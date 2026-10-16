@@ -36,7 +36,8 @@ import { patternPreview } from '../three/fabric'
 import type { PatternKind } from '../three/patterns'
 import { isTyping } from '../dom'
 import { lang, roomName, t, tAuto, tSoft } from '../i18n'
-import { bbox, centroid, edgesOf, type Furniture, type WallTrim } from '../model'
+import { bbox, centroid, edgesOf, type Furniture, type Plan, type WallTrim } from '../model'
+import { roomStyles } from '../decorate'
 import { wallThicknessAt } from '../walls'
 import {
   addFurniture,
@@ -83,6 +84,16 @@ const furnRoot = new THREE.Group()
 /** 室内灯光：房间主灯、灯具家具的光源，入夜自动亮（three/lights.ts） */
 let lights: IndoorLights
 let lastDining = ''
+
+/** 房间灯按风格换造型：居室跟住在里面的人，其余房间跟住户；没有住户就用通用造型 */
+function lightStyles(p: Plan) {
+  const hh = p.household
+  if (!hh) return undefined
+  const rs = roomStyles(p, hh)
+  return (id: string) => rs.get(id) ?? hh.style
+}
+/** 房间灯要重建的指纹：餐桌位置 + 住户风格 */
+const roomLightKey = (p: Plan) => `${diningKey(p)}|${p.household ? `${p.household.style}:${p.household.members.map((m) => m.style).join(',')}` : ''}`
 /** 蒸汽、烟、火苗等动态特效 */
 const fx = new FxLayer()
 /** 会活动的宠物、扫地机器人、Kachaka（预览模式下才动） */
@@ -327,8 +338,8 @@ function rebuildHouse() {
   }
   house = buildHouse(plan.value, sandbox.wallHeight)
   stage.scene.add(house)
-  lights.syncRooms(toRaw(plan.value), ASSET_MAP, floorY)
-  lastDining = diningKey(toRaw(plan.value))
+  lights.syncRooms(toRaw(plan.value), ASSET_MAP, floorY, lightStyles(toRaw(plan.value)))
+  lastDining = roomLightKey(toRaw(plan.value))
   const pts = plan.value.rooms.flatMap((r) => r.points)
   if (pts.length) {
     const b = bbox(pts)
@@ -389,10 +400,10 @@ function syncFurniture() {
   updateRing()
   // 灯具家具：发光部件、光源位置；餐桌挪了吊灯跟着挪
   lights.syncLamps(p, objs, ASSET_MAP, (f) => roomAt(p, f), floorY)
-  const dk = diningKey(p)
+  const dk = roomLightKey(p)
   if (dk !== lastDining) {
     lastDining = dk
-    lights.syncRooms(p, ASSET_MAP, floorY)
+    lights.syncRooms(p, ASSET_MAP, floorY, lightStyles(p))
   }
   lights.touch()
   updateCutaway()

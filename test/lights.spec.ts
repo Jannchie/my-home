@@ -4,7 +4,7 @@ import * as THREE from 'three'
 import { generatePlan } from '/src/generate-region'
 import { normalizePlan } from '/src/store'
 import { ASSETS } from '/src/three/assets'
-import { DEFAULT_KELVIN, autoLevel, glowIntensity, isLampAsset, kelvinColor, lampTarget, lightColor, roomLightSpecs, roomTarget } from '/src/three/lights'
+import { DEFAULT_KELVIN, LARGE_GLOW_CAP, autoLevel, glowIntensity, isLampAsset, kelvinColor, lampTarget, lightColor, roomLightSpecs, roomTarget } from '/src/three/lights'
 import type { Plan } from '/src/model'
 import { JP_OPTS, range } from './helpers'
 
@@ -145,5 +145,35 @@ describe('存档字段', () => {
     expect(fixed.rooms[1].light).toBeUndefined()
     expect(fixed.rooms[1].lightK).toBe(6500)
     expect(fixed.furniture[0].light).toBeUndefined()
+  })
+})
+
+describe('灯具亮度与按风格的主灯', () => {
+  test('大面积白色纸罩夜里压到更低的上限；小灯罩、灯泡不受影响', () => {
+    // 和纸灯笼落地灯：emissive 0.55、近白、发光面两万多 cm²
+    expect(glowIntensity(0.55, 1, 1, 0.94, 22000)).toBeLessThanOrEqual(LARGE_GLOW_CAP + 0.01)
+    expect(glowIntensity(0.55, 1, 1, 0.94, 300)).toBeCloseTo(0.55)
+    expect(glowIntensity(0.85, 1, 1, 0.9, 22000)).toBeCloseTo(0.85)
+    // 白天不变
+    expect(glowIntensity(0.55, 0, 1, 0.94, 22000)).toBeCloseTo(0.55)
+  })
+
+  test('吸顶灯 / 吊灯按风格换造型，光源仍在天花板以下、灯具里面', () => {
+    const styles = ['cute', 'nordic', 'modern', 'japanese', 'industrial', 'retro', 'chinese', 'classic', 'farmhouse'] as const
+    for (const st of styles) {
+      const shapes = new Set<string>()
+      for (const [, p] of plans.slice(0, 20)) {
+        for (const s of roomLightSpecs(p, new Map(), () => st)) {
+          expect(s.h).toBeGreaterThan(100)
+          expect(s.h).toBeLessThanOrEqual(240)
+          if (s.kind === 'ceiling' || s.kind === 'small' || s.kind === 'pendant') {
+            expect(s.h).toBeGreaterThanOrEqual(s.fy)
+            expect(s.shape).toBeTruthy()
+            shapes.add(s.shape!)
+          } else expect(s.shape).toBeUndefined()
+        }
+      }
+      expect(shapes.size).toBeGreaterThan(1)
+    }
   })
 })

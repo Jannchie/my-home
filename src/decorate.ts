@@ -219,6 +219,9 @@ class Decorator {
   }
   private computeLimit(def: AssetDef) {
     if (def.limit) return { group: def.limit.group ?? def.family ?? def.id, scope: def.limit.scope, max: def.limit.max }
+    // 灯具按系列算：落地灯每间一盏、壁灯每间一对、台灯每个台面一盏
+    const lamp = def.family ? LAMP_FAMILIES[def.family] : undefined
+    if (lamp) return { group: def.family!, scope: lamp.scope, max: lamp.max }
     const text = `${def.id} ${def.name}`
     // 牙刷杯、漱口杯是洗漱用品，不算进全家的杯子数
     const r = LIMITS.find(([g, re]) => re.test(text) && !(g === 'cup' && /toothbrush|牙刷|漱口/.test(text)))
@@ -434,6 +437,7 @@ class Decorator {
   vary(asset: string) {
     const def = ASSET_MAP.get(asset)
     if (!def?.family) return asset
+    if (LAMP_FAMILIES[def.family]) return this.lampPick(def.family)
     let sib = this.siblings.get(asset)
     if (!sib) {
       const near = (a: number, b: number) => Math.abs(a - b) <= b * 0.1 + 2
@@ -447,6 +451,50 @@ class Decorator {
     if (sib.length < 2 || !(def.sizeLabel === '标准' || STYLE_FAMILIES.has(def.family) || sib.some((a) => /^(va|vb|mv)-/.test(a.id)))) return asset
     const styled = sib.filter((a) => a.styles?.includes(this.style))
     return this.pick(styled.length && this.rand() < 0.75 ? styled : sib).id
+  }
+
+  private lampPools = new Map<string, AssetDef[]>()
+  /**
+   * 灯具换款：从系列（书桌灯还可以用台灯）里均匀地挑，85% 挑当前房间风格的款。
+   * 不按尺寸限制换款（各风格的灯高矮胖瘦差别大），只去掉占地太大的（弧形钓鱼灯）；放不下由调用方换一款再试。
+   */
+  lampPick(family: string) {
+    const spec = LAMP_FAMILIES[family]
+    let pool = this.lampPools.get(family)
+    if (!pool) {
+      pool = ASSETS.filter((a) => spec.pool.includes(a.family ?? '') && !a.fixture && Math.max(a.w, a.d) <= spec.maxSide)
+      this.lampPools.set(family, pool)
+    }
+    const styled = pool.filter((a) => a.styles?.includes(this.style))
+    const r = this.rand()
+    return this.pick(styled.length && r < 0.85 ? styled : pool).id
+  }
+
+  /** 房间里要让开的高处障碍：设备（造作收纳、厨房吊柜）和高过壁灯的家具 */
+  private tallBoxes(room: Room) {
+    return [
+      ...this.plan.fixtures.filter((f) => pointInPolygon(f, room.points)).map(fixtureBox),
+      ...this.out
+        .filter((o) => !o.z && pointInPolygon(o, room.points))
+        .filter((o) => {
+          const d = ASSET_MAP.get(o.asset)
+          return !!d && !d.mount && !d.stick && d.h > 130
+        })
+        .map((o) => footprint(o.asset, o.x, o.y, o.rot)),
+    ]
+  }
+
+  /** 床头两侧各一盏壁灯（同一款）；挂不上就算了 */
+  bedSconces(room: Room, bed: Furniture) {
+    const def = ASSET_MAP.get(bed.asset)
+    if (!def) return
+    const id = this.lampPick('wall-lamp')
+    const lamp = ASSET_MAP.get(id)!
+    const fd = frontDir(bed.rot)
+    const side = { x: fd.y, y: -fd.x }
+    const head = add({ x: bed.x, y: bed.y }, mul(fd, -def.d / 2))
+    const extra = this.tallBoxes(room)
+    for (const s of [-1, 1]) this.mountAvoiding(room, id, extra, add(head, mul(side, s * (def.w / 2 + lamp.w / 2 + 12))), 45)
   }
 
   /** 一定要摆上的小东西：先找台面 / 层板，摆不上就靠墙放地上 */
@@ -1643,6 +1691,11 @@ class Decorator {
       this.freePush(room, 'coffee-table', 0, tableAt, 10)
       this.wall(room, 'tv-board', { front: 120, near: add({ x: sofa.x, y: sofa.y }, mul(fd, 320)), nearMax: 600, centered: true })
       if (this.rand() < 0.7) this.freePush(room, 'beanbag', 0, add(tableAt, mul({ x: fd.y, y: -fd.x }, 110)), 5)
+      // 沙发旁的落地灯（扶手边，靠墙）
+      if (this.rand() < 0.55) {
+        const s = this.rand() < 0.5 ? 1 : -1
+        this.wall(room, 'floor-lamp', { near: add({ x: sofa.x, y: sofa.y }, mul({ x: fd.y, y: -fd.x }, s * (def.w / 2 + 25))), nearMax: 90, centered: false })
+      }
     }
     // 中式 / 欧美有独立的餐厅（客餐厅一体但分区）：餐桌摆在餐厅里
     if (!this.plan.rooms.some((r) => r.kind === 'dining')) this.dining(room, kitchen)
@@ -1860,6 +1913,8 @@ class Decorator {
       const head = add({ x: bed.x, y: bed.y }, mul(frontDir(bed.rot), -def.d / 2))
       this.wall(room, 'nightstand', { near: head, nearMax: def.w / 2 + 40 })
       if (this.rand() < 0.6) this.wall(room, 'bear', { near: head, nearMax: def.w / 2 + 80 })
+      // 床头两侧的壁灯：古典 / 和 / 中式 / 乡村 / 复古多一些
+      if (this.rand() < (SCONCE_STYLES.has(this.style) ? 0.4 : 0.22)) this.bedSconces(room, bed)
       this.plushOnBed(bed, people)
     }
     // 中式 / 欧美的卧室没有日式的押入れ / クローゼット：没有嵌入式衣柜和衣帽间时先放衣柜（在书桌之前占墙）
@@ -1905,7 +1960,11 @@ class Decorator {
         if (boxInside(fp, room)) this.push('zabuton', p.x, p.y, rot)
       }
     }
+    // 和室的落地灯：多半挑和风的款（行灯、角行灯、障子灯、石灯笼…）
+    const st = this.style
+    if (this.rand() < 0.7) this.style = 'japanese'
     this.corner(room, ['andon'])
+    this.style = st
     if (this.rand() < 0.5) this.corner(room, ['cactus'])
   }
 
@@ -1965,6 +2024,7 @@ class Decorator {
     for (const id of this.shuffle(['tbl-console', 'tbl-console', 'fm-genkan-bench', 'sf-hall-tree']).filter((x) => ASSET_MAP.has(x))) if (this.wall(room, id, { front: 50 })) break
     if (this.rand() < 0.5) this.wall(room, 'umbrella-stand')
     if (this.rand() < 0.4) this.corner(room, ['monstera', 'floor-lamp'])
+    if (this.rand() < 0.35) this.mountAvoiding(room, this.lampPick('wall-lamp'), this.tallBoxes(room))
   }
 
   /**
@@ -2512,6 +2572,7 @@ class Decorator {
           if (this.rand() < 0.7) this.wall(r, 'umbrella-stand')
           // 偶尔放一张小穿鞋凳（放不下 wall 会自动跳过）
           if (this.rand() < 0.35 && ASSET_MAP.has('c2-shoe-bench-60')) this.wall(r, 'c2-shoe-bench-60', { front: 40 })
+          if (this.rand() < 0.3) this.mountAvoiding(r, this.lampPick('wall-lamp'), this.tallBoxes(r))
           break
         case 'wash':
           this.wall(r, 'laundry-basket')
@@ -2605,7 +2666,20 @@ class Decorator {
 
   /** 摆到 parent 的某一层：level 为 surfaces 的下标，不给就是顶面；层板净高不够的东西放不进去 */
   onLevel(parent: Furniture, asset: string, fx: number, fz: number, lrot = 0, level?: number) {
-    asset = this.vary(asset)
+    const fam = ASSET_MAP.get(asset)?.family
+    if (fam && LAMP_FAMILIES[fam]) {
+      // 灯：挑中的款放不下（台面太小、层板太矮）就换一款再试，最后退回原款
+      for (let k = 0; k < 4; k++) {
+        const f = this.onLevelAs(parent, this.vary(asset), fx, fz, lrot, level)
+        if (f) return f
+      }
+      return this.onLevelAs(parent, asset, fx, fz, lrot, level)
+    }
+    return this.onLevelAs(parent, this.vary(asset), fx, fz, lrot, level)
+  }
+
+  /** onLevel 本体：不换款 */
+  private onLevelAs(parent: Furniture, asset: string, fx: number, fz: number, lrot = 0, level?: number) {
     const pd = ASSET_MAP.get(parent.asset)
     const def = ASSET_MAP.get(asset)
     if (!pd || !def) return null
@@ -2682,17 +2756,23 @@ class Decorator {
 
   /** 给桌、柜摆上东西 */
   dress() {
+    const base = this.style
     for (const f of [...this.out]) {
       const def = ASSET_MAP.get(f.asset)
       if (!def?.surface || def.prop) continue
       const rules = DRESS[f.asset] ?? dressFor(def)
       if (!rules) continue
-      // 每组的第一件是主角（电视、笔记本、台灯…）必摆，其余随机点缀
+      // 按家具所在房间的风格挑款、配色（卧室的床头灯跟着房间主人的风格）
+      const room = this.plan.rooms.find((r) => pointInPolygon(f, r.points))
+      this.style = room ? this.styleFor(room) : base
+      // 每组的第一件是主角（电视、笔记本、台灯…）必摆，其余随机点缀；床头柜的台灯八成五的概率摆
       const list = typeof rules === 'function' ? rules(def) : rules
       list.forEach(([asset, fx, fz, rot, must], i) => {
-        if (i === 0 || must || this.rand() < 0.8) this.onLevel(f, asset, fx, fz, rot)
+        const lead = i === 0 && !(def.family === 'nightstand' && this.rand() >= 0.85)
+        if (lead || (i > 0 && (must || this.rand() < 0.8))) this.onLevel(f, asset, fx, fz, rot)
       })
     }
+    this.style = base
   }
 }
 
@@ -2779,6 +2859,19 @@ function variantsOf(id: string) {
 }
 
 /** 款式不同、功能相同的系列（可以随机换款） */
+/**
+ * 灯具系列：换款时从哪些系列里挑（书桌上也可以摆普通台灯）、占地上限（太大的不随机挑），以及同类数量上限。
+ */
+const LAMP_FAMILIES: Record<string, { pool: string[]; maxSide: number; scope: 'room' | 'surface'; max: number }> = {
+  'floor-lamp': { pool: ['floor-lamp'], maxSide: 62, scope: 'room', max: 1 },
+  'table-lamp': { pool: ['table-lamp'], maxSide: 40, scope: 'surface', max: 1 },
+  'desk-lamp': { pool: ['desk-lamp', 'table-lamp'], maxSide: 40, scope: 'surface', max: 1 },
+  'wall-lamp': { pool: ['wall-lamp'], maxSide: 40, scope: 'room', max: 2 },
+}
+
+/** 爱在床头挂壁灯的风格 */
+const SCONCE_STYLES = new Set<StyleTag>(['classic', 'japanese', 'chinese', 'farmhouse', 'retro'])
+
 const STYLE_FAMILIES = new Set(['dining-chair', 'body-scale', 'bath-mat', 'kid-bed', 'kid-crib', 'umbrella-stand', 'beanbag', 'nightstand', 'laundry-stand'])
 
 /** 书桌 / 工作台 */
@@ -2802,6 +2895,7 @@ const DESK: Dress = [
   ['prop-mug', 0.22, 0.22, 0, true],
   ['prop-desk-lamp', 0.36, -0.22],
 ]
+const NIGHTSTAND: Dress = [['prop-table-lamp', 0, -0.08]]
 const DINING: Dress = [
   ['prop-vase-flowers', 0, 0],
   ['prop-coffee-cup', -0.28, 0.22, 0, true],
@@ -2823,7 +2917,7 @@ const DRESS: Record<string, Dress | ((def: AssetDef) => Dress)> = {
   'coffee-table': COFFEE,
   'dining-table': DINING,
   'dining-table-l': DINING,
-  nightstand: [['prop-table-lamp', 0, -0.08]],
+  nightstand: NIGHTSTAND,
   'tv-board': tvDress,
   chabudai: [['prop-tea-set', 0, 0]],
   kotatsu: [['prop-mikan-basket', 0, 0]],
@@ -2839,6 +2933,7 @@ const DRESS: Record<string, Dress | ((def: AssetDef) => Dress)> = {
 /** 素材包里新加的桌柜：按名称 / 系列套用 */
 function dressFor(def: AssetDef): Dress | null {
   const key = `${def.id} ${def.family ?? ''} ${def.name}`
+  if (def.family === 'nightstand' || /床头柜|nightstand/.test(key)) return NIGHTSTAND
   if (/tv|电视/.test(key)) return tvDress(def)
   if (def.category === 'study' && /桌/.test(def.name)) return DESK
   if (def.category === 'dining' && /桌/.test(def.name)) return DINING

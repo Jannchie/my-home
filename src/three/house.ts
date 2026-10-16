@@ -1348,7 +1348,7 @@ export const isPlant = (asset: string) => {
   let v = plantCache.get(asset)
   if (v === undefined) {
     const d = ASSET_MAP.get(asset)
-    v = !!d && (d.category === 'plants' || PLANT_RE.test(`${d.id} ${d.name}`)) && !d.mount
+    v = !!d && (d.category === 'plants' || (PLANT_RE.test(`${d.id} ${d.name}`) && d.category !== 'lighting')) && !d.mount
     plantCache.set(asset, v)
   }
   return v

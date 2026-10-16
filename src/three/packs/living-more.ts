@@ -1117,8 +1117,9 @@ export const LM_LIGHTS: AssetDef[] = [
       ['cute', C.mint, C.white, C.white],
     ],
     arcLamp,
+    { family: 'floor-lamp', sizeLabel: '弧形钓鱼' },
   ),
-  def('lm-tripod-lamp', '三脚落地灯', 'lighting', [51.3, 53.5, 149.5], LAMP_SHADE_PALS, tripodLamp),
+  def('lm-tripod-lamp', '三脚落地灯', 'lighting', [51.3, 53.5, 149.5], LAMP_SHADE_PALS, tripodLamp, { family: 'floor-lamp', sizeLabel: '三脚' }),
   def(
     'lm-akari-floor',
     '和纸灯笼落地灯',
@@ -1147,7 +1148,7 @@ export const LM_LIGHTS: AssetDef[] = [
       ['japanese', J.washi, J.ai, J.sumi],
     ],
     pleatLamp,
-    PROP,
+    { ...PROP, family: 'table-lamp', sizeLabel: '褶皱罩' },
   ),
   def(
     'lm-banker-lamp',
@@ -1161,7 +1162,7 @@ export const LM_LIGHTS: AssetDef[] = [
       ['retro', R.red, BRASS],
     ],
     bankerLamp,
-    PROP,
+    { ...PROP, family: 'desk-lamp', sizeLabel: '银行家' },
   ),
   def(
     'lm-jar-lamp',
@@ -1176,7 +1177,7 @@ export const LM_LIGHTS: AssetDef[] = [
       ['cute', C.white, C.pink, BRASS],
     ],
     jarLamp,
-    PROP,
+    { ...PROP, family: 'table-lamp', sizeLabel: '陶瓷罐' },
   ),
   def(
     'lm-moon-lamp',
@@ -1205,7 +1206,7 @@ export const LM_LIGHTS: AssetDef[] = [
       ['cute', C.sakura, C.white],
     ],
     sconce,
-    { mount: SCONCE_Y },
+    { mount: SCONCE_Y, family: 'wall-lamp', sizeLabel: '弯臂' },
   ),
   def(
     'lm-fairy-lights',

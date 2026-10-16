@@ -167,7 +167,8 @@ describe('地区特色物件', () => {
             }
             continue
           }
-          if (/^hg-go-board/.test(x.asset)) boards++
+          // 棋盘：围棋盘或象棋 / 国际象棋盘（中式棋桌上围棋、象棋各一半概率）
+          if (/^(hg-go-board|int-(chess|xiangqi))/.test(x.asset)) boards++
           const sp = supportOf(plan, x)
           if (!sp) bad.push(`${region} seed ${seed}: ${x.asset} 悬空`)
           else if (!sp.fits) bad.push(`${region} seed ${seed}: ${x.asset} 超出台面`)

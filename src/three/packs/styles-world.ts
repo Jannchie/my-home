@@ -2577,7 +2577,7 @@ export const SW_CHINESE: AssetDef[] = [
     [ZH, CN.rose, '#ffe2b0', CN.gold],
     [ZH, CN.zitan, '#f0b04a', CN.ink],
     ['japanese', J.dark, J.washi, J.sumi],
-  ], lanternStand),
+  ], lanternStand, { family: 'floor-lamp', sizeLabel: '灯笼' }),
   D('sw-cn-moongate', '月洞门', 'deco', [146, 30, 210], [
     [ZH, CN.wall, CN.tile, CN.huali],
     [ZH, '#e9e1d2', '#3e4247', CN.rose],
@@ -2681,7 +2681,7 @@ export const SW_CLASSIC: AssetDef[] = [
     [EU, CL.gold, CL.ivory, CL.gold],
     [EU, CL.navy, CL.cream, CL.gold],
     [EU, CL.sage, CL.ivory, CL.gold],
-  ], candleTableLamp, { prop: true }),
+  ], candleTableLamp, { prop: true, family: 'table-lamp', sizeLabel: '烛台' }),
   D('sw-cl-poster-bed', '雕花四柱床', 'bedroom', [177.1, 219.1, 208], [
     [EU, CL.cream, CL.ivory, CL.mahogany],
     [EU, CL.wine, CL.cream, CL.walnut],
@@ -2890,7 +2890,7 @@ export const SW_JAPANESE: AssetDef[] = [
     ['japanese', J.washi, J.shu, J.sumi],
     ['japanese', '#f3e3c3', J.wood, J.dark],
     ['modern', M.white, M.black, M.black],
-  ], maruAndon),
+  ], maruAndon, { family: 'floor-lamp', sizeLabel: '丸行灯' }),
   D('sw-jp-shoji', '障子三折屏风', 'japanese', [147, 30.2, 170], [
     ['japanese', J.hinoki, J.washi, J.wood],
     ['japanese', J.dark, J.washi, J.sumi],

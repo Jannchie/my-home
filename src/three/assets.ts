@@ -1446,7 +1446,7 @@ export const ASSETS: AssetDef[] = [
     build: futon,
   },
   { id: 'zabuton', name: '坐垫', category: 'japanese', w: 55, d: 55, h: 9, ...sty({ japanese: [[J.ai], [J.shu], [J.tatami]], cute: [[C.pink], [C.lilac], [C.lemon]], nordic: [[N.gray]], modern: [[M.char]] }), build: zabuton },
-  { id: 'andon', name: '行灯', category: 'lighting', w: 32, d: 32, h: 64, ...sty({ japanese: [[J.washi]], cute: [[C.lamp], [C.sakura]] }), build: andon },
+  { id: 'andon', name: '行灯', category: 'lighting', family: 'floor-lamp', sizeLabel: '行灯', w: 32, d: 32, h: 64, ...sty({ japanese: [[J.washi]], cute: [[C.lamp], [C.sakura]] }), build: andon },
 
   { id: 'bear', name: '小熊玩偶', family: 'bear', sizeLabel: '小熊', category: 'deco', w: 30, d: 26, h: 44, prop: true, ...sty({ cute: [[C.peach], [C.sakura], [C.white], ['#c99a6e'], [C.sky]] }), build: (p) => bearBody(1, p[0]) },
   { id: 'cat-loaf', name: '猫面包', category: 'deco', w: 40, d: 28, h: 30, prop: true, ...sty({ cute: [[C.white, C.pink], ['#ffcf8f', C.white], ['#6b6061', C.white], ['#c9c9cf', C.pink]] }), build: catLoaf },

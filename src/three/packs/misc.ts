@@ -1673,6 +1673,8 @@ export const MISC: AssetDef[] = [
     id: 'jp-shoji-lamp', name: '障子落地灯', category: 'lighting', w: 32, d: 32, h: 140,
     ...sty({ japanese: [[J.dark, J.washi], [J.hinoki, J.washi], [J.sumi, '#fff0cf']], nordic: [[N.oak, N.white]], modern: [[M.black, M.white]] }),
     build: shojiLamp,
+    family: 'floor-lamp',
+    sizeLabel: '障子',
   },
 
   // ---------- 绿植 ----------
