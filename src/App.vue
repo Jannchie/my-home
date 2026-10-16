@@ -12,6 +12,7 @@ import GenOptions from './components/GenOptions.vue'
 import BottomSheet, { type SheetSnap } from './components/BottomSheet.vue'
 import ContextMenu, { type MenuEntry } from './components/ContextMenu.vue'
 import UpdatePrompt from './components/UpdatePrompt.vue'
+import SafeAreaDebug from './components/SafeAreaDebug.vue'
 import { AUTHOR, REPO_URL } from './seo'
 import { currentSaved, detachSaved, initSaved, openPanel, quickSave, saved, toast } from './saved'
 import { busy, nextPaint, overlays, runBusy } from './ui/feedback'
@@ -293,6 +294,9 @@ const deskMoreItems = computed<MenuEntry[]>(() => [
   { label: t('作者的 X'), brand: 'x', action: () => openLink(AUTHOR.x) },
   { label: t('GitHub 仓库'), icon: ICONS.github, action: () => openLink(REPO_URL) },
 ])
+/** 临时：iOS 主屏幕 Web App 里看系统报告的安全区（排查顶栏 / 底部被磨砂盖住） */
+const iosStandalone = typeof navigator !== 'undefined' && !!(navigator as { standalone?: boolean }).standalone
+const safeDebug = ref(false)
 const moreItems = computed<MenuEntry[]>(() => [
   ...(viewMode.value !== 'lib'
     ? ([
@@ -316,6 +320,7 @@ const moreItems = computed<MenuEntry[]>(() => [
   'sep',
   { label: t('作者的 X'), brand: 'x', action: () => openLink(AUTHOR.x) },
   { label: t('GitHub 仓库'), icon: ICONS.github, action: () => openLink(REPO_URL) },
+  ...(iosStandalone ? (['sep', { label: '安全区诊断', action: () => (safeDebug.value = true) }] as MenuEntry[]) : []),
 ])
 function openLink(url: string) {
   window.open(url, '_blank', 'noopener')
@@ -542,6 +547,7 @@ onBeforeUnmount(() => {
     <ShortcutHelp />
     <Onboarding />
     <UpdatePrompt />
+    <SafeAreaDebug v-if="safeDebug" @close="safeDebug = false" />
   </div>
 </template>
 
