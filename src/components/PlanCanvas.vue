@@ -161,6 +161,7 @@ function hitOf(e: Event) {
 }
 
 function onPointerDown(e: PointerEvent) {
+  stopAnim()
   svg.value!.setPointerCapture(e.pointerId)
   if (e.button === 1 || e.button === 2 || (e.button === 0 && spaceDown.value)) {
     drag.value = { kind: 'pan', sx: e.clientX, sy: e.clientY, ox: view.x, oy: view.y }
@@ -279,6 +280,7 @@ function onPointerMove(e: PointerEvent) {
   }
   if (!d) {
     guides.value = {}
+    updateHover(e)
     if (tool.value === 'rect' || tool.value === 'poly') {
       let p = snapPoint(w)
       if (tool.value === 'poly' && e.shiftKey && draft.value.length) p = orthoFrom(draft.value[draft.value.length - 1], p)
@@ -445,31 +447,105 @@ function onDblClick(e: MouseEvent) {
   selection.value = { type: 'vertex', roomId: r.id, index: k + 1 }
 }
 
-function onWheel(e: WheelEvent) {
-  const r = svg.value!.getBoundingClientRect()
-  const mx = e.clientX - r.left
-  const my = e.clientY - r.top
-  const k = Math.exp(-e.deltaY * 0.0015)
-  const ns = Math.min(8, Math.max(0.05, view.s * k))
+/** 以屏幕点 (mx, my) 为中心缩放到 ns */
+function zoomAt(mx: number, my: number, ns: number) {
+  ns = Math.min(8, Math.max(0.05, ns))
   view.x = mx - ((mx - view.x) * ns) / view.s
   view.y = my - ((my - view.y) * ns) / view.s
   view.s = ns
 }
 
-function fit() {
-  const pts = plan.value.rooms.flatMap((r) => r.points)
-  if (!pts.length) {
-    view.s = 0.6
-    view.x = size.w / 2
-    view.y = size.h / 2
+/**
+ * 滚轮 / 触控板：
+ *   - 鼠标滚轮（整格、像素量大）：以光标为中心缩放；
+ *   - 触控板捏合（浏览器报成 ctrlKey + 小幅 deltaY）：缩放，灵敏度更高；
+ *   - 触控板双指滑动（有横向分量或小幅连续像素量）：平移画布。
+ */
+function onWheel(e: WheelEvent) {
+  stopAnim()
+  const r = svg.value!.getBoundingClientRect()
+  const mx = e.clientX - r.left
+  const my = e.clientY - r.top
+  if (e.ctrlKey) {
+    // 捏合的 deltaY 很小；Ctrl + 鼠标滚轮一格是 100 左右，限一下幅度免得一下跳太多
+    zoomAt(mx, my, view.s * Math.exp(-Math.max(-30, Math.min(30, e.deltaY)) * 0.01))
     return
   }
+  const trackpad = e.deltaMode === 0 && (e.deltaX !== 0 || (Math.abs(e.deltaY) < 40 && !Number.isInteger(e.deltaY * 2)))
+  if (trackpad) {
+    view.x -= e.deltaX
+    view.y -= e.deltaY
+    return
+  }
+  zoomAt(mx, my, view.s * Math.exp(-e.deltaY * 0.0015))
+}
+
+// ---------- 视图动画：适应视图、缩放按钮平滑过渡 ----------
+let animId = 0
+function stopAnim() {
+  cancelAnimationFrame(animId)
+}
+function animateTo(to: { x: number; y: number; s: number }, ms = 260) {
+  stopAnim()
+  const from = { x: view.x, y: view.y, s: view.s }
+  // 系统要求减少动效时直接到位
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) ms = 0
+  const t0 = performance.now()
+  const step = () => {
+    const k = ms ? Math.min(1, (performance.now() - t0) / ms) : 1
+    const e = 1 - Math.pow(1 - k, 3)
+    // 缩放按对数插值，平移按「世界中心点」插值，过渡看起来是匀速推拉
+    const s = from.s * Math.pow(to.s / from.s, e)
+    const cx = (size.w / 2 - from.x) / from.s + ((size.w / 2 - to.x) / to.s - (size.w / 2 - from.x) / from.s) * e
+    const cy = (size.h / 2 - from.y) / from.s + ((size.h / 2 - to.y) / to.s - (size.h / 2 - from.y) / from.s) * e
+    view.s = s
+    view.x = size.w / 2 - cx * s
+    view.y = size.h / 2 - cy * s
+    if (k < 1) animId = requestAnimationFrame(step)
+  }
+  step()
+}
+
+function fitTarget() {
+  const pts = plan.value.rooms.flatMap((r) => r.points)
+  if (!pts.length) return { s: 0.6, x: size.w / 2, y: size.h / 2 }
   const b = bbox(pts)
   const pad = 70
-  const s = Math.min((size.w - pad * 2) / (b.x1 - b.x0 || 1), (size.h - pad * 2) / (b.y1 - b.y0 || 1))
-  view.s = Math.min(4, s)
-  view.x = (size.w - (b.x1 - b.x0) * view.s) / 2 - b.x0 * view.s
-  view.y = (size.h - (b.y1 - b.y0) * view.s) / 2 - b.y0 * view.s
+  const s = Math.min(4, Math.min((size.w - pad * 2) / (b.x1 - b.x0 || 1), (size.h - pad * 2) / (b.y1 - b.y0 || 1)))
+  return { s, x: (size.w - (b.x1 - b.x0) * s) / 2 - b.x0 * s, y: (size.h - (b.y1 - b.y0) * s) / 2 - b.y0 * s }
+}
+
+/** 适应视图；instant 用于首次挂载（没有可过渡的起点） */
+function fit(instant = false) {
+  const to = fitTarget()
+  if (instant) {
+    stopAnim()
+    Object.assign(view, to)
+  } else animateTo(to)
+}
+
+/** 缩放按钮：以画布中心为基准，平滑过渡 */
+function zoomBy(f: number) {
+  const ns = Math.min(8, Math.max(0.05, view.s * f))
+  const cx = size.w / 2
+  const cy = size.h / 2
+  animateTo({ s: ns, x: cx - ((cx - view.x) * ns) / view.s, y: cy - ((cy - view.y) * ns) / view.s }, 180)
+}
+/** 点百分比：回到 100% */
+function zoomReset() {
+  zoomBy(1 / view.s)
+}
+
+// ---------- 悬停高亮：选择工具下指到的房间描一圈 ----------
+const hoverRoomId = ref<string | null>(null)
+const hoverRoom = computed(() => (hoverRoomId.value && hoverRoomId.value !== selectedRoom.value?.id ? findRoom(hoverRoomId.value) ?? null : null))
+function updateHover(e: PointerEvent) {
+  let id: string | null = null
+  if (tool.value === 'select' && !spaceDown.value) {
+    const h = hitOf(e)
+    id = h?.hit === 'room' ? h.id ?? null : h?.hit === 'edge' || h?.hit === 'vertex' ? h.room ?? null : null
+  }
+  if (id !== hoverRoomId.value) hoverRoomId.value = id
 }
 
 // ---------- 键盘：空格平移、Esc ----------
@@ -501,7 +577,7 @@ onMounted(() => {
   const r = svg.value!.getBoundingClientRect()
   size.w = r.width
   size.h = r.height
-  fit()
+  fit(true)
   window.addEventListener('keydown', onKeyDown)
   window.addEventListener('keyup', onKeyUp)
 })
@@ -724,7 +800,7 @@ const isSel = (type: string, id: string) => {
 }
 
 const cursorInfo = computed(() => (cursor.value ? `${Math.round(cursor.value.x)}, ${Math.round(cursor.value.y)}` : ''))
-defineExpose({ fit, exportPng, view, cursorInfo })
+defineExpose({ fit, zoomBy, zoomReset, exportPng, view, cursorInfo })
 
 // ---------- 导出 PNG ----------
 
@@ -777,7 +853,7 @@ async function exportPng() {
     @pointermove="onPointerMove"
     @pointerup="onPointerUp"
     @pointercancel="onPointerUp"
-    @pointerleave="cursor = drag ? cursor : null"
+    @pointerleave="(cursor = drag ? cursor : null), (hoverRoomId = null)"
     @dblclick="onDblClick"
     @wheel.prevent="onWheel"
     @contextmenu.prevent
@@ -971,11 +1047,22 @@ async function exportPng() {
         </text>
       </g>
 
+      <!-- 悬停的房间：淡淡的底色 + 细描边，提示「点这里会选中它」 -->
+      <path
+        v-if="hoverRoom && !drag"
+        class="ui hover-room"
+        :d="polyPath(hoverRoom.points)"
+        fill="rgba(87,122,104,0.07)"
+        stroke="#577a68"
+        :stroke-width="px(1.5)"
+        stroke-opacity="0.7"
+        pointer-events="none"
+      />
       <!-- 选中房间：轮廓、边长、边拖拽、顶点 -->
       <g v-if="selectedRoom" class="ui">
         <path
           :d="polyPath(selectedRoom.points)"
-          fill="none"
+          fill="rgba(63,102,82,0.08)"
           stroke="#3f6652"
           :stroke-width="px(2)"
           pointer-events="none"

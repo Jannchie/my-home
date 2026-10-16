@@ -110,7 +110,8 @@ export const INTERESTS: Record<InterestId, { label: string; floor?: Matcher; pro
   models: { label: '模型', props: { re: /模型|train|plane|铁道|飞机|高达|gunpla|3d.?print|打印机/ } },
   tea: { label: '茶道', props: { re: /tea|茶|incense|线香|daruma|达摩|tetsubin|铁壶/ }, floor: { cats: ['japanese'] }, style: 'japanese' },
   cats: { label: '养猫', floor: { re: /cat-|猫爬|猫窝|猫砂/ }, props: { re: /cat|猫/ } },
-  dogs: { label: '养狗', floor: { re: /dog|狗/ } },
+  // 机器狗（rb-）不算养狗
+  dogs: { label: '养狗', floor: { re: /^(?!rb-).*(dog|狗)/ } },
   aquarium: { label: '水族', floor: { re: /aquarium|水族|鱼缸/ } },
   // 小动物 / 鸟的笼子在 packs/pet-habitats.ts，带 limit（全屋各一只），所以落地和台面的笼子合起来只会摆一个
   smallpets: { label: '养小动物', floor: { re: /ph-(hamster-(cage|castle)|rabbit|guinea|chinchilla)/ }, props: { re: /ph-hamster-(cage|acrylic|castle)/ } },
@@ -118,7 +119,7 @@ export const INTERESTS: Record<InterestId, { label: string; floor?: Matcher; pro
   coffee: { label: '咖啡', props: { re: /coffee|espresso|moka|pour-over|grinder|磨豆|咖啡/ } },
   streaming: { label: '直播', props: { re: /mic-|webcam|stream|capture|audio-interface|声卡|麦克风|补光/ }, floor: { re: /ring-light-floor|softbox|green-screen|绿幕|柔光/ } },
   tech: { label: '数码', props: { re: /kb-|monitor|nas|mini-pc|router|显示器|键盘|NAS/ }, floor: { re: /pc-(mid|full|itx)|server|机箱|机柜/ }, style: 'industrial' },
-  sports: { label: '运动', props: { re: /ball|球|racket|拍|glove|手套|helmet|头盔/ }, floor: { re: /surf|冲浪|golf|高尔夫|bike|自行车|skate|滑板|ski|滑雪/ } },
+  sports: { label: '运动', props: { re: /ball|球|racket|(?<![航自])拍|glove|手套|helmet|头盔/ }, floor: { re: /surf|冲浪|golf|高尔夫|bike|自行车|skate|滑板|ski|滑雪/ } },
   science: { label: '天文科学', props: { re: /telescope|望远镜|microscope|显微镜|globe|地球仪|星图|flask|烧瓶|矿石/ }, floor: { re: /telescope|望远镜/ } },
   beauty: { label: '美妆', props: { cats: ['toiletry'] }, floor: { re: /mirror|镜|vanity|梳妆|clothes-rail|挂衣/ } },
   boardgames: { label: '桌游棋牌', props: { re: /桌游|棋|麻将|花札|かるた|扑克|骰|board-?game|chess|shogi|mahjong|jenga|叠叠乐|卡牌/ }, floor: { re: /麻将桌/ } },

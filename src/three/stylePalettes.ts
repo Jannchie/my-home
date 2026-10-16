@@ -82,15 +82,16 @@ export const STYLE_KITS: Record<StyleTag, Kit[]> = {
   ],
   // 欧式古典：象牙白、香槟金、雾蓝、灰绿、酒红丝绒、浅胡桃
   classic: [
-    { light: '#f4ede0', wood: '#9a7656', dark: '#4a3a33', metal: '#c8a96a', fabric: '#8fa3b8', accent: '#7a2e3a', accent2: '#a3ae98' },
-    { light: '#f7f1e6', wood: '#b08d6b', dark: '#3b4a66', metal: '#c8b07a', fabric: '#a3ae98', accent: '#3b4a66', accent2: '#c9a6a0' },
-    { light: '#efe6d6', wood: '#8a6446', dark: '#3a2e2a', metal: '#b8975a', fabric: '#e9dcc3', accent: '#7a2e3a', accent2: '#8fa3b8' },
+    // 第 1、3 套是「法式描金白漆」：木作刷成奶油白，靠香槟金和丝绒色出彩；第 2 套是浅胡桃
+    { light: '#f4ede0', wood: '#e6d8bd', dark: '#4a3a33', metal: '#c8a96a', fabric: '#8fa3b8', accent: '#7a2e3a', accent2: '#a3ae98', spread: 0.35 },
+    { light: '#f7f1e6', wood: '#9a7656', dark: '#3b4a66', metal: '#c8b07a', fabric: '#a3ae98', accent: '#8fa3b8', accent2: '#c9a6a0' },
+    { light: '#efe6d6', wood: '#dccaa6', dark: '#3a2e2a', metal: '#b8975a', fabric: '#e9dcc3', accent: '#7a2e3a', accent2: '#8fa3b8', spread: 0.35 },
   ],
   // 美式乡村：做旧白、原木橡木、鼠尾草绿、海军蓝、谷仓红、黄油黄
   farmhouse: [
-    { light: '#f1ece2', wood: '#b88d5e', dark: '#3c3a38', metal: '#5a5650', fabric: '#e3d8c4', accent: '#9caf91', accent2: '#34465e' },
-    { light: '#f3efe6', wood: '#a87d50', dark: '#2f3640', metal: '#6b665e', fabric: '#9caf91', accent: '#9e3b2f', accent2: '#efd99a' },
-    { light: '#eee8dc', wood: '#c49a6a', dark: '#34465e', metal: '#4a4743', fabric: '#a7b8c9', accent: '#34465e', accent2: '#9e3b2f' },
+    { light: '#f1ece2', wood: '#c49a6a', dark: '#3c3a38', metal: '#5a5650', fabric: '#e3d8c4', accent: '#9caf91', accent2: '#34465e' },
+    { light: '#f3efe6', wood: '#b88d5e', dark: '#2f3640', metal: '#6b665e', fabric: '#9caf91', accent: '#9e3b2f', accent2: '#efd99a' },
+    { light: '#eee8dc', wood: '#cfa676', dark: '#34465e', metal: '#4a4743', fabric: '#a7b8c9', accent: '#9e3b2f', accent2: '#9caf91' },
   ],
 }
 
@@ -102,7 +103,7 @@ const TEMPLATE_PREF: Record<StyleTag, StyleTag[]> = {
   japanese: ['nordic', 'chinese', 'modern', 'retro', 'farmhouse', 'industrial', 'classic', 'cute'],
   industrial: ['modern', 'retro', 'farmhouse', 'nordic', 'japanese', 'chinese', 'classic', 'cute'],
   retro: ['nordic', 'farmhouse', 'japanese', 'cute', 'industrial', 'modern', 'classic', 'chinese'],
-  chinese: ['japanese', 'industrial', 'modern', 'retro', 'nordic', 'classic', 'farmhouse', 'cute'],
+  chinese: ['japanese', 'nordic', 'modern', 'industrial', 'retro', 'classic', 'farmhouse', 'cute'],
   classic: ['nordic', 'modern', 'retro', 'farmhouse', 'japanese', 'cute', 'industrial', 'chinese'],
   farmhouse: ['nordic', 'retro', 'japanese', 'industrial', 'modern', 'classic', 'cute', 'chinese'],
 }
@@ -221,10 +222,10 @@ function probe(def: AssetDef, n: number): SlotProbe[] {
       total += w
       for (const mat of mats) {
         if (!mat?.color) continue
-        const hsl = { h: 0, s: 0, l: 0 }
-        mat.color.getHSL(hsl)
+        // 用 sRGB 十六进制再换 HSL（getHSL 默认在线性工作空间里算，色相会偏）
+        const hsl = toHsl('#' + mat.color.getHexString())!
         if (hsl.s < 0.45 || hsl.l < 0.12 || hsl.l > 0.9) continue
-        const h = hsl.h * 360
+        const h = hsl.h
         let best = -1
         let bd = Math.min(8, 360 / n / 3)
         hues.forEach((hh, i) => {
@@ -270,9 +271,14 @@ const REF_L: Record<Role, number> = { light: 0.92, wood: 0.6, dark: 0.18, grey: 
 /** 撞色时的备选角色 */
 const ALT: Record<string, keyof Kit> = { light: 'fabric', fabric: 'light', accent: 'accent2', accent2: 'fabric', wood: 'dark', dark: 'metal', metal: 'dark' }
 
-/** 绿植、角色（宠物 / 机器人）不派生 */
+/** 以食物本身为主体的素材：配色槽就是食物的颜色，换风格没有意义 */
+const FOOD_RE = /popcorn|ginger|fruit|veget|爆米花|生姜|水果|蔬菜/
+/** 带枝叶的素材（花环、插花、盆景…）：叶绿保持原样 */
+const LEAFY_RE = /wreath|plant|leaf|tree|flower|bonsai|sprout|herb|garland|moss|cactus|succulent|bouquet|ikebana|花环|花|叶|树|草|盆栽|绿植/
+
+/** 绿植、角色（宠物 / 机器人）、设备、以食物为主体的素材不派生 */
 export function canDerive(def: AssetDef) {
-  return def.category !== 'plants' && !def.actor
+  return def.category !== 'plants' && !def.actor && !def.fixture && !FOOD_RE.test(def.id + def.name) && def.palettes.some((p) => p.some(Boolean))
 }
 
 /** 这件素材某风格有没有原生配色 */
@@ -312,11 +318,13 @@ function recolor(def: AssetDef, style: StyleTag): string[] {
   const tpl = def.palettes[templateIndex(def, style)] ?? def.palettes[0] ?? []
   const n = Math.max(1, ...def.palettes.map((p) => p.length))
   const kits = STYLE_KITS[style]
-  const kit = kits[hashStr(def.family ?? def.id) % kits.length]
+  const kit = kits[hashStr(`${def.family ?? def.id}|${style}`) % kits.length]
   const spread = kit.spread ?? 0.55
   const pr = probe(def, n)
   const bodyShare = Math.max(...pr.map((p) => p.share))
-  const outdoor = def.category === 'outdoor'
+  const leafy = def.category === 'outdoor' || LEAFY_RE.test(def.id + def.name)
+  // 固有色：原生配色有 3 组以上、而这个槽在各组里都一样 → 是食物 / 屏幕 / 叶子之类的固有色，保持原样
+  const fixed = (i: number) => def.palettes.length >= 3 && def.palettes.every((p) => (p[i] ?? '').toLowerCase() === (def.palettes[0][i] ?? '').toLowerCase())
 
   // 1. 每个槽的角色
   const slots = Array.from({ length: n }, (_, i) => {
@@ -331,8 +339,9 @@ function recolor(def: AssetDef, style: StyleTag): string[] {
   let accents = 0
   for (const s of order) {
     const c = s.hsl!
-    // 室外素材里的叶绿保持原样
-    if (outdoor && c.h >= 70 && c.h <= 165 && c.s > 0.2) continue
+    // 室外 / 带枝叶素材里的叶绿保持原样；各组都一样的固有色保持原样
+    if (leafy && c.h >= 70 && c.h <= 170 && c.s > 0.08) continue
+    if (fixed(s.i)) continue
     const role = roleOf(c)
     let key: keyof Kit
     if (role === 'grey') key = s.probe.share >= 0.3 && s.probe.share >= bodyShare - 1e-6 ? 'fabric' : 'metal'
@@ -343,7 +352,8 @@ function recolor(def: AssetDef, style: StyleTag): string[] {
     if (clash && ALT[key]) key = ALT[key]
     const kc = toHsl(kit[key] as string)!
     const k = key === 'wood' || key === 'light' || key === 'dark' ? spread : 0.35
-    let l = clamp01(kc.l + (c.l - REF_L[role]) * k)
+    // 金属 / 小面积灰（坐垫、把手、腿）：明度主要跟模板走，只往色板的方向偏一半，避免浅灰坐垫变成黑铁
+    let l = key === 'metal' ? clamp01(c.l + (kc.l - 0.6) * 0.5) : clamp01(kc.l + (c.l - REF_L[role]) * k)
     // 浅色不要变灰、深色不要发白
     if (key === 'light') l = Math.max(l, 0.84)
     if (key === 'dark') l = Math.min(l, 0.3)

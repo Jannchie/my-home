@@ -11,10 +11,15 @@ import { attachPost, LOOKS, LOOK_MAP, type LookId, type Post } from '../three/po
 import { CITIES, MONTH_DAYS, compassAxes, skyState, type SkyState } from '../three/sky'
 import { disposeUnshared } from '../three/toon'
 import { useThumbs } from '../three/thumbs'
+import { normalizeColor } from '../three/stylePalettes'
 import { coverInto, liveCapture } from '../three/planThumb'
 import { FxLayer } from '../three/fx'
 import { ActorLayer } from '../three/actors'
 import ColorEditor from './ColorEditor.vue'
+import SandboxOverlay from './SandboxOverlay.vue'
+import { sandboxBridge } from '../ui/sandboxBridge'
+import { runBusy } from '../ui/feedback'
+import { toast } from '../saved'
 import { JIcon } from '@jannchie/icons-vue'
 import { CATEGORY_ICONS, ICONS, VIEW_ICONS, WALL_MODE_ICONS } from '../ui/icons'
 import { SIZE_LABELS, assetName, browse, canHang, categoriesOf, displayName, formFor, paletteFor, siblings, variantLabel, type Filter, type SizeClass } from '../three/catalog'
@@ -608,8 +613,10 @@ function onKey(e: KeyboardEvent) {
 
 // ---------- 面板操作 ----------
 
-function autoDecorate() {
-  redecorate()
+async function autoDecorate() {
+  // 布置要算一会儿：先画出「处理中」，完成后报件数
+  await runBusy(t('正在布置家具…'), redecorate)
+  toast(t('已布置 {n} 件家具', { n: plan.value.furniture.length }))
 }
 
 function clearFurniture() {
@@ -857,6 +864,8 @@ onMounted(() => {
   window.addEventListener('keyup', onKeyUp)
   window.addEventListener('blur', onKeyUp as unknown as () => void)
   liveCapture.fn = captureView
+  // 浮动工具条 / 右键菜单 / 双击聚焦 / 方向键微移（SandboxOverlay.vue）用的句柄
+  sandboxBridge.value = { canvas: canvas.value!, camera: stage.camera, controls, object: (id) => objs.get(id)?.obj, pick: (e) => pickFurniture(e as PointerEvent), resetView, redraw: () => (dirty = true) }
 })
 
 /**
@@ -1000,6 +1009,7 @@ function toggleLooks() {
 
 onBeforeUnmount(() => {
   if (liveCapture.fn === captureView) liveCapture.fn = null
+  sandboxBridge.value = null
   cancelAnimationFrame(raf)
   ro?.disconnect()
   controls.dispose()
@@ -1125,6 +1135,7 @@ defineExpose({ resetView })
         @drop.prevent="onCanvasDrop"
         @contextmenu.prevent
       />
+      <SandboxOverlay />
       <div v-if="!plan.rooms.length" class="empty">{{ t('还没有房间。先去 2D 平面图画一个，或者点「随机生成」。') }}</div>
       <div class="hud">
         <template v-if="!editing">{{ t('预览模式 · 左键旋转 · 右键平移 · 滚轮缩放 · 鼠标所指房间前的墙自动处理 · P 或 Esc 回到布置') }}</template>
@@ -1341,7 +1352,7 @@ defineExpose({ resetView })
         </div>
         <ColorEditor
           :def="selectedDef"
-          :color="(selectedFurniture.color ?? 0) % selectedDef.palettes.length"
+          :color="normalizeColor(selectedDef, selectedFurniture.color ?? 0)"
           :colors="selectedFurniture.colors"
           :patterns="selectedFurniture.patterns"
           @patterns="(p) => commitFurniturePatterns(selectedFurniture!.id, p)"

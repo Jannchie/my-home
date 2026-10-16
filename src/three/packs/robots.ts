@@ -119,7 +119,7 @@ function remote(p: string[]) {
   g.add(rbox(15, 2.4, 8, main, {}, 1.1))
   for (const sx of [-1, 1]) g.add(ball(2.4, main, { x: sx * 6.4, y: 1.3, z: -0.6 }, [1.1, 0.55, 1.5]))
   g.add(rbox(9.4, 0.5, 6, SCREEN, { y: 2.2, z: 0.4 }, 0.3))
-  g.add(lit(rbox(8.6, 0.2, 5.2, glowC, { y: 2.55, z: 0.4 }, 0.1), glowC, 0.55))
+  g.add(lit(rbox(8.6, 0.2, 5.2, glowC, { y: 2.7, z: 0.4 }, 0.1), glowC, 0.55))
   for (const sx of [-1, 1]) {
     g.add(cyl(0.45, 0.45, 1.4, sub, { x: sx * 6.2, y: 2.2, z: 1.4 }, 8))
     g.add(cyl(1.1, 1.1, 0.5, sub, { x: sx * 6.2, y: 3.4, z: 1.4 }, 14))
@@ -371,7 +371,7 @@ function transformer(form: 'robot' | 'car') {
     for (const sx of [-1, 1]) {
       g.add(rbox(2.8, 1.4, 4.4, sub, { x: sx * 1.8, z: 0.4 }, 0.4))
       g.add(rbox(2.4, 7, 2.6, main, { x: sx * 1.8, y: 1.2 }, 0.5))
-      g.add(cyl(1.4, 1.4, 1, RUBBER, { x: sx * 3.4 - 0.5, y: 4.4, rz: PI / 2 }, 12))
+      g.add(cyl(1.4, 1.4, 1, RUBBER, { x: sx * 3.4, y: 4.4, rz: PI / 2 }, 12))
     }
     g.add(rbox(6, 1.6, 3.4, sub, { y: 8 }, 0.4))
     g.add(rbox(7.2, 5, 4, main, { y: 9.4 }, 0.9))
@@ -412,14 +412,14 @@ function robotArm(p: string[]) {
   const g = new THREE.Group()
   g.add(puck(7.5, 3, joint, {}))
   g.add(cyl(5, 5.4, 5, main, { y: 3 }, 20))
-  g.add(cyl(3.4, 3.4, 9, joint, { x: -4.5, y: 9.5, rz: PI / 2 }, 16))
+  g.add(cyl(3.4, 3.4, 9, joint, { y: 9.5 - 4.5, rz: PI / 2 }, 16))
   const sh: [number, number, number] = [0, 9.5, 0]
   const el: [number, number, number] = [0, 26, -4]
   const wr: [number, number, number] = [0, 27, 10]
   g.add(beam(sh, el, 5.4, 4.4, main, 1.6))
-  g.add(cyl(2.8, 2.8, 7, joint, { x: -3.5, y: el[1], z: el[2], rz: PI / 2 }, 16))
+  g.add(cyl(2.8, 2.8, 7, joint, { y: el[1] - 3.5, z: el[2], rz: PI / 2 }, 16))
   g.add(beam(el, wr, 4, 3.6, main, 1.3))
-  g.add(cyl(2.2, 2.2, 5.6, joint, { x: -2.8, y: wr[1], z: wr[2], rz: PI / 2 }, 14))
+  g.add(cyl(2.2, 2.2, 5.6, joint, { y: wr[1] - 2.8, z: wr[2], rz: PI / 2 }, 14))
   g.add(cyl(1.8, 1.8, 6, main, { y: wr[1] - 6, z: wr[2] + 0.4 }, 14))
   g.add(rbox(4.6, 1.4, 2.6, joint, { y: wr[1] - 7.4, z: wr[2] + 0.4 }, 0.5))
   for (const sx of [-1, 1]) g.add(rbox(0.8, 3.6, 1.8, acc, { x: sx * 1.6, y: wr[1] - 11, z: wr[2] + 0.4 }, 0.3))
@@ -477,7 +477,7 @@ function mecha(p: string[]) {
   g.add(rbox(10, 10, 5, joint, { y: y0 + 29, z: -7 }, 1.2))
   for (const sx of [-1, 1]) g.add(cyl(1.6, 2.2, 5, '#5b5f66', { x: sx * 2.6, y: y0 + 25, z: -8 }, 12))
   for (const sx of [-1, 1]) {
-    const x = sx * 12.5
+    const x = sx * 11.8
     g.add(rbox(8, 7, 9, main, { x, y: y0 + 34 }, 2))
     g.add(rbox(4.4, 11, 4.6, joint, { x, y: y0 + 24 }, 1))
     g.add(rbox(5.4, 9, 5.6, main, { x, y: y0 + 15 }, 1.2))
@@ -509,13 +509,13 @@ export const ROBOT_ASSETS: AssetDef[] = [
   def('rb-drone-aerial', '折叠航拍无人机', 'hobby', [47.5, 27.5, 10], AERIAL_PALS, flying('aerial'), { ...PROP, family: 'rb-drone-aerial', form: 'open', formLabel: '展开', ...actor('drone', 'body', 'aerial') }),
   def('rb-drone-aerial-fold', '折叠航拍无人机', 'hobby', [16, 25.5, 10], AERIAL_PALS, centered(folded('aerial')), { ...PROP, family: 'rb-drone-aerial', form: 'folded', formLabel: '收起' }),
   def('rb-drone-mini', '迷你航拍无人机', 'hobby', [31.5, 18, 6.5], MINI_PALS, flying('mini'), { ...PROP, family: 'rb-drone-mini', form: 'open', formLabel: '展开', ...actor('drone', 'body', 'mini') }),
-  def('rb-drone-mini-fold', '迷你航拍无人机', 'hobby', [10.5, 17, 7], MINI_PALS, folded('mini'), { ...PROP, family: 'rb-drone-mini', form: 'folded', formLabel: '收起' }),
+  def('rb-drone-mini-fold', '迷你航拍无人机', 'hobby', [10.5, 17, 7], MINI_PALS, centered(folded('mini')), { ...PROP, family: 'rb-drone-mini', form: 'folded', formLabel: '收起' }),
   def('rb-drone-fpv', '涵道 FPV 无人机', 'hobby', [19.5, 19, 8], FPV_PALS, flying('fpv'), { ...PROP, ...actor('drone', 'body', 'fpv') }),
   def('rb-drone-toy', '玩具四轴无人机', 'kids', [19, 19, 5], TOY_PALS, flying('toy'), { ...PROP, ...actor('drone', 'body', 'toy') }),
   def('rb-drone-selfie', '掌上自拍无人机', 'hobby', [12, 12, 3], SELFIE_PALS, flying('selfie'), { ...PROP, ...actor('drone', 'body', 'selfie') }),
   def('rb-drone-case', '无人机收纳箱套装', 'hobby', [38, 36, 39.5], GEAR_PALS, centered(droneCase(true)), { family: 'rb-drone-case', form: 'open', formLabel: '打开' }),
   def('rb-drone-case-closed', '无人机收纳箱套装', 'hobby', [39, 29, 18.5], GEAR_PALS, droneCase(false), { family: 'rb-drone-case', form: 'closed', formLabel: '合上' }),
-  def('rb-drone-rc', '带屏无人机遥控器', 'hobby', [18, 9.5, 4], GEAR_PALS, remote, PROP),
+  def('rb-drone-rc', '带屏无人机遥控器', 'hobby', [18.2, 9.6, 4], GEAR_PALS, centered(remote), PROP),
   def('rb-drone-charger', '无人机电池充电管家', 'hobby', [15, 9, 9.5], GEAR_PALS, charger, PROP),
   def('rb-drone-pad', '无人机停机坪垫', 'hobby', [55, 55, 1], PAD_PALS, pad, { ...actor('drone', 'home', 'aerial', [0, 0.6, 0]), limit: { scope: 'house', max: 1, group: 'rb-drone-pad' } }),
   def('rb-gimbal', '口袋云台相机', 'hobby', [3.4, 3, 13], GEAR_PALS, gimbal, PROP),
@@ -533,8 +533,8 @@ export const ROBOT_ASSETS: AssetDef[] = [
 
   // ---------- 机器人：服务 / 家务 ----------
   def('rb-window-bot', '擦窗机器人（贴窗）', 'appliance', [25, 9.5, 25], DOCK_PALS, windowBot, { stick: true }),
-  def('rb-server', '送餐机器人', 'appliance', [47, 47, 130], SERVER_PALS, server, { family: 'rb-server', sizeLabel: '本体', ...SERVER_SURF, ...actor('robopet', 'body', 'server'), limit: { scope: 'house', max: 1, group: 'rb-server' } }),
-  def('rb-server-dock', '送餐机器人充电桩', 'appliance', [48, 60, 42], DOCK_PALS, serverDock, { ...actor('robopet', 'home', 'server', SERVER_DOCK), limit: { scope: 'house', max: 1, group: 'rb-server-dock' } }),
+  def('rb-serve-bot', '送餐机器人', 'appliance', [47, 47, 130], SERVER_PALS, server, { family: 'rb-serve-bot', sizeLabel: '本体', ...SERVER_SURF, ...actor('robopet', 'body', 'server'), limit: { scope: 'house', max: 1, group: 'rb-serve-bot' } }),
+  def('rb-serve-bot-dock', '送餐机器人充电桩', 'appliance', [48, 60, 42], DOCK_PALS, serverDock, { ...actor('robopet', 'home', 'server', SERVER_DOCK), limit: { scope: 'house', max: 1, group: 'rb-serve-bot-dock' } }),
   def('rb-helper', '人形家务机器人', 'appliance', [47.3, 43.6, 109.5], HELPER_PALS, robo('helper'), { ...actor('robopet', 'body', 'helper'), limit: { scope: 'house', max: 1, group: 'rb-helper' } }),
   def('rb-butler', '管家机器人（大屏）', 'appliance', [40, 40, 107.5], BUTLER_PALS, robo('butler'), { ...actor('robopet', 'body', 'butler'), limit: { scope: 'house', max: 1, group: 'rb-butler' } }),
   def('rb-humanoid', '人形机器人', 'hobby', [48, 22, 132.5], HUMANOID_PALS, centered(robo('humanoid')), { family: 'rb-humanoid', sizeLabel: '本体', ...actor('robopet', 'body', 'humanoid'), limit: { scope: 'house', max: 1, group: 'rb-humanoid' } }),
@@ -558,19 +558,19 @@ export const ROBOT_ASSETS: AssetDef[] = [
     ['modern', ['#f4f4f2', '#3d3f44', '#7fd8ff']],
     ['retro', ['#e2702f', '#2f8f8a', '#f4e7c8']],
     ['nordic', ['#e8e1d4', '#a9bfa3', '#9fb4c7']],
-  ], codeCar, PROP),
-  def('rb-arm', '桌面六轴机械臂', 'hobby', [16.5, 20, 32.5], [
+  ], centered(codeCar), PROP),
+  def('rb-arm', '桌面六轴机械臂', 'hobby', [15, 20, 29.5], [
     ['industrial', ['#e0a526', '#3a3a3c', '#7c8085']],
     ['modern', ['#f4f4f2', '#3d3f44', '#8a8d93']],
     ['modern', ['#3d3f44', '#24252a', '#c3c7cc']],
     ['nordic', ['#e6e7e4', '#9fb4c7', '#d9b98c']],
   ], centered(robotArm), PROP),
-  def('rb-tin', '复古铁皮机器人', 'deco', [12, 6.7, 22], [
+  def('rb-tin', '复古铁皮机器人', 'deco', [12.2, 6.8, 22.2], [
     ['retro', ['#c8473a', '#e0a526', '#2f8f8a']],
     ['retro', ['#2f8f8a', '#f4e7c8', '#c8473a']],
     ['industrial', ['#7c8085', '#c46a3a', '#e0a526']],
     ['cute', ['#a8d4f4', '#ffe08f', '#ff8f86']],
-  ], tinRobot, PROP),
+  ], centered(tinRobot), PROP),
   def('rb-mecha', '大型机甲模型', 'hobby', [34, 22, 53.5], [
     ['modern', ['#f4f4f2', '#3d3f44', '#3d5a80']],
     ['industrial', ['#6b6f63', '#3a3a3c', '#c46a3a']],

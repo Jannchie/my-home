@@ -20,6 +20,11 @@ export interface NavOptions {
   /** 不算障碍的家具 id（活动角色自己、可以钻进去的窝） */
   ignore?: Set<string>
   cell?: number
+  /**
+   * 空中网格（无人机）：只把顶端高于 minH 的家具（含摆在台面上的、壁挂在 minH ~ 210 之间的）算障碍，
+   * 低矮的家具从上面飞过去；房间、墙、门洞的规则和 pet 一样。
+   */
+  minH?: number
 }
 
 export class NavGrid {
@@ -85,7 +90,10 @@ export class NavGrid {
     const ignore = opts.ignore ?? new Set<string>()
     for (const f of plan.furniture) {
       const d = ASSET_MAP.get(f.asset)
-      if (!d || d.mount || d.stick || (f.z ?? 0) > 0.5 || ignore.has(f.id) || d.h < 3) continue
+      if (opts.minH !== undefined) {
+        const bottom = d?.mount ?? f.z ?? 0
+        if (!d || d.stick || ignore.has(f.id) || bottom + d.h < opts.minH || bottom > 210) continue
+      } else if (!d || d.mount || d.stick || (f.z ?? 0) > 0.5 || ignore.has(f.id) || d.h < 3) continue
       this.box(furnitureBox(f.asset, f.x, f.y, f.rot), blocked)
     }
     for (const fx of plan.fixtures) this.fixture(fx, blocked)

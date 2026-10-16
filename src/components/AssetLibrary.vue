@@ -143,7 +143,35 @@ function placeInSandbox() {
   viewMode.value = '3d'
 }
 
+/** 双击卡片：直接放进沙盘（设备类只能在平面图里放，双击只选中） */
+function quickPlace(id: string) {
+  select(id)
+  if (!ASSET_MAP.get(id)?.fixture) placeInSandbox()
+}
+
 const dims = (d: { w: number; d: number; h: number }) => `${d.w}×${d.d}×${d.h}`
+
+// ---------- 搜索：按 / 聚焦，Esc 清空；没有结果时一键清除筛选 ----------
+const searchInput = ref<HTMLInputElement>()
+const filtered = computed(() => !!filter.query || filter.category !== 'all' || filter.style !== 'all' || filter.size !== 'all')
+function clearFilters() {
+  Object.assign(filter, { category: 'all', style: 'all', size: 'all', query: '' })
+}
+function onSlash(e: KeyboardEvent) {
+  const el = e.target as HTMLElement
+  if (e.key !== '/' || e.ctrlKey || e.metaKey || el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT') return
+  e.preventDefault()
+  searchInput.value?.focus()
+  searchInput.value?.select()
+}
+function onSearchKey(e: KeyboardEvent) {
+  if (e.key === 'Escape') {
+    filter.query = ''
+    ;(e.target as HTMLInputElement).blur()
+  }
+}
+onMounted(() => window.addEventListener('keydown', onSlash))
+onBeforeUnmount(() => window.removeEventListener('keydown', onSlash))
 </script>
 
 <template>
@@ -151,7 +179,8 @@ const dims = (d: { w: number; d: number; h: number }) => `${d.w}×${d.d}×${d.h}
     <nav class="cats">
       <label class="search-box">
         <JIcon :icon="ICONS.search" :size="14" class="ico-muted" />
-        <input v-model="filter.query" class="search" :placeholder="t('搜索名称 / 规格…')" :aria-label="t('搜索名称 / 规格…')" />
+        <input ref="searchInput" v-model="filter.query" class="search" :placeholder="t('搜索名称 / 规格…')" :aria-label="t('搜索名称 / 规格…')" @keydown="onSearchKey" />
+        <kbd v-if="!filter.query" class="slash" :title="t('按 / 搜索')">/</kbd>
       </label>
       <button :class="{ on: filter.category === 'all' }" @click="filter.category = 'all'">
         <JIcon :icon="ICONS.allCategories" /><span class="cat-name">{{ t('全部') }}</span><span class="num">{{ total }}</span>
@@ -181,7 +210,10 @@ const dims = (d: { w: number; d: number; h: number }) => `${d.w}×${d.d}×${d.h}
           v-memo="[g, thumbs[`${g.rep.id}#${cardColor(g.rep.id)}`], g.rep.id === selectedId || (!!def.family && g.rep.family === def.family), lang]"
           v-thumb="[g.rep.id, cardColor(g.rep.id)]"
           class="card"
-          :class="{ on: g.rep.id === selectedId || (!!def.family && g.rep.family === def.family) }" @click="select(g.rep.id)">
+          :class="{ on: g.rep.id === selectedId || (!!def.family && g.rep.family === def.family) }"
+          :title="g.rep.fixture ? undefined : t('双击放进 3D 沙盘')"
+          @click="select(g.rep.id)"
+          @dblclick="quickPlace(g.rep.id)">
           <img v-if="thumbs[`${g.rep.id}#${cardColor(g.rep.id)}`]" :src="thumbs[`${g.rep.id}#${cardColor(g.rep.id)}`]" alt="" />
           <span v-else class="ph" />
           <span class="name" :title="assetName(g.rep)">{{ assetName(g.rep) }}</span>
@@ -189,7 +221,10 @@ const dims = (d: { w: number; d: number; h: number }) => `${d.w}×${d.d}×${d.h}
           <span v-if="g.rep.prop" class="badge">{{ t('摆件') }}</span>
           <span v-else-if="g.rep.surface" class="badge">{{ t('可摆放') }}</span>
         </button>
-        <div v-if="!list.length" class="none">{{ t('没有匹配的素材') }}</div>
+        <div v-if="!list.length" class="none">
+          {{ t('没有匹配的素材') }}
+          <button v-if="filtered" class="clear" @click="clearFilters"><JIcon :icon="ICONS.reset" :size="14" />{{ t('清除筛选') }}</button>
+        </div>
       </div>
     </div>
 
@@ -415,7 +450,26 @@ const dims = (d: { w: number; d: number; h: number }) => `${d.w}×${d.d}×${d.h}
   color: var(--text-muted);
 }
 .none {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 48px 0;
   color: var(--text-muted);
+}
+.search-box .slash {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  margin: 0;
+  padding: 0 5px;
+  line-height: 16px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface-2);
+  pointer-events: none;
 }
 .detail {
   width: 380px;

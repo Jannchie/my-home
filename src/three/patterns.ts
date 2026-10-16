@@ -662,7 +662,7 @@ function drawHuiwen(p: P) {
   bg(p)
   const n = 2
   const cell = S / n
-  const g = cell / 9 // 平行线间距
+  const g = cell / 7 // 平行线间距
   const h = cell / 2 - g / 2
   const L = 2 * h
   // 方形螺旋各段长度：L, L, L, L-g, L-g, L-2g, L-2g, …
@@ -670,7 +670,7 @@ function drawHuiwen(p: P) {
   for (let k = 1; L - k * g > g * 0.9; k++) lens.push(L - k * g, L - k * g)
   const dirs = [[0, -1], [1, 0], [0, 1], [-1, 0]] as const
   c.strokeStyle = ink(p, 0)
-  c.lineWidth = g * (0.4 + 0.35 * p.d)
+  c.lineWidth = g * (0.3 + 0.25 * p.d)
   c.lineCap = 'butt'
   c.lineJoin = 'miter'
   for (let j = 0; j < n; j++) {
@@ -752,17 +752,19 @@ function drawDamask(p: P) {
     c.quadraticCurveTo(R * 0.13, -R * 1.42, 0, -R * 1.3)
     c.quadraticCurveTo(-R * 0.13, -R * 1.42, 0, -R * 1.62)
     c.fill()
-    c.strokeStyle = col
-    c.lineWidth = Math.max(1, R * 0.07)
-    c.lineCap = 'round'
+    // 两侧下部向外上方舒展的卷叶 + 底部小托叶
     half(() => {
       c.beginPath()
-      c.moveTo(R * 0.78, R * 0.2)
-      c.bezierCurveTo(R * 1.15, R * 0.05, R * 1.2, -R * 0.45, R * 0.95, -R * 0.55)
-      c.stroke()
+      c.moveTo(R * 0.55, R * 0.8)
+      c.bezierCurveTo(R * 1.0, R * 0.85, R * 1.45, R * 0.45, R * 1.35, -R * 0.15)
+      c.bezierCurveTo(R * 1.2, R * 0.3, R * 0.95, R * 0.55, R * 0.62, R * 0.6)
+      c.closePath()
+      c.fill()
       c.beginPath()
-      c.arc(R * 0.95, -R * 0.42, R * 0.12, Math.PI * 1.5, Math.PI * 0.6, true)
-      c.stroke()
+      c.moveTo(R * 0.05, R * 1.15)
+      c.quadraticCurveTo(R * 0.45, R * 1.25, R * 0.6, R * 1.55)
+      c.quadraticCurveTo(R * 0.25, R * 1.5, R * 0.05, R * 1.3)
+      c.fill()
     })
     c.restore()
   }

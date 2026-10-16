@@ -1346,7 +1346,6 @@ export function bendToWalls(obj: THREE.Object3D, plan: Plan, fu: Pick<Furniture,
     if (t < -60 || t > e.length + 60) continue
     // 离家具最近的那一点上真的有墙吗：门洞、落地窗、敞开的边界（LDK 和厨房之间等）都不算墙
     const q = add(e.a, mul(e.dir, Math.max(0, Math.min(e.length, t))))
-    const reach = Math.max(def.w, def.d) / 2
     if (opens.some((o) => projectToSegment(q, o.a, o.b).d < 1)) continue
     if (
       plan.openings.some((o) => {
@@ -1355,7 +1354,8 @@ export function bendToWalls(obj: THREE.Object3D, plan: Plan, fu: Pick<Furniture,
         const g = openingGeom(plan.rooms, o)
         if (!g || Math.abs(g.e.dir.x * e.dir.y - g.e.dir.y * e.dir.x) > 1e-3) return false
         const pr = projectToSegment(g.center, e.a, e.b)
-        return pr.d < 1 && Math.abs(pr.t - t) < o.width / 2 + reach * 0.5
+        // 只有植物中心正对门洞（站在门口）才不避让；门旁边那段实墙照样要避
+        return pr.d < 1 && Math.abs(pr.t - t) < o.width / 2
       })
     )
       continue

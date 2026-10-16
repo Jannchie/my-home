@@ -11,7 +11,7 @@ import type { PatternSpec } from './three/patterns'
 import { DEFAULT_GEO, type Geo } from './three/sky'
 import { ensureOutdoorUnits, planArea, randomSeed, type GenOptions } from './generate'
 import { generatePlan } from './generate-region'
-import { t } from './i18n'
+import { lang, t } from './i18n'
 import { edgeInfo, emptyPlan, projectToSegment, type Fixture, type FixtureKind, type Furniture, type Opening, type Plan, type Room, type Vec, type Wallpaper, uid } from './model'
 
 export type Tool = 'select' | 'rect' | 'poly' | 'door' | 'window' | 'fixture'
@@ -49,6 +49,41 @@ function load(): Plan | null {
   }
 }
 
+// ---------- 默认地区：跟随界面语言（中文 → 中式、日文 → 日式、英文 → 欧美），用户在生成选项里选过就记住 ----------
+const REGION_KEY = 'my-home:region'
+type GenRegion = NonNullable<GenOptions['region']>
+function regionForLang(l: string): GenRegion {
+  return l === 'zh' ? 'cn' : l === 'en' ? 'west' : 'jp'
+}
+function initialRegion(): GenRegion {
+  try {
+    const saved = localStorage.getItem(REGION_KEY)
+    if (saved) return saved as GenRegion
+  } catch {
+    /* 隐私模式等：读不到就按语言 */
+  }
+  return regionForLang(lang.value)
+}
+/** 用户在生成选项里手动选了地区：记住，之后不再跟随语言 */
+export function chooseRegion(r: GenRegion) {
+  genOptions.region = r
+  try {
+    localStorage.setItem(REGION_KEY, r)
+  } catch {
+    /* 存不了就只在本次生效 */
+  }
+}
+// 没手动选过时，切换语言也跟着换默认地区
+watch(lang, (l) => {
+  let saved: string | null = null
+  try {
+    saved = localStorage.getItem(REGION_KEY)
+  } catch {
+    /* ignore */
+  }
+  if (!saved) genOptions.region = regionForLang(l)
+})
+
 export const genOptions = reactive<GenOptions>({
   seed: randomSeed(),
   type: 'random',
@@ -57,9 +92,10 @@ export const genOptions = reactive<GenOptions>({
   access: 'random',
   minArea: null,
   maxArea: null,
-  region: 'jp',
+  region: initialRegion(),
   bedrooms: 'random',
 })
+
 /** 生成结果提示（面积没满足时） */
 export const genMessage = ref('')
 

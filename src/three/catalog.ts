@@ -3,6 +3,7 @@
 import { ASSETS, ASSET_MAP, type AssetDef } from './assets'
 import { FORM_LABELS, type AssetCategory, type StyleTag } from './kit'
 import { assetText, lang } from '../i18n'
+import { paletteStyleOf, preferredColor, styleSet } from './stylePalettes'
 
 export type SizeClass = 'S' | 'M' | 'L'
 export const SIZE_LABELS: Record<SizeClass, string> = { S: '小件', M: '中件', L: '大件' }
@@ -13,21 +14,18 @@ export function sizeClass(def: AssetDef): SizeClass {
   return m <= 50 ? 'S' : m <= 120 ? 'M' : 'L'
 }
 
-/** 第 i 组配色的风格 */
-export const paletteStyle = (def: AssetDef, i: number): StyleTag => def.paletteStyles?.[i] ?? def.styles?.[0] ?? 'cute'
+/** 配色编号 i 的风格（i ≥ 1000 为派生配色，见 stylePalettes.ts） */
+export const paletteStyle = (def: AssetDef, i: number): StyleTag => paletteStyleOf(def, i)
 
-/** 素材支持的全部风格（造型 + 配色） */
+/** 素材支持的全部风格（造型 + 原生配色 + 派生配色） */
 export function stylesOf(def: AssetDef): Set<StyleTag> {
-  const out = new Set<StyleTag>(def.styles ?? [])
-  def.palettes.forEach((_, i) => out.add(paletteStyle(def, i)))
-  return out
+  return styleSet(def)
 }
 
-/** 某个风格的第一组配色；没有就用默认的 0 */
+/** 某个风格优先用的配色编号：该风格第一组原生配色 → 派生配色 → 默认的 0 */
 export function paletteFor(def: AssetDef, style: StyleTag | 'all') {
   if (style === 'all') return 0
-  const i = def.palettes.findIndex((_, k) => paletteStyle(def, k) === style)
-  return i < 0 ? 0 : i
+  return preferredColor(def, style)
 }
 
 /** 系列 → 成员：只建一次索引（以前每次都扫全部素材，browse 里对每个系列各扫一遍，是 O(n²)） */

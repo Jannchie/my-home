@@ -36,6 +36,12 @@ import {
   IconFileTypePng,
   IconFolderOpen,
   IconFitToScreen,
+  IconFocus,
+  IconKeyboard,
+  IconLightbulb,
+  IconLoader,
+  IconSearchMinus,
+  IconSearchPlus,
   IconGuitar,
   IconHeart,
   IconHistory,
@@ -206,6 +212,13 @@ export const ICONS = {
   // 门窗
   doorFlip: IconDoor,
   tidyDoors: IconWand,
+  // 操作感：快捷键帮助、聚焦、缩放、加载、新手提示
+  keyboard: IconKeyboard,
+  focus: IconFocus, // 双击 / 菜单：镜头聚焦到家具
+  zoomIn: IconSearchPlus,
+  zoomOut: IconSearchMinus,
+  loading: IconLoader,
+  tip: IconLightbulb,
 } satisfies Record<string, AppIcon>
 
 /** 顶栏视图切换 */

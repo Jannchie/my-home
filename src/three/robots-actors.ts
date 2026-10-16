@@ -71,7 +71,7 @@ export type DroneType = 'aerial' | 'mini' | 'fpv' | 'toy' | 'selfie'
 
 /** 各型号的飞行参数：r 碰撞半径（含桨），speed 巡航速度 cm/s，pad 停机时机身中心离地 */
 export const DRONES: Record<DroneType, { r: number; speed: number }> = {
-  aerial: { r: 26, speed: 70 },
+  aerial: { r: 24, speed: 70 },
   mini: { r: 19, speed: 55 },
   fpv: { r: 15, speed: 85 },
   toy: { r: 14, speed: 40 },
@@ -192,7 +192,7 @@ function fpvDrone(pal: string[]): DroneParts {
   const [on, off] = ledPair((c) => rbox(2.6, 0.5, 0.5, c, { y: 4.5, z: -4.95 }, 0.2), led)
   k.add(on, off)
   // 底部两条滑橇
-  for (const sx of [-1, 1]) k.add(rbox(1, 0.9, 10, acc, { x: sx * 2.6, y: 0 }, 0.4))
+  for (const sx of [-1, 1]) k.add(rbox(1, 2.5, 10, acc, { x: sx * 2.6, y: 0 }, 0.4))
   const props: THREE.Object3D[] = []
   for (const sx of [-1, 1])
     for (const sz of [-1, 1]) {
@@ -681,11 +681,11 @@ function buildHumanoid(id: string, b: RoboBreed, pal: string[]): RoboRig {
   for (const sx of [-1, 1]) {
     const x = sx * 9
     inner.add(rbox(8.4, 4, 20, joint, { x, z: 2.5 }, 1.6))
-    inner.add(cyl(3, 3, 6, joint, { x: x - 3, y: 5.5, rz: PI / 2 }, 12))
-    inner.add(rbox(6, 30, 7, main, { x, y: 6 }, 2.4))
-    inner.add(cyl(4.2, 4.2, 8, joint, { x: x - 4, y: 38, rz: PI / 2 }, 16))
-    inner.add(rbox(7.6, 28, 8.6, main, { x, y: 41 }, 2.8))
-    inner.add(cyl(4.8, 4.8, 6, joint, { x: x - 3, y: 70, rz: PI / 2 }, 16))
+    inner.add(cyl(3, 3, 6, joint, { x, y: 2, rz: PI / 2 }, 12))
+    inner.add(rbox(6, 32, 7, main, { x, y: 3.5 }, 2.4))
+    inner.add(cyl(4.2, 4.2, 8, joint, { x, y: 34, rz: PI / 2 }, 16))
+    inner.add(rbox(7.6, 28, 8.6, main, { x, y: 40 }, 2.8))
+    inner.add(cyl(4.8, 4.8, 6, joint, { x, y: 67, rz: PI / 2 }, 16))
   }
   inner.add(rbox(22, 12, 14, joint, { y: 64 }, 4))
   inner.add(cyl(6, 7, 9, joint, { y: 75 }, 18))

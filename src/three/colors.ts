@@ -2,6 +2,7 @@
 
 import type { AssetDef, StyleTag } from './kit'
 import { C, S } from './kit'
+import { basePalette } from './stylePalettes'
 import { t } from '../i18n'
 
 /** 颜色槽的名字：素材 build 按 [主色, 副色, 点缀色, …] 取用 */
@@ -15,9 +16,9 @@ export function slotCount(def: AssetDef) {
   return Math.max(1, ...def.palettes.map((p) => p.length))
 }
 
-/** 实际用的配色：预设第 color 组，再用 colors 逐槽覆盖 */
+/** 实际用的配色：预设第 color 组（≥ 1000 为风格派生配色，见 stylePalettes.ts），再用 colors 逐槽覆盖 */
 export function effectivePalette(def: AssetDef, color = 0, colors?: string[]) {
-  const base = def.palettes[color % def.palettes.length] ?? []
+  const base = basePalette(def, color)
   if (!colors?.length) return base
   const n = Math.max(base.length, colors.length)
   return Array.from({ length: n }, (_, i) => colors[i] || base[i] || base[0] || '#cccccc')
@@ -32,6 +33,9 @@ export const SWATCHES: { style: StyleTag | 'basic'; label: string; colors: strin
   { style: 'japanese', label: '和风', colors: Object.values(S.japanese) },
   { style: 'industrial', label: '工业风', colors: Object.values(S.industrial) },
   { style: 'retro', label: '复古昭和', colors: Object.values(S.retro) },
+  { style: 'chinese', label: '新中式', colors: Object.values(S.chinese) },
+  { style: 'classic', label: '欧式古典', colors: Object.values(S.classic) },
+  { style: 'farmhouse', label: '美式乡村', colors: Object.values(S.farmhouse) },
   { style: 'basic', label: '木色', colors: [C.woodL, C.wood, C.woodD, '#a0703f', '#7a5236', '#4e3424'] },
   { style: 'basic', label: '鲜艳', colors: ['#e84a5f', '#ff8c42', '#ffd23f', '#3bb273', '#2e86de', '#7c4dff', '#ff5fa2', '#00b8a9'] },
 ]

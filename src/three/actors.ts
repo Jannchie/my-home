@@ -37,6 +37,7 @@ import {
   type Rig,
   type VacuumParts,
 } from './critters'
+import { DRONES, buildRobo, droneModel, emptyRoboMotion, poseRobo, type DroneParts, type DroneType, type RoboMotion, type RoboRig } from './robots-actors'
 
 type Kind = ActorSpec['kind']
 
@@ -61,13 +62,18 @@ interface Desc {
 }
 
 type Task =
-  | { t: 'rest'; pose: PoseName; dur: number; sleep?: boolean; look?: number; lick?: number; wag?: number; face?: number }
+  | { t: 'rest'; pose: PoseName; dur: number; sleep?: boolean; look?: number; lick?: number; wag?: number; face?: number; wave?: number }
   | { t: 'go'; to: Vec; run?: boolean; sniff?: boolean; path?: Vec[] | null; i?: number; stuck?: number; tries?: number; rr?: number }
   | { t: 'enter'; spot: Spot }
   | { t: 'leave'; to: Vec }
   | { t: 'turn'; h: number }
   | { t: 'clean'; dur: number; wall?: boolean; modeT?: number; turnTo?: number | null }
   | { t: 'wait'; dur: number; charge?: boolean; deliver?: boolean }
+  // 无人机：起飞到巡航高度 / 沿空中网格飞 / 悬停 / 回到停机点降落
+  | { t: 'lift'; h: number }
+  | { t: 'fly'; to: Vec; path?: Vec[] | null; i?: number }
+  | { t: 'hover'; dur: number; dir?: number }
+  | { t: 'land'; spot: Spot }
 
 const TAU = Math.PI * 2
 const wrap = (a: number) => ((((a + Math.PI) % TAU) + TAU) % TAU) - Math.PI
@@ -125,12 +131,31 @@ class Actor {
   carry: { id: string; obj: THREE.Object3D; local: THREE.Matrix4; casters: THREE.Mesh[] }[] = []
   modelKey: string
   blink = 0
+  /** 无人机 / 机器人（robots-actors.ts） */
+  dr?: DroneParts
+  robo?: RoboRig
+  rm: RoboMotion = emptyRoboMotion()
+  shadow: THREE.Mesh
+  shadowR = 1
+  /** 无人机：水平速度、桨转速 0..1、本次巡航高度 */
+  vel: Vec = { x: 0, y: 0 }
+  spin = 0
+  cruise = 150
+  prevH = 0
 
   constructor(public d: Desc) {
     this.modelKey = `${d.kind}|${d.breed}|${d.pal.join(',')}|${d.tiers}`
-    this.cls = d.kind === 'vacuum' || d.kind === 'kachaka' ? 'robot' : 'pet'
+    this.cls = d.kind === 'vacuum' || d.kind === 'kachaka' || d.kind === 'robopet' ? 'robot' : 'pet'
     let model: THREE.Object3D
-    if (d.kind === 'vacuum') {
+    if (d.kind === 'drone') {
+      this.dr = droneModel(d.breed, d.pal)
+      model = this.dr.root
+      this.r = (DRONES[d.breed as DroneType] ?? DRONES.aerial).r
+    } else if (d.kind === 'robopet') {
+      this.robo = buildRobo(d.breed, d.pal)
+      model = this.robo.root
+      this.r = this.robo.breed.r
+    } else if (d.kind === 'vacuum') {
       this.vac = vacuumModel(d.pal)
       model = this.vac.root
       this.r = 18
@@ -151,11 +176,15 @@ class Actor {
     if (this.rig) sh.scale.set(this.rig.breed.girth * 1.25, 1, this.rig.breed.len * 0.75)
     else if (this.kc && d.tiers) sh.scale.set(18, 1, 26)
     else if (this.kc) sh.scale.set(13, 1, 20)
+    else if (this.dr) sh.scale.set(this.r * 0.55, 1, this.r * 0.55)
+    else if (this.robo) sh.scale.set(this.r * 0.75, 1, this.r * (this.robo.breed.type === 'quad' ? 1.2 : 0.75))
     else sh.scale.set(18, 1, 18)
     sh.position.y = 0.35
     sh.renderOrder = 1
     sh.userData.noOutline = true
     this.root.add(sh)
+    this.shadow = sh
+    this.shadowR = sh.scale.x
   }
 
   get breed() {
@@ -178,6 +207,18 @@ class Actor {
     }
     if (this.vac) this.setLed(true)
     if (this.kc) this.setLed(true)
+    if (this.dr) {
+      this.spin = 0
+      this.vel = { x: 0, y: 0 }
+      this.dr.body.rotation.set(0, 0, 0)
+      this.shadow.position.y = 0.35
+      this.setLed(true)
+    }
+    if (this.robo) {
+      const quad = this.robo.breed.type === 'quad'
+      this.rm = { ...emptyRoboMotion(), rest: quad || this.robo.breed.roam ? 1 : 0, eyes: quad ? 0.3 : this.robo.breed.roam ? 0.12 : 1 }
+      poseRobo(this.robo, this.rm)
+    }
     this.writeTransform()
   }
 
@@ -200,6 +241,14 @@ class Actor {
       this.tasks.push({ t: 'rest', pose: rabbit ? 'loaf' : 'curl', dur: rnd(1.5, 9), sleep: true })
     } else if (this.vac) {
       this.tasks.push({ t: 'wait', dur: rnd(2, 8), charge: true })
+    } else if (this.dr) {
+      this.vel = { x: 0, y: 0 }
+      this.spin = 0
+      this.tasks.push({ t: 'wait', dur: rnd(3, 10), charge: true })
+    } else if (this.robo) {
+      this.rm = { ...emptyRoboMotion(), rest: 1 }
+      this.prevH = this.h
+      this.tasks.push(this.robo.breed.roam ? { t: 'rest', pose: 'lie', dur: rnd(2, 8), sleep: true } : { t: 'rest', pose: 'stand', dur: rnd(1, 4), look: 0.5 })
     } else {
       this.tasks.push({ t: 'wait', dur: rnd(3, 10), charge: true })
     }
@@ -207,6 +256,10 @@ class Actor {
 
   setLed(on: boolean) {
     const p = this.vac ?? this.kc
+    if (this.dr) {
+      for (const o of this.dr.ledOn) o.visible = on
+      for (const o of this.dr.ledOff) o.visible = !on
+    }
     if (!p) return
     p.ledOn.visible = on
     p.ledOff.visible = !on
@@ -224,6 +277,8 @@ const SHADOW_MAT = new THREE.MeshBasicMaterial({ color: '#2b2030', transparent: 
 
 /** Kachaka 会去「送东西」的家具：沙发、床、书桌、餐桌前 */
 const DELIVER_RE = /sofa|couch|bed(?!-side)|desk|dining|kotatsu|沙发|ソファ|床|书桌|餐桌|被炉|矮桌|茶几/
+/** 无人机的巡航下限：顶端低于它的家具从上面飞过去（空中网格只把更高的算障碍） */
+const AIR_MIN = 118
 /** 宠物会去吃饭的地方 */
 const BOWL_RE = /pet-bowl|食碗/
 
@@ -233,6 +288,8 @@ export class ActorLayer {
   private plan: Plan | null = null
   private preview = false
   private nav: NavGrid | null = null
+  /** 无人机用的空中网格（低矮家具不算障碍） */
+  private air: NavGrid | null = null
   private bowls: Vec[] = []
   private deliver: { p: Vec; h: number }[] = []
 
@@ -252,13 +309,13 @@ export class ActorLayer {
       const a = def?.actor
       if (!def || !a) continue
       if (a.role === 'body') {
-        // 摆在桌上的（坐姿小猫摆件）不动
-        if ((f.z ?? 0) > 0.5) continue
+        // 摆在桌上的（坐姿小猫摆件）不动；无人机放在桌上也能起飞
+        if ((f.z ?? 0) > 0.5 && a.kind !== 'drone') continue
         const n = def.surfaces?.length ?? 0
         const tiers = a.kind === 'kachaka' ? (n >= 2 ? 3 : n === 1 ? 2 : 0) : 0
         const d: Desc = { src: f.id, kind: a.kind, breed: a.breed ?? (a.kind === 'dog' ? 'shiba' : 'cat'), pal: effectivePalette(def, f.color ?? 0, f.colors), tiers: tiers as 0 | 2 | 3, role: 'body' }
         out.push(d)
-        if (a.kind === 'cat' || a.kind === 'dog') pets.push(d)
+        if (a.kind === 'cat' || a.kind === 'dog' || a.kind === 'robopet' || a.kind === 'drone') pets.push(d)
       } else homes.push({ f, def, a })
     }
     // 宠物认领最近的同类窝
@@ -268,7 +325,7 @@ export class ActorLayer {
       let best: string | undefined
       let bd = Infinity
       for (const h of homes) {
-        if (h.a.kind !== p.kind || taken.has(h.f.id) || actorPartDef(h.def)) continue
+        if (h.a.kind !== p.kind || taken.has(h.f.id) || actorPartDef(h.def) || (p.kind === 'robopet' && h.a.breed !== p.breed)) continue
         const d = dist(me, h.f)
         if (d < bd) {
           bd = d
@@ -290,7 +347,8 @@ export class ActorLayer {
       const breed = h.a.breed ?? (h.a.kind === 'dog' ? 'shiba' : 'cat')
       const src = ASSETS.find((d) => d.actor?.role === 'body' && d.actor.breed === breed && d.id.startsWith('act-')) ?? ASSETS.find((d) => d.actor?.role === 'body' && d.actor.breed === breed)
       const pals = src?.palettes ?? [['#f4a259', '#fff4e6']]
-      out.push({ src: h.f.id, kind: h.a.kind, breed, pal: pals[hash(h.f.id) % pals.length], tiers: 0, role: 'home' })
+      // 座子上自带角色模型的（陪伴机器人充电窝、人形机器人站立架）：用和静态模型一致的第一组配色
+      out.push({ src: h.f.id, kind: h.a.kind, breed, pal: pals[actorPartDef(h.def) ? 0 : hash(h.f.id) % pals.length], tiers: 0, role: 'home' })
     }
     return out
   }
@@ -375,6 +433,7 @@ export class ActorLayer {
     for (const a of this.actors.values()) if (a.d.role === 'body') ignore.add(a.d.src)
     this.nav = new NavGrid(plan, { ignore })
     const nav = this.nav
+    this.air = [...this.actors.values()].some((a) => a.dr) ? new NavGrid(plan, { ignore, minH: AIR_MIN }) : null
     this.bowls = []
     this.deliver = []
     for (const f of plan.furniture) {
@@ -404,7 +463,7 @@ export class ActorLayer {
       a.writeTransform()
       // Kachaka 架子上的东西跟着走
       a.carry = []
-      if (a.kc && a.d.tiers && a.reps[0]) {
+      if (((a.kc && a.d.tiers) || a.robo?.breed.deliver) && a.reps[0]) {
         const src = plan.furniture.find((f) => f.id === a.d.src)
         const part = a.reps[0]
         part.updateWorldMatrix(true, false)
@@ -442,6 +501,7 @@ export class ActorLayer {
       a.carry = []
     }
     this.nav = null
+    this.air = null
   }
 
   /** 射线点中的活动角色 → 它来源的家具 id（走动中的猫狗也能点选） */
@@ -468,6 +528,7 @@ export class ActorLayer {
 
   private brain(a: Actor): Task[] {
     const nav = this.nav!
+    if (a.robo) return this.roboBrain(a)
     if (a.vac) {
       // 扫地机器人：出门清扫一阵 → 回座 → 充电
       if (a.atHome) return [{ t: 'leave', to: a.door }, { t: 'clean', dur: rnd(45, 90) }]
@@ -544,6 +605,7 @@ export class ActorLayer {
   }
 
   private step(a: Actor, dt: number) {
+    if (a.dr) return this.droneStep(a, dt)
     if (!a.tasks.length) a.tasks = this.brain(a)
     const task = a.tasks[0]
     a.tt += dt
@@ -567,7 +629,7 @@ export class ActorLayer {
   }
 
   private turnTo(a: Actor, h: number, dt: number) {
-    const rate = a.cls === 'robot' ? 1.8 : 5
+    const rate = a.robo?.breed.type === 'quad' ? 2.6 : a.cls === 'robot' ? 1.8 : 5
     const d = wrap(h - a.h)
     a.h += Math.max(-rate * dt, Math.min(rate * dt, d))
     return Math.abs(d) < 0.03
@@ -621,6 +683,8 @@ export class ActorLayer {
       }
       case 'enter': {
         const s = task.spot
+        // 机器人没走到座子门口（路被堵住）：不硬闯，就地休息，过一阵再试
+        if (a.robo && dist(a.pos, s) > a.r + 60) return true
         if (a.cls === 'robot') {
           // 机器人倒车进座：朝向不变，沿直线退回去
           this.turnTo(a, s.h, dt)
@@ -649,7 +713,7 @@ export class ActorLayer {
         if (task.path === undefined || task.path === null) {
           // 规划时多留 4cm 余量（走的时候朝向会有点偏），找不到再按原半径找
           // 宠物实在过不去（窄门 + 家具）时缩着身子挤过去
-          for (const rr of a.cls === 'pet' ? [a.r + 4, a.r, a.r * 0.8] : [a.r + 4, a.r]) {
+          for (const rr of a.cls === 'pet' ? [a.r + 4, a.r, a.r * 0.8] : a.robo ? [a.r + 4, a.r, a.r * 0.85] : [a.r + 4, a.r]) {
             task.path = nav.path(a.cls, a.pos, task.to, rr)
             task.rr = Math.min(rr, a.r)
             if (task.path) break
@@ -664,7 +728,7 @@ export class ActorLayer {
         if (i >= path.length) return true
         const last = i === path.length - 1
         const b = a.breed
-        const vmax = a.vac ? 22 : a.kc ? 28 : task.run ? b!.run : task.sniff ? b!.walk * 0.55 : b!.walk
+        const vmax = a.vac ? 22 : a.kc ? 28 : a.robo ? a.robo.breed.speed * (task.run ? 1.5 : 1) : task.run ? b!.run : task.sniff ? b!.walk * 0.55 : b!.walk
         const left = this.moveTo(a, path[i], vmax, dt, true, task.rr)
         if (left < 0) {
           task.stuck = (task.stuck ?? 0) + dt
@@ -713,6 +777,8 @@ export class ActorLayer {
         void vac
         return a.tt >= task.dur
       }
+      default:
+        return true
     }
   }
 
@@ -727,6 +793,7 @@ export class ActorLayer {
     if ((a.atHome || task?.t === 'enter' || task?.t === 'leave') && dHome < 22) yT = s.z
     a.yW += (yT - a.yW) * Math.min(1, dt * 10)
 
+    if (a.robo) return this.animateRobo(a, task, dt)
     if (a.vac) {
       const cleaning = task?.t === 'clean' || task?.t === 'go' || task?.t === 'leave'
       for (const [k, br] of a.vac.brushes.entries()) br.rotation.y += (k ? -1 : 1) * (cleaning ? 14 : 0) * dt
@@ -794,9 +861,241 @@ export class ActorLayer {
     applyPose(rig, a.pose, { ...m, earFlick: Math.sin(m.earFlick * Math.PI) })
   }
 
+  // ---------- 机器人（robopet） ----------
+
+  /** 机器狗 / 轮式机器人：出座 → 到处走走、去沙发 / 餐桌前「看看人」→ 回座充电；人形机器人原地待机（转头、挥手） */
+  private roboBrain(a: Actor): Task[] {
+    const nav = this.nav!
+    const b = a.robo!.breed
+    if (!b.roam) {
+      const r = Math.random()
+      return [r < 0.3 ? { t: 'rest', pose: 'stand', dur: rnd(2.5, 3.5), wave: 1, look: 0.3 } : { t: 'rest', pose: 'stand', dur: rnd(4, 9), look: r < 0.75 ? 1 : 0.15 }]
+    }
+    const s = a.sleep
+    if (a.atHome) {
+      // 还在摆放的原位（认领的充电座在别处）：就近找个能站的地方起步，不直线穿过家具去座子门口
+      const out = dist(a.pos, s) > 30 ? nav.nearest('robot', a.pos, a.r, 150) ?? a.pos : a.door
+      return [{ t: 'rest', pose: 'stretch', dur: b.type === 'quad' ? rnd(1.6, 2.4) : 0.8 }, { t: 'leave', to: out }]
+    }
+    a.acts++
+    if (a.acts > 3 + Math.random() * 4) {
+      a.acts = 0
+      return [{ t: 'go', to: a.door }, { t: 'turn', h: s.h }, { t: 'enter', spot: s }, { t: 'rest', pose: 'lie', dur: rnd(25, 45), sleep: true }]
+    }
+    const r = Math.random()
+    if (this.deliver.length && r < (b.deliver ? 0.8 : 0.4)) {
+      // 停在沙发 / 床 / 餐桌前，朝着那边东张西望（看人），轮式的偶尔挥挥手
+      const d = this.deliver[Math.floor(Math.random() * this.deliver.length)]
+      const wave = b.type === 'wheel' && Math.random() < 0.4 ? 1 : 0
+      return [{ t: 'go', to: d.p }, { t: 'turn', h: d.h }, { t: 'rest', pose: 'stand', dur: rnd(3, 6), look: 1, wave }]
+    }
+    const p = nav.randomSpot('robot', a.r, Math.random, a.pos, 380, 10)
+    const go: Task[] = p ? [{ t: 'go', to: p }] : []
+    return [...go, { t: 'rest', pose: Math.random() < 0.3 && b.type === 'quad' ? 'lie' : 'stand', dur: rnd(2, 5), look: 0.7 }]
+  }
+
+  private animateRobo(a: Actor, task: Task | undefined, dt: number) {
+    const rig = a.robo!
+    const b = rig.breed
+    const m = a.rm
+    m.t += dt
+    let rest = 0
+    let stretch = 0
+    let look = 0
+    let wave = 0
+    let sleep = false
+    if (task?.t === 'rest') {
+      rest = task.pose === 'lie' || task.pose === 'curl' ? 1 : 0
+      stretch = task.pose === 'stretch' ? 1 : 0
+      look = task.look ?? 0
+      wave = task.wave ?? 0
+      sleep = !!task.sleep
+    } else if (task?.t === 'wait' && a.atHome) {
+      rest = 1
+      sleep = true
+    }
+    const k = (r: number) => Math.min(1, dt * r)
+    m.rest += (rest - m.rest) * k(2.5)
+    m.stretch += (stretch - m.stretch) * k(3)
+    m.look += (look - m.look) * k(3)
+    m.wave += (wave - m.wave) * k(4)
+    // 步态：走路按速度推进相位，原地转身也小碎步
+    const turn = Math.abs(wrap(a.h - a.prevH)) / Math.max(dt, 1e-4)
+    a.prevH = a.h
+    const sp = Math.abs(a.speed)
+    const turning = turn > 0.3 && sp < 3
+    const gT = sp > 1 ? Math.min(1, sp / (b.speed * 0.5)) : turning ? 0.6 : 0
+    m.gait += (gT - m.gait) * k(6)
+    m.phase += turning ? TAU * 2 * dt : (TAU * a.speed * dt) / (18.4 * b.s)
+    m.speed = a.speed
+    // 眨眼：睡着时闭眼；醒着时偶尔眨一下
+    const blink = Math.sin(m.t * 1.3 + a.r) > 0.995
+    const eyes = sleep ? (b.type === 'quad' ? 0.3 : 0.12) : blink ? 0.1 : 1
+    m.eyes += (eyes - m.eyes) * k(18)
+    for (const w of rig.wheels) w.rotation.x += (a.speed / (rig.wheelR * b.s)) * dt
+    poseRobo(rig, m)
+  }
+
+  // ---------- 无人机 ----------
+
+  private droneStep(a: Actor, dt: number) {
+    if (!a.tasks.length) a.tasks = this.droneBrain(a)
+    const task = a.tasks[0]
+    a.tt += dt
+    if (!task || this.droneRun(a, task, dt)) {
+      a.tasks.shift()
+      a.tt = 0
+    }
+    this.droneAnimate(a, task, dt)
+    a.writeTransform()
+  }
+
+  /** 一趟出勤：起飞 → 在几个房间上空飞一飞、悬停 → 飞回停机点 → 降落 → 充电 */
+  private droneBrain(a: Actor): Task[] {
+    const air = this.air
+    const s = a.sleep
+    const home: Task[] = [{ t: 'fly', to: { x: s.x, y: s.y } }, { t: 'land', spot: s }, { t: 'wait', dur: rnd(20, 40), charge: true }]
+    if (!a.atHome) return home
+    a.cruise = Math.min(205, Math.max(rnd(AIR_MIN + 15, 175), s.z + 40))
+    const list: Task[] = [{ t: 'lift', h: a.cruise }]
+    // 只挑飞得过去的地方（大飞机过不了窄门就在本房间里转转）
+    const n = 2 + Math.floor(Math.random() * 3)
+    let from: Vec = { x: s.x, y: s.y }
+    for (let i = 0, tries = 0; i < n && air && tries < 10; tries++) {
+      const p = air.randomSpot('pet', a.r, Math.random, undefined, Infinity, 15)
+      if (!p || !air.path('pet', from, p, a.r)) continue
+      list.push({ t: 'fly', to: p }, { t: 'hover', dur: rnd(2, 5), dir: Math.random() < 0.5 ? -1 : 1 })
+      from = p
+      i++
+    }
+    return [...list, ...home]
+  }
+
+  /** 朝 target 水平加速飞行；返回剩余距离 */
+  private flyToward(a: Actor, target: Vec, vmax: number, dt: number, last: boolean) {
+    const dx = target.x - a.pos.x
+    const dy = target.y - a.pos.y
+    const d = Math.hypot(dx, dy)
+    // 快到终点 / 拐点就减速（拐点不减到 0，免得每个拐角都停一下）
+    // 方向始终对准航点（不抄近路，贴着规划好的航线飞），只平滑速度大小
+    const v = Math.min(vmax, last ? d * 1.6 : d * 2.2 + 18)
+    const cur = Math.hypot(a.vel.x, a.vel.y)
+    const spd = cur + (v - cur) * Math.min(1, dt * 3)
+    a.vel = d > 0.01 ? { x: (dx / d) * spd, y: (dy / d) * spd } : { x: 0, y: 0 }
+    // 一帧不越过目标点
+    let sx = a.vel.x * dt
+    let sy = a.vel.y * dt
+    const sl = Math.hypot(sx, sy)
+    if (sl > d && sl > 0) {
+      sx *= d / sl
+      sy *= d / sl
+    }
+    a.pos = { x: a.pos.x + sx, y: a.pos.y + sy }
+    return Math.hypot(target.x - a.pos.x, target.y - a.pos.y)
+  }
+
+  private droneRun(a: Actor, task: Task, dt: number): boolean {
+    const air = this.air
+    const vmax = (DRONES[a.d.breed as DroneType] ?? DRONES.aerial).speed
+    const cruiseY = () => a.cruise + Math.sin(a.rm.t * 1.3) * 2
+    switch (task.t) {
+      case 'wait':
+        a.vel = { x: 0, y: 0 }
+        return a.tt >= task.dur
+      case 'lift':
+        a.atHome = false
+        // 先把桨转起来，再垂直爬升
+        if (a.spin < 0.85) return false
+        a.yW = Math.min(task.h, a.yW + dt * (task.h - a.yW > 20 ? 45 : 20))
+        return a.yW >= task.h - 0.5
+      case 'fly': {
+        if (!air) return true
+        if (task.path === undefined) {
+          task.path = air.path('pet', a.pos, task.to, a.r)
+          task.i = task.path && dist(task.path[0], a.pos) > 3 ? 0 : 1
+        }
+        const path = task.path
+        if (!path) return true
+        let i = task.i ?? 1
+        if (i >= path.length) return true
+        const last = i === path.length - 1
+        const left = this.flyToward(a, path[i], vmax, dt, last)
+        a.yW += (cruiseY() - a.yW) * Math.min(1, dt * 2)
+        const sp = Math.hypot(a.vel.x, a.vel.y)
+        if (sp > 8) this.turnDrone(a, Math.atan2(a.vel.x, a.vel.y), dt)
+        if (left < (last ? 1.5 : 2.5)) task.i = ++i
+        return i >= path.length || a.tt > 90
+      }
+      case 'hover':
+        a.vel.x *= Math.max(0, 1 - dt * 3)
+        a.vel.y *= Math.max(0, 1 - dt * 3)
+        a.h += (task.dir ?? 1) * 0.45 * dt
+        a.yW += (cruiseY() - a.yW) * Math.min(1, dt * 2)
+        return a.tt >= task.dur
+      case 'land': {
+        const s = task.spot
+        const d = dist(a.pos, s)
+        // 只在停机点附近做最后的对准（飞回来的路径已经到了上空；实在没飞到就原地降落）
+        if (d > 0.5 && d < 80) this.flyToward(a, s, vmax * 0.4, dt, true)
+        else a.vel = { x: 0, y: 0 }
+        this.turnDrone(a, s.h, dt)
+        if (d < 3 || d >= 80) {
+          const v = a.yW - s.z > 25 ? 40 : 16
+          a.yW = Math.max(s.z, a.yW - v * dt)
+        }
+        if (a.yW <= s.z + 0.05) {
+          a.yW = s.z
+          if (d < 80) a.pos = { x: s.x, y: s.y }
+          a.vel = { x: 0, y: 0 }
+          a.atHome = true
+          return true
+        }
+        return a.tt > 40
+      }
+      default:
+        return true
+    }
+  }
+
+  private turnDrone(a: Actor, h: number, dt: number) {
+    const d = wrap(h - a.h)
+    a.h += Math.max(-2.4 * dt, Math.min(2.4 * dt, d))
+  }
+
+  private droneAnimate(a: Actor, task: Task | undefined, dt: number) {
+    const dr = a.dr!
+    const m = a.rm
+    m.t += dt
+    const flying = !!task && task.t !== 'wait'
+    a.spin += ((flying ? 1 : 0) - a.spin) * Math.min(1, dt * (flying ? 2.2 : 1.2))
+    dr.props.forEach((p, k) => (p.rotation.y += (k % 2 ? -1 : 1) * a.spin * 48 * dt))
+    // 机身姿态：往前飞低头、横移侧倾，悬停时轻轻晃
+    const f = fwd(a.h)
+    const vf = a.vel.x * f.x + a.vel.y * f.y
+    const vs = a.vel.x * f.y - a.vel.y * f.x
+    const air = a.yW > a.sleep.z + 2 ? 1 : 0
+    const tx = Math.max(-0.22, Math.min(0.22, vf * 0.0032)) + Math.sin(m.t * 2.3) * 0.02 * air
+    const tz = -Math.max(-0.22, Math.min(0.22, vs * 0.0032)) + Math.sin(m.t * 1.7) * 0.02 * air
+    dr.body.rotation.x += (tx - dr.body.rotation.x) * Math.min(1, dt * 5)
+    dr.body.rotation.z += (tz - dr.body.rotation.z) * Math.min(1, dt * 5)
+    a.blink += dt
+    a.setLed(flying ? Math.sin(a.blink * 6) > 0 : Math.sin(a.blink * 1.6) > -0.7)
+    // 接触阴影落在地面上，飞得越高越小
+    const floor = this.air?.floorAt(a.pos) ?? this.nav?.floorAt(a.pos) ?? 0
+    const hgt = Math.max(0, a.yW - floor)
+    a.shadow.position.y = floor - a.yW + 0.35
+    const sc = a.shadowR * Math.max(0.45, 1 - hgt / 320)
+    a.shadow.scale.set(sc, 1, sc)
+  }
+
   /** 调试 / 测试用：每个角色的位置 */
   snapshot() {
-    return [...this.actors.values()].map((a) => ({ id: a.d.src, kind: a.d.kind, breed: a.d.breed, x: a.pos.x, y: a.pos.y, h: a.h, r: (a.tasks[0]?.t === 'go' && (a.tasks[0] as { rr?: number }).rr) || a.r, cls: a.cls, task: a.tasks[0]?.t, atHome: a.atHome }))
+    return [...this.actors.values()].map((a) => ({ id: a.d.src, kind: a.d.kind, breed: a.d.breed, x: a.pos.x, y: a.pos.y, h: a.h, r: (a.tasks[0]?.t === 'go' && (a.tasks[0] as { rr?: number }).rr) || a.r, cls: a.cls, task: a.tasks[0]?.t, atHome: a.atHome, z: a.yW }))
+  }
+
+  /** 测试用：无人机的空中网格 */
+  get airGrid() {
+    return this.air
   }
 
   /** 测试用 */
@@ -807,7 +1106,7 @@ export class ActorLayer {
 
 /** 素材里有没有标 actorPart 的子树（基站一类：本身带着角色，不能被别的宠物认领） */
 function actorPartDef(def: AssetDef) {
-  return def.actor?.kind === 'vacuum' || def.actor?.kind === 'kachaka'
+  return def.actor?.kind === 'vacuum' || def.actor?.kind === 'kachaka' || /^rb-(companion-nest|humanoid-stand)$/.test(def.id)
 }
 
 export { BREEDS }

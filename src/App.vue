@@ -1,12 +1,16 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import PlanCanvas from './components/PlanCanvas.vue'
 import InspectorPanel from './components/InspectorPanel.vue'
 import Sandbox3D from './components/Sandbox3D.vue'
 import AssetLibrary from './components/AssetLibrary.vue'
 import SavedPlans from './components/SavedPlans.vue'
-import { currentSaved, detachSaved, initSaved, openPanel, quickSave, saved } from './saved'
-import { FIXTURES, REGION_LABELS, type Plan } from './model'
+import TooltipLayer from './components/TooltipLayer.vue'
+import ShortcutHelp from './components/ShortcutHelp.vue'
+import Onboarding from './components/Onboarding.vue'
+import { currentSaved, detachSaved, initSaved, openPanel, quickSave, saved, toast } from './saved'
+import { busy, nextPaint, overlays, runBusy } from './ui/feedback'
+import { FIXTURES, REGION_LABELS, dot, edgeInfo, type Plan } from './model'
 import { LAYOUT_TYPES, STYLE_LABELS } from './generate'
 import { isTyping } from './dom'
 import { LANGS, jp, lang, setLang, t, type Lang } from './i18n'
@@ -17,6 +21,7 @@ import {
   duplicateSelection,
   findRoom,
   genMessage,
+  chooseRegion,
   genOptions,
   generate,
   historyState,
@@ -78,10 +83,13 @@ const hints: Record<Tool, string> = {
 }
 
 async function doGenerate(newSeed = true) {
-  generate(newSeed)
-  detachSaved()
-  await nextTick()
+  // 生成（含自动布置）要算一会儿：先画出「处理中」，生成完报一下户型名
+  await runBusy(t(sandbox.autoFurnish ? '正在生成户型并布置家具…' : '正在生成户型…'), () => {
+    generate(newSeed)
+    detachSaved()
+  })
   canvas.value?.fit()
+  toast(t('已生成「{name}」', { name: plan.value.name || t('未命名户型') }))
 }
 
 async function doNew() {
@@ -111,8 +119,10 @@ async function importJson(e: Event) {
     detachSaved()
     await nextTick()
     canvas.value?.fit()
+    toast(t('已导入「{name}」', { name: p.name || t('未命名户型') }))
   } catch (err) {
-    alert(t('导入失败：{msg}', { msg: (err as Error).message }))
+    // 用应用内提示代替浏览器 alert（不打断操作）
+    toast(t('导入失败：{msg}', { msg: (err as Error).message }), 'error')
   }
   ;(e.target as HTMLInputElement).value = ''
 }
@@ -141,6 +151,16 @@ function onKey(e: KeyboardEvent) {
   // 面板 / 确认框开着时不响应编辑器快捷键
   if (saved.panelOpen || saved.confirm) return
   if (isTyping(e)) return
+  // ?：快捷键帮助（帮助开着时其他快捷键都不响应，Esc 关闭）
+  if (e.key === '?' && !mod) {
+    e.preventDefault()
+    overlays.help = !overlays.help
+    return
+  }
+  if (overlays.help) {
+    if (e.key === 'Escape') overlays.help = false
+    return
+  }
   if (mod && k === 'z') {
     e.preventDefault()
     if (e.shiftKey) redo()
@@ -153,6 +173,9 @@ function onKey(e: KeyboardEvent) {
     duplicateSelection()
   } else if (!mod && (e.key === 'Delete' || e.key === 'Backspace')) {
     deleteSelection()
+  } else if (!mod && !e.altKey && !e.shiftKey && (k === '1' || k === '2' || k === '3')) {
+    // 1 / 2 / 3：切换平面图 / 3D 沙盘 / 素材库
+    viewMode.value = views[+k - 1].id
   } else if (!mod && !e.altKey && viewMode.value === '2d') {
     const tl = tools.find((x) => x.key.toLowerCase() === k)
     if (tl) tool.value = tl.id
@@ -163,19 +186,61 @@ function onKey(e: KeyboardEvent) {
   }
 }
 
+/**
+ * 方向键微移选中的房间 / 设备 / 门窗（门窗沿所在墙移动）。
+ * 连按（含按住不放）只记一步撤销：距上次微移超过 800ms 才开新的一步。
+ */
+let lastNudge = 0
 function nudge(e: KeyboardEvent) {
   const s = selection.value
-  if (s?.type !== 'room') return
-  const r = findRoom(s.id)
-  if (!r) return
-  e.preventDefault()
+  if (!s || (s.type !== 'room' && s.type !== 'fixture' && s.type !== 'opening')) return
   const step = e.shiftKey ? settings.grid * 10 : settings.grid || 1
   const dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0
   const dy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0
-  mutate(() => {
-    r.points = r.points.map((p) => ({ x: p.x + dx, y: p.y + dy }))
-  })
+  let apply: (() => void) | null = null
+  if (s.type === 'room') {
+    const r = findRoom(s.id)
+    if (r) apply = () => (r.points = r.points.map((p) => ({ x: p.x + dx, y: p.y + dy })))
+  } else if (s.type === 'fixture') {
+    const f = plan.value.fixtures.find((x) => x.id === s.id)
+    if (f) apply = () => ((f.x += dx), (f.y += dy))
+  } else {
+    const o = plan.value.openings.find((x) => x.id === s.id)
+    const r = o && findRoom(o.roomId)
+    if (o && r) {
+      const ed = edgeInfo(r.points, o.edge)
+      const d = dot({ x: dx, y: dy }, ed.dir)
+      // 和墙垂直的方向键不动
+      if (Math.abs(d) > 0.5) apply = () => (o.offset = ed.length <= o.width ? ed.length / 2 : Math.max(o.width / 2, Math.min(ed.length - o.width / 2, o.offset + d)))
+    }
+  }
+  if (!apply) return
+  e.preventDefault()
+  const now = performance.now()
+  if (now - lastNudge > 800) mutate(apply)
+  else apply()
+  lastNudge = now
 }
+
+// ---------- 视图切换：3D 沙盘 / 素材库要建 WebGL 场景，先画出「处理中」再挂载 ----------
+const shownView = ref<ViewMode>(viewMode.value)
+watch(viewMode, async (v) => {
+  if (v === shownView.value) return
+  if (v === '2d') {
+    shownView.value = v
+    return
+  }
+  busy.count++
+  busy.text = t(v === '3d' ? '正在搭建 3D 沙盘…' : '正在准备素材库…')
+  try {
+    await nextPaint()
+    if (viewMode.value !== v) return
+    shownView.value = v
+    await nextTick()
+  } finally {
+    busy.count--
+  }
+})
 
 // 「生成选项」弹层：只是界面开关，点外面或按 Esc 收起
 const genOpen = ref(false)
@@ -211,7 +276,7 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="views">
-        <button v-for="v in views" :key="v.id" :class="{ on: viewMode === v.id }" :title="t(v.label)" :aria-label="t(v.label)" @click="viewMode = v.id"><JIcon :icon="VIEW_ICONS[v.id]" /><span class="lbl">{{ t(v.label) }}</span></button>
+        <button v-for="(v, i) in views" :key="v.id" :class="{ on: viewMode === v.id }" :title="`${t(v.label)} (${i + 1})`" :aria-label="t(v.label)" @click="viewMode = v.id"><JIcon :icon="VIEW_ICONS[v.id]" /><span class="lbl">{{ t(v.label) }}</span></button>
       </div>
 
       <div v-if="viewMode === '2d'" class="group">
@@ -235,7 +300,7 @@ onBeforeUnmount(() => {
       <div class="group hist">
         <button :disabled="!historyState.canUndo" :title="t('撤销') + ' (Ctrl Z)'" :aria-label="t('撤销')" @click="undo"><JIcon :icon="ICONS.undo" /><span class="lbl">{{ t('撤销') }}</span></button>
         <button :disabled="!historyState.canRedo" :title="t('重做') + ' (Ctrl Shift Z)'" :aria-label="t('重做')" @click="redo"><JIcon :icon="ICONS.redo" /><span class="lbl">{{ t('重做') }}</span></button>
-        <button v-if="viewMode === '2d'" :title="t('适应视图') + ' (F)'" :aria-label="t('适应视图')" @click="canvas?.fit()"><JIcon :icon="ICONS.fit" /><span class="lbl">{{ t('适应') }}</span></button>
+        <button v-if="viewMode === '2d'" class="fit-btn" :title="t('适应视图') + ' (F)'" :aria-label="t('适应视图')" @click="canvas?.fit()"><JIcon :icon="ICONS.fit" /><span class="lbl">{{ t('适应') }}</span></button>
       </div>
 
       <!-- 户型生成：主按钮 + 「生成选项」弹层（参数多，平铺在顶栏会挤成两行） -->
@@ -249,7 +314,7 @@ onBeforeUnmount(() => {
         <div v-if="genOpen" class="gen-pop" role="dialog" :aria-label="t('生成选项')">
           <label class="field">
             <span>{{ t('地区 / 风格') }}</span>
-            <select v-model="genOptions.region">
+            <select :value="genOptions.region" @change="chooseRegion(($event.target as HTMLSelectElement).value as never)">
               <option v-for="(label, key) in REGION_LABELS" :key="key" :value="key">{{ t(label) }}</option>
               <option value="random">{{ t('随机地区') }}</option>
             </select>
@@ -323,26 +388,43 @@ onBeforeUnmount(() => {
         <select :value="lang" :title="t('界面语言')" aria-label="Language" @change="setLang(($event.target as HTMLSelectElement).value as Lang)">
           <option v-for="l in LANGS" :key="l.id" :value="l.id">{{ l.label }}</option>
         </select>
+        <button class="help-btn" :title="t('快捷键') + ' (?)'" :aria-label="t('快捷键')" @click="overlays.help = true"><JIcon :icon="ICONS.keyboard" /></button>
       </div>
     </header>
 
-    <main v-if="viewMode === '2d'">
+    <!-- 视图内容比顶栏的高亮晚两帧切换：先画出「处理中」再搭 WebGL 场景 -->
+    <main v-if="shownView === '2d'">
       <div class="stage">
         <PlanCanvas ref="canvas" />
+        <!-- 缩放控件：滚轮 / 捏合之外的可见入口；点百分比回到 100% -->
+        <div class="zoom">
+          <button class="icon-only" :title="t('缩小')" :aria-label="t('缩小')" @click="canvas?.zoomBy(1 / 1.25)"><JIcon :icon="ICONS.zoomOut" :size="15" /></button>
+          <button class="pct num" :title="t('回到 100%')" @click="canvas?.zoomReset()">{{ Math.round((canvas?.view.s ?? 1) * 100) }}%</button>
+          <button class="icon-only" :title="t('放大')" :aria-label="t('放大')" @click="canvas?.zoomBy(1.25)"><JIcon :icon="ICONS.zoomIn" :size="15" /></button>
+          <button class="icon-only" :title="t('适应视图') + ' (F)'" :aria-label="t('适应视图')" @click="canvas?.fit()"><JIcon :icon="ICONS.fit" :size="15" /></button>
+        </div>
         <footer class="status">
           <span>{{ t(hints[tool]) }}<b v-if="genMessage" class="warn"> · {{ genMessage }}</b></span>
-          <span class="num">{{ canvas?.cursorInfo }} · {{ Math.round((canvas?.view.s ?? 1) * 100) }}%</span>
+          <span class="num">{{ canvas?.cursorInfo }}</span>
         </footer>
       </div>
       <InspectorPanel />
     </main>
-    <main v-else-if="viewMode === '3d'">
+    <main v-else-if="shownView === '3d'">
       <Sandbox3D />
     </main>
     <main v-else>
       <AssetLibrary />
     </main>
     <SavedPlans @opened="onSavedOpened" />
+    <!-- 处理中：淡入带延迟，很快的操作不会闪；转圈是合成线程动画，主线程忙时也在转 -->
+    <div v-if="busy.count" class="busy" role="status" aria-live="polite">
+      <JIcon :icon="ICONS.loading" :size="16" class="spin" />
+      <span>{{ busy.text }}</span>
+    </div>
+    <TooltipLayer />
+    <ShortcutHelp />
+    <Onboarding />
   </div>
 </template>
 
@@ -412,7 +494,14 @@ onBeforeUnmount(() => {
   }
 }
 @media (max-width: 1760px) {
-  .views .lbl {
+  /* 窄一些时只给当前视图留文字：一眼看出自己在哪，其余两个靠图标 + 提示 */
+  .views button:not(.on) .lbl {
+    display: none;
+  }
+  .views button:not(.on) {
+    padding: 0 10px;
+  }
+  .gen-toggle .lbl {
     display: none;
   }
 }
@@ -503,6 +592,10 @@ onBeforeUnmount(() => {
 }
 .lang {
   gap: 4px;
+}
+/* 设备下拉：日文 / 英文的设备名很长，限宽免得把顶栏挤成两行（展开的列表仍显示全名） */
+.top .kind {
+  max-width: 128px;
 }
 /* 保存按钮：有未保存的修改时右上角一个鼠尾草绿小圆点 */
 .save-btn {
@@ -600,5 +693,112 @@ main {
   background: rgba(250, 250, 248, 0.88);
   border-top: 1px solid var(--border);
   pointer-events: none;
+}
+.help-btn {
+  padding: 0 8px;
+}
+.zoom {
+  position: absolute;
+  right: 12px;
+  bottom: 38px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 3px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+.zoom button {
+  height: 26px;
+  border-color: transparent;
+  background: transparent;
+}
+.zoom button:hover:not(:disabled) {
+  border-color: transparent;
+}
+.zoom .pct {
+  min-width: 52px;
+  padding: 0 6px;
+  font-size: var(--fs-xs);
+}
+/* 处理中提示：顶栏下方居中的小胶囊 */
+.busy {
+  position: fixed;
+  top: 64px;
+  left: 50%;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  font-size: var(--fs-sm);
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  box-shadow: var(--shadow);
+  transform: translateX(-50%);
+  pointer-events: none;
+  animation: busy-in 0.18s ease-out 0.08s both;
+}
+.busy .spin {
+  color: var(--accent);
+  animation: busy-spin 0.9s linear infinite;
+}
+@keyframes busy-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -4px);
+  }
+}
+@keyframes busy-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* 更窄的屏幕：收起品牌文字、当前视图文字和顶栏里的「适应」（平面图右下角的缩放控件里也有），保持一行 */
+@media (max-width: 1440px) {
+  .brand {
+    padding-right: 10px;
+    margin-right: 0;
+  }
+  .brand-text {
+    display: none;
+  }
+  .top .views button.on .lbl {
+    display: none;
+  }
+  .hist .fit-btn {
+    display: none;
+  }
+  .top {
+    padding: 10px 12px;
+  }
+  .top .kind {
+    max-width: 104px;
+  }
+  .lang > svg,
+  .gen-toggle > svg:last-child {
+    display: none;
+  }
+}
+@media (max-width: 1180px) {
+  .top {
+    gap: 6px;
+    padding: 8px 10px;
+  }
+  .group {
+    padding-left: 6px;
+    gap: 4px;
+  }
+  .lang > svg {
+    display: none;
+  }
+  .top .kind {
+    width: 88px;
+  }
 }
 </style>

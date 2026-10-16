@@ -3,6 +3,7 @@
 import * as THREE from 'three'
 import { onBeforeUnmount, shallowRef, type Directive } from 'vue'
 import { ASSET_MAP } from './assets'
+import { basePalette } from './stylePalettes'
 import { addOutlines, disposeUnshared } from './toon'
 import { createStage, fitSun, frameCamera, type Stage } from './stage'
 
@@ -30,7 +31,7 @@ export function thumbnail(assetId: string, color = 0): string {
   const def = ASSET_MAP.get(assetId)
   if (!def) return ''
   const s = getStage()
-  const obj = def.build(def.palettes[color % def.palettes.length])
+  const obj = def.build(basePalette(def, color))
   addOutlines(obj)
   s.scene.add(obj)
   const box = new THREE.Box3().setFromObject(obj)

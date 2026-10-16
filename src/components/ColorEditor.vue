@@ -3,7 +3,7 @@
 // colors 为自定义覆盖（undefined = 完全用预设）。拖动取色器时发 preview，松手发 commit，方便上层只记一次撤销。
 import { computed, ref } from 'vue'
 import { STYLE_LABELS, type AssetDef, type StyleTag } from '../three/assets'
-import { paletteStyle } from '../three/catalog'
+import { allPalettes, type PaletteEntry } from '../three/stylePalettes'
 import { SWATCHES, effectivePalette, randomColors, slotCount, slotLabel } from '../three/colors'
 import { PATTERN_KINDS, randomPattern, type PatternKind, type PatternSpec } from '../three/patterns'
 import { patternPreview } from '../three/fabric'
@@ -20,12 +20,10 @@ const emit = defineEmits<{
   applySame: []
 }>()
 
+/** 按风格分组：原生配色 + 缺原生配色的风格补一项派生配色（自动按该风格色板重新上色） */
 const groups = computed(() => {
-  const m = new Map<StyleTag, number[]>()
-  props.def.palettes.forEach((_, i) => {
-    const s = paletteStyle(props.def, i)
-    m.set(s, [...(m.get(s) ?? []), i])
-  })
+  const m = new Map<StyleTag, PaletteEntry[]>()
+  for (const e of allPalettes(props.def)) m.set(e.style, [...(m.get(e.style) ?? []), e])
   return [...m.entries()]
 })
 
@@ -77,7 +75,15 @@ const groupsOfKinds = computed(() => {
     <div v-for="[st, idx] in groups" :key="st" class="pal-row">
       <span class="pal-style" :title="t(STYLE_LABELS[st])">{{ t(STYLE_LABELS[st]) }}</span>
       <div class="swatches">
-        <button v-for="i in idx" :key="i" class="sw" :class="{ on: !custom && color === i }" :style="{ background: grad(def.palettes[i]) }" @click="emit('preset', i)" />
+        <button
+          v-for="e in idx"
+          :key="e.index"
+          class="sw"
+          :class="{ on: !custom && color === e.index, auto: e.derived }"
+          :title="e.derived ? t('自动派生（按本风格色板重新上色）') : undefined"
+          :style="{ background: grad(e.colors) }"
+          @click="emit('preset', e.index)"
+        />
       </div>
     </div>
 
@@ -189,6 +195,21 @@ const groupsOfKinds = computed(() => {
 }
 .sw.on {
   box-shadow: 0 0 0 2px var(--accent);
+}
+/* 自动派生的配色：右下角一个小圆点作标记 */
+.sw.auto {
+  position: relative;
+}
+.sw.auto::after {
+  content: '';
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 1.5px solid var(--surface);
 }
 .custom-head {
   display: flex;

@@ -26,6 +26,7 @@ import type { CheckItem } from './checklist'
 import { ASSETS, ASSET_MAP, STYLE_LABELS, type AssetDef, type StyleTag } from './three/assets'
 import { rng } from './three/kit'
 import { paletteStyle } from './three/catalog'
+import { derivedIndex, hasDerived } from './three/stylePalettes'
 import { fitsOnFixture, fitsOnSurface, fixtureTop, toWorld } from './surface'
 import { JOBS, interestFloor, interestProps, interestStickers, interestWall, jobDeskProps, type Household, type InterestId, type Member } from './household'
 import { furnitureBox } from './snap'
@@ -224,10 +225,12 @@ class Decorator {
     return same.filter((o) => room && pointInPolygon(o, room.points)).length < lim.max
   }
 
-  /** 按风格挑一组配色；这件素材没有该风格的配色就随便挑 */
+  /** 按风格挑一组配色：有原生配色就从中挑；没有就用该风格的派生配色（1000 + 风格序号）；都不行才随便挑 */
   colorFor(def: AssetDef) {
     const ok = def.palettes.map((_, i) => i).filter((i) => paletteStyle(def, i) === this.style)
-    return ok.length ? this.pick(ok) : Math.floor(this.rand() * def.palettes.length)
+    if (ok.length) return this.pick(ok)
+    const r = this.rand() // 保持随机序列的消耗不变
+    return hasDerived(def, this.style) ? derivedIndex(this.style) : Math.floor(r * def.palettes.length)
   }
 
   ctx() {
@@ -271,6 +274,14 @@ class Decorator {
     const solid = [
       ...this.plan.fixtures.filter((f) => pointInPolygon(f, room.points)).map(fixtureBox),
       ...this.out.filter((o) => !this.flat.has(o.id) && !o.z && pointInPolygon(o, room.points)).map((o) => footprint(o.asset, o.x, o.y, o.rot)),
+      // 门洞正前方的通道（门宽 × 进深 60）：门的开合范围可以占，但不能堵在门口
+      ...openingsOn(room, this.plan)
+        .filter(({ o }) => o.kind !== 'window')
+        .map(({ o, e, center }) => {
+          const into = mul(e.out, -1)
+          const pts = [-1, 1].flatMap((sd) => [0, 60].map((k) => add(add(center, mul(e.dir, (sd * o.width) / 2)), mul(into, k))))
+          return { x0: Math.min(...pts.map((p) => p.x)), y0: Math.min(...pts.map((p) => p.y)), x1: Math.max(...pts.map((p) => p.x)), y1: Math.max(...pts.map((p) => p.y)) }
+        }),
     ]
     const b = bbox(room.points)
     const edges = edgesOf(room.points)
@@ -1995,8 +2006,51 @@ class Decorator {
     this.wearDress()
     // 电脑椅前面的桌上要有电脑（在 dress 之前补，免得桌面先被摆件占满）
     this.computersForChairs()
+    this.robots()
     this.dress()
     return this.out
+  }
+
+  /**
+   * 无人机 / 机器人：住户里有数码、电子手工、游戏、摄影爱好或工程师类职业的，按概率摆一两样——
+   * 航拍无人机（收纳箱放地上，或客厅里一块停机坪垫，预览时会有无人机从上面起飞）、桌面机器人小玩意、
+   * 工作台 / 书桌上的机械臂、口袋云台；全家偶尔有一只机器狗（充电座）或陪伴机器人（充电窝）。
+   */
+  robots() {
+    const hh = this.household
+    if (!hh) return
+    const FANS: InterestId[] = ['tech', 'maker', 'gaming', 'photo']
+    const ENG = ['engineer', 'programmer', 'researcher']
+    const fans = hh.members.filter((m) => m.age >= 8 && (m.interests.some((i) => FANS.includes(i)) || ENG.includes(m.job)))
+    if (!fans.length) return
+    const living = this.plan.rooms.filter((r) => r.kind === 'ldk').sort((a, b) => area(b.points) - area(a.points))[0]
+    const roomOf = (m: Member) => this.plan.rooms.find((r) => this.occupants.get(r.id)?.includes(m) || this.studyOf.get(r.id) === m) ?? living
+    const desksIn = (room: Room) => this.out.filter((o) => !o.z && pointInPolygon(o, room.points) && !!ASSET_MAP.get(o.asset)?.surface && DESK_RE.test(`${o.asset} ${ASSET_MAP.get(o.asset)!.name}`))
+    const onDesk = (room: Room, ids: string[]) => {
+      for (const d of desksIn(room)) for (let t = 0; t < 4; t++) if (this.onLevel(d, this.pick(ids), (this.rand() - 0.5) * 0.7, (this.rand() - 0.5) * 0.4, Math.round((this.rand() - 0.5) * 40))) return true
+      return false
+    }
+    const scatterOne = (room: Room, id: string) => ASSET_MAP.has(id) && this.scatter(room, [ASSET_MAP.get(id)!], 1)
+    let drone = false
+    for (const m of fans.slice(0, 2)) {
+      const room = roomOf(m)
+      if (!room) continue
+      const it = new Set(m.interests)
+      // 航拍无人机：摄影爱好者多半有一台
+      if (!drone && this.rand() < (it.has('photo') ? 0.7 : 0.3)) {
+        drone = true
+        if (this.rand() < 0.5 || !living) this.wall(room, this.rand() < 0.5 ? 'rb-drone-case' : 'rb-drone-case-closed', { front: 30 })
+        else if (this.freePush(living, 'rb-drone-pad', 0, centroid(living.points), 30, true) && this.rand() < 0.6) scatterOne(room, 'rb-drone-rc')
+        if (this.rand() < 0.5) scatterOne(room, 'rb-drone-charger')
+      }
+      // 桌面机器人小玩意
+      if (this.rand() < (it.has('tech') || it.has('gaming') ? 0.6 : 0.35)) onDesk(room, ['rb-emo-bot', 'rb-code-car', 'rb-transform', 'rb-tin', 'rb-drone-selfie'])
+      // 机械臂：电子手工 / 硬件工程师
+      if ((it.has('maker') || m.job === 'engineer') && this.rand() < 0.55) onDesk(room, ['rb-arm'])
+      if (it.has('photo') && this.rand() < 0.5) onDesk(room, ['rb-gimbal'])
+    }
+    // 全家一只机器狗（客厅里的充电座，预览时它会起来到处走）；偶尔是陪伴机器人
+    if (living && this.rand() < 0.3) this.wall(living, this.rand() < 0.65 ? 'rb-dog-dock' : 'rb-companion-nest', { front: 60 })
   }
 
   /** 摆到 parent 的某一层：level 为 surfaces 的下标，不给就是顶面；层板净高不够的东西放不进去 */
