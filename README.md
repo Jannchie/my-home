@@ -2,7 +2,10 @@
   <img src="public/icon-512.png" width="88" alt="" />
   <h1 align="center">My Home</h1>
   <p align="center">
-    <a href="https://home.jannchie.com">home.jannchie.com</a> · 中文 · <a href="README.ja.md">日本語</a> · <a href="README.en.md">English</a>
+    <a href="https://home.jannchie.com"><b>在线体验</b></a>
+  </p>
+  <p align="center">
+    中文 · <a href="README.ja.md">日本語</a> · <a href="README.en.md">English</a>
   </p>
   <p align="center">
     <a href="https://github.com/Jannchie/my-home/releases/latest"><img src="https://img.shields.io/github/v/release/Jannchie/my-home" alt="release" /></a>
