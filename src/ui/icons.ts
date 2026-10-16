@@ -169,6 +169,7 @@ export const ICONS = {
   date: IconCalendar, // 月日
   location: IconMapPin, // 城市 / 经纬度
   north: IconCompass, // 户型朝向（指北针）
+  indoorLight: IconLightbulb, // 室内灯光开关 / 色温
   play: IconPlay, // 时间流逝动画
   pause: IconPause,
   language: IconLanguages,

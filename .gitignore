@@ -10,3 +10,4 @@ coverage
 *.stackdump
 .DS_Store
 Thumbs.db
+dist-promo

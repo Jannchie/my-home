@@ -5,7 +5,7 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus } from '../toon'
-import { C, S, G, glow, rng, shell, rectPoly, type AssetCategory, type AssetDef, type StyleTag } from '../kit'
+import { C, CLIP_DROP, S, G, clipLevels, glow, rng, shell, rectPoly, type AssetCategory, type AssetDef, type StyleTag } from '../kit'
 
 type Pal = [StyleTag, string[]]
 const M = S.modern
@@ -629,17 +629,24 @@ function shotgunMic(p: string[]) {
   return g
 }
 
-/** 网络摄像头（夹式，夹脚当底座）：[机身, 镜头圈, 夹脚] */
+/**
+ * 网络摄像头（夹式）：夹在显示器 / 电视顶边上——后脚贴着屏幕背面往下扣 CLIP_DROP，顶板搭在顶边上，前唇扣住屏幕正面上沿。
+ * 原点在后脚底端（= 顶边往下 CLIP_DROP），后脚和前唇之间留 2.6 的缝夹住面板。[机身, 镜头圈, 夹脚]
+ */
 function webcamClip(p: string[]) {
   const [body, ring, foot] = p
   const g = new THREE.Group()
-  g.add(rbox(4, 0.6, 5, foot, { z: -0.5 }, 0.25))
-  g.add(strut3([0, 0.6, -2.6], [0, 4.2, -1.2], 3, 0.6, foot))
-  g.add(P(capsule(1.6, 6.4, body), 0, 6, 0, 0, 0, PI / 2))
-  g.add(cylZ(1.15, 0.6, ring, 0, 6, 1.45))
-  g.add(cylZ(0.7, 0.5, '#28466b', 0, 6, 1.75))
-  for (const s of [-1, 1]) g.add(noLine(cylZ(0.35, 0.3, BLACK, s * 2.4, 6, 1.5, 12)))
-  g.add(led(1.3, 7.1, 1.25, GREEN, 0.15))
+  const D = CLIP_DROP
+  g.add(rbox(3.6, D + 0.6, 0.6, foot, { z: -1.6 }, 0.25))
+  g.add(rbox(3.6, 0.6, 3.9, foot, { y: D, z: 0 }, 0.25))
+  g.add(rbox(3.6, 1.4, 0.5, foot, { y: D - 0.8, z: 1.55 }, 0.2))
+  g.add(cyl(0.7, 0.7, 1.2, foot, { y: D + 0.6, z: 0 }, 12))
+  const cy = D + 3.4
+  g.add(P(capsule(1.6, 6.4, body), 0, cy, 0, 0, 0, PI / 2))
+  g.add(cylZ(1.15, 0.6, ring, 0, cy, 1.45))
+  g.add(cylZ(0.7, 0.5, '#28466b', 0, cy, 1.75))
+  for (const s of [-1, 1]) g.add(noLine(cylZ(0.35, 0.3, BLACK, s * 2.4, cy, 1.5, 12)))
+  g.add(led(1.3, cy + 1.1, 1.25, GREEN, 0.15))
   return g
 }
 
@@ -657,17 +664,20 @@ function webcamTripod(p: string[]) {
   return g
 }
 
-/** 电视机顶摄像头（条形）：[机身, 夹座, 镜头圈] */
+/** 电视机顶摄像头（条形）：和夹式摄像头一样扣在屏幕顶边上（原点在后脚底端），缝宽 3.2 夹得住电视面板 [机身, 夹座, 镜头圈] */
 function tvCamera(p: string[]) {
   const [body, foot, ring] = p
   const g = new THREE.Group()
-  g.add(rbox(8, 0.6, 7, foot, { z: -1 }, 0.25))
-  g.add(rbox(8, 3, 0.8, foot, { y: 0.6, z: -4.1 }, 0.3))
-  g.add(rbox(22, 3.4, 4.4, body, { y: 0.6, z: 0.5 }, 1.2))
-  g.add(cylZ(1.3, 0.5, ring, 0, 2.3, 2.85))
-  g.add(cylZ(0.8, 0.4, '#28466b', 0, 2.3, 3.1))
-  for (const s of [-1, 1]) for (let i = 0; i < 3; i++) g.add(noLine(cylZ(0.2, 0.4, BLACK, s * (5 + i * 0.9), 2.3, 2.75, 8)))
-  g.add(led(3, 3.2, 2.7, BLUE, 0.15))
+  const D = CLIP_DROP
+  g.add(rbox(8, D + 0.6, 0.6, foot, { z: -1.9 }, 0.25))
+  g.add(rbox(8, 0.6, 4.4, foot, { y: D, z: 0 }, 0.25))
+  g.add(rbox(8, 1.4, 0.5, foot, { y: D - 0.8, z: 1.85 }, 0.2))
+  const y = D + 0.6
+  g.add(rbox(22, 3.4, 4.4, body, { y, z: 0.3 }, 1.2))
+  g.add(cylZ(1.3, 0.5, ring, 0, y + 1.7, 2.65))
+  g.add(cylZ(0.8, 0.4, '#28466b', 0, y + 1.7, 2.9))
+  for (const s of [-1, 1]) for (let i = 0; i < 3; i++) g.add(noLine(cylZ(0.2, 0.4, BLACK, s * (5 + i * 0.9), y + 1.7, 2.55, 8)))
+  g.add(led(3, y + 2.6, 2.5, BLUE, 0.15))
   return g
 }
 
@@ -2087,7 +2097,7 @@ export const PROPS_OFFICE: AssetDef[] = [
   def('of-mouse-rgb', '电竞鼠标', 'tabletop', [6.5, 13, 4], RGB_GEAR, gamingMouse),
   def('of-mousepad-rgb', 'RGB 电竞桌垫', 'tabletop', [90.5, 40.5, 0.5], RGB_GEAR.map(([s, [a, b, c, d]]): Pal => [s, [a === M.white ? M.light : a === C.white ? C.sakura : a, b, c, d]]), rgbMousepad),
   def('of-headset-stand-rgb', 'RGB 耳机架 + 耳机', 'tabletop', [21, 14.5, 27], RGB_GEAR.map(([s, [a, b, c]]): Pal => [s, [a, b, c, a === M.black || a === M.char ? M.char : C.white]]), headsetStandRGB),
-  def('of-monitor-gaming', '电竞曲面显示器', 'tabletop', [80, 18.5, 49], RGB_GEAR.map(([s, [a, b, c]]): Pal => [s, [a === C.sakura || a === C.white ? C.white : M.black, a === M.white ? M.light : M.char, b === '#ff8fd0' ? b : c]]), gamingMonitor),
+  def('of-monitor-gaming', '电竞曲面显示器', 'tabletop', [80, 18.5, 49], RGB_GEAR.map(([s, [a, b, c]]): Pal => [s, [a === C.sakura || a === C.white ? C.white : M.black, a === M.white ? M.light : M.char, b === '#ff8fd0' ? b : c]]), gamingMonitor, { screens: [{ x: 0, y: 13, z: -2, w: 80, h: 36, t: 2.2, bow: 5.3 }], surfaces: clipLevels([{ x: 0, y: 13, z: -2, w: 80, h: 36, t: 2.2 }]) }),
 
   // ---------- 主播设备 ----------
   def('of-mic-condenser', '麦克风', 'tabletop', [12, 12, 25], [
@@ -2118,22 +2128,22 @@ export const PROPS_OFFICE: AssetDef[] = [
     ['modern', [M.silver, '#8a7f74', M.char]],
     ['cute', [C.white, C.sakura, C.white]],
   ], shotgunMic, { family: 'mic', sizeLabel: '枪麦' }),
-  def('of-webcam', '网络摄像头', 'tabletop', [9.5, 5, 7.5], [
+  def('of-webcam', '网络摄像头', 'tabletop', [9.6, 5, 10], [
     ['modern', [M.black, M.char, M.black]],
     ['modern', [M.white, M.light, M.gray]],
     ['cute', [C.white, C.pink, C.sakura]],
     ['cute', [C.sky, C.white, C.white]],
-  ], webcamClip, { family: 'webcam', sizeLabel: '夹式' }),
+  ], webcamClip, { family: 'webcam', sizeLabel: '夹式', screenClip: true }),
   def('of-webcam-tripod', '网络摄像头', 'tabletop', [9.5, 8.5, 13.5], [
     ['modern', [M.black, M.char, M.char]],
     ['modern', [M.white, M.gray, M.black]],
     ['cute', [C.white, C.pink, C.white]],
   ], webcamTripod, { family: 'webcam', sizeLabel: '三脚架' }),
-  def('of-tv-camera', '机顶摄像头', 'tabletop', [22, 8, 4], [
+  def('of-tv-camera', '机顶摄像头', 'tabletop', [22, 6, 9], [
     ['modern', [M.black, M.char, M.char]],
     ['modern', [M.white, M.light, M.gray]],
     ['cute', [C.white, C.sakura, C.pink]],
-  ], tvCamera),
+  ], tvCamera, { screenClip: true }),
   def('of-capture-card', '采集卡', 'tabletop', [11, 14, 2.5], [
     ['modern', [M.black, '#a46bff', M.char]],
     ['modern', [M.white, '#4fe3ff', M.gray]],
@@ -2332,7 +2342,7 @@ export const PROPS_OFFICE: AssetDef[] = [
     ['cute', ['#f5b7c6', M.white, C.pink]],
     ['cute', ['#a8dcc0', M.white, C.mint]],
     ['retro', ['#f2cf6a', M.white, R.orange]],
-  ], allInOne),
+  ], allInOne, { screens: [{ x: 0, y: 8, z: -0.6, w: 54.7, h: 38.5, t: 1.2 }], surfaces: clipLevels([{ x: 0, y: 8, z: -0.6, w: 54.7, h: 38.5, t: 1.2 }]) }),
   def('of-retro-pc', '复古电脑套装', 'tabletop', [42, 52, 43], [
     ['retro', ['#e8dfc8', '#d6cbb0', '#7dff9a']],
     ['retro', [R.cream, '#e6d6b0', '#ffc04d']],

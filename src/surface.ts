@@ -4,7 +4,7 @@ import * as THREE from 'three'
 import { fixtureDepth, pointInPolygon, type Fixture, type Furniture, type Plan, type Vec } from './model'
 import { ASSET_MAP, builtinShelves, CLOSET_PIPE } from './three/assets'
 import { floorY, roomAt } from './three/house'
-import type { Poly, SurfaceKind } from './three/kit'
+import { CLIP_DROP, type Poly, type SurfaceKind } from './three/kit'
 
 /** 平面坐标 → 家具局部坐标（x, z）；rot 为顺时针角度 */
 export function toLocal(f: Pick<Furniture, 'x' | 'y' | 'rot'>, p: Vec) {
@@ -194,6 +194,23 @@ export function pickSurface(plan: Plan, ray: THREE.Ray, exclude: Set<string>, ac
     for (const l of f.levels) {
       if (!accept(l.kind, l.h)) continue
       const z = f.z + l.y
+      if (l.kind === 'clip') {
+        // 屏幕顶边：算射线到顶边中线（窄带两条短边中点的连线，抬到真正的顶边高度）的距离，够近就吸上去
+        for (const pl of l.polys) {
+          if (pl.length < 4) continue
+          const mid = (i: number, j: number) => toWorld(f, (pl[i][0] + pl[j][0]) / 2, (pl[i][1] + pl[j][1]) / 2)
+          const a = mid(0, 3)
+          const b = mid(1, 2)
+          const y = floor + z + CLIP_DROP
+          const onRay = new THREE.Vector3()
+          const onSeg = new THREE.Vector3()
+          const d2 = ray.distanceSqToSegment(new THREE.Vector3(a.x, y, a.y), new THREE.Vector3(b.x, y, b.y), onRay, onSeg)
+          if (d2 > HOOK_REACH * HOOK_REACH) continue
+          const t = onRay.distanceTo(ray.origin) - 40
+          if (!best || t < best.t) best = { x: onSeg.x, y: onSeg.z, z, owner: f.id, t, kind: l.kind, pose: { x: f.x, y: f.y, rot: f.rot }, poly: pl }
+        }
+        continue
+      }
       if (l.kind === 'hook') {
         // 挂钩是一条细线：算射线到这条线的 3D 最近距离，HOOK_REACH 以内就算点中（比求平面交点宽容得多）
         for (const pl of l.polys) {
@@ -249,7 +266,7 @@ function corners(asset: string, x: number, y: number, rot: number): Vec[] {
 export function fitOnSurface(plan: Plan, ownerId: string, z: number, asset: string, x: number, y: number, rot: number): Vec {
   const owner = owners(plan).find((f) => f.id === ownerId)
   const lv = owner && owner.levels.find((l) => Math.abs(owner.z + l.y - z) < 0.5)
-  if (!owner || !lv || lv.kind === 'hook') return { x, y }
+  if (!owner || !lv || lv.kind !== 'shelf') return { x, y }
   // 往所在那块多边形的中心收
   const l = toLocal(owner, { x, y })
   const poly = lv.polys.find((pl) => pointInPolygon(l, pl.map(([px, pz]) => ({ x: px, y: pz })))) ?? lv.polys[0]
@@ -283,7 +300,8 @@ export function supportOf(plan: Plan, f: Furniture): { ownerId: string; fits: bo
     for (const lv of o.levels) {
       if (Math.abs(o.z + lv.y - z) >= 0.5) continue
       // 四角都在层内（横跨浴缸边沿的盖子中心落在水面上，也算有支撑）；否则至少中心要在层内
-      const fits = lv.kind === 'hook' || corners(f.asset, f.x, f.y, f.rot).every((c) => inPolys(o, lv.polys, c))
+      // 挂钩层：挂着的东西不要求四角都在层内，但中心要在挂钩范围里（不能随便挂到同高度别处的挂杆上）
+      const fits = lv.kind === 'hook' ? inPolys(o, lv.polys, f) : corners(f.asset, f.x, f.y, f.rot).every((c) => inPolys(o, lv.polys, c))
       if (!fits && !inPolys(o, lv.polys, f)) continue
       if (fits) return { ownerId: o.id, fits }
       found ??= { ownerId: o.id, fits }
@@ -311,4 +329,15 @@ export function snapToHook(pose: { x: number; y: number; rot: number }, poly: Po
   const w = toWorld(pose, lx, lz)
   const rot = (pose.rot + (Math.atan2(-dx, dz) * 180) / Math.PI + 360) % 360
   return { x: Math.round(w.x * 10) / 10, y: Math.round(w.y * 10) / 10, rot: Math.round(rot) }
+}
+
+/**
+ * 屏幕顶边吸附：夹式摄像头吸到窄带正中（= 顶边中间），朝向和面板一致（窄带第一条边就是面板方向，见 clipLevels）。
+ */
+export function snapToClip(pose: { x: number; y: number; rot: number }, poly: Poly) {
+  const cx = poly.reduce((s, q) => s + q[0], 0) / poly.length
+  const cz = poly.reduce((s, q) => s + q[1], 0) / poly.length
+  const w = toWorld(pose, cx, cz)
+  const ang = (Math.atan2(poly[1][1] - poly[0][1], poly[1][0] - poly[0][0]) * 180) / Math.PI
+  return { x: Math.round(w.x * 10) / 10, y: Math.round(w.y * 10) / 10, rot: Math.round((pose.rot + ang + 720) % 360) }
 }

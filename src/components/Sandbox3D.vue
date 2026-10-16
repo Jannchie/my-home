@@ -5,10 +5,11 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { ASSET_MAP, CATEGORY_LABELS, STYLE_LABELS, type StyleTag } from '../three/assets'
 import { applyCutaway, bendToWalls, buildHouse, floorY, isPlant, stepCutaway, furnitureModel, placeFurniture, roomAt } from '../three/house'
 import { overlapsOthers, snapFurniture, snapToWall, type Guide } from '../snap'
-import { fitOnSurface, pickSurface, propsOn, snapToHook } from '../surface'
+import { fitOnSurface, pickSurface, propsOn, snapToClip, snapToHook } from '../surface'
 import { createStage, fitSun, frameCamera, setStageQuality, type Stage } from '../three/stage'
 import { attachPost, LOOKS, LOOK_MAP, type LookId, type Post } from '../three/post'
 import { CITIES, MONTH_DAYS, compassAxes, skyState, type SkyState } from '../three/sky'
+import { IndoorLights, KELVIN_MAX, KELVIN_MIN, LIGHT_MODES, POOL_HIGH, POOL_LOW, POWER_MAX, POWER_MIN, autoLevel, diningKey, isLampAsset, lightColor, type LightMode } from '../three/lights'
 import { disposeUnshared } from '../three/toon'
 import { useThumbs } from '../three/thumbs'
 import { normalizeColor } from '../three/stylePalettes'
@@ -66,6 +67,9 @@ import {
   WALL_MODES,
   settle,
   syncSkyToNow,
+  setRoomLight,
+  setRoomLightK,
+  setFurnitureLight,
 } from '../store'
 
 const host = ref<HTMLDivElement>()
@@ -76,6 +80,9 @@ let post: Post
 let controls: OrbitControls
 let house: THREE.Group | null = null
 const furnRoot = new THREE.Group()
+/** 室内灯光：房间主灯、灯具家具的光源，入夜自动亮（three/lights.ts） */
+let lights: IndoorLights
+let lastDining = ''
 /** 蒸汽、烟、火苗等动态特效 */
 const fx = new FxLayer()
 /** 会活动的宠物、扫地机器人、Kachaka（预览模式下才动） */
@@ -154,6 +161,8 @@ function updateCutaway() {
     depth = (c.x - houseCenter.x) * dir.x + (c.y - houseCenter.y) * dir.y
   }
   applyCutaway(house, houseCenter, dir, depth, sandbox.wallMode === 'down', sandbox.wallMode === 'half')
+  // 天花板灯具：墙压低 / 半墙 / 墙很矮时淡出（挡视线），所指房间之前的也淡出；光照保留
+  lights?.applyCutaway(houseCenter, dir, depth, sandbox.wallMode === 'down' || sandbox.wallMode === 'half' || sandbox.wallHeight < 200)
   fading = true
   updateMounted(dir, depth)
 }
@@ -318,6 +327,8 @@ function rebuildHouse() {
   }
   house = buildHouse(plan.value, sandbox.wallHeight)
   stage.scene.add(house)
+  lights.syncRooms(toRaw(plan.value), ASSET_MAP, floorY)
+  lastDining = diningKey(toRaw(plan.value))
   const pts = plan.value.rooms.flatMap((r) => r.points)
   if (pts.length) {
     const b = bbox(pts)
@@ -376,6 +387,14 @@ function syncFurniture() {
       fx.remove(id)
     }
   updateRing()
+  // 灯具家具：发光部件、光源位置；餐桌挪了吊灯跟着挪
+  lights.syncLamps(p, objs, ASSET_MAP, (f) => roomAt(p, f), floorY)
+  const dk = diningKey(p)
+  if (dk !== lastDining) {
+    lastDining = dk
+    lights.syncRooms(p, ASSET_MAP, floorY)
+  }
+  lights.touch()
   updateCutaway()
   actors.sync(p, actorsLive())
   dirty = true
@@ -420,6 +439,50 @@ function syncGhost(asset = placing.value?.asset) {
   }
   dirty = true
 }
+
+/**
+ * 手机底部抽屉盖住画布下半截：把投影中心上移到抽屉上方可见区域的正中（相机视口偏移，相机本身不动），
+ * 取景也按可见区域算。射线拾取、浮动工具条的投影都走同一个投影矩阵，不用另外换算。
+ * 抽屉展开 / 收起时偏移量缓动过去。
+ */
+let viewSize = { w: 1, h: 1 }
+let sheetOff = 0
+let sheetTween = 0
+function sheetTarget() {
+  return device.compact && !device.landscape ? Math.min(layout.sheetH, viewSize.h * 0.55) : 0
+}
+function setViewOffset(off: number) {
+  const cam = stage.camera
+  const { w, h } = viewSize
+  sheetOff = off
+  if (off < 0.5) {
+    cam.clearViewOffset()
+    cam.aspect = w / Math.max(1, h)
+  } else {
+    cam.aspect = w / (h + off)
+    cam.setViewOffset(w, h + off, 0, off, w, h)
+  }
+  cam.updateProjectionMatrix()
+  dirty = true
+}
+function applySheetOffset(animate = false) {
+  if (!stage) return
+  cancelAnimationFrame(sheetTween)
+  const to = sheetTarget()
+  if (!animate || Math.abs(to - sheetOff) < 1) return setViewOffset(to)
+  const from = sheetOff
+  const t0 = performance.now()
+  const step = () => {
+    const k = Math.min(1, (performance.now() - t0) / 220)
+    setViewOffset(from + (to - from) * (1 - (1 - k) ** 3))
+    if (k < 1) sheetTween = requestAnimationFrame(step)
+  }
+  sheetTween = requestAnimationFrame(step)
+}
+watch(
+  () => [layout.sheetH, device.compact, device.landscape] as const,
+  () => applySheetOffset(true),
+)
 
 function resetView() {
   if (!house) return
@@ -551,8 +614,13 @@ function locate(e: PointerEvent, asset: string, selfId: string | null, exclude: 
     const hang = canHang(def)
     // 挂钩只收有挂起形态的；净高不够的层（床底、矮层板）放不进去
     const hangDef = hang ? ASSET_MAP.get(formFor(def, 'hook')!) : undefined
-    const hit = pickSurface(plan.value, raycaster.ray, exclude, (kind, h) => (kind === 'hook' ? !!hangDef && hangDef.h <= h + 0.5 : def.h <= h + 0.5))
+    // 屏幕顶边（clip）只收夹式摄像头这类 screenClip 的东西
+    const hit = pickSurface(plan.value, raycaster.ray, exclude, (kind, h) => (kind === 'clip' ? !!def.screenClip : kind === 'hook' ? !!hangDef && hangDef.h <= h + 0.5 : def.h <= h + 0.5))
     if (hit) {
+      if (hit.kind === 'clip') {
+        const c = snapToClip(hit.pose, hit.poly)
+        return { x: c.x, y: c.y, z: hit.z, rot: c.rot, guides: [], asset }
+      }
       const a = formFor(def, hit.kind) ?? asset
       if (hit.kind === 'hook') {
         const h = snapToHook(hit.pose, hit.poly, hit)
@@ -731,7 +799,10 @@ function onTouchUp(e: PointerEvent) {
     return
   }
   // 点按（没动、没长按）：点到家具选中它，点到空处取消选中
-  if (pr && !pr.moved && !pr.long && e.type !== 'pointercancel') selection.value = pr.hitId ? { type: 'furniture', id: pr.hitId } : null
+  if (pr && !pr.moved && !pr.long && e.type !== 'pointercancel') {
+    const rid = pr.hitId ? null : pickLightRoom(e)
+    selection.value = pr.hitId ? { type: 'furniture', id: pr.hitId } : rid ? { type: 'room', id: rid } : null
+  }
 }
 
 /** 拖动中：按指针位置摆家具（落地吸附 / 落在台面上 / 吸到墙上），上面的东西跟着走 */
@@ -795,7 +866,10 @@ function onPointerDown(e: PointerEvent) {
     selection.value = { type: 'furniture', id }
     beginDrag(e, id)
   } else {
-    down = { x: e.clientX, y: e.clientY }
+    // 天花板灯具：选中它所在的房间（浮出灯光开关卡片）
+    const rid = pickLightRoom(e)
+    if (rid) selection.value = { type: 'room', id: rid }
+    else down = { x: e.clientX, y: e.clientY }
   }
 }
 
@@ -1146,7 +1220,12 @@ function loop() {
   if (fading && house) {
     // 壁挂物按透明方式淡出（压低模式下也是淡出，它们没有矮墙可压）
     const furnBusy = stepCutaway(furnRoot, dt, { ...wallLook(), style: 'fade', opacity: sandbox.wallMode === 'fade' ? sandbox.cutawayOpacity / 100 : 0 })
-    fading = stepCutaway(house, dt, wallLook()) || furnBusy
+    const lampBusy = stepCutaway(lights.fixtures, dt, { ...wallLook(), style: 'fade', opacity: 0 })
+    if (lights.fixtures.userData.cutawayChanged) {
+      lights.fixtures.userData.cutawayChanged = false
+      dirty = true
+    }
+    fading = stepCutaway(house, dt, wallLook()) || furnBusy || lampBusy
     if (house.userData.cutawayChanged || furnRoot.userData.cutawayChanged) {
       house.userData.cutawayChanged = false
       furnRoot.userData.cutawayChanged = false
@@ -1157,6 +1236,8 @@ function loop() {
   // 选中框：出现时缩入，之后角标呼吸（省电画质 / 减少动效时静止，画面不用每帧重画）
   const framesMoving = [selFrame.update(now, low), hoverFrame.update(now, true), ghostFrame.update(now, true)].some(Boolean)
   if (framesMoving) dirty = true
+  // 灯光渐亮 / 渐灭（开关、黄昏清晨）
+  if (lights.step(dt)) dirty = true
   if (moved) {
     updateCutaway()
     updateCompass()
@@ -1186,7 +1267,11 @@ function onVisibility() {
 function applyQuality() {
   const low = lowPower()
   setStageQuality(stage, low)
+  // setStageQuality 里的 resize 会重设宽高比，重新套上抽屉偏移
+  applySheetOffset()
   post.setLow(low)
+  // 灯数池大小跟画质：只在切换画质时重编译一次着色器
+  lights.setPoolSize(low ? POOL_LOW : POOL_HIGH)
   dirty = true
 }
 
@@ -1194,6 +1279,8 @@ onMounted(() => {
   stage = createStage(canvas.value!, { low: lowPower() })
   post = attachPost(stage, { low: lowPower() })
   post.setLook(sandbox.look)
+  lights = new IndoorLights(lowPower() ? POOL_LOW : POOL_HIGH)
+  stage.scene.add(lights.group, lights.fixtures)
   applySky()
   stage.renderer.shadowMap.autoUpdate = false
   stage.renderer.shadowMap.needsUpdate = true
@@ -1220,9 +1307,13 @@ onMounted(() => {
   const r = host.value!.getBoundingClientRect()
   stage.resize(r.width, r.height)
   syncLineRes(r.width, r.height)
+  viewSize = { w: r.width, h: r.height }
+  applySheetOffset()
   ro = new ResizeObserver(([entry]) => {
     stage.resize(entry.contentRect.width, entry.contentRect.height)
     syncLineRes(entry.contentRect.width, entry.contentRect.height)
+    viewSize = { w: entry.contentRect.width, h: entry.contentRect.height }
+    applySheetOffset()
     dirty = true
   })
   ro.observe(host.value!)
@@ -1237,6 +1328,8 @@ onMounted(() => {
   window.addEventListener('keyup', onKeyUp)
   window.addEventListener('blur', onKeyUp as unknown as () => void)
   document.addEventListener('visibilitychange', onVisibility)
+  // 捕获阶段：比 SandboxOverlay 的双击聚焦先拿到（同一元素上捕获监听先触发）
+  canvas.value!.addEventListener('dblclick', onDblClick, true)
   liveCapture.fn = captureView
   // 浮动工具条 / 右键菜单 / 双击聚焦 / 方向键微移（SandboxOverlay.vue）用的句柄
   sandboxBridge.value = {
@@ -1292,7 +1385,26 @@ function applySky() {
   stage.hemi.intensity = s.hemiIntensity
   if (houseBox) fitSun(stage.sun, houseBox, s.lightDir)
   post.setSky(s.bg, s.night)
+  applyLights()
   sunMoved = true
+  dirty = true
+}
+
+/** 室内灯光的全局状态：自动 / 开 / 关、色温、太阳高度 → 各房间、灯具的目标亮度 */
+function applyLights() {
+  const s = skyNow.value
+  if (!s || !lights) return
+  const power = sandbox.lightPower / 100
+  lights.setState({ global: sandbox.lightMode, kelvin: sandbox.lightK, auto: autoLevel(s.altitude), night: s.night, power })
+  const kel = lightColor(sandbox.lightK)
+  const avg = lights.averageLevel
+  post.setIndoor(kel, avg * Math.min(1.2, power))
+  // 夜里开着灯：整体补一点暖色的氛围光（天光加强、地面反光偏暖），让平均亮度上来，不靠灯池中心的高光
+  const fill = avg * s.night * power
+  // （天光本身保持蓝紫，只加强度、地面反光偏暖：底座、户外仍是夜色）
+  stage.hemi.intensity = s.hemiIntensity + 0.25 * fill
+  stage.hemi.color.copy(s.hemiSky)
+  stage.hemi.groundColor.copy(s.hemiGround).lerp(kel, Math.min(1, 0.6 * fill))
   dirty = true
 }
 
@@ -1400,6 +1512,7 @@ function toggleLooks() {
 }
 
 onBeforeUnmount(() => {
+  lights.dispose()
   if (liveCapture.fn === captureView) liveCapture.fn = null
   sandboxBridge.value = null
   cancelAnimationFrame(raf)
@@ -1419,11 +1532,22 @@ onBeforeUnmount(() => {
   placing.value = null
 })
 
+// 房间的灯光开关 / 色温不影响房子本身：比较时剔掉，免得一开灯就整栋重建
+const roomsShape = () => JSON.stringify(plan.value.rooms, (k, v) => (k === 'light' || k === 'lightK' ? undefined : v))
 watch(
-  () => [plan.value.rooms, plan.value.openings, plan.value.fixtures, plan.value.wall, plan.value.wallOuter, sandbox.wallHeight],
+  () => [roomsShape(), plan.value.openings, plan.value.fixtures, plan.value.wall, plan.value.wallOuter, sandbox.wallHeight],
   rebuildHouse,
   { deep: true },
 )
+watch(
+  () => plan.value.rooms.map((r) => `${r.light ?? ''}/${r.lightK ?? ''}`).join(),
+  () => {
+    lights.refreshTargets()
+    applyLights()
+  },
+)
+watch(() => [sandbox.lightMode, sandbox.lightK, sandbox.lightPower], applyLights)
+
 watch(() => plan.value.furniture, syncFurniture, { deep: true })
 // 布置 / 预览切换：角色回家静止 / 开始活动（素材里的角色部分随之隐藏、复原，阴影贴图要重画）
 watch(
@@ -1525,6 +1649,45 @@ function pickTab(id: Tab) {
   if (device.compact && sheet.value === 'peek') sheet.value = 'half'
 }
 
+// ---------- 室内灯光：开关与色温 ----------
+const LIGHT_LABELS: Record<LightMode, string> = { auto: '自动', on: '开', off: '关' }
+/** 房间单独色温的预设（不填 = 跟随全局） */
+const ROOM_K_PRESETS = [2700, 3000, 3500, 4000, 5000, 6500]
+const lampSelected = computed(() => !!selectedDef.value && isLampAsset(selectedDef.value))
+/** 3D 里点中天花板灯具时选中的房间 */
+const selectedRoom = computed(() => {
+  const s = selection.value
+  return s?.type === 'room' ? plan.value.rooms.find((r) => r.id === s.id) ?? null : null
+})
+/** 屏幕坐标处的天花板灯具 → 房间 id */
+function pickLightRoom(e: { clientX: number; clientY: number }) {
+  setRay(e as PointerEvent)
+  return lights.pickRoom(raycaster)
+}
+/** 切换：按现在实际亮不亮来定（自动模式下夜里亮着 → 关） */
+function toggleRoomLight(id: string) {
+  setRoomLight(id, lights.levelOf(id) > 0.5 ? 'off' : 'on')
+}
+function toggleLamp(id: string) {
+  setFurnitureLight(id, lights.levelOf(id) > 0.5 ? 'off' : 'on')
+}
+function setRoomK(id: string, v: string) {
+  setRoomLightK(id, v ? Number(v) : undefined)
+}
+/** 预览模式下双击灯（灯具家具或天花板灯具）开关它；拦在浮动工具条的「双击聚焦」之前 */
+function onDblClick(e: MouseEvent) {
+  if (editing.value) return
+  const id = pickFurniture(e as unknown as PointerEvent)
+  const def = id ? ASSET_MAP.get(findFurniture(id)?.asset ?? '') : undefined
+  if (id && def && isLampAsset(def)) toggleLamp(id)
+  else {
+    const r = pickLightRoom(e)
+    if (!r) return
+    toggleRoomLight(r)
+  }
+  e.stopImmediatePropagation()
+}
+
 /** 画质选择 */
 const QUALITIES: { id: Quality; label: string }[] = [
   { id: 'auto', label: '自动' },
@@ -1599,6 +1762,24 @@ defineExpose({ resetView })
         @contextmenu.prevent
       />
       <SandboxOverlay />
+      <!-- 点中天花板灯具：这个房间的灯光开关与色温 -->
+      <div v-if="selectedRoom && editing" class="light-card" :style="{ bottom: device.compact && !device.landscape ? 'calc(var(--sheet-h, 0px) + 10px)' : undefined }">
+        <div class="lc-head">
+          <JIcon :icon="ICONS.indoorLight" class="ico-muted" />
+          <b>{{ roomName(selectedRoom.name) }}</b>
+          <button class="icon-only lc-close" :title="t('关闭')" :aria-label="t('关闭')" @click="selection = null"><JIcon :icon="ICONS.close" :size="14" /></button>
+        </div>
+        <div class="seg seg-text" role="radiogroup" :aria-label="t('灯')">
+          <button v-for="m in LIGHT_MODES" :key="m" role="radio" :aria-checked="(selectedRoom.light ?? 'auto') === m" :class="{ on: (selectedRoom.light ?? 'auto') === m }" @click="setRoomLight(selectedRoom.id, m)">{{ t(LIGHT_LABELS[m]) }}</button>
+        </div>
+        <label class="lc-row">
+          <span>{{ t('色温') }}</span>
+          <select class="sel-style num" :value="selectedRoom.lightK ?? ''" @change="setRoomK(selectedRoom.id, ($event.target as HTMLSelectElement).value)">
+            <option value="">{{ t('跟随全局（{k} K）', { k: sandbox.lightK }) }}</option>
+            <option v-for="k in ROOM_K_PRESETS" :key="k" :value="k">{{ k }} K</option>
+          </select>
+        </label>
+      </div>
       <div v-if="!plan.rooms.length" class="empty">{{ t('还没有房间。先去 2D 平面图画一个，或者点「随机生成」。') }}</div>
       <div v-if="!device.compact" class="hud">
         <template v-if="placing && !device.coarse">
@@ -1699,6 +1880,24 @@ defineExpose({ resetView })
           </label>
           <div class="meta num">{{ sunInfo }}</div>
         </div>
+        <!-- 室内灯光：全局开关 + 色温；单个房间 / 灯具在 3D 里点选后单独设置 -->
+        <div class="row">
+          <span class="ico-label"><JIcon :icon="ICONS.indoorLight" class="ico-muted" />{{ t('室内灯光') }}</span>
+          <div class="seg seg-text" role="radiogroup" :aria-label="t('室内灯光')">
+            <button v-for="m in LIGHT_MODES" :key="m" role="radio" :aria-checked="sandbox.lightMode === m" :class="{ on: sandbox.lightMode === m }" @click="sandbox.lightMode = m">{{ t(LIGHT_LABELS[m]) }}</button>
+          </div>
+        </div>
+        <label class="row" :title="t('灯光色温：数值低偏暖黄，高偏冷白')">
+          <span>{{ t('色温') }}</span>
+          <input v-model.number="sandbox.lightK" type="range" :min="KELVIN_MIN" :max="KELVIN_MAX" step="100" :aria-label="t('色温')" />
+          <span class="num val kval">{{ sandbox.lightK }} K</span>
+        </label>
+        <label class="row">
+          <span>{{ t('亮度') }}</span>
+          <input v-model.number="sandbox.lightPower" type="range" :min="POWER_MIN" :max="POWER_MAX" step="5" :aria-label="t('亮度')" />
+          <span class="num val kval">{{ sandbox.lightPower }}%</span>
+        </label>
+        <p class="q-note">{{ sandbox.lightMode === 'auto' ? t('自动：日落前后渐亮，清晨渐灭。点选天花板的灯或灯具可以单独开关') : t('点选天花板的灯或灯具可以单独开关；单独设过的不受这里影响') }}</p>
         <div class="look">
           <button class="look-head" :aria-expanded="lookOpen" @click="toggleLooks">
             <JIcon :icon="ICONS.look" class="ico-muted" />
@@ -1834,6 +2033,14 @@ defineExpose({ resetView })
         <div class="meta num">
           {{ selectedDef.w }} × {{ selectedDef.d }} × {{ selectedDef.h }} cm · {{ Math.round(selectedFurniture.rot) }}°<template v-if="selectedFurniture.z"> · {{ t('离地 {n} cm', { n: selectedFurniture.z }) }}</template>
         </div>
+        <div v-if="lampSelected" class="row">
+          <span class="ico-label"><JIcon :icon="ICONS.indoorLight" class="ico-muted" />{{ t('灯') }}</span>
+          <div class="seg seg-text" role="radiogroup" :aria-label="t('灯')">
+            <button role="radio" :aria-checked="!selectedFurniture.light" :class="{ on: !selectedFurniture.light }" :title="t('跟随房间的灯')" @click="setFurnitureLight(selectedFurniture.id, undefined)">{{ t('自动') }}</button>
+            <button role="radio" :aria-checked="selectedFurniture.light === 'on'" :class="{ on: selectedFurniture.light === 'on' }" @click="setFurnitureLight(selectedFurniture.id, 'on')">{{ t('开') }}</button>
+            <button role="radio" :aria-checked="selectedFurniture.light === 'off'" :class="{ on: selectedFurniture.light === 'off' }" @click="setFurnitureLight(selectedFurniture.id, 'off')">{{ t('关') }}</button>
+          </div>
+        </div>
         <div v-if="selectedSizes.length > 1" class="sizes">
           <button v-for="sz in selectedSizes" :key="sz.id" :class="{ on: sz.id === selectedDef.id }" :title="sz.w + '×' + sz.d + '×' + sz.h" @click="swapSize(sz.id)">{{ variantLabel(sz) }}</button>
         </div>
@@ -1931,6 +2138,58 @@ defineExpose({ resetView })
 </template>
 
 <style scoped>
+.light-card {
+  position: absolute;
+  right: 12px;
+  bottom: 44px;
+  z-index: 6;
+  width: 272px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  font-size: var(--fs-sm);
+}
+.light-card .seg {
+  margin: 0;
+}
+.lc-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.lc-head b {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lc-close {
+  padding: 2px;
+}
+.lc-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.lc-row select {
+  flex: 1;
+  min-width: 0;
+}
+.kval {
+  min-width: 4.2em;
+  text-align: right;
+}
+:root.compact .light-card {
+  left: 12px;
+  right: 12px;
+  width: auto;
+}
 .sandbox {
   flex: 1;
   display: flex;

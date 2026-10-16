@@ -6,7 +6,7 @@
 
 import * as THREE from 'three'
 import { ball, cup, cyl, rbox, shade, toon, torus, tray } from '../toon'
-import { C, S, glow, paintPanel, type AssetCategory, type AssetDef, type StyleTag } from '../kit'
+import { C, S, glow, paintPanel, pinwheelWalls, type AssetCategory, type AssetDef, type StyleTag } from '../kit'
 
 type Pal = [StyleTag, ...string[]]
 type Draw = (g: CanvasRenderingContext2D, W: number, H: number) => void
@@ -354,14 +354,16 @@ const certs: AssetDef[] = [
 // ---------- 麻将：桌子和牌分开（自动麻将机是一体机，保留成品） ----------
 // 折叠麻将桌、和室手积麻将桌只是桌子；牌墙 / 牌局是独立的桌面摆件，由一键布置摆到桌上。
 
-/** 牌墙：四边各一道（n 墩 × 2 层），在 y 高度、离中心 dist */
-function tileWalls(y: number, dist: number, back: string, n = 17) {
+/**
+ * 牌墙：四边各一道（n 墩 × 2 层），在 y 高度；四道风车形围成方框——每道的一端顶着相邻那道的侧面，
+ * 各自歪 2–4°、错开一点，互不重叠（见 kit.ts 的 pinwheelWalls）。seed 决定歪的方向和错位
+ */
+function tileWalls(y: number, seed: number, back: string, n = 17) {
   const g = new THREE.Group()
   const L = n * 2.6
-  for (let k = 0; k < 4; k++) {
+  for (const w of pinwheelWalls(L, 3.5, seed)) {
     const side = grp(rbox(L, 1.9, 3.5, IVORY, {}, 0.25), rbox(L, 0.7, 3.5, back, { y: 1.9 }, 0.25), rbox(L, 1.2, 3.5, IVORY, { y: 2.6 }, 0.25), rbox(L, 0.7, 3.5, back, { y: 3.8 }, 0.25))
-    for (const c of side.children) c.position.z += dist
-    g.add(P(side, 0, y, 0, 0, (k * PI) / 2))
+    g.add(P(side, w.x, y, w.z, 0, w.ry))
   }
   return g
 }

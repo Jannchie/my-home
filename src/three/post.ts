@@ -168,8 +168,12 @@ export const LOOKS: LookDef[] = [
   },
 ]
 
-/** 入夜时灯具自发光的最大加亮倍数 */
-const NIGHT_GLOW = 2.5
+/**
+ * 入夜时自发光部件的亮度上限（emissiveIntensity）：屏幕、指示灯等到 0.6（加上受到的灯光，约为原色的 1.2–1.5 倍），
+ * 屏幕（带画面贴图的）更低一点，保留画面内容；以前是统一乘 2.5，夜里会过曝成一片白、看不出造型和画面。
+ */
+const NIGHT_GLOW_CAP = 0.6
+const NIGHT_SCREEN_CAP = 0.55
 
 export const LOOK_MAP = new Map(LOOKS.map((l) => [l.id, l]))
 
@@ -568,16 +572,22 @@ export interface Post {
   withLook: <T>(id: string, fn: () => T) => T
   /** 省电画质：无 MSAA + FXAA、不加入夜泛光 */
   setLow: (low: boolean) => void
+  /** 室内灯光（three/lights.ts）：窗户夜光的颜色（跟色温）和亮灯程度 0–1 */
+  setIndoor: (color: THREE.Color, level: number) => void
   dispose: () => void
 }
 
 /** 窗玻璃（kit.ts 的 C.glass，半透明）：入夜后透出暖光 */
 const GLASS_HEX = 'bfe6ff'
 const WINDOW_GLOW = new THREE.Color('#ffcf8a')
+/** 室内灯光模块自己控制的发光材质（userData 标记，见 three/lights.ts 的 LAMP_GLOW） */
+const LAMP_GLOW = 'lampGlow'
 
 export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
   const { renderer, scene, camera } = stage
   let low = !!opts.low
+  // 省电画质没有 MSAA：像素比够高（≥2）时锯齿不明显，不再叠 FXAA（FXAA 会把描边抹糊）
+  const needFxaa = () => low && renderer.getPixelRatio() < 2
 
   let composer: EffectComposer | null = null
   let passes: {
@@ -596,6 +606,9 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
   } | null = null
   let current: LookDef = LOOK_MAP.get('none')!
   let sky: { bg: [string, string, string]; night: number } = { bg: DEFAULT_BG, night: 0 }
+  /** 窗户夜光：颜色跟色温，亮度跟室内亮灯程度（没接室内灯光时按全亮） */
+  const windowGlow = WINDOW_GLOW.clone()
+  let indoor = 1
   /** 上次写进 uniform 的状态（效果或天色变了才重设） */
   let appliedKey = ''
 
@@ -626,7 +639,7 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
       fxaa: mk(FXAAShader),
     }
     passes.tiltV.uniforms.uDir.value.set(0, 1)
-    passes.fxaa.enabled = low
+    passes.fxaa.enabled = needFxaa()
     const p = passes
     for (const ps of [p.render, p.base, p.kuwahara, p.pigment, p.comic, p.pixel, p.sketch, p.tiltH, p.tiltV, p.grade, p.fxaa]) composer.addPass(ps)
     appliedKey = ''
@@ -670,7 +683,8 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
     appliedKey = key
     const p = passes
     // 泛光：效果自带的，和入夜后灯具的光晕取较强者
-    const nightBloom = sky.night > 0.02 && !low ? { strength: 0.6 * sky.night, radius: 0.45, threshold: 0.35 } : undefined
+    // 阈值高、强度低：只在最亮的发光部件周围留一圈淡晕，不盖住灯具轮廓和屏幕边框
+    const nightBloom = sky.night > 0.02 && !low ? { strength: 0.28 * sky.night, radius: 0.3, threshold: 0.82 } : undefined
     const bloom = nightBloom && (!look.bloom || nightBloom.strength > look.bloom.strength) ? nightBloom : look.bloom
     if (bloom && !p.bloom) {
       // 用到才建（mip 链占显存）
@@ -743,7 +757,6 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
     const boosted: [THREE.MeshStandardMaterial, number][] = []
     const glass: [THREE.MeshStandardMaterial, THREE.Color, number][] = []
     const seen = new Set<THREE.Material>()
-    const glow = 1 + (NIGHT_GLOW - 1) * night
     scene.traverseVisible((o) => {
       const m = (o as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined
       if (!m) return
@@ -764,15 +777,21 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
         if (!e.emissive) continue
         if (e.transparent && e.color?.getHexString() === GLASS_HEX) {
           glass.push([e, e.emissive.clone(), e.emissiveIntensity])
-          e.emissive.copy(WINDOW_GLOW)
-          e.emissiveIntensity = 0.85 * night
+          e.emissive.copy(windowGlow)
+          e.emissiveIntensity = night * (0.12 + 0.6 * indoor)
           continue
         }
-        // 只加亮真正的灯，浴缸水面、玻璃这类微微自发光的不算；纯黑 emissive 加亮也没用
+        // 室内灯光模块自己管的灯罩 / 灯泡（按开关、色温控制）
+        if (e.userData?.[LAMP_GLOW]) continue
+        // 只加亮真正的灯和屏幕，浴缸水面、玻璃这类微微自发光的不算；纯黑 emissive 加亮也没用
         if (!(e.emissiveIntensity >= 0.3)) continue
         if (e.emissive.r + e.emissive.g + e.emissive.b < 0.01) continue
-        boosted.push([e, e.emissiveIntensity])
-        e.emissiveIntensity *= glow
+        // 加亮到上限为止（已经比上限亮的不动）：保留原色、画面和分格
+        const cap = e.emissiveMap ? NIGHT_SCREEN_CAP : NIGHT_GLOW_CAP
+        const v = e.emissiveIntensity
+        if (v >= cap) continue
+        boosted.push([e, v])
+        e.emissiveIntensity = v + (cap - v) * night
       }
     })
     try {
@@ -804,7 +823,7 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
   /** 按当前效果与天色决定走不走 composer；keep 为真时不拆（生成缩略图途中） */
   function update(keep = false) {
     stage.outlineScale = current.outline ?? 1
-    const need = current.id !== 'none' || sky.night > 0.02 || low
+    const need = current.id !== 'none' || sky.night > 0.02 || needFxaa()
     if (need && !composer) build()
     if (!need && !keep) teardown()
     // 白天「原样」：不接管，直接 renderer.render；夜里即使不走 composer 也要接管来调整材质
@@ -830,6 +849,10 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
         current = keep
         update(true)
       }
+    },
+    setIndoor(color, level) {
+      windowGlow.copy(WINDOW_GLOW).lerp(color, 0.6)
+      indoor = level
     },
     setLow(v) {
       if (v === low) return

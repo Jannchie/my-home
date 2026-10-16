@@ -637,16 +637,16 @@ export const ROOM_NAMES: Record<string, Entry> = {
 // ---------- 产品简介（页面「关于」区、SEO meta、README 共用） ----------
 // 按本文件的约定，key 就是中文原文：页面里写 t(PRODUCT_TAGLINE) / t(PRODUCT_INTRO)，标题用 t('产品简介')。
 /** 一句话简介 */
-export const PRODUCT_TAGLINE = '在浏览器里生成一个日本的家，再把生活摆进去。'
+export const PRODUCT_TAGLINE = '生成一个带有生活气息的家。'
 /** 一段 150 字左右的简介 */
 export const PRODUCT_INTRO =
-  'My Home 是在浏览器里运行的日式户型编辑器：随机生成 1K～3LDK 的日本住宅户型（ユニットバス、洗濯機置場、玄関、和室、阳台一应俱全），也能自己画。一键布置会先推断住户的家庭构成、职业、性格与兴趣，再按人设摆好家具和上千种生活小物，空房间会变成书房、电竞房或音乐室。在 3D 卡通沙盘里，还能看到猫狗和扫地机器人走来走去。2000+ 素材、6 种风格，免费、无需注册，数据只保存在你的浏览器里。'
+  'My Home 是在浏览器里运行的户型编辑器与 3D 卡通沙盘。户型可按日式（1K–3LDK）、中式（几室几厅）、欧美三种方式生成，也可以在平面图里手绘。一键布置会按住户的家庭构成、职业、性格与兴趣摆放家具和生活小物。3D 沙盘有五种墙体显示，按时刻、日期和城市计算日照与昼夜，提供 12 种画面效果，宠物和扫地机器人会走动。2600+ 程序化素材、9 种风格；支持触屏与 PWA 离线，中日英三语。免费、无需注册，数据只保存在浏览器本地。'
 
 UI['产品简介'] = ['このアプリについて', 'About']
-UI[PRODUCT_TAGLINE] = ['ブラウザで日本の間取りをつくって、暮らしまで並べよう。', 'Generate a Japanese home in your browser, then fill it with life.']
+UI[PRODUCT_TAGLINE] = ['暮らしの気配がある家をつくる。', 'Generate a home that feels lived-in.']
 UI[PRODUCT_INTRO] = [
-  'My Home は、ブラウザで動く日本の間取りエディタです。1K〜3LDK の間取りをランダムに生成し（ユニットバス、洗濯機置場、玄関、和室、バルコニーまで再現）、自分で描くこともできます。おまかせ配置では、まず住む人の家族構成・職業・性格・趣味を想定し、それに合わせて家具と細かな生活小物まで並べます。空き部屋は書斎やゲーム部屋、音楽室に。3D のトゥーン調ジオラマでは、猫や犬、ロボット掃除機が歩き回ります。素材 2000 点以上・6 つのテイスト、無料・登録不要で、データはブラウザの中にだけ保存されます。',
-  'My Home is a Japanese floor plan editor that runs in your browser. It generates 1K–3LDK apartments — unit bath, laundry space, genkan, tatami room and balcony included — or lets you draw your own. One-click furnishing first imagines who lives there (household, job, personality, hobbies), then places furniture and over a thousand everyday items to match, turning spare rooms into a study, gaming room or music room. Explore it as a toon-shaded 3D diorama with wandering cats, dogs and robot vacuums. 2,000+ assets, 6 styles, free, no sign-up — your data stays in your browser.',
+  'My Home は、ブラウザで動く間取りエディタと 3D トゥーンジオラマです。間取りは日本（1K〜3LDK）・中国・欧米の 3 方式で生成でき、間取り図に手で描くこともできます。おまかせ配置は、住む人の家族構成・職業・性格・趣味に合わせて家具と生活小物を並べます。3D ジオラマには 5 種類の壁表示があり、時刻・日付・都市から日照と昼夜を計算し、12 種類の画面エフェクトを備えます。ペットやロボット掃除機も歩き回ります。素材 2600 点以上・9 つのテイスト。タッチ操作と PWA のオフライン利用、日中英の 3 言語に対応。無料・登録不要で、データはブラウザ内にだけ保存されます。',
+  'My Home is a floor plan editor and toon-shaded 3D diorama that runs in your browser. It generates Japanese (1K–3LDK), Chinese and Western layouts, or lets you draw your own. One-click furnishing places furniture and everyday items based on the household, jobs, personalities and hobbies of the people living there. The 3D view offers five wall display modes, sunlight and day/night computed from time, date and city, 12 visual looks, and wandering pets and robot vacuums. 2,600+ procedural assets and 9 styles; touch and offline PWA support; Chinese, Japanese and English. Free, no sign-up — your data stays in your browser.',
 ]
 
 // ---------- 3D 沙盘：画面效果（three/post.ts 的 LOOKS） ----------
@@ -855,4 +855,20 @@ Object.assign(UI, {
   爱好者: ['愛好家', 'Enthusiast'],
   发烧友: ['マニア', 'Devotee'],
   骨灰级: ['ガチ勢', 'Hardcore'],
+} satisfies Record<string, Entry>)
+
+// ---------- 室内灯光 ----------
+Object.assign(UI, {
+  室内灯光: ['室内照明', 'Indoor lights'],
+  色温: ['色温度', 'Color temp'],
+  亮度: ['明るさ', 'Brightness'],
+  开: ['オン', 'On'],
+  关: ['オフ', 'Off'],
+  灯: ['照明', 'Light'],
+  跟随全局: ['全体に合わせる', 'Use global'],
+  '跟随全局（{k} K）': ['全体に合わせる（{k} K）', 'Use global ({k} K)'],
+  跟随房间的灯: ['部屋の照明に合わせる', 'Follow the room’s light'],
+  '灯光色温：数值低偏暖黄，高偏冷白': ['照明の色温度：低いほど暖かい黄色、高いほど青白い白', 'Light color temperature: lower is warmer yellow, higher is cooler white'],
+  '自动：日落前后渐亮，清晨渐灭。点选天花板的灯或灯具可以单独开关': ['自動：日没ごろに少しずつ点き、明け方に消えます。天井の照明や照明器具をクリックすると個別にオン／オフできます', 'Auto: lights fade on around sunset and off at dawn. Click a ceiling light or lamp to switch it on its own'],
+  '点选天花板的灯或灯具可以单独开关；单独设过的不受这里影响': ['天井の照明や照明器具をクリックすると個別にオン／オフできます。個別に設定したものはここの影響を受けません', 'Click a ceiling light or lamp to switch it on its own; lights set individually ignore this'],
 } satisfies Record<string, Entry>)

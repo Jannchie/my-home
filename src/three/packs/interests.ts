@@ -4,7 +4,7 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
-import { C, S, paintLandscape, paintPanel, rng, type AssetCategory, type AssetDef, type StyleTag } from '../kit'
+import { C, S, paintLandscape, paintPanel, pinwheelWalls, rng, type AssetCategory, type AssetDef, type StyleTag } from '../kit'
 
 type V3 = [number, number, number]
 type V2 = [number, number]
@@ -1630,25 +1630,8 @@ function mahjong(p: string[]) {
   const fy = 71.5
   const tw = 2.6
   const th = 3.5
-  const tt = 1.9
   for (let k = 0; k < 4; k++) {
     const side = new THREE.Group()
-    // 牌山：17 墩 × 2 层，背面朝上
-    const L = 17 * tw
-    for (let l = 0; l < 2; l++) {
-      side.add(rbox(L, 1.2, th, IVORY, { y: l * tt, z: 18 }, 0.25))
-      side.add(rbox(L, 0.7, th, back, { y: l * tt + 1.2, z: 18 }, 0.25))
-    }
-    side.add(paintPanel(L, 3.8, `int-mj-wall-${back}`, (c, W, H) => {
-      c.fillStyle = IVORY
-      c.fillRect(0, 0, W, H)
-      c.fillStyle = back
-      c.fillRect(0, 0, W, H * 0.18)
-      c.fillRect(0, H * 0.5, W, H * 0.18)
-      c.fillStyle = 'rgba(0,0,0,0.25)'
-      for (let i = 1; i < 17; i++) c.fillRect((i * W) / 17, 0, 1, H)
-      c.fillRect(0, H * 0.5 - 1, W, 1)
-    }, { y: 0, z: 18 + th / 2 + 0.3 }))
     // 手牌：13 张立着，牌面朝外
     const HL = 13 * tw
     side.add(rbox(HL, th, 1.2, IVORY, { z: 33.4 }, 0.25))
@@ -1660,6 +1643,8 @@ function mahjong(p: string[]) {
     side.add(paintTop(6 * tw - 0.2, 2 * th - 0.2, `int-mj-river-${k}`, drawTiles(6, 2, 50 + k, IVORY), 0, 2.2, 9))
     g.add(P(side, 0, fy, 0, 0, (k * PI) / 2))
   }
+  // 牌山：四面各 17 墩 × 2 层，风车形围成方框（彼此不重叠）
+  mjRing(g, 17, back, fy, 11)
   g.add(rbox(9, 0.6, 9, DARK, { y: fy }, 0.3))
   for (const [x, z] of [[-1.2, 0.5], [1.4, -0.8]] as V2[]) g.add(rbox(1.4, 1.4, 1.4, '#ffffff', { x, y: fy + 0.6, z }, 0.3))
   return g
@@ -5133,6 +5118,10 @@ function mjWall(n: number, back: string) {
   }, { y: 0, z: MJ_TH / 2 + 0.3 }))
   return side
 }
+/** 四条牌墙风车形围成方框：每条的一端顶着相邻那条的侧面，各自歪一点、错开一点，互不重叠（见 pinwheelWalls） */
+function mjRing(g: THREE.Group, n: number, back: string, y: number, seed: number) {
+  for (const w of pinwheelWalls(n * MJ_TW, MJ_TH, seed)) g.add(P(mjWall(n, back), w.x, y, w.z, 0, w.ry))
+}
 /** 洗牌用的散牌：背面朝上随意散在 (cx, cz) 周围半径 rad 的范围里 */
 function mjScatter(g: THREE.Group, back: string, y: number, rad: number, n: number, seed: number) {
   const r = rng(seed)
@@ -5159,7 +5148,7 @@ function mjWalls(p: string[]) {
   const [frame, felt, back] = p
   const g = new THREE.Group()
   mjTable(g, frame, felt)
-  for (let k = 0; k < 4; k++) g.add(P(grp(P(mjWall(17, back), 0, 0, 18)), 0, 71.5, 0, 0, (k * PI) / 2))
+  mjRing(g, 17, back, 71.5, 5)
   g.add(rbox(9, 0.6, 9, DARK, { y: 71.5 }, 0.3))
   for (const [x, z] of [[-1.2, 0.5], [1.4, -0.8]] as V2[]) g.add(rbox(1.4, 1.4, 1.4, '#ffffff', { x, y: 72.1, z }, 0.3))
   return g
@@ -5216,7 +5205,7 @@ function mjMatShuffle(p: string[]) {
 function mjMatWalls(p: string[]) {
   const [mat, back] = p
   const g = grp(rbox(70, 0.4, 70, mat, {}, 0.2))
-  for (let k = 0; k < 4; k++) g.add(P(grp(P(mjWall(17, back), 0, 0, 18)), 0, 0.4, 0, 0, (k * PI) / 2))
+  mjRing(g, 17, back, 0.4, 9)
   for (const [x, z] of [[-1.2, 0.5], [1.4, -0.8]] as V2[]) g.add(rbox(1.4, 1.4, 1.4, '#ffffff', { x, y: 0.4, z }, 0.3))
   return fit(g)
 }

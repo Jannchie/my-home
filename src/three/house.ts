@@ -232,7 +232,10 @@ export function applyCutaway(root: THREE.Object3D, center: Vec, camDir: Vec | nu
     if (camDir && !faded) {
       const s = (f.x - center.x) * camDir.x + (f.y - center.y) * camDir.y
       const toward = f.nx * camDir.x + f.ny * camDir.y
-      faded = f.outer ? toward > 0.3 : depth !== null && Math.abs(toward) > 0.3 && s > depth
+      // 带回差：已经让开的墙转回 0.2 以下才恢复，没让开的超过 0.4 才让开。
+      // 只用一个阈值的话，视角停在阈值附近时（阻尼的余动）墙会在两种状态之间来回跳，看起来像闪烁
+      const th = o.userData.target === 1 ? 0.2 : 0.4
+      faded = f.outer ? toward > th : depth !== null && Math.abs(toward) > th && s > depth
     }
     o.userData.target = faded ? 1 : 0
   }
@@ -867,7 +870,9 @@ function buildCurtains(plan: Plan, infos: OpeningInfo[], H: number) {
  */
 function buildTrims(plan: Plan, infos: OpeningInfo[], H: number) {
   const g = new THREE.Group()
-  const opens = wallSegments(plan.rooms).filter((s) => s.kind === 'open')
+  const segs = wallSegments(plan.rooms)
+  const opens = segs.filter((s) => s.kind === 'open')
+  const outers = segs.filter((s) => s.kind === 'outer')
   for (const room of plan.rooms) {
     const tr: WallTrim | undefined = room.wallpaper?.trim
     if (!tr || !isIndoor(room)) continue
@@ -907,7 +912,10 @@ function buildTrims(plan: Plan, infos: OpeningInfo[], H: number) {
         if (pa.d > 1 || pb.d > 1) continue
         cuts.push([Math.min(pa.t, pb.t), Math.max(pa.t, pb.t), -1])
       }
-      const outer = half[i] * 2 >= plan.wallOuter
+      // 和墙体用同一个标准：这条边在户型外轮廓（kind 'outer' 的墙段）上才算外墙。
+      // 按墙厚判断的话，中式户型里厚的承重内墙会被当成外墙，半墙模式下墙压低了腰壁还立着
+      const mid = mul(add(e.a, e.b), 0.5)
+      const outer = outers.some((sg) => projectToSegment(mid, sg.a, sg.b).d < 1)
       const strip = (y0: number, h: number, th: number, color: string, under: number) => {
         // under：低于这个高度的洞口（门、落地窗；腰壁还有矮窗）要断开
         let spans: [number, number][] = [[along(s0) - (reflex(i) ? th : 0), along(s1) + (reflex((i + 1) % n) ? th : 0)]]
@@ -922,7 +930,9 @@ function buildTrims(plan: Plan, infos: OpeningInfo[], H: number) {
           m.rotation.y = Math.atan2(-e.dir.y, e.dir.x)
           m.userData.wall = { y0, h }
           m.receiveShadow = true
-          tagFade(m, c, e.out, outer)
+          // 让开 / 压低的判断用墙体中线上的点：用边饰自己的中心（偏到墙面外侧几厘米）判断，
+          // 视角在阈值附近时会和墙体本身判得不一样——墙压低了、腰壁还立着，转视角时来回闪
+          tagFade(m, add(e.a, mul(e.dir, (a + b) / 2)), e.out, outer)
           g.add(m)
         }
       }
@@ -942,7 +952,7 @@ function buildTrims(plan: Plan, infos: OpeningInfo[], H: number) {
             m.position.set(c.x, (w.h - 3) / 2, c.y)
             m.rotation.y = Math.atan2(-e.dir.y, e.dir.x)
             m.userData.wall = { y0: 0, h: w.h - 3 }
-            tagFade(m, c, e.out, outer)
+            tagFade(m, add(e.a, mul(e.dir, u)), e.out, outer)
             g.add(m)
           }
         }

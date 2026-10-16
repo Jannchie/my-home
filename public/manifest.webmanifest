@@ -1,7 +1,7 @@
 {
-  "name": "My Home · 日式户型编辑器与 3D 卡通沙盘",
+  "name": "My Home · 户型编辑器与 3D 卡通沙盘",
   "short_name": "My Home",
-  "description": "在浏览器里生成一个日本的家，再把生活摆进去。",
+  "description": "浏览器里的户型编辑器与 3D 卡通沙盘：生成户型、一键布置家具、在 3D 中查看。",
   "lang": "zh-CN",
   "start_url": "/",
   "scope": "/",

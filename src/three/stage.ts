@@ -24,12 +24,12 @@ export interface PostHook {
 }
 
 /**
- * low：省电画质（手机 / 低性能设备，见 src/ui/device.ts）——不开 MSAA（后处理里改用 FXAA）、像素比上限 1.5、
- * 阴影贴图 1024 且不做软阴影。
+ * low：省电画质（手机 / 低性能设备，见 src/ui/device.ts）——不开 MSAA、阴影贴图 1024 且不做软阴影。
+ * 像素比上限两档都是 2：手机屏幕像素比多为 3，限到 1.5 等于半分辨率再拉伸，画面发虚；沙盘只在变化时重画，多出的像素可以接受。
  */
 export function createStage(canvas: HTMLCanvasElement, opts: { preserve?: boolean; shadowSize?: number; low?: boolean } = {}): Stage {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: !opts.low, alpha: true, preserveDrawingBuffer: !!opts.preserve })
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, opts.low ? 1.5 : 2))
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
   renderer.shadowMap.enabled = true
   renderer.shadowMap.type = opts.low ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap
   renderer.outputColorSpace = THREE.SRGBColorSpace
@@ -81,7 +81,7 @@ export function createStage(canvas: HTMLCanvasElement, opts: { preserve?: boolea
 /** 运行中切换画质：像素比、阴影贴图尺寸与软阴影（画布本身的 MSAA 建好后改不了，由后处理的 FXAA 兜底） */
 export function setStageQuality(stage: Stage, low: boolean) {
   const { renderer, sun } = stage
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, low ? 1.5 : 2))
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
   renderer.shadowMap.type = low ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap
   const size = low ? 1024 : 2048
   if (sun.shadow.mapSize.x !== size) {

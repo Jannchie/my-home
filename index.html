@@ -7,9 +7,9 @@
       SEO / 分享卡片。站点地址占位符（两个下划线包着 SITE_URL）由 vite.config.ts 的 seo 插件替换成 VITE_SITE_URL（未设置时用占位地址）。
       这里写的是中文版；构建时插件会按 src/seo.ts 的三语文案改写，并额外生成 /zh/ /ja/ /en/ 三个入口页。
     -->
-    <title>My Home · 日式户型编辑器与 3D 卡通沙盘</title>
-    <meta name="description" content="在浏览器里随机生成 1K～3LDK 日本户型，按住户人设一键布置家具与上千种生活小物，再到 3D 卡通沙盘里看看这个家。2000+ 素材、6 种风格，免费、无需注册。" />
-    <meta name="keywords" content="户型编辑器,日本户型,間取り,户型生成,3D 沙盘,家具布置,室内设计,1LDK,2LDK,在线户型图" />
+    <title>My Home · 户型编辑器与 3D 卡通沙盘</title>
+    <meta name="description" content="浏览器里的户型编辑器与 3D 卡通沙盘。生成日式、中式、欧美户型，按家庭构成、职业、性格与兴趣一键布置，模拟日照与昼夜。2600+ 素材、9 种风格，免费、无需注册。" />
+    <meta name="keywords" content="户型编辑器,户型生成,户型图,在线户型图,三室两厅,日本户型,間取り,3D 沙盘,家具布置,室内设计" />
     <meta name="author" content="Jianqi Pan" />
     <meta name="robots" content="index, follow, max-image-preview:large" />
     <meta name="color-scheme" content="light" />
@@ -37,23 +37,23 @@
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="My Home" />
     <meta property="og:url" content="__SITE_URL__/" />
-    <meta property="og:title" content="My Home · 日式户型编辑器与 3D 卡通沙盘" />
-    <meta property="og:description" content="在浏览器里生成一个日本的家，再把生活摆进去。" />
+    <meta property="og:title" content="My Home · 户型编辑器与 3D 卡通沙盘" />
+    <meta property="og:description" content="生成一个带有生活气息的家。" />
     <meta property="og:image" content="__SITE_URL__/og.png" />
     <meta property="og:image:type" content="image/png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="My Home：左侧是标题「生成一个日本的家，再把生活摆进去」，右侧是一键布置好家具的 2LDK 户型 3D 卡通沙盘" />
+    <meta property="og:image:alt" content="My Home：标题「生成一个带有生活气息的家」，旁边是一键布置好家具的户型 3D 卡通沙盘截图" />
     <meta property="og:locale" content="zh_CN" />
     <meta property="og:locale:alternate" content="ja_JP" />
     <meta property="og:locale:alternate" content="en_US" />
 
     <!-- Twitter / X -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="My Home · 日式户型编辑器与 3D 卡通沙盘" />
-    <meta name="twitter:description" content="在浏览器里生成一个日本的家，再把生活摆进去。" />
+    <meta name="twitter:title" content="My Home · 户型编辑器与 3D 卡通沙盘" />
+    <meta name="twitter:description" content="生成一个带有生活气息的家。" />
     <meta name="twitter:image" content="__SITE_URL__/og.png" />
-    <meta name="twitter:image:alt" content="My Home：左侧是标题「生成一个日本的家，再把生活摆进去」，右侧是一键布置好家具的 2LDK 户型 3D 卡通沙盘" />
+    <meta name="twitter:image:alt" content="My Home：标题「生成一个带有生活气息的家」，旁边是一键布置好家具的户型 3D 卡通沙盘截图" />
 
     <!-- 结构化数据：内容由 seo 插件按语言生成（src/seo.ts 的 jsonLd），这里留空占位 -->
     <script type="application/ld+json" id="ld-json">{}</script>
@@ -62,17 +62,13 @@
     <div id="app"></div>
     <noscript>
       <main style="max-width: 640px; margin: 48px auto; padding: 0 16px; font: 16px/1.7 system-ui, sans-serif; color: #2c302e">
-        <h1>My Home · 日式户型编辑器与 3D 卡通沙盘</h1>
+        <h1>My Home · 户型编辑器与 3D 卡通沙盘</h1>
         <p>
-          My Home 是在浏览器里运行的日式户型编辑器：随机生成 1K～3LDK 的日本住宅户型（ユニットバス、洗濯機置場、玄関、和室、阳台一应俱全），也能自己画。一键布置会先推断住户的家庭构成、职业、性格与兴趣，再按人设摆好家具和上千种生活小物。在
-          3D 卡通沙盘里，还能看到猫狗和扫地机器人走来走去。2000+ 素材、6 种风格，免费、无需注册，数据只保存在你的浏览器里。
+          My Home 是在浏览器里运行的户型编辑器与 3D 卡通沙盘。户型可按日式（1K–3LDK）、中式（几室几厅）、欧美三种方式生成，也可以在平面图里手绘。一键布置会按住户的家庭构成、职业、性格与兴趣摆放家具和生活小物。3D
+          沙盘有五种墙体显示，按时刻、日期和城市计算日照与昼夜，提供 12 种画面效果。2600+ 程序化素材、9 种风格。免费、无需注册，数据只保存在浏览器本地。
         </p>
-        <p>
-          ブラウザで日本の間取りをつくって、暮らしまで並べよう。1K〜3LDK の間取りをランダム生成し、住む人に合わせて家具と生活小物を自動配置、3D ジオラマで眺められます。
-        </p>
-        <p>
-          Generate a Japanese home in your browser, then fill it with life: random 1K–3LDK floor plans, one-click furnishing based on an imagined household, and a toon-shaded 3D diorama.
-        </p>
+        <p lang="ja">暮らしの気配がある家をつくる。</p>
+        <p lang="en">Generate a home that feels lived-in.</p>
         <p><strong>请启用 JavaScript 后使用 · JavaScript を有効にしてください · Please enable JavaScript to use this app.</strong></p>
       </main>
     </noscript>

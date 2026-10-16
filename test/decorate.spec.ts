@@ -47,9 +47,10 @@ const def = (x: Furniture) => ASSET_MAP.get(x.asset)!
 /** 落地、占地的实体家具：去掉壁挂、贴附、挂起、桌面上的，以及地毯这类薄片 */
 const isFloor = (x: Furniture) => !x.z && !def(x).mount && !def(x).stick && def(x).form !== 'hanging' && def(x).h > 3
 const footprint = (x: Furniture) => rectCorners(x, def(x).w, def(x).d, x.rot)
-/** 椅子、坐垫可以塞到桌子底下 */
+/** 椅子、坐垫可以塞到桌子底下；主机也可以 */
 const SEAT = /chair|stool|zabuton|bench|^ch-|^c2-|椅|坐垫|凳|座布団/
-const tucked = (a: AssetDef, b: Furniture) => !!a.surface && SEAT.test(b.asset + def(b).name)
+/** 主机机箱可以放在书桌底下（比桌面矮） */
+const tucked = (a: AssetDef, b: Furniture) => !!a.surface && (SEAT.test(b.asset + def(b).name) || (def(b).family === 'pc-tower' && def(b).h < a.surface))
 /** 洗衣机上方置物架跨在洗衣机 / 干衣机（家具）上 */
 const straddles = (a: Furniture, b: Furniture) => def(a).family === 'laundry-rack' && ['washer', 'dryer'].includes(def(b).family ?? '')
 const all = (fn: (c: Case) => string[]) => cases.filter((c) => !c.error).flatMap((c) => fn(c).map((m) => `seed ${c.seed}: ${m}`))

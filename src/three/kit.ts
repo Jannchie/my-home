@@ -115,8 +115,82 @@ export interface Fx {
   color?: string
 }
 
-/** 可摆放层的类型：shelf = 普通台面 / 层板（默认）；hook = 挂钩、挂杆、洞洞板的挂点，只接受有挂起形态的东西 */
-export type SurfaceKind = 'shelf' | 'hook'
+/**
+ * 可摆放层的类型：shelf = 普通台面 / 层板（默认）；hook = 挂钩、挂杆、洞洞板的挂点，只接受有挂起形态的东西；
+ * clip = 显示器 / 电视的顶边（一条很窄的带子），只接受 screenClip 的东西（夹式网络摄像头、条形机顶摄像头），吸到带子正中
+ */
+export type SurfaceKind = 'shelf' | 'hook' | 'clip'
+
+/**
+ * 屏幕面板（显示器、电视、一体机），局部坐标：x / z 为面板底边中点（z 取面板厚度的中心），y 为底边离地高度；
+ * w × h 为面板外框，t 为厚度；ry 为面板绕竖轴的转角（three.js rotation.y，双屏两侧往里收）；
+ * bow 为曲面屏两端比中间往前凸出的距离。一键布置用它在边框上贴便签、在顶边夹摄像头。
+ */
+export interface ScreenPanel {
+  x: number
+  y: number
+  z: number
+  w: number
+  h: number
+  t: number
+  ry?: number
+  bow?: number
+}
+
+/** 夹在屏幕顶边上的东西：后脚从顶边往下扣这么多（cm），原点在后脚底端，所以 clip 层比顶边低这么多 */
+export const CLIP_DROP = 5
+
+/** 面板上一点（沿面板方向 u、朝前 v）→ 素材局部坐标 [x, z] */
+export function screenPoint(s: ScreenPanel, u: number, v: number): [number, number] {
+  const ry = s.ry ?? 0
+  const c = Math.cos(ry)
+  const sn = Math.sin(ry)
+  return [s.x + u * c + v * sn, s.z - u * sn + v * c]
+}
+
+/**
+ * 屏幕顶边的夹挂层：每块面板一条沿面板方向的窄带（宽不超过 32、深 9），y = 顶边 − CLIP_DROP。
+ * 多边形按 [左后, 右后, 右前, 左前] 排列：第一条边就是面板方向（snapToClip 用它定朝向）。
+ */
+export function clipLevels(screens: ScreenPanel[]): NonNullable<AssetDef['surfaces']> {
+  return screens.map((s) => {
+    const hw = Math.min(s.w / 2 - 2, 16)
+    const hd = 4.5
+    return { y: s.y + s.h - CLIP_DROP, kind: 'clip' as const, h: 30, shape: [[screenPoint(s, -hw, -hd), screenPoint(s, hw, -hd), screenPoint(s, hw, hd), screenPoint(s, -hw, hd)]] }
+  })
+}
+
+/**
+ * 风车形牌墙的摆位：四条长 L、厚 th 的牌墙围成方框，每条的一端顶着前一条的内侧面（像四个 T 字依次轮转），彼此不重叠；
+ * 每条随机歪 2–4°、前后错开一点，端头和相邻牌墙之间留 0.2–0.6 的缝。
+ * 返回每条牌墙的中心 [x, z] 和朝向 ry（three.js rotation.y；牌墙本身沿 x 排开、墙面朝 +z）。
+ */
+export function pinwheelWalls(L: number, th: number, seed: number): { x: number; z: number; ry: number }[] {
+  const r = rng(seed)
+  const rot = (x: number, z: number, a: number): [number, number] => [x * Math.cos(a) + z * Math.sin(a), -x * Math.sin(a) + z * Math.cos(a)]
+  const walls = [0, 1, 2, 3].map((k) => {
+    const base = (k * Math.PI) / 2
+    const tilt = (r() < 0.5 ? -1 : 1) * ((2 + r() * 2) * Math.PI) / 180
+    const ry = base + tilt
+    // 基准位置：沿自身方向偏 th / 2、离中心 L / 2，再沿法线错开一点
+    const [cx, cz] = rot(th / 2, L / 2 + (r() - 0.5) * 1.2, base)
+    const u = rot(1, 0, ry)
+    const o = rot(0, 1, ry)
+    return { cx, cz, ry, u, o, gap: 0.2 + r() * 0.4 }
+  })
+  // 第 k 条的「起始端」（局部 x = -L/2）顶着第 k-1 条的内侧面：沿自身方向滑动，让端头两角离那个面正好 gap
+  // （滑动不改变自己侧面所在的直线，所以各条互不牵连，一次就能算完）
+  return walls.map((w, k) => {
+    const n = walls[(k + 3) % 4]
+    const qx = n.cx - (th / 2) * n.o[0]
+    const qz = n.cz - (th / 2) * n.o[1]
+    const ends = [-1, 1].map((s) => [w.cx - (L / 2) * w.u[0] + s * (th / 2) * w.o[0], w.cz - (L / 2) * w.u[1] + s * (th / 2) * w.o[1]])
+    const d0 = Math.min(...ends.map(([x, z]) => -((x - qx) * n.o[0] + (z - qz) * n.o[1])))
+    const k1 = -(w.u[0] * n.o[0] + w.u[1] * n.o[1])
+    const s = (w.gap - d0) / k1
+    return { x: w.cx + s * w.u[0], z: w.cz + s * w.u[1], ry: w.ry }
+  })
+}
 
 export type FormTag = 'lying' | 'standing' | 'hanging' | 'folded' | 'closed' | 'open' | 'boxed' | 'stacked'
 export const FORM_LABELS: Record<FormTag, string> = {
@@ -192,6 +266,10 @@ export interface AssetDef {
   fx?: Fx[]
   /** 会在沙盘预览里活动的角色（宠物、扫地机器人、Kachaka），见 actors.ts */
   actor?: ActorSpec
+  /** 屏幕面板（显示器、电视、一体机）：一键布置在边框上贴便签、在顶边夹摄像头用。见 ScreenPanel */
+  screens?: ScreenPanel[]
+  /** 夹在屏幕顶边上的东西（夹式网络摄像头、条形机顶摄像头）：只能放到 kind 'clip' 的层上，原点在后脚底端（见 CLIP_DROP） */
+  screenClip?: boolean
 }
 
 /**

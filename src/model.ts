@@ -55,6 +55,10 @@ export interface Room {
   flush?: boolean
   /** 敞开分组：同组的相邻房间之间不砌墙（中式客餐厅、欧美开放式 living / dining / kitchen） */
   openGroup?: string
+  /** 房间灯：auto（缺省）= 跟随全局（入夜自动亮）；on / off 强制开关（3D 沙盘，见 three/lights.ts） */
+  light?: 'auto' | 'on' | 'off'
+  /** 房间灯色温（K），不填跟随全局 */
+  lightK?: number
 }
 
 /**
@@ -244,6 +248,8 @@ export interface Furniture {
   patterns?: (PatternSpec | null)[]
   /** 离房间地面的高度：摆在桌面上的东西 = 桌面高度；地上的为 0 / 不填 */
   z?: number
+  /** 仅灯具：强制开 / 关；不填 = 跟随所在房间的灯 */
+  light?: 'on' | 'off'
 }
 
 export interface Plan {

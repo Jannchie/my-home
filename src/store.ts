@@ -10,6 +10,7 @@ import { ASSET_MAP } from './three/assets'
 import type { StyleTag } from './three/kit'
 import type { PatternSpec } from './three/patterns'
 import { CITIES, DEFAULT_GEO, type Geo } from './three/sky'
+import { DEFAULT_KELVIN, DEFAULT_POWER, POWER_MAX, POWER_MIN, clampKelvin, isLightMode, type LightMode } from './three/lights'
 import { ensureOutdoorUnits, planArea, randomSeed, type GenOptions } from './generate'
 import { generatePlan } from './generate-region'
 import { lang, t } from './i18n'
@@ -28,6 +29,7 @@ export type Selection =
 const STORAGE_KEY = 'my-home:plan'
 const LOOK_KEY = 'my-home:look'
 const SKY_KEY = 'my-home:sky'
+const LIGHTS_KEY = 'my-home:lights'
 
 /** 校验并补全旧版本数据（早期没有 fixtures / furniture） */
 export function normalizePlan(p: Plan): Plan | null {
@@ -39,6 +41,15 @@ export function normalizePlan(p: Plan): Plan | null {
   p.wallOuter ??= Math.max(18, Math.round(p.wall * 1.5))
   // 冰箱、洗衣机以前是带款式 / 颜色的设备：换成摆在冰箱位 / 洗衣机位上的同款家具
   migrateAppliances(p)
+  // 灯光开关 / 色温：缺省 = 自动、跟随全局；坏数据去掉
+  for (const r of p.rooms) {
+    if (r.light !== undefined && (!isLightMode(r.light) || r.light === 'auto')) delete r.light
+    if (r.lightK !== undefined) {
+      if (Number.isFinite(r.lightK)) r.lightK = clampKelvin(r.lightK)
+      else delete r.lightK
+    }
+  }
+  for (const f of p.furniture) if (f.light !== undefined && f.light !== 'on' && f.light !== 'off') delete f.light
   return p
 }
 
@@ -123,7 +134,7 @@ export const WALL_MODES: { id: WallMode; label: string }[] = [
   { id: 'half', label: '内墙半墙' },
   { id: 'down', label: '全部压低' },
 ]
-export const sandbox = reactive({ wallHeight: 240, wallMode: 'half' as WallMode, cutHeight: 60, cutawayOpacity: 0, cutawayHover: true, snap: true, mode: 'edit' as 'edit' | 'preview', autoRotate: true, autoFurnish: true, style: 'auto' as StyleTag | 'random' | 'auto', look: loadLook(), ...loadSky(), playing: false })
+export const sandbox = reactive({ wallHeight: 240, wallMode: 'half' as WallMode, cutHeight: 60, cutawayOpacity: 0, cutawayHover: true, snap: true, mode: 'edit' as 'edit' | 'preview', autoRotate: true, autoFurnish: true, style: 'auto' as StyleTag | 'random' | 'auto', look: loadLook(), ...loadSky(), ...loadLights(), playing: false })
 
 /** 设备的当前时间：时刻（小时，含分钟）与月日 */
 export function nowSky() {
@@ -192,6 +203,63 @@ watch(
     }, 500)
   },
 )
+
+/**
+ * 室内灯光的全局设置：lightMode 自动（按太阳高度渐亮渐灭）/ 开 / 关，lightK 色温（K），lightPower 亮度（%）。单独存一个键，不进户型数据；
+ * 单个房间、单个灯具的开关和色温覆盖存在户型里（Room.light / lightK、Furniture.light）。
+ */
+function loadLights(): { lightMode: LightMode; lightK: number; lightPower: number } {
+  const d = { lightMode: 'auto' as LightMode, lightK: DEFAULT_KELVIN, lightPower: DEFAULT_POWER }
+  try {
+    const raw = JSON.parse(localStorage.getItem(LIGHTS_KEY) || 'null')
+    if (raw && typeof raw === 'object') {
+      if (isLightMode(raw.mode)) d.lightMode = raw.mode
+      if (Number.isFinite(raw.k)) d.lightK = clampKelvin(raw.k)
+      if (Number.isFinite(raw.power)) d.lightPower = Math.round(Math.min(POWER_MAX, Math.max(POWER_MIN, raw.power)))
+    }
+  } catch {
+    /* 读不到就用默认 */
+  }
+  return d
+}
+watch(
+  () => [sandbox.lightMode, sandbox.lightK, sandbox.lightPower],
+  () => {
+    try {
+      localStorage.setItem(LIGHTS_KEY, JSON.stringify({ mode: sandbox.lightMode, k: sandbox.lightK, power: sandbox.lightPower }))
+    } catch {
+      /* 存储不可用时忽略 */
+    }
+  },
+)
+
+/** 房间灯：auto 删字段（旧存档的样子） */
+export function setRoomLight(id: string, mode: LightMode) {
+  const r = findRoom(id)
+  if (!r || (r.light ?? 'auto') === mode) return
+  mutate(() => {
+    if (mode === 'auto') delete r.light
+    else r.light = mode
+  })
+}
+/** 房间灯色温：undefined = 跟随全局 */
+export function setRoomLightK(id: string, k: number | undefined) {
+  const r = findRoom(id)
+  if (!r || r.lightK === k) return
+  mutate(() => {
+    if (k === undefined) delete r.lightK
+    else r.lightK = clampKelvin(k)
+  })
+}
+/** 灯具开关：undefined = 跟随房间 */
+export function setFurnitureLight(id: string, v: 'on' | 'off' | undefined) {
+  const f = findFurniture(id)
+  if (!f || f.light === v) return
+  mutate(() => {
+    if (v === undefined) delete f.light
+    else f.light = v
+  })
+}
 
 /** 3D 沙盘的画面效果（three/post.ts 的 LookId），单独存一个键，不进户型数据 */
 function loadLook() {

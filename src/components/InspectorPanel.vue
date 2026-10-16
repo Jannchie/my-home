@@ -4,10 +4,15 @@ import { FIXTURES, OPENING_LABELS, ROOM_KINDS, area, bbox, edgeInfo, fixtureDept
 import { planArea } from '../generate'
 import { RAILING_KINDS, type RailingKind } from '../model'
 import { isIndoor } from '../walls'
-import { deleteSelection, duplicateSelection, findFixture, findRoom, mutate, plan, rotateSelectedFixture, selection, settings, tidyDoors } from '../store'
+import { deleteSelection, duplicateSelection, findFixture, findRoom, mutate, plan, rotateSelectedFixture, selection, settings, tidyDoors, setRoomLight, setRoomLightK } from '../store'
+import { LIGHT_MODES, type LightMode } from '../three/lights'
 import { roomName, t } from '../i18n'
 import { JIcon } from '@jannchie/icons-vue'
 import { FIXTURE_ICONS, ICONS, ROOM_ICONS, TOOL_ICONS } from '../ui/icons'
+
+/** 房间灯（3D 沙盘夜里的灯光，见 three/lights.ts） */
+const LIGHT_LABELS: Record<LightMode, string> = { auto: '自动', on: '开', off: '关' }
+const ROOM_K_PRESETS = [2700, 3000, 3500, 4000, 5000, 6500]
 
 const room = computed(() => {
   const s = selection.value
@@ -104,6 +109,22 @@ function toggleRecessed() {
           <option v-for="(label, k) in RAILING_KINDS" :key="k" :value="k">{{ label }}</option>
         </select>
       </label>
+      <!-- 房间灯（3D 沙盘夜里的灯光）：自动 = 跟随全局；色温不填跟随全局 -->
+      <div class="row">
+        <label
+          >{{ t('灯') }}
+          <select :value="room.light ?? 'auto'" @change="setRoomLight(room!.id, str($event) as LightMode)">
+            <option v-for="m in LIGHT_MODES" :key="m" :value="m">{{ t(LIGHT_LABELS[m]) }}</option>
+          </select>
+        </label>
+        <label
+          >{{ t('色温') }}
+          <select class="num" :value="room.lightK ?? ''" @change="setRoomLightK(room!.id, str($event) ? Number(str($event)) : undefined)">
+            <option value="">{{ t('跟随全局') }}</option>
+            <option v-for="k in ROOM_K_PRESETS" :key="k" :value="k">{{ k }} K</option>
+          </select>
+        </label>
+      </div>
       <template v-if="rectSize">
         <div class="row">
           <label>{{ t('宽 cm') }}<input type="number" step="10" :value="rectSize.w" @change="setRectSize(num($event), rectSize!.h)" /></label>

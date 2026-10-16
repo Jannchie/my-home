@@ -4,7 +4,7 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, face, puck, rbox, shade, toon, torus, tray } from '../toon'
-import { C, S, glow, rng, rod, shell, type AssetCategory, type AssetDef, type Fx, type StyleTag, paintPanel, paintLandscape } from '../kit'
+import { C, S, clipLevels, glow, rng, rod, shell, type AssetCategory, type AssetDef, type Fx, type ScreenPanel, type StyleTag, paintPanel, paintLandscape } from '../kit'
 
 // ---------- 配色 / 定义 ----------
 
@@ -46,6 +46,11 @@ function def(
 }
 
 // ---------- 小工具 ----------
+
+/** 屏幕面板声明 + 顶边夹挂层（和下面各 build 里面板的位置一致） */
+function screensOf(screens: ScreenPanel[]): Partial<AssetDef> {
+  return { screens, surfaces: clipLevels(screens) }
+}
 
 function P<T extends THREE.Object3D>(o: T, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0): T {
   o.position.set(x, y, z)
@@ -1214,19 +1219,19 @@ export const PROPS_DESK: AssetDef[] = [
     ['cute', [C.sakura, C.white, C.sky]],
     ['nordic', [N.white, N.oak, N.sage]],
     ['modern', [M.black, M.silver, M.gray]],
-  ], monitor(54, 33, 22, 16), { family: 'monitor', sizeLabel: '24 寸' }),
+  ], monitor(54, 33, 22, 16), { family: 'monitor', sizeLabel: '24 寸', ...screensOf([{ x: 0, y: 10, z: -2.2, w: 54, h: 33, t: 2 }]) }),
   def('prop-monitor-27', '显示器', 'tabletop', [62, 20, 48], [
     ['cute', [C.white, C.white, C.pink]],
     ['cute', [C.sakura, C.white, C.sky]],
     ['nordic', [N.white, N.oak, N.sage]],
     ['modern', [M.black, M.silver, M.gray]],
-  ], monitor(62, 38, 25, 18), { family: 'monitor', sizeLabel: '27 寸' }),
+  ], monitor(62, 38, 25, 18), { family: 'monitor', sizeLabel: '27 寸', ...screensOf([{ x: 0, y: 10, z: -2.2, w: 62, h: 38, t: 2 }]) }),
   def('prop-monitor-dual', '双屏显示器', 'tabletop', [110, 24, 47], [
     ['cute', [C.white, C.white, C.pink]],
     ['nordic', [N.white, N.gray, N.sage]],
     ['modern', [M.black, M.char, M.gray]],
     ['industrial', [I.iron, I.steel, I.rust]],
-  ], dualMonitor),
+  ], dualMonitor, screensOf([-1, 1].map((s) => ({ x: s * 27.6, y: 14, z: 3.91, w: 55, h: 33, t: 2, ry: s * -0.25 })))),
   def('prop-keyboard-mouse', '键盘鼠标', 'tabletop', [54, 16, 4], [
     ['cute', [C.white, C.sakura, C.pink]],
     ['cute', [C.white, C.sky, C.lemon]],
@@ -1238,12 +1243,12 @@ export const PROPS_DESK: AssetDef[] = [
     ['modern', [M.black, M.char, '#ff6b6b']],
     ['cute', [C.white, C.white, C.pink]],
     ['nordic', [N.white, N.oak, N.sage]],
-  ], tv(97, 57, 34, 22), { family: 'tv', sizeLabel: '43 寸', styles: ['modern', 'cute', 'nordic', 'industrial'] }),
+  ], tv(97, 57, 34, 22), { family: 'tv', sizeLabel: '43 寸', styles: ['modern', 'cute', 'nordic', 'industrial'], ...screensOf([{ x: 0, y: 7, z: 0, w: 97, h: 57, t: 2.4 }]) }),
   def('prop-tv-55', '平板电视', 'tabletop', [123, 26, 78], [
     ['modern', [M.black, M.char, '#ff6b6b']],
     ['cute', [C.white, C.white, C.pink]],
     ['nordic', [N.white, N.oak, N.sage]],
-  ], tv(123, 71, 42, 26), { family: 'tv', sizeLabel: '55 寸', styles: ['modern', 'cute', 'nordic', 'industrial'] }),
+  ], tv(123, 71, 42, 26), { family: 'tv', sizeLabel: '55 寸', styles: ['modern', 'cute', 'nordic', 'industrial'], ...screensOf([{ x: 0, y: 7, z: 0, w: 123, h: 71, t: 2.4 }]) }),
   def('prop-game-console', '游戏机', 'tabletop', [36, 16, 12], [
     ['cute', [C.white, C.sky, C.pink]],
     ['cute', [C.sakura, C.mint, C.lemon]],

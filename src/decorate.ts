@@ -30,6 +30,7 @@ import { derivedIndex, hasDerived } from './three/stylePalettes'
 import { fitsOnFixture, fitsOnSurface, fixtureTop, toLocal, toWorld } from './surface'
 import { COMPETITIVE, INTEREST_TIERS, JOBS, interestFloor, interestProps, interestStickers, interestWall, jobDeskProps, levelOf, topLevel, type Household, type InterestId, type Member, type Tier } from './household'
 import { furnitureBox } from './snap'
+import { deskExtras, workstations } from './workstation'
 import { appliancesOn, isApplianceOf, isMainAppliance, poseOnSpot, type SpotKind } from './appliance'
 import { cornerSpots, showerBoxes, showerSpot } from './bathroom'
 import { lidSizeFor } from './three/packs/bath-extra'
@@ -757,54 +758,12 @@ class Decorator {
   }
 
   /**
-   * 办公椅、电竞椅、人体工学椅前面那张桌子上没有电脑就补一台：
-   * 电竞椅配显示器 + 键盘，其余六成笔记本电脑、四成显示器 + 键盘。
+   * 电脑工位（见 workstation.ts）：台式主机全部收走、按想要主机的房间重新分到书桌座位上（每人最多一台），
+   * 有主机就一定配显示器（单 / 双 / 三屏、竖屏、横竖组合，按职业兴趣挑、桌宽不够减屏），主机放桌上一侧或桌下；
+   * 其余办公椅、电竞椅前的桌子补笔记本或主机；夹式 / 条形摄像头夹到显示器、电视的顶边。
    */
   computersForChairs() {
-    const isPc = (id: string) => COMPUTER_RE.test(`${id} ${ASSET_MAP.get(id)?.name ?? ''}`)
-    for (const chair of [...this.out]) {
-      const cd = ASSET_MAP.get(chair.asset)
-      if (!cd || chair.z || !OFFICE_CHAIR_RE.test(`${cd.id} ${cd.name}`)) continue
-      // 椅子正前方最近的一张桌子（有台面、名字像桌子）
-      const desk = this.out
-        .filter((o) => o !== chair && !o.z && ASSET_MAP.get(o.asset)?.surface && DESK_RE.test(`${o.asset} ${ASSET_MAP.get(o.asset)!.name}`))
-        .map((o) => ({ o, d: dist(o, chair) }))
-        .filter((x) => x.d < 110)
-        .sort((a, b) => a.d - b.d)[0]?.o
-      if (!desk) continue
-      const top = (desk.z ?? 0) + ASSET_MAP.get(desk.asset)!.surface!
-      if (this.out.some((o) => isPc(o.asset) && Math.abs((o.z ?? 0) - top) < 1 && dist(o, desk) < 100)) continue
-      const gamer = /电竞|gaming/.test(`${cd.id} ${cd.name}`)
-      const dd = ASSET_MAP.get(desk.asset)!
-      // 只挑放得下的：宽不超过桌宽 70%、深不超过桌深 55%；支架、收起的笔记本不算
-      const pick = (re: RegExp) => {
-        const c = this.find(re, (a) => !!a.prop && !a.stick && !a.form?.includes('hanging') && a.form !== 'closed' && !/stand|riser|支架|增高/.test(`${a.id} ${a.name}`) && a.w <= dd.w * 0.7 && a.d <= dd.d * 0.55)
-        return c.length ? this.pick(c).id : null
-      }
-      const place = (id: string | null, fz: number) => {
-        if (!id) return null
-        for (let round = 0; round < 3; round++) {
-          // 先在偏后 / 偏前的位置试，再在整张桌面上随机试（L 形桌按外框取点常落在缺角里）
-          for (let t = 0; t < 16; t++) {
-            const wide = t >= 6
-            const f = this.onLevel(desk, id, (this.rand() - 0.5) * (wide ? 0.7 : 0.3), wide ? (this.rand() - 0.5) * 0.7 : fz + (this.rand() - 0.5) * 0.1, 0)
-            if (f) return f
-          }
-          // 桌面被摆件占满了：电脑是必需品，挪走一件普通摆件再试
-          const clutter = this.out.filter((o) => o.id !== desk.id && Math.abs((o.z ?? 0) - top) < 1 && this.parentOf.get(o.id) === desk.id && !isPc(o.asset))
-          if (!clutter.length) break
-          const drop = this.pick(clutter)
-          this.out = this.out.filter((o) => o !== drop && this.parentOf.get(o.id) !== drop.id)
-        }
-        return null
-      }
-      if (!gamer && this.rand() < 0.6) {
-        place(pick(/laptop|笔记本电脑/), 0)
-      } else {
-        place(pick(/monitor|显示器/), -0.2)
-        place(pick(/keyboard|键盘/), 0.2)
-      }
-    }
+    workstations({ d: this, plan: this.plan, rand: this.rand, household: this.household })
   }
 
   /** 挂到某件家具的挂钩层上、沿杆的 lx 位置（局部坐标） */
@@ -2597,6 +2556,8 @@ class Decorator {
     this.dress()
     // 多宝格、书架、展示柜这类开放格子：最后补一遍，每一格都至少放一件
     this.fillCompartments()
+    // 便签：贴屏幕边框、桌后墙、冰箱门，书桌上散几张
+    deskExtras({ d: this, plan: this.plan, rand: this.rand, household: this.household })
     return this.out
   }
 
@@ -2820,12 +2781,8 @@ function variantsOf(id: string) {
 /** 款式不同、功能相同的系列（可以随机换款） */
 const STYLE_FAMILIES = new Set(['dining-chair', 'body-scale', 'bath-mat', 'kid-bed', 'kid-crib', 'umbrella-stand', 'beanbag', 'nightstand', 'laundry-stand'])
 
-/** 需要配电脑的椅子：办公椅、电竞椅、人体工学椅、网椅 */
-const OFFICE_CHAIR_RE = /desk-chair|office|ergo|mesh|gaming|电竞|办公椅|人体工学|网椅/
 /** 书桌 / 工作台 */
 const DESK_RE = /desk|书桌|电竞桌|工作台|L 形|tbl-desk/
-/** 电脑：笔记本、显示器、一体机、台式机 */
-const COMPUTER_RE = /laptop(?!-stand)|笔记本电脑|monitor(?!-riser|-arm)|显示器(?!支架|增高)|imac|一体机|computer|电脑/
 
 /** 家具顶面高度（相对地面）；没有顶面返回 -1 */
 function surfaceTopOf(f: Furniture) {
