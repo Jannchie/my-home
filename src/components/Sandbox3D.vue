@@ -361,8 +361,9 @@ function rebuildHouse() {
 }
 
 function syncFurniture() {
-  // 模型可能要重建：先把悬停时换上的提亮材质还回去
+  // 模型可能要重建：先把悬停时换上的提亮材质、选中容器的半透明材质还回去
   if (hoverId) setHover(null)
+  clearXray()
   // 读原始对象：拖动时每帧都要过一遍全部家具，走响应式代理的开销比计算本身还大
   const p = toRaw(plan.value)
   const alive = new Set<string>()
@@ -398,6 +399,7 @@ function syncFurniture() {
       fx.remove(id)
     }
   updateRing()
+  applyXray()
   // 灯具家具：发光部件、光源位置；餐桌挪了吊灯跟着挪
   lights.syncLamps(p, objs, ASSET_MAP, (f) => roomAt(p, f), floorY)
   const dk = roomLightKey(p)
@@ -527,11 +529,78 @@ function floorPoint(e: PointerEvent) {
 
 function pickFurniture(e: PointerEvent): string | null {
   setRay(e)
-  const hit = raycaster.intersectObject(furnRoot, true)[0]
-  let o: THREE.Object3D | null = hit?.object ?? null
-  while (o && !o.userData.furnitureId) o = o.parent
+  // 射线经过的家具（去重、由近到远）
+  const ids: string[] = []
+  for (const h of raycaster.intersectObject(furnRoot, true)) {
+    let o: THREE.Object3D | null = h.object
+    while (o && !o.userData.furnitureId) o = o.parent
+    const id = o?.userData.furnitureId as string | undefined
+    if (id && !ids.includes(id)) ids.push(id)
+  }
   // 走动中的宠物 / 机器人：点中就选中它来源的那件家具（选中后角色回到原位静止，方便拖动）
-  return (o?.userData.furnitureId as string) ?? actors.pick(raycaster)
+  if (!ids.length) return actors.pick(raycaster)
+  // 柜子、架子的格子里摆满了东西，点柜子正面多半先碰到摆件：先选容器本身；容器已经选中时再点，才选里面的东西
+  const sel = selection.value?.type === 'furniture' ? selection.value.id : null
+  const inside = (kid: string, box: string) => {
+    const p = findFurniture(box)
+    return !!p && propsOn(plan.value, p).some((k) => k.id === kid)
+  }
+  // 容器已经选中（柜体半透明）：射线穿过它碰到的里面的东西优先
+  if (sel && ids.includes(sel)) {
+    const kid = ids.find((id) => id !== sel && inside(id, sel))
+    if (kid) return kid
+  }
+  const top = ids[0]
+  if (findFurniture(top)?.z) {
+    const parent = ids.slice(1).find((id) => inside(top, id))
+    if (parent && sel !== top) return parent
+  }
+  return top
+}
+
+/**
+ * 选中柜子、架子这类容器时，柜体变半透明（里面的东西保持实色），看得清格子里放了什么，也能直接点里面的东西。
+ * 模型重建（syncFurniture）前先还原，之后重新套上。
+ */
+const xraySwapped: [THREE.Mesh, THREE.Material | THREE.Material[]][] = []
+const xrayMats = new WeakMap<THREE.Material, THREE.Material>()
+function ghostOf(mat: THREE.Material) {
+  let g = xrayMats.get(mat)
+  if (!g) {
+    g = mat.clone()
+    g.onBeforeCompile = mat.onBeforeCompile
+    g.customProgramCacheKey = mat.customProgramCacheKey
+    g.transparent = true
+    g.opacity = (mat.transparent ? mat.opacity : 1) * 0.28
+    g.depthWrite = false
+    xrayMats.set(mat, g)
+  }
+  return g
+}
+function clearXray() {
+  for (const [m, mat] of xraySwapped) {
+    m.material = mat
+    for (const c of m.children) if (c.userData.isOutline) c.visible = true
+  }
+  xraySwapped.length = 0
+}
+function applyXray() {
+  clearXray()
+  const f = selectedFurniture.value
+  const def = f && ASSET_MAP.get(f.asset)
+  const o = f && objs.get(f.id)?.obj
+  if (!f || !def || !o || def.prop || !def.surfaces?.some((l) => l.kind !== 'hook') || !editing.value) return
+  o.traverse((n) => {
+    const m = n as THREE.Mesh
+    if (!m.isMesh) return
+    if (n.userData.isOutline) {
+      n.visible = false
+      return
+    }
+    xraySwapped.push([m, m.material])
+    m.material = Array.isArray(m.material) ? m.material.map(ghostOf) : ghostOf(m.material)
+  })
+  dirty = true
 }
 
 /**
@@ -1569,7 +1638,10 @@ watch(
     dirty = true
   },
 )
-watch(selection, updateRing)
+watch(selection, () => {
+  updateRing()
+  applyXray()
+})
 watch(
   () => sandbox.autoRotate,
   (v) => (controls.autoRotate = v && !editing.value),
