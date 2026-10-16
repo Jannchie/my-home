@@ -1,6 +1,8 @@
 {
   "name": "my-home",
   "private": true,
+  "license": "MIT",
+  "author": "Jianqi Pan <jannchie@gmail.com>",
   "type": "module",
   "scripts": {
     "dev": "vite",
