@@ -320,7 +320,7 @@ const moreItems = computed<MenuEntry[]>(() => [
   'sep',
   { label: t('作者的 X'), brand: 'x', action: () => openLink(AUTHOR.x) },
   { label: t('GitHub 仓库'), icon: ICONS.github, action: () => openLink(REPO_URL) },
-  ...(iosStandalone ? (['sep', { label: '安全区诊断', action: () => (safeDebug.value = true) }] as MenuEntry[]) : []),
+  ...(iosStandalone ? (['sep', { label: t('安全区诊断'), action: () => (safeDebug.value = true) }] as MenuEntry[]) : []),
 ])
 function openLink(url: string) {
   window.open(url, '_blank', 'noopener')
