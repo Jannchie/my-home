@@ -43,6 +43,8 @@ import type { Wardrobe } from './three/garments'
 import { PIPE, PIPE_WIDTHS, ROW_LENGTHS } from './three/packs/garments-pack'
 import { floorY, isPlant, roomAt } from './three/house'
 import { openingGeom, regionOf, type Region } from './model'
+import { gameWeight } from './three/packs/games-more'
+import { homeCams } from './homecams'
 
 type Rand = () => number
 
@@ -1033,7 +1035,7 @@ class Decorator {
         const lv = levelOf(m, it) || 1
         const floor = interestFloor(it)
         if (floor.length && this.rand() < (0.45 + 0.15 * lv) * k) this.wall(room, this.pick(floor).id, { front: 40 })
-        const props = interestProps(it)
+        const props = it === 'boardgames' ? this.regionalGames(interestProps(it)) : interestProps(it)
         if (props.length) this.scatter(room, props, Math.max(1, Math.round((0.5 + 0.5 * lv) * k)))
         const wall = interestWall(it)
         if (wall.length && this.rand() < 0.5 * k) this.mount(room, this.pick(wall).id)
@@ -1068,7 +1070,9 @@ class Decorator {
       }
       for (const re of t.props ?? []) {
         const c = this.find(re, (a) => !!a.prop && !a.stick && !a.form?.includes('hanging'))
-        if (c.length) this.scatter(room, [this.pick(c)], 1)
+        // 棋牌按地区加权（中式军旗 / 斗地主、日式花札 / 双六、欧美跳棋 / 拼字…）；其他素材权重都是 1，等同均匀挑
+        const a = this.gamePick(c)
+        if (a) this.scatter(room, [a], 1)
       }
       for (const re of t.wall ?? []) {
         const c = this.find(re, (a) => !!a.mount)
@@ -1344,9 +1348,12 @@ class Decorator {
       // 围棋 / 象棋：中式方桌，两人对坐
       if (this.rand() < 0.08 + (elder ? 0.3 : 0) + (bg >= 2 ? 0.25 : 0)) {
         // 中式方桌式棋桌 + 平板棋盘（围棋带一对棋罐 / 象棋），两人对坐
+        // 不是围棋时：一半象棋，一半军旗 / 五子棋 / 斗兽棋 / 跳棋
         const go = this.rand() < 0.5
-        tryRooms([...spare, ldk], (r) => this.gameTable(r, 'hg-qizhuo', this.seatFor(r), [0, 2], 40, (t) => (go ? this.goSet(t) : this.boardSet(t, 'xiangqi'))))
+        tryRooms([...spare, ldk], (r) => this.gameTable(r, 'hg-qizhuo', this.seatFor(r), [0, 2], 40, (t) => (go ? this.goSet(t) : this.rand() < 0.5 ? this.boardSet(t, 'xiangqi') : this.onLevelAny(t, /^(bg-(junqi-(setup|mid|flip)|gomoku|doushou)|int-chinese-checkers)(-|$)/))))
       }
+      // 斗地主 / 掼蛋：方桌四面坐人，桌上一局扑克
+      if (this.rand() < 0.05 + (bg >= 2 ? 0.2 : 0) + (elder ? 0.05 : 0)) tryRooms([...spare, ldk], (r) => this.gameTable(r, 'hg-qizhuo', this.seatFor(r), [0, 1, 2, 3], 45, (t) => this.onLevelAny(t, /^bg-poker-(ddz|guandan)$/)))
       // 茶台
       if (ldk && this.rand() < 0.1 + (topLevel(hh, 'tea') ? 0.35 : 0) + (elder ? 0.15 : 0) + (hh.style === 'chinese' ? 0.2 : 0)) {
         this.style = this.styleFor(ldk)
@@ -1359,6 +1366,8 @@ class Decorator {
         const go = this.rand() < 0.55
         tryRooms(washitsu, (r) => this.gameTable(r, go ? 'hg-go-ban' : 'hg-shogi-ban', 'zabuton', [0, 2], 30, go ? (t) => this.goBanSet(t, r) : undefined))
       }
+      // 花札：和室榻榻米上铺一块座布团对局，两人对坐
+      if (this.rand() < 0.05 + (bg >= 2 ? 0.2 : 0) + (elder ? 0.1 : 0)) tryRooms([...washitsu, ldk], (r) => this.gameTable(r, 'bg-hanafuda-mat', 'zabuton', [0, 2], 30))
       if (this.rand() < 0.12 + (elder || traditional ? 0.35 : 0)) {
         const r = washitsu[0] ?? ldk
         if (r) {
@@ -1381,9 +1390,33 @@ class Decorator {
           return this.mount(r, id)
         })
       }
-      if (this.rand() < 0.1 + (bg >= 2 ? 0.3 : 0) + (elder ? 0.15 : 0)) tryRooms([...spare.filter((r) => this.purposeOf.get(r.id) === 'library'), ldk], (r) => this.gameTable(r, 'hg-game-table-round', this.vary('dining-chair'), [0, 2], 40, (t) => this.boardSet(t, 'chess')))
+      if (this.rand() < 0.1 + (bg >= 2 ? 0.3 : 0) + (elder ? 0.15 : 0)) tryRooms([...spare.filter((r) => this.purposeOf.get(r.id) === 'library'), ldk], (r) => this.gameTable(r, 'hg-game-table-round', this.vary('dining-chair'), [0, 2], 40, (t) => (this.rand() < 0.55 ? this.boardSet(t, 'chess') : this.onLevelAny(t, /^(bg-checkers|int-backgammon)(-|$)/))))
     }
+    this.gameNight()
     this.style = this.baseStyle
+  }
+
+  /**
+   * 桌游之夜：爱玩棋牌的人家（Lv.2 起）偶尔在餐桌 / 被炉 / 矮桌上摊着一局（座位就是桌边原有的椅子 / 坐垫），
+   * 按地区挑：中式斗地主 / 掼蛋 / 飞行棋 / 军旗，日式黑白棋 / 双六 / 花札，欧美地产桌游 / 拼字 / 德州扑克 / 多米诺。
+   */
+  gameNight() {
+    const bg = topLevel(this.household, 'boardgames')
+    if (bg < 2 || this.rand() >= 0.2 + (bg >= 3 ? 0.2 : 0)) return
+    const tables = this.shuffle(
+      this.out.filter((o) => {
+        const d = ASSET_MAP.get(o.asset)
+        return !o.z && !!d?.surface && !d.prop && /dining-table|tbl-dining|餐桌|kotatsu|被炉|chabudai|矮桌|ちゃぶ台/.test(`${d.id} ${d.name}`)
+      }),
+    )
+    const pool = this.find(/^(bg-(poker-|feixing|junqi-(mid|flip)|gomoku|paijiu-reveal|sugoroku$|property$|words$|holdem|dominoes|checkers-mid)|int-(reversi|hanafuda-dealing|poker-dealing|uno-dealing|card-game|mahjong-mat|bg-|chess-(study|endgame)|backgammon$))/, (a) => !!a.prop)
+    for (const t of tables.slice(0, 2)) {
+      this.style = this.styleFor(this.plan.rooms.find((r) => pointInPolygon(t, r.points)) ?? this.plan.rooms[0])
+      for (let k = 0; k < 4; k++) {
+        const a = this.gamePick(pool)
+        if (a && this.onLevel(t, a.id, 0, 0, 0)) return
+      }
+    }
   }
 
   /** 全家共同的兴趣放在客厅：养猫、园艺、水族、乐器、鸟笼 / 小动物笼（笼子全屋限一只，主人房间里已经有了就不再摆） */
@@ -1529,6 +1562,15 @@ class Decorator {
   }
 
   // ---------- 冰箱、洗衣机（家具，摆在冰箱位 / 洗衣机位上） ----------
+
+  /** 按地区加权挑一件棋牌（gameWeight；非棋牌权重 1） */
+  gamePick(c: AssetDef[]) {
+    return this.weighted(c.map((a) => [a, gameWeight(a.id, this.region)] as [AssetDef, number]))
+  }
+  /** 随机池里去掉这个地区少见的棋牌（权重 < 1 的），只剩本地常见的和通用的 */
+  regionalGames(c: AssetDef[]) {
+    return c.filter((a) => gameWeight(a.id, this.region) >= 1)
+  }
 
   /** 按权重随机挑一个 */
   weighted<T>(items: [T, number][]): T | undefined {
@@ -1820,8 +1862,10 @@ class Decorator {
         seat(desk)
         if (it) for (const a of this.shuffle(interestFloor(it)).slice(0, 3)) this.wall(room, a.id, { front: 40 })
         this.floorOf(room, /bookshelf|书架|陈列柜|展示柜|收纳柜|shelf/, { front: 40 })
-        if (it && desk) for (const a of this.shuffle(interestProps(it)).slice(0, 4)) this.onLevel(desk, a.id, (this.rand() - 0.5) * 0.7, (this.rand() - 0.5) * 0.4, Math.round((this.rand() - 0.5) * 40))
-        if (it) this.scatter(room, interestProps(it), 4)
+        // 棋牌按地区（regionalGames 对非棋牌不起作用）
+        const pool = it ? this.regionalGames(interestProps(it)) : []
+        if (it && desk) for (const a of this.shuffle(pool).slice(0, 4)) this.onLevel(desk, a.id, (this.rand() - 0.5) * 0.7, (this.rand() - 0.5) * 0.4, Math.round((this.rand() - 0.5) * 40))
+        if (it) this.scatter(room, pool, 4)
         break
       }
       case 'cards': {
@@ -1844,7 +1888,7 @@ class Decorator {
         if (this.region === 'cn') this.floorOf(room, /^sw-cn-chatai$/, { front: 60 })
         this.floorOf(room, /bookshelf|书架|陈列柜|展示柜|收纳柜|shelf/, { front: 40 })
         this.freePush(room, 'floor-lamp', 0, c, 0)
-        this.propsOf(room, /^(int-(poker|mahjong-case|boardgame|chess|xiangqi|shogi)|hg-go-board)/, 4)
+        this.scatter(room, this.regionalGames(this.find(/^(int-(poker|mahjong-case|boardgame|chess|xiangqi|shogi|reversi|hanafuda|backgammon)|hg-go-board|bg-(junqi|gomoku|box-stack|chip-case|dice|score-pad|words-boxed|property-boxed|sugoroku-rolled))/, (a) => !!a.prop)), 4)
         break
       }
       case 'gym':
@@ -2614,6 +2658,8 @@ class Decorator {
     // 电脑椅前面的桌上要有电脑（在 dress 之前补，免得桌面先被摆件占满）
     this.computersForChairs()
     this.robots()
+    // 摄像头：宠物区的宠物摄像头、婴儿床边的婴儿监视器、玄关 / 客厅的安防摄像头、门口的可视门铃 / 猫眼
+    homeCams({ d: this, plan: this.plan, rand: this.rand, household: this.household })
     this.dress()
     // 多宝格、书架、展示柜这类开放格子：最后补一遍，每一格都至少放一件
     this.fillCompartments()
@@ -2709,7 +2755,11 @@ class Decorator {
     const pools = {
       chinese: this.find(/瓷|vase|花瓶|茶|tea|盆景|bonsai|奇石|stone|香炉|incense|玉|jade|印章|砚|墨|scroll|卷轴|铜|bronze|葫芦/, ok),
       books: this.find(/book|书(?!架|柜|桌)|漫画|manga|novel|杂志|magazine/, ok),
-      deco: this.find(HIGH_OK, ok),
+      // 棋牌（花札盒之类）按地区：中式 / 欧美的格子里不塞花札
+      // 厕所、浴室、洗衣用品（除臭盒、洗剂……）不进柜架格子
+      deco: this.regionalGames(this.find(HIGH_OK, (a) => ok(a) && !/^wet-|toilet|厕所|トイレ|浴|bath|洗|laundry|deodor|除臭|消臭|detergent/.test(a.id + a.name))),
+      // 展示柜、收藏柜：放收藏品，不放收纳盒、牌盒
+      collection: this.find(/figure|手办|フィギュア|模型|model|minifig|gacha|扭蛋|ガチャ|toy-car|小汽车|车模|ミニカー|mineral|矿石|crystal|水晶|shell|贝壳|snow-?globe|雪景球|trophy|奖杯|doll|人形|ornament|摆件|plush|玩偶|cube|魔方|squishy|捏捏|emo-bot|情感机器人/, (a) => ok(a) && !/box|盒|case|箱|card|牌|^hc-|摄像头|camera/.test(a.id + a.name)),
     }
     for (const parent of [...this.out]) {
       const pd = ASSET_MAP.get(parent.asset)
@@ -2718,6 +2768,7 @@ class Decorator {
       if (!isOpenShelf(pd)) continue
       const kids = this.out.filter((o) => this.parentOf.get(o.id) === parent.id)
       const chineseShelf = /多宝|duobao|cn-|curio/.test(label)
+      const collectionShelf = /展示|陈列|收藏|showcase|display|collection|curio|コレクション/.test(label)
       pd.surfaces.forEach((lv, i) => {
         if (lv.kind === 'hook') return
         const z = (parent.z ?? 0) + lv.y
@@ -2735,11 +2786,20 @@ class Decorator {
           if (kids.some(inCell) || this.out.some((o) => o.z !== undefined && this.parentOf.get(o.id) === parent.id && inCell(o))) continue
           const roomH = lv.h ?? 40
           const fits = (a: AssetDef) => a.h <= roomH - 1.5 && a.w <= x1 - x0 - 1 && a.d <= z1 - z0 - 1
-          const pool = (chineseShelf && this.rand() < 0.8 ? pools.chinese : /book|书/.test(label) && this.rand() < 0.65 ? pools.books : pools.deco).filter(fits)
-          const fallback = pools.deco.concat(pools.books).filter(fits)
+          const pool = (
+            chineseShelf && this.rand() < 0.8
+              ? pools.chinese
+              : collectionShelf
+                ? pools.collection
+                : /book|书/.test(label) && this.rand() < 0.65
+                  ? pools.books
+                  : pools.deco
+          ).filter(fits)
+          // 收藏柜：先收藏品，再是不带「盒」的小摆件，最后才是别的
+          const fallback = (collectionShelf ? [...this.shuffle(pools.collection), ...this.shuffle(pools.deco.filter((a) => !/box|盒|case|箱/.test(a.id + a.name))), ...this.shuffle(pools.books), ...this.shuffle(pools.deco)] : [...pools.deco, ...pools.books]).filter(fits)
           const n = x1 - x0 > 45 && this.rand() < 0.5 + 0.3 * this.clutter ? 2 : 1
           let placed = 0
-          for (const a of [...this.shuffle(pool), ...this.shuffle(fallback)]) {
+          for (const a of [...this.shuffle(pool), ...(collectionShelf ? fallback : this.shuffle(fallback))]) {
             if (placed >= n) break
             const cx = (x0 + x1) / 2 + (n > 1 ? (placed ? 0.25 : -0.25) * (x1 - x0) : (this.rand() - 0.5) * 0.3 * (x1 - x0 - a.w))
             const cz = (z0 + z1) / 2

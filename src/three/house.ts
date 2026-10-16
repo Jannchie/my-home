@@ -715,8 +715,11 @@ function buildWallDevices(plan: Plan, infos: OpeningInfo[], H: number) {
       const side = mul(info.out, sgn)
       const room = roomOnSide(info, side)
       if (!room) {
-        // 户外一侧：玄关大门外装门铃
-        if (info.owner.kind === 'entrance' && info.outer) add(doorbell(), info, side, along + 6, 145)
+        // 户外一侧：玄关大门外装门铃；同一位置已经装了可视门铃（素材 hc-doorbell-*，一键布置或手动摆的）就不画默认门铃
+        if (info.owner.kind === 'entrance' && info.outer) {
+          const p = add2(add2(info.center, mul(info.dir, along + 6)), mul(side, info.wall / 2))
+          if (!plan.furniture.some((f) => f.asset.startsWith('hc-doorbell') && Math.hypot(f.x - p.x, f.y - p.y) < 40)) add(doorbell(), info, side, along + 6, 145)
+        }
         continue
       }
       if (!isIndoor(room) || room.kind === 'storage') continue

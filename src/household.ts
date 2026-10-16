@@ -131,7 +131,7 @@ export const INTERESTS: Record<InterestId, { label: string; floor?: Matcher; pro
   beauty: { label: '美妆', props: { cats: ['toiletry'] }, floor: { re: /mirror|镜|vanity|梳妆|clothes-rail|挂衣/ } },
   // 麻将桌 / 棋桌按地区由 Decorator.specialties 成套摆（桌子 + 座位 + 台面上的牌 / 棋盘），随机池里只有台面摆件；
   // 棋罐要成对摆在棋盘边，不进随机池
-  boardgames: { label: '桌游棋牌', props: { re: /^(?!hg-go-bowl)(?=.*(桌游|棋|麻将|花札|かるた|扑克|骰|board-?game|chess|shogi|mahjong|jenga|叠叠乐|卡牌))(?!.*棋桌)/ } },
+  boardgames: { label: '桌游棋牌', props: { re: /^(?!hg-go-bowl)(?=.*(桌游|棋|麻将|花札|かるた|扑克|骰|board-?game|chess|shogi|mahjong|jenga|叠叠乐|卡牌|牌九|骨牌|双六|拼字|筹码|计分本))(?!.*棋桌)/ } },
   collecting: { label: '收藏', props: { re: /col-|瓷|矿石|晶|化石|硬币|邮票|coin|stamp|mineral|赏盘|茶碗/ }, floor: { re: /陈列柜|博古架|curio/ }, style: 'retro' },
   movies: { label: '电影', props: { re: /av-|投影|CD|dvd|蓝光|vhs|卡带|cassette|boombox|爆米花|海报/ }, floor: { re: /幕布|projector|家庭影院|soundbar|回音壁|落地音箱|hifi/i } },
   fishing: { label: '钓鱼', floor: { re: /钓|fishing/ }, props: { re: /渔具|拟饵|tackle|鱼篓/ } },
@@ -182,12 +182,18 @@ export const INTEREST_TIERS: Partial<Record<InterestId, Tier[]>> = {
     { floor: [/^of-pc-(mid|full)$/], props: [/^of-monitor-gaming$/, /^of-mousepad-rgb$/], wall: [/^hg-hex-lights$/] },
     { floor: [/^of-pc-full$/, /展示柜|showcase/], room: true },
   ],
+  // 每条正则的候选按地区加权挑（GAME_REGION：中式多军旗 / 五子棋 / 斗地主，日式花札 / 黑白棋 / 双六，欧美跳棋 / 拼字 / 地产桌游）
   boardgames: [
-    { props: [/^int-(poker|mahjong-case)/] },
-    { props: [/^(hg-go-board|int-(chess|xiangqi|shogi)(-|$))/, /^int-mahjong-mat/] },
-    // Lv.3 的牌桌 / 棋桌按地区单独摆（Decorator.specialties），这里只多撒几样
-    { props: [/^(int-boardgame|int-chess|hg-go-board)/] },
-    { room: true },
+    { props: [/^(int-(poker|uno|card-game|mahjong-case|hanafuda-(boxed|stack))|bg-dice-pair)/] },
+    {
+      props: [
+        /^(hg-go-board|int-(chess|xiangqi|shogi|reversi|chinese-checkers|backgammon)|bg-(junqi|gomoku|doushou|feixing|checkers|sugoroku))(-|$)/,
+        /^(int-mahjong-mat|bg-(poker-|paijiu|hanafuda-mat|dominoes|holdem))/,
+      ],
+    },
+    // Lv.3 的牌桌 / 棋桌按地区单独摆（Decorator.specialties），这里多撒几样更专门的：桌游、筹码、计分本、多面骰
+    { props: [/^(int-boardgame|int-bg-|bg-(box-stack|property|words|jenga))/, /^bg-(chip-case|score-pad|dice-rpg)/] },
+    { props: [/^bg-box-stack-l$/], room: true },
   ],
   music: [
     { props: [/metronome|节拍|谱/] },
