@@ -2765,10 +2765,13 @@ class Decorator {
       const pd = ASSET_MAP.get(parent.asset)
       if (!pd || pd.prop || !pd.surfaces?.length || parent.z) continue
       const label = `${pd.id} ${pd.name} ${pd.family ?? ''}`
-      if (!isOpenShelf(pd)) continue
+      // 相机展示柜这类专用柜由 fillCameras 摆满，这里不碰
+      if (!isOpenShelf(pd) || this.reserved.has(parent.id)) continue
       const kids = this.out.filter((o) => this.parentOf.get(o.id) === parent.id)
       const chineseShelf = /多宝|duobao|cn-|curio/.test(label)
       const collectionShelf = /展示|陈列|收藏|showcase|display|collection|curio|コレクション/.test(label)
+      // 收藏柜像相机展示柜一样放开同类数量限制：同类收藏品可以摆好几件
+      this.noLimit = collectionShelf
       pd.surfaces.forEach((lv, i) => {
         if (lv.kind === 'hook') return
         const z = (parent.z ?? 0) + lv.y
@@ -2799,7 +2802,12 @@ class Decorator {
           const fallback = (collectionShelf ? [...this.shuffle(pools.collection), ...this.shuffle(pools.deco.filter((a) => !/box|盒|case|箱/.test(a.id + a.name))), ...this.shuffle(pools.books), ...this.shuffle(pools.deco)] : [...pools.deco, ...pools.books]).filter(fits)
           const n = x1 - x0 > 45 && this.rand() < 0.5 + 0.3 * this.clutter ? 2 : 1
           let placed = 0
-          for (const a of [...this.shuffle(pool), ...(collectionShelf ? fallback : this.shuffle(fallback))]) {
+          // 同一件柜子里同款只放一次（小格子多的柜子不会被同一样东西塞满）；实在没有别的放得下才重复
+          const used = new Set(kids.map((k) => k.asset))
+          const cands = [...this.shuffle(pool), ...(collectionShelf ? fallback : this.shuffle(fallback))]
+          // 收藏柜：重复只在收藏品里重复（一格一辆小汽车、一个手办都自然），不重复牌盒之类
+          const repeats = cands.filter((c) => used.has(c.id) && (!collectionShelf || pools.collection.includes(c)))
+          for (const a of [...cands.filter((c) => !used.has(c.id)), ...repeats]) {
             if (placed >= n) break
             const cx = (x0 + x1) / 2 + (n > 1 ? (placed ? 0.25 : -0.25) * (x1 - x0) : (this.rand() - 0.5) * 0.3 * (x1 - x0 - a.w))
             const cz = (z0 + z1) / 2
@@ -2812,6 +2820,7 @@ class Decorator {
         }
       })
     }
+    this.noLimit = false
   }
 
   /** 给桌、柜摆上东西 */

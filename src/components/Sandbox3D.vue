@@ -991,8 +991,12 @@ function onPointerDown(e: PointerEvent) {
   }
   const id = pickFurniture(e)
   if (id) {
+    // 按下只选中；拖过一段距离才开始移动（没选中的要拖得更远），免得点一下手一抖就把家具挪了
+    const wasSelected = selection.value?.type === 'furniture' && selection.value.id === id
     selection.value = { type: 'furniture', id }
-    beginDrag(e, id)
+    pendingDrag = { e, id, slop: wasSelected ? 3 : 12 }
+    // 按在家具上不转视角
+    controls.enabled = false
   } else if (pickedBuiltin) {
     selection.value = { type: 'fixture', id: pickedBuiltin }
   } else {
@@ -1003,8 +1007,23 @@ function onPointerDown(e: PointerEvent) {
   }
 }
 
+/** 鼠标按在家具上、还没拖够距离（slop，像素）的状态 */
+let pendingDrag: { e: PointerEvent; id: string; slop: number } | null = null
+
 function onPointerMove(e: PointerEvent) {
   const touch = e.pointerType !== 'mouse'
+  if (pendingDrag && !touch) {
+    if (e.buttons === 0) pendingDrag = null
+    else {
+      const p = pendingDrag
+      if (Math.hypot(e.clientX - p.e.clientX, e.clientY - p.e.clientY) < p.slop) return
+      pendingDrag = null
+      // 偏移按按下时的位置算，家具不会一下跳到指针下
+      beginDrag(p.e, p.id)
+      moveDrag(e)
+      return
+    }
+  }
   if (touch && touches.has(e.pointerId)) touches.set(e.pointerId, { x: e.clientX, y: e.clientY })
   if (onRotateMove(e)) {
     dirty = true
@@ -1036,6 +1055,10 @@ function onPointerUp(e: PointerEvent) {
     touches.delete(e.pointerId)
     if (editing.value) onTouchUp(e)
     return
+  }
+  if (pendingDrag) {
+    pendingDrag = null
+    controls.enabled = true
   }
   if (drag) {
     endDrag()
@@ -1859,7 +1882,7 @@ defineExpose({ resetView })
 <template>
   <div class="sandbox">
     <div ref="host" class="viewport" :class="{ placing: !!placing, hover: hovering, night: nightUi }" :style="{ background: viewportBg, '--sheet-h': layout.sheetH + 'px' }">
-      <div class="compass" :title="t('北') + ' · ' + t('户型朝向 {n}°', { n: northDeg })">
+      <div class="compass" :class="{ 'under-bar': !editing }" :title="t('北') + ' · ' + t('户型朝向 {n}°', { n: northDeg })">
         <svg viewBox="-20 -20 40 40" width="40" height="40" aria-hidden="true">
           <circle r="18" class="compass-bg" />
           <g :transform="`rotate(${compassAngle})`">
@@ -1965,8 +1988,8 @@ defineExpose({ resetView })
 
     <BottomSheet v-if="editing" v-model="sheet" :enabled="device.compact" class="panel" :label="t('沙盘面板')">
       <template #header>
-        <nav class="ptabs" role="tablist" :aria-label="t('沙盘面板')">
-          <button v-for="tb in tabs" :key="tb.id" role="tab" :aria-selected="tab === tb.id" :class="{ on: tab === tb.id, 'tab-sel': tb.id === 'sel' }" @click="pickTab(tb.id)">
+        <nav class="ptabs" :class="{ many: tabs.length > 4 }" role="tablist" :aria-label="t('沙盘面板')">
+          <button v-for="tb in tabs" :key="tb.id" role="tab" :title="tb.label" :aria-selected="tab === tb.id" :class="{ on: tab === tb.id, 'tab-sel': tb.id === 'sel' }" @click="pickTab(tb.id)">
             <JIcon :icon="tb.icon" :size="15" /><span>{{ tb.label }}</span>
           </button>
         </nav>
@@ -2478,6 +2501,23 @@ defineExpose({ resetView })
   color: var(--text-muted);
   border-radius: var(--radius-sm);
 }
+/* 选中家具时多出「属性」页，共 5 项：没选中的只留图标（悬停有提示），当前页显示图标 + 文字，一行放得下 */
+.ptabs.many button {
+  flex: 0 0 auto;
+  padding: 0 8px;
+}
+.ptabs.many button:not(.on) span {
+  display: none;
+}
+.ptabs.many button.on {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.ptabs.many button.on span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .ptabs button.on {
   background: var(--surface);
   border-color: var(--border);
@@ -2686,12 +2726,16 @@ h3 {
   color: var(--text);
 }
 /* 3D 指北针 */
+/* 画布右上角，上 / 右边距相等（和左上角模式切换的边距一致）；预览模式右上角有工具条，放到它下面 */
 .compass {
   position: absolute;
+  top: 12px;
   right: 12px;
-  bottom: 30px;
   z-index: 1;
   pointer-events: auto;
+}
+.compass.under-bar {
+  top: 64px;
 }
 .compass svg {
   display: block;
@@ -3277,9 +3321,11 @@ h3 {
   flex: none;
 }
 :root.compact .compass {
-  top: 56px;
+  top: 10px;
   right: 10px;
-  bottom: auto;
+}
+:root.compact .compass.under-bar {
+  top: 60px;
 }
 :root.compact .modes {
   top: 10px;
