@@ -287,16 +287,23 @@ const RULES: [string, (d: D) => boolean][] = [
   ['book', R(/book|书(?!架|柜|桌)/)],
   ['manga', R(/漫画|manga/)],
   ['magazine', R(/novel|杂志|magazine/)],
-  ['camera', R(/camera|相机/)],
-  ['lens', R(/lens|镜头/)],
+  // 工作台上的工具（职业工作台按它们挑；旧的 /pen/ 会命中 open、/midi/ 会命中 humidifier，这里按词边界写）
+  ['camera', and((d) => !!d.prop, R(/^of-camera-|^of-action-cam|相机/))],
+  ['lens', R(/^of-lens-|镜头/)],
   ['webcam', R(/webcam/)],
-  ['mic', R(/mic-|麦克风/)],
-  ['stream-gear', R(/stream|capture|声卡|补光/)],
-  ['audio-gear', R(/audio-interface|mixer|synth|midi/)],
-  ['pen-tablet', R(/tablet/)],
-  ['pen', R(/pen/)],
+  ['mic', R(/(^|-)mic(-|$)|麦克风/)],
+  ['stream-gear', R(/stream-deck|capture-card|直播/)],
+  ['audio-gear', R(/audio-interface|of-mixer|调音台|synth|midi-|studio-monitors/)],
+  ['tablet', R(/(^|-)tablet(-|$)|平板电脑|平板支架/)],
+  ['pen', R(/(^|-)(pen|pencil)(-|s?$)|笔筒|笔袋|削笔/)],
   ['microscope', R(/microscope/)],
-  ['electronics-tool', R(/mk-|oscillo|示波器|烙铁|pcb/)],
+  ['electronics-tool', R(/^mk-|oscillo|示波器|烙铁|pcb/)],
+  // 晾衣架上随手晾的日常衣物（T 恤、衬衫、裤子、裙子、童装）
+  ['line-dry', (d) => /^gm-(tee|tshirt|t-shirt|shirt|blouse|polo|tank|hoodie|sweat|jeans|shorts|pants|slacks|dress|skirt|kids)/.test(d.id)],
+  // 收纳箱 / 盒 / 篮（真正用来收东西的）
+  // 桌游 / 棋牌 / 牌类（含收在盒里的）：和兴趣 boardgames 的摆件同一批
+  ['tabletop-game', (d) => !!d.prop && INTERESTS.boardgames.props!.test(T(d))],
+  ['storage-box', (d) => /^(sb-(plastic-box|fabric-box|rattan-box|closet-box|underbed|vac-bag|wood-crate)|sf-storage-box|sf-basket|wet-clear-case|wet-wash-basket|st-baskets|lm-file-boxes|av-cassette-box|mk-parts-box|mk-screw-sorter|prop-cosmetic-box)/.test(d.id) || /收纳箱|收纳盒|收纳篮/.test(d.name)],
   // ----- 收藏 / 玩具 / 装饰 -----
   ['plush', R(/plush|玩偶|毛绒|bear|teddy|兔|bunny|抱枕/)],
   ['figure', R(/figure|手办/)],
@@ -326,7 +333,6 @@ const RULES: [string, (d: D) => boolean][] = [
   // fillCompartments 的几类候选
   ['curio-ok', R(/瓷|vase|花瓶|茶|tea|盆景|bonsai|奇石|stone|香炉|incense|玉|jade|印章|砚|墨|scroll|卷轴|铜|bronze|葫芦/)],
   ['collectible', (d) => R(/figure|手办|フィギュア|模型|model|minifig|gacha|扭蛋|ガチャ|toy-car|小汽车|车模|ミニカー|mineral|矿石|crystal|水晶|shell|贝壳|snow-?globe|雪景球|trophy|奖杯|doll|人形|ornament|摆件|plush|玩偶|cube|魔方|squishy|捏捏|emo-bot|情感机器人/)(d) && !/box|盒|case|箱|card|牌|^hc-|摄像头|camera/.test(d.id + d.name)],
-  ['boxed', (d) => /box|盒|case|箱/.test(d.id + d.name)],
   // ----- 摆放能力 -----
   ['high-ok', R(OLD.HIGH_OK)],
   ['bed-ok', R(OLD.BED_OK)],
@@ -371,8 +377,6 @@ for (const [it, m] of Object.entries(INTERESTS)) {
     },
   ])
 }
-// 职业工作台
-for (const [job, re] of Object.entries(JOB_DESK)) RULES.push([`job:${job}`, (d) => !!d.prop && re.test(T(d))])
 
 // ---------- 人工审查结论（REVIEW）：旧规则的误匹配，逐条修正 ----------
 
@@ -383,7 +387,26 @@ interface Fix {
   remove?: string[]
   why: string
 }
-const REVIEW: Fix[] = []
+const REVIEW: Fix[] = [
+  // ---- 第 1 批：已知误匹配 ----
+  { ids: ['ph-birdcage-bamboo', 'ph-birdcage-bamboo-hanging', 'prop-seiro', 'wet-charcoal-bag', 'gr-rugby', 'gd-plant-labels'], remove: ['plant'], why: '名字里的「竹 / 橄榄 / plant」不是绿植：竹编鸟笼、竹蒸笼、竹炭包、橄榄球、植物标签牌（会被当绿植贴墙弯折）' },
+  {
+    ids: ['av-projector-cube', 'av-projector-cube-on', 'sn-desk-cube', 'vb-kettle-cube', 'lp-cl-crystal-table', 'sw-cl-crystal-lamp', 'hb-model-workmat', 'ch-shell-wood', 'ch-shell-eiffel', 'lm-lazy-cube', 'lm-lazy-shell', 'lv-cube-2x2', 'lv-cube-3x3', 'lv-cube-4x4', 'ss-shelf-cube', 'sf-display-cube', 'vb-bs-cube', 'rb-helper'],
+    remove: ['collectible'],
+    why: 'cube / shell / crystal 字样被当成魔方、贝壳、水晶收藏（方块投影仪、便签本、方形电水壶、水晶灯、格子柜、壳椅…会被塞进展示柜）',
+  },
+  {
+    ids: ['wet-deodor-box', 'wet-powder-box', 'chore-bag-box', 'gr-golf-box', 'hb-printer-box', 'int-tackle-box', 'int-tackle-box-open', 'int-boxing-gloves', 'int-basketball', 'cl-xone', 'cl-x360', 'of-pad-xbox', 'prop-tissue-box', 'sf-mask-box', 'sf-pill-box', 'kf-donut-box', 'kf-mikan-box', 'kf-cutlery-tray', 'kf-wrap-rack', 'kf-pan-rack', 'kf-veg-basket', 'kf-fruit-basket', 'prop-mikan-basket', 'sb-underbed-s', 'sb-underbed-m', 'sb-underbed-l', 'sb-toolbox-closed', 'sb-toolbox-open', 'sf-peg-cup-standing', 'sf-peg-cup-hanging', 'sf-peg-basket-standing', 'sf-peg-basket-hanging', 'gd-plant-labels'],
+    remove: ['high-ok'],
+    why: '名字带「盒 / box / 篮」的日用品、食物、电器（除臭盒、洗衣粉、纸巾盒、Xbox、篮球、拳击手套…）不是高处的收纳 / 摆件',
+  },
+  { ids: ['prop-stapler', 'int-calligraphy', 'ss-ceramic-heater', 'lp-nd-oak-arm', 'lp-md-arm', 'lp-cn-silk-frame-table', 'lp-cn-vase-table', 'lp-cl-bouillotte', 'lm-jar-lamp'], remove: ['high-ok'], why: '订书机 / 书法（「书」）、陶瓷暖风机（「瓷」）、台灯（frame / vase / 书桌灯）不是高处摆件' },
+  // 工作台工具词表的清理（旧正则 monitor / keyboard / lamp 的误命中）
+  { ids: ['of-studio-monitors', 'lm-monitor-riser'], remove: ['monitor'], why: '监听音箱、显示器增高架不是显示器（也不该占「每张桌一台显示器」的名额）' },
+  { ids: ['int-synth', 'int-midi-keyboard', 'tbl-desk-pc'], remove: ['keyboard'], why: '合成器键盘是乐器、带键盘托的电脑桌是家具，都不是电脑键盘' },
+  { ids: ['gr-headlamp', 'mk-led-strip'], remove: ['lamp'], why: '头灯、灯带卷不是室内照明' },
+  { ids: ['hg-cert-folder', 'hg-cert-stack', 'hg-cert-tube', 'hg-cert-box', 'int-calligraphy', 'prop-stapler'], remove: ['book'], why: '证书收纳（证「书」）、书法套装、订书机不是书' },
+]
 
 // ---------- 生成 ----------
 
@@ -417,7 +440,14 @@ if (args.has('--list')) {
   const want = process.argv[process.argv.indexOf('--list') + 1]
   for (const d of ASSETS) if (tags.get(d.id)!.has(want)) console.log(`${d.id}\t${d.name}\t${d.category}\t${d.prop ? 'P' : ''}${d.mount ? 'M' : ''}${d.stick ? 'S' : ''}`)
 }
-if (!args.has('--check') && !args.has('--stats') && !args.has('--list')) {
+if (args.has('--dump')) {
+  // 全部「标签 → 素材」写成一个 TSV，人工审查用
+  const out = process.argv[process.argv.indexOf('--dump') + 1]
+  const rows: string[] = []
+  for (const d of ASSETS) for (const t of tags.get(d.id)!) rows.push(`${t}\t${d.id}\t${d.name}\t${d.category}\t${d.prop ? 'P' : ''}${d.mount ? 'M' : ''}${d.stick ? 'S' : ''}${d.form === 'hanging' ? 'H' : ''}`)
+  fs.writeFileSync(out, rows.sort().join('\n'))
+}
+if (!args.has('--check') && !args.has('--stats') && !args.has('--list') && !args.has('--dump')) {
   const lines = ASSETS.map((d) => `  ${JSON.stringify(d.id)}: [${[...tags.get(d.id)!].sort().map((t) => `'${t}'`).join(', ')}],`)
   const src = `// 由 scripts/migrate-tags.mts 生成的初始语义标签（id → 标签）。规则见 src/three/tags.ts。
 // 新增素材请在 def 里直接写 tags（运行时与这张表合并）；要改某件素材的标签，在 migrate-tags.mts 的 REVIEW 里加一条再重新生成。
@@ -560,7 +590,7 @@ if (args.has('--check')) {
   site('fillCompartments 书', F(/book|书(?!架|柜|桌)|漫画|manga|novel|杂志|magazine/, (a) => !!a.prop && !a.mount && !a.stick && a.form !== 'hanging'), N(['book', 'manga', 'magazine'], (a) => !!a.prop && !a.mount && !a.stick && a.form !== 'hanging'))
   site('fillCompartments 摆件', F(OLD.HIGH_OK, (a) => !!a.prop && !a.mount && !a.stick && a.form !== 'hanging' && !/^wet-|toilet|厕所|トイレ|浴|bath|洗|laundry|deodor|除臭|消臭|detergent/.test(a.id + a.name)), N('high-ok', (a) => !!a.prop && !a.mount && !a.stick && a.form !== 'hanging' && !has(a, 'wet-supply')))
   site('fillCompartments 收藏', F(/figure|手办|フィギュア|模型|model|minifig|gacha|扭蛋|ガチャ|toy-car|小汽车|车模|ミニカー|mineral|矿石|crystal|水晶|shell|贝壳|snow-?globe|雪景球|trophy|奖杯|doll|人形|ornament|摆件|plush|玩偶|cube|魔方|squishy|捏捏|emo-bot|情感机器人/, (a) => !!a.prop && !a.mount && !a.stick && a.form !== 'hanging' && !/box|盒|case|箱|card|牌|^hc-|摄像头|camera/.test(a.id + a.name)), N('collectible', (a) => !!a.prop && !a.mount && !a.stick && a.form !== 'hanging'))
-  site('fillCompartments 去盒', (d) => /box|盒|case|箱/.test(d.id + d.name), any('boxed'))
+  site('fillCompartments 去盒', (d) => /box|盒|case|箱/.test(d.id + d.name), any('storage-box'))
   site('fillCompartments 多宝格柜', (d) => /多宝|duobao|cn-|curio/.test(`${d.id} ${d.name} ${d.family ?? ''}`), any('curio-shelf'))
   site('fillCompartments 收藏柜', (d) => /展示|陈列|收藏|showcase|display|collection|curio|コレクション/.test(`${d.id} ${d.name} ${d.family ?? ''}`), any('collection-shelf'))
   site('fillCompartments 书柜', (d) => has(d, 'open-shelf') && /book|书/.test(`${d.id} ${d.name} ${d.family ?? ''}`), (d) => has(d, 'open-shelf') && has(d, 'legacy-book-label'))
@@ -659,7 +689,8 @@ if (args.has('--check')) {
     if (m.props) site(`interestStickers ${it}`, (d) => !!d.stick && m.props!.test(T(d)), (d) => !!d.stick && has(d, tg))
     if (m.wall) site(`interestWall ${it}`, (d) => !!d.mount && m.wall!.test(T(d)), (d) => !!d.mount && has(d, tg))
   }
-  for (const [job, re] of Object.entries(JOB_DESK)) site(`jobDesk ${job}`, (d) => !!d.prop && d.form !== 'hanging' && re.test(T(d)), (d) => !!d.prop && d.form !== 'hanging' && has(d, `job:${job}`))
+  const NEW_JOB_DESK: Record<string, string[]> = { programmer: ['monitor', 'keyboard', 'mouse'], designer: ['tablet', 'monitor', 'pen'], streamer: ['mic', 'webcam', 'monitor', 'stream-gear'], photographer: ['camera', 'lens', 'monitor'], musician: ['audio-gear', 'monitor'], student: ['laptop', 'book'], researcher: ['monitor', 'book', 'microscope'], engineer: ['electronics-tool', 'monitor'], schoolkid: ['book', 'pen', 'lamp'] }
+  for (const [job, re] of Object.entries(JOB_DESK)) site(`jobDesk ${job}`, (d) => !!d.prop && d.form !== 'hanging' && re.test(T(d)), (d) => !!d.prop && d.form !== 'hanging' && any(...NEW_JOB_DESK[job])(d))
 
   // INTEREST_TIERS（按名字的几级；锚定 id 的不变）
   const tprop = (d: D) => !!d.prop && !d.stick && !d.form?.includes('hanging')

@@ -5,12 +5,11 @@
 //   功能       这件东西是什么（bed、desk、kettle、towel、plant…），每件素材至少一个
 //   摆放       能放在哪 / 怎么摆（high-ok 可放 >140cm 高处、bed-ok 可放床上、fridge-door 可贴冰箱门…）
 //   兴趣       hobby:<InterestId>：和 household.ts 的兴趣对应（落地 / 摆件 / 壁挂按素材本身的形态区分）
-//   工作台     job:<JobId>：职业工作台上会放的东西
 //
 // 标签来源：src/three/tags.generated.ts（迁移脚本 scripts/migrate-tags.mts 生成的初始表）与 def.tags（新素材直接写）合并。
 
 import type { AssetDef } from './kit'
-import type { InterestId, JobId } from '../household'
+import type { InterestId } from '../household'
 
 /** 功能：家具 */
 export const FURNITURE_TAGS = [
@@ -117,7 +116,7 @@ export const DEVICE_TAGS = [
   'mic',
   'stream-gear',
   'audio-gear',
-  'pen-tablet',
+  'tablet',
   'microscope',
   'electronics-tool', // 电子手工工具（示波器、烙铁、开发板）
 ] as const
@@ -161,7 +160,10 @@ export const ITEM_TAGS = [
   'book',
   'manga',
   'magazine',
-  'pen',
+  'pen', // 笔、笔筒、笔袋
+  'storage-box', // 收纳箱 / 盒 / 篮
+  'tabletop-game', // 桌游、棋、牌（含盒装）
+  'line-dry', // 晾衣架上可以晾的日常衣物
   'plush',
   'figure',
   'acrylic-stand',
@@ -181,7 +183,6 @@ export const ITEM_TAGS = [
 export const ATTR_TAGS = [
   'for-kids', // 儿童用
   'diatomite', // 硅藻土 / 石材（地垫）
-  'boxed', // 盒、箱、匣
   'fixture', // 设备（只在 3D 里代替平面图设备）
 ] as const
 
@@ -262,9 +263,9 @@ type FixedTag =
   | (typeof PLACEMENT_TAGS)[number]
   | (typeof LEGACY_TAGS)[number]
 
-export type Tag = FixedTag | `hobby:${InterestId}` | `job:${JobId}`
+export type Tag = FixedTag | `hobby:${InterestId}`
 
-/** 固定词表（不含 hobby: / job: 这类带参数的） */
+/** 固定词表（不含 hobby: 这类带参数的） */
 export const FIXED_TAGS: readonly string[] = [...FUNCTION_TAGS, ...ATTR_TAGS, ...PLACEMENT_TAGS, ...LEGACY_TAGS]
 
 /** 有没有其中任一标签 */

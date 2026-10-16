@@ -831,7 +831,7 @@ class Decorator {
     if (!pd || !lv || this.rand() < 0.15) return
     const xs = lv.shape![0].map((q) => q[0])
     const [x0, x1] = [Math.min(...xs), Math.max(...xs)]
-    const clothes = this.find(/^gm-(tee|tshirt|t-shirt|shirt|blouse|polo|tank|hoodie|sweat|jeans|shorts|pants|slacks|dress|skirt|kids)/, (a) => a.form === 'hanging' && a.h <= lv.h! - 5)
+    const clothes = this.find('line-dry', (a) => a.form === 'hanging' && a.h <= lv.h! - 5)
     const towels = this.find(/^gm-towel-[a-z0-9-]*-bar$/, (a) => a.h <= lv.h! - 5)
     const pinch = this.find(/^laundry-pinch-full$/)
     // 先抽类型再挑款式：夹着袜子的夹架几乎家家都有，毛巾其次，其余是衣服
@@ -2790,8 +2790,8 @@ class Decorator {
                   ? pools.books
                   : pools.deco
           ).filter(fits)
-          // 收藏柜：先收藏品，再是不带「盒」的小摆件，最后才是别的
-          const fallback = (collectionShelf ? [...this.shuffle(pools.collection), ...this.shuffle(pools.deco.filter((a) => !hasTag(a, 'boxed'))), ...this.shuffle(pools.books), ...this.shuffle(pools.deco)] : [...pools.deco, ...pools.books]).filter(fits)
+          // 收藏柜：先收藏品，再是小摆件、书；收纳盒、牌盒 / 桌游盒这类「盒子」不进展示柜（放不下就空着）
+          const fallback = (collectionShelf ? [...this.shuffle(pools.collection), ...this.shuffle(pools.deco.filter((a) => !hasTag(a, 'storage-box', 'tabletop-game'))), ...this.shuffle(pools.books)] : [...pools.deco, ...pools.books]).filter(fits)
           const n = x1 - x0 > 45 && this.rand() < 0.5 + 0.3 * this.clutter ? 2 : 1
           let placed = 0
           // 同一件柜子里同款只放一次（小格子多的柜子不会被同一样东西塞满）；实在没有别的放得下才重复

@@ -4,7 +4,7 @@
 import { area, type Plan } from './model'
 import { ASSETS, type AssetCategory, type AssetDef, type StyleTag } from './three/assets'
 import { rng } from './three/kit'
-import { hasTag, type Sel } from './three/tags'
+import { hasTag, type Sel, type Tag } from './three/tags'
 import { t } from './i18n'
 
 export type Role = 'self' | 'partner' | 'child' | 'elder' | 'roommate'
@@ -281,23 +281,23 @@ function levelsFor(m: Member, seed: number, idx: number, cap: Lv): Partial<Recor
 
 export type JobId = 'engineer' | 'office' | 'programmer' | 'designer' | 'streamer' | 'photographer' | 'musician' | 'chef' | 'student' | 'teacher' | 'nurse' | 'researcher' | 'retired' | 'preschool' | 'schoolkid'
 
-/** desk：工作台上摆这个职业的东西（带 job:<JobId> 标签的摆件） */
-export const JOBS: Record<JobId, { label: string; wfh: boolean; interests?: InterestId[]; desk?: true }> = {
+/** desk：工作台上摆的东西（有其中任一标签的摆件） */
+export const JOBS: Record<JobId, { label: string; wfh: boolean; interests?: InterestId[]; desk?: Tag[] }> = {
   office: { label: '公司职员', wfh: false },
-  programmer: { label: '程序员', wfh: true, interests: ['tech', 'gaming', 'coffee'], desk: true },
-  designer: { label: '设计师', wfh: true, interests: ['crafts', 'reading'], desk: true },
-  streamer: { label: '主播', wfh: true, interests: ['streaming', 'gaming'], desk: true },
-  photographer: { label: '摄影师', wfh: true, interests: ['photo'], desk: true },
-  musician: { label: '音乐人', wfh: true, interests: ['music'], desk: true },
+  programmer: { label: '程序员', wfh: true, interests: ['tech', 'gaming', 'coffee'], desk: ['monitor', 'keyboard', 'mouse'] },
+  designer: { label: '设计师', wfh: true, interests: ['crafts', 'reading'], desk: ['tablet', 'monitor', 'pen'] },
+  streamer: { label: '主播', wfh: true, interests: ['streaming', 'gaming'], desk: ['mic', 'webcam', 'monitor', 'stream-gear'] },
+  photographer: { label: '摄影师', wfh: true, interests: ['photo'], desk: ['camera', 'lens', 'monitor'] },
+  musician: { label: '音乐人', wfh: true, interests: ['music'], desk: ['audio-gear', 'monitor'] },
   chef: { label: '厨师', wfh: false, interests: ['cooking', 'coffee'] },
-  student: { label: '大学生', wfh: false, interests: ['reading'], desk: true },
+  student: { label: '大学生', wfh: false, interests: ['reading'], desk: ['laptop', 'book'] },
   teacher: { label: '教师', wfh: false, interests: ['reading'] },
   nurse: { label: '护士', wfh: false },
-  researcher: { label: '研究员', wfh: true, interests: ['science', 'reading'], desk: true },
-  engineer: { label: '硬件工程师', wfh: true, interests: ['maker', 'tech'], desk: true },
+  researcher: { label: '研究员', wfh: true, interests: ['science', 'reading'], desk: ['monitor', 'book', 'microscope'] },
+  engineer: { label: '硬件工程师', wfh: true, interests: ['maker', 'tech'], desk: ['electronics-tool', 'monitor'] },
   retired: { label: '退休', wfh: false, interests: ['tea', 'plants'] },
   preschool: { label: '学龄前', wfh: false },
-  schoolkid: { label: '学生', wfh: false, interests: ['reading'], desk: true },
+  schoolkid: { label: '学生', wfh: false, interests: ['reading'], desk: ['book', 'pen', 'lamp'] },
 }
 
 const NAMES = ['陽', '葵', '蒼', '凛', '湊', '結', '晴', '碧', '律', '澪', '樹', '楓', '光', '遥', '空', '真琴', '千尋', '和泉', '薫', '透', '渚', '悠', '暁', '環']
@@ -433,5 +433,6 @@ export function interestWall(id: InterestId) {
 }
 /** 职业的工作台摆件 */
 export function jobDeskProps(job: JobId) {
-  return JOBS[job].desk ? ASSETS.filter((d) => d.prop && d.form !== 'hanging' && hasTag(d, `job:${job}`)) : []
+  const tags = JOBS[job].desk
+  return tags ? ASSETS.filter((d) => d.prop && d.form !== 'hanging' && hasTag(d, ...tags)) : []
 }
