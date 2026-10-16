@@ -12,8 +12,8 @@ import { PRODUCT_TAGLINE, UI } from './i18n/ui'
 export type SeoLang = 'zh' | 'ja' | 'en'
 export const SEO_LANGS: SeoLang[] = ['zh', 'ja', 'en']
 
-/** 默认站点地址：上线前用环境变量 VITE_SITE_URL 覆盖（见 vite.config.ts / README） */
-export const DEFAULT_SITE_URL = 'https://my-home.example'
+/** 默认站点地址（正式站点）；部署到别的域名时用环境变量 VITE_SITE_URL 覆盖（见 vite.config.ts / README） */
+export const DEFAULT_SITE_URL = 'https://home.jannchie.com'
 
 export const SITE_NAME = 'My Home'
 export const AUTHOR = { name: 'Jianqi Pan', url: 'https://github.com/Jannchie' }

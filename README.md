@@ -17,7 +17,7 @@
 ![i18n](https://img.shields.io/badge/i18n-zh%20%7C%20ja%20%7C%20en-E8A33D)
 [![License: MIT](https://img.shields.io/badge/License-MIT-577a68.svg)](LICENSE)
 
-[**在线体验**](https://my-home.example) · **中文** · [日本語](README.ja.md) · [English](README.en.md)
+[**在线体验**](https://home.jannchie.com) · **中文** · [日本語](README.ja.md) · [English](README.en.md)
 
 </div>
 
@@ -102,7 +102,7 @@ pnpm build    # 类型检查 + 构建静态站点到 dist/
 
 ## 部署
 
-`dist/` 是纯静态文件，放到任意静态托管即可。canonical、`og:url`、hreflang、`sitemap.xml`、`robots.txt` 里的绝对地址来自环境变量 `VITE_SITE_URL`，上线前在项目根目录新建 `.env.production`：
+`dist/` 是纯静态文件，放到任意静态托管即可。canonical、`og:url`、hreflang、`sitemap.xml`、`robots.txt` 里的绝对地址默认是 `https://home.jannchie.com`；部署到自己的域名时，用环境变量 `VITE_SITE_URL` 覆盖，在项目根目录新建 `.env.production`：
 
 ```bash
 VITE_SITE_URL=https://你的域名

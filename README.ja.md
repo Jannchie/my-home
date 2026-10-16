@@ -17,7 +17,7 @@
 ![i18n](https://img.shields.io/badge/i18n-zh%20%7C%20ja%20%7C%20en-E8A33D)
 [![License: MIT](https://img.shields.io/badge/License-MIT-577a68.svg)](LICENSE)
 
-[**デモを試す**](https://my-home.example) · [中文](README.md) · **日本語** · [English](README.en.md)
+[**デモを試す**](https://home.jannchie.com) · [中文](README.md) · **日本語** · [English](README.en.md)
 
 </div>
 
@@ -102,7 +102,7 @@ pnpm build    # 型チェック + dist/ に静的サイトをビルド
 
 ## デプロイ
 
-`dist/` は静的ファイルだけなので、どの静的ホスティングにも置けます。canonical、`og:url`、hreflang、`sitemap.xml`、`robots.txt` の絶対 URL は環境変数 `VITE_SITE_URL` から作られます。公開前にプロジェクト直下に `.env.production` を作成してください。
+`dist/` は静的ファイルだけなので、どの静的ホスティングにも置けます。canonical、`og:url`、hreflang、`sitemap.xml`、`robots.txt` の絶対 URL は既定で `https://home.jannchie.com` です。自分のドメインに置く場合は環境変数 `VITE_SITE_URL` で上書きします。プロジェクト直下に `.env.production` を作成してください。
 
 ```bash
 VITE_SITE_URL=https://your-domain.example

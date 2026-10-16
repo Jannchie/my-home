@@ -17,7 +17,7 @@ Runs entirely in the browser. Free, no sign-up, and your data never leaves your 
 ![i18n](https://img.shields.io/badge/i18n-zh%20%7C%20ja%20%7C%20en-E8A33D)
 [![License: MIT](https://img.shields.io/badge/License-MIT-577a68.svg)](LICENSE)
 
-[**Try it online**](https://my-home.example) · [中文](README.md) · [日本語](README.ja.md) · **English**
+[**Try it online**](https://home.jannchie.com) · [中文](README.md) · [日本語](README.ja.md) · **English**
 
 </div>
 
@@ -102,7 +102,7 @@ pnpm build    # type-check and build the static site into dist/
 
 ## Deployment
 
-`dist/` is plain static files, so any static host will do. Absolute URLs in canonical, `og:url`, hreflang, `sitemap.xml` and `robots.txt` come from the `VITE_SITE_URL` environment variable. Before going live, create `.env.production` in the project root:
+`dist/` is plain static files, so any static host will do. Absolute URLs in canonical, `og:url`, hreflang, `sitemap.xml` and `robots.txt` default to `https://home.jannchie.com`. To deploy under your own domain, override them with the `VITE_SITE_URL` environment variable by creating `.env.production` in the project root:
 
 ```bash
 VITE_SITE_URL=https://your-domain.example
