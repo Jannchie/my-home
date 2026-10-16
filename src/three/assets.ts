@@ -9,6 +9,7 @@ import { PACKS } from './packs'
 import { soft, type SoftFn } from './packs/more-variety'
 import { applyDims, warnIfDimsStale } from './dims'
 import { DIMS } from './dims.generated'
+import { GENERATED_TAGS } from './tags.generated'
 
 export { C, CATEGORY_LABELS, STYLE_LABELS, type AssetCategory, type AssetDef, type StyleTag } from './kit'
 
@@ -1473,6 +1474,12 @@ export const ASSETS: AssetDef[] = [
 ]
 
 ASSETS.push(...PACKS)
+
+// 语义标签：def 里写的 + 迁移生成的初始表（tags.generated.ts），合并去重
+for (const a of ASSETS) {
+  const g = GENERATED_TAGS[a.id]
+  if (g) a.tags = a.tags ? [...new Set([...a.tags, ...g])] : [...g]
+}
 
 // 尺寸校正：实测比声明大的放大、陷地的抬起（预计算结果见 dims.generated.ts，由 pnpm gen:dims 生成；规则见 dims.ts）
 applyDims(ASSETS, DIMS)

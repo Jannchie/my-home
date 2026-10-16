@@ -4,6 +4,7 @@
 import { area, type Plan } from './model'
 import { ASSETS, type AssetCategory, type AssetDef, type StyleTag } from './three/assets'
 import { rng } from './three/kit'
+import { hasTag, type Sel } from './three/tags'
 import { t } from './i18n'
 
 export type Role = 'self' | 'partner' | 'child' | 'elder' | 'roommate'
@@ -66,10 +67,13 @@ export const TRAITS: Record<TraitId, { label: string; style?: StyleTag; clutter?
 
 // ---------- 兴趣：对应的家具（落地）、摆件（桌柜上）、壁挂 ----------
 
-/** 素材匹配：按分类和 `id 名称` 上的关键词 */
+/**
+ * 素材匹配：分类命中，或带有这个兴趣的标签 hobby:<id>（tagged）。
+ * 同一个兴趣标签按素材形态区分用途：落地的算 floor、摆件和贴附物算 props、壁挂算 wall。
+ */
 interface Matcher {
   cats?: AssetCategory[]
-  re?: RegExp
+  tagged?: true
 }
 
 export type InterestId =
@@ -104,41 +108,41 @@ export type InterestId =
   | 'puzzles'
 
 export const INTERESTS: Record<InterestId, { label: string; floor?: Matcher; props?: Matcher; wall?: Matcher; style?: StyleTag }> = {
-  gaming: { label: '游戏', props: { re: /pad-|handheld|gameboy|game-console|headset|arcade|vr\b|手柄|掌机|耳麦/ }, floor: { re: /电竞椅|gaming/ } },
-  music: { label: '音乐', floor: { cats: ['music'] }, props: { cats: ['music'], re: /metronome|节拍|口琴|harmonica|谱|turntable|唱片机/ }, wall: { re: /吉他|guitar/ } },
-  reading: { label: '读书', props: { re: /book|书(?!架|柜|桌)/ }, floor: { re: /bookshelf|bookcase|书架|书柜/ } },
-  otaku: { label: '动漫', props: { re: /漫画|manga|figure|手办|立牌|应援|gacha|扭蛋/ }, floor: { re: /展示柜|showcase|display/ } },
+  gaming: { label: '游戏', props: { tagged: true }, floor: { tagged: true } },
+  music: { label: '音乐', floor: { cats: ['music'] }, props: { cats: ['music'], tagged: true }, wall: { tagged: true } },
+  reading: { label: '读书', props: { tagged: true }, floor: { tagged: true } },
+  otaku: { label: '动漫', props: { tagged: true }, floor: { tagged: true } },
   fitness: { label: '健身', floor: { cats: ['fitness'] }, props: { cats: ['fitness'] } },
   // 防潮柜、相机展示柜只按等级摆（Lv.3 起，见 INTEREST_TIERS），随机池里只有三脚架
-  photo: { label: '摄影', floor: { re: /tripod|三脚架/ }, props: { re: /camera|lens|相机|镜头|拍立得/ } },
+  photo: { label: '摄影', floor: { tagged: true }, props: { tagged: true } },
   cooking: { label: '料理', props: { cats: ['kitchenware'] } },
-  plants: { label: '园艺', floor: { cats: ['plants'] }, props: { re: /gd-|succulent|cactus|air-plant|bonsai|多肉|盆栽|仙人掌|花瓶|浇水壶|花盆/ }, style: 'nordic' },
-  crafts: { label: '手作', props: { re: /毛线|缝纫|刺绣|书法|水彩|陶艺|knit|sew|embroid|paint/ }, floor: { re: /easel|画架|缝纫/ } },
-  models: { label: '模型', props: { re: /模型|train|plane|铁道|飞机|高达|gunpla|3d.?print|打印机/ } },
-  tea: { label: '茶道', props: { re: /tea|茶|incense|线香|daruma|达摩|tetsubin|铁壶/ }, floor: { cats: ['japanese'] }, style: 'japanese' },
-  cats: { label: '养猫', floor: { re: /cat-|猫爬|猫窝|猫砂/ }, props: { re: /cat|猫/ } },
+  plants: { label: '园艺', floor: { cats: ['plants'] }, props: { tagged: true }, style: 'nordic' },
+  crafts: { label: '手作', props: { tagged: true }, floor: { tagged: true } },
+  models: { label: '模型', props: { tagged: true } },
+  tea: { label: '茶道', props: { tagged: true }, floor: { cats: ['japanese'] }, style: 'japanese' },
+  cats: { label: '养猫', floor: { tagged: true }, props: { tagged: true } },
   // 机器狗（rb-）不算养狗
-  dogs: { label: '养狗', floor: { re: /^(?!rb-).*(dog|狗)/ } },
-  aquarium: { label: '水族', floor: { re: /aquarium|水族|鱼缸/ } },
+  dogs: { label: '养狗', floor: { tagged: true } },
+  aquarium: { label: '水族', floor: { tagged: true } },
   // 小动物 / 鸟的笼子在 packs/pet-habitats.ts，带 limit（全屋各一只），所以落地和台面的笼子合起来只会摆一个
-  smallpets: { label: '养小动物', floor: { re: /ph-(hamster-(cage|castle)|rabbit|guinea|chinchilla)/ }, props: { re: /ph-hamster-(cage|acrylic|castle)/ } },
-  birds: { label: '养鸟', floor: { re: /ph-birdcage/ }, props: { re: /ph-birdcage|ph-bird-perch/ } },
-  coffee: { label: '咖啡', props: { re: /coffee|espresso|moka|pour-over|grinder|磨豆|咖啡/ } },
-  streaming: { label: '直播', props: { re: /mic-|webcam|stream|capture|audio-interface|声卡|麦克风|补光/ }, floor: { re: /ring-light-floor|softbox|green-screen|绿幕|柔光/ } },
-  tech: { label: '数码', props: { re: /kb-|monitor|nas|mini-pc|router|显示器|键盘|NAS/ }, floor: { re: /pc-(mid|full|itx)|server|机箱|机柜/ }, style: 'industrial' },
-  sports: { label: '运动', props: { re: /ball|球|racket|(?<![航自])拍|glove|手套|helmet|头盔/ }, floor: { re: /surf|冲浪|golf|高尔夫|bike|自行车|skate|滑板|ski|滑雪/ } },
-  science: { label: '天文科学', props: { re: /telescope|望远镜|microscope|显微镜|globe|地球仪|星图|flask|烧瓶|矿石/ }, floor: { re: /telescope|望远镜/ } },
-  beauty: { label: '美妆', props: { cats: ['toiletry'] }, floor: { re: /mirror|镜|vanity|梳妆|clothes-rail|挂衣/ } },
+  smallpets: { label: '养小动物', floor: { tagged: true }, props: { tagged: true } },
+  birds: { label: '养鸟', floor: { tagged: true }, props: { tagged: true } },
+  coffee: { label: '咖啡', props: { tagged: true } },
+  streaming: { label: '直播', props: { tagged: true }, floor: { tagged: true } },
+  tech: { label: '数码', props: { tagged: true }, floor: { tagged: true }, style: 'industrial' },
+  sports: { label: '运动', props: { tagged: true }, floor: { tagged: true } },
+  science: { label: '天文科学', props: { tagged: true }, floor: { tagged: true } },
+  beauty: { label: '美妆', props: { cats: ['toiletry'] }, floor: { tagged: true } },
   // 麻将桌 / 棋桌按地区由 Decorator.specialties 成套摆（桌子 + 座位 + 台面上的牌 / 棋盘），随机池里只有台面摆件；
-  // 棋罐要成对摆在棋盘边，不进随机池
-  boardgames: { label: '桌游棋牌', props: { re: /^(?!hg-go-bowl)(?=.*(桌游|棋|麻将|花札|かるた|扑克|骰|board-?game|chess|shogi|mahjong|jenga|叠叠乐|卡牌|牌九|骨牌|双六|拼字|筹码|计分本))(?!.*棋桌)/ } },
-  collecting: { label: '收藏', props: { re: /col-|瓷|矿石|晶|化石|硬币|邮票|coin|stamp|mineral|赏盘|茶碗/ }, floor: { re: /陈列柜|博古架|curio/ }, style: 'retro' },
-  movies: { label: '电影', props: { re: /av-|投影|CD|dvd|蓝光|vhs|卡带|cassette|boombox|爆米花|海报/ }, floor: { re: /幕布|projector|家庭影院|soundbar|回音壁|落地音箱|hifi/i } },
-  fishing: { label: '钓鱼', floor: { re: /钓|fishing/ }, props: { re: /渔具|拟饵|tackle|鱼篓/ } },
-  outdoor: { label: '户外登山', floor: { re: /gr-.*(tent|pack|bag)|帐篷|登山包|露营|camp|ski|滑雪/ }, props: { re: /gr-|登山|攀岩|露营|头灯|carabiner|harness|trekking|球(?!鞋)/ } },
-  maker: { label: '电子手工', floor: { re: /mk-.*(bench|cabinet|chest)|工作台|工具柜|元件柜/ }, props: { re: /mk-|pcb|arduino|开发板|面包板|烙铁|示波器|万用表|solder|oscillo|multimeter/i }, style: 'industrial' },
+  // 棋罐要成对摆在棋盘边，不进随机池（棋罐没有 hobby:boardgames 标签）
+  boardgames: { label: '桌游棋牌', props: { tagged: true } },
+  collecting: { label: '收藏', props: { tagged: true }, floor: { tagged: true }, style: 'retro' },
+  movies: { label: '电影', props: { tagged: true }, floor: { tagged: true } },
+  fishing: { label: '钓鱼', floor: { tagged: true }, props: { tagged: true } },
+  outdoor: { label: '户外登山', floor: { tagged: true }, props: { tagged: true } },
+  maker: { label: '电子手工', floor: { tagged: true }, props: { tagged: true }, style: 'industrial' },
   // 收藏展示架、计时器垫按等级单独摆（INTEREST_TIERS），随机池里不放
-  puzzles: { label: '益智', props: { re: /^(pz-(?!cube-shelf|speed-timer)|prop-rubiks)/ } },
+  puzzles: { label: '益智', props: { tagged: true } },
 }
 
 // ---------- 兴趣等级：Lv.1 入门 → Lv.4 骨灰级，每级在上一级基础上再加东西 ----------
@@ -147,13 +151,14 @@ export type Lv = 1 | 2 | 3 | 4
 export const LV_LABELS: Record<Lv, string> = { 1: '入门', 2: '爱好者', 3: '发烧友', 4: '骨灰级' }
 
 /**
- * 每一级新增的东西（按 id / 名字正则，各挑一件）：floor 落地靠墙、props 台面摆件、wall 壁挂。
+ * 每一级新增的东西（每个选择器各挑一件；选择器是语义标签、锚定 id 的正则，或它们的并集，见 three/tags.ts）：
+ * floor 落地靠墙、props 台面摆件、wall 壁挂。
  * room：这一级想要一整间专用房（有空房时优先分给它）。没列的兴趣只按通用匹配撒东西，件数随等级增加。
  */
 export interface Tier {
-  floor?: RegExp[]
-  props?: RegExp[]
-  wall?: RegExp[]
+  floor?: Sel[]
+  props?: Sel[]
+  wall?: Sel[]
   room?: boolean
 }
 export const INTEREST_TIERS: Partial<Record<InterestId, Tier[]>> = {
@@ -177,10 +182,10 @@ export const INTEREST_TIERS: Partial<Record<InterestId, Tier[]>> = {
     { floor: [/^of-ring-light-floor$/], props: [/^rb-drone-(mini|fpv)$/], room: true },
   ],
   gaming: [
-    { props: [/game-console|pad-|手柄/] },
+    { props: ['gamepad'] },
     { props: [/^of-(gaming-headset|headset-stand-rgb)$/, /^of-kb-.*-rgb$/] },
     { floor: [/^of-pc-(mid|full)$/], props: [/^of-monitor-gaming$/, /^of-mousepad-rgb$/], wall: [/^hg-hex-lights$/] },
-    { floor: [/^of-pc-full$/, /展示柜|showcase/], room: true },
+    { floor: [/^of-pc-full$/, 'legacy-showcase'], room: true },
   ],
   // 每条正则的候选按地区加权挑（GAME_REGION：中式多军旗 / 五子棋 / 斗地主，日式花札 / 黑白棋 / 双六，欧美跳棋 / 拼字 / 地产桌游）
   boardgames: [
@@ -196,33 +201,33 @@ export const INTEREST_TIERS: Partial<Record<InterestId, Tier[]>> = {
     { props: [/^bg-box-stack-l$/], room: true },
   ],
   music: [
-    { props: [/metronome|节拍|谱/] },
-    { floor: [/^(?!.*(piano|钢琴)).*(guitar|吉他|keyboard|电子琴|ukulele|尤克里里)/] },
-    { wall: [/吉他|guitar/, /^hg-acoustic$/] },
-    { floor: [/piano|钢琴|drum|鼓/], room: true },
+    { props: ['music-accessory'] },
+    { floor: ['legacy-music-t2'] },
+    { wall: ['guitar', /^hg-acoustic$/] },
+    { floor: ['legacy-piano-drum'], room: true },
   ],
   fitness: [
-    { props: [/dumbbell|哑铃|yoga|瑜伽/] },
-    { floor: [/yoga-mat|瑜伽垫|kettlebell|壶铃/] },
-    { floor: [/treadmill|跑步机|bike|单车|bench|卧推|rack/] },
-    { floor: [/power-rack|深蹲|rowing|划船/], room: true },
+    { props: ['legacy-fit-t1'] },
+    { floor: ['legacy-fit-t2'] },
+    { floor: ['legacy-fit-t3'] },
+    { floor: ['legacy-fit-t4'], room: true },
   ],
   reading: [
-    { props: [/book|书(?!架|柜|桌)/] },
-    { floor: [/bookshelf|bookcase|书架|书柜/] },
-    { floor: [/bookshelf|bookcase|书架|书柜/, /armchair|单人沙发|阅读椅|摇椅/] },
+    { props: ['book'] },
+    { floor: ['bookshelf'] },
+    { floor: ['bookshelf', 'legacy-reading-chair'] },
     { room: true },
   ],
   otaku: [
-    { props: [/漫画|manga|figure|手办|立牌/] },
-    { props: [/^int-figure-case$|gacha|扭蛋/] },
-    { floor: [/^col-lit-showcase$|展示柜|showcase/] },
+    { props: [['manga', 'figure', 'acrylic-stand']] },
+    { props: [[/^int-figure-case$/, 'gacha']] },
+    { floor: [[/^col-lit-showcase$/, 'legacy-showcase']] },
     { wall: [/^col-wall-showcase$/], room: true },
   ],
   collecting: [
-    { props: [/col-|硬币|邮票|coin|stamp/] },
-    { props: [/col-|矿石|化石|mineral/] },
-    { floor: [/陈列柜|博古架|curio|^col-lit-showcase$/] },
+    { props: ['legacy-col-t1'] },
+    { props: ['legacy-col-t2'] },
+    { floor: [['curio-cabinet', /^col-lit-showcase$/]] },
     { wall: [/^col-wall-showcase$/], room: true },
   ],
   puzzles: [
@@ -276,22 +281,23 @@ function levelsFor(m: Member, seed: number, idx: number, cap: Lv): Partial<Recor
 
 export type JobId = 'engineer' | 'office' | 'programmer' | 'designer' | 'streamer' | 'photographer' | 'musician' | 'chef' | 'student' | 'teacher' | 'nurse' | 'researcher' | 'retired' | 'preschool' | 'schoolkid'
 
-export const JOBS: Record<JobId, { label: string; wfh: boolean; interests?: InterestId[]; desk?: RegExp }> = {
+/** desk：工作台上摆这个职业的东西（带 job:<JobId> 标签的摆件） */
+export const JOBS: Record<JobId, { label: string; wfh: boolean; interests?: InterestId[]; desk?: true }> = {
   office: { label: '公司职员', wfh: false },
-  programmer: { label: '程序员', wfh: true, interests: ['tech', 'gaming', 'coffee'], desk: /monitor|kb-|mouse/ },
-  designer: { label: '设计师', wfh: true, interests: ['crafts', 'reading'], desk: /tablet|monitor|pen/ },
-  streamer: { label: '主播', wfh: true, interests: ['streaming', 'gaming'], desk: /mic-|webcam|monitor|stream/ },
-  photographer: { label: '摄影师', wfh: true, interests: ['photo'], desk: /camera|lens|monitor/ },
-  musician: { label: '音乐人', wfh: true, interests: ['music'], desk: /audio-interface|mixer|monitor|synth|midi/ },
+  programmer: { label: '程序员', wfh: true, interests: ['tech', 'gaming', 'coffee'], desk: true },
+  designer: { label: '设计师', wfh: true, interests: ['crafts', 'reading'], desk: true },
+  streamer: { label: '主播', wfh: true, interests: ['streaming', 'gaming'], desk: true },
+  photographer: { label: '摄影师', wfh: true, interests: ['photo'], desk: true },
+  musician: { label: '音乐人', wfh: true, interests: ['music'], desk: true },
   chef: { label: '厨师', wfh: false, interests: ['cooking', 'coffee'] },
-  student: { label: '大学生', wfh: false, interests: ['reading'], desk: /laptop|book/ },
+  student: { label: '大学生', wfh: false, interests: ['reading'], desk: true },
   teacher: { label: '教师', wfh: false, interests: ['reading'] },
   nurse: { label: '护士', wfh: false },
-  researcher: { label: '研究员', wfh: true, interests: ['science', 'reading'], desk: /monitor|book|microscope/ },
-  engineer: { label: '硬件工程师', wfh: true, interests: ['maker', 'tech'], desk: /mk-|monitor|oscillo|示波器|烙铁|pcb/ },
+  researcher: { label: '研究员', wfh: true, interests: ['science', 'reading'], desk: true },
+  engineer: { label: '硬件工程师', wfh: true, interests: ['maker', 'tech'], desk: true },
   retired: { label: '退休', wfh: false, interests: ['tea', 'plants'] },
   preschool: { label: '学龄前', wfh: false },
-  schoolkid: { label: '学生', wfh: false, interests: ['reading'], desk: /book|pen|lamp/ },
+  schoolkid: { label: '学生', wfh: false, interests: ['reading'], desk: true },
 }
 
 const NAMES = ['陽', '葵', '蒼', '凛', '湊', '結', '晴', '碧', '律', '澪', '樹', '楓', '光', '遥', '空', '真琴', '千尋', '和泉', '薫', '透', '渚', '悠', '暁', '環']
@@ -403,32 +409,29 @@ export function describe(m: Member) {
 
 // ---------- 按兴趣找素材 ----------
 
-const text = (d: AssetDef) => `${d.id} ${d.name}`
-function matches(d: AssetDef, m: Matcher | undefined) {
+function matches(d: AssetDef, id: InterestId, m: Matcher | undefined) {
   if (!m) return false
-  // 并集：分类符合、或正则命中都算（music.props = music 分类的摆件 + 若干外分类关键词）
-  return (!!m.cats && m.cats.includes(d.category)) || (!!m.re && m.re.test(text(d)))
+  // 并集：分类符合、或有兴趣标签都算（music.props = music 分类的摆件 + 带 hobby:music 的外分类摆件）
+  return (!!m.cats && m.cats.includes(d.category)) || (!!m.tagged && hasTag(d, `hobby:${id}`))
 }
 
-/** 兴趣对应的落地家具（不含设备、壁挂、太大的） */
+/** 兴趣对应的落地家具（不含设备、壁挂、贴附物、太大的） */
 export function interestFloor(id: InterestId) {
-  // 相机展示柜 / 防潮柜只给摄影（按等级），别的兴趣的「展示柜」不算它
-  return ASSETS.filter((d) => !d.fixture && !d.prop && !d.mount && Math.max(d.w, d.d) <= 200 && (id === 'photo' || !/^of-(camera-showcase|dry-)/.test(d.id)) && matches(d, INTERESTS[id].floor))
+  return ASSETS.filter((d) => !d.fixture && !d.prop && !d.mount && !d.stick && Math.max(d.w, d.d) <= 200 && matches(d, id, INTERESTS[id].floor))
 }
 /** 兴趣对应的桌面摆件 */
 export function interestProps(id: InterestId) {
-  return ASSETS.filter((d) => d.prop && !d.stick && !d.form?.includes('hanging') && matches(d, INTERESTS[id].props))
+  return ASSETS.filter((d) => d.prop && !d.stick && !d.form?.includes('hanging') && matches(d, id, INTERESTS[id].props))
 }
 /** 兴趣对应的贴附物（海报、贴纸），贴在墙上 */
 export function interestStickers(id: InterestId) {
-  return ASSETS.filter((d) => !!d.stick && matches(d, INTERESTS[id].props))
+  return ASSETS.filter((d) => !!d.stick && matches(d, id, INTERESTS[id].props))
 }
 /** 兴趣对应的壁挂物 */
 export function interestWall(id: InterestId) {
-  return ASSETS.filter((d) => !!d.mount && matches(d, INTERESTS[id].wall))
+  return ASSETS.filter((d) => !!d.mount && matches(d, id, INTERESTS[id].wall))
 }
 /** 职业的工作台摆件 */
 export function jobDeskProps(job: JobId) {
-  const re = JOBS[job].desk
-  return re ? ASSETS.filter((d) => d.prop && d.form !== 'hanging' && re.test(text(d))) : []
+  return JOBS[job].desk ? ASSETS.filter((d) => d.prop && d.form !== 'hanging' && hasTag(d, `job:${job}`)) : []
 }

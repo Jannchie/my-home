@@ -12,6 +12,7 @@
 
 import * as THREE from 'three'
 import { cyl, rbox, shade, toon } from './toon'
+import type { Tag } from './tags'
 
 export type AssetCategory =
   | 'living'
@@ -270,6 +271,11 @@ export interface AssetDef {
   screens?: ScreenPanel[]
   /** 夹在屏幕顶边上的东西（夹式网络摄像头、条形机顶摄像头）：只能放到 kind 'clip' 的层上，原点在后脚底端（见 CLIP_DROP） */
   screenClip?: boolean
+  /**
+   * 语义标签（词表见 tags.ts）：一键布置、检查清单、兴趣、灯光等业务规则只按标签判断「这是什么、能放哪」，不看名字。
+   * 新素材直接在这里写；已有素材的初始标签在 tags.generated.ts，加载时合并。
+   */
+  tags?: Tag[]
 }
 
 /**

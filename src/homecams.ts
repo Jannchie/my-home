@@ -12,6 +12,7 @@ import { ASSET_MAP, type AssetDef, type StyleTag } from './three/assets'
 import { toWorld } from './surface'
 import { wallThicknessAt } from './walls'
 import type { Household, InterestId, Member } from './household'
+import { hasTag } from './three/tags'
 
 /** Decorator 里这里要用到的部分（都是公开成员） */
 export interface CamHost {
@@ -38,9 +39,9 @@ export interface CamCtx {
 }
 
 const def = (f: Furniture) => ASSET_MAP.get(f.asset)
-const isBed = (d?: AssetDef) => !!d && (d.family === 'bed' || d.family === 'kid-bed' || d.family === 'kid-crib' || /^bed-|床$|futon|布団/.test(`${d.id} ${d.name}`))
+const isBed = (d?: AssetDef) => hasTag(d, 'bed', 'bedding')
 /** 宠物活动区：宠物分类的落地物（窝、爬架、猫砂盆、笼子、围栏、会走动的宠物），不含机器宠物和水族箱 */
-const isPetSpot = (d?: AssetDef) => !!d && d.category === 'pets' && !d.prop && !d.mount && !/^rb-|aquarium|水族/.test(d.id)
+const isPetSpot = (d?: AssetDef) => !!d && d.category === 'pets' && !d.prop && !d.mount && !d.id.startsWith('rb-') && !hasTag(d, 'aquarium')
 /** 朝向：让素材正面（+z）朝向世界方向 v 的 rot（度） */
 const rotToward = (v: Vec) => ((Math.atan2(-v.x, v.y) * 180) / Math.PI + 360) % 360
 
@@ -101,8 +102,8 @@ function petCams(c: CamCtx) {
     used.add(room.id)
     d.style = d.styleFor(room)
     const sd = def(spot)!
-    const dog = /dog|狗/.test(`${sd.id} ${sd.name}`) || (all.has('dogs') && !all.has('cats'))
-    const cat = /cat|猫/.test(`${sd.id} ${sd.name}`) || (all.has('cats') && !all.has('dogs'))
+    const dog = hasTag(sd, 'dog') || (all.has('dogs') && !all.has('cats'))
+    const cat = hasTag(sd, 'cat') || (all.has('cats') && !all.has('dogs'))
     const choice = d.weighted<string>([
       ['hc-pet-dome', 3],
       ['hc-pet-ears', cat ? 2 : 1],
@@ -226,7 +227,7 @@ function actionKit(c: CamCtx) {
   d.style = d.styleFor(room)
   const shelves = d.surfacesIn(room).filter((p) => {
     const pd = def(p)
-    return !!pd && !isBed(pd) && (!!pd.surfaces?.length || /shelf|架|柜/.test(`${pd.id} ${pd.name}`))
+    return !!pd && !isBed(pd) && (!!pd.surfaces?.length || hasTag(pd, 'cabinet'))
   })
   for (const p of shelves) {
     const pd = def(p)!
