@@ -320,10 +320,10 @@ kbd.mouse {
   max-height: none;
   border: 0;
   border-radius: 0;
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-bottom: var(--safe-b, env(safe-area-inset-bottom, 0px));
 }
 :root.compact header {
-  padding-top: max(14px, env(safe-area-inset-top, 0px));
+  padding-top: calc(env(safe-area-inset-top, 0px) + 14px);
 }
 :root.compact .cols {
   grid-template-columns: 1fr;

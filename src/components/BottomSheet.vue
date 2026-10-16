@@ -207,7 +207,7 @@ defineExpose({ body })
   border-radius: 16px 16px 0 0;
   background: var(--surface-2);
   box-shadow: 0 -6px 24px rgba(32, 38, 34, 0.12);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-bottom: var(--safe-b, env(safe-area-inset-bottom, 0px));
   transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
   will-change: transform;
   touch-action: auto;

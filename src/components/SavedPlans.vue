@@ -833,8 +833,9 @@ const metaLine = (m: { area: number; layout: string; furniture: number }) =>
   height: 100%;
   border: 0;
   border-radius: 0;
-  padding-top: env(safe-area-inset-top, 0px);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  /* 状态栏 / 底部横条外各多留一点，避开 iOS 全屏时系统叠的渐变磨砂 */
+  padding-top: calc(env(safe-area-inset-top, 0px) + 8px);
+  padding-bottom: var(--safe-b, env(safe-area-inset-bottom, 0px));
 }
 :root.compact .sp-close {
   width: 44px;

@@ -96,7 +96,11 @@ if (typeof window !== 'undefined') {
   probe.style.cssText = 'position:fixed;left:0;bottom:0;width:0;height:env(safe-area-inset-bottom,0px);visibility:hidden;pointer-events:none'
   const measure = () => {
     if (!probe.isConnected && document.body) document.body.appendChild(probe)
-    layout.safeBottom = probe.offsetHeight || 0
+    // 有底部横条（iPhone 全屏 / PWA）时，在安全区外再多留 8px：系统会在横条附近叠一层渐变磨砂，贴着安全区边缘的内容会被糊掉。
+    // 同一个值写成 CSS 变量 --safe-b，底部抽屉的内边距和这里算高度用的是同一个数
+    const inset = probe.offsetHeight || 0
+    layout.safeBottom = inset ? inset + 8 : 0
+    document.documentElement.style.setProperty('--safe-b', layout.safeBottom + 'px')
     layout.vh = window.innerHeight
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', measure, { once: true })

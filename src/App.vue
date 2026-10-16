@@ -887,7 +887,8 @@ main {
 /* ---------- 精简顶栏（手机 / 平板）：一行放下品牌、视图、撤销重做、保存、更多 ---------- */
 :root.compact-bar .top {
   flex-wrap: nowrap;
-  padding-top: max(8px, env(safe-area-inset-top, 0px));
+  /* 状态栏下面再留 8px：贴着状态栏的话，iOS 全屏 / PWA 里系统的渐变磨砂会盖住顶栏上沿 */
+  padding-top: calc(env(safe-area-inset-top, 0px) + 8px);
   padding-left: max(10px, env(safe-area-inset-left, 0px));
   padding-right: max(10px, env(safe-area-inset-right, 0px));
 }
