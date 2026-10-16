@@ -296,9 +296,10 @@ const deskMoreItems = computed<MenuEntry[]>(() => [
 const moreItems = computed<MenuEntry[]>(() => [
   ...(viewMode.value !== 'lib'
     ? ([
-        { label: t('随机生成'), icon: ICONS.generate, keys: device.coarse ? undefined : 'G', action: () => doGenerate() },
         { label: t('生成选项'), icon: ICONS.generateOptions, action: () => (genOpen.value = true) },
         'sep',
+        // 顶栏外面放的是随机生成，保存在这里
+        { label: t('保存'), icon: ICONS.save, action: () => quickSave() },
       ] as MenuEntry[])
     : []),
   { label: t('我的户型'), icon: ICONS.savedPlans, action: () => openPanel() },
@@ -438,9 +439,10 @@ onBeforeUnmount(() => {
         <button :title="t('导出 JSON')" :aria-label="t('导出 JSON')" @click="exportJson"><JIcon :icon="ICONS.exportJson" /><span class="lbl">{{ t('导出 JSON') }}</span></button>
         <button v-if="viewMode === '2d'" :title="t('导出 PNG')" :aria-label="t('导出 PNG')" @click="canvas?.exportPng()"><JIcon :icon="ICONS.exportPng" /><span class="lbl">{{ t('导出 PNG') }}</span></button>
       </div>
-      <!-- 精简顶栏：保存 + 「更多」 -->
+      <!-- 精简顶栏：随机生成（手机上最常点，放在外面）+ 「更多」；保存收进「更多」。素材库里没有生成，留保存 -->
       <div v-else class="group right file">
-        <button class="save-btn icon-only" :class="{ dirty: saved.dirty && !!saved.currentId }" :title="saveTitle" :aria-label="t('保存')" :disabled="saved.busy" @click="quickSave"><JIcon :icon="ICONS.save" /></button>
+        <button v-if="viewMode !== 'lib'" class="primary icon-only gen-icon" :title="t('随机生成')" :aria-label="t('随机生成')" @click="doGenerate()"><JIcon :icon="ICONS.generate" /></button>
+        <button v-else class="save-btn icon-only" :class="{ dirty: saved.dirty && !!saved.currentId }" :title="saveTitle" :aria-label="t('保存')" :disabled="saved.busy" @click="quickSave"><JIcon :icon="ICONS.save" /></button>
         <button ref="moreBtn" class="icon-only more-btn" :class="{ on: !!moreMenu }" :title="t('更多')" :aria-label="t('更多')" :aria-expanded="!!moreMenu" @click="toggleMore"><JIcon :icon="ICONS.more" /></button>
       </div>
       <input ref="fileInput" type="file" accept=".json,application/json" hidden @change="importJson" />
@@ -899,10 +901,9 @@ main {
 :root.compact-bar .gen-icon {
   color: var(--text-inverse);
 }
+/* 手机：顶栏空间留给视图切换和操作按钮，不放 logo */
 :root.compact .brand {
-  border-right: 0;
-  padding-right: 0;
-  margin-right: 0;
+  display: none;
 }
 :root.compact .top {
   gap: 6px;
