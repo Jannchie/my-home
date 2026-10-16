@@ -2,7 +2,7 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <!--
       SEO / 分享卡片。站点地址占位符（两个下划线包着 SITE_URL）由 vite.config.ts 的 seo 插件替换成 VITE_SITE_URL（未设置时用占位地址）。
       这里写的是中文版；构建时插件会按 src/seo.ts 的三语文案改写，并额外生成 /zh/ /ja/ /en/ 三个入口页。
@@ -17,6 +17,9 @@
     <meta name="theme-color" content="#2c302e" media="(prefers-color-scheme: dark)" />
     <meta name="application-name" content="My Home" />
     <meta name="apple-mobile-web-app-title" content="My Home" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="format-detection" content="telephone=no" />
 
     <link rel="canonical" href="__SITE_URL__/" />

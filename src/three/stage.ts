@@ -23,11 +23,15 @@ export interface PostHook {
   resize: (w: number, h: number) => void
 }
 
-export function createStage(canvas: HTMLCanvasElement, opts: { preserve?: boolean; shadowSize?: number } = {}): Stage {
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: !!opts.preserve })
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+/**
+ * low：省电画质（手机 / 低性能设备，见 src/ui/device.ts）——不开 MSAA（后处理里改用 FXAA）、像素比上限 1.5、
+ * 阴影贴图 1024 且不做软阴影。
+ */
+export function createStage(canvas: HTMLCanvasElement, opts: { preserve?: boolean; shadowSize?: number; low?: boolean } = {}): Stage {
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: !opts.low, alpha: true, preserveDrawingBuffer: !!opts.preserve })
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, opts.low ? 1.5 : 2))
   renderer.shadowMap.enabled = true
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap
+  renderer.shadowMap.type = opts.low ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap
   renderer.outputColorSpace = THREE.SRGBColorSpace
 
   const scene = new THREE.Scene()
@@ -38,7 +42,8 @@ export function createStage(canvas: HTMLCanvasElement, opts: { preserve?: boolea
   scene.add(hemi)
   const sun = new THREE.DirectionalLight('#fff3df', 2.0)
   sun.castShadow = true
-  sun.shadow.mapSize.set(opts.shadowSize ?? 2048, opts.shadowSize ?? 2048)
+  const shadow = opts.shadowSize ?? (opts.low ? 1024 : 2048)
+  sun.shadow.mapSize.set(shadow, shadow)
   sun.shadow.bias = -0.0004
   sun.shadow.normalBias = 0.6
   sun.shadow.radius = 4
@@ -71,6 +76,22 @@ export function createStage(canvas: HTMLCanvasElement, opts: { preserve?: boolea
     },
   }
   return stage
+}
+
+/** 运行中切换画质：像素比、阴影贴图尺寸与软阴影（画布本身的 MSAA 建好后改不了，由后处理的 FXAA 兜底） */
+export function setStageQuality(stage: Stage, low: boolean) {
+  const { renderer, sun } = stage
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, low ? 1.5 : 2))
+  renderer.shadowMap.type = low ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap
+  const size = low ? 1024 : 2048
+  if (sun.shadow.mapSize.x !== size) {
+    sun.shadow.mapSize.set(size, size)
+    sun.shadow.map?.dispose()
+    sun.shadow.map = null
+  }
+  renderer.shadowMap.needsUpdate = true
+  const s = renderer.getSize(new THREE.Vector2())
+  stage.resize(s.x, s.y)
 }
 
 /** 默认的太阳方向（指向光源）：左后上方 */

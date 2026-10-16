@@ -338,7 +338,8 @@ function digitalPiano(p: string[]) {
 function drum(r: number, h: number, shellC: string, head: string, hoop: string) {
   const g = new THREE.Group()
   g.add(cyl(r, r, h, shellC, {}, 28))
-  g.add(cyl(r * 0.97, r * 0.97, 0.3, head, { y: h }, 28))
+  // 鼓皮比鼓圈顶略低（鼓圈顶在 h + 0.3），不和鼓圈顶共面
+  g.add(cyl(r * 0.97, r * 0.97, 0.3, head, { y: h - 0.15 }, 28))
   g.add(torus(r, 0.5, hoop, { y: h - 0.2, rx: PI / 2 }))
   g.add(torus(r, 0.5, hoop, { y: 0.2, rx: PI / 2 }))
   return g
@@ -707,7 +708,8 @@ function accordion(p: string[]) {
     for (let i = 0; i < n - 1; i++) if ([0, 1, 3, 4, 5].includes(i % 7)) c.fillRect(0, (i + 1) * kh - kh * 0.3, W * 0.6, kh * 0.6)
   }, { x: 9.5, y: 3.5, z: 11.1 }))
   for (let r = 0; r < 6; r++) for (let c = 0; c < 3; c++) g.add(ball(0.7, IVORY, { x: -21 + c * 3, y: 10 + r * 4.5 + c * 1.2, z: 9.2 }, [1, 1, 0.5]))
-  g.add(rbox(10, 1.2, 1, acc, { x: 14, y: 30, z: 10.6 }, 0.3))
+  // 装饰条比键盘面板靠后 0.3cm，避免共面闪烁
+  g.add(rbox(10, 1.2, 1, acc, { x: 14, y: 30, z: 10.3 }, 0.3))
   for (const x of [-18, 14]) g.add(rbox(3, 4, 4, acc, { x, y: 41 }, 0.8))
   g.add(rbox(36, 1, 2.4, acc, { x: -2, y: 44, z: 0 }, 0.4))
   return g
@@ -1299,7 +1301,8 @@ function baseball(p: string[]) {
   glove.add(noLine(P(torus(3.4, 0.14, stitch, {}), 0.5, 10, -1.5, 0.4, 0.3, 0)))
   for (let i = 0; i < 3; i++) glove.add(noLine(P(torus(0.6, 0.15, stitch, {}), -3 + i * 3, 7.6, 3.2, 0.3)))
   glove.scale.setScalar(1.5)
-  g.add(P(glove, -24, 0, -9))
+  // 手套的腕口圆筒最低到 -1（×1.5 = -1.5）：抬起 1.5 贴地，否则 fit 会把整体抬高、球棒悬空
+  g.add(P(glove, -24, 1.5, -9))
   return fit(g)
 }
 
@@ -1570,7 +1573,8 @@ function chess(p: string[]) {
     const [x, z] = sq(f, r)
     g.add(P(chessPiece(k as 'p', w ? white : black, w ? PI : 0), x, 2.35, z))
   }
-  g.add(P(chessPiece('b', black), 21.5, 0, 6, 0, 0, PI / 2).translateY(1.4))
+  // 被吃掉的黑象躺在棋盘边（沿 +z 平放，底座半径 1.4 → 抬 1.4 正好贴地；以前 translateY 在旋转后的局部系里，象一半陷进地面，整盘被 fit 抬高）
+  g.add(P(chessPiece('b', black), 21, 1.4, 1.8, PI / 2))
   g.add(P(chessPiece('p', white), 20.5, 0, -6), P(chessPiece('n', white, 0.8), 21, 0, -1))
   return fit(g)
 }
@@ -2539,7 +2543,8 @@ const cartons = (n: number) => (p: string[]) => {
 function snackPile(p: string[]) {
   const [bag, box, acc] = p
   const g = new THREE.Group()
-  g.add(P(rbox(16, 4.5, 22, bag, {}, 2.2), 0, 0, 0, 0, 0.15))
+  // 薯片袋：P 会覆盖 rbox 自带的位置，所以这里直接给袋子中心高度 2.25（底面贴地）
+  g.add(P(rbox(16, 4.5, 22, bag, {}, 2.2), 0, 2.25, 0, 0, 0.15))
   g.add(P(grp(paintTop(11, 13, `int-chips-${bag}-${acc}`, (c, W, H) => {
     c.fillStyle = bag
     c.fillRect(0, 0, W, H)
@@ -2550,7 +2555,8 @@ function snackPile(p: string[]) {
     c.fillStyle = '#ffffff'
     c.fillRect(W * 0.15, H * 0.12, W * 0.7, H * 0.14)
   }, 0, 4.8, 0)), 0, 0, 0, 0, 0.15))
-  for (const s of [-1, 1]) g.add(P(rbox(16.4, 1.4, 1.4, shade(bag, -0.15), { z: s * 10.8 }, 0.4), 0, 1.6, 0, 0, 0.15))
+  // 袋子两端的封口压边（包一层 grp 再转，免得 P 把 z 覆盖成 0、两条叠在中间）
+  for (const s of [-1, 1]) g.add(P(grp(rbox(16.4, 1.4, 1.4, shade(bag, -0.15), { y: 1.6, z: s * 10.8 }, 0.4)), 0, 0, 0, 0, 0.15))
   g.add(rbox(4, 2, 15, box, { x: 12, z: 0 }, 0.3), P(rbox(4, 2, 15, shade(box, 0.15), {}, 0.3), 12.5, 2, 0.5, 0, 0.2))
   const cc = [acc, C.pink, C.sky, C.lemon, C.mint]
   cc.forEach((c, i) => {

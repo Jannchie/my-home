@@ -1416,7 +1416,8 @@ function labelPrinter(p: string[]) {
   g.add(rbox(12, 4.6, 20, body, {}, 1.4))
   g.add(flat(8, 2.8, LCD, -0.6, 4.5, -6.4, 0.35))
   g.add(ghost(rbox(5.4, 0.3, 4, C.glass, { x: 0, y: 4.55, z: -1.6 }, 0.1), C.glass, 0.45))
-  g.add(rbox(4.6, 0.4, 3.4, tape, { y: 4.2, z: -1.6 }, 0.2))
+  // 色带顶面在机身顶面之上、玻璃窗之内，不和机身顶面共面
+  g.add(rbox(4.6, 0.55, 3.4, tape, { y: 4.2, z: -1.6 }, 0.2))
   keyGrid(g, 6, 4, 1.6, 1.2, key, -4, 4.5, 2.2, C.red)
   g.add(rbox(4.2, 0.5, 1.2, key, { y: 4.5, z: 8.6 }, 0.2))
   // 侧面吐出标签

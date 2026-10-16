@@ -2926,7 +2926,7 @@ function petBottle(p: string[], big: boolean) {
   g.add(glassy(rbox(9.6, 23, 9.6, PET, {}, 2), PET, 0.4))
   g.add(glassy(lathe([[4.8, 0], [4.8, 1], [3, 4.5], [1.6, 6.2], [1.6, 8], [0, 8]], PET, { y: 23 }), PET, 0.4))
   g.add(noLine(rbox(9, 21.6, 9, liq, { y: 0.4 }, 1.8)))
-  g.add(noLine(rbox(9.7, 7, 9.7, lab, { y: 9 }, 2)))
+  g.add(noLine(rbox(10.2, 7, 10.2, lab, { y: 9 }, 2))) // 比瓶身每边凸出 0.3，避免和瓶身侧面闪烁
   g.add(cyl(1.7, 1.7, 2, cap, { y: 31 }, 14))
   return g
 }

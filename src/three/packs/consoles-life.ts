@@ -1732,7 +1732,7 @@ function parcel(p: string[]) {
   const g = new THREE.Group()
   g.add(rbox(25, 1.4, 34, env, {}, 0.6))
   g.add(rbox(23.4, 0.5, 31, shade(env, 0.03), { y: 1.05 }, 0.25))
-  g.add(rbox(25.2, 0.3, 2.6, tape, { y: 1.25, z: -14.5 }, 0.12))
+  g.add(rbox(25.2, 0.3, 2.6, tape, { y: 1.45, z: -14.5 }, 0.12)) // 顶面高出内衬 0.2，避免共面闪烁
   g.add(rbox(10.6, 0.25, 7.6, '#ffffff', { x: 3.2, y: 1.4, z: 3 }, 0.08))
   g.add(flatScreen(10, 7, 'ship-label', shipLabel, 3.2, 1.68, 3, 0))
   g.add(rbox(4.2, 0.25, 2.4, acc, { x: -7, y: 1.4, z: -8 }, 0.08))

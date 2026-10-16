@@ -59,7 +59,14 @@ const RABBIT_PALS: Pal[] = [
   ['cute', ['#fbf7f1', '#ffffff', '#5a4646', '#5a4646']], // 熊猫兔
 ]
 
-const pet = (breed: string, pose: PoseName) => (p: string[]) => G(markActorPart(creatureStatic(breed, p, pose)))
+/** 静态宠物：蜷睡姿势让身体偏向一侧，按包围盒在 xz 上居中（预览时角色从 actorPart 的世界位置出发，位置一致） */
+const pet = (breed: string, pose: PoseName) => (p: string[]) => {
+  const g = markActorPart(creatureStatic(breed, p, pose))
+  const c = new THREE.Box3().setFromObject(g, true).getCenter(new THREE.Vector3())
+  g.position.x -= c.x
+  g.position.z -= c.z
+  return G(g)
+}
 
 // ---------- 扫地机器人（带充电座） ----------
 

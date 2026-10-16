@@ -3,7 +3,6 @@
 import * as THREE from 'three'
 import { fixtureDepth, pointInPolygon, type Fixture, type Furniture, type Plan, type Vec } from './model'
 import { ASSET_MAP, builtinShelves, CLOSET_PIPE } from './three/assets'
-import { fridgeTop, washerBody, washerTop } from './three/appliances'
 import { floorY, roomAt } from './three/house'
 import type { Poly, SurfaceKind } from './three/kit'
 
@@ -55,7 +54,8 @@ const rect = (x0: number, z0: number, x1: number, z1: number): Poly => [
 ]
 
 /**
- * 固定设备的台面（和 assets.ts 里设备模型的尺寸一致）：厨房台面、洗面台、洗衣机顶、马桶水箱盖、冰箱顶、空调外机顶。
+ * 固定设备的台面（和 assets.ts 里设备模型的尺寸一致）：厨房台面、洗面台、马桶水箱盖、空调外机顶。
+ * 冰箱位 / 洗衣机位没有台面：上面摆的冰箱、洗衣机是家具，顶面由素材的 surface 声明。
  * 设备的局部坐标和家具一样，背面朝 -y（= 模型的 -z）。
  */
 function fixtureLevels(f: Fixture): Level[] {
@@ -100,17 +100,9 @@ function fixtureLevels(f: Fixture): Level[] {
       ].filter((pl) => Math.abs(pl[1][0] - pl[0][0]) > 4 && Math.abs(pl[2][1] - pl[1][1]) > 4)
       return [{ y: 83, polys, kind: 'shelf', h: Infinity }]
     }
-    case 'washer': {
-      const m = washerBody(f, d)
-      return [L(washerTop(f), rect(-m / 2, -m / 2, m / 2, m / 2))]
-    }
     case 'toilet':
       // 无水箱马桶没有水箱盖可以摆东西
       return f.toiletType === 'tankless' ? [] : [L(78, rect(-(w + 6) / 2, -d / 2, (w + 6) / 2, -d / 2 + 20))]
-    case 'fridge':
-      // 两门小冰箱比冰箱位窄
-      const fw = (f.style === '2door' ? Math.min(w, 54) : w) - 4
-      return [L(fridgeTop(f), rect(-fw / 2, -(d - 4) / 2, fw / 2, (d - 4) / 2))]
     case 'builtin': {
       // 柜内层板：门打开时都能放；关着时只有下駄箱中间的开放台面（y = 90）能放
       const t = f.builtinType ?? 'shoe'
@@ -235,10 +227,6 @@ export function pickSurface(plan: Plan, ray: THREE.Ray, exclude: Set<string>, ac
   return best
 }
 
-/** 某件家具在高度 z（相对房间地面）的那一层 */
-function levelAt(f: Furniture, z: number) {
-  return levels(f.asset).find((l) => Math.abs((f.z ?? 0) + l.y - z) < 0.5) ?? null
-}
 
 /** 摆件占地的四个角（平面坐标） */
 function corners(asset: string, x: number, y: number, rot: number): Vec[] {
@@ -278,8 +266,9 @@ export function fitOnSurface(plan: Plan, ownerId: string, z: number, asset: stri
 
 /** 摆件整个占地都在台面内 */
 export function fitsOnSurface(owner: Furniture, z: number, asset: string, x: number, y: number, rot: number) {
-  const lv = levelAt(owner, z)
-  return !!lv && corners(asset, x, y, rot).every((c) => inPolys(owner, lv.polys, c))
+  // 同一高度可能有好几格（多宝格左右两列的底层、被竖隔板隔开的两小格）：整件落在其中任意一格里就行，不能横跨隔板
+  const cs = corners(asset, x, y, rot)
+  return levels(owner.asset).some((l) => Math.abs((owner.z ?? 0) + l.y - z) < 0.5 && cs.every((c) => inPolys(owner, l.polys, c)))
 }
 
 /**

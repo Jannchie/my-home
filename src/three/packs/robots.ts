@@ -521,10 +521,10 @@ export const ROBOT_ASSETS: AssetDef[] = [
   def('rb-gimbal', '口袋云台相机', 'hobby', [3.4, 3, 13], GEAR_PALS, gimbal, PROP),
 
   // ---------- 机器人：宠物 ----------
-  def('rb-dog', '四足机器狗', 'pets', [31.5, 62, 41], DOG_PALS, centered(robo('quad')), { family: 'rb-dog', form: 'standing', formLabel: '站立', ...actor('robopet', 'body', 'quad'), limit: { scope: 'house', max: 1, group: 'rb-dog' } }),
-  def('rb-dog-rest', '四足机器狗', 'pets', [31.5, 65, 20.5], DOG_PALS, centered(robo('quad', 1)), { family: 'rb-dog', form: 'lying', formLabel: '趴下休眠', ...actor('robopet', 'body', 'quad'), limit: { scope: 'house', max: 1, group: 'rb-dog' } }),
+  def('rb-dog', '四足机器狗', 'pets', [31.5, 49, 41], DOG_PALS, centered(robo('quad')), { family: 'rb-dog', form: 'standing', formLabel: '站立', ...actor('robopet', 'body', 'quad'), limit: { scope: 'house', max: 1, group: 'rb-dog' } }),
+  def('rb-dog-rest', '四足机器狗', 'pets', [31.5, 49, 22], DOG_PALS, centered(robo('quad', 1)), { family: 'rb-dog', form: 'lying', formLabel: '趴下休眠', ...actor('robopet', 'body', 'quad'), limit: { scope: 'house', max: 1, group: 'rb-dog' } }),
   def('rb-dog-dock', '机器狗充电座', 'pets', [46, 72, 14], DOCK_PALS, dogDock, { ...actor('robopet', 'home', 'quad', [0, 1.5, 8]), limit: { scope: 'house', max: 1, group: 'rb-dog-dock' } }),
-  def('rb-dog-mini', '小型机器狗', 'pets', [17.6, 34.6, 23], DOG_MINI_PALS, centered(robo('quad-mini')), actor('robopet', 'body', 'quad-mini')),
+  def('rb-dog-mini', '小型机器狗', 'pets', [17.6, 28, 23], DOG_MINI_PALS, centered(robo('quad-mini')), actor('robopet', 'body', 'quad-mini')),
   def('rb-companion', '陪伴机器人（毛绒外衣）', 'pets', [31, 29, 42], COMP_PALS, robo('companion'), { family: 'rb-companion', sizeLabel: '本体', ...actor('robopet', 'body', 'companion') }),
   def('rb-companion-nest', '陪伴机器人（毛绒外衣）', 'pets', [46, 46, 45], SOFT_DOCK_PALS, companionNest, { family: 'rb-companion', sizeLabel: '+ 充电窝', ...actor('robopet', 'home', 'companion'), limit: { scope: 'house', max: 1, group: 'rb-companion' } }),
   def('rb-emo-bot', '桌面情感机器人', 'tabletop', [7.6, 7.6, 9], CAT_PALS, emoBot, PROP),

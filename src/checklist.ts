@@ -12,6 +12,7 @@ export type Fix =
   | { how: 'scatter'; re: RegExp } // 摆到房间里的台面 / 层板上
   | { how: 'fixture'; re: RegExp; fixture: 'kitchen' | 'basin' | 'washer' | 'toilet' } // 摆到设备台面上
   | { how: 'aircon' } // 挂空调（内机 + 外机朝向）
+  | { how: 'appliance'; kind: 'fridge' | 'washer' } // 冰箱 / 洗衣机：放到空着的冰箱位 / 洗衣机位上，没有位就靠墙放
   | { how: 'outdoor' } // 空调外机补到和室内机一样多（在 store 里处理：外机是设备不是家具）
   | { how: 'chairs' } // 餐椅补到人数
   | { how: 'bed' } // 按住户补床
@@ -113,8 +114,8 @@ export function checklist(plan: Plan, hh?: Household): CheckItem[] {
     if (r.kind === 'ldk' || r.kind === 'kitchen') {
       const hasKitchen = plan.fixtures.some((x) => x.kind === 'kitchen' && pointInPolygon(x, r.points))
       if (hasKitchen) {
-        // 中式厨房小，冰箱常放在餐厅：按全屋算
-        item(r, '冰箱', plan.fixtures.filter((x) => x.kind === 'fridge' && (region !== 'jp' || pointInPolygon(x, r.points))).length, 1)
+        // 冰箱是家具：全屋有一台就行（中式厨房小，冰箱常放在餐厅）
+        item(r, '冰箱', count(all, /./, (d) => d.family === 'fridge'), 1, { how: 'appliance', kind: 'fridge' })
         item(r, '微波炉', count(all, RE.microwave), 1, { how: 'fixture', re: /prop-microwave/, fixture: 'kitchen' })
         item(r, '电饭煲', count(all, RE.rice), 1, { how: 'fixture', re: /prop-rice-cooker$/, fixture: 'kitchen' })
         item(r, '电水壶', count(all, RE.kettle), 1, { how: 'fixture', re: /prop-kettle$/, fixture: 'kitchen' })
@@ -167,6 +168,9 @@ export function checklist(plan: Plan, hh?: Household): CheckItem[] {
       if (ac && region !== 'west' && r === firstBalcony) item(r, `空调外机（对应 ${ac} 台室内机）`, plan.fixtures.filter((x) => x.kind === 'outdoor').length, ac, { how: 'outdoor' })
     }
   }
+
+  // 洗衣机（家具）：有洗衣机位或洗面所的户型全屋要有一台
+  if (plan.fixtures.some((x) => x.kind === 'washer') || plan.rooms.some((r) => r.kind === 'wash')) item(null, '洗衣机', count(all, /./, (d) => d.family === 'washer'), 1, { how: 'appliance', kind: 'washer' })
 
   // ---------- 住户相关 ----------
   if (hh) {

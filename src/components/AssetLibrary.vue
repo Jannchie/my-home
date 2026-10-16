@@ -12,6 +12,9 @@ import { effectivePalette } from '../three/colors'
 import { applyPatterns } from '../three/fabric'
 import type { PatternSpec } from '../three/patterns'
 import ColorEditor from './ColorEditor.vue'
+import BottomSheet, { type SheetSnap } from './BottomSheet.vue'
+import { device, lowPower } from '../ui/device'
+import { useProgressive } from '../ui/progressive'
 import { JIcon } from '@jannchie/icons-vue'
 import { CATEGORY_ICONS, ICONS, STYLE_ICONS } from '../ui/icons'
 import { placing, selection, viewMode } from '../store'
@@ -22,6 +25,10 @@ const categories = categoriesOf(true)
 const styleKeys = Object.keys(STYLE_LABELS) as StyleTag[]
 const sizeKeys = Object.keys(SIZE_LABELS) as SizeClass[]
 const list = computed(() => browse(filter))
+// 1500+ 张卡片按滚动逐批挂载（每批 60 张），筛选变化时回到第一批
+const { shown, more, vSentinel } = useProgressive(() => list.value, 60)
+/** 手机：详情是底部抽屉（收起时只露出名字和「放进 3D 沙盘」） */
+const sheet = ref<SheetSnap>('peek')
 // 各分类的数量：一次算完缓存起来（以前模板里每个分类按钮每次重渲染都跑一遍 browse）
 const counts = computed(() => countByCategory(filter))
 const countOf = (c: AssetCategory) => counts.value.m.get(c) ?? 0
@@ -54,7 +61,9 @@ function pickSize(id: string) {
 // ---------- 缩略图：卡片用当前风格的配色 ----------
 
 // 缩略图只渲染滚到可见处的卡片（v-thumb）
-const { thumbs, vThumb } = useThumbs()
+const { thumbs, want, vThumb } = useThumbs()
+// 抽屉标题栏的小图：选中的素材按当前配色要一张缩略图
+watch([selectedId, color], () => device.compact && want(selectedId.value, color.value), { immediate: true })
 const cardColor = (id: string) => paletteFor(ASSET_MAP.get(id)!, filter.style)
 
 // ---------- 大预览：自动旋转 ----------
@@ -95,6 +104,8 @@ function showPreview() {
 let dirty = true
 function loop() {
   raf = requestAnimationFrame(loop)
+  // 手机上详情抽屉收起时预览看不见：不转、不画；切到后台时 rAF 本身会停
+  if (device.compact && sheet.value === 'peek') return
   controls.autoRotate = spin.value
   const moved = controls.update()
   const now = performance.now()
@@ -108,7 +119,7 @@ function loop() {
 }
 
 onMounted(() => {
-  stage = createStage(canvas.value!)
+  stage = createStage(canvas.value!, { low: lowPower() })
   stage.renderer.shadowMap.autoUpdate = false
   const ground = new THREE.Mesh(new THREE.CircleGeometry(400, 64).rotateX(-Math.PI / 2), new THREE.ShadowMaterial({ opacity: 0.14 }))
   ground.receiveShadow = true
@@ -205,7 +216,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onSlash))
       </div>
       <div class="grid">
         <button
-          v-for="g in list"
+          v-for="g in shown"
           :key="g.rep.id"
           v-memo="[g, thumbs[`${g.rep.id}#${cardColor(g.rep.id)}`], g.rep.id === selectedId || (!!def.family && g.rep.family === def.family), lang]"
           v-thumb="[g.rep.id, cardColor(g.rep.id)]"
@@ -225,10 +236,21 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onSlash))
           {{ t('没有匹配的素材') }}
           <button v-if="filtered" class="clear" @click="clearFilters"><JIcon :icon="ICONS.reset" :size="14" />{{ t('清除筛选') }}</button>
         </div>
+        <div v-if="more" v-sentinel class="sentinel" aria-hidden="true" />
       </div>
     </div>
 
-    <aside class="detail">
+    <BottomSheet v-model="sheet" :enabled="device.compact" class="detail" :label="displayName(def)">
+      <template v-if="device.compact" #header>
+        <div class="peek">
+          <img v-if="thumbs[`${def.id}#${color}`]" :src="thumbs[`${def.id}#${color}`]" alt="" class="peek-img" />
+          <span class="peek-name">
+            <b>{{ displayName(def) }}</b>
+            <span class="num">{{ t('宽 {w} · 深 {d} · 高 {h} cm', { w: def.w, d: def.d, h: def.h }) }}</span>
+          </span>
+          <button v-if="!def.fixture" class="primary" @click="placeInSandbox"><JIcon :icon="ICONS.placeInSandbox" />{{ t('放进沙盘') }}</button>
+        </div>
+      </template>
       <div ref="host" class="preview">
         <canvas ref="canvas" />
         <label class="spin"><input v-model="spin" type="checkbox" /><JIcon :icon="ICONS.autoRotate" :size="14" />{{ t('自动旋转') }}</label>
@@ -271,7 +293,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onSlash))
         </template>
         <p v-else class="note">{{ t('设备类：在 2D 平面图里放置对应设备（厨房、浴缸、马桶…），3D 沙盘会按实际尺寸自动生成。') }}</p>
       </div>
-    </aside>
+    </BottomSheet>
   </div>
 </template>
 
@@ -473,11 +495,48 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onSlash))
 }
 .detail {
   width: 380px;
+  flex: none;
   border-left: 1px solid var(--border);
   background: var(--surface-2);
+}
+.sentinel {
+  grid-column: 1 / -1;
+  height: 1px;
+}
+/* 手机：抽屉收起时露出的一行（缩略图 + 名字 + 放进沙盘） */
+.peek {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px 10px;
+}
+.peek-img {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+  flex: none;
+}
+.peek-name {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  line-height: 1.3;
+}
+.peek-name b {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.peek-name span {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
+.peek button {
+  flex: none;
+  height: 44px;
+  gap: 6px;
+  border-radius: 10px;
 }
 .preview {
   position: relative;
@@ -585,5 +644,101 @@ h2 {
   font-size: var(--fs-sm);
   color: var(--text-muted);
   line-height: 1.6;
+}
+/* ---------- 手机 / 平板竖屏 ---------- */
+:root.compact .lib {
+  flex-direction: column;
+  min-width: 0;
+}
+:root.compact .main {
+  min-width: 0;
+  width: 100%;
+}
+/* 搜索 + 分类：顶部一条横向滚动的胶囊 */
+:root.compact .cats {
+  width: auto;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 12px;
+  border-right: 0;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  flex: none;
+}
+:root.compact .cats::-webkit-scrollbar {
+  display: none;
+}
+:root.compact .search-box {
+  flex: none;
+  width: 170px;
+  margin: 0;
+}
+:root.compact .search-box .slash {
+  display: none;
+}
+:root.compact .cats button {
+  flex: none;
+  min-height: 40px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 99px;
+  padding: 0 12px;
+}
+:root.compact .cats button.on {
+  background: var(--accent-weak);
+  border-color: var(--accent-ring);
+  color: var(--accent-strong);
+}
+:root.compact .cat-name {
+  flex: none;
+}
+:root.compact .filters {
+  padding: 8px 12px 0;
+}
+:root.compact .chips {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+:root.compact .chips::-webkit-scrollbar {
+  display: none;
+}
+:root.compact .chips > * {
+  flex: none;
+}
+:root.compact .chips .label {
+  min-width: 0;
+}
+:root.compact .main {
+  min-height: 0;
+}
+:root.compact .grid {
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 8px;
+  padding: 10px 12px calc(110px + env(safe-area-inset-bottom, 0px));
+}
+:root.compact .card {
+  padding: 6px 4px 8px;
+}
+:root.compact .card:hover {
+  transform: none;
+  box-shadow: none;
+}
+:root.compact .detail {
+  width: auto;
+}
+:root.compact .preview {
+  height: 240px;
+}
+:root.coarse .chips button,
+:root.coarse .sizes button {
+  height: 36px;
+}
+:root.coarse .go {
+  height: 48px;
 }
 </style>

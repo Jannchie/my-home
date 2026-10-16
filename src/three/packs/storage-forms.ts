@@ -584,7 +584,7 @@ function openRack(w: number, d: number, h: number, n: number): Build {
     for (const sx of xs)
       for (const sz of [-1, 1]) {
         const x = sx * (w / 2 - 1.5)
-        g.add(rbox(3, h, 3, frame, { x, z: sz * (d / 2 - 1.5) }, 0.4))
+        g.add(rbox(3, h - 0.3, 3, frame, { x, z: sz * (d / 2 - 1.5) }, 0.4)) // 立柱顶藏进顶板，不与顶板顶面共面
       }
     for (const y of rackYs(h, n)) g.add(rbox(w - 0.4, 2, d - 0.4, board, { y }, 0.5))
     // 背后 X 撑
@@ -669,7 +669,7 @@ function kitchenRack(p: string[]) {
   const [board, frame] = p
   const g = new THREE.Group()
   for (const sx of [-1, 1])
-    for (const sz of [-1, 1]) g.add(rbox(2.5, KR.h, 2.5, frame, { x: sx * (KR.w / 2 - 1.25), z: sz * (KR.d / 2 - 1.25) }, 0.4))
+    for (const sz of [-1, 1]) g.add(rbox(2.5, KR.h - 0.3, 2.5, frame, { x: sx * (KR.w / 2 - 1.25), z: sz * (KR.d / 2 - 1.25) }, 0.4))
   for (const y of KR.ys) g.add(rbox(KR.w - 0.4, 2, KR.d - 0.4, board, { y }, 0.5))
   // 挂杆：从两根前柱伸出
   for (const sx of [-1, 1]) g.add(stick([sx * (KR.w / 2 - 1.25), KR_BAR_Y, KR.d / 2 - 1], [sx * (KR.w / 2 - 1.25), KR_BAR_Y, KR.d / 2 + 2.2], 0.5, frame))
@@ -731,7 +731,10 @@ function bathCorner(p: string[]) {
   g.add(rbox(2, 50, 0.6, sub, { x: -BATH.s / 2 + 1.5, y: BATH.mount, z: -BATH.s / 2 + 0.3 }, 0.2))
   return g
 }
-const BATH_CORNER = asset('sf-bath-corner', '浴室角架', 'storage', [24, 24, 51.3], WIRE_PALS, bathCorner, {
+// 和 wet.ts / bath-corners.ts 的各款转角架同一系列
+const BATH_CORNER = asset('sf-bath-corner', '浴室转角架', 'storage', [24, 24, 51.3], WIRE_PALS, bathCorner, {
+  family: 'bath-corner-shelf',
+  sizeLabel: '三角网篮 3 层',
   mount: BATH.mount,
   surfaces: BATH.ys.map((y, i) => ({ y: BATH.mount + y + BATH.t, h: i < 2 ? 23 : 30, shape: [triPoly(BATH.s, 1)] })),
 })

@@ -4,6 +4,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, S, holePanel, legs, lPoly, rectPoly, rng, rod, shell, slab, type AssetDef, type StyleTag } from '../kit'
+import { soft, type SoftFn } from './more-variety'
 
 type V3 = [number, number, number]
 const N = S.nordic
@@ -228,13 +229,23 @@ function rocker(p: string[]) {
 }
 
 /** 梨形豆袋 */
+/** 梨形豆袋：下宽上窄的一整团，顶部往后倒成靠背，前面坐出窝（以前是两颗球叠起来，像葫芦 / 雪人） */
+const pearF: SoftFn = (x, y, z) => {
+  const t = (y + 1) / 2
+  const q = Math.hypot(x, z)
+  const [c, s] = q > 1e-6 ? [x / q, z / q] : [0, 0]
+  let r = 35 * Math.pow(Math.sin(Math.PI * Math.pow(t, 0.72)), 0.7)
+  r *= 1 - 0.34 * Math.exp(-(((t - 0.55) / 0.16) ** 2)) * Math.max(0, s) ** 2
+  return [c * r, Math.max(0, 98 * t - 13), s * r - 18 * t ** 3 + 3]
+}
 function beanPear(p: string[]) {
   const [main, sub] = p
-  const g = new THREE.Group()
-  g.add(ball(34, main, { y: 26 }, [1, 0.76, 1]))
-  g.add(ball(24, main, { y: 58, z: -10 }, [1, 1.1, 0.8]))
-  g.add(ball(20, shade(main, 0.05), { y: 44, z: 9 }, [1.2, 0.42, 1]))
-  g.add(rbox(6, 3, 1, sub, { x: 22, y: 20, z: 31.5, ry: 0.6 }, 0.4))
+  const g = G(soft(main, pearF, { wrinkle: 0.8, seed: 6 }))
+  // 侧面小布标：贴在 t≈0.33 处的表面上
+  const t = 0.33
+  const r = 35 * Math.pow(Math.sin(Math.PI * Math.pow(t, 0.72)), 0.7)
+  const a = 0.6
+  g.add(rbox(6, 3, 1, sub, { x: Math.sin(a) * (r + 0.2), y: 98 * t - 13 - 1.5, z: Math.cos(a) * (r + 0.2) - 18 * t ** 3 + 3, ry: a }, 0.4))
   return g
 }
 
@@ -1014,7 +1025,8 @@ function kidChair(p: string[]) {
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(cyl(1.6, 1.4, 30.3, shade(main, -0.12), { x: sx * 14, z: sz * 13 }, 10))
   g.add(rbox(34, 3, 32, main, { y: 30 }, 1.2))
   for (const s of [-1, 1]) g.add(rbox(3, 18, 3, main, { x: s * 14, y: 32.6, z: -14.5 }, 1))
-  g.add(rbox(32, 12, 3, sub, { y: 46, z: -14.5 }, 1.4))
+  // 靠背板比立柱厚一点，前后面不和立柱共面
+  g.add(rbox(32, 12, 3.6, sub, { y: 46, z: -14.5 }, 1.4))
   for (const x of [-9, 0, 9]) g.add(ball(x === 0 ? 6 : 5, sub, { x, y: 58 + (x === 0 ? 1.5 : 0), z: -14.5 }, [1, 1, 0.3]))
   return g
 }

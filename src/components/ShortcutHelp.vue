@@ -6,6 +6,7 @@ import { ICONS } from '../ui/icons'
 import { overlays } from '../ui/feedback'
 import { viewMode } from '../store'
 import { t } from '../i18n'
+import { device } from '../ui/device'
 
 /** 鼠标 / 触控板动作：显示成文字按键 */
 const MOUSE: Record<string, { label: string }> = {
@@ -17,6 +18,11 @@ const MOUSE: Record<string, { label: string }> = {
   pinch: { label: '双指捏合' },
   swipe: { label: '双指滑动' },
   click: { label: '点击' },
+  tap: { label: '点按' },
+  press: { label: '长按' },
+  drag1: { label: '单指拖动' },
+  drag2: { label: '双指拖动' },
+  twist: { label: '双指拧转' },
 }
 const ARROWS = '↑ ↓ ← →'
 
@@ -25,9 +31,25 @@ interface Row {
   label: string
 }
 interface Group {
-  id: 'common' | '2d' | '3d'
+  id: 'common' | '2d' | '3d' | 'touch'
   label: string
   rows: Row[]
+}
+
+/** 触屏手势（手机 / 平板上排在最前面） */
+const TOUCH: Group = {
+  id: 'touch',
+  label: '触屏手势',
+  rows: [
+    { keys: [['drag1']], label: '平面图：拖动空白处移动画布；3D：旋转视角' },
+    { keys: [['pinch'], ['drag2']], label: '缩放 / 平移视图' },
+    { keys: [['tap']], label: '选中房间、门窗、设备或家具；点空白处取消选中' },
+    { keys: [['press']], label: '弹出快捷菜单（复制 / 删除 / 旋转…）' },
+    { keys: [['tap', 'drag1']], label: '3D：选中家具后按住拖动来移动它' },
+    { keys: [['twist']], label: '3D：拖着家具时再放一根手指拧转，旋转家具' },
+    { keys: [['press', 'drag1']], label: '长按家具栏的卡片，直接拖进场景' },
+    { keys: [['tap']], label: '多边形房间：逐点点按，点「完成」闭合' },
+  ],
 }
 
 const GROUPS: Group[] = [
@@ -85,11 +107,11 @@ const GROUPS: Group[] = [
   },
 ]
 
-// 当前视图的分组排在通用之后、最显眼的位置
+// 当前视图的分组排在通用之后、最显眼的位置；触屏设备把手势放最前面
 const groups = computed(() => {
   const cur = viewMode.value === '2d' ? '2d' : '3d'
-  const order = ['common', cur, cur === '2d' ? '3d' : '2d']
-  return [...GROUPS].sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id))
+  const order = ['touch', 'common', cur, cur === '2d' ? '3d' : '2d']
+  return [...(device.coarse ? [TOUCH] : []), ...GROUPS].sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id))
 })
 const isCurrent = (g: Group) => g.id === (viewMode.value === '2d' ? '2d' : '3d')
 const keyText = (k: string) => (MOUSE[k] ? t(MOUSE[k].label) : k)
@@ -115,8 +137,8 @@ function close() {
     <div v-if="overlays.help" class="sh-layer" @pointerdown.self="close" @keydown.esc.stop="close">
       <div class="sh" role="dialog" aria-modal="true" :aria-label="t('快捷键')">
         <header>
-          <h2 class="ico-label"><JIcon :icon="ICONS.keyboard" class="ico-muted" />{{ t('快捷键') }}</h2>
-          <span class="sub">{{ t('在任意位置按 ? 打开') }}</span>
+          <h2 class="ico-label"><JIcon :icon="ICONS.keyboard" class="ico-muted" />{{ device.coarse ? t('手势与快捷键') : t('快捷键') }}</h2>
+          <span v-if="!device.coarse" class="sub">{{ t('在任意位置按 ? 打开') }}</span>
           <button ref="closeBtn" class="icon-only close" :aria-label="t('关闭')" @click="close"><JIcon :icon="ICONS.close" /></button>
         </header>
         <div class="cols">
@@ -287,5 +309,31 @@ kbd.mouse {
 .sh-enter-from .sh,
 .sh-leave-to .sh {
   transform: translateY(6px) scale(0.99);
+}
+/* 手机：整屏，避开刘海与底部横条 */
+:root.compact .sh-layer {
+  padding: 0;
+}
+:root.compact .sh {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+:root.compact header {
+  padding-top: max(14px, env(safe-area-inset-top, 0px));
+}
+:root.compact .cols {
+  grid-template-columns: 1fr;
+}
+:root.compact section {
+  border-right: 0;
+  border-bottom: 1px solid var(--border);
+}
+:root.coarse .close {
+  width: 44px;
+  height: 44px;
 }
 </style>

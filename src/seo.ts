@@ -16,7 +16,9 @@ export const SEO_LANGS: SeoLang[] = ['zh', 'ja', 'en']
 export const DEFAULT_SITE_URL = 'https://home.jannchie.com'
 
 export const SITE_NAME = 'My Home'
-export const AUTHOR = { name: 'Jianqi Pan', url: 'https://github.com/Jannchie' }
+export const AUTHOR = { name: 'Jianqi Pan', url: 'https://github.com/Jannchie', x: 'https://x.com/jannchie' }
+/** 项目源码仓库（顶栏 / 「更多」菜单的 GitHub 链接、JSON-LD 的 codeRepository） */
+export const REPO_URL = 'https://github.com/Jannchie/my-home'
 
 const pick = (zh: string, l: SeoLang) => (l === 'zh' ? zh : UI[zh][l === 'ja' ? 0 : 1])
 
@@ -98,6 +100,7 @@ export function jsonLd(l: SeoLang, siteUrl: string, page = SEO[l].path) {
     image: siteUrl + s.ogImage,
     screenshot: siteUrl + s.ogImage,
     featureList: s.features,
-    author: { '@type': 'Person', name: AUTHOR.name, url: AUTHOR.url },
+    author: { '@type': 'Person', name: AUTHOR.name, url: AUTHOR.url, sameAs: [AUTHOR.x, AUTHOR.url] },
+    codeRepository: REPO_URL,
   }
 }

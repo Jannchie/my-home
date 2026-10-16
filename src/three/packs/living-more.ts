@@ -325,18 +325,30 @@ function lazyCube(p: string[]) {
   return centered(g)
 }
 
-/** 贝壳懒人沙发：圆座 + 半圈弧形靠背 */
+/** 贝壳懒人沙发：圆鼓鼓的座 + 身后扇形张开的一圈鼓瓣（像打开的扇贝），中间瓣最高、两侧渐低 */
 function lazyShell(p: string[]) {
   const [fab, , acc] = p
   const g = new THREE.Group()
-  g.add(puck(38, 28, fab))
-  const back = torus(30, 14, fab, {}, Math.PI)
-  back.rotation.set(-Math.PI / 2 + 0.35, 0, Math.PI)
-  back.position.set(0, 36, -6)
-  back.scale.set(1, 1, 1.25)
-  g.add(back)
-  g.add(puck(26, 6, acc, { y: 27, z: 4 }))
-  return g
+  g.add(puck(36, 26, fab))
+  g.add(puck(27, 6, acc, { y: 24, z: 5 }))
+  const n = 9
+  for (let i = 0; i < n; i++) {
+    const t = i / (n - 1) - 0.5
+    const th = t * 2.7
+    const r = 10.5 - Math.abs(t) * 3
+    const len = 36 - Math.abs(t) * 26
+    // 瓣的底部落在座的后半圈上，顶部向外后方张开
+    const pivot = new THREE.Group()
+    pivot.position.set(Math.sin(th) * 22, 12, -Math.cos(th) * 22)
+    pivot.rotation.order = 'YXZ'
+    pivot.rotation.y = -th
+    pivot.rotation.x = -0.26
+    const lobe = capsule(r, len, fab)
+    lobe.scale.z = 0.78
+    pivot.add(lobe)
+    g.add(pivot)
+  }
+  return centered(g)
 }
 
 /** 长条豆袋（躺倒的长枕形） */
@@ -2439,8 +2451,9 @@ function puzzleMat(p: string[]) {
       const z = (j - 1) * 40
       const col = cols[(i + j * 2) % 3]
       g.add(rugBase(rbox(39.6, 1.2, 39.6, col, { x, z }, 0.4)))
-      if (i < 2) for (const k of [-1, 1]) g.add(rugBase(rbox(3, 1.2, 4, col, { x: x + 20.5, z: z + k * 10 }, 0.4), false))
-      if (j < 2) for (const k of [-1, 1]) g.add(rugBase(rbox(4, 1.2, 3, col, { x: x + k * 10, z: z + 20.5 }, 0.4), false))
+      // 咬合齿伸进相邻地垫：比地垫面高 0.3cm，避免和邻块顶面共面闪烁
+      if (i < 2) for (const k of [-1, 1]) g.add(rugBase(rbox(3, 1.5, 4, col, { x: x + 20.5, z: z + k * 10 }, 0.4), false))
+      if (j < 2) for (const k of [-1, 1]) g.add(rugBase(rbox(4, 1.5, 3, col, { x: x + k * 10, z: z + 20.5 }, 0.4), false))
     }
   return g
 }

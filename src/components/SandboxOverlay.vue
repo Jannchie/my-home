@@ -4,7 +4,8 @@
 //   - 右键（没拖动）家具弹出快捷菜单，右键空地弹出场景菜单；
 //   - 双击家具：镜头平滑聚焦过去；
 //   - 方向键按视角方向微移选中的家具（壁挂物只沿墙走），连按只记一步撤销；
-//   - 在画布里点选家具时，侧栏滚回顶部，让属性区（已排到第一位）直接可见。
+//   - 在画布里点选家具时，侧栏（已切到「属性」页）滚回顶部；
+//   - 触屏：长按（Sandbox3D 判定）通过 sandboxBridge.menu 弹出同一个菜单；工具条按钮放大到 44px，手机上多一个「属性」按钮。
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import * as THREE from 'three'
 import { JIcon } from '@jannchie/icons-vue'
@@ -18,6 +19,9 @@ import { displayName, siblings, variantLabel } from '../three/catalog'
 import { propsOn } from '../surface'
 import { isTyping } from '../dom'
 import { t } from '../i18n'
+import { overlays } from '../ui/feedback'
+import { saved } from '../saved'
+import { device } from '../ui/device'
 import {
   WALL_MODES,
   checkpoint,
@@ -79,9 +83,12 @@ raf = requestAnimationFrame(track)
 let rDown: { x: number; y: number } | null = null
 /** 最近一次在画布上按下的时间：区分「在场景里点选」和「从家具栏放下」 */
 let lastCanvasDown = 0
+/** 最近一次按下是手指：安卓长按会发 contextmenu，触屏的菜单由 Sandbox3D 的长按判定负责，这里忽略 */
+let lastTouch = false
 
 function onDown(e: PointerEvent) {
   lastCanvasDown = performance.now()
+  lastTouch = e.pointerType !== 'mouse'
   menu.value = null
   if (e.button === 2) rDown = { x: e.clientX, y: e.clientY }
   pressing.value = true
@@ -95,7 +102,7 @@ function onMove(e: PointerEvent) {
 }
 function onContext(e: MouseEvent) {
   const b = sandboxBridge.value
-  if (!b || !editing.value || placing.value) return
+  if (!b || !editing.value || placing.value || lastTouch) return
   // 右键拖动是平移视角：拖过了就不弹菜单
   if (rDown && Math.hypot(e.clientX - rDown.x, e.clientY - rDown.y) > 6) return
   const id = b.pick(e)
@@ -126,6 +133,14 @@ function bind(c: HTMLCanvasElement | null) {
   }
 }
 watch(() => sandboxBridge.value?.canvas ?? null, bind, { immediate: true })
+// 触屏长按弹菜单的入口
+watch(
+  sandboxBridge,
+  (b) => {
+    if (b) b.menu = (x, y, id) => openMenu(x, y, id)
+  },
+  { immediate: true },
+)
 window.addEventListener('pointerup', onUp)
 window.addEventListener('pointercancel', onUp)
 window.addEventListener('pointermove', onMove)
@@ -165,6 +180,7 @@ function focusOn(id: string) {
 let lastNudge = 0
 function onKey(e: KeyboardEvent) {
   if (!e.key.startsWith('Arrow') || e.ctrlKey || e.metaKey || e.altKey || isTyping(e)) return
+  if (overlays.help || saved.panelOpen || saved.confirm) return
   const b = sandboxBridge.value
   const id = selId.value
   const f = id ? findFurniture(id) : undefined
@@ -259,7 +275,7 @@ function openMenu(x: number, y: number, id: string | null) {
 
 watch(selId, (id, old) => {
   if (!id || id === old || performance.now() - lastCanvasDown > 600) return
-  const panel = sandboxBridge.value?.canvas.closest('.sandbox')?.querySelector<HTMLElement>('.panel')
+  const panel = sandboxBridge.value?.canvas.closest('.sandbox')?.querySelector<HTMLElement>('.panel .bs-body')
   if (panel && panel.scrollTop > 0) panel.scrollTo({ top: 0, behavior: 'smooth' })
 })
 
@@ -288,6 +304,7 @@ onBeforeUnmount(() => {
     <button class="icon-only" :title="t('聚焦') + ' · ' + t('双击家具')" :aria-label="t('聚焦')" @click="selId && focusOn(selId)"><JIcon :icon="ICONS.focus" :size="15" /></button>
     <button class="icon-only" :title="t('复制') + ' (Ctrl D)'" :aria-label="t('复制')" @click="duplicateSelection"><JIcon :icon="ICONS.duplicate" :size="15" /></button>
     <button class="icon-only danger" :title="t('删除') + ' (Del)'" :aria-label="t('删除')" @click="deleteSelection"><JIcon :icon="ICONS.delete" :size="15" /></button>
+    <button v-if="device.compact" class="icon-only" :title="t('属性')" :aria-label="t('属性')" @click="sandboxBridge?.showProps?.()"><JIcon :icon="ICONS.generateOptions" :size="15" /></button>
   </div>
   <ContextMenu v-if="menu" :x="menu.x" :y="menu.y" :items="menu.items" :title="menu.title" @close="menu = null" />
 </template>
@@ -335,13 +352,12 @@ onBeforeUnmount(() => {
     transform: translate(-50%, calc(-100% - 4px));
   }
 }
-</style>
-
-<style>
-/* 选中家具时，侧栏的属性区排到最前面（侧栏是纵向 flex），不用在长长的设置里找 */
-.sandbox .panel > section.sel {
-  order: -1;
-  box-shadow: inset 3px 0 0 var(--accent);
-  background: var(--surface);
+/* 触屏：按钮 44px；名字在手机上省掉，给按钮腾地方 */
+:root.coarse .fbar button {
+  width: 44px;
+  height: 44px;
+}
+:root.compact .fname {
+  display: none;
 }
 </style>

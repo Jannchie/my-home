@@ -1484,7 +1484,8 @@ function yoshizu(p: string[]) {
     }, { z: 0.05 }),
   )
   for (const y of [1, h - 1]) {
-    const b = cyl(1, 1, w, shade(reed, -0.2), {}, 8)
+    // 压条比帘子长 0.6cm，端面不和帘子侧面共面
+    const b = cyl(1, 1, w + 0.6, shade(reed, -0.2), {}, 8)
     b.rotation.z = PI / 2
     b.position.set(0, y, 0.6)
     pg.add(b)

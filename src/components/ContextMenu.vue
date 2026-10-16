@@ -3,10 +3,13 @@
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { JIcon } from '@jannchie/icons-vue'
 import type { AppIcon } from '../ui/icons'
+import XLogo from './XLogo.vue'
 
 export interface MenuItem {
   label: string
   icon?: AppIcon
+  /** 品牌图标（jannchie-icons 里没有的）：目前只有 X */
+  brand?: 'x'
   /** 右侧的快捷键提示 */
   keys?: string
   danger?: boolean
@@ -83,7 +86,8 @@ onBeforeUnmount(() => {
       <div v-if="it === 'sep'" class="cm-sep" role="separator" />
       <div v-else-if="'header' in it" class="cm-head">{{ it.header }}</div>
       <button v-else role="menuitem" class="cm-item" :class="{ danger: it.danger }" :disabled="it.disabled" @click="run(it)">
-        <JIcon v-if="it.icon" :icon="it.icon" :size="15" />
+        <XLogo v-if="it.brand === 'x'" :size="15" />
+        <JIcon v-else-if="it.icon" :icon="it.icon" :size="15" />
         <span v-else class="cm-ico" />
         <span class="cm-label">{{ it.label }}</span>
         <kbd v-if="it.keys">{{ it.keys }}</kbd>
@@ -171,5 +175,19 @@ onBeforeUnmount(() => {
     opacity: 0;
     transform: translateY(-3px);
   }
+}
+/* 触屏：条目 44px 高，菜单不超出屏幕 */
+:root.coarse .cm {
+  max-width: calc(100vw - 16px);
+  max-height: calc(100dvh - 16px);
+  overflow-y: auto;
+}
+:root.coarse .cm-item {
+  height: 44px;
+  font-size: var(--fs-base);
+}
+/* 触屏没有键盘：快捷键提示不显示 */
+:root.coarse .cm kbd {
+  display: none;
 }
 </style>

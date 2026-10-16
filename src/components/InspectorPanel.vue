@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { FIXTURES, OPENING_LABELS, ROOM_KINDS, area, bbox, edgeInfo, fixtureDepth, fmtArea, fmtJo, fmtRoomArea, isAxisRect, perimeter, rectPoints, type KitchenVariant, type OpeningKind, type RoomKind, TOILET_TYPES, type ToiletType, BUILTIN_TYPES, type BuiltinType, WASHER_STYLES, FRIDGE_STYLES, APPLIANCE_COLORS } from '../model'
+import { FIXTURES, OPENING_LABELS, ROOM_KINDS, area, bbox, edgeInfo, fixtureDepth, fmtArea, fmtJo, fmtRoomArea, isAxisRect, perimeter, rectPoints, type KitchenVariant, type OpeningKind, type RoomKind, TOILET_TYPES, type ToiletType, BUILTIN_TYPES, type BuiltinType } from '../model'
 import { planArea } from '../generate'
 import { RAILING_KINDS, type RailingKind } from '../model'
 import { isIndoor } from '../walls'
@@ -194,18 +194,8 @@ function toggleRecessed() {
         <label class="inline"><input type="checkbox" :checked="!!fixture.recessed" @change="toggleRecessed" /> {{ t('嵌在墙里（不占房间）') }}</label>
         <label class="inline"><input type="checkbox" :checked="!!fixture.open" @change="mutate(() => (fixture!.open = !fixture!.open))" /> {{ t('柜门打开（可往里放东西）') }}</label>
       </template>
-      <template v-if="fixture.kind === 'fridge' || fixture.kind === 'washer'">
-        <label
-          >{{ t('款式') }}
-          <select :value="fixture.style ?? (fixture.kind === 'fridge' ? '3door' : 'drum')" @change="mutate(() => (fixture!.style = str($event) as never))">
-            <option v-for="(label, k) in fixture.kind === 'fridge' ? FRIDGE_STYLES : WASHER_STYLES" :key="k" :value="k">{{ t(label) }}</option>
-          </select>
-        </label>
-        <div class="swatches">
-          <button v-for="c in APPLIANCE_COLORS" :key="c" class="sw" :class="{ on: fixture.color === c }" :style="{ background: c }" :title="c" @click="mutate(() => (fixture!.color = c))" />
-          <input type="color" :value="fixture.color ?? '#f6f6f3'" :title="t('自定义颜色')" @change="mutate(() => (fixture!.color = str($event)))" />
-        </div>
-      </template>
+      <p v-if="fixture.kind === 'fridge'" class="hint">{{ t('冰箱位只是预留的空间。冰箱本身是家具：一键布置会按户型和住户风格放一台，也可以在 3D 沙盘或素材库里自己挑款式和颜色。') }}</p>
+      <p v-if="fixture.kind === 'washer'" class="hint">{{ t('洗衣机位是防水盘和给排水口。洗衣机本身是家具：一键布置会按户型和住户风格放一台，也可以在 3D 沙盘或素材库里自己挑款式和颜色。') }}</p>
       <label v-if="fixture.kind === 'toilet'"
         >{{ t('类型') }}
         <select :value="fixture.toiletType ?? 'washlet'" @change="mutate(() => (fixture!.toiletType = str($event) as ToiletType))">
@@ -419,5 +409,17 @@ dd {
   padding: 0;
   border: none;
   background: none;
+}
+/* 手机：放在底部抽屉里（BottomSheet），不再是固定宽度的侧栏；滚动交给抽屉的内容区 */
+:root.compact .panel {
+  width: auto;
+  border-left: 0;
+  background: transparent;
+  overflow: visible;
+  padding: 4px 16px 20px;
+}
+/* 触屏：房间列表行高 ≥ 44px，好点 */
+:root.coarse .rooms li {
+  min-height: 44px;
 }
 </style>

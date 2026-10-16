@@ -26,7 +26,7 @@ import { isIndoor, sharedIntervals, wallSegments, wallThicknessAt } from '../wal
 import { tatamiLayout } from '../tatami'
 import { addOutlines, ball, capsule, cyl, mergeMeshes, rbox, shade, toon } from './toon'
 import { glow } from './kit'
-import { fridgeModel, washerModel } from './appliances'
+import { fridgeSpotModel, washerSpotModel } from './appliances'
 import { effectivePalette } from './colors'
 import { applyPatterns, patternMaterial } from './fabric'
 import {
@@ -1206,10 +1206,11 @@ export function fixtureModel(f: Fixture, wallH: number) {
       return toiletModel(f.w, d, f.toiletType ?? 'washlet')
     case 'basin':
       return basinModel(f.w, d)
+    // 洗衣机位 / 冰箱位：只画防水盘 + 给排水口 / 地面标记，机器是摆在上面的家具
     case 'washer':
-      return washerModel(f, d)
+      return washerSpotModel(f.w, d)
     case 'fridge':
-      return fridgeModel(f, d)
+      return fridgeSpotModel(f.w, d)
     case 'outdoor': {
       const unit = outdoorUnitModel(f.w, d)
       if (!f.stackOn) return unit
@@ -1298,6 +1299,7 @@ export function furnitureModel(fu: Furniture) {
   applyPatterns(m, pal, fu.patterns)
   g.add(m)
   g.userData.furnitureId = fu.id
+  g.userData.asset = fu.asset
   return g
 }
 

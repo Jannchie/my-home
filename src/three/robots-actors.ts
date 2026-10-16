@@ -3,7 +3,7 @@
 // 坐标约定和 critters.ts 一致：单位 cm，原点在地面（无人机在起落架底部），正面朝 +z。
 //   无人机：root → body（机身枢轴，飞行时前倾 / 侧倾）→ 机身、机臂、电机；props 是各个桨的节点（绕 y 转）。
 //   四足机器狗：root → inner（整体缩放，小型机器狗用）→ body（躯干，俯仰）→ head → lidar（头部激光雷达，绕 y 缓慢转）；
-//     四条腿的 hip 节点不挂在躯干下面，而是每帧按躯干姿态算出髋关节的位置，再用两连杆 IK 让脚落在目标点上（膝盖朝后）。
+//     四条腿的 hip 节点不挂在躯干下面，而是每帧按躯干姿态算出髋关节的位置，再用两连杆 IK 让脚落在目标点上（前腿膝盖朝后、后腿膝盖朝前的 X 形腿型）。
 //   轮式机器人：root → inner → body（轻微起伏）→ head（转头看人），eyes 是屏幕上的眼睛（scale.y 压扁 = 眨眼），wheels 绕 x 转。
 //   人形机器人：root → inner → torso（呼吸 / 重心晃动）→ head、两条手臂（shoulder → elbow），挥手 / 转头。
 // 外形参考消费级航拍无人机、四足机器狗、人形机器人的常见形态语言，但不带任何品牌名、型号、logo。
@@ -393,6 +393,12 @@ function ik2(dz: number, dy: number): [number, number] {
   return [a1, abs2 - a1]
 }
 
+/** 后腿用：膝盖朝前的镜像解（X 形腿型，趴下时后腿折在身体两侧，不会向后翘出） */
+function ik2Fwd(dz: number, dy: number): [number, number] {
+  const [a1, a2] = ik2(-dz, dy)
+  return [-a1, -a2]
+}
+
 /** 四足机器狗：深色机身、头部面罩 + 下巴处的激光雷达、外露的髋 / 膝电机圆盘。pal = [机身, 关节 / 小腿, 点缀灯色] */
 function buildQuad(id: string, b: RoboBreed, pal: string[]): RoboRig {
   const [main = '#3d4047', joint = '#22242a', acc = '#7fd8ff'] = pal
@@ -475,9 +481,10 @@ function poseQuad(r: RoboRig, m: RoboMotion) {
     L.hip.position.copy(tmpV)
     const q = m.phase + off[i]
     const front = i < 2
-    const fz = L.local.z + A * Math.sin(q) - 3.5 * rest + (front ? 6 * st : 0)
+    // 趴下时脚落在髋关节正下方附近：大腿接近水平、小腿折回身下，膝盖贴着机身两侧
+    const fz = L.local.z + A * Math.sin(q) + (front ? -0.5 : 0.5) * rest + (front ? 6 * st : 0)
     const fy = FOOT_R + 4 * Math.max(0, Math.cos(q)) * m.gait
-    const [a1, a2] = ik2(fz - tmpV.z, fy - tmpV.y)
+    const [a1, a2] = front ? ik2(fz - tmpV.z, fy - tmpV.y) : ik2Fwd(fz - tmpV.z, fy - tmpV.y)
     L.hip.rotation.x = a1
     L.knee.rotation.x = a2
   }

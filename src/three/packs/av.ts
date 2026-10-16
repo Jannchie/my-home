@@ -1344,7 +1344,7 @@ function theaterCurtain(p: string[]) {
     g.add(ball(23, shade(velvet, 0.03), { x, y: top - 26, z: 0 }, [1, 0.35, 0.22]))
     g.add(cyl(1.6, 0.5, 6, gold, { x: x + 23, y: top - 34, z: 1.5 }, 10))
   }
-  g.add(rbox(234, 3, 11, gold, { y: top - 3, z: -1 }, 0.8))
+  g.add(rbox(234, 3, 11, gold, { y: top - 2.7, z: -1 }, 0.8)) // 比丝绒帘头高 0.3，顶面不共面
   return g
 }
 

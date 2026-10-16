@@ -660,7 +660,8 @@ function elliptical(p: string[]) {
     g.add(bar([s * 27, 95, -58], [s * 27, 160, -50], 2, frame))
     g.add(bar([s * 27, 125, -55], [s * 27, 158, -50], 2.6, RUBBER))
     g.add(cylX(3, 6, frame, s * 27, 95, -58, 14))
-    g.add(cylX(3.5, 4, acc, x, 30, 52 + s * 0.01, 14))
+    // 曲柄轴头比连杆宽一点，两侧面不和连杆共面
+    g.add(cylX(3.5, 4.8, acc, x, 30, 52 + s * 0.01, 14))
   }
   g.add(rbox(60, 6, 6, frame, { y: 92, z: -61 }, 1))
   return g

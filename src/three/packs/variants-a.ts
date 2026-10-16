@@ -363,7 +363,8 @@ function standLift(p: string[]) {
   g.add(rbox(w, 3, 3, frame, { y: top - 3.5, z: d / 2 - 3 }, 0.8))
   // 吊绳上端挂在顶框的两根横梁上
   for (const z of [z1, z2]) g.add(rbox(w - 5, 2.6, 3, frame, { y: top - 3.6, z }, 0.8))
-  for (const z of [z1, z2]) g.add(cylX(1.2, w - 14, bar, 0, by, z))
+  // 晾杆两端缩进吊块里 0.3cm，端面不和吊块侧面共面
+  for (const z of [z1, z2]) g.add(cylX(1.2, w - 14.6, bar, 0, by, z))
   // 摇把盒（左侧立轨上）
   const bx = -w / 2 + 8.5
   g.add(rbox(7, 12, 5, box, { x: bx, y: 104, z: zb + 1 }, 1.2))

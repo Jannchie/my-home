@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // 新手引导：第一次打开时在右下角弹一张小卡片，三步说明主要流程，点哪一步就直接去哪。
 // 关掉后记在 localStorage（my-home:welcomed），之后可以从快捷键帮助里再看到这些操作。
-import { onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
+import { device } from '../ui/device'
 import { JIcon } from '@jannchie/icons-vue'
 import { ICONS, VIEW_ICONS } from '../ui/icons'
 import { overlays } from '../ui/feedback'
@@ -10,11 +11,12 @@ import { t } from '../i18n'
 
 const KEY = 'my-home:welcomed'
 
-const steps: { view: ViewMode; label: string; desc: string }[] = [
-  { view: '2d', label: '画户型', desc: '在平面图里画房间、放门窗，或者点「随机生成」先来一套。' },
-  { view: '3d', label: '布置家具', desc: '到 3D 沙盘点「一键布置家具」，再拖动、旋转、换配色。' },
-  { view: 'lib', label: '挑素材', desc: '在素材库按风格和尺寸挑家具，双击卡片放进沙盘。' },
-]
+// 触屏上的说法换成「点按 / 长按 / 双指」
+const steps = computed<{ view: ViewMode; label: string; desc: string }[]>(() => [
+  { view: '2d', label: '画户型', desc: device.coarse ? '在平面图里画房间、放门窗，或者点「生成」先来一套；单指拖动画布，双指缩放。' : '在平面图里画房间、放门窗，或者点「随机生成」先来一套。' },
+  { view: '3d', label: '布置家具', desc: device.coarse ? '到 3D 沙盘点「一键布置家具」；点家具选中，再按住拖动，双指拧转旋转，长按弹出菜单。' : '到 3D 沙盘点「一键布置家具」，再拖动、旋转、换配色。' },
+  { view: 'lib', label: '挑素材', desc: device.coarse ? '在素材库按风格和尺寸挑家具，点「放进沙盘」摆进 3D 沙盘。' : '在素材库按风格和尺寸挑家具，双击卡片放进沙盘。' },
+])
 
 onMounted(() => {
   try {
@@ -62,7 +64,7 @@ function openHelp() {
         </li>
       </ol>
       <footer>
-        <button @click="openHelp"><JIcon :icon="ICONS.keyboard" />{{ t('查看快捷键') }}</button>
+        <button @click="openHelp"><JIcon :icon="ICONS.keyboard" />{{ device.coarse ? t('查看手势') : t('查看快捷键') }}</button>
         <button class="primary" @click="dismiss">{{ t('开始使用') }}</button>
       </footer>
     </aside>
@@ -162,5 +164,22 @@ footer {
 .ob-leave-to {
   opacity: 0;
   transform: translateY(10px);
+}
+/* 手机：贴底部的整宽卡片，压在底部抽屉上面 */
+:root.compact .ob {
+  left: 8px;
+  right: 8px;
+  bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  width: auto;
+  max-width: none;
+  z-index: 45;
+}
+:root.coarse .step {
+  min-height: 52px;
+}
+:root.coarse footer button,
+:root.coarse .x {
+  height: 44px;
+  min-width: 44px;
 }
 </style>

@@ -162,12 +162,15 @@ export function overlapsOthers(plan: Plan, selfId: string | null, asset: string,
   const def = ASSET_MAP.get(asset)
   if (!def || def.mount || def.h <= 3) return false
   const me = shrink(furnitureBox(asset, x, y, rot), 2)
+  // 洗衣机上方置物架本来就跨在洗衣机 / 干衣机上
+  const straddle = (x?: string, y?: string) => (x === 'laundry-rack' && (y === 'washer' || y === 'dryer')) || (y === 'laundry-rack' && (x === 'washer' || x === 'dryer'))
   const solid = (id: string, a: string, z?: number) => {
     const d = ASSET_MAP.get(a)
-    return id !== selfId && !z && !!d && !d.mount && d.h > 3
+    return id !== selfId && !z && !!d && !d.mount && d.h > 3 && !straddle(def.family, d.family)
   }
   if (plan.furniture.some((f) => solid(f.id, f.asset, f.z) && boxHit(me, shrink(furnitureBox(f.asset, f.x, f.y, f.rot), 2)))) return true
-  return plan.fixtures.some((f) => f.kind !== 'outdoor' && boxHit(me, fixtureBox(f)))
+  // 冰箱位 / 洗衣机位只是预留的空间，冰箱、洗衣机（以及别的家具）可以放在上面
+  return plan.fixtures.some((f) => f.kind !== 'outdoor' && f.kind !== 'fridge' && f.kind !== 'washer' && boxHit(me, fixtureBox(f)))
 }
 
 const shrink = (b: Box, k: number): Box => ({ x0: b.x0 + k, y0: b.y0 + k, x1: b.x1 - k, y1: b.y1 - k })

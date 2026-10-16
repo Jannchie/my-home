@@ -1429,7 +1429,7 @@ const BATH: AssetDef[] = [
   ...[2, 3].map((n) =>
     asset(`wet-bath-corner-shelf-${n}`, '浴室转角架', 'storage', [24, 24, cornerH(n)], WIRE_PALS, cornerShelf(n), {
       family: 'bath-corner-shelf',
-      sizeLabel: `${n} 层`,
+      sizeLabel: `三角钢丝 ${n} 层`,
       mount: CORNER_MOUNT - 4.4,
       surface: CORNER_MOUNT + (n - 1) * CORNER_GAP + 1.2,
       surfaceShape: [TRI(1.5)],

@@ -1,10 +1,10 @@
 // 一键布置：seed 1..40 的摆放质量
 import { beforeAll, describe, expect, test } from 'vitest'
 import * as THREE from 'three'
-import { decorate } from '/src/decorate'
+import { decorate, isOpenShelf } from '/src/decorate'
 import { generateHousehold } from '/src/household'
 import { edgesOf, fixtureBox, onBoundary, pointInPolygon, type Furniture, type Plan } from '/src/model'
-import { supportOf } from '/src/surface'
+import { supportOf, toLocal } from '/src/surface'
 import { ASSET_MAP, type AssetDef } from '/src/three/assets'
 import { bendToWalls, furnitureModel, isPlant, placeFurniture } from '/src/three/house'
 import { wallThicknessAt } from '/src/walls'
@@ -50,6 +50,8 @@ const footprint = (x: Furniture) => rectCorners(x, def(x).w, def(x).d, x.rot)
 /** 椅子、坐垫可以塞到桌子底下 */
 const SEAT = /chair|stool|zabuton|bench|^ch-|^c2-|椅|坐垫|凳|座布団/
 const tucked = (a: AssetDef, b: Furniture) => !!a.surface && SEAT.test(b.asset + def(b).name)
+/** 洗衣机上方置物架跨在洗衣机 / 干衣机（家具）上 */
+const straddles = (a: Furniture, b: Furniture) => def(a).family === 'laundry-rack' && ['washer', 'dryer'].includes(def(b).family ?? '')
 const all = (fn: (c: Case) => string[]) => cases.filter((c) => !c.error).flatMap((c) => fn(c).map((m) => `seed ${c.seed}: ${m}`))
 
 describe('一键布置 seed 1..40', () => {
@@ -63,7 +65,7 @@ describe('一键布置 seed 1..40', () => {
       const fl = f.filter(isFloor)
       for (let i = 0; i < fl.length; i++)
         for (let j = i + 1; j < fl.length; j++) {
-          if (tucked(def(fl[i]), fl[j]) || tucked(def(fl[j]), fl[i])) continue
+          if (tucked(def(fl[i]), fl[j]) || tucked(def(fl[j]), fl[i]) || straddles(fl[i], fl[j]) || straddles(fl[j], fl[i])) continue
           const p = penetration(footprint(fl[i]), footprint(fl[j]))
           if (p > 4) out.push(`${fl[i].asset} × ${fl[j].asset} ${p.toFixed(1)}cm`)
         }
@@ -72,11 +74,12 @@ describe('一键布置 seed 1..40', () => {
     expect(bad.length, bad.join('\n')).toBeLessThanOrEqual(LIMIT.overlap)
   })
 
-  test('落地家具不压设备本体（洗衣机置物架跨在洗衣机上除外）', () => {
+  test('落地家具不压设备本体（冰箱 / 洗衣机放在冰箱位 / 洗衣机位上、洗衣机置物架跨在洗衣机位上除外）', () => {
     const bad = all(({ plan, f }) =>
       f.filter(isFloor).flatMap((x) =>
         plan.fixtures
-          .filter((fx) => !(fx.kind === 'washer' && def(x).family === 'laundry-rack'))
+          // 冰箱位 / 洗衣机位是给机器预留的空间：冰箱、洗衣机、干衣机本来就放在上面
+          .filter((fx) => !(fx.kind === 'washer' && ['laundry-rack', 'washer', 'dryer'].includes(def(x).family ?? '')) && !(fx.kind === 'fridge' && def(x).family === 'fridge'))
           .flatMap((fx) => {
             const b = fixtureBox(fx)
             const p = penetration(footprint(x), [
@@ -151,6 +154,30 @@ describe('一键布置 seed 1..40', () => {
       plan.rooms.some((r) => r.kind === 'bath')
         ? [!has(f, 'wet-shampoo') && '没有洗发水', !has(f, 'wet-body-soap') && '没有沐浴露'].filter((x): x is string => !!x)
         : [],
+    )
+    expect(bad).toEqual([])
+  })
+
+  test('多宝格、书架、展示柜的开放格子每一格都放了东西', () => {
+    const bad = all(({ f }) =>
+      f.flatMap((p) => {
+        const pd = def(p)
+        if (p.z || !isOpenShelf(pd)) return []
+        return pd.surfaces!.flatMap((lv) =>
+          lv.kind === 'hook'
+            ? []
+            : (lv.shape?.length ? lv.shape : [[[-pd.w / 2, -pd.d / 2], [pd.w / 2, pd.d / 2]] as [number, number][]]).flatMap((cell) => {
+                const xs = cell.map((q) => q[0])
+                const zs = cell.map((q) => q[1])
+                const has = f.some((o) => {
+                  if (o.z === undefined || Math.abs(o.z - lv.y) > 0.6) return false
+                  const l = toLocal(p, o)
+                  return l.x >= Math.min(...xs) - 1 && l.x <= Math.max(...xs) + 1 && l.y >= Math.min(...zs) - 1 && l.y <= Math.max(...zs) + 1
+                })
+                return has ? [] : [`${p.asset} y=${lv.y} 的格子是空的`]
+              }),
+        )
+      }),
     )
     expect(bad).toEqual([])
   })

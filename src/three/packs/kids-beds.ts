@@ -935,7 +935,8 @@ function extendBed(p: string[]) {
   g.add(holePanel(82, 40, 3, frame, [{ kind: 'rect', x: 0, y: 16, w: 30, h: 8, r: 4 }], { y: 28, z: -85 }, 10))
   // 床尾段：侧轨在床头段侧轨内侧滑动
   for (const sx of [-1, 1]) {
-    g.add(rbox(3, 10, 100, shade(frame, 0.06), { x: sx * 42.5, y: 15, z: 38 }, 1))
+    // 侧轨略窄、略短：内侧面、前端面不和床脚共面
+    g.add(rbox(2.6, 10, 99.4, shade(frame, 0.06), { x: sx * 42.7, y: 15, z: 37.7 }, 1))
     g.add(rbox(5, 50, 5, frame, { x: sx * 42.5, z: 85.5 }, 1.4))
     for (let i = 0; i < 6; i++) g.add(rbox(0.6, i % 2 ? 2 : 4, 0.8, acc, { x: sx * 44.2, y: 19, z: 14 + i * 5 }, 0.2))
   }

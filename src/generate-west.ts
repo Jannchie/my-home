@@ -7,7 +7,7 @@
 //         中间一条 Hallway 通到开放的客餐厨。
 // 入口不下沉（室内可穿鞋），没有日式的鞋柜要求；空调是中央空调，Patio 上放一台室外机。
 
-import { pointInPolygon, type FridgeStyle, type Plan, type Room } from './model'
+import { pointInPolygon, type Plan, type Room } from './model'
 import {
   balconyAlong,
   bandLayout,
@@ -119,6 +119,7 @@ function layout(seed: number, o: { bedrooms: 'random' | 1 | 2 | 3 | 4; corner: '
   const beds = c.rooms.filter((r) => r.kind === 'western' && r.name !== 'Office').length
   const plan: Plan = {
     version: 1,
+    appliancesAsFurniture: true,
     name: `${t('{n}室{b}卫', { n: beds, b: `${full}${halfN ? '.5' : ''}` })}${c.rooms.some((r) => r.name === 'Office') ? t('+书房') : ''}${corner ? t('·边户') : ''} ${planArea({ rooms: c.rooms }).toFixed(1)}㎡ #${seed}`,
     wall: WALL,
     wallOuter: WALL_OUTER,
@@ -153,13 +154,8 @@ function furnish({ c, plan }: { c: Ctx; plan: Plan }): Plan {
       else if (r.name === 'Primary Bath') placeBathroom(plan, r, { wet: c.chance(0.55) ? 'tub' : 'shower', basins: 2, basinW: [75, 70, 65], basinD: 55 })
       else placeBathroom(plan, r, { wet: c.chance(0.7) ? 'tub' : 'shower', basins: 1, basinW: [80, 70, 60], basinD: 55 })
     } else if (r.name === 'Laundry') {
-      // 洗衣机 + 烘干机并排；放不下就叠放
-      const pair = put(r, { kind: 'washer', lengths: [140, 130], depth: 70 })
-      if (pair) pair.style = 'pair'
-      else {
-        const st = put(r, { kind: 'washer', lengths: [70, 64], depth: 68 })
-        if (st) st.style = 'stack'
-      }
+      // 洗衣机位：宽的放洗衣机 + 烘干机并排，窄的放叠放款（一键布置按位的宽度挑）
+      if (!put(r, { kind: 'washer', lengths: [140, 130], depth: 70 })) put(r, { kind: 'washer', lengths: [70, 64], depth: 68 })
       if (c.chance(0.6)) put(r, { kind: 'basin', lengths: [60, 50], depth: 50 })
     } else if (r.name === 'Pantry') {
       const f = put(r, { kind: 'builtin', lengths: [130, 120, 100, 90, 80], depth: 40 })
@@ -173,13 +169,7 @@ function furnish({ c, plan }: { c: Ctx; plan: Plan }): Plan {
   const patio = plan.rooms.find((r) => r.kind === 'balcony')
   if (patio) put(patio, { kind: 'outdoor', lengths: [80], depth: 40, edges: 'house', avoidWindows: true }) ?? put(patio, { kind: 'outdoor', lengths: [80], depth: 40, avoidWindows: true })
 
-  for (const f of plan.fixtures) {
-    if (f.kind === 'fridge') {
-      f.style = c.pick<FridgeStyle>(f.w >= 85 ? ['side', 'side', 'french'] : ['french', '3door'])
-      f.color = c.pick(['#c9ccd1', '#c9ccd1', '#c9ccd1', '#2f3134', '#f6f6f3'])
-    } else if (f.kind === 'washer') f.color = c.pick(['#f6f6f3', '#f6f6f3', '#8a8d93', '#2f3134'])
-    else if (f.kind === 'toilet') f.toiletType = 'basic'
-  }
+  for (const f of plan.fixtures) if (f.kind === 'toilet') f.toiletType = 'basic'
   return plan
 }
 

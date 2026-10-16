@@ -258,7 +258,7 @@ function towelStack(variant: string, n: number) {
       const t = buildGarment(s, 'folded')
       t.position.set(((i * 37) % 5) * 0.2 - 0.4, y, ((i * 23) % 3) * 0.3 - 0.3)
       g.add(t)
-      y += new THREE.Box3().setFromObject(t, true).getSize(new THREE.Vector3()).y - 0.1
+      y += new THREE.Box3().setFromObject(t, true).getSize(new THREE.Vector3()).y - 0.35 // 减去织带高出顶面的 0.3，上一条压实在下一条上
     }
     return ground(g)
   }

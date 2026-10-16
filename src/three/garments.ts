@@ -872,7 +872,8 @@ function towelFolded(s: GarmentSpec, m: Mats) {
   const lh = h / n
   for (let i = 0; i < n; i++) g.add(rb(i === 1 ? w - 0.5 : w, lh + 0.05, i === 1 ? d - 0.5 : d, m.main, 0, lh * (i + 0.5), 0, Math.min(1, lh * 0.45)))
   // 前沿的折边 + 一道织带
-  g.add(bx(w * 0.08 + 1.5, h + 0.1, d + 0.3, m.sub, w * 0.3, h / 2, 0))
+  // 织带比毛巾顶面高出 0.3，避免和顶层毛巾共面闪烁
+  g.add(bx(w * 0.08 + 1.5, h + 0.15, d + 0.3, m.sub, w * 0.3, 0.15 + (h + 0.15) / 2, 0))
   return g
 }
 

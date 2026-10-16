@@ -16,6 +16,11 @@ export interface Member {
   job: JobId
   traits: TraitId[]
   interests: InterestId[]
+  /**
+   * 各兴趣的投入程度 Lv.1–4（没写的按 Lv.1）：等级越高，相关的东西越多越专业——
+   * 例如数码 Lv.1 一台台式机、Lv.2 高端 RGB 主机、Lv.3 服务器机柜 / NAS、Lv.4 人形机器人。见 INTEREST_TIERS。
+   */
+  levels?: Partial<Record<InterestId, Lv>>
   /** 这个人的房间用什么风格（孩子、合租室友可以和全家不同） */
   style: StyleTag
 }
@@ -96,6 +101,7 @@ export type InterestId =
   | 'fishing'
   | 'outdoor'
   | 'maker'
+  | 'puzzles'
 
 export const INTERESTS: Record<InterestId, { label: string; floor?: Matcher; props?: Matcher; wall?: Matcher; style?: StyleTag }> = {
   gaming: { label: '游戏', props: { re: /pad-|handheld|gameboy|game-console|headset|arcade|vr\b|手柄|掌机|耳麦/ }, floor: { re: /电竞椅|gaming/ } },
@@ -103,7 +109,8 @@ export const INTERESTS: Record<InterestId, { label: string; floor?: Matcher; pro
   reading: { label: '读书', props: { re: /book|书(?!架|柜|桌)/ }, floor: { re: /bookshelf|bookcase|书架|书柜/ } },
   otaku: { label: '动漫', props: { re: /漫画|manga|figure|手办|立牌|应援|gacha|扭蛋/ }, floor: { re: /展示柜|showcase|display/ } },
   fitness: { label: '健身', floor: { cats: ['fitness'] }, props: { cats: ['fitness'] } },
-  photo: { label: '摄影', floor: { re: /dry-|防潮|tripod|三脚架/ }, props: { re: /camera|lens|相机|镜头|拍立得/ } },
+  // 防潮柜、相机展示柜只按等级摆（Lv.3 起，见 INTEREST_TIERS），随机池里只有三脚架
+  photo: { label: '摄影', floor: { re: /tripod|三脚架/ }, props: { re: /camera|lens|相机|镜头|拍立得/ } },
   cooking: { label: '料理', props: { cats: ['kitchenware'] } },
   plants: { label: '园艺', floor: { cats: ['plants'] }, props: { re: /gd-|succulent|cactus|air-plant|bonsai|多肉|盆栽|仙人掌|花瓶|浇水壶|花盆/ }, style: 'nordic' },
   crafts: { label: '手作', props: { re: /毛线|缝纫|刺绣|书法|水彩|陶艺|knit|sew|embroid|paint/ }, floor: { re: /easel|画架|缝纫/ } },
@@ -122,12 +129,141 @@ export const INTERESTS: Record<InterestId, { label: string; floor?: Matcher; pro
   sports: { label: '运动', props: { re: /ball|球|racket|(?<![航自])拍|glove|手套|helmet|头盔/ }, floor: { re: /surf|冲浪|golf|高尔夫|bike|自行车|skate|滑板|ski|滑雪/ } },
   science: { label: '天文科学', props: { re: /telescope|望远镜|microscope|显微镜|globe|地球仪|星图|flask|烧瓶|矿石/ }, floor: { re: /telescope|望远镜/ } },
   beauty: { label: '美妆', props: { cats: ['toiletry'] }, floor: { re: /mirror|镜|vanity|梳妆|clothes-rail|挂衣/ } },
-  boardgames: { label: '桌游棋牌', props: { re: /桌游|棋|麻将|花札|かるた|扑克|骰|board-?game|chess|shogi|mahjong|jenga|叠叠乐|卡牌/ }, floor: { re: /麻将桌/ } },
+  // 麻将桌 / 棋桌按地区由 Decorator.specialties 成套摆（桌子 + 座位 + 台面上的牌 / 棋盘），随机池里只有台面摆件；
+  // 棋罐要成对摆在棋盘边，不进随机池
+  boardgames: { label: '桌游棋牌', props: { re: /^(?!hg-go-bowl)(?=.*(桌游|棋|麻将|花札|かるた|扑克|骰|board-?game|chess|shogi|mahjong|jenga|叠叠乐|卡牌))(?!.*棋桌)/ } },
   collecting: { label: '收藏', props: { re: /col-|瓷|矿石|晶|化石|硬币|邮票|coin|stamp|mineral|赏盘|茶碗/ }, floor: { re: /陈列柜|博古架|curio/ }, style: 'retro' },
   movies: { label: '电影', props: { re: /av-|投影|CD|dvd|蓝光|vhs|卡带|cassette|boombox|爆米花|海报/ }, floor: { re: /幕布|projector|家庭影院|soundbar|回音壁|落地音箱|hifi/i } },
   fishing: { label: '钓鱼', floor: { re: /钓|fishing/ }, props: { re: /渔具|拟饵|tackle|鱼篓/ } },
   outdoor: { label: '户外登山', floor: { re: /gr-.*(tent|pack|bag)|帐篷|登山包|露营|camp|ski|滑雪/ }, props: { re: /gr-|登山|攀岩|露营|头灯|carabiner|harness|trekking|球(?!鞋)/ } },
   maker: { label: '电子手工', floor: { re: /mk-.*(bench|cabinet|chest)|工作台|工具柜|元件柜/ }, props: { re: /mk-|pcb|arduino|开发板|面包板|烙铁|示波器|万用表|solder|oscillo|multimeter/i }, style: 'industrial' },
+  // 收藏展示架、计时器垫按等级单独摆（INTEREST_TIERS），随机池里不放
+  puzzles: { label: '益智', props: { re: /^(pz-(?!cube-shelf|speed-timer)|prop-rubiks)/ } },
+}
+
+// ---------- 兴趣等级：Lv.1 入门 → Lv.4 骨灰级，每级在上一级基础上再加东西 ----------
+
+export type Lv = 1 | 2 | 3 | 4
+export const LV_LABELS: Record<Lv, string> = { 1: '入门', 2: '爱好者', 3: '发烧友', 4: '骨灰级' }
+
+/**
+ * 每一级新增的东西（按 id / 名字正则，各挑一件）：floor 落地靠墙、props 台面摆件、wall 壁挂。
+ * room：这一级想要一整间专用房（有空房时优先分给它）。没列的兴趣只按通用匹配撒东西，件数随等级增加。
+ */
+export interface Tier {
+  floor?: RegExp[]
+  props?: RegExp[]
+  wall?: RegExp[]
+  room?: boolean
+}
+export const INTEREST_TIERS: Partial<Record<InterestId, Tier[]>> = {
+  tech: [
+    { floor: [/^of-pc-(mid-plain|itx)$/], props: [/^of-kb-(tkl|60)/] },
+    { floor: [/^of-pc-(mid|full)$/], props: [/^of-monitor-gaming$/] },
+    { floor: [/^of-server-rack$/], props: [/^of-nas-/] },
+    { floor: [/^rb-humanoid/], props: [/^rb-arm$/], room: true },
+  ],
+  // 相机多了才有柜子：Lv.3 小防潮柜 + 相机展示柜（摆满机身和镜头），Lv.4 大防潮柜
+  photo: [
+    { props: [/^of-camera-(mirrorless|instant)$/, /^of-lens-(pancake|35)$/] },
+    { props: [/^of-camera-dslr$/, /^of-lens-(2470|wide)$/] },
+    { floor: [/^of-camera-showcase$/, /^of-dry-(30|50)$/], props: [/^of-lens-(70200|macro)$/, /^of-camera-film$/] },
+    { floor: [/^of-dry-(100|160)$/], props: [/^rb-drone-aerial$/, /^rb-gimbal$/], room: true },
+  ],
+  streaming: [
+    { props: [/^of-mic-(condenser|dynamic)$/, /^of-tv-camera$/] },
+    { props: [/^of-audio-interface$/, /^of-ring-light$/, /^of-mic-boom$/] },
+    { floor: [/^of-green-screen$/, /^of-softbox$/], wall: [/^hg-acoustic$/] },
+    { floor: [/^of-ring-light-floor$/], props: [/^rb-drone-(mini|fpv)$/], room: true },
+  ],
+  gaming: [
+    { props: [/game-console|pad-|手柄/] },
+    { props: [/^of-(gaming-headset|headset-stand-rgb)$/, /^of-kb-.*-rgb$/] },
+    { floor: [/^of-pc-(mid|full)$/], props: [/^of-monitor-gaming$/, /^of-mousepad-rgb$/], wall: [/^hg-hex-lights$/] },
+    { floor: [/^of-pc-full$/, /展示柜|showcase/], room: true },
+  ],
+  boardgames: [
+    { props: [/^int-(poker|mahjong-case)/] },
+    { props: [/^(hg-go-board|int-(chess|xiangqi|shogi)(-|$))/, /^int-mahjong-mat/] },
+    // Lv.3 的牌桌 / 棋桌按地区单独摆（Decorator.specialties），这里只多撒几样
+    { props: [/^(int-boardgame|int-chess|hg-go-board)/] },
+    { room: true },
+  ],
+  music: [
+    { props: [/metronome|节拍|谱/] },
+    { floor: [/^(?!.*(piano|钢琴)).*(guitar|吉他|keyboard|电子琴|ukulele|尤克里里)/] },
+    { wall: [/吉他|guitar/, /^hg-acoustic$/] },
+    { floor: [/piano|钢琴|drum|鼓/], room: true },
+  ],
+  fitness: [
+    { props: [/dumbbell|哑铃|yoga|瑜伽/] },
+    { floor: [/yoga-mat|瑜伽垫|kettlebell|壶铃/] },
+    { floor: [/treadmill|跑步机|bike|单车|bench|卧推|rack/] },
+    { floor: [/power-rack|深蹲|rowing|划船/], room: true },
+  ],
+  reading: [
+    { props: [/book|书(?!架|柜|桌)/] },
+    { floor: [/bookshelf|bookcase|书架|书柜/] },
+    { floor: [/bookshelf|bookcase|书架|书柜/, /armchair|单人沙发|阅读椅|摇椅/] },
+    { room: true },
+  ],
+  otaku: [
+    { props: [/漫画|manga|figure|手办|立牌/] },
+    { props: [/^int-figure-case$|gacha|扭蛋/] },
+    { floor: [/^col-lit-showcase$|展示柜|showcase/] },
+    { wall: [/^col-wall-showcase$/], room: true },
+  ],
+  collecting: [
+    { props: [/col-|硬币|邮票|coin|stamp/] },
+    { props: [/col-|矿石|化石|mineral/] },
+    { floor: [/陈列柜|博古架|curio|^col-lit-showcase$/] },
+    { wall: [/^col-wall-showcase$/], room: true },
+  ],
+  puzzles: [
+    { props: [/^(prop-rubiks-cube|pz-cube-3)$/] },
+    { props: [/^pz-(luban|nine-rings|huarong|tangram|hanoi)/] },
+    { props: [/^pz-cube-stand$/, /^pz-speed-timer$/] },
+    { props: [/^pz-cube-shelf$/, /^pz-(megaminx|pyraminx|mirror)$/] },
+  ],
+}
+
+/** 会拿奖的兴趣：等级 ≥ 3 时可能有奖杯、奖牌、证书 */
+export const COMPETITIVE: InterestId[] = ['sports', 'fitness', 'music', 'boardgames', 'gaming', 'science', 'photo', 'outdoor', 'fishing', 'crafts', 'puzzles', 'cooking', 'reading']
+
+/** 这个人在某个兴趣上的等级（没有这个兴趣 → 0） */
+export function levelOf(m: Member, it: InterestId): 0 | Lv {
+  return m.interests.includes(it) ? (m.levels?.[it] ?? 1) : 0
+}
+/** 全家在某个兴趣上的最高等级 */
+export function topLevel(hh: Household | undefined, it: InterestId): 0 | Lv {
+  return (hh?.members.reduce<number>((a, m) => Math.max(a, levelOf(m, it)), 0) ?? 0) as 0 | Lv
+}
+
+/** 户型能容下的最高等级：小户型放不下 Lv.4 的整间游戏室 / 机柜 */
+export function levelCap(plan: Plan): Lv {
+  const m2 = plan.rooms.reduce((sum, r) => sum + (r.kind === 'balcony' ? 0 : area(r.points)), 0) / 10000
+  const n = plan.rooms.filter((r) => r.kind === 'western' || r.kind === 'japanese').length
+  return m2 < 35 || n < 1 ? 2 : m2 < 55 || n < 2 ? 3 : 4
+}
+
+/**
+ * 推算一个人各兴趣的等级（用确定性哈希，不消耗住户生成的随机序列）：
+ *   基础 1–4（越高越少见）；职业对口 +1；收藏癖 +1、极简 −1；长辈的茶道 / 园艺 / 棋牌 +1；
+ *   小孩最多 Lv.2、少年最多 Lv.3；最后受户型上限约束。
+ */
+function levelsFor(m: Member, seed: number, idx: number, cap: Lv): Partial<Record<InterestId, Lv>> {
+  const out: Partial<Record<InterestId, Lv>> = {}
+  m.interests.forEach((it, k) => {
+    const h = hash01(seed, 1000 + idx * 37 + k)
+    let lv = h < 0.36 ? 1 : h < 0.7 ? 2 : h < 0.92 ? 3 : 4
+    if (JOBS[m.job].interests?.includes(it)) lv++
+    if (m.traits.includes('collector')) lv++
+    if (m.traits.includes('minimal')) lv--
+    if (m.age >= 65 && (it === 'tea' || it === 'plants' || it === 'boardgames')) lv++
+    const ageCap = m.age < 10 ? 2 : m.age < 16 ? 3 : 4
+    out[it] = Math.max(1, Math.min(lv, ageCap, cap)) as Lv
+  })
+  return out
 }
 
 // ---------- 职业：决定工作台和额外兴趣 ----------
@@ -179,7 +315,7 @@ function pickN<T>(rand: Rand, xs: readonly T[], n: number): T[] {
 
 const ADULT_JOBS: JobId[] = ['office', 'office', 'programmer', 'engineer', 'designer', 'streamer', 'photographer', 'musician', 'chef', 'teacher', 'nurse', 'researcher']
 const ALL_INTERESTS = Object.keys(INTERESTS) as InterestId[]
-const KID_INTERESTS: InterestId[] = ['gaming', 'otaku', 'sports', 'reading', 'models', 'music', 'crafts', 'science', 'boardgames', 'smallpets']
+const KID_INTERESTS: InterestId[] = ['gaming', 'otaku', 'sports', 'reading', 'models', 'music', 'crafts', 'science', 'boardgames', 'smallpets', 'puzzles']
 const STYLE_TRAITS: TraitId[] = ['minimal', 'nostalgic', 'traditional', 'rational', 'natural', 'maker', 'cutie']
 const MOOD_TRAITS: TraitId[] = ['tidy', 'messy', 'collector', 'homebody', 'active']
 
@@ -247,6 +383,9 @@ export function generateHousehold(plan: Plan, seed = Date.now()): Household {
   // 伴侣的风格跟户主走（两个人商量着装修）；公共空间用户主的风格
   const head = members[0]
   for (const m of members) if (m.role === 'partner') m.style = head.style
+  // 兴趣等级（哈希，不改变上面的随机序列）
+  const cap = levelCap(plan)
+  members.forEach((m, i) => (m.levels = levelsFor(m, seed, i, cap)))
   const clutter = members.filter((m) => m.age >= 18).reduce((c, m) => c * (m.traits.map((t) => TRAITS[t].clutter ?? 1).reduce((a, b) => a * b, 1)), 1)
   return { kind, members, style: head.style, clutter: Math.max(0.5, Math.min(1.6, clutter)), seed }
 }
@@ -267,7 +406,8 @@ function matches(d: AssetDef, m: Matcher | undefined) {
 
 /** 兴趣对应的落地家具（不含设备、壁挂、太大的） */
 export function interestFloor(id: InterestId) {
-  return ASSETS.filter((d) => !d.fixture && !d.prop && !d.mount && Math.max(d.w, d.d) <= 200 && matches(d, INTERESTS[id].floor))
+  // 相机展示柜 / 防潮柜只给摄影（按等级），别的兴趣的「展示柜」不算它
+  return ASSETS.filter((d) => !d.fixture && !d.prop && !d.mount && Math.max(d.w, d.d) <= 200 && (id === 'photo' || !/^of-(camera-showcase|dry-)/.test(d.id)) && matches(d, INTERESTS[id].floor))
 }
 /** 兴趣对应的桌面摆件 */
 export function interestProps(id: InterestId) {

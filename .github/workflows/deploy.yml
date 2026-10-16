@@ -1,7 +1,5 @@
-# 推送到 main（或打 v* 标签）时：类型检查 + 测试 + 构建，然后部署到腾讯 EdgeOne Pages。
-# EdgeOne 选「全球可用区（不含中国大陆）」：免备案，香港等节点对国内访问友好；域名 home.jannchie.com 的 DNS 仍在 Cloudflare，
-# 只需一条 CNAME 指向 EdgeOne 给的地址（Cloudflare 里关闭代理，灰云）。
-# 需要的仓库 Secret：EDGEONE_API_TOKEN（EdgeOne Makers 控制台 → API Token）。没配置时只构建、不部署。
+# 推送到 main 或打 v* 标签：测试 + 类型检查 + 构建，部署到 Cloudflare Pages（项目 my-home）。
+# Secrets：CLOUDFLARE_API_TOKEN（权限 Account / Cloudflare Pages / Edit）、CLOUDFLARE_ACCOUNT_ID。未配置时跳过部署。
 name: Deploy
 
 on:
@@ -31,7 +29,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
-      # build 里已经包含 vue-tsc 类型检查
+      # build 含 vue-tsc
       - run: pnpm build
         env:
           NODE_OPTIONS: --max-old-space-size=4096
@@ -44,6 +42,9 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - uses: actions/download-artifact@v8
         with:
@@ -52,12 +53,13 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-      - name: Deploy to EdgeOne Pages
-        env:
-          EDGEONE_API_TOKEN: ${{ secrets.EDGEONE_API_TOKEN }}
+      - name: Deploy to Cloudflare Pages
         run: |
-          if [ -z "$EDGEONE_API_TOKEN" ]; then
-            echo "::warning::没有配置 EDGEONE_API_TOKEN，跳过部署"
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::warning::CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID 未配置，跳过部署"
             exit 0
           fi
-          npx -y edgeone@1.6.41 makers deploy ./dist -n my-home -e production --site global -t "$EDGEONE_API_TOKEN"
+          W="npx -y wrangler@4.146.0"
+          # 首次部署时创建项目（已存在则忽略）
+          $W pages project create my-home --production-branch main 2>/dev/null || true
+          $W pages deploy dist --project-name my-home --branch main --commit-hash "$GITHUB_SHA" --commit-dirty=true

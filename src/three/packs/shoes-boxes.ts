@@ -325,6 +325,20 @@ function shoeLast(s: LastSpec) {
       const [ea, eb] = e
       idx.push(ea, ea + nv, eb + nv, ea, eb + nv, eb)
     }
+    // 封住闭合的端面（鞋尖、封闭的后跟）：端面截面是一道窄而高的拱，不封的话鞋头正中会露出一条竖缝、看见里面的鞋垫
+    for (const i of [0, S0 - 1]) {
+      if (sl[i].open) continue
+      const p0 = at(sl[i].u, 0, off)
+      const p1 = at(sl[i].u, PI, off)
+      // 端面单独一套顶点（法线不和鞋面混），鞋尖朝 +z、后跟朝 -z
+      const ci = all.length / 3
+      all.push((p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2, (p0[2] + p1[2]) / 2)
+      for (let c = 0; c < Cn; c++) all.push(pos[(i * Cn + c) * 3], pos[(i * Cn + c) * 3 + 1], pos[(i * Cn + c) * 3 + 2])
+      for (let c = 0; c < Cn - 1; c++) {
+        if (i > 0) idx.push(ci, ci + 1 + c, ci + 2 + c)
+        else idx.push(ci, ci + 2 + c, ci + 1 + c)
+      }
+    }
     return meshOf(all, idx, color)
   }
 
@@ -1543,7 +1557,7 @@ function fabricBox(w: number, d: number, h: number): Build {
     const g = new THREE.Group()
     const hole = { kind: 'rect' as const, x: 0, y: h - 6, w: 9, h: 2.6, r: 1.3 }
     g.add(shell(w, h, d, 0.8, p[0], { top: false, left: [hole], right: [hole] }))
-    g.add(rimRing(w + 0.4, d + 0.4, h - 1, 1, p[1]))
+    g.add(rimRing(w + 0.4, d + 0.4, h - 1, 1.3, p[1])) // 包边比箱壁高出 0.3，避免顶面共面闪烁
     // 把手洞包边
     for (const sx of [-1, 1]) g.add(rbox(0.4, 3.6, 10, p[1], { x: sx * (w / 2 + 0.25), y: h - 6.5 }, 0.2))
     g.add(holePanel(10, 3.6, 0.4, p[1], [{ kind: 'rect', x: 0, y: 0.5, w: 9, h: 2.6, r: 1.3 }], { x: w / 2 + 0.45, y: h - 6.5, ry: PI / 2 }, 1))
@@ -1552,7 +1566,7 @@ function fabricBox(w: number, d: number, h: number): Build {
     const r = rng(Math.round(w + h))
     for (let i = 0; i < 4; i++) {
       const rr = Math.min(3.6, (h - 3) / 4)
-      const m = capsule(rr, d - 4 - 2 * rr, CLOTH[Math.floor(r() * CLOTH.length)])
+      const m = capsule(rr, d - 4 - 2 * rr, CLOTH[(i * 3 + Math.floor(r() * 2)) % CLOTH.length]) // 颜色错开，不会随机到一排深色
       g.add(P(m, -w / 2 + 5 + (i * (w - 10)) / 3, 0.8 + rr, 0, PI / 2))
     }
     return g
@@ -1605,7 +1619,7 @@ function rattanBox(open: boolean) {
     for (let i = 0; i < 4; i++) for (const sz of [-1, 1]) body.add(cyl(0.3, 0.3, hb - 1.6, p[1], { x: -w / 2 + 6 + i * ((w - 12) / 3), y: 0.4, z: sz * (d / 2 + 0.1) }, 6))
     body.add(clothes(w - 6, d - 6, hb * 0.65, 1.2, 77))
     g.add(P(body, 0, 0, dz))
-    const lid = G(rbox(w + 1.2, 2, d + 1.2, p[0], { z: (d + 1.4) / 2 }, 0.8), rimRing(w + 1.8, d + 1.8, -0.05, 2.1, p[1]).translateZ((d + 1.4) / 2))
+    const lid = G(rbox(w + 1.2, 2, d + 1.2, p[0], { z: (d + 1.4) / 2 }, 0.8), rimRing(w + 1.8, d + 1.8, -0.15, 2.45, p[1]).translateZ((d + 1.4) / 2))
     lid.add(P(torus(3, 0.5, p[2], {}, PI), 0, 2, (d + 1.4) / 2, 0, 0, 0))
     g.add(hinged(lid, hb, dz - d / 2 - 0.7, open))
     return g
@@ -1715,17 +1729,15 @@ function closetGrid(p: string[]) {
   const w = 32
   const d = 32
   const h = 11
-  const g = G(boxTray(w, h, d, 0.8, p[0]), rimRing(w + 0.3, d + 0.3, h - 0.9, 0.9, p[1]))
+  const g = G(boxTray(w, h - 0.3, d, 0.8, p[0]), rimRing(w + 0.3, d + 0.3, h - 0.9, 0.9, p[1])) // 盒壁略低于包边，顶面不共面
   for (let i = 1; i < 4; i++) {
     g.add(rbox(0.5, h - 1.6, d - 1.6, p[1], { x: -w / 2 + i * (w / 4), y: 0.8 }, 0.15))
     g.add(rbox(w - 1.6, h - 1.6, 0.5, p[1], { y: 0.8, z: -d / 2 + i * (d / 4) }, 0.15))
   }
-  // 卷好的袜子 / 内衣
-  const r = rng(5)
+  // 卷好的袜子 / 内衣：每格一卷、按列配色，整整齐齐
   for (let ix = 0; ix < 4; ix++)
     for (let iz = 0; iz < 4; iz++) {
-      if (r() < 0.2) continue
-      const col = CLOTH[Math.floor(r() * CLOTH.length)]
+      const col = CLOTH[(ix * 2 + (iz % 2)) % CLOTH.length]
       g.add(P(capsule(2.4, 1.6, col), -w / 2 + (ix + 0.5) * (w / 4), 0.8 + 2.4, -d / 2 + (iz + 0.5) * (d / 4), PI / 2))
     }
   return g
@@ -1734,7 +1746,7 @@ function closetLong(p: string[]) {
   const w = 15
   const d = 32
   const h = 12
-  const g = G(boxTray(w, h, d, 0.8, p[0]), rimRing(w + 0.3, d + 0.3, h - 0.9, 0.9, p[1]))
+  const g = G(boxTray(w, h - 0.3, d, 0.8, p[0]), rimRing(w + 0.3, d + 0.3, h - 0.9, 0.9, p[1])) // 盒壁略低于包边，顶面不共面
   g.add(holePanel(5, 3, 0.5, p[1], [{ kind: 'rect', x: 0, y: 0.8, w: 3, h: 1.4, r: 0.7 }], { y: h - 4, z: d / 2 + 0.3 }, 0.8))
   g.add(clothes(w - 1, d - 2, h - 2, 0.8, 8))
   return g

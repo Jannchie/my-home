@@ -3,9 +3,10 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, face, leaf, plate, puck, rbox, shade, toon, torus, tray } from './toon'
-import { fridgeModel, washerModel } from './appliances'
+import { fridgeSpotModel, washerSpotModel } from './appliances'
 import { holePanel, C, G, S, ellipsePoly, glow, legs, rectPoly, rng, shell, type AssetDef, type StyleTag } from './kit'
 import { PACKS } from './packs'
+import { soft, type SoftFn } from './packs/more-variety'
 import { applyDims, warnIfDimsStale } from './dims'
 import { DIMS } from './dims.generated'
 
@@ -172,12 +173,16 @@ function monstera(p: string[]) {
   return g
 }
 
+/** 圆团懒人沙发：一整团软布，前面坐出浅窝、后背自然鼓起（以前是两颗球叠起来，像馒头盖了个盖） */
+const beanbagF: SoftFn = (x, y, z) => {
+  let Y = (y + 1) * 30
+  if (y > 0) Y -= 16 * Math.exp(-((x / 0.5) ** 2 + ((z - 0.25) / 0.5) ** 2)) * y
+  if (z < 0) Y += 20 * z * z * Math.max(0, y)
+  const spill = 1 + 0.05 * Math.max(0, -y)
+  return [x * 36 * spill, Math.max(0, Y - 6), z * 34 * spill]
+}
 function beanbag(p: string[]) {
-  const [main] = p
-  const g = new THREE.Group()
-  g.add(ball(36, main, { y: 24 }, [1, 0.68, 0.95]))
-  g.add(ball(20, shade(main, 0.04), { y: 44, z: -10 }, [1.3, 0.6, 0.7]))
-  return g
+  return G(soft(p[0], beanbagF, { wrinkle: 0.9, seed: 4 }))
 }
 
 // ---------- 餐厅 ----------
@@ -1458,8 +1463,9 @@ export const ASSETS: AssetDef[] = [
 
   { id: 'fx-kitchen', name: '整体厨房', category: 'appliance', w: 255, d: 65, h: 120, palettes: [[]], build: () => kitchenModel(255, false), fixture: true },
   { id: 'fx-kitchen-facing', name: '对面式厨房', category: 'appliance', w: 255, d: 200, h: 120, palettes: [[]], build: () => kitchenModel(255, true), fixture: true },
-  { id: 'fx-fridge', name: '冰箱', category: 'appliance', w: 65, d: 65, h: 172, palettes: [[]], build: () => fridgeModel({ w: 65, d: 65 }, 65), fixture: true },
-  { id: 'fx-washer', name: '洗衣机', category: 'appliance', w: 64, d: 64, h: 88, palettes: [[]], build: () => washerModel({ w: 64, d: 64 }, 64), fixture: true },
+  // 冰箱位 / 洗衣机位只是预留空间：机器本身是家具（packs/appliances-pack.ts）
+  { id: 'fx-fridge', name: '冰箱位', category: 'appliance', w: 65, d: 65, h: 1, palettes: [[]], build: () => fridgeSpotModel(65, 65), fixture: true },
+  { id: 'fx-washer', name: '洗衣机位', category: 'appliance', w: 64, d: 64, h: 115, palettes: [[]], build: () => washerSpotModel(64, 64), fixture: true },
   { id: 'fx-bathtub', name: '浴缸', category: 'appliance', w: 140, d: 75, h: 58, palettes: [[]], build: () => bathtubModel(140, 75), fixture: true },
   { id: 'fx-toilet', name: '马桶', category: 'appliance', w: 40, d: 70, h: 78, palettes: [[]], build: () => toiletModel(40, 70), fixture: true },
   { id: 'fx-basin', name: '洗面台', category: 'appliance', w: 75, d: 55, h: 92, palettes: [[]], build: () => basinModel(75, 55), fixture: true },

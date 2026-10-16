@@ -58,6 +58,21 @@ const SNAPSHOT_EVERY = 3 * 60 * 1000
 
 /** 由房间推算房型：居室数 + LDK / DK / K（S = 納戸） */
 export function layoutOf(p: Plan): string {
+  const baths = p.rooms.filter((r) => r.kind === 'bath')
+  // 中式：几室几厅几卫（书房也算一室，客厅、餐厅各算一厅）
+  if (p.region === 'cn') {
+    const n = p.rooms.filter((r) => r.kind === 'western' || r.kind === 'japanese').length
+    // 一室户的客餐厅算一厅（和生成器的命名一致）
+    const h = n === 1 ? 1 : p.rooms.filter((r) => r.kind === 'ldk' || r.kind === 'dining').length
+    return t('{n}室{h}厅{b}卫', { n, h, b: baths.length })
+  }
+  // 欧美：卧室数 + 卫生间数（Half Bath 算 0.5，书房 Office 不算卧室）
+  if (p.region === 'west') {
+    const n = p.rooms.filter((r) => (r.kind === 'western' || r.kind === 'japanese') && r.name !== 'Office').length
+    const half = baths.filter((r) => r.name === 'Half Bath').length
+    const full = baths.length - half
+    return t('{n}室{b}卫', { n, b: `${full + Math.floor(half / 2)}${half % 2 ? '.5' : ''}` })
+  }
   const n = p.rooms.filter((r) => r.kind === 'western' || r.kind === 'japanese').length
   const ldk = p.rooms.find((r) => r.kind === 'ldk')
   const s = p.rooms.some((r) => r.name === '納戸') ? 'S' : ''
@@ -65,7 +80,9 @@ export function layoutOf(p: Plan): string {
     const tag = /^(S?LDK|DK|K)$/.test(ldk.name) ? ldk.name.replace(/^S/, '') : 'LDK'
     return `${n}${s}${tag}`
   }
-  if (p.rooms.some((r) => r.kind === 'kitchen')) return `${n}${s}K`
+  // 1DK 的 DK 是厨房类型的房间，名字写着 DK
+  const k = p.rooms.find((r) => r.kind === 'kitchen')
+  if (k) return `${n}${s}${/^S?L?DK$/.test(k.name) ? k.name.replace(/^S/, '') : 'K'}`
   return n ? `${n}R` : ''
 }
 

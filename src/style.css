@@ -262,3 +262,39 @@ button:active:not(:disabled) {
     transition-duration: 0.01ms !important;
   }
 }
+
+/*
+ * ---------- 手机 / 平板 ----------
+ * <html> 上的 compact / compact-bar / coarse / landscape 由 src/ui/device.ts 按媒体查询维护。
+ * 组件 scoped 样式里用 :root.coarse .xxx 适配（不要写 :global(.coarse) .xxx：Vue 会把整条选择器换成 .coarse）。
+ */
+html,
+body {
+  height: 100%;
+  /* 禁止整页回弹 / 下拉刷新：画布上的拖动不会把页面拽走 */
+  overscroll-behavior: none;
+}
+body {
+  -webkit-tap-highlight-color: transparent;
+  /* 双击不缩放页面（画布自己处理捏合缩放） */
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+/* 触屏：按钮、输入框、下拉框加高，触控目标 ≥ 40–44px */
+:root.coarse {
+  --control-h: 40px;
+  --control-h-sm: 34px;
+}
+/* iOS 聚焦字号小于 16px 的输入框会自动放大整页：触屏上统一 16px */
+:root.coarse :is(input:not([type='checkbox']):not([type='radio']):not([type='range']), select, textarea) {
+  font-size: 16px !important;
+}
+:root.coarse input[type='checkbox'],
+:root.coarse input[type='radio'] {
+  width: 20px;
+  height: 20px;
+}
+:root.coarse input[type='range'] {
+  min-height: 32px;
+}

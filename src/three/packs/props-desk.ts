@@ -293,15 +293,14 @@ function gameConsole(p: string[]) {
   }
   // 桌上的手柄
   const pad = new THREE.Group()
-  pad.add(rbox(10, 2.6, 5.4, dock, { y: 0.5 }, 1))
+  // 左摇杆 + 右四键（不对称布局，避免两个黑圆点 + 中间小点看起来像一张脸）
+  pad.add(rbox(10, 2.6, 5.4, dock, { y: 0.3 }, 1))
   for (const [s, col] of [
     [-1, joyL],
     [1, joyR],
-  ] as const) {
-    pad.add(ball(2.5, col, { x: s * 5, y: 2.2, z: 1.2 }, [1, 0.8, 1.3]))
-    pad.add(cyl(0.8, 0.8, 0.7, '#3d3d46', { x: s * 2.4, y: 2.9, z: 0.6 }, 12))
-  }
-  pad.add(ball(0.4, joyR, { x: 0, y: 3.2, z: -1 }))
+  ] as const) pad.add(ball(2.4, col, { x: s * 4.8, y: 1.9, z: 1.4 }, [0.95, 0.75, 1.35]))
+  pad.add(cyl(0.75, 0.6, 0.5, '#3d3d46', { x: -2.4, y: 2.85, z: 0.2 }, 12), ball(0.75, '#3d3d46', { x: -2.4, y: 3.45, z: 0.2 }, [1, 0.45, 1]))
+  for (const [bx, bz] of [[0, -0.9], [0, 0.9], [-0.9, 0], [0.9, 0]] as const) pad.add(ball(0.42, shade(joyR, -0.25), { x: 2.4 + bx, y: 2.95, z: 0.2 + bz }, [1, 0.6, 1]))
   g.add(P(pad, 10, 0, 4, 0, -0.3))
   return g
 }
@@ -771,21 +770,49 @@ function globe(p: string[]) {
   return g
 }
 
-/** 沙漏：[木框, 沙, -] */
+/** 沙漏：[木框, 沙, -]。玻璃是一整个连续的旋转体（两个泡 + 细颈），上泡的沙落在泡底、下泡堆成小丘，中间一缕细沙 */
+const HG = { y0: 1.4, y1: 14.6, neck: 0.35, bulb: 3.4, cap: 2.6 }
+/** 玻璃内壁半径：y 为离地高度 */
+function hgRadius(y: number) {
+  const mid = (HG.y0 + HG.y1) / 2
+  const u = Math.min(1, Math.abs(y - mid) / ((HG.y1 - HG.y0) / 2))
+  // 细颈附近迅速鼓起（开方让泡身更圆），靠近盖子处圆滑收口
+  if (u < 0.6) return HG.neck + (HG.bulb - HG.neck) * Math.sqrt(Math.sin(((u / 0.6) * Math.PI) / 2))
+  return HG.cap + (HG.bulb - HG.cap) * Math.sqrt(Math.cos((((u - 0.6) / 0.4) * Math.PI) / 2))
+}
+function lathe(pts: [number, number][], color: string) {
+  return new THREE.Mesh(
+    new THREE.LatheGeometry(
+      pts.map(([r, y]) => new THREE.Vector2(r, y)),
+      24,
+    ),
+    toon(color),
+  )
+}
 function hourglass(p: string[]) {
   const [wood, sand] = p
   const g = new THREE.Group()
   g.add(puck(5, 1.4, wood))
-  g.add(puck(5, 1.4, wood, { y: 14.6 }))
+  g.add(puck(5, 1.4, wood, { y: HG.y1 }))
   for (let i = 0; i < 3; i++) {
     const a = (i / 3) * Math.PI * 2 + 0.5
-    g.add(cyl(0.45, 0.45, 13.4, wood, { x: Math.cos(a) * 4, y: 1.2, z: Math.sin(a) * 4 }, 8))
+    g.add(cyl(0.45, 0.45, 13.4, wood, { x: Math.cos(a) * 4.1, y: 1.2, z: Math.sin(a) * 4.1 }, 8))
   }
-  g.add(cyl(0.2, 3, 2.6, sand, { y: 1.4 }, 20))
-  g.add(cyl(2.4, 0.3, 2, sand, { y: 9.8 }, 20))
-  g.add(cyl(0.12, 0.12, 6, sand, { y: 3.5 }, 6))
-  g.add(ghost(ball(3.4, C.glass, { y: 4.8 }, [1, 1.05, 1]), C.glass, 0.35))
-  g.add(ghost(ball(3.4, C.glass, { y: 11.2 }, [1, 1.05, 1]), C.glass, 0.35))
+  const mid = (HG.y0 + HG.y1) / 2
+  const steps = (a: number, b: number, n: number) => Array.from({ length: n + 1 }, (_, i) => a + ((b - a) * i) / n)
+  // 玻璃：从底盖到顶盖的连续轮廓
+  const glass: [number, number][] = steps(HG.y0, HG.y1, 28).map((y) => [hgRadius(y), y])
+  g.add(ghost(noLine(lathe([[0, HG.y0], ...glass, [0, HG.y1]], C.glass)), C.glass, 0.3))
+  // 上泡的沙：贴着泡底（细颈往上）到平整的沙面，沙面中间微微凹下
+  const top = mid + 2.6
+  const upper: [number, number][] = steps(mid + 0.1, top, 8).map((y) => [hgRadius(y) * 0.94, y])
+  g.add(lathe([[0, mid + 0.1], ...upper, [hgRadius(top) * 0.5, top - 0.15], [0, top - 0.4]], sand))
+  // 下泡的沙堆：铺满泡底、往上隆成小丘
+  const base = HG.y0 + 0.1
+  const lower: [number, number][] = steps(base, base + 1.4, 4).map((y) => [hgRadius(y) * 0.94, y])
+  g.add(lathe([[0, base], ...lower, [hgRadius(base + 1.4) * 0.55, base + 2.3], [0.5, base + 2.9], [0, base + 3]], sand))
+  // 正在落下的一缕沙
+  g.add(cyl(0.1, 0.1, mid + 0.1 - (base + 3), sand, { y: base + 3 }, 6))
   return g
 }
 
@@ -1334,7 +1361,7 @@ export const PROPS_DESK: AssetDef[] = [
     ['cute', [C.white, C.pink, C.peach, C.lemon, C.mint, C.sky, C.lilac]],
     ['modern', [M.black, '#d94b45', '#f08a3c', '#f2d14b', '#4fae6a', '#3f7fd0', M.white]],
     ['retro', [R.cream, R.red, R.orange, R.mustard, R.olive, R.teal, C.white]],
-  ], rubiksCube),
+  ], rubiksCube, { family: 'puzzle-cube', sizeLabel: '三阶 · 打乱' }),
   def('prop-globe', '地球仪', 'tabletop', [25, 22, 28], [
     ['cute', [C.sky, C.mint, C.pink]],
     ['nordic', [N.blue, N.linen, N.oak]],

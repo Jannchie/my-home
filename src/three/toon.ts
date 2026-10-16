@@ -4,6 +4,31 @@
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 
+// ---------- 赛璐璐阴影 ----------
+// three 自带的 PCF 阴影用逐像素噪点（IGN）旋转采样，边缘是一片网点状的颗粒渐变。
+// 改成：固定采样分布（不再有颗粒）+ 把阴影收成「亮 / 暗」两档，边缘保留一段柔和但干净的过渡，像动画里的阴影块。
+{
+  const chunk = THREE.ShaderChunk as unknown as Record<string, string>
+  const NOISE = 'interleavedGradientNoise( gl_FragCoord.xy ) * PI2'
+  const AVG = ') * 0.2;'
+  if (chunk.shadowmap_pars_fragment.includes(NOISE)) {
+    chunk.shadowmap_pars_fragment = chunk.shadowmap_pars_fragment
+      .split(NOISE)
+      .join('0.7')
+      // 只改第一处（平行光 / 聚光灯的 2D 阴影）：再加一圈 8 个固定方向的采样，过渡更平滑，再收成干净的边
+      .replace(
+        AVG,
+        `${AVG}
+				shadow *= 5.0;
+				for ( int k = 0; k < 8; k ++ ) {
+					float a = float( k ) * 0.7853982 + 0.3927;
+					shadow += texture( shadowMap, vec3( shadowCoord.xy + vec2( cos( a ), sin( a ) ) * radius * 1.5, shadowCoord.z ) );
+				}
+				shadow = smoothstep( 0.12, 0.88, shadow / 13.0 );`,
+      )
+  }
+}
+
 // ---------- 材质 ----------
 
 let gradient: THREE.DataTexture | null = null

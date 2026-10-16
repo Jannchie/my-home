@@ -1143,7 +1143,8 @@ function futonRack(p: string[]) {
   for (const s of [-1, 1]) {
     // 中心放在 (y 77, z ±11.5)，绕中心倾斜
     const slab = G(rbox(120, 66, 4, main, { y: -33 }, 2))
-    for (const y of [-21, -3, 15]) slab.add(noOL(rbox(120, 4, 0.6, acc, { y, z: s * 2.3 }, 0.3)))
+    // 绑带比被子略窄，两端不和被子侧面共面
+    for (const y of [-21, -3, 15]) slab.add(noOL(rbox(119.2, 4, 0.6, acc, { y, z: s * 2.3 }, 0.3)))
     slab.position.set(0, 77, s * 11.5)
     slab.rotation.x = -s * 0.2
     g.add(slab)

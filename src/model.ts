@@ -115,6 +115,7 @@ export interface Opening {
 /**
  * 固定设备。x/y 为中心；局部坐标里「背面」朝 -y（贴墙一侧），
  * rot 为顺时针角度（0/90/180/270）。
+ * washer / fridge 是「洗衣机位 / 冰箱位」：只是预留的空间（防水盘、冰箱的位置），机器本身是家具（family washer / fridge）。
  */
 export type FixtureKind = 'kitchen' | 'bathtub' | 'toilet' | 'basin' | 'washer' | 'fridge' | 'ps' | 'outdoor' | 'builtin'
 export type KitchenVariant = 'wall' | 'facing'
@@ -122,12 +123,6 @@ export type ToiletType = 'basic' | 'washlet' | 'tankless'
 export type BuiltinType = 'shoe' | 'closet' | 'pantry'
 export const BUILTIN_TYPES: Record<BuiltinType, string> = { shoe: '鞋柜（下駄箱）', closet: '壁内收纳', pantry: '食品柜' }
 export const TOILET_TYPES: Record<ToiletType, string> = { basic: '普通（水箱）', washlet: '温水洗净', tankless: '无水箱一体（高级）' }
-export type WasherStyle = 'drum' | 'top' | 'compact' | 'stack' | 'twin' | 'pair'
-export const WASHER_STYLES: Record<WasherStyle, string> = { drum: '滚筒（ドラム式）', top: '立式波轮（縦型）', compact: '小型立式（一人暮らし）', stack: '洗衣机 + 干衣机叠放', twin: '双槽（二槽式）', pair: '洗衣机 + 烘干机并排' }
-export type FridgeStyle = '2door' | '3door' | 'french' | 'side' | 'retro'
-export const FRIDGE_STYLES: Record<FridgeStyle, string> = { '2door': '两门小冰箱', '3door': '三门', french: '法式六门', side: '对开门', retro: '复古圆角' }
-/** 冰箱、洗衣机的机身颜色 */
-export const APPLIANCE_COLORS = ['#f6f6f3', '#c9ccd1', '#8a8d93', '#2f3134', '#e8d9bf', '#efe4d0', '#bfe8d8', '#f6c9d2', '#cfe3f2', '#f3e3a6']
 
 export interface Fixture {
   id: string
@@ -148,9 +143,12 @@ export interface Fixture {
   toiletType?: ToiletType
   /** 仅空调外机：叠放在哪台外机上面（二段置き架台），不填就是放在地上 */
   stackOn?: string
-  /** 仅冰箱、洗衣机：款式（WASHER_STYLES / FRIDGE_STYLES），不填用默认款 */
-  style?: WasherStyle | FridgeStyle
-  /** 仅冰箱、洗衣机：机身颜色 */
+  /**
+   * @deprecated 旧存档：冰箱、洗衣机以前是带款式的设备（'2door' | '3door' | 'french' | 'side' | 'retro' / 'drum' | 'top' | 'compact' | 'stack' | 'twin' | 'pair'）。
+   * 现在设备只是「冰箱位 / 洗衣机位」，机器是素材库里的家具；读档时 migrate.ts 把它换成同款家具后删掉这个字段。
+   */
+  style?: string
+  /** @deprecated 旧存档：冰箱、洗衣机的机身颜色，迁移时转成家具的配色 */
   color?: string
   /** 仅内置收纳：类型 */
   builtinType?: BuiltinType
@@ -250,6 +248,8 @@ export interface Furniture {
 
 export interface Plan {
   version: 1
+  /** 冰箱、洗衣机已经是家具（摆在冰箱位 / 洗衣机位上）。没有这个标记的是旧存档：读取时给每个位补上原来的默认款 */
+  appliancesAsFurniture?: true
   name: string
   /** 户内隔墙厚 */
   wall: number
@@ -536,5 +536,5 @@ export function fmtJo(cm2: number) {
 }
 
 export function emptyPlan(): Plan {
-  return { version: 1, name: t('未命名户型'), wall: 10, wallOuter: 18, rooms: [], openings: [], fixtures: [], furniture: [] }
+  return { version: 1, appliancesAsFurniture: true, name: t('未命名户型'), wall: 10, wallOuter: 18, rooms: [], openings: [], fixtures: [], furniture: [] }
 }

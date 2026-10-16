@@ -6,7 +6,7 @@
 //   L 块：南排主卧（三室以上带主卫），北排次卧 / 书房 / 公卫；两块中间各有一条走廊通客餐厅。
 // 卫生间干湿分离：淋浴房 + 马桶 + 洗手台，主卫偶尔有浴缸；洗衣机多在生活阳台，否则进公卫。
 
-import { pointInPolygon, rectPoints, type Fixture, type FridgeStyle, type Plan, type Room, type WasherStyle } from './model'
+import { pointInPolygon, rectPoints, type Fixture, type Plan, type Room } from './model'
 import {
   balconyAlong,
   bandLayout,
@@ -145,6 +145,7 @@ function layout(seed: number, o: { bedrooms: 'random' | 1 | 2 | 3 | 4; corner: '
   const baths = c.rooms.filter((r) => r.kind === 'bath').length
   const plan: Plan = {
     version: 1,
+    appliancesAsFurniture: true,
     name: `${t('{n}室{h}厅{b}卫', { n, h: n === 1 ? 1 : 2, b: baths })}${corner ? t('·边户') : ''} ${planArea({ rooms: c.rooms }).toFixed(1)}㎡ #${seed}`,
     wall: WALL,
     wallOuter: WALL_OUTER,
@@ -198,17 +199,8 @@ function furnish({ c, plan }: { c: Ctx; plan: Plan }): Plan {
   // 主卧常见整面定制衣柜
   for (const r of byName(/^(主卧|卧室)$/)) if (c.chance(0.55)) bedroomCloset(plan, r, [240, 220, 200, 180, 160], 60)
 
-  // 款式：冰箱法式 / 对开门为主，洗衣机滚筒、波轮各半；马桶普通款居多，智能马桶约三成
-  const big = planArea(plan) > 90
-  for (const f of plan.fixtures) {
-    if (f.kind === 'fridge') {
-      f.style = c.pick<FridgeStyle>(big ? ['french', 'french', 'side', '3door'] : ['3door', 'french', '2door', '3door'])
-      f.color = c.pick(['#c9ccd1', '#c9ccd1', '#f6f6f3', '#e8d9bf', '#2f3134'])
-    } else if (f.kind === 'washer') {
-      f.style = c.pick<WasherStyle>(['drum', 'drum', 'top'])
-      f.color = c.pick(['#f6f6f3', '#f6f6f3', '#c9ccd1', '#8a8d93'])
-    } else if (f.kind === 'toilet') f.toiletType = c.chance(0.55) ? 'basic' : c.chance(0.75) ? 'washlet' : 'tankless'
-  }
+  // 马桶普通款居多，智能马桶约三成（冰箱、洗衣机是家具，由一键布置挑款式）
+  for (const f of plan.fixtures) if (f.kind === 'toilet') f.toiletType = c.chance(0.55) ? 'basic' : c.chance(0.75) ? 'washlet' : 'tankless'
   return plan
 }
 

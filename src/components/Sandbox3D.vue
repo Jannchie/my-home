@@ -6,7 +6,7 @@ import { ASSET_MAP, CATEGORY_LABELS, STYLE_LABELS, type StyleTag } from '../thre
 import { applyCutaway, bendToWalls, buildHouse, floorY, isPlant, stepCutaway, furnitureModel, placeFurniture, roomAt } from '../three/house'
 import { overlapsOthers, snapFurniture, snapToWall, type Guide } from '../snap'
 import { fitOnSurface, pickSurface, propsOn, snapToHook } from '../surface'
-import { createStage, fitSun, frameCamera, type Stage } from '../three/stage'
+import { createStage, fitSun, frameCamera, setStageQuality, type Stage } from '../three/stage'
 import { attachPost, LOOKS, LOOK_MAP, type LookId, type Post } from '../three/post'
 import { CITIES, MONTH_DAYS, compassAxes, skyState, type SkyState } from '../three/sky'
 import { disposeUnshared } from '../three/toon'
@@ -14,23 +14,29 @@ import { useThumbs } from '../three/thumbs'
 import { normalizeColor } from '../three/stylePalettes'
 import { coverInto, liveCapture } from '../three/planThumb'
 import { FxLayer } from '../three/fx'
+import { SelectFrame, WallGuide } from '../three/selectFrame'
 import { ActorLayer } from '../three/actors'
 import ColorEditor from './ColorEditor.vue'
 import SandboxOverlay from './SandboxOverlay.vue'
+import BottomSheet, { type SheetSnap } from './BottomSheet.vue'
+import { device, gfx, layout, lowPower, setQuality, LONG_PRESS_MS, TAP_SLOP, type Quality } from '../ui/device'
+import { useProgressive } from '../ui/progressive'
+import { overlays } from '../ui/feedback'
 import { sandboxBridge } from '../ui/sandboxBridge'
 import { runBusy } from '../ui/feedback'
-import { toast } from '../saved'
+import { saved, toast } from '../saved'
 import { JIcon } from '@jannchie/icons-vue'
 import { CATEGORY_ICONS, ICONS, VIEW_ICONS, WALL_MODE_ICONS } from '../ui/icons'
 import { SIZE_LABELS, assetName, browse, canHang, categoriesOf, displayName, formFor, paletteFor, siblings, variantLabel, type Filter, type SizeClass } from '../three/catalog'
-import { INTERESTS, KIND_LABELS, ROLE_LABELS, TRAITS, describe } from '../household'
+import { INTERESTS, KIND_LABELS, LV_LABELS, ROLE_LABELS, TRAITS, describe, levelOf } from '../household'
 import { checklist, missing } from '../checklist'
 import { accentOf } from '../wallpaper'
 import { patternPreview } from '../three/fabric'
 import type { PatternKind } from '../three/patterns'
 import { isTyping } from '../dom'
 import { lang, roomName, t, tAuto, tSoft } from '../i18n'
-import { bbox, centroid, APPLIANCE_COLORS, FRIDGE_STYLES, WASHER_STYLES, type Fixture, type WallTrim } from '../model'
+import { bbox, centroid, edgesOf, type Furniture, type WallTrim } from '../model'
+import { wallThicknessAt } from '../walls'
 import {
   addFurniture,
   checkpoint,
@@ -59,6 +65,7 @@ import {
   selection,
   WALL_MODES,
   settle,
+  syncSkyToNow,
 } from '../store'
 
 const host = ref<HTMLDivElement>()
@@ -81,23 +88,31 @@ let dirty = true
 let raf = 0
 let ro: ResizeObserver | null = null
 
-// 选中标记：地面上的一圈
-const ring = new THREE.Mesh(
-  new THREE.RingGeometry(0.86, 1, 48).rotateX(-Math.PI / 2),
-  new THREE.MeshBasicMaterial({ color: '#ff7aa2', transparent: true, opacity: 0.9, depthWrite: false }),
-)
-ring.renderOrder = 2
-ring.visible = false
-const RING_OK = '#ff7aa2'
-const RING_BAD = '#ff3b30'
-/** 摆放预览脚下的圈：重叠时变红 */
-const ghostRing = new THREE.Mesh(ring.geometry, new THREE.MeshBasicMaterial({ color: RING_OK, transparent: true, opacity: 0.85, depthWrite: false }))
-ghostRing.renderOrder = 2
-ghostRing.visible = false
+// 选中 / 悬停 / 摆放标记：贴合占地的圆角矩形取景框（three/selectFrame.ts）。
+// 主色鼠尾草绿；和别的东西穿模时换成柔和的玫瑰红（界面的危险色）。
+const RING_OK = '#577a68'
+const RING_BAD = '#b4454f'
+const selFrame = new SelectFrame('select')
+const hoverFrame = new SelectFrame('hover')
+/** 摆放预览脚下的框：重叠时变红 */
+const ghostFrame = new SelectFrame('ghost')
+/** 拖动时落到最近墙面的距离引导线 */
+const wallGuide = new WallGuide()
+const frameRoot = new THREE.Group()
+frameRoot.add(selFrame.group, hoverFrame.group, ghostFrame.group, wallGuide.group)
+/** 线宽按屏幕像素算：跟着画布尺寸更新 */
+function syncLineRes(w: number, h: number) {
+  for (const f of [selFrame, hoverFrame, ghostFrame, wallGuide]) f.setResolution(w, h)
+}
+/** 在家具模型脚下显示一个框（占地取素材尺寸，朝向取模型的 rotation.y） */
+function frameAt(fr: SelectFrame, obj: THREE.Object3D, asset: string) {
+  const d = ASSET_MAP.get(asset)
+  fr.show(obj.position.x, obj.position.y, obj.position.z, d?.w ?? 40, d?.d ?? 40, obj.rotation.y)
+}
 
-// 吸附参考线：贴墙用粉色，和家具对齐用蓝色
+// 吸附参考线：贴墙用深一点的主色绿，和家具对齐用灰蓝
 const guideRoot = new THREE.Group()
-const guideMat = { wall: new THREE.MeshBasicMaterial({ color: '#ff5c8a' }), align: new THREE.MeshBasicMaterial({ color: '#4aa8ff' }) }
+const guideMat = { wall: new THREE.MeshBasicMaterial({ color: '#3f6652' }), align: new THREE.MeshBasicMaterial({ color: '#5b8fb8' }) }
 function showGuides(gs: Guide[], y = 0) {
   guideRoot.clear()
   for (const g of gs) {
@@ -194,6 +209,106 @@ const selectedFurniture = computed(() => {
 })
 const selectedDef = computed(() => (selectedFurniture.value ? ASSET_MAP.get(selectedFurniture.value.asset) ?? null : null))
 
+// ---------- 悬停高亮（鼠标）：指到的家具整体提亮一点 ----------
+// toon 材质按颜色共享，不能直接改：悬停时把这件家具的网格临时换成提亮过的克隆材质（按原材质缓存），移开就换回。
+// 描边壳不动（它的 uniform 和全局描边宽度联动）。
+let hoverId: string | null = null
+const hiMats = new Map<THREE.Material, THREE.Material>()
+const hiSwapped: [THREE.Mesh, THREE.Material | THREE.Material[]][] = []
+function brighter(mat: THREE.Material) {
+  let h = hiMats.get(mat)
+  if (!h) {
+    h = mat.clone()
+    const e = h as THREE.MeshToonMaterial
+    if (e.emissive) {
+      // 本身发光的（灯、屏幕）稍微再亮一点；其余加一层很淡的同色自发光
+      if (e.emissive.r + e.emissive.g + e.emissive.b > 0.01) e.emissiveIntensity *= 1.25
+      else {
+        // 按自身颜色发一点光：浅色、深色都是「同色提亮」，不会整块发白
+        e.emissive = (e.color ?? new THREE.Color('#ffffff')).clone()
+        e.emissiveIntensity = 0.2
+      }
+    }
+    hiMats.set(mat, h)
+  }
+  return h
+}
+function setHover(id: string | null) {
+  if (id === hoverId) return
+  for (const [m, mat] of hiSwapped) m.material = mat
+  hiSwapped.length = 0
+  hoverId = id
+  const o = id ? objs.get(id)?.obj : undefined
+  const hf = id ? findFurniture(id) : undefined
+  if (o && hf) frameAt(hoverFrame, o, hf.asset)
+  else hoverFrame.hide()
+  if (o) {
+    o.traverse((n) => {
+      const m = n as THREE.Mesh
+      if (!m.isMesh || n.userData.isOutline) return
+      const orig = m.material
+      hiSwapped.push([m, orig])
+      m.material = Array.isArray(orig) ? orig.map(brighter) : brighter(orig)
+    })
+  }
+  dirty = true
+}
+
+/**
+ * 拖动时的提示：家具占地离所在房间最近那面墙的净距（cm）。
+ * 墙面 = 房间边往里收半个墙厚；占地按旋转后的宽深在墙法线方向上的投影算。摆在台面上的东西不算。
+ */
+function wallGap(f: Pick<Furniture, 'asset' | 'x' | 'y' | 'rot' | 'z'>): { gap: number; from: { x: number; y: number }; to: { x: number; y: number } } | null {
+  const def = ASSET_MAP.get(f.asset)
+  if (!def || f.z) return null
+  const p = toRaw(plan.value)
+  const room = roomAt(p, { x: f.x, y: f.y })
+  if (!room) return null
+  const a = (f.rot * Math.PI) / 180
+  const u = { x: Math.cos(a), y: Math.sin(a) }
+  const v = { x: -Math.sin(a), y: Math.cos(a) }
+  let best = Infinity
+  let line: { from: { x: number; y: number }; to: { x: number; y: number } } | null = null
+  for (const e of edgesOf(room.points)) {
+    const rx = f.x - e.a.x
+    const ry = f.y - e.a.y
+    const along = rx * e.dir.x + ry * e.dir.y
+    if (along < -20 || along > e.length + 20) continue
+    const inward = -(rx * e.out.x + ry * e.out.y)
+    // 凹多边形房间：中心在这条边外侧时，这条边不是挡在它面前的墙
+    if (inward < 0) continue
+    const half = (def.w / 2) * Math.abs(u.x * e.out.x + u.y * e.out.y) + (def.d / 2) * Math.abs(v.x * e.out.x + v.y * e.out.y)
+    const t = wallThicknessAt(p, { x: e.a.x + e.dir.x * along, y: e.a.y + e.dir.y * along }, e.out, room)
+    const gap = inward - half - t / 2
+    if (gap < best) {
+      best = gap
+      // 从占地边缘（中心沿墙法线外推 half）到墙面（外推 inward - t/2）
+      line = { from: { x: f.x + e.out.x * half, y: f.y + e.out.y * half }, to: { x: f.x + e.out.x * (inward - t / 2), y: f.y + e.out.y * (inward - t / 2) } }
+    }
+  }
+  return Number.isFinite(best) && line ? { gap: Math.max(0, Math.round(best)), ...line } : null
+}
+
+/** 拖动 / 旋转家具时跟着指针的小提示：角度、离墙距离、吸附开关提示 */
+const dragHud = ref<{ x: number; y: number; rot: number; wall: number | null; snap: boolean; touch: boolean } | null>(null)
+function updateDragHud(e: { clientX: number; clientY: number; altKey?: boolean; pointerType?: string }, f: Pick<Furniture, 'asset' | 'x' | 'y' | 'rot' | 'z'>) {
+  const r = canvas.value!.getBoundingClientRect()
+  const g = wallGap(f)
+  // 离墙引导线：画在家具所在的地面高度上
+  const o = 'id' in f ? objs.get((f as Furniture).id)?.obj : undefined
+  if (g && g.gap > 0) wallGuide.show(g.from, g.to, o?.position.y ?? 0)
+  else wallGuide.hide()
+  dirty = true
+  dragHud.value = {
+    x: Math.round(e.clientX - r.left),
+    y: Math.round(e.clientY - r.top),
+    rot: ((Math.round(f.rot) % 360) + 360) % 360,
+    wall: g ? g.gap : null,
+    snap: sandbox.snap && !e.altKey,
+    touch: !!e.pointerType && e.pointerType !== 'mouse',
+  }
+}
+
 // ---------- 场景同步 ----------
 
 function rebuildHouse() {
@@ -224,6 +339,8 @@ function rebuildHouse() {
 }
 
 function syncFurniture() {
+  // 模型可能要重建：先把悬停时换上的提亮材质还回去
+  if (hoverId) setHover(null)
   // 读原始对象：拖动时每帧都要过一遍全部家具，走响应式代理的开销比计算本身还大
   const p = toRaw(plan.value)
   const alive = new Set<string>()
@@ -264,24 +381,22 @@ function syncFurniture() {
   dirty = true
 }
 
-function footprintRadius(asset: string) {
-  const d = ASSET_MAP.get(asset)
-  return d ? Math.hypot(d.w, d.d) / 2 + 8 : 30
-}
-
+/** 上一次框住的家具：换了一件就重新播「缩入」 */
+let framedId = ''
 function updateRing() {
   const f = selectedFurniture.value
   const o = f && objs.get(f.id)
   if (!f || !o || !editing.value) {
-    ring.visible = false
+    selFrame.hide()
+    framedId = ''
     return
   }
-  ring.visible = true
-  const r = footprintRadius(f.asset)
-  ring.scale.set(r, 1, r)
-  ring.position.set(o.obj.position.x, o.obj.position.y + 0.6, o.obj.position.z)
+  if (f.id !== framedId) selFrame.hide()
+  framedId = f.id
+  frameAt(selFrame, o.obj, f.asset)
   // 和别的家具 / 设备穿模时提示成红色
-  ;(ring.material as THREE.MeshBasicMaterial).color.set(overlapsOthers(plan.value, f.id, f.asset, f.x, f.y, f.rot) ? RING_BAD : RING_OK)
+  selFrame.setColor(overlapsOthers(plan.value, f.id, f.asset, f.x, f.y, f.rot) ? RING_BAD : RING_OK)
+  if (hoverId === f.id) hoverFrame.hide()
 }
 
 /** 摆放预览当前显示的素材（挂到挂钩上时会换成挂起形态） */
@@ -296,7 +411,7 @@ function syncGhost(asset = placing.value?.asset) {
   }
   ghost = null
   ghostKey = key
-  ghostRing.visible = false
+  ghostFrame.hide()
   if (p) {
     ghostAsset = asset ?? p.asset
     ghost = furnitureModel({ id: 'ghost', asset: ghostAsset, x: 0, y: 0, rot: ghostRot.value, color: p.color, colors: p.colors, patterns: p.patterns })
@@ -413,9 +528,23 @@ function locate(e: PointerEvent, asset: string, selfId: string | null, exclude: 
     return null
   }
   if (def.mount) {
-    if (!p) return null
-    const w = snapToWall(plan.value, asset, p.x, p.z)
-    return w && { x: w.x, y: w.y, z: 0, rot: w.rot, guides: w.guides, asset }
+    // 鼠标通常指着墙上一米多高的地方：用射线和「挂的高度」那个水平面的交点找墙。
+    // 直接用地面交点的话，射线穿过墙才落地，点在房间外面、找不到房间，东西就拖不动
+    setRay(e)
+    const self = selfId ? findFurniture(selfId) : undefined
+    const base = floorY(roomAt(plan.value, self ?? (p ? { x: p.x, y: p.z } : { x: 0, y: 0 })))
+    const hp = raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -(base + def.mount + def.h / 2)), new THREE.Vector3())
+    const toCam = new THREE.Vector2(stage.camera.position.x, stage.camera.position.z)
+    for (const q of [hp, p]) {
+      if (!q) continue
+      // 交点刚好落在墙体里：沿着朝镜头的方向往房间里挪一点再找
+      const dir = toCam.clone().sub(new THREE.Vector2(q.x, q.z)).normalize()
+      for (let k = 0; k <= 8; k++) {
+        const w = snapToWall(plan.value, asset, q.x + dir.x * k * 5, q.z + dir.y * k * 5)
+        if (w) return { x: w.x, y: w.y, z: 0, rot: w.rot, guides: w.guides, asset }
+      }
+    }
+    return null
   }
   if (def.prop) {
     setRay(e)
@@ -440,6 +569,195 @@ function locate(e: PointerEvent, asset: string, selfId: string | null, exclude: 
 /** 拖动中的家具；kids 是摆在它上面、要跟着走的东西（相对偏移） */
 let drag: { id: string; dx: number; dz: number; kids: { id: string; dx: number; dy: number; dz: number }[]; exclude: Set<string> } | null = null
 let down: { x: number; y: number } | null = null
+
+// ---------- 触控（手指 / 笔）：和 OrbitControls 分工 ----------
+// 单指按在已选中的家具上：拖动家具（超过一点阈值才开始动）；按在别处：交给 OrbitControls 转视角，松手时没动过算点按（选中 / 取消选中）。
+// 第二根手指落下时，如果正在拖家具，就变成双指拧转旋转家具；否则 OrbitControls 自己处理缩放平移。
+// 长按（不动）= 右键菜单。摆放模式：手指按下就出预览、拖动调整、松手放下。
+const touches = new Map<number, { x: number; y: number }>()
+let press: { id: number; x: number; y: number; hitId: string | null; moved: boolean; long: boolean; timer: number } | null = null
+let twist: { a0: number; base: number } | null = null
+/** 摆放模式下手指正按着（预览跟着手指） */
+let touchPlacing = false
+const touchAngle = () => {
+  const [a, b] = [...touches.values()]
+  return (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI
+}
+
+function beginDrag(e: PointerEvent, id: string) {
+  const f = findFurniture(id)!
+  const p = floorPoint(e)
+  checkpoint()
+  const kids = propsOn(plan.value, f).map((k) => ({ id: k.id, dx: k.x - f.x, dy: k.y - f.y, dz: (k.z ?? 0) - (f.z ?? 0) }))
+  drag = { id, dx: p ? f.x - p.x : 0, dz: p ? f.y - p.z : 0, kids, exclude: new Set([id, ...kids.map((k) => k.id)]) }
+  controls.enabled = false
+  try {
+    canvas.value!.setPointerCapture(e.pointerId)
+  } catch {
+    /* 指针已经抬起 */
+  }
+}
+function endDrag() {
+  if (!drag) return
+  settle()
+  drag = null
+  showGuides([])
+  dragHud.value = null
+  wallGuide.hide()
+}
+
+/** 摆放预览跟着指针（鼠标悬停 / 手指按住 / 从家具栏拖进来） */
+function updateGhost(e: { clientX: number; clientY: number; altKey: boolean }) {
+  if (!placing.value || !ghost) return
+  const q = locate(e as PointerEvent, placing.value.asset, null, new Set(), undefined, ghostRot.value)
+  if (q && q.asset !== ghostAsset) syncGhost(q.asset)
+  if (!ghost) return
+  ghost.visible = !!q
+  if (!q) ghostFrame.hide()
+  if (q) {
+    placeFurniture(ghost, plan.value, { x: q.x, y: q.y, rot: q.rot ?? ghostRot.value, z: q.z })
+    frameAt(ghostFrame, ghost, q.asset)
+    ghostFrame.setColor(!q.z && overlapsOthers(plan.value, null, q.asset, q.x, q.y, q.rot ?? ghostRot.value) ? RING_BAD : RING_OK)
+    showGuides(q.guides)
+  }
+  dirty = true
+}
+function hideGhost() {
+  if (!ghost) return
+  ghost.visible = false
+  ghostFrame.hide()
+  showGuides([])
+  dirty = true
+}
+/** 在指针处放下正在摆放的家具；keep 为真时继续摆放同一件 */
+function dropPlacing(e: { clientX: number; clientY: number; altKey: boolean }, keep = false) {
+  if (!placing.value) return
+  const q = locate(e as PointerEvent, placing.value.asset, null, new Set(), undefined, ghostRot.value)
+  if (q) {
+    addFurniture({ asset: q.asset, color: placing.value.color, colors: placing.value.colors, patterns: placing.value.patterns, x: q.x, y: q.y, rot: q.rot ?? ghostRot.value, z: q.z || undefined })
+    if (!keep) placing.value = null
+  }
+  showGuides([])
+}
+
+function onTouchDown(e: PointerEvent) {
+  if (touches.size === 2) {
+    clearTimeout(press?.timer)
+    press = null
+    const s = selection.value
+    if (drag && s?.type === 'furniture') {
+      // 拖着家具时落下第二根手指：拧转旋转（家具先回到按下时的位置不变，只转角度）
+      twist = { a0: touchAngle(), base: findFurniture(s.id)?.rot ?? 0 }
+      showGuides([])
+    } else if (touchPlacing) {
+      touchPlacing = false
+      hideGhost()
+    }
+    return
+  }
+  if (touches.size > 2) return
+  if (placing.value) {
+    touchPlacing = true
+    controls.enabled = false
+    canvas.value!.setPointerCapture(e.pointerId)
+    updateGhost(e)
+    return
+  }
+  const id = pickFurniture(e)
+  const sel = selection.value?.type === 'furniture' ? selection.value.id : null
+  press = { id: e.pointerId, x: e.clientX, y: e.clientY, hitId: id, moved: false, long: false, timer: 0 }
+  press.timer = window.setTimeout(() => onLongPress(e.clientX, e.clientY), LONG_PRESS_MS)
+  // 按在已选中的家具上：准备拖动（先关掉转视角；动过阈值才真的移动）
+  if (id && id === sel) beginDrag(e, id)
+}
+
+function onLongPress(x: number, y: number) {
+  const pr = press
+  if (!pr || pr.moved || touches.size !== 1) return
+  pr.long = true
+  if (drag) {
+    endDrag()
+    controls.enabled = true
+  }
+  if (pr.hitId) selection.value = { type: 'furniture', id: pr.hitId }
+  navigator.vibrate?.(10)
+  sandboxBridge.value?.menu?.(x, y, pr.hitId)
+}
+
+function onTouchMove(e: PointerEvent) {
+  if (twist && touches.size >= 2) {
+    let rot = twist.base + (touchAngle() - twist.a0)
+    // 接近 15° 的整数倍时吸过去
+    const snap = Math.round(rot / 15) * 15
+    if (Math.abs(rot - snap) < 4) rot = snap
+    setSelectedFurnitureRotation(rot)
+    const f = selectedFurniture.value
+    if (f) updateDragHud(e, f)
+    return
+  }
+  if (press && !press.moved && Math.hypot(e.clientX - press.x, e.clientY - press.y) > TAP_SLOP) {
+    press.moved = true
+    clearTimeout(press.timer)
+  }
+  if (touchPlacing) {
+    updateGhost(e)
+    return
+  }
+  if (drag && press?.moved) moveDrag(e)
+}
+
+function onTouchUp(e: PointerEvent) {
+  if (twist) {
+    if (touches.size < 2) {
+      twist = null
+      endDrag()
+    }
+    if (!touches.size) controls.enabled = true
+    return
+  }
+  const pr = press
+  clearTimeout(pr?.timer)
+  press = null
+  if (touchPlacing) {
+    touchPlacing = false
+    controls.enabled = true
+    if (e.type !== 'pointercancel' && ghost?.visible) dropPlacing(e)
+    else hideGhost()
+    return
+  }
+  if (drag) {
+    endDrag()
+    controls.enabled = true
+    return
+  }
+  // 点按（没动、没长按）：点到家具选中它，点到空处取消选中
+  if (pr && !pr.moved && !pr.long && e.type !== 'pointercancel') selection.value = pr.hitId ? { type: 'furniture', id: pr.hitId } : null
+}
+
+/** 拖动中：按指针位置摆家具（落地吸附 / 落在台面上 / 吸到墙上），上面的东西跟着走 */
+function moveDrag(e: PointerEvent) {
+  if (!drag) return
+  const f = findFurniture(drag.id)
+  const q = f && locate(e, f.asset, f.id, drag.exclude, { x: drag.dx, y: drag.dz }, f.rot)
+  if (f && q) {
+    f.x = q.x
+    f.y = q.y
+    if (q.z) f.z = q.z
+    else delete f.z
+    if (q.rot !== undefined) f.rot = q.rot
+    if (q.asset !== f.asset) f.asset = q.asset
+    // 桌上的东西跟着走
+    for (const k of drag.kids) {
+      const o = findFurniture(k.id)
+      if (!o) continue
+      o.x = Math.round((f.x + k.dx) * 10) / 10
+      o.y = Math.round((f.y + k.dy) * 10) / 10
+      o.z = (f.z ?? 0) + k.dz
+    }
+    showGuides(q.guides)
+    updateDragHud(e, f)
+  }
+}
 const hovering = ref(false)
 const editing = computed(() => sandbox.mode === 'edit')
 
@@ -459,94 +777,74 @@ function setMode(m: 'edit' | 'preview') {
 function onPointerDown(e: PointerEvent) {
   // 用户动手转视角时停下自动旋转
   if (controls.autoRotate) sandbox.autoRotate = false
+  const touch = e.pointerType !== 'mouse'
+  if (touch) touches.set(e.pointerId, { x: e.clientX, y: e.clientY })
   if (!editing.value) return
+  setHover(null)
+  if (touch) return onTouchDown(e)
   if (e.button !== 0) {
     if (e.button === 2 && placing.value) placing.value = null
     return
   }
   if (placing.value) {
-    const q = locate(e, placing.value.asset, null, new Set(), undefined, ghostRot.value)
-    if (q) {
-      addFurniture({ asset: q.asset, color: placing.value.color, colors: placing.value.colors, patterns: placing.value.patterns, x: q.x, y: q.y, rot: q.rot ?? ghostRot.value, z: q.z || undefined })
-      if (!e.shiftKey) placing.value = null
-      showGuides([])
-    }
+    dropPlacing(e, e.shiftKey)
     return
   }
   const id = pickFurniture(e)
   if (id) {
     selection.value = { type: 'furniture', id }
-    const f = findFurniture(id)!
-    const p = floorPoint(e)
-    checkpoint()
-    const kids = propsOn(plan.value, f).map((k) => ({ id: k.id, dx: k.x - f.x, dy: k.y - f.y, dz: (k.z ?? 0) - (f.z ?? 0) }))
-    drag = { id, dx: p ? f.x - p.x : 0, dz: p ? f.y - p.z : 0, kids, exclude: new Set([id, ...kids.map((k) => k.id)]) }
-    controls.enabled = false
-    canvas.value!.setPointerCapture(e.pointerId)
+    beginDrag(e, id)
   } else {
     down = { x: e.clientX, y: e.clientY }
   }
 }
 
 function onPointerMove(e: PointerEvent) {
+  const touch = e.pointerType !== 'mouse'
+  if (touch && touches.has(e.pointerId)) touches.set(e.pointerId, { x: e.clientX, y: e.clientY })
   if (onRotateMove(e)) {
     dirty = true
     return
   }
-  if (e.buttons === 0 || drag || placing.value) updateHoverRoom(e)
+  if (!touch && (e.buttons === 0 || drag || placing.value)) updateHoverRoom(e)
+  if (touch) {
+    if (editing.value) onTouchMove(e)
+    return
+  }
   if (placing.value && ghost) {
-    const q = locate(e, placing.value.asset, null, new Set(), undefined, ghostRot.value)
-    if (q && q.asset !== ghostAsset) syncGhost(q.asset)
-    if (!ghost) return
-    ghost.visible = !!q
-    ghostRing.visible = !!q
-    if (q) {
-      placeFurniture(ghost, plan.value, { x: q.x, y: q.y, rot: q.rot ?? ghostRot.value, z: q.z })
-      const r = footprintRadius(q.asset)
-      ghostRing.scale.set(r, 1, r)
-      ghostRing.position.set(ghost.position.x, ghost.position.y + 0.6, ghost.position.z)
-      ;(ghostRing.material as THREE.MeshBasicMaterial).color.set(!q.z && overlapsOthers(plan.value, null, q.asset, q.x, q.y, q.rot ?? ghostRot.value) ? RING_BAD : RING_OK)
-      showGuides(q.guides)
-    }
-    dirty = true
+    updateGhost(e)
     return
   }
   if (drag) {
-    const f = findFurniture(drag.id)
-    const q = f && locate(e, f.asset, f.id, drag.exclude, { x: drag.dx, y: drag.dz }, f.rot)
-    if (f && q) {
-      f.x = q.x
-      f.y = q.y
-      if (q.z) f.z = q.z
-      else delete f.z
-      if (q.rot !== undefined) f.rot = q.rot
-      if (q.asset !== f.asset) f.asset = q.asset
-      // 桌上的东西跟着走
-      for (const k of drag.kids) {
-        const o = findFurniture(k.id)
-        if (!o) continue
-        o.x = Math.round((f.x + k.dx) * 10) / 10
-        o.y = Math.round((f.y + k.dy) * 10) / 10
-        o.z = (f.z ?? 0) + k.dz
-      }
-      showGuides(q.guides)
-    }
+    moveDrag(e)
     return
   }
-  // 悬停时换指针
-  if (e.buttons === 0 && editing.value) hovering.value = !!pickFurniture(e)
+  // 悬停：换指针、提亮指到的家具（选中的那件已经有选中圈，不再提亮）
+  if (e.buttons === 0 && editing.value) {
+    const id = pickFurniture(e)
+    hovering.value = !!id
+    setHover(id && id !== (selection.value?.type === 'furniture' ? selection.value.id : null) ? id : null)
+  }
 }
 
 function onPointerUp(e: PointerEvent) {
+  if (e.pointerType !== 'mouse') {
+    touches.delete(e.pointerId)
+    if (editing.value) onTouchUp(e)
+    return
+  }
   if (drag) {
-    settle()
-    drag = null
+    endDrag()
     controls.enabled = true
-    showGuides([])
   } else if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 4) {
     selection.value = null
   }
   down = null
+}
+
+function onPointerLeave() {
+  updateHoverRoom(null)
+  setHover(null)
 }
 
 // ---------- 键盘 ----------
@@ -572,6 +870,8 @@ function onRotateMove(e: PointerEvent) {
   let target = rotating.base + (ang - rotating.start)
   if (e.shiftKey) target = Math.round(target / 15) * 15
   setSelectedFurnitureRotation(target)
+  const f = selectedFurniture.value
+  if (f) updateDragHud(e, f)
   return true
 }
 function endRotate() {
@@ -579,10 +879,14 @@ function endRotate() {
   rotating = null
   settle()
   controls.enabled = true
+  dragHud.value = null
+  wallGuide.hide()
+  dirty = true
 }
 let rKey = false
 function onKeyUp(e: KeyboardEvent) {
-  if (e.key.toLowerCase() === 'r') {
+  // 窗口失焦（blur）也走这里，事件上没有 key
+  if (!e.key || e.key.toLowerCase() === 'r') {
     rKey = false
     endRotate()
   }
@@ -590,6 +894,8 @@ function onKeyUp(e: KeyboardEvent) {
 
 function onKey(e: KeyboardEvent) {
   if (isTyping(e) || e.ctrlKey || e.metaKey || e.altKey) return
+  // 快捷键帮助 / 我的户型 / 确认框开着时不响应（Esc 留给它们关闭自己）
+  if (overlays.help || saved.panelOpen || saved.confirm) return
   const k = e.key.toLowerCase()
   if (k === 'r' && !e.repeat) rKey = true
   const step = e.shiftKey ? 15 : 90
@@ -640,49 +946,99 @@ function startPlacing(asset: string) {
   selection.value = null
   const def = ASSET_MAP.get(asset)!
   placing.value = placing.value?.asset === asset ? null : { asset, color: paletteFor(def, libFilter.style) }
+  // 手机：收起抽屉，把地面让出来点按
+  if (placing.value && device.compact) sheet.value = 'peek'
 }
 
-// ---------- 从家具栏直接拖进场景 ----------
-// 拖动开始就进入放置状态；在画布上移动时预览跟着走，松手放下；拖到别处松手就取消
-let dragPlacing = false
-function onCardDragStart(e: DragEvent, asset: string) {
+// ---------- 从家具栏直接拖进场景（pointer 事件实现，手机上也能用；HTML5 拖放在移动端不可用） ----------
+// 鼠标：按住卡片拖出 6px 就开始；手指：长按卡片约 0.3 秒再拖（直接滑动是滚动列表）。
+// 拖动中缩略图跟着指针，进入画布后摆放预览跟着走，松手放下；在画布外松手就取消。
+let cardPress: { asset: string; x: number; y: number; id: number; touch: boolean; timer: number; started: boolean; src: string; last: PointerEvent } | null = null
+const cardGhost = ref<{ x: number; y: number; src: string } | null>(null)
+let suppressCardClick = false
+
+function onCardDown(e: PointerEvent, asset: string) {
+  if (e.pointerType === 'mouse' && e.button !== 0) return
+  const src = (e.currentTarget as HTMLElement).querySelector('img')?.src ?? ''
+  cardPress = { asset, x: e.clientX, y: e.clientY, id: e.pointerId, touch: e.pointerType !== 'mouse', timer: 0, started: false, src, last: e }
+  if (cardPress.touch) {
+    cardPress.timer = window.setTimeout(() => {
+      if (cardPress && !cardPress.started) beginCardDrag(cardPress.last)
+    }, 320)
+  }
+  window.addEventListener('pointermove', onCardMove, { passive: false })
+  window.addEventListener('pointerup', onCardUp)
+  window.addEventListener('pointercancel', onCardUp)
+  // 拖动开始后拦住页面 / 列表的触摸滚动（否则浏览器接管手势、发 pointercancel）
+  window.addEventListener('touchmove', blockTouch, { passive: false })
+}
+function blockTouch(e: TouchEvent) {
+  if (cardPress?.started) e.preventDefault()
+}
+function beginCardDrag(e: PointerEvent) {
+  const cp = cardPress
+  if (!cp) return
+  cp.started = true
+  suppressCardClick = true
   if (!editing.value) setMode('edit')
   selection.value = null
-  const def = ASSET_MAP.get(asset)!
-  placing.value = { asset, color: paletteFor(def, libFilter.style) }
-  dragPlacing = true
-  if (e.dataTransfer) {
-    e.dataTransfer.effectAllowed = 'copy'
-    e.dataTransfer.setData('text/plain', asset)
-    // 拖动时不显示整张卡片的残影，用缩略图当拖动图标
-    const img = (e.currentTarget as HTMLElement).querySelector('img')
-    if (img) e.dataTransfer.setDragImage(img, img.width / 2, img.height / 2)
+  placing.value = { asset: cp.asset, color: paletteFor(ASSET_MAP.get(cp.asset)!, libFilter.style) }
+  // 手机：收起抽屉，露出画布
+  if (device.compact) sheet.value = 'peek'
+  cardGhost.value = { x: e.clientX, y: e.clientY, src: cp.src }
+  navigator.vibrate?.(8)
+}
+/** 指针是否在画布上（没被抽屉、工具条盖住） */
+function overCanvas(e: { clientX: number; clientY: number }) {
+  return document.elementFromPoint(e.clientX, e.clientY) === canvas.value
+}
+function onCardMove(e: PointerEvent) {
+  const cp = cardPress
+  if (!cp || e.pointerId !== cp.id) return
+  cp.last = e
+  const d = Math.hypot(e.clientX - cp.x, e.clientY - cp.y)
+  if (!cp.started) {
+    if (!cp.touch && d > 6) beginCardDrag(e)
+    else {
+      // 手指在长按前就动了：是在滚动列表
+      if (cp.touch && d > TAP_SLOP) endCardPress()
+      return
+    }
   }
+  e.preventDefault()
+  cardGhost.value = { x: e.clientX, y: e.clientY, src: cp.src }
+  if (overCanvas(e)) {
+    updateHoverRoom(e)
+    updateGhost(e)
+  } else hideGhost()
 }
-function onCardDragEnd() {
-  if (dragPlacing) placing.value = null
-  dragPlacing = false
-  showGuides([])
+function onCardUp(e: PointerEvent) {
+  const cp = cardPress
+  if (!cp || e.pointerId !== cp.id) return
+  if (cp.started) {
+    if (e.type !== 'pointercancel' && overCanvas(e)) dropPlacing(e)
+    placing.value = null
+    hideGhost()
+    // 紧跟着的 click 不算点卡片
+    setTimeout(() => (suppressCardClick = false), 0)
+  }
+  endCardPress()
 }
-function onCanvasDragOver(e: DragEvent) {
-  if (!dragPlacing) return
-  if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'
-  onPointerMove(e as unknown as PointerEvent)
+function endCardPress() {
+  if (cardPress) clearTimeout(cardPress.timer)
+  cardPress = null
+  cardGhost.value = null
+  window.removeEventListener('pointermove', onCardMove)
+  window.removeEventListener('pointerup', onCardUp)
+  window.removeEventListener('pointercancel', onCardUp)
+  window.removeEventListener('touchmove', blockTouch)
 }
-function onCanvasDragLeave() {
-  if (!dragPlacing || !ghost) return
-  ghost.visible = false
-  ghostRing.visible = false
-  showGuides([])
-  dirty = true
-}
-function onCanvasDrop(e: DragEvent) {
-  if (!dragPlacing || !placing.value) return
-  const q = locate(e as unknown as PointerEvent, placing.value.asset, null, new Set(), undefined, ghostRot.value)
-  if (q) addFurniture({ asset: q.asset, color: placing.value.color, colors: placing.value.colors, patterns: placing.value.patterns, x: q.x, y: q.y, rot: q.rot ?? ghostRot.value, z: q.z || undefined })
-  placing.value = null
-  dragPlacing = false
-  showGuides([])
+function onCardClick(asset: string) {
+  if (suppressCardClick) {
+    suppressCardClick = false
+    return
+  }
+  startPlacing(asset)
 }
 
 // ---------- 家具栏：按分类 / 风格 / 尺寸筛选，同系列合成一项 ----------
@@ -692,6 +1048,8 @@ const categories = categoriesOf(false)
 const styleKeys = Object.keys(STYLE_LABELS) as StyleTag[]
 const sizeKeys = Object.keys(SIZE_LABELS) as SizeClass[]
 const placeable = computed(() => browse(libFilter))
+// 1500+ 张卡片按滚动逐批挂载（每批 48 张），筛选变化时回到第一批
+const { shown: shownPlaceable, more: morePlaceable, vSentinel } = useProgressive(() => placeable.value, 48)
 // 缩略图只渲染滚到可见处的（v-thumb）
 const { thumbs, vThumb } = useThumbs()
 const thumbColor = (id: string) => paletteFor(ASSET_MAP.get(id)!, libFilter.style)
@@ -714,15 +1072,6 @@ watch(paperRooms, (rs) => {
 }, { immediate: true })
 const WP_COLORS = ['#fbf7f1', '#f2f2f0', '#fff4f1', '#f3f8ff', '#f4fbf6', '#fff9e8', '#f6f0e1', '#e6e6e4', '#d6d3cd', '#f4e7c8', '#dfe8f0', '#3d3f44']
 const WP_PATTERNS: PatternKind[] = ['stripes', 'dots', 'gingham', 'flowers', 'sakura', 'stars', 'asanoha', 'seigaiha', 'ichimatsu', 'chevron', 'houndstooth', 'argyle']
-// ---------- 家电（冰箱、洗衣机）款式和颜色 ----------
-const appliances = computed(() => plan.value.fixtures.filter((f) => f.kind === 'fridge' || f.kind === 'washer'))
-function setAppliance(id: string, patch: Partial<Pick<Fixture, 'style' | 'color'>>) {
-  mutate((p) => {
-    const f = p.fixtures.find((x) => x.id === id)
-    if (f) Object.assign(f, patch)
-  })
-}
-
 /** 边饰预设：颜色用 trimColor */
 const TRIM_COLORS = ['#f4f1ea', '#d2b48c', '#b98b5e', '#7a5638', '#3d3f44', '#c9d6cf']
 const trimColor = ref('#f4f1ea')
@@ -790,8 +1139,10 @@ function loop() {
     shadowDirty = true
     dirty = true
   }
-  if (fx.update(dt, stage.renderer.domElement.height)) dirty = true
-  if (actors.update(dt)) dirty = true
+  // 省电画质：只有动画（粒子、走动的角色）在变时，最多 30fps 重画
+  const low = lowPower()
+  const anim = fx.update(dt, stage.renderer.domElement.height) || actors.update(dt)
+  if (anim && !(low && now - lastRender < 32)) dirty = true
   if (fading && house) {
     // 壁挂物按透明方式淡出（压低模式下也是淡出，它们没有矮墙可压）
     const furnBusy = stepCutaway(furnRoot, dt, { ...wallLook(), style: 'fade', opacity: sandbox.wallMode === 'fade' ? sandbox.cutawayOpacity / 100 : 0 })
@@ -803,11 +1154,9 @@ function loop() {
       dirty = true
     }
   }
-  if (ring.visible) {
-    const t = performance.now() / 1000
-    ;(ring.material as THREE.MeshBasicMaterial).opacity = 0.55 + Math.sin(t * 4) * 0.35
-    dirty = true
-  }
+  // 选中框：出现时缩入，之后角标呼吸（省电画质 / 减少动效时静止，画面不用每帧重画）
+  const framesMoving = [selFrame.update(now, low), hoverFrame.update(now, true), ghostFrame.update(now, true)].some(Boolean)
+  if (framesMoving) dirty = true
   if (moved) {
     updateCutaway()
     updateCompass()
@@ -816,17 +1165,39 @@ function loop() {
     if (shadowDirty) stage.renderer.shadowMap.needsUpdate = true
     stage.render()
     dirty = false
+    lastRender = now
+  }
+}
+let lastRender = 0
+
+/** 切到后台 / 锁屏：停掉渲染循环；回来时接着跑（时间步长从头算，不会一下跳很多） */
+function onVisibility() {
+  if (document.hidden) {
+    cancelAnimationFrame(raf)
+    raf = 0
+  } else if (!raf) {
+    lastFrame = performance.now()
+    dirty = true
+    loop()
   }
 }
 
+/** 画质切换（场景页的「画质」或设备变化）：像素比、阴影、抗锯齿方式 */
+function applyQuality() {
+  const low = lowPower()
+  setStageQuality(stage, low)
+  post.setLow(low)
+  dirty = true
+}
+
 onMounted(() => {
-  stage = createStage(canvas.value!)
-  post = attachPost(stage)
+  stage = createStage(canvas.value!, { low: lowPower() })
+  post = attachPost(stage, { low: lowPower() })
   post.setLook(sandbox.look)
   applySky()
   stage.renderer.shadowMap.autoUpdate = false
   stage.renderer.shadowMap.needsUpdate = true
-  stage.scene.add(furnRoot, ring, ghostRing, guideRoot, fx.group, actors.group)
+  stage.scene.add(furnRoot, frameRoot, guideRoot, fx.group, actors.group)
   controls = new OrbitControls(stage.camera, canvas.value!)
   controls.enableDamping = true
   controls.dampingFactor = 0.12
@@ -848,8 +1219,10 @@ onMounted(() => {
 
   const r = host.value!.getBoundingClientRect()
   stage.resize(r.width, r.height)
+  syncLineRes(r.width, r.height)
   ro = new ResizeObserver(([entry]) => {
     stage.resize(entry.contentRect.width, entry.contentRect.height)
+    syncLineRes(entry.contentRect.width, entry.contentRect.height)
     dirty = true
   })
   ro.observe(host.value!)
@@ -863,9 +1236,22 @@ onMounted(() => {
   window.addEventListener('keydown', onKey)
   window.addEventListener('keyup', onKeyUp)
   window.addEventListener('blur', onKeyUp as unknown as () => void)
+  document.addEventListener('visibilitychange', onVisibility)
   liveCapture.fn = captureView
   // 浮动工具条 / 右键菜单 / 双击聚焦 / 方向键微移（SandboxOverlay.vue）用的句柄
-  sandboxBridge.value = { canvas: canvas.value!, camera: stage.camera, controls, object: (id) => objs.get(id)?.obj, pick: (e) => pickFurniture(e as PointerEvent), resetView, redraw: () => (dirty = true) }
+  sandboxBridge.value = {
+    canvas: canvas.value!,
+    camera: stage.camera,
+    controls,
+    object: (id) => objs.get(id)?.obj,
+    pick: (e) => pickFurniture(e as PointerEvent),
+    resetView,
+    redraw: () => (dirty = true),
+    showProps: () => {
+      tab.value = 'sel'
+      if (sheet.value === 'peek') sheet.value = 'half'
+    },
+  }
 })
 
 /**
@@ -874,7 +1260,8 @@ onMounted(() => {
  */
 function captureView(w: number, h: number) {
   if (!house) return null
-  const hidden = [ring, ghostRing, guideRoot, ...(ghost ? [ghost] : [])].filter((o) => o.visible)
+  setHover(null)
+  const hidden = [frameRoot, guideRoot, ...(ghost ? [ghost] : [])].filter((o) => o.visible)
   for (const o of hidden) o.visible = false
   try {
     stage.render()
@@ -930,6 +1317,11 @@ watch(dayCount, (n) => {
   if (sandbox.day > n) sandbox.day = n
 })
 const SPEEDS = [0.25, 0.5, 1, 2, 4]
+/** 播放 / 暂停时间流逝：播放过就算改过时间，不再跟随当前时间 */
+function togglePlay() {
+  sandbox.playing = !sandbox.playing
+  if (sandbox.playing) sandbox.timeSet = true
+}
 const sunInfo = computed(() => {
   const s = skyNow.value
   if (!s) return ''
@@ -1018,6 +1410,12 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKey)
   window.removeEventListener('keyup', onKeyUp)
   window.removeEventListener('blur', onKeyUp as unknown as () => void)
+  document.removeEventListener('visibilitychange', onVisibility)
+  endCardPress()
+  setHover(null)
+  for (const m of hiMats.values()) m.dispose()
+  hiMats.clear()
+  for (const f of [selFrame, hoverFrame, ghostFrame, wallGuide]) f.dispose()
   placing.value = null
 })
 
@@ -1074,6 +1472,74 @@ watch(
   () => updateCompass(),
 )
 
+watch(lowPower, applyQuality)
+
+// ---------- 侧栏 / 底部抽屉：标签页 ----------
+// 原来一条长侧栏（设置 + 住户 + 墙纸 + 清单 + 1500 件家具）拆成几页；选中家具时自动切到「属性」页，取消选中回到原来那页。
+type Tab = 'sel' | 'lib' | 'scene' | 'home' | 'decor'
+const TAB_KEY = 'my-home:sandbox-tab'
+function loadTab(): Tab {
+  try {
+    const v = localStorage.getItem(TAB_KEY)
+    if (v === 'lib' || v === 'scene' || v === 'home' || v === 'decor') return v
+  } catch {
+    /* 读不到就用默认 */
+  }
+  return 'scene'
+}
+const tab = ref<Tab>(loadTab())
+let tabBeforeSel: Tab = tab.value === 'sel' ? 'scene' : tab.value
+const tabs = computed(() => [
+  ...(selectedFurniture.value ? [{ id: 'sel' as Tab, label: t('属性'), icon: ICONS.generateOptions }] : []),
+  { id: 'lib' as Tab, label: t('家具'), icon: VIEW_ICONS.lib },
+  { id: 'scene' as Tab, label: t('场景'), icon: VIEW_ICONS['3d'] },
+  { id: 'home' as Tab, label: t('住户'), icon: ICONS.household },
+  { id: 'decor' as Tab, label: t('墙纸'), icon: ICONS.wallpaper },
+])
+watch(
+  () => selectedFurniture.value?.id ?? null,
+  (id, old) => {
+    if (id && !old) {
+      if (tab.value !== 'sel') tabBeforeSel = tab.value
+      tab.value = 'sel'
+    } else if (!id && tab.value === 'sel') tab.value = tabBeforeSel
+  },
+)
+watch(tab, (v) => {
+  if (v === 'sel') return
+  try {
+    localStorage.setItem(TAB_KEY, v)
+  } catch {
+    /* 存不了就只在本次生效 */
+  }
+})
+/** 底部抽屉（手机）的三档 */
+const sheet = ref<SheetSnap>('peek')
+function pickTab(id: Tab) {
+  if (tab.value === id && device.compact) {
+    // 再点一次当前页：收起 / 展开
+    sheet.value = sheet.value === 'peek' ? 'half' : 'peek'
+    return
+  }
+  tab.value = id
+  if (device.compact && sheet.value === 'peek') sheet.value = 'half'
+}
+
+/** 画质选择 */
+const QUALITIES: { id: Quality; label: string }[] = [
+  { id: 'auto', label: '自动' },
+  { id: 'high', label: '高画质' },
+  { id: 'low', label: '省电' },
+]
+
+/** 底部提示：触屏和鼠标的操作说法不一样 */
+const hudText = computed(() => {
+  if (!editing.value) return device.coarse ? t('预览模式 · 单指旋转 · 双指缩放 / 平移') : t('预览模式 · 左键旋转 · 右键平移 · 滚轮缩放 · 鼠标所指房间前的墙自动处理 · P 或 Esc 回到布置')
+  return device.coarse
+    ? t('单指旋转 · 双指缩放 / 平移 · 点家具选中，再按住拖动 · 双指拧转旋转 · 长按弹出菜单')
+    : t('左键旋转 · 右键平移 · 滚轮缩放 · 点家具选中后拖动（自动贴墙对齐，Alt 关闭）· Q / E 旋转 · Delete 删除 · C 切换墙体显示 · F 重置视角 · P 预览')
+})
+
 const planSize = computed(() => {
   const pts = plan.value.rooms.flatMap((r) => r.points)
   if (!pts.length) return ''
@@ -1086,7 +1552,7 @@ defineExpose({ resetView })
 
 <template>
   <div class="sandbox">
-    <div ref="host" class="viewport" :class="{ placing: !!placing, hover: hovering, night: nightUi }" :style="{ background: viewportBg }">
+    <div ref="host" class="viewport" :class="{ placing: !!placing, hover: hovering, night: nightUi }" :style="{ background: viewportBg, '--sheet-h': layout.sheetH + 'px' }">
       <div class="compass" :title="t('北') + ' · ' + t('户型朝向 {n}°', { n: northDeg })">
         <svg viewBox="-20 -20 40 40" width="40" height="40" aria-hidden="true">
           <circle r="18" class="compass-bg" />
@@ -1108,10 +1574,10 @@ defineExpose({ resetView })
         </select>
         <label class="pb-time" :title="t('时刻')">
           <JIcon :icon="ICONS.timeOfDay" class="ico-muted" />
-          <input v-model.number="sandbox.time" type="range" min="0" max="24" step="0.05" :aria-label="t('时刻')" />
+          <input v-model.number="sandbox.time" type="range" min="0" max="24" step="0.05" :aria-label="t('时刻')" @input="sandbox.timeSet = true" />
           <span class="clock">{{ clock }}</span>
         </label>
-        <button class="icon-only" :class="{ on: sandbox.playing }" :title="sandbox.playing ? t('暂停') : t('播放时间流逝')" :aria-label="sandbox.playing ? t('暂停') : t('播放时间流逝')" @click="sandbox.playing = !sandbox.playing">
+        <button class="icon-only" :class="{ on: sandbox.playing }" :title="sandbox.playing ? t('暂停') : t('播放时间流逝')" :aria-label="sandbox.playing ? t('暂停') : t('播放时间流逝')" @click="togglePlay">
           <JIcon :icon="sandbox.playing ? ICONS.pause : ICONS.play" :size="14" />
         </button>
         <label :title="t('画面效果')">
@@ -1129,24 +1595,43 @@ defineExpose({ resetView })
         @pointermove="onPointerMove"
         @pointerup="onPointerUp"
         @pointercancel="onPointerUp"
-        @pointerleave="updateHoverRoom(null)"
-        @dragover.prevent="onCanvasDragOver"
-        @dragleave="onCanvasDragLeave"
-        @drop.prevent="onCanvasDrop"
+        @pointerleave="onPointerLeave"
         @contextmenu.prevent
       />
       <SandboxOverlay />
       <div v-if="!plan.rooms.length" class="empty">{{ t('还没有房间。先去 2D 平面图画一个，或者点「随机生成」。') }}</div>
-      <div class="hud">
-        <template v-if="!editing">{{ t('预览模式 · 左键旋转 · 右键平移 · 滚轮缩放 · 鼠标所指房间前的墙自动处理 · P 或 Esc 回到布置') }}</template>
-        <template v-else-if="placing">
+      <div v-if="!device.compact" class="hud">
+        <template v-if="placing && !device.coarse">
           <b>{{ t('摆放 {name}', { name: placingName }) }}</b> · {{ t('点击地面放下（自动贴墙对齐，Alt 关闭）· Q / E 旋转 90°（Shift 15°）· 按住 Shift 连续摆放 · Esc 取消') }}
         </template>
-        <template v-else>{{ t('左键旋转 · 右键平移 · 滚轮缩放 · 点家具选中后拖动（自动贴墙对齐，Alt 关闭）· Q / E 旋转 · Delete 删除 · C 切换墙体显示 · F 重置视角 · P 预览') }}</template>
+        <template v-else-if="!placing">{{ hudText }}</template>
+      </div>
+      <!-- 触屏摆放：提示 + 旋转 / 取消按钮 -->
+      <div v-if="placing && device.coarse" class="place-pill" :style="{ bottom: device.compact && !device.landscape ? 'calc(var(--sheet-h, 0px) + 10px)' : undefined }">
+        <span class="pp-text"><b>{{ t('摆放 {name}', { name: placingName }) }}</b><span>{{ t('按住地面拖到合适位置，松手放下') }}</span></span>
+        <button class="icon-only" :title="t('顺时针旋转 90°')" :aria-label="t('顺时针旋转 90°')" @click="ghostRot = (ghostRot + 90) % 360"><JIcon :icon="ICONS.rotateCw" /></button>
+        <button @click="placing = null"><JIcon :icon="ICONS.close" />{{ t('取消') }}</button>
+      </div>
+      <!-- 拖动 / 旋转家具时跟着指针的提示：角度、离墙距离、吸附 -->
+      <div v-if="dragHud" class="drag-hud" :class="{ touch: dragHud.touch }" :style="{ left: dragHud.x + 'px', top: dragHud.y + 'px' }">
+        <span class="num">{{ dragHud.rot }}°</span>
+        <span v-if="dragHud.wall !== null" class="num">{{ t('离墙 {n} cm', { n: dragHud.wall }) }}</span>
+        <span v-if="!dragHud.touch" class="dh-hint">{{ dragHud.snap ? t('按住 Alt 关闭吸附') : t('吸附已关闭') }}</span>
       </div>
     </div>
 
-    <aside v-if="editing" class="panel">
+    <!-- 从家具栏拖出来时跟着指针的缩略图 -->
+    <img v-if="cardGhost && cardGhost.src" class="card-ghost" :src="cardGhost.src" alt="" :style="{ left: cardGhost.x + 'px', top: cardGhost.y + 'px' }" />
+
+    <BottomSheet v-if="editing" v-model="sheet" :enabled="device.compact" class="panel" :label="t('沙盘面板')">
+      <template #header>
+        <nav class="ptabs" role="tablist" :aria-label="t('沙盘面板')">
+          <button v-for="tb in tabs" :key="tb.id" role="tab" :aria-selected="tab === tb.id" :class="{ on: tab === tb.id, 'tab-sel': tb.id === 'sel' }" @click="pickTab(tb.id)">
+            <JIcon :icon="tb.icon" :size="15" /><span>{{ tb.label }}</span>
+          </button>
+        </nav>
+      </template>
+      <template v-if="tab === 'scene'">
       <section>
         <h3 class="ico-label"><JIcon :icon="VIEW_ICONS['3d']" class="ico-muted" />{{ t('沙盘') }}</h3>
         <div class="meta num">{{ planSize }} · {{ t('家具 {n} 件', { n: counts }) }}</div>
@@ -1172,23 +1657,28 @@ defineExpose({ resetView })
         <div class="sky">
           <div class="sky-row">
             <JIcon :icon="ICONS.timeOfDay" class="ico-muted" />
-            <input v-model.number="sandbox.time" type="range" min="0" max="24" step="0.05" class="sky-time" :aria-label="t('时刻')" :title="t('时刻')" />
+            <input v-model.number="sandbox.time" type="range" min="0" max="24" step="0.05" class="sky-time" :aria-label="t('时刻')" :title="t('时刻')" @input="sandbox.timeSet = true" />
             <span class="clock">{{ clock }}</span>
-            <button class="sky-play icon-only" :class="{ on: sandbox.playing }" :title="sandbox.playing ? t('暂停') : t('播放时间流逝')" :aria-label="sandbox.playing ? t('暂停') : t('播放时间流逝')" @click="sandbox.playing = !sandbox.playing">
+            <button class="sky-play icon-only" :class="{ on: sandbox.playing }" :title="sandbox.playing ? t('暂停') : t('播放时间流逝')" :aria-label="sandbox.playing ? t('暂停') : t('播放时间流逝')" @click="togglePlay">
               <JIcon :icon="sandbox.playing ? ICONS.pause : ICONS.play" :size="14" />
             </button>
           </div>
           <div class="sky-row">
             <JIcon :icon="ICONS.date" class="ico-muted" />
-            <select v-model.number="sandbox.month" class="sel-style" :aria-label="t('月份')">
+            <select v-model.number="sandbox.month" class="sel-style" :aria-label="t('月份')" @change="sandbox.timeSet = true">
               <option v-for="(m, i) in monthNames" :key="i" :value="i + 1">{{ m }}</option>
             </select>
-            <select v-model.number="sandbox.day" class="sel-style num" :aria-label="t('日')">
+            <select v-model.number="sandbox.day" class="sel-style num" :aria-label="t('日')" @change="sandbox.timeSet = true">
               <option v-for="d in dayCount" :key="d" :value="d">{{ d }}</option>
             </select>
             <select v-model.number="sandbox.speed" class="sel-style num" :title="t('播放速度')" :aria-label="t('播放速度')">
               <option v-for="v in SPEEDS" :key="v" :value="v">{{ t('{n} 小时/秒', { n: v }) }}</option>
             </select>
+          </div>
+          <!-- 时间默认跟随设备当前时间；手动改过之后可以一键回到现在 -->
+          <div class="sky-row now-row">
+            <span v-if="!sandbox.timeSet" class="now-tag">{{ t('跟随当前时间') }}</span>
+            <button v-else class="mini" :title="t('时刻和日期重新跟随设备的当前时间')" @click="syncSkyToNow"><JIcon :icon="ICONS.timeOfDay" :size="14" />{{ t('回到现在') }}</button>
           </div>
           <div class="sky-row">
             <JIcon :icon="ICONS.location" class="ico-muted" />
@@ -1225,7 +1715,14 @@ defineExpose({ resetView })
           </div>
           <div class="look-desc">{{ t(currentLook.desc) }}</div>
         </div>
-        <label class="row check"><input v-model="sandbox.snap" type="checkbox" /><JIcon :icon="ICONS.snap" class="ico-muted" />{{ t('贴墙 / 对齐吸附') }} <span class="hint">{{ t('按住 Alt 临时关闭') }}</span></label>
+        <label class="row check"><input v-model="sandbox.snap" type="checkbox" /><JIcon :icon="ICONS.snap" class="ico-muted" />{{ t('贴墙 / 对齐吸附') }} <span v-if="!device.coarse" class="hint">{{ t('按住 Alt 临时关闭') }}</span></label>
+        <div class="row">
+          <span>{{ t('画质') }}</span>
+          <div class="seg seg-text" role="radiogroup" :aria-label="t('画质')">
+            <button v-for="q in QUALITIES" :key="q.id" role="radio" :aria-checked="gfx.quality === q.id" :class="{ on: gfx.quality === q.id }" @click="setQuality(q.id)">{{ t(q.label) }}</button>
+          </div>
+        </div>
+        <p v-if="gfx.quality === 'auto'" class="q-note">{{ lowPower() ? t('已按设备自动切到省电画质') : t('已按设备自动使用高画质') }}</p>
         <label class="row">
           <span>{{ t('布置风格') }}</span>
           <select v-model="sandbox.style" class="sel-style">
@@ -1243,7 +1740,9 @@ defineExpose({ resetView })
           <button @click="screenshot"><JIcon :icon="ICONS.screenshotPng" />{{ t('截图 PNG') }}</button>
         </div>
       </section>
+      </template>
 
+      <template v-else-if="tab === 'home'">
       <section class="hh">
         <div class="hh-head">
           <h3 class="ico-label"><JIcon :icon="ICONS.household" class="ico-muted" />{{ t('住户') }}</h3>
@@ -1260,27 +1759,37 @@ defineExpose({ resetView })
           </div>
           <div class="chips">
             <span v-for="tr in m.traits" :key="tr" class="chip trait">{{ t(TRAITS[tr].label) }}</span>
-            <span v-for="i in m.interests" :key="i" class="chip">{{ t(INTERESTS[i].label) }}</span>
+            <span v-for="i in m.interests" :key="i" class="chip" :title="t(LV_LABELS[levelOf(m, i) || 1])">{{ t(INTERESTS[i].label) }} <span class="num">Lv.{{ levelOf(m, i) || 1 }}</span></span>
             <span class="chip style">{{ t(STYLE_LABELS[m.style]) }}</span>
           </div>
         </div>
       </section>
-
-      <section v-if="appliances.length" class="wp">
-        <div class="hh-head"><h3 class="ico-label"><JIcon :icon="ICONS.appliances" class="ico-muted" />{{ t('家电') }}</h3></div>
-        <div v-for="f in appliances" :key="f.id" class="ap">
-          <div class="ap-row">
-            <span class="ap-name">{{ t(f.kind === 'fridge' ? '冰箱' : '洗衣机') }}</span>
-            <select class="sel-style" :value="f.style ?? (f.kind === 'fridge' ? '3door' : 'drum')" @change="setAppliance(f.id, { style: ($event.target as HTMLSelectElement).value as never })">
-              <option v-for="(label, k) in f.kind === 'fridge' ? FRIDGE_STYLES : WASHER_STYLES" :key="k" :value="k">{{ t(label) }}</option>
-            </select>
-          </div>
-          <div class="wp-row">
-            <button v-for="c in APPLIANCE_COLORS" :key="c" class="wp-sw" :class="{ on: f.color === c }" :style="{ background: c }" :title="c" @click="setAppliance(f.id, { color: c })" />
-          </div>
+      <!-- 检查清单 -->
+      <section class="cl">
+        <div class="hh-head">
+          <h3 class="ico-label"><JIcon :icon="ICONS.checklist" class="ico-muted" />{{ t('检查清单') }}</h3>
+          <span class="tag num" :class="{ bad: missingItems.length }">{{ missingItems.length ? t('缺 {n} 项', { n: missingItems.length }) : t('齐全') }}</span>
+          <span class="spacer" />
+          <button class="mini icon-only" :title="clOpen ? t('收起') : t('展开')" :aria-label="clOpen ? t('收起') : t('展开')" :aria-expanded="clOpen" @click="clOpen = !clOpen"><JIcon :icon="clOpen ? ICONS.collapse : ICONS.expand" :size="14" /></button>
+          <button class="mini primary" :disabled="!missingItems.some((i) => i.fix)" @click="fixChecklist(missingItems)"><JIcon :icon="ICONS.checkFixAll" :size="14" />{{ t('一键补齐') }}</button>
         </div>
+        <template v-if="clOpen">
+          <div v-for="[room, items] in checkGroups" :key="room" class="cl-room">
+            <div class="cl-name">{{ roomName(room) }}</div>
+            <div v-for="it in items" :key="it.key" class="cl-item" :class="{ ok: it.builtin || it.have >= it.need }">
+              <JIcon class="mark" :icon="it.builtin || it.have >= it.need ? ICONS.checkOk : ICONS.checkMissing" :size="14" />
+              <span class="cl-label">{{ tAuto(it.label) }}</span>
+              <span v-if="!it.builtin && it.need > 1" class="num cl-count">{{ it.have }}/{{ it.need }}</span>
+              <span v-if="it.builtin" class="cl-hint">{{ t('内置') }}</span>
+              <button v-else-if="it.have < it.need && it.fix" class="mini" @click="fixChecklist([it])"><JIcon :icon="ICONS.checkFixOne" :size="12" />{{ t('补上') }}</button>
+              <span v-else-if="it.have < it.need" class="cl-hint">{{ t('需在平面图添加') }}</span>
+            </div>
+          </div>
+        </template>
       </section>
+      </template>
 
+      <template v-else-if="tab === 'decor'">
       <section class="wp">
         <div class="hh-head">
           <h3 class="ico-label"><JIcon :icon="ICONS.wallpaper" class="ico-muted" />{{ t('墙纸') }}</h3>
@@ -1318,31 +1827,9 @@ defineExpose({ resetView })
           </div>
         </template>
       </section>
+      </template>
 
-      <section class="cl">
-        <div class="hh-head">
-          <h3 class="ico-label"><JIcon :icon="ICONS.checklist" class="ico-muted" />{{ t('检查清单') }}</h3>
-          <span class="tag num" :class="{ bad: missingItems.length }">{{ missingItems.length ? t('缺 {n} 项', { n: missingItems.length }) : t('齐全') }}</span>
-          <span class="spacer" />
-          <button class="mini icon-only" :title="clOpen ? t('收起') : t('展开')" :aria-label="clOpen ? t('收起') : t('展开')" :aria-expanded="clOpen" @click="clOpen = !clOpen"><JIcon :icon="clOpen ? ICONS.collapse : ICONS.expand" :size="14" /></button>
-          <button class="mini primary" :disabled="!missingItems.some((i) => i.fix)" @click="fixChecklist(missingItems)"><JIcon :icon="ICONS.checkFixAll" :size="14" />{{ t('一键补齐') }}</button>
-        </div>
-        <template v-if="clOpen">
-          <div v-for="[room, items] in checkGroups" :key="room" class="cl-room">
-            <div class="cl-name">{{ roomName(room) }}</div>
-            <div v-for="it in items" :key="it.key" class="cl-item" :class="{ ok: it.builtin || it.have >= it.need }">
-              <JIcon class="mark" :icon="it.builtin || it.have >= it.need ? ICONS.checkOk : ICONS.checkMissing" :size="14" />
-              <span class="cl-label">{{ tAuto(it.label) }}</span>
-              <span v-if="!it.builtin && it.need > 1" class="num cl-count">{{ it.have }}/{{ it.need }}</span>
-              <span v-if="it.builtin" class="cl-hint">{{ t('内置') }}</span>
-              <button v-else-if="it.have < it.need && it.fix" class="mini" @click="fixChecklist([it])"><JIcon :icon="ICONS.checkFixOne" :size="12" />{{ t('补上') }}</button>
-              <span v-else-if="it.have < it.need" class="cl-hint">{{ t('需在平面图添加') }}</span>
-            </div>
-          </div>
-        </template>
-      </section>
-
-      <section v-if="selectedFurniture && selectedDef" class="sel">
+      <section v-else-if="tab === 'sel' && selectedFurniture && selectedDef" class="sel">
         <h3>{{ displayName(selectedDef) }}</h3>
         <div class="meta num">
           {{ selectedDef.w }} × {{ selectedDef.d }} × {{ selectedDef.h }} cm · {{ Math.round(selectedFurniture.rot) }}°<template v-if="selectedFurniture.z"> · {{ t('离地 {n} cm', { n: selectedFurniture.z }) }}</template>
@@ -1387,7 +1874,7 @@ defineExpose({ resetView })
             @change="rotateSelectedFurniture(Number(($event.target as HTMLInputElement).value) - selectedFurniture!.rot)"
           /><span class="rot-unit">°</span>
         </div>
-        <p class="rot-hint">{{ t('按住 R 拖动鼠标自由旋转，按住 Shift 每 15° 吸附') }}</p>
+        <p class="rot-hint">{{ device.coarse ? t('在画布上用两根手指拧转也能旋转') : t('按住 R 拖动鼠标自由旋转，按住 Shift 每 15° 吸附') }}</p>
         <div class="btns">
           <button class="rot" :title="t('逆时针旋转 90°')" :aria-label="t('逆时针旋转 90°')" @click="rotateSelectedFurniture(-90)"><JIcon :icon="ICONS.rotateCcw" /><span class="num">90°</span></button>
           <button class="rot" :title="t('顺时针旋转 90°')" :aria-label="t('顺时针旋转 90°')" @click="rotateSelectedFurniture(90)"><JIcon :icon="ICONS.rotateCw" /><span class="num">90°</span></button>
@@ -1396,8 +1883,7 @@ defineExpose({ resetView })
         </div>
       </section>
 
-      <section class="lib">
-        <h3 class="ico-label"><JIcon :icon="VIEW_ICONS.lib" class="ico-muted" />{{ t('家具') }}</h3>
+      <section v-show="tab === 'lib'" class="lib">
         <label class="search-box">
           <JIcon :icon="ICONS.search" :size="14" class="ico-muted" />
           <input v-model="libFilter.query" class="search" :placeholder="t('搜索…')" :aria-label="t('搜索…')" />
@@ -1416,19 +1902,20 @@ defineExpose({ resetView })
             <option v-for="sz in sizeKeys" :key="sz" :value="sz">{{ t(SIZE_LABELS[sz]) }}</option>
           </select>
         </div>
+        <p class="lib-tip">{{ device.coarse ? t('点卡片后点按地面放下；长按卡片可直接拖进场景') : t('点卡片后在场景里点击放下，也可以直接把卡片拖进场景') }}</p>
         <div class="grid">
           <button
-            v-for="g in placeable"
+            v-for="g in shownPlaceable"
             :key="g.rep.id"
             v-memo="[g, thumbs[g.rep.id + '#' + thumbColor(g.rep.id)], placing?.asset === g.rep.id, lang]"
             v-thumb="[g.rep.id, thumbColor(g.rep.id)]"
             class="item"
             :class="{ on: placing?.asset === g.rep.id }"
             :title="displayName(g.rep) + '  ' + g.rep.w + '×' + g.rep.d + '×' + g.rep.h + 'cm' + (g.sizes > 1 ? t('（共 {n} 种规格，放下后可切换）', { n: g.sizes }) : '')"
-            draggable="true"
-            @click="startPlacing(g.rep.id)"
-            @dragstart="onCardDragStart($event, g.rep.id)"
-            @dragend="onCardDragEnd"
+            @click="onCardClick(g.rep.id)"
+            @pointerdown="onCardDown($event, g.rep.id)"
+            @contextmenu.prevent
+            @dragstart.prevent
           >
             <img v-if="thumbs[g.rep.id + '#' + thumbColor(g.rep.id)]" :src="thumbs[g.rep.id + '#' + thumbColor(g.rep.id)]" alt="" />
             <span v-else class="ph" />
@@ -1436,9 +1923,10 @@ defineExpose({ resetView })
             <span v-if="g.sizes > 1" class="multi num">{{ g.sizes }}</span>
           </button>
           <div v-if="!placeable.length" class="none">{{ t('没有匹配的家具') }}</div>
+          <div v-if="morePlaceable" v-sentinel class="sentinel" aria-hidden="true" />
         </div>
       </section>
-    </aside>
+    </BottomSheet>
   </div>
 </template>
 
@@ -1540,9 +2028,140 @@ defineExpose({ resetView })
   flex: none;
   border-left: 1px solid var(--border);
   background: var(--surface-2);
-  overflow-y: auto;
+}
+/* 标签页：桌面在侧栏顶部，手机在底部抽屉的标题栏 */
+.ptabs {
+  display: flex;
+  gap: 2px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.ptabs::-webkit-scrollbar {
+  display: none;
+}
+.ptabs button {
+  flex: 1 0 auto;
+  gap: 5px;
+  height: var(--control-h);
+  padding: 0 10px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+}
+.ptabs button.on {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+  text-shadow: 0 0 0.6px currentColor; /* 假粗体：选中态不改字重，宽度不跳 */
+}
+.ptabs button.tab-sel {
+  color: var(--accent-strong);
+}
+.ptabs button.tab-sel.on {
+  background: var(--accent-weak);
+  border-color: var(--accent-ring);
+}
+/* 拖动提示：在指针上方，不被手指挡住 */
+.drag-hud {
+  position: absolute;
+  z-index: 3;
+  transform: translate(-50%, calc(-100% - 18px));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  box-shadow: var(--shadow);
+  pointer-events: none;
+}
+.drag-hud.touch {
+  transform: translate(-50%, calc(-100% - 64px));
+  font-size: var(--fs-sm);
+}
+.dh-hint {
+  color: var(--text-muted);
+}
+/* 触屏摆放提示条 */
+.place-pill {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: min(460px, calc(100% - 20px));
+  padding: 4px 4px 4px 14px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+}
+.pp-text {
+  flex: 1;
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  font-size: var(--fs-xs);
+  line-height: 1.35;
+  color: var(--text-muted);
+}
+.pp-text b {
+  font-size: var(--fs-sm);
+  color: var(--accent-strong);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.place-pill button {
+  flex: none;
+  height: 44px;
+  min-width: 44px;
+  border-radius: 10px;
+}
+/* 从家具栏拖出来的缩略图 */
+.card-ghost {
+  position: fixed;
+  z-index: 90;
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  transform: translate(-50%, -70%);
+  pointer-events: none;
+  filter: drop-shadow(0 6px 12px rgba(32, 38, 34, 0.25));
+  opacity: 0.92;
+}
+.sentinel {
+  grid-column: 1 / -1;
+  height: 1px;
+}
+.lib-tip {
+  margin: 0 0 8px;
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
+.seg-text {
+  flex: 1;
+  margin: 0;
+}
+.seg-text button {
+  font-size: var(--fs-xs);
+}
+.q-note {
+  margin: -4px 0 10px;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
 }
 section {
   padding: 16px 18px;
@@ -2158,5 +2777,110 @@ h3 {
   margin: 4px 0 0;
   font-size: var(--fs-xs);
   color: var(--text-faint);
+}
+.now-row {
+  margin-top: -2px;
+}
+.now-tag {
+  font-size: var(--fs-xs);
+  color: var(--accent-strong);
+  background: var(--accent-weak);
+  border-radius: 99px;
+  padding: 0 8px;
+  line-height: 20px;
+}
+/* ---------- 手机 / 平板 ---------- */
+/* 家具卡片：长按拖动时不要弹出系统的图片菜单 / 选中文字 */
+.item {
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+:root.coarse .item {
+  touch-action: pan-y;
+}
+:root.coarse .cats button,
+:root.coarse .mini,
+:root.coarse .trim-btn,
+:root.coarse .sizes button {
+  height: 36px;
+}
+:root.coarse .wp-sw {
+  width: 32px;
+  height: 32px;
+}
+:root.coarse .wp-pat {
+  width: 40px;
+  height: 40px;
+}
+:root.coarse .seg button {
+  height: 40px;
+}
+:root.compact .panel {
+  width: auto;
+}
+:root.compact section {
+  padding: 14px 16px;
+}
+:root.compact .ptabs {
+  border-bottom: 0;
+  padding: 0 10px 8px;
+  background: transparent;
+}
+:root.compact .ptabs button {
+  height: 44px;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  padding: 0 8px;
+}
+:root.compact .grid {
+  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+}
+/* 横向滚动的分类条，省得分类按钮占好几行 */
+:root.compact .cats {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  margin: 0 -16px 10px;
+  padding: 0 16px 2px;
+  scrollbar-width: none;
+}
+:root.compact .cats::-webkit-scrollbar {
+  display: none;
+}
+:root.compact .cats button {
+  flex: none;
+}
+:root.compact .compass {
+  top: 56px;
+  right: 10px;
+  bottom: auto;
+}
+:root.compact .modes {
+  top: 10px;
+  left: 10px;
+}
+:root.compact .modes button {
+  height: 36px;
+  padding: 0 12px;
+}
+/* 预览模式的工具条：手机上放到底部，横向滚动 */
+:root.compact .preview-bar {
+  top: auto;
+  left: 10px;
+  right: 10px;
+  bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 6px 8px;
+}
+:root.compact .preview-bar::-webkit-scrollbar {
+  display: none;
+}
+:root.compact .preview-bar > * {
+  flex: none;
+}
+:root.coarse .preview-bar button,
+:root.coarse .preview-bar select {
+  height: 40px;
 }
 </style>

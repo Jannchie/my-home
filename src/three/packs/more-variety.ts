@@ -180,9 +180,9 @@ function smoothNormals(geo: THREE.BufferGeometry) {
   }
 }
 
-type SoftFn = (x: number, y: number, z: number) => V3
+export type SoftFn = (x: number, y: number, z: number) => V3
 /** 软团：f 把单位球上的点映射成模型坐标；wrinkle 为褶皱幅度（cm），freq 越大褶越密（长毛款用很密的小起伏） */
-function soft(color: string, f: SoftFn, opts: { wrinkle?: number; freq?: number; seed?: number; seg?: [number, number] } = {}) {
+export function soft(color: string, f: SoftFn, opts: { wrinkle?: number; freq?: number; seed?: number; seg?: [number, number] } = {}) {
   const [ws, hs] = opts.seg ?? [48, 32]
   const geo = new THREE.SphereGeometry(1, ws, hs)
   const pos = geo.attributes.position
@@ -1845,9 +1845,15 @@ function decoWoodGeo(p: string[]) {
     const color = i === 3 || i === 7 ? acc : i % 3 === 1 ? dark : wood
     g.add(cylZ(r, depth, color, cx * dx, 30 + cy * dy, 0, 6))
   })
-  // 两个小三角
-  g.add(cylZ(4, 3, acc, 3 * dx - 2, 30 + dy * 0.9, 0, 3))
-  g.add(cylZ(3.5, 2, dark, -2.2 * dx, 30 + dy * 0.6, 0, 3))
+  // 两个小三角：嵌进蜂窝边上的空位，和六边形连成一整块（原先离得太远，像掉出来的碎片）
+  // 六边形平边到中心 r·cos30°，三角内切圆半径 = 外接半径 / 2，再留 0.4cm 缝
+  const side = r * Math.cos(PI / 6) + 0.4
+  g.add(cylZ(4, 3, acc, 1.5 * dx + side + 2, 30 + dy, 0, 3))
+  g.add(cylZ(3.5, 2, dark, -dx - side - 1.75, 30, 0, 3))
+  // 整体 xz 居中
+  const bb = new THREE.Box3().setFromObject(g)
+  const cx = (bb.min.x + bb.max.x) / 2
+  for (const c of g.children) c.position.x -= cx
   return g
 }
 

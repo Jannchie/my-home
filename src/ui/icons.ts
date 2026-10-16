@@ -26,6 +26,7 @@ import {
   IconCursor,
   IconCursorClick,
   IconDicePair,
+  IconDots,
   IconDiorama,
   IconDoor,
   IconDumbbell,
@@ -35,6 +36,7 @@ import {
   IconFilePlus,
   IconFileTypePng,
   IconFolderOpen,
+  IconGithub,
   IconFitToScreen,
   IconFocus,
   IconKeyboard,
@@ -64,6 +66,7 @@ import {
   IconPuzzle,
   IconRectangleHorizontal,
   IconRedo,
+  IconRefresh,
   IconRefrigerator,
   IconReset,
   IconRotate,
@@ -219,6 +222,10 @@ export const ICONS = {
   zoomOut: IconSearchMinus,
   loading: IconLoader,
   tip: IconLightbulb,
+  // 手机 / 平板：顶栏「更多」菜单、PWA 新版本提示
+  more: IconDots,
+  refresh: IconRefresh,
+  github: IconGithub, // 项目仓库链接
 } satisfies Record<string, AppIcon>
 
 /** 顶栏视图切换 */

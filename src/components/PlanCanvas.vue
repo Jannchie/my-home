@@ -1,5 +1,10 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import ContextMenu, { type MenuEntry } from './ContextMenu.vue'
+import { ICONS } from '../ui/icons'
+import { overlays } from '../ui/feedback'
+import { saved } from '../saved'
+import { device, layout, LONG_PRESS_MS, TAP_SLOP } from '../ui/device'
 import {
   ROOM_KINDS,
   add,
@@ -41,6 +46,10 @@ import {
   addOpening,
   addRoom,
   checkpoint,
+  deleteSelection,
+  duplicateSelection,
+  mutate,
+  rotateSelectedFixture,
   findFixture,
   findRoom,
   insertVertex,
@@ -62,15 +71,32 @@ const guides = ref<{ x?: number; y?: number }>({})
 const draft = ref<Vec[]>([])
 const spaceDown = ref(false)
 
+/**
+ * 拖动状态。pan 的 tap：没怎么动就松手时执行（触屏上单指拖空白是平移，点按才是放门窗 / 加顶点 / 取消选中）。
+ * 编辑类拖动带 orig：双指捏合打断时还原。
+ */
 type Drag =
-  | { kind: 'pan'; sx: number; sy: number; ox: number; oy: number }
+  | { kind: 'pan'; sx: number; sy: number; ox: number; oy: number; tap?: () => void; menu?: { x: number; y: number; hit: DOMStringMap | null } }
   | { kind: 'room'; id: string; start: Vec; orig: Vec[] }
-  | { kind: 'vertex'; roomId: string; index: number }
+  | { kind: 'vertex'; roomId: string; index: number; orig: Vec }
   | { kind: 'edge'; roomId: string; index: number; start: Vec; orig: Vec[] }
-  | { kind: 'opening'; id: string }
+  | { kind: 'opening'; id: string; orig: Pick<Opening, 'roomId' | 'edge' | 'offset'> }
   | { kind: 'fixture'; id: string; start: Vec; orig: Vec }
   | { kind: 'rect'; start: Vec; end: Vec }
 const drag = ref<Drag | null>(null)
+
+// ---------- 触控：多指、长按、点按阈值 ----------
+/** 当前按下的指针（屏幕坐标），两指时进入捏合缩放 / 平移 */
+const pointers = new Map<number, { x: number; y: number }>()
+let pinch: { d0: number; s0: number; world: Vec } | null = null
+/** 一次手势里出现过多指（或长按弹了菜单）：剩下的手指不再触发任何编辑，直到全部松开 */
+let gestureSpent = false
+/** 按下的位置与是否已经超出点按阈值（超出之前不移动物体，避免手指抖动把东西推歪） */
+let downAt: { x: number; y: number; moved: boolean; slop: number } | null = null
+let lpTimer = 0
+/** 最近一次是手指 / 笔操作：放大顶点、边、门窗的命中范围 */
+const touchUI = ref(device.coarse)
+const hitPx = (mouse: number, touch: number) => px(touchUI.value ? touch : mouse)
 
 const px = (n: number) => n / view.s // 屏幕像素 → 世界单位
 
@@ -160,11 +186,67 @@ function hitOf(e: Event) {
   return el?.dataset ?? null
 }
 
+/** 平移拖动；tap 是「没动就松手」时要做的事 */
+function startPan(e: PointerEvent, tap?: () => void) {
+  drag.value = { kind: 'pan', sx: e.clientX, sy: e.clientY, ox: view.x, oy: view.y, tap }
+}
+
+/** 编辑中的拖动被打断（捏合 / 长按菜单）：还原到按下时的样子，丢掉刚记的撤销点 */
+function abortDrag() {
+  const d = drag.value
+  drag.value = null
+  guides.value = {}
+  if (!d || d.kind === 'pan' || d.kind === 'rect') return
+  if (d.kind === 'room' || d.kind === 'edge') {
+    const r = findRoom(d.kind === 'room' ? d.id : d.roomId)
+    if (r) r.points = d.orig.map((p) => ({ ...p }))
+  } else if (d.kind === 'vertex') {
+    const r = findRoom(d.roomId)
+    if (r) r.points[d.index] = { ...d.orig }
+  } else if (d.kind === 'fixture') {
+    const f = findFixture(d.id)
+    if (f) Object.assign(f, d.orig)
+  } else if (d.kind === 'opening') {
+    const o = plan.value.openings.find((x) => x.id === d.id)
+    if (o) Object.assign(o, d.orig)
+  }
+  settle()
+}
+
+/** 按命中的元素设置选中 */
+function selectHit(h: DOMStringMap) {
+  if (h.hit === 'room') selection.value = { type: 'room', id: h.id! }
+  else if (h.hit === 'fixture') selection.value = { type: 'fixture', id: h.id! }
+  else if (h.hit === 'opening') selection.value = { type: 'opening', id: h.id! }
+  else if (h.hit === 'vertex') selection.value = { type: 'vertex', roomId: h.room!, index: Number(h.index) }
+  else if (h.hit === 'edge') selection.value = { type: 'room', id: h.room! }
+}
+
+function clearLongPress() {
+  clearTimeout(lpTimer)
+  lpTimer = 0
+}
+
 function onPointerDown(e: PointerEvent) {
   stopAnim()
   svg.value!.setPointerCapture(e.pointerId)
+  const touch = e.pointerType !== 'mouse'
+  touchUI.value = touch || device.coarse
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+  // 第二根手指：打断正在进行的编辑，进入捏合缩放 + 双指平移
+  if (pointers.size === 2) {
+    clearLongPress()
+    abortDrag()
+    startPinch()
+    gestureSpent = true
+    return
+  }
+  if (pointers.size > 2 || gestureSpent) return
+  downAt = { x: e.clientX, y: e.clientY, moved: false, slop: touch ? TAP_SLOP : 3 }
   if (e.button === 1 || e.button === 2 || (e.button === 0 && spaceDown.value)) {
-    drag.value = { kind: 'pan', sx: e.clientX, sy: e.clientY, ox: view.x, oy: view.y }
+    // 右键：拖动是平移，没拖就松手弹出快捷菜单
+    startPan(e)
+    if (e.button === 2 && drag.value?.kind === 'pan') drag.value.menu = { x: e.clientX, y: e.clientY, hit: tool.value === 'select' ? hitOf(e) : null }
     return
   }
   if (e.button !== 0) return
@@ -173,14 +255,35 @@ function onPointerDown(e: PointerEvent) {
   if (tool.value === 'select') {
     const hit = hitOf(e)
     if (!hit) {
-      selection.value = null
+      // 空白处：拖动平移画布，点按取消选中
+      startPan(e, () => (selection.value = null))
       return
+    }
+    // 触屏长按：选中并弹出快捷菜单（复制 / 删除 / 旋转…）
+    if (touch) {
+      clearLongPress()
+      const at = { x: e.clientX, y: e.clientY }
+      lpTimer = window.setTimeout(() => {
+        lpTimer = 0
+        if (pointers.size !== 1 || downAt?.moved) return
+        abortDrag()
+        selectHit(hit)
+        gestureSpent = true
+        openMenu(at.x, at.y)
+        navigator.vibrate?.(10)
+      }, LONG_PRESS_MS)
+      // 触屏：没选中的房间 / 设备 / 门窗，拖动是平移画布、点按才选中（放大后满屏都是房间，不然没法单指平移）；
+      // 选中之后再按住拖动才移动它。顶点和边只在选中的房间上出现，可以直接拖。
+      if ((hit.hit === 'room' || hit.hit === 'fixture' || hit.hit === 'opening') && !isSel(hit.hit, hit.id!)) {
+        startPan(e, () => selectHit(hit))
+        return
+      }
     }
     if (hit.hit === 'vertex') {
       const index = Number(hit.index)
       selection.value = { type: 'vertex', roomId: hit.room!, index }
       checkpoint()
-      drag.value = { kind: 'vertex', roomId: hit.room!, index }
+      drag.value = { kind: 'vertex', roomId: hit.room!, index, orig: { ...findRoom(hit.room!)!.points[index] } }
     } else if (hit.hit === 'edge') {
       const r = findRoom(hit.room!)!
       checkpoint()
@@ -191,9 +294,10 @@ function onPointerDown(e: PointerEvent) {
       checkpoint()
       drag.value = { kind: 'fixture', id: f.id, start: w, orig: { x: f.x, y: f.y } }
     } else if (hit.hit === 'opening') {
+      const o = plan.value.openings.find((x) => x.id === hit.id)!
       selection.value = { type: 'opening', id: hit.id! }
       checkpoint()
-      drag.value = { kind: 'opening', id: hit.id! }
+      drag.value = { kind: 'opening', id: hit.id!, orig: { roomId: o.roomId, edge: o.edge, offset: o.offset } }
     } else if (hit.hit === 'room') {
       const r = findRoom(hit.id!)!
       selection.value = { type: 'room', id: r.id }
@@ -210,17 +314,34 @@ function onPointerDown(e: PointerEvent) {
   }
 
   if (tool.value === 'poly') {
-    let p = snapPoint(w)
-    if (e.shiftKey && draft.value.length) p = orthoFrom(draft.value[draft.value.length - 1], p)
-    if (draft.value.length >= 3 && dist(p, draft.value[0]) < px(12)) {
-      finishPoly()
-      return
-    }
-    const last = draft.value[draft.value.length - 1]
-    if (!last || dist(last, p) > 0.5) draft.value.push(p)
+    // 触屏：点按加点，拖动是平移（不然一碰屏幕就多出一个顶点）
+    if (touch) startPan(e, () => addPolyPoint(w, false))
+    else addPolyPoint(w, e.shiftKey)
     return
   }
 
+  // 触屏：放门窗 / 设备也是点按（松手时）才放，拖动是平移
+  if (touch && (tool.value === 'fixture' || tool.value === 'door' || tool.value === 'window')) {
+    startPan(e, () => placeAt(w))
+    return
+  }
+  placeAt(w)
+}
+
+function addPolyPoint(w: Vec, shift: boolean) {
+  let p = snapPoint(w)
+  if (shift && draft.value.length) p = orthoFrom(draft.value[draft.value.length - 1], p)
+  if (draft.value.length >= 3 && dist(p, draft.value[0]) < hitPx(12, 24)) {
+    finishPoly()
+    return
+  }
+  const last = draft.value[draft.value.length - 1]
+  if (!last || dist(last, p) > 0.5) draft.value.push(p)
+  cursor.value = p
+}
+
+/** 放设备 / 门 / 窗 */
+function placeAt(w: Vec) {
   if (tool.value === 'fixture') {
     // 靠近轴向墙时贴墙放（按该处墙厚让开），否则原地放
     const kind = placeKind.value
@@ -247,7 +368,7 @@ function onPointerDown(e: PointerEvent) {
   }
 
   if (tool.value === 'door' || tool.value === 'window') {
-    const ne = nearestEdge(w, 24)
+    const ne = nearestEdge(w, touchUI.value ? 40 : 24)
     if (!ne) return
     const L = edgeInfo(ne.room.points, ne.edge).length
     const width = tool.value === 'door' ? 80 : 150
@@ -270,9 +391,37 @@ function orthoFrom(a: Vec, p: Vec): Vec {
   return Math.abs(p.x - a.x) > Math.abs(p.y - a.y) ? { x: p.x, y: a.y } : { x: a.x, y: p.y }
 }
 
+function startPinch() {
+  const [a, b] = [...pointers.values()]
+  const r = svg.value!.getBoundingClientRect()
+  const mx = (a.x + b.x) / 2 - r.left
+  const my = (a.y + b.y) / 2 - r.top
+  pinch = { d0: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), s0: view.s, world: { x: (mx - view.x) / view.s, y: (my - view.y) / view.s } }
+}
+
 function onPointerMove(e: PointerEvent) {
+  if (pointers.has(e.pointerId)) pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+  // 捏合：两指距离定缩放，两指中点定平移（按下时中点下的那一点始终跟着中点走）
+  if (pinch && pointers.size >= 2) {
+    const [a, b] = [...pointers.values()]
+    const r = svg.value!.getBoundingClientRect()
+    const mx = (a.x + b.x) / 2 - r.left
+    const my = (a.y + b.y) / 2 - r.top
+    const s = Math.min(8, Math.max(0.05, (pinch.s0 * Math.hypot(a.x - b.x, a.y - b.y)) / pinch.d0))
+    view.s = s
+    view.x = mx - pinch.world.x * s
+    view.y = my - pinch.world.y * s
+    return
+  }
+  if (gestureSpent) return
+  if (downAt && !downAt.moved && Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) > downAt.slop) {
+    downAt.moved = true
+    clearLongPress()
+  }
   const w = toWorld(e)
   const d = drag.value
+  // 编辑拖动：超出点按阈值之前不动（点选 / 长按时手指的轻微抖动不改东西）
+  if (d && d.kind !== 'pan' && d.kind !== 'rect' && downAt && !downAt.moved) return
   if (d?.kind === 'pan') {
     view.x = d.ox + e.clientX - d.sx
     view.y = d.oy + e.clientY - d.sy
@@ -401,11 +550,35 @@ function resetNorth() {
   plan.value.north = 0
 }
 
-function onPointerUp() {
+function onPointerUp(e: PointerEvent) {
+  pointers.delete(e.pointerId)
+  clearLongPress()
+  if (pinch) {
+    if (pointers.size < 2) pinch = null
+    if (!pointers.size) gestureSpent = false
+    return
+  }
+  if (gestureSpent) {
+    if (!pointers.size) gestureSpent = false
+    return
+  }
+  const tapped = !!downAt && !downAt.moved && e.type !== 'pointercancel'
+  downAt = null
   const d = drag.value
   drag.value = null
   guides.value = {}
-  if (!d || d.kind === 'pan') return
+  if (!d) return
+  if (d.kind === 'pan') {
+    if (tapped && d.menu) {
+      // 右键点按：选中指到的东西并弹出快捷菜单
+      const h = d.menu.hit
+      if (h) {
+        selectHit(h)
+        openMenu(d.menu.x, d.menu.y)
+      }
+    } else if (tapped) d.tap?.()
+    return
+  }
   if (d.kind === 'rect') {
     const w = Math.abs(d.end.x - d.start.x)
     const h = Math.abs(d.end.y - d.start.y)
@@ -510,9 +683,14 @@ function fitTarget() {
   const pts = plan.value.rooms.flatMap((r) => r.points)
   if (!pts.length) return { s: 0.6, x: size.w / 2, y: size.h / 2 }
   const b = bbox(pts)
-  const pad = 70
-  const s = Math.min(4, Math.min((size.w - pad * 2) / (b.x1 - b.x0 || 1), (size.h - pad * 2) / (b.y1 - b.y0 || 1)))
-  return { s, x: (size.w - (b.x1 - b.x0) * s) / 2 - b.x0 * s, y: (size.h - (b.y1 - b.y0) * s) / 2 - b.y0 * s }
+  // 四周留白；手机上右侧有缩放条、上方有指北针和提示、下方压着底部抽屉，按实际可见区域取景
+  const pad = device.compact
+    ? { l: 20, r: 64, t: 64, b: (device.landscape ? 0 : layout.sheetH) + 24 }
+    : { l: 70, r: 70, t: 70, b: 70 }
+  const aw = Math.max(40, size.w - pad.l - pad.r)
+  const ah = Math.max(40, size.h - pad.t - pad.b)
+  const s = Math.min(4, Math.min(aw / (b.x1 - b.x0 || 1), ah / (b.y1 - b.y0 || 1)))
+  return { s, x: pad.l + (aw - (b.x1 - b.x0) * s) / 2 - b.x0 * s, y: pad.t + (ah - (b.y1 - b.y0) * s) / 2 - b.y0 * s }
 }
 
 /** 适应视图；instant 用于首次挂载（没有可过渡的起点） */
@@ -551,7 +729,8 @@ function updateHover(e: PointerEvent) {
 // ---------- 键盘：空格平移、Esc ----------
 
 function onKeyDown(e: KeyboardEvent) {
-  if (isTyping(e)) return
+  // 快捷键帮助 / 我的户型 / 确认框开着时，画布不响应键盘
+  if (isTyping(e) || overlays.help || saved.panelOpen || saved.confirm) return
   if (e.code === 'Space') {
     spaceDown.value = true
     e.preventDefault()
@@ -800,7 +979,57 @@ const isSel = (type: string, id: string) => {
 }
 
 const cursorInfo = computed(() => (cursor.value ? `${Math.round(cursor.value.x)}, ${Math.round(cursor.value.y)}` : ''))
-defineExpose({ fit, zoomBy, zoomReset, exportPng, view, cursorInfo })
+
+// ---------- 多边形：触屏上的「撤销一点 / 取消 / 完成」按钮（App.vue） ----------
+const draftCount = computed(() => draft.value.length)
+function undoPoint() {
+  draft.value.pop()
+  cursor.value = draft.value[draft.value.length - 1] ?? null
+}
+function cancelDraft() {
+  draft.value = []
+  cursor.value = null
+  tool.value = 'select'
+}
+
+// ---------- 快捷菜单：触屏长按 / 右键点按 ----------
+const menu = ref<{ x: number; y: number; items: MenuEntry[]; title?: string } | null>(null)
+function openMenu(x: number, y: number) {
+  const s = selection.value
+  if (!s) return
+  const del: MenuEntry = { label: t('删除'), icon: ICONS.delete, keys: 'Del', danger: true, action: deleteSelection }
+  let items: MenuEntry[] = []
+  let title = ''
+  if (s.type === 'room') {
+    const r = findRoom(s.id)
+    title = r ? roomName(r.name) : ''
+    items = [{ label: t('复制'), icon: ICONS.duplicate, keys: 'Ctrl D', action: duplicateSelection }, 'sep', del]
+  } else if (s.type === 'fixture') {
+    const f = findFixture(s.id)
+    title = f ? t(FIXTURES[f.kind].label) : ''
+    items = [{ label: t('旋转 90°'), icon: ICONS.rotateCw, keys: 'Q', action: rotateSelectedFixture }, 'sep', del]
+  } else if (s.type === 'opening') {
+    const o = plan.value.openings.find((x) => x.id === s.id)
+    if (!o) return
+    const flip = o.kind === 'door' || o.kind === 'folding'
+    items = [
+      ...(flip
+        ? ([
+            { label: t('左右翻转'), icon: ICONS.doorFlip, action: () => mutate(() => (o.hinge = o.hinge === 'start' ? 'end' : 'start')) },
+            { label: t('内外翻转'), icon: ICONS.doorFlip, action: () => mutate(() => (o.swing = o.swing === 'in' ? 'out' : 'in')) },
+            'sep',
+          ] as MenuEntry[])
+        : []),
+      del,
+    ]
+  } else if (s.type === 'vertex') {
+    const r = findRoom(s.roomId)
+    items = [{ ...(del as Exclude<MenuEntry, string | { header: string }>), label: t('删除顶点'), disabled: !r || r.points.length <= 3 }]
+  }
+  if (items.length) menu.value = { x, y, items, title }
+}
+
+defineExpose({ fit, zoomBy, zoomReset, exportPng, view, cursorInfo, draftCount, finishPoly, undoPoint, cancelDraft })
 
 // ---------- 导出 PNG ----------
 
@@ -845,6 +1074,9 @@ async function exportPng() {
 </script>
 
 <template>
+  <Teleport to="body">
+    <ContextMenu v-if="menu" :x="menu.x" :y="menu.y" :items="menu.items" :title="menu.title" @close="menu = null" />
+  </Teleport>
   <svg
     ref="svg"
     class="canvas"
@@ -968,8 +1200,8 @@ async function exportPng() {
           <path v-for="(g, i) in v.glass" :key="i" :d="g" fill="none" stroke="#2b2925" :stroke-width="i === 1 ? 2.5 : 1.5" />
         </template>
         <path v-if="isSel('opening', v.o.id)" class="ui" :d="v.gap" fill="none" stroke="#3f6652" :stroke-width="px(2)" />
-        <!-- 加粗的点击热区 -->
-        <path :d="v.gap" fill="transparent" stroke="transparent" :stroke-width="px(10)" />
+        <!-- 加粗的点击热区（触屏更粗） -->
+        <path :d="v.gap" fill="transparent" stroke="transparent" :stroke-width="hitPx(10, 28)" />
       </g>
       <!-- 家具（3D 沙盘里摆的）：只画占地，不参与编辑 -->
       <g pointer-events="none">
@@ -1090,19 +1322,33 @@ async function exportPng() {
           :x2="d.e.b.x"
           :y2="d.e.b.y"
           stroke="transparent"
-          :stroke-width="px(12)"
+          :stroke-width="hitPx(12, 30)"
           data-hit="edge"
           :data-room="selectedRoom.id"
           :data-index="d.i"
           :style="{ cursor: edgeCursor(d.e) }"
         />
+        <!-- 触屏：顶点外面再垫一圈透明的大热区 -->
+        <template v-if="touchUI">
+          <circle
+            v-for="(p, i) in selectedRoom.points"
+            :key="'vh' + i"
+            :cx="p.x"
+            :cy="p.y"
+            :r="px(22)"
+            fill="transparent"
+            data-hit="vertex"
+            :data-room="selectedRoom.id"
+            :data-index="i"
+          />
+        </template>
         <rect
           v-for="(p, i) in selectedRoom.points"
           :key="'v' + i"
-          :x="p.x - px(5)"
-          :y="p.y - px(5)"
-          :width="px(10)"
-          :height="px(10)"
+          :x="p.x - hitPx(5, 7)"
+          :y="p.y - hitPx(5, 7)"
+          :width="hitPx(10, 14)"
+          :height="hitPx(10, 14)"
           :fill="selection?.type === 'vertex' && selection.index === i ? '#3f6652' : '#fff'"
           stroke="#3f6652"
           :stroke-width="px(1.5)"

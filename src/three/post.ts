@@ -8,6 +8,8 @@
 //   → [移轴模糊：横、竖两遍]
 //   → Grade：调色（曝光、对比、饱和、分离色调、褪色、单色 / 棕褐、雾感、暗角、色差、纸纹、颗粒）
 // 选「无」时不建 composer，直接 renderer.render，零额外开销。
+// 省电画质（setLow(true)，手机 / 低性能设备）：画布不开 MSAA，改为始终走 composer（目标不开多重采样），
+// 末尾加一遍 FXAA；入夜的灯光泛光也关掉（泛光的 mip 链很吃填充率）。
 // 所有效果都是静态的（颗粒按像素坐标固定），沿用沙盘的按需渲染：画面没变就不重画。
 
 import * as THREE from 'three'
@@ -15,6 +17,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js'
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
+import { FXAAShader } from 'three/addons/shaders/FXAAShader.js'
 import type { Stage } from './stage'
 
 export type LookId = 'none' | 'tiltshift' | 'warm' | 'cool' | 'film' | 'pastel' | 'watercolor' | 'comic' | 'mono' | 'sepia' | 'pixel' | 'sketch'
@@ -563,6 +566,8 @@ export interface Post {
   setSky: (bg: [string, string, string], night: number) => void
   /** 临时用某个效果渲染一帧（生成选择器缩略图用），fn 里调用 stage.render() */
   withLook: <T>(id: string, fn: () => T) => T
+  /** 省电画质：无 MSAA + FXAA、不加入夜泛光 */
+  setLow: (low: boolean) => void
   dispose: () => void
 }
 
@@ -570,8 +575,9 @@ export interface Post {
 const GLASS_HEX = 'bfe6ff'
 const WINDOW_GLOW = new THREE.Color('#ffcf8a')
 
-export function attachPost(stage: Stage): Post {
+export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
   const { renderer, scene, camera } = stage
+  let low = !!opts.low
 
   let composer: EffectComposer | null = null
   let passes: {
@@ -586,6 +592,7 @@ export function attachPost(stage: Stage): Post {
     tiltH: ShaderPass
     tiltV: ShaderPass
     grade: ShaderPass
+    fxaa: ShaderPass
   } | null = null
   let current: LookDef = LOOK_MAP.get('none')!
   let sky: { bg: [string, string, string]; night: number } = { bg: DEFAULT_BG, night: 0 }
@@ -598,7 +605,8 @@ export function attachPost(stage: Stage): Post {
     const pr = renderer.getPixelRatio()
     const s = cssSize()
     // 4× MSAA：后处理目标默认没有抗锯齿，toon 描边会出明显锯齿
-    const rt = new THREE.WebGLRenderTarget(Math.max(1, s.x * pr), Math.max(1, s.y * pr), { type: THREE.HalfFloatType, samples: 4 })
+    // 省电画质不开多重采样，末尾用 FXAA
+    const rt = new THREE.WebGLRenderTarget(Math.max(1, s.x * pr), Math.max(1, s.y * pr), { type: THREE.HalfFloatType, samples: low ? 0 : 4 })
     composer = new EffectComposer(renderer, rt)
     composer.setPixelRatio(pr)
     composer.setSize(s.x, s.y)
@@ -615,10 +623,12 @@ export function attachPost(stage: Stage): Post {
       tiltH: mk(TiltShader),
       tiltV: mk(TiltShader),
       grade: mk(GradeShader),
+      fxaa: mk(FXAAShader),
     }
     passes.tiltV.uniforms.uDir.value.set(0, 1)
+    passes.fxaa.enabled = low
     const p = passes
-    for (const ps of [p.render, p.base, p.kuwahara, p.pigment, p.comic, p.pixel, p.sketch, p.tiltH, p.tiltV, p.grade]) composer.addPass(ps)
+    for (const ps of [p.render, p.base, p.kuwahara, p.pigment, p.comic, p.pixel, p.sketch, p.tiltH, p.tiltV, p.grade, p.fxaa]) composer.addPass(ps)
     appliedKey = ''
     syncSize()
   }
@@ -643,6 +653,7 @@ export function attachPost(stage: Stage): Post {
       u.uRes?.value.copy(res)
       if (u.uScale) u.uScale.value = pr
     }
+    passes.fxaa.uniforms.resolution.value.set(1 / Math.max(1, res.x), 1 / Math.max(1, res.y))
     passes.kuwahara.uniforms.uStep.value = Math.max(1, pr * 0.9)
     passes.pixel.uniforms.uPx.value = Math.round(5 * pr)
     if (current.tilt) {
@@ -654,12 +665,12 @@ export function attachPost(stage: Stage): Post {
   function apply() {
     if (!passes || !composer) return
     const look = current
-    const key = look.id + '|' + sky.bg.join() + '|' + sky.night.toFixed(3)
+    const key = look.id + '|' + sky.bg.join() + '|' + sky.night.toFixed(3) + '|' + low
     if (key === appliedKey) return
     appliedKey = key
     const p = passes
     // 泛光：效果自带的，和入夜后灯具的光晕取较强者
-    const nightBloom = sky.night > 0.02 ? { strength: 0.6 * sky.night, radius: 0.45, threshold: 0.35 } : undefined
+    const nightBloom = sky.night > 0.02 && !low ? { strength: 0.6 * sky.night, radius: 0.45, threshold: 0.35 } : undefined
     const bloom = nightBloom && (!look.bloom || nightBloom.strength > look.bloom.strength) ? nightBloom : look.bloom
     if (bloom && !p.bloom) {
       // 用到才建（mip 链占显存）
@@ -793,7 +804,7 @@ export function attachPost(stage: Stage): Post {
   /** 按当前效果与天色决定走不走 composer；keep 为真时不拆（生成缩略图途中） */
   function update(keep = false) {
     stage.outlineScale = current.outline ?? 1
-    const need = current.id !== 'none' || sky.night > 0.02
+    const need = current.id !== 'none' || sky.night > 0.02 || low
     if (need && !composer) build()
     if (!need && !keep) teardown()
     // 白天「原样」：不接管，直接 renderer.render；夜里即使不走 composer 也要接管来调整材质
@@ -819,6 +830,13 @@ export function attachPost(stage: Stage): Post {
         current = keep
         update(true)
       }
+    },
+    setLow(v) {
+      if (v === low) return
+      low = v
+      // 多重采样数和 FXAA 都在建 composer 时决定：拆掉按新画质重建
+      teardown()
+      update()
     },
     dispose() {
       stage.post = null

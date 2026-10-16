@@ -1,5 +1,6 @@
 import { reactive, ref, toRaw, watch } from 'vue'
 import { orientDoors } from './doors'
+import { migrateAppliances } from './appliance'
 import { applyFixes, decorate, roomStyles } from './decorate'
 import { autoWallpapers } from './wallpaper'
 import type { CheckItem } from './checklist'
@@ -8,7 +9,7 @@ import { propsOn } from './surface'
 import { ASSET_MAP } from './three/assets'
 import type { StyleTag } from './three/kit'
 import type { PatternSpec } from './three/patterns'
-import { DEFAULT_GEO, type Geo } from './three/sky'
+import { CITIES, DEFAULT_GEO, type Geo } from './three/sky'
 import { ensureOutdoorUnits, planArea, randomSeed, type GenOptions } from './generate'
 import { generatePlan } from './generate-region'
 import { lang, t } from './i18n'
@@ -36,6 +37,8 @@ export function normalizePlan(p: Plan): Plan | null {
   p.furniture ??= []
   // 早期数据只有一种墙厚
   p.wallOuter ??= Math.max(18, Math.round(p.wall * 1.5))
+  // 冰箱、洗衣机以前是带款式 / 颜色的设备：换成摆在冰箱位 / 洗衣机位上的同款家具
+  migrateAppliances(p)
   return p
 }
 
@@ -122,32 +125,67 @@ export const WALL_MODES: { id: WallMode; label: string }[] = [
 ]
 export const sandbox = reactive({ wallHeight: 240, wallMode: 'half' as WallMode, cutHeight: 60, cutawayOpacity: 0, cutawayHover: true, snap: true, mode: 'edit' as 'edit' | 'preview', autoRotate: true, autoFurnish: true, style: 'auto' as StyleTag | 'random' | 'auto', look: loadLook(), ...loadSky(), playing: false })
 
-/** 3D 沙盘的时间与太阳：时刻（0–24 小时，连续）、月日、地点（城市预设或经纬度）、播放速度（小时 / 秒）；单独存一个键 */
+/** 设备的当前时间：时刻（小时，含分钟）与月日 */
+export function nowSky() {
+  const n = new Date()
+  return { time: n.getHours() + n.getMinutes() / 60, month: n.getMonth() + 1, day: n.getDate() }
+}
+
+/** 没选过地点时，按设备时区挑一个同时区的城市（东八区 → 上海，东九区 → 东京…），让「现在」的太阳位置大致对得上 */
+function guessGeo(): Geo {
+  const tz = -new Date().getTimezoneOffset() / 60
+  const c = CITIES.find((x) => x.tz === tz)
+  return c ? { id: c.id, lat: c.lat, lon: c.lon, tz: c.tz } : { ...DEFAULT_GEO }
+}
+
+/**
+ * 3D 沙盘的时间与太阳：时刻（0–24 小时，连续）、月日、地点（城市预设或经纬度）、播放速度（小时 / 秒）；单独存一个键。
+ * 时刻和月日默认跟着设备的当前时间走（timeSet = false）；用户拖过时刻、改过月日或播放过时间流逝之后才记住自己设的时间。
+ */
 function loadSky() {
-  const d = { time: 14, month: 5, day: 15, geo: { ...DEFAULT_GEO } as Geo, speed: 1 }
+  const d = { time: 14, month: 5, day: 15, timeSet: false, geo: guessGeo(), speed: 1 }
   try {
     const raw = JSON.parse(localStorage.getItem(SKY_KEY) || 'null')
     if (raw && typeof raw === 'object') {
-      if (Number.isFinite(raw.time)) d.time = Math.min(24, Math.max(0, raw.time))
-      if (Number.isInteger(raw.month) && raw.month >= 1 && raw.month <= 12) d.month = raw.month
-      if (Number.isInteger(raw.day) && raw.day >= 1 && raw.day <= 31) d.day = raw.day
+      // 旧数据没有 timeSet：当作没改过，跟随当前时间
+      if (raw.timeSet === true) {
+        d.timeSet = true
+        if (Number.isFinite(raw.time)) d.time = Math.min(24, Math.max(0, raw.time))
+        if (Number.isInteger(raw.month) && raw.month >= 1 && raw.month <= 12) d.month = raw.month
+        if (Number.isInteger(raw.day) && raw.day >= 1 && raw.day <= 31) d.day = raw.day
+      }
       if (raw.geo && Number.isFinite(raw.geo.lat) && Number.isFinite(raw.geo.lon)) d.geo = { id: String(raw.geo.id ?? 'custom'), lat: raw.geo.lat, lon: raw.geo.lon, tz: Number.isFinite(raw.geo.tz) ? raw.geo.tz : Math.round(raw.geo.lon / 15) }
       if (Number.isFinite(raw.speed)) d.speed = raw.speed
     }
   } catch {
     /* 存储不可用或数据损坏时用默认值 */
   }
+  if (!d.timeSet) Object.assign(d, nowSky())
   return d
 }
+
+/** 「回到现在」：时刻和月日重新跟随设备时间 */
+export function syncSkyToNow() {
+  sandbox.playing = false
+  Object.assign(sandbox, nowSky())
+  sandbox.timeSet = false
+}
+// 跟随当前时间时，每分钟对一次表（开着页面过了很久，太阳也跟着走）
+if (typeof window !== 'undefined') {
+  window.setInterval(() => {
+    if (!sandbox.timeSet && !sandbox.playing) Object.assign(sandbox, nowSky())
+  }, 60_000)
+}
+
 let skyTimer = 0
 watch(
-  () => [sandbox.time, sandbox.month, sandbox.day, sandbox.geo.id, sandbox.geo.lat, sandbox.geo.lon, sandbox.geo.tz, sandbox.speed],
+  () => [sandbox.time, sandbox.month, sandbox.day, sandbox.timeSet, sandbox.geo.id, sandbox.geo.lat, sandbox.geo.lon, sandbox.geo.tz, sandbox.speed],
   () => {
     // 播放时时刻每帧都在变：节流写入
     clearTimeout(skyTimer)
     skyTimer = window.setTimeout(() => {
       try {
-        localStorage.setItem(SKY_KEY, JSON.stringify({ time: sandbox.time, month: sandbox.month, day: sandbox.day, geo: toRaw(sandbox.geo), speed: sandbox.speed }))
+        localStorage.setItem(SKY_KEY, JSON.stringify({ time: sandbox.time, month: sandbox.month, day: sandbox.day, timeSet: sandbox.timeSet, geo: toRaw(sandbox.geo), speed: sandbox.speed }))
       } catch {
         /* 存储不可用时忽略 */
       }

@@ -1,4 +1,5 @@
 import { defineConfig, loadEnv, type Plugin } from 'vite'
+import { PUBLIC_PRECACHE, swSource, swVersion } from './src/pwa/sw'
 import vue from '@vitejs/plugin-vue'
 import { DEFAULT_SITE_URL, jsonLd, SEO, SEO_LANGS, type SeoLang } from './src/seo'
 import { PRODUCT_INTRO, PRODUCT_TAGLINE, UI } from './src/i18n/ui'
@@ -112,11 +113,33 @@ function seo(site: string): Plugin {
   }
 }
 
+/**
+ * PWA：构建时生成 dist/sw.js（源码见 src/pwa/sw.ts），预缓存应用壳——三语入口页、全部带 hash 的 JS / CSS、
+ * 图标与 manifest（分享卡片大图不缓存）。版本号取清单内容的 hash：任何资源变了，SW 就会更新并提示用户刷新。
+ * 开发环境不生成、也不注册（src/ui/pwa.ts）。
+ */
+function pwa(): Plugin {
+  return {
+    name: 'my-home-pwa',
+    apply: 'build',
+    enforce: 'post',
+    generateBundle: {
+      order: 'post',
+      handler(_, bundle) {
+        const files = Object.keys(bundle).filter((f) => /\.(js|css|html|woff2?|svg|png|webmanifest)$/.test(f) && f !== 'sitemap.xml')
+        const urls = [...new Set(['/', ...files.map((f) => '/' + f.replace(/(^|\/)index\.html$/, '$1')), ...PUBLIC_PRECACHE])].sort()
+        const src = swSource(swVersion(JSON.stringify(urls)), urls)
+        this.emitFile({ type: 'asset', fileName: 'sw.js', source: src })
+      },
+    },
+  }
+}
+
 export default defineConfig(({ mode }) => {
   // 站点地址：项目根 .env* / 环境变量里的 VITE_SITE_URL，没有就用占位地址（上线前务必改掉）
   const site = (loadEnv(mode, '', 'VITE_').VITE_SITE_URL || DEFAULT_SITE_URL).replace(/\/+$/, '')
   return {
-    plugins: [vue(), seo(site)],
+    plugins: [vue(), seo(site), pwa()],
     define: { 'import.meta.env.VITE_SITE_URL': JSON.stringify(site) },
     build: {
       // 分包：three、素材包、i18n 词典体积大且更新节奏不同，各自成独立 chunk，改业务代码时浏览器缓存仍可复用。

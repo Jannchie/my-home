@@ -8,21 +8,25 @@ import SavedPlans from './components/SavedPlans.vue'
 import TooltipLayer from './components/TooltipLayer.vue'
 import ShortcutHelp from './components/ShortcutHelp.vue'
 import Onboarding from './components/Onboarding.vue'
+import GenOptions from './components/GenOptions.vue'
+import BottomSheet, { type SheetSnap } from './components/BottomSheet.vue'
+import ContextMenu, { type MenuEntry } from './components/ContextMenu.vue'
+import UpdatePrompt from './components/UpdatePrompt.vue'
+import { AUTHOR, REPO_URL } from './seo'
 import { currentSaved, detachSaved, initSaved, openPanel, quickSave, saved, toast } from './saved'
 import { busy, nextPaint, overlays, runBusy } from './ui/feedback'
-import { FIXTURES, REGION_LABELS, dot, edgeInfo, type Plan } from './model'
-import { LAYOUT_TYPES, STYLE_LABELS } from './generate'
+import { device, layout } from './ui/device'
+import { FIXTURES, OPENING_LABELS, dot, edgeInfo, type Plan } from './model'
 import { isTyping } from './dom'
-import { LANGS, jp, lang, setLang, t, type Lang } from './i18n'
+import { LANGS, lang, roomName, setLang, t, type Lang } from './i18n'
 import { JIcon } from '@jannchie/icons-vue'
 import { ICONS, TOOL_ICONS, VIEW_ICONS } from './ui/icons'
 import {
   deleteSelection,
   duplicateSelection,
+  findFixture,
   findRoom,
   genMessage,
-  chooseRegion,
-  genOptions,
   generate,
   historyState,
   mutate,
@@ -51,18 +55,6 @@ const views: { id: ViewMode; label: string }[] = [
 
 const canvas = ref<InstanceType<typeof PlanCanvas>>()
 
-// 面积输入：空字符串表示不限
-const areaModel = (key: 'minArea' | 'maxArea') =>
-  computed({
-    get: () => genOptions[key] ?? '',
-    set: (v: string | number) => {
-      const n = Number(v)
-      genOptions[key] = v === '' || !Number.isFinite(n) || n <= 0 ? null : n
-    },
-  })
-const minArea = areaModel('minArea')
-const maxArea = areaModel('maxArea')
-
 // 图标见 TOOL_ICONS[id]（src/ui/icons.ts）
 const tools: { id: Tool; label: string; key: string }[] = [
   { id: 'select', label: '选择', key: 'V' },
@@ -80,6 +72,14 @@ const hints: Record<Tool, string> = {
   door: '点击墙上放门',
   window: '点击墙上放窗',
   fixture: '点击放设备，靠近墙会自动贴墙 · 选中后 Q 旋转',
+}
+/** 触屏上的工具提示（选择工具不提示：单指拖空白平移、双指缩放是常识） */
+const touchHints: Partial<Record<Tool, string>> = {
+  rect: '手指拖拽画出矩形房间 · 双指移动画布',
+  poly: '逐点点按添加顶点，点「完成」闭合 · 拖动空白处移动画布',
+  door: '点按墙放门',
+  window: '点按墙放窗',
+  fixture: '点按放设备，靠近墙会自动贴墙',
 }
 
 async function doGenerate(newSeed = true) {
@@ -158,7 +158,11 @@ function onKey(e: KeyboardEvent) {
     return
   }
   if (overlays.help) {
-    if (e.key === 'Escape') overlays.help = false
+    // 关帮助的这次 Esc 到此为止：别再传给沙盘 / 画布（否则顺带取消了选中）
+    if (e.key === 'Escape') {
+      overlays.help = false
+      e.stopImmediatePropagation()
+    }
     return
   }
   if (mod && k === 'z') {
@@ -242,31 +246,135 @@ watch(viewMode, async (v) => {
   }
 })
 
-// 「生成选项」弹层：只是界面开关，点外面或按 Esc 收起
+// 「生成选项」：桌面是顶栏下的弹层，精简顶栏（手机 / 平板）时是底部面板；点外面或按 Esc 收起
 const genOpen = ref(false)
 const genBox = ref<HTMLElement>()
+const genSheet = ref<HTMLElement>()
 function onDocPointer(e: PointerEvent) {
-  if (genOpen.value && genBox.value && !genBox.value.contains(e.target as Node)) genOpen.value = false
+  if (!genOpen.value) return
+  const n = e.target as Node
+  if (genBox.value?.contains(n) || genSheet.value?.contains(n)) return
+  // 手机上点「生成选项」按钮本身由按钮自己切换
+  if ((e.target as Element).closest?.('[data-gen-toggle]')) return
+  genOpen.value = false
 }
 function onEsc(e: KeyboardEvent) {
   if (e.key === 'Escape') genOpen.value = false
 }
 
+// ---------- 顶栏高度：底部抽屉全屏时停在顶栏下面 ----------
+const topBar = ref<HTMLElement>()
+let topRo: ResizeObserver | null = null
+
+// ---------- 「更多」菜单（精简顶栏）：生成、文件、语言、帮助 ----------
+const moreBtn = ref<HTMLElement>()
+const deskMoreBtn = ref<HTMLElement>()
+const moreMenu = ref<{ x: number; y: number } | null>(null)
+let menuClosedAt = 0
+function closeMore() {
+  moreMenu.value = null
+  menuClosedAt = performance.now()
+}
+function toggleMore() {
+  // 菜单开着时点按钮：菜单在 pointerdown 时已经自己关了，这次 click 不要再打开
+  if (!moreMenu.value && performance.now() - menuClosedAt < 300) return
+  if (moreMenu.value) {
+    moreMenu.value = null
+    return
+  }
+  const r = (moreBtn.value ?? deskMoreBtn.value)!.getBoundingClientRect()
+  moreMenu.value = { x: r.right - 240, y: r.bottom + 6 }
+}
+/** 桌面顶栏的「更多」：只放帮助和链接（文件、语言按钮都在顶栏上） */
+const deskMoreItems = computed<MenuEntry[]>(() => [
+  { label: t('快捷键'), icon: ICONS.keyboard, keys: '?', action: () => (overlays.help = true) },
+  { label: t('新手引导'), icon: ICONS.tip, action: () => (overlays.onboarding = true) },
+  'sep',
+  { label: t('作者的 X'), brand: 'x', action: () => openLink(AUTHOR.x) },
+  { label: t('GitHub 仓库'), icon: ICONS.github, action: () => openLink(REPO_URL) },
+])
+const moreItems = computed<MenuEntry[]>(() => [
+  ...(viewMode.value !== 'lib'
+    ? ([
+        { label: t('随机生成'), icon: ICONS.generate, keys: device.coarse ? undefined : 'G', action: () => doGenerate() },
+        { label: t('生成选项'), icon: ICONS.generateOptions, action: () => (genOpen.value = true) },
+        'sep',
+      ] as MenuEntry[])
+    : []),
+  { label: t('我的户型'), icon: ICONS.savedPlans, action: () => openPanel() },
+  { label: t('新建'), icon: ICONS.newPlan, action: doNew },
+  { label: t('导入'), icon: ICONS.import, action: () => fileInput.value?.click() },
+  { label: t('导出 JSON'), icon: ICONS.exportJson, action: exportJson },
+  ...(viewMode.value === '2d' ? [{ label: t('导出 PNG'), icon: ICONS.exportPng, action: () => canvas.value?.exportPng() }] : []),
+  'sep',
+  { header: t('界面语言') },
+  ...LANGS.map((l) => ({ label: l.label, icon: l.id === lang.value ? ICONS.check : undefined, action: () => setLang(l.id as Lang) })),
+  'sep',
+  { label: t(device.coarse ? '手势与快捷键' : '快捷键'), icon: ICONS.keyboard, keys: device.coarse ? undefined : '?', action: () => (overlays.help = true) },
+  { label: t('新手引导'), icon: ICONS.tip, action: () => (overlays.onboarding = true) },
+  'sep',
+  { label: t('作者的 X'), brand: 'x', action: () => openLink(AUTHOR.x) },
+  { label: t('GitHub 仓库'), icon: ICONS.github, action: () => openLink(REPO_URL) },
+])
+function openLink(url: string) {
+  window.open(url, '_blank', 'noopener')
+}
+
+// ---------- 手机：平面图的底部抽屉、选中物体的浮动操作条、多边形绘制控件 ----------
+const sheet2d = ref<SheetSnap>('peek')
+watch(viewMode, () => (sheet2d.value = 'peek'))
+// 开始画东西时收起抽屉，把画布让出来
+watch(tool, (v) => {
+  if (v !== 'select' && device.compact) sheet2d.value = 'peek'
+})
+
+const selLabel = computed(() => {
+  const s = selection.value
+  if (!s) return ''
+  if (s.type === 'room') return roomName(findRoom(s.id)?.name ?? '')
+  if (s.type === 'vertex') return t('顶点')
+  if (s.type === 'fixture') {
+    const f = findFixture(s.id)
+    return f ? t(FIXTURES[f.kind].label) : ''
+  }
+  if (s.type === 'opening') {
+    const o = plan.value.openings.find((x) => x.id === s.id)
+    return o ? t(OPENING_LABELS[o.kind]) : ''
+  }
+  return ''
+})
+const show2dBar = computed(() => device.compact && shownView.value === '2d' && !!selLabel.value && tool.value === 'select' && sheet2d.value === 'peek')
+const barBottom = computed(() => (device.landscape ? 12 + layout.safeBottom : layout.sheetH + 10) + 'px')
+
+// 提示条（toast）让开底部抽屉
+watch(
+  () => layout.sheetH,
+  (h) => document.documentElement.style.setProperty('--toast-bottom', (h ? h + 12 : 28) + 'px'),
+  { immediate: true },
+)
+
 onMounted(() => {
   window.addEventListener('keydown', onKey)
   window.addEventListener('keydown', onEsc)
   document.addEventListener('pointerdown', onDocPointer)
+  topRo = new ResizeObserver(() => {
+    if (!topBar.value) return
+    layout.topBar = topBar.value.getBoundingClientRect().bottom
+    document.documentElement.style.setProperty('--topbar', layout.topBar + 'px')
+  })
+  if (topBar.value) topRo.observe(topBar.value)
 })
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKey)
   window.removeEventListener('keydown', onEsc)
   document.removeEventListener('pointerdown', onDocPointer)
+  topRo?.disconnect()
 })
 </script>
 
 <template>
   <div class="app">
-    <header class="top">
+    <header ref="topBar" class="top">
       <!-- 品牌：鼠尾草绿圆角块里放平面图图标 + 产品名（和页面标题、OG 图一致） -->
       <div class="brand">
         <span class="logo" aria-hidden="true"><JIcon :icon="VIEW_ICONS['2d']" :size="18" weight="bold" /></span>
@@ -275,11 +383,12 @@ onBeforeUnmount(() => {
         </span>
       </div>
 
-      <div class="views">
-        <button v-for="(v, i) in views" :key="v.id" :class="{ on: viewMode === v.id }" :title="`${t(v.label)} (${i + 1})`" :aria-label="t(v.label)" @click="viewMode = v.id"><JIcon :icon="VIEW_ICONS[v.id]" /><span class="lbl">{{ t(v.label) }}</span></button>
+      <div class="views" role="tablist">
+        <button v-for="(v, i) in views" :key="v.id" role="tab" :aria-selected="viewMode === v.id" :class="{ on: viewMode === v.id }" :title="`${t(v.label)} (${i + 1})`" :aria-label="t(v.label)" @click="viewMode = v.id"><JIcon :icon="VIEW_ICONS[v.id]" /><span class="lbl">{{ t(v.label) }}</span></button>
       </div>
 
-      <div v-if="viewMode === '2d'" class="group">
+      <!-- 平面图工具：手机上放进底部抽屉的标题栏 -->
+      <div v-if="viewMode === '2d' && !device.compact" class="group">
         <button
           v-for="tl in tools"
           :key="tl.id"
@@ -300,11 +409,11 @@ onBeforeUnmount(() => {
       <div class="group hist">
         <button :disabled="!historyState.canUndo" :title="t('撤销') + ' (Ctrl Z)'" :aria-label="t('撤销')" @click="undo"><JIcon :icon="ICONS.undo" /><span class="lbl">{{ t('撤销') }}</span></button>
         <button :disabled="!historyState.canRedo" :title="t('重做') + ' (Ctrl Shift Z)'" :aria-label="t('重做')" @click="redo"><JIcon :icon="ICONS.redo" /><span class="lbl">{{ t('重做') }}</span></button>
-        <button v-if="viewMode === '2d'" class="fit-btn" :title="t('适应视图') + ' (F)'" :aria-label="t('适应视图')" @click="canvas?.fit()"><JIcon :icon="ICONS.fit" /><span class="lbl">{{ t('适应') }}</span></button>
+        <button v-if="viewMode === '2d' && !device.compactBar" class="fit-btn" :title="t('适应视图') + ' (F)'" :aria-label="t('适应视图')" @click="canvas?.fit()"><JIcon :icon="ICONS.fit" /><span class="lbl">{{ t('适应') }}</span></button>
       </div>
 
-      <!-- 户型生成：主按钮 + 「生成选项」弹层（参数多，平铺在顶栏会挤成两行） -->
-      <div v-if="viewMode !== 'lib'" ref="genBox" class="group gen">
+      <!-- 户型生成：主按钮 + 「生成选项」弹层（参数多，平铺在顶栏会挤成两行）；精简顶栏时收进「更多」 -->
+      <div v-if="viewMode !== 'lib' && !device.compactBar" ref="genBox" class="group gen">
         <button class="primary" :title="t('随机生成') + ' (G)'" @click="doGenerate()"><JIcon :icon="ICONS.generate" />{{ t('随机生成') }}</button>
         <button class="gen-toggle" :class="{ on: genOpen }" :title="t('生成选项')" :aria-label="t('生成选项')" :aria-expanded="genOpen" @click="genOpen = !genOpen">
           <JIcon :icon="ICONS.generateOptions" />
@@ -312,83 +421,38 @@ onBeforeUnmount(() => {
           <JIcon :icon="genOpen ? ICONS.collapse : ICONS.expand" :size="14" class="ico-muted" />
         </button>
         <div v-if="genOpen" class="gen-pop" role="dialog" :aria-label="t('生成选项')">
-          <label class="field">
-            <span>{{ t('地区 / 风格') }}</span>
-            <select :value="genOptions.region" @change="chooseRegion(($event.target as HTMLSelectElement).value as never)">
-              <option v-for="(label, key) in REGION_LABELS" :key="key" :value="key">{{ t(label) }}</option>
-              <option value="random">{{ t('随机地区') }}</option>
-            </select>
-          </label>
-          <label v-if="genOptions.region === 'cn' || genOptions.region === 'west'" class="field">
-            <span>{{ t('卧室数') }}</span>
-            <select v-model="genOptions.bedrooms">
-              <option value="random">{{ t('随机户型') }}</option>
-              <option v-for="n in [1, 2, 3, 4]" :key="n" :value="n">{{ genOptions.region === 'cn' ? t('{n} 室', { n }) : t('{n} 卧', { n }) }}</option>
-            </select>
-          </label>
-          <label v-if="genOptions.region !== 'cn' && genOptions.region !== 'west'" class="field">
-            <span>{{ t('间取り') }}</span>
-            <select v-model="genOptions.type">
-              <option value="random">{{ t('随机户型') }}</option>
-              <option v-for="lt in LAYOUT_TYPES" :key="lt" :value="lt">{{ lt }}</option>
-            </select>
-          </label>
-          <label v-if="genOptions.region !== 'cn' && genOptions.region !== 'west'" class="field">
-            <span>{{ t('骨架') }}</span>
-            <select v-model="genOptions.style">
-              <option value="random">{{ t('随机骨架') }}</option>
-              <option v-for="(label, key) in STYLE_LABELS" :key="key" :value="key">{{ jp(label) }}</option>
-            </select>
-          </label>
-          <label v-if="genOptions.region !== 'cn' && genOptions.region !== 'west'" class="field">
-            <span>{{ t('居室入口') }}</span>
-            <select v-model="genOptions.access">
-              <option value="random">{{ t('入口随机') }}</option>
-              <option value="hall">{{ t('廊下进') }}</option>
-              <option value="living">{{ t('リビングイン') }}</option>
-            </select>
-          </label>
-          <label class="field">
-            <span>{{ t('住户位置') }}</span>
-            <select v-model="genOptions.corner" :title="t('角部屋（侧墙开窗）')">
-              <option value="random">{{ t('位置随机') }}</option>
-              <option value="no">{{ t('中部屋') }}</option>
-              <option value="yes">{{ t('角部屋') }}</option>
-            </select>
-          </label>
-          <div class="field">
-            <span>{{ t('专有面积') }} ㎡</span>
-            <span class="area num">
-              <input v-model="minArea" type="number" min="0" :placeholder="t('不限')" :title="t('最小专有面积 ㎡')" :aria-label="t('最小专有面积 ㎡')" />
-              <span>–</span>
-              <input v-model="maxArea" type="number" min="0" :placeholder="t('不限')" :title="t('最大专有面积 ㎡')" :aria-label="t('最大专有面积 ㎡')" />
-            </span>
-          </div>
-          <label class="field">
-            <span>{{ t('种子') }}</span>
-            <input v-model.number="genOptions.seed" type="number" class="seed num" @change="doGenerate(false)" />
-          </label>
-          <label class="furnish"><input v-model="sandbox.autoFurnish" type="checkbox" /><JIcon :icon="ICONS.autoFurnishToggle" class="ico-muted" />{{ t('生成户型时自动布置家具') }}</label>
+          <GenOptions @generate="doGenerate" />
         </div>
       </div>
+      <!-- 平板横屏：生成按钮留在顶栏（只有图标） -->
+      <div v-else-if="viewMode !== 'lib' && !device.compact" class="group">
+        <button class="primary icon-only gen-icon" :title="t('随机生成')" :aria-label="t('随机生成')" @click="doGenerate()"><JIcon :icon="ICONS.generate" /></button>
+        <button class="icon-only" data-gen-toggle :class="{ on: genOpen }" :title="t('生成选项')" :aria-label="t('生成选项')" @click="genOpen = !genOpen"><JIcon :icon="ICONS.generateOptions" /></button>
+      </div>
 
-      <div class="group right file">
+      <div v-if="!device.compactBar" class="group right file">
         <button class="save-btn" :class="{ dirty: saved.dirty && !!saved.currentId }" :title="saveTitle" :aria-label="t('保存')" :disabled="saved.busy" @click="quickSave"><JIcon :icon="ICONS.save" /><span class="lbl">{{ t('保存') }}</span></button>
         <button :title="t('我的户型')" :aria-label="t('我的户型')" @click="openPanel()"><JIcon :icon="ICONS.savedPlans" /><span class="lbl">{{ t('我的户型') }}</span></button>
         <button :title="t('新建')" :aria-label="t('新建')" @click="doNew"><JIcon :icon="ICONS.newPlan" /><span class="lbl">{{ t('新建') }}</span></button>
         <button :title="t('导入')" :aria-label="t('导入')" @click="fileInput?.click()"><JIcon :icon="ICONS.import" /><span class="lbl">{{ t('导入') }}</span></button>
         <button :title="t('导出 JSON')" :aria-label="t('导出 JSON')" @click="exportJson"><JIcon :icon="ICONS.exportJson" /><span class="lbl">{{ t('导出 JSON') }}</span></button>
         <button v-if="viewMode === '2d'" :title="t('导出 PNG')" :aria-label="t('导出 PNG')" @click="canvas?.exportPng()"><JIcon :icon="ICONS.exportPng" /><span class="lbl">{{ t('导出 PNG') }}</span></button>
-        <input ref="fileInput" type="file" accept=".json,application/json" hidden @change="importJson" />
       </div>
+      <!-- 精简顶栏：保存 + 「更多」 -->
+      <div v-else class="group right file">
+        <button class="save-btn icon-only" :class="{ dirty: saved.dirty && !!saved.currentId }" :title="saveTitle" :aria-label="t('保存')" :disabled="saved.busy" @click="quickSave"><JIcon :icon="ICONS.save" /></button>
+        <button ref="moreBtn" class="icon-only more-btn" :class="{ on: !!moreMenu }" :title="t('更多')" :aria-label="t('更多')" :aria-expanded="!!moreMenu" @click="toggleMore"><JIcon :icon="ICONS.more" /></button>
+      </div>
+      <input ref="fileInput" type="file" accept=".json,application/json" hidden @change="importJson" />
 
       <!-- 界面语言：首次按浏览器语言推断，选择后记在 localStorage（my-home:lang） -->
-      <div class="group lang">
+      <div v-if="!device.compactBar" class="group lang">
         <JIcon :icon="ICONS.language" class="ico-muted" />
         <select :value="lang" :title="t('界面语言')" aria-label="Language" @change="setLang(($event.target as HTMLSelectElement).value as Lang)">
           <option v-for="l in LANGS" :key="l.id" :value="l.id">{{ l.label }}</option>
         </select>
-        <button class="help-btn" :title="t('快捷键') + ' (?)'" :aria-label="t('快捷键')" @click="overlays.help = true"><JIcon :icon="ICONS.keyboard" /></button>
+        <!-- 快捷键、新手引导、作者 X、GitHub 仓库收在一个「更多」里，顶栏在 1280px 以上三语都能一行放下 -->
+        <button ref="deskMoreBtn" class="help-btn more-btn" :class="{ on: !!moreMenu }" :title="t('更多')" :aria-label="t('更多')" :aria-expanded="!!moreMenu" @click="toggleMore"><JIcon :icon="ICONS.more" /></button>
       </div>
     </header>
 
@@ -403,12 +467,46 @@ onBeforeUnmount(() => {
           <button class="icon-only" :title="t('放大')" :aria-label="t('放大')" @click="canvas?.zoomBy(1.25)"><JIcon :icon="ICONS.zoomIn" :size="15" /></button>
           <button class="icon-only" :title="t('适应视图') + ' (F)'" :aria-label="t('适应视图')" @click="canvas?.fit()"><JIcon :icon="ICONS.fit" :size="15" /></button>
         </div>
-        <footer class="status">
-          <span>{{ t(hints[tool]) }}<b v-if="genMessage" class="warn"> · {{ genMessage }}</b></span>
+        <footer v-if="!device.compact" class="status">
+          <span>{{ t(device.coarse ? (touchHints[tool] ?? '单指拖动空白处平移 · 双指缩放 · 点按选中，选中后拖动 · 长按弹出菜单') : hints[tool]) }}<b v-if="genMessage" class="warn"> · {{ genMessage }}</b></span>
           <span class="num">{{ canvas?.cursorInfo }}</span>
         </footer>
+        <!-- 手机：画图工具的提示条 + 多边形的「撤销一点 / 取消 / 完成」 -->
+        <div v-if="device.compact && (touchHints[tool] || genMessage)" class="touch-hint">
+          <span v-if="touchHints[tool]">{{ t(touchHints[tool]!) }}</span>
+          <b v-if="genMessage" class="warn">{{ genMessage }}</b>
+        </div>
+        <div v-if="tool === 'poly' && (device.coarse || device.compact)" class="poly-bar" :style="{ bottom: barBottom }">
+          <span class="num poly-n">{{ t('{n} 个顶点', { n: canvas?.draftCount ?? 0 }) }}</span>
+          <button :disabled="!canvas?.draftCount" @click="canvas?.undoPoint()"><JIcon :icon="ICONS.undo" />{{ t('撤销一点') }}</button>
+          <button @click="canvas?.cancelDraft()"><JIcon :icon="ICONS.close" />{{ t('取消') }}</button>
+          <button class="primary" :disabled="(canvas?.draftCount ?? 0) < 3" @click="canvas?.finishPoly()"><JIcon :icon="ICONS.check" />{{ t('完成') }}</button>
+        </div>
+        <!-- 手机：选中物体的浮动操作条 -->
+        <div v-if="show2dBar" class="sel-bar" :style="{ bottom: barBottom }">
+          <span class="sel-name">{{ selLabel }}</span>
+          <button v-if="selection?.type === 'fixture'" class="icon-only" :title="t('旋转 90°')" :aria-label="t('旋转 90°')" @click="rotateSelectedFixture()"><JIcon :icon="ICONS.rotateCw" /></button>
+          <button v-if="selection?.type === 'room'" class="icon-only" :title="t('复制')" :aria-label="t('复制')" @click="duplicateSelection()"><JIcon :icon="ICONS.duplicate" /></button>
+          <button class="icon-only danger" :title="t('删除')" :aria-label="t('删除')" @click="deleteSelection()"><JIcon :icon="ICONS.delete" /></button>
+          <button class="props-btn" @click="sheet2d = 'half'"><JIcon :icon="ICONS.generateOptions" />{{ t('属性') }}</button>
+        </div>
       </div>
-      <InspectorPanel />
+      <BottomSheet v-model="sheet2d" :enabled="device.compact" :label="t('属性')" class="sheet2d">
+        <template v-if="device.compact" #header>
+          <div class="tools2d">
+            <button class="primary gen-btn" :title="t('随机生成')" @click="doGenerate()"><JIcon :icon="ICONS.generate" /><span>{{ t('生成') }}</span></button>
+            <button class="icon-only" data-gen-toggle :class="{ on: genOpen }" :title="t('生成选项')" :aria-label="t('生成选项')" @click="genOpen = !genOpen"><JIcon :icon="ICONS.generateOptions" /></button>
+            <span class="vsep" />
+            <button v-for="tl in tools" :key="tl.id" class="icon-only tool" :class="{ on: tool === tl.id }" :title="t(tl.label)" :aria-label="t(tl.label)" :aria-pressed="tool === tl.id" @click="tool = tl.id">
+              <JIcon :icon="TOOL_ICONS[tl.id]" :size="18" />
+            </button>
+            <select v-if="tool === 'fixture'" v-model="placeKind" class="kind" :title="t('要放的设备')" :aria-label="t('要放的设备')">
+              <option v-for="(spec, key) in FIXTURES" :key="key" :value="key">{{ t(spec.label) }}</option>
+            </select>
+          </div>
+        </template>
+        <InspectorPanel />
+      </BottomSheet>
     </main>
     <main v-else-if="shownView === '3d'">
       <Sandbox3D />
@@ -416,6 +514,22 @@ onBeforeUnmount(() => {
     <main v-else>
       <AssetLibrary />
     </main>
+
+    <!-- 生成选项（精简顶栏）：底部面板 / 平板上的浮层 -->
+    <Transition name="gs">
+      <div v-if="genOpen && device.compactBar" class="gen-layer" @pointerdown.self="genOpen = false">
+        <div ref="genSheet" class="gen-sheet" role="dialog" :aria-label="t('生成选项')">
+          <header class="gen-head">
+            <b class="ico-label"><JIcon :icon="ICONS.generateOptions" class="ico-muted" />{{ t('生成选项') }}</b>
+            <button class="icon-only" :aria-label="t('关闭')" @click="genOpen = false"><JIcon :icon="ICONS.close" /></button>
+          </header>
+          <GenOptions @generate="doGenerate" />
+          <button class="primary gen-go" @click="(genOpen = false), doGenerate()"><JIcon :icon="ICONS.generate" />{{ t('随机生成') }}</button>
+        </div>
+      </div>
+    </Transition>
+    <ContextMenu v-if="moreMenu" :x="moreMenu.x" :y="moreMenu.y" :items="device.compactBar ? moreItems : deskMoreItems" class="more-menu" @close="closeMore" />
+
     <SavedPlans @opened="onSavedOpened" />
     <!-- 处理中：淡入带延迟，很快的操作不会闪；转圈是合成线程动画，主线程忙时也在转 -->
     <div v-if="busy.count" class="busy" role="status" aria-live="polite">
@@ -425,12 +539,14 @@ onBeforeUnmount(() => {
     <TooltipLayer />
     <ShortcutHelp />
     <Onboarding />
+    <UpdatePrompt />
   </div>
 </template>
 
 <style scoped>
 .app {
   height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
 }
@@ -466,10 +582,9 @@ onBeforeUnmount(() => {
   background: var(--surface);
   color: var(--text);
 }
-/* 窄屏：工具、文件按钮只留图标（title / aria-label 仍有文字） */
 /*
  * 顶栏要在一行放下：按宽度逐级把按钮收成纯图标（title / aria-label 仍有文字）。
- * 撤销 / 重做 / 适应一直是纯图标；工具 ≥2200px、文件 ≥2000px 才显示文字。
+ * 撤销 / 重做 / 适应一直是纯图标；工具和文件按钮 ≥2880px 才显示文字（日文 / 英文的按钮文字长，低于这个宽度会挤成两行）。
  */
 .hist .lbl {
   display: none;
@@ -477,7 +592,7 @@ onBeforeUnmount(() => {
 .hist button {
   padding: 0 8px;
 }
-@media (max-width: 2200px) {
+@media (max-width: 2879px) {
   .tool span {
     display: none;
   }
@@ -485,7 +600,7 @@ onBeforeUnmount(() => {
     padding: 0 8px;
   }
 }
-@media (max-width: 2000px) {
+@media (max-width: 2879px) {
   .file .lbl {
     display: none;
   }
@@ -584,7 +699,9 @@ onBeforeUnmount(() => {
   margin-left: auto;
 }
 .tool.on,
-.gen-toggle.on {
+.gen-toggle.on,
+.more-btn.on,
+[data-gen-toggle].on {
   background: var(--accent-weak);
   color: var(--accent-strong);
   border-color: var(--accent-ring);
@@ -621,49 +738,11 @@ onBeforeUnmount(() => {
   left: 12px;
   z-index: 20;
   width: 300px;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 10px 12px;
   padding: 14px 16px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
-}
-.field {
-  display: contents;
-}
-.field > span:first-child {
-  font-size: var(--fs-sm);
-  color: var(--text-muted);
-  white-space: nowrap;
-}
-.gen-pop select,
-.gen-pop .seed {
-  width: 100%;
-  min-width: 0;
-}
-.area {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--text-muted);
-}
-.top .area input {
-  flex: 1;
-  min-width: 0;
-  width: 0;
-}
-.furnish {
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: var(--fs-sm);
-  color: var(--text);
-  padding-top: 4px;
-  border-top: 1px solid var(--border);
 }
 .warn {
   color: var(--danger);
@@ -743,6 +822,7 @@ main {
   transform: translateX(-50%);
   pointer-events: none;
   animation: busy-in 0.18s ease-out 0.08s both;
+  max-width: calc(100vw - 32px);
 }
 .busy .spin {
   color: var(--accent);
@@ -800,5 +880,289 @@ main {
   .top .kind {
     width: 88px;
   }
+}
+
+/* ---------- 精简顶栏（手机 / 平板）：一行放下品牌、视图、撤销重做、保存、更多 ---------- */
+:root.compact-bar .top {
+  flex-wrap: nowrap;
+  padding-top: max(8px, env(safe-area-inset-top, 0px));
+  padding-left: max(10px, env(safe-area-inset-left, 0px));
+  padding-right: max(10px, env(safe-area-inset-right, 0px));
+}
+:root.compact-bar .top .views button.on .lbl {
+  display: inline;
+}
+:root.compact-bar .top .icon-only {
+  width: var(--control-h);
+  padding: 0;
+}
+:root.compact-bar .gen-icon {
+  color: var(--text-inverse);
+}
+:root.compact .brand {
+  border-right: 0;
+  padding-right: 0;
+  margin-right: 0;
+}
+:root.compact .top {
+  gap: 6px;
+}
+:root.compact .group {
+  border-left: 0;
+  padding-left: 0;
+  gap: 2px;
+}
+:root.compact .views {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+:root.compact .top .views button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 6px;
+}
+:root.compact .top .views button.on {
+  flex: 2 1 auto;
+}
+:root.compact .top .views .lbl {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+:root.compact .hist button {
+  width: 40px;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+}
+/* 很窄（≤360px）：当前视图也只留图标 */
+@media (max-width: 360px) {
+  :root.compact .top .views button.on .lbl {
+    display: none;
+  }
+}
+
+/* ---------- 手机：平面图 ---------- */
+:root.compact .zoom {
+  top: 76px;
+  right: 10px;
+  bottom: auto;
+  flex-direction: column;
+  padding: 3px;
+}
+:root.compact .zoom button {
+  width: 40px;
+  height: 40px;
+}
+:root.compact .zoom .pct {
+  min-width: 0;
+  padding: 0;
+  font-size: 11px;
+}
+:root:not(.compact) .sheet2d :deep(.panel) {
+  height: 100%;
+}
+.tools2d {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tools2d::-webkit-scrollbar {
+  display: none;
+}
+.tools2d button {
+  flex: none;
+  height: 44px;
+  min-width: 44px;
+  border-radius: 10px;
+}
+.tools2d .tool {
+  border-color: transparent;
+  background: transparent;
+}
+.tools2d .tool.on {
+  background: var(--accent-weak);
+  color: var(--accent-strong);
+  border-color: var(--accent-ring);
+}
+.tools2d .gen-btn {
+  padding: 0 14px;
+  gap: 6px;
+}
+/* 很窄的手机：「生成选项」收进「更多」菜单，让六个工具一行放下 */
+@media (max-width: 419px) {
+  .tools2d [data-gen-toggle] {
+    display: none;
+  }
+}
+.tools2d .kind {
+  flex: none;
+  height: 44px;
+  max-width: 150px;
+  font: inherit;
+  font-size: 16px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+}
+.vsep {
+  flex: none;
+  width: 1px;
+  height: 24px;
+  margin: 0 4px;
+  background: var(--border);
+}
+.touch-hint {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  max-width: calc(100% - 120px);
+  padding: 6px 12px;
+  font-size: var(--fs-xs);
+  line-height: 1.4;
+  color: var(--text-muted);
+  text-align: center;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  box-shadow: var(--shadow-sm);
+  pointer-events: none;
+}
+.touch-hint .warn {
+  display: block;
+}
+.poly-bar,
+.sel-bar {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: calc(100% - 20px);
+  padding: 4px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  transition: bottom 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.poly-bar button,
+.sel-bar button {
+  height: 44px;
+  min-width: 44px;
+  border-radius: 10px;
+  gap: 6px;
+}
+.sel-bar .icon-only {
+  border-color: transparent;
+  background: transparent;
+}
+.poly-n {
+  padding: 0 8px;
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.sel-name {
+  max-width: 120px;
+  padding: 0 6px 0 10px;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 非手机（平板横屏）的多边形控件：浮在画布底部 */
+:root:not(.compact) .poly-bar {
+  bottom: 44px !important;
+}
+
+/* ---------- 生成选项：底部面板（手机）/ 右上浮层（平板） ---------- */
+.gen-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(32, 38, 34, 0.24);
+}
+.gen-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: 86dvh;
+  overflow-y: auto;
+  padding: 0 16px calc(16px + env(safe-area-inset-bottom, 0px));
+  background: var(--surface);
+  border-radius: 16px 16px 0 0;
+  box-shadow: 0 -10px 30px rgba(32, 38, 34, 0.16);
+  overscroll-behavior: contain;
+}
+:root:not(.compact) .gen-sheet {
+  left: auto;
+  right: 16px;
+  bottom: auto;
+  top: calc(var(--topbar, 60px) + 8px);
+  width: 360px;
+  border-radius: var(--radius-lg);
+  padding-bottom: 16px;
+}
+:root.landscape .gen-sheet {
+  left: auto;
+  right: 8px;
+  width: min(440px, 60vw);
+}
+.gen-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0 10px;
+  margin-bottom: 4px;
+  background: var(--surface);
+}
+.gen-head b {
+  font-size: var(--fs-md);
+}
+.gen-head button {
+  width: 44px;
+  height: 44px;
+  border-color: transparent;
+  background: transparent;
+}
+.gen-go {
+  width: 100%;
+  height: 48px;
+  margin-top: 14px;
+  font-size: var(--fs-base);
+  gap: 8px;
+}
+.gs-enter-active,
+.gs-leave-active {
+  transition: opacity 0.2s ease;
+}
+.gs-enter-active .gen-sheet,
+.gs-leave-active .gen-sheet {
+  transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.gs-enter-from,
+.gs-leave-to {
+  opacity: 0;
+}
+:root.compact .gs-enter-from .gen-sheet,
+:root.compact .gs-leave-to .gen-sheet {
+  transform: translateY(40px);
+}
+:root.compact .busy {
+  top: calc(var(--topbar, 56px) + 10px);
 }
 </style>

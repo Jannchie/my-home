@@ -4,7 +4,7 @@
 
 import * as THREE from 'three'
 import { C, rectPoly, S, type AssetDef, type StyleTag } from '../kit'
-import { ball, capsule, cyl, rbox, shade, toon, torus } from '../toon'
+import { ball, cyl, rbox, shade, toon, torus } from '../toon'
 
 type Pal = [StyleTag, string[]]
 
@@ -49,29 +49,50 @@ function bulb(x: number, y: number, z: number, r = 1.5) {
 
 const UNDIE = ['#fbf7f1', '#ffd6e0', '#cfb8f3', '#a8d4f4', '#3d3f44', '#f4e7c8', '#a6e3cc', '#e88aa0']
 
-/** 一格抽屉里的东西：卷好的袜子 / 叠成小方块的内衣，摆满 w × d */
-function drawerFill(w: number, d: number, seed: number) {
+/**
+ * 一格抽屉里的东西：放进白色分隔收纳格，排得方方正正、挤满 w × d：
+ *   seed 偶数：方格收纳盒（每格约 8cm），每格一件叠成小方块的内衣，顶面有一道折痕；同一列同一种颜色；
+ *   seed 奇数：档案式竖插，几列之间有隔板，每列内衣一件件紧贴着立放（相邻两件深浅交替，看得出是一件件）。
+ * hMax：衣物最高多高（不能冒出抽屉盒）。
+ */
+const DIVIDER = '#f6f3ee'
+function drawerFill(w: number, d: number, seed: number, hMax = 6) {
   const g = new THREE.Group()
-  let s = seed
-  const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296)
-  const rolled = seed % 2 === 0
-  const cw = rolled ? 6 : 9
-  const cd = rolled ? 8 : 10
-  const nx = Math.max(1, Math.floor(w / cw))
-  const nz = Math.max(1, Math.floor(d / cd))
-  for (let ix = 0; ix < nx; ix++)
-    for (let iz = 0; iz < nz; iz++) {
-      if (rnd() < 0.12) continue
-      const col = UNDIE[Math.floor(rnd() * UNDIE.length)]
-      const x = -w / 2 + (ix + 0.5) * (w / nx)
-      const z = -d / 2 + (iz + 0.5) * (d / nz)
-      if (rolled) {
-        const c = capsule(2.3, 2.2, col, {})
-        c.position.set(x, 2.3, z - 3.4)
-        c.rotation.x = Math.PI / 2
-        g.add(c)
-      } else g.add(rbox(w / nx - 0.8, 2.4, d / nz - 0.8, col, { x, z }, 0.6))
-    }
+  // 每格抽屉取 3 种相邻的颜色，按列交替，整体看上去有秩序
+  const cols = [0, 1, 2].map((i) => UNDIE[(seed * 3 + i) % UNDIE.length])
+  const wall = 0.4
+  const hh = Math.min(hMax, 5)
+  const divH = hh + 0.6
+  const nx = Math.max(1, Math.round(w / (seed % 2 === 0 ? 8 : 11)))
+  const cw = w / nx
+  // 竖隔板（两种排法都有）
+  for (let i = 1; i < nx; i++) g.add(rbox(wall, divH, d, DIVIDER, { x: -w / 2 + i * cw }, 0.1))
+  if (seed % 2 === 0) {
+    const nz = Math.max(1, Math.round(d / 8))
+    const cd = d / nz
+    for (let i = 1; i < nz; i++) g.add(rbox(w, divH, wall, DIVIDER, { z: -d / 2 + i * cd }, 0.1))
+    for (let ix = 0; ix < nx; ix++)
+      for (let iz = 0; iz < nz; iz++) {
+        const col = cols[ix % cols.length]
+        const x = -w / 2 + (ix + 0.5) * cw
+        const z = -d / 2 + (iz + 0.5) * cd
+        g.add(rbox(cw - wall - 0.5, hh, cd - wall - 0.5, col, { x, z }, 0.9))
+        // 折痕：顶面中间一道浅一点的线
+        const crease = rbox(cw - wall - 2.2, 0.15, 0.35, shade(col, -0.1), { x, y: hh, z }, 0.05)
+        crease.userData.noOutline = true
+        g.add(crease)
+      }
+  } else {
+    const t = 2.6
+    const nz = Math.max(1, Math.floor(d / t))
+    const sz = d / nz
+    for (let ix = 0; ix < nx; ix++)
+      for (let iz = 0; iz < nz; iz++) {
+        const base = cols[ix % cols.length]
+        const col = iz % 2 ? shade(base, -0.07) : base
+        g.add(rbox(cw - wall - 0.5, hh, sz - 0.12, col, { x: -w / 2 + (ix + 0.5) * cw, z: -d / 2 + (iz + 0.5) * sz }, 0.8))
+      }
+  }
   return g
 }
 
@@ -90,7 +111,7 @@ function drawer(w: number, h: number, d: number, front: string, body: string, kn
     for (const s of [-1, 1]) g.add(rbox(t, bh, d - 2, body, { x: s * (w / 2 - 1.9), y: 0.6, z: -0.2 }, 0.2))
     g.add(rbox(w - 3, bh, t, body, { y: 0.6, z: -d / 2 + 0.9 }, 0.2))
     if (fill !== null) {
-      const f = drawerFill(w - 6, d - 5, fill)
+      const f = drawerFill(w - 5, d - 4, fill, bh - 2)
       f.position.set(0, 0.6 + t, -0.4)
       g.add(f)
     }
@@ -140,7 +161,7 @@ function chest(spec: ChestSpec, open: boolean) {
       for (let c = 0; c < n; c++) {
         // 打开的格：第 2、4 格拉出，露出里面的衣物
         const pull = open && (k === 1 || k === 3) ? Math.min(16, d * 0.4) : 0
-        const dr = drawer(cw - 0.5, rh - 0.5, d - 2, front, shade(body, 0.04), knob, pull, pull ? ri * 7 + c + 3 : null, spec.knob)
+        const dr = drawer(cw - 0.5, rh - 0.5, d - 2, front, shade(body, 0.04), knob, pull, pull ? (k === 1 ? 2 : 1) + 2 * (ri + c) : null, spec.knob)
         dr.position.x = -w / 2 + t + cw * (c + 0.5)
         dr.position.y = y + 0.25
         dr.position.z += 0.5

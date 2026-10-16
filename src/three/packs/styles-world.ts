@@ -162,6 +162,34 @@ function glass(w: number, h: number, t: number, at: { x?: number; y: number; z: 
   return m
 }
 
+/**
+ * 把座面压低：y0 以下按比例压缩到 y0 - dy，y0 以上整体下移 dy（靠背、扶手比例不变）。
+ * 明式椅子原比例座高约 50（配 85 高的桌子 + 踏脚），和现代 72–75 的桌子搭配会太高。
+ */
+function lowerSeat(g: THREE.Group, y0: number, dy: number) {
+  g.updateMatrixWorld(true)
+  const inv = new THREE.Matrix4().copy(g.matrixWorld).invert()
+  const k = (y0 - dy) / y0
+  g.traverse((o) => {
+    const m = o as THREE.Mesh
+    if (!m.isMesh) return
+    const rel = new THREE.Matrix4().multiplyMatrices(inv, m.matrixWorld)
+    const geo = m.geometry.clone()
+    geo.applyMatrix4(rel)
+    const pos = geo.attributes.position
+    for (let i = 0; i < pos.count; i++) {
+      const y = pos.getY(i)
+      pos.setY(i, y < y0 ? y * k : y - dy)
+    }
+    geo.applyMatrix4(rel.clone().invert())
+    geo.computeVertexNormals()
+    geo.computeBoundingBox()
+    geo.computeBoundingSphere()
+    m.geometry = geo
+  })
+  return g
+}
+
 /** 把模型在 xz 上居中（只用于没有 surface 声明的自由造型） */
 function centerXZ(g: THREE.Group) {
   g.updateMatrixWorld(true)
@@ -453,7 +481,7 @@ function guanmaoChair(p: string[]) {
   g.add(prism([[-22.5, 46], [22.5, 46], [22.5, 41], [16, 40], [10, 37.5], [-10, 37.5], [-16, 40], [-22.5, 41]], 1.6, dark, Z))
   g.add(rbox(47, 2.2, 3.4, dark, { y: 8, z: Z }, 0.6))
   g.add(rod3([-X, 21, -Z], [X, 21, -Z], 1, dark))
-  return g
+  return lowerSeat(g, 46, 4.5)
 }
 
 /** 太师椅：三屏风式靠背带帽头、实板扶手开光、托泥底座 */
@@ -485,7 +513,7 @@ function taishiChair(p: string[]) {
   // 坐垫与靠枕
   g.add(rbox(52, 5, 40, cushion, { y: 48.5, z: 2 }, 2))
   g.add(rbox(34, 22, 6, cushion, { y: 54, z: -18.5, rx: -0.08 }, 2.5))
-  return g
+  return lowerSeat(g, 44, 4.5)
 }
 
 /** 玫瑰椅：低靠背与扶手等高感，背下部券口格心，圆材直腿 */
@@ -515,7 +543,7 @@ function meiguiChair(p: string[]) {
   g.add(prism([[-20, 45.5], [20, 45.5], [20, 42], [12, 40.5], [-12, 40.5], [-20, 42]], 1.4, dark, Z))
   g.add(rbox(43, 2, 3, dark, { y: 8, z: Z }, 0.6))
   g.add(rod3([-X, 18, -Z], [X, 18, -Z], 0.9, dark))
-  return g
+  return lowerSeat(g, 45.5, 4.5)
 }
 
 /** 三面围子：背板 + 两侧板，格心开孔 */
@@ -2460,20 +2488,20 @@ const HALF_MOON: Poly = [[-46, -17], ...Array.from({ length: 13 }, (_, i) => { c
 
 /** 新中式 */
 export const SW_CHINESE: AssetDef[] = [
-  D('sw-cn-guanmao', '官帽椅', 'living', [61.6, 49.8, 112.4], [
+  D('sw-cn-guanmao', '官帽椅', 'living', [61.6, 49.8, 107.9], [
     [ZH, CN.rose, CN.cane, CN.zitan],
     [ZH, CN.huali, CN.cane, CN.wenge],
     [ZH, CN.zitan, CN.lacquer, CN.wenge],
     [ZH, CN.wenge, CN.silk, CN.zitan],
     ['modern', M.black, M.light, M.char],
   ], guanmaoChair),
-  D('sw-cn-taishi', '太师椅', 'living', [66, 50.5, 106.5], [
+  D('sw-cn-taishi', '太师椅', 'living', [66, 50.5, 102], [
     [ZH, CN.rose, CN.lacquer, CN.zitan],
     [ZH, CN.zitan, CN.gold, CN.wenge],
     [ZH, CN.huali, CN.indigo, CN.wenge],
     [ZH, CN.wenge, CN.jade, CN.zitan],
   ], taishiChair),
-  D('sw-cn-meigui', '玫瑰椅', 'dining', [46, 42, 85.5], [
+  D('sw-cn-meigui', '玫瑰椅', 'dining', [46, 42, 81], [
     [ZH, CN.rose, CN.cane, CN.zitan],
     [ZH, CN.huali, CN.cane, CN.wenge],
     [ZH, CN.zitan, CN.silk, CN.wenge],

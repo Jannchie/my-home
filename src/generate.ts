@@ -12,7 +12,7 @@
 
 import { orientDoors } from './doors'
 import { firstDoorCenter, placeCandidates, placeOnWall, placePair, type PlaceSpec } from './place'
-import { JO, add, area, bbox, dist, edgeInfo, edgesOf, fixtureDepth, mul, rotFacingWall, openingGeom, openingsOn, pointInPolygon, projectToSegment, rectPoints, uid, type Fixture, type FridgeStyle, type WasherStyle, type KitchenVariant, type Opening, type Plan, type RailingKind, type Region, type Room, type RoomKind, type Vec } from './model'
+import { JO, add, area, bbox, dist, edgeInfo, edgesOf, fixtureDepth, mul, rotFacingWall, openingGeom, openingsOn, pointInPolygon, projectToSegment, rectPoints, uid, type Fixture, type KitchenVariant, type Opening, type Plan, type RailingKind, type Region, type Room, type RoomKind, type Vec } from './model'
 import { isIndoor, sharedIntervals } from './walls'
 import { jp } from './i18n'
 import { ASSET_MAP } from './three/assets'
@@ -795,6 +795,7 @@ function layout(opts: GenOptions): Layout {
 
   const plan: Plan = {
     version: 1,
+    appliancesAsFurniture: true,
     name: `${c.tags.includes('S') ? type.replace('LDK', 'SLDK') : type} ${jp(STYLE_LABELS[style])}${c.livingIn ? '·' + jp('リビングイン') : ''}${c.tags.filter((t) => t !== 'S').map((t) => '·' + t).join('')}${corner ? '·' + jp('角部屋') : ''} ${planArea({ rooms: c.rooms }).toFixed(1)}㎡ #${opts.seed}`,
     wall: WALL,
     wallOuter: WALL_OUTER,
@@ -904,23 +905,7 @@ function furnish({ c, plan }: Layout): Plan {
     }
   }
 
-  // 冰箱、洗衣机的款式和颜色：小户型多是两门小冰箱 / 小型立式洗衣机
-  const small = planArea(plan) < 35
-  const pickW = <T,>(items: [T, number][]) => {
-    let r = c.rand() * items.reduce((s, [, w]) => s + w, 0)
-    for (const [v, w] of items) if ((r -= w) <= 0) return v
-    return items[0][0]
-  }
-  const COLORS: [string, number][] = [['#f6f6f3', 5], ['#c9ccd1', 3], ['#2f3134', 2], ['#e8d9bf', 2], ['#8a8d93', 1], ['#bfe8d8', 1], ['#f6c9d2', 0.6], ['#cfe3f2', 0.6], ['#efe4d0', 1]]
-  for (const f of plan.fixtures) {
-    if (f.kind === 'fridge') {
-      f.style = small ? pickW<FridgeStyle>([['2door', 6], ['3door', 3], ['retro', 1]]) : pickW<FridgeStyle>([['3door', 4], ['french', 3], ['side', 1.5], ['retro', 0.6], ['2door', 0.4]])
-      f.color = f.style === 'retro' ? pickW([['#bfe8d8', 2], ['#f6c9d2', 2], ['#cfe3f2', 1], ['#f3e3a6', 1], ['#efe4d0', 1]]) : pickW(COLORS)
-    } else if (f.kind === 'washer') {
-      f.style = small ? pickW<WasherStyle>([['compact', 5], ['top', 3], ['drum', 1.5], ['twin', 0.3]]) : pickW<WasherStyle>([['drum', 4], ['top', 4], ['stack', 1], ['twin', 0.3]])
-      f.color = pickW([['#f6f6f3', 6], ['#c9ccd1', 2], ['#8a8d93', 1], ['#2f3134', 1], ['#e8d9bf', 1]])
-    }
-  }
+  // 冰箱、洗衣机本身是家具：一键布置按户型大小和住户风格挑款式、配色放到冰箱位 / 洗衣机位上（decorate.ts appliances）
 
   // 马桶类型：日本住宅多是温水洗净；面积大的户型更可能是无水箱的高级款
   const big = planArea(plan) > 60

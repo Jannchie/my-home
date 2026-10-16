@@ -824,4 +824,39 @@ const metaLine = (m: { area: number; layout: string; furniture: number }) =>
     min-width: 0;
   }
 }
+/* 手机（compact）：整屏面板，避开刘海 / 底部横条；提示条让开底部抽屉 */
+:root.compact .sp-backdrop:not(.confirm-layer) {
+  padding: 0;
+}
+:root.compact .sp {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+:root.compact .sp-close {
+  width: 44px;
+  height: 44px;
+  margin-left: auto;
+}
+:root.compact .grid {
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+}
+:root.compact .card-actions .icon-only {
+  width: 40px;
+}
+:root.coarse .save-row button,
+:root.coarse .name-input,
+:root.coarse .search input,
+:root.coarse .seg button,
+:root.coarse .card-actions button,
+:root.coarse .snaps button,
+:root.coarse .confirm button {
+  height: 44px;
+}
+:root.compact .sp-toast {
+  bottom: calc(var(--toast-bottom, 96px) + env(safe-area-inset-bottom, 0px));
+}
 </style>

@@ -15,6 +15,10 @@ export interface SandboxBridge {
   resetView(): void
   /** 标记需要重画 */
   redraw(): void
+  /** 弹出家具 / 场景的快捷菜单（触屏长按用；SandboxOverlay 挂上） */
+  menu?: (x: number, y: number, id: string | null) => void
+  /** 手机：展开底部抽屉的「属性」页（浮动工具条上的按钮用） */
+  showProps?: () => void
 }
 
 export const sandboxBridge = shallowRef<SandboxBridge | null>(null)
