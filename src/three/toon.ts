@@ -301,7 +301,8 @@ export function shade(color: string, dl: number, ds = 0) {
 
 // ---------- 合并静态网格（减少 draw call） ----------
 
-const MERGE_ATTRS = new Set(['position', 'normal', 'uv'])
+// mask：宠物毛色材质的花纹场（见 critter-geo.ts 的 furMaterial）
+const MERGE_ATTRS = new Set(['position', 'normal', 'uv', 'mask'])
 
 /** 能不能并进同材质的大网格：普通不透明网格、没有子节点、没有业务标记、几何体只有常规属性 */
 function mergeable(o: THREE.Object3D): o is THREE.Mesh {
@@ -353,7 +354,7 @@ export function mergeMeshes(root: THREE.Object3D) {
       verts += n
       tris += m.geometry.index ? m.geometry.index.count : n
     }
-    const size: Record<string, number> = { position: 3, normal: 3, uv: 2 }
+    const size: Record<string, number> = { position: 3, normal: 3, uv: 2, mask: 3 }
     const out: Record<string, Float32Array> = {}
     for (const k of names) out[k] = new Float32Array(verts * size[k])
     const index = verts > 65535 ? new Uint32Array(tris) : new Uint16Array(tris)

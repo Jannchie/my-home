@@ -26,7 +26,10 @@ function def(id: string, name: string, [w, d, h]: [number, number, number], pals
   }
 }
 
-/** 猫的花色：[主色, 肚皮 / 吻部 / 爪, 背上斑块, 侧面斑块 / 尾尖] */
+/**
+ * 猫的花色：[主色, 副色（肚皮 / 吻部 / 白袜子）, 花纹 A, 花纹 B]。花纹画法按颜色关系推（见 critters.ts 的 coatOf）：
+ * A = B = 主色 → 纯色；A ≠ B → 三花；A = B 且主色浅、花纹深 → 副色 = 主色时奶牛猫，否则重点色（暹罗）；其余 → 虎斑。
+ */
 const CAT_PALS: Pal[] = [
   ['cute', ['#f4a259', '#fff4e6', '#d9792b', '#d9792b']], // 橘猫
   ['cute', ['#fbf7f1', '#fbf7f1', '#e8954a', '#3a3536']], // 三花
@@ -36,6 +39,7 @@ const CAT_PALS: Pal[] = [
   ['nordic', ['#f3e6d0', '#f7efe2', '#7a5a48', '#7a5a48']], // 暹罗色
 ]
 
+/** 狗：[主色, 副色（柴犬的白色里毛 / 腊肠的棕色重点 / 贵宾的口吻）, 项圈色] */
 const SHIBA_PALS: Pal[] = [
   ['japanese', ['#e9a35a', '#fff4e6', '#d65a3c']], // 赤柴
   ['japanese', ['#3e3a39', '#f1dcc0', '#3d5a80']], // 黑柴
@@ -52,6 +56,7 @@ const DACHS_PALS: Pal[] = [
   ['modern', ['#2f2a2a', '#b9784a', '#e0a526']], // 黑棕
   ['cute', ['#e9c49a', '#f6e2c6', '#ffb6c8']], // 奶油
 ]
+/** 兔子：[主色, 副色（肚皮 / 口鼻 / 尾巴）, 花纹色（有就是荷兰兔 / 熊猫兔：后半身、耳朵、眼圈）] */
 const RABBIT_PALS: Pal[] = [
   ['cute', ['#fbf7f1', '#ffffff']],
   ['nordic', ['#b9906a', '#f1e4d2']],
@@ -124,14 +129,14 @@ function kachakaSurfaces(tiers: 2 | 3): Partial<AssetDef> {
 }
 
 export const ACTOR_ASSETS: AssetDef[] = [
-  def('act-cat', '猫（会走动）', [34, 40, 20], CAT_PALS, pet('cat', 'curl'), { kind: 'cat', role: 'body', breed: 'cat' }, { family: 'act-cat', sizeLabel: '短毛猫' }),
-  def('act-cat-long', '猫（会走动）', [38, 44, 24], CAT_PALS, pet('cat-long', 'curl'), { kind: 'cat', role: 'body', breed: 'cat-long' }, { family: 'act-cat', sizeLabel: '长毛猫' }),
-  def('act-kitten', '猫（会走动）', [24, 28, 15], CAT_PALS, pet('kitten', 'curl'), { kind: 'cat', role: 'body', breed: 'kitten' }, { family: 'act-cat', sizeLabel: '小猫' }),
-  def('act-shiba', '狗（会走动）', [44, 56, 30], SHIBA_PALS, pet('shiba', 'curl'), { kind: 'dog', role: 'body', breed: 'shiba' }, { family: 'act-dog', sizeLabel: '柴犬' }),
-  def('act-poodle', '狗（会走动）', [32, 40, 24], POODLE_PALS, pet('poodle', 'curl'), { kind: 'dog', role: 'body', breed: 'poodle' }, { family: 'act-dog', sizeLabel: '玩具贵宾' }),
-  def('act-dachshund', '狗（会走动）', [36, 60, 20], DACHS_PALS, pet('dachshund', 'curl'), { kind: 'dog', role: 'body', breed: 'dachshund' }, { family: 'act-dog', sizeLabel: '腊肠犬' }),
-  def('act-rabbit', '兔子（会走动）', [24, 34, 26], RABBIT_PALS, pet('rabbit', 'loaf'), { kind: 'rabbit', role: 'body', breed: 'rabbit' }, { family: 'act-rabbit', sizeLabel: '立耳兔' }),
-  def('act-rabbit-lop', '兔子（会走动）', [26, 34, 20], RABBIT_PALS, pet('rabbit-lop', 'loaf'), { kind: 'rabbit', role: 'body', breed: 'rabbit-lop' }, { family: 'act-rabbit', sizeLabel: '垂耳兔' }),
+  def('act-cat', '猫（会走动）', [26, 34, 31], CAT_PALS, pet('cat', 'curl'), { kind: 'cat', role: 'body', breed: 'cat' }, { family: 'act-cat', sizeLabel: '短毛猫' }),
+  def('act-cat-long', '猫（会走动）', [29, 39, 35], CAT_PALS, pet('cat-long', 'curl'), { kind: 'cat', role: 'body', breed: 'cat-long' }, { family: 'act-cat', sizeLabel: '长毛猫' }),
+  def('act-kitten', '猫（会走动）', [18, 25, 24], CAT_PALS, pet('kitten', 'curl'), { kind: 'cat', role: 'body', breed: 'kitten' }, { family: 'act-cat', sizeLabel: '小猫' }),
+  def('act-shiba', '狗（会走动）', [32, 47, 43], SHIBA_PALS, pet('shiba', 'curl'), { kind: 'dog', role: 'body', breed: 'shiba' }, { family: 'act-dog', sizeLabel: '柴犬' }),
+  def('act-poodle', '狗（会走动）', [24, 33, 29], POODLE_PALS, pet('poodle', 'curl'), { kind: 'dog', role: 'body', breed: 'poodle' }, { family: 'act-dog', sizeLabel: '玩具贵宾' }),
+  def('act-dachshund', '狗（会走动）', [29, 40, 26], DACHS_PALS, pet('dachshund', 'curl'), { kind: 'dog', role: 'body', breed: 'dachshund' }, { family: 'act-dog', sizeLabel: '腊肠犬' }),
+  def('act-rabbit', '兔子（会走动）', [19, 34, 30], RABBIT_PALS, pet('rabbit', 'loaf'), { kind: 'rabbit', role: 'body', breed: 'rabbit' }, { family: 'act-rabbit', sizeLabel: '立耳兔' }),
+  def('act-rabbit-lop', '兔子（会走动）', [21, 36, 22], RABBIT_PALS, pet('rabbit-lop', 'loaf'), { kind: 'rabbit', role: 'body', breed: 'rabbit-lop' }, { family: 'act-rabbit', sizeLabel: '垂耳兔' }),
   def('act-vacuum', '扫地机器人（会自动清扫）', [36, 46, 11], VAC_PALS, vacuumWithDock, { kind: 'vacuum', role: 'body' }, { category: 'appliance', limit: { scope: 'house', max: 1, group: 'vacuum' } }),
   def('act-kachaka', '家用搬运机器人 Kachaka', [34, 56, 13], KC_PALS, kachakaSet(0), { kind: 'kachaka', role: 'body' }, { category: 'appliance', family: 'act-kachaka', sizeLabel: '本体 + 充电座' }),
   def('act-kachaka-2', '家用搬运机器人 Kachaka', [34, 56, 44], KC_PALS, kachakaSet(2), { kind: 'kachaka', role: 'body' }, { category: 'appliance', family: 'act-kachaka', sizeLabel: '+ 2 段架子', ...kachakaSurfaces(2) }),

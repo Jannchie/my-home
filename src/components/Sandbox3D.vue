@@ -239,6 +239,9 @@ function brighter(mat: THREE.Material) {
   let h = hiMats.get(mat)
   if (!h) {
     h = mat.clone()
+    // clone 不带着色器钩子（花纹布料、宠物毛色），要手动接上
+    h.onBeforeCompile = mat.onBeforeCompile
+    h.customProgramCacheKey = mat.customProgramCacheKey
     const e = h as THREE.MeshToonMaterial
     if (e.emissive) {
       // 本身发光的（灯、屏幕）稍微再亮一点；其余加一层很淡的同色自发光
