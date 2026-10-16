@@ -55,6 +55,8 @@ const FIRST_STYLE: StyleTag = 'modern'
 const FINAL_STYLE: StyleTag = 'nordic'
 const LOOK_CUTS: LookId[] = ['tiltshift', 'film', 'watercolor', 'comic', 'pixel', 'sketch']
 const REGION_NAMES = ['日式', '中式', '欧美']
+/** 地区段：每个地区一句话概括户型特点（和三个生成器实际生成的格局一致） */
+const REGION_NOTES = ['紧凑的 nLDK 格局，玄关落差、榻榻米和室、整体浴室', '客餐厅一体，主卧带卫，景观阳台与生活阳台', '开放式客厅配厨房中岛，主卧套间带衣帽间，独立洗衣房']
 const CAT_TIME = 17.0
 
 // ---------- 叠层状态（Promo.vue 渲染） ----------
@@ -86,7 +88,7 @@ export const ui = reactive({
   dark: false,
   /** 右下角小字标 */
   brand: 0,
-  label: null as null | { parts: { text: string; on?: boolean; dim?: boolean }[]; o: number },
+  label: null as null | { parts: { text: string; on?: boolean; dim?: boolean }[]; note?: string; o: number },
   clock: null as null | { o: number; time: number },
   mask: null as null | { mode: 'cover' | 'reveal'; k: number },
   cursor: null as null | { x: number; y: number; down: number; o: number },
@@ -389,7 +391,7 @@ export class Director {
       set = this.set(['jp', 'cn', 'west'][i])
       this.resetFurniture(set)
       view = orbit(set, t, 0.82, 0.98)
-      ui.label = { parts: REGION_NAMES.map((n, k) => ({ text: n, dim: k !== i })), o: showIn(t, S.regions + 0.35, S.daynight - 0.2) }
+      ui.label = { parts: REGION_NAMES.map((n, k) => ({ text: n, dim: k !== i })), note: REGION_NOTES[i], o: showIn(t, S.regions + 0.35, S.daynight - 0.2) }
       if (t < S.regions + 0.3) ui.mask = { mode: 'reveal', k: easeOut((t - S.regions) / 0.3) }
     } else if (t < S.looks) {
       // 5：昼夜流转

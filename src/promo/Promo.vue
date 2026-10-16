@@ -170,6 +170,8 @@ onMounted(async () => {
         <span v-if="i" class="sep">·</span>
         <span :class="{ on: p.on, dim: p.dim }">{{ p.text }}</span>
       </template>
+      <!-- 第二行：一句话概括（地区段） -->
+      <span v-if="ui.label.note" class="note">{{ ui.label.note }}</span>
       <span v-if="ui.clock" class="sep">·</span>
       <span v-if="ui.clock" class="num on">{{ clockText }}</span>
       <svg v-if="ui.clock" class="sunmoon" viewBox="-12 -12 24 24">
@@ -203,7 +205,7 @@ onMounted(async () => {
       <div class="card-end" :style="{ opacity: ui.end.logo, transform: `translateY(${(1 - ui.end.logo) * 2}vmin)` }">
         <svg viewBox="0 0 512 512" class="logo"><rect width="512" height="512" rx="116" fill="#f4f1ea" /><g transform="translate(64 64) scale(16)" fill="none" stroke="#577a68" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 3.5h15a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H4.5a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1zm-1 9h5m4 0h8m-6 0v4" /></g></svg>
         <div class="big">My Home</div>
-        <div class="small">生成一个带有生活气息的家。</div>
+        <div class="small">生成一个带有生活气息的家</div>
         <div class="small url">home.jannchie.com</div>
       </div>
     </div>
@@ -296,6 +298,20 @@ body,
   font-size: var(--small);
   font-weight: 500;
   letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.label:has(.note) {
+  flex-wrap: wrap;
+  row-gap: calc(var(--u) * 0.6);
+}
+.promo.vertical .label:has(.note) {
+  justify-content: center;
+}
+.label .note {
+  flex-basis: 100%;
+  font-weight: 400;
+  opacity: 0.72;
+  /* 一句话，不折行：标签宽度跟着句子撑开 */
   white-space: nowrap;
 }
 .label .sep {
