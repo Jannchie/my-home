@@ -10,7 +10,12 @@
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "gen:dims": "vite-node scripts/gen-dims.mts"
+    "gen:dims": "vite-node scripts/gen-dims.mts",
+    "promo": "vite --config vite.promo.config.ts",
+    "promo:build": "vite build --config vite.promo.config.ts",
+    "promo:preview": "vite preview --config vite.promo.config.ts",
+    "promo:bgm": "python scripts/promo-bgm.py promo-bgm.wav",
+    "promo:record": "node scripts/record-promo.mjs"
   },
   "dependencies": {
     "@jannchie/icons": "0.11.0",
