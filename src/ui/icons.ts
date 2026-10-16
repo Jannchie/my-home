@@ -227,6 +227,8 @@ export const ICONS = {
   more: IconDots,
   refresh: IconRefresh,
   github: IconGithub, // 项目仓库链接
+  // 内置收纳（3D 里选中时的卡片）
+  builtin: IconWardrobe,
 } satisfies Record<string, AppIcon>
 
 /** 顶栏视图切换 */

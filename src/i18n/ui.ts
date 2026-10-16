@@ -871,4 +871,7 @@ Object.assign(UI, {
   '灯光色温：数值低偏暖黄，高偏冷白': ['照明の色温度：低いほど暖かい黄色、高いほど青白い白', 'Light color temperature: lower is warmer yellow, higher is cooler white'],
   '自动：日落前后渐亮，清晨渐灭。点选天花板的灯或灯具可以单独开关': ['自動：日没ごろに少しずつ点き、明け方に消えます。天井の照明や照明器具をクリックすると個別にオン／オフできます', 'Auto: lights fade on around sunset and off at dawn. Click a ceiling light or lamp to switch it on its own'],
   '点选天花板的灯或灯具可以单独开关；单独设过的不受这里影响': ['天井の照明や照明器具をクリックすると個別にオン／オフできます。個別に設定したものはここの影響を受けません', 'Click a ceiling light or lamp to switch it on its own; lights set individually ignore this'],
+  '柜门': ['扉', 'Doors'],
+  '关上': ['閉める', 'Closed'],
+  '再点一次里面的东西可以选中它': ['中の物をもう一度クリックすると選択できます', 'Click an item inside again to select it'],
 } satisfies Record<string, Entry>)

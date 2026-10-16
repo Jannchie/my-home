@@ -1312,6 +1312,8 @@ export function buildHouse(plan: Plan, wallH: number) {
     mergeMeshes(m)
     addOutlines(m)
     placeOnFloor(m, plan, f.x, f.y, f.rot)
+    // 3D 里点选设备（内置收纳）用
+    m.userData.fixtureId = f.id
     fx.add(m)
   }
   addOutlines(base)

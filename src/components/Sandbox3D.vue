@@ -5,7 +5,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { ASSET_MAP, CATEGORY_LABELS, STYLE_LABELS, type StyleTag } from '../three/assets'
 import { applyCutaway, bendToWalls, buildHouse, floorY, isPlant, stepCutaway, furnitureModel, placeFurniture, roomAt } from '../three/house'
 import { overlapsOthers, snapFurniture, snapToWall, type Guide } from '../snap'
-import { fitOnSurface, pickSurface, propsOn, snapToClip, snapToHook } from '../surface'
+import { fitOnSurface, pickSurface, propsOn, snapToClip, snapToHook, supportOf } from '../surface'
 import { createStage, fitSun, frameCamera, setStageQuality, type Stage } from '../three/stage'
 import { attachPost, LOOKS, LOOK_MAP, type LookId, type Post } from '../three/post'
 import { CITIES, MONTH_DAYS, compassAxes, skyState, type SkyState } from '../three/sky'
@@ -36,7 +36,7 @@ import { patternPreview } from '../three/fabric'
 import type { PatternKind } from '../three/patterns'
 import { isTyping } from '../dom'
 import { lang, roomName, t, tAuto, tSoft } from '../i18n'
-import { bbox, centroid, edgesOf, type Furniture, type Plan, type WallTrim } from '../model'
+import { BUILTIN_TYPES, bbox, centroid, edgesOf, type Furniture, type Plan, type WallTrim } from '../model'
 import { roomStyles } from '../decorate'
 import { wallThicknessAt } from '../walls'
 import {
@@ -336,6 +336,7 @@ function rebuildHouse() {
     stage.scene.remove(house)
     disposeUnshared(house)
   }
+  xraySwapped.length = 0
   house = buildHouse(plan.value, sandbox.wallHeight)
   stage.scene.add(house)
   lights.syncRooms(toRaw(plan.value), ASSET_MAP, floorY, lightStyles(toRaw(plan.value)))
@@ -356,6 +357,7 @@ function rebuildHouse() {
     const o = objs.get(f.id)
     if (o) placeFurniture(o.obj, plan.value, f)
   }
+  applyXray()
   actors.sync(toRaw(plan.value), actorsLive())
   dirty = true
 }
@@ -527,11 +529,46 @@ function floorPoint(e: PointerEvent) {
   return raycaster.ray.intersectPlane(floor, p) ? p : null
 }
 
+/** 内置收纳（壁内收纳 / 押入れ / 嵌墙柜）的 3D 模型 */
+function builtinObjects() {
+  const out: THREE.Object3D[] = []
+  for (const o of house?.children ?? [])
+    for (const c of o.children) {
+      const id = c.userData.fixtureId as string | undefined
+      if (id && plan.value.fixtures.find((f) => f.id === id)?.kind === 'builtin') out.push(c)
+    }
+  return out
+}
+/** 上一次 pickFurniture 判定应该选中的内置收纳（它返回 null 时看这个） */
+let pickedBuiltin: string | null = null
+
 function pickFurniture(e: PointerEvent): string | null {
   setRay(e)
+  pickedBuiltin = null
+  const fhits = raycaster.intersectObject(furnRoot, true)
+  // 内置收纳是户型设备，不在家具里：射线先碰到它、或者碰到的是收在它里面的东西时，先选收纳本身；
+  // 收纳已经选中（柜体半透明）时，点到的就是里面的东西
+  const bhit = raycaster.intersectObjects(builtinObjects(), true).find((h) => h.object.visible && !h.object.userData.isOutline)
+  if (bhit) {
+    let o: THREE.Object3D | null = bhit.object
+    while (o && !o.userData.fixtureId) o = o.parent
+    const bid = o?.userData.fixtureId as string
+    const selB = selection.value?.type === 'fixture' ? selection.value.id : null
+    if (bid !== selB) {
+      const first = fhits[0]
+      let fo: THREE.Object3D | null = first?.object ?? null
+      while (fo && !fo.userData.furnitureId) fo = fo.parent
+      const fu = fo ? findFurniture(fo.userData.furnitureId) : undefined
+      const insideB = !!fu?.z && supportOf(toRaw(plan.value), fu)?.ownerId === bid
+      if (!first || bhit.distance <= first.distance + 1 || insideB) {
+        pickedBuiltin = bid
+        return null
+      }
+    }
+  }
   // 射线经过的家具（去重、由近到远）
   const ids: string[] = []
-  for (const h of raycaster.intersectObject(furnRoot, true)) {
+  for (const h of fhits) {
     let o: THREE.Object3D | null = h.object
     while (o && !o.userData.furnitureId) o = o.parent
     const id = o?.userData.furnitureId as string | undefined
@@ -584,12 +621,20 @@ function clearXray() {
   }
   xraySwapped.length = 0
 }
-function applyXray() {
-  clearXray()
+function xrayTarget(): THREE.Object3D | undefined {
+  if (!editing.value) return
+  const s = selection.value
+  // 内置收纳：选中就透视
+  if (s?.type === 'fixture') return builtinObjects().find((o) => o.userData.fixtureId === s.id)
   const f = selectedFurniture.value
   const def = f && ASSET_MAP.get(f.asset)
-  const o = f && objs.get(f.id)?.obj
-  if (!f || !def || !o || def.prop || !def.surfaces?.some((l) => l.kind !== 'hook') || !editing.value) return
+  if (!f || !def || def.prop || !def.surfaces?.some((l) => l.kind !== 'hook')) return
+  return objs.get(f.id)?.obj
+}
+function applyXray() {
+  clearXray()
+  const o = xrayTarget()
+  if (!o) return
   o.traverse((n) => {
     const m = n as THREE.Mesh
     if (!m.isMesh) return
@@ -723,7 +768,7 @@ let down: { x: number; y: number } | null = null
 // 第二根手指落下时，如果正在拖家具，就变成双指拧转旋转家具；否则 OrbitControls 自己处理缩放平移。
 // 长按（不动）= 右键菜单。摆放模式：手指按下就出预览、拖动调整、松手放下。
 const touches = new Map<number, { x: number; y: number }>()
-let press: { id: number; x: number; y: number; hitId: string | null; moved: boolean; long: boolean; timer: number } | null = null
+let press: { id: number; x: number; y: number; hitId: string | null; builtin: string | null; moved: boolean; long: boolean; timer: number } | null = null
 let twist: { a0: number; base: number } | null = null
 /** 摆放模式下手指正按着（预览跟着手指） */
 let touchPlacing = false
@@ -813,7 +858,7 @@ function onTouchDown(e: PointerEvent) {
   }
   const id = pickFurniture(e)
   const sel = selection.value?.type === 'furniture' ? selection.value.id : null
-  press = { id: e.pointerId, x: e.clientX, y: e.clientY, hitId: id, moved: false, long: false, timer: 0 }
+  press = { id: e.pointerId, x: e.clientX, y: e.clientY, hitId: id, builtin: pickedBuiltin, moved: false, long: false, timer: 0 }
   press.timer = window.setTimeout(() => onLongPress(e.clientX, e.clientY), LONG_PRESS_MS)
   // 按在已选中的家具上：准备拖动（先关掉转视角；动过阈值才真的移动）
   if (id && id === sel) beginDrag(e, id)
@@ -880,8 +925,8 @@ function onTouchUp(e: PointerEvent) {
   }
   // 点按（没动、没长按）：点到家具选中它，点到空处取消选中
   if (pr && !pr.moved && !pr.long && e.type !== 'pointercancel') {
-    const rid = pr.hitId ? null : pickLightRoom(e)
-    selection.value = pr.hitId ? { type: 'furniture', id: pr.hitId } : rid ? { type: 'room', id: rid } : null
+    const rid = pr.hitId || pr.builtin ? null : pickLightRoom(e)
+    selection.value = pr.hitId ? { type: 'furniture', id: pr.hitId } : pr.builtin ? { type: 'fixture', id: pr.builtin } : rid ? { type: 'room', id: rid } : null
   }
 }
 
@@ -945,6 +990,8 @@ function onPointerDown(e: PointerEvent) {
   if (id) {
     selection.value = { type: 'furniture', id }
     beginDrag(e, id)
+  } else if (pickedBuiltin) {
+    selection.value = { type: 'fixture', id: pickedBuiltin }
   } else {
     // 天花板灯具：选中它所在的房间（浮出灯光开关卡片）
     const rid = pickLightRoom(e)
@@ -1742,6 +1789,16 @@ const selectedRoom = computed(() => {
   const s = selection.value
   return s?.type === 'room' ? plan.value.rooms.find((r) => r.id === s.id) ?? null : null
 })
+/** 3D 里点中的内置收纳 */
+const selectedBuiltin = computed(() => {
+  const s = selection.value
+  const f = s?.type === 'fixture' ? plan.value.fixtures.find((x) => x.id === s.id) : undefined
+  return f?.kind === 'builtin' ? f : null
+})
+function setBuiltinOpen(open: boolean) {
+  const f = selectedBuiltin.value
+  if (f && !!f.open !== open) mutate(() => (f.open = open))
+}
 /** 屏幕坐标处的天花板灯具 → 房间 id */
 function pickLightRoom(e: { clientX: number; clientY: number }) {
   setRay(e as PointerEvent)
@@ -1862,6 +1919,22 @@ defineExpose({ resetView })
             <option v-for="k in ROOM_K_PRESETS" :key="k" :value="k">{{ k }} K</option>
           </select>
         </label>
+      </div>
+      <!-- 点中内置收纳：柜体半透明可以看到里面；柜门开关 -->
+      <div v-if="selectedBuiltin && editing" class="light-card" :style="{ bottom: device.compact && !device.landscape ? 'calc(var(--sheet-h, 0px) + 10px)' : undefined }">
+        <div class="lc-head">
+          <JIcon :icon="ICONS.builtin" class="ico-muted" />
+          <b>{{ t(BUILTIN_TYPES[selectedBuiltin.builtinType ?? 'shoe']) }}</b>
+          <button class="icon-only lc-close" :title="t('关闭')" :aria-label="t('关闭')" @click="selection = null"><JIcon :icon="ICONS.close" :size="14" /></button>
+        </div>
+        <div class="lc-row">
+          <span>{{ t('柜门') }}</span>
+          <div class="seg seg-text" role="radiogroup" :aria-label="t('柜门')">
+            <button role="radio" :aria-checked="!!selectedBuiltin.open" :class="{ on: !!selectedBuiltin.open }" @click="setBuiltinOpen(true)">{{ t('打开') }}</button>
+            <button role="radio" :aria-checked="!selectedBuiltin.open" :class="{ on: !selectedBuiltin.open }" @click="setBuiltinOpen(false)">{{ t('关上') }}</button>
+          </div>
+        </div>
+        <p class="lc-hint">{{ t('再点一次里面的东西可以选中它') }}</p>
       </div>
       <div v-if="!plan.rooms.length" class="empty">{{ t('还没有房间。先去 2D 平面图画一个，或者点「随机生成」。') }}</div>
       <div v-if="!device.compact" class="hud">
@@ -2239,6 +2312,14 @@ defineExpose({ resetView })
 }
 .light-card .seg {
   margin: 0;
+}
+.lc-row .seg {
+  flex: 1;
+}
+.lc-hint {
+  margin: 0;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
 }
 .lc-head {
   display: flex;
