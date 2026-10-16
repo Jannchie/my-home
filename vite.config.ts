@@ -1,0 +1,138 @@
+import { defineConfig, loadEnv, type Plugin } from 'vite'
+import vue from '@vitejs/plugin-vue'
+import { DEFAULT_SITE_URL, jsonLd, SEO, SEO_LANGS, type SeoLang } from './src/seo'
+import { PRODUCT_INTRO, PRODUCT_TAGLINE, UI } from './src/i18n/ui'
+
+const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+const tr = (zh: string, l: SeoLang) => (l === 'zh' ? zh : UI[zh][l === 'ja' ? 0 : 1])
+
+/** 改写一个 <meta>/<link> 的属性值：attr="key" 的那个标签，把 field="..." 换成 value */
+function setAttr(html: string, tag: 'meta' | 'link', attr: string, key: string, field: string, value: string) {
+  const re = new RegExp(`(<${tag}\\b[^>]*\\b${attr}="${key}"[^>]*\\b${field}=")[^"]*(")`)
+  if (!re.test(html)) throw new Error(`[seo] index.html 里找不到 <${tag} ${attr}="${key}">`)
+  return html.replace(re, `$1${esc(value)}$2`)
+}
+
+/** 按语言改写整页 <head>；page 是这一页自己的路径（'/' 或 '/ja/' 等），决定 canonical / og:url */
+function localize(html: string, l: SeoLang, page: string, site: string) {
+  const s = SEO[l]
+  html = html.replace(/<html lang="[^"]*"/, `<html lang="${s.htmlLang}"`)
+  html = html.replace(/<title>[^<]*<\/title>/, `<title>${esc(s.title)}</title>`)
+  html = setAttr(html, 'meta', 'name', 'description', 'content', s.description)
+  html = setAttr(html, 'meta', 'name', 'keywords', 'content', s.keywords)
+  html = setAttr(html, 'link', 'rel', 'canonical', 'href', site + page)
+  html = setAttr(html, 'meta', 'property', 'og:url', 'content', site + page)
+  for (const [attr, pre] of [
+    ['property', 'og'],
+    ['name', 'twitter'],
+  ] as const) {
+    html = setAttr(html, 'meta', attr, `${pre}:title`, 'content', s.title)
+    html = setAttr(html, 'meta', attr, `${pre}:description`, 'content', s.tagline)
+    html = setAttr(html, 'meta', attr, `${pre}:image`, 'content', site + s.ogImage)
+    html = setAttr(html, 'meta', attr, `${pre}:image:alt`, 'content', s.ogImageAlt)
+  }
+  html = setAttr(html, 'meta', 'property', 'og:locale', 'content', s.ogLocale)
+  // og:locale:alternate：其余两种语言
+  html = html.replace(/(\s*<meta property="og:locale:alternate"[^>]*>)+/, () =>
+    SEO_LANGS.filter((x) => x !== l)
+      .map((x) => `\n    <meta property="og:locale:alternate" content="${SEO[x].ogLocale}" />`)
+      .join(''),
+  )
+  html = html.replace(
+    /<script type="application\/ld\+json" id="ld-json">[\s\S]*?<\/script>/,
+    `<script type="application/ld+json" id="ld-json">${JSON.stringify(jsonLd(l, site, page)).replace(/</g, '\\u003c')}</script>`,
+  )
+  // <noscript>：本语言的长简介打头，另两种语言各一句
+  const others = SEO_LANGS.filter((x) => x !== l)
+    .map((x) => `\n        <p lang="${SEO[x].htmlLang}">${esc(tr(PRODUCT_TAGLINE, x))}</p>`)
+    .join('')
+  html = html.replace(
+    /(<noscript>\s*<main[^>]*>)[\s\S]*?(<p><strong>)/,
+    `$1\n        <h1>${esc(s.title)}</h1>\n        <p>${esc(tr(PRODUCT_INTRO, l))}</p>${others}\n        $2`,
+  )
+  return html
+}
+
+function sitemap(site: string) {
+  const alts = SEO_LANGS.map((l) => `    <xhtml:link rel="alternate" hreflang="${SEO[l].htmlLang}" href="${site}${SEO[l].path}"/>`)
+    .concat(`    <xhtml:link rel="alternate" hreflang="x-default" href="${site}/"/>`)
+    .join('\n')
+  const today = new Date().toISOString().slice(0, 10)
+  const urls = ['/', ...SEO_LANGS.map((l) => SEO[l].path)]
+    .map((p) => `  <url>\n    <loc>${site}${p}</loc>\n    <lastmod>${today}</lastmod>\n${alts}\n  </url>`)
+    .join('\n')
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n${urls}\n</urlset>\n`
+}
+
+const robots = (site: string) => `User-agent: *\nAllow: /\n\nSitemap: ${site}/sitemap.xml\n`
+
+/**
+ * SEO 插件：
+ * - index.html 里的 __SITE_URL__ 换成站点地址，并按 src/seo.ts 填好中文版 meta / JSON-LD；
+ * - 构建时额外输出 zh/ja/en/index.html（各自的 meta、canonical、分享图），以及 sitemap.xml、robots.txt；
+ * - 开发时 /robots.txt、/sitemap.xml 也能直接访问。
+ */
+function seo(site: string): Plugin {
+  return {
+    name: 'my-home-seo',
+    enforce: 'post',
+    transformIndexHtml: {
+      order: 'post',
+      // 顺手去掉 HTML 注释（只是给维护者看的）
+      // 开发时访问 /ja/ 等路径，也直接给对应语言的 head（构建时这里只处理根 index.html，三语入口页在 generateBundle 里生成）
+      handler: (html, ctx) => {
+        const m = /^\/(zh|ja|en)\//.exec(ctx.originalUrl ?? '')
+        const l = (m?.[1] ?? 'zh') as SeoLang
+        return localize(html.replaceAll('__SITE_URL__', site).replace(/\s*<!--[\s\S]*?-->/g, ''), l, m ? SEO[l].path : '/', site)
+      },
+    },
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const path = (req as { url?: string }).url?.split('?')[0]
+        const body = path === '/robots.txt' ? robots(site) : path === '/sitemap.xml' ? sitemap(site) : null
+        if (body == null) return next()
+        res.setHeader('Content-Type', path === '/sitemap.xml' ? 'application/xml; charset=utf-8' : 'text/plain; charset=utf-8')
+        res.end(body)
+      })
+    },
+    // index.html 由 Vite 自己的 html 插件在 generateBundle 阶段产出，这里排在它后面
+    generateBundle: {
+      order: 'post',
+      handler(_, bundle) {
+        const index = bundle['index.html']
+        if (!index || index.type !== 'asset') return
+        const html = String(index.source)
+        for (const l of SEO_LANGS) {
+          this.emitFile({ type: 'asset', fileName: `${l}/index.html`, source: localize(html, l, SEO[l].path, site) })
+        }
+        this.emitFile({ type: 'asset', fileName: 'sitemap.xml', source: sitemap(site) })
+        this.emitFile({ type: 'asset', fileName: 'robots.txt', source: robots(site) })
+      },
+    },
+  }
+}
+
+export default defineConfig(({ mode }) => {
+  // 站点地址：项目根 .env* / 环境变量里的 VITE_SITE_URL，没有就用占位地址（上线前务必改掉）
+  const site = (loadEnv(mode, '', 'VITE_').VITE_SITE_URL || DEFAULT_SITE_URL).replace(/\/+$/, '')
+  return {
+    plugins: [vue(), seo(site)],
+    define: { 'import.meta.env.VITE_SITE_URL': JSON.stringify(site) },
+    build: {
+      // 分包：three、素材包、i18n 词典体积大且更新节奏不同，各自成独立 chunk，改业务代码时浏览器缓存仍可复用。
+      // Vite 8（rolldown）里 manualChunks 只是兼容写法：它被转成单个 group，而 group 默认会把命中模块的依赖一并收进来，
+      // 结果 three 被素材包的 chunk 吞掉。这里用 codeSplitting.groups 按优先级分组，three 先认领。
+      rolldownOptions: {
+        output: {
+          codeSplitting: {
+            groups: [
+              { name: 'three', test: /[\\/]node_modules[\\/](\.pnpm[\\/]three@[^\\/]+[\\/]node_modules[\\/])?three[\\/]/, priority: 30 },
+              { name: 'i18n', test: /[\\/]src[\\/]i18n[\\/](ui|assetNames)\.ts$/, priority: 20 },
+              { name: 'asset-packs', test: /[\\/]src[\\/]three[\\/]packs[\\/]/, priority: 10 },
+            ],
+          },
+        },
+      },
+    },
+  }
+})

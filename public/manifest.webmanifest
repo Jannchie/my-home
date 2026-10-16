@@ -1,0 +1,22 @@
+{
+  "name": "My Home · 日式户型编辑器与 3D 卡通沙盘",
+  "short_name": "My Home",
+  "description": "在浏览器里生成一个日本的家，再把生活摆进去。",
+  "lang": "zh-CN",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f6f6f3",
+  "theme_color": "#577a68",
+  "categories": ["design", "lifestyle", "productivity"],
+  "icons": [
+    { "src": "/favicon.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "any" },
+    { "src": "/icon-192.png", "type": "image/png", "sizes": "192x192", "purpose": "any" },
+    { "src": "/icon-512.png", "type": "image/png", "sizes": "512x512", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "type": "image/png", "sizes": "512x512", "purpose": "maskable" }
+  ],
+  "screenshots": [
+    { "src": "/og.png", "type": "image/png", "sizes": "1200x630", "form_factor": "wide", "label": "My Home 3D 沙盘" }
+  ]
+}

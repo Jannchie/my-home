@@ -1,0 +1,105 @@
+// 渲染舞台：渲染器、暖色灯光、相机取景。沙盘、素材预览、缩略图共用。
+
+import * as THREE from 'three'
+import { outlineUniforms } from './toon'
+
+export interface Stage {
+  renderer: THREE.WebGLRenderer
+  scene: THREE.Scene
+  camera: THREE.PerspectiveCamera
+  sun: THREE.DirectionalLight
+  hemi: THREE.HemisphereLight
+  /** 后处理接管：设置后 render / resize 交给它（见 post.ts），为 null 时直接 renderer.render */
+  post: PostHook | null
+  /** 描边宽度倍数（漫画等画面效果会加粗） */
+  outlineScale: number
+  render: () => void
+  resize: (w: number, h: number) => void
+  dispose: () => void
+}
+
+export interface PostHook {
+  render: () => void
+  resize: (w: number, h: number) => void
+}
+
+export function createStage(canvas: HTMLCanvasElement, opts: { preserve?: boolean; shadowSize?: number } = {}): Stage {
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: !!opts.preserve })
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+  renderer.shadowMap.enabled = true
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap
+  renderer.outputColorSpace = THREE.SRGBColorSpace
+
+  const scene = new THREE.Scene()
+  const camera = new THREE.PerspectiveCamera(30, 1, 5, 20000)
+
+  // 天光：上方偏暖白、下方是中性米色（底色不能带彩色，否则会渗进墙脚、缝隙里）
+  const hemi = new THREE.HemisphereLight('#fff6e8', '#e8dfd2', 1.5)
+  scene.add(hemi)
+  const sun = new THREE.DirectionalLight('#fff3df', 2.0)
+  sun.castShadow = true
+  sun.shadow.mapSize.set(opts.shadowSize ?? 2048, opts.shadowSize ?? 2048)
+  sun.shadow.bias = -0.0004
+  sun.shadow.normalBias = 0.6
+  sun.shadow.radius = 4
+  scene.add(sun)
+  scene.add(sun.target)
+
+  const stage: Stage = {
+    renderer,
+    scene,
+    camera,
+    sun,
+    hemi,
+    post: null,
+    outlineScale: 1,
+    render() {
+      const size = renderer.getDrawingBufferSize(new THREE.Vector2())
+      outlineUniforms.uViewport.value.copy(size)
+      outlineUniforms.uWidth.value = 1.25 * renderer.getPixelRatio() * stage.outlineScale
+      if (stage.post) stage.post.render()
+      else renderer.render(scene, camera)
+    },
+    resize(w, h) {
+      renderer.setSize(w, h, false)
+      camera.aspect = w / Math.max(1, h)
+      camera.updateProjectionMatrix()
+      stage.post?.resize(w, h)
+    },
+    dispose() {
+      renderer.dispose()
+    },
+  }
+  return stage
+}
+
+/** 默认的太阳方向（指向光源）：左后上方 */
+const DEFAULT_SUN_DIR = new THREE.Vector3(-0.55, 1.4, -0.9).normalize()
+
+/** 让太阳的阴影相机罩住整个物体；dir 是指向光源的方向（3D 沙盘按时间与朝向算出，见 sky.ts） */
+export function fitSun(sun: THREE.DirectionalLight, box: THREE.Box3, dir: THREE.Vector3 = DEFAULT_SUN_DIR) {
+  const c = box.getCenter(new THREE.Vector3())
+  const r = box.getSize(new THREE.Vector3()).length() / 2 + 20
+  sun.position.copy(c).addScaledVector(dir, r * 1.75)
+  sun.target.position.copy(c)
+  const cam = sun.shadow.camera
+  cam.left = -r
+  cam.right = r
+  cam.top = r
+  cam.bottom = -r
+  cam.near = 1
+  cam.far = r * 4
+  cam.updateProjectionMatrix()
+}
+
+/** 相机从斜前上方看向物体，距离刚好装下 */
+export function frameCamera(camera: THREE.PerspectiveCamera, box: THREE.Box3, dir = new THREE.Vector3(0.62, 0.78, 1).normalize(), margin = 1.15) {
+  const c = box.getCenter(new THREE.Vector3())
+  const r = box.getSize(new THREE.Vector3()).length() / 2
+  const fov = (camera.fov * Math.PI) / 180
+  const fit = Math.min(fov, 2 * Math.atan(Math.tan(fov / 2) * camera.aspect))
+  const d = (r * margin) / Math.sin(fit / 2)
+  camera.position.copy(c).addScaledVector(dir, d)
+  camera.lookAt(c)
+  return c
+}

@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      SEO / 分享卡片。站点地址占位符（两个下划线包着 SITE_URL）由 vite.config.ts 的 seo 插件替换成 VITE_SITE_URL（未设置时用占位地址）。
+      这里写的是中文版；构建时插件会按 src/seo.ts 的三语文案改写，并额外生成 /zh/ /ja/ /en/ 三个入口页。
+    -->
+    <title>My Home · 日式户型编辑器与 3D 卡通沙盘</title>
+    <meta name="description" content="在浏览器里随机生成 1K～3LDK 日本户型，按住户人设一键布置家具与上千种生活小物，再到 3D 卡通沙盘里看看这个家。2000+ 素材、6 种风格，免费、无需注册。" />
+    <meta name="keywords" content="户型编辑器,日本户型,間取り,户型生成,3D 沙盘,家具布置,室内设计,1LDK,2LDK,在线户型图" />
+    <meta name="author" content="Jianqi Pan" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta name="color-scheme" content="light" />
+    <meta name="theme-color" content="#fafaf8" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#2c302e" media="(prefers-color-scheme: dark)" />
+    <meta name="application-name" content="My Home" />
+    <meta name="apple-mobile-web-app-title" content="My Home" />
+    <meta name="format-detection" content="telephone=no" />
+
+    <link rel="canonical" href="__SITE_URL__/" />
+    <link rel="alternate" hreflang="zh-CN" href="__SITE_URL__/zh/" />
+    <link rel="alternate" hreflang="ja" href="__SITE_URL__/ja/" />
+    <link rel="alternate" hreflang="en" href="__SITE_URL__/en/" />
+    <link rel="alternate" hreflang="x-default" href="__SITE_URL__/" />
+
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="My Home" />
+    <meta property="og:url" content="__SITE_URL__/" />
+    <meta property="og:title" content="My Home · 日式户型编辑器与 3D 卡通沙盘" />
+    <meta property="og:description" content="在浏览器里生成一个日本的家，再把生活摆进去。" />
+    <meta property="og:image" content="__SITE_URL__/og.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="My Home：左侧是标题「生成一个日本的家，再把生活摆进去」，右侧是一键布置好家具的 2LDK 户型 3D 卡通沙盘" />
+    <meta property="og:locale" content="zh_CN" />
+    <meta property="og:locale:alternate" content="ja_JP" />
+    <meta property="og:locale:alternate" content="en_US" />
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="My Home · 日式户型编辑器与 3D 卡通沙盘" />
+    <meta name="twitter:description" content="在浏览器里生成一个日本的家，再把生活摆进去。" />
+    <meta name="twitter:image" content="__SITE_URL__/og.png" />
+    <meta name="twitter:image:alt" content="My Home：左侧是标题「生成一个日本的家，再把生活摆进去」，右侧是一键布置好家具的 2LDK 户型 3D 卡通沙盘" />
+
+    <!-- 结构化数据：内容由 seo 插件按语言生成（src/seo.ts 的 jsonLd），这里留空占位 -->
+    <script type="application/ld+json" id="ld-json">{}</script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <noscript>
+      <main style="max-width: 640px; margin: 48px auto; padding: 0 16px; font: 16px/1.7 system-ui, sans-serif; color: #2c302e">
+        <h1>My Home · 日式户型编辑器与 3D 卡通沙盘</h1>
+        <p>
+          My Home 是在浏览器里运行的日式户型编辑器：随机生成 1K～3LDK 的日本住宅户型（ユニットバス、洗濯機置場、玄関、和室、阳台一应俱全），也能自己画。一键布置会先推断住户的家庭构成、职业、性格与兴趣，再按人设摆好家具和上千种生活小物。在
+          3D 卡通沙盘里，还能看到猫狗和扫地机器人走来走去。2000+ 素材、6 种风格，免费、无需注册，数据只保存在你的浏览器里。
+        </p>
+        <p>
+          ブラウザで日本の間取りをつくって、暮らしまで並べよう。1K〜3LDK の間取りをランダム生成し、住む人に合わせて家具と生活小物を自動配置、3D ジオラマで眺められます。
+        </p>
+        <p>
+          Generate a Japanese home in your browser, then fill it with life: random 1K–3LDK floor plans, one-click furnishing based on an imagined household, and a toon-shaded 3D diorama.
+        </p>
+        <p><strong>请启用 JavaScript 后使用 · JavaScript を有効にしてください · Please enable JavaScript to use this app.</strong></p>
+      </main>
+    </noscript>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

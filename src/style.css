@@ -1,0 +1,228 @@
+@font-face {
+  font-family: 'Berkeley Mono';
+  src: url('https://cdn.jannchie.com/fonts/variants/BerkeleyMono-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Berkeley Mono';
+  src: url('https://cdn.jannchie.com/fonts/variants/BerkeleyMono-Oblique.woff2') format('woff2');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Berkeley Mono';
+  src: url('https://cdn.jannchie.com/fonts/variants/BerkeleyMono-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Berkeley Mono';
+  src: url('https://cdn.jannchie.com/fonts/variants/BerkeleyMono-Bold-Oblique.woff2') format('woff2');
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+/*
+ * 设计 token：轻量、日常的浅色体系
+ * 底色是带一点暖意的近白，主色是低饱和的鼠尾草绿；层级靠字重与灰度，不靠色块。
+ */
+:root {
+  /* 底与面 */
+  --bg: #f6f6f3; /* 应用底色 */
+  --surface: #ffffff; /* 卡片、输入框、按钮 */
+  --surface-2: #fafaf8; /* 侧栏、顶栏 */
+  --hover: #efefeb; /* hover / 分段控件底 / 占位 */
+  --canvas: #fbfaf7; /* 2D 平面图画布（与门洞遮罩、PNG 导出底色一致） */
+
+  /* 线 */
+  --border: #e6e6e1;
+  --border-strong: #d3d4ce;
+
+  /* 文字 */
+  --text: #2c302e; /* 墨色正文 */
+  --text-muted: #73786f; /* 次要说明 */
+  --text-faint: #a4a8a1; /* 占位、禁用提示 */
+  --text-inverse: #fbfbf9; /* 深底上的字 */
+
+  /* 主色：鼠尾草绿 */
+  --accent: #577a68;
+  --accent-hover: #486a59;
+  --accent-strong: #3f6652; /* 平面图选中描边等需要更高对比的地方 */
+  --accent-weak: #e8efea; /* 浅底高亮 */
+  --accent-ring: rgba(87, 122, 104, 0.24); /* 选中外圈 / 焦点环 */
+
+  /* 语义色 */
+  --ok: #4f8a66;
+  --danger: #b4454f; /* 柔和的玫瑰红，不偏橙 */
+  --danger-weak: #f7e9ea;
+
+  /* 形 */
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --shadow-sm: 0 1px 2px rgba(32, 38, 34, 0.05);
+  --shadow: 0 4px 14px rgba(32, 38, 34, 0.07);
+
+  /* 字体：正文系统无衬线；等宽只给代码 / ID / 按键 */
+  --font-sans: system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans CJK SC', 'Microsoft YaHei', 'Yu Gothic UI', sans-serif;
+  --font-mono: 'Berkeley Mono', ui-monospace, 'Sarasa Mono SC', 'Noto Sans Mono CJK SC', 'MS Gothic', monospace;
+
+  /* 字号：偏日常 App 的舒展尺度（各组件统一引用，不要再写死 px） */
+  --fs-xs: 12px; /* chip、提示、计数等小字 */
+  --fs-sm: 13px; /* 次要文字、按钮、表单控件 */
+  --fs-base: 14px; /* 正文 */
+  --fs-md: 15px; /* 侧栏小节标题 */
+  --fs-lg: 18px; /* 详情标题 */
+  --lh: 1.5;
+
+  /* 控件尺寸：顶栏 / 侧栏的按钮、输入框、下拉框统一高度 */
+  --control-h: 32px;
+  --control-h-sm: 26px; /* 小按钮、chip */
+  --control-px: 10px;
+
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: var(--fs-base);
+  line-height: var(--lh);
+  -webkit-font-smoothing: antialiased;
+}
+
+/*
+ * 正文字体按界面语言切换（<html lang> 由 src/i18n 设置，字体文件也由它按需插入 Google Fonts 链接）。
+ * 拉丁字母 / 数字统一先走 Nunito（圆润，支持 tabular-nums），CJK 落到各语言自己的字体。
+ */
+:root[lang='en'] {
+  --font-sans: 'Nunito', 'Segoe UI', system-ui, -apple-system, 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic UI', 'Microsoft YaHei UI', sans-serif;
+}
+:root[lang='zh-CN'] {
+  --font-sans: 'Nunito', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei UI', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+}
+:root[lang='ja'] {
+  --font-sans: 'Nunito', 'Zen Maru Gothic', 'Hiragino Maru Gothic ProN', 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic UI', 'Yu Gothic', 'Meiryo', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+button {
+  font: inherit;
+  font-size: var(--fs-sm);
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 5px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background-color 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+button:hover:not(:disabled) {
+  background: var(--hover);
+  border-color: var(--border-strong);
+}
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--text-inverse);
+  font-weight: 600;
+}
+button.primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+button.danger {
+  color: var(--danger);
+}
+button.danger:hover:not(:disabled) {
+  background: var(--danger-weak);
+  border-color: var(--danger-weak);
+}
+
+/* 图标（<JIcon>，渲染成 <svg>）：颜色继承文字色；按钮里有图标时改成行内 flex，图标在文字左侧、垂直居中 */
+button:has(> svg) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  line-height: 1;
+}
+/* svg 默认 inline，会按基线下沉；改成 block 才能和文字真正居中 */
+button > svg,
+.ico-label > svg,
+label > svg {
+  flex: none;
+  display: block;
+}
+/* 纯图标按钮：左右内边距收窄成近似方形 */
+button.icon-only {
+  padding-left: 6px;
+  padding-right: 6px;
+}
+/* 标题 / 标签前带图标 */
+.ico-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+/* 次要图标（小节标题、搜索框前缀等）用弱化色 */
+.ico-muted {
+  color: var(--text-muted);
+}
+
+/* 统一焦点环：键盘操作时清晰，鼠标点击不打扰 */
+:focus-visible {
+  outline: 2px solid var(--accent-ring);
+  outline-offset: 1px;
+}
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--accent-ring);
+  outline-offset: 0;
+  border-color: var(--accent);
+}
+
+input[type='checkbox'],
+input[type='radio'],
+input[type='range'] {
+  accent-color: var(--accent);
+}
+
+select,
+input {
+  transition: border-color 0.12s ease;
+}
+
+kbd {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  margin-left: 4px;
+}
+
+::selection {
+  background: var(--accent-weak);
+}

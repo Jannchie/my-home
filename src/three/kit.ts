@@ -1,0 +1,580 @@
+// 素材制作工具箱：所有素材包（assets.ts、packs/*.ts）共用的类型、配色和小部件。
+//
+// 约定（写新素材前必读）：
+//   - 单位 cm。局部坐标原点在占地中心的地面上：宽沿 x，进深沿 z，高沿 y。
+//   - 背面（贴墙一侧）朝 -z，正面朝 +z。rbox / cyl / cup 等的 at.y 是底面高度，ball / torus 的 at.y 是中心。
+//   - 描边由 addOutlines 统一加，build 里不用管；不想描边的小贴片设 userData.noOutline = true。
+//   - 不要让两个面在同一平面上重叠（会闪烁）：贴在表面上的东西至少浮出 0.3cm，或者整体嵌进去。
+//   - 容器（杯、碗、花盆、桶、箱）用 cup / tray 做成空心，里面的东西放在口沿以下。
+//   - 只有玩偶、角色类才加 face()，家具和日用品不要加脸。
+//   - 桌、柜等可以在上面摆东西的家具：本体保持空的，声明 surface（顶面高度），
+//     不规则顶面再给 surfaceShape；桌上的东西做成独立的 prop 素材。
+
+import * as THREE from 'three'
+import { cyl, rbox, shade, toon } from './toon'
+
+export type AssetCategory =
+  | 'living'
+  | 'dining'
+  | 'bedroom'
+  | 'study'
+  | 'kids'
+  | 'japanese'
+  | 'storage'
+  | 'plants'
+  | 'lighting'
+  | 'tabletop'
+  | 'kitchenware'
+  | 'toiletry'
+  | 'deco'
+  | 'pets'
+  | 'fitness'
+  | 'hobby'
+  | 'music'
+  | 'entrance'
+  | 'outdoor'
+  | 'appliance'
+
+export const CATEGORY_LABELS: Record<AssetCategory, string> = {
+  living: '客厅',
+  dining: '餐桌椅',
+  bedroom: '卧室',
+  study: '书房',
+  kids: '儿童',
+  japanese: '和风',
+  storage: '收纳',
+  plants: '绿植',
+  lighting: '灯具',
+  tabletop: '桌面摆件',
+  kitchenware: '厨房餐具',
+  toiletry: '洗护',
+  deco: '装饰',
+  pets: '宠物',
+  fitness: '健身',
+  hobby: '爱好模型',
+  music: '乐器',
+  entrance: '玄关',
+  outdoor: '阳台',
+  appliance: '家电设备',
+}
+
+/** 风格标签：配色和造型都可以打 */
+export type StyleTag = 'cute' | 'nordic' | 'modern' | 'japanese' | 'industrial' | 'retro' | 'chinese' | 'classic' | 'farmhouse'
+
+export const STYLE_LABELS: Record<StyleTag, string> = {
+  cute: '可爱粉彩',
+  nordic: '北欧原木',
+  modern: '现代简约',
+  japanese: '和风',
+  industrial: '工业风',
+  retro: '复古昭和',
+  chinese: '新中式',
+  classic: '欧式古典',
+  farmhouse: '美式乡村',
+}
+
+/**
+ * 各风格的参考色板（配色时从这里取，保证同一风格的东西放在一起协调）：
+ *   cute       粉彩：C.pink / C.sky / C.mint / C.lemon / C.lilac，浅木 C.woodL
+ *   nordic     白 + 浅橡木 + 灰蓝 / 鼠尾草绿，少量芥末黄
+ *   modern     炭灰 / 纯白 / 黑，金属银，几乎不用彩色
+ *   japanese   原木、榻榻米黄绿、墨色、朱红点缀、和纸白
+ *   industrial 黑铁、胡桃木、旧皮革棕、锈橙
+ *   retro      芥末黄、青绿、橙、焦糖棕、奶油白（昭和喫茶店）
+ *   chinese    红木 / 胡桃深木、朱红漆、墨黑、象牙白、玉绿，黄铜金点缀
+ *   classic    象牙白、香槟金、雾蓝、灰绿、酒红丝绒、浅胡桃
+ *   farmhouse  做旧白、原木橡木、鼠尾草绿、海军蓝、谷仓红
+ */
+export const S = {
+  nordic: { white: '#f7f5f0', oak: '#d9b98c', oakL: '#ead7b8', gray: '#b9bfc4', blue: '#9fb4c7', sage: '#a9bfa3', mustard: '#e3b549', linen: '#e8e1d4' },
+  modern: { char: '#3d3f44', gray: '#8a8d93', light: '#d7d8db', white: '#f4f4f2', black: '#24252a', silver: '#c3c7cc', walnut: '#7a5a43' },
+  japanese: { hinoki: '#e9d2a6', wood: '#b88a5a', dark: '#6e4f37', tatami: '#c9cf8e', sumi: '#3e3a39', shu: '#d65a3c', washi: '#f6f0e1', ai: '#3d5a80' },
+  industrial: { iron: '#3a3a3c', steel: '#7c8085', walnut: '#7b5236', leather: '#9a5f3a', rust: '#c46a3a', concrete: '#a8a5a0', brick: '#a5543f' },
+  retro: { mustard: '#e0a526', teal: '#2f8f8a', orange: '#e2702f', caramel: '#a8683a', cream: '#f4e7c8', olive: '#8c8c3a', red: '#c8473a' },
+  chinese: { rosewood: '#6b3a2a', walnut: '#5a3b2a', lacquer: '#b8352b', ink: '#2b2624', ivory: '#f2eadb', jade: '#7fa48f', brass: '#c9a25a', celadon: '#a9c2b0' },
+  classic: { ivory: '#f4ede0', gold: '#c8a96a', blue: '#8fa3b8', sage: '#a3ae98', wine: '#7a2e3a', walnut: '#9a7656', cream: '#e9dcc3', navy: '#3b4a66' },
+  farmhouse: { white: '#f1ece2', oak: '#b88d5e', sage: '#9caf91', navy: '#34465e', barn: '#9e3b2f', linen: '#e3d8c4', iron: '#3c3a38', butter: '#efd99a' },
+}
+
+/**
+ * 动态特效发射点，局部坐标（和 build 里的坐标一致）。
+ *   steam  ：热气（茶杯、拉面、水壶）白色、上升快、很快散掉
+ *   smoke  ：细烟（线香、蚊香）灰白、细长、缓慢飘
+ *   mist   ：水雾（香薰机、加湿器）白色、团状、慢慢上升扩散
+ *   flame  ：火苗（蜡烛、火钵炭火）橙黄、原地闪烁
+ *   bubbles：气泡（鱼缸）从底部升到水面
+ * scale 缩放粒子大小和范围（默认 1，约合直径 3cm 的源）；height 是粒子能升多高（cm），气泡用来限定到水面。
+ */
+export interface Fx {
+  kind: 'steam' | 'smoke' | 'mist' | 'flame' | 'bubbles'
+  x: number
+  y: number
+  z: number
+  scale?: number
+  height?: number
+  color?: string
+}
+
+/** 可摆放层的类型：shelf = 普通台面 / 层板（默认）；hook = 挂钩、挂杆、洞洞板的挂点，只接受有挂起形态的东西 */
+export type SurfaceKind = 'shelf' | 'hook'
+
+export type FormTag = 'lying' | 'standing' | 'hanging' | 'folded' | 'closed' | 'open' | 'boxed' | 'stacked'
+export const FORM_LABELS: Record<FormTag, string> = {
+  lying: '平放',
+  standing: '立放',
+  hanging: '挂起',
+  folded: '叠好',
+  closed: '合上',
+  open: '打开',
+  boxed: '装箱',
+  stacked: '叠放',
+}
+
+/** 平面多边形，局部坐标 [x, z] */
+export type Poly = [number, number][]
+
+export interface AssetDef {
+  id: string
+  name: string
+  category: AssetCategory
+  /** 占地宽（x）、深（z）、高（y），cm */
+  w: number
+  d: number
+  h: number
+  /** 配色方案：每组是 [主色, 副色, 点缀色]，build 自行取用；第一组是默认 */
+  palettes: string[][]
+  /** 每组配色的风格（和 palettes 一一对应）；不给就当作 styles[0] 或 cute */
+  paletteStyles?: StyleTag[]
+  /** 造型本身适合的风格（同一造型换配色能覆盖的风格都写上） */
+  styles?: StyleTag[]
+  /**
+   * 系列：同一种家具的不同规格共用一个 family（如 'bed'、'desk'），素材库里合成一张卡片，
+   * 用 sizeLabel（如 'Queen'、'120'、'L 形（左）'）切换。没有规格之分的不用填。
+   */
+  family?: string
+  sizeLabel?: string
+  build: (p: string[]) => THREE.Group
+  /** 设备类：只在 3D 中代替平面图的设备显示，不能作为家具单独摆放 */
+  fixture?: boolean
+  /** 壁挂：离地安装高度（cm），build 里自己把模型放到这个高度。不占地面，不参与家具之间的碰撞 */
+  mount?: number
+  /** 顶面高度（cm）：桌、柜、台等，上面可以摆 prop */
+  surface?: number
+  /** 顶面可摆放的区域（局部坐标多边形，可以多块）；不给就是整个 w × d。L 形、圆形等不规则桌面用 */
+  surfaceShape?: Poly[]
+  /**
+   * 额外的可摆放层（柜内层板、置物架各层、防潮柜隔板…）：y 为离家具底面的高度，shape 为该层可摆区域（默认整个 w × d）。
+   * 顶面仍用 surface / surfaceShape；这里只写顶面以外的层。用户对着柜子正面点击时，射线会落到里面的层板上。
+   * h 是这一层的净高（到上一层层板底 / 床板底的距离）：比它高的东西放不进去，避免穿模。床底收纳就是 y = 0 附近、h ≈ 床底净空的一层。
+   */
+  surfaces?: { y: number; shape?: Poly[]; kind?: SurfaceKind; h?: number }[]
+  /**
+   * 形态：同一 family 里的不同摆法（平放 / 立放 / 挂起 / 叠好 / 合上 / 装箱）。
+   * 放到挂钩层（kind: 'hook'）上时自动换成同 family 的 'hanging' 形态；从挂钩拿到台面上时换回非挂起的形态。
+   * 挂起形态的模型挂在原点下方（原点 = 挂钩位置，模型的 y 为负），其余形态原点在底面。
+   */
+  form?: FormTag
+  /**
+   * 一键布置时同类东西最多摆几个：house 全屋 / room 每个房间 / surface 每个台面。
+   * 不填按 decorate.ts 里的通用规则（电饭煲全屋一个、台灯每张桌一个、书和绿植不限…）。手动摆放不受限制。
+   */
+  limit?: { scope: 'house' | 'room' | 'surface'; max: number; group?: string }
+  /** 形态的显示名，覆盖通用的 FORM_LABELS（如投影仪的 open 显示成「投影中」） */
+  formLabel?: string
+  /** 桌面摆件：可以摆在别的家具顶面上，也可以直接放地上 */
+  prop?: boolean
+  /**
+   * 贴附物（冰箱贴、便签、照片、海报、贴纸）：可以贴在任何物体的竖直表面上（冰箱门、柜门、墙），
+   * 会按表面朝向贴平。原点在背面中心，模型向 +z 伸出、在 y 方向上下居中。
+   */
+  stick?: boolean
+  /** 动态特效发射点（蒸汽、烟、火苗、气泡…），由 fx.ts 实时渲染粒子；不要再用静态网格去画烟雾 */
+  fx?: Fx[]
+  /** 会在沙盘预览里活动的角色（宠物、扫地机器人、Kachaka），见 actors.ts */
+  actor?: ActorSpec
+}
+
+/**
+ * 活动角色声明：
+ *   role 'body'：这件素材本身就是角色（猫、狗、单独摆的扫地机器人、Kachaka 套装）；预览时它离开原位在家里活动。
+ *   role 'home'：角色的窝 / 充电座（猫窝、狗窝、扫地机器人基站）；预览时会有一只角色住在这里。
+ * 模型里 userData.actorPart = true 的子树是「会跑开的部分」（基站上的机器人、Kachaka 和它驮的架子），
+ * 预览时隐藏、由活动的角色代替，座子留在原地；没有标记且 role 为 body 的，整件隐藏。
+ * breed：外观（见 critters.ts 的 BREEDS）；dock：没有 actorPart 的窝里，角色趴的位置（局部坐标 [x, y, z]，y 为垫子高度）。
+ * drone（无人机，breed 见 robots-actors.ts 的 DRONES）：从停机坪 / 摆放处起飞，在房间上空巡航后回来降落；
+ * robopet（机器狗、陪伴 / 送餐 / 管家 / 人形机器人，breed 见 ROBO_BREEDS）：home 是它的充电座。
+ */
+export interface ActorSpec {
+  kind: 'cat' | 'dog' | 'rabbit' | 'vacuum' | 'kachaka' | 'drone' | 'robopet'
+  role: 'body' | 'home'
+  breed?: string
+  dock?: [number, number, number]
+}
+
+export const C = {
+  white: '#fbf7f1',
+  cream: '#fff1dc',
+  wood: '#e7bf93',
+  woodD: '#bf8b5e',
+  woodL: '#f3dcbc',
+  ink: '#5a4646',
+  steel: '#d9dee6',
+  pink: '#ffb6c8',
+  sakura: '#ffd6e0',
+  mint: '#a6e3cc',
+  sky: '#a8d4f4',
+  lemon: '#ffe08f',
+  lilac: '#cfb8f3',
+  peach: '#ffc6a0',
+  leaf: '#78c47a',
+  leafD: '#4f9e5b',
+  red: '#ff8f86',
+  orange: '#ffa64d',
+  glass: '#bfe6ff',
+  lamp: '#fff2b8',
+}
+
+/** 小型确定性随机数：书脊颜色之类，每次生成一致 */
+export function rng(seed: number) {
+  let s = seed >>> 0
+  return () => {
+    s = (s * 1664525 + 1013904223) >>> 0
+    return s / 4294967296
+  }
+}
+
+export const G = (...c: THREE.Object3D[]) => {
+  const g = new THREE.Group()
+  for (const o of c) g.add(o)
+  return g
+}
+
+/** 竖直的屏幕 / 发光面板：用很薄的圆角盒，正面朝 +z */
+export function glow(w: number, h: number, color: string, at: { x?: number; y: number; z: number; rx?: number; ry?: number }, k = 0.55) {
+  const m = rbox(w, h, 0.6, color, at, 0.3)
+  m.material = toon(color, { emissive: k })
+  m.userData.noOutline = true
+  return m
+}
+
+/** 四条腿 */
+export function legs(w: number, d: number, h: number, color: string, r = 2.2, inset = 6, round = true) {
+  const g = new THREE.Group()
+  for (const sx of [-1, 1])
+    for (const sz of [-1, 1]) {
+      const at = { x: sx * (w / 2 - inset), z: sz * (d / 2 - inset) }
+      g.add(round ? cyl(r, r * 0.8, h, color, at, 12) : rbox(r * 2, h, r * 2, color, at, 0.6))
+    }
+  return g
+}
+
+/** 一根两端已知的细杆 */
+export function rod(ax: number, ay: number, bx: number, by: number, r: number, color: string, z = 0) {
+  const len = Math.hypot(bx - ax, by - ay)
+  const m = cyl(r, r, len, color, {}, 8)
+  m.position.set((ax + bx) / 2, (ay + by) / 2, z)
+  m.rotation.z = Math.atan2(-(bx - ax), by - ay)
+  return m
+}
+
+
+// ---------- 顶面形状 ----------
+
+export const rectPoly = (x0: number, z0: number, x1: number, z1: number): Poly => [
+  [x0, z0],
+  [x1, z0],
+  [x1, z1],
+  [x0, z1],
+]
+
+/** 圆 / 椭圆顶面 */
+export function ellipsePoly(rx: number, rz = rx, cx = 0, cz = 0, n = 24): Poly {
+  return Array.from({ length: n }, (_, i): [number, number] => {
+    const a = (i / n) * Math.PI * 2
+    return [cx + Math.cos(a) * rx, cz + Math.sin(a) * rz]
+  })
+}
+
+/**
+ * L 形顶面：占地 w × d，两条臂的宽度 armX（沿 x 的那条臂的进深）、armZ（沿 z 的那条臂的宽度）。
+ * corner 指缺角以外的拐角在哪：'left' = 长臂靠背面、短臂在左侧往前伸。
+ */
+export function lPoly(w: number, d: number, armX: number, armZ: number, corner: 'left' | 'right' = 'left'): Poly {
+  const x0 = -w / 2
+  const x1 = w / 2
+  const z0 = -d / 2
+  const z1 = d / 2
+  const pts: Poly =
+    corner === 'left'
+      ? [
+          [x0, z0],
+          [x1, z0],
+          [x1, z0 + armX],
+          [x0 + armZ, z0 + armX],
+          [x0 + armZ, z1],
+          [x0, z1],
+        ]
+      : [
+          [x0, z0],
+          [x1, z0],
+          [x1, z1],
+          [x1 - armZ, z1],
+          [x1 - armZ, z0 + armX],
+          [x0, z0 + armX],
+        ]
+  return pts
+}
+
+/** 按多边形挤出一块板（桌面、台面）：底面在 y，厚 t，带一点倒角（倒角往里收，轮廓不超出多边形） */
+export function slab(poly: Poly, t: number, color: THREE.ColorRepresentation, y = 0) {
+  const shape = new THREE.Shape(poly.map(([x, z]) => new THREE.Vector2(x, -z)))
+  const bevel = Math.min(1, t * 0.25)
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: t - bevel * 2, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelOffset: -bevel, bevelSegments: 2 })
+  geo.rotateX(-Math.PI / 2)
+  geo.translate(0, bevel, 0)
+  const m = new THREE.Mesh(geo, toon(color))
+  m.position.y = y
+  m.castShadow = true
+  m.receiveShadow = true
+  return m
+}
+
+// ---------- 真开口：带洞的板、空心外壳 ----------
+
+/**
+ * 洞的形状（板的局部坐标：x 以板中心为 0，y 以板底为 0）
+ *   circle：圆心 (x, y)，半径 r
+ *   rect  ：底边中点 (x, y)，宽 w 高 h，圆角 r
+ *   arch  ：底边中点 (x, y)，宽 w 高 h，顶部是半圆（狗窝门、猫窝入口）
+ */
+export type Hole =
+  | { kind: 'circle'; x: number; y: number; r: number }
+  | { kind: 'rect'; x: number; y: number; w: number; h: number; r?: number }
+  | { kind: 'arch'; x: number; y: number; w: number; h: number }
+
+function holePath(h: Hole) {
+  const p = new THREE.Path()
+  if (h.kind === 'circle') {
+    p.absarc(h.x, h.y, h.r, 0, Math.PI * 2, true)
+  } else if (h.kind === 'arch') {
+    const r = h.w / 2
+    const top = h.y + Math.max(h.h - r, 0)
+    p.moveTo(h.x - r, h.y)
+    p.lineTo(h.x - r, top)
+    p.absarc(h.x, top, r, Math.PI, 0, true)
+    p.lineTo(h.x + r, h.y)
+    p.lineTo(h.x - r, h.y)
+  } else {
+    const r = Math.min(h.r ?? 2, h.w / 2, h.h / 2)
+    const x0 = h.x - h.w / 2
+    const x1 = h.x + h.w / 2
+    const y0 = h.y
+    const y1 = h.y + h.h
+    p.moveTo(x0 + r, y0)
+    p.absarc(x0 + r, y0 + r, r, -Math.PI / 2, -Math.PI, true)
+    p.lineTo(x0, y1 - r)
+    p.absarc(x0 + r, y1 - r, r, Math.PI, Math.PI / 2, true)
+    p.lineTo(x1 - r, y1)
+    p.absarc(x1 - r, y1 - r, r, Math.PI / 2, 0, true)
+    p.lineTo(x1, y0 + r)
+    p.absarc(x1 - r, y0 + r, r, 0, -Math.PI / 2, true)
+  }
+  return p
+}
+
+/**
+ * 带洞的板：在 xy 平面里，宽 w（x 居中）、高 h（底边在 y = 0）、厚 t（z 居中），可以开多个真正透光的洞。
+ * at 和 rbox 一样：at.y 是底面；ry 转 90° 就能当侧板用。
+ */
+export function holePanel(w: number, h: number, t: number, color: THREE.ColorRepresentation, holes: Hole[] = [], at: { x?: number; y?: number; z?: number; rx?: number; ry?: number; rz?: number } = {}, corner = 1.5) {
+  const r = Math.min(corner, w / 2, h / 2)
+  const s = new THREE.Shape()
+  s.moveTo(-w / 2 + r, 0)
+  s.lineTo(w / 2 - r, 0)
+  s.quadraticCurveTo(w / 2, 0, w / 2, r)
+  s.lineTo(w / 2, h - r)
+  s.quadraticCurveTo(w / 2, h, w / 2 - r, h)
+  s.lineTo(-w / 2 + r, h)
+  s.quadraticCurveTo(-w / 2, h, -w / 2, h - r)
+  s.lineTo(-w / 2, r)
+  s.quadraticCurveTo(-w / 2, 0, -w / 2 + r, 0)
+  for (const hole of holes) s.holes.push(holePath(hole))
+  const bevel = Math.min(0.4, t * 0.2)
+  const geo = new THREE.ExtrudeGeometry(s, { depth: Math.max(0.01, t - bevel * 2), bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelOffset: -bevel, bevelSegments: 1, curveSegments: 16 })
+  geo.translate(0, 0, -t / 2 + bevel)
+  const m = new THREE.Mesh(geo, toon(color))
+  m.position.set(at.x ?? 0, at.y ?? 0, at.z ?? 0)
+  m.rotation.set(at.rx ?? 0, at.ry ?? 0, at.rz ?? 0)
+  m.castShadow = true
+  m.receiveShadow = true
+  return m
+}
+
+/**
+ * 空心外壳：外尺寸 w × h × d、壁厚 t，原点在底面中心。每个面可以开洞（洞坐标用该面自己的局部坐标，从外面看）。
+ * top / bottom 为 false 时不封顶 / 不封底（盒子、花箱、猫砂盆盆体）。
+ */
+export function shell(
+  w: number,
+  h: number,
+  d: number,
+  t: number,
+  color: THREE.ColorRepresentation,
+  opts: { front?: Hole[]; back?: Hole[]; left?: Hole[]; right?: Hole[]; top?: boolean; bottom?: boolean } = {},
+) {
+  const g = new THREE.Group()
+  const y0 = opts.bottom === false ? 0 : t
+  const ih = h - y0 - (opts.top === false ? 0 : t)
+  // 前后板盖住全宽，左右板夹在中间
+  g.add(holePanel(w, ih, t, color, (opts.front ?? []).map((o) => ({ ...o, y: o.y - y0 })), { y: y0, z: d / 2 - t / 2 }))
+  g.add(holePanel(w, ih, t, color, (opts.back ?? []).map((o) => ({ ...o, x: -o.x, y: o.y - y0 })), { y: y0, z: -d / 2 + t / 2, ry: Math.PI }))
+  g.add(holePanel(d - t * 2, ih, t, color, (opts.right ?? []).map((o) => ({ ...o, y: o.y - y0 })), { x: w / 2 - t / 2, y: y0, ry: Math.PI / 2 }))
+  g.add(holePanel(d - t * 2, ih, t, color, (opts.left ?? []).map((o) => ({ ...o, y: o.y - y0 })), { x: -w / 2 + t / 2, y: y0, ry: -Math.PI / 2 }))
+  if (opts.bottom !== false) g.add(rbox(w, t, d, color, {}, Math.min(t * 0.4, 1)))
+  if (opts.top !== false) g.add(rbox(w, t, d, color, { y: h - t }, Math.min(t * 0.4, 1)))
+  return g
+}
+
+// ---------- 画面：相框里的照片、挂画、屏幕画面 ----------
+
+const paintCache = new Map<string, THREE.CanvasTexture>()
+
+/**
+ * 画布面板：在 w × h（cm）的竖直面板上用 Canvas 作画，正面朝 +z，at.y 为底边。
+ * 画面天然被裁在面板范围内，不会像拼贴小网格那样溢出画框。key 相同的画面共用贴图。
+ * emissive > 0 时自发光（屏幕）。不描边。
+ */
+export function paintPanel(
+  w: number,
+  h: number,
+  key: string,
+  draw: (g: CanvasRenderingContext2D, W: number, H: number) => void,
+  at: { x?: number; y?: number; z?: number; rx?: number; ry?: number } = {},
+  emissive = 0,
+) {
+  const pxPerCm = Math.min(12, 512 / Math.max(w, h))
+  const W = Math.max(16, Math.round(w * pxPerCm))
+  const H = Math.max(16, Math.round(h * pxPerCm))
+  const k = `${key}|${W}x${H}`
+  let tex = paintCache.get(k)
+  if (!tex) {
+    const cv = document.createElement('canvas')
+    cv.width = W
+    cv.height = H
+    draw(cv.getContext('2d')!, W, H)
+    tex = new THREE.CanvasTexture(cv)
+    tex.colorSpace = THREE.SRGBColorSpace
+    tex.anisotropy = 4
+    paintCache.set(k, tex)
+  }
+  const geo = new THREE.PlaneGeometry(w, h).translate(0, h / 2, 0)
+  const mat = new THREE.MeshToonMaterial({ map: tex, color: '#ffffff', gradientMap: (toon('#fff') as THREE.MeshToonMaterial).gradientMap })
+  if (emissive > 0) {
+    mat.emissive = new THREE.Color('#ffffff')
+    mat.emissiveMap = tex
+    mat.emissiveIntensity = emissive
+  }
+  const m = new THREE.Mesh(geo, mat)
+  m.position.set(at.x ?? 0, at.y ?? 0, at.z ?? 0)
+  m.rotation.set(at.rx ?? 0, at.ry ?? 0, 0)
+  m.userData.noOutline = true
+  m.receiveShadow = true
+  return m
+}
+
+/** 现成的画：风景（天空、远山、近山、太阳、云） */
+export function paintLandscape(sky: string, hill: string, sun: string) {
+  return (g: CanvasRenderingContext2D, W: number, H: number) => {
+    g.fillStyle = sky
+    g.fillRect(0, 0, W, H)
+    g.fillStyle = sun
+    g.beginPath()
+    g.arc(W * 0.72, H * 0.3, Math.min(W, H) * 0.12, 0, Math.PI * 2)
+    g.fill()
+    g.fillStyle = '#ffffff'
+    for (const [x, y, r] of [
+      [0.2, 0.22, 0.07],
+      [0.28, 0.2, 0.09],
+      [0.36, 0.23, 0.06],
+    ]) {
+      g.beginPath()
+      g.arc(W * x, H * y, Math.min(W, H) * r, 0, Math.PI * 2)
+      g.fill()
+    }
+    const mountain = (cx: number, top: number, half: number, color: string) => {
+      g.fillStyle = color
+      g.beginPath()
+      g.moveTo(W * (cx - half), H)
+      g.lineTo(W * cx, H * top)
+      g.lineTo(W * (cx + half), H)
+      g.closePath()
+      g.fill()
+    }
+    mountain(0.32, 0.38, 0.5, shade(hill, 0.18))
+    mountain(0.78, 0.55, 0.45, hill)
+    // 雪顶
+    g.fillStyle = '#ffffff'
+    g.beginPath()
+    g.moveTo(W * 0.32, H * 0.38)
+    g.lineTo(W * (0.32 - 0.1), H * (0.38 + 0.124))
+    g.lineTo(W * (0.32 + 0.1), H * (0.38 + 0.124))
+    g.closePath()
+    g.fill()
+  }
+}
+
+/** 现成的画：一枝花 */
+export function paintFlower(ground: string, petal: string, center: string) {
+  return (g: CanvasRenderingContext2D, W: number, H: number) => {
+    g.fillStyle = ground
+    g.fillRect(0, 0, W, H)
+    const cx = W / 2
+    const cy = H * 0.35
+    const r = Math.min(W, H) * 0.11
+    g.strokeStyle = '#4f9e5b'
+    g.lineWidth = Math.max(2, W * 0.03)
+    g.beginPath()
+    g.moveTo(cx, cy)
+    g.lineTo(cx, H * 0.86)
+    g.stroke()
+    g.fillStyle = '#78c47a'
+    for (const s of [-1, 1]) {
+      g.beginPath()
+      g.ellipse(cx + s * W * 0.1, H * 0.6, W * 0.11, H * 0.035, -s * 0.5, 0, Math.PI * 2)
+      g.fill()
+    }
+    g.fillStyle = petal
+    for (let k = 0; k < 5; k++) {
+      const a = (k / 5) * Math.PI * 2 - Math.PI / 2
+      g.beginPath()
+      g.arc(cx + Math.cos(a) * r * 1.2, cy + Math.sin(a) * r * 1.2, r, 0, Math.PI * 2)
+      g.fill()
+    }
+    g.fillStyle = center
+    g.beginPath()
+    g.arc(cx, cy, r * 0.75, 0, Math.PI * 2)
+    g.fill()
+    g.fillStyle = shade(ground, -0.12)
+    g.fillRect(cx - W * 0.16, H * 0.82, W * 0.32, H * 0.12)
+  }
+}
+
+/** 现成的画：几何抽象（大圆 + 色块 + 横线） */
+export function paintAbstract(ground: string, a: string, line: string) {
+  return (g: CanvasRenderingContext2D, W: number, H: number) => {
+    g.fillStyle = ground
+    g.fillRect(0, 0, W, H)
+    g.fillStyle = a
+    g.beginPath()
+    g.arc(W * 0.36, H * 0.42, Math.min(W, H) * 0.26, 0, Math.PI * 2)
+    g.fill()
+    g.fillStyle = shade(a, -0.25)
+    g.fillRect(W * 0.58, H * 0.3, W * 0.24, H * 0.55)
+    g.fillStyle = line
+    g.fillRect(W * 0.12, H * 0.74, W * 0.6, Math.max(2, H * 0.035))
+    g.fillStyle = shade(a, 0.2)
+    g.beginPath()
+    g.arc(W * 0.8, H * 0.18, Math.min(W, H) * 0.07, 0, Math.PI * 2)
+    g.fill()
+  }
+}
