@@ -194,10 +194,7 @@ const RULES: [string, (d: D) => boolean][] = [
   ['hifi', R(/av-ht-front|落地 HiFi|hifi/)],
   ['pc', R(/pc-tower|台式机|主机箱/)],
   ['aio-pc', (d) => /aio|一体机|retro-pc/.test(d.id)],
-  ['legacy-kd-kettle', R(/prop-kettle$|electric-pot|电水壶|电热水瓶/)],
-  ['legacy-kd-toaster', R(/prop-toaster$|toaster-oven|烤面包/)],
-  ['legacy-kd-microwave', R(/prop-microwave|微波炉/)],
-  ['legacy-cl-kettle', R(/kettle|electric-pot|水壶|电热水瓶/)],
+  ['electric-kettle', R(/prop-kettle$|electric-pot|电水壶|电热水瓶/)],
   ['legacy-light-dining', (d) => OLD.LIGHT_DINING_RE.test(d.id)],
   ['monitor', R(/monitor|显示器/)],
   ['keyboard', R(/keyboard|键盘|^of-kb-|kb-/)],
@@ -361,7 +358,6 @@ const RULES: [string, (d: D) => boolean][] = [
   ['dog', (d) => d.category === 'pets' && /dog|狗/.test(T(d))],
   ['cat', (d) => d.category === 'pets' && /cat|猫/.test(T(d))],
 ]
-for (const [k, re] of LIMITS) if (!RULES.some(([t]) => t === k)) RULES.push([`limit-${k}`, R(re)])
 
 // 兴趣：按素材的形态决定看哪条正则（落地看 floor、摆件和贴附物看 props、壁挂看 wall）
 for (const [it, m] of Object.entries(INTERESTS)) {
@@ -406,6 +402,18 @@ const REVIEW: Fix[] = [
   { ids: ['int-synth', 'int-midi-keyboard', 'tbl-desk-pc'], remove: ['keyboard'], why: '合成器键盘是乐器、带键盘托的电脑桌是家具，都不是电脑键盘' },
   { ids: ['gr-headlamp', 'mk-led-strip'], remove: ['lamp'], why: '头灯、灯带卷不是室内照明' },
   { ids: ['hg-cert-folder', 'hg-cert-stack', 'hg-cert-tube', 'hg-cert-box', 'int-calligraphy', 'prop-stapler'], remove: ['book'], why: '证书收纳（证「书」）、书法套装、订书机不是书' },
+  // ---- 第 2 批：同类数量规则（LIMITS）的误归类：被误归进一组的东西会互相挤掉名额 ----
+  { ids: ['fit-kettlebell-4kg', 'fit-kettlebell-8kg', 'fit-kettlebell-16kg', 'gd-can-big', 'gd-can-small', 'gr-bike-bottles', 'kf-fridge-pot', 'prop-glass-pitcher', 'prop-water-pitcher'], remove: ['kettle'], why: '壶铃（kettlebell）、浇水壶、骑行水壶、冷水壶 / 滤水壶不是水壶：摆了它们就不能再摆电水壶（全屋限 1）' },
+  { ids: ['prop-steam-oven'], remove: ['toaster'], why: '蒸烤箱（「烤箱」）归微波炉一类，不占烤面包机的名额' },
+  { ids: ['kf-range-rack'], remove: ['microwave'], why: '微波炉架是家具，不是微波炉（摆了架子就摆不了微波炉）' },
+  { ids: ['prop-steam-oven'], remove: ['microwave'], add: ['steam-oven'], why: '蒸烤箱单独一类（同类数量和检查清单里仍与微波炉合算；厨房台面挑「微波炉」时不挑它，和旧规则一致）' },
+  { ids: /^(hg-trophy-|int-trophy-)/, remove: ['cup'], why: '奖杯不是杯子：会和马克杯一起受「全家杯子数 ≤ 人数 + 1」限制' },
+  { ids: ['kf-chawanmushi', 'kf-cup-noodle', 'kf-cup-noodle-open', 'kf-noodle-case', 'kf-ice-cream', 'kf-pudding-3', 'prop-pen-cup', 'sf-peg-cup-standing', 'sf-peg-cup-hanging', 'wet-toy-cups'], remove: ['cup'], why: '茶碗蒸、杯面、冰淇淋杯、布丁、笔筒、洞洞板收纳杯、洗澡叠叠杯不是喝水的杯子' },
+  { ids: ['sb-vac-bag-flat', 'sb-vac-bag-puffy'], remove: ['vacuum'], why: '衣物压缩袋（vac-bag）不是吸尘器' },
+  { ids: ['wet-dehumidifier-l', 'wet-dehumidifier-s'], remove: ['dehumidifier'], why: '除湿盒（一次性吸湿盒）不是除湿机' },
+  { ids: ['lp-rt-milk-bell-wall'], remove: ['clock'], why: '「钟」罩壁灯不是钟' },
+  { ids: ['lp-cn-vase-table'], remove: ['vase'], why: '陶瓷瓶台灯是灯，不是花瓶' },
+  { ids: ['cl-peeled-mikan', 'kf-mikan-box'], remove: ['fruit-bowl'], why: '剥了一半的橘子、一箱橘子不是果盘' },
 ]
 
 // ---------- 生成 ----------
@@ -493,11 +501,11 @@ if (args.has('--check')) {
   site('toiletWall 搁板小物', F(/toilet-paper|卷纸|卷筒纸|freshener|芳香|香氛|消臭|除湿|succulent|多肉|plant|绿植|incense|香薰|diffuser|tissue|纸巾/, (a) => !!a.prop && a.h < 20 && a.w < 30 && !a.form?.includes('hanging')), N('toilet-shelf-ok', (a) => !!a.prop && a.h < 20 && a.w < 30 && !a.form?.includes('hanging')))
   const kd: [RegExp, string][] = [
     [/prop-rice-cooker$|ih-rice-cooker|电饭煲/, 'rice-cooker'],
-    [/prop-kettle$|electric-pot|电水壶|电热水瓶/, 'legacy-kd-kettle'],
+    [/prop-kettle$|electric-pot|电水壶|电热水瓶/, 'electric-kettle'],
     [/prop-cutting-board|砧板/, 'cutting-board'],
     [/prop-knife-block|刀架/, 'knife-block'],
-    [/prop-toaster$|toaster-oven|烤面包/, 'legacy-kd-toaster'],
-    [/prop-microwave|微波炉/, 'legacy-kd-microwave'],
+    [/prop-toaster$|toaster-oven|烤面包/, 'toaster'],
+    [/prop-microwave|微波炉/, 'microwave'],
     [/prop-dish-rack|沥水/, 'dish-rack'],
     [/prop-spice-rack|spice-jars|调味|香料/, 'spice'],
     [/air-fryer|空气炸锅/, 'air-fryer'],
@@ -606,7 +614,7 @@ if (args.has('--check')) {
   site('dressFor 电视柜', (d) => !!d.surface && !d.prop && !(d.family === 'nightstand' || /床头柜|nightstand/.test(`${d.id} ${d.family ?? ''} ${d.name}`)) && /tv|电视/.test(`${d.id} ${d.family ?? ''} ${d.name}`), (d) => !!d.surface && !d.prop && !has(d, 'nightstand') && any('tv-stand', 'tv')(d))
   site('dressFor 书桌', (d) => d.category === 'study' && /桌/.test(d.name), (d) => d.category === 'study' && any('legacy-name-zhuo')(d))
   site('dressFor 餐桌', (d) => d.category === 'dining' && /桌/.test(d.name), (d) => d.category === 'dining' && any('legacy-name-zhuo')(d))
-  for (const [k, re] of LIMITS) site(`LIMITS ${k}`, (d) => re.test(T(d)) && !(k === 'cup' && /toothbrush|牙刷|漱口/.test(T(d))), any(RULES.some(([t]) => t === k) ? k : `limit-${k}`))
+  for (const [k, re] of LIMITS) site(`LIMITS ${k}`, (d) => re.test(T(d)) && !(k === 'cup' && /toothbrush|牙刷|漱口/.test(T(d))), any(({ console: 'game-console', coffee: 'coffee-maker', pressure: 'pressure-cooker', trash: 'trash-bin', fruit: 'fruit-bowl' } as Record<string, string>)[k] ?? k))
   // workstation.ts
   site('ws isDeskDef', (d) => !!d.surface && !d.prop && !d.mount && OLD.DESK_RE.test(T(d)) && !OLD.NOT_PC_DESK.test(T(d)), (d) => !!d.surface && !d.prop && !d.mount && has(d, 'desk'))
   site('ws SEAT_RE', (d) => OLD.SEAT_RE.test(T(d)), any('seat'))
@@ -632,7 +640,7 @@ if (args.has('--check')) {
     ['dining', /dining-table|tbl-dining|餐桌/, 'dining-table'],
     ['microwave', /microwave|微波炉|steam-oven|蒸烤箱/, 'microwave'],
     ['rice', /rice-cooker|电饭煲/, 'rice-cooker'],
-    ['kettle', /kettle|electric-pot|水壶|电热水瓶/, 'legacy-cl-kettle'],
+    ['kettle', /kettle|electric-pot|水壶|电热水瓶/, 'electric-kettle'],
     ['shoeCab', /shoe-cabinet|鞋柜|鞋架|shoe-rack/, 'shoe-storage'],
     ['umbrella', /umbrella|伞架/, 'umbrella-stand'],
     ['shoes', /shoe(?!-cab|-rack)|鞋(?!柜|架)|sneaker|boots|靴/, 'shoe', (d) => !!d.prop],

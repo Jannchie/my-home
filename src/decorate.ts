@@ -220,7 +220,7 @@ class Decorator {
     const lamp = def.family ? LAMP_FAMILIES[def.family] : undefined
     if (lamp) return { group: def.family!, scope: lamp.scope, max: lamp.max }
     // 牙刷杯、漱口杯是洗漱用品，不算进全家的杯子数（cup 标签不含它们）
-    const r = LIMITS.find(([, tag]) => hasTag(def, tag))
+    const r = LIMITS.find(([, tag]) => hasTag(def, ...[tag].flat()))
     // 没有专门规则的：可以多摆的（multi-ok）不限，其余同款（同系列）每个房间一个
     if (!r) return hasTag(def, 'multi-ok') ? null : { group: def.family ?? def.id, scope: 'room' as const, max: 1 }
     const max = r[3] === 0 ? (this.household?.members.length ?? 2) + 1 : r[3]
@@ -593,11 +593,11 @@ class Decorator {
     const coffee = this.household?.members.some((m) => m.interests.includes('coffee')) ?? false
     const want: Sel[] = [
       'rice-cooker',
-      'legacy-kd-kettle',
+      'electric-kettle',
       'cutting-board',
       'knife-block',
-      'legacy-kd-toaster',
-      'legacy-kd-microwave',
+      'toaster',
+      'microwave',
       'dish-rack',
       'spice',
       ...(cooks ? (['air-fryer', 'pressure-cooker', 'stand-mixer', 'oil-bottle', 'paper-towel'] as const) : []),
@@ -2846,16 +2846,16 @@ export function isOpenShelf(d: AssetDef) {
  * 同类数量规则：[分组, 标签, 范围, 上限]（按顺序取第一条命中的）。同一分组按功能归类（不同款的电饭煲算一类）。
  * 上限为 0 表示「按住户人数 + 1」（杯子）。没匹配上的不限（书、绿植、手办、鞋、贴纸…）。
  */
-const LIMITS: [string, Tag, 'house' | 'room' | 'surface', number][] = [
+const LIMITS: [string, Tag | Tag[], 'house' | 'room' | 'surface', number][] = [
   ['tv', 'tv', 'room', 1],
-  ['console', 'limit-console', 'house', 2],
+  ['console', 'game-console', 'house', 2],
   ['rice-cooker', 'rice-cooker', 'house', 1],
   ['kettle', 'kettle', 'house', 1],
-  ['microwave', 'microwave', 'house', 1],
+  ['microwave', ['microwave', 'steam-oven'], 'house', 1],
   ['toaster', 'toaster', 'house', 1],
-  ['coffee', 'limit-coffee', 'house', 1],
+  ['coffee', 'coffee-maker', 'house', 1],
   ['air-fryer', 'air-fryer', 'house', 1],
-  ['pressure', 'limit-pressure', 'house', 1],
+  ['pressure', 'pressure-cooker', 'house', 1],
   ['blender', 'blender', 'house', 1],
   ['vacuum', 'vacuum', 'house', 1],
   ['router', 'router', 'house', 1],
@@ -2868,13 +2868,13 @@ const LIMITS: [string, Tag, 'house' | 'room' | 'surface', number][] = [
   ['humidifier', 'humidifier', 'room', 1],
   ['purifier', 'purifier', 'room', 1],
   ['dehumidifier', 'dehumidifier', 'room', 1],
-  ['trash', 'limit-trash', 'room', 1],
+  ['trash', 'trash-bin', 'room', 1],
   ['laptop', 'laptop', 'surface', 1],
   ['desk-lamp', 'desk-lamp', 'surface', 1],
   ['table-lamp', 'table-lamp', 'surface', 1],
   ['monitor', 'monitor', 'surface', 1],
   ['tea-set', 'tea-set', 'surface', 1],
-  ['fruit', 'limit-fruit', 'surface', 1],
+  ['fruit', 'fruit-bowl', 'surface', 1],
   ['vase', 'vase', 'surface', 1],
   ['key-tray', 'key-tray', 'surface', 1],
   ['makeup-mirror', 'makeup-mirror', 'surface', 1],
