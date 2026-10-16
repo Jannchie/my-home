@@ -863,6 +863,26 @@ function buildCurtains(plan: Plan, infos: OpeningInfo[], H: number) {
   return g
 }
 
+const trimCache = new Map<string, THREE.Material>()
+/**
+ * 边饰材质：比墙纸（polygonOffset -1 / -2）偏移得更多。墙纸的偏移随表面倾斜变大，斜着看时会把墙纸拉到
+ * 只凸出 0.8cm 的腰壁前面，逐像素抢深度成一片网点，而且随视角变化。边饰偏移更大就始终压在墙纸上。
+ */
+function trimMat(color: string) {
+  let m = trimCache.get(color)
+  if (!m) {
+    const src = toon(color)
+    m = src.clone()
+    m.onBeforeCompile = src.onBeforeCompile
+    m.customProgramCacheKey = src.customProgramCacheKey
+    m.polygonOffset = true
+    m.polygonOffsetFactor = -3
+    m.polygonOffsetUnits = -6
+    trimCache.set(color, m)
+  }
+  return m
+}
+
 /**
  * 墙面边饰：踢脚线、腰壁、顶角线。沿房间内侧墙面（按各边墙厚内缩的多边形）走一圈，
  * 门洞、敞开的边断开；腰壁在落到它高度以下的窗处也断开。墙凸角处各多伸出一个厚度把角包住。
@@ -924,7 +944,7 @@ function buildTrims(plan: Plan, infos: OpeningInfo[], H: number) {
           spans = spans.flatMap(([a, b]): [number, number][] => (hi <= a || lo >= b ? [[a, b]] : ([[a, lo], [hi, b]] as [number, number][]).filter(([x, z]) => z - x > 2)))
         }
         for (const [a, b] of spans) {
-          const m = new THREE.Mesh(new THREE.BoxGeometry(b - a, h, th), toon(color))
+          const m = new THREE.Mesh(new THREE.BoxGeometry(b - a, h, th), trimMat(color))
           const c = add(add(e.a, mul(e.dir, (a + b) / 2)), mul(e.out, -(half[i] + th / 2)))
           m.position.set(c.x, y0 + h / 2, c.y)
           m.rotation.y = Math.atan2(-e.dir.y, e.dir.x)
@@ -947,7 +967,7 @@ function buildTrims(plan: Plan, infos: OpeningInfo[], H: number) {
           const a1 = along(s1)
           for (let u = a0 + 15; u < a1 - 5; u += 30) {
             if (cuts.some(([lo, hi, y]) => y < w.h && u > lo - 2 && u < hi + 2)) continue
-            const m = new THREE.Mesh(new THREE.BoxGeometry(1.6, w.h - 3, 1.4), toon(shade(w.color, -0.03)))
+            const m = new THREE.Mesh(new THREE.BoxGeometry(1.6, w.h - 3, 1.4), trimMat(shade(w.color, -0.03)))
             const c = add(add(e.a, mul(e.dir, u)), mul(e.out, -(half[i] + 0.7)))
             m.position.set(c.x, (w.h - 3) / 2, c.y)
             m.rotation.y = Math.atan2(-e.dir.y, e.dir.x)

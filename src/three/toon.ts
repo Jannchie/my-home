@@ -29,6 +29,22 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
   }
 }
 
+// 光线贴着表面掠过（月光、低角度的夕阳照在和光线几乎平行的墙上）时，阴影贴图的一个像素被拉成长条，
+// 阴影边缘会变成一排排斜向的网点。这类表面在 toon 着色里本来就落在暗部：按 N·L 把阴影淡掉，走样就看不到了。
+{
+  const chunk = THREE.ShaderChunk as unknown as Record<string, string>
+  const DIR = 'directLight.color *= ( directLight.visible && receiveShadow ) ? getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, vDirectionalShadowCoord[ i ] ) : 1.0;'
+  if (chunk.lights_fragment_begin.includes(DIR)) {
+    chunk.lights_fragment_begin = chunk.lights_fragment_begin.replace(
+      DIR,
+      DIR.replace(
+        'getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, vDirectionalShadowCoord[ i ] )',
+        'mix( 1.0, getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, vDirectionalShadowCoord[ i ] ), smoothstep( 0.04, 0.28, dot( geometryNormal, directLight.direction ) ) )',
+      ),
+    )
+  }
+}
+
 // ---------- 材质 ----------
 
 let gradient: THREE.DataTexture | null = null
