@@ -50,13 +50,26 @@ watch(
 .msg {
   white-space: nowrap;
 }
+/* Nunito 的下沉区留得多，字形落在行框偏上约 0.13em：文字往下挪一点，笔画中心才和图标、关闭键对齐 */
+.msg {
+  transform: translateY(0.13em);
+}
 .up button {
   height: 32px;
   border-radius: 99px;
+  /* 按钮固定高度：内容要真正垂直居中（默认是块级，文字贴着上内边距排） */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.up .primary {
+  padding-top: 0.26em;
 }
 :root.coarse .up button {
-  height: 40px;
-  min-width: 40px;
+  height: 36px;
+  min-width: 36px;
 }
 .x {
   border-color: transparent;
