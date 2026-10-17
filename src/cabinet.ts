@@ -69,16 +69,16 @@ export function setOpen(plan: Pick<Plan, 'furniture'>, f: Furniture, open: boole
   const moved = new Set<string>()
   const base = f.z ?? 0
   ;(def.surfaces ?? []).forEach((s, i) => {
-    if (!s.slide) return
+    if (!s.slide && !s.slideX) return
     const lv = cur[i + off]
     const on = plan.furniture.filter((o) => {
       if (o.id === f.id || moved.has(o.id) || Math.abs((o.z ?? 0) - (base + lv.y)) >= 0.5) return false
       const l = toLocal(f, o)
       return lv.polys.some((pl) => pointInPolygon(l, pl.map(([x, z]) => ({ x, y: z }))))
     })
-    const dz = open ? s.slide : -s.slide
+    const k = open ? 1 : -1
     const o0 = toWorld(f, 0, 0)
-    const o1 = toWorld(f, 0, dz)
+    const o1 = toWorld(f, k * (s.slideX ?? 0), k * (s.slide ?? 0))
     const dx = o1.x - o0.x
     const dy = o1.y - o0.y
     for (const o of on.flatMap((x) => [x, ...propsOn(plan, x)])) {
@@ -144,3 +144,29 @@ export function migrateCabinets(plan: Plan): number {
   return n
 }
 
+
+/**
+ * 以前用「打开」形态的另一件素材表示开着的柜子（同系列 form 'open'）；现在同一件素材按 open 切换。
+ * 旧 id → 保留的那件（位置照旧：两种形态的柜体都以占地中心为原点）。
+ */
+export const LEGACY_OPEN_FORMS: Record<string, string> = {
+  'sb-shoe-cab-open': 'sb-shoe-cab-closed',
+  'sb-door-cab-open': 'sb-door-cab-closed',
+  'be-lingerie-38-open': 'be-lingerie-38-closed',
+  'be-lingerie-48-open': 'be-lingerie-48-closed',
+  'be-chest-low-open': 'be-chest-low-closed',
+  'fm-storage-bed-open': 'fm-storage-bed',
+}
+
+/** 旧存档迁移：「打开」形态的素材换成同一件可开合素材 + open。返回换了几件 */
+export function migrateOpenForms(plan: Pick<Plan, 'furniture'>): number {
+  let n = 0
+  for (const f of plan.furniture) {
+    const to = LEGACY_OPEN_FORMS[f.asset]
+    if (!to || ASSET_MAP.has(f.asset) || !ASSET_MAP.get(to)?.openable) continue
+    f.asset = to
+    f.open = true
+    n++
+  }
+  return n
+}

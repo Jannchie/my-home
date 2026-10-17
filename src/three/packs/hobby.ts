@@ -3,7 +3,8 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
-import { C, S, ellipsePoly, glow, rng, shell, slab, type AssetCategory, type AssetDef, type Poly, type StyleTag } from '../kit'
+import { C, S, ellipsePoly, glow, rectPoly, rng, shell, slab, type AssetCategory, type AssetDef, type Poly, type StyleTag } from '../kit'
+import { hollow, swingDoor } from './styles-world'
 
 type V3 = [number, number, number]
 type Pal = [StyleTag, ...string[]]
@@ -2589,11 +2590,13 @@ function wallCabinet(p: string[]) {
   const y = CAB_MOUNT
   g.add(rbox(60, 1.5, 12.4, body, { y, z: -1.3 }, 0.5))
   for (const s of [-1, 1]) g.add(rbox(1.5, 11, 12.4, body, { x: s * 29.25, y: y + 1.4, z: -1.3 }, 0.4))
-  g.add(rbox(60, 58, 12.4, body, { y: y + 12, z: -1.3 }, 1))
+  g.add(hollow(60, 58, 12.4, body, { y: y + 12, z: -1.3 }, 1.2))
+  for (const sy of [31, 50]) g.add(rbox(57.4, 1, 11, shade(body, 0.05), { y: y + sy, z: -0.8 }, 0.2))
   g.add(noLine(lit(rbox(50, 0.4, 2, C.lamp, { y: y + 11.7, z: 2 }, 0.1), C.lamp, 0.8)))
+  // 两扇镜门，铰链在外侧
   for (const s of [-1, 1]) {
-    g.add(rbox(29.6, 56, 1.5, door, { x: s * 14.9, y: y + 13, z: 5.65 }, 0.5))
-    g.add(P(mirrorGlass(rrOutline(new THREE.Shape(), 26.6, 52, 1, 0), -4, 34, 24), s * 14.9, y + 15, 6.65))
+    const parts = [rbox(29.6, 56, 1.5, door, { x: s * 14.9, y: y + 13, z: 5.65 }, 0.5), P(mirrorGlass(rrOutline(new THREE.Shape(), 26.6, 52, 1, 0), -4, 34, 24), s * 14.9, y + 15, 6.65)]
+    g.add(swingDoor(parts, s * 29.7, 6.4, s < 0 ? 'left' : 'right'))
   }
   g.add(noLine(lit(rbox(40, 0.6, 1, acc, { y: y + 69.4, z: 3 }, 0.2), acc, 0.6)))
   return g
@@ -2633,7 +2636,14 @@ const MIRRORS: AssetDef[] = [
       ['cute', C.white, C.sakura, C.lamp],
     ],
     wallCabinet,
-    { mount: CAB_MOUNT },
+    {
+      mount: CAB_MOUNT,
+      surfaces: [
+        { y: CAB_MOUNT + 1.5, h: 9.5, shape: [rectPoly(-28.5, -7.5, 28.5, 4.9)] },
+        ...[13.2, 32, 51].map((y) => ({ y: CAB_MOUNT + y, h: 17.4, inside: true, shape: [rectPoly(-28.6, -6.8, 28.6, 4.3)] })),
+      ],
+      openable: true,
+    },
   ),
 ]
 

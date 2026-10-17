@@ -2394,8 +2394,8 @@ class Decorator {
     }
     // 内衣柜：窄高，靠墙
     if (m2 >= 6.5 && grown.length && this.rand() < (female ? 0.6 : 0.3)) {
-      const open = this.rand() < 0.3
-      const opts = this.find(/^be-lingerie-\d+-(open|closed)/, (a) => (a.form === 'open') === open)
+      // 抽屉开合由 stowAll 统一决定（少数开着）
+      const opts = this.find(/^be-lingerie-\d+/, (a) => a.form !== 'open')
       if (opts.length) this.wall(room, this.pick(opts).id, { front: 45 })
     }
   }

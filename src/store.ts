@@ -1,7 +1,7 @@
 import { reactive, ref, toRaw, watch } from 'vue'
 import { orientDoors } from './doors'
 import { migrateAppliances } from './appliance'
-import { migrateCabinets, setOpen } from './cabinet'
+import { migrateCabinets, migrateOpenForms, setOpen } from './cabinet'
 import { applyFixes, decorate, roomStyles } from './decorate'
 import { autoWallpapers } from './wallpaper'
 import type { CheckItem } from './checklist'
@@ -46,6 +46,8 @@ export function normalizePlan(p: Plan): Plan | null {
   migrateAppliances(p)
   // 收纳位以前自己画柜子：换成摆在位上的同类柜子家具（柜门开关照旧）
   migrateCabinets(p)
+  // 以前用「打开」形态的另一件素材表示开着的柜子：换成同一件素材 + open
+  migrateOpenForms(p)
   for (const f of p.furniture) if (f.open !== undefined && f.open !== true) delete f.open
   // 灯光开关 / 色温：缺省 = 自动、跟随全局；坏数据去掉
   for (const r of p.rooms) {

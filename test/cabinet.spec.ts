@@ -1,7 +1,7 @@
 // 收纳位 + 柜体家具、可开合的柜子：素材结构、旧存档迁移、开关柜门时里面的东西、一键布置在收纳位上放柜子并往柜里收东西
 import { describe, expect, test } from 'vitest'
 import * as THREE from 'three'
-import { cabinetsOn, legacyCabinet, migrateCabinets, setOpen } from '/src/cabinet'
+import { cabinetsOn, LEGACY_OPEN_FORMS, legacyCabinet, migrateCabinets, setOpen } from '/src/cabinet'
 import { checklist } from '/src/checklist'
 import { applyFixes, decorate } from '/src/decorate'
 import { generatePlan } from '/src/generate-region'
@@ -38,18 +38,23 @@ describe('可开合柜子的素材', () => {
       const closed = new THREE.Box3().setFromObject(g, true)
       poseDoors(g, true)
       g.updateMatrixWorld(true)
-      const opened = new THREE.Box3().setFromObject(g, true)
+      // 推拉门推到相邻门前面时整体包围盒可能不变：看会动的部件本身有没有挪
+      let moved = false
+      g.traverse((o) => {
+        const b = o.userData.doorBase as { p: THREE.Vector3; r: THREE.Euler } | undefined
+        if (b && (o.position.distanceTo(b.p) > 0.5 || Math.abs(o.rotation.x - b.r.x) + Math.abs(o.rotation.y - b.r.y) > 0.1)) moved = true
+      })
+      if (!moved) bad.push(`${a.id} 打开后没有变化`)
       poseDoors(g, false)
       g.updateMatrixWorld(true)
       const back = new THREE.Box3().setFromObject(g, true)
-      if (opened.equals(closed)) bad.push(`${a.id} 打开后没有变化`)
       if (back.min.distanceTo(closed.min) > 0.01 || back.max.distanceTo(closed.max) > 0.01) bad.push(`${a.id} 关上后没有复原`)
     }
     expect(bad).toEqual([])
   })
 
   test('不可开合的素材没有会动的部件、也没有门里的层', () => {
-    const bad = ASSETS.filter((a) => !a.openable && (a.surfaces ?? []).some((s) => s.inside || s.slide)).map((a) => a.id)
+    const bad = ASSETS.filter((a) => !a.openable && (a.surfaces ?? []).some((s) => s.inside || s.slide || s.slideX)).map((a) => a.id)
     expect(bad).toEqual([])
   })
 
@@ -62,7 +67,8 @@ describe('可开合柜子的素材', () => {
         if (!(s.h! > 0)) bad.push(`${tag} 净高 ${s.h}`)
         if (s.slide !== undefined && !(s.slide > 0)) bad.push(`${tag} slide ${s.slide}`)
         if (s.kind === 'hook' && !s.shape?.length) bad.push(`${tag} 挂杆没有形状`)
-        if (s.y < 0 || s.y > a.h) bad.push(`${tag} 高度 ${s.y} 超出柜子`)
+        // 壁挂柜的层 y 是离地高度
+        if (s.y < (a.mount ?? 0) || s.y > (a.mount ?? 0) + a.h) bad.push(`${tag} 高度 ${s.y} 超出柜子`)
         for (const pl of s.shape ?? []) for (const [x, z] of pl) if (Math.abs(x) > a.w / 2 + 0.5 || Math.abs(z) > a.d / 2 + 0.5) bad.push(`${tag} 层超出占地 (${x}, ${z})`)
       }
     expect(bad).toEqual([])
@@ -116,6 +122,20 @@ describe('旧存档迁移', () => {
     const cab = (id: string) => cabinetsOn(p.furniture, p.fixtures.find((f) => f.id === id)!)[0]
     expect(supportOf(p, p.furniture.find((f) => f.id === 'shoe')!)?.ownerId).toBe(cab('s').id)
     expect(supportOf(p, p.furniture.find((f) => f.id === 'row')!)?.ownerId).toBe(cab('c').id)
+  })
+
+  test('以前「打开」形态的另一件素材 → 同一件可开合素材 + open（位置、配色照旧）', () => {
+    const old = spotPlan([])
+    old.furniture.push({ id: 'a', asset: 'sb-shoe-cab-open', x: 150, y: 40, rot: 90, color: 1 }, { id: 'b', asset: 'fm-storage-bed-open', x: 500, y: 200, rot: 0 })
+    const p = normalizePlan(JSON.parse(JSON.stringify(old)))!
+    for (const [id, asset] of Object.entries(LEGACY_OPEN_FORMS)) {
+      expect(ASSET_MAP.has(id), id).toBe(false)
+      expect(ASSET_MAP.get(asset)?.openable, asset).toBe(true)
+    }
+    expect(p.furniture.map((f) => [f.id, f.asset, f.open, f.x, f.y, f.color])).toEqual([
+      ['a', 'sb-shoe-cab-closed', true, 150, 40, 1],
+      ['b', 'fm-storage-bed', true, 500, 200, undefined],
+    ])
   })
 
   test('放不进位的宽度时退到最窄的一档', () => {

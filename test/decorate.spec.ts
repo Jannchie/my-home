@@ -155,8 +155,9 @@ describe('一键布置 seed 1..40', () => {
       f.flatMap((p) => {
         const pd = def(p)
         if (p.z || !isOpenShelf(pd)) return []
+        // 柜门里的层（关着门看不见）不要求放满
         return pd.surfaces!.flatMap((lv) =>
-          lv.kind === 'hook'
+          lv.kind === 'hook' || (lv.inside && !lv.glass)
             ? []
             : (lv.shape?.length ? lv.shape : [[[-pd.w / 2, -pd.d / 2], [pd.w / 2, pd.d / 2]] as [number, number][]]).flatMap((cell) => {
                 const xs = cell.map((q) => q[0])

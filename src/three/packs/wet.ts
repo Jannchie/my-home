@@ -10,7 +10,7 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
-import { C, G, S, ellipsePoly, holePanel, rectPoly, rng, rod, shell, slab, type AssetCategory, type AssetDef, type Hole, type Poly, type StyleTag } from '../kit'
+import { C, G, S, SWING_OPEN, ellipsePoly, holePanel, movable, rectPoly, rng, rod, shell, slab, type AssetCategory, type AssetDef, type Hole, type Poly, type StyleTag, type SurfaceDef } from '../kit'
 
 const PI = Math.PI
 type V3 = [number, number, number]
@@ -278,6 +278,7 @@ function cabinet(s: CabSpec, y0 = 0): Build {
       else g.add(rbox(s.w - T * 2, T, bd, body, { y: y0 + by, z: bz }, 0.3))
     })
     if (s.plinth > 0) g.add(rbox(s.w - T * 2, s.plinth, 1.6, body, { y: y0, z: front - 3 }, 0.3))
+    const inner = shade(body, 0.05)
     s.secs.forEach((sec, i) => {
       const [a, b] = L.ranges[i]
       if (sec.kind === 'open') {
@@ -288,28 +289,69 @@ function cabinet(s: CabSpec, y0 = 0): Build {
       const yb = y0 + a - T / 2 + 0.2
       const dh = b - a + T - 0.4
       if (sec.kind === 'drawer') {
-        g.add(rbox(s.w - 0.6, dh, 1.4, door, { y: yb, z: front + 0.7 }, 0.4))
-        g.add(rbox(Math.min(12, s.w * 0.4), 0.8, 0.6, handle, { y: yb + dh / 2 - 0.4, z: s.d / 2 - 0.3 }, 0.2))
+        // 抽屉：面板 + 抽屉盒，打开时往前拉出
+        const dg = new THREE.Group()
+        dg.add(rbox(s.w - 0.6, dh, 1.4, door, { z: 0.7 }, 0.4))
+        dg.add(rbox(Math.min(12, s.w * 0.4), 0.8, 0.6, handle, { y: dh / 2 - 0.4, z: s.d / 2 - 0.3 - front }, 0.2))
+        const { bw, bd2 } = drawerDims(s)
+        const fy = a + 0.2 - (a - T / 2 + 0.2)
+        const sh = sec.h - 1.2
+        dg.add(rbox(bw, 0.8, bd2, inner, { y: fy, z: -bd2 / 2 }, 0.2))
+        for (const sx of [-1, 1]) dg.add(rbox(0.6, sh, bd2, inner, { x: sx * (bw / 2 - 0.3), y: fy, z: -bd2 / 2 }, 0.2))
+        dg.add(rbox(bw - 1.2, sh, 0.6, inner, { y: fy, z: -bd2 + 0.3 }, 0.2))
+        dg.position.set(0, yb, front)
+        g.add(movable(dg, { kind: 'drawer', dz: drawerDims(s).pull }))
         return
       }
+      // 门里的层板（高的门柜中间一块）
+      if (sec.h >= 30) g.add(rbox(s.w - T * 2, T, bd, inner, { y: y0 + a + sec.h / 2 - T / 2, z: bz }, 0.3))
       const n = sec.doors ?? 1
       const dw = (s.w - 0.6) / n - (n > 1 ? 0.2 : 0)
       const hh = Math.min(10, dh * 0.3)
       for (let k = 0; k < n; k++) {
         const x = n === 1 ? 0 : (k === 0 ? -1 : 1) * (dw / 2 + 0.2)
-        g.add(rbox(dw, dh, 1.4, door, { x, y: yb, z: front + 0.7 }, 0.4))
         const hx = n === 1 ? dw / 2 - 2.5 : x + (k === 0 ? 1 : -1) * (dw / 2 - 2.5)
         const hy = a < 60 && y0 === 0 ? yb + dh - hh - 3 : yb + 3
-        g.add(rbox(0.8, hh, 0.6, handle, { x: hx, y: hy, z: s.d / 2 - 0.3 }, 0.2))
+        // 平开门：铰链在外侧（单扇在左），把手在另一侧
+        const left = n === 1 || k === 0
+        const off = left ? dw / 2 : -dw / 2
+        const leaf = new THREE.Group()
+        leaf.add(rbox(dw, dh, 1.4, door, { x: off }, 0.4))
+        leaf.add(rbox(0.8, hh, 0.6, handle, { x: off + (hx - x), y: hy - yb, z: s.d / 2 - 0.3 - (front + 0.7) }, 0.2))
+        leaf.position.set(left ? x - dw / 2 : x + dw / 2, yb, front + 0.7)
+        g.add(movable(leaf, { kind: 'swing', angle: (left ? -1 : 1) * SWING_OPEN }))
       }
     })
     return g
   }
 }
-function cabSurfaces(s: CabSpec, y0 = 0) {
+/** 抽屉盒的宽、深（从面板背后往里）和拉出距离 */
+function drawerDims(s: CabSpec) {
+  const front = s.d / 2 - 1.8
+  const dc = front + s.d / 2
+  const bd2 = Math.round((dc - 1.4) * 10) / 10
+  return { bw: s.w - T * 2 - 0.6, bd2, pull: Math.round(bd2 * 0.6) }
+}
+function cabSurfaces(s: CabSpec, y0 = 0): SurfaceDef[] {
   const L = cabLayout(s)
+  const r1 = (v: number) => Math.round(v * 10) / 10
   const shape = [rectPoly(-s.w / 2 + T + 0.5, -s.d / 2 + 1.2, s.w / 2 - T - 0.5, s.d / 2 - 2.3)]
-  return L.surf.map((y) => ({ y: Math.round((y0 + y) * 10) / 10, shape }))
+  const out: SurfaceDef[] = L.surf.map((y) => ({ y: r1(y0 + y), shape }))
+  // 门里 / 抽屉里的层（和 cabinet() 的板对得上）
+  s.secs.forEach((sec, i) => {
+    const [a, b] = L.ranges[i]
+    if (sec.kind === 'door') {
+      if (sec.h >= 30) {
+        const mid = a + sec.h / 2 + T / 2
+        out.push({ y: r1(y0 + a), h: r1(mid - T - a), inside: true, shape }, { y: r1(y0 + mid), h: r1(b - mid), inside: true, shape })
+      } else out.push({ y: r1(y0 + a), h: r1(b - a), inside: true, shape })
+    } else if (sec.kind === 'drawer') {
+      const { bw, bd2, pull } = drawerDims(s)
+      const front = s.d / 2 - 1.8
+      out.push({ y: r1(y0 + a + 1), h: r1(sec.h - 1.6), inside: true, slide: pull, shape: [rectPoly(-bw / 2 + 0.8, front - bd2 + 0.8, bw / 2 - 0.8, front - 0.2)] })
+    }
+  })
+  return out
 }
 
 // =====================================================================
@@ -865,14 +907,20 @@ function mirrorCabinet(p: string[]) {
     g.add(rbox(1, h - 14, bd, body, { x: sx * 18.5, y: m + 12.5, z: bz }, 0.2))
     for (const y of [31, 50]) g.add(rbox(9.8, 1, bd, body, { x: sx * 23.9, y: m + y, z: bz }, 0.2))
   }
-  // 镜门
+  // 镜门后面：两块层板
+  for (const y of [31, 50]) g.add(rbox(36, 1, bd, shade(body, 0.04), { y: m + y, z: bz }, 0.2))
+  // 镜门：铰链在外侧，往两边打开
   for (const sx of [-1, 1]) {
     const x = sx * 9.35
-    g.add(rbox(18.3, 55.4, 1.2, body, { x, y: m + 12.8, z: front + 0.6 }, 0.4))
-    const mir = rbox(16.7, 53.8, 0.5, MIRROR, { x, y: m + 13.6, z: front + 1.25 }, 0.15)
+    const hinge = sx * 18.5
+    const leaf = new THREE.Group()
+    leaf.add(rbox(18.3, 55.4, 1.2, body, { x: x - hinge, y: 0, z: 0 }, 0.4))
+    const mir = rbox(16.7, 53.8, 0.5, MIRROR, { x: x - hinge, y: 0.8, z: 0.65 }, 0.15)
     mir.material = toon(MIRROR, { emissive: 0.18 })
-    g.add(mir)
-    g.add(rbox(0.5, 6, 0.3, acc, { x: sx * 0.6, y: m + 14.5, z: front + 1.35 }, 0.1))
+    leaf.add(mir)
+    leaf.add(rbox(0.5, 6, 0.3, acc, { x: sx * 0.6 - hinge, y: 1.7, z: 0.75 }, 0.1))
+    leaf.position.set(hinge, m + 12.8, front + 0.6)
+    g.add(movable(leaf, { kind: 'swing', angle: sx * SWING_OPEN }))
   }
   return g
 }
@@ -1268,14 +1316,35 @@ const CASE_PALS: Pal[] = [
 
 // 抽屉式收纳盒（三抽，顶面可以摆东西）
 const DC = { w: 28, d: 38, h: 32 }
+/** 抽屉盒：宽、深（面板背后往里）、拉出距离 */
+const DC_BOX = { w: 25, d: 34.5, pull: 21 }
+/** 三格抽屉的可摆放层（关着时的位置，打开随抽屉拉出） */
+const DC_LEVELS: SurfaceDef[] = [0, 1, 2].map((i) => ({
+  y: 1.2 + i * 10 + 1,
+  h: 7.2,
+  inside: true,
+  slide: DC_BOX.pull,
+  shape: [rectPoly(-DC_BOX.w / 2 + 0.8, DC.d / 2 - 1.3 - 0.5 - DC_BOX.d + 0.8, DC_BOX.w / 2 - 0.8, DC.d / 2 - 1.3 - 0.7)],
+}))
 function drawerChest(p: string[]) {
   const [frame, drawer, handle] = p
   const g = new THREE.Group()
-  g.add(rbox(DC.w, DC.h, DC.d - 1, frame, { z: -0.5 }, 1))
+  // 空心外框：两侧、顶、底、背板
+  for (const sx of [-1, 1]) g.add(rbox(1, DC.h, DC.d - 1, frame, { x: sx * (DC.w / 2 - 0.5), z: -0.5 }, 0.4))
+  g.add(rbox(DC.w - 2, 1, DC.d - 1, frame, { y: DC.h - 1, z: -0.5 }, 0.3))
+  g.add(rbox(DC.w - 2, 1.2, DC.d - 1, frame, { z: -0.5 }, 0.3))
+  g.add(rbox(DC.w - 2, DC.h - 2.2, 0.8, frame, { y: 1.2, z: -DC.d / 2 + 0.4 }, 0.2))
+  const inner = shade(drawer, 0.08)
   for (let i = 0; i < 3; i++) {
     const y = 1.2 + i * 10
-    g.add(rbox(DC.w - 2, 9.4, 1, drawer, { y, z: DC.d / 2 - 1.3 }, 0.5))
-    g.add(rbox(8, 1.2, 0.4, handle, { y: y + 6.8, z: DC.d / 2 - 0.4 }, 0.15))
+    const dg = new THREE.Group()
+    dg.add(rbox(DC.w - 2, 9.4, 1, drawer, {}, 0.5))
+    dg.add(rbox(8, 1.2, 0.4, handle, { y: 6.8, z: 0.9 }, 0.15))
+    dg.add(rbox(DC_BOX.w, 0.8, DC_BOX.d, inner, { y: 0.2, z: -0.5 - DC_BOX.d / 2 }, 0.2))
+    for (const sx of [-1, 1]) dg.add(rbox(0.6, 8, DC_BOX.d, inner, { x: sx * (DC_BOX.w / 2 - 0.3), y: 0.2, z: -0.5 - DC_BOX.d / 2 }, 0.2))
+    dg.add(rbox(DC_BOX.w - 1.2, 8, 0.6, inner, { y: 0.2, z: -0.5 - DC_BOX.d + 0.3 }, 0.2))
+    dg.position.set(0, y, DC.d / 2 - 1.3)
+    g.add(movable(dg, { kind: 'drawer', dz: DC_BOX.pull }))
   }
   return g
 }
@@ -1307,10 +1376,12 @@ const TOILET: AssetDef[] = [
   asset('wet-toilet-wall-cabinet', '厕所吊柜', 'storage', [TOILET_CAB.w, TOILET_CAB.d, cabLayout(TOILET_CAB).h], CAB_PALS, cabinet(TOILET_CAB, TOILET_CAB_MOUNT), {
     mount: TOILET_CAB_MOUNT,
     surfaces: cabSurfaces(TOILET_CAB, TOILET_CAB_MOUNT),
+    openable: true,
   }),
   asset('wet-toilet-slim-cabinet', '厕所角落窄柜', 'storage', [TOILET_SLIM.w, TOILET_SLIM.d, cabLayout(TOILET_SLIM).h], CAB_PALS, cabinet(TOILET_SLIM), {
     surface: cabLayout(TOILET_SLIM).h,
     surfaces: cabSurfaces(TOILET_SLIM),
+    openable: true,
   }),
   prop('wet-tp-stack', '卷筒纸', 'toiletry', [11, 11, 33], TP_PALS, tpStack, { family: 'tp-pack', sizeLabel: '3 卷叠放' }),
   prop('wet-tp-4pack', '卷筒纸', 'toiletry', [22.9, 22.9, 11.8], TP_PALS, tpPack(2, 2, 1, false), { family: 'tp-pack', sizeLabel: '4 卷装' }),
@@ -1467,11 +1538,13 @@ const DRESSING: AssetDef[] = [
       sizeLabel: `${s.w}`,
       surface: cabLayout(s).h,
       surfaces: cabSurfaces(s),
+      openable: true,
     }),
   ),
   asset('wet-washroom-wall-cabinet', '洗面所吊柜', 'storage', [WASH_CAB.w, WASH_CAB.d, cabLayout(WASH_CAB).h], CAB_PALS, cabinet(WASH_CAB, WASH_CAB_MOUNT), {
     mount: WASH_CAB_MOUNT,
     surfaces: cabSurfaces(WASH_CAB, WASH_CAB_MOUNT),
+    openable: true,
   }),
   asset('wet-mirror-cabinet', '镜柜', 'storage', [MC.w, MC.d, MC.h], CAB_PALS, mirrorCabinet, {
     mount: MC.mount,
@@ -1480,7 +1553,12 @@ const DRESSING: AssetDef[] = [
       { y: MC.mount + 12.5, shape: MC_COL() },
       { y: MC.mount + 32, shape: MC_COL() },
       { y: MC.mount + 51, shape: MC_COL() },
+      // 镜门后面的三层
+      { y: MC.mount + 12.5, h: 18.5, inside: true, shape: [rectPoly(-17.6, -6.4, 17.6, 4.8)] },
+      { y: MC.mount + 32, h: 18, inside: true, shape: [rectPoly(-17.6, -6.4, 17.6, 4.8)] },
+      { y: MC.mount + 51, h: 17.5, inside: true, shape: [rectPoly(-17.6, -6.4, 17.6, 4.8)] },
     ],
+    openable: true,
   }),
   asset('wet-towel-stand', '落地浴巾架', 'storage', [TS.w, TS.d, 83.5], RACK_PALS.map(([s, c]): Pal => [s, [c[1] === M.silver ? M.silver : c[0], c[1]]]), towelStand, {
     surfaces: TS_BARS.map(([y, z]) => ({ y: y + TS.barR + 0.5, kind: 'hook' as const, shape: [rectPoly(-TS.w / 2 + 5, z - 1.5, TS.w / 2 - 5, z + 1.5)] })),
@@ -1586,7 +1664,7 @@ const DRESSING: AssetDef[] = [
     ['nordic', [N.white, N.oak, N.gray]],
     ['cute', [C.white, C.sakura, C.pink]],
     ['modern', [M.char, M.gray, M.silver]],
-  ], drawerChest, { surface: DC.h }),
+  ], drawerChest, { surface: DC.h, surfaces: DC_LEVELS, openable: true }),
   prop('wet-wash-basket', '洗面所收纳篮', 'storage', [31, 21, 14], [
     ['nordic', [N.oakL, N.oak]],
     ['japanese', [J.hinoki, J.dark]],

@@ -213,6 +213,7 @@ export type Poly = [number, number][]
  *   inside：在柜门里 / 抽屉里（关着门时不能往里放；一键布置只往里收日常用品，开放格子「必须放满」的规则不管它）
  *   glass ：柜门是玻璃的，关着也看得见里面（展示柜、玻璃门食器棚）：仍按展示格对待
  *   slide ：抽屉格，打开时随抽屉往前（+z）拉出这么多 cm；里面的东西跟着抽屉走（cabinet.ts setOpen）
+ *   slideX：往侧面拉的抽屉（床侧抽屉）：打开时沿 x 拉出这么多 cm（可以为负）
  */
 export interface SurfaceDef {
   y: number
@@ -222,6 +223,7 @@ export interface SurfaceDef {
   inside?: boolean
   glass?: boolean
   slide?: number
+  slideX?: number
 }
 
 export interface AssetDef {

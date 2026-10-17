@@ -6,7 +6,7 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cyl, face, puck, rbox, shade, toon, torus } from '../toon'
-import { C, S, ellipsePoly, glow, holePanel, rectPoly, slab, type AssetDef, type StyleTag } from '../kit'
+import { C, S, ellipsePoly, glow, holePanel, movable, rectPoly, slab, type AssetDef, type StyleTag, type SurfaceDef } from '../kit'
 
 type V3 = [number, number, number]
 type Pal = [StyleTag, string, string, string]
@@ -297,16 +297,39 @@ function cribNordic(p: string[]) {
   return g
 }
 
+// ---------- 可开合部件 ----------
+
+/** 把一组部件收进一个会往 +z 拉出 dz 的抽屉 Group（部件位置不变） */
+function pullOut(parts: THREE.Object3D[], dz: number) {
+  const g = new THREE.Group()
+  for (const o of parts) g.add(o)
+  return movable(g, { kind: 'drawer', dz })
+}
+/** 抽屉盒（敞口托盘）：面板背面在 zf，往后深 depth；x / y 为盒子底面中心 */
+function drawerTray(w: number, h: number, depth: number, color: string, x: number, y: number, zf: number) {
+  const t = 0.8
+  const g = new THREE.Group()
+  g.add(rbox(w, t, depth, color, {}, 0.3))
+  for (const s of [-1, 1]) {
+    g.add(rbox(w, h, t, color, { z: (s * (depth - t)) / 2 }, 0.3))
+    g.add(rbox(t, h, depth - t * 2 + 0.6, color, { x: (s * (w - t)) / 2 }, 0.3))
+  }
+  g.position.set(x, y, zf - depth / 2)
+  return g
+}
+/** 高架床书桌抽屉柜三只抽屉的底边高度 */
+const LOFT_DRAWERS = [3, 25, 47]
+/** 抽屉储物床三只抽屉的中心 z */
+const STORAGE_DRAWERS = [-58, 2, 62]
+
 /** 可调高度带抽屉：底部两只抽屉的柜座，角柱上有三档调节孔，床板在高档 */
 function cribDrawer(p: string[]) {
   const [frame, fab, acc] = p
   const g = new THREE.Group()
   // 柜座
   g.add(rbox(124, 24, 66, frame, { y: 1 }, 2))
-  for (const sx of [-1, 1]) {
-    g.add(rbox(56, 18, 1.6, shade(frame, -0.04), { x: sx * 29, y: 4, z: 32.6 }, 0.8))
-    g.add(rbox(20, 2, 0.8, acc, { x: sx * 29, y: 17, z: 33.6 }, 0.4))
-  }
+  for (const sx of [-1, 1])
+    g.add(pullOut([rbox(56, 18, 1.6, shade(frame, -0.04), { x: sx * 29, y: 4, z: 32.6 }, 0.8), rbox(20, 2, 0.8, acc, { x: sx * 29, y: 17, z: 33.6 }, 0.4), drawerTray(52, 14, 50, shade(frame, 0.08), sx * 29, 4.3, 31.8)], 30))
   for (const sx of [-1, 1])
     for (const sz of [-1, 1]) {
       g.add(rbox(5, 100, 5, frame, { x: sx * 62.5, z: sz * 32.5 }, 1.4))
@@ -711,10 +734,12 @@ function loftBed(p: string[]) {
   // 书桌：桌面 + 抽屉柜 + 端板
   g.add(rbox(50, 3, 120, desk, { x: -21, y: 70, z: -20 }, 1))
   g.add(rbox(42, 70, 36, frame, { x: -25, z: -60 }, 1.2))
-  for (const y of [3, 25, 47]) {
-    g.add(rbox(1.6, 20, 32, desk, { x: -3.6, y, z: -60 }, 0.8))
-    g.add(rbox(0.8, 2, 12, C.ink, { x: -2.6, y: y + 15, z: -60 }, 0.3))
-  }
+  // 三斗抽屉朝 +x 拉出：在转了 90° 的局部坐标里做（局部 +z = 世界 +x，局部 x = 世界 -z）
+  const chest = new THREE.Group()
+  chest.rotation.y = Math.PI / 2
+  for (const y of LOFT_DRAWERS)
+    chest.add(pullOut([rbox(32, 20, 1.6, desk, { x: 60, y, z: -3.6 }, 0.8), rbox(12, 2, 0.8, C.ink, { x: 60, y: y + 15, z: -2.6 }, 0.3), drawerTray(28, 16, 36, shade(frame, 0.08), 60, y + 0.5, -4.4)], 22))
+  g.add(chest)
   g.add(rbox(46, 70, 3, frame, { x: -23, z: 38.5 }, 1))
   g.add(bunny(C.sakura, -26, 141.8, -50, 1, 0.3))
   return g
@@ -826,10 +851,12 @@ function storageBed(p: string[]) {
   const g = new THREE.Group()
   g.add(rbox(90, 2, 190, shade(main, -0.2), { y: 0 }, 0.6))
   g.add(rbox(96, 29, 196, main, { y: 2 }, 1.6))
-  for (const z of [-58, 2, 62]) {
-    g.add(rbox(1.6, 22, 56, sub, { x: 47.6, y: 5, z }, 0.8))
-    g.add(rbox(0.8, 2.5, 16, acc, { x: 48.6, y: 21, z }, 0.3))
-  }
+  // +x 一侧三只大抽屉（朝 +x 拉出：局部 +z = 世界 +x，局部 x = 世界 -z）
+  const side = new THREE.Group()
+  side.rotation.y = Math.PI / 2
+  for (const z of STORAGE_DRAWERS)
+    side.add(pullOut([rbox(56, 22, 1.6, sub, { x: -z, y: 5, z: 47.6 }, 0.8), rbox(16, 2.5, 0.8, acc, { x: -z, y: 21, z: 48.6 }, 0.3), drawerTray(52, 18, 40, shade(main, 0.08), -z, 5.5, 46.8)], 30))
+  g.add(side)
   // -x 一侧的装饰面板（和 +x 抽屉面对称）
   g.add(rbox(1.6, 24, 188, sub, { x: -48.2, y: 4 }, 0.8))
   // 书架床头
@@ -974,7 +1001,7 @@ export const KIDS_BEDS: AssetDef[] = [
     ['cute', C.white, C.sakura, C.lilac],
     ['modern', M.white, M.light, M.char],
   ]),
-  A({ ...CRIB, id: 'kb2-crib-drawer', sizeLabel: '升降抽屉', w: 130, d: 70, h: 100, build: cribDrawer }, [
+  A({ ...CRIB, id: 'kb2-crib-drawer', sizeLabel: '升降抽屉', w: 130, d: 70, h: 100, surfaces: [...[-1, 1].map((sx): SurfaceDef => ({ y: 5.1, h: 13, inside: true, slide: 30, shape: [rectPoly(sx * 29 - 24.8, 31.8 - 50 + 1.2, sx * 29 + 24.8, 31.8 - 1.2)] }))], openable: true, build: cribDrawer }, [
     ['modern', M.white, M.light, M.char],
     ['modern', M.char, M.white, M.silver],
     ['nordic', N.oak, N.white, N.blue],
@@ -1064,7 +1091,10 @@ export const KIDS_BEDS: AssetDef[] = [
     surfaces: [
       { y: 73, shape: [rectPoly(-45, -79, 3, 39)], h: 51 },
       { y: 142, shape: [rectPoly(-40, -60, 40, -12)], h: 40 },
+      // 书桌下抽屉柜的三只抽屉（朝 +x 拉，层不跟着动）
+      ...LOFT_DRAWERS.map((y): SurfaceDef => ({ y: y + 1.3, h: 15, inside: true, slideX: 22, shape: [rectPoly(-39.2, -72.8, -5.6, -47.2)] })),
     ],
+    openable: true,
     build: loftBed,
   }, [
     ['modern', M.white, M.light, M.walnut],
@@ -1094,7 +1124,10 @@ export const KIDS_BEDS: AssetDef[] = [
     surfaces: [
       { y: 92, shape: [rectPoly(-47, -97, 47, -77)] },
       { y: 64.5, shape: [rectPoly(-44, -95, 44, -77)], h: 24.5 },
+      // 床座 +x 侧的三只抽屉（朝侧面拉，层不跟着动：东西收在床座里）
+      ...STORAGE_DRAWERS.map((z): SurfaceDef => ({ y: 6.3, h: 17, inside: true, slideX: 30, shape: [rectPoly(8, z - 24.8, 45.6, z + 24.8)] })),
     ],
+    openable: true,
     build: storageBed,
   }, [
     ['nordic', N.white, N.oak, N.gray],

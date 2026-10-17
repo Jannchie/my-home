@@ -5,7 +5,7 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus } from '../toon'
-import { C, CLIP_DROP, S, G, clipLevels, glow, rng, shell, rectPoly, type AssetCategory, type AssetDef, type StyleTag } from '../kit'
+import { C, CLIP_DROP, S, G, SWING_OPEN, clipLevels, glow, movable, rng, shell, rectPoly, type AssetCategory, type AssetDef, type StyleTag, type SurfaceDef } from '../kit'
 
 type Pal = [StyleTag, string[]]
 const M = S.modern
@@ -1825,6 +1825,18 @@ function netSwitch(p: string[]) {
 // 防潮柜 / 展示柜（不 fit，精确对 surfaces）
 // ====================================================================
 
+/** 平开门：把一组部件（门板、把手…）收进以铰链竖线 (hx, hz) 为原点的 Group；left = 铰链在门的左边 */
+function hinged(parts: THREE.Object3D[], hx: number, hz: number, left: boolean) {
+  const g = new THREE.Group()
+  g.position.set(hx, 0, hz)
+  for (const o of parts) {
+    o.position.x -= hx
+    o.position.z -= hz
+    g.add(o)
+  }
+  return movable(g, { kind: 'swing', angle: (left ? -1 : 1) * SWING_OPEN })
+}
+
 /** 电子防潮柜：w × d × h，n 块隔板，foot 是脚高。[柜体, 隔板, 数显] */
 function dryCabinet(w: number, d: number, h: number, n: number, foot: number) {
   const t = 1.2
@@ -1852,28 +1864,25 @@ function dryCabinet(w: number, d: number, h: number, n: number, foot: number) {
     for (const y of ys) {
       g.add(rbox(w - 2 * t - 0.2, shelfT, bodyD - t - 1, shelf, { y: y - shelfT, z: -d / 2 + t + (bodyD - t - 1) / 2 }, 0.2))
     }
-    // 玻璃门：门框 + 半透明玻璃
+    // 玻璃门：门框 + 半透明玻璃 + 把手 + 门上沿的湿度数显，左边铰链，可以打开
     const dz = dFront - doorT / 2
     const fw = 2.2
-    g.add(rbox(w, fw * 1.6, doorT, body, { y: h - fw * 1.6, z: dz }, 0.4))
-    g.add(rbox(w, fw, doorT, body, { y: foot, z: dz }, 0.4))
-    for (const s of [-1, 1]) g.add(rbox(fw, ch - fw * 2.6, doorT, body, { x: s * (w / 2 - fw / 2), y: foot + fw, z: dz }, 0.3))
-    g.add(ghost(rbox(w - fw * 2 + 0.6, ch - fw * 2.6 + 0.6, 0.4, C.glass, { y: foot + fw - 0.3, z: dz }, 0.1), C.glass, 0.2))
-    // 门把手
-    g.add(rbox(1, Math.min(14, ch * 0.3), 1.0, M.silver, { x: w / 2 - fw / 2, y: foot + ch * 0.45, z: dFront + 0.3 }, 0.4))
-    // 湿度数显
+    const door: THREE.Object3D[] = [rbox(w, fw * 1.6, doorT, body, { y: h - fw * 1.6, z: dz }, 0.4), rbox(w, fw, doorT, body, { y: foot, z: dz }, 0.4)]
+    for (const s of [-1, 1]) door.push(rbox(fw, ch - fw * 2.6, doorT, body, { x: s * (w / 2 - fw / 2), y: foot + fw, z: dz }, 0.3))
+    door.push(ghost(rbox(w - fw * 2 + 0.6, ch - fw * 2.6 + 0.6, 0.4, C.glass, { y: foot + fw - 0.3, z: dz }, 0.1), C.glass, 0.2))
+    door.push(rbox(1, Math.min(14, ch * 0.3), 1.0, M.silver, { x: w / 2 - fw / 2, y: foot + ch * 0.45, z: dFront + 0.3 }, 0.4))
     const sy = h - fw * 1.6 + 0.6
-    g.add(glow(5.2, 1.8, disp, { x: -w / 2 + 6, y: sy, z: dFront + 0.1 }, 0.85))
-    g.add(led(-w / 2 + 10.2, sy + 0.9, dFront + 0.15, GREEN, 0.25))
+    door.push(glow(5.2, 1.8, disp, { x: -w / 2 + 6, y: sy, z: dFront + 0.1 }, 0.85))
+    door.push(led(-w / 2 + 10.2, sy + 0.9, dFront + 0.15, GREEN, 0.25))
+    g.add(hinged(door, -w / 2, dFront - doorT, true))
     if (foot > 0) for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(cyl(1.4, 1.4, foot, BLACK, { x: sx * (w / 2 - 3), z: sz * (d / 2 - 3) }, 12))
     return g
   }
   const shape = [rectPoly(x0, z0, -x0, z1)]
-  return {
-    build,
-    surface: h,
-    surfaces: [{ y: floorY, shape }, ...ys.map((y) => ({ y, shape }))],
-  }
+  // 玻璃门里：关着也看得见（glass）
+  const lv = [floorY, ...ys]
+  const surfaces: SurfaceDef[] = lv.map((y, i) => ({ y, h: Math.round(((lv[i + 1] ?? innerTop + shelfT) - shelfT - y - 0.3) * 10) / 10, shape, inside: true, glass: true }))
+  return { build, surface: h, surfaces }
 }
 
 /** 相机展示柜（玻璃层板）：[框架, 层板玻璃, 灯带] */
@@ -1894,10 +1903,14 @@ function displayCabinet(w: number, d: number, h: number, n: number) {
     g.add(rbox(w, t, d, frame, { y: h - t }, 0.6))
     g.add(rbox(w - 2 * t, h - foot - 2 * t, 0.6, shade(frame, 0.08), { y: foot + t, z: -d / 2 + 0.3 }, 0.2))
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(t, h - foot - 2 * t, t, frame, { x: sx * (w / 2 - t / 2), y: foot + t, z: sz * (d / 2 - t / 2) }, 0.4))
-    // 侧面 + 门玻璃
+    // 侧面玻璃；正面两扇玻璃门（铰链在两侧立柱上，右扇带中缝压条）
     for (const s of [-1, 1]) g.add(ghost(rbox(0.4, h - foot - 2 * t, d - 2 * t, C.glass, { x: s * (w / 2 - t / 2), y: foot + t }, 0.1), C.glass, 0.2))
-    g.add(ghost(rbox(w - 2 * t, h - foot - 2 * t, 0.4, C.glass, { y: foot + t, z: d / 2 - t / 2 }, 0.1), C.glass, 0.2))
-    g.add(rbox(0.4, h - foot - 2 * t, 0.6, frame, { y: foot + t, z: d / 2 - 0.3 }, 0.1))
+    const gw = (w - 2 * t) / 2
+    for (const s of [-1, 1]) {
+      const leaf: THREE.Object3D[] = [ghost(rbox(gw - 0.2, h - foot - 2 * t, 0.4, C.glass, { x: (s * gw) / 2, y: foot + t, z: d / 2 - t / 2 }, 0.1), C.glass, 0.2)]
+      if (s > 0) leaf.push(rbox(0.4, h - foot - 2 * t, 0.6, frame, { y: foot + t, z: d / 2 - 0.3 }, 0.1))
+      g.add(hinged(leaf, s * (w / 2 - t), d / 2 - t / 2 - 0.2, s < 0))
+    }
     for (const y of ys) {
       g.add(ghost(rbox(w - 2 * t - 0.2, 0.8, d - 2 * t - 1.2, glassC, { y: y - 0.8, z: -0.6 }, 0.2), glassC, 0.45))
       g.add(rbox(w - 2 * t - 0.2, 0.3, 0.3, frame, { y: y - 0.8, z: d / 2 - t - 1.4 }, 0.1))
@@ -1906,7 +1919,8 @@ function displayCabinet(w: number, d: number, h: number, n: number) {
     return g
   }
   const shape = [rectPoly(x0, z0, -x0, z1)]
-  return { build, surface: h, surfaces: [{ y: floorY, shape }, ...ys.map((y) => ({ y, shape }))] }
+  const lv = [floorY, ...ys]
+  return { build, surface: h, surfaces: lv.map((y, i): SurfaceDef => ({ y, h: Math.round(((lv[i + 1] ?? top + 0.8) - 0.8 - y - 0.3) * 10) / 10, shape, inside: true, glass: true })) }
 }
 
 // ====================================================================
@@ -2377,14 +2391,14 @@ export const PROPS_OFFICE: AssetDef[] = [
   ], netSwitch),
 
   // ---------- 防潮柜 / 展示柜 ----------
-  def('of-dry-30', '防潮柜', 'storage', [30, 33, 40], DRY, DRY30.build, { family: 'dry-cabinet', sizeLabel: '30L 桌面', surface: DRY30.surface, surfaces: DRY30.surfaces, prop: undefined }, true),
-  def('of-dry-50', '防潮柜', 'storage', [35, 36, 52], DRY, DRY50.build, { family: 'dry-cabinet', sizeLabel: '50L', surface: DRY50.surface, surfaces: DRY50.surfaces, prop: undefined }, true),
-  def('of-dry-100', '防潮柜', 'storage', [40, 38, 75], DRY, DRY100.build, { family: 'dry-cabinet', sizeLabel: '100L', surface: DRY100.surface, surfaces: DRY100.surfaces, prop: undefined }, true),
-  def('of-dry-160', '防潮柜', 'storage', [40, 40, 130], DRY, DRY160.build, { family: 'dry-cabinet', sizeLabel: '160L 落地', surface: DRY160.surface, surfaces: DRY160.surfaces, prop: undefined }, true),
+  def('of-dry-30', '防潮柜', 'storage', [30, 33, 40], DRY, DRY30.build, { family: 'dry-cabinet', sizeLabel: '30L 桌面', surface: DRY30.surface, surfaces: DRY30.surfaces, prop: undefined, openable: true }, true),
+  def('of-dry-50', '防潮柜', 'storage', [35, 36, 52], DRY, DRY50.build, { family: 'dry-cabinet', sizeLabel: '50L', surface: DRY50.surface, surfaces: DRY50.surfaces, prop: undefined, openable: true }, true),
+  def('of-dry-100', '防潮柜', 'storage', [40, 38, 75], DRY, DRY100.build, { family: 'dry-cabinet', sizeLabel: '100L', surface: DRY100.surface, surfaces: DRY100.surfaces, prop: undefined, openable: true }, true),
+  def('of-dry-160', '防潮柜', 'storage', [40, 40, 130], DRY, DRY160.build, { family: 'dry-cabinet', sizeLabel: '160L 落地', surface: DRY160.surface, surfaces: DRY160.surfaces, prop: undefined, openable: true }, true),
   def('of-camera-showcase', '相机展示柜', 'storage', [60, 36, 160], [
     ['modern', [M.black, C.glass, '#fff6e0']],
     ['modern', [M.white, C.glass, '#fff6e0']],
     ['nordic', [N.oak, C.glass, '#fff2c8']],
     ['industrial', [I.walnut, C.glass, '#ffe8c0']],
-  ], SHOWCASE.build, { surface: SHOWCASE.surface, surfaces: SHOWCASE.surfaces, prop: undefined }, true),
+  ], SHOWCASE.build, { surface: SHOWCASE.surface, surfaces: SHOWCASE.surfaces, prop: undefined, openable: true }, true),
 ]

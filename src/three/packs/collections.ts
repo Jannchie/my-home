@@ -8,6 +8,7 @@ import { ParametricGeometry } from 'three/addons/geometries/ParametricGeometry.j
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js'
 import { ball, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, S, legs, paintPanel, rectPoly, rng, rod, type AssetCategory, type AssetDef, type Poly, type StyleTag } from '../kit'
+import { swingDoor } from './styles-world'
 
 type V3 = [number, number, number]
 type RY = [number, number]
@@ -1914,14 +1915,15 @@ function curioCabinet(w: number, d: number, H: number, n: number) {
       for (const k of [-1, 1]) fr.add(rbox(2.4, dh - 4.8, 1.5, main, { x: (k * (dw - 2.4)) / 2, y: 2.4 }, 0.5))
       fr.add(ghost(rbox(dw - 4.8, dh - 4.8, 0.4, GLASS, { y: 2.4 }, 0.1), GLASS, GLASS_A))
       fr.add(ball(0.6, knob, { x: -s * (dw / 2 - 1.2), y: dh / 2, z: 0.7 }))
-      g.add(P(fr, s * (dw / 2 + 0.1), floor + 0.2, d / 2 - 1))
+      // 玻璃门：铰链在外侧立柱旁，绕门的正面边转开
+      g.add(swingDoor([P(fr, s * (dw / 2 + 0.1), floor + 0.2, d / 2 - 1)], s * (dw + 0.1), d / 2 - 0.25, s < 0 ? 'left' : 'right'))
     }
     return g
   }
 }
 function curioSurfaces(w: number, d: number, H: number, n: number) {
   const { clear, ys } = curioSpec(H, n)
-  return ys.map((y) => ({ y, h: clear, shape: [rectPoly(-w / 2 + 3, -d / 2 + 1, w / 2 - 3, d / 2 - 2.5)] }))
+  return ys.map((y) => ({ y, h: clear, inside: true, glass: true, shape: [rectPoly(-w / 2 + 3, -d / 2 + 1, w / 2 - 3, d / 2 - 2.5)] }))
 }
 
 const CURIO_PALS: Pal[] = [
@@ -2074,15 +2076,15 @@ function litShowcase(p: string[]) {
   g.add(lit(rbox(w - 6, 0.4, d - 6, light, { y: inTop }, 0.1), light, 0.9))
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(2, inTop + 0.4 - floor, 2, frame, { x: sx * (w / 2 - 1), y: floor, z: sz * (d / 2 - 1) }, 0.3))
   const gh = inTop + 0.4 - floor
-  for (const s of [-1, 1]) {
-    g.add(ghost(rbox(0.5, gh, d - 4, GLASS, { x: s * (w / 2 - 1), y: floor }, 0.1), GLASS, GLASS_A))
-    g.add(ghost(rbox(w - 4, gh, 0.5, GLASS, { y: floor, z: s * (d / 2 - 1) }, 0.1), GLASS, GLASS_A))
-  }
+  for (const s of [-1, 1]) g.add(ghost(rbox(0.5, gh, d - 4, GLASS, { x: s * (w / 2 - 1), y: floor }, 0.1), GLASS, GLASS_A))
+  // 背面玻璃固定，正面玻璃是一扇门（铰链在左，把手在右）
+  g.add(ghost(rbox(w - 4, gh, 0.5, GLASS, { y: floor, z: -(d / 2 - 1) }, 0.1), GLASS, GLASS_A))
+  const front = [ghost(rbox(w - 4, gh, 0.5, GLASS, { y: floor, z: d / 2 - 1 }, 0.1), GLASS, GLASS_A), rbox(0.6, 14, 0.6, frame, { x: w / 2 - 5, y: 74, z: d / 2 - 0.4 }, 0.2)]
+  g.add(swingDoor(front, -(w / 2 - 2), d / 2 - 0.75, 'left'))
   for (let k = 1; k < LS.n; k++) {
     g.add(ghost(rbox(w - 4, T, d - 4.6, GLASS, { y: ys[k] - T, z: -0.3 }, 0.1), GLASS, 0.3))
     g.add(rbox(w - 4, T, 0.6, frame, { y: ys[k] - T, z: d / 2 - 2.3 }, 0.1))
   }
-  g.add(rbox(0.6, 14, 0.6, frame, { x: w / 2 - 5, y: 74, z: d / 2 - 0.4 }, 0.2))
   // 顶部的两颗射灯
   for (const s of [-1, 1]) g.add(lit(cyl(1.2, 1.4, 0.8, light, { x: s * 10, y: inTop - 0.7 }, 16), light, 1))
   return g
@@ -2448,12 +2450,14 @@ export const COLLECTIONS: AssetDef[] = [
     sizeLabel: '90',
     surface: 180,
     surfaces: curioSurfaces(90, 40, 180, 5),
+    openable: true,
   }),
   def('col-curio-cabinet-60', '古董陈列柜', 'storage', [60, 36, 160], CURIO_PALS, curioCabinet(60, 36, 160, 4), {
     family: 'col-curio-cabinet',
     sizeLabel: '60',
     surface: 160,
     surfaces: curioSurfaces(60, 36, 160, 4),
+    openable: true,
   }),
   def('col-bogu-shelf', '博古架', 'storage', [BOGU.w, BOGU.d, BOGU.h], BOGU_PALS, bogu, {
     surface: BOGU.h,
@@ -2502,6 +2506,7 @@ export const COLLECTIONS: AssetDef[] = [
   }),
   def('col-lit-showcase', '带灯展示柜', 'storage', [LS.w, LS.d, LS.h], LS_PALS, litShowcase, {
     surface: LS.h,
-    surfaces: lsSpec().ys.map((y) => ({ y, h: lsSpec().clear, shape: [rectPoly(-LS.w / 2 + 2, -LS.d / 2 + 1.5, LS.w / 2 - 2, LS.d / 2 - 1.5)] })),
+    surfaces: lsSpec().ys.map((y) => ({ y, h: lsSpec().clear, inside: true, glass: true, shape: [rectPoly(-LS.w / 2 + 2, -LS.d / 2 + 1.5, LS.w / 2 - 2, LS.d / 2 - 1.5)] })),
+    openable: true,
   }),
 ]

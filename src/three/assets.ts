@@ -4,7 +4,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, face, leaf, plate, puck, rbox, shade, toon, torus, tray } from './toon'
 import { fridgeSpotModel, washerSpotModel } from './appliances'
-import { holePanel, C, G, S, ellipsePoly, glow, legs, rectPoly, rng, shell, type AssetDef, type StyleTag } from './kit'
+import { holePanel, C, G, S, carcass, drawerBox, drawerLevel, ellipsePoly, flapDoor, glow, hangingPipe, hingedDoor, legs, pipeHook, rectPoly, rng, shell, shelvesIn, type AssetDef, type StyleTag } from './kit'
 import { PACKS } from './packs'
 import { soft, type SoftFn } from './packs/more-variety'
 import { applyDims, warnIfDimsStale } from './dims'
@@ -59,13 +59,34 @@ function coffeeTable(p: string[]) {
   return g
 }
 
+/** 柜内可摆区域：柜体外宽 w、外深 dc（柜体中心在 z = zc），板厚 t */
+function cabInner(w: number, dc: number, zc: number, t = 1.8) {
+  return rectPoly(-w / 2 + t + 0.4, zc - dc / 2 + t + 0.4, w / 2 - t - 0.4, zc + dc / 2 - 0.8)
+}
+
+// 电视柜：空心柜体分三格，每格一扇往下翻的门（关着时和以前一样是三块门板）
+const TV_BOARD = { w: 150, d: 42, y0: 8, h: 36 }
+const TV_BOARD_SURF: NonNullable<AssetDef['surfaces']> = (() => {
+  const { w, d, y0, h } = TV_BOARD
+  const dc = d - 1.6
+  const z0 = -0.8 - dc / 2 + 1.8 + 0.4
+  const z1 = -0.8 + dc / 2 - 0.8
+  const cells = [
+    [-w / 2 + 2.2, -w / 6 - 1.3],
+    [-w / 6 + 1.3, w / 6 - 1.3],
+    [w / 6 + 1.3, w / 2 - 2.2],
+  ].map(([a, b]) => rectPoly(a, z0, b, z1))
+  return [{ y: y0 + 1.8, h: h - 3.6 - 0.5, inside: true, shape: cells }]
+})()
 function tvBoard(p: string[]) {
   const [main] = p
-  const w = 150
-  const d = 42
-  const g = G(legs(w - 10, d - 10, 8, C.woodD, 2, 4))
-  g.add(rbox(w, 36, d, main, { y: 8 }, 3))
-  for (const s of [-1, 0, 1]) g.add(rbox(w / 3 - 6, 26, 2, shade(main, s === 0 ? -0.08 : 0.04), { x: (s * w) / 3, y: 13, z: d / 2 }, 1))
+  const { w, d, y0, h } = TV_BOARD
+  const g = G(legs(w - 10, d - 10, y0, C.woodD, 2, 4))
+  const body = carcass(w, h, d - 1.6, main)
+  body.position.set(0, y0, -0.8)
+  for (const s of [-1, 1]) body.add(rbox(1.8, h - 3.6, d - 3.4, main, { x: (s * w) / 6, y: 1.8, z: 0.1 }, 0.3))
+  g.add(body)
+  for (const s of [-1, 0, 1]) g.add(flapDoor({ x0: (s * w) / 3 - w / 6, x1: (s * w) / 3 + w / 6, y0, y1: y0 + h, z: d / 2, color: shade(main, s === 0 ? -0.08 : 0.04), hinge: 'bottom', knob: false }))
   return g
 }
 
@@ -231,31 +252,54 @@ function bed(w: number, p: string[]) {
   return g
 }
 
+// 床头柜：空心柜体 + 两层抽屉（拉出 0.6 深，里面能放东西）
+const NIGHTSTAND_DRAWERS: [number, number][] = [
+  [8, 26],
+  [26, 44],
+]
+const nsDrawer = (y0: number, y1: number) => ({ x0: -21, x1: 21, y0, y1, z: 15.6, depth: 30 })
+const NIGHTSTAND_SURF = NIGHTSTAND_DRAWERS.map(([a, b]) => drawerLevel(nsDrawer(a, b)))
 function nightstand(p: string[]) {
   const [main] = p
   // 柜体略往后收，让抽屉面板和拉手也落在声明的 36cm 进深以内
   const g = G(legs(40, 34, 8, shade(main, -0.12), 1.6, 4))
-  g.add(rbox(42, 36, 33, main, { y: 8, z: -1.5 }, 3))
-  for (const y of [12, 28]) {
-    g.add(rbox(36, 13, 1.5, shade(main, 0.06), { y, z: 15.3 }, 1))
-    g.add(ball(1.5, C.woodD, { y: y + 6.5, z: 16.6 }))
-  }
+  const body = carcass(42, 36, 32, main)
+  body.position.set(0, 8, -2)
+  g.add(body)
+  const c = shade(main, 0.06)
+  for (const [a, b] of NIGHTSTAND_DRAWERS) g.add(drawerBox({ ...nsDrawer(a, b), color: c, knob: false, front: (w, h) => [rbox(w, h, 1.6, c, { z: -0.8 }, 1), ball(1.5, C.woodD, { y: h / 2, z: 0.6 })] }))
   return g
 }
 
+// 衣柜：空心柜体，对开门（约 100° 转开），里面一根挂衣杆 + 杆上方一块层板
+const WARDROBE = { w: 100, d: 58, h: 188, y0: 8, cw: 96, cd: 54, cz: -2, pipe: 158, shelf: 166 }
+const WARDROBE_SURF: NonNullable<AssetDef['surfaces']> = (() => {
+  const { y0, cw, cd, cz, pipe, shelf, h } = WARDROBE
+  const inner = cabInner(cw, cd, cz)
+  const ceil = h - 6 - 1.8
+  return [
+    { y: y0 + 1.8, h: shelf - 1.6 - y0 - 1.8 - 0.5, inside: true, shape: [inner] },
+    { y: shelf, h: ceil - shelf - 0.5, inside: true, shape: [inner] },
+    pipeHook(-cw / 2 + 1.8, cw / 2 - 1.8, pipe, cz + 1, pipe - y0 - 1.8 - 6),
+  ]
+})()
 function wardrobe(p: string[]) {
   const [main, knob] = p
-  const w = 100
-  const d = 58
-  const h = 188
-  // 顶冠、门板、拉手都收在声明的 w × d 以内（以前顶冠和门板各伸出 2~4cm，实际占地比平面图大）
-  const g = G(legs(w, d, 8, shade(main, -0.12), 2, 6))
-  g.add(rbox(w - 4, h - 14, d - 4, main, { y: 8, z: -2 }, 3))
+  const { w, d, h, y0, cw, cd, cz, pipe, shelf } = WARDROBE
+  // 顶冠、门板、拉手都收在声明的 w × d 以内
+  const g = G(legs(w, d, y0, shade(main, -0.12), 2, 6))
+  const body = carcass(cw, h - 6 - y0, cd, main)
+  body.position.set(0, y0, cz)
+  body.add(shelvesIn(cw, cd, [shelf - y0], shade(main, 0.04)))
+  g.add(body)
+  g.add(hangingPipe(-cw / 2 + 1.8, cw / 2 - 1.8, pipe, cz + 1))
   g.add(rbox(w, 6, d - 2, shade(main, -0.06), { y: h - 6, z: -1 }, 2.5))
+  const door = shade(main, 0.05)
   for (const s of [-1, 1]) {
-    g.add(rbox((w - 4) / 2 - 1.5, h - 32, 2, shade(main, 0.05), { x: (s * (w - 4)) / 4, y: 12, z: d / 2 - 3 }, 2))
-    // 竖条拉手（衣柜门高，圆钮太小看不清）
-    g.add(rbox(1.8, 26, 1.8, knob, { x: s * 4.5, y: 84, z: d / 2 - 1.3 }, 0.8))
+    const left = s < 0
+    // 竖条拉手（衣柜门高，圆钮太小看不清），在两扇门相接的一侧
+    const panel = (pw: number, ph: number) => [rbox(pw, ph, 2, door, {}, 2), rbox(1.8, 26, 1.8, knob, { x: (left ? 1 : -1) * (pw / 2 - 4.5), y: 84 - y0 - 3, z: 1.6 }, 0.8)]
+    g.add(hingedDoor({ x0: left ? -cw / 2 : 0, x1: left ? 0 : cw / 2, y0: y0 + 2, y1: h - 6.5, z: d / 2 - 1.2, hinge: left ? 'left' : 'right', color: door, th: 2, knob: false, panel }))
   }
   return g
 }
@@ -303,18 +347,24 @@ function deskChair(p: string[]) {
   return g
 }
 
+// 五斗柜：空心柜体 + 三层抽屉（拉出 0.6 深，抽屉格能放东西）
+const DRESSER_ROWS: [number, number][] = [
+  [8, 33.3],
+  [33.3, 58.7],
+  [58.7, 84],
+]
+const drDrawer = (y0: number, y1: number) => ({ x0: -40, x1: 40, y0, y1, z: 19.6, depth: 37 })
+const DRESSER_SURF = DRESSER_ROWS.map(([a, b]) => drawerLevel(drDrawer(a, b)))
 function dresser(p: string[]) {
   const [main, knob] = p
-  const w = 80
-  const d = 44
   // 柜体往后收 4cm，抽屉面板和拉手落在声明的进深以内
-  const g = G(legs(w, d, 8, shade(main, -0.12), 2, 5))
-  g.add(rbox(w, 76, d - 4, main, { y: 8, z: -2 }, 3))
-  for (let i = 0; i < 3; i++) {
-    const y = 12 + i * 24
-    g.add(rbox(w - 8, 20, 1.5, shade(main, 0.05), { y, z: d / 2 - 3.3 }, 1.5))
-    for (const s of [-1, 1]) g.add(ball(2, knob, { x: s * 18, y: y + 10, z: d / 2 - 1.9 }))
-  }
+  const g = G(legs(80, 44, 8, shade(main, -0.12), 2, 5))
+  const body = carcass(80, 76, 40, main)
+  body.position.set(0, 8, -2)
+  g.add(body)
+  const c = shade(main, 0.05)
+  for (const [a, b] of DRESSER_ROWS)
+    g.add(drawerBox({ ...drDrawer(a, b), color: c, knob: false, front: (w, h) => [rbox(w, h, 1.6, c, { z: -0.8 }, 1.5), ...[-1, 1].map((s) => ball(2, knob, { x: s * 18, y: h / 2, z: 0.6 }))] }))
   return g
 }
 
@@ -641,16 +691,23 @@ function standMirror(p: string[]) {
 
 // ---------- 玄关 ----------
 
+// 鞋柜：空心柜体 + 对开门，里面四层鞋板
+const SHOE_CAB = { w: 80, d: 36, y0: 6, h: 94, cd: 33, cz: -1.5, shelves: [27.6, 47.4, 67.2] }
+const SHOE_CAB_SURF: NonNullable<AssetDef['surfaces']> = (() => {
+  const { w, y0, h, cd, cz, shelves } = SHOE_CAB
+  const ys = [y0 + 1.8, ...shelves]
+  const top = y0 + h - 1.8
+  return ys.map((y, i) => ({ y, h: Math.round(((ys[i + 1] ?? top + 1.6) - 1.6 - y - 0.5) * 10) / 10, inside: true, shape: [cabInner(w, cd, cz)] }))
+})()
 function shoeCabinet(p: string[]) {
   const [main] = p
-  const w = 80
-  const d = 36
-  const g = G(legs(w, d, 6, shade(main, -0.12), 1.6, 5))
-  g.add(rbox(w, 94, d, main, { y: 6 }, 2.5))
-  for (const s of [-1, 1]) {
-    g.add(rbox(w / 2 - 5, 86, 1.5, shade(main, 0.05), { x: (s * w) / 4, y: 10, z: d / 2 }, 1.5))
-    g.add(rbox(1.6, 12, 2, C.woodD, { x: s * 4, y: 56, z: d / 2 + 1.5 }, 0.6))
-  }
+  const { w, d, y0, h, cd, cz, shelves } = SHOE_CAB
+  const g = G(legs(w, d, y0, shade(main, -0.12), 1.6, 5))
+  const body = carcass(w, h, cd, main)
+  body.position.set(0, y0, cz)
+  body.add(shelvesIn(w, cd, shelves.map((y) => y - y0), shade(main, 0.04)))
+  g.add(body)
+  for (const s of [-1, 1]) g.add(hingedDoor({ x0: s < 0 ? -w / 2 : 0, x1: s < 0 ? 0 : w / 2, y0, y1: y0 + h, z: d / 2 - 1.4, hinge: s < 0 ? 'left' : 'right', color: shade(main, 0.05), knob: C.woodD, knobY: 50 - y0 }))
   return g
 }
 
@@ -1214,7 +1271,7 @@ export const ASSETS: AssetDef[] = [
   { id: 'sofa3', name: '沙发', family: 'sofa', sizeLabel: '三人', category: 'living', w: 210, d: 86, h: 80, ...sofaColors, build: (p) => sofa(210, p) },
   { id: 'armchair', name: '单人沙发', category: 'living', w: 80, d: 80, h: 80, ...sofaColors, build: armchair },
   { id: 'coffee-table', name: '圆茶几', family: 'coffee-table', sizeLabel: '标准', category: 'living', w: 84, d: 84, h: 38, surface: 38, surfaceShape: [ellipsePoly(39)], ...woods, build: coffeeTable },
-  { id: 'tv-board', name: '电视柜', family: 'lv-tv-low', sizeLabel: '150', category: 'living', w: 150, d: 42, h: 44, surface: 44, ...woods, build: tvBoard },
+  { id: 'tv-board', name: '电视柜', family: 'lv-tv-low', sizeLabel: '150', category: 'living', w: 150, d: 42, h: 44, surface: 44, ...woods, surfaces: TV_BOARD_SURF, openable: true, build: tvBoard },
   {
     id: 'rug',
     name: '方地毯',
@@ -1297,7 +1354,7 @@ export const ASSETS: AssetDef[] = [
 
   // 床：按日本规格的床垫宽（长 195），床架两侧各多 4cm。id 里 single / double 沿用旧存档
   ...BEDS.map(([id, size, m], i): AssetDef => ({ id, name: '床', family: 'bed', sizeLabel: size, category: 'bedroom', w: m + 8, d: 210, h: 80, surface: 50, surfaceShape: [rectPoly(-m / 2 + 4, -30, m / 2 - 4, 98)], ...bedColors(i), build: (p) => bed(m, p) })),
-  { id: 'nightstand', name: '床头柜', family: 'nightstand', sizeLabel: '标准', category: 'bedroom', w: 42, d: 36, h: 44, surface: 44, ...woods, build: nightstand },
+  { id: 'nightstand', name: '床头柜', family: 'nightstand', sizeLabel: '标准', category: 'bedroom', w: 42, d: 36, h: 44, surface: 44, surfaces: NIGHTSTAND_SURF, openable: true, ...woods, build: nightstand },
   {
     id: 'wardrobe',
     name: '衣柜',
@@ -1312,6 +1369,8 @@ export const ASSETS: AssetDef[] = [
       [C.woodL, C.sky],
       [C.sakura, C.white],
     ]),
+    surfaces: WARDROBE_SURF,
+    openable: true,
     build: wardrobe,
   },
   {
@@ -1358,6 +1417,8 @@ export const ASSETS: AssetDef[] = [
       [C.wood, C.white],
       [C.mint, C.white],
     ]),
+    surfaces: DRESSER_SURF,
+    openable: true,
     build: dresser,
   },
   { id: 'stand-mirror', name: '穿衣镜', category: 'bedroom', w: 46, d: 40, h: 158, ...sty({ cute: [[C.white], [C.sakura], [C.lemon]], nordic: [[N.oak]], modern: [[M.black]], industrial: [[I.iron]], retro: [[R.caramel]] }), build: standMirror },
@@ -1420,7 +1481,7 @@ export const ASSETS: AssetDef[] = [
   { id: 'cat-tower', name: '猫爬架', category: 'pets', w: 60, d: 60, h: 136, ...sty({ cute: [[C.sakura, C.white], [C.sky, C.cream], [C.mint, C.white], [C.lemon, C.peach]], nordic: [[N.oak, N.linen]], modern: [[M.light, M.char]] }), build: catTower },
   { id: 'laundry-basket', name: '洗衣篮', family: 'laundry-basket', sizeLabel: '标准', category: 'storage', w: 42, d: 42, h: 44, ...sty({ cute: [[C.woodL], [C.sky], [C.white], [C.sakura]], nordic: [[N.linen]], modern: [[M.gray]], japanese: [[J.hinoki]] }), build: laundryBasket },
 
-  { id: 'shoe-cabinet', name: '鞋柜', family: 'shoe-cabinet', sizeLabel: '标准', category: 'entrance', w: 80, d: 36, h: 100, surface: 100, ...woods, build: shoeCabinet },
+  { id: 'shoe-cabinet', name: '鞋柜', family: 'shoe-cabinet', sizeLabel: '标准', category: 'entrance', w: 80, d: 36, h: 100, surface: 100, surfaces: SHOE_CAB_SURF, openable: true, ...woods, build: shoeCabinet },
   { id: 'umbrella-stand', name: '伞架', family: 'umbrella-stand', sizeLabel: '经典圆桶', category: 'entrance', w: 24, d: 24, h: 80, ...sty({ cute: [[C.white], [C.sky], [C.sakura]], nordic: [[N.white]], modern: [[M.char]], japanese: [[J.dark]], industrial: [[I.iron]] }), build: umbrellaStand },
 
   { id: 'planter', name: '花箱', family: 'planter', sizeLabel: '标准', category: 'outdoor', w: 64, d: 24, h: 50, ...pots([[C.white], [C.woodL], [C.peach], [C.sky]]), build: planter },

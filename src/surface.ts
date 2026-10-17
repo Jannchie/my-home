@@ -48,8 +48,9 @@ export function levels(asset: string, open = false): Level[] {
   if (def.surface) out.push({ y: def.surface, polys: def.surfaceShape ?? [full], kind: 'shelf', h: Infinity })
   for (const s of def.surfaces ?? []) {
     const dz = open && s.slide ? s.slide : 0
+    const dx = open && s.slideX ? s.slideX : 0
     const polys = s.shape ?? [full]
-    out.push({ y: s.y, polys: dz ? polys.map((pl) => pl.map(([x, z]): [number, number] => [x, z + dz])) : polys, kind: s.kind ?? 'shelf', h: s.h ?? Infinity, inside: !!s.inside && !s.glass })
+    out.push({ y: s.y, polys: dz || dx ? polys.map((pl) => pl.map(([x, z]): [number, number] => [x + dx, z + dz])) : polys, kind: s.kind ?? 'shelf', h: s.h ?? Infinity, inside: !!s.inside && !s.glass })
   }
   return out
 }
