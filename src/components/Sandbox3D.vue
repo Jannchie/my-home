@@ -1005,17 +1005,60 @@ function localRay() {
   return r
 }
 
+/** 射线命中的是看得见的东西：Raycaster 不管 visible。fading 时把正在淡出的（跟着墙藏起来的壁挂物）也当成看不见 */
+function shown(o: THREE.Object3D | null, fading = false) {
+  for (; o; o = o.parent) if (!o.visible || (fading && o.userData.target === 1)) return false
+  return true
+}
+/** 挡得住视线的面：半透明（透明墙、玻璃）的不算 */
+function opaqueHit(h: THREE.Intersection) {
+  const m = (h.object as THREE.Mesh).material
+  return (Array.isArray(m) ? m : [m]).some((x) => x && x.colorWrite !== false && !(x.transparent && x.opacity < 0.5))
+}
+/** 壁挂物又薄又小（描边还比本体外扩一圈）：点在它边上、射线落到墙上时，包围盒外扩这么多也算点中 */
+const WALL_PICK_PAD = 4
+const padBox = new THREE.Box3()
+const padHit = new THREE.Vector3()
+/** 射线打到墙上（far 之前没碰到家具）：找包围盒外扩后被射线穿过的、最近的壁挂物 */
+function wallItemNear(far: number) {
+  let best: string | null = null
+  let bestD = far
+  for (const f of fv().furniture) {
+    const def = ASSET_MAP.get(f.asset)
+    const o = objs.get(f.id)?.obj
+    if (!def || !(def.mount || def.stick) || !o || !shown(o, true)) continue
+    padBox.setFromObject(o).expandByScalar(WALL_PICK_PAD)
+    if (!raycaster.ray.intersectBox(padBox, padHit)) continue
+    const d = padHit.distanceTo(raycaster.ray.origin)
+    if (d <= bestD) {
+      bestD = d
+      best = f.id
+    }
+  }
+  return best
+}
+
 function pickFurniture(e: PointerEvent): string | null {
   setRay(e)
   // 只点当前楼层的家具（上层隐藏 / 下层被挡住时都不会选到别的楼层）
   const fhits = raycaster.intersectObject(furnLayer(activeFloor.value), true)
+  // 墙、楼板挡住的不算：点在墙上不会选到墙后面房间里的家具
+  const house = floorGroups.find((g) => g.floor.id === activeFloor.value)?.group
+  const wall = house ? raycaster.intersectObject(house, true).find((h) => (h.object as THREE.Mesh).isMesh && shown(h.object) && opaqueHit(h)) : undefined
+  const far = wall ? wall.distance + 0.5 : Infinity
   // 射线经过的家具（去重、由近到远）
   const ids: string[] = []
   for (const h of fhits) {
+    if (h.distance > far) break
+    if (!shown(h.object, true)) continue
     let o: THREE.Object3D | null = h.object
     while (o && !o.userData.furnitureId) o = o.parent
     const id = o?.userData.furnitureId as string | undefined
     if (id && !ids.includes(id)) ids.push(id)
+  }
+  if (!ids.length && wall) {
+    const id = wallItemNear(far)
+    if (id) return id
   }
   // 走动中的宠物 / 机器人：点中就选中它来源的那件家具（选中后角色回到原位静止，方便拖动）
   if (!ids.length) return actors.pick(raycaster)
