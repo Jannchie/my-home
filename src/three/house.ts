@@ -162,13 +162,15 @@ function floorSlab(r: Room, bottom = BASE, holes: Vec[][] = []) {
     if (Math.abs(signedArea(cut)) >= Math.abs(signedArea(r.points)) - 4) return null
     shape.holes.push(new THREE.Path(toV2(insetToward(cut, 0.5))))
   }
-  const top = floorY(r)
+  // 铺榻榻米的和室：楼板低一张榻榻米的厚度，榻榻米面和别的房间地面齐平，楼板只在缝里露出来（深色）
+  const sunk = hasTatami(r)
+  const top = floorY(r) - (sunk ? TATAMI_T : 0)
   bottom = Math.min(bottom, top - 1)
   const depth = top - bottom
   const geo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false })
   geo.rotateX(-Math.PI / 2)
   const sideMat = toon('#e9dccb')
-  const m = new THREE.Mesh(geo, [floorMaterial(r.kind), sideMat])
+  const m = new THREE.Mesh(geo, [sunk ? toon('#8e8a5e') : floorMaterial(r.kind), sideMat])
   m.position.y = bottom
   m.receiveShadow = true
   return m
@@ -242,14 +244,19 @@ function structureSlab(outline: Vec[], holes: Vec[][], wallOuter: number) {
   return m
 }
 
+/** 榻榻米厚度：嵌在降低的楼板里，面和地面齐平 */
+const TATAMI_T = 3
+const hasTatami = (r: Room) => r.kind === 'japanese' && isAxisRect(r.points)
+
 /** 和室：按畳割り铺榻榻米 */
 function tatami(r: Room, wall: number) {
   const g = new THREE.Group()
-  if (!isAxisRect(r.points)) return g
+  if (!hasTatami(r)) return g
   const b = bbox(r.points)
   const k = wall / 2
+  const y = floorY(r) - TATAMI_T
   for (const t of tatamiLayout(b.x0 + k, b.y0 + k, b.x1 - k, b.y1 - k)) {
-    const mat = rbox(t.w - 1.2, 3, t.h - 1.2, t.half ? '#d6dc9c' : '#cfd893', { x: t.x + t.w / 2, z: t.y + t.h / 2 }, 0.8)
+    const mat = rbox(t.w - 1.2, TATAMI_T, t.h - 1.2, t.half ? '#d6dc9c' : '#cfd893', { x: t.x + t.w / 2, y, z: t.y + t.h / 2 }, 0.8)
     mat.castShadow = false
     g.add(mat)
   }
@@ -688,7 +695,7 @@ function buildWalls(plan: Plan, H0: number, infos: OpeningInfo[], opts: HouseOpt
   // 不参与让开 / 压低的部分（墙脚细线、压到地面下的窗台门槛）：全屋按投影设置各合成一个网格
   const statics: THREE.Mesh[] = []
   const stub = (a: Vec, b: Vec, t: number) => {
-    // 墙脚线顶面 2.4：低于榻榻米（3），不和它共面
+    // 墙脚线顶面 2.4（和室里像一圈畳寄せ，高出榻榻米面）
     const m = wallStub(a, b, t + 0.4, bottom, 2.4, isOuter)
     if (m) statics.push(m)
   }
