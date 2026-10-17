@@ -12,6 +12,33 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '1.6.0',
+    date: '2026-10-17',
+    notes: {
+      zh: [
+        '多层住宅统一分配房间：每人一间，夫妻同室，长辈优先住一楼，孩子和父母同层或相邻；住户面板显示每人所在楼层和房间',
+        '一键布置按层协调：冰箱、洗衣机全户只放一台，每层都有垃圾桶，楼梯口和走廊留出通道，楼梯下做成储物角',
+        '猫、狗、机器狗和人形机器人会走楼梯上下楼；扫地机器人等只在本层活动；人形机器人会走动了',
+        '户建新增 L 形楼梯和客厅开放式楼梯；复式挑空边改为栏杆，从楼上能看到客厅；家具拖进院子时高度正确，院子物件也检查碰撞',
+        '楼层淡入淡出改为整层均匀变淡，不再透出内墙和家具，过程更从容',
+      ],
+      ja: [
+        '複数階の住まいで部屋を一括で割り当て：一人一部屋、夫婦は同室、高齢者は 1 階優先、子どもは親と同じ階か隣の階。住人パネルに各自の階と部屋を表示',
+        'おまかせ配置を階ごとに調整：冷蔵庫・洗濯機は家に 1 台、各階にゴミ箱、階段の上り口と廊下は通路を確保、階段下は収納コーナーに',
+        '猫・犬・ロボット犬・人型ロボットが階段で上り下りするように。ロボット掃除機などは同じ階だけで動きます。人型ロボットが歩くように',
+        '戸建てに L 字階段とリビング階段を追加。メゾネットの吹き抜けは手すりになり、上の階からリビングが見えます。庭へ家具をドラッグしたときの高さを修正し、庭の物も干渉チェックの対象に',
+        '階のフェードは階全体が均一に薄くなるように。内壁や家具が透けて見えず、変化もゆっくりに',
+      ],
+      en: [
+        'Multi-floor homes assign rooms for the whole household: one room each, couples together, elders downstairs first, children on or next to their parents' floor; the household panel shows each person's floor and room',
+        'Auto-furnish coordinates floors: one fridge and one washer per home, a bin on every floor, clear paths at stairs and hallways, and storage nooks under the stairs',
+        'Cats, dogs, robot dogs and humanoid robots use the stairs; robot vacuums and the like stay on their floor; humanoid robots now walk around',
+        'Houses can get L-shaped stairs and open stairs in the living room; duplex voids get railings so you can look down into the living room; furniture dragged into the yard sits at the right height and yard items are checked for collisions',
+        'Floors now fade as one even layer, without inner walls and furniture showing through, and at a calmer pace',
+      ],
+    },
+  },
+  {
     version: '1.5.0',
     date: '2026-10-17',
     notes: {
