@@ -527,6 +527,11 @@ export function allocateRooms(plan: Plan, hh: Household): Allocation {
     } else if (g[0]?.role === 'child' && parentsRoom) {
       const pl = level(parentsRoom)
       const own = (r: Room) => !shared(r)
+      // 学龄前的孩子不单独住到别的楼层：父母那层没有空房就和父母睡
+      if (g[0].age < 6 && !free.some((r) => own(r) && level(r) === pl)) {
+        occupants.set(parentsRoom.id, [...(occupants.get(parentsRoom.id) ?? []), ...g])
+        continue
+      }
       room = take((r) => own(r) && level(r) === pl && r.kind === 'western', (r) => own(r) && level(r) === pl, (r) => own(r) && Math.abs(level(r) - pl) === 1, own)
     } else room = take((r) => !shared(r) && r.kind === 'western', (r) => !shared(r))
     occupants.set(room.id, g)

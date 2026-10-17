@@ -89,7 +89,7 @@ describe('全户统一分配房间', () => {
     ).toEqual([])
   })
 
-  test('夫妻同室；孩子和父母同层或相邻层', () => {
+  test('夫妻同室；孩子和父母同层或相邻层，学龄前的孩子和父母同层', () => {
     expect(
       each(({ plan }) => {
         const rooms = memberRooms(plan, plan.household!)
@@ -102,6 +102,7 @@ describe('全户统一分配房间', () => {
         for (const k of ms.filter((m) => m.role === 'child')) {
           const d = Math.abs(fs.indexOf(floorOf(plan, rooms.get(k.id)!)) - fs.indexOf(floorOf(plan, pr)))
           if (d > 1) out.push('孩子离父母隔了一层以上')
+          if (k.age < 6 && d > 0) out.push('学龄前的孩子单独住在别的楼层')
         }
         return out
       }),
