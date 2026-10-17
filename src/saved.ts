@@ -11,9 +11,9 @@
 
 import { reactive, toRaw, watch } from 'vue'
 import { planArea } from './generate'
-import { t } from './i18n'
+import { lang, t } from './i18n'
 import { uid, type Plan } from './model'
-import { normalizePlan, plan, replacePlan, sandbox } from './store'
+import { bootFresh, historyState, normalizePlan, plan, replacePlan, sandbox } from './store'
 import { planThumbnail } from './three/planThumb'
 
 // ---------- 数据结构 ----------
@@ -489,6 +489,39 @@ export async function restoreSnapshot(id: string): Promise<boolean> {
     toast(friendlyError(e), 'error')
     return false
   }
+}
+
+// ---------- 打开分享链接里的户型 ----------
+
+/**
+ * 用分享来的户型替换当前户型（进撤销历史）。当前户型有内容又没存过时先问：
+ * 「存进我的户型再打开」（默认）/「直接替换」/ 取消。返回是否打开了。
+ */
+export async function openSharedPlan(p: Plan): Promise<boolean> {
+  // 启动时存档列表可能还没读完：要靠它判断当前户型存没存过
+  if (!saved.loaded) await refreshSaved()
+  const cur = toRaw(plan.value)
+  const empty = !cur.rooms.length && !cur.furniture.length
+  // 第一次来、还没动过的随机户型也不用问
+  const untouched = (bootFresh && !historyState.canUndo) || (!!currentSaved() && !saved.dirty)
+  if (!empty && !untouched) {
+    const m = currentSaved()
+    const canSave = !saved.unavailable
+    const c = await ask({
+      title: t('打开分享的户型「{name}」？', { name: p.name || t('未命名户型') }),
+      message: [m ? t('「{name}」有未保存的修改。', { name: m.name }) : t('当前户型还没有保存。'), canSave ? t('建议先存进「我的户型」，之后随时可以打开。') : t('直接打开也没关系：可以用「撤销」找回，自动快照里也会留一份。')].join(lang.value === 'en' ? ' ' : ''),
+      ok: canSave ? t('先存进「我的户型」再打开') : t('直接替换'),
+      ...(canSave ? { alt: t('直接替换') } : {}),
+    })
+    if (c === 'cancel') return false
+    if (c === 'ok' && canSave && !(await saveCurrent(m ? {} : { asNew: true }))) return false
+    if (saved.dirty) await takeSnapshot(true)
+  }
+  delete p.savedId
+  replacePlan(p)
+  // 分享来的户型不对应任何存档：标为未保存
+  detachSaved()
+  return true
 }
 
 // ---------- 初始化 ----------

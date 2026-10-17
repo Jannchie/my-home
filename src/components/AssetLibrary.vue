@@ -19,6 +19,7 @@ import { JIcon } from '@jannchie/icons-vue'
 import { CATEGORY_ICONS, ICONS, STYLE_ICONS } from '../ui/icons'
 import { placing, selection, viewMode } from '../store'
 import { lang, t } from '../i18n'
+import { routeAsset } from '../router'
 
 const filter = reactive<Filter>({ category: 'all', style: 'all', size: 'all', query: '', fixtures: true })
 const categories = categoriesOf(true)
@@ -34,7 +35,8 @@ const counts = computed(() => countByCategory(filter))
 const countOf = (c: AssetCategory) => counts.value.m.get(c) ?? 0
 const total = computed(() => counts.value.all)
 
-const selectedId = ref(ASSETS[0].id)
+// 地址里带了素材 id（/en/library/sofa-3p）就打开它；选中的素材写回地址（router.ts）
+const selectedId = ref(routeAsset.value && ASSET_MAP.has(routeAsset.value) ? routeAsset.value : ASSETS[0].id)
 const color = ref(0)
 const def = computed(() => ASSET_MAP.get(selectedId.value)!)
 const sizes = computed(() => siblings(def.value))
@@ -49,6 +51,8 @@ function select(id: string) {
   selectedId.value = id
   color.value = paletteFor(ASSET_MAP.get(id)!, filter.style)
 }
+watch(selectedId, (id) => (routeAsset.value = id))
+watch(routeAsset, (id) => id && id !== selectedId.value && ASSET_MAP.has(id) && select(id))
 /** 换规格：保留当前配色（新规格配色数不够时取同风格的） */
 function pickSize(id: string) {
   const st = paletteStyle(def.value, color.value)

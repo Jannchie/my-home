@@ -1,0 +1,7 @@
+# Cloudflare Pages：视图深链（/en/3d、/ja/library/sofa-3p…）返回对应语言的入口页（各自写死了语言的 meta / canonical）。
+# 目标写 /en/ 而不是 /en/index.html：重写后的路径会再走一遍 Pages 的 .html 规范化，写 index.html 会被 308 到 /en/，丢掉视图路径。
+# 不加 /* 兜底：Pages 的 _redirects 优先于静态文件（哪怕文件存在也会被重写），/* 会把 /assets/*.js、sw.js、sitemap.xml 都换成 HTML。
+# 不带语言前缀的深链（/3d、/library）靠 Pages 自带的 SPA 回退：产物里没有 404.html 时，找不到文件的路径都返回根入口页。
+/zh/* /zh/ 200
+/ja/* /ja/ 200
+/en/* /en/ 200

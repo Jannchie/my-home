@@ -2,7 +2,7 @@
 //
 // 缓存策略：
 //   - 安装时预缓存应用壳（入口页、全部带 hash 的 JS / CSS、图标、manifest），之后离线也能打开；
-//   - 页面导航：先走网络（拿到最新入口页），失败再用缓存（离线）；
+//   - 页面导航：先走网络（拿到最新入口页），失败再用缓存（离线）；视图路径 /en/3d 等按语言回退到 /en/、再退到 /；
 //   - /assets/ 下带 hash 的文件：缓存优先（内容永不变）；
 //   - 其他同源文件、Google Fonts、字体 CDN：先给缓存、后台再更新（stale-while-revalidate）。
 // 新版本安装好后不自动接管：页面提示「有新版本」，用户点刷新时发 SKIP_WAITING 再接管（见 src/ui/pwa.ts）。
@@ -44,19 +44,26 @@ self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting()
 })
 
-async function networkFirst(request) {
+// 页面导航对应的入口页：/en/3d、/en/library/x → /en/；不带语言前缀的视图路径（/3d）→ /
+// 视图路径的 HTML 和入口页是同一份（Cloudflare Pages 的 _redirects / SPA 回退），按入口页缓存，免得每个视图各存一份
+function entryOf(url) {
+  const seg = url.pathname.split('/')[1]
+  return seg === 'zh' || seg === 'ja' || seg === 'en' ? '/' + seg + '/' : '/'
+}
+
+async function navigate(request) {
+  const entry = entryOf(new URL(request.url))
   try {
     const res = await fetch(request)
-    if (res.ok) {
+    // 直接打开的 sitemap.xml、图片等也是导航请求：只把 HTML 当入口页存
+    if (res.ok && !res.redirected && (res.headers.get('content-type') || '').includes('text/html')) {
       const c = await caches.open(SHELL)
-      c.put(request, res.clone())
+      c.put(entry, res.clone())
     }
     return res
   } catch {
-    const hit = await caches.match(request, { ignoreSearch: true })
-    if (hit) return hit
-    // 语言入口（/ja/ 等）没缓存到时退回根入口页
-    return (await caches.match('/')) || Response.error()
+    // 离线：先找本语言入口页，没缓存到再退回根入口页
+    return (await caches.match(entry)) || (await caches.match('/')) || Response.error()
   }
 }
 
@@ -89,7 +96,7 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return
   const url = new URL(request.url)
   if (url.origin === self.location.origin) {
-    if (request.mode === 'navigate') return event.respondWith(networkFirst(request))
+    if (request.mode === 'navigate') return event.respondWith(navigate(request))
     if (url.pathname.startsWith('/assets/')) return event.respondWith(cacheFirst(request))
     if (url.pathname === '/sw.js') return
     return event.respondWith(staleWhileRevalidate(request, SHELL))

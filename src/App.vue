@@ -12,8 +12,11 @@ import GenOptions from './components/GenOptions.vue'
 import BottomSheet, { type SheetSnap } from './components/BottomSheet.vue'
 import ContextMenu, { type MenuEntry } from './components/ContextMenu.vue'
 import UpdatePrompt from './components/UpdatePrompt.vue'
+import SharePanel from './components/SharePanel.vue'
 import { AUTHOR, REPO_URL } from './seo'
-import { currentSaved, detachSaved, initSaved, openPanel, quickSave, saved, toast } from './saved'
+import { currentSaved, detachSaved, initSaved, openPanel, openSharedPlan, quickSave, saved, toast } from './saved'
+import { initRouter } from './router'
+import { decodeShare, payloadFromHash, stripShareHash } from './share'
 import { busy, nextPaint, overlays, runBusy } from './ui/feedback'
 import { device, layout } from './ui/device'
 import { FIXTURES, OPENING_LABELS, dot, edgeInfo, type Plan } from './model'
@@ -127,6 +130,39 @@ async function importJson(e: Event) {
   ;(e.target as HTMLInputElement).value = ''
 }
 
+// ---------- 分享链接：顶栏「更多」里打开面板；带 #p= 的地址打开时导入户型 ----------
+const shareOpen = ref(false)
+let importing = false
+async function openFromHash() {
+  const payload = payloadFromHash(location.hash)
+  if (!payload || importing) return
+  importing = true
+  // 不管打没打开都把 #p 从地址里去掉：刷新时不会再导入一次
+  const clear = () => history.replaceState(history.state, '', stripShareHash(location.href))
+  try {
+    const res = await decodeShare(payload)
+    if (!res.ok) {
+      clear()
+      toast(res.error === 'version' ? t('这个分享链接来自更新版本的 My Home，刷新页面后再试。') : t('分享链接已损坏或不完整，没能打开户型。'), 'error')
+      return
+    }
+    const opened = await openSharedPlan(res.plan)
+    clear()
+    if (!opened) return
+    await nextTick()
+    canvas.value?.fit()
+    toast(t('已打开分享的户型「{name}」', { name: res.plan.name || t('未命名户型') }))
+  } finally {
+    importing = false
+  }
+}
+function onHashChange() {
+  void openFromHash()
+}
+
+// 视图和地址栏同步（/en/3d、/library…，浏览器前进 / 后退切换视图）
+initRouter(viewMode)
+
 // 「我的户型」：初始化（读关联存档、开自动快照）；打开存档后让平面图适应视图
 initSaved()
 const saveTitle = computed(() => {
@@ -149,7 +185,7 @@ function onKey(e: KeyboardEvent) {
     return
   }
   // 面板 / 确认框开着时不响应编辑器快捷键
-  if (saved.panelOpen || saved.confirm) return
+  if (saved.panelOpen || saved.confirm || shareOpen.value) return
   if (isTyping(e)) return
   // ?：快捷键帮助（帮助开着时其他快捷键都不响应，Esc 关闭）
   if (e.key === '?' && !mod) {
@@ -287,6 +323,8 @@ function toggleMore() {
 }
 /** 桌面顶栏的「更多」：只放帮助和链接（文件、语言按钮都在顶栏上） */
 const deskMoreItems = computed<MenuEntry[]>(() => [
+  { label: t('分享链接'), icon: ICONS.shareLink, action: () => (shareOpen.value = true) },
+  'sep',
   { label: t('快捷键'), icon: ICONS.keyboard, keys: '?', action: () => (overlays.help = true) },
   { label: t('新手引导'), icon: ICONS.tip, action: () => (overlays.onboarding = true) },
   'sep',
@@ -307,6 +345,7 @@ const moreItems = computed<MenuEntry[]>(() => [
   { label: t('导入'), icon: ICONS.import, action: () => fileInput.value?.click() },
   { label: t('导出 JSON'), icon: ICONS.exportJson, action: exportJson },
   ...(viewMode.value === '2d' ? [{ label: t('导出 PNG'), icon: ICONS.exportPng, action: () => canvas.value?.exportPng() }] : []),
+  { label: t('分享链接'), icon: ICONS.shareLink, action: () => (shareOpen.value = true) },
   'sep',
   { header: t('界面语言') },
   ...LANGS.map((l) => ({ label: l.label, icon: l.id === lang.value ? ICONS.check : undefined, action: () => setLang(l.id as Lang) })),
@@ -358,6 +397,8 @@ onMounted(() => {
   window.addEventListener('keydown', onKey)
   window.addEventListener('keydown', onEsc)
   document.addEventListener('pointerdown', onDocPointer)
+  window.addEventListener('hashchange', onHashChange)
+  void openFromHash()
   topRo = new ResizeObserver(() => {
     if (!topBar.value) return
     layout.topBar = topBar.value.getBoundingClientRect().bottom
@@ -369,6 +410,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKey)
   window.removeEventListener('keydown', onEsc)
   document.removeEventListener('pointerdown', onDocPointer)
+  window.removeEventListener('hashchange', onHashChange)
   topRo?.disconnect()
 })
 </script>
@@ -533,6 +575,7 @@ onBeforeUnmount(() => {
     <ContextMenu v-if="moreMenu" :x="moreMenu.x" :y="moreMenu.y" :items="device.compactBar ? moreItems : deskMoreItems" class="more-menu" @close="closeMore" />
 
     <SavedPlans @opened="onSavedOpened" />
+    <SharePanel v-model="shareOpen" />
     <!-- 处理中：淡入带延迟，很快的操作不会闪；转圈是合成线程动画，主线程忙时也在转 -->
     <div v-if="busy.count" class="busy" role="status" aria-live="polite">
       <JIcon :icon="ICONS.loading" :size="16" class="spin" />

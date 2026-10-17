@@ -875,3 +875,31 @@ Object.assign(UI, {
   '关上': ['閉める', 'Closed'],
   '再点一次里面的东西可以选中它': ['中の物をもう一度クリックすると選択できます', 'Click an item inside again to select it'],
 } satisfies Record<string, Entry>)
+
+// ---------- 分享链接 ----------
+Object.assign(UI, {
+  分享链接: ['共有リンク', 'Share link'],
+  已复制分享链接: ['共有リンクをコピーしました', 'Share link copied'],
+  '没能自动复制，请手动复制选中的链接': ['自動でコピーできませんでした。選択されたリンクを手動でコピーしてください', 'Couldn’t copy automatically. Please copy the selected link by hand'],
+  '分享失败：{msg}': ['共有に失敗しました：{msg}', 'Sharing failed: {msg}'],
+  '户型数据都写在链接里，不经过服务器。对方打开链接就能看到这套户型。': ['間取りのデータはすべてリンクの中に入っていて、サーバーには送られません。相手はリンクを開くだけでこの間取りを見られます。', 'The whole plan is packed into the link itself — nothing goes through a server. Anyone who opens it sees this plan.'],
+  分享内容: ['共有する内容', 'What to share'],
+  只户型: ['間取りのみ', 'Plan only'],
+  '{n} 字符': ['{n} 文字', '{n} chars'],
+  包含家具: ['家具も含める', 'With furniture'],
+  当前户型里没有家具: ['今の間取りには家具がありません', 'This plan has no furniture'],
+  '房间、门窗、设备、墙厚和朝向；不含家具、住户和墙纸。': ['部屋・建具・設備・壁厚・方位。家具・住人・壁紙は含みません。', 'Rooms, doors & windows, fixtures, wall thickness and orientation — no furniture, household or wallpaper.'],
+  '户型加上家具、配色、墙纸和住户设定。': ['間取りに加えて、家具・配色・壁紙・住人の設定も。', 'The plan plus furniture, colors, wallpaper and household.'],
+  '生成链接失败：这个浏览器不支持压缩。可以改用「导出 JSON」。': ['リンクを作れませんでした：このブラウザは圧縮に対応していません。「JSON 保存」をお使いください。', 'Couldn’t create the link: this browser doesn’t support compression. Try “Export JSON” instead.'],
+  '链接很长（超过 {n} 字符），部分聊天软件可能截断。建议改用「只户型」，或用「导出 JSON」发送文件。': ['リンクがとても長く（{n} 文字超）、チャットアプリによっては途中で切れることがあります。「間取りのみ」にするか、「JSON 保存」でファイルを送るのがおすすめです。', 'This link is very long (over {n} characters) and some chat apps may cut it off. Try “Plan only”, or send a file with “Export JSON”.'],
+  '正在生成链接…': ['リンクを作成中…', 'Creating link…'],
+  '分享…': ['共有…', 'Share…'],
+  复制链接: ['リンクをコピー', 'Copy link'],
+  '打开分享的户型「{name}」？': ['共有された間取り「{name}」を開きますか？', 'Open the shared plan “{name}”?'],
+  '建议先存进「我的户型」，之后随时可以打开。': ['先に「マイ間取り」に保存しておくと、いつでも開き直せます。', 'Save it to “My plans” first so you can come back to it any time.'],
+  '先存进「我的户型」再打开': ['「マイ間取り」に保存してから開く', 'Save to “My plans”, then open'],
+  直接替换: ['そのまま置き換える', 'Replace it'],
+  '这个分享链接来自更新版本的 My Home，刷新页面后再试。': ['この共有リンクは新しいバージョンの My Home で作られています。ページを再読み込みしてからもう一度お試しください。', 'This link was made by a newer version of My Home. Reload the page and try again.'],
+  '分享链接已损坏或不完整，没能打开户型。': ['共有リンクが壊れているか途中で切れているため、間取りを開けませんでした。', 'The share link is broken or incomplete, so the plan couldn’t be opened.'],
+  '已打开分享的户型「{name}」': ['共有された間取り「{name}」を開きました', 'Opened the shared plan “{name}”'],
+} satisfies Record<string, Entry>)

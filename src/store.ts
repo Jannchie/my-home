@@ -14,6 +14,7 @@ import { DEFAULT_KELVIN, DEFAULT_POWER, POWER_MAX, POWER_MIN, clampKelvin, isLig
 import { ensureOutdoorUnits, planArea, randomSeed, type GenOptions } from './generate'
 import { generatePlan } from './generate-region'
 import { lang, t } from './i18n'
+import { initialRoute } from './router'
 import { edgeInfo, emptyPlan, projectToSegment, type Fixture, type FixtureKind, type Furniture, type Opening, type Plan, type Room, type Vec, type Wallpaper, uid } from './model'
 
 export type Tool = 'select' | 'rect' | 'poly' | 'door' | 'window' | 'fixture'
@@ -113,7 +114,10 @@ export const genOptions = reactive<GenOptions>({
 /** 生成结果提示（面积没满足时） */
 export const genMessage = ref('')
 
-export const plan = ref<Plan>(load() ?? generatePlan(genOptions).plan)
+const loaded = load()
+/** 启动时没有自动保存的户型（第一次来 / 清过数据），当前户型是随手生成的：打开分享链接时不用确认 */
+export const bootFresh = !loaded
+export const plan = ref<Plan>(loaded ?? generatePlan(genOptions).plan)
 export const selection = ref<Selection>(null)
 export const tool = ref<Tool>('select')
 /** 设备工具当前要放的种类 */
@@ -122,7 +126,8 @@ export const settings = reactive({ grid: 10, snap: true })
 
 /** 主视图：2D 平面图 / 3D 沙盘 / 素材库 */
 export type ViewMode = '2d' | '3d' | 'lib'
-export const viewMode = ref<ViewMode>('2d')
+/** 初值取自地址（/en/3d、/library…，见 router.ts）；之后由 router 双向同步 */
+export const viewMode = ref<ViewMode>(initialRoute.view)
 /** 3D 沙盘里正要摆放的素材 */
 export const placing = ref<{ asset: string; color: number; colors?: string[]; patterns?: (PatternSpec | null)[] } | null>(null)
 /** 墙体显示：完整 / 前墙透明 / 前墙压低（模拟人生式）/ 全部压低 */

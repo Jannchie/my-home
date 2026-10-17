@@ -22,6 +22,7 @@ import {
   IconChevronDown,
   IconChevronUp,
   IconCopy,
+  IconShare,
   IconCube,
   IconCursor,
   IconCursorClick,
@@ -41,6 +42,7 @@ import {
   IconFocus,
   IconKeyboard,
   IconLightbulb,
+  IconLink,
   IconLoader,
   IconSearchMinus,
   IconSearchPlus,
@@ -145,6 +147,10 @@ export const ICONS = {
   export: IconExport,
   exportJson: IconJson,
   exportPng: IconFileTypePng,
+  // 分享链接（户型压进地址）
+  shareLink: IconLink,
+  share: IconShare,
+  copy: IconCopy,
   // 我的户型（浏览器里保存的多份户型）
   save: IconSave,
   savedPlans: IconFolderOpen,
