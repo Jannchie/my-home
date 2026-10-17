@@ -24,6 +24,9 @@ import { SelectFrame, WallGuide } from '../three/selectFrame'
 import { ActorLayer } from '../three/actors'
 import ColorEditor from './ColorEditor.vue'
 import SandboxOverlay from './SandboxOverlay.vue'
+import BlueprintBar from './BlueprintBar.vue'
+import { BlueprintView } from '../three/blueprint'
+import { blueprint, unitOf } from '../blueprintPrefs'
 import BottomSheet, { type SheetSnap } from './BottomSheet.vue'
 import { device, gfx, layout, lowPower, setQuality, LONG_PRESS_MS, TAP_SLOP, type Quality } from '../ui/device'
 import { useProgressive } from '../ui/progressive'
@@ -90,6 +93,8 @@ let stage: Stage
 /** 画面效果（后处理），选「原样」时不建 composer */
 let post: Post
 let controls: OrbitControls
+/** 3D 设计图（three/blueprint.ts）：第一次打开时才建，和沙盘共用画布 */
+let bp: BlueprintView | null = null
 let house: THREE.Group | null = null
 /** 各楼层的模型（单层户型只有一项）：墙体压低只作用于当前层 */
 let floorGroups: FloorGroup[] = []
@@ -1351,6 +1356,12 @@ function moveDrag(e: PointerEvent) {
 const hovering = ref(false)
 const editing = computed(() => sandbox.mode === 'edit')
 
+/** 从设计图回到布置 / 预览 */
+function leaveBlueprint(m: 'edit' | 'preview') {
+  blueprint.on = false
+  setMode(m)
+}
+
 /** 切换布置 / 预览：预览时清掉选中、摆放和参考线，家具不可编辑 */
 function setMode(m: 'edit' | 'preview') {
   sandbox.mode = m
@@ -1365,6 +1376,8 @@ function setMode(m: 'edit' | 'preview') {
 }
 
 function onPointerDown(e: PointerEvent) {
+  // 设计图：视角由它自己的控制器处理，不选、不拖家具
+  if (blueprint.on) return
   // 用户动手转视角时停下自动旋转
   if (controls.autoRotate) sandbox.autoRotate = false
   const touch = e.pointerType !== 'mouse'
@@ -1400,6 +1413,7 @@ function onPointerDown(e: PointerEvent) {
 let pendingDrag: { e: PointerEvent; id: string; slop: number } | null = null
 
 function onPointerMove(e: PointerEvent) {
+  if (blueprint.on) return
   const touch = e.pointerType !== 'mouse'
   if (pendingDrag && !touch) {
     if (e.buttons === 0) pendingDrag = null
@@ -1440,6 +1454,7 @@ function onPointerMove(e: PointerEvent) {
 }
 
 function onPointerUp(e: PointerEvent) {
+  if (blueprint.on) return
   if (e.pointerType !== 'mouse') {
     touches.delete(e.pointerId)
     if (editing.value) onTouchUp(e)
@@ -1513,6 +1528,16 @@ function onKey(e: KeyboardEvent) {
   // 快捷键帮助 / 我的户型 / 确认框开着时不响应（Esc 留给它们关闭自己）
   if (overlays.help || saved.panelOpen || saved.confirm) return
   const k = e.key.toLowerCase()
+  // 设计图：B 切换，F 重置视角，Esc 退出；其余快捷键不响应
+  if (k === 'b' && !e.repeat) {
+    blueprint.on = !blueprint.on
+    return
+  }
+  if (blueprint.on) {
+    if (k === 'f') bp?.resetView()
+    else if (e.key === 'Escape') blueprint.on = false
+    return
+  }
   if (k === 'r' && !e.repeat) rKey = true
   const step = e.shiftKey ? 15 : 90
   if (k === 'p') setMode(editing.value ? 'preview' : 'edit')
@@ -1777,6 +1802,11 @@ function loop() {
   const now = performance.now()
   const dt = Math.min(0.1, (now - lastFrame) / 1000)
   lastFrame = now
+  // 设计图开着：沙盘停画，只推进设计图的视角
+  if (bp?.active) {
+    bp.frame()
+    return
+  }
   const moved = controls.update()
   // 时间流逝动画：只有播放时才每帧推进（推进后由 watch 更新光照并标脏）
   if (sandbox.playing) sandbox.time = (sandbox.time + dt * sandbox.speed) % 24
@@ -1899,6 +1929,7 @@ onMounted(() => {
     syncLineRes(entry.contentRect.width, entry.contentRect.height)
     viewSize = { w: entry.contentRect.width, h: entry.contentRect.height }
     applySheetOffset()
+    bp?.resize(entry.contentRect.width, entry.contentRect.height)
     dirty = true
   })
   ro.observe(host.value!)
@@ -1947,6 +1978,7 @@ function captureView(w: number, h: number) {
   } finally {
     for (const o of hidden) o.visible = true
     dirty = true
+    bp?.invalidate()
   }
 }
 
@@ -2097,6 +2129,9 @@ function toggleLooks() {
 }
 
 onBeforeUnmount(() => {
+  bp?.dispose()
+  bp = null
+  blueprint.on = false
   lights.dispose()
   clearTimeout(warmTimer)
   warmTarget?.dispose()
@@ -2300,6 +2335,11 @@ function setRoomK(id: string, v: string) {
 }
 /** 预览模式下双击灯（灯具家具或天花板灯具）开关它；拦在浮动工具条的「双击聚焦」之前 */
 function onDblClick(e: MouseEvent) {
+  // 设计图里不做双击聚焦 / 开关灯（相机不是沙盘的）
+  if (blueprint.on) {
+    e.stopImmediatePropagation()
+    return
+  }
   if (editing.value) return
   const id = pickFurniture(e as unknown as PointerEvent)
   const def = id ? ASSET_MAP.get(findFurniture(id)?.asset ?? '') : undefined
@@ -2334,15 +2374,82 @@ const planSize = computed(() => {
   return `${((b.x1 - b.x0) / 100).toFixed(1)} × ${((b.y1 - b.y0) / 100).toFixed(1)} m`
 })
 
+// ---------- 3D 设计图 ----------
+// 和「布置 / 预览」并列的一种视图：同一块画布换成设计图自己的场景和相机（three/blueprint.ts），沙盘暂停渲染。
+// 结构线框只在户型形状变了时重算，家具线框按素材缓存；进入 / 退出不重搭沙盘。
+const bpBusy = ref(false)
+/** 家具借用沙盘里现成模型的几何体（设计图只换材质，不重搭） */
+const bpInput = () => ({ plan: toRaw(plan.value), model: (f: Furniture) => objs.get(f.id)?.obj })
+const bpOptions = () => ({ paper: blueprint.paper, furniture: blueprint.furniture, walls: blueprint.walls, ortho: blueprint.ortho, unit: unitOf(plan.value), layout: blueprint.layout })
+function enterBlueprint() {
+  if (!stage) return
+  selection.value = null
+  placing.value = null
+  setHover(null)
+  showGuides([])
+  dragHud.value = null
+  wallGuide.hide()
+  controls.enabled = false
+  controls.autoRotate = false
+  if (!bp) {
+    bp = new BlueprintView(stage.renderer, canvas.value!)
+    bp.resize(viewSize.w, viewSize.h)
+  }
+  bp.enter(bpInput(), bpOptions())
+}
+function exitBlueprint() {
+  if (!stage || !bp) return
+  bp.exit()
+  controls.enabled = true
+  controls.autoRotate = !editing.value && sandbox.autoRotate
+  applySheetOffset()
+  dirty = true
+}
+watch(
+  () => blueprint.on,
+  (on) => (on ? enterBlueprint() : exitBlueprint()),
+)
+watch(
+  () => [blueprint.paper, blueprint.furniture, blueprint.walls, blueprint.ortho, blueprint.unit, blueprint.layout, plan.value.region, lang.value],
+  () => bp?.setOptions(bpOptions()),
+)
+// 设计图开着时改了户型（撤销 / 重做）：稍等沙盘那边同步完再重算
+let bpTimer = 0
+watch(planVer, () => {
+  if (!bp?.active) return
+  clearTimeout(bpTimer)
+  bpTimer = window.setTimeout(() => bp?.active && bp.update(bpInput()), 120)
+})
+/** 导出设计图 PNG（3 倍分辨率，按当前视角和纸面），文件名带户型名和「设计图」 */
+async function exportBlueprint() {
+  if (!bp || bpBusy.value) return
+  bpBusy.value = true
+  try {
+    const name = plan.value.name || 'home'
+    const d = new Date()
+    const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    const blob = await bp.exportPNG(3, `${name}  ·  ${t('设计图')}  ·  ${date}`)
+    if (!blob) return
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `${name}-${t('设计图')}.png`
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000)
+  } finally {
+    bpBusy.value = false
+  }
+}
+const bpBg = computed(() => (blueprint.paper === 'blue' ? '#1d4a72' : '#fbfbf9'))
+
 defineExpose({ resetView })
 </script>
 
 <template>
   <div class="sandbox">
-    <div ref="host" class="viewport" :class="{ placing: !!placing, hover: hovering, night: nightUi }" :style="{ background: viewportBg, '--sheet-h': layout.sheetH + 'px' }">
+    <div ref="host" class="viewport" :class="{ placing: !!placing, hover: hovering, night: nightUi && !blueprint.on, blueprint: blueprint.on }" :style="{ background: blueprint.on ? bpBg : viewportBg, '--sheet-h': (blueprint.on ? 0 : layout.sheetH) + 'px' }">
       <!-- 竖排楼层切换（多层户型；单层时只有「加一层」） -->
-      <FloorRail />
-      <div class="compass" :class="{ 'under-bar': !editing }" :title="t('北') + ' · ' + t('户型朝向 {n}°', { n: northDeg })">
+      <FloorRail v-if="!blueprint.on" />
+      <div v-if="!blueprint.on" class="compass" :class="{ 'under-bar': !editing }" :title="t('北') + ' · ' + t('户型朝向 {n}°', { n: northDeg })">
         <svg viewBox="-20 -20 40 40" width="40" height="40" aria-hidden="true">
           <circle r="18" class="compass-bg" />
           <g :transform="`rotate(${compassAngle})`">
@@ -2353,11 +2460,13 @@ defineExpose({ resetView })
         </svg>
       </div>
       <div class="modes">
-        <button :class="{ on: editing }" :title="t('布置') + ' (P)'" @click="setMode('edit')"><JIcon :icon="ICONS.modeEdit" />{{ t('布置') }}</button>
-        <button :class="{ on: !editing }" :title="t('预览') + ' (P)'" @click="setMode('preview')"><JIcon :icon="ICONS.modePreview" />{{ t('预览') }}</button>
-        <button class="ext-toggle" :class="{ on: sandbox.exterior }" :aria-pressed="sandbox.exterior" :title="t('外观：显示屋顶和完整外墙') + ' (O)'" @click="sandbox.exterior = !sandbox.exterior"><JIcon :icon="ICONS.exteriorView" />{{ t('外观') }}</button>
+        <button :class="{ on: editing && !blueprint.on }" :title="t('布置') + ' (P)'" @click="leaveBlueprint('edit')"><JIcon :icon="ICONS.modeEdit" />{{ t('布置') }}</button>
+        <button :class="{ on: !editing && !blueprint.on }" :title="t('预览') + ' (P)'" @click="leaveBlueprint('preview')"><JIcon :icon="ICONS.modePreview" />{{ t('预览') }}</button>
+        <button class="bp-toggle" :class="{ on: blueprint.on }" :aria-pressed="blueprint.on" :title="t('设计图：线框、尺寸标注，可导出 PNG') + ' (B)'" :aria-label="t('设计图')" @click="blueprint.on = !blueprint.on"><JIcon :icon="ICONS.blueprint" /><span class="ml">{{ t('设计图') }}</span></button>
+        <button v-if="!blueprint.on" class="ext-toggle" :class="{ on: sandbox.exterior }" :aria-pressed="sandbox.exterior" :title="t('外观：显示屋顶和完整外墙') + ' (O)'" :aria-label="t('外观')" @click="sandbox.exterior = !sandbox.exterior"><JIcon :icon="ICONS.exteriorView" /><span class="ml">{{ t('外观') }}</span></button>
       </div>
-      <div v-if="!editing" class="preview-bar">
+      <BlueprintBar v-if="blueprint.on" :busy="bpBusy" @reset="bp?.resetView()" @export="exportBlueprint" />
+      <div v-if="!editing && !blueprint.on" class="preview-bar">
         <label><input v-model="sandbox.autoRotate" type="checkbox" /><JIcon :icon="ICONS.autoRotate" class="ico-muted" />{{ t('自动旋转') }}</label>
         <select v-model="sandbox.wallMode" :title="t('墙体显示') + ' (C)'">
           <option v-for="m in WALL_MODES" :key="m.id" :value="m.id">{{ t(m.label) }}</option>
@@ -2388,7 +2497,7 @@ defineExpose({ resetView })
         @pointerleave="onPointerLeave"
         @contextmenu.prevent
       />
-      <SandboxOverlay />
+      <SandboxOverlay v-if="!blueprint.on" />
       <!-- 点中天花板灯具：这个房间的灯光开关与色温 -->
       <div v-if="selectedRoom && editing" class="light-card" :style="{ bottom: device.compact && !device.landscape ? 'calc(var(--sheet-h, 0px) + 10px)' : undefined }">
         <div class="lc-head">
@@ -2425,7 +2534,8 @@ defineExpose({ resetView })
       </div>
       <div v-if="!plan.rooms.length" class="empty">{{ t('还没有房间。先去 2D 平面图画一个，或者点「随机生成」。') }}</div>
       <div v-if="!device.compact" class="hud">
-        <template v-if="placing && !device.coarse">
+        <template v-if="blueprint.on">{{ device.coarse ? t('设计图 · 单指旋转 · 双指缩放 / 平移') : t('设计图 · 左键旋转 · 右键平移 · 滚轮缩放 · F 重置视角 · B 或 Esc 返回') }}</template>
+        <template v-else-if="placing && !device.coarse">
           <b>{{ t('摆放 {name}', { name: placingName }) }}</b> · {{ t('点击地面放下（自动贴墙对齐，Alt 关闭）· Q / E 旋转 90°（Shift 15°）· 按住 Shift 连续摆放 · Esc 取消') }}
         </template>
         <template v-else-if="!placing">{{ hudText }}</template>
@@ -2447,7 +2557,7 @@ defineExpose({ resetView })
     <!-- 从家具栏拖出来时跟着指针的缩略图 -->
     <img v-if="cardGhost && cardGhost.src" class="card-ghost" :src="cardGhost.src" alt="" :style="{ left: cardGhost.x + 'px', top: cardGhost.y + 'px' }" />
 
-    <BottomSheet v-if="editing" v-model="sheet" :enabled="device.compact" class="panel" :label="t('沙盘面板')">
+    <BottomSheet v-if="editing && !blueprint.on" v-model="sheet" :enabled="device.compact" class="panel" :label="t('沙盘面板')">
       <template #header>
         <nav class="ptabs" :class="{ many: tabs.length > 4 }" role="tablist" :aria-label="t('沙盘面板')">
           <button v-for="tb in tabs" :key="tb.id" role="tab" :title="tb.label" :aria-selected="tab === tb.id" :class="{ on: tab === tb.id, 'tab-sel': tb.id === 'sel' }" @click="pickTab(tb.id)">
@@ -3828,6 +3938,14 @@ h3 {
 :root.compact .modes button {
   height: 36px;
   padding: 0 12px;
+}
+/* 手机上模式条放不下四个带字的按钮：设计图、外观只留图标（title / aria-label 照常） */
+:root.compact .modes .ml {
+  display: none;
+}
+:root.compact .modes .bp-toggle,
+:root.compact .modes .ext-toggle {
+  padding: 0 10px;
 }
 /* 预览模式的工具条：手机上放到底部，横向滚动 */
 :root.compact .preview-bar {

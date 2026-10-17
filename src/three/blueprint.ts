@@ -4,8 +4,10 @@
 //
 // 画法：
 // - 房子另搭一份「素模」（building.ts bare：不要底座和用地），墙默认剖切在 CUT_H（像平面图的剖切高度），也可以画完整墙高 + 屋顶。
-// - 每个网格按 EdgesGeometry 取硬边（按夹角阈值），按部件分主次：墙 / 门窗 / 设备 / 家具，线宽和颜色依次变浅；
+// - 结构（墙、楼板、门窗、设备、楼梯）按夹角阈值取硬边（hardEdges），按部件分主次：墙 / 门窗 / 设备，线宽和颜色依次变浅；
 //   同时把三角形并成几张大网格画填充（向后推一点深度），线条被前面的东西挡住，就是消隐线。
+// - 家具不在 CPU 上取边（一件动辄上万个三角形），借用沙盘模型的几何体画填充，线条由屏幕空间描线画：
+//   先画一张「法线 + 深度」缓冲，在家具的轮廓、深度断层、折痕处描细线——更细、更浅，只画看得见的面。
 // - 墙的剖切面（墙顶）涂成实心色块（poché），侧面按朝向略微分出明暗，不打光、没有阴影。
 // - 外轮廓转角的线往外出头，墙的长水平线两端略出头，像手绘 / CAD 的构造线；地面一层淡淡的 1m 网格。
 // - 线用 LineSegments2（屏幕像素线宽，导出放大时线宽按比例放大）。
@@ -13,7 +15,7 @@
 //   每次视角变化重新排一遍：放不下（尺寸线在屏幕上比文字短）或和优先级更高的文字重叠就藏起来。
 // - 只显示朝向镜头的两条边上的尺寸，转过去时换边；竖向尺寸（标高）放在屏幕左侧的外轮廓角上。
 //
-// 性能：结构线框只在户型形状 / 墙体画法变了时重算；家具线框按素材（+ 柜门开合）缓存三角形和边，摆放时只做矩阵变换。
+// 性能：结构线框只在户型形状 / 墙体画法变了时重算（剖切 / 满高各留一份）；家具不预处理，只摆网格。
 // 渲染只在视角或内容变化时进行。
 
 import * as THREE from 'three'
@@ -51,9 +53,12 @@ export const CUT_H = 140
 export const BP_EXPLODE = 300
 
 type LineClass = 'wall' | 'opening' | 'fixture' | 'furniture' | 'construct' | 'dim' | 'grid'
-type FillClass = 'floor' | 'wall' | 'solid' | 'furniture'
+/** sketch：家具和特别细碎的网格，线条由屏幕空间描线画 */
+type FillClass = 'floor' | 'wall' | 'solid' | 'furniture' | 'sketch'
 const LINE_CLASSES: LineClass[] = ['wall', 'opening', 'fixture', 'furniture', 'construct', 'dim', 'grid']
-const FILL_CLASSES: FillClass[] = ['floor', 'wall', 'solid', 'furniture']
+const FILL_CLASSES: FillClass[] = ['floor', 'wall', 'solid', 'furniture', 'sketch']
+/** 这些填充参与屏幕空间描线 */
+const SKETCHED = new Set<FillClass>(['furniture', 'sketch'])
 
 interface Palette {
   bg: string
@@ -71,7 +76,7 @@ export const PAPERS: Record<Paper, Palette> = {
   // 白纸：墨色线条，剖切面深灰蓝，标注用一点钢蓝
   white: {
     bg: '#fbfbf9',
-    fill: { floor: '#ffffff', wall: '#f2f3f2', solid: '#fbfbfa', furniture: '#ffffff' },
+    fill: { floor: '#ffffff', wall: '#f2f3f2', solid: '#fbfbfa', furniture: '#ffffff', sketch: '#fbfbfa' },
     poche: '#38434c',
     line: { wall: '#1f2a33', opening: '#46525c', fixture: '#56626c', furniture: '#98a2aa', construct: '#a9b3ba', dim: '#35607f', grid: '#e7eaeb' },
     shade: 0.06,
@@ -81,7 +86,7 @@ export const PAPERS: Record<Paper, Palette> = {
   // 晒图纸：深蓝底、白线
   blue: {
     bg: '#1d4a72',
-    fill: { floor: '#21507a', wall: '#24567f', solid: '#22527c', furniture: '#22527c' },
+    fill: { floor: '#21507a', wall: '#24567f', solid: '#22527c', furniture: '#22527c', sketch: '#22527c' },
     poche: '#d9e6f1',
     line: { wall: '#f2f7fb', opening: '#d3e2ef', fixture: '#c3d6e7', furniture: '#86abca', construct: '#7aa1c2', dim: '#ffffff', grid: '#285a85' },
     shade: -0.05,
@@ -154,19 +159,117 @@ const emptyFills = (): Record<FillClass, Buf> => Object.fromEntries(FILL_CLASSES
 const outLines = (b: Record<LineClass, Buf>) => Object.fromEntries(LINE_CLASSES.map((k) => [k, b[k].out()])) as LineSet
 const outFills = (b: Record<FillClass, Buf>) => Object.fromEntries(FILL_CLASSES.map((k) => [k, b[k].out()])) as FillSet
 
-/** 几何体的硬边（xyz 成对），按几何体和阈值缓存 */
+/**
+ * 几何体的硬边（xyz 成对）：相邻两个面的夹角超过阈值、或只属于一个面的边。按几何体和阈值缓存。
+ * 和 THREE.EdgesGeometry 结果一样，但顶点焊接和边的查找都用数字键（EdgesGeometry 拼字符串，大网格慢一个数量级）。
+ */
 const edgeCache = new WeakMap<THREE.BufferGeometry, Map<number, Float32Array>>()
-function hardEdges(geo: THREE.BufferGeometry, angle: number) {
-  let m = edgeCache.get(geo)
-  if (!m) edgeCache.set(geo, (m = new Map()))
-  let v = m.get(angle)
-  if (!v) {
+export function hardEdges(geo: THREE.BufferGeometry, angle: number): Float32Array {
+  let cache = edgeCache.get(geo)
+  if (!cache) edgeCache.set(geo, (cache = new Map()))
+  const hit = cache.get(angle)
+  if (hit) return hit
+  const attr = geo.getAttribute('position') as THREE.BufferAttribute
+  // 交错存储的顶点退回 three 自带的实现
+  if (!attr || (attr as unknown as THREE.InterleavedBufferAttribute).isInterleavedBufferAttribute) {
     const eg = new THREE.EdgesGeometry(geo, angle)
-    v = (eg.getAttribute('position') as THREE.BufferAttribute).array as Float32Array
-    v = new Float32Array(v)
+    const v = new Float32Array((eg.getAttribute('position') as THREE.BufferAttribute).array)
     eg.dispose()
-    m.set(angle, v)
+    cache.set(angle, v)
+    return v
   }
+  const P = attr.array as ArrayLike<number>
+  const nv = attr.count
+  const idx = geo.index ? (geo.index.array as ArrayLike<number>) : null
+  const start = geo.drawRange.start
+  const count = Math.min(geo.drawRange.count, idx ? idx.length : nv) - (Math.min(geo.drawRange.count, idx ? idx.length : nv) % 3)
+  // 顶点焊接：坐标量化成整数，拼成一个 < 2^53 的数字键
+  let x0 = Infinity
+  let y0 = Infinity
+  let z0 = Infinity
+  let x1 = -Infinity
+  let y1 = -Infinity
+  let z1 = -Infinity
+  for (let i = 0; i < nv; i++) {
+    const x = P[i * 3]
+    const y = P[i * 3 + 1]
+    const z = P[i * 3 + 2]
+    if (x < x0) x0 = x
+    if (x > x1) x1 = x
+    if (y < y0) y0 = y
+    if (y > y1) y1 = y
+    if (z < z0) z0 = z
+    if (z > z1) z1 = z
+  }
+  const span = Math.max(x1 - x0, y1 - y0, z1 - z0, 1e-6)
+  const q = Math.min(1000, 131000 / span)
+  const weld = new Map<number, number>()
+  const vid = new Int32Array(nv)
+  const W: number[] = []
+  for (let i = 0; i < nv; i++) {
+    const x = P[i * 3]
+    const y = P[i * 3 + 1]
+    const z = P[i * 3 + 2]
+    const key = (Math.round((x - x0) * q) * 131072 + Math.round((y - y0) * q)) * 131072 + Math.round((z - z0) * q)
+    let id = weld.get(key)
+    if (id === undefined) {
+      id = W.length / 3
+      weld.set(key, id)
+      W.push(x, y, z)
+    }
+    vid[i] = id
+  }
+  const nt = count / 3
+  const fn = new Float32Array(nt * 3)
+  const edges = new Map<number, number>()
+  const cos = Math.cos((angle * Math.PI) / 180)
+  const out: number[] = []
+  const emit = (a: number, b: number) => out.push(W[a * 3], W[a * 3 + 1], W[a * 3 + 2], W[b * 3], W[b * 3 + 1], W[b * 3 + 2])
+  for (let t = 0; t < nt; t++) {
+    const i0 = start + t * 3
+    const a = vid[idx ? idx[i0] : i0]
+    const b = vid[idx ? idx[i0 + 1] : i0 + 1]
+    const c = vid[idx ? idx[i0 + 2] : i0 + 2]
+    if (a === b || b === c || a === c) continue
+    const ux = W[b * 3] - W[a * 3]
+    const uy = W[b * 3 + 1] - W[a * 3 + 1]
+    const uz = W[b * 3 + 2] - W[a * 3 + 2]
+    const vx = W[c * 3] - W[a * 3]
+    const vy = W[c * 3 + 1] - W[a * 3 + 1]
+    const vz = W[c * 3 + 2] - W[a * 3 + 2]
+    let nx = uy * vz - uz * vy
+    let ny = uz * vx - ux * vz
+    let nz = ux * vy - uy * vx
+    const l = Math.hypot(nx, ny, nz)
+    if (l < 1e-10) continue
+    nx /= l
+    ny /= l
+    nz /= l
+    fn[t * 3] = nx
+    fn[t * 3 + 1] = ny
+    fn[t * 3 + 2] = nz
+    for (let k = 0; k < 3; k++) {
+      const p = k === 0 ? a : k === 1 ? b : c
+      const r = k === 0 ? b : k === 1 ? c : a
+      const lo = p < r ? p : r
+      const hi = p < r ? r : p
+      const key = lo * 67108864 + hi
+      const f = edges.get(key)
+      if (f === undefined) edges.set(key, t)
+      else if (f >= 0) {
+        if (fn[f * 3] * nx + fn[f * 3 + 1] * ny + fn[f * 3 + 2] * nz <= cos) emit(lo, hi)
+        edges.set(key, -1)
+      }
+    }
+  }
+  // 只属于一个面的边（开放的边界）
+  for (const [key, f] of edges)
+    if (f >= 0) {
+      const lo = Math.floor(key / 67108864)
+      emit(lo, key - lo * 67108864)
+    }
+  const v = new Float32Array(out)
+  cache.set(angle, v)
   return v
 }
 
@@ -181,17 +284,26 @@ function triangles(geo: THREE.BufferGeometry) {
   const start = geo.drawRange.start
   const count = Math.min(geo.drawRange.count, idx ? idx.count : pos.count)
   v = new Float32Array(Math.max(0, count) * 3)
+  const flat = !(pos as unknown as THREE.InterleavedBufferAttribute).isInterleavedBufferAttribute
+  const P = pos.array as ArrayLike<number>
+  const I = idx?.array as ArrayLike<number> | undefined
   for (let i = 0; i < count; i++) {
-    const k = idx ? idx.getX(start + i) : start + i
-    v[i * 3] = pos.getX(k)
-    v[i * 3 + 1] = pos.getY(k)
-    v[i * 3 + 2] = pos.getZ(k)
+    const k = I ? I[start + i] : start + i
+    if (flat) {
+      v[i * 3] = P[k * 3]
+      v[i * 3 + 1] = P[k * 3 + 1]
+      v[i * 3 + 2] = P[k * 3 + 2]
+    } else {
+      v[i * 3] = pos.getX(k)
+      v[i * 3 + 1] = pos.getY(k)
+      v[i * 3 + 2] = pos.getZ(k)
+    }
   }
   triCache.set(geo, v)
   return v
 }
 
-/** 材质是不是半透明的（楼层淡出、选中透视换上的副本按原材质算） */
+/** 材质是不是半透明的（楼层淡出换上的副本按原材质算） */
 function isGlassy(mat: THREE.Material | THREE.Material[]) {
   const ms = Array.isArray(mat) ? mat : [mat]
   return ms.every((m) => {
@@ -231,6 +343,9 @@ function classify(mesh: THREE.Object3D, stop: THREE.Object3D, walls: WallShow): 
   }
 }
 
+/** 三角形超过这个数的网格（编织、叶片、布料之类）不取硬边：交给屏幕空间的描线（fill = sketch） */
+const EDGE_TRI_CAP = 12000
+
 const _m = new THREE.Matrix4()
 const _inv = new THREE.Matrix4()
 const _inst = new THREE.Matrix4()
@@ -245,13 +360,17 @@ function collect(root: THREE.Object3D, stop: THREE.Object3D, pick: (mesh: THREE.
     const cls = pick(mesh)
     if (!cls) return
     const geo = mesh.geometry
-    if (!geo?.getAttribute('position')) return
-    const edges = hardEdges(geo, angle)
+    const pos = geo?.getAttribute('position')
+    if (!pos) return
+    const nt = (geo.index ? geo.index.count : pos.count) / 3
+    const heavy = nt > EDGE_TRI_CAP
+    const edges = heavy ? null : hardEdges(geo, angle)
     const glassy = isGlassy(mesh.material)
-    const tris = glassy ? null : triangles(geo)
+    const tris = glassy && !heavy ? null : triangles(geo)
+    const fill = heavy ? 'sketch' : cls.fill
     const each = (mat: THREE.Matrix4) => {
-      lines[cls.line].pushTransformed(edges, mat)
-      if (tris) fills[cls.fill].pushTransformed(tris, mat)
+      if (edges) lines[cls.line].pushTransformed(edges, mat)
+      if (tris) fills[fill].pushTransformed(tris, mat)
     }
     _m.multiplyMatrices(_inv, mesh.matrixWorld)
     const im = mesh as THREE.InstancedMesh
@@ -322,66 +441,53 @@ export function isLargeFurniture(f: Furniture) {
   return a >= 3600 || (d.h >= 120 && a >= 1800)
 }
 
-/** 家具按素材缓存的局部线框与三角形（柜门开合影响形状） */
-const furnCache = new Map<string, { edges: Float32Array; tris: Float32Array }>()
-const furnKey = (f: Furniture) => `${f.asset}#${f.open ? 1 : 0}`
-
-function furnitureLocal(f: Furniture, obj: THREE.Object3D) {
-  const key = furnKey(f)
-  let c = furnCache.get(key)
-  if (c) return c
-  const lines = emptyLines()
-  const fills = emptyFills()
-  const holder = obj
-  collect(holder, holder, (m) => {
-    for (let o: THREE.Object3D | null = m; o && o !== holder; o = o.parent) if (!o.visible || o.userData.isOutline) return null
-    return { line: 'furniture', fill: 'furniture' }
-  }, EDGE_ANGLE.furniture, lines, fills)
-  c = { edges: lines.furniture.out(), tris: fills.furniture.out() }
-  furnCache.set(key, c)
-  return c
-}
-
 export interface FurnitureFloor {
   floorId: string
-  lines: Float32Array
-  fills: Float32Array
+  /** 填充网格（借用家具模型的几何体，userData.borrowed：不要释放） */
+  meshes: THREE.Mesh[]
 }
 
 /**
- * 家具线框（每层，坐标相对本层地面）。model 给出已经搭好、摆好的家具模型（沙盘里现成的），没有时现搭一个。
+ * 家具：不在 CPU 上取边（家具动辄上万个三角形，素材多了要好几秒），只借用模型的几何体画填充，
+ * 线条由屏幕空间描线（法线 / 深度突变处）画出来——家具线自然更细、更浅，而且只画看得见的面。
+ * model 给出沙盘里现成的家具模型；没有时（测试）现搭一个。
  */
-export function furnitureGeometry(plan: Plan, show: FurnitureShow, model?: (f: Furniture) => THREE.Object3D | undefined): FurnitureFloor[] {
+export function furnitureMeshes(plan: Plan, show: FurnitureShow, material: THREE.Material, model?: (f: Furniture) => THREE.Object3D | undefined): FurnitureFloor[] {
   const fs = planFloors(plan)
-  const per = new Map(fs.map((f) => [f.id, { lines: new Buf(), fills: new Buf() }]))
-  if (show !== 'none') {
-    const elev = new Map(fs.map((f) => [f.id, f.elevation]))
-    const m = new THREE.Matrix4()
-    for (const f of plan.furniture) {
-      if (show === 'large' && !isLargeFurniture(f)) continue
-      if (!ASSET_MAP.has(f.asset)) continue
-      let obj = model?.(f)
-      let temp = false
-      if (!obj) {
-        obj = furnitureModel(f)
-        temp = true
-      }
-      const local = furnitureLocal(f, obj)
-      // 摆放矩阵：按户型数据重算（和沙盘的 placeFurniture 一致），再减掉楼层标高
-      const holder = new THREE.Object3D()
-      placeFurniture(holder, plan, f)
-      holder.updateMatrix()
-      const fid = floorOf(plan, f)
-      m.makeTranslation(0, -(elev.get(fid) ?? 0), 0).multiply(holder.matrix)
-      const dst = per.get(fid)
-      if (dst) {
-        dst.lines.pushTransformed(local.edges, m)
-        dst.fills.pushTransformed(local.tris, m)
-      }
-      if (temp) obj.traverse((o) => (o as THREE.Mesh).isMesh && !(o as THREE.Mesh).geometry.userData.shared && (o as THREE.Mesh).geometry.dispose())
-    }
+  const per = new Map<string, THREE.Mesh[]>(fs.map((f) => [f.id, []]))
+  if (show === 'none') return fs.map((f) => ({ floorId: f.id, meshes: [] }))
+  const elev = new Map(fs.map((f) => [f.id, f.elevation]))
+  const place = new THREE.Object3D()
+  const base = new THREE.Matrix4()
+  const inv = new THREE.Matrix4()
+  for (const f of plan.furniture) {
+    if (show === 'large' && !isLargeFurniture(f)) continue
+    if (!ASSET_MAP.has(f.asset)) continue
+    const obj = model?.(f) ?? furnitureModel(f)
+    const fid = floorOf(plan, f)
+    const list = per.get(fid)
+    if (!list) continue
+    // 摆放矩阵按户型数据重算（和沙盘的 placeFurniture 一致），减掉楼层标高
+    placeFurniture(place, plan, f)
+    place.updateMatrix()
+    base.makeTranslation(0, -(elev.get(fid) ?? 0), 0).multiply(place.matrix)
+    obj.updateWorldMatrix(true, true)
+    inv.copy(obj.matrixWorld).invert()
+    obj.traverse((o) => {
+      const src = o as THREE.Mesh
+      if (!src.isMesh || o.userData.isOutline || o.userData.fadeTwin || !src.geometry?.getAttribute('position')) return
+      const im = src as THREE.InstancedMesh
+      const m = im.isInstancedMesh ? new THREE.InstancedMesh(src.geometry, material, im.count) : new THREE.Mesh(src.geometry, material)
+      if (im.isInstancedMesh) (m as THREE.InstancedMesh).instanceMatrix.copy(im.instanceMatrix)
+      m.matrixAutoUpdate = false
+      m.matrix.multiplyMatrices(base, _m.multiplyMatrices(inv, src.matrixWorld))
+      m.userData.borrowed = true
+      m.frustumCulled = false
+      m.layers.enable(1)
+      list.push(m)
+    })
   }
-  return fs.map((f) => ({ floorId: f.id, lines: per.get(f.id)!.lines.out(), fills: per.get(f.id)!.fills.out() }))
+  return fs.map((f) => ({ floorId: f.id, meshes: per.get(f.id)! }))
 }
 
 /** 家具占地（旋转后的包围盒）：房间名避开它们 */
@@ -583,31 +689,52 @@ interface FloorNode {
 
 export interface BlueprintInput {
   plan: Plan
-  /** 沙盘里现成的家具模型（按 id），没有时现搭 */
+  /** 沙盘里现成的家具模型（借用几何体）；没有时现搭 */
   model?: (f: Furniture) => THREE.Object3D | undefined
 }
 
-/** 填充材质：纯色，按面的朝向（屏幕导数求法线）分出一点明暗；剖切面（墙顶）涂实心 */
-function fillMaterial(): THREE.ShaderMaterial {
+/**
+ * 填充材质：纯色，按面的朝向（屏幕导数求法线）分出一点明暗；剖切面（墙顶）涂实心。
+ * uMode = 1 时改画「法线 + 深度」缓冲给屏幕空间描线用：rg = 视空间法线（八面体编码），b = 视深 - uRef，a = 0.5 / 1（1 = 要描线）。
+ */
+function fillMaterial(weight: number): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
-    uniforms: { uColor: { value: new THREE.Color() }, uPoche: { value: new THREE.Color() }, uShade: { value: 0.06 }, uCut: { value: -1e6 } },
+    uniforms: { uColor: { value: new THREE.Color() }, uPoche: { value: new THREE.Color() }, uShade: { value: 0.06 }, uCut: { value: -1e6 }, uMode: { value: 0 }, uWeight: { value: weight }, uRef: { value: 0 } },
     vertexShader: /* glsl */ `
       varying vec3 vW;
+      varying vec3 vV;
       varying float vY;
       void main() {
         vY = position.y;
         vec4 w = modelMatrix * vec4(position, 1.0);
         vW = w.xyz;
-        gl_Position = projectionMatrix * viewMatrix * w;
+        vec4 v = viewMatrix * w;
+        vV = v.xyz;
+        gl_Position = projectionMatrix * v;
       }`,
     fragmentShader: /* glsl */ `
       uniform vec3 uColor;
       uniform vec3 uPoche;
       uniform float uShade;
       uniform float uCut;
+      uniform float uMode;
+      uniform float uWeight;
+      uniform float uRef;
       varying vec3 vW;
+      varying vec3 vV;
       varying float vY;
+      vec2 oct(vec3 n) {
+        n /= abs(n.x) + abs(n.y) + abs(n.z);
+        vec2 e = n.xy;
+        if (n.z < 0.0) e = (1.0 - abs(e.yx)) * vec2(e.x >= 0.0 ? 1.0 : -1.0, e.y >= 0.0 ? 1.0 : -1.0);
+        return e;
+      }
       void main() {
+        if (uMode > 0.5) {
+          vec3 nv = normalize(cross(dFdx(vV), dFdy(vV)));
+          gl_FragColor = vec4(oct(nv), -vV.z - uRef, uWeight > 0.5 ? 1.0 : 0.5);
+          return;
+        }
         vec3 n = normalize(cross(dFdx(vW), dFdy(vW)));
         vec3 c = uColor;
         if (abs(n.y) > 0.7) {
@@ -622,6 +749,75 @@ function fillMaterial(): THREE.ShaderMaterial {
     polygonOffset: true,
     polygonOffsetFactor: 1,
     polygonOffsetUnits: 2,
+    toneMapped: false,
+  })
+}
+
+/**
+ * 屏幕空间描线：读「法线 + 深度」缓冲，在家具（a = 1）的轮廓、深度断层、折痕处画细线。
+ * 轮廓和深度断层只画在靠前的一侧，折痕只和右、下邻居比，线宽约 1 个采样步长。
+ */
+function edgeMaterial(): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      tND: { value: null },
+      uSize: { value: new THREE.Vector2(1, 1) },
+      uStep: { value: 1 },
+      uColor: { value: new THREE.Color() },
+      uOpacity: { value: 0.9 },
+      uOrtho: { value: 1 },
+      uWpp: { value: 1 },
+      uPerspK: { value: 0.001 },
+      uRef: { value: 0 },
+    },
+    vertexShader: /* glsl */ `
+      void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }`,
+    fragmentShader: /* glsl */ `
+      uniform sampler2D tND;
+      uniform vec2 uSize;
+      uniform float uStep;
+      uniform vec3 uColor;
+      uniform float uOpacity;
+      uniform float uOrtho;
+      uniform float uWpp;
+      uniform float uPerspK;
+      uniform float uRef;
+      vec3 dec(vec2 e) {
+        vec3 n = vec3(e, 1.0 - abs(e.x) - abs(e.y));
+        if (n.z < 0.0) n.xy = (1.0 - abs(n.yx)) * vec2(n.x >= 0.0 ? 1.0 : -1.0, n.y >= 0.0 ? 1.0 : -1.0);
+        return normalize(n);
+      }
+      vec4 at(vec2 p) {
+        ivec2 q = ivec2(clamp(p, vec2(0.0), uSize - 1.0));
+        return texelFetch(tND, q, 0);
+      }
+      void main() {
+        vec2 p = floor(gl_FragCoord.xy);
+        vec4 c = at(p);
+        bool cv = c.a > 0.25;
+        float depth = c.b + uRef;
+        float wpp = uOrtho > 0.5 ? uWpp : max(depth, 1.0) * uPerspK;
+        float tD = max(2.0, 2.5 * wpp * uStep);
+        bool hit = false;
+        vec2 dirs[4] = vec2[4](vec2(1.0, 0.0), vec2(0.0, 1.0), vec2(-1.0, 0.0), vec2(0.0, -1.0));
+        for (int i = 0; i < 4; i++) {
+          vec4 q = at(p + dirs[i] * uStep);
+          bool qv = q.a > 0.25;
+          if (!cv && !qv) continue;
+          if (max(c.a, q.a) < 0.75) continue;
+          if (cv != qv) { if (cv) hit = true; continue; }
+          vec4 o = at(p - dirs[i] * uStep);
+          float lap = abs(q.b + o.b - 2.0 * c.b);
+          if (q.b - c.b > tD && (o.a < 0.25 || lap > tD)) hit = true;
+          if (i < 2 && dot(dec(c.rg), dec(q.rg)) < 0.8) hit = true;
+        }
+        if (!hit) discard;
+        gl_FragColor = vec4(uColor, uOpacity);
+        #include <colorspace_fragment>
+      }`,
+    transparent: true,
+    depthTest: false,
+    depthWrite: false,
     toneMapped: false,
   })
 }
@@ -647,12 +843,18 @@ export class BlueprintView {
   private needsRender = true
   private needsLayout = true
   private plan: Plan | null = null
-  private model: BlueprintInput['model']
   private structKey = ''
   private furnKey = ''
   private labelKey = ''
   private structCache: StructureFloor[] = []
+  private structMemo = new Map<string, StructureFloor[]>()
   private furnGeo: FurnitureFloor[] = []
+  private model: BlueprintInput['model']
+  /** 屏幕空间描线：法线 + 深度缓冲、全屏描线 */
+  private nd: THREE.WebGLRenderTarget | null = null
+  private edgeMat = edgeMaterial()
+  private edgeScene = new THREE.Scene()
+  private edgeCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
   /** 竖向尺寸放在哪个角（变了才重排） */
   private cornerKey = ''
   /** 全部楼层外皮的包围盒（平面坐标） */
@@ -672,8 +874,11 @@ export class BlueprintView {
       }
       this.lineMats.set(k, m)
     }
-    for (const k of FILL_CLASSES) this.fillMats.set(k, fillMaterial())
+    for (const k of FILL_CLASSES) this.fillMats.set(k, fillMaterial(SKETCHED.has(k) ? 1 : 0))
     this.scene.add(this.root)
+    const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.edgeMat)
+    quad.frustumCulled = false
+    this.edgeScene.add(quad)
     const c = new OrbitControls(this.ortho, dom)
     c.enableDamping = true
     c.dampingFactor = 0.12
@@ -751,14 +956,18 @@ export class BlueprintView {
     const sKey = `${walls}|${shape}`
     let rebuilt = false
     if (sKey !== this.structKey) {
-      this.structCache = structureGeometry(plan, walls)
+      // 剖切 / 满高来回切换时直接用上次算好的（只留最近两份）
+      this.structCache = this.structMemo.get(sKey) ?? structureGeometry(plan, walls)
+      this.structMemo.delete(sKey)
+      this.structMemo.set(sKey, this.structCache)
+      while (this.structMemo.size > 2) this.structMemo.delete(this.structMemo.keys().next().value!)
       this.structKey = sKey
       rebuilt = true
     }
     const fKey = `${furniture}|${JSON.stringify(plan.furniture.map((f) => [f.asset, f.x, f.y, f.z, f.rot, f.floor, f.open]))}|${plan.floors?.length ?? 0}`
     const furnChanged = fKey !== this.furnKey
     if (furnChanged) {
-      this.furnGeo = furnitureGeometry(plan, furniture, this.model)
+      this.furnGeo = furnitureMeshes(plan, furniture, this.fillMats.get('furniture')!, this.model)
       this.furnKey = fKey
     }
     const lKey = `${sKey}|${furnChanged ? fKey : this.furnKey}|${unit}|${paper}|${t('设计图')}|${furniture}`
@@ -787,13 +996,14 @@ export class BlueprintView {
     g.setAttribute('position', new THREE.BufferAttribute(pos, 3))
     const m = new THREE.Mesh(g, this.fillMats.get(cls)!)
     m.frustumCulled = false
+    m.layers.enable(1)
     return m
   }
 
   private disposeGroup(g: THREE.Object3D) {
     g.traverse((o) => {
       const m = o as THREE.Mesh
-      if (m.geometry) m.geometry.dispose()
+      if (m.geometry && !m.userData.borrowed) m.geometry.dispose()
       const sp = o as THREE.Sprite
       if (sp.isSprite) {
         sp.material.map?.dispose()
@@ -843,12 +1053,7 @@ export class BlueprintView {
         node.furniture = new THREE.Group()
         node.group.add(node.furniture)
         const fg = this.furnGeo.find((x) => x.floorId === node.id)
-        if (fg) {
-          const m = this.fillObj('furniture', fg.fills)
-          if (m) node.furniture.add(m)
-          const l = this.lineObj('furniture', fg.lines)
-          if (l) node.furniture.add(l)
-        }
+        if (fg) for (const m of fg.meshes) node.furniture.add(m)
       }
     })
     this.buildAnnotations(plan, pal)
@@ -929,6 +1134,8 @@ export class BlueprintView {
     const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, depthTest: true, toneMapped: false })
     const sprite = new THREE.Sprite(mat)
     sprite.renderOrder = 10
+    // 文字单独一遍画在最上面（描线之后）
+    sprite.layers.set(2)
     const lb: Label = { sprite, kind, w, h, floorId }
     this.labels.push(lb)
     return lb
@@ -1151,12 +1358,62 @@ export class BlueprintView {
     this.needsRender = true
   }
 
+  /**
+   * 画一帧：① 法线 + 深度缓冲（只画填充，图层 1）② 填充和线（图层 0）③ 屏幕空间描线叠上去 ④ 文字（图层 2）。
+   * target 为 null 画到画布；导出时画到离屏目标。
+   */
   private draw(target: THREE.WebGLRenderTarget | null) {
     const r = this.renderer
-    r.setRenderTarget(target)
-    r.setClearColor(PAPERS[this.opts.paper].bg, 1)
-    r.clear()
-    r.render(this.scene, this.camera)
+    const cam = this.camera
+    const buf = target ? new THREE.Vector2(target.width, target.height) : r.getDrawingBufferSize(new THREE.Vector2())
+    const W = Math.max(1, Math.round(buf.x))
+    const H = Math.max(1, Math.round(buf.y))
+    if (!this.nd || this.nd.width !== W || this.nd.height !== H) {
+      this.nd?.dispose()
+      const float = !!r.extensions?.has?.('EXT_color_buffer_float')
+      this.nd = new THREE.WebGLRenderTarget(W, H, { type: float ? THREE.FloatType : THREE.HalfFloatType, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: true })
+    }
+    const ref = cam.position.distanceTo(this.controls.target)
+    // ① 法线 + 深度
+    for (const m of this.fillMats.values()) {
+      m.uniforms.uMode.value = 1
+      m.uniforms.uRef.value = ref
+    }
+    const autoClear = r.autoClear
+    try {
+      cam.layers.set(1)
+      r.setRenderTarget(this.nd)
+      r.setClearColor(0x000000, 0)
+      r.clear()
+      r.render(this.scene, cam)
+      for (const m of this.fillMats.values()) m.uniforms.uMode.value = 0
+      // ② 填充和线
+      cam.layers.set(0)
+      r.setRenderTarget(target)
+      r.setClearColor(PAPERS[this.opts.paper].bg, 1)
+      r.clear()
+      r.render(this.scene, cam)
+      r.autoClear = false
+      // ③ 描线：采样步长按输出像素密度（屏幕 2× 时 1 像素，导出 3× 时 2 像素）
+      const density = W / this.size.w
+      const u = this.edgeMat.uniforms
+      u.tND.value = this.nd.texture
+      u.uSize.value.set(W, H)
+      u.uStep.value = Math.max(1, Math.round(density / 1.6))
+      u.uColor.value.set(PAPERS[this.opts.paper].line.furniture)
+      u.uOrtho.value = cam === this.ortho ? 1 : 0
+      u.uWpp.value = (this.ortho.top - this.ortho.bottom) / this.ortho.zoom / H
+      u.uPerspK.value = (2 * Math.tan((this.persp.fov * Math.PI) / 360)) / H
+      u.uRef.value = ref
+      r.render(this.edgeScene, this.edgeCam)
+      // ④ 文字
+      cam.layers.set(2)
+      r.render(this.scene, cam)
+    } finally {
+      cam.layers.set(0)
+      for (const m of this.fillMats.values()) m.uniforms.uMode.value = 0
+      r.autoClear = autoClear
+    }
   }
 
   /** 每像素对应的世界长度（CSS 像素） */
@@ -1318,6 +1575,8 @@ export class BlueprintView {
     this.floors = []
     for (const m of this.lineMats.values()) m.dispose()
     for (const m of this.fillMats.values()) m.dispose()
+    this.edgeMat.dispose()
+    this.nd?.dispose()
   }
 
   /** 测试 / 调试：当前各层的线段数（按类） */

@@ -54,6 +54,9 @@ import {
   IconJson,
   IconLanguages,
   IconLayers,
+  IconRuler,
+  IconIso,
+  IconPerspective,
   IconStairs,
   IconStairsUp,
   IconDashedCircle,
@@ -190,6 +193,10 @@ export const ICONS = {
   modePreview: IconEye,
   // 3D 沙盘的「外观」视图：屋顶、外墙全高
   exteriorView: IconBuilding,
+  // 3D 沙盘的「设计图」视图：线框 + 尺寸标注；正交轴测 / 透视
+  blueprint: IconRuler,
+  ortho: IconIso,
+  perspective: IconPerspective,
   // 3D 沙盘：一键布置 / 清空 / 吸附 / 跟随鼠标
   autoFurnish: IconSofaSparkle, // 新增
   clearFurniture: IconBroom,

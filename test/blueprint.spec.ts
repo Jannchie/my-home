@@ -1,7 +1,8 @@
 // 3D 设计图：标注数据（外墙尺寸线、标高、房间名）与户型一致；结构 / 家具线框能搭出来。
+import * as THREE from 'three'
 import { describe, expect, test } from 'vitest'
 import { floorAnnotations, fmtDim, fmtLevel, outlineDims, topLevel, unitFor, SIDES } from '/src/dimensions'
-import { structureGeometry, furnitureGeometry, isLargeFurniture } from '/src/three/blueprint'
+import { BlueprintView, structureGeometry, furnitureMeshes, hardEdges, isLargeFurniture } from '/src/three/blueprint'
 import { floorOutline, floorView, planFloors } from '/src/floors'
 import { bbox, rectPoints, type Plan } from '/src/model'
 import { generatePlan } from '/src/generate-region'
@@ -155,7 +156,8 @@ describe('线框', () => {
     const p = genJp(5)
     p.furniture = decorate(p, 5)
     expect(p.furniture.length).toBeGreaterThan(0)
-    const count = (show: 'all' | 'large' | 'none') => furnitureGeometry(p, show).reduce((s, f) => s + f.lines.length, 0)
+    const mat = new THREE.MeshBasicMaterial()
+    const count = (show: 'all' | 'large' | 'none') => furnitureMeshes(p, show, mat).reduce((s, f) => s + f.meshes.length, 0)
     const all = count('all')
     const large = count('large')
     expect(all).toBeGreaterThan(0)
@@ -163,5 +165,61 @@ describe('线框', () => {
     expect(large).toBeLessThan(all)
     expect(count('none')).toBe(0)
     expect(p.furniture.some(isLargeFurniture)).toBe(true)
+  })
+})
+
+describe('硬边提取', () => {
+  test('和 THREE.EdgesGeometry 的边数一致（立方体、圆柱、圆角盒、球）', () => {
+    const geos = [new THREE.BoxGeometry(10, 20, 30), new THREE.CylinderGeometry(5, 5, 20, 24), new THREE.SphereGeometry(10, 16, 12), new THREE.TorusGeometry(10, 3, 8, 24), new THREE.BoxGeometry(10, 10, 10).toNonIndexed()]
+    for (const g of geos)
+      for (const angle of [20, 32]) {
+        const ref = new THREE.EdgesGeometry(g, angle).getAttribute('position').count / 2
+        expect(hardEdges(g, angle).length / 6).toBe(ref)
+      }
+  })
+})
+
+describe('设计图视图（假渲染器）', () => {
+  const fakeDom = () => {
+    const ev = { addEventListener() {}, removeEventListener() {} }
+    return { ...ev, style: {}, ownerDocument: ev, getRootNode: () => ev, clientWidth: 800, clientHeight: 600, getBoundingClientRect: () => ({ left: 0, top: 0, width: 800, height: 600 }) } as unknown as HTMLElement
+  }
+  const fakeRenderer = () =>
+    ({
+      getClearColor: (c: unknown) => c,
+      getClearAlpha: () => 0,
+      setClearColor() {},
+      setRenderTarget() {},
+      getRenderTarget: () => null,
+      clear() {},
+      render() {},
+      shadowMap: {},
+      capabilities: { maxTextureSize: 8192 },
+      extensions: { has: () => true },
+      autoClear: true,
+      getDrawingBufferSize: (v: import('three').Vector2) => v.set(1600, 1200),
+    }) as unknown as import('three').WebGLRenderer
+  const opts = { paper: 'white', furniture: 'all', walls: 'cut', ortho: true, unit: 'mm', layout: 'explode' } as const
+
+  test('两层户建：进入、排版、切换选项都不报错；每层都有尺寸线、标高文字', () => {
+    const p = twoStoryPlan()
+    const v = new BlueprintView(fakeRenderer(), fakeDom())
+    v.resize(800, 600)
+    v.enter({ plan: p }, { ...opts })
+    expect(v.frame()).toBe(true)
+    const s = v.stats() as Record<string, number>
+    expect(s.wall).toBeGreaterThan(0)
+    expect(s.dim).toBeGreaterThan(0)
+    expect(s.labels).toBeGreaterThan(8)
+    // 标高：两层各一个 + 墙顶
+    const levels = (v as unknown as { labels: { kind: string; floorId: string }[] }).labels.filter((l) => l.kind === 'level')
+    expect(levels).toHaveLength(3)
+    expect(new Set(levels.map((l) => l.floorId)).size).toBe(2)
+    for (const o of [{ walls: 'full' }, { paper: 'blue' }, { ortho: false }, { layout: 'stack' }, { furniture: 'none' }, { unit: 'cm' }] as const) {
+      v.setOptions({ ...opts, ...o })
+      v.frame()
+    }
+    v.exit()
+    v.dispose()
   })
 })
