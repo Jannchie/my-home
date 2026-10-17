@@ -24,7 +24,7 @@ import {
 } from '../model'
 import { isIndoor, sharedIntervals, wallSegments, wallThicknessAt } from '../walls'
 import { tatamiLayout } from '../tatami'
-import { addOutlines, ball, capsule, cyl, mergeMeshes, rbox, shade, toon } from './toon'
+import { addOutlines, ball, capsule, cyl, mergeMeshes, rbox, shade, toon, useAnisotropy } from './toon'
 import { glow } from './kit'
 import { fridgeSpotModel, washerSpotModel } from './appliances'
 import { effectivePalette } from './colors'
@@ -68,7 +68,7 @@ function canvasTex(key: string, size: number, tile: number, draw: (g: CanvasRend
   t.wrapS = t.wrapT = THREE.RepeatWrapping
   t.repeat.set(1 / tile, 1 / tile)
   t.colorSpace = THREE.SRGBColorSpace
-  t.anisotropy = 4
+  useAnisotropy(t)
   texCache.set(key, t)
   return t
 }

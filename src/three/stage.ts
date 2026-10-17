@@ -1,7 +1,7 @@
 // 渲染舞台：渲染器、暖色灯光、相机取景。沙盘、素材预览、缩略图共用。
 
 import * as THREE from 'three'
-import { outlineUniforms } from './toon'
+import { outlineUniforms, setMaxAnisotropy } from './toon'
 
 export interface Stage {
   renderer: THREE.WebGLRenderer
@@ -31,6 +31,7 @@ export function createStage(canvas: HTMLCanvasElement, opts: { preserve?: boolea
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: !opts.low, alpha: true, preserveDrawingBuffer: !!opts.preserve })
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
   renderer.shadowMap.enabled = true
+  setMaxAnisotropy(opts.low ? 4 : Math.min(16, renderer.capabilities.getMaxAnisotropy()))
   renderer.shadowMap.type = opts.low ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap
   renderer.outputColorSpace = THREE.SRGBColorSpace
 
@@ -83,6 +84,7 @@ export function setStageQuality(stage: Stage, low: boolean) {
   const { renderer, sun } = stage
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
   renderer.shadowMap.type = low ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap
+  setMaxAnisotropy(low ? 4 : Math.min(16, renderer.capabilities.getMaxAnisotropy()))
   const size = low ? 1024 : 2048
   if (sun.shadow.mapSize.x !== size) {
     sun.shadow.mapSize.set(size, size)

@@ -11,7 +11,7 @@
 //     不规则顶面再给 surfaceShape；桌上的东西做成独立的 prop 素材。
 
 import * as THREE from 'three'
-import { cyl, rbox, shade, toon } from './toon'
+import { cyl, rbox, shade, toon, useAnisotropy } from './toon'
 
 export type AssetCategory =
   | 'living'
@@ -542,7 +542,7 @@ export function paintPanel(
     draw(cv.getContext('2d')!, W, H)
     tex = new THREE.CanvasTexture(cv)
     tex.colorSpace = THREE.SRGBColorSpace
-    tex.anisotropy = 4
+    useAnisotropy(tex)
     paintCache.set(k, tex)
   }
   const geo = new THREE.PlaneGeometry(w, h).translate(0, h / 2, 0)

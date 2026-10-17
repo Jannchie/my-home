@@ -1,6 +1,7 @@
 // 动态特效：蒸汽、烟、水雾、火苗、气泡。每个发射点一组 Points，粒子在 CPU 上更新，
 // 发射点每帧跟着宿主物体走（家具被拖动、旋转时特效跟着动）。
 
+import { useAnisotropy } from './toon'
 import * as THREE from 'three'
 import type { Fx } from './kit'
 
@@ -43,6 +44,7 @@ function softTexture() {
   g.fillStyle = grad
   g.fillRect(0, 0, 64, 64)
   softTex = new THREE.CanvasTexture(c)
+  useAnisotropy(softTex)
   return softTex
 }
 

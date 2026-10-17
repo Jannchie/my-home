@@ -45,6 +45,26 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
   }
 }
 
+// ---------- 各向异性过滤 ----------
+// 斜着看的贴图（地板、墙纸、布艺花纹、灯光光斑）用显卡支持的最大各向异性过滤，远处不糊成一片。
+// 舞台建好后由 setMaxAnisotropy 设定上限（省电画质 4×）；之前已经建好的贴图登记在这里，一起更新。
+let anisoLevel = 4
+const anisoTextures = new Set<THREE.Texture>()
+/** 给贴图套上当前的各向异性级别，并登记（画质切换时统一更新） */
+export function useAnisotropy<T extends THREE.Texture>(t: T): T {
+  t.anisotropy = anisoLevel
+  anisoTextures.add(t)
+  return t
+}
+export function setMaxAnisotropy(n: number) {
+  anisoLevel = Math.max(1, n)
+  for (const t of anisoTextures) {
+    if (t.anisotropy === anisoLevel) continue
+    t.anisotropy = anisoLevel
+    t.needsUpdate = true
+  }
+}
+
 // ---------- 材质 ----------
 
 let gradient: THREE.DataTexture | null = null

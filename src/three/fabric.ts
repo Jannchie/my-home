@@ -3,7 +3,7 @@
 
 import * as THREE from 'three'
 import { drawPattern, type PatternSpec } from './patterns'
-import { toon } from './toon'
+import { toon, useAnisotropy } from './toon'
 
 const TEX = 256
 const texCache = new Map<string, THREE.CanvasTexture>()
@@ -20,7 +20,7 @@ export function patternTexture(spec: PatternSpec) {
     t = new THREE.CanvasTexture(cv)
     t.wrapS = t.wrapT = THREE.RepeatWrapping
     t.colorSpace = THREE.SRGBColorSpace
-    t.anisotropy = 4
+    useAnisotropy(t)
     texCache.set(key, t)
   }
   return t

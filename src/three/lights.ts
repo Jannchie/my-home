@@ -14,7 +14,7 @@
 import * as THREE from 'three'
 import { area, labelPointAvoiding, pointInPolygon, edgesOf, fixtureBox, fixtureDepth, type Furniture, type Plan, type Room, type RoomKind, type Vec } from '../model'
 import type { AssetDef, StyleTag } from './kit'
-import { addOutlines, ball, cup, cyl, rbox, toon, torus } from './toon'
+import { addOutlines, ball, cup, cyl, rbox, toon, torus, useAnisotropy } from './toon'
 
 // ---------- 设置 ----------
 
@@ -312,6 +312,7 @@ function poolTexture() {
   g.fillRect(0, 0, s, s)
   poolTex = new THREE.CanvasTexture(cv)
   poolTex.wrapS = poolTex.wrapT = THREE.ClampToEdgeWrapping
+  useAnisotropy(poolTex)
   return poolTex
 }
 

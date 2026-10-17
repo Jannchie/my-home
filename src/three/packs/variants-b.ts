@@ -3,7 +3,7 @@
 // 约定见 kit.ts 开头；id 前缀 vb-。
 
 import * as THREE from 'three'
-import { ball, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
+import { ball, cup, cyl, puck, rbox, shade, toon, torus, tray, useAnisotropy } from '../toon'
 import { C, G, S, ellipsePoly, rectPoly, rng, slab, type AssetCategory, type AssetDef, type Poly, type StyleTag } from '../kit'
 
 const PI = Math.PI
@@ -144,7 +144,7 @@ function paintDisc(r: number, key: string, draw: (g: CanvasRenderingContext2D, s
     draw(cv.getContext('2d')!, s)
     tex = new THREE.CanvasTexture(cv)
     tex.colorSpace = THREE.SRGBColorSpace
-    tex.anisotropy = 4
+    useAnisotropy(tex)
     discCache.set(key, tex)
   }
   const geo = new THREE.CircleGeometry(r, 64).rotateX(-PI / 2)
