@@ -898,6 +898,13 @@ main {
   padding-left: max(10px, env(safe-area-inset-left, 0px));
   padding-right: max(10px, env(safe-area-inset-right, 0px));
 }
+/* 主屏幕独立窗口（iPhone PWA，状态栏样式 default）：页面从状态栏下方开始，顶部安全区报告为 0，
+   但系统会在状态栏下沿叠一层渐变磨砂压住页面最上面一小段——顶栏再往下让 10px */
+@media (display-mode: standalone) {
+  :root.compact-bar .top {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 18px);
+  }
+}
 :root.compact-bar .top .views button.on .lbl {
   display: inline;
 }

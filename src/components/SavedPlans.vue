@@ -837,6 +837,11 @@ const metaLine = (m: { area: number; layout: string; furniture: number }) =>
   padding-top: calc(env(safe-area-inset-top, 0px) + 8px);
   padding-bottom: var(--safe-b, env(safe-area-inset-bottom, 0px));
 }
+@media (display-mode: standalone) {
+  :root.compact .sp {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 18px);
+  }
+}
 :root.compact .sp-close {
   width: 44px;
   height: 44px;

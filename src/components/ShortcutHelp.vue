@@ -325,6 +325,11 @@ kbd.mouse {
 :root.compact header {
   padding-top: calc(env(safe-area-inset-top, 0px) + 14px);
 }
+@media (display-mode: standalone) {
+  :root.compact header {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 24px);
+  }
+}
 :root.compact .cols {
   grid-template-columns: 1fr;
 }
