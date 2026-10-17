@@ -132,10 +132,23 @@ function outlineMaterial(color: THREE.Color) {
   return m
 }
 
+// 描边颜色：填充色的深色版本。浅色 / 中色填充沿用原来的算法；近黑的填充（黑色电竞椅、人体工学椅、
+// 小车底盘、深色显示器）如果描边也接近黑，远景观感里轮廓和内部转折会糊成一坨黑，所以单独给一个
+// 有上限的提亮——色相不变、饱和度压低，明度最高只到中灰（比白填充的描边还暗一档），不会变成刺眼的
+// 白色硬边。注意 getHSL 默认在工作色彩空间（线性）里取值，这里的数字比肉眼看到的明度低。
+const OUTLINE_FLOOR = 0.12 // 描边明度下限（沿用原值）
+const OUTLINE_DARK_FROM = 0.3 // 填充线性明度低于它才开始提亮；提亮量线性衰减，到这里归零，函数连续
+const OUTLINE_DARK_L = 0.3 // 纯黑填充的描边明度上限（显示出来约 #3d4052–#4e463e 的中灰）：看得见轮廓，又不抢眼
 export function outlineColor(fill: THREE.Color) {
   const hsl = { h: 0, s: 0, l: 0 }
   fill.getHSL(hsl)
-  return new THREE.Color().setHSL(hsl.h, Math.min(1, hsl.s * 0.8 + 0.1), Math.max(0.12, hsl.l * 0.32))
+  const dark = Math.max(0, 1 - hsl.l / OUTLINE_DARK_FROM)
+  const lift = OUTLINE_DARK_L * dark
+  const l = Math.max(OUTLINE_FLOOR, hsl.l * 0.32, lift)
+  // 只有真的把描边抬到了下限以上才压饱和度（lifted: 0→1），其余填充的饱和度保持原样
+  const lifted = Math.max(0, (lift - OUTLINE_FLOOR) / (OUTLINE_DARK_L - OUTLINE_FLOOR))
+  const s = Math.min(1, (hsl.s * 0.8 + 0.1) * (1 - 0.35 * lifted))
+  return new THREE.Color().setHSL(hsl.h, s, l)
 }
 
 /**

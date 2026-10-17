@@ -84,7 +84,7 @@ function sidePrism(pts: [number, number][], t: number, color: string, x: number)
 }
 
 /** 编织藤面：方孔阵列 */
-function weave(w: number, h: number, cell = 5, hole = 3): Hole[] {
+function weave(w: number, h: number, cell = 7, hole = 4.5): Hole[] {
   const holes: Hole[] = []
   const nx = Math.floor((w - 4) / cell)
   const ny = Math.floor((h - 4) / cell)

@@ -123,7 +123,19 @@ function stick(a: V3, b: V3, r: number, color: string, seg = 8) {
   return m
 }
 /** 丝网的一根细丝：不描边 */
-const wire = (a: V3, b: V3, r: number, color: string) => noOL(stick(a, b, r, color, 5))
+const wire = (a: V3, b: V3, r: number, color: string, castShadow = true) => {
+  const m = noOL(stick(a, b, r, color, 5))
+  if (!castShadow) m.castShadow = false
+  return m
+}
+
+/** 笼丝颜色：把配色的丝色压到中等明度——640px 常规取景下细丝才看得清，又不会和深色框架 / 背景糊在一起 */
+function wireSteel(color: string) {
+  const c = new THREE.Color(color)
+  const hsl = { h: 0, s: 0, l: 0 }
+  c.getHSL(hsl)
+  return '#' + new THREE.Color().setHSL(hsl.h, Math.min(hsl.s, 0.2), Math.min(0.6, Math.max(0.44, hsl.l - 0.34))).getHexString()
+}
 
 /** 平滑管子（提手、软管、树枝） */
 function tube(pts: V3[], r: number, color: string, seg?: number, caps = true) {
@@ -184,6 +196,10 @@ interface CageOpt {
   rings?: number[]
   top?: boolean
   topGap?: number
+  /** 细丝颜色（默认同框架色）：框架保持配色、细丝单独加深时用 */
+  wireColor?: string
+  /** 细丝是否投影（默认是）：高处的密网投影会在远处缩成摩尔纹，个别笼子关掉细丝投影 */
+  wireShadow?: boolean
 }
 /** 方形丝网笼身：宽 w、深 d，从 y0 起高 h；竖丝间距 gap，rings 为中间横向加强圈的高度（绝对 y） */
 function wireBox(w: number, d: number, y0: number, h: number, color: string, o: CageOpt = {}) {
@@ -191,6 +207,8 @@ function wireBox(w: number, d: number, y0: number, h: number, color: string, o: 
   const gap = o.gap ?? 1.4
   const r = o.r ?? 0.12
   const fr = o.frameR ?? 0.32
+  const wc = o.wireColor ?? color
+  const ws = o.wireShadow ?? true
   const x0 = -w / 2
   const x1 = w / 2
   const z0 = -d / 2
@@ -200,11 +218,11 @@ function wireBox(w: number, d: number, y0: number, h: number, color: string, o: 
   const nz = Math.max(1, Math.round(d / gap))
   for (let i = 1; i < nx; i++) {
     const x = x0 + (w * i) / nx
-    g.add(wire([x, y0, z0], [x, y1, z0], r, color), wire([x, y0, z1], [x, y1, z1], r, color))
+    g.add(wire([x, y0, z0], [x, y1, z0], r, wc, ws), wire([x, y0, z1], [x, y1, z1], r, wc, ws))
   }
   for (let i = 1; i < nz; i++) {
     const z = z0 + (d * i) / nz
-    g.add(wire([x0, y0, z], [x0, y1, z], r, color), wire([x1, y0, z], [x1, y1, z], r, color))
+    g.add(wire([x0, y0, z], [x0, y1, z], r, wc, ws), wire([x1, y0, z], [x1, y1, z], r, wc, ws))
   }
   for (const [x, z] of [
     [x0, z0],
@@ -225,7 +243,7 @@ function wireBox(w: number, d: number, y0: number, h: number, color: string, o: 
     const n = Math.max(1, Math.round(d / tg))
     for (let i = 1; i < n; i++) {
       const z = z0 + (d * i) / n
-      g.add(wire([x0, y1, z], [x1, y1, z], r, color))
+      g.add(wire([x0, y1, z], [x1, y1, z], r, wc, ws))
     }
     g.add(stick([0, y1, z0], [0, y1, z1], fr * 0.7, color))
   }
@@ -888,17 +906,20 @@ function birdcageStand(p: string[]) {
   return g
 }
 
-/** 方形大鸟笼：底盘抽屉 + 方丝网笼，两根栖木、秋千、镜子、食槽 */
-function squareCage(p: string[], W: number, D: number, HW: number, birds: [BirdKind, BirdKind]) {
+/** 方形大鸟笼：底盘抽屉 + 方丝网笼，两根栖木、秋千、镜子、食槽；wireShadow=false 时笼丝不投影（高处的大笼子用） */
+function squareCage(p: string[], W: number, D: number, HW: number, birds: [BirdKind, BirdKind], wireShadow = true) {
   const [base, wireC, acc] = p
   const g = new THREE.Group()
   g.add(tray(W, 9, D, 1, base, {}, 0.5))
   g.add(rbox(W - 4, 4, 0.6, shade(base, -0.06), { y: 1.5, z: D / 2 + 0.05 }, 0.3))
   g.add(rbox(6, 1.2, 1, acc, { y: 3, z: D / 2 + 0.6 }, 0.4))
   g.add(rbox(W - 2, 0.4, D - 2, '#efe4c8', { y: 1 }, 0.15))
-  for (let x = -W / 2 + 2; x <= W / 2 - 2; x += 1.6) g.add(wire([x, 6, -D / 2 + 1], [x, 6, D / 2 - 1], 0.12, wireC))
+  // 底部格栅：丝径加粗、间距放大——原来的 1.6 / 0.12 在 640px 下会退化成一片灰网
+  const wc = wireSteel(wireC)
+  for (let x = -W / 2 + 2; x <= W / 2 - 2; x += 2.8) g.add(wire([x, 6, -D / 2 + 1], [x, 6, D / 2 - 1], 0.18, wc))
   const y0 = 9.2
-  g.add(wireBox(W - 0.6, D - 0.6, y0, HW, wireC, { gap: 1.3, rings: [y0 + HW * 0.45], topGap: 1.6 }))
+  // 细丝不投影：笼子架在 80cm 高，密网的影子落到地面时会缩成一片摩尔纹，只留框架/托盘/栖木的影子
+  g.add(wireBox(W - 0.6, D - 0.6, y0, HW, wireC, { gap: 2.4, r: 0.22, rings: [y0 + HW * 0.45], topGap: 2.8, wireColor: wc, wireShadow }))
   const z1 = D / 2 - 0.3 + 0.35
   g.add(P(frameXY(0, y0 + 4 + HW * 0.22, W * 0.32, HW * 0.36, 0.32, wireC), 0, 0, z1))
   for (const s of [-1, 1]) g.add(P(frameXY(s * W * 0.33, y0 + 4.5, 8, 7, 0.28, wireC, false), 0, 0, z1))
@@ -911,7 +932,7 @@ function squareCage(p: string[], W: number, D: number, HW: number, birds: [BirdK
   g.add(stick([W / 4, pb, -D / 2 + 0.6], [W / 4, pb, D / 2 - 0.6], 0.75, WOODD))
   // 秋千
   const sy = top - 16
-  for (const s of [-1, 1]) g.add(wire([s * 4, top, 2], [s * 4, sy, 2], 0.12, wireC))
+  for (const s of [-1, 1]) g.add(wire([s * 4, top, 2], [s * 4, sy, 2], 0.12, wc))
   g.add(stick([-4.4, sy, 2], [4.4, sy, 2], 0.5, WOOD))
   for (let i = 0; i < 4; i++) g.add(ball(0.9, [acc, C.lemon, C.sky, C.pink][i], { x: -4, y: sy + 3 + i * 2.2, z: 2 }))
   // 镜子 + 铃铛（左壁内侧）
@@ -947,7 +968,7 @@ function squareStand(p: string[]) {
   }
   for (let x = -W / 2 + 6; x <= W / 2 - 6; x += 3) g.add(wire([x, 23.6, -D / 2 + 3], [x, 23.6, D / 2 - 3], 0.2, wireC))
   g.add(tray(30, 8, 20, 0.6, base, { x: -10, y: 24.2 }, 0.4))
-  const cage = squareCage(p, 60, 46, 58, ['cockatiel', 'budgie'])
+  const cage = squareCage(p, 60, 46, 58, ['cockatiel', 'budgie'], false)
   cage.position.y = SH
   g.add(cage)
   return g
