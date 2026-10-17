@@ -2,6 +2,7 @@
 import { describe, expect, test } from 'vitest'
 import { decorate } from '/src/decorate'
 import { generatePlan } from '/src/generate-region'
+import { matchSel } from '/src/three/tags'
 import { INTEREST_TIERS, generateHousehold, levelCap, levelOf, type Household, type InterestId, type Lv } from '/src/household'
 import { ASSET_MAP } from '/src/three/assets'
 import { JP_OPTS, genJp, penetration, range, rectCorners } from './helpers'
@@ -17,10 +18,10 @@ function withLevel(hh: Household, it: InterestId, lv: Lv): Household {
   )
   return { ...hh, members }
 }
-/** 某兴趣各级套装里出现的素材（按正则命中） */
+/** 某兴趣各级套装里出现的素材（按选择器命中） */
 function tierHits(f: Furniture[], it: InterestId) {
-  const res = (INTEREST_TIERS[it] ?? []).flatMap((t) => [...(t.floor ?? []), ...(t.props ?? []), ...(t.wall ?? [])])
-  return f.filter((x) => res.some((re) => re.test(x.asset) || re.test(`${x.asset} ${ASSET_MAP.get(x.asset)?.name ?? ''}`))).length
+  const sels = (INTEREST_TIERS[it] ?? []).flatMap((t) => [...(t.floor ?? []), ...(t.props ?? []), ...(t.wall ?? [])])
+  return f.filter((x) => sels.some((sel) => matchSel(ASSET_MAP.get(x.asset)!, sel))).length
 }
 
 describe('兴趣等级推算', () => {

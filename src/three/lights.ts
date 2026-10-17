@@ -14,6 +14,8 @@
 import * as THREE from 'three'
 import { area, labelPointAvoiding, pointInPolygon, edgesOf, fixtureBox, fixtureDepth, type Furniture, type Plan, type Room, type RoomKind, type Vec } from '../model'
 import type { AssetDef, StyleTag } from './kit'
+import { ASSET_MAP } from './assets'
+import { hasTag } from './tags'
 import { addOutlines, ball, cup, cyl, rbox, toon, torus, useAnisotropy } from './toon'
 
 // ---------- 设置 ----------
@@ -112,14 +114,15 @@ export interface RoomLightSpec {
 }
 
 const SMALL_ROOMS: RoomKind[] = ['entrance', 'hall', 'storage', 'toilet', 'wash']
-const DINING_RE = /^tbl-dining|^tbl-bar-table|baxian|fh-table/
+/** 吊灯挂在上方的餐桌 */
+const isDiningTable = (asset: string) => hasTag(ASSET_MAP.get(asset), 'dining-table')
 
 /** 房间里的餐桌（吊灯挂在它上方） */
 function diningTable(plan: Plan, room: Room, defs: Map<string, AssetDef>) {
   let best: Furniture | null = null
   let bestA = 0
   for (const f of plan.furniture) {
-    if (f.z || !DINING_RE.test(f.asset) || !pointInPolygon(f, room.points)) continue
+    if (f.z || !isDiningTable(f.asset) || !pointInPolygon(f, room.points)) continue
     const d = defs.get(f.asset)
     const a = d ? d.w * d.d : 1
     if (a > bestA) {
@@ -222,14 +225,9 @@ function roomSpecsInto(out: RoomLightSpec[], plan: Plan, defs: Map<string, Asset
 
 // ---------- 灯具家具 ----------
 
-/** 名字像灯、但不是照明的东西（头灯、应援棒、灯带卷、遥控器） */
-const NOT_LAMP = new Set(['gr-headlamp', 'int-penlights', 'mk-led-strip', 'sf-remote-light'])
-const LAMP_RE = /灯|燭|烛|蜡烛|行灯|lamp|lantern|candle/i
-
-/** 灯具家具：素材分类是「灯具」，或名字是灯 / 蜡烛（化妆台的灯泡、植物补光灯、南瓜灯…） */
-export function isLampAsset(def: Pick<AssetDef, 'id' | 'name' | 'category' | 'fixture'>) {
-  if (def.fixture || NOT_LAMP.has(def.id)) return false
-  return def.category === 'lighting' || LAMP_RE.test(def.name) || LAMP_RE.test(def.id)
+/** 灯具家具：带 light 标签的（灯具分类，以及化妆台的灯泡、植物补光灯、南瓜灯、蜡烛…；头灯、应援棒、灯带卷不算） */
+export function isLampAsset(def: Pick<AssetDef, 'tags' | 'fixture'>) {
+  return !def.fixture && hasTag(def, 'light')
 }
 
 /** 发光部件的标记：post.ts 的夜间加亮跳过它们，由这里按开关 / 色温控制 */
@@ -1343,7 +1341,7 @@ export function primaryCount(plan: Plan) {
 /** 餐桌位置的指纹：变了才需要重算吊灯位置（拖动别的家具时不用重建房间灯） */
 export function diningKey(plan: Plan) {
   return plan.furniture
-    .filter((f) => !f.z && DINING_RE.test(f.asset))
+    .filter((f) => !f.z && isDiningTable(f.asset))
     .map((f) => `${f.asset}@${f.x},${f.y}`)
     .join(';')
 }

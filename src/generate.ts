@@ -965,7 +965,7 @@ export function subtractIntervals([lo, hi]: [number, number], cuts: [number, num
 
 /** 室内机（壁挂空调）的台数 */
 /** 室内机：空调系列（含各款式）里的壁挂机 */
-export const indoorUnits = (plan: Plan) => plan.furniture.filter((f) => f.asset === 'aircon' || ASSET_MAP.get(f.asset)?.family === 'aircon').length
+export const indoorUnits = (plan: Plan) => plan.furniture.filter((f) => f.asset === 'aircon' || ASSET_MAP.get(f.asset)?.type === 'aircon').length
 
 /**
  * 空调外机补到和室内机一样多：先在阳台上靠建筑外墙放，再靠阳台其他边（都避开落地窗），

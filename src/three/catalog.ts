@@ -4,6 +4,7 @@ import { ASSETS, ASSET_MAP, type AssetDef } from './assets'
 import { FORM_LABELS, type AssetCategory, type StyleTag } from './kit'
 import { assetText, lang } from '../i18n'
 import { paletteStyleOf, preferredColor, styleSet } from './stylePalettes'
+import type { Tag } from './tags'
 
 export type SizeClass = 'S' | 'M' | 'L'
 export const SIZE_LABELS: Record<SizeClass, string> = { S: '小件', M: '中件', L: '大件' }
@@ -28,23 +29,32 @@ export function paletteFor(def: AssetDef, style: StyleTag | 'all') {
   return preferredColor(def, style)
 }
 
-/** 系列 → 成员：只建一次索引（以前每次都扫全部素材，browse 里对每个系列各扫一遍，是 O(n²)） */
-let families: Map<string, AssetDef[]> | null = null
-function familyOf(name: string) {
-  if (!families) {
-    families = new Map()
-    for (const a of ASSETS) if (a.family) (families.get(a.family) ?? families.set(a.family, []).get(a.family)!).push(a)
+/** 同款系列 → 成员：只建一次索引（browse 里对每个系列各查一遍，扫全部素材会是 O(n²)） */
+let seriesIndex: Map<string, AssetDef[]> | null = null
+function seriesOf(name: string) {
+  if (!seriesIndex) {
+    seriesIndex = new Map()
+    for (const a of ASSETS) {
+      const k = a.series ?? a.id
+      ;(seriesIndex.get(k) ?? seriesIndex.set(k, []).get(k)!).push(a)
+    }
   }
-  return families.get(name) ?? []
+  return seriesIndex.get(name) ?? []
 }
 
-/** 同系列的全部规格（没有系列就只有自己）；尺寸已按 dims.generated.ts 校正过，按校正后的尺寸排序 */
+/**
+ * 同款系列的全部成员（同一造型的各尺寸、各陈设；造型不同的同类物品不在其中，见 type）。
+ * 尺寸已按 dims.generated.ts 校正过，按校正后的尺寸排序
+ */
 export function siblings(def: AssetDef): AssetDef[] {
-  return def.family ? familyOf(def.family).slice().sort((a, b) => a.w * a.d - b.w * b.d) : [def]
+  const xs = seriesOf(def.series ?? def.id)
+  return xs.length > 1 ? xs.slice().sort((a, b) => a.w * a.d - b.w * b.d) : [def]
 }
 
 export interface Filter {
   category: AssetCategory | 'all'
+  /** 细分类型（功能标签）；不给 = 全部 */
+  type?: Tag | 'all'
   style: StyleTag | 'all'
   size: SizeClass | 'all'
   query: string
@@ -57,6 +67,7 @@ export interface Filter {
 function matches(a: AssetDef, f: Filter, q: string) {
   return (
     (f.fixtures || !a.fixture) &&
+    (!f.type || f.type === 'all' || a.type === f.type) &&
     (f.style === 'all' || stylesOf(a).has(f.style)) &&
     (f.size === 'all' || sizeClass(a) === f.size) &&
     (!q || a.name.includes(q) || (a.sizeLabel ?? '').includes(q) || a.id.includes(q) || localHit(a, q))
@@ -77,7 +88,7 @@ export function countByCategory(f: Filter) {
   const all = new Set<string>()
   for (const a of ASSETS) {
     if (!matches(a, f, q)) continue
-    const key = a.family ?? a.id
+    const key = a.series ?? a.id
     all.add(key)
     let s = keys.get(a.category)
     if (!s) keys.set(a.category, (s = new Set()))
@@ -93,12 +104,25 @@ export function browse(f: Filter) {
   const hit = ASSETS.filter((a) => (f.category === 'all' || a.category === f.category) && matches(a, f, q))
   const seen = new Map<string, { rep: AssetDef; items: AssetDef[] }>()
   for (const a of hit) {
-    const key = a.family ?? a.id
+    const key = a.series ?? a.id
     const g = seen.get(key)
     if (g) g.items.push(a)
     else seen.set(key, { rep: a, items: [a] })
   }
-  return [...seen.values()].map((g) => ({ ...g, sizes: g.rep.family ? familyOf(g.rep.family).length : 1 }))
+  return [...seen.values()].map((g) => ({ ...g, sizes: seriesOf(g.rep.series ?? g.rep.id).length || 1 }))
+}
+
+/** 当前分类（和其他筛选条件）下有哪些细分类型、各有几款：素材库的「类型」筛选用，按款数从多到少 */
+export function typesIn(f: Filter) {
+  const q = f.query.trim()
+  const m = new Map<Tag, Set<string>>()
+  for (const a of ASSETS) {
+    if (!a.type || (f.category !== 'all' && a.category !== f.category) || !matches(a, { ...f, type: 'all' }, q)) continue
+    let s = m.get(a.type)
+    if (!s) m.set(a.type, (s = new Set()))
+    s.add(a.series ?? a.id)
+  }
+  return [...m].map(([type, s]) => ({ type, n: s.size })).sort((a, b) => b.n - a.n || a.type.localeCompare(b.type))
 }
 
 /** 规格 / 形态的短标签 */
@@ -110,6 +134,16 @@ export const displayName = (def: AssetDef) => [assetText(def.name), assetText(de
 
 /** 素材的系列名（按当前语言） */
 export const assetName = (def: AssetDef) => assetText(def.name)
+
+/**
+ * 卡片上的名字：系列里各成员的 sizeLabel 都一样时（款式名，如「石灯笼」「兔子」），它是这一款的名字的一部分，跟在后面；
+ * sizeLabel 是在卡片里切换的尺寸 / 陈设（120 / 140、对局中 / 收在盒里）时只显示系列名。「标准」不显示
+ */
+export function cardName(def: AssetDef) {
+  const sib = siblings(def)
+  const label = def.sizeLabel && def.sizeLabel !== '标准' && sib.every((a) => a.sizeLabel === def.sizeLabel) ? def.sizeLabel : ''
+  return [assetText(def.name), assetText(label)].filter(Boolean).join(' ')
+}
 
 /**
  * 换到某类层上时该用的形态：挂钩层要 hanging；普通台面上如果当前是 hanging 就换回同规格的非挂起形态。

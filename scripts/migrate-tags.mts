@@ -1,0 +1,891 @@
+// 语义标签迁移：用「迁移前」散落在业务代码里的名字 / id 正则给全部素材打一遍初始标签，生成 src/three/tags.generated.ts。
+//
+// 用法：pnpm gen:tags                                   生成（RULES → 粗分类 COARSE → 人工审查 REVIEW → 按分类兜底）
+//       vite-node scripts/migrate-tags.mts --check      不写文件，打印各调用点「旧正则（含原过滤条件）vs 现在的标签查询」的候选差异
+//       vite-node scripts/migrate-tags.mts --dump <tsv> 把全部「标签 → 素材」写成 TSV，人工审查用
+//       vite-node scripts/migrate-tags.mts --list <tag> 列出某个标签下的素材
+//
+// 这里的正则只是迁移时的一次性依据（从旧代码原样抄来，REVIEW 里逐条纠正它们的误匹配），业务代码已经不再按名字判断。
+// 迁移过程：第一步（提交 8465911）用和旧正则逐字对应的过渡标签做了等价重构，--check 0 差异、120 户布置结果完全一致；
+// 之后分批收敛到现在的词表，每批的有意变化写在 REVIEW 的 why 里。
+// 生成后的标签表是数据：新增素材请直接在 def 里写 tags（运行时与生成表合并），不要再回来加正则。
+// 要修正已有素材的标签：在 REVIEW 里加一条（写明原因）再 pnpm gen:tags，或直接在 def.tags 里补。
+import '../test/setup/stubdom'
+import fs from 'node:fs'
+import path from 'node:path'
+import { ASSETS } from '/src/three/assets'
+import type { AssetDef } from '/src/three/kit'
+import { FUNCTION_TAGS } from '/src/three/tags'
+
+type D = AssetDef
+const T = (d: D) => `${d.id} ${d.name}`
+/** 旧 Decorator.find 的匹配方式：id 或「id 名字」整串 */
+const R = (re: RegExp) => (d: D) => re.test(d.id) || re.test(T(d))
+const hasHook = (d: D) => !!d.surfaces?.some((l) => l.kind === 'hook' && l.shape?.length)
+const furniture = (d: D) => !d.prop && !d.mount && !d.stick
+const and =
+  (...fs: ((d: D) => boolean)[]) =>
+  (d: D) =>
+    fs.every((f) => f(d))
+const not = (f: (d: D) => boolean) => (d: D) => !f(d)
+
+// ---------- 旧规则（原样抄自迁移前的代码，注释里写出处） ----------
+
+const OLD = {
+  // decorate.ts / homecams.ts / checklist.ts 的床
+  isBedDecorate: (d: D) => d.family === 'bed' || d.family === 'kid-bed' || d.family === 'kid-crib' || /^bed-|床$/.test(d.id + ' ' + d.name),
+  isBedCams: (d: D) => d.family === 'bed' || d.family === 'kid-bed' || d.family === 'kid-crib' || /^bed-|床$|futon|布団/.test(`${d.id} ${d.name}`),
+  DESK_RE: /desk|书桌|电竞桌|工作台|L 形|tbl-desk/,
+  NOT_PC_DESK: /potting|园艺|焊接|weld/,
+  OFFICE_CHAIR_RE: /desk-chair|office|ergo|mesh|gaming|电竞|办公椅|人体工学|网椅/,
+  SEAT_RE: /chair|stool|椅|凳|^ch-|^c2-/,
+  LAPTOP_RE: /laptop(?!-stand)|笔记本电脑/,
+  KEYBOARD_RE: /keyboard|键盘|^of-kb-/,
+  HIGH_OK: /book|书|漫画|manga|plant|多肉|仙人掌|盆栽|succulent|cactus|figure|手办|收纳|box|篮|basket|trophy|奖杯|vase|花瓶|瓷|globe|地球仪|相框|frame|摆件|模型|plane|飞机|bear|玩偶|plush|lamp-globe/,
+  BED_OK: /plush|玩偶|毛绒|bear|兔|cushion|靠垫|抱枕|pillow|枕|book|书(?!架|柜|桌)|漫画|manga|phone|手机|tablet|平板|switch|掌机|clothes|衣|towel|毛巾|pajama|睡衣/,
+  MULTI_OK: /book|书|漫画|manga|plant|多肉|仙人掌|盆栽|succulent|cactus|herb|香草|figure|手办|立牌|bear|玩偶|plush|cat-loaf|shoe|鞋|magnet|冰箱贴|便签|sticky|polaroid|decal|贴纸|snack|零食|can|罐|box|盒|箱|carton|纸箱|zabuton|坐垫|cushion|靠垫|trophy|奖杯|record|唱片|cd|dvd|vhs|卡带|bottle|瓶|towel|毛巾|clothes|衣|hat|帽|bag|包|dumbbell|哑铃|kettlebell|壶铃|ball|球|stone|矿石|coin|硬币|stamp|邮票|pot|花盆|chair|椅|stool|凳/,
+  PLANT_RE: /monstera|^pl-|cactus|plant|bonsai|盆栽|绿植|龟背|琴叶|橄榄|虎尾|天堂鸟|海芋|竹/,
+  LAMP_RE: /灯|燭|烛|蜡烛|行灯|lamp|lantern|candle/i,
+  NOT_LAMP: new Set(['gr-headlamp', 'int-penlights', 'mk-led-strip', 'sf-remote-light']),
+  LIGHT_DINING_RE: /^tbl-dining|^tbl-bar-table|baxian|fh-table/,
+  OPEN_SHELF_YES: /书架|书柜|多宝|陈列|展示|格|搁架|置物架|层架|开放架|bookshelf|bookcase|display|cube|curio|etagere|open-rack|wall-shelf|ラック|棚/,
+  OPEN_SHELF_NO: /鞋|shoe|厨|kitchen|調味|调料|浴|bath|洗|wash|laundry|衣|wardrobe|closet|clothes|hanger|towel|毛巾|冰箱|fridge|微波|电视柜|tv-|toilet|马桶|garage|工具|tool|pet|猫|狗|cage|笼/,
+}
+
+/** decorate.ts LIMITS（同类数量规则） */
+const LIMITS: [string, RegExp][] = [
+  ['tv', /prop-tv|wall-tv|电视(?!柜)/],
+  ['console', /game-console|cl-(ps\d|xsx|xss|xone|x360|wii|gamecube|n64|famicom|sfc|megadrive|switch-dock|mini-arcade)/],
+  ['rice-cooker', /rice-cooker|电饭煲/],
+  ['kettle', /kettle|electric-pot|tetsubin|水壶|电热水瓶|铁壶/],
+  ['microwave', /microwave|steam-oven|微波炉|蒸烤箱/],
+  ['toaster', /toaster|烤面包|烤箱/],
+  ['coffee', /coffee-maker|espresso|咖啡机/],
+  ['air-fryer', /air-fryer|空气炸锅/],
+  ['pressure', /pressure-cooker|电压力锅/],
+  ['blender', /blender|料理机|原汁机|juicer/],
+  ['vacuum', /vac(?!uum-bag)|吸尘器|robot-station/],
+  ['router', /router|路由器/],
+  ['nas', /\bnas|of-nas|NAS/],
+  ['piano', /piano|钢琴/],
+  ['drums', /drum|架子鼓|电子鼓/],
+  ['aquarium', /aquarium|水族|鱼缸/],
+  ['clock', /clock|钟(?!表)/],
+  ['floor-mirror', /floor-mirror|stand-mirror|mir-floor|穿衣镜|落地镜/],
+  ['humidifier', /humidifier|加湿器/],
+  ['purifier', /purifier|净化器/],
+  ['dehumidifier', /dehumidifier(?!-bag)|除湿机/],
+  ['trash', /垃圾桶|sort-bin|pedal-bin|kitchen-bin|swing-bin|waste-basket|废纸篓/],
+  ['laptop', /laptop|笔记本电脑/],
+  ['desk-lamp', /desk-lamp|折臂台灯|lamp-(edison|washi|globe|mushroom)/],
+  ['table-lamp', /table-lamp|床头台灯/],
+  ['monitor', /monitor|显示器/],
+  ['tea-set', /tea-set|茶具|tea-tray/],
+  ['fruit', /fruit-bowl|果盘|mikan-basket|橘子/],
+  ['vase', /vase|花瓶/],
+  ['key-tray', /key-tray|钥匙托盘/],
+  ['makeup-mirror', /makeup-mirror|化妆镜|mir-table/],
+  ['keyboard', /keyboard|键盘|kb-/],
+  ['cup', /mug|cup(?!-noodle|board)|杯(?!垫)|yunomi|湯呑/],
+]
+
+/** household.ts INTERESTS：落地 / 摆件 / 壁挂各自的正则（cats 分类匹配不在这里，运行时照旧按分类） */
+const INTERESTS: Record<string, { floor?: RegExp; props?: RegExp; wall?: RegExp }> = {
+  gaming: { props: /pad-|handheld|gameboy|game-console|headset|arcade|vr\b|手柄|掌机|耳麦/, floor: /电竞椅|gaming/ },
+  music: { props: /metronome|节拍|口琴|harmonica|谱|turntable|唱片机/, wall: /吉他|guitar/ },
+  reading: { props: /book|书(?!架|柜|桌)/, floor: /bookshelf|bookcase|书架|书柜/ },
+  otaku: { props: /漫画|manga|figure|手办|立牌|应援|gacha|扭蛋/, floor: /展示柜|showcase|display/ },
+  photo: { floor: /tripod|三脚架/, props: /camera|lens|相机|镜头|拍立得/ },
+  plants: { props: /gd-|succulent|cactus|air-plant|bonsai|多肉|盆栽|仙人掌|花瓶|浇水壶|花盆/ },
+  crafts: { props: /毛线|缝纫|刺绣|书法|水彩|陶艺|knit|sew|embroid|paint/, floor: /easel|画架|缝纫/ },
+  models: { props: /模型|train|plane|铁道|飞机|高达|gunpla|3d.?print|打印机/ },
+  tea: { props: /tea|茶|incense|线香|daruma|达摩|tetsubin|铁壶/ },
+  cats: { floor: /cat-|猫爬|猫窝|猫砂/, props: /cat|猫/ },
+  dogs: { floor: /^(?!rb-).*(dog|狗)/ },
+  aquarium: { floor: /aquarium|水族|鱼缸/ },
+  smallpets: { floor: /ph-(hamster-(cage|castle)|rabbit|guinea|chinchilla)/, props: /ph-hamster-(cage|acrylic|castle)/ },
+  birds: { floor: /ph-birdcage/, props: /ph-birdcage|ph-bird-perch/ },
+  coffee: { props: /coffee|espresso|moka|pour-over|grinder|磨豆|咖啡/ },
+  streaming: { props: /mic-|webcam|stream|capture|audio-interface|声卡|麦克风|补光/, floor: /ring-light-floor|softbox|green-screen|绿幕|柔光/ },
+  tech: { props: /kb-|monitor|nas|mini-pc|router|显示器|键盘|NAS/, floor: /pc-(mid|full|itx)|server|机箱|机柜/ },
+  sports: { props: /ball|球|racket|(?<![航自])拍|glove|手套|helmet|头盔/, floor: /surf|冲浪|golf|高尔夫|bike|自行车|skate|滑板|ski|滑雪/ },
+  science: { props: /telescope|望远镜|microscope|显微镜|globe|地球仪|星图|flask|烧瓶|矿石/, floor: /telescope|望远镜/ },
+  beauty: { floor: /mirror|镜|vanity|梳妆|clothes-rail|挂衣/ },
+  boardgames: { props: /^(?!hg-go-bowl)(?=.*(桌游|棋|麻将|花札|かるた|扑克|骰|board-?game|chess|shogi|mahjong|jenga|叠叠乐|卡牌|牌九|骨牌|双六|拼字|筹码|计分本))(?!.*棋桌)/ },
+  collecting: { props: /col-|瓷|矿石|晶|化石|硬币|邮票|coin|stamp|mineral|赏盘|茶碗/, floor: /陈列柜|博古架|curio/ },
+  movies: { props: /av-|投影|CD|dvd|蓝光|vhs|卡带|cassette|boombox|爆米花|海报/, floor: /幕布|projector|家庭影院|soundbar|回音壁|落地音箱|hifi/i },
+  fishing: { floor: /钓|fishing/, props: /渔具|拟饵|tackle|鱼篓/ },
+  outdoor: { floor: /gr-.*(tent|pack|bag)|帐篷|登山包|露营|camp|ski|滑雪/, props: /gr-|登山|攀岩|露营|头灯|carabiner|harness|trekking|球(?!鞋)/ },
+  maker: { floor: /mk-.*(bench|cabinet|chest)|工作台|工具柜|元件柜/, props: /mk-|pcb|arduino|开发板|面包板|烙铁|示波器|万用表|solder|oscillo|multimeter/i },
+  puzzles: { props: /^(pz-(?!cube-shelf|speed-timer)|prop-rubiks)/ },
+}
+
+/** household.ts JOBS.desk */
+const JOB_DESK: Record<string, RegExp> = {
+  programmer: /monitor|kb-|mouse/,
+  designer: /tablet|monitor|pen/,
+  streamer: /mic-|webcam|monitor|stream/,
+  photographer: /camera|lens|monitor/,
+  musician: /audio-interface|mixer|monitor|synth|midi/,
+  student: /laptop|book/,
+  researcher: /monitor|book|microscope/,
+  engineer: /mk-|monitor|oscillo|示波器|烙铁|pcb/,
+  schoolkid: /book|pen|lamp/,
+}
+
+const CAMERA_CASE = /^of-(camera-showcase|dry-)/
+
+// ---------- 标签规则：标签 → 旧规则（迁移依据） ----------
+
+/** [标签, 判定]。同一个标签可以出现多次（取并集） */
+const RULES: [string, (d: D) => boolean][] = [
+  // ----- 床 / 坐具 -----
+  ['bed', OLD.isBedDecorate],
+  ['bedding', R(/futon|布団|被褥/)],
+  ['crib', R(/kid-crib|婴儿床/)],
+  ['kid-bed', R(/kid-bed|儿童床/)],
+  ['loft', R(/loft|阁楼/)],
+  ['sofa', R(/sofa|沙发/)],
+  ['armchair', R(/armchair|单人沙发|lounge|阅读椅|摇椅/)],
+  ['chair', R(/chair|椅/)],
+  ['seat', R(/chair|stool|椅|凳|^ch-|^c2-/)],
+  ['floor-cushion', R(/zabuton|坐垫|zaisu/)],
+  ['stool', R(/stool|凳/)],
+  ['bar-stool', and((d) => !d.prop, R(/(^|-)bar-|吧凳|吧椅|swivel-bar|高脚凳/))],
+  ['floor-chair', R(/zaisu|座椅子/)],
+  ['dining-chair', (d) => d.family === 'dining-chair' || (!d.prop && (d.category === 'dining' || /餐|dining/.test(d.id + d.name)) && /chair|椅/.test(T(d)) && !/(^|-)bar-|吧|stool|凳|swivel/.test(T(d)))],
+  ['dining-seat', (d) => R(/chair|椅|stool|凳|zabuton|坐垫|zaisu/)(d) && (d.category === 'dining' || /餐|dining/.test(d.id + d.name))],
+  ['office-chair', R(/办公椅|office|ergonomic|人体工学|书桌椅|task/)],
+  ['ergonomic-chair', R(/人体工学|ergo|网椅|mesh-office/)],
+  ['gaming-chair', R(/电竞椅|gaming-chair|^ch-gaming/)],
+  // ----- 桌 -----
+  ['desk', and((d) => !!d.surface, R(OLD.DESK_RE), not(R(OLD.NOT_PC_DESK)))],
+  ['workbench', and((d) => !!d.surface, R(/工作台|workbench/))],
+  ['table', and((d) => !!d.surface && !d.prop && !d.mount, R(/desk|桌/))],
+  ['gaming-desk', R(/gaming-desk|电竞桌|tbl-desk-(140|160|l-)|L 形/)],
+  ['duo-desk', R(/duo|双人/)],
+  ['dining-table', R(/dining-table|tbl-dining|餐桌/)],
+  ['low-table', R(/kotatsu|被炉|chabudai|矮桌|ちゃぶ台/)],
+  ['coffee-table', (d) => /几/.test(d.name)],
+  ['nightstand', (d) => d.family === 'nightstand' || /床头柜|nightstand/.test(`${d.id} ${d.family ?? ''} ${d.name}`)],
+  // ----- 柜架 -----
+  ['bookshelf', R(/bookshelf|bookcase|书架|书柜/)],
+  ['record-shelf', R(/唱片架|黑胶|cd-tower|CD 架/)],
+  ['shelving', R(/bookshelf|书架|陈列柜|展示柜|收纳柜|shelf/)],
+  ['display-cabinet', R(/展示柜|showcase|display/)],
+  ['curio-cabinet', R(/陈列柜|博古架|curio/)],
+  ['open-shelf', (d) => !d.prop && !!d.surfaces?.length && OLD.OPEN_SHELF_YES.test(`${d.id} ${d.name} ${d.family ?? ''}`) && !OLD.OPEN_SHELF_NO.test(`${d.id} ${d.name} ${d.family ?? ''}`)],
+  ['wardrobe', R(/wardrobe|衣柜/)],
+  ['dresser', R(/tansu|箪笥|dresser|斗柜/)],
+  ['clothes-rail', R(/clothes-rail|挂衣/)],
+  ['coat-rack', and(furniture, R(/衣帽架|hanger/))],
+  ['storage-cabinet', R(/收纳柜|chest|抽屉柜|storage/)],
+  ['cabinet', R(/shelf|架|柜/)],
+  ['shoe-storage', R(/shoe-cabinet|鞋柜|鞋架|shoe-rack/)],
+  ['washer-rack', R(/laundry-rack|ランドリー|洗衣机.*架|洗衣机置物架/)],
+  ['open-rack', R(/sf-(open|wire)-rack|オープンラック|スチールラック/)],
+  ['tv-stand', R(/tv-stand|lv-tv|电视柜/)],
+  // ----- 电器 / 设备 -----
+  ['aircon', R(/aircon|空调/)],
+  ['tv', R(/prop-tv|wall-tv|电视(?!柜)/)],
+  ['hifi', R(/av-ht-front|落地 HiFi|hifi/)],
+  ['pc', R(/pc-tower|台式机|主机箱/)],
+  ['aio-pc', (d) => /aio|一体机|retro-pc/.test(d.id)],
+  ['electric-kettle', R(/prop-kettle$|electric-pot|电水壶|电热水瓶/)],
+  ['monitor', R(/monitor|显示器/)],
+  ['keyboard', R(/keyboard|键盘|^of-kb-|kb-/)],
+  ['mouse', R(/mouse|鼠标/)],
+  ['headset', R(/headset|耳麦|耳机|headphone/)],
+  ['laptop', R(/laptop|笔记本电脑/)],
+  ['game-console', R(/game-console|cl-(ps\d|xsx|xss|xone|x360|wii|gamecube|n64|famicom|sfc|megadrive|switch-dock|mini-arcade)/)],
+  ['rice-cooker', R(/rice-cooker|电饭煲/)],
+  ['kettle', R(/kettle|electric-pot|tetsubin|水壶|电热水瓶|铁壶/)],
+  ['microwave', R(/microwave|steam-oven|微波炉|蒸烤箱/)],
+  ['toaster', R(/toaster|烤面包|烤箱/)],
+  ['coffee-maker', R(/coffee-maker|espresso|咖啡机/)],
+  ['air-fryer', R(/air-fryer|空气炸锅/)],
+  ['pressure-cooker', R(/pressure-cooker|电压力锅/)],
+  ['blender', R(/blender|料理机|原汁机|juicer/)],
+  ['stand-mixer', R(/stand-mixer|厨师机/)],
+  ['vacuum', R(/vac(?!uum-bag)|吸尘器|robot-station/)],
+  ['router', R(/router|路由器/)],
+  ['nas', R(/\bnas|of-nas|NAS/)],
+  ['humidifier', R(/humidifier|加湿器/)],
+  ['purifier', R(/purifier|净化器/)],
+  ['dehumidifier', R(/dehumidifier(?!-bag)|除湿机/)],
+  ['hair-dryer', R(/hair-dryer|吹风机/)],
+  ['body-scale', (d) => /^(wet-body-scale|fit-scale|scale-(glass|round|dial|composition))$/.test(d.id)],
+  // ----- 灯 / 绿植 -----
+  ['light', (d) => !d.fixture && !OLD.NOT_LAMP.has(d.id) && (d.category === 'lighting' || OLD.LAMP_RE.test(d.name) || OLD.LAMP_RE.test(d.id))],
+  ['lamp', R(/lamp|灯(?!泡)/)],
+  ['floor-lamp', (d) => d.family === 'floor-lamp'],
+  ['wall-lamp', (d) => d.family === 'wall-lamp'],
+  ['planter', (d) => d.family === 'planter'],
+  ['laundry-basket', (d) => d.family === 'laundry-basket'],
+  ['bath-corner-shelf', (d) => d.family === 'bath-corner-shelf'],
+  ['bath-wall-shelf', (d) => d.family === 'bath-wall-shelf'],
+  ['desk-lamp', (d) => d.family === 'desk-lamp' || R(/desk-lamp|折臂台灯|书桌灯|lamp-(edison|washi|globe|mushroom)/)(d)],
+  ['table-lamp', (d) => d.family === 'table-lamp' || R(/table-lamp|台灯/)(d)],
+  ['plant', (d) => (d.category === 'plants' || (OLD.PLANT_RE.test(T(d)) && d.category !== 'lighting')) && !d.mount],
+  // ----- 厨房 -----
+  ['cutting-board', R(/prop-cutting-board|砧板|cutting/)],
+  ['knife-block', R(/prop-knife-block|刀架/)],
+  ['dish-rack', R(/prop-dish-rack|沥水/)],
+  ['spice', R(/prop-spice-rack|spice-jars|调味|香料/)],
+  ['oil-bottle', R(/oil-bottles|油壶/)],
+  ['paper-towel', R(/paper-towel|厨房纸/)],
+  ['coffee-gear', R(/coffee-maker|espresso|pour-over|moka|磨豆/)],
+  ['kitchen-shelf-ok', R(/spice|调料|seasoning|jar|罐|canister|mug|杯|bottle|瓶|succulent|多肉|herb|香草|tea|茶|coffee|咖啡/)],
+  ['tea-set', R(/tea-set|茶具|tea-tray/)],
+  ['fruit-bowl', R(/fruit-bowl|果盘|mikan-basket|橘子/)],
+  ['mug', and((d) => !!d.prop, R(/(^|-)mug(-|$)|马克杯/))],
+  ['coffee-cup', and((d) => !!d.prop, R(/coffee-cup|va-coffee-|咖啡杯|cup-latte|拿铁杯/))],
+  ['teacup', and((d) => !!d.prop, R(/teacup|cup-glass-tea|cup-yunomi|cup-gaiwan|汤吞|盖碗|茶杯/))],
+  ['perfume', and((d) => !!d.prop, R(/perfume|香水/))],
+  ['cup', (d) => /mug|cup(?!-noodle|board)|杯(?!垫)|yunomi|湯呑/.test(T(d)) && !/toothbrush|牙刷|漱口/.test(T(d))],
+  // ----- 卫浴 / 洗衣 -----
+  ['toothbrush', R(/toothbrush|刷牙/)],
+  ['oral-care', R(/toothbrush|牙刷|漱口/)],
+  ['hand-soap', R(/hand-soap|洗手液/)],
+  ['skincare', R(/lotion|乳液|化妆水/)],
+  ['cosmetics', R(/makeup-mirror|perfume|cosmetic|lipstick|lotion|comb|hair-dryer|化妆|香水|口红|乳液/)],
+  ['makeup-mirror', R(/makeup-mirror|化妆镜|mir-table/)],
+  ['shampoo', R(/shampoo|bottle-set|洗发|洗护三瓶/)],
+  ['body-soap', R(/body-soap|body-wash|bottle-set|沐浴|洗护三瓶/)],
+  ['toilet-paper', R(/toilet-paper|卷纸|卷筒纸/)],
+  ['toilet-brush', R(/toilet-brush|马桶刷/)],
+  ['sanitary-bin', R(/sanitary|卫生桶|小垃圾桶/)],
+  ['air-freshener', R(/freshener|芳香|香氛/)],
+  ['toilet-shelf-ok', R(/toilet-paper|卷纸|卷筒纸|freshener|芳香|香氛|消臭|除湿|succulent|多肉|plant|绿植|incense|香薰|diffuser|tissue|纸巾/)],
+  ['bath-stool', R(/bath-stool|浴凳|风呂椅|風呂椅/)],
+  ['bath-pail', R(/^wet-bath-pail|洗面桶|風呂桶|洗面器/)],
+  ['bath-mat', R(/bath-mat|bx-mat-/)],
+  ['diatomite', (d) => /硅藻土|stone|diatom/.test(`${d.id} ${d.sizeLabel ?? ''}`)],
+  ['towel', R(/towel|毛巾|浴巾/)],
+  ['towel-rail', (d) => hasHook(d) && /towel|毛巾|浴巾|タオル/.test(`${d.id} ${d.family ?? ''} ${d.name}`)],
+  ['towel-bar', R(/towel-bar|毛巾杆|浴巾架/)],
+  ['detergent', R(/detergent|洗衣液|洗衣粉/)],
+  ['softener', R(/soften|柔软/)],
+  ['laundry-supply', R(/detergent|soften|洗衣|柔软/)],
+  ['laundry-stand', R(/laundry-stand|晾衣架/)],
+  ['hamper', R(/hamper|脏衣篓/)],
+  ['wet-supply', R(/^wet-|toilet|厕所|トイレ|浴|bath|洗|laundry|deodor|除臭|消臭|detergent/)],
+  // ----- 衣物 / 玄关 -----
+  ['shoe', R(/shoe(?!-cab|-rack)|鞋(?!柜|架)|sneaker|boots|靴/)],
+  ['umbrella-stand', R(/umbrella|伞架/)],
+  ['luggage', R(/luggage|行李箱|suitcase/)],
+  ['kimono-rack', (d) => /ikou|衣桁/.test(`${d.id} ${d.family ?? ''} ${d.name}`)],
+  ['garment-rail', (d) => /garment-rail|clothes-rail|挂衣杆/.test(`${d.id} ${d.family ?? ''} ${d.name}`) && !/gm-closet-pipe/.test(d.id)],
+  ['mirror', R(/mirror|镜/)],
+  ['floor-mirror', R(/floor-mirror|stand-mirror|mir-floor|穿衣镜|落地镜/)],
+  // ----- 书 / 文具 / 数码 -----
+  ['book', R(/book|书(?!架|柜|桌)/)],
+  ['manga', R(/漫画|manga/)],
+  ['magazine', R(/novel|杂志|magazine/)],
+  // 工作台上的工具（职业工作台按它们挑；旧的 /pen/ 会命中 open、/midi/ 会命中 humidifier，这里按词边界写）
+  ['camera', and((d) => !!d.prop, R(/^of-camera-|^of-action-cam|相机/))],
+  ['lens', R(/^of-lens-|镜头/)],
+  ['webcam', R(/webcam/)],
+  ['mic', R(/(^|-)mic(-|$)|麦克风/)],
+  ['stream-gear', R(/stream-deck|capture-card|直播/)],
+  ['audio-gear', R(/audio-interface|of-mixer|调音台|synth|midi-|studio-monitors/)],
+  ['tablet', R(/(^|-)tablet(-|$)|平板电脑|平板支架/)],
+  ['pen', R(/(^|-)(pen|pencil)(-|s?$)|笔筒|笔袋|削笔/)],
+  ['microscope', R(/microscope/)],
+  ['electronics-tool', R(/^mk-|oscillo|示波器|烙铁|pcb/)],
+  // 晾衣架上随手晾的日常衣物（T 恤、衬衫、裤子、裙子、童装）
+  ['line-dry', (d) => /^gm-(tee|tshirt|t-shirt|shirt|blouse|polo|tank|hoodie|sweat|jeans|shorts|pants|slacks|dress|skirt|kids)/.test(d.id)],
+  // 收纳箱 / 盒 / 篮（真正用来收东西的）
+  // 桌游 / 棋牌 / 牌类（含收在盒里的）：和兴趣 boardgames 的摆件同一批
+  ['tabletop-game', (d) => !!d.prop && INTERESTS.boardgames.props!.test(T(d))],
+  ['storage-box', (d) => /^(sb-(plastic-box|fabric-box|rattan-box|closet-box|underbed|vac-bag|wood-crate)|sf-storage-box|sf-basket|wet-clear-case|wet-wash-basket|st-baskets|lm-file-boxes|av-cassette-box|mk-parts-box|mk-screw-sorter|prop-cosmetic-box)/.test(d.id) || /收纳箱|收纳盒|收纳篮/.test(d.name)],
+  // ----- 收藏 / 玩具 / 装饰 -----
+  ['plush', R(/plush|玩偶|毛绒|bear|teddy|兔|bunny|抱枕/)],
+  ['figure', R(/figure|手办/)],
+  ['video-game', R(/game-console|手柄|掌机|joycon|^of-pad-|^of-handheld|^of-gameboy|^cl-(ps\d|xsx|xss|xone|x360|wii|gamecube|n64|famicom|sfc|megadrive|switch|mini-arcade|pad-|3ds|dslite|gba|gbc|gbpocket|psp|vita|steamdeck)/)],
+  ['toy', R(/toy|玩具|积木|block|plush|玩偶|绘本|picture-book|ball|球/)],
+  ['record', R(/唱片|(^|-)record|黑胶|turntable/)],
+  ['home-theater', R(/av-projector|投影|popcorn|爆米花|蓝光|dvd|vhs|cd-row/)],
+  ['water-bottle', R(/bike-bottles|水杯壶|sports-bottle/)],
+  ['hat', R(/(^|-)hat(-|$)|beanie|^sf-cap|帽子|草帽|礼帽|渔夫帽|毛线帽|棒球帽/)],
+  ['bag', R(/^sf-(crossbody|handbag|tote|backpack)|ita-bag|^bag-tote|挎包|手提包|托特包|双肩包|痛包/)],
+  ['music-stand', R(/谱架|music-stand/)],
+  ['guitar', R(/guitar|吉他|bass|贝斯/)],
+  ['piano', R(/piano|钢琴/)],
+  ['drums', R(/drum|架子鼓|电子鼓/)],
+  ['yoga-mat', R(/yoga-mat|瑜伽垫/)],
+  ['play-mat', R(/play-?mat|爬行垫|拼图垫|地垫/)],
+  ['wall-art', R(/wall-art|挂画|ss-art|ss-photo|ss-tapestry|ss-macrame|poster|海报/)],
+  ['clock', R(/clock|钟(?!表)/)],
+  ['vase', R(/vase|花瓶/)],
+  ['key-tray', R(/key-tray|钥匙托盘/)],
+  ['trash-bin', R(/垃圾桶|sort-bin|pedal-bin|kitchen-bin|swing-bin|waste-basket|废纸篓/)],
+  ['aquarium', R(/aquarium|水族|鱼缸/)],
+  ['cat-tower', R(/cat-tower|猫爬架/)],
+  ['pet-bowl', R(/pet-bowl|食碗/)],
+  ['litter-box', R(/litter|猫砂/)],
+  ['fridge-door', (d) => !!d.stick && R(/冰箱贴|便签|拍立得|儿童画|magnet|sticky-note|polaroid|kids-drawing/)(d)],
+  ['for-kids', R(/儿童画|kids|kid|儿童/)],
+  // fillCompartments 的几类候选
+  ['curio-ok', R(/瓷|vase|花瓶|茶|tea|盆景|bonsai|奇石|stone|香炉|incense|玉|jade|印章|砚|墨|scroll|卷轴|铜|bronze|葫芦/)],
+  ['collectible', (d) => R(/figure|手办|フィギュア|模型|model|minifig|gacha|扭蛋|ガチャ|toy-car|小汽车|车模|ミニカー|mineral|矿石|crystal|水晶|shell|贝壳|snow-?globe|雪景球|trophy|奖杯|doll|人形|ornament|摆件|plush|玩偶|cube|魔方|squishy|捏捏|emo-bot|情感机器人/)(d) && !/box|盒|case|箱|card|牌|^hc-|摄像头|camera/.test(d.id + d.name)],
+  // ----- 摆放能力 -----
+  ['high-ok', R(OLD.HIGH_OK)],
+  ['bed-ok', R(OLD.BED_OK)],
+  ['multi-ok', R(OLD.MULTI_OK)],
+  // ----- 成套摆放专用（通用查询不返回） -----
+  ['set-piece', (d) => /^hg-duo|^hg-go-bowl/.test(d.id) || CAMERA_CASE.test(d.id)],
+  ['projector-screen', R(/av-screen-(pull|electric)$|幕布/)],
+  ['curio-shelf', (d) => /多宝|duobao|cn-|curio/.test(`${d.id} ${d.name} ${d.family ?? ''}`)],
+  ['collection-shelf', (d) => /展示|陈列|收藏|showcase|display|collection|curio|コレクション/.test(`${d.id} ${d.name} ${d.family ?? ''}`)],
+  // INTEREST_TIERS 里按名字挑的几级
+  ['music-accessory', R(/metronome|节拍|谱/)],
+  // 乐器 / 健身器材的细分（兴趣等级套装按它们挑）
+  ['e-keyboard', R(/^hb-keyboard|电子琴/)],
+  ['weights', R(/dumbbell|哑铃|kettlebell|壶铃|barbell|杠铃/)],
+  ['yoga', R(/yoga|瑜伽|pilates|普拉提/)],
+  ['cardio', R(/treadmill|跑步机|spin-bike|动感单车|rower|划船机|elliptical|椭圆机/)],
+  ['strength', R(/fit-bench|卧推|power-rack|squat|深蹲|dumbbell-rack|哑铃架|pullup|引体/)],
+  ['acrylic-stand', R(/立牌/)],
+  ['gacha', R(/gacha|扭蛋/)],
+  ['trophy', and((d) => !!d.prop, R(/trophy|奖杯/))],
+  ['coin', (d) => /^col-(coin|cash)/.test(d.id)],
+  ['stamp', (d) => /^col-stamp/.test(d.id)],
+  ['mineral', R(/amethyst|quartz|pyrite|agate|fluorite|ammonite|trilobite|meteorite|specimen|mineral|矿石|化石|水晶|晶洞/)],
+  ['dog', (d) => d.category === 'pets' && /dog|狗/.test(T(d))],
+  ['cat', (d) => d.category === 'pets' && /cat|猫/.test(T(d))],
+]
+
+// 兴趣：按素材的形态决定看哪条正则（落地看 floor、摆件和贴附物看 props、壁挂看 wall）
+for (const [it, m] of Object.entries(INTERESTS)) {
+  RULES.push([
+    `hobby:${it}`,
+    (d) => {
+      const t = T(d)
+      if (!d.prop && !d.mount && m.floor?.test(t) && (it === 'photo' || !CAMERA_CASE.test(d.id))) return true
+      if (d.prop && m.props?.test(t)) return true
+      if (d.stick && m.props?.test(t)) return true
+      if (d.mount && m.wall?.test(t)) return true
+      return false
+    },
+  ])
+}
+
+// ---------- 粗分类：保证每件素材至少有一个「这是什么」的功能标签（业务规则目前不按它们查询，供以后的规则和检索用） ----------
+
+const prop = (d: D) => !!d.prop
+const COARSE: [string, (d: D) => boolean][] = [
+  ['rug', and(not(prop), R(/(^|-)rug(-|$)|地毯|doormat|脚垫|hot-carpet|hanamushiro|花莚|floor-tiles|拼接地垫/))],
+  ['floor-cushion', R(/(^|-)bean|豆袋|懒人沙发|pouf|坐墩|zafu|蒲团|meditation-set/)],
+  ['audio', R(/^av-(ht-|bt-|soundbar|mini-compo|receiver|tube-amp|cd-player|cassette-deck|walkman|discman|boombox|hifi|headphone-amp)|speaker|音箱|收音机|radio|turntable|唱片机/)],
+  ['home-camera', R(/^hc-|intercom|对讲/)],
+  ['robot', and((d) => !/drone/.test(d.id), R(/^rb-|^act-kachaka|机器人/))],
+  ['drone', R(/drone|无人机/)],
+  ['model', R(/^hb-(plane|train|shinkansen|steam-loco|gunpla|display-case)|^rb-mecha|模型/)],
+  ['puzzle', R(/^pz-|puzzle|拼图|七巧板|鲁班锁|tangram|jigsaw|魔方/)],
+  ['clothing', R(/^gm-(?!hanger|closet-pipe|towel)|^sf-(coat|down|suit|hoodie|cardigan|dress|shirt|sweater|raincoat|apron|scarf|tshirt|pants|kimono)|raincoat|雨衣|gd-apron/)],
+  ['stationery', R(/^sn-|^st-note|sticky|便签|便利贴|calendar|日历|台历|whiteboard|白板|blackboard|黑板|cork|软木|letter-tray|文件托盘|hole-punch|打孔|paper-ream|纸堆|calculator|计算器|stapler|订书|tape-dispenser|胶带座|file-boxes|letterboard|留言板|notebook|journal|手账|label-maker|map-scroll|star-chart|星图/)],
+  ['office-machine', R(/printer|打印机|scanner|扫描仪|fax|传真|shredder|碎纸|of-mfp|复合机|of-ups|typewriter|打字机/)],
+  ['electronics', R(/phone|手机|电话|power-bank|移动电源|watch-dock|portable-hdd|硬盘|of-onu|光猫|of-switch|交换机|cable|数据线|charger|充电器|of-vr|头显|arcade-stick|gimbal|稳定器|mini-pc|digital-frame|数码相框|ereader|阅读器/)],
+  ['fan', R(/(^|-)fan(-|$)|风扇|电风扇|台扇|落地扇/)],
+  ['heater', R(/heater|暖风|暖炉|kerosene|fireplace|壁炉|hibachi|火钵|hot-carpet|电热地毯/)],
+  ['fridge', (d) => d.family === 'fridge' || (!d.stick && /(^|-)fridge-(mini|2door|3door|retro|french|side)/.test(d.id))],
+  ['washer', (d) => d.family === 'washer' || /^ap2-washer/.test(d.id)],
+  ['dryer', (d) => d.family === 'dryer' || /^ap2-dryer/.test(d.id)],
+  ['appliance', (d) => d.category === 'appliance' && !d.prop && !d.mount],
+  ['cleaning', R(/mop|拖把|broom|扫帚|塵取|duster|掸子|lint-roller|粘毛|cleaner|清洁|cleanser|去污|sponge|橡胶手套|chore-gloves|window-(robot|bot)|擦窗|clean-caddy|recycle|回收|carton-bundle|paper-bundle|steel-wool|钢丝球/)],
+  ['storage-box', R(/carton|纸箱|crate|木箱|trunk|旅行箱|^st-drawer|slim-cart|收纳推车|^st-baskets|basket|收纳篮|cassette-box|cert-(folder|stack|tube|box)|证书收纳|vac-bag|压缩袋/)],
+  ['hook-rack', R(/pegboard|洞洞板|hook-rail|挂钩排|door-hooks|门后挂钩|kitchen-bar|kitchen-rail|tool-rack|挂板|mag-hook|磁吸挂钩|door-hook|门顶挂钩|bag-set-|key-rack|钥匙挂架|medal-frame|medal-rack/)],
+  ['shopping-bag', (d) => /^bag-/.test(d.id)],
+  ['food', and(prop, R(/rice-bowl|miso|udon|curry|sushi|onigiri|bread|toast|baguette|donut|apples|watermelon|grapes|snack|teishoku|dinner-two|nabe|takoyaki-party|okonomiyaki|temaki|sukiyaki|yogurt-(tub|4)|pizza|takeout|sandwich|natto|tofu|candy|cookie|chocolate|chips|dango|dorayaki|daifuku|fruit-basket|veg-basket|veg-bag|cake|pudding|ramen|cream-soda|mochi|bento|eggs|milk|onion|rice-sack|kf-cans|konbini|cup-noodle|mikan|bananas|ice-cream|chawanmushi|tsukimi|plate-set|donut-plate|rice-miso|饭团|寿司|拉面|蛋糕|布丁|零食|点心|披萨|豆腐|纳豆|面包|吐司|巧克力|薯片|糖果|年糕|团子|橘子|苹果|西瓜|葡萄|香蕉|鸡蛋|牛奶|米袋/))],
+  ['drink', and(prop, R(/beer|啤酒|sake|清酒|isshobin|(^|-)pet-|宝特瓶|kf-can(-|$)|罐装饮料|bottle-(soda|milk|juice|beer|sparkling)|tetra|纸盒饮料|kf-water|矿泉水|energy-cans|half-drink|饮料|tokkuri|热燗|wine/))],
+  ['tableware', and(prop, R(/plate|盘子|cutlery|餐具|placemat|餐垫|coaster|杯垫|tokkuri|sake-set|酒器|washoku|食器|mug-tree|tumbler|wine-glasses|beer-mugs|donburi|丼碗|kyusu|急须|drip-set|chopstick|筷/))],
+  ['cookware', and(prop, R(/(^|-)pan(-|s?$)|锅|(^|-)pot(-|s?$)|wok|donabe|cassette-stove|卡式炉|hotplate|电烤盘|takoyaki(?!-party)|章鱼烧机|steamer(?!-hand)|电蒸锅|slow-cooker|bread-maker|面包机|ice-maker|制冰机|yogurt-maker|酸奶机|ih-cooktop|电磁炉|baking|烘焙|kitchen-scale|厨房秤|thermos|保温壶|seiro|蒸笼|tamagoyaki|yukihira|stock-pot|electric-hotpot|火锅/))],
+  ['kitchenware', (d) => d.category === 'kitchenware' || R(/ladle|汤勺|turner|锅铲|whisk|打蛋器|tongs|食物夹|utensil|厨具|food-containers|glass-containers|保鲜盒|canisters|密封罐|rice-bin|米桶|kf-wagon|gap-wagon|kitchen-cart|厨房推车|spice|调味/)(d)],
+  ['personal-care', and(prop, R(/tissue|纸巾|抽纸|wipes|湿巾|mask-box|口罩|swab|棉签|hand-cream|护手霜|eye-drops|眼药|pill|药盒|nail-clipper|指甲剪|scale-baby|婴儿秤/))],
+  ['sundries', and(prop, R(/bug-zapper|电蚊拍|mosquito|蚊香|repellent|bug-spray|杀虫|fly-swatter|苍蝇拍|keys|钥匙串|remote|遥控器|katori|aroma-diffuser|香薰机|incense|线香|hourglass|沙漏|candle|蜡烛|lint/))],
+  ['tool', R(/scissors|剪刀|pliers|钳子|drivers|螺丝刀|(^|-)tape-(lying|hanging)|卷尺|wrench|扳手|toolcart|工具车|toolbox|工具箱|tool-chest|工具柜|drill|电钻|saw|锯|grinder(?!.*coffee)/)],
+  ['garden-tool', R(/^gd-(sprayer|trowel|rake|pruner|gloves|soil|fertilizer|tool-rack|compost|hose|garden-cart|can-|seed-tray|potting|plant-labels)|out-garden-box|garden/)],
+  ['pet-supply', (d) => d.category === 'pets' || R(/^pet-|^ph-|宠物|猫砂|猫窝|狗窝|鸟笼|仓鼠|饲养箱|乌龟缸|青鳉|cat-tower|cat-toys/)(d)],
+  ['instrument', (d) => d.category === 'music' || R(/violin|小提琴|trumpet|小号|flute|长笛|harmonica|口琴|accordion|手风琴|harp|竖琴|shamisen|三味线|koto|(^|-)筝|taiko|太鼓|shakuhachi|尺八|small-instruments|dj-deck|ukulele|尤克里里|guitar|吉他|piano|钢琴|drum-kit|e-drum|synth|合成器|hb-keyboard|电子琴/)(d)],
+  ['sports-gear', (d) => d.category === 'fitness' || R(/^gr-|^int-(skateboard|surfboard|snowboard|boxing|bike-helmet|basketball|soccer|tennis|badminton|baseball|golf)|^fit-|dart|飞镖|out-bike|自行车|frisbee|飞盘/)(d)],
+  ['outdoor-gear', R(/tent(?!-bag)?|帐篷|camp|露营|backpack|登山|sleeping-bag|睡袋|sleep-pad|trek-poles|ice-axe|冰镐|crampons|冰爪|rope-coil|harness|quickdraws|climb|攀岩|thermos|compass|指北针|headlamp|头灯|gr-lantern/)],
+  ['fishing-gear', R(/^int-(rod|tackle|fish|landing)|fishing|钓竿|渔具|鱼篓/)],
+  ['craft-tool', R(/knitting|毛线篮|sewing|缝纫|embroidery|刺绣|watercolor|水彩|pottery-wheel|陶艺转盘|airbrush|喷笔|printer-(fdm|resin|box)|3D 打印|easel|画架|calligraphy|书法|model-workmat/)],
+  ['science-kit', R(/telescope|望远镜|microscope|显微镜|chem-set|烧瓶|celestial-globe|天体仪|(^|-)globe$|地球仪/)],
+  ['decor', (d) => d.category === 'deco' || d.category === 'japanese' || R(/^ss-|^mv-(art|photo|deco)|^st-(magnet|decal|polaroid|kids-drawing|poster)|^av-poster|ornament|摆件|daruma|达摩|maneki|招财猫|hina|雏人形|kabuto|koinobori|鲤鱼旗|kadomatsu|门松|shimekazari|hagoita|furin|风铃|uchiwa|团扇|xmas|圣诞|wreath|bunting|balloon|气球|stocking|(^|-)ema|omamori|御守|kakejiku|挂轴|sensu|扇面|zhongtang|中堂|moongate|月洞门|barn-door|谷仓门|butsudan|佛|kamidana|神棚|ikebana|生花台|ticket-stubs|票根|medal|奖牌|cert-(award|cert|diploma)|奖状|trophy|奖杯|postcard|明信片|acoustic|吸音|fukubukuro|福袋|gifts|礼物|clapper|场记板|film-reels|胶片盘|celestial-globe|天体仪|(^|-)globe|地球仪|tin|铁皮/)(d)],
+  ['curtain', R(/curtain|窗帘|sudare|竹帘|yoshizu|苇帘/)],
+  ['partition', R(/(^|-)screen$|bd-screen|cn-screen|屏风|byobu|tsuitate|衝立|shoji|障子/)],
+  ['platform', R(/koagari|小上がり/)],
+  ['vanity', R(/vanity|梳妆|化妆台|kyodai|鏡台|镜台/)],
+  ['counter', R(/kitchen-island|厨房中岛|bar-counter|吧台/)],
+  ['cabinet', (d) => !d.prop && !!d.surfaces?.length && /cupboard|shokkidana|食器棚|cubby|chigaidana|違い棚|changing-table|尿布台|kitchen-cart/.test(T(d))],
+]
+/** 还没有任何功能标签的，按分类兜底（打印出来人工看） */
+const FALLBACK: Partial<Record<string, string>> = {
+  deco: 'decor',
+  japanese: 'decor',
+  tabletop: 'sundries',
+  appliance: 'appliance',
+  kitchenware: 'kitchenware',
+  toiletry: 'personal-care',
+  fitness: 'sports-gear',
+  outdoor: 'outdoor-gear',
+  pets: 'pet-supply',
+  kids: 'toy',
+  music: 'instrument',
+  study: 'stationery',
+  plants: 'plant',
+}
+
+// ---------- 人工审查结论（REVIEW）：旧规则的误匹配，逐条修正 ----------
+
+interface Fix {
+  /** 素材 id，或 id 正则（批量） */
+  ids: string[] | RegExp
+  add?: string[]
+  remove?: string[]
+  why: string
+}
+const hobbyFix = (it: string, ids: string[], why: string): Fix[] => [{ ids, remove: [`hobby:${it}`], why: `兴趣 ${it}：${why}` }]
+const REVIEW: Fix[] = [
+  // ---- 第 1 批：已知误匹配 ----
+  { ids: ['ph-birdcage-bamboo', 'ph-birdcage-bamboo-hanging', 'prop-seiro', 'wet-charcoal-bag', 'gr-rugby', 'gd-plant-labels'], remove: ['plant'], why: '名字里的「竹 / 橄榄 / plant」不是绿植：竹编鸟笼、竹蒸笼、竹炭包、橄榄球、植物标签牌（会被当绿植贴墙弯折）' },
+  {
+    ids: ['av-projector-cube', 'av-projector-cube-on', 'sn-desk-cube', 'vb-kettle-cube', 'lp-cl-crystal-table', 'sw-cl-crystal-lamp', 'hb-model-workmat', 'ch-shell-wood', 'ch-shell-eiffel', 'lm-lazy-cube', 'lm-lazy-shell', 'lv-cube-2x2', 'lv-cube-3x3', 'lv-cube-4x4', 'ss-shelf-cube', 'sf-display-cube', 'vb-bs-cube', 'rb-helper'],
+    remove: ['collectible'],
+    why: 'cube / shell / crystal 字样被当成魔方、贝壳、水晶收藏（方块投影仪、便签本、方形电水壶、水晶灯、格子柜、壳椅…会被塞进展示柜）',
+  },
+  {
+    ids: ['wet-deodor-box', 'wet-powder-box', 'chore-bag-box', 'gr-golf-box', 'hb-printer-box', 'int-tackle-box', 'int-tackle-box-open', 'int-boxing-gloves', 'int-basketball', 'cl-xone', 'cl-x360', 'of-pad-xbox', 'prop-tissue-box', 'sf-mask-box', 'sf-pill-box', 'kf-donut-box', 'kf-mikan-box', 'kf-cutlery-tray', 'kf-wrap-rack', 'kf-pan-rack', 'kf-veg-basket', 'kf-fruit-basket', 'prop-mikan-basket', 'sb-underbed-s', 'sb-underbed-m', 'sb-underbed-l', 'sb-toolbox-closed', 'sb-toolbox-open', 'sf-peg-cup-standing', 'sf-peg-cup-hanging', 'sf-peg-basket-standing', 'sf-peg-basket-hanging', 'gd-plant-labels'],
+    remove: ['high-ok'],
+    why: '名字带「盒 / box / 篮」的日用品、食物、电器（除臭盒、洗衣粉、纸巾盒、Xbox、篮球、拳击手套…）不是高处的收纳 / 摆件',
+  },
+  { ids: ['prop-stapler', 'int-calligraphy', 'ss-ceramic-heater', 'lp-nd-oak-arm', 'lp-md-arm', 'lp-cn-silk-frame-table', 'lp-cn-vase-table', 'lp-cl-bouillotte', 'lm-jar-lamp'], remove: ['high-ok'], why: '订书机 / 书法（「书」）、陶瓷暖风机（「瓷」）、台灯（frame / vase / 书桌灯）不是高处摆件' },
+  // 工作台工具词表的清理（旧正则 monitor / keyboard / lamp 的误命中）
+  { ids: ['of-studio-monitors', 'lm-monitor-riser'], remove: ['monitor'], why: '监听音箱、显示器增高架不是显示器（也不该占「每张桌一台显示器」的名额）' },
+  { ids: ['int-synth', 'int-midi-keyboard', 'tbl-desk-pc'], remove: ['keyboard'], why: '合成器键盘是乐器、带键盘托的电脑桌是家具，都不是电脑键盘' },
+  { ids: ['gr-headlamp', 'mk-led-strip'], remove: ['lamp'], why: '头灯、灯带卷不是室内照明' },
+  { ids: ['hg-cert-folder', 'hg-cert-stack', 'hg-cert-tube', 'hg-cert-box', 'int-calligraphy', 'prop-stapler'], remove: ['book'], why: '证书收纳（证「书」）、书法套装、订书机不是书' },
+  // ---- 第 2 批：同类数量规则（LIMITS）的误归类：被误归进一组的东西会互相挤掉名额 ----
+  { ids: ['fit-kettlebell-4kg', 'fit-kettlebell-8kg', 'fit-kettlebell-16kg', 'gd-can-big', 'gd-can-small', 'gr-bike-bottles', 'kf-fridge-pot', 'prop-glass-pitcher', 'prop-water-pitcher'], remove: ['kettle'], why: '壶铃（kettlebell）、浇水壶、骑行水壶、冷水壶 / 滤水壶不是水壶：摆了它们就不能再摆电水壶（全屋限 1）' },
+  { ids: ['prop-steam-oven'], remove: ['toaster'], why: '蒸烤箱（「烤箱」）归微波炉一类，不占烤面包机的名额' },
+  { ids: ['kf-range-rack'], remove: ['microwave'], why: '微波炉架是家具，不是微波炉（摆了架子就摆不了微波炉）' },
+  { ids: ['prop-steam-oven'], remove: ['microwave'], add: ['steam-oven'], why: '蒸烤箱单独一类（同类数量和检查清单里仍与微波炉合算；厨房台面挑「微波炉」时不挑它，和旧规则一致）' },
+  { ids: /^(hg-trophy-|int-trophy-)/, remove: ['cup'], why: '奖杯不是杯子：会和马克杯一起受「全家杯子数 ≤ 人数 + 1」限制' },
+  { ids: ['kf-chawanmushi', 'kf-cup-noodle', 'kf-cup-noodle-open', 'kf-noodle-case', 'kf-ice-cream', 'kf-pudding-3', 'prop-pen-cup', 'sf-peg-cup-standing', 'sf-peg-cup-hanging', 'wet-toy-cups'], remove: ['cup'], why: '茶碗蒸、杯面、冰淇淋杯、布丁、笔筒、洞洞板收纳杯、洗澡叠叠杯不是喝水的杯子' },
+  { ids: ['sb-vac-bag-flat', 'sb-vac-bag-puffy'], remove: ['vacuum'], why: '衣物压缩袋（vac-bag）不是吸尘器' },
+  { ids: ['wet-dehumidifier-l', 'wet-dehumidifier-s'], remove: ['dehumidifier'], why: '除湿盒（一次性吸湿盒）不是除湿机' },
+  { ids: ['lp-rt-milk-bell-wall'], remove: ['clock'], why: '「钟」罩壁灯不是钟' },
+  { ids: ['lp-cn-vase-table'], remove: ['vase'], why: '陶瓷瓶台灯是灯，不是花瓶' },
+  { ids: ['cl-peeled-mikan', 'kf-mikan-box'], remove: ['fruit-bowl'], why: '剥了一半的橘子、一箱橘子不是果盘' },
+  // ---- 第 3 批：兴趣标签（旧的兴趣正则按子串命中，会把无关的东西当成兴趣物摆进房间） ----
+  ...hobbyFix('gaming', ['hg-duo-gaming-desk'], '双人电竞台是成套摆放的专用件，不进兴趣的随机落地池'),
+  ...hobbyFix('reading', ['hg-cert-folder', 'hg-cert-stack', 'hg-cert-tube', 'hg-cert-box', 'int-calligraphy', 'prop-stapler', 'lm-tv-wall-unit', 'fm-pc-hutch'], '证书收纳、书法、订书机（「书」）、电视组合柜 / 电脑台（带书架）不是读书用品'),
+  ...hobbyFix('photo', ['av-screen-tripod', 'av-screen-tripod-closed', 'av-stand-tripod', 'lm-tripod-lamp', 'lp-in-surveyor', 'lp-nd-tripod-wood', 'of-tv-camera'], '三脚架幕布 / 投影支架 / 三脚落地灯（tripod）、机顶摄像头不是摄影器材'),
+  ...hobbyFix('crafts', ['sf-beanie-hanging', 'sf-beanie-lying'], '毛线帽（「毛线」）是衣物'),
+  ...hobbyFix('models', ['of-inkjet', 'of-label-printer', 'of-laser-printer', 'int-bg-train', 'lm-train-track'], '喷墨 / 激光 / 标签打印机（「打印机」）、铁路桌游、儿童木轨道不是模型'),
+  ...hobbyFix('tea', ['cl-steamdeck', 'hb-steam-loco-n', 'hb-steam-loco-ho', 'hb-steam-loco-o', 'kf-chawanmushi', 'mk-teardown', 'prop-electric-steamer', 'prop-steam-oven', 'ss-calendar-tear', 'ss-humidifier-steam', 'ss-steamer-hand'], 'steam / tear / teardown 里的 tea、茶碗蒸里的「茶」：掌机、蒸汽机车、电蒸锅、加湿器、撕页日历不是茶具'),
+  ...hobbyFix('cats', ['lm-blocks-scatter', 'of-onu'], 'scatter 里的 cat、光「猫」（光调制解调器）'),
+  ...hobbyFix('coffee', ['mk-angle-grinder'], '角磨机（grinder）不是磨豆机'),
+  ...hobbyFix('streaming', ['gd-ceramic-m', 'gd-ceramic-s', 'gd-grow-light-clip', 'ss-ceramic-heater'], 'ceramic 里的 mic-、植物「补光」灯不是直播设备'),
+  ...hobbyFix('tech', ['int-midi-keyboard', 'int-synth', 'kf-bananas', 'kf-water-server-bottom', 'kf-water-server-top'], '合成器「键盘」、bananas 里的 nas、饮水机（water-server）不是数码设备'),
+  ...hobbyFix('sports', ['av-bt-ball', 'chore-gloves', 'chore-gloves-hanging', 'chore-steel-wool', 'col-vase-tianqiu', 'gd-cactus-group', 'gd-gloves', 'gd-hydrangea', 'int-metronome', 'lm-moon-lamp', 'lp-jp-akari-table', 'of-camera-instant', 'prop-bug-zapper', 'prop-bug-zapper-stand', 'prop-fly-swatter', 'prop-globe', 'prop-lamp-globe', 'sb-shoe-ballet-f', 'sb-shoe-ballet-k', 'ss-kabuto', 'st-polaroid', 'wet-bath-pouf'], '「球 / 拍 / 手套 / 头盔」子串：钢丝球、仙人球、绣球花、地球仪、月球灯、橡胶手套、节拍器、拍立得、电蚊拍、芭蕾鞋（ballet）、浴球不是运动用品'),
+  ...hobbyFix('science', ['gd-terrarium-globe', 'prop-lamp-globe'], '玻璃球微景观、玻璃球台灯（globe）不是地球仪'),
+  ...hobbyFix('beauty', ['hb-telescope', 'fm-hall-tree', 'sf-hall-tree'], '望远「镜」、玄关挂衣柜（「挂衣」）不是梳妆用品'),
+  ...hobbyFix('collecting', ['cl-coin-jar', 'gd-ceramic-m', 'gd-ceramic-s', 'kf-chawanmushi', 'lm-jar-lamp', 'lp-cl-crystal-table', 'lp-cn-vase-table', 'ss-ceramic-heater'], '零钱罐（coin）、白瓷花盆 / 陶瓷暖风机（「瓷」）、茶碗蒸、水晶 / 陶瓷台灯不是收藏品'),
+  ...hobbyFix('movies', ['cl-n64', 'prop-cassette-stove'], '插「卡带」的游戏机、卡式炉（cassette）不是影音收藏'),
+  ...hobbyFix('fishing', ['lm-arc-lamp'], '弧形「钓鱼」灯是落地灯'),
+  ...hobbyFix('outdoor', ['av-bt-ball', 'chore-steel-wool', 'col-vase-tianqiu', 'gd-cactus-group', 'gd-hydrangea', 'lm-moon-lamp', 'lp-jp-akari-table', 'prop-globe', 'prop-lamp-globe', 'wet-bath-pouf', 'gr-yoga-blocks', 'gr-yoga-strap', 'gr-bolster', 'gr-pilates-ring', 'kid-teepee'], '「球」子串（同运动）、瑜伽 / 普拉提用品（gr- 前缀）、儿童小帐篷不是登山露营用品'),
+  ...hobbyFix('maker', ['gd-potting-bench'], '园艺工作台（「工作台」）不是电子手工台'),
+  // ---- 第 4 批：房间布置用的候选池 / 摆放能力 ----
+  { ids: ['bx-mat-towel', 'prop-paper-towel', 'bx-towel-hook', 'bx-towel-hook-3', 'bx-towel-ring', 'bx-towel-bar-bath', 'bc-towel-tri-2', 'bc-wall-glass-towel', 'sf-towel-bar-1', 'sf-towel-bar-2', 'wet-towel-stand', 'wet-towel-shelf'], remove: ['towel'], why: '毛巾地垫、厨房纸（paper-towel）、毛巾杆 / 挂钩 / 浴巾架不是毛巾（检查清单数毛巾、健身房撒毛巾时会误算）' },
+  { ids: ['c2-mesh-simple', 'ch-drafting', 'desk-chair'], add: ['office-chair'], why: '简约网椅、绘图高椅、猫耳书桌椅都是书桌椅（旧规则在不同地方各算各的）' },
+  { ids: ['of-office-phone'], remove: ['office-chair'], why: '办公电话不是办公椅' },
+  { ids: ['bx-shower-set', 'be-vanity-fold-open', 'be-vanity-fold-closed', 'be-vanity-tri', 'be-vanity-wall', 'col-coin-loupe', 'col-stamp-tools', 'fm-kyodai', 'gr-ski-helmet', 'gr-swim-set', 'gr-snorkel-fins', 'hb-telescope', 'int-microscope', 'mk-usb-microscope', 'mk-mag-lamp', 'of-camera-mirrorless', 'of-lens-pancake', 'of-lens-35', 'of-lens-wide', 'of-lens-2470', 'of-lens-macro', 'of-lens-70200', 'pz-mirror', 'ss-kagami-mochi', 'ss-kagami-mochi-s'], remove: ['mirror'], why: '「镜」子串：放大镜、泳镜、望远镜、显微镜、镜头、无反相机（mirrorless）、镜饼、梳妆台不是镜子（健身房 / 衣帽间会摆出望远镜）' },
+  { ids: ['ap2-washer-drum', 'vb-ct-drum'], remove: ['drums'], why: '滚筒洗衣机（drum）、鼓形茶几不是鼓：会占「全屋一套鼓」的名额，兴趣套装还会把洗衣机摆进音乐室' },
+  { ids: ['int-taiko'], add: ['drums'], why: '太鼓是鼓' },
+  { ids: ['c2-piano-bench'], remove: ['piano'], why: '钢琴凳不是钢琴（会占「全屋一台钢琴」的名额）' },
+  { ids: ['c2-fold-pad-closed', 'of-mousepad-rgb'], remove: ['video-game'], why: '折叠软垫椅、RGB 鼠标垫（pad-）不是游戏机 / 手柄' },
+  { ids: ['bx-mat-towel', 'av-headphone-amp', 'chore-pinch-hanger', 'chore-pinch-hanger-hanging', 'cl-switch-dock', 'hg-cert-folder', 'hg-cert-stack', 'hg-cert-tube', 'hg-cert-box', 'int-calligraphy', 'lp-ct-bunny', 'laundry-pinch', 'prop-tv-43', 'prop-tv-55', 'prop-headphone-stand', 'prop-rotary-phone', 'prop-stapler', 'prop-paper-towel', 'of-gimbal', 'of-cordless-phone', 'of-office-phone', 'of-retro-push-phone', 'of-pink-phone', 'of-switch', 'sb-vac-bag-puffy', 'sb-vac-bag-flat', 'sb-closet-box-grid', 'sb-closet-box-long', 'gd-lavender', 'wet-toilet-tablets'], remove: ['bed-ok'], why: '床上随手放的东西按子串匹配（衣 / 书 / 平板 / 手机 / 枕 / 兔 / switch）：洗衣夹、电视（平板电视）、座机、交换机、压缩袋、薰衣草、洁厕块、兔子台灯不该摆到床上' },
+  { ids: /^(gm-(hanger|row)-|va-hamper-|gm-towel-.*-(bar|hook)$)/, remove: ['bed-ok'], why: '衣架、一排排挂着的衣服、脏衣篓、搭在杆上的毛巾不放床上' },
+  { ids: /^wet-(?!bath-towel)/, remove: ['bed-ok'], why: '洗衣液、洗衣网、晾衣夹篮等卫浴洗衣用品不放床上' },
+  { ids: /^(col-|cl-(steamdeck|piggy-bank|coin-jar)|hb-steam-loco-|hg-trophy-|hg-go-bowl-|int-trophy-|lp-|lm-jar-lamp|mk-teardown|ss-(humidifier-steam|steamer-hand|calendar-tear)|sf-peg-cup-|va-tb-|vb-perfume-|wet-)/, remove: ['kitchen-shelf-ok'], why: '厨房搁板上的小物按子串匹配（瓶 / 罐 / 杯 / tea）：收藏瓷器、存钱罐、奖杯、棋罐、香水、刷牙杯、洗护瓶、蒸汽机车模型、加湿器（steam）、台灯不放厨房搁板' },
+  { ids: ['int-chem-set', 'gr-tennis-can', 'gr-bike-bottles', 'prop-perfume', 'prop-toothbrush-cup', 'prop-steam-oven'], remove: ['kitchen-shelf-ok'], why: '烧瓶、网球罐、骑行水壶、香水、刷牙杯、蒸烤箱不放厨房搁板' },
+  { ids: ['gd-plant-labels'], remove: ['toilet-shelf-ok'], why: '植物标签牌不是绿植' },
+  { ids: ['cl-steamdeck', 'hb-steam-loco-n', 'hb-steam-loco-ho', 'hb-steam-loco-o', 'hg-trophy-cup-bronze', 'hg-trophy-tall-bronze', 'hg-trophy-star-bronze', 'hg-trophy-laurel-bronze', 'hg-medal-bronze', 'kf-chawanmushi', 'lp-cn-vase-table', 'lp-cl-pleat-urn', 'lm-jar-lamp', 'mk-teardown', 'prop-electric-steamer', 'prop-steam-oven', 'prop-tamagoyaki', 'of-inkjet', 'ss-ceramic-heater', 'ss-humidifier-steam', 'ss-steamer-hand', 'ss-calendar-tear', 'wet-bath-mat-stone'], remove: ['curio-ok'], why: '多宝格候选按子串匹配（茶 / tea / 铜 / 瓷 / 玉 / 墨 / stone）：铜牌、玉子烧锅、喷墨打印机、陶瓷暖风机、硅藻土地垫、蒸汽类电器、台灯不进多宝格' },
+  { ids: ['av-bt-ball', 'chore-steel-wool', 'col-vase-tianqiu', 'gd-cactus-group', 'gd-hydrangea', 'gr-golf-box', 'gr-bowling-bag', 'gr-bowling-ball', 'gr-ball-net', 'gr-ball-net-hanging', 'gr-yoga-blocks', 'gr-massage-balls', 'int-cat-toys', 'lp-jp-akari-table', 'lm-moon-lamp', 'lm-block-calendar', 'prop-globe', 'prop-lamp-globe', 'prop-knife-block', 'sb-shoe-pump-block-f', 'sb-shoe-ballet-f', 'sb-shoe-ballet-k', 'sf-cap-lying', 'sf-cap-hanging', 'wet-bath-pouf'], remove: ['toy'], why: '儿童游戏室的玩具按子串匹配（球 / block / ball）：刀架、钢丝球、仙人球、绣球花、地球仪、球形台灯、芭蕾鞋、浴球、猫玩具不是儿童玩具' },
+  { ids: ['fit-yoga-mat-rolled'], add: ['yoga-mat'], why: '卷起来的瑜伽垫也是瑜伽垫' },
+  { ids: ['c2-ball-stool', 'ch-ball', 'ch-ball-seat', 'fit-yoga-ball', 'gr-ball-rack', 'gr-bat-rack', 'gr-racket-wall', 'hg-pool-table', 'int-golf-bag', 'lm-block-sofa-1', 'lm-block-sofa-2', 'lm-block-sofa-3', 'lm-floor-globe', 'lp-nd-double-globe', 'lp-nd-opal-wall', 'lm-toy-shelf', 'fm-book-sling', 'lm-book-sling'], remove: ['toy'], why: '球椅、台球桌、球架、方块沙发、球形灯、玩具收纳柜、绘本架是家具，不是玩具' },
+  { ids: ['lp-cl-crystal-table', 'sw-cl-crystal-lamp'], remove: ['mineral'], why: '水晶烛台灯不是矿物标本' },
+  { ids: ['gr-helmet-wall'], remove: ['hat'], why: '头盔 / 帽子壁挂架是挂架' },
+  // ---- 第 5 批：检查清单 / 补齐 / 灯光里各自写的旧判断收敛到同一组标签 ----
+  { ids: ['fm-tatami-bed-100', 'fm-tatami-bed-122', 'fm-tatami-bed-142', 'bd-loft'], add: ['bed'], why: '榻榻米床台、阁楼床是床（旧的「名字以床结尾」判断漏掉了）' },
+  { ids: ['sw-fh-dogbed'], remove: ['bed'], why: '格纹狗床是宠物用品' },
+  { ids: ['out-futon-rack', 'ss-futon-folded', 'lm-futon-sofa', 'lm-futon-sofa-open'], remove: ['bedding'], why: '晾被架、被炉被（futon）不是地铺；地板沙发床已经算床' },
+  { ids: ['wet-toilet-slippers'], remove: ['shoe'], why: '厕所拖鞋不算玄关的鞋子' },
+  { ids: ['sw-cn-baxian', 'tbl-bar-table'], add: ['dining-table'], why: '八仙桌、吧台高桌也是吃饭的桌子（灯光原来就在它们上方挂吊灯）' },
+  // ---- 第 6 批：功能标签全覆盖（粗分类兜不住的逐件补；粗分类规则的误命中也在这里去掉） ----
+  { ids: ['bc-fan-acrylic-1', 'bc-fan-brass-3', 'bc-fan-ceramic-2', 'bc-fan-glass-2', 'bc-hook-fan-3', 'sn-tabs-fan', 'tbl-desk-fan'], remove: ['fan'], why: '扇形转角架、扇形索引贴、扇形转角桌不是风扇' },
+  { ids: ['av-theater-curtain', 'av-theater-sofa', 'av-theater-sofa-2'], remove: ['heater'], why: 'theater 里的 heater' },
+  { ids: ['hb-jigsaw', 'int-jigsaw', 'prop-coffee-grinder', 'prop-hand-grinder'], remove: ['tool'], why: '拼图（jigsaw）、磨豆机（grinder）不是工具' },
+  { ids: /^hc-pet-/, remove: ['drink'], why: '宠物摄像头（pet-）不是宝特瓶饮料' },
+  { ids: ['gd-hanging-pot', 'gd-hanging-pot-hanging', 'kf-fridge-pot'], remove: ['cookware'], why: '吊盆是花盆、冷水壶不是锅' },
+  { ids: ['prop-hotplate'], remove: ['tableware'], why: '电烤盘是厨房电器' },
+  { ids: ['mk-bluepill'], remove: ['personal-care'], why: 'STM32 蓝丸板（pill）不是药' },
+  { ids: ['hc-pet-screen', 'jp-shoji-lamp', 'of-green-screen', 'vb-sc-shoji'], remove: ['partition'], why: '带屏摄像头、障子灯、绿幕、障子门鞋柜不是屏风' },
+  { ids: ['mk-mag-lamp'], remove: ['vanity'], why: '放大「镜台」灯不是梳妆台' },
+  { ids: ['gd-terrarium-globe', 'lp-nd-double-globe', 'prop-lamp-globe', 'vb-fl-globe'], remove: ['science-kit'], why: '玻璃球微景观、球形灯（globe）不是地球仪' },
+  { ids: ['lm-puzzle-mat', 'mk-jigsaw'], remove: ['puzzle'], why: '拼接地垫、曲线锯（jigsaw）不是益智玩具' },
+  { ids: ['hb-gunpla', 'rb-gimbal'], remove: ['robot'], why: '拼装机器人模型、口袋云台不是机器人' },
+  { ids: ['kid-teepee'], remove: ['outdoor-gear'], why: '儿童小帐篷是玩具' },
+  { ids: ['ss-kakejiku-sho'], remove: ['craft-tool'], why: '书法挂轴是装饰' },
+  { ids: ['chore-bag-box'], add: ['cleaning'], why: '垃圾袋盒' },
+  { ids: ['fm-booth'], remove: ['duo-desk'], add: ['dining-seat'], why: '双人卡座是座位，不是双人桌（「双人」）' },
+  { ids: ['bag-set-door-umbrella'], remove: ['umbrella-stand'], why: '挂着雨伞的门顶挂钩不是伞架（检查清单会把它算成伞架）' },
+  { ids: ['mk-drawers-desk'], remove: ['desk', 'table'], why: '桌面零件抽屉柜（id 里的 desk）不是书桌' },
+  { ids: ['va-coffee-espresso'], remove: ['coffee-maker'], why: '浓缩咖啡杯（espresso）不是咖啡机：会占「全屋一台咖啡机」的名额' },
+  { ids: /^(va-tb-|prop-toothbrush-cup)/, remove: ['cup'], why: '刷牙杯不算进全家的杯子数（旧规则只排除了名字里有「牙刷」的）' },
+  { ids: ['va-vase-milk'], remove: ['food'], why: '牛奶罐花瓶不是食物' },
+  { ids: ['sf-beanie-lying', 'sf-beanie-hanging', 'vb-keytray-bean', 'wet-bath-pouf'], remove: ['floor-cushion'], why: '毛线帽（beanie）、豆形钥匙托盘、浴球（pouf）不是坐垫' },
+  { ids: ['fm-closet-system'], add: ['wardrobe'], why: '开放式衣帽间是衣物收纳（检查清单「衣物收纳」应计入）' },
+  { ids: ['hg-mj-fold-closed', 'hg-go-bowl-black', 'hg-go-bowl-white', 'hg-go-bowl-rattan-black', 'hg-go-bowl-rattan-white', 'hg-pool-table', 'int-bg-hex', 'int-bg-train'], add: ['tabletop-game'], why: '折叠麻将桌、棋罐、台球桌、版图类桌游' },
+  { ids: ['int-penlights'], add: ['decor'], why: '应援棒' },
+  { ids: ['lm-daybed', 'sw-cl-recamier'], add: ['sofa'], why: '贵妃榻是沙发' },
+  { ids: ['sw-cn-kang'], add: ['low-table'], why: '炕桌是矮桌' },
+  { ids: ['sw-cn-qiaotou', 'lm-zataku', 'sw-jp-zataku'], add: ['table'], why: '翘头案、座卓（「卓」不是「桌」，旧规则漏掉）是桌' },
+  { ids: ['lm-zataku', 'sw-jp-zataku'], add: ['low-table'], why: '座卓是矮桌' },
+]
+
+// ---------- 生成 ----------
+
+const args = new Set(process.argv.slice(2))
+const tags = new Map<string, Set<string>>()
+for (const d of ASSETS) {
+  const s = new Set<string>()
+  if (d.fixture) s.add('fixture')
+  else for (const [t, f] of [...RULES, ...COARSE]) if (f(d)) s.add(t)
+  tags.set(d.id, s)
+}
+for (const fx of REVIEW) {
+  const hit = Array.isArray(fx.ids) ? fx.ids : ASSETS.filter((d) => (fx.ids as RegExp).test(d.id)).map((d) => d.id)
+  if (!hit.length) throw new Error(`REVIEW: ${fx.ids} 没有命中任何素材`)
+  for (const id of hit) {
+    const s = tags.get(id)
+    if (!s) throw new Error(`REVIEW: 没有素材 ${id}`)
+    for (const t of fx.add ?? []) s.add(t)
+    for (const t of fx.remove ?? []) s.delete(t)
+  }
+}
+
+// 兜底：审查之后仍然没有功能标签的，按分类给一个粗分类
+const FUNC = new Set<string>(FUNCTION_TAGS)
+const leftover: string[] = []
+for (const d of ASSETS) {
+  const s = tags.get(d.id)!
+  if (d.fixture || [...s].some((t) => FUNC.has(t))) continue
+  const f = FALLBACK[d.category]
+  if (f) s.add(f)
+  else leftover.push(`${d.id}:${d.name}:${d.category}`)
+}
+if (leftover.length) console.warn(`[migrate-tags] ${leftover.length} 件没有功能标签：${leftover.join(' ')}`)
+
+const counts = new Map<string, number>()
+for (const s of tags.values()) for (const t of s) counts.set(t, (counts.get(t) ?? 0) + 1)
+
+if (args.has('--stats')) {
+  for (const [t, n] of [...counts].sort((a, b) => b[1] - a[1])) console.log(`${t}\t${n}`)
+}
+if (args.has('--list')) {
+  const want = process.argv[process.argv.indexOf('--list') + 1]
+  for (const d of ASSETS) if (tags.get(d.id)!.has(want)) console.log(`${d.id}\t${d.name}\t${d.category}\t${d.prop ? 'P' : ''}${d.mount ? 'M' : ''}${d.stick ? 'S' : ''}`)
+}
+if (args.has('--dump')) {
+  // 全部「标签 → 素材」写成一个 TSV，人工审查用
+  const out = process.argv[process.argv.indexOf('--dump') + 1]
+  const rows: string[] = []
+  for (const d of ASSETS) for (const t of tags.get(d.id)!) rows.push(`${t}\t${d.id}\t${d.name}\t${d.category}\t${d.prop ? 'P' : ''}${d.mount ? 'M' : ''}${d.stick ? 'S' : ''}${d.form === 'hanging' ? 'H' : ''}`)
+  fs.writeFileSync(out, rows.sort().join('\n'))
+}
+if (!args.has('--check') && !args.has('--stats') && !args.has('--list') && !args.has('--dump')) {
+  const lines = ASSETS.map((d) => `  ${JSON.stringify(d.id)}: [${[...tags.get(d.id)!].sort().map((t) => `'${t}'`).join(', ')}],`)
+  const src = `// 由 scripts/migrate-tags.mts 生成的初始语义标签（id → 标签）。规则见 src/three/tags.ts。
+// 新增素材请在 def 里直接写 tags（运行时与这张表合并）；要改某件素材的标签，在 migrate-tags.mts 的 REVIEW 里加一条再重新生成。
+import type { Tag } from './tags'
+
+export const GENERATED_TAGS: Record<string, readonly Tag[]> = {
+${lines.join('\n')}
+}
+`
+  fs.writeFileSync(path.resolve(process.cwd(), 'src/three/tags.generated.ts'), src)
+  console.log(`[migrate-tags] ${ASSETS.length} 个素材，${counts.size} 种标签，REVIEW ${REVIEW.length} 条`)
+}
+
+// ---------- 核对：各调用点「旧正则（含原过滤条件）」与「新标签查询」的候选是否一致 ----------
+
+if (args.has('--check')) {
+  const has = (d: D, t: string) => tags.get(d.id)!.has(t)
+  const any = (...ts: string[]) => (d: D) => ts.some((t) => has(d, t))
+  const COMPOSED: [RegExp, RegExp][] = [
+    [/^hg-duo/, /duo/],
+    [/^hg-go-bowl/, /go-bowl/],
+    [/^of-(camera-showcase|dry-)/, /camera-showcase|dry-/],
+  ]
+  /** 旧 Decorator.find */
+  const F = (re: RegExp, f: (d: D) => boolean = () => true) => (d: D) =>
+    !d.fixture && !COMPOSED.filter(([, n]) => !n.test(re.source)).some(([id]) => id.test(d.id)) && (re.test(d.id) || re.test(T(d))) && f(d)
+  /** 新 find：标签（任一）+ 同样的过滤；成套部件不进通用查询 */
+  const N = (ts: string | string[], f: (d: D) => boolean = () => true) => (d: D) => !d.fixture && !has(d, 'set-piece') && any(...[ts].flat())(d) && f(d)
+  /** 旧的「id 名字」整串匹配（checklist count / household matches） */
+  const C = (re: RegExp, f: (d: D) => boolean = () => true) => (d: D) => re.test(T(d)) && f(d)
+  const NC = (ts: string | string[], f: (d: D) => boolean = () => true) => (d: D) => any(...[ts].flat())(d) && f(d)
+  const prop = (d: D) => !!d.prop && d.form !== 'hanging'
+  const propX = (d: D) => !!d.prop && !d.stick && !d.form?.includes('hanging')
+  const floor = (d: D) => !d.prop && !d.mount && !d.stick && !d.fixture && Math.max(d.w, d.d) <= 240
+  const mount = (d: D) => !!d.mount
+  const small = (d: D) => !d.mount && d.form !== 'hanging' && Math.max(d.w, d.d) < 70
+  const surf = (d: D) => !!d.surface && !d.prop
+  const SITES: [string, (d: D) => boolean, (d: D) => boolean][] = []
+  const site = (name: string, old: (d: D) => boolean, now: (d: D) => boolean) => SITES.push([name, old, now])
+
+  // decorate.ts
+  site('kitchenWall 搁板小物', F(/spice|调料|seasoning|jar|罐|canister|mug|杯|bottle|瓶|succulent|多肉|herb|香草|tea|茶|coffee|咖啡/, (a) => !!a.prop && a.h < 26 && !a.form?.includes('hanging')), N('kitchen-shelf-ok', (a) => !!a.prop && a.h < 26 && !a.form?.includes('hanging')))
+  site('toiletWall 搁板小物', F(/toilet-paper|卷纸|卷筒纸|freshener|芳香|香氛|消臭|除湿|succulent|多肉|plant|绿植|incense|香薰|diffuser|tissue|纸巾/, (a) => !!a.prop && a.h < 20 && a.w < 30 && !a.form?.includes('hanging')), N('toilet-shelf-ok', (a) => !!a.prop && a.h < 20 && a.w < 30 && !a.form?.includes('hanging')))
+  const kd: [RegExp, string][] = [
+    [/prop-rice-cooker$|ih-rice-cooker|电饭煲/, 'rice-cooker'],
+    [/prop-kettle$|electric-pot|电水壶|电热水瓶/, 'electric-kettle'],
+    [/prop-cutting-board|砧板/, 'cutting-board'],
+    [/prop-knife-block|刀架/, 'knife-block'],
+    [/prop-toaster$|toaster-oven|烤面包/, 'toaster'],
+    [/prop-microwave|微波炉/, 'microwave'],
+    [/prop-dish-rack|沥水/, 'dish-rack'],
+    [/prop-spice-rack|spice-jars|调味|香料/, 'spice'],
+    [/air-fryer|空气炸锅/, 'air-fryer'],
+    [/pressure-cooker|电压力锅/, 'pressure-cooker'],
+    [/stand-mixer|厨师机/, 'stand-mixer'],
+    [/oil-bottles|油壶/, 'oil-bottle'],
+    [/paper-towel|厨房纸/, 'paper-towel'],
+    [/coffee-maker|espresso|pour-over|moka|磨豆/, 'coffee-gear'],
+  ]
+  for (const [re, t] of kd) site(`kitchenDress ${t}`, F(re, prop), N(t, prop))
+  site('kitchenDress 砧板居中', (d) => !!d.prop && /cutting|砧板/.test(d.id + d.name), (d) => !!d.prop && has(d, 'cutting-board'))
+  site('bathMat', F(/bath-mat|bx-mat-/, (a) => !!a.prop && a.h < 4), N('bath-mat', (a) => !!a.prop && a.h < 4))
+  const wet: [RegExp, string, (d: D) => boolean][] = [
+    [/toothbrush|刷牙/, 'toothbrush', prop],
+    [/hand-soap|洗手液/, 'hand-soap', prop],
+    [/lotion|乳液|化妆水/, 'skincare', prop],
+    [/toilet-paper|卷纸|卷筒纸/, 'toilet-paper', prop],
+    [/freshener|芳香|香氛/, 'air-freshener', prop],
+    [/detergent|洗衣液|洗衣粉/, 'detergent', prop],
+    [/soften|柔软/, 'softener', prop],
+    [/towel-bar|毛巾杆|浴巾架/, 'towel-bar', mount],
+    [/toilet-brush|马桶刷/, 'toilet-brush', small],
+    [/sanitary|卫生桶|小垃圾桶/, 'sanitary-bin', small],
+    [/bath-stool|浴凳|风呂椅|風呂椅/, 'bath-stool', small],
+    [/^wet-bath-pail|洗面桶|風呂桶|洗面器/, 'bath-pail', small],
+    [/hamper|脏衣篓/, 'hamper', small],
+  ]
+  for (const [re, t, f] of wet) site(`wetDress ${t}`, F(re, f), N(t, f))
+  site('wetDress 已有卷纸', (d) => /toilet-paper|卷纸/.test(d.id + d.name), any('toilet-paper'))
+  site('wash 体重秤', F(/^(wet-body-scale|fit-scale|scale-(glass|round|dial|composition)) /), N('body-scale'))
+  site('wash 撒洗衣用品毛巾', F(/detergent|soften|洗衣|柔软|towel|毛巾/, prop), N(['laundry-supply', 'towel'], prop))
+  site('personalize 书桌', (d) => /desk|书桌|桌/.test(d.id + d.name) && !!d.surface, (d) => has(d, 'table') && !!d.surface)
+  site('personalize 墙饰', F(/wall-art|wall-clock|挂画|挂钟/, mount), N(['wall-art', 'clock'], mount))
+  site('duoGaming 电竞椅', F(/电竞椅|gaming-chair|^ch-gaming/, (a) => !a.prop && a.category !== 'tabletop'), N('gaming-chair', (a) => !a.prop && a.category !== 'tabletop'))
+  site('gameNight 桌', (d) => !!d.surface && !d.prop && /dining-table|tbl-dining|餐桌|kotatsu|被炉|chabudai|矮桌|ちゃぶ台/.test(T(d)), (d) => !!d.surface && !d.prop && any('dining-table', 'low-table')(d))
+  site('chairsUpTo 餐桌', (d) => /dining-table|tbl-dining|餐桌/.test(d.id + d.name), any('dining-table'))
+  site('chairsUpTo 椅子', (d) => /chair|椅/.test(d.id + d.name), any('chair'))
+  site('plushOnBed', F(/plush|玩偶|毛绒|bear|teddy|兔|bunny|抱枕/, propX), N('plush', propX))
+  site('chairAsset 人体工学', F(/人体工学|ergo|网椅|mesh-office/, (a) => !a.prop && a.category === 'study' && a.form !== 'closed'), N('ergonomic-chair', (a) => !a.prop && a.category === 'study' && a.form !== 'closed'))
+  site('chairAsset 办公椅 plain', F(/办公椅|office|ergonomic|人体工学|书桌椅|task|绘图|简约/, (a) => !a.prop && (a.category === 'study' || a.category === 'dining') && a.id !== 'desk-chair'), N('office-chair', (a) => !a.prop && (a.category === 'study' || a.category === 'dining') && a.id !== 'desk-chair'))
+  site('chairAsset 办公椅 any', F(/办公椅|office|ergonomic|人体工学|书桌椅|task/, (a) => !a.prop && a.id !== 'desk-chair'), N('office-chair', (a) => !a.prop && a.id !== 'desk-chair'))
+  site('fridgeMagnets', F(/冰箱贴|便签|拍立得|儿童画|magnet|sticky-note|polaroid|kids-drawing/, (a) => !!a.stick), N('fridge-door', (a) => !!a.stick))
+  site('fridgeMagnets 儿童画', (d) => !!d.stick && has(d, 'fridge-door') && /儿童画|kids/.test(d.id + d.name), (d) => !!d.stick && has(d, 'fridge-door') && has(d, 'for-kids'))
+  site('rackOverWasher', F(/laundry-rack|ランドリー|洗衣机.*架|洗衣机置物架/, (a) => !a.prop && !a.mount), N('washer-rack', (a) => !a.prop && !a.mount))
+  site('funcRoom 电竞椅', F(/电竞椅|gaming-chair|gaming/, (a) => !a.prop && a.category !== 'tabletop'), N('gaming-chair', (a) => !a.prop && a.category !== 'tabletop'))
+  site('study/western 电竞椅', F(/电竞椅|gaming/, (a) => !a.prop), N('gaming-chair', (a) => !a.prop))
+  site('library 书架', F(/bookshelf|bookcase|书架|书柜/, floor), N('bookshelf', floor))
+  site('library 单人椅', F(/armchair|单人沙发|lounge|阅读椅|摇椅/, floor), N('armchair', floor))
+  site('library 书', F(/book|书(?!架|柜|桌)|漫画/, propX), N(['book', 'manga'], propX))
+  site('gaming 桌', F(/gaming-desk|电竞桌|tbl-desk-(140|160|l-)|L 形/, floor), N('gaming-desk', floor))
+  for (const [re, t] of [[/monitor|显示器/, 'monitor'], [/keyboard|键盘/, 'keyboard'], [/mouse|鼠标/, 'mouse'], [/headset|耳麦|耳机/, 'headset']] as [RegExp, string][]) site(`gaming 外设 ${t}`, F(re, prop), N(t, prop))
+  site('gaming 主机', F(/pc-tower|台式机|主机箱/, floor), N('pc', floor))
+  site('gaming/theater 电视柜', F(/tv-stand|lv-tv|电视柜/, floor), N('tv-stand', floor))
+  site('gaming 展示柜', F(/展示柜|showcase|display|figure|手办/, floor), N(['display-cabinet', 'figure'], floor))
+  site('gaming 摆件', F(/game-console|手柄|pad-|掌机|cl-|figure|手办/, propX), N(['video-game', 'figure'], propX))
+  site('music 谱架', F(/谱架|music-stand/, floor), N('music-stand', floor))
+  site('music 吉他', F(/guitar|吉他|bass|贝斯/, floor), N('guitar', floor))
+  site('music 凳', F(/stool|凳/, floor), N('stool', floor))
+  site('music 书架', F(/bookshelf|书架|唱片架|黑胶/, floor), N(['bookshelf', 'record-shelf'], floor))
+  site('music 摆件', F(/metronome|节拍|谱|唱片|record|headphone|耳机/, propX), N(['music-accessory', 'record', 'headset'], propX))
+  site('theater 沙发', F(/sofa|沙发|影院沙发|theater-sofa/, (a) => floor(a) && a.w <= 200), N('sofa', (a) => floor(a) && a.w <= 200))
+  site('theater 电视柜', F(/tv-stand|lv-tv|电视柜|av-ht-front|落地 HiFi|hifi/, floor), N(['tv-stand', 'hifi'], floor))
+  site('theater 幕布', F(/av-screen-(pull|electric)$|幕布/, mount), N('projector-screen', mount))
+  site('theater 唱片架', F(/cd-tower|CD 架|唱片架|bookshelf/, floor), N(['record-shelf', 'bookshelf'], floor))
+  site('theater 摆件', F(/av-projector|投影|popcorn|爆米花|蓝光|dvd|vhs|cd-row/, propX), N('home-theater', propX))
+  site('hobby 工作台(maker)', F(/mk-workbench|工作台|workbench/, floor), N('workbench', floor))
+  site('hobby 书桌', F(/tbl-desk-(120|140|160)|desk|书桌|工作台/, floor), N(['desk', 'workbench'], floor))
+  site('hobby/cards 柜', F(/bookshelf|书架|陈列柜|展示柜|收纳柜|shelf/, floor), N('shelving', floor))
+  site('gym 健身器材', (d) => !d.fixture && d.category === 'fitness' && !d.prop && !d.mount, (d) => !d.fixture && d.category === 'fitness' && !d.prop && !d.mount)
+  site('gym 镜', F(/mirror|镜/, floor), N('mirror', floor))
+  site('gym 瑜伽垫', F(/yoga-mat|瑜伽垫/), N('yoga-mat'))
+  site('gym 摆件', F(/dumbbell|哑铃|kettlebell|壶铃|protein|蛋白|towel|毛巾|水壶|bottle/, propX), N(['weights', 'towel', 'water-bottle'], propX))
+  site('play 地垫', F(/play-?mat|爬行垫|拼图垫|地垫/), N('play-mat'))
+  site('play 儿童家具', (d) => !d.fixture && d.category === 'kids' && !d.prop && !d.mount && !/crib|婴儿床|kid-bed|儿童床/.test(d.id + d.name), (d) => !d.fixture && d.category === 'kids' && !d.prop && !d.mount && !any('crib', 'kid-bed')(d))
+  site('play 玩具', F(/toy|玩具|积木|block|plush|玩偶|绘本|picture-book|ball|球/, propX), N('toy', propX))
+  site('guest 行李箱', F(/luggage|行李箱|suitcase/, floor), N('luggage', floor))
+  site('guest 挂衣架', F(/clothes-rail|衣帽架|hanger|挂衣/, floor), N(['clothes-rail', 'coat-rack'], floor))
+  site('closet 衣柜', F(/wardrobe|衣柜|clothes-rail|挂衣|收纳柜|chest|抽屉柜|storage/, floor), N(['wardrobe', 'clothes-rail', 'storage-cabinet'], floor))
+  site('closet 镜', F(/mirror|穿衣镜|落地镜/, floor), N('mirror', floor))
+  site('closet 摆件', F(/收纳箱|storage-box|box|盒|帽|hat|bag|包/, propX), N(['storage-box', 'hat', 'bag'], propX))
+  site('wearDress 衣桁', (d) => hasHook(d) && /ikou|衣桁/.test(`${d.id} ${d.family ?? ''} ${d.name}`), (d) => hasHook(d) && has(d, 'kimono-rack'))
+  site('wearDress 挂衣杆', (d) => hasHook(d) && !/ikou|衣桁/.test(`${d.id} ${d.family ?? ''} ${d.name}`) && /garment-rail|clothes-rail|挂衣杆/.test(`${d.id} ${d.family ?? ''} ${d.name}`) && !/gm-closet-pipe/.test(d.id), (d) => hasHook(d) && !has(d, 'kimono-rack') && has(d, 'garment-rail'))
+  site('wearDress 毛巾杆', (d) => hasHook(d) && !/ikou|衣桁|garment-rail|clothes-rail|挂衣杆/.test(`${d.id} ${d.family ?? ''} ${d.name}`) && /towel|毛巾|浴巾|タオル/.test(`${d.id} ${d.family ?? ''} ${d.name}`), (d) => hasHook(d) && !has(d, 'kimono-rack') && !has(d, 'garment-rail') && has(d, 'towel-rail'))
+  site('bedroomExtras 化妆品', F(/makeup-mirror|perfume|cosmetic|lipstick|lotion|comb|hair-dryer|化妆|香水|口红|乳液/, (a) => prop(a) && a.category === 'toiletry'), N('cosmetics', (a) => prop(a) && a.category === 'toiletry'))
+  site('linen 架子', F(/sf-(open|wire)-rack|オープンラック|スチールラック/, (a) => !a.prop && !a.mount && (a.surfaces?.length ?? 0) >= 2 && a.d <= 50), N('open-rack', (a) => !a.prop && !a.mount && (a.surfaces?.length ?? 0) >= 2 && a.d <= 50))
+  site('artWall 已有挂画', (d) => /wall-art|ss-art|ss-photo|ss-tapestry|ss-macrame|poster|海报|挂画/.test(T(d)), any('wall-art'))
+  site('artWall 沙发', (d) => /sofa|沙发/.test(d.id + d.name), any('sofa'))
+  site('DESK_RE', (d) => !!d.surface && OLD.DESK_RE.test(T(d)), (d) => !!d.surface && any('desk', 'workbench')(d))
+  site('fillCompartments 多宝格', F(/瓷|vase|花瓶|茶|tea|盆景|bonsai|奇石|stone|香炉|incense|玉|jade|印章|砚|墨|scroll|卷轴|铜|bronze|葫芦/, (a) => !!a.prop && !a.mount && !a.stick && a.form !== 'hanging'), N('curio-ok', (a) => !!a.prop && !a.mount && !a.stick && a.form !== 'hanging'))
+  site('fillCompartments 书', F(/book|书(?!架|柜|桌)|漫画|manga|novel|杂志|magazine/, (a) => !!a.prop && !a.mount && !a.stick && a.form !== 'hanging'), N(['book', 'manga', 'magazine'], (a) => !!a.prop && !a.mount && !a.stick && a.form !== 'hanging'))
+  site('fillCompartments 摆件', F(OLD.HIGH_OK, (a) => !!a.prop && !a.mount && !a.stick && a.form !== 'hanging' && !/^wet-|toilet|厕所|トイレ|浴|bath|洗|laundry|deodor|除臭|消臭|detergent/.test(a.id + a.name)), N('high-ok', (a) => !!a.prop && !a.mount && !a.stick && a.form !== 'hanging' && !has(a, 'wet-supply')))
+  site('fillCompartments 收藏', F(/figure|手办|フィギュア|模型|model|minifig|gacha|扭蛋|ガチャ|toy-car|小汽车|车模|ミニカー|mineral|矿石|crystal|水晶|shell|贝壳|snow-?globe|雪景球|trophy|奖杯|doll|人形|ornament|摆件|plush|玩偶|cube|魔方|squishy|捏捏|emo-bot|情感机器人/, (a) => !!a.prop && !a.mount && !a.stick && a.form !== 'hanging' && !/box|盒|case|箱|card|牌|^hc-|摄像头|camera/.test(a.id + a.name)), N('collectible', (a) => !!a.prop && !a.mount && !a.stick && a.form !== 'hanging'))
+  site('fillCompartments 去盒', (d) => /box|盒|case|箱/.test(d.id + d.name), any('storage-box'))
+  site('fillCompartments 多宝格柜', (d) => /多宝|duobao|cn-|curio/.test(`${d.id} ${d.name} ${d.family ?? ''}`), any('curio-shelf'))
+  site('fillCompartments 收藏柜', (d) => /展示|陈列|收藏|showcase|display|collection|curio|コレクション/.test(`${d.id} ${d.name} ${d.family ?? ''}`), any('collection-shelf'))
+  site('fillCompartments 书柜', (d) => has(d, 'open-shelf') && /book|书/.test(`${d.id} ${d.name} ${d.family ?? ''}`), (d) => has(d, 'open-shelf') && has(d, 'bookshelf'))
+  site('isOpenShelf', (d) => !d.prop && !!d.surfaces?.length && OLD.OPEN_SHELF_YES.test(`${d.id} ${d.name} ${d.family ?? ''}`) && !OLD.OPEN_SHELF_NO.test(`${d.id} ${d.name} ${d.family ?? ''}`), any('open-shelf'))
+  site('scatter HIGH_OK', R(OLD.HIGH_OK), any('high-ok'))
+  site('scatter BED_OK', R(OLD.BED_OK), any('bed-ok'))
+  site('MULTI_OK', R(OLD.MULTI_OK), any('multi-ok'))
+  site('isBed(decorate)', OLD.isBedDecorate, any('bed'))
+  site('isBed(homecams)', OLD.isBedCams, any('bed', 'bedding'))
+  site('applyFixes 有床', (d) => /^bed-|kid-crib|kid-bed|futon|bd-bunk|bd-loft/.test(d.id), any('bed', 'bedding'))
+  site('applyFixes 有书桌', (d) => /desk|书桌|学习桌/.test(d.id + d.name), any('desk'))
+  site('dressFor 床头柜', (d) => !!d.surface && !d.prop && (d.family === 'nightstand' || /床头柜|nightstand/.test(`${d.id} ${d.family ?? ''} ${d.name}`)), (d) => !!d.surface && !d.prop && has(d, 'nightstand'))
+  site('dressFor 电视柜', (d) => !!d.surface && !d.prop && !(d.family === 'nightstand' || /床头柜|nightstand/.test(`${d.id} ${d.family ?? ''} ${d.name}`)) && /tv|电视/.test(`${d.id} ${d.family ?? ''} ${d.name}`), (d) => !!d.surface && !d.prop && !has(d, 'nightstand') && any('tv-stand', 'tv')(d))
+  site('dressFor 书桌', (d) => d.category === 'study' && /桌/.test(d.name), (d) => d.category === 'study' && any('table')(d))
+  site('dressFor 餐桌', (d) => d.category === 'dining' && /桌/.test(d.name), (d) => d.category === 'dining' && any('table')(d))
+  for (const [k, re] of LIMITS) site(`LIMITS ${k}`, (d) => re.test(T(d)) && !(k === 'cup' && /toothbrush|牙刷|漱口/.test(T(d))), any(({ console: 'game-console', coffee: 'coffee-maker', pressure: 'pressure-cooker', trash: 'trash-bin', fruit: 'fruit-bowl' } as Record<string, string>)[k] ?? k))
+  // workstation.ts
+  site('ws isDeskDef', (d) => !!d.surface && !d.prop && !d.mount && OLD.DESK_RE.test(T(d)) && !OLD.NOT_PC_DESK.test(T(d)), (d) => !!d.surface && !d.prop && !d.mount && has(d, 'desk'))
+  site('ws SEAT_RE', (d) => OLD.SEAT_RE.test(T(d)), any('seat'))
+  const seatOnly = (f: (d: D) => boolean) => (d: D) => OLD.SEAT_RE.test(T(d)) && f(d)
+  site('ws 办公椅', seatOnly((d) => OLD.OFFICE_CHAIR_RE.test(T(d))), seatOnly(any('office-chair', 'gaming-chair')))
+  site('ws 电竞椅', seatOnly((d) => /电竞|gaming/.test(T(d))), seatOnly(any('gaming-chair')))
+  site('ws laptop', F(OLD.LAPTOP_RE, (a) => !!a.prop && !a.stick && a.form !== 'closed' && !a.form?.includes('hanging') && !/stand|支架/.test(a.id)), N('laptop', (a) => !!a.prop && !a.stick && a.form !== 'closed' && !a.form?.includes('hanging')))
+  site('ws laptop 在座', (d) => OLD.LAPTOP_RE.test(T(d)), any('laptop'))
+  site('ws keyboard', (d) => OLD.KEYBOARD_RE.test(T(d)), any('keyboard'))
+  site('ws clear laptop(id)', (d) => OLD.LAPTOP_RE.test(d.id), any('laptop'))
+  site('ws clear keyboard(id)', (d) => OLD.KEYBOARD_RE.test(d.id), any('keyboard'))
+  site('ws aio', (d) => /aio|一体机|retro-pc/.test(d.id), any('aio-pc'))
+  site('ws duo', (d) => d.w >= 180 && /duo|双人/.test(T(d)), (d) => d.w >= 180 && has(d, 'duo-desk'))
+  site('ws 儿童桌', (d) => /loft|阁楼|kid|儿童/.test(T(d)), any('loft', 'for-kids'))
+  // checklist.ts
+  const CL: [string, RegExp, string | string[], ((d: D) => boolean)?][] = [
+    ['aircon', /aircon|空调/, 'aircon'],
+    ['bed', /^bed-|kid-crib|kid-bed|futon|bd-bunk|bd-loft|床(?!头|尾|边)|被褥/, ['bed', 'bedding']],
+    ['closet', /wardrobe|衣柜|tansu|箪笥|dresser|斗柜|clothes-rail|挂衣/, ['wardrobe', 'dresser', 'clothes-rail']],
+    ['lamp', /lamp|灯(?!泡)/, 'lamp'],
+    ['sofa', /sofa|沙发/, 'sofa'],
+    ['tv', /prop-tv|wall-tv|电视(?!柜)/, 'tv'],
+    ['dining', /dining-table|tbl-dining|餐桌/, 'dining-table'],
+    ['microwave', /microwave|微波炉|steam-oven|蒸烤箱/, 'microwave'],
+    ['rice', /rice-cooker|电饭煲/, 'rice-cooker'],
+    ['kettle', /kettle|electric-pot|水壶|电热水瓶/, 'electric-kettle'],
+    ['shoeCab', /shoe-cabinet|鞋柜|鞋架|shoe-rack/, 'shoe-storage'],
+    ['umbrella', /umbrella|伞架/, 'umbrella-stand'],
+    ['shoes', /shoe(?!-cab|-rack)|鞋(?!柜|架)|sneaker|boots|靴/, 'shoe', (d) => !!d.prop],
+    ['detergent', /detergent|洗衣液|洗衣粉/, 'detergent'],
+    ['scale', /body-scale|fit-scale|^scale-|体重秤/, 'body-scale'],
+    ['softener', /soften|柔软/, 'softener'],
+    ['towel', /towel|毛巾|浴巾/, 'towel'],
+    ['dryer', /hair-dryer|吹风机/, 'hair-dryer'],
+    ['toothbrush', /toothbrush|刷牙/, 'toothbrush'],
+    ['shampoo', /shampoo|bottle-set|洗发|洗护三瓶/, 'shampoo'],
+    ['bodySoap', /body-soap|body-wash|bottle-set|沐浴|洗护三瓶/, 'body-soap'],
+    ['bathStool', /bath-stool|浴凳|风呂椅|風呂椅/, 'bath-stool'],
+    ['bath-pail', /bucket|洗面桶|風呂桶/, 'bath-pail'],
+    ['toiletPaper', /toilet-paper|卷纸|卷筒纸/, 'toilet-paper'],
+    ['toiletBrush', /toilet-brush|马桶刷/, 'toilet-brush'],
+    ['laundryStand', /laundry-stand|晾衣架/, 'laundry-stand'],
+    ['desk', /desk|书桌|学习桌|写字台|电脑桌/, 'desk', (d) => !d.prop && !!d.surface],
+    ['crib', /kid-crib|婴儿床/, 'crib'],
+    ['catTower', /cat-tower|猫爬架/, 'cat-tower'],
+    ['litter', /litter|猫砂/, 'litter-box'],
+    ['chair(餐)', /chair|椅|stool|凳|zabuton|坐垫|zaisu/, 'dining-seat', (d) => d.category === 'dining' || /餐|dining/.test(d.id + d.name)],
+  ]
+  for (const [k, re, t, f] of CL) site(`checklist ${k}`, C(re, f), NC(t, f))
+  // checklist 补法
+  const CF: [string, RegExp, string | string[], (d: D) => boolean][] = [
+    ['台灯', /prop-table-lamp|prop-desk-lamp|台灯/, ['table-lamp', 'desk-lamp'], prop],
+    ['鞋子', /sneaker|运动鞋|shoe/, 'shoe', prop],
+    ['洗衣液', /detergent|洗衣液/, 'detergent', prop],
+    ['毛巾', /towel|毛巾/, 'towel', prop],
+    ['柔软剂', /soften|柔软/, 'softener', prop],
+    ['牙刷杯', /toothbrush|刷牙/, 'toothbrush', prop],
+    ['吹风机', /hair-dryer|吹风机/, 'hair-dryer', prop],
+    ['浴凳', /bath-stool|浴凳|風呂椅|风呂椅/, 'bath-stool', (d) => !d.mount],
+    ['洗面桶', /bucket|洗面桶|風呂桶/, 'bath-pail', (d) => !d.mount],
+    ['卷纸', /toilet-paper|卷纸|卷筒纸/, 'toilet-paper', prop],
+    ['马桶刷', /toilet-brush|马桶刷/, 'toilet-brush', (d) => !d.mount],
+    ['猫砂', /litter|猫砂/, 'litter-box', (d) => !d.mount],
+  ]
+  for (const [k, re, t, f] of CF) site(`checklist 补 ${k}`, F(re, f), N(t, f))
+  // homecams.ts
+  site('cams 宠物区', (d) => d.category === 'pets' && !d.prop && !d.mount && !/^rb-|aquarium|水族/.test(d.id), (d) => d.category === 'pets' && !d.prop && !d.mount && !d.id.startsWith('rb-') && !has(d, 'aquarium'))
+  site('cams 狗', (d) => d.category === 'pets' && !d.prop && !d.mount && /dog|狗/.test(T(d)), (d) => d.category === 'pets' && !d.prop && !d.mount && has(d, 'dog'))
+  site('cams 猫', (d) => d.category === 'pets' && !d.prop && !d.mount && /cat|猫/.test(T(d)), (d) => d.category === 'pets' && !d.prop && !d.mount && has(d, 'cat'))
+  site('cams 架子', (d) => !!d.surface && !d.prop && (!!d.surfaces?.length || /shelf|架|柜/.test(T(d))), (d) => !!d.surface && !d.prop && (!!d.surfaces?.length || has(d, 'cabinet')))
+  // lights / house
+  site('isLampAsset', (d) => !d.fixture && !OLD.NOT_LAMP.has(d.id) && (d.category === 'lighting' || OLD.LAMP_RE.test(d.name) || OLD.LAMP_RE.test(d.id)), any('light'))
+  site('lights 餐桌', (d) => OLD.LIGHT_DINING_RE.test(d.id), any('dining-table'))
+  site('isPlant', (d) => (d.category === 'plants' || (OLD.PLANT_RE.test(T(d)) && d.category !== 'lighting')) && !d.mount, any('plant'))
+  // household.ts 兴趣
+  for (const [it, m] of Object.entries(INTERESTS)) {
+    const tg = `hobby:${it}`
+    if (m.floor) site(`interestFloor ${it}`, (d) => !d.fixture && !d.prop && !d.mount && Math.max(d.w, d.d) <= 200 && (it === 'photo' || !CAMERA_CASE.test(d.id)) && m.floor!.test(T(d)), (d) => !d.fixture && !d.prop && !d.mount && !d.stick && Math.max(d.w, d.d) <= 200 && has(d, tg))
+    if (m.props) site(`interestProps ${it}`, (d) => !!d.prop && !d.stick && !d.form?.includes('hanging') && m.props!.test(T(d)), (d) => !!d.prop && !d.stick && !d.form?.includes('hanging') && has(d, tg))
+    if (m.props) site(`interestStickers ${it}`, (d) => !!d.stick && m.props!.test(T(d)), (d) => !!d.stick && has(d, tg))
+    if (m.wall) site(`interestWall ${it}`, (d) => !!d.mount && m.wall!.test(T(d)), (d) => !!d.mount && has(d, tg))
+  }
+  const NEW_JOB_DESK: Record<string, string[]> = { programmer: ['monitor', 'keyboard', 'mouse'], designer: ['tablet', 'monitor', 'pen'], streamer: ['mic', 'webcam', 'monitor', 'stream-gear'], photographer: ['camera', 'lens', 'monitor'], musician: ['audio-gear', 'monitor'], student: ['laptop', 'book'], researcher: ['monitor', 'book', 'microscope'], engineer: ['electronics-tool', 'monitor'], schoolkid: ['book', 'pen', 'lamp'] }
+  for (const [job, re] of Object.entries(JOB_DESK)) site(`jobDesk ${job}`, (d) => !!d.prop && d.form !== 'hanging' && re.test(T(d)), (d) => !!d.prop && d.form !== 'hanging' && any(...NEW_JOB_DESK[job])(d))
+
+  // INTEREST_TIERS（按名字的几级；锚定 id 的不变）
+  const tprop = (d: D) => !!d.prop && !d.stick && !d.form?.includes('hanging')
+  const tier: [string, RegExp, string[], (d: D) => boolean][] = [
+    ['gaming 1', /game-console|pad-|手柄/, ['video-game'], tprop],
+    ['gaming 4 展示柜', /展示柜|showcase/, ['display-cabinet'], floor],
+    ['music 1', /metronome|节拍|谱/, ['music-accessory'], tprop],
+    ['music 2', /^(?!.*(piano|钢琴)).*(guitar|吉他|keyboard|电子琴|ukulele|尤克里里)/, ['guitar', 'e-keyboard'], floor],
+    ['music 3 壁挂', /吉他|guitar/, ['guitar'], mount],
+    ['music 4', /piano|钢琴|drum|鼓/, ['piano', 'drums'], floor],
+    ['fitness 1', /dumbbell|哑铃|yoga|瑜伽/, ['weights', 'yoga'], tprop],
+    ['fitness 2', /yoga-mat|瑜伽垫|kettlebell|壶铃/, ['yoga-mat', 'yoga'], floor],
+    ['fitness 3', /treadmill|跑步机|bike|单车|bench|卧推|rack/, ['cardio'], floor],
+    ['fitness 4', /power-rack|深蹲|rowing|划船/, ['strength'], floor],
+    ['reading 1', /book|书(?!架|柜|桌)/, ['book'], tprop],
+    ['reading 2', /bookshelf|bookcase|书架|书柜/, ['bookshelf'], floor],
+    ['reading 3 椅', /armchair|单人沙发|阅读椅|摇椅/, ['armchair'], floor],
+    ['otaku 1', /漫画|manga|figure|手办|立牌/, ['manga', 'figure', 'acrylic-stand'], tprop],
+    ['otaku 2', /gacha|扭蛋/, ['gacha'], tprop],
+    ['otaku 3', /展示柜|showcase/, ['display-cabinet'], floor],
+    ['collecting 1', /col-|硬币|邮票|coin|stamp/, ['coin', 'stamp'], tprop],
+    ['collecting 2', /col-|矿石|化石|mineral/, ['mineral'], tprop],
+    ['collecting 3', /陈列柜|博古架|curio/, ['curio-cabinet'], floor],
+  ]
+  for (const [k, re, t, f] of tier) site(`tier ${k}`, F(re, f), N(t, f))
+
+  let bad = 0
+  for (const [name, old, now] of SITES) {
+    const lost = ASSETS.filter((d) => !d.fixture && old(d) && !now(d)).map((d) => d.id)
+    const gain = ASSETS.filter((d) => !d.fixture && !old(d) && now(d)).map((d) => d.id)
+    if (!lost.length && !gain.length) continue
+    bad++
+    console.log(`✗ ${name}${lost.length ? `\n    少了 ${lost.length}: ${lost.join(' ')}` : ''}${gain.length ? `\n    多了 ${gain.length}: ${gain.join(' ')}` : ''}`)
+  }
+  console.log(`\n${SITES.length} 个调用点，${bad} 个候选有差异`)
+}
+
+export { tags, OLD, ASSETS, T, R }

@@ -26,6 +26,7 @@ import { isIndoor, sharedIntervals, wallSegments, wallThicknessAt } from '../wal
 import { tatamiLayout } from '../tatami'
 import { addOutlines, ball, capsule, cyl, mergeMeshes, rbox, shade, toon, useAnisotropy } from './toon'
 import { glow } from './kit'
+import { hasTag } from './tags'
 import { fridgeSpotModel, washerSpotModel } from './appliances'
 import { effectivePalette } from './colors'
 import { applyPatterns, patternMaterial } from './fabric'
@@ -1345,15 +1346,13 @@ export function placeFurniture(obj: THREE.Object3D, plan: Plan, fu: Pick<Furnitu
 
 // ---------- 盆栽贴墙时自动弯曲，避免枝叶穿进墙里 ----------
 
-const PLANT_RE = /monstera|^pl-|cactus|plant|bonsai|盆栽|绿植|龟背|琴叶|橄榄|虎尾|天堂鸟|海芋|竹/
-
 /** 这件家具要不要做贴墙弯曲（绿植类） */
 const plantCache = new Map<string, boolean>()
 export const isPlant = (asset: string) => {
   let v = plantCache.get(asset)
   if (v === undefined) {
     const d = ASSET_MAP.get(asset)
-    v = !!d && (d.category === 'plants' || (PLANT_RE.test(`${d.id} ${d.name}`) && d.category !== 'lighting')) && !d.mount
+    v = !!d && hasTag(d, 'plant') && !d.mount
     plantCache.set(asset, v)
   }
   return v

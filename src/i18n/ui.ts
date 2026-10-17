@@ -2,6 +2,8 @@
 // 新增界面文字时：模板 / 代码里写 t('中文原文')，再在这里补一行；插值用 {name}。
 // 覆盖率检查：node <scratchpad>/check-i18n.mjs（会列出缺失项）。
 
+import { TYPE_NAMES } from '../three/typeLabels'
+
 type Entry = [ja: string, en: string]
 
 export const UI: Record<string, Entry> = {
@@ -9,6 +11,7 @@ export const UI: Record<string, Entry> = {
   平面图: ['間取り図', 'Floor plan'],
   '3D 沙盘': ['3D ジオラマ', '3D sandbox'],
   素材库: ['素材ライブラリ', 'Library'],
+  全部类型: ['すべての種類', 'All types'],
   选择: ['選択', 'Select'],
   矩形房间: ['四角形', 'Rectangle room'],
   多边形房间: ['多角形', 'Polygon room'],
@@ -558,6 +561,9 @@ export const UI: Record<string, Entry> = {
   '{name} 副本': ['{name} のコピー', '{name} copy'],
   '已复制为「{name}」': ['「{name}」として複製しました', 'Duplicated as “{name}”'],
 }
+
+// ---------- 素材的细分类型（three/typeLabels.ts）：已有同名词条的不覆盖，后面的分组表照常覆盖 ----------
+for (const [zh, ja, en] of Object.values(TYPE_NAMES)) UI[zh] ??= [ja, en]
 
 /**
  * 房间的默认名（生成器 / ROOM_KINDS / 房间用途给的）。只有名字恰好是这些（或「这些 + 序号」，如 洋室2）时才翻译，

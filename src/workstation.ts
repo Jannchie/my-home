@@ -13,6 +13,7 @@ import { boxInside } from './place'
 import { levelOf, type Household, type Member } from './household'
 import { wallThicknessAt } from './walls'
 import { isMainAppliance } from './appliance'
+import { hasTag, type Sel } from './three/tags'
 
 /** Decorator 里这里要用到的部分（都是公开成员） */
 export interface DeskHost {
@@ -21,7 +22,7 @@ export interface DeskHost {
   parentOf: Map<string, string>
   pick<T>(xs: T[]): T
   shuffle<T>(a: T[]): T[]
-  find(re: RegExp, filter?: (d: AssetDef) => boolean): AssetDef[]
+  find(sel: Sel, filter?: (d: AssetDef) => boolean): AssetDef[]
   peopleIn(room: Room): Member[]
   readonly clutter: number
   colorFor(def: AssetDef): number
@@ -33,22 +34,19 @@ export interface DeskCtx {
   household?: Household
 }
 
-/** 书桌 / 工作台（和 decorate.ts 的 DESK_RE 一致） */
-const DESK_RE = /desk|书桌|电竞桌|工作台|L 形|tbl-desk/
-/** 需要配电脑的椅子（和 decorate.ts 的 OFFICE_CHAIR_RE 一致） */
-const OFFICE_CHAIR_RE = /desk-chair|office|ergo|mesh|gaming|电竞|办公椅|人体工学|网椅/
-const SEAT_RE = /chair|stool|椅|凳|^ch-|^c2-/
-const LAPTOP_RE = /laptop(?!-stand)|笔记本电脑/
-const KEYBOARD_RE = /keyboard|键盘|^of-kb-/
-
 const def = (f: Furniture) => ASSET_MAP.get(f.asset)
+/** 需要配电脑的椅子 */
+const isOfficeChair = (f: Furniture) => hasTag(def(f), 'office-chair', 'gaming-chair')
+/** 椅子、凳子 */
+const isSeat = (f: Furniture) => hasTag(def(f), 'seat')
+const isLaptop = (f: Furniture) => hasTag(def(f), 'laptop')
+const isKeyboard = (f: Furniture) => hasTag(def(f), 'keyboard')
 /** 台式主机：机箱、迷你主机 */
-export const isTower = (d?: AssetDef) => !!d && (d.family === 'pc-tower' || d.id === 'of-mini-pc')
+export const isTower = (d?: AssetDef) => !!d && (d.type === 'pc' || d.id === 'of-mini-pc')
 /** 显示器（有屏幕面板、不是电视 / 一体机） */
-export const isMonitor = (d?: AssetDef) => !!d?.screens?.length && d.family !== 'tv' && d.id !== 'of-aio'
-/** 不放电脑的「工作台」：园艺台、焊接台 */
-const NOT_PC_DESK = /potting|园艺|焊接|weld/
-const isDeskDef = (d?: AssetDef) => !!d && !!d.surface && !d.prop && !d.mount && DESK_RE.test(`${d.id} ${d.name}`) && !NOT_PC_DESK.test(`${d.id} ${d.name}`)
+export const isMonitor = (d?: AssetDef) => !!d?.screens?.length && d.type !== 'tv' && d.id !== 'of-aio'
+/** 能放电脑的书桌 / 工作台（desk 标签不含园艺台、焊接台） */
+const isDeskDef = (d?: AssetDef) => !!d && !!d.surface && !d.prop && !d.mount && hasTag(d, 'desk')
 /** 屏幕顶边能夹东西的（显示器、电视、一体机） */
 const hasClip = (d?: AssetDef) => !!d?.surfaces?.some((l) => l.kind === 'clip' && l.shape?.length)
 const round1 = (v: number) => Math.round(v * 10) / 10
@@ -153,17 +151,17 @@ export function workstations(c: DeskCtx) {
     const room = roomOf(desk)
     if (!room) continue
     const dd = def(desk)!
-    const duo = dd.w >= 180 && /duo|双人/.test(`${dd.id} ${dd.name}`)
+    const duo = dd.w >= 180 && hasTag(dd, 'duo-desk')
     for (const x of duo ? [-dd.w / 4, dd.w / 4] : [0]) {
       const chair = d.out
-        .filter((o) => !o.z && SEAT_RE.test(`${o.asset} ${def(o)?.name ?? ''}`) && dist(o, desk) < 130)
+        .filter((o) => !o.z && isSeat(o) && dist(o, desk) < 130)
         .map((o) => ({ o, l: toLocal(desk, o) }))
         .filter(({ l }) => l.y > -dd.d / 2 && Math.abs(l.x - x) < (duo ? dd.w / 4 : dd.w / 2) + 10)
         .sort((a, b) => Math.abs(a.l.x - x) - Math.abs(b.l.x - x))[0]?.o
       seats.push({ desk, room, x, zone: duo ? dd.w / 2 : dd.w, chair })
     }
   }
-  const officeChair = (s: Seat) => !!s.chair && OFFICE_CHAIR_RE.test(`${s.chair.asset} ${def(s.chair)?.name ?? ''}`)
+  const officeChair = (s: Seat) => !!s.chair && isOfficeChair(s.chair)
   // 主人：房间里的人（住的人 + 书房主人）依次分到各座位，办公椅、宽桌优先
   for (const room of plan.rooms) {
     const ss = seats.filter((s) => s.room === room).sort((a, b) => +officeChair(b) - +officeChair(a) || def(b.desk)!.w - def(a.desk)!.w)
@@ -192,7 +190,7 @@ export function workstations(c: DeskCtx) {
   }
   // 电竞椅前的桌子：主人还没有主机就配一台
   for (const s of seats) {
-    if (!s.chair || !/电竞|gaming/.test(`${s.chair.asset} ${def(s.chair)?.name ?? ''}`) || !canHave(s)) continue
+    if (!s.chair || !hasTag(def(s.chair), 'gaming-chair') || !canHave(s)) continue
     const game = s.owner ? levelOf(s.owner, 'gaming') : 1
     const ids = game >= 3 ? ['of-pc-mid', 'of-pc-full'] : ['of-pc-mid-plain', 'of-pc-itx', 'of-pc-mid']
     give(s, d.pick(ids.filter((id) => ASSET_MAP.has(id))))
@@ -203,9 +201,9 @@ export function workstations(c: DeskCtx) {
   // 6. 其余办公椅前的桌子：没有电脑就补笔记本（重度用户偶尔再接一台外接显示器）
   for (const s of seats) {
     if (s.desktop || !officeChair(s)) continue
-    if (onSeat(c, s).some((o) => isMonitor(def(o)) || LAPTOP_RE.test(`${o.asset} ${def(o)?.name ?? ''}`) || /aio|一体机|retro-pc/.test(o.asset))) continue
+    if (onSeat(c, s).some((o) => isMonitor(def(o)) || isLaptop(o) || hasTag(def(o), 'aio-pc'))) continue
     const dd = def(s.desk)!
-    const laptops = d.find(LAPTOP_RE, (a) => !!a.prop && !a.stick && a.form !== 'closed' && !a.form?.includes('hanging') && !/stand|支架/.test(a.id) && a.w <= s.zone * 0.6 && a.d <= dd.d * 0.6)
+    const laptops = d.find('laptop', (a) => !!a.prop && !a.stick && a.form !== 'closed' && !a.form?.includes('hanging') && a.w <= s.zone * 0.6 && a.d <= dd.d * 0.6)
     if (!laptops.length) continue
     const heavy = !!s.owner && ['programmer', 'designer', 'engineer', 'researcher', 'streamer'].includes(s.owner.job)
     const ext = heavy && rand() < 0.45
@@ -300,7 +298,7 @@ function floorTower(c: DeskCtx, s: Seat, asset: string, side: number, outside = 
     const back = tw.h > 40 ? (u.back ?? 4) : 4
     if (dd.surface! - (u.apron ?? 0) - tw.h < 3 || tw.d > dd.d - back - 2) return null
     if ((dd.surfaces ?? []).some((l) => l.kind !== 'clip' && l.y < tw.h + 2)) return null
-    if (/loft|阁楼|kid|儿童/.test(`${dd.id} ${dd.name}`)) return null
+    if (hasTag(dd, 'loft', 'for-kids')) return null
   } else if (s.x && Math.sign(s.x) !== side) return null
   const lx = outside ? s.x + side * (s.zone / 2 + tw.w / 2 + 2) : s.x + side * (s.zone / 2 - tw.w / 2 - (u.edge ?? 8))
   const lz = -dd.d / 2 + tw.d / 2 + (outside ? 1 : tw.h > 40 ? (u.back ?? 4) : 4)
@@ -311,7 +309,7 @@ function floorTower(c: DeskCtx, s: Seat, asset: string, side: number, outside = 
   const solid = c.d.out.filter((o) => o !== s.desk && !o.z && !c.d.flat.has(o.id) && !def(o)?.mount && !def(o)?.stick && (def(o)?.h ?? 0) > 3)
   const boxOf = (o: Furniture) => {
     const b = furnitureBox(o.asset, o.x, o.y, o.rot)
-    const k = SEAT_RE.test(`${o.asset} ${def(o)?.name ?? ''}`) ? 4 : 0
+    const k = isSeat(o) ? 4 : 0
     return { x0: b.x0 + k, y0: b.y0 + k, x1: b.x1 - k, y1: b.y1 - k }
   }
   if (solid.some((o) => boxOverlaps(box, boxOf(o)))) return null
@@ -360,7 +358,7 @@ function setupDesktop(c: DeskCtx, s: Seat, weighted: <T>(items: [T, number][]) =
   // 先试按人挑的那种；被摆件挡住就挪走普通摆件（台灯、杯子之类，dress 之后还会补）再试，最后才减屏
   const order = [...fits.slice(0, 1), ...d.shuffle(fits.slice(1, 3)), ...fits.slice(3)]
   const clear = () => {
-    for (const o of onSeat(c, s)) if (o !== tower && !LAPTOP_RE.test(o.asset) && !KEYBOARD_RE.test(o.asset) && !isMonitor(def(o))) d.out = d.out.filter((x) => x !== o && d.parentOf.get(x.id) !== o.id)
+    for (const o of onSeat(c, s)) if (o !== tower && !isLaptop(o) && !isKeyboard(o) && !isMonitor(def(o))) d.out = d.out.filter((x) => x !== o && d.parentOf.get(x.id) !== o.id)
   }
   if (order.length) {
     mon = placeOnDesk(c, s, order[0], 0, 'back', center)
@@ -376,7 +374,7 @@ function setupDesktop(c: DeskCtx, s: Seat, weighted: <T>(items: [T, number][]) =
   }
   if (mini) placeOnDesk(c, s, asset, 0, 'back', toLocal(s.desk, mon).x + (ASSET_MAP.get(mon.asset)!.w / 2 + 9) * side)
   // 键盘：座位上还没有就补一把，放在显示器正前方
-  if (!onSeat(c, s).some((o) => KEYBOARD_RE.test(`${o.asset} ${def(o)?.name ?? ''}`))) {
+  if (!onSeat(c, s).some(isKeyboard)) {
     const kb = d.find(gamer ? /^of-kb-.*-rgb$/ : /^(of-kb-(tkl|full|60)|prop-keyboard-mouse)$/, (a) => !!a.prop && a.w <= s.zone * 0.7)
     if (kb.length) placeOnDesk(c, s, d.pick(kb).id, 0, 'front', toLocal(s.desk, mon).x)
   }
@@ -417,8 +415,8 @@ function screenCams(c: DeskCtx) {
     d.out = d.out.filter((o) => o !== cam)
     const asset = cam.asset === 'sf-webcam-lying' ? 'of-webcam' : cam.asset
     const all = screensIn(roomOf(cam))
-    const tv = all.filter((o) => def(o)!.family === 'tv')
-    const mons = all.filter((o) => def(o)!.family !== 'tv')
+    const tv = all.filter((o) => def(o)!.type === 'tv')
+    const mons = all.filter((o) => def(o)!.type !== 'tv')
     const pool = asset === 'of-tv-camera' && tv.length ? tv : mons.length ? mons : tv
     if (pool.length) clipOnScreen(c, d.pick(pool), asset)
   }

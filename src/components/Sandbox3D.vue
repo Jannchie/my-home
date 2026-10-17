@@ -28,7 +28,8 @@ import { runBusy } from '../ui/feedback'
 import { saved, toast } from '../saved'
 import { JIcon } from '@jannchie/icons-vue'
 import { CATEGORY_ICONS, ICONS, VIEW_ICONS, WALL_MODE_ICONS } from '../ui/icons'
-import { SIZE_LABELS, assetName, browse, canHang, categoriesOf, displayName, formFor, paletteFor, siblings, variantLabel, type Filter, type SizeClass } from '../three/catalog'
+import { SIZE_LABELS, assetName, browse, canHang, cardName, categoriesOf, displayName, formFor, paletteFor, siblings, typesIn, variantLabel, type Filter, type SizeClass } from '../three/catalog'
+import { typeLabel } from '../three/typeLabels'
 import { INTERESTS, KIND_LABELS, LV_LABELS, ROLE_LABELS, TRAITS, describe, levelOf } from '../household'
 import { checklist, missing } from '../checklist'
 import { accentOf } from '../wallpaper'
@@ -1270,7 +1271,13 @@ function onCardClick(asset: string) {
 
 // ---------- 家具栏：按分类 / 风格 / 尺寸筛选，同系列合成一项 ----------
 
-const libFilter = reactive<Filter>({ category: 'all', style: 'all', size: 'all', query: '', fixtures: false })
+const libFilter = reactive<Filter>({ category: 'all', type: 'all', style: 'all', size: 'all', query: '', fixtures: false })
+// 细分类型：换分类时回到「全部」，只在选了某个分类时可选
+watch(
+  () => libFilter.category,
+  () => (libFilter.type = 'all'),
+)
+const libTypes = computed(() => (libFilter.category === 'all' ? [] : typesIn(libFilter)))
 const categories = categoriesOf(false)
 const styleKeys = Object.keys(STYLE_LABELS) as StyleTag[]
 const sizeKeys = Object.keys(SIZE_LABELS) as SizeClass[]
@@ -2282,6 +2289,10 @@ defineExpose({ resetView })
           <button v-for="c in categories" :key="c" :class="{ on: libFilter.category === c }" @click="libFilter.category = c"><JIcon :icon="CATEGORY_ICONS[c]" :size="14" />{{ t(CATEGORY_LABELS[c]) }}</button>
         </div>
         <div class="filter-row">
+          <select v-if="libTypes.length > 1" v-model="libFilter.type">
+            <option value="all">{{ t('全部类型') }}</option>
+            <option v-for="x in libTypes" :key="x.type" :value="x.type">{{ t(typeLabel(x.type)) }}（{{ x.n }}）</option>
+          </select>
           <select v-model="libFilter.style">
             <option value="all">{{ t('全部风格') }}</option>
             <option v-for="st in styleKeys" :key="st" :value="st">{{ t(STYLE_LABELS[st]) }}</option>
@@ -2308,7 +2319,7 @@ defineExpose({ resetView })
           >
             <img v-if="thumbs[g.rep.id + '#' + thumbColor(g.rep.id)]" :src="thumbs[g.rep.id + '#' + thumbColor(g.rep.id)]" alt="" />
             <span v-else class="ph" />
-            <span class="name">{{ assetName(g.rep) }}</span>
+            <span class="name">{{ cardName(g.rep) }}</span>
             <span v-if="g.sizes > 1" class="multi num">{{ g.sizes }}</span>
           </button>
           <div v-if="!placeable.length" class="none">{{ t('没有匹配的家具') }}</div>

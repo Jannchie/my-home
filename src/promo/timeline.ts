@@ -21,6 +21,7 @@ import { isIndoor } from '../walls'
 import { generateHousehold, INTEREST_TIERS, INTERESTS, JOBS, levelOf, type InterestId, type Member } from '../household'
 import { roomStyles } from '../decorate'
 import { planArea } from '../generate'
+import { hasTag, matchSel, type Sel, type Tag } from '../three/tags'
 import { SelectFrame } from '../three/selectFrame'
 import { t as t_ } from '../i18n'
 import { L, personName } from './text'
@@ -1180,15 +1181,14 @@ function pickPeople(p: Plan) {
       const lv = levelOf(m, it)
       if (lv < 1) continue
       const def = INTERESTS[it]
-      const res = [
-        ...(INTEREST_TIERS[it] ?? []).slice(0, lv).flatMap((tier) => [...(tier.floor ?? []), ...(tier.wall ?? []), ...(tier.props ?? [])]),
-        ...[def.floor?.re, def.props?.re].filter((x): x is RegExp => !!x),
-      ]
+      // 等级套装里的选择器（标签 / id 前缀正则），加上带这个兴趣标签（hobby:<id>）的素材
+      const sels: Sel[] = (INTEREST_TIERS[it] ?? []).slice(0, lv).flatMap((tier) => [...(tier.floor ?? []), ...(tier.wall ?? []), ...(tier.props ?? [])])
+      const tagged = !!(def.floor?.tagged || def.props?.tagged)
       // 只框立在地上或摆在台面上的（壁挂的框在地上看不出是哪件）
       const cats = [...(def.floor?.cats ?? []), ...(def.props?.cats ?? [])] as string[]
       const hits = p.furniture.filter((f) => {
         const d = ASSET_MAP.get(f.asset)
-        return d && !d.mount && (res.some((re) => re.test(f.asset)) || cats.includes(d.category))
+        return d && !d.mount && (sels.some((sel) => matchSel(d, sel)) || (tagged && hasTag(d, `hobby:${it}` as Tag)) || cats.includes(d.category))
       })
       const byRoom = new Map<string, { room: Room; items: Plan['furniture'] }>()
       for (const f of hits) {

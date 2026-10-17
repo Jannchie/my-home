@@ -11,6 +11,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "gen:dims": "vite-node scripts/gen-dims.mts",
+    "gen:tags": "vite-node scripts/migrate-tags.mts",
+    "gen:taxonomy": "vite-node scripts/gen-taxonomy.mts",
     "promo": "vite --config vite.promo.config.ts",
     "promo:build": "vite build --config vite.promo.config.ts",
     "promo:preview": "vite preview --config vite.promo.config.ts",
