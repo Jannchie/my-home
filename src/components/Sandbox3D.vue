@@ -3,12 +3,12 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, toRaw,
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { ASSET_MAP, CATEGORY_LABELS, STYLE_LABELS, type StyleTag } from '../three/assets'
-import { applyCutaway, bendToWalls, floorY, isPlant, stepCutaway, furnitureModel, placeFurniture, roomAt, type WallLook } from '../three/house'
+import { BASE, applyCutaway, bendToWalls, floorY, isPlant, stepCutaway, furnitureModel, placeFurniture, roomAt, type WallLook } from '../three/house'
 import { buildBuilding, type FloorGroup } from '../three/building'
 import { baseFloorId, floorById, floorOf, floorView, isMultiFloor, planFloors } from '../floors'
 import FloorBar from './FloorBar.vue'
 import FloorRail from './FloorRail.vue'
-import { stairHoles, withStairHoles } from '../stairs'
+import { withStairHoles } from '../stairs'
 import { overlapsOthers, snapFurniture, snapToWall, type Guide } from '../snap'
 import { fitOnSurface, pickSurface, propsOn, snapToClip, snapToHook } from '../surface'
 import { createStage, fitSun, frameCamera, setStageQuality, type Stage } from '../three/stage'
@@ -35,14 +35,14 @@ import { JIcon } from '@jannchie/icons-vue'
 import { CATEGORY_ICONS, ICONS, VIEW_ICONS, WALL_MODE_ICONS } from '../ui/icons'
 import { SIZE_LABELS, assetName, browse, canHang, cardName, categoriesOf, displayName, formFor, paletteFor, siblings, typesIn, variantLabel, type Filter, type SizeClass } from '../three/catalog'
 import { typeLabel } from '../three/typeLabels'
-import { INTERESTS, KIND_LABELS, LV_LABELS, ROLE_LABELS, TRAITS, describe, levelOf } from '../household'
+import { INTERESTS, KIND_LABELS, LV_LABELS, ROLE_LABELS, TRAITS, describe, levelOf, memberRooms } from '../household'
 import { checklist, missing } from '../checklist'
 import { accentOf } from '../wallpaper'
 import { patternPreview } from '../three/fabric'
 import type { PatternKind } from '../three/patterns'
 import { isTyping } from '../dom'
 import { lang, roomName, t, tAuto, tSoft } from '../i18n'
-import { bbox, centroid, edgesOf, type Furniture, type Plan, type WallTrim } from '../model'
+import { bbox, centroid, edgesOf, type Furniture, type Plan, type Room, type WallTrim } from '../model'
 import { roomStyles } from '../decorate'
 import { wallThicknessAt } from '../walls'
 import {
@@ -278,14 +278,16 @@ function solidOf(m: THREE.Material | THREE.Material[]) {
 const isFloorGhost = (m: THREE.Material | THREE.Material[]) => (Array.isArray(m) ? m : [m]).some((x) => !!x?.userData?.floorGhost)
 
 /** 渲染前统一套用各层的淡入淡出（在墙体让开之后，以楼层淡出为准） */
+/** 某层现在显示的不透明度（匀速推进的进度套 smoothstep） */
+function floorAlpha(id: string) {
+  const t = floorAnim.get(id)?.alpha ?? 1
+  return t * t * (3 - 2 * t)
+}
 function syncFloorFades() {
-  const a = (id: string) => {
-    const t = floorAnim.get(id)?.alpha ?? 1
-    return t * t * (3 - 2 * t)
-  }
-  for (const fg of floorGroups) fadeFloor(fg.group, fg.floor.id, a(fg.floor.id))
-  for (const [id, g] of furnLayers) fadeFloor(g, id, a(id))
-  for (const [id, l] of actorLayers) fadeFloor(l.group, id, a(id))
+  for (const fg of floorGroups) fadeFloor(fg.group, fg.floor.id, floorAlpha(fg.floor.id))
+  for (const [id, g] of furnLayers) fadeFloor(g, id, floorAlpha(id))
+  // 角色按所在楼层（走楼梯时按走到的那一层）淡入淡出
+  actors.relayout()
 }
 
 /**
@@ -302,10 +304,10 @@ function prewarmFloorFade() {
   warmTimer = window.setTimeout(() => {
     if (!stage || !isMultiFloor(plan.value)) return
     // 正在淡入淡出的层不碰（它的程序本来就在编了）
-    const roots = [
-      ...floorGroups.map((fg) => [fg.group, fg.floor.id] as const),
-      ...[...furnLayers].map(([id, g]) => [g as THREE.Object3D, id] as const),
-      ...[...actorLayers].map(([id, a]) => [a.group as THREE.Object3D, id] as const),
+    const roots: [THREE.Object3D, string][] = [
+      ...floorGroups.map((fg) => [fg.group, fg.floor.id] as [THREE.Object3D, string]),
+      ...[...furnLayers].map(([id, g]) => [g, id] as [THREE.Object3D, string]),
+      ...actors.roots(),
     ].filter(([root]) => !root.userData.floorFaded)
     const renderer = stage.renderer
     const prev = renderer.getRenderTarget()
@@ -339,11 +341,8 @@ function applyFloorPose() {
     g.position.y = st?.extra ?? 0
     g.visible = st?.show ?? true
   }
-  for (const [id, a] of actorLayers) {
-    const st = floorAnim.get(id)
-    a.group.position.y = (floorById(plan.value, id)?.elevation ?? 0) + (st?.extra ?? 0)
-    a.group.visible = st?.show ?? true
-  }
+  // 宠物、机器人：按所在楼层（走楼梯时在两层之间）跟着楼层的动画走（位置、显示、淡入淡出）
+  actors?.relayout()
   if (lights) {
     if (isMultiFloor(plan.value)) {
       const raw = toRaw(plan.value)
@@ -414,31 +413,29 @@ function houseChanged() {
 }
 
 /** 宠物、机器人按楼层分开（各在各的楼层走动） */
-const actorLayers = new Map<string, ActorLayer>()
-function actorLayer(id: string) {
-  let a = actorLayers.get(id)
-  if (!a) {
-    a = new ActorLayer((fid) => objs.get(fid)?.obj)
-    actorLayers.set(id, a)
-    stage?.scene.add(a.group)
-  }
-  return a
-}
+/**
+ * 宠物、机器人：整套房子一层 ActorLayer（多层户型每层一张导航网格，猫狗、机器狗、人形机器人经楼梯上下楼）。
+ * 角色的高度 = 所在楼层的抬升（elevation + 分层拉开 / 隐藏的动画偏移）+ 离本层地面的高度。
+ */
+const actors = new ActorLayer((fid) => objs.get(fid)?.obj)
+actors.lift = (id) => (isMultiFloor(plan.value) ? liftOf(id) : 0)
+actors.elevOf = (id) => (isMultiFloor(plan.value) ? (floorById(plan.value, id)?.elevation ?? 0) : 0)
+actors.shown = (id) => floorAnim.get(id)?.show ?? true
+actors.fade = (root, id) => fadeFloor(root, id, floorAlpha(id))
 function syncActors() {
-  const raw = toRaw(plan.value)
-  const fs = planFloors(raw)
-  for (const [id, a] of actorLayers)
-    if (!fs.some((f) => f.id === id)) {
-      a.sync({ ...raw, furniture: [] }, false)
-      a.group.removeFromParent()
-      actorLayers.delete(id)
-    }
-  for (const f of fs) {
-    const a = actorLayer(f.id)
-    a.elev = isMultiFloor(raw) ? f.elevation : 0
-    a.holes = stairHoles(raw, f.id).map((h) => h.poly)
-    a.group.position.y = isMultiFloor(raw) ? liftOf(f.id) : 0
-    a.sync(floorView(raw, f.id), actorsLive())
+  actors.sync(toRaw(plan.value), actorsLive())
+}
+// 开发时的调试入口（截图脚本用）：看角色位置、让角色去某层某处
+if (import.meta.env.DEV) {
+  const w = window as unknown as { __myhomeActors?: ActorLayer; __myhomeCam?: (target: number[], pos: number[]) => void }
+  w.__myhomeActors = actors
+  // 镜头：target / pos 是世界坐标 [x, 高度, 平面 y]
+  w.__myhomeCam = (target, pos) => {
+    controls.autoRotate = false
+    controls.target.set(target[0], target[1], target[2])
+    stage.camera.position.set(pos[0], pos[1], pos[2])
+    controls.update()
+    dirty = true
   }
 }
 /** 室内灯光：房间主灯、灯具家具的光源，入夜自动亮（three/lights.ts） */
@@ -456,7 +453,7 @@ function lightStyles(p: Plan) {
 const roomLightKey = (p: Plan) => `${diningKey(p)}|${p.household ? `${p.household.style}:${p.household.members.map((m) => m.style).join(',')}` : ''}`
 /** 蒸汽、烟、火苗等动态特效 */
 const fx = new FxLayer()
-/** 会活动的宠物、扫地机器人、Kachaka（预览模式下才动）：按楼层分开，见 actorLayers */
+/** 会活动的宠物、扫地机器人、Kachaka（预览模式下才动）：整套房子一层，见 actors */
 const objs = new Map<string, { obj: THREE.Group; key: string }>()
 let ghost: THREE.Group | null = null
 let ghostKey = ''
@@ -941,7 +938,16 @@ function floorPoint(e: PointerEvent) {
   const p = new THREE.Vector3()
   // 当前楼层的地面
   floor.constant = -activeY()
-  return raycaster.ray.intersectPlane(floor, p) ? p : null
+  if (!raycaster.ray.intersectPlane(floor, p)) return null
+  // 户建的院子：用地地面比室内低（BASE），指在院子里时改用院子地面的交点，拖动的东西才跟手
+  const raw = toRaw(plan.value)
+  if (raw.site && activeFloor.value === baseFloorId(raw) && !roomAt(fv(), { x: p.x, y: p.z })) {
+    const q = new THREE.Vector3()
+    floor.constant = -(activeY() + BASE)
+    if (raycaster.ray.intersectPlane(floor, q) && !roomAt(fv(), { x: q.x, y: q.z })) p.copy(q)
+    floor.constant = -activeY()
+  }
+  return p
 }
 /** 射线换到当前楼层的局部高度（家具、台面的高度都按本层地面算） */
 function localRay() {
@@ -963,7 +969,7 @@ function pickFurniture(e: PointerEvent): string | null {
     if (id && !ids.includes(id)) ids.push(id)
   }
   // 走动中的宠物 / 机器人：点中就选中它来源的那件家具（选中后角色回到原位静止，方便拖动）
-  if (!ids.length) return actorLayer(activeFloor.value).pick(raycaster)
+  if (!ids.length) return actors.pick(raycaster)
   // 柜子、架子的格子里摆满了东西，点柜子正面多半先碰到摆件：先选容器本身；容器已经选中时再点，才选里面的东西
   const sel = selection.value?.type === 'furniture' ? selection.value.id : null
   const inside = (kid: string, box: string) => {
@@ -1729,11 +1735,36 @@ const checkItems = computed(() => {
   return checklist(p, p.household)
 })
 const missingItems = computed(() => missing(checkItems.value))
+/**
+ * 清单分组：房间条目按房间（多层户型带楼层，两层都有的「トイレ」分开），按层的条目归到「2F · 每层」，全户条目归到「全屋」。
+ * 返回 [分组键, 显示名, 条目]。
+ */
 const checkGroups = computed(() => {
-  const m = new Map<string, typeof checkItems.value>()
-  for (const it of checkItems.value) m.set(it.roomName, [...(m.get(it.roomName) ?? []), it])
-  return [...m.entries()]
+  const p = toRaw(plan.value)
+  const multi = isMultiFloor(p)
+  const fname = (id?: string) => (id ? (floorById(p, id)?.name ?? '') : '')
+  const m = new Map<string, { label: string; items: typeof checkItems.value }>()
+  for (const it of checkItems.value) {
+    const key = it.roomId ? `r:${it.roomId}` : it.perFloor ? `f:${it.floor}` : 'home'
+    const label = it.roomId ? (multi ? `${fname(it.floor)} · ` : '') + roomName(it.roomName) : it.perFloor ? `${fname(it.floor)} · ${t('每层')}` : roomName(it.roomName)
+    const g = m.get(key) ?? { label, items: [] }
+    g.items.push(it)
+    m.set(key, g)
+  }
+  return [...m.entries()].map(([k, g]) => [k, g.label, g.items] as const)
 })
+/** 住户面板：每个人住的房间（多层户型带楼层） */
+const memberRoomMap = computed(() => {
+  void planVer.value
+  const p = toRaw(plan.value)
+  return p.household ? memberRooms(p, p.household) : new Map<string, Room>()
+})
+function memberRoomLabel(id: string) {
+  const r = memberRoomMap.value.get(id)
+  if (!r) return ''
+  const p = toRaw(plan.value)
+  return (isMultiFloor(p) ? `${floorById(p, floorOf(p, r))?.name ?? ''} · ` : '') + roomName(r.name)
+}
 const placingName = computed(() => {
   const d = placing.value ? ASSET_MAP.get(placing.value.asset) : undefined
   return d ? assetName(d) : ''
@@ -1760,8 +1791,7 @@ function loop() {
   }
   // 省电画质：只有动画（粒子、走动的角色）在变时，最多 30fps 重画
   const low = lowPower()
-  let actorsBusy = false
-  for (const a of actorLayers.values()) actorsBusy = a.update(dt) || actorsBusy
+  const actorsBusy = actors.update(dt)
   const anim = fx.update(dt, stage.renderer.domElement.height) || actorsBusy
   // 楼层切换 / 分层拉开的缓动
   if (stepFloors(dt)) {
@@ -1838,7 +1868,7 @@ onMounted(() => {
   stage.renderer.shadowMap.autoUpdate = false
   stage.renderer.shadowMap.needsUpdate = true
   stage.scene.add(furnRoot, frameRoot, guideRoot, fx.group)
-  for (const a of actorLayers.values()) stage.scene.add(a.group)
+  stage.scene.add(actors.group)
   controls = new OrbitControls(stage.camera, canvas.value!)
   controls.enableDamping = true
   controls.dampingFactor = 0.12
@@ -2578,6 +2608,7 @@ defineExpose({ resetView })
             <span class="m-role">{{ t(ROLE_LABELS[m.role]) }}</span>
             <span class="m-desc num">{{ describe(m) }}</span>
           </div>
+          <div v-if="memberRoomLabel(m.id)" class="m-room"><JIcon :icon="ICONS.household" :size="12" class="ico-muted" />{{ memberRoomLabel(m.id) }}</div>
           <div class="chips">
             <span v-for="tr in m.traits" :key="tr" class="chip trait">{{ t(TRAITS[tr].label) }}</span>
             <span v-for="i in m.interests" :key="i" class="chip" :title="t(LV_LABELS[levelOf(m, i) || 1])">{{ t(INTERESTS[i].label) }} <span class="num">Lv.{{ levelOf(m, i) || 1 }}</span></span>
@@ -2595,8 +2626,8 @@ defineExpose({ resetView })
           <button class="mini primary" :disabled="!missingItems.some((i) => i.fix)" @click="fixChecklist(missingItems)"><JIcon :icon="ICONS.checkFixAll" :size="14" />{{ t('一键补齐') }}</button>
         </div>
         <template v-if="clOpen">
-          <div v-for="[room, items] in checkGroups" :key="room" class="cl-room">
-            <div class="cl-name">{{ roomName(room) }}</div>
+          <div v-for="[key, label, items] in checkGroups" :key="key" class="cl-room">
+            <div class="cl-name">{{ label }}</div>
             <div v-for="it in items" :key="it.key" class="cl-item" :class="{ ok: it.builtin || it.have >= it.need }">
               <JIcon class="mark" :icon="it.builtin || it.have >= it.need ? ICONS.checkOk : ICONS.checkMissing" :size="14" />
               <span class="cl-label">{{ tAuto(it.label) }}</span>
@@ -3423,6 +3454,14 @@ h3 {
 }
 .m-desc {
   margin-left: auto;
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
+.m-room {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
   font-size: var(--fs-xs);
   color: var(--text-muted);
 }

@@ -22,7 +22,7 @@ import {
   type Vec,
 } from './model'
 import { boxInsideWalls, clearances, doorSwings, firstDoorCenter, isSashWindow, placeCandidates, type PlaceSpec } from './place'
-import type { CheckItem } from './checklist'
+import { fixFloor, type CheckItem } from './checklist'
 import { ASSETS, ASSET_MAP, STYLE_LABELS, type AssetDef, type StyleTag } from './three/assets'
 import { rng, type Poly } from './three/kit'
 import { paletteStyle } from './three/catalog'
@@ -49,6 +49,27 @@ import { cabinetsOnSpots, stowAll } from './stow'
 import { spotInRoom } from './cabinet'
 import { curtainSpecs, fixtureSpans } from './curtains'
 import { hasTag, matchSel, selKey, type Sel, type Tag } from './three/tags'
+import { allocateRooms, type Allocation, type RoomPurpose } from './household'
+import { baseFloorId, floorViews, isMultiFloor, riseOf, stampFloor } from './floors'
+import { stairHoles, stairToWorld, stairUnderZone, stairWalk, withStairKeepout } from './stairs'
+import { NavGrid } from './nav'
+
+export type { RoomPurpose }
+
+/**
+ * 多层户型按层布置时的全户信息：
+ *   alloc  全户统一的房间分配（allocateRooms(整份户型)），每层都用它；
+ *   prior  别的楼层已经摆好的家具：全户限量的东西（游戏机、路由器…）、冰箱 / 洗衣机算上它们，不每层都放；
+ *   fixtures 整份户型的设备：别的楼层有洗衣机位 / 冰箱位时，这一层不靠墙另放。
+ */
+export interface HouseCtx {
+  alloc?: Allocation
+  prior?: Furniture[]
+  fixtures?: Fixture[]
+}
+
+/** 楼梯下储物角放的东西：抽屉柜、收纳篮、纸箱、矮柜、立着的行李箱、回收箱 */
+const UNDER_STAIR = /^(st-drawer-3|st-baskets|int-cartons-[23]|sb-drawer-cab-[34]|sb-door-cab-closed|sw-fh-baskets|int-suitcase-standing|chore-recycle-crate)$/
 
 type Rand = () => number
 
@@ -127,8 +148,20 @@ class Decorator {
     /** 公共空间的风格 */
     private baseStyle: StyleTag,
     private household?: Household,
+    /** 多层户型按层布置时的全户信息（见 HouseCtx）；单层不给 */
+    private house?: HouseCtx,
   ) {
     this.style = baseStyle
+  }
+
+  /** 别的楼层已经摆好的家具（全户限量的东西要算上它们） */
+  get prior(): Furniture[] {
+    return this.house?.prior ?? []
+  }
+
+  /** 多层户型的上层（不是最底层）：走廊收纳、每层垃圾桶等按层的东西 */
+  get upper() {
+    return isMultiFloor(this.plan) && this.plan.rooms.length > 0 && floorOf(this.plan, this.plan.rooms[0]) !== baseFloorId(this.plan)
   }
 
   /** 东西多少的系数（住户性格决定） */
@@ -140,67 +173,20 @@ class Decorator {
   assign() {
     const hh = this.household
     if (!hh) return
-    const rooms = this.plan.rooms.filter((r) => r.kind === 'western' || r.kind === 'japanese').sort((a, b) => area(b.points) - area(a.points))
-    // 欧美的 Office 是书房，最后才拿来住人
-    if (this.region === 'west') rooms.sort((a, b) => Number(a.name === 'Office') - Number(b.name === 'Office'))
-    const free = [...rooms]
-    const take = (prefer?: (r: Room) => boolean) => {
-      const i = prefer ? free.findIndex(prefer) : -1
-      return free.splice(i >= 0 ? i : 0, 1)[0]
-    }
-    const couple = hh.members.filter((m) => m.role === 'self' || m.role === 'partner')
-    const groups: Member[][] = []
-    if (hh.kind === 'roommates') for (const m of hh.members) groups.push([m])
-    else {
-      groups.push(couple)
-      for (const m of hh.members.filter((m) => m.role === 'elder')) groups.push([m])
-      for (const m of hh.members.filter((m) => m.role === 'child').sort((a, b) => b.age - a.age)) groups.push([m])
-    }
-    for (const g of groups) {
-      if (!free.length) {
-        // 房间不够：小孩和父母睡，长辈 / 大孩子挤进最大的孩子房
-        const room = rooms[0]
-        if (room) this.occupants.set(room.id, [...(this.occupants.get(room.id) ?? []), ...g])
-        continue
-      }
-      const elder = g[0]?.role === 'elder'
-      const room = take(elder ? (r) => r.kind === 'japanese' : (r) => r.kind === 'western')
-      this.occupants.set(room.id, g)
-    }
-    // 剩下的居室不留空：按住户的工作和兴趣排出功能房，一间一种用途
-    const adults = hh.members.filter((m) => m.age >= 18)
-    const has = (it: InterestId) => hh.members.filter((m) => m.interests.includes(it))
-    const wanted: [RoomPurpose, Member | undefined][] = []
-    const want = (p: RoomPurpose, who: Member[] | Member | undefined) => {
-      const m = Array.isArray(who) ? who[0] : who
-      if (m && !wanted.some(([q]) => q === p)) wanted.push([p, m])
-    }
-    // 骨灰级（Lv.4）的兴趣先挑一整间专用房
-    const lv4 = (it: InterestId) => hh.members.filter((m) => levelOf(m, it) >= 4)
-    want('cards', lv4('boardgames'))
-    want('gaming', lv4('gaming').concat(lv4('streaming')))
-    want('music', lv4('music'))
-    want('gym', lv4('fitness'))
-    want('library', lv4('reading'))
-    want('hobby', [...lv4('otaku'), ...lv4('collecting'), ...lv4('photo'), ...lv4('tech')])
-    want('study', adults.find((m) => JOBS[m.job].wfh))
-    want('gaming', has('gaming').concat(has('streaming')))
-    want('music', has('music'))
-    want('theater', has('movies'))
-    want('hobby', [...has('maker'), ...has('models'), ...has('crafts'), ...has('collecting'), ...has('otaku'), ...has('boardgames'), ...has('photo')])
-    want('gym', [...has('fitness'), ...has('sports'), ...has('outdoor')])
-    want('play', hh.members.filter((m) => m.role === 'child' && m.age < 10))
-    want('library', has('reading'))
-    want('study', adults[0])
-    want('guest', adults[0] ?? hh.members[0])
-    want('closet', adults[0] ?? hh.members[0])
-    for (const r of free) {
-      // 和室优先当客房 / 茶室式的书房，洋室按顺序分
-      const i = r.kind === 'japanese' ? Math.max(0, wanted.findIndex(([p]) => p === 'guest' || p === 'study' || p === 'library')) : 0
-      const [p, m] = wanted.splice(i, 1)[0] ?? ['guest', hh.members[0]]
-      this.purposeOf.set(r.id, p)
-      if (m) this.studyOf.set(r.id, m)
-    }
+    // 多层户型按层布置时用全户统一的分配（同一个人不会在两层都有房间）
+    const a = this.house?.alloc ?? allocateRooms(this.plan, hh)
+    this.occupants = a.occupants
+    this.studyOf = a.studyOf
+    this.purposeOf = a.purposeOf
+  }
+
+  /** 这个人的房间（住的或书房）在这一层：返回它；在别的层：null；没分到房间：undefined */
+  homeOf(m: Member): Room | null | undefined {
+    const here = this.plan.rooms.find((r) => this.occupants.get(r.id)?.includes(m) || this.studyOf.get(r.id) === m)
+    if (here) return here
+    for (const [, ms] of this.occupants) if (ms.includes(m)) return null
+    for (const [, o] of this.studyOf) if (o === m) return null
+    return undefined
   }
 
   /** 这个房间用谁的风格 */
@@ -259,7 +245,17 @@ class Decorator {
       const l = d && this.limitOf(d)
       return !!l && l.group === lim.group
     })
-    if (lim.scope === 'house') return same.length < lim.max
+    if (lim.scope === 'house') {
+      // 全户限量：别的楼层已经有的也算
+      const elsewhere = this.prior.length
+        ? this.prior.filter((o) => {
+            const d = ASSET_MAP.get(o.asset)
+            const l = d && this.limitOf(d)
+            return !!l && l.group === lim.group
+          }).length
+        : 0
+      return same.length + elsewhere < lim.max
+    }
     if (lim.scope === 'surface') return same.filter((o) => this.parentOf.get(o.id) === parentId).length < lim.max
     const room = this.plan.rooms.find((r) => pointInPolygon(at, r.points))
     return same.filter((o) => room && pointInPolygon(o, room.points)).length < lim.max
@@ -482,7 +478,7 @@ class Decorator {
     const inRoom = (p: Vec) => pointInPolygon(p, room.points)
     const blockers = [
       ...this.out.filter((o) => inRoom(o) && (ASSET_MAP.get(o.asset)?.mount || (!o.z && (ASSET_MAP.get(o.asset)?.h ?? 0) > 170))).map(asFixture),
-      ...this.plan.fixtures.filter((f) => inRoom(f) && (f.kind === 'builtin' || f.kind === 'kitchen' || f.kind === 'fridge')),
+      ...this.plan.fixtures.filter((f) => inRoom(f) && (f.kind === 'builtin' || f.kind === 'kitchen' || f.kind === 'fridge' || f.kind === 'stairs')),
     ]
     const spec: PlaceSpec = { kind: 'ps', lengths: [def.w], depth: def.d, front: 0, far: door, centered: true }
     // 找不到空墙段就不挂（宁可这间没有空调，也不嵌进柜子里）
@@ -1825,6 +1821,8 @@ class Decorator {
         for (const [id, lx] of picks) this.out.push({ id: uid('u'), asset: id, ...poseOnSpot(fx, id, lx), color })
       }
       if (spots.length || this.out.some((f) => isApplianceOf(f, kind))) continue
+      // 全户一台：别的楼层有这种位或已经放了一台，这一层就不靠墙另放
+      if (this.house?.fixtures?.some((f) => f.kind === kind) || this.prior.some((f) => isApplianceOf(f, kind))) continue
       // 没有位：冰箱贴着厨房，洗衣机放洗面所（中式生活阳台、浴室、阳台）
       if (kind === 'fridge') {
         const k = this.plan.fixtures.find((f) => f.kind === 'kitchen')
@@ -2806,12 +2804,74 @@ class Decorator {
     return true
   }
 
+  /**
+   * 楼梯下敞开的储物角（楼梯 under = 'open'）：顺着储物角摆两三件矮柜 / 收纳箱，正面朝开口那一侧
+   * （开口外 30cm 在同一个房间里的那一侧）。楼梯是设备、平常摆家具时是障碍，这里直接按储物角的矩形摆。
+   */
+  underStairs() {
+    for (const f of this.plan.fixtures) {
+      if (f.kind !== 'stairs' || f.under !== 'open' || f.id.endsWith('~hole')) continue
+      const z = stairUnderZone(f, riseOf(this.plan, floorOf(this.plan, f)))
+      if (!z) continue
+      const w = stairToWorld(f)
+      const mid = { x: (z.x0 + z.x1) / 2, y: (z.y0 + z.y1) / 2 }
+      const home = this.plan.rooms.find((r) => pointInPolygon(w(mid), r.points))
+      if (!home) continue
+      // 开口外侧 30cm 要在同一个房间里，且没被设备（冰箱位、厨房…）挡住
+      const others = this.plan.fixtures.filter((x) => x !== f && x.kind !== 'ps' && !x.id.endsWith('~hole')).map(fixtureBox)
+      const open = (q: Vec) => pointInPolygon(q, home.points) && !others.some((b) => q.x > b.x0 && q.x < b.x1 && q.y > b.y0 && q.y < b.y1)
+      const n = z.fronts.find((q) => {
+        const edge = q.x > 0 ? z.x1 : z.x0
+        return [mid.y, z.y0 + 10, z.y1 - 10].every((y) => open(w({ x: edge + q.x * 30, y })))
+      })
+      if (!n) continue
+      const depthMax = z.x1 - z.x0 - 4
+      const pool = this.shuffle(this.find(UNDER_STAIR, (d) => d.h <= z.clear && d.d <= depthMax))
+      if (!pool.length) continue
+      this.style = this.styleFor(home)
+      // 世界坐标里的开口方向 → 家具朝向（正面 = 局部 +y）
+      const o = w({ x: 0, y: 0 })
+      const nw = { x: w(n).x - o.x, y: w(n).y - o.y }
+      const rot = (Math.round((Math.atan2(-nw.x, nw.y) * 180) / Math.PI / 90) * 90 + 360) % 360
+      const edge = n.x > 0 ? z.x1 : z.x0
+      let y = z.y0 + 3
+      let k = 0
+      for (const d of pool) {
+        if (k >= 3) break
+        if (y + d.w > z.y1 - 3) continue
+        const p = w({ x: edge - n.x * (d.d / 2 + 2), y: y + d.w / 2 })
+        this.push(d.id, p.x, p.y, rot)
+        y += d.w + 4
+        k++
+      }
+      this.style = this.baseStyle
+    }
+  }
+
+  /** 多层户型上层的走廊：靠墙一件薄的收纳柜 / 书架（留出 70 的通道） */
+  upperHall(room: Room) {
+    if (area(room.points) / 10000 < 3 || this.rand() > 0.75) return
+    const pool = this.find(['storage-cabinet', 'bookshelf', 'storage-box'], (d) => !d.prop && !d.mount && !d.stick && d.d <= 32 && d.w >= 40 && d.w <= 120 && d.h <= 130 && d.h >= 50)
+    for (const d of this.shuffle(pool).slice(0, 4)) if (this.wall(room, d.id, { front: 70 })) return
+  }
+
+  /** 多层户型：每层至少一个垃圾桶（这一层还没有就放到走廊或最大的居室里） */
+  floorTrash() {
+    const has = this.out.some((f) => hasTag(ASSET_MAP.get(f.asset), 'trash-bin') && this.plan.rooms.some((r) => pointInPolygon(f, r.points)))
+    if (has) return
+    const rooms = this.plan.rooms.filter((r) => r.kind === 'hall' || r.kind === 'western' || r.kind === 'japanese' || r.kind === 'ldk').sort((a, b) => Number(b.kind === 'hall') - Number(a.kind === 'hall') || area(b.points) - area(a.points))
+    const ids = ['vb-bin-square', 'vb-bin-pedal', 'of-waste-basket'].filter((id) => ASSET_MAP.has(id))
+    for (const r of rooms) for (const id of ids) if (this.wall(r, id, { front: 30 })) return
+  }
+
   run() {
     this.assign()
     // 冰箱、洗衣机先放：后面的冰箱贴、洗衣液、置物架、购物袋都要找它们
     this.appliances()
     // 收纳位上的柜子（鞋柜、衣柜、食品柜）也先放：后面靠墙的家具要避开它们
     this.cabinets()
+    // 楼梯下敞开的储物角
+    this.underStairs()
     for (const r of this.plan.rooms) {
       this.style = this.styleFor(r)
       switch (r.kind) {
@@ -2846,6 +2906,9 @@ class Decorator {
           this.wall(r, 'laundry-basket')
           this.wetDress(r)
           break
+        case 'hall':
+          if (this.upper) this.upperHall(r)
+          break
         case 'toilet':
         case 'bath':
           this.wetDress(r)
@@ -2872,6 +2935,7 @@ class Decorator {
       if (r.kind === 'ldk' || r.kind === 'western' || r.kind === 'japanese') this.artWall(r)
     }
     this.style = this.baseStyle
+    if (isMultiFloor(this.plan)) this.floorTrash()
     this.specialties()
     // 厨房台面：烹饪用具优先摆这里
     for (const fx of this.plan.fixtures) if (fx.kind === 'kitchen') this.kitchenWall(fx)
@@ -2927,7 +2991,11 @@ class Decorator {
     const fans = hh.members.filter((m) => m.age >= 8 && (m.interests.some((i) => FANS.includes(i)) || ENG.includes(m.job)))
     if (!fans.length) return
     const living = this.plan.rooms.filter((r) => r.kind === 'ldk').sort((a, b) => area(b.points) - area(a.points))[0]
-    const roomOf = (m: Member) => this.plan.rooms.find((r) => this.occupants.get(r.id)?.includes(m) || this.studyOf.get(r.id) === m) ?? living
+    // 房间在别的楼层的人：那一层布置时再摆
+    const roomOf = (m: Member) => {
+      const h = this.homeOf(m)
+      return h === null ? undefined : (h ?? living)
+    }
     const desksIn = (room: Room) => this.out.filter((o) => !o.z && pointInPolygon(o, room.points) && !!ASSET_MAP.get(o.asset)?.surface && isDeskish(ASSET_MAP.get(o.asset)!))
     const onDesk = (room: Room, ids: string[]) => {
       for (const d of desksIn(room)) for (let t = 0; t < 4; t++) if (this.onLevel(d, this.pick(ids), (this.rand() - 0.5) * 0.7, (this.rand() - 0.5) * 0.4, Math.round((this.rand() - 0.5) * 40))) return true
@@ -3156,8 +3224,6 @@ const LIMITS: [string, Tag | Tag[], 'house' | 'room' | 'surface', number][] = [
   ['cup', 'cup', 'house', 0],
 ]
 
-/** 空居室的用途 */
-export type RoomPurpose = 'study' | 'library' | 'gaming' | 'music' | 'theater' | 'hobby' | 'gym' | 'play' | 'guest' | 'closet' | 'cards'
 /** 兴趣类的功能房：主人的等级套装、奖杯证书摆在这里 */
 const HOBBY_PURPOSES: RoomPurpose[] = ['study', 'library', 'gaming', 'music', 'theater', 'hobby', 'gym', 'cards']
 export const PURPOSE_LABELS: Record<RoomPurpose, string> = {
@@ -3306,9 +3372,9 @@ export function roomStyles(plan: Plan, household?: Household) {
 /**
  * 检查清单补齐：在现有家具基础上只补缺的东西（不动已经摆好的）。
  */
-export function applyFixes(plan: Plan, items: CheckItem[], household?: Household, seed = Date.now()): Furniture[] {
+export function applyFixes(plan: Plan, items: CheckItem[], household?: Household, seed = Date.now(), house?: HouseCtx): Furniture[] {
   const rand = rng(seed)
-  const d = new Decorator({ ...plan, furniture: [] }, rand, household?.style ?? 'cute', household)
+  const d = new Decorator({ ...plan, furniture: [] }, rand, household?.style ?? 'cute', household, house)
   d.out = plan.furniture.map((f) => ({ ...f }))
   for (const f of d.out) {
     const def = ASSET_MAP.get(f.asset)
@@ -3427,13 +3493,124 @@ export function applyFixes(plan: Plan, items: CheckItem[], household?: Household
  * style：'auto' = 跟随住户设定（没有住户时随机）；'random' = 随机挑一个；或指定风格（公共空间和各房间统一用它）。
  * household：住户设定，决定房间分配、床、餐椅数、职业工作台、兴趣家具和摆件。
  */
-export function decorate(plan: Plan, seed = Date.now(), style: StyleTag | 'random' | 'auto' = 'auto', household?: Household): Furniture[] {
+export function decorate(plan: Plan, seed = Date.now(), style: StyleTag | 'random' | 'auto' = 'auto', household?: Household, house?: HouseCtx): Furniture[] {
   const rand = rng(seed)
   const styles = Object.keys(STYLE_LABELS) as StyleTag[]
   const st = style === 'auto' ? (household?.style ?? styles[Math.floor(rand() * styles.length)]) : style === 'random' ? styles[Math.floor(rand() * styles.length)] : style
   // 指定了风格就全屋统一；跟随住户时各房间用各自主人的风格
   const hh = household && style !== 'auto' ? { ...household, members: household.members.map((m) => ({ ...m, style: st })) } : household
-  return new Decorator({ ...plan, furniture: [] }, rand, st, hh).run()
+  // 指定了统一风格时，全户分配里的成员也换成改过风格的那份（按 id 对上）
+  const alloc = house?.alloc && hh && hh !== household ? remapAlloc(house.alloc, hh) : house?.alloc
+  return new Decorator({ ...plan, furniture: [] }, rand, st, hh, house && { ...house, alloc }).run()
+}
+
+/** 分配表里的成员换成另一份住户里同 id 的成员 */
+function remapAlloc(a: Allocation, hh: Household): Allocation {
+  const by = new Map(hh.members.map((m) => [m.id, m]))
+  const sw = (m: Member) => by.get(m.id) ?? m
+  return {
+    occupants: new Map([...a.occupants].map(([k, ms]) => [k, ms.map(sw)])),
+    studyOf: new Map([...a.studyOf].map(([k, m]) => [k, sw(m)])),
+    purposeOf: a.purposeOf,
+  }
+}
+
+/**
+ * 多层户型的一键布置：按楼层从下往上逐层布置（每层当作一份子户型，楼梯洞口和楼梯口留空的地方当障碍），
+ * 房间分配全户统一，全户限量的东西算上已经布置好的楼层。家具打上所在楼层。单层户型就是 decorate。
+ * seedFor：每层的种子（缺省最底层用 seed，其余加上楼层的 elevation）。
+ */
+export function decorateHouse(plan: Plan, seed = Date.now(), style: StyleTag | 'random' | 'auto' = 'auto', household?: Household): Furniture[] {
+  if (!isMultiFloor(plan)) return decorate(plan, seed, style, household)
+  const alloc = household ? allocateRooms(plan, household) : undefined
+  const base = baseFloorId(plan)
+  const out: Furniture[] = []
+  for (const { floor, view } of floorViews(plan)) {
+    const v = withStairKeepout(plan, view, floor.id)
+    const fs = decorate(v, floor.id === base ? seed : seed + Math.round(floor.elevation), style, household, { alloc, prior: out, fixtures: plan.fixtures })
+    for (const f of unblock(plan, view, floor.id, fs)) out.push(stampFloor(plan, f, floor.id))
+  }
+  return out
+}
+
+/** 走廊被堵住时拿掉的家具最多几件 */
+const UNBLOCK_MAX = 6
+
+/**
+ * 楼梯口和各房间的门之间要走得通（宠物大小 r = 14 的格子导航）：走廊里两边各摆一件把路堵死、楼梯口被围住时，
+ * 从最后摆的开始拿掉走廊 / 楼梯口所在房间里的落地家具（连同上面的摆件），直到走得通（最多 UNBLOCK_MAX 件）。
+ */
+function unblock(plan: Plan, view: Plan, floorId: string, fs: Furniture[]): Furniture[] {
+  const holes = stairHoles(plan, floorId).map((h) => h.poly)
+  const r = 14
+  // 楼梯起步外侧 / 出梯口外侧
+  const stairKeys: Vec[] = []
+  for (const f of plan.fixtures) {
+    if (f.kind !== 'stairs') continue
+    const w = stairWalk(plan, f)
+    if (w?.from === floorId) stairKeys.push(w.entry)
+    if (w?.to === floorId) stairKeys.push(w.exit)
+  }
+  if (!stairKeys.length) return fs
+  // 要保持通畅的房间：走廊、楼梯口所在的房间；关键点：这些房间里门内侧 30 的点
+  const hubRooms = new Set(view.rooms.filter((x) => x.kind === 'hall' || stairKeys.some((k) => pointInPolygon(k, x.points))).map((x) => x.id))
+  const keys: Vec[] = []
+  for (const o of view.openings) {
+    if (o.kind === 'window') continue
+    const g = openingGeom(view.rooms, o)
+    if (!g) continue
+    for (const k of [30, -30]) {
+      const q = add(g.center, mul(g.e.out, k))
+      if (view.rooms.some((x) => hubRooms.has(x.id) && pointInPolygon(q, x.points))) keys.push(q)
+    }
+  }
+  keys.push(...stairKeys)
+  if (keys.length < 2) return fs
+  let cur = fs
+  for (let guard = 0; guard <= UNBLOCK_MAX; guard++) {
+    const g = new NavGrid({ ...view, furniture: cur }, { holes })
+    const pts = keys.map((k) => g.nearest('pet', k, r, 40)).filter((p): p is Vec => !!p)
+    // 和第一个关键点（最好是楼梯口）连不通的
+    const hub = pts[pts.length - 1]
+    const ok = !hub || pts.every((p) => p === hub || !!g.path('pet', hub, p, r))
+    if (ok || guard === UNBLOCK_MAX) return cur
+    const victim = [...cur].reverse().find((f) => {
+      const d = ASSET_MAP.get(f.asset)
+      if (!d || f.z || d.mount || d.stick || d.h <= 3 || d.fixture) return false
+      return view.rooms.some((x) => hubRooms.has(x.id) && pointInPolygon(f, x.points))
+    })
+    if (!victim) return cur
+    const vb = furnitureBox(victim.asset, victim.x, victim.y, victim.rot)
+    cur = cur.filter((f) => f !== victim && !(f.z && f.x >= vb.x0 && f.x <= vb.x1 && f.y >= vb.y0 && f.y <= vb.y1))
+  }
+  return cur
+}
+
+/**
+ * 多层户型的检查清单补齐：每个条目交给 fixFloor 指定的那层（房间条目 → 房间所在层，每层的条目 → 那层，
+ * 床 / 书桌 → 每层，其余全户条目 → 最底层），房间分配全户统一。单层户型就是 applyFixes。
+ */
+export function applyFixesHouse(plan: Plan, items: CheckItem[], household?: Household, seed = Date.now()): Furniture[] {
+  if (!isMultiFloor(plan)) return applyFixes(plan, items, household, seed)
+  const alloc = household ? allocateRooms(plan, household) : undefined
+  const done = new Map<string, Furniture[]>()
+  for (const { floor, view } of floorViews(plan)) {
+    const mine = items.filter((it) => {
+      const t = fixFloor(plan, it)
+      return t === '*' || t === floor.id
+    })
+    if (!mine.length) {
+      done.set(floor.id, view.furniture)
+      continue
+    }
+    // 别的楼层的家具（已经补过的用补过的）：全户限量的东西算上它们
+    const prior = floorViews(plan)
+      .filter((x) => x.floor.id !== floor.id)
+      .flatMap((x) => done.get(x.floor.id) ?? x.view.furniture)
+    const fs = applyFixes(withStairKeepout(plan, view, floor.id), mine, household, seed + Math.round(floor.elevation), { alloc, prior, fixtures: plan.fixtures })
+    done.set(floor.id, fs.map((f) => stampFloor(plan, f, floor.id)))
+  }
+  return floorViews(plan).flatMap(({ floor }) => done.get(floor.id) ?? [])
 }
 
 /** 字符串 → [0, 1) 的稳定小随机数（推测衣柜主题用） */

@@ -41,6 +41,9 @@ export function fixtureSpans(fx: Fixture): [Box, number, number][] {
       return full(60)
     case 'ps':
       return full(300)
+    // 楼梯：人从下层走到上层，整段（含上楼时的头顶空间）都不挂东西
+    case 'stairs':
+      return full(400)
     default:
       return []
   }

@@ -8,7 +8,7 @@
 
 import * as THREE from 'three'
 import type { Fixture, Vec } from '../model'
-import { stairLayout, stairsVariant, subtractSpan, type StairRail } from '../stairs'
+import { UNDER_CEIL, stairLayout, stairsVariant, stepHollow, subtractSpan, type StairRail } from '../stairs'
 import { stairStyle, type StairBody, type StairRailKind, type StairStyle } from '../stairStyles'
 import { rbox, toon } from './toon'
 
@@ -141,7 +141,8 @@ function splitRail(r: StairRail, walls: WallLine[]): { run: RailRun; wall: boole
 
 // ---------- 踏步下方 ----------
 
-type StepRect = { x0: number; x1: number; z0: number; z1: number; top: number }
+/** y0：实心部分的底（楼梯下敞开的储物角那几级抬到 UNDER_CEIL，下面掏空；其余 0） */
+type StepRect = { x0: number; x1: number; z0: number; z1: number; top: number; y0?: number }
 type Run = { axis: 'x' | 'z'; steps: StepRect[] }
 type BodyCtx = { runs: Run[]; rects: StepRect[]; style: StairStyle; againstWall: (a: Vec, b: Vec) => boolean }
 type BodyBuilder = (c: BodyCtx, g: THREE.Group) => void
@@ -189,12 +190,16 @@ const at3 = (axis: Run['axis'], u: number, h: number, c: number) => (axis === 'x
 function runBody(run: Run, color: string) {
   const { axis, steps } = run
   const span = runSpans(run)
-  const pts: THREE.Vector2[] = [new THREE.Vector2(span[0][0], 0)]
+  const pts: THREE.Vector2[] = []
   steps.forEach((r, i) => {
-    const top = Math.max(0.5, r.top)
+    const top = Math.max((r.y0 ?? 0) + 0.5, r.top)
     pts.push(new THREE.Vector2(span[i][0], top), new THREE.Vector2(span[i][1], top))
   })
-  pts.push(new THREE.Vector2(span[span.length - 1][1], 0))
+  // 底边：倒着走回起点，掏空的几级底边抬高（截面仍是一个简单多边形）
+  for (let i = steps.length - 1; i >= 0; i--) {
+    const y0 = steps[i].y0 ?? 0
+    pts.push(new THREE.Vector2(span[i][1], y0), new THREE.Vector2(span[i][0], y0))
+  }
   const s0 = steps[0]
   const width = axis === 'x' ? s0.z1 - s0.z0 : s0.x1 - s0.x0
   // 截面在 XY 平面（x = 行进方向坐标，y = 高度），沿 z 挤出横向宽度
@@ -234,7 +239,8 @@ const cabinet: BodyBuilder = (c, g) => {
       const cs = k === 0 ? c0 - 0.6 : c1 + 0.6
       for (let i = 0; i + 1 < run.steps.length; i += 2) {
         const h = run.steps[i].top - 8
-        if (h < 50) continue
+        // 掏空成储物角的那几级不装门
+        if (h < 50 || run.steps[i].y0 || run.steps[i + 1].y0) continue
         const u0 = span[i][0]
         const u1 = span[i + 1][1]
         const w = Math.abs(u1 - u0) - 3
@@ -312,7 +318,8 @@ export function stairsModel(f: Fixture, rise: number, walls: WallLine[] = []) {
     const rects = L.steps.map((s) => {
       const xs = s.poly.map((p) => p.x)
       const ys = s.poly.map((p) => p.y)
-      return { x0: Math.min(...xs), x1: Math.max(...xs), z0: Math.min(...ys), z1: Math.max(...ys), top: s.top - TREAD_T }
+      // 楼梯下敞开的储物角（under = 'open'）：高处那几级的实心部分从 UNDER_CEIL 起，下面掏空
+      return { x0: Math.min(...xs), x1: Math.max(...xs), z0: Math.min(...ys), z1: Math.max(...ys), top: s.top - TREAD_T, y0: stepHollow(f, rise, s) ? UNDER_CEIL : 0 }
     })
     const againstWall = (p: Vec, q: Vec) => splitRail({ pts: [{ ...p, h: 0 }, { ...q, h: 0 }] }, local)[0]?.wall ?? false
     BODY_BUILDERS[style.body]({ runs: stairRuns(rects), rects, style, againstWall }, g)
@@ -326,6 +333,22 @@ export function stairsModel(f: Fixture, rise: number, walls: WallLine[] = []) {
 /** 洞口栏杆用的立柱扶手 */
 function railModel(r: StairRail, g: THREE.Group) {
   balusters({ pts: r.pts }, { colors: { tread: '', body: '', rail: RAIL, post: POST } }, g)
+}
+
+/** 沿 p → q 的一段地面栏杆（挑空边用）：立柱 + 扶手 + 中间一道横杆，y = 0 是这一层地面 */
+export function edgeRail(p: Vec, q: Vec) {
+  const g = new THREE.Group()
+  railModel(
+    {
+      pts: [
+        { x: p.x, y: p.y, h: 0 },
+        { x: q.x, y: q.y, h: 0 },
+      ],
+    },
+    g,
+  )
+  g.add(bar(new THREE.Vector3(p.x, 40, p.y), new THREE.Vector3(q.x, 40, q.y), 1.2, POST))
+  return g
 }
 
 /**

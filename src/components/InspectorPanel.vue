@@ -84,6 +84,16 @@ function setStairs(v: StairsVariant) {
     f.d = STAIRS_SIZE[v].d
     if (v === 'straight') delete f.turn
     if (v !== 'l') delete f.run
+    if (v !== 'straight' && v !== 'l') delete f.under
+  })
+}
+/** 楼梯下的用法：'' = 按外观样式 */
+function setUnder(v: string) {
+  const f = fixture.value
+  if (!f) return
+  mutate(() => {
+    if (v === 'open') f.under = v
+    else delete f.under
   })
 }
 
@@ -306,6 +316,13 @@ function setSpotOpen(open: boolean) {
         <label v-if="stairsVariant(fixture) === 'l'"
           >{{ t('梯段宽 cm') }}<input type="number" step="5" min="60" max="150" :value="fixture.run ?? 90" @change="mutate(() => (fixture!.run = Math.max(60, num($event))))"
         /></label>
+        <label v-if="stairsVariant(fixture) === 'straight' || stairsVariant(fixture) === 'l'"
+          >{{ t('楼梯下') }}
+          <select :value="fixture.under ?? ''" @change="setUnder(str($event))">
+            <option value="">{{ t('按外观样式') }}</option>
+            <option value="open">{{ t('储物角（敞开）') }}</option>
+          </select>
+        </label>
         <dl v-if="stairInfo">
           <dt>{{ t('通到') }}</dt>
           <dd>{{ stairInfo.to?.name ?? t('（上面还没有楼层）') }}</dd>

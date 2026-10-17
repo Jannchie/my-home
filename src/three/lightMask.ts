@@ -21,7 +21,7 @@
 import * as THREE from 'three'
 import { edgesOf, pointInPolygon, type Plan, type Room, type Vec } from '../model'
 import { floorOf, planFloors } from '../floors'
-import { isOpenBetween, isVoid, sharedIntervals, wallSegments } from '../walls'
+import { isOpenBetween, isVoid, sharedIntervals, voidRailSegments, wallSegments } from '../walls'
 import { stairHoles } from '../stairs'
 
 /** uniform 数组长度：灯池上限（POOL_HIGH）、楼层上限 */
@@ -97,7 +97,7 @@ function segDist(px: number, py: number, a: Vec, b: Vec) {
 
 /**
  * 生成各层的房间编号图（见文件头）。
- * 分组：同层相邻且敞开（walls.ts isOpenBetween：同 openGroup、玄関与廊下 / 厨房…）的房间并成一组；阳台 = 户外；挑空自成一组。
+ * 分组：同层相邻且敞开（walls.ts isOpenBetween：同 openGroup、玄関与廊下 / 厨房…）的房间并成一组；阳台 = 户外；挑空和装栏杆的那几间上层房间（walls.ts voidRailSegments）并成一组，其余挑空自成一组。
  */
 export function buildLightMask(plan: Plan, cellSize = LM_CELL): LightMaskMap | null {
   const fs = planFloors(plan)
@@ -147,6 +147,10 @@ export function buildLightMask(plan: Plan, cellSize = LM_CELL): LightMaskMap | n
       if (floorOf(plan, a) !== floorOf(plan, b) || !indoorish(a) || !indoorish(b)) continue
       if (isOpenBetween(a, b) && adjacent(a, b)) union(a.id, b.id)
     }
+  // 挑空边装栏杆（不砌墙）的上层房间（走廊、起居）和挑空同一组：灯光从栏杆那边照进挑空、照到下面的客厅
+  const railRooms = new Set(voidRailSegments(rooms).map((s) => s.room.id))
+  for (const v of rooms.filter(isVoid))
+    for (const r of rooms) if (railRooms.has(r.id) && floorOf(plan, r) === floorOf(plan, v) && adjacent(r, v)) union(r.id, v.id)
   const groupOf = new Map<string, number>()
   const roomsOut = new Map<string, { floor: number; group: number }>()
   let next = 2

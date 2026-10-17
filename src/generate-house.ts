@@ -28,7 +28,7 @@ import { WALL, WALL_OUTER, createCtx, planArea, planViolations, type Ctx } from 
 import { bedroomCloset, placeBathroom, placeKitchen, roomLinks, shoeCabinet } from './generate-band'
 import { isIndoor, sharedIntervals } from './walls'
 import { DEFAULT_FLOOR_H, SLAB, floorOf, floorView, planFloors, stampFloor } from './floors'
-import { stairHoleConflicts, stairLinks } from './stairs'
+import { stairHoleConflicts, stairLinks, withStairKeepout } from './stairs'
 import { jp, t } from './i18n'
 
 export type Dwelling = 'apartment' | 'house' | 'duplex'
@@ -83,6 +83,46 @@ export interface HouseLayout {
 
 const F1 = '1f'
 const F2 = '2f'
+
+/** L 形楼梯的占地（宽 = 两跑的梯段宽，深 = 沿北墙的长度） */
+const STAIR_L = { w: 180, d: 270 }
+/** 户建的客厅楼梯：2F 南带东端让给走廊（洞口在里面）的宽度 */
+const LIVING_STRIP = 110
+/** 客厅楼梯起步前留出的进深 */
+const STAIR_CLEAR_LIVING = 85
+
+/** 不消耗布局随机序列的确定性哈希（0..1） */
+function seedHash(seed: number, k: number) {
+  let h = (Math.imul(seed | 0, 2654435761) ^ Math.imul(k + 7, 40503)) >>> 0
+  h = Math.imul(h ^ (h >>> 15), 2246822507) >>> 0
+  return ((h ^ (h >>> 13)) >>> 0) / 4294967296
+}
+
+export type HouseStairKind = 'u' | 'l' | 'living'
+
+/**
+ * 楼梯形式按住宅类型和地区挑：
+ *   户建：日式 U 形 45% / L 形 25% / 客厅楼梯 30%；欧美 U 形 30% / L 形 30% / 客厅楼梯（开放式）40%；中式 U 形 45% / L 形 25% / 客厅楼梯 30%。
+ *   复式：U 形 50% / 挑空里的客厅楼梯 50%（L 形放不进楼梯间的进深）。
+ * 客厅楼梯要客厅在南带东端（日式和室、中式老人房在东端时退回 U 形）。
+ */
+export function stairKind(seed: number, region: Region, duplex: boolean, ldkLast: boolean): HouseStairKind {
+  const h = seedHash(seed, 1)
+  const pLiving = !ldkLast ? 0 : duplex ? 0.5 : region === 'west' ? 0.4 : 0.3
+  const pL = duplex ? 0 : region === 'west' ? 0.3 : 0.25
+  return h < pLiving ? 'living' : h < pLiving + pL ? 'l' : 'u'
+}
+
+/**
+ * 楼梯下面和外观（stairStyles.ts）：
+ *   楼梯间里的 L 形：掏空成储物角（一键布置摆矮柜、收纳箱）45%、「楼梯下收纳」样式（侧面柜门）35%、实心 20%；
+ *   客厅楼梯：镂空木梯 / 现代玻璃栏板各半（开放式），其中一半下面摆收纳。
+ */
+function stairLook(seed: number, living: boolean): Pick<Fixture, 'under' | 'stairStyle'> {
+  const h = seedHash(seed, 2)
+  if (living) return { stairStyle: seedHash(seed, 3) < 0.5 ? 'open' : 'modern', ...(h < 0.5 ? { under: 'open' as const } : {}) }
+  return h < 0.45 ? { under: 'open' } : h < 0.8 ? { stairStyle: 'storage' } : {}
+}
 
 // ---------------------------------------------------------------------------
 // 地区方案
@@ -416,13 +456,21 @@ function layout(seed: number, o: Pick<HouseGenOpts, 'region' | 'dwelling' | 'bed
   // 东侧当卧室要 290 宽以上（4.5 帖 / 7.3㎡）
   if (eastBed && d.wG + d.wSC < 290) d.wSC = 290 - d.wG
   if (o.region === 'west' && d.wG + d.wSC < 220) d.wSC = 220 - d.wG
-  const wSt = 180
+  // 楼梯形式（用种子的哈希挑，不消耗布局的随机序列：U 形的户型和以前一样）
+  // 客厅楼梯：起步前要留 80 的地方，南带进深放不下 300 长的梯段就不做
+  const livingRun = Math.min(360, d.dS - WALL / 2 - WALL_OUTER / 2 - STAIR_CLEAR_LIVING)
+  const kind = stairKind(seed, o.region, duplex, s1.cells[s1.cells.length - 1].kind === 'ldk' && livingRun >= 300)
+  const living = kind === 'living'
+  // 楼梯间宽：U 形 180；L 形要放下 270 长的占地（两侧隔墙各让半个墙厚）；客厅楼梯时这一格做收纳
+  const wSt = kind === 'l' ? STAIR_L.d + WALL + 2 : 180
+  // 户建的客厅楼梯：2F 南带东端让出一条走廊（洞口在里面）
+  const stripW = living && !duplex ? LIVING_STRIP : 0
   // 复式的挑空：客厅上方，宽 300–380
   const voidW = duplex ? c.rint(300, 380) : 0
   // 宽度：北带的最小和、2F 南带放得下 k 间卧室
   const northMin = d.wC + d.wT + wSt + d.wG + d.wSC
   const master = P.masterMin(d)
-  const needS = (k > 0 ? master + (k - 1) * 290 : 0) + voidW
+  const needS = (k > 0 ? master + (k - 1) * 290 : 0) + voidW + stripW
   let W = Math.max(d.W, northMin, needS + (partial ? d.wC : 0))
   // 1F 南带的最小和
   const south1Min = s1.cells.reduce((a, x) => a + x.min, 0)
@@ -461,16 +509,29 @@ function layout(seed: number, o: Pick<HouseGenOpts, 'region' | 'dwelling' | 'bed
   }
 
   // ---------- 1F ----------
-  const hallPts = (x0: number): Vec[] => [
+  // 走廊：走廊带 + 北带的楼梯间（客厅楼梯时楼梯间做收纳，走廊不含它）；strip = 2F 南带东端让给客厅楼梯洞口的一条
+  const hallPts = (x0: number, strip = 0): Vec[] => [
     { x: x0, y: dS },
-    { x: W, y: dS },
+    ...(strip
+      ? [
+          { x: W - strip, y: dS },
+          { x: W - strip, y: 0 },
+          { x: W, y: 0 },
+        ]
+      : [{ x: W, y: dS }]),
     { x: W, y: yN },
-    { x: xG, y: yN },
-    { x: xG, y: D },
-    { x: xS, y: D },
-    { x: xS, y: yN },
+    ...(living
+      ? []
+      : [
+          { x: xG, y: yN },
+          { x: xG, y: D },
+          { x: xS, y: D },
+          { x: xS, y: yN },
+        ]),
     { x: x0, y: yN },
   ]
+  // 客厅楼梯：楼梯间并进填充间（收纳）
+  const xFill = living ? xG : xS
   const hall1 = c.room('hall', P.hallName, hallPts(wC))
   if (P.group) hall1.openGroup = P.group
   if (P.core.north) {
@@ -478,7 +539,7 @@ function layout(seed: number, o: Pick<HouseGenOpts, 'region' | 'dwelling' | 'bed
     rec(P.core.south, c.rect(P.core.south.kind, P.core.south.name, 0, dS, wC, D - d.dB), F1)
   } else rec(P.core.south, c.rect(P.core.south.kind, P.core.south.name, 0, dS, wC, D), F1)
   rec(P.col, c.rect(P.col.kind, P.col.name, wC, yN, xF, D), F1)
-  if (wF > 0) rec(P.filler, c.rect(P.filler.kind, P.filler.name, xF, yN, xS, D), F1)
+  if (xFill > xF) rec(P.filler, c.rect(P.filler.kind, P.filler.name, xF, yN, xFill, D), F1)
   const entry = rec(P.entry, c.rect('entrance', P.entry.name, xG, yN, xSC, D), F1)
   if (d.wSC > 0) rec(P.side, c.rect(P.side.kind, P.side.name, xSC, yN, W, D), F1)
   // 南带
@@ -494,6 +555,12 @@ function layout(seed: number, o: Pick<HouseGenOpts, 'region' | 'dwelling' | 'bed
       rest += 10
     }
     fixed[fi] = rest
+    // 客厅楼梯贴着客厅东墙：东墙不开窗
+    if (living) {
+      const last = s1.cells[s1.cells.length - 1]
+      last.win = { ...last.win }
+      delete last.win.e
+    }
     let x = 0
     s1.cells.forEach((def, i) => {
       const r = c.rect(def.kind, def.name, x, 0, x + fixed[i], dS)
@@ -507,10 +574,10 @@ function layout(seed: number, o: Pick<HouseGenOpts, 'region' | 'dwelling' | 'bed
 
   // ---------- 2F ----------
   const x2 = partial ? wC : 0
-  const hall2 = c.room('hall', P.hallName, hallPts(wC))
+  const hall2 = c.room('hall', P.hallName, hallPts(wC, stripW))
   if (!partial) rec(P.nw2, c.rect(P.nw2.kind, P.nw2.name, 0, dS, wC, D), F2)
   rec(P.col2, c.rect(P.col2.kind, P.col2.name, wC, yN, xF, D), F2)
-  if (wF > 0) rec(P.filler2, c.rect(P.filler2.kind, P.filler2.name, xF, yN, xS, D), F2)
+  if (xFill > xF) rec(P.filler2, c.rect(P.filler2.kind, P.filler2.name, xF, yN, xFill, D), F2)
   {
     let x = xG
     const extraBedName = eastBed ? P.bedName(k) : null
@@ -519,8 +586,8 @@ function layout(seed: number, o: Pick<HouseGenOpts, 'region' | 'dwelling' | 'bed
       x += w
     }
   }
-  // 南带卧室（复式时东端是客厅上方的挑空）
-  const southEnd = W - voidW
+  // 南带卧室（复式时东端是客厅上方的挑空；户建的客厅楼梯时东端是走廊的一条）
+  const southEnd = W - voidW - stripW
   const beds2: Room[] = []
   if (k > 0) {
     const mins = Array.from({ length: k }, (_, i) => (i === 0 ? master : 280))
@@ -567,7 +634,7 @@ function layout(seed: number, o: Pick<HouseGenOpts, 'region' | 'dwelling' | 'bed
       const target = rule === 'hall' ? hall : bySide(room, rule)
       if (!target) continue
       // 走廊门靠近楼梯（走得少）；其余居中
-      doorBetween(c, room, target, def.doorKind ?? 'door', def.doorW ?? 75, def.swing ?? 'in', rule === 'hall' ? (room.kind === 'ldk' ? { x: xG + d.wG / 2, y: dS } : stairsMid) : undefined)
+      doorBetween(c, room, target, def.doorKind ?? 'door', def.doorW ?? 75, def.swing ?? 'in', rule === 'hall' ? (room.kind === 'ldk' ? { x: living ? Math.min(xG + d.wG / 2, W - 260) : xG + d.wG / 2, y: dS } : stairsMid) : undefined)
     }
     for (const { def, room } of mine) for (const [side, w] of Object.entries(def.win ?? {}) as [Side, number][]) windowSide(c, room, side, w, rooms)
     // 阳台：南侧卧室的窗本来就开在南墙上，阳台挨着它们就是落地窗
@@ -587,8 +654,19 @@ function layout(seed: number, o: Pick<HouseGenOpts, 'region' | 'dwelling' | 'bed
   for (const r of rooms2) r.floor = F2
   for (const op of open2) op.floor = F2
 
-  // ---------- 楼梯：U 形，占满北带进深，起步和出梯口都在走廊带一侧 ----------
-  const stairs: Fixture = { id: `f${seed.toString(36)}st`, kind: 'stairs', stairs: 'u', turn: c.chance(0.5) ? 'left' : 'right', x: xS + wSt / 2, y: yN + dN / 2, w: wSt, d: dN, rot: 180 }
+  // ---------- 楼梯 ----------
+  //   u      U 形，占满北带进深，起步和出梯口都在走廊带一侧；
+  //   l      L 形，贴着楼梯间北墙：从东端（玄关那边）起步往西上，西端的平台拐向南，出梯口朝楼梯间南半边的走廊；
+  //   living 客厅楼梯（直跑），贴着客厅东墙从南往北上，出梯口落在 2F 走廊带（户建：2F 南带东端那条走廊里开洞；复式：在挑空里）。
+  const turnU = c.chance(0.5) ? 'left' : 'right'
+  const id = `f${seed.toString(36)}st`
+  const look = stairLook(seed, living)
+  const stairs: Fixture =
+    kind === 'l'
+      ? { id, kind: 'stairs', stairs: 'l', turn: 'right', x: xS + wSt / 2, y: D - WALL_OUTER / 2 - STAIR_L.w / 2 - 1, w: STAIR_L.w, d: STAIR_L.d, rot: 270, ...look }
+      : living
+        ? { id, kind: 'stairs', stairs: 'straight', x: W - WALL_OUTER / 2 - 45 - 1, y: dS - WALL / 2 - livingRun / 2 - 1, w: 90, d: livingRun, rot: 180, ...look }
+        : { id, kind: 'stairs', stairs: 'u', turn: turnU, x: xS + wSt / 2, y: yN + dN / 2, w: wSt, d: dN, rot: 180 }
 
   // ---------- 用地 ----------
   let site: Site | undefined
@@ -625,8 +703,10 @@ function layout(seed: number, o: Pick<HouseGenOpts, 'region' | 'dwelling' | 'bed
   if (mirror) {
     const mx = mirrorX(W)
     for (const r of [...rooms1, ...rooms2]) r.points = r.points.map(mx)
+    // 左右镜像：局部 x 翻转（拐向对调），朝向 rot → 360 - rot
     stairs.x = W - stairs.x
-    stairs.turn = stairs.turn === 'left' ? 'right' : 'left'
+    if (stairs.stairs !== 'straight') stairs.turn = stairs.turn === 'left' ? 'right' : 'left'
+    stairs.rot = (360 - stairs.rot) % 360
     if (site) {
       site.points = site.points.map(mx)
       site.gates = site.gates.map(([a, b]) => [mx(a), mx(b)])
@@ -669,8 +749,9 @@ function furnish({ c, plan, placed }: HouseLayout): Plan {
   const region = plan.region ?? 'jp'
   for (const fl of planFloors(plan)) {
     const view = floorView(plan, fl.id)
-    // 子户型的设备数组是筛出来的副本：摆好的设备同时记到原户型里
-    view.fixtures = [...view.fixtures]
+    // 子户型的设备数组是筛出来的副本：摆好的设备同时记到原户型里。
+    // 上层的楼梯洞口、楼梯口留空的地方当作障碍（只在这份子户型里，不写回户型）
+    view.fixtures = withStairKeepout(plan, view, fl.id).fixtures.slice()
     orientDoors(view)
     const commit = (fs: Fixture[]) => {
       for (const f of fs) if (!plan.fixtures.includes(f)) plan.fixtures.push(stampFloor(plan, f, fl.id))

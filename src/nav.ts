@@ -10,6 +10,8 @@ import { wallSegments } from './walls'
 import { ASSET_MAP } from './three/assets'
 import { furnitureBox } from './snap'
 import { floorY } from './three/house'
+import { floorView, isMultiFloor, planFloors } from './floors'
+import { stairHoles, stairWalk, type StairWalk } from './stairs'
 
 export type NavClass = 'pet' | 'robot'
 
@@ -406,5 +408,116 @@ export class NavGrid {
       i = j
     }
     return out
+  }
+}
+
+// ---------- 多层：每层一张网格，楼梯是两层之间的连接边 ----------
+
+/** 一段路：在某层地面上走（折线），或走一趟楼梯（up = 往上） */
+export type NavLeg = { t: 'walk'; floor: string; path: Vec[] } | { t: 'stairs'; walk: StairWalk; up: boolean; from: string; to: string }
+
+/** 某层上的一个点 */
+export interface FloorPoint {
+  floor: string
+  p: Vec
+}
+
+/**
+ * 整套房子的导航：每层一张 NavGrid（上层的楼梯洞口挖掉；楼梯本身在下层是设备、不能直接穿过），
+ * 楼梯（stairs.ts stairWalk）把下层的起步外侧和上层的出梯口外侧连起来。单层户型只有一张网格、没有连接。
+ */
+export class HouseNav {
+  readonly grids = new Map<string, NavGrid>()
+  readonly links: StairWalk[] = []
+  readonly floors: string[]
+
+  constructor(plan: Plan, opts: Omit<NavOptions, 'holes'> = {}) {
+    const fs = planFloors(plan)
+    this.floors = fs.map((f) => f.id)
+    for (const f of fs) {
+      const view = isMultiFloor(plan) ? floorView(plan, f.id) : plan
+      this.grids.set(f.id, new NavGrid(view, { ...opts, holes: stairHoles(plan, f.id).map((h) => h.poly) }))
+    }
+    if (isMultiFloor(plan))
+      for (const fx of plan.fixtures) {
+        if (fx.kind !== 'stairs') continue
+        const w = stairWalk(plan, fx)
+        if (w && this.grids.has(w.to)) this.links.push(w)
+      }
+  }
+
+  grid(floor: string) {
+    return this.grids.get(floor) ?? this.grids.get(this.floors[0])!
+  }
+
+  /** 楼梯两端在网格上能站的点（就近挪 60 以内；站不下返回 null） */
+  ends(cls: NavClass, w: StairWalk, r: number): { lo: Vec; hi: Vec } | null {
+    const lo = this.grid(w.from).nearest(cls, w.entry, r, 60)
+    const hi = this.grid(w.to).nearest(cls, w.exit, r, 60)
+    return lo && hi ? { lo, hi } : null
+  }
+
+  /** 从 a 层能经楼梯到 b 层吗（只看连接，不看网格） */
+  connected(a: string, b: string) {
+    return !!this.floorPath(a, b)
+  }
+
+  /** 楼层之间的连接（BFS）：返回经过的楼层序列 */
+  private floorPath(a: string, b: string): string[] | null {
+    if (a === b) return [a]
+    const prev = new Map<string, string>([[a, a]])
+    const q = [a]
+    while (q.length) {
+      const f = q.shift()!
+      for (const w of this.links)
+        for (const [x, y] of [
+          [w.from, w.to],
+          [w.to, w.from],
+        ])
+          if (x === f && !prev.has(y)) {
+            prev.set(y, f)
+            if (y === b) {
+              const out = [b]
+              for (let c = b; c !== a; c = prev.get(c)!) out.push(prev.get(c)!)
+              return out.reverse()
+            }
+            q.push(y)
+          }
+    }
+    return null
+  }
+
+  /**
+   * 跨层找路：同层直接 A*；不同层按楼层序列，每次换层挑一部两端都能站、两边都走得到的楼梯。
+   * 返回一段段的路（walk / stairs），找不到返回 null。
+   */
+  route(cls: NavClass, from: FloorPoint, to: FloorPoint, r: number): NavLeg[] | null {
+    const seq = this.floorPath(from.floor, to.floor)
+    if (!seq) return null
+    const legs: NavLeg[] = []
+    let cur = from.p
+    for (let i = 0; i + 1 < seq.length; i++) {
+      const a = seq[i]
+      const b = seq[i + 1]
+      let ok = false
+      for (const w of this.links) {
+        const up = w.from === a && w.to === b
+        if (!up && !(w.from === b && w.to === a)) continue
+        const e = this.ends(cls, w, r)
+        if (!e) continue
+        const start = up ? e.lo : e.hi
+        const path = this.grid(a).path(cls, cur, start, r)
+        if (!path) continue
+        legs.push({ t: 'walk', floor: a, path }, { t: 'stairs', walk: w, up, from: a, to: b })
+        cur = up ? e.hi : e.lo
+        ok = true
+        break
+      }
+      if (!ok) return null
+    }
+    const last = this.grid(to.floor).path(cls, cur, to.p, r)
+    if (!last) return null
+    legs.push({ t: 'walk', floor: to.floor, path: last })
+    return legs
   }
 }

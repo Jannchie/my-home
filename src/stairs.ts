@@ -8,9 +8,9 @@
 //   spiral   旋转：扇形踏步绕中心柱转大约 300°。
 // 最后一级踏步和上层地面齐平（落在洞口里），出梯口（arrival）是占地边界上接上层地面的那一段。
 
-import { add, fixtureDepth, mul, pointInPolygon, rectPoints, type Fixture, type Plan, type Room, type Vec } from './model'
+import { add, bbox, fixtureDepth, mul, openingGeom, pointInPolygon, rectPoints, type Box, type Fixture, type Plan, type Room, type Vec } from './model'
 import { floorAbove, floorOf, isMultiFloor, riseOf } from './floors'
-import { isVoid } from './walls'
+import { isVoid, voidRailSegments } from './walls'
 
 /** 一级踢面的上限（cm）：级数 = ceil(层间高 / 它) */
 export const MAX_RISER = 20
@@ -362,4 +362,228 @@ export function stairLinks(p: Plan): StairLink[] {
     out.push({ stair: f, lower: hit(lowRooms, start) ?? hit(lowRooms, center), upper: hit(upRooms, beyond) ?? hit(upRooms, center), from, to: up.id })
   }
   return out
+}
+
+// ---------- 楼梯口、楼梯下、走楼梯的路线（第三期） ----------
+
+/** 梯段宽：起步处要留出的通道宽 */
+function runWidth(f: Fixture) {
+  const v = stairsVariant(f)
+  const D = fixtureDepth(f)
+  if (v === 'straight') return f.w
+  if (v === 'u') return f.w / 2
+  if (v === 'l') return stairsRun(f, D)
+  return Math.min(f.w, D) * 0.45
+}
+
+/** 出梯口的中点和朝外的单位向量（局部坐标：背离占地中心） */
+function arrivalOut(L: StairLayout): { mid: Vec; out: Vec } {
+  const [a, b] = L.arrival
+  const mid = lerpV(a, b, 0.5)
+  const len = Math.hypot(b.x - a.x, b.y - a.y) || 1
+  let out = { x: -(b.y - a.y) / len, y: (b.x - a.x) / len }
+  if (out.x * mid.x + out.y * mid.y < 0) out = mul(out, -1)
+  return { mid, out }
+}
+
+/** 楼梯口要留空的进深（cm） */
+export const STAIR_CLEAR = 80
+
+/**
+ * 楼梯口要留空的地方（平面坐标的包围盒）：这一层楼梯的起步处（梯段宽 × STAIR_CLEAR），
+ * 以及从下层通上来的楼梯在这一层的出梯口外侧（出梯口长 × STAIR_CLEAR）。一键布置、检查补漏把它们当障碍。
+ */
+export function stairClearZones(p: Plan, floorId: string): Box[] {
+  const out: Box[] = []
+  for (const f of p.fixtures) {
+    if (f.kind !== 'stairs') continue
+    const from = floorOf(p, f)
+    const L = stairLayout(f, riseOf(p, from))
+    const w = stairToWorld(f)
+    const D = fixtureDepth(f)
+    const rooms = p.rooms.filter((r) => floorOf(p, r) === floorId)
+    if (from === floorId && stairsVariant(f) !== 'spiral') {
+      const p0 = L.path[0]
+      const h = runWidth(f) / 2
+      out.push(bbox([w({ x: p0.x - h, y: D / 2 }), w({ x: p0.x + h, y: D / 2 }), w({ x: p0.x - h, y: D / 2 + STAIR_CLEAR }), w({ x: p0.x + h, y: D / 2 + STAIR_CLEAR })]))
+      out.push(...passage(p, rooms, w({ x: p0.x, y: D / 2 + STAIR_CLEAR / 2 })))
+    }
+    if (isMultiFloor(p) && floorAbove(p, from)?.id === floorId) {
+      const { mid, out: o } = arrivalOut(L)
+      const [a, b] = L.arrival
+      out.push(bbox([w(a), w(b), w(add(a, mul(o, STAIR_CLEAR))), w(add(b, mul(o, STAIR_CLEAR)))]))
+      out.push(...passage(p, rooms, w(add(mid, mul(o, STAIR_CLEAR / 2)))))
+    }
+  }
+  return out
+}
+
+/** 楼梯口到所在房间的门（没有门就到房间中心）留一条 70 宽的通道：两段横平竖直的带子，家具不能把楼梯口围起来 */
+const PASS = 70
+function passage(p: Plan, rooms: Room[], e: Vec): Box[] {
+  const room = rooms.find((r) => r.kind !== 'void' && pointInPolygon(e, r.points))
+  if (!room) return []
+  const doors = p.openings.filter((o) => o.kind !== 'window' && (o.roomId === room.id || rooms.some((r) => r.id === o.roomId)))
+  let target: Vec | null = null
+  let best = Infinity
+  for (const o of doors) {
+    const g = openingGeom(p.rooms, o)
+    if (!g) continue
+    // 门洞往房间里面挪 40，带子不伸进墙里
+    const into = pointInPolygon(add(g.center, mul(g.e.out, 20)), room.points) ? g.e.out : mul(g.e.out, -1)
+    const c = add(g.center, mul(into, 40))
+    if (!pointInPolygon(c, room.points)) continue
+    const d = Math.hypot(c.x - e.x, c.y - e.y)
+    if (d < best) {
+      best = d
+      target = c
+    }
+  }
+  target ??= centroidOf(room.points)
+  if (Math.hypot(target.x - e.x, target.y - e.y) < 5) return []
+  const h = PASS / 2
+  const strip = (a: Vec, b: Vec): Box => ({ x0: Math.min(a.x, b.x) - h, y0: Math.min(a.y, b.y) - h, x1: Math.max(a.x, b.x) + h, y1: Math.max(a.y, b.y) + h })
+  // 先横后竖还是先竖后横：拐角在房间里的那一种
+  const c1 = { x: target.x, y: e.y }
+  const c2 = { x: e.x, y: target.y }
+  const corner = pointInPolygon(c1, room.points) ? c1 : c2
+  return [strip(e, corner), strip(corner, target)]
+}
+
+const centroidOf = (pts: Vec[]): Vec => {
+  const b = bbox(pts)
+  return { x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 }
+}
+
+/** 留空的地方当作一件不占使用空间的设备（PS）：只在这份子户型里，不写回户型 */
+export function clearZoneFixtures(p: Plan, floorId: string): Fixture[] {
+  return stairClearZones(p, floorId).map((b, i) => ({ id: `stair-clear-${floorId}-${i}`, kind: 'ps', x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2, w: b.x1 - b.x0, d: b.y1 - b.y0, rot: 0 }))
+}
+
+/** 一键布置 / 检查补漏用的子户型：上层的楼梯洞口当设备，楼梯口留空的地方也当设备 */
+export function withStairKeepout(p: Plan, view: Plan, floorId: string): Plan {
+  const v = withStairHoles(p, view, floorId)
+  const zones = [...clearZoneFixtures(p, floorId), ...railKeepout(view)]
+  return zones.length ? { ...v, fixtures: [...v.fixtures, ...zones] } : v
+}
+
+/** 挑空边的栏杆（walls.ts voidRailSegments）里侧 35cm 不靠墙摆家具：栏杆不是墙 */
+function railKeepout(view: Plan): Fixture[] {
+  return voidRailSegments(view.rooms).map((s, i) => {
+    const len = Math.hypot(s.b.x - s.a.x, s.b.y - s.a.y) || 1
+    let n = { x: -(s.b.y - s.a.y) / len, y: (s.b.x - s.a.x) / len }
+    const mid = lerpV(s.a, s.b, 0.5)
+    if (!pointInPolygon(add(mid, mul(n, 10)), s.room.points)) n = mul(n, -1)
+    const b = bbox([s.a, s.b, add(s.a, mul(n, 35)), add(s.b, mul(n, 35))])
+    return { id: `void-rail-${i}`, kind: 'ps' as const, x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2, w: Math.max(1, b.x1 - b.x0), d: Math.max(1, b.y1 - b.y0), rot: 0 }
+  })
+}
+
+/** 楼梯下储物角的顶（离地 cm）：踏面高过它 + 15 的那几级下面掏空 */
+export const UNDER_CEIL = 100
+
+export interface UnderZone {
+  /** 局部坐标的矩形 */
+  x0: number
+  y0: number
+  x1: number
+  y1: number
+  /** 下面能放的东西的最大高度 */
+  clear: number
+  /** 开口朝哪（局部坐标的单位法线，可能有两个：直跑的两侧） */
+  fronts: Vec[]
+}
+
+/**
+ * 楼梯下方高处可以用的空间（局部坐标）：直跑取踏面高于 UNDER_CEIL + 15 的那一段，L 形取远端的平台 + 第二跑。
+ * U 形、旋转楼梯没有（U 形下面是两跑交错，旋转楼梯是悬挑的）。
+ */
+export function stairUnderZone(f: Fixture, rise: number): UnderZone | null {
+  const v = stairsVariant(f)
+  const W = f.w
+  const D = fixtureDepth(f)
+  if (v === 'straight') {
+    const hi = stairLayout(f, rise).steps.filter((s) => s.top >= UNDER_CEIL + 15)
+    if (hi.length < 2) return null
+    const ys = hi.flatMap((s) => s.poly.map((q) => q.y))
+    return { x0: -W / 2, x1: W / 2, y0: Math.min(...ys), y1: Math.max(...ys), clear: UNDER_CEIL - 5, fronts: [{ x: 1, y: 0 }, { x: -1, y: 0 }] }
+  }
+  if (v === 'l') {
+    const s = stairsRun(f, D)
+    const sx = f.turn === 'right' ? -1 : 1
+    return { x0: -W / 2, x1: W / 2, y0: -D / 2, y1: -D / 2 + s, clear: UNDER_CEIL - 5, fronts: [{ x: -sx, y: 0 }] }
+  }
+  return null
+}
+
+/** 楼梯下的储物角在平面上的范围（四个角） */
+export function underZonePoly(f: Fixture, z: UnderZone): Vec[] {
+  return rectPoints(z.x0, z.y0, z.x1, z.y1).map(stairToWorld(f))
+}
+
+/** 某级踏步下面是不是掏空的（楼梯下敞开的储物角）：stairs3d 搭模型用 */
+export function stepHollow(f: Fixture, rise: number, step: StairStep): boolean {
+  if (f.under !== 'open' || step.top < UNDER_CEIL + 15) return false
+  const z = stairUnderZone(f, rise)
+  if (!z) return false
+  const c = step.poly.reduce((a, q) => add(a, mul(q, 1 / step.poly.length)), { x: 0, y: 0 })
+  return c.x >= z.x0 - 0.5 && c.x <= z.x1 + 0.5 && c.y >= z.y0 - 0.5 && c.y <= z.y1 + 0.5
+}
+
+export interface StairWalk {
+  stair: Fixture
+  from: string
+  to: string
+  /** 起步外侧（下层地面，平面坐标） */
+  entry: Vec
+  /** 出梯口外侧（上层地面，平面坐标） */
+  exit: Vec
+  /** 上楼的路线（平面坐标 + 离下层地面的高度 z），从 entry 到 exit */
+  pts: { x: number; y: number; z: number }[]
+  rise: number
+}
+
+/** 局部坐标的点踩在哪级踏步上：返回踏面高度，不在踏步上返回 null */
+function stepTopAt(L: StairLayout, q: Vec) {
+  let best: number | null = null
+  for (const s of L.steps) if (pointInPolygon(q, s.poly)) best = Math.max(best ?? 0, s.top)
+  return best
+}
+
+/**
+ * 走楼梯的路线（宠物、人形机器人上下楼）：起步外侧 → 沿 stairLayout 的 path 走过每一级 → 出梯口外侧。
+ * 每隔约 6cm 一个点，高度取脚下那级踏面（还没踏上第一级是 0，过了最后一级是层间高）。
+ */
+export function stairWalk(p: Plan, f: Fixture): StairWalk | null {
+  const from = floorOf(p, f)
+  const up = floorAbove(p, from)
+  if (!up) return null
+  const rise = riseOf(p, from)
+  const L = stairLayout(f, rise)
+  const w = stairToWorld(f)
+  const D = fixtureDepth(f)
+  const { mid, out } = arrivalOut(L)
+  const p0 = L.path[0]
+  // 起步外侧：path 起点沿 +y 往外 30（旋转楼梯：第一级的径向外侧）
+  const entryL = stairsVariant(f) === 'spiral' ? mul(p0, (Math.min(f.w, D) / 2 + 30) / (Math.hypot(p0.x, p0.y) || 1)) : { x: p0.x, y: D / 2 + 30 }
+  const exitL = add(mid, mul(out, 30))
+  const line: Vec[] = [entryL, ...L.path]
+  const last = line[line.length - 1]
+  if (Math.hypot(last.x - mid.x, last.y - mid.y) > 2) line.push(mid)
+  line.push(exitL)
+  const pts: StairWalk['pts'] = []
+  let passed = false
+  for (let i = 0; i + 1 < line.length; i++) {
+    const a = line[i]
+    const b = line[i + 1]
+    const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 6))
+    for (let k = 0; k < n; k++) {
+      const q = lerpV(a, b, k / n)
+      const top = stepTopAt(L, q)
+      if (top !== null && top >= rise - 0.5) passed = true
+      pts.push({ ...w(q), z: top ?? (passed ? rise : 0) })
+    }
+  }
+  pts.push({ ...w(exitL), z: rise })
+  return { stair: f, from, to: up.id, entry: w(entryL), exit: w(exitL), pts, rise }
 }
