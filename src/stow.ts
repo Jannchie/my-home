@@ -9,10 +9,9 @@
 import * as THREE from 'three'
 import { edgesOf, fixtureBox, pointInPolygon, projectToSegment, uid, type Fixture, type Furniture, type Plan, type Room } from './model'
 import { propsOn, toWorld } from './surface'
-import { furnitureBox } from './snap'
 import { poseDoors } from './three/kit'
 import { isIndoor } from './walls'
-import { clearances } from './place'
+import { DOOR_ZONES, STAIR_ZONES, type Occupancy } from './occupancy'
 import { cabinetsOn, fitsSpot, poseOnStorageSpot, setOpen, SPOT_CABINET_TYPES } from './cabinet'
 import { ASSET_MAP, ASSETS, type AssetDef, type StyleTag } from './three/assets'
 import type { Region } from './model'
@@ -36,6 +35,8 @@ export interface StowHost {
   hangRows(owner: { id: string; x: number; y: number; rot: number }, cx: number, cz: number, len: number, hookZ: number, wds: Wardrobe[], maxH: number, maxD: number, room?: Room): Furniture[]
   /** 收进柜子：这期间放开「门里的层不能放」和同类数量限制 */
   stowing<T>(fn: () => T): T
+  /** 统一的空间占用表：开着的柜门不碰的东西、不挡的门前空间都按它算 */
+  readonly occ: Occupancy
 }
 export interface StowCtx {
   d: StowHost
@@ -291,19 +292,22 @@ export function canOpen(c: StowCtx, cab: Furniture) {
   const y1 = base + open.max.y
   const mine = new Set([cab.id, ...propsOn({ furniture: d.out }, cab).map((o) => o.id)])
   const half = Math.max(plan.wall, plan.wallOuter ?? plan.wall) / 2
-  const others = d.out
-    .filter((o) => !mine.has(o.id))
-    .flatMap((o) => {
-      const od = ASSET_MAP.get(o.asset)
-      if (!od || od.h <= 3) return []
-      const z0 = od.mount ?? o.z ?? 0
-      if (Math.min(y1, z0 + od.h) - Math.max(y0, z0) <= 2) return []
-      return [furnitureBox(o.asset, o.x, o.y, o.rot)]
-    })
+  // 占用表里的东西（按各自的立体范围：壁挂物、挂件、贴附物都算）和柜门伸出部分在高度上重叠的
+  const others = d.occ
+    .bodies()
+    .filter((b) => !mine.has(b.f.id) && b.def.h > 3 && Math.min(y1, b.hi) - Math.max(y0, b.lo) > 2)
+    .map((b) => b.box)
   const solid = plan.fixtures.filter((fx) => fx.kind !== 'builtin' && fx.kind !== 'fridge' && fx.kind !== 'washer').map(fixtureBox)
-  // 门扇开合范围、门口前的通道（clearances）也不能挡
-  const doorZones = new Map<string, ReturnType<typeof clearances>>()
-  const zonesOf = (r: Room) => doorZones.get(r.id) ?? doorZones.set(r.id, clearances(r, plan, false)).get(r.id)!
+  // 门扇开合范围、门口前的通道、楼梯口也不能挡（不含落地窗前：柜门开着也过得去）
+  const doorZones = new Map<string, { x0: number; y0: number; x1: number; y1: number }[]>()
+  const zonesOf = (r: Room) =>
+    doorZones.get(r.id) ??
+    doorZones
+      .set(
+        r.id,
+        d.occ.zoneBoxes(r, [DOOR_ZONES, STAIR_ZONES], { sash: false }),
+      )
+      .get(r.id)!
   const inBox = (b: { x0: number; y0: number; x1: number; y1: number }, p: { x: number; y: number }) => p.x > b.x0 + 1 && p.x < b.x1 - 1 && p.y > b.y0 + 1 && p.y < b.y1 - 1
   for (let x = open.min.x; x <= open.max.x + 0.01; x += Math.max(1, Math.min(4, open.max.x - open.min.x)))
     for (let z = open.min.z; z <= open.max.z + 0.01; z += Math.max(1, Math.min(4, open.max.z - open.min.z))) {

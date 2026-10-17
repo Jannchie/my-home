@@ -115,7 +115,15 @@ export function boxInsideWalls(b: Box, room: Room, ctx: Pick<Plan, 'rooms' | 'wa
  * sash：通往阳台的落地窗（掃き出し窓）也是出入口，留出 50 的通行空间（家具用；设备摆放不传，保持户型生成结果不变）。
  */
 export function clearances(room: Room, ctx: PlaceCtx, avoidWindows: boolean, sash = false): Box[] {
-  return [...openingClearances(room, ctx, avoidWindows, sash), ...stairClearances(room, ctx)]
+  return clearanceZones(room, ctx, avoidWindows, sash).map((z) => z.box)
+}
+
+/** 留空区的种类：门扇扫过的范围、门前通道、落地窗前、腰窗前、楼梯（起步处 / 储物角开口前） */
+export type ClearanceKind = 'door-swing' | 'door-front' | 'sash' | 'window' | 'stair'
+
+/** clearances 的带种类版本（一键布置的占用表按种类区分用途） */
+export function clearanceZones(room: Room, ctx: PlaceCtx, avoidWindows: boolean, sash = false): { box: Box; kind: ClearanceKind }[] {
+  return [...openingClearances(room, ctx, avoidWindows, sash), ...stairClearances(room, ctx).map((box) => ({ box, kind: 'stair' as const }))]
 }
 
 /**
@@ -132,16 +140,19 @@ function stairClearances(room: Room, ctx: PlaceCtx): Box[] {
 }
 const centroidOf = (poly: Vec[]) => poly.reduce((a, q) => ({ x: a.x + q.x / poly.length, y: a.y + q.y / poly.length }), { x: 0, y: 0 })
 
-function openingClearances(room: Room, ctx: PlaceCtx, avoidWindows: boolean, sash = false): Box[] {
+function openingClearances(room: Room, ctx: PlaceCtx, avoidWindows: boolean, sash = false): { box: Box; kind: ClearanceKind }[] {
   return openingsOn(room, ctx).flatMap(({ o, owner, e, center }) => {
-    if (o.kind === 'window' && !avoidWindows && !(sash && isSashWindow(ctx, owner, e, center))) return []
+    if (o.kind === 'window' && !avoidWindows && !sash) return []
+    const isSash = o.kind === 'window' && isSashWindow(ctx, owner, e, center)
+    if (o.kind === 'window' && !avoidWindows && !isSash) return []
     // 指向本房间内部的法线
     const into = pointInPolygon(add(center, mul(e.out, 5)), room.points) ? e.out : mul(e.out, -1)
     const swingsIn = (o.kind === 'door' || o.kind === 'folding') && (owner.id === room.id ? o.swing === 'in' : o.swing === 'out')
     const depth = swingsIn ? (o.kind === 'door' ? o.width : o.width / 2) + 5 : 50
     const p0 = add(center, mul(e.dir, -o.width / 2))
     const p1 = add(center, mul(e.dir, o.width / 2))
-    return [bbox([p0, p1, add(p0, mul(into, depth)), add(p1, mul(into, depth))])]
+    const kind: ClearanceKind = o.kind !== 'window' ? (swingsIn ? 'door-swing' : 'door-front') : isSash ? 'sash' : 'window'
+    return [{ box: bbox([p0, p1, add(p0, mul(into, depth)), add(p1, mul(into, depth))]), kind }]
   })
 }
 

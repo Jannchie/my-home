@@ -14,6 +14,7 @@ import { levelOf, type Household, type Member } from './household'
 import { wallThicknessAt } from './walls'
 import { isMainAppliance } from './appliance'
 import { hasTag, type Sel } from './three/tags'
+import { HARD_ZONES, type Occupancy, type PlaceOpts } from './occupancy'
 
 /** Decorator 里这里要用到的部分（都是公开成员） */
 export interface DeskHost {
@@ -26,8 +27,10 @@ export interface DeskHost {
   peopleIn(room: Room): Member[]
   readonly clutter: number
   colorFor(def: AssetDef): number
-  /** 立体上不冲突：不顶到墙上挂的东西、不插进窗帘（见 Decorator.clear3d） */
-  clear3d(asset: string, x: number, y: number, rot: number, z?: number, ignore?: Set<string>): boolean
+  /** 统一的占用表（禁放区、留空区） */
+  readonly occ: Occupancy
+  /** 立体上能不能放（统一的占用表，见 Occupancy.canPlace） */
+  canPlace(asset: string, x: number, y: number, rot: number, z?: number, opts?: PlaceOpts): boolean
 }
 export interface DeskCtx {
   d: DeskHost
@@ -213,8 +216,42 @@ export function workstations(c: DeskCtx) {
     placeOnDesk(c, s, d.pick(laptops).id, ext ? 1 : 0, ext ? 'front' : 'mid')
   }
   SEATS.set(d, seats)
+  TOWERS.set(d, new Set(d.out.filter((o) => isTower(def(o))).map((o) => o.id)))
   // 摄像头上屏幕顶边：在 dress / 补格子之前做，挪走书架上的摄像头后那一格还会被补上
   screenCams(c)
+}
+
+/** 工位那一步摆好的主机 */
+const TOWERS = new WeakMap<DeskHost, Set<string>>()
+
+/**
+ * 个人物件摆完之后再收拾一遍工位（工位在功能性的那一步先摆，后面散放的兴趣摆件里可能又有迷你主机、夹式摄像头）：
+ * 新出现的主机交给同一房间里还没有主机的座位（主人还没有主机的），放不上就收走；
+ * 夹式 / 条形摄像头挪到屏幕顶边（电视这时已经摆上了）。
+ */
+export function settleDesks(c: DeskCtx) {
+  const { d, plan, rand } = c
+  const seats = SEATS.get(d) ?? []
+  const known = TOWERS.get(d) ?? new Set<string>()
+  const owned = new Set(seats.filter((s) => s.desktop && s.owner).map((s) => s.owner!))
+  const weighted = <T,>(items: [T, number][]) => {
+    let r = rand() * items.reduce((t, [, w]) => t + w, 0)
+    for (const [v, w] of items) if ((r -= w) <= 0) return v
+    return items[items.length - 1][0]
+  }
+  for (const o of [...d.out]) {
+    if (!isTower(def(o)) || known.has(o.id)) continue
+    const room = plan.rooms.find((r) => pointInPolygon(o, r.points))
+    d.out = d.out.filter((x) => x !== o && d.parentOf.get(x.id) !== o.id)
+    const s = seats.find((x) => x.room === room && !x.desktop && x.zone >= 70 && d.out.includes(x.desk) && (!x.owner || !owned.has(x.owner)))
+    if (!s) continue
+    s.desktop = o.asset
+    if (s.owner) owned.add(s.owner)
+    if (!setupDesktop(c, s, weighted)) s.desktop = undefined
+  }
+  known.clear()
+  for (const o of d.out) if (isTower(def(o))) known.add(o.id)
+  screenCams(c, false)
 }
 
 /** 座位那一段桌面上的东西 */
@@ -233,10 +270,8 @@ function putOn(c: DeskCtx, parent: Furniture, asset: string, lx: number, lz: num
   const p = toWorld(parent, lx, lz)
   const f: Furniture = { id: uid('u'), asset, x: round1(p.x), y: round1(p.y), rot: (parent.rot + lrot + 360) % 360, color: c.d.colorFor(a), z }
   if (!fitsOnSurface(parent, z, asset, f.x, f.y, f.rot)) return null
-  const box = furnitureBox(asset, f.x, f.y, f.rot)
-  const shrink = (b: Box): Box => ({ x0: b.x0 + 0.4, y0: b.y0 + 0.4, x1: b.x1 - 0.4, y1: b.y1 - 0.4 })
-  if (c.d.out.some((o) => o !== parent && Math.abs((o.z ?? 0) - z) < 0.6 && !def(o)?.stick && boxOverlaps(shrink(box), shrink(furnitureBox(o.asset, o.x, o.y, o.rot))))) return null
-  if (!c.d.clear3d(asset, f.x, f.y, f.rot, z, new Set([parent.id]))) return null
+  // 同一台面上的东西（含主机）重叠不超过 1.8（贴着放）、不顶到墙上挂的东西…（Occupancy.canPlace）
+  if (!c.d.canPlace(asset, f.x, f.y, f.rot, z, { parent: parent.id, surfaceTol: 1.8 })) return null
   c.d.out.push(f)
   c.d.flat.add(f.id)
   c.d.parentOf.set(f.id, parent.id)
@@ -290,7 +325,7 @@ const UNDER: Record<string, { sides?: number[]; edge?: number; back?: number; ap
 
 /**
  * 地上放主机：outside = false 在桌下贴着这一侧的桌腿、靠后；outside = true 在桌子这一侧的外面、贴着桌腿。
- * 不和椅子（扶手、椅脚按收进 4cm 算）、垃圾桶、抽屉柜、设备打架
+ * 不和椅子（扶手、椅脚按收进 3cm 算，和别的落地家具最多交叠 4cm）、垃圾桶、抽屉柜、设备打架
  */
 function floorTower(c: DeskCtx, s: Seat, asset: string, side: number, outside = false) {
   const dd = def(s.desk)!
@@ -309,15 +344,17 @@ function floorTower(c: DeskCtx, s: Seat, asset: string, side: number, outside = 
   const box = furnitureBox(asset, p.x, p.y, s.desk.rot)
   if (!boxInsideWalls(box, s.room, c.plan)) return null
   if (c.plan.fixtures.some((fx) => boxOverlaps(box, fixtureBox(fx)))) return null
+  // 床边下床的空间、楼梯口这些留空区
+  if (c.d.occ.zoneBoxes(s.room, [HARD_ZONES]).some((b) => boxOverlaps(box, b))) return null
   const solid = c.d.out.filter((o) => o !== s.desk && !o.z && !c.d.flat.has(o.id) && !def(o)?.mount && !def(o)?.stick && (def(o)?.h ?? 0) > 3)
   const boxOf = (o: Furniture) => {
     const b = furnitureBox(o.asset, o.x, o.y, o.rot)
-    const k = isSeat(o) ? 4 : 0
+    const k = isSeat(o) ? 3 : 0
     return { x0: b.x0 + k, y0: b.y0 + k, x1: b.x1 - k, y1: b.y1 - k }
   }
   if (solid.some((o) => boxOverlaps(box, boxOf(o)))) return null
   // 墙上挂的东西、窗帘（放到桌子外面、窗边时）
-  if (!c.d.clear3d(asset, p.x, p.y, s.desk.rot)) return null
+  if (!c.d.canPlace(asset, p.x, p.y, s.desk.rot)) return null
   // 门的开合范围、过道不能堵：放到桌子外面时也要在房间里留出门前空间
   if (outside && openingsOn(s.room, c.plan).some((o) => o.o.kind !== 'window' && dist(o.center, p) < o.o.width / 2 + tw.w / 2 + 50)) return null
   const f: Furniture = { id: uid('u'), asset, x: round1(p.x), y: round1(p.y), rot: s.desk.rot, color: c.d.colorFor(tw) }
@@ -411,7 +448,7 @@ const clipped = (c: DeskCtx, screen: Furniture) => c.d.out.some((o) => c.d.paren
  * 摄像头：夹式 / 条形机顶摄像头（以及桌上那种折起来的小摄像头）一律挪到同一房间显示器（条形的优先电视）的顶边正中；
  * 房间里没有屏幕就不放。主播、远程办公的人的显示器上按概率再加一个。
  */
-function screenCams(c: DeskCtx) {
+function screenCams(c: DeskCtx, extras = true) {
   const { d, plan, rand } = c
   const roomOf = (p: Vec) => plan.rooms.find((r) => pointInPolygon(p, r.points))
   const screensIn = (room: Room | undefined) => (room ? d.out.filter((o) => hasClip(def(o)) && pointInPolygon(o, room.points) && !clipped(c, o)) : [])
@@ -426,6 +463,7 @@ function screenCams(c: DeskCtx) {
     if (pool.length) clipOnScreen(c, d.pick(pool), asset)
   }
   // 主播的每台显示器几乎都有摄像头；程序员、设计等远程办公偶尔装一个开视频会
+  if (extras)
   for (const s of SEATS.get(d) ?? []) {
     const mon = onSeat(c, s).find((o) => isMonitor(def(o)))
     if (!mon || clipped(c, mon)) continue
