@@ -7,6 +7,7 @@ import { BASE, applyCutaway, bendToWalls, floorY, isPlant, stepCutaway, furnitur
 import { buildBuilding, type FloorGroup } from '../three/building'
 import { baseFloorId, floorById, floorOf, floorView, isMultiFloor, planFloors } from '../floors'
 import FloorBar from './FloorBar.vue'
+import FloorRail from './FloorRail.vue'
 import { withStairHoles } from '../stairs'
 import { overlapsOthers, snapFurniture, snapToWall, type Guide } from '../snap'
 import { fitOnSurface, pickSurface, propsOn, snapToClip, snapToHook } from '../surface'
@@ -107,7 +108,7 @@ const activeFloorField = () => (activeFloor.value === baseFloorId(plan.value) ? 
  * 每层的显示状态：extra = 叠在 elevation 上的偏移（分层拉开 / 隐藏时往上滑走），shown = 是否显示。
  * 目标由「楼层显示」和当前层决定，每帧缓动过去（floorTargets / stepFloors）。
  */
-const floorAnim = new Map<string, { extra: number; target: number; show: boolean; hideAt: boolean }>()
+const floorAnim = new Map<string, { extra: number; target: number; show: boolean; hideAt: boolean; alpha: number }>()
 /** 分层拉开时层与层之间多拉开的距离 */
 const EXPLODE_GAP = 230
 /** 只显示到当前层时，上面的层往上滑走的距离（滑完再隐藏） */
@@ -141,7 +142,7 @@ function floorTargets(snap = false) {
   for (const id of floorAnim.keys()) if (!fs.some((f) => f.id === id)) floorAnim.delete(id)
   fs.forEach((f, i) => {
     let st = floorAnim.get(f.id)
-    if (!st) floorAnim.set(f.id, (st = { extra: 0, target: 0, show: true, hideAt: false }))
+    if (!st) floorAnim.set(f.id, (st = { extra: 0, target: 0, show: true, hideAt: false, alpha: 1 }))
     // 外观视图：全部楼层叠好
     const show = sandbox.exterior ? 'all' : floorShow.value
     const hide = multi && show === 'upto' && i > ai
@@ -152,6 +153,7 @@ function floorTargets(snap = false) {
     if (snap) {
       st.extra = st.target
       st.show = !hide
+      st.alpha = hide ? 0 : 1
     }
   })
   floorsMoving = true
@@ -163,12 +165,20 @@ function stepFloors(dt: number) {
   let busy = false
   const k = 1 - Math.exp(-dt * 9)
   for (const st of floorAnim.values()) {
+    // 淡入淡出和滑动一起走：藏起来的层边往上滑边变透明，回来时边落下边显现
+    const at = st.hideAt ? 0 : 1
+    if (Math.abs(at - st.alpha) < 0.01) st.alpha = at
+    else {
+      st.alpha += (at - st.alpha) * k
+      busy = true
+    }
     const d = st.target - st.extra
-    if (Math.abs(d) < 0.5) {
+    if (Math.abs(d) < 0.5 && st.alpha === at) {
       st.extra = st.target
       if (st.hideAt) st.show = false
     } else {
-      st.extra += d * k
+      if (Math.abs(d) >= 0.5) st.extra += d * k
+      else st.extra = st.target
       busy = true
     }
   }
@@ -176,19 +186,109 @@ function stepFloors(dt: number) {
   floorsMoving = busy
   return true
 }
+/**
+ * 整层淡入淡出：各层共用同一批（缓存的）材质，不能直接改透明度——渐变期间给这一层换上它自己的透明副本，
+ * 完全不透明后换回原材质。描边外壳是不透明的，淡出时藏起来。
+ */
+const floorFadeMats = new Map<string, WeakMap<THREE.Material, THREE.Material>>()
+/** 某层某个材质的透明副本（按层缓存） */
+function fadeGhost(floorId: string, m: THREE.Material) {
+  let cache = floorFadeMats.get(floorId)
+  if (!cache) floorFadeMats.set(floorId, (cache = new WeakMap()))
+  let g = cache.get(m)
+  if (!g) {
+    g = m.clone()
+    g.onBeforeCompile = m.onBeforeCompile
+    g.customProgramCacheKey = m.customProgramCacheKey
+    g.transparent = true
+    g.depthWrite = false
+    g.userData.baseOpacity = m.transparent ? m.opacity : 1
+    cache.set(m, g)
+  }
+  return g
+}
+function fadeFloor(root: THREE.Object3D, floorId: string, alpha: number) {
+  const faded = alpha < 0.995
+  if (!faded && !root.userData.floorFaded) return
+  const ghost = (m: THREE.Material) => {
+    const g = fadeGhost(floorId, m)
+    g.opacity = (g.userData.baseOpacity as number) * alpha
+    return g
+  }
+  root.traverse((n) => {
+    if (n.userData.isOutline) {
+      n.visible = !faded
+      return
+    }
+    const mesh = n as THREE.Mesh
+    if (!mesh.isMesh) return
+    if (faded) {
+      const solid = (mesh.userData.floorSolid ??= mesh.material) as THREE.Material | THREE.Material[]
+      mesh.material = Array.isArray(solid) ? solid.map(ghost) : ghost(solid)
+    } else if (mesh.userData.floorSolid) {
+      mesh.material = mesh.userData.floorSolid
+      delete mesh.userData.floorSolid
+    }
+  })
+  root.userData.floorFaded = faded
+}
+
+/**
+ * 透明副本是新的着色器变体：第一次切换楼层时要同步编译十来个程序（实测卡 3 秒多）。
+ * 多层户型搭好 / 换了家具模型后，空闲时把各层的透明副本临时换上，用 compileAsync 在后台
+ * （KHR_parallel_shader_compile）编译好再换回去。直接画到屏幕和经后处理画到渲染目标是两种变体，两种都编。
+ */
+let warmTimer = 0
+let warmTarget: THREE.WebGLRenderTarget | null = null
+function prewarmFloorFade() {
+  clearTimeout(warmTimer)
+  if (!isMultiFloor(plan.value)) return
+  warmTimer = window.setTimeout(() => {
+    if (!stage || !isMultiFloor(plan.value)) return
+    const roots: [THREE.Object3D, string][] = [
+      ...floorGroups.map((fg) => [fg.group, fg.floor.id] as [THREE.Object3D, string]),
+      ...[...furnLayers].map(([id, g]) => [g, id] as [THREE.Object3D, string]),
+      ...actors.roots(),
+    ]
+    const swapped: [THREE.Mesh, THREE.Material | THREE.Material[]][] = []
+    const renderer = stage.renderer
+    const prev = renderer.getRenderTarget()
+    try {
+      for (const [root, id] of roots)
+        root.traverse((n) => {
+          const mesh = n as THREE.Mesh
+          if (!mesh.isMesh || n.userData.isOutline || mesh.userData.floorSolid) return
+          const solid = mesh.material
+          swapped.push([mesh, solid])
+          mesh.material = Array.isArray(solid) ? solid.map((m) => fadeGhost(id, m)) : fadeGhost(id, solid)
+        })
+      warmTarget ??= new THREE.WebGLRenderTarget(1, 1)
+      for (const target of [null, warmTarget]) {
+        renderer.setRenderTarget(target)
+        for (const [root] of roots) renderer.compileAsync(root, stage.camera, stage.scene).catch(() => {})
+      }
+    } finally {
+      renderer.setRenderTarget(prev)
+      for (const [mesh, solid] of swapped) mesh.material = solid
+    }
+  }, 400)
+}
+
 /** 按动画状态摆好各层的房子、家具、宠物、灯 */
 function applyFloorPose() {
   for (const fg of floorGroups) {
     const st = floorAnim.get(fg.floor.id)
     fg.group.position.y = fg.floor.elevation + (st?.extra ?? 0)
     fg.group.visible = st?.show ?? true
+    fadeFloor(fg.group, fg.floor.id, st?.alpha ?? 1)
   }
   for (const [id, g] of furnLayers) {
     const st = floorAnim.get(id)
     g.position.y = st?.extra ?? 0
     g.visible = st?.show ?? true
+    fadeFloor(g, id, st?.alpha ?? 1)
   }
-  // 宠物、机器人：按所在楼层（走楼梯时在两层之间）跟着楼层的动画走，所在楼层藏起来时一起藏
+  // 宠物、机器人：按所在楼层（走楼梯时在两层之间）跟着楼层的动画走（位置、显示、淡入淡出）
   actors?.relayout()
   if (lights) {
     if (isMultiFloor(plan.value)) {
@@ -268,6 +368,7 @@ const actors = new ActorLayer((fid) => objs.get(fid)?.obj)
 actors.lift = (id) => (isMultiFloor(plan.value) ? liftOf(id) : 0)
 actors.elevOf = (id) => (isMultiFloor(plan.value) ? (floorById(plan.value, id)?.elevation ?? 0) : 0)
 actors.shown = (id) => floorAnim.get(id)?.show ?? true
+actors.fade = (root, id) => fadeFloor(root, id, floorAnim.get(id)?.alpha ?? 1)
 function syncActors() {
   actors.sync(toRaw(plan.value), actorsLive())
 }
@@ -299,7 +400,7 @@ function lightStyles(p: Plan) {
 const roomLightKey = (p: Plan) => `${diningKey(p)}|${p.household ? `${p.household.style}:${p.household.members.map((m) => m.style).join(',')}` : ''}`
 /** 蒸汽、烟、火苗等动态特效 */
 const fx = new FxLayer()
-/** 会活动的宠物、扫地机器人、Kachaka（预览模式下才动）：按楼层分开，见 actorLayers */
+/** 会活动的宠物、扫地机器人、Kachaka（预览模式下才动）：整套房子一层，见 actors */
 const objs = new Map<string, { obj: THREE.Group; key: string }>()
 let ghost: THREE.Group | null = null
 let ghostKey = ''
@@ -583,6 +684,7 @@ function rebuildHouse() {
   }
   applyXray()
   syncActors()
+  prewarmFloorFade()
   dirty = true
 }
 /** 上次搭房子时的当前楼层（墙高滑杆调低时只压低当前层：换层要重搭） */
@@ -595,6 +697,7 @@ function syncFurniture() {
   // 读原始对象：拖动时每帧都要过一遍全部家具，走响应式代理的开销比计算本身还大
   const p = toRaw(plan.value)
   const alive = new Set<string>()
+  let built = false
   for (const f of p.furniture) {
     alive.add(f.id)
     const key = `${f.asset}#${f.color ?? 0}#${f.colors?.join(',') ?? ''}#${f.patterns ? JSON.stringify(f.patterns) : ''}#${f.open ? 1 : 0}`
@@ -606,6 +709,7 @@ function syncFurniture() {
       }
       o = { obj: furnitureModel(f), key }
       objs.set(f.id, o)
+      built = true
       fx.set(f.id, o.obj, ASSET_MAP.get(f.asset)?.fx)
     }
     // 按楼层放进各层的组（换了楼层就挪过去）
@@ -641,6 +745,7 @@ function syncFurniture() {
   applyFloorPose()
   updateCutaway()
   syncActors()
+  if (built) prewarmFloorFade()
   dirty = true
 }
 
@@ -1942,6 +2047,8 @@ function toggleLooks() {
 
 onBeforeUnmount(() => {
   lights.dispose()
+  clearTimeout(warmTimer)
+  warmTarget?.dispose()
   if (liveCapture.fn === captureView) liveCapture.fn = null
   sandboxBridge.value = null
   cancelAnimationFrame(raf)
@@ -2182,6 +2289,8 @@ defineExpose({ resetView })
 <template>
   <div class="sandbox">
     <div ref="host" class="viewport" :class="{ placing: !!placing, hover: hovering, night: nightUi }" :style="{ background: viewportBg, '--sheet-h': layout.sheetH + 'px' }">
+      <!-- 竖排楼层切换（多层户型；单层时只有「加一层」） -->
+      <FloorRail />
       <div class="compass" :class="{ 'under-bar': !editing }" :title="t('北') + ' · ' + t('户型朝向 {n}°', { n: northDeg })">
         <svg viewBox="-20 -20 40 40" width="40" height="40" aria-hidden="true">
           <circle r="18" class="compass-bg" />

@@ -335,6 +335,13 @@ export class ActorLayer {
   lift: (floor: string) => number = () => 0
   elevOf: (floor: string) => number = () => 0
   shown: (floor: string) => boolean = () => true
+  /** 楼层淡入淡出：角色跟着所在楼层一起半透明（Sandbox3D 的 fadeFloor） */
+  fade: (root: THREE.Object3D, floor: string) => void = () => {}
+
+  /** 每个角色的模型和所在楼层（预编译楼层淡出的着色器用） */
+  roots(): [THREE.Object3D, string][] {
+    return [...this.actors.values()].map((a) => [a.root, a.fl] as [THREE.Object3D, string])
+  }
 
   constructor(private getObj: (id: string) => THREE.Object3D | undefined) {}
 
@@ -351,10 +358,13 @@ export class ActorLayer {
       const k = Math.max(0, Math.min(1, a.yW / w.rise))
       const lo = this.lift(w.from)
       a.baseY = lo + (this.lift(w.to) - lo - w.rise) * k
-      a.root.visible = this.shown(k > 0.5 ? w.to : w.from)
+      const fl = k > 0.5 ? w.to : w.from
+      a.root.visible = this.shown(fl)
+      this.fade(a.root, fl)
     } else {
       a.baseY = this.lift(a.fl)
       a.root.visible = this.shown(a.fl) && (this.preview || !a.hasRep)
+      this.fade(a.root, a.fl)
     }
     a.writeTransform()
   }

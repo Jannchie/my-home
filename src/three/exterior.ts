@@ -9,6 +9,7 @@ import { roofParts, type RoofPart, type Side } from '../exterior'
 import { subtractSpan } from '../stairs'
 import { addOutlines, cyl, mergeMeshes, rbox, shade, toon, useAnisotropy } from './toon'
 import { BASE, openingInfos } from './house'
+import { injectLightMask } from './lightMask'
 
 // ---------- 外墙材质 ----------
 
@@ -72,6 +73,7 @@ export function facadeMaterial(ex: Pick<Exterior, 'facade' | 'wallColor'>): THRE
   const base = toon('#ffffff') as THREE.MeshToonMaterial
   const mat = new THREE.MeshToonMaterial({ color: '#ffffff', map: facadeTexture(ex.facade, ex.wallColor), gradientMap: base.gradientMap })
   mat.onBeforeCompile = (sh) => {
+    injectLightMask(sh)
     sh.vertexShader = 'varying vec3 vFacPos;\nvarying vec3 vFacNrm;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vFacPos = (modelMatrix * vec4(position, 1.0)).xyz;\n  vFacNrm = mat3(modelMatrix) * normal;')
     sh.fragmentShader =
       'varying vec3 vFacPos;\nvarying vec3 vFacNrm;\n' +
@@ -307,6 +309,8 @@ export function facadeExtras(view: Plan, H: number, ex: Exterior, ground: boolea
         item.add(step)
       }
     } else continue
+    // 窗套 / 门框的几块板同色：合成一个网格（每扇窗 4 块板 + 4 个描边壳 → 1 + 1 个 draw call）
+    mergeMeshes(item)
     tagWall(item, center, out)
     g.add(item)
   }

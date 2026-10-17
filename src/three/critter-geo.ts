@@ -7,6 +7,7 @@
 
 import * as THREE from 'three'
 import { toon } from './toon'
+import { injectLightMask } from './lightMask'
 
 const TAU = Math.PI * 2
 
@@ -153,6 +154,7 @@ export function furMaterial(main: string, sub: string, a: string, b: string) {
   const cs = { sub: new THREE.Color(sub), a: new THREE.Color(a), b: new THREE.Color(b) }
   m.userData.fur = [main, sub, a, b]
   m.onBeforeCompile = (sh) => {
+    injectLightMask(sh)
     sh.uniforms.uFurSub = { value: cs.sub }
     sh.uniforms.uFurA = { value: cs.a }
     sh.uniforms.uFurB = { value: cs.b }

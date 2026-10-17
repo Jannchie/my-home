@@ -11,7 +11,7 @@ import { baseFloorId, floorOf, floorView, planFloors } from '/src/floors'
 import { stairClearZones, stairFootprint, stairUnderZone, stairWalk, underZonePoly } from '/src/stairs'
 import { HouseNav } from '/src/nav'
 import { voidRailSegments } from '/src/walls'
-import { bbox, pointInPolygon, type Furniture, type Plan, type Region } from '/src/model'
+import { add, bbox, mul, openingGeom, pointInPolygon, type Furniture, type Plan, type Region } from '/src/model'
 import { furnitureBox, overlapsOthers, yardBlocked } from '/src/snap'
 import { yardFurniture } from '/src/yard'
 import { isMainAppliance } from '/src/appliance'
@@ -20,6 +20,7 @@ import { hasTag } from '/src/three/tags'
 import { buildBuilding } from '/src/three/building'
 import { furnitureModel, placeFurniture } from '/src/three/house'
 import { ActorLayer } from '/src/three/actors'
+import { buildLightMask } from '/src/three/lightMask'
 import { JP_OPTS, range } from './helpers'
 
 type Combo = { region: Region; dwelling: 'house' | 'duplex' }
@@ -208,8 +209,11 @@ describe('楼梯寻路', () => {
         if (!exit) return [...out, '出梯口站不下']
         let goals = 0
         for (const r of floorView(plan, hi).rooms.filter((x) => bedroom(x.kind))) {
+          // 卧室门内侧 35cm（门开在走廊那边的也算）
+          const door = plan.openings.map((o) => (o.kind === 'window' ? null : openingGeom(plan.rooms, o))).find((g) => !!g && pointInPolygon(add(g.center, mul(g.e.out, 35)), r.points) !== pointInPolygon(add(g.center, mul(g.e.out, -35)), r.points) && (pointInPolygon(add(g.center, mul(g.e.out, 35)), r.points) || pointInPolygon(add(g.center, mul(g.e.out, -35)), r.points)))
+          const inside = door ? (pointInPolygon(add(door.center, mul(door.e.out, 35)), r.points) ? add(door.center, mul(door.e.out, 35)) : add(door.center, mul(door.e.out, -35))) : null
           const c = bbox(r.points)
-          const goal = nav.grid(hi).nearest('pet', { x: (c.x0 + c.x1) / 2, y: (c.y0 + c.y1) / 2 }, 12, 150)
+          const goal = nav.grid(hi).nearest('pet', inside ?? { x: (c.x0 + c.x1) / 2, y: (c.y0 + c.y1) / 2 }, 12, 60)
           // 卧室里被家具堵住、本层从出梯口也走不进去的不算（那是布置的问题，不是楼梯寻路的）
           if (!goal || !nav.grid(hi).path('pet', exit, goal, 12)) continue
           goals++
@@ -319,6 +323,10 @@ describe('第二期的补齐', () => {
         })
         const out: string[] = []
         if (!rails) out.push('3D 里没有栏杆')
+        // 灯光遮罩：挑空和装栏杆的走廊同一组（走廊的灯照得进挑空）
+        const lm = buildLightMask(plan)!
+        const v = plan.rooms.find((r) => r.kind === 'void')!
+        if (segs.some((s) => lm.rooms.get(s.room.id)?.group !== lm.rooms.get(v.id)?.group)) out.push('挑空和走廊不在同一个灯光组')
         // 栏杆段中点 1.5m 高处没有墙
         g.updateMatrixWorld(true)
         const boxes: THREE.Box3[] = []

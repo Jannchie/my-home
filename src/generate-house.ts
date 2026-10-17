@@ -113,10 +113,15 @@ export function stairKind(seed: number, region: Region, duplex: boolean, ldkLast
   return h < pLiving ? 'living' : h < pLiving + pL ? 'l' : 'u'
 }
 
-/** 直跑 / L 形楼梯下面：敞开的储物角 45%、封起来的收纳间 35%、实心 20% */
-function stairUnder(seed: number): Fixture['under'] {
+/**
+ * 楼梯下面和外观（stairStyles.ts）：
+ *   楼梯间里的 L 形：掏空成储物角（一键布置摆矮柜、收纳箱）45%、「楼梯下收纳」样式（侧面柜门）35%、实心 20%；
+ *   客厅楼梯：镂空木梯 / 现代玻璃栏板各半（开放式），其中一半下面摆收纳。
+ */
+function stairLook(seed: number, living: boolean): Pick<Fixture, 'under' | 'stairStyle'> {
   const h = seedHash(seed, 2)
-  return h < 0.45 ? 'open' : h < 0.8 ? 'closet' : undefined
+  if (living) return { stairStyle: seedHash(seed, 3) < 0.5 ? 'open' : 'modern', ...(h < 0.5 ? { under: 'open' as const } : {}) }
+  return h < 0.45 ? { under: 'open' } : h < 0.8 ? { stairStyle: 'storage' } : {}
 }
 
 // ---------------------------------------------------------------------------
@@ -655,12 +660,12 @@ function layout(seed: number, o: Pick<HouseGenOpts, 'region' | 'dwelling' | 'bed
   //   living 客厅楼梯（直跑），贴着客厅东墙从南往北上，出梯口落在 2F 走廊带（户建：2F 南带东端那条走廊里开洞；复式：在挑空里）。
   const turnU = c.chance(0.5) ? 'left' : 'right'
   const id = `f${seed.toString(36)}st`
-  const under = stairUnder(seed)
+  const look = stairLook(seed, living)
   const stairs: Fixture =
     kind === 'l'
-      ? { id, kind: 'stairs', stairs: 'l', turn: 'right', x: xS + wSt / 2, y: D - WALL_OUTER / 2 - STAIR_L.w / 2 - 1, w: STAIR_L.w, d: STAIR_L.d, rot: 270, ...(under ? { under } : {}) }
+      ? { id, kind: 'stairs', stairs: 'l', turn: 'right', x: xS + wSt / 2, y: D - WALL_OUTER / 2 - STAIR_L.w / 2 - 1, w: STAIR_L.w, d: STAIR_L.d, rot: 270, ...look }
       : living
-        ? { id, kind: 'stairs', stairs: 'straight', x: W - WALL_OUTER / 2 - 45 - 1, y: dS - WALL / 2 - livingRun / 2 - 1, w: 90, d: livingRun, rot: 180, ...(under ? { under } : {}) }
+        ? { id, kind: 'stairs', stairs: 'straight', x: W - WALL_OUTER / 2 - 45 - 1, y: dS - WALL / 2 - livingRun / 2 - 1, w: 90, d: livingRun, rot: 180, ...look }
         : { id, kind: 'stairs', stairs: 'u', turn: turnU, x: xS + wSt / 2, y: yN + dN / 2, w: wSt, d: dN, rot: 180 }
 
   // ---------- 用地 ----------

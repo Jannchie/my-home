@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import ContextMenu, { type MenuEntry } from './ContextMenu.vue'
 import { ICONS } from '../ui/icons'
 import { overlays } from '../ui/feedback'
@@ -57,6 +57,9 @@ import {
   findRoom,
   insertVertex,
   placeKind,
+  placeRot,
+  placeContinuous,
+  placePicker,
   plan,
   floorPlan as fp,
   activeFloor,
@@ -88,6 +91,7 @@ type Drag =
   | { kind: 'opening'; id: string; orig: Pick<Opening, 'roomId' | 'edge' | 'offset'> }
   | { kind: 'fixture'; id: string; start: Vec; orig: Vec }
   | { kind: 'rect'; start: Vec; end: Vec }
+  | { kind: 'ghost'; start: Vec; orig: Vec }
 const drag = ref<Drag | null>(null)
 
 // ---------- 触控：多指、长按、点按阈值 ----------
@@ -326,8 +330,16 @@ function onPointerDown(e: PointerEvent) {
     return
   }
 
-  // 触屏：放门窗 / 设备也是点按（松手时）才放，拖动是平移
-  if (touch && (tool.value === 'fixture' || tool.value === 'door' || tool.value === 'window')) {
+  // 触屏放设备：按在预览上是拖预览，点按别处是把预览挪过去（不直接放下，按「放下」才放），拖动别处是平移
+  if (touch && tool.value === 'fixture') {
+    if (placePicker.value) return
+    if (!ghostAt.value) centerGhost()
+    if (onGhost(w)) drag.value = { kind: 'ghost', start: w, orig: { ...ghostAt.value! } }
+    else startPan(e, () => (ghostAt.value = w))
+    return
+  }
+  // 触屏：放门窗也是点按（松手时）才放，拖动是平移
+  if (touch && (tool.value === 'door' || tool.value === 'window')) {
     startPan(e, () => placeAt(w))
     return
   }
@@ -346,30 +358,69 @@ function addPolyPoint(w: Vec, shift: boolean) {
   cursor.value = p
 }
 
+/** 要放的设备在 w 处的样子：靠近轴向墙时贴墙放（按该处墙厚让开、背靠墙），否则原地放、朝向用手动旋转 */
+function fixtureCandidate(w: Vec): Omit<Fixture, 'id'> {
+  const kind = placeKind.value
+  const spec = FIXTURES[kind]
+  const base = kind === 'kitchen' ? { kind, variant: 'wall' as const } : { kind, d: spec.d }
+  const d = fixtureDepth(base)
+  const f: Omit<Fixture, 'id'> = { ...base, x: snapGrid(w.x), y: snapGrid(w.y), w: spec.w, rot: placeRot.value }
+  const ne = nearestEdge(w, 40)
+  if (ne) {
+    const e = edgeInfo(ne.room.points, ne.edge)
+    if (isAxisEdge(e)) {
+      // 贴的是这面墙「另一侧」还是本侧，取光标所在一侧
+      const side = dot(sub(w, add(e.a, mul(e.dir, ne.t))), e.out) > 0 ? -1 : 1
+      const wallDir = mul(e.out, side) // 从设备指向墙
+      const onEdge = add(e.a, mul(e.dir, snapGrid(ne.t)))
+      const t = wallThicknessAt(fp.value, onEdge, e.out, ne.room)
+      const c = add(onEdge, mul(wallDir, -(t / 2 + d / 2)))
+      return { ...f, x: c.x, y: c.y, rot: rotFacingWall(wallDir) }
+    }
+  }
+  return f
+}
+
+// ---------- 放设备的预览 ----------
+// 桌面：预览跟着光标（ghostAt = 光标位置），点一下放下。
+// 触屏：进入放置时预览出现在画面中央；拖预览挪它、点画面别处把它挪过去，按放置条上的「放下」确认。
+const ghostAt = ref<Vec | null>(null)
+const ghost = computed(() => (tool.value === 'fixture' && !placePicker.value && ghostAt.value ? fixtureCandidate(ghostAt.value) : null))
+/** 把预览放到画面中央（触屏进入放置时） */
+function centerGhost() {
+  ghostAt.value = { x: (size.w / 2 - view.x) / view.s, y: (size.h / 2 - view.y) / view.s }
+}
+/** w 落在预览上（按占地外扩一点，手指好按） */
+function onGhost(w: Vec) {
+  const g = ghost.value
+  if (!g) return false
+  const a = (-g.rot * Math.PI) / 180
+  const dx = w.x - g.x
+  const dy = w.y - g.y
+  const lx = dx * Math.cos(a) - dy * Math.sin(a)
+  const ly = dx * Math.sin(a) + dy * Math.cos(a)
+  const pad = 24 / view.s
+  return Math.abs(lx) <= g.w / 2 + pad && Math.abs(ly) <= fixtureDepth(g) / 2 + pad
+}
+/** 放下预览里的设备；不连续放置时回到选择工具 */
+function confirmPlace() {
+  const g = ghost.value
+  if (!g) return
+  addFixture(g)
+  if (!placeContinuous.value) {
+    tool.value = 'select'
+    ghostAt.value = null
+  }
+}
+watch(tool, (v) => {
+  if (v !== 'fixture') ghostAt.value = null
+})
+
 /** 放设备 / 门 / 窗 */
 function placeAt(w: Vec) {
   if (tool.value === 'fixture') {
-    // 靠近轴向墙时贴墙放（按该处墙厚让开），否则原地放
-    const kind = placeKind.value
-    const spec = FIXTURES[kind]
-    const base = kind === 'kitchen' ? { kind, variant: 'wall' as const } : { kind, d: spec.d }
-    const d = fixtureDepth(base)
-    let f: Omit<Fixture, 'id'> = { ...base, x: snapGrid(w.x), y: snapGrid(w.y), w: spec.w, rot: 0 }
-    const ne = nearestEdge(w, 40)
-    if (ne) {
-      const e = edgeInfo(ne.room.points, ne.edge)
-      if (isAxisEdge(e)) {
-        // 贴的是这面墙「另一侧」还是本侧，取光标所在一侧
-        const side = dot(sub(w, add(e.a, mul(e.dir, ne.t))), e.out) > 0 ? -1 : 1
-        const wallDir = mul(e.out, side) // 从设备指向墙
-        const onEdge = add(e.a, mul(e.dir, snapGrid(ne.t)))
-        const t = wallThicknessAt(fp.value, onEdge, e.out, ne.room)
-        const c = add(onEdge, mul(wallDir, -(t / 2 + d / 2)))
-        f = { ...f, x: c.x, y: c.y, rot: rotFacingWall(wallDir) }
-      }
-    }
-    addFixture(f)
-    tool.value = 'select'
+    ghostAt.value = w
+    confirmPlace()
     return
   }
 
@@ -441,9 +492,15 @@ function onPointerMove(e: PointerEvent) {
       if (tool.value === 'poly' && e.shiftKey && draft.value.length) p = orthoFrom(draft.value[draft.value.length - 1], p)
       cursor.value = p
     } else cursor.value = w
+    // 桌面放设备：预览跟着光标
+    if (tool.value === 'fixture' && e.pointerType !== 'touch') ghostAt.value = w
     return
   }
   cursor.value = w
+  if (d.kind === 'ghost') {
+    ghostAt.value = add(d.orig, sub(w, d.start))
+    return
+  }
 
   if (d.kind === 'rect') {
     d.end = snapPoint(w)
@@ -748,6 +805,7 @@ function onKeyDown(e: KeyboardEvent) {
     else selection.value = null
   }
   if (e.key === 'Enter' && tool.value === 'poly') finishPoly()
+  if ((e.key === 'r' || e.key === 'R') && tool.value === 'fixture') placeRot.value = (placeRot.value + 90) % 360
 }
 function onKeyUp(e: KeyboardEvent) {
   if (e.code === 'Space') spaceDown.value = false
@@ -1089,7 +1147,7 @@ function openMenu(x: number, y: number) {
   if (items.length) menu.value = { x, y, items, title }
 }
 
-defineExpose({ fit, zoomBy, zoomReset, exportPng, view, cursorInfo, draftCount, finishPoly, undoPoint, cancelDraft })
+defineExpose({ fit, zoomBy, zoomReset, exportPng, view, cursorInfo, draftCount, finishPoly, undoPoint, cancelDraft, confirmPlace, centerGhost })
 
 // ---------- 导出 PNG ----------
 
@@ -1327,6 +1385,20 @@ async function exportPng() {
         :style="{ cursor: tool === 'select' ? 'move' : undefined }"
       >
         <FixtureGlyph :f="v.f" :rise="v.rise" />
+      </g>
+      <!-- 放设备的预览（半透明，不接收点击） -->
+      <g v-if="ghost" class="ui ghost" :transform="`translate(${ghost.x},${ghost.y}) rotate(${ghost.rot})`" pointer-events="none">
+        <g opacity="0.55"><FixtureGlyph :f="{ ...ghost, id: 'ghost' }" /></g>
+        <rect
+          :x="-ghost.w / 2"
+          :y="-fixtureDepth(ghost) / 2"
+          :width="ghost.w"
+          :height="fixtureDepth(ghost)"
+          fill="rgba(63,102,82,0.06)"
+          stroke="#3f6652"
+          :stroke-width="px(1.5)"
+          stroke-dasharray="5 3"
+        />
       </g>
       <!-- 选中设备：前方使用空间 -->
       <template v-for="v in fixtureViews.filter((x) => x.selected && x.front)" :key="'ff' + v.f.id">

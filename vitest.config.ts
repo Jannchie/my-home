@@ -12,6 +12,8 @@ export default defineConfig((env) =>
       testTimeout: 120_000,
       hookTimeout: 120_000,
       pool: 'forks',
+      // 每个进程都要加载 three.js 和全部素材（几百 MB）：默认按核数开会吃掉十几 GB，限制在 4 个
+      maxWorkers: 4,
     },
   }),
 )

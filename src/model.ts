@@ -178,13 +178,15 @@ export interface Fixture {
   stairs?: StairsVariant
   /** 仅 L / U / 旋转楼梯：上楼时往哪边拐（缺省 left） */
   turn?: 'left' | 'right'
+  /** 仅楼梯：外观样式 id（stairStyles.ts STAIR_STYLES，缺省经典实心） */
+  stairStyle?: string
   /** 仅 L 形楼梯：梯段宽（缺省 90，不超过占地宽 / 深的一半） */
   run?: number
   /**
-   * 仅直跑 / L 形楼梯：楼梯下方高处的空间怎么用（缺省 = 实心封死）。
-   * open 敞开的储物角（下面放矮柜、收纳箱），closet 封起来做收纳间（侧面一扇小门）。见 stairs.ts stairUnderZone
+   * 仅直跑 / L 形楼梯：楼梯下方高处的空间怎么用（缺省 = 按外观样式：实心封死 / 楼梯下收纳的柜门 / 镂空）。
+   * open 掏空成敞开的储物角（下面放矮柜、收纳箱，一键布置会摆）。见 stairs.ts stairUnderZone
    */
-  under?: 'open' | 'closet'
+  under?: 'open'
   /** 所在楼层（Plan.floors 的 id）；不填 = 最底下那层 */
   floor?: string
   x: number
