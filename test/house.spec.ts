@@ -79,7 +79,7 @@ describe.each(COMBOS)('$region $dwelling', (c) => {
     ).toEqual([])
   })
 
-  test('楼梯上下对齐：1F 一部楼梯，2F 洞口 = 楼梯占地、落在走廊里，上下两端都接着房间', () => {
+  test('楼梯上下对齐：1F 一部楼梯，2F 洞口 = 楼梯占地、落在走廊里（复式的客厅楼梯在挑空里），上下两端都接着房间', () => {
     expect(
       collect(c, (p) => {
         const out: string[] = []
@@ -92,7 +92,9 @@ describe.each(COMBOS)('$region $dwelling', (c) => {
         if (Math.abs(stairOverlap(holes[0].poly, fp) - area(fp)) > 1) out.push('洞口和楼梯占地不重合')
         if (stairHoleConflicts(p).length) out.push('洞口压到卧室等房间')
         const hall2 = floorView(p, '2f').rooms.find((r) => pointInPolygon({ x: st[0].x, y: st[0].y }, r.points))
-        if (hall2?.kind !== 'hall') out.push(`洞口所在房间是 ${hall2?.kind}`)
+        if (hall2?.kind !== 'hall' && !(c.dwelling === 'duplex' && hall2?.kind === 'void')) out.push(`洞口所在房间是 ${hall2?.kind}`)
+        // 出梯口外侧接着 2F 走廊（客厅楼梯的洞口在走廊或挑空边）
+        if (stairLinks(p)[0]?.upper?.kind !== 'hall') out.push(`出梯口接着 ${stairLinks(p)[0]?.upper?.kind}`)
         const [link] = stairLinks(p)
         if (!link?.lower || !link.upper) out.push('楼梯上下端没接到房间')
         return out

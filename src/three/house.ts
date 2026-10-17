@@ -22,7 +22,7 @@ import {
   type WallTrim,
   edgesOf as roomEdges,
 } from '../model'
-import { isIndoor, sharedIntervals, wallSegments, wallThicknessAt } from '../walls'
+import { isIndoor, sharedIntervals, voidRailSegments, wallSegments, wallThicknessAt } from '../walls'
 import { tatamiLayout } from '../tatami'
 import { addOutlines, ball, capsule, cyl, mergeMeshes, rbox, shade, toon, useAnisotropy } from './toon'
 import { glow, poseDoors } from './kit'
@@ -46,7 +46,8 @@ import { edgesOf } from '../model'
 import { showerSpot } from '../bathroom'
 import { curtainSpec } from '../curtains'
 import { showerCurtainModel, showerModel } from './packs/bath-extra'
-import { holeRails, stairsModel } from './stairs3d'
+import { edgeRail, holeRails, stairsModel } from './stairs3d'
+import { subtractSpan } from '../stairs'
 import { SLAB, floorElevation, floorOf, isMultiFloor } from '../floors'
 import { centroid, onBoundary, signedArea } from '../model'
 
@@ -549,6 +550,7 @@ function buildWalls(plan: Plan, H0: number, infos: OpeningInfo[], opts: HouseOpt
       if (Math.abs(dir.x * od.y - dir.y * od.x) > 1e-3) return false
       return dist(o.a, p) < 1 || dist(o.b, p) < 1
     })
+  const railSegs = opts.upper ? voidRailSegments(plan.rooms) : []
   for (const s of segs) {
     const outer = s.kind === 'outer'
     isOuter = outer
@@ -582,6 +584,14 @@ function buildWalls(plan: Plan, H0: number, infos: OpeningInfo[], opts: HouseOpt
     }
     // 本段上的门窗
     const cuts: Cut[] = []
+    // 上层挑空边（走廊 / 起居一侧）：整段不砌墙，装栏杆（voidRails）
+    if (outer && opts.upper)
+      for (const vr of railSegs) {
+        const pa = projectToSegment(vr.a, s.a, s.b)
+        const pb = projectToSegment(vr.b, s.a, s.b)
+        if (pa.d > 1 || pb.d > 1) continue
+        cuts.push({ lo: Math.min(pa.t, pb.t), hi: Math.max(pa.t, pb.t), y0: 0, y1: H + 1 })
+      }
     for (const info of infos) {
       const pr = projectToSegment(info.center, s.a, s.b)
       if (pr.d > 1 || Math.abs(dir.x * info.dir.y - dir.y * info.dir.x) > 1e-3) continue
@@ -1451,10 +1461,28 @@ export function buildHouse(plan: Plan, wallH: number, opts: HouseOpts = {}) {
       .filter((s) => s.kind !== 'open')
       .map((s) => ({ a: s.a, b: s.b, t: s.kind === 'outer' ? plan.wallOuter : plan.wall }))
     const rails = new THREE.Group()
-    for (const h of opts.stairHoles) rails.add(holeRails(h.poly, h.arrival, ws))
+    // 开在挑空里的洞口（复式的客厅楼梯）四周没有楼板，不装栏杆（挑空边的栏杆管）
+    const voids = plan.rooms.filter((r) => r.kind === 'void')
+    for (const h of opts.stairHoles) if (!voids.some((v) => pointInPolygon(centroid(h.poly), v.points))) rails.add(holeRails(h.poly, h.arrival, ws))
     mergeMeshes(rails)
     addOutlines(rails)
     root.add(rails)
+  }
+  // 上层挑空边的栏杆（走廊 / 起居一侧不砌墙），出梯口那一段让开
+  if (opts.upper) {
+    const segs = voidRailSegments(plan.rooms)
+    if (segs.length) {
+      const g = new THREE.Group()
+      for (const s of segs) {
+        let spans: [number, number][] = [[0, dist(s.a, s.b)]]
+        for (const h of opts.stairHoles ?? []) spans = spans.flatMap(([lo, hi]) => subtractSpan(s.a, s.b, h.arrival, 14).filter(([x, y]) => y > lo && x < hi).map(([x, y]): [number, number] => [Math.max(lo, x), Math.min(hi, y)]))
+        const u = mul({ x: s.b.x - s.a.x, y: s.b.y - s.a.y }, 1 / Math.max(1e-6, dist(s.a, s.b)))
+        for (const [lo, hi] of spans) if (hi - lo > 5) g.add(edgeRail(add(s.a, mul(u, lo)), add(s.a, mul(u, hi))))
+      }
+      mergeMeshes(g)
+      addOutlines(g)
+      root.add(g)
+    }
   }
 
   const fx = new THREE.Group()

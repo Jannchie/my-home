@@ -1,9 +1,9 @@
 // 家具吸附：拖动 / 放置时，边缘贴墙面，或和其他家具、设备的边线、中线对齐。
 
 import { ASSET_MAP } from './three/assets'
-import { bbox, edgesOf, fixtureBox, isAxisEdge, mul, add, rotFacingWall, type Box, type Fixture, type Plan, type Vec } from './model'
+import { bbox, edgesOf, fixtureBox, isAxisEdge, mul, add, pointInPolygon, rectPoints, rotFacingWall, type Box, type Fixture, type Plan, type Vec } from './model'
 import { floorOf, riseOf } from './floors'
-import { stairUnderZone, underZonePoly } from './stairs'
+import { overlapArea, stairUnderZone, underZonePoly } from './stairs'
 import { wallThicknessAt } from './walls'
 import { roomAt } from './three/house'
 
@@ -171,8 +171,23 @@ export function overlapsOthers(plan: Plan, selfId: string | null, asset: string,
     return id !== selfId && !z && !!d && !d.mount && d.h > 3 && !straddle(def.type, d.type)
   }
   if (plan.furniture.some((f) => solid(f.id, f.asset, f.z) && boxHit(me, shrink(furnitureBox(f.asset, f.x, f.y, f.rot), 2)))) return true
+  if (yardBlocked(plan, me, { x, y })) return true
   // 冰箱位 / 洗衣机位 / 收纳位只是预留的空间，冰箱、洗衣机、柜子（以及别的家具）可以放在上面
   return plan.fixtures.some((f) => f.kind !== 'outdoor' && f.kind !== 'fridge' && f.kind !== 'washer' && f.kind !== 'builtin' && boxHit(me, fixtureBox(f)) && !underStairs(plan, f, me, def.h))
+}
+
+/**
+ * 户建院子里的东西（最底层、中心不在任何房间里）：伸出用地、压到房子（外墙中心线往外半个外墙厚）、压到停着车的车位都算穿模。
+ * plan 是整份户型或最底层的子户型（上层的子户型不查：上层房间外面是空中）。
+ */
+export function yardBlocked(plan: Plan, me: Box, c: Vec) {
+  if (!plan.site || plan.rooms.some((r) => r.floor) || plan.rooms.some((r) => pointInPolygon(c, r.points))) return false
+  const corners = rectPoints(me.x0, me.y0, me.x1, me.y1)
+  if (!corners.every((q) => pointInPolygon(q, plan.site!.points))) return true
+  const t = plan.wallOuter / 2
+  const grown = rectPoints(me.x0 - t, me.y0 - t, me.x1 + t, me.y1 + t)
+  if (plan.rooms.some((r) => overlapArea(r.points, grown) > 1)) return true
+  return plan.site.parking.some((s) => s.car && overlapArea(s.points, corners) > 1)
 }
 
 /** 楼梯下敞开的储物角里放得下的东西（整块在储物角里、不高于它）不算撞到楼梯 */

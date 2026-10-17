@@ -112,6 +112,27 @@ function floorWallSegments(rooms: Room[]): WallSegment[] {
   return segs
 }
 
+/** 挨着挑空时装栏杆、不砌墙的房间：走廊、起居（卧室、卫生间照样是墙） */
+const RAIL_KINDS = new Set<RoomKind>(['hall', 'ldk', 'dining', 'kitchen'])
+
+/**
+ * 挑空边上装栏杆的地方：同层的走廊 / 起居房间和挑空共用的边（中心线上的线段）。
+ * 这些边在墙段推导里仍是外墙（导航、靠墙摆放照旧当墙），3D 里不砌墙、改成栏杆，从上层能俯视下面的客厅。
+ */
+export function voidRailSegments(rooms: Room[]): { a: Vec; b: Vec; room: Room }[] {
+  const out: { a: Vec; b: Vec; room: Room }[] = []
+  const voids = rooms.filter(isVoid)
+  if (!voids.length) return out
+  for (const r of rooms) {
+    if (!RAIL_KINDS.has(r.kind)) continue
+    for (const v of voids) {
+      if (v.floor !== r.floor) continue
+      for (const e of edgesOf(r.points)) for (const [lo, hi] of sharedIntervals(e, v)) out.push({ a: add(e.a, mul(e.dir, lo)), b: add(e.a, mul(e.dir, hi)), room: r })
+    }
+  }
+  return out
+}
+
 /**
  * 边上某点的墙厚：外侧紧挨着户内房间就是隔墙，否则是外墙。
  * 从阳台这一侧看，背后的户内房间隔着的是建筑外墙（wallSegments 里也是 outer），按外墙算。

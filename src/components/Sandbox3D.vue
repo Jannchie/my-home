@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, toRaw,
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { ASSET_MAP, CATEGORY_LABELS, STYLE_LABELS, type StyleTag } from '../three/assets'
-import { applyCutaway, bendToWalls, floorY, isPlant, stepCutaway, furnitureModel, placeFurniture, roomAt, type WallLook } from '../three/house'
+import { BASE, applyCutaway, bendToWalls, floorY, isPlant, stepCutaway, furnitureModel, placeFurniture, roomAt, type WallLook } from '../three/house'
 import { buildBuilding, type FloorGroup } from '../three/building'
 import { baseFloorId, floorById, floorOf, floorView, isMultiFloor, planFloors } from '../floors'
 import FloorBar from './FloorBar.vue'
@@ -789,7 +789,16 @@ function floorPoint(e: PointerEvent) {
   const p = new THREE.Vector3()
   // 当前楼层的地面
   floor.constant = -activeY()
-  return raycaster.ray.intersectPlane(floor, p) ? p : null
+  if (!raycaster.ray.intersectPlane(floor, p)) return null
+  // 户建的院子：用地地面比室内低（BASE），指在院子里时改用院子地面的交点，拖动的东西才跟手
+  const raw = toRaw(plan.value)
+  if (raw.site && activeFloor.value === baseFloorId(raw) && !roomAt(fv(), { x: p.x, y: p.z })) {
+    const q = new THREE.Vector3()
+    floor.constant = -(activeY() + BASE)
+    if (raycaster.ray.intersectPlane(floor, q) && !roomAt(fv(), { x: q.x, y: q.z })) p.copy(q)
+    floor.constant = -activeY()
+  }
+  return p
 }
 /** 射线换到当前楼层的局部高度（家具、台面的高度都按本层地面算） */
 function localRay() {

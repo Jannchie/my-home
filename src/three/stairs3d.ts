@@ -109,6 +109,22 @@ export function stairsModel(f: Fixture, rise: number) {
   return g
 }
 
+/** 沿 p → q 的一段地面栏杆（挑空边用）：立柱 + 扶手 + 中间一道横杆，y = 0 是这一层地面 */
+export function edgeRail(p: Vec, q: Vec) {
+  const g = new THREE.Group()
+  railModel(
+    {
+      pts: [
+        { x: p.x, y: p.y, h: 0 },
+        { x: q.x, y: q.y, h: 0 },
+      ],
+    },
+    g,
+  )
+  g.add(bar(new THREE.Vector3(p.x, 40, p.y), new THREE.Vector3(q.x, 40, q.y), 1.2, POST))
+  return g
+}
+
 /**
  * 楼板洞口四周的栏杆（上层地面坐标，y = 0 是这一层地面）：洞口的每条边去掉贴着墙的部分和出梯口，剩下的装栏杆。
  * walls：这一层的墙段（中心线）和墙厚，边贴着墙（离墙中心线不超过半个墙厚 + 2）就不装。

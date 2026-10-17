@@ -10,7 +10,7 @@
 
 import { add, bbox, fixtureDepth, mul, pointInPolygon, rectPoints, type Box, type Fixture, type Plan, type Room, type Vec } from './model'
 import { floorAbove, floorOf, isMultiFloor, riseOf } from './floors'
-import { isVoid } from './walls'
+import { isVoid, voidRailSegments } from './walls'
 
 /** 一级踢面的上限（cm）：级数 = ceil(层间高 / 它) */
 export const MAX_RISER = 20
@@ -397,8 +397,20 @@ export function clearZoneFixtures(p: Plan, floorId: string): Fixture[] {
 /** 一键布置 / 检查补漏用的子户型：上层的楼梯洞口当设备，楼梯口留空的地方也当设备 */
 export function withStairKeepout(p: Plan, view: Plan, floorId: string): Plan {
   const v = withStairHoles(p, view, floorId)
-  const zones = clearZoneFixtures(p, floorId)
+  const zones = [...clearZoneFixtures(p, floorId), ...railKeepout(view)]
   return zones.length ? { ...v, fixtures: [...v.fixtures, ...zones] } : v
+}
+
+/** 挑空边的栏杆（walls.ts voidRailSegments）里侧 35cm 不靠墙摆家具：栏杆不是墙 */
+function railKeepout(view: Plan): Fixture[] {
+  return voidRailSegments(view.rooms).map((s, i) => {
+    const len = Math.hypot(s.b.x - s.a.x, s.b.y - s.a.y) || 1
+    let n = { x: -(s.b.y - s.a.y) / len, y: (s.b.x - s.a.x) / len }
+    const mid = lerpV(s.a, s.b, 0.5)
+    if (!pointInPolygon(add(mid, mul(n, 10)), s.room.points)) n = mul(n, -1)
+    const b = bbox([s.a, s.b, add(s.a, mul(n, 35)), add(s.b, mul(n, 35))])
+    return { id: `void-rail-${i}`, kind: 'ps' as const, x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2, w: Math.max(1, b.x1 - b.x0), d: Math.max(1, b.y1 - b.y0), rot: 0 }
+  })
 }
 
 /** 楼梯下储物角的顶（离地 cm）：踏面高过它 + 15 的那几级下面掏空 */
