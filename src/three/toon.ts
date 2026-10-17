@@ -138,15 +138,23 @@ export function outlineColor(fill: THREE.Color) {
   return new THREE.Color().setHSL(hsl.h, Math.min(1, hsl.s * 0.8 + 0.1), Math.max(0.12, hsl.l * 0.32))
 }
 
-/** 给 root 下所有网格加描边（userData.noOutline 的跳过） */
-export function addOutlines(root: THREE.Object3D) {
+/**
+ * 给 root 下所有网格加描边（userData.noOutline 的跳过）。
+ * minSize：包围球直径小于它（cm）的网格不加（每个外壳都是一次 draw call；太小的零件描边只有几个像素）。
+ */
+export function addOutlines(root: THREE.Object3D, opts: { minSize?: number } = {}) {
   const meshes: THREE.Mesh[] = []
   root.traverse((o) => {
     if ((o as THREE.Mesh).isMesh && !o.userData.noOutline && !o.userData.isOutline) meshes.push(o as THREE.Mesh)
   })
+  if (opts.minSize) root.updateMatrixWorld(true)
   for (const m of meshes) {
     const mat = m.material as THREE.MeshToonMaterial
     if (mat.transparent) continue
+    if (opts.minSize) {
+      if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere()
+      if (m.geometry.boundingSphere!.radius * 2 * m.matrixWorld.getMaxScaleOnAxis() < opts.minSize) continue
+    }
     const hull = new THREE.Mesh(m.geometry, outlineMaterial(outlineColor(mat.color)))
     hull.userData.isOutline = true
     hull.raycast = () => {}

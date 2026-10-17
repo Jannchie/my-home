@@ -1545,7 +1545,7 @@ export function furnitureModel(fu: Furniture) {
   // 零件按材质合并，draw call 少一个数量级（描边、花纹、弯曲都在合并后的网格上照常工作）
   mergeMeshes(m)
   noTinyShadows(m)
-  addOutlines(m)
+  addOutlines(m, { minSize: TINY_OUTLINE })
   applyPatterns(m, pal, fu.patterns)
   // 可开合的柜子：柜门 / 抽屉按 open 摆好（模型本身是关着的）
   if (def.openable) poseDoors(m, !!fu.open)
@@ -1559,6 +1559,8 @@ export function furnitureModel(fu: Furniture) {
 
 /** 包围盒对角线小于这个值（cm）的网格不投影：把手、衣物、小摆件的影子在 2048 的阴影贴图上只有几个像素，却各占一次阴影 draw call */
 const TINY_CASTER = 15
+/** 包围球直径小于这个值（cm）的零件不描边（合并后还单独剩下的小零件：把手、按钮、小摆件里的细节） */
+const TINY_OUTLINE = 10
 function noTinyShadows(root: THREE.Object3D) {
   root.updateMatrixWorld(true)
   root.traverse((o) => {
