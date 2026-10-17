@@ -383,6 +383,7 @@ interface Fix {
   remove?: string[]
   why: string
 }
+const hobbyFix = (it: string, ids: string[], why: string): Fix[] => [{ ids, remove: [`hobby:${it}`], why: `兴趣 ${it}：${why}` }]
 const REVIEW: Fix[] = [
   // ---- 第 1 批：已知误匹配 ----
   { ids: ['ph-birdcage-bamboo', 'ph-birdcage-bamboo-hanging', 'prop-seiro', 'wet-charcoal-bag', 'gr-rugby', 'gd-plant-labels'], remove: ['plant'], why: '名字里的「竹 / 橄榄 / plant」不是绿植：竹编鸟笼、竹蒸笼、竹炭包、橄榄球、植物标签牌（会被当绿植贴墙弯折）' },
@@ -414,6 +415,25 @@ const REVIEW: Fix[] = [
   { ids: ['lp-rt-milk-bell-wall'], remove: ['clock'], why: '「钟」罩壁灯不是钟' },
   { ids: ['lp-cn-vase-table'], remove: ['vase'], why: '陶瓷瓶台灯是灯，不是花瓶' },
   { ids: ['cl-peeled-mikan', 'kf-mikan-box'], remove: ['fruit-bowl'], why: '剥了一半的橘子、一箱橘子不是果盘' },
+  // ---- 第 3 批：兴趣标签（旧的兴趣正则按子串命中，会把无关的东西当成兴趣物摆进房间） ----
+  ...hobbyFix('gaming', ['hg-duo-gaming-desk'], '双人电竞台是成套摆放的专用件，不进兴趣的随机落地池'),
+  ...hobbyFix('reading', ['hg-cert-folder', 'hg-cert-stack', 'hg-cert-tube', 'hg-cert-box', 'int-calligraphy', 'prop-stapler', 'lm-tv-wall-unit', 'fm-pc-hutch'], '证书收纳、书法、订书机（「书」）、电视组合柜 / 电脑台（带书架）不是读书用品'),
+  ...hobbyFix('photo', ['av-screen-tripod', 'av-screen-tripod-closed', 'av-stand-tripod', 'lm-tripod-lamp', 'lp-in-surveyor', 'lp-nd-tripod-wood', 'of-tv-camera'], '三脚架幕布 / 投影支架 / 三脚落地灯（tripod）、机顶摄像头不是摄影器材'),
+  ...hobbyFix('crafts', ['sf-beanie-hanging', 'sf-beanie-lying'], '毛线帽（「毛线」）是衣物'),
+  ...hobbyFix('models', ['of-inkjet', 'of-label-printer', 'of-laser-printer', 'int-bg-train', 'lm-train-track'], '喷墨 / 激光 / 标签打印机（「打印机」）、铁路桌游、儿童木轨道不是模型'),
+  ...hobbyFix('tea', ['cl-steamdeck', 'hb-steam-loco-n', 'hb-steam-loco-ho', 'hb-steam-loco-o', 'kf-chawanmushi', 'mk-teardown', 'prop-electric-steamer', 'prop-steam-oven', 'ss-calendar-tear', 'ss-humidifier-steam', 'ss-steamer-hand'], 'steam / tear / teardown 里的 tea、茶碗蒸里的「茶」：掌机、蒸汽机车、电蒸锅、加湿器、撕页日历不是茶具'),
+  ...hobbyFix('cats', ['lm-blocks-scatter', 'of-onu'], 'scatter 里的 cat、光「猫」（光调制解调器）'),
+  ...hobbyFix('coffee', ['mk-angle-grinder'], '角磨机（grinder）不是磨豆机'),
+  ...hobbyFix('streaming', ['gd-ceramic-m', 'gd-ceramic-s', 'gd-grow-light-clip', 'ss-ceramic-heater'], 'ceramic 里的 mic-、植物「补光」灯不是直播设备'),
+  ...hobbyFix('tech', ['int-midi-keyboard', 'int-synth', 'kf-bananas', 'kf-water-server-bottom', 'kf-water-server-top'], '合成器「键盘」、bananas 里的 nas、饮水机（water-server）不是数码设备'),
+  ...hobbyFix('sports', ['av-bt-ball', 'chore-gloves', 'chore-gloves-hanging', 'chore-steel-wool', 'col-vase-tianqiu', 'gd-cactus-group', 'gd-gloves', 'gd-hydrangea', 'int-metronome', 'lm-moon-lamp', 'lp-jp-akari-table', 'of-camera-instant', 'prop-bug-zapper', 'prop-bug-zapper-stand', 'prop-fly-swatter', 'prop-globe', 'prop-lamp-globe', 'sb-shoe-ballet-f', 'sb-shoe-ballet-k', 'ss-kabuto', 'st-polaroid', 'wet-bath-pouf'], '「球 / 拍 / 手套 / 头盔」子串：钢丝球、仙人球、绣球花、地球仪、月球灯、橡胶手套、节拍器、拍立得、电蚊拍、芭蕾鞋（ballet）、浴球不是运动用品'),
+  ...hobbyFix('science', ['gd-terrarium-globe', 'prop-lamp-globe'], '玻璃球微景观、玻璃球台灯（globe）不是地球仪'),
+  ...hobbyFix('beauty', ['hb-telescope', 'fm-hall-tree', 'sf-hall-tree'], '望远「镜」、玄关挂衣柜（「挂衣」）不是梳妆用品'),
+  ...hobbyFix('collecting', ['cl-coin-jar', 'gd-ceramic-m', 'gd-ceramic-s', 'kf-chawanmushi', 'lm-jar-lamp', 'lp-cl-crystal-table', 'lp-cn-vase-table', 'ss-ceramic-heater'], '零钱罐（coin）、白瓷花盆 / 陶瓷暖风机（「瓷」）、茶碗蒸、水晶 / 陶瓷台灯不是收藏品'),
+  ...hobbyFix('movies', ['cl-n64', 'prop-cassette-stove'], '插「卡带」的游戏机、卡式炉（cassette）不是影音收藏'),
+  ...hobbyFix('fishing', ['lm-arc-lamp'], '弧形「钓鱼」灯是落地灯'),
+  ...hobbyFix('outdoor', ['av-bt-ball', 'chore-steel-wool', 'col-vase-tianqiu', 'gd-cactus-group', 'gd-hydrangea', 'lm-moon-lamp', 'lp-jp-akari-table', 'prop-globe', 'prop-lamp-globe', 'wet-bath-pouf', 'gr-yoga-blocks', 'gr-yoga-strap', 'gr-bolster', 'gr-pilates-ring', 'kid-teepee'], '「球」子串（同运动）、瑜伽 / 普拉提用品（gr- 前缀）、儿童小帐篷不是登山露营用品'),
+  ...hobbyFix('maker', ['gd-potting-bench'], '园艺工作台（「工作台」）不是电子手工台'),
 ]
 
 // ---------- 生成 ----------
