@@ -58,7 +58,7 @@ const SHOW_ICONS: Record<FloorShow, (typeof ICONS)[keyof typeof ICONS]> = { all:
 </script>
 
 <template>
-  <div ref="root" class="floorbar" :class="['fb-' + props.variant, { multi }]">
+  <div ref="root" class="floorbar" :class="['fb-' + props.variant, { 'fb-multi': multi }]">
     <div class="chips" role="tablist" :aria-label="t('楼层')">
       <JIcon v-if="props.variant === 'canvas'" :icon="ICONS.floors" :size="14" class="ico-muted lead" />
       <button

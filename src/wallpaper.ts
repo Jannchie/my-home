@@ -78,7 +78,7 @@ const CURTAINS: Record<StyleTag, string[]> = {
   farmhouse: ['#f1ece2', '#9caf91', '#34465e', '#e3d8c4', '#9e3b2f'],
 }
 
-const papered = (r: Room) => r.kind !== 'balcony' && r.kind !== 'bath' && r.kind !== 'storage'
+const papered = (r: Room) => r.kind !== 'balcony' && r.kind !== 'bath' && r.kind !== 'storage' && r.kind !== 'void'
 
 /**
  * 全屋自动墙纸：居室用住在里面的人的风格，公共空间用全家的风格；浴室、收纳、阳台不贴。

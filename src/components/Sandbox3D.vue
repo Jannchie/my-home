@@ -1491,7 +1491,9 @@ function swapSize(asset: string) {
 const counts = computed(() => plan.value.furniture.length)
 
 // ---------- 墙纸 ----------
-const paperRooms = computed(() => plan.value.rooms.filter((r) => r.kind !== 'balcony'))
+const paperRooms = computed(() => plan.value.rooms.filter((r) => r.kind !== 'balcony' && r.kind !== 'void'))
+/** 墙纸的房间下拉：多层户型前面加楼层名 */
+const paperRoomLabel = (r: { name: string; floor?: string }) => (isMultiFloor(plan.value) ? `${floorById(plan.value, floorOf(plan.value, r))?.name ?? ''} · ` : '') + roomName(r.name)
 const wpRoomId = ref('')
 const wpRoom = computed(() => plan.value.rooms.find((r) => r.id === wpRoomId.value) ?? paperRooms.value[0])
 watch(paperRooms, (rs) => {
@@ -2404,7 +2406,7 @@ defineExpose({ resetView })
         </div>
         <div class="row">
           <select v-model="wpRoomId" class="sel-style">
-            <option v-for="r in paperRooms" :key="r.id" :value="r.id">{{ roomName(r.name) }}</option>
+            <option v-for="r in paperRooms" :key="r.id" :value="r.id">{{ paperRoomLabel(r) }}</option>
           </select>
           <button class="mini" :disabled="!wpRoom?.wallpaper" @click="setRoomWallpaper(wpRoomId, undefined)"><JIcon :icon="ICONS.wallpaperDefault" :size="14" />{{ t('默认') }}</button>
         </div>

@@ -12,7 +12,7 @@ import type { StyleTag } from './three/kit'
 import type { PatternSpec } from './three/patterns'
 import { CITIES, DEFAULT_GEO, type Geo } from './three/sky'
 import { DEFAULT_KELVIN, DEFAULT_POWER, POWER_MAX, POWER_MIN, clampKelvin, isLightMode, type LightMode } from './three/lights'
-import { ensureOutdoorUnits, planArea, randomSeed, type GenOptions } from './generate'
+import { ensureOutdoorUnits as ensureOutdoorUnits1, indoorUnits, planArea, randomSeed, type GenOptions } from './generate'
 import { generatePlan } from './generate-region'
 import { lang, t } from './i18n'
 import { initialRoute } from './router'
@@ -665,7 +665,10 @@ export function rotateSelectedFixture() {
 
 /** 按规则重新决定所有开门的铰链与开向 */
 export function tidyDoors() {
-  mutate((p) => orientDoors(p))
+  // 多层户型按层整理（门扇只和同一层的墙、门打架）；子户型里的门窗和原户型是同一批对象
+  mutate((p) => {
+    for (const fl of planFloors(p)) orientDoors(floorView(p, fl.id))
+  })
 }
 
 export function addOpening(o: Omit<Opening, 'id'>) {
@@ -792,6 +795,21 @@ export function redecorate() {
 function furnish(p: Plan, seed: number) {
   const base = baseFloorId(p)
   return perFloorFurniture(p, (view, fl) => decorate(withStairHoles(p, view, fl.id), fl.id === base ? seed : seed + Math.round(fl.elevation), sandbox.style, p.household))
+}
+
+/**
+ * 空调外机补到和室内机一样多。多层户型按层放（各层的阳台），新外机打上所在楼层；单层和以前一样。
+ */
+function ensureOutdoorUnits(p: Plan) {
+  if (!isMultiFloor(p)) return ensureOutdoorUnits1(p)
+  const need = indoorUnits(p)
+  for (const fl of planFloors(p)) {
+    const view = floorView(p, fl.id)
+    const before = new Set(view.fixtures)
+    const others = p.fixtures.filter((f) => f.kind === 'outdoor' && floorOf(p, f) !== fl.id).length
+    ensureOutdoorUnits1(view, Math.max(0, need - others))
+    for (const f of view.fixtures) if (!before.has(f)) p.fixtures.push(stampFloor(p, f, fl.id))
+  }
 }
 
 /** 按住户自动贴墙纸（居室用主人的风格） */

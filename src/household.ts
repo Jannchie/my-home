@@ -252,7 +252,7 @@ export function topLevel(hh: Household | undefined, it: InterestId): 0 | Lv {
 
 /** 户型能容下的最高等级：小户型放不下 Lv.4 的整间游戏室 / 机柜 */
 export function levelCap(plan: Plan): Lv {
-  const m2 = plan.rooms.reduce((sum, r) => sum + (r.kind === 'balcony' ? 0 : area(r.points)), 0) / 10000
+  const m2 = plan.rooms.reduce((sum, r) => sum + (r.kind === 'balcony' || r.kind === 'void' ? 0 : area(r.points)), 0) / 10000
   const n = plan.rooms.filter((r) => r.kind === 'western' || r.kind === 'japanese').length
   return m2 < 35 || n < 1 ? 2 : m2 < 55 || n < 2 ? 3 : 4
 }
@@ -358,7 +358,7 @@ const bedrooms = (plan: Plan) => plan.rooms.filter((r) => r.kind === 'western' |
 export function generateHousehold(plan: Plan, seed = Date.now()): Household {
   const rand: Rand = rng(seed)
   const n = bedrooms(plan)
-  const m2 = plan.rooms.reduce((sum, r) => sum + (r.kind === 'balcony' ? 0 : area(r.points)), 0) / 10000
+  const m2 = plan.rooms.reduce((sum, r) => sum + (r.kind === 'balcony' || r.kind === 'void' ? 0 : area(r.points)), 0) / 10000
   const hasWashitsu = plan.rooms.some((r) => r.kind === 'japanese')
   const region = plan.region ?? 'jp'
   const names = region === 'cn' ? CN_NAMES : region === 'west' ? WEST_NAMES : NAMES

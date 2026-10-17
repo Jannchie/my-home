@@ -1167,6 +1167,10 @@ async function exportPng() {
         <rect width="14" height="14" fill="#f7f6f2" />
         <path d="M0,14L14,0" fill="none" stroke="#c9c3b8" stroke-width="0.8" />
       </pattern>
+      <!-- 楼梯洞口：只有斜线（透出下层楼梯的参考线） -->
+      <pattern id="hole-hatch" width="14" height="14" patternUnits="userSpaceOnUse">
+        <path d="M0,14L14,0" fill="none" stroke="#b9b2a6" stroke-width="0.8" />
+      </pattern>
       <pattern id="hatch-ps" width="7" height="7" patternUnits="userSpaceOnUse">
         <rect width="7" height="7" fill="#e3ded5" />
         <path d="M0,7L7,0" fill="none" stroke="#6b665d" stroke-width="0.8" />
@@ -1231,7 +1235,7 @@ async function exportPng() {
       <!-- 楼梯洞口（下层的楼梯通上来的地方）：斜线 + 「下」箭头；压到卧室等房间时标红 -->
       <g pointer-events="none">
         <g v-for="h in holeViews" :key="'h' + h.id" class="hole">
-          <path :d="h.d" :fill="h.bad ? 'rgba(180,69,79,0.16)' : 'url(#void-hatch)'" :stroke="h.bad ? '#b4454f' : '#6b665d'" :stroke-width="px(1.5)" />
+          <path :d="h.d" :fill="h.bad ? 'rgba(180,69,79,0.16)' : 'url(#hole-hatch)'" :stroke="h.bad ? '#b4454f' : '#6b665d'" :stroke-width="px(1.5)" />
           <line :x1="h.arrival[0].x" :y1="h.arrival[0].y" :x2="h.arrival[1].x" :y2="h.arrival[1].y" stroke="#3f6652" :stroke-width="px(3)" />
           <text :x="h.c.x" :y="h.c.y" :font-size="px(11)" text-anchor="middle" dominant-baseline="middle" :fill="h.bad ? '#b4454f' : '#6b665d'" class="hole-t">{{ h.bad ? t('楼梯洞口和房间重叠') : t('楼梯洞口') }}</text>
         </g>

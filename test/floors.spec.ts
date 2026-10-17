@@ -11,6 +11,10 @@ import { area, rectPoints, type Plan } from '/src/model'
 import { buildBuilding } from '/src/three/building'
 import { buildHouse } from '/src/three/house'
 import { checklist } from '/src/checklist'
+import { decorate } from '/src/decorate'
+import { perFloorFurniture } from '/src/floors'
+import { withStairHoles } from '/src/stairs'
+import { pointInPolygon } from '/src/model'
 import { JP_OPTS } from './helpers'
 import { twoStoryPlan } from './twoStory'
 
@@ -147,6 +151,21 @@ describe('楼梯', () => {
 })
 
 describe('其他模块', () => {
+  test('一键布置按层分别跑：家具都打上所在楼层，2F 的家具不落在楼梯洞口里', () => {
+    const p = normalizePlan(twoStoryPlan())!
+    const furn = perFloorFurniture(p, (view, fl) => decorate(withStairHoles(p, view, fl.id), 11))
+    p.furniture = furn
+    const up = furn.filter((f) => f.floor === '2f')
+    expect(up.length).toBeGreaterThan(0)
+    expect(furn.filter((f) => !f.floor).length).toBeGreaterThan(0)
+    expect(furn.every((f) => f.floor === undefined || f.floor === '2f')).toBe(true)
+    const hole = stairHoles(p, '2f')[0].poly
+    expect(up.filter((f) => pointInPolygon(f, hole))).toEqual([])
+    // 2F 的家具都在 2F 的房间里（中心点）
+    const rooms2 = floorView(p, '2f').rooms
+    expect(up.filter((f) => !rooms2.some((r) => pointInPolygon(f, r.points))).map((f) => f.asset)).toEqual([])
+  })
+
   test('检查清单按层汇总：每个房间的条目只出现一次', () => {
     const p = normalizePlan(twoStoryPlan())!
     const items = checklist(p)
