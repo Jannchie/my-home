@@ -1979,18 +1979,28 @@ class Decorator {
     const kids = this.household?.members.some((m) => m.role === 'child' && m.age < 12) ?? false
     const n = Math.round((1 + this.rand() * 3) * this.clutter)
     const top = fd.h
+    // 已经贴上的（门面上的横向位置 lx、高度 z、宽、高）：互相错开 1cm，找不到空位就少贴一张
+    const placed: [number, number, number, number][] = []
     for (let i = 0; i < n; i++) {
       const pool = kids ? cand : cand.filter((c) => !hasTag(c, 'for-kids'))
       const def = this.pick(pool.length ? pool : cand)
-      const lx = (this.rand() - 0.5) * (fd.w - 20)
+      let spot: [number, number] | null = null
+      for (let k = 0; k < 10 && !spot; k++) {
+        const lx = (this.rand() - 0.5) * (fd.w - 20)
+        // 贴在冰箱门上：高度在冰箱顶以下（两门小冰箱、迷你冰箱矮）
+        const z = Math.min(top - 15, 95 + this.rand() * 60) - (top < 140 ? Math.min(40, top - 50) * this.rand() : 0)
+        if (placed.every(([x, y, w, h]) => Math.abs(lx - x) >= (w + def.w) / 2 + 1 || Math.abs(z - y) >= (h + def.h) / 2 + 1)) spot = [lx, z]
+      }
+      if (!spot) continue
+      const [lx, z] = spot
+      placed.push([lx, z, def.w, def.h])
       // 冰箱门面在素材前沿往里 3cm（appliances.ts fridgeModel），贴附物浮出 0.3
       const p = toWorld(fr, lx, fd.d / 2 - 3 + 0.3)
       const f = this.push(def.id, p.x, p.y, fr.rot, true)
       // push 会把坐标取整：贴附物要精确贴在门面上
       f.x = Math.round(p.x * 10) / 10
       f.y = Math.round(p.y * 10) / 10
-      // 贴在冰箱门上：高度在冰箱顶以下（两门小冰箱、迷你冰箱矮）
-      f.z = Math.min(top - 15, 95 + this.rand() * 60) - (top < 140 ? Math.min(40, top - 50) * this.rand() : 0)
+      f.z = z
     }
   }
 

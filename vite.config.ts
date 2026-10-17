@@ -135,14 +135,20 @@ function pwa(): Plugin {
   }
 }
 
+/** 本仓库根目录下的 .claude/（小写、正斜杠；Windows 的 URL 路径去掉开头的 /） */
+const CLAUDE_DIR = decodeURIComponent(new URL('./.claude/', import.meta.url).pathname)
+  .replace(/^\/([A-Za-z]:)/, '$1')
+  .toLowerCase()
+
 export default defineConfig(({ mode }) => {
   // 站点地址：项目根 .env* / 环境变量里的 VITE_SITE_URL，没有就用占位地址（上线前务必改掉）
   const site = (loadEnv(mode, '', 'VITE_').VITE_SITE_URL || DEFAULT_SITE_URL).replace(/\/+$/, '')
   return {
     plugins: [vue(), seo(site), pwa()],
     define: { 'import.meta.env.VITE_SITE_URL': JSON.stringify(site) },
-    // 代理的 git worktree 在 .claude/worktrees 下：别让它们的改动触发本仓库 dev server 整页刷新
-    server: { watch: { ignored: ['**/.claude/**'] } },
+    // 代理的 git worktree 在 .claude/worktrees 下：别让它们的改动触发本仓库 dev server 整页刷新。
+    // 只忽略本仓库根目录下的 .claude（worktree 自己也在某个 .claude 里，不能按路径片段匹配）
+    server: { watch: { ignored: (p: string) => p.replace(/\\/g, '/').toLowerCase().startsWith(CLAUDE_DIR) } },
     build: {
       // 分包：three、素材包、i18n 词典体积大且更新节奏不同，各自成独立 chunk，改业务代码时浏览器缓存仍可复用。
       // Vite 8（rolldown）里 manualChunks 只是兼容写法：它被转成单个 group，而 group 默认会把命中模块的依赖一并收进来，

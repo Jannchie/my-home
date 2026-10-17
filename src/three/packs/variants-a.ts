@@ -1145,6 +1145,180 @@ function vaseMilk(p: string[]) {
   return g
 }
 
+// 丝带花瓶：白瓷细颈瓶（下圆上细的 S 形轮廓），瓶颈系一条扁缎带打蝴蝶结、两条长飘带顺着瓶身垂下，
+// 插一朵粉色非洲菊、一朵黄色大丽花（花做简单：一两圈花瓣 + 花心）
+
+/**
+ * 一条有宽度的扁缎带：沿 path（经过的点，Catmull-Rom 平滑）走，宽 w、厚 t。
+ * side(p, tangent) 给出缎带宽度方向的大致朝向（会和走向正交化）；宽面朝 tangent × side。
+ */
+function ribbonBand(path: V3[], side: (p: THREE.Vector3, tan: THREE.Vector3) => THREE.Vector3, w: number, t: number, color: string, closed = false, seg = 48) {
+  const curve = new THREE.CatmullRomCurve3(path.map((q) => new THREE.Vector3(...q)), closed, 'centripetal')
+  const n = closed ? seg : seg + 1
+  const rows: THREE.Vector3[][] = []
+  for (let i = 0; i < n; i++) {
+    const u = closed ? i / seg : i / seg
+    const p = curve.getPointAt(u)
+    const tan = curve.getTangentAt(u)
+    const sd = side(p, tan).clone()
+    sd.sub(tan.clone().multiplyScalar(sd.dot(tan))).normalize()
+    const nm = new THREE.Vector3().crossVectors(tan, sd).normalize()
+    const hw = sd.multiplyScalar(w / 2)
+    const ht = nm.multiplyScalar(t / 2)
+    // 四个角：+宽+厚、-宽+厚、-宽-厚、+宽-厚
+    rows.push([p.clone().add(hw).add(ht), p.clone().sub(hw).add(ht), p.clone().sub(hw).sub(ht), p.clone().add(hw).sub(ht)])
+  }
+  const pos: number[] = []
+  const quad = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, d: THREE.Vector3) => pos.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z, a.x, a.y, a.z, c.x, c.y, c.z, d.x, d.y, d.z)
+  const m = closed ? n : n - 1
+  for (let i = 0; i < m; i++) {
+    const r0 = rows[i]
+    const r1 = rows[(i + 1) % n]
+    // 四个面：每个面独立顶点（宽面、窄边各自是平的）
+    for (let k = 0; k < 4; k++) {
+      const k1 = (k + 1) % 4
+      quad(r0[k], r0[k1], r1[k1], r1[k])
+    }
+  }
+  if (!closed) {
+    const [e0, e1] = [rows[0], rows[n - 1]]
+    quad(e0[3], e0[2], e0[1], e0[0])
+    quad(e1[0], e1[1], e1[2], e1[3])
+  }
+  const geo = new THREE.BufferGeometry()
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+  geo.computeVertexNormals()
+  return new THREE.Mesh(geo, toon(color))
+}
+
+/** 一圈花瓣：count 片椭球花瓣，从花心往外 r0 到 r0 + len，宽 wid，往前（+z）翘 cup（弧度） */
+function petalRing(count: number, r0: number, len: number, wid: number, cup: number, color: string, phase = 0) {
+  const g = new THREE.Group()
+  for (let i = 0; i < count; i++) {
+    const a = phase + (i / count) * PI * 2
+    const arm = new THREE.Group()
+    arm.rotation.z = a
+    const tilt = new THREE.Group()
+    tilt.position.x = r0
+    tilt.rotation.y = -cup
+    const pet = ball(len / 2, color, { x: len / 2 }, [1, wid / len, 0.18])
+    tilt.add(pet)
+    arm.add(tilt)
+    g.add(arm)
+  }
+  return g
+}
+
+function vaseRibbon(p: string[]) {
+  const [body, ribbon, pink, yellow] = p
+  const g = new THREE.Group()
+  // 瓶身：圆润的下腹 → 内收的长颈 → 微微外翻的小口（S 形），控制点用样条加密，轮廓连续不折
+  const CTRL: [number, number][] = [
+    [4.9, 0],
+    [6.0, 0.9],
+    [6.5, 3.2],
+    [6.4, 6.5],
+    [5.8, 10.2],
+    [4.6, 13.8],
+    [3.2, 17.0],
+    [2.2, 19.4],
+    [1.75, 21.2],
+    [1.8, 22.6],
+    [2.25, 23.5],
+  ]
+  const spline = new THREE.SplineCurve(CTRL.map(([r, y]) => new THREE.Vector2(r, y)))
+  const OUT: [number, number][] = spline.getSpacedPoints(36).map((v) => [Math.round(v.x * 100) / 100, Math.round(v.y * 100) / 100])
+  g.add(vessel(OUT, 0.45, 5, body))
+  /** 某个高度上的瓶身半径（缎带贴着瓶面走） */
+  const radiusAt = (y: number) => {
+    for (let i = 1; i < OUT.length; i++) {
+      const [r1, y1] = OUT[i]
+      const [r0, y0] = OUT[i - 1]
+      if (y <= y1) return r0 + ((r1 - r0) * (y - y0)) / Math.max(1e-6, y1 - y0)
+    }
+    return OUT[OUT.length - 1][0]
+  }
+  const W = 1.6
+  const T = 0.22
+  const up = new THREE.Vector3(0, 1, 0)
+
+  // 领口一圈缎带（宽面朝外）
+  const bandY = 20.6
+  const ring: V3[] = []
+  for (let i = 0; i < 16; i++) {
+    const a = (i / 16) * PI * 2
+    const r = radiusAt(bandY) + 0.12
+    ring.push([Math.sin(a) * r, bandY, Math.cos(a) * r])
+  }
+  g.add(ribbonBand(ring, () => up, W * 0.9, T, ribbon, true, 40))
+
+  // 结心在正面
+  const kz = radiusAt(bandY) + 0.35
+  const knot: V3 = [0, bandY, kz]
+  g.add(rbox(1.3, 1.25, 0.7, ribbon, { y: bandY - 0.62, z: kz }, 0.3))
+
+  // 两个蝴蝶结圈：缎带从结心往外走、在尖端折回来，压扁的环（宽面朝前，能看到环口），略微下垂
+  for (const s of [-1, 1]) {
+    const L = s < 0 ? 5.2 : 4.8
+    const lift = s < 0 ? 0.9 : 0.5
+    const pts: V3[] = []
+    for (let i = 0; i <= 12; i++) {
+      const th = (i / 12) * PI * 2
+      const out = (L / 2) * (1 - Math.cos(th))
+      pts.push([knot[0] + s * out, knot[1] + lift * Math.sin(th / 2) ** 2 - 0.5 * Math.sin(th) - 1.1 * (out / L) ** 1.5, knot[2] + 0.2 + 0.75 * Math.sin(th) + 0.25 * (out / L)])
+    }
+    // 宽度方向大致竖直、向外侧稍微倾斜：从正面看到缎带的宽面
+    g.add(ribbonBand(pts, () => new THREE.Vector3(-s * 0.25, 1, 0.15), W, T, ribbon, false, 36))
+  }
+
+  // 两条飘带：从结心下方垂下，贴着瓶面往下走（左边那条偏正面、长一点，右边那条绕到侧面）
+  const tail = (s: number, yEnd: number, swing: number) => {
+    const pts: V3[] = []
+    const steps = 10
+    for (let i = 0; i <= steps; i++) {
+      const k = i / steps
+      const y = bandY - 0.4 - (bandY - 0.4 - yEnd) * k
+      const a = s * (0.12 + swing * k ** 1.2)
+      const r = radiusAt(y) + 0.25 + 0.5 * Math.sin(k * PI) * (1 - k)
+      pts.push([Math.sin(a) * r, y, Math.cos(a) * r])
+    }
+    // 宽面朝外：宽度方向沿瓶身的周向
+    return ribbonBand(pts, (q) => new THREE.Vector3(q.z, 0, -q.x), W * 0.95, T, ribbon, false, 40)
+  }
+  g.add(tail(-1, 9.6, 0.32))
+  g.add(tail(1, 7.2, 0.95))
+
+  // 花：粉色非洲菊（左上、朝前）+ 黄色大丽花（右边、低一点、朝右前）
+  const STEM = '#5d8f4a'
+  const mouth: V3 = [0, 22.8, 0]
+  const pinkAt: V3 = [-2.4, 33.5, 1.6]
+  const yellowAt: V3 = [3.4, 29.2, 1.8]
+  g.add(rod3(mouth, [pinkAt[0] * 0.9, pinkAt[1] - 1, pinkAt[2] - 0.8], 0.2, STEM, 6))
+  g.add(rod3(mouth, [yellowAt[0] * 0.9, yellowAt[1] - 1, yellowAt[2] - 0.8], 0.2, STEM, 6))
+
+  const gerbera = new THREE.Group()
+  gerbera.add(petalRing(16, 1.6, 4.4, 1.0, 0.18, pink))
+  gerbera.add(petalRing(12, 1.3, 2.8, 0.8, 0.4, shade(pink, -0.06), PI / 12))
+  gerbera.add(ball(1.5, '#c99a6a', { z: 0.3 }, [1, 1, 0.45]))
+  gerbera.add(ball(1.05, '#4f6b3a', { z: 0.6 }, [1, 1, 0.5]))
+  gerbera.position.set(...pinkAt)
+  gerbera.rotation.set(-0.25, -0.12, 0.15)
+  g.add(gerbera)
+
+  const dahlia = new THREE.Group()
+  dahlia.add(petalRing(12, 1.2, 4.0, 1.4, 0.3, yellow))
+  dahlia.add(petalRing(10, 0.9, 3.0, 1.2, 0.65, shade(yellow, 0.04), PI / 10))
+  dahlia.add(petalRing(7, 0.5, 2.0, 1.0, 1.0, shade(yellow, 0.08), PI / 7))
+  dahlia.add(ball(0.9, shade(yellow, -0.08), { z: 0.5 }, [1, 1, 0.7]))
+  dahlia.position.set(...yellowAt)
+  dahlia.rotation.set(-0.2, 0.55, -0.2)
+  g.add(dahlia)
+
+  // 叶子：粉花后面一片深绿、黄花下面一片
+  g.add(leaf(6.2, C.leafD, { x: -5.2, y: 29.5, z: -0.6, rx: -0.5, ry: 0.6, rz: 0.5 }))
+  g.add(leaf(4.6, C.leaf, { x: 4.4, y: 25.8, z: -0.4, rx: -0.6, ry: -0.5, rz: -0.6 }))
+  return g
+}
 // =====================================================================
 // 洗衣篮（里面堆着待洗衣物，衣物低于口沿）
 // =====================================================================
@@ -2075,6 +2249,16 @@ const PLUSHES: AssetDef[] = [
 const vase = (id: string, label: string, dims: Dims, pals: Pal[], build: Build) =>
   prop(id, '花瓶插花', 'tabletop', dims, pals, fitted(build), { sizeLabel: label })
 
+/** 丝带花瓶：第一组配色照参考照片（白瓶、天蓝缎带、粉菊、黄大丽花） */
+const RIBBON_VASE_PALS: Pal[] = [
+  ['cute', ['#fdfaf3', '#5aa7d6', '#f2a3b8', '#f0c23a']],
+  ['cute', ['#fbf6ee', '#7fc3e8', '#f6b9c8', '#f4d66a']],
+  ['nordic', ['#f7f5f0', '#9fb4c7', '#e9b0b6', '#e3b549']],
+  ['classic', ['#f4ede0', '#8fa3b8', '#e6a3ae', '#e8c56a']],
+  ['retro', ['#f4e7c8', '#2f8f8a', '#e8a0a0', '#e0a526']],
+  ['modern', ['#f4f4f2', '#3d3f44', '#f0d6d8', '#e6c04a']],
+]
+
 const VASES: AssetDef[] = [
   vase('va-vase-bud', '一轮插', [10.8, 10.8, 30.4], [
     ['japanese', [J.ai, J.shu, J.washi]],
@@ -2105,6 +2289,13 @@ const VASES: AssetDef[] = [
     ['cute', [C.white, C.sky, C.lemon]],
     ['nordic', [N.white, N.blue, N.mustard]],
   ], vaseMilk),
+  // 新素材直接写 type / limitGroup（不再写 family，见 kit.ts）
+  prop('va-vase-ribbon', '花瓶插花', 'tabletop', [18, 14, 42], RIBBON_VASE_PALS, fitted(vaseRibbon), {
+    type: 'vase',
+    limitGroup: 'prop-vase-flowers',
+    sizeLabel: '丝带',
+    tags: ['curio-ok', 'high-ok', 'hobby:plants', 'kitchen-shelf-ok', 'multi-ok', 'vase'],
+  }),
 ]
 
 const lb = (id: string, label: string, dims: Dims, pals: Pal[], build: Build) =>

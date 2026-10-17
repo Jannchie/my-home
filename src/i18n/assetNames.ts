@@ -235,6 +235,7 @@ export const ASSET_NAMES: Record<string, [string, string]> = {
   "下置水桶": ["下置きボトル", "Bottom-load"],
   "不锈钢": ["ステンレス", "Stainless"],
   "不锈钢挂篮": ["ステンレスバスケット", "Stainless wire basket"],
+  "丝带": ["リボン", "Ribbon"],
   "丝绒圆脚凳": ["ベルベット丸オットマン", "Velvet Round Ottoman"],
   "两人位超大": ["2人掛け特大", "Oversized 2-seater"],
   "两人晚餐套组": ["2人分ディナー", "Dinner for two"],
