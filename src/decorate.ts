@@ -37,7 +37,6 @@ import { lidSizeFor } from './three/packs/bath-extra'
 import { openingsOn, rotFacingWall } from './model'
 import { isWallOwner, snapToHook } from './surface'
 import { sharedIntervals, wallThicknessAt } from './walls'
-import { CLOSET_PIPE } from './three/assets'
 import { edgesOf, projectToSegment } from './model'
 import type { Wardrobe } from './three/garments'
 import { PIPE, PIPE_WIDTHS, ROW_LENGTHS } from './three/packs/garments-pack'
@@ -45,6 +44,8 @@ import { floorY, roomAt } from './three/house'
 import { openingGeom, regionOf, type Region } from './model'
 import { gameWeight } from './three/packs/games-more'
 import { homeCams } from './homecams'
+import { cabinetsOnSpots, stowAll } from './stow'
+import { spotInRoom } from './cabinet'
 import { curtainSpecs, fixtureSpans } from './curtains'
 import { hasTag, matchSel, selKey, type Sel, type Tag } from './three/tags'
 
@@ -495,7 +496,7 @@ class Decorator {
         const okHigh = hasTag(a, 'high-ok')
         // 床面只放玩偶、书、手机这类随手放的软东西，不放棋牌、电器
         if (isBed(pd) && !hasTag(a, 'bed-ok')) continue
-        const levels = [...(pd.surface && (okHigh || !high(pd.surface)) ? [undefined] : []), ...(pd.surfaces ?? []).flatMap((l, i) => (okHigh || !high(l.y) ? [i] : []))]
+        const levels = [...(pd.surface && (okHigh || !high(pd.surface)) ? [undefined] : []), ...(pd.surfaces ?? []).flatMap((l, i) => ((okHigh || !high(l.y)) && !(l.inside && !l.glass) ? [i] : []))]
         if (!levels.length) continue
         const lv = this.pick(levels)
         if (this.onLevel(parent, a.id, (this.rand() - 0.5) * 0.7, (this.rand() - 0.5) * 0.6, Math.round((this.rand() - 0.5) * 40), lv)) break
@@ -1810,6 +1811,25 @@ class Decorator {
     this.style = base
   }
 
+  /** 收纳位上的柜子：每个空着的鞋柜位 / 衣柜位 / 食品柜位放一件尺寸合适的（款式按地区、风格挑） */
+  cabinets(only?: Fixture['builtinType']) {
+    cabinetsOnSpots({ d: this, plan: this.plan, rand: this.rand }, only)
+  }
+
+  /** 正在往柜子里收东西（stowAll）：放开「门里的层不能放」和同类数量限制 */
+  private isStowing = false
+  stowing<T>(fn: () => T): T {
+    const [a, b] = [this.isStowing, this.noLimit]
+    this.isStowing = true
+    this.noLimit = true
+    try {
+      return fn()
+    } finally {
+      this.isStowing = a
+      this.noLimit = b
+    }
+  }
+
   /** 房间里的洗衣机（家具，不含干衣机） */
   washersIn(room: Room) {
     return this.out.filter((f) => !f.z && isMainAppliance(ASSET_MAP.get(f.asset), 'washer') && pointInPolygon(f, room.points))
@@ -2415,15 +2435,10 @@ class Decorator {
 
   /** 已经摆好的挂衣杆 / 衣桁 / 壁内收纳挂满衣服；毛巾杆上搭毛巾（还没挂东西的才挂） */
   wearDress() {
-    const wds = this.wardrobesFor()
-    // 壁内收纳（クローゼット）：门里的挂衣杆，杆在柜内进深中间（局部 z = 0.9）
-    for (const fx of this.plan.fixtures) {
-      if (fx.kind !== 'builtin' || fx.builtinType !== 'closet') continue
-      this.hangRows(fx, 0, 0.9, fx.w - 3.6 - 6, CLOSET_PIPE.y + CLOSET_PIPE.r + 0.45, wds, CLOSET_PIPE.y - 10, fixtureDepth(fx) - 5)
-    }
+    // 柜门里的挂衣杆（衣柜）由 stowAll 挂衣服
     for (const f of [...this.out]) {
       const def = ASSET_MAP.get(f.asset)
-      const hooks = (def?.surfaces ?? []).filter((l) => l.kind === 'hook' && l.shape?.length)
+      const hooks = (def?.surfaces ?? []).filter((l) => l.kind === 'hook' && l.shape?.length && !l.inside)
       if (!def || !hooks.length || this.out.some((o) => this.parentOf.get(o.id) === f.id && ASSET_MAP.get(o.asset)?.form === 'hanging')) continue
       const room = this.plan.rooms.find((r) => pointInPolygon(f, r.points))
       if (hasTag(def, 'kimono-rack')) {
@@ -2486,7 +2501,7 @@ class Decorator {
     for (let t = 0; t < 12 && n > 0 && towels.length && parents.length; t++) {
       const p = this.pick(parents)
       const pd = ASSET_MAP.get(p.asset)!
-      const levels = [...(pd.surface ? [undefined] : []), ...(pd.surfaces ?? []).flatMap((l, i) => (l.kind === 'hook' ? [] : [i]))]
+      const levels = [...(pd.surface ? [undefined] : []), ...(pd.surfaces ?? []).flatMap((l, i) => (l.kind === 'hook' || (l.inside && !l.glass) ? [] : [i]))]
       if (levels.length && this.onLevel(p, this.pick(towels).id, (this.rand() - 0.5) * 0.6, (this.rand() - 0.5) * 0.3, 0, this.pick(levels))) n--
     }
   }
@@ -2543,8 +2558,8 @@ class Decorator {
     }
     // 内衣柜：窄高，靠墙
     if (m2 >= 6.5 && grown.length && this.rand() < (female ? 0.6 : 0.3)) {
-      const open = this.rand() < 0.3
-      const opts = this.find(/^be-lingerie-\d+-(open|closed)/, (a) => (a.form === 'open') === open)
+      // 抽屉开合由 stowAll 统一决定（少数开着）
+      const opts = this.find(/^be-lingerie-\d+/, (a) => a.form !== 'open')
       if (opts.length) this.wall(room, this.pick(opts).id, { front: 45 })
     }
   }
@@ -2751,6 +2766,8 @@ class Decorator {
     this.assign()
     // 冰箱、洗衣机先放：后面的冰箱贴、洗衣液、置物架、购物袋都要找它们
     this.appliances()
+    // 收纳位上的柜子（鞋柜、衣柜、食品柜）也先放：后面靠墙的家具要避开它们
+    this.cabinets()
     for (const r of this.plan.rooms) {
       this.style = this.styleFor(r)
       switch (r.kind) {
@@ -2775,7 +2792,7 @@ class Decorator {
             break
           }
           // 有造作鞋柜就不再放鞋柜家具
-          if (!this.plan.fixtures.some((x) => x.kind === 'builtin' && pointInPolygon(x, r.points))) this.wall(r, 'shoe-cabinet')
+          if (!this.plan.fixtures.some((x) => x.kind === 'builtin' && spotInRoom(x, r.points))) this.wall(r, 'shoe-cabinet')
           if (this.rand() < 0.7) this.wall(r, 'umbrella-stand')
           // 偶尔放一张小穿鞋凳（放不下 wall 会自动跳过）
           if (this.rand() < 0.35 && ASSET_MAP.has('c2-shoe-bench-60')) this.wall(r, 'c2-shoe-bench-60', { front: 40 })
@@ -2829,6 +2846,8 @@ class Decorator {
     this.dress()
     // 多宝格、书架、展示柜这类开放格子：最后补一遍，每一格都至少放一件
     this.fillCompartments()
+    // 柜门里 / 抽屉里收东西（外面的摆设都放完之后，只收日常用品）；少数柜子开着门
+    stowAll({ d: this, plan: this.plan, rand: this.rand }, (f) => this.reserved.has(f.id))
     // 便签：贴屏幕边框、桌后墙、冰箱门，书桌上散几张
     deskExtras({ d: this, plan: this.plan, rand: this.rand, household: this.household })
     this.reseatAircons()
@@ -2913,8 +2932,10 @@ class Decorator {
     const def = ASSET_MAP.get(asset)
     if (!pd || !def) return null
     if (this.reserved.has(parent.id) && !this.noLimit) return null
-    const lv = level === undefined ? (pd.surface ? { y: pd.surface, h: Infinity } : pd.surfaces?.[0]) : pd.surfaces?.[level]
+    const lv: { y: number; h?: number; inside?: boolean; glass?: boolean } | undefined = level === undefined ? (pd.surface ? { y: pd.surface, h: Infinity } : pd.surfaces?.[0]) : pd.surfaces?.[level]
     if (!lv || def.h > (lv.h ?? Infinity)) return null
+    // 柜门里 / 抽屉里：只有收纳那一步（stowAll）往里放日常用品，别的摆设都放在外面看得到的地方
+    if (lv.inside && !lv.glass && !this.isStowing) return null
     const p = toWorld(parent, fx * pd.w, fz * pd.d)
     if (!this.allow(asset, p, parent.id)) return null
     const f: Furniture = { id: uid('u'), asset, x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10, rot: (parent.rot + lrot + 360) % 360, color: this.colorFor(def), z: (parent.z ?? 0) + lv.y }
@@ -2958,7 +2979,8 @@ class Decorator {
       // 收藏柜像相机展示柜一样放开同类数量限制：同类收藏品可以摆好几件
       this.noLimit = collectionShelf
       pd.surfaces.forEach((lv, i) => {
-        if (lv.kind === 'hook') return
+        // 挂钩、柜门里的层（关着门看不见，不要求放满）不管
+        if (lv.kind === 'hook' || (lv.inside && !lv.glass)) return
         const z = (parent.z ?? 0) + lv.y
         // 这一层的每个格子（shape 里的每个多边形；没有 shape 就是整层）
         const cells: Poly[] = lv.shape?.length ? lv.shape : [[[-pd.w / 2, -pd.d / 2], [pd.w / 2, -pd.d / 2], [pd.w / 2, pd.d / 2], [-pd.w / 2, pd.d / 2]]]
@@ -2996,7 +3018,12 @@ class Decorator {
             if (placed >= n) break
             const cx = (x0 + x1) / 2 + (n > 1 ? (placed ? 0.25 : -0.25) * (x1 - x0) : (this.rand() - 0.5) * 0.3 * (x1 - x0 - a.w))
             const cz = (z0 + z1) / 2
-            const f = this.onLevel(parent, a.id, cx / pd.w, cz / pd.d, 0, i)
+            // 格子中间被旁边斜放的东西占了一角：再试贴着格子四角放
+            const ex = Math.max(0, (x1 - x0 - a.w) / 2 - 0.5)
+            const ez = Math.max(0, (z1 - z0 - a.d) / 2 - 0.5)
+            const spots: [number, number][] = placed || n > 1 ? [[cx, cz]] : [[cx, cz], [(x0 + x1) / 2 + ex, cz - ez], [(x0 + x1) / 2 - ex, cz - ez], [(x0 + x1) / 2 + ex, cz + ez], [(x0 + x1) / 2 - ex, cz + ez]]
+            let f: Furniture | null = null
+            for (const [sx, sz] of spots) if ((f = this.onLevel(parent, a.id, sx / pd.w, sz / pd.d, 0, i))) break
             if (f) {
               kids.push(f)
               placed++
@@ -3208,6 +3235,8 @@ function dressFor(def: AssetDef): Dress | null {
   if (def.category === 'study' && hasTag(def, 'table')) return DESK
   if (def.category === 'dining' && hasTag(def, 'table')) return DINING
   if (hasTag(def, 'coffee-table')) return COFFEE
+  // 玄关的矮鞋柜：台面上放钥匙盘、花
+  if (hasTag(def, 'shoe-storage') && def.surface && def.surface >= 80 && def.surface <= 125) return DRESS['shoe-cabinet'] as Dress
   return null
 }
 
@@ -3314,6 +3343,10 @@ export function applyFixes(plan: Plan, items: CheckItem[], household?: Household
       case 'appliance':
         // 冰箱 / 洗衣机：补到空着的位上，没有位就靠墙放
         d.appliances(fix.kind)
+        break
+      case 'spot':
+        // 柜子：放到空着的收纳位上
+        d.cabinets(fix.type)
         break
       case 'chairs':
         for (const r of plan.rooms.filter((r) => r.kind === 'ldk' || r.kind === 'kitchen' || r.kind === 'dining')) d.chairsUpTo(r, household?.members.length ?? 4)

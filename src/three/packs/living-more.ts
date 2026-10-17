@@ -4,7 +4,7 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, face, puck, rbox, shade, toon, torus, tray } from '../toon'
-import { C, S, ellipsePoly, glow, holePanel, paintPanel, rectPoly, rng, shell, type AssetCategory, type AssetDef, type Poly, type StyleTag } from '../kit'
+import { C, S, SWING_OPEN, ellipsePoly, glow, holePanel, movable, paintPanel, rectPoly, rng, shell, type AssetCategory, type AssetDef, type Poly, type StyleTag, type SurfaceDef } from '../kit'
 
 type V3 = [number, number, number]
 type Pal = [StyleTag, ...string[]]
@@ -228,6 +228,38 @@ function front(w: number, h: number, color: string, x: number, y: number, zf: nu
   return rbox(w, h, t, color, { x, y, z: zf + t / 2 - 0.3 }, 0.6)
 }
 
+/**
+ * 可开合的抽屉：抽屉面（front 同款，贴在 zf）+ 抽屉盒（深 bd，往 -z）+ 拉手，拉出 pull。
+ * 抽屉面底边在 y，宽 w、高 h；返回会动的 Group。抽屉格用 liveDrawerLevel。
+ */
+function liveDrawer(o: { w: number; h: number; x: number; y: number; zf: number; bd: number; color: string; inner: string; handle: THREE.Object3D }) {
+  const g = new THREE.Group()
+  g.add(front(o.w, o.h, o.color, 0, 0, o.zf))
+  const bw = o.w - 3
+  const bh = Math.max(3, o.h - 3)
+  const z0 = o.zf - 0.3 - o.bd
+  g.add(rbox(bw, 0.6, o.bd, o.inner, { y: 0.6, z: z0 + o.bd / 2 }, 0.2))
+  for (const s of [-1, 1]) g.add(rbox(0.6, bh, o.bd, o.inner, { x: s * (bw / 2 - 0.3), y: 0.6, z: z0 + o.bd / 2 }, 0.15))
+  g.add(rbox(bw - 1.2, bh, 0.6, o.inner, { y: 0.6, z: z0 + 0.3 }, 0.15))
+  o.handle.position.x -= o.x
+  o.handle.position.y -= o.y
+  g.add(o.handle)
+  g.position.set(o.x, o.y, 0)
+  return movable(g, { kind: 'drawer', dz: Math.round(o.bd * 0.6) })
+}
+/** liveDrawer 的抽屉格（dz：整件模型最后 shiftZ 的量） */
+function liveDrawerLevel(o: { w: number; h: number; x: number; y: number; zf: number; bd: number }, dz: number): SurfaceDef {
+  const bw = o.w - 3
+  const z0 = o.zf - 0.3 - o.bd
+  return {
+    y: Math.round((o.y + 1.2) * 10) / 10,
+    h: Math.round((Math.max(3, o.h - 3) - 1) * 10) / 10,
+    shape: [rectPoly(o.x - bw / 2 + 1, z0 + 1 + dz, o.x + bw / 2 - 1, o.zf - 1 + dz)],
+    inside: true,
+    slide: Math.round(o.bd * 0.6),
+  }
+}
+
 // =====================================================================
 // 沙发
 // =====================================================================
@@ -388,9 +420,17 @@ function storageOttoman(p: string[]) {
   const [fab, wood, acc] = p
   const g = new THREE.Group()
   for (const [x, z] of [[-25, -25], [25, -25], [-25, 25], [25, 25]] as [number, number][]) g.add(cyl(2, 1.5, 6, wood, { x, z }, 10))
-  g.add(rbox(58, 28, 58, fab, { y: 6 }, 3))
-  g.add(rbox(60, 8, 60, fab, { y: 34 }, 3.5))
-  g.add(rbox(60.6, 1.4, 60.6, acc, { y: 33.6 }, 0.6))
+  // 空心的箱体（底 + 四壁），盖子绕后沿往上掀开
+  g.add(rbox(58, 1.6, 58, fab, { y: 6 }, 0.6))
+  for (const s of [-1, 1]) {
+    g.add(rbox(58, 28, 3, fab, { y: 6, z: s * 27.5 }, 1.2))
+    g.add(rbox(3, 28, 52, fab, { x: s * 27.5, y: 6 }, 1.2))
+  }
+  const lid = new THREE.Group()
+  lid.add(rbox(60, 8, 60, fab, { y: 0.4, z: 30.3 }, 3.5))
+  lid.add(rbox(60.6, 1.4, 60.6, acc, { z: 30.3 }, 0.6))
+  lid.position.set(0, 33.6, -30.3)
+  g.add(movable(lid, { kind: 'flap', angle: -(75 * Math.PI) / 180 }))
   return g
 }
 
@@ -486,7 +526,7 @@ export const LM_SOFAS: AssetDef[] = [
       ['cute', C.lilac, C.woodL, C.white],
     ],
     storageOttoman,
-    { surface: 42 },
+    { surface: 42, openable: true, surfaces: [{ y: 7.6, h: 25.5, shape: [rectPoly(-25, -25, 25, 25)], inside: true }] },
   ),
   def(
     'lm-knit-pouf',
@@ -601,12 +641,11 @@ function storageTable(p: string[]) {
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(cyl(2, 1.6, 6.2, metal, { x: sx * 45, z: sz * 23 }, 10))
   g.add(openBox(100, 36, 55, 2.5, wood, 6))
   g.add(rbox(2.5, 31.4, 53, wood, { y: 8.3, z: 0.5 }))
-  for (const y of [9.2, 24.6]) {
-    g.add(front(46, 14.6, fr, -24.2, y, 27.5))
-    g.add(rbox(10, 1.2, 1.2, metal, { x: -24.2, y: y + 9, z: 29.4 }, 0.5))
-  }
+  for (const d of ST_DRAWERS) g.add(liveDrawer({ ...d, color: fr, inner: shade(wood, 0.08), handle: rbox(10, 1.2, 1.2, metal, { x: -24.2, y: d.y + 9, z: 29.4 }, 0.5) }))
   return shiftZ(g, -1.25)
 }
+/** 带收纳茶几左半的两只抽屉 */
+const ST_DRAWERS = [9.2, 24.6].map((y) => ({ w: 46, h: 14.6, x: -24.2, y, zf: 27.5, bd: 50 }))
 
 /** 低矮电视柜：两侧门 / 抽屉，中间开放格（带一层隔板） */
 function tvBoard(W: number) {
@@ -619,25 +658,45 @@ function tvBoard(W: number) {
     g.add(rbox(60, 1.6, 37.5, wood, { y: 24, z: 0.5 }, 0.4))
     const sw = W / 2 - 2 - 32
     const cx = W / 2 - 2 - sw / 2
-    // 左：翻门（木条装饰）
-    g.add(front(sw - 0.6, 29.6, fr, -cx, 10.2, 20))
-    for (let k = 1; k < 6; k++) g.add(rbox(0.8, 26, 0.8, shade(fr, -0.1), { x: -cx - sw / 2 + (sw * k) / 6, y: 12, z: 21.5 }, 0.2))
-    g.add(rbox(8, 1.2, 1.2, metal, { x: -cx, y: 36, z: 21.8 }, 0.5))
+    // 左：翻门（木条装饰），底边铰链往前放倒；门里一块层板
+    g.add(rbox(sw - 0.2, 1.6, 37.5, wood, { x: -cx, y: 24, z: 0.5 }, 0.4))
+    const flap = new THREE.Group()
+    flap.add(front(sw - 0.6, 29.6, fr, 0, 0, 0))
+    for (let k = 1; k < 6; k++) flap.add(rbox(0.8, 26, 0.8, shade(fr, -0.1), { x: -sw / 2 + (sw * k) / 6, y: 1.8, z: 1.5 }, 0.2))
+    flap.add(rbox(8, 1.2, 1.2, metal, { y: 25.8, z: 1.8 }, 0.5))
+    flap.position.set(-cx, 10.2, 20)
+    g.add(movable(flap, { kind: 'flap', angle: (85 * Math.PI) / 180 }))
     // 右：两只抽屉
-    for (const y of [10.2, 25.2]) {
-      g.add(front(sw - 0.6, 14.6, fr, cx, y, 20))
-      g.add(rbox(8, 1.2, 1.2, metal, { x: cx, y: y + 10, z: 21.8 }, 0.5))
-    }
+    for (const d of tvDrawers(W)) g.add(liveDrawer({ ...d, color: fr, inner: shade(wood, 0.08), handle: rbox(8, 1.2, 1.2, metal, { x: d.x, y: d.y + 10, z: 21.8 }, 0.5) }))
     return shiftZ(g, -1.2)
   }
 }
-const tvSurf = (): Partial<AssetDef> => ({
-  surface: 42,
-  surfaces: [
-    { y: 10, shape: [rectPoly(-29.5, -19.7, 29.5, 18.3)], h: 14 },
-    { y: 25.6, shape: [rectPoly(-29.5, -19.7, 29.5, 18.3)], h: 14.4 },
-  ],
-})
+/** 低矮电视柜右侧的两只抽屉 */
+function tvDrawers(W: number) {
+  const sw = W / 2 - 2 - 32
+  const cx = W / 2 - 2 - sw / 2
+  return [10.2, 25.2].map((y) => ({ w: sw - 0.6, h: 14.6, x: cx, y, zf: 20, bd: 34 }))
+}
+const tvSurf = (W: number): Partial<AssetDef> => {
+  const sw = W / 2 - 2 - 32
+  const cx = W / 2 - 2 - sw / 2
+  const left = [rectPoly(-cx - sw / 2 + 0.3, -19.7, -cx + sw / 2 - 0.3, 18.3)]
+  return {
+    surface: 42,
+    openable: true,
+    surfaces: [
+      { y: 10, shape: [rectPoly(-29.5, -19.7, 29.5, 18.3)], h: 14 },
+      { y: 25.6, shape: [rectPoly(-29.5, -19.7, 29.5, 18.3)], h: 14.4 },
+      // 翻门里：底板、层板
+      { y: 10, shape: left, h: 13.5, inside: true },
+      { y: 25.6, shape: left, h: 13.9, inside: true },
+      ...tvDrawers(W).map((d) => liveDrawerLevel(d, -1.2)),
+    ],
+  }
+}
+
+/** 电视组合柜右侧的三只抽屉 */
+const TVW_DRAWERS = [8.4, 18.2, 28].map((y) => ({ w: 76.4, h: 9.4, x: 80, y, zf: 21, bd: 36 }))
 
 /** 电视组合柜：低柜 + 右侧高书架 + 浮空壁挂层板 */
 function tvWallUnit(p: string[]) {
@@ -646,15 +705,17 @@ function tvWallUnit(p: string[]) {
   for (const x of [-112, -40, 40, 112]) for (const z of [-15, 15]) g.add(cyl(1.8, 1.4, 6.2, metal, { x, z }, 10))
   g.add(openBox(240, 34, 42, 2.2, wood, 6))
   for (const x of [-40, 40]) g.add(rbox(2.2, 29.8, 40.5, wood, { x, y: 8, z: 0.75 }))
-  // 左：两扇门；右：三只抽屉
+  // 左：两扇平开门（铰链在外侧）；右：三只抽屉
   for (const x of [-99.5, -60.5]) {
-    g.add(front(38.4, 29.2, fr, x, 8.4, 21))
-    g.add(rbox(1.2, 8, 1.2, metal, { x: x + (x < -80 ? 16 : -16), y: 18, z: 22.8 }, 0.5))
+    const left = x < -80
+    const hinge = x + (left ? -19.2 : 19.2)
+    const dr = new THREE.Group()
+    dr.add(front(38.4, 29.2, fr, x - hinge, 0, 21 - 21))
+    dr.add(rbox(1.2, 8, 1.2, metal, { x: x + (left ? 16 : -16) - hinge, y: 18 - 8.4, z: 1.8 }, 0.5))
+    dr.position.set(hinge, 8.4, 21)
+    g.add(movable(dr, { kind: 'swing', angle: (left ? -1 : 1) * SWING_OPEN }))
   }
-  for (const y of [8.4, 18.2, 28]) {
-    g.add(front(76.4, 9.4, fr, 80, y, 21))
-    g.add(rbox(12, 1.2, 1.2, metal, { x: 80, y: y + 4, z: 22.8 }, 0.5))
-  }
+  for (const d of TVW_DRAWERS) g.add(liveDrawer({ ...d, color: fr, inner: shade(wood, 0.08), handle: rbox(12, 1.2, 1.2, metal, { x: 80, y: d.y + 4, z: 22.8 }, 0.5) }))
   // 高书架
   const shelf = openBox(40, 140, 32, 2, wood, 40)
   shelf.position.set(100, 0, -5)
@@ -723,10 +784,14 @@ export const LM_TABLES: AssetDef[] = [
     glassTable,
     { surface: 40, surfaces: [{ y: 12, h: 25, shape: [rectPoly(-50, -25, 50, 25)] }] },
   ),
-  def('lm-storage-coffee', '带收纳茶几', 'living', [100, 57.5, 42], WOOD_PALS, storageTable, { surface: 42, surfaces: [{ y: 8.5, shape: [rectPoly(2, -27.75, 47.5, 25.75)], h: 31 }] }),
-  def('lm-tv-board-150', '低矮电视柜（翻门）', 'living', [150, 42.4, 42], WOOD_PALS, tvBoard(150), { family: 'lm-tv-board', sizeLabel: '150', ...tvSurf() }),
-  def('lm-tv-board-200', '低矮电视柜（翻门）', 'living', [200, 42.4, 42], WOOD_PALS, tvBoard(200), { family: 'lm-tv-board', sizeLabel: '200', ...tvSurf() }),
-  def('lm-tv-board-240', '低矮电视柜（翻门）', 'living', [240, 42.4, 42], WOOD_PALS, tvBoard(240), { family: 'lm-tv-board', sizeLabel: '240', ...tvSurf() }),
+  def('lm-storage-coffee', '带收纳茶几', 'living', [100, 57.5, 42], WOOD_PALS, storageTable, {
+    surface: 42,
+    surfaces: [{ y: 8.5, shape: [rectPoly(2, -27.75, 47.5, 25.75)], h: 31 }, ...ST_DRAWERS.map((d) => liveDrawerLevel(d, -1.25))],
+    openable: true,
+  }),
+  def('lm-tv-board-150', '低矮电视柜（翻门）', 'living', [150, 42.4, 42], WOOD_PALS, tvBoard(150), { family: 'lm-tv-board', sizeLabel: '150', ...tvSurf(150) }),
+  def('lm-tv-board-200', '低矮电视柜（翻门）', 'living', [200, 42.4, 42], WOOD_PALS, tvBoard(200), { family: 'lm-tv-board', sizeLabel: '200', ...tvSurf(200) }),
+  def('lm-tv-board-240', '低矮电视柜（翻门）', 'living', [240, 42.4, 42], WOOD_PALS, tvBoard(240), { family: 'lm-tv-board', sizeLabel: '240', ...tvSurf(240) }),
   def('lm-tv-wall-unit', '电视组合柜（带书架）', 'living', [240, 44.4, 180], WOOD_PALS, tvWallUnit, {
     surface: 180,
     surfaceShape: [rectPoly(80, -22.2, 120, 9.8)],
@@ -738,7 +803,11 @@ export const LM_TABLES: AssetDef[] = [
       { y: 111.6, shape: [rectPoly(82, -21.2, 118, 9.8)], h: 33.4 },
       { y: 146.6, shape: [rectPoly(82, -21.2, 118, 9.8)], h: 31.4 },
       { y: 8.2, shape: [rectPoly(-38, -21.2, 38, 19.8)], h: 29.6 },
+      // 左边两扇门里、右边三只抽屉
+      { y: 8.2, shape: [rectPoly(-117.4, -21.2, -42, 19.8)], h: 29.6, inside: true },
+      ...TVW_DRAWERS.map((d) => liveDrawerLevel(d, -1.2)),
     ],
+    openable: true,
   }),
 ]
 

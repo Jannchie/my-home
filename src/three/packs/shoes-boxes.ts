@@ -9,7 +9,7 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cyl, puck, rbox, shade, toon, torus } from '../toon'
-import { C, S, holePanel, paintPanel, rectPoly, rng, shell, slab, type AssetCategory, type AssetDef, type Poly, type StyleTag } from '../kit'
+import { C, S, SWING_OPEN, holePanel, movable, paintPanel, rectPoly, rng, shell, slab, type AssetCategory, type AssetDef, type Poly, type StyleTag } from '../kit'
 
 const PI = Math.PI
 type V3 = [number, number, number]
@@ -1120,22 +1120,22 @@ function door(w: number, h: number, kind: DoorKind, color: string, handle: strin
   return g
 }
 
-/** 双开门柜：closed / open（门开 90°，占地往前加一个门宽） */
-function doorCabinet(c: Cab, kind: DoorKind, open: boolean) {
+/** 双开门柜：可开合（门绕外侧铰链转开约 100°），门里的层板标 inside（玻璃门再标 glass） */
+function doorCabinet(c: Cab, kind: DoorKind) {
   const dw = c.w / 2
-  const D = open ? c.d + dw + 0.3 : c.d + 2.4
+  const D = c.d + 2.4
   const dz = -(D - c.d) / 2
-  const W = open ? c.w + 2 * 2.4 : c.w
   const doorY = c.tops[0] - c.t
   const build: Build = (p) => {
     const g = carcass(c, p[0], p[1], dz)
     for (const side of [-1, 1]) {
       const dr = door(dw, c.h - doorY - 0.2, kind, p[0], p[2], side)
-      g.add(P(dr, side * (c.w / 2), doorY, dz + c.d / 2, 0, open ? side * (PI / 2) : 0))
+      g.add(movable(P(dr, side * (c.w / 2), doorY, dz + c.d / 2), { kind: 'swing', angle: side * SWING_OPEN }))
     }
     return g
   }
-  return { build, dims: [r1(W), r1(D), c.h] as Dims, surfaces: cabSurfaces(c, dz), dz }
+  const surfaces = cabSurfaces(c, dz).map((l): Surf => ({ ...l, inside: true, ...(kind === 'glass' ? { glass: true } : {}) }))
+  return { build, dims: [r1(c.w), r1(D), c.h] as Dims, surfaces, dz }
 }
 
 const CAB_PALS: Pal[] = [
@@ -1249,21 +1249,22 @@ const SHOE_CAB: Cab = { w: 90, d: 35, h: 105, t: 1.8, tops: [7.8, 25.8, 43.8, 61
 const GLASS_CAB: Cab = { w: 60, d: 34, h: 120, t: 1.8, tops: [7.8, 26.8, 45.8, 64.8, 83.8, 102.8] }
 const LOUVER_CAB: Cab = { w: 75, d: 35, h: 92, t: 1.8, tops: [7.8, 25.8, 43.8, 61.8] }
 
-function doorCabDef(id: string, name: string, c: Cab, kind: DoorKind, open: boolean, pals: Pal[], cat: AssetCategory, extra: Partial<AssetDef> = {}, withSurfaces = true): AssetDef {
-  const m = doorCabinet(c, kind, open)
+function doorCabDef(id: string, name: string, c: Cab, kind: DoorKind, pals: Pal[], cat: AssetCategory, extra: Partial<AssetDef> = {}): AssetDef {
+  const m = doorCabinet(c, kind)
   return asset(id, name, cat, m.dims, pals, m.build, {
     surface: c.h,
     surfaceShape: [rectPoly(-c.w / 2, m.dz - c.d / 2, c.w / 2, m.dz + c.d / 2)],
-    ...(withSurfaces ? { surfaces: m.surfaces } : {}),
+    surfaces: m.surfaces,
+    openable: true,
     ...extra,
   })
 }
 
 const CABINETS: AssetDef[] = [
-  doorCabDef('sb-shoe-cab-closed', '双门鞋柜', SHOE_CAB, 'solid', false, CAB_PALS, 'entrance', { family: 'sb-shoe-cab', form: 'closed' }, false),
-  doorCabDef('sb-shoe-cab-open', '双门鞋柜', SHOE_CAB, 'solid', true, CAB_PALS, 'entrance', { family: 'sb-shoe-cab', form: 'open' }),
-  doorCabDef('sb-cab-glass', '玻璃门鞋柜', GLASS_CAB, 'glass', false, CAB_PALS, 'entrance'),
-  doorCabDef('sb-cab-louver', '百叶门鞋柜', LOUVER_CAB, 'louver', false, CAB_PALS, 'entrance', { family: 'shoe-cabinet', sizeLabel: '百叶门' }),
+  // 以前开 / 关是两件素材（sb-shoe-cab-open / -closed），现在一件可开合（旧的 open 形态读档时迁移成 closed + open）
+  doorCabDef('sb-shoe-cab-closed', '双门鞋柜', SHOE_CAB, 'solid', CAB_PALS, 'entrance', { family: 'sb-shoe-cab' }),
+  doorCabDef('sb-cab-glass', '玻璃门鞋柜', GLASS_CAB, 'glass', CAB_PALS, 'entrance'),
+  doorCabDef('sb-cab-louver', '百叶门鞋柜', LOUVER_CAB, 'louver', CAB_PALS, 'entrance', { family: 'shoe-cabinet', sizeLabel: '百叶门' }),
 ]
 
 // --- 开放柜：窄高鞋柜、靴柜 ---
@@ -1309,12 +1310,11 @@ function benchSurfaces(): Surf[] {
   ]
 }
 
-// --- 翻斗鞋柜（翻斗打开） ---
+// --- 翻斗鞋柜：每层一个往外翻的斗（关着时前板竖直，打开时绕底边往外倾 30°） ---
 
 const FLIP = { w: 80, d: 30, t: 1.8, tier: 42, a: PI / 6, panelH: 39 }
 function flipDims(n: number): Dims {
-  const out = FLIP.panelH * Math.sin(FLIP.a) + 1.8 * Math.cos(FLIP.a)
-  return [FLIP.w, r1(FLIP.d + out), n * FLIP.tier + 6 + FLIP.t]
+  return [FLIP.w, r1(FLIP.d + 1.8), n * FLIP.tier + 6 + FLIP.t]
 }
 const flipFloors = (n: number) => Array.from({ length: n }, (_, i) => 6 + i * FLIP.tier + 1.5)
 function flipCab(n: number): Build {
@@ -1329,30 +1329,27 @@ function flipCab(n: number): Build {
     g.add(rbox(w - 2 * t + 0.2, 6, t, p[0], { z: dz + d / 2 - t / 2 }, 0.4))
     const iw = w - 2 * t - 0.6
     const pivotZ = dz + d / 2
-    const topZ = FLIP.panelH * Math.sin(FLIP.a)
-    const topY = FLIP.panelH * Math.cos(FLIP.a)
     for (let i = 0; i < n; i++) {
       const yb = 6 + i * FLIP.tier
       // 斗底板
       g.add(rbox(w - 2 * t + 0.2, 1.5, d - 0.6, p[1], { y: yb, z: dz + 0.3 }, 0.3))
-      // 翻斗前板：绕底边往外倾 30°
+      // 翻斗：前板 + 两侧挡板，绕前板底边往外倾
       const fp = G(rbox(iw, FLIP.panelH, 1.8, p[0], { z: 0.9 }, 0.5), rbox(14, 1.2, 0.8, p[2], { y: FLIP.panelH - 5, z: 2.1 }, 0.4))
-      g.add(P(fp, 0, yb + 1.5, pivotZ, FLIP.a))
-      // 两侧三角挡板
       for (const s of [-1, 1])
-        g.add(
+        fp.add(
           sidePlate(
             [
-              [pivotZ - 4, yb + 1.5],
-              [pivotZ + 0.2, yb + 1.5],
-              [pivotZ + topZ * 0.97, yb + 1.5 + topY * 0.97],
-              [pivotZ - 4, yb + 1.5 + topY * 0.97],
+              [-5, 0],
+              [0, 0],
+              [0, FLIP.panelH * 0.95],
+              [-2.5, FLIP.panelH * 0.95],
             ],
             0.8,
             p[1],
             s > 0 ? iw / 2 - 0.8 : -iw / 2,
           ),
         )
+      g.add(movable(P(fp, 0, yb + 1.5, pivotZ), { kind: 'flap', angle: FLIP.a }))
     }
     return g
   }
@@ -1364,8 +1361,9 @@ function flipSurfaces(n: number): Surf[] {
   const fl = flipFloors(n)
   return fl.map((y, i) => ({
     y,
-    shape: [rectPoly(-xi, dz - FLIP.d / 2 + 0.6, xi, dz + FLIP.d / 2 + 2)],
+    shape: [rectPoly(-xi, dz - FLIP.d / 2 + 0.6, xi, dz + FLIP.d / 2 - 0.3)],
     h: r1((i < n - 1 ? fl[i + 1] - 1.5 : H - FLIP.t) - y),
+    inside: true,
   }))
 }
 
@@ -1406,10 +1404,10 @@ const SHOE_FURNITURE: AssetDef[] = [
     return asset(`sb-flip-cab-${n}`, '翻斗鞋柜', 'entrance', [w, D, H], CAB_PALS, flipCab(n), {
       family: 'sb-flip-cab',
       sizeLabel: `${n} 斗`,
-      form: 'open',
       surface: H,
       surfaceShape: [rectPoly(-w / 2, -D / 2, w / 2, -D / 2 + FLIP.d)],
       surfaces: flipSurfaces(n),
+      openable: true,
     })
   }),
   asset('sb-cubby', '玄关开放格', 'entrance', [CUB.w, CUB.d, CUB_H], CAB_PALS, cubby, { surface: CUB_H, surfaces: cubSurfaces() }),
@@ -1687,9 +1685,16 @@ function vacBag(puffy: boolean): Build {
 
 const DRAWER = { w: 40, d: 45, unit: 20.5, base: 4 }
 const drawerH = (n: number) => DRAWER.base + n * DRAWER.unit + 2
+/** 每层抽屉：抽屉盒底面 y、净高 dh、内宽 dw；抽屉里码着的衣服最多到 clothH（抽屉格在衣服上面） */
+const drawerRow = (i: number) => {
+  const y = DRAWER.base + 0.8 + i * DRAWER.unit
+  const dh = DRAWER.unit - 1.6
+  return { y, dh, dw: DRAWER.w - 3.4, clothH: r1(dh * 0.4) }
+}
+const DRAWER_PULL = Math.round(DRAWER.d * 0.6)
 function drawerCab(n: number): Build {
   return (p) => {
-    const { w, d, unit, base } = DRAWER
+    const { w, d, base } = DRAWER
     const g = new THREE.Group()
     const H = drawerH(n)
     for (const sx of [-1, 1]) {
@@ -1700,17 +1705,28 @@ function drawerCab(n: number): Build {
     g.add(rbox(w, 2, d, p[0], { y: H - 2 }, 0.6))
     g.add(rbox(w - 2.8, H - base - 2, 0.6, p[0], { y: base + 0.6, z: -d / 2 + 0.3 }, 0.2))
     for (let i = 0; i < n; i++) {
-      const y = base + 0.8 + i * unit
+      const { y, dh, dw, clothH } = drawerRow(i)
       if (i > 0) g.add(rbox(w - 2.8, 0.6, d - 2, p[0], { y: y - 0.7, z: 0 }, 0.2))
-      const dw = w - 3.4
-      const dh = unit - 1.6
-      g.add(P(boxTray(dw, dh, d - 3, 0.5, CLEAR, 0.4), 0, y, 0.2))
-      g.add(clear(rbox(dw + 0.8, dh + 0.4, 0.6, p[1], { y: y - 0.1, z: d / 2 - 1.2 }, 0.3), p[1], 0.5))
-      g.add(rbox(14, 2, 1.2, p[0], { y: y + dh - 4, z: d / 2 - 0.4 }, 0.5))
-      g.add(clothes(dw - 2, d - 6, dh - 3, y + 0.5, 10 + i * 3 + n))
+      // 抽屉（盒 + 面板 + 拉手 + 里面的衣服）整个往前拉出
+      const dr = G(
+        P(boxTray(dw, dh, d - 3, 0.5, CLEAR, 0.4), 0, 0, 0.2),
+        clear(rbox(dw + 0.8, dh + 0.4, 0.6, p[1], { y: -0.1, z: d / 2 - 1.2 }, 0.3), p[1], 0.5),
+        rbox(14, 2, 1.2, p[0], { y: dh - 4, z: d / 2 - 0.4 }, 0.5),
+        clothes(dw - 2, d - 6, clothH, 0.5, 10 + i * 3 + n),
+      )
+      g.add(movable(P(dr, 0, y, 0), { kind: 'drawer', dz: DRAWER_PULL }))
     }
     return g
   }
+}
+/** 抽屉格：衣服上面还能放的空间，跟着抽屉拉出 */
+function drawerCabSurfaces(n: number): Surf[] {
+  return Array.from({ length: n }, (_, i) => {
+    const { y, dh, dw, clothH } = drawerRow(i)
+    const z0 = 0.2 - (DRAWER.d - 3) / 2 + 0.6
+    const z1 = 0.2 + (DRAWER.d - 3) / 2 - 0.6
+    return { y: r1(y + 0.5 + clothH), h: r1(dh - 0.5 - clothH - 0.3), shape: [rectPoly(-dw / 2 + 0.6, z0, dw / 2 - 0.6, z1)], inside: true, slide: DRAWER_PULL }
+  })
 }
 const DRAWER_PALS: Pal[] = [
   ['modern', [M.white, '#eef3f6', M.light]],
@@ -2005,10 +2021,15 @@ const BOXES: AssetDef[] = [
     }),
   ),
   ...[3, 4, 5].map((n) =>
-    asset(`sb-drawer-cab-${n}`, '半透明抽屉柜', 'storage', [DRAWER.w, DRAWER.d, drawerH(n)], DRAWER_PALS, drawerCab(n), { family: 'sb-drawer-cab', sizeLabel: `${n} 层`, surface: drawerH(n) }),
+    asset(`sb-drawer-cab-${n}`, '半透明抽屉柜', 'storage', [DRAWER.w, DRAWER.d, drawerH(n)], DRAWER_PALS, drawerCab(n), {
+      family: 'sb-drawer-cab',
+      sizeLabel: `${n} 层`,
+      surface: drawerH(n),
+      surfaces: drawerCabSurfaces(n),
+      openable: true,
+    }),
   ),
-  doorCabDef('sb-door-cab-closed', '双门收纳柜', DOOR_CAB, 'solid', false, CAB_PALS, 'storage', { family: 'sb-door-cab', form: 'closed' }, false),
-  doorCabDef('sb-door-cab-open', '双门收纳柜', DOOR_CAB, 'solid', true, CAB_PALS, 'storage', { family: 'sb-door-cab', form: 'open' }),
+  doorCabDef('sb-door-cab-closed', '双门收纳柜', DOOR_CAB, 'solid', CAB_PALS, 'storage', { family: 'sb-door-cab' }),
   asset('sb-closet-box-grid', '衣柜内收纳盒', 'storage', [32.3, 32.3, 11], CLOSET_PALS, closetGrid, { family: 'sb-closet-box', sizeLabel: '16 格', prop: true }),
   asset('sb-closet-box-long', '衣柜内收纳盒', 'storage', [15.3, 32.8, 12], CLOSET_PALS, closetLong, { family: 'sb-closet-box', sizeLabel: '长条', prop: true }),
   ...CARTONS.map((c) =>

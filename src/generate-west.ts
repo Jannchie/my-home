@@ -120,6 +120,7 @@ function layout(seed: number, o: { bedrooms: 'random' | 1 | 2 | 3 | 4; corner: '
   const plan: Plan = {
     version: 1,
     appliancesAsFurniture: true,
+    cabinetsAsFurniture: true,
     name: `${t('{n}室{b}卫', { n: beds, b: `${full}${halfN ? '.5' : ''}` })}${c.rooms.some((r) => r.name === 'Office') ? t('+书房') : ''}${corner ? t('·边户') : ''} ${planArea({ rooms: c.rooms }).toFixed(1)}㎡ #${seed}`,
     wall: WALL,
     wallOuter: WALL_OUTER,

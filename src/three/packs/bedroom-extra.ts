@@ -1,9 +1,11 @@
 // 卧室补充素材包（be- 前缀）：内衣柜（ランジェリーチェスト）、小抽屉柜、矮斗柜、各种风格的化妆台 + 化妆凳。
-//   - 抽屉柜有「合上 / 打开」两种形态：打开时拉出一两格，露出叠好的内衣、卷好的袜子（衣物来自 ../garments）。
+//   - 内衣柜、矮斗柜可开合（openable）：每格抽屉都是会动的部件，打开时全部拉出，露出码好的内衣；抽屉格（衣物上面）能放东西。
+//   - 桌上小抽屉柜（prop）仍是「合上 / 打开」两件素材：打开时拉出一两格。
+//   - 化妆台、和风鏡台的抽屉也可开合。
 //   - 化妆台都有台面（surface / surfaceShape 避开镜子），化妆品是独立的摆件（toiletry 类）。
 
 import * as THREE from 'three'
-import { C, rectPoly, S, type AssetDef, type StyleTag } from '../kit'
+import { C, movable, rectPoly, S, type AssetDef, type StyleTag, type SurfaceDef } from '../kit'
 import { ball, cyl, rbox, shade, toon, torus } from '../toon'
 
 type Pal = [StyleTag, string[]]
@@ -97,13 +99,13 @@ function drawerFill(w: number, d: number, seed: number, hMax = 6) {
 }
 
 /** 一格抽屉：前板 + 浅盒；pull = 拉出的距离 */
-function drawer(w: number, h: number, d: number, front: string, body: string, knob: string, pull: number, fill: number | null, knobKind: 'ball' | 'bar' | 'ring') {
+function drawer(w: number, h: number, d: number, front: string, body: string, knob: string, pull: number, fill: number | null, knobKind: 'ball' | 'bar' | 'ring', withBox = pull > 0, fillH?: number) {
   const g = new THREE.Group()
   g.add(rbox(w, h, 1.6, front, { z: d / 2 - 0.8 }, 0.5))
   if (knobKind === 'ball') g.add(ball(1.2, knob, { y: h / 2, z: d / 2 + 0.9 }))
   else if (knobKind === 'ring') g.add(torus(1.6, 0.3, knob, { y: h / 2 - 0.6, z: d / 2 + 0.4 }, Math.PI))
   else g.add(rbox(Math.min(10, w * 0.35), 1, 1.2, knob, { y: h / 2 - 0.5, z: d / 2 + 0.5 }, 0.4))
-  if (pull > 0) {
+  if (withBox) {
     // 抽屉盒：底 + 两侧 + 后板
     const t = 0.8
     const bh = h - 2
@@ -111,7 +113,7 @@ function drawer(w: number, h: number, d: number, front: string, body: string, kn
     for (const s of [-1, 1]) g.add(rbox(t, bh, d - 2, body, { x: s * (w / 2 - 1.9), y: 0.6, z: -0.2 }, 0.2))
     g.add(rbox(w - 3, bh, t, body, { y: 0.6, z: -d / 2 + 0.9 }, 0.2))
     if (fill !== null) {
-      const f = drawerFill(w - 5, d - 4, fill, bh - 2)
+      const f = drawerFill(w - 5, d - 4, fill, fillH ?? bh - 2)
       f.position.set(0, 0.6 + t, -0.4)
       g.add(f)
     }
@@ -174,6 +176,76 @@ function chest(spec: ChestSpec, open: boolean) {
   }
 }
 
+/** 可开合抽屉柜里每格抽屉的衣物高度（衣物上面是抽屉格） */
+const liveFillH = (rh: number) => Math.max(2, Math.min(5, (rh - 2.5) * 0.45))
+/** 拉手凸出柜体正面多少（整体往后挪一半，占地以原点为中心） */
+const KNOB_OUT = { ball: 1.6, ring: 0.2, bar: 0.6 }
+const livePull = (d: number) => Math.round(d * 0.55)
+
+/** 每格抽屉的几何：中心 x、底 y、宽、高、列 / 行序号 */
+function chestCells(spec: ChestSpec) {
+  const { w, h, rows, plinth } = spec
+  const t = 1.8
+  let y = plinth + t
+  const inner = h - plinth - t * 2
+  const sum = rows.reduce((a, b) => a + b, 0)
+  const out: { x: number; y: number; cw: number; rh: number; k: number; ri: number; c: number }[] = []
+  let k = 0
+  rows.forEach((rh0, ri) => {
+    const rh = (rh0 / sum) * inner
+    const n = spec.cols?.[ri] ?? 1
+    const cw = (w - t * 2) / n
+    for (let c = 0; c < n; c++) out.push({ x: -w / 2 + t + cw * (c + 0.5), y: y + 0.25, cw, rh, k: k++, ri, c })
+    y += rh
+  })
+  return out
+}
+
+/** 可开合的抽屉柜：外观同 chest(spec, false)，每格抽屉是会动的部件（盒里码着衣物） */
+function chestLive(spec: ChestSpec) {
+  return (p: string[]) => {
+    const [body, front, knob] = p
+    const { w, d, h, plinth } = spec
+    const g = new THREE.Group()
+    const t = 1.8
+    const y0 = plinth
+    for (const s of [-1, 1]) g.add(rbox(t, h - y0, d, body, { x: s * (w / 2 - t / 2), y: y0 }, 0.5))
+    g.add(rbox(w, t, d, body, { y: h - t }, 0.6))
+    g.add(rbox(w - t * 2, t, d - 1, body, { y: y0, z: 0.5 }, 0.3))
+    g.add(rbox(w - t * 2, h - y0 - t, 1, body, { y: y0, z: -d / 2 + 0.5 }, 0.2))
+    if (spec.legs) for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(cyl(1.6, 1.1, y0, shade(body, -0.12), { x: sx * (w / 2 - 3), z: sz * (d / 2 - 3) }, 10))
+    else g.add(rbox(w - 2, y0, d - 3, shade(body, -0.12), { z: -1 }, 0.3))
+    for (const cell of chestCells(spec)) {
+      const dr = drawer(cell.cw - 0.5, cell.rh - 0.5, d - 2, front, shade(body, 0.04), knob, 0, 1 + cell.k + 2 * (cell.ri + cell.c), spec.knob, true, liveFillH(cell.rh - 0.5))
+      dr.position.set(cell.x, cell.y, 0.5)
+      g.add(movable(dr, { kind: 'drawer', dz: livePull(d) }))
+    }
+    g.position.z = -KNOB_OUT[spec.knob] / 2
+    return new THREE.Group().add(g)
+  }
+}
+
+/** chestLive 的抽屉格：衣物上面的空间，跟着抽屉拉出 */
+function chestLiveSurfaces(spec: ChestSpec): SurfaceDef[] {
+  const dd = spec.d - 2
+  const dz = 0.5 - KNOB_OUT[spec.knob] / 2
+  return chestCells(spec).map((cell) => {
+    const dw = cell.cw - 0.5
+    const bh = cell.rh - 0.5 - 2
+    const fh = liveFillH(cell.rh - 0.5)
+    const y = cell.y + 0.6 + 0.8 + fh
+    const z0 = dz - 0.4 - (dd - 4) / 2
+    const z1 = dz - 0.4 + (dd - 4) / 2
+    return {
+      y: Math.round(y * 10) / 10,
+      h: Math.round(Math.max(0.5, bh - 0.8 - fh) * 10) / 10,
+      shape: [rectPoly(cell.x - (dw - 5) / 2, z0, cell.x + (dw - 5) / 2, z1)],
+      inside: true,
+      slide: livePull(spec.d),
+    }
+  })
+}
+
 const CHEST_PALS: Pal[] = [
   ['nordic', [N.white, N.white, N.oak]],
   ['nordic', [N.oak, N.oakL, N.white]],
@@ -200,20 +272,23 @@ function centered(build: (p: string[]) => THREE.Group) {
 }
 const pullOut = (d: number) => Math.min(16, d * 0.4)
 
+const LOW_CHEST: ChestSpec = { w: 80, d: 42, h: 72, rows: [20, 20, 13], cols: [1, 1, 2], plinth: 8, knob: 'bar' }
 const CHESTS: AssetDef[] = [
-  ...LINGERIE.flatMap((s) =>
-    ([false, true] as const).map((open) =>
-      def(`be-lingerie-${s.w}-${open ? 'open' : 'closed'}`, '内衣柜（ランジェリーチェスト）', [s.w, s.d + (open ? pullOut(s.d) + 1.5 : 0.9), s.h], CHEST_PALS, centered(chest(s, open)), {
-        family: 'be-lingerie',
-        sizeLabel: `${s.w} 宽`,
-        form: open ? 'open' : 'closed',
-        surface: s.h,
-      }),
-    ),
+  // 以前开 / 关是两件素材（-open / -closed），现在 -closed 一件可开合（旧的 -open 读档时迁移成 -closed + open）
+  ...LINGERIE.map((s) =>
+    def(`be-lingerie-${s.w}-closed`, '内衣柜（ランジェリーチェスト）', [s.w, s.d + 0.9, s.h], CHEST_PALS, chestLive(s), {
+      family: 'be-lingerie',
+      sizeLabel: `${s.w} 宽`,
+      surface: s.h,
+      surfaces: chestLiveSurfaces(s),
+      openable: true,
+    }),
   ),
-  ...([false, true] as const).map((open) => {
-    const s: ChestSpec = { w: 80, d: 42, h: 72, rows: [20, 20, 13], cols: [1, 1, 2], plinth: 8, knob: 'bar' }
-    return def(`be-chest-low-${open ? 'open' : 'closed'}`, '矮斗柜', [s.w, s.d + (open ? pullOut(s.d) + 1.5 : 0.9), s.h], CHEST_PALS, centered(chest(s, open)), { family: 'be-chest-low', form: open ? 'open' : 'closed', surface: s.h })
+  def('be-chest-low-closed', '矮斗柜', [LOW_CHEST.w, LOW_CHEST.d + 0.9, LOW_CHEST.h], CHEST_PALS, chestLive(LOW_CHEST), {
+    family: 'be-chest-low',
+    surface: LOW_CHEST.h,
+    surfaces: chestLiveSurfaces(LOW_CHEST),
+    openable: true,
   }),
   ...([3, 5] as const).flatMap((n) =>
     ([false, true] as const).map((open) => {
@@ -252,16 +327,44 @@ function desk(w: number, d: number, top: number, main: string, sub: string, acc:
       else if (legKind === 'cabriole') g.add(cyl(1.4, 2.2, legH, shade(main, -0.06), at, 10), ball(2.3, shade(main, -0.06), { ...at, y: 2.3 }))
       else g.add(cyl(2, 1.3, legH, shade(main, -0.1), at, 10))
     }
-  g.add(rbox(w - 6, 10, d - 6, main, { y: top - 13 }, 1))
+  // 台面下的抽屉箱（空心：底板、背板、两侧），抽屉是会动的部件
+  const aw = w - 6
+  const ad = d - 6
+  g.add(rbox(aw, 0.8, ad, main, { y: top - 13 }, 0.3))
+  g.add(rbox(aw, 10, 0.8, main, { y: top - 13, z: -ad / 2 + 0.4 }, 0.3))
+  for (const s of [-1, 1]) g.add(rbox(0.8, 10, ad, main, { x: s * (aw / 2 - 0.4), y: top - 13 }, 0.3))
   g.add(rbox(w, 3, d, main, { y: top - 3 }, 1))
-  const n = w > 80 ? 3 : w > 50 ? 2 : 1
-  for (let i = 0; i < n; i++) {
-    const dw = (w - 10) / n
-    const x = -w / 2 + 5 + dw * (i + 0.5)
-    g.add(rbox(dw - 1, 8, 1.2, sub, { x, y: top - 12, z: d / 2 - 3 + 0.6 }, 0.4))
-    g.add(ball(1, acc, { x, y: top - 8, z: d / 2 - 1.6 }))
+  for (const c of deskDrawers(w, d, top)) {
+    const dr = new THREE.Group()
+    dr.add(rbox(c.dw - 1, 8, 1.2, sub, { y: 0, z: d / 2 - 3 + 0.6 }, 0.4))
+    dr.add(ball(1, acc, { y: 4, z: d / 2 - 1.6 }))
+    const inner = shade(sub, 0.08)
+    dr.add(rbox(c.dw - 2.4, 0.6, c.bd, inner, { y: 0.4, z: c.bz }, 0.2))
+    for (const s of [-1, 1]) dr.add(rbox(0.5, 6, c.bd, inner, { x: s * ((c.dw - 2.4) / 2 - 0.25), y: 0.4, z: c.bz }, 0.15))
+    dr.add(rbox(c.dw - 2.4, 6, 0.5, inner, { y: 0.4, z: c.bz - c.bd / 2 + 0.25 }, 0.15))
+    dr.position.set(c.x, top - 12, 0)
+    g.add(movable(dr, { kind: 'drawer', dz: c.pull }))
   }
   return g
+}
+
+/** desk() 的抽屉：中心 x、宽、抽屉盒深 bd 与中心 bz、拉出距离 */
+function deskDrawers(w: number, d: number, top: number) {
+  const n = w > 80 ? 3 : w > 50 ? 2 : 1
+  const dw = (w - 10) / n
+  const bd = d - 9
+  const bz = d / 2 - 3 - bd / 2
+  return Array.from({ length: n }, (_, i) => ({ x: -w / 2 + 5 + dw * (i + 0.5), dw, bd, bz, pull: Math.round(bd * 0.6), top }))
+}
+/** desk() 抽屉格的可摆放层 */
+function deskSurfaces(w: number, d: number, top: number): SurfaceDef[] {
+  return deskDrawers(w, d, top).map((c) => ({
+    y: top - 12 + 1,
+    h: 5.2,
+    shape: [rectPoly(c.x - (c.dw - 2.4) / 2 + 0.8, c.bz - c.bd / 2 + 0.8, c.x + (c.dw - 2.4) / 2 - 0.8, c.bz + c.bd / 2 - 0.4)],
+    inside: true,
+    slide: c.pull,
+  }))
 }
 
 /** 折叠镜化妆桌：台面后半是掀盖，打开时盖背面的镜子竖起来 */
@@ -326,10 +429,23 @@ function kyodai(p: string[]) {
   const d = 32
   const g = new THREE.Group()
   const base = 30
-  g.add(rbox(w, base, d, main, {}, 1))
-  for (let i = 0; i < 2; i++) {
-    g.add(rbox(w - 4, 11, 1, shade(main, 0.05), { y: 3 + i * 13, z: d / 2 + 0.4 }, 0.4))
-    g.add(torus(1.4, 0.3, acc, { y: 8 + i * 13 - 0.6, z: d / 2 + 1 }, Math.PI))
+  // 矮柜：空心柜体（底、顶、两侧、背板、中隔板），两格抽屉是会动的部件
+  const t = 1.5
+  g.add(rbox(w, t, d, main, { y: base - t }, 0.6))
+  g.add(rbox(w, 2.5, d, main, {}, 0.6))
+  for (const s of [-1, 1]) g.add(rbox(t, base - t - 2.5, d, main, { x: s * (w / 2 - t / 2), y: 2.5 }, 0.5))
+  g.add(rbox(w - t * 2, base - t - 2.5, 0.8, main, { y: 2.5, z: -d / 2 + 0.4 }, 0.2))
+  g.add(rbox(w - t * 2, 0.8, d - 1, main, { y: 15.2, z: 0.5 }, 0.2))
+  for (const c of KYODAI_DRAWERS) {
+    const dr = new THREE.Group()
+    dr.add(rbox(w - 4, 11, 1, shade(main, 0.05), { z: d / 2 + 0.4 }, 0.4))
+    dr.add(torus(1.4, 0.3, acc, { y: 5 - 0.6, z: d / 2 + 1 }, Math.PI))
+    const inner = shade(main, 0.12)
+    dr.add(rbox(w - 6, 0.6, KYODAI_BD, inner, { y: 0.3, z: d / 2 - KYODAI_BD / 2 }, 0.2))
+    for (const s of [-1, 1]) dr.add(rbox(0.5, 8, KYODAI_BD, inner, { x: s * (w / 2 - 3.25), y: 0.3, z: d / 2 - KYODAI_BD / 2 }, 0.15))
+    dr.add(rbox(w - 6, 8, 0.5, inner, { y: 0.3, z: d / 2 - KYODAI_BD + 0.25 }, 0.15))
+    dr.position.y = c
+    g.add(movable(dr, { kind: 'drawer', dz: Math.round(KYODAI_BD * 0.6) }))
   }
   const zc = -d / 2 + 6
   // 两根立柱 + 镜框
@@ -346,6 +462,19 @@ function kyodai(p: string[]) {
   g.add(rbox(28, 1.6, 3.6, main, { y: base + 54, z: zc }, 0.5))
   return g
 }
+/** 和风鏡台两格抽屉的底边高度、抽屉盒深 */
+const KYODAI_DRAWERS = [3, 16]
+const KYODAI_BD = 28
+/** centered() 把鏡台往后挪的量（拉手凸出前沿约 1.3）：抽屉格的 z 跟着挪 */
+const KYODAI_DZ = -0.65
+const KYODAI_SURF: SurfaceDef[] = KYODAI_DRAWERS.map((y) => ({
+  y: y + 0.9,
+  h: 7.2,
+  shape: [rectPoly(-46 / 2 + 3.9, 32 / 2 - KYODAI_BD + 0.6 + KYODAI_DZ, 46 / 2 - 3.9, 32 / 2 - 0.8 + KYODAI_DZ)],
+  inside: true,
+  slide: Math.round(KYODAI_BD * 0.6),
+}))
+
 const KYODAI_PALS: Pal[] = [
   ['japanese', [J.dark, J.shu, '#c9a45c']],
   ['japanese', [J.wood, J.ai, J.dark]],
@@ -407,13 +536,14 @@ function stool(p: string[]) {
 }
 
 const VANITY_SURF = (w: number, d: number, z0: number) => [rectPoly(-w / 2 + 2, z0, w / 2 - 2, d / 2 - 1.5)]
+// 化妆台：桌下抽屉可开合（折叠镜化妆桌的镜子立起 / 放平仍是两件素材）
 const VANITIES: AssetDef[] = [
-  def('be-vanity-fold-open', '折叠镜化妆桌', [80, 45, 97.5], VANITY_PALS, vanityFold(true), { family: 'be-vanity-fold', form: 'open', formLabel: '镜子立起', surface: 73, surfaceShape: VANITY_SURF(80, 45, 2) }),
-  def('be-vanity-fold-closed', '折叠镜化妆桌', [80, 45, 75], VANITY_PALS, vanityFold(false), { family: 'be-vanity-fold', form: 'closed', surface: 73, surfaceShape: VANITY_SURF(80, 45, 2) }),
-  def('be-vanity-tri', '三面镜梳妆台', [90, 45, 143], VANITY_PALS, vanityTri, { surface: 74, surfaceShape: VANITY_SURF(90, 45, -8) }),
-  def('be-kyodai', '和风鏡台', [46, 33, 107], KYODAI_PALS, centered(kyodai), { category: 'japanese', surface: 30, surfaceShape: [rectPoly(-21, -4, 21, 15)] }),
-  def('be-vanity-hollywood', '好莱坞灯泡化妆台', [100, 45, 135], VANITY_PALS, vanityHollywood, { surface: 75, surfaceShape: VANITY_SURF(100, 45, -15) }),
-  def('be-vanity-wall', '北欧圆镜化妆桌', [70, 38, 168], VANITY_PALS, vanityWall, { surface: 74, surfaceShape: VANITY_SURF(70, 38, -15) }),
+  def('be-vanity-fold-open', '折叠镜化妆桌', [80, 45, 97.5], VANITY_PALS, vanityFold(true), { family: 'be-vanity-fold', form: 'open', formLabel: '镜子立起', surface: 73, surfaceShape: VANITY_SURF(80, 45, 2), surfaces: deskSurfaces(80, 45, 73), openable: true }),
+  def('be-vanity-fold-closed', '折叠镜化妆桌', [80, 45, 75], VANITY_PALS, vanityFold(false), { family: 'be-vanity-fold', form: 'closed', surface: 73, surfaceShape: VANITY_SURF(80, 45, 2), surfaces: deskSurfaces(80, 45, 73), openable: true }),
+  def('be-vanity-tri', '三面镜梳妆台', [90, 45, 143], VANITY_PALS, vanityTri, { surface: 74, surfaceShape: VANITY_SURF(90, 45, -8), surfaces: deskSurfaces(90, 45, 74), openable: true }),
+  def('be-kyodai', '和风鏡台', [46, 33, 107], KYODAI_PALS, centered(kyodai), { category: 'japanese', surface: 30, surfaceShape: [rectPoly(-21, -4, 21, 15)], surfaces: KYODAI_SURF, openable: true }),
+  def('be-vanity-hollywood', '好莱坞灯泡化妆台', [100, 45, 135], VANITY_PALS, vanityHollywood, { surface: 75, surfaceShape: VANITY_SURF(100, 45, -15), surfaces: deskSurfaces(100, 45, 75), openable: true }),
+  def('be-vanity-wall', '北欧圆镜化妆桌', [70, 38, 168], VANITY_PALS, vanityWall, { surface: 74, surfaceShape: VANITY_SURF(70, 38, -15), surfaces: deskSurfaces(70, 38, 74), openable: true }),
   def('be-vanity-stool', '化妆凳', [29, 29, 46.8], [...VANITY_PALS.map(([s, c]): Pal => [s, [c[0], c[1]]])], stool),
 ]
 

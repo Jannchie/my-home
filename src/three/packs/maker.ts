@@ -7,7 +7,7 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
-import { C, G, S, paintPanel, rectPoly, rng, shell, type AssetCategory, type AssetDef, type Poly, type StyleTag } from '../kit'
+import { C, G, S, movable, paintPanel, rectPoly, rng, shell, type AssetCategory, type AssetDef, type Poly, type StyleTag, type SurfaceDef } from '../kit'
 
 type V3 = [number, number, number]
 type Pal = [StyleTag, ...string[]]
@@ -2234,9 +2234,13 @@ function drawerCab(W: number, D: number, rows: { h: number; n: number }[], plint
         const x = -W / 2 + 0.6 + cw * (i + 0.5)
         g.add(rbox(0.5, row.h, 1.0, frame, { x: x - cw / 2, y, z: zf + 0.5 }, 0.15))
         const c = PART_COLORS[Math.floor(r() * PART_COLORS.length)]
-        g.add(noLine(rbox(cw - 1.0, row.h * (0.25 + r() * 0.25), 0.6, c, { x, y: y + 0.3, z: zf + 0.35 }, 0.1)))
-        g.add(ghost(rbox(cw - 0.45, row.h - 0.45, 0.2, tint, { x, y: y + 0.22, z: zf + 0.85 }, 0.08), tint, 0.4))
-        g.add(rbox(Math.min(cw * 0.4, 4), 0.5, 0.5, handle, { x, y: y + row.h * 0.55, z: zf + 1.15 }, 0.15))
+        // 每个透明小抽屉（连同里面的零件）都能拉出一半
+        const bin = new THREE.Group()
+        bin.add(noLine(rbox(cw - 1.0, row.h * (0.25 + r() * 0.25), 0.6, c, { x, y: y + 0.3, z: zf + 0.35 }, 0.1)))
+        bin.add(ghost(rbox(cw - 0.45, row.h - 0.45, 0.2, tint, { x, y: y + 0.22, z: zf + 0.85 }, 0.08), tint, 0.4))
+        bin.add(rbox(Math.min(cw * 0.4, 4), 0.5, 0.5, handle, { x, y: y + row.h * 0.55, z: zf + 1.15 }, 0.15))
+        bin.add(tray(cw - 1.2, row.h - 1.2, D - 3, 0.4, shade(tint, -0.08), { x, y: y + 0.3, z: zf - (D - 3) / 2 }, 0.15))
+        g.add(movable(bin, { kind: 'drawer', dz: Math.round(D * 0.5) }))
       }
       g.add(rbox(0.5, row.h, 1.0, frame, { x: W / 2 - 0.35, y, z: zf + 0.5 }, 0.15))
       y += row.h
@@ -2252,6 +2256,21 @@ const DRAWER_PALS: Pal[] = [
   ['cute', C.pink, '#fff0f4', C.white],
   ['retro', R.teal, R.cream, R.mustard],
 ]
+/** 零件抽屉柜每个小抽屉的可摆放层（和 drawerCab 一致；抽屉是透明的，标 glass） */
+function drawerCabSurfaces(W: number, D: number, rows: { h: number; n: number }[], plinth: number): SurfaceDef[] {
+  const zf = D / 2 - 1.2
+  const out: SurfaceDef[] = []
+  let y = plinth + 0.6
+  for (const row of rows) {
+    const cw = (W - 1.2) / row.n
+    for (let i = 0; i < row.n; i++) {
+      const x = -W / 2 + 0.6 + cw * (i + 0.5)
+      out.push({ y: y + 0.7, h: Math.round((row.h - 1.8) * 10) / 10, inside: true, glass: true, slide: Math.round(D * 0.5), shape: [rectPoly(x - (cw - 1.2) / 2 + 0.6, zf - (D - 3) + 0.6, x + (cw - 1.2) / 2 - 0.6, zf - 0.6)] })
+    }
+    y += row.h
+  }
+  return out
+}
 const DESK_ROWS = [{ h: 6.4, n: 3 }, ...Array.from({ length: 6 }, () => ({ h: 3.6, n: 6 }))]
 const FLOOR_ROWS = Array.from({ length: 12 }, () => ({ h: 7.8, n: 5 }))
 
@@ -2267,9 +2286,8 @@ function toolChest(p: string[]) {
     }
   g.add(rbox(68, 73, 46, body, { y: 9 }, 1))
   let y = 10
-  for (const h of [6, 6, 8, 10, 16, 24]) {
-    g.add(rbox(64, h - 0.6, 0.6, shade(body, 0.04), { y, z: 23.1 }, 0.3))
-    g.add(rbox(56, 1.2, 1.4, handle, { y: y + h - 2.6, z: 23.9 }, 0.4))
+  for (const h of CHEST_DRAWERS) {
+    g.add(movable(G(rbox(64, h - 0.6, 0.6, shade(body, 0.04), { y, z: 23.1 }, 0.3), rbox(56, 1.2, 1.4, handle, { y: y + h - 2.6, z: 23.9 }, 0.4), tray(62, h - 3, 42, 0.6, shade(body, -0.12), { y: y + 0.5, z: 22.8 - 21 }, 0.2)), { kind: 'drawer', dz: 26 }))
     y += h
   }
   for (const s of [-1, 1]) g.add(cylX(0.6, 4, handle, 36, 74, s * 15, 10))
@@ -2286,6 +2304,17 @@ function toolChest(p: string[]) {
 /** 侧把手和抽屉拉手让包围盒偏了，整体挪回占地中心 */
 const CHEST_DX = -2.75
 const CHEST_DZ = -0.8
+/** 工具柜六个抽屉的高度（自下而上，第一个从 y = 10 起） */
+const CHEST_DRAWERS = [6, 6, 8, 10, 16, 24]
+/** 工具柜抽屉格（和 toolChest 一致，含整体平移） */
+function chestSurfaces(): SurfaceDef[] {
+  let y = 10
+  return CHEST_DRAWERS.map((h) => {
+    const lv: SurfaceDef = { y: y + 1.1, h: h - 4, inside: true, slide: 26, shape: [rectPoly(-30 + CHEST_DX, -18.4 + CHEST_DZ, 30 + CHEST_DX, 22 + CHEST_DZ)] }
+    y += h
+    return lv
+  })
+}
 const CHEST_PALS: Pal[] = [
   ['industrial', '#c8382e', CHROME, RUBBER],
   ['modern', M.black, M.silver, RUBBER],
@@ -2590,9 +2619,9 @@ export const MAKER: AssetDef[] = [
   def('mk-drill-press', '台钻', 'hobby', [20, 36, 57], MACHINE_PALS, drillPress, PROP),
   def('mk-laser-cutter', '激光切割机', 'hobby', [70, 55, 20.1], LASER_PALS, laserCutter, PROP),
   def('mk-cnc', '迷你 CNC 雕刻机', 'hobby', [45.9, 36.2, 27.7], CNC_PALS, cnc3018, PROP),
-  def('mk-drawers-desk', '零件抽屉柜', 'storage', [38, 16.2, 29.2], DRAWER_PALS, drawerCab(38, 16, DESK_ROWS, 0), { ...PROP, family: 'mk-parts-drawer', sizeLabel: '桌面 39 格', surface: 29.2 }),
-  def('mk-drawers-floor', '零件抽屉柜', 'storage', [50, 25.2, 98.8], DRAWER_PALS, drawerCab(50, 25, FLOOR_ROWS, 4), { family: 'mk-parts-drawer', sizeLabel: '落地 60 格', surface: 98.8 }),
-  def('mk-tool-chest', '工具柜', 'storage', [73.5, 47.6, 85], CHEST_PALS, toolChest, { surface: 83.3, surfaceShape: [rectPoly(-32.6 + CHEST_DX, -21.6 + CHEST_DZ, 32.6 + CHEST_DX, 21.6 + CHEST_DZ)] }),
+  def('mk-drawers-desk', '零件抽屉柜', 'storage', [38, 16.2, 29.2], DRAWER_PALS, drawerCab(38, 16, DESK_ROWS, 0), { ...PROP, family: 'mk-parts-drawer', sizeLabel: '桌面 39 格', surface: 29.2, surfaces: drawerCabSurfaces(38, 16, DESK_ROWS, 0), openable: true }),
+  def('mk-drawers-floor', '零件抽屉柜', 'storage', [50, 25.2, 98.8], DRAWER_PALS, drawerCab(50, 25, FLOOR_ROWS, 4), { family: 'mk-parts-drawer', sizeLabel: '落地 60 格', surface: 98.8, surfaces: drawerCabSurfaces(50, 25, FLOOR_ROWS, 4), openable: true }),
+  def('mk-tool-chest', '工具柜', 'storage', [73.5, 47.6, 85], CHEST_PALS, toolChest, { surface: 83.3, surfaceShape: [rectPoly(-32.6 + CHEST_DX, -21.6 + CHEST_DZ, 32.6 + CHEST_DX, 21.6 + CHEST_DZ)], surfaces: chestSurfaces(), openable: true }),
   def('mk-workbench', '工作台', 'hobby', [150, 79.4, 90], BENCH_PALS, workbench(false), { family: 'mk-workbench', sizeLabel: '150', ...BENCH_SURF(false) }),
   def('mk-workbench-peg', '工作台', 'hobby', [150, 79.4, 163], BENCH_PALS, workbench(true), { family: 'mk-workbench', sizeLabel: '150 带洞洞板', ...BENCH_SURF(true) }),
   def('mk-sawhorse', '锯木架', 'hobby', [90, 49.3, 70], HORSE_PALS, sawhorse, { surface: 70, surfaceShape: [rectPoly(-45, -1.9, 45, 1.9)] }),

@@ -1,7 +1,8 @@
 // 全屋检查清单：按房间用途和住户设定列出必要的东西，看看缺了什么；每一项都可以一键补上。
 
 import { sharedIntervals } from './walls'
-import { edgesOf, pointInPolygon, type Furniture, type Plan, type Room } from './model'
+import { edgesOf, pointInPolygon, type BuiltinType, type Furniture, type Plan, type Room } from './model'
+import { cabinetsOn, spotInRoom } from './cabinet'
 import { ASSET_MAP, type AssetDef } from './three/assets'
 import { JOBS, type Household } from './household'
 import { hasTag, type Sel, type Tag } from './three/tags'
@@ -14,6 +15,7 @@ export type Fix =
   | { how: 'fixture'; sel: Sel; fixture: 'kitchen' | 'basin' | 'washer' | 'toilet' } // 摆到设备台面上
   | { how: 'aircon' } // 挂空调（内机 + 外机朝向）
   | { how: 'appliance'; kind: 'fridge' | 'washer' } // 冰箱 / 洗衣机：放到空着的冰箱位 / 洗衣机位上，没有位就靠墙放
+  | { how: 'spot'; type: BuiltinType } // 柜子：放到空着的收纳位（鞋柜位 / 衣柜位 / 食品柜位）上
   | { how: 'outdoor' } // 空调外机补到和室内机一样多（在 store 里处理：外机是设备不是家具）
   | { how: 'chairs' } // 餐椅补到人数
   | { how: 'bed' } // 按住户补床
@@ -94,6 +96,9 @@ export function checklist(plan: Plan, hh?: Household): CheckItem[] {
   const diningRoom = plan.rooms.some((r) => r.kind === 'dining')
   const firstBalcony = plan.rooms.find((r) => r.kind === 'balcony')
   const serviceBalcony = plan.rooms.find((r) => r.kind === 'balcony' && r.name === '生活阳台')
+  /** 房间里空着的收纳位（还没放柜子）：补救时把柜子放到位上，没有就靠墙放 */
+  const emptySpot = (r: Room, type: BuiltinType) => plan.fixtures.some((x) => x.kind === 'builtin' && (x.builtinType ?? 'shoe') === type && spotInRoom(x, r.points) && !cabinetsOn(plan.furniture, x).length)
+  const spotFix = (r: Room, type: BuiltinType, fallback: Fix): Fix => (emptySpot(r, type) ? { how: 'spot', type } : fallback)
 
   for (const r of plan.rooms) {
     const f = inRoom(plan, r)
@@ -104,10 +109,9 @@ export function checklist(plan: Plan, hh?: Household): CheckItem[] {
     }
     if (r.kind === 'western' || r.kind === 'japanese') {
       item(r, '照明（台灯 / 落地灯）', count(f, TAGS.lamp), 1, { how: 'scatter', sel: ['table-lamp', 'desk-lamp'] })
-      // 和房间共墙的收纳间（クローゼット、押入れ、WIC）或房间里的壁内收纳就算有衣物收纳
+      // 和房间共墙的收纳间（クローゼット、押入れ、WIC）就算有衣物收纳；衣柜位上的衣柜是家具，按件数算（空着的位补救时放上衣柜）
       const closetRoom = plan.rooms.some((o) => o.kind === 'storage' && edgesOf(r.points).some((e) => sharedIntervals(e, o).length > 0))
-      const builtinCloset = plan.fixtures.some((x) => x.kind === 'builtin' && x.builtinType === 'closet' && pointInPolygon(x, r.points))
-      item(r, '衣物收纳', count(f, TAGS.closet) + (closetRoom || builtinCloset ? 1 : 0), 1, { how: 'wall', sel: ['wardrobe', 'dresser', 'clothes-rail'] })
+      item(r, '衣物收纳', count(f, TAGS.closet) + (closetRoom ? 1 : 0), 1, spotFix(r, 'closet', { how: 'wall', sel: ['wardrobe', 'dresser', 'clothes-rail'] }))
     }
     if (r.kind === 'ldk') {
       item(r, '沙发', count(f, TAGS.sofa), 1, { how: 'wall', sel: /^sofa2$/ })
@@ -127,14 +131,20 @@ export function checklist(plan: Plan, hh?: Household): CheckItem[] {
       }
     }
     if (r.kind === 'entrance' && region !== 'west') {
-      const builtinShoe = plan.fixtures.filter((x) => x.kind === 'builtin' && (x.builtinType ?? 'shoe') === 'shoe' && pointInPolygon(x, r.points)).length
-      // 玄关太小时鞋架、伞架会放到相邻的走廊里，也算
+      // 玄关太小时鞋架、伞架会放到相邻的走廊里，也算；鞋柜位上的鞋柜是家具（嵌墙壁龛里的柜子中心可能在墙里，按位算进玄关）
       const fe = [...f, ...plan.rooms.filter((o) => o.kind === 'hall' && edgesOf(r.points).some((e) => sharedIntervals(e, o).length > 0)).flatMap((o) => inRoom(plan, o))]
-      item(r, '鞋柜 / 鞋架', count(fe, TAGS.shoeCab) + builtinShoe, 1, { how: 'wall', sel: /^shoe-cabinet$/ })
+      const onSpots = plan.fixtures
+        .filter((x) => x.kind === 'builtin' && (x.builtinType ?? 'shoe') === 'shoe' && spotInRoom(x, r.points))
+        .flatMap((x) => cabinetsOn(plan.furniture, x))
+        .filter((c) => !fe.includes(c))
+      item(r, '鞋柜 / 鞋架', count([...fe, ...onSpots], TAGS.shoeCab), 1, spotFix(r, 'shoe', { how: 'wall', sel: /^shoe-cabinet$/ }))
       item(r, '伞架', count(fe, TAGS.umbrella), 1, { how: 'wall', sel: /^umbrella-stand$/ })
       item(r, '鞋子', count(f, TAGS.shoes, (d) => !!d.prop), 1, { how: 'scatter', sel: 'shoe' })
     }
     const hasFx = (kind: string) => plan.fixtures.some((x) => x.kind === kind && pointInPolygon(x, r.points))
+    // 食品柜位：要有一件食品柜
+    const pantrySpots = plan.fixtures.filter((x) => x.kind === 'builtin' && x.builtinType === 'pantry' && spotInRoom(x, r.points))
+    if (pantrySpots.length) item(r, '食品柜', count([...f, ...pantrySpots.flatMap((x) => cabinetsOn(plan.furniture, x))].filter((x, i, a) => a.indexOf(x) === i), 'pantry'), 1, spotFix(r, 'pantry', { how: 'wall', sel: 'pantry' }))
     if (r.kind === 'wash' && region !== 'jp') {
       // 欧美的 Laundry：只看洗衣用品
       item(r, '洗衣液', count(f, TAGS.detergent), 1, { how: 'fixture', sel: 'detergent', fixture: 'washer' })

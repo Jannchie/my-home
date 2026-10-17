@@ -5,7 +5,7 @@
 
 import * as THREE from 'three'
 import { ball, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
-import { C, S, holePanel, paintPanel, rectPoly, ellipsePoly, type AssetDef, type Hole, type Poly, type StyleTag } from '../kit'
+import { C, S, SWING_OPEN, hangingPipe, holePanel, movable, paintPanel, pipeHook, rectPoly, ellipsePoly, type AssetDef, type Hole, type Poly, type StyleTag, type SurfaceDef } from '../kit'
 
 type V3 = [number, number, number]
 type P2 = [number, number]
@@ -146,6 +146,65 @@ function lattice(w: number, h: number, cols: number, rows: number, bar = 2.4, ma
 function noOL<T extends THREE.Object3D>(o: T) {
   o.traverse((c) => (c.userData.noOutline = true))
   return o
+}
+
+// ---------- 可开合的柜子：门 / 抽屉做成会动的部件（见 kit.ts movable / poseDoors） ----------
+
+/** 平开门：零件按柜子坐标做好，挂到铰链线 (hx, hz) 上；hinge 为铰链在门的哪一侧（左铰链往外开是负角） */
+export function swingDoor(parts: THREE.Object3D[], hx: number, hz: number, hinge: 'left' | 'right', angle = SWING_OPEN) {
+  const pivot = new THREE.Group()
+  const inner = new THREE.Group()
+  inner.position.set(-hx, 0, -hz)
+  for (const o of parts) inner.add(o)
+  pivot.add(inner)
+  pivot.position.set(hx, 0, hz)
+  return movable(pivot, { kind: 'swing', angle: (hinge === 'left' ? -1 : 1) * angle })
+}
+
+/** 推拉门：零件按柜子坐标做好，打开时沿 x 推 dx */
+export function slideDoor(parts: THREE.Object3D[], dx: number) {
+  const g = new THREE.Group()
+  for (const o of parts) g.add(o)
+  return movable(g, { kind: 'slide', dx })
+}
+
+/** 抽屉盒的底、侧、后板：抽屉口 x0..x1、底边 y0、高 h，面板背面在 zf，盒深 depth（往 -z） */
+function drawerTray(x0: number, x1: number, y0: number, h: number, zf: number, depth: number, color: string) {
+  const w = x1 - x0 - 2
+  const cx = (x0 + x1) / 2
+  const bh = Math.max(2, h - 3)
+  const zc = zf - depth / 2
+  return [
+    rbox(w, 1, depth, color, { x: cx, y: y0 + 0.6, z: zc }, 0.2),
+    rbox(1, bh, depth, color, { x: cx - w / 2 + 0.5, y: y0 + 0.6, z: zc }, 0.2),
+    rbox(1, bh, depth, color, { x: cx + w / 2 - 0.5, y: y0 + 0.6, z: zc }, 0.2),
+    rbox(w - 2, bh, 1, color, { x: cx, y: y0 + 0.6, z: zf - depth + 0.5 }, 0.2),
+  ]
+}
+
+/** 抽屉：面板零件 + 抽屉盒，打开时往前拉 pull（默认盒深的 0.6） */
+export function drawerOf(front: THREE.Object3D[], x0: number, x1: number, y0: number, h: number, zf: number, depth: number, color: string, pull = Math.round(depth * 0.6)) {
+  const g = new THREE.Group()
+  for (const o of [...front, ...drawerTray(x0, x1, y0, h, zf, depth, color)]) g.add(o)
+  return movable(g, { kind: 'drawer', dz: pull })
+}
+
+/** 和 drawerOf 对应的抽屉格（关着时的位置；打开时按 slide 往前移） */
+export function drawerLv(x0: number, x1: number, y0: number, h: number, zf: number, depth: number, pull = Math.round(depth * 0.6)): SurfaceDef {
+  return { y: y0 + 1.6, h: Math.max(2, h - 3.6), inside: true, slide: pull, shape: [rectPoly(x0 + 2.2, zf - depth + 1.2, x1 - 2.2, zf - 0.4)] }
+}
+
+/** 空心柜体：外形 w × h × d（at.y 为底面，x / z 为中心），背板、两侧、顶、底，板厚 t */
+export function hollow(w: number, h: number, d: number, color: string, at: { x?: number; y?: number; z?: number } = {}, t = 1.6, inner = shade(color, 0.05)) {
+  const g = new THREE.Group()
+  const x = at.x ?? 0
+  const y = at.y ?? 0
+  const z = at.z ?? 0
+  for (const s of [-1, 1]) g.add(rbox(t, h, d, color, { x: x + s * (w / 2 - t / 2), y, z }, 0.4))
+  g.add(rbox(w - t * 2 + 0.02, t, d, color, { x, y: y + h - t, z }, 0.4))
+  g.add(rbox(w - t * 2 + 0.02, t, d, color, { x, y, z }, 0.4))
+  g.add(rbox(w - t * 2 + 0.02, h - t * 2 + 0.02, t, inner, { x, y: y + t, z: z - d / 2 + t / 2 }, 0.3))
+  return g
 }
 
 /** 自发光的小件 */
@@ -739,6 +798,8 @@ function duobaoSurfaces() {
   }
   return out
 }
+/** 多宝格下柜（对开门里）的一层 */
+const DUOBAO_LOWER: SurfaceDef = { y: 8, h: 41.5, inside: true, shape: [r(-37, -14.4, 37, 15.2)] }
 function duobao(p: string[]) {
   const [wood, dark, brass] = p
   const { w, d, h, t, cab, split, left, right, subX, subY } = DB
@@ -752,10 +813,14 @@ function duobao(p: string[]) {
   // 下柜：对开门 + 铜面叶
   g.add(rbox(w - 2 * t + 0.4, 2, d - 1.6, wood, { y: cab, z: 0.8 }, 0.5))
   for (const s of [-1, 1]) {
-    g.add(rbox(w / 2 - t - 0.6, cab - 8.6, 1.6, dark, { x: s * (w / 4 - t / 2 + 0.1), y: 8.3, z: d / 2 - 0.4 }, 0.6))
-    g.add(rbox(w / 2 - t - 6, cab - 15, 0.6, wood, { x: s * (w / 4 - t / 2 + 0.1), y: 11.5, z: d / 2 + 0.6 }, 0.3))
+    const parts: THREE.Object3D[] = [
+      rbox(w / 2 - t - 0.6, cab - 8.6, 1.6, dark, { x: s * (w / 4 - t / 2 + 0.1), y: 8.3, z: d / 2 - 0.4 }, 0.6),
+      rbox(w / 2 - t - 6, cab - 15, 0.6, wood, { x: s * (w / 4 - t / 2 + 0.1), y: 11.5, z: d / 2 + 0.6 }, 0.3),
+    ]
+    // 铜面叶压在右门的边上
+    if (s > 0) parts.push(brassPlate(0, 30, d / 2 + 0.4, 4.2, brass))
+    g.add(swingDoor(parts, s * (w / 2 - t - 0.2), d / 2 - 1.2, s < 0 ? 'left' : 'right'))
   }
-  g.add(brassPlate(0, 30, d / 2 + 0.4, 4.2, brass))
   // 竖隔板：主隔板开拱洞，副隔板开圆洞
   g.add(holePanel(d - 2.8, h - t - cab - 2, 2.2, wood, [{ kind: 'arch', x: 2, y: 45, w: 14, h: 22 }], { x: split, y: cab + 2, z: 0.8, ry: Math.PI / 2 }))
   g.add(holePanel(d - 2.8, h - t - subY - 2, 2.2, wood, [{ kind: 'circle', x: 1, y: 18, r: 7 }], { x: subX, y: subY + 2, z: 0.8, ry: Math.PI / 2 }))
@@ -887,24 +952,26 @@ function moonGate(p: string[]) {
   return g
 }
 
-/** 顶箱柜：下柜 + 顶箱，对开门、闩杆、铜面叶与合页 */
+/** 顶箱柜：下柜 + 顶箱，对开门、闩杆、铜面叶与合页；门可以打开，里面是层板 */
 function dingxiang(p: string[]) {
   const [wood, brass, dark] = p
   const g = new THREE.Group()
   const W = 100
   const D = 55
+  const inner = shade(wood, 0.05)
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(5, 6, 5, wood, { x: sx * 47.5, z: sz * 25 }, 1))
   g.add(prism([[-45, 6], [45, 6], [45, 3], [36, 2.2], [-36, 2.2], [-45, 3]], 1.4, dark, 25.8))
-  const sec = (y: number, h: number, n: number) => {
-    g.add(rbox(W, h, D, wood, { y }, 1.2))
-    // 闩杆 + 两扇门
+  const sec = (y: number, h: number, n: number, shelves: number[]) => {
+    g.add(hollow(W, h, D, wood, { y }, 2, inner))
+    for (const sy of shelves) g.add(rbox(W - 4, 1.6, D - 3, inner, { y: sy - 1.6, z: 0.5 }, 0.3))
+    // 闩杆（固定在柜体上）+ 两扇门
     g.add(rbox(3.2, h - 4, 1.4, dark, { y: y + 2, z: D / 2 + 0.3 }, 0.5))
     for (const s of [-1, 1]) {
       const dx = s * (W / 4 + 0.5)
-      g.add(rbox(W / 2 - 5.6, h - 4, 1.2, wood, { x: dx, y: y + 2, z: D / 2 + 0.2 }, 0.5))
-      g.add(rbox(W / 2 - 12, h - 12, 0.6, shade(wood, -0.06), { x: dx, y: y + 6, z: D / 2 + 0.95 }, 0.3))
+      const parts: THREE.Object3D[] = [rbox(W / 2 - 5.6, h - 4, 1.2, wood, { x: dx, y: y + 2, z: D / 2 + 0.2 }, 0.5), rbox(W / 2 - 12, h - 12, 0.6, shade(wood, -0.06), { x: dx, y: y + 6, z: D / 2 + 0.95 }, 0.3)]
       // 合页
-      for (const hy of n > 1 ? [y + 18, y + h - 22] : [y + 10, y + h - 14]) g.add(rbox(4, 4, 0.5, brass, { x: s * (W / 2 - 4), y: hy, z: D / 2 + 1 }, 0.2))
+      for (const hy of n > 1 ? [y + 18, y + h - 22] : [y + 10, y + h - 14]) parts.push(rbox(4, 4, 0.5, brass, { x: s * (W / 2 - 4), y: hy, z: D / 2 + 1 }, 0.2))
+      g.add(swingDoor(parts, s * (W / 2 - 2.3), D / 2 - 0.4, s < 0 ? 'left' : 'right'))
     }
     // 面叶：闩杆上一块长方铜片 + 两侧吊牌
     const my = y + h / 2
@@ -914,12 +981,19 @@ function dingxiang(p: string[]) {
       g.add(ball(0.9, brass, { x: s * 3, y: my - 5.6, z: D / 2 + 1.8 }))
     }
   }
-  sec(6, 164, 2)
+  sec(6, 164, 2, [60, 115])
   g.add(rbox(W + 1.2, 2.4, D + 1.2, dark, { y: 170 }, 0.8))
-  sec(172.4, 52, 1)
+  sec(172.4, 52, 1, [])
   g.add(rbox(W + 1.6, 2.6, D + 1.6, dark, { y: 224.4 }, 0.8))
   return g
 }
+const DX_IN = r(-47.4, -25, 47.4, 26)
+const DINGXIANG_SURFACES: SurfaceDef[] = [
+  { y: 8, h: 50.4, inside: true, shape: [DX_IN] },
+  { y: 60, h: 53.4, inside: true, shape: [DX_IN] },
+  { y: 115, h: 53, inside: true, shape: [DX_IN] },
+  { y: 174.4, h: 48, inside: true, shape: [DX_IN] },
+]
 
 /** 鼓凳：四根外鼓的弧腿连接上下圈，鼓钉一圈 + 绣墩坐垫 */
 function drumStool(p: string[]) {
@@ -1055,17 +1129,17 @@ function penjing(p: string[]) {
 function cnNightstand(p: string[]) {
   const [wood, brass, dark] = p
   const g = new THREE.Group()
+  const inner = shade(wood, 0.05)
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(3.6, 10, 3.6, wood, { x: sx * 19.2, z: sz * 14.6 }, 0.8))
   g.add(prism([[-17.4, 10], [17.4, 10], [17.4, 7], [10, 6], [-10, 6], [-17.4, 7]], 1.2, dark, 15.4))
-  g.add(rbox(42, 42, 32, wood, { y: 10 }, 1))
+  g.add(hollow(42, 42, 32, wood, { y: 10 }, 1.6, inner))
+  g.add(rbox(38.8, 1.6, 30, inner, { y: 37.4, z: 0.4 }, 0.3))
   g.add(rbox(46, 3, 36, wood, { y: 52 }, 1))
-  g.add(rbox(38, 10, 1.2, dark, { y: 39.5, z: 16.2 }, 0.5))
-  g.add(rbox(38, 26, 1.2, dark, { y: 12, z: 16.2 }, 0.5))
-  g.add(rbox(30, 18, 0.5, shade(dark, 0.08), { y: 16, z: 16.9 }, 0.2))
-  g.add(brassPlate(0, 45, 16.6, 2.6, brass))
-  g.add(brassPlate(0, 27, 17.1, 3.4, brass))
+  g.add(drawerOf([rbox(38, 10, 1.2, dark, { y: 39.5, z: 16.2 }, 0.5), brassPlate(0, 45, 16.6, 2.6, brass)], -19, 19, 39.5, 10, 15.6, 28, inner))
+  g.add(swingDoor([rbox(38, 26, 1.2, dark, { y: 12, z: 16.2 }, 0.5), rbox(30, 18, 0.5, shade(dark, 0.08), { y: 16, z: 16.9 }, 0.2), brassPlate(0, 27, 17.1, 3.4, brass)], -19, 15.6, 'left'))
   return g
 }
+const CN_NS_SURFACES: SurfaceDef[] = [{ y: 11.6, h: 25.3, inside: true, shape: [r(-18.8, -14.4, 18.8, 14.8)] }, drawerLv(-19, 19, 39.5, 10, 15.6, 28)]
 
 // =====================================================================
 // 欧式古典
@@ -1148,41 +1222,74 @@ function recamier(p: string[]) {
   return g
 }
 
-/** 雕花餐边柜：卷曲短腿、三门（两侧门 + 中间抽屉组）、描金线脚 */
+/** 雕花餐边柜：卷曲短腿、三门（两侧门 + 中间抽屉组）、描金线脚；门里各一块层板 */
 function clSideboard(p: string[]) {
   const [body, top, gold] = p
   const g = new THREE.Group()
+  const inner = shade(body, 0.05)
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(cabriole(sx * 74, sz * 20, 16, 2.2, body, sx * 0.5, sz * 0.5, 'scroll', gold))
-  g.add(rbox(156, 76, 46, body, { y: 15 }, 1.6))
+  g.add(hollow(156, 76, 46, body, { y: 15 }, 1.6, inner))
+  // 中间抽屉组两侧的隔板、门里的层板
+  for (const s of [-1, 1]) {
+    g.add(rbox(1.6, 72.8, 44, body, { x: s * 27.5, y: 16.6, z: 0.8 }, 0.3))
+    g.add(rbox(46.4, 1.6, 42, inner, { x: s * 52, y: 48.4, z: 0.8 }, 0.3))
+  }
+  // 面框：底、两侧、门与抽屉之间的立梃、上方横档
+  g.add(rbox(156, 7, 1.6, body, { y: 15, z: 22.2 }, 0.4))
+  for (const s of [-1, 1]) {
+    g.add(rbox(3, 58, 1.6, body, { x: s * 76.5, y: 22, z: 22.2 }, 0.4))
+    g.add(rbox(3, 62, 1.6, body, { x: s * 27.5, y: 22, z: 22.2 }, 0.4))
+    g.add(rbox(50, 11, 1.6, body, { x: s * 52, y: 80, z: 22.2 }, 0.4))
+  }
+  g.add(rbox(52, 7, 1.6, body, { y: 84, z: 22.2 }, 0.4))
   // 波浪裙脚
   g.add(prism([[-76, 16], [76, 16], [76, 13], [60, 11], [44, 14], [20, 11], [0, 13.5], [-20, 11], [-44, 14], [-60, 11], [-76, 13]], 1.4, body, 23.2))
   g.add(rbox(160, 4, 50, top, { y: 91 }, 1.4))
-  // 三段门面
+  // 两侧门（铰链在外侧）
   for (const x of [-52, 52]) {
-    g.add(rbox(46, 58, 1.2, body, { x, y: 22, z: 23.2 }, 0.6))
-    g.add(rbox(36, 46, 0.6, shade(body, -0.05), { x, y: 28, z: 23.95 }, 0.4))
-    g.add(noOL(torus(7, 0.5, gold, { x, y: 51, z: 24.5 })))
-    g.add(ball(1.3, gold, { x: x + (x < 0 ? 19 : -19), y: 52, z: 24.6 }))
+    const s = Math.sign(x)
+    const parts: THREE.Object3D[] = [
+      rbox(46, 58, 1.2, body, { x, y: 22, z: 23.2 }, 0.6),
+      rbox(36, 46, 0.6, shade(body, -0.05), { x, y: 28, z: 23.95 }, 0.4),
+      noOL(torus(7, 0.5, gold, { x, y: 51, z: 24.5 })),
+      ball(1.3, gold, { x: x + (x < 0 ? 19 : -19), y: 52, z: 24.6 }),
+    ]
+    g.add(swingDoor(parts, x + s * 23, 22.6, s < 0 ? 'left' : 'right'))
   }
+  // 中间三层抽屉
   for (let k = 0; k < 3; k++) {
     const y = 23 + k * 21
-    g.add(rbox(52, 19, 1.2, body, { y, z: 23.2 }, 0.6))
-    g.add(rbox(10, 2.4, 1.2, gold, { y: y + 8.5, z: 24.4 }, 0.6))
+    g.add(drawerOf([rbox(52, 19, 1.2, body, { y, z: 23.2 }, 0.6), rbox(10, 2.4, 1.2, gold, { y: y + 8.5, z: 24.4 }, 0.6)], -26, 26, y, 19, 22.6, 40, inner))
   }
   g.add(carving(0, 86, 23.4, 5, gold))
   return g
 }
+const CL_SB_SURFACES: SurfaceDef[] = [
+  ...[-1, 1].flatMap((s): SurfaceDef[] => {
+    const shape = [s < 0 ? r(-76, -21.2, -29.2, 21) : r(29.2, -21.2, 76, 21)]
+    return [
+      { y: 16.6, h: 31.6, inside: true, shape },
+      { y: 50, h: 39, inside: true, shape },
+    ]
+  }),
+  ...[0, 1, 2].map((k) => drawerLv(-26, 26, 23 + k * 21, 19, 22.6, 40)),
+]
 
-/** 法式梳妆台：卷曲腿、弓形台面、背后立椭圆镜 */
+/** 法式梳妆台：卷曲腿、弓形台面、背后立椭圆镜；台面下三只小抽屉 */
 function clVanity(p: string[]) {
   const [body, mirrorC, gold] = p
   const g = new THREE.Group()
+  const inner = shade(body, 0.05)
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(cabriole(sx * 48, sz * 18, 60, 2, body, sx * 0.5, sz * 0.5, 'scroll', gold))
-  g.add(rbox(104, 14, 42, body, { y: 60 }, 1.4))
-  for (const x of [-30, 0, 30]) {
-    g.add(rbox(26, 10, 1, shade(body, -0.04), { x, y: 62, z: 21.2 }, 0.4))
-    g.add(ball(1.2, gold, { x, y: 67, z: 22.1 }))
+  g.add(hollow(104, 14, 42, body, { y: 60 }, 1.6, inner))
+  // 抽屉面框：上下横档 + 抽屉之间的立梃
+  g.add(rbox(104, 2, 1.2, body, { y: 60, z: 20.4 }, 0.3))
+  g.add(rbox(104, 2, 1.2, body, { y: 72, z: 20.4 }, 0.3))
+  for (const s of [-1, 1]) {
+    g.add(rbox(4, 10, 1.2, body, { x: s * 15, y: 62, z: 20.4 }, 0.3))
+    g.add(rbox(9, 10, 1.2, body, { x: s * 47.5, y: 62, z: 20.4 }, 0.3))
   }
+  for (const x of [-30, 0, 30]) g.add(drawerOf([rbox(26, 10, 1, shade(body, -0.04), { x, y: 62, z: 21.2 }, 0.4), ball(1.2, gold, { x, y: 67, z: 22.1 })], x - 13, x + 13, 62, 10, 20.7, 36, inner))
   g.add(prism([[-50, 60], [50, 60], [50, 57], [30, 55], [0, 57.5], [-30, 55], [-50, 57]], 1.4, body, 20.6))
   g.add(rbox(110, 3, 46, body, { y: 74 }, 1.2))
   // 镜子：底座 + 椭圆框
@@ -1199,6 +1306,7 @@ function clVanity(p: string[]) {
   g.add(mg)
   return g
 }
+const CL_VANITY_SURFACES: SurfaceDef[] = [-30, 0, 30].map((x) => drawerLv(x - 13, x + 13, 62, 10, 20.7, 36))
 
 /** 欧式壁炉：大理石炉身、线脚炉架、柴火 + 两只三叉烛台 */
 function clFireplace(p: string[]) {
@@ -1421,27 +1529,41 @@ function velvetOttoman(p: string[]) {
   return g
 }
 
-/** 法式衣柜（拱顶）：弓形顶冠、两扇镜面 / 镶板门、卷曲短腿 */
+/** 法式衣柜（拱顶）：弓形顶冠、两扇镜面 / 镶板门、卷曲短腿；门里是挂衣杆 + 枕棚 */
 function clArmoire(p: string[]) {
   const [body, panel, gold] = p
   const g = new THREE.Group()
+  const inner = shade(body, 0.05)
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(cabriole(sx * 56, sz * 25, 14, 2.4, body, sx * 0.5, sz * 0.5, 'scroll', gold))
-  g.add(rbox(120, 170, 58, body, { y: 13 }, 1.6))
+  g.add(hollow(120, 170, 58, body, { y: 13 }, 1.8, inner))
+  g.add(rbox(116.4, 1.6, 55, inner, { y: 168.4, z: 0.5 }, 0.3))
+  g.add(hangingPipe(-56, 56, 160, 0))
+  // 门上下的横档
+  g.add(rbox(120, 5, 1.6, body, { y: 13, z: 28.2 }, 0.4))
+  g.add(rbox(120, 5, 1.6, body, { y: 178, z: 28.2 }, 0.4))
   g.add(prism([[-60, 14], [60, 14], [60, 11], [40, 9], [0, 12], [-40, 9], [-60, 11]], 1.4, body, 29.2))
   // 拱顶
   g.add(prism([[-62, 183], [62, 183], [62, 189], [40, 197], [14, 202], [0, 208], [-14, 202], [-40, 197], [-62, 189]], 60, body))
   g.add(carving(0, 199, 30.4, 6, gold))
-  // 门
+  // 门（铰链在外侧）
   for (const s of [-1, 1]) {
     const x = s * 28.6
-    g.add(rbox(55, 160, 1.4, body, { x, y: 18, z: 29.2 }, 0.6))
     const arch: P2[] = [[-21, 28], [21, 28], [21, 140], [12, 150], [0, 153], [-12, 150], [-21, 140]]
-    g.add(prism(arch, 0.8, panel, 30.2, x))
-    g.add(noOL(rbox(14, 1, 0.4, gold, { x, y: 90, z: 30.8 }, 0.2)))
-    g.add(rbox(1.6, 14, 1.6, gold, { x: x - s * 23.5, y: 92, z: 31 }, 0.6))
+    const parts: THREE.Object3D[] = [
+      rbox(55, 160, 1.4, body, { x, y: 18, z: 29.2 }, 0.6),
+      prism(arch, 0.8, panel, 30.2, x),
+      noOL(rbox(14, 1, 0.4, gold, { x, y: 90, z: 30.8 }, 0.2)),
+      rbox(1.6, 14, 1.6, gold, { x: x - s * 23.5, y: 92, z: 31 }, 0.6),
+    ]
+    g.add(swingDoor(parts, x + s * 27.5, 28.5, s < 0 ? 'left' : 'right'))
   }
   return g
 }
+const CL_ARMOIRE_SURFACES: SurfaceDef[] = [
+  { y: 14.8, h: 150, inside: true, shape: [r(-57.6, -26.6, 57.6, 27.4)] },
+  { y: 170, h: 11, inside: true, shape: [r(-57.6, -26.6, 57.6, 27.4)] },
+  pipeHook(-56, 56, 160, 0, 160 - 14.8 - 6),
+]
 
 /** 巴洛克金框落地镜：靠墙斜放，涡卷顶饰 */
 function baroqueMirror(p: string[]) {
@@ -1530,16 +1652,16 @@ function columnPedestal(p: string[]) {
 function clNightstand(p: string[]) {
   const [body, top, gold] = p
   const g = new THREE.Group()
+  const inner = shade(body, 0.05)
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(cabriole(sx * 18, sz * 13.5, 22, 1.6, body, sx * 0.5, sz * 0.5, 'scroll', gold))
-  g.add(rbox(42, 34, 33, body, { y: 21 }, 1.4))
+  g.add(hollow(42, 34, 33, body, { y: 21 }, 1.6, inner))
+  g.add(rbox(38.8, 1.6, 31, inner, { y: 36.6, z: 0.4 }, 0.3))
   g.add(prism([[-20, 22], [20, 22], [20, 19], [10, 17], [0, 19.5], [-10, 17], [-20, 19]], 1.2, body, 16))
-  for (const y of [23.5, 39]) {
-    g.add(rbox(36, 13, 1, shade(body, -0.04), { y, z: 16.8 }, 0.5))
-    g.add(rbox(8, 1.6, 1.2, gold, { y: y + 6, z: 17.6 }, 0.5))
-  }
+  for (const y of [23.5, 39]) g.add(drawerOf([rbox(36, 13, 1, shade(body, -0.04), { y, z: 16.8 }, 0.5), rbox(8, 1.6, 1.2, gold, { y: y + 6, z: 17.6 }, 0.5)], -18, 18, y, 13, 16.3, 30, inner))
   g.add(rbox(46, 3, 37, top, { y: 55 }, 1.2))
   return g
 }
+const CL_NS_SURFACES: SurfaceDef[] = [23.5, 39].map((y) => drawerLv(-18, 18, y, 13, 16.3, 30))
 
 
 /** 按多边形挤出的平板（[x, z] 多边形，底面在 y，厚 t，不倒角） */
@@ -1702,15 +1824,20 @@ function farmBench(p: string[]) {
 function hutch(p: string[]) {
   const [body, top, back] = p
   const g = new THREE.Group()
+  const inner = shade(body, 0.05)
   g.add(rbox(136, 4, 44, shade(body, -0.2), {}, 0.5))
-  g.add(rbox(140, 84, 48, body, { y: 4 }, 1.2))
+  g.add(hollow(140, 84, 48, body, { y: 4 }, 1.6, inner))
+  g.add(rbox(136.8, 1.6, 46, inner, { y: 32.4, z: 0.8 }, 0.3))
+  g.add(rbox(136.8, 1.6, 46, inner, { y: 61.4, z: 0.8 }, 0.3))
+  // 面框
+  g.add(rbox(140, 4, 1.6, body, { y: 4, z: 23.2 }, 0.4))
+  g.add(rbox(140, 3, 1.6, body, { y: 62, z: 23.2 }, 0.4))
+  g.add(rbox(140, 5, 1.6, body, { y: 83, z: 23.2 }, 0.4))
+  g.add(rbox(4, 79, 1.6, body, { y: 4, z: 23.2 }, 0.4))
   for (const s of [-1, 1]) {
     const x = s * 34.5
-    g.add(rbox(65, 54, 1.2, body, { x, y: 8, z: 24.2 }, 0.6))
-    g.add(rbox(53, 42, 0.6, shade(body, -0.05), { x, y: 14, z: 25 }, 0.3))
-    g.add(ball(1.4, FH.black, { x: x - s * 26, y: 36, z: 25.6 }))
-    g.add(rbox(65, 18, 1.2, body, { x, y: 65, z: 24.2 }, 0.6))
-    g.add(torus(2.6, 0.6, FH.black, { x, y: 75.6, z: 25.2 }, Math.PI))
+    g.add(swingDoor([rbox(65, 54, 1.2, body, { x, y: 8, z: 24.2 }, 0.6), rbox(53, 42, 0.6, shade(body, -0.05), { x, y: 14, z: 25 }, 0.3), ball(1.4, FH.black, { x: x - s * 26, y: 36, z: 25.6 })], s * 67, 23.6, s < 0 ? 'left' : 'right'))
+    g.add(drawerOf([rbox(65, 18, 1.2, body, { x, y: 65, z: 24.2 }, 0.6), torus(2.6, 0.6, FH.black, { x, y: 75.6, z: 25.2 }, Math.PI)], x - 32.5, x + 32.5, 65, 18, 23.6, 44, inner))
   }
   g.add(rbox(144, 3, 52, top, { y: 88 }, 1))
   // 上柜
@@ -1729,7 +1856,7 @@ function hutch(p: string[]) {
       g.add(noOL(cylZ(6.6, 0.4, k % 2 ? FH.denim : FH.barn, k * 25, y + 12, -20.6, 24)).rotateX(-0.12))
     }
   }
-  // 玻璃门
+  // 玻璃门（铰链在外侧）
   for (const s of [-1, 1]) {
     const x = s * 32.6
     const dg = new THREE.Group()
@@ -1741,10 +1868,19 @@ function hutch(p: string[]) {
     dg.add(glass(58, 94.6, 0.4, { y: 3.2, z: 0 }))
     dg.add(ball(1.2, FH.black, { x: -s * 28, y: 50, z: 1.6 }))
     dg.position.set(x, 91.4, 6.9)
-    g.add(dg)
+    g.add(swingDoor([dg], x + s * 32.3, 6.1, s < 0 ? 'left' : 'right'))
   }
   return g
 }
+const HUTCH_UP = r(-64.6, -17, 64.6, 5.2)
+const HUTCH_SURFACES: SurfaceDef[] = [
+  { y: 5.6, h: 26.6, inside: true, shape: [r(-68.2, -22.2, 68.2, 22)] },
+  { y: 34, h: 27, inside: true, shape: [r(-68.2, -22.2, 68.2, 22)] },
+  ...[-1, 1].map((s) => drawerLv(s * 34.5 - 32.5, s * 34.5 + 32.5, 65, 18, 23.6, 44)),
+  { y: 91, h: 33.5, inside: true, glass: true, shape: [HUTCH_UP] },
+  { y: 127, h: 30.5, inside: true, glass: true, shape: [HUTCH_UP] },
+  { y: 160, h: 31.5, inside: true, glass: true, shape: [HUTCH_UP] },
+]
 
 /** 白铁艺床：拱形床头、黄铜球顶、竖栏，铺拼布被 */
 function fhIronBed(p: string[]) {
@@ -2058,9 +2194,8 @@ function fhNightstand(p: string[]) {
   const [top, body, pull] = p
   const g = new THREE.Group()
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(3.4, 54, 3.4, body, { x: sx * 19.3, z: sz * 15.3 }, 0.6))
-  g.add(rbox(41, 18, 33, body, { y: 36 }, 0.8))
-  g.add(rbox(36, 14, 1, shade(body, -0.04), { y: 38, z: 16.8 }, 0.5))
-  g.add(torus(2.4, 0.6, pull, { y: 46.6, z: 17.6 }, Math.PI))
+  g.add(hollow(41, 18, 33, body, { y: 36 }, 1.6))
+  g.add(drawerOf([rbox(36, 14, 1, shade(body, -0.04), { y: 38, z: 16.8 }, 0.5), torus(2.4, 0.6, pull, { y: 46.6, z: 17.6 }, Math.PI)], -18, 18, 38, 14, 16.3, 30, shade(body, 0.05)))
   g.add(rbox(38.6, 2, 30.6, body, { y: 12 }, 0.5))
   for (const s of [-1, 1]) g.add(rbox(35.2, 3, 1.6, body, { y: 30, z: s * 15.3 }, 0.4))
   g.add(rbox(46, 3, 38, top, { y: 54 }, 1))
@@ -2117,33 +2252,39 @@ function ichimaiZataku(p: string[]) {
   return g
 }
 
-/** 車箪笥：铁饰抽屉 + 拉门，底下四只木轮 */
+/** 車箪笥：铁饰抽屉 + 拉门，底下四只木轮；拉门里一块层板 */
 function kurumaDansu(p: string[]) {
   const [wood, iron, wheel] = p
   const g = new THREE.Group()
+  const inner = shade(wood, 0.05)
   for (const sx of [-1, 1])
     for (const sz of [-1, 1]) {
       g.add(cylZ(7, 4, wheel, sx * 38, 7, sz * 20, 20))
       g.add(cylZ(2, 4.8, iron, sx * 38, 7, sz * 20, 10))
     }
   g.add(rbox(100, 5, 46, shade(wood, -0.12), { y: 9 }, 0.8))
-  g.add(rbox(100, 78, 46, wood, { y: 14 }, 1))
+  g.add(hollow(100, 78, 46, wood, { y: 14 }, 1.6, inner))
+  g.add(rbox(1.6, 74.8, 44, wood, { x: -1.2, y: 15.6, z: 0.8 }, 0.3))
+  g.add(rbox(48.4, 1.6, 44, inner, { x: 24, y: 50.4, z: 0.8 }, 0.3))
   g.add(rbox(102, 3, 48, wood, { y: 92 }, 1))
   // 左：三层抽屉
   for (let k = 0; k < 3; k++) {
     const y = 16 + k * 25
-    g.add(rbox(47, 23, 1.2, shade(wood, 0.04), { x: -25, y, z: 23.3 }, 0.5))
-    g.add(rbox(10, 6, 0.4, iron, { x: -25, y: y + 13, z: 24.1 }, 0.3))
-    g.add(torus(2.8, 0.5, iron, { x: -25, y: y + 11, z: 24.5 }, Math.PI * 2))
-    for (const s of [-1, 1]) g.add(noOL(rbox(4, 4, 0.3, iron, { x: -25 + s * 21.4, y: y + 0.4, z: 24.05 }, 0.1)))
+    const front: THREE.Object3D[] = [rbox(47, 23, 1.2, shade(wood, 0.04), { x: -25, y, z: 23.3 }, 0.5), rbox(10, 6, 0.4, iron, { x: -25, y: y + 13, z: 24.1 }, 0.3), torus(2.8, 0.5, iron, { x: -25, y: y + 11, z: 24.5 }, Math.PI * 2)]
+    for (const s of [-1, 1]) front.push(noOL(rbox(4, 4, 0.3, iron, { x: -25 + s * 21.4, y: y + 0.4, z: 24.05 }, 0.1)))
+    g.add(drawerOf(front, -48.5, -1.5, y, 23, 22.7, 42, inner))
   }
-  // 右：两扇拉门 + 锁板
-  for (const [x, z] of [[11.5, 23.3], [36, 24.2]] as P2[]) g.add(rbox(25, 73, 0.9, shade(wood, 0.04), { x, y: 16.5, z }, 0.4))
-  g.add(rbox(8, 12, 0.4, iron, { x: 23, y: 48, z: 24.9 }, 0.3))
-  g.add(ball(1.2, iron, { x: 23, y: 54, z: 25.2 }))
+  // 右：两扇拉门（后轨固定，前轨带锁板推到左边）
+  g.add(rbox(25, 73, 0.9, shade(wood, 0.04), { x: 11.5, y: 16.5, z: 23.3 }, 0.4))
+  g.add(slideDoor([rbox(25, 73, 0.9, shade(wood, 0.04), { x: 36, y: 16.5, z: 24.2 }, 0.4), rbox(8, 12, 0.4, iron, { x: 23, y: 48, z: 24.9 }, 0.3), ball(1.2, iron, { x: 23, y: 54, z: 25.2 })], -24.5))
   for (const s of [-1, 1]) for (const y of [14.6, 89.6]) g.add(noOL(rbox(6, 2.4, 0.4, iron, { x: s * 47, y, z: 23.2 }, 0.1)))
   return g
 }
+const KURUMA_SURFACES: SurfaceDef[] = [
+  ...[0, 1, 2].map((k) => drawerLv(-48.5, -1.5, 16 + k * 25, 23, 22.7, 42)),
+  { y: 15.6, h: 33.2, inside: true, shape: [r(0.6, -21.4, 47.8, 22)] },
+  { y: 52, h: 36.8, inside: true, shape: [r(0.6, -21.4, 47.8, 22)] },
+]
 
 /** 丸行灯：三足圆筒纸灯，顶上提梁 */
 function maruAndon(p: string[]) {
@@ -2217,9 +2358,11 @@ function chigaidana(p: string[]) {
   g.add(rbox(85.2, 109, 1.2, shade(wood, -0.06), { y: 0.5, z: -17.2 }, 0.3))
   g.add(rbox(85.2, 2, 34.4, wood, { y: 1.5, z: 0.4 }, 0.4))
   g.add(rbox(85.2, 2.4, 34.8, wood, { y: 30, z: 0.4 }, 0.5))
+  // 地袋：两扇拉门，前轨那扇推到右边
   for (const [x, z] of [[-21.2, 17.2], [21.2, 16.2]] as P2[]) {
-    g.add(rbox(42.2, 26, 0.9, door, { x, y: 3.8, z }, 0.3))
-    g.add(noOL(cylZ(1.6, 0.4, dark, x + (x < 0 ? 16 : -16), 16.8, z + 0.6, 12)))
+    const parts = [rbox(42.2, 26, 0.9, door, { x, y: 3.8, z }, 0.3), noOL(cylZ(1.6, 0.4, dark, x + (x < 0 ? 16 : -16), 16.8, z + 0.6, 12))]
+    if (x < 0) g.add(slideDoor(parts, 42.4))
+    else for (const o of parts) g.add(o)
   }
   g.add(rbox(44, 2.2, 32, wood, { x: -20.6, y: 62, z: 0.5 }, 0.5))
   g.add(rbox(44, 2.2, 32, wood, { x: 21.6, y: 74, z: 0.5 }, 0.5))
@@ -2227,9 +2370,11 @@ function chigaidana(p: string[]) {
   g.add(prism([[-42.6, 64.2], [-40, 64.2], [-40, 66.2], [-42.6, 67.4]], 30, dark, 0.5))
   g.add(prism([[43.6, 76.2], [41, 76.2], [41, 78.2], [43.6, 79.4]], 30, dark, 0.5))
   g.add(rbox(85.2, 2, 34.4, wood, { y: 88, z: 0.4 }, 0.4))
+  // 天袋：同样两扇拉门
   for (const [x, z] of [[-21.2, 17.2], [21.2, 16.2]] as P2[]) {
-    g.add(rbox(42.2, 19.6, 0.9, door, { x, y: 90.2, z }, 0.3))
-    g.add(noOL(cylZ(1.4, 0.4, dark, x + (x < 0 ? 16 : -16), 100, z + 0.6, 12)))
+    const parts = [rbox(42.2, 19.6, 0.9, door, { x, y: 90.2, z }, 0.3), noOL(cylZ(1.4, 0.4, dark, x + (x < 0 ? 16 : -16), 100, z + 0.6, 12))]
+    if (x < 0) g.add(slideDoor(parts, 42.4))
+    else for (const o of parts) g.add(o)
   }
   g.add(rbox(90, 2.4, 37, wood, { y: 110 }, 0.6))
   return g
@@ -2259,12 +2404,7 @@ function jpNightstand(p: string[]) {
   g.add(rbox(44, 2, 34, kiri, { y: 44 }, 0.6))
   g.add(rbox(40.4, 39.6, 1, shade(kiri, -0.06), { y: 4.2, z: -16.4 }, 0.3))
   g.add(rbox(40.4, 2, 33, kiri, { y: 28, z: 0.4 }, 0.4))
-  g.add(rbox(40.4, 24, 31.6, kiri, { y: 4, z: 0.2 }, 0.4))
-  for (const y of [4.6, 16.4]) {
-    g.add(rbox(39, 11, 1, shade(kiri, 0.03), { y, z: 16.4 }, 0.4))
-    g.add(rbox(6, 2.6, 0.4, kan, { y: y + 7.2, z: 17.1 }, 0.2))
-    g.add(torus(2.2, 0.45, kan, { y: y + 5.2, z: 17.6 }, Math.PI * 2))
-  }
+  for (const y of [4.6, 16.4]) g.add(drawerOf([rbox(39, 11, 1, shade(kiri, 0.03), { y, z: 16.4 }, 0.4), rbox(6, 2.6, 0.4, kan, { y: y + 7.2, z: 17.1 }, 0.2), torus(2.2, 0.45, kan, { y: y + 5.2, z: 17.6 }, Math.PI * 2)], -19.5, 19.5, y, 11, 15.9, 30, shade(kiri, 0.05)))
   return g
 }
 
@@ -2297,23 +2437,33 @@ function pipeSurfaces() {
   return levels.slice(0, -1).map((y, i) => ({ y: y + 3, shape: [r(-w / 2, -d / 2, w / 2, d / 2)], h: levels[i + 1] - 2.6 - y - 3 }))
 }
 
-/** 三门铁皮更衣柜：百叶通风孔、号码牌、把手 */
+/** 三门铁皮更衣柜：百叶通风孔、号码牌、把手；每格一块顶层板 */
 function locker3(p: string[]) {
   const [metal, plate, dark] = p
   const g = new THREE.Group()
+  const inner = shade(metal, 0.06)
   g.add(rbox(88, 6, 43, dark, {}, 0.6))
-  g.add(rbox(90, 174, 45, metal, { y: 6 }, 0.8))
+  g.add(hollow(90, 174, 45, metal, { y: 6 }, 1.2, inner))
+  for (const s of [-1, 1]) g.add(rbox(1.2, 171.6, 43.8, metal, { x: s * 14.7, y: 7.2, z: 0.6 }, 0.2))
+  for (let i = 0; i < 3; i++) g.add(rbox(28, 1.2, 43, inner, { x: (i - 1) * 29.4, y: 148.8, z: 0.6 }, 0.2))
+  g.add(rbox(90, 3, 1, metal, { y: 6, z: 22 }, 0.3))
+  g.add(rbox(90, 3, 1, metal, { y: 177, z: 22 }, 0.3))
   g.add(rbox(91, 2, 46, shade(metal, -0.1), { y: 180 }, 0.6))
   for (let i = 0; i < 3; i++) {
     const x = (i - 1) * 29.4
-    g.add(rbox(28.4, 168, 1, shade(metal, 0.04), { x, y: 9, z: 22.9 }, 0.4))
-    for (const y0 of [150, 18]) for (let k = 0; k < 5; k++) g.add(noOL(rbox(16, 0.8, 0.4, dark, { x, y: y0 + k * 2.2, z: 23.55 }, 0.1)))
-    g.add(noOL(rbox(6, 3.4, 0.4, plate, { x, y: 138, z: 23.55 }, 0.2)))
-    g.add(rbox(1.8, 12, 2, dark, { x: x + 10, y: 86, z: 24 }, 0.5))
-    g.add(torus(1.2, 0.35, plate, { x: x + 10, y: 85, z: 25.2 }, Math.PI * 2))
+    const parts: THREE.Object3D[] = [rbox(28.4, 168, 1, shade(metal, 0.04), { x, y: 9, z: 22.9 }, 0.4)]
+    for (const y0 of [150, 18]) for (let k = 0; k < 5; k++) parts.push(noOL(rbox(16, 0.8, 0.4, dark, { x, y: y0 + k * 2.2, z: 23.55 }, 0.1)))
+    parts.push(noOL(rbox(6, 3.4, 0.4, plate, { x, y: 138, z: 23.55 }, 0.2)))
+    parts.push(rbox(1.8, 12, 2, dark, { x: x + 10, y: 86, z: 24 }, 0.5))
+    parts.push(torus(1.2, 0.35, plate, { x: x + 10, y: 85, z: 25.2 }, Math.PI * 2))
+    g.add(swingDoor(parts, x - 14.2, 22.4, 'left'))
   }
   return g
 }
+const LOCKER_SURFACES: SurfaceDef[] = [r(-43.8, -21.3, -15.3, 21.4), r(-14.1, -21.3, 14.1, 21.4), r(15.3, -21.3, 43.8, 21.4)].flatMap((shape): SurfaceDef[] => [
+  { y: 7.2, h: 141, inside: true, shape: [shape] },
+  { y: 150, h: 28.6, inside: true, shape: [shape] },
+])
 
 /** 焊接工作台：角钢框、厚木台面、下层钢板，后角装台钳 */
 function weldBench(p: string[]) {
@@ -2391,6 +2541,7 @@ function edisonLamp(p: string[]) {
 }
 
 /** 工具车：多抽屉推车，顶部托盘、两侧把手、万向轮 */
+const TOOLCART_DRAWERS = [0, 1, 2, 3, 4].map((k) => ({ h: k < 2 ? 16 : 11, y: k < 2 ? 11 + k * 17 : 45 + (k - 2) * 12 }))
 function toolCart(p: string[]) {
   const [body, handle, wheel] = p
   const g = new THREE.Group()
@@ -2403,13 +2554,8 @@ function toolCart(p: string[]) {
       g.add(rbox(1, 5, 4, CHROME, { x: x + 2, y: 3.6, z }, 0.2))
       g.add(cylX(3.6, 3, wheel, x, 3.6, z, 16))
     }
-  g.add(rbox(64, 70, 42, body, { y: 9.4 }, 1))
-  for (let k = 0; k < 5; k++) {
-    const h = k < 2 ? 16 : 11
-    const y = k < 2 ? 11 + k * 17 : 45 + (k - 2) * 12
-    g.add(rbox(60, h, 1, shade(body, 0.05), { y, z: 21.3 }, 0.4))
-    g.add(rbox(40, 1.4, 1.8, CHROME, { y: y + h - 3.4, z: 22.2 }, 0.5))
-  }
+  g.add(hollow(64, 70, 42, body, { y: 9.4 }, 1.2))
+  for (const { h, y } of TOOLCART_DRAWERS) g.add(drawerOf([rbox(60, h, 1, shade(body, 0.05), { y, z: 21.3 }, 0.4), rbox(40, 1.4, 1.8, CHROME, { y: y + h - 3.4, z: 22.2 }, 0.5)], -30, 30, y, h, 20.8, 38, shade(body, 0.1)))
   g.add(tray(66, 6, 44, 1.2, shade(body, -0.06), { y: 79.4 }, 0.6))
   for (const s of [-1, 1]) {
     for (const z of [-14, 14]) g.add(cylX(0.9, 4, handle, s * 34, 72, z, 8))
@@ -2464,12 +2610,9 @@ function inNightstand(p: string[]) {
   const [metal, label, wood] = p
   const g = new THREE.Group()
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(2.4, 12.4, 2.4, IRON, { x: sx * 18.5, z: sz * 15.5 }, 0.3))
-  g.add(rbox(40, 40, 34, metal, { y: 12 }, 0.8))
-  for (const y of [13.5, 32]) {
-    g.add(rbox(36, 17, 1, shade(metal, 0.05), { y, z: 17.3 }, 0.4))
-    g.add(noOL(rbox(8, 3, 0.4, label, { y: y + 12, z: 17.95 }, 0.2)))
-    g.add(rbox(10, 1.6, 2, CHROME, { y: y + 7, z: 18.4 }, 0.5))
-  }
+  g.add(hollow(40, 40, 34, metal, { y: 12 }, 1.2))
+  g.add(rbox(37.6, 1.2, 33, shade(metal, 0.06), { y: 30.6, z: 0.5 }, 0.2))
+  for (const y of [13.5, 32]) g.add(drawerOf([rbox(36, 17, 1, shade(metal, 0.05), { y, z: 17.3 }, 0.4), noOL(rbox(8, 3, 0.4, label, { y: y + 12, z: 17.95 }, 0.2)), rbox(10, 1.6, 2, CHROME, { y: y + 7, z: 18.4 }, 0.5)], -18, 18, y, 17, 16.8, 30, shade(metal, 0.08)))
   g.add(rbox(42, 3, 36, wood, { y: 52 }, 0.8))
   return g
 }
@@ -2559,7 +2702,7 @@ export const SW_CHINESE: AssetDef[] = [
     [ZH, CN.zitan, CN.wenge, BRASS],
     [ZH, CN.lacquer, CN.ink, BRASS],
     ['modern', M.walnut, M.char, M.silver],
-  ], duobao, { family: 'bookshelf', sizeLabel: '多宝格', surface: 180, surfaces: duobaoSurfaces() }),
+  ], duobao, { family: 'bookshelf', sizeLabel: '多宝格', surface: 180, surfaces: [...duobaoSurfaces(), DUOBAO_LOWER], openable: true }),
   D('sw-cn-screen', '四扇屏风', 'deco', [174.9, 25.1, 176], [
     [ZH, CN.rose, CN.silk, '#c0392b'],
     [ZH, CN.zitan, '#1f1b1a', CN.gold],
@@ -2590,7 +2733,7 @@ export const SW_CHINESE: AssetDef[] = [
     [ZH, CN.lacquer, BRASS, CN.ink],
     [ZH, CN.zitan, BRASS, CN.wenge],
     ['modern', M.walnut, M.silver, M.char],
-  ], dingxiang),
+  ], dingxiang, { surfaces: DINGXIANG_SURFACES, openable: true }),
   D('sw-cn-gudeng', '鼓凳', 'living', [39.3, 39.3, 49.1], [
     [ZH, CN.rose, CN.lacquer, BRASS],
     [ZH, CN.huali, CN.celadon, BRASS],
@@ -2627,7 +2770,7 @@ export const SW_CHINESE: AssetDef[] = [
     [ZH, CN.lacquer, BRASS, CN.ink],
     [ZH, CN.zitan, BRASS, CN.wenge],
     ['modern', M.walnut, M.silver, M.char],
-  ], cnNightstand, { family: 'nightstand', sizeLabel: '中式', surface: 55 }),
+  ], cnNightstand, { family: 'nightstand', sizeLabel: '中式', surface: 55, surfaces: CN_NS_SURFACES, openable: true }),
 ]
 
 /** 欧式古典 */
@@ -2657,13 +2800,13 @@ export const SW_CLASSIC: AssetDef[] = [
     [EU, CL.mahogany, CL.mahogany, CL.gold],
     [EU, CL.sage, CL.marble, CL.gold],
     [EU, CL.walnut, CL.black, CL.gold],
-  ], clSideboard, { surface: 95 }),
+  ], clSideboard, { surface: 95, surfaces: CL_SB_SURFACES, openable: true }),
   D('sw-cl-vanity', '法式梳妆台', 'bedroom', [110, 46.4, 151.4], [
     [EU, CL.ivory, '#dfe8ee', CL.gold],
     [EU, CL.blush, '#dfe8ee', CL.gold],
     [EU, CL.mahogany, '#dfe8ee', CL.gold],
     ['cute', C.white, '#dfe8ee', C.lemon],
-  ], clVanity, { surface: 77, surfaceShape: [r(-55, -12, 55, 23)] }),
+  ], clVanity, { surface: 77, surfaceShape: [r(-55, -12, 55, 23)], surfaces: CL_VANITY_SURFACES, openable: true }),
   D('sw-cl-fireplace', '欧式壁炉', 'living', [156, 46, 131.4], [
     [EU, CL.marble, CL.marble, CL.gold],
     [EU, CL.ivory, CL.cream, CL.gold],
@@ -2718,7 +2861,7 @@ export const SW_CLASSIC: AssetDef[] = [
     [EU, CL.mahogany, CL.walnut, CL.gold],
     [EU, CL.sage, CL.ivory, CL.gold],
     [EU, CL.blush, CL.ivory, CL.gold],
-  ], clArmoire),
+  ], clArmoire, { surfaces: CL_ARMOIRE_SURFACES, openable: true }),
   D('sw-cl-mirror', '落地镜', 'bedroom', [80.9, 29.5, 179.2], [
     [EU, CL.gold, '#dfe8ee', CL.cream],
     [EU, CL.ivory, '#dfe8ee', CL.gold],
@@ -2742,7 +2885,7 @@ export const SW_CLASSIC: AssetDef[] = [
     [EU, CL.mahogany, CL.mahogany, CL.gold],
     [EU, CL.blush, CL.ivory, CL.gold],
     [EU, CL.sage, CL.marble, CL.gold],
-  ], clNightstand, { family: 'nightstand', sizeLabel: '法式', surface: 58 }),
+  ], clNightstand, { family: 'nightstand', sizeLabel: '法式', surface: 58, surfaces: CL_NS_SURFACES, openable: true }),
 ]
 
 /** 美式乡村 */
@@ -2780,7 +2923,7 @@ export const SW_FARMHOUSE: AssetDef[] = [
     [FA, FH.barn, FH.pine, FH.cream],
     [FA, FH.denim, FH.pine, FH.white],
     ['retro', R.teal, R.caramel, R.cream],
-  ], hutch, { surface: 91, surfaceShape: [r(-72, 8.5, 72, 26)] }),
+  ], hutch, { surface: 91, surfaceShape: [r(-72, 8.5, 72, 26)], surfaces: HUTCH_SURFACES, openable: true }),
   D('sw-fh-iron-bed', '白铁艺床', 'bedroom', [165.7, 211.7, 127.7], [
     [FA, FH.plaid, FH.white, FH.white],
     [FA, FH.denim, FH.cream, FH.white],
@@ -2861,7 +3004,7 @@ export const SW_FARMHOUSE: AssetDef[] = [
     [FA, FH.oak, FH.sage, FH.black],
     [FA, FH.pine, FH.denim, BRASS],
     [FA, FH.oak, FH.black, BRASS],
-  ], fhNightstand, { family: 'nightstand', sizeLabel: '农舍', surface: 57, surfaces: [{ y: 14, shape: [r(-19.3, -15.3, 19.3, 15.3)], h: 22 }] }),
+  ], fhNightstand, { family: 'nightstand', sizeLabel: '农舍', surface: 57, surfaces: [{ y: 14, shape: [r(-19.3, -15.3, 19.3, 15.3)], h: 22 }, drawerLv(-18, 18, 38, 14, 16.3, 30)], openable: true }),
 ]
 
 /** 和风补充 */
@@ -2884,7 +3027,7 @@ export const SW_JAPANESE: AssetDef[] = [
     ['japanese', J.dark, J.sumi, J.sumi],
     ['japanese', '#7a3b2a', J.sumi, J.dark],
     ['retro', R.caramel, '#3a3030', '#3a3030'],
-  ], kurumaDansu, { surface: 95 }),
+  ], kurumaDansu, { surface: 95, surfaces: KURUMA_SURFACES, openable: true }),
   D('sw-jp-maru-andon', '丸行灯', 'japanese', [29.7, 31.1, 88.9], [
     ['japanese', J.washi, J.dark, J.sumi],
     ['japanese', J.washi, J.shu, J.sumi],
@@ -2907,7 +3050,7 @@ export const SW_JAPANESE: AssetDef[] = [
     ['japanese', J.wood, '#e9dcc0', J.dark],
     ['japanese', J.dark, J.washi, J.sumi],
     ['modern', M.walnut, M.white, M.black],
-  ], chigaidana, { surface: 112.4, surfaces: [{ y: 32.4, shape: [r(-42.6, -16.4, 42.6, 17)], h: 29.6 }, { y: 64.2, shape: [r(-42.6, -15.5, -0.5, 16.5)], h: 23.8 }, { y: 76.2, shape: [r(1.5, -15.5, 42.6, 16.5)], h: 11.8 }] }),
+  ], chigaidana, { surface: 112.4, surfaces: [{ y: 32.4, shape: [r(-42.6, -16.4, 42.6, 17)], h: 29.6 }, { y: 64.2, shape: [r(-42.6, -15.5, -0.5, 16.5)], h: 23.8 }, { y: 76.2, shape: [r(1.5, -15.5, 42.6, 16.5)], h: 11.8 }, { y: 3.5, h: 26.2, inside: true, shape: [r(-42.6, -16.4, 42.6, 15.4)] }, { y: 90, h: 19.8, inside: true, shape: [r(-42.6, -16.4, 42.6, 15.4)] }], openable: true }),
   D('sw-jp-zafu', '坐禅蒲团', 'japanese', [60, 60, 21.9], [
     ['japanese', J.ai, J.sumi, J.shu],
     ['japanese', J.tatami, J.dark, J.shu],
@@ -2919,7 +3062,7 @@ export const SW_JAPANESE: AssetDef[] = [
     ['japanese', J.wood, J.sumi, J.dark],
     ['japanese', J.dark, '#c9a45a', J.sumi],
     ['nordic', N.oakL, M.black, N.oak],
-  ], jpNightstand, { family: 'nightstand', sizeLabel: '和风', surface: 46, surfaces: [{ y: 30, shape: [r(-20, -16, 20, 17)], h: 14 }] }),
+  ], jpNightstand, { family: 'nightstand', sizeLabel: '和风', surface: 46, surfaces: [{ y: 30, shape: [r(-20, -16, 20, 17)], h: 14 }, ...[4.6, 16.4].map((y) => drawerLv(-19.5, 19.5, y, 11, 15.9, 30))], openable: true }),
 ]
 
 /** 工业风补充 */
@@ -2936,7 +3079,7 @@ export const SW_INDUSTRIAL: AssetDef[] = [
     ['industrial', '#8a4a3a', BRASS, I.iron],
     ['retro', R.teal, R.cream, '#3a3030'],
     ['modern', M.white, M.silver, M.char],
-  ], locker3),
+  ], locker3, { surfaces: LOCKER_SURFACES, openable: true }),
   D('sw-in-workbench', '焊接工作台', 'study', [150, 70, 102.1], [
     ['industrial', I.walnut, I.iron, '#3c5a7a'],
     ['industrial', '#c9a070', I.steel, I.rust],
@@ -2961,7 +3104,7 @@ export const SW_INDUSTRIAL: AssetDef[] = [
     ['industrial', I.iron, I.steel, '#3a3a3c'],
     ['retro', R.teal, '#3a3030', '#3a3030'],
     ['modern', M.white, M.char, M.black],
-  ], toolCart, { surface: 80.6, surfaceShape: [r(-31.8, -20.8, 31.8, 20.8)] }),
+  ], toolCart, { surface: 80.6, surfaceShape: [r(-31.8, -20.8, 31.8, 20.8)], surfaces: TOOLCART_DRAWERS.map(({ h, y }) => drawerLv(-30, 30, y, h, 20.8, 38)), openable: true }),
   D('sw-in-concrete-side', '水泥台面边桌', 'living', [45, 45, 55.3], [
     ['industrial', I.concrete, I.iron, I.walnut],
     ['industrial', '#8f8c87', I.iron, '#a87a52'],
@@ -2979,5 +3122,5 @@ export const SW_INDUSTRIAL: AssetDef[] = [
     ['industrial', I.steel, '#f2efe6', I.walnut],
     ['industrial', I.iron, BRASS, '#a87a52'],
     ['modern', M.white, M.light, M.walnut],
-  ], inNightstand, { family: 'nightstand', sizeLabel: '铁皮档案柜', surface: 55 }),
+  ], inNightstand, { family: 'nightstand', sizeLabel: '铁皮档案柜', surface: 55, surfaces: [13.5, 32].map((y) => drawerLv(-18, 18, y, 17, 16.8, 30)), openable: true }),
 ]

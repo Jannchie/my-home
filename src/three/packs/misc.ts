@@ -3,7 +3,8 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, face, puck, rbox, shade, toon, torus, tray } from '../toon'
-import { C, G, S, ellipsePoly, glow, holePanel, legs, rng, shell, type AssetDef, type Fx, type StyleTag, paintPanel, paintLandscape, paintFlower, paintAbstract } from '../kit'
+import { C, G, S, ellipsePoly, glow, holePanel, legs, rectPoly, rng, shell, type AssetDef, type Fx, type StyleTag, paintPanel, paintLandscape, paintFlower, paintAbstract } from '../kit'
+import { drawerLv, drawerOf, hollow, slideDoor, swingDoor } from './styles-world'
 
 const { nordic: N, modern: M, japanese: J, industrial: I, retro: R } = S
 
@@ -80,21 +81,26 @@ function disc(r: number, color: string, x: number, y: number, z: number, t = 0.4
 // 和风
 // ======================================================================
 
+/** 桐箪笥的抽屉格：四层通长抽屉 + 上面左右两只 */
+const KIRI_SURFACES = [...[0, 1, 2, 3].map((i) => drawerLv(-47, 47, 10 + i * 20.5, 19, 21.9, 40)), ...[-1, 1].map((s) => drawerLv(s * 23.75 - 22.75, s * 23.75 + 22.75, 93, 22, 21.9, 40))]
+
 function kiriTansu(p: string[]) {
   const [main, , metal] = p
   const w = 100
   const d = 45
   const g = new THREE.Group()
   g.add(rbox(w - 4, 6, d - 4, shade(main, -0.14), {}, 1))
-  g.add(rbox(w, 114, d, main, { y: 6 }, 2))
+  g.add(hollow(w, 114, d, main, { y: 6 }, 1.6))
   const fz = d / 2
+  // 抽屉：面板 + 金属把手，拉出来是抽屉盒
   const drawer = (x: number, y: number, dw: number, dh: number, n: number) => {
-    g.add(rbox(dw, dh, 1.2, shade(main, 0.04), { x, y, z: fz }, 0.6))
+    const front: THREE.Object3D[] = [rbox(dw, dh, 1.2, shade(main, 0.04), { x, y, z: fz }, 0.6)]
     for (let i = 0; i < n; i++) {
       const hx = n === 1 ? x : x + (i - (n - 1) / 2) * dw * 0.5
-      g.add(rbox(5, 2.2, 0.8, metal, { x: hx, y: y + dh / 2 + 1.2, z: fz + 0.9 }, 0.3))
-      g.add(torus(2.6, 0.45, metal, { x: hx, y: y + dh / 2 - 1.2, z: fz + 1.2 }))
+      front.push(rbox(5, 2.2, 0.8, metal, { x: hx, y: y + dh / 2 + 1.2, z: fz + 0.9 }, 0.3))
+      front.push(torus(2.6, 0.45, metal, { x: hx, y: y + dh / 2 - 1.2, z: fz + 1.2 }))
     }
+    g.add(drawerOf(front, x - dw / 2, x + dw / 2, y, dh, fz - 0.6, 40, shade(main, 0.06)))
   }
   for (let i = 0; i < 4; i++) drawer(0, 10 + i * 20.5, w - 6, 19, 2)
   for (const s of [-1, 1]) drawer(s * 23.75, 93, 45.5, 22, 1)
@@ -106,15 +112,21 @@ function kiriTansu(p: string[]) {
   return g
 }
 
+/** 茶箪笥：下段引戸里、右上天袋里各一层 */
+const CHA_SURFACES = [
+  { y: 5.6, h: 36.6, inside: true, shape: [rectPoly(-43.2, -18.4, 43.2, 18.6)] },
+  { y: 74.2, h: 11.4, inside: true, shape: [rectPoly(3.4, -18.6, 41.6, 15.4)] },
+]
+
 function chaTansu(p: string[]) {
   const [main, sub] = p
   const g = new THREE.Group()
   g.add(rbox(88, 4, 38, shade(main, -0.14), {}, 1))
-  g.add(rbox(90, 42, 40, main, { y: 4 }, 1.5))
-  // 下段引戸，前后错开
-  g.add(rbox(44, 36, 1.2, sub, { x: -21, y: 7, z: 20.4 }, 0.5))
+  g.add(hollow(90, 42, 40, main, { y: 4 }, 1.6))
+  // 下段引戸，前后错开：前轨那扇推到右边
+  g.add(slideDoor([rbox(44, 36, 1.2, sub, { x: -21, y: 7, z: 20.4 }, 0.5), disc(1.6, C.ink, -6, 25, 21.05, 0.5, 16)], 42))
   g.add(rbox(44, 36, 1.2, sub, { x: 21, y: 7, z: 19.9 }, 0.5))
-  for (const [x, z] of [[-6, 21.05], [6, 20.55]]) g.add(disc(1.6, C.ink, x, 25, z, 0.5, 16))
+  g.add(disc(1.6, C.ink, 6, 25, 20.55, 0.5, 16))
   // 上段：侧板、背板、顶板
   for (const s of [-1, 1]) g.add(rbox(2.5, 41, 40, main, { x: s * 43.75, y: 46 }, 0.6))
   g.add(rbox(85, 41, 1.5, shade(main, -0.06), { y: 46, z: -19.25 }, 0.4))
@@ -123,12 +135,11 @@ function chaTansu(p: string[]) {
   g.add(rbox(42, 2, 34, main, { x: -21, y: 64, z: -2 }, 0.5))
   g.add(rbox(42, 2, 34, main, { x: 21, y: 56, z: -2 }, 0.5))
   g.add(rbox(2, 8, 2, main, { x: 0, y: 58 }, 0.4))
-  // 右上的小天袋
-  g.add(rbox(40, 14, 36, main, { x: 22.5, y: 73, z: -2 }, 0.8))
-  for (const x of [13, 32]) {
-    g.add(rbox(18.6, 12, 1, sub, { x, y: 74, z: 16.3 }, 0.4))
-    g.add(disc(0.9, C.ink, x + (x < 20 ? 7 : -7), 80, 16.95, 0.4, 12))
-  }
+  // 右上的小天袋：左边那扇在前轨，推到右边
+  g.add(hollow(40, 14, 36, main, { x: 22.5, y: 73, z: -2 }, 1.2))
+  g.add(slideDoor([rbox(18.6, 12, 1, sub, { x: 13, y: 74, z: 17.1 }, 0.4), disc(0.9, C.ink, 20, 80, 17.75, 0.4, 12)], 19))
+  g.add(rbox(18.6, 12, 1, sub, { x: 32, y: 74, z: 16.1 }, 0.4))
+  g.add(disc(0.9, C.ink, 25, 80, 16.75, 0.4, 12))
   return g
 }
 
@@ -1105,16 +1116,27 @@ function foldingSet(p: string[]) {
   return g
 }
 
+/** 户外储物柜：正面两扇对开门（横纹），里面一块层板 */
 function outdoorStorage(p: string[]) {
   const [main, sub, acc] = p
   const g = new THREE.Group()
-  g.add(rbox(86, 74, 46, main, {}, 2.5))
+  g.add(hollow(86, 74, 46, main, {}, 2))
+  g.add(rbox(82, 1.6, 42, shade(main, 0.05), { y: 36.4 }, 0.3))
   g.add(rbox(90, 6, 50, sub, { y: 74 }, 2))
-  for (const y of [15, 30, 45, 60]) g.add(noOL(rbox(80, 0.8, 0.6, shade(main, -0.12), { y, z: 23.2 }, 0.2)))
-  g.add(rbox(10, 4, 1.5, acc, { y: 68, z: 23.5 }, 0.6))
+  for (const s of [-1, 1]) {
+    const x = s * 21.6
+    const parts: THREE.Object3D[] = [rbox(42.8, 72, 1.6, main, { x, y: 1, z: 23.8 }, 0.6)]
+    for (const y of [15, 30, 45, 60]) parts.push(noOL(rbox(38, 0.8, 0.6, shade(main, -0.12), { x, y, z: 24.7 }, 0.2)))
+    if (s > 0) parts.push(rbox(10, 4, 1.5, acc, { y: 68, z: 25.3 }, 0.6))
+    g.add(swingDoor(parts, s * 43, 24.6, s < 0 ? 'left' : 'right'))
+  }
   for (const s of [-1, 1]) g.add(rbox(1.5, 3, 14, acc, { x: s * 43.5, y: 58 }, 0.6))
   return g
 }
+const OUT_STORAGE_SURFACES = [
+  { y: 2, h: 34, inside: true, shape: [rectPoly(-40.6, -20.6, 40.6, 22.4)] },
+  { y: 38, h: 33.6, inside: true, shape: [rectPoly(-40.6, -20.6, 40.6, 22.4)] },
+]
 
 function mopBucket(p: string[]) {
   const [main, sub] = p
@@ -1620,12 +1642,12 @@ const ART_COLORS = {
 export const MISC: AssetDef[] = [
   // ---------- 和风 ----------
   {
-    id: 'jp-kiri-tansu', name: '桐箪笥', category: 'japanese', w: 100, d: 45, h: 120, surface: 120,
+    id: 'jp-kiri-tansu', name: '桐箪笥', category: 'japanese', w: 100, d: 45, h: 120, surface: 120, surfaces: KIRI_SURFACES, openable: true,
     ...sty({ japanese: [[J.hinoki, '', J.sumi], ['#f3e3c8', '', '#8a6a4a'], [J.dark, '', '#c9a35a']], nordic: [[N.oakL, '', M.char]], cute: [[C.woodL, '', C.woodD]] }),
     build: kiriTansu,
   },
   {
-    id: 'jp-cha-tansu', name: '茶箪笥', category: 'japanese', w: 90, d: 40, h: 90, surface: 90,
+    id: 'jp-cha-tansu', name: '茶箪笥', category: 'japanese', w: 90, d: 40, h: 90, surface: 90, surfaces: CHA_SURFACES, openable: true,
     ...sty({ japanese: [[J.dark, J.washi], [J.wood, J.washi], [J.hinoki, J.tatami]], retro: [[R.caramel, R.cream]], cute: [[C.wood, C.cream]] }),
     build: chaTansu,
   },
@@ -1789,7 +1811,7 @@ export const MISC: AssetDef[] = [
     build: foldingSet,
   },
   {
-    id: 'out-storage', name: '户外储物柜', category: 'outdoor', w: 90, d: 50, h: 80, surface: 80,
+    id: 'out-storage', name: '户外储物柜', category: 'outdoor', w: 90, d: 50, h: 80, surface: 80, surfaces: OUT_STORAGE_SURFACES, openable: true,
     ...sty({ cute: [[C.mint, C.white, C.woodD], [C.sakura, C.white, C.woodD]], nordic: [[N.gray, N.white, M.char], [N.sage, N.linen, M.char]], industrial: [[I.steel, I.iron, I.rust]], modern: [[M.char, M.black, M.silver]] }),
     build: outdoorStorage,
   },

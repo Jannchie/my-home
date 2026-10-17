@@ -77,7 +77,7 @@ const rectPoly = (b: { x0: number; y0: number; x1: number; y1: number }) => [
 ]
 const vert = (a: { y0: number; y1: number }, b: { y0: number; y1: number }) => Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0)
 
-/** 挂在钩子上的东西挂在谁身上（钩子层附近 4cm 以内；壁内收纳的挂衣杆也算） */
+/** 挂在钩子上的东西挂在谁身上（钩子层附近 4cm 以内，柜子里的挂衣杆也算） */
 function hookOwner(plan: Plan, f: Furniture) {
   for (const o of plan.furniture) {
     if (o.id === f.id) continue
@@ -90,11 +90,6 @@ function hookOwner(plan: Plan, f: Furniture) {
         if (lp.x > Math.min(...xs) - 4 && lp.x < Math.max(...xs) + 4 && lp.y > Math.min(...zs) - 4 && lp.y < Math.max(...zs) + 4) return o.id
       }
     }
-  }
-  for (const fx of plan.fixtures) {
-    if (fx.kind !== 'builtin' || fx.builtinType !== 'closet') continue
-    const [[b]] = fixtureSpans(fx)
-    if (f.x > b.x0 && f.x < b.x1 && f.y > b.y0 && f.y < b.y1) return fx.id
   }
   return null
 }
@@ -149,6 +144,14 @@ describe('一键布置不穿模（jp / cn / west seed 1..20）', () => {
           return Array.from({ length: n }, (_, s) => ({ x: a.x + ((b.x - a.x) * s) / n, y: a.y + ((b.y - a.y) * s) / n }))
         })
         const doors = openingsOn(room, plan).filter(({ o }) => o.kind !== 'window')
+        // 嵌墙收纳位（壁龛）：正面那段墙挖开了，里面的柜子和柜里的东西本来就伸进墙里
+        const niches = plan.fixtures
+          .filter((x) => x.kind === 'builtin' && x.recessed)
+          .map((x) => {
+            const a = (x.rot * Math.PI) / 180
+            const d = x.d ?? 38
+            return { c: { x: x.x - Math.sin(a) * (d / 2), y: x.y + Math.cos(a) * (d / 2) }, half: x.w / 2 + 1 }
+          })
         let worst = 0
         for (const e of edgesOf(room.points)) {
           const half = wallThicknessAt(plan, add(e.a, mul(e.dir, e.length / 2)), e.out, room) / 2
@@ -161,6 +164,7 @@ describe('一键布置不穿模（jp / cn / west seed 1..20）', () => {
             const nb = plan.rooms.find((r) => r !== room && pointInPolygon(add(foot, mul(e.out, 5)), r.points))
             if (nb && isOpenBetween(room, nb)) continue
             if (doors.some(({ o, center }) => Math.hypot(foot.x - center.x, foot.y - center.y) < o.width / 2 + 1)) continue
+            if (niches.some(({ c, half }) => Math.hypot(foot.x - c.x, foot.y - c.y) < half)) continue
             worst = Math.max(worst, half - din)
           }
         }

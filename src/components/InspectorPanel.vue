@@ -5,6 +5,10 @@ import { planArea } from '../generate'
 import { RAILING_KINDS, type RailingKind } from '../model'
 import { isIndoor } from '../walls'
 import { deleteSelection, duplicateSelection, findFixture, findRoom, mutate, plan, rotateSelectedFixture, selection, settings, tidyDoors, setRoomLight, setRoomLightK } from '../store'
+import { cabinetsOn, setOpen } from '../cabinet'
+import { propsOn } from '../surface'
+import { ASSET_MAP } from '../three/assets'
+import { displayName } from '../three/catalog'
 import { LIGHT_MODES, type LightMode } from '../three/lights'
 import { roomName, t } from '../i18n'
 import { JIcon } from '@jannchie/icons-vue'
@@ -74,16 +78,36 @@ function setRectSize(w: number, h: number) {
   })
 }
 
-/** 嵌墙切换：柜子沿正面方向挪一个柜深（嵌墙时柜体退到墙后，正面和墙面齐平） */
+/** 嵌墙切换：收纳位沿正面方向挪一个位深（嵌墙时退到墙后，正面和墙面齐平）；位上的柜子和柜里的东西一起挪 */
 function toggleRecessed() {
   const f = fixture.value
   if (!f) return
-  mutate(() => {
+  mutate((p) => {
     const a = (f.rot * Math.PI) / 180
     const k = (f.recessed ? 1 : -1) * fixtureDepth(f)
-    f.x = Math.round(f.x - Math.sin(a) * k)
-    f.y = Math.round(f.y + Math.cos(a) * k)
+    const dx = Math.round(-Math.sin(a) * k)
+    const dy = Math.round(Math.cos(a) * k)
+    const cabs = cabinetsOn(p.furniture, f)
+    for (const o of new Set([...cabs, ...cabs.flatMap((c) => propsOn(p, c))])) {
+      o.x += dx
+      o.y += dy
+    }
+    f.x += dx
+    f.y += dy
     f.recessed = !f.recessed
+  })
+}
+
+/** 收纳位上放着的、能开合的柜子（平面图里在收纳位的属性里开关柜门） */
+const spotCabinets = computed(() => {
+  const f = fixture.value
+  return f?.kind === 'builtin' ? cabinetsOn(plan.value.furniture, f).filter((c) => ASSET_MAP.get(c.asset)?.openable) : []
+})
+function setSpotOpen(open: boolean) {
+  const cabs = spotCabinets.value
+  if (!cabs.length || cabs.every((c) => !!c.open === open)) return
+  mutate((p) => {
+    for (const c of cabs) setOpen(p, c, open)
   })
 }
 </script>
@@ -213,7 +237,11 @@ function toggleRecessed() {
           </select>
         </label>
         <label class="inline"><input type="checkbox" :checked="!!fixture.recessed" @change="toggleRecessed" /> {{ t('嵌在墙里（不占房间）') }}</label>
-        <label class="inline"><input type="checkbox" :checked="!!fixture.open" @change="mutate(() => (fixture!.open = !fixture!.open))" /> {{ t('柜门打开（可往里放东西）') }}</label>
+        <label v-if="spotCabinets.length" class="inline"
+          ><input type="checkbox" :checked="spotCabinets.every((c) => c.open)" @change="setSpotOpen(!spotCabinets.every((c) => c.open))" />
+          {{ t('柜门打开（{name}）', { name: displayName(ASSET_MAP.get(spotCabinets[0].asset)!) }) }}</label
+        >
+        <p class="hint">{{ t('收纳位只是预留的空间（嵌墙的是墙里的壁龛）。柜子本身是家具：一键布置会按位的尺寸放一件鞋柜 / 衣柜 / 食品柜，也可以在 3D 沙盘或素材库里自己换款式和颜色。') }}</p>
       </template>
       <p v-if="fixture.kind === 'fridge'" class="hint">{{ t('冰箱位只是预留的空间。冰箱本身是家具：一键布置会按户型和住户风格放一台，也可以在 3D 沙盘或素材库里自己挑款式和颜色。') }}</p>
       <p v-if="fixture.kind === 'washer'" class="hint">{{ t('洗衣机位是防水盘和给排水口。洗衣机本身是家具：一键布置会按户型和住户风格放一台，也可以在 3D 沙盘或素材库里自己挑款式和颜色。') }}</p>

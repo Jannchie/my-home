@@ -120,12 +120,14 @@ export interface Opening {
  * 固定设备。x/y 为中心；局部坐标里「背面」朝 -y（贴墙一侧），
  * rot 为顺时针角度（0/90/180/270）。
  * washer / fridge 是「洗衣机位 / 冰箱位」：只是预留的空间（防水盘、冰箱的位置），机器本身是家具（family washer / fridge）。
+ * builtin 是「收纳位」（鞋柜位 / 衣柜位 / 食品柜位）：嵌墙的是墙里留出的壁龛，不嵌墙的是靠墙预留的一块地方；
+ * 柜子本身是家具（cabinet.ts、packs/cabinets.ts），一键布置按位的尺寸挑一件放上去。
  */
 export type FixtureKind = 'kitchen' | 'bathtub' | 'toilet' | 'basin' | 'washer' | 'fridge' | 'ps' | 'outdoor' | 'builtin'
 export type KitchenVariant = 'wall' | 'facing'
 export type ToiletType = 'basic' | 'washlet' | 'tankless'
 export type BuiltinType = 'shoe' | 'closet' | 'pantry'
-export const BUILTIN_TYPES: Record<BuiltinType, string> = { shoe: '鞋柜（下駄箱）', closet: '壁内收纳', pantry: '食品柜' }
+export const BUILTIN_TYPES: Record<BuiltinType, string> = { shoe: '鞋柜位', closet: '衣柜位', pantry: '食品柜位' }
 export const TOILET_TYPES: Record<ToiletType, string> = { basic: '普通（水箱）', washlet: '温水洗净', tankless: '无水箱一体（高级）' }
 
 export interface Fixture {
@@ -154,11 +156,11 @@ export interface Fixture {
   style?: string
   /** @deprecated 旧存档：冰箱、洗衣机的机身颜色，迁移时转成家具的配色 */
   color?: string
-  /** 仅内置收纳：类型 */
+  /** 仅收纳位：放什么柜子（鞋柜 / 衣柜 / 食品柜） */
   builtinType?: BuiltinType
-  /** 仅内置收纳：嵌在墙里（柜门和墙面齐平，柜体伸进墙后的空间，不占房间） */
+  /** 仅收纳位：嵌在墙里的壁龛（柜子正面和墙面齐平，柜体伸进墙后的空间，不占房间） */
   recessed?: boolean
-  /** 仅内置收纳：柜门打开（露出里面的层板，可以往里放东西） */
+  /** @deprecated 旧存档：以前收纳位本身画柜子、带柜门开关；迁移时转成柜体家具的 open（cabinet.ts migrateCabinets） */
   open?: boolean
   x: number
   y: number
@@ -179,7 +181,7 @@ export const FIXTURES: Record<FixtureKind, { label: string; w: number; d: number
   fridge: { label: '冰箱位', w: 65, d: 65, front: 60 },
   ps: { label: 'PS 管道井', w: 50, d: 50, front: 0 },
   outdoor: { label: '空调外机', w: 80, d: 30, front: 0 },
-  builtin: { label: '内置收纳', w: 90, d: 38, front: 0 },
+  builtin: { label: '收纳位', w: 90, d: 38, front: 0 },
 }
 
 /** 厨房各段进深：壁付け只有主台面；対面 = 背面食器棚 + 通道 + 主台面 */
@@ -250,12 +252,16 @@ export interface Furniture {
   z?: number
   /** 仅灯具：强制开 / 关；不填 = 跟随所在房间的灯 */
   light?: 'on' | 'off'
+  /** 仅可开合的柜子（素材 openable）：柜门 / 抽屉打开着；不填 = 关着 */
+  open?: boolean
 }
 
 export interface Plan {
   version: 1
   /** 冰箱、洗衣机已经是家具（摆在冰箱位 / 洗衣机位上）。没有这个标记的是旧存档：读取时给每个位补上原来的默认款 */
   appliancesAsFurniture?: true
+  /** 收纳位上的柜子已经是家具。没有这个标记的旧存档：读取时在每个收纳位上补一件同类柜子（cabinet.ts migrateCabinets） */
+  cabinetsAsFurniture?: true
   name: string
   /** 户内隔墙厚 */
   wall: number
@@ -542,5 +548,5 @@ export function fmtJo(cm2: number) {
 }
 
 export function emptyPlan(): Plan {
-  return { version: 1, appliancesAsFurniture: true, name: t('未命名户型'), wall: 10, wallOuter: 18, rooms: [], openings: [], fixtures: [], furniture: [] }
+  return { version: 1, appliancesAsFurniture: true, cabinetsAsFurniture: true, name: t('未命名户型'), wall: 10, wallOuter: 18, rooms: [], openings: [], fixtures: [], furniture: [] }
 }

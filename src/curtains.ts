@@ -11,7 +11,7 @@ function at(f: Pick<Fixture, 'x' | 'y' | 'rot'>, lx: number, lz: number) {
 
 /**
  * 设备的立体块（和 assets.ts 里的设备模型一致）：[平面包围盒, 底, 顶]（相对房间地面）。
- * 厨房 = 台面柜 + 灶台上方的抽油烟机（中岛还有背面吊柜）；冰箱位 / 洗衣机位只是预留的地面，不算。
+ * 厨房 = 台面柜 + 灶台上方的抽油烟机（中岛还有背面吊柜）；冰箱位 / 洗衣机位 / 收纳位只是预留的空间，不算（上面的机器、柜子是家具）。
  */
 export function fixtureSpans(fx: Fixture): [Box, number, number][] {
   const d = fixtureDepth(fx)
@@ -37,8 +37,6 @@ export function fixtureSpans(fx: Fixture): [Box, number, number][] {
       return [part(-w / 2 - 3, w / 2 + 3, -d / 2, d / 2, 0, 78)]
     case 'basin':
       return full(90)
-    case 'builtin':
-      return full(230)
     case 'outdoor':
       return full(60)
     case 'ps':
@@ -48,6 +46,8 @@ export function fixtureSpans(fx: Fixture): [Box, number, number][] {
   }
 }
 
+/** 柜子可以比收纳位略深 / 略出一点（cabinet.ts fitsSpot） */
+const grow = (b: Box, k: number): Box => ({ x0: b.x0 - k, y0: b.y0 - k, x1: b.x1 + k, y1: b.y1 + k })
 const overlaps = (a: Box, b: Box) => a.x0 < b.x1 - 0.5 && b.x0 < a.x1 - 0.5 && a.y0 < b.y1 - 0.5 && b.y0 < a.y1 - 0.5
 
 /** 窗帘：杆比窗宽两侧各 15，帘子贴着墙面（离墙面 0..11） */
@@ -73,8 +73,9 @@ export function curtainSpec(plan: Pick<Plan, 'fixtures'>, o: { center: { x: numb
   const half = o.width / 2 + CURTAIN.over
   const ends = [add(face, mul(o.dir, -half)), add(face, mul(o.dir, half))]
   const box = bbox([...ends, ...ends.map((p) => add(p, mul(o.out, -CURTAIN.depth)))])
-  // 冰箱位 / 洗衣机位上总会放冰箱、洗衣机（家具），按机器的大致高度算
-  const spots = (fx: Fixture): [Box, number, number][] => (fx.kind === 'fridge' ? [[fixtureBox(fx), 0, 185]] : fx.kind === 'washer' ? [[fixtureBox(fx), 0, 105]] : fixtureSpans(fx))
+  // 冰箱位 / 洗衣机位 / 收纳位上总会放冰箱、洗衣机、柜子（家具），按它们的大致高度算
+  const spots = (fx: Fixture): [Box, number, number][] =>
+    fx.kind === 'fridge' ? [[fixtureBox(fx), 0, 185]] : fx.kind === 'washer' ? [[fixtureBox(fx), 0, 105]] : fx.kind === 'builtin' ? [[grow(fixtureBox(fx), 8), 0, 230]] : fixtureSpans(fx)
   for (const fx of plan.fixtures) for (const [b, lo, hi] of spots(fx)) if (lo < bottom + 1 && overlaps(b, box)) bottom = Math.max(bottom, hi + 1)
   // 下摆抬到快碰到杆了：这扇窗就不挂
   if (rodY - bottom < 25) return null

@@ -4,7 +4,7 @@
 
 import * as THREE from 'three'
 import { ball, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
-import { C, S, holePanel, legs, paintPanel, rectPoly, shell, slab, type AssetDef, type Hole, type Poly, type StyleTag } from '../kit'
+import { C, S, SWING_OPEN, hangingPipe, holePanel, legs, movable, paintPanel, pipeHook, rectPoly, shell, slab, type AssetDef, type DoorMotion, type Hole, type Poly, type StyleTag, type SurfaceDef } from '../kit'
 
 type V3 = [number, number, number]
 const N = S.nordic
@@ -154,6 +154,40 @@ function lit<T extends THREE.Mesh>(m: T, color: string, k = 0.8) {
   m.userData.noOutline = true
   return m
 }
+
+// ---------- 可开合部件：把原来的门板 / 抽屉面（连同把手）原样收进一个会动的 Group ----------
+
+/** 把一组部件收进以 at 为原点的 Group（部件位置不变），标上开合动作 */
+function pivot(parts: THREE.Object3D[], at: V3, m: DoorMotion) {
+  const g = new THREE.Group()
+  g.position.set(...at)
+  for (const o of parts) {
+    o.position.x -= at[0]
+    o.position.y -= at[1]
+    o.position.z -= at[2]
+    g.add(o)
+  }
+  return movable(g, m)
+}
+/** 平开门：铰链竖线在 (hx, hz)；left = 铰链在门的左边（门往 +x 伸） */
+const swingAt = (parts: THREE.Object3D[], hx: number, hz: number, left: boolean) => pivot(parts, [hx, 0, hz], { kind: 'swing', angle: (left ? -1 : 1) * SWING_OPEN })
+/** 抽屉：整体往 +z 拉出 dz */
+const pullOut = (parts: THREE.Object3D[], dz: number) => pivot(parts, [0, 0, 0], { kind: 'drawer', dz })
+/** 推拉门：沿 x 推 dx */
+const slideBy = (parts: THREE.Object3D[], dx: number) => pivot(parts, [0, 0, 0], { kind: 'slide', dx })
+/** 翻门：铰链横线在 (hy, hz)，angle 为 rotation.x 的增量（底边铰链往外放倒为正） */
+const flapAt = (parts: THREE.Object3D[], hy: number, hz: number, angle: number) => pivot(parts, [0, hy, hz], { kind: 'flap', angle })
+
+/** 抽屉盒（敞口托盘）：面板背面在 zf，往后深 depth；x / y 为盒子底面中心 */
+function drawerTray(w: number, h: number, depth: number, color: string, x: number, y: number, zf: number) {
+  return tray(w, h, depth, 0.8, color, { x, y, z: zf - depth / 2 })
+}
+/** 药柜 6 × 8 小抽屉：格宽、行高、每格面板的 [x, 底边 y] */
+const APO_CW = 96 / 6
+const APO_RH = 104 / 8
+const APOTHECARY_CELLS: [number, number][] = Array.from({ length: 48 }, (_, k) => [-48 + APO_CW * ((k % 6) + 0.5), 11 + APO_RH * Math.floor(k / 6) + 0.5])
+/** 抽屉盒的可摆放层：托盘内底在 y（离地），x0..x1、zf - depth..zf，打开时拉出 dz */
+const drawerSurf = (x0: number, x1: number, y: number, zf: number, depth: number, h: number, dz: number): SurfaceDef => ({ y, h, inside: true, slide: dz, shape: [rectPoly(x0 + 1.2, zf - depth + 1.2, x1 - 1.2, zf - 1.2)] })
 
 /** 床垫 + 被子 + 枕头：床垫底面 y0、床头在 z0（往 +z 延伸 len），床垫用 p[1]，被子用 p[0] */
 function bedding(g: THREE.Group, w: number, len: number, y0: number, z0: number, p: string[], mh = 20, duvetOver = 2) {
@@ -498,8 +532,8 @@ function tatamiBed(w: number, p: string[]) {
   return g
 }
 
-/** 抽屉储物床：两侧各两个大抽屉（可拉开一半），床头板顶面可放东西 */
-function storageBed(p: string[], open: boolean) {
+/** 抽屉储物床：两侧各两个大抽屉（往两侧拉出），床头板顶面可放东西 */
+function storageBed(p: string[]) {
   const [, , frame] = p
   const g = new THREE.Group()
   const fr = shade(frame, 0.06)
@@ -507,17 +541,25 @@ function storageBed(p: string[], open: boolean) {
   g.add(rbox(160, 85, 16, frame, { z: -96 }, 2))
   g.add(rbox(140, 4, 182, shade(frame, -0.3), { z: 8 }, 1))
   g.add(rbox(150, 28, 192, frame, { y: 4, z: 8 }, 2))
-  const out = open ? 40 : 0
-  for (const s of [-1, 1])
+  for (const s of [-1, 1]) {
+    // 抽屉朝两侧拉：在一个转了 ±90° 的局部坐标里做（局部 +z = 世界 ±x），抽屉动作照常沿局部 +z
+    const side = new THREE.Group()
+    side.rotation.y = (s * Math.PI) / 2
     for (const zc of [-38, 54]) {
-      const fx = s * (75.4 + out)
-      if (open) {
-        const box = tray(60, 18, 84, 1.2, shade(frame, 0.12), { x: s * (75 + out - 30), y: 8, z: zc })
-        g.add(box)
-      }
-      g.add(rbox(1.6, 22, 88, fr, { x: fx, y: 6, z: zc }, 0.6))
-      g.add(rbox(1.5, 1.5, 24, pull, { x: fx + s * 1.4, y: 22, z: zc }, 0.6))
+      const lx = s > 0 ? -zc : zc
+      side.add(
+        pullOut(
+          [
+            rbox(88, 22, 1.6, fr, { x: lx, y: 6, z: 75.4 }, 0.6),
+            rbox(24, 1.5, 1.5, pull, { x: lx, y: 22, z: 76.8 }, 0.6),
+            drawerTray(84, 18, 60, shade(frame, 0.12), lx, 7, 74.6),
+          ],
+          40,
+        ),
+      )
     }
+    g.add(side)
+  }
   bedding(g, 146, 190, 32, -86, p, 20)
   return g
 }
@@ -737,25 +779,33 @@ function drawPlate(g: CanvasRenderingContext2D, W: number, H: number) {
 // 柜类
 // =====================================================================
 
-/** 推拉门衣柜：2 / 3 扇门前后两条轨道，中间一扇是镜面 */
+/** 推拉门衣柜：空心柜体，里面一块枕棚 + 挂衣杆；前后两条轨道的推拉门，一扇带镜面 */
 function slidingWardrobe(w: number, p: string[]) {
   const [main, sub, acc] = p
   const g = new THREE.Group()
   const n = w > 150 ? 3 : 2
   g.add(rbox(w - 4, 6, 52, shade(main, -0.25), { z: -2 }, 1))
-  g.add(rbox(w, 190, 56, main, { y: 6, z: -2 }, 1.5))
+  // 柜体（z -30..26）：背板、两侧、底板，顶盖原样
+  g.add(rbox(w - 4, 190, 1.5, shade(main, -0.06), { y: 6, z: -29.25 }, 0.4))
+  for (const s of [-1, 1]) g.add(rbox(2, 190, 56, main, { x: s * (w / 2 - 1), y: 6, z: -2 }, 0.6))
+  g.add(rbox(w - 4, 2, 54.5, main, { y: 6, z: -1.25 }, 0.4))
   g.add(rbox(w + 1, 4, 61, shade(main, -0.08), { y: 196 }, 1.2))
+  g.add(rbox(w - 4, 1.8, 54, shade(main, 0.04), { y: 172.2, z: -1.5 }, 0.3))
+  g.add(hangingPipe(-w / 2 + 2, w / 2 - 2, 166, -2, CHROME, 1.2))
   g.add(rbox(w - 4, 3, 5, shade(main, -0.15), { y: 6, z: 28.5 }, 0.8))
   const span = (w - 4) / n
   const dw = span + 3
   for (let i = 0; i < n; i++) {
     const x = -w / 2 + 2 + span * (i + 0.5)
     const z = i % 2 ? 29.6 : 27.4
-    g.add(rbox(dw, 185, 2, sub, { x, y: 9.5, z }, 0.8))
-    if (i === Math.floor((n - 1) / 2) + (n === 2 ? 1 : 0)) g.add(rbox(dw - 12, 150, 0.6, '#d8ecf2', { x, y: 25, z: z + 1.1 }, 0.3))
-    else g.add(rbox(dw - 8, 177, 0.6, shade(sub, 0.05), { x, y: 13.5, z: z + 1.1 }, 0.3))
+    const parts: THREE.Object3D[] = [rbox(dw, 185, 2, sub, { x, y: 9.5, z }, 0.8)]
+    if (i === Math.floor((n - 1) / 2) + (n === 2 ? 1 : 0)) parts.push(rbox(dw - 12, 150, 0.6, '#d8ecf2', { x, y: 25, z: z + 1.1 }, 0.3))
+    else parts.push(rbox(dw - 8, 177, 0.6, shade(sub, 0.05), { x, y: 13.5, z: z + 1.1 }, 0.3))
     const hx = i === 0 ? dw / 2 - 4 : -(dw / 2 - 4)
-    g.add(rbox(1.6, 40, 1.4, acc, { x: x + hx, y: 80, z: z + 1.6 }, 0.6))
+    parts.push(rbox(1.6, 40, 1.4, acc, { x: x + hx, y: 80, z: z + 1.6 }, 0.6))
+    // 前轨（奇数扇）推到左边那扇的前面
+    if (i % 2) g.add(slideBy(parts, -span))
+    else for (const o of parts) g.add(o)
   }
   return g
 }
@@ -796,11 +846,10 @@ function closetSystem(p: string[]) {
   for (const y of [178, 92]) g.add(cylX(1.2, 56.25, CHROME, -59.4, y, 0))
   for (let i = 0; i < 4; i++) g.add(garment(-84 + i * 6, 178, 68, CLOTHES[i]))
   for (let i = 0; i < 2; i++) g.add(garment(-83 + i * 7, 92, 46, CLOTHES[4 + i], 30))
-  // 中：三层抽屉 + 两层板
+  // 中：三层抽屉（可拉出）+ 两层板
   for (let i = 0; i < 3; i++) {
     const y = 7 + i * 20
-    g.add(rbox(56.5, 19, 1.6, sub, { y, z: d / 2 + 0.4 }, 0.8))
-    g.add(pullBar(16, 0, y + 14, d / 2 + 1.8, acc))
+    g.add(pullOut([rbox(56.5, 19, 1.6, sub, { y, z: d / 2 + 0.4 }, 0.8), pullBar(16, 0, y + 14, d / 2 + 1.8, acc), drawerTray(54, 15, 42, shade(main, 0.06), 0, y + 1, 23.6)], 26))
   }
   for (const y of [66, 100, 135]) g.add(shelfIn(-28.75, 28.75, y))
   // 右：长挂杆
@@ -809,18 +858,18 @@ function closetSystem(p: string[]) {
   return g
 }
 
-/** 食器棚：下柜 + 家电台面 + 上方玻璃门餐具柜（底层放碗盘，上层留空） */
+/** 食器棚：下柜（两个抽屉 + 两扇门，门里一块层板）+ 家电台面 + 上方玻璃门餐具柜（底层放碗盘，上层留空） */
 function shokkidana(p: string[]) {
   const [main, sub, acc] = p
   const g = new THREE.Group()
   g.add(rbox(96, 6, 40, shade(main, -0.3), { z: -1 }, 1))
   g.add(carcass(100, 79, 43.8, main, 6))
+  g.add(rbox(95, 1.6, 41, main, { y: 66.2, z: 0.5 }, 0.4))
+  g.add(rbox(95, 1.6, 41, shade(main, 0.04), { y: 36, z: 0.5 }, 0.4))
   for (const s of [-1, 1]) {
     const x = s * 24.4
-    g.add(front(47.6, 13, 43.8, sub, x, 68.6))
-    g.add(knob(x, 75, 23.5, acc, 1.4))
-    g.add(front(47.6, 58, 43.8, sub, x, 9.3))
-    g.add(knob(s * 4.5, 50, 23.5, acc, 1.5))
+    g.add(pullOut([front(47.6, 13, 43.8, sub, x, 68.6), knob(x, 75, 23.5, acc, 1.4), drawerTray(44, 10, 38, shade(main, 0.08), x, 69, 21.5)], 23))
+    g.add(swingAt([front(47.6, 58, 43.8, sub, x, 9.3), knob(s * 4.5, 50, 23.5, acc, 1.5)], s * 48.2, 21.5, s < 0))
   }
   const Du = 32
   const zc = -22.5 + Du / 2
@@ -829,10 +878,7 @@ function shokkidana(p: string[]) {
   g.add(rbox(95.4, 2.5, Du - 1.2, main, { y: 122, z: zc + 0.6 }, 0.6))
   g.add(rbox(95.4, 2, Du - 3, main, { y: 151, z: zc + 0.5 }, 0.6))
   g.add(rbox(101, 2.5, Du + 1, main, { y: 177.5, z: zc }, 1))
-  for (const s of [-1, 1]) {
-    g.add(glassDoor(47.4, 52.6, sub, s * 24, 124.7, 10.2))
-    g.add(knob(s * 4, 150, 11.6, acc, 1.2))
-  }
+  for (const s of [-1, 1]) g.add(swingAt([glassDoor(47.4, 52.6, sub, s * 24, 124.7, 10.2), knob(s * 4, 150, 11.6, acc, 1.2)], s * 47.7, 9.5, s < 0))
   // 固定的碗盘：都在上柜底层（y 124.5），上层留空
   const yb = 124.5
   for (let i = 0; i < 6; i++) g.add(cyl(8.5, 7, 0.9, C.white, { x: -34, y: yb + i * 1.1, z: -6 }, 24))
@@ -847,48 +893,56 @@ function shokkidana(p: string[]) {
   return g
 }
 
-/** 水屋箪笥：上段组子推拉门 + 小抽屉，下段抽屉 + 木推拉门，铁件环形拉手 */
+/** 水屋箪笥：上段组子推拉门 + 小抽屉，下段抽屉 + 木推拉门，铁件环形拉手；柜体空心，上下段各一块层板 */
 function mizuya(p: string[]) {
   const [main, paper, iron] = p
   const g = new THREE.Group()
   const fr = shade(main, 0.06)
-  const ring = (x: number, y: number, z: number) => {
-    g.add(rbox(4.6, 4.6, 0.5, iron, { x, y: y - 2.3, z }, 0.3))
-    g.add(torus(1.7, 0.35, iron, { x, y: y - 1.9, z: z + 0.6 }))
-  }
+  const inner = shade(main, 0.08)
+  const ring = (x: number, y: number, z: number): THREE.Object3D[] => [rbox(4.6, 4.6, 0.5, iron, { x, y: y - 2.3, z }, 0.3), torus(1.7, 0.35, iron, { x, y: y - 1.9, z: z + 0.6 })]
   g.add(rbox(120, 5, 45, shade(main, -0.2), { z: -0.5 }, 1))
-  g.add(rbox(120, 78, 44, main, { y: 5, z: -1 }, 1))
+  // 下段柜体（z -23..21）
+  g.add(rbox(116, 78, 1.5, shade(main, -0.06), { y: 5, z: -22.25 }, 0.4))
+  for (const s of [-1, 1]) g.add(rbox(2, 78, 44, main, { x: s * 59, y: 5, z: -1 }, 0.6))
+  g.add(rbox(116, 2, 43, main, { y: 5, z: -0.5 }, 0.4))
+  g.add(rbox(116, 1.6, 42, main, { y: 66.6, z: 0 }, 0.4))
+  g.add(rbox(116, 1.6, 42, inner, { y: 36.4, z: 0 }, 0.4))
   for (let i = 0; i < 3; i++) {
     const x = -40 + i * 40
-    g.add(rbox(38.6, 13, 1.4, fr, { x, y: 68.5, z: 21.6 }, 0.5))
-    ring(x, 77, 22.4)
-    for (const s of [-1, 1]) g.add(rbox(3, 3, 0.4, iron, { x: x + s * 17.5, y: 78.3, z: 22.4 }, 0.15))
+    const parts: THREE.Object3D[] = [rbox(38.6, 13, 1.4, fr, { x, y: 68.5, z: 21.6 }, 0.5), ...ring(x, 77, 22.4), drawerTray(36, 10, 38, inner, x, 69, 20.9)]
+    for (const s of [-1, 1]) parts.push(rbox(3, 3, 0.4, iron, { x: x + s * 17.5, y: 78.3, z: 22.4 }, 0.15))
+    g.add(pullOut(parts, 23))
   }
   for (const s of [-1, 1]) {
     const z = s < 0 ? 21.6 : 23.2
-    g.add(rbox(58.5, 54, 1.4, shade(main, 0.03), { x: s * 29.25, y: 11, z }, 0.5))
-    g.add(rbox(1.4, 9, 0.5, iron, { x: s * 4, y: 34, z: z + 0.8 }, 0.2))
+    const parts = [rbox(58.5, 54, 1.4, shade(main, 0.03), { x: s * 29.25, y: 11, z }, 0.5), rbox(1.4, 9, 0.5, iron, { x: s * 4, y: 34, z: z + 0.8 }, 0.2)]
+    if (s > 0) g.add(slideBy(parts, -58.5))
+    else for (const o of parts) g.add(o)
   }
   g.add(rbox(122, 3, 46, shade(main, -0.08), { y: 83 }, 1))
-  g.add(rbox(116, 86, 36, main, { y: 86, z: -5 }, 1))
+  // 上段柜体（z -23..13）
+  g.add(rbox(112, 86, 1.5, shade(main, -0.06), { y: 86, z: -22.25 }, 0.4))
+  for (const s of [-1, 1]) g.add(rbox(2, 86, 36, main, { x: s * 57, y: 86, z: -5 }, 0.6))
+  g.add(rbox(112, 1.4, 35, main, { y: 97.2, z: -5 }, 0.4))
+  g.add(rbox(112, 1.6, 35, inner, { y: 133, z: -5 }, 0.4))
   g.add(rbox(120, 3, 41, shade(main, -0.08), { y: 172, z: -2.5 }, 1))
   for (let i = 0; i < 4; i++) {
     const x = -43.5 + i * 29
-    g.add(rbox(27.4, 9, 1.4, fr, { x, y: 88, z: 13.4 }, 0.5))
-    ring(x, 94.5, 14.2)
+    g.add(pullOut([rbox(27.4, 9, 1.4, fr, { x, y: 88, z: 13.4 }, 0.5), ...ring(x, 94.5, 14.2), drawerTray(25, 7, 30, inner, x, 88.3, 12.7)], 18))
   }
   for (const s of [-1, 1]) {
     const x = s * 29
     const z = s < 0 ? 14.7 : 16.5
-    g.add(rbox(55, 69, 0.4, paper, { x, y: 100, z: z - 1.15 }, 0.1))
-    g.add(holePanel(58, 72, 1.6, main, lattice(58, 72, 3, 4, 1.6, 2.6), { x, y: 98.5, z }))
+    const parts = [rbox(55, 69, 0.4, paper, { x, y: 100, z: z - 1.15 }, 0.1), holePanel(58, 72, 1.6, main, lattice(58, 72, 3, 4, 1.6, 2.6), { x, y: 98.5, z })]
+    if (s > 0) g.add(slideBy(parts, -58))
+    else for (const o of parts) g.add(o)
   }
   return g
 }
 
 const RECORD_COLORS = [R.teal, R.red, R.mustard, R.cream, R.orange, M.black, '#5a4a7a', N.blue, '#e9e2d0']
 
-/** 复古唱片柜：外八腿，三格唱片 + 一格推拉门 */
+/** 复古唱片柜：外八腿，三格唱片 + 一格平开门（门里一块层板） */
 function recordCabinet(p: string[]) {
   const [main, sub, acc] = p
   const g = carcass(120, 46, 42, main, 16)
@@ -912,8 +966,8 @@ function recordCabinet(p: string[]) {
     lean.position.y += 0.3
     g.add(lean)
   })
-  g.add(front(26.4, 39.6, 42, sub, 44.3, fy + 0.2))
-  g.add(rbox(1.4, 12, 1.4, acc, { x: 33.5, y: 33, z: 22.6 }, 0.5))
+  g.add(rbox(26.4, 1.6, 39, shade(main, 0.04), { x: 44.3, y: 38.4, z: 0.4 }, 0.4))
+  g.add(swingAt([front(26.4, 39.6, 42, sub, 44.3, fy + 0.2), rbox(1.4, 12, 1.4, acc, { x: 33.5, y: 33, z: 22.6 }, 0.5)], 57.5, 20.6, false))
   return g
 }
 
@@ -929,7 +983,7 @@ function drawLockerNo(n: number) {
   }
 }
 
-/** 金属储物柜：学校风，百叶通风口 + 号码牌 */
+/** 金属储物柜：学校风，百叶通风口 + 号码牌；空心柜体分格，每扇门里一格（高柜上面一块帽架） */
 function locker(tall: boolean, p: string[]) {
   const [body, door, handle] = p
   const g = new THREE.Group()
@@ -937,9 +991,13 @@ function locker(tall: boolean, p: string[]) {
   const D = 45
   const H = tall ? 180 : 90
   g.add(rbox(W - 4, 5, D - 4, shade(body, -0.3), { z: -1 }, 1))
-  g.add(rbox(W, H - 5, D, body, { y: 5, z: -1 }, 1))
-  g.add(rbox(W - 3, H - 9, 0.3, '#2a2b2e', { y: 7, z: 21.75 }, 0.1))
+  g.add(rbox(W - 4, H - 7, 1.2, shade(body, -0.2), { y: 5, z: -22.9 }, 0.3))
+  for (const s of [-1, 1]) g.add(rbox(2, H - 5, D, body, { x: s * (W / 2 - 1), y: 5, z: -1 }, 0.6))
+  g.add(rbox(W, 2, D, body, { y: H - 2, z: -1 }, 0.6))
+  g.add(rbox(W - 4, 2, D - 1, body, { y: 5, z: -1.5 }, 0.4))
+  for (const s of [-1, 1]) g.add(rbox(1.4, H - 9, D - 2, body, { x: s * ((W - 4) / 6), y: 7, z: -1.5 }, 0.3))
   const rows = tall ? 1 : 3
+  for (const y of lockerBoards(tall)) g.add(rbox(W - 4, 1.4, D - 2, body, { y: y - 1.4, z: -1.5 }, 0.3))
   const dw = (W - 4) / 3 - 0.8
   const dh = (H - 9) / rows - 0.8
   let no = 1
@@ -951,32 +1009,43 @@ function locker(tall: boolean, p: string[]) {
       const nSlot = tall ? 5 : 3
       for (let i = 0; i < nSlot; i++) holes.push({ kind: 'rect', x: 0, y: dh - 8 - i * 2.6, w: dw * 0.6, h: 1.2, r: 0.5 })
       if (tall) for (let i = 0; i < nSlot; i++) holes.push({ kind: 'rect', x: 0, y: 6 + i * 2.6, w: dw * 0.6, h: 1.2, r: 0.5 })
-      g.add(holePanel(dw, dh, 1, door, holes, { x, y, z: 22.6 }, 1))
-      g.add(rbox(2, 8, 1.4, handle, { x: x + dw / 2 - 4, y: y + (tall ? 85 : dh / 2 - 4), z: 23.6 }, 0.5))
-      g.add(paintPanel(5, 2.6, `fm-locker-${no}`, drawLockerNo(no), { x, y: y + dh - (tall ? 22 : 14), z: 23.15 }))
+      g.add(
+        swingAt(
+          [
+            holePanel(dw, dh, 1, door, holes, { x, y, z: 22.6 }, 1),
+            rbox(2, 8, 1.4, handle, { x: x + dw / 2 - 4, y: y + (tall ? 85 : dh / 2 - 4), z: 23.6 }, 0.5),
+            paintPanel(5, 2.6, `fm-locker-${no}`, drawLockerNo(no), { x, y: y + dh - (tall ? 22 : 14), z: 23.15 }),
+          ],
+          x - dw / 2,
+          22.1,
+          true,
+        ),
+      )
       no++
     }
   return g
 }
 
-/** 药柜（百味箪笥）：6 × 8 小抽屉，铜标签框 */
+/** 药柜（百味箪笥）：6 × 8 小抽屉（每个都能拉出），铜标签框 */
 function apothecary(p: string[]) {
   const [main, drawer, pull] = p
   const g = new THREE.Group()
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(5, 8.4, 5, shade(main, -0.15), { x: sx * 45, z: sz * 14 }, 1))
   g.add(rbox(100, 110, 36, main, { y: 8, z: -1 }, 1))
   g.add(rbox(102, 2.5, 38, shade(main, -0.06), { y: 117.5 }, 1))
-  const cw = 96 / 6
-  const rh = 104 / 8
-  for (let i = 0; i < 6; i++)
-    for (let j = 0; j < 8; j++) {
-      const x = -48 + cw * (i + 0.5)
-      const y = 11 + rh * j + 0.5
-      g.add(rbox(cw - 1, rh - 1, 1.4, drawer, { x, y, z: 17.3 }, 0.4))
-      g.add(rbox(6.4, 2.6, 0.5, pull, { x, y: y + rh - 5, z: 18.1 }, 0.15))
-      g.add(rbox(5.2, 1.6, 0.5, R.cream, { x, y: y + rh - 4.5, z: 18.3 }, 0.1))
-      g.add(knob(x, y + 3.5, 18.4, pull, 1.1))
-    }
+  for (const [x, y] of APOTHECARY_CELLS)
+    g.add(
+      pullOut(
+        [
+          rbox(APO_CW - 1, APO_RH - 1, 1.4, drawer, { x, y, z: 17.3 }, 0.4),
+          rbox(6.4, 2.6, 0.5, pull, { x, y: y + APO_RH - 5, z: 18.1 }, 0.15),
+          rbox(5.2, 1.6, 0.5, R.cream, { x, y: y + APO_RH - 4.5, z: 18.3 }, 0.1),
+          knob(x, y + 3.5, 18.4, pull, 1.1),
+          drawerTray(APO_CW - 2.4, APO_RH - 4, 30, shade(main, 0.1), x, y + 0.5, 16.6),
+        ],
+        18,
+      ),
+    )
   return g
 }
 
@@ -1003,35 +1072,38 @@ function hallTree(p: string[]) {
   return g
 }
 
-/** 翻斗鞋柜：超薄，翻门 */
+/** 翻斗鞋柜：超薄，空心柜体，每层一扇底边铰链的翻门 */
 function tiltShoe(tiers: number, p: string[]) {
   const [main, sub, acc] = p
   const g = new THREE.Group()
   const dh = 36
   const legH = 10
+  const H = tiers * dh + 2
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(cyl(1.8, 1.2, legH + 0.3, shade(main, -0.15), { x: sx * 35, z: -1 + sz * 8 }, 12))
-  g.add(rbox(80, tiers * dh + 2, 24, main, { y: legH, z: -1 }, 1))
+  g.add(rbox(77, H, 1.2, shade(main, -0.06), { y: legH, z: -12.4 }, 0.3))
+  for (const s of [-1, 1]) g.add(rbox(1.5, H, 24, main, { x: s * 39.25, y: legH, z: -1 }, 0.5))
+  g.add(rbox(80, 1.6, 24, main, { y: legH + H - 1.6, z: -1 }, 0.5))
   for (let i = 0; i < tiers; i++) {
+    g.add(rbox(77, 1.6, 23, shade(main, 0.04), { y: legH + i * dh, z: -1.5 }, 0.3))
     const y = legH + 1 + i * dh + 0.6
-    g.add(rbox(77, dh - 1.2, 1.6, sub, { y, z: 11.4 }, 0.6))
-    g.add(rbox(24, 1.5, 1.6, acc, { y: y + dh - 7, z: 12.8 }, 0.6))
+    g.add(flapAt([rbox(77, dh - 1.2, 1.6, sub, { y, z: 11.4 }, 0.6), rbox(24, 1.5, 1.6, acc, { y: y + dh - 7, z: 12.8 }, 0.6)], y, 10.6, (32 * Math.PI) / 180))
   }
   return g
 }
 
-/** 厨房中岛：实木台面 + 抽屉门板 + 端头毛巾杆 */
+/** 厨房中岛：实木台面 + 抽屉（可拉出）+ 平开门（门里一块层板）+ 端头毛巾杆 */
 function island(p: string[]) {
   const [body, top, acc] = p
   const g = new THREE.Group()
   g.add(rbox(106, 8, 48, shade(body, -0.3), {}, 1))
   g.add(carcass(110, 77, 54, body, 8))
+  g.add(rbox(105, 1.6, 51, body, { y: 65.6, z: 0.5 }, 0.4))
+  g.add(rbox(105, 1.6, 51, shade(body, 0.04), { y: 37.5, z: 0.5 }, 0.4))
   g.add(rbox(120, 5, 65, top, { y: 85 }, 1.5))
   for (const s of [-1, 1]) {
     const x = s * 27.3
-    g.add(front(53.6, 14, 54, shade(body, 0.05), x, 67.6))
-    g.add(pullBar(20, x, 75.5, 28.9, acc))
-    g.add(front(53.6, 54, 54, shade(body, 0.05), x, 12))
-    g.add(rbox(1.5, 18, 1.5, acc, { x: s * 4, y: 44, z: 28.9 }, 0.6))
+    g.add(pullOut([front(53.6, 14, 54, shade(body, 0.05), x, 67.6), pullBar(20, x, 75.5, 28.9, acc), drawerTray(50, 10, 48, shade(body, 0.1), x, 68, 26.6)], 29))
+    g.add(swingAt([front(53.6, 54, 54, shade(body, 0.05), x, 12), rbox(1.5, 18, 1.5, acc, { x: s * 4, y: 44, z: 28.9 }, 0.6)], s * 54.1, 26.6, s < 0))
   }
   for (const z of [-19, 19]) g.add(cylX(0.8, 3.4, acc, 57, 70, z, 8))
   g.add(cylZ(0.9, 40, acc, 58.4, 70, 0, 10))
@@ -1061,7 +1133,7 @@ function kitchenCart(p: string[]) {
   return g
 }
 
-/** 酒柜：下部酒格（横放酒瓶）+ 开放台面 + 上部玻璃门（倒挂酒杯） */
+/** 酒柜：下部酒格（横放酒瓶）+ 开放台面 + 上部玻璃门（倒挂酒杯），玻璃门可以打开 */
 function wineCabinet(p: string[]) {
   const [main, sub, acc] = p
   const g = carcass(80, 176, 38, main, 4)
@@ -1094,12 +1166,11 @@ function wineCabinet(p: string[]) {
       g.add(bowl)
     }
   }
-  for (const s of [-1, 1]) g.add(glassDoor(37.6, 64, sub, s * 19.2, 113, 19.8))
-  for (const s of [-1, 1]) g.add(knob(s * 3.5, 140, 21.2, acc, 1.2))
+  for (const s of [-1, 1]) g.add(swingAt([glassDoor(37.6, 64, sub, s * 19.2, 113, 19.8), knob(s * 3.5, 140, 21.2, acc, 1.2)], s * 38, 19.1, s < 0))
   return g
 }
 
-/** 拱形玻璃陈列柜：拱顶 + 玻璃层板 + 顶部灯条 */
+/** 拱形玻璃陈列柜：拱顶 + 玻璃层板 + 顶部灯条；拱形玻璃门（左铰链）和底座抽屉都能打开 */
 function archCabinet(p: string[]) {
   const [main, sub, acc] = p
   const g = new THREE.Group()
@@ -1123,16 +1194,14 @@ function archCabinet(p: string[]) {
     return s
   }
   g.add(rbox(80, 20, 38, main, {}, 1))
-  g.add(front(74, 14, 38, sub, 0, 3))
-  g.add(knob(0, 10, 20.6, acc, 1.2))
+  g.add(pullOut([front(74, 14, 38, sub, 0, 3), knob(0, 10, 20.6, acc, 1.2), drawerTray(70, 10, 32, shade(main, 0.08), 0, 3.5, 18.6)], 20))
   const ff = archOutline(40, 20)
   ff.holes.push(archPath(34, 26))
   const fm = meshOf(extrude(ff, 2), toon(main))
   fm.position.z = 18
-  g.add(fm)
   const gl = meshOf(extrude(archOutline(34.4, 25.6), 0.4), toon(C.glass, { transparent: 0.32 }))
   gl.position.z = 18
-  g.add(gl)
+  g.add(swingAt([fm, gl, knob(31, 80, 19.8, acc, 1.3)], -40, 17, true))
   const bk = meshOf(extrude(archOutline(40, 20), 1.5), toon(shade(main, -0.06)))
   bk.position.z = -18.25
   g.add(bk)
@@ -1146,7 +1215,6 @@ function archCabinet(p: string[]) {
   g.add(meshOf(extrude(roof, 34.5), toon(main)))
   for (const y of [60, 100, 132]) glassShelf(g, 75.6, 33, y)
   g.add(lit(rbox(44, 0.6, 3, C.lamp, { y: 160, z: 6 }, 0.2), C.lamp, 0.9))
-  g.add(knob(31, 80, 19.8, acc, 1.3))
   return g
 }
 
@@ -1158,19 +1226,16 @@ function glassShelf(g: THREE.Group, w: number, d: number, y: number) {
 // 桌台
 // =====================================================================
 
-/** 和风镜台：矮抽屉座 + 立镜 + 镜掛け（盖布） */
+/** 和风镜台：矮抽屉座（三个抽屉都能拉出）+ 立镜 + 镜掛け（盖布） */
 function kyodai(p: string[]) {
   const [wood, cloth, metal] = p
   const g = new THREE.Group()
   const fr = shade(wood, 0.06)
+  const inner = shade(wood, 0.1)
   g.add(rbox(56, 1.4, 30, shade(wood, -0.2), { z: -1 }, 0.4))
   g.add(rbox(60, 33, 33, wood, { y: 1, z: -1 }, 1))
-  for (const s of [-1, 1]) {
-    g.add(rbox(28.4, 9, 1.4, fr, { x: s * 14.5, y: 22, z: 15.9 }, 0.5))
-    g.add(knob(s * 14.5, 26.5, 16.9, metal, 1))
-  }
-  g.add(rbox(57.6, 17, 1.4, fr, { y: 3.5, z: 15.9 }, 0.5))
-  g.add(torus(1.8, 0.35, metal, { y: 10.5, z: 16.9 }))
+  for (const s of [-1, 1]) g.add(pullOut([rbox(28.4, 9, 1.4, fr, { x: s * 14.5, y: 22, z: 15.9 }, 0.5), knob(s * 14.5, 26.5, 16.9, metal, 1), drawerTray(26, 6, 28, inner, s * 14.5, 22.5, 15.2)], 17))
+  g.add(pullOut([rbox(57.6, 17, 1.4, fr, { y: 3.5, z: 15.9 }, 0.5), torus(1.8, 0.35, metal, { y: 10.5, z: 16.9 }), drawerTray(55, 13, 28, inner, 0, 4, 15.2)], 17))
   g.add(rbox(61, 1.6, 34, shade(wood, -0.06), { y: 33.4, z: -1 }, 0.6))
   for (const s of [-1, 1]) {
     g.add(rbox(2.6, 66, 2.6, wood, { x: s * 23, y: 35, z: -11 }, 0.6))
@@ -1185,7 +1250,7 @@ function kyodai(p: string[]) {
   return g
 }
 
-/** 翻盖书桌（secretary）：斜面上段打开成写字板，里面是小抽屉和信插格 */
+/** 翻盖书桌（secretary）：斜面上段打开成写字板，里面是小抽屉和信插格；下面三个大抽屉可以拉出 */
 function secretary(p: string[]) {
   const [wood, leather, brass] = p
   const g = new THREE.Group()
@@ -1197,11 +1262,12 @@ function secretary(p: string[]) {
   g.add(rbox(90, 67, 45, wood, { y: 8, z: zc }, 1))
   for (let i = 0; i < 3; i++) {
     const y = 10 + i * 19.6
-    g.add(rbox(84, 18.6, 1.4, fr, { y, z: zf + 0.3 }, 0.5))
+    const parts: THREE.Object3D[] = [rbox(84, 18.6, 1.4, fr, { y, z: zf + 0.3 }, 0.5), drawerTray(80, 14, 38, shade(wood, 0.1), 0, y + 1, zf - 0.4)]
     for (const s of [-1, 1]) {
-      g.add(rbox(5, 2.6, 0.5, brass, { x: s * 24, y: y + 11, z: zf + 1.2 }, 0.2))
-      g.add(torus(2.6, 0.35, brass, { x: s * 24, y: y + 12.3, z: zf + 1.6, rz: Math.PI }, Math.PI))
+      parts.push(rbox(5, 2.6, 0.5, brass, { x: s * 24, y: y + 11, z: zf + 1.2 }, 0.2))
+      parts.push(torus(2.6, 0.35, brass, { x: s * 24, y: y + 12.3, z: zf + 1.6, rz: Math.PI }, Math.PI))
     }
+    g.add(pullOut(parts, 24))
   }
   for (const s of [-1, 1])
     g.add(
@@ -1296,21 +1362,19 @@ function drawGakuPanel(g: CanvasRenderingContext2D, W: number, H: number) {
   }
 }
 
-/** 日式学習机：书架 + 层板下灯管 + 软木板 + 昭和风时钟开关面板 */
+/** 学习机：侧柜三个抽屉 + 中间扁抽屉（都能拉出）+ 上方书架和灯 */
 function gakushu(p: string[]) {
   const [body, accent, knobC] = p
   const g = new THREE.Group()
+  const inner = shade(body, 0.08)
   g.add(rbox(105, 3, 60, body, { y: 69 }, 1))
   g.add(rbox(2.5, 69, 56, body, { x: -51.25 }, 0.8))
   g.add(rbox(32, 69, 56, body, { x: 36.5 }, 1))
   for (let i = 0; i < 3; i++) {
     const y = 3 + i * 21.8
-    g.add(rbox(30, 20.4, 1.4, accent, { x: 36.5, y, z: 28.4 }, 0.6))
-    g.add(knob(36.5, y + 15, 29.6, knobC, 1.4))
+    g.add(pullOut([rbox(30, 20.4, 1.4, accent, { x: 36.5, y, z: 28.4 }, 0.6), knob(36.5, y + 15, 29.6, knobC, 1.4), drawerTray(28, 16, 48, inner, 36.5, y + 1, 27.7)], 28))
   }
-  g.add(rbox(68, 9, 50, shade(body, -0.05), { x: -15, y: 59.5, z: 2 }, 0.6))
-  g.add(rbox(70, 8.6, 1.4, accent, { x: -15, y: 59.8, z: 27.6 }, 0.5))
-  g.add(knob(-15, 64, 28.8, knobC, 1.3))
+  g.add(pullOut([drawerTray(66, 7, 50, shade(body, -0.05), -15, 59.8, 27), rbox(70, 8.6, 1.4, accent, { x: -15, y: 59.8, z: 27.6 }, 0.5), knob(-15, 64, 28.8, knobC, 1.3)], 30))
   g.add(rbox(70, 4, 4, body, { x: -15, y: 8, z: -20 }, 0.8))
   g.add(rbox(2, 50, 20, body, { x: -51.5, y: 72, z: -20 }, 0.6))
   g.add(rbox(8.5, 50, 20, body, { x: 48.25, y: 72, z: -20 }, 0.8))
@@ -1454,7 +1518,7 @@ function catWall(p: string[]) {
   return out
 }
 
-/** 婴儿尿布台：抽屉 + 侧格 + 三面护栏 + 绗缝垫 */
+/** 婴儿尿布台：三个抽屉（可拉出）+ 侧格 + 三面护栏 + 绗缝垫 */
 function changingTable(p: string[]) {
   const [padC, body, knobC] = p
   const g = carcass(85, 86, 48, body, 4)
@@ -1464,8 +1528,7 @@ function changingTable(p: string[]) {
   g.add(divider(18, fy, ceil, 48, body))
   for (let i = 0; i < 3; i++) {
     const y = 7.3 + i * 26.6
-    g.add(front(55.8, 25.6, 48, shade(body, 0.04), -11.6, y))
-    g.add(knob(-11.6, y + 17, 25.6, knobC, 1.6))
+    g.add(pullOut([front(55.8, 25.6, 48, shade(body, 0.04), -11.6, y), knob(-11.6, y + 17, 25.6, knobC, 1.6), drawerTray(52, 20, 44, shade(body, 0.08), -11.6, y + 1, 23.6)], 26))
   }
   g.add(rbox(21.5, 2.5, 45.6, body, { x: 29.55, y: 46, z: 0.5 }, 0.6))
   g.add(rbox(85, 8, 2, body, { y: 90, z: -23.6 }, 0.6))
@@ -1547,6 +1610,44 @@ function ladderShelf(p: string[]) {
 }
 const LADDER_YS = [30, 70, 110, 150]
 
+
+/** 推拉门衣柜的可摆放层：底板、枕棚、挂衣杆 */
+function slidingWardrobeSurfaces(w: number): SurfaceDef[] {
+  const shape = [rectPoly(-w / 2 + 2.5, -28, w / 2 - 2.5, 25)]
+  return [
+    { y: 8, h: 150, inside: true, shape },
+    { y: 174, h: 21.5, inside: true, shape },
+    pipeHook(-w / 2 + 2, w / 2 - 2, 166, -2, 152, 1.2),
+  ]
+}
+
+/** 水屋箪笥的可摆放层：下段两层、上段两层、七个抽屉 */
+function mizuyaSurfaces(): SurfaceDef[] {
+  const lo = [rectPoly(-57.5, -21.5, 57.5, 20)]
+  const up = [rectPoly(-55.5, -21.5, 55.5, 11.5)]
+  return [
+    { y: 7, h: 29, inside: true, shape: lo },
+    { y: 38, h: 28, inside: true, shape: lo },
+    { y: 86, h: 10.5, inside: true, shape: up },
+    { y: 98.6, h: 34, inside: true, shape: up },
+    { y: 134.6, h: 36.5, inside: true, shape: up },
+    ...[0, 1, 2].map((i) => drawerSurf(-40 + i * 40 - 18, -40 + i * 40 + 18, 69.8, 20.9, 38, 9, 23)),
+    ...[0, 1, 2, 3].map((i) => drawerSurf(-43.5 + i * 29 - 12.5, -43.5 + i * 29 + 12.5, 89.1, 12.7, 30, 6, 18)),
+  ]
+}
+
+/** 储物柜里各层板的顶面高度（不含底板 y = 7）：高柜一块帽架，矮柜两块隔板 */
+function lockerBoards(tall: boolean) {
+  return tall ? [150.7] : [34.7, 61.7]
+}
+
+/** 储物柜的可摆放层：每列一格 */
+function lockerSurfaces(tall: boolean): SurfaceDef[] {
+  const cols = [rectPoly(-42.5, -21.5, -15.5, 20), rectPoly(-13.5, -21.5, 13.5, 20), rectPoly(15.5, -21.5, 42.5, 20)]
+  const ys = [7, ...lockerBoards(tall)]
+  const top = tall ? 178 : 88
+  return ys.map((y, i) => ({ y, h: Math.round(((ys[i + 1] ?? top + 1.4) - 1.4 - y - 0.5) * 10) / 10, inside: true, shape: cols }))
+}
 
 // =====================================================================
 // 配色
@@ -1687,23 +1788,22 @@ export const FURNITURE_MORE: AssetDef[] = [
       ['cute', C.pink, C.white, C.woodL],
     ]),
   ),
-  ...([false, true] as const).map((open) =>
-    A({
-      id: open ? 'fm-storage-bed-open' : 'fm-storage-bed',
-      name: '抽屉储物床',
-      family: 'fm-storage-bed',
-      sizeLabel: open ? '抽屉拉开' : '抽屉合上',
-      form: open ? 'open' : 'closed',
-      category: 'bedroom',
-      w: open ? 234 : 160,
-      d: 208,
-      h: 85,
-      surface: 85,
-      surfaceShape: [r(-80, -104, 80, -88)],
-      styles: ['modern', 'nordic', 'cute'],
-      build: (p) => storageBed(p, open),
-    }, BED),
-  ),
+  A({
+    id: 'fm-storage-bed',
+    name: '抽屉储物床',
+    family: 'fm-storage-bed',
+    category: 'bedroom',
+    w: 160,
+    d: 208,
+    h: 85,
+    surface: 85,
+    surfaceShape: [r(-80, -104, 80, -88)],
+    // 床座两侧的抽屉格：抽屉朝两侧拉出 40（slideX），里面的东西跟着抽屉走
+    surfaces: [-1, 1].flatMap((s) => [-38, 54].map((zc): SurfaceDef => ({ y: 7.8, h: 17, inside: true, slideX: s * 40, shape: [s > 0 ? r(16, zc - 40.8, 73, zc + 40.8) : r(-73, zc - 40.8, -16, zc + 40.8)] }))),
+    openable: true,
+    styles: ['modern', 'nordic', 'cute'],
+    build: storageBed,
+  }, BED),
   A({ id: 'fm-round-bed', name: '圆床', category: 'bedroom', w: 220, d: 224, h: 80, styles: ['cute', 'retro', 'modern'], build: roundBed }, [
     ['cute', C.pink, C.white, C.white],
     ['cute', C.lilac, C.sakura, C.white],
@@ -1750,7 +1850,7 @@ export const FURNITURE_MORE: AssetDef[] = [
 
   // ---------- 柜类 ----------
   ...[120, 180].map((w) =>
-    A({ id: `fm-sliding-wardrobe-${w}`, name: '推拉门衣柜', family: 'fm-sliding-wardrobe', sizeLabel: `${w}`, category: 'bedroom', w: w + 1, d: 61, h: 200, surface: 200, styles: ['modern', 'nordic', 'japanese'], build: (p) => slidingWardrobe(w, p) }, [
+    A({ id: `fm-sliding-wardrobe-${w}`, name: '推拉门衣柜', family: 'fm-sliding-wardrobe', sizeLabel: `${w}`, category: 'bedroom', w: w + 1, d: 61, h: 200, surface: 200, surfaces: slidingWardrobeSurfaces(w), openable: true, styles: ['modern', 'nordic', 'japanese'], build: (p) => slidingWardrobe(w, p) }, [
       ['modern', M.white, M.light, M.silver],
       ['modern', M.char, M.walnut, M.silver],
       ['nordic', N.white, N.oak, N.oak],
@@ -1773,7 +1873,10 @@ export const FURNITURE_MORE: AssetDef[] = [
       { y: 185.5, shape: [r(-87.5, -23, -31.5, 23), r(-28.5, -23, 28.5, 23), r(31.5, -23, 87.5, 23)], h: 22 },
       { y: 178, kind: 'hook', shape: [r(-62, -3, -33, 3), r(56, -3, 86, 3)], h: 80 },
       { y: 92, kind: 'hook', shape: [r(-68, -3, -33, 3)], h: 84 },
+      // 中间三个抽屉
+      ...[0, 1, 2].map((i) => drawerSurf(-27, 27, 7 + i * 20 + 1.8, 23.6, 42, 13, 26)),
     ],
+    openable: true,
     build: closetSystem,
   }, CAB),
   A({
@@ -1787,8 +1890,13 @@ export const FURNITURE_MORE: AssetDef[] = [
     surfaceShape: [r(-50.5, -22.5, 50.5, 10)],
     surfaces: [
       { y: 85, shape: [r(-50, -22.5, 50, 22.5)], h: 37 },
-      { y: 153, shape: [r(-47.5, -21, 47.5, 7.5)], h: 24.5 },
+      { y: 153, shape: [r(-47.5, -21, 47.5, 7.5)], h: 24.5, inside: true, glass: true },
+      // 下柜：门里两层、两个抽屉
+      { y: 8.9, shape: [r(-47.5, -20.5, 47.5, 20.5)], h: 26.5, inside: true },
+      { y: 37.6, shape: [r(-47.5, -20.5, 47.5, 20.5)], h: 28, inside: true },
+      ...[-1, 1].map((s) => drawerSurf(s * 24.4 - 22, s * 24.4 + 22, 69.8, 21.5, 38, 9, 23)),
     ],
+    openable: true,
     styles: ['retro', 'japanese', 'nordic'],
     build: shokkidana,
   }, [
@@ -1798,14 +1906,14 @@ export const FURNITURE_MORE: AssetDef[] = [
     ['cute', C.white, C.mint, C.pink],
     ['industrial', I.walnut, I.iron, I.steel],
   ]),
-  A({ id: 'fm-mizuya', name: '水屋箪笥', category: 'japanese', w: 122, d: 47, h: 175, surface: 175, surfaceShape: [r(-60, -23, 60, 18)], styles: ['japanese', 'retro'], build: mizuya }, [
+  A({ id: 'fm-mizuya', name: '水屋箪笥', category: 'japanese', w: 122, d: 47, h: 175, surface: 175, surfaceShape: [r(-60, -23, 60, 18)], surfaces: mizuyaSurfaces(), openable: true, styles: ['japanese', 'retro'], build: mizuya }, [
     ['japanese', J.wood, J.washi, J.sumi],
     ['japanese', J.dark, J.washi, J.sumi],
     ['japanese', J.hinoki, J.washi, '#4a4040'],
     ['retro', R.caramel, R.cream, '#3a3030'],
     ['nordic', N.oak, N.white, M.black],
   ]),
-  A({ id: 'fm-record-cabinet', name: '唱片柜', category: 'living', w: 122, d: 46, h: 62, surface: 62, styles: ['retro', 'nordic', 'industrial'], build: recordCabinet }, [
+  A({ id: 'fm-record-cabinet', name: '唱片柜', category: 'living', w: 122, d: 46, h: 62, surface: 62, surfaces: [18.9, 40].map((y) => ({ y, h: 19, inside: true, shape: [r(31.5, -19, 57, 19.5)] })), openable: true, styles: ['retro', 'nordic', 'industrial'], build: recordCabinet }, [
     ['retro', R.caramel, R.cream, R.mustard],
     ['retro', R.teal, R.cream, BRASS],
     ['nordic', N.oak, N.white, M.black],
@@ -1813,7 +1921,7 @@ export const FURNITURE_MORE: AssetDef[] = [
     ['modern', M.walnut, M.char, M.silver],
   ]),
   ...([true, false] as const).map((tall) =>
-    A({ id: tall ? 'fm-locker' : 'fm-locker-grid', name: '金属储物柜', family: 'fm-locker', sizeLabel: tall ? '3 门高柜' : '9 格矮柜', category: 'storage', w: 90, d: 48, h: tall ? 180 : 90, surface: tall ? 180 : 90, styles: ['industrial', 'retro', 'cute'], build: (p) => locker(tall, p) }, [
+    A({ id: tall ? 'fm-locker' : 'fm-locker-grid', name: '金属储物柜', family: 'fm-locker', sizeLabel: tall ? '3 门高柜' : '9 格矮柜', category: 'storage', w: 90, d: 48, h: tall ? 180 : 90, surface: tall ? 180 : 90, surfaces: lockerSurfaces(tall), openable: true, styles: ['industrial', 'retro', 'cute'], build: (p) => locker(tall, p) }, [
       ['industrial', '#5f7470', '#6f8782', M.silver],
       ['industrial', I.iron, I.steel, M.silver],
       ['retro', '#d9d3c0', '#e8e2cf', I.steel],
@@ -1821,7 +1929,7 @@ export const FURNITURE_MORE: AssetDef[] = [
       ['cute', C.sky, C.mint, C.white],
     ]),
   ),
-  A({ id: 'fm-apothecary', name: '药柜（百味箪笥）', category: 'storage', w: 102, d: 39, h: 120, surface: 120, styles: ['retro', 'japanese', 'industrial'], build: apothecary }, [
+  A({ id: 'fm-apothecary', name: '药柜（百味箪笥）', category: 'storage', w: 102, d: 39, h: 120, surface: 120, surfaces: APOTHECARY_CELLS.map(([x, y]) => drawerSurf(x - (APO_CW - 2.4) / 2, x + (APO_CW - 2.4) / 2, y + 1.3, 16.6, 30, APO_RH - 5, 18)), openable: true, styles: ['retro', 'japanese', 'industrial'], build: apothecary }, [
     ['retro', R.caramel, shade(R.caramel, 0.06), BRASS],
     ['japanese', J.dark, J.hinoki, J.sumi],
     ['industrial', I.walnut, shade(I.walnut, 0.06), I.steel],
@@ -1854,7 +1962,7 @@ export const FURNITURE_MORE: AssetDef[] = [
     ['modern', M.char, M.light, M.silver],
   ]),
   ...[2, 3].map((n) =>
-    A({ id: `fm-tilt-shoe-${n}`, name: '翻斗鞋柜', family: 'fm-tilt-shoe', sizeLabel: `${n} 层`, category: 'entrance', w: 80, d: 27, h: 12 + n * 36, surface: 12 + n * 36, styles: ['modern', 'nordic', 'cute'], build: (p) => tiltShoe(n, p) }, [
+    A({ id: `fm-tilt-shoe-${n}`, name: '翻斗鞋柜', family: 'fm-tilt-shoe', sizeLabel: `${n} 层`, category: 'entrance', w: 80, d: 27, h: 12 + n * 36, surface: 12 + n * 36, surfaces: Array.from({ length: n }, (_, i) => ({ y: 11.6 + i * 36, h: 33, inside: true, shape: [r(-38, -11.5, 38, 9.5)] })), openable: true, styles: ['modern', 'nordic', 'cute'], build: (p) => tiltShoe(n, p) }, [
       ['modern', M.white, M.white, M.black],
       ['modern', M.char, M.gray, M.silver],
       ['nordic', N.white, N.oak, N.oak],
@@ -1863,7 +1971,23 @@ export const FURNITURE_MORE: AssetDef[] = [
       ['retro', R.cream, R.mustard, R.caramel],
     ]),
   ),
-  A({ id: 'fm-kitchen-island', name: '厨房中岛', category: 'dining', w: 120, d: 65, h: 90, surface: 90, styles: ['nordic', 'modern', 'industrial'], build: island }, [
+  A({
+    id: 'fm-kitchen-island',
+    name: '厨房中岛',
+    category: 'dining',
+    w: 120,
+    d: 65,
+    h: 90,
+    surface: 90,
+    surfaces: [
+      { y: 10.9, h: 26, inside: true, shape: [r(-52.5, -25, 52.5, 25.5)] },
+      { y: 39.1, h: 26, inside: true, shape: [r(-52.5, -25, 52.5, 25.5)] },
+      ...[-1, 1].map((s) => drawerSurf(s * 27.3 - 25, s * 27.3 + 25, 68.8, 26.6, 48, 9, 29)),
+    ],
+    openable: true,
+    styles: ['nordic', 'modern', 'industrial'],
+    build: island,
+  }, [
     ['nordic', N.white, N.oak, M.black],
     ['modern', M.char, M.walnut, M.silver],
     ['industrial', I.iron, I.walnut, I.steel],
@@ -1902,9 +2026,10 @@ export const FURNITURE_MORE: AssetDef[] = [
     surface: 180,
     surfaces: [
       { y: 82.5, shape: [r(-37.5, -17, 37.5, 18)], h: 29.5 },
-      { y: 114.5, shape: [r(-37.5, -17, 37.5, 18)], h: 27.5 },
-      { y: 144, shape: [r(-37.5, -17, 37.5, 18)], h: 17 },
+      { y: 114.5, shape: [r(-37.5, -17, 37.5, 18)], h: 27.5, inside: true, glass: true },
+      { y: 144, shape: [r(-37.5, -17, 37.5, 18)], h: 17, inside: true, glass: true },
     ],
+    openable: true,
     styles: ['industrial', 'retro', 'modern'],
     build: wineCabinet,
   }, [
@@ -1922,7 +2047,11 @@ export const FURNITURE_MORE: AssetDef[] = [
     h: 175,
     surface: 175,
     surfaceShape: [r(-8, -17, 8, 17)],
-    surfaces: [20, 61, 101, 133].map((y, i) => ({ y, shape: [i === 3 ? r(-24, -16, 24, 16) : r(-37, -16, 37, 16)], h: [40, 39, 31, 25][i] })),
+    surfaces: [
+      ...[20, 61, 101, 133].map((y, i): SurfaceDef => ({ y, shape: [i === 3 ? r(-24, -16, 24, 16) : r(-37, -16, 37, 16)], h: [40, 39, 31, 25][i], inside: true, glass: true })),
+      drawerSurf(-35, 35, 4.3, 18.6, 32, 9, 20),
+    ],
+    openable: true,
     styles: ['cute', 'nordic', 'retro'],
     build: archCabinet,
   }, [
@@ -1934,7 +2063,20 @@ export const FURNITURE_MORE: AssetDef[] = [
   ]),
 
   // ---------- 桌台 ----------
-  A({ id: 'fm-kyodai', name: '和风镜台', category: 'japanese', w: 61, d: 35, h: 104, surface: 35, surfaceShape: [r(-30, -8.5, 30, 16)], styles: ['japanese', 'retro', 'cute'], build: kyodai }, [
+  A({
+    id: 'fm-kyodai',
+    name: '和风镜台',
+    category: 'japanese',
+    w: 61,
+    d: 35,
+    h: 104,
+    surface: 35,
+    surfaceShape: [r(-30, -8.5, 30, 16)],
+    surfaces: [...[-1, 1].map((s) => drawerSurf(s * 14.5 - 13, s * 14.5 + 13, 23.3, 15.2, 28, 5, 17)), drawerSurf(-27.5, 27.5, 4.8, 15.2, 28, 11.5, 17)],
+    openable: true,
+    styles: ['japanese', 'retro', 'cute'],
+    build: kyodai,
+  }, [
     ['japanese', J.dark, J.shu, J.sumi],
     ['japanese', J.wood, J.ai, J.sumi],
     ['retro', R.caramel, R.red, BRASS],
@@ -1949,7 +2091,8 @@ export const FURNITURE_MORE: AssetDef[] = [
     h: 105,
     surface: 105,
     surfaceShape: [r(-45, -39.5, 45, -19.5)],
-    surfaces: [{ y: 76.3, shape: [r(-38, 8.5, 38, 36.5)], h: 40 }],
+    surfaces: [{ y: 76.3, shape: [r(-38, 8.5, 38, 36.5)], h: 40 }, ...[0, 1, 2].map((i) => drawerSurf(-40, 40, 10 + i * 19.6 + 1.8, 5.1, 38, 13, 24))],
+    openable: true,
     styles: ['retro', 'industrial', 'nordic'],
     build: secretary,
   }, [
@@ -1996,7 +2139,11 @@ export const FURNITURE_MORE: AssetDef[] = [
       { y: 72, shape: [r(-52.5, -9, 52.5, 30)], h: 50 },
       { y: 72, shape: [r(-50.5, -29, 44, -10)], h: 22 },
       { y: 100, shape: [r(-50.5, -29, 44, -10)], h: 22 },
+      // 侧柜三个抽屉 + 中间扁抽屉
+      ...[0, 1, 2].map((i) => drawerSurf(22.5, 50.5, 3 + i * 21.8 + 1.8, 27.7, 48, 15, 28)),
+      drawerSurf(-48, 18, 60.6, 27, 50, 6, 30),
     ],
+    openable: true,
     styles: ['retro', 'cute', 'nordic'],
     build: gakushu,
   }, [
@@ -2053,7 +2200,18 @@ export const FURNITURE_MORE: AssetDef[] = [
     ['modern', M.white, M.char, M.black],
     ['japanese', J.hinoki, J.tatami, J.sumi],
   ]),
-  A({ id: 'fm-changing-table', name: '婴儿尿布台', category: 'kids', w: 85, d: 52, h: 98, surfaces: [6.9, 48.5].map((y) => ({ y, shape: [r(19.5, -21, 40, 23)], h: 39 })), styles: ['cute', 'nordic'], build: changingTable }, [
+  A({
+    id: 'fm-changing-table',
+    name: '婴儿尿布台',
+    category: 'kids',
+    w: 85,
+    d: 52,
+    h: 98,
+    surfaces: [...[6.9, 48.5].map((y): SurfaceDef => ({ y, shape: [r(19.5, -21, 40, 23)], h: 39 })), ...[0, 1, 2].map((i) => drawerSurf(-37.5, 14.3, 7.3 + i * 26.6 + 1.8, 23.6, 44, 19, 26))],
+    openable: true,
+    styles: ['cute', 'nordic'],
+    build: changingTable,
+  }, [
     ['cute', C.mint, C.white, C.pink],
     ['cute', C.sakura, C.white, C.lemon],
     ['cute', C.sky, C.woodL, C.white],

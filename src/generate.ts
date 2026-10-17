@@ -796,6 +796,7 @@ function layout(opts: GenOptions): Layout {
   const plan: Plan = {
     version: 1,
     appliancesAsFurniture: true,
+    cabinetsAsFurniture: true,
     name: `${c.tags.includes('S') ? type.replace('LDK', 'SLDK') : type} ${jp(STYLE_LABELS[style])}${c.livingIn ? '·' + jp('リビングイン') : ''}${c.tags.filter((t) => t !== 'S').map((t) => '·' + t).join('')}${corner ? '·' + jp('角部屋') : ''} ${planArea({ rooms: c.rooms }).toFixed(1)}㎡ #${opts.seed}`,
     wall: WALL,
     wallOuter: WALL_OUTER,

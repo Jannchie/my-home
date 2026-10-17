@@ -3,7 +3,7 @@
 
 import * as THREE from 'three'
 import { cyl, rbox, shade } from '../toon'
-import { C, type AssetDef, type StyleTag } from '../kit'
+import { C, carcass, hingedDoor, rectPoly, shelvesIn, type AssetDef, type StyleTag, type SurfaceDef } from '../kit'
 
 type Pal = [StyleTag, string[]]
 
@@ -56,21 +56,38 @@ function openShelf(w: number, d: number, n: number, gap: number, mount: number) 
   }
 }
 
-/** 吊柜：盒体 + 两扇门，底下可带一层开放格 */
+/** 吊柜：空心盒体 + 平开门（把手在门下沿，吊柜从下面开），柜内中间一块层板；底下可带一层开放格 */
+const CAB_T = 1.8
 function wallCabinet(w: number, d: number, h: number, mount: number, niche: number) {
   return (p: string[]) => {
     const [body, door] = p
     const g = new THREE.Group()
     const y0 = mount + niche
     // 盒体比声明进深浅 2，门板和把手凸出的部分正好落在声明范围内
-    g.add(rbox(w, h - niche, d - 2, body, { y: y0, z: -1 }, 1))
+    const box = carcass(w, h - niche, d - 2, body, { t: CAB_T })
+    box.position.set(0, y0, -1)
+    g.add(box)
+    const shelf = shelvesIn(w, d - 2, [cabShelfY(h, mount, niche)], shade(body, 0.04), CAB_T)
+    shelf.position.set(0, 0, -1)
+    g.add(shelf)
     const n = Math.max(1, Math.round(w / 45))
     const dw = w / n
     for (let i = 0; i < n; i++) {
-      const x = -w / 2 + dw * (i + 0.5)
-      g.add(rbox(dw - 1.2, h - niche - 1.4, 1.2, door, { x, y: y0 + 0.7, z: d / 2 - 1.3 }, 0.8))
-      // 把手在门的下沿（吊柜从下面开）
-      g.add(rbox(8, 1.2, 1.6, shade(door, -0.35), { x: x + (i % 2 ? -1 : 1) * (dw / 2 - 8), y: y0 + 2.5, z: d / 2 - 0.5 }, 0.4))
+      const hinge = n > 1 && i >= n / 2 ? 'right' : 'left'
+      g.add(
+        hingedDoor({
+          x0: -w / 2 + dw * i,
+          x1: -w / 2 + dw * (i + 1),
+          y0: y0 + 0.4,
+          y1: y0 + h - niche - 0.4,
+          z: d / 2 - 0.6,
+          hinge,
+          color: door,
+          th: 1.2,
+          knob: false,
+          panel: (pw, ph) => [rbox(pw, ph, 1.2, door, {}, 0.8), rbox(8, 1.2, 1, shade(door, -0.35), { x: (hinge === 'left' ? 1 : -1) * (pw / 2 - 8), y: 1.8, z: 1.1 }, 0.4)],
+        }),
+      )
     }
     if (niche > 0) {
       // 底下的开放格：两侧板 + 底板
@@ -80,6 +97,21 @@ function wallCabinet(w: number, d: number, h: number, mount: number, niche: numb
     }
     return g
   }
+}
+
+/** 吊柜中间层板的顶面高度（离地） */
+const cabShelfY = (h: number, mount: number, niche: number) => Math.round(mount + niche + (h - niche) / 2)
+
+/** 吊柜门里的两层：柜底板、中间层板（离地高度，和 wallCabinet 的板对得上） */
+function cabLevels(w: number, d: number, h: number, mount: number, niche: number): SurfaceDef[] {
+  const floor = mount + niche + CAB_T
+  const mid = cabShelfY(h, mount, niche)
+  const top = mount + h - CAB_T
+  const shape = [rectPoly(-w / 2 + CAB_T + 0.4, -d / 2 + CAB_T + 0.4, w / 2 - CAB_T - 0.4, d / 2 - 2.6)]
+  return [
+    { y: floor, h: Math.round((mid - 1.6 - floor) * 10) / 10, inside: true, shape },
+    { y: mid, h: Math.round((top - mid) * 10) / 10, inside: true, shape },
+  ]
 }
 
 /** 挂杆 + S 钩：搁板底下多一根挂杆 */
@@ -129,6 +161,8 @@ const KITCHEN_CABS: AssetDef[] = [60, 90, 120].map((w) =>
     family: 'ws-kitchen-cab',
     sizeLabel: `${w}`,
     mount: 150,
+    surfaces: cabLevels(w, 35, 70, 150, 0),
+    openable: true,
   }),
 )
 
@@ -150,7 +184,8 @@ const TOILET: AssetDef[] = [
   }),
   def('ws-toilet-cab', '马桶上方吊柜', [60, 25, 60], CAB_PALS, wallCabinet(60, 25, 60, T_MOUNT, 20), {
     mount: T_MOUNT,
-    surfaces: [{ y: T_MOUNT + 2, h: 18 }],
+    surfaces: [{ y: T_MOUNT + 2, h: 18 }, ...cabLevels(60, 25, 60, T_MOUNT, 20)],
+    openable: true,
     category: 'toiletry',
   }),
 ]

@@ -178,8 +178,9 @@ export function fromCompact(c: unknown): Plan {
 
   const p: Plan = {
     version: 1,
-    // 分享出去的都是迁移过的新数据：冰箱 / 洗衣机已经是家具（只户型时也不要给冰箱位补默认款）
+    // 分享出去的都是迁移过的新数据：冰箱 / 洗衣机、收纳位上的柜子已经是家具（只户型时也不要给位补默认款）
     appliancesAsFurniture: true,
+    cabinetsAsFurniture: true,
     name: isStr(o.n) ? o.n : '',
     wall: o.w,
     wallOuter: o.o,

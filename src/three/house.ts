@@ -25,7 +25,7 @@ import {
 import { isIndoor, sharedIntervals, wallSegments, wallThicknessAt } from '../walls'
 import { tatamiLayout } from '../tatami'
 import { addOutlines, ball, capsule, cyl, mergeMeshes, rbox, shade, toon, useAnisotropy } from './toon'
-import { glow } from './kit'
+import { glow, poseDoors } from './kit'
 import { hasTag } from './tags'
 import { fridgeSpotModel, washerSpotModel } from './appliances'
 import { effectivePalette } from './colors'
@@ -39,7 +39,8 @@ import {
   outdoorUnitModel,
   psModel,
   toiletModel,
-  builtinModel,
+  storageSpotModel,
+  NICHE_H,
 } from './assets'
 import { edgesOf } from '../model'
 import { showerSpot } from '../bathroom'
@@ -494,7 +495,7 @@ function buildWalls(plan: Plan, H: number, infos: OpeningInfo[]) {
       if (pr.d > 1 || Math.abs(dir.x * info.dir.y - dir.y * info.dir.x) > 1e-3) continue
       cuts.push({ lo: pr.t - info.width / 2, hi: pr.t + info.width / 2, y0: info.y0, y1: info.y1 })
     }
-    // 嵌墙收纳：柜门所在的那段墙整段挖开（柜体伸进墙里）
+    // 嵌墙收纳位（壁龛）：正面那段墙整段挖开到壁龛高度（柜子家具伸进墙里）
     for (const f of plan.fixtures) {
       if (f.kind !== 'builtin' || !f.recessed) continue
       const a = (f.rot * Math.PI) / 180
@@ -503,7 +504,7 @@ function buildWalls(plan: Plan, H: number, infos: OpeningInfo[]) {
       const fdir = { x: Math.cos(a), y: Math.sin(a) }
       const pr = projectToSegment(front, s.a, s.b)
       if (pr.d > t / 2 + 2 || Math.abs(dir.x * fdir.y - dir.y * fdir.x) > 1e-3) continue
-      cuts.push({ lo: pr.t - f.w / 2, hi: pr.t + f.w / 2, y0: 0, y1: Math.min(H, 230) })
+      cuts.push({ lo: pr.t - f.w / 2, hi: pr.t + f.w / 2, y0: 0, y1: Math.min(H - 1, NICHE_H) })
     }
     cuts.sort((a, b) => a.lo - b.lo)
     const at = (u: number) => add(s.a, mul(dir, u))
@@ -534,7 +535,7 @@ function buildWalls(plan: Plan, H: number, infos: OpeningInfo[]) {
       stub(at(cur), at(end), t)
     }
   }
-  // 嵌墙收纳和建筑一体：伸进隔壁（收纳间）的柜体用墙包起来——背后、两侧一道墙，柜顶以上封到天花，
+  // 壁龛和建筑一体：伸进隔壁（收纳间）的部分用墙包起来——背后、两侧一道墙，壁龛顶以上封到天花，
   // 隔壁看过来只是一段加厚的墙，柜子后面没有空隙
   for (const f of plan.fixtures) {
     if (f.kind !== 'builtin' || !f.recessed) continue
@@ -553,7 +554,7 @@ function buildWalls(plan: Plan, H: number, infos: OpeningInfo[]) {
     const w = f.w / 2
     piece(at(d + s / 2, -w - s), at(d + s / 2, w + s), s, 0, H)
     for (const k of [-1, 1]) piece(at(t, k * (w + s / 2)), at(d + s, k * (w + s / 2)), s, 0, H)
-    if (H > 230) piece(at((t + d) / 2, -w), at((t + d) / 2, w), d - t, 230, H)
+    if (H - 1 > NICHE_H) piece(at((t + d) / 2, -w), at((t + d) / 2, w), d - t, NICHE_H, H)
   }
   return g
 }
@@ -1262,7 +1263,7 @@ export function fixtureModel(f: Fixture, wallH: number) {
     case 'ps':
       return psModel(f.w, d, Math.min(wallH, 240))
     case 'builtin':
-      return builtinModel(f.w, d, f.builtinType ?? 'shoe', !!f.open, Math.max(wallH, 200))
+      return storageSpotModel(f.w, d, !!f.recessed, Math.min(wallH - 1, NICHE_H))
   }
 }
 
@@ -1335,6 +1336,8 @@ export function furnitureModel(fu: Furniture) {
   mergeMeshes(m)
   addOutlines(m)
   applyPatterns(m, pal, fu.patterns)
+  // 可开合的柜子：柜门 / 抽屉按 open 摆好（模型本身是关着的）
+  if (def.openable) poseDoors(m, !!fu.open)
   g.add(m)
   g.userData.furnitureId = fu.id
   g.userData.asset = fu.asset

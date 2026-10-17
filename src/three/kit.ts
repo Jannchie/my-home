@@ -208,6 +208,24 @@ export const FORM_LABELS: Record<FormTag, string> = {
 /** 平面多边形，局部坐标 [x, z] */
 export type Poly = [number, number][]
 
+/**
+ * 一层可摆放面（见 AssetDef.surfaces）。
+ *   inside：在柜门里 / 抽屉里（关着门时不能往里放；一键布置只往里收日常用品，开放格子「必须放满」的规则不管它）
+ *   glass ：柜门是玻璃的，关着也看得见里面（展示柜、玻璃门食器棚）：仍按展示格对待
+ *   slide ：抽屉格，打开时随抽屉往前（+z）拉出这么多 cm；里面的东西跟着抽屉走（cabinet.ts setOpen）
+ *   slideX：往侧面拉的抽屉（床侧抽屉）：打开时沿 x 拉出这么多 cm（可以为负）
+ */
+export interface SurfaceDef {
+  y: number
+  shape?: Poly[]
+  kind?: SurfaceKind
+  h?: number
+  inside?: boolean
+  glass?: boolean
+  slide?: number
+  slideX?: number
+}
+
 export interface AssetDef {
   id: string
   name: string
@@ -256,7 +274,13 @@ export interface AssetDef {
    * 顶面仍用 surface / surfaceShape；这里只写顶面以外的层。用户对着柜子正面点击时，射线会落到里面的层板上。
    * h 是这一层的净高（到上一层层板底 / 床板底的距离）：比它高的东西放不进去，避免穿模。床底收纳就是 y = 0 附近、h ≈ 床底净空的一层。
    */
-  surfaces?: { y: number; shape?: Poly[]; kind?: SurfaceKind; h?: number }[]
+  surfaces?: SurfaceDef[]
+  /**
+   * 可开合：有柜门 / 抽屉的柜子。模型里会动的部件（门扇、抽屉、翻门）用 movable() 标出开合动作，
+   * 家具的 open 状态决定它们摆成开着还是关着（poseDoors），同一件素材、同一个 id，切换时里面的东西不动。
+   * 门里的层板 / 挂杆 / 抽屉格照常写在 surfaces 里并标 inside；关着门时东西还在，只是被门挡住。
+   */
+  openable?: boolean
   /**
    * 形态：同一系列（series）里的不同摆法（平放 / 立放 / 挂起 / 叠好 / 合上 / 装箱）。
    * 放到挂钩层（kind: 'hook'）上时自动换成同系列的 'hanging' 形态；从挂钩拿到台面上时换回非挂起的形态。
@@ -675,4 +699,238 @@ export function paintAbstract(ground: string, a: string, line: string) {
     g.arc(W * 0.8, H * 0.18, Math.min(W, H) * 0.07, 0, Math.PI * 2)
     g.fill()
   }
+}
+
+// ---------- 柜门、抽屉：可开合的部件 ----------
+
+/**
+ * 开合动作（挂在门扇 / 抽屉的 Group 的 userData.door 上，poseDoors 按家具的 open 状态摆）：
+ *   swing ：平开门，绕 Group 原点的竖轴转 angle 弧度（three.js rotation.y 的增量；铰链在左、门往 +x 伸的，往外开是负角）
+ *   slide ：推拉门，沿 x 平移 dx
+ *   drawer：抽屉，沿 +z 拉出 dz
+ *   flap  ：翻门 / 翻斗，绕 Group 原点的横轴转 angle 弧度（rotation.x 的增量；底边铰链往外翻是正角）
+ */
+export type DoorMotion = { kind: 'swing'; angle: number } | { kind: 'slide'; dx: number } | { kind: 'drawer'; dz: number } | { kind: 'flap'; angle: number }
+
+/** 把一个部件标成会动的（门扇、抽屉…）。部件本身的 position / rotation 是关着时的位姿 */
+export function movable<T extends THREE.Object3D>(o: T, m: DoorMotion): T {
+  o.userData.door = m
+  return o
+}
+
+/** 按开 / 关摆好模型里所有会动的部件（可以反复调用，不会累积） */
+export function poseDoors(root: THREE.Object3D, open: boolean) {
+  root.traverse((o) => {
+    const m = o.userData.door as DoorMotion | undefined
+    if (!m) return
+    const base = (o.userData.doorBase ??= { p: o.position.clone(), r: o.rotation.clone() }) as { p: THREE.Vector3; r: THREE.Euler }
+    o.position.copy(base.p)
+    o.rotation.copy(base.r)
+    if (!open) return
+    if (m.kind === 'swing') o.rotation.y += m.angle
+    else if (m.kind === 'flap') o.rotation.x += m.angle
+    else if (m.kind === 'slide') o.position.x += m.dx
+    else o.position.z += m.dz
+  })
+}
+
+/** 模型里会动的部件个数 */
+export function countDoors(root: THREE.Object3D) {
+  let n = 0
+  root.traverse((o) => {
+    if (o.userData.door) n++
+  })
+  return n
+}
+
+/** 平开门开到多少度（弧度）：约 100°，门扇转到柜子侧面外，里面看得清 */
+export const SWING_OPEN = (100 * Math.PI) / 180
+
+/**
+ * 柜体（正面敞开的箱子）：背板、两侧、顶板、底板，外尺寸 w × h × d，板厚 t，原点在底面中心、正面朝 +z。
+ * base 为踢脚 / 底座高度（底板抬到 base 上，下面是一块缩进的踢脚板）。门、抽屉另外做，层板用 shelvesIn。
+ */
+export function carcass(w: number, h: number, d: number, color: string, opts: { t?: number; base?: number; plinth?: string; back?: string; top?: boolean } = {}) {
+  const t = opts.t ?? 1.8
+  const base = opts.base ?? 0
+  const g = new THREE.Group()
+  g.add(rbox(w - t * 2, h - base - t, t, opts.back ?? shade(color, -0.04), { y: base, z: -d / 2 + t / 2 }, 0.3))
+  for (const s of [-1, 1]) g.add(rbox(t, h, d, color, { x: (s * (w - t)) / 2 }, 0.3))
+  if (opts.top !== false) g.add(rbox(w - t * 2 + 0.01, t, d, color, { y: h - t }, 0.3))
+  g.add(rbox(w - t * 2, t, d - t, color, { y: base, z: t / 2 }, 0.3))
+  if (base > 0) g.add(rbox(w - t * 2, base, d - 4, opts.plinth ?? shade(color, -0.12), { z: -1 }, 0.3))
+  return g
+}
+
+/** 柜内层板：每个 y 是层板顶面高度（= surfaces 的 y），柜体外宽 w、外深 d，侧板厚 t */
+export function shelvesIn(w: number, d: number, ys: number[], color: string, t = 1.8, th = 1.6) {
+  const g = new THREE.Group()
+  for (const y of ys) g.add(rbox(w - t * 2 - 0.2, th, d - t - 0.6, color, { y: y - th, z: t / 2 - 0.3 }, 0.3))
+  return g
+}
+
+/** 柜内一根挂衣杆（两端杆座）：x0..x1、杆中心高 y、进深位置 z */
+export function hangingPipe(x0: number, x1: number, y: number, z: number, color = '#d9dee6', r = 1.4) {
+  const g = new THREE.Group()
+  const pipe = cyl(r, r, x1 - x0, color, {}, 14)
+  pipe.position.set((x0 + x1) / 2, y, z)
+  pipe.rotation.z = Math.PI / 2
+  g.add(pipe)
+  for (const x of [x0 + 0.5, x1 - 0.5]) {
+    const seat = cyl(r + 0.8, r + 0.8, 1, color, {}, 12)
+    seat.position.set(x, y, z)
+    seat.rotation.z = Math.PI / 2
+    g.add(seat)
+  }
+  return g
+}
+
+/**
+ * 挂衣杆的挂钩层（和 surface.ts 里旧内置收纳的写法一致）：挂点带沿杆、窄窄一条，钩环内顶搭在杆顶。
+ * clear 为杆下净空（衣服长度上限）。
+ */
+export function pipeHook(x0: number, x1: number, y: number, z: number, clear: number, r = 1.4): SurfaceDef {
+  return { y: y + r + 0.45, kind: 'hook', inside: true, h: clear, shape: [rectPoly(x0 + 2, z - 1.7, x1 - 2, z + 1.3)] }
+}
+
+/**
+ * 平开门扇：门洞 x0..x1 × y0..y1，门板正面在 z（门板厚 th，背面贴着柜体正面）。
+ * hinge 为铰链在哪一侧，把手在另一侧。panel 可以换成别的门板做法（玻璃、格栅…）：参数为门板宽高，
+ * 返回的部件以门板中心底边为原点（x 居中、y 从 0 起、z 居中）。返回已标好 swing 动作的 Group（原点在铰链线上）。
+ */
+export function hingedDoor(o: {
+  x0: number
+  x1: number
+  y0: number
+  y1: number
+  z: number
+  hinge: 'left' | 'right'
+  color: string
+  th?: number
+  gap?: number
+  knob?: string | false
+  knobY?: number
+  angle?: number
+  panel?: (w: number, h: number) => THREE.Object3D[]
+}) {
+  const th = o.th ?? 1.6
+  const gap = o.gap ?? 0.3
+  const w = o.x1 - o.x0 - gap * 2
+  const h = o.y1 - o.y0 - gap * 2
+  const left = o.hinge === 'left'
+  const leaf = new THREE.Group()
+  const inner = new THREE.Group()
+  for (const m of o.panel ? o.panel(w, h) : [rbox(w, h, th, o.color, {}, 0.5)]) inner.add(m)
+  if (o.knob !== false) {
+    // 把手：高柜在离地 95 左右，矮柜在门的上部
+    const kh = Math.min(10, h * 0.3)
+    const ky = o.knobY ?? (o.y1 > 120 ? Math.min(Math.max(95 - o.y0, kh), h - kh - 2) : h - kh - Math.min(4, h * 0.15))
+    inner.add(rbox(1.2, kh, 1.4, o.knob ?? '#c9ced6', { x: (left ? 1 : -1) * (w / 2 - 3), y: ky, z: th / 2 + 0.7 }, 0.4))
+  }
+  inner.position.set(left ? w / 2 : -w / 2, 0, 0)
+  leaf.add(inner)
+  leaf.position.set(left ? o.x0 + gap : o.x1 - gap, o.y0 + gap, o.z - th / 2)
+  return movable(leaf, { kind: 'swing', angle: (left ? -1 : 1) * (o.angle ?? SWING_OPEN) })
+}
+
+/** 一排平开门：门洞 x0..x1 均分成 n 扇（默认每扇约 45 宽），左半边铰链在左、右半边在右（单扇铰链在 hinge 侧） */
+export function doorRow(o: Omit<Parameters<typeof hingedDoor>[0], 'hinge'> & { n?: number; hinge?: 'left' | 'right' }) {
+  const n = o.n ?? Math.max(1, Math.round((o.x1 - o.x0) / 45))
+  const g = new THREE.Group()
+  const dw = (o.x1 - o.x0) / n
+  for (let i = 0; i < n; i++) {
+    const hinge: 'left' | 'right' = n === 1 ? (o.hinge ?? 'left') : i < n / 2 ? 'left' : 'right'
+    g.add(hingedDoor({ ...o, x0: o.x0 + dw * i, x1: o.x0 + dw * (i + 1), hinge }))
+  }
+  return g
+}
+
+/**
+ * 翻门（上翻 / 下翻）：门洞 x0..x1 × y0..y1，门板正面在 z。hinge 'bottom' = 底边铰链往前放倒（电视柜翻门、写字台），
+ * 'top' = 顶边铰链往上掀（吊柜上翻门）。
+ */
+export function flapDoor(o: { x0: number; x1: number; y0: number; y1: number; z: number; color: string; hinge: 'bottom' | 'top'; th?: number; gap?: number; knob?: string | false; angle?: number }) {
+  const th = o.th ?? 1.6
+  const gap = o.gap ?? 0.3
+  const w = o.x1 - o.x0 - gap * 2
+  const h = o.y1 - o.y0 - gap * 2
+  const g = new THREE.Group()
+  const bottom = o.hinge === 'bottom'
+  const panel = rbox(w, h, th, o.color, { y: bottom ? 0 : -h }, 0.5)
+  g.add(panel)
+  if (o.knob !== false) g.add(rbox(Math.min(12, w * 0.3), 1.2, 1.4, o.knob ?? '#c9ced6', { y: bottom ? h - 4 : -h + 3, z: th / 2 + 0.7 }, 0.4))
+  g.position.set((o.x0 + o.x1) / 2, bottom ? o.y0 + gap : o.y1 - gap, o.z - th / 2)
+  // 下翻放平（约 85°），上翻掀到 75° 左右
+  return movable(g, { kind: 'flap', angle: bottom ? (o.angle ?? (85 * Math.PI) / 180) : -(o.angle ?? (75 * Math.PI) / 180) })
+}
+
+/**
+ * 抽屉：抽屉口 x0..x1 × y0..y1，面板正面在 z，抽屉盒深 depth（往 -z）。打开时拉出 pull（默认 depth 的 0.6）。
+ * 返回 Group（标好 drawer 动作）。抽屉格的 surfaces 用 drawerLevel 生成。
+ */
+export function drawerBox(o: { x0: number; x1: number; y0: number; y1: number; z: number; depth: number; color: string; inner?: string; th?: number; gap?: number; knob?: string | false; pull?: number; front?: (w: number, h: number) => THREE.Object3D[] }) {
+  const th = o.th ?? 1.6
+  const gap = o.gap ?? 0.3
+  const w = o.x1 - o.x0 - gap * 2
+  const h = o.y1 - o.y0 - gap * 2
+  const g = new THREE.Group()
+  const inner = o.inner ?? shade(o.color, 0.06)
+  for (const m of o.front ? o.front(w, h) : [rbox(w, h, th, o.color, { z: -th / 2 }, 0.5)]) g.add(m)
+  // 抽屉盒：底板、两侧、后板（比面板矮一点）
+  const bh = Math.max(2, h - 3)
+  const bw = w - 2
+  const bd = o.depth - th - 1
+  g.add(rbox(bw, 1, bd, inner, { y: DRAWER_FLOOR - 1, z: -th - bd / 2 }, 0.2))
+  for (const s of [-1, 1]) g.add(rbox(1, bh, bd, inner, { x: (s * (bw - 1)) / 2, y: DRAWER_FLOOR - 1, z: -th - bd / 2 }, 0.2))
+  g.add(rbox(bw - 2, bh, 1, inner, { y: DRAWER_FLOOR - 1, z: -th - bd + 0.5 }, 0.2))
+  if (o.knob !== false) g.add(rbox(Math.min(10, w * 0.3), 1.2, 1.4, o.knob ?? '#c9ced6', { y: Math.max(1, h / 2 - 0.6), z: 0.7 }, 0.4))
+  g.position.set((o.x0 + o.x1) / 2, o.y0 + gap, o.z)
+  return movable(g, { kind: 'drawer', dz: o.pull ?? drawerPull(o.depth) })
+}
+
+/** 抽屉默认拉出多少 */
+export const drawerPull = (depth: number) => Math.round(depth * 0.6)
+
+/** 抽屉盒内底面离抽屉面板底边的高度（drawerBox 的底板顶面） */
+export const DRAWER_FLOOR = 2
+
+/**
+ * 抽屉格的可摆放层：和 drawerBox 同样的参数，返回关着时的位置（surfaces 里的 y、shape），打开时按 slide 往前移。
+ */
+export function drawerLevel(o: { x0: number; x1: number; y0: number; y1: number; z: number; depth: number; th?: number; gap?: number; pull?: number }): SurfaceDef {
+  const th = o.th ?? 1.6
+  const gap = o.gap ?? 0.3
+  const w = o.x1 - o.x0 - gap * 2
+  const h = o.y1 - o.y0 - gap * 2
+  const bw = w - 2
+  const bd = o.depth - th - 1
+  const cx = (o.x0 + o.x1) / 2
+  return { y: o.y0 + gap + DRAWER_FLOOR, h: Math.max(2, h - 3), inside: true, slide: o.pull ?? drawerPull(o.depth), shape: [rectPoly(cx - bw / 2 + 1.2, o.z - th - bd + 1.2, cx + bw / 2 - 1.2, o.z - th - 0.2)] }
+}
+
+/**
+ * 推拉门：门洞 x0..x1 × y0..y1 均分成 n 扇，前后两条轨道交错（偶数扇在前轨 z，奇数扇在后轨）。
+ * 打开时前轨的门推到相邻后轨门的正前方（露出一半柜内）。
+ */
+export function slidingDoors(o: { x0: number; x1: number; y0: number; y1: number; z: number; color: string; n?: number; th?: number; panel?: (w: number, h: number) => THREE.Object3D[]; pull?: string | false }) {
+  const n = o.n ?? 2
+  const th = o.th ?? 1.8
+  const g = new THREE.Group()
+  const dw = (o.x1 - o.x0) / n
+  const h = o.y1 - o.y0 - 0.6
+  for (let i = 0; i < n; i++) {
+    const front = i % 2 === 0
+    // 相邻两扇在中间重叠 1.5cm
+    const w = dw + 1.5
+    const leaf = new THREE.Group()
+    for (const m of o.panel ? o.panel(w, h) : [rbox(w, h, th, o.color, {}, 0.5)]) leaf.add(m)
+    // 凹槽拉手（靠近和相邻门交错的一侧）
+    if (o.pull !== false) leaf.add(rbox(1.6, Math.min(16, h * 0.4), 0.6, o.pull ?? shade(o.color, -0.25), { x: (front ? 1 : -1) * (w / 2 - 4), y: Math.max(1, Math.min(h / 2, 100 - o.y0) - 8), z: th / 2 + 0.1 }, 0.3))
+    const cx = o.x0 + dw * (i + 0.5)
+    leaf.position.set(Math.min(Math.max(cx, o.x0 + w / 2), o.x1 - w / 2), o.y0 + 0.3, o.z - th / 2 - (front ? 0 : th + 0.4))
+    // 前轨的门往右边那扇推（最后一扇往左）
+    const dir = i < n - 1 ? 1 : -1
+    g.add(front ? movable(leaf, { kind: 'slide', dx: dir * dw }) : leaf)
+  }
+  return g
 }

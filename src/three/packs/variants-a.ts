@@ -9,7 +9,7 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, face, leaf, puck, rbox, shade, toon, torus, tray } from '../toon'
-import { C, S, ellipsePoly, paintPanel, rectPoly, rng, shell, type AssetCategory, type AssetDef, type StyleTag } from '../kit'
+import { C, S, SWING_OPEN, ellipsePoly, movable, paintPanel, rectPoly, rng, shell, type AssetCategory, type AssetDef, type DoorMotion, type StyleTag, type SurfaceDef } from '../kit'
 
 const PI = Math.PI
 type V3 = [number, number, number]
@@ -66,6 +66,37 @@ const fitted = (b: Build, y0 = 0): Build => (p) => {
   const g = new THREE.Group()
   g.add(b(p))
   return fit(g, y0)
+}
+
+// ---------- 可开合：门、抽屉 ----------
+
+/** 把一组部件包成会动的门 / 抽屉：pivot 为转轴 / 原点（部件的世界坐标不变） */
+function moving(parts: THREE.Object3D[], pivot: V3, m: DoorMotion) {
+  const g = new THREE.Group()
+  g.position.set(...pivot)
+  for (const o of parts) {
+    o.position.x -= pivot[0]
+    o.position.y -= pivot[1]
+    o.position.z -= pivot[2]
+    g.add(o)
+  }
+  return movable(g, m)
+}
+/** 抽屉盒（面板后面的箱子）：口宽 x0..x1，底 y，盒高 h，从 z1（面板背面）往后 depth */
+function trayParts(x0: number, x1: number, y: number, h: number, z1: number, depth: number, color: string): THREE.Object3D[] {
+  const w = x1 - x0
+  const cx = (x0 + x1) / 2
+  const zc = z1 - depth / 2
+  return [rbox(w, 1, depth, color, { x: cx, y, z: zc }, 0.2), rbox(1, h, depth, color, { x: x0 + 0.5, y, z: zc }, 0.2), rbox(1, h, depth, color, { x: x1 - 0.5, y, z: zc }, 0.2), rbox(w - 2, h, 1, color, { x: cx, y, z: z1 - depth + 0.5 }, 0.2)]
+}
+type Tray = readonly [number, number, number, number, number, number]
+/** 抽屉格（和 trayParts 同样的参数），打开时随抽屉拉出 */
+function trayLevel([x0, x1, y, h, z1, depth]: Tray): SurfaceDef {
+  return { y: y + 1, h: Math.round((h - 1.5) * 10) / 10, inside: true, slide: Math.round(depth * 0.6), shape: [rectPoly(x0 + 1.2, z1 - depth + 1.2, x1 - 1.2, z1 - 0.4)] }
+}
+/** 一个抽屉：面板等部件 + 盒子，标好拉出动作 */
+function drawer(face: THREE.Object3D[], [x0, x1, y, h, z1, depth]: Tray, color: string) {
+  return moving([...face, ...trayParts(x0, x1, y, h, z1, depth, color)], [0, 0, 0], { kind: 'drawer', dz: Math.round(depth * 0.6) })
 }
 
 /** 沿 x / z 的横圆柱，(x, y, z) 为中心 */
@@ -643,16 +674,24 @@ function brushStand(p: string[]) {
 
 // 北欧开放格：一个抽屉 + 下方开放格，斜插的锥形木腿
 const NS_OPEN = { w: 42, d: 34, h: 48, leg: 16 }
+/** 北欧开放格床头柜：柜体往后收（d 33，中心 z = -1.25），上面一只抽屉 */
+const NS_OPEN_Z = -1.25
+const NS_OPEN_TRAY: Tray = [-NS_OPEN.w / 2 + 2.6, NS_OPEN.w / 2 - 2.6, NS_OPEN.leg + 18.9, 9.5, NS_OPEN_Z + 33 / 2 - 0.1, 29.5]
 function nsOpen(p: string[]) {
   const [main, leg, knob] = p
-  const { w, d, h, leg: lh } = NS_OPEN
+  const { w, h, leg: lh } = NS_OPEN
+  const d = 33
+  const zc = NS_OPEN_Z
   const g = new THREE.Group()
   for (const sx of [-1, 1])
-    for (const sz of [-1, 1]) g.add(stick([sx * (w / 2 - 3), 0, sz * (d / 2 - 3)], [sx * (w / 2 - 7), lh + 0.5, sz * (d / 2 - 7)], 0.9, leg, 10, 1.6))
-  g.add(shell(w, h - lh, d, 1.8, main, { front: [{ kind: 'rect', x: 0, y: 1.8, w: w - 3.6, h: 15, r: 0.6 }] }).translateY(lh))
-  // 抽屉面
-  g.add(rbox(w - 3, h - lh - 20.5, 1.4, shade(main, 0.05), { y: lh + 18.8, z: d / 2 - 0.4 }, 0.6))
-  g.add(rbox(10, 1.2, 1.2, knob, { y: lh + 25, z: d / 2 + 0.9 }, 0.5))
+    for (const sz of [-1, 1]) g.add(stick([sx * (w / 2 - 3), 0, zc + sz * (d / 2 - 3)], [sx * (w / 2 - 7), lh + 0.5, zc + sz * (d / 2 - 7)], 0.9, leg, 10, 1.6))
+  // 柜体：下面开放格、上面抽屉口，中间一块隔板
+  const hh = h - lh
+  g.add(shell(w, hh, d, 1.8, main, { front: [{ kind: 'rect', x: 0, y: 1.8, w: w - 3.6, h: 15, r: 0.6 }, { kind: 'rect', x: 0, y: 18.6, w: w - 3.6, h: hh - 18.6 - 1.8, r: 0.3 }] }).translateY(lh).translateZ(zc))
+  g.add(rbox(w - 3.6, 1.8, d - 3.6, main, { y: lh + 16.8, z: zc }, 0.4))
+  // 抽屉
+  const fz = zc + d / 2 + 0.7
+  g.add(drawer([rbox(w - 3.8, hh - 20.6, 1.4, shade(main, 0.05), { y: lh + 18.7, z: fz }, 0.6), rbox(10, 1.2, 1.2, knob, { y: lh + 25, z: fz + 1.3 }, 0.5)], NS_OPEN_TRAY, shade(main, 0.08)))
   return g
 }
 
@@ -700,22 +739,32 @@ function nsWagon(p: string[]) {
 
 // 和风小抽屉：低台座 + 三层抽屉，铁环拉手，四角包铁片
 const NS_TANSU = { w: 44, d: 34, h: 42 }
+const NS_TANSU_ROWS = [
+  [7, 10],
+  [18, 10],
+  [29, 11.4],
+] as const
+const nsTansuTray = (y: number, hh: number): Tray => [-NS_TANSU.w / 2 + 2.2, NS_TANSU.w / 2 - 2.2, y + 0.3, hh - 2.5, NS_TANSU.d / 2 - 1.4, 30.5]
 function nsTansu(p: string[]) {
   const [main, metal, base] = p
   const { w, d, h } = NS_TANSU
   const g = new THREE.Group()
   g.add(rbox(w - 2, 5, d - 2, base, {}, 0.6))
-  g.add(rbox(w, h - 5, d - 1.4, main, { y: 5, z: -0.7 }, 0.8))
-  const rows = [
-    [7, 10],
-    [18, 10],
-    [29, 11.4],
-  ]
-  for (const [y, hh] of rows) {
-    g.add(rbox(w - 3, hh - 0.8, 1, shade(main, 0.05), { y, z: d / 2 - 0.9 }, 0.4))
-    // 铁环拉手：底座 + 半圆环
-    g.add(rbox(4, 2.4, 0.5, metal, { y: y + hh / 2 - 1.4, z: d / 2 + 0.25 }, 0.2))
-    g.add(torus(1.8, 0.3, metal, { y: y + hh / 2 - 1.2, z: d / 2 + 0.75 }, PI).rotateZ(PI))
+  // 空心柜体：两侧、背、顶、底
+  const bz = -0.7
+  const bd = d - 1.4
+  for (const s of [-1, 1]) g.add(rbox(1.4, h - 5, bd, main, { x: s * (w / 2 - 0.7), y: 5, z: bz }, 0.4))
+  g.add(rbox(w - 2.8, h - 5, 1.2, shade(main, -0.05), { y: 5, z: bz - bd / 2 + 0.6 }, 0.3))
+  g.add(rbox(w - 2.8, 1.4, bd, main, { y: h - 1.4, z: bz }, 0.3))
+  g.add(rbox(w - 2.8, 1.2, bd, main, { y: 5, z: bz }, 0.3))
+  for (const [y, hh] of NS_TANSU_ROWS) {
+    // 抽屉面 + 铁环拉手（底座 + 半圆环）
+    const face = [
+      rbox(w - 3, hh - 0.8, 1, shade(main, 0.05), { y, z: d / 2 - 0.9 }, 0.4),
+      rbox(4, 2.4, 0.5, metal, { y: y + hh / 2 - 1.4, z: d / 2 + 0.25 }, 0.2),
+      torus(1.8, 0.3, metal, { y: y + hh / 2 - 1.2, z: d / 2 + 0.75 }, PI).rotateZ(PI),
+    ]
+    g.add(drawer(face, nsTansuTray(y, hh), shade(main, 0.08)))
   }
   // 顶角包铁
   for (const s of [-1, 1]) g.add(rbox(3.4, 0.6, 3.4, metal, { x: s * (w / 2 - 1.7), y: h, z: d / 2 - 2.1 }, 0.2))
@@ -724,6 +773,10 @@ function nsTansu(p: string[]) {
 
 // 圆角糖果柜：大圆角柜身，两只抽屉，圆形拉手，弯脚
 const NS_CANDY = { w: 40, d: 34, h: 46 }
+/** 糖果柜整体往后挪一点，让圆拉手也落在声明的进深里（以前由 fitted 居中） */
+const NS_CANDY_DZ = -1.1
+const nsCandyTray = (y: number): Tray => [-NS_CANDY.w / 2 + 5, NS_CANDY.w / 2 - 5, y + 0.3, 9.5, NS_CANDY.d / 2 - 1.5 + NS_CANDY_DZ, 30]
+const NS_CANDY_YS = [12.5, 26.5]
 function nsCandy(p: string[]) {
   const [main, knob, leg] = p
   const { w, d, h } = NS_CANDY
@@ -733,11 +786,13 @@ function nsCandy(p: string[]) {
       g.add(ball(2.2, leg, { x: sx * (w / 2 - 6), y: 2, z: sz * (d / 2 - 6) }, [1, 0.9, 1]))
       g.add(cyl(1.6, 1.2, 7, leg, { x: sx * (w / 2 - 6), y: 3, z: sz * (d / 2 - 6) }, 12))
     }
-  g.add(rbox(w, h - 9, d - 1, main, { y: 9, z: -0.5 }, 7))
-  for (const y of [12.5, 26.5]) {
-    g.add(rbox(w - 8, 11.6, 1.2, shade(main, 0.06), { y, z: d / 2 - 0.9 }, 3))
-    g.add(ball(1.8, knob, { y: y + 5.8, z: d / 2 + 0.8 }, [1, 1, 0.8]))
-  }
+  // 圆角柜身做成空心：圆角侧板、顶板，薄底板和背板
+  for (const s of [-1, 1]) g.add(rbox(4, h - 9, d - 1, main, { x: s * (w / 2 - 2), y: 9, z: -0.5 }, 1.8))
+  g.add(rbox(w, 4, d - 1, main, { y: h - 4, z: -0.5 }, 2))
+  g.add(rbox(w - 8, 3, d - 1, main, { y: 9, z: -0.5 }, 1))
+  g.add(rbox(w - 8, h - 16, 1.2, shade(main, -0.05), { y: 12, z: -d / 2 + 0.6 }, 0.4))
+  for (const o of g.children) o.position.z += NS_CANDY_DZ
+  for (const y of NS_CANDY_YS) g.add(drawer([rbox(w - 8, 11.6, 1.2, shade(main, 0.06), { y, z: d / 2 - 0.9 + NS_CANDY_DZ }, 3), ball(1.8, knob, { y: y + 5.8, z: d / 2 + 0.8 + NS_CANDY_DZ }, [1, 1, 0.8])], nsCandyTray(y), shade(main, 0.1)))
   return g
 }
 
@@ -1546,6 +1601,13 @@ const LR_CAB: RackLayout = {
   top: 184,
   shelves: [{ y: 124, z0: -14, z1: 14, h: 20 }],
 }
+/** 上柜中间的层板顶面 */
+const LR_CAB_SHELF = 165
+/** 上柜门里两层（底板、中间层板）：柜体 d 32，fitted 后中心大约往后 0.6 */
+const LR_CAB_INSIDE: SurfaceDef[] = [
+  { y: 145.6, h: LR_CAB_SHELF - 1.4 - 145.6 - 0.5, inside: true, shape: [rectPoly(-LR_CAB.w / 2 + 2.2, -13.5, LR_CAB.w / 2 - 2.2, 13)] },
+  { y: LR_CAB_SHELF, h: LR_CAB.h - 1.6 - LR_CAB_SHELF - 0.5, inside: true, shape: [rectPoly(-LR_CAB.w / 2 + 2.2, -13.5, LR_CAB.w / 2 - 2.2, 13)] },
+]
 function rackCabinet(p: string[]) {
   const [body, leg, knob] = p
   const { w, h } = LR_CAB
@@ -1558,9 +1620,11 @@ function rackCabinet(p: string[]) {
   for (const y of [20, 60]) for (const s of [-1, 1]) g.add(cylZ(0.8, d - 3.6, leg, s * x, y, 0))
   // 柜体：底 144，顶 184
   g.add(shell(w, h - 144, d, 1.6, body, { front: [{ kind: 'rect', x: 0, y: 1.6, w: w - 3.2, h: h - 144 - 3.2, r: 0.3 }] }).translateY(144))
+  g.add(rbox(w - 3.2, 1.4, d - 3.2, body, { y: LR_CAB_SHELF - 1.4 }, 0.3))
+  // 两扇门：铰链在外侧，约 100° 转开
   for (const s of [-1, 1]) {
-    g.add(rbox(w / 2 - 2, h - 144 - 3.6, 1.4, shade(body, 0.04), { x: s * (w / 4 - 0.2), y: 145.8, z: d / 2 - 0.3 }, 0.4))
-    g.add(rbox(1, 9, 1, knob, { x: s * 3, y: 160, z: d / 2 + 0.9 }, 0.4))
+    const parts = [rbox(w / 2 - 2, h - 144 - 3.6, 1.4, shade(body, 0.04), { x: s * (w / 4 - 0.2), y: 145.8, z: d / 2 - 0.3 }, 0.4), rbox(1, 9, 1, knob, { x: s * 3, y: 160, z: d / 2 + 0.9 }, 0.4)]
+    g.add(moving(parts, [s * (w / 4 - 0.2 + (w / 2 - 2) / 2), 145.8, d / 2 - 1], { kind: 'swing', angle: (s < 0 ? -1 : 1) * SWING_OPEN }))
   }
   return g
 }
@@ -1979,7 +2043,11 @@ const NIGHTSTANDS: AssetDef[] = [
     ['nordic', [N.oak, N.oak, M.black]],
     ['retro', [R.caramel, R.caramel, R.mustard]],
     ['modern', [M.white, M.black, M.black]],
-  ], nsOpen, { surfaces: [{ y: NS_OPEN.leg + 1.8, h: 15, shape: [rectPoly(-NS_OPEN.w / 2 + 2.5, -NS_OPEN.d / 2 + 2.5, NS_OPEN.w / 2 - 2.5, NS_OPEN.d / 2 - 1.5)] }] }),
+  ], nsOpen, {
+    build: nsOpen,
+    openable: true,
+    surfaces: [{ y: NS_OPEN.leg + 1.8, h: 14.5, shape: [rectPoly(-NS_OPEN.w / 2 + 2.5, NS_OPEN_Z - 33 / 2 + 2.3, NS_OPEN.w / 2 - 2.5, NS_OPEN_Z + 33 / 2 - 1)] }, trayLevel(NS_OPEN_TRAY)],
+  }),
   ns('va-ns-round', '圆柱', [NS_ROUND.r * 2, NS_ROUND.r * 2, NS_ROUND.h], [
     ['modern', [M.white, M.white, M.char]],
     ['modern', [M.black, M.walnut, M.black]],
@@ -1999,13 +2067,13 @@ const NIGHTSTANDS: AssetDef[] = [
     ['japanese', [J.dark, '#2a2624', J.sumi]],
     ['retro', [R.caramel, '#3a3330', '#7a4a2a']],
     ['industrial', [I.walnut, I.iron, I.iron]],
-  ], nsTansu, { surface: NS_TANSU.h }),
+  ], nsTansu, { surface: NS_TANSU.h, build: nsTansu, openable: true, surfaces: NS_TANSU_ROWS.map(([y, hh]) => trayLevel(nsTansuTray(y, hh))) }),
   ns('va-ns-candy', '糖果圆角', [NS_CANDY.w, 36.2, NS_CANDY.h], [
     ['cute', [C.sakura, C.white, C.woodL]],
     ['cute', [C.mint, C.lemon, C.woodL]],
     ['cute', [C.sky, C.white, C.white]],
     ['retro', [R.mustard, R.cream, R.caramel]],
-  ], nsCandy, {}),
+  ], nsCandy, { build: nsCandy, openable: true, surfaces: NS_CANDY_YS.map((y) => trayLevel(nsCandyTray(y))) }),
 ]
 
 const kb = (id: string, label: string, dims: Dims, pals: Pal[], build: Build) =>
@@ -2201,12 +2269,16 @@ const LAUNDRY_RACKS: AssetDef[] = [
     ['industrial', [I.iron, I.walnut, I.iron]],
     ['nordic', [N.white, N.oak, N.gray]],
   ], rackTension),
-  lr('va-lrack-cabinet', '带门上柜', LR_CAB, [
-    ['modern', [M.white, M.silver, M.char]],
-    ['japanese', [J.hinoki, J.wood, J.dark]],
-    ['nordic', [N.white, N.oak, N.oak]],
-    ['industrial', [I.walnut, I.iron, I.iron]],
-  ], rackCabinet),
+  {
+    ...lr('va-lrack-cabinet', '带门上柜', LR_CAB, [
+      ['modern', [M.white, M.silver, M.char]],
+      ['japanese', [J.hinoki, J.wood, J.dark]],
+      ['nordic', [N.white, N.oak, N.oak]],
+      ['industrial', [I.walnut, I.iron, I.iron]],
+    ], rackCabinet),
+    surfaces: [...rackSurfacesOf(LR_CAB), ...LR_CAB_INSIDE],
+    openable: true,
+  },
   lr('va-lrack-mesh', '网格篮', LR_MESH, [
     ['industrial', [I.iron, I.steel, I.iron]],
     ['modern', [M.silver, M.silver, M.char]],

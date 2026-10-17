@@ -8,7 +8,7 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
-import { C, G, S, rectPoly, rng, type AssetCategory, type AssetDef, type Fx, type StyleTag } from '../kit'
+import { C, G, S, SWING_OPEN, movable, rectPoly, rng, type AssetCategory, type AssetDef, type DoorMotion, type Fx, type StyleTag, type SurfaceDef } from '../kit'
 
 const PI = Math.PI
 const N = S.nordic
@@ -925,28 +925,54 @@ function gapWagon(p: string[]) {
   return g
 }
 
+/** 可开合部件：把一组部件收进以 at 为原点的 Group（部件位置不变），标上开合动作 */
+function pivot(parts: THREE.Object3D[], at: [number, number, number], m: DoorMotion) {
+  const g = new THREE.Group()
+  g.position.set(...at)
+  for (const o of parts) {
+    o.position.x -= at[0]
+    o.position.y -= at[1]
+    o.position.z -= at[2]
+    g.add(o)
+  }
+  return movable(g, m)
+}
+/** 平开门：铰链竖线在 (hx, hz)；left = 铰链在门的左边 */
+const swingAt = (parts: THREE.Object3D[], hx: number, hz: number, left: boolean) => pivot(parts, [hx, 0, hz], { kind: 'swing', angle: (left ? -1 : 1) * SWING_OPEN })
+/** 抽屉：整体往 +z 拉出 dz */
+const pullOut = (parts: THREE.Object3D[], dz: number) => pivot(parts, [0, 0, 0], { kind: 'drawer', dz })
+
 /** 食器棚（玻璃门上柜 + 开放台面 + 下柜），宽 W */
 function cupboardShelves(W: number) {
-  return { lowTop: 85, upBottom: 125, upMid: 152, top: 180, upD: 32, D: 45, W }
+  return { lowTop: 85, upBottom: 125, upMid: 152, top: 180, upD: 32, D: 45, W, lowMid: 36, drawerY: 63 }
+}
+/** 下柜每列的中心 x 和列宽 */
+function cupboardCols(W: number) {
+  const nCol = W >= 100 ? 3 : 2
+  const cw = (W - 4) / nCol
+  return Array.from({ length: nCol }, (_, i) => ({ x: -W / 2 + 2 + cw * (i + 0.5), cw, i }))
 }
 function cupboard(p: string[], W: number) {
   const [body, door, knob] = p
   const k = cupboardShelves(W)
   const g = new THREE.Group()
   const D = k.D
-  // 下柜
+  const inner = shade(body, 0.06)
+  // 下柜（空心：背板、两侧、底板、门里一块层板、抽屉下面一块隔板）
   g.add(rbox(W - 2, 6, D - 2, shade(body, -0.15), {}, 0.5))
-  g.add(rbox(W, k.lowTop - 6 - 2, D, body, { y: 6 }, 0.8))
+  g.add(rbox(W - 4, k.lowTop - 8, 1.2, shade(body, -0.06), { y: 6, z: -D / 2 + 0.6 }, 0.3))
+  for (const sx of [-1, 1]) g.add(rbox(2, k.lowTop - 8, D, body, { x: sx * (W / 2 - 1), y: 6 }, 0.5))
+  g.add(rbox(W - 4, 2, D - 1.2, body, { y: 6, z: 0.6 }, 0.3))
+  g.add(rbox(W - 4, 1.6, D - 2.5, inner, { y: k.lowMid - 1.6, z: 0.5 }, 0.3))
+  g.add(rbox(W - 4, 1.2, D - 2, body, { y: 61.4, z: 0.5 }, 0.3))
   g.add(rbox(W + 1, 2, D + 1, shade(body, 0.04), { y: k.lowTop - 2 }, 0.6))
-  // 下柜正面：上排抽屉 + 下排门
-  const nCol = W >= 100 ? 3 : 2
-  const cw = (W - 4) / nCol
-  for (let i = 0; i < nCol; i++) {
-    const x = -W / 2 + 2 + cw * (i + 0.5)
-    g.add(rbox(cw - 1, 14, 0.8, door, { x, y: 63, z: D / 2 }, 0.5))
-    g.add(rbox(6, 1.2, 1.2, knob, { x, y: 69, z: D / 2 + 0.7 }, 0.4))
-    g.add(rbox(cw - 1, 52, 0.8, door, { x, y: 9, z: D / 2 }, 0.5))
-    g.add(rbox(1.2, 8, 1.2, knob, { x: x + (i % 2 ? -1 : 1) * (cw / 2 - 4), y: 50, z: D / 2 + 0.7 }, 0.4))
+  // 抽屉上沿到台面之间的前横档（挡住柜内）
+  g.add(rbox(W - 4, k.lowTop - 2 - 77.2, 1, body, { y: 77.2, z: D / 2 - 0.9 }, 0.3))
+  // 下柜正面：上排抽屉 + 下排门（把手在哪边，铰链就在另一边）
+  for (const { x, cw, i } of cupboardCols(W)) {
+    g.add(pullOut([rbox(cw - 1, 14, 0.8, door, { x, y: k.drawerY, z: D / 2 }, 0.5), rbox(6, 1.2, 1.2, knob, { x, y: 69, z: D / 2 + 0.7 }, 0.4), tray(cw - 4, 10, 38, 0.8, inner, { x, y: k.drawerY + 0.3, z: D / 2 - 0.4 - 19 })], 23))
+    const ks = i % 2 ? -1 : 1
+    g.add(swingAt([rbox(cw - 1, 52, 0.8, door, { x, y: 9, z: D / 2 }, 0.5), rbox(1.2, 8, 1.2, knob, { x: x + ks * (cw / 2 - 4), y: 50, z: D / 2 + 0.7 }, 0.4)], x - ks * (cw / 2 - 0.5), D / 2 - 0.4, ks > 0))
   }
   // 开放台面的背板
   g.add(rbox(W, k.upBottom - k.lowTop, 1.5, shade(body, 0.08), { y: k.lowTop, z: -D / 2 + 0.75 }, 0.3))
@@ -959,18 +985,19 @@ function cupboard(p: string[], W: number) {
   g.add(rbox(W - 4, 2, k.upD, body, { y: k.upBottom - 2, z: zc }, 0.3))
   g.add(rbox(W - 4, k.top - k.upBottom - 2, 1, shade(body, 0.08), { y: k.upBottom, z: z0 + 0.5 }, 0.3))
   g.add(rbox(W - 4, 1.5, k.upD - 3, body, { y: k.upMid - 1.5, z: zc - 0.5 }, 0.3))
-  // 上柜玻璃门（框 + 玻璃）
+  // 上柜玻璃门（框 + 玻璃），可以打开
   const nd = W >= 100 ? 3 : 2
   const dw = (W - 4) / nd
   for (let i = 0; i < nd; i++) {
     const x = -W / 2 + 2 + dw * (i + 0.5)
     const zz = z1 + 0.5
     const hh = k.top - k.upBottom - 2
-    g.add(rbox(dw - 0.6, 2.4, 1, door, { x, y: k.upBottom, z: zz }, 0.3))
-    g.add(rbox(dw - 0.6, 2.4, 1, door, { x, y: k.upBottom + hh - 2.4, z: zz }, 0.3))
-    for (const s of [-1, 1]) g.add(rbox(2.4, hh, 1, door, { x: x + s * (dw / 2 - 1.5), y: k.upBottom, z: zz }, 0.3))
-    g.add(glassy(rbox(dw - 5, hh - 4.6, 0.3, GLASS, { x, y: k.upBottom + 2.3, z: zz }, 0.1), GLASS, 0.25))
-    g.add(rbox(1, 6, 1, knob, { x: x + (i % 2 ? -1 : 1) * (dw / 2 - 3.6), y: k.upBottom + 8, z: zz + 0.9 }, 0.3))
+    const ks = i % 2 ? -1 : 1
+    const parts: THREE.Object3D[] = [rbox(dw - 0.6, 2.4, 1, door, { x, y: k.upBottom, z: zz }, 0.3), rbox(dw - 0.6, 2.4, 1, door, { x, y: k.upBottom + hh - 2.4, z: zz }, 0.3)]
+    for (const s of [-1, 1]) parts.push(rbox(2.4, hh, 1, door, { x: x + s * (dw / 2 - 1.5), y: k.upBottom, z: zz }, 0.3))
+    parts.push(glassy(rbox(dw - 5, hh - 4.6, 0.3, GLASS, { x, y: k.upBottom + 2.3, z: zz }, 0.1), GLASS, 0.25))
+    parts.push(rbox(1, 6, 1, knob, { x: x + ks * (dw / 2 - 3.6), y: k.upBottom + 8, z: zz + 0.9 }, 0.3))
+    g.add(swingAt(parts, x - ks * (dw / 2 - 0.3), zz - 0.5, ks > 0))
   }
   // 门把手往前凸 0.8，整体后移让包围盒前后居中
   return P(g, 0, 0, -0.4)
@@ -2698,13 +2725,19 @@ const wagonSurf = (tiers: number) => {
   const gap = ys[1] - ys[0]
   return ys.slice(0, -1).map((y) => ({ y: y + 0.6, h: gap - 0.6, shape: [WAGON_IN] }))
 }
-const cupSurf = (W: number) => {
+const cupSurf = (W: number): SurfaceDef[] => {
   const k = cupboardShelves(W)
   const z0 = -k.D / 2
+  const low = [r(-W / 2 + 2.5, z0 + 1.8, W / 2 - 2.5, k.D / 2 - 1.5)]
   return [
     { y: k.lowTop, h: k.upBottom - 2 - k.lowTop, shape: [r(-W / 2 + 1, z0 + 2, W / 2 - 1, k.D / 2 - 1)] },
-    { y: k.upBottom, h: k.upMid - 1.5 - k.upBottom, shape: [r(-W / 2 + 2.5, z0 + 1.5, W / 2 - 2.5, z0 + k.upD - 2)] },
-    { y: k.upMid, h: k.top - 2 - k.upMid, shape: [r(-W / 2 + 2.5, z0 + 1.5, W / 2 - 2.5, z0 + k.upD - 4)] },
+    // 上柜（玻璃门）
+    { y: k.upBottom, h: k.upMid - 1.5 - k.upBottom, shape: [r(-W / 2 + 2.5, z0 + 1.5, W / 2 - 2.5, z0 + k.upD - 2)], inside: true, glass: true },
+    { y: k.upMid, h: k.top - 2 - k.upMid, shape: [r(-W / 2 + 2.5, z0 + 1.5, W / 2 - 2.5, z0 + k.upD - 4)], inside: true, glass: true },
+    // 下柜：门里两层 + 每列一个抽屉
+    { y: 8, h: k.lowMid - 1.6 - 8 - 0.5, shape: low, inside: true },
+    { y: k.lowMid, h: 61.4 - k.lowMid - 0.5, shape: low, inside: true },
+    ...cupboardCols(W).map(({ x, cw }): SurfaceDef => ({ y: k.drawerY + 1.1, h: 9.5, inside: true, slide: 23, shape: [r(x - (cw - 4) / 2 + 1.2, k.D / 2 - 0.4 - 38 + 1.2, x + (cw - 4) / 2 - 1.2, k.D / 2 - 1.6)] })),
   ]
 }
 
@@ -2762,8 +2795,8 @@ export const KITCHEN_FOOD: AssetDef[] = [
   def({ id: 'kf-range-rack', name: '微波炉架', w: MW.w, d: MW.d, h: MW.h, prop: false, surface: MW.h, surfaces: [{ y: MW.shelves[0] + 2, h: 120 }, { y: MW.shelves[1] + 2, h: 36 }, { y: MW.shelves[2] + 2, h: 28 }], pals: SHELF_PALS, build: rangeRack }),
   def({ id: 'kf-counter-rack', name: '台面置物架（跨电器）', w: 58, d: 36, h: 42, surface: 42, pals: SHELF_PALS, build: counterRack }),
   def({ id: 'kf-gap-wagon', name: '冰箱夹缝推车（带调料）', w: 15, d: 55.9, h: 80.2, prop: false, pals: GAP_PALS, build: gapWagon }),
-  def({ id: 'kf-cupboard-80', name: '玻璃门食器棚', family: 'kf-cupboard', sizeLabel: '80', category: 'dining', w: 81, d: 46.8, h: 180, prop: false, surface: 180, surfaceShape: [r(-40, -22.5, 40, 9)], surfaces: cupSurf(80), pals: CUPBOARD_PALS, build: (p) => cupboard(p, 80) }),
-  def({ id: 'kf-cupboard-120', name: '玻璃门食器棚', family: 'kf-cupboard', sizeLabel: '120', category: 'dining', w: 121, d: 46.8, h: 180, prop: false, surface: 180, surfaceShape: [r(-60, -22.5, 60, 9)], surfaces: cupSurf(120), pals: CUPBOARD_PALS, build: (p) => cupboard(p, 120) }),
+  def({ id: 'kf-cupboard-80', name: '玻璃门食器棚', family: 'kf-cupboard', sizeLabel: '80', category: 'dining', w: 81, d: 46.8, h: 180, prop: false, surface: 180, surfaceShape: [r(-40, -22.5, 40, 9)], openable: true, surfaces: cupSurf(80), pals: CUPBOARD_PALS, build: (p) => cupboard(p, 80) }),
+  def({ id: 'kf-cupboard-120', name: '玻璃门食器棚', family: 'kf-cupboard', sizeLabel: '120', category: 'dining', w: 121, d: 46.8, h: 180, prop: false, surface: 180, surfaceShape: [r(-60, -22.5, 60, 9)], openable: true, surfaces: cupSurf(120), pals: CUPBOARD_PALS, build: (p) => cupboard(p, 120) }),
 
   // ---------- 餐具 ----------
   def({ id: 'kf-washoku-set', name: '一人份和食器', category: 'tabletop', w: 25, d: 17.5, h: 9.2, pals: WASHOKU_PALS, build: washokuSet }),
