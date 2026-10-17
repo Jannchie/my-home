@@ -5,12 +5,11 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { ASSETS, ASSET_MAP, CATEGORY_LABELS, STYLE_LABELS, type AssetCategory, type StyleTag } from '../three/assets'
 import { SIZE_LABELS, browse, cardName, categoriesOf, countByCategory, displayName, paletteFor, paletteStyle, siblings, sizeClass, typesIn, variantLabel, type Filter, type SizeClass } from '../three/catalog'
 import { typeLabel } from '../three/typeLabels'
-import { addOutlines } from '../three/toon'
+import { disposeUnshared } from '../three/toon'
+import { furnitureModel } from '../three/house'
 import { createStage, fitSun, frameCamera, type Stage } from '../three/stage'
 import { useThumbs } from '../three/thumbs'
 import { FxLayer } from '../three/fx'
-import { effectivePalette } from '../three/colors'
-import { applyPatterns } from '../three/fabric'
 import type { PatternSpec } from '../three/patterns'
 import ColorEditor from './ColorEditor.vue'
 import BottomSheet, { type SheetSnap } from './BottomSheet.vue'
@@ -92,12 +91,15 @@ const spin = ref(true)
 
 function showPreview() {
   if (!stage) return
-  if (current) stage.scene.remove(current)
+  if (current) {
+    stage.scene.remove(current)
+    // 合并出来的几何体每次新建：换模型时释放，免得来回翻素材时显存一直涨
+    disposeUnshared(current)
+  }
   const d = def.value
-  const pal = effectivePalette(d, color.value, customColors.value)
-  current = d.build(pal)
-  addOutlines(current)
-  applyPatterns(current, pal, customPatterns.value)
+  // 和沙盘里的家具同一个出口（house.ts furnitureModel）：合并同材质零件 → 描边 → 套花纹，走同一套模板缓存。
+  // 近景版（closeUp）小零件也投影、描边，和沙盘的远景版是两份模板
+  current = furnitureModel({ id: 'preview', asset: d.id, x: 0, y: 0, rot: 0, color: color.value, colors: customColors.value, patterns: customPatterns.value }, { closeUp: true })
   stage.scene.add(current)
   fx.set('preview', current, d.fx)
   stage.renderer.shadowMap.needsUpdate = true
@@ -152,12 +154,23 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   cancelAnimationFrame(raf)
+  cancelAnimationFrame(previewRaf)
+  if (current) disposeUnshared(current)
   ro?.disconnect()
   controls.dispose()
   stage.dispose()
 })
 
-watch([selectedId, color, customColors, customPatterns], showPreview)
+// 取色器拖动时 @preview 一帧可能来好几次：合并到下一帧只重建一次
+let previewRaf = 0
+function schedulePreview() {
+  if (previewRaf) return
+  previewRaf = requestAnimationFrame(() => {
+    previewRaf = 0
+    showPreview()
+  })
+}
+watch([selectedId, color, customColors, customPatterns], schedulePreview)
 
 function placeInSandbox() {
   selection.value = null

@@ -41,9 +41,10 @@ export function measureDims(def: AssetDef, box = new THREE.Box3()): [number, num
   box.setFromObject(g, true)
   if (box.isEmpty()) return null
   const lift = box.min.y < -0.5 ? roundLift(-box.min.y) : 0
-  const w = Math.ceil(2 * Math.max(box.max.x, -box.min.x))
-  const dd = Math.ceil(2 * Math.max(box.max.z, -box.min.z))
-  const h = Math.ceil(box.max.y + lift)
+  // 进位留 0.001cm 容差：浮点误差、体素尺寸量化（≤ 0.05cm 以内的抖动）不应让 120.0000001 进成 121
+  const w = Math.ceil(2 * Math.max(box.max.x, -box.min.x) - 1e-3)
+  const dd = Math.ceil(2 * Math.max(box.max.z, -box.min.z) - 1e-3)
+  const h = Math.ceil(box.max.y + lift - 1e-3)
   if (w > decl.w + 1 || dd > decl.d + 1 || h > decl.h + 2 || lift) return [Math.max(decl.w, w), Math.max(decl.d, dd), Math.max(decl.h, h), lift]
   return null
 }

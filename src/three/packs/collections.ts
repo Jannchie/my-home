@@ -886,6 +886,8 @@ function rockGeo(seed: number, detail = 1, amp = 0.22) {
     }
     g.computeVertexNormals()
     geo = g
+    // 模块级缓存、多件家具共用：标记共享，disposeUnshared 不释放
+    geo.userData.shared = true
     rockCache.set(key, geo)
   }
   return geo
@@ -1124,7 +1126,7 @@ const amRc = (t: number) => AM.R0 * Math.exp(amK * t)
 /** 菊石：对数螺线盘绕的管 + 横肋，立在木座上 */
 function ammonite(p: string[]) {
   const [shell, rib, wood] = p
-  if (!ammoGeo)
+  if (!ammoGeo) {
     ammoGeo = new ParametricGeometry(
       (u, v, target) => {
         const t = u * amTh
@@ -1136,6 +1138,9 @@ function ammonite(p: string[]) {
       220,
       16,
     )
+    // 模块级缓存、多件家具共用：标记共享，disposeUnshared 不释放
+    ammoGeo.userData.shared = true
+  }
   const am = grp(mesh(ammoGeo, shell))
   const basis = (t: number) => {
     const X = new THREE.Vector3(Math.cos(t), Math.sin(t), 0)
@@ -1701,6 +1706,8 @@ function cashCoin(color: string) {
     s.holes.push(h)
     cashGeo = new THREE.ExtrudeGeometry(s, { depth: 0.1, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.03, bevelSegments: 1, curveSegments: 24 })
     cashGeo.translate(0, 0, -0.05)
+    // 模块级缓存、多件家具共用：标记共享，disposeUnshared 不释放
+    cashGeo.userData.shared = true
   }
   return mesh(cashGeo, color)
 }

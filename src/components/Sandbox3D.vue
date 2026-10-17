@@ -17,6 +17,7 @@ import { attachPost, LOOKS, LOOK_MAP, type LookId, type Post } from '../three/po
 import { CITIES, MONTH_DAYS, compassAxes, skyState, type SkyState } from '../three/sky'
 import { IndoorLights, KELVIN_MAX, KELVIN_MIN, LIGHT_MODES, POOL_HIGH, POOL_LOW, POWER_MAX, POWER_MIN, autoLevel, diningKey, isLampAsset, lightColor, type LightMode } from '../three/lights'
 import { disposeUnshared } from '../three/toon'
+import { poseDoors } from '../three/kit'
 import { useThumbs } from '../three/thumbs'
 import { normalizeColor } from '../three/stylePalettes'
 import { coverInto, liveCapture } from '../three/planThumb'
@@ -487,7 +488,8 @@ const roomLightKey = (p: Plan) => `${diningKey(p)}|${p.household ? `${p.househol
 /** 蒸汽、烟、火苗等动态特效 */
 const fx = new FxLayer()
 /** 会活动的宠物、扫地机器人、Kachaka（预览模式下才动）：整套房子一层，见 actors */
-const objs = new Map<string, { obj: THREE.Group; key: string }>()
+// open：上次摆好的柜门开合状态（开合只重新摆门，不重建模型）
+const objs = new Map<string, { obj: THREE.Group; key: string; open: boolean }>()
 let ghost: THREE.Group | null = null
 let ghostKey = ''
 const ghostRot = ref(0)
@@ -775,6 +777,10 @@ function rebuildHouse() {
   prewarmFloorFade()
   dirty = true
 }
+/** 家具模型的缓存键：素材 + 配色 + 单件改色 + 花纹（开合不在内） */
+function furnitureKey(asset: string, color: number | undefined, colors: readonly string[] | undefined, patterns: unknown) {
+  return `${asset}#${color ?? 0}#${colors?.join(',') ?? ''}#${patterns ? JSON.stringify(patterns) : ''}`
+}
 /** 上次搭房子时的当前楼层（墙高滑杆调低时只压低当前层：换层要重搭） */
 let builtActive = ''
 
@@ -787,14 +793,19 @@ function syncFurniture() {
   const alive = new Set<string>()
   for (const f of p.furniture) {
     alive.add(f.id)
-    const key = `${f.asset}#${f.color ?? 0}#${f.colors?.join(',') ?? ''}#${f.patterns ? JSON.stringify(f.patterns) : ''}#${f.open ? 1 : 0}`
+    // 开合不进键：开关柜门只重新摆门（poseDoors 会同步静态矩阵），不整件重建
+    const key = furnitureKey(f.asset, f.color, f.colors, f.patterns)
     let o = objs.get(f.id)
+    if (o && o.key === key && o.open !== !!f.open) {
+      poseDoors(o.obj, !!f.open)
+      o.open = !!f.open
+    }
     if (!o || o.key !== key) {
       if (o) {
         o.obj.removeFromParent()
         disposeUnshared(o.obj)
       }
-      o = { obj: furnitureModel(f), key }
+      o = { obj: furnitureModel(f), key, open: !!f.open }
       // 根节点也用静态矩阵：placeFurniture 挪动时会更新
       o.obj.matrixAutoUpdate = false
       objs.set(f.id, o)
@@ -858,7 +869,8 @@ function updateRing() {
 let ghostAsset = ''
 function syncGhost(asset = placing.value?.asset) {
   const p = placing.value
-  const key = p ? `${asset}#${p.color}` : ''
+  // 和家具缓存键一致：换配色、单件改色、花纹都要重建预览
+  const key = p ? furnitureKey(asset ?? p.asset, p.color, p.colors, p.patterns) : ''
   if (key === ghostKey) return
   if (ghost) {
     stage.scene.remove(ghost)

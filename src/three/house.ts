@@ -24,8 +24,8 @@ import {
 } from '../model'
 import { isIndoor, sharedIntervals, voidRailSegments, wallSegments, wallThicknessAt } from '../walls'
 import { tatamiLayout } from '../tatami'
-import { addOutlines, ball, capsule, cyl, mergeMeshes, rbox, shade, toon, useAnisotropy } from './toon'
-import { glow, poseDoors } from './kit'
+import { addOutlines, ball, capsule, cyl, disposeHooks, mergeMeshes, noTransparentShadows, rbox, shade, toon, useAnisotropy } from './toon'
+import { glow, poseDoors, type AssetDef } from './kit'
 import { freezeMatrices, syncMatrix } from './matrices'
 import { hasTag } from './tags'
 import { fridgeSpotModel, washerSpotModel } from './appliances'
@@ -303,6 +303,89 @@ function boxMesh(geo: THREE.BoxGeometry, mats: THREE.Material[]) {
   return new THREE.Mesh(geo, uniq)
 }
 
+/**
+ * 把同一父节点下的若干（多材质）网格合成一个：顶点烘进 frame 坐标系，按材质重新分组（同材质的面并成一组）。
+ * toon.ts 的 mergeMeshes 不处理材质数组，墙体每段都是多材质盒子，用这个合。
+ * frame 是合成网格自己的局部矩阵（墙体压低按自身原点缩放 y，所以原点要放在墙段的竖直中心）。
+ */
+function mergeMulti(list: THREE.Mesh[], frame: THREE.Matrix4): THREE.Mesh {
+  const inv = frame.clone().invert()
+  const mats: THREE.Material[] = []
+  const slot = new Map<THREE.Material, number>()
+  const tris: number[][] = []
+  let verts = 0
+  for (const m of list) {
+    m.updateMatrix()
+    verts += m.geometry.attributes.position.count
+  }
+  const pos = new Float32Array(verts * 3)
+  const nor = new Float32Array(verts * 3)
+  const uv = new Float32Array(verts * 2)
+  const local = new THREE.Matrix4()
+  const nm = new THREE.Matrix3()
+  const v = new THREE.Vector3()
+  let vo = 0
+  for (const m of list) {
+    local.multiplyMatrices(inv, m.matrix)
+    nm.getNormalMatrix(local)
+    const g = m.geometry
+    const P = g.attributes.position
+    const N = g.attributes.normal
+    const U = g.attributes.uv
+    for (let i = 0; i < P.count; i++) {
+      v.fromBufferAttribute(P, i).applyMatrix4(local)
+      pos[(vo + i) * 3] = v.x
+      pos[(vo + i) * 3 + 1] = v.y
+      pos[(vo + i) * 3 + 2] = v.z
+      v.fromBufferAttribute(N, i).applyMatrix3(nm).normalize()
+      nor[(vo + i) * 3] = v.x
+      nor[(vo + i) * 3 + 1] = v.y
+      nor[(vo + i) * 3 + 2] = v.z
+      if (U) {
+        uv[(vo + i) * 2] = U.getX(i)
+        uv[(vo + i) * 2 + 1] = U.getY(i)
+      }
+    }
+    const ms = Array.isArray(m.material) ? m.material : [m.material]
+    const idx = g.index ? g.index.array : null
+    const total = idx ? idx.length : P.count
+    const groups = g.groups.length ? g.groups : [{ start: 0, count: total, materialIndex: 0 }]
+    for (const gr of groups) {
+      const mat = ms[gr.materialIndex ?? 0]
+      let k = slot.get(mat)
+      if (k === undefined) {
+        k = mats.length
+        mats.push(mat)
+        slot.set(mat, k)
+        tris.push([])
+      }
+      const t = tris[k]
+      const end = Math.min(total, gr.start + gr.count)
+      for (let j = gr.start; j < end; j++) t.push(vo + (idx ? idx[j] : j))
+    }
+    vo += P.count
+  }
+  const n = tris.reduce((a, t) => a + t.length, 0)
+  const index = verts > 65535 ? new Uint32Array(n) : new Uint16Array(n)
+  const geo = new THREE.BufferGeometry()
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3))
+  geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3))
+  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2))
+  let o = 0
+  tris.forEach((t, k) => {
+    index.set(t, o)
+    if (mats.length > 1) geo.addGroup(o, t.length, k)
+    o += t.length
+  })
+  geo.setIndex(new THREE.BufferAttribute(index, 1))
+  geo.computeBoundingSphere()
+  const out = new THREE.Mesh(geo, mats.length > 1 ? mats : mats[0])
+  frame.decompose(out.position, out.quaternion, out.scale)
+  out.castShadow = list[0].castShadow
+  out.receiveShadow = list[0].receiveShadow
+  return out
+}
+
 /** 墙脚细线：前墙隐藏后仍能看出房间边界（被完整的墙包在里面时看不见） */
 function wallStub(a: Vec, b: Vec, t: number, y0: number, y1: number, outer: boolean) {
   const L = dist(a, b)
@@ -372,6 +455,8 @@ interface FadePart {
   ghost: THREE.Material[]
   /** 原本就半透明的（玻璃），按比例淡出 */
   base: number[]
+  /** 原本投不投影（玻璃、纱帘不投影）：恢复实心时还原成它，不一律打开 */
+  cast: boolean
 }
 
 /** 物体里要淡出的网格；描边外壳是不透明的，淡出时直接藏起来 */
@@ -395,7 +480,9 @@ function fadeParts(o: THREE.Object3D) {
         g.depthWrite = false
         return g
       })
-      parts.push({ mesh, solid, ghost, base: mats.map((m) => (m.transparent ? m.opacity : 1)) })
+      // 楼层淡出期间 castShadow 被临时改过，原值记在 floorShadow 里
+      const cast = (mesh.userData.floorShadow as boolean | undefined) ?? mesh.castShadow
+      parts.push({ mesh, solid, ghost, base: mats.map((m) => (m.transparent ? m.opacity : 1)), cast })
     }
   })
   o.userData.parts = { parts, hulls }
@@ -446,7 +533,7 @@ export function stepCutaway(root: THREE.Object3D, dt: number, look: WallLook, fo
         const { parts } = fadeParts(o)
         for (const p of parts) {
           p.mesh.material = p.solid
-          p.mesh.castShadow = true
+          p.mesh.castShadow = p.cast
         }
         o.visible = hh > 0.3
         continue
@@ -459,11 +546,11 @@ export function stepCutaway(root: THREE.Object3D, dt: number, look: WallLook, fo
     for (const p of parts) {
       if (t === 0) {
         p.mesh.material = p.solid
-        p.mesh.castShadow = true
+        p.mesh.castShadow = p.cast
       } else {
         p.ghost.forEach((g, i) => (g.opacity = alpha * p.base[i]))
         p.mesh.material = Array.isArray(p.solid) ? p.ghost : p.ghost[0]
-        p.mesh.castShadow = e < 0.5
+        p.mesh.castShadow = p.cast && e < 0.5
       }
     }
     // 完全透明时直接隐藏；墙脚另有一条贴地的细线（wallStub）标出房间边界
@@ -552,16 +639,65 @@ export function openingInfos(plan: Plan): OpeningInfo[] {
   return out
 }
 
+/**
+ * 墙块合批（墙、窗台、过梁）：
+ *   - 内墙：让开 / 压低的判断统一用这段墙的中点（以前每块用自己的中心，视角在阈值附近时门边的墙和门上的过梁可能一块让开一块不让），
+ *     同一段里 y0 / h 相同的墙块（门窗两侧的整高墙、同高的过梁、同高的窗台）并成一个网格；
+ *   - 外墙：是否让开只看法线朝不朝镜头（applyCutaway 里外墙不看位置），所以整层朝向相同、y0 / h 相同的外墙块可以并成一个；
+ *   - 压低是按每个对象自己的 { y0, h } 缩放，所以只有同高的才能共用一个变换；
+ *   - 压到地面下的窗台（不参与让开）交给 statics，全屋一起合并。
+ */
+interface WallBucket {
+  list: THREE.Mesh[]
+  mid: Vec
+  n: Vec
+  outer: boolean
+}
+function bucketPieces(buckets: Map<string, WallBucket>, seg: number, pieces: THREE.Mesh[], mid: Vec, n: Vec, outer: boolean, statics: THREE.Mesh[]) {
+  for (const m of pieces) {
+    if (!m.userData.fade) {
+      delete m.userData.wall
+      statics.push(m)
+      continue
+    }
+    const w = m.userData.wall as { y0: number; h: number }
+    const k = `${outer ? `o${n.x.toFixed(3)},${n.y.toFixed(3)}` : `i${seg}`}|${w.y0}|${w.h}`
+    let b = buckets.get(k)
+    if (!b) buckets.set(k, (b = { list: [], mid, n, outer }))
+    b.list.push(m)
+  }
+}
+function flushWallBuckets(g: THREE.Group, buckets: Map<string, WallBucket>) {
+  for (const { list, mid, n, outer } of buckets.values()) {
+    const w = list[0].userData.wall as { y0: number; h: number }
+    const m = list.length === 1 ? list[0] : mergeMulti(list, new THREE.Matrix4().makeTranslation(0, w.y0 + w.h / 2, 0))
+    if (list.length > 1) for (const x of list) x.geometry.dispose()
+    m.userData.wall = { y0: w.y0, h: w.h }
+    // 外墙组的中心取第一段的中点即可（外墙让开不看位置）
+    tagFade(m, mid, n, outer)
+    g.add(m)
+  }
+}
+
 function buildWalls(plan: Plan, H0: number, infos: OpeningInfo[], opts: HouseOpts = {}) {
   const g = new THREE.Group()
   // 墙外侧不是房间时墙脚落到哪：最底层落到底座，上层落在楼板上
   const outside = opts.upper ? 0 : BASE
   let bottom = 0
   let isOuter = false
+  // 不参与让开 / 压低的部分（墙脚细线、压到地面下的窗台门槛）：全屋按投影设置各合成一个网格
+  const statics: THREE.Mesh[] = []
   const stub = (a: Vec, b: Vec, t: number) => {
     // 墙脚线顶面 2.4：低于榻榻米（3），不和它共面
     const m = wallStub(a, b, t + 0.4, bottom, 2.4, isOuter)
-    if (m) g.add(m)
+    if (m) statics.push(m)
+  }
+  /** 本段墙上的墙块（墙、窗台、过梁），段末分进合批的桶，全部建完再合并 */
+  let pieces: THREE.Mesh[] = []
+  const buckets = new Map<string, WallBucket>()
+  let segIdx = 0
+  const put = (m: THREE.Mesh | null) => {
+    if (m) pieces.push(m)
   }
   const seen = new Set<string>()
   const key = (p: Vec) => `${Math.round(p.x)},${Math.round(p.y)}`
@@ -649,25 +785,29 @@ function buildWalls(plan: Plan, H0: number, infos: OpeningInfo[], opts: HouseOpt
     for (const c of cuts) {
       const lo = Math.max(cur, c.lo)
       if (lo > cur) {
-        const m = wallPiece(at(cur), at(lo), t, bottom, H, outer, true, n, faces)
-        if (m) g.add(m)
+        put(wallPiece(at(cur), at(lo), t, bottom, H, outer, true, n, faces))
         stub(at(cur), at(lo), t)
       }
       // 洞口下方的窗台、上方的过梁
       // 落地的洞口（门、落地窗）下方的窗台压到地面下 0.2，顶面不和室内地面共面闪烁
-      const sill = wallPiece(at(lo), at(c.hi), t, bottom, c.y0 <= 0.5 ? -0.2 : Math.min(c.y0, H), outer, c.y0 >= H, n, faces)
-      if (sill) g.add(sill)
-      if (H > c.y1) {
-        const lintel = wallPiece(at(lo), at(c.hi), t, c.y1, H, outer, true, n, faces)
-        if (lintel) g.add(lintel)
-      }
+      put(wallPiece(at(lo), at(c.hi), t, bottom, c.y0 <= 0.5 ? -0.2 : Math.min(c.y0, H), outer, c.y0 >= H, n, faces))
+      if (H > c.y1) put(wallPiece(at(lo), at(c.hi), t, c.y1, H, outer, true, n, faces))
       cur = Math.max(cur, c.hi)
     }
     if (end > cur) {
-      const m = wallPiece(at(cur), at(end), t, bottom, H, outer, true, n, faces)
-      if (m) g.add(m)
+      put(wallPiece(at(cur), at(end), t, bottom, H, outer, true, n, faces))
       stub(at(cur), at(end), t)
     }
+    bucketPieces(buckets, segIdx++, pieces, mid, n, outer, statics)
+    pieces = []
+  }
+  flushWallBuckets(g, buckets)
+  // 墙脚细线、地面下的窗台：从不单独让开，按投影设置各并成一个网格
+  for (const cast of [false, true]) {
+    const list = statics.filter((m) => m.castShadow === cast)
+    if (!list.length) continue
+    g.add(mergeMulti(list, new THREE.Matrix4()))
+    for (const m of list) m.geometry.dispose()
   }
   // 壁龛和建筑一体：伸进隔壁（收纳间）的部分用墙包起来——背后、两侧一道墙，壁龛顶以上封到天花，
   // 隔壁看过来只是一段加厚的墙，柜子后面没有空隙
@@ -749,6 +889,10 @@ function buildOpenings(infos: OpeningInfo[], H: number) {
     } else if (o.kind === 'folding') {
       const into = o.swing === 'in' ? mul(out, -1) : out
       const apex = add(add(p0, mul(dir, w / 2)), mul(into, w * 0.28))
+      // 两扇折门放进同一个组（同一个洞口、同一种颜色），组内合并成一个网格
+      const fold = new THREE.Group()
+      fold.userData.info = info
+      g.add(fold)
       for (const [a, b] of [
         [p0, apex],
         [apex, p1],
@@ -758,8 +902,7 @@ function buildOpenings(infos: OpeningInfo[], H: number) {
         const m = rbox(L, doorH, 2.4, '#f3e1c7', { y: 0 }, 0.8)
         m.position.set(c.x, doorH / 2, c.y)
         m.rotation.y = Math.atan2(-(b.y - a.y), b.x - a.x)
-        m.userData.info = info
-        g.add(m)
+        fold.add(m)
       }
     } else {
       // 腰窗：白框 + 半透明玻璃
@@ -782,6 +925,9 @@ function buildOpenings(infos: OpeningInfo[], H: number) {
   for (const c of g.children) {
     const info = c.userData.info as OpeningInfo
     if (info) tagFade(c, info.center, info.out, info.outer)
+    // 每个洞口的组（门扇 / 推拉扇 / 窗框）内部按材质合并：窗框 4~5 根白条并成一个，门扇和把手各一个；
+    // 玻璃是半透明的，留在组外不合并。业务标记（info、fade）都在组上，让开时整组一起淡出
+    mergeMeshes(c)
   }
   return g
 }
@@ -1035,6 +1181,27 @@ function buildTrims(plan: Plan, infos: OpeningInfo[], H: number) {
   const segs = wallSegments(plan.rooms)
   const opens = segs.filter((s) => s.kind === 'open')
   const outers = segs.filter((s) => s.kind === 'outer')
+  const solid = segs.filter((s) => s.kind !== 'open')
+  /**
+   * 饰条按「所在墙段 + 饰条类型（y0 / h / 厚度）」分组：让开 / 压低的标记（wall、fade）设在组上，组内的饰条合并成一个网格。
+   * 让开的判断点用墙段中点，和墙体（buildWalls 的 mergeSegment）完全一致，墙压低时腰壁同步压低。
+   */
+  const groups = new Map<string, THREE.Group>()
+  const bucket = (p: Vec, kind: string, y0: number, h: number, out: Vec, outer: boolean, fallback: Vec) => {
+    const si = solid.findIndex((sg) => projectToSegment(p, sg.a, sg.b).d < 1)
+    // 同一道墙两侧的房间各有自己的饰条：按朝向分开
+    const key = `${si < 0 ? `${fallback.x},${fallback.y}` : si}|${out.x.toFixed(3)},${out.y.toFixed(3)}|${kind}`
+    let gg = groups.get(key)
+    if (!gg) {
+      gg = new THREE.Group()
+      gg.position.y = y0 + h / 2
+      gg.userData.wall = { y0, h }
+      tagFade(gg, si < 0 ? fallback : mul(add(solid[si].a, solid[si].b), 0.5), out, outer)
+      groups.set(key, gg)
+      g.add(gg)
+    }
+    return gg
+  }
   for (const room of plan.rooms) {
     const tr: WallTrim | undefined = room.wallpaper?.trim
     if (!tr || !isIndoor(room)) continue
@@ -1088,14 +1255,14 @@ function buildTrims(plan: Plan, infos: OpeningInfo[], H: number) {
         for (const [a, b] of spans) {
           const m = new THREE.Mesh(new THREE.BoxGeometry(b - a, h, th), trimMat(color))
           const c = add(add(e.a, mul(e.dir, (a + b) / 2)), mul(e.out, -(half[i] + th / 2)))
-          m.position.set(c.x, y0 + h / 2, c.y)
+          // 组的原点在饰条的竖直中心（压低时按它缩放），饰条在组里 y = 0
+          m.position.set(c.x, 0, c.y)
           m.rotation.y = Math.atan2(-e.dir.y, e.dir.x)
-          m.userData.wall = { y0, h }
           m.receiveShadow = true
-          // 让开 / 压低的判断用墙体中线上的点：用边饰自己的中心（偏到墙面外侧几厘米）判断，
+          // 让开 / 压低的判断用墙体中线上的点（所在墙段的中点）：用边饰自己的中心（偏到墙面外侧几厘米）判断，
           // 视角在阈值附近时会和墙体本身判得不一样——墙压低了、腰壁还立着，转视角时来回闪
-          tagFade(m, add(e.a, mul(e.dir, (a + b) / 2)), e.out, outer)
-          g.add(m)
+          const on = add(e.a, mul(e.dir, (a + b) / 2))
+          bucket(on, `s${y0},${h},${th}`, y0, h, e.out, outer, on).add(m)
         }
       }
       if (tr.wainscot) {
@@ -1111,11 +1278,10 @@ function buildTrims(plan: Plan, infos: OpeningInfo[], H: number) {
             if (cuts.some(([lo, hi, y]) => y < w.h && u > lo - 2 && u < hi + 2)) continue
             const m = new THREE.Mesh(new THREE.BoxGeometry(1.6, w.h - 3, 1.4), trimMat(shade(w.color, -0.03)))
             const c = add(add(e.a, mul(e.dir, u)), mul(e.out, -(half[i] + 0.7)))
-            m.position.set(c.x, (w.h - 3) / 2, c.y)
+            m.position.set(c.x, 0, c.y)
             m.rotation.y = Math.atan2(-e.dir.y, e.dir.x)
-            m.userData.wall = { y0: 0, h: w.h - 3 }
-            tagFade(m, add(e.a, mul(e.dir, u)), e.out, outer)
-            g.add(m)
+            const on = add(e.a, mul(e.dir, u))
+            bucket(on, `b${w.h}`, 0, w.h - 3, e.out, outer, on).add(m)
           }
         }
       }
@@ -1127,7 +1293,8 @@ function buildTrims(plan: Plan, infos: OpeningInfo[], H: number) {
       }
     })
   }
-  mergeMeshes(g)
+  // 组上有业务标记，mergeMeshes(g) 会整组跳过：逐组合并
+  for (const c of g.children) mergeMeshes(c)
   return g
 }
 
@@ -1536,24 +1703,130 @@ export function buildHouse(plan: Plan, wallH: number, opts: HouseOpts = {}) {
     addOutlines(top)
   }
   root.add(part(fx, 'fixture'))
+  // 玻璃、纱帘等半透明件先用 rbox 建（默认投影）再换材质：统一关掉投影，阳光能透过窗户
+  noTransparentShadows(root)
   return root
 }
 
-export function furnitureModel(fu: Furniture) {
+// ---------- 家具模板缓存 ----------
+//
+// 同一件素材（同配色、同单件改色、同花纹）建一次「关着门、已合并、已描边、已冻结矩阵」的模板，之后每件家具 clone(true)：
+// 几何体、材质共用，只复制对象树。生成户型、一键布置、切风格时同一种椅子、书、杯子成套出现，省掉重复的 build + 合并。
+//   - 模板自己合并出来的几何体标成 shared：实例被 disposeUnshared 时不会释放（别的实例、模板还在用）；
+//   - 按模板做引用计数：模板被挤出 LRU 且没有实例在用时，才释放它的几何体；
+//   - 绿植贴墙弯折（bendToWalls）先 clone 几何再改，原几何（模板的）不动，可以照常走缓存；
+//   - 柜门开合在实例上摆（poseDoors 记的 doorBase 在实例上），模板永远是关着的。
+
+interface FurnitureTemplate {
+  root: THREE.Object3D
+  /** 模板自己新建的几何体（合并出来的、素材包里不缓存的）：模板释放时一起 dispose */
+  own: THREE.BufferGeometry[]
+  refs: number
+  /** 已经不在缓存里：最后一个实例释放时 dispose */
+  evicted: boolean
+}
+// 一整套户建的家具约 150 种不同的键：上限小于它时，按顺序重建整屋会把 LRU 刷穿（每件都未命中）
+let templateLimit = 256
+const templates = new Map<string, FurnitureTemplate>()
+const templateStats = { hits: 0, misses: 0 }
+
+/** 模板缓存上限（件数）；0 = 不缓存（每次都重新建） */
+export function setFurnitureTemplateLimit(n: number) {
+  templateLimit = Math.max(0, Math.floor(n))
+  trimTemplates()
+}
+/** 调试 / 测试用：缓存件数、命中、未命中 */
+export function furnitureTemplateInfo() {
+  return { size: templates.size, limit: templateLimit, ...templateStats }
+}
+/** 清空模板缓存（没有实例在用的立即释放） */
+export function clearFurnitureTemplates() {
+  for (const t of templates.values()) evictTemplate(t)
+  templates.clear()
+}
+function evictTemplate(t: FurnitureTemplate) {
+  t.evicted = true
+  if (!t.refs) for (const g of t.own) g.dispose()
+}
+function trimTemplates() {
+  while (templates.size > templateLimit) {
+    const [k, t] = templates.entries().next().value as [string, FurnitureTemplate]
+    templates.delete(k)
+    evictTemplate(t)
+  }
+}
+
+/** 模板的缓存键：素材 | 配色 | 单件改色 | 花纹（开合不在内） */
+export function furnitureTemplateKey(fu: Pick<Furniture, 'asset' | 'color' | 'colors' | 'patterns'>) {
+  return `${fu.asset}|${fu.color ?? 0}|${fu.colors?.join(',') ?? ''}|${fu.patterns ? JSON.stringify(fu.patterns) : ''}`
+}
+
+function buildTemplate(def: AssetDef, fu: Furniture, closeUp: boolean): FurnitureTemplate {
+  const pal = effectivePalette(def, fu.color ?? 0, fu.colors)
+  const m = def.build(pal)
+  // 半透明零件（玻璃、水面）不投影
+  noTransparentShadows(m)
+  // 零件按材质合并，draw call 少一个数量级（描边、花纹、弯曲都在合并后的网格上照常工作）
+  mergeMeshes(m)
+  // 沙盘里远看：太小的零件不投影、不描边（省 draw call）；素材库的近景预览全都保留
+  if (!closeUp) noTinyShadows(m)
+  addOutlines(m, closeUp ? {} : { minSize: TINY_OUTLINE })
+  applyPatterns(m, pal, fu.patterns)
+  // 模型内部的零件不再动（开合只改柜门子树，poseDoors 会同步矩阵）：矩阵算一次就固定
+  freezeMatrices(m)
+  const own = new Set<THREE.BufferGeometry>()
+  m.traverse((o) => {
+    const g = (o as THREE.Mesh).geometry
+    if (!(o as THREE.Mesh).isMesh || !g || g.userData.shared) return
+    g.userData.shared = true
+    own.add(g)
+  })
+  return { root: m, own: [...own], refs: 0, evicted: false }
+}
+
+/** 从模板复制一份对象树（几何、材质共用）。clone 不复制 raycast：描边外壳要重新设成不可拾取 */
+function instantiate(t: FurnitureTemplate) {
+  const m = t.root.clone(true)
+  m.traverse((o) => {
+    if (o.userData.isOutline) o.raycast = () => {}
+  })
+  return m
+}
+
+/**
+ * 家具模型（关着门的模板的一份实例，再按 fu.open 摆门）。
+ * closeUp：素材库的近景预览——小零件也投影、描边（沙盘里为了 draw call 略去），走另一套模板。
+ */
+export function furnitureModel(fu: Furniture, opts: { closeUp?: boolean } = {}) {
   const def = ASSET_MAP.get(fu.asset)
   const g = new THREE.Group()
   if (!def) return g
-  const pal = effectivePalette(def, fu.color ?? 0, fu.colors)
-  const m = def.build(pal)
-  // 零件按材质合并，draw call 少一个数量级（描边、花纹、弯曲都在合并后的网格上照常工作）
-  mergeMeshes(m)
-  noTinyShadows(m)
-  addOutlines(m, { minSize: TINY_OUTLINE })
-  applyPatterns(m, pal, fu.patterns)
-  // 可开合的柜子：柜门 / 抽屉按 open 摆好（模型本身是关着的）
+  const closeUp = !!opts.closeUp
+  const key = (closeUp ? 'near|' : '') + furnitureTemplateKey(fu)
+  let t = templates.get(key)
+  if (t) {
+    // LRU：用到的挪到最后
+    templates.delete(key)
+    templates.set(key, t)
+    templateStats.hits++
+  } else {
+    t = buildTemplate(def, fu, closeUp)
+    templateStats.misses++
+    if (templateLimit > 0) {
+      templates.set(key, t)
+      trimTemplates()
+    } else t.evicted = true
+  }
+  const m = instantiate(t)
+  t.refs++
+  const tpl = t
+  // 实例被丢弃（disposeUnshared）时归还引用
+  disposeHooks.set(g, () => {
+    tpl.refs--
+    if (tpl.evicted && !tpl.refs) for (const geo of tpl.own) geo.dispose()
+  })
+  // 可开合的柜子：柜门 / 抽屉按 open 摆好（模板本身是关着的）
   if (def.openable) poseDoors(m, !!fu.open)
-  // 模型内部的零件不再动（开合是重建模型）：矩阵算一次就固定，免得每帧上万个对象重算矩阵
-  freezeMatrices(m)
   g.add(m)
   g.userData.furnitureId = fu.id
   g.userData.asset = fu.asset

@@ -185,6 +185,23 @@ describe('3D 搭建户建', () => {
       expect(site).toBe(true)
     } else expect(floors.every((f) => !f.roof)).toBe(true)
   })
+
+  test('半透明件（窗玻璃、纱帘、阳台玻璃）不投影、仍接收阴影；有窗玻璃', () => {
+    const p = normalizePlan(JSON.parse(JSON.stringify(plans.get('jp/house')!.get(3)!)))!
+    const { root } = buildBuilding(p, 240)
+    let glass = 0
+    const bad: string[] = []
+    root.traverse((o) => {
+      const m = o as THREE.Mesh
+      if (!m.isMesh) return
+      const mats = Array.isArray(m.material) ? m.material : [m.material]
+      if (!mats.every((x) => x.transparent)) return
+      glass++
+      if (m.castShadow) bad.push(`${o.parent?.userData.part ?? o.parent?.type} 透明件投影`)
+    })
+    expect(glass).toBeGreaterThan(0)
+    expect(bad).toEqual([])
+  })
 })
 
 describe('存档 / 分享', () => {
