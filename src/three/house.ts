@@ -1363,8 +1363,14 @@ export function fixtureModel(f: Fixture, wallH: number, rise?: number) {
   }
 }
 
+/** 地面高度：房间里按房间（土间、阳台低一点）；户建院子里（不在房间里、在用地里）落到用地的地面 */
+function groundAt(plan: Pick<Plan, 'site'>, p: Vec, room: Room | undefined) {
+  if (room) return floorY(room)
+  return plan.site && pointInPolygon(p, plan.site.points) ? BASE : 0
+}
+
 function placeOnFloor(obj: THREE.Object3D, plan: Plan, x: number, y: number, rot: number) {
-  obj.position.set(x, floorY(roomAt(plan, { x, y })), y)
+  obj.position.set(x, groundAt(plan, { x, y }, roomAt(plan, { x, y })), y)
   obj.rotation.y = (-rot * Math.PI) / 180
 }
 
@@ -1494,7 +1500,8 @@ export function furnitureModel(fu: Furniture) {
 export function placeFurniture(obj: THREE.Object3D, plan: Plan, fu: Pick<Furniture, 'x' | 'y' | 'rot' | 'z' | 'floor'>) {
   if (isMultiFloor(plan)) {
     const room = roomAt(plan, { x: fu.x, y: fu.y }, fu.floor ?? null)
-    obj.position.set(fu.x, floorElevation(plan, floorOf(plan, fu)) + floorY(room) + (fu.z ?? 0), fu.y)
+    const elev = floorElevation(plan, floorOf(plan, fu))
+    obj.position.set(fu.x, elev + (elev === 0 ? groundAt(plan, fu, room) : floorY(room)) + (fu.z ?? 0), fu.y)
     obj.rotation.y = (-fu.rot * Math.PI) / 180
     return
   }

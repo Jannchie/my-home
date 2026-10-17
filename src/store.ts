@@ -19,6 +19,7 @@ import { initialRoute } from './router'
 import { edgeInfo, emptyPlan, projectToSegment, type Fixture, type FixtureKind, type Floor, type Furniture, type Opening, type Plan, type Room, type Vec, type Wallpaper, uid } from './model'
 import { withStairHoles } from './stairs'
 import { normalizeExterior } from './exterior'
+import { yardFurniture } from './yard'
 import { BASE_FLOOR_ID, DEFAULT_FLOOR_H, SLAB, baseFloor, baseFloorId, floorBelow, floorById, floorOf, floorOutline, floorView, isMultiFloor, nextFloorId, normalizeFloors, perFloorFurniture, planFloors, stampFloor } from './floors'
 
 export type Tool = 'select' | 'rect' | 'poly' | 'door' | 'window' | 'fixture'
@@ -798,7 +799,9 @@ export function redecorate() {
  */
 function furnish(p: Plan, seed: number) {
   const base = baseFloorId(p)
-  return perFloorFurniture(p, (view, fl) => decorate(withStairHoles(p, view, fl.id), fl.id === base ? seed : seed + Math.round(fl.elevation), sandbox.style, p.household))
+  const inside = perFloorFurniture(p, (view, fl) => decorate(withStairHoles(p, view, fl.id), fl.id === base ? seed : seed + Math.round(fl.elevation), sandbox.style, p.household))
+  // 户建：院子里再摆几件户外物件（yard.ts）
+  return p.site ? [...inside, ...yardFurniture(p, seed)] : inside
 }
 
 /**
