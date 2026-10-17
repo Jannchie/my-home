@@ -4,7 +4,7 @@
 
 import * as THREE from 'three'
 import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js'
-import { ball, capsule, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
+import { ball, capsule, cyl, puck, rbox, shade, toon, torus, tray, useAnisotropy } from '../toon'
 import { C, G, S, ellipsePoly, holePanel, legs, slab, type AssetDef, type Hole, type StyleTag } from '../kit'
 
 type V2 = [number, number]
@@ -599,6 +599,91 @@ function foldingChair(wood: boolean, open: boolean, p: string[]) {
 
 // ---------- 办公 / 书房 ----------
 
+/**
+ * 网布靠背贴片：编织底纹 + 隔行错开的冲孔，整块只有两个三角面。
+ * 以前用 12×14 = 168 个真孔，远景孔洞缩成一层透光的白点，深色椅背读不出来；
+ * 改成贴图后 mipmap 把孔纹平均成深色，远景是深色网面，近景仍能看出织纹和孔。
+ */
+const meshSheetMats = new Map<string, THREE.MeshToonMaterial>()
+function meshSheetMaterial(w: number, h: number, color: string) {
+  const key = `${w}x${h}|${color}`
+  const cached = meshSheetMats.get(key)
+  if (cached) return cached
+  const ppc = 16 // 每厘米像素
+  const W = Math.round(w * ppc)
+  const H = Math.round(h * ppc)
+  const cv = document.createElement('canvas')
+  cv.width = W
+  cv.height = H
+  const g = cv.getContext('2d')!
+  // 底布：直接用配色槽的深色，和框架同一明度，远景平均下来仍是深色网面（不能提亮成浅灰板）
+  g.fillStyle = color
+  g.fillRect(0, 0, W, H)
+  // 经纬织纹（近景看是布纹，远景被 mipmap 平均掉）
+  g.strokeStyle = shade(color, 0.11)
+  g.globalAlpha = 0.5
+  g.lineWidth = 0.14 * ppc
+  for (let x = 0.4; x < w; x += 0.85) {
+    g.beginPath()
+    g.moveTo(x * ppc, 0)
+    g.lineTo(x * ppc, H)
+    g.stroke()
+  }
+  for (let y = 0.4; y < h; y += 0.85) {
+    g.beginPath()
+    g.moveTo(0, y * ppc)
+    g.lineTo(W, y * ppc)
+    g.stroke()
+  }
+  g.globalAlpha = 1
+  // 冲孔：9 列 × 11 行，隔行错半格，孔径 2.5、孔距约 4.4
+  const cols = 9
+  const rows = 11
+  const px = w / cols
+  const py = h / rows
+  const hole = 2.5
+  const r = 0.8
+  const rrect = (x: number, y: number, ww: number, hh: number, rad: number) => {
+    g.beginPath()
+    g.moveTo(x + rad, y)
+    g.arcTo(x + ww, y, x + ww, y + hh, rad)
+    g.arcTo(x + ww, y + hh, x, y + hh, rad)
+    g.arcTo(x, y + hh, x, y, rad)
+    g.arcTo(x, y, x + ww, y, rad)
+    g.closePath()
+  }
+  g.fillStyle = shade(color, -0.28)
+  for (let j = 0; j < rows; j++) {
+    const off = (px / 2) * (j % 2)
+    for (let i = 0; i < cols; i++) {
+      const cx = px * (i + 0.5) + off
+      const cy = py * (j + 0.5)
+      if (cx + hole / 2 > w - 0.8 || cx - hole / 2 < 0.8) continue
+      rrect((cx - hole / 2) * ppc, (cy - hole / 2) * ppc, hole * ppc, hole * ppc, r * ppc)
+      g.fill()
+      // 孔口的一圈亮边，近景能看出是孔
+      g.strokeStyle = shade(color, 0.05)
+      g.lineWidth = 0.14 * ppc
+      g.stroke()
+    }
+  }
+  const tex = new THREE.CanvasTexture(cv)
+  tex.colorSpace = THREE.SRGBColorSpace
+  useAnisotropy(tex)
+  const mat = new THREE.MeshToonMaterial({ map: tex, color: '#ffffff', gradientMap: (toon('#fff') as THREE.MeshToonMaterial).gradientMap, side: THREE.DoubleSide })
+  meshSheetMats.set(key, mat)
+  return mat
+}
+
+/** 带贴图的网布板（局部坐标：板中心在原点，正面朝 +z） */
+function meshSheet(w: number, h: number, color: string) {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), meshSheetMaterial(w, h, color))
+  m.castShadow = true
+  m.receiveShadow = true
+  m.userData.noOutline = true
+  return m
+}
+
 /** 人体工学网椅：网背 + 腰托 + 头枕 + T 形扶手 + 五星脚轮 */
 function meshChair(p: string[]) {
   const [fab, meshC, frame] = p
@@ -607,9 +692,9 @@ function meshChair(p: string[]) {
   g.add(rbox(50, 3, 47, frame, { y: 40, z: 1 }, 1.2))
   g.add(rbox(48, 6, 46, fab, { y: 42.5, z: 1.5 }, 2.6))
   const back = G(holePanel(46, 52, 2.4, frame, [{ kind: 'rect', x: 0, y: 3, w: 40, h: 46, r: 5 }], {}, 7))
-  const holes: Hole[] = []
-  for (let i = 0; i < 12; i++) for (let j = 0; j < 14; j++) holes.push({ kind: 'rect', x: -16.5 + i * 3, y: 2.2 + j * 3.2, w: 1.8, h: 2, r: 0.4 })
-  back.add(holePanel(41, 47, 0.8, meshC, holes, { y: 2.5 }, 5))
+  const sheet = meshSheet(41, 47, meshC)
+  sheet.position.set(0, 2.5 + 47 / 2, 0)
+  back.add(sheet)
   back.add(rbox(30, 6, 2.4, frame, { y: 12, z: 1.6 }, 1.2))
   back.add(beam([0, -8, -2.6], [0, 24, -2.6], 5, 2.4, frame))
   for (const s of [-1, 1]) back.add(bar([s * 6, 50, -0.6], [s * 6, 58, -0.6], 0.8, frame))

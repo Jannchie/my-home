@@ -763,8 +763,11 @@ function hamsterCage(p: string[]) {
 // 玻璃 / 水都是半透明（不描边）；鱼是独立的 Group，设 userData.swim 由 fx.ts 驱动绕椭圆游。
 
 const GLASS_A = 0.22
-const WATER = '#9fd8f0'
-const WATER_A = 0.3
+const WATER = '#8fd0ea'
+const WATER_A = 0.36
+/** 水面薄片与水线：比水体亮/深一点点，斜侧是一块浅蓝水面，正面是一条水平线 */
+const WATER_TOP = '#d8f1fb'
+const WATERLINE = '#62b6d6'
 const SAND = '#eadcc0'
 
 /** 方缸尺寸：w 宽、d 深、H 玻璃高、stand 缸底座的底面高度（柜高；桌面缸是垫子厚 0.6） */
@@ -843,21 +846,40 @@ function fishModel(kind: number, k = 1) {
 /**
  * 往水里放 n 条鱼：椭圆限制在 [-ax, ax] × [-az, az]（已扣掉离玻璃 2cm），y 在 [y0, y1]。
  * 每条的椭圆中心 + 半径 + 鱼的半长都不超出范围。
+ * front：前 front 条走「前排泳道」——泳道贴前侧、鱼散在左右和上下，正面/斜侧看得到；
+ * 其余仍按原来的随机分布（多半躲在后景水草附近）。前排稍放大，但不贴前玻璃、不压水草石头。
  */
-function addFish(g: THREE.Group, n: number, seed: number, ax: number, az: number, y0: number, y1: number, k = 1) {
+function addFish(g: THREE.Group, n: number, seed: number, ax: number, az: number, y0: number, y1: number, k = 1, front = 0) {
   const rand = rng(seed)
   for (let i = 0; i < n; i++) {
-    const { g: f, half } = fishModel(i + seed, k)
+    const frontLane = i < front
+    // 前排鱼放大 1.65 倍：640px 下身体约 18~28px，颜色和轮廓都读得出来（120cm 缸里约 7~11cm 的鱼）
+    const { g: f, half } = fishModel(i + seed, frontLane ? k * 1.65 : k)
     const mx = Math.max(0.5, ax - half)
     const mz = Math.max(0.5, az - half)
-    const rx = mx * (0.45 + rand() * 0.5)
-    const rz = mz * (0.35 + rand() * 0.5)
-    const cx = (rand() - 0.5) * 2 * (mx - rx)
-    const cz = (rand() - 0.5) * 2 * (mz - rz)
-    const bob = 0.4 + rand() * 0.5
-    const y = y0 + bob + half * 0.5 + rand() * Math.max(0, y1 - y0 - 2 * bob - half)
-    const speed = (0.3 + rand() * 0.6) * (rand() < 0.4 ? -1 : 1)
-    f.position.set(cx + rx, y, cz)
+    let rx: number, rz: number, cx: number, cz: number, bob: number, y: number, speed: number
+    if (frontLane) {
+      // 前排：泳道中心左右均分（±0.72mx），半径按剩余半宽收；z 靠前但离前玻璃还留一段距离
+      const t = front > 1 ? (i + 0.5) / front : 0.5
+      cx = (t * 2 - 1) * mx * 0.72
+      rx = Math.max(1, (mx - Math.abs(cx)) * (0.5 + rand() * 0.3))
+      cz = mz * (0.45 + rand() * 0.28)
+      rz = Math.max(1, mz * (0.08 + rand() * 0.08))
+      bob = 0.45 + rand() * 0.35
+      // 纵向也分层：最低留出砂面/石头，最高留出水面，多数落在中层偏上的开阔水域
+      y = y0 + half * 0.5 + (y1 - y0 - half) * (0.25 + rand() * 0.55)
+      speed = (0.3 + rand() * 0.4) * (i % 2 ? -1 : 1)
+    } else {
+      rx = mx * (0.45 + rand() * 0.5)
+      rz = mz * (0.35 + rand() * 0.5)
+      cx = (rand() - 0.5) * 2 * (mx - rx)
+      cz = (rand() - 0.5) * 2 * (mz - rz)
+      bob = 0.4 + rand() * 0.5
+      y = y0 + bob + half * 0.5 + rand() * Math.max(0, y1 - y0 - 2 * bob - half)
+      speed = (0.3 + rand() * 0.6) * (rand() < 0.4 ? -1 : 1)
+    }
+    // 前排静态位置放在泳道中心（渲染截图能左右散开），其余沿用椭圆右端点
+    f.position.set(frontLane ? cx : cx + rx, y, cz)
     f.userData.swim = { rx, rz, cx, cz, y, speed, bob }
     g.add(f)
   }
@@ -906,7 +928,14 @@ function tankBody(t: Tank, trim: string, light: string) {
   const iw = w - 1.2
   const id = d - 1.2
   g.add(rbox(iw, sand - floor, id, SAND, { y: floor - 0.2 }, 0.6))
-  g.add(see(rbox(w - 1.4, water - floor, d - 1.4, WATER, { y: floor }, 0.4), WATER, WATER_A))
+  // 水体到水面下 0.45（留出水面薄片，避免顶面 z-fighting）；水面比水体亮，斜侧看是一块浅蓝平面
+  g.add(see(rbox(w - 1.4, water - floor - 0.45, d - 1.4, WATER, { y: floor }, 0.4), WATER, WATER_A))
+  g.add(see(rbox(w - 1.3, 0.45, d - 1.3, WATER_TOP, { y: water - 0.45 }, 0.2), WATER_TOP, 0.8))
+  // 水线：沿内侧玻璃一圈细边，正面看是水面与空气的分界
+  for (const s of [-1, 1]) {
+    g.add(see(rbox(w - 1.4, 0.5, 0.35, WATERLINE, { y: water - 0.5, z: s * (d / 2 - 0.95) }, 0.1), WATERLINE, 0.8))
+    g.add(see(rbox(0.35, 0.5, d - 1.4, WATERLINE, { x: s * (w / 2 - 0.95), y: water - 0.5 }, 0.1), WATERLINE, 0.8))
+  }
   // 造景：后排水草、石头、沉木
   const top = water - 1.5
   const nWeed = Math.max(3, Math.round(w / 9))
@@ -946,8 +975,8 @@ function tankBody(t: Tank, trim: string, light: string) {
   g.add(rbox(lw, 1.4, Math.min(8, d * 0.35), trim, { y: ly }, 0.6))
   for (const s of [-1, 1]) g.add(rbox(1.2, 2.6, d, trim, { x: s * (lw / 2 - 0.6), y: floor + H }, 0.4))
   g.add(lit(rbox(lw - 3, 0.4, Math.min(8, d * 0.35) - 2, light, { y: ly - 0.3 }, 0.15), light, 0.9))
-  // 鱼：离玻璃至少 2cm，在砂面和水面之间
-  addFish(g, t.fish, t.seed, w / 2 - 0.8 - 2, d / 2 - 0.8 - 2, sand + 1.5, water - 2, t.w >= 90 ? 1.25 : 1)
+  // 鱼：离玻璃至少 2cm，在砂面和水面之间；大缸前 4 条走前排泳道，保证正面有生命感
+  addFish(g, t.fish, t.seed, w / 2 - 0.8 - 2, d / 2 - 0.8 - 2, sand + 1.5, water - 2, t.w >= 90 ? 1.25 : 1, t.w >= 90 ? 4 : 0)
   return g
 }
 
