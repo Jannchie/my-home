@@ -30,6 +30,7 @@ import { derivedIndex, hasDerived } from './three/stylePalettes'
 import { fitsOnFixture, fitsOnSurface, fixtureTop, toLocal, toWorld } from './surface'
 import { COMPETITIVE, INTEREST_TIERS, JOBS, interestFloor, interestProps, interestStickers, interestWall, jobDeskProps, levelOf, topLevel, type Household, type InterestId, type Member, type Tier } from './household'
 import { furnitureBox } from './snap'
+import { DEFAULT_FLOOR_H, floorById, floorOf } from './floors'
 import { deskExtras, workstations } from './workstation'
 import { appliancesOn, isApplianceOf, isMainAppliance, poseOnSpot, type SpotKind } from './appliance'
 import { cornerSpots, showerBoxes, showerSpot } from './bathroom'
@@ -68,7 +69,23 @@ function footprint(asset: string, x: number, y: number, rot: number): Box {
 /** 家具当作一件 PS 设备参与碰撞（PS 没有使用空间） */
 function asFixture(f: Furniture): Fixture {
   const def = ASSET_MAP.get(f.asset)!
-  return { id: f.id, kind: 'ps', x: f.x, y: f.y, w: def.w, d: def.d, rot: Math.round(f.rot / 90) * 90 }
+  const c = bodyCenter(f.asset, f.x, f.y, f.rot)
+  return { id: f.id, kind: 'ps', x: c.x, y: c.y, w: def.w, d: def.d, rot: Math.round(f.rot / 90) * 90 }
+}
+
+/**
+ * 一件东西本体的平面中心：贴附物（磁吸挂钩、冰箱贴…）的位置是贴附面上的点，模型从那里往前（局部 +z）伸出 d，
+ * 本体中心在前面 d / 2；其他东西的位置就是中心。
+ */
+function bodyCenter(asset: string, x: number, y: number, rot: number) {
+  const def = ASSET_MAP.get(asset)
+  return def?.stick ? toWorld({ x, y, rot }, 0, def.d / 2) : { x, y }
+}
+
+/** 一件东西本体的平面包围盒（贴附物按实际伸出的方向算，见 bodyCenter） */
+function bodyBox(asset: string, x: number, y: number, rot: number): Box {
+  const c = bodyCenter(asset, x, y, rot)
+  return furnitureBox(asset, c.x, c.y, rot)
 }
 
 /**
@@ -277,7 +294,7 @@ class Decorator {
     if (!def) return true
     const me = { asset, x, y, rot, z } as Furniture
     const [lo, hi] = vrange(me, def)
-    const box = furnitureBox(asset, x, y, rot)
+    const box = bodyBox(asset, x, y, rot)
     const wallish = !!def.mount || !!def.stick
     for (const o of this.out) {
       if (ignore?.has(o.id)) continue
@@ -289,7 +306,7 @@ class Decorator {
       if (oWall === wallish) continue
       // 地毯、垫子这类薄片
       if (!oWall && d.h <= 3) continue
-      if (!boxesOverlap(box, furnitureBox(o.asset, o.x, o.y, o.rot))) continue
+      if (!boxesOverlap(box, bodyBox(o.asset, o.x, o.y, o.rot))) continue
       const [a, b] = vrange(o, d)
       if (Math.min(hi, b) - Math.max(lo, a) > 1) return false
     }
@@ -305,15 +322,30 @@ class Decorator {
     return (this.curtainCache ??= curtainSpecs(this.plan).map((c): [Box, number, number] => [c.box, c.bottom, c.rodY + 2.5]))
   }
 
+  /** 摆在 parentId 上的 f 不和设备本体（fixtureSpans）在平面和高度上同时重叠；f 的支撑链上的设备不算 */
+  clearOfFixtures(asset: string, f: Pick<Furniture, 'x' | 'y' | 'rot' | 'z'>, parentId: string) {
+    const def = ASSET_MAP.get(asset)
+    if (!def) return true
+    const chain = new Set<string>()
+    for (let p: string | undefined = parentId; p && !chain.has(p); p = this.parentOf.get(p)) chain.add(p)
+    const [lo, hi] = vrange(f, def)
+    const box = bodyBox(asset, f.x, f.y, f.rot)
+    for (const fx of this.plan.fixtures) {
+      if (chain.has(fx.id)) continue
+      for (const [b, a0, a1] of fixtureSpans(fx)) if (boxesOverlap(box, b) && Math.min(hi, a1) - Math.max(lo, a0) > 1) return false
+    }
+    return true
+  }
+
   /** 墙面上这块地方没有别的壁挂物 / 贴附物（平面和高度都重叠才算） */
   wallFree(asset: string, x: number, y: number, rot: number, z?: number) {
     const def = ASSET_MAP.get(asset)
     if (!def) return true
     const [lo, hi] = vrange({ z }, def)
-    const box = furnitureBox(asset, x, y, rot)
+    const box = bodyBox(asset, x, y, rot)
     return !this.out.some((o) => {
       const d = ASSET_MAP.get(o.asset)
-      if (!d || !(d.mount !== undefined || d.stick) || !boxesOverlap(box, furnitureBox(o.asset, o.x, o.y, o.rot))) return false
+      if (!d || !(d.mount !== undefined || d.stick) || !boxesOverlap(box, bodyBox(o.asset, o.x, o.y, o.rot))) return false
       const [a, c] = vrange(o, d)
       return Math.min(hi, c) - Math.max(lo, a) > 1
     })
@@ -2295,6 +2327,18 @@ class Decorator {
     // 落地挂衣杆：侧挂的衣服比杆架宽，不能碰到旁边的家具和墙上挂的东西（room 给了才查）
     const mounted = room ? this.out.filter((o) => ASSET_MAP.get(o.asset)?.mount && pointInPolygon(o, room.points)).map(asFixture) : []
     const solid = room ? [...this.ctx().fixtures, ...mounted].filter((f) => f.id !== owner.id && pointInPolygon(f, room.points)).map(fixtureBox) : []
+    // 杆所属的家具里已经放好的东西（衣柜底层的收纳箱、挂衣架下层板上的鞋盒…）：衣服下摆不能垂到它们身上。
+    // 柜子里挂衣服时不给 room（不走 hangClear），所以这里单独查；碰到了就换短一点的衣服，都不行这段就空着
+    const kids = this.out
+      .filter((o) => this.parentOf.get(o.id) === owner.id)
+      .flatMap((o) => {
+        const d = ASSET_MAP.get(o.asset)
+        return d ? [{ box: furnitureBox(o.asset, o.x, o.y, o.rot), span: vrange(o, d) }] : []
+      })
+    const hemClear = (d: AssetDef, p: Vec) => {
+      const box = furnitureBox(d.id, p.x, p.y, owner.rot)
+      return !kids.some((k) => boxesOverlap(box, k.box) && Math.min(hookZ, k.span[1]) - Math.max(hookZ - d.h, k.span[0]) > 1)
+    }
     const placed: Furniture[] = []
     let x = -len / 2
     let k = Math.floor(this.rand() * wds.length)
@@ -2307,7 +2351,7 @@ class Decorator {
       const p = toWorld(owner, cx + x + L / 2, cz)
       const def = fallback
         .map((wd) => ASSET_MAP.get(`gm-row-${wd}-${L}-hanging`))
-        .find((d) => !!d && d.h <= maxH && d.d <= maxD && !solid.some((b) => boxesOverlap(b, furnitureBox(d.id, p.x, p.y, owner.rot))) && (!room || this.hangClear(d.id, p.x, p.y, owner.rot, hookZ, owner.id)))
+        .find((d) => !!d && d.h <= maxH && d.d <= maxD && hemClear(d, p) && !solid.some((b) => boxesOverlap(b, furnitureBox(d.id, p.x, p.y, owner.rot))) && (!room || this.hangClear(d.id, p.x, p.y, owner.rot, hookZ, owner.id)))
       if (def) {
         const f: Furniture = { id: uid('u'), asset: def.id, x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10, rot: owner.rot, color: this.colorFor(def), z: hookZ }
         this.out.push(f)
@@ -2926,6 +2970,12 @@ class Decorator {
     return this.onLevelAs(parent, this.vary(asset), fx, fz, lrot, level)
   }
 
+  /** 这一层的层高（按层布置时 plan 是一层的子户型，房间都在同一层；单层户型 = 默认墙高） */
+  private ceilingAt() {
+    const r = this.plan.rooms[0]
+    return (r && floorById(this.plan, floorOf(this.plan, r))?.height) || DEFAULT_FLOOR_H
+  }
+
   /** onLevel 本体：不换款 */
   private onLevelAs(parent: Furniture, asset: string, fx: number, fz: number, lrot = 0, level?: number) {
     const pd = ASSET_MAP.get(parent.asset)
@@ -2939,6 +2989,8 @@ class Decorator {
     const p = toWorld(parent, fx * pd.w, fz * pd.d)
     if (!this.allow(asset, p, parent.id)) return null
     const f: Furniture = { id: uid('u'), asset, x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10, rot: (parent.rot + lrot + 360) % 360, color: this.colorFor(def), z: (parent.z ?? 0) + lv.y }
+    // 不顶到天花板：高柜顶上的摆件整件要低于这一层的层高（留 8cm），否则会穿出房子
+    if (f.z! + def.h > this.ceilingAt() - 8) return null
     // 不穿模：整个占地在台面内，且不和同一台面上已摆的东西重叠
     if (!fitsOnSurface(parent, f.z!, asset, f.x, f.y, f.rot)) return null
     const box = furnitureBox(asset, f.x, f.y, f.rot)
@@ -2947,6 +2999,8 @@ class Decorator {
     if (clash) return null
     // 不顶到上方墙上挂的东西（搁板、挂画、壁挂吉他…）
     if (!this.clear3d(asset, f.x, f.y, f.rot, f.z, new Set([parent.id]))) return null
+    // 不顶进设备本体（抽油烟机、吊柜…）：墙上搁板 / 台面摆件上的东西也算；支撑链上的设备（摆在厨房台面上的架子）除外
+    if (!this.clearOfFixtures(asset, f, parent.id)) return null
     this.out.push(f)
     this.flat.add(f.id)
     this.parentOf.set(f.id, parent.id)
