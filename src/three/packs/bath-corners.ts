@@ -450,7 +450,6 @@ interface Spec {
   u: Unit
   pals: Pal[]
   floor?: boolean
-  family?: string
 }
 
 function def(s: Spec): AssetDef {
@@ -466,7 +465,6 @@ function def(s: Spec): AssetDef {
     d,
     h,
     ...pal(...s.pals),
-    family: s.family ?? 'bath-corner-shelf',
     sizeLabel: s.label,
     ...(s.floor ? {} : { mount }),
     surfaces: u.ys.map((y, i) => ({
@@ -693,7 +691,6 @@ const SPECS: Spec[] = [
     id: 'bc-wall-wire-2',
     name: '浴室置物架',
     label: '直排钢丝篮 2 层',
-    family: 'bath-wall-shelf',
     u: { w: 40, d: 12, shape: rectS(-20, -6, 40, 12), ys: tiers(96, 27, 2), deck: 'wire', rim: { h: 6, kind: 'wirewall' }, hold: 'plates', backOnly: true },
     pals: [P_STEEL, P_BLACK, P_WHITE_W],
   },
@@ -701,7 +698,6 @@ const SPECS: Spec[] = [
     id: 'bc-wall-glass-towel',
     name: '浴室置物架',
     label: '玻璃板 + 毛巾杆',
-    family: 'bath-wall-shelf',
     u: { w: 50, d: 14, shape: rectS(-25, -7, 50, 14), ys: [112], deck: 'glass', t: 0.8, hold: 'brackets', backOnly: true, towel: 101 },
     pals: [P_STEEL, P_GOLD, P_BLACK_M],
   },
@@ -709,7 +705,6 @@ const SPECS: Spec[] = [
     id: 'bc-wall-niche',
     name: '浴室置物架',
     label: '壁龛感搁板 2 层',
-    family: 'bath-wall-shelf',
     u: { w: 40, d: 12, shape: rectS(-19.2, -5.2, 39.2, 11.2), ys: tiers(98, 26, 2), deck: 'slab', t: 2.4, hold: 'tile', backOnly: true, topH: 24 },
     pals: [
       ['classic', [MARBLE, CL.gold, TILE]],
@@ -722,7 +717,6 @@ const SPECS: Spec[] = [
     id: 'bc-wall-teak-hook',
     name: '浴室置物架',
     label: '柚木搁板 + 挂钩',
-    family: 'bath-wall-shelf',
     u: { w: 40, d: 12, shape: rectS(-20, -6, 40, 12), ys: [106], deck: 'slat', t: 1.6, hold: 'brackets', backOnly: true, hooks: true },
     pals: [
       ['nordic', [N.oak, STEEL_D]],

@@ -309,7 +309,7 @@ function ecoFolded(print: Print): Build {
 const PRINT_LABEL: Record<Print, string> = { plain: '纯色', stripe: '条纹', flower: '小碎花' }
 
 const ECO: AssetDef[] = (['plain', 'stripe', 'flower'] as Print[]).flatMap((pr) => {
-  const ex = { family: 'bag-eco', sizeLabel: PRINT_LABEL[pr] }
+  const ex = { sizeLabel: PRINT_LABEL[pr] }
   return [
     asset(`bag-eco-${pr}-open`, '环保袋', 'kitchenware', [34, 14.4, 52.4], ECO_PALS, ecoOpen(pr), { ...ex, form: 'open' as FormTag, formLabel: '装满东西' }),
     asset(`bag-eco-${pr}-folded`, '环保袋', 'kitchenware', [13, 10.4, 5.1], ECO_PALS, ecoFolded(pr), { ...ex, form: 'folded' as FormTag, formLabel: '叠成小包' }),
@@ -384,9 +384,9 @@ function toteLying(p: string[]) {
 }
 
 const TOTE: AssetDef[] = [
-  asset('bag-tote-open', '帆布托特包', 'kitchenware', [36.6, 11.6, 60.9], TOTE_PALS, toteOpen, { family: 'bag-tote', form: 'open', formLabel: '装着东西' }),
-  asset('bag-tote-lying', '帆布托特包', 'kitchenware', [36, 52.9, 4.4], TOTE_PALS, toteLying, { family: 'bag-tote', form: 'lying', formLabel: '空着平放' }),
-  asset('bag-tote-hanging', '帆布托特包', 'kitchenware', [36, 3.3, 60.5], TOTE_PALS, toteHanging, { family: 'bag-tote', form: 'hanging' }),
+  asset('bag-tote-open', '帆布托特包', 'kitchenware', [36.6, 11.6, 60.9], TOTE_PALS, toteOpen, { form: 'open', formLabel: '装着东西' }),
+  asset('bag-tote-lying', '帆布托特包', 'kitchenware', [36, 52.9, 4.4], TOTE_PALS, toteLying, { form: 'lying', formLabel: '空着平放' }),
+  asset('bag-tote-hanging', '帆布托特包', 'kitchenware', [36, 3.3, 60.5], TOTE_PALS, toteHanging, { form: 'hanging' }),
 ]
 
 // =====================================================================
@@ -455,9 +455,9 @@ function paperShop(p: string[]) {
 }
 
 const PAPER: AssetDef[] = [
-  asset('bag-paper-grocery', '纸质购物袋', 'kitchenware', [31.4, 18.1, 49.7], KRAFT_PALS, paperGrocery, { family: 'bag-paper', sizeLabel: '超市大号', form: 'open', formLabel: '装着法棍蔬菜' }),
-  asset('bag-paper-folded', '纸质购物袋', 'kitchenware', [31.2, 35.3, 2.4], KRAFT_PALS, paperFolded, { family: 'bag-paper', sizeLabel: '超市大号', form: 'folded', formLabel: '叠平收着' }),
-  asset('bag-paper-shop', '纸质购物袋', 'kitchenware', [26, 10.3, 39.8], SHOP_PALS, paperShop, { family: 'bag-paper', sizeLabel: '精品小号', form: 'standing' }),
+  asset('bag-paper-grocery', '纸质购物袋', 'kitchenware', [31.4, 18.1, 49.7], KRAFT_PALS, paperGrocery, { sizeLabel: '超市大号', form: 'open', formLabel: '装着法棍蔬菜' }),
+  asset('bag-paper-folded', '纸质购物袋', 'kitchenware', [31.2, 35.3, 2.4], KRAFT_PALS, paperFolded, { sizeLabel: '超市大号', form: 'folded', formLabel: '叠平收着' }),
+  asset('bag-paper-shop', '纸质购物袋', 'kitchenware', [26, 10.3, 39.8], SHOP_PALS, paperShop, { sizeLabel: '精品小号', form: 'standing' }),
 ]
 
 // =====================================================================
@@ -544,11 +544,11 @@ function regiFolded(p: string[]) {
 }
 
 const REGI: AssetDef[] = [
-  asset('bag-regi-open', 'レジ袋（塑料袋）', 'kitchenware', [30, 17.8, 46.2], REGI_PALS, regiOpen, { family: 'bag-regi', sizeLabel: '大号', form: 'open', formLabel: '装着东西' }),
-  asset('bag-regi-folded', 'レジ袋（塑料袋）', 'kitchenware', [20.4, 11, 3.8], REGI_PALS, regiFolded, { family: 'bag-regi', sizeLabel: '大号', form: 'folded', formLabel: '叠成三角' }),
-  asset('bag-regi-hanging', 'レジ袋（塑料袋）', 'kitchenware', [24.5, 15.3, 43], REGI_PALS, regiHanging(12), { family: 'bag-regi', sizeLabel: '大号', form: 'hanging', formLabel: '袋中袋挂起' }),
-  asset('bag-konbini-open', 'レジ袋（塑料袋）', 'kitchenware', [19.3, 11.5, 24.8], REGI_PALS, konbiniOpen, { family: 'bag-regi', sizeLabel: '便利店小号', form: 'open', formLabel: '装着饭团饮料' }),
-  asset('bag-konbini-hanging', 'レジ袋（塑料袋）', 'kitchenware', [16.3, 10.2, 28.8], REGI_PALS, regiHanging(8), { family: 'bag-regi', sizeLabel: '便利店小号', form: 'hanging' }),
+  asset('bag-regi-open', 'レジ袋（塑料袋）', 'kitchenware', [30, 17.8, 46.2], REGI_PALS, regiOpen, { sizeLabel: '大号', form: 'open', formLabel: '装着东西' }),
+  asset('bag-regi-folded', 'レジ袋（塑料袋）', 'kitchenware', [20.4, 11, 3.8], REGI_PALS, regiFolded, { sizeLabel: '大号', form: 'folded', formLabel: '叠成三角' }),
+  asset('bag-regi-hanging', 'レジ袋（塑料袋）', 'kitchenware', [24.5, 15.3, 43], REGI_PALS, regiHanging(12), { sizeLabel: '大号', form: 'hanging', formLabel: '袋中袋挂起' }),
+  asset('bag-konbini-open', 'レジ袋（塑料袋）', 'kitchenware', [19.3, 11.5, 24.8], REGI_PALS, konbiniOpen, { sizeLabel: '便利店小号', form: 'open', formLabel: '装着饭团饮料' }),
+  asset('bag-konbini-hanging', 'レジ袋（塑料袋）', 'kitchenware', [16.3, 10.2, 28.8], REGI_PALS, regiHanging(8), { sizeLabel: '便利店小号', form: 'hanging' }),
 ]
 
 // =====================================================================
@@ -599,9 +599,9 @@ function coolerHanging(p: string[]) {
 }
 
 const COOLER: AssetDef[] = [
-  asset('bag-cooler-closed', '保冷袋', 'kitchenware', [30.6, 20.7, 31.8], COOL_PALS, coolerClosed, { family: 'bag-cooler', form: 'closed', formLabel: '拉好拉链' }),
-  asset('bag-cooler-folded', '保冷袋', 'kitchenware', [28.4, 18.6, 4.2], COOL_PALS, coolerFolded, { family: 'bag-cooler', form: 'folded' }),
-  asset('bag-cooler-hanging', '保冷袋', 'kitchenware', [28.6, 7.6, 38.5], COOL_PALS, coolerHanging, { family: 'bag-cooler', form: 'hanging' }),
+  asset('bag-cooler-closed', '保冷袋', 'kitchenware', [30.6, 20.7, 31.8], COOL_PALS, coolerClosed, { form: 'closed', formLabel: '拉好拉链' }),
+  asset('bag-cooler-folded', '保冷袋', 'kitchenware', [28.4, 18.6, 4.2], COOL_PALS, coolerFolded, { form: 'folded' }),
+  asset('bag-cooler-hanging', '保冷袋', 'kitchenware', [28.6, 7.6, 38.5], COOL_PALS, coolerHanging, { form: 'hanging' }),
 ]
 
 // =====================================================================
@@ -686,8 +686,8 @@ function netHanging(p: string[]) {
 }
 
 const NET: AssetDef[] = [
-  asset('bag-net-open', '网兜', 'kitchenware', [21.6, 18.8, 33], NET_PALS, netOpen, { family: 'bag-net', form: 'open', formLabel: '装着橘子' }),
-  asset('bag-net-hanging', '网兜', 'kitchenware', [15.6, 14.4, 40.7], NET_PALS, netHanging, { family: 'bag-net', form: 'hanging', formLabel: '挂着洋葱' }),
+  asset('bag-net-open', '网兜', 'kitchenware', [21.6, 18.8, 33], NET_PALS, netOpen, { form: 'open', formLabel: '装着橘子' }),
+  asset('bag-net-hanging', '网兜', 'kitchenware', [15.6, 14.4, 40.7], NET_PALS, netHanging, { form: 'hanging', formLabel: '挂着洋葱' }),
 ]
 
 // =====================================================================
@@ -737,9 +737,9 @@ function bigHanging(p: string[]) {
 }
 
 const BIG: AssetDef[] = [
-  asset('bag-big-open', '大号编织购物袋', 'storage', [55, 37, 45.4], BIG_PALS, bigOpen, { family: 'bag-big', form: 'open', formLabel: '装着毛毯' }),
-  asset('bag-big-folded', '大号编织购物袋', 'storage', [30, 20.6, 4.6], BIG_PALS, bigFolded, { family: 'bag-big', form: 'folded' }),
-  asset('bag-big-hanging', '大号编织购物袋', 'storage', [55, 5.6, 48.5], BIG_PALS, bigHanging, { family: 'bag-big', form: 'hanging' }),
+  asset('bag-big-open', '大号编织购物袋', 'storage', [55, 37, 45.4], BIG_PALS, bigOpen, { form: 'open', formLabel: '装着毛毯' }),
+  asset('bag-big-folded', '大号编织购物袋', 'storage', [30, 20.6, 4.6], BIG_PALS, bigFolded, { form: 'folded' }),
+  asset('bag-big-hanging', '大号编织购物袋', 'storage', [55, 5.6, 48.5], BIG_PALS, bigHanging, { form: 'hanging' }),
 ]
 
 // =====================================================================
@@ -851,8 +851,8 @@ const DOOR3_XS = [-10, 0, 10]
 
 const HOOKS: AssetDef[] = [
   hookAsset('bag-mag-hook', '磁吸挂钩', magnetNatural, MAGNET_PALS, {}),
-  hookAsset('bag-door-hook-2', '门顶挂钩', doorNatural(DOOR2_XS), DOOR_PALS, { family: 'bag-door-hook', sizeLabel: '双钩' }),
-  hookAsset('bag-door-hook-3', '门顶挂钩', doorNatural(DOOR3_XS), DOOR_PALS, { family: 'bag-door-hook', sizeLabel: '三钩' }),
+  hookAsset('bag-door-hook-2', '门顶挂钩', doorNatural(DOOR2_XS), DOOR_PALS, { sizeLabel: '双钩' }),
+  hookAsset('bag-door-hook-3', '门顶挂钩', doorNatural(DOOR3_XS), DOOR_PALS, { sizeLabel: '三钩' }),
 ]
 
 // =====================================================================
@@ -937,10 +937,10 @@ function comboDoorUmbrella(p: string[]) {
 }
 
 const COMBOS: AssetDef[] = [
-  asset('bag-set-mag-eco', '挂钩 + 购物袋', 'entrance', [30, 5.3, 51.6], COMBO_PALS_MAGNET_ECO, comboMagnetEco, { stick: true, family: 'bag-hook-set', sizeLabel: '磁吸挂钩 · 环保袋' }),
-  asset('bag-set-mag-regi', '挂钩 + 购物袋', 'entrance', [22.4, 15.5, 40.7], COMBO_PALS_MAGNET_REGI, comboMagnetRegi, { stick: true, family: 'bag-hook-set', sizeLabel: '磁吸挂钩 · 袋中袋' }),
-  asset('bag-set-door-net', '挂钩 + 购物袋', 'entrance', [38.8, 19.7, 79.5], COMBO_PALS_DOOR_NET, comboDoorNet, { stick: true, family: 'bag-hook-set', sizeLabel: '门顶挂钩 · 环保袋 + 网兜' }),
-  asset('bag-set-door-umbrella', '挂钩 + 购物袋', 'entrance', [34, 8.2, 97.2], COMBO_PALS_DOOR_UMB, comboDoorUmbrella, { stick: true, family: 'bag-hook-set', sizeLabel: '门顶挂钩 · 环保袋 + 雨伞' }),
+  asset('bag-set-mag-eco', '挂钩 + 购物袋', 'entrance', [30, 5.3, 51.6], COMBO_PALS_MAGNET_ECO, comboMagnetEco, { stick: true, sizeLabel: '磁吸挂钩 · 环保袋' }),
+  asset('bag-set-mag-regi', '挂钩 + 购物袋', 'entrance', [22.4, 15.5, 40.7], COMBO_PALS_MAGNET_REGI, comboMagnetRegi, { stick: true, sizeLabel: '磁吸挂钩 · 袋中袋' }),
+  asset('bag-set-door-net', '挂钩 + 购物袋', 'entrance', [38.8, 19.7, 79.5], COMBO_PALS_DOOR_NET, comboDoorNet, { stick: true, sizeLabel: '门顶挂钩 · 环保袋 + 网兜' }),
+  asset('bag-set-door-umbrella', '挂钩 + 购物袋', 'entrance', [34, 8.2, 97.2], COMBO_PALS_DOOR_UMB, comboDoorUmbrella, { stick: true, sizeLabel: '门顶挂钩 · 环保袋 + 雨伞' }),
 ]
 
 export const SHOPPING_BAGS: AssetDef[] = [...ECO, ...TOTE, ...PAPER, ...REGI, ...COOLER, ...NET, ...BIG, ...HOOKS, ...COMBOS]

@@ -1309,7 +1309,6 @@ function washBasket(p: string[]) {
 const TOILET: AssetDef[] = [
   ...TOILET_RACKS.map(({ label, s }) =>
     define(`wet-toilet-rack-${s.tops.length}`, '马桶置物架', 'storage', [s.w, s.d, rackH(s)], RACK_PALS, rack(s), {
-      family: 'toilet-rack',
       sizeLabel: label,
       surface: s.tops[s.tops.length - 1],
       surfaceShape: [rectPoly(-s.w / 2 + 3, -s.d / 2 + 2, s.w / 2 - 3, s.d / 2 - 1)],
@@ -1326,11 +1325,10 @@ const TOILET: AssetDef[] = [
     surfaces: cabSurfaces(TOILET_SLIM),
     openable: true,
   }),
-  prop('wet-tp-stack', '卷筒纸', 'toiletry', [11, 11, 33], TP_PALS, tpStack, { family: 'tp-pack', sizeLabel: '3 卷叠放' }),
-  prop('wet-tp-4pack', '卷筒纸', 'toiletry', [22.9, 22.9, 11.8], TP_PALS, tpPack(2, 2, 1, false), { family: 'tp-pack', sizeLabel: '4 卷装' }),
-  prop('wet-tp-12pack', '卷筒纸', 'toiletry', [33.9, 22.9, 26.5], TP_PALS, tpPack(3, 2, 2, true), { family: 'tp-pack', sizeLabel: '12 卷装' }),
+  prop('wet-tp-stack', '卷筒纸', 'toiletry', [11, 11, 33], TP_PALS, tpStack, { sizeLabel: '3 卷叠放' }),
+  prop('wet-tp-4pack', '卷筒纸', 'toiletry', [22.9, 22.9, 11.8], TP_PALS, tpPack(2, 2, 1, false), { sizeLabel: '4 卷装' }),
+  prop('wet-tp-12pack', '卷筒纸', 'toiletry', [33.9, 22.9, 26.5], TP_PALS, tpPack(3, 2, 2, true), { sizeLabel: '12 卷装' }),
   define('wet-tp-holder', '卷纸架', 'toiletry', [14, 13, 13.4], PLA_PALS.map(([s, c]) => [s, [c[2] === C.sky ? C.white : c[1], PAPER]] as Pal), tpHolder, {
-    family: 'tp-holder',
     sizeLabel: '单联',
     mount: TPH_MOUNT,
   }),
@@ -1340,7 +1338,6 @@ const TOILET: AssetDef[] = [
     ['industrial', [I.iron, PAPER, I.walnut]],
     ['japanese', [J.sumi, PAPER, J.hinoki]],
   ], tpHolderDouble, {
-    family: 'tp-holder',
     sizeLabel: '双联带置物板',
     mount: TPH_MOUNT,
     surface: TPH_MOUNT + 14.2,
@@ -1351,7 +1348,7 @@ const TOILET: AssetDef[] = [
     ['cute', [C.white, C.pink, C.sakura]],
     ['nordic', [N.white, N.oak, N.gray]],
     ['modern', [M.black, M.black, M.char]],
-  ], toiletBrush, { family: 'wet-toilet-brush', sizeLabel: '标准' }),
+  ], toiletBrush, { sizeLabel: '标准' }),
   prop('wet-sanitary-bin', '卫生桶', 'toiletry', [13.6, 20.6, 25.1], PLA_PALS, sanitaryBin),
   prop('wet-air-freshener', '芳香剂', 'toiletry', [7.8, 7.8, 9.9], [
     ['cute', [C.pink, C.white, C.sakura]],
@@ -1369,9 +1366,9 @@ const TOILET: AssetDef[] = [
 ]
 
 const BATH: AssetDef[] = [
-  prop('wet-shampoo', '洗护按压瓶', 'toiletry', [7.8, 8.1, 22.1], bottlePals('shampoo'), bathBottle('shampoo'), { family: 'bath-bottle', sizeLabel: '洗发水' }),
-  prop('wet-conditioner', '洗护按压瓶', 'toiletry', [7.5, 8.1, 22.1], bottlePals('conditioner'), bathBottle('conditioner'), { family: 'bath-bottle', sizeLabel: '护发素' }),
-  prop('wet-body-soap', '洗护按压瓶', 'toiletry', [7.8, 8.1, 22.1], bottlePals('body'), bathBottle('body'), { family: 'bath-bottle', sizeLabel: '沐浴露' }),
+  prop('wet-shampoo', '洗护按压瓶', 'toiletry', [7.8, 8.1, 22.1], bottlePals('shampoo'), bathBottle('shampoo'), { sizeLabel: '洗发水' }),
+  prop('wet-conditioner', '洗护按压瓶', 'toiletry', [7.5, 8.1, 22.1], bottlePals('conditioner'), bathBottle('conditioner'), { sizeLabel: '护发素' }),
+  prop('wet-body-soap', '洗护按压瓶', 'toiletry', [7.8, 8.1, 22.1], bottlePals('body'), bathBottle('body'), { sizeLabel: '沐浴露' }),
   prop('wet-bottle-set', '洗护三瓶套装', 'toiletry', [27, 10, 22.7], BOTTLE_BASE.map(([s, b, pump]): Pal => [s, [b, pump, shade(b, -0.08)]]), bottleSet),
   prop('wet-refill-pouch', '补充装', 'toiletry', [12.2, 5, 21.8], PLA_PALS, refillPouch),
   prop('wet-face-wash', '洁面乳', 'toiletry', [4.4, 3.8, 13.8], [
@@ -1400,25 +1397,24 @@ const BATH: AssetDef[] = [
   ], bathSponge),
   ...[25, 35].map((h) =>
     define(`wet-bath-stool-${h}`, '浴凳', 'toiletry', [32, 25, h], HINOKI_PALS, bathStool(h), {
-      family: 'bath-stool',
       sizeLabel: h === 25 ? '低 25' : '高 35',
       surface: h,
       surfaceShape: [rectPoly(-15, -11.5, -3, 11.5), rectPoly(3, -11.5, 15, 11.5)],
     }),
   ),
-  prop('wet-bath-pail', '洗面桶', 'toiletry', [24, 24, 11], HINOKI_PALS, bathPail, { family: 'wet-bath-pail', sizeLabel: '标准' }),
+  prop('wet-bath-pail', '洗面桶', 'toiletry', [24, 24, 11], HINOKI_PALS, bathPail, { sizeLabel: '标准' }),
   prop('wet-bath-lid-rolled', '浴缸盖', 'toiletry', [73.2, 18.9, 18.9], [
     ['modern', [M.white, M.gray]],
     ['cute', [C.sky, C.white]],
     ['nordic', [N.white, N.oak]],
     ['japanese', [J.hinoki, J.dark]],
-  ], bathLidRolled, { family: 'bath-lid', form: 'lying' }),
+  ], bathLidRolled, { form: 'lying' }),
   prop('wet-bath-lid-folded', '浴缸盖', 'toiletry', [72, 46, 5.4], [
     ['modern', [M.white, M.gray]],
     ['cute', [C.sky, C.white]],
     ['nordic', [N.white, N.oak]],
     ['japanese', [J.hinoki, J.dark]],
-  ], bathLidFolded, { family: 'bath-lid', form: 'folded' }),
+  ], bathLidFolded, { form: 'folded' }),
   prop('wet-toy-boat', '洗澡玩具小船', 'kids', [14.2, 7.6, 9.4], [
     ['cute', [C.red, C.white, C.sky]],
     ['cute', [C.sky, C.lemon, C.pink]],
@@ -1442,7 +1438,6 @@ const BATH: AssetDef[] = [
   ], bathSaltJar),
   ...[2, 3].map((n) =>
     define(`wet-bath-corner-shelf-${n}`, '浴室转角架', 'storage', [24, 24, cornerH(n)], WIRE_PALS, cornerShelf(n), {
-      family: 'bath-corner-shelf',
       sizeLabel: `三角钢丝 ${n} 层`,
       mount: CORNER_MOUNT - 4.4,
       surface: CORNER_MOUNT + (n - 1) * CORNER_GAP + 1.2,
@@ -1468,7 +1463,6 @@ const tc45 = tallCab(45)
 const DRESSING: AssetDef[] = [
   ...LAUNDRY_RACKS.map(({ label, s }) =>
     define(`wet-laundry-rack-${s.w}`, '洗衣机置物架', 'storage', [s.w, s.d, rackH(s)], RACK_PALS, rack(s), {
-      family: 'laundry-rack',
       sizeLabel: label,
       surface: s.tops[s.tops.length - 1],
       surfaceShape: [rectPoly(-s.w / 2 + 3, -s.d / 2 + 2, s.w / 2 - 3, s.d / 2 - 1)],
@@ -1477,7 +1471,6 @@ const DRESSING: AssetDef[] = [
   ),
   ...[tc30, tc45].map((s) =>
     define(`wet-washroom-tall-${s.w}`, '洗面所窄高柜', 'storage', [s.w, s.d, cabLayout(s).h], CAB_PALS, cabinet(s), {
-      family: 'washroom-tall',
       sizeLabel: `${s.w}`,
       surface: cabLayout(s).h,
       surfaces: cabSurfaces(s),
@@ -1512,30 +1505,30 @@ const DRESSING: AssetDef[] = [
     surfaceShape: [rectPoly(-TW.w / 2 + 1, -TW.d / 2 + 1, TW.w / 2 - 1, TW.d / 2 - 1)],
     surfaces: [{ y: TW.mount + TW.barY + TW.barR + 0.5, kind: 'hook', shape: [rectPoly(-TW.w / 2 + 6, TW.barZ - 1.5, TW.w / 2 - 6, TW.barZ + 1.5)] }],
   }),
-  prop('wet-bath-towel-folded', '浴巾', 'toiletry', [36.7, 26.7, 7.8], CLOTH_PALS, bathTowelFolded, { family: 'bath-towel', form: 'folded' }),
-  prop('wet-bath-towel-hanging', '浴巾', 'toiletry', [40.4, 4.1, 91.8], CLOTH_PALS, bathTowelHanging, { family: 'bath-towel', form: 'hanging' }),
-  prop('wet-bath-mat', '浴室地垫', 'toiletry', [60, 40, 1.5], CLOTH_PALS, bathMatCloth, { family: 'bath-mat', sizeLabel: '布艺' }),
+  prop('wet-bath-towel-folded', '浴巾', 'toiletry', [36.7, 26.7, 7.8], CLOTH_PALS, bathTowelFolded, { form: 'folded' }),
+  prop('wet-bath-towel-hanging', '浴巾', 'toiletry', [40.4, 4.1, 91.8], CLOTH_PALS, bathTowelHanging, { form: 'hanging' }),
+  prop('wet-bath-mat', '浴室地垫', 'toiletry', [60, 40, 1.5], CLOTH_PALS, bathMatCloth, { sizeLabel: '布艺' }),
   prop('wet-bath-mat-stone', '浴室地垫', 'toiletry', [60, 39, 1.15], [
     ['modern', [M.light, M.gray, M.char]],
     ['nordic', [N.linen, N.white, N.oak]],
     ['cute', [C.sakura, C.white, C.pink]],
     ['japanese', ['#d8d2c4', J.washi, J.sumi]],
-  ], bathMatStone, { family: 'bath-mat', sizeLabel: '硅藻土' }),
+  ], bathMatStone, { sizeLabel: '硅藻土' }),
   prop('wet-body-scale', '体重秤', 'toiletry', [30, 30, 2.4], [
     ['modern', [M.white, M.silver]],
     ['modern', [M.black, M.gray]],
     ['cute', [C.sakura, C.white]],
     ['nordic', [N.oakL, N.white]],
-  ], bodyScale, { family: 'body-scale', sizeLabel: '基础款' }),
+  ], bodyScale, { sizeLabel: '基础款' }),
   define('wet-dryer-holder', '吹风机挂架', 'storage', [DH.w, DH.d, DH.h], [
     ['modern', [M.white, M.gray]],
     ['modern', [M.black, M.gray]],
     ['nordic', [N.white, N.oak]],
     ['cute', [C.pink, C.white]],
   ], dryerHolder, { mount: DH.mount }),
-  prop('wet-detergent', '洗衣用品瓶', 'toiletry', [14, 9.6, 28.3], LAUNDRY_BOTTLE_PALS.detergent, detergent, { family: 'laundry-bottle', sizeLabel: '洗衣液' }),
-  prop('wet-softener', '洗衣用品瓶', 'toiletry', [11, 7.9, 26], LAUNDRY_BOTTLE_PALS.softener, softener, { family: 'laundry-bottle', sizeLabel: '柔软剂' }),
-  prop('wet-bleach', '洗衣用品瓶', 'toiletry', [12, 8.3, 29.1], LAUNDRY_BOTTLE_PALS.bleach, bleach, { family: 'laundry-bottle', sizeLabel: '漂白剂' }),
+  prop('wet-detergent', '洗衣用品瓶', 'toiletry', [14, 9.6, 28.3], LAUNDRY_BOTTLE_PALS.detergent, detergent, { sizeLabel: '洗衣液' }),
+  prop('wet-softener', '洗衣用品瓶', 'toiletry', [11, 7.9, 26], LAUNDRY_BOTTLE_PALS.softener, softener, { sizeLabel: '柔软剂' }),
+  prop('wet-bleach', '洗衣用品瓶', 'toiletry', [12, 8.3, 29.1], LAUNDRY_BOTTLE_PALS.bleach, bleach, { sizeLabel: '漂白剂' }),
   prop('wet-powder-box', '洗衣粉', 'toiletry', [20, 12.6, 22.5], [
     ['modern', [M.white, '#4a8fd9', M.char]],
     ['retro', [R.orange, R.cream, R.red]],
@@ -1570,13 +1563,13 @@ const DRESSING: AssetDef[] = [
     ['modern', [M.light, M.char, M.white]],
     ['japanese', [J.tatami, J.wood, J.ai]],
     ['cute', [C.white, C.pink, C.sky]],
-  ], hamperClosed, { family: 'hamper', sizeLabel: '标准', form: 'closed' }),
+  ], hamperClosed, { sizeLabel: '标准', form: 'closed' }),
   prop('wet-hamper-open', '脏衣篓', 'storage', [37.2, 33.2, 55], [
     ['nordic', [N.linen, N.oak, N.blue]],
     ['modern', [M.light, M.char, M.white]],
     ['japanese', [J.tatami, J.wood, J.ai]],
     ['cute', [C.white, C.pink, C.sky]],
-  ], hamperOpen, { family: 'hamper', sizeLabel: '标准', form: 'open' }),
+  ], hamperOpen, { sizeLabel: '标准', form: 'open' }),
   prop('wet-iron', '熨斗', 'appliance', [12, 27.7, 12.6], [
     ['modern', [M.white, M.char]],
     ['cute', [C.sky, C.white]],
@@ -1588,18 +1581,18 @@ const DRESSING: AssetDef[] = [
     ['modern', [M.light, M.char]],
     ['cute', [C.sakura, C.white]],
     ['retro', [R.mustard, R.cream]],
-  ], ironingBoardOpen, { family: 'ironing-board', form: 'open', surface: IB_Y + 2, surfaceShape: [boardPoly(2)] }),
+  ], ironingBoardOpen, { form: 'open', surface: IB_Y + 2, surfaceShape: [boardPoly(2)] }),
   define('wet-ironing-board-folded', '熨衣板', 'storage', [34, 4.4, 110], [
     ['nordic', [N.linen, N.white]],
     ['modern', [M.light, M.char]],
     ['cute', [C.sakura, C.white]],
     ['retro', [R.mustard, R.cream]],
-  ], ironingBoardFolded, { family: 'ironing-board', form: 'folded' }),
+  ], ironingBoardFolded, { form: 'folded' }),
   ...(['S', 'L'] as const).flatMap((k) => {
     const c = CASES[k]
     return [
-      prop(`wet-clear-case-${k.toLowerCase()}-closed`, '半透明收纳箱', 'storage', [c.w + 0.8, c.d + 0.8, c.h + 1.85], CASE_PALS, clearCase(c, false), { family: 'clear-case', sizeLabel: k, form: 'closed' }),
-      prop(`wet-clear-case-${k.toLowerCase()}-open`, '半透明收纳箱', 'storage', [c.w + 0.8, c.d + 1.7, c.h + c.d + 0.8], CASE_PALS, clearCase(c, true), { family: 'clear-case', sizeLabel: k, form: 'open' }),
+      prop(`wet-clear-case-${k.toLowerCase()}-closed`, '半透明收纳箱', 'storage', [c.w + 0.8, c.d + 0.8, c.h + 1.85], CASE_PALS, clearCase(c, false), { sizeLabel: k, form: 'closed' }),
+      prop(`wet-clear-case-${k.toLowerCase()}-open`, '半透明收纳箱', 'storage', [c.w + 0.8, c.d + 1.7, c.h + c.d + 0.8], CASE_PALS, clearCase(c, true), { sizeLabel: k, form: 'open' }),
     ]
   }),
   define('wet-drawer-chest', '抽屉式收纳盒', 'storage', [DC.w, DC.d, DC.h], [
@@ -1786,18 +1779,18 @@ const AROMA: AssetDef[] = [
     ['cute', [C.white, C.pink, C.mint]],
     ['nordic', [N.white, N.blue, N.sage]],
   ], toiletTablets),
-  prop('wet-dehumidifier-l', '除湿盒', 'toiletry', [12, 9, 17], DEHUM_PALS, dehumidifier(12, 9, 17), { family: 'dehumidifier', sizeLabel: '大' }),
-  prop('wet-dehumidifier-s', '除湿盒', 'toiletry', [9, 7, 12], DEHUM_PALS, dehumidifier(9, 7, 12), { family: 'dehumidifier', sizeLabel: '小' }),
-  prop('wet-dehum-bag-hanging', '挂式除湿袋', 'toiletry', [12, 4.2, 35.8], DEHUM_PALS, dehumBagHanging, { family: 'dehumidifier-bag', form: 'hanging' }),
-  prop('wet-dehum-bag-lying', '挂式除湿袋', 'toiletry', [12, 30, 2], DEHUM_PALS, dehumBagLying, { family: 'dehumidifier-bag', form: 'lying' }),
+  prop('wet-dehumidifier-l', '除湿盒', 'toiletry', [12, 9, 17], DEHUM_PALS, dehumidifier(12, 9, 17), { sizeLabel: '大' }),
+  prop('wet-dehumidifier-s', '除湿盒', 'toiletry', [9, 7, 12], DEHUM_PALS, dehumidifier(9, 7, 12), { sizeLabel: '小' }),
+  prop('wet-dehum-bag-hanging', '挂式除湿袋', 'toiletry', [12, 4.2, 35.8], DEHUM_PALS, dehumBagHanging, { form: 'hanging' }),
+  prop('wet-dehum-bag-lying', '挂式除湿袋', 'toiletry', [12, 30, 2], DEHUM_PALS, dehumBagLying, { form: 'lying' }),
   prop('wet-charcoal-bag', '竹炭包', 'toiletry', [9, 14.1, 3.6], [
     ['japanese', [J.washi, J.sumi]],
     ['nordic', [N.linen, N.oak]],
     ['cute', [C.cream, C.pink]],
     ['modern', [M.light, M.black]],
   ], charcoalBag),
-  prop('wet-moth-hanging', '防虫剂', 'toiletry', [9, 4.2, 18.8], SCENT_PALS, mothHanging, { family: 'moth-repellent', form: 'hanging' }),
-  prop('wet-moth-sheet', '防虫剂', 'toiletry', [20, 12, 0.75], SCENT_PALS, mothSheet, { family: 'moth-repellent', form: 'lying' }),
+  prop('wet-moth-hanging', '防虫剂', 'toiletry', [9, 4.2, 18.8], SCENT_PALS, mothHanging, { form: 'hanging' }),
+  prop('wet-moth-sheet', '防虫剂', 'toiletry', [20, 12, 0.75], SCENT_PALS, mothSheet, { form: 'lying' }),
 ]
 
 export const WET: AssetDef[] = [...TOILET, ...BATH, ...DRESSING, ...AROMA]

@@ -25,7 +25,6 @@ const STONE = '#b7b2a7'
 const CRYSTAL = '#e6f3ff'
 
 type Kind = 'floor' | 'table' | 'desk' | 'wall'
-const FAMILY: Record<Kind, string> = { floor: 'floor-lamp', table: 'table-lamp', desk: 'desk-lamp', wall: 'wall-lamp' }
 /** 壁灯底边离地高度 */
 const WALL_Y = 150
 
@@ -39,7 +38,6 @@ function def(id: string, name: string, kind: Kind, sizeLabel: string, [w, d, h]:
     h,
     ...pal(...pals),
     build,
-    family: FAMILY[kind],
     sizeLabel,
     ...(kind === 'table' || kind === 'desk' ? { prop: true } : {}),
     ...(kind === 'wall' ? { mount } : {}),

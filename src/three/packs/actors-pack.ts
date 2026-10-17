@@ -111,16 +111,16 @@ function kachakaSurfaces(tiers: 2 | 3): Partial<AssetDef> {
 }
 
 export const ACTOR_ASSETS: AssetDef[] = [
-  define('act-cat', '猫（会走动）', 'pets', [26, 34, 31], CAT_PALS, pet('cat', 'curl'), { actor: { kind: 'cat', role: 'body', breed: 'cat' }, ...{ family: 'act-cat', sizeLabel: '短毛猫' } }),
-  define('act-cat-long', '猫（会走动）', 'pets', [29, 39, 35], CAT_PALS, pet('cat-long', 'curl'), { actor: { kind: 'cat', role: 'body', breed: 'cat-long' }, ...{ family: 'act-cat', sizeLabel: '长毛猫' } }),
-  define('act-kitten', '猫（会走动）', 'pets', [18, 25, 24], CAT_PALS, pet('kitten', 'curl'), { actor: { kind: 'cat', role: 'body', breed: 'kitten' }, ...{ family: 'act-cat', sizeLabel: '小猫' } }),
-  define('act-shiba', '狗（会走动）', 'pets', [32, 47, 43], SHIBA_PALS, pet('shiba', 'curl'), { actor: { kind: 'dog', role: 'body', breed: 'shiba' }, ...{ family: 'act-dog', sizeLabel: '柴犬' } }),
-  define('act-poodle', '狗（会走动）', 'pets', [24, 33, 29], POODLE_PALS, pet('poodle', 'curl'), { actor: { kind: 'dog', role: 'body', breed: 'poodle' }, ...{ family: 'act-dog', sizeLabel: '玩具贵宾' } }),
-  define('act-dachshund', '狗（会走动）', 'pets', [29, 40, 26], DACHS_PALS, pet('dachshund', 'curl'), { actor: { kind: 'dog', role: 'body', breed: 'dachshund' }, ...{ family: 'act-dog', sizeLabel: '腊肠犬' } }),
-  define('act-rabbit', '兔子（会走动）', 'pets', [19, 34, 30], RABBIT_PALS, pet('rabbit', 'loaf'), { actor: { kind: 'rabbit', role: 'body', breed: 'rabbit' }, ...{ family: 'act-rabbit', sizeLabel: '立耳兔' } }),
-  define('act-rabbit-lop', '兔子（会走动）', 'pets', [21, 36, 22], RABBIT_PALS, pet('rabbit-lop', 'loaf'), { actor: { kind: 'rabbit', role: 'body', breed: 'rabbit-lop' }, ...{ family: 'act-rabbit', sizeLabel: '垂耳兔' } }),
+  define('act-cat', '猫（会走动）', 'pets', [26, 34, 31], CAT_PALS, pet('cat', 'curl'), { actor: { kind: 'cat', role: 'body', breed: 'cat' }, ...{ sizeLabel: '短毛猫' } }),
+  define('act-cat-long', '猫（会走动）', 'pets', [29, 39, 35], CAT_PALS, pet('cat-long', 'curl'), { actor: { kind: 'cat', role: 'body', breed: 'cat-long' }, ...{ sizeLabel: '长毛猫' } }),
+  define('act-kitten', '猫（会走动）', 'pets', [18, 25, 24], CAT_PALS, pet('kitten', 'curl'), { actor: { kind: 'cat', role: 'body', breed: 'kitten' }, ...{ sizeLabel: '小猫' } }),
+  define('act-shiba', '狗（会走动）', 'pets', [32, 47, 43], SHIBA_PALS, pet('shiba', 'curl'), { actor: { kind: 'dog', role: 'body', breed: 'shiba' }, ...{ sizeLabel: '柴犬' } }),
+  define('act-poodle', '狗（会走动）', 'pets', [24, 33, 29], POODLE_PALS, pet('poodle', 'curl'), { actor: { kind: 'dog', role: 'body', breed: 'poodle' }, ...{ sizeLabel: '玩具贵宾' } }),
+  define('act-dachshund', '狗（会走动）', 'pets', [29, 40, 26], DACHS_PALS, pet('dachshund', 'curl'), { actor: { kind: 'dog', role: 'body', breed: 'dachshund' }, ...{ sizeLabel: '腊肠犬' } }),
+  define('act-rabbit', '兔子（会走动）', 'pets', [19, 34, 30], RABBIT_PALS, pet('rabbit', 'loaf'), { actor: { kind: 'rabbit', role: 'body', breed: 'rabbit' }, ...{ sizeLabel: '立耳兔' } }),
+  define('act-rabbit-lop', '兔子（会走动）', 'pets', [21, 36, 22], RABBIT_PALS, pet('rabbit-lop', 'loaf'), { actor: { kind: 'rabbit', role: 'body', breed: 'rabbit-lop' }, ...{ sizeLabel: '垂耳兔' } }),
   define('act-vacuum', '扫地机器人（会自动清扫）', 'pets', [36, 46, 11], VAC_PALS, vacuumWithDock, { actor: { kind: 'vacuum', role: 'body' }, ...{ category: 'appliance', limit: { scope: 'house', max: 1, group: 'vacuum' } } }),
-  define('act-kachaka', '家用搬运机器人 Kachaka', 'pets', [34, 56, 13], KC_PALS, kachakaSet(0), { actor: { kind: 'kachaka', role: 'body' }, ...{ category: 'appliance', family: 'act-kachaka', sizeLabel: '本体 + 充电座' } }),
-  define('act-kachaka-2', '家用搬运机器人 Kachaka', 'pets', [34, 56, 44], KC_PALS, kachakaSet(2), { actor: { kind: 'kachaka', role: 'body' }, ...{ category: 'appliance', family: 'act-kachaka', sizeLabel: '+ 2 段架子', ...kachakaSurfaces(2) } }),
-  define('act-kachaka-3', '家用搬运机器人 Kachaka', 'pets', [34, 56, 72], KC_PALS, kachakaSet(3), { actor: { kind: 'kachaka', role: 'body' }, ...{ category: 'appliance', family: 'act-kachaka', sizeLabel: '+ 3 段架子', ...kachakaSurfaces(3) } }),
+  define('act-kachaka', '家用搬运机器人 Kachaka', 'pets', [34, 56, 13], KC_PALS, kachakaSet(0), { actor: { kind: 'kachaka', role: 'body' }, ...{ category: 'appliance', sizeLabel: '本体 + 充电座' } }),
+  define('act-kachaka-2', '家用搬运机器人 Kachaka', 'pets', [34, 56, 44], KC_PALS, kachakaSet(2), { actor: { kind: 'kachaka', role: 'body' }, ...{ category: 'appliance', sizeLabel: '+ 2 段架子', ...kachakaSurfaces(2) } }),
+  define('act-kachaka-3', '家用搬运机器人 Kachaka', 'pets', [34, 56, 72], KC_PALS, kachakaSet(3), { actor: { kind: 'kachaka', role: 'body' }, ...{ category: 'appliance', sizeLabel: '+ 3 段架子', ...kachakaSurfaces(3) } }),
 ]

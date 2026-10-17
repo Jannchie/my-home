@@ -1275,11 +1275,11 @@ const bedColors = (i: number) =>
   })
 
 export const ASSETS: AssetDef[] = [
-  { id: 'sofa2', name: '沙发', family: 'sofa', sizeLabel: '双人', category: 'living', w: 170, d: 86, h: 80, ...sofaColors, build: (p) => sofa(170, p) },
-  { id: 'sofa3', name: '沙发', family: 'sofa', sizeLabel: '三人', category: 'living', w: 210, d: 86, h: 80, ...sofaColors, build: (p) => sofa(210, p) },
+  { id: 'sofa2', name: '沙发', sizeLabel: '双人', category: 'living', w: 170, d: 86, h: 80, ...sofaColors, build: (p) => sofa(170, p) },
+  { id: 'sofa3', name: '沙发', sizeLabel: '三人', category: 'living', w: 210, d: 86, h: 80, ...sofaColors, build: (p) => sofa(210, p) },
   { id: 'armchair', name: '单人沙发', category: 'living', w: 80, d: 80, h: 80, ...sofaColors, build: armchair },
-  { id: 'coffee-table', name: '圆茶几', family: 'coffee-table', sizeLabel: '标准', category: 'living', w: 84, d: 84, h: 38, surface: 38, surfaceShape: [ellipsePoly(39)], ...woods, build: coffeeTable },
-  { id: 'tv-board', name: '电视柜', family: 'lv-tv-low', sizeLabel: '150', category: 'living', w: 150, d: 42, h: 44, surface: 44, ...woods, surfaces: TV_BOARD_SURF, openable: true, build: tvBoard },
+  { id: 'coffee-table', name: '圆茶几', sizeLabel: '标准', category: 'living', w: 84, d: 84, h: 38, surface: 38, surfaceShape: [ellipsePoly(39)], ...woods, build: coffeeTable },
+  { id: 'tv-board', name: '电视柜', sizeLabel: '150', category: 'living', w: 150, d: 42, h: 44, surface: 44, ...woods, surfaces: TV_BOARD_SURF, openable: true, build: tvBoard },
   {
     id: 'rug',
     name: '方地毯',
@@ -1305,7 +1305,6 @@ export const ASSETS: AssetDef[] = [
   {
     id: 'rug-round',
     name: '圆地毯',
-    family: 'rug-round',
     sizeLabel: '标准',
     category: 'living',
     w: 150,
@@ -1323,17 +1322,16 @@ export const ASSETS: AssetDef[] = [
     }),
     build: (p) => roundRug(75, p),
   },
-  { id: 'floor-lamp', name: '落地灯', family: 'floor-lamp', sizeLabel: '标准', category: 'lighting', w: 40, d: 40, h: 156, ...sty({ cute: [[C.lamp], [C.sakura], [C.mint]], nordic: [[N.linen]], modern: [[M.white]], retro: [[R.mustard]] }), build: floorLamp },
-  { id: 'bookshelf', name: '书架', family: 'bookshelf', sizeLabel: '标准', category: 'storage', w: 80, d: 30, h: 176, surface: 176, ...woods, build: bookshelf },
-  { id: 'monstera', name: '龟背竹', family: 'monstera', sizeLabel: '标准', category: 'plants', w: 70, d: 70, h: 130, ...pots([[C.white], [C.peach], [C.sky], [C.sakura]]), build: monstera },
-  { id: 'beanbag', name: '懒人沙发', family: 'beanbag', sizeLabel: '圆团', category: 'living', w: 72, d: 70, h: 56, ...softs(), build: beanbag },
+  { id: 'floor-lamp', name: '落地灯', sizeLabel: '标准', category: 'lighting', w: 40, d: 40, h: 156, ...sty({ cute: [[C.lamp], [C.sakura], [C.mint]], nordic: [[N.linen]], modern: [[M.white]], retro: [[R.mustard]] }), build: floorLamp },
+  { id: 'bookshelf', name: '书架', sizeLabel: '标准', category: 'storage', w: 80, d: 30, h: 176, surface: 176, ...woods, build: bookshelf },
+  { id: 'monstera', name: '龟背竹', sizeLabel: '标准', category: 'plants', w: 70, d: 70, h: 130, ...pots([[C.white], [C.peach], [C.sky], [C.sakura]]), build: monstera },
+  { id: 'beanbag', name: '懒人沙发', sizeLabel: '圆团', category: 'living', w: 72, d: 70, h: 56, ...softs(), build: beanbag },
 
-  { id: 'dining-table', name: '餐桌', family: 'dining-table', sizeLabel: '4 人 120×80', category: 'dining', w: 120, d: 80, h: 72, surface: 72, ...woods, build: (p) => diningTable(120, p) },
-  { id: 'dining-table-l', name: '餐桌', family: 'dining-table', sizeLabel: '6 人 160×80', category: 'dining', w: 160, d: 80, h: 72, surface: 72, ...woods, build: (p) => diningTable(160, p) },
+  { id: 'dining-table', name: '餐桌', sizeLabel: '4 人 120×80', category: 'dining', w: 120, d: 80, h: 72, surface: 72, ...woods, build: (p) => diningTable(120, p) },
+  { id: 'dining-table-l', name: '餐桌', sizeLabel: '6 人 160×80', category: 'dining', w: 160, d: 80, h: 72, surface: 72, ...woods, build: (p) => diningTable(160, p) },
   {
     id: 'dining-chair',
     name: '餐椅',
-    family: 'dining-chair',
     sizeLabel: '标准',
     category: 'dining',
     w: 42,
@@ -1361,8 +1359,8 @@ export const ASSETS: AssetDef[] = [
   },
 
   // 床：按日本规格的床垫宽（长 195），床架两侧各多 4cm。id 里 single / double 沿用旧存档
-  ...BEDS.map(([id, size, m], i): AssetDef => ({ id, name: '床', family: 'bed', sizeLabel: size, category: 'bedroom', w: m + 8, d: 210, h: 80, surface: 50, surfaceShape: [rectPoly(-m / 2 + 4, -30, m / 2 - 4, 98)], ...bedColors(i), build: (p) => bed(m, p) })),
-  { id: 'nightstand', name: '床头柜', family: 'nightstand', sizeLabel: '标准', category: 'bedroom', w: 42, d: 36, h: 44, surface: 44, surfaces: NIGHTSTAND_SURF, openable: true, ...woods, build: nightstand },
+  ...BEDS.map(([id, size, m], i): AssetDef => ({ id, name: '床', sizeLabel: size, category: 'bedroom', w: m + 8, d: 210, h: 80, surface: 50, surfaceShape: [rectPoly(-m / 2 + 4, -30, m / 2 - 4, 98)], ...bedColors(i), build: (p) => bed(m, p) })),
+  { id: 'nightstand', name: '床头柜', sizeLabel: '标准', category: 'bedroom', w: 42, d: 36, h: 44, surface: 44, surfaces: NIGHTSTAND_SURF, openable: true, ...woods, build: nightstand },
   {
     id: 'wardrobe',
     name: '衣柜',
@@ -1385,7 +1383,6 @@ export const ASSETS: AssetDef[] = [
   {
     id: 'desk',
     name: '书桌',
-    family: 'desk',
     sizeLabel: '110',
     category: 'study',
     w: 110,
@@ -1413,7 +1410,6 @@ export const ASSETS: AssetDef[] = [
   {
     id: 'dresser',
     name: '五斗柜',
-    family: 'dresser',
     sizeLabel: '标准',
     category: 'bedroom',
     w: 80,
@@ -1482,20 +1478,20 @@ export const ASSETS: AssetDef[] = [
     build: futon,
   },
   { id: 'zabuton', name: '坐垫', category: 'japanese', w: 55, d: 55, h: 9, ...sty({ japanese: [[J.ai], [J.shu], [J.tatami]], cute: [[C.pink], [C.lilac], [C.lemon]], nordic: [[N.gray]], modern: [[M.char]] }), build: zabuton },
-  { id: 'andon', name: '行灯', category: 'lighting', family: 'floor-lamp', sizeLabel: '行灯', w: 32, d: 32, h: 64, ...sty({ japanese: [[J.washi]], cute: [[C.lamp], [C.sakura]] }), build: andon },
+  { id: 'andon', name: '行灯', category: 'lighting', sizeLabel: '行灯', w: 32, d: 32, h: 64, ...sty({ japanese: [[J.washi]], cute: [[C.lamp], [C.sakura]] }), build: andon },
 
-  { id: 'bear', name: '小熊玩偶', family: 'bear', sizeLabel: '小熊', category: 'deco', w: 30, d: 26, h: 44, prop: true, ...sty({ cute: [[C.peach], [C.sakura], [C.white], ['#c99a6e'], [C.sky]] }), build: (p) => bearBody(1, p[0]) },
+  { id: 'bear', name: '小熊玩偶', sizeLabel: '小熊', category: 'deco', w: 30, d: 26, h: 44, prop: true, ...sty({ cute: [[C.peach], [C.sakura], [C.white], ['#c99a6e'], [C.sky]] }), build: (p) => bearBody(1, p[0]) },
   { id: 'cat-loaf', name: '猫面包', category: 'deco', w: 40, d: 28, h: 30, prop: true, ...sty({ cute: [[C.white, C.pink], ['#ffcf8f', C.white], ['#6b6061', C.white], ['#c9c9cf', C.pink]] }), build: catLoaf },
   { id: 'cactus', name: '仙人掌', category: 'plants', w: 20, d: 20, h: 42, prop: true, ...pots([[C.sakura], [C.sky], [C.lemon], [C.white]]), build: cactus },
   { id: 'cat-tower', name: '猫爬架', category: 'pets', w: 60, d: 60, h: 136, ...sty({ cute: [[C.sakura, C.white], [C.sky, C.cream], [C.mint, C.white], [C.lemon, C.peach]], nordic: [[N.oak, N.linen]], modern: [[M.light, M.char]] }), build: catTower },
-  { id: 'laundry-basket', name: '洗衣篮', family: 'laundry-basket', sizeLabel: '标准', category: 'storage', w: 42, d: 42, h: 44, ...sty({ cute: [[C.woodL], [C.sky], [C.white], [C.sakura]], nordic: [[N.linen]], modern: [[M.gray]], japanese: [[J.hinoki]] }), build: laundryBasket },
+  { id: 'laundry-basket', name: '洗衣篮', sizeLabel: '标准', category: 'storage', w: 42, d: 42, h: 44, ...sty({ cute: [[C.woodL], [C.sky], [C.white], [C.sakura]], nordic: [[N.linen]], modern: [[M.gray]], japanese: [[J.hinoki]] }), build: laundryBasket },
 
-  { id: 'shoe-cabinet', name: '鞋柜', family: 'shoe-cabinet', sizeLabel: '标准', category: 'entrance', w: 80, d: 36, h: 100, surface: 100, surfaces: SHOE_CAB_SURF, openable: true, ...woods, build: shoeCabinet },
-  { id: 'umbrella-stand', name: '伞架', family: 'umbrella-stand', sizeLabel: '经典圆桶', category: 'entrance', w: 24, d: 24, h: 80, ...sty({ cute: [[C.white], [C.sky], [C.sakura]], nordic: [[N.white]], modern: [[M.char]], japanese: [[J.dark]], industrial: [[I.iron]] }), build: umbrellaStand },
+  { id: 'shoe-cabinet', name: '鞋柜', sizeLabel: '标准', category: 'entrance', w: 80, d: 36, h: 100, surface: 100, surfaces: SHOE_CAB_SURF, openable: true, ...woods, build: shoeCabinet },
+  { id: 'umbrella-stand', name: '伞架', sizeLabel: '经典圆桶', category: 'entrance', w: 24, d: 24, h: 80, ...sty({ cute: [[C.white], [C.sky], [C.sakura]], nordic: [[N.white]], modern: [[M.char]], japanese: [[J.dark]], industrial: [[I.iron]] }), build: umbrellaStand },
 
-  { id: 'planter', name: '花箱', family: 'planter', sizeLabel: '标准', category: 'outdoor', w: 64, d: 24, h: 50, ...pots([[C.white], [C.woodL], [C.peach], [C.sky]]), build: planter },
-  { id: 'aircon', name: '壁挂空调', family: 'aircon', sizeLabel: '标准', category: 'appliance', w: 96, d: 25, h: 28, mount: AIRCON_MOUNT, ...sty({ cute: [[C.white], [C.sakura], [C.sky]], modern: [[M.white], [M.char]], nordic: [[N.white]] }), build: aircon },
-  { id: 'laundry-stand', name: '晾衣架', family: 'laundry-stand', sizeLabel: '标准', category: 'outdoor', w: 156, d: 46, h: 160, surfaces: [{ y: 151.7, kind: 'hook', h: 146, shape: [rectPoly(-69, -0.5, 69, 2.5)] }], ...sty({ cute: [[C.white], [C.sky]], modern: [[M.silver]], industrial: [[I.iron]] }), build: laundryStand },
+  { id: 'planter', name: '花箱', sizeLabel: '标准', category: 'outdoor', w: 64, d: 24, h: 50, ...pots([[C.white], [C.woodL], [C.peach], [C.sky]]), build: planter },
+  { id: 'aircon', name: '壁挂空调', sizeLabel: '标准', category: 'appliance', w: 96, d: 25, h: 28, mount: AIRCON_MOUNT, ...sty({ cute: [[C.white], [C.sakura], [C.sky]], modern: [[M.white], [M.char]], nordic: [[N.white]] }), build: aircon },
+  { id: 'laundry-stand', name: '晾衣架', sizeLabel: '标准', category: 'outdoor', w: 156, d: 46, h: 160, surfaces: [{ y: 151.7, kind: 'hook', h: 146, shape: [rectPoly(-69, -0.5, 69, 2.5)] }], ...sty({ cute: [[C.white], [C.sky]], modern: [[M.silver]], industrial: [[I.iron]] }), build: laundryStand },
 
   { id: 'fx-kitchen', name: '整体厨房', category: 'appliance', w: 255, d: 65, h: 120, palettes: [[]], build: () => kitchenModel(255, false), fixture: true },
   { id: 'fx-kitchen-facing', name: '对面式厨房', category: 'appliance', w: 255, d: 200, h: 120, palettes: [[]], build: () => kitchenModel(255, true), fixture: true },

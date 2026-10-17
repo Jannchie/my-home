@@ -5,7 +5,7 @@
 //   tree ：整棵树按遍历顺序的结构哈希（含 Group 的局部变换和 userData：柜门枢轴、可开合标记都在这里）
 //   meta ：def 里除 build 以外的数据（尺寸、surface / surfaces / screens、标签…）
 //   dp   ：九种风格的派生配色（stylePalettes.derivedPalette）
-// 用法：vite-node scripts/asset-fingerprint.mts --out <json> [--base <json>] [--only <id 正则>]
+// 用法：vite-node scripts/asset-fingerprint.mts --out <json> [--base <json>] [--only <id 正则>] [--ignore-meta <字段,…>] [--ignore-meta <字段,…>]
 //   给了 --base 就逐项对比，有差异时列出并以非 0 退出。
 import '../test/setup/stubdom'
 import crypto from 'node:crypto'
@@ -19,6 +19,7 @@ const arg = (k: string) => (argv.includes(k) ? argv[argv.indexOf(k) + 1] : undef
 const outFile = arg('--out')
 const baseFile = arg('--base')
 const only = arg('--only') ? new RegExp(arg('--only')!) : null
+const ignoreMeta = (arg('--ignore-meta') ?? '').split(',').filter(Boolean)
 
 const r3 = (n: number) => Math.round(n * 1000)
 
@@ -144,6 +145,8 @@ function printModel(root: THREE.Object3D): PalPrint {
 
 function metaOf(a: (typeof ASSETS)[number]) {
   const { build: _b, ...rest } = a
+  // --ignore-meta k1,k2：比较时忽略这些字段（例如迁移掉的 family）
+  for (const k of ignoreMeta) delete (rest as Record<string, unknown>)[k]
   return crypto.createHash('sha1').update(JSON.stringify(plain(rest))).digest('hex').slice(0, 16)
 }
 

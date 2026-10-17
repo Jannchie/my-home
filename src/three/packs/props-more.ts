@@ -1101,8 +1101,8 @@ const steam = (x: number, y: number, z: number, scale = 1): Fx => ({ kind: 'stea
 
 export const PROPS_MORE: AssetDef[] = [
   // —— 加热家电 ——
-  def({ id: 'prop-air-fryer', name: '空气炸锅', family: 'air-fryer', sizeLabel: '大（方形）', w: 28, d: 36.5, h: 32, pals: APP2, build: airFryerSquare }),
-  def({ id: 'prop-air-fryer-s', name: '空气炸锅', family: 'air-fryer', sizeLabel: '小（圆形）', w: 23, d: 27.5, h: 28.5, pals: APP, build: airFryerRound }),
+  def({ id: 'prop-air-fryer', name: '空气炸锅', sizeLabel: '大（方形）', w: 28, d: 36.5, h: 32, pals: APP2, build: airFryerSquare }),
+  def({ id: 'prop-air-fryer-s', name: '空气炸锅', sizeLabel: '小（圆形）', w: 23, d: 27.5, h: 28.5, pals: APP, build: airFryerRound }),
   def({
     id: 'prop-pressure-cooker',
     name: '电压力锅',
@@ -1379,7 +1379,6 @@ export const PROPS_MORE: AssetDef[] = [
   def({
     id: 'prop-electric-pot',
     name: '电热水瓶',
-    family: 'prop-electric-pot',
     sizeLabel: '标准',
     w: 21,
     d: 26,
@@ -1453,10 +1452,10 @@ export const PROPS_MORE: AssetDef[] = [
   }),
 
   // —— 锅具 ——
-  def({ id: 'prop-cast-iron-pot', name: '珐琅铸铁锅', family: 'cast-iron-pot', sizeLabel: '24 cm', w: 31.5, d: 25, h: 15, pals: POT, build: castIronPot(12) }),
-  def({ id: 'prop-cast-iron-pot-s', name: '珐琅铸铁锅', family: 'cast-iron-pot', sizeLabel: '18 cm', w: 25.5, d: 19, h: 12, pals: POT, build: castIronPot(9) }),
-  def({ id: 'prop-yukihira', name: '雪平锅', family: 'yukihira', sizeLabel: '20 cm', w: 37.5, d: 22.5, h: 8, styles: ['japanese', 'modern', 'industrial', 'retro'], pals: PAN, build: yukihira(10) }),
-  def({ id: 'prop-yukihira-s', name: '雪平锅', family: 'yukihira', sizeLabel: '16 cm', w: 30.5, d: 18.5, h: 6.5, styles: ['japanese', 'modern', 'industrial', 'retro'], pals: PAN, build: yukihira(8) }),
+  def({ id: 'prop-cast-iron-pot', name: '珐琅铸铁锅', sizeLabel: '24 cm', w: 31.5, d: 25, h: 15, pals: POT, build: castIronPot(12) }),
+  def({ id: 'prop-cast-iron-pot-s', name: '珐琅铸铁锅', sizeLabel: '18 cm', w: 25.5, d: 19, h: 12, pals: POT, build: castIronPot(9) }),
+  def({ id: 'prop-yukihira', name: '雪平锅', sizeLabel: '20 cm', w: 37.5, d: 22.5, h: 8, styles: ['japanese', 'modern', 'industrial', 'retro'], pals: PAN, build: yukihira(10) }),
+  def({ id: 'prop-yukihira-s', name: '雪平锅', sizeLabel: '16 cm', w: 30.5, d: 18.5, h: 6.5, styles: ['japanese', 'modern', 'industrial', 'retro'], pals: PAN, build: yukihira(8) }),
   def({
     id: 'prop-wok',
     name: '中华炒锅',
@@ -1473,9 +1472,9 @@ export const PROPS_MORE: AssetDef[] = [
     build: wok,
   }),
   def({ id: 'prop-tamagoyaki', name: '玉子烧锅', w: 31, d: 18, h: 5.5, styles: ['japanese', 'retro', 'modern'], pals: [['japanese', COPPER, J.hinoki, J.hinoki], ['modern', M.black, M.walnut, M.walnut], ['retro', R.orange, R.caramel, R.caramel], ['japanese', J.sumi, J.wood, J.wood]], build: tamagoyaki }),
-  def({ id: 'prop-stock-pot', name: '汤锅', family: 'stock-pot', sizeLabel: '24 cm', w: 30, d: 24.5, h: 23, pals: STOCK, build: stockPot(12) }),
-  def({ id: 'prop-stock-pot-m', name: '汤锅', family: 'stock-pot', sizeLabel: '20 cm', w: 26, d: 20.5, h: 19.5, pals: STOCK, build: stockPot(10) }),
-  def({ id: 'prop-stock-pot-s', name: '汤锅', family: 'stock-pot', sizeLabel: '16 cm', w: 22, d: 16.5, h: 16, pals: STOCK, build: stockPot(8) }),
+  def({ id: 'prop-stock-pot', name: '汤锅', sizeLabel: '24 cm', w: 30, d: 24.5, h: 23, pals: STOCK, build: stockPot(12) }),
+  def({ id: 'prop-stock-pot-m', name: '汤锅', sizeLabel: '20 cm', w: 26, d: 20.5, h: 19.5, pals: STOCK, build: stockPot(10) }),
+  def({ id: 'prop-stock-pot-s', name: '汤锅', sizeLabel: '16 cm', w: 22, d: 16.5, h: 16, pals: STOCK, build: stockPot(8) }),
   def({
     id: 'prop-seiro',
     name: '竹蒸笼',
@@ -1510,7 +1509,6 @@ export const PROPS_MORE: AssetDef[] = [
   def({
     id: 'prop-knife-block',
     name: '刀架',
-    family: 'prop-knife-block',
     sizeLabel: '标准',
     w: 11,
     d: 23,
@@ -1630,7 +1628,6 @@ export const PROPS_MORE: AssetDef[] = [
     id: 'prop-bug-zapper',
     name: '电蚊拍',
     category: 'tabletop',
-    family: 'bug-zapper',
     sizeLabel: '平放',
     w: 41,
     d: 18,
@@ -1647,7 +1644,6 @@ export const PROPS_MORE: AssetDef[] = [
     id: 'prop-bug-zapper-stand',
     name: '电蚊拍',
     category: 'tabletop',
-    family: 'bug-zapper',
     sizeLabel: '充电座',
     w: 18,
     d: 9.5,

@@ -560,7 +560,8 @@ export class Director {
     for (const a of ASSETS) {
       if (a.fixture || a.id.startsWith('act-')) continue
       const l = byCat.get(a.category) ?? []
-      if (!l.some((x) => ASSET_MAP.get(x)?.family && ASSET_MAP.get(x)!.family === a.family)) l.push(a.id)
+      // 同款系列只取一件
+      if (!l.some((x) => ASSET_MAP.get(x)?.series === a.series)) l.push(a.id)
       byCat.set(a.category, l)
     }
     const lists = [...byCat.values()]

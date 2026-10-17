@@ -1825,8 +1825,8 @@ const PAD_RETRO_FC: Pal[] = [
 
 export const CONSOLES_LIFE: AssetDef[] = [
   // ===== 家用主机：PS 系 =====
-  def('cl-ps5-standing', '双翼主机（PS5 风）', 'tabletop', [12.4, 26.2, 39.9], PS5_PALS, ps5Standing, { family: 'cl-console-ps5', sizeLabel: '竖放', form: 'standing' }),
-  def('cl-ps5-lying', '双翼主机（PS5 风）', 'tabletop', [39, 26.2, 10.6], PS5_PALS, ps5Lying, { family: 'cl-console-ps5', sizeLabel: '横放', form: 'lying' }),
+  def('cl-ps5-standing', '双翼主机（PS5 风）', 'tabletop', [12.4, 26.2, 39.9], PS5_PALS, ps5Standing, { sizeLabel: '竖放', form: 'standing' }),
+  def('cl-ps5-lying', '双翼主机（PS5 风）', 'tabletop', [39, 26.2, 10.6], PS5_PALS, ps5Lying, { sizeLabel: '横放', form: 'lying' }),
   def('cl-ps4', '斜切薄片主机（PS4 风）', 'tabletop', [27.5, 29.8, 5.5], [
     ['modern', [BLACK, '#121316', BLUE]],
     ['modern', [M.white, M.light, BLUE]],
@@ -1839,8 +1839,8 @@ export const CONSOLES_LIFE: AssetDef[] = [
     ['retro', ['#3a3330', R.caramel, R.orange]],
     ['cute', [C.sky, C.white, C.pink]],
   ], ps3),
-  def('cl-ps2-lying', '叠层黑主机（PS2 风）', 'tabletop', [30, 18.1, 8], PS2_PALS, ps2Lying, { family: 'cl-console-ps2', sizeLabel: '横放', form: 'lying' }),
-  def('cl-ps2-standing', '叠层黑主机（PS2 风）', 'tabletop', [10, 19, 31.2], PS2_PALS, ps2Standing, { family: 'cl-console-ps2', sizeLabel: '竖放带支架', form: 'standing' }),
+  def('cl-ps2-lying', '叠层黑主机（PS2 风）', 'tabletop', [30, 18.1, 8], PS2_PALS, ps2Lying, { sizeLabel: '横放', form: 'lying' }),
+  def('cl-ps2-standing', '叠层黑主机（PS2 风）', 'tabletop', [10, 19, 31.2], PS2_PALS, ps2Standing, { sizeLabel: '竖放带支架', form: 'standing' }),
   def('cl-ps1', '灰色圆盖主机（PS1 风）', 'tabletop', [27, 19, 6.1], [
     ['retro', ['#c9c6bf', '#b7b4ad', '#8a8d93']],
     ['retro', [R.cream, R.caramel, R.teal]],
@@ -1849,10 +1849,10 @@ export const CONSOLES_LIFE: AssetDef[] = [
   ], ps1),
 
   // ===== 家用主机：Xbox 系 =====
-  def('cl-xsx-standing', '立方塔主机（Series X 风）', 'tabletop', [15.1, 15.6, 30.6], XSX_PALS, xsxStanding, { family: 'cl-console-xsx', sizeLabel: '竖放', form: 'standing' }),
-  def('cl-xsx-lying', '立方塔主机（Series X 风）', 'tabletop', [30, 15.6, 15.1], XSX_PALS, xsxLying, { family: 'cl-console-xsx', sizeLabel: '横放', form: 'lying' }),
-  def('cl-xss-standing', '白色扁盒主机（Series S 风）', 'tabletop', [7, 15.5, 27.5], XSS_PALS, xssStanding, { family: 'cl-console-xss', sizeLabel: '竖放', form: 'standing' }),
-  def('cl-xss-lying', '白色扁盒主机（Series S 风）', 'tabletop', [27.5, 15.5, 7], XSS_PALS, xssLying, { family: 'cl-console-xss', sizeLabel: '横放', form: 'lying' }),
+  def('cl-xsx-standing', '立方塔主机（Series X 风）', 'tabletop', [15.1, 15.6, 30.6], XSX_PALS, xsxStanding, { sizeLabel: '竖放', form: 'standing' }),
+  def('cl-xsx-lying', '立方塔主机（Series X 风）', 'tabletop', [30, 15.6, 15.1], XSX_PALS, xsxLying, { sizeLabel: '横放', form: 'lying' }),
+  def('cl-xss-standing', '白色扁盒主机（Series S 风）', 'tabletop', [7, 15.5, 27.5], XSS_PALS, xssStanding, { sizeLabel: '竖放', form: 'standing' }),
+  def('cl-xss-lying', '白色扁盒主机（Series S 风）', 'tabletop', [27.5, 15.5, 7], XSS_PALS, xssLying, { sizeLabel: '横放', form: 'lying' }),
   def('cl-xone', '长方黑主机（Xbox One 风）', 'tabletop', [33.3, 27.6, 8.1], [
     ['modern', ['#2a2b30', '#151619', M.white]],
     ['modern', [M.white, M.light, M.white]],
@@ -1925,56 +1925,56 @@ export const CONSOLES_LIFE: AssetDef[] = [
     ['cute', [C.sakura, M.white, '#ff9fd0']],
     ['cute', [C.sky, M.white, C.lilac]],
     ['retro', [R.cream, '#3a3330', R.orange]],
-  ], padPS5, { family: 'cl-pad', sizeLabel: '双翼 · PS5 风' }),
+  ], padPS5, { sizeLabel: '双翼 · PS5 风' }),
   def('cl-pad-ps1', '游戏手柄', 'tabletop', [15.8, 10.4, 3.6], [
     ['retro', ['#c9c6bf', '#5b5f72', '#8a8d93']],
     ['modern', [BLACK, M.char, M.gray]],
     ['cute', [C.white, C.lilac, C.pink]],
     ['retro', [R.cream, R.caramel, R.teal]],
-  ], padPS1, { family: 'cl-pad', sizeLabel: '初代 · PS1 风' }),
-  def('cl-pad-fc', '游戏手柄', 'tabletop', [12.6, 5.4, 1.9], PAD_RETRO_FC, padFC, { family: 'cl-pad', sizeLabel: '方形 · FC 风' }),
+  ], padPS1, { sizeLabel: '初代 · PS1 风' }),
+  def('cl-pad-fc', '游戏手柄', 'tabletop', [12.6, 5.4, 1.9], PAD_RETRO_FC, padFC, { sizeLabel: '方形 · FC 风' }),
   def('cl-pad-sfc', '游戏手柄', 'tabletop', [14.6, 6.4, 2.5], [
     ['retro', ['#c9c6bf', '#a39fb8', '#3a3b44']],
     ['retro', [R.cream, R.caramel, '#3a3330']],
     ['cute', [C.white, C.lilac, M.char]],
     ['modern', [M.char, M.gray, BLACK]],
-  ], padSFC, { family: 'cl-pad', sizeLabel: '狗骨头 · 超任风' }),
+  ], padSFC, { sizeLabel: '狗骨头 · 超任风' }),
   def('cl-pad-n64', '游戏手柄', 'tabletop', [16, 11.8, 4.7], [
     ['retro', ['#8a8d93', '#5b5f72', '#f2c94c']],
     ['retro', [R.cream, R.caramel, R.mustard]],
     ['cute', [C.lilac, C.white, C.lemon]],
     ['modern', [M.char, M.black, '#f2c94c']],
-  ], padN64, { family: 'cl-pad', sizeLabel: '三叉 · N64 风' }),
+  ], padN64, { sizeLabel: '三叉 · N64 风' }),
   def('cl-pad-gc', '游戏手柄', 'tabletop', [15.1, 10.6, 5.2], [
     ['retro', ['#5a4a9a', '#8a8d93', '#f2c94c']],
     ['modern', [BLACK, M.gray, '#f2c94c']],
     ['retro', [R.orange, M.gray, R.mustard]],
     ['cute', [C.lilac, C.white, C.lemon]],
-  ], padGC, { family: 'cl-pad', sizeLabel: 'GC 风' }),
+  ], padGC, { sizeLabel: 'GC 风' }),
   def('cl-pad-md', '游戏手柄', 'tabletop', [16.8, 8.7, 4.3], [
     ['retro', [BLACK, '#3a3b44', '#5b5f72']],
     ['retro', ['#3a3330', R.orange, R.caramel]],
     ['cute', [C.white, C.pink, C.sky]],
     ['modern', [M.char, M.gray, M.black]],
-  ], padMD, { family: 'cl-pad', sizeLabel: '月牙 · MD 风' }),
+  ], padMD, { sizeLabel: '月牙 · MD 风' }),
   def('cl-pad-wii', '游戏手柄', 'tabletop', [9.7, 14.8, 4.7], [
     ['modern', [M.white, M.white, BLUE]],
     ['modern', [BLACK, BLACK, BLUE]],
     ['cute', [C.sakura, C.white, '#ff9fd0']],
     ['cute', [C.sky, C.white, C.mint]],
-  ], padWii, { family: 'cl-pad', sizeLabel: '体感 · Wii 风' }),
+  ], padWii, { sizeLabel: '体感 · Wii 风' }),
 
   // ===== 掌机 =====
-  def('cl-3ds-open', '翻盖双屏掌机（3DS 风）', 'tabletop', [13.4, 9.5, 8.3], HANDHELD3DS, clamshell(CLAM_3DS, true), { family: 'cl-3ds', sizeLabel: '打开', form: 'open' }),
-  def('cl-3ds-closed', '翻盖双屏掌机（3DS 风）', 'tabletop', [13.4, 7.6, 2.4], HANDHELD3DS, clamshell(CLAM_3DS, false), { family: 'cl-3ds', sizeLabel: '合上', form: 'closed' }),
+  def('cl-3ds-open', '翻盖双屏掌机（3DS 风）', 'tabletop', [13.4, 9.5, 8.3], HANDHELD3DS, clamshell(CLAM_3DS, true), { sizeLabel: '打开', form: 'open' }),
+  def('cl-3ds-closed', '翻盖双屏掌机（3DS 风）', 'tabletop', [13.4, 7.6, 2.4], HANDHELD3DS, clamshell(CLAM_3DS, false), { sizeLabel: '合上', form: 'closed' }),
   def('cl-dslite', '翻盖双屏掌机（DS Lite 风）', 'tabletop', [13.3, 9.6, 8.2], [
     ['modern', [M.white, M.light, M.gray]],
     ['modern', [BLACK, M.char, M.gray]],
     ['cute', [C.pink, M.white, C.sakura]],
     ['cute', [C.sky, M.white, C.lilac]],
   ], clamshell(CLAM_DSL, true), { form: 'open' }),
-  def('cl-gbasp-open', '翻盖掌机（GBA SP 风）', 'tabletop', [8.2, 10.9, 9.3], SP_PALS, clamshell(CLAM_SP, true), { family: 'cl-gbasp', sizeLabel: '打开', form: 'open' }),
-  def('cl-gbasp-closed', '翻盖掌机（GBA SP 风）', 'tabletop', [8.2, 8.6, 2.7], SP_PALS, clamshell(CLAM_SP, false), { family: 'cl-gbasp', sizeLabel: '合上', form: 'closed' }),
+  def('cl-gbasp-open', '翻盖掌机（GBA SP 风）', 'tabletop', [8.2, 10.9, 9.3], SP_PALS, clamshell(CLAM_SP, true), { sizeLabel: '打开', form: 'open' }),
+  def('cl-gbasp-closed', '翻盖掌机（GBA SP 风）', 'tabletop', [8.2, 8.6, 2.7], SP_PALS, clamshell(CLAM_SP, false), { sizeLabel: '合上', form: 'closed' }),
   def('cl-psp', '横长宽屏掌机（PSP 风）', 'tabletop', [17, 7.4, 2.5], [
     ['modern', [BLACK, '#121316', M.char]],
     ['modern', [M.white, M.light, M.gray]],
@@ -2025,9 +2025,9 @@ export const CONSOLES_LIFE: AssetDef[] = [
     ['japanese', [J.washi, J.hinoki, '#7ac05a']],
   ], sproutBox),
   def('cl-avocado-pit', '牛油果核水培', 'plants', [8, 8.2, 20.3], GLASS_PALS(C.leafD, '#8a5a3a'), avocadoPit),
-  def('cl-herb-basil', '窗台香草盆', 'plants', [11.2, 11.2, 19.7], HERB_POTS('#4fae4f'), basil, { family: 'cl-herb-pot', sizeLabel: '罗勒' }),
-  def('cl-herb-mint', '窗台香草盆', 'plants', [12.9, 11.4, 17.3], HERB_POTS('#7ccf7a'), mint, { family: 'cl-herb-pot', sizeLabel: '薄荷' }),
-  def('cl-herb-rosemary', '窗台香草盆', 'plants', [11.2, 11.2, 23], HERB_POTS('#5e8a6a'), rosemary, { family: 'cl-herb-pot', sizeLabel: '迷迭香' }),
+  def('cl-herb-basil', '窗台香草盆', 'plants', [11.2, 11.2, 19.7], HERB_POTS('#4fae4f'), basil, { sizeLabel: '罗勒' }),
+  def('cl-herb-mint', '窗台香草盆', 'plants', [12.9, 11.4, 17.3], HERB_POTS('#7ccf7a'), mint, { sizeLabel: '薄荷' }),
+  def('cl-herb-rosemary', '窗台香草盆', 'plants', [11.2, 11.2, 23], HERB_POTS('#5e8a6a'), rosemary, { sizeLabel: '迷迭香' }),
   def('cl-mini-tomato', '小番茄盆栽', 'plants', [13, 13, 39], [
     ['nordic', ['#c8774e', '#ff5a4a', C.leafD]],
     ['nordic', [N.white, '#ff5a4a', C.leafD]],

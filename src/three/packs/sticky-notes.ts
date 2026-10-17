@@ -282,11 +282,10 @@ function bound(w: number, h: number, tilt: number): [number, number] {
   return [Math.round((w * Math.cos(a) + h * Math.sin(a)) * 10) / 10 + 0.4, Math.round((w * Math.sin(a) + h * Math.cos(a)) * 10) / 10 + 0.4]
 }
 
-function base(id: string, name: string, family: string | undefined, sizeLabel: string | undefined, dims: [number, number, number], build: (p: string[]) => THREE.Group, extra: Partial<AssetDef> = {}): AssetDef {
+function base(id: string, name: string, sizeLabel: string | undefined, dims: [number, number, number], build: (p: string[]) => THREE.Group, extra: Partial<AssetDef> = {}): AssetDef {
   return {
     id,
     name,
-    ...(family ? { family } : {}),
     ...(sizeLabel ? { sizeLabel } : {}),
     category: 'deco',
     w: dims[0],
@@ -300,31 +299,31 @@ function base(id: string, name: string, family: string | undefined, sizeLabel: s
     ...extra,
   }
 }
-function stuckDef(id: string, name: string, family: string, label: string, spec: NoteSpec, tilt: number) {
+function stuckDef(id: string, name: string, label: string, spec: NoteSpec, tilt: number) {
   const [w, h] = bound(...SIZE[spec.shape], tilt)
-  return base(id, name, family, label, [w, 0.6, h], stuck(spec, tilt), { stick: true })
+  return base(id, name, label, [w, 0.6, h], stuck(spec, tilt), { stick: true })
 }
 
 export const STICKY_NOTES: AssetDef[] = [
   // 贴的
-  stuckDef('sn-square-scribble', '方形便签', 'sn-square', '涂鸦 · 左倾', { shape: 'square', doodle: 'scribble' }, -7),
-  stuckDef('sn-square-check', '方形便签', 'sn-square', '清单 · 右倾', { shape: 'square', doodle: 'check' }, 5),
-  stuckDef('sn-square-smile', '方形便签', 'sn-square', '笑脸', { shape: 'square', doodle: 'smile', slot: 2 }, -2),
-  stuckDef('sn-square-curl', '方形便签', 'sn-square', '卷角', { shape: 'square', doodle: 'lines', curl: true }, 4),
-  stuckDef('sn-strip-h', '长条便签', 'sn-strip', '横条', { shape: 'strip', doodle: 'lines' }, -3),
-  stuckDef('sn-strip-v', '长条便签', 'sn-strip', '竖条', { shape: 'vstrip', doodle: 'lines', slot: 3 }, 6),
-  stuckDef('sn-heart-l', '心形便签', 'sn-heart', '左倾', { shape: 'heart', doodle: 'none' }, -8),
-  stuckDef('sn-heart-r', '心形便签', 'sn-heart', '右倾', { shape: 'heart', doodle: 'star', slot: 2 }, 7),
-  stuckDef('sn-cloud-l', '云朵便签', 'sn-cloud', '左倾', { shape: 'cloud', doodle: 'lines', slot: 3 }, -5),
-  stuckDef('sn-cloud-r', '云朵便签', 'sn-cloud', '右倾', { shape: 'cloud', doodle: 'smile' }, 4),
-  base('sn-stack', '一叠便签', 'sn-stack', '同色', [9.6, 1, 9.6], stack(false, -3), { stick: true }),
-  base('sn-stack-rainbow', '一叠便签', 'sn-stack', '彩虹', [9.6, 1, 9.6], stack(true, 4), { stick: true }),
-  base('sn-tabs-row', '索引贴', 'sn-tabs', '一排', [9, 0.6, 5.8], tabs(false), { stick: true }),
-  base('sn-tabs-fan', '索引贴', 'sn-tabs', '扇形', [7.6, 0.8, 6.4], tabs(true), { stick: true }),
-  base('sn-trio', '便签组', undefined, undefined, [15.4, 1, 13.4], trio, { stick: true }),
+  stuckDef('sn-square-scribble', '方形便签', '涂鸦 · 左倾', { shape: 'square', doodle: 'scribble' }, -7),
+  stuckDef('sn-square-check', '方形便签', '清单 · 右倾', { shape: 'square', doodle: 'check' }, 5),
+  stuckDef('sn-square-smile', '方形便签', '笑脸', { shape: 'square', doodle: 'smile', slot: 2 }, -2),
+  stuckDef('sn-square-curl', '方形便签', '卷角', { shape: 'square', doodle: 'lines', curl: true }, 4),
+  stuckDef('sn-strip-h', '长条便签', '横条', { shape: 'strip', doodle: 'lines' }, -3),
+  stuckDef('sn-strip-v', '长条便签', '竖条', { shape: 'vstrip', doodle: 'lines', slot: 3 }, 6),
+  stuckDef('sn-heart-l', '心形便签', '左倾', { shape: 'heart', doodle: 'none' }, -8),
+  stuckDef('sn-heart-r', '心形便签', '右倾', { shape: 'heart', doodle: 'star', slot: 2 }, 7),
+  stuckDef('sn-cloud-l', '云朵便签', '左倾', { shape: 'cloud', doodle: 'lines', slot: 3 }, -5),
+  stuckDef('sn-cloud-r', '云朵便签', '右倾', { shape: 'cloud', doodle: 'smile' }, 4),
+  base('sn-stack', '一叠便签', '同色', [9.6, 1, 9.6], stack(false, -3), { stick: true }),
+  base('sn-stack-rainbow', '一叠便签', '彩虹', [9.6, 1, 9.6], stack(true, 4), { stick: true }),
+  base('sn-tabs-row', '索引贴', '一排', [9, 0.6, 5.8], tabs(false), { stick: true }),
+  base('sn-tabs-fan', '索引贴', '扇形', [7.6, 0.8, 6.4], tabs(true), { stick: true }),
+  base('sn-trio', '便签组', undefined, [15.4, 1, 13.4], trio, { stick: true }),
   // 桌面上平放的
-  base('sn-desk-pad', '便签本', 'sn-desk', '一本', [10, 10, 0.8], lying(stack(false, 0), 0.2), { family: 'sn-desk' }),
-  base('sn-desk-cube', '便签本', 'sn-desk', '彩色方块', [9.2, 9.2, 6.6], cube),
-  base('sn-desk-loose', '便签本', 'sn-desk', '散落几张', [17, 13.5, 0.6], loose),
-  base('sn-desk-tabs', '便签本', 'sn-desk', '索引贴卡', [9, 7.4, 0.5], tabPack),
+  base('sn-desk-pad', '便签本', '一本', [10, 10, 0.8], lying(stack(false, 0), 0.2), { }),
+  base('sn-desk-cube', '便签本', '彩色方块', [9.2, 9.2, 6.6], cube),
+  base('sn-desk-loose', '便签本', '散落几张', [17, 13.5, 0.6], loose),
+  base('sn-desk-tabs', '便签本', '索引贴卡', [9, 7.4, 0.5], tabPack),
 ]

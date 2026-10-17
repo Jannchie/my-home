@@ -144,11 +144,11 @@ const PET_TABLET_P: PalFlat[] = [
 ]
 const PET_LIMIT = { scope: 'house' as const, max: 2, group: 'hc-pet-cam' }
 const pets: AssetDef[] = [
-  define('hc-pet-dome', '宠物摄像头', 'pets', [9.2, 9.9, 14.2], PET_P, petDome, { prop: true, family: 'hc-pet-cam', sizeLabel: '球形云台', limit: PET_LIMIT }),
-  define('hc-pet-ears', '宠物摄像头', 'pets', [10.9, 10.7, 14.5], PET_EARS_P, petEars, { prop: true, family: 'hc-pet-cam', sizeLabel: '猫耳萌系', limit: PET_LIMIT }),
-  define('hc-pet-treat', '宠物摄像头', 'pets', [15, 18.8, 29.2], PET_TREAT_P, petTreat, { prop: true, family: 'hc-pet-cam', sizeLabel: '零食投喂', limit: PET_LIMIT }),
-  define('hc-pet-laser', '宠物摄像头', 'pets', [10.9, 10.9, 13], PET_P, petLaser, { prop: true, family: 'hc-pet-cam', sizeLabel: '激光逗猫', limit: PET_LIMIT }),
-  define('hc-pet-screen', '宠物摄像头', 'pets', [20, 14, 17.7], PET_TABLET_P, petTablet, { prop: true, family: 'hc-pet-cam', sizeLabel: '平板底座', limit: PET_LIMIT }),
+  define('hc-pet-dome', '宠物摄像头', 'pets', [9.2, 9.9, 14.2], PET_P, petDome, { prop: true, sizeLabel: '球形云台', limit: PET_LIMIT }),
+  define('hc-pet-ears', '宠物摄像头', 'pets', [10.9, 10.7, 14.5], PET_EARS_P, petEars, { prop: true, sizeLabel: '猫耳萌系', limit: PET_LIMIT }),
+  define('hc-pet-treat', '宠物摄像头', 'pets', [15, 18.8, 29.2], PET_TREAT_P, petTreat, { prop: true, sizeLabel: '零食投喂', limit: PET_LIMIT }),
+  define('hc-pet-laser', '宠物摄像头', 'pets', [10.9, 10.9, 13], PET_P, petLaser, { prop: true, sizeLabel: '激光逗猫', limit: PET_LIMIT }),
+  define('hc-pet-screen', '宠物摄像头', 'pets', [20, 14, 17.7], PET_TABLET_P, petTablet, { prop: true, sizeLabel: '平板底座', limit: PET_LIMIT }),
 ]
 
 // ---------- 室内安防摄像头 ----------
@@ -210,10 +210,10 @@ const SEC_P: PalFlat[] = [
 ]
 const SEC_LIMIT = { scope: 'house' as const, max: 2, group: 'hc-sec-cam' }
 const security: AssetDef[] = [
-  define('hc-sec-pt', '安防摄像头', 'appliance', [7.9, 8.6, 13.4], SEC_P, secPanTilt, { prop: true, family: 'hc-sec-cam', sizeLabel: '桌面云台', limit: SEC_LIMIT }),
-  define('hc-sec-cube', '安防摄像头', 'appliance', [6, 6.2, 7.3], SEC_P, secCube, { prop: true, family: 'hc-sec-cam', sizeLabel: '磁吸小方块', limit: SEC_LIMIT }),
-  define('hc-sec-wall-dome', '安防摄像头', 'appliance', [12, 17.2, 10], SEC_P, secWallDome, { mount: SEC_MOUNT, family: 'hc-sec-cam', sizeLabel: '壁挂半球', limit: SEC_LIMIT }),
-  define('hc-sec-wall-bullet', '安防摄像头', 'appliance', [8, 22, 11.1], SEC_P, secWallBullet, { mount: SEC_MOUNT, family: 'hc-sec-cam', sizeLabel: '壁挂枪机', limit: SEC_LIMIT }),
+  define('hc-sec-pt', '安防摄像头', 'appliance', [7.9, 8.6, 13.4], SEC_P, secPanTilt, { prop: true, sizeLabel: '桌面云台', limit: SEC_LIMIT }),
+  define('hc-sec-cube', '安防摄像头', 'appliance', [6, 6.2, 7.3], SEC_P, secCube, { prop: true, sizeLabel: '磁吸小方块', limit: SEC_LIMIT }),
+  define('hc-sec-wall-dome', '安防摄像头', 'appliance', [12, 17.2, 10], SEC_P, secWallDome, { mount: SEC_MOUNT, sizeLabel: '壁挂半球', limit: SEC_LIMIT }),
+  define('hc-sec-wall-bullet', '安防摄像头', 'appliance', [8, 22, 11.1], SEC_P, secWallBullet, { mount: SEC_MOUNT, sizeLabel: '壁挂枪机', limit: SEC_LIMIT }),
 ]
 
 // ---------- 婴儿监视器 ----------
@@ -260,8 +260,8 @@ const BABY_RECV_P: PalFlat[] = [
   ['modern', M.char, '#7fb8e6', M.light],
 ]
 const baby: AssetDef[] = [
-  define('hc-baby-cam', '婴儿监视器', 'kids', [11.7, 11.7, 17.4], BABY_P, babyCam, { prop: true, family: 'hc-baby', sizeLabel: '摄像头（带夜灯）', limit: { scope: 'house', max: 1, group: 'hc-baby-cam' } }),
-  define('hc-baby-recv', '婴儿监视器', 'kids', [12, 5.2, 16.3], BABY_RECV_P, babyRecv, { prop: true, family: 'hc-baby', sizeLabel: '接收器（带屏幕）', limit: { scope: 'house', max: 1, group: 'hc-baby-recv' } }),
+  define('hc-baby-cam', '婴儿监视器', 'kids', [11.7, 11.7, 17.4], BABY_P, babyCam, { prop: true, sizeLabel: '摄像头（带夜灯）', limit: { scope: 'house', max: 1, group: 'hc-baby-cam' } }),
+  define('hc-baby-recv', '婴儿监视器', 'kids', [12, 5.2, 16.3], BABY_RECV_P, babyRecv, { prop: true, sizeLabel: '接收器（带屏幕）', limit: { scope: 'house', max: 1, group: 'hc-baby-recv' } }),
 ]
 
 // ---------- 门口：可视门铃、猫眼摄像头 ----------

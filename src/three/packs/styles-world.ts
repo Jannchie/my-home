@@ -2548,7 +2548,7 @@ export const SW_CHINESE: AssetDef[] = [
     [ZH, CHN.zitan, CHN.silk, CHN.wenge],
     ['japanese', J.wood, J.tatami, J.dark],
     ['modern', M.walnut, M.light, M.char],
-  ], meiguiChair, { family: 'dining-chair', sizeLabel: '玫瑰椅' }),
+  ], meiguiChair, { sizeLabel: '玫瑰椅' }),
   D('sw-cn-luohan', '罗汉床', 'living', [201.2, 95.9, 74.9], [
     [ZH, CHN.rose, CHN.lacquer, CHN.zitan],
     [ZH, CHN.huali, CHN.celadon, CHN.wenge],
@@ -2600,7 +2600,7 @@ export const SW_CHINESE: AssetDef[] = [
     [ZH, CHN.zitan, CHN.wenge, BRASS],
     [ZH, CHN.lacquer, CHN.ink, BRASS],
     ['modern', M.walnut, M.char, M.silver],
-  ], duobao, { family: 'bookshelf', sizeLabel: '多宝格', surface: 180, surfaces: [...duobaoSurfaces(), DUOBAO_LOWER], openable: true }),
+  ], duobao, { sizeLabel: '多宝格', surface: 180, surfaces: [...duobaoSurfaces(), DUOBAO_LOWER], openable: true }),
   D('sw-cn-screen', '四扇屏风', 'deco', [174.9, 25.1, 176], [
     [ZH, CHN.rose, CHN.silk, '#c0392b'],
     [ZH, CHN.zitan, '#1f1b1a', CHN.gold],
@@ -2612,13 +2612,13 @@ export const SW_CHINESE: AssetDef[] = [
     [ZH, CHN.zitan, '#fff1c8', CHN.gold],
     [ZH, CHN.huali, '#ffd9a8', CHN.lacquer],
     [ZH, CHN.lacquer, '#fff1c8', CHN.gold],
-  ], gongLamp, { family: 'floor-lamp', sizeLabel: '宫灯' }),
+  ], gongLamp, { sizeLabel: '宫灯' }),
   D('sw-cn-denglong', '灯笼落地灯', 'lighting', [59.4, 36, 175.7], [
     [ZH, CHN.wenge, '#e24a3a', CHN.gold],
     [ZH, CHN.rose, '#ffe2b0', CHN.gold],
     [ZH, CHN.zitan, '#f0b04a', CHN.ink],
     ['japanese', J.dark, J.washi, J.sumi],
-  ], lanternStand, { family: 'floor-lamp', sizeLabel: '灯笼' }),
+  ], lanternStand, { sizeLabel: '灯笼' }),
   D('sw-cn-moongate', '月洞门', 'deco', [146, 30, 210], [
     [ZH, CHN.wall, CHN.tile, CHN.huali],
     [ZH, '#e9e1d2', '#3e4247', CHN.rose],
@@ -2668,7 +2668,7 @@ export const SW_CHINESE: AssetDef[] = [
     [ZH, CHN.lacquer, BRASS, CHN.ink],
     [ZH, CHN.zitan, BRASS, CHN.wenge],
     ['modern', M.walnut, M.silver, M.char],
-  ], cnNightstand, { family: 'nightstand', sizeLabel: '中式', surface: 55, surfaces: CN_NS_SURFACES, openable: true }),
+  ], cnNightstand, { sizeLabel: '中式', surface: 55, surfaces: CN_NS_SURFACES, openable: true }),
 ]
 
 /** 欧式古典 */
@@ -2686,7 +2686,7 @@ export const SW_CLASSIC: AssetDef[] = [
     [EU, CLS.navy, CLS.ivory, CLS.gold],
     [EU, CLS.sage, CLS.ivory, CLS.gold],
     ['cute', C.sakura, C.white, C.lemon],
-  ], louisChair, { family: 'dining-chair', sizeLabel: '路易' }),
+  ], louisChair, { sizeLabel: '路易' }),
   D('sw-cl-recamier', '卷头贵妃榻', 'living', [176, 67.4, 78.1], [
     [EU, CLS.blush, CLS.ivory, CLS.gold],
     [EU, CLS.wine, CLS.mahogany, CLS.gold],
@@ -2716,13 +2716,13 @@ export const SW_CLASSIC: AssetDef[] = [
     [EU, '#c8ccd2', CLS.cream, '#e8f4ff'],
     [EU, CLS.black, CLS.ivory, '#e8f4ff'],
     [EU, CLS.gold, CLS.wine, '#ffe8f0'],
-  ], crystalFloorLamp, { family: 'floor-lamp', sizeLabel: '水晶烛台' }),
+  ], crystalFloorLamp, { sizeLabel: '水晶烛台' }),
   D('sw-cl-candle-lamp', '烛台台灯', 'lighting', [27, 27.2, 50.3], [
     [EU, CLS.ivory, CLS.cream, CLS.gold],
     [EU, CLS.gold, CLS.ivory, CLS.gold],
     [EU, CLS.navy, CLS.cream, CLS.gold],
     [EU, CLS.sage, CLS.ivory, CLS.gold],
-  ], candleTableLamp, { prop: true, family: 'table-lamp', sizeLabel: '烛台' }),
+  ], candleTableLamp, { prop: true, sizeLabel: '烛台' }),
   D('sw-cl-poster-bed', '雕花四柱床', 'bedroom', [177.1, 219.1, 208], [
     [EU, CLS.cream, CLS.ivory, CLS.mahogany],
     [EU, CLS.wine, CLS.cream, CLS.walnut],
@@ -2734,13 +2734,13 @@ export const SW_CLASSIC: AssetDef[] = [
     [EU, '#2e2c2c', CLS.gold, '#cfc8bd'],
     [EU, '#e8dccd', CLS.gold, '#c8a98c'],
     ['modern', M.white, M.black, M.gray],
-  ], marbleCoffee, { family: 'coffee-table', sizeLabel: '大理石', surface: 42.4, surfaceShape: [ellipsePoly(40)] }),
+  ], marbleCoffee, { sizeLabel: '大理石', surface: 42.4, surfaceShape: [ellipsePoly(40)] }),
   D('sw-cl-empire', '帝国式书柜', 'storage', [88, 34, 196], [
     [EU, CLS.mahogany, CLS.gold, CLS.wine],
     [EU, CLS.ivory, CLS.gold, CLS.sage],
     [EU, CLS.walnut, CLS.gold, CLS.navy],
     [EU, CLS.black, CLS.gold, CLS.teal],
-  ], empireBookcase, { family: 'bookshelf', sizeLabel: '帝国式', surfaces: empireSurfaces() }),
+  ], empireBookcase, { sizeLabel: '帝国式', surfaces: empireSurfaces() }),
   D('sw-cl-bench', '法式软包长凳', 'living', [110, 41.1, 47.3], [
     [EU, CLS.cream, CLS.ivory, CLS.gold],
     [EU, CLS.wine, CLS.walnut, CLS.gold],
@@ -2765,7 +2765,7 @@ export const SW_CLASSIC: AssetDef[] = [
     [EU, CLS.ivory, '#dfe8ee', CLS.gold],
     [EU, CLS.black, '#dfe8ee', CLS.gold],
     ['retro', R.caramel, '#dfe8ee', R.mustard],
-  ], baroqueMirror, { family: 'floor-mirror', sizeLabel: '巴洛克金框' }),
+  ], baroqueMirror, { sizeLabel: '巴洛克金框' }),
   D('sw-cl-console', '半圆玄关桌', 'entrance', [100, 39.3, 79.1], [
     [EU, CLS.ivory, CLS.marble, CLS.gold],
     [EU, CLS.mahogany, CLS.mahogany, CLS.gold],
@@ -2783,7 +2783,7 @@ export const SW_CLASSIC: AssetDef[] = [
     [EU, CLS.mahogany, CLS.mahogany, CLS.gold],
     [EU, CLS.blush, CLS.ivory, CLS.gold],
     [EU, CLS.sage, CLS.marble, CLS.gold],
-  ], clNightstand, { family: 'nightstand', sizeLabel: '法式', surface: 58, surfaces: CL_NS_SURFACES, openable: true }),
+  ], clNightstand, { sizeLabel: '法式', surface: 58, surfaces: CL_NS_SURFACES, openable: true }),
 ]
 
 /** 美式乡村 */
@@ -2864,7 +2864,7 @@ export const SW_FARMHOUSE: AssetDef[] = [
     [FA, '#3a4a3c', '#ffe9b0', BRASS],
     [FA, FH.oak, '#ffe9b0', FH.black],
     ['industrial', I.iron, '#ffd38a', I.rust],
-  ], ironLanternLamp, { family: 'floor-lamp', sizeLabel: '铸铁灯笼' }),
+  ], ironLanternLamp, { sizeLabel: '铸铁灯笼' }),
   D('sw-fh-shelf', '旧木货架', 'storage', [120, 40.5, 180], [
     [FA, FH.pine, FH.black, BRASS],
     [FA, FH.oak, FH.black, BRASS],
@@ -2883,7 +2883,7 @@ export const SW_FARMHOUSE: AssetDef[] = [
     [FA, FH.sage, FH.white, FH.oak],
     [FA, FH.barn, FH.cream, FH.oak],
     [FA, FH.black, FH.pine, FH.pine],
-  ], farmBookcase, { family: 'bookshelf', sizeLabel: '做旧', surface: 180, surfaces: farmBookSurfaces() }),
+  ], farmBookcase, { sizeLabel: '做旧', surface: 180, surfaces: farmBookSurfaces() }),
   D('sw-fh-dogbed', '格纹狗床', 'pets', [88, 68, 23.1], [
     [FA, FH.plaid, FH.cream, FH.oak],
     [FA, FH.denim, FH.white, FH.black],
@@ -2896,13 +2896,13 @@ export const SW_FARMHOUSE: AssetDef[] = [
     [FA, FH.white, '#c9a66b', FH.pine],
     [FA, FH.sage, '#c9a66b', FH.sage],
     ['industrial', I.walnut, I.leather, I.iron],
-  ], xbackChair, { family: 'dining-chair', sizeLabel: 'X 背' }),
+  ], xbackChair, { sizeLabel: 'X 背' }),
   D('sw-fh-nightstand', '床头柜', 'bedroom', [46, 38, 57], [
     [FA, FH.pine, FH.white, FH.black],
     [FA, FH.oak, FH.sage, FH.black],
     [FA, FH.pine, FH.denim, BRASS],
     [FA, FH.oak, FH.black, BRASS],
-  ], fhNightstand, { family: 'nightstand', sizeLabel: '农舍', surface: 57, surfaces: [{ y: 14, shape: [r(-19.3, -15.3, 19.3, 15.3)], h: 22 }, drawerLv(-18, 18, 38, 14, 16.3, 30)], openable: true }),
+  ], fhNightstand, { sizeLabel: '农舍', surface: 57, surfaces: [{ y: 14, shape: [r(-19.3, -15.3, 19.3, 15.3)], h: 22 }, drawerLv(-18, 18, 38, 14, 16.3, 30)], openable: true }),
 ]
 
 /** 和风补充 */
@@ -2931,7 +2931,7 @@ export const SW_JAPANESE: AssetDef[] = [
     ['japanese', J.washi, J.shu, J.sumi],
     ['japanese', '#f3e3c3', J.wood, J.dark],
     ['modern', M.white, M.black, M.black],
-  ], maruAndon, { family: 'floor-lamp', sizeLabel: '丸行灯' }),
+  ], maruAndon, { sizeLabel: '丸行灯' }),
   D('sw-jp-shoji', '障子三折屏风', 'japanese', [147, 30.2, 170], [
     ['japanese', J.hinoki, J.washi, J.wood],
     ['japanese', J.dark, J.washi, J.sumi],
@@ -2960,7 +2960,7 @@ export const SW_JAPANESE: AssetDef[] = [
     ['japanese', J.wood, J.sumi, J.dark],
     ['japanese', J.dark, '#c9a45a', J.sumi],
     ['nordic', N.oakL, M.black, N.oak],
-  ], jpNightstand, { family: 'nightstand', sizeLabel: '和风', surface: 46, surfaces: [{ y: 30, shape: [r(-20, -16, 20, 17)], h: 14 }, ...[4.6, 16.4].map((y) => drawerLv(-19.5, 19.5, y, 11, 15.9, 30))], openable: true }),
+  ], jpNightstand, { sizeLabel: '和风', surface: 46, surfaces: [{ y: 30, shape: [r(-20, -16, 20, 17)], h: 14 }, ...[4.6, 16.4].map((y) => drawerLv(-19.5, 19.5, y, 11, 15.9, 30))], openable: true }),
 ]
 
 /** 工业风补充 */
@@ -2970,7 +2970,7 @@ export const SW_INDUSTRIAL: AssetDef[] = [
     ['industrial', '#a87a52', I.iron, BRASS],
     ['industrial', I.concrete, I.iron, I.rust],
     [FA, FH.pine, FH.black, FH.black],
-  ], pipeBookshelf, { family: 'bookshelf', sizeLabel: '铁管', surface: 179, surfaces: pipeSurfaces() }),
+  ], pipeBookshelf, { sizeLabel: '铁管', surface: 179, surfaces: pipeSurfaces() }),
   D('sw-in-locker', '三门更衣柜', 'storage', [91, 48.6, 182], [
     ['industrial', '#5f7a7c', BRASS, I.iron],
     ['industrial', I.steel, '#f2f2f2', I.iron],
@@ -2995,7 +2995,7 @@ export const SW_INDUSTRIAL: AssetDef[] = [
     ['industrial', I.steel, BRASS, '#ffc56a'],
     ['industrial', '#6a4a32', I.iron, '#ffd38a'],
     ['retro', '#3a3030', R.red, '#ffc56a'],
-  ], edisonLamp, { family: 'floor-lamp', sizeLabel: '爱迪生灯泡' }),
+  ], edisonLamp, { sizeLabel: '爱迪生灯泡' }),
   D('sw-in-toolcart', '工具车', 'hobby', [74.5, 45.1, 85.4], [
     ['industrial', '#c0392b', I.iron, I.iron],
     ['industrial', '#3c5a7a', I.iron, I.iron],
@@ -3020,5 +3020,5 @@ export const SW_INDUSTRIAL: AssetDef[] = [
     ['industrial', I.steel, '#f2efe6', I.walnut],
     ['industrial', I.iron, BRASS, '#a87a52'],
     ['modern', M.white, M.light, M.walnut],
-  ], inNightstand, { family: 'nightstand', sizeLabel: '铁皮档案柜', surface: 55, surfaces: [13.5, 32].map((y) => drawerLv(-18, 18, y, 17, 16.8, 30)), openable: true }),
+  ], inNightstand, { sizeLabel: '铁皮档案柜', surface: 55, surfaces: [13.5, 32].map((y) => drawerLv(-18, 18, y, 17, 16.8, 30)), openable: true }),
 ]

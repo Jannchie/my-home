@@ -107,7 +107,6 @@ const SHARK_PALS: [StyleTag, string[]][] = [
 const sharkDef = (id: string, sizeLabel: string, L: number): AssetDef => ({
   id,
   name: '鲨鱼玩偶',
-  family: 'plush-shark',
   sizeLabel,
   category: 'deco',
   w: Math.round(L * 1.11),

@@ -255,11 +255,6 @@ export interface AssetDef {
   series?: string
   /** 一键布置「同款每间一个」的默认分组（不填 = series ?? id）；limit.group 优先 */
   limitGroup?: string
-  /**
-   * @deprecated 旧的系列字段：曾经同时表示规格、陈设和「同类不同款」。已有素材仍保留它作数据来源（gen-taxonomy.mts 据此迁移），
-   * 业务代码不要再用，改用 type / series；新素材不要写。
-   */
-  family?: string
   /** 尺寸 / 款式的显示名（Queen、120、石灯笼…）；陈设状态也可以写在这里（对局中、收在盒里） */
   sizeLabel?: string
   build: (p: string[]) => THREE.Group

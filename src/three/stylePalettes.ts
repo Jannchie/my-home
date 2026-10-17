@@ -18,6 +18,7 @@
 import * as THREE from 'three'
 import type { AssetDef, StyleTag } from './kit'
 import { disposeUnshared } from './toon'
+import { LEGACY_FAMILY } from './family.legacy'
 
 /** 风格序号：派生配色编号 = 1000 + 序号。只能往后追加，绝不调整顺序 */
 export const STYLE_ORDER: readonly StyleTag[] = ['cute', 'nordic', 'modern', 'japanese', 'industrial', 'retro', 'chinese', 'classic', 'farmhouse']
@@ -314,11 +315,17 @@ export function derivedPalette(def: AssetDef, style: StyleTag): string[] {
   return out
 }
 
+/**
+ * 派生配色的分组键：同一组的素材抽到同一套风格色板。迁移前用的是旧系列字段 family（没有就用 id），
+ * family 删除后冻结在 LEGACY_FAMILY 里，保证已有素材的派生配色逐个不变；新素材按 id。
+ */
+export const paletteKey = (def: AssetDef) => LEGACY_FAMILY[def.id] ?? def.id
+
 function recolor(def: AssetDef, style: StyleTag): string[] {
   const tpl = def.palettes[templateIndex(def, style)] ?? def.palettes[0] ?? []
   const n = Math.max(1, ...def.palettes.map((p) => p.length))
   const kits = STYLE_KITS[style]
-  const kit = kits[hashStr(`${def.family ?? def.id}|${style}`) % kits.length]
+  const kit = kits[hashStr(`${paletteKey(def)}|${style}`) % kits.length]
   const spread = kit.spread ?? 0.55
   const pr = probe(def, n)
   const bodyShare = Math.max(...pr.map((p) => p.share))

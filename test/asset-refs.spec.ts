@@ -21,7 +21,8 @@ const NOT_ASSET = new Set(['three-gen', 'cn-public', 'west-great'])
 const looksLikeId = (s: string) => /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(s) && /[-0-9]/.test(s)
 
 function scan() {
-  const families = new Set(ASSETS.map((a) => a.family).filter(Boolean) as string[])
+  // 同款系列 / 同类数量分组名（迁移前的 family 名都在这两个字段里）
+  const families = new Set(ASSETS.flatMap((a) => [a.series !== a.id ? a.series : undefined, a.limitGroup]).filter(Boolean) as string[])
   const tags = new Set(FIXED_TAGS)
   const refs = new Map<string, Set<string>>() // id → 出现的文件
   for (const f of FILES) {

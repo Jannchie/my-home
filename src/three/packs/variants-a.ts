@@ -1819,7 +1819,7 @@ function coffeeYunomi(p: string[]) {
 // =====================================================================
 
 const air = (id: string, label: string, dims: Dims, pals: Pal[], build: Build) =>
-  define(id, '壁挂空调', 'appliance', dims, pals, build, { family: 'aircon', sizeLabel: label, mount: AIRCON_MOUNT })
+  define(id, '壁挂空调', 'appliance', dims, pals, build, { sizeLabel: label, mount: AIRCON_MOUNT })
 
 const AIRCON: AssetDef[] = [
   air('va-aircon-slim', '薄型', [92, 21, 24], [
@@ -1854,7 +1854,7 @@ const AIRCON: AssetDef[] = [
 ]
 
 const stand = (id: string, label: string, dims: Dims, pals: Pal[], build: Build, surfaces: NonNullable<AssetDef['surfaces']>) =>
-  define(id, '晾衣架', 'outdoor', dims, pals, build, { family: 'laundry-stand', sizeLabel: label, surfaces })
+  define(id, '晾衣架', 'outdoor', dims, pals, build, { sizeLabel: label, surfaces })
 
 const STANDS: AssetDef[] = [
   stand('va-lstand-tele', '伸缩落地', [TEL.w - 1, TEL.d, TEL.top + 3], [
@@ -1901,7 +1901,7 @@ const STANDS: AssetDef[] = [
 ]
 
 const pl = (id: string, label: string, dims: Dims, pals: Pal[], build: Build) =>
-  define(id, '花箱', 'outdoor', dims, pals, fitted(build), { family: 'planter', sizeLabel: label })
+  define(id, '花箱', 'outdoor', dims, pals, fitted(build), { sizeLabel: label })
 
 const PLANTERS: AssetDef[] = [
   pl('va-planter-wood', '木条', [64, 26, 37], [
@@ -1937,7 +1937,7 @@ const PLANTERS: AssetDef[] = [
 ]
 
 const tb = (id: string, label: string, dims: Dims, pals: Pal[], build: Build) =>
-  prop(id, '马桶刷', 'toiletry', dims, pals, fitted(build), { family: 'wet-toilet-brush', sizeLabel: label })
+  prop(id, '马桶刷', 'toiletry', dims, pals, fitted(build), { sizeLabel: label })
 
 const TOILET_BRUSHES: AssetDef[] = [
   tb('va-brush-slim', '方形纤薄', [8.6, 7.4, 40.4], [
@@ -1966,7 +1966,7 @@ const TOILET_BRUSHES: AssetDef[] = [
 ]
 
 const ns = (id: string, label: string, dims: Dims, pals: Pal[], build: Build, extra: Partial<AssetDef>) =>
-  define(id, '床头柜', 'bedroom', dims, pals, fitted(build), { family: 'nightstand', sizeLabel: label, surface: dims[2], ...extra })
+  define(id, '床头柜', 'bedroom', dims, pals, fitted(build), { sizeLabel: label, surface: dims[2], ...extra })
 
 const NIGHTSTANDS: AssetDef[] = [
   ns('va-ns-open', '开放格', [NS_OPEN.w, 35.5, NS_OPEN.h], [
@@ -2008,7 +2008,7 @@ const NIGHTSTANDS: AssetDef[] = [
 ]
 
 const kb = (id: string, label: string, dims: Dims, pals: Pal[], build: Build) =>
-  prop(id, '刀架', 'kitchenware', dims, pals, fitted(build), { family: 'prop-knife-block', sizeLabel: label })
+  prop(id, '刀架', 'kitchenware', dims, pals, fitted(build), { sizeLabel: label })
 
 const KNIFE_BLOCKS: AssetDef[] = [
   kb('va-knife-magnet', '磁吸立板', [9, 20, 34.4], [
@@ -2036,7 +2036,7 @@ const KNIFE_BLOCKS: AssetDef[] = [
 ]
 
 const plush = (id: string, label: string, dims: Dims, pals: Pal[], build: Build) =>
-  prop(id, '毛绒玩偶', 'deco', dims, pals, fitted(build), { family: 'bear', sizeLabel: label })
+  prop(id, '毛绒玩偶', 'deco', dims, pals, fitted(build), { sizeLabel: label })
 
 const PLUSHES: AssetDef[] = [
   plush('va-plush-bunny', '兔子', [26, 24.5, 48.5], [
@@ -2073,7 +2073,7 @@ const PLUSHES: AssetDef[] = [
 ]
 
 const vase = (id: string, label: string, dims: Dims, pals: Pal[], build: Build) =>
-  prop(id, '花瓶插花', 'tabletop', dims, pals, fitted(build), { family: 'prop-vase-flowers', sizeLabel: label })
+  prop(id, '花瓶插花', 'tabletop', dims, pals, fitted(build), { sizeLabel: label })
 
 const VASES: AssetDef[] = [
   vase('va-vase-bud', '一轮插', [10.8, 10.8, 30.4], [
@@ -2108,7 +2108,7 @@ const VASES: AssetDef[] = [
 ]
 
 const lb = (id: string, label: string, dims: Dims, pals: Pal[], build: Build) =>
-  define(id, '洗衣篮', 'storage', dims, pals, fitted(build), { family: 'laundry-basket', sizeLabel: label })
+  define(id, '洗衣篮', 'storage', dims, pals, fitted(build), { sizeLabel: label })
 
 const LAUNDRY_BASKETS: AssetDef[] = [
   lb('va-lb-rattan', '藤编', [45.6, 36.5, 38.7], [
@@ -2138,7 +2138,7 @@ const LAUNDRY_BASKETS: AssetDef[] = [
 ]
 
 const hp = (id: string, label: string, dims: Dims, pals: Pal[], build: Build, form: 'open' | 'closed') =>
-  prop(id, '脏衣篓', 'storage', dims, pals, fitted(build), { family: 'hamper', sizeLabel: label, form })
+  prop(id, '脏衣篓', 'storage', dims, pals, fitted(build), { sizeLabel: label, form })
 
 const WICKER_PALS: Pal[] = [
   ['japanese', ['#c9a46a', J.dark, J.ai]],
@@ -2180,7 +2180,6 @@ const HAMPERS: AssetDef[] = [
 
 const lr = (id: string, label: string, L: RackLayout, pals: Pal[], build: Build) =>
   define(id, '洗衣机置物架', 'storage', [L.w, L.d, L.h], pals, fitted(build), {
-    family: 'laundry-rack',
     sizeLabel: label,
     surface: L.top,
     surfaceShape: [rectPoly(-L.w / 2 + 3, -L.d / 2 + 2, L.w / 2 - 3, L.d / 2 - 2)],
@@ -2225,7 +2224,7 @@ const LAUNDRY_RACKS: AssetDef[] = [
 ]
 
 const tbc = (id: string, label: string, dims: Dims, pals: Pal[], build: Build) =>
-  prop(id, '刷牙杯', 'toiletry', dims, pals, fitted(build), { family: 'prop-toothbrush-cup', sizeLabel: label })
+  prop(id, '刷牙杯', 'toiletry', dims, pals, fitted(build), { sizeLabel: label })
 
 const TOOTHBRUSH_CUPS: AssetDef[] = [
   tbc('va-tb-holder', '立式牙刷架', [9, 6, 16.5], [
@@ -2254,7 +2253,7 @@ const TOOTHBRUSH_CUPS: AssetDef[] = [
 ]
 
 const cc = (id: string, label: string, dims: Dims, pals: Pal[], build: Build, steamY: number) =>
-  prop(id, '咖啡杯碟', 'kitchenware', dims, pals, build, { family: 'prop-coffee-cup', sizeLabel: label, fx: [{ kind: 'steam', x: 0, y: steamY, z: 0, scale: 0.55 }] })
+  prop(id, '咖啡杯碟', 'kitchenware', dims, pals, build, { sizeLabel: label, fx: [{ kind: 'steam', x: 0, y: steamY, z: 0, scale: 0.55 }] })
 
 const COFFEE_CUPS: AssetDef[] = [
   cc('va-coffee-latte', '拿铁宽口', [14, 14, 5.8], [

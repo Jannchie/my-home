@@ -3604,13 +3604,13 @@ const MUSIC: AssetDef[] = [
     ['retro', R.caramel, R.teal, '#b0652e'],
     ['cute', C.sky, C.sakura, '#c07a3e'],
     ['nordic', N.white, N.blue, '#c07a3e'],
-  ], fitBuild(violinCase), { ...PROP, family: 'int-violin', form: 'open' }),
+  ], fitBuild(violinCase), { ...PROP, form: 'open' }),
   define('int-violin-stand', '小提琴', 'music', [23, 23, 66], [
     ['retro', DARK, '#b0652e', '#2a2220'],
     ['nordic', N.oak, '#c07a3e', '#2a2220'],
     ['modern', M.silver, '#9a5428', '#1f1f22'],
     ['japanese', J.dark, '#b0652e', J.sumi],
-  ], fitBuild(violinStand), { ...PROP, family: 'int-violin', form: 'standing' }),
+  ], fitBuild(violinStand), { ...PROP, form: 'standing' }),
   define('int-cello', '大提琴（支架）', 'music', [50, 34.5, 133.5], [
     ['retro', '#b0652e', DARK, '#2a2220'],
     ['nordic', '#c07a3e', N.oak, '#2a2220'],
@@ -3630,14 +3630,14 @@ const MUSIC: AssetDef[] = [
     ['modern', '#26262a', '#26262a', '#d9b98c'],
     ['retro', R.teal, IVORY, '#d9b98c'],
     ['nordic', N.blue, N.white, N.oakL],
-  ], fitBuild(eGuitarStand(false)), { family: 'int-e-guitar', sizeLabel: '支架' }),
+  ], fitBuild(eGuitarStand(false)), { sizeLabel: '支架' }),
   define('int-e-guitar-wall', '电吉他', 'music', [32, 9, 100.5], [
     ['retro', R.red, C.white, '#d9b98c'],
     ['cute', C.pink, C.white, '#ead7b8'],
     ['modern', '#26262a', '#26262a', '#d9b98c'],
     ['retro', R.teal, IVORY, '#d9b98c'],
     ['nordic', N.blue, N.white, N.oakL],
-  ], eGuitarWall, { family: 'int-e-guitar', sizeLabel: '壁挂', mount: E_GUITAR_MOUNT }),
+  ], eGuitarWall, { sizeLabel: '壁挂', mount: E_GUITAR_MOUNT }),
   define('int-guitar-amp', '吉他音箱', 'music', [50, 27.5, 43.5], [
     ['modern', '#26262a', '#4a4b50', '#c3c7cc'],
     ['retro', R.cream, '#a8683a', R.caramel],
@@ -3712,13 +3712,13 @@ const MUSIC: AssetDef[] = [
     ['retro', R.cream, IVORY, R.orange],
     ['nordic', N.white, '#fbfaf6', GOLD],
     ['cute', C.lilac, '#fffaf4', C.pink],
-  ], synth(36, 100, 32, false), { ...PROP, family: 'int-keyboard', sizeLabel: '61 键合成器' }),
+  ], synth(36, 100, 32, false), { ...PROP, sizeLabel: '61 键合成器' }),
   define('int-midi-keyboard', '合成器键盘', 'music', [50, 24, 8.7], [
     ['modern', '#2f3035', '#fbfaf6', '#ff7a4d'],
     ['retro', R.cream, IVORY, R.orange],
     ['cute', C.sky, '#fffaf4', C.pink],
     ['modern', M.white, '#fbfaf6', '#5ad1ff'],
-  ], synth(15, 50, 24, true), { ...PROP, family: 'int-keyboard', sizeLabel: '25 键 MIDI' }),
+  ], synth(15, 50, 24, true), { ...PROP, sizeLabel: '25 键 MIDI' }),
   define('int-dj-deck', 'DJ 台', 'music', [70, 38, 7], [
     ['modern', '#26262a', '#4a4b50', '#5ad1ff'],
     ['modern', M.silver, '#3d3f44', '#ff6a8a'],
@@ -3747,9 +3747,9 @@ const MANGA_PALS: PalFlat[] = [
 ]
 
 const OTAKU: AssetDef[] = [
-  define('int-manga-stack-s', '漫画书堆', 'hobby', [18.7, 12.5, 7.5], MANGA_PALS, mangaStack(5), { ...PROP, family: 'int-manga-stack', sizeLabel: '5 本' }),
-  define('int-manga-stack-m', '漫画书堆', 'hobby', [18.5, 12.3, 15], MANGA_PALS, mangaStack(10), { ...PROP, family: 'int-manga-stack', sizeLabel: '10 本' }),
-  define('int-manga-stack-l', '漫画书堆', 'hobby', [18.6, 12.4, 24], MANGA_PALS, mangaStack(16), { ...PROP, family: 'int-manga-stack', sizeLabel: '16 本' }),
+  define('int-manga-stack-s', '漫画书堆', 'hobby', [18.7, 12.5, 7.5], MANGA_PALS, mangaStack(5), { ...PROP, sizeLabel: '5 本' }),
+  define('int-manga-stack-m', '漫画书堆', 'hobby', [18.5, 12.3, 15], MANGA_PALS, mangaStack(10), { ...PROP, sizeLabel: '10 本' }),
+  define('int-manga-stack-l', '漫画书堆', 'hobby', [18.6, 12.4, 24], MANGA_PALS, mangaStack(16), { ...PROP, sizeLabel: '16 本' }),
   define('int-manga-row', '漫画全套（一排）', 'hobby', [65, 11.6, 17.6], [
     ['cute', '#ff9fc0', '#8fc8f0', '#f4f4f2'],
     ['retro', R.orange, R.teal, '#8a8d93'],
@@ -3819,13 +3819,13 @@ const SPORTS: AssetDef[] = [
     ['cute', C.mint, '#3a3a3a', C.pink],
     ['modern', '#26262a', '#2b2b2b', '#f4f4f2'],
     ['industrial', I.walnut, '#2b2b2b', I.rust],
-  ], skateboardFlat, { ...PROP, family: 'int-skateboard', form: 'lying' }),
+  ], skateboardFlat, { ...PROP, form: 'lying' }),
   define('int-skateboard-stand', '滑板', 'hobby', [21.5, 20.5, 79.5], [
     ['retro', R.orange, '#2b2b2b', R.cream],
     ['cute', C.mint, '#3a3a3a', C.pink],
     ['modern', '#26262a', '#2b2b2b', '#f4f4f2'],
     ['industrial', I.walnut, '#2b2b2b', I.rust],
-  ], skateboardStand, { family: 'int-skateboard', form: 'standing' }),
+  ], skateboardStand, { form: 'standing' }),
   define('int-surfboard', '冲浪板（靠墙）', 'hobby', [52.5, 32, 179.5], [
     ['nordic', N.white, N.blue, N.oak],
     ['retro', R.cream, R.orange, R.teal],
@@ -3863,29 +3863,29 @@ const GAMES: AssetDef[] = [
     ['japanese', '#e8c87a', '#f0d9a0', J.sumi],
     ['japanese', J.hinoki, '#f6e2b0', J.sumi],
     ['retro', R.caramel, R.cream, '#3a2a22'],
-  ], shogi, { ...PROP, family: 'int-shogi', sizeLabel: '开局' }),
+  ], shogi, { ...PROP, sizeLabel: '开局' }),
   define('int-go', '围棋', 'hobby', [74, 45.5, 9.8], [
     ['japanese', '#e8c87a', J.dark, J.sumi],
     ['japanese', J.hinoki, '#5a2e22', J.sumi],
     ['nordic', N.oak, N.white, '#3a3a3a'],
-  ], goBoard, { ...PROP, family: 'int-go', sizeLabel: '中盘' }),
+  ], goBoard, { ...PROP, sizeLabel: '中盘' }),
   define('int-chess', '国际象棋', 'hobby', [40.5, 36, 10.1], [
     ['modern', '#3d3f44', '#f4f4f2', '#26262a'],
     ['retro', R.caramel, R.cream, '#5a3a24'],
     ['nordic', N.oak, N.white, '#5a5f66'],
     ['cute', C.woodL, C.white, C.pink],
-  ], chess, { ...PROP, family: 'int-chess', sizeLabel: '中盘' }),
+  ], chess, { ...PROP, sizeLabel: '中盘' }),
   define('int-mahjong-table', '自动麻将桌', 'hobby', [88, 88, 75.5], [
     ['retro', R.caramel, '#2f8a5a', R.orange],
     ['modern', '#26262a', '#3d6fb8', '#3d6fb8'],
     ['japanese', J.dark, '#3f7a4a', '#2f8a5a'],
     ['cute', C.woodL, C.mint, C.pink],
-  ], mahjong, { surface: 71.5, family: 'int-mahjong-table', sizeLabel: '打牌中' }),
+  ], mahjong, { surface: 71.5, sizeLabel: '打牌中' }),
   define('int-poker', '扑克牌', 'hobby', [32, 22, 4.4], [
     ['retro', '#2f6a4a', '#c8473a', '#c8473a'],
     ['modern', '#26262a', '#3d6fb8', '#3d6fb8'],
     ['industrial', '#3a5a3c', '#7a2a22', I.rust],
-  ], poker, { ...PROP, family: 'int-poker', sizeLabel: '对局中' }),
+  ], poker, { ...PROP, sizeLabel: '对局中' }),
   define('int-boardgame-pile', '桌游盒子堆', 'hobby', [34.5, 31, 26.5], [
     ['cute', C.pink, C.sky, C.lemon],
     ['retro', R.teal, R.orange, R.mustard],
@@ -3976,17 +3976,17 @@ const COLLECT: AssetDef[] = [
     ['modern', '#26262a', GOLD, GOLD],
     ['retro', R.caramel, BRASS, BRASS],
     ['nordic', N.white, '#c9ced6', '#c9ced6'],
-  ], trophyCup, { ...PROP, family: 'int-trophy', sizeLabel: '大杯' }),
+  ], trophyCup, { ...PROP, sizeLabel: '大杯' }),
   define('int-trophy-star', '奖杯', 'deco', [11.4, 7.2, 23.5], [
     ['modern', '#26262a', GOLD, GOLD],
     ['retro', R.caramel, BRASS, BRASS],
     ['cute', C.sky, '#ffd65a', '#ffd65a'],
-  ], trophyStar, { ...PROP, family: 'int-trophy', sizeLabel: '星形' }),
+  ], trophyStar, { ...PROP, sizeLabel: '星形' }),
   define('int-trophy-column', '奖杯', 'deco', [8, 8, 19.5], [
     ['modern', '#26262a', GOLD, GOLD],
     ['nordic', N.white, '#c9ced6', '#c9ced6'],
     ['retro', '#3a3a3a', '#c8875a', '#c8875a'],
-  ], trophyColumn, { ...PROP, family: 'int-trophy', sizeLabel: '小立柱' }),
+  ], trophyColumn, { ...PROP, sizeLabel: '小立柱' }),
   define('int-medal-rack', '奖牌挂架', 'deco', [60, 3.3, 33.6], [
     ['modern', '#26262a', '#3d6fb8', '#c8473a'],
     ['nordic', N.oak, N.blue, N.mustard],
@@ -4023,23 +4023,23 @@ const LIFE: AssetDef[] = [
     ['nordic', N.sage, N.oak, N.mustard],
     ['retro', R.mustard, R.caramel, R.teal],
     ['industrial', I.steel, I.leather, I.rust],
-  ], suitcaseStand, { family: 'int-suitcase', form: 'standing' }),
+  ], suitcaseStand, { form: 'standing' }),
   define('int-suitcase-open', '旅行箱', 'entrance', [81, 65.5, 11], [
     ['cute', C.sakura, C.white, C.sky],
     ['modern', '#3d3f44', '#8a8d93', '#3d5a80'],
     ['nordic', N.sage, N.linen, N.blue],
     ['retro', R.mustard, R.cream, R.teal],
     ['industrial', I.steel, I.concrete, I.rust],
-  ], suitcaseOpen, { family: 'int-suitcase', form: 'open' }),
+  ], suitcaseOpen, { form: 'open' }),
   define('int-raincoat', '雨衣（挂钩）', 'entrance', [42, 18.7, 87], [
     ['retro', '#f0c040', '#3a3a3a', R.caramel],
     ['cute', C.pink, C.white, C.woodL],
     ['nordic', N.sage, N.white, N.oak],
     ['modern', '#3d5a80', '#f4f4f2', '#26262a'],
   ], raincoat, { mount: RAINCOAT_MOUNT }),
-  define('int-cartons-1', '快递纸箱', 'storage', [34, 24.5, 20], [['industrial', CARD], ['nordic', '#d8b98c'], ['retro', '#b8854e']], cartons(1), { ...PROP, family: 'int-cartons', sizeLabel: '1 箱' }),
-  define('int-cartons-2', '快递纸箱', 'storage', [45, 35.5, 50], [['industrial', CARD], ['nordic', '#d8b98c'], ['retro', '#b8854e']], cartons(2), { family: 'int-cartons', sizeLabel: '2 箱' }),
-  define('int-cartons-3', '快递纸箱', 'storage', [55, 40.5, 85], [['industrial', CARD], ['nordic', '#d8b98c'], ['retro', '#b8854e']], cartons(3), { family: 'int-cartons', sizeLabel: '3 箱' }),
+  define('int-cartons-1', '快递纸箱', 'storage', [34, 24.5, 20], [['industrial', CARD], ['nordic', '#d8b98c'], ['retro', '#b8854e']], cartons(1), { ...PROP, sizeLabel: '1 箱' }),
+  define('int-cartons-2', '快递纸箱', 'storage', [45, 35.5, 50], [['industrial', CARD], ['nordic', '#d8b98c'], ['retro', '#b8854e']], cartons(2), { sizeLabel: '2 箱' }),
+  define('int-cartons-3', '快递纸箱', 'storage', [55, 40.5, 85], [['industrial', CARD], ['nordic', '#d8b98c'], ['retro', '#b8854e']], cartons(3), { sizeLabel: '3 箱' }),
   define('int-snack-pile', '零食堆', 'tabletop', [34.5, 28, 12.3], [
     ['cute', '#ff9a5a', C.pink, C.lemon],
     ['retro', R.red, R.mustard, R.orange],
@@ -4073,10 +4073,10 @@ const BAG_PALS: PalFlat[] = [
 ]
 
 const FISHING: AssetDef[] = [
-  define('int-rod-sea', '钓竿', 'hobby', [7.3, 20, 237.5], ROD_PALS, rodStanding(true), { family: 'int-fishing-rod', sizeLabel: '海竿 240', form: 'standing' }),
-  define('int-rod-sea-bag', '钓竿', 'hobby', [150, 15.4, 11.2], BAG_PALS, rodBag(true), { ...PROP, family: 'int-fishing-rod', sizeLabel: '海竿 240', form: 'boxed' }),
-  define('int-rod-lure', '钓竿', 'hobby', [5.8, 18.5, 192.5], ROD_PALS, rodStanding(false), { family: 'int-fishing-rod', sizeLabel: '路亚竿 195', form: 'standing' }),
-  define('int-rod-lure-bag', '钓竿', 'hobby', [128, 15.4, 11.2], BAG_PALS, rodBag(false), { ...PROP, family: 'int-fishing-rod', sizeLabel: '路亚竿 195', form: 'boxed' }),
+  define('int-rod-sea', '钓竿', 'hobby', [7.3, 20, 237.5], ROD_PALS, rodStanding(true), { sizeLabel: '海竿 240', form: 'standing' }),
+  define('int-rod-sea-bag', '钓竿', 'hobby', [150, 15.4, 11.2], BAG_PALS, rodBag(true), { ...PROP, sizeLabel: '海竿 240', form: 'boxed' }),
+  define('int-rod-lure', '钓竿', 'hobby', [5.8, 18.5, 192.5], ROD_PALS, rodStanding(false), { sizeLabel: '路亚竿 195', form: 'standing' }),
+  define('int-rod-lure-bag', '钓竿', 'hobby', [128, 15.4, 11.2], BAG_PALS, rodBag(false), { ...PROP, sizeLabel: '路亚竿 195', form: 'boxed' }),
   define('int-rod-rack', '壁挂钓竿架', 'hobby', [210, 15.7, 34], [
     ['nordic', N.oak, N.blue, '#c3c7cc'],
     ['industrial', I.walnut, '#3a5a3c', '#7c8085'],
@@ -4088,13 +4088,13 @@ const FISHING: AssetDef[] = [
     ['modern', '#3d3f44', '#c3c7cc', '#5ad1ff'],
     ['retro', R.red, METAL, R.mustard],
     ['cute', C.mint, C.white, C.pink],
-  ], tackleBox(true), { ...PROP, family: 'int-tackle-box', form: 'open' }),
+  ], tackleBox(true), { ...PROP, form: 'open' }),
   define('int-tackle-box', '渔具箱', 'hobby', [36.5, 21, 22], [
     ['industrial', '#5a6a4a', '#c3c7cc', '#e2702f'],
     ['modern', '#3d3f44', '#c3c7cc', '#5ad1ff'],
     ['retro', R.red, METAL, R.mustard],
     ['cute', C.mint, C.white, C.pink],
-  ], tackleBox(false), { ...PROP, family: 'int-tackle-box', form: 'closed' }),
+  ], tackleBox(false), { ...PROP, form: 'closed' }),
   define('int-fish-cooler', '钓鱼冷藏箱', 'hobby', [55.5, 31.5, 33.5], [
     ['modern', '#f4f4f2', '#3d5a80', '#26262a'],
     ['retro', R.cream, R.red, '#3a3a3a'],
@@ -4128,10 +4128,10 @@ const TRIO_PALS: PalFlat[] = [
 ]
 
 const BOARDGAMES: AssetDef[] = [
-  define('int-bgbox-square', '桌游盒', 'hobby', [30, 30, 7.8], BOX_PALS, bgBoxSingle(30, 7.5, 30, 1), { ...PROP, family: 'int-bgbox', sizeLabel: '方形大盒' }),
-  define('int-bgbox-mid', '桌游盒', 'hobby', [23, 23, 6.3], BOX_PALS, bgBoxSingle(23, 6, 23, 2), { ...PROP, family: 'int-bgbox', sizeLabel: '中号方盒' }),
-  define('int-bgbox-rect', '桌游盒', 'hobby', [30, 22, 6.3], BOX_PALS, bgBoxSingle(30, 6, 22, 3), { ...PROP, family: 'int-bgbox', sizeLabel: '长方形' }),
-  define('int-bgbox-card', '桌游盒', 'hobby', [12.1, 9.1, 4.3], BOX_PALS, bgBoxSingle(12, 4, 9, 4), { ...PROP, family: 'int-bgbox', sizeLabel: '小卡牌盒' }),
+  define('int-bgbox-square', '桌游盒', 'hobby', [30, 30, 7.8], BOX_PALS, bgBoxSingle(30, 7.5, 30, 1), { ...PROP, sizeLabel: '方形大盒' }),
+  define('int-bgbox-mid', '桌游盒', 'hobby', [23, 23, 6.3], BOX_PALS, bgBoxSingle(23, 6, 23, 2), { ...PROP, sizeLabel: '中号方盒' }),
+  define('int-bgbox-rect', '桌游盒', 'hobby', [30, 22, 6.3], BOX_PALS, bgBoxSingle(30, 6, 22, 3), { ...PROP, sizeLabel: '长方形' }),
+  define('int-bgbox-card', '桌游盒', 'hobby', [12.1, 9.1, 4.3], BOX_PALS, bgBoxSingle(12, 4, 9, 4), { ...PROP, sizeLabel: '小卡牌盒' }),
   define('int-bgbox-row', '桌游盒（竖插一排）', 'hobby', [57.5, 30.5, 30], TRIO_PALS, bgShelfRow, PROP),
   define('int-bg-hex', '六角地块版图（对局中）', 'hobby', [53.5, 36.5, 2.7], [
     ['cute', '#9ccbe8', C.pink, '#ffffff'],
@@ -4147,7 +4147,7 @@ const BOARDGAMES: AssetDef[] = [
     ['retro', '#c8473a', '#2f6a4a'],
     ['modern', '#26262a', '#3d3f44'],
     ['cute', C.pink, C.sky],
-  ], cardGame, { ...PROP, family: 'int-uno', sizeLabel: '对局中' }),
+  ], cardGame, { ...PROP, sizeLabel: '对局中' }),
   define('int-dice-game', '骰子游戏（骰盅 + 骰子）', 'hobby', [36.5, 26, 10.2], [
     ['industrial', I.leather, '#2f6a4a', '#fbfaf6'],
     ['modern', '#26262a', '#3d5a80', '#fbfaf6'],
@@ -4169,44 +4169,44 @@ const BOARDGAMES: AssetDef[] = [
     ['retro', R.caramel, R.cream, '#5a3a24'],
     ['nordic', N.oak, N.white, '#5a5f66'],
     ['cute', C.woodL, C.white, C.pink],
-  ], chessOpening, { ...PROP, family: 'int-chess', sizeLabel: '开局' }),
+  ], chessOpening, { ...PROP, sizeLabel: '开局' }),
   define('int-xiangqi', '中国象棋', 'hobby', [40, 44, 2.7], [
     ['retro', '#e8c87a', '#c8302a', '#26262a'],
     ['nordic', N.oakL, '#c8302a', '#26262a'],
     ['japanese', J.hinoki, '#c8302a', J.sumi],
-  ], xiangqi, { ...PROP, family: 'int-xiangqi', sizeLabel: '开局' }),
+  ], xiangqi, { ...PROP, sizeLabel: '开局' }),
   define('int-reversi', '黑白棋', 'hobby', [34, 34, 2], [
     ['modern', '#3f8a4a', '#26262a', '#f4f4f2'],
     ['retro', '#2f7a4a', '#26262a', R.cream],
     ['cute', '#8fcf9a', '#5a4646', '#ffffff'],
-  ], reversi, { ...PROP, family: 'int-reversi', sizeLabel: '中盘' }),
+  ], reversi, { ...PROP, sizeLabel: '中盘' }),
   define('int-chinese-checkers', '跳棋', 'hobby', [43, 43, 3], [
     ['retro', R.caramel, R.cream, R.red],
     ['nordic', N.oak, N.white, '#c8473a'],
     ['cute', C.woodL, C.sakura, C.pink],
-  ], chineseCheckers, { ...PROP, family: 'int-chinese-checkers', sizeLabel: '开局' }),
+  ], chineseCheckers, { ...PROP, sizeLabel: '开局' }),
   define('int-backgammon', '双陆棋', 'hobby', [48.5, 38, 3], [
     ['retro', '#7a4a2a', R.red, R.red],
     ['industrial', I.walnut, '#3a3a3c', '#26262a'],
     ['nordic', N.oak, N.blue, N.blue],
-  ], backgammon, { ...PROP, family: 'int-backgammon', sizeLabel: '对局中' }),
+  ], backgammon, { ...PROP, sizeLabel: '对局中' }),
   define('int-hanafuda', '花札', 'japanese', [21.5, 19.9, 1.6], [
     ['japanese', '#c8302a', '#f2e6cc', J.shu],
     ['japanese', '#26262a', '#cfe0f0', '#8a4fb0'],
     ['retro', R.red, R.cream, R.mustard],
-  ], hanafuda, { ...PROP, family: 'int-hanafuda', sizeLabel: '对局中' }),
+  ], hanafuda, { ...PROP, sizeLabel: '对局中' }),
   define('int-karuta', '百人一首（かるた）', 'japanese', [88, 60, 1.1], [
     ['japanese', J.tatami, '#3a6a4a', J.sumi],
     ['japanese', '#d0d49a', '#c8302a', J.sumi],
     ['retro', '#c9c48a', R.teal, '#3a2a22'],
-  ], karuta, { ...PROP, family: 'int-karuta', sizeLabel: '摆开对局' }),
-  define('int-jenga', '叠叠乐', 'hobby', [13.5, 11, 27], [['nordic', '#e8cfa0'], ['japanese', J.hinoki], ['cute', '#f0d6b0']], jenga(true), { ...PROP, family: 'int-jenga', form: 'stacked' }),
-  define('int-jenga-fallen', '叠叠乐', 'hobby', [45.5, 40, 8.3], [['nordic', '#e8cfa0'], ['japanese', J.hinoki], ['cute', '#f0d6b0']], jenga(false), { ...PROP, family: 'int-jenga', form: 'lying' }),
+  ], karuta, { ...PROP, sizeLabel: '摆开对局' }),
+  define('int-jenga', '叠叠乐', 'hobby', [13.5, 11, 27], [['nordic', '#e8cfa0'], ['japanese', J.hinoki], ['cute', '#f0d6b0']], jenga(true), { ...PROP, form: 'stacked' }),
+  define('int-jenga-fallen', '叠叠乐', 'hobby', [45.5, 40, 8.3], [['nordic', '#e8cfa0'], ['japanese', J.hinoki], ['cute', '#f0d6b0']], jenga(false), { ...PROP, form: 'lying' }),
   define('int-uno-cards', '彩色数字卡牌', 'hobby', [37, 11.3, 3.2], [
     ['retro', '#c8473a', '#2f6a4a'],
     ['modern', '#26262a', '#3d3f44'],
     ['cute', C.pink, C.sky],
-  ], unoCards, { ...PROP, family: 'int-uno', sizeLabel: '一副 + 摊开几张' }),
+  ], unoCards, { ...PROP, sizeLabel: '一副 + 摊开几张' }),
   define('int-jigsaw', '拼图（拼到一半）', 'hobby', [54, 40, 0.9], [
     ['nordic', N.linen, '#a8d4f4', '#78c47a'],
     ['retro', R.cream, '#9ad0e0', R.olive],
@@ -5125,57 +5125,57 @@ const BGM_P: PalFlat[] = [['retro', '#7a4a2a', R.red, R.red], ['industrial', I.w
 const HANA_P: PalFlat[] = [['japanese', '#c8302a', '#f2e6cc', J.shu], ['japanese', '#26262a', '#cfe0f0', '#8a4fb0'], ['retro', R.red, R.cream, R.mustard]]
 const KARUTA_P: PalFlat[] = [['japanese', J.tatami, '#3a6a4a', J.sumi], ['japanese', '#d0d49a', '#c8302a', J.sumi], ['retro', '#c9c48a', R.teal, '#3a2a22']]
 
-const st = (family: string, sizeLabel: string) => ({ ...PROP, family, sizeLabel })
+const st = (sizeLabel: string) => ({ ...PROP, sizeLabel })
 
 export const INT_GAME_STATES: AssetDef[] = [
   // 国际象棋（旧：int-chess-opening = 开局、int-chess = 中盘）
-  define('int-chess-boxed', '国际象棋', 'hobby', [30, 15, 7.5], CHESS_P, chessBoxed, st('int-chess', '收在盒里')),
-  define('int-chess-folded', '国际象棋', 'hobby', [36, 19.1, 5.6], CHESS_P, chessFolded, st('int-chess', '棋盘合上')),
-  define('int-chess-endgame', '国际象棋', 'hobby', [61.3, 36, 8.8], CHESS_P, chessEndgame, st('int-chess', '残局')),
-  define('int-chess-study', '国际象棋', 'hobby', [64.4, 36, 8.8], CHESS_P, chessStudy, st('int-chess', '复盘摆谱')),
-  define('int-chess-messy', '国际象棋', 'hobby', [63, 54.5, 8.8], CHESS_P, chessMessy, st('int-chess', '收拾中')),
+  define('int-chess-boxed', '国际象棋', 'hobby', [30, 15, 7.5], CHESS_P, chessBoxed, st('收在盒里')),
+  define('int-chess-folded', '国际象棋', 'hobby', [36, 19.1, 5.6], CHESS_P, chessFolded, st('棋盘合上')),
+  define('int-chess-endgame', '国际象棋', 'hobby', [61.3, 36, 8.8], CHESS_P, chessEndgame, st('残局')),
+  define('int-chess-study', '国际象棋', 'hobby', [64.4, 36, 8.8], CHESS_P, chessStudy, st('复盘摆谱')),
+  define('int-chess-messy', '国际象棋', 'hobby', [63, 54.5, 8.8], CHESS_P, chessMessy, st('收拾中')),
   // 围棋（旧：int-go = 中盘）
-  define('int-go-empty', '围棋', 'hobby', [74, 45.5, 9.8], GO_P, goEmpty, st('int-go', '空盘 + 棋罐')),
-  define('int-go-opening', '围棋', 'hobby', [74, 45.5, 9.6], GO_P, goOpening, st('int-go', '布局')),
-  define('int-go-counting', '围棋', 'hobby', [74, 45.5, 9.6], GO_P, goCounting, st('int-go', '终局数子')),
+  define('int-go-empty', '围棋', 'hobby', [74, 45.5, 9.8], GO_P, goEmpty, st('空盘 + 棋罐')),
+  define('int-go-opening', '围棋', 'hobby', [74, 45.5, 9.6], GO_P, goOpening, st('布局')),
+  define('int-go-counting', '围棋', 'hobby', [74, 45.5, 9.6], GO_P, goCounting, st('终局数子')),
   // 将棋（旧：int-shogi = 开局）
-  define('int-shogi-mid', '将棋', 'hobby', [66, 36.4, 4.9], SHOGI_P, shogiMid, st('int-shogi', '中盘（持驹）')),
-  define('int-shogi-tsume', '将棋', 'hobby', [49.6, 57, 4.9], SHOGI_P, shogiTsume, st('int-shogi', '诘将棋')),
-  define('int-shogi-boxed', '将棋', 'hobby', [33.3, 36.4, 8.5], SHOGI_P, shogiBoxed, st('int-shogi', '收好（驹箱）')),
+  define('int-shogi-mid', '将棋', 'hobby', [66, 36.4, 4.9], SHOGI_P, shogiMid, st('中盘（持驹）')),
+  define('int-shogi-tsume', '将棋', 'hobby', [49.6, 57, 4.9], SHOGI_P, shogiTsume, st('诘将棋')),
+  define('int-shogi-boxed', '将棋', 'hobby', [33.3, 36.4, 8.5], SHOGI_P, shogiBoxed, st('收好（驹箱）')),
   // 中国象棋（旧：int-xiangqi = 开局）
-  define('int-xiangqi-mid', '中国象棋', 'hobby', [50.6, 44, 3.1], XQ_P, xqMid, st('int-xiangqi', '中盘')),
-  define('int-xiangqi-end', '中国象棋', 'hobby', [50.6, 44, 6.1], XQ_P, xqEnd, st('int-xiangqi', '残局')),
-  define('int-xiangqi-boxed', '中国象棋', 'hobby', [30, 19.6, 6.5], XQ_P, xqBoxed, st('int-xiangqi', '收在盒里')),
+  define('int-xiangqi-mid', '中国象棋', 'hobby', [50.6, 44, 3.1], XQ_P, xqMid, st('中盘')),
+  define('int-xiangqi-end', '中国象棋', 'hobby', [50.6, 44, 6.1], XQ_P, xqEnd, st('残局')),
+  define('int-xiangqi-boxed', '中国象棋', 'hobby', [30, 19.6, 6.5], XQ_P, xqBoxed, st('收在盒里')),
   // 黑白棋（旧：int-reversi = 中盘）
-  define('int-reversi-opening', '黑白棋', 'hobby', [34, 34, 2.3], REV_P, reversiOpening, st('int-reversi', '开局四子')),
-  define('int-reversi-full', '黑白棋', 'hobby', [34, 34, 2.3], REV_P, reversiFull, st('int-reversi', '终局铺满')),
-  define('int-reversi-boxed', '黑白棋', 'hobby', [30.2, 30.2, 4.3], REV_P, reversiBoxed, st('int-reversi', '收在盒里')),
+  define('int-reversi-opening', '黑白棋', 'hobby', [34, 34, 2.3], REV_P, reversiOpening, st('开局四子')),
+  define('int-reversi-full', '黑白棋', 'hobby', [34, 34, 2.3], REV_P, reversiFull, st('终局铺满')),
+  define('int-reversi-boxed', '黑白棋', 'hobby', [30.2, 30.2, 4.3], REV_P, reversiBoxed, st('收在盒里')),
   // 跳棋（旧：int-chinese-checkers = 开局）
-  define('int-chinese-checkers-playing', '跳棋', 'hobby', [43.2, 43.2, 2.9], CC_P, ccPlaying, st('int-chinese-checkers', '对局中')),
-  define('int-chinese-checkers-tidy', '跳棋', 'hobby', [54.1, 43.2, 4.5], CC_P, ccTidy, st('int-chinese-checkers', '收拾中')),
+  define('int-chinese-checkers-playing', '跳棋', 'hobby', [43.2, 43.2, 2.9], CC_P, ccPlaying, st('对局中')),
+  define('int-chinese-checkers-tidy', '跳棋', 'hobby', [54.1, 43.2, 4.5], CC_P, ccTidy, st('收拾中')),
   // 双陆棋（旧：int-backgammon = 对局中）
-  define('int-backgammon-opening', '双陆棋', 'hobby', [48.4, 38, 2.4], BGM_P, bgmOpening, st('int-backgammon', '开局')),
-  define('int-backgammon-closed', '双陆棋', 'hobby', [27.6, 38, 5.4], BGM_P, bgmClosed, st('int-backgammon', '合上')),
+  define('int-backgammon-opening', '双陆棋', 'hobby', [48.4, 38, 2.4], BGM_P, bgmOpening, st('开局')),
+  define('int-backgammon-closed', '双陆棋', 'hobby', [27.6, 38, 5.4], BGM_P, bgmClosed, st('合上')),
   // 扑克（旧：int-poker = 对局中）
-  define('int-poker-boxed', '扑克牌', 'hobby', [27.1, 13.2, 6.3], POKER_P, pokerBoxed, st('int-poker', '收在盒里')),
-  define('int-poker-deck', '扑克牌', 'hobby', [22.1, 13.4, 3.4], POKER_P, pokerDeck, st('int-poker', '整副叠放')),
-  define('int-poker-dealing', '扑克牌', 'hobby', [44, 36, 3.7], POKER_P, pokerDealing, st('int-poker', '发牌中')),
+  define('int-poker-boxed', '扑克牌', 'hobby', [27.1, 13.2, 6.3], POKER_P, pokerBoxed, st('收在盒里')),
+  define('int-poker-deck', '扑克牌', 'hobby', [22.1, 13.4, 3.4], POKER_P, pokerDeck, st('整副叠放')),
+  define('int-poker-dealing', '扑克牌', 'hobby', [44, 36, 3.7], POKER_P, pokerDealing, st('发牌中')),
   // 花札（旧：int-hanafuda = 对局中）
-  define('int-hanafuda-boxed', '花札', 'japanese', [10, 6.9, 2.6], HANA_P, hanaBoxed, st('int-hanafuda', '收在盒里')),
-  define('int-hanafuda-stack', '花札', 'japanese', [15.5, 7.6, 2.2], HANA_P, hanaStack, st('int-hanafuda', '整副叠放')),
-  define('int-hanafuda-dealing', '花札', 'japanese', [21.5, 21.9, 1], HANA_P, hanaDealing, st('int-hanafuda', '发牌中')),
+  define('int-hanafuda-boxed', '花札', 'japanese', [10, 6.9, 2.6], HANA_P, hanaBoxed, st('收在盒里')),
+  define('int-hanafuda-stack', '花札', 'japanese', [15.5, 7.6, 2.2], HANA_P, hanaStack, st('整副叠放')),
+  define('int-hanafuda-dealing', '花札', 'japanese', [21.5, 21.9, 1], HANA_P, hanaDealing, st('发牌中')),
   // UNO 风卡牌（旧：int-uno-cards = 一副 + 摊开、int-card-game = 对局中）
-  define('int-uno-boxed', '彩色数字卡牌', 'hobby', [6.6, 9.6, 3.4], UNO_P, unoBoxed, st('int-uno', '收在盒里')),
-  define('int-uno-dealing', '彩色数字卡牌', 'hobby', [44, 32, 2.4], UNO_P, unoDealing, st('int-uno', '发牌中')),
+  define('int-uno-boxed', '彩色数字卡牌', 'hobby', [6.6, 9.6, 3.4], UNO_P, unoBoxed, st('收在盒里')),
+  define('int-uno-dealing', '彩色数字卡牌', 'hobby', [44, 32, 2.4], UNO_P, unoDealing, st('发牌中')),
   // 百人一首（旧：int-karuta = 摆开对局）
-  define('int-karuta-boxed', '百人一首（かるた）', 'japanese', [20.3, 13.9, 7], KARUTA_P, karutaBoxed, st('int-karuta', '收在盒里')),
-  define('int-karuta-stack', '百人一首（かるた）', 'japanese', [32.8, 13.6, 4], KARUTA_P, karutaStacks, st('int-karuta', '整叠')),
+  define('int-karuta-boxed', '百人一首（かるた）', 'japanese', [20.3, 13.9, 7], KARUTA_P, karutaBoxed, st('收在盒里')),
+  define('int-karuta-stack', '百人一首（かるた）', 'japanese', [32.8, 13.6, 4], KARUTA_P, karutaStacks, st('整叠')),
   // 自动麻将桌（旧：int-mahjong-table = 打牌中）
-  define('int-mahjong-shuffle', '自动麻将桌', 'hobby', [88, 88, 73.4], MJ_P, mjShuffle, { surface: 71.5, family: 'int-mahjong-table', sizeLabel: '洗牌中' }),
-  define('int-mahjong-walls', '自动麻将桌', 'hobby', [88, 88, 75.3], MJ_P, mjWalls, { surface: 71.5, family: 'int-mahjong-table', sizeLabel: '砌好牌墙' }),
-  define('int-mahjong-win', '自动麻将桌', 'hobby', [88, 88, 75.3], MJ_P, mjWin, { surface: 71.5, family: 'int-mahjong-table', sizeLabel: '和牌摊开' }),
+  define('int-mahjong-shuffle', '自动麻将桌', 'hobby', [88, 88, 73.4], MJ_P, mjShuffle, { surface: 71.5, sizeLabel: '洗牌中' }),
+  define('int-mahjong-walls', '自动麻将桌', 'hobby', [88, 88, 75.3], MJ_P, mjWalls, { surface: 71.5, sizeLabel: '砌好牌墙' }),
+  define('int-mahjong-win', '自动麻将桌', 'hobby', [88, 88, 75.3], MJ_P, mjWin, { surface: 71.5, sizeLabel: '和牌摊开' }),
   // 麻将牌（桌面用）
-  define('int-mahjong-case', '麻将牌', 'hobby', [38.2, 24.7, 15.7], MJSET_P, mjCase, st('int-mahjong-set', '收在牌箱里')),
-  define('int-mahjong-mat-shuffle', '麻将牌', 'hobby', [70, 70, 2.3], MJSET_P, mjMatShuffle, st('int-mahjong-set', '牌垫上洗牌')),
-  define('int-mahjong-mat-walls', '麻将牌', 'hobby', [70, 70, 4.2], MJSET_P, mjMatWalls, st('int-mahjong-set', '牌垫上砌牌墙')),
+  define('int-mahjong-case', '麻将牌', 'hobby', [38.2, 24.7, 15.7], MJSET_P, mjCase, st('收在牌箱里')),
+  define('int-mahjong-mat-shuffle', '麻将牌', 'hobby', [70, 70, 2.3], MJSET_P, mjMatShuffle, st('牌垫上洗牌')),
+  define('int-mahjong-mat-walls', '麻将牌', 'hobby', [70, 70, 4.2], MJSET_P, mjMatWalls, st('牌垫上砌牌墙')),
 ]

@@ -216,17 +216,17 @@ const { nordic: N, modern: M, retro: R, japanese: J, industrial: I } = S
 const base = { category: 'deco' as const, stick: true, prop: true }
 
 export const STICKERS: AssetDef[] = [
-  { id: 'st-magnet-strawberry', name: '冰箱贴', family: 'fridge-magnet', sizeLabel: '草莓', w: 5.4, d: 2.5, h: 6.2, ...base, ...sty({ cute: [[C.red, C.leaf], [C.pink, C.leaf]] }), build: magnet('strawberry') },
-  { id: 'st-magnet-lemon', name: '冰箱贴', family: 'fridge-magnet', sizeLabel: '柠檬', w: 7, d: 2.3, h: 5, ...base, ...sty({ cute: [[C.lemon, C.leaf]], retro: [[R.mustard, R.olive]] }), build: magnet('lemon') },
-  { id: 'st-magnet-donut', name: '冰箱贴', family: 'fridge-magnet', sizeLabel: '甜甜圈', w: 5.6, d: 2.2, h: 5.6, ...base, ...sty({ cute: [[C.pink, C.white], [C.lilac, C.white]] }), build: magnet('donut') },
-  { id: 'st-magnet-letter', name: '冰箱贴', family: 'fridge-magnet', sizeLabel: '字母', w: 4, d: 1.4, h: 5, ...base, ...sty({ cute: [[C.sky, C.white], [C.mint, C.white]], modern: [[M.char, M.white]], retro: [[R.teal, R.cream]] }), build: magnet('letter') },
-  { id: 'st-magnet-star', name: '冰箱贴', family: 'fridge-magnet', sizeLabel: '星星', w: 5.2, d: 1.9, h: 5.2, ...base, ...sty({ cute: [[C.lemon, C.orange]], nordic: [[N.mustard, N.white]] }), build: magnet('star') },
-  { id: 'st-note', name: '便签', family: 'sticky-note', sizeLabel: '小', w: 7.6, d: 0.5, h: 7.6, ...base, ...sty({ cute: [['#fff3a0', '#c9a24a', C.pink], [C.sakura, '#c4788c', C.sky]], nordic: [[N.linen, N.gray, N.sage]], modern: [['#ffffff', M.gray, M.char]] }), build: stickyNote(7.6, 7.6, false) },
-  { id: 'st-note-magnet', name: '便签', family: 'sticky-note', sizeLabel: '购物清单', w: 10, d: 1.5, h: 14.5, ...base, ...sty({ cute: [['#fffdf5', '#c9a24a', C.red], ['#fff3a0', '#c9a24a', C.sky]], modern: [['#ffffff', M.gray, M.black]], japanese: [[J.washi, J.sumi, J.shu]] }), build: stickyNote(10, 14, true) },
+  { id: 'st-magnet-strawberry', name: '冰箱贴', sizeLabel: '草莓', w: 5.4, d: 2.5, h: 6.2, ...base, ...sty({ cute: [[C.red, C.leaf], [C.pink, C.leaf]] }), build: magnet('strawberry') },
+  { id: 'st-magnet-lemon', name: '冰箱贴', sizeLabel: '柠檬', w: 7, d: 2.3, h: 5, ...base, ...sty({ cute: [[C.lemon, C.leaf]], retro: [[R.mustard, R.olive]] }), build: magnet('lemon') },
+  { id: 'st-magnet-donut', name: '冰箱贴', sizeLabel: '甜甜圈', w: 5.6, d: 2.2, h: 5.6, ...base, ...sty({ cute: [[C.pink, C.white], [C.lilac, C.white]] }), build: magnet('donut') },
+  { id: 'st-magnet-letter', name: '冰箱贴', sizeLabel: '字母', w: 4, d: 1.4, h: 5, ...base, ...sty({ cute: [[C.sky, C.white], [C.mint, C.white]], modern: [[M.char, M.white]], retro: [[R.teal, R.cream]] }), build: magnet('letter') },
+  { id: 'st-magnet-star', name: '冰箱贴', sizeLabel: '星星', w: 5.2, d: 1.9, h: 5.2, ...base, ...sty({ cute: [[C.lemon, C.orange]], nordic: [[N.mustard, N.white]] }), build: magnet('star') },
+  { id: 'st-note', name: '便签', sizeLabel: '小', w: 7.6, d: 0.5, h: 7.6, ...base, ...sty({ cute: [['#fff3a0', '#c9a24a', C.pink], [C.sakura, '#c4788c', C.sky]], nordic: [[N.linen, N.gray, N.sage]], modern: [['#ffffff', M.gray, M.char]] }), build: stickyNote(7.6, 7.6, false) },
+  { id: 'st-note-magnet', name: '便签', sizeLabel: '购物清单', w: 10, d: 1.5, h: 14.5, ...base, ...sty({ cute: [['#fffdf5', '#c9a24a', C.red], ['#fff3a0', '#c9a24a', C.sky]], modern: [['#ffffff', M.gray, M.black]], japanese: [[J.washi, J.sumi, J.shu]] }), build: stickyNote(10, 14, true) },
   { id: 'st-polaroid', name: '拍立得照片', w: 8.8, d: 1.3, h: 11.7, ...base, ...sty({ cute: [[C.sky, C.leaf, C.lemon]], nordic: [[N.blue, N.sage, N.mustard]], retro: [[R.cream, R.olive, R.orange]] }), build: polaroid },
   { id: 'st-kids-drawing', name: '儿童画', w: 21, d: 1.1, h: 16, ...base, ...sty({ cute: [['#fffdf5', '#5b8def', C.orange], ['#fffdf5', C.red, C.lemon]] }), build: kidsDrawing },
-  { id: 'st-poster', name: '海报', family: 'poster', sizeLabel: 'A2 风景', w: 42, d: 0.5, h: 59, ...base, prop: false, ...sty({ cute: [[C.sky, C.mint, C.lemon]], nordic: [[N.linen, N.sage, N.mustard]], retro: [[R.cream, R.teal, R.orange]], japanese: [[J.washi, J.ai, J.shu]] }), build: poster(42, 59, 'landscape') },
-  { id: 'st-poster-shapes', name: '海报', family: 'poster', sizeLabel: 'A2 几何', w: 42, d: 0.5, h: 59, ...base, prop: false, ...sty({ modern: [[M.light, M.char, M.black]], nordic: [[N.white, N.mustard, N.gray]], retro: [[R.mustard, R.red, R.teal]], industrial: [[I.concrete, I.rust, I.iron]] }), build: poster(42, 59, 'shapes') },
-  { id: 'st-decal-heart', name: '贴纸', family: 'decal', sizeLabel: '爱心', w: 6, d: 0.2, h: 6, ...base, ...sty({ cute: [[C.pink], [C.red]] }), build: decal('heart') },
-  { id: 'st-decal-star', name: '贴纸', family: 'decal', sizeLabel: '星星', w: 6, d: 0.2, h: 6, ...base, ...sty({ cute: [[C.lemon], [C.sky]] }), build: decal('star') },
+  { id: 'st-poster', name: '海报', sizeLabel: 'A2 风景', w: 42, d: 0.5, h: 59, ...base, prop: false, ...sty({ cute: [[C.sky, C.mint, C.lemon]], nordic: [[N.linen, N.sage, N.mustard]], retro: [[R.cream, R.teal, R.orange]], japanese: [[J.washi, J.ai, J.shu]] }), build: poster(42, 59, 'landscape') },
+  { id: 'st-poster-shapes', name: '海报', sizeLabel: 'A2 几何', w: 42, d: 0.5, h: 59, ...base, prop: false, ...sty({ modern: [[M.light, M.char, M.black]], nordic: [[N.white, N.mustard, N.gray]], retro: [[R.mustard, R.red, R.teal]], industrial: [[I.concrete, I.rust, I.iron]] }), build: poster(42, 59, 'shapes') },
+  { id: 'st-decal-heart', name: '贴纸', sizeLabel: '爱心', w: 6, d: 0.2, h: 6, ...base, ...sty({ cute: [[C.pink], [C.red]] }), build: decal('heart') },
+  { id: 'st-decal-star', name: '贴纸', sizeLabel: '星星', w: 6, d: 0.2, h: 6, ...base, ...sty({ cute: [[C.lemon], [C.sky]] }), build: decal('star') },
 ]

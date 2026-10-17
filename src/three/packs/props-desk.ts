@@ -1160,13 +1160,13 @@ export const PROPS_DESK: AssetDef[] = [
     ['cute', [C.sakura, C.white, C.sky]],
     ['nordic', [N.white, N.oak, N.sage]],
     ['modern', [M.black, M.silver, M.gray]],
-  ], monitor(54, 33, 22, 16), { family: 'monitor', sizeLabel: '24 寸', ...screensOf([{ x: 0, y: 10, z: -2.2, w: 54, h: 33, t: 2 }]) }),
+  ], monitor(54, 33, 22, 16), { sizeLabel: '24 寸', ...screensOf([{ x: 0, y: 10, z: -2.2, w: 54, h: 33, t: 2 }]) }),
   def('prop-monitor-27', '显示器', 'tabletop', [62, 20, 48], [
     ['cute', [C.white, C.white, C.pink]],
     ['cute', [C.sakura, C.white, C.sky]],
     ['nordic', [N.white, N.oak, N.sage]],
     ['modern', [M.black, M.silver, M.gray]],
-  ], monitor(62, 38, 25, 18), { family: 'monitor', sizeLabel: '27 寸', ...screensOf([{ x: 0, y: 10, z: -2.2, w: 62, h: 38, t: 2 }]) }),
+  ], monitor(62, 38, 25, 18), { sizeLabel: '27 寸', ...screensOf([{ x: 0, y: 10, z: -2.2, w: 62, h: 38, t: 2 }]) }),
   def('prop-monitor-dual', '双屏显示器', 'tabletop', [110, 24, 47], [
     ['cute', [C.white, C.white, C.pink]],
     ['nordic', [N.white, N.gray, N.sage]],
@@ -1184,12 +1184,12 @@ export const PROPS_DESK: AssetDef[] = [
     ['modern', [M.black, M.char, '#ff6b6b']],
     ['cute', [C.white, C.white, C.pink]],
     ['nordic', [N.white, N.oak, N.sage]],
-  ], tv(97, 57, 34, 22), { family: 'tv', sizeLabel: '43 寸', styles: ['modern', 'cute', 'nordic', 'industrial'], ...screensOf([{ x: 0, y: 7, z: 0, w: 97, h: 57, t: 2.4 }]) }),
+  ], tv(97, 57, 34, 22), { sizeLabel: '43 寸', styles: ['modern', 'cute', 'nordic', 'industrial'], ...screensOf([{ x: 0, y: 7, z: 0, w: 97, h: 57, t: 2.4 }]) }),
   def('prop-tv-55', '平板电视', 'tabletop', [123, 26, 78], [
     ['modern', [M.black, M.char, '#ff6b6b']],
     ['cute', [C.white, C.white, C.pink]],
     ['nordic', [N.white, N.oak, N.sage]],
-  ], tv(123, 71, 42, 26), { family: 'tv', sizeLabel: '55 寸', styles: ['modern', 'cute', 'nordic', 'industrial'], ...screensOf([{ x: 0, y: 7, z: 0, w: 123, h: 71, t: 2.4 }]) }),
+  ], tv(123, 71, 42, 26), { sizeLabel: '55 寸', styles: ['modern', 'cute', 'nordic', 'industrial'], ...screensOf([{ x: 0, y: 7, z: 0, w: 123, h: 71, t: 2.4 }]) }),
   def('prop-game-console', '游戏机', 'tabletop', [36, 16, 12], [
     ['cute', [C.white, C.sky, C.pink]],
     ['cute', [C.sakura, C.mint, C.lemon]],
@@ -1254,7 +1254,7 @@ export const PROPS_DESK: AssetDef[] = [
   ], typewriter),
 
   // 书
-  def('prop-book-stack', '一叠书', 'tabletop', [24, 18, 13], BOOKS, bookStack, { family: 'prop-book-stack', sizeLabel: '标准' }),
+  def('prop-book-stack', '一叠书', 'tabletop', [24, 18, 13], BOOKS, bookStack, { sizeLabel: '标准' }),
   def('prop-books-upright', '书立和书', 'tabletop', [28, 17, 22], BOOKS, booksUpright),
   def('prop-book-open', '摊开的书', 'tabletop', [30, 24, 3], BOOKS, openBook),
 
@@ -1307,7 +1307,7 @@ export const PROPS_DESK: AssetDef[] = [
     ['cute', [C.white, C.pink, C.peach, C.lemon, C.mint, C.sky, C.lilac]],
     ['modern', [M.black, '#d94b45', '#f08a3c', '#f2d14b', '#4fae6a', '#3f7fd0', M.white]],
     ['retro', [R.cream, R.red, R.orange, R.mustard, R.olive, R.teal, C.white]],
-  ], rubiksCube, { family: 'puzzle-cube', sizeLabel: '三阶 · 打乱' }),
+  ], rubiksCube, { sizeLabel: '三阶 · 打乱' }),
   def('prop-globe', '地球仪', 'tabletop', [25, 22, 28], [
     ['cute', [C.sky, C.mint, C.pink]],
     ['nordic', [N.blue, N.linen, N.oak]],
@@ -1351,32 +1351,32 @@ export const PROPS_DESK: AssetDef[] = [
     ['nordic', [N.white, N.oak]],
     ['modern', [M.black, M.silver]],
     ['industrial', [I.iron, I.rust]],
-  ], deskLamp, { family: 'desk-lamp', sizeLabel: '折臂' }),
-  def('prop-table-lamp', '床头台灯', 'lighting', [21, 21, 29], LAMP_SHADES, tableLamp, { family: 'table-lamp', sizeLabel: '床头' }),
+  ], deskLamp, { sizeLabel: '折臂' }),
+  def('prop-table-lamp', '床头台灯', 'lighting', [21, 21, 29], LAMP_SHADES, tableLamp, { sizeLabel: '床头' }),
   def('prop-lamp-edison', '爱迪生灯泡台灯', 'lighting', [14, 11, 26], [
     ['industrial', [I.walnut, I.iron]],
     ['industrial', [I.concrete, I.steel]],
     ['retro', [R.caramel, '#7a6a3a']],
     ['modern', [M.walnut, M.black]],
-  ], edisonLamp, { family: 'desk-lamp', sizeLabel: '爱迪生灯泡' }),
+  ], edisonLamp, { sizeLabel: '爱迪生灯泡' }),
   def('prop-lamp-mushroom', '蘑菇灯', 'lighting', [20, 20, 23], [
     ['retro', [R.orange, R.cream]],
     ['retro', [R.mustard, R.cream]],
     ['modern', [M.white, M.white]],
     ['cute', [C.sakura, C.white]],
     ['nordic', [N.linen, N.oak]],
-  ], mushroomLamp, { family: 'table-lamp', sizeLabel: '蘑菇' }),
+  ], mushroomLamp, { sizeLabel: '蘑菇' }),
   def('prop-lamp-washi', '和纸台灯', 'lighting', [16, 16, 25], [
     ['japanese', [J.washi, J.wood]],
     ['japanese', [J.washi, J.sumi]],
     ['nordic', [N.linen, N.oak]],
-  ], washiLamp, { family: 'table-lamp', sizeLabel: '和纸' }),
+  ], washiLamp, { sizeLabel: '和纸' }),
   def('prop-lamp-globe', '玻璃球台灯', 'lighting', [18, 18, 24], [
     ['modern', [M.white, M.black, M.silver]],
     ['nordic', [N.white, N.oak, N.linen]],
     ['cute', [C.sakura, C.white, C.lemon]],
     ['retro', [R.cream, R.caramel, '#b8863b']],
-  ], globeLamp, { family: 'table-lamp', sizeLabel: '玻璃球' }),
+  ], globeLamp, { sizeLabel: '玻璃球' }),
   def('prop-candles', '蜡烛', 'tabletop', [16, 16, 14], [
     ['cute', [C.sakura, C.white]],
     ['nordic', [N.white, N.oak]],
@@ -1410,14 +1410,14 @@ export const PROPS_DESK: AssetDef[] = [
     ['nordic', [N.oak, N.blue, N.sage]],
     ['modern', [M.black, M.light, M.gray]],
     ['retro', [R.caramel, R.cream, R.teal]],
-  ], photoFrame(13, 18), { family: 'photo-frame', sizeLabel: '竖版' }),
+  ], photoFrame(13, 18), { sizeLabel: '竖版' }),
   def('prop-photo-frame-wide', '相框', 'tabletop', [18, 8, 13], [
     ['cute', [C.sakura, C.sky, C.mint]],
     ['cute', [C.woodL, C.lemon, C.pink]],
     ['nordic', [N.oak, N.blue, N.sage]],
     ['modern', [M.black, M.light, M.gray]],
     ['retro', [R.caramel, R.cream, R.teal]],
-  ], photoFrame(18, 13), { family: 'photo-frame', sizeLabel: '横版' }),
+  ], photoFrame(18, 13), { sizeLabel: '横版' }),
   def('prop-anime-figure', '手办', 'tabletop', [11, 9, 18], [
     ['cute', ['#ff9fc0', C.white, C.sky]],
     ['cute', ['#a8c8ff', C.lilac, C.pink]],

@@ -34,9 +34,9 @@ interface FormSpec {
   extra?: Partial<AssetDef>
 }
 
-/** 一个 family 的多种形态：配色、名字、规格都相同，只有 form 不同 */
-function forms(family: string, name: string, category: AssetCategory, pals: Pal[], list: FormSpec[]): AssetDef[] {
-  return list.map((f) => prop(f.id, name, category, f.dims, pals, f.build, { family, form: f.form, ...f.extra }))
+/** 同一件东西的多种形态：配色、名字、规格都相同，只有 form 不同 */
+function forms(name: string, category: AssetCategory, pals: Pal[], list: FormSpec[]): AssetDef[] {
+  return list.map((f) => prop(f.id, name, category, f.dims, pals, f.build, { form: f.form, ...f.extra }))
 }
 
 // ---------- 小工具 ----------
@@ -262,7 +262,6 @@ const PEG_SIZES: { label: string; w: number; h: number; mount: number; sp: numbe
 
 const PEGBOARDS: AssetDef[] = PEG_SIZES.map((s) =>
   define(`sf-pegboard-${s.w}x${s.h}`, '洞洞板', 'storage', [s.w, PEG_D, s.h], PEG_PALS, (p) => pegboardPart(s.w, s.h, s.mount, s.sp, p[0], p[1]), {
-    family: 'pegboard',
     sizeLabel: s.label,
     mount: s.mount,
     surfaces: pegBands(s.w, s.h, s.mount, s.sp, PEG_D / 2),
@@ -303,7 +302,6 @@ const PEG_SETS: AssetDef[] = SET_SIZES.map((s) => {
   const sw = s.w - 12
   const top = s.mount + s.shelfY + SHELF_T
   return define(`sf-pegboard-set-${s.w}x${s.h}`, '洞洞板套装（带层板）', 'storage', [s.w, SET_D, s.h], PEG_PALS, pegSet(s), {
-    family: 'pegboard-set',
     sizeLabel: s.label,
     mount: s.mount,
     surfaces: [
@@ -382,16 +380,16 @@ function pegBasketBody(p: string[], hang: boolean) {
 const PEG_SHELF_SURF = (dz: number, dy: number) => ({ surface: -1.0 + dy, surfaceShape: [rectPoly(-14, 1 + dz, 14, 11.8 + dz)] })
 
 const PEG_ACCESSORIES: AssetDef[] = [
-  ...forms('peg-shelf', '洞洞板小层板', 'storage', ACC_PALS, [
+  ...forms('洞洞板小层板', 'storage', ACC_PALS, [
     // 立放：整体抬高 11.2（托架底在地面），z 方向居中（包围盒 z -1..12.5 → 中心 5.75）
     { id: 'sf-peg-shelf-standing', form: 'standing', dims: [30, 13.5, 10.9], build: (p) => P(pegShelfBody(p), 0, 11.2, -5.75), extra: PEG_SHELF_SURF(-5.75, 11.2) },
     { id: 'sf-peg-shelf-hanging', form: 'hanging', dims: [30, 13.5, 10.9], build: (p) => pegShelfBody(p), extra: PEG_SHELF_SURF(0, 0) },
   ]),
-  ...forms('peg-cup', '洞洞板收纳杯', 'storage', ACC_PALS, [
+  ...forms('洞洞板收纳杯', 'storage', ACC_PALS, [
     { id: 'sf-peg-cup-standing', form: 'standing', dims: [7.6, 8.4, 10], build: (p) => ground(pegCupBody(p, false)) },
     { id: 'sf-peg-cup-hanging', form: 'hanging', dims: [7.6, 9.8, 10.2], build: (p) => pegCupBody(p, true) },
   ]),
-  ...forms('peg-basket', '洞洞板挂篮', 'storage', ACC_PALS, [
+  ...forms('洞洞板挂篮', 'storage', ACC_PALS, [
     { id: 'sf-peg-basket-standing', form: 'standing', dims: [24, 10, 9], build: (p) => ground(pegBasketBody(p, false)) },
     { id: 'sf-peg-basket-hanging', form: 'hanging', dims: [24, 11.85, 9.7], build: (p) => pegBasketBody(p, true) },
   ]),
@@ -430,7 +428,6 @@ const TIER_SPECS = [
 const WALL_TIERS: AssetDef[] = TIER_SPECS.map((t) => {
   const h = TIER_BR + (t.n - 1) * TIER_GAP + 2
   return define(`sf-wall-shelf-${t.n}`, '壁挂搁板', 'storage', [TIER_W, TIER_D, h], SHELF_PALS, wallTier(t.n, t.mount), {
-    family: 'wall-tier-shelf',
     sizeLabel: t.label,
     mount: t.mount,
     surface: t.mount + h,
@@ -515,7 +512,6 @@ const RACK_SPECS = [
 ]
 const OPEN_RACKS: AssetDef[] = RACK_SPECS.map((s) =>
   define(`sf-open-rack-${s.w}`, '开放式层架', 'storage', [s.w, s.d, s.h], SHELF_PALS, openRack(s.w, s.d, s.h, s.n), {
-    family: 'open-rack',
     sizeLabel: s.label,
     surface: s.h,
     surfaceShape: [rectPoly(-s.w / 2 + 3, -s.d / 2 + 3, s.w / 2 - 3, s.d / 2 - 3)],
@@ -568,7 +564,6 @@ const WIRE_RACKS: AssetDef[] = WIRE_SPECS.map((s) => {
   const ys = wireYs(s.h, s.n)
   const shape = [rectPoly(-s.w / 2 + 3, -s.d / 2 + 2, s.w / 2 - 3, s.d / 2 - 2)]
   return define(`sf-wire-rack-${s.w}`, '金属线网架', 'storage', [s.w + 0.2, s.d + 1, s.h], WIRE_PALS, wireRack(s.w, s.d, s.h, s.n), {
-    family: 'wire-rack',
     sizeLabel: s.label,
     surface: Math.round((ys[ys.length - 1] + WIRE_R) * 10) / 10,
     surfaceShape: shape,
@@ -647,7 +642,6 @@ function bathCorner(p: string[]) {
 }
 // 和 wet.ts / bath-corners.ts 的各款转角架同一系列
 const BATH_CORNER = define('sf-bath-corner', '浴室转角架', 'storage', [24, 24, 51.3], WIRE_PALS, bathCorner, {
-  family: 'bath-corner-shelf',
   sizeLabel: '三角网篮 3 层',
   mount: BATH.mount,
   surfaces: BATH.ys.map((y, i) => ({ y: BATH.mount + y + BATH.t, h: i < 2 ? 23 : 30, shape: [triPoly(BATH.s, 1)] })),
@@ -695,7 +689,6 @@ const SHOE_SPECS = [
 ]
 const SHOE_RACKS: AssetDef[] = SHOE_SPECS.map((s) =>
   define(`sf-shoe-rack-${s.n + 1}`, '鞋架', 'storage', [s.w, s.d, s.h], SHELF_PALS, shoeRack(s.w, s.d, s.h, s.n), {
-    family: 'shoe-rack',
     sizeLabel: s.label,
     surface: s.h,
     surfaces: shoeYs(s.n).map((y) => ({ y, h: s.n === 1 ? s.h - 2 - y : 16, shape: [rectPoly(-s.w / 2 + 3, -s.d / 2 + 2, s.w / 2 - 3, s.d / 2 - 2)] })),
@@ -727,7 +720,6 @@ function garmentRail(w: number): Build {
 }
 const GARMENT_RAILS: AssetDef[] = [80, 120].map((w) =>
   define(`sf-garment-rail-${w}`, '挂衣杆', 'storage', [w - 0.4, 42.6, GR.h], SHELF_PALS, garmentRail(w), {
-    family: 'garment-rail',
     sizeLabel: `${w}`,
     surfaces: [
       { y: GR.shelfY, h: 40, shape: [rectPoly(-w / 2 + 5, -14, w / 2 - 5, 14)] },
@@ -757,7 +749,6 @@ function towelBar(n: number): Build {
 }
 const TOWEL_BARS: AssetDef[] = [1, 2].map((n) =>
   define(`sf-towel-bar-${n}`, '毛巾杆', 'storage', [59.2, TB.d, 5.2 + (n - 1) * 26], WIRE_PALS, towelBar(n), {
-    family: 'towel-bar',
     sizeLabel: n === 1 ? '单杆' : '双层',
     mount: TB.mount,
     surfaces: Array.from({ length: n }, (_, i) => ({
@@ -803,7 +794,6 @@ const HOOK_RAILS: AssetDef[] = [
   { w: 80, n: 6 },
 ].map((s) =>
   define(`sf-hook-rail-${s.n}`, '墙上挂钩排', 'storage', [s.w, 7.4, HR.h], SHELF_PALS, hookRail(s.w, s.n), {
-    family: 'hook-rail',
     sizeLabel: `${s.n} 钩`,
     mount: HR.mount,
     surfaces: railHooks(s.w, s.n, -0.4, HR.mount + HR.pegY + HR.pegR + 2.32),
@@ -1477,96 +1467,96 @@ function boxOpen(p: string[]) {
 }
 
 const FORM_ITEMS: AssetDef[] = [
-  ...forms('headphones', '耳机', 'tabletop', HP_PALS, [
+  ...forms('耳机', 'tabletop', HP_PALS, [
     { id: 'sf-headphones-lying', form: 'lying', dims: [20.4, 20.6, 8.4], build: (p) => phonesLying(p, false) },
     { id: 'sf-headphones-hanging', form: 'hanging', dims: [20.4, 9.7, 20.7], build: (p) => phonesHang(p, false) },
   ]),
-  ...forms('headset', '头戴耳麦', 'tabletop', HP_PALS, [
+  ...forms('头戴耳麦', 'tabletop', HP_PALS, [
     { id: 'sf-headset-lying', form: 'lying', dims: [20.9, 25.6, 11.7], build: (p) => phonesLying(p, true) },
     { id: 'sf-headset-hanging', form: 'hanging', dims: [20.9, 13, 25.7], build: (p) => phonesHang(p, true) },
   ]),
-  ...forms('webcam', '网络摄像头', 'tabletop', CAM_PALS, [
+  ...forms('网络摄像头', 'tabletop', CAM_PALS, [
     { id: 'sf-webcam-standing', form: 'standing', dims: [10.5, 9.3, 13.8], build: camStanding },
     { id: 'sf-webcam-lying', form: 'lying', dims: [9.6, 6.3, 3.3], build: camLying },
   ]),
-  ...forms('tote-bag', '托特包', 'deco', TOTE_PALS, [
+  ...forms('托特包', 'deco', TOTE_PALS, [
     { id: 'sf-tote-standing', form: 'standing', dims: [34, 10.6, 43], build: toteStanding },
     { id: 'sf-tote-hanging', form: 'hanging', dims: [34, 11.9, 63.5], build: toteHanging },
   ]),
-  ...forms('backpack', '双肩包', 'deco', BP_PALS, [
+  ...forms('双肩包', 'deco', BP_PALS, [
     { id: 'sf-backpack-standing', form: 'standing', dims: [28, 20.4, 43.1], build: (p) => ground(backpackBody(p, true)) },
     { id: 'sf-backpack-hanging', form: 'hanging', dims: [28, 21.5, 54], build: backpackHanging },
   ]),
-  ...forms('cap', '棒球帽', 'deco', HAT_PALS, [
+  ...forms('棒球帽', 'deco', HAT_PALS, [
     { id: 'sf-cap-lying', form: 'lying', dims: [18, 25.7, 8.3], build: (p) => ground(capBody(p)) },
     { id: 'sf-cap-hanging', form: 'hanging', dims: [18, 9.8, 32.3], build: (p) => G(hangAt(turned(capBody(p), PI / 2), S_UNDER + 0.1), sHook()) },
   ]),
-  ...forms('scarf', '围巾', 'deco', SCARF_PALS, [
+  ...forms('围巾', 'deco', SCARF_PALS, [
     { id: 'sf-scarf-folded', form: 'folded', dims: [24.2, 16.3, 5.9], build: scarfFolded },
     { id: 'sf-scarf-hanging', form: 'hanging', dims: [16.3, 5.3, 68.1], build: scarfHanging },
   ]),
-  ...forms('towel', '毛巾', 'deco', TOWEL_PALS, [
+  ...forms('毛巾', 'deco', TOWEL_PALS, [
     { id: 'sf-towel-folded', form: 'folded', dims: [32, 20.4, 6.6], build: towelFolded },
     { id: 'sf-towel-hanging', form: 'hanging', dims: [34.4, 5.4, 68], build: towelHanging },
   ]),
-  ...forms('tshirt', 'T 恤', 'deco', CLOTH_PALS, [
+  ...forms('T 恤', 'deco', CLOTH_PALS, [
     { id: 'sf-tshirt-folded', form: 'folded', dims: [26, 32, 4.1], build: shirtFolded },
     { id: 'sf-tshirt-hanging', form: 'hanging', dims: [57.7, 5.3, 67.4], build: shirtHanging },
   ]),
-  ...forms('pants', '裤子', 'deco', CLOTH_PALS, [
+  ...forms('裤子', 'deco', CLOTH_PALS, [
     { id: 'sf-pants-folded', form: 'folded', dims: [28, 34.4, 4.8], build: pantsFolded },
     { id: 'sf-pants-hanging', form: 'hanging', dims: [40, 5.2, 61.8], build: pantsHanging },
   ]),
-  ...forms('hang-mug', '马克杯', 'tabletop', MUG_PALS, [
+  ...forms('马克杯', 'tabletop', MUG_PALS, [
     { id: 'sf-mug-standing', form: 'standing', dims: [10.9, 8.6, 9.5], build: (p) => ground(mugBody(p)) },
     { id: 'sf-mug-hanging', form: 'hanging', dims: [9.5, 9.6, 11.3], build: mugHanging },
   ]),
-  ...forms('scissors', '剪刀', 'tabletop', TOOL_PALS, [
+  ...forms('剪刀', 'tabletop', TOOL_PALS, [
     { id: 'sf-scissors-lying', form: 'lying', dims: [9.7, 19.7, 1.6], build: (p) => laid(scissorsBody(p), -PI / 2) },
     { id: 'sf-scissors-hanging', form: 'hanging', dims: [9.9, 7.3, 20.1], build: (p) => toolHang(scissorsBody(p), true, 2.4) },
   ]),
-  ...forms('pliers', '钳子', 'tabletop', TOOL_PALS, [
+  ...forms('钳子', 'tabletop', TOOL_PALS, [
     { id: 'sf-pliers-lying', form: 'lying', dims: [4.6, 20.1, 1.5], build: (p) => laid(pliersBody(p), -PI / 2) },
     { id: 'sf-pliers-hanging', form: 'hanging', dims: [4.5, 7.3, 20.5], build: (p) => toolHang(pliersBody(p), true, 1.0) },
   ]),
-  ...forms('screwdrivers', '螺丝刀组', 'tabletop', TOOL_PALS, [
+  ...forms('螺丝刀组', 'tabletop', TOOL_PALS, [
     { id: 'sf-drivers-lying', form: 'lying', dims: [12.3, 17, 1.9], build: driversLying },
     { id: 'sf-drivers-hanging', form: 'hanging', dims: [16, 5.3, 17], build: driversHanging },
   ]),
-  ...forms('tape-measure', '卷尺', 'tabletop', TOOL_PALS, [
+  ...forms('卷尺', 'tabletop', TOOL_PALS, [
     { id: 'sf-tape-lying', form: 'lying', dims: [8.1, 10.6, 3.9], build: (p) => laid(tapeBody(p), -PI / 2) },
     { id: 'sf-tape-hanging', form: 'hanging', dims: [8.1, 7.3, 11.2], build: (p) => toolHang(tapeBody(p), true) },
   ]),
-  ...forms('wrench', '扳手', 'tabletop', TOOL_PALS, [
+  ...forms('扳手', 'tabletop', TOOL_PALS, [
     { id: 'sf-wrench-lying', form: 'lying', dims: [4.9, 21.3, 1.5], build: (p) => laid(wrenchBody(p), -PI / 2) },
     { id: 'sf-wrench-hanging', form: 'hanging', dims: [4.9, 7.3, 21.3], build: (p) => toolHang(wrenchBody(p), true) },
   ]),
-  ...forms('cable', '数据线', 'tabletop', CABLE_PALS, [
+  ...forms('数据线', 'tabletop', CABLE_PALS, [
     { id: 'sf-cable-lying', form: 'lying', dims: [10.1, 16.2, 2.4], build: (p) => laid(cableBody(p), -PI / 2) },
     { id: 'sf-cable-hanging', form: 'hanging', dims: [10.1, 7.3, 16.7], build: (p) => toolHang(cableBody(p), true) },
   ]),
-  ...forms('keychain', '钥匙串', 'tabletop', KEY_PALS, [
+  ...forms('钥匙串', 'tabletop', KEY_PALS, [
     { id: 'sf-keys-lying', form: 'lying', dims: [3.6, 8.2, 1.7], build: (p) => laid(keysBody(p), -PI / 2) },
     { id: 'sf-keys-hanging', form: 'hanging', dims: [3.6, 7.3, 8.7], build: (p) => toolHang(keysBody(p), true) },
   ]),
-  ...forms('folding-umbrella', '折叠伞', 'deco', UMB_PALS, [
+  ...forms('折叠伞', 'deco', UMB_PALS, [
     { id: 'sf-umbrella-lying', form: 'lying', dims: [35.4, 5.6, 5.6], build: (p) => laid(umbrellaBody(p), PI / 2, 0, PI / 2) },
     { id: 'sf-umbrella-hanging', form: 'hanging', dims: [5.6, 7.1, 39.9], build: (p) => G(hangAt(umbrellaBody(p), -5.6 + 0.7, S_Z), sHook()) },
   ]),
-  ...forms('hang-basket', '收纳篮', 'storage', BASKET_PALS, [
+  ...forms('收纳篮', 'storage', BASKET_PALS, [
     { id: 'sf-basket-standing', form: 'standing', dims: [28, 18.4, 15.6], build: basketStanding },
     { id: 'sf-basket-hanging', form: 'hanging', dims: [26.4, 20, 30], build: basketHanging },
   ]),
-  ...forms('book', '书', 'tabletop', BOOK_PALS, [
+  ...forms('书', 'tabletop', BOOK_PALS, [
     { id: 'sf-book-standing', form: 'standing', dims: [2.4, 15, 21], build: bookStanding },
     { id: 'sf-book-lying', form: 'lying', dims: [15, 21, 2.4], build: (p) => ground(bookOne(p)) },
     { id: 'sf-book-stacked', form: 'stacked', dims: [23.4, 29.1, 10.6], build: bookStack },
   ]),
-  ...forms('laptop-fold', '笔记本电脑', 'tabletop', LAP_PALS, [
+  ...forms('笔记本电脑', 'tabletop', LAP_PALS, [
     { id: 'sf-laptop-open', form: 'open', dims: [32, 27.5, 22.2], build: laptopOpen },
     { id: 'sf-laptop-closed', form: 'closed', dims: [32, 22, 2.1], build: laptopClosed },
   ]),
-  ...forms('storage-box', '收纳盒', 'storage', BOX_PALS, [
+  ...forms('收纳盒', 'storage', BOX_PALS, [
     { id: 'sf-storage-box-closed', form: 'boxed', dims: [37, 27, 24], build: boxClosed },
     { id: 'sf-storage-box-open', form: 'open', dims: [37, 33.5, 48.4], build: boxOpen },
   ]),
@@ -1743,8 +1733,8 @@ function nailClipper(p: string[]) {
   g.add(lever, cyl(0.25, 0.25, 1.6, metal, { y: 0.4, z: 2.3 }, 8), torus(0.6, 0.15, metal, { z: -3.3, y: 0.3, rx: PI / 2 }))
   return ground(g)
 }
-const REMOTE_EXTRA = (label: string) => ({ family: 'remote', sizeLabel: label })
-const TISSUE_EXTRA = (label: string) => ({ family: 'tissue', sizeLabel: label })
+const REMOTE_EXTRA = (label: string) => ({ sizeLabel: label })
+const TISSUE_EXTRA = (label: string) => ({ sizeLabel: label })
 
 const DAILY: AssetDef[] = [
   prop('sf-tissue-cube', '抽纸盒', 'tabletop', [12.4, 12.4, 16.5], TISSUE_PALS, tissueCube, TISSUE_EXTRA('方形')),
@@ -2121,7 +2111,7 @@ const GDIMS: Record<string, Dims> = {
   'sf-raincoat-hanging': [56, 5.8, 101.4],
 }
 const GARMENT_ITEMS: AssetDef[] = GARMENT_LIST.flatMap(([key, name, spec, [fw, fd, fh, fk]]) =>
-  forms(key, name, 'deco', GARMENT_PALS[key], [
+  forms(name, 'deco', GARMENT_PALS[key], [
     { id: `sf-${key}-folded`, form: 'folded', dims: GDIMS[`sf-${key}-folded`], build: (p) => foldedG(p, fw, fd, fh, fk) },
     { id: `sf-${key}-hanging`, form: 'hanging', dims: GDIMS[`sf-${key}-hanging`], build: (p) => garmentHang(p, spec) },
   ]),
@@ -2272,35 +2262,35 @@ function handHanging(p: string[]) {
 }
 
 const MORE_WEAR: AssetDef[] = [
-  ...forms('kimono', '和服 / 浴衣', 'japanese', KIMONO_PALS, [
+  ...forms('和服 / 浴衣', 'japanese', KIMONO_PALS, [
     { id: 'sf-kimono-folded', form: 'folded', dims: [40, 86, 4.3], build: kimonoFolded },
     { id: 'sf-kimono-hanging', form: 'hanging', dims: [134.2, 3.9, 140.6], build: kimonoHanging },
   ]),
-  ...forms('apron', '围裙', 'deco', APRON_PALS, [
+  ...forms('围裙', 'deco', APRON_PALS, [
     { id: 'sf-apron-folded', form: 'folded', dims: [24, 22.4, 2.7], build: apronFolded },
     { id: 'sf-apron-hanging', form: 'hanging', dims: [54, 5.3, 83], build: apronHanging },
   ]),
-  ...forms('beanie', '毛线帽', 'deco', HAT_PALS, [
+  ...forms('毛线帽', 'deco', HAT_PALS, [
     { id: 'sf-beanie-lying', form: 'lying', dims: [17.6, 17.6, 18.6], build: (p) => ground(beanie(p)) },
     { id: 'sf-beanie-hanging', form: 'hanging', dims: [17.6, 20.1, 24.2], build: (p) => hatHang(beanie(p)) },
   ]),
-  ...forms('straw-hat', '草帽', 'deco', STRAW_PALS, [
+  ...forms('草帽', 'deco', STRAW_PALS, [
     { id: 'sf-straw-hat-lying', form: 'lying', dims: [34, 34, 9.4], build: (p) => ground(strawHat(p)) },
     { id: 'sf-straw-hat-hanging', form: 'hanging', dims: [34, 10.9, 40.6], build: (p) => hatHang(strawHat(p)) },
   ]),
-  ...forms('bucket-hat', '渔夫帽', 'deco', HAT_PALS, [
+  ...forms('渔夫帽', 'deco', HAT_PALS, [
     { id: 'sf-bucket-hat-lying', form: 'lying', dims: [23, 23, 9.7], build: (p) => ground(bucketHat(p)) },
     { id: 'sf-bucket-hat-hanging', form: 'hanging', dims: [23, 11.2, 29.6], build: (p) => hatHang(bucketHat(p)) },
   ]),
-  ...forms('top-hat', '礼帽', 'deco', HAT_PALS, [
+  ...forms('礼帽', 'deco', HAT_PALS, [
     { id: 'sf-top-hat-lying', form: 'lying', dims: [30, 30, 15.8], build: (p) => ground(topHat(p)) },
     { id: 'sf-top-hat-hanging', form: 'hanging', dims: [30, 17.3, 36.6], build: (p) => hatHang(topHat(p)) },
   ]),
-  ...forms('crossbody-bag', '斜挎包', 'deco', BAG_PALS, [
+  ...forms('斜挎包', 'deco', BAG_PALS, [
     { id: 'sf-crossbody-standing', form: 'standing', dims: [29.1, 25.4, 15.7], build: crossStanding },
     { id: 'sf-crossbody-hanging', form: 'hanging', dims: [23.6, 10.2, 55], build: crossHanging },
   ]),
-  ...forms('handbag', '手提包', 'deco', BAG_PALS, [
+  ...forms('手提包', 'deco', BAG_PALS, [
     { id: 'sf-handbag-standing', form: 'standing', dims: [31, 13, 30.9], build: handStanding },
     { id: 'sf-handbag-hanging', form: 'hanging', dims: [31, 14.5, 42.6], build: handHanging },
   ]),

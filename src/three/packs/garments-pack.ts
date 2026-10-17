@@ -192,7 +192,7 @@ const CLOTHES: AssetDef[] = LINES.flatMap((line) => {
     const pals = st.pals ?? line.pals ?? WEAR
     const base = `gm-${line.kind}-s${i + 1}`
     const ref = specOf(line.kind, st, pals[0][1])
-    const common = { family: `gm-${line.kind}`, sizeLabel: st.label, prop: true, limit: { scope: 'surface' as const, max: 30 } }
+    const common = { sizeLabel: st.label, prop: true, limit: { scope: 'surface' as const, max: 30 } }
     return [
       define(`${base}-${line.rest ?? 'folded'}`, label, line.category ?? 'deco', measureGarment(ref, 'folded'), pals, (p) => ground(buildGarment(specOf(line.kind, st, p), 'folded')), { ...common, form: line.rest ?? 'folded' }),
       define(`${base}-hanging`, label, line.category ?? 'deco', measureGarment(ref, 'hanging'), pals, (p) => buildGarment(specOf(line.kind, st, p), 'hanging'), { ...common, form: 'hanging' }),
@@ -217,7 +217,7 @@ function towelSpec(t: (typeof TOWEL_STYLES)[number], p: string[]) {
 }
 const TOWELS: AssetDef[] = TOWEL_STYLES.flatMap((t) => {
   const ref = towelSpec(t, TOWEL_PAL[0][1])
-  const common = { family: 'gm-towel', sizeLabel: t.label, prop: true, limit: { scope: 'surface' as const, max: 30 } }
+  const common = { sizeLabel: t.label, prop: true, limit: { scope: 'surface' as const, max: 30 } }
   return [
     define(`gm-towel-${t.key}-folded`, '毛巾', 'toiletry', measureGarment(ref, 'folded'), TOWEL_PAL, (p) => ground(buildGarment(towelSpec(t, p), 'folded')), { ...common, form: 'folded' }),
     define(`gm-towel-${t.key}-bar`, '毛巾', 'toiletry', measureGarment(ref, 'bar'), TOWEL_PAL, (p) => buildGarment(towelSpec(t, p), 'bar'), { ...common, form: 'hanging', formLabel: '搭在杆上' }),
@@ -247,7 +247,7 @@ const STACKS: [string, string, string, number][] = [
 ]
 const TOWEL_STACKS: AssetDef[] = STACKS.map(([id, label, v, n]) => {
   const b = new THREE.Box3().setFromObject(towelStack(v, n)(TOWEL_PAL[0][1]), true).getSize(new THREE.Vector3())
-  return define(id, '一摞毛巾', 'toiletry', [Math.round(b.x * 10) / 10, Math.round(b.z * 10) / 10, Math.round(b.y * 10) / 10], TOWEL_PAL, towelStack(v, n), { family: 'gm-towel-stack', sizeLabel: label, prop: true, form: 'stacked', limit: { scope: 'surface', max: 30 } })
+  return define(id, '一摞毛巾', 'toiletry', [Math.round(b.x * 10) / 10, Math.round(b.z * 10) / 10, Math.round(b.y * 10) / 10], TOWEL_PAL, towelStack(v, n), { sizeLabel: label, prop: true, form: 'stacked', limit: { scope: 'surface', max: 30 } })
 })
 
 // ---------- 衣架 ----------
@@ -286,7 +286,6 @@ const HANGER_DEFS: AssetDef[] = HANGERS.flatMap(([key, label, type, mat, o]) =>
   ([false, true] as const).map((lying) => {
     const b = hangerBuild(type, mat, o, lying)
     return define(`gm-hanger-${key}-${lying ? 'lying' : 'hanging'}`, '衣架', 'storage', measure(b(HANGER_PAL[0][1])), HANGER_PAL, b, {
-      family: 'gm-hanger',
       sizeLabel: label,
       prop: true,
       form: lying ? 'lying' : 'hanging',
@@ -320,7 +319,7 @@ const WARDROBES: Wardrobe[] = ['women', 'men', 'kids', 'casual', 'outer']
 const ROWS: AssetDef[] = WARDROBES.flatMap((wd) =>
   ROW_LENGTHS.flatMap((len) => {
     const [Dcap, Hcap] = ROW_ENVELOPE[wd]
-    const fam = { family: `gm-row-${wd}`, sizeLabel: `${len}`, limit: { scope: 'house' as const, max: 99 } }
+    const fam = { sizeLabel: `${len}`, limit: { scope: 'house' as const, max: 99 } }
     const name = `一排衣服（${WARDROBE_LABELS[wd]}）`
     const rowStyle = (p: string[]): StyleTag => STYLE_OF.get(p.join()) ?? 'nordic'
     const hanging = define(`gm-row-${wd}-${len}-hanging`, name, 'storage', [len, Dcap, Hcap], ROW_PAL, (p) => {
@@ -374,7 +373,6 @@ const PIPE_PAL: Pal[] = [
 export const PIPE_WIDTHS = [60, 90, 120, 150, 180, 240]
 const PIPES: AssetDef[] = PIPE_WIDTHS.map((w) =>
   define(`gm-closet-pipe-${w}`, '衣柜挂杆（枕棚）', 'storage', [w, PIPE.d, PIPE.shelfY + PIPE.shelfT - PIPE.mount], PIPE_PAL, closetPipe(w), {
-    family: 'gm-closet-pipe',
     sizeLabel: `${w}`,
     mount: PIPE.mount,
     surface: PIPE.shelfY + PIPE.shelfT,

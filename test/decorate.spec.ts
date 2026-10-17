@@ -45,9 +45,9 @@ const footprint = (x: Furniture) => rectCorners(x, def(x).w, def(x).d, x.rot)
 /** 椅子、坐垫可以塞到桌子底下；主机也可以 */
 const SEAT = /chair|stool|zabuton|bench|^ch-|^c2-|椅|坐垫|凳|座布団/
 /** 主机机箱可以放在书桌底下（比桌面矮） */
-const tucked = (a: AssetDef, b: Furniture) => !!a.surface && (SEAT.test(b.asset + def(b).name) || (def(b).family === 'pc-tower' && def(b).h < a.surface))
+const tucked = (a: AssetDef, b: Furniture) => !!a.surface && (SEAT.test(b.asset + def(b).name) || (def(b).type === 'pc' && def(b).h < a.surface))
 /** 洗衣机上方置物架跨在洗衣机 / 干衣机（家具）上 */
-const straddles = (a: Furniture, b: Furniture) => def(a).family === 'laundry-rack' && ['washer', 'dryer'].includes(def(b).family ?? '')
+const straddles = (a: Furniture, b: Furniture) => def(a).type === 'washer-rack' && ['washer', 'dryer'].includes(def(b).type ?? '')
 const all = (fn: (c: Case) => string[]) => cases.filter((c) => !c.error).flatMap((c) => fn(c).map((m) => `seed ${c.seed}: ${m}`))
 
 describe('一键布置 seed 1..40', () => {
@@ -75,7 +75,7 @@ describe('一键布置 seed 1..40', () => {
       f.filter(isFloor).flatMap((x) =>
         plan.fixtures
           // 冰箱位 / 洗衣机位是给机器预留的空间：冰箱、洗衣机、干衣机本来就放在上面
-          .filter((fx) => !(fx.kind === 'washer' && ['laundry-rack', 'washer', 'dryer'].includes(def(x).family ?? '')) && !(fx.kind === 'fridge' && def(x).family === 'fridge'))
+          .filter((fx) => !(fx.kind === 'washer' && ['washer-rack', 'washer', 'dryer'].includes(def(x).type ?? '')) && !(fx.kind === 'fridge' && def(x).type === 'fridge'))
           // 收纳位是给柜子预留的空间：柜子本来就放在上面
           .filter((fx) => !(fx.kind === 'builtin' && cabinetsOn([x], fx).length))
           .flatMap((fx) => {
@@ -134,7 +134,8 @@ describe('一键布置 seed 1..40', () => {
   })
 
   test('有浴室的户都有洗发水和沐浴露', () => {
-    const fam = (id: string) => ASSET_MAP.get(id)?.family
+    // 同一组瓶子（洗发水 / 护发素 / 沐浴露同属 bath-bottle 一组）都算
+    const fam = (id: string) => ASSET_MAP.get(id)?.limitGroup
     const has = (f: Furniture[], id: string) => f.some((x) => x.asset === id || (!!fam(id) && fam(x.asset) === fam(id)))
     const bad = all(({ plan, f }) =>
       plan.rooms.some((r) => r.kind === 'bath')

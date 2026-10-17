@@ -113,8 +113,8 @@ export function lidSizeFor(w: number, d: number) {
 
 const LIDS: AssetDef[] = LID_W.flatMap((w) =>
   LID_D.flatMap((d) => [
-    prop(`bx-lid-roll-${w}x${d}`, '浴缸盖（卷帘・盖着）', 'toiletry', [w, d, 1.8], LID_PALS, lidRollCover(w, d), { family: 'bx-lid-roll', sizeLabel: `${w}×${d}`, form: 'closed' }),
-    prop(`bx-lid-panel-${w}x${d}`, '浴缸盖（组合板・盖着）', 'toiletry', [w - 0.5, d, 2.6], LID_PALS, lidPanelCover(w, d), { family: 'bx-lid-panel', sizeLabel: `${w}×${d}`, form: 'closed' }),
+    prop(`bx-lid-roll-${w}x${d}`, '浴缸盖（卷帘・盖着）', 'toiletry', [w, d, 1.8], LID_PALS, lidRollCover(w, d), { sizeLabel: `${w}×${d}`, form: 'closed' }),
+    prop(`bx-lid-panel-${w}x${d}`, '浴缸盖（组合板・盖着）', 'toiletry', [w - 0.5, d, 2.6], LID_PALS, lidPanelCover(w, d), { sizeLabel: `${w}×${d}`, form: 'closed' }),
   ]),
 )
 
@@ -183,31 +183,31 @@ const DIATOM_PALS: Pal[] = [
   ['japanese', ['#d8d2c4', J.wood, J.ai]],
 ]
 const MATS: AssetDef[] = [
-  prop('bx-mat-diatom-fold', '浴室地垫', 'toiletry', [60.2, 40, 1.6], DIATOM_PALS, matDiatomFold, { family: 'bath-mat', sizeLabel: '硅藻土・对折' }),
+  prop('bx-mat-diatom-fold', '浴室地垫', 'toiletry', [60.2, 40, 1.6], DIATOM_PALS, matDiatomFold, { sizeLabel: '硅藻土・对折' }),
   prop('bx-mat-diatom-dots', '浴室地垫', 'toiletry', [45, 35, 1.3], [
     ['modern', ['#e9e7e2', M.gray]],
     ['nordic', [N.white, N.blue]],
     ['cute', [C.white, C.mint]],
     ['japanese', [J.washi, J.tatami]],
-  ], matDiatomDots, { family: 'bath-mat', sizeLabel: '硅藻土・小号' }),
+  ], matDiatomDots, { sizeLabel: '硅藻土・小号' }),
   prop('bx-mat-chenille', '浴室地垫', 'toiletry', [60, 42, 2.75], [
     ['cute', [C.pink, C.white]],
     ['nordic', [N.sage, N.white]],
     ['modern', [M.gray, M.char]],
     ['retro', [R.mustard, R.caramel]],
     ['cute', [C.sky, C.white]],
-  ], matChenille, { family: 'bath-mat', sizeLabel: '雪尼尔' }),
+  ], matChenille, { sizeLabel: '雪尼尔' }),
   prop('bx-mat-towel', '浴室地垫', 'toiletry', [65, 45, 1], [
     ['nordic', [N.white, N.blue, N.gray]],
     ['modern', [M.light, M.char, M.white]],
     ['japanese', [J.washi, J.ai, J.shu]],
     ['retro', [R.cream, R.orange, R.teal]],
-  ], matTowel, { family: 'bath-mat', sizeLabel: '毛巾' }),
+  ], matTowel, { sizeLabel: '毛巾' }),
   prop('bx-mat-slat', '浴室地垫', 'toiletry', [60, 38.6, 3], [
     ['japanese', [J.hinoki, J.wood]],
     ['nordic', [N.oakL, N.oak]],
     ['industrial', [I.walnut, I.iron]],
-  ], matSlat, { family: 'bath-mat', sizeLabel: '桧木踏板' }),
+  ], matSlat, { sizeLabel: '桧木踏板' }),
 ]
 
 // =====================================================================
@@ -309,13 +309,11 @@ const hookLevel = (x0: number, x1: number, rest: number, y: number) => ({ y, kin
 
 const HOOKS: AssetDef[] = [
   define('bx-towel-hook', '毛巾挂钩', 'toiletry', [4.4, HK.d, 5.6], HOOK_PALS, towelHook, {
-    family: 'bx-towel-hook',
     sizeLabel: '单钩',
     mount: HK.mount,
     surfaces: [hookLevel(-1.2, 1.2, HK.tip - 1.2, HK.mount + 2.2 + 0.75 + 0.5)],
   }),
   define('bx-towel-hook-3', '毛巾挂钩', 'toiletry', [32, HK.d, 6], HOOK_PALS, towelHook3, {
-    family: 'bx-towel-hook',
     sizeLabel: '三连',
     mount: HK.mount - 0.6,
     surfaces: [-11, 0, 11].map((x) => hookLevel(x - 1.2, x + 1.2, HK.tip - 1.2, HK.mount + 2.2 + 0.75 + 0.5)),
@@ -329,8 +327,8 @@ const HOOKS: AssetDef[] = [
     mount: TBB.mount,
     surfaces: [hookLevel(-TBB.w / 2 + 5, TBB.w / 2 - 5, TBB.barZ, TBB.mount + 2.4 + 0.9 + 0.5)],
   }),
-  prop('bx-face-towel-folded', '面巾', 'toiletry', [34.4, 21.4, 4.6], TOWEL_PALS, faceTowelFolded, { family: 'bx-face-towel', form: 'folded' }),
-  prop('bx-face-towel-hanging', '面巾', 'toiletry', [34.4, 6, 40.3], TOWEL_PALS, faceTowelHanging, { family: 'bx-face-towel', form: 'hanging' }),
+  prop('bx-face-towel-folded', '面巾', 'toiletry', [34.4, 21.4, 4.6], TOWEL_PALS, faceTowelFolded, { form: 'folded' }),
+  prop('bx-face-towel-hanging', '面巾', 'toiletry', [34.4, 6, 40.3], TOWEL_PALS, faceTowelHanging, { form: 'hanging' }),
 ]
 
 // =====================================================================

@@ -2451,8 +2451,6 @@ const WIP_PALS: PalFlat[] = [
 // 导出
 // ======================================================================
 
-const H = { family: 'mk-dupont' }
-const ST = { family: 'mk-stripper' }
 const BENCH_SURF = (peg: boolean): Partial<AssetDef> => ({
   surface: BENCH_TOP,
   surfaceShape: [rectPoly(-BENCH_W / 2, -BENCH_D / 2 + (peg ? 7 : 0) + BZ, BENCH_W / 2, BENCH_D / 2 + BZ)] as Poly[],
@@ -2465,13 +2463,13 @@ export const MAKER: AssetDef[] = [
   define('mk-raspi', '树莓派', 'hobby', [8.8, 6, 2], PI_PALS, (p) => fitGroup(raspiParts(p[0], p[1], p[2])), PROP),
   define('mk-esp32', 'ESP32 开发板', 'hobby', [5.4, 2.9, 1.5], BOARD_PALS, esp32, PROP),
   define('mk-bluepill', 'STM32 蓝丸板', 'hobby', [5.5, 2.4, 1.9], [['modern', '#2f5fb5', HDR, '#7cff8a'], ['industrial', '#2a2b30', HDR, '#7cff8a'], ['cute', '#9b6fd0', HDR, C.pink]], bluePill, PROP),
-  define('mk-breadboard-full', '面包板', 'hobby', [16.5, 5.5, 2.6], BB_PALS, breadboardFull, { ...PROP, family: 'mk-breadboard', sizeLabel: '830 孔' }),
-  define('mk-breadboard-half', '面包板', 'hobby', [8.2, 5.5, 2.6], BB_PALS, breadboardHalf, { ...PROP, family: 'mk-breadboard', sizeLabel: '400 孔' }),
+  define('mk-breadboard-full', '面包板', 'hobby', [16.5, 5.5, 2.6], BB_PALS, breadboardFull, { ...PROP, sizeLabel: '830 孔' }),
+  define('mk-breadboard-half', '面包板', 'hobby', [8.2, 5.5, 2.6], BB_PALS, breadboardHalf, { ...PROP, sizeLabel: '400 孔' }),
   define('mk-pcb-stack', '裸 PCB 一摞', 'hobby', [17.6, 10.8, 1.3], [['industrial', '#2f7d4a', '#9b6fd0'], ['modern', '#2a2b30', '#1f6fb2'], ['cute', '#f2f2ee', '#d9468f'], ['modern', '#1f6fb2', '#c8473a']], pcbStack, PROP),
   define('mk-smd-reels', '贴片元件卷带', 'hobby', [8, 20.6, 18.8], REEL_PALS, smdReels, PROP),
   define('mk-parts-box', '元件收纳盒', 'hobby', [19, 12.7, 3.7], CASE_PALS, partsBox, PROP),
-  define('mk-dupont-lying', '杜邦线', 'hobby', [19.5, 11, 0.5], DUPONT_PALS, dupontLying, { ...PROP, ...H, form: 'lying' }),
-  define('mk-dupont-hanging', '杜邦线', 'hobby', [1.5, 5.5, 15.7], DUPONT_PALS, dupontHanging, { ...PROP, ...H, form: 'hanging' }),
+  define('mk-dupont-lying', '杜邦线', 'hobby', [19.5, 11, 0.5], DUPONT_PALS, dupontLying, { ...PROP, form: 'lying' }),
+  define('mk-dupont-hanging', '杜邦线', 'hobby', [1.5, 5.5, 15.7], DUPONT_PALS, dupontHanging, { ...PROP, form: 'hanging' }),
   define('mk-servo-set', '舵机与减速电机', 'hobby', [21.2, 9, 4.4], SERVO_PALS, servoSet, PROP),
   define('mk-robot-car', '小车底盘套件', 'hobby', [18.7, 20.5, 10.3], CAR_PALS, robotCar, PROP),
   define('mk-led-strip', 'LED 灯带卷', 'hobby', [21.3, 27.6, 10.3], STRIP_PALS, ledStrip, PROP),
@@ -2494,8 +2492,8 @@ export const MAKER: AssetDef[] = [
   define('mk-glue-gun', '热熔胶枪', 'hobby', [9.6, 25, 11.2], TOOL_PALS, glueGun, PROP),
   define('mk-e-screwdriver', '电动螺丝刀', 'hobby', [14.6, 5.8, 16.6], TOOL_PALS, eScrewdriver, PROP),
   define('mk-rotary-tool', '迷你电磨', 'hobby', [24.9, 13.5, 4.5], TOOL_PALS, rotaryTool, PROP),
-  define('mk-stripper-lying', '剥线钳', 'hobby', [4.5, 18.1, 2.1], STRIP_TOOL_PALS, stripperLying, { ...PROP, ...ST, form: 'lying' }),
-  define('mk-stripper-hanging', '剥线钳', 'hobby', [4.5, 3.8, 20], STRIP_TOOL_PALS, stripperHanging, { ...PROP, ...ST, form: 'hanging' }),
+  define('mk-stripper-lying', '剥线钳', 'hobby', [4.5, 18.1, 2.1], STRIP_TOOL_PALS, stripperLying, { ...PROP, form: 'lying' }),
+  define('mk-stripper-hanging', '剥线钳', 'hobby', [4.5, 3.8, 20], STRIP_TOOL_PALS, stripperHanging, { ...PROP, form: 'hanging' }),
   define('mk-esd-strap', '静电手环', 'hobby', [20.3, 5.7, 1.2], ESD_PALS, esdStrap, PROP),
   define('mk-esd-mat', 'ESD 防静电垫', 'hobby', [60, 40, 0.6], MAT_PALS, esdMat, { ...PROP, surface: 0.4 }),
   define('mk-mag-lamp', '放大镜台灯', 'hobby', [18.2, 38.4, 34.8], MAG_PALS, magLamp, PROP),
@@ -2508,11 +2506,11 @@ export const MAKER: AssetDef[] = [
   define('mk-drill-press', '台钻', 'hobby', [20, 36, 57], MACHINE_PALS, drillPress, PROP),
   define('mk-laser-cutter', '激光切割机', 'hobby', [70, 55, 20.1], LASER_PALS, laserCutter, PROP),
   define('mk-cnc', '迷你 CNC 雕刻机', 'hobby', [45.9, 36.2, 27.7], CNC_PALS, cnc3018, PROP),
-  define('mk-drawers-desk', '零件抽屉柜', 'storage', [38, 16.2, 29.2], DRAWER_PALS, drawerCab(38, 16, DESK_ROWS, 0), { ...PROP, family: 'mk-parts-drawer', sizeLabel: '桌面 39 格', surface: 29.2, surfaces: drawerCabSurfaces(38, 16, DESK_ROWS, 0), openable: true }),
-  define('mk-drawers-floor', '零件抽屉柜', 'storage', [50, 25.2, 98.8], DRAWER_PALS, drawerCab(50, 25, FLOOR_ROWS, 4), { family: 'mk-parts-drawer', sizeLabel: '落地 60 格', surface: 98.8, surfaces: drawerCabSurfaces(50, 25, FLOOR_ROWS, 4), openable: true }),
+  define('mk-drawers-desk', '零件抽屉柜', 'storage', [38, 16.2, 29.2], DRAWER_PALS, drawerCab(38, 16, DESK_ROWS, 0), { ...PROP, sizeLabel: '桌面 39 格', surface: 29.2, surfaces: drawerCabSurfaces(38, 16, DESK_ROWS, 0), openable: true }),
+  define('mk-drawers-floor', '零件抽屉柜', 'storage', [50, 25.2, 98.8], DRAWER_PALS, drawerCab(50, 25, FLOOR_ROWS, 4), { sizeLabel: '落地 60 格', surface: 98.8, surfaces: drawerCabSurfaces(50, 25, FLOOR_ROWS, 4), openable: true }),
   define('mk-tool-chest', '工具柜', 'storage', [73.5, 47.6, 85], CHEST_PALS, toolChest, { surface: 83.3, surfaceShape: [rectPoly(-32.6 + CHEST_DX, -21.6 + CHEST_DZ, 32.6 + CHEST_DX, 21.6 + CHEST_DZ)], surfaces: chestSurfaces(), openable: true }),
-  define('mk-workbench', '工作台', 'hobby', [150, 79.4, 90], BENCH_PALS, workbench(false), { family: 'mk-workbench', sizeLabel: '150', ...BENCH_SURF(false) }),
-  define('mk-workbench-peg', '工作台', 'hobby', [150, 79.4, 163], BENCH_PALS, workbench(true), { family: 'mk-workbench', sizeLabel: '150 带洞洞板', ...BENCH_SURF(true) }),
+  define('mk-workbench', '工作台', 'hobby', [150, 79.4, 90], BENCH_PALS, workbench(false), { sizeLabel: '150', ...BENCH_SURF(false) }),
+  define('mk-workbench-peg', '工作台', 'hobby', [150, 79.4, 163], BENCH_PALS, workbench(true), { sizeLabel: '150 带洞洞板', ...BENCH_SURF(true) }),
   define('mk-sawhorse', '锯木架', 'hobby', [90, 49.3, 70], HORSE_PALS, sawhorse, { surface: 70, surfaceShape: [rectPoly(-45, -1.9, 45, 1.9)] }),
   define('mk-lumber', '木料一捆', 'hobby', [114.4, 28.2, 9.7], LUMBER_PALS, lumber),
   define('mk-screw-sorter', '螺丝分类盒', 'hobby', [26, 21.5, 20.5], SORTER_PALS, screwSorter, PROP),

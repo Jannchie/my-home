@@ -1595,24 +1595,24 @@ const [filmOff, filmOn] = both(filmProjector)
 
 export const AV: AssetDef[] = [
   // ---------- 投影仪 ----------
-  define('av-projector', '家用投影仪', 'appliance', [30, 24.5, 10.6], PRJ_HOME, homeOff, { ...PROP, family: 'av-projector', form: 'closed', formLabel: '待机' }),
-  define('av-projector-on', '家用投影仪', 'appliance', [35, 54.6, 15.6], PRJ_HOME, homeOn, { ...PROP, family: 'av-projector', form: 'open', formLabel: '投影中' }),
-  define('av-projector-cube', '迷你方块投影仪', 'appliance', [10, 11.4, 10.4], PRJ_CUBE, cubeOff, { ...PROP, family: 'av-projector-cube', form: 'closed', formLabel: '待机' }),
-  define('av-projector-cube-on', '迷你方块投影仪', 'appliance', [20, 36.8, 11.5], PRJ_CUBE, cubeOn, { ...PROP, family: 'av-projector-cube', form: 'open', formLabel: '投影中' }),
-  define('av-projector-can', '迷你圆筒投影仪', 'appliance', [8.6, 9.5, 15.7], PRJ_CAN, canOff, { ...PROP, family: 'av-projector-can', form: 'closed', formLabel: '待机' }),
-  define('av-projector-can-on', '迷你圆筒投影仪', 'appliance', [18, 34.6, 16.6], PRJ_CAN, canOn, { ...PROP, family: 'av-projector-can', form: 'open', formLabel: '投影中' }),
-  define('av-projector-ust', '短焦投影仪', 'appliance', [55, 33.4, 12.4], PRJ_UST, ustOff, { ...PROP, family: 'av-projector-ust', form: 'closed', formLabel: '待机' }),
-  define('av-projector-ust-on', '短焦投影仪', 'appliance', [55, 33.2, 60.4], PRJ_UST, ustOn, { ...PROP, family: 'av-projector-ust', form: 'open', formLabel: '投影中' }),
-  define('av-film-projector', '胶片放映机', 'appliance', [30.6, 45, 43.5], PRJ_FILM, filmOff, { ...PROP, family: 'av-film-projector', form: 'closed', formLabel: '待机' }),
-  define('av-film-projector-on', '胶片放映机', 'appliance', [32.6, 70, 43.5], PRJ_FILM, filmOn, { ...PROP, family: 'av-film-projector', form: 'open', formLabel: '投影中' }),
+  define('av-projector', '家用投影仪', 'appliance', [30, 24.5, 10.6], PRJ_HOME, homeOff, { ...PROP, form: 'closed', formLabel: '待机' }),
+  define('av-projector-on', '家用投影仪', 'appliance', [35, 54.6, 15.6], PRJ_HOME, homeOn, { ...PROP, form: 'open', formLabel: '投影中' }),
+  define('av-projector-cube', '迷你方块投影仪', 'appliance', [10, 11.4, 10.4], PRJ_CUBE, cubeOff, { ...PROP, form: 'closed', formLabel: '待机' }),
+  define('av-projector-cube-on', '迷你方块投影仪', 'appliance', [20, 36.8, 11.5], PRJ_CUBE, cubeOn, { ...PROP, form: 'open', formLabel: '投影中' }),
+  define('av-projector-can', '迷你圆筒投影仪', 'appliance', [8.6, 9.5, 15.7], PRJ_CAN, canOff, { ...PROP, form: 'closed', formLabel: '待机' }),
+  define('av-projector-can-on', '迷你圆筒投影仪', 'appliance', [18, 34.6, 16.6], PRJ_CAN, canOn, { ...PROP, form: 'open', formLabel: '投影中' }),
+  define('av-projector-ust', '短焦投影仪', 'appliance', [55, 33.4, 12.4], PRJ_UST, ustOff, { ...PROP, form: 'closed', formLabel: '待机' }),
+  define('av-projector-ust-on', '短焦投影仪', 'appliance', [55, 33.2, 60.4], PRJ_UST, ustOn, { ...PROP, form: 'open', formLabel: '投影中' }),
+  define('av-film-projector', '胶片放映机', 'appliance', [30.6, 45, 43.5], PRJ_FILM, filmOff, { ...PROP, form: 'closed', formLabel: '待机' }),
+  define('av-film-projector-on', '胶片放映机', 'appliance', [32.6, 70, 43.5], PRJ_FILM, filmOn, { ...PROP, form: 'open', formLabel: '投影中' }),
 
   // ---------- 幕布 ----------
-  define('av-screen-tripod', '三脚架幕布', 'living', [175, 60.2, 228], SCR_TRIPOD, tripodScreen(true), { family: 'av-screen-tripod', form: 'open', formLabel: '展开' }),
-  define('av-screen-tripod-closed', '三脚架幕布', 'living', [175, 60.2, 134], SCR_TRIPOD, tripodScreen(false), { family: 'av-screen-tripod', form: 'closed', formLabel: '收起' }),
-  define('av-screen-pull', '壁挂手拉幕布', 'living', [211, 9, 180.3], SCR_PULL, pullScreen(true), { family: 'av-screen-pull', form: 'open', formLabel: '展开', mount: 70 }),
-  define('av-screen-pull-closed', '壁挂手拉幕布', 'living', [211, 9, 20.3], SCR_PULL, pullScreen(false), { family: 'av-screen-pull', form: 'closed', formLabel: '收起', mount: 230 }),
-  define('av-screen-electric', '电动幕布', 'living', [242, 11, 174.3], SCR_ELEC, electricScreen(true), { family: 'av-screen-electric', form: 'open', formLabel: '展开', mount: 81 }),
-  define('av-screen-electric-closed', '电动幕布', 'living', [242, 11, 12.8], SCR_ELEC, electricScreen(false), { family: 'av-screen-electric', form: 'closed', formLabel: '收起', mount: 242.5 }),
+  define('av-screen-tripod', '三脚架幕布', 'living', [175, 60.2, 228], SCR_TRIPOD, tripodScreen(true), { form: 'open', formLabel: '展开' }),
+  define('av-screen-tripod-closed', '三脚架幕布', 'living', [175, 60.2, 134], SCR_TRIPOD, tripodScreen(false), { form: 'closed', formLabel: '收起' }),
+  define('av-screen-pull', '壁挂手拉幕布', 'living', [211, 9, 180.3], SCR_PULL, pullScreen(true), { form: 'open', formLabel: '展开', mount: 70 }),
+  define('av-screen-pull-closed', '壁挂手拉幕布', 'living', [211, 9, 20.3], SCR_PULL, pullScreen(false), { form: 'closed', formLabel: '收起', mount: 230 }),
+  define('av-screen-electric', '电动幕布', 'living', [242, 11, 174.3], SCR_ELEC, electricScreen(true), { form: 'open', formLabel: '展开', mount: 81 }),
+  define('av-screen-electric-closed', '电动幕布', 'living', [242, 11, 12.8], SCR_ELEC, electricScreen(false), { form: 'closed', formLabel: '收起', mount: 242.5 }),
   define('av-screen-frame', '画框幕布', 'living', [164, 50, 150], SCR_FRAME, frameScreen),
 
   // ---------- 投影支架 ----------
@@ -1620,8 +1620,8 @@ export const AV: AssetDef[] = [
   define('av-stand-arm', '床头悬臂投影支架', 'bedroom', [40, 90, 151], STAND_ARM, armStand, { surface: ARM_TOP, surfaceShape: [rectPoly(-14.2, 21.8, 14.2, 45)] }),
 
   // ---------- 播放器 ----------
-  define('av-cd-player', 'CD 机', 'appliance', [43, 30.7, 9], CDP, cdPlayer(false), { ...PROP, family: 'av-cd-player', form: 'closed' }),
-  define('av-cd-player-open', 'CD 机', 'appliance', [43, 44.1, 9], CDP, cdPlayer(true), { ...PROP, family: 'av-cd-player', form: 'open' }),
+  define('av-cd-player', 'CD 机', 'appliance', [43, 30.7, 9], CDP, cdPlayer(false), { ...PROP, form: 'closed' }),
+  define('av-cd-player-open', 'CD 机', 'appliance', [43, 44.1, 9], CDP, cdPlayer(true), { ...PROP, form: 'open' }),
   define('av-boombox', '手提 CD 收音机', 'appliance', [52, 18.2, 31.6], BOOM, boombox, PROP),
   define('av-discman', 'Discman 随身 CD', 'appliance', [20, 14, 3], DISCMAN, discman, PROP),
   define('av-walkman', '卡带随身听', 'appliance', [30.4, 9.4, 8.8], WALKMAN, walkman, PROP),
@@ -1634,12 +1634,12 @@ export const AV: AssetDef[] = [
 
   // ---------- 音箱 ----------
   define('av-soundbar', '回音壁 Soundbar', 'appliance', [90, 10.4, 6.7], BAR, soundbar, PROP),
-  define('av-ht-front', '家庭影院音箱', 'living', [26, 30, 100.5], HT, htTower, { family: 'av-ht-speaker', sizeLabel: '前置落地箱' }),
-  define('av-ht-center', '家庭影院音箱', 'living', [52, 21.8, 17], HT, htCenter, { ...PROP, family: 'av-ht-speaker', sizeLabel: '中置' }),
-  define('av-ht-surround', '家庭影院音箱', 'living', [15, 15.7, 24], HT, htSurround, { ...PROP, family: 'av-ht-speaker', sizeLabel: '环绕' }),
-  define('av-ht-sub', '家庭影院音箱', 'living', [26, 38.7, 37.5], HT, subwoofer, { family: 'av-ht-speaker', sizeLabel: '低音炮' }),
-  define('av-hifi-tower', '落地 HiFi 音箱', 'living', [24, 32.8, 90], HIFI, hifiTower(24, 86, 30, false), { family: 'av-hifi-tower', sizeLabel: '中' }),
-  define('av-hifi-tower-l', '落地 HiFi 音箱', 'living', [30, 41.1, 108], HIFI, hifiTower(30, 104, 38, true), { family: 'av-hifi-tower', sizeLabel: '大' }),
+  define('av-ht-front', '家庭影院音箱', 'living', [26, 30, 100.5], HT, htTower, { sizeLabel: '前置落地箱' }),
+  define('av-ht-center', '家庭影院音箱', 'living', [52, 21.8, 17], HT, htCenter, { ...PROP, sizeLabel: '中置' }),
+  define('av-ht-surround', '家庭影院音箱', 'living', [15, 15.7, 24], HT, htSurround, { ...PROP, sizeLabel: '环绕' }),
+  define('av-ht-sub', '家庭影院音箱', 'living', [26, 38.7, 37.5], HT, subwoofer, { sizeLabel: '低音炮' }),
+  define('av-hifi-tower', '落地 HiFi 音箱', 'living', [24, 32.8, 90], HIFI, hifiTower(24, 86, 30, false), { sizeLabel: '中' }),
+  define('av-hifi-tower-l', '落地 HiFi 音箱', 'living', [30, 41.1, 108], HIFI, hifiTower(30, 104, 38, true), { sizeLabel: '大' }),
   define('av-bt-cylinder', '圆柱蓝牙音箱', 'appliance', [9, 10.6, 17.9], BT_CYL, btCylinder, PROP),
   define('av-bt-retro', '复古皮革蓝牙音箱', 'appliance', [18, 8.4, 15.1], BT_RETRO, btRetro, PROP),
   define('av-bt-ball', '圆球蓝牙音箱', 'appliance', [12, 12.4, 12.4], BT_BALL, btBall, PROP),
@@ -1665,9 +1665,9 @@ export const AV: AssetDef[] = [
   define('av-clapper', '场记板', 'hobby', [28.5, 34.2, 2.7], CLAP, clapper, PROP),
 
   // ---------- 海报 / 票根 ----------
-  define('av-poster', '电影海报', 'deco', [51.5, 0.9, 72.8], POSTER_SIL, poster(51.5, 72.8, 'silhouette', false), { stick: true, prop: true, family: 'av-poster', sizeLabel: 'B2 剪影' }),
-  define('av-poster-space', '电影海报', 'deco', [51.5, 2, 72.8], POSTER_SPACE, poster(51.5, 72.8, 'space', true), { stick: true, prop: true, family: 'av-poster', sizeLabel: 'B2 太空（带框）' }),
-  define('av-poster-retro', '电影海报', 'deco', [36.4, 0.9, 51.5], POSTER_RETRO, poster(36.4, 51.5, 'retro', false), { stick: true, prop: true, family: 'av-poster', sizeLabel: 'B3 复古' }),
+  define('av-poster', '电影海报', 'deco', [51.5, 0.9, 72.8], POSTER_SIL, poster(51.5, 72.8, 'silhouette', false), { stick: true, prop: true, sizeLabel: 'B2 剪影' }),
+  define('av-poster-space', '电影海报', 'deco', [51.5, 2, 72.8], POSTER_SPACE, poster(51.5, 72.8, 'space', true), { stick: true, prop: true, sizeLabel: 'B2 太空（带框）' }),
+  define('av-poster-retro', '电影海报', 'deco', [36.4, 0.9, 51.5], POSTER_RETRO, poster(36.4, 51.5, 'retro', false), { stick: true, prop: true, sizeLabel: 'B3 复古' }),
   define('av-ticket-stubs', '电影票根', 'deco', [20.7, 1.7, 13.4], TICKETS, ticketStubs, { stick: true, prop: true }),
 
   // ---------- 爆米花 ----------
@@ -1677,6 +1677,6 @@ export const AV: AssetDef[] = [
 
   // ---------- 家庭影院氛围 ----------
   define('av-theater-curtain', '影院遮光帘', 'deco', [234, 14.2, 235], CURTAIN, theaterCurtain, { mount: CURTAIN_MOUNT }),
-  define('av-theater-sofa', '影院沙发', 'living', [96, 93.8, 90.8], SOFA, theaterSofa(1), { family: 'av-theater-sofa', sizeLabel: '单人' }),
-  define('av-theater-sofa-2', '影院沙发', 'living', [174, 93.8, 90.8], SOFA, theaterSofa(2), { family: 'av-theater-sofa', sizeLabel: '双人' }),
+  define('av-theater-sofa', '影院沙发', 'living', [96, 93.8, 90.8], SOFA, theaterSofa(1), { sizeLabel: '单人' }),
+  define('av-theater-sofa-2', '影院沙发', 'living', [174, 93.8, 90.8], SOFA, theaterSofa(2), { sizeLabel: '双人' }),
 ]

@@ -110,7 +110,7 @@ describe('棋牌与摄像头的一键布置', () => {
     for (const { tag, plan, f } of normal) {
       for (const c of f.filter((x) => x.asset === 'hc-baby-cam')) {
         babyCams++
-        const crib = f.find((x) => def(x).family === 'kid-crib')
+        const crib = f.find((x) => def(x).type === 'crib')
         if (!crib || dist(crib, c) > 330) bad.push(`${tag}: 婴儿监视器离婴儿床太远`)
       }
       for (const b of f.filter((x) => x.asset === 'hc-doorbell-video')) if (plan.rooms.some((r) => pointInPolygon(b, r.points))) bad.push(`${tag}: 可视门铃在室内`)

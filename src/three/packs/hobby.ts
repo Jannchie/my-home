@@ -655,10 +655,10 @@ function floorTiles(p: string[]) {
 }
 
 const FITNESS: AssetDef[] = [
-  define('fit-dumbbell-2', '哑铃', 'fitness', [22.6, 8.8, 7.6], DB_PALS, (p) => dumbbellHex(22, 4.4, p[0], p[1], p[2]), { ...PROP, family: 'dumbbell', sizeLabel: '2kg' }),
-  define('fit-dumbbell-5', '哑铃', 'fitness', [30, 12, 12], DB_PALS, (p) => dumbbellRound(30, 6, p[0], p[1], p[2]), { ...PROP, family: 'dumbbell', sizeLabel: '5kg' }),
-  define('fit-dumbbell-10', '哑铃', 'fitness', [36, 16, 16], DB_PALS, (p) => dumbbellRound(36, 8, p[0], p[1], p[2]), { ...PROP, family: 'dumbbell', sizeLabel: '10kg' }),
-  define('fit-dumbbell-adj', '哑铃', 'fitness', [44.4, 22, 21], DB_PALS, adjustableDumbbell, { ...PROP, family: 'dumbbell', sizeLabel: '可调式' }),
+  define('fit-dumbbell-2', '哑铃', 'fitness', [22.6, 8.8, 7.6], DB_PALS, (p) => dumbbellHex(22, 4.4, p[0], p[1], p[2]), { ...PROP, sizeLabel: '2kg' }),
+  define('fit-dumbbell-5', '哑铃', 'fitness', [30, 12, 12], DB_PALS, (p) => dumbbellRound(30, 6, p[0], p[1], p[2]), { ...PROP, sizeLabel: '5kg' }),
+  define('fit-dumbbell-10', '哑铃', 'fitness', [36, 16, 16], DB_PALS, (p) => dumbbellRound(36, 8, p[0], p[1], p[2]), { ...PROP, sizeLabel: '10kg' }),
+  define('fit-dumbbell-adj', '哑铃', 'fitness', [44.4, 22, 21], DB_PALS, adjustableDumbbell, { ...PROP, sizeLabel: '可调式' }),
   define(
     'fit-dumbbell-rack',
     '哑铃架',
@@ -691,7 +691,7 @@ const FITNESS: AssetDef[] = [
         ['retro', R.mustard, R.mustard, R.cream],
       ],
       kettlebell(r),
-      { ...PROP, family: 'kettlebell', sizeLabel: lab },
+      { ...PROP, sizeLabel: lab },
     ),
   ),
   define(
@@ -707,8 +707,8 @@ const FITNESS: AssetDef[] = [
     ],
     barbell,
   ),
-  define('fit-bench-flat', '卧推凳', 'fitness', [50, 125, 45.5], BENCH_PALS, weightBench(0), { family: 'weight-bench', sizeLabel: '平板' }),
-  define('fit-bench-incline', '卧推凳', 'fitness', [50, 125, 92.2], BENCH_PALS, weightBench(0.7), { family: 'weight-bench', sizeLabel: '上斜' }),
+  define('fit-bench-flat', '卧推凳', 'fitness', [50, 125, 45.5], BENCH_PALS, weightBench(0), { sizeLabel: '平板' }),
+  define('fit-bench-incline', '卧推凳', 'fitness', [50, 125, 92.2], BENCH_PALS, weightBench(0.7), { sizeLabel: '上斜' }),
   define(
     'fit-power-rack',
     '深蹲架',
@@ -721,7 +721,7 @@ const FITNESS: AssetDef[] = [
       ['retro', R.red, M.black, R.cream],
     ],
     powerRack(true),
-    { family: 'power-rack', sizeLabel: '全框' },
+    { sizeLabel: '全框' },
   ),
   define(
     'fit-squat-stand',
@@ -735,7 +735,7 @@ const FITNESS: AssetDef[] = [
       ['retro', R.red, M.black, R.cream],
     ],
     powerRack(false),
-    { family: 'power-rack', sizeLabel: '半架' },
+    { sizeLabel: '半架' },
   ),
   define(
     'fit-yoga-mat',
@@ -750,7 +750,7 @@ const FITNESS: AssetDef[] = [
       ['japanese', J.ai, J.washi],
     ],
     yogaMat,
-    { family: 'yoga-mat', sizeLabel: '铺开' },
+    { sizeLabel: '铺开' },
   ),
   define(
     'fit-yoga-mat-rolled',
@@ -765,7 +765,7 @@ const FITNESS: AssetDef[] = [
       ['japanese', J.ai, J.washi, J.wood],
     ],
     yogaMatRolled,
-    { ...PROP, family: 'yoga-mat', sizeLabel: '卷起' },
+    { ...PROP, sizeLabel: '卷起' },
   ),
   define(
     'fit-yoga-ball',
@@ -866,8 +866,8 @@ const FITNESS: AssetDef[] = [
     pullupBar,
     { mount: PULLUP_MOUNT },
   ),
-  define('fit-treadmill-home', '跑步机', 'fitness', [70, 160, 128], TREAD_PALS, treadmill(70, 160, 130, false), { family: 'treadmill', sizeLabel: '家用折叠' }),
-  define('fit-treadmill-gym', '跑步机', 'fitness', [90, 205, 160], TREAD_PALS, treadmill(90, 205, 160, true), { family: 'treadmill', sizeLabel: '健身房款' }),
+  define('fit-treadmill-home', '跑步机', 'fitness', [70, 160, 128], TREAD_PALS, treadmill(70, 160, 130, false), { sizeLabel: '家用折叠' }),
+  define('fit-treadmill-gym', '跑步机', 'fitness', [90, 205, 160], TREAD_PALS, treadmill(90, 205, 160, true), { sizeLabel: '健身房款' }),
   define('fit-spin-bike', '动感单车', 'fitness', [55, 115, 113], BIKE_PALS, spinBike),
   define('fit-rower', '划船机', 'fitness', [55, 206, 84], BIKE_PALS, rower),
   define('fit-elliptical', '椭圆机', 'fitness', [60, 160, 160], TREAD_PALS, elliptical),
@@ -883,7 +883,7 @@ const FITNESS: AssetDef[] = [
       ['nordic', N.white, N.oak, '#c8f5d2'],
     ],
     bodyScale,
-    { ...PROP, family: 'body-scale', sizeLabel: '健身款' },
+    { ...PROP, sizeLabel: '健身款' },
   ),
   define(
     'fit-punching-bag',
@@ -897,7 +897,7 @@ const FITNESS: AssetDef[] = [
       ['cute', C.pink, C.white, C.white],
     ],
     punchingBagStand,
-    { family: 'punching-bag', sizeLabel: '落地' },
+    { sizeLabel: '落地' },
   ),
   define(
     'fit-punching-bag-hang',
@@ -911,7 +911,7 @@ const FITNESS: AssetDef[] = [
       ['cute', C.pink, C.white, C.white],
     ],
     punchingBagHang,
-    { family: 'punching-bag', sizeLabel: '吊挂', mount: BAG_MOUNT },
+    { sizeLabel: '吊挂', mount: BAG_MOUNT },
   ),
   define(
     'fit-floor-tiles',
@@ -2088,7 +2088,7 @@ const HOBBY_ITEMS: AssetDef[] = [
         ['japanese', J.sumi, J.shu, J.dark],
       ],
       steamLoco(k),
-      { ...PROP, family: 'steam-loco', sizeLabel: lab },
+      { ...PROP, sizeLabel: lab },
     ),
   ),
   define(
@@ -2519,12 +2519,12 @@ const WALL_MIR_PALS: PalFlat[] = [
 ]
 
 const MIRRORS: AssetDef[] = [
-  define('mir-floor-arch', '落地镜', 'bedroom', [60, 50.4, 165.4], FLOOR_MIR_PALS, floorArch, { family: 'floor-mirror', sizeLabel: '拱形' }),
-  define('mir-floor-cheval', '落地镜', 'bedroom', [63, 44, 157.2], FLOOR_MIR_PALS, floorCheval, { family: 'floor-mirror', sizeLabel: '长方形' }),
-  define('mir-floor-oval', '落地镜', 'bedroom', [50, 36, 155], FLOOR_MIR_PALS, floorOval, { family: 'floor-mirror', sizeLabel: '椭圆' }),
-  define('mir-floor-led', '落地镜', 'bedroom', [52, 48, 159.5], FLOOR_MIR_PALS, floorLed, { family: 'floor-mirror', sizeLabel: '带灯' }),
-  define('mir-floor-lean', '落地镜', 'bedroom', [70, 34, 178], FLOOR_MIR_PALS, floorLean, { family: 'floor-mirror', sizeLabel: '靠墙斜放' }),
-  define('mir-floor-wheel', '落地镜', 'bedroom', [50, 40, 162], FLOOR_MIR_PALS, floorWheel, { family: 'floor-mirror', sizeLabel: '带轮移动' }),
+  define('mir-floor-arch', '落地镜', 'bedroom', [60, 50.4, 165.4], FLOOR_MIR_PALS, floorArch, { sizeLabel: '拱形' }),
+  define('mir-floor-cheval', '落地镜', 'bedroom', [63, 44, 157.2], FLOOR_MIR_PALS, floorCheval, { sizeLabel: '长方形' }),
+  define('mir-floor-oval', '落地镜', 'bedroom', [50, 36, 155], FLOOR_MIR_PALS, floorOval, { sizeLabel: '椭圆' }),
+  define('mir-floor-led', '落地镜', 'bedroom', [52, 48, 159.5], FLOOR_MIR_PALS, floorLed, { sizeLabel: '带灯' }),
+  define('mir-floor-lean', '落地镜', 'bedroom', [70, 34, 178], FLOOR_MIR_PALS, floorLean, { sizeLabel: '靠墙斜放' }),
+  define('mir-floor-wheel', '落地镜', 'bedroom', [50, 40, 162], FLOOR_MIR_PALS, floorWheel, { sizeLabel: '带轮移动' }),
   define('mir-table-round', '圆形台镜', 'bedroom', [20.2, 8, 22.6], TABLE_MIR_PALS, tableRound, PROP),
   define('mir-table-swivel', '双面放大镜', 'bedroom', [20.6, 14, 34.3], TABLE_MIR_PALS, tableSwivel, PROP),
   define('mir-table-ring', 'LED 环灯化妆镜', 'bedroom', [23.4, 10, 34.7], TABLE_MIR_PALS, tableRing, PROP),

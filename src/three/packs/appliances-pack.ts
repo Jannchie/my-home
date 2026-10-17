@@ -46,7 +46,6 @@ function appliance(id: string, name: string, family: string, sizeLabel: string, 
   return {
     id,
     name,
-    family,
     sizeLabel,
     category: 'appliance',
     w,

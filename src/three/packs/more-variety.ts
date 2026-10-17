@@ -409,7 +409,7 @@ const UMB_POLE: Pal[] = [
   ['nordic', [M.white, N.oak, N.blue, N.mustard]],
 ]
 
-const UMB = (sizeLabel: string) => ({ family: 'umbrella-stand', sizeLabel })
+const UMB = (sizeLabel: string) => ({ sizeLabel })
 
 export const MV_UMBRELLA: AssetDef[] = [
   A('mv-umb-ceramic', '伞架', 'entrance', [25.8, 25.8, 88.8], UMB_CERAMIC, umbCeramic, UMB('陶瓷圆筒')),
@@ -670,7 +670,7 @@ const BEAN_PAD: Pal[] = [
   ['retro', [R.red, R.cream]],
 ]
 
-const BEAN = (sizeLabel: string) => ({ family: 'beanbag', sizeLabel })
+const BEAN = (sizeLabel: string) => ({ sizeLabel })
 
 export const MV_BEANBAG: AssetDef[] = [
   A('mv-bean-drop', '懒人沙发', 'living', [76.3, 75.5, 95.4], BEAN_A, beanDrop, BEAN('水滴 · 尖顶提手')),
@@ -1309,7 +1309,6 @@ function artFamily(
   return sizes.map(([suffix, label, w, h, mount]) =>
     A(`mv-art-${fam}-${suffix}`, name, 'deco', [w, depth, h], pals, (p) => framed(kind, w, h, p, picOf(p, fallback), kind === 'wood' || kind === 'black' || kind === 'gold' ? MAT_KINDS : []), {
       mount,
-      family: `mv-art-${fam}`,
       sizeLabel: label,
     }),
   )

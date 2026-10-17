@@ -125,7 +125,7 @@ export interface Opening {
 /**
  * 固定设备。x/y 为中心；局部坐标里「背面」朝 -y（贴墙一侧），
  * rot 为顺时针角度（0/90/180/270）。
- * washer / fridge 是「洗衣机位 / 冰箱位」：只是预留的空间（防水盘、冰箱的位置），机器本身是家具（family washer / fridge）。
+ * washer / fridge 是「洗衣机位 / 冰箱位」：只是预留的空间（防水盘、冰箱的位置），机器本身是家具（type washer / fridge）。
  * builtin 是「收纳位」（鞋柜位 / 衣柜位 / 食品柜位）：嵌墙的是墙里留出的壁龛，不嵌墙的是靠墙预留的一块地方；
  * 柜子本身是家具（cabinet.ts、packs/cabinets.ts），一键布置按位的尺寸挑一件放上去。
  */

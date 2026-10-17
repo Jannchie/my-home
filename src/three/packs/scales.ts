@@ -9,7 +9,6 @@ import { pal, type Pal } from '../packkit'
 const def = (id: string, sizeLabel: string, [w, d, h]: [number, number, number], pals: Pal[], build: (p: string[]) => THREE.Group): AssetDef => ({
   id,
   name: '体重秤',
-  family: 'body-scale',
   sizeLabel,
   category: 'toiletry',
   w,

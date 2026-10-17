@@ -1307,7 +1307,7 @@ const CUBE: Pal3[] = [
 const cube = (id: string, label: string, c: number, r: number): AssetDef => {
   const w = c * 33 + (c - 1) * 3 + 8
   const h = r * 33 + (r - 1) * 3 + 8.4
-  return withPals({ id, name: '格子柜', family: 'cube-shelf', sizeLabel: label, category: 'storage', w, d: 39, h, surface: h, build: (p) => cubeShelf(p, c, r).g }, CUBE)
+  return withPals({ id, name: '格子柜', sizeLabel: label, category: 'storage', w, d: 39, h, surface: h, build: (p) => cubeShelf(p, c, r).g }, CUBE)
 }
 
 /** 和 drawerTower 里的高度算法一致 */
@@ -1315,8 +1315,8 @@ const towerH = (n: number) => 8 + n * 19.2 + 2
 
 export const ROOMS: AssetDef[] = [
   // ---- 客厅 ----
-  withPals({ id: 'lv-sofa-l-left', name: 'L 形转角沙发', family: 'sofa-l', sizeLabel: '贵妃位在左', category: 'living', w: 240, d: 160, h: 80, build: (p) => sofaL(p, -1) }, UPH),
-  withPals({ id: 'lv-sofa-l-right', name: 'L 形转角沙发', family: 'sofa-l', sizeLabel: '贵妃位在右', category: 'living', w: 240, d: 160, h: 80, build: (p) => sofaL(p, 1) }, UPH),
+  withPals({ id: 'lv-sofa-l-left', name: 'L 形转角沙发', sizeLabel: '贵妃位在左', category: 'living', w: 240, d: 160, h: 80, build: (p) => sofaL(p, -1) }, UPH),
+  withPals({ id: 'lv-sofa-l-right', name: 'L 形转角沙发', sizeLabel: '贵妃位在右', category: 'living', w: 240, d: 160, h: 80, build: (p) => sofaL(p, 1) }, UPH),
   withPals(
     { id: 'lv-sofa-low', name: '极简低沙发', category: 'living', w: 220, d: 95, h: 69, build: sofaLow },
     [
@@ -1349,7 +1349,7 @@ export const ROOMS: AssetDef[] = [
     ],
   ),
   withPals(
-    { id: 'lv-bean-pear', name: '梨形豆袋', family: 'beanbag', sizeLabel: '梨形', category: 'living', w: 70, d: 70, h: 85, build: beanPear },
+    { id: 'lv-bean-pear', name: '梨形豆袋', sizeLabel: '梨形', category: 'living', w: 70, d: 70, h: 85, build: beanPear },
     [
       ['cute', C.lilac, C.lemon, C.white],
       ['cute', C.mint, C.pink, C.white],
@@ -1370,8 +1370,8 @@ export const ROOMS: AssetDef[] = [
       ['industrial', I.leather, I.walnut, I.iron],
     ],
   ),
-  withPals({ id: 'lv-tv-120', name: '低矮电视柜', family: 'lv-tv-low', sizeLabel: '120', category: 'living', w: 120, d: 40, h: 42, surface: 42, surfaces: tvLowSurf(120), openable: true, build: (p) => tvLow(p, 120) }, CAB),
-  withPals({ id: 'lv-tv-180', name: '低矮电视柜', family: 'lv-tv-low', sizeLabel: '180', category: 'living', w: 180, d: 40, h: 42, surface: 42, surfaces: tvLowSurf(180), openable: true, build: (p) => tvLow(p, 180) }, CAB),
+  withPals({ id: 'lv-tv-120', name: '低矮电视柜', sizeLabel: '120', category: 'living', w: 120, d: 40, h: 42, surface: 42, surfaces: tvLowSurf(120), openable: true, build: (p) => tvLow(p, 120) }, CAB),
+  withPals({ id: 'lv-tv-180', name: '低矮电视柜', sizeLabel: '180', category: 'living', w: 180, d: 40, h: 42, surface: 42, surfaces: tvLowSurf(180), openable: true, build: (p) => tvLow(p, 180) }, CAB),
   withPals(
     { id: 'lv-tv-retro', name: '昭和电视柜', category: 'living', w: 120, d: 46, h: 50, surface: 50, surfaces: TV_RETRO_SURF, openable: true, build: tvRetro },
     [
@@ -1455,7 +1455,7 @@ export const ROOMS: AssetDef[] = [
 
   // ---- 收纳 ----
   ...[3, 5].map((n) =>
-    withPals({ id: `st-drawer-${n}`, name: '抽屉收纳箱塔', family: 'st-drawer-tower', sizeLabel: `${n} 层`, category: 'storage', w: 41, d: 46, h: towerH(n), surface: towerH(n), surfaces: towerSurf(n), openable: true, build: (p) => drawerTower(p, n).g }, [
+    withPals({ id: `st-drawer-${n}`, name: '抽屉收纳箱塔', sizeLabel: `${n} 层`, category: 'storage', w: 41, d: 46, h: towerH(n), surface: towerH(n), surfaces: towerSurf(n), openable: true, build: (p) => drawerTower(p, n).g }, [
       ['cute', C.white, C.pink, C.sky],
       ['cute', C.white, C.mint, C.lemon],
       ['nordic', N.white, N.oakL, N.gray],
@@ -1467,7 +1467,7 @@ export const ROOMS: AssetDef[] = [
     [3, 90],
     [5, 180],
   ] as [number, number][]).map(([n, h]) =>
-    withPals({ id: `st-steel-rack-${n}`, name: '钢架置物架', family: 'st-steel-rack', sizeLabel: `${n} 层`, category: 'storage', w: 90, d: 45, h, surface: h, build: (p) => steelRack(p, n, h) }, [
+    withPals({ id: `st-steel-rack-${n}`, name: '钢架置物架', sizeLabel: `${n} 层`, category: 'storage', w: 90, d: 45, h, surface: h, build: (p) => steelRack(p, n, h) }, [
       ['modern', C.steel, M.silver, M.silver],
       ['modern', M.black, M.char, M.char],
       ['industrial', I.steel, I.iron, I.iron],
@@ -1480,7 +1480,7 @@ export const ROOMS: AssetDef[] = [
     [3, 100],
     [5, 180],
   ] as [number, number][]).map(([n, h]) =>
-    withPals({ id: `st-pipe-shelf-${n}`, name: '水管置物架', family: 'st-pipe-shelf', sizeLabel: `${n} 层`, category: 'storage', w: 100, d: 35, h, surface: h, build: (p) => pipeShelf(p, n, h) }, [
+    withPals({ id: `st-pipe-shelf-${n}`, name: '水管置物架', sizeLabel: `${n} 层`, category: 'storage', w: 100, d: 35, h, surface: h, build: (p) => pipeShelf(p, n, h) }, [
       ['industrial', I.walnut, I.iron, I.iron],
       ['industrial', I.leather, I.iron, I.rust],
       ['industrial', N.oak, I.iron, I.steel],
@@ -1494,8 +1494,8 @@ export const ROOMS: AssetDef[] = [
     ['modern', M.white, M.char, M.gray],
     ['modern', M.black, M.light, M.silver],
   ]),
-  withPals({ id: 'st-bookcase-low', name: '书柜', family: 'st-bookcase', sizeLabel: '矮款 80', category: 'storage', w: 81, d: 31, h: 90, surface: 90, build: (p) => bookcase(p, 80, 90, 30, 1, 3, 3) }, CAB),
-  withPals({ id: 'st-bookcase-wide', name: '书柜', family: 'st-bookcase', sizeLabel: '宽款 160', category: 'storage', w: 161, d: 33, h: 120, surface: 120, build: (p) => bookcase(p, 160, 120, 32, 4, 3, 5) }, CAB),
+  withPals({ id: 'st-bookcase-low', name: '书柜', sizeLabel: '矮款 80', category: 'storage', w: 81, d: 31, h: 90, surface: 90, build: (p) => bookcase(p, 80, 90, 30, 1, 3, 3) }, CAB),
+  withPals({ id: 'st-bookcase-wide', name: '书柜', sizeLabel: '宽款 160', category: 'storage', w: 161, d: 33, h: 120, surface: 120, build: (p) => bookcase(p, 160, 120, 32, 4, 3, 5) }, CAB),
   withPals({ id: 'st-magazine', name: '杂志架', category: 'storage', w: 44, d: 30, h: 70, build: magazineRack }, [
     ['cute', C.woodL, C.pink, C.sky],
     ['cute', C.white, C.mint, C.lemon],
@@ -1518,7 +1518,7 @@ export const ROOMS: AssetDef[] = [
   ]),
 
   // ---- 儿童 ----
-  withPals({ id: 'kid-crib', name: '婴儿床', family: 'kid-crib', sizeLabel: '经典', category: 'kids', w: 128, d: 68, h: 96, build: crib }, CUTE_KIDS),
+  withPals({ id: 'kid-crib', name: '婴儿床', sizeLabel: '经典', category: 'kids', w: 128, d: 68, h: 96, build: crib }, CUTE_KIDS),
   withPals({ id: 'kid-desk', name: '儿童书桌', category: 'kids', w: 90, d: 50, h: 58, surface: 58, build: kidDesk }, CUTE_KIDS),
   withPals({ id: 'kid-chair', name: '儿童椅', category: 'kids', w: 36, d: 34, h: 64, build: kidChair }, CUTE_KIDS),
   withPals({ id: 'kid-toybox', name: '玩具箱', category: 'kids', w: 72, d: 56, h: 79, build: toyBox }, CUTE_KIDS),
@@ -1541,7 +1541,7 @@ export const ROOMS: AssetDef[] = [
     ['nordic', N.white, N.oakL, N.sage],
     ['modern', M.light, M.white, M.gray],
   ]),
-  withPals({ id: 'kid-bed', name: '儿童床', family: 'kid-bed', sizeLabel: '小屋', category: 'kids', w: 100, d: 200, h: 162, build: kidBed }, [
+  withPals({ id: 'kid-bed', name: '儿童床', sizeLabel: '小屋', category: 'kids', w: 100, d: 200, h: 162, build: kidBed }, [
     ['cute', C.white, C.pink, C.lemon],
     ['cute', C.woodL, C.sky, C.mint],
     ['nordic', N.oak, N.sage, N.mustard],

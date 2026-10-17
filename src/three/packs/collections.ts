@@ -2023,7 +2023,7 @@ const LS_PALS: PalFlat[] = [
 
 // ---------- 素材表 ----------
 
-const VASE_EXTRA = { ...PROP, family: 'col-vase' }
+const VASE_EXTRA = { ...PROP }
 
 export const COLLECTIONS: AssetDef[] = [
   // 花瓶 / 瓷器
@@ -2048,8 +2048,8 @@ export const COLLECTIONS: AssetDef[] = [
   ),
   define('col-bw-jar', '青花将军罐', 'deco', [23, 23, 31], BW_PALS, bwJar, PROP),
   define('col-bw-vase', '青花缠枝赏瓶', 'deco', [21, 21, 35], BW_PALS, bwVase, PROP),
-  define('col-imari-plate', '伊万里风赏盘（盘架）', 'deco', [30, 16, 31], IMARI_PALS, fitBuild(imariPlate(15)), { ...PROP, family: 'col-imari-plate', sizeLabel: '30cm' }),
-  define('col-imari-plate-s', '伊万里风赏盘（盘架）', 'deco', [21, 14, 22], IMARI_PALS, fitBuild(imariPlate(10.5)), { ...PROP, family: 'col-imari-plate', sizeLabel: '21cm' }),
+  define('col-imari-plate', '伊万里风赏盘（盘架）', 'deco', [30, 16, 31], IMARI_PALS, fitBuild(imariPlate(15)), { ...PROP, sizeLabel: '30cm' }),
+  define('col-imari-plate-s', '伊万里风赏盘（盘架）', 'deco', [21, 14, 22], IMARI_PALS, fitBuild(imariPlate(10.5)), { ...PROP, sizeLabel: '21cm' }),
   define(
     'col-chawan-set',
     '茶碗收藏（三只）',
@@ -2095,7 +2095,7 @@ export const COLLECTIONS: AssetDef[] = [
       ],
       11,
     ),
-    { ...PROP, family: 'col-glass-vase', sizeLabel: '高筒' },
+    { ...PROP, sizeLabel: '高筒' },
   ),
   define(
     'col-glass-vase-round',
@@ -2116,7 +2116,7 @@ export const COLLECTIONS: AssetDef[] = [
       ],
       7,
     ),
-    { ...PROP, family: 'col-glass-vase', sizeLabel: '球形' },
+    { ...PROP, sizeLabel: '球形' },
   ),
   define(
     'col-pottery-jars',
@@ -2148,8 +2148,8 @@ export const COLLECTIONS: AssetDef[] = [
     PROP,
   ),
   // 矿石 / 化石
-  define('col-amethyst-geode', '紫水晶晶洞', 'hobby', [17, 9, 21], GEODE_PALS, fitBuild(geodeDesk), { ...PROP, family: 'col-geode', sizeLabel: '桌面' }),
-  define('col-amethyst-cathedral', '紫水晶晶洞', 'hobby', [28, 18, 64], GEODE_PALS, fitBuild(geodeCathedral), { family: 'col-geode', sizeLabel: '落地' }),
+  define('col-amethyst-geode', '紫水晶晶洞', 'hobby', [17, 9, 21], GEODE_PALS, fitBuild(geodeDesk), { ...PROP, sizeLabel: '桌面' }),
+  define('col-amethyst-cathedral', '紫水晶晶洞', 'hobby', [28, 18, 64], GEODE_PALS, fitBuild(geodeCathedral), { sizeLabel: '落地' }),
   define(
     'col-quartz-cluster',
     '水晶簇',
@@ -2276,10 +2276,10 @@ export const COLLECTIONS: AssetDef[] = [
     PROP,
   ),
   // 硬币
-  define('col-coin-album', '硬币收藏册', 'hobby', [33, 25, 2], ALBUM_PALS, (p) => albumOpen(p, 'coinpage', drawCoinPage(p[1], 3), drawCoinPage(p[1], 8)), { ...PROP, family: 'col-coin-album', form: 'open' }),
-  define('col-coin-album-stack', '硬币收藏册', 'hobby', [20, 27, 7.5], ALBUM_PALS, fitBuild((p) => albumStack(p, 'coinalbum', coinLabel)), { ...PROP, family: 'col-coin-album', form: 'stacked' }),
-  define('col-coin-frame', '硬币展示框', 'hobby', [42, 3, 30], FRAME_PALS, coinFrame(42, 30, 6, 3, false), { family: 'col-coin-frame', sizeLabel: '壁挂', mount: 140 }),
-  define('col-coin-frame-desk', '硬币展示框', 'hobby', [24, 10, 18], FRAME_PALS, coinFrame(24, 18, 4, 2, true), { ...PROP, family: 'col-coin-frame', sizeLabel: '桌面' }),
+  define('col-coin-album', '硬币收藏册', 'hobby', [33, 25, 2], ALBUM_PALS, (p) => albumOpen(p, 'coinpage', drawCoinPage(p[1], 3), drawCoinPage(p[1], 8)), { ...PROP, form: 'open' }),
+  define('col-coin-album-stack', '硬币收藏册', 'hobby', [20, 27, 7.5], ALBUM_PALS, fitBuild((p) => albumStack(p, 'coinalbum', coinLabel)), { ...PROP, form: 'stacked' }),
+  define('col-coin-frame', '硬币展示框', 'hobby', [42, 3, 30], FRAME_PALS, coinFrame(42, 30, 6, 3, false), { sizeLabel: '壁挂', mount: 140 }),
+  define('col-coin-frame-desk', '硬币展示框', 'hobby', [24, 10, 18], FRAME_PALS, coinFrame(24, 18, 4, 2, true), { ...PROP, sizeLabel: '桌面' }),
   define(
     'col-coin-case',
     '硬币盒（天鹅绒圆槽）',
@@ -2350,10 +2350,10 @@ export const COLLECTIONS: AssetDef[] = [
     PROP,
   ),
   // 邮票
-  define('col-stamp-album', '邮票册', 'hobby', [33, 25, 2], STAMP_ALBUM_PALS, (p) => albumOpen(p, 'stamppage', drawStampPage(p[1], 5), drawStampPage(p[1], 12)), { ...PROP, family: 'col-stamp-album', form: 'open' }),
-  define('col-stamp-album-stack', '邮票册', 'hobby', [20, 27, 7.5], STAMP_ALBUM_PALS, fitBuild((p) => albumStack(p, 'stampalbum', stampLabel)), { ...PROP, family: 'col-stamp-album', form: 'stacked' }),
-  define('col-stamp-frame', '裱框邮票', 'hobby', [34, 2.4, 44], STAMP_FRAME_PALS, stampFrame(34, 44, 3, 4, false), { family: 'col-stamp-frame', sizeLabel: '壁挂', mount: 135 }),
-  define('col-stamp-frame-desk', '裱框邮票', 'hobby', [20, 12, 25], STAMP_FRAME_PALS, stampFrame(20, 25, 2, 2, true), { ...PROP, family: 'col-stamp-frame', sizeLabel: '桌面' }),
+  define('col-stamp-album', '邮票册', 'hobby', [33, 25, 2], STAMP_ALBUM_PALS, (p) => albumOpen(p, 'stamppage', drawStampPage(p[1], 5), drawStampPage(p[1], 12)), { ...PROP, form: 'open' }),
+  define('col-stamp-album-stack', '邮票册', 'hobby', [20, 27, 7.5], STAMP_ALBUM_PALS, fitBuild((p) => albumStack(p, 'stampalbum', stampLabel)), { ...PROP, form: 'stacked' }),
+  define('col-stamp-frame', '裱框邮票', 'hobby', [34, 2.4, 44], STAMP_FRAME_PALS, stampFrame(34, 44, 3, 4, false), { sizeLabel: '壁挂', mount: 135 }),
+  define('col-stamp-frame-desk', '裱框邮票', 'hobby', [20, 12, 25], STAMP_FRAME_PALS, stampFrame(20, 25, 2, 2, true), { ...PROP, sizeLabel: '桌面' }),
   define(
     'col-stamp-tools',
     '集邮工具（镊子·放大镜·护邮袋）',
@@ -2370,14 +2370,12 @@ export const COLLECTIONS: AssetDef[] = [
   ),
   // 展示家具
   define('col-curio-cabinet', '古董陈列柜', 'storage', [90, 40, 180], CURIO_PALS, curioCabinet(90, 40, 180, 5), {
-    family: 'col-curio-cabinet',
     sizeLabel: '90',
     surface: 180,
     surfaces: curioSurfaces(90, 40, 180, 5),
     openable: true,
   }),
   define('col-curio-cabinet-60', '古董陈列柜', 'storage', [60, 36, 160], CURIO_PALS, curioCabinet(60, 36, 160, 4), {
-    family: 'col-curio-cabinet',
     sizeLabel: '60',
     surface: 160,
     surfaces: curioSurfaces(60, 36, 160, 4),

@@ -3,7 +3,7 @@
 //       vite-node scripts/gen-taxonomy.mts --check   不写文件，生成结果与已提交的 taxonomy.generated.ts 不一致就报错（test/generated.spec.ts 跑它）
 //       vite-node scripts/gen-taxonomy.mts --review <tsv>   导出每个旧 family 的拆分方式和成员类型，人工审查用
 //
-// 旧的 family 一个字段混了三种关系，这里把它拆开：
+// 旧的 family 一个字段混了三种关系，这里把它拆开（family 字段已从素材定义里删除，迁移时的值冻结在 src/three/family.legacy.ts，这里读那张表）：
 //   变体（variant）：完全相同的物品、不同的陈设方式（叠好 / 挂起、打开 / 合上、对局中 / 收在盒里、竖放 / 横放）
 //   规格（size）：同一造型的不同尺寸（单人床 / 双人床、书桌 120 / 140、S / M / L）
 //   款式：同类但造型不同的物品（行灯、石灯笼、PH 灯都是落地灯）——不再是变体，各自独立，靠细分类型 type 归类
@@ -17,9 +17,12 @@ import path from 'node:path'
 import { ASSETS } from '/src/three/assets'
 import type { AssetDef } from '/src/three/kit'
 import { FUNCTION_TAGS } from '/src/three/tags'
+import { LEGACY_FAMILY } from '/src/three/family.legacy'
 import { TAXONOMY } from '/src/three/taxonomy.generated'
 
 type D = AssetDef
+/** 旧系列字段（AssetDef.family 已删除，迁移时的值冻结在 family.legacy.ts） */
+const fam = (d: D): string | undefined => LEGACY_FAMILY[d.id]
 
 // ---------- 旧 family 的拆分方式（人工审查结论） ----------
 
@@ -159,7 +162,7 @@ for (const t of TYPE_PRIORITY) if (!FUNC.has(t)) throw new Error(`TYPE_PRIORITY:
 for (const t of Object.values(FAMILY_TYPE)) if (!FUNC.has(t)) throw new Error(`FAMILY_TYPE: ${t} 不是功能标签`)
 
 const fams = new Map<string, D[]>()
-for (const a of ASSETS) if (a.family && !a.fixture) (fams.get(a.family) ?? fams.set(a.family, []).get(a.family)!).push(a)
+for (const a of ASSETS) if (fam(a) && !a.fixture) (fams.get(fam(a)) ?? fams.set(fam(a), []).get(fam(a))!).push(a)
 
 /** 系列里只靠 form 区分的一组（同一件东西的不同陈设） */
 const onlyForms = (xs: D[]) => xs.length === new Set(xs.map((a) => `${a.form ?? ''}|${a.formLabel ?? ''}`)).size
@@ -189,7 +192,7 @@ for (const [fam, xs] of fams) {
 }
 
 function typeOf(a: D) {
-  if (a.family && FAMILY_TYPE[a.family]) return FAMILY_TYPE[a.family]
+  if (fam(a) && FAMILY_TYPE[fam(a)]) return FAMILY_TYPE[fam(a)]
   // more-variety 包的装饰画、照片墙、立体壁饰都是挂画
   if (/^mv-(art|photo|deco)-/.test(a.id)) return 'wall-art'
   const own = new Set(a.tags ?? [])
@@ -211,7 +214,7 @@ for (const a of ASSETS) {
   types.set(a.id, t)
   const s = series.get(a.id)
   // 同类数量规则的默认分组：沿用旧系列（同一类款式每间一个，和以前一样），和 series 相同时省略
-  const g = a.family && a.family !== (s ?? a.id) ? a.family : undefined
+  const g = fam(a) && fam(a) !== (s ?? a.id) ? fam(a) : undefined
   out.push(`  ${JSON.stringify(a.id)}: ['${t}'${s || g ? `, ${s ? JSON.stringify(s) : 'undefined'}` : ''}${g ? `, ${JSON.stringify(g)}` : ''}],`)
 }
 if (missing.length) throw new Error(`没有细分类型：\n${missing.join('\n')}`)

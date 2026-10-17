@@ -346,11 +346,11 @@ function wallToolRack(p: string[]) {
 // 定义
 // ======================================================================
 
-function vc(id: string, name: string, family: string | undefined, sizeLabel: string | undefined, category: AssetCategory, [w, d, h]: [number, number, number], pals: Pal3[], build: Build, extra: Partial<AssetDef> = {}): AssetDef {
+function vc(id: string, name: string, sizeLabel: string | undefined, category: AssetCategory, [w, d, h]: [number, number, number], pals: Pal3[], build: Build, extra: Partial<AssetDef> = {}): AssetDef {
   return {
     id,
     name,
-    ...(family ? { family, sizeLabel } : {}),
+    ...(sizeLabel !== undefined ? { sizeLabel } : {}),
     category,
     w,
     d,
@@ -363,46 +363,44 @@ function vc(id: string, name: string, family: string | undefined, sizeLabel: str
   }
 }
 
-const PAIL = 'wet-bath-pail'
-
 export const VARIANTS_C: AssetDef[] = [
   // —— 洗面桶 ——
-  vc('vc-pail-hinoki', '洗面桶', PAIL, '桧木风呂桶', 'toiletry', [24.3, 24.3, 11.5], [
+  vc('vc-pail-hinoki', '洗面桶', '桧木风呂桶', 'toiletry', [24.3, 24.3, 11.5], [
     ['japanese', J.hinoki, COPPER, ''],
     ['japanese', '#d9b27c', J.sumi, ''],
     ['nordic', N.oakL, M.silver, ''],
     ['retro', R.caramel, BRASS, ''],
     ['modern', M.walnut, M.black, ''],
   ], pailHinoki, { prop: true }),
-  vc('vc-pail-classic', '洗面桶', PAIL, '经典圆桶', 'toiletry', [24.1, 24.1, 11.2], [
+  vc('vc-pail-classic', '洗面桶', '经典圆桶', 'toiletry', [24.1, 24.1, 11.2], [
     ['retro', '#f6c431', R.red, '#e3ab1c'],
     ['retro', R.teal, R.cream, shade(R.teal, -0.15)],
     ['cute', C.sky, C.white, shade(C.sky, -0.15)],
     ['cute', '#ff9fb6', C.white, shade('#ff9fb6', -0.15)],
     ['modern', M.white, M.char, M.gray],
   ], pailClassic, { prop: true }),
-  vc('vc-pail-acrylic', '洗面桶', PAIL, '透明亚克力', 'toiletry', [24, 24, 10.6], [
+  vc('vc-pail-acrylic', '洗面桶', '透明亚克力', 'toiletry', [24, 24, 10.6], [
     ['modern', '#dff2fb', M.silver, ''],
     ['cute', '#ffd9e4', C.pink, ''],
     ['cute', '#d6f3e6', C.mint, ''],
     ['modern', '#cfd3d8', M.char, ''],
     ['retro', '#f5ddb0', R.caramel, ''],
   ], pailAcrylic, { prop: true }),
-  vc('vc-pail-square', '洗面桶', PAIL, '哑光方形', 'toiletry', [23.9, 22.6, 11], [
+  vc('vc-pail-square', '洗面桶', '哑光方形', 'toiletry', [23.9, 22.6, 11], [
     ['modern', '#d9d6d0', M.char, M.char],
     ['modern', M.char, M.black, M.silver],
     ['modern', M.white, M.gray, M.light],
     ['nordic', N.sage, N.white, N.oak],
     ['nordic', '#d8cbbb', N.oak, N.white],
   ], pailSquare, { prop: true }),
-  vc('vc-pail-dipper', '洗面桶', PAIL, '片手桶', 'toiletry', [25.9, 22, 13.4], [
+  vc('vc-pail-dipper', '洗面桶', '片手桶', 'toiletry', [25.9, 22, 13.4], [
     ['japanese', J.hinoki, COPPER, J.hinoki],
     ['japanese', J.shu, J.sumi, J.sumi],
     ['japanese', J.sumi, J.shu, J.shu],
     ['nordic', N.white, N.oak, N.oak],
     ['cute', C.sakura, C.white, C.woodL],
   ], pailDipper, { prop: true }),
-  vc('vc-pail-pastel', '洗面桶', PAIL, '粉彩圆角', 'toiletry', [25.2, 22, 10], [
+  vc('vc-pail-pastel', '洗面桶', '粉彩圆角', 'toiletry', [25.2, 22, 10], [
     ['cute', C.sakura, C.white, C.pink],
     ['cute', C.mint, C.white, C.lemon],
     ['cute', '#dccbf5', C.white, C.lilac],
@@ -411,21 +409,21 @@ export const VARIANTS_C: AssetDef[] = [
   ], pailPastel, { prop: true }),
 
   // —— 拖把 / 清洁用品收纳 ——
-  vc('vc-mop-tube', '拖把收纳筒', 'mop-storage', '带盖收纳筒', 'storage', [19, 20.8, 121.8], [
+  vc('vc-mop-tube', '拖把收纳筒', '带盖收纳筒', 'storage', [19, 20.8, 121.8], [
     ['modern', M.white, M.char, M.char],
     ['modern', M.char, M.black, M.silver],
     ['nordic', N.sage, N.white, N.oak],
     ['nordic', '#e9e4da', N.oak, N.oak],
     ['cute', C.sky, C.white, C.pink],
   ], mopTube),
-  vc('vc-clean-caddy', '帆布清洁收纳篮', undefined, undefined, 'storage', [34.6, 23.6, 27.2], [
+  vc('vc-clean-caddy', '帆布清洁收纳篮', undefined, 'storage', [34.6, 23.6, 27.2], [
     ['nordic', '#e6dccb', '#a07a55', N.blue],
     ['nordic', N.gray, N.white, N.mustard],
     ['modern', M.char, M.black, M.silver],
     ['cute', C.sakura, C.white, C.mint],
     ['industrial', '#8f8a5e', I.leather, I.rust],
   ], cleanCaddy),
-  vc('vc-clean-wall-rack', '壁挂清洁工具挂架', undefined, undefined, 'storage', [80, 17.5, 110.9], [
+  vc('vc-clean-wall-rack', '壁挂清洁工具挂架', undefined, 'storage', [80, 17.5, 110.9], [
     ['nordic', N.oak, N.white, '#d8c08a'],
     ['japanese', J.hinoki, J.sumi, '#c9a86a'],
     ['modern', M.char, M.white, M.gray],

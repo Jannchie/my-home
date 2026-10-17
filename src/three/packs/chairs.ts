@@ -1452,22 +1452,22 @@ const A = (d: Def): AssetDef => ({ ...d, build: (p) => fitChildren(d.build(p)) }
 
 export const CHAIRS: AssetDef[] = [
   // 餐椅
-  A({ id: 'ch-windsor', name: '温莎椅', family: 'dining-chair', sizeLabel: '温莎', category: 'dining', w: 46, d: 45, h: 91, ...WOOD_PAL, build: windsor }),
+  A({ id: 'ch-windsor', name: '温莎椅', sizeLabel: '温莎', category: 'dining', w: 46, d: 45, h: 91, ...WOOD_PAL, build: windsor }),
   A({ id: 'ch-wishbone', name: 'Y 椅', category: 'dining', w: 51, d: 50, h: 71, ...WISH_PAL, build: wishbone }),
-  A({ id: 'ch-shell-wood', name: '壳椅', family: 'ch-shell', sizeLabel: '木腿', category: 'dining', w: 46, d: 46, h: 81, ...SHELL_PAL, build: (p) => shellChair('wood', p) }),
-  A({ id: 'ch-shell-eiffel', name: '壳椅', family: 'ch-shell', sizeLabel: '铁腿', category: 'dining', w: 46, d: 46, h: 80, ...SHELL_PAL, build: (p) => shellChair('eiffel', p) }),
-  A({ id: 'ch-plywood', name: '胶合板椅', family: 'dining-chair', sizeLabel: '胶合板', category: 'dining', w: 46, d: 48, h: 82, ...PLY_PAL, build: plywoodChair }),
-  A({ id: 'ch-tolix', name: '铁皮椅', family: 'dining-chair', sizeLabel: '铁皮', category: 'dining', w: 47, d: 47, h: 82, ...TOLIX_PAL, build: tolix }),
+  A({ id: 'ch-shell-wood', name: '壳椅', sizeLabel: '木腿', category: 'dining', w: 46, d: 46, h: 81, ...SHELL_PAL, build: (p) => shellChair('wood', p) }),
+  A({ id: 'ch-shell-eiffel', name: '壳椅', sizeLabel: '铁腿', category: 'dining', w: 46, d: 46, h: 80, ...SHELL_PAL, build: (p) => shellChair('eiffel', p) }),
+  A({ id: 'ch-plywood', name: '胶合板椅', sizeLabel: '胶合板', category: 'dining', w: 46, d: 48, h: 82, ...PLY_PAL, build: plywoodChair }),
+  A({ id: 'ch-tolix', name: '铁皮椅', sizeLabel: '铁皮', category: 'dining', w: 47, d: 47, h: 82, ...TOLIX_PAL, build: tolix }),
   A({ id: 'ch-panton', name: 'S 形一体椅', category: 'dining', w: 52, d: 50, h: 84, ...PANTON_PAL, build: panton }),
   A({ id: 'ch-quanyi', name: '圈椅', category: 'dining', w: 55, d: 55, h: 96, ...QUANYI_PAL, build: quanyi }),
-  A({ id: 'ch-cesca', name: '藤编悬臂椅', family: 'dining-chair', sizeLabel: '藤编悬臂', category: 'dining', w: 44, d: 47, h: 84, ...CANE_PAL, build: cesca }),
+  A({ id: 'ch-cesca', name: '藤编悬臂椅', sizeLabel: '藤编悬臂', category: 'dining', w: 44, d: 47, h: 84, ...CANE_PAL, build: cesca }),
   A({ id: 'ch-upholstered', name: '软包餐椅', category: 'dining', w: 46, d: 51, h: 95, ...SOFT_PAL, build: upholstered }),
-  A({ id: 'ch-bar-back-75', name: '靠背吧椅', family: 'ch-bar-back', sizeLabel: '座高 75', category: 'dining', w: 40, d: 42, h: 102, ...SOFT_PAL, build: (p) => barChair(75, p) }),
-  A({ id: 'ch-bar-back-65', name: '靠背吧椅', family: 'ch-bar-back', sizeLabel: '座高 65', category: 'dining', w: 40, d: 42, h: 92, ...SOFT_PAL, build: (p) => barChair(65, p) }),
-  A({ id: 'ch-fold-metal', name: '折叠椅', family: 'ch-fold-metal', form: 'open', category: 'dining', w: 40, d: 42, h: 82, ...FOLD_METAL_PAL, build: (p) => foldingChair(false, true, p) }),
-  A({ id: 'ch-fold-metal-closed', name: '折叠椅', family: 'ch-fold-metal', form: 'closed', category: 'dining', w: 40, d: 7, h: 84, ...FOLD_METAL_PAL, build: (p) => foldingChair(false, false, p) }),
-  A({ id: 'ch-fold-wood', name: '木折叠椅', family: 'ch-fold-wood', form: 'open', category: 'dining', w: 41, d: 43, h: 82, ...FOLD_WOOD_PAL, build: (p) => foldingChair(true, true, p) }),
-  A({ id: 'ch-fold-wood-closed', name: '木折叠椅', family: 'ch-fold-wood', form: 'closed', category: 'dining', w: 41, d: 8, h: 84, ...FOLD_WOOD_PAL, build: (p) => foldingChair(true, false, p) }),
+  A({ id: 'ch-bar-back-75', name: '靠背吧椅', sizeLabel: '座高 75', category: 'dining', w: 40, d: 42, h: 102, ...SOFT_PAL, build: (p) => barChair(75, p) }),
+  A({ id: 'ch-bar-back-65', name: '靠背吧椅', sizeLabel: '座高 65', category: 'dining', w: 40, d: 42, h: 92, ...SOFT_PAL, build: (p) => barChair(65, p) }),
+  A({ id: 'ch-fold-metal', name: '折叠椅', form: 'open', category: 'dining', w: 40, d: 42, h: 82, ...FOLD_METAL_PAL, build: (p) => foldingChair(false, true, p) }),
+  A({ id: 'ch-fold-metal-closed', name: '折叠椅', form: 'closed', category: 'dining', w: 40, d: 7, h: 84, ...FOLD_METAL_PAL, build: (p) => foldingChair(false, false, p) }),
+  A({ id: 'ch-fold-wood', name: '木折叠椅', form: 'open', category: 'dining', w: 41, d: 43, h: 82, ...FOLD_WOOD_PAL, build: (p) => foldingChair(true, true, p) }),
+  A({ id: 'ch-fold-wood-closed', name: '木折叠椅', form: 'closed', category: 'dining', w: 41, d: 8, h: 84, ...FOLD_WOOD_PAL, build: (p) => foldingChair(true, false, p) }),
 
   // 办公 / 书房
   A({ id: 'ch-mesh-office', name: '人体工学椅', category: 'study', w: 64, d: 67, h: 114, ...OFFICE_PAL, build: meshChair }),
@@ -1483,8 +1483,8 @@ export const CHAIRS: AssetDef[] = [
   A({ id: 'ch-ball', name: '球椅', category: 'living', w: 103, d: 82, h: 111, ...EGG_PAL, build: ballChair }),
   A({ id: 'ch-butterfly', name: '蝴蝶椅', category: 'living', w: 70, d: 63, h: 89, ...LOUNGE_PAL, build: butterfly }),
   A({ id: 'ch-barcelona', name: '巴塞罗那椅', category: 'living', w: 73, d: 68, h: 83, ...LOUNGE_PAL, build: barcelona }),
-  A({ id: 'ch-lounge', name: '休闲躺椅', family: 'ch-lounge', sizeLabel: '单椅', category: 'living', w: 72, d: 89, h: 93, ...EAMES_PAL, build: (p) => loungeChair(false, p) }),
-  A({ id: 'ch-lounge-ottoman', name: '休闲躺椅', family: 'ch-lounge', sizeLabel: '含脚凳', category: 'living', w: 72, d: 148, h: 93, ...EAMES_PAL, build: (p) => loungeChair(true, p) }),
+  A({ id: 'ch-lounge', name: '休闲躺椅', sizeLabel: '单椅', category: 'living', w: 72, d: 89, h: 93, ...EAMES_PAL, build: (p) => loungeChair(false, p) }),
+  A({ id: 'ch-lounge-ottoman', name: '休闲躺椅', sizeLabel: '含脚凳', category: 'living', w: 72, d: 148, h: 93, ...EAMES_PAL, build: (p) => loungeChair(true, p) }),
 
   // 和式
   A({ id: 'ch-zaisu-high', name: '高背座椅子', category: 'japanese', w: 60, d: 72, h: 67, ...ZAISU_PAL, build: highZaisu }),
@@ -1496,17 +1496,17 @@ export const CHAIRS: AssetDef[] = [
   A({ id: 'ch-step-stool', name: '梯凳', category: 'living', w: 42, d: 38, h: 50, ...WOODS, build: stepStool }),
   A({ id: 'ch-stool-60', name: '三脚圆凳', category: 'living', w: 35, d: 35, h: 44, ...WOODS, build: stool60 }),
   A({ id: 'ch-mushroom', name: '蘑菇凳', category: 'kids', w: 40, d: 40, h: 42, ...MUSHROOM_PAL, build: mushroomStool }),
-  A({ id: 'ch-swivel-bar-high', name: '旋转吧凳', family: 'ch-swivel-bar', sizeLabel: '高', category: 'dining', w: 44, d: 44, h: 75, ...BAR_PAL, build: (p) => swivelStool(75, p) }),
-  A({ id: 'ch-swivel-bar-mid', name: '旋转吧凳', family: 'ch-swivel-bar', sizeLabel: '中', category: 'dining', w: 44, d: 44, h: 62, ...BAR_PAL, build: (p) => swivelStool(62, p) }),
-  A({ id: 'ch-mazha', name: '马扎', family: 'ch-mazha', form: 'open', category: 'living', w: 32, d: 26, h: 29, ...CANVAS_PAL, build: (p) => mazha(true, p) }),
-  A({ id: 'ch-mazha-closed', name: '马扎', family: 'ch-mazha', form: 'closed', category: 'living', w: 32, d: 5, h: 36, ...CANVAS_PAL, build: (p) => mazha(false, p) }),
+  A({ id: 'ch-swivel-bar-high', name: '旋转吧凳', sizeLabel: '高', category: 'dining', w: 44, d: 44, h: 75, ...BAR_PAL, build: (p) => swivelStool(75, p) }),
+  A({ id: 'ch-swivel-bar-mid', name: '旋转吧凳', sizeLabel: '中', category: 'dining', w: 44, d: 44, h: 62, ...BAR_PAL, build: (p) => swivelStool(62, p) }),
+  A({ id: 'ch-mazha', name: '马扎', form: 'open', category: 'living', w: 32, d: 26, h: 29, ...CANVAS_PAL, build: (p) => mazha(true, p) }),
+  A({ id: 'ch-mazha-closed', name: '马扎', form: 'closed', category: 'living', w: 32, d: 5, h: 36, ...CANVAS_PAL, build: (p) => mazha(false, p) }),
   A({ id: 'ch-bath-stool', name: '浴室凳', category: 'toiletry', w: 36, d: 26, h: 29, ...BATH_PAL, build: bathStool }),
 
   // 儿童
   A({ id: 'ch-high-chair', name: '儿童高脚椅', category: 'kids', w: 45, d: 56, h: 82, ...KID_PAL, build: highChair }),
-  A({ id: 'ch-animal-bear', name: '动物靠背椅', family: 'ch-animal', sizeLabel: '小熊', category: 'kids', w: 34, d: 30, h: 65, ...ANIMAL_PAL, build: (p) => animalChair('bear', p) }),
-  A({ id: 'ch-animal-bunny', name: '动物靠背椅', family: 'ch-animal', sizeLabel: '兔子', category: 'kids', w: 32, d: 30, h: 77, ...ANIMAL_PAL, build: (p) => animalChair('bunny', p) }),
-  A({ id: 'ch-animal-cat', name: '动物靠背椅', family: 'ch-animal', sizeLabel: '小猫', category: 'kids', w: 32, d: 31, h: 68, ...ANIMAL_PAL, build: (p) => animalChair('cat', p) }),
+  A({ id: 'ch-animal-bear', name: '动物靠背椅', sizeLabel: '小熊', category: 'kids', w: 34, d: 30, h: 65, ...ANIMAL_PAL, build: (p) => animalChair('bear', p) }),
+  A({ id: 'ch-animal-bunny', name: '动物靠背椅', sizeLabel: '兔子', category: 'kids', w: 32, d: 30, h: 77, ...ANIMAL_PAL, build: (p) => animalChair('bunny', p) }),
+  A({ id: 'ch-animal-cat', name: '动物靠背椅', sizeLabel: '小猫', category: 'kids', w: 32, d: 31, h: 68, ...ANIMAL_PAL, build: (p) => animalChair('cat', p) }),
 
   // 户外
   A({ id: 'ch-deck', name: '沙滩折叠椅', category: 'outdoor', w: 57, d: 74, h: 95, ...CANVAS_PAL, build: deckChair }),

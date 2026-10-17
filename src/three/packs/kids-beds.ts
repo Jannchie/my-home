@@ -931,8 +931,8 @@ function extendBed(p: string[]) {
 // 素材表
 // =====================================================================
 
-const CRIB = { name: '婴儿床', family: 'kid-crib', category: 'kids' as const }
-const BED = { name: '儿童床', family: 'kid-bed', category: 'kids' as const }
+const CRIB = { name: '婴儿床', category: 'kids' as const }
+const BED = { name: '儿童床', category: 'kids' as const }
 
 export const KIDS_BEDS: AssetDef[] = [
   // ---- 婴儿床 ----

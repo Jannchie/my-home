@@ -404,7 +404,6 @@ function shoeFamily(f: ShoeFamily): AssetDef[] {
     const z = SIZES[k]
     const [w, d] = pairWD(z, f.extraW ?? 0, f.extraD ?? 0.4)
     return define(`sb-shoe-${f.key}-${k.toLowerCase()}`, f.name, 'entrance', [w, d, f.hs[i]], f.pals, (p) => pair(() => f.one(z, p), z.W), {
-      family: `sb-shoe-${f.key}`,
       sizeLabel: f.labels?.[k] ?? z.label,
       prop: true,
     })
@@ -973,7 +972,7 @@ const SHOES: AssetDef[] = [
   ...shoeFamily({ key: 'oxford', name: '牛津皮鞋', sizes: ['M', 'F'], hs: [8.9, 8.0], pals: LEATHER_PALS, one: oxford }),
   ...shoeFamily({ key: 'loafer', name: '乐福鞋', sizes: ['M', 'F'], hs: [7.9, 7.1], pals: LEATHER_PALS, one: loafer }),
   ...shoeFamily({ key: 'pump', name: '高跟鞋', sizes: ['F'], hs: [13.7], pals: HEEL_PALS, one: heels(false), extraW: -0.4 }).map((d) => ({ ...d, sizeLabel: '成人女款 · 细跟 8cm' })),
-  ...shoeFamily({ key: 'pump-block', name: '高跟鞋', sizes: ['F'], hs: [10.7], pals: HEEL_PALS, one: heels(true), extraW: -0.4 }).map((d) => ({ ...d, family: 'sb-shoe-pump', sizeLabel: '成人女款 · 粗跟 5cm' })),
+  ...shoeFamily({ key: 'pump-block', name: '高跟鞋', sizes: ['F'], hs: [10.7], pals: HEEL_PALS, one: heels(true), extraW: -0.4 }).map((d) => ({ ...d, sizeLabel: '成人女款 · 粗跟 5cm' })),
   ...shoeFamily({ key: 'ballet', name: '芭蕾平底鞋', sizes: ['F', 'K'], hs: [4.4, 3.7], pals: FLAT_PALS, one: ballet, extraW: -0.4 }),
   ...shoeFamily({ key: 'chelsea', name: '短靴', sizes: ['M', 'F'], hs: [18.6, 16.6], pals: BOOT_PALS, one: shortBoot }),
   ...shoeFamily({ key: 'long-boot', name: '长筒靴', sizes: ['F'], hs: [42.1], pals: BOOT_PALS, one: longBoot, }),
@@ -1150,7 +1149,6 @@ const RACKS: AssetDef[] = [
   ...[2, 3, 4].map((n) => {
     const tops = rackTops(n, 6)
     return define(`sb-rack-wood-${n}`, '木鞋架', 'entrance', [RACK_W, RACK_D, tops[n - 1]], WOOD_RACK_PALS, woodRack(n), {
-      family: 'sb-rack-wood',
       sizeLabel: `${n} 层`,
       surface: tops[n - 1],
       surfaceShape: rackShape(0, 0),
@@ -1160,7 +1158,6 @@ const RACKS: AssetDef[] = [
   ...[2, 3, 4].map((n) => {
     const tops = rackTops(n, 4)
     return define(`sb-rack-metal-${n}`, '金属鞋架', 'entrance', [RACK_W, RACK_D, tops[n - 1] + 3.2], METAL_RACK_PALS, metalRack(n), {
-      family: 'sb-rack-metal',
       sizeLabel: `${n} 层`,
       surface: tops[n - 1],
       surfaceShape: rackShape(2.8, 0.4),
@@ -1188,9 +1185,9 @@ function doorCabDef(id: string, name: string, c: Cab, kind: DoorKind, pals: Pal[
 
 const CABINETS: AssetDef[] = [
   // 以前开 / 关是两件素材（sb-shoe-cab-open / -closed），现在一件可开合（旧的 open 形态读档时迁移成 closed + open）
-  doorCabDef('sb-shoe-cab-closed', '双门鞋柜', SHOE_CAB, 'solid', CAB_PALS, 'entrance', { family: 'sb-shoe-cab' }),
+  doorCabDef('sb-shoe-cab-closed', '双门鞋柜', SHOE_CAB, 'solid', CAB_PALS, 'entrance', { }),
   doorCabDef('sb-cab-glass', '玻璃门鞋柜', GLASS_CAB, 'glass', CAB_PALS, 'entrance'),
-  doorCabDef('sb-cab-louver', '百叶门鞋柜', LOUVER_CAB, 'louver', CAB_PALS, 'entrance', { family: 'shoe-cabinet', sizeLabel: '百叶门' }),
+  doorCabDef('sb-cab-louver', '百叶门鞋柜', LOUVER_CAB, 'louver', CAB_PALS, 'entrance', { sizeLabel: '百叶门' }),
 ]
 
 // --- 开放柜：窄高鞋柜、靴柜 ---
@@ -1328,7 +1325,6 @@ const SHOE_FURNITURE: AssetDef[] = [
   ...[2, 3].map((n) => {
     const [w, D, H] = flipDims(n)
     return define(`sb-flip-cab-${n}`, '翻斗鞋柜', 'entrance', [w, D, H], CAB_PALS, flipCab(n), {
-      family: 'sb-flip-cab',
       sizeLabel: `${n} 斗`,
       surface: H,
       surfaceShape: [rectPoly(-w / 2, -D / 2, w / 2, -D / 2 + FLIP.d)],
@@ -1914,7 +1910,6 @@ const BOXES: AssetDef[] = [
     [false, true].map((open) => {
       const m = plasticBox(s, open)
       return define(`sb-plastic-box-${s.key}-${open ? 'open' : 'closed'}`, '塑料收纳箱', 'storage', m.dims, PLASTIC_PALS, m.build, {
-        family: 'sb-plastic-box',
         sizeLabel: PLASTIC_LABEL[s.key],
         form: open ? 'open' : 'closed',
         prop: true,
@@ -1922,54 +1917,51 @@ const BOXES: AssetDef[] = [
     }),
   ),
   ...UNDER.map((s) =>
-    define(`sb-underbed-${s.key}`, '床底收纳箱', 'storage', [s.w + 0.2, s.d + 1.2, s.h], UNDER_PALS, underBed(s), { family: 'sb-underbed', sizeLabel: s.label, prop: true }),
+    define(`sb-underbed-${s.key}`, '床底收纳箱', 'storage', [s.w + 0.2, s.d + 1.2, s.h], UNDER_PALS, underBed(s), { sizeLabel: s.label, prop: true }),
   ),
   ...(
     [
       ['std', '标准', 38, 26, 25],
       ['low', '浅型', 38, 26, 16],
     ] as const
-  ).map(([k, label, w, d, h]) => define(`sb-fabric-box-${k}`, '布艺收纳箱', 'storage', [w + 1, d + 0.4, h + 0.2], BOX_PALS, fabricBox(w, d, h), { family: 'sb-fabric-box', sizeLabel: label, prop: true })),
+  ).map(([k, label, w, d, h]) => define(`sb-fabric-box-${k}`, '布艺收纳箱', 'storage', [w + 1, d + 0.4, h + 0.2], BOX_PALS, fabricBox(w, d, h), { sizeLabel: label, prop: true })),
   define('sb-wood-crate', '木箱', 'storage', [42, 30, 26], CRATE_PALS, woodCrate, { prop: true }),
   ...[false, true].map((open) => {
     const m = rattanBox(open)
-    return define(`sb-rattan-box-${open ? 'open' : 'closed'}`, '藤编收纳箱', 'storage', m.dims, RATTAN_PALS, m.build, { family: 'sb-rattan-box', form: open ? 'open' : 'closed', prop: true })
+    return define(`sb-rattan-box-${open ? 'open' : 'closed'}`, '藤编收纳箱', 'storage', m.dims, RATTAN_PALS, m.build, { form: open ? 'open' : 'closed', prop: true })
   }),
   ...[false, true].map((open) => {
     const m = toolbox(open)
-    return define(`sb-toolbox-${open ? 'open' : 'closed'}`, '金属工具箱', 'storage', m.dims, TOOL_PALS, m.build, { family: 'sb-toolbox', form: open ? 'open' : 'closed', prop: true })
+    return define(`sb-toolbox-${open ? 'open' : 'closed'}`, '金属工具箱', 'storage', m.dims, TOOL_PALS, m.build, { form: open ? 'open' : 'closed', prop: true })
   }),
   ...[true, false].map((puffy) =>
     define(`sb-vac-bag-${puffy ? 'puffy' : 'flat'}`, '衣物压缩袋', 'storage', [60, 45, puffy ? 19.1 : 7.1], BAG_PALS, vacBag(puffy), {
-      family: 'sb-vac-bag',
       form: puffy ? 'open' : 'closed',
       prop: true,
     }),
   ),
   ...[3, 4, 5].map((n) =>
     define(`sb-drawer-cab-${n}`, '半透明抽屉柜', 'storage', [DRAWER.w, DRAWER.d, drawerH(n)], DRAWER_PALS, drawerCab(n), {
-      family: 'sb-drawer-cab',
       sizeLabel: `${n} 层`,
       surface: drawerH(n),
       surfaces: drawerCabSurfaces(n),
       openable: true,
     }),
   ),
-  doorCabDef('sb-door-cab-closed', '双门收纳柜', DOOR_CAB, 'solid', CAB_PALS, 'storage', { family: 'sb-door-cab' }),
-  define('sb-closet-box-grid', '衣柜内收纳盒', 'storage', [32.3, 32.3, 11], CLOSET_PALS, closetGrid, { family: 'sb-closet-box', sizeLabel: '16 格', prop: true }),
-  define('sb-closet-box-long', '衣柜内收纳盒', 'storage', [15.3, 32.8, 12], CLOSET_PALS, closetLong, { family: 'sb-closet-box', sizeLabel: '长条', prop: true }),
+  doorCabDef('sb-door-cab-closed', '双门收纳柜', DOOR_CAB, 'solid', CAB_PALS, 'storage', { }),
+  define('sb-closet-box-grid', '衣柜内收纳盒', 'storage', [32.3, 32.3, 11], CLOSET_PALS, closetGrid, { sizeLabel: '16 格', prop: true }),
+  define('sb-closet-box-long', '衣柜内收纳盒', 'storage', [15.3, 32.8, 12], CLOSET_PALS, closetLong, { sizeLabel: '长条', prop: true }),
   ...CARTONS.map((c) =>
     define(`sb-carton-${c.key}`, '快递纸箱', 'storage', [c.w + 0.7, c.d + 0.7, c.h + 0.3], CARTON_PALS, (p) => carton(c.w, c.d, c.h, p, { marks: true }), {
-      family: 'sb-carton',
       sizeLabel: c.key.toUpperCase(),
       form: 'closed',
       prop: true,
     }),
   ),
-  define('sb-carton-open', '快递纸箱', 'storage', openCartonDims(), CARTON_PALS, openCarton, { family: 'sb-carton', sizeLabel: 'M', form: 'open', prop: true }),
+  define('sb-carton-open', '快递纸箱', 'storage', openCartonDims(), CARTON_PALS, openCarton, { sizeLabel: 'M', form: 'open', prop: true }),
   define('sb-carton-flat', '压扁的纸箱捆', 'storage', [71, 50, 4.4], CARTON_PALS, flatBundle, { form: 'lying', prop: true }),
   ...[2, 3].map((n) =>
-    define(`sb-carton-stack-${n}`, '搬家纸箱堆', 'storage', [51.5, 39.5, n === 2 ? 64.6 : 90.9], CARTON_PALS, cartonStack(n), { family: 'sb-carton-stack', sizeLabel: `${n} 箱`, form: 'stacked', prop: true }),
+    define(`sb-carton-stack-${n}`, '搬家纸箱堆', 'storage', [51.5, 39.5, n === 2 ? 64.6 : 90.9], CARTON_PALS, cartonStack(n), { sizeLabel: `${n} 箱`, form: 'stacked', prop: true }),
   ),
 ]
 

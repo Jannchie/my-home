@@ -142,8 +142,8 @@ describe('一键布置 / 检查清单', () => {
     let magnets = 0
     let detergents = 0
     for (const { plan } of plans) {
-      const fridges = plan.furniture.filter((f) => ASSET_MAP.get(f.asset)?.family === 'fridge')
-      const washers = plan.furniture.filter((f) => ASSET_MAP.get(f.asset)?.family === 'washer')
+      const fridges = plan.furniture.filter((f) => ASSET_MAP.get(f.asset)?.type === 'fridge')
+      const washers = plan.furniture.filter((f) => ASSET_MAP.get(f.asset)?.type === 'washer')
       for (const m of plan.furniture.filter((f) => ASSET_MAP.get(f.asset)?.stick && /magnet|冰箱贴|sticky-note|polaroid|kids-drawing/.test(f.asset + ASSET_MAP.get(f.asset)!.name))) {
         const fr = fridges.find((f) => Math.hypot(f.x - m.x, f.y - m.y) < 80)
         if (!fr) continue
@@ -166,7 +166,7 @@ describe('一键布置 / 检查清单', () => {
     expect(fridgeItem().have).toBeGreaterThanOrEqual(1)
     expect(washerItem().have).toBeGreaterThanOrEqual(1)
     const machines = new Set(['fridge', 'washer', 'dryer'])
-    plan.furniture = plan.furniture.filter((f) => !machines.has(ASSET_MAP.get(f.asset)?.family ?? ''))
+    plan.furniture = plan.furniture.filter((f) => !machines.has(ASSET_MAP.get(f.asset)?.type ?? ''))
     expect(fridgeItem().have).toBe(0)
     expect(washerItem().have).toBe(0)
     plan.furniture = applyFixes(plan, [fridgeItem(), washerItem()], plan.household, seed)
@@ -178,7 +178,7 @@ describe('一键布置 / 检查清单', () => {
   test('没有冰箱位 / 洗衣机位的户型：靠墙放一台', () => {
     const plan = basePlan([fx({ kind: 'kitchen', x: 300, y: 33, w: 255, variant: 'wall' })])
     plan.furniture = decorate(plan, 1, 'modern')
-    const fams = plan.furniture.map((f) => ASSET_MAP.get(f.asset)?.family)
+    const fams = plan.furniture.map((f) => ASSET_MAP.get(f.asset)?.type)
     expect(fams).toContain('fridge')
     expect(fams).toContain('washer')
     expect(fixtureDepth(plan.fixtures[0])).toBe(65)

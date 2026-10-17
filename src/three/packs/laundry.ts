@@ -80,7 +80,6 @@ function pinchFolded(p: string[]) {
 const def = (id: string, sizeLabel: string, form: AssetDef['form'], [w, d, h]: [number, number, number], build: (p: string[]) => THREE.Group, prop = false): AssetDef => ({
   id,
   name: '晾衣夹架',
-  family: 'laundry-pinch',
   sizeLabel,
   form,
   category: 'outdoor',

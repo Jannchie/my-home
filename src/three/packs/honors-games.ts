@@ -131,8 +131,8 @@ const SHAPES: { key: string; label: string; size: [number, number, number]; make
 const MATS: Mat[] = ['gold', 'silver', 'bronze', 'crystal']
 
 const trophies: AssetDef[] = [
-  ...SHAPES.flatMap((s) => MATS.map((m) => define(`hg-trophy-${s.key}-${m}`, '奖杯', 'deco', s.size, TROPHY_BASES, s.make(m), { ...PROP, family: 'hg-trophy', sizeLabel: `${s.label} · ${MAT_LABEL[m]}` }))),
-  define('hg-trophy-obelisk', '奖杯', 'deco', [10, 10, 25], TROPHY_BASES, trophyObelisk, { ...PROP, family: 'hg-trophy', sizeLabel: '方尖碑 · 水晶' }),
+  ...SHAPES.flatMap((s) => MATS.map((m) => define(`hg-trophy-${s.key}-${m}`, '奖杯', 'deco', s.size, TROPHY_BASES, s.make(m), { ...PROP, sizeLabel: `${s.label} · ${MAT_LABEL[m]}` }))),
+  define('hg-trophy-obelisk', '奖杯', 'deco', [10, 10, 25], TROPHY_BASES, trophyObelisk, { ...PROP, sizeLabel: '方尖碑 · 水晶' }),
 ]
 
 // ---------- 奖牌 ----------
@@ -183,7 +183,7 @@ const medals: AssetDef[] = [
       ['cute', C.pink, C.sky],
       ['classic', CL.wine, CL.navy],
       ['chinese', CN.lacquer, CN.brass],
-    ], medalStand(m), { ...PROP, family: 'hg-medal', sizeLabel: `${MAT_LABEL[m]}牌 · 立架` }),
+    ], medalStand(m), { ...PROP, sizeLabel: `${MAT_LABEL[m]}牌 · 立架` }),
   ),
   define('hg-medal-frame', '奖牌展示框', 'deco', [42, 4, 32], [
     ['modern', DARK, '#3d3f44', '#3d6fb8'],
@@ -283,31 +283,31 @@ function certBox([box, label]: string[]) {
 }
 
 const certs: AssetDef[] = [
-  define('hg-cert-award-s', '奖状', 'deco', [32, 2, 23], CERT_FRAMES, certFrame('award', 32, 23), { mount: CERT_MOUNT, family: 'hg-cert', sizeLabel: '奖状 · 小' }),
-  define('hg-cert-award-m', '奖状', 'deco', [44, 2, 32], CERT_FRAMES, certFrame('award', 44, 32), { mount: CERT_MOUNT, family: 'hg-cert', sizeLabel: '奖状 · 中' }),
-  define('hg-cert-cert-m', '奖状', 'deco', [44, 2, 33], CERT_FRAMES, certFrame('cert', 44, 33), { mount: CERT_MOUNT, family: 'hg-cert', sizeLabel: '证书 · 中' }),
-  define('hg-cert-diploma-l', '奖状', 'deco', [60, 2, 46], CERT_FRAMES, certFrame('diploma', 60, 46), { mount: CERT_MOUNT, family: 'hg-cert', sizeLabel: '毕业证书 · 大' }),
+  define('hg-cert-award-s', '奖状', 'deco', [32, 2, 23], CERT_FRAMES, certFrame('award', 32, 23), { mount: CERT_MOUNT, sizeLabel: '奖状 · 小' }),
+  define('hg-cert-award-m', '奖状', 'deco', [44, 2, 32], CERT_FRAMES, certFrame('award', 44, 32), { mount: CERT_MOUNT, sizeLabel: '奖状 · 中' }),
+  define('hg-cert-cert-m', '奖状', 'deco', [44, 2, 33], CERT_FRAMES, certFrame('cert', 44, 33), { mount: CERT_MOUNT, sizeLabel: '证书 · 中' }),
+  define('hg-cert-diploma-l', '奖状', 'deco', [60, 2, 46], CERT_FRAMES, certFrame('diploma', 60, 46), { mount: CERT_MOUNT, sizeLabel: '毕业证书 · 大' }),
   define('hg-cert-folder', '证书收纳', 'study', [24, 17, 1.6], [
     ['chinese', CN.lacquer, CN.brass],
     ['classic', CL.navy, CL.gold],
     ['modern', DARK, '#c9ced6'],
     ['retro', '#7a2e3a', '#e6bf55'],
-  ], certFolder, { ...PROP, family: 'hg-cert-stored', sizeLabel: '证书夹' }),
+  ], certFolder, { ...PROP, sizeLabel: '证书夹' }),
   define('hg-cert-stack', '证书收纳', 'study', [26, 18, 6], [
     ['chinese', CN.lacquer, CN.brass],
     ['classic', CL.navy, CL.gold],
     ['modern', DARK, '#c9ced6'],
-  ], certStack, { ...PROP, family: 'hg-cert-stored', sizeLabel: '一摞证书夹' }),
+  ], certStack, { ...PROP, sizeLabel: '一摞证书夹' }),
   define('hg-cert-tube', '证书收纳', 'study', [36, 8, 8], [
     ['classic', CL.navy, CL.gold],
     ['modern', DARK, '#c9ced6'],
     ['farmhouse', F.barn, F.iron],
-  ], certTube, { ...PROP, family: 'hg-cert-stored', sizeLabel: '毕业证书筒' }),
+  ], certTube, { ...PROP, sizeLabel: '毕业证书筒' }),
   define('hg-cert-box', '证书收纳', 'storage', [35, 36, 34], [
     ['nordic', N.linen, N.oak],
     ['modern', M.light, M.char],
     ['cute', C.sakura, C.white],
-  ], certBox, { ...PROP, family: 'hg-cert-stored', sizeLabel: '收纳盒（打开）' }),
+  ], certBox, { ...PROP, sizeLabel: '收纳盒（打开）' }),
 ]
 
 // ---------- 麻将：桌子和牌分开（自动麻将机是一体机，保留成品） ----------
@@ -403,12 +403,12 @@ const mahjongs: AssetDef[] = [
     ['modern', DARK, '#3d6fb8', '#8a8d93'],
     ['retro', '#7a4e2e', '#2f8a5a', '#e0a526'],
     ['cute', C.woodL, C.mint, C.sakura],
-  ], mjCovered, { surface: 75.4, family: 'int-mahjong-table', sizeLabel: '盖着桌罩' }),
-  define('hg-mj-fold', '折叠麻将桌', 'hobby', [80, 80, 72.4], FELTS, mjFold, { surface: 72.4, family: 'hg-mj-fold', sizeLabel: '打开' }),
-  define('hg-mj-fold-closed', '折叠麻将桌', 'hobby', [80, 9, 81], FELTS, mjFoldClosed, { family: 'hg-mj-fold', sizeLabel: '收起靠墙' }),
-  define('hg-jantaku', '和室麻将桌', 'japanese', [76, 76, 35.6], FELTS, jantaku, { surface: 33.4, surfaceShape: [[[-33.5, -33.5], [33.5, -33.5], [33.5, 33.5], [-33.5, 33.5]]], family: 'hg-jantaku', sizeLabel: '手积 · 座卓', styles: ['japanese', 'chinese', 'modern', 'retro', 'cute'] }),
-  define('hg-mj-walls', '麻将牌', 'hobby', [44, 44, 4.6], TILE_BACKS, mjWalls, { ...PROP, family: 'int-mahjong-set', sizeLabel: '砌好牌墙（不带牌垫）' }),
-  define('hg-mj-hands', '麻将牌', 'hobby', [56, 56, 4.6], TILE_BACKS, mjHands, { ...PROP, family: 'int-mahjong-set', sizeLabel: '对局中（不带牌垫）' }),
+  ], mjCovered, { surface: 75.4, sizeLabel: '盖着桌罩' }),
+  define('hg-mj-fold', '折叠麻将桌', 'hobby', [80, 80, 72.4], FELTS, mjFold, { surface: 72.4, sizeLabel: '打开' }),
+  define('hg-mj-fold-closed', '折叠麻将桌', 'hobby', [80, 9, 81], FELTS, mjFoldClosed, { sizeLabel: '收起靠墙' }),
+  define('hg-jantaku', '和室麻将桌', 'japanese', [76, 76, 35.6], FELTS, jantaku, { surface: 33.4, surfaceShape: [[[-33.5, -33.5], [33.5, -33.5], [33.5, 33.5], [-33.5, 33.5]]], sizeLabel: '手积 · 座卓', styles: ['japanese', 'chinese', 'modern', 'retro', 'cute'] }),
+  define('hg-mj-walls', '麻将牌', 'hobby', [44, 44, 4.6], TILE_BACKS, mjWalls, { ...PROP, sizeLabel: '砌好牌墙（不带牌垫）' }),
+  define('hg-mj-hands', '麻将牌', 'hobby', [56, 56, 4.6], TILE_BACKS, mjHands, { ...PROP, sizeLabel: '对局中（不带牌垫）' }),
 ]
 
 // ---------- 棋：桌子、棋盘、棋罐各自独立 ----------
@@ -538,28 +538,28 @@ const gameTables: AssetDef[] = [
     ['chinese', CN.rosewood, '#e9c98f'],
     ['nordic', N.oak, N.oakL],
     ['retro', '#7a4e2e', '#e3c27f'],
-  ], qizhuo, { surface: 73, family: 'hg-game-table', sizeLabel: '中式方桌', styles: ['chinese', 'nordic', 'retro'] }),
+  ], qizhuo, { surface: 73, sizeLabel: '中式方桌', styles: ['chinese', 'nordic', 'retro'] }),
   define('hg-game-table-round', '棋桌', 'hobby', [64, 64, 70.4], [
     ['classic', CL.walnut],
     ['modern', DARK],
     ['farmhouse', F.oak],
     ['nordic', N.oak],
-  ], roundGameTable, { surface: 70.4, surfaceShape: [[[-22, -22], [22, -22], [22, 22], [-22, 22]]], family: 'hg-game-table', sizeLabel: '独脚圆桌' }),
-  define('hg-go-board', '围棋盘', 'hobby', [45, 42, 2.6], BOARD_WOOD, goBoardFlat(0), { ...PROP, family: 'hg-go-board', sizeLabel: '空盘' }),
-  define('hg-go-board-mid', '围棋盘', 'hobby', [45, 42, 3.4], BOARD_WOOD, goBoardFlat(0.14), { ...PROP, family: 'hg-go-board', sizeLabel: '对局中' }),
-  define('hg-go-board-end', '围棋盘', 'hobby', [45, 42, 3.4], BOARD_WOOD, goBoardFlat(0.42), { ...PROP, family: 'hg-go-board', sizeLabel: '收官' }),
-  define('hg-go-bowl-black', '棋罐', 'hobby', [14, 13, 10], BOWLS, goBowl('black', false), { ...PROP, family: 'hg-go-bowl', sizeLabel: '黑子', limit: { scope: 'surface', max: 1, group: 'hg-go-bowl-black' } }),
-  define('hg-go-bowl-white', '棋罐', 'hobby', [14, 13, 10], BOWLS, goBowl('white', false), { ...PROP, family: 'hg-go-bowl', sizeLabel: '白子', limit: { scope: 'surface', max: 1, group: 'hg-go-bowl-white' } }),
-  define('hg-go-bowl-rattan-black', '棋罐', 'hobby', [14, 13, 10], [['chinese', '#c9a46a', '#8a6a3a'], ['nordic', '#e0c79a', '#b8955f']], goBowl('black', true), { ...PROP, family: 'hg-go-bowl', sizeLabel: '藤编 · 黑子', limit: { scope: 'surface', max: 1, group: 'hg-go-bowl-black' } }),
-  define('hg-go-bowl-rattan-white', '棋罐', 'hobby', [14, 13, 10], [['chinese', '#c9a46a', '#8a6a3a'], ['nordic', '#e0c79a', '#b8955f']], goBowl('white', true), { ...PROP, family: 'hg-go-bowl', sizeLabel: '藤编 · 白子', limit: { scope: 'surface', max: 1, group: 'hg-go-bowl-white' } }),
+  ], roundGameTable, { surface: 70.4, surfaceShape: [[[-22, -22], [22, -22], [22, 22], [-22, 22]]], sizeLabel: '独脚圆桌' }),
+  define('hg-go-board', '围棋盘', 'hobby', [45, 42, 2.6], BOARD_WOOD, goBoardFlat(0), { ...PROP, sizeLabel: '空盘' }),
+  define('hg-go-board-mid', '围棋盘', 'hobby', [45, 42, 3.4], BOARD_WOOD, goBoardFlat(0.14), { ...PROP, sizeLabel: '对局中' }),
+  define('hg-go-board-end', '围棋盘', 'hobby', [45, 42, 3.4], BOARD_WOOD, goBoardFlat(0.42), { ...PROP, sizeLabel: '收官' }),
+  define('hg-go-bowl-black', '棋罐', 'hobby', [14, 13, 10], BOWLS, goBowl('black', false), { ...PROP, sizeLabel: '黑子', limit: { scope: 'surface', max: 1, group: 'hg-go-bowl-black' } }),
+  define('hg-go-bowl-white', '棋罐', 'hobby', [14, 13, 10], BOWLS, goBowl('white', false), { ...PROP, sizeLabel: '白子', limit: { scope: 'surface', max: 1, group: 'hg-go-bowl-white' } }),
+  define('hg-go-bowl-rattan-black', '棋罐', 'hobby', [14, 13, 10], [['chinese', '#c9a46a', '#8a6a3a'], ['nordic', '#e0c79a', '#b8955f']], goBowl('black', true), { ...PROP, sizeLabel: '藤编 · 黑子', limit: { scope: 'surface', max: 1, group: 'hg-go-bowl-black' } }),
+  define('hg-go-bowl-rattan-white', '棋罐', 'hobby', [14, 13, 10], [['chinese', '#c9a46a', '#8a6a3a'], ['nordic', '#e0c79a', '#b8955f']], goBowl('white', true), { ...PROP, sizeLabel: '藤编 · 白子', limit: { scope: 'surface', max: 1, group: 'hg-go-bowl-white' } }),
   define('hg-go-ban', '围棋', 'japanese', [45, 42, 25], [
     ['japanese', '#e8c98a', J.dark],
     ['retro', '#e3c27f', '#5a3b2a'],
-  ], goBan, { family: 'hg-ban', sizeLabel: '足付き碁盤' }),
+  ], goBan, { sizeLabel: '足付き碁盤' }),
   define('hg-shogi-ban', '将棋', 'japanese', [33, 36, 22], [
     ['japanese', '#e8c98a', J.dark],
     ['retro', '#e3c27f', '#5a3b2a'],
-  ], shogiBan, { family: 'hg-ban', sizeLabel: '足付き将棋盤' }),
+  ], shogiBan, { sizeLabel: '足付き将棋盤' }),
 ]
 
 // ---------- 欧美：台球桌、飞镖盘 ----------
@@ -659,12 +659,12 @@ const westGames: AssetDef[] = [
     ['modern', DARK, '#c8473a', '#2f8a5a'],
     ['industrial', I.iron, I.rust, '#3a5a3c'],
     ['farmhouse', F.iron, F.barn, F.sage],
-  ], dartboard, { mount: DART_MOUNT, family: 'hg-dart', sizeLabel: '单盘' }),
+  ], dartboard, { mount: DART_MOUNT, sizeLabel: '单盘' }),
   define('hg-dart-cabinet', '飞镖盘', 'hobby', [112, 30, 60], [
     ['classic', CL.walnut, '#c8473a', '#2f8a5a'],
     ['farmhouse', F.oak, F.barn, F.sage],
     ['industrial', I.walnut, I.rust, '#3a5a3c'],
-  ], dartCabinet, { mount: DART_MOUNT - 7, family: 'hg-dart', sizeLabel: '飞镖柜（门打开）' }),
+  ], dartCabinet, { mount: DART_MOUNT - 7, sizeLabel: '飞镖柜（门打开）' }),
 ]
 
 // ---------- 双人设定：并排电竞台、双人书桌；RGB 灯板、吸音棉 ----------

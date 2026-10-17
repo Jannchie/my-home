@@ -1612,7 +1612,7 @@ export const FURNITURE_MORE: AssetDef[] = [
     ['cute', C.pink, C.white, C.woodD],
   ]),
   ...[2, 3, 4].map((n) =>
-    withPals({ id: `fm-modular-${n}`, name: '模块组合沙发', family: 'fm-modular', sizeLabel: `${n} 模块`, category: 'living', w: n * 80 + 28, d: 98, h: 73, build: (p) => modularSofa(n, p) }, [
+    withPals({ id: `fm-modular-${n}`, name: '模块组合沙发', sizeLabel: `${n} 模块`, category: 'living', w: n * 80 + 28, d: 98, h: 73, build: (p) => modularSofa(n, p) }, [
       ['modern', M.char, M.light, M.black],
       ['modern', M.light, M.char, M.black],
       ['nordic', N.linen, N.sage, N.oak],
@@ -1642,7 +1642,7 @@ export const FURNITURE_MORE: AssetDef[] = [
     ['nordic', N.linen, N.blue, N.oak],
   ]),
   ...([false, true] as const).map((open) =>
-    withPals({ id: open ? 'fm-recliner-open' : 'fm-recliner', name: '功能躺椅沙发', family: 'fm-recliner', sizeLabel: open ? '躺平' : '坐姿', form: open ? 'open' : 'closed', category: 'living', w: 94, d: open ? 160 : 96, h: open ? 98 : 101, styles: ['modern', 'industrial', 'retro'], build: (p) => recliner(p, open) }, [
+    withPals({ id: open ? 'fm-recliner-open' : 'fm-recliner', name: '功能躺椅沙发', sizeLabel: open ? '躺平' : '坐姿', form: open ? 'open' : 'closed', category: 'living', w: 94, d: open ? 160 : 96, h: open ? 98 : 101, styles: ['modern', 'industrial', 'retro'], build: (p) => recliner(p, open) }, [
       ['modern', M.char, M.gray, M.black],
       ['industrial', I.leather, I.rust, I.iron],
       ['retro', R.caramel, R.cream, '#5a3a28'],
@@ -1705,7 +1705,7 @@ export const FURNITURE_MORE: AssetDef[] = [
       [142, '双人 142'],
     ] as const
   ).map(([w, label]) =>
-    withPals({ id: `fm-tatami-bed-${w}`, name: '榻榻米床台', family: 'fm-tatami-bed', sizeLabel: label, category: 'japanese', w, d: 212, h: 46, styles: ['japanese', 'nordic', 'modern'], build: (p) => tatamiBed(w, p) }, [
+    withPals({ id: `fm-tatami-bed-${w}`, name: '榻榻米床台', sizeLabel: label, category: 'japanese', w, d: 212, h: 46, styles: ['japanese', 'nordic', 'modern'], build: (p) => tatamiBed(w, p) }, [
       ['japanese', J.ai, J.washi, J.wood],
       ['japanese', J.shu, J.washi, J.dark],
       ['nordic', N.sage, N.white, N.oak],
@@ -1716,7 +1716,6 @@ export const FURNITURE_MORE: AssetDef[] = [
   withPals({
     id: 'fm-storage-bed',
     name: '抽屉储物床',
-    family: 'fm-storage-bed',
     category: 'bedroom',
     w: 160,
     d: 208,
@@ -1750,7 +1749,7 @@ export const FURNITURE_MORE: AssetDef[] = [
     ['cute', C.mint, C.white, C.woodL],
   ]),
   ...([true, false] as const).map((open) =>
-    withPals({ id: open ? 'fm-folding-bed' : 'fm-folding-bed-closed', name: '折叠床', family: 'fm-folding-bed', sizeLabel: open ? '打开' : '收起', form: open ? 'open' : 'closed', category: 'bedroom', w: open ? 91 : 92, d: open ? 199 : 36, h: open ? 51 : 117, styles: ['modern', 'industrial', 'cute'], build: (p) => (open ? foldingBedOpen(p) : foldingBedClosed(p)) }, [
+    withPals({ id: open ? 'fm-folding-bed' : 'fm-folding-bed-closed', name: '折叠床', sizeLabel: open ? '打开' : '收起', form: open ? 'open' : 'closed', category: 'bedroom', w: open ? 91 : 92, d: open ? 199 : 36, h: open ? 51 : 117, styles: ['modern', 'industrial', 'cute'], build: (p) => (open ? foldingBedOpen(p) : foldingBedClosed(p)) }, [
       ['cute', C.sky, C.white, C.white],
       ['nordic', N.gray, N.white, N.white],
       ['modern', M.char, M.light, M.black],
@@ -1775,7 +1774,7 @@ export const FURNITURE_MORE: AssetDef[] = [
 
   // ---------- 柜类 ----------
   ...[120, 180].map((w) =>
-    withPals({ id: `fm-sliding-wardrobe-${w}`, name: '推拉门衣柜', family: 'fm-sliding-wardrobe', sizeLabel: `${w}`, category: 'bedroom', w: w + 1, d: 61, h: 200, surface: 200, surfaces: slidingWardrobeSurfaces(w), openable: true, styles: ['modern', 'nordic', 'japanese'], build: (p) => slidingWardrobe(w, p) }, [
+    withPals({ id: `fm-sliding-wardrobe-${w}`, name: '推拉门衣柜', sizeLabel: `${w}`, category: 'bedroom', w: w + 1, d: 61, h: 200, surface: 200, surfaces: slidingWardrobeSurfaces(w), openable: true, styles: ['modern', 'nordic', 'japanese'], build: (p) => slidingWardrobe(w, p) }, [
       ['modern', M.white, M.light, M.silver],
       ['modern', M.char, M.walnut, M.silver],
       ['nordic', N.white, N.oak, N.oak],
@@ -1846,7 +1845,7 @@ export const FURNITURE_MORE: AssetDef[] = [
     ['modern', M.walnut, M.char, M.silver],
   ]),
   ...([true, false] as const).map((tall) =>
-    withPals({ id: tall ? 'fm-locker' : 'fm-locker-grid', name: '金属储物柜', family: 'fm-locker', sizeLabel: tall ? '3 门高柜' : '9 格矮柜', category: 'storage', w: 90, d: 48, h: tall ? 180 : 90, surface: tall ? 180 : 90, surfaces: lockerSurfaces(tall), openable: true, styles: ['industrial', 'retro', 'cute'], build: (p) => locker(tall, p) }, [
+    withPals({ id: tall ? 'fm-locker' : 'fm-locker-grid', name: '金属储物柜', sizeLabel: tall ? '3 门高柜' : '9 格矮柜', category: 'storage', w: 90, d: 48, h: tall ? 180 : 90, surface: tall ? 180 : 90, surfaces: lockerSurfaces(tall), openable: true, styles: ['industrial', 'retro', 'cute'], build: (p) => locker(tall, p) }, [
       ['industrial', '#5f7470', '#6f8782', M.silver],
       ['industrial', I.iron, I.steel, M.silver],
       ['retro', '#d9d3c0', '#e8e2cf', I.steel],
@@ -1887,7 +1886,7 @@ export const FURNITURE_MORE: AssetDef[] = [
     ['modern', M.char, M.light, M.silver],
   ]),
   ...[2, 3].map((n) =>
-    withPals({ id: `fm-tilt-shoe-${n}`, name: '翻斗鞋柜', family: 'fm-tilt-shoe', sizeLabel: `${n} 层`, category: 'entrance', w: 80, d: 27, h: 12 + n * 36, surface: 12 + n * 36, surfaces: Array.from({ length: n }, (_, i) => ({ y: 11.6 + i * 36, h: 33, inside: true, shape: [r(-38, -11.5, 38, 9.5)] })), openable: true, styles: ['modern', 'nordic', 'cute'], build: (p) => tiltShoe(n, p) }, [
+    withPals({ id: `fm-tilt-shoe-${n}`, name: '翻斗鞋柜', sizeLabel: `${n} 层`, category: 'entrance', w: 80, d: 27, h: 12 + n * 36, surface: 12 + n * 36, surfaces: Array.from({ length: n }, (_, i) => ({ y: 11.6 + i * 36, h: 33, inside: true, shape: [r(-38, -11.5, 38, 9.5)] })), openable: true, styles: ['modern', 'nordic', 'cute'], build: (p) => tiltShoe(n, p) }, [
       ['modern', M.white, M.white, M.black],
       ['modern', M.char, M.gray, M.silver],
       ['nordic', N.white, N.oak, N.oak],
@@ -2111,7 +2110,7 @@ export const FURNITURE_MORE: AssetDef[] = [
     ['modern', M.char, M.black, M.silver],
   ]),
   ...[2, 3].map((n) =>
-    withPals({ id: `fm-koagari-${n}`, name: '小上がり', family: 'fm-koagari', sizeLabel: `${n} 畳`, category: 'japanese', w: 88 * n, d: 178, h: 40, surface: 40, styles: ['japanese', 'modern', 'nordic'], build: (p) => koagari(n, p) }, [
+    withPals({ id: `fm-koagari-${n}`, name: '小上がり', sizeLabel: `${n} 畳`, category: 'japanese', w: 88 * n, d: 178, h: 40, surface: 40, styles: ['japanese', 'modern', 'nordic'], build: (p) => koagari(n, p) }, [
       ['japanese', J.hinoki, J.tatami, J.sumi],
       ['japanese', J.dark, J.tatami, J.ai],
       ['modern', M.white, '#c4c79a', M.char],
