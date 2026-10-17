@@ -11,6 +11,7 @@ import { area, edgeInfo, onBoundary, pointInPolygon, type Plan, type Region } fr
 import { normalizePlan } from '/src/store'
 import { decodeShare, encodeShare } from '/src/share'
 import { buildBuilding } from '/src/three/building'
+import { yardFurniture } from '/src/yard'
 import { JP_OPTS, normalizeIds, overlapArea, range } from './helpers'
 
 type Combo = { region: Region; dwelling: 'house' | 'duplex' }
@@ -141,6 +142,26 @@ describe('部分二阶', () => {
       expect(low.length).toBeGreaterThan(0)
       if (p.exterior!.roof !== 'flat') expect(low.every((r) => r.kind === 'shed' && r.against)).toBe(true)
     }
+  })
+})
+
+describe('院子', () => {
+  test('一键布置的户外物件都在用地里、不在 1F 房间里，也不压车位和通道', () => {
+    const bad: string[] = []
+    for (const c of COMBOS.filter((x) => x.dwelling === 'house'))
+      for (const s of SEEDS.slice(0, 8)) {
+        const p = plans.get(key(c))!.get(s)!
+        const items = yardFurniture(p, s)
+        if (!items.length) bad.push(`${key(c)} ${s}: 没摆东西`)
+        const rooms1 = floorView(p, '1f').rooms
+        for (const f of items) {
+          if (!pointInPolygon(f, p.site!.points)) bad.push(`${key(c)} ${s}: ${f.asset} 在用地外`)
+          if (rooms1.some((r) => pointInPolygon(f, r.points))) bad.push(`${key(c)} ${s}: ${f.asset} 在房间里`)
+          if ([...p.site!.paths, ...p.site!.parking.map((k) => k.points)].some((q) => pointInPolygon(f, q))) bad.push(`${key(c)} ${s}: ${f.asset} 压到通道 / 车位`)
+          if (f.floor) bad.push('院子物件不该有楼层标记')
+        }
+      }
+    expect(bad).toEqual([])
   })
 })
 
