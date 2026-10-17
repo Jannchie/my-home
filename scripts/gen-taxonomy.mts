@@ -1,5 +1,6 @@
 // 素材分类法：细分类型（type）+ 同款系列（series），生成 src/three/taxonomy.generated.ts。
 // 用法：pnpm gen:taxonomy            生成
+//       vite-node scripts/gen-taxonomy.mts --check   不写文件，生成结果与已提交的 taxonomy.generated.ts 不一致就报错（test/generated.spec.ts 跑它）
 //       vite-node scripts/gen-taxonomy.mts --review <tsv>   导出每个旧 family 的拆分方式和成员类型，人工审查用
 //
 // 旧的 family 一个字段混了三种关系，这里把它拆开：
@@ -16,6 +17,7 @@ import path from 'node:path'
 import { ASSETS } from '/src/three/assets'
 import type { AssetDef } from '/src/three/kit'
 import { FUNCTION_TAGS } from '/src/three/tags'
+import { TAXONOMY } from '/src/three/taxonomy.generated'
 
 type D = AssetDef
 
@@ -197,8 +199,10 @@ function typeOf(a: D) {
 const out: string[] = []
 const missing: string[] = []
 const types = new Map<string, string>()
+// 生成表只覆盖迁移的素材：之后新加、在 def 里直接写了 type 的素材（例如 cb- 柜体）不进表（运行时 def 里的值优先，进表也没用）
+const migrated = (a: D) => a.id in TAXONOMY || !a.type
 for (const a of ASSETS) {
-  if (a.fixture) continue
+  if (a.fixture || !migrated(a)) continue
   const t = typeOf(a)
   if (!t) {
     missing.push(`${a.id} ${a.name} [${(a.tags ?? []).join(',')}]`)
@@ -233,6 +237,15 @@ export const TAXONOMY: Record<string, readonly [Tag, (string | undefined)?, stri
 ${out.join('\n')}
 }
 `
-  fs.writeFileSync(path.resolve(process.cwd(), 'src/three/taxonomy.generated.ts'), src)
-  console.log(`[gen-taxonomy] ${out.length} 个素材，${new Set(series.values()).size} 个多件系列，${new Set(types.values()).size} 种细分类型`)
+  const target = path.resolve(process.cwd(), 'src/three/taxonomy.generated.ts')
+  if (args[0] === '--check') {
+    if (fs.readFileSync(target, 'utf8').replace(/\r\n/g, '\n') !== src) {
+      console.error('[gen-taxonomy] taxonomy.generated.ts 已过期：请运行 pnpm gen:taxonomy 并提交')
+      process.exit(1)
+    }
+    console.log('[gen-taxonomy] taxonomy.generated.ts 是最新的')
+  } else {
+    fs.writeFileSync(target, src)
+    console.log(`[gen-taxonomy] ${out.length} 个素材，${new Set(series.values()).size} 个多件系列，${new Set(types.values()).size} 种细分类型`)
+  }
 }

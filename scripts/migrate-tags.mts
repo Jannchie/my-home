@@ -1,12 +1,13 @@
 // 语义标签迁移：用「迁移前」散落在业务代码里的名字 / id 正则给全部素材打一遍初始标签，生成 src/three/tags.generated.ts。
 //
 // 用法：pnpm gen:tags                                   生成（RULES → 粗分类 COARSE → 人工审查 REVIEW → 按分类兜底）
-//       vite-node scripts/migrate-tags.mts --check      不写文件，打印各调用点「旧正则（含原过滤条件）vs 现在的标签查询」的候选差异
+//       vite-node scripts/migrate-tags.mts --check      不写文件，生成结果与已提交的 tags.generated.ts 不一致就报错（test/generated.spec.ts 跑它）
+//       vite-node scripts/migrate-tags.mts --sites      不写文件，打印各调用点「旧正则（含原过滤条件）vs 现在的标签查询」的候选差异
 //       vite-node scripts/migrate-tags.mts --dump <tsv> 把全部「标签 → 素材」写成 TSV，人工审查用
 //       vite-node scripts/migrate-tags.mts --list <tag> 列出某个标签下的素材
 //
 // 这里的正则只是迁移时的一次性依据（从旧代码原样抄来，REVIEW 里逐条纠正它们的误匹配），业务代码已经不再按名字判断。
-// 迁移过程：第一步（提交 8465911）用和旧正则逐字对应的过渡标签做了等价重构，--check 0 差异、120 户布置结果完全一致；
+// 迁移过程：第一步（提交 8465911）用和旧正则逐字对应的过渡标签做了等价重构，--sites（当时叫 --check）0 差异、120 户布置结果完全一致；
 // 之后分批收敛到现在的词表，每批的有意变化写在 REVIEW 的 why 里。
 // 生成后的标签表是数据：新增素材请直接在 def 里写 tags（运行时与生成表合并），不要再回来加正则。
 // 要修正已有素材的标签：在 REVIEW 里加一条（写明原因）再 pnpm gen:tags，或直接在 def.tags 里补。
@@ -611,7 +612,7 @@ if (args.has('--dump')) {
   for (const d of ASSETS) for (const t of tags.get(d.id)!) rows.push(`${t}\t${d.id}\t${d.name}\t${d.category}\t${d.prop ? 'P' : ''}${d.mount ? 'M' : ''}${d.stick ? 'S' : ''}${d.form === 'hanging' ? 'H' : ''}`)
   fs.writeFileSync(out, rows.sort().join('\n'))
 }
-if (!args.has('--check') && !args.has('--stats') && !args.has('--list') && !args.has('--dump')) {
+if (!args.has('--sites') && !args.has('--stats') && !args.has('--list') && !args.has('--dump')) {
   // 生成表只覆盖迁移时已有的素材：之后新加、在 def 里直接写了 tags 的素材（例如 cb- 柜体）不进表，
   // 免得旧规则给它们推出不合适的标签（比如衣柜被推成 bed-ok）
   const lines = ASSETS.filter((d) => d.id in GENERATED_TAGS || !d.tags?.length).map((d) => `  ${JSON.stringify(d.id)}: [${[...tags.get(d.id)!].sort().map((t) => `'${t}'`).join(', ')}],`)
@@ -623,13 +624,22 @@ export const GENERATED_TAGS: Record<string, readonly Tag[]> = {
 ${lines.join('\n')}
 }
 `
-  fs.writeFileSync(path.resolve(process.cwd(), 'src/three/tags.generated.ts'), src)
-  console.log(`[migrate-tags] ${ASSETS.length} 个素材，${counts.size} 种标签，REVIEW ${REVIEW.length} 条`)
+  const target = path.resolve(process.cwd(), 'src/three/tags.generated.ts')
+  if (args.has('--check')) {
+    if (fs.readFileSync(target, 'utf8').replace(/\r\n/g, '\n') !== src) {
+      console.error('[migrate-tags] tags.generated.ts 已过期：请运行 pnpm gen:tags 并提交')
+      process.exit(1)
+    }
+    console.log('[migrate-tags] tags.generated.ts 是最新的')
+  } else {
+    fs.writeFileSync(target, src)
+    console.log(`[migrate-tags] ${ASSETS.length} 个素材，${counts.size} 种标签，REVIEW ${REVIEW.length} 条`)
+  }
 }
 
 // ---------- 核对：各调用点「旧正则（含原过滤条件）」与「新标签查询」的候选是否一致 ----------
 
-if (args.has('--check')) {
+if (args.has('--sites')) {
   const has = (d: D, t: string) => tags.get(d.id)!.has(t)
   const any = (...ts: string[]) => (d: D) => ts.some((t) => has(d, t))
   const COMPOSED: [RegExp, RegExp][] = [
