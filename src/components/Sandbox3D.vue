@@ -514,8 +514,18 @@ function syncLineRes(w: number, h: number) {
   for (const f of [selFrame, hoverFrame, ghostFrame, wallGuide]) f.setResolution(w, h)
 }
 /** 在家具模型脚下显示一个框（占地取素材尺寸，朝向取模型的 rotation.y） */
+const frameBox = new THREE.Box3()
+const frameC = new THREE.Vector3()
 function frameAt(fr: SelectFrame, obj: THREE.Object3D, asset: string) {
   const d = ASSET_MAP.get(asset)
+  // 挂在墙上 / 贴在表面上的东西：脚下没有占地，框立起来贴在它正面（中心取模型包围盒，往前让出半个厚度）
+  if (d && (d.mount !== undefined || d.stick)) {
+    frameBox.setFromObject(obj).getCenter(frameC)
+    const a = obj.rotation.y
+    const k = d.d / 2 + 1.5
+    fr.showUpright(frameC.x + Math.sin(a) * k, frameC.y, frameC.z + Math.cos(a) * k, d.w, d.h, a)
+    return
+  }
   // 世界坐标：多层户型里家具在楼层组里（分层拉开时组有偏移）
   const w = obj.getWorldPosition(new THREE.Vector3())
   fr.show(w.x, w.y, w.z, d?.w ?? 40, d?.d ?? 40, obj.rotation.y)
