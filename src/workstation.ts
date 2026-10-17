@@ -14,6 +14,7 @@ import { levelOf, type Household, type Member } from './household'
 import { wallThicknessAt } from './walls'
 import { isMainAppliance } from './appliance'
 import { hasTag, type Sel } from './three/tags'
+import type { PlaceOpts } from './occupancy'
 
 /** Decorator 里这里要用到的部分（都是公开成员） */
 export interface DeskHost {
@@ -26,8 +27,8 @@ export interface DeskHost {
   peopleIn(room: Room): Member[]
   readonly clutter: number
   colorFor(def: AssetDef): number
-  /** 立体上不冲突：不顶到墙上挂的东西、不插进窗帘（见 Decorator.clear3d） */
-  clear3d(asset: string, x: number, y: number, rot: number, z?: number, ignore?: Set<string>): boolean
+  /** 立体上能不能放（统一的占用表，见 Occupancy.canPlace） */
+  canPlace(asset: string, x: number, y: number, rot: number, z?: number, opts?: PlaceOpts): boolean
 }
 export interface DeskCtx {
   d: DeskHost
@@ -233,10 +234,8 @@ function putOn(c: DeskCtx, parent: Furniture, asset: string, lx: number, lz: num
   const p = toWorld(parent, lx, lz)
   const f: Furniture = { id: uid('u'), asset, x: round1(p.x), y: round1(p.y), rot: (parent.rot + lrot + 360) % 360, color: c.d.colorFor(a), z }
   if (!fitsOnSurface(parent, z, asset, f.x, f.y, f.rot)) return null
-  const box = furnitureBox(asset, f.x, f.y, f.rot)
-  const shrink = (b: Box): Box => ({ x0: b.x0 + 0.4, y0: b.y0 + 0.4, x1: b.x1 - 0.4, y1: b.y1 - 0.4 })
-  if (c.d.out.some((o) => o !== parent && Math.abs((o.z ?? 0) - z) < 0.6 && !def(o)?.stick && boxOverlaps(shrink(box), shrink(furnitureBox(o.asset, o.x, o.y, o.rot))))) return null
-  if (!c.d.clear3d(asset, f.x, f.y, f.rot, z, new Set([parent.id]))) return null
+  // 同一台面上的东西（含主机）重叠不超过 1.8（贴着放）、不顶到墙上挂的东西…（Occupancy.canPlace）
+  if (!c.d.canPlace(asset, f.x, f.y, f.rot, z, { parent: parent.id, surfaceTol: 1.8 })) return null
   c.d.out.push(f)
   c.d.flat.add(f.id)
   c.d.parentOf.set(f.id, parent.id)
@@ -317,7 +316,7 @@ function floorTower(c: DeskCtx, s: Seat, asset: string, side: number, outside = 
   }
   if (solid.some((o) => boxOverlaps(box, boxOf(o)))) return null
   // 墙上挂的东西、窗帘（放到桌子外面、窗边时）
-  if (!c.d.clear3d(asset, p.x, p.y, s.desk.rot)) return null
+  if (!c.d.canPlace(asset, p.x, p.y, s.desk.rot)) return null
   // 门的开合范围、过道不能堵：放到桌子外面时也要在房间里留出门前空间
   if (outside && openingsOn(s.room, c.plan).some((o) => o.o.kind !== 'window' && dist(o.center, p) < o.o.width / 2 + tw.w / 2 + 50)) return null
   const f: Furniture = { id: uid('u'), asset, x: round1(p.x), y: round1(p.y), rot: s.desk.rot, color: c.d.colorFor(tw) }
