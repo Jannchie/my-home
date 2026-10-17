@@ -874,5 +874,4 @@ Object.assign(UI, {
   '柜门': ['扉', 'Doors'],
   '关上': ['閉める', 'Closed'],
   '再点一次里面的东西可以选中它': ['中の物をもう一度クリックすると選択できます', 'Click an item inside again to select it'],
-  '安全区诊断': ['セーフエリア診断', 'Safe area diagnostics'],
 } satisfies Record<string, Entry>)
