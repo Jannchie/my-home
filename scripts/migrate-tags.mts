@@ -13,6 +13,7 @@
 import '../test/setup/stubdom'
 import fs from 'node:fs'
 import path from 'node:path'
+import { GENERATED_TAGS } from '/src/three/tags.generated'
 import { ASSETS } from '/src/three/assets'
 import type { AssetDef } from '/src/three/kit'
 import { FUNCTION_TAGS } from '/src/three/tags'
@@ -449,6 +450,9 @@ interface Fix {
 }
 const hobbyFix = (it: string, ids: string[], why: string): Fix[] => [{ ids, remove: [`hobby:${it}`], why: `兴趣 ${it}：${why}` }]
 const REVIEW: Fix[] = [
+  // ---- 柜子可开合之后的修正（原来是在生成表里手工改的）----
+  { ids: ['lv-sofa-l-left', 'lv-sofa-l-right'], remove: ['gaming-desk'], why: 'L 形沙发被 l-left / l-right 字样推成 L 形电竞桌，电竞椅会压进沙发' },
+  { ids: ['lv-display', 'vb-bs-glass'], remove: ['open-shelf'], why: '玻璃门展示柜 / 书柜：门里的层不是开放格子，不要求填满' },
   // ---- 第 1 批：已知误匹配 ----
   { ids: ['ph-birdcage-bamboo', 'ph-birdcage-bamboo-hanging', 'prop-seiro', 'wet-charcoal-bag', 'gr-rugby', 'gd-plant-labels'], remove: ['plant'], why: '名字里的「竹 / 橄榄 / plant」不是绿植：竹编鸟笼、竹蒸笼、竹炭包、橄榄球、植物标签牌（会被当绿植贴墙弯折）' },
   {
@@ -608,7 +612,9 @@ if (args.has('--dump')) {
   fs.writeFileSync(out, rows.sort().join('\n'))
 }
 if (!args.has('--check') && !args.has('--stats') && !args.has('--list') && !args.has('--dump')) {
-  const lines = ASSETS.map((d) => `  ${JSON.stringify(d.id)}: [${[...tags.get(d.id)!].sort().map((t) => `'${t}'`).join(', ')}],`)
+  // 生成表只覆盖迁移时已有的素材：之后新加、在 def 里直接写了 tags 的素材（例如 cb- 柜体）不进表，
+  // 免得旧规则给它们推出不合适的标签（比如衣柜被推成 bed-ok）
+  const lines = ASSETS.filter((d) => d.id in GENERATED_TAGS || !d.tags?.length).map((d) => `  ${JSON.stringify(d.id)}: [${[...tags.get(d.id)!].sort().map((t) => `'${t}'`).join(', ')}],`)
   const src = `// 由 scripts/migrate-tags.mts 生成的初始语义标签（id → 标签）。规则见 src/three/tags.ts。
 // 新增素材请在 def 里直接写 tags（运行时与这张表合并）；要改某件素材的标签，在 migrate-tags.mts 的 REVIEW 里加一条再重新生成。
 import type { Tag } from './tags'
