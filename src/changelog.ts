@@ -30,7 +30,7 @@ export const CHANGELOG: Release[] = [
         '階のフェードは階全体が均一に薄くなるように。内壁や家具が透けて見えず、変化もゆっくりに',
       ],
       en: [
-        'Multi-floor homes assign rooms for the whole household: one room each, couples together, elders downstairs first, children on or next to their parents' floor; the household panel shows each person's floor and room',
+        "Multi-floor homes assign rooms for the whole household: one room each, couples together, elders downstairs first, children on or next to their parents' floor; the household panel shows each person's floor and room",
         'Auto-furnish coordinates floors: one fridge and one washer per home, a bin on every floor, clear paths at stairs and hallways, and storage nooks under the stairs',
         'Cats, dogs, robot dogs and humanoid robots use the stairs; robot vacuums and the like stay on their floor; humanoid robots now walk around',
         'Houses can get L-shaped stairs and open stairs in the living room; duplex voids get railings so you can look down into the living room; furniture dragged into the yard sits at the right height and yard items are checked for collisions',
