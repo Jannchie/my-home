@@ -17,8 +17,8 @@ SR = 48000
 BPM = 96
 BEAT = 60 / BPM
 BAR = BEAT * 4
-BARS = 25
-DUR = BARS * BAR + 1.0  # 最后一个和弦的余音
+BARS = 23
+DUR = BARS * BAR + 0.5  # 和视频等长（最后一个和弦在末小节延音淡出）
 N = int(DUR * SR)
 rng = np.random.default_rng(20261016)
 
@@ -161,32 +161,38 @@ def bar_t(b: int) -> float:
 
 
 def section(b: int) -> str:
-    # 与时间线对应：0 开场 | 1-3 一键布置 | 4-7 风格快切 | 8-10 地区 | 11-13 昼夜 | 14-16 画面效果 | 17-19 平面图 | 20-21 素材库 | 22-24 猫 + 结尾
+    # 与时间线对应：0 开场 | 1-2 一键布置 | 3-5 住户设定 | 6-7 风格快切 | 8-10 户型规模 × 地区 | 11-12 昼夜（12 小节后半进画面效果）
+    # | 13-14 画面效果 | 15-17 平面图 | 18-19 素材库 | 20-21 猫 | 22 结尾字标
     if b == 0:
         return "intro"
-    if b <= 3:
+    if b <= 2:
         return "build"
-    if b <= 7:
-        return "full"
+    if b <= 5:
+        return "light"
     if b <= 10:
         return "full"
-    if b <= 13:
+    if b == 11:
         return "soft"
-    if b <= 16:
+    if b <= 14:
         return "full"
-    if b <= 19:
+    if b <= 17:
         return "light"
-    if b <= 21:
+    if b <= 19:
         return "full"
-    if b <= 23:
+    if b <= 21:
         return "outro"
     return "final"
+
+
+def chord_of(b: int):
+    # 从 Dm9 起（ii–V–I–vi），这样倒数第二小节正好是 G13，最后一小节落到 Cmaj9
+    return CHORDS[(b + 2) % 4]
 
 
 for b in range(BARS):
     sec = section(b)
     t0 = bar_t(b)
-    root, voicing = FINAL if sec == "final" else CHORDS[b % 4]
+    root, voicing = FINAL if sec == "final" else chord_of(b)
     # 和声：pad 长音 + 电钢琴（切分节奏的和弦）
     if sec == "final":
         for k, nn in enumerate(voicing):
@@ -208,7 +214,7 @@ for b in range(BARS):
             add(epiano(note_hz(nn), length * BEAT, v), t0 + beat * BEAT + k * 0.012, pan=-0.3 + 0.2 * k)
     # 贝斯：根音 + 第四拍走向下一和弦的经过音
     if sec != "intro":
-        nxt = CHORDS[(b + 1) % 4][0] if b + 1 < BARS - 1 else FINAL[0]
+        nxt = chord_of(b + 1)[0] if b + 1 < BARS - 1 else FINAL[0]
         f_root = note_hz(root)
         f_next = note_hz(nxt)
         add(bass(f_root, BEAT * 1.4), t0)
@@ -234,24 +240,24 @@ for b in range(BARS):
                 add(hat(1.0 if i % 2 == 0 else 0.6), t0 + swing8(i) * BEAT, pan=-0.35)
     # 旋律（钢片琴）：风格快切、地区、画面效果、素材库段落
     mel = None
-    if 4 <= b <= 11:
-        mel = MEL_A if ((b - 4) // 4) % 2 == 0 else MEL_B
-        phase = (b - 4) % 4
-    elif 14 <= b <= 17:
-        mel, phase = MEL_B, (b - 14) % 4
+    phase = (b + 2) % 4
+    if 6 <= b <= 10:
+        mel = MEL_A if b <= 7 else MEL_B
+    elif 13 <= b <= 14:
+        mel = MEL_B
+    elif 18 <= b <= 19:
+        mel = MEL_A
     elif 20 <= b <= 21:
-        mel, phase = MEL_A, (b - 20) % 4
-    elif 22 <= b <= 23:
-        mel, phase = MEL_B, (b - 22) % 4
+        mel = MEL_B
     if mel is not None:
         for beat, nn, length in mel:
             if phase * 4 <= beat < phase * 4 + 4:
                 bt = beat - phase * 4
                 frac = bt % 1
                 bt = int(bt) + (SWING if abs(frac - 0.5) < 1e-6 else frac)
-                vel = 0.75 if b >= 22 else 1.0
+                vel = 0.75 if b >= 20 else 1.0
                 add(glock(note_hz(nn), vel), t0 + bt * BEAT, pan=0.3)
-                if b >= 14 and b <= 17:
+                if 13 <= b <= 14:
                     add(epiano(note_hz(nn), length * BEAT * 0.9, 0.5), t0 + bt * BEAT, pan=0.25, gain=0.6)
 
 # ---------- 混音 ----------

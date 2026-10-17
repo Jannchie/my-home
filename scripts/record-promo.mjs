@@ -5,7 +5,7 @@
 //   node scripts/record-promo.mjs --w 1920 --h 1080 --fps 60 --out promo-1080p.mp4 --audio bgm.wav
 //   node scripts/record-promo.mjs --w 960 --h 540 --fps 30 --out preview.mp4 --fast       # 低分辨率样片（JPEG 截图）
 //   node scripts/record-promo.mjs --w 1920 --h 1080 --stills 1,6,15 --dir shots          # 只截几张关键帧
-//   可选：--from 10 --to 20 只录一段；--url 指定页面地址
+//   可选：--lang zh|ja|en 文字语言（画面相同）；--from 10 --to 20 只录一段；--url 指定页面地址
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -20,10 +20,21 @@ const args = Object.fromEntries(
 const W = +(args.w ?? 1920)
 const H = +(args.h ?? 1080)
 const FPS = +(args.fps ?? 60)
-const URL = args.url ?? `http://localhost:${args.port ?? 5302}/promo.html?lang=zh`
+const LANG = args.lang ?? 'zh'
+const URL = args.url ?? `http://localhost:${args.port ?? 5302}/promo.html?lang=${LANG}`
 const fast = !!args.fast
 
+let ffProc = null
+let browser = null
+// 任何一步出错（含 CDP 超时）：收掉浏览器和 ffmpeg 再以非零退出，外层可以重试
+process.on('unhandledRejection', async (e) => {
+  console.error('\n录制出错：', e?.message ?? e)
+  ffProc?.kill()
+  await browser?.close().catch(() => {})
+  process.exit(2)
+})
 const b = await launch({ width: W, height: H, port: +(args.cdp ?? 9350) + Math.floor(Math.random() * 40) })
+browser = b
 await b.send('Page.navigate', { url: URL })
 for (let i = 0; i < 600; i++) {
   const ok = await b.evaluate('!!window.__promo').catch(() => false)
@@ -89,6 +100,7 @@ const ff = spawn(
   ],
   { stdio: ['pipe', 'inherit', 'inherit'] },
 )
+ffProc = ff
 const tStart = Date.now()
 for (let i = 0; i < n; i++) {
   const t = from + i / FPS

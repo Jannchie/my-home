@@ -4,11 +4,17 @@
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { Director, DURATION, libCards, planUi, ui } from './timeline'
 import PlanLayer from './PlanLayer.vue'
+import { L } from './text'
+import { t } from '../i18n'
+import { PRODUCT_TAGLINE } from '../i18n/ui'
 
 const canvas = ref<HTMLCanvasElement>()
+const ghost = ref<HTMLCanvasElement>()
 const status = ref('loading')
 let director: Director
 
+/** 卡片里的行依次出现（错开约 3 帧），离场时一起更快淡出 */
+const row = (o: number, i: number) => Math.max(0, Math.min(1, (o - i * 0.18) / (1 - i * 0.18)))
 const vmin = computed(() => Math.min(ui.w, ui.h) / 100)
 const ink = computed(() => (ui.dark ? '#f4f1ea' : '#2b2925'))
 
@@ -22,11 +28,8 @@ function rr(cx: number, cy: number, s: number) {
 const maskPath = computed(() => {
   const m = ui.mask
   if (!m) return ''
-  const W = ui.w
-  const H = ui.h
-  const full = Math.hypot(W, H) * 1.12
-  if (m.mode === 'cover') return rr(W / 2, H / 2, Math.max(0.01, m.k * full))
-  return `M0,0H${W}V${H}H0Z` + rr(W / 2, H / 2, Math.max(0.01, m.k * full))
+  const full = Math.hypot(ui.w, ui.h) * 1.12
+  return rr(ui.w / 2, ui.h / 2, Math.max(0.01, m.k * full))
 })
 
 const lib = computed(() => {
@@ -72,6 +75,7 @@ declare global {
 
 onMounted(async () => {
   director = new Director(canvas.value!)
+  director.ghost = ghost.value!
   ;(window as unknown as { __director: Director }).__director = director
   const resize = () => director.resize(window.innerWidth, window.innerHeight)
   resize()
@@ -110,6 +114,7 @@ onMounted(async () => {
 <template>
   <div class="promo" :class="{ vertical: ui.w < ui.h }" :style="{ background: ui.bg, '--u': vmin + 'px', '--ink': ink }">
     <canvas ref="canvas" class="gl" :style="{ opacity: ui.canvasO }" />
+    <canvas ref="ghost" class="gl" :style="{ opacity: ui.ghost * ui.canvasO, visibility: ui.ghost > 0.001 ? 'visible' : 'hidden' }" />
 
     <!-- 平面图 -->
     <div v-if="planUi" class="layer plan" :style="{ opacity: planUi.o }">
@@ -168,16 +173,41 @@ onMounted(async () => {
       </svg>
       <template v-for="(p, i) in ui.label.parts" :key="i">
         <span v-if="i" class="sep">·</span>
-        <span :class="{ on: p.on, dim: p.dim }">{{ p.text }}</span>
+        <span :class="{ on: p.on, dim: p.dim, num: p.num }">{{ p.text }}</span>
       </template>
       <!-- 第二行：一句话概括（地区段） -->
-      <span v-if="ui.label.note" class="note">{{ ui.label.note }}</span>
+      <span v-if="ui.label.note" class="note" :style="{ opacity: Math.max(0, (ui.label.o - 0.35) / 0.65) }">{{ ui.label.note }}</span>
       <span v-if="ui.clock" class="sep">·</span>
       <span v-if="ui.clock" class="num on">{{ clockText }}</span>
       <svg v-if="ui.clock" class="sunmoon" viewBox="-12 -12 24 24">
         <circle v-if="isDay" r="5" fill="#e0a64a" />
         <path v-else d="M3 -8 A8 8 0 1 0 8 4 A6.5 6.5 0 1 1 3 -8 Z" :fill="ink" />
       </svg>
+    </div>
+
+    <!-- 住户卡 -->
+    <div v-for="(c, i) in ui.cards" :key="c.name + i" class="hcard" :style="{ opacity: c.o, transform: `translateX(${c.dx * 100}%)` }">
+      <div class="hc-head" :style="{ opacity: row(c.o, 0) }">
+        <div class="avatar" :style="{ background: c.color }">{{ c.name.slice(0, 1) }}</div>
+        <div>
+          <div class="hc-name">{{ c.name }}</div>
+          <div class="hc-meta num">{{ c.meta }}</div>
+        </div>
+      </div>
+      <div class="hc-row" :style="{ opacity: row(c.o, 1) }">
+        <span class="hc-k">{{ L('风格偏好') }}</span>
+        <span class="chip"><i :style="{ background: c.color }" />{{ c.style }}</span>
+      </div>
+      <div class="hc-row top" :style="{ opacity: row(c.o, 2) }">
+        <span class="hc-k">{{ L('兴趣') }}</span>
+        <div class="its">
+          <div v-for="it in c.interests" :key="it.label" class="it" :class="{ on: it.on }">
+            <span>{{ it.label }}</span>
+            <span class="dots"><b v-for="k in 4" :key="k" :class="{ on: k <= it.lv }" /></span>
+            <span class="lv num">Lv.{{ it.lv }}</span>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="brand" :style="{ opacity: ui.brand }">
@@ -191,9 +221,16 @@ onMounted(async () => {
       <path d="M0 0 L0 22 L5.6 16.6 L9.6 25.4 L13.4 23.6 L9.6 15 L17 15 Z" fill="#2b2925" stroke="#fbfaf7" stroke-width="2" stroke-linejoin="round" />
     </svg>
 
-    <!-- 圆角方块遮罩 -->
+    <!-- 圆角方块遮罩：cover 是绿色方块放大盖住画面，reveal 是绿色底上开一个放大的方块洞；都带一点旋转回正 -->
     <svg v-if="ui.mask" class="layer mask" :viewBox="`0 0 ${ui.w} ${ui.h}`">
-      <path :d="maskPath" fill="#577a68" fill-rule="evenodd" />
+      <defs>
+        <mask id="hole">
+          <rect :width="ui.w" :height="ui.h" fill="#fff" />
+          <path :d="maskPath" fill="#000" :transform="`rotate(${ui.mask.rot} ${ui.w / 2} ${ui.h / 2})`" />
+        </mask>
+      </defs>
+      <path v-if="ui.mask.mode === 'cover'" :d="maskPath" fill="#577a68" :transform="`rotate(${ui.mask.rot} ${ui.w / 2} ${ui.h / 2})`" />
+      <rect v-else :width="ui.w" :height="ui.h" fill="#577a68" mask="url(#hole)" />
     </svg>
 
     <!-- 结尾 -->
@@ -205,7 +242,7 @@ onMounted(async () => {
       <div class="card-end" :style="{ opacity: ui.end.logo, transform: `translateY(${(1 - ui.end.logo) * 2}vmin)` }">
         <svg viewBox="0 0 512 512" class="logo"><rect width="512" height="512" rx="116" fill="#f4f1ea" /><g transform="translate(64 64) scale(16)" fill="none" stroke="#577a68" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 3.5h15a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H4.5a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1zm-1 9h5m4 0h8m-6 0v4" /></g></svg>
         <div class="big">My Home</div>
-        <div class="small">生成一个带有生活气息的家</div>
+        <div class="small">{{ t(PRODUCT_TAGLINE) }}</div>
         <div class="small url">home.jannchie.com</div>
       </div>
     </div>
@@ -236,9 +273,17 @@ body,
   --small: calc(var(--u) * 2.6);
   --big: calc(var(--u) * 7.2);
 }
+:lang(ja) .promo {
+  font-family: 'Noto Sans JP', 'Noto Sans SC', 'Yu Gothic UI', sans-serif;
+}
 .promo.vertical {
   --small: calc(var(--u) * 3.3);
   --big: calc(var(--u) * 9);
+}
+.promo.vertical .label .note {
+  white-space: normal;
+  text-align: center;
+  max-width: 100%;
 }
 .promo.vertical .label {
   bottom: calc(var(--u) * 26);
@@ -306,6 +351,8 @@ body,
 }
 .promo.vertical .label:has(.note) {
   justify-content: center;
+  width: calc(var(--u) * 90);
+  box-sizing: border-box;
 }
 .label .note {
   flex-basis: 100%;
@@ -330,6 +377,112 @@ body,
 .sunmoon {
   width: calc(var(--small) * 1.05);
   height: calc(var(--small) * 1.05);
+}
+.hcard {
+  position: absolute;
+  left: calc(var(--u) * 5);
+  top: 50%;
+  margin-top: calc(var(--u) * -17);
+  width: max-content;
+  min-width: calc(var(--u) * 30);
+  padding: calc(var(--u) * 2.4);
+  border-radius: calc(var(--u) * 2.2);
+  background: #fbfaf7;
+  color: #2b2925;
+  font-size: var(--small);
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 1.6);
+  box-shadow: 0 0 0 1px rgba(43, 41, 37, 0.07);
+}
+.promo.vertical .hcard {
+  left: 50%;
+  top: calc(var(--u) * 12);
+  margin: 0;
+  translate: -50% 0;
+}
+.hc-head {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 1.4);
+}
+.avatar {
+  width: calc(var(--u) * 5.6);
+  height: calc(var(--u) * 5.6);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fbfaf7;
+  font-weight: 700;
+  flex: none;
+}
+.hc-name {
+  font-weight: 700;
+}
+.hc-meta {
+  opacity: 0.6;
+}
+.hc-row {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 1.4);
+}
+.hc-row.top {
+  align-items: flex-start;
+}
+.hc-k {
+  opacity: 0.5;
+  min-width: 4.2em;
+  flex: none;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+  font-weight: 600;
+}
+.chip i {
+  width: 0.9em;
+  height: 0.9em;
+  border-radius: 0.22em;
+  display: inline-block;
+}
+.its {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 0.7);
+}
+.it {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+}
+.it > span:first-child {
+  min-width: 4.2em;
+  font-weight: 600;
+}
+.dots {
+  display: inline-flex;
+  gap: 0.22em;
+}
+.dots b {
+  width: 0.5em;
+  height: 0.5em;
+  border-radius: 50%;
+  background: rgba(43, 41, 37, 0.14);
+}
+.it.on > span:first-child {
+  color: #577a68;
+}
+.dots b.on {
+  background: #577a68;
+}
+.lv {
+  color: #577a68;
+  font-weight: 600;
+}
+.num {
+  font-variant-numeric: tabular-nums;
 }
 .brand {
   position: absolute;

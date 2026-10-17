@@ -196,7 +196,7 @@ export class PromoScene {
   render() {
     // 壁挂物的显隐（mounted）
     const set = this.current
-    if (set) for (const o of set.furn) o.obj.visible = !o.obj.userData.mountHidden && !o.obj.userData.occluded && o.obj.userData.dropVisible !== false
+    if (set) for (const o of set.furn) o.obj.visible = !o.obj.userData.mountHidden && o.obj.userData.dropVisible !== false
     this.stage.renderer.shadowMap.needsUpdate = true
     this.stage.render()
   }

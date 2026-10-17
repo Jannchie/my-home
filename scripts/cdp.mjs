@@ -61,10 +61,18 @@ export async function launch({ width, height, port = 9350, gpu = true } = {}) {
       pending.delete(m.id)
     } else if (m.method) for (const l of listeners) l(m)
   }
+  // 每个请求最多等 60s：GPU / 页面卡死时抛错退出，而不是无限挂起（录制脚本外层会重试）
   const send = (method, params = {}) =>
-    new Promise((r) => {
+    new Promise((r, reject) => {
       const i = ++id
-      pending.set(i, r)
+      const timer = setTimeout(() => {
+        pending.delete(i)
+        reject(new Error(`CDP ${method} 超时`))
+      }, 60000)
+      pending.set(i, (m) => {
+        clearTimeout(timer)
+        r(m)
+      })
       ws.send(JSON.stringify({ id: i, method, params }))
     })
   const evaluate = async (expr) => {
