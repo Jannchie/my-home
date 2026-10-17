@@ -6,6 +6,8 @@ import { ASSETS, ASSET_MAP } from '/src/three/assets'
 import { FIXED_TAGS, FUNCTION_TAGS } from '/src/three/tags'
 import { GENERATED_TAGS } from '/src/three/tags.generated'
 import { INTERESTS } from '/src/household'
+import { TAXONOMY } from '/src/three/taxonomy.generated'
+import { TYPE_NAMES } from '/src/three/typeLabels'
 
 const ROOT = path.resolve(__dirname, '..')
 
@@ -36,6 +38,32 @@ describe('素材标签', () => {
 
   test('生成表里的 id 都是现有素材', () => {
     expect(Object.keys(GENERATED_TAGS).filter((id) => !ASSET_MAP.has(id))).toEqual([])
+    expect(Object.keys(TAXONOMY).filter((id) => !ASSET_MAP.has(id))).toEqual([])
+  })
+})
+
+describe('细分类型与同款系列', () => {
+  test('每件素材（设备除外）都有细分类型，且是有显示名的功能标签，素材自己也带着这个标签或由系列迁移而来', () => {
+    const func = new Set<string>(FUNCTION_TAGS)
+    const bad = ASSETS.filter((a) => !a.fixture && (!a.type || !func.has(a.type) || !(a.type in TYPE_NAMES))).map((a) => `${a.id}: ${a.type}`)
+    expect(bad).toEqual([])
+  })
+
+  test('同款系列只收同一造型：同一尺寸 / 款式名（sizeLabel）下只能靠 form 区分，成员的细分类型一致', () => {
+    const by = new Map<string, typeof ASSETS>()
+    for (const a of ASSETS) if (!a.fixture) (by.get(a.series!) ?? by.set(a.series!, []).get(a.series!)!).push(a)
+    const bad: string[] = []
+    for (const [s, xs] of by) {
+      if (xs.length < 2) continue
+      if (new Set(xs.map((a) => a.type)).size > 1) bad.push(`${s}: 细分类型不一致 ${[...new Set(xs.map((a) => a.type))]}`)
+      const groups = new Map<string, string[]>()
+      for (const a of xs) {
+        const k = a.sizeLabel ?? ''
+        groups.set(k, [...(groups.get(k) ?? []), `${a.form ?? ''}|${a.formLabel ?? ''}`])
+      }
+      for (const [k, forms] of groups) if (forms.length !== new Set(forms).size) bad.push(`${s}「${k}」: 同一款里有重复的 form（不是同一件东西的不同陈设）`)
+    }
+    expect(bad).toEqual([])
   })
 })
 
@@ -45,6 +73,7 @@ describe('素材标签', () => {
  *   - 正则字面量必须锚定在 id 开头（^…，每个顶层分支都以 ^ 开头）：只用来点名具体素材或成套系列，类别一律用标签
  *   - new RegExp 的模板也必须以 ^ 开头
  *   - 素材的 name 不能参与匹配（.test / .match / .includes / 模板字符串拼接）
+ *   - 不用已废弃的 family 字段（细分类型用 type，同款系列用 series）
  */
 const FILES = [
   'src/decorate.ts',
@@ -59,6 +88,9 @@ const FILES = [
   'src/three/house.ts',
   'src/three/post.ts',
   'src/three/actors.ts',
+  'src/three/catalog.ts',
+  'src/generate.ts',
+  'src/store.ts',
 ]
 /** 匹配房间名（不是素材）的正则：收纳间是鞋柜 / 食品库 / リネン庫 / WIC，按房间名判断 */
 const ROOM_NAME = /^\s*\.test\((room|r)\.name\)/
@@ -135,6 +167,8 @@ function lint(file: string) {
     else if (!branches(body).every((b) => b.startsWith('^'))) bad.push(`${at}  没有锚定在 id 开头`)
   }
   for (const m of src.matchAll(/new RegExp\(\s*([`'"])(.)/g)) if (m[2] !== '^') bad.push(`${file}:${lineOf(m.index!)} new RegExp 没有锚定在 id 开头`)
+  // 旧的 family 字段不再参与业务判断（用 type / series）
+  for (const m of src.matchAll(/\.family\b/g)) bad.push(`${file}:${lineOf(m.index!)} 用了已废弃的 family（改用 type / series）`)
   const raw = fs.readFileSync(path.join(ROOT, file), 'utf8').split('\n')
   raw.forEach((line, i) => {
     const code = line.replace(/\/\/.*$/, '')

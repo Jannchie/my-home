@@ -661,10 +661,10 @@ export function commitFurniturePatterns(id: string, patterns: (PatternSpec | nul
   })
 }
 
-/** 同款：同一个素材，或同系列（不同规格 / 形态）的家具 */
+/** 同款：同一个素材，或同款系列（同一造型的不同尺寸 / 陈设）的家具 */
 export function sameKind(f: Furniture) {
-  const fam = ASSET_MAP.get(f.asset)?.family
-  return plan.value.furniture.filter((o) => o.asset === f.asset || (!!fam && ASSET_MAP.get(o.asset)?.family === fam))
+  const s = ASSET_MAP.get(f.asset)?.series
+  return plan.value.furniture.filter((o) => o.asset === f.asset || (!!s && ASSET_MAP.get(o.asset)?.series === s))
 }
 
 /** 把一件家具的配色复制给所有同款 */

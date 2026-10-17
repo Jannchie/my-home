@@ -3,7 +3,8 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { ASSETS, ASSET_MAP, CATEGORY_LABELS, STYLE_LABELS, type AssetCategory, type StyleTag } from '../three/assets'
-import { SIZE_LABELS, assetName, browse, categoriesOf, countByCategory, displayName, paletteFor, paletteStyle, siblings, sizeClass, variantLabel, type Filter, type SizeClass } from '../three/catalog'
+import { SIZE_LABELS, browse, cardName, categoriesOf, countByCategory, displayName, paletteFor, paletteStyle, siblings, sizeClass, typesIn, variantLabel, type Filter, type SizeClass } from '../three/catalog'
+import { typeLabel } from '../three/typeLabels'
 import { addOutlines } from '../three/toon'
 import { createStage, fitSun, frameCamera, type Stage } from '../three/stage'
 import { useThumbs } from '../three/thumbs'
@@ -20,7 +21,13 @@ import { CATEGORY_ICONS, ICONS, STYLE_ICONS } from '../ui/icons'
 import { placing, selection, viewMode } from '../store'
 import { lang, t } from '../i18n'
 
-const filter = reactive<Filter>({ category: 'all', style: 'all', size: 'all', query: '', fixtures: true })
+const filter = reactive<Filter>({ category: 'all', type: 'all', style: 'all', size: 'all', query: '', fixtures: true })
+// 细分类型：换分类时回到「全部」；只在选了某个分类时列出（全部分类下类型太多）
+watch(
+  () => filter.category,
+  () => (filter.type = 'all'),
+)
+const types = computed(() => (filter.category === 'all' ? [] : typesIn(filter)))
 const categories = categoriesOf(true)
 const styleKeys = Object.keys(STYLE_LABELS) as StyleTag[]
 const sizeKeys = Object.keys(SIZE_LABELS) as SizeClass[]
@@ -164,9 +171,9 @@ const dims = (d: { w: number; d: number; h: number }) => `${d.w}×${d.d}×${d.h}
 
 // ---------- 搜索：按 / 聚焦，Esc 清空；没有结果时一键清除筛选 ----------
 const searchInput = ref<HTMLInputElement>()
-const filtered = computed(() => !!filter.query || filter.category !== 'all' || filter.style !== 'all' || filter.size !== 'all')
+const filtered = computed(() => !!filter.query || filter.category !== 'all' || filter.type !== 'all' || filter.style !== 'all' || filter.size !== 'all')
 function clearFilters() {
-  Object.assign(filter, { category: 'all', style: 'all', size: 'all', query: '' })
+  Object.assign(filter, { category: 'all', type: 'all', style: 'all', size: 'all', query: '' })
 }
 function onSlash(e: KeyboardEvent) {
   const el = e.target as HTMLElement
@@ -203,6 +210,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onSlash))
 
     <div class="main">
       <div class="filters">
+        <div v-if="types.length > 1" class="chips">
+          <span class="label">{{ t('类型') }}</span>
+          <button :class="{ on: filter.type === 'all' }" @click="filter.type = 'all'">{{ t('全部') }}</button>
+          <button v-for="x in types" :key="x.type" :class="{ on: filter.type === x.type }" @click="filter.type = x.type">
+            {{ t(typeLabel(x.type)) }}<span class="num">{{ x.n }}</span>
+          </button>
+        </div>
         <div class="chips">
           <span class="label">{{ t('风格') }}</span>
           <button :class="{ on: filter.style === 'all' }" @click="filter.style = 'all'">{{ t('全部') }}</button>
@@ -218,16 +232,16 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onSlash))
         <button
           v-for="g in shown"
           :key="g.rep.id"
-          v-memo="[g, thumbs[`${g.rep.id}#${cardColor(g.rep.id)}`], g.rep.id === selectedId || (!!def.family && g.rep.family === def.family), lang]"
+          v-memo="[g, thumbs[`${g.rep.id}#${cardColor(g.rep.id)}`], g.rep.id === selectedId || g.rep.series === def.series, lang]"
           v-thumb="[g.rep.id, cardColor(g.rep.id)]"
           class="card"
-          :class="{ on: g.rep.id === selectedId || (!!def.family && g.rep.family === def.family) }"
+          :class="{ on: g.rep.id === selectedId || g.rep.series === def.series }"
           :title="g.rep.fixture ? undefined : t('双击放进 3D 沙盘')"
           @click="select(g.rep.id)"
           @dblclick="quickPlace(g.rep.id)">
           <img v-if="thumbs[`${g.rep.id}#${cardColor(g.rep.id)}`]" :src="thumbs[`${g.rep.id}#${cardColor(g.rep.id)}`]" alt="" />
           <span v-else class="ph" />
-          <span class="name" :title="assetName(g.rep)">{{ assetName(g.rep) }}</span>
+          <span class="name" :title="cardName(g.rep)">{{ cardName(g.rep) }}</span>
           <span class="size num">{{ g.sizes > 1 ? t('{n} 种规格', { n: g.sizes }) : dims(g.rep) }}</span>
           <span v-if="g.rep.prop" class="badge">{{ t('摆件') }}</span>
           <span v-else-if="g.rep.surface" class="badge">{{ t('可摆放') }}</span>
@@ -259,6 +273,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onSlash))
         <div class="title">
           <h2>{{ displayName(def) }}</h2>
           <span class="tag">{{ t(CATEGORY_LABELS[def.category]) }}</span>
+          <span v-if="def.type" class="tag">{{ t(typeLabel(def.type)) }}</span>
           <span class="tag">{{ t(SIZE_LABELS[sizeClass(def)]) }}</span>
         </div>
         <div class="dims num">
@@ -400,6 +415,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onSlash))
   padding: 0 12px;
   border-radius: 999px;
   font-size: var(--fs-sm);
+}
+.chips button .num {
+  margin-left: 2px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
 }
 .chips button.on {
   background: var(--accent-weak);

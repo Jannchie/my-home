@@ -163,10 +163,10 @@ export function overlapsOthers(plan: Plan, selfId: string | null, asset: string,
   if (!def || def.mount || def.h <= 3) return false
   const me = shrink(furnitureBox(asset, x, y, rot), 2)
   // 洗衣机上方置物架本来就跨在洗衣机 / 干衣机上
-  const straddle = (x?: string, y?: string) => (x === 'laundry-rack' && (y === 'washer' || y === 'dryer')) || (y === 'laundry-rack' && (x === 'washer' || x === 'dryer'))
+  const straddle = (x?: string, y?: string) => (x === 'washer-rack' && (y === 'washer' || y === 'dryer')) || (y === 'washer-rack' && (x === 'washer' || x === 'dryer'))
   const solid = (id: string, a: string, z?: number) => {
     const d = ASSET_MAP.get(a)
-    return id !== selfId && !z && !!d && !d.mount && d.h > 3 && !straddle(def.family, d.family)
+    return id !== selfId && !z && !!d && !d.mount && d.h > 3 && !straddle(def.type, d.type)
   }
   if (plan.furniture.some((f) => solid(f.id, f.asset, f.z) && boxHit(me, shrink(furnitureBox(f.asset, f.x, f.y, f.rot), 2)))) return true
   // 冰箱位 / 洗衣机位只是预留的空间，冰箱、洗衣机（以及别的家具）可以放在上面

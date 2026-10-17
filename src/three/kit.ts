@@ -223,10 +223,24 @@ export interface AssetDef {
   /** 造型本身适合的风格（同一造型换配色能覆盖的风格都写上） */
   styles?: StyleTag[]
   /**
-   * 系列：同一种家具的不同规格共用一个 family（如 'bed'、'desk'），素材库里合成一张卡片，
-   * 用 sizeLabel（如 'Queen'、'120'、'L 形（左）'）切换。没有规格之分的不用填。
+   * 细分类型（一个功能标签，词表见 tags.ts）：「这是什么」。行灯、石灯笼、PH 灯是三件独立的素材，type 都是 floor-lamp。
+   * 素材库按它细分筛选；一键布置的换款、灯具池等按它判断。已有素材的值在 taxonomy.generated.ts，新素材直接写。
+   */
+  type?: Tag
+  /**
+   * 同款系列：素材库里合成一张卡片的单位，只收「同一造型」——它的不同尺寸（sizeLabel：单人 / 双人、120 / 140）
+   * 和不同陈设（form：叠好 / 挂起、打开 / 合上，或 sizeLabel 写的状态：对局中 / 收在盒里）。造型不同的同类物品不要放进同一系列，
+   * 它们各自独立、靠 type 归类。没有尺寸 / 陈设之分的不用填（自成一款）。
+   */
+  series?: string
+  /** 一键布置「同款每间一个」的默认分组（不填 = series ?? id）；limit.group 优先 */
+  limitGroup?: string
+  /**
+   * @deprecated 旧的系列字段：曾经同时表示规格、陈设和「同类不同款」。已有素材仍保留它作数据来源（gen-taxonomy.mts 据此迁移），
+   * 业务代码不要再用，改用 type / series；新素材不要写。
    */
   family?: string
+  /** 尺寸 / 款式的显示名（Queen、120、石灯笼…）；陈设状态也可以写在这里（对局中、收在盒里） */
   sizeLabel?: string
   build: (p: string[]) => THREE.Group
   /** 设备类：只在 3D 中代替平面图的设备显示，不能作为家具单独摆放 */
@@ -244,8 +258,8 @@ export interface AssetDef {
    */
   surfaces?: { y: number; shape?: Poly[]; kind?: SurfaceKind; h?: number }[]
   /**
-   * 形态：同一 family 里的不同摆法（平放 / 立放 / 挂起 / 叠好 / 合上 / 装箱）。
-   * 放到挂钩层（kind: 'hook'）上时自动换成同 family 的 'hanging' 形态；从挂钩拿到台面上时换回非挂起的形态。
+   * 形态：同一系列（series）里的不同摆法（平放 / 立放 / 挂起 / 叠好 / 合上 / 装箱）。
+   * 放到挂钩层（kind: 'hook'）上时自动换成同系列的 'hanging' 形态；从挂钩拿到台面上时换回非挂起的形态。
    * 挂起形态的模型挂在原点下方（原点 = 挂钩位置，模型的 y 为负），其余形态原点在底面。
    */
   form?: FormTag

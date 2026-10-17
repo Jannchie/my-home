@@ -10,6 +10,7 @@ import { soft, type SoftFn } from './packs/more-variety'
 import { applyDims, warnIfDimsStale } from './dims'
 import { DIMS } from './dims.generated'
 import { GENERATED_TAGS } from './tags.generated'
+import { TAXONOMY } from './taxonomy.generated'
 
 export { C, CATEGORY_LABELS, STYLE_LABELS, type AssetCategory, type AssetDef, type StyleTag } from './kit'
 
@@ -1479,6 +1480,14 @@ ASSETS.push(...PACKS)
 for (const a of ASSETS) {
   const g = GENERATED_TAGS[a.id]
   if (g) a.tags = a.tags ? [...new Set([...a.tags, ...g])] : [...g]
+  // 细分类型 / 同款系列：def 里写了的优先，否则用迁移生成的（taxonomy.generated.ts）；没有系列的自成一款
+  const x = TAXONOMY[a.id]
+  if (x) {
+    a.type ??= x[0]
+    a.series ??= x[1]
+    a.limitGroup ??= x[2]
+  }
+  a.series ??= a.id
 }
 
 // 尺寸校正：实测比声明大的放大、陷地的抬起（预计算结果见 dims.generated.ts，由 pnpm gen:dims 生成；规则见 dims.ts）

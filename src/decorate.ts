@@ -215,14 +215,15 @@ class Decorator {
     return r
   }
   private computeLimit(def: AssetDef) {
-    if (def.limit) return { group: def.limit.group ?? def.family ?? def.id, scope: def.limit.scope, max: def.limit.max }
-    // 灯具按系列算：落地灯每间一盏、壁灯每间一对、台灯每个台面一盏
-    const lamp = def.family ? LAMP_FAMILIES[def.family] : undefined
-    if (lamp) return { group: def.family!, scope: lamp.scope, max: lamp.max }
+    const group = def.limitGroup ?? def.series ?? def.id
+    if (def.limit) return { group: def.limit.group ?? group, scope: def.limit.scope, max: def.limit.max }
+    // 灯具按细分类型算：落地灯每间一盏、壁灯每间一对、台灯每个台面一盏
+    const lamp = def.type ? LAMP_TYPES[def.type] : undefined
+    if (lamp) return { group: def.type!, scope: lamp.scope, max: lamp.max }
     // 牙刷杯、漱口杯是洗漱用品，不算进全家的杯子数（cup 标签不含它们）
     const r = LIMITS.find(([, tag]) => hasTag(def, ...[tag].flat()))
     // 没有专门规则的：可以多摆的（multi-ok）不限，其余同款（同系列）每个房间一个
-    if (!r) return hasTag(def, 'multi-ok') ? null : { group: def.family ?? def.id, scope: 'room' as const, max: 1 }
+    if (!r) return hasTag(def, 'multi-ok') ? null : { group, scope: 'room' as const, max: 1 }
     const max = r[3] === 0 ? (this.household?.members.length ?? 2) + 1 : r[3]
     return { group: r[0], scope: r[2], max }
   }
@@ -424,42 +425,41 @@ class Decorator {
     }
   }
 
-  /** 同系列里「同一尺寸、不同造型」的各款（宽深差在 10% 以内；尺寸规格不同的——床、书桌、餐桌的大小——不算） */
+  /** 同一细分类型里「同一尺寸、不同造型」的各款（宽深差在 10% 以内；尺寸规格不同的——床、书桌、餐桌的大小——不算） */
   private siblings = new Map<string, AssetDef[]>()
   /**
-   * 换款：经常出现的东西每次都挑同系列里的不同造型，优先当前房间的风格。
+   * 换款：经常出现的东西每次都挑同一细分类型（type）里的不同造型，优先当前房间的风格。
    * 只在尺寸几乎一样的款之间换，所以按尺寸挑好的规格（单人床 / 双人床、110 / 140 书桌）不会被换掉。
    */
   vary(asset: string) {
     const def = ASSET_MAP.get(asset)
-    if (!def?.family) return asset
-    if (LAMP_FAMILIES[def.family]) return this.lampPick(def.family)
+    if (!def?.type) return asset
+    if (LAMP_TYPES[def.type]) return this.lampPick(def.type)
     let sib = this.siblings.get(asset)
     if (!sib) {
       const near = (a: number, b: number) => Math.abs(a - b) <= b * 0.1 + 2
       sib = ASSETS.filter(
-        (a) => a.family === def.family && a.form === def.form && !!a.mount === !!def.mount && !!a.prop === !!def.prop && !!a.stick === !!def.stick && near(a.w, def.w) && near(a.d, def.d) && Math.abs(a.h - def.h) <= def.h * 0.35 + 5,
+        (a) => a.type === def.type && a.form === def.form && !!a.mount === !!def.mount && !!a.prop === !!def.prop && !!a.stick === !!def.stick && near(a.w, def.w) && near(a.d, def.d) && Math.abs(a.h - def.h) <= def.h * 0.35 + 5,
       )
       this.siblings.set(asset, sib)
     }
-    // 只在「同功能、不同造型」的系列里换：原款标了「标准」、或系列里有款式包（va- / vb- / mv-）做的新款、或明确列出的系列。
-    // 同系列里功能不同的（洗发水 / 护发素 / 沐浴露、洗衣液 / 柔软剂）不能互换
-    if (sib.length < 2 || !(def.sizeLabel === '标准' || STYLE_FAMILIES.has(def.family) || sib.some((a) => /^(va|vb|mv)-/.test(a.id)))) return asset
+    // 只在常换款的细分类型上换（见 VARY_TYPES / ALWAYS_VARY）
+    if (sib.length < 2 || !(ALWAYS_VARY.has(def.type) || (VARY_TYPES.has(def.type) && def.sizeLabel === '标准'))) return asset
     const styled = sib.filter((a) => a.styles?.includes(this.style))
     return this.pick(styled.length && this.rand() < 0.75 ? styled : sib).id
   }
 
   private lampPools = new Map<string, AssetDef[]>()
   /**
-   * 灯具换款：从系列（书桌灯还可以用台灯）里均匀地挑，85% 挑当前房间风格的款。
+   * 灯具换款：从同一细分类型（书桌灯还可以用台灯）里均匀地挑，85% 挑当前房间风格的款。
    * 不按尺寸限制换款（各风格的灯高矮胖瘦差别大），只去掉占地太大的（弧形钓鱼灯）；放不下由调用方换一款再试。
    */
-  lampPick(family: string) {
-    const spec = LAMP_FAMILIES[family]
-    let pool = this.lampPools.get(family)
+  lampPick(type: Tag) {
+    const spec = LAMP_TYPES[type]!
+    let pool = this.lampPools.get(type)
     if (!pool) {
-      pool = ASSETS.filter((a) => spec.pool.includes(a.family ?? '') && !a.fixture && Math.max(a.w, a.d) <= spec.maxSide)
-      this.lampPools.set(family, pool)
+      pool = ASSETS.filter((a) => !!a.type && spec.pool.includes(a.type) && !a.fixture && Math.max(a.w, a.d) <= spec.maxSide)
+      this.lampPools.set(type, pool)
     }
     const styled = pool.filter((a) => a.styles?.includes(this.style))
     const r = this.rand()
@@ -534,7 +534,7 @@ class Decorator {
     if (!kind) return
     for (const [a, b] of spans) {
       const len = b - a
-      const fits = variantsOf(`${kind}-60`).concat(variantsOf(`${kind}2-60`)).map((id) => ASSET_MAP.get(id)!).filter((d) => d.w <= len - 4).sort((x, y) => y.w - x.w)
+      const fits = [...new Set(seriesIds(`${kind}-60`).concat(seriesIds(`${kind}2-60`)))].map((id) => ASSET_MAP.get(id)!).filter((d) => d.w <= len - 4).sort((x, y) => y.w - x.w)
       if (!fits.length) continue
       // 吊柜尽量占满；搁板随机挑一款
       const d = kind === 'ws-kitchen-cab' ? fits[0] : this.pick(fits.slice(0, 3))
@@ -666,7 +666,7 @@ class Decorator {
     const r = this.rand()
     if (r < 0.6 && this.bathCorner(room)) return
     if (r >= 0.85 && this.clutter < 1.1) return
-    const cand = ASSETS.filter((a) => a.family === 'bath-wall-shelf' || a.id === 'wet-wire-basket')
+    const cand = ASSETS.filter((a) => a.type === 'bath-wall-shelf' || a.id === 'wet-wire-basket')
     if (cand.length) this.mountAvoiding(room, this.styledPick(cand).id, showerBoxes(this.plan, room))
   }
 
@@ -677,14 +677,14 @@ class Decorator {
   }
 
   /**
-   * 浴室转角架（直角在局部左后）：从 family 'bath-corner-shelf' 的所有款式里挑（三角、扇形、圆角三角、L 形、靠角矩形、深篮、吸盘、
+   * 浴室转角架（直角在局部左后）：从细分类型 bath-corner-shelf 的所有款式里挑（三角、扇形、圆角三角、L 形、靠角矩形、深篮、吸盘、
    * 带毛巾杆 / 挂钩、伸缩杆落地款），放进房间的阳角里，背面和左侧各贴一面墙（L 形两臂各贴一面，矩形款背贴墙、左端顶到侧墙）。
    * 壁挂款避开门窗前方、淋浴、已挂的东西、洗面台 / 马桶上方；浴缸上方的墙角排在洗身区墙角之后。
    * 伸缩杆款落地顶到天花板：墙角不能压到任何设备（含浴缸内部）、淋浴、门前通道、已挂的东西和已摆的家具，优先浴缸外侧的墙角。
    * 这一款放不进就换别的款再试两次，都不行返回 null（由调用方改放普通置物架）。
    */
   bathCorner(room: Room) {
-    const all = ASSETS.filter((a) => a.family === 'bath-corner-shelf')
+    const all = ASSETS.filter((a) => a.type === 'bath-corner-shelf')
     if (!all.length) return null
     const shower = showerBoxes(this.plan, room)
     const guards = clearances(room, this.plan, true)
@@ -1940,7 +1940,7 @@ class Decorator {
     let bed: Furniture | null = null
     // 婴儿床 / 儿童床有多种款式：同系列里随便挑一款，放不下再换
     const tryKid = (id: string) => {
-      for (const v of this.shuffle(variantsOf(id))) if ((bed = this.wall(room, v, { front: 40, far: door }))) return
+      for (const v of this.shuffle(sameType(id))) if ((bed = this.wall(room, v, { front: 40, far: door }))) return
     }
     if (kid && kid.age < 3) tryKid('kid-crib')
     if (!bed && kid && kid.age < 10) tryKid('kid-bed')
@@ -2498,7 +2498,7 @@ class Decorator {
     if (!n && !have) n = 1
     if (!n) return
     // 1. 大画挂在沙发 / 床 / 书桌上方（婴儿床上方不挂）
-    const rank = (d: AssetDef) => (hasTag(d, 'sofa') && d.family !== 'beanbag' ? 0 : isBed(d) && d.family !== 'kid-crib' ? 1 : isDeskish(d) && d.surface ? 2 : -1)
+    const rank = (d: AssetDef) => (hasTag(d, 'sofa') && d.type !== 'floor-cushion' ? 0 : isBed(d) && d.type !== 'crib' ? 1 : isDeskish(d) && d.surface ? 2 : -1)
     const anchors = this.out
       .filter((o) => inRoom(o) && !this.flat.has(o.id) && !ASSET_MAP.get(o.asset)?.prop && rank(ASSET_MAP.get(o.asset)!) >= 0)
       .sort((a, b) => rank(ASSET_MAP.get(a.asset)!) - rank(ASSET_MAP.get(b.asset)!))
@@ -2705,8 +2705,8 @@ class Decorator {
 
   /** 摆到 parent 的某一层：level 为 surfaces 的下标，不给就是顶面；层板净高不够的东西放不进去 */
   onLevel(parent: Furniture, asset: string, fx: number, fz: number, lrot = 0, level?: number) {
-    const fam = ASSET_MAP.get(asset)?.family
-    if (fam && LAMP_FAMILIES[fam]) {
+    const type = ASSET_MAP.get(asset)?.type
+    if (type && LAMP_TYPES[type]) {
       // 灯：挑中的款放不下（台面太小、层板太矮）就换一款再试，最后退回原款
       for (let k = 0; k < 4; k++) {
         const f = this.onLevelAs(parent, this.vary(asset), fx, fz, lrot, level)
@@ -2829,7 +2829,7 @@ class Decorator {
       // 每组的第一件是主角（电视、笔记本、台灯…）必摆，其余随机点缀；床头柜的台灯八成五的概率摆
       const list = typeof rules === 'function' ? rules(def) : rules
       list.forEach(([asset, fx, fz, rot, must], i) => {
-        const lead = i === 0 && !(def.family === 'nightstand' && this.rand() >= 0.85)
+        const lead = i === 0 && !(def.type === 'nightstand' && this.rand() >= 0.85)
         if (lead || (i > 0 && (must || this.rand() < 0.8))) this.onLevel(f, asset, fx, fz, rot)
       })
     }
@@ -2903,17 +2903,21 @@ export const PURPOSE_LABELS: Record<RoomPurpose, string> = {
 /** 床（含儿童床、婴儿床） */
 const isBed = (d: AssetDef) => hasTag(d, 'bed')
 
-/** 同系列（family）的各款；没有系列就只有自己 */
-function variantsOf(id: string) {
-  const fam = ASSET_MAP.get(id)?.family
-  return fam ? ASSETS.filter((a) => a.family === fam && !a.form?.includes('hanging')).map((a) => a.id) : ASSET_MAP.has(id) ? [id] : []
+/** 同款系列（同一造型的各尺寸）的成员，不含挂起形态；没有系列就只有自己 */
+function seriesIds(id: string) {
+  const s = ASSET_MAP.get(id)?.series
+  return s ? ASSETS.filter((a) => a.series === s && !a.form?.includes('hanging')).map((a) => a.id) : []
+}
+/** 同一细分类型的各款各尺寸（婴儿床的各种造型、小一号的衣柜…），不含挂起形态；没有类型就只有自己 */
+function sameType(id: string) {
+  const t = ASSET_MAP.get(id)?.type
+  return t ? ASSETS.filter((a) => a.type === t && !a.fixture && !a.form?.includes('hanging')).map((a) => a.id) : ASSET_MAP.has(id) ? [id] : []
 }
 
-/** 款式不同、功能相同的系列（可以随机换款） */
 /**
- * 灯具系列：换款时从哪些系列里挑（书桌上也可以摆普通台灯）、占地上限（太大的不随机挑），以及同类数量上限。
+ * 灯具：换款时从哪些细分类型里挑（书桌上也可以摆普通台灯）、占地上限（太大的不随机挑），以及同类数量上限。
  */
-const LAMP_FAMILIES: Record<string, { pool: string[]; maxSide: number; scope: 'room' | 'surface'; max: number }> = {
+const LAMP_TYPES: Partial<Record<Tag, { pool: Tag[]; maxSide: number; scope: 'room' | 'surface'; max: number }>> = {
   'floor-lamp': { pool: ['floor-lamp'], maxSide: 62, scope: 'room', max: 1 },
   'table-lamp': { pool: ['table-lamp'], maxSide: 40, scope: 'surface', max: 1 },
   'desk-lamp': { pool: ['desk-lamp', 'table-lamp'], maxSide: 40, scope: 'surface', max: 1 },
@@ -2923,7 +2927,16 @@ const LAMP_FAMILIES: Record<string, { pool: string[]; maxSide: number; scope: 'r
 /** 爱在床头挂壁灯的风格 */
 const SCONCE_STYLES = new Set<StyleTag>(['classic', 'japanese', 'chinese', 'farmhouse', 'retro'])
 
-const STYLE_FAMILIES = new Set(['dining-chair', 'body-scale', 'bath-mat', 'kid-bed', 'kid-crib', 'umbrella-stand', 'beanbag', 'nightstand', 'laundry-stand'])
+/**
+ * 常换款的细分类型：摆到这一类的默认款（sizeLabel「标准」的那件，代码里点名的 'bookshelf'、'prop-mug' 这类）时，
+ * 在同类型、尺寸几乎一样的各款里换一个造型；always 的类型不论摆的是哪一款都换（餐椅、床头柜、伞架…每次都不一样）。
+ * 不在表里的（书桌、床、餐桌这类按尺寸挑的，或者洗发水 / 护发素这类功能不同的）不换；特意挑中的某一款也不换
+ */
+const VARY_TYPES = new Set<Tag>([
+  'coffee-table', 'rug', 'bookshelf', 'plant', 'dresser', 'laundry-basket', 'shoe-storage', 'planter', 'aircon', 'trash-bin', 'book', 'mug', 'coffee-cup',
+  'vase', 'fruit-bowl', 'key-tray', 'electric-kettle', 'perfume', 'toothbrush', 'knife-block', 'storage-box', 'toilet-brush', 'hamper', 'washer-rack', 'bath-pail',
+])
+const ALWAYS_VARY = new Set<Tag>(['dining-chair', 'body-scale', 'bath-mat', 'kid-bed', 'crib', 'umbrella-stand', 'floor-cushion', 'nightstand', 'laundry-stand', 'plush'])
 
 /** 书桌 / 工作台 */
 const isDeskish = (d: AssetDef) => hasTag(d, 'desk', 'workbench')
@@ -3025,8 +3038,8 @@ export function applyFixes(plan: Plan, items: CheckItem[], household?: Household
         const base = d.find(fix.sel, (a) => !a.mount)
         const target = room ?? plan.rooms.find((r) => r.kind === 'ldk') ?? plan.rooms.find((r) => r.kind === 'western')
         if (!base.length || !target) break
-        // 同系列的其他款（小一号的衣柜、单人沙发、两人餐桌…）也算数
-        const ids = [...new Set(base.flatMap((a) => variantsOf(a.id)))].map((id) => ASSET_MAP.get(id)!).filter((a) => !a.mount && !a.form?.includes('hanging'))
+        // 同一细分类型的其他款（小一号的衣柜、单人沙发、两人餐桌…）也算数
+        const ids = [...new Set(base.flatMap((a) => sameType(a.id)))].map((id) => ASSET_MAP.get(id)!).filter((a) => !a.mount && !a.form?.includes('hanging'))
         const bySize = [...ids].sort((a, b) => a.w * a.d - b.w * b.d)
         const tries = [d.pick(base), ...d.shuffle(ids).slice(0, 3), ...bySize]
         let done = false

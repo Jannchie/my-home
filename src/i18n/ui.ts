@@ -2,6 +2,8 @@
 // 新增界面文字时：模板 / 代码里写 t('中文原文')，再在这里补一行；插值用 {name}。
 // 覆盖率检查：node <scratchpad>/check-i18n.mjs（会列出缺失项）。
 
+import { TYPE_NAMES } from '../three/typeLabels'
+
 type Entry = [ja: string, en: string]
 
 export const UI: Record<string, Entry> = {
@@ -9,6 +11,7 @@ export const UI: Record<string, Entry> = {
   平面图: ['間取り図', 'Floor plan'],
   '3D 沙盘': ['3D ジオラマ', '3D sandbox'],
   素材库: ['素材ライブラリ', 'Library'],
+  全部类型: ['すべての種類', 'All types'],
   选择: ['選択', 'Select'],
   矩形房间: ['四角形', 'Rectangle room'],
   多边形房间: ['多角形', 'Polygon room'],
@@ -875,3 +878,6 @@ Object.assign(UI, {
   '关上': ['閉める', 'Closed'],
   '再点一次里面的东西可以选中它': ['中の物をもう一度クリックすると選択できます', 'Click an item inside again to select it'],
 } satisfies Record<string, Entry>)
+
+// ---------- 素材的细分类型（three/typeLabels.ts）：界面里已有同名词条的不覆盖 ----------
+for (const [zh, ja, en] of Object.values(TYPE_NAMES)) UI[zh] ??= [ja, en]

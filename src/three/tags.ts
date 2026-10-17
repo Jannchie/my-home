@@ -27,7 +27,10 @@ export const FURNITURE_TAGS = [
   'seat', // 坐具（椅、凳）
   'stool',
   'floor-cushion', // 坐垫、座椅（和室）
-  'dining-seat', // 餐椅 / 餐凳
+  'dining-seat', // 餐桌边的坐具（餐椅、餐凳、卡座）
+  'dining-chair', // 餐椅
+  'bar-stool', // 吧凳、吧椅
+  'floor-chair', // 座椅子（和室无腿椅）
   'office-chair',
   'ergonomic-chair',
   'gaming-chair',
@@ -64,6 +67,9 @@ export const FURNITURE_TAGS = [
   'umbrella-stand',
   'laundry-stand', // 晾衣架
   'hamper', // 脏衣篓
+  'laundry-basket', // 洗衣篮
+  'bath-corner-shelf', // 浴室转角架
+  'bath-wall-shelf', // 浴室壁挂置物架
   'cat-tower',
   'pet-bowl', // 宠物食碗（预览时宠物会去吃饭）
   'litter-box',
@@ -133,14 +139,17 @@ export const DEVICE_TAGS = [
 /** 功能：灯、绿植 */
 export const LIGHT_PLANT_TAGS = [
   'light', // 会发光的灯具（灯光模块据此加光源）
+  'floor-lamp',
+  'wall-lamp',
   'lamp', // 灯（检查清单「照明」）
   'desk-lamp',
   'table-lamp',
   'plant', // 绿植（贴墙时枝叶弯曲）
+  'planter', // 花箱
 ] as const
 
 /** 功能：厨房、餐具 */
-export const KITCHEN_TAGS = ['cutting-board', 'knife-block', 'dish-rack', 'spice', 'oil-bottle', 'paper-towel', 'coffee-gear', 'tea-set', 'fruit-bowl', 'cup'] as const
+export const KITCHEN_TAGS = ['cutting-board', 'knife-block', 'dish-rack', 'spice', 'oil-bottle', 'paper-towel', 'coffee-gear', 'tea-set', 'fruit-bowl', 'cup', 'mug', 'coffee-cup', 'teacup'] as const
 
 /** 功能：卫浴、洗衣、洗护 */
 export const HYGIENE_TAGS = [
@@ -149,6 +158,7 @@ export const HYGIENE_TAGS = [
   'hand-soap',
   'skincare',
   'cosmetics',
+  'perfume',
   'makeup-mirror',
   'shampoo',
   'body-soap',
@@ -215,7 +225,8 @@ export const COARSE_TAGS = [
   'fan',
   'heater',
   'fridge',
-  'washer', // 洗衣机、干衣机
+  'washer', // 洗衣机
+  'dryer', // 干衣机
   'appliance', // 其他家电
   'cleaning', // 清洁用品、资源回收
   'hook-rack', // 洞洞板、挂钩排、挂架

@@ -119,7 +119,7 @@ function petCams(c: CamCtx) {
 function babyMonitor(c: CamCtx) {
   const { d, plan, rand, household: hh } = c
   if (!hh?.members.some((m) => m.age < 3)) return
-  const crib = d.out.find((f) => !f.z && def(f)?.family === 'kid-crib')
+  const crib = d.out.find((f) => !f.z && def(f)?.type === 'crib')
   if (!crib || rand() >= 0.75) return
   const room = roomOf(plan, crib)
   if (!room) return

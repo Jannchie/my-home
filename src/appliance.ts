@@ -6,21 +6,22 @@
 import { fixtureDepth, uid, type Fixture, type Furniture, type Plan } from './model'
 import { ASSET_MAP, type AssetDef } from './three/assets'
 import { APPLIANCE_PALETTES } from './three/packs/appliances-pack'
+import type { Tag } from './three/tags'
 
 export type SpotKind = 'fridge' | 'washer'
 
-/** 各种位上算作「那台机器」的素材系列：洗衣机位上放洗衣机、干衣机（叠放 / 并排）都算 */
-export const SPOT_FAMILIES: Record<SpotKind, string[]> = { fridge: ['fridge'], washer: ['washer', 'dryer'] }
+/** 各种位上算作「那台机器」的细分类型：洗衣机位上放洗衣机、干衣机（叠放 / 并排）都算 */
+export const SPOT_TYPES: Record<SpotKind, Tag[]> = { fridge: ['fridge'], washer: ['washer', 'dryer'] }
 
 /** 这件家具是不是冰箱（kind = 'fridge'）/ 洗衣机（kind = 'washer'，含干衣机） */
 export function isApplianceOf(f: Pick<Furniture, 'asset'>, kind: SpotKind) {
-  const fam = ASSET_MAP.get(f.asset)?.family
-  return !!fam && SPOT_FAMILIES[kind].includes(fam)
+  const type = ASSET_MAP.get(f.asset)?.type
+  return !!type && SPOT_TYPES[kind].includes(type)
 }
 
 /** 冰箱 / 洗衣机本身（不含干衣机）：检查清单「全屋有一台」用 */
 export function isMainAppliance(def: AssetDef | undefined, kind: SpotKind) {
-  return def?.family === kind
+  return def?.type === kind
 }
 
 /** 局部坐标（沿位的宽度 lx、离墙方向 lz）→ 平面坐标 */

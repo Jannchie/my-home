@@ -120,7 +120,7 @@ export function checklist(plan: Plan, hh?: Household): CheckItem[] {
       const hasKitchen = plan.fixtures.some((x) => x.kind === 'kitchen' && pointInPolygon(x, r.points))
       if (hasKitchen) {
         // 冰箱是家具：全屋有一台就行（中式厨房小，冰箱常放在餐厅）
-        item(r, '冰箱', countIf(all, (d) => d.family === 'fridge'), 1, { how: 'appliance', kind: 'fridge' })
+        item(r, '冰箱', countIf(all, (d) => d.type === 'fridge'), 1, { how: 'appliance', kind: 'fridge' })
         item(r, '微波炉', count(all, TAGS.microwave), 1, { how: 'fixture', sel: /^prop-microwave/, fixture: 'kitchen' })
         item(r, '电饭煲', count(all, TAGS.rice), 1, { how: 'fixture', sel: /^prop-rice-cooker$/, fixture: 'kitchen' })
         item(r, '电水壶', count(all, TAGS.kettle), 1, { how: 'fixture', sel: /^prop-kettle$/, fixture: 'kitchen' })
@@ -175,7 +175,7 @@ export function checklist(plan: Plan, hh?: Household): CheckItem[] {
   }
 
   // 洗衣机（家具）：有洗衣机位或洗面所的户型全屋要有一台
-  if (plan.fixtures.some((x) => x.kind === 'washer') || plan.rooms.some((r) => r.kind === 'wash')) item(null, '洗衣机', countIf(all, (d) => d.family === 'washer'), 1, { how: 'appliance', kind: 'washer' })
+  if (plan.fixtures.some((x) => x.kind === 'washer') || plan.rooms.some((r) => r.kind === 'wash')) item(null, '洗衣机', countIf(all, (d) => d.type === 'washer'), 1, { how: 'appliance', kind: 'washer' })
 
   // ---------- 住户相关 ----------
   if (hh) {

@@ -42,9 +42,9 @@ const isSeat = (f: Furniture) => hasTag(def(f), 'seat')
 const isLaptop = (f: Furniture) => hasTag(def(f), 'laptop')
 const isKeyboard = (f: Furniture) => hasTag(def(f), 'keyboard')
 /** 台式主机：机箱、迷你主机 */
-export const isTower = (d?: AssetDef) => !!d && (d.family === 'pc-tower' || d.id === 'of-mini-pc')
+export const isTower = (d?: AssetDef) => !!d && (d.type === 'pc' || d.id === 'of-mini-pc')
 /** 显示器（有屏幕面板、不是电视 / 一体机） */
-export const isMonitor = (d?: AssetDef) => !!d?.screens?.length && d.family !== 'tv' && d.id !== 'of-aio'
+export const isMonitor = (d?: AssetDef) => !!d?.screens?.length && d.type !== 'tv' && d.id !== 'of-aio'
 /** 能放电脑的书桌 / 工作台（desk 标签不含园艺台、焊接台） */
 const isDeskDef = (d?: AssetDef) => !!d && !!d.surface && !d.prop && !d.mount && hasTag(d, 'desk')
 /** 屏幕顶边能夹东西的（显示器、电视、一体机） */
@@ -415,8 +415,8 @@ function screenCams(c: DeskCtx) {
     d.out = d.out.filter((o) => o !== cam)
     const asset = cam.asset === 'sf-webcam-lying' ? 'of-webcam' : cam.asset
     const all = screensIn(roomOf(cam))
-    const tv = all.filter((o) => def(o)!.family === 'tv')
-    const mons = all.filter((o) => def(o)!.family !== 'tv')
+    const tv = all.filter((o) => def(o)!.type === 'tv')
+    const mons = all.filter((o) => def(o)!.type !== 'tv')
     const pool = asset === 'of-tv-camera' && tv.length ? tv : mons.length ? mons : tv
     if (pool.length) clipOnScreen(c, d.pick(pool), asset)
   }
