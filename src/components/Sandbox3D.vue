@@ -208,17 +208,24 @@ function applyFloorPose() {
 }
 
 /**
- * 屋顶（户建）：外观视图里总是显示；预览模式下显示，但镜头接近正上方往下看（看室内）时让开；布置模式不显示。
+ * 屋顶（户建）：外观视图里总是显示；预览模式下显示（这时墙也都是完整的，像看一座模型房子），
+ * 镜头接近正上方往下看（看室内）时屋顶让开、墙恢复压低；布置模式不显示。
  * 有楼层被「只到当前层」藏起来时也不显示（下层露出来的那块屋顶会挡住当前层）。
  */
+let roofUp = false
 function roofWanted() {
   if (sandbox.exterior) return true
-  if (sandbox.mode !== 'preview') return false
-  if ([...floorAnim.values()].some((s) => s.hideAt)) return false
-  return controls ? controls.getPolarAngle() > 0.7 : true
+  // 墙高滑杆压低时屋顶会悬空：不显示
+  if (sandbox.mode !== 'preview' || sandbox.wallHeight < 240 || !floorGroups.some((f) => f.roof)) return (roofUp = false)
+  if ([...floorAnim.values()].some((s) => s.hideAt)) return (roofUp = false)
+  // 带回差：俯视角在阈值附近来回时屋顶不闪
+  const polar = controls ? controls.getPolarAngle() : 1
+  roofUp = roofUp ? polar > 0.6 : polar > 0.72
+  return roofUp
 }
-function applyRoofs() {
-  const want = roofWanted()
+/** 外观样子（墙全部完整）：外观视图，或预览里屋顶盖着的时候（屋顶下面不压低墙） */
+const fullLook = () => sandbox.exterior || (sandbox.mode === 'preview' && roofUp)
+function applyRoofs(want = roofWanted()) {
   for (const fg of floorGroups) {
     if (!fg.roof || fg.roof.visible === want) continue
     fg.roof.visible = want
@@ -229,7 +236,7 @@ function applyRoofs() {
 
 /** 墙体压低：当前层按设置处理，其余楼层保持完整；外观视图里所有墙都是完整的 */
 function cutawayFloors(center: { x: number; y: number }, dir: { x: number; y: number } | null, depth: number | null) {
-  if (sandbox.exterior) {
+  if (fullLook()) {
     for (const fg of floorGroups) applyCutaway(fg.group, center, null)
     return
   }
@@ -364,9 +371,10 @@ let fading = false
 let lastFrame = performance.now()
 function updateCutaway() {
   if (!house) return
+  const roof = roofWanted()
   const v = new THREE.Vector3().subVectors(stage.camera.position, new THREE.Vector3(houseCenter.x, 0, houseCenter.y))
   const l = Math.hypot(v.x, v.z)
-  const dir = sandbox.wallMode !== 'up' && !sandbox.exterior && l > 1 ? { x: v.x / l, y: v.z / l } : null
+  const dir = sandbox.wallMode !== 'up' && !fullLook() && l > 1 ? { x: v.x / l, y: v.z / l } : null
   let depth: number | null = null
   const room = hoverRoomId && sandbox.cutawayHover ? plan.value.rooms.find((r) => r.id === hoverRoomId) : undefined
   if (dir && room) {
@@ -376,8 +384,8 @@ function updateCutaway() {
   }
   cutawayFloors(houseCenter, dir, depth)
   // 天花板灯具：墙压低 / 半墙 / 墙很矮时淡出（挡视线），所指房间之前的也淡出；光照保留
-  lights?.applyCutaway(houseCenter, dir, depth, !sandbox.exterior && (sandbox.wallMode === 'down' || sandbox.wallMode === 'half' || sandbox.wallHeight < 200))
-  applyRoofs()
+  lights?.applyCutaway(houseCenter, dir, depth, !fullLook() && (sandbox.wallMode === 'down' || sandbox.wallMode === 'half' || sandbox.wallHeight < 200))
+  applyRoofs(roof)
   fading = true
   updateMounted(dir, depth)
 }
@@ -1945,7 +1953,10 @@ watch(
     dirty = true
   },
 )
-watch(() => sandbox.mode, () => applyRoofs())
+watch(
+  () => sandbox.mode,
+  () => updateCutaway(),
+)
 watch([activeFloor, floorShow], () => {
   if (!house) return
   // 墙高滑杆调低时只有当前层是矮墙：换层要重搭
