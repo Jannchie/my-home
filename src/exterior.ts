@@ -144,6 +144,31 @@ export function roofCovers(parts: RoofRect[], outline: Vec[]): boolean {
   return true
 }
 
+// ---------- 按住户风格配色 ----------
+
+/** 住户风格 → 外观配色（墙、屋顶、点缀）；屋顶形式和外墙材质仍按地区，不在这里换 */
+const STYLE_COLORS: Record<string, { wall: string[]; roof: string[]; trim: string }> = {
+  japanese: { wall: ['#efe9dc', '#e2d9c6'], roof: ['#3d4655', '#4f5866'], trim: '#5a4a3e' },
+  nordic: { wall: ['#f4f2ee', '#dfe5e8'], roof: ['#3a3f47', '#5a6068'], trim: '#ffffff' },
+  modern: { wall: ['#ecebe8', '#5b5f64'], roof: ['#2f3338', '#45494f'], trim: '#2f3338' },
+  industrial: { wall: ['#8c8f93', '#6f7378'], roof: ['#2f3338', '#3b3f45'], trim: '#1f2226' },
+  retro: { wall: ['#e8d8b5', '#d9c49a'], roof: ['#8a4b3c', '#6b4a3c'], trim: '#ffffff' },
+  cute: { wall: ['#f6e3e6', '#e6eef6', '#f7efd9'], roof: ['#d98880', '#8fb3d9'], trim: '#ffffff' },
+  chinese: { wall: ['#ece4d6', '#f1ebdf'], roof: ['#4a4f57', '#5a5f66'], trim: '#7a3b2e' },
+  classic: { wall: ['#efe7d6', '#e6dccb'], roof: ['#4a4f57', '#5c4b43'], trim: '#ffffff' },
+  farmhouse: { wall: ['#f1efe8', '#e7e2d6'], roof: ['#3b3f45', '#4a4f57'], trim: '#2f3338' },
+}
+
+/** 生成户型、推算出住户之后：外观颜色跟着住户风格走（砖墙保留砖色）。seed 决定同一风格里取哪一组 */
+export function styleExterior(ex: Exterior, style: string | undefined, seed: number) {
+  const c = style ? STYLE_COLORS[style] : undefined
+  if (!c) return
+  const k = (seed >>> 3) % 7
+  if (ex.facade !== 'brick') ex.wallColor = c.wall[k % c.wall.length]
+  ex.roofColor = c.roof[k % c.roof.length]
+  ex.trimColor = c.trim
+}
+
 // ---------- 读档校验 ----------
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)

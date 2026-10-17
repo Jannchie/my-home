@@ -18,7 +18,7 @@ import { lang, t } from './i18n'
 import { initialRoute } from './router'
 import { edgeInfo, emptyPlan, projectToSegment, type Fixture, type FixtureKind, type Floor, type Furniture, type Opening, type Plan, type Room, type Vec, type Wallpaper, uid } from './model'
 import { withStairHoles } from './stairs'
-import { normalizeExterior } from './exterior'
+import { normalizeExterior, styleExterior } from './exterior'
 import { yardFurniture } from './yard'
 import { BASE_FLOOR_ID, DEFAULT_FLOOR_H, SLAB, baseFloor, baseFloorId, floorBelow, floorById, floorOf, floorOutline, floorView, isMultiFloor, nextFloorId, normalizeFloors, perFloorFurniture, planFloors, stampFloor } from './floors'
 
@@ -540,6 +540,8 @@ export function generate(newSeed = true) {
   // 生成户型时顺带布置家具（同一个种子，结果可复现）
   // 先推算住户，再按住户布置（同一个种子，结果可复现）
   r.plan.household = generateHousehold(r.plan, r.seed)
+  // 户建的外观颜色跟着住户风格
+  if (r.plan.exterior) styleExterior(r.plan.exterior, r.plan.household.style, r.seed)
   if (sandbox.autoFurnish) {
     r.plan.furniture = furnish(r.plan, r.seed)
     ensureOutdoorUnits(r.plan)
