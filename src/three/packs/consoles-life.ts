@@ -8,8 +8,11 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, S, G, glow, holePanel, paintPanel, rng, slab, type AssetDef, type Hole, type Poly } from '../kit'
-import { P, PI, cylX, cylZ, fitBuild, ghost, lit, noOutline, type V3 } from '../geo'
+import { P, PI, batten, cylX, cylZ, fitBuild, ghost, lit, noOutline, taperRod3, type V3 } from '../geo'
 import { J, M, N, PROP, R, definer, type Pal } from '../packkit'
+
+/** 两点之间的扁板（截面 w × t，小圆角） */
+const plank = (a: V3, b: V3, w: number, t: number, color: string) => batten(a, b, w, t, color, Math.min(0.3, t * 0.4))
 
 /** 本包默认是桌面摆件，build 之后按包围盒居中、贴地（fitGroup） */
 const def = definer(PROP, (b) => fitBuild(b))
@@ -41,28 +44,6 @@ const flatScreen = (w: number, d: number, key: string, draw: Draw, x: number, y:
 /** 竖直的画面，朝 +z，y 为底边 */
 const vScreen = (w: number, h: number, key: string, draw: Draw, x: number, y: number, z: number, k = 0.5) => paintPanel(w, h, key, draw, { x, y, z }, k)
 
-/** 两点之间的锥形杆：a 端半径 r0，b 端半径 r1 */
-function stem(a: V3, b: V3, r0: number, r1: number, color: string, seg = 6) {
-  const A = new THREE.Vector3(...a)
-  const B = new THREE.Vector3(...b)
-  const dir = B.clone().sub(A)
-  const m = cyl(r1, r0, Math.max(0.01, dir.length()), color, {}, seg)
-  m.position.copy(A).add(B).multiplyScalar(0.5)
-  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize())
-  return m
-}
-
-/** 两点之间的扁板 */
-function strut(a: V3, b: V3, w: number, t: number, color: string) {
-  const A = new THREE.Vector3(...a)
-  const B = new THREE.Vector3(...b)
-  const dir = B.clone().sub(A)
-  const m = rbox(w, dir.length(), t, color, {}, Math.min(0.3, t * 0.4))
-  m.position.copy(A).add(B).multiplyScalar(0.5)
-  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize())
-  return m
-}
-
 /** 折线茎：一串锥形段 + 关节小球，半径从 r0 渐变到 r1 */
 function path(pts: V3[], r0: number, r1: number, color: string): THREE.Mesh[] {
   const out: THREE.Mesh[] = []
@@ -70,7 +51,7 @@ function path(pts: V3[], r0: number, r1: number, color: string): THREE.Mesh[] {
   for (let i = 0; i < n; i++) {
     const ra = r0 + ((r1 - r0) * i) / n
     const rb = r0 + ((r1 - r0) * (i + 1)) / n
-    out.push(stem(pts[i], pts[i + 1], ra, rb, color))
+    out.push(taperRod3(pts[i], pts[i + 1], ra, rb, color, 6))
     if (i > 0) out.push(ball(ra, color, { x: pts[i][0], y: pts[i][1], z: pts[i][2] }))
   }
   return out
@@ -577,7 +558,7 @@ function switchOled(p: string[]) {
   // 支架：从机身背面中上部到桌面
   const yb = 6.5 * Math.cos(a) - 0.7 * Math.sin(a)
   const zb = -6.5 * Math.sin(a) - 0.7 * Math.cos(a)
-  g.add(strut([0, yb, zb - 0.2], [0, 0.3, zb - 3.4], 15, 0.4, shade(body, -0.05)))
+  g.add(plank([0, yb, zb - 0.2], [0, 0.3, zb - 3.4], 15, 0.4, shade(body, -0.05)))
   return g
 }
 
@@ -1110,7 +1091,7 @@ function roots(n: number, x: number, y: number, z: number, len: number, spread: 
   for (let i = 0; i < n; i++) {
     const a = r() * PI * 2
     const s = spread * (0.4 + r() * 0.6)
-    out.push(stem([x + Math.cos(a) * 0.3, y, z + Math.sin(a) * 0.3], [x + Math.cos(a) * s, y - len * (0.6 + r() * 0.4), z + Math.sin(a) * s], 0.07, 0.04, ROOT, 5))
+    out.push(taperRod3([x + Math.cos(a) * 0.3, y, z + Math.sin(a) * 0.3], [x + Math.cos(a) * s, y - len * (0.6 + r() * 0.4), z + Math.sin(a) * s], 0.07, 0.04, ROOT, 5))
   }
   return out
 }
@@ -1136,7 +1117,7 @@ function garlicSprout(p: string[]) {
     const bz = Math.sin(a) * 1.1
     const len = 9 + r() * 7
     const lean = 0.08 + r() * 0.16
-    blades.push(stem([bx, cy + 1.6, bz], [bx + Math.cos(a) * len * lean, cy + 1.6 + len, bz + Math.sin(a) * len * lean], 0.2, 0.06, sprout, 6))
+    blades.push(taperRod3([bx, cy + 1.6, bz], [bx + Math.cos(a) * len * lean, cy + 1.6 + len, bz + Math.sin(a) * len * lean], 0.2, 0.06, sprout, 6))
   }
   g.add(merged(blades, sprout))
   return g
@@ -1163,7 +1144,7 @@ function negiRegrow(p: string[]) {
     const len = 7 + r() * 8
     const lean = 0.05 + r() * 0.08
     const k = Math.atan2(z, x || 0.01)
-    shoots.push(stem([x, 0.6 + h - 0.3, z], [x + Math.cos(k) * len * lean, 0.6 + h + len, z + Math.sin(k) * len * lean], 0.38, 0.14, green, 10))
+    shoots.push(taperRod3([x, 0.6 + h - 0.3, z], [x + Math.cos(k) * len * lean, 0.6 + h + len, z + Math.sin(k) * len * lean], 0.38, 0.14, green))
   }
   g.add(merged(shoots, green))
   return g
@@ -1185,7 +1166,7 @@ function sproutBox(p: string[]) {
       const h = 4.5 + r() * 2.5
       const tx = x + (r() - 0.5) * 0.8
       const tz = z + (r() - 0.5) * 0.8
-      stems.push(stem([x, 1.3, z], [tx, 1.5 + h, tz], 0.06, 0.05, '#f6f4e8', 4))
+      stems.push(taperRod3([x, 1.3, z], [tx, 1.5 + h, tz], 0.06, 0.05, '#f6f4e8', 4))
       const yaw = r() * PI
       leaves.push(leafOut([tx, 1.5 + h, tz], 1.0, yaw, 0.25, leafC, 0.7, 0.14))
       leaves.push(leafOut([tx, 1.5 + h, tz], 1.0, yaw + PI, 0.25, leafC, 0.7, 0.14))
@@ -1200,7 +1181,7 @@ function toothpicks(y: number, rOut: number, seed: number): THREE.Mesh[] {
   const out: THREE.Mesh[] = []
   for (let i = 0; i < 3; i++) {
     const a = (i / 3) * PI * 2 + seed
-    out.push(stem([Math.cos(a) * 0.5, y, Math.sin(a) * 0.5], [Math.cos(a) * rOut, y, Math.sin(a) * rOut], 0.09, 0.07, '#e9d2a6', 6))
+    out.push(taperRod3([Math.cos(a) * 0.5, y, Math.sin(a) * 0.5], [Math.cos(a) * rOut, y, Math.sin(a) * rOut], 0.09, 0.07, '#e9d2a6', 6))
   }
   return out
 }
@@ -1214,9 +1195,9 @@ function avocadoPit(p: string[]) {
   const cy = 9.2
   g.add(ball(2.0, pit, { y: cy }, [1, 1.2, 1]))
   g.add(merged(toothpicks(H + 0.12, 4.6, 0.4), '#e9d2a6'))
-  g.add(stem([0, cy - 2.2, 0], [0.3, 2.0, 0.2], 0.28, 0.08, ROOT, 8))
+  g.add(taperRod3([0, cy - 2.2, 0], [0.3, 2.0, 0.2], 0.28, 0.08, ROOT, 8))
   g.add(merged(roots(5, 0.15, 4.5, 0.1, 1.6, 1.2, 21), ROOT))
-  g.add(stem([0, cy + 2.0, 0], [0.3, cy + 9.5, -0.2], 0.22, 0.14, '#7a8a4a', 8))
+  g.add(taperRod3([0, cy + 2.0, 0], [0.3, cy + 9.5, -0.2], 0.22, 0.14, '#7a8a4a', 8))
   const top: V3 = [0.3, cy + 9.4, -0.2]
   for (let i = 0; i < 4; i++) g.add(leafOut(top, 4.2 - i * 0.4, (i / 4) * PI * 2 + 0.3, 0.35 + i * 0.1, leafC, 0.42, 0.1))
   return g
@@ -1245,7 +1226,7 @@ function basil(p: string[]) {
     const h = 7 + r() * 4
     const tx = bx + Math.cos(a) * 2
     const tz = bz + Math.sin(a) * 2
-    stems.push(stem([bx, y0 - 0.2, bz], [tx, y0 + h, tz], 0.18, 0.12, shade(leafC, -0.1), 6))
+    stems.push(taperRod3([bx, y0 - 0.2, bz], [tx, y0 + h, tz], 0.18, 0.12, shade(leafC, -0.1), 6))
     for (let k = 1; k <= 3; k++) {
       const f = k / 3.4
       const base: V3 = [bx + (tx - bx) * f, y0 + h * f, bz + (tz - bz) * f]
@@ -1275,7 +1256,7 @@ function mint(p: string[]) {
     const h = 5 + r() * 4
     const tx = bx + Math.cos(a) * 2.4
     const tz = bz + Math.sin(a) * 2.4
-    stems.push(stem([bx, y0 - 0.2, bz], [tx, y0 + h, tz], 0.12, 0.08, '#6a8a4a', 5))
+    stems.push(taperRod3([bx, y0 - 0.2, bz], [tx, y0 + h, tz], 0.12, 0.08, '#6a8a4a', 5))
     for (let k = 1; k <= 4; k++) {
       const f = k / 4.2
       const base: V3 = [bx + (tx - bx) * f, y0 + h * f, bz + (tz - bz) * f]
@@ -1304,7 +1285,7 @@ function rosemary(p: string[]) {
     const h = 10 + r() * 5
     const tx = bx + Math.cos(a) * 1.6
     const tz = bz + Math.sin(a) * 1.6
-    stems.push(stem([bx, y0 - 0.2, bz], [tx, y0 + h, tz], 0.14, 0.07, '#7a6a4a', 5))
+    stems.push(taperRod3([bx, y0 - 0.2, bz], [tx, y0 + h, tz], 0.14, 0.07, '#7a6a4a', 5))
     const n = 11
     for (let k = 2; k <= n; k++) {
       const f = k / (n + 0.5)
@@ -1341,7 +1322,7 @@ function miniTomato(p: string[]) {
     const yaw = k * 2.2
     const base: V3 = [0.5, y, -0.6]
     const tip: V3 = [0.5 + Math.sin(yaw) * 4, y + 1.2, -0.6 + Math.cos(yaw) * 4]
-    stems.push(stem(base, tip, 0.12, 0.08, '#6a9a4a', 5))
+    stems.push(taperRod3(base, tip, 0.12, 0.08, '#6a9a4a', 5))
     for (let j = 0; j < 3; j++) {
       const f = 0.45 + j * 0.27
       const at: V3 = [base[0] + (tip[0] - base[0]) * f, base[1] + (tip[1] - base[1]) * f, base[2] + (tip[2] - base[2]) * f]
@@ -1361,7 +1342,7 @@ function miniTomato(p: string[]) {
   for (const [[x, y, z], yaw] of trusses) {
     const ex = x + Math.sin(yaw) * 2.6
     const ez = z + Math.cos(yaw) * 2.6
-    g.add(stem([x, y, z], [ex, y - 1.2, ez], 0.08, 0.06, '#6a9a4a', 5))
+    g.add(taperRod3([x, y, z], [ex, y - 1.2, ez], 0.08, 0.06, '#6a9a4a', 5))
     for (let i = 0; i < 5; i++) {
       const f = 0.3 + i * 0.17
       const fx = x + (ex - x) * f + (r() - 0.5) * 0.6
@@ -1432,7 +1413,7 @@ function gingerSprout(p: string[]) {
   ]) {
     g.add(cyl(0.3, 0.32, 1.2, '#d6707a', { x, y: 2.4, z }, 8))
     const top: V3 = [x + lean, 2.4 + h, z]
-    stems.push(stem([x, 3.4, z], top, 0.24, 0.12, '#7aaa5a', 6))
+    stems.push(taperRod3([x, 3.4, z], top, 0.24, 0.12, '#7aaa5a', 6))
     for (let k = 0; k < 4; k++) {
       const f = 0.45 + k * 0.15
       const at: V3 = [x + lean * f, 2.4 + h * f, z]
@@ -1458,7 +1439,7 @@ function bagDryer(p: string[]) {
   ]
   for (const [yaw, tilt] of tilts) {
     const top: V3 = [Math.sin(yaw) * Math.sin(tilt) * 18, 1.2 + Math.cos(tilt) * 18, Math.cos(yaw) * Math.sin(tilt) * 18]
-    g.add(stem([0, 0.8, 0], top, 0.3, 0.25, shade(wood, -0.05), 8))
+    g.add(taperRod3([0, 0.8, 0], top, 0.3, 0.25, shade(wood, -0.05), 8))
     g.add(ball(0.4, wood, { x: top[0], y: top[1], z: top[2] }))
     // 袋子：沿杆方向的薄片，袋底搭在杆顶
     const dir = new THREE.Vector3(top[0], top[1] - 0.8, top[2]).normalize()

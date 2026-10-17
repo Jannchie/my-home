@@ -6,8 +6,8 @@
 import * as THREE from 'three'
 import { ball, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, hangingPipe, holePanel, paintPanel, pipeHook, rectPoly, ellipsePoly, type AssetDef, type Hole, type Poly, type StyleTag, type SurfaceDef } from '../kit'
-import { batten, cappedTube, centerGroup, cylX, cylZ, glassPane, lit, mesh, noOutlineDeep, rod3, type TubeOpts, type V3 } from '../geo'
-import { I, J, M, N, R, withPals } from '../packkit'
+import { batten, cappedTube, centerGroup, cylX, cylZ, glassPane, latheAt, lit, mesh, noOutlineDeep, rod3, type TubeOpts, type V3 } from '../geo'
+import { I, J, M, N, R, withPals, type Pal3 } from '../packkit'
 import { drawerLv, drawerOf, hollow, slideDoor, swingDoor } from '../cabinetKit'
 
 /** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
@@ -16,9 +16,9 @@ const TUBE: TubeOpts = { seg: { per: 8, min: 12 }, radial: 10, group: true }
 type P2 = [number, number]
 
 /** 新中式：红木 / 黄花梨 / 鸡翅木、朱漆、铜饰、黛瓦、素绢 */
-const CN = { rose: '#6b2f22', huali: '#b9773f', wenge: '#3f2b22', zitan: '#3a2220', lacquer: '#b8352b', jade: '#5f8f7a', ink: '#2f2b2a', gold: '#c9a45a', brass: '#c79a4a', silk: '#efe4c8', indigo: '#2f4a6b', celadon: '#9fbfa8', tile: '#4a4d52', wall: '#f1ede4', cane: '#c9a66b' }
+const CHN = { rose: '#6b2f22', huali: '#b9773f', wenge: '#3f2b22', zitan: '#3a2220', lacquer: '#b8352b', jade: '#5f8f7a', ink: '#2f2b2a', gold: '#c9a45a', brass: '#c79a4a', silk: '#efe4c8', indigo: '#2f4a6b', celadon: '#9fbfa8', tile: '#4a4d52', wall: '#f1ede4', cane: '#c9a66b' }
 /** 欧式古典：象牙白 + 金饰、桃花心木、酒红 / 海军蓝丝绒、大理石 */
-const CL = { ivory: '#f1e8d6', gold: '#c9a54f', cream: '#efe3c4', wine: '#7d2a35', navy: '#2c3a5a', marble: '#ece8e2', vein: '#b8b2aa', mahogany: '#6e3524', sage: '#a7b59a', blush: '#e5bfb5', walnut: '#5e3a26', teal: '#2f5f5f', black: '#2a2626' }
+const CLS = { ivory: '#f1e8d6', gold: '#c9a54f', cream: '#efe3c4', wine: '#7d2a35', navy: '#2c3a5a', marble: '#ece8e2', vein: '#b8b2aa', mahogany: '#6e3524', sage: '#a7b59a', blush: '#e5bfb5', walnut: '#5e3a26', teal: '#2f5f5f', black: '#2a2626' }
 /** 美式乡村：做旧白、谷仓红、鼠尾草绿、松木 / 深橡木、牛仔蓝、格纹、镀锌铁 */
 const FH = { white: '#f2ede2', barn: '#9e3b2e', sage: '#9caf8f', pine: '#c99a63', oak: '#7a5638', denim: '#5b7391', black: '#2f2d2b', cream: '#efe4cc', plaid: '#b5443a', galv: '#a9adb0', mustard: '#d4a23f', cognac: '#9a5a32', brick: '#a85a44', stone: '#a6a198' }
 
@@ -33,13 +33,6 @@ const IRON = '#2f2f31'
 // =====================================================================
 // 小工具
 // =====================================================================
-
-/** 旋转体：轮廓 [半径, 高度]，at 为底面中心 */
-function lathe(profile: P2[], color: string, at: { x?: number; y?: number; z?: number } = {}, seg = 24) {
-  const m = mesh(new THREE.LatheGeometry(profile.map(([r, y]) => new THREE.Vector2(Math.max(0.001, r), y)), seg), color)
-  m.position.set(at.x ?? 0, at.y ?? 0, at.z ?? 0)
-  return m
-}
 
 function extrude(s: THREE.Shape, depth: number) {
   const bevel = Math.min(0.5, depth * 0.2)
@@ -181,7 +174,7 @@ function turnedLeg(h: number, r: number, color: string, at: { x?: number; y?: nu
           [r * 0.8, h],
           [0, h],
         ]
-  return lathe(prof, color, at, 16)
+  return latheAt(prof, color, at, 16, 0.001)
 }
 
 /** 圆形铜饰（中式面叶）：贴在 +z 面上 */
@@ -192,8 +185,6 @@ function brassPlate(x: number, y: number, z: number, r: number, color = BRASS) {
   g.add(ball(0.6, color, { x, y: y + r * 0.1, z: z + 0.6 }))
   return g
 }
-
-type Pal = [Tag, string, string, string]
 
 const r = rectPoly
 
@@ -610,7 +601,7 @@ function teaTable(p: string[]) {
   }
   g.add(rbox(117, 2, 45, dark, { y: 10 }, 0.6))
   g.add(rbox(140, 6, 70, wood, { y: 59 }, 1.6))
-  teaSet(g, -32, 65, 4, trayC, CN.zitan)
+  teaSet(g, -32, 65, 4, trayC, CHN.zitan)
   return g
 }
 
@@ -722,7 +713,7 @@ function gongLamp(p: string[]) {
   for (const ry of [0, Math.PI / 2]) {
     g.add(rbox(36, 4, 5, wood, { ry }, 1))
   }
-  g.add(lathe([[0, 4], [5, 4], [3.2, 8], [2.2, 12], [2.2, 104], [3.2, 106], [3.2, 108], [0, 108]], wood, {}, 16))
+  g.add(latheAt([[0, 4], [5, 4], [3.2, 8], [2.2, 12], [2.2, 104], [3.2, 106], [3.2, 108], [0, 108]], wood, {}, 16, 0.001))
   // 灯体
   const y0 = 110
   g.add(cyl(12, 12, 2.4, wood, { y: y0 - 2.4 }, 6))
@@ -937,11 +928,11 @@ function zhongtang(p: string[]) {
     g.add(cylX(1.5, w + 2, rodC, x, y0 + 1.5, 0))
     for (const s of [-1, 1]) g.add(ball(1.5, rodC, { x: x + s * (w / 2 + 1.4), y: y0 + 1.5, z: 0 }))
     g.add(rbox(w + 1, 2, 1.6, rodC, { x, y: y0 + h + 3, z: -0.4 }, 0.5))
-    for (const s of [-1, 1]) g.add(rod3([x + s * w * 0.3, y0 + h + 4.6, -0.4], [x, y0 + h + 11, -0.4], 0.25, CN.ink, 4))
+    for (const s of [-1, 1]) g.add(rod3([x + s * w * 0.3, y0 + h + 4.6, -0.4], [x, y0 + h + 11, -0.4], 0.25, CHN.ink, 4))
   }
-  scroll(0, 62, 150, `sw-zt-c-${paper}`, paintShanshui(paper, CN.ink, '#c0392b'))
-  scroll(-52, 20, 142, `sw-zt-l-${paper}`, paintCalligraphy(paper, CN.ink, '松竹梅岁寒'))
-  scroll(52, 20, 142, `sw-zt-r-${paper}`, paintCalligraphy(paper, CN.ink, '山水月清风'))
+  scroll(0, 62, 150, `sw-zt-c-${paper}`, paintShanshui(paper, CHN.ink, '#c0392b'))
+  scroll(-52, 20, 142, `sw-zt-l-${paper}`, paintCalligraphy(paper, CHN.ink, '松竹梅岁寒'))
+  scroll(52, 20, 142, `sw-zt-r-${paper}`, paintCalligraphy(paper, CHN.ink, '山水月清风'))
   return centerGroup(g)
 }
 
@@ -1065,7 +1056,7 @@ function recamier(p: string[]) {
   }
   scroll(-76, -1, 44)
   scroll(76, 1, 30)
-  g.add(cylZ(8, 46, CL.cream, -58, 47, -2, 16))
+  g.add(cylZ(8, 46, CLS.cream, -58, 47, -2, 16))
   return g
 }
 
@@ -1185,7 +1176,7 @@ function clFireplace(p: string[]) {
   for (const s of [-1, 1]) {
     const x = s * 62
     const y = 107
-    g.add(lathe([[0, 0], [4.4, 0], [4, 1.4], [1.6, 2.4], [1.2, 10], [2, 11], [0, 11]], gold, { x, y, z: 4 }, 16))
+    g.add(latheAt([[0, 0], [4.4, 0], [4, 1.4], [1.6, 2.4], [1.2, 10], [2, 11], [0, 11]], gold, { x, y, z: 4 }, 16, 0.001))
     for (const k of [-1, 0, 1]) {
       const cx = x + k * 7
       if (k) g.add(cappedTube([[x, y + 10.5, 4], [x + k * 4, y + 11, 4], [cx, y + 13.5, 4]], 0.6, gold, { ...TUBE, caps: false }))
@@ -1210,7 +1201,7 @@ function crystalFloorLamp(p: string[]) {
     const pt = (rr: number, y: number): V3 => [Math.sin(a) * rr, y, Math.cos(a) * rr]
     g.add(cappedTube([pt(2, 18), pt(10, 10), pt(15, 2.7), pt(17, 1.3)], 1.3, metal, TUBE))
   }
-  g.add(lathe([[0, 8], [3, 8], [2, 14], [3.4, 20], [1.4, 26], [1.2, 130], [2.4, 132], [2.4, 134], [0, 134]], metal, {}, 16))
+  g.add(latheAt([[0, 8], [3, 8], [2, 14], [3.4, 20], [1.4, 26], [1.2, 130], [2.4, 132], [2.4, 134], [0, 134]], metal, {}, 16, 0.001))
   // 五臂烛台
   const y = 134
   for (let k = 0; k < 5; k++) {
@@ -1229,7 +1220,7 @@ function crystalFloorLamp(p: string[]) {
     drop.material = toon(crystal, { transparent: 0.75 })
     g.add(drop)
   }
-  g.add(lathe([[0, 0], [1.4, 0], [3, 3], [2.4, 6], [0.4, 9], [0, 9]], metal, { y: y + 2 }, 12))
+  g.add(latheAt([[0, 0], [1.4, 0], [3, 3], [2.4, 6], [0.4, 9], [0, 9]], metal, { y: y + 2 }, 12, 0.001))
   return g
 }
 
@@ -1237,7 +1228,7 @@ function crystalFloorLamp(p: string[]) {
 function candleTableLamp(p: string[]) {
   const [base, shadeC, gold] = p
   const g = new THREE.Group()
-  g.add(lathe([[0, 0], [7, 0], [7, 1.6], [5, 3], [2.4, 5], [3.6, 9], [1.4, 14], [1.4, 26], [2.6, 28], [3.2, 30], [0, 30]], base, {}, 20))
+  g.add(latheAt([[0, 0], [7, 0], [7, 1.6], [5, 3], [2.4, 5], [3.6, 9], [1.4, 14], [1.4, 26], [2.6, 28], [3.2, 30], [0, 30]], base, {}, 20, 0.001))
   g.add(torus(6.6, 0.6, gold, { y: 1.6, rx: Math.PI / 2 }))
   g.add(cyl(0.5, 0.5, 6, gold, { y: 30 }, 8))
   g.add(lit(ball(2.2, C.lamp, { y: 34 }), C.lamp, 0.9))
@@ -1258,7 +1249,7 @@ function candleTableLamp(p: string[]) {
 /** 雕花四柱床：车旋柱带尖顶、拱形软包床头配描金冠饰、床尾低板 */
 function clPosterBed(p: string[]) {
   const [duvet, sheet, wood] = p
-  const gold = CL.gold
+  const gold = CLS.gold
   const g = new THREE.Group()
   const W = 176
   const D = 218
@@ -1267,8 +1258,8 @@ function clPosterBed(p: string[]) {
   for (const sx of [-1, 1]) {
     g.add(turnedLeg(196, 4.6, wood, { x: sx * PX, z: -PZ }, 'baluster'))
     g.add(turnedLeg(150, 4.6, wood, { x: sx * PX, z: PZ }, 'baluster'))
-    g.add(lathe([[0, 0], [3.4, 0], [2, 4], [2.8, 7], [0.4, 12], [0, 12]], gold, { x: sx * PX, y: 196, z: -PZ }, 12))
-    g.add(lathe([[0, 0], [3.4, 0], [2, 4], [2.8, 7], [0.4, 12], [0, 12]], gold, { x: sx * PX, y: 150, z: PZ }, 12))
+    g.add(latheAt([[0, 0], [3.4, 0], [2, 4], [2.8, 7], [0.4, 12], [0, 12]], gold, { x: sx * PX, y: 196, z: -PZ }, 12, 0.001))
+    g.add(latheAt([[0, 0], [3.4, 0], [2, 4], [2.8, 7], [0.4, 12], [0, 12]], gold, { x: sx * PX, y: 150, z: PZ }, 12, 0.001))
     // 侧梁
     g.add(rbox(4, 16, D - 18, wood, { x: sx * PX, y: 22 }, 1.2))
   }
@@ -1301,7 +1292,7 @@ function marbleCoffee(p: string[]) {
     g.add(cappedTube([pt(12, 38), pt(22, 30), pt(20, 16), pt(27, 4), pt(31, 1.8)], 1.6, metal, TUBE))
   }
   g.add(torus(14, 1.4, metal, { y: 22, rx: Math.PI / 2 }))
-  g.add(lathe([[0, 14], [4, 14], [6, 18], [3, 26], [5, 34], [12, 38.4], [0, 38.4]], metal, {}, 20))
+  g.add(latheAt([[0, 14], [4, 14], [6, 18], [3, 26], [5, 34], [12, 38.4], [0, 38.4]], metal, {}, 20, 0.001))
   g.add(cyl(42, 42, 4, stone, { y: 38.4 }, 48))
   // 大理石纹
   for (const [x, z, l, a] of [[-12, -8, 34, 0.5], [10, 6, 28, -0.4], [-4, 18, 18, 0.2]] as number[][]) {
@@ -1444,7 +1435,7 @@ function demilune(p: string[]) {
   const half = (rr: number, z0: number, n = 20): Poly => [[-rr, z0], ...Array.from({ length: n + 1 }, (_, i) => { const a = Math.PI - (i / n) * Math.PI; return [Math.cos(a) * rr, z0 + Math.sin(a) * rr * 0.76] as [number, number] }), [rr, z0]]
   const legPos: P2[] = [[-44, -14], [44, -14], [0, 14]]
   for (const [x, z] of legPos) {
-    g.add(lathe([[0, 0], [1.6, 0], [1.4, 4], [2.4, 6], [2.2, 60], [3, 66], [3, 70], [0, 70]], body, { x, z }, 12))
+    g.add(latheAt([[0, 0], [1.6, 0], [1.4, 4], [2.4, 6], [2.2, 60], [3, 66], [3, 70], [0, 70]], body, { x, z }, 12, 0.001))
     g.add(ball(1.6, gold, { x, y: 1.6, z }))
   }
   // 弧形裙板：用一圈短板拼
@@ -1482,7 +1473,7 @@ function columnPedestal(p: string[]) {
   const g = new THREE.Group()
   g.add(rbox(34, 6, 34, stone, {}, 1))
   g.add(rbox(30, 4, 30, shade(stone, -0.04), { y: 6 }, 1))
-  g.add(lathe([[0, 10], [12, 10], [12, 12], [10, 14], [10, 90], [12, 92], [12, 94], [0, 94]], stone, {}, 32))
+  g.add(latheAt([[0, 10], [12, 10], [12, 12], [10, 14], [10, 90], [12, 92], [12, 94], [0, 94]], stone, {}, 32, 0.001))
   for (let k = 0; k < 12; k++) {
     const a = (k / 12) * Math.PI * 2
     const f = rbox(1.4, 72, 0.6, vein, { x: Math.sin(a) * 10.05, y: 16, z: Math.cos(a) * 10.05, ry: a }, 0.3)
@@ -1961,7 +1952,7 @@ function basketShelf(p: string[]) {
 function ironLanternLamp(p: string[]) {
   const [metal, glow, accent] = p
   const g = new THREE.Group()
-  g.add(lathe([[0, 0], [19, 0], [18, 2], [11, 4.4], [6, 7], [3, 12], [2.2, 14], [0, 14]], metal, {}, 24))
+  g.add(latheAt([[0, 0], [19, 0], [18, 2], [11, 4.4], [6, 7], [3, 12], [2.2, 14], [0, 14]], metal, {}, 24, 0.001))
   g.add(cyl(1.6, 1.6, 106, metal, { y: 14 }, 12))
   g.add(torus(2.2, 0.6, accent, { y: 70, rx: Math.PI / 2 }))
   const y0 = 120
@@ -2021,7 +2012,7 @@ function reclaimedSurfaces() {
 function leatherClub(p: string[]) {
   const [leather, nail, wood] = p
   const g = new THREE.Group()
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(lathe([[0, 0], [3.4, 0], [4.2, 3], [3.6, 6], [2.6, 8.4], [0, 8.4]], wood, { x: sx * 36, z: sz * 33 }, 16))
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(latheAt([[0, 0], [3.4, 0], [4.2, 3], [3.6, 6], [2.6, 8.4], [0, 8.4]], wood, { x: sx * 36, z: sz * 33 }, 16, 0.001))
   g.add(rbox(88, 28, 82, leather, { y: 8 }, 4))
   for (const s of [-1, 1]) {
     g.add(rbox(16, 32, 84, leather, { x: s * 36, y: 22 }, 5))
@@ -2529,7 +2520,7 @@ function inNightstand(p: string[]) {
 // =====================================================================
 
 type Extra = Partial<Omit<AssetDef, 'id' | 'name' | 'category' | 'w' | 'd' | 'h' | 'build' | 'palettes' | 'paletteStyles'>>
-function D(id: string, name: string, category: AssetDef['category'], dims: [number, number, number], pals: Pal[], build: AssetDef['build'], extra: Extra = {}): AssetDef {
+function D(id: string, name: string, category: AssetDef['category'], dims: [number, number, number], pals: Pal3[], build: AssetDef['build'], extra: Extra = {}): AssetDef {
   // 统一在 xz 上居中（个别造型的拉手、雕花、斜靠让包围盒偏了 1~2cm）
   return withPals({ id, name, category, w: dims[0], d: dims[1], h: dims[2], build: (p) => centerGroup(build(p)), ...extra }, pals)
 }
@@ -2539,143 +2530,143 @@ const HALF_MOON: Poly = [[-46, -17], ...Array.from({ length: 13 }, (_, i) => { c
 /** 新中式 */
 export const SW_CHINESE: AssetDef[] = [
   D('sw-cn-guanmao', '官帽椅', 'living', [61.6, 49.8, 107.9], [
-    [ZH, CN.rose, CN.cane, CN.zitan],
-    [ZH, CN.huali, CN.cane, CN.wenge],
-    [ZH, CN.zitan, CN.lacquer, CN.wenge],
-    [ZH, CN.wenge, CN.silk, CN.zitan],
+    [ZH, CHN.rose, CHN.cane, CHN.zitan],
+    [ZH, CHN.huali, CHN.cane, CHN.wenge],
+    [ZH, CHN.zitan, CHN.lacquer, CHN.wenge],
+    [ZH, CHN.wenge, CHN.silk, CHN.zitan],
     ['modern', M.black, M.light, M.char],
   ], guanmaoChair),
   D('sw-cn-taishi', '太师椅', 'living', [66, 50.5, 102], [
-    [ZH, CN.rose, CN.lacquer, CN.zitan],
-    [ZH, CN.zitan, CN.gold, CN.wenge],
-    [ZH, CN.huali, CN.indigo, CN.wenge],
-    [ZH, CN.wenge, CN.jade, CN.zitan],
+    [ZH, CHN.rose, CHN.lacquer, CHN.zitan],
+    [ZH, CHN.zitan, CHN.gold, CHN.wenge],
+    [ZH, CHN.huali, CHN.indigo, CHN.wenge],
+    [ZH, CHN.wenge, CHN.jade, CHN.zitan],
   ], taishiChair),
   D('sw-cn-meigui', '玫瑰椅', 'dining', [46, 42, 81], [
-    [ZH, CN.rose, CN.cane, CN.zitan],
-    [ZH, CN.huali, CN.cane, CN.wenge],
-    [ZH, CN.zitan, CN.silk, CN.wenge],
+    [ZH, CHN.rose, CHN.cane, CHN.zitan],
+    [ZH, CHN.huali, CHN.cane, CHN.wenge],
+    [ZH, CHN.zitan, CHN.silk, CHN.wenge],
     ['japanese', J.wood, J.tatami, J.dark],
     ['modern', M.walnut, M.light, M.char],
   ], meiguiChair, { family: 'dining-chair', sizeLabel: '玫瑰椅' }),
   D('sw-cn-luohan', '罗汉床', 'living', [201.2, 95.9, 74.9], [
-    [ZH, CN.rose, CN.lacquer, CN.zitan],
-    [ZH, CN.huali, CN.celadon, CN.wenge],
-    [ZH, CN.zitan, CN.gold, CN.wenge],
-    [ZH, CN.wenge, CN.indigo, CN.zitan],
+    [ZH, CHN.rose, CHN.lacquer, CHN.zitan],
+    [ZH, CHN.huali, CHN.celadon, CHN.wenge],
+    [ZH, CHN.zitan, CHN.gold, CHN.wenge],
+    [ZH, CHN.wenge, CHN.indigo, CHN.zitan],
     ['modern', M.walnut, M.light, M.char],
   ], luohanBed),
   D('sw-cn-kang', '炕桌', 'living', [70, 42, 25.5], [
-    [ZH, CN.rose, CN.zitan, CN.gold],
-    [ZH, CN.huali, CN.wenge, CN.gold],
-    [ZH, CN.lacquer, CN.ink, CN.gold],
+    [ZH, CHN.rose, CHN.zitan, CHN.gold],
+    [ZH, CHN.huali, CHN.wenge, CHN.gold],
+    [ZH, CHN.lacquer, CHN.ink, CHN.gold],
     ['japanese', J.wood, J.dark, J.shu],
   ], kangTable, { prop: true, surface: 25.5 }),
   D('sw-cn-qiaotou', '翘头案', 'living', [171.2, 42, 88.5], [
-    [ZH, CN.rose, CN.zitan, CN.rose],
-    [ZH, CN.huali, CN.wenge, CN.huali],
-    [ZH, CN.zitan, CN.wenge, CN.zitan],
-    [ZH, CN.lacquer, CN.ink, CN.lacquer],
+    [ZH, CHN.rose, CHN.zitan, CHN.rose],
+    [ZH, CHN.huali, CHN.wenge, CHN.huali],
+    [ZH, CHN.zitan, CHN.wenge, CHN.zitan],
+    [ZH, CHN.lacquer, CHN.ink, CHN.lacquer],
     ['modern', M.walnut, M.char, M.walnut],
   ], qiaotouTable, { surface: 84, surfaceShape: [r(-78, -20, 78, 20)] }),
   D('sw-cn-baxian', '八仙桌', 'dining', [90, 90, 83], [
-    [ZH, CN.rose, CN.zitan, CN.gold],
-    [ZH, CN.huali, CN.wenge, CN.gold],
-    [ZH, CN.zitan, CN.wenge, CN.gold],
-    [ZH, CN.wenge, CN.zitan, CN.gold],
+    [ZH, CHN.rose, CHN.zitan, CHN.gold],
+    [ZH, CHN.huali, CHN.wenge, CHN.gold],
+    [ZH, CHN.zitan, CHN.wenge, CHN.gold],
+    [ZH, CHN.wenge, CHN.zitan, CHN.gold],
   ], baxianTable, { surface: 83 }),
   D('sw-cn-tiaodeng', '条凳', 'dining', [110, 24.7, 48], [
-    [ZH, CN.rose, CN.zitan, CN.gold],
-    [ZH, CN.huali, CN.wenge, CN.gold],
-    [ZH, CN.lacquer, CN.ink, CN.gold],
+    [ZH, CHN.rose, CHN.zitan, CHN.gold],
+    [ZH, CHN.huali, CHN.wenge, CHN.gold],
+    [ZH, CHN.lacquer, CHN.ink, CHN.gold],
     ['japanese', J.wood, J.dark, J.shu],
   ], tiaoBench),
   D('sw-cn-fangji', '方几', 'living', [45, 40, 71], [
-    [ZH, CN.rose, CN.zitan, CN.gold],
-    [ZH, CN.huali, CN.wenge, CN.gold],
-    [ZH, CN.zitan, CN.wenge, CN.gold],
+    [ZH, CHN.rose, CHN.zitan, CHN.gold],
+    [ZH, CHN.huali, CHN.wenge, CHN.gold],
+    [ZH, CHN.zitan, CHN.wenge, CHN.gold],
     ['modern', M.walnut, M.char, M.silver],
   ], fangji, { surface: 71, surfaces: [{ y: 14, shape: [r(-18.3, -15.8, 18.3, 15.8)], h: 47 }] }),
   D('sw-cn-chatai', '茶台（带茶具）', 'living', [140, 70, 77.2], [
-    [ZH, CN.rose, CN.zitan, CN.wenge],
-    [ZH, CN.huali, CN.wenge, CN.zitan],
-    [ZH, CN.wenge, CN.zitan, CN.ink],
+    [ZH, CHN.rose, CHN.zitan, CHN.wenge],
+    [ZH, CHN.huali, CHN.wenge, CHN.zitan],
+    [ZH, CHN.wenge, CHN.zitan, CHN.ink],
     ['japanese', J.wood, J.dark, J.sumi],
     ['modern', M.walnut, M.char, M.black],
   ], teaTable, { surface: 65, surfaceShape: [r(-2, -33, 68, 33)], surfaces: [{ y: 12, shape: [r(-58, -21.5, 58, 21.5)], h: 39 }] }),
   D('sw-cn-duobao', '多宝格', 'storage', [81.2, 34.3, 180], [
-    [ZH, CN.rose, CN.zitan, BRASS],
-    [ZH, CN.huali, CN.wenge, BRASS],
-    [ZH, CN.zitan, CN.wenge, BRASS],
-    [ZH, CN.lacquer, CN.ink, BRASS],
+    [ZH, CHN.rose, CHN.zitan, BRASS],
+    [ZH, CHN.huali, CHN.wenge, BRASS],
+    [ZH, CHN.zitan, CHN.wenge, BRASS],
+    [ZH, CHN.lacquer, CHN.ink, BRASS],
     ['modern', M.walnut, M.char, M.silver],
   ], duobao, { family: 'bookshelf', sizeLabel: '多宝格', surface: 180, surfaces: [...duobaoSurfaces(), DUOBAO_LOWER], openable: true }),
   D('sw-cn-screen', '四扇屏风', 'deco', [174.9, 25.1, 176], [
-    [ZH, CN.rose, CN.silk, '#c0392b'],
-    [ZH, CN.zitan, '#1f1b1a', CN.gold],
-    [ZH, CN.huali, '#f3ecd8', '#c0392b'],
-    [ZH, CN.ink, '#2a2020', '#d8a55a'],
+    [ZH, CHN.rose, CHN.silk, '#c0392b'],
+    [ZH, CHN.zitan, '#1f1b1a', CHN.gold],
+    [ZH, CHN.huali, '#f3ecd8', '#c0392b'],
+    [ZH, CHN.ink, '#2a2020', '#d8a55a'],
   ], screen4),
   D('sw-cn-gongdeng', '宫灯落地灯', 'lighting', [36, 39.3, 151.6], [
-    [ZH, CN.rose, '#ffe2b0', CN.lacquer],
-    [ZH, CN.zitan, '#fff1c8', CN.gold],
-    [ZH, CN.huali, '#ffd9a8', CN.lacquer],
-    [ZH, CN.lacquer, '#fff1c8', CN.gold],
+    [ZH, CHN.rose, '#ffe2b0', CHN.lacquer],
+    [ZH, CHN.zitan, '#fff1c8', CHN.gold],
+    [ZH, CHN.huali, '#ffd9a8', CHN.lacquer],
+    [ZH, CHN.lacquer, '#fff1c8', CHN.gold],
   ], gongLamp, { family: 'floor-lamp', sizeLabel: '宫灯' }),
   D('sw-cn-denglong', '灯笼落地灯', 'lighting', [59.4, 36, 175.7], [
-    [ZH, CN.wenge, '#e24a3a', CN.gold],
-    [ZH, CN.rose, '#ffe2b0', CN.gold],
-    [ZH, CN.zitan, '#f0b04a', CN.ink],
+    [ZH, CHN.wenge, '#e24a3a', CHN.gold],
+    [ZH, CHN.rose, '#ffe2b0', CHN.gold],
+    [ZH, CHN.zitan, '#f0b04a', CHN.ink],
     ['japanese', J.dark, J.washi, J.sumi],
   ], lanternStand, { family: 'floor-lamp', sizeLabel: '灯笼' }),
   D('sw-cn-moongate', '月洞门', 'deco', [146, 30, 210], [
-    [ZH, CN.wall, CN.tile, CN.huali],
-    [ZH, '#e9e1d2', '#3e4247', CN.rose],
-    [ZH, CN.lacquer, CN.ink, CN.gold],
+    [ZH, CHN.wall, CHN.tile, CHN.huali],
+    [ZH, '#e9e1d2', '#3e4247', CHN.rose],
+    [ZH, CHN.lacquer, CHN.ink, CHN.gold],
     ['japanese', J.washi, J.sumi, J.wood],
   ], moonGate),
   D('sw-cn-dingxiang', '顶箱柜', 'bedroom', [101.6, 58.5, 227], [
-    [ZH, CN.rose, BRASS, CN.zitan],
-    [ZH, CN.huali, BRASS, CN.wenge],
-    [ZH, CN.lacquer, BRASS, CN.ink],
-    [ZH, CN.zitan, BRASS, CN.wenge],
+    [ZH, CHN.rose, BRASS, CHN.zitan],
+    [ZH, CHN.huali, BRASS, CHN.wenge],
+    [ZH, CHN.lacquer, BRASS, CHN.ink],
+    [ZH, CHN.zitan, BRASS, CHN.wenge],
     ['modern', M.walnut, M.silver, M.char],
   ], dingxiang, { surfaces: DINGXIANG_SURFACES, openable: true }),
   D('sw-cn-gudeng', '鼓凳', 'living', [39.3, 39.3, 49.1], [
-    [ZH, CN.rose, CN.lacquer, BRASS],
-    [ZH, CN.huali, CN.celadon, BRASS],
-    [ZH, CN.zitan, CN.gold, BRASS],
-    [ZH, CN.lacquer, CN.silk, BRASS],
+    [ZH, CHN.rose, CHN.lacquer, BRASS],
+    [ZH, CHN.huali, CHN.celadon, BRASS],
+    [ZH, CHN.zitan, CHN.gold, BRASS],
+    [ZH, CHN.lacquer, CHN.silk, BRASS],
   ], drumStool),
   D('sw-cn-huaji', '高花几', 'living', [36, 36, 102], [
-    [ZH, CN.rose, CN.zitan, CN.gold],
-    [ZH, CN.huali, CN.wenge, CN.gold],
-    [ZH, CN.zitan, CN.wenge, CN.gold],
+    [ZH, CHN.rose, CHN.zitan, CHN.gold],
+    [ZH, CHN.huali, CHN.wenge, CHN.gold],
+    [ZH, CHN.zitan, CHN.wenge, CHN.gold],
     ['modern', M.black, M.char, M.silver],
   ], tallStand, { surface: 102, surfaces: [{ y: 22, shape: [r(-13.5, -13.5, 13.5, 13.5)], h: 36 }] }),
   D('sw-cn-jiazi', '架子床', 'bedroom', [170, 220, 226], [
-    [ZH, CN.lacquer, CN.silk, CN.rose],
-    [ZH, CN.gold, CN.silk, CN.zitan],
-    [ZH, CN.indigo, '#f3ecd8', CN.huali],
-    [ZH, CN.jade, CN.silk, CN.wenge],
+    [ZH, CHN.lacquer, CHN.silk, CHN.rose],
+    [ZH, CHN.gold, CHN.silk, CHN.zitan],
+    [ZH, CHN.indigo, '#f3ecd8', CHN.huali],
+    [ZH, CHN.jade, CHN.silk, CHN.wenge],
   ], jiaziBed),
   D('sw-cn-zhongtang', '中堂挂轴', 'deco', [129.8, 3, 161.3], [
-    [ZH, CN.indigo, CN.silk, CN.zitan],
-    [ZH, '#8a6a3a', '#f3ecd8', CN.wenge],
-    [ZH, CN.jade, CN.silk, CN.rose],
-    [ZH, CN.lacquer, '#f6e7c8', CN.ink],
+    [ZH, CHN.indigo, CHN.silk, CHN.zitan],
+    [ZH, '#8a6a3a', '#f3ecd8', CHN.wenge],
+    [ZH, CHN.jade, CHN.silk, CHN.rose],
+    [ZH, CHN.lacquer, '#f6e7c8', CHN.ink],
   ], zhongtang, { mount: ZT_MOUNT }),
   D('sw-cn-penjing', '山水盆景台', 'plants', [40, 40, 95], [
-    [ZH, CN.rose, '#f2efe8', '#8f9aa3'],
-    [ZH, CN.huali, CN.celadon, '#9a9488'],
-    [ZH, CN.zitan, '#e9e4da', '#7f8a92'],
+    [ZH, CHN.rose, '#f2efe8', '#8f9aa3'],
+    [ZH, CHN.huali, CHN.celadon, '#9a9488'],
+    [ZH, CHN.zitan, '#e9e4da', '#7f8a92'],
     ['japanese', J.dark, J.washi, '#8f9aa3'],
   ], penjing),
   D('sw-cn-nightstand', '床头柜', 'bedroom', [46, 36.4, 55], [
-    [ZH, CN.rose, BRASS, CN.zitan],
-    [ZH, CN.huali, BRASS, CN.wenge],
-    [ZH, CN.lacquer, BRASS, CN.ink],
-    [ZH, CN.zitan, BRASS, CN.wenge],
+    [ZH, CHN.rose, BRASS, CHN.zitan],
+    [ZH, CHN.huali, BRASS, CHN.wenge],
+    [ZH, CHN.lacquer, BRASS, CHN.ink],
+    [ZH, CHN.zitan, BRASS, CHN.wenge],
     ['modern', M.walnut, M.silver, M.char],
   ], cnNightstand, { family: 'nightstand', sizeLabel: '中式', surface: 55, surfaces: CN_NS_SURFACES, openable: true }),
 ]
@@ -2683,115 +2674,115 @@ export const SW_CHINESE: AssetDef[] = [
 /** 欧式古典 */
 export const SW_CLASSIC: AssetDef[] = [
   D('sw-cl-louis-arm', '路易扶手椅', 'living', [62.8, 58.7, 105.5], [
-    [EU, CL.cream, CL.ivory, CL.gold],
-    [EU, CL.wine, CL.walnut, CL.gold],
-    [EU, CL.navy, CL.ivory, CL.gold],
-    [EU, CL.blush, CL.ivory, CL.gold],
-    [EU, CL.sage, CL.walnut, CL.gold],
+    [EU, CLS.cream, CLS.ivory, CLS.gold],
+    [EU, CLS.wine, CLS.walnut, CLS.gold],
+    [EU, CLS.navy, CLS.ivory, CLS.gold],
+    [EU, CLS.blush, CLS.ivory, CLS.gold],
+    [EU, CLS.sage, CLS.walnut, CLS.gold],
   ], louisArmchair),
   D('sw-cl-louis-chair', '路易餐椅', 'dining', [44, 45.3, 98.5], [
-    [EU, CL.cream, CL.ivory, CL.gold],
-    [EU, CL.wine, CL.walnut, CL.gold],
-    [EU, CL.navy, CL.ivory, CL.gold],
-    [EU, CL.sage, CL.ivory, CL.gold],
+    [EU, CLS.cream, CLS.ivory, CLS.gold],
+    [EU, CLS.wine, CLS.walnut, CLS.gold],
+    [EU, CLS.navy, CLS.ivory, CLS.gold],
+    [EU, CLS.sage, CLS.ivory, CLS.gold],
     ['cute', C.sakura, C.white, C.lemon],
   ], louisChair, { family: 'dining-chair', sizeLabel: '路易' }),
   D('sw-cl-recamier', '卷头贵妃榻', 'living', [176, 67.4, 78.1], [
-    [EU, CL.blush, CL.ivory, CL.gold],
-    [EU, CL.wine, CL.mahogany, CL.gold],
-    [EU, CL.teal, CL.walnut, CL.gold],
-    [EU, CL.cream, CL.ivory, CL.gold],
+    [EU, CLS.blush, CLS.ivory, CLS.gold],
+    [EU, CLS.wine, CLS.mahogany, CLS.gold],
+    [EU, CLS.teal, CLS.walnut, CLS.gold],
+    [EU, CLS.cream, CLS.ivory, CLS.gold],
   ], recamier),
   D('sw-cl-sideboard', '雕花餐边柜', 'dining', [160, 50.9, 95], [
-    [EU, CL.ivory, CL.marble, CL.gold],
-    [EU, CL.mahogany, CL.mahogany, CL.gold],
-    [EU, CL.sage, CL.marble, CL.gold],
-    [EU, CL.walnut, CL.black, CL.gold],
+    [EU, CLS.ivory, CLS.marble, CLS.gold],
+    [EU, CLS.mahogany, CLS.mahogany, CLS.gold],
+    [EU, CLS.sage, CLS.marble, CLS.gold],
+    [EU, CLS.walnut, CLS.black, CLS.gold],
   ], clSideboard, { surface: 95, surfaces: CL_SB_SURFACES, openable: true }),
   D('sw-cl-vanity', '法式梳妆台', 'bedroom', [110, 46.4, 151.4], [
-    [EU, CL.ivory, '#dfe8ee', CL.gold],
-    [EU, CL.blush, '#dfe8ee', CL.gold],
-    [EU, CL.mahogany, '#dfe8ee', CL.gold],
+    [EU, CLS.ivory, '#dfe8ee', CLS.gold],
+    [EU, CLS.blush, '#dfe8ee', CLS.gold],
+    [EU, CLS.mahogany, '#dfe8ee', CLS.gold],
     ['cute', C.white, '#dfe8ee', C.lemon],
   ], clVanity, { surface: 77, surfaceShape: [r(-55, -12, 55, 23)], surfaces: CL_VANITY_SURFACES, openable: true }),
   D('sw-cl-fireplace', '欧式壁炉', 'living', [156, 46, 131.4], [
-    [EU, CL.marble, CL.marble, CL.gold],
-    [EU, CL.ivory, CL.cream, CL.gold],
-    [EU, '#d8d2ca', CL.walnut, CL.gold],
-    [EU, '#3a3636', CL.black, CL.gold],
+    [EU, CLS.marble, CLS.marble, CLS.gold],
+    [EU, CLS.ivory, CLS.cream, CLS.gold],
+    [EU, '#d8d2ca', CLS.walnut, CLS.gold],
+    [EU, '#3a3636', CLS.black, CLS.gold],
   ], clFireplace, { surface: 107, surfaceShape: [r(-50, -23, 50, 23)], fx: FIREPLACE_FX }),
   D('sw-cl-crystal-lamp', '水晶烛台落地灯', 'lighting', [39.8, 38.4, 152], [
-    [EU, CL.gold, CL.ivory, '#e8f4ff'],
-    [EU, '#c8ccd2', CL.cream, '#e8f4ff'],
-    [EU, CL.black, CL.ivory, '#e8f4ff'],
-    [EU, CL.gold, CL.wine, '#ffe8f0'],
+    [EU, CLS.gold, CLS.ivory, '#e8f4ff'],
+    [EU, '#c8ccd2', CLS.cream, '#e8f4ff'],
+    [EU, CLS.black, CLS.ivory, '#e8f4ff'],
+    [EU, CLS.gold, CLS.wine, '#ffe8f0'],
   ], crystalFloorLamp, { family: 'floor-lamp', sizeLabel: '水晶烛台' }),
   D('sw-cl-candle-lamp', '烛台台灯', 'lighting', [27, 27.2, 50.3], [
-    [EU, CL.ivory, CL.cream, CL.gold],
-    [EU, CL.gold, CL.ivory, CL.gold],
-    [EU, CL.navy, CL.cream, CL.gold],
-    [EU, CL.sage, CL.ivory, CL.gold],
+    [EU, CLS.ivory, CLS.cream, CLS.gold],
+    [EU, CLS.gold, CLS.ivory, CLS.gold],
+    [EU, CLS.navy, CLS.cream, CLS.gold],
+    [EU, CLS.sage, CLS.ivory, CLS.gold],
   ], candleTableLamp, { prop: true, family: 'table-lamp', sizeLabel: '烛台' }),
   D('sw-cl-poster-bed', '雕花四柱床', 'bedroom', [177.1, 219.1, 208], [
-    [EU, CL.cream, CL.ivory, CL.mahogany],
-    [EU, CL.wine, CL.cream, CL.walnut],
-    [EU, CL.navy, CL.ivory, CL.ivory],
-    [EU, CL.blush, CL.ivory, CL.ivory],
+    [EU, CLS.cream, CLS.ivory, CLS.mahogany],
+    [EU, CLS.wine, CLS.cream, CLS.walnut],
+    [EU, CLS.navy, CLS.ivory, CLS.ivory],
+    [EU, CLS.blush, CLS.ivory, CLS.ivory],
   ], clPosterBed),
   D('sw-cl-marble-coffee', '大理石圆茶几', 'living', [85.6, 85.6, 42.5], [
-    [EU, CL.marble, CL.gold, CL.vein],
-    [EU, '#2e2c2c', CL.gold, '#cfc8bd'],
-    [EU, '#e8dccd', CL.gold, '#c8a98c'],
+    [EU, CLS.marble, CLS.gold, CLS.vein],
+    [EU, '#2e2c2c', CLS.gold, '#cfc8bd'],
+    [EU, '#e8dccd', CLS.gold, '#c8a98c'],
     ['modern', M.white, M.black, M.gray],
   ], marbleCoffee, { family: 'coffee-table', sizeLabel: '大理石', surface: 42.4, surfaceShape: [ellipsePoly(40)] }),
   D('sw-cl-empire', '帝国式书柜', 'storage', [88, 34, 196], [
-    [EU, CL.mahogany, CL.gold, CL.wine],
-    [EU, CL.ivory, CL.gold, CL.sage],
-    [EU, CL.walnut, CL.gold, CL.navy],
-    [EU, CL.black, CL.gold, CL.teal],
+    [EU, CLS.mahogany, CLS.gold, CLS.wine],
+    [EU, CLS.ivory, CLS.gold, CLS.sage],
+    [EU, CLS.walnut, CLS.gold, CLS.navy],
+    [EU, CLS.black, CLS.gold, CLS.teal],
   ], empireBookcase, { family: 'bookshelf', sizeLabel: '帝国式', surfaces: empireSurfaces() }),
   D('sw-cl-bench', '法式软包长凳', 'living', [110, 41.1, 47.3], [
-    [EU, CL.cream, CL.ivory, CL.gold],
-    [EU, CL.wine, CL.walnut, CL.gold],
-    [EU, CL.navy, CL.ivory, CL.gold],
-    [EU, CL.blush, CL.ivory, CL.gold],
+    [EU, CLS.cream, CLS.ivory, CLS.gold],
+    [EU, CLS.wine, CLS.walnut, CLS.gold],
+    [EU, CLS.navy, CLS.ivory, CLS.gold],
+    [EU, CLS.blush, CLS.ivory, CLS.gold],
   ], tuftedBench),
   D('sw-cl-ottoman', '丝绒圆脚凳', 'living', [58.1, 58.1, 41], [
-    [EU, CL.wine, CL.walnut, CL.gold],
-    [EU, CL.teal, CL.walnut, CL.gold],
-    [EU, CL.blush, CL.ivory, CL.gold],
-    [EU, CL.navy, CL.ivory, CL.gold],
+    [EU, CLS.wine, CLS.walnut, CLS.gold],
+    [EU, CLS.teal, CLS.walnut, CLS.gold],
+    [EU, CLS.blush, CLS.ivory, CLS.gold],
+    [EU, CLS.navy, CLS.ivory, CLS.gold],
     ['retro', R.mustard, R.caramel, R.cream],
   ], velvetOttoman),
   D('sw-cl-armoire', '法式拱顶衣柜', 'bedroom', [124, 61.9, 208], [
-    [EU, CL.ivory, CL.cream, CL.gold],
-    [EU, CL.mahogany, CL.walnut, CL.gold],
-    [EU, CL.sage, CL.ivory, CL.gold],
-    [EU, CL.blush, CL.ivory, CL.gold],
+    [EU, CLS.ivory, CLS.cream, CLS.gold],
+    [EU, CLS.mahogany, CLS.walnut, CLS.gold],
+    [EU, CLS.sage, CLS.ivory, CLS.gold],
+    [EU, CLS.blush, CLS.ivory, CLS.gold],
   ], clArmoire, { surfaces: CL_ARMOIRE_SURFACES, openable: true }),
   D('sw-cl-mirror', '落地镜', 'bedroom', [80.9, 29.5, 179.2], [
-    [EU, CL.gold, '#dfe8ee', CL.cream],
-    [EU, CL.ivory, '#dfe8ee', CL.gold],
-    [EU, CL.black, '#dfe8ee', CL.gold],
+    [EU, CLS.gold, '#dfe8ee', CLS.cream],
+    [EU, CLS.ivory, '#dfe8ee', CLS.gold],
+    [EU, CLS.black, '#dfe8ee', CLS.gold],
     ['retro', R.caramel, '#dfe8ee', R.mustard],
   ], baroqueMirror, { family: 'floor-mirror', sizeLabel: '巴洛克金框' }),
   D('sw-cl-console', '半圆玄关桌', 'entrance', [100, 39.3, 79.1], [
-    [EU, CL.ivory, CL.marble, CL.gold],
-    [EU, CL.mahogany, CL.mahogany, CL.gold],
-    [EU, CL.black, CL.marble, CL.gold],
-    [EU, CL.sage, CL.ivory, CL.gold],
+    [EU, CLS.ivory, CLS.marble, CLS.gold],
+    [EU, CLS.mahogany, CLS.mahogany, CLS.gold],
+    [EU, CLS.black, CLS.marble, CLS.gold],
+    [EU, CLS.sage, CLS.ivory, CLS.gold],
   ], demilune, { surface: 79, surfaceShape: [HALF_MOON] }),
   D('sw-cl-pedestal', '大理石柱花台', 'deco', [34, 34, 102], [
-    [EU, CL.marble, CL.gold, CL.vein],
-    [EU, CL.ivory, CL.gold, '#d8ccb4'],
-    [EU, '#3a3636', CL.gold, '#6a6464'],
+    [EU, CLS.marble, CLS.gold, CLS.vein],
+    [EU, CLS.ivory, CLS.gold, '#d8ccb4'],
+    [EU, '#3a3636', CLS.gold, '#6a6464'],
     ['modern', M.white, M.silver, M.light],
   ], columnPedestal, { surface: 102 }),
   D('sw-cl-nightstand', '床头柜', 'bedroom', [46, 37, 58], [
-    [EU, CL.ivory, CL.ivory, CL.gold],
-    [EU, CL.mahogany, CL.mahogany, CL.gold],
-    [EU, CL.blush, CL.ivory, CL.gold],
-    [EU, CL.sage, CL.marble, CL.gold],
+    [EU, CLS.ivory, CLS.ivory, CLS.gold],
+    [EU, CLS.mahogany, CLS.mahogany, CLS.gold],
+    [EU, CLS.blush, CLS.ivory, CLS.gold],
+    [EU, CLS.sage, CLS.marble, CLS.gold],
   ], clNightstand, { family: 'nightstand', sizeLabel: '法式', surface: 58, surfaces: CL_NS_SURFACES, openable: true }),
 ]
 

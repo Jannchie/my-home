@@ -5,7 +5,7 @@
 import * as THREE from 'three'
 import { ball, cup, cyl, puck, rbox, shade, toon, torus, tray, useAnisotropy } from '../toon'
 import { C, G, SWING_OPEN, ellipsePoly, movable, rectPoly, rng, slab, type AssetCategory, type AssetDef, type DoorMotion, type Poly, type SurfaceDef } from '../kit'
-import { PI, clearDeep, fitChildrenBuild, lit, mesh, noOutlineDeep, rod3, tube, type TubeOpts, type V3 } from '../geo'
+import { PI, clearDeep, fitChildrenBuild, lathe, lit, mesh, noOutlineDeep, rod3, tube, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, R, type Build, type Pal3 } from '../packkit'
 
 /** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
@@ -25,10 +25,6 @@ const BOOKC = ['#c96f5a', '#e3b549', '#6f8fa8', '#8aa37b', '#efe6d6', '#5a4646',
 
 // ---------- 小工具 ----------
 
-/** 旋转体：profile 为 [半径, 高] */
-function lathe(profile: [number, number][], color: string, seg = 32) {
-  return mesh(new THREE.LatheGeometry(profile.map(([r, y]) => new THREE.Vector2(r, y)), seg), color)
-}
 /** 竖直挤出的柱体：截面 poly（[x, z]），底面 y0、高 h，不倒角 */
 function prism(poly: Poly, h: number, color: string, y0 = 0) {
   const shape = new THREE.Shape(poly.map(([x, z]) => new THREE.Vector2(x, -z)))
@@ -140,7 +136,7 @@ function drawer(face: THREE.Object3D[], t: Tray, color: string) {
   return moving([...face, ...trayParts(t, color)], [0, 0, 0], { kind: 'drawer', dz: Math.round(t[5] * 0.6) })
 }
 /** 空心柜体：外框 x ±w/2、y0..y1、z0（背）..z1（前），板厚 t（正面敞开） */
-function hollow(w: number, y0: number, y1: number, z0: number, z1: number, color: string, t = 1.6, r = 0.4) {
+function hollowBox(w: number, y0: number, y1: number, z0: number, z1: number, color: string, t = 1.6, r = 0.4) {
   const d = z1 - z0
   const zc = (z0 + z1) / 2
   return [
@@ -927,7 +923,7 @@ function scRetro(p: string[]) {
   const g = new THREE.Group()
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rod3([sx * 38, 0.5, sz * 14.5], [sx * 35, 18.5, sz * 12], 1.4, leg))
   // 空心柜体 + 中间一块层板
-  for (const o of hollow(w, 18, 92, -18, 15, main, 1.6, 0.8)) g.add(o)
+  for (const o of hollowBox(w, 18, 92, -18, 15, main, 1.6, 0.8)) g.add(o)
   g.add(rbox(w - 3.2, 1.6, 31, main, { y: 54, z: -2 }, 0.3))
   // 两扇拉门：一前一后，夹在上下两道轨道里；前面那扇推到后面那扇前头
   for (const y of [21.8, 87]) g.add(rbox(w - 4, 1.2, 3, shade(main, -0.1), { y, z: 16.4 }, 0.4))
@@ -1004,7 +1000,7 @@ function scShoji(p: string[]) {
   const d = 36
   const g = new THREE.Group()
   g.add(rbox(w - 2, 8, d - 4, shade(wood, -0.2), { z: -1 }, 1))
-  for (const o of hollow(w, 8, 94, -18, 15.5, wood, 1.6, 0.8)) g.add(o)
+  for (const o of hollowBox(w, 8, 94, -18, 15.5, wood, 1.6, 0.8)) g.add(o)
   g.add(rbox(w - 3.2, 1.6, 31.5, wood, { y: 50, z: -1.5 }, 0.3))
   g.add(rbox(w + 0, 2, d, shade(wood, -0.05), { y: 94 }, 0.8))
   const fz = d / 2 - 2
@@ -1090,7 +1086,7 @@ function drTall(p: string[]) {
   const d = 44
   const g = new THREE.Group()
   g.add(rbox(w - 6, 6, d - 8, shade(main, -0.25), { z: -2 }, 1))
-  for (const o of hollow(w, 6, 110, -22, 20, main, 1.6, 0.8)) g.add(o)
+  for (const o of hollowBox(w, 6, 110, -22, 20, main, 1.6, 0.8)) g.add(o)
   const fz = d / 2 - 2 + 0.7
   const trays = drTallTrays()
   DR_TALL_ROWS.forEach(([y, h], i) => {
@@ -1121,7 +1117,7 @@ function drMcm(p: string[]) {
   const d = 44
   const g = new THREE.Group()
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rod3([sx * 40, 0.6, sz * 18], [sx * 36, 20.5, sz * 15], 1.5, leg))
-  for (const o of hollow(w, 20, 78, -22, 20, main, 1.6, 1)) g.add(o)
+  for (const o of hollowBox(w, 20, 78, -22, 20, main, 1.6, 1)) g.add(o)
   g.add(rbox(1.6, 58 - 3.2, d - 4, main, { y: 21.6, z: -1 }, 0.3))
   const fz = d / 2 - 2 + 0.7
   const trays = drMcmTrays()
@@ -1149,7 +1145,7 @@ function drTansu(p: string[]) {
   const d = 42
   const g = new THREE.Group()
   g.add(rbox(w, 6, d - 2, shade(wood, -0.2), { z: -1 }, 1))
-  for (const o of hollow(w, 6, 90, -22, 20, wood, 1.6, 0.6)) g.add(o)
+  for (const o of hollowBox(w, 6, 90, -22, 20, wood, 1.6, 0.6)) g.add(o)
   // 上下两部分之间的隔板、小抽屉和小门之间的竖隔板
   g.add(rbox(w - 3.2, 1.4, d - 4, wood, { y: 63.6, z: -1 }, 0.3))
   g.add(rbox(1.4, 24.8, d - 4, wood, { x: 15.3, y: 65, z: -1 }, 0.3))
@@ -1214,7 +1210,7 @@ function drMetal(p: string[]) {
       g.add(ball(2.6, DARK, { x: sx * 34, y: 2.6, z: sz * 16 }))
       g.add(rbox(5, 2, 5, STEEL, { x: sx * 34, y: 4.6, z: sz * 16 }, 0.5))
     }
-  for (const o of hollow(w, 6.6, 84, -22, 20, body, 1.6, 0.6)) g.add(o)
+  for (const o of hollowBox(w, 6.6, 84, -22, 20, body, 1.6, 0.6)) g.add(o)
   const cw = (w - 4) / 3
   for (const c of [1, 2]) g.add(rbox(1, 77.4 - 3.2, d - 4, body, { x: -w / 2 + 2 + cw * c, y: 8.2, z: -1 }, 0.2))
   const fz = d / 2 - 2 + 0.6

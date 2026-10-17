@@ -9,7 +9,7 @@ import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js'
 import { ball, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, legs, paintPanel, rectPoly, rng, rod, type AssetDef, type Poly } from '../kit'
 import { swingDoor } from '../cabinetKit'
-import { G, P, PI, UP, fitGroup, ghost, lit, mesh, noOutline, type V3 } from '../geo'
+import { G, P, PI, UP, fitBuild, fitGroup, ghost, lit, mesh, noOutline, type V3 } from '../geo'
 import { I, J, M, N, PROP, R, define, type PalFlat } from '../packkit'
 
 type RY = [number, number]
@@ -35,8 +35,6 @@ function ghost2<T extends THREE.Mesh>(m: T, color: string, a = 0.28): T {
   m.userData.noOutline = true
   return m
 }
-
-const F = (b: (p: string[]) => THREE.Group) => (p: string[]) => fitGroup(b(p))
 
 /** 平放的画面：w × d，画布顶边朝后（-z），(x, z) 为中心，y 为高度 */
 function paintTop(w: number, d: number, key: string, draw: Draw, x: number, y: number, z: number) {
@@ -72,10 +70,10 @@ const COIN_COLS = [GOLD, SILVER, COPPER, SILVER, BRASS, '#b8bcc2']
 
 // ---------- 车削 ----------
 
-const V2 = (x: number, y: number) => new THREE.Vector2(x, y)
+const vec2 = (x: number, y: number) => new THREE.Vector2(x, y)
 
 function spline(ctrl: RY[], n = 36) {
-  return new THREE.SplineCurve(ctrl.map(([r, y]) => V2(r, y))).getSpacedPoints(n)
+  return new THREE.SplineCurve(ctrl.map(([r, y]) => vec2(r, y))).getSpacedPoints(n)
 }
 
 function radiusAt(pts: THREE.Vector2[], y: number) {
@@ -108,15 +106,15 @@ function vessel(ctrl: RY[], t: number, color: string, seg = 40): Vessel {
     const dx = b.x - a.x
     const dy = b.y - a.y
     const l = Math.hypot(dx, dy) || 1
-    return V2(-dy / l, dx / l)
+    return vec2(-dy / l, dx / l)
   }
   const floor = t * 1.3
   const k = Math.min(t, out[0].x * 0.25)
-  const pts = [V2(0, 0), V2(out[0].x - k, 0), V2(out[0].x, k)]
+  const pts = [vec2(0, 0), vec2(out[0].x - k, 0), vec2(out[0].x, k)]
   for (let i = 1; i < n; i++) if (out[i].y > k) pts.push(out[i].clone())
   const O = out[n - 1]
   const No = nrm(n - 1)
-  const T = V2(No.y, -No.x)
+  const T = vec2(No.y, -No.x)
   for (let j = 1; j < 6; j++) {
     const a = (j / 6) * PI
     pts.push(
@@ -131,19 +129,19 @@ function vessel(ctrl: RY[], t: number, color: string, seg = 40): Vessel {
     q.x = Math.max(q.x, 0.12)
     pts.push(q)
   }
-  pts.push(V2(Math.max(0.12, pts[pts.length - 1].x * 0.6), floor), V2(0, floor))
+  pts.push(vec2(Math.max(0.12, pts[pts.length - 1].x * 0.6), floor), vec2(0, floor))
   return { m: mesh(new THREE.LatheGeometry(pts, seg), color), r: (y) => radiusAt(out, y), top: O.y + t / 2 }
 }
 
 /** 实心车削体（盖子、钮）：ctrl 从底到顶，第一点 y = 0 */
 function solid(ctrl: RY[], color: string, seg = 32) {
   const out = spline(ctrl, 24)
-  return mesh(new THREE.LatheGeometry([V2(0, 0), ...out, V2(0, out[out.length - 1].y)], seg), color)
+  return mesh(new THREE.LatheGeometry([vec2(0, 0), ...out, vec2(0, out[out.length - 1].y)], seg), color)
 }
 
 /** 显式点列车削（盘、碟这种薄而平的） */
 function latheRaw(pts: RY[], color: string, seg = 40) {
-  return mesh(new THREE.LatheGeometry(pts.map(([r, y]) => V2(r, y)), seg), color)
+  return mesh(new THREE.LatheGeometry(pts.map(([r, y]) => vec2(r, y)), seg), color)
 }
 
 /** 瓶身上的环带纹 */
@@ -1098,7 +1096,7 @@ function trilobite(p: string[]) {
     const b = blobR(a, 0.7, 2.1)
     poly.push([8.2 * b * Math.cos(a), 6.2 * b * Math.sin(a)])
   }
-  const sl = new THREE.Shape(poly.map(([x, z]) => V2(x, -z)))
+  const sl = new THREE.Shape(poly.map(([x, z]) => vec2(x, -z)))
   const geo = new THREE.ExtrudeGeometry(sl, { depth: 1.4, bevelEnabled: true, bevelThickness: 0.2, bevelSize: 0.2, bevelOffset: -0.2, bevelSegments: 1 })
   geo.rotateX(-PI / 2)
   geo.translate(0, 0.2, 0)
@@ -1254,10 +1252,10 @@ function mineralBox(p: string[]) {
 function domeSpecimen(p: string[]) {
   const [wood, xtal, rockC] = p
   const g = G(puck(9.8, 2, wood), puck(8.9, 1.1, shade(wood, -0.1), { y: 1.9 }))
-  const pts: THREE.Vector2[] = [V2(8.4, 0), V2(8.4, 12.5)]
+  const pts: THREE.Vector2[] = [vec2(8.4, 0), vec2(8.4, 12.5)]
   for (let i = 1; i <= 10; i++) {
     const a = (i / 10) * (PI / 2)
-    pts.push(V2(Math.max(0.01, 8.4 * Math.cos(a)), 12.5 + 8 * Math.sin(a)))
+    pts.push(vec2(Math.max(0.01, 8.4 * Math.cos(a)), 12.5 + 8 * Math.sin(a)))
   }
   const dome = ghost2(new THREE.Mesh(new THREE.LatheGeometry(pts, 40)), GLASS, 0.26)
   g.add(P(dome, 0, 2.95, 0))
@@ -2050,8 +2048,8 @@ export const COLLECTIONS: AssetDef[] = [
   ),
   define('col-bw-jar', '青花将军罐', 'deco', [23, 23, 31], BW_PALS, bwJar, PROP),
   define('col-bw-vase', '青花缠枝赏瓶', 'deco', [21, 21, 35], BW_PALS, bwVase, PROP),
-  define('col-imari-plate', '伊万里风赏盘（盘架）', 'deco', [30, 16, 31], IMARI_PALS, F(imariPlate(15)), { ...PROP, family: 'col-imari-plate', sizeLabel: '30cm' }),
-  define('col-imari-plate-s', '伊万里风赏盘（盘架）', 'deco', [21, 14, 22], IMARI_PALS, F(imariPlate(10.5)), { ...PROP, family: 'col-imari-plate', sizeLabel: '21cm' }),
+  define('col-imari-plate', '伊万里风赏盘（盘架）', 'deco', [30, 16, 31], IMARI_PALS, fitBuild(imariPlate(15)), { ...PROP, family: 'col-imari-plate', sizeLabel: '30cm' }),
+  define('col-imari-plate-s', '伊万里风赏盘（盘架）', 'deco', [21, 14, 22], IMARI_PALS, fitBuild(imariPlate(10.5)), { ...PROP, family: 'col-imari-plate', sizeLabel: '21cm' }),
   define(
     'col-chawan-set',
     '茶碗收藏（三只）',
@@ -2150,8 +2148,8 @@ export const COLLECTIONS: AssetDef[] = [
     PROP,
   ),
   // 矿石 / 化石
-  define('col-amethyst-geode', '紫水晶晶洞', 'hobby', [17, 9, 21], GEODE_PALS, F(geodeDesk), { ...PROP, family: 'col-geode', sizeLabel: '桌面' }),
-  define('col-amethyst-cathedral', '紫水晶晶洞', 'hobby', [28, 18, 64], GEODE_PALS, F(geodeCathedral), { family: 'col-geode', sizeLabel: '落地' }),
+  define('col-amethyst-geode', '紫水晶晶洞', 'hobby', [17, 9, 21], GEODE_PALS, fitBuild(geodeDesk), { ...PROP, family: 'col-geode', sizeLabel: '桌面' }),
+  define('col-amethyst-cathedral', '紫水晶晶洞', 'hobby', [28, 18, 64], GEODE_PALS, fitBuild(geodeCathedral), { family: 'col-geode', sizeLabel: '落地' }),
   define(
     'col-quartz-cluster',
     '水晶簇',
@@ -2163,7 +2161,7 @@ export const COLLECTIONS: AssetDef[] = [
       ['cute', '#f6c9d3', '#a89a90'],
       ['retro', '#f3d27a', '#8a7a68'],
     ],
-    F((p) => quartzCluster(p)),
+    fitBuild((p) => quartzCluster(p)),
     PROP,
   ),
   define(
@@ -2176,7 +2174,7 @@ export const COLLECTIONS: AssetDef[] = [
       ['industrial', '#b8953a', '#4a4846'],
       ['modern', '#a9aeb5', '#5b5d61'],
     ],
-    F(pyrite),
+    fitBuild(pyrite),
     PROP,
   ),
   define(
@@ -2191,7 +2189,7 @@ export const COLLECTIONS: AssetDef[] = [
       ['nordic', '#5aa58a', '#d9efe5', '#2f6f58', N.white],
       ['modern', '#6b6e75', '#e4e5e8', '#2e2f33', M.black],
     ],
-    F(agateSlice),
+    fitBuild(agateSlice),
     PROP,
   ),
   define(
@@ -2205,7 +2203,7 @@ export const COLLECTIONS: AssetDef[] = [
       ['modern', '#b4d4f0', '#3b6fb0', M.black],
       ['cute', '#f6c2d4', '#b5527a', C.woodL],
     ],
-    F(fluorite),
+    fitBuild(fluorite),
     PROP,
   ),
   define(
@@ -2219,7 +2217,7 @@ export const COLLECTIONS: AssetDef[] = [
       ['retro', '#c46a3a', '#8a4a2a', R.cream],
       ['japanese', '#d9cdb4', '#a8987a', J.dark],
     ],
-    F(ammonite),
+    fitBuild(ammonite),
     PROP,
   ),
   define(
@@ -2233,7 +2231,7 @@ export const COLLECTIONS: AssetDef[] = [
       ['modern', '#4a4a4e', '#a8a29a', M.black],
       ['industrial', '#b9805a', '#5a3a28', I.walnut],
     ],
-    F(trilobite),
+    fitBuild(trilobite),
     PROP,
   ),
   define(
@@ -2246,7 +2244,7 @@ export const COLLECTIONS: AssetDef[] = [
       ['nordic', '#5b544e', '#d0d4d8', N.oak],
       ['industrial', '#3a3634', '#a9aeb5', I.walnut],
     ],
-    F(meteorite),
+    fitBuild(meteorite),
     PROP,
   ),
   define(
@@ -2260,7 +2258,7 @@ export const COLLECTIONS: AssetDef[] = [
       ['modern', M.black, '#e9e9e6', M.black],
       ['japanese', J.hinoki, J.washi, J.wood],
     ],
-    F(mineralBox),
+    fitBuild(mineralBox),
     PROP,
   ),
   define(
@@ -2279,7 +2277,7 @@ export const COLLECTIONS: AssetDef[] = [
   ),
   // 硬币
   define('col-coin-album', '硬币收藏册', 'hobby', [33, 25, 2], ALBUM_PALS, (p) => albumOpen(p, 'coinpage', drawCoinPage(p[1], 3), drawCoinPage(p[1], 8)), { ...PROP, family: 'col-coin-album', form: 'open' }),
-  define('col-coin-album-stack', '硬币收藏册', 'hobby', [20, 27, 7.5], ALBUM_PALS, F((p) => albumStack(p, 'coinalbum', coinLabel)), { ...PROP, family: 'col-coin-album', form: 'stacked' }),
+  define('col-coin-album-stack', '硬币收藏册', 'hobby', [20, 27, 7.5], ALBUM_PALS, fitBuild((p) => albumStack(p, 'coinalbum', coinLabel)), { ...PROP, family: 'col-coin-album', form: 'stacked' }),
   define('col-coin-frame', '硬币展示框', 'hobby', [42, 3, 30], FRAME_PALS, coinFrame(42, 30, 6, 3, false), { family: 'col-coin-frame', sizeLabel: '壁挂', mount: 140 }),
   define('col-coin-frame-desk', '硬币展示框', 'hobby', [24, 10, 18], FRAME_PALS, coinFrame(24, 18, 4, 2, true), { ...PROP, family: 'col-coin-frame', sizeLabel: '桌面' }),
   define(
@@ -2293,7 +2291,7 @@ export const COLLECTIONS: AssetDef[] = [
       ['nordic', N.oak, '#4f6b5a', BRASS],
       ['industrial', I.walnut, '#2a2522', BRASS],
     ],
-    F(coinCase),
+    fitBuild(coinCase),
     PROP,
   ),
   define(
@@ -2307,7 +2305,7 @@ export const COLLECTIONS: AssetDef[] = [
       ['modern', M.black, '#d7d8db', '#8a8d93', '#c9a45c'],
       ['cute', C.woodL, '#ffb6c8', '#a8d4f4', '#ffe08f'],
     ],
-    F(coinRolls),
+    fitBuild(coinRolls),
     PROP,
   ),
   define(
@@ -2321,7 +2319,7 @@ export const COLLECTIONS: AssetDef[] = [
       ['modern', '#5a5040', GOLD, M.black],
       ['japanese', '#a07a3a', J.shu, J.washi],
     ],
-    F(cashString),
+    fitBuild(cashString),
     PROP,
   ),
   define(
@@ -2335,7 +2333,7 @@ export const COLLECTIONS: AssetDef[] = [
       ['modern', M.black, '#2f3f6a', M.black],
       ['industrial', I.leather, '#2a2522', I.walnut],
     ],
-    F(coinLoupe),
+    fitBuild(coinLoupe),
     PROP,
   ),
   define(
@@ -2348,12 +2346,12 @@ export const COLLECTIONS: AssetDef[] = [
       ['modern', M.white, '#c8473a'],
       ['nordic', N.oak, '#4f6b5a'],
     ],
-    F(coinSlabs),
+    fitBuild(coinSlabs),
     PROP,
   ),
   // 邮票
   define('col-stamp-album', '邮票册', 'hobby', [33, 25, 2], STAMP_ALBUM_PALS, (p) => albumOpen(p, 'stamppage', drawStampPage(p[1], 5), drawStampPage(p[1], 12)), { ...PROP, family: 'col-stamp-album', form: 'open' }),
-  define('col-stamp-album-stack', '邮票册', 'hobby', [20, 27, 7.5], STAMP_ALBUM_PALS, F((p) => albumStack(p, 'stampalbum', stampLabel)), { ...PROP, family: 'col-stamp-album', form: 'stacked' }),
+  define('col-stamp-album-stack', '邮票册', 'hobby', [20, 27, 7.5], STAMP_ALBUM_PALS, fitBuild((p) => albumStack(p, 'stampalbum', stampLabel)), { ...PROP, family: 'col-stamp-album', form: 'stacked' }),
   define('col-stamp-frame', '裱框邮票', 'hobby', [34, 2.4, 44], STAMP_FRAME_PALS, stampFrame(34, 44, 3, 4, false), { family: 'col-stamp-frame', sizeLabel: '壁挂', mount: 135 }),
   define('col-stamp-frame-desk', '裱框邮票', 'hobby', [20, 12, 25], STAMP_FRAME_PALS, stampFrame(20, 25, 2, 2, true), { ...PROP, family: 'col-stamp-frame', sizeLabel: '桌面' }),
   define(

@@ -284,6 +284,20 @@ export function cappedTube(pts: V3[], r: number, color: string, o: TubeOpts = {}
   return G(m, ball(r, color, { x: a[0], y: a[1], z: a[2] }), ball(r, color, { x: b[0], y: b[1], z: b[2] }))
 }
 
+// ---------- 车削体 ----------
+
+/** 车削体：轮廓点 [半径, 高度] 绕 y 轴旋转；phi = [起始角, 扫过的角度]。投影并接收阴影 */
+export function lathe(pts: V2[], color: string, seg = 32, phi: [number, number] = [0, PI * 2]) {
+  return mesh(new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r, y)), seg, phi[0], phi[1]), color)
+}
+
+/** 车削体并放到 at；半径小于 minR 的轮廓点抬到 minR（避免轴上退化三角形） */
+export function latheAt(pts: V2[], color: string, at: { x?: number; y?: number; z?: number } = {}, seg = 32, minR = 0) {
+  const m = mesh(new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(Math.max(minR, r), y)), seg), color)
+  m.position.set(at.x ?? 0, at.y ?? 0, at.z ?? 0)
+  return m
+}
+
 // ---------- 按包围盒对齐（几种语义不同，名字区分） ----------
 
 /**

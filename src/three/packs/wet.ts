@@ -173,14 +173,14 @@ interface Sec {
   doors?: 1 | 2
   shelves?: number
 }
-interface CabSpec {
+interface WetCabSpec {
   w: number
   d: number
   plinth: number
   secs: Sec[]
 }
 /** 段落高度、开放层的高度（相对柜底） */
-function cabLayout(s: CabSpec) {
+function cabLayout(s: WetCabSpec) {
   let y = s.plinth + T
   const surf: number[] = []
   const boards: number[] = [s.plinth]
@@ -202,7 +202,7 @@ function cabLayout(s: CabSpec) {
   // 累加出来的浮点误差（81.39999…）会直接显示在尺寸标注上，取两位小数
   return { h: Math.round(y * 100) / 100, surf, boards, ranges }
 }
-function cabinet(s: CabSpec, y0 = 0): Build {
+function cabinet(s: WetCabSpec, y0 = 0): Build {
   return (p) => {
     const [body, door, handle] = p
     const back = shade(body, -0.07)
@@ -269,13 +269,13 @@ function cabinet(s: CabSpec, y0 = 0): Build {
   }
 }
 /** 抽屉盒的宽、深（从面板背后往里）和拉出距离 */
-function drawerDims(s: CabSpec) {
+function drawerDims(s: WetCabSpec) {
   const front = s.d / 2 - 1.8
   const dc = front + s.d / 2
   const bd2 = Math.round((dc - 1.4) * 10) / 10
   return { bw: s.w - T * 2 - 0.6, bd2, pull: Math.round(bd2 * 0.6) }
 }
-function cabSurfaces(s: CabSpec, y0 = 0): SurfaceDef[] {
+function cabSurfaces(s: WetCabSpec, y0 = 0): SurfaceDef[] {
   const L = cabLayout(s)
   const r1 = (v: number) => Math.round(v * 10) / 10
   const shape = [rectPoly(-s.w / 2 + T + 0.5, -s.d / 2 + 1.2, s.w / 2 - T - 0.5, s.d / 2 - 2.3)]
@@ -361,10 +361,10 @@ const LAUNDRY_RACKS: { label: string; s: RackSpec }[] = [
 // =====================================================================
 
 // 厕所吊柜：下层开放格 + 上面两扇门
-const TOILET_CAB: CabSpec = { w: 45, d: 18, plinth: 0, secs: [{ kind: 'open', h: 12 }, { kind: 'door', h: 30, doors: 2 }] }
+const TOILET_CAB: WetCabSpec = { w: 45, d: 18, plinth: 0, secs: [{ kind: 'open', h: 12 }, { kind: 'door', h: 30, doors: 2 }] }
 const TOILET_CAB_MOUNT = 150
 // 厕所窄柜：放卷纸的下柜 + 上面开放格
-const TOILET_SLIM: CabSpec = { w: 20, d: 36, plinth: 4, secs: [{ kind: 'door', h: 50 }, { kind: 'open', h: 22 }] }
+const TOILET_SLIM: WetCabSpec = { w: 20, d: 36, plinth: 4, secs: [{ kind: 'door', h: 50 }, { kind: 'open', h: 22 }] }
 
 // 卷纸：叠放 / 4 卷装 / 12 卷装
 function tpStack(p: string[]) {
@@ -815,7 +815,7 @@ function bathCaddy(p: string[]) {
 // =====================================================================
 
 // 洗面所窄高柜：下柜门 / 抽屉 / 开放格（中间一块层板）/ 上柜门
-const tallCab = (w: number): CabSpec => ({
+const tallCab = (w: number): WetCabSpec => ({
   w,
   d: 30,
   plinth: 6,
@@ -827,7 +827,7 @@ const tallCab = (w: number): CabSpec => ({
   ],
 })
 // 洗面所吊柜
-const WASH_CAB: CabSpec = { w: 60, d: 22, plinth: 0, secs: [{ kind: 'open', h: 14 }, { kind: 'door', h: 34, doors: 2 }] }
+const WASH_CAB: WetCabSpec = { w: 60, d: 22, plinth: 0, secs: [{ kind: 'open', h: 14 }, { kind: 'door', h: 34, doors: 2 }] }
 const WASH_CAB_MOUNT = 165
 
 // 镜柜：中间两扇镜门，两侧开放小格，底下一条开放托架；挂在洗面台上方 110–180

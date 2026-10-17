@@ -6,7 +6,7 @@
 import * as THREE from 'three'
 import { ball, cup, cyl, rbox, shade, torus, tray } from '../toon'
 import { C, G, type AssetCategory, type AssetDef } from '../kit'
-import { PI, clearDeep, fitChildren, mesh, noOutlineDeep, rod3 } from '../geo'
+import { PI, clearDeep, fitChildren, lathe, mesh, noOutlineDeep, rod3 } from '../geo'
 import { I, J, M, N, R, type Build, type Pal3 } from '../packkit'
 
 const COPPER = '#c7814a'
@@ -15,10 +15,6 @@ const PAD = '#eef1f4'
 
 // ---------- 小工具 ----------
 
-/** 车削体：pts 为 [半径, 高度] 的轮廓 */
-function lathe(pts: [number, number][], color: string, seg = 32) {
-  return mesh(new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r, y)), seg), color)
-}
 /** 环带：贴着锥形桶壁的一圈箍（rAt(y) 为桶壁外半径），内侧嵌进壁里 */
 function band(rAt: (y: number) => number, y0: number, y1: number, color: string, out = 0.32) {
   const a = rAt(y0)

@@ -9,7 +9,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, holePanel, rectPoly, rng, type AssetCategory, type AssetDef, type StyleTag } from '../kit'
-import { PI, clearMat, lit, noOutline, rod3, taperRod3, tube, type TubeOpts, type V3 } from '../geo'
+import { PI, clearMat, lathe, lit, noOutline, rod3, taperRod3, tube, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, R, type Build } from '../packkit'
 
 /** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
@@ -77,12 +77,6 @@ function sprig(len: number, color: string, base: V3, yaw: number, pitch: number,
   return m
 }
 const curveOf = (pts: V3[]) => new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(...p)))
-function lathe(pts: [number, number][], color: string, seg = 32, phi: [number, number] = [0, PI * 2]) {
-  const m = new THREE.Mesh(new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r, y)), seg, phi[0], phi[1]), toon(color))
-  m.castShadow = true
-  m.receiveShadow = true
-  return m
-}
 /** 实心环带（盆口加厚的口沿、底圈） */
 function band(rOB: number, rOT: number, rIB: number, rIT: number, h: number, color: string, y = 0) {
   const m = lathe([[rIB, 0], [rOB, 0], [rOT, h], [rIT, h], [rIB, 0]], color)
@@ -99,7 +93,7 @@ function rAt(prof: [number, number][], y: number) {
   return prof[prof.length - 1][0]
 }
 /** 任意外轮廓的空心旋转体（鼓肚盆、草莓罐、玻璃球） */
-function hollow(prof: [number, number][], t: number, color: string, seg = 32, phi?: [number, number]) {
+function hollowLathe(prof: [number, number][], t: number, color: string, seg = 32, phi?: [number, number]) {
   const pts: [number, number][] = [[0, 0], ...prof]
   const [rt, yt] = prof[prof.length - 1]
   for (let i = 1; i < 6; i++) {
@@ -183,7 +177,7 @@ function terraPot(rTop: number, h: number, color: string, saucer = true): Pot {
 function glazedPot(R: number, h: number, color: string, accent: string, seed = 1): Pot {
   const t = 0.8
   const prof: [number, number][] = [[R * 0.6, 0], [R * 0.8, h * 0.16], [R * 0.97, h * 0.42], [R, h * 0.62], [R * 0.93, h * 0.86], [R * 0.9, h - t / 2]]
-  const g = G(hollow(prof, t, color))
+  const g = G(hollowLathe(prof, t, color))
   const yr = h - 1.5
   g.add(torus(rAt(prof, yr) + 0.02, 0.42, accent, { y: yr, rx: PI / 2 }))
   const rand = rng(seed)
@@ -323,7 +317,7 @@ const bowlProf = (R: number, H: number, t: number): [number, number][] => [[R * 
 function bowlPot(R: number, H: number, color: string): Pot {
   const t = 0.7
   const prof = bowlProf(R, H, t)
-  const g = G(hollow(prof, t, color))
+  const g = G(hollowLathe(prof, t, color))
   const soil = H - 1.5
   const sr = rAt(prof, soil) - t - 0.25
   g.add(soilDisc(sr, soil))
@@ -417,7 +411,7 @@ function wallPot(p: string[]) {
   g.add(rbox(18, H + 7, 1.2, plate, { y: 0, z: -0.6 + 0.0 }, 0.5))
   for (const x of [-5, 5]) g.add(cyl(0.6, 0.6, 0.6, STEEL, { x, y: H + 3.5 - 0.3, z: 0.2, rx: PI / 2 }, 10))
   const prof: [number, number][] = [[R * 0.78, 0], [R, H - t / 2]]
-  const half = hollow(prof, t, pot, 24, [-PI / 2, PI])
+  const half = hollowLathe(prof, t, pot, 24, [-PI / 2, PI])
   half.position.set(0, 0.5, zc - 0.4)
   g.add(half)
   const soil = 0.5 + H - 1.6
@@ -513,7 +507,7 @@ function terrarium(kind: 'jar' | 'globe'): Build {
       }
       prof[0][1] = 0
     }
-    g.add(clearMat(hollow(prof, t, GLASS), GLASS, 0.28))
+    g.add(clearMat(hollowLathe(prof, t, GLASS), GLASS, 0.28))
     const ri = (y: number) => rAt(prof, y) - t - 0.2
     // 底座 / 软木塞
     if (kind === 'jar') {
@@ -964,7 +958,7 @@ function strawberryJar(p: string[]) {
   const g = new THREE.Group()
   const t = 0.9
   const prof: [number, number][] = [[6.5, 0], [9, 3], [11, 10], [10.6, 17], [8, 22.5], [7.2, 24.6], [7.6, 26 - t / 2]]
-  g.add(hollow(prof, t, potC))
+  g.add(hollowLathe(prof, t, potC))
   const y = 24.3
   g.add(soilDisc(rAt(prof, y) - t - 0.3, y))
   const rand = rng(81)

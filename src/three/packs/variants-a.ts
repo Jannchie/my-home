@@ -10,7 +10,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, face, leaf, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, SWING_OPEN, ellipsePoly, movable, paintPanel, rectPoly, rng, shell, type AssetCategory, type AssetDef, type DoorMotion, type SurfaceDef } from '../kit'
-import { PI, cylXLegacy, cylZLegacy, fitInPlace, lit, noOutlineDeep, rod3, taperRod3, type V3 } from '../geo'
+import { PI, cylXLegacy, cylZLegacy, fitInPlace, latheAt, lit, noOutlineDeep, rod3, taperRod3, type V3 } from '../geo'
 import { I, J, M, N, R, define, type Build, type Dims, type Pal } from '../packkit'
 
 const COFFEE = '#7a4a32'
@@ -75,14 +75,6 @@ function glassFlat<T extends THREE.Object3D>(o: T, color = GLASS, k = 0.4): T {
   })
   return o
 }
-/** 车削体：pts 为 [半径, 高度]，自下而上；at.y 为底 */
-function lathe(pts: [number, number][], color: string, at: { x?: number; y?: number; z?: number } = {}, seg = 28) {
-  const m = new THREE.Mesh(new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(Math.max(0, r), y)), seg), toon(color))
-  m.position.set(at.x ?? 0, at.y ?? 0, at.z ?? 0)
-  m.castShadow = true
-  m.receiveShadow = true
-  return m
-}
 /** 有口的瓶 / 罐：外轮廓 out（[r, y]，最后一点是口沿外缘），壁厚 t，内壁往下 depth */
 function vessel(out: [number, number][], t: number, depth: number, color: string, at: { x?: number; y?: number; z?: number } = {}) {
   const [rt, ht] = out[out.length - 1]
@@ -92,7 +84,7 @@ function vessel(out: [number, number][], t: number, depth: number, color: string
     pts.push([rt - t / 2 + (Math.cos(a) * t) / 2, ht + (Math.sin(a) * t) / 2])
   }
   pts.push([rt - t, ht], [rt - t, ht - depth], [0, ht - depth])
-  return lathe(pts, color, at)
+  return latheAt(pts, color, at, 28)
 }
 /** 木纹：竖条纹 */
 const woodGrain = (base: string) => (g: CanvasRenderingContext2D, W: number, H: number) => {

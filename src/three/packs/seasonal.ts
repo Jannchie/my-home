@@ -14,7 +14,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, face, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, glow, paintAbstract, paintFlower, paintLandscape, paintPanel, rectPoly, rng, shell, type AssetDef, type Fx } from '../kit'
-import { PI, clearDeep, noOutlineDeep, rod3, tube, type TubeOpts, type V3 } from '../geo'
+import { PI, clearDeep, lathe, noOutlineDeep, rod3, tube, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, R, definer, type Build, type Pal } from '../packkit'
 
 /** build 之后按形态对齐（挂起 / 贴附 / 落地，见 settleByForm） */
@@ -47,13 +47,6 @@ function litAll<T extends THREE.Object3D>(o: T, color: string, k = 0.8): T {
     c.userData.noOutline = true
   })
   return o
-}
-/** 旋转体：[r, y] 轮廓 */
-function lathe(pts: [number, number][], color: string, seg = 32) {
-  const m = new THREE.Mesh(new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r, y)), seg), toon(color))
-  m.castShadow = true
-  m.receiveShadow = true
-  return m
 }
 /** 平面轮廓挤出的薄片：轮廓在 xy 平面（y 朝上），厚度沿 +z 从 z0 开始 */
 function flat(pts: [number, number][], t: number, color: string, z0 = 0) {

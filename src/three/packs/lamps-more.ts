@@ -82,7 +82,7 @@ function pleated(rTop: number, rBot: number, h: number, color: string, y: number
 }
 
 /** 旋转体：profile 为 [半径, 高]；k > 0 时发光（双面） */
-function lathe(profile: [number, number][], color: string, at: { x?: number; y?: number; z?: number } = {}, seg = 24, k = 0) {
+function latheGlow(profile: [number, number][], color: string, at: { x?: number; y?: number; z?: number } = {}, seg = 24, k = 0) {
   const geo = new THREE.LatheGeometry(profile.map(([r, y]) => new THREE.Vector2(Math.max(0.001, r), y)), seg)
   const mat = k > 0 ? toon(color, { emissive: k }).clone() : toon(color)
   if (k > 0) mat.side = THREE.DoubleSide
@@ -506,8 +506,8 @@ function doubleGlobe(p: string[]) {
 function mushroomNordic(p: string[]) {
   const [shadeC, base] = p
   const g = new THREE.Group()
-  g.add(lathe([[0, 0], [9, 0], [9, 1.2], [3.2, 4], [1.8, 12], [1.6, 20], [0, 20]], base, {}, 28))
-  g.add(lathe([[0.5, 0], [12, 0], [11.6, 2.2], [10, 5], [7, 7.2], [3.5, 8.4], [0, 8.8]], shadeC, { y: 19.5 }, 32, 0.38))
+  g.add(latheGlow([[0, 0], [9, 0], [9, 1.2], [3.2, 4], [1.8, 12], [1.6, 20], [0, 20]], base, {}, 28))
+  g.add(latheGlow([[0.5, 0], [12, 0], [11.6, 2.2], [10, 5], [7, 7.2], [3.5, 8.4], [0, 8.8]], shadeC, { y: 19.5 }, 32, 0.38))
   g.add(bulb(2.6, 0, 18.5, 0))
   return g
 }
@@ -806,9 +806,9 @@ function pipeWall(p: string[]) {
 function fringeFloor(p: string[]) {
   const [shadeC, pole, tassel] = p
   const g = new THREE.Group()
-  g.add(lathe([[0, 0], [15, 0], [15, 2], [9, 5], [4, 7], [2.4, 12], [2.4, 60], [3.6, 63], [2.2, 66], [2.2, 124], [3, 126], [0, 126]], pole, {}, 24))
+  g.add(latheGlow([[0, 0], [15, 0], [15, 2], [9, 5], [4, 7], [2.4, 12], [2.4, 60], [3.6, 63], [2.2, 66], [2.2, 124], [3, 126], [0, 126]], pole, {}, 24))
   g.add(cyl(0.5, 0.5, 10, BRASS, { y: 126 }, 8))
-  g.add(lathe([[19, 0], [18, 4], [14, 12], [10, 20], [9, 24]], shadeC, { y: 122 }, 32, 0.42))
+  g.add(latheGlow([[19, 0], [18, 4], [14, 12], [10, 20], [9, 24]], shadeC, { y: 122 }, 32, 0.42))
   g.add(ring(19, 0.5, tassel, 122))
   g.add(fringe(18.8, 122, 6, tassel, 34))
   g.add(bulb(3.2, 0, 132, 0))
@@ -832,7 +832,7 @@ function tulipFloor(p: string[]) {
     const ez = Math.cos(a) * 13
     g.add(tube([[0, 120, 0], [ex * 0.3, y - 14, ez * 0.3], [ex * 0.9, y - 6, ez * 0.9], [ex, y - 2, ez]], 0.6, metal, { ...TUBE, seg: 24 }))
     g.add(cyl(1.6, 1.6, 2, metal, { x: ex, y: y - 2.5, z: ez }, 10))
-    g.add(lathe([[0, 0], [2.4, 0.4], [5.4, 4], [6.6, 8.5], [6.2, 11]], glass, { x: ex, y: y - 0.8, z: ez }, 28, 0.45))
+    g.add(latheGlow([[0, 0], [2.4, 0.4], [5.4, 4], [6.6, 8.5], [6.2, 11]], glass, { x: ex, y: y - 0.8, z: ez }, 28, 0.45))
     g.add(bulb(2, ex, y + 3, ez))
   }
   return fitGroup(g)
@@ -842,7 +842,7 @@ function tulipFloor(p: string[]) {
 function tiffanyFloor(p: string[]) {
   const [c1, c2, bronze, c3] = p
   const g = new THREE.Group()
-  g.add(lathe([[0, 0], [14, 0], [14, 1.8], [10, 4], [5, 6], [2.6, 10], [2, 120], [3, 122], [0, 122]], bronze, {}, 20))
+  g.add(latheGlow([[0, 0], [14, 0], [14, 1.8], [10, 4], [5, 6], [2.6, 10], [2, 120], [3, 122], [0, 122]], bronze, {}, 20))
   for (let k = 0; k < 3; k++) {
     const a = (k / 3) * Math.PI * 2
     g.add(rod3([0, 124, 0], [Math.sin(a) * 9, 130, Math.cos(a) * 9], 0.4, bronze, 6))
@@ -858,9 +858,9 @@ function tiffanyFloor(p: string[]) {
 function fringeTable(p: string[]) {
   const [shadeC, base, tassel] = p
   const g = new THREE.Group()
-  g.add(lathe([[0, 0], [6, 0], [7.5, 3], [8, 7], [6, 12], [2.4, 15], [1.6, 17], [0, 17]], base, {}, 24))
+  g.add(latheGlow([[0, 0], [6, 0], [7.5, 3], [8, 7], [6, 12], [2.4, 15], [1.6, 17], [0, 17]], base, {}, 24))
   g.add(cyl(0.5, 0.5, 9, BRASS, { y: 17 }, 8))
-  g.add(lathe([[12.5, 0], [12, 3], [9, 8], [6.5, 13], [6, 14.5]], shadeC, { y: 22 }, 28, 0.42))
+  g.add(latheGlow([[12.5, 0], [12, 3], [9, 8], [6.5, 13], [6, 14.5]], shadeC, { y: 22 }, 28, 0.42))
   g.add(ring(12.5, 0.4, tassel, 22))
   g.add(fringe(12.3, 22, 3.6, tassel, 26))
   g.add(bulb(2.4, 0, 28, 0))
@@ -871,15 +871,15 @@ function fringeTable(p: string[]) {
 function lavaLamp(p: string[]) {
   const [liquid, blob, metal] = p
   const g = new THREE.Group()
-  g.add(lathe([[0, 0], [6.5, 0], [6.4, 1], [4.2, 11], [0, 11]], metal, {}, 24))
-  g.add(lathe([[0, 0], [4.2, 0], [5.2, 6], [5.4, 12], [3.6, 20], [2.6, 23], [0, 23]], liquid, { y: 11 }, 24, 0.42))
+  g.add(latheGlow([[0, 0], [6.5, 0], [6.4, 1], [4.2, 11], [0, 11]], metal, {}, 24))
+  g.add(latheGlow([[0, 0], [4.2, 0], [5.2, 6], [5.4, 12], [3.6, 20], [2.6, 23], [0, 23]], liquid, { y: 11 }, 24, 0.42))
   for (const [x, y, r, sy] of [
     [0.6, 14.5, 2.6, 1.3],
     [-1.2, 22.5, 1.8, 1.4],
     [1.4, 28.5, 1.2, 1.2],
   ] as const)
     g.add(lit(ball(r, blob, { x, y }, [1, sy, 1]), blob))
-  g.add(lathe([[0, 0], [2.8, 0], [1.4, 6], [0, 6.4]], metal, { y: 33.6 }, 20))
+  g.add(latheGlow([[0, 0], [2.8, 0], [1.4, 6], [0, 6.4]], metal, { y: 33.6 }, 20))
   return g
 }
 
@@ -887,7 +887,7 @@ function lavaLamp(p: string[]) {
 function tiffanyMushroom(p: string[]) {
   const [c1, c2, bronze, c3] = p
   const g = new THREE.Group()
-  g.add(lathe([[0, 0], [8.5, 0], [8, 1.6], [4, 3.4], [2, 6], [1.6, 22], [0, 22]], bronze, {}, 20))
+  g.add(latheGlow([[0, 0], [8.5, 0], [8, 1.6], [4, 3.4], [2, 6], [1.6, 22], [0, 22]], bronze, {}, 20))
   const n = 12
   const colors = [c1, c2, c3, c2]
   for (let i = 0; i < n; i++) {
@@ -919,7 +919,7 @@ function milkBellWall(p: string[]) {
   g.add(P(cyl(5.5, 5.5, 1.6, brass, {}, 24), 0, 24, -10, Math.PI / 2))
   g.add(tube([[0, 24, -9], [0, 25.5, -3], [0, 24, 2], [0, 21, 4]], 0.7, brass, { ...TUBE, seg: 20 }))
   g.add(cyl(2, 2, 2.4, brass, { y: 18.6, z: 4 }, 12))
-  const bell = lathe([[8.6, 0], [8.2, 2], [6.6, 6], [4.2, 9.4], [2.2, 10.4]], glass, { y: 8.6, z: 4 }, 16, 0.45)
+  const bell = latheGlow([[8.6, 0], [8.2, 2], [6.6, 6], [4.2, 9.4], [2.2, 10.4]], glass, { y: 8.6, z: 4 }, 16, 0.45)
   g.add(bell)
   g.add(ring(8.6, 0.35, brass, 8.6, 0, 4))
   g.add(bulb(2.4, 0, 12.5, 4))
@@ -933,7 +933,7 @@ function tulipWall(p: string[]) {
   g.add(P(cyl(4.5, 4.5, 1.6, brass, {}, 20), 0, 6, -8, Math.PI / 2))
   g.add(tube([[0, 6, -7], [0, 5, -1], [0, 8, 3], [0, 13, 4]], 0.7, brass, { ...TUBE, seg: 20 }))
   g.add(cyl(1.6, 1.6, 2, brass, { y: 12.8, z: 4 }, 10))
-  g.add(lathe([[0, 0], [2.4, 0.4], [5.6, 4], [7, 8.5], [6.6, 11.5]], glass, { y: 14.2, z: 4 }, 28, 0.45))
+  g.add(latheGlow([[0, 0], [2.4, 0.4], [5.6, 4], [7, 8.5], [6.6, 11.5]], glass, { y: 14.2, z: 4 }, 28, 0.45))
   g.add(bulb(2, 0, 18.5, 4))
   return mountAt(g, WALL_Y)
 }
@@ -1009,8 +1009,8 @@ function capDot(prof: [number, number][], y0: number, a: number, t: number, r: n
 function mushroomFloor(p: string[]) {
   const [cap, stem, dot] = p
   const g = new THREE.Group()
-  g.add(lathe([[0, 0], [12, 0], [12.5, 3], [9, 6], [6.5, 12], [5.5, 60], [5, 96], [0, 96]], stem, {}, 28))
-  g.add(lathe(CAP_FLOOR, cap, { y: 94 }, 36, 0.42))
+  g.add(latheGlow([[0, 0], [12, 0], [12.5, 3], [9, 6], [6.5, 12], [5.5, 60], [5, 96], [0, 96]], stem, {}, 28))
+  g.add(latheGlow(CAP_FLOOR, cap, { y: 94 }, 36, 0.42))
   for (const [a, t] of [
     [0.3, 0.3],
     [1.5, 0.5],
@@ -1085,8 +1085,8 @@ function rainbowTable(p: string[]) {
 function mushroomCute(p: string[]) {
   const [cap, stem, dot] = p
   const g = new THREE.Group()
-  g.add(lathe([[0, 0], [6, 0], [6.4, 1.6], [4, 3], [3.2, 6], [3, 11], [0, 11]], stem, {}, 24))
-  g.add(lathe(CAP_SMALL, cap, { y: 10 }, 28, 0.42))
+  g.add(latheGlow([[0, 0], [6, 0], [6.4, 1.6], [4, 3], [3.2, 6], [3, 11], [0, 11]], stem, {}, 24))
+  g.add(latheGlow(CAP_SMALL, cap, { y: 10 }, 28, 0.42))
   for (const [a, t] of [
     [0.4, 0.3],
     [1.9, 0.5],
@@ -1171,7 +1171,7 @@ function lotusFloor(p: string[]) {
   g.add(cyl(14, 15, 3, base, {}, 36))
   g.add(tube([[0, 3, -8], [0, 60, -9], [0, 120, -7], [0, 148, -2], [0, 153, 6], [0, 150, 10]], 1.3, stem, { ...TUBE, seg: 48 }))
   const leafG = new THREE.Group()
-  leafG.add(lathe([[1.5, 0], [20, -0.2], [19, 3], [14, 6.5], [7, 9], [0, 10]], leaf, {}, 36, 0.42))
+  leafG.add(latheGlow([[1.5, 0], [20, -0.2], [19, 3], [14, 6.5], [7, 9], [0, 10]], leaf, {}, 36, 0.42))
   for (let k = 0; k < 12; k++) {
     const a = (k / 12) * Math.PI * 2
     leafG.add(rod3([0, 9.8, 0], [Math.sin(a) * 19.4, 0.3, Math.cos(a) * 19.4], 0.25, stem, 4))
@@ -1236,7 +1236,7 @@ function vaseTable(p: string[]) {
   const [vase, silk, pattern] = p
   const g = new THREE.Group()
   g.add(cyl(5.5, 6, 1.6, CN.rosewood, {}, 24))
-  g.add(lathe([[0, 0], [5, 0], [6, 2], [8.5, 12], [9, 16], [6.5, 20], [3, 22], [2.4, 24], [3.2, 25], [0, 25]], vase, { y: 1.6 }, 32))
+  g.add(latheGlow([[0, 0], [5, 0], [6, 2], [8.5, 12], [9, 16], [6.5, 20], [3, 22], [2.4, 24], [3.2, 25], [0, 25]], vase, { y: 1.6 }, 32))
   for (const y of [8, 13]) g.add(ring(y === 8 ? 7.6 : 8.9, 0.35, pattern, 1.6 + y))
   g.add(ring(6.9, 0.35, pattern, 1.6 + 19.6))
   g.add(cyl(0.6, 0.6, 9, BRASS, { y: 26.6 }, 8))
@@ -1288,7 +1288,7 @@ function hexPalaceWall(p: string[]) {
 function pleatBrassFloor(p: string[]) {
   const [shadeC, brass, base] = p
   const g = new THREE.Group()
-  g.add(lathe([[0, 0], [15, 0], [15, 2.4], [12, 4], [6, 7], [3.6, 10], [2.4, 16], [2.2, 70], [4.2, 73], [2.4, 77], [2.2, 118], [3.4, 121], [2.4, 124], [0, 124]], brass, {}, 24))
+  g.add(latheGlow([[0, 0], [15, 0], [15, 2.4], [12, 4], [6, 7], [3.6, 10], [2.4, 16], [2.2, 70], [4.2, 73], [2.4, 77], [2.2, 118], [3.4, 121], [2.4, 124], [0, 124]], brass, {}, 24))
   g.add(cyl(13, 15, 1.6, base, {}, 32))
   g.add(pleated(13, 20, 26, shadeC, 120, 26))
   g.add(ring(20, 0.5, brass, 120))
@@ -1302,7 +1302,7 @@ function pleatBrassFloor(p: string[]) {
 function candelabraFloor(p: string[]) {
   const [brass, candle, drip] = p
   const g = new THREE.Group()
-  g.add(lathe([[0, 0], [14, 0], [13, 2], [8, 4], [4, 8], [2.6, 14], [2.2, 128], [3.6, 131], [0, 131]], brass, {}, 24))
+  g.add(latheGlow([[0, 0], [14, 0], [13, 2], [8, 4], [4, 8], [2.6, 14], [2.2, 128], [3.6, 131], [0, 131]], brass, {}, 24))
   const arms: [number, number][] = [
     [0, 0],
     [-1, 15],
@@ -1326,7 +1326,7 @@ function candelabraFloor(p: string[]) {
 function torchiere(p: string[]) {
   const [bowl, metal, base] = p
   const g = new THREE.Group()
-  g.add(lathe([[0, 0], [13, 0], [12.4, 2.4], [8, 4], [4, 9], [2.4, 16], [2, 150], [0, 150]], metal, {}, 24))
+  g.add(latheGlow([[0, 0], [13, 0], [12.4, 2.4], [8, 4], [4, 9], [2.4, 16], [2, 150], [0, 150]], metal, {}, 24))
   g.add(cyl(14, 14, 1.4, base, {}, 32))
   for (let k = 0; k < 6; k++) {
     const a = (k / 6) * Math.PI * 2
@@ -1337,7 +1337,7 @@ function torchiere(p: string[]) {
     g.add(leaf)
   }
   g.add(cyl(4, 2.4, 4, metal, { y: 148 }, 16))
-  g.add(lathe([[0, 0], [5, 0], [12, 3], [16, 7], [17.6, 11], [17, 11.6]], bowl, { y: 151 }, 36, 0.42))
+  g.add(latheGlow([[0, 0], [5, 0], [12, 3], [16, 7], [17.6, 11], [17, 11.6]], bowl, { y: 151 }, 36, 0.42))
   g.add(ring(17.4, 0.5, metal, 162))
   g.add(bulb(3, 0, 158, 0))
   return g
@@ -1376,7 +1376,7 @@ function pleatUrnTable(p: string[]) {
   const [shadeC, brass, base] = p
   const g = new THREE.Group()
   g.add(rbox(13, 2.4, 13, base, {}, 0.6))
-  g.add(lathe([[0, 0], [4, 0], [3, 2], [6.5, 6], [7.4, 10], [5.6, 15], [2.6, 18], [3.4, 20], [0, 20]], brass, { y: 2.4 }, 28))
+  g.add(latheGlow([[0, 0], [4, 0], [3, 2], [6.5, 6], [7.4, 10], [5.6, 15], [2.6, 18], [3.4, 20], [0, 20]], brass, { y: 2.4 }, 28))
   for (const s of [-1, 1]) g.add(tube([[s * 5.5, 17, 0], [s * 9, 16, 0], [s * 9, 11, 0], [s * 7, 9.5, 0]], 0.5, brass, { ...TUBE, seg: 16 }))
   g.add(cyl(0.6, 0.6, 9, brass, { y: 22.4 }, 8))
   g.add(pleated(9, 13, 16, shadeC, 27))
@@ -1447,7 +1447,7 @@ function rattanFloor(p: string[]) {
   g.add(puck(15, 3.5, base))
   g.add(cyl(1.6, 1.8, 118, wood, { y: 3 }, 12))
   const cy = 132
-  g.add(lathe([[14, -10], [17, -4], [17.5, 2], [15, 9], [8, 14], [0.5, 15]], rattan, { y: cy }, 32, 0.38))
+  g.add(latheGlow([[14, -10], [17, -4], [17.5, 2], [15, 9], [8, 14], [0.5, 15]], rattan, { y: cy }, 32, 0.38))
   for (let k = 0; k < 16; k++) {
     for (const dir of [-1, 1]) {
       const a0 = (k / 16) * Math.PI * 2
@@ -1483,7 +1483,7 @@ function hookLantern(p: string[]) {
 function lantern(metal: string, glass: string, x: number, y0: number, s = 1) {
   const g = new THREE.Group()
   g.add(cyl(6 * s, 6.4 * s, 4 * s, metal, { y: 0 }, 20))
-  g.add(lathe([[3.2 * s, 0], [5.2 * s, 4 * s], [5.6 * s, 8 * s], [4.2 * s, 12.5 * s], [2.6 * s, 14 * s]], glass, { y: 4 * s }, 24, 0.42))
+  g.add(latheGlow([[3.2 * s, 0], [5.2 * s, 4 * s], [5.6 * s, 8 * s], [4.2 * s, 12.5 * s], [2.6 * s, 14 * s]], glass, { y: 4 * s }, 24, 0.42))
   for (let k = 0; k < 4; k++) {
     const a = (k / 4) * Math.PI * 2 + Math.PI / 4
     g.add(tube([[Math.sin(a) * 6 * s, 4 * s, Math.cos(a) * 6 * s], [Math.sin(a) * 6.6 * s, 11 * s, Math.cos(a) * 6.6 * s], [Math.sin(a) * 3.6 * s, 18 * s, Math.cos(a) * 3.6 * s]], 0.3 * s, metal, { ...TUBE, seg: 10 }))
@@ -1500,7 +1500,7 @@ function turnedWoodFloor(p: string[]) {
   const [shadeC, wood, base] = p
   const g = new THREE.Group()
   g.add(rbox(28, 3, 28, base, {}, 1))
-  g.add(lathe([[0, 0], [6, 0], [6, 3], [3.4, 6], [4.6, 10], [2.6, 14], [2.6, 50], [4.4, 56], [2.6, 62], [2.6, 96], [4, 100], [2.4, 104], [2.2, 122], [0, 122]], wood, { y: 3 }, 20))
+  g.add(latheGlow([[0, 0], [6, 0], [6, 3], [3.4, 6], [4.6, 10], [2.6, 14], [2.6, 50], [4.4, 56], [2.6, 62], [2.6, 96], [4, 100], [2.4, 104], [2.2, 122], [0, 122]], wood, { y: 3 }, 20))
   g.add(cyl(0.6, 0.6, 12, BRASS, { y: 125 }, 8))
   g.add(shadeOpen(17, 20, 26, shadeC, { y: 122 }))
   g.add(ring(20, 0.4, wood, 122))
@@ -1519,7 +1519,7 @@ function hurricaneTable(p: string[]) {
 function jugTable(p: string[]) {
   const [jug, shadeC, band] = p
   const g = new THREE.Group()
-  g.add(lathe([[0, 0], [6.5, 0], [8.4, 4], [8.8, 10], [7, 16], [3.2, 19], [2.6, 21], [3.2, 22], [0, 22]], jug, {}, 28))
+  g.add(latheGlow([[0, 0], [6.5, 0], [8.4, 4], [8.8, 10], [7, 16], [3.2, 19], [2.6, 21], [3.2, 22], [0, 22]], jug, {}, 28))
   g.add(ring(8.6, 0.5, band, 7))
   g.add(tube([[2.8, 20, 0], [6.5, 20.5, 0], [7.6, 17, 0], [7.4, 14.5, 0]], 0.7, jug, { ...TUBE, seg: 12 }))
   g.add(cyl(0.6, 0.6, 8, BRASS, { y: 22 }, 8))
@@ -1536,7 +1536,7 @@ function rattanTable(p: string[]) {
   g.add(cyl(7, 7.5, 2.4, wood, {}, 24))
   g.add(cyl(1.2, 1.4, 16, wood, { y: 2.4 }, 12))
   const cy = 18
-  g.add(lathe([[11, 0], [10.6, 4], [8.4, 8.6], [4, 11], [0.5, 11.6]], rattan, { y: cy }, 28, 0.38))
+  g.add(latheGlow([[11, 0], [10.6, 4], [8.4, 8.6], [4, 11], [0.5, 11.6]], rattan, { y: cy }, 28, 0.38))
   for (let k = 0; k < 12; k++) {
     for (const dir of [-1, 1]) {
       const a0 = (k / 12) * Math.PI * 2

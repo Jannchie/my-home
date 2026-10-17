@@ -5,7 +5,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, paintLandscape, paintPanel, pinwheelWalls, rng, type AssetDef } from '../kit'
-import { G, P, PI, cylX, cylZ, fitGroup, ghostOutlined, litOutlined, noOutline, rod3, taperRod3, type V2, type V3 } from '../geo'
+import { G, P, PI, cylX, cylZ, fitBuild, fitGroup, ghostOutlined, lathe, litOutlined, noOutline, rod3, taperRod3, type V2, type V3 } from '../geo'
 import { I, J, M, N, PROP, R, define, type PalFlat } from '../packkit'
 
 type Draw = (g: CanvasRenderingContext2D, W: number, H: number) => void
@@ -19,9 +19,6 @@ const PAPER = '#fbf8f0'
 const IVORY = '#f6f0e1'
 const CARD = '#c99a62'
 const GLASS = '#cfe8f5'
-
-/** build 结果再摆正一次 */
-const F = (b: (p: string[]) => THREE.Group) => (p: string[]) => fitGroup(b(p))
 
 // ---------- 小工具 ----------
 
@@ -873,14 +870,6 @@ function petal(len: number, color: string, x: number, y: number, z: number, a: n
   return m
 }
 
-/** 旋转体：pts 为 [半径, 高度] */
-function lathe(pts: V2[], color: string, seg = 20) {
-  const m = new THREE.Mesh(new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r, y)), seg), toon(color))
-  m.castShadow = true
-  m.receiveShadow = true
-  return m
-}
-
 // ---------- 漫画 / 宅物 ----------
 
 /** 平放的书：书脊朝 +z（spineBack 时朝 -z），底面中心 (x,y,z) */
@@ -1443,20 +1432,20 @@ function chessPiece(kind: 'p' | 'r' | 'n' | 'b' | 'q' | 'k', color: string, faci
   const g = new THREE.Group()
   const baseP: V2[] = [[0, 0], [1.4, 0], [1.4, 0.45], [1.0, 0.85]]
   if (kind === 'p') {
-    g.add(lathe([...baseP, [0.55, 2.3], [0.95, 2.5], [0.45, 2.7], [0, 2.7]], color))
+    g.add(lathe([...baseP, [0.55, 2.3], [0.95, 2.5], [0.45, 2.7], [0, 2.7]], color, 20))
     g.add(ball(0.8, color, { y: 3.3 }))
   } else if (kind === 'r') {
-    g.add(lathe([...baseP, [0.85, 3.1], [1.15, 3.3], [1.15, 4.1], [0, 4.1]], color))
+    g.add(lathe([...baseP, [0.85, 3.1], [1.15, 3.3], [1.15, 4.1], [0, 4.1]], color, 20))
   } else if (kind === 'b') {
-    g.add(lathe([...baseP, [0.55, 3.0], [1.0, 3.2], [0.5, 3.4], [0, 3.4]], color))
+    g.add(lathe([...baseP, [0.55, 3.0], [1.0, 3.2], [0.5, 3.4], [0, 3.4]], color, 20))
     g.add(ball(0.75, color, { y: 4.2 }, [1, 1.35, 1]), ball(0.28, color, { y: 5.4 }))
   } else if (kind === 'n') {
-    g.add(lathe([...baseP, [0.9, 1.4], [0, 1.4]], color))
+    g.add(lathe([...baseP, [0.9, 1.4], [0, 1.4]], color, 20))
     const head = G(rbox(1.3, 3.2, 1.6, color, { y: 0 }, 0.5), rbox(1.2, 1.2, 2.2, color, { y: 2, z: 0.8 }, 0.4))
     g.add(P(head, 0, 1.3, -0.2, 0.2))
   } else {
     const tall = kind === 'k' ? 4.6 : 4.2
-    g.add(lathe([...baseP, [0.6, tall - 0.8], [1.1, tall - 0.6], [0.7, tall - 0.4], [1.05, tall + 0.3], [0, tall + 0.3]], color))
+    g.add(lathe([...baseP, [0.6, tall - 0.8], [1.1, tall - 0.6], [0.7, tall - 0.4], [1.05, tall + 0.3], [0, tall + 0.3]], color, 20))
     if (kind === 'q') g.add(ball(0.42, color, { y: tall + 0.6 }))
     else g.add(rbox(0.4, 1.5, 0.4, color, { y: tall + 0.3 }, 0.1), rbox(1.2, 0.4, 0.4, color, { y: tall + 1 }, 0.1))
   }
@@ -3589,7 +3578,7 @@ const PIANO_PALS: PalFlat[] = [
 
 const MUSIC: AssetDef[] = [
   define('int-piano-upright', '立式钢琴', 'music', [150, 62, 125], PIANO_PALS, uprightPiano, { surface: 125, surfaceShape: [[[-75, -31], [75, -31], [75, 4.5], [-75, 4.5]]] }),
-  define('int-piano-grand', '三角钢琴', 'music', [151.5, 164.5, 159], PIANO_PALS.slice(0, 4), F(grandPiano)),
+  define('int-piano-grand', '三角钢琴', 'music', [151.5, 164.5, 159], PIANO_PALS.slice(0, 4), fitBuild(grandPiano)),
   define('int-digital-piano', '电钢琴（带琴凳）', 'music', [136, 80, 95], [
     ['modern', '#2f3035', '#fbfaf6', '#3d3f44'],
     ['nordic', N.white, '#fbfaf6', N.sage],
@@ -3603,45 +3592,45 @@ const MUSIC: AssetDef[] = [
     ['cute', C.sky, '#fffaf4', METAL],
     ['retro', R.teal, IVORY, METAL],
     ['industrial', I.walnut, IVORY, I.steel],
-  ], F(drumKit)),
+  ], fitBuild(drumKit)),
   define('int-e-drum', '电子鼓', 'music', [118, 97, 116.5], [
     ['modern', DARK, '#55575d', '#5ad1ff'],
     ['modern', M.silver, '#55575d', '#ff6a8a'],
     ['cute', C.white, '#6a6d74', C.pink],
     ['industrial', I.iron, '#4a4a4c', I.rust],
-  ], F(eDrum)),
+  ], fitBuild(eDrum)),
   define('int-violin-case', '小提琴', 'music', [78, 33.5, 31.5], [
     ['modern', '#2f3035', '#8a3a4a', '#b0652e'],
     ['retro', R.caramel, R.teal, '#b0652e'],
     ['cute', C.sky, C.sakura, '#c07a3e'],
     ['nordic', N.white, N.blue, '#c07a3e'],
-  ], F(violinCase), { ...PROP, family: 'int-violin', form: 'open' }),
+  ], fitBuild(violinCase), { ...PROP, family: 'int-violin', form: 'open' }),
   define('int-violin-stand', '小提琴', 'music', [23, 23, 66], [
     ['retro', DARK, '#b0652e', '#2a2220'],
     ['nordic', N.oak, '#c07a3e', '#2a2220'],
     ['modern', M.silver, '#9a5428', '#1f1f22'],
     ['japanese', J.dark, '#b0652e', J.sumi],
-  ], F(violinStand), { ...PROP, family: 'int-violin', form: 'standing' }),
+  ], fitBuild(violinStand), { ...PROP, family: 'int-violin', form: 'standing' }),
   define('int-cello', '大提琴（支架）', 'music', [50, 34.5, 133.5], [
     ['retro', '#b0652e', DARK, '#2a2220'],
     ['nordic', '#c07a3e', N.oak, '#2a2220'],
     ['modern', '#9a5428', M.char, '#1f1f22'],
     ['japanese', '#a8602e', J.dark, J.sumi],
-  ], F(celloStand)),
+  ], fitBuild(celloStand)),
   define('int-e-bass', '电贝斯（支架）', 'music', [34.5, 46.5, 127], [
     ['modern', '#26262a', '#f4f4f2', '#d9b98c'],
     ['retro', R.orange, IVORY, '#d9b98c'],
     ['cute', C.mint, C.white, '#ead7b8'],
     ['industrial', '#3a5a3c', '#2b2b2b', I.walnut],
     ['retro', '#e0b07a', '#2b2b2b', '#d9b98c'],
-  ], F(eGuitarStand(true))),
+  ], fitBuild(eGuitarStand(true))),
   define('int-e-guitar-stand', '电吉他', 'music', [33.5, 43.5, 109.5], [
     ['retro', R.red, C.white, '#d9b98c'],
     ['cute', C.pink, C.white, '#ead7b8'],
     ['modern', '#26262a', '#26262a', '#d9b98c'],
     ['retro', R.teal, IVORY, '#d9b98c'],
     ['nordic', N.blue, N.white, N.oakL],
-  ], F(eGuitarStand(false)), { family: 'int-e-guitar', sizeLabel: '支架' }),
+  ], fitBuild(eGuitarStand(false)), { family: 'int-e-guitar', sizeLabel: '支架' }),
   define('int-e-guitar-wall', '电吉他', 'music', [32, 9, 100.5], [
     ['retro', R.red, C.white, '#d9b98c'],
     ['cute', C.pink, C.white, '#ead7b8'],
@@ -3654,7 +3643,7 @@ const MUSIC: AssetDef[] = [
     ['retro', R.cream, '#a8683a', R.caramel],
     ['industrial', I.iron, '#6b5a48', I.steel],
     ['cute', C.mint, C.cream, C.white],
-  ], F(guitarAmp)),
+  ], fitBuild(guitarAmp)),
   define('int-sax-stand', '萨克斯（支架）', 'music', [34.5, 23.5, 78.5], [
     ['retro', BRASS, DARK, '#f4ead2'],
     ['modern', '#c3c7cc', DARK, '#f4f4f2'],
@@ -3675,7 +3664,7 @@ const MUSIC: AssetDef[] = [
     ['modern', '#2a2a2e', '#d5d9de', DARK],
     ['retro', '#3a2a22', BRASS, '#3a2a22'],
     ['nordic', '#2a2a2e', '#d5d9de', N.oak],
-  ], F(clarinetStand), PROP),
+  ], fitBuild(clarinetStand), PROP),
   define('int-harmonica', '口琴', 'music', [12.8, 7.9, 2.4], [
     ['modern', '#d5d9de', '#3d3f44', '#26262a'],
     ['retro', '#d5d9de', R.caramel, R.red],
@@ -3686,7 +3675,7 @@ const MUSIC: AssetDef[] = [
     ['retro', R.teal, R.cream, METAL],
     ['modern', '#26262a', '#f4f4f2', '#c3c7cc'],
     ['cute', C.pink, C.white, C.lemon],
-  ], F(accordion), PROP),
+  ], fitBuild(accordion), PROP),
   define('int-harp', '竖琴', 'music', [68, 30, 162], [
     ['nordic', N.oak, '#f2ead8', GOLD],
     ['retro', R.caramel, '#f2ead8', BRASS],
@@ -3747,7 +3736,7 @@ const MUSIC: AssetDef[] = [
     ['modern', '#26262a', M.white, METAL],
     ['cute', C.pink, C.white, C.lemon],
     ['nordic', N.oak, N.white, METAL],
-  ], F(metronome), PROP),
+  ], fitBuild(metronome), PROP),
 ]
 
 const MANGA_PALS: PalFlat[] = [

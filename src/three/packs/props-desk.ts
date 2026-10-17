@@ -726,7 +726,7 @@ function hgRadius(y: number) {
   if (u < 0.6) return HG.neck + (HG.bulb - HG.neck) * Math.sqrt(Math.sin(((u / 0.6) * Math.PI) / 2))
   return HG.cap + (HG.bulb - HG.cap) * Math.sqrt(Math.cos((((u - 0.6) / 0.4) * Math.PI) / 2))
 }
-function lathe(pts: [number, number][], color: string) {
+function latheBare(pts: [number, number][], color: string) {
   return new THREE.Mesh(
     new THREE.LatheGeometry(
       pts.map(([r, y]) => new THREE.Vector2(r, y)),
@@ -748,15 +748,15 @@ function hourglass(p: string[]) {
   const steps = (a: number, b: number, n: number) => Array.from({ length: n + 1 }, (_, i) => a + ((b - a) * i) / n)
   // 玻璃：从底盖到顶盖的连续轮廓
   const glass: [number, number][] = steps(HG.y0, HG.y1, 28).map((y) => [hgRadius(y), y])
-  g.add(ghostOutlined(noOutline(lathe([[0, HG.y0], ...glass, [0, HG.y1]], C.glass)), C.glass, 0.3))
+  g.add(ghostOutlined(noOutline(latheBare([[0, HG.y0], ...glass, [0, HG.y1]], C.glass)), C.glass, 0.3))
   // 上泡的沙：贴着泡底（细颈往上）到平整的沙面，沙面中间微微凹下
   const top = mid + 2.6
   const upper: [number, number][] = steps(mid + 0.1, top, 8).map((y) => [hgRadius(y) * 0.94, y])
-  g.add(lathe([[0, mid + 0.1], ...upper, [hgRadius(top) * 0.5, top - 0.15], [0, top - 0.4]], sand))
+  g.add(latheBare([[0, mid + 0.1], ...upper, [hgRadius(top) * 0.5, top - 0.15], [0, top - 0.4]], sand))
   // 下泡的沙堆：铺满泡底、往上隆成小丘
   const base = HG.y0 + 0.1
   const lower: [number, number][] = steps(base, base + 1.4, 4).map((y) => [hgRadius(y) * 0.94, y])
-  g.add(lathe([[0, base], ...lower, [hgRadius(base + 1.4) * 0.55, base + 2.3], [0.5, base + 2.9], [0, base + 3]], sand))
+  g.add(latheBare([[0, base], ...lower, [hgRadius(base + 1.4) * 0.55, base + 2.3], [0.5, base + 2.9], [0, base + 3]], sand))
   // 正在落下的一缕沙
   g.add(cyl(0.1, 0.1, mid + 0.1 - (base + 3), sand, { y: base + 3 }, 6))
   return g
