@@ -12,7 +12,7 @@ import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, SWING_OPEN, ellipsePoly, holePanel, movable, rectPoly, rng, rod, shell, slab, type AssetCategory, type AssetDef, type Hole, type Poly, type StyleTag, type SurfaceDef } from '../kit'
 import { PI, box3, clearDeep, cylXLegacy, cylZLegacy, rod3 } from '../geo'
-import { I, J, M, N, R, type Build, type Dims, type Pal } from '../packkit'
+import { I, J, M, N, R, define, type Build, type Dims, type Pal } from '../packkit'
 
 const STEEL = '#c3c7cc'
 const PAPER = '#fbfaf6'
@@ -22,24 +22,8 @@ const GLASS = '#dff2fb'
 
 // ---------- 定义 ----------
 
-function asset(id: string, name: string, category: AssetCategory, [w, d, h]: Dims, pals: Pal[], build: Build, extra: Partial<AssetDef> = {}): AssetDef {
-  return {
-    id,
-    name,
-    category,
-    w,
-    d,
-    h,
-    palettes: pals.map((x) => x[1]),
-    paletteStyles: pals.map((x) => x[0]),
-    styles: [...new Set(pals.map((x) => x[0]))],
-    build,
-    ...extra,
-  }
-}
-
 const prop = (id: string, name: string, category: AssetCategory, dims: Dims, pals: Pal[], build: Build, extra: Partial<AssetDef> = {}) =>
-  asset(id, name, category, dims, pals, build, { prop: true, ...extra })
+  define(id, name, category, dims, pals, build, { prop: true, ...extra })
 
 // ---------- 小工具 ----------
 
@@ -1324,7 +1308,7 @@ function washBasket(p: string[]) {
 
 const TOILET: AssetDef[] = [
   ...TOILET_RACKS.map(({ label, s }) =>
-    asset(`wet-toilet-rack-${s.tops.length}`, '马桶置物架', 'storage', [s.w, s.d, rackH(s)], RACK_PALS, rack(s), {
+    define(`wet-toilet-rack-${s.tops.length}`, '马桶置物架', 'storage', [s.w, s.d, rackH(s)], RACK_PALS, rack(s), {
       family: 'toilet-rack',
       sizeLabel: label,
       surface: s.tops[s.tops.length - 1],
@@ -1332,12 +1316,12 @@ const TOILET: AssetDef[] = [
       surfaces: rackSurfaces(s),
     }),
   ),
-  asset('wet-toilet-wall-cabinet', '厕所吊柜', 'storage', [TOILET_CAB.w, TOILET_CAB.d, cabLayout(TOILET_CAB).h], CAB_PALS, cabinet(TOILET_CAB, TOILET_CAB_MOUNT), {
+  define('wet-toilet-wall-cabinet', '厕所吊柜', 'storage', [TOILET_CAB.w, TOILET_CAB.d, cabLayout(TOILET_CAB).h], CAB_PALS, cabinet(TOILET_CAB, TOILET_CAB_MOUNT), {
     mount: TOILET_CAB_MOUNT,
     surfaces: cabSurfaces(TOILET_CAB, TOILET_CAB_MOUNT),
     openable: true,
   }),
-  asset('wet-toilet-slim-cabinet', '厕所角落窄柜', 'storage', [TOILET_SLIM.w, TOILET_SLIM.d, cabLayout(TOILET_SLIM).h], CAB_PALS, cabinet(TOILET_SLIM), {
+  define('wet-toilet-slim-cabinet', '厕所角落窄柜', 'storage', [TOILET_SLIM.w, TOILET_SLIM.d, cabLayout(TOILET_SLIM).h], CAB_PALS, cabinet(TOILET_SLIM), {
     surface: cabLayout(TOILET_SLIM).h,
     surfaces: cabSurfaces(TOILET_SLIM),
     openable: true,
@@ -1345,12 +1329,12 @@ const TOILET: AssetDef[] = [
   prop('wet-tp-stack', '卷筒纸', 'toiletry', [11, 11, 33], TP_PALS, tpStack, { family: 'tp-pack', sizeLabel: '3 卷叠放' }),
   prop('wet-tp-4pack', '卷筒纸', 'toiletry', [22.9, 22.9, 11.8], TP_PALS, tpPack(2, 2, 1, false), { family: 'tp-pack', sizeLabel: '4 卷装' }),
   prop('wet-tp-12pack', '卷筒纸', 'toiletry', [33.9, 22.9, 26.5], TP_PALS, tpPack(3, 2, 2, true), { family: 'tp-pack', sizeLabel: '12 卷装' }),
-  asset('wet-tp-holder', '卷纸架', 'toiletry', [14, 13, 13.4], PLA_PALS.map(([s, c]) => [s, [c[2] === C.sky ? C.white : c[1], PAPER]] as Pal), tpHolder, {
+  define('wet-tp-holder', '卷纸架', 'toiletry', [14, 13, 13.4], PLA_PALS.map(([s, c]) => [s, [c[2] === C.sky ? C.white : c[1], PAPER]] as Pal), tpHolder, {
     family: 'tp-holder',
     sizeLabel: '单联',
     mount: TPH_MOUNT,
   }),
-  asset('wet-tp-holder-double', '卷纸架', 'toiletry', [33, 14, 14.2], [
+  define('wet-tp-holder-double', '卷纸架', 'toiletry', [33, 14, 14.2], [
     ['modern', [M.silver, PAPER, M.white]],
     ['nordic', [N.white, PAPER, N.oak]],
     ['industrial', [I.iron, PAPER, I.walnut]],
@@ -1415,7 +1399,7 @@ const BATH: AssetDef[] = [
     ['modern', [M.light, M.char]],
   ], bathSponge),
   ...[25, 35].map((h) =>
-    asset(`wet-bath-stool-${h}`, '浴凳', 'toiletry', [32, 25, h], HINOKI_PALS, bathStool(h), {
+    define(`wet-bath-stool-${h}`, '浴凳', 'toiletry', [32, 25, h], HINOKI_PALS, bathStool(h), {
       family: 'bath-stool',
       sizeLabel: h === 25 ? '低 25' : '高 35',
       surface: h,
@@ -1457,7 +1441,7 @@ const BATH: AssetDef[] = [
     ['modern', [M.white, M.char, M.gray]],
   ], bathSaltJar),
   ...[2, 3].map((n) =>
-    asset(`wet-bath-corner-shelf-${n}`, '浴室转角架', 'storage', [24, 24, cornerH(n)], WIRE_PALS, cornerShelf(n), {
+    define(`wet-bath-corner-shelf-${n}`, '浴室转角架', 'storage', [24, 24, cornerH(n)], WIRE_PALS, cornerShelf(n), {
       family: 'bath-corner-shelf',
       sizeLabel: `三角钢丝 ${n} 层`,
       mount: CORNER_MOUNT - 4.4,
@@ -1466,7 +1450,7 @@ const BATH: AssetDef[] = [
       surfaces: Array.from({ length: n - 1 }, (_, i) => ({ y: CORNER_MOUNT + i * CORNER_GAP + 1.2, shape: [TRI(1.5)] })),
     }),
   ),
-  asset('wet-wire-basket', '不锈钢挂篮', 'storage', [WB.w, WB.d, WB.h], WIRE_PALS, wireBasket, {
+  define('wet-wire-basket', '不锈钢挂篮', 'storage', [WB.w, WB.d, WB.h], WIRE_PALS, wireBasket, {
     mount: WB.mount,
     surfaces: [{ y: WB.mount + 0.6, shape: [rectPoly(-WB.w / 2 + 1, -WB.d / 2 + 1, WB.w / 2 - 1, WB.d / 2 - 1)] }],
   }),
@@ -1483,7 +1467,7 @@ const tc45 = tallCab(45)
 
 const DRESSING: AssetDef[] = [
   ...LAUNDRY_RACKS.map(({ label, s }) =>
-    asset(`wet-laundry-rack-${s.w}`, '洗衣机置物架', 'storage', [s.w, s.d, rackH(s)], RACK_PALS, rack(s), {
+    define(`wet-laundry-rack-${s.w}`, '洗衣机置物架', 'storage', [s.w, s.d, rackH(s)], RACK_PALS, rack(s), {
       family: 'laundry-rack',
       sizeLabel: label,
       surface: s.tops[s.tops.length - 1],
@@ -1492,7 +1476,7 @@ const DRESSING: AssetDef[] = [
     }),
   ),
   ...[tc30, tc45].map((s) =>
-    asset(`wet-washroom-tall-${s.w}`, '洗面所窄高柜', 'storage', [s.w, s.d, cabLayout(s).h], CAB_PALS, cabinet(s), {
+    define(`wet-washroom-tall-${s.w}`, '洗面所窄高柜', 'storage', [s.w, s.d, cabLayout(s).h], CAB_PALS, cabinet(s), {
       family: 'washroom-tall',
       sizeLabel: `${s.w}`,
       surface: cabLayout(s).h,
@@ -1500,12 +1484,12 @@ const DRESSING: AssetDef[] = [
       openable: true,
     }),
   ),
-  asset('wet-washroom-wall-cabinet', '洗面所吊柜', 'storage', [WASH_CAB.w, WASH_CAB.d, cabLayout(WASH_CAB).h], CAB_PALS, cabinet(WASH_CAB, WASH_CAB_MOUNT), {
+  define('wet-washroom-wall-cabinet', '洗面所吊柜', 'storage', [WASH_CAB.w, WASH_CAB.d, cabLayout(WASH_CAB).h], CAB_PALS, cabinet(WASH_CAB, WASH_CAB_MOUNT), {
     mount: WASH_CAB_MOUNT,
     surfaces: cabSurfaces(WASH_CAB, WASH_CAB_MOUNT),
     openable: true,
   }),
-  asset('wet-mirror-cabinet', '镜柜', 'storage', [MC.w, MC.d, MC.h], CAB_PALS, mirrorCabinet, {
+  define('wet-mirror-cabinet', '镜柜', 'storage', [MC.w, MC.d, MC.h], CAB_PALS, mirrorCabinet, {
     mount: MC.mount,
     surfaces: [
       { y: MC.mount + 1.5, shape: [rectPoly(-28.4, -6.4, 28.4, 5.2)] },
@@ -1519,10 +1503,10 @@ const DRESSING: AssetDef[] = [
     ],
     openable: true,
   }),
-  asset('wet-towel-stand', '落地浴巾架', 'storage', [TS.w, TS.d, 83.5], RACK_PALS.map(([s, c]): Pal => [s, [c[1] === M.silver ? M.silver : c[0], c[1]]]), towelStand, {
+  define('wet-towel-stand', '落地浴巾架', 'storage', [TS.w, TS.d, 83.5], RACK_PALS.map(([s, c]): Pal => [s, [c[1] === M.silver ? M.silver : c[0], c[1]]]), towelStand, {
     surfaces: TS_BARS.map(([y, z]) => ({ y: y + TS.barR + 0.5, kind: 'hook' as const, shape: [rectPoly(-TS.w / 2 + 5, z - 1.5, TS.w / 2 - 5, z + 1.5)] })),
   }),
-  asset('wet-towel-shelf', '壁挂浴巾架', 'storage', [TW.w, TW.d, 21.8], RACK_PALS, towelShelf, {
+  define('wet-towel-shelf', '壁挂浴巾架', 'storage', [TW.w, TW.d, 21.8], RACK_PALS, towelShelf, {
     mount: TW.mount,
     surface: TW.mount + 21.8,
     surfaceShape: [rectPoly(-TW.w / 2 + 1, -TW.d / 2 + 1, TW.w / 2 - 1, TW.d / 2 - 1)],
@@ -1543,7 +1527,7 @@ const DRESSING: AssetDef[] = [
     ['cute', [C.sakura, C.white]],
     ['nordic', [N.oakL, N.white]],
   ], bodyScale, { family: 'body-scale', sizeLabel: '基础款' }),
-  asset('wet-dryer-holder', '吹风机挂架', 'storage', [DH.w, DH.d, DH.h], [
+  define('wet-dryer-holder', '吹风机挂架', 'storage', [DH.w, DH.d, DH.h], [
     ['modern', [M.white, M.gray]],
     ['modern', [M.black, M.gray]],
     ['nordic', [N.white, N.oak]],
@@ -1599,13 +1583,13 @@ const DRESSING: AssetDef[] = [
     ['retro', [R.teal, R.cream]],
     ['modern', [M.char, M.silver]],
   ], ironModel),
-  asset('wet-ironing-board-open', '熨衣板', 'storage', [110, 34, 86], [
+  define('wet-ironing-board-open', '熨衣板', 'storage', [110, 34, 86], [
     ['nordic', [N.linen, N.white]],
     ['modern', [M.light, M.char]],
     ['cute', [C.sakura, C.white]],
     ['retro', [R.mustard, R.cream]],
   ], ironingBoardOpen, { family: 'ironing-board', form: 'open', surface: IB_Y + 2, surfaceShape: [boardPoly(2)] }),
-  asset('wet-ironing-board-folded', '熨衣板', 'storage', [34, 4.4, 110], [
+  define('wet-ironing-board-folded', '熨衣板', 'storage', [34, 4.4, 110], [
     ['nordic', [N.linen, N.white]],
     ['modern', [M.light, M.char]],
     ['cute', [C.sakura, C.white]],
@@ -1618,7 +1602,7 @@ const DRESSING: AssetDef[] = [
       prop(`wet-clear-case-${k.toLowerCase()}-open`, '半透明收纳箱', 'storage', [c.w + 0.8, c.d + 1.7, c.h + c.d + 0.8], CASE_PALS, clearCase(c, true), { family: 'clear-case', sizeLabel: k, form: 'open' }),
     ]
   }),
-  asset('wet-drawer-chest', '抽屉式收纳盒', 'storage', [DC.w, DC.d, DC.h], [
+  define('wet-drawer-chest', '抽屉式收纳盒', 'storage', [DC.w, DC.d, DC.h], [
     ['modern', [M.white, M.light, M.gray]],
     ['nordic', [N.white, N.oak, N.gray]],
     ['cute', [C.white, C.sakura, C.pink]],

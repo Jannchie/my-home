@@ -3,10 +3,10 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
-import { C, ellipsePoly, glow, rectPoly, rng, shell, slab, type AssetCategory, type AssetDef, type Poly } from '../kit'
+import { C, ellipsePoly, glow, rectPoly, rng, shell, slab, type AssetDef, type Poly } from '../kit'
 import { hollow, swingDoor } from './styles-world'
 import { P, PI, batten, centerGroup, cylX, cylZ, ghostOutlined, litOutlined, noOutline, rod3, type V3 } from '../geo'
-import { I, J, M, N, PROP, R, type PalFlat } from '../packkit'
+import { I, J, M, N, PROP, R, define, type PalFlat } from '../packkit'
 
 const MIR = '#cfdfe9'
 const SCREEN = '#bfe3ff'
@@ -15,30 +15,6 @@ const CHROME = '#d5d9de'
 const TEA = '#9dbb55'
 const BLACK_TEA = '#b8652c'
 const COFFEE = '#a8724a'
-
-function def(
-  id: string,
-  name: string,
-  category: AssetCategory,
-  [w, d, h]: [number, number, number],
-  pals: PalFlat[],
-  build: (p: string[]) => THREE.Group,
-  extra: Partial<AssetDef> = {},
-): AssetDef {
-  return {
-    id,
-    name,
-    category,
-    w,
-    d,
-    h,
-    palettes: pals.map((x) => x.slice(1) as string[]),
-    paletteStyles: pals.map((x) => x[0]),
-    styles: [...new Set(pals.map((x) => x[0]))],
-    build,
-    ...extra,
-  }
-}
 
 // ---------- 小工具 ----------
 
@@ -679,11 +655,11 @@ function floorTiles(p: string[]) {
 }
 
 const FITNESS: AssetDef[] = [
-  def('fit-dumbbell-2', '哑铃', 'fitness', [22.6, 8.8, 7.6], DB_PALS, (p) => dumbbellHex(22, 4.4, p[0], p[1], p[2]), { ...PROP, family: 'dumbbell', sizeLabel: '2kg' }),
-  def('fit-dumbbell-5', '哑铃', 'fitness', [30, 12, 12], DB_PALS, (p) => dumbbellRound(30, 6, p[0], p[1], p[2]), { ...PROP, family: 'dumbbell', sizeLabel: '5kg' }),
-  def('fit-dumbbell-10', '哑铃', 'fitness', [36, 16, 16], DB_PALS, (p) => dumbbellRound(36, 8, p[0], p[1], p[2]), { ...PROP, family: 'dumbbell', sizeLabel: '10kg' }),
-  def('fit-dumbbell-adj', '哑铃', 'fitness', [44.4, 22, 21], DB_PALS, adjustableDumbbell, { ...PROP, family: 'dumbbell', sizeLabel: '可调式' }),
-  def(
+  define('fit-dumbbell-2', '哑铃', 'fitness', [22.6, 8.8, 7.6], DB_PALS, (p) => dumbbellHex(22, 4.4, p[0], p[1], p[2]), { ...PROP, family: 'dumbbell', sizeLabel: '2kg' }),
+  define('fit-dumbbell-5', '哑铃', 'fitness', [30, 12, 12], DB_PALS, (p) => dumbbellRound(30, 6, p[0], p[1], p[2]), { ...PROP, family: 'dumbbell', sizeLabel: '5kg' }),
+  define('fit-dumbbell-10', '哑铃', 'fitness', [36, 16, 16], DB_PALS, (p) => dumbbellRound(36, 8, p[0], p[1], p[2]), { ...PROP, family: 'dumbbell', sizeLabel: '10kg' }),
+  define('fit-dumbbell-adj', '哑铃', 'fitness', [44.4, 22, 21], DB_PALS, adjustableDumbbell, { ...PROP, family: 'dumbbell', sizeLabel: '可调式' }),
+  define(
     'fit-dumbbell-rack',
     '哑铃架',
     'fitness',
@@ -702,7 +678,7 @@ const FITNESS: AssetDef[] = [
     ['8kg', 7.5],
     ['16kg', 9.5],
   ] as const).map(([lab, r]) =>
-    def(
+    define(
       `fit-kettlebell-${lab}`,
       '壶铃',
       'fitness',
@@ -718,7 +694,7 @@ const FITNESS: AssetDef[] = [
       { ...PROP, family: 'kettlebell', sizeLabel: lab },
     ),
   ),
-  def(
+  define(
     'fit-barbell',
     '杠铃',
     'fitness',
@@ -731,9 +707,9 @@ const FITNESS: AssetDef[] = [
     ],
     barbell,
   ),
-  def('fit-bench-flat', '卧推凳', 'fitness', [50, 125, 45.5], BENCH_PALS, weightBench(0), { family: 'weight-bench', sizeLabel: '平板' }),
-  def('fit-bench-incline', '卧推凳', 'fitness', [50, 125, 92.2], BENCH_PALS, weightBench(0.7), { family: 'weight-bench', sizeLabel: '上斜' }),
-  def(
+  define('fit-bench-flat', '卧推凳', 'fitness', [50, 125, 45.5], BENCH_PALS, weightBench(0), { family: 'weight-bench', sizeLabel: '平板' }),
+  define('fit-bench-incline', '卧推凳', 'fitness', [50, 125, 92.2], BENCH_PALS, weightBench(0.7), { family: 'weight-bench', sizeLabel: '上斜' }),
+  define(
     'fit-power-rack',
     '深蹲架',
     'fitness',
@@ -747,7 +723,7 @@ const FITNESS: AssetDef[] = [
     powerRack(true),
     { family: 'power-rack', sizeLabel: '全框' },
   ),
-  def(
+  define(
     'fit-squat-stand',
     '深蹲架',
     'fitness',
@@ -761,7 +737,7 @@ const FITNESS: AssetDef[] = [
     powerRack(false),
     { family: 'power-rack', sizeLabel: '半架' },
   ),
-  def(
+  define(
     'fit-yoga-mat',
     '瑜伽垫',
     'fitness',
@@ -776,7 +752,7 @@ const FITNESS: AssetDef[] = [
     yogaMat,
     { family: 'yoga-mat', sizeLabel: '铺开' },
   ),
-  def(
+  define(
     'fit-yoga-mat-rolled',
     '瑜伽垫',
     'fitness',
@@ -791,7 +767,7 @@ const FITNESS: AssetDef[] = [
     yogaMatRolled,
     { ...PROP, family: 'yoga-mat', sizeLabel: '卷起' },
   ),
-  def(
+  define(
     'fit-yoga-ball',
     '瑜伽球',
     'fitness',
@@ -805,7 +781,7 @@ const FITNESS: AssetDef[] = [
     ],
     yogaBall,
   ),
-  def(
+  define(
     'fit-foam-roller',
     '泡沫轴',
     'fitness',
@@ -820,7 +796,7 @@ const FITNESS: AssetDef[] = [
     foamRoller,
     PROP,
   ),
-  def(
+  define(
     'fit-resistance-bands',
     '弹力带',
     'fitness',
@@ -834,7 +810,7 @@ const FITNESS: AssetDef[] = [
     resistanceBands,
     PROP,
   ),
-  def(
+  define(
     'fit-jump-rope',
     '跳绳',
     'fitness',
@@ -848,7 +824,7 @@ const FITNESS: AssetDef[] = [
     jumpRope,
     PROP,
   ),
-  def(
+  define(
     'fit-pushup-bars',
     '俯卧撑架',
     'fitness',
@@ -862,7 +838,7 @@ const FITNESS: AssetDef[] = [
     pushupBars,
     PROP,
   ),
-  def(
+  define(
     'fit-ab-wheel',
     '腹肌轮',
     'fitness',
@@ -876,7 +852,7 @@ const FITNESS: AssetDef[] = [
     abWheel,
     PROP,
   ),
-  def(
+  define(
     'fit-pullup-bar',
     '门框引体向上杆',
     'fitness',
@@ -890,12 +866,12 @@ const FITNESS: AssetDef[] = [
     pullupBar,
     { mount: PULLUP_MOUNT },
   ),
-  def('fit-treadmill-home', '跑步机', 'fitness', [70, 160, 128], TREAD_PALS, treadmill(70, 160, 130, false), { family: 'treadmill', sizeLabel: '家用折叠' }),
-  def('fit-treadmill-gym', '跑步机', 'fitness', [90, 205, 160], TREAD_PALS, treadmill(90, 205, 160, true), { family: 'treadmill', sizeLabel: '健身房款' }),
-  def('fit-spin-bike', '动感单车', 'fitness', [55, 115, 113], BIKE_PALS, spinBike),
-  def('fit-rower', '划船机', 'fitness', [55, 206, 84], BIKE_PALS, rower),
-  def('fit-elliptical', '椭圆机', 'fitness', [60, 160, 160], TREAD_PALS, elliptical),
-  def(
+  define('fit-treadmill-home', '跑步机', 'fitness', [70, 160, 128], TREAD_PALS, treadmill(70, 160, 130, false), { family: 'treadmill', sizeLabel: '家用折叠' }),
+  define('fit-treadmill-gym', '跑步机', 'fitness', [90, 205, 160], TREAD_PALS, treadmill(90, 205, 160, true), { family: 'treadmill', sizeLabel: '健身房款' }),
+  define('fit-spin-bike', '动感单车', 'fitness', [55, 115, 113], BIKE_PALS, spinBike),
+  define('fit-rower', '划船机', 'fitness', [55, 206, 84], BIKE_PALS, rower),
+  define('fit-elliptical', '椭圆机', 'fitness', [60, 160, 160], TREAD_PALS, elliptical),
+  define(
     'fit-scale',
     '体重秤',
     'fitness',
@@ -909,7 +885,7 @@ const FITNESS: AssetDef[] = [
     bodyScale,
     { ...PROP, family: 'body-scale', sizeLabel: '健身款' },
   ),
-  def(
+  define(
     'fit-punching-bag',
     '拳击沙袋',
     'fitness',
@@ -923,7 +899,7 @@ const FITNESS: AssetDef[] = [
     punchingBagStand,
     { family: 'punching-bag', sizeLabel: '落地' },
   ),
-  def(
+  define(
     'fit-punching-bag-hang',
     '拳击沙袋',
     'fitness',
@@ -937,7 +913,7 @@ const FITNESS: AssetDef[] = [
     punchingBagHang,
     { family: 'punching-bag', sizeLabel: '吊挂', mount: BAG_MOUNT },
   ),
-  def(
+  define(
     'fit-floor-tiles',
     '健身拼接地垫',
     'fitness',
@@ -1088,7 +1064,7 @@ function teaTraySet(p: string[]) {
 }
 
 const CUPS: AssetDef[] = [
-  def(
+  define(
     'cup-yunomi',
     '汤吞茶杯',
     'kitchenware',
@@ -1103,7 +1079,7 @@ const CUPS: AssetDef[] = [
     yunomi,
     { ...PROP, fx: [{ kind: 'steam', x: 0, y: 9, z: 0, scale: 0.6 }] },
   ),
-  def(
+  define(
     'cup-teacup-saucer',
     '红茶杯碟',
     'kitchenware',
@@ -1117,7 +1093,7 @@ const CUPS: AssetDef[] = [
     teacupSaucer,
     { ...PROP, fx: [{ kind: 'steam', x: 0, y: 6.2, z: 0, scale: 0.7 }] },
   ),
-  def(
+  define(
     'cup-glass-tea',
     '玻璃茶杯',
     'kitchenware',
@@ -1132,7 +1108,7 @@ const CUPS: AssetDef[] = [
     glassTea,
     { ...PROP, fx: [{ kind: 'steam', x: 0, y: 9.5, z: 0, scale: 0.6 }] },
   ),
-  def(
+  define(
     'cup-gaiwan',
     '盖碗',
     'kitchenware',
@@ -1147,7 +1123,7 @@ const CUPS: AssetDef[] = [
     gaiwan,
     PROP,
   ),
-  def(
+  define(
     'cup-aroma-set',
     '闻香杯组',
     'kitchenware',
@@ -1161,7 +1137,7 @@ const CUPS: AssetDef[] = [
     aromaSet,
     { ...PROP, fx: [{ kind: 'steam', x: 3.4, y: 3.5, z: 0, scale: 0.5 }] },
   ),
-  def(
+  define(
     'cup-latte',
     '拿铁杯碟',
     'kitchenware',
@@ -1176,7 +1152,7 @@ const CUPS: AssetDef[] = [
     latteCup,
     { ...PROP, fx: [{ kind: 'steam', x: 0, y: 6.75, z: 0, scale: 0.7 }] },
   ),
-  def(
+  define(
     'cup-guinomi',
     'ぐい呑み小酒杯',
     'kitchenware',
@@ -1190,7 +1166,7 @@ const CUPS: AssetDef[] = [
     guinomi,
     PROP,
   ),
-  def(
+  define(
     'cup-tea-tray-set',
     '功夫茶盘套组',
     'kitchenware',
@@ -1951,7 +1927,7 @@ const MODEL_BASE: PalFlat[] = [
 ]
 
 const HOBBY_ITEMS: AssetDef[] = [
-  def(
+  define(
     'hb-printer-fdm',
     '3D 打印机（FDM）',
     'hobby',
@@ -1966,7 +1942,7 @@ const HOBBY_ITEMS: AssetDef[] = [
     printerFdm,
     PROP,
   ),
-  def(
+  define(
     'hb-printer-resin',
     '光固化 3D 打印机',
     'hobby',
@@ -1980,7 +1956,7 @@ const HOBBY_ITEMS: AssetDef[] = [
     printerResin,
     PROP,
   ),
-  def(
+  define(
     'hb-printer-box',
     '封闭式 3D 打印机',
     'hobby',
@@ -1994,7 +1970,7 @@ const HOBBY_ITEMS: AssetDef[] = [
     printerBox,
     PROP,
   ),
-  def(
+  define(
     'hb-filament-rack',
     '耗材架',
     'hobby',
@@ -2008,8 +1984,8 @@ const HOBBY_ITEMS: AssetDef[] = [
     filamentRack,
     { surface: 110 },
   ),
-  def('hb-plane-airliner', '客机模型', 'hobby', [34.2, 36, 22.8], MODEL_BASE, airliner, PROP),
-  def(
+  define('hb-plane-airliner', '客机模型', 'hobby', [34.2, 36, 22.8], MODEL_BASE, airliner, PROP),
+  define(
     'hb-plane-fighter',
     '战斗机模型',
     'hobby',
@@ -2023,7 +1999,7 @@ const HOBBY_ITEMS: AssetDef[] = [
     fighter,
     PROP,
   ),
-  def(
+  define(
     'hb-plane-prop',
     '螺旋桨小飞机模型',
     'hobby',
@@ -2037,7 +2013,7 @@ const HOBBY_ITEMS: AssetDef[] = [
     propPlane,
     PROP,
   ),
-  def(
+  define(
     'hb-plane-heli',
     '直升机模型',
     'hobby',
@@ -2051,7 +2027,7 @@ const HOBBY_ITEMS: AssetDef[] = [
     helicopter,
     PROP,
   ),
-  def(
+  define(
     'hb-drone',
     '无人机',
     'hobby',
@@ -2065,7 +2041,7 @@ const HOBBY_ITEMS: AssetDef[] = [
     drone,
     PROP,
   ),
-  def(
+  define(
     'hb-train-layout',
     '铁道模型展示台',
     'hobby',
@@ -2079,7 +2055,7 @@ const HOBBY_ITEMS: AssetDef[] = [
     trainLayout,
     PROP,
   ),
-  def(
+  define(
     'hb-shinkansen',
     '新干线模型展示轨',
     'hobby',
@@ -2099,7 +2075,7 @@ const HOBBY_ITEMS: AssetDef[] = [
     ['HO 规', 0.66],
     ['O 规', 1],
   ] as const).map(([lab, k], i) =>
-    def(
+    define(
       ['hb-steam-loco-n', 'hb-steam-loco-ho', 'hb-steam-loco-o'][i],
       '蒸汽机车模型',
       'hobby',
@@ -2115,7 +2091,7 @@ const HOBBY_ITEMS: AssetDef[] = [
       { ...PROP, family: 'steam-loco', sizeLabel: lab },
     ),
   ),
-  def(
+  define(
     'hb-gunpla',
     '拼装机器人模型',
     'hobby',
@@ -2130,7 +2106,7 @@ const HOBBY_ITEMS: AssetDef[] = [
     (p) => centerGroup(gunpla(p)),
     PROP,
   ),
-  def(
+  define(
     'hb-display-case',
     '模型展示罩',
     'hobby',
@@ -2144,7 +2120,7 @@ const HOBBY_ITEMS: AssetDef[] = [
     displayCase,
     PROP,
   ),
-  def(
+  define(
     'hb-model-workmat',
     '模型工作垫与工具',
     'hobby',
@@ -2158,7 +2134,7 @@ const HOBBY_ITEMS: AssetDef[] = [
     workMat,
     PROP,
   ),
-  def(
+  define(
     'hb-airbrush',
     '喷笔与气泵',
     'hobby',
@@ -2172,7 +2148,7 @@ const HOBBY_ITEMS: AssetDef[] = [
     airbrushSet,
     PROP,
   ),
-  def(
+  define(
     'hb-jigsaw',
     '拼图',
     'hobby',
@@ -2187,7 +2163,7 @@ const HOBBY_ITEMS: AssetDef[] = [
     jigsaw,
     PROP,
   ),
-  def(
+  define(
     'hb-puzzle-toys',
     '益智玩具组（汉诺塔 + 鲁班锁）',
     'hobby',
@@ -2201,7 +2177,7 @@ const HOBBY_ITEMS: AssetDef[] = [
     puzzleToys,
     PROP,
   ),
-  def(
+  define(
     'hb-celestial-globe',
     '天体仪',
     'hobby',
@@ -2216,7 +2192,7 @@ const HOBBY_ITEMS: AssetDef[] = [
     celestialGlobe,
     PROP,
   ),
-  def(
+  define(
     'hb-telescope',
     '天文望远镜',
     'hobby',
@@ -2230,8 +2206,8 @@ const HOBBY_ITEMS: AssetDef[] = [
     ],
     telescope,
   ),
-  def('hb-guitar', '吉他（带支架）', 'hobby', [38.2, 42.2, 112.6], GUITAR_PALS, guitar(1)),
-  def(
+  define('hb-guitar', '吉他（带支架）', 'hobby', [38.2, 42.2, 112.6], GUITAR_PALS, guitar(1)),
+  define(
     'hb-keyboard',
     '电子琴（带支架）',
     'hobby',
@@ -2245,7 +2221,7 @@ const HOBBY_ITEMS: AssetDef[] = [
     ],
     keyboard,
   ),
-  def(
+  define(
     'hb-ukulele',
     '尤克里里（带支架）',
     'hobby',
@@ -2260,7 +2236,7 @@ const HOBBY_ITEMS: AssetDef[] = [
     guitar(0.52),
     PROP,
   ),
-  def('hb-easel', '画架', 'hobby', [64, 50, 175], EASEL_PALS, easel),
+  define('hb-easel', '画架', 'hobby', [64, 50, 175], EASEL_PALS, easel),
 ]
 
 // ======================================================================
@@ -2543,20 +2519,20 @@ const WALL_MIR_PALS: PalFlat[] = [
 ]
 
 const MIRRORS: AssetDef[] = [
-  def('mir-floor-arch', '落地镜', 'bedroom', [60, 50.4, 165.4], FLOOR_MIR_PALS, floorArch, { family: 'floor-mirror', sizeLabel: '拱形' }),
-  def('mir-floor-cheval', '落地镜', 'bedroom', [63, 44, 157.2], FLOOR_MIR_PALS, floorCheval, { family: 'floor-mirror', sizeLabel: '长方形' }),
-  def('mir-floor-oval', '落地镜', 'bedroom', [50, 36, 155], FLOOR_MIR_PALS, floorOval, { family: 'floor-mirror', sizeLabel: '椭圆' }),
-  def('mir-floor-led', '落地镜', 'bedroom', [52, 48, 159.5], FLOOR_MIR_PALS, floorLed, { family: 'floor-mirror', sizeLabel: '带灯' }),
-  def('mir-floor-lean', '落地镜', 'bedroom', [70, 34, 178], FLOOR_MIR_PALS, floorLean, { family: 'floor-mirror', sizeLabel: '靠墙斜放' }),
-  def('mir-floor-wheel', '落地镜', 'bedroom', [50, 40, 162], FLOOR_MIR_PALS, floorWheel, { family: 'floor-mirror', sizeLabel: '带轮移动' }),
-  def('mir-table-round', '圆形台镜', 'bedroom', [20.2, 8, 22.6], TABLE_MIR_PALS, tableRound, PROP),
-  def('mir-table-swivel', '双面放大镜', 'bedroom', [20.6, 14, 34.3], TABLE_MIR_PALS, tableSwivel, PROP),
-  def('mir-table-ring', 'LED 环灯化妆镜', 'bedroom', [23.4, 10, 34.7], TABLE_MIR_PALS, tableRing, PROP),
-  def('mir-table-trifold', '折叠三面镜', 'bedroom', [34, 11, 28], TABLE_MIR_PALS, tableTrifold, PROP),
-  def('mir-hand-stand', '复古手持镜（带支架）', 'bedroom', [12, 10, 28.5], TABLE_MIR_PALS, handMirror, PROP),
-  def('mir-wall-round', '圆形壁镜', 'deco', [60, 2.5, 60], WALL_MIR_PALS, wallRound, { mount: WALL_MIR_MOUNT }),
-  def('mir-wall-sun', '太阳镜', 'deco', [80, 3.5, 80], WALL_MIR_PALS, wallSun, { mount: WALL_MIR_MOUNT }),
-  def(
+  define('mir-floor-arch', '落地镜', 'bedroom', [60, 50.4, 165.4], FLOOR_MIR_PALS, floorArch, { family: 'floor-mirror', sizeLabel: '拱形' }),
+  define('mir-floor-cheval', '落地镜', 'bedroom', [63, 44, 157.2], FLOOR_MIR_PALS, floorCheval, { family: 'floor-mirror', sizeLabel: '长方形' }),
+  define('mir-floor-oval', '落地镜', 'bedroom', [50, 36, 155], FLOOR_MIR_PALS, floorOval, { family: 'floor-mirror', sizeLabel: '椭圆' }),
+  define('mir-floor-led', '落地镜', 'bedroom', [52, 48, 159.5], FLOOR_MIR_PALS, floorLed, { family: 'floor-mirror', sizeLabel: '带灯' }),
+  define('mir-floor-lean', '落地镜', 'bedroom', [70, 34, 178], FLOOR_MIR_PALS, floorLean, { family: 'floor-mirror', sizeLabel: '靠墙斜放' }),
+  define('mir-floor-wheel', '落地镜', 'bedroom', [50, 40, 162], FLOOR_MIR_PALS, floorWheel, { family: 'floor-mirror', sizeLabel: '带轮移动' }),
+  define('mir-table-round', '圆形台镜', 'bedroom', [20.2, 8, 22.6], TABLE_MIR_PALS, tableRound, PROP),
+  define('mir-table-swivel', '双面放大镜', 'bedroom', [20.6, 14, 34.3], TABLE_MIR_PALS, tableSwivel, PROP),
+  define('mir-table-ring', 'LED 环灯化妆镜', 'bedroom', [23.4, 10, 34.7], TABLE_MIR_PALS, tableRing, PROP),
+  define('mir-table-trifold', '折叠三面镜', 'bedroom', [34, 11, 28], TABLE_MIR_PALS, tableTrifold, PROP),
+  define('mir-hand-stand', '复古手持镜（带支架）', 'bedroom', [12, 10, 28.5], TABLE_MIR_PALS, handMirror, PROP),
+  define('mir-wall-round', '圆形壁镜', 'deco', [60, 2.5, 60], WALL_MIR_PALS, wallRound, { mount: WALL_MIR_MOUNT }),
+  define('mir-wall-sun', '太阳镜', 'deco', [80, 3.5, 80], WALL_MIR_PALS, wallSun, { mount: WALL_MIR_MOUNT }),
+  define(
     'mir-wall-cabinet',
     '浴室镜柜',
     'deco',

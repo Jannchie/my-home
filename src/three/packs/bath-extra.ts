@@ -10,28 +10,13 @@ import * as THREE from 'three'
 import { ball, cyl, rbox, shade, toon, torus } from '../toon'
 import { C, G, rectPoly, type AssetCategory, type AssetDef } from '../kit'
 import { PI, cylXLegacy, cylZLegacy } from '../geo'
-import { I, J, M, N, R, type Build, type Dims, type Pal } from '../packkit'
+import { I, J, M, N, R, define, type Build, type Dims, type Pal } from '../packkit'
 
 const CHROME = '#d9dee6'
 const MIRROR = '#d6ebf5'
 
-function asset(id: string, name: string, category: AssetCategory, [w, d, h]: Dims, pals: Pal[], build: Build, extra: Partial<AssetDef> = {}): AssetDef {
-  return {
-    id,
-    name,
-    category,
-    w,
-    d,
-    h,
-    palettes: pals.map((x) => x[1]),
-    paletteStyles: pals.map((x) => x[0]),
-    styles: [...new Set(pals.map((x) => x[0]))],
-    build,
-    ...extra,
-  }
-}
 const prop = (id: string, name: string, category: AssetCategory, dims: Dims, pals: Pal[], build: Build, extra: Partial<AssetDef> = {}) =>
-  asset(id, name, category, dims, pals, build, { prop: true, ...extra })
+  define(id, name, category, dims, pals, build, { prop: true, ...extra })
 
 // ---------- 小工具 ----------
 
@@ -531,24 +516,24 @@ const TOWEL_PALS: Pal[] = [
 const hookLevel = (x0: number, x1: number, rest: number, y: number) => ({ y, kind: 'hook' as const, shape: [rectPoly(x0, rest - 0.35 - 1.5, x1, rest - 0.35 + 1.5)] })
 
 const HOOKS: AssetDef[] = [
-  asset('bx-towel-hook', '毛巾挂钩', 'toiletry', [4.4, HK.d, 5.6], HOOK_PALS, towelHook, {
+  define('bx-towel-hook', '毛巾挂钩', 'toiletry', [4.4, HK.d, 5.6], HOOK_PALS, towelHook, {
     family: 'bx-towel-hook',
     sizeLabel: '单钩',
     mount: HK.mount,
     surfaces: [hookLevel(-1.2, 1.2, HK.tip - 1.2, HK.mount + 2.2 + 0.75 + 0.5)],
   }),
-  asset('bx-towel-hook-3', '毛巾挂钩', 'toiletry', [32, HK.d, 6], HOOK_PALS, towelHook3, {
+  define('bx-towel-hook-3', '毛巾挂钩', 'toiletry', [32, HK.d, 6], HOOK_PALS, towelHook3, {
     family: 'bx-towel-hook',
     sizeLabel: '三连',
     mount: HK.mount - 0.6,
     surfaces: [-11, 0, 11].map((x) => hookLevel(x - 1.2, x + 1.2, HK.tip - 1.2, HK.mount + 2.2 + 0.75 + 0.5)),
   }),
-  asset('bx-towel-ring', '毛巾环', 'toiletry', [TR.r * 2 + 1.1, TR.d, TR.r * 2 + 6.5], HOOK_PALS, towelRing, {
+  define('bx-towel-ring', '毛巾环', 'toiletry', [TR.r * 2 + 1.1, TR.d, TR.r * 2 + 6.5], HOOK_PALS, towelRing, {
     mount: TR.mount,
     // 挂点：环底内侧（面巾从环里穿过搭着）
     surfaces: [hookLevel(-4, 4, TR.z, TR.mount + 1.1 + 0.5)],
   }),
-  asset('bx-towel-bar-bath', '浴室毛巾杆', 'toiletry', [TBB.w, TBB.d, 4.8], HOOK_PALS, towelBarBath, {
+  define('bx-towel-bar-bath', '浴室毛巾杆', 'toiletry', [TBB.w, TBB.d, 4.8], HOOK_PALS, towelBarBath, {
     mount: TBB.mount,
     surfaces: [hookLevel(-TBB.w / 2 + 5, TBB.w / 2 - 5, TBB.barZ, TBB.mount + 2.4 + 0.9 + 0.5)],
   }),
@@ -564,7 +549,7 @@ const SHOWER_SET_D = 16.3
 const OTHER: AssetDef[] = [
   prop('bx-lid-zigzag', '浴缸盖（折叠式・收起）', 'toiletry', [72, 14.7, 22.4], LID_PALS, lidZigzag, { form: 'folded' }),
   prop('bx-lid-rolled-60', '浴缸盖（卷帘・卷起）', 'toiletry', [60, 17.2, 17.2], LID_PALS, lidRolledSmall, { form: 'lying' }),
-  asset('bx-shower-set', '淋浴组（水栓・滑杆・镜子）', 'toiletry', [64, SHOWER_SET_D, 147.1], SHOWER_PALS, (p) => {
+  define('bx-shower-set', '淋浴组（水栓・滑杆・镜子）', 'toiletry', [64, SHOWER_SET_D, 147.1], SHOWER_PALS, (p) => {
     const g = showerModel({ mode: 'side', full: true }, p)
     g.position.set(-32, 0, -SHOWER_SET_D / 2)
     return G(g)

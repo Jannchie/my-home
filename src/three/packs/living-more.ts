@@ -4,9 +4,9 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, face, puck, rbox, shade, toon, torus, tray } from '../toon'
-import { C, SWING_OPEN, ellipsePoly, glow, holePanel, movable, paintPanel, rectPoly, rng, shell, type AssetCategory, type AssetDef, type Poly, type SurfaceDef } from '../kit'
+import { C, SWING_OPEN, ellipsePoly, glow, holePanel, movable, paintPanel, rectPoly, rng, shell, type AssetDef, type Poly, type SurfaceDef } from '../kit'
 import { G, P, batten, clearMat, cylX, cylZ, fitGroup, lit, noOutlineDeep, rod3, tube, type TubeOpts, type V3 } from '../geo'
-import { I, J, M, N, PROP, R, type PalFlat } from '../packkit'
+import { I, J, M, N, PROP, R, define, type PalFlat } from '../packkit'
 
 /** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
 const TUBE: TubeOpts = { seg: 48, receive: false }
@@ -16,30 +16,6 @@ const CHROME = '#d0d5db'
 const TIRE = '#3a3a3c'
 const WARM = '#ffe2a0'
 const PAPER = '#fbf8f0'
-
-function def(
-  id: string,
-  name: string,
-  category: AssetCategory,
-  [w, d, h]: [number, number, number],
-  pals: PalFlat[],
-  build: (p: string[]) => THREE.Group,
-  extra: Partial<AssetDef> = {},
-): AssetDef {
-  return {
-    id,
-    name,
-    category,
-    w,
-    d,
-    h,
-    palettes: pals.map((x) => x.slice(1) as string[]),
-    paletteStyles: pals.map((x) => x[0]),
-    styles: [...new Set(pals.map((x) => x[0]))],
-    build,
-    ...extra,
-  }
-}
 
 // ---------- 小工具 ----------
 
@@ -375,14 +351,14 @@ const FUTON_PALS: PalFlat[] = [
 ]
 
 export const LM_SOFAS: AssetDef[] = [
-  def('lm-corner-sofa-l', '转角沙发', 'living', [240, 200, 80], SOFA_PALS, cornerSofa(false), { family: 'lm-corner-sofa', sizeLabel: '左转角' }),
-  def('lm-corner-sofa-r', '转角沙发', 'living', [240, 200, 80], SOFA_PALS, cornerSofa(true), { family: 'lm-corner-sofa', sizeLabel: '右转角' }),
-  def('lm-block-sofa-1', '方块模块沙发', 'living', [90, 95, 66.3], SOFA_PALS, blockSofa(1), { family: 'lm-block-sofa', sizeLabel: '单座' }),
-  def('lm-block-sofa-2', '方块模块沙发', 'living', [180, 95, 66.3], SOFA_PALS, blockSofa(2), { family: 'lm-block-sofa', sizeLabel: '双座' }),
-  def('lm-block-sofa-3', '方块模块沙发', 'living', [270, 95, 66.3], SOFA_PALS, blockSofa(3), { family: 'lm-block-sofa', sizeLabel: '三座' }),
-  def('lm-futon-sofa', '地板沙发床', 'living', [120, 82.9, 71.9], FUTON_PALS, futonSofa(false), { family: 'lm-futon-sofa', form: 'folded', formLabel: '沙发' }),
-  def('lm-futon-sofa-open', '地板沙发床', 'living', [120, 190, 34], FUTON_PALS, futonSofa(true), { family: 'lm-futon-sofa', form: 'open', formLabel: '展开成床' }),
-  def(
+  define('lm-corner-sofa-l', '转角沙发', 'living', [240, 200, 80], SOFA_PALS, cornerSofa(false), { family: 'lm-corner-sofa', sizeLabel: '左转角' }),
+  define('lm-corner-sofa-r', '转角沙发', 'living', [240, 200, 80], SOFA_PALS, cornerSofa(true), { family: 'lm-corner-sofa', sizeLabel: '右转角' }),
+  define('lm-block-sofa-1', '方块模块沙发', 'living', [90, 95, 66.3], SOFA_PALS, blockSofa(1), { family: 'lm-block-sofa', sizeLabel: '单座' }),
+  define('lm-block-sofa-2', '方块模块沙发', 'living', [180, 95, 66.3], SOFA_PALS, blockSofa(2), { family: 'lm-block-sofa', sizeLabel: '双座' }),
+  define('lm-block-sofa-3', '方块模块沙发', 'living', [270, 95, 66.3], SOFA_PALS, blockSofa(3), { family: 'lm-block-sofa', sizeLabel: '三座' }),
+  define('lm-futon-sofa', '地板沙发床', 'living', [120, 82.9, 71.9], FUTON_PALS, futonSofa(false), { family: 'lm-futon-sofa', form: 'folded', formLabel: '沙发' }),
+  define('lm-futon-sofa-open', '地板沙发床', 'living', [120, 190, 34], FUTON_PALS, futonSofa(true), { family: 'lm-futon-sofa', form: 'open', formLabel: '展开成床' }),
+  define(
     'lm-lazy-cube',
     '方块豆袋',
     'living',
@@ -396,7 +372,7 @@ export const LM_SOFAS: AssetDef[] = [
     lazyCube,
     { family: 'beanbag', sizeLabel: '方块' },
   ),
-  def(
+  define(
     'lm-lazy-shell',
     '贝壳懒人沙发',
     'living',
@@ -410,7 +386,7 @@ export const LM_SOFAS: AssetDef[] = [
     lazyShell,
     { family: 'beanbag', sizeLabel: '贝壳' },
   ),
-  def(
+  define(
     'lm-lazy-long',
     '长条豆袋',
     'living',
@@ -424,7 +400,7 @@ export const LM_SOFAS: AssetDef[] = [
     lazyLong,
     { family: 'beanbag', sizeLabel: '长条' },
   ),
-  def(
+  define(
     'lm-daybed',
     '贵妃榻',
     'living',
@@ -437,7 +413,7 @@ export const LM_SOFAS: AssetDef[] = [
     ],
     daybed,
   ),
-  def(
+  define(
     'lm-storage-ottoman',
     '收纳软凳',
     'living',
@@ -451,7 +427,7 @@ export const LM_SOFAS: AssetDef[] = [
     storageOttoman,
     { surface: 42, openable: true, surfaces: [{ y: 7.6, h: 25.5, shape: [rectPoly(-25, -25, 25, 25)], inside: true }] },
   ),
-  def(
+  define(
     'lm-knit-pouf',
     '针织坐墩',
     'living',
@@ -653,9 +629,9 @@ function tvWallUnit(p: string[]) {
 }
 
 export const LM_TABLES: AssetDef[] = [
-  def('lm-lift-table', '升降茶几', 'living', [110, 60, 42], WOOD_PALS, liftTable(false), { family: 'lm-lift-table', form: 'closed', formLabel: '收起', ...LIFT_SURF_CLOSED }),
-  def('lm-lift-table-open', '升降茶几', 'living', [110, 60, 61], WOOD_PALS, liftTable(true), { family: 'lm-lift-table', form: 'open', formLabel: '升起', ...LIFT_SURF_OPEN }),
-  def(
+  define('lm-lift-table', '升降茶几', 'living', [110, 60, 42], WOOD_PALS, liftTable(false), { family: 'lm-lift-table', form: 'closed', formLabel: '收起', ...LIFT_SURF_CLOSED }),
+  define('lm-lift-table-open', '升降茶几', 'living', [110, 60, 61], WOOD_PALS, liftTable(true), { family: 'lm-lift-table', form: 'open', formLabel: '升起', ...LIFT_SURF_OPEN }),
+  define(
     'lm-nest-tables',
     '三件套嵌套边几',
     'living',
@@ -677,7 +653,7 @@ export const LM_TABLES: AssetDef[] = [
       ],
     },
   ),
-  def(
+  define(
     'lm-zataku',
     '和式座卓',
     'japanese',
@@ -692,7 +668,7 @@ export const LM_TABLES: AssetDef[] = [
     zataku,
     { surface: 33 },
   ),
-  def(
+  define(
     'lm-glass-coffee',
     '玻璃茶几',
     'living',
@@ -707,15 +683,15 @@ export const LM_TABLES: AssetDef[] = [
     glassTable,
     { surface: 40, surfaces: [{ y: 12, h: 25, shape: [rectPoly(-50, -25, 50, 25)] }] },
   ),
-  def('lm-storage-coffee', '带收纳茶几', 'living', [100, 57.5, 42], WOOD_PALS, storageTable, {
+  define('lm-storage-coffee', '带收纳茶几', 'living', [100, 57.5, 42], WOOD_PALS, storageTable, {
     surface: 42,
     surfaces: [{ y: 8.5, shape: [rectPoly(2, -27.75, 47.5, 25.75)], h: 31 }, ...ST_DRAWERS.map((d) => liveDrawerLevel(d, -1.25))],
     openable: true,
   }),
-  def('lm-tv-board-150', '低矮电视柜（翻门）', 'living', [150, 42.4, 42], WOOD_PALS, tvBoard(150), { family: 'lm-tv-board', sizeLabel: '150', ...tvSurf(150) }),
-  def('lm-tv-board-200', '低矮电视柜（翻门）', 'living', [200, 42.4, 42], WOOD_PALS, tvBoard(200), { family: 'lm-tv-board', sizeLabel: '200', ...tvSurf(200) }),
-  def('lm-tv-board-240', '低矮电视柜（翻门）', 'living', [240, 42.4, 42], WOOD_PALS, tvBoard(240), { family: 'lm-tv-board', sizeLabel: '240', ...tvSurf(240) }),
-  def('lm-tv-wall-unit', '电视组合柜（带书架）', 'living', [240, 44.4, 180], WOOD_PALS, tvWallUnit, {
+  define('lm-tv-board-150', '低矮电视柜（翻门）', 'living', [150, 42.4, 42], WOOD_PALS, tvBoard(150), { family: 'lm-tv-board', sizeLabel: '150', ...tvSurf(150) }),
+  define('lm-tv-board-200', '低矮电视柜（翻门）', 'living', [200, 42.4, 42], WOOD_PALS, tvBoard(200), { family: 'lm-tv-board', sizeLabel: '200', ...tvSurf(200) }),
+  define('lm-tv-board-240', '低矮电视柜（翻门）', 'living', [240, 42.4, 42], WOOD_PALS, tvBoard(240), { family: 'lm-tv-board', sizeLabel: '240', ...tvSurf(240) }),
+  define('lm-tv-wall-unit', '电视组合柜（带书架）', 'living', [240, 44.4, 180], WOOD_PALS, tvWallUnit, {
     surface: 180,
     surfaceShape: [rectPoly(80, -22.2, 120, 9.8)],
     surfaces: [
@@ -1085,7 +1061,7 @@ const LAMP_SHADE_PALS: PalFlat[] = [
 ]
 
 export const LM_LIGHTS: AssetDef[] = [
-  def(
+  define(
     'lm-arc-lamp',
     '弧形钓鱼灯',
     'lighting',
@@ -1100,8 +1076,8 @@ export const LM_LIGHTS: AssetDef[] = [
     arcLamp,
     { family: 'floor-lamp', sizeLabel: '弧形钓鱼' },
   ),
-  def('lm-tripod-lamp', '三脚落地灯', 'lighting', [51.3, 53.5, 149.5], LAMP_SHADE_PALS, tripodLamp, { family: 'floor-lamp', sizeLabel: '三脚' }),
-  def(
+  define('lm-tripod-lamp', '三脚落地灯', 'lighting', [51.3, 53.5, 149.5], LAMP_SHADE_PALS, tripodLamp, { family: 'floor-lamp', sizeLabel: '三脚' }),
+  define(
     'lm-akari-floor',
     '和纸灯笼落地灯',
     'lighting',
@@ -1115,8 +1091,8 @@ export const LM_LIGHTS: AssetDef[] = [
     akariFloor,
     { family: 'floor-lamp', sizeLabel: '和纸灯笼' },
   ),
-  def('lm-pole-lamp', '北欧木杆落地灯', 'lighting', [40, 40, 150], LAMP_SHADE_PALS, poleLamp, { family: 'floor-lamp', sizeLabel: '木杆' }),
-  def(
+  define('lm-pole-lamp', '北欧木杆落地灯', 'lighting', [40, 40, 150], LAMP_SHADE_PALS, poleLamp, { family: 'floor-lamp', sizeLabel: '木杆' }),
+  define(
     'lm-pleat-lamp',
     '褶皱灯罩台灯',
     'lighting',
@@ -1131,7 +1107,7 @@ export const LM_LIGHTS: AssetDef[] = [
     pleatLamp,
     { ...PROP, family: 'table-lamp', sizeLabel: '褶皱罩' },
   ),
-  def(
+  define(
     'lm-banker-lamp',
     '银行家台灯',
     'lighting',
@@ -1145,7 +1121,7 @@ export const LM_LIGHTS: AssetDef[] = [
     bankerLamp,
     { ...PROP, family: 'desk-lamp', sizeLabel: '银行家' },
   ),
-  def(
+  define(
     'lm-jar-lamp',
     '陶瓷罐台灯',
     'lighting',
@@ -1160,7 +1136,7 @@ export const LM_LIGHTS: AssetDef[] = [
     jarLamp,
     { ...PROP, family: 'table-lamp', sizeLabel: '陶瓷罐' },
   ),
-  def(
+  define(
     'lm-moon-lamp',
     '月球灯',
     'lighting',
@@ -1174,7 +1150,7 @@ export const LM_LIGHTS: AssetDef[] = [
     moonLamp,
     PROP,
   ),
-  def(
+  define(
     'lm-sconce',
     '壁灯',
     'lighting',
@@ -1189,7 +1165,7 @@ export const LM_LIGHTS: AssetDef[] = [
     sconce,
     { mount: SCONCE_Y, family: 'wall-lamp', sizeLabel: '弯臂' },
   ),
-  def(
+  define(
     'lm-fairy-lights',
     '串灯',
     'lighting',
@@ -1203,7 +1179,7 @@ export const LM_LIGHTS: AssetDef[] = [
     fairyLights,
     { mount: FAIRY_Y },
   ),
-  def(
+  define(
     'lm-star-curtain',
     '星星灯帘',
     'lighting',
@@ -1217,7 +1193,7 @@ export const LM_LIGHTS: AssetDef[] = [
     starCurtain,
     { mount: STAR_Y },
   ),
-  def(
+  define(
     'lm-neon-sign',
     '霓虹灯牌',
     'lighting',
@@ -1231,7 +1207,7 @@ export const LM_LIGHTS: AssetDef[] = [
     neonSign,
     { mount: NEON_Y },
   ),
-  def(
+  define(
     'lm-led-bar',
     '氛围灯棒',
     'lighting',
@@ -1245,7 +1221,7 @@ export const LM_LIGHTS: AssetDef[] = [
     ledBar,
     PROP,
   ),
-  def(
+  define(
     'lm-cloud-light',
     '云朵小夜灯',
     'lighting',
@@ -1259,7 +1235,7 @@ export const LM_LIGHTS: AssetDef[] = [
     cloudNightLight,
     PROP,
   ),
-  def(
+  define(
     'lm-candle-lantern',
     '烛台灯笼',
     'lighting',
@@ -1273,7 +1249,7 @@ export const LM_LIGHTS: AssetDef[] = [
     candleLantern,
     { ...PROP, fx: [{ kind: 'flame', x: 0, y: 11, z: 0, scale: 0.7 }] },
   ),
-  def(
+  define(
     'lm-candle-tray',
     '托盘蜡烛组',
     'lighting',
@@ -1574,7 +1550,7 @@ function doormat(kind: 'rect' | 'half' | 'cat') {
 const RUG_SURF = (h: number): Partial<AssetDef> => ({ surface: h })
 
 export const LM_RUGS: AssetDef[] = [
-  def(
+  define(
     'lm-rug-runner',
     '长条走廊地毯',
     'living',
@@ -1589,7 +1565,7 @@ export const LM_RUGS: AssetDef[] = [
     runnerRug,
     RUG_SURF(1.9),
   ),
-  def(
+  define(
     'lm-rug-cloud',
     '云朵地毯',
     'kids',
@@ -1603,7 +1579,7 @@ export const LM_RUGS: AssetDef[] = [
     cloudRug,
     RUG_SURF(2),
   ),
-  def(
+  define(
     'lm-rug-bear',
     '小熊地毯',
     'kids',
@@ -1617,7 +1593,7 @@ export const LM_RUGS: AssetDef[] = [
     bearRug,
     RUG_SURF(2.4),
   ),
-  def(
+  define(
     'lm-rug-rainbow',
     '彩虹地毯',
     'kids',
@@ -1631,7 +1607,7 @@ export const LM_RUGS: AssetDef[] = [
     rainbowRug,
     RUG_SURF(1.6),
   ),
-  def(
+  define(
     'lm-rug-checker',
     '格纹方地毯',
     'living',
@@ -1646,7 +1622,7 @@ export const LM_RUGS: AssetDef[] = [
     checkerRug,
     RUG_SURF(1.5),
   ),
-  def(
+  define(
     'lm-rug-braided',
     '椭圆编织地毯',
     'living',
@@ -1660,7 +1636,7 @@ export const LM_RUGS: AssetDef[] = [
     braidedRug,
     RUG_SURF(2.4),
   ),
-  def(
+  define(
     'lm-hanamushiro',
     '花莚',
     'japanese',
@@ -1674,7 +1650,7 @@ export const LM_RUGS: AssetDef[] = [
     hanamushiro,
     RUG_SURF(1.3),
   ),
-  def(
+  define(
     'lm-rug-kilim',
     '几何基里姆地毯',
     'living',
@@ -1688,7 +1664,7 @@ export const LM_RUGS: AssetDef[] = [
     kilimRug,
     RUG_SURF(1.4),
   ),
-  def(
+  define(
     'lm-doormat-rect',
     '门口脚垫',
     'entrance',
@@ -1702,7 +1678,7 @@ export const LM_RUGS: AssetDef[] = [
     doormat('rect'),
     { family: 'lm-doormat', sizeLabel: '长方', ...RUG_SURF(1.9) },
   ),
-  def(
+  define(
     'lm-doormat-half',
     '门口脚垫',
     'entrance',
@@ -1716,7 +1692,7 @@ export const LM_RUGS: AssetDef[] = [
     doormat('half'),
     { family: 'lm-doormat', sizeLabel: '半圆', ...RUG_SURF(2.1) },
   ),
-  def(
+  define(
     'lm-doormat-cat',
     '门口脚垫',
     'entrance',
@@ -2120,8 +2096,8 @@ const DESK_PALS: PalFlat[] = [
 ]
 
 export const LM_DESK: AssetDef[] = [
-  def('lm-pen-organizer', '多格笔筒', 'study', [14.2, 10, 15.7], DESK_PALS, penOrganizer, PROP),
-  def(
+  define('lm-pen-organizer', '多格笔筒', 'study', [14.2, 10, 15.7], DESK_PALS, penOrganizer, PROP),
+  define(
     'lm-notebook-stack',
     '笔记本叠',
     'study',
@@ -2136,8 +2112,8 @@ export const LM_DESK: AssetDef[] = [
     notebookStack,
     { ...PROP, form: 'lying' },
   ),
-  def('lm-file-boxes', '文件盒三连', 'study', [30, 25, 32], DESK_PALS, fileBoxes, PROP),
-  def(
+  define('lm-file-boxes', '文件盒三连', 'study', [30, 25, 32], DESK_PALS, fileBoxes, PROP),
+  define(
     'lm-letter-tray',
     '叠层文件托盘',
     'study',
@@ -2151,7 +2127,7 @@ export const LM_DESK: AssetDef[] = [
     letterTray,
     { ...PROP, surfaces: [{ y: 1.4, shape: [rectPoly(-12, -16, 12, 16)], h: 5.6 }, { y: 8.4, shape: [rectPoly(-12, -16, 12, 16)], h: 5.6 }, { y: 15.4, shape: [rectPoly(-12, -16, 12, 16)] }] },
   ),
-  def(
+  define(
     'lm-block-calendar',
     '木块万年历',
     'study',
@@ -2165,7 +2141,7 @@ export const LM_DESK: AssetDef[] = [
     blockCalendar,
     PROP,
   ),
-  def(
+  define(
     'lm-sticky-notes',
     '便利贴组',
     'study',
@@ -2179,7 +2155,7 @@ export const LM_DESK: AssetDef[] = [
     stickyNotes,
     PROP,
   ),
-  def(
+  define(
     'lm-floor-globe',
     '落地地球仪',
     'study',
@@ -2192,7 +2168,7 @@ export const LM_DESK: AssetDef[] = [
     ],
     floorGlobe,
   ),
-  def(
+  define(
     'lm-desk-whiteboard',
     '桌面白板',
     'study',
@@ -2206,7 +2182,7 @@ export const LM_DESK: AssetDef[] = [
     deskWhiteboard,
     PROP,
   ),
-  def(
+  define(
     'lm-desk-drawers',
     '桌面收纳抽屉',
     'study',
@@ -2221,7 +2197,7 @@ export const LM_DESK: AssetDef[] = [
     deskDrawers,
     { ...PROP, surface: 20 },
   ),
-  def(
+  define(
     'lm-cat-bookends',
     '猫咪书立',
     'study',
@@ -2235,7 +2211,7 @@ export const LM_DESK: AssetDef[] = [
     catBookends,
     PROP,
   ),
-  def(
+  define(
     'lm-bladeless-fan',
     '无叶桌面风扇',
     'appliance',
@@ -2249,7 +2225,7 @@ export const LM_DESK: AssetDef[] = [
     bladelessFan,
     PROP,
   ),
-  def(
+  define(
     'lm-drop-humidifier',
     '水滴加湿器',
     'appliance',
@@ -2263,7 +2239,7 @@ export const LM_DESK: AssetDef[] = [
     dropHumidifier,
     { ...PROP, fx: [{ kind: 'mist', x: 0, y: 22.6, z: 0, scale: 0.8, height: 30 }] },
   ),
-  def(
+  define(
     'lm-desk-mat',
     '桌垫',
     'study',
@@ -2278,8 +2254,8 @@ export const LM_DESK: AssetDef[] = [
     deskMat,
     { ...PROP, surface: 0.4 },
   ),
-  def('lm-monitor-riser', '显示器增高架', 'study', [60, 24.5, 12], WOOD_PALS, monitorRiser, { ...PROP, surface: 12, surfaces: [{ y: 0.8, shape: [rectPoly(-27, -10, 27, 10)], h: 9 }] }),
-  def(
+  define('lm-monitor-riser', '显示器增高架', 'study', [60, 24.5, 12], WOOD_PALS, monitorRiser, { ...PROP, surface: 12, surfaces: [{ y: 0.8, shape: [rectPoly(-27, -10, 27, 10)], h: 9 }] }),
+  define(
     'lm-sharpener',
     '手摇削笔机',
     'study',
@@ -2293,7 +2269,7 @@ export const LM_DESK: AssetDef[] = [
     sharpener,
     PROP,
   ),
-  def(
+  define(
     'lm-hole-punch',
     '打孔机',
     'study',
@@ -2307,7 +2283,7 @@ export const LM_DESK: AssetDef[] = [
     holePunch,
     PROP,
   ),
-  def(
+  define(
     'lm-flip-clock',
     '翻页钟',
     'study',
@@ -2321,7 +2297,7 @@ export const LM_DESK: AssetDef[] = [
     flipClock,
     PROP,
   ),
-  def(
+  define(
     'lm-pencil-case',
     '笔袋',
     'study',
@@ -2335,7 +2311,7 @@ export const LM_DESK: AssetDef[] = [
     pencilCase,
     PROP,
   ),
-  def(
+  define(
     'lm-paper-ream',
     'A4 纸堆',
     'study',
@@ -2349,7 +2325,7 @@ export const LM_DESK: AssetDef[] = [
     paperReam,
     PROP,
   ),
-  def(
+  define(
     'lm-cork-board',
     '软木板',
     'study',
@@ -2881,7 +2857,7 @@ const KID_WOOD: PalFlat[] = [
 ]
 
 export const LM_KIDS: AssetDef[] = [
-  def(
+  define(
     'lm-blocks-tower',
     '木积木',
     'kids',
@@ -2895,7 +2871,7 @@ export const LM_KIDS: AssetDef[] = [
     blocksTower,
     { ...PROP, family: 'lm-wood-blocks', form: 'stacked', formLabel: '搭成塔' },
   ),
-  def(
+  define(
     'lm-blocks-scatter',
     '木积木',
     'kids',
@@ -2909,7 +2885,7 @@ export const LM_KIDS: AssetDef[] = [
     blocksScatter,
     { ...PROP, family: 'lm-wood-blocks', form: 'lying', formLabel: '散开' },
   ),
-  def(
+  define(
     'lm-puzzle-mat',
     '拼接地垫',
     'kids',
@@ -2923,7 +2899,7 @@ export const LM_KIDS: AssetDef[] = [
     puzzleMat,
     { surface: 1.2 },
   ),
-  def(
+  define(
     'lm-train-track',
     '木制火车轨道',
     'kids',
@@ -2937,7 +2913,7 @@ export const LM_KIDS: AssetDef[] = [
     trainTrack,
     PROP,
   ),
-  def(
+  define(
     'lm-ride-car',
     '儿童乘骑车',
     'kids',
@@ -2950,7 +2926,7 @@ export const LM_KIDS: AssetDef[] = [
     ],
     rideCar,
   ),
-  def(
+  define(
     'lm-dollhouse',
     '玩偶屋',
     'kids',
@@ -2970,7 +2946,7 @@ export const LM_KIDS: AssetDef[] = [
       ],
     },
   ),
-  def(
+  define(
     'lm-rocker-unicorn',
     '毛绒摇摇马',
     'kids',
@@ -2983,7 +2959,7 @@ export const LM_KIDS: AssetDef[] = [
     ],
     rockerUnicorn,
   ),
-  def(
+  define(
     'lm-play-tunnel',
     '爬行隧道',
     'kids',
@@ -2996,7 +2972,7 @@ export const LM_KIDS: AssetDef[] = [
     ],
     playTunnel,
   ),
-  def(
+  define(
     'lm-ball-pit',
     '球池',
     'kids',
@@ -3009,9 +2985,9 @@ export const LM_KIDS: AssetDef[] = [
     ],
     ballPit,
   ),
-  def('lm-book-sling', '吊兜绘本架', 'kids', [60.4, 28.1, 71.4], KID_WOOD, bookSling),
-  def('lm-toy-shelf', '玩具收纳柜（带收纳筐）', 'kids', [86, 30, 60], KID_WOOD, toyShelf, { surface: 60 }),
-  def(
+  define('lm-book-sling', '吊兜绘本架', 'kids', [60.4, 28.1, 71.4], KID_WOOD, bookSling),
+  define('lm-toy-shelf', '玩具收纳柜（带收纳筐）', 'kids', [86, 30, 60], KID_WOOD, toyShelf, { surface: 60 }),
+  define(
     'lm-pikler',
     '皮克勒攀爬三角',
     'kids',
@@ -3024,9 +3000,9 @@ export const LM_KIDS: AssetDef[] = [
     ],
     pikler,
   ),
-  def('lm-walker', '学步推车', 'kids', [42, 35.6, 48.6], [['nordic', N.oak, N.white, N.sage], ['cute', C.woodL, C.pink, C.sky], ['retro', R.caramel, R.cream, R.red], ['modern', M.white, M.char, M.gray]], walker),
-  def('lm-growth-chair', '成长椅', 'kids', [46, 46.4, 80], [['nordic', N.oak, N.gray, N.sage], ['modern', M.white, M.char, M.gray], ['cute', C.woodL, C.pink, C.mint], ['industrial', I.walnut, I.leather, I.iron], ['japanese', J.hinoki, J.ai, J.wood]], growthChair),
-  def(
+  define('lm-walker', '学步推车', 'kids', [42, 35.6, 48.6], [['nordic', N.oak, N.white, N.sage], ['cute', C.woodL, C.pink, C.sky], ['retro', R.caramel, R.cream, R.red], ['modern', M.white, M.char, M.gray]], walker),
+  define('lm-growth-chair', '成长椅', 'kids', [46, 46.4, 80], [['nordic', N.oak, N.gray, N.sage], ['modern', M.white, M.char, M.gray], ['cute', C.woodL, C.pink, C.mint], ['industrial', I.walnut, I.leather, I.iron], ['japanese', J.hinoki, J.ai, J.wood]], growthChair),
+  define(
     'lm-stroller',
     '婴儿推车',
     'kids',
@@ -3040,7 +3016,7 @@ export const LM_KIDS: AssetDef[] = [
     stroller(true),
     { family: 'lm-stroller', form: 'open', formLabel: '展开' },
   ),
-  def(
+  define(
     'lm-stroller-folded',
     '婴儿推车',
     'kids',
@@ -3054,7 +3030,7 @@ export const LM_KIDS: AssetDef[] = [
     stroller(false),
     { family: 'lm-stroller', form: 'folded', formLabel: '收折' },
   ),
-  def(
+  define(
     'lm-playpen',
     '宝宝游戏围栏',
     'kids',
@@ -3068,7 +3044,7 @@ export const LM_KIDS: AssetDef[] = [
     playpen,
     { surfaces: [{ y: 2, shape: [rectPoly(-56, -56, 56, 56)], h: 58 }] },
   ),
-  def(
+  define(
     'lm-play-kitchen',
     '儿童过家家厨房',
     'kids',
@@ -3082,11 +3058,11 @@ export const LM_KIDS: AssetDef[] = [
     playKitchen,
     { surfaces: [{ y: 50, shape: [rectPoly(-6, -12.6, 11, 15.4)], h: 33 }] },
   ),
-  def('lm-kids-table-set', '儿童桌椅套', 'kids', [112, 45, 46.4], [['nordic', N.oak, N.white, N.sage], ['cute', C.white, C.woodL, C.pink], ['modern', M.white, M.char, M.gray], ['retro', R.cream, R.caramel, R.mustard]], kidsTableSet, {
+  define('lm-kids-table-set', '儿童桌椅套', 'kids', [112, 45, 46.4], [['nordic', N.oak, N.white, N.sage], ['cute', C.white, C.woodL, C.pink], ['modern', M.white, M.char, M.gray], ['retro', R.cream, R.caramel, R.mustard]], kidsTableSet, {
     surface: 46.4,
     surfaceShape: [rectPoly(-30, -22.5, 30, 22.5)],
   }),
-  def(
+  define(
     'lm-shape-sorter',
     '形状配对盒',
     'kids',
@@ -3100,7 +3076,7 @@ export const LM_KIDS: AssetDef[] = [
     shapeSorter,
     PROP,
   ),
-  def(
+  define(
     'lm-stack-rings',
     '叠叠圈',
     'kids',
@@ -3114,5 +3090,5 @@ export const LM_KIDS: AssetDef[] = [
     stackRings,
     PROP,
   ),
-  def('lm-kids-easel', '儿童双面画架', 'kids', [56, 46.7, 101.4], [['nordic', N.oak, N.blue, N.white], ['cute', C.woodL, C.pink, C.white], ['modern', M.white, M.char, M.light], ['retro', R.caramel, R.red, R.cream]], kidsEasel),
+  define('lm-kids-easel', '儿童双面画架', 'kids', [56, 46.7, 101.4], [['nordic', N.oak, N.blue, N.white], ['cute', C.woodL, C.pink, C.white], ['modern', M.white, M.char, M.light], ['retro', R.caramel, R.red, R.cream]], kidsEasel),
 ]

@@ -8,32 +8,16 @@
 // 机器人属于角色类，可以有屏幕眼睛；配件、底座、遥控器之类不加脸。
 
 import * as THREE from 'three'
-import { G, rectPoly, type ActorSpec, type AssetCategory, type AssetDef } from '../kit'
+import { G, rectPoly, type ActorSpec, type AssetDef } from '../kit'
 import { markActorPart } from '../critters'
 import { SERVER_TRAYS, beam, buildRobo, droneModel, lit, roboStatic, screenEye } from '../robots-actors'
 import { ball, capsule, cyl, puck, rbox, shade, torus, tray } from '../toon'
 import { PI, centerBuild } from '../geo'
-import { PROP, type Pal } from '../packkit'
+import { PROP, define, type Pal } from '../packkit'
 
 const SCREEN = '#1c1f2a'
 const RUBBER = '#2a2a2e'
 const FOAM = '#33353b'
-
-function def(id: string, name: string, category: AssetCategory, [w, d, h]: [number, number, number], pals: Pal[], build: (p: string[]) => THREE.Group, extra: Partial<AssetDef> = {}): AssetDef {
-  return {
-    id,
-    name,
-    category,
-    w,
-    d,
-    h,
-    palettes: pals.map((x) => x[1]),
-    paletteStyles: pals.map((x) => x[0]),
-    styles: [...new Set(pals.map((x) => x[0]))],
-    build,
-    ...extra,
-  }
-}
 
 const actor = (kind: ActorSpec['kind'], role: ActorSpec['role'], breed: string, dock?: [number, number, number]): Partial<AssetDef> => ({ actor: { kind, role, breed, ...(dock ? { dock } : {}) } })
 
@@ -495,72 +479,72 @@ function server(p: string[]) {
 
 export const ROBOT_ASSETS: AssetDef[] = [
   // ---------- 无人机 ----------
-  def('rb-drone-aerial', '折叠航拍无人机', 'hobby', [47.5, 27.5, 10], AERIAL_PALS, flying('aerial'), { ...PROP, family: 'rb-drone-aerial', form: 'open', formLabel: '展开', ...actor('drone', 'body', 'aerial') }),
-  def('rb-drone-aerial-fold', '折叠航拍无人机', 'hobby', [16, 25.5, 10], AERIAL_PALS, centerBuild(folded('aerial')), { ...PROP, family: 'rb-drone-aerial', form: 'folded', formLabel: '收起' }),
-  def('rb-drone-mini', '迷你航拍无人机', 'hobby', [31.5, 18, 6.5], MINI_PALS, flying('mini'), { ...PROP, family: 'rb-drone-mini', form: 'open', formLabel: '展开', ...actor('drone', 'body', 'mini') }),
-  def('rb-drone-mini-fold', '迷你航拍无人机', 'hobby', [10.5, 17, 7], MINI_PALS, centerBuild(folded('mini')), { ...PROP, family: 'rb-drone-mini', form: 'folded', formLabel: '收起' }),
-  def('rb-drone-fpv', '涵道 FPV 无人机', 'hobby', [19.5, 19, 8], FPV_PALS, flying('fpv'), { ...PROP, ...actor('drone', 'body', 'fpv') }),
-  def('rb-drone-toy', '玩具四轴无人机', 'kids', [19, 19, 5], TOY_PALS, flying('toy'), { ...PROP, ...actor('drone', 'body', 'toy') }),
-  def('rb-drone-selfie', '掌上自拍无人机', 'hobby', [12, 12, 3], SELFIE_PALS, flying('selfie'), { ...PROP, ...actor('drone', 'body', 'selfie') }),
-  def('rb-drone-case', '无人机收纳箱套装', 'hobby', [38, 36, 39.5], GEAR_PALS, centerBuild(droneCase(true)), { family: 'rb-drone-case', form: 'open', formLabel: '打开' }),
-  def('rb-drone-case-closed', '无人机收纳箱套装', 'hobby', [39, 29, 18.5], GEAR_PALS, droneCase(false), { family: 'rb-drone-case', form: 'closed', formLabel: '合上' }),
-  def('rb-drone-rc', '带屏无人机遥控器', 'hobby', [18.2, 9.6, 4], GEAR_PALS, centerBuild(remote), PROP),
-  def('rb-drone-charger', '无人机电池充电管家', 'hobby', [15, 9, 9.5], GEAR_PALS, charger, PROP),
-  def('rb-drone-pad', '无人机停机坪垫', 'hobby', [55, 55, 1], PAD_PALS, pad, { ...actor('drone', 'home', 'aerial', [0, 0.6, 0]), limit: { scope: 'house', max: 1, group: 'rb-drone-pad' } }),
-  def('rb-gimbal', '口袋云台相机', 'hobby', [3.4, 3, 13], GEAR_PALS, gimbal, PROP),
+  define('rb-drone-aerial', '折叠航拍无人机', 'hobby', [47.5, 27.5, 10], AERIAL_PALS, flying('aerial'), { ...PROP, family: 'rb-drone-aerial', form: 'open', formLabel: '展开', ...actor('drone', 'body', 'aerial') }),
+  define('rb-drone-aerial-fold', '折叠航拍无人机', 'hobby', [16, 25.5, 10], AERIAL_PALS, centerBuild(folded('aerial')), { ...PROP, family: 'rb-drone-aerial', form: 'folded', formLabel: '收起' }),
+  define('rb-drone-mini', '迷你航拍无人机', 'hobby', [31.5, 18, 6.5], MINI_PALS, flying('mini'), { ...PROP, family: 'rb-drone-mini', form: 'open', formLabel: '展开', ...actor('drone', 'body', 'mini') }),
+  define('rb-drone-mini-fold', '迷你航拍无人机', 'hobby', [10.5, 17, 7], MINI_PALS, centerBuild(folded('mini')), { ...PROP, family: 'rb-drone-mini', form: 'folded', formLabel: '收起' }),
+  define('rb-drone-fpv', '涵道 FPV 无人机', 'hobby', [19.5, 19, 8], FPV_PALS, flying('fpv'), { ...PROP, ...actor('drone', 'body', 'fpv') }),
+  define('rb-drone-toy', '玩具四轴无人机', 'kids', [19, 19, 5], TOY_PALS, flying('toy'), { ...PROP, ...actor('drone', 'body', 'toy') }),
+  define('rb-drone-selfie', '掌上自拍无人机', 'hobby', [12, 12, 3], SELFIE_PALS, flying('selfie'), { ...PROP, ...actor('drone', 'body', 'selfie') }),
+  define('rb-drone-case', '无人机收纳箱套装', 'hobby', [38, 36, 39.5], GEAR_PALS, centerBuild(droneCase(true)), { family: 'rb-drone-case', form: 'open', formLabel: '打开' }),
+  define('rb-drone-case-closed', '无人机收纳箱套装', 'hobby', [39, 29, 18.5], GEAR_PALS, droneCase(false), { family: 'rb-drone-case', form: 'closed', formLabel: '合上' }),
+  define('rb-drone-rc', '带屏无人机遥控器', 'hobby', [18.2, 9.6, 4], GEAR_PALS, centerBuild(remote), PROP),
+  define('rb-drone-charger', '无人机电池充电管家', 'hobby', [15, 9, 9.5], GEAR_PALS, charger, PROP),
+  define('rb-drone-pad', '无人机停机坪垫', 'hobby', [55, 55, 1], PAD_PALS, pad, { ...actor('drone', 'home', 'aerial', [0, 0.6, 0]), limit: { scope: 'house', max: 1, group: 'rb-drone-pad' } }),
+  define('rb-gimbal', '口袋云台相机', 'hobby', [3.4, 3, 13], GEAR_PALS, gimbal, PROP),
 
   // ---------- 机器人：宠物 ----------
-  def('rb-dog', '四足机器狗', 'pets', [31.5, 49, 41], DOG_PALS, centerBuild(robo('quad')), { family: 'rb-dog', form: 'standing', formLabel: '站立', ...actor('robopet', 'body', 'quad'), limit: { scope: 'house', max: 1, group: 'rb-dog' } }),
-  def('rb-dog-rest', '四足机器狗', 'pets', [31.5, 49, 22], DOG_PALS, centerBuild(robo('quad', 1)), { family: 'rb-dog', form: 'lying', formLabel: '趴下休眠', ...actor('robopet', 'body', 'quad'), limit: { scope: 'house', max: 1, group: 'rb-dog' } }),
-  def('rb-dog-dock', '机器狗充电座', 'pets', [46, 72, 14], DOCK_PALS, dogDock, { ...actor('robopet', 'home', 'quad', [0, 1.5, 8]), limit: { scope: 'house', max: 1, group: 'rb-dog-dock' } }),
-  def('rb-dog-mini', '小型机器狗', 'pets', [17.6, 28, 23], DOG_MINI_PALS, centerBuild(robo('quad-mini')), actor('robopet', 'body', 'quad-mini')),
-  def('rb-companion', '陪伴机器人（毛绒外衣）', 'pets', [31, 29, 42], COMP_PALS, robo('companion'), { family: 'rb-companion', sizeLabel: '本体', ...actor('robopet', 'body', 'companion') }),
-  def('rb-companion-nest', '陪伴机器人（毛绒外衣）', 'pets', [46, 46, 45], SOFT_DOCK_PALS, companionNest, { family: 'rb-companion', sizeLabel: '+ 充电窝', ...actor('robopet', 'home', 'companion'), limit: { scope: 'house', max: 1, group: 'rb-companion' } }),
-  def('rb-emo-bot', '桌面情感机器人', 'tabletop', [7.6, 7.6, 9], CAT_PALS, emoBot, PROP),
-  def('rb-catbot', '猫耳机器人', 'pets', [21.5, 26.5, 32.5], CAT_PALS, centerBuild(robo('catbot')), { family: 'rb-catbot', sizeLabel: '本体', ...actor('robopet', 'body', 'catbot') }),
-  def('rb-catbot-dock', '猫耳机器人充电座', 'pets', [26, 30, 8], SOFT_DOCK_PALS, catDock, { ...actor('robopet', 'home', 'catbot', [0, 0.8, 4]), limit: { scope: 'house', max: 1, group: 'rb-catbot-dock' } }),
+  define('rb-dog', '四足机器狗', 'pets', [31.5, 49, 41], DOG_PALS, centerBuild(robo('quad')), { family: 'rb-dog', form: 'standing', formLabel: '站立', ...actor('robopet', 'body', 'quad'), limit: { scope: 'house', max: 1, group: 'rb-dog' } }),
+  define('rb-dog-rest', '四足机器狗', 'pets', [31.5, 49, 22], DOG_PALS, centerBuild(robo('quad', 1)), { family: 'rb-dog', form: 'lying', formLabel: '趴下休眠', ...actor('robopet', 'body', 'quad'), limit: { scope: 'house', max: 1, group: 'rb-dog' } }),
+  define('rb-dog-dock', '机器狗充电座', 'pets', [46, 72, 14], DOCK_PALS, dogDock, { ...actor('robopet', 'home', 'quad', [0, 1.5, 8]), limit: { scope: 'house', max: 1, group: 'rb-dog-dock' } }),
+  define('rb-dog-mini', '小型机器狗', 'pets', [17.6, 28, 23], DOG_MINI_PALS, centerBuild(robo('quad-mini')), actor('robopet', 'body', 'quad-mini')),
+  define('rb-companion', '陪伴机器人（毛绒外衣）', 'pets', [31, 29, 42], COMP_PALS, robo('companion'), { family: 'rb-companion', sizeLabel: '本体', ...actor('robopet', 'body', 'companion') }),
+  define('rb-companion-nest', '陪伴机器人（毛绒外衣）', 'pets', [46, 46, 45], SOFT_DOCK_PALS, companionNest, { family: 'rb-companion', sizeLabel: '+ 充电窝', ...actor('robopet', 'home', 'companion'), limit: { scope: 'house', max: 1, group: 'rb-companion' } }),
+  define('rb-emo-bot', '桌面情感机器人', 'tabletop', [7.6, 7.6, 9], CAT_PALS, emoBot, PROP),
+  define('rb-catbot', '猫耳机器人', 'pets', [21.5, 26.5, 32.5], CAT_PALS, centerBuild(robo('catbot')), { family: 'rb-catbot', sizeLabel: '本体', ...actor('robopet', 'body', 'catbot') }),
+  define('rb-catbot-dock', '猫耳机器人充电座', 'pets', [26, 30, 8], SOFT_DOCK_PALS, catDock, { ...actor('robopet', 'home', 'catbot', [0, 0.8, 4]), limit: { scope: 'house', max: 1, group: 'rb-catbot-dock' } }),
 
   // ---------- 机器人：服务 / 家务 ----------
-  def('rb-window-bot', '擦窗机器人（贴窗）', 'appliance', [25, 9.5, 25], DOCK_PALS, windowBot, { stick: true }),
-  def('rb-serve-bot', '送餐机器人', 'appliance', [47, 47, 130], SERVER_PALS, server, { family: 'rb-serve-bot', sizeLabel: '本体', ...SERVER_SURF, ...actor('robopet', 'body', 'server'), limit: { scope: 'house', max: 1, group: 'rb-serve-bot' } }),
-  def('rb-serve-bot-dock', '送餐机器人充电桩', 'appliance', [48, 60, 42], DOCK_PALS, serverDock, { ...actor('robopet', 'home', 'server', SERVER_DOCK), limit: { scope: 'house', max: 1, group: 'rb-serve-bot-dock' } }),
-  def('rb-helper', '人形家务机器人', 'appliance', [47.3, 43.6, 109.5], HELPER_PALS, robo('helper'), { ...actor('robopet', 'body', 'helper'), limit: { scope: 'house', max: 1, group: 'rb-helper' } }),
-  def('rb-butler', '管家机器人（大屏）', 'appliance', [40, 40, 107.5], BUTLER_PALS, robo('butler'), { ...actor('robopet', 'body', 'butler'), limit: { scope: 'house', max: 1, group: 'rb-butler' } }),
-  def('rb-humanoid', '人形机器人', 'hobby', [48, 22, 132.5], HUMANOID_PALS, centerBuild(robo('humanoid')), { family: 'rb-humanoid', sizeLabel: '本体', ...actor('robopet', 'body', 'humanoid'), limit: { scope: 'house', max: 1, group: 'rb-humanoid' } }),
-  def('rb-humanoid-stand', '人形机器人', 'hobby', [60, 50, 154], DOCK_PALS, humanoidStand, { family: 'rb-humanoid', sizeLabel: '+ 充电站立架', ...actor('robopet', 'home', 'humanoid'), limit: { scope: 'house', max: 1, group: 'rb-humanoid' } }),
+  define('rb-window-bot', '擦窗机器人（贴窗）', 'appliance', [25, 9.5, 25], DOCK_PALS, windowBot, { stick: true }),
+  define('rb-serve-bot', '送餐机器人', 'appliance', [47, 47, 130], SERVER_PALS, server, { family: 'rb-serve-bot', sizeLabel: '本体', ...SERVER_SURF, ...actor('robopet', 'body', 'server'), limit: { scope: 'house', max: 1, group: 'rb-serve-bot' } }),
+  define('rb-serve-bot-dock', '送餐机器人充电桩', 'appliance', [48, 60, 42], DOCK_PALS, serverDock, { ...actor('robopet', 'home', 'server', SERVER_DOCK), limit: { scope: 'house', max: 1, group: 'rb-serve-bot-dock' } }),
+  define('rb-helper', '人形家务机器人', 'appliance', [47.3, 43.6, 109.5], HELPER_PALS, robo('helper'), { ...actor('robopet', 'body', 'helper'), limit: { scope: 'house', max: 1, group: 'rb-helper' } }),
+  define('rb-butler', '管家机器人（大屏）', 'appliance', [40, 40, 107.5], BUTLER_PALS, robo('butler'), { ...actor('robopet', 'body', 'butler'), limit: { scope: 'house', max: 1, group: 'rb-butler' } }),
+  define('rb-humanoid', '人形机器人', 'hobby', [48, 22, 132.5], HUMANOID_PALS, centerBuild(robo('humanoid')), { family: 'rb-humanoid', sizeLabel: '本体', ...actor('robopet', 'body', 'humanoid'), limit: { scope: 'house', max: 1, group: 'rb-humanoid' } }),
+  define('rb-humanoid-stand', '人形机器人', 'hobby', [60, 50, 154], DOCK_PALS, humanoidStand, { family: 'rb-humanoid', sizeLabel: '+ 充电站立架', ...actor('robopet', 'home', 'humanoid'), limit: { scope: 'house', max: 1, group: 'rb-humanoid' } }),
 
   // ---------- 机器人：玩具 / 爱好 ----------
-  def('rb-transform', '变形机器人玩具', 'kids', [11.4, 5, 19], [
+  define('rb-transform', '变形机器人玩具', 'kids', [11.4, 5, 19], [
     ['retro', ['#c8473a', '#3d5a80', '#9fd8ff']],
     ['cute', ['#ffe08f', '#3a3a3c', '#9fd8ff']],
     ['modern', ['#3d3f44', '#c3c7cc', '#9fd8ff']],
     ['cute', ['#a8d4f4', '#fbf7f1', '#ffe08f']],
   ], transformer('robot'), { ...PROP, family: 'rb-transform', form: 'standing', formLabel: '机器人形态' }),
-  def('rb-transform-car', '变形机器人玩具', 'kids', [8, 15.5, 5.7], [
+  define('rb-transform-car', '变形机器人玩具', 'kids', [8, 15.5, 5.7], [
     ['retro', ['#c8473a', '#3d5a80', '#9fd8ff']],
     ['cute', ['#ffe08f', '#3a3a3c', '#9fd8ff']],
     ['modern', ['#3d3f44', '#c3c7cc', '#9fd8ff']],
     ['cute', ['#a8d4f4', '#fbf7f1', '#ffe08f']],
   ], transformer('car'), { ...PROP, family: 'rb-transform', form: 'lying', formLabel: '汽车形态' }),
-  def('rb-code-car', '积木编程机器人小车', 'kids', [13, 16, 10], [
+  define('rb-code-car', '积木编程机器人小车', 'kids', [13, 16, 10], [
     ['cute', ['#ffe08f', '#a8d4f4', '#ff8f86']],
     ['modern', ['#f4f4f2', '#3d3f44', '#7fd8ff']],
     ['retro', ['#e2702f', '#2f8f8a', '#f4e7c8']],
     ['nordic', ['#e8e1d4', '#a9bfa3', '#9fb4c7']],
   ], centerBuild(codeCar), PROP),
-  def('rb-arm', '桌面六轴机械臂', 'hobby', [15, 20, 29.5], [
+  define('rb-arm', '桌面六轴机械臂', 'hobby', [15, 20, 29.5], [
     ['industrial', ['#e0a526', '#3a3a3c', '#7c8085']],
     ['modern', ['#f4f4f2', '#3d3f44', '#8a8d93']],
     ['modern', ['#3d3f44', '#24252a', '#c3c7cc']],
     ['nordic', ['#e6e7e4', '#9fb4c7', '#d9b98c']],
   ], centerBuild(robotArm), PROP),
-  def('rb-tin', '复古铁皮机器人', 'deco', [12.2, 6.8, 22.2], [
+  define('rb-tin', '复古铁皮机器人', 'deco', [12.2, 6.8, 22.2], [
     ['retro', ['#c8473a', '#e0a526', '#2f8f8a']],
     ['retro', ['#2f8f8a', '#f4e7c8', '#c8473a']],
     ['industrial', ['#7c8085', '#c46a3a', '#e0a526']],
     ['cute', ['#a8d4f4', '#ffe08f', '#ff8f86']],
   ], centerBuild(tinRobot), PROP),
-  def('rb-mecha', '大型机甲模型', 'hobby', [34, 22, 53.5], [
+  define('rb-mecha', '大型机甲模型', 'hobby', [34, 22, 53.5], [
     ['modern', ['#f4f4f2', '#3d3f44', '#3d5a80']],
     ['industrial', ['#6b6f63', '#3a3a3c', '#c46a3a']],
     ['retro', ['#c8473a', '#3a3a3c', '#e0a526']],

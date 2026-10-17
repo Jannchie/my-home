@@ -12,31 +12,17 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cyl, rbox, shade, torus, tray } from '../toon'
-import { C, paintPanel, rng, type AssetCategory, type AssetDef, type FormTag, type Poly } from '../kit'
+import { C, paintPanel, rng, type AssetDef, type FormTag, type Poly } from '../kit'
 import { G, P, PI, cappedTube, cylZFrom, type TubeOpts, type V3 } from '../geo'
-import { I, J, M, N, R, type Build, type Dims, type Pal } from '../packkit'
+import { I, J, M, N, PROP, R, definer, type Build, type Pal } from '../packkit'
+
+/** 本包默认是桌面摆件（prop: true） */
+const asset = definer(PROP)
 
 /** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
 const TUBE: TubeOpts = { seg: { per: 8, min: 16 } }
 
 // ---------- 定义 ----------
-
-function asset(id: string, name: string, category: AssetCategory, [w, d, h]: Dims, pals: Pal[], build: Build, extra: Partial<AssetDef> = {}): AssetDef {
-  return {
-    id,
-    name,
-    category,
-    w,
-    d,
-    h,
-    palettes: pals.map((x) => x[1]),
-    paletteStyles: pals.map((x) => x[0]),
-    styles: [...new Set(pals.map((x) => x[0]))],
-    build,
-    prop: true,
-    ...extra,
-  }
-}
 
 // ---------- 小工具 ----------
 

@@ -13,9 +13,12 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, face, puck, rbox, shade, toon, torus, tray } from '../toon'
-import { C, G, glow, paintAbstract, paintFlower, paintLandscape, paintPanel, rectPoly, rng, shell, type AssetCategory, type AssetDef, type Fx } from '../kit'
+import { C, G, glow, paintAbstract, paintFlower, paintLandscape, paintPanel, rectPoly, rng, shell, type AssetDef, type Fx } from '../kit'
 import { PI, clearDeep, noOutlineDeep, rod3, tube, type TubeOpts, type V3 } from '../geo'
-import { I, J, M, N, R, type Build, type Pal } from '../packkit'
+import { I, J, M, N, R, definer, type Build, type Pal } from '../packkit'
+
+/** build 之后按形态对齐（挂起 / 贴附 / 落地，见 settleByForm） */
+const A = definer({}, (b, e) => (p) => settleByForm(b(p), e))
 
 /** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
 const TUBE: TubeOpts = { radial: 6 }
@@ -171,23 +174,6 @@ function settleByForm(g: THREE.Group, e: Partial<AssetDef>) {
     g.position.y += (e.mount ?? 0) - b.min.y
   }
   return G(g)
-}
-
-function A(id: string, name: string, category: AssetCategory, [w, d, h]: [number, number, number], pals: Pal[], build: Build, extra: Partial<AssetDef> = {}): AssetDef {
-  const styles = [...new Set(pals.map((p) => p[0]))]
-  return {
-    id,
-    name,
-    category,
-    w,
-    d,
-    h,
-    palettes: pals.map((p) => p[1]),
-    paletteStyles: pals.map((p) => p[0]),
-    styles,
-    ...extra,
-    build: (p) => settleByForm(build(p), extra),
-  }
 }
 
 // ======================================================================

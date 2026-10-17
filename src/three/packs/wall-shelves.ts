@@ -4,7 +4,7 @@
 import * as THREE from 'three'
 import { cyl, rbox, shade } from '../toon'
 import { C, carcass, hingedDoor, rectPoly, shelvesIn, type AssetDef, type SurfaceDef } from '../kit'
-import { type Pal } from '../packkit'
+import { define, type Pal } from '../packkit'
 
 const SHELF_PALS: Pal[] = [
   ['nordic', [C.woodL, '#2f3134']],
@@ -20,20 +20,6 @@ const CAB_PALS: Pal[] = [
   ['cute', ['#fbe3ea', '#f6f1e8']],
   ['industrial', ['#5b5e63', '#8a6a4a']],
 ]
-
-const def = (id: string, name: string, [w, d, h]: [number, number, number], pals: Pal[], build: (p: string[]) => THREE.Group, extra: Partial<AssetDef>): AssetDef => ({
-  id,
-  name,
-  category: 'storage',
-  w,
-  d,
-  h,
-  palettes: pals.map((x) => x[1]),
-  paletteStyles: pals.map((x) => x[0]),
-  styles: [...new Set(pals.map((x) => x[0]))],
-  build,
-  ...extra,
-})
 
 /** 开放搁板：n 层木板 + 墙上的 L 形托架；层距 gap */
 function openShelf(w: number, d: number, n: number, gap: number, mount: number) {
@@ -131,13 +117,13 @@ const K_MOUNT = 140
 const T_MOUNT = 150
 
 const KITCHEN_SHELVES: AssetDef[] = [60, 90, 120].flatMap((w) => [
-  def(`ws-kitchen-shelf-${w}`, '厨房壁挂搁板', [w, 22, 8], SHELF_PALS, openShelf(w, 22, 1, 0, K_MOUNT), {
+  define(`ws-kitchen-shelf-${w}`, '厨房壁挂搁板', 'storage', [w, 22, 8], SHELF_PALS, openShelf(w, 22, 1, 0, K_MOUNT), {
     family: 'ws-kitchen-shelf',
     sizeLabel: `单层 ${w}`,
     mount: K_MOUNT,
     surface: K_MOUNT + 8,
   }),
-  def(`ws-kitchen-shelf2-${w}`, '厨房壁挂搁板', [w, 22, 38], SHELF_PALS, openShelf(w, 22, 2, 30, K_MOUNT), {
+  define(`ws-kitchen-shelf2-${w}`, '厨房壁挂搁板', 'storage', [w, 22, 38], SHELF_PALS, openShelf(w, 22, 2, 30, K_MOUNT), {
     family: 'ws-kitchen-shelf',
     sizeLabel: `双层 ${w}`,
     mount: K_MOUNT,
@@ -147,7 +133,7 @@ const KITCHEN_SHELVES: AssetDef[] = [60, 90, 120].flatMap((w) => [
 ])
 
 const KITCHEN_RAIL: AssetDef[] = [60, 90].map((w) =>
-  def(`ws-kitchen-rail-${w}`, '搁板 + 挂杆', [w, 22, 22], SHELF_PALS, shelfWithRail(w, 22, K_MOUNT), {
+  define(`ws-kitchen-rail-${w}`, '搁板 + 挂杆', 'storage', [w, 22, 22], SHELF_PALS, shelfWithRail(w, 22, K_MOUNT), {
     family: 'ws-kitchen-rail',
     sizeLabel: `${w}`,
     mount: K_MOUNT,
@@ -156,7 +142,7 @@ const KITCHEN_RAIL: AssetDef[] = [60, 90].map((w) =>
 )
 
 const KITCHEN_CABS: AssetDef[] = [60, 90, 120].map((w) =>
-  def(`ws-kitchen-cab-${w}`, '厨房吊柜', [w, 35, 70], CAB_PALS, wallCabinet(w, 35, 70, 150, 0), {
+  define(`ws-kitchen-cab-${w}`, '厨房吊柜', 'storage', [w, 35, 70], CAB_PALS, wallCabinet(w, 35, 70, 150, 0), {
     family: 'ws-kitchen-cab',
     sizeLabel: `${w}`,
     mount: 150,
@@ -166,7 +152,7 @@ const KITCHEN_CABS: AssetDef[] = [60, 90, 120].map((w) =>
 )
 
 const TOILET: AssetDef[] = [
-  def('ws-toilet-shelf', '马桶上方搁板', [60, 16, 38], SHELF_PALS, openShelf(60, 16, 2, 30, T_MOUNT), {
+  define('ws-toilet-shelf', '马桶上方搁板', 'storage', [60, 16, 38], SHELF_PALS, openShelf(60, 16, 2, 30, T_MOUNT), {
     family: 'ws-toilet-shelf',
     sizeLabel: '双层',
     mount: T_MOUNT,
@@ -174,14 +160,14 @@ const TOILET: AssetDef[] = [
     surfaces: [{ y: T_MOUNT + 8, h: 28 }],
     category: 'toiletry',
   }),
-  def('ws-toilet-shelf-1', '马桶上方搁板', [60, 16, 8], SHELF_PALS, openShelf(60, 16, 1, 0, T_MOUNT + 15), {
+  define('ws-toilet-shelf-1', '马桶上方搁板', 'storage', [60, 16, 8], SHELF_PALS, openShelf(60, 16, 1, 0, T_MOUNT + 15), {
     family: 'ws-toilet-shelf',
     sizeLabel: '单层',
     mount: T_MOUNT + 15,
     surface: T_MOUNT + 23,
     category: 'toiletry',
   }),
-  def('ws-toilet-cab', '马桶上方吊柜', [60, 25, 60], CAB_PALS, wallCabinet(60, 25, 60, T_MOUNT, 20), {
+  define('ws-toilet-cab', '马桶上方吊柜', 'storage', [60, 25, 60], CAB_PALS, wallCabinet(60, 25, 60, T_MOUNT, 20), {
     mount: T_MOUNT,
     surfaces: [{ y: T_MOUNT + 2, h: 18 }, ...cabLevels(60, 25, 60, T_MOUNT, 20)],
     openable: true,

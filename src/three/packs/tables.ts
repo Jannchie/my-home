@@ -3,15 +3,10 @@
 
 import { ball, cyl, puck, rbox, shade, torus } from '../toon'
 import { C, G, ellipsePoly, legs, lPoly, rectPoly, slab, type AssetDef, type Poly } from '../kit'
-import { I, J, M, N, R, type Pal } from '../packkit'
+import { I, J, M, N, R, pal } from '../packkit'
 import { fitPoly } from '../geo'
 
 // ---------- 配色 ----------
-
-/** 带风格标注的配色组：展开成 palettes / paletteStyles / styles */
-function pal(...xs: Pal[]) {
-  return { palettes: xs.map((x) => x[1]), paletteStyles: xs.map((x) => x[0]), styles: [...new Set(xs.map((x) => x[0]))] }
-}
 
 /** 书桌：[桌面, 框架, 点缀] */
 const DESK_PAL = pal(

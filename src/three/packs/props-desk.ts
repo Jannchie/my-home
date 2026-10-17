@@ -4,9 +4,12 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, face, puck, rbox, shade, toon, torus, tray } from '../toon'
-import { C, clipLevels, glow, rng, rod, shell, type AssetCategory, type AssetDef, type Fx, type ScreenPanel, paintPanel, paintLandscape } from '../kit'
+import { C, clipLevels, glow, rng, rod, shell, type AssetDef, type Fx, type ScreenPanel, paintPanel, paintLandscape } from '../kit'
 import { P, cylX, cylZ, ghostOutlined, litOutlined, noOutline } from '../geo'
-import { I, J, M, N, R, type Pal } from '../packkit'
+import { I, J, M, N, PROP, R, definer, type Pal } from '../packkit'
+
+/** 本包默认是桌面摆件（prop: true） */
+const def = definer(PROP)
 
 // ---------- 配色 / 定义 ----------
 
@@ -14,31 +17,6 @@ const SCREEN = '#bfe3ff'
 const SKIN = '#ffe3d1'
 const SOIL = '#8b6a4f'
 const WARM = '#ffd27a'
-
-function def(
-  id: string,
-  name: string,
-  category: AssetCategory,
-  [w, d, h]: [number, number, number],
-  pals: Pal[],
-  build: (p: string[]) => THREE.Group,
-  extra: Partial<AssetDef> = {},
-): AssetDef {
-  return {
-    id,
-    name,
-    category,
-    w,
-    d,
-    h,
-    palettes: pals.map((x) => x[1]),
-    paletteStyles: pals.map((x) => x[0]),
-    styles: [...new Set(pals.map((x) => x[0]))],
-    build,
-    prop: true,
-    ...extra,
-  }
-}
 
 // ---------- 小工具 ----------
 

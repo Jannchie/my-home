@@ -11,7 +11,10 @@ import * as THREE from 'three'
 import { ball, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, glow, holePanel, rng, shell, type AssetDef } from '../kit'
 import { P, PI, cappedTube, centerXZInPlace, fitBuild, litDeep, noOutlineDeep, rod3, type TubeOpts, type V3 } from '../geo'
-import { I, J, M, N, R, type Build, type Dims, type Pal } from '../packkit'
+import { I, J, M, N, R, definer, type Build, type Dims, type Pal } from '../packkit'
+
+/** 分类在调用处写 pets；除挂起形态外 build 之后按包围盒居中、贴地 */
+const def = definer({}, (b, e) => (e.form !== 'hanging' ? fitBuild(b) : b))
 
 /** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
 const TUBE: TubeOpts = { seg: { per: 6, min: 12 }, radial: 10, group: true }
@@ -33,23 +36,7 @@ const BIRD_HOME = { scope: 'house' as const, max: 1, group: 'ph-bird-cage' }
 
 // ---------- 定义 ----------
 
-function def(id: string, name: string, [w, d, h]: Dims, pals: Pal[], build: Build, extra: Partial<AssetDef> = {}): AssetDef {
-  if (extra.form !== 'hanging') build = fitBuild(build)
-  return {
-    id,
-    name,
-    category: 'pets',
-    w,
-    d,
-    h,
-    palettes: pals.map((x) => x[1]),
-    paletteStyles: pals.map((x) => x[0]),
-    styles: [...new Set(pals.map((x) => x[0]))],
-    build,
-    ...extra,
-  }
-}
-const prop = (id: string, name: string, dims: Dims, pals: Pal[], build: Build, extra: Partial<AssetDef> = {}) => def(id, name, dims, pals, build, { prop: true, ...extra })
+const prop = (id: string, name: string, dims: Dims, pals: Pal[], build: Build, extra: Partial<AssetDef> = {}) => def(id, name, 'pets', dims, pals, build, { prop: true, ...extra })
 
 // ---------- 小工具 ----------
 
@@ -1447,15 +1434,15 @@ export const PET_HABITATS: AssetDef[] = [
   prop('ph-hamster-orb', '仓鼠散步舱', [18.5, 18, 18.4], ORB_PALS, hamsterOrb),
   prop('ph-hamster-carrier', '仓鼠外出提笼', [23, 14.4, 20], CARRIER_PALS, hamsterCarrier),
   // 兔 / 豚鼠 / 龙猫
-  def('ph-rabbit-cage', '两层兔笼', [90.2, 58.8, 92.7], RABBIT_PALS, rabbitCage, { limit: SMALL_HOME }),
-  def('ph-guinea-pen', '豚鼠围栏', [120.2, 60.2, 38.6], GUINEA_PALS, guineaPen, { limit: SMALL_HOME }),
-  def('ph-chinchilla-cage', '龙猫高笼', [64.2, 46.8, 119], CHIN_PALS, chinchillaCage, { limit: SMALL_HOME }),
+  def('ph-rabbit-cage', '两层兔笼', 'pets', [90.2, 58.8, 92.7], RABBIT_PALS, rabbitCage, { limit: SMALL_HOME }),
+  def('ph-guinea-pen', '豚鼠围栏', 'pets', [120.2, 60.2, 38.6], GUINEA_PALS, guineaPen, { limit: SMALL_HOME }),
+  def('ph-chinchilla-cage', '龙猫高笼', 'pets', [64.2, 46.8, 119], CHIN_PALS, chinchillaCage, { limit: SMALL_HOME }),
   // 鸟
   prop('ph-birdcage-dome', '圆顶鸟笼', [29.4, 29.4, 49.6], DOME_PALS, domeStanding, { family: 'ph-birdcage-dome', form: 'standing', limit: BIRD_HOME }),
   prop('ph-birdcage-dome-hanging', '圆顶鸟笼', [29.4, 29.4, 49.6], DOME_PALS, domeHanging, { family: 'ph-birdcage-dome', form: 'hanging', limit: BIRD_HOME }),
-  def('ph-birdcage-stand', '落地鸟笼支架', [60.7, 48, 172.5], STAND_PALS, birdcageStand, { limit: BIRD_HOME }),
+  def('ph-birdcage-stand', '落地鸟笼支架', 'pets', [60.7, 48, 172.5], STAND_PALS, birdcageStand, { limit: BIRD_HOME }),
   prop('ph-birdcage-square', '方形大鸟笼', [46, 41.1, 62.8], SQUARE_PALS, (p) => squareCage(p, 46, 40, 48, ['budgie', 'budgie-blue']), { family: 'ph-birdcage-square', sizeLabel: '桌上 46', limit: BIRD_HOME }),
-  def('ph-birdcage-square-stand', '方形大鸟笼', [60, 47.5, 153], SQUARE_PALS, squareStand, { family: 'ph-birdcage-square', sizeLabel: '带脚架 60', limit: BIRD_HOME }),
+  def('ph-birdcage-square-stand', '方形大鸟笼', 'pets', [60, 47.5, 153], SQUARE_PALS, squareStand, { family: 'ph-birdcage-square', sizeLabel: '带脚架 60', limit: BIRD_HOME }),
   prop('ph-birdcage-bamboo', '和风竹编鸟笼', [30.6, 25.2, 43.1], BAMBOO_PALS, bambooStanding, { family: 'ph-birdcage-bamboo', form: 'standing', limit: BIRD_HOME }),
   prop('ph-birdcage-bamboo-hanging', '和风竹编鸟笼', [30.6, 25.2, 43.1], BAMBOO_PALS, bambooHanging, { family: 'ph-birdcage-bamboo', form: 'hanging', limit: BIRD_HOME }),
   prop('ph-bird-perch', '鸟栖架', [40, 28, 45], PERCH_PALS, perchStand),
@@ -1465,9 +1452,9 @@ export const PET_HABITATS: AssetDef[] = [
   prop('ph-goldfish-bowl', '金鱼缸', [28.2, 28.3, 27.5], GOLDFISH_PALS, goldfishBowl, { family: 'ph-goldfish-bowl', sizeLabel: '波浪口玻璃钵' }),
   prop('ph-medaka-bowl', '青鳉睡莲钵', [38, 38, 22], MEDAKA_PALS, medakaBowl),
   // 狗 / 猫
-  def('ph-dog-crate-s', '狗笼', [63.6, 46.6, 54.7], CRATE_PALS, (p) => dogCrate(p, 62, 45, 50), { family: 'ph-dog-crate', sizeLabel: 'S（小型犬）' }),
-  def('ph-dog-crate-m', '狗笼', [93.6, 60.6, 68.7], CRATE_PALS, (p) => dogCrate(p, 92, 59, 64), { family: 'ph-dog-crate', sizeLabel: 'M（中型犬）' }),
-  def('ph-dog-pen', '狗围栏', [120, 80.5, 61.9], PEN_PALS, dogPen),
+  def('ph-dog-crate-s', '狗笼', 'pets', [63.6, 46.6, 54.7], CRATE_PALS, (p) => dogCrate(p, 62, 45, 50), { family: 'ph-dog-crate', sizeLabel: 'S（小型犬）' }),
+  def('ph-dog-crate-m', '狗笼', 'pets', [93.6, 60.6, 68.7], CRATE_PALS, (p) => dogCrate(p, 92, 59, 64), { family: 'ph-dog-crate', sizeLabel: 'M（中型犬）' }),
+  def('ph-dog-pen', '狗围栏', 'pets', [120, 80.5, 61.9], PEN_PALS, dogPen),
   prop('ph-cat-carrier', '猫外出包', [46, 28, 40.2], BAG_PALS, catCarrier),
   prop('ph-pet-fountain', '宠物饮水机', [20.4, 20.4, 16.3], FOUNTAIN_PALS, petFountain),
 ]

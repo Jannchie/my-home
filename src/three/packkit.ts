@@ -40,6 +40,12 @@ export function pal(...xs: (Pal | PalFlat)[]) {
   return { palettes: xs.map(colorsOf), paletteStyles: xs.map((x) => x[0]), styles: [...new Set(xs.map((x) => x[0]))] }
 }
 
+/** 已有基础字段的定义补上配色组（base.styles 写了就用它，否则按配色组的风格去重） */
+export function withPals(base: Omit<AssetDef, 'palettes' | 'paletteStyles'>, pals: (Pal | PalFlat)[]): AssetDef {
+  const p = pal(...pals)
+  return { ...base, palettes: p.palettes, paletteStyles: p.paletteStyles, styles: base.styles ?? p.styles }
+}
+
 // ---------- 定义 ----------
 
 /** 一条素材定义：基本字段 + 配色展开，extra 覆盖在最后 */

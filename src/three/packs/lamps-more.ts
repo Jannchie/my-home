@@ -10,7 +10,7 @@ import * as THREE from 'three'
 import { ball, cup, cyl, face, puck, rbox, toon, torus } from '../toon'
 import { C, type AssetDef } from '../kit'
 import { G, P, fitGroup, lit, litOutlined, rod3, tube, type TubeOpts, type V3 } from '../geo'
-import { CL, CN, F, I, J, M, N, R, type PalFlat } from '../packkit'
+import { CL, CN, F, I, J, M, N, R, pal, type PalFlat } from '../packkit'
 
 /** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
 const TUBE: TubeOpts = { seg: 40, receive: false }
@@ -37,9 +37,7 @@ function def(id: string, name: string, kind: Kind, sizeLabel: string, [w, d, h]:
     w,
     d,
     h,
-    palettes: pals.map((x) => x.slice(1) as string[]),
-    paletteStyles: pals.map((x) => x[0]),
-    styles: [...new Set(pals.map((x) => x[0]))],
+    ...pal(...pals),
     build,
     family: FAMILY[kind],
     sizeLabel,

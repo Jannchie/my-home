@@ -9,9 +9,12 @@
 
 import * as THREE from 'three'
 import { ball, cup, cyl, rbox, shade, toon, tray } from '../toon'
-import { C, paintPanel, rng, type AssetCategory, type AssetDef } from '../kit'
+import { C, paintPanel, rng, type AssetDef } from '../kit'
 import { G, P, PI, fitGroup, noOutline } from '../geo'
-import { CL, CN, F, I, J, M, N, R, type PalFlat } from '../packkit'
+import { CL, CN, F, I, J, M, N, PROP, R, definer, type PalFlat } from '../packkit'
+
+/** 本包默认是桌面摆件（prop: true） */
+const def = definer(PROP)
 
 type Draw = (g: CanvasRenderingContext2D, W: number, H: number) => void
 const IVORY = '#f6f0e1'
@@ -19,9 +22,6 @@ const PAPER = '#fbf8f0'
 const DARK = '#26262a'
 const RED = '#c8302a'
 
-function def(id: string, name: string, category: AssetCategory, [w, d, h]: [number, number, number], pals: PalFlat[], build: (p: string[]) => THREE.Group, extra: Partial<AssetDef> = {}): AssetDef {
-  return { id, name, category, w, d, h, palettes: pals.map((x) => x.slice(1)), paletteStyles: pals.map((x) => x[0]), styles: [...new Set(pals.map((x) => x[0]))], build, prop: true, ...extra }
-}
 /** 平放的画面：w × d，(x, z) 为中心，y 为高度 */
 const paintTop = (w: number, d: number, key: string, draw: Draw, x: number, y: number, z: number, ry = 0) => {
   const m = paintPanel(w, d, key, draw, { x: 0, y: 0, z: d / 2, rx: -PI / 2 })

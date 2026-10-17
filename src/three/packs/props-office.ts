@@ -6,8 +6,8 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus } from '../toon'
 import { C, CLIP_DROP, SWING_OPEN, clipLevels, glow, movable, rng, shell, rectPoly, type AssetCategory, type AssetDef, type SurfaceDef } from '../kit'
-import { I, J, M, N, R, hasDeclaredCoords, shiftDeclared, type Pal } from '../packkit'
-import { P, PI, cylX, cylZ, fitGroup, fitOffset, ghostOutlined, litOutlined, noOutline, rod3 } from '../geo'
+import { I, J, M, N, PROP, R, define, hasDeclaredCoords, shiftDeclared, type Build, type Dims, type Pal } from '../packkit'
+import { P, PI, cylX, cylZ, fitBuild, fitOffset, ghostOutlined, litOutlined, noOutline, rod3 } from '../geo'
 
 const SCREEN = '#bfe3ff'
 const DARK = '#2c2e34'
@@ -22,34 +22,12 @@ const LCD = '#cfe0b4'
 
 // ---------- 定义 ----------
 
-function def(
-  id: string,
-  name: string,
-  category: AssetCategory,
-  [w, d, h]: [number, number, number],
-  pals: Pal[],
-  build: (p: string[]) => THREE.Group,
-  extra: Partial<AssetDef> = {},
-  exact = false,
-): AssetDef {
+function def(id: string, name: string, category: AssetCategory, dims: Dims, pals: Pal[], build: Build, extra: Partial<AssetDef> = {}, exact = false): AssetDef {
   const mount = extra.mount ?? 0
   // fit 会把模型重定心：手写的 surface / surfaces / screens 写在 build 的坐标系里，要跟着平移同样的量
   // （之前没跟：一体机的夹式摄像头 / 便签离屏幕 1.5cm，电竞曲面屏 0.66cm）
   if (!exact && hasDeclaredCoords(extra)) extra = shiftDeclared(extra, fitOffset(build(pals[0][1]), mount))
-  return {
-    id,
-    name,
-    category,
-    w,
-    d,
-    h,
-    palettes: pals.map((x) => x[1]),
-    paletteStyles: pals.map((x) => x[0]),
-    styles: [...new Set(pals.map((x) => x[0]))],
-    build: exact ? build : (p) => fitGroup(build(p), mount),
-    prop: true,
-    ...extra,
-  }
+  return define(id, name, category, dims, pals, exact ? build : fitBuild(build, mount), { ...PROP, ...extra })
 }
 
 // ---------- 小工具 ----------

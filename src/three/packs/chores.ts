@@ -7,7 +7,10 @@ import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray, type At } from '../toon'
 import { C, G, glow, paintPanel, rectPoly, rng, shell, type AssetCategory, type AssetDef, type Fx } from '../kit'
 import { P, PI, cappedTube, clearMat, cylX, cylZ, lit, noOutline, rod3, type TubeOpts, type V3 } from '../geo'
-import { I, J, M, N, R, type Build, type Dims, type Pal } from '../packkit'
+import { I, J, M, N, R, definer, type Build, type Dims, type Pal } from '../packkit'
+
+/** 除挂起形态、带特效 / 层板的以外，build 之后按（宽松）包围盒居中，落地件贴地 */
+const def = definer({}, (b, e) => (e.form !== 'hanging' && !e.fx && !e.surfaces ? normalizeLoose(b, !e.mount) : b))
 
 /** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
 const TUBE: TubeOpts = { seg: { per: 6, min: 12 }, radial: 10 }
@@ -17,23 +20,6 @@ const HOSE = '#6f737a'
 
 // ---------- 定义 ----------
 
-function def(id: string, name: string, category: AssetCategory, [w, d, h]: Dims, pals: Pal[], build: Build, extra: Partial<AssetDef> = {}): AssetDef {
-  // 普通形态统一在 xz 上居中、最低点贴地（壁挂的只居中）；挂起形态、带特效点或层板坐标的保持原样
-  if (extra.form !== 'hanging' && !extra.fx && !extra.surfaces) build = normalizeLoose(build, !extra.mount)
-  return {
-    id,
-    name,
-    category,
-    w,
-    d,
-    h,
-    palettes: pals.map((x) => x[1]),
-    paletteStyles: pals.map((x) => x[0]),
-    styles: [...new Set(pals.map((x) => x[0]))],
-    build,
-    ...extra,
-  }
-}
 const prop = (id: string, name: string, category: AssetCategory, dims: Dims, pals: Pal[], build: Build, extra: Partial<AssetDef> = {}) =>
   def(id, name, category, dims, pals, build, { prop: true, ...extra })
 

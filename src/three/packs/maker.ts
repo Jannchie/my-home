@@ -7,9 +7,9 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
-import { C, G, movable, paintPanel, rectPoly, rng, shell, type AssetCategory, type AssetDef, type Poly, type SurfaceDef } from '../kit'
+import { C, G, movable, paintPanel, rectPoly, rng, shell, type AssetDef, type Poly, type SurfaceDef } from '../kit'
 import { P, PI, batten, cappedTube, cylX, cylZ, fitGroup, ghostDeep, lit, noOutlineDeep, rod3, type TubeOpts, type V3 } from '../geo'
-import { I, J, M, N, PROP, R, type PalFlat } from '../packkit'
+import { I, J, M, N, PROP, R, define, type PalFlat } from '../packkit'
 
 /** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
 const TUBE: TubeOpts = { seg: { per: 8, min: 16 } }
@@ -29,22 +29,6 @@ const SOLDER = '#cfd3d8'
 const WIRES = ['#8a5a3a', '#e8453c', '#f2963a', '#f2d23a', '#4caf50', '#3a8ee8', '#9b59d0', '#9a9da3', '#f4f4f2', '#2b2b2b']
 const PASTEL = ['#d9a88a', '#ff9db0', '#ffc28f', '#ffe48f', '#a6e3a0', '#a8d4f4', '#cfb8f3', '#c9ccd2', '#fbf7f1', '#6a6a72']
 const PART_COLORS = ['#e8453c', '#f2963a', '#f2d23a', '#4caf50', '#3a8ee8', '#9b59d0', '#f4f4f2', '#2b2b2b', '#e6c9a0', '#5ac8fa']
-
-function def(id: string, name: string, category: AssetCategory, [w, d, h]: [number, number, number], pals: PalFlat[], build: (p: string[]) => THREE.Group, extra: Partial<AssetDef> = {}): AssetDef {
-  return {
-    id,
-    name,
-    category,
-    w,
-    d,
-    h,
-    palettes: pals.map((x) => x.slice(1) as string[]),
-    paletteStyles: pals.map((x) => x[0]),
-    styles: [...new Set(pals.map((x) => x[0]))],
-    build,
-    ...extra,
-  }
-}
 
 // ======================================================================
 // 小工具
@@ -2477,63 +2461,63 @@ const BENCH_SURF = (peg: boolean): Partial<AssetDef> => ({
 
 export const MAKER: AssetDef[] = [
   // 电子 / 单片机
-  def('mk-arduino', 'Arduino 开发板', 'hobby', [7.3, 5.4, 1.5], BOARD_PALS, (p) => fitGroup(arduinoParts(p[0], p[1], p[2])), PROP),
-  def('mk-raspi', '树莓派', 'hobby', [8.8, 6, 2], PI_PALS, (p) => fitGroup(raspiParts(p[0], p[1], p[2])), PROP),
-  def('mk-esp32', 'ESP32 开发板', 'hobby', [5.4, 2.9, 1.5], BOARD_PALS, esp32, PROP),
-  def('mk-bluepill', 'STM32 蓝丸板', 'hobby', [5.5, 2.4, 1.9], [['modern', '#2f5fb5', HDR, '#7cff8a'], ['industrial', '#2a2b30', HDR, '#7cff8a'], ['cute', '#9b6fd0', HDR, C.pink]], bluePill, PROP),
-  def('mk-breadboard-full', '面包板', 'hobby', [16.5, 5.5, 2.6], BB_PALS, breadboardFull, { ...PROP, family: 'mk-breadboard', sizeLabel: '830 孔' }),
-  def('mk-breadboard-half', '面包板', 'hobby', [8.2, 5.5, 2.6], BB_PALS, breadboardHalf, { ...PROP, family: 'mk-breadboard', sizeLabel: '400 孔' }),
-  def('mk-pcb-stack', '裸 PCB 一摞', 'hobby', [17.6, 10.8, 1.3], [['industrial', '#2f7d4a', '#9b6fd0'], ['modern', '#2a2b30', '#1f6fb2'], ['cute', '#f2f2ee', '#d9468f'], ['modern', '#1f6fb2', '#c8473a']], pcbStack, PROP),
-  def('mk-smd-reels', '贴片元件卷带', 'hobby', [8, 20.6, 18.8], REEL_PALS, smdReels, PROP),
-  def('mk-parts-box', '元件收纳盒', 'hobby', [19, 12.7, 3.7], CASE_PALS, partsBox, PROP),
-  def('mk-dupont-lying', '杜邦线', 'hobby', [19.5, 11, 0.5], DUPONT_PALS, dupontLying, { ...PROP, ...H, form: 'lying' }),
-  def('mk-dupont-hanging', '杜邦线', 'hobby', [1.5, 5.5, 15.7], DUPONT_PALS, dupontHanging, { ...PROP, ...H, form: 'hanging' }),
-  def('mk-servo-set', '舵机与减速电机', 'hobby', [21.2, 9, 4.4], SERVO_PALS, servoSet, PROP),
-  def('mk-robot-car', '小车底盘套件', 'hobby', [18.7, 20.5, 10.3], CAR_PALS, robotCar, PROP),
-  def('mk-led-strip', 'LED 灯带卷', 'hobby', [21.3, 27.6, 10.3], STRIP_PALS, ledStrip, PROP),
-  def('mk-battery-box', '电池盒', 'hobby', [8.6, 13.5, 1.6], BATT_PALS, batteryBox, PROP),
-  def('mk-18650', '18650 电池与充电器', 'hobby', [13.7, 10.9, 6.6], CELL_PALS, charger18650, PROP),
-  def('mk-oled', 'OLED 屏模块', 'hobby', [4.6, 3.5, 4.4], OLED_PALS, oledModule, PROP),
+  define('mk-arduino', 'Arduino 开发板', 'hobby', [7.3, 5.4, 1.5], BOARD_PALS, (p) => fitGroup(arduinoParts(p[0], p[1], p[2])), PROP),
+  define('mk-raspi', '树莓派', 'hobby', [8.8, 6, 2], PI_PALS, (p) => fitGroup(raspiParts(p[0], p[1], p[2])), PROP),
+  define('mk-esp32', 'ESP32 开发板', 'hobby', [5.4, 2.9, 1.5], BOARD_PALS, esp32, PROP),
+  define('mk-bluepill', 'STM32 蓝丸板', 'hobby', [5.5, 2.4, 1.9], [['modern', '#2f5fb5', HDR, '#7cff8a'], ['industrial', '#2a2b30', HDR, '#7cff8a'], ['cute', '#9b6fd0', HDR, C.pink]], bluePill, PROP),
+  define('mk-breadboard-full', '面包板', 'hobby', [16.5, 5.5, 2.6], BB_PALS, breadboardFull, { ...PROP, family: 'mk-breadboard', sizeLabel: '830 孔' }),
+  define('mk-breadboard-half', '面包板', 'hobby', [8.2, 5.5, 2.6], BB_PALS, breadboardHalf, { ...PROP, family: 'mk-breadboard', sizeLabel: '400 孔' }),
+  define('mk-pcb-stack', '裸 PCB 一摞', 'hobby', [17.6, 10.8, 1.3], [['industrial', '#2f7d4a', '#9b6fd0'], ['modern', '#2a2b30', '#1f6fb2'], ['cute', '#f2f2ee', '#d9468f'], ['modern', '#1f6fb2', '#c8473a']], pcbStack, PROP),
+  define('mk-smd-reels', '贴片元件卷带', 'hobby', [8, 20.6, 18.8], REEL_PALS, smdReels, PROP),
+  define('mk-parts-box', '元件收纳盒', 'hobby', [19, 12.7, 3.7], CASE_PALS, partsBox, PROP),
+  define('mk-dupont-lying', '杜邦线', 'hobby', [19.5, 11, 0.5], DUPONT_PALS, dupontLying, { ...PROP, ...H, form: 'lying' }),
+  define('mk-dupont-hanging', '杜邦线', 'hobby', [1.5, 5.5, 15.7], DUPONT_PALS, dupontHanging, { ...PROP, ...H, form: 'hanging' }),
+  define('mk-servo-set', '舵机与减速电机', 'hobby', [21.2, 9, 4.4], SERVO_PALS, servoSet, PROP),
+  define('mk-robot-car', '小车底盘套件', 'hobby', [18.7, 20.5, 10.3], CAR_PALS, robotCar, PROP),
+  define('mk-led-strip', 'LED 灯带卷', 'hobby', [21.3, 27.6, 10.3], STRIP_PALS, ledStrip, PROP),
+  define('mk-battery-box', '电池盒', 'hobby', [8.6, 13.5, 1.6], BATT_PALS, batteryBox, PROP),
+  define('mk-18650', '18650 电池与充电器', 'hobby', [13.7, 10.9, 6.6], CELL_PALS, charger18650, PROP),
+  define('mk-oled', 'OLED 屏模块', 'hobby', [4.6, 3.5, 4.4], OLED_PALS, oledModule, PROP),
   // 仪器 / 工具
-  def('mk-solder-station', '电烙铁台', 'hobby', [21, 19.8, 15.7], STATION_PALS, solderStation, PROP),
-  def('mk-hot-air', '热风枪拆焊台', 'hobby', [21.8, 23.1, 10], STATION_PALS, hotAirStation, PROP),
-  def('mk-desolder-pump', '吸锡器', 'hobby', [2.2, 21.2, 2.5], PUMP_PALS, desolderPump, PROP),
-  def('mk-solder-spool', '焊锡丝卷', 'hobby', [8, 9.9, 8.9], SPOOL_PALS, solderSpool, PROP),
-  def('mk-flux', '助焊剂', 'hobby', [12.4, 9.9, 1.6], FLUX_PALS, fluxSet, PROP),
-  def('mk-helping-hands', '第三只手', 'hobby', [15, 10.6, 21.3], HH_PALS, helpingHands, PROP),
-  def('mk-multimeter', '万用表', 'hobby', [15.5, 19.8, 6.1], METER_PALS, multimeter, PROP),
-  def('mk-oscilloscope', '示波器', 'hobby', [31, 22.6, 16], SCOPE_PALS, oscilloscope, PROP),
-  def('mk-bench-psu', '可调直流电源', 'hobby', [13, 35.9, 16], PSU_PALS, benchPsu, PROP),
-  def('mk-sig-gen', '信号发生器', 'hobby', [23, 27.4, 10.5], PSU_PALS, sigGen, PROP),
-  def('mk-logic-analyzer', '逻辑分析仪', 'hobby', [12.8, 23.9, 2], LA_PALS, logicAnalyzer, PROP),
-  def('mk-usb-microscope', 'USB 显微镜', 'hobby', [16, 17.5, 19.5], MICRO_PALS, usbMicroscope, PROP),
-  def('mk-glue-gun', '热熔胶枪', 'hobby', [9.6, 25, 11.2], TOOL_PALS, glueGun, PROP),
-  def('mk-e-screwdriver', '电动螺丝刀', 'hobby', [14.6, 5.8, 16.6], TOOL_PALS, eScrewdriver, PROP),
-  def('mk-rotary-tool', '迷你电磨', 'hobby', [24.9, 13.5, 4.5], TOOL_PALS, rotaryTool, PROP),
-  def('mk-stripper-lying', '剥线钳', 'hobby', [4.5, 18.1, 2.1], STRIP_TOOL_PALS, stripperLying, { ...PROP, ...ST, form: 'lying' }),
-  def('mk-stripper-hanging', '剥线钳', 'hobby', [4.5, 3.8, 20], STRIP_TOOL_PALS, stripperHanging, { ...PROP, ...ST, form: 'hanging' }),
-  def('mk-esd-strap', '静电手环', 'hobby', [20.3, 5.7, 1.2], ESD_PALS, esdStrap, PROP),
-  def('mk-esd-mat', 'ESD 防静电垫', 'hobby', [60, 40, 0.6], MAT_PALS, esdMat, { ...PROP, surface: 0.4 }),
-  def('mk-mag-lamp', '放大镜台灯', 'hobby', [18.2, 38.4, 34.8], MAG_PALS, magLamp, PROP),
+  define('mk-solder-station', '电烙铁台', 'hobby', [21, 19.8, 15.7], STATION_PALS, solderStation, PROP),
+  define('mk-hot-air', '热风枪拆焊台', 'hobby', [21.8, 23.1, 10], STATION_PALS, hotAirStation, PROP),
+  define('mk-desolder-pump', '吸锡器', 'hobby', [2.2, 21.2, 2.5], PUMP_PALS, desolderPump, PROP),
+  define('mk-solder-spool', '焊锡丝卷', 'hobby', [8, 9.9, 8.9], SPOOL_PALS, solderSpool, PROP),
+  define('mk-flux', '助焊剂', 'hobby', [12.4, 9.9, 1.6], FLUX_PALS, fluxSet, PROP),
+  define('mk-helping-hands', '第三只手', 'hobby', [15, 10.6, 21.3], HH_PALS, helpingHands, PROP),
+  define('mk-multimeter', '万用表', 'hobby', [15.5, 19.8, 6.1], METER_PALS, multimeter, PROP),
+  define('mk-oscilloscope', '示波器', 'hobby', [31, 22.6, 16], SCOPE_PALS, oscilloscope, PROP),
+  define('mk-bench-psu', '可调直流电源', 'hobby', [13, 35.9, 16], PSU_PALS, benchPsu, PROP),
+  define('mk-sig-gen', '信号发生器', 'hobby', [23, 27.4, 10.5], PSU_PALS, sigGen, PROP),
+  define('mk-logic-analyzer', '逻辑分析仪', 'hobby', [12.8, 23.9, 2], LA_PALS, logicAnalyzer, PROP),
+  define('mk-usb-microscope', 'USB 显微镜', 'hobby', [16, 17.5, 19.5], MICRO_PALS, usbMicroscope, PROP),
+  define('mk-glue-gun', '热熔胶枪', 'hobby', [9.6, 25, 11.2], TOOL_PALS, glueGun, PROP),
+  define('mk-e-screwdriver', '电动螺丝刀', 'hobby', [14.6, 5.8, 16.6], TOOL_PALS, eScrewdriver, PROP),
+  define('mk-rotary-tool', '迷你电磨', 'hobby', [24.9, 13.5, 4.5], TOOL_PALS, rotaryTool, PROP),
+  define('mk-stripper-lying', '剥线钳', 'hobby', [4.5, 18.1, 2.1], STRIP_TOOL_PALS, stripperLying, { ...PROP, ...ST, form: 'lying' }),
+  define('mk-stripper-hanging', '剥线钳', 'hobby', [4.5, 3.8, 20], STRIP_TOOL_PALS, stripperHanging, { ...PROP, ...ST, form: 'hanging' }),
+  define('mk-esd-strap', '静电手环', 'hobby', [20.3, 5.7, 1.2], ESD_PALS, esdStrap, PROP),
+  define('mk-esd-mat', 'ESD 防静电垫', 'hobby', [60, 40, 0.6], MAT_PALS, esdMat, { ...PROP, surface: 0.4 }),
+  define('mk-mag-lamp', '放大镜台灯', 'hobby', [18.2, 38.4, 34.8], MAG_PALS, magLamp, PROP),
   // 机械 / 木工
-  def('mk-bench-vise', '台钳', 'hobby', [14, 18.5, 13.2], VISE_PALS, benchVise, PROP),
-  def('mk-drill-set', '电钻 + 钻头盒', 'hobby', [19.3, 26.3, 19.6], TOOL_PALS, drillSet, PROP),
-  def('mk-angle-grinder', '角磨机', 'hobby', [32, 18.9, 8.2], TOOL_PALS, angleGrinder, PROP),
-  def('mk-jigsaw', '曲线锯（锯木中）', 'hobby', [36.5, 26.3, 20], MACHINE_PALS, jigsawScene, PROP),
-  def('mk-table-saw', '迷你台锯', 'hobby', [34, 35.1, 19.3], MACHINE_PALS, tableSaw, PROP),
-  def('mk-drill-press', '台钻', 'hobby', [20, 36, 57], MACHINE_PALS, drillPress, PROP),
-  def('mk-laser-cutter', '激光切割机', 'hobby', [70, 55, 20.1], LASER_PALS, laserCutter, PROP),
-  def('mk-cnc', '迷你 CNC 雕刻机', 'hobby', [45.9, 36.2, 27.7], CNC_PALS, cnc3018, PROP),
-  def('mk-drawers-desk', '零件抽屉柜', 'storage', [38, 16.2, 29.2], DRAWER_PALS, drawerCab(38, 16, DESK_ROWS, 0), { ...PROP, family: 'mk-parts-drawer', sizeLabel: '桌面 39 格', surface: 29.2, surfaces: drawerCabSurfaces(38, 16, DESK_ROWS, 0), openable: true }),
-  def('mk-drawers-floor', '零件抽屉柜', 'storage', [50, 25.2, 98.8], DRAWER_PALS, drawerCab(50, 25, FLOOR_ROWS, 4), { family: 'mk-parts-drawer', sizeLabel: '落地 60 格', surface: 98.8, surfaces: drawerCabSurfaces(50, 25, FLOOR_ROWS, 4), openable: true }),
-  def('mk-tool-chest', '工具柜', 'storage', [73.5, 47.6, 85], CHEST_PALS, toolChest, { surface: 83.3, surfaceShape: [rectPoly(-32.6 + CHEST_DX, -21.6 + CHEST_DZ, 32.6 + CHEST_DX, 21.6 + CHEST_DZ)], surfaces: chestSurfaces(), openable: true }),
-  def('mk-workbench', '工作台', 'hobby', [150, 79.4, 90], BENCH_PALS, workbench(false), { family: 'mk-workbench', sizeLabel: '150', ...BENCH_SURF(false) }),
-  def('mk-workbench-peg', '工作台', 'hobby', [150, 79.4, 163], BENCH_PALS, workbench(true), { family: 'mk-workbench', sizeLabel: '150 带洞洞板', ...BENCH_SURF(true) }),
-  def('mk-sawhorse', '锯木架', 'hobby', [90, 49.3, 70], HORSE_PALS, sawhorse, { surface: 70, surfaceShape: [rectPoly(-45, -1.9, 45, 1.9)] }),
-  def('mk-lumber', '木料一捆', 'hobby', [114.4, 28.2, 9.7], LUMBER_PALS, lumber),
-  def('mk-screw-sorter', '螺丝分类盒', 'hobby', [26, 21.5, 20.5], SORTER_PALS, screwSorter, PROP),
-  def('mk-sandpaper', '砂纸卷', 'hobby', [25.9, 23.3, 7.1], SAND_PALS, sandpaper, PROP),
+  define('mk-bench-vise', '台钳', 'hobby', [14, 18.5, 13.2], VISE_PALS, benchVise, PROP),
+  define('mk-drill-set', '电钻 + 钻头盒', 'hobby', [19.3, 26.3, 19.6], TOOL_PALS, drillSet, PROP),
+  define('mk-angle-grinder', '角磨机', 'hobby', [32, 18.9, 8.2], TOOL_PALS, angleGrinder, PROP),
+  define('mk-jigsaw', '曲线锯（锯木中）', 'hobby', [36.5, 26.3, 20], MACHINE_PALS, jigsawScene, PROP),
+  define('mk-table-saw', '迷你台锯', 'hobby', [34, 35.1, 19.3], MACHINE_PALS, tableSaw, PROP),
+  define('mk-drill-press', '台钻', 'hobby', [20, 36, 57], MACHINE_PALS, drillPress, PROP),
+  define('mk-laser-cutter', '激光切割机', 'hobby', [70, 55, 20.1], LASER_PALS, laserCutter, PROP),
+  define('mk-cnc', '迷你 CNC 雕刻机', 'hobby', [45.9, 36.2, 27.7], CNC_PALS, cnc3018, PROP),
+  define('mk-drawers-desk', '零件抽屉柜', 'storage', [38, 16.2, 29.2], DRAWER_PALS, drawerCab(38, 16, DESK_ROWS, 0), { ...PROP, family: 'mk-parts-drawer', sizeLabel: '桌面 39 格', surface: 29.2, surfaces: drawerCabSurfaces(38, 16, DESK_ROWS, 0), openable: true }),
+  define('mk-drawers-floor', '零件抽屉柜', 'storage', [50, 25.2, 98.8], DRAWER_PALS, drawerCab(50, 25, FLOOR_ROWS, 4), { family: 'mk-parts-drawer', sizeLabel: '落地 60 格', surface: 98.8, surfaces: drawerCabSurfaces(50, 25, FLOOR_ROWS, 4), openable: true }),
+  define('mk-tool-chest', '工具柜', 'storage', [73.5, 47.6, 85], CHEST_PALS, toolChest, { surface: 83.3, surfaceShape: [rectPoly(-32.6 + CHEST_DX, -21.6 + CHEST_DZ, 32.6 + CHEST_DX, 21.6 + CHEST_DZ)], surfaces: chestSurfaces(), openable: true }),
+  define('mk-workbench', '工作台', 'hobby', [150, 79.4, 90], BENCH_PALS, workbench(false), { family: 'mk-workbench', sizeLabel: '150', ...BENCH_SURF(false) }),
+  define('mk-workbench-peg', '工作台', 'hobby', [150, 79.4, 163], BENCH_PALS, workbench(true), { family: 'mk-workbench', sizeLabel: '150 带洞洞板', ...BENCH_SURF(true) }),
+  define('mk-sawhorse', '锯木架', 'hobby', [90, 49.3, 70], HORSE_PALS, sawhorse, { surface: 70, surfaceShape: [rectPoly(-45, -1.9, 45, 1.9)] }),
+  define('mk-lumber', '木料一捆', 'hobby', [114.4, 28.2, 9.7], LUMBER_PALS, lumber),
+  define('mk-screw-sorter', '螺丝分类盒', 'hobby', [26, 21.5, 20.5], SORTER_PALS, screwSorter, PROP),
+  define('mk-sandpaper', '砂纸卷', 'hobby', [25.9, 23.3, 7.1], SAND_PALS, sandpaper, PROP),
   // 半成品
-  def('mk-teardown', '拆解中的电子产品', 'hobby', [49.6, 20.3, 4.5], TEAR_PALS, teardown, PROP),
-  def('mk-wip-solder', '焊接中的小板', 'hobby', [20.4, 12.2, 7.4], WIP_PALS, wipSoldering, { ...PROP, fx: [{ kind: 'smoke', x: 3.1, y: 6.4, z: -0.8, scale: 0.35, height: 10 }] }),
+  define('mk-teardown', '拆解中的电子产品', 'hobby', [49.6, 20.3, 4.5], TEAR_PALS, teardown, PROP),
+  define('mk-wip-solder', '焊接中的小板', 'hobby', [20.4, 12.2, 7.4], WIP_PALS, wipSoldering, { ...PROP, fx: [{ kind: 'smoke', x: 3.1, y: 6.4, z: -0.8, scale: 0.35, height: 10 }] }),
 ]

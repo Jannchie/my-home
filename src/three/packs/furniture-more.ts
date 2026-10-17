@@ -6,7 +6,7 @@ import * as THREE from 'three'
 import { ball, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, SWING_OPEN, hangingPipe, holePanel, legs, movable, paintPanel, pipeHook, rectPoly, shell, slab, type AssetDef, type DoorMotion, type Hole, type Poly, type SurfaceDef } from '../kit'
 import { batten, cylX, cylZ, glassPane, lit, meshWith, rod3, type V3 } from '../geo'
-import { I, J, M, N, R, type Pal3 } from '../packkit'
+import { I, J, M, N, R, withPals, type Pal3 } from '../packkit'
 
 const BRASS = '#d4b25a'
 const CHROME = '#d0d5db'
@@ -152,18 +152,6 @@ function centerGroupLoose(g: THREE.Group) {
   g.position.z -= (box.min.z + box.max.z) / 2
   out.add(g)
   return out
-}
-
-type Base = Omit<AssetDef, 'palettes' | 'paletteStyles'>
-
-/** 组装素材定义：配色带风格标注；styles 不给就取配色里出现过的风格 */
-function A(base: Base, pals: Pal3[]): AssetDef {
-  return {
-    ...base,
-    palettes: pals.map((p) => [p[1], p[2], p[3]]),
-    paletteStyles: pals.map((p) => p[0]),
-    styles: base.styles ?? [...new Set(pals.map((p) => p[0]))],
-  }
 }
 
 // =====================================================================
@@ -1616,7 +1604,7 @@ const r = rectPoly
 
 export const FURNITURE_MORE: AssetDef[] = [
   // ---------- 沙发 ----------
-  A({ id: 'fm-chesterfield', name: '切斯特菲尔德沙发', category: 'living', w: 198, d: 86, h: 77, styles: ['retro', 'industrial', 'modern'], build: chesterfield }, [
+  withPals({ id: 'fm-chesterfield', name: '切斯特菲尔德沙发', category: 'living', w: 198, d: 86, h: 77, styles: ['retro', 'industrial', 'modern'], build: chesterfield }, [
     ['retro', '#7a2e2a', R.cream, '#5a3a28'],
     ['industrial', I.leather, I.rust, I.iron],
     ['retro', '#2f5a46', R.mustard, R.caramel],
@@ -1624,7 +1612,7 @@ export const FURNITURE_MORE: AssetDef[] = [
     ['cute', C.pink, C.white, C.woodD],
   ]),
   ...[2, 3, 4].map((n) =>
-    A({ id: `fm-modular-${n}`, name: '模块组合沙发', family: 'fm-modular', sizeLabel: `${n} 模块`, category: 'living', w: n * 80 + 28, d: 98, h: 73, build: (p) => modularSofa(n, p) }, [
+    withPals({ id: `fm-modular-${n}`, name: '模块组合沙发', family: 'fm-modular', sizeLabel: `${n} 模块`, category: 'living', w: n * 80 + 28, d: 98, h: 73, build: (p) => modularSofa(n, p) }, [
       ['modern', M.char, M.light, M.black],
       ['modern', M.light, M.char, M.black],
       ['nordic', N.linen, N.sage, N.oak],
@@ -1632,21 +1620,21 @@ export const FURNITURE_MORE: AssetDef[] = [
       ['cute', C.lilac, C.sakura, C.white],
     ]),
   ),
-  A({ id: 'fm-jp-low-sofa', name: '和风矮沙发', category: 'japanese', w: 171, d: 80, h: 62, styles: ['japanese', 'nordic'], build: jpLowSofa }, [
+  withPals({ id: 'fm-jp-low-sofa', name: '和风矮沙发', category: 'japanese', w: 171, d: 80, h: 62, styles: ['japanese', 'nordic'], build: jpLowSofa }, [
     ['japanese', J.washi, J.ai, J.wood],
     ['japanese', J.ai, J.washi, J.hinoki],
     ['japanese', J.tatami, J.shu, J.dark],
     ['nordic', N.gray, N.mustard, N.oak],
     ['nordic', N.sage, N.linen, N.oakL],
   ]),
-  A({ id: 'fm-rattan-sofa', name: '藤编沙发', category: 'living', w: 145, d: 71, h: 81, styles: ['japanese', 'nordic', 'retro'], build: rattanSofa }, [
+  withPals({ id: 'fm-rattan-sofa', name: '藤编沙发', category: 'living', w: 145, d: 71, h: 81, styles: ['japanese', 'nordic', 'retro'], build: rattanSofa }, [
     ['nordic', N.white, N.sage, '#c79a5b'],
     ['japanese', J.washi, J.ai, '#b8884e'],
     ['nordic', N.linen, N.mustard, '#d2a86a'],
     ['cute', C.mint, C.pink, '#d2a86a'],
     ['retro', R.cream, R.orange, R.caramel],
   ]),
-  A({ id: 'fm-curve-sofa', name: '天鹅绒弧形沙发', category: 'living', w: 220, d: 100, h: 72, styles: ['modern', 'cute'], build: curveSofa }, [
+  withPals({ id: 'fm-curve-sofa', name: '天鹅绒弧形沙发', category: 'living', w: 220, d: 100, h: 72, styles: ['modern', 'cute'], build: curveSofa }, [
     ['modern', M.light, M.char, M.black],
     ['cute', C.pink, C.lemon, C.white],
     ['cute', C.lilac, C.sakura, C.white],
@@ -1654,7 +1642,7 @@ export const FURNITURE_MORE: AssetDef[] = [
     ['nordic', N.linen, N.blue, N.oak],
   ]),
   ...([false, true] as const).map((open) =>
-    A({ id: open ? 'fm-recliner-open' : 'fm-recliner', name: '功能躺椅沙发', family: 'fm-recliner', sizeLabel: open ? '躺平' : '坐姿', form: open ? 'open' : 'closed', category: 'living', w: 94, d: open ? 160 : 96, h: open ? 98 : 101, styles: ['modern', 'industrial', 'retro'], build: (p) => recliner(p, open) }, [
+    withPals({ id: open ? 'fm-recliner-open' : 'fm-recliner', name: '功能躺椅沙发', family: 'fm-recliner', sizeLabel: open ? '躺平' : '坐姿', form: open ? 'open' : 'closed', category: 'living', w: 94, d: open ? 160 : 96, h: open ? 98 : 101, styles: ['modern', 'industrial', 'retro'], build: (p) => recliner(p, open) }, [
       ['modern', M.char, M.gray, M.black],
       ['industrial', I.leather, I.rust, I.iron],
       ['retro', R.caramel, R.cream, '#5a3a28'],
@@ -1662,7 +1650,7 @@ export const FURNITURE_MORE: AssetDef[] = [
       ['cute', C.peach, C.white, C.woodD],
     ]),
   ),
-  A({ id: 'fm-booth', name: '双人卡座', category: 'dining', w: 132, d: 63, h: 107, styles: ['retro', 'industrial', 'modern'], build: booth }, [
+  withPals({ id: 'fm-booth', name: '双人卡座', category: 'dining', w: 132, d: 63, h: 107, styles: ['retro', 'industrial', 'modern'], build: booth }, [
     ['retro', R.red, R.cream, R.cream],
     ['retro', R.teal, R.mustard, R.caramel],
     ['retro', R.mustard, R.orange, '#5a3a28'],
@@ -1670,14 +1658,14 @@ export const FURNITURE_MORE: AssetDef[] = [
     ['modern', M.char, M.light, M.walnut],
     ['cute', C.pink, C.white, C.white],
   ]),
-  A({ id: 'fm-cloud-sofa', name: '云朵沙发', category: 'living', w: 200, d: 92, h: 73, styles: ['cute', 'modern'], build: cloudSofa }, [
+  withPals({ id: 'fm-cloud-sofa', name: '云朵沙发', category: 'living', w: 200, d: 92, h: 73, styles: ['cute', 'modern'], build: cloudSofa }, [
     ['cute', C.white, C.pink, C.white],
     ['cute', C.sakura, C.sky, C.white],
     ['cute', C.lemon, C.mint, C.white],
     ['modern', M.white, M.char, M.black],
     ['nordic', N.linen, N.sage, N.oak],
   ]),
-  A({ id: 'fm-daybed', name: '格栅日床', category: 'living', w: 197, d: 89, h: 72, styles: ['nordic', 'japanese', 'retro'], build: daybed }, [
+  withPals({ id: 'fm-daybed', name: '格栅日床', category: 'living', w: 197, d: 89, h: 72, styles: ['nordic', 'japanese', 'retro'], build: daybed }, [
     ['nordic', N.linen, N.mustard, N.oak],
     ['nordic', N.blue, N.white, N.oakL],
     ['japanese', J.washi, J.ai, J.dark],
@@ -1686,14 +1674,14 @@ export const FURNITURE_MORE: AssetDef[] = [
   ]),
 
   // ---------- 床 ----------
-  A({ id: 'fm-canopy-bed', name: '帷幔公主床', category: 'bedroom', w: 155, d: 213, h: 206, styles: ['cute', 'nordic', 'japanese'], build: canopyBed }, [
+  withPals({ id: 'fm-canopy-bed', name: '帷幔公主床', category: 'bedroom', w: 155, d: 213, h: 206, styles: ['cute', 'nordic', 'japanese'], build: canopyBed }, [
     ['cute', C.pink, C.sakura, C.white],
     ['cute', C.lilac, C.white, C.white],
     ['nordic', N.sage, N.linen, N.oak],
     ['japanese', J.ai, J.washi, J.dark],
     ['modern', M.light, M.white, M.black],
   ]),
-  A({
+  withPals({
     id: 'fm-four-poster',
     name: '四柱格栅床',
     category: 'bedroom',
@@ -1717,7 +1705,7 @@ export const FURNITURE_MORE: AssetDef[] = [
       [142, '双人 142'],
     ] as const
   ).map(([w, label]) =>
-    A({ id: `fm-tatami-bed-${w}`, name: '榻榻米床台', family: 'fm-tatami-bed', sizeLabel: label, category: 'japanese', w, d: 212, h: 46, styles: ['japanese', 'nordic', 'modern'], build: (p) => tatamiBed(w, p) }, [
+    withPals({ id: `fm-tatami-bed-${w}`, name: '榻榻米床台', family: 'fm-tatami-bed', sizeLabel: label, category: 'japanese', w, d: 212, h: 46, styles: ['japanese', 'nordic', 'modern'], build: (p) => tatamiBed(w, p) }, [
       ['japanese', J.ai, J.washi, J.wood],
       ['japanese', J.shu, J.washi, J.dark],
       ['nordic', N.sage, N.white, N.oak],
@@ -1725,7 +1713,7 @@ export const FURNITURE_MORE: AssetDef[] = [
       ['cute', C.pink, C.white, C.woodL],
     ]),
   ),
-  A({
+  withPals({
     id: 'fm-storage-bed',
     name: '抽屉储物床',
     family: 'fm-storage-bed',
@@ -1741,20 +1729,20 @@ export const FURNITURE_MORE: AssetDef[] = [
     styles: ['modern', 'nordic', 'cute'],
     build: storageBed,
   }, BED),
-  A({ id: 'fm-round-bed', name: '圆床', category: 'bedroom', w: 220, d: 224, h: 80, styles: ['cute', 'retro', 'modern'], build: roundBed }, [
+  withPals({ id: 'fm-round-bed', name: '圆床', category: 'bedroom', w: 220, d: 224, h: 80, styles: ['cute', 'retro', 'modern'], build: roundBed }, [
     ['cute', C.pink, C.white, C.white],
     ['cute', C.lilac, C.sakura, C.white],
     ['retro', R.red, R.cream, R.caramel],
     ['modern', M.char, M.light, M.black],
   ]),
-  A({ id: 'fm-iron-bed', name: '铁艺床', category: 'bedroom', w: 147, d: 213, h: 113, styles: ['retro', 'industrial', 'cute'], surfaces: [{ y: 0.2, shape: [r(-67, -100, 67, 100)], h: 32.6 }], build: ironBed }, [
+  withPals({ id: 'fm-iron-bed', name: '铁艺床', category: 'bedroom', w: 147, d: 213, h: 113, styles: ['retro', 'industrial', 'cute'], surfaces: [{ y: 0.2, shape: [r(-67, -100, 67, 100)], h: 32.6 }], build: ironBed }, [
     ['retro', R.mustard, R.cream, '#3a3030'],
     ['industrial', I.rust, I.concrete, I.iron],
     ['cute', C.pink, C.white, C.white],
     ['nordic', N.sage, N.white, M.black],
     ['retro', R.teal, R.cream, R.cream],
   ]),
-  A({ id: 'fm-nordic-bed', name: '北欧高脚床', category: 'bedroom', w: 160, d: 215, h: 100, styles: ['nordic', 'modern'], surfaces: [{ y: 0.2, shape: [r(-68, -94, 68, 100)], h: 29.6 }], build: nordicBed }, [
+  withPals({ id: 'fm-nordic-bed', name: '北欧高脚床', category: 'bedroom', w: 160, d: 215, h: 100, styles: ['nordic', 'modern'], surfaces: [{ y: 0.2, shape: [r(-68, -94, 68, 100)], h: 29.6 }], build: nordicBed }, [
     ['nordic', N.sage, N.white, N.oak],
     ['nordic', N.mustard, N.linen, N.oakL],
     ['nordic', N.blue, N.white, N.white],
@@ -1762,7 +1750,7 @@ export const FURNITURE_MORE: AssetDef[] = [
     ['cute', C.mint, C.white, C.woodL],
   ]),
   ...([true, false] as const).map((open) =>
-    A({ id: open ? 'fm-folding-bed' : 'fm-folding-bed-closed', name: '折叠床', family: 'fm-folding-bed', sizeLabel: open ? '打开' : '收起', form: open ? 'open' : 'closed', category: 'bedroom', w: open ? 91 : 92, d: open ? 199 : 36, h: open ? 51 : 117, styles: ['modern', 'industrial', 'cute'], build: (p) => (open ? foldingBedOpen(p) : foldingBedClosed(p)) }, [
+    withPals({ id: open ? 'fm-folding-bed' : 'fm-folding-bed-closed', name: '折叠床', family: 'fm-folding-bed', sizeLabel: open ? '打开' : '收起', form: open ? 'open' : 'closed', category: 'bedroom', w: open ? 91 : 92, d: open ? 199 : 36, h: open ? 51 : 117, styles: ['modern', 'industrial', 'cute'], build: (p) => (open ? foldingBedOpen(p) : foldingBedClosed(p)) }, [
       ['cute', C.sky, C.white, C.white],
       ['nordic', N.gray, N.white, N.white],
       ['modern', M.char, M.light, M.black],
@@ -1770,7 +1758,7 @@ export const FURNITURE_MORE: AssetDef[] = [
       ['retro', R.orange, R.cream, R.cream],
     ]),
   ),
-  A({ id: 'fm-hotel-bed', name: '酒店风软包床', category: 'bedroom', w: 192, d: 258, h: 130, styles: ['modern', 'nordic', 'retro'], build: hotelBed }, [
+  withPals({ id: 'fm-hotel-bed', name: '酒店风软包床', category: 'bedroom', w: 192, d: 258, h: 130, styles: ['modern', 'nordic', 'retro'], build: hotelBed }, [
     ['modern', M.char, M.white, M.walnut],
     ['modern', '#b9a892', M.white, M.char],
     ['nordic', N.blue, N.white, N.oak],
@@ -1778,7 +1766,7 @@ export const FURNITURE_MORE: AssetDef[] = [
     ['industrial', I.leather, '#efe9de', I.iron],
     ['cute', C.pink, C.white, C.white],
   ]),
-  A({ id: 'fm-car-bed', name: '跑车儿童床', category: 'kids', w: 110, d: 225, h: 71, styles: ['cute', 'retro'], build: carBed }, [
+  withPals({ id: 'fm-car-bed', name: '跑车儿童床', category: 'kids', w: 110, d: 225, h: 71, styles: ['cute', 'retro'], build: carBed }, [
     ['cute', C.red, C.sky, C.white],
     ['cute', C.pink, C.white, C.lemon],
     ['cute', C.sky, C.lemon, C.white],
@@ -1787,7 +1775,7 @@ export const FURNITURE_MORE: AssetDef[] = [
 
   // ---------- 柜类 ----------
   ...[120, 180].map((w) =>
-    A({ id: `fm-sliding-wardrobe-${w}`, name: '推拉门衣柜', family: 'fm-sliding-wardrobe', sizeLabel: `${w}`, category: 'bedroom', w: w + 1, d: 61, h: 200, surface: 200, surfaces: slidingWardrobeSurfaces(w), openable: true, styles: ['modern', 'nordic', 'japanese'], build: (p) => slidingWardrobe(w, p) }, [
+    withPals({ id: `fm-sliding-wardrobe-${w}`, name: '推拉门衣柜', family: 'fm-sliding-wardrobe', sizeLabel: `${w}`, category: 'bedroom', w: w + 1, d: 61, h: 200, surface: 200, surfaces: slidingWardrobeSurfaces(w), openable: true, styles: ['modern', 'nordic', 'japanese'], build: (p) => slidingWardrobe(w, p) }, [
       ['modern', M.white, M.light, M.silver],
       ['modern', M.char, M.walnut, M.silver],
       ['nordic', N.white, N.oak, N.oak],
@@ -1795,7 +1783,7 @@ export const FURNITURE_MORE: AssetDef[] = [
       ['cute', C.white, C.sakura, C.lemon],
     ]),
   ),
-  A({
+  withPals({
     id: 'fm-closet-system',
     name: '开放式衣帽间',
     category: 'bedroom',
@@ -1816,7 +1804,7 @@ export const FURNITURE_MORE: AssetDef[] = [
     openable: true,
     build: closetSystem,
   }, CAB),
-  A({
+  withPals({
     id: 'fm-shokkidana',
     name: '食器棚',
     category: 'dining',
@@ -1843,14 +1831,14 @@ export const FURNITURE_MORE: AssetDef[] = [
     ['cute', C.white, C.mint, C.pink],
     ['industrial', I.walnut, I.iron, I.steel],
   ]),
-  A({ id: 'fm-mizuya', name: '水屋箪笥', category: 'japanese', w: 122, d: 47, h: 175, surface: 175, surfaceShape: [r(-60, -23, 60, 18)], surfaces: mizuyaSurfaces(), openable: true, styles: ['japanese', 'retro'], build: mizuya }, [
+  withPals({ id: 'fm-mizuya', name: '水屋箪笥', category: 'japanese', w: 122, d: 47, h: 175, surface: 175, surfaceShape: [r(-60, -23, 60, 18)], surfaces: mizuyaSurfaces(), openable: true, styles: ['japanese', 'retro'], build: mizuya }, [
     ['japanese', J.wood, J.washi, J.sumi],
     ['japanese', J.dark, J.washi, J.sumi],
     ['japanese', J.hinoki, J.washi, '#4a4040'],
     ['retro', R.caramel, R.cream, '#3a3030'],
     ['nordic', N.oak, N.white, M.black],
   ]),
-  A({ id: 'fm-record-cabinet', name: '唱片柜', category: 'living', w: 122, d: 46, h: 62, surface: 62, surfaces: [18.9, 40].map((y) => ({ y, h: 19, inside: true, shape: [r(31.5, -19, 57, 19.5)] })), openable: true, styles: ['retro', 'nordic', 'industrial'], build: recordCabinet }, [
+  withPals({ id: 'fm-record-cabinet', name: '唱片柜', category: 'living', w: 122, d: 46, h: 62, surface: 62, surfaces: [18.9, 40].map((y) => ({ y, h: 19, inside: true, shape: [r(31.5, -19, 57, 19.5)] })), openable: true, styles: ['retro', 'nordic', 'industrial'], build: recordCabinet }, [
     ['retro', R.caramel, R.cream, R.mustard],
     ['retro', R.teal, R.cream, BRASS],
     ['nordic', N.oak, N.white, M.black],
@@ -1858,7 +1846,7 @@ export const FURNITURE_MORE: AssetDef[] = [
     ['modern', M.walnut, M.char, M.silver],
   ]),
   ...([true, false] as const).map((tall) =>
-    A({ id: tall ? 'fm-locker' : 'fm-locker-grid', name: '金属储物柜', family: 'fm-locker', sizeLabel: tall ? '3 门高柜' : '9 格矮柜', category: 'storage', w: 90, d: 48, h: tall ? 180 : 90, surface: tall ? 180 : 90, surfaces: lockerSurfaces(tall), openable: true, styles: ['industrial', 'retro', 'cute'], build: (p) => locker(tall, p) }, [
+    withPals({ id: tall ? 'fm-locker' : 'fm-locker-grid', name: '金属储物柜', family: 'fm-locker', sizeLabel: tall ? '3 门高柜' : '9 格矮柜', category: 'storage', w: 90, d: 48, h: tall ? 180 : 90, surface: tall ? 180 : 90, surfaces: lockerSurfaces(tall), openable: true, styles: ['industrial', 'retro', 'cute'], build: (p) => locker(tall, p) }, [
       ['industrial', '#5f7470', '#6f8782', M.silver],
       ['industrial', I.iron, I.steel, M.silver],
       ['retro', '#d9d3c0', '#e8e2cf', I.steel],
@@ -1866,14 +1854,14 @@ export const FURNITURE_MORE: AssetDef[] = [
       ['cute', C.sky, C.mint, C.white],
     ]),
   ),
-  A({ id: 'fm-apothecary', name: '药柜（百味箪笥）', category: 'storage', w: 102, d: 39, h: 120, surface: 120, surfaces: APOTHECARY_CELLS.map(([x, y]) => drawerSurf(x - (APO_CW - 2.4) / 2, x + (APO_CW - 2.4) / 2, y + 1.3, 16.6, 30, APO_RH - 5, 18)), openable: true, styles: ['retro', 'japanese', 'industrial'], build: apothecary }, [
+  withPals({ id: 'fm-apothecary', name: '药柜（百味箪笥）', category: 'storage', w: 102, d: 39, h: 120, surface: 120, surfaces: APOTHECARY_CELLS.map(([x, y]) => drawerSurf(x - (APO_CW - 2.4) / 2, x + (APO_CW - 2.4) / 2, y + 1.3, 16.6, 30, APO_RH - 5, 18)), openable: true, styles: ['retro', 'japanese', 'industrial'], build: apothecary }, [
     ['retro', R.caramel, shade(R.caramel, 0.06), BRASS],
     ['japanese', J.dark, J.hinoki, J.sumi],
     ['industrial', I.walnut, shade(I.walnut, 0.06), I.steel],
     ['nordic', N.oak, N.white, M.black],
     ['cute', C.woodL, C.white, C.pink],
   ]),
-  A({
+  withPals({
     id: 'fm-hall-tree',
     name: '玄关挂衣凳柜',
     category: 'entrance',
@@ -1899,7 +1887,7 @@ export const FURNITURE_MORE: AssetDef[] = [
     ['modern', M.char, M.light, M.silver],
   ]),
   ...[2, 3].map((n) =>
-    A({ id: `fm-tilt-shoe-${n}`, name: '翻斗鞋柜', family: 'fm-tilt-shoe', sizeLabel: `${n} 层`, category: 'entrance', w: 80, d: 27, h: 12 + n * 36, surface: 12 + n * 36, surfaces: Array.from({ length: n }, (_, i) => ({ y: 11.6 + i * 36, h: 33, inside: true, shape: [r(-38, -11.5, 38, 9.5)] })), openable: true, styles: ['modern', 'nordic', 'cute'], build: (p) => tiltShoe(n, p) }, [
+    withPals({ id: `fm-tilt-shoe-${n}`, name: '翻斗鞋柜', family: 'fm-tilt-shoe', sizeLabel: `${n} 层`, category: 'entrance', w: 80, d: 27, h: 12 + n * 36, surface: 12 + n * 36, surfaces: Array.from({ length: n }, (_, i) => ({ y: 11.6 + i * 36, h: 33, inside: true, shape: [r(-38, -11.5, 38, 9.5)] })), openable: true, styles: ['modern', 'nordic', 'cute'], build: (p) => tiltShoe(n, p) }, [
       ['modern', M.white, M.white, M.black],
       ['modern', M.char, M.gray, M.silver],
       ['nordic', N.white, N.oak, N.oak],
@@ -1908,7 +1896,7 @@ export const FURNITURE_MORE: AssetDef[] = [
       ['retro', R.cream, R.mustard, R.caramel],
     ]),
   ),
-  A({
+  withPals({
     id: 'fm-kitchen-island',
     name: '厨房中岛',
     category: 'dining',
@@ -1932,7 +1920,7 @@ export const FURNITURE_MORE: AssetDef[] = [
     ['retro', R.teal, R.caramel, BRASS],
     ['cute', C.mint, C.woodL, C.white],
   ]),
-  A({
+  withPals({
     id: 'fm-kitchen-cart',
     name: '厨房推车',
     category: 'dining',
@@ -1953,7 +1941,7 @@ export const FURNITURE_MORE: AssetDef[] = [
     ['nordic', N.white, N.oak, N.oak],
     ['modern', M.black, M.walnut, M.silver],
   ]),
-  A({
+  withPals({
     id: 'fm-wine-cabinet',
     name: '酒柜',
     category: 'dining',
@@ -1975,7 +1963,7 @@ export const FURNITURE_MORE: AssetDef[] = [
     ['modern', M.black, M.char, M.silver],
     ['nordic', N.oak, N.white, N.oak],
   ]),
-  A({
+  withPals({
     id: 'fm-arch-cabinet',
     name: '拱形玻璃柜',
     category: 'living',
@@ -2000,7 +1988,7 @@ export const FURNITURE_MORE: AssetDef[] = [
   ]),
 
   // ---------- 桌台 ----------
-  A({
+  withPals({
     id: 'fm-kyodai',
     name: '和风镜台',
     category: 'japanese',
@@ -2019,7 +2007,7 @@ export const FURNITURE_MORE: AssetDef[] = [
     ['retro', R.caramel, R.red, BRASS],
     ['cute', C.woodL, C.pink, C.lemon],
   ]),
-  A({
+  withPals({
     id: 'fm-secretary',
     name: '翻盖书桌',
     category: 'study',
@@ -2039,7 +2027,7 @@ export const FURNITURE_MORE: AssetDef[] = [
     ['nordic', N.oak, N.sage, M.black],
     ['cute', C.white, C.sakura, C.lemon],
   ]),
-  A({
+  withPals({
     id: 'fm-pc-hutch',
     name: '电脑台（上方书架）',
     category: 'study',
@@ -2063,7 +2051,7 @@ export const FURNITURE_MORE: AssetDef[] = [
     ['nordic', N.oak, N.white, N.oak],
     ['cute', C.white, C.sky, C.pink],
   ]),
-  A({
+  withPals({
     id: 'fm-gakushu-desk',
     name: '学習机',
     category: 'kids',
@@ -2090,14 +2078,14 @@ export const FURNITURE_MORE: AssetDef[] = [
     ['cute', C.woodL, C.sky, C.white],
     ['nordic', N.oak, N.white, N.sage],
   ]),
-  A({ id: 'fm-c-table', name: 'C 形边桌', category: 'living', w: 50, d: 40, h: 62, surface: 62, styles: ['modern', 'nordic', 'industrial'], build: cTable }, [
+  withPals({ id: 'fm-c-table', name: 'C 形边桌', category: 'living', w: 50, d: 40, h: 62, surface: 62, styles: ['modern', 'nordic', 'industrial'], build: cTable }, [
     ['modern', M.white, M.black, M.black],
     ['modern', M.walnut, M.silver, M.silver],
     ['nordic', N.oak, N.white, N.white],
     ['industrial', I.walnut, I.iron, I.iron],
     ['cute', C.sakura, C.white, C.white],
   ]),
-  A({ id: 'fm-bar-counter', name: '吧台', category: 'dining', w: 150, d: 60, h: 108, surface: 108, surfaces: [{ y: 52.5, shape: [r(-70, -23.5, 70, 13)], h: 50.5 }], styles: ['industrial', 'retro', 'modern'], build: barCounter }, [
+  withPals({ id: 'fm-bar-counter', name: '吧台', category: 'dining', w: 150, d: 60, h: 108, surface: 108, surfaces: [{ y: 52.5, shape: [r(-70, -23.5, 70, 13)], h: 50.5 }], styles: ['industrial', 'retro', 'modern'], build: barCounter }, [
     ['industrial', I.walnut, I.iron, I.steel],
     ['industrial', '#8a5a3a', I.concrete, I.iron],
     ['retro', R.caramel, R.cream, BRASS],
@@ -2106,7 +2094,7 @@ export const FURNITURE_MORE: AssetDef[] = [
   ]),
 
   // ---------- 其他 ----------
-  A({ id: 'fm-divider-shelf', name: '隔断书架', category: 'storage', w: 120, d: 35, h: 150, surface: 150, surfaces: [6.5, 52.5, 99.5].map((y, i) => ({ y, shape: [r(-57.5, -17.5, 57.5, 17.5)], h: [43.5, 44.5, 48][i] })), styles: ['nordic', 'modern', 'industrial'], build: dividerShelf }, [
+  withPals({ id: 'fm-divider-shelf', name: '隔断书架', category: 'storage', w: 120, d: 35, h: 150, surface: 150, surfaces: [6.5, 52.5, 99.5].map((y, i) => ({ y, shape: [r(-57.5, -17.5, 57.5, 17.5)], h: [43.5, 44.5, 48][i] })), styles: ['nordic', 'modern', 'industrial'], build: dividerShelf }, [
     ['nordic', N.white, N.sage, N.oak],
     ['nordic', N.oak, N.white, N.oak],
     ['modern', M.white, M.char, M.black],
@@ -2114,7 +2102,7 @@ export const FURNITURE_MORE: AssetDef[] = [
     ['industrial', I.walnut, I.iron, I.steel],
     ['cute', C.white, C.pink, C.lemon],
   ]),
-  A({ id: 'fm-genkan-bench', name: '玄关鞋凳', category: 'entrance', w: 100, d: 34, h: 45, surface: 45, surfaces: [{ y: 11.8, shape: [r(-44, -13.5, 44, 13.5)], h: 23 }], styles: ['japanese', 'nordic', 'industrial'], build: genkanBench }, [
+  withPals({ id: 'fm-genkan-bench', name: '玄关鞋凳', category: 'entrance', w: 100, d: 34, h: 45, surface: 45, surfaces: [{ y: 11.8, shape: [r(-44, -13.5, 44, 13.5)], h: 23 }], styles: ['japanese', 'nordic', 'industrial'], build: genkanBench }, [
     ['japanese', J.hinoki, J.hinoki, J.sumi],
     ['japanese', J.dark, J.dark, J.sumi],
     ['nordic', N.oak, N.oak, M.black],
@@ -2123,21 +2111,21 @@ export const FURNITURE_MORE: AssetDef[] = [
     ['modern', M.char, M.black, M.silver],
   ]),
   ...[2, 3].map((n) =>
-    A({ id: `fm-koagari-${n}`, name: '小上がり', family: 'fm-koagari', sizeLabel: `${n} 畳`, category: 'japanese', w: 88 * n, d: 178, h: 40, surface: 40, styles: ['japanese', 'modern', 'nordic'], build: (p) => koagari(n, p) }, [
+    withPals({ id: `fm-koagari-${n}`, name: '小上がり', family: 'fm-koagari', sizeLabel: `${n} 畳`, category: 'japanese', w: 88 * n, d: 178, h: 40, surface: 40, styles: ['japanese', 'modern', 'nordic'], build: (p) => koagari(n, p) }, [
       ['japanese', J.hinoki, J.tatami, J.sumi],
       ['japanese', J.dark, J.tatami, J.ai],
       ['modern', M.white, '#c4c79a', M.char],
       ['nordic', N.oak, '#d6d3a6', N.blue],
     ]),
   ),
-  A({ id: 'fm-cat-wall', name: '猫爬墙', category: 'pets', w: 120, d: 34, h: 129, mount: 60, styles: ['cute', 'nordic', 'modern'], build: catWall }, [
+  withPals({ id: 'fm-cat-wall', name: '猫爬墙', category: 'pets', w: 120, d: 34, h: 129, mount: 60, styles: ['cute', 'nordic', 'modern'], build: catWall }, [
     ['cute', C.woodL, C.pink, C.white],
     ['cute', C.white, C.mint, C.woodD],
     ['nordic', N.oak, N.gray, M.black],
     ['modern', M.white, M.char, M.black],
     ['japanese', J.hinoki, J.tatami, J.sumi],
   ]),
-  A({
+  withPals({
     id: 'fm-changing-table',
     name: '婴儿尿布台',
     category: 'kids',
@@ -2155,20 +2143,20 @@ export const FURNITURE_MORE: AssetDef[] = [
     ['nordic', N.sage, N.white, N.oak],
     ['nordic', N.linen, N.oak, M.black],
   ]),
-  A({ id: 'fm-book-sling', name: '小屋绘本架', category: 'kids', w: 93, d: 34, h: 99, styles: ['cute', 'nordic'], build: bookSling }, [
+  withPals({ id: 'fm-book-sling', name: '小屋绘本架', category: 'kids', w: 93, d: 34, h: 99, styles: ['cute', 'nordic'], build: bookSling }, [
     ['cute', C.pink, C.lemon, C.woodL],
     ['cute', C.mint, C.lilac, C.white],
     ['nordic', N.gray, N.mustard, N.oak],
     ['nordic', N.sage, N.linen, N.white],
     ['retro', R.mustard, R.teal, R.caramel],
   ]),
-  A({ id: 'fm-trunk', name: '复古旅行箱', category: 'living', w: 94, d: 52, h: 52, surface: 51.5, styles: ['retro', 'industrial', 'cute'], build: trunk }, [
+  withPals({ id: 'fm-trunk', name: '复古旅行箱', category: 'living', w: 94, d: 52, h: 52, surface: 51.5, styles: ['retro', 'industrial', 'cute'], build: trunk }, [
     ['retro', R.caramel, '#6b4228', '#c9a04a'],
     ['retro', '#3f6f6a', R.caramel, '#c9a04a'],
     ['industrial', '#5a4636', I.leather, I.steel],
     ['cute', C.pink, C.white, C.lemon],
   ]),
-  A({
+  withPals({
     id: 'fm-ladder-shelf',
     name: '梯形置物架',
     category: 'storage',

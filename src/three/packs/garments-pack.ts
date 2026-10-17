@@ -11,7 +11,7 @@ import { GARMENT_LABELS, buildGarment, buildHanger, foldedRow, garment, garmentR
 import { rectPoly, type AssetCategory, type AssetDef, type FormTag, type StyleTag } from '../kit'
 import type { PatternKind } from '../patterns'
 import { cyl, rbox, shade } from '../toon'
-import { I, J, M, N, R, type Pal } from '../packkit'
+import { I, J, M, N, R, define, type Pal } from '../packkit'
 
 /** 衣物通用配色：[主色, 副色, 点缀色] */
 const WEAR: Pal[] = [
@@ -185,22 +185,6 @@ function ground(g: THREE.Group) {
   return new THREE.Group().add(g)
 }
 
-function def(id: string, name: string, category: AssetCategory, dims: [number, number, number], pals: Pal[], build: (p: string[]) => THREE.Group, extra: Partial<AssetDef>): AssetDef {
-  return {
-    id,
-    name,
-    category,
-    w: dims[0],
-    d: dims[1],
-    h: dims[2],
-    palettes: pals.map((x) => x[1]),
-    paletteStyles: pals.map((x) => x[0]),
-    styles: [...new Set(pals.map((x) => x[0]))],
-    build,
-    ...extra,
-  }
-}
-
 const NAMES: Partial<Record<GarmentKind, string>> = { kimono: '和服 / 浴衣', tank: '背心', pants: '长裤' }
 const CLOTHES: AssetDef[] = LINES.flatMap((line) => {
   const label = NAMES[line.kind] ?? GARMENT_LABELS[line.kind]
@@ -210,8 +194,8 @@ const CLOTHES: AssetDef[] = LINES.flatMap((line) => {
     const ref = specOf(line.kind, st, pals[0][1])
     const common = { family: `gm-${line.kind}`, sizeLabel: st.label, prop: true, limit: { scope: 'surface' as const, max: 30 } }
     return [
-      def(`${base}-${line.rest ?? 'folded'}`, label, line.category ?? 'deco', measureGarment(ref, 'folded'), pals, (p) => ground(buildGarment(specOf(line.kind, st, p), 'folded')), { ...common, form: line.rest ?? 'folded' }),
-      def(`${base}-hanging`, label, line.category ?? 'deco', measureGarment(ref, 'hanging'), pals, (p) => buildGarment(specOf(line.kind, st, p), 'hanging'), { ...common, form: 'hanging' }),
+      define(`${base}-${line.rest ?? 'folded'}`, label, line.category ?? 'deco', measureGarment(ref, 'folded'), pals, (p) => ground(buildGarment(specOf(line.kind, st, p), 'folded')), { ...common, form: line.rest ?? 'folded' }),
+      define(`${base}-hanging`, label, line.category ?? 'deco', measureGarment(ref, 'hanging'), pals, (p) => buildGarment(specOf(line.kind, st, p), 'hanging'), { ...common, form: 'hanging' }),
     ]
   })
 })
@@ -235,9 +219,9 @@ const TOWELS: AssetDef[] = TOWEL_STYLES.flatMap((t) => {
   const ref = towelSpec(t, TOWEL_PAL[0][1])
   const common = { family: 'gm-towel', sizeLabel: t.label, prop: true, limit: { scope: 'surface' as const, max: 30 } }
   return [
-    def(`gm-towel-${t.key}-folded`, '毛巾', 'toiletry', measureGarment(ref, 'folded'), TOWEL_PAL, (p) => ground(buildGarment(towelSpec(t, p), 'folded')), { ...common, form: 'folded' }),
-    def(`gm-towel-${t.key}-bar`, '毛巾', 'toiletry', measureGarment(ref, 'bar'), TOWEL_PAL, (p) => buildGarment(towelSpec(t, p), 'bar'), { ...common, form: 'hanging', formLabel: '搭在杆上' }),
-    def(`gm-towel-${t.key}-hook`, '毛巾', 'toiletry', measureGarment(ref, 'hook'), TOWEL_PAL, (p) => buildGarment(towelSpec(t, p), 'hook'), { ...common, form: 'hanging', formLabel: '挂钩吊起' }),
+    define(`gm-towel-${t.key}-folded`, '毛巾', 'toiletry', measureGarment(ref, 'folded'), TOWEL_PAL, (p) => ground(buildGarment(towelSpec(t, p), 'folded')), { ...common, form: 'folded' }),
+    define(`gm-towel-${t.key}-bar`, '毛巾', 'toiletry', measureGarment(ref, 'bar'), TOWEL_PAL, (p) => buildGarment(towelSpec(t, p), 'bar'), { ...common, form: 'hanging', formLabel: '搭在杆上' }),
+    define(`gm-towel-${t.key}-hook`, '毛巾', 'toiletry', measureGarment(ref, 'hook'), TOWEL_PAL, (p) => buildGarment(towelSpec(t, p), 'hook'), { ...common, form: 'hanging', formLabel: '挂钩吊起' }),
   ]
 })
 
@@ -263,7 +247,7 @@ const STACKS: [string, string, string, number][] = [
 ]
 const TOWEL_STACKS: AssetDef[] = STACKS.map(([id, label, v, n]) => {
   const b = new THREE.Box3().setFromObject(towelStack(v, n)(TOWEL_PAL[0][1]), true).getSize(new THREE.Vector3())
-  return def(id, '一摞毛巾', 'toiletry', [Math.round(b.x * 10) / 10, Math.round(b.z * 10) / 10, Math.round(b.y * 10) / 10], TOWEL_PAL, towelStack(v, n), { family: 'gm-towel-stack', sizeLabel: label, prop: true, form: 'stacked', limit: { scope: 'surface', max: 30 } })
+  return define(id, '一摞毛巾', 'toiletry', [Math.round(b.x * 10) / 10, Math.round(b.z * 10) / 10, Math.round(b.y * 10) / 10], TOWEL_PAL, towelStack(v, n), { family: 'gm-towel-stack', sizeLabel: label, prop: true, form: 'stacked', limit: { scope: 'surface', max: 30 } })
 })
 
 // ---------- 衣架 ----------
@@ -301,7 +285,7 @@ const measure = (g: THREE.Object3D): [number, number, number] => {
 const HANGER_DEFS: AssetDef[] = HANGERS.flatMap(([key, label, type, mat, o]) =>
   ([false, true] as const).map((lying) => {
     const b = hangerBuild(type, mat, o, lying)
-    return def(`gm-hanger-${key}-${lying ? 'lying' : 'hanging'}`, '衣架', 'storage', measure(b(HANGER_PAL[0][1])), HANGER_PAL, b, {
+    return define(`gm-hanger-${key}-${lying ? 'lying' : 'hanging'}`, '衣架', 'storage', measure(b(HANGER_PAL[0][1])), HANGER_PAL, b, {
       family: 'gm-hanger',
       sizeLabel: label,
       prop: true,
@@ -339,11 +323,11 @@ const ROWS: AssetDef[] = WARDROBES.flatMap((wd) =>
     const fam = { family: `gm-row-${wd}`, sizeLabel: `${len}`, limit: { scope: 'house' as const, max: 99 } }
     const name = `一排衣服（${WARDROBE_LABELS[wd]}）`
     const rowStyle = (p: string[]): StyleTag => STYLE_OF.get(p.join()) ?? 'nordic'
-    const hanging = def(`gm-row-${wd}-${len}-hanging`, name, 'storage', [len, Dcap, Hcap], ROW_PAL, (p) => {
+    const hanging = define(`gm-row-${wd}-${len}-hanging`, name, 'storage', [len, Dcap, Hcap], ROW_PAL, (p) => {
       const style = rowStyle(p)
       return garmentRow(len, { seed: hashSeed(`gm-row-${wd}-${len}`, ...p), wardrobe: wd, style, tones: [p[0], p[1]], hanger: hangerMatFor(style, p[2]), hangerColor: p[2] })
     }, { ...fam, form: 'hanging', prop: true })
-    const folded = def(`gm-row-${wd}-${len}-folded`, name, 'storage', [len, FOLD_ROW.d, FOLD_ROW.h], ROW_PAL, (p) => {
+    const folded = define(`gm-row-${wd}-${len}-folded`, name, 'storage', [len, FOLD_ROW.d, FOLD_ROW.h], ROW_PAL, (p) => {
       return foldedRow(len, { seed: hashSeed(`gm-rowf-${wd}-${len}`, ...p), wardrobe: wd, style: rowStyle(p), tones: [p[0], p[1]], h: FOLD_ROW.h - 0.6, d: FOLD_ROW.d })
     }, { ...fam, form: 'folded', prop: true })
     return [hanging, folded]
@@ -389,7 +373,7 @@ const PIPE_PAL: Pal[] = [
 ]
 export const PIPE_WIDTHS = [60, 90, 120, 150, 180, 240]
 const PIPES: AssetDef[] = PIPE_WIDTHS.map((w) =>
-  def(`gm-closet-pipe-${w}`, '衣柜挂杆（枕棚）', 'storage', [w, PIPE.d, PIPE.shelfY + PIPE.shelfT - PIPE.mount], PIPE_PAL, closetPipe(w), {
+  define(`gm-closet-pipe-${w}`, '衣柜挂杆（枕棚）', 'storage', [w, PIPE.d, PIPE.shelfY + PIPE.shelfT - PIPE.mount], PIPE_PAL, closetPipe(w), {
     family: 'gm-closet-pipe',
     sizeLabel: `${w}`,
     mount: PIPE.mount,

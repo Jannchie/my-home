@@ -11,7 +11,7 @@ import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, glow, rectPoly, rng, slab, type AssetCategory, type AssetDef, type FormTag, type Poly } from '../kit'
 import { G, P, PI, batten, box3, cappedTube, cylX, cylZ, ghost, rod3, type TubeOpts, type V3 } from '../geo'
-import { I, J, M, N, R, type Build, type Dims, type Pal } from '../packkit'
+import { I, J, M, N, R, define, type Build, type Dims, type Pal } from '../packkit'
 
 /** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
 const TUBE: TubeOpts = { seg: { per: 6, min: 12 } }
@@ -23,24 +23,8 @@ const WHITE = '#ffffff'
 
 // ---------- 定义 ----------
 
-function asset(id: string, name: string, category: AssetCategory, [w, d, h]: Dims, pals: Pal[], build: Build, extra: Partial<AssetDef> = {}): AssetDef {
-  return {
-    id,
-    name,
-    category,
-    w,
-    d,
-    h,
-    palettes: pals.map((x) => x[1]),
-    paletteStyles: pals.map((x) => x[0]),
-    styles: [...new Set(pals.map((x) => x[0]))],
-    build,
-    ...extra,
-  }
-}
-
 const prop = (id: string, name: string, category: AssetCategory, dims: Dims, pals: Pal[], build: Build, extra: Partial<AssetDef> = {}) =>
-  asset(id, name, category, dims, pals, build, { prop: true, ...extra })
+  define(id, name, category, dims, pals, build, { prop: true, ...extra })
 
 interface FormSpec {
   id: string
@@ -277,7 +261,7 @@ const PEG_SIZES: { label: string; w: number; h: number; mount: number; sp: numbe
 ]
 
 const PEGBOARDS: AssetDef[] = PEG_SIZES.map((s) =>
-  asset(`sf-pegboard-${s.w}x${s.h}`, '洞洞板', 'storage', [s.w, PEG_D, s.h], PEG_PALS, (p) => pegboardPart(s.w, s.h, s.mount, s.sp, p[0], p[1]), {
+  define(`sf-pegboard-${s.w}x${s.h}`, '洞洞板', 'storage', [s.w, PEG_D, s.h], PEG_PALS, (p) => pegboardPart(s.w, s.h, s.mount, s.sp, p[0], p[1]), {
     family: 'pegboard',
     sizeLabel: s.label,
     mount: s.mount,
@@ -318,7 +302,7 @@ const PEG_SETS: AssetDef[] = SET_SIZES.map((s) => {
   const zf = -SET_D / 2 + PEG_D
   const sw = s.w - 12
   const top = s.mount + s.shelfY + SHELF_T
-  return asset(`sf-pegboard-set-${s.w}x${s.h}`, '洞洞板套装（带层板）', 'storage', [s.w, SET_D, s.h], PEG_PALS, pegSet(s), {
+  return define(`sf-pegboard-set-${s.w}x${s.h}`, '洞洞板套装（带层板）', 'storage', [s.w, SET_D, s.h], PEG_PALS, pegSet(s), {
     family: 'pegboard-set',
     sizeLabel: s.label,
     mount: s.mount,
@@ -445,7 +429,7 @@ const TIER_SPECS = [
 ]
 const WALL_TIERS: AssetDef[] = TIER_SPECS.map((t) => {
   const h = TIER_BR + (t.n - 1) * TIER_GAP + 2
-  return asset(`sf-wall-shelf-${t.n}`, '壁挂搁板', 'storage', [TIER_W, TIER_D, h], SHELF_PALS, wallTier(t.n, t.mount), {
+  return define(`sf-wall-shelf-${t.n}`, '壁挂搁板', 'storage', [TIER_W, TIER_D, h], SHELF_PALS, wallTier(t.n, t.mount), {
     family: 'wall-tier-shelf',
     sizeLabel: t.label,
     mount: t.mount,
@@ -467,7 +451,7 @@ function ladderShelf(p: string[]) {
   }
   return g
 }
-const LADDER = asset('sf-ladder-shelf', '梯子架', 'storage', [LAD.w, LAD.d, 160.7], SHELF_PALS, ladderShelf, {
+const LADDER = define('sf-ladder-shelf', '梯子架', 'storage', [LAD.w, LAD.d, 160.7], SHELF_PALS, ladderShelf, {
   surfaces: LAD.ys.map((y, i) => ({ y: y + 2, h: i < LAD.ys.length - 1 ? 38 : 30, shape: [rectPoly(-LAD.w / 2 + 4, -18.5, LAD.w / 2 - 4, Math.min(19, ladZ(y) + 3) - 0.5)] })),
 })
 
@@ -496,7 +480,7 @@ function cornerShelf(p: string[]) {
   for (const [x, z] of posts) g.add(cyl(1, 1, CORNER.ys[4], frame, { x, z }, 10))
   return g
 }
-const CORNER_SHELF = asset('sf-corner-shelf', '转角架', 'storage', [32, 32, 116], SHELF_PALS, cornerShelf, {
+const CORNER_SHELF = define('sf-corner-shelf', '转角架', 'storage', [32, 32, 116], SHELF_PALS, cornerShelf, {
   surface: 116,
   surfaceShape: [quarterPoly(CORNER.r, 1)],
   surfaces: CORNER.ys.slice(0, 4).map((y) => ({ y: y + 2, h: 26, shape: [quarterPoly(CORNER.r, 1)] })),
@@ -530,7 +514,7 @@ const RACK_SPECS = [
   { label: '120×35 · 5 层', w: 120, d: 35, h: 180, n: 5 },
 ]
 const OPEN_RACKS: AssetDef[] = RACK_SPECS.map((s) =>
-  asset(`sf-open-rack-${s.w}`, '开放式层架', 'storage', [s.w, s.d, s.h], SHELF_PALS, openRack(s.w, s.d, s.h, s.n), {
+  define(`sf-open-rack-${s.w}`, '开放式层架', 'storage', [s.w, s.d, s.h], SHELF_PALS, openRack(s.w, s.d, s.h, s.n), {
     family: 'open-rack',
     sizeLabel: s.label,
     surface: s.h,
@@ -583,7 +567,7 @@ const WIRE_SPECS = [
 const WIRE_RACKS: AssetDef[] = WIRE_SPECS.map((s) => {
   const ys = wireYs(s.h, s.n)
   const shape = [rectPoly(-s.w / 2 + 3, -s.d / 2 + 2, s.w / 2 - 3, s.d / 2 - 2)]
-  return asset(`sf-wire-rack-${s.w}`, '金属线网架', 'storage', [s.w + 0.2, s.d + 1, s.h], WIRE_PALS, wireRack(s.w, s.d, s.h, s.n), {
+  return define(`sf-wire-rack-${s.w}`, '金属线网架', 'storage', [s.w + 0.2, s.d + 1, s.h], WIRE_PALS, wireRack(s.w, s.d, s.h, s.n), {
     family: 'wire-rack',
     sizeLabel: s.label,
     surface: Math.round((ys[ys.length - 1] + WIRE_R) * 10) / 10,
@@ -606,7 +590,7 @@ function kitchenRack(p: string[]) {
   g.add(rod3([-KR.w / 2 + 1.25, KR_BAR_Y, KR.d / 2 + 2.2], [KR.w / 2 - 1.25, KR_BAR_Y, KR.d / 2 + 2.2], 0.6, frame, 8))
   return ground(g)
 }
-const KITCHEN_RACK = asset('sf-kitchen-rack', '厨房置物架', 'storage', [KR.w, 42.8, KR.h], SHELF_PALS, kitchenRack, {
+const KITCHEN_RACK = define('sf-kitchen-rack', '厨房置物架', 'storage', [KR.w, 42.8, KR.h], SHELF_PALS, kitchenRack, {
   surface: KR.h,
   surfaces: [
     ...KR.ys.slice(0, -1).map((y) => ({ y: y + 2, h: 30, shape: [rectPoly(-KR.w / 2 + 3, -19.6, KR.w / 2 - 3, 16.8)] })),
@@ -662,7 +646,7 @@ function bathCorner(p: string[]) {
   return g
 }
 // 和 wet.ts / bath-corners.ts 的各款转角架同一系列
-const BATH_CORNER = asset('sf-bath-corner', '浴室转角架', 'storage', [24, 24, 51.3], WIRE_PALS, bathCorner, {
+const BATH_CORNER = define('sf-bath-corner', '浴室转角架', 'storage', [24, 24, 51.3], WIRE_PALS, bathCorner, {
   family: 'bath-corner-shelf',
   sizeLabel: '三角网篮 3 层',
   mount: BATH.mount,
@@ -680,7 +664,7 @@ function displayCube(p: string[]) {
   for (const x of [-1, -1 / 3, 1 / 3, 1]) g.add(rbox(DC.t, DC.h - DC.t * 2 + 0.2, DC.d - 0.2, board, { x: (x * (DC.w - DC.t)) / 2, y: y0 + DC.t - 0.1 }, 0.3))
   return g
 }
-const DISPLAY_CUBE = asset('sf-display-cube', '壁挂展示格', 'storage', [DC.w, DC.d, DC.h], SHELF_PALS, displayCube, {
+const DISPLAY_CUBE = define('sf-display-cube', '壁挂展示格', 'storage', [DC.w, DC.d, DC.h], SHELF_PALS, displayCube, {
   mount: DC.mount,
   surface: DC.mount + DC.h,
   surfaces: [{ y: DC.mount + DC.t, h: (DC.h - DC.t * 3) / 2 }, { y: DC.mount + (DC.h - DC.t) / 2 + DC.t, h: (DC.h - DC.t * 3) / 2 }],
@@ -710,7 +694,7 @@ const SHOE_SPECS = [
   { label: '4 层', w: 80, d: 30, h: 80, n: 3 },
 ]
 const SHOE_RACKS: AssetDef[] = SHOE_SPECS.map((s) =>
-  asset(`sf-shoe-rack-${s.n + 1}`, '鞋架', 'storage', [s.w, s.d, s.h], SHELF_PALS, shoeRack(s.w, s.d, s.h, s.n), {
+  define(`sf-shoe-rack-${s.n + 1}`, '鞋架', 'storage', [s.w, s.d, s.h], SHELF_PALS, shoeRack(s.w, s.d, s.h, s.n), {
     family: 'shoe-rack',
     sizeLabel: s.label,
     surface: s.h,
@@ -742,7 +726,7 @@ function garmentRail(w: number): Build {
   }
 }
 const GARMENT_RAILS: AssetDef[] = [80, 120].map((w) =>
-  asset(`sf-garment-rail-${w}`, '挂衣杆', 'storage', [w - 0.4, 42.6, GR.h], SHELF_PALS, garmentRail(w), {
+  define(`sf-garment-rail-${w}`, '挂衣杆', 'storage', [w - 0.4, 42.6, GR.h], SHELF_PALS, garmentRail(w), {
     family: 'garment-rail',
     sizeLabel: `${w}`,
     surfaces: [
@@ -772,7 +756,7 @@ function towelBar(n: number): Build {
   }
 }
 const TOWEL_BARS: AssetDef[] = [1, 2].map((n) =>
-  asset(`sf-towel-bar-${n}`, '毛巾杆', 'storage', [59.2, TB.d, 5.2 + (n - 1) * 26], WIRE_PALS, towelBar(n), {
+  define(`sf-towel-bar-${n}`, '毛巾杆', 'storage', [59.2, TB.d, 5.2 + (n - 1) * 26], WIRE_PALS, towelBar(n), {
     family: 'towel-bar',
     sizeLabel: n === 1 ? '单杆' : '双层',
     mount: TB.mount,
@@ -818,7 +802,7 @@ const HOOK_RAILS: AssetDef[] = [
   { w: 50, n: 4 },
   { w: 80, n: 6 },
 ].map((s) =>
-  asset(`sf-hook-rail-${s.n}`, '墙上挂钩排', 'storage', [s.w, 7.4, HR.h], SHELF_PALS, hookRail(s.w, s.n), {
+  define(`sf-hook-rail-${s.n}`, '墙上挂钩排', 'storage', [s.w, 7.4, HR.h], SHELF_PALS, hookRail(s.w, s.n), {
     family: 'hook-rail',
     sizeLabel: `${s.n} 钩`,
     mount: HR.mount,
@@ -844,7 +828,7 @@ function doorHooks(p: string[]) {
   }
   return g
 }
-const DOOR_HOOKS = asset('sf-door-hooks', '门后挂钩', 'storage', [8.2, 8.8, 46.6], ACC_PALS, doorHooks, {
+const DOOR_HOOKS = define('sf-door-hooks', '门后挂钩', 'storage', [8.2, 8.8, 46.6], ACC_PALS, doorHooks, {
   mount: DH.mount,
   surfaces: Array.from({ length: 5 }, (_, i) => ({
     y: DH.mount + 4 + i * 9 + 0.3 + 2.32,
@@ -863,7 +847,7 @@ function umbrellaHook(p: string[]) {
   for (const x of [-12, 0, 12]) g.add(cappedTube([[x, UH.mount + 8, -3.4], [x, UH.mount + 6, -1.5], [x, UH.mount + 4, 1.5], [x, UH.mount + 3.6, 3.8], [x, UH.mount + 5.2, 4.8]], 0.5, metal, { ...TUBE, seg: 14 }))
   return g
 }
-const UMBRELLA_HOOK = asset('sf-umbrella-hook', '伞挂', 'storage', [UH.w, 10.3, 9], SHELF_PALS, umbrellaHook, {
+const UMBRELLA_HOOK = define('sf-umbrella-hook', '伞挂', 'storage', [UH.w, 10.3, 9], SHELF_PALS, umbrellaHook, {
   mount: UH.mount + 3,
   surfaces: [{ y: UH.mount + 3.6 + 0.5 + 2.32, kind: 'hook', h: UH.mount, shape: [-12, 0, 12].map((x) => rectPoly(x - 2.5, 1.2, x + 2.5, 4.2)) }],
 })
@@ -881,7 +865,7 @@ function kitchenBar(p: string[]) {
   g.add(cylX(KB.barR, KB.w, metal, 0, KB.mount + 2, KB.barZ))
   return g
 }
-const KITCHEN_BAR = asset('sf-kitchen-bar', '厨房挂杆', 'storage', [KB.w, 6.3, 4], WIRE_PALS, kitchenBar, {
+const KITCHEN_BAR = define('sf-kitchen-bar', '厨房挂杆', 'storage', [KB.w, 6.3, 4], WIRE_PALS, kitchenBar, {
   mount: KB.mount,
   surfaces: [{ y: KB.mount + 2 + KB.barR + 0.5, kind: 'hook', h: 50, shape: [rectPoly(-KB.w / 2 + 3, KB.barZ - 1.7, KB.w / 2 - 3, KB.barZ + 1.3)] }],
 })
@@ -1811,7 +1795,7 @@ function coatTree(p: string[]) {
   return g
 }
 const treeBand = (angles: number[], r: number): Poly[] => angles.map((a) => rectPoly(Math.cos(a) * r - 2, Math.sin(a) * r - 2, Math.cos(a) * r + 2, Math.sin(a) * r + 2))
-const COAT_TREE = asset('sf-coat-tree', '树形衣帽架', 'entrance', [36, 36, 182.2], SHELF_PALS, coatTree, {
+const COAT_TREE = define('sf-coat-tree', '树形衣帽架', 'entrance', [36, 36, 182.2], SHELF_PALS, coatTree, {
   surfaces: [
     { y: CT.upY + 1, kind: 'hook', h: 150, shape: treeBand(CT_UP, CT.upR) },
     { y: CT.lowY + 1, kind: 'hook', h: 130, shape: treeBand(CT_LOW, CT.lowR) },
@@ -1828,7 +1812,7 @@ function ladderHanger(p: string[]) {
   for (const y of LH.rungs) g.add(cylX(1.2, LH.w - 3, y === LH.rungs[LH.rungs.length - 1] ? acc : wood, 0, y, lhZ(y)))
   return g
 }
-const LADDER_HANGER = asset('sf-ladder-hanger', '梯子形挂衣架', 'bedroom', [50, 34, 170.7], SHELF_PALS, ladderHanger, {
+const LADDER_HANGER = define('sf-ladder-hanger', '梯子形挂衣架', 'bedroom', [50, 34, 170.7], SHELF_PALS, ladderHanger, {
   surfaces: LH.rungs.map((y) => ({ y: y + 1.2 + 0.5, kind: 'hook' as const, h: y - 3, shape: [rectPoly(-LH.w / 2 + 4, lhZ(y) - 1.7, LH.w / 2 - 4, lhZ(y) + 1.3)] })),
 })
 
@@ -1855,7 +1839,7 @@ function hallTree(p: string[]) {
   }
   return g
 }
-const HALL_TREE = asset('sf-hall-tree', '玄关挂衣柜', 'entrance', [HT.w, HT.d, HT.h], SHELF_PALS, hallTree, {
+const HALL_TREE = define('sf-hall-tree', '玄关挂衣柜', 'entrance', [HT.w, HT.d, HT.h], SHELF_PALS, hallTree, {
   surface: HT.seat,
   surfaceShape: [rectPoly(-HT.w / 2 + 3, -HT.d / 2 + 2.5, HT.w / 2 - 3, HT.d / 2 - 1.5)],
   surfaces: [
@@ -1882,7 +1866,7 @@ function doorRack(p: string[]) {
   for (const x of DR_X) g.add(cappedTube([[x, y0 + 7.4, 0.5], [x, y0 + 5, 1.6], [x, y0 + 3.2, 3.2], [x, y0 + 4.2, 4.6], [x, y0 + 5.6, 5]], 0.35, metal, { ...TUBE, seg: 16 }))
   return g
 }
-const DOOR_RACK = asset('sf-door-rack', '门后挂衣架', 'entrance', [45, 10.3, 9.1], ACC_PALS, doorRack, {
+const DOOR_RACK = define('sf-door-rack', '门后挂衣架', 'entrance', [45, 10.3, 9.1], ACC_PALS, doorRack, {
   mount: DR.mount,
   surfaces: [{ y: DR.mount + 0.35 + 0.35 + 0.5, kind: 'hook', h: 160, shape: DR_X.map((x) => rectPoly(x - 2, 1.7, x + 2, 4.7)) }],
 })
@@ -1912,7 +1896,7 @@ function doubleRail(p: string[]) {
   for (const s of [-1, 1]) g.add(rbox(2, 1.8, 40, frame, { x: s * (DRL.w / 2 - 4), y: DRL.shelfY - 3.3 }, 0.5))
   return g
 }
-const DOUBLE_RAIL = asset('sf-double-rail', '双杆挂衣架', 'bedroom', [99.6, 47.6, 166.2], SHELF_PALS, doubleRail, {
+const DOUBLE_RAIL = define('sf-double-rail', '双杆挂衣架', 'bedroom', [99.6, 47.6, 166.2], SHELF_PALS, doubleRail, {
   surfaces: [
     { y: DRL.shelfY, h: 50, shape: [rectPoly(-DRL.w / 2 + 5, -18, DRL.w / 2 - 5, 18)] },
     { y: DRL.upY + 1.2 + 0.45, kind: 'hook', h: DRL.upY - DRL.shelfY - 2, shape: [rectPoly(-DRL.w / 2 + 5, DRL.upZ - 1.7, DRL.w / 2 - 5, DRL.upZ + 1.3)] },
@@ -1943,7 +1927,7 @@ function ikou(p: string[]) {
   g.add(cylX(0.8, IK.post * 2 + 2, metal, 0, IK.rodY, IK.rodZ))
   return g
 }
-const IKOU = asset('sf-ikou', '衣桁（和服架）', 'japanese', [160, 40, 166], IKOU_PALS, ikou, {
+const IKOU = define('sf-ikou', '衣桁（和服架）', 'japanese', [160, 40, 166], IKOU_PALS, ikou, {
   surfaces: [{ y: IK.rodY + 0.8 + 0.45, kind: 'hook', h: IK.rodY - 4, shape: [rectPoly(-60, IK.rodZ - 1.7, 60, IK.rodZ + 1.3)] }],
 })
 

@@ -8,7 +8,10 @@ import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, ellipsePoly, holePanel, rectPoly, slab, type AssetCategory, type AssetDef, type Poly } from '../kit'
 import { P, PI, cylX, cylZ, fitBuild, ghost, lit, noOutline, rod3, taperRod3, type V3 } from '../geo'
-import { I, M, N, R, type Build, type PalFlat } from '../packkit'
+import { I, M, N, R, definer, type Build, type PalFlat } from '../packkit'
+
+/** 落地、无层板的素材 build 之后按包围盒居中、贴地 */
+const def = definer({}, (b, e) => (e.form !== 'hanging' && e.mount === undefined && !e.surfaces ? fitBuild(b) : b))
 
 const STEEL = '#c3c7cc'
 const DARK = '#2e2f33'
@@ -23,23 +26,6 @@ const PAPER = '#f1ead2'
 
 // ---------- 定义 ----------
 
-function def(id: string, name: string, category: AssetCategory, [w, d, h]: V3, pals: PalFlat[], build: Build, extra: Partial<AssetDef> = {}): AssetDef {
-  // 普通形态：xz 居中、最低点贴地；挂起 / 壁挂 / 带层板坐标的保持原样
-  if (extra.form !== 'hanging' && extra.mount === undefined && !extra.surfaces) build = fitBuild(build)
-  return {
-    id,
-    name,
-    category,
-    w,
-    d,
-    h,
-    palettes: pals.map((x) => x.slice(1) as string[]),
-    paletteStyles: pals.map((x) => x[0]),
-    styles: [...new Set(pals.map((x) => x[0]))],
-    build,
-    ...extra,
-  }
-}
 const prop = (id: string, name: string, category: AssetCategory, dims: V3, pals: PalFlat[], build: Build, extra: Partial<AssetDef> = {}) =>
   def(id, name, category, dims, pals, build, { prop: true, ...extra })
 

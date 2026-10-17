@@ -8,9 +8,12 @@
 
 import * as THREE from 'three'
 import { ball, cup, cyl, rbox, shade, torus, tray } from '../toon'
-import { C, G, holePanel, paintAbstract, paintFlower, paintLandscape, paintPanel, rng, shell, type AssetCategory, type AssetDef, type StyleTag } from '../kit'
-import { PI, clearDeep, cylZFrom, fitGroup, mesh, noOutlineDeep, tube, type TubeOpts, type V3 } from '../geo'
-import { I, J, M, N, R, type Build, type Pal } from '../packkit'
+import { C, G, holePanel, paintAbstract, paintFlower, paintLandscape, paintPanel, rng, shell, type AssetDef, type StyleTag } from '../kit'
+import { PI, clearDeep, cylZFrom, fitBuild, mesh, noOutlineDeep, tube, type TubeOpts, type V3 } from '../geo'
+import { I, J, M, N, R, definer, type Pal } from '../packkit'
+
+/** build 之后按包围盒居中，底面贴地（壁挂件贴 mount） */
+const A = definer({}, (b, e) => fitBuild(b, e.mount ?? 0))
 
 /** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
 const TUBE: TubeOpts = { radial: 6 }
@@ -97,22 +100,6 @@ function hash(s: string) {
 }
 
 // ---------- 定义工具 ----------
-
-function A(id: string, name: string, category: AssetCategory, [w, d, h]: [number, number, number], pals: Pal[], build: Build, extra: Partial<AssetDef> = {}): AssetDef {
-  return {
-    id,
-    name,
-    category,
-    w,
-    d,
-    h,
-    palettes: pals.map((p) => p[1]),
-    paletteStyles: pals.map((p) => p[0]),
-    styles: [...new Set(pals.map((p) => p[0]))],
-    ...extra,
-    build: (p) => fitGroup(build(p), extra.mount ?? 0),
-  }
-}
 
 // ======================================================================
 // 布料软团：单位球按函数变形 + 一点褶皱，接缝处法线取平均

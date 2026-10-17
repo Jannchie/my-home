@@ -7,17 +7,13 @@ import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometr
 import { ball, capsule, cyl, puck, rbox, shade, toon, torus, tray, useAnisotropy } from '../toon'
 import { C, G, ellipsePoly, holePanel, legs, slab, type AssetDef, type Hole } from '../kit'
 import { UP, cappedTube, fitChildren, mesh, strut, strutBox, tube, type TubeOpts, type V2, type V3 } from '../geo'
-import { I, J, M, N, R, type Pal } from '../packkit'
+import { I, J, M, N, R, pal } from '../packkit'
 
 /** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
 const TUBE: TubeOpts = { seg: { per: 10, min: 16 } }
 
 // ---------- 配色 ----------
 
-/** 带风格标注的配色组：展开成 palettes / paletteStyles / styles */
-function pal(...xs: Pal[]) {
-  return { palettes: xs.map((x) => x[1]), paletteStyles: xs.map((x) => x[0]), styles: [...new Set(xs.map((x) => x[0]))] }
-}
 const CHROME = M.silver
 const INK = M.black
 

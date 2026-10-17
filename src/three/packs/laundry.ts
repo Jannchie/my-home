@@ -4,7 +4,7 @@
 import * as THREE from 'three'
 import { ball, rbox, torus } from '../toon'
 import { C, rod, type AssetDef } from '../kit'
-import { type Pal } from '../packkit'
+import { pal, type Pal } from '../packkit'
 
 const PALS: Pal[] = [
   ['cute', [C.white, C.pink, C.lilac]],
@@ -88,9 +88,7 @@ const def = (id: string, sizeLabel: string, form: AssetDef['form'], [w, d, h]: [
   d,
   h,
   prop,
-  palettes: PALS.map((x) => x[1]),
-  paletteStyles: PALS.map((x) => x[0]),
-  styles: [...new Set(PALS.map((x) => x[0]))],
+  ...pal(...PALS),
   build,
 })
 

@@ -7,23 +7,7 @@
 import * as THREE from 'three'
 import { C, movable, rectPoly, type AssetDef, type SurfaceDef } from '../kit'
 import { ball, cyl, rbox, shade, toon, torus } from '../toon'
-import { I, J, M, N, R, type Pal } from '../packkit'
-
-function def(id: string, name: string, [w, d, h]: [number, number, number], pals: Pal[], build: (p: string[]) => THREE.Group, extra: Partial<AssetDef> = {}): AssetDef {
-  return {
-    id,
-    name,
-    category: 'bedroom',
-    w,
-    d,
-    h,
-    palettes: pals.map((x) => x[1]),
-    paletteStyles: pals.map((x) => x[0]),
-    styles: [...new Set(pals.map((x) => x[0]))],
-    build,
-    ...extra,
-  }
-}
+import { I, J, M, N, R, define, type Pal } from '../packkit'
 
 /** 镜面：浅蓝玻璃色、不描边，竖直朝 +z；(x, y, z) 是镜面中心；round = 圆镜（w 为直径） */
 function mirrorPlate(w: number, h: number, x: number, y: number, z: number, round = false) {
@@ -269,7 +253,7 @@ const LOW_CHEST: ChestSpec = { w: 80, d: 42, h: 72, rows: [20, 20, 13], cols: [1
 const CHESTS: AssetDef[] = [
   // 以前开 / 关是两件素材（-open / -closed），现在 -closed 一件可开合（旧的 -open 读档时迁移成 -closed + open）
   ...LINGERIE.map((s) =>
-    def(`be-lingerie-${s.w}-closed`, '内衣柜（ランジェリーチェスト）', [s.w, s.d + 0.9, s.h], CHEST_PALS, chestLive(s), {
+    define(`be-lingerie-${s.w}-closed`, '内衣柜（ランジェリーチェスト）', 'bedroom', [s.w, s.d + 0.9, s.h], CHEST_PALS, chestLive(s), {
       family: 'be-lingerie',
       sizeLabel: `${s.w} 宽`,
       surface: s.h,
@@ -277,7 +261,7 @@ const CHESTS: AssetDef[] = [
       openable: true,
     }),
   ),
-  def('be-chest-low-closed', '矮斗柜', [LOW_CHEST.w, LOW_CHEST.d + 0.9, LOW_CHEST.h], CHEST_PALS, chestLive(LOW_CHEST), {
+  define('be-chest-low-closed', '矮斗柜', 'bedroom', [LOW_CHEST.w, LOW_CHEST.d + 0.9, LOW_CHEST.h], CHEST_PALS, chestLive(LOW_CHEST), {
     family: 'be-chest-low',
     surface: LOW_CHEST.h,
     surfaces: chestLiveSurfaces(LOW_CHEST),
@@ -286,7 +270,7 @@ const CHESTS: AssetDef[] = [
   ...([3, 5] as const).flatMap((n) =>
     ([false, true] as const).map((open) => {
       const s: ChestSpec = { w: 26, d: 20, h: n === 3 ? 22 : 32, rows: Array(n).fill(1), plinth: 1, knob: 'ball' }
-      return def(`be-mini-drawers-${n}-${open ? 'open' : 'closed'}`, '桌上小抽屉柜', [s.w, s.d + (open ? pullOut(s.d) + 1.5 : 0.9), s.h], CHEST_PALS, centerZBuild(chest(s, open)), {
+      return define(`be-mini-drawers-${n}-${open ? 'open' : 'closed'}`, '桌上小抽屉柜', 'bedroom', [s.w, s.d + (open ? pullOut(s.d) + 1.5 : 0.9), s.h], CHEST_PALS, centerZBuild(chest(s, open)), {
         family: 'be-mini-drawers',
         sizeLabel: `${n} 格`,
         form: open ? 'open' : 'closed',
@@ -531,13 +515,13 @@ function stool(p: string[]) {
 const VANITY_SURF = (w: number, d: number, z0: number) => [rectPoly(-w / 2 + 2, z0, w / 2 - 2, d / 2 - 1.5)]
 // 化妆台：桌下抽屉可开合（折叠镜化妆桌的镜子立起 / 放平仍是两件素材）
 const VANITIES: AssetDef[] = [
-  def('be-vanity-fold-open', '折叠镜化妆桌', [80, 45, 97.5], VANITY_PALS, vanityFold(true), { family: 'be-vanity-fold', form: 'open', formLabel: '镜子立起', surface: 73, surfaceShape: VANITY_SURF(80, 45, 2), surfaces: deskSurfaces(80, 45, 73), openable: true }),
-  def('be-vanity-fold-closed', '折叠镜化妆桌', [80, 45, 75], VANITY_PALS, vanityFold(false), { family: 'be-vanity-fold', form: 'closed', surface: 73, surfaceShape: VANITY_SURF(80, 45, 2), surfaces: deskSurfaces(80, 45, 73), openable: true }),
-  def('be-vanity-tri', '三面镜梳妆台', [90, 45, 143], VANITY_PALS, vanityTri, { surface: 74, surfaceShape: VANITY_SURF(90, 45, -8), surfaces: deskSurfaces(90, 45, 74), openable: true }),
-  def('be-kyodai', '和风鏡台', [46, 33, 107], KYODAI_PALS, centerZBuild(kyodai), { category: 'japanese', surface: 30, surfaceShape: [rectPoly(-21, -4, 21, 15)], surfaces: KYODAI_SURF, openable: true }),
-  def('be-vanity-hollywood', '好莱坞灯泡化妆台', [100, 45, 135], VANITY_PALS, vanityHollywood, { surface: 75, surfaceShape: VANITY_SURF(100, 45, -15), surfaces: deskSurfaces(100, 45, 75), openable: true }),
-  def('be-vanity-wall', '北欧圆镜化妆桌', [70, 38, 168], VANITY_PALS, vanityWall, { surface: 74, surfaceShape: VANITY_SURF(70, 38, -15), surfaces: deskSurfaces(70, 38, 74), openable: true }),
-  def('be-vanity-stool', '化妆凳', [29, 29, 46.8], [...VANITY_PALS.map(([s, c]): Pal => [s, [c[0], c[1]]])], stool),
+  define('be-vanity-fold-open', '折叠镜化妆桌', 'bedroom', [80, 45, 97.5], VANITY_PALS, vanityFold(true), { family: 'be-vanity-fold', form: 'open', formLabel: '镜子立起', surface: 73, surfaceShape: VANITY_SURF(80, 45, 2), surfaces: deskSurfaces(80, 45, 73), openable: true }),
+  define('be-vanity-fold-closed', '折叠镜化妆桌', 'bedroom', [80, 45, 75], VANITY_PALS, vanityFold(false), { family: 'be-vanity-fold', form: 'closed', surface: 73, surfaceShape: VANITY_SURF(80, 45, 2), surfaces: deskSurfaces(80, 45, 73), openable: true }),
+  define('be-vanity-tri', '三面镜梳妆台', 'bedroom', [90, 45, 143], VANITY_PALS, vanityTri, { surface: 74, surfaceShape: VANITY_SURF(90, 45, -8), surfaces: deskSurfaces(90, 45, 74), openable: true }),
+  define('be-kyodai', '和风鏡台', 'bedroom', [46, 33, 107], KYODAI_PALS, centerZBuild(kyodai), { category: 'japanese', surface: 30, surfaceShape: [rectPoly(-21, -4, 21, 15)], surfaces: KYODAI_SURF, openable: true }),
+  define('be-vanity-hollywood', '好莱坞灯泡化妆台', 'bedroom', [100, 45, 135], VANITY_PALS, vanityHollywood, { surface: 75, surfaceShape: VANITY_SURF(100, 45, -15), surfaces: deskSurfaces(100, 45, 75), openable: true }),
+  define('be-vanity-wall', '北欧圆镜化妆桌', 'bedroom', [70, 38, 168], VANITY_PALS, vanityWall, { surface: 74, surfaceShape: VANITY_SURF(70, 38, -15), surfaces: deskSurfaces(70, 38, 74), openable: true }),
+  define('be-vanity-stool', '化妆凳', 'bedroom', [29, 29, 46.8], [...VANITY_PALS.map(([s, c]): Pal => [s, [c[0], c[1]]])], stool),
 ]
 
 export const BEDROOM_EXTRA: AssetDef[] = [...CHESTS, ...VANITIES]

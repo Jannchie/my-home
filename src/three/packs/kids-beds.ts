@@ -8,24 +8,12 @@ import * as THREE from 'three'
 import { ball, capsule, cyl, face, puck, rbox, shade, toon, torus } from '../toon'
 import { C, ellipsePoly, glow, holePanel, movable, rectPoly, slab, type AssetDef, type SurfaceDef } from '../kit'
 import { cylX, cylZ, meshWith, rod3, type V3 } from '../geo'
-import { I, J, M, N, R, type Pal3 } from '../packkit'
-
-type Base = Omit<AssetDef, 'palettes' | 'paletteStyles'>
+import { I, J, M, N, R, withPals } from '../packkit'
 
 /** 床垫 / 床单白 */
 const MAT = '#fbf8f2'
 const TIRE = '#3a3a3c'
 const STAR = '#ffe08f'
-
-/** 组装素材定义：配色带风格标注；styles 不给就取配色里出现过的风格 */
-function A(base: Base, pals: Pal3[]): AssetDef {
-  return {
-    ...base,
-    palettes: pals.map((p) => [p[1], p[2], p[3]]),
-    paletteStyles: pals.map((p) => p[0]),
-    styles: base.styles ?? [...new Set(pals.map((p) => p[0]))],
-  }
-}
 
 // =====================================================================
 // 小工具
@@ -948,52 +936,52 @@ const BED = { name: '儿童床', family: 'kid-bed', category: 'kids' as const }
 
 export const KIDS_BEDS: AssetDef[] = [
   // ---- 婴儿床 ----
-  A({ ...CRIB, id: 'kb2-crib-wood', sizeLabel: '木栏床铃', w: 132, d: 72, h: 118, build: cribWood }, [
+  withPals({ ...CRIB, id: 'kb2-crib-wood', sizeLabel: '木栏床铃', w: 132, d: 72, h: 118, build: cribWood }, [
     ['nordic', N.oak, N.linen, N.sage],
     ['japanese', J.wood, J.washi, J.ai],
     ['retro', R.caramel, R.cream, R.mustard],
     ['cute', C.woodL, C.pink, C.mint],
     ['industrial', I.walnut, I.concrete, I.rust],
   ]),
-  A({ ...CRIB, id: 'kb2-crib-nordic', sizeLabel: '北欧圆角', w: 124, d: 66, h: 90, build: cribNordic }, [
+  withPals({ ...CRIB, id: 'kb2-crib-nordic', sizeLabel: '北欧圆角', w: 124, d: 66, h: 90, build: cribNordic }, [
     ['nordic', N.white, N.sage, N.mustard],
     ['nordic', N.white, N.blue, N.oakL],
     ['nordic', N.gray, N.linen, N.oak],
     ['cute', C.white, C.sakura, C.lilac],
     ['modern', M.white, M.light, M.char],
   ]),
-  A({ ...CRIB, id: 'kb2-crib-drawer', sizeLabel: '升降抽屉', w: 130, d: 70, h: 100, surfaces: [...[-1, 1].map((sx): SurfaceDef => ({ y: 5.1, h: 13, inside: true, slide: 30, shape: [rectPoly(sx * 29 - 24.8, 31.8 - 50 + 1.2, sx * 29 + 24.8, 31.8 - 1.2)] }))], openable: true, build: cribDrawer }, [
+  withPals({ ...CRIB, id: 'kb2-crib-drawer', sizeLabel: '升降抽屉', w: 130, d: 70, h: 100, surfaces: [...[-1, 1].map((sx): SurfaceDef => ({ y: 5.1, h: 13, inside: true, slide: 30, shape: [rectPoly(sx * 29 - 24.8, 31.8 - 50 + 1.2, sx * 29 + 24.8, 31.8 - 1.2)] }))], openable: true, build: cribDrawer }, [
     ['modern', M.white, M.light, M.char],
     ['modern', M.char, M.white, M.silver],
     ['nordic', N.oak, N.white, N.blue],
     ['cute', C.white, C.sky, C.lemon],
   ]),
-  A({ ...CRIB, id: 'kb2-crib-cradle', sizeLabel: '摇篮', w: 92, d: 64, h: 82, build: cradle }, [
+  withPals({ ...CRIB, id: 'kb2-crib-cradle', sizeLabel: '摇篮', w: 92, d: 64, h: 82, build: cradle }, [
     ['nordic', N.oakL, N.linen, N.sage],
     ['japanese', J.hinoki, J.washi, J.shu],
     ['retro', R.caramel, R.cream, R.teal],
     ['cute', C.white, C.pink, C.lemon],
   ]),
-  A({ ...CRIB, id: 'kb2-crib-oval', sizeLabel: '椭圆', w: 124, d: 76, h: 88, build: cribOval }, [
+  withPals({ ...CRIB, id: 'kb2-crib-oval', sizeLabel: '椭圆', w: 124, d: 76, h: 88, build: cribOval }, [
     ['nordic', N.white, N.linen, N.oak],
     ['modern', M.white, M.light, M.silver],
     ['cute', C.white, C.mint, C.pink],
     ['nordic', N.oak, N.sage, N.mustard],
   ]),
-  A({ ...CRIB, id: 'kb2-crib-travel', sizeLabel: '折叠旅行', w: 104, d: 76, h: 78, build: cribTravel }, [
+  withPals({ ...CRIB, id: 'kb2-crib-travel', sizeLabel: '折叠旅行', w: 104, d: 76, h: 78, build: cribTravel }, [
     ['modern', M.char, M.light, M.gray],
     ['modern', M.gray, M.white, M.black],
     ['cute', C.sky, C.white, C.lemon],
     ['nordic', N.blue, N.white, N.mustard],
     ['industrial', I.iron, I.concrete, I.rust],
   ]),
-  A({ ...CRIB, id: 'kb2-crib-wa', sizeLabel: '和风矮床', w: 127, d: 75, h: 46, build: cribWa }, [
+  withPals({ ...CRIB, id: 'kb2-crib-wa', sizeLabel: '和风矮床', w: 127, d: 75, h: 46, build: cribWa }, [
     ['japanese', J.hinoki, J.tatami, J.ai],
     ['japanese', J.wood, J.tatami, J.shu],
     ['japanese', J.dark, '#d8d39a', J.sumi],
     ['nordic', N.oakL, N.sage, N.linen],
   ]),
-  A({ ...CRIB, id: 'kb2-crib-canopy', sizeLabel: '蚊帐顶篷', w: 128, d: 70, h: 168, build: cribCanopy }, [
+  withPals({ ...CRIB, id: 'kb2-crib-canopy', sizeLabel: '蚊帐顶篷', w: 128, d: 70, h: 168, build: cribCanopy }, [
     ['cute', C.white, C.sakura, C.pink],
     ['nordic', N.white, N.linen, N.sage],
     ['retro', R.caramel, R.cream, R.orange],
@@ -1001,28 +989,28 @@ export const KIDS_BEDS: AssetDef[] = [
   ]),
 
   // ---- 儿童床 ----
-  A({ ...BED, id: 'kb2-bed-car', sizeLabel: '汽车床', w: 109, d: 206, h: 69, build: carBed }, [
+  withPals({ ...BED, id: 'kb2-bed-car', sizeLabel: '汽车床', w: 109, d: 206, h: 69, build: carBed }, [
     ['cute', C.red, C.sky, C.lemon],
     ['cute', C.sky, C.lemon, C.pink],
     ['retro', R.red, R.cream, R.mustard],
     ['retro', R.teal, R.cream, R.orange],
     ['modern', M.white, M.light, M.black],
   ]),
-  A({ ...BED, id: 'kb2-bed-castle', sizeLabel: '公主城堡', w: 104, d: 200, h: 175, build: castleBed }, [
+  withPals({ ...BED, id: 'kb2-bed-castle', sizeLabel: '公主城堡', w: 104, d: 200, h: 175, build: castleBed }, [
     ['cute', C.white, C.sakura, C.pink],
     ['cute', C.sakura, C.white, C.lilac],
     ['nordic', N.white, N.linen, N.blue],
     ['retro', R.cream, R.mustard, R.red],
     ['modern', M.light, M.white, M.char],
   ]),
-  A({ ...BED, id: 'kb2-bed-house', sizeLabel: '烟囱小屋', w: 97, d: 200, h: 175, build: houseBed2 }, [
+  withPals({ ...BED, id: 'kb2-bed-house', sizeLabel: '烟囱小屋', w: 97, d: 200, h: 175, build: houseBed2 }, [
     ['nordic', N.oak, N.linen, N.sage],
     ['nordic', N.white, N.blue, N.mustard],
     ['japanese', J.hinoki, J.washi, J.shu],
     ['cute', C.woodL, C.pink, C.mint],
     ['modern', M.char, M.light, M.white],
   ]),
-  A({
+  withPals({
     ...BED,
     id: 'kb2-bed-bunk',
     sizeLabel: '上下铺',
@@ -1042,7 +1030,7 @@ export const KIDS_BEDS: AssetDef[] = [
     ['modern', M.white, M.char, M.gray],
     ['cute', C.white, C.pink, C.sky],
   ]),
-  A({
+  withPals({
     ...BED,
     id: 'kb2-bed-loft',
     sizeLabel: '高架书桌',
@@ -1063,19 +1051,19 @@ export const KIDS_BEDS: AssetDef[] = [
     ['nordic', N.white, N.sage, N.oak],
     ['cute', C.white, C.sky, C.woodL],
   ]),
-  A({ ...BED, id: 'kb2-bed-floor', sizeLabel: '蒙氏地床', w: 98, d: 198, h: 40, build: montessoriBed }, [
+  withPals({ ...BED, id: 'kb2-bed-floor', sizeLabel: '蒙氏地床', w: 98, d: 198, h: 40, build: montessoriBed }, [
     ['nordic', N.oakL, N.linen, N.sage],
     ['japanese', J.hinoki, J.washi, J.ai],
     ['modern', M.white, M.light, M.char],
     ['cute', C.woodL, C.lemon, C.pink],
   ]),
-  A({ ...BED, id: 'kb2-bed-rocket', sizeLabel: '火箭床', w: 99, d: 200, h: 96, build: rocketBed }, [
+  withPals({ ...BED, id: 'kb2-bed-rocket', sizeLabel: '火箭床', w: 99, d: 200, h: 96, build: rocketBed }, [
     ['cute', C.white, C.sky, C.red],
     ['retro', R.cream, R.teal, R.orange],
     ['modern', M.light, M.char, C.red],
     ['industrial', I.steel, I.concrete, I.rust],
   ]),
-  A({
+  withPals({
     ...BED,
     id: 'kb2-bed-storage',
     sizeLabel: '抽屉储物',
@@ -1097,14 +1085,14 @@ export const KIDS_BEDS: AssetDef[] = [
     ['cute', C.white, C.mint, C.pink],
     ['japanese', J.wood, J.washi, J.sumi],
   ]),
-  A({ ...BED, id: 'kb2-bed-starry', sizeLabel: '星空顶篷', w: 100, d: 200, h: 176, build: starryBed }, [
+  withPals({ ...BED, id: 'kb2-bed-starry', sizeLabel: '星空顶篷', w: 100, d: 200, h: 176, build: starryBed }, [
     ['nordic', N.white, '#3d4f7a', N.mustard],
     ['modern', M.char, '#2a3550', M.silver],
     ['cute', C.white, C.lilac, C.lemon],
     ['retro', R.caramel, '#2f4a6b', R.mustard],
     ['japanese', J.hinoki, J.ai, J.washi],
   ]),
-  A({ ...BED, id: 'kb2-bed-extend', sizeLabel: '可延长', w: 94, d: 176, h: 72, build: extendBed }, [
+  withPals({ ...BED, id: 'kb2-bed-extend', sizeLabel: '可延长', w: 94, d: 176, h: 72, build: extendBed }, [
     ['nordic', N.oak, N.linen, N.sage],
     ['nordic', N.white, N.blue, N.oak],
     ['modern', M.light, M.white, M.char],

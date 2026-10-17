@@ -4,7 +4,7 @@
 import * as THREE from 'three'
 import { cyl, rbox, shade, toon, torus } from '../toon'
 import { C, glow, type AssetDef } from '../kit'
-import { type Pal } from '../packkit'
+import { pal, type Pal } from '../packkit'
 
 const def = (id: string, sizeLabel: string, [w, d, h]: [number, number, number], pals: Pal[], build: (p: string[]) => THREE.Group): AssetDef => ({
   id,
@@ -16,9 +16,7 @@ const def = (id: string, sizeLabel: string, [w, d, h]: [number, number, number],
   d,
   h,
   prop: true,
-  palettes: pals.map((x) => x[1]),
-  paletteStyles: pals.map((x) => x[0]),
-  styles: [...new Set(pals.map((x) => x[0]))],
+  ...pal(...pals),
   build,
 })
 

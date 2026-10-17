@@ -6,7 +6,7 @@ import * as THREE from 'three'
 import { cyl, rbox, shade } from '../toon'
 import { C, clipLevels, glow, type AssetDef, type ScreenPanel } from '../kit'
 import { P } from '../geo'
-import { I, M, N, type Pal } from '../packkit'
+import { I, M, N, pal, type Pal } from '../packkit'
 
 const SCREEN = '#bfe3ff'
 
@@ -122,9 +122,7 @@ function def(id: string, name: string, dims: [number, number, number], build: (p
     w,
     d,
     h,
-    palettes: PALS.map((x) => x[1]),
-    paletteStyles: PALS.map((x) => x[0]),
-    styles: [...new Set(PALS.map((x) => x[0]))],
+    ...pal(...PALS),
     build,
     prop: true,
     screens,

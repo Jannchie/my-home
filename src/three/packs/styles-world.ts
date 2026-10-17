@@ -7,7 +7,7 @@ import * as THREE from 'three'
 import { ball, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, SWING_OPEN, hangingPipe, holePanel, movable, paintPanel, pipeHook, rectPoly, ellipsePoly, type AssetDef, type Hole, type Poly, type StyleTag, type SurfaceDef } from '../kit'
 import { batten, cappedTube, centerGroup, cylX, cylZ, glassPane, lit, mesh, noOutlineDeep, rod3, type TubeOpts, type V3 } from '../geo'
-import { I, J, M, N, R } from '../packkit'
+import { I, J, M, N, R, withPals } from '../packkit'
 
 /** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
 const TUBE: TubeOpts = { seg: { per: 8, min: 12 }, radial: 10, group: true }
@@ -252,17 +252,6 @@ function brassPlate(x: number, y: number, z: number, r: number, color = BRASS) {
 }
 
 type Pal = [Tag, string, string, string]
-type Base = Omit<AssetDef, 'palettes' | 'paletteStyles'>
-
-/** 组装素材定义：配色带风格标注；styles 不给就取配色里出现过的风格 */
-function A(base: Base, pals: Pal[]): AssetDef {
-  return {
-    ...base,
-    palettes: pals.map((p) => [p[1], p[2], p[3]]),
-    paletteStyles: pals.map((p) => p[0]),
-    styles: base.styles ?? [...new Set(pals.map((p) => p[0]))],
-  }
-}
 
 const r = rectPoly
 
@@ -2600,7 +2589,7 @@ function inNightstand(p: string[]) {
 type Extra = Partial<Omit<AssetDef, 'id' | 'name' | 'category' | 'w' | 'd' | 'h' | 'build' | 'palettes' | 'paletteStyles'>>
 function D(id: string, name: string, category: AssetDef['category'], dims: [number, number, number], pals: Pal[], build: AssetDef['build'], extra: Extra = {}): AssetDef {
   // 统一在 xz 上居中（个别造型的拉手、雕花、斜靠让包围盒偏了 1~2cm）
-  return A({ id, name, category, w: dims[0], d: dims[1], h: dims[2], build: (p) => centerGroup(build(p)), ...extra }, pals)
+  return withPals({ id, name, category, w: dims[0], d: dims[1], h: dims[2], build: (p) => centerGroup(build(p)), ...extra }, pals)
 }
 
 const HALF_MOON: Poly = [[-46, -17], ...Array.from({ length: 13 }, (_, i) => { const a = Math.PI - (i / 12) * Math.PI; return [Math.cos(a) * 46, -17 + Math.sin(a) * 35] as [number, number] }), [46, -17]]

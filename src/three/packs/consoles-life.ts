@@ -7,9 +7,12 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
-import { C, S, G, glow, holePanel, paintPanel, rng, slab, type AssetCategory, type AssetDef, type Hole, type Poly } from '../kit'
-import { P, PI, cylX, cylZ, fitGroup, ghost, lit, noOutline, type V3 } from '../geo'
-import { J, M, N, R, type Pal } from '../packkit'
+import { C, S, G, glow, holePanel, paintPanel, rng, slab, type AssetDef, type Hole, type Poly } from '../kit'
+import { P, PI, cylX, cylZ, fitBuild, ghost, lit, noOutline, type V3 } from '../geo'
+import { J, M, N, PROP, R, definer, type Pal } from '../packkit'
+
+/** 本包默认是桌面摆件，build 之后按包围盒居中、贴地（fitGroup） */
+const def = definer(PROP, (b) => fitBuild(b))
 
 type Draw = (g: CanvasRenderingContext2D, W: number, H: number) => void
 
@@ -27,31 +30,6 @@ const SOIL = '#6b4a35'
 const FACE4 = ['#6fd3a8', '#ff8f86', '#8fb8ff', '#ffb3e0']
 
 // ---------- 定义 ----------
-
-function def(
-  id: string,
-  name: string,
-  category: AssetCategory,
-  [w, d, h]: [number, number, number],
-  pals: Pal[],
-  build: (p: string[]) => THREE.Group,
-  extra: Partial<AssetDef> = {},
-): AssetDef {
-  return {
-    id,
-    name,
-    category,
-    w,
-    d,
-    h,
-    palettes: pals.map((x) => x[1]),
-    paletteStyles: pals.map((x) => x[0]),
-    styles: [...new Set(pals.map((x) => x[0]))],
-    build: (p) => fitGroup(build(p)),
-    prop: true,
-    ...extra,
-  }
-}
 
 // ---------- 小工具 ----------
 

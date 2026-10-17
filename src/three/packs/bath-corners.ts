@@ -12,7 +12,7 @@ import * as THREE from 'three'
 import { ball, cyl, puck, rbox, toon, torus } from '../toon'
 import { C, type AssetDef, type Poly } from '../kit'
 import { PI, clearDeep, rod3 } from '../geo'
-import { CL, CN, F, I, J, M, N, R, type Build, type Pal } from '../packkit'
+import { CL, CN, F, I, J, M, N, R, pal, type Build, type Pal } from '../packkit'
 
 /** 层板形状：ins 为向内收的距离（摆放区域用），0 为实际轮廓 */
 type Shape = (ins?: number) => Poly
@@ -465,9 +465,7 @@ function def(s: Spec): AssetDef {
     w,
     d,
     h,
-    palettes: s.pals.map((x) => x[1]),
-    paletteStyles: s.pals.map((x) => x[0]),
-    styles: [...new Set(s.pals.map((x) => x[0]))],
+    ...pal(...s.pals),
     family: s.family ?? 'bath-corner-shelf',
     sizeLabel: s.label,
     ...(s.floor ? {} : { mount }),

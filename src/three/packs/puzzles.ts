@@ -4,13 +4,12 @@
 
 import * as THREE from 'three'
 import { ball, cyl, rbox, shade, toon, torus } from '../toon'
-import { C, S, rng, type AssetCategory, type AssetDef } from '../kit'
+import { C, S, rng, type AssetDef } from '../kit'
 import { G, P, PI, fitGroup } from '../geo'
-import { CN, M, N, R, type PalFlat } from '../packkit'
+import { CN, M, N, PROP, R, definer, type PalFlat } from '../packkit'
 
-function def(id: string, name: string, category: AssetCategory, [w, d, h]: [number, number, number], pals: PalFlat[], build: (p: string[]) => THREE.Group, extra: Partial<AssetDef> = {}): AssetDef {
-  return { id, name, category, w, d, h, palettes: pals.map((x) => x.slice(1)), paletteStyles: pals.map((x) => x[0]), styles: [...new Set(pals.map((x) => x[0]))], build, prop: true, ...extra }
-}
+/** 本包默认是桌面摆件（prop: true） */
+const def = definer(PROP)
 
 /** 魔方配色：[芯, 6 种贴纸色] */
 const CUBE_PALS: PalFlat[] = [

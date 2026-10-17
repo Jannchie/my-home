@@ -8,16 +8,13 @@ import * as THREE from 'three'
 import { ball, cup, cyl, puck, rbox, shade, torus } from '../toon'
 import { C, G, holePanel, shell, type AssetDef } from '../kit'
 import { PI, cappedTube, fitChildren, mesh, strut, strutBox, type TubeOpts, type V3 } from '../geo'
-import { I, J, M, N, R, type Pal } from '../packkit'
+import { I, J, M, N, R, pal } from '../packkit'
 
 /** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
 const TUBE: TubeOpts = { seg: { per: 10, min: 16 }, group: true }
 
 // ---------- 配色 ----------
 
-function pal(...xs: Pal[]) {
-  return { palettes: xs.map((x) => x[1]), paletteStyles: xs.map((x) => x[0]), styles: [...new Set(xs.map((x) => x[0]))] }
-}
 const CHROME = M.silver
 const INK = M.black
 

@@ -11,7 +11,7 @@ import * as THREE from 'three'
 import { ball, capsule, cup, cyl, face, leaf, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, SWING_OPEN, ellipsePoly, movable, paintPanel, rectPoly, rng, shell, type AssetCategory, type AssetDef, type DoorMotion, type SurfaceDef } from '../kit'
 import { PI, cylXLegacy, cylZLegacy, fitInPlace, lit, noOutlineDeep, rod3, taperRod3, type V3 } from '../geo'
-import { I, J, M, N, R, type Build, type Dims, type Pal } from '../packkit'
+import { I, J, M, N, R, define, type Build, type Dims, type Pal } from '../packkit'
 
 const COFFEE = '#7a4a32'
 const CREAM = '#fffaf2'
@@ -22,23 +22,8 @@ const DARK = '#3c3f46'
 
 // ---------- 定义 ----------
 
-function asset(id: string, name: string, category: AssetCategory, [w, d, h]: Dims, pals: Pal[], build: Build, extra: Partial<AssetDef> = {}): AssetDef {
-  return {
-    id,
-    name,
-    category,
-    w,
-    d,
-    h,
-    palettes: pals.map((x) => x[1]),
-    paletteStyles: pals.map((x) => x[0]),
-    styles: [...new Set(pals.map((x) => x[0]))],
-    build,
-    ...extra,
-  }
-}
 const prop = (id: string, name: string, category: AssetCategory, dims: Dims, pals: Pal[], build: Build, extra: Partial<AssetDef> = {}) =>
-  asset(id, name, category, dims, pals, build, { prop: true, ...extra })
+  define(id, name, category, dims, pals, build, { prop: true, ...extra })
 
 // ---------- 小工具 ----------
 
@@ -1842,7 +1827,7 @@ function coffeeYunomi(p: string[]) {
 // =====================================================================
 
 const air = (id: string, label: string, dims: Dims, pals: Pal[], build: Build) =>
-  asset(id, '壁挂空调', 'appliance', dims, pals, build, { family: 'aircon', sizeLabel: label, mount: AIRCON_MOUNT })
+  define(id, '壁挂空调', 'appliance', dims, pals, build, { family: 'aircon', sizeLabel: label, mount: AIRCON_MOUNT })
 
 const AIRCON: AssetDef[] = [
   air('va-aircon-slim', '薄型', [92, 21, 24], [
@@ -1877,7 +1862,7 @@ const AIRCON: AssetDef[] = [
 ]
 
 const stand = (id: string, label: string, dims: Dims, pals: Pal[], build: Build, surfaces: NonNullable<AssetDef['surfaces']>) =>
-  asset(id, '晾衣架', 'outdoor', dims, pals, build, { family: 'laundry-stand', sizeLabel: label, surfaces })
+  define(id, '晾衣架', 'outdoor', dims, pals, build, { family: 'laundry-stand', sizeLabel: label, surfaces })
 
 const STANDS: AssetDef[] = [
   stand('va-lstand-tele', '伸缩落地', [TEL.w - 1, TEL.d, TEL.top + 3], [
@@ -1924,7 +1909,7 @@ const STANDS: AssetDef[] = [
 ]
 
 const pl = (id: string, label: string, dims: Dims, pals: Pal[], build: Build) =>
-  asset(id, '花箱', 'outdoor', dims, pals, fitted(build), { family: 'planter', sizeLabel: label })
+  define(id, '花箱', 'outdoor', dims, pals, fitted(build), { family: 'planter', sizeLabel: label })
 
 const PLANTERS: AssetDef[] = [
   pl('va-planter-wood', '木条', [64, 26, 37], [
@@ -1989,7 +1974,7 @@ const TOILET_BRUSHES: AssetDef[] = [
 ]
 
 const ns = (id: string, label: string, dims: Dims, pals: Pal[], build: Build, extra: Partial<AssetDef>) =>
-  asset(id, '床头柜', 'bedroom', dims, pals, fitted(build), { family: 'nightstand', sizeLabel: label, surface: dims[2], ...extra })
+  define(id, '床头柜', 'bedroom', dims, pals, fitted(build), { family: 'nightstand', sizeLabel: label, surface: dims[2], ...extra })
 
 const NIGHTSTANDS: AssetDef[] = [
   ns('va-ns-open', '开放格', [NS_OPEN.w, 35.5, NS_OPEN.h], [
@@ -2131,7 +2116,7 @@ const VASES: AssetDef[] = [
 ]
 
 const lb = (id: string, label: string, dims: Dims, pals: Pal[], build: Build) =>
-  asset(id, '洗衣篮', 'storage', dims, pals, fitted(build), { family: 'laundry-basket', sizeLabel: label })
+  define(id, '洗衣篮', 'storage', dims, pals, fitted(build), { family: 'laundry-basket', sizeLabel: label })
 
 const LAUNDRY_BASKETS: AssetDef[] = [
   lb('va-lb-rattan', '藤编', [45.6, 36.5, 38.7], [
@@ -2202,7 +2187,7 @@ const HAMPERS: AssetDef[] = [
 ]
 
 const lr = (id: string, label: string, L: RackLayout, pals: Pal[], build: Build) =>
-  asset(id, '洗衣机置物架', 'storage', [L.w, L.d, L.h], pals, fitted(build), {
+  define(id, '洗衣机置物架', 'storage', [L.w, L.d, L.h], pals, fitted(build), {
     family: 'laundry-rack',
     sizeLabel: label,
     surface: L.top,
