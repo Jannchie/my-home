@@ -1793,10 +1793,10 @@ function loop() {
   const low = lowPower()
   const actorsBusy = actors.update(dt)
   const anim = fx.update(dt, stage.renderer.domElement.height) || actorsBusy
-  // 楼层切换 / 分层拉开的缓动
+  // 楼层切换 / 分层拉开的缓动：动画期间沿用旧阴影（每次重画阴影要提交上千次 draw call），停下的那一帧重画一次
   if (stepFloors(dt)) {
     dirty = true
-    sunMoved = true
+    if (!floorsMoving) shadowDirty = true
   }
   if (anim && !(low && now - lastRender < 32)) dirty = true
   if (fading && house) {
@@ -1811,9 +1811,15 @@ function loop() {
     const houseMoved = houseChanged()
     if (houseMoved || furnRoot.userData.cutawayChanged) {
       furnRoot.userData.cutawayChanged = false
-      shadowDirty = true
+      cutawayShadow = true
       dirty = true
     }
+  }
+  // 墙体渐变同理：渐变中保留旧阴影，全部停下后重画一次（转镜头时墙一直在让开，不再每帧重画阴影）
+  if (cutawayShadow && !fading) {
+    cutawayShadow = false
+    shadowDirty = true
+    dirty = true
   }
   // 选中框：出现时缩入，之后角标呼吸（省电画质 / 减少动效时静止，画面不用每帧重画）
   const framesMoving = [selFrame.update(now, low), hoverFrame.update(now, true), ghostFrame.update(now, true)].some(Boolean)
@@ -1833,6 +1839,8 @@ function loop() {
   }
 }
 let lastRender = 0
+/** 墙体渐变改过投影，等渐变结束后重画阴影 */
+let cutawayShadow = false
 
 /** 切到后台 / 锁屏：停掉渲染循环；回来时接着跑（时间步长从头算，不会一下跳很多） */
 function onVisibility() {
