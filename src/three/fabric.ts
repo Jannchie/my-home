@@ -4,6 +4,7 @@
 import * as THREE from 'three'
 import { drawPattern, type PatternSpec } from './patterns'
 import { toon, useAnisotropy } from './toon'
+import { injectLightMask } from './lightMask'
 
 const TEX = 256
 const texCache = new Map<string, THREE.CanvasTexture>()
@@ -50,6 +51,7 @@ export function patternMaterial(spec: PatternSpec, world = false) {
   m = new THREE.MeshToonMaterial({ color: '#ffffff', map: patternTexture(spec), gradientMap: base.gradientMap })
   const scale = 1 / Math.max(1, spec.scale)
   m.onBeforeCompile = (sh) => {
+    injectLightMask(sh)
     sh.uniforms.uPatScale = { value: scale }
     const assign = world ? 'vObjPos = (modelMatrix * vec4(position, 1.0)).xyz;\n  vObjNormal = mat3(modelMatrix) * normal;' : 'vObjPos = position;\n  vObjNormal = normal;'
     sh.vertexShader = 'varying vec3 vObjPos;\nvarying vec3 vObjNormal;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  ' + assign)

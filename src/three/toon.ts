@@ -3,6 +3,8 @@
 
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
+// 室内灯的楼层 / 房间遮罩：给所有受光照材质挂上 onBeforeCompile（副作用导入，要在任何材质编译前生效）
+import './lightMask'
 
 // ---------- 赛璐璐阴影 ----------
 // three 自带的 PCF 阴影用逐像素噪点（IGN）旋转采样，边缘是一片网点状的颗粒渐变。

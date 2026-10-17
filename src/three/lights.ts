@@ -9,6 +9,8 @@
 //   - 地面光斑按房间多边形裁剪（不会漏到隔壁房间），UV 以灯为中心做径向渐变，叠加混合。
 //   - 发光部件（灯罩、和纸、灯泡）亮度有上限（约原色 1.0–1.3 倍）：保留颜色、分格和造型，不会一片白。
 //   - 天花板高度的灯具在墙体压低 / 半墙时淡出（光照保留），走 house.ts 的 stepCutaway。
+//   - 不投阴影的光会穿过楼板和隔墙：lightMask.ts 用俯视的房间编号图把每盏灯限制在所在楼层 + 所在房间
+//     （敞开相连的房间、楼梯洞口 / 挑空上下相通），户型变了才重建编号图。
 // 单位：厘米。平面图的 y 对应 3D 的 z。
 
 import * as THREE from 'three'
@@ -16,7 +18,8 @@ import { area, labelPointAvoiding, pointInPolygon, edgesOf, fixtureBox, fixtureD
 import type { AssetDef, StyleTag } from './kit'
 import { ASSET_MAP } from './assets'
 import { hasTag } from './tags'
-import { floorViews } from '../floors'
+import { floorOf, floorViews, planFloors } from '../floors'
+import { buildLightMask, lightMaskKey, setLightMaskEnabled, setLightMaskFloors, setLightMaskLight, setLightMaskMap, type LightMaskMap } from './lightMask'
 import { addOutlines, ball, cup, cyl, rbox, toon, torus, useAnisotropy } from './toon'
 
 // ---------- 设置 ----------
@@ -922,6 +925,9 @@ export class IndoorLights {
    * 房间灯的规格（RoomLightSpec）都是按本层地面算的，这里统一加上。单层户型不设，等于 0。
    */
   private liftOf: ((roomId: string | null) => number | null) | null = null
+  /** 房间编号图（lightMask.ts）与它的指纹 */
+  private mask: LightMaskMap | null = null
+  private maskKey = ''
 
   constructor(poolSize = POOL_HIGH) {
     this.group.name = 'indoor-lights'
@@ -949,6 +955,7 @@ export class IndoorLights {
   /** 房间、设备、餐桌变了：按需重建房间灯（同一房间 key 没变就不动） */
   syncRooms(plan: Plan, defs: Map<string, AssetDef>, floorY: (r: Room | undefined) => number, styleOf?: (roomId: string) => StyleTag | undefined) {
     this.plan = plan
+    this.syncMask(plan)
     const specs = roomLightSpecs(plan, defs, styleOf)
     const alive = new Set<string>()
     const byRoom = new Map(plan.rooms.map((r) => [r.id, r]))
@@ -992,6 +999,32 @@ export class IndoorLights {
     delete this.fixtures.userData.fadeList
     delete this.fixtures.userData.wallTop
     this.refreshTargets()
+  }
+
+  /** 房间 / 墙 / 楼层 / 楼梯变了：重建房间编号图 */
+  private syncMask(plan: Plan) {
+    const key = lightMaskKey(plan)
+    if (key === this.maskKey) return
+    this.maskKey = key
+    this.mask = buildLightMask(plan)
+    setLightMaskMap(this.mask)
+    this.updateMaskFloors()
+  }
+
+  /** 各层地面的当前世界高度（含分层拉开的偏移；隐藏的层不参与） */
+  private updateMaskFloors() {
+    const p = this.plan
+    if (!p) return
+    const fs = planFloors(p)
+    setLightMaskFloors(
+      fs.map((f) => {
+        if (!this.liftOf) return f.elevation
+        const r = p.rooms.find((x) => floorOf(p, x) === f.id)
+        if (!r) return f.elevation
+        const y = this.liftOf(r.id)
+        return y === null ? 1e7 : y
+      }),
+    )
   }
 
   private dropRig(rig: RoomRig) {
@@ -1151,6 +1184,7 @@ export class IndoorLights {
       if (rig.decal) rig.decal.position.y = y ?? 0
     }
     for (const l of this.lamps.values()) if (l.decal) l.decal.position.y = fn?.(l.roomId) ?? 0
+    this.updateMaskFloors()
     this.dirty = true
   }
 
@@ -1163,7 +1197,7 @@ export class IndoorLights {
     const night = this.state.night
     const power = this.state.power
     // 候选：[优先级, 位置, 颜色, 强度, 距离]
-    type Cand = { pri: number; x: number; y: number; z: number; color: THREE.Color; i: number; d: number }
+    type Cand = { pri: number; x: number; y: number; z: number; color: THREE.Color; i: number; d: number; room: string | null }
     const cands: Cand[] = []
     for (const rig of this.rooms.values()) {
       const s = rig.spec
@@ -1182,7 +1216,7 @@ export class IndoorLights {
       }
       if ((rig.target > 0 || lv > 0) && !hidden) {
         const pri = (s.primary ? 2e6 : 1e6) + Math.min(9e5, s.distance * s.distance * 0.01)
-        cands.push({ pri, x: s.x, y: s.h + (this.liftOf?.(s.roomId) ?? 0), z: s.y, color: rig.kelvin, i: s.intensity * e * power, d: s.distance })
+        cands.push({ pri, x: s.x, y: s.h + (this.liftOf?.(s.roomId) ?? 0), z: s.y, color: rig.kelvin, i: s.intensity * e * power, d: s.distance, room: s.roomId })
       }
     }
     // 灯具家具：每个房间离房间中心近的前 N 盏打光，其余只发光
@@ -1215,10 +1249,12 @@ export class IndoorLights {
       for (const { l } of list.slice(0, this.lampsPerRoom)) {
         const e = l.level * l.level * (3 - 2 * l.level)
         const w = (l as Lamp & { _w?: THREE.Vector3 })._w!
-        cands.push({ pri: 5e5 + l.intensity * 1000, x: w.x, y: w.y, z: w.z, color: this.kelvinOfRoom(l.roomId), i: l.intensity * e * power, d: l.distance })
+        cands.push({ pri: 5e5 + l.intensity * 1000, x: w.x, y: w.y, z: w.z, color: this.kelvinOfRoom(l.roomId), i: l.intensity * e * power, d: l.distance, room: l.roomId })
       }
     }
     cands.sort((a, b) => b.pri - a.pri)
+    let anyOn = false
+    // 池子里第 i 盏灯 = 着色器里的 pointLights[ i ]（场景里只有这些点光源，按加入顺序）：遮罩数组按同样的下标写
     this.pool.forEach((pl, i) => {
       const c = cands[i]
       if (!c || c.i <= 0.0005) {
@@ -1229,7 +1265,11 @@ export class IndoorLights {
       pl.color.copy(c.color)
       pl.intensity = c.i
       pl.distance = c.d
+      anyOn = true
+      const m = c.room ? this.mask?.rooms.get(c.room) : undefined
+      setLightMaskLight(i, m?.floor ?? 0, m?.group ?? 0, !m)
     })
+    setLightMaskEnabled(anyOn)
   }
 
   private kelvinOfRoom(id: string | null) {
