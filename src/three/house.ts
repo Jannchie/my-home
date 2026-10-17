@@ -1762,7 +1762,7 @@ function trimTemplates() {
  * 灯具排除：没有发光部件的灯（蜡烛类）要挑「上部最浅色的部件」当灯罩（lights.ts prepareLamp），并成一个网格就挑不出来了。
  * 改了开关会清空模板缓存（已经摆着的家具要重建才生效）。
  */
-let vcMerge: boolean | ((def: AssetDef) => boolean) = false
+let vcMerge: boolean | ((def: AssetDef) => boolean) = true
 export function setVertexColorMerge(v: boolean | ((def: AssetDef) => boolean)) {
   vcMerge = v
   clearFurnitureTemplates()
