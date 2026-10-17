@@ -192,24 +192,36 @@ function place(mesh: THREE.Mesh, at: At = {}) {
   return mesh
 }
 
-const r1 = (n: number) => Math.round(n * 10) / 10
+/**
+ * 体素尺寸先量化再建几何：缓存键和几何用同一组数，同一个键永远对应同一份几何（不会因为先来的那次尺寸不同而差一点）。
+ * 取整到 0.1cm（误差 ≤ 0.05cm）；不到 0.1cm 的细小尺寸保留到 0.001cm，免得被取成 0 变成退化几何。
+ */
+const q = (n: number) => (Math.abs(n) >= 0.1 ? Math.round(n * 10) / 10 : Math.round(n * 1000) / 1000)
 
 /** 圆角盒，at.y 是底面高度（不是中心），摆东西更顺手 */
 export function rbox(w: number, h: number, d: number, color: THREE.ColorRepresentation, at: At = {}, radius?: number) {
-  const r = Math.min(radius ?? Math.min(w, h, d) * 0.18, Math.min(w, h, d) / 2 - 0.01)
-  const g = cached(`rb${r1(w)},${r1(h)},${r1(d)},${r1(r)}`, () => new RoundedBoxGeometry(w, h, d, 3, Math.max(0.01, r)))
+  w = q(w)
+  h = q(h)
+  d = q(d)
+  const r = q(Math.max(0.01, Math.min(radius ?? Math.min(w, h, d) * 0.18, Math.min(w, h, d) / 2 - 0.01)))
+  const g = cached(`rb${w},${h},${d},${r}`, () => new RoundedBoxGeometry(w, h, d, 3, r))
   return place(new THREE.Mesh(g, toon(color)), { ...at, y: (at.y ?? 0) + h / 2 })
 }
 
 /** 圆柱 / 圆台，at.y 为底面 */
 export function cyl(rTop: number, rBottom: number, h: number, color: THREE.ColorRepresentation, at: At = {}, seg = 24) {
-  const g = cached(`cy${r1(rTop)},${r1(rBottom)},${r1(h)},${seg}`, () => new THREE.CylinderGeometry(rTop, rBottom, h, seg))
+  rTop = q(rTop)
+  rBottom = q(rBottom)
+  h = q(h)
+  const g = cached(`cy${rTop},${rBottom},${h},${seg}`, () => new THREE.CylinderGeometry(rTop, rBottom, h, seg))
   return place(new THREE.Mesh(g, toon(color)), { ...at, y: (at.y ?? 0) + h / 2 })
 }
 
 /** 圆角圆柱（坐垫、饼状物）：胶囊压扁 */
 export function puck(r: number, h: number, color: THREE.ColorRepresentation, at: At = {}) {
-  const g = cached(`pk${r1(r)},${r1(h)}`, () => {
+  r = q(r)
+  h = q(h)
+  const g = cached(`pk${r},${h}`, () => {
     const k = Math.min(h / 2, r) * 0.9
     const pts: THREE.Vector2[] = [new THREE.Vector2(0, -h / 2)]
     const arc = (cx: number, cy: number, a0: number, a1: number) => {
@@ -228,7 +240,11 @@ export function puck(r: number, h: number, color: THREE.ColorRepresentation, at:
 
 /** 空心的杯 / 桶 / 花盆：带壁厚和圆润的口沿，at.y 为底面 */
 export function cup(rTop: number, rBottom: number, h: number, t: number, color: THREE.ColorRepresentation, at: At = {}) {
-  const g = cached(`cu${r1(rTop)},${r1(rBottom)},${r1(h)},${r1(t)}`, () => {
+  rTop = q(rTop)
+  rBottom = q(rBottom)
+  h = q(h)
+  t = q(t)
+  const g = cached(`cu${rTop},${rBottom},${h},${t}`, () => {
     const k = Math.min(t * 0.6, rBottom * 0.2)
     const innerBottom = rBottom - t + ((rTop - rBottom) * t) / h
     const pts: THREE.Vector2[] = [new THREE.Vector2(0, 0)]
@@ -264,7 +280,8 @@ export function tray(w: number, h: number, d: number, t: number, color: THREE.Co
 
 /** 球 / 椭球，at.y 为球心；scale 用于压扁 */
 export function ball(r: number, color: THREE.ColorRepresentation, at: At = {}, scale?: [number, number, number]) {
-  const g = cached(`sp${r1(r)}`, () => new THREE.SphereGeometry(r, 24, 16))
+  r = q(r)
+  const g = cached(`sp${r}`, () => new THREE.SphereGeometry(r, 24, 16))
   const m = place(new THREE.Mesh(g, toon(color)), at)
   if (scale) m.scale.set(...scale)
   return m
@@ -272,18 +289,26 @@ export function ball(r: number, color: THREE.ColorRepresentation, at: At = {}, s
 
 /** 胶囊，竖直；at.y 为底 */
 export function capsule(r: number, len: number, color: THREE.ColorRepresentation, at: At = {}) {
-  const g = cached(`cp${r1(r)},${r1(len)}`, () => new THREE.CapsuleGeometry(r, len, 6, 16))
+  r = q(r)
+  len = q(len)
+  const g = cached(`cp${r},${len}`, () => new THREE.CapsuleGeometry(r, len, 6, 16))
   return place(new THREE.Mesh(g, toon(color)), { ...at, y: (at.y ?? 0) + len / 2 + r })
 }
 
 export function torus(r: number, tube: number, color: THREE.ColorRepresentation, at: At = {}, arc = Math.PI * 2) {
-  const g = cached(`to${r1(r)},${r1(tube)},${r1(arc)}`, () => new THREE.TorusGeometry(r, tube, 10, 32, arc))
+  r = q(r)
+  tube = q(tube)
+  // 弧度取整到 0.001（按 0.1 取整的话，半径大的圆环弧长误差会超过 0.05cm）
+  arc = Math.abs(arc - Math.PI * 2) < 1e-4 ? Math.PI * 2 : Math.round(arc * 1000) / 1000
+  const g = cached(`to${r},${tube},${arc}`, () => new THREE.TorusGeometry(r, tube, 10, 32, arc))
   return place(new THREE.Mesh(g, toon(color)), at)
 }
 
 /** 平面贴片（不描边），用于地板花纹、画、屏幕等 */
 export function plate(w: number, d: number, color: THREE.ColorRepresentation, at: At = {}, emissive = 0) {
-  const g = cached(`pl${r1(w)},${r1(d)}`, () => new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2))
+  w = q(w)
+  d = q(d)
+  const g = cached(`pl${w},${d}`, () => new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2))
   const m = place(new THREE.Mesh(g, toon(color, { emissive })), at)
   m.userData.noOutline = true
   m.castShadow = false
@@ -469,6 +494,20 @@ export function mergeMeshes(root: THREE.Object3D) {
     for (const m of list) m.removeFromParent()
     root.add(merged)
   }
+}
+
+/**
+ * 半透明网格（玻璃、纱帘、水面：材质或材质数组全部 transparent）不投影，只接收阴影。
+ * 体素默认 castShadow = true，换成半透明材质后投影标记还开着，阳光会被整扇窗挡住。
+ * 在建模出口（家具模型、房体）统一调一遍；楼层淡出临时换上的透明副本由 fadeFloor 自己管，不受影响。
+ */
+export function noTransparentShadows(root: THREE.Object3D) {
+  root.traverse((o) => {
+    const m = o as THREE.Mesh
+    if (!m.isMesh || !m.castShadow || o.userData.isOutline) return
+    const mats = Array.isArray(m.material) ? m.material : [m.material]
+    if (mats.length && mats.every((x) => x.transparent)) m.castShadow = false
+  })
 }
 
 /**

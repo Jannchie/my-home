@@ -5,7 +5,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { ASSETS, ASSET_MAP, CATEGORY_LABELS, STYLE_LABELS, type AssetCategory, type StyleTag } from '../three/assets'
 import { SIZE_LABELS, browse, cardName, categoriesOf, countByCategory, displayName, paletteFor, paletteStyle, siblings, sizeClass, typesIn, variantLabel, type Filter, type SizeClass } from '../three/catalog'
 import { typeLabel } from '../three/typeLabels'
-import { addOutlines } from '../three/toon'
+import { addOutlines, disposeUnshared, mergeMeshes, noTransparentShadows } from '../three/toon'
 import { createStage, fitSun, frameCamera, type Stage } from '../three/stage'
 import { useThumbs } from '../three/thumbs'
 import { FxLayer } from '../three/fx'
@@ -92,10 +92,17 @@ const spin = ref(true)
 
 function showPreview() {
   if (!stage) return
-  if (current) stage.scene.remove(current)
+  if (current) {
+    stage.scene.remove(current)
+    // 合并出来的几何体每次新建：换模型时释放，免得来回翻素材时显存一直涨
+    disposeUnshared(current)
+  }
   const d = def.value
   const pal = effectivePalette(d, color.value, customColors.value)
+  // 和沙盘里的家具同一套出口：合并同材质零件 → 描边 → 套花纹（半透明件不投影）
   current = d.build(pal)
+  noTransparentShadows(current)
+  mergeMeshes(current)
   addOutlines(current)
   applyPatterns(current, pal, customPatterns.value)
   stage.scene.add(current)
@@ -152,12 +159,23 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   cancelAnimationFrame(raf)
+  cancelAnimationFrame(previewRaf)
+  if (current) disposeUnshared(current)
   ro?.disconnect()
   controls.dispose()
   stage.dispose()
 })
 
-watch([selectedId, color, customColors, customPatterns], showPreview)
+// 取色器拖动时 @preview 一帧可能来好几次：合并到下一帧只重建一次
+let previewRaf = 0
+function schedulePreview() {
+  if (previewRaf) return
+  previewRaf = requestAnimationFrame(() => {
+    previewRaf = 0
+    showPreview()
+  })
+}
+watch([selectedId, color, customColors, customPatterns], schedulePreview)
 
 function placeInSandbox() {
   selection.value = null

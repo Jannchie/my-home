@@ -24,7 +24,7 @@ import {
 } from '../model'
 import { isIndoor, sharedIntervals, voidRailSegments, wallSegments, wallThicknessAt } from '../walls'
 import { tatamiLayout } from '../tatami'
-import { addOutlines, ball, capsule, cyl, mergeMeshes, rbox, shade, toon, useAnisotropy } from './toon'
+import { addOutlines, ball, capsule, cyl, mergeMeshes, noTransparentShadows, rbox, shade, toon, useAnisotropy } from './toon'
 import { glow, poseDoors } from './kit'
 import { freezeMatrices, syncMatrix } from './matrices'
 import { hasTag } from './tags'
@@ -372,6 +372,8 @@ interface FadePart {
   ghost: THREE.Material[]
   /** 原本就半透明的（玻璃），按比例淡出 */
   base: number[]
+  /** 原本投不投影（玻璃、纱帘不投影）：恢复实心时还原成它，不一律打开 */
+  cast: boolean
 }
 
 /** 物体里要淡出的网格；描边外壳是不透明的，淡出时直接藏起来 */
@@ -395,7 +397,9 @@ function fadeParts(o: THREE.Object3D) {
         g.depthWrite = false
         return g
       })
-      parts.push({ mesh, solid, ghost, base: mats.map((m) => (m.transparent ? m.opacity : 1)) })
+      // 楼层淡出期间 castShadow 被临时改过，原值记在 floorShadow 里
+      const cast = (mesh.userData.floorShadow as boolean | undefined) ?? mesh.castShadow
+      parts.push({ mesh, solid, ghost, base: mats.map((m) => (m.transparent ? m.opacity : 1)), cast })
     }
   })
   o.userData.parts = { parts, hulls }
@@ -446,7 +450,7 @@ export function stepCutaway(root: THREE.Object3D, dt: number, look: WallLook, fo
         const { parts } = fadeParts(o)
         for (const p of parts) {
           p.mesh.material = p.solid
-          p.mesh.castShadow = true
+          p.mesh.castShadow = p.cast
         }
         o.visible = hh > 0.3
         continue
@@ -459,11 +463,11 @@ export function stepCutaway(root: THREE.Object3D, dt: number, look: WallLook, fo
     for (const p of parts) {
       if (t === 0) {
         p.mesh.material = p.solid
-        p.mesh.castShadow = true
+        p.mesh.castShadow = p.cast
       } else {
         p.ghost.forEach((g, i) => (g.opacity = alpha * p.base[i]))
         p.mesh.material = Array.isArray(p.solid) ? p.ghost : p.ghost[0]
-        p.mesh.castShadow = e < 0.5
+        p.mesh.castShadow = p.cast && e < 0.5
       }
     }
     // 完全透明时直接隐藏；墙脚另有一条贴地的细线（wallStub）标出房间边界
@@ -1536,6 +1540,8 @@ export function buildHouse(plan: Plan, wallH: number, opts: HouseOpts = {}) {
     addOutlines(top)
   }
   root.add(part(fx, 'fixture'))
+  // 玻璃、纱帘等半透明件先用 rbox 建（默认投影）再换材质：统一关掉投影，阳光能透过窗户
+  noTransparentShadows(root)
   return root
 }
 
@@ -1545,6 +1551,8 @@ export function furnitureModel(fu: Furniture) {
   if (!def) return g
   const pal = effectivePalette(def, fu.color ?? 0, fu.colors)
   const m = def.build(pal)
+  // 半透明零件（玻璃、水面）不投影
+  noTransparentShadows(m)
   // 零件按材质合并，draw call 少一个数量级（描边、花纹、弯曲都在合并后的网格上照常工作）
   mergeMeshes(m)
   noTinyShadows(m)

@@ -311,6 +311,8 @@ function pegPanelGeo(w: number, h: number, t: number, sp: number) {
   const bevel = 0.2
   geo = new THREE.ExtrudeGeometry(s, { depth: t - bevel * 2, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelOffset: -bevel, bevelSegments: 1, curveSegments: 3 })
   geo.translate(0, 0, -t / 2 + bevel)
+  // 模块级缓存、多件家具共用：标记共享，disposeUnshared 不释放
+  geo.userData.shared = true
   panelCache.set(key, geo)
   return geo
 }
@@ -2061,6 +2063,8 @@ function torsoGeo(g: GSpec) {
   const b = 0.4
   geo = new THREE.ExtrudeGeometry(s, { depth: g.T - b * 2, bevelEnabled: true, bevelThickness: b, bevelSize: b, bevelOffset: -b, bevelSegments: 2 })
   geo.translate(0, 0, -g.T / 2 + b)
+  // 模块级缓存、多件家具共用：标记共享，disposeUnshared 不释放
+  geo.userData.shared = true
   torsoCache.set(key, geo)
   return geo
 }

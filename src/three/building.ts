@@ -9,6 +9,7 @@ import { slabHoles, stairHoles } from '../stairs'
 import { roofParts } from '../exterior'
 import { buildHouse, type HouseOpts } from './house'
 import { buildSite, facadeExtras, facadeMaterial, roofGroup } from './exterior'
+import { noTransparentShadows } from './toon'
 
 export interface FloorGroup {
   floor: Floor
@@ -40,6 +41,8 @@ export function buildBuilding(plan: Plan, wallH: number, wallHFor?: (f: Floor) =
       fg.roof = roof
     }
     if (plan.site && i === 0 && !opts.bare) fg.group.add(buildSite(plan.site))
+    // 外墙装饰、屋顶里的玻璃同样不投影（buildHouse 已处理房体本身）
+    noTransparentShadows(fg.group)
   }
   const extra: HouseOpts = { facade, noBase: !!plan.site || !!opts.bare }
   if (!isMultiFloor(plan)) {

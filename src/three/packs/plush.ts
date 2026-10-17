@@ -37,7 +37,13 @@ function finGeo(shape: THREE.Shape, thick: number) {
   return g
 }
 
-const mesh = (g: THREE.BufferGeometry, color: string) => new THREE.Mesh(g, toon(color))
+/** 毛绒件的网格：和 toon.ts 的体素一样投影、接收阴影 */
+const mesh = (g: THREE.BufferGeometry, color: string) => {
+  const m = new THREE.Mesh(g, toon(color))
+  m.castShadow = true
+  m.receiveShadow = true
+  return m
+}
 
 /** 趴着的鲨鱼：头朝 +x。L 为全长；配色 [背, 肚, 眼] */
 function shark(L: number) {
