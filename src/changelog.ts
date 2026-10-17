@@ -12,6 +12,33 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '1.5.0',
+    date: '2026-10-17',
+    notes: {
+      zh: [
+        '画面右侧新增竖排楼层切换，平面图和 3D 都能直接切换楼层；楼层出现、消失时会淡入淡出',
+        '放设备改为先在面板里挑选（按用途分组，标注尺寸），画面里有跟手的预览，靠近墙自动贴墙；手机上拖动预览后点"放下"确认，可连续放置',
+        '室内灯光不再穿墙、穿楼板：灯只照亮所在房间和楼层，开放相连的房间、楼梯和挑空仍然相通',
+        '楼梯新增样式：经典、楼梯下收纳、镂空木梯、现代玻璃栏板；靠墙一侧装靠墙扶手，踏步侧面不再出现竖线',
+        '高柜顶上的摆件不再超出层高；修正衣柜里收纳箱碰到衣服下摆、墙上挂件碰到壁灯、搁板摆件顶到抽油烟机',
+      ],
+      ja: [
+        '画面右側に縦並びの階切り替えを追加。間取り図と 3D のどちらでもすぐ階を切り替えられます。階の表示・非表示はフェードします',
+        '設備の配置は、まずパネルから選ぶ方式に（用途別・サイズ表示）。画面にプレビューが表示され、壁の近くでは壁に沿わせます。スマホではプレビューをドラッグして「置く」で確定、連続配置も可能',
+        '室内照明が壁や床を透過しないように。照明は同じ部屋・同じ階だけを照らし、つながった部屋や階段・吹き抜けは通します',
+        '階段のスタイルを追加：クラシック、階段下収納、オープン階段、ガラス手すりのモダン。壁側には壁付け手すりが付き、段の側面に縦線が出なくなりました',
+        '背の高い家具の上の小物が天井を突き抜けないように。収納ケースと衣類の裾、壁掛けと壁付け照明、棚の小物とレンジフードの干渉を修正',
+      ],
+      en: [
+        'A vertical floor switcher on the right of both the plan and 3D views; floors fade in and out as they appear and hide',
+        'Placing fixtures starts from a panel grouped by use with sizes; a live preview follows the pointer and snaps to walls. On phones, drag the preview and tap Place to confirm, with an option to keep placing',
+        'Room lights no longer leak through walls or floors: each light only reaches its own room and floor, while open-plan rooms, stairs and voids stay connected',
+        'Stair styles: classic, under-stair storage, open wooden and modern with glass rails; wall-side handrails, and no more vertical lines along the stair sides',
+        'Decor on tall furniture stays below the ceiling; fixed storage boxes hitting hanging clothes, wall hangings hitting wall lamps and shelf items hitting range hoods',
+      ],
+    },
+  },
+  {
     version: '1.4.0',
     date: '2026-10-17',
     notes: {
