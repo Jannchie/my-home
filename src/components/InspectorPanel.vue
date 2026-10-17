@@ -4,7 +4,10 @@ import { FIXTURES, OPENING_LABELS, ROOM_KINDS, area, bbox, edgeInfo, fixtureDept
 import { planArea } from '../generate'
 import { RAILING_KINDS, type RailingKind } from '../model'
 import { isIndoor } from '../walls'
-import { deleteSelection, duplicateSelection, findFixture, findRoom, mutate, plan, rotateSelectedFixture, selection, settings, tidyDoors, setRoomLight, setRoomLightK } from '../store'
+import { deleteSelection, duplicateSelection, findFixture, findRoom, mutate, plan, floorPlan, rotateSelectedFixture, selection, settings, tidyDoors, setRoomLight, setRoomLightK } from '../store'
+import { STAIRS_VARIANTS, type StairsVariant } from '../model'
+import { floorAbove, floorOf, isMultiFloor, planFloors, riseOf, floorView } from '../floors'
+import { MAX_RISER, STAIRS_SIZE, stairsVariant } from '../stairs'
 import { cabinetsOn, setOpen } from '../cabinet'
 import { propsOn } from '../surface'
 import { ASSET_MAP } from '../three/assets'
@@ -56,7 +59,32 @@ const stats = computed(() => ({
   count: plan.value.rooms.filter(isIndoor).length,
 }))
 
-const sortedRooms = computed(() => [...plan.value.rooms].sort((a, b) => area(b.points) - area(a.points)))
+/** 房间列表：多层户型只列当前楼层的 */
+const sortedRooms = computed(() => [...floorPlan.value.rooms].sort((a, b) => area(b.points) - area(a.points)))
+/** 多层户型：各层面积（户内房间，挑空不算） */
+const floorStats = computed(() => (isMultiFloor(plan.value) ? planFloors(plan.value).map((f) => ({ f, area: planArea(floorView(plan.value, f.id)) * 10000 })) : []))
+
+/** 楼梯：通到哪一层、级数、踢面高 */
+const stairInfo = computed(() => {
+  const f = fixture.value
+  if (f?.kind !== 'stairs') return null
+  const from = floorOf(plan.value, f)
+  const rise = riseOf(plan.value, from)
+  const n = Math.max(3, Math.ceil(rise / MAX_RISER))
+  return { to: floorAbove(plan.value, from), rise, n, riser: rise / n }
+})
+/** 换楼梯形式：占地换成这种形式的默认尺寸（中心不动） */
+function setStairs(v: StairsVariant) {
+  const f = fixture.value
+  if (!f) return
+  mutate(() => {
+    f.stairs = v
+    f.w = STAIRS_SIZE[v].w
+    f.d = STAIRS_SIZE[v].d
+    if (v === 'straight') delete f.turn
+    if (v !== 'l') delete f.run
+  })
+}
 
 const num = (e: Event) => Number((e.target as HTMLInputElement).value)
 const str = (e: Event) => (e.target as HTMLInputElement).value
@@ -127,6 +155,7 @@ function setSpotOpen(open: boolean) {
           </select>
         </span>
       </label>
+      <p v-if="room.kind === 'void'" class="hint">{{ t('挑空：这一块没有楼板，下层在这里通高（下层的外墙一直砌到这一层的天花）。') }}</p>
       <label v-if="room.kind === 'balcony'"
         >{{ t('扶手墙') }}
         <select :value="room.railing ?? 'mixed'" @change="mutate(() => (room!.railing = str($event) as RailingKind))">
@@ -243,6 +272,31 @@ function setSpotOpen(open: boolean) {
         >
         <p class="hint">{{ t('收纳位只是预留的空间（嵌墙的是墙里的壁龛）。柜子本身是家具：一键布置会按位的尺寸放一件鞋柜 / 衣柜 / 食品柜，也可以在 3D 沙盘或素材库里自己换款式和颜色。') }}</p>
       </template>
+      <template v-if="fixture.kind === 'stairs'">
+        <label
+          >{{ t('形式') }}
+          <select :value="stairsVariant(fixture)" @change="setStairs(str($event) as StairsVariant)">
+            <option v-for="(label, k) in STAIRS_VARIANTS" :key="k" :value="k">{{ t(label) }}</option>
+          </select>
+        </label>
+        <label v-if="stairsVariant(fixture) !== 'straight'"
+          >{{ t('上楼方向') }}
+          <select :value="fixture.turn ?? 'left'" @change="mutate(() => (fixture!.turn = str($event) as 'left' | 'right'))">
+            <option value="left">{{ t('往左拐') }}</option>
+            <option value="right">{{ t('往右拐') }}</option>
+          </select>
+        </label>
+        <label v-if="stairsVariant(fixture) === 'l'"
+          >{{ t('梯段宽 cm') }}<input type="number" step="5" min="60" max="150" :value="fixture.run ?? 90" @change="mutate(() => (fixture!.run = Math.max(60, num($event))))"
+        /></label>
+        <dl v-if="stairInfo">
+          <dt>{{ t('通到') }}</dt>
+          <dd>{{ stairInfo.to?.name ?? t('（上面还没有楼层）') }}</dd>
+          <dt>{{ t('级数') }}</dt>
+          <dd class="num">{{ t('{n} 级 · 每级 {r} cm', { n: stairInfo.n, r: stairInfo.riser.toFixed(1) }) }}</dd>
+        </dl>
+        <p class="hint">{{ t('楼梯放在下层，通到上面一层；上层对应的位置自动开出楼梯洞口。旋转 90° 改朝向，起步处是小圆、箭头指向上楼方向。') }}</p>
+      </template>
       <p v-if="fixture.kind === 'fridge'" class="hint">{{ t('冰箱位只是预留的空间。冰箱本身是家具：一键布置会按户型和住户风格放一台，也可以在 3D 沙盘或素材库里自己挑款式和颜色。') }}</p>
       <p v-if="fixture.kind === 'washer'" class="hint">{{ t('洗衣机位是防水盘和给排水口。洗衣机本身是家具：一键布置会按户型和住户风格放一台，也可以在 3D 沙盘或素材库里自己挑款式和颜色。') }}</p>
       <label v-if="fixture.kind === 'toilet'"
@@ -289,6 +343,10 @@ function setSpotOpen(open: boolean) {
       <dl>
         <dt>{{ t('专有面积') }}</dt>
         <dd class="num">{{ fmtArea(stats.total) }}</dd>
+        <template v-for="s in floorStats" :key="s.f.id">
+          <dt class="sub">· {{ s.f.name }}</dt>
+          <dd class="num">{{ fmtArea(s.area) }}</dd>
+        </template>
         <dt>{{ t('房间') }}</dt>
         <dd class="num">{{ stats.count }}</dd>
       </dl>

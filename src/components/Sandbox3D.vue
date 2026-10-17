@@ -3,7 +3,11 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, toRaw,
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { ASSET_MAP, CATEGORY_LABELS, STYLE_LABELS, type StyleTag } from '../three/assets'
-import { applyCutaway, bendToWalls, buildHouse, floorY, isPlant, stepCutaway, furnitureModel, placeFurniture, roomAt } from '../three/house'
+import { applyCutaway, bendToWalls, floorY, isPlant, stepCutaway, furnitureModel, placeFurniture, roomAt, type WallLook } from '../three/house'
+import { buildBuilding, type FloorGroup } from '../three/building'
+import { baseFloorId, floorById, floorOf, floorView, isMultiFloor, planFloors } from '../floors'
+import FloorBar from './FloorBar.vue'
+import { stairHoles, withStairHoles } from '../stairs'
 import { overlapsOthers, snapFurniture, snapToWall, type Guide } from '../snap'
 import { fitOnSurface, pickSurface, propsOn, snapToClip, snapToHook } from '../surface'
 import { createStage, fitSun, frameCamera, setStageQuality, type Stage } from '../three/stage'
@@ -75,6 +79,8 @@ import {
   setFurnitureOpen,
   FOV_MIN,
   FOV_MAX,
+  activeFloor,
+  floorShow,
 } from '../store'
 
 const host = ref<HTMLDivElement>()
@@ -84,7 +90,173 @@ let stage: Stage
 let post: Post
 let controls: OrbitControls
 let house: THREE.Group | null = null
+/** 各楼层的模型（单层户型只有一项）：墙体压低只作用于当前层 */
+let floorGroups: FloorGroup[] = []
 const furnRoot = new THREE.Group()
+
+// ---------- 多楼层：当前层、各层的显示动画 ----------
+
+/** 当前楼层的子户型（原始对象）：拖动、吸附、摆放只看它；上层的楼梯洞口当作障碍（摆上去会标红） */
+const fv = () => {
+  const raw = toRaw(plan.value)
+  return withStairHoles(raw, floorView(raw, activeFloor.value), activeFloor.value)
+}
+/** 新摆的东西的 floor 字段（最底层不写） */
+const activeFloorField = () => (activeFloor.value === baseFloorId(plan.value) ? undefined : activeFloor.value)
+/**
+ * 每层的显示状态：extra = 叠在 elevation 上的偏移（分层拉开 / 隐藏时往上滑走），shown = 是否显示。
+ * 目标由「楼层显示」和当前层决定，每帧缓动过去（floorTargets / stepFloors）。
+ */
+const floorAnim = new Map<string, { extra: number; target: number; show: boolean; hideAt: boolean }>()
+/** 分层拉开时层与层之间多拉开的距离 */
+const EXPLODE_GAP = 230
+/** 只显示到当前层时，上面的层往上滑走的距离（滑完再隐藏） */
+const HIDE_LIFT = 320
+let floorsMoving = false
+/** 家具按楼层分组：组的 y = 这一层的 extra（家具模型自己的 y 已经含楼层 elevation） */
+const furnLayers = new Map<string, THREE.Group>()
+function furnLayer(id: string) {
+  let g = furnLayers.get(id)
+  if (!g) {
+    g = new THREE.Group()
+    g.userData.floorId = id
+    furnLayers.set(id, g)
+    furnRoot.add(g)
+  }
+  return g
+}
+/** 某层当前的抬升（elevation + 动画偏移） */
+function liftOf(id: string) {
+  return (floorById(plan.value, id)?.elevation ?? 0) + (floorAnim.get(id)?.extra ?? 0)
+}
+/** 当前楼层地面的世界高度 */
+const activeY = () => liftOf(activeFloor.value)
+/** 这一层现在看得见吗（隐藏动画结束前仍算看得见） */
+const floorShown = (id: string) => floorAnim.get(id)?.show ?? true
+/** 按「楼层显示」和当前层算各层的目标 */
+function floorTargets(snap = false) {
+  const fs = planFloors(plan.value)
+  const ai = Math.max(0, fs.findIndex((f) => f.id === activeFloor.value))
+  const multi = isMultiFloor(plan.value)
+  for (const id of floorAnim.keys()) if (!fs.some((f) => f.id === id)) floorAnim.delete(id)
+  fs.forEach((f, i) => {
+    let st = floorAnim.get(f.id)
+    if (!st) floorAnim.set(f.id, (st = { extra: 0, target: 0, show: true, hideAt: false }))
+    const hide = multi && floorShow.value === 'upto' && i > ai
+    st.target = !multi ? 0 : floorShow.value === 'explode' ? i * EXPLODE_GAP : hide ? HIDE_LIFT : 0
+    st.hideAt = hide
+    // 要显示的层：先露出来再滑下去
+    if (!hide) st.show = true
+    if (snap) {
+      st.extra = st.target
+      st.show = !hide
+    }
+  })
+  floorsMoving = true
+  applyFloorPose()
+}
+/** 每帧推进楼层动画；返回是否还在动 */
+function stepFloors(dt: number) {
+  if (!floorsMoving) return false
+  let busy = false
+  const k = 1 - Math.exp(-dt * 9)
+  for (const st of floorAnim.values()) {
+    const d = st.target - st.extra
+    if (Math.abs(d) < 0.5) {
+      st.extra = st.target
+      if (st.hideAt) st.show = false
+    } else {
+      st.extra += d * k
+      busy = true
+    }
+  }
+  applyFloorPose()
+  floorsMoving = busy
+  return true
+}
+/** 按动画状态摆好各层的房子、家具、宠物、灯 */
+function applyFloorPose() {
+  for (const fg of floorGroups) {
+    const st = floorAnim.get(fg.floor.id)
+    fg.group.position.y = fg.floor.elevation + (st?.extra ?? 0)
+    fg.group.visible = st?.show ?? true
+  }
+  for (const [id, g] of furnLayers) {
+    const st = floorAnim.get(id)
+    g.position.y = st?.extra ?? 0
+    g.visible = st?.show ?? true
+  }
+  for (const [id, a] of actorLayers) {
+    const st = floorAnim.get(id)
+    a.group.position.y = (floorById(plan.value, id)?.elevation ?? 0) + (st?.extra ?? 0)
+    a.group.visible = st?.show ?? true
+  }
+  if (lights) {
+    if (isMultiFloor(plan.value)) {
+      const raw = toRaw(plan.value)
+      const roomFloor = new Map(raw.rooms.map((r) => [r.id, floorOf(raw, r)]))
+      lights.setLift((rid) => {
+        const fid = rid ? roomFloor.get(rid) : undefined
+        if (!fid) return 0
+        return floorShown(fid) && !floorAnim.get(fid)?.hideAt ? liftOf(fid) : null
+      })
+    } else lights.setLift(null)
+  }
+  dirty = true
+}
+
+/** 墙体压低：当前层按设置处理，其余楼层保持完整 */
+function cutawayFloors(center: { x: number; y: number }, dir: { x: number; y: number } | null, depth: number | null) {
+  for (const fg of floorGroups) {
+    if (fg.floor.id === activeFloor.value || floorGroups.length === 1) applyCutaway(fg.group, center, dir, depth, sandbox.wallMode === 'down', sandbox.wallMode === 'half')
+    else applyCutaway(fg.group, center, null)
+  }
+}
+/** 推进各层墙体的渐变；返回是否还在动 */
+function stepHouse(dt: number, look: WallLook, force = false) {
+  let busy = false
+  for (const fg of floorGroups) busy = stepCutaway(fg.group, dt, look, force) || busy
+  return busy
+}
+/** 有楼层的墙这一帧变了（投影要重画），顺手清掉标记 */
+function houseChanged() {
+  let changed = false
+  for (const fg of floorGroups)
+    if (fg.group.userData.cutawayChanged) {
+      fg.group.userData.cutawayChanged = false
+      changed = true
+    }
+  return changed
+}
+
+/** 宠物、机器人按楼层分开（各在各的楼层走动） */
+const actorLayers = new Map<string, ActorLayer>()
+function actorLayer(id: string) {
+  let a = actorLayers.get(id)
+  if (!a) {
+    a = new ActorLayer((fid) => objs.get(fid)?.obj)
+    actorLayers.set(id, a)
+    stage?.scene.add(a.group)
+  }
+  return a
+}
+function syncActors() {
+  const raw = toRaw(plan.value)
+  const fs = planFloors(raw)
+  for (const [id, a] of actorLayers)
+    if (!fs.some((f) => f.id === id)) {
+      a.sync({ ...raw, furniture: [] }, false)
+      a.group.removeFromParent()
+      actorLayers.delete(id)
+    }
+  for (const f of fs) {
+    const a = actorLayer(f.id)
+    a.elev = isMultiFloor(raw) ? f.elevation : 0
+    a.holes = stairHoles(raw, f.id).map((h) => h.poly)
+    a.group.position.y = isMultiFloor(raw) ? liftOf(f.id) : 0
+    a.sync(floorView(raw, f.id), actorsLive())
+  }
+}
 /** 室内灯光：房间主灯、灯具家具的光源，入夜自动亮（three/lights.ts） */
 let lights: IndoorLights
 let lastDining = ''
@@ -100,8 +272,7 @@ function lightStyles(p: Plan) {
 const roomLightKey = (p: Plan) => `${diningKey(p)}|${p.household ? `${p.household.style}:${p.household.members.map((m) => m.style).join(',')}` : ''}`
 /** 蒸汽、烟、火苗等动态特效 */
 const fx = new FxLayer()
-/** 会活动的宠物、扫地机器人、Kachaka（预览模式下才动） */
-const actors = new ActorLayer((id) => objs.get(id)?.obj)
+/** 会活动的宠物、扫地机器人、Kachaka（预览模式下才动）：按楼层分开，见 actorLayers */
 const objs = new Map<string, { obj: THREE.Group; key: string }>()
 let ghost: THREE.Group | null = null
 let ghostKey = ''
@@ -129,7 +300,9 @@ function syncLineRes(w: number, h: number) {
 /** 在家具模型脚下显示一个框（占地取素材尺寸，朝向取模型的 rotation.y） */
 function frameAt(fr: SelectFrame, obj: THREE.Object3D, asset: string) {
   const d = ASSET_MAP.get(asset)
-  fr.show(obj.position.x, obj.position.y, obj.position.z, d?.w ?? 40, d?.d ?? 40, obj.rotation.y)
+  // 世界坐标：多层户型里家具在楼层组里（分层拉开时组有偏移）
+  const w = obj.getWorldPosition(new THREE.Vector3())
+  fr.show(w.x, w.y, w.z, d?.w ?? 40, d?.d ?? 40, obj.rotation.y)
 }
 
 // 吸附参考线：贴墙用深一点的主色绿，和家具对齐用灰蓝
@@ -175,7 +348,7 @@ function updateCutaway() {
     const c = centroid(room.points)
     depth = (c.x - houseCenter.x) * dir.x + (c.y - houseCenter.y) * dir.y
   }
-  applyCutaway(house, houseCenter, dir, depth, sandbox.wallMode === 'down', sandbox.wallMode === 'half')
+  cutawayFloors(houseCenter, dir, depth)
   // 天花板灯具：墙压低 / 半墙 / 墙很矮时淡出（挡视线），所指房间之前的也淡出；光照保留
   lights?.applyCutaway(houseCenter, dir, depth, sandbox.wallMode === 'down' || sandbox.wallMode === 'half' || sandbox.wallHeight < 200)
   fading = true
@@ -188,8 +361,15 @@ function updateCutaway() {
  * 半墙模式下挂在内墙上的（背后隔着墙还是户内房间）都藏。
  */
 function updateMounted(dir: { x: number; y: number } | null, depth: number | null) {
-  const p = toRaw(plan.value)
+  // 只处理当前楼层（别的楼层墙不压低，壁挂物照常显示）
+  const p = fv()
   const list: THREE.Object3D[] = []
+  for (const o of objs.values()) if (o.obj.userData.target) o.obj.userData.target = 0
+  for (const f of toRaw(plan.value).furniture) {
+    const def = ASSET_MAP.get(f.asset)
+    const o = objs.get(f.id)
+    if (def?.mount && o && floorOf(p, f) !== activeFloor.value) list.push(o.obj)
+  }
   for (const f of p.furniture) {
     const def = ASSET_MAP.get(f.asset)
     const o = objs.get(f.id)
@@ -219,7 +399,7 @@ function updateHoverRoom(e: PointerEvent | null) {
   let id: string | null = null
   if (e) {
     const p = floorPoint(e)
-    id = (p && roomAt(plan.value, { x: p.x, y: p.z })?.id) || null
+    id = (p && roomAt(fv(), { x: p.x, y: p.z })?.id) || null
   }
   if (id !== hoverRoomId) {
     hoverRoomId = id
@@ -288,7 +468,7 @@ function setHover(id: string | null) {
 function wallGap(f: Pick<Furniture, 'asset' | 'x' | 'y' | 'rot' | 'z'>): { gap: number; from: { x: number; y: number }; to: { x: number; y: number } } | null {
   const def = ASSET_MAP.get(f.asset)
   if (!def || f.z) return null
-  const p = toRaw(plan.value)
+  const p = fv()
   const room = roomAt(p, { x: f.x, y: f.y })
   if (!room) return null
   const a = (f.rot * Math.PI) / 180
@@ -323,7 +503,7 @@ function updateDragHud(e: { clientX: number; clientY: number; altKey?: boolean; 
   const g = wallGap(f)
   // 离墙引导线：画在家具所在的地面高度上
   const o = 'id' in f ? objs.get((f as Furniture).id)?.obj : undefined
-  if (g && g.gap > 0) wallGuide.show(g.from, g.to, o?.position.y ?? 0)
+  if (g && g.gap > 0) wallGuide.show(g.from, g.to, o ? o.getWorldPosition(new THREE.Vector3()).y : activeY())
   else wallGuide.hide()
   dirty = true
   dragHud.value = {
@@ -344,9 +524,15 @@ function rebuildHouse() {
     disposeUnshared(house)
   }
   xraySwapped.length = 0
-  house = buildHouse(plan.value, sandbox.wallHeight)
+  const raw = toRaw(plan.value)
+  // 多层户型每层用自己的层高；墙高滑杆调低时只压低当前层
+  const built = buildBuilding(raw, sandbox.wallHeight, (f) => (f.id === activeFloor.value && sandbox.wallHeight < 240 ? Math.min(f.height, sandbox.wallHeight) : f.height))
+  house = built.root
+  floorGroups = built.floors
+  builtActive = activeFloor.value
   stage.scene.add(house)
-  lights.syncRooms(toRaw(plan.value), ASSET_MAP, floorY, lightStyles(toRaw(plan.value)))
+  lights.syncRooms(raw, ASSET_MAP, floorY, lightStyles(raw))
+  floorTargets(true)
   lastDining = roomLightKey(toRaw(plan.value))
   const pts = plan.value.rooms.flatMap((r) => r.points)
   if (pts.length) {
@@ -355,19 +541,21 @@ function rebuildHouse() {
   }
   updateCutaway()
   // 重建时直接到位，不播渐变
-  stepCutaway(house, 10, wallLook())
+  stepHouse(10, wallLook())
   const box = new THREE.Box3().setFromObject(house)
   houseBox = box.isEmpty() ? null : box
   if (houseBox) fitSun(stage.sun, houseBox, skyNow.value?.lightDir)
   // 房间变了，家具的地面高度可能也变了
-  for (const f of plan.value.furniture) {
+  for (const f of raw.furniture) {
     const o = objs.get(f.id)
-    if (o) placeFurniture(o.obj, plan.value, f)
+    if (o) placeFurniture(o.obj, raw, f)
   }
   applyXray()
-  actors.sync(toRaw(plan.value), actorsLive())
+  syncActors()
   dirty = true
 }
+/** 上次搭房子时的当前楼层（墙高滑杆调低时只压低当前层：换层要重搭） */
+let builtActive = ''
 
 function syncFurniture() {
   // 模型可能要重建：先把悬停时换上的提亮材质、选中容器的半透明材质还回去
@@ -382,27 +570,29 @@ function syncFurniture() {
     let o = objs.get(f.id)
     if (!o || o.key !== key) {
       if (o) {
-        furnRoot.remove(o.obj)
+        o.obj.removeFromParent()
         disposeUnshared(o.obj)
       }
       o = { obj: furnitureModel(f), key }
       objs.set(f.id, o)
-      furnRoot.add(o.obj)
       fx.set(f.id, o.obj, ASSET_MAP.get(f.asset)?.fx)
     }
+    // 按楼层放进各层的组（换了楼层就挪过去）
+    const layer = furnLayer(floorOf(p, f))
+    if (o.obj.parent !== layer) layer.add(o.obj)
     placeFurniture(o.obj, p, f)
     // 绿植贴墙时把越过墙面的枝叶弯回来（位置变了才重算）
     if (isPlant(f.asset)) {
-      const pk = `${f.x},${f.y},${f.rot}`
+      const pk = `${f.x},${f.y},${f.rot},${f.floor ?? ''}`
       if (o.obj.userData.bentAt !== pk) {
-        bendToWalls(o.obj, p, f)
+        bendToWalls(o.obj, isMultiFloor(p) ? floorView(p, floorOf(p, f)) : p, f)
         o.obj.userData.bentAt = pk
       }
     }
   }
   for (const [id, o] of objs)
     if (!alive.has(id)) {
-      furnRoot.remove(o.obj)
+      o.obj.removeFromParent()
       disposeUnshared(o.obj)
       objs.delete(id)
       fx.remove(id)
@@ -410,15 +600,16 @@ function syncFurniture() {
   updateRing()
   applyXray()
   // 灯具家具：发光部件、光源位置；餐桌挪了吊灯跟着挪
-  lights.syncLamps(p, objs, ASSET_MAP, (f) => roomAt(p, f), floorY)
+  lights.syncLamps(p, objs, ASSET_MAP, (f) => roomAt(p, f, isMultiFloor(p) ? (f.floor ?? null) : undefined), floorY)
   const dk = roomLightKey(p)
   if (dk !== lastDining) {
     lastDining = dk
     lights.syncRooms(p, ASSET_MAP, floorY, lightStyles(p))
   }
   lights.touch()
+  applyFloorPose()
   updateCutaway()
-  actors.sync(p, actorsLive())
+  syncActors()
   dirty = true
 }
 
@@ -436,7 +627,7 @@ function updateRing() {
   framedId = f.id
   frameAt(selFrame, o.obj, f.asset)
   // 和别的家具 / 设备穿模时提示成红色
-  selFrame.setColor(overlapsOthers(plan.value, f.id, f.asset, f.x, f.y, f.rot) ? RING_BAD : RING_OK)
+  selFrame.setColor(overlapsOthers(fv(), f.id, f.asset, f.x, f.y, f.rot) ? RING_BAD : RING_OK)
   if (hoverId === f.id) hoverFrame.hide()
 }
 
@@ -540,7 +731,7 @@ function resetView() {
   controls.target.copy(c)
   controls.update()
   updateCutaway()
-  stepCutaway(house, 10, wallLook())
+  stepHouse(10, wallLook())
   dirty = true
 }
 
@@ -559,12 +750,21 @@ function setRay(e: PointerEvent) {
 function floorPoint(e: PointerEvent) {
   setRay(e)
   const p = new THREE.Vector3()
+  // 当前楼层的地面
+  floor.constant = -activeY()
   return raycaster.ray.intersectPlane(floor, p) ? p : null
+}
+/** 射线换到当前楼层的局部高度（家具、台面的高度都按本层地面算） */
+function localRay() {
+  const r = raycaster.ray.clone()
+  r.origin.y -= activeY()
+  return r
 }
 
 function pickFurniture(e: PointerEvent): string | null {
   setRay(e)
-  const fhits = raycaster.intersectObject(furnRoot, true)
+  // 只点当前楼层的家具（上层隐藏 / 下层被挡住时都不会选到别的楼层）
+  const fhits = raycaster.intersectObject(furnLayer(activeFloor.value), true)
   // 射线经过的家具（去重、由近到远）
   const ids: string[] = []
   for (const h of fhits) {
@@ -574,7 +774,7 @@ function pickFurniture(e: PointerEvent): string | null {
     if (id && !ids.includes(id)) ids.push(id)
   }
   // 走动中的宠物 / 机器人：点中就选中它来源的那件家具（选中后角色回到原位静止，方便拖动）
-  if (!ids.length) return actors.pick(raycaster)
+  if (!ids.length) return actorLayer(activeFloor.value).pick(raycaster)
   // 柜子、架子的格子里摆满了东西，点柜子正面多半先碰到摆件：先选容器本身；容器已经选中时再点，才选里面的东西
   const sel = selection.value?.type === 'furniture' ? selection.value.id : null
   const inside = (kid: string, box: string) => {
@@ -656,7 +856,7 @@ function actorsLive() {
 /** 吸附：按住 Alt 或关掉开关时只吸 5cm 网格 */
 function snapped(id: string | null, asset: string, x: number, y: number, rot: number, alt: boolean) {
   if (!sandbox.snap || alt) return { x: Math.round(x / 5) * 5, y: Math.round(y / 5) * 5, guides: [] as Guide[] }
-  return snapFurniture(plan.value, id, asset, x, y, rot)
+  return snapFurniture(fv(), id, asset, x, y, rot)
 }
 
 /**
@@ -687,7 +887,8 @@ function locate(e: PointerEvent, asset: string, selfId: string | null, exclude: 
   const p = floorPoint(e)
   if (def.stick) {
     setRay(e)
-    const targets: THREE.Object3D[] = [furnRoot, ...(house ? [house] : [])]
+    const cur = floorGroups.find((g) => g.floor.id === activeFloor.value)?.group
+    const targets: THREE.Object3D[] = [furnLayer(activeFloor.value), ...(cur ? [cur] : [])]
     const hits = raycaster.intersectObjects(targets, true).filter((h) => {
       let o: THREE.Object3D | null = h.object
       while (o && !o.userData.furnitureId) o = o.parent
@@ -699,7 +900,7 @@ function locate(e: PointerEvent, asset: string, selfId: string | null, exclude: 
       const len = Math.hypot(n.x, n.z) || 1
       const nx = n.x / len
       const nz = n.z / len
-      const floor = floorY(roomAt(plan.value, { x: h.point.x, y: h.point.z }))
+      const floor = activeY() + floorY(roomAt(fv(), { x: h.point.x, y: h.point.z }))
       return {
         x: Math.round((h.point.x + nx * 0.05) * 10) / 10,
         y: Math.round((h.point.z + nz * 0.05) * 10) / 10,
@@ -716,7 +917,7 @@ function locate(e: PointerEvent, asset: string, selfId: string | null, exclude: 
     // 直接用地面交点的话，射线穿过墙才落地，点在房间外面、找不到房间，东西就拖不动
     setRay(e)
     const self = selfId ? findFurniture(selfId) : undefined
-    const base = floorY(roomAt(plan.value, self ?? (p ? { x: p.x, y: p.z } : { x: 0, y: 0 })))
+    const base = activeY() + floorY(roomAt(fv(), self ?? (p ? { x: p.x, y: p.z } : { x: 0, y: 0 })))
     const hp = raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -(base + def.mount + def.h / 2)), new THREE.Vector3())
     const toCam = new THREE.Vector2(stage.camera.position.x, stage.camera.position.z)
     for (const q of [hp, p]) {
@@ -724,7 +925,7 @@ function locate(e: PointerEvent, asset: string, selfId: string | null, exclude: 
       // 交点刚好落在墙体里：沿着朝镜头的方向往房间里挪一点再找
       const dir = toCam.clone().sub(new THREE.Vector2(q.x, q.z)).normalize()
       for (let k = 0; k <= 8; k++) {
-        const w = snapToWall(plan.value, asset, q.x + dir.x * k * 5, q.z + dir.y * k * 5)
+        const w = snapToWall(fv(), asset, q.x + dir.x * k * 5, q.z + dir.y * k * 5)
         if (w) return { x: w.x, y: w.y, z: 0, rot: w.rot, guides: w.guides, asset }
       }
     }
@@ -736,7 +937,7 @@ function locate(e: PointerEvent, asset: string, selfId: string | null, exclude: 
     // 挂钩只收有挂起形态的；净高不够的层（床底、矮层板）放不进去
     const hangDef = hang ? ASSET_MAP.get(formFor(def, 'hook')!) : undefined
     // 屏幕顶边（clip）只收夹式摄像头这类 screenClip 的东西
-    const hit = pickSurface(plan.value, raycaster.ray, exclude, (kind, h) => (kind === 'clip' ? !!def.screenClip : kind === 'hook' ? !!hangDef && hangDef.h <= h + 0.5 : def.h <= h + 0.5))
+    const hit = pickSurface(fv(), localRay(), exclude, (kind, h) => (kind === 'clip' ? !!def.screenClip : kind === 'hook' ? !!hangDef && hangDef.h <= h + 0.5 : def.h <= h + 0.5))
     if (hit) {
       if (hit.kind === 'clip') {
         const c = snapToClip(hit.pose, hit.poly)
@@ -747,7 +948,7 @@ function locate(e: PointerEvent, asset: string, selfId: string | null, exclude: 
         const h = snapToHook(hit.pose, hit.poly, hit)
         return { x: h.x, y: h.y, z: hit.z, rot: h.rot, guides: [], asset: a }
       }
-      const fit = fitOnSurface(plan.value, hit.owner, hit.z, a, hit.x, hit.y, rot)
+      const fit = fitOnSurface(fv(), hit.owner, hit.z, a, hit.x, hit.y, rot)
       return { x: Math.round(fit.x * 10) / 10, y: Math.round(fit.y * 10) / 10, z: hit.z, guides: [], asset: a }
     }
   }
@@ -804,10 +1005,12 @@ function updateGhost(e: { clientX: number; clientY: number; altKey: boolean }) {
   ghost.visible = !!q
   if (!q) ghostFrame.hide()
   if (q) {
-    placeFurniture(ghost, plan.value, { x: q.x, y: q.y, rot: q.rot ?? ghostRot.value, z: q.z })
+    placeFurniture(ghost, plan.value, { x: q.x, y: q.y, rot: q.rot ?? ghostRot.value, z: q.z, floor: activeFloorField() })
+    // 摆放预览在场景根上：加上当前楼层的动画偏移
+    ghost.position.y += floorAnim.get(activeFloor.value)?.extra ?? 0
     frameAt(ghostFrame, ghost, q.asset)
-    ghostFrame.setColor(!q.z && overlapsOthers(plan.value, null, q.asset, q.x, q.y, q.rot ?? ghostRot.value) ? RING_BAD : RING_OK)
-    showGuides(q.guides)
+    ghostFrame.setColor(!q.z && overlapsOthers(fv(), null, q.asset, q.x, q.y, q.rot ?? ghostRot.value) ? RING_BAD : RING_OK)
+    showGuides(q.guides, activeY())
   }
   dirty = true
 }
@@ -946,7 +1149,7 @@ function moveDrag(e: PointerEvent) {
       o.y = Math.round((f.y + k.dy) * 10) / 10
       o.z = (f.z ?? 0) + k.dz
     }
-    showGuides(q.guides)
+    showGuides(q.guides, activeY())
     updateDragHud(e, f)
   }
 }
@@ -1365,7 +1568,14 @@ function loop() {
   }
   // 省电画质：只有动画（粒子、走动的角色）在变时，最多 30fps 重画
   const low = lowPower()
-  const anim = fx.update(dt, stage.renderer.domElement.height) || actors.update(dt)
+  let actorsBusy = false
+  for (const a of actorLayers.values()) actorsBusy = a.update(dt) || actorsBusy
+  const anim = fx.update(dt, stage.renderer.domElement.height) || actorsBusy
+  // 楼层切换 / 分层拉开的缓动
+  if (stepFloors(dt)) {
+    dirty = true
+    sunMoved = true
+  }
   if (anim && !(low && now - lastRender < 32)) dirty = true
   if (fading && house) {
     // 壁挂物按透明方式淡出（压低模式下也是淡出，它们没有矮墙可压）
@@ -1375,9 +1585,9 @@ function loop() {
       lights.fixtures.userData.cutawayChanged = false
       dirty = true
     }
-    fading = stepCutaway(house, dt, wallLook()) || furnBusy || lampBusy
-    if (house.userData.cutawayChanged || furnRoot.userData.cutawayChanged) {
-      house.userData.cutawayChanged = false
+    fading = stepHouse(dt, wallLook()) || furnBusy || lampBusy
+    const houseMoved = houseChanged()
+    if (houseMoved || furnRoot.userData.cutawayChanged) {
       furnRoot.userData.cutawayChanged = false
       shadowDirty = true
       dirty = true
@@ -1434,7 +1644,8 @@ onMounted(() => {
   applySky()
   stage.renderer.shadowMap.autoUpdate = false
   stage.renderer.shadowMap.needsUpdate = true
-  stage.scene.add(furnRoot, frameRoot, guideRoot, fx.group, actors.group)
+  stage.scene.add(furnRoot, frameRoot, guideRoot, fx.group)
+  for (const a of actorLayers.values()) stage.scene.add(a.group)
   controls = new OrbitControls(stage.camera, canvas.value!)
   controls.enableDamping = true
   controls.dampingFactor = 0.12
@@ -1686,10 +1897,27 @@ onBeforeUnmount(() => {
 // 房间的灯光开关 / 色温不影响房子本身：比较时剔掉，免得一开灯就整栋重建
 const roomsShape = () => JSON.stringify(plan.value.rooms, (k, v) => (k === 'light' || k === 'lightK' ? undefined : v))
 watch(
-  () => [roomsShape(), plan.value.openings, plan.value.fixtures, plan.value.wall, plan.value.wallOuter, sandbox.wallHeight],
+  () => [roomsShape(), plan.value.openings, plan.value.fixtures, plan.value.wall, plan.value.wallOuter, sandbox.wallHeight, plan.value.floors],
   rebuildHouse,
   { deep: true },
 )
+// 换楼层 / 换楼层显示方式：各层缓动到新位置；墙体压低换到新的当前层
+watch([activeFloor, floorShow], () => {
+  if (!house) return
+  // 墙高滑杆调低时只有当前层是矮墙：换层要重搭
+  if (isMultiFloor(plan.value) && sandbox.wallHeight < 240 && builtActive !== activeFloor.value) rebuildHouse()
+  floorTargets()
+  updateCutaway()
+  hoverRoomId = null
+  // 当前层以外的家具不能选中
+  const s = selection.value
+  if (s?.type === 'furniture') {
+    const f = findFurniture(s.id)
+    if (f && floorOf(plan.value, f) !== activeFloor.value) selection.value = null
+  }
+  placing.value = null
+  dirty = true
+})
 watch(
   () => plan.value.rooms.map((r) => `${r.light ?? ''}/${r.lightK ?? ''}`).join(),
   () => {
@@ -1704,7 +1932,7 @@ watch(() => plan.value.furniture, syncFurniture, { deep: true })
 watch(
   () => [sandbox.mode, !!selection.value, !!placing.value] as const,
   () => {
-    actors.sync(toRaw(plan.value), actorsLive())
+    syncActors()
     stage.renderer.shadowMap.needsUpdate = true
     dirty = true
   },
@@ -1725,14 +1953,14 @@ watch(
   () => [sandbox.wallMode, sandbox.cutawayHover],
   () => {
     // 换样式时先把已处理的墙按新样式重画一遍，再按新目标渐变
-    if (house) stepCutaway(house, 0, wallLook(), true)
+    if (house) stepHouse(0, wallLook(), true)
     updateCutaway()
   },
 )
 watch(
   () => [sandbox.cutawayOpacity, sandbox.cutHeight],
   () => {
-    if (house) stepCutaway(house, 0, wallLook(), true)
+    if (house) stepHouse(0, wallLook(), true)
     dirty = true
   },
 )
@@ -1988,6 +2216,8 @@ defineExpose({ resetView })
       <section>
         <h3 class="ico-label"><JIcon :icon="VIEW_ICONS['3d']" class="ico-muted" />{{ t('沙盘') }}</h3>
         <div class="meta num">{{ planSize }} · {{ t('家具 {n} 件', { n: counts }) }}</div>
+        <!-- 楼层：切换当前层（摆放、拖动、墙体压低都作用于它）、楼层显示方式 -->
+        <FloorBar variant="panel" class="floors" />
         <label class="row">
           <span>{{ t('墙高') }}</span>
           <input v-model.number="sandbox.wallHeight" type="range" min="40" max="240" step="10" />

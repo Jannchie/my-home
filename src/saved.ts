@@ -26,6 +26,8 @@ export interface PlanSummary {
   layout: string
   rooms: number
   furniture: number
+  /** 楼层数（多层户型才有；面积是各层相加） */
+  floors?: number
 }
 
 export interface SavedMeta extends PlanSummary {
@@ -93,6 +95,7 @@ export function summarize(p: Plan, name = p.name): PlanSummary {
     layout: layoutOf(p),
     rooms: p.rooms.length,
     furniture: p.furniture.length,
+    ...(p.floors && p.floors.length > 1 ? { floors: p.floors.length } : {}),
   }
 }
 

@@ -28,13 +28,16 @@ import {
   isAxisRect,
   polyPath,
   sub,
+  centroid,
   type Fixture,
   type Opening,
   type Room,
   type RoomKind,
   type Vec,
 } from '../model'
-import { isIndoor, wallSegments, wallThicknessAt } from '../walls'
+import { wallSegments, wallThicknessAt } from '../walls'
+import { floorBelow, floorById, floorOf, floorView, isMultiFloor, riseOf } from '../floors'
+import { stairHoleConflicts, stairHoles, stairPlanLines } from '../stairs'
 import { tatamiLayout } from '../tatami'
 import FixtureGlyph from './FixtureGlyph.vue'
 import { roomName, t } from '../i18n'
@@ -55,6 +58,8 @@ import {
   insertVertex,
   placeKind,
   plan,
+  floorPlan as fp,
+  activeFloor,
   selection,
   settings,
   settle,
@@ -110,7 +115,8 @@ function toWorld(e: { clientX: number; clientY: number }): Vec {
 
 function snapVertices(exclude?: { roomId: string; index?: number }) {
   const out: Vec[] = []
-  for (const r of plan.value.rooms) {
+  // 只吸当前楼层的顶点；上层再吸下层的外轮廓角点（对齐上下层的外墙）
+  for (const r of [...fp.value.rooms, ...below.value.rooms]) {
     r.points.forEach((p, i) => {
       if (exclude && r.id === exclude.roomId && (exclude.index === undefined || exclude.index === i)) return
       out.push(p)
@@ -164,7 +170,7 @@ function snapPoint(p: Vec, exclude?: { roomId: string; index?: number }): Vec {
 
 function nearestEdge(p: Vec, maxPx = 16) {
   let best: { room: Room; edge: number; t: number; d: number } | null = null
-  for (const r of plan.value.rooms) {
+  for (const r of fp.value.rooms) {
     for (let i = 0; i < r.points.length; i++) {
       const e = edgeInfo(r.points, i)
       const pr = projectToSegment(p, e.a, e.b)
@@ -357,7 +363,7 @@ function placeAt(w: Vec) {
         const side = dot(sub(w, add(e.a, mul(e.dir, ne.t))), e.out) > 0 ? -1 : 1
         const wallDir = mul(e.out, side) // 从设备指向墙
         const onEdge = add(e.a, mul(e.dir, snapGrid(ne.t)))
-        const t = wallThicknessAt(plan.value, onEdge, e.out, ne.room)
+        const t = wallThicknessAt(fp.value, onEdge, e.out, ne.room)
         const c = add(onEdge, mul(wallDir, -(t / 2 + d / 2)))
         f = { ...f, x: c.x, y: c.y, rot: rotFacingWall(wallDir) }
       }
@@ -680,6 +686,7 @@ function animateTo(to: { x: number; y: number; s: number }, ms = 260) {
 }
 
 function fitTarget() {
+  // 按全部楼层取景：切换楼层时画面不跳
   const pts = plan.value.rooms.flatMap((r) => r.points)
   if (!pts.length) return { s: 0.6, x: size.w / 2, y: size.h / 2 }
   const b = bbox(pts)
@@ -805,7 +812,7 @@ function closetLines(r: Room): string[] {
 }
 
 const roomViews = computed(() =>
-  plan.value.rooms.map((r) => {
+  fp.value.rooms.map((r) => {
     const a = area(r.points)
     let mats: ReturnType<typeof tatamiLayout> = []
     if (r.kind === 'japanese' && isAxisRect(r.points)) {
@@ -822,16 +829,16 @@ const roomViews = computed(() =>
       closet: closetLines(r),
       label: labelPointAvoiding(
         r.points,
-        plan.value.fixtures.filter((f) => pointInPolygon({ x: f.x, y: f.y }, r.points)).map(fixtureBox),
+        fp.value.fixtures.filter((f) => pointInPolygon({ x: f.x, y: f.y }, r.points)).map(fixtureBox),
       ),
-      sub: r.kind === 'balcony' ? '' : fmtRoomArea(a, plan.value.region),
+      sub: r.kind === 'balcony' || r.kind === 'void' ? '' : fmtRoomArea(a, plan.value.region),
     }
   }),
 )
 
 /** 墙段：外墙 / 隔墙 / 玄関敞开处的上り框 */
 const wallViews = computed(() => {
-  const segs = wallSegments(plan.value.rooms)
+  const segs = wallSegments(fp.value.rooms)
   const path = (kind: string) =>
     segs
       .filter((s) => s.kind === kind)
@@ -858,7 +865,7 @@ interface OpeningView {
 
 const openingViews = computed<OpeningView[]>(() => {
   const out: OpeningView[] = []
-  for (const o of plan.value.openings) {
+  for (const o of fp.value.openings) {
     const r = findRoom(o.roomId)
     if (!r || o.edge >= r.points.length) continue
     const e = edgeInfo(r.points, o.edge)
@@ -868,12 +875,12 @@ const openingViews = computed<OpeningView[]>(() => {
     const p1 = add(e.a, mul(e.dir, c + w / 2))
     const center = add(e.a, mul(e.dir, c))
     // 开口处的墙厚：外墙厚、隔墙薄
-    const wall = wallThicknessAt(plan.value, center, e.out, r)
+    const wall = wallThicknessAt(fp.value, center, e.out, r)
     const h = wall / 2 + 1
     const gap = polyPath([add(p0, mul(e.out, h)), add(p1, mul(e.out, h)), add(p1, mul(e.out, -h)), add(p0, mul(e.out, -h))])
     // 窗外是阳台 → 掃き出し窓
     const probe = add(center, mul(e.out, wall / 2 + 15))
-    const sash = o.kind === 'window' && plan.value.rooms.some((x) => x.kind === 'balcony' && pointInPolygon(probe, x.points))
+    const sash = o.kind === 'window' && fp.value.rooms.some((x) => x.kind === 'balcony' && pointInPolygon(probe, x.points))
     const v: OpeningView = { o, gap, leaf: '', arc: '', glass: [], panels: [], sash, fold: '' }
     if (o.kind === 'sliding' || sash) {
       // 引き違い：两扇板分别靠墙两侧，在中间重叠一点
@@ -914,8 +921,9 @@ const openingViews = computed<OpeningView[]>(() => {
 })
 
 const fixtureViews = computed(() =>
-  plan.value.fixtures.map((f) => ({
+  fp.value.fixtures.map((f) => ({
     f,
+    rise: f.kind === 'stairs' ? riseOf(plan.value, floorOf(plan.value, f)) : undefined,
     transform: `translate(${f.x},${f.y}) rotate(${f.rot})`,
     selected: isSel('fixture', f.id),
     box: fixtureBox(f),
@@ -925,7 +933,7 @@ const fixtureViews = computed(() =>
 
 /** 家具占地；颜色取当前配色的主色 */
 const furnitureViews = computed(() =>
-  plan.value.furniture.flatMap((f) => {
+  fp.value.furniture.flatMap((f) => {
     const def = ASSET_MAP.get(f.asset)
     if (!def) return []
     const pal = effectivePalette(def, f.color ?? 0, f.colors)
@@ -933,7 +941,33 @@ const furnitureViews = computed(() =>
   }),
 )
 
-const balconies = computed(() => roomViews.value.filter((v) => !isIndoor(v.room)))
+const balconies = computed(() => roomViews.value.filter((v) => v.room.kind === 'balcony'))
+/** 挑空：虚线框 + 对角线 */
+const voids = computed(() => roomViews.value.filter((v) => v.room.kind === 'void'))
+
+// ---------- 多楼层：下层参考线、楼梯洞口 ----------
+
+/** 下一层的子户型（当前是最底层时为空户型）：半透明画出它的墙和楼梯作参考，吸附也会吸它的角点 */
+const below = computed(() => {
+  const p = plan.value
+  const b = floorBelow(p, activeFloor.value)
+  return b ? floorView(p, b.id) : { ...p, rooms: [], openings: [], fixtures: [], furniture: [] }
+})
+const belowWalls = computed(() => {
+  const segs = wallSegments(below.value.rooms).filter((s) => s.kind !== 'open')
+  return segs.map((s) => `M${s.a.x},${s.a.y}L${s.b.x},${s.b.y}`).join('')
+})
+const belowStairs = computed(() =>
+  below.value.fixtures
+    .filter((f) => f.kind === 'stairs')
+    .map((f) => ({ f, lines: stairPlanLines(f, riseOf(plan.value, floorOf(plan.value, f))) })),
+)
+/** 通到当前楼层的楼梯洞口；压到卧室等房间的标红 */
+const holeViews = computed(() => {
+  const p = plan.value
+  const bad = new Set(stairHoleConflicts(p).map((c) => c.stairId))
+  return stairHoles(p, activeFloor.value).map((h) => ({ id: h.stair.id, d: polyPath(h.poly), bad: bad.has(h.stair.id), arrival: h.arrival, c: centroid(h.poly) }))
+})
 
 /** 选中房间的边长标注，放在外侧 */
 const dimViews = computed(() => {
@@ -1034,7 +1068,7 @@ defineExpose({ fit, zoomBy, zoomReset, exportPng, view, cursorInfo, draftCount, 
 // ---------- 导出 PNG ----------
 
 async function exportPng() {
-  const pts = plan.value.rooms.flatMap((r) => r.points)
+  const pts = fp.value.rooms.flatMap((r) => r.points)
   if (!pts.length || !svg.value) return
   const b = bbox(pts)
   const pad = 60
@@ -1068,7 +1102,7 @@ async function exportPng() {
   canvas.getContext('2d')!.drawImage(img, 0, 0)
   const a = document.createElement('a')
   a.href = canvas.toDataURL('image/png')
-  a.download = `${plan.value.name || 'plan'}.png`
+  a.download = `${plan.value.name || 'plan'}${isMultiFloor(plan.value) ? '-' + (floorById(plan.value, activeFloor.value)?.name ?? '') : ''}.png`
   a.click()
 }
 </script>
@@ -1129,6 +1163,10 @@ async function exportPng() {
       <pattern id="doma" width="12" height="12" patternUnits="userSpaceOnUse">
         <path d="M0,12L12,0" fill="none" stroke="#a49b8c" stroke-width="0.8" />
       </pattern>
+      <pattern id="void-hatch" width="14" height="14" patternUnits="userSpaceOnUse">
+        <rect width="14" height="14" fill="#f7f6f2" />
+        <path d="M0,14L14,0" fill="none" stroke="#c9c3b8" stroke-width="0.8" />
+      </pattern>
       <pattern id="hatch-ps" width="7" height="7" patternUnits="userSpaceOnUse">
         <rect width="7" height="7" fill="#e3ded5" />
         <path d="M0,7L7,0" fill="none" stroke="#6b665d" stroke-width="0.8" />
@@ -1166,16 +1204,37 @@ async function exportPng() {
           <path v-for="(c, i) in v.closet" :key="'c' + i" :d="c" stroke="#6b665d" stroke-width="1.2" stroke-dasharray="8 5" />
         </template>
       </g>
+      <!-- 挑空：虚线框 + 对角线（楼板挖空，下层通高） -->
+      <g pointer-events="none">
+        <template v-for="v in voids" :key="'v' + v.room.id">
+          <path :d="v.d" fill="url(#void-hatch)" stroke="#8a857c" :stroke-width="px(1.2)" stroke-dasharray="8 5" />
+        </template>
+      </g>
       <!-- 阳台扶手：粗线上叠一条浅色细线，形成双线 -->
       <g pointer-events="none">
         <path v-for="v in balconies" :key="'b' + v.room.id" :d="v.d" fill="none" stroke="#6b665d" stroke-width="7" />
         <path v-for="v in balconies" :key="'b2' + v.room.id" :d="v.d" fill="none" stroke="#fbfaf7" stroke-width="3.5" />
+      </g>
+      <!-- 下层参考：墙中心线 + 楼梯（半透明，不可点） -->
+      <g v-if="belowWalls" class="underlay" pointer-events="none">
+        <path :d="belowWalls" stroke="#5b8fb8" :stroke-width="px(1.5)" stroke-dasharray="6 4" fill="none" />
+        <g v-for="s in belowStairs" :key="'bs' + s.f.id">
+          <path v-for="(st, i) in s.lines.steps" :key="i" :d="polyPath(st)" fill="none" stroke="#5b8fb8" :stroke-width="px(1)" />
+        </g>
       </g>
       <!-- 墙：隔墙薄、外墙（躯体）厚；玄関与廊下之间只画上り框 -->
       <g pointer-events="none">
         <path :d="wallViews.inner" stroke="#3a3732" :stroke-width="plan.wall" stroke-linecap="square" />
         <path :d="wallViews.outer" stroke="#22201c" :stroke-width="plan.wallOuter" stroke-linecap="square" />
         <path :d="wallViews.open" stroke="#5a554d" stroke-width="3" />
+      </g>
+      <!-- 楼梯洞口（下层的楼梯通上来的地方）：斜线 + 「下」箭头；压到卧室等房间时标红 -->
+      <g pointer-events="none">
+        <g v-for="h in holeViews" :key="'h' + h.id" class="hole">
+          <path :d="h.d" :fill="h.bad ? 'rgba(180,69,79,0.16)' : 'url(#void-hatch)'" :stroke="h.bad ? '#b4454f' : '#6b665d'" :stroke-width="px(1.5)" />
+          <line :x1="h.arrival[0].x" :y1="h.arrival[0].y" :x2="h.arrival[1].x" :y2="h.arrival[1].y" stroke="#3f6652" :stroke-width="px(3)" />
+          <text :x="h.c.x" :y="h.c.y" :font-size="px(11)" text-anchor="middle" dominant-baseline="middle" :fill="h.bad ? '#b4454f' : '#6b665d'" class="hole-t">{{ h.bad ? t('楼梯洞口和房间重叠') : t('楼梯洞口') }}</text>
+        </g>
       </g>
       <!-- 门窗 -->
       <g
@@ -1230,7 +1289,7 @@ async function exportPng() {
         :transform="v.transform"
         :style="{ cursor: tool === 'select' ? 'move' : undefined }"
       >
-        <FixtureGlyph :f="v.f" />
+        <FixtureGlyph :f="v.f" :rise="v.rise" />
       </g>
       <!-- 选中设备：前方使用空间 -->
       <template v-for="v in fixtureViews.filter((x) => x.selected && x.front)" :key="'ff' + v.f.id">

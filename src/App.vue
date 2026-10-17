@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import PlanCanvas from './components/PlanCanvas.vue'
+import FloorBar from './components/FloorBar.vue'
 import InspectorPanel from './components/InspectorPanel.vue'
 import Sandbox3D from './components/Sandbox3D.vue'
 import AssetLibrary from './components/AssetLibrary.vue'
@@ -521,6 +522,8 @@ onBeforeUnmount(() => {
     <main v-if="shownView === '2d'">
       <div class="stage">
         <PlanCanvas ref="canvas" />
+        <!-- 楼层切换（多层户型）：左上角 -->
+        <FloorBar />
         <!-- 缩放控件：滚轮 / 捏合之外的可见入口；点百分比回到 100% -->
         <div class="zoom">
           <button class="icon-only" :title="t('缩小')" :aria-label="t('缩小')" @click="canvas?.zoomBy(1 / 1.25)"><JIcon :icon="ICONS.zoomOut" :size="15" /></button>

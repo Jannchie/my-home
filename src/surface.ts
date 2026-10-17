@@ -181,7 +181,8 @@ export function propsOn(plan: Pick<Plan, 'furniture'>, f: Furniture, depth = 0):
   const lv = levels(f.asset, !!f.open)
   if (depth > 3 || !lv.length) return []
   const base = f.z ?? 0
-  const direct = plan.furniture.filter((o) => o.id !== f.id && lv.some((l) => Math.abs((o.z ?? 0) - (base + l.y)) < 0.5 && inPolys(f, l.polys, o)))
+  // 多层户型：只看同一层的东西（上层同一位置桌上的摆件不算在下层的桌子上）
+  const direct = plan.furniture.filter((o) => o.id !== f.id && o.floor === f.floor && lv.some((l) => Math.abs((o.z ?? 0) - (base + l.y)) < 0.5 && inPolys(f, l.polys, o)))
   return direct.flatMap((o) => [o, ...propsOn(plan, o, depth + 1)])
 }
 

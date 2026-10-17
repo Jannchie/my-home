@@ -17,6 +17,7 @@ import { generatePlan } from './generate-region'
 import { lang, t } from './i18n'
 import { initialRoute } from './router'
 import { edgeInfo, emptyPlan, projectToSegment, type Fixture, type FixtureKind, type Floor, type Furniture, type Opening, type Plan, type Room, type Vec, type Wallpaper, uid } from './model'
+import { withStairHoles } from './stairs'
 import { BASE_FLOOR_ID, DEFAULT_FLOOR_H, SLAB, baseFloor, baseFloorId, floorBelow, floorById, floorOf, floorOutline, floorView, isMultiFloor, nextFloorId, normalizeFloors, perFloorFurniture, planFloors, stampFloor } from './floors'
 
 export type Tool = 'select' | 'rect' | 'poly' | 'door' | 'window' | 'fixture'
@@ -790,7 +791,7 @@ export function redecorate() {
  */
 function furnish(p: Plan, seed: number) {
   const base = baseFloorId(p)
-  return perFloorFurniture(p, (view, fl) => decorate(view, fl.id === base ? seed : seed + Math.round(fl.elevation), sandbox.style, p.household))
+  return perFloorFurniture(p, (view, fl) => decorate(withStairHoles(p, view, fl.id), fl.id === base ? seed : seed + Math.round(fl.elevation), sandbox.style, p.household))
 }
 
 /** 按住户自动贴墙纸（居室用主人的风格） */
@@ -825,7 +826,7 @@ export function fixChecklist(items: CheckItem[]) {
     const base = baseFloorId(raw)
     p.furniture = perFloorFurniture(raw, (view, fl) =>
       applyFixes(
-        view,
+        withStairHoles(raw, view, fl.id),
         isMultiFloor(raw) ? items.filter((it) => (it.roomId ? view.rooms.some((r) => r.id === it.roomId) : fl.id === base)) : items,
         raw.household,
       ),

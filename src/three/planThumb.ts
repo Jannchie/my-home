@@ -5,7 +5,8 @@
 // 输出 640×400（2 倍图，卡片上按 320×200 显示）的 WebP Blob。
 
 import * as THREE from 'three'
-import { applyCutaway, buildHouse, furnitureModel, placeFurniture, stepCutaway } from './house'
+import { applyCutaway, furnitureModel, placeFurniture, stepCutaway } from './house'
+import { buildBuilding } from './building'
 import { disposeUnshared } from './toon'
 import { createStage, fitSun, frameCamera, type Stage } from './stage'
 import { bbox, ROOM_KINDS, type Plan } from '../model'
@@ -42,13 +43,16 @@ function getStage() {
   return stage
 }
 
-/** 离屏渲染整套户型（默认视角 + 内墙半墙 + 前墙压低，和沙盘「重置视角」的观感一致） */
+/**
+ * 离屏渲染整套户型（默认视角 + 内墙半墙 + 前墙压低，和沙盘「重置视角」的观感一致）。
+ * 多层户型显示全部楼层：最上面一层做半墙处理，下面的楼层保持完整。
+ */
 function renderOffscreen(p: Plan, wallH: number): HTMLCanvasElement | null {
   const pts = p.rooms.flatMap((r) => r.points)
   if (!pts.length) return null
   const s = getStage()
   const root = new THREE.Group()
-  const house = buildHouse(p, wallH)
+  const { root: house, floors } = buildBuilding(p, wallH)
   root.add(house)
   const furn: THREE.Object3D[] = []
   for (const f of p.furniture) {
@@ -68,8 +72,11 @@ function renderOffscreen(p: Plan, wallH: number): HTMLCanvasElement | null {
     const center = { x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 }
     const v = new THREE.Vector3().subVectors(s.camera.position, c)
     const l = Math.hypot(v.x, v.z) || 1
-    applyCutaway(house, center, { x: v.x / l, y: v.z / l }, null, false, true)
-    stepCutaway(house, 10, { style: 'cut', opacity: 0, cut: 60 }, true)
+    floors.forEach((fg, i) => {
+      if (i === floors.length - 1) applyCutaway(fg.group, center, { x: v.x / l, y: v.z / l }, null, false, true)
+      else applyCutaway(fg.group, center, null)
+      stepCutaway(fg.group, 10, { style: 'cut', opacity: 0, cut: 60 }, true)
+    })
     s.renderer.shadowMap.needsUpdate = true
     s.render()
     return coverInto(s.renderer.domElement, THUMB_W, THUMB_H)
@@ -96,7 +103,8 @@ function render2d(p: Plan): HTMLCanvasElement {
   const ox = (THUMB_W - (b.x1 - b.x0) * s) / 2 - b.x0 * s
   const oy = (THUMB_H - (b.y1 - b.y0) * s) / 2 - b.y0 * s
   g.lineJoin = 'round'
-  for (const r of p.rooms) {
+  // 多层户型画最底层（平面图色块只能画一层）
+  for (const r of p.rooms.filter((x) => !x.floor)) {
     g.beginPath()
     r.points.forEach((q, i) => (i ? g.lineTo(ox + q.x * s, oy + q.y * s) : g.moveTo(ox + q.x * s, oy + q.y * s)))
     g.closePath()

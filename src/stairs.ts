@@ -222,6 +222,16 @@ export function stairHoles(p: Plan, floorId: string): StairHole[] {
   return out
 }
 
+/**
+ * 给一层的子户型补上楼梯洞口：把通上来的楼梯照原样当作这一层的一个设备（只在这份子户型里，不写回户型），
+ * 一键布置、检查补漏把它当障碍，洞口里不会摆家具。
+ */
+export function withStairHoles(p: Plan, view: Plan, floorId: string): Plan {
+  const holes = stairHoles(p, floorId)
+  if (!holes.length) return view
+  return { ...view, fixtures: [...view.fixtures, ...holes.map((h) => ({ ...h.stair, id: `${h.stair.id}~hole`, floor: floorId }))] }
+}
+
 /** 楼板上要挖空的区域：楼梯洞口 + 挑空房间 */
 export function slabHoles(p: Plan, floorId: string): Vec[][] {
   const voids = p.rooms.filter((r) => isVoid(r) && floorOf(p, r) === floorId).map((r) => r.points)
