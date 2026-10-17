@@ -13,7 +13,7 @@ import { floorY } from './three/house'
 
 export type NavClass = 'pet' | 'robot'
 
-const NO_PET: RoomKind[] = ['balcony', 'bath', 'storage']
+const NO_PET: RoomKind[] = ['balcony', 'bath', 'storage', 'void']
 const NO_ROBOT: RoomKind[] = [...NO_PET, 'entrance']
 
 export interface NavOptions {
@@ -25,6 +25,8 @@ export interface NavOptions {
    * 低矮的家具从上面飞过去；房间、墙、门洞的规则和 pet 一样。
    */
   minH?: number
+  /** 不能走的区域（多层户型上层的楼梯洞口：第一期宠物不上下楼，各在各的楼层） */
+  holes?: Vec[][]
 }
 
 export class NavGrid {
@@ -97,6 +99,9 @@ export class NavGrid {
       this.box(furnitureBox(f.asset, f.x, f.y, f.rot), blocked)
     }
     for (const fx of plan.fixtures) this.fixture(fx, blocked)
+    for (const h of opts.holes ?? [])
+      for (let j = 0; j < this.ny; j++)
+        for (let i = 0; i < this.nx; i++) if (pointInPolygon(this.center(i, j), h)) blocked[j * this.nx + i] = 1
 
     // 4. clearance：两遍倒角距离变换（10 / 14），减去半格
     const dt = (ok: Uint8Array) => {

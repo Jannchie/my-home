@@ -6,7 +6,8 @@
 //     r 房间 [[名字, 种类, 顶点（0.1cm 整数，首点绝对值、之后逐点差分，x/y 交错）, 其余字段?]],
 //     d 门窗 [[房间序号, 种类, 边, 位置, 宽, 铰链 / 开向（bit0 = end，bit1 = out）]],
 //     x 设备 [[种类, x, y, 宽, 旋转, 其余字段?（stackOn 换成设备序号）]],
-//     a? 素材表 [素材 id…], f? 家具 [[素材表序号, x, y, 旋转, 配色序号?, 其余字段?]], h? 住户 }
+//     a? 素材表 [素材 id…], f? 家具 [[素材表序号, x, y, 旋转, 配色序号?, 其余字段?]], h? 住户,
+//     F? 楼层 [[id, 名字, 地面高, 层高]]（多层户型才有；房间 / 设备 / 家具的 floor 跟着「其余字段」走，门窗跟着房间） }
 // id 一律不进链接，解码时重新生成；坐标、长度四舍五入到 0.1cm。
 // 「只户型」不带家具、住户和房间的装饰（墙纸、窗帘、灯光覆盖）。
 // 解码后走 store.normalizePlan（存档迁移），坏数据返回错误码，不抛异常。
@@ -64,6 +65,7 @@ interface Compact {
   a?: string[]
   f?: CFurniture[]
   h?: unknown
+  F?: [string, string, number, number][]
 }
 
 const ROOM_DECOR = ['wallpaper', 'curtain', 'light', 'lightK']
@@ -100,6 +102,7 @@ export function toCompact(p: Plan, mode: ShareMode): Compact {
   }
   if (p.region) c.g = p.region
   if (p.north) c.N = r1(p.north)
+  if (p.floors && p.floors.length > 1) c.F = p.floors.map((f) => [f.id, f.name, r1(f.elevation), r1(f.height)])
   if (mode === 'full') {
     const table: string[] = []
     const ai = new Map<string, number>()
@@ -150,6 +153,7 @@ export function fromCompact(c: unknown): Plan {
     const [ri, kind, edge, offset, width, hs] = cd
     if (!isNum(ri) || !rooms[ri] || !isStr(kind) || !isNum(edge) || !isNum(offset) || !isNum(width) || !isNum(hs)) bad('opening')
     if (edge < 0 || edge >= rooms[ri].points.length) bad('opening edge')
+    // 门窗的楼层跟着房间（normalizePlan 里同步）
     return { id: uid('o'), kind: kind as Opening['kind'], roomId: rooms[ri].id, edge, offset, width, hinge: hs & 1 ? 'end' : 'start', swing: hs & 2 ? 'out' : 'in' }
   })
 
@@ -191,6 +195,8 @@ export function fromCompact(c: unknown): Plan {
   }
   if (o.g === 'jp' || o.g === 'cn' || o.g === 'west') p.region = o.g
   if (isNum(o.N)) p.north = o.N
+  // 楼层表：坏的项丢掉，其余交给 normalizePlan（排序、去重、只剩一层时变回单层）
+  if (Array.isArray(o.F)) p.floors = o.F.filter((f) => Array.isArray(f) && isStr(f[0]) && isStr(f[1]) && isNum(f[2]) && isNum(f[3])).map(([id, name, elevation, height]) => ({ id, name, elevation, height }))
   if (isObj(o.h) && Array.isArray((o.h as { members?: unknown }).members)) p.household = o.h as unknown as Plan['household']
   return p
 }

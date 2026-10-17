@@ -1,4 +1,4 @@
-import { reactive, ref, toRaw, watch } from 'vue'
+import { computed, reactive, ref, toRaw, watch } from 'vue'
 import { orientDoors } from './doors'
 import { migrateAppliances } from './appliance'
 import { migrateCabinets, migrateOpenForms, setOpen } from './cabinet'
@@ -12,11 +12,13 @@ import type { StyleTag } from './three/kit'
 import type { PatternSpec } from './three/patterns'
 import { CITIES, DEFAULT_GEO, type Geo } from './three/sky'
 import { DEFAULT_KELVIN, DEFAULT_POWER, POWER_MAX, POWER_MIN, clampKelvin, isLightMode, type LightMode } from './three/lights'
-import { ensureOutdoorUnits, planArea, randomSeed, type GenOptions } from './generate'
+import { ensureOutdoorUnits as ensureOutdoorUnits1, indoorUnits, planArea, randomSeed, type GenOptions } from './generate'
 import { generatePlan } from './generate-region'
 import { lang, t } from './i18n'
 import { initialRoute } from './router'
-import { edgeInfo, emptyPlan, projectToSegment, type Fixture, type FixtureKind, type Furniture, type Opening, type Plan, type Room, type Vec, type Wallpaper, uid } from './model'
+import { edgeInfo, emptyPlan, projectToSegment, type Fixture, type FixtureKind, type Floor, type Furniture, type Opening, type Plan, type Room, type Vec, type Wallpaper, uid } from './model'
+import { withStairHoles } from './stairs'
+import { BASE_FLOOR_ID, DEFAULT_FLOOR_H, SLAB, baseFloor, baseFloorId, floorBelow, floorById, floorOf, floorOutline, floorView, isMultiFloor, nextFloorId, normalizeFloors, perFloorFurniture, planFloors, stampFloor } from './floors'
 
 export type Tool = 'select' | 'rect' | 'poly' | 'door' | 'window' | 'fixture'
 
@@ -58,6 +60,8 @@ export function normalizePlan(p: Plan): Plan | null {
     }
   }
   for (const f of p.furniture) if (f.light !== undefined && f.light !== 'on' && f.light !== 'off') delete f.light
+  // 楼层：没有 floors 的是单层户型（旧存档都是），物件的 floor 一律删掉；坏数据整理掉
+  normalizeFloors(p)
   return p
 }
 
@@ -127,6 +131,120 @@ export const bootFresh = !loaded
 export const plan = ref<Plan>(loaded ?? generatePlan(genOptions).plan)
 export const selection = ref<Selection>(null)
 export const tool = ref<Tool>('select')
+
+// ---------- 楼层：平面图和 3D 沙盘共用「当前楼层」 ----------
+
+/** 正在编辑的楼层 id（不存在时退回最底层，见 activeFloor） */
+export const currentFloor = ref<string>(BASE_FLOOR_ID)
+/** 当前楼层（总是户型里存在的一层） */
+export const activeFloor = computed(() => (floorById(plan.value, currentFloor.value) ? currentFloor.value : baseFloorId(plan.value)))
+/** 当前楼层的子户型（单层户型就是 plan 本身）：平面图的绘制、吸附、选中都只看它 */
+export const floorPlan = computed(() => floorView(plan.value, activeFloor.value))
+/** 3D 沙盘的楼层显示：all 全部 / upto 只显示到当前层 / explode 分层拉开 */
+export type FloorShow = 'all' | 'upto' | 'explode'
+export const FLOOR_SHOWS: { id: FloorShow; label: string }[] = [
+  { id: 'all', label: '全部楼层' },
+  { id: 'upto', label: '只到当前层' },
+  { id: 'explode', label: '分层拉开' },
+]
+export const floorShow = ref<FloorShow>('upto')
+
+/** 选中的东西所在楼层（没有选中返回 null） */
+function selectionFloor(): string | null {
+  const s = selection.value
+  if (!s) return null
+  const p = plan.value
+  if (s.type === 'opening') {
+    const o = p.openings.find((x) => x.id === s.id)
+    return o ? floorOf(p, findRoom(o.roomId) ?? {}) : null
+  }
+  const item = s.type === 'room' ? findRoom(s.id) : s.type === 'vertex' ? findRoom(s.roomId) : s.type === 'fixture' ? findFixture(s.id) : findFurniture(s.id)
+  return item ? floorOf(p, item) : null
+}
+
+/** 切换当前楼层：选中的东西不在这一层就取消选中 */
+export function setFloor(id: string) {
+  if (!floorById(plan.value, id)) return
+  currentFloor.value = id
+  if (selection.value && selectionFloor() !== id) selection.value = null
+}
+
+/** 新物件打上当前楼层 */
+const onActive = <T extends { floor?: string }>(x: T) => stampFloor(plan.value, x, activeFloor.value)
+
+/**
+ * 加一层（放在最上面）：层高照抄最上一层，地面 = 最上层天花 + 楼板厚；默认把下层的外轮廓复制成一个大房间（走廊），
+ * 之后再在里面隔房间。单层户型第一次加层时补上楼层表（原来的那层成为 1F）。
+ */
+export function addFloor() {
+  mutate((p) => {
+    const fs = planFloors(p).map((f) => ({ ...f }))
+    if (!p.floors?.length) fs[0] = baseFloor(sandbox.wallHeight >= 200 ? sandbox.wallHeight : DEFAULT_FLOOR_H)
+    const top = fs[fs.length - 1]
+    const id = nextFloorId({ floors: fs })
+    const f: Floor = { id, name: id.toUpperCase(), elevation: top.elevation + top.height + SLAB, height: top.height }
+    p.floors = [...fs, f]
+    const outline = floorOutline(floorView(toRaw(p), top.id).rooms)
+    if (outline) p.rooms.push({ id: uid('r'), name: '廊下', kind: 'hall', points: outline, floor: id })
+    currentFloor.value = id
+  })
+  selection.value = null
+}
+
+/** 删掉一层（最底层不能删）：这一层的房间、门窗、设备、家具一起删；只剩一层时变回单层户型 */
+export function deleteFloor(id: string) {
+  const p0 = plan.value
+  if (!isMultiFloor(p0) || id === baseFloorId(p0)) return
+  const below = floorBelow(p0, id)?.id
+  mutate((p) => {
+    const gone = new Set(p.rooms.filter((r) => r.floor === id).map((r) => r.id))
+    p.rooms = p.rooms.filter((r) => r.floor !== id)
+    p.openings = p.openings.filter((o) => !gone.has(o.roomId))
+    p.fixtures = p.fixtures.filter((f) => f.floor !== id)
+    p.furniture = p.furniture.filter((f) => f.floor !== id)
+    p.floors = p.floors!.filter((f) => f.id !== id)
+    // 上面的楼层落下来补上空出的高度
+    restack(p)
+    normalizeFloors(p)
+  })
+  currentFloor.value = below ?? baseFloorId(plan.value)
+  selection.value = null
+}
+
+/** 楼层重新叠放：每层地面 = 下一层天花 + 楼板厚 */
+function restack(p: Plan) {
+  const fs = p.floors
+  if (!fs) return
+  for (let i = 1; i < fs.length; i++) fs[i].elevation = fs[i - 1].elevation + fs[i - 1].height + SLAB
+}
+
+export function renameFloor(id: string, name: string) {
+  const f = plan.value.floors?.find((x) => x.id === id)
+  const n = name.trim()
+  if (!f || !n || f.name === n) return
+  mutate(() => (f.name = n))
+}
+
+/** 改层高（墙高）：上面的楼层跟着升降 */
+export function setFloorHeight(id: string, h: number) {
+  const f = plan.value.floors?.find((x) => x.id === id)
+  const v = Math.round(Math.min(400, Math.max(200, h)))
+  if (!f || f.height === v) return
+  mutate((p) => {
+    f.height = v
+    restack(p)
+  })
+}
+
+/** 把下一层的外轮廓复制到当前楼层（一个房间）；没有下一层或下一层是空的就不做 */
+export function copyOutlineFromBelow() {
+  const p = plan.value
+  const below = floorBelow(p, activeFloor.value)
+  if (!below) return
+  const outline = floorOutline(floorView(toRaw(p), below.id).rooms)
+  if (!outline) return
+  addRoom({ name: '廊下', kind: 'hall', points: outline })
+}
 /** 设备工具当前要放的种类 */
 export const placeKind = ref<FixtureKind>('kitchen')
 export const settings = reactive({ grid: 10, snap: true })
@@ -418,7 +536,7 @@ export function generate(newSeed = true) {
   // 先推算住户，再按住户布置（同一个种子，结果可复现）
   r.plan.household = generateHousehold(r.plan, r.seed)
   if (sandbox.autoFurnish) {
-    r.plan.furniture = decorate(r.plan, r.seed, sandbox.style, r.plan.household)
+    r.plan.furniture = furnish(r.plan, r.seed)
     ensureOutdoorUnits(r.plan)
     papers(r.plan, r.seed)
   }
@@ -437,7 +555,7 @@ export function findRoom(id: string): Room | undefined {
 
 export function addRoom(room: Omit<Room, 'id'>) {
   checkpoint()
-  const r: Room = { ...room, id: uid('r') }
+  const r: Room = onActive({ ...room, id: uid('r') })
   plan.value.rooms.push(r)
   selection.value = { type: 'room', id: r.id }
   return r
@@ -494,7 +612,7 @@ export function duplicateSelection() {
   const r = findRoom(s.id)
   if (!r) return
   checkpoint()
-  const copy: Room = { id: uid('r'), name: r.name, kind: r.kind, points: r.points.map((p) => ({ x: p.x + 50, y: p.y + 50 })) }
+  const copy: Room = { id: uid('r'), name: r.name, kind: r.kind, points: r.points.map((p) => ({ x: p.x + 50, y: p.y + 50 })), ...(r.floor ? { floor: r.floor } : {}) }
   plan.value.rooms.push(copy)
   for (const o of plan.value.openings.filter((o) => o.roomId === r.id)) {
     plan.value.openings.push({ ...o, id: uid('o'), roomId: copy.id })
@@ -533,7 +651,7 @@ export function findFixture(id: string): Fixture | undefined {
 
 export function addFixture(f: Omit<Fixture, 'id'>) {
   checkpoint()
-  const fx: Fixture = { ...f, id: uid('f') }
+  const fx: Fixture = onActive({ ...f, id: uid('f') })
   plan.value.fixtures.push(fx)
   selection.value = { type: 'fixture', id: fx.id }
 }
@@ -547,12 +665,19 @@ export function rotateSelectedFixture() {
 
 /** 按规则重新决定所有开门的铰链与开向 */
 export function tidyDoors() {
-  mutate((p) => orientDoors(p))
+  // 多层户型按层整理（门扇只和同一层的墙、门打架）；子户型里的门窗和原户型是同一批对象
+  mutate((p) => {
+    for (const fl of planFloors(p)) orientDoors(floorView(p, fl.id))
+  })
 }
 
 export function addOpening(o: Omit<Opening, 'id'>) {
   checkpoint()
   const op: Opening = { ...o, id: uid('o') }
+  // 门窗的楼层跟着所在房间
+  const owner = findRoom(o.roomId)
+  if (owner?.floor) op.floor = owner.floor
+  else delete op.floor
   plan.value.openings.push(op)
   selection.value = { type: 'opening', id: op.id }
 }
@@ -564,6 +689,8 @@ export function findFurniture(id: string): Furniture | undefined {
 export function addFurniture(f: Omit<Furniture, 'id'>) {
   checkpoint()
   const fu: Furniture = { asset: f.asset, x: f.x, y: f.y, rot: f.rot, color: f.color, id: uid('u'), ...(f.z ? { z: f.z } : {}), ...(f.colors?.length ? { colors: [...f.colors] } : {}), ...(f.patterns?.some(Boolean) ? { patterns: [...f.patterns] } : {}) }
+  // 复制的家具留在原来那层；新摆的放在当前楼层
+  stampFloor(plan.value, fu, f.floor ?? activeFloor.value)
   plan.value.furniture.push(fu)
   selection.value = { type: 'furniture', id: fu.id }
   return fu
@@ -642,7 +769,7 @@ export function rerollHousehold() {
     const seed = Math.floor(Math.random() * 1e9)
     p.household = generateHousehold(toRaw(p), seed)
     // 布置算法只读 plan，传原始对象：经过响应式代理要慢一个数量级（约 1s → 0.1s）
-    p.furniture = decorate(toRaw(p), seed, sandbox.style, toRaw(p).household)
+    p.furniture = furnish(toRaw(p), seed)
     ensureOutdoorUnits(p)
     papers(p, seed)
   })
@@ -654,17 +781,43 @@ export function redecorate() {
   mutate((p) => {
     p.household ??= generateHousehold(toRaw(p))
     const seed = Date.now()
-    p.furniture = decorate(toRaw(p), seed, sandbox.style, toRaw(p).household)
+    p.furniture = furnish(toRaw(p), seed)
     ensureOutdoorUnits(p)
     papers(p, seed)
   })
   selection.value = null
 }
 
+/**
+ * 一键布置：多层户型每层当作独立户型分别布置（第一期；楼梯在子户型里是设备，周围照常留空），
+ * 家具打上所在楼层。单层户型和以前完全一样。
+ */
+function furnish(p: Plan, seed: number) {
+  const base = baseFloorId(p)
+  return perFloorFurniture(p, (view, fl) => decorate(withStairHoles(p, view, fl.id), fl.id === base ? seed : seed + Math.round(fl.elevation), sandbox.style, p.household))
+}
+
+/**
+ * 空调外机补到和室内机一样多。多层户型按层放（各层的阳台），新外机打上所在楼层；单层和以前一样。
+ */
+function ensureOutdoorUnits(p: Plan) {
+  if (!isMultiFloor(p)) return ensureOutdoorUnits1(p)
+  const need = indoorUnits(p)
+  for (const fl of planFloors(p)) {
+    const view = floorView(p, fl.id)
+    const before = new Set(view.fixtures)
+    const others = p.fixtures.filter((f) => f.kind === 'outdoor' && floorOf(p, f) !== fl.id).length
+    ensureOutdoorUnits1(view, Math.max(0, need - others))
+    for (const f of view.fixtures) if (!before.has(f)) p.fixtures.push(stampFloor(p, f, fl.id))
+  }
+}
+
 /** 按住户自动贴墙纸（居室用主人的风格） */
 function papers(p: Plan, seed: number) {
-  const styles = roomStyles(toRaw(p), toRaw(p).household)
-  autoWallpapers(p, toRaw(p).household, (r) => styles.get(r.id), seed)
+  const raw = toRaw(p)
+  const styles = new Map<string, StyleTag>()
+  for (const fl of planFloors(raw)) for (const [k, v] of roomStyles(floorView(raw, fl.id), raw.household)) styles.set(k, v)
+  autoWallpapers(p, raw.household, (r) => styles.get(r.id), seed)
 }
 
 /** 某个房间换墙纸；undefined = 恢复默认 */
@@ -686,7 +839,16 @@ export function rerollWallpapers() {
 export function fixChecklist(items: CheckItem[]) {
   mutate((p) => {
     p.household ??= generateHousehold(toRaw(p))
-    p.furniture = applyFixes(toRaw(p), items, toRaw(p).household)
+    // 多层户型按层补：房间相关的条目交给房间所在的那层，全户的条目交给最底层
+    const raw = toRaw(p)
+    const base = baseFloorId(raw)
+    p.furniture = perFloorFurniture(raw, (view, fl) =>
+      applyFixes(
+        withStairHoles(raw, view, fl.id),
+        isMultiFloor(raw) ? items.filter((it) => (it.roomId ? view.rooms.some((r) => r.id === it.roomId) : fl.id === base)) : items,
+        raw.household,
+      ),
+    )
     // 空调外机是设备，applyFixes 管不到：按室内机台数补够
     ensureOutdoorUnits(p)
   })

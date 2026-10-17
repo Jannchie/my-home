@@ -46,15 +46,18 @@ import { edgesOf } from '../model'
 import { showerSpot } from '../bathroom'
 import { curtainSpec } from '../curtains'
 import { showerCurtainModel, showerModel } from './packs/bath-extra'
+import { holeRails, stairsModel } from './stairs3d'
+import { SLAB, floorElevation, floorOf, isMultiFloor } from '../floors'
+import { centroid, onBoundary, signedArea } from '../model'
 
 /** 地面高度：玄関土间、阳台比室内低 */
 const FLOOR_Y: Partial<Record<RoomKind, number>> = { entrance: -12, balcony: -15 }
 export const floorY = (r: Room | undefined) => (r ? (r.flush ? 0 : (FLOOR_Y[r.kind] ?? 0)) : 0)
 const BASE = -26
 
-export function roomAt(plan: Pick<Plan, 'rooms'>, p: Vec) {
-  // 阳台和户内重叠时户内优先
-  const hits = plan.rooms.filter((r) => pointInPolygon(p, r.points))
+export function roomAt(plan: Pick<Plan, 'rooms'>, p: Vec, floor?: string | null) {
+  // 阳台和户内重叠时户内优先；floor 给定（多层户型）时只看那一层的房间（undefined 字段 = 最底层，传 null 表示最底层）
+  const hits = plan.rooms.filter((r) => (floor === undefined || (r.floor ?? null) === floor) && pointInPolygon(p, r.points))
   return hits.find(isIndoor) ?? hits[0]
 }
 
@@ -143,17 +146,97 @@ function floorMaterial(kind: RoomKind) {
   return m
 }
 
-/** 房间地面：从底座顶面挤出到地面高度 */
-function floorSlab(r: Room) {
-  const shape = new THREE.Shape(r.points.map((p) => new THREE.Vector2(p.x, -p.y)))
+const toV2 = (pts: Vec[]) => pts.map((p) => new THREE.Vector2(p.x, -p.y))
+
+/**
+ * 房间地面：从 bottom（缺省底座顶面）挤出到地面高度。holes：要挖掉的区域（上层的楼梯洞口、挑空），
+ * 只取和房间相交的部分（凸的洞口按房间裁一下）；洞口盖住整个房间时返回 null。
+ */
+function floorSlab(r: Room, bottom = BASE, holes: Vec[][] = []) {
+  const shape = new THREE.Shape(toV2(r.points))
+  for (const h of holes) {
+    const cut = clipConvex(r.points, h)
+    if (cut.length < 3 || Math.abs(signedArea(cut)) < 4) continue
+    if (Math.abs(signedArea(cut)) >= Math.abs(signedArea(r.points)) - 4) return null
+    shape.holes.push(new THREE.Path(toV2(insetToward(cut, 0.5))))
+  }
   const top = floorY(r)
-  const depth = top - BASE
+  bottom = Math.min(bottom, top - 1)
+  const depth = top - bottom
   const geo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false })
   geo.rotateX(-Math.PI / 2)
   const sideMat = toon('#e9dccb')
   const m = new THREE.Mesh(geo, [floorMaterial(r.kind), sideMat])
-  m.position.y = BASE
+  m.position.y = bottom
   m.receiveShadow = true
+  return m
+}
+
+/** 多边形 subject 被凸多边形 clip 裁剪（Sutherland–Hodgman）：两者的交 */
+export function clipConvex(subject: Vec[], clip: Vec[]): Vec[] {
+  let out = subject
+  const s = signedArea(clip) >= 0 ? 1 : -1
+  for (let i = 0; i < clip.length && out.length; i++) {
+    const a = clip[i]
+    const b = clip[(i + 1) % clip.length]
+    const inside = (p: Vec) => s * ((b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x)) >= -1e-9
+    const cross = (p: Vec, q: Vec): Vec => {
+      const d1 = (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x)
+      const d2 = (b.x - a.x) * (q.y - a.y) - (b.y - a.y) * (q.x - a.x)
+      const t = d1 / (d1 - d2)
+      return { x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t }
+    }
+    const input = out
+    out = []
+    for (let k = 0; k < input.length; k++) {
+      const p = input[k]
+      const q = input[(k + 1) % input.length]
+      const pi = inside(p)
+      const qi = inside(q)
+      if (pi) out.push(p)
+      if (pi !== qi) out.push(cross(p, q))
+    }
+  }
+  return out
+}
+
+/** 各顶点往形心挪 d（洞口和外轮廓不共边，三角化稳定） */
+function insetToward(pts: Vec[], d: number) {
+  const c = centroid(pts)
+  return pts.map((p) => {
+    const l = Math.hypot(p.x - c.x, p.y - c.y) || 1
+    return { x: p.x + ((c.x - p.x) / l) * d, y: p.y + ((c.y - p.y) / l) * d }
+  })
+}
+
+/** 多边形各边沿外法线平移 d 后的新多边形（直角户型的外轮廓外扩半个墙厚） */
+export function offsetPolygon(pts: Vec[], d: number): Vec[] {
+  const es = roomEdges(pts)
+  const n = es.length
+  return es.map((q, i) => {
+    const p = es[(i + n - 1) % n]
+    const pa = add(p.a, mul(p.out, d))
+    const qa = add(q.a, mul(q.out, d))
+    const den = p.dir.x * q.dir.y - p.dir.y * q.dir.x
+    if (Math.abs(den) < 1e-6) return qa
+    const t = ((qa.x - pa.x) * q.dir.y - (qa.y - pa.y) * q.dir.x) / den
+    return add(pa, mul(p.dir, t))
+  })
+}
+
+/**
+ * 上层的结构楼板：外轮廓外扩半个外墙厚（和外墙外皮齐平），从 -SLAB 到 -2（上面再铺各房间的地面），
+ * 侧面是截面色，层与层之间露出一道楼板。holes：楼梯洞口、四周被房间围住的挑空。
+ */
+function structureSlab(outline: Vec[], holes: Vec[][], wallOuter: number) {
+  const shape = new THREE.Shape(toV2(offsetPolygon(outline, wallOuter / 2)))
+  for (const h of holes) if (h.every((p) => pointInPolygon(p, outline) || onBoundary(outline, p, 0.5))) shape.holes.push(new THREE.Path(toV2(insetToward(h, 0.5))))
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: SLAB - 2, bevelEnabled: false })
+  geo.rotateX(-Math.PI / 2)
+  const m = new THREE.Mesh(geo, [toon('#efe6d8'), toon('#b9a48e')])
+  m.position.y = -SLAB
+  m.receiveShadow = true
+  m.castShadow = true
   return m
 }
 
@@ -436,8 +519,10 @@ function openingInfos(plan: Plan): OpeningInfo[] {
   return out
 }
 
-function buildWalls(plan: Plan, H: number, infos: OpeningInfo[]) {
+function buildWalls(plan: Plan, H0: number, infos: OpeningInfo[], opts: HouseOpts = {}) {
   const g = new THREE.Group()
+  // 墙外侧不是房间时墙脚落到哪：最底层落到底座，上层落在楼板上
+  const outside = opts.upper ? 0 : BASE
   let bottom = 0
   let isOuter = false
   const stub = (a: Vec, b: Vec, t: number) => {
@@ -478,8 +563,10 @@ function buildWalls(plan: Plan, H: number, infos: OpeningInfo[]) {
     const mid = mul(add(s.a, s.b), 0.5)
     const sideY = (k: number) => {
       const r = roomAt(plan, add(mid, mul(n, k * (t / 2 + 5))))
-      return r ? floorY(r) : BASE
+      return r ? floorY(r) : outside
     }
+    // 上层是挑空的地方，外墙通高到上层的天花
+    const H = outer && opts.tall?.zones.some((z) => pointInPolygon(mid, z) || onBoundary(z, mid, 2)) ? H0 + opts.tall.extra : H0
     bottom = Math.min(0, sideY(1), sideY(-1))
     // 墙纸：+z 面（朝 (-dir.y, dir.x)）和 -z 面分别取那一侧房间的墙纸
     const n0 = { x: -dir.y, y: dir.x }
@@ -537,6 +624,7 @@ function buildWalls(plan: Plan, H: number, infos: OpeningInfo[]) {
   }
   // 壁龛和建筑一体：伸进隔壁（收纳间）的部分用墙包起来——背后、两侧一道墙，壁龛顶以上封到天花，
   // 隔壁看过来只是一段加厚的墙，柜子后面没有空隙
+  const H = H0
   for (const f of plan.fixtures) {
     if (f.kind !== 'builtin' || !f.recessed) continue
     const t = plan.wall
@@ -1232,7 +1320,8 @@ function buildShowers(plan: Plan) {
   return g
 }
 
-export function fixtureModel(f: Fixture, wallH: number) {
+/** rise：楼梯的层间高（不给按墙高 + 楼板厚） */
+export function fixtureModel(f: Fixture, wallH: number, rise?: number) {
   const d = fixtureDepth(f)
   switch (f.kind) {
     case 'kitchen':
@@ -1264,6 +1353,8 @@ export function fixtureModel(f: Fixture, wallH: number) {
       return psModel(f.w, d, Math.min(wallH, 240))
     case 'builtin':
       return storageSpotModel(f.w, d, !!f.recessed, Math.min(wallH - 1, NICHE_H))
+    case 'stairs':
+      return stairsModel(f, rise ?? wallH + SLAB)
   }
 }
 
@@ -1272,7 +1363,25 @@ function placeOnFloor(obj: THREE.Object3D, plan: Plan, x: number, y: number, rot
   obj.rotation.y = (-rot * Math.PI) / 180
 }
 
-export function buildHouse(plan: Plan, wallH: number) {
+/**
+ * 多层户型里搭某一层时的附加信息（单层户型都不用给，和以前一样）。plan 传这一层的子户型（floors.ts floorView）。
+ */
+export interface HouseOpts {
+  /** 不是最底层：不搭底座；地面是带厚度的结构楼板 + 各房间地面，墙脚落在楼板上 */
+  upper?: boolean
+  /** 这一层的外轮廓（结构楼板的形状，floors.ts floorOutline） */
+  outline?: Vec[] | null
+  /** 楼板上挖空的区域：楼梯洞口、挑空（stairs.ts slabHoles） */
+  holes?: Vec[][]
+  /** 楼梯洞口：四周装栏杆，出梯口那一段不装 */
+  stairHoles?: { poly: Vec[]; arrival: [Vec, Vec] }[]
+  /** 上一层是挑空的区域：这里的外墙通高，墙顶再加 extra */
+  tall?: { zones: Vec[][]; extra: number }
+  /** 楼梯的层间高 */
+  rise?: number
+}
+
+export function buildHouse(plan: Plan, wallH: number, opts: HouseOpts = {}) {
   const root = new THREE.Group()
   const pts = plan.rooms.flatMap((r) => r.points)
   if (!pts.length) return root
@@ -1283,21 +1392,32 @@ export function buildHouse(plan: Plan, wallH: number) {
   // 底座：两层，上层奶油色，下层深一点，像模型展示台
   const base = rbox(W + 30, 30, D + 30, '#d9c3a5', { x: (b.x0 + b.x1) / 2, y: BASE - 60, z: (b.y0 + b.y1) / 2 }, 14)
   base.receiveShadow = true
-  root.add(base)
   const top = rbox(W, 30, D, '#f5ead8', { x: (b.x0 + b.x1) / 2, y: BASE - 30, z: (b.y0 + b.y1) / 2 }, 10)
   top.receiveShadow = true
-  root.add(top)
+  if (!opts.upper) {
+    root.add(base)
+    root.add(top)
+  }
 
   const floors = new THREE.Group()
+  const holes = opts.holes ?? []
   for (const r of plan.rooms) {
-    floors.add(floorSlab(r))
+    // 挑空没有地面
+    if (r.kind === 'void') continue
+    const slab = opts.upper ? floorSlab(r, isIndoor(r) ? -2 : -SLAB, holes) : floorSlab(r)
+    if (slab) floors.add(slab)
     if (r.kind === 'japanese') floors.add(tatami(r, plan.wall))
+  }
+  if (opts.upper && opts.outline) {
+    // 四周被房间围住的挑空：结构楼板上挖掉（墙坐在楼板上，洞口比挑空每边小半个外墙厚）
+    const inner = plan.rooms.filter((r) => r.kind === 'void').map((r) => offsetPolygon(r.points, -plan.wallOuter / 2))
+    floors.add(structureSlab(opts.outline, [...(opts.stairHoles ?? []).map((h) => h.poly), ...inner], plan.wallOuter))
   }
   mergeMeshes(floors)
   root.add(floors)
 
   const infos = openingInfos(plan)
-  const walls = buildWalls(plan, wallH, infos)
+  const walls = buildWalls(plan, wallH, infos, opts)
   root.add(walls)
   const ops = buildOpenings(infos, wallH)
   addOutlines(ops)
@@ -1310,9 +1430,21 @@ export function buildHouse(plan: Plan, wallH: number) {
   root.add(buildCurtains(plan, infos, wallH))
   root.add(buildTrims(plan, infos, wallH))
 
+  // 楼梯洞口四周的栏杆（贴着墙的边不装）
+  if (opts.stairHoles?.length) {
+    const ws = wallSegments(plan.rooms)
+      .filter((s) => s.kind !== 'open')
+      .map((s) => ({ a: s.a, b: s.b, t: s.kind === 'outer' ? plan.wallOuter : plan.wall }))
+    const rails = new THREE.Group()
+    for (const h of opts.stairHoles) rails.add(holeRails(h.poly, h.arrival, ws))
+    mergeMeshes(rails)
+    addOutlines(rails)
+    root.add(rails)
+  }
+
   const fx = new THREE.Group()
   for (const f of plan.fixtures) {
-    const m = fixtureModel(f, wallH)
+    const m = fixtureModel(f, wallH, opts.rise)
     mergeMeshes(m)
     addOutlines(m)
     placeOnFloor(m, plan, f.x, f.y, f.rot)
@@ -1344,7 +1476,17 @@ export function furnitureModel(fu: Furniture) {
   return g
 }
 
-export function placeFurniture(obj: THREE.Object3D, plan: Plan, fu: Pick<Furniture, 'x' | 'y' | 'rot' | 'z'>) {
+/**
+ * 摆家具（世界坐标）。多层户型按家具的 floor 找那一层的房间定地面高度，再加上楼层的 elevation；
+ * plan 传整份户型或那一层的子户型都行。
+ */
+export function placeFurniture(obj: THREE.Object3D, plan: Plan, fu: Pick<Furniture, 'x' | 'y' | 'rot' | 'z' | 'floor'>) {
+  if (isMultiFloor(plan)) {
+    const room = roomAt(plan, { x: fu.x, y: fu.y }, fu.floor ?? null)
+    obj.position.set(fu.x, floorElevation(plan, floorOf(plan, fu)) + floorY(room) + (fu.z ?? 0), fu.y)
+    obj.rotation.y = (-fu.rot * Math.PI) / 180
+    return
+  }
   placeOnFloor(obj, plan, fu.x, fu.y, fu.rot)
   obj.position.y += fu.z ?? 0
 }

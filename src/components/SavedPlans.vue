@@ -188,8 +188,8 @@ function fmtTime(ms: number) {
   const d = new Date(ms)
   return (d.getFullYear() === new Date().getFullYear() ? fmt.value.thisYear : fmt.value.other).format(d)
 }
-const metaLine = (m: { area: number; layout: string; furniture: number }) =>
-  [`${m.area.toFixed(1)} ㎡`, m.layout, t('家具 {n} 件', { n: m.furniture })].filter(Boolean).join(' · ')
+const metaLine = (m: { area: number; layout: string; furniture: number; floors?: number }) =>
+  [`${m.area.toFixed(1)} ㎡`, m.floors ? t('{n} 层', { n: m.floors }) : '', m.layout, t('家具 {n} 件', { n: m.furniture })].filter(Boolean).join(' · ')
 </script>
 
 <template>

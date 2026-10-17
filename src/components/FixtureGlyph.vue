@@ -2,16 +2,35 @@
 // 设备符号，局部坐标：中心在原点，背面（贴墙一侧）朝 -y。
 // 外层负责 translate + rotate；文字反向旋转保持正立。
 import { computed } from 'vue'
-import { KITCHEN, fixtureDepth, type Fixture } from '../model'
+import { KITCHEN, fixtureDepth, polyPath, type Fixture } from '../model'
 import { jp, t } from '../i18n'
+import { stairLayout, stairsVariant } from '../stairs'
+import { SLAB } from '../floors'
 
-const props = defineProps<{ f: Fixture }>()
+/** rise：楼梯的层间高（决定级数），不给按 240 + 楼板厚 */
+const props = defineProps<{ f: Fixture; rise?: number }>()
 
 const w = computed(() => props.f.w)
 const d = computed(() => fixtureDepth(props.f))
 const back = computed(() => -d.value / 2)
 const LINE = '#2b2925'
 const FILL = '#ffffff'
+
+/** 楼梯：踏步线、上楼箭头（局部坐标），起步处画一个小圆 */
+const stairs = computed(() => {
+  if (props.f.kind !== 'stairs') return null
+  const L = stairLayout(props.f, props.rise ?? 240 + SLAB)
+  const path = L.path
+  const end = path[path.length - 1]
+  const prev = path[path.length - 2] ?? path[0]
+  const dx = end.x - prev.x
+  const dy = end.y - prev.y
+  const l = Math.hypot(dx, dy) || 1
+  const ux = dx / l
+  const uy = dy / l
+  const head = `M${end.x - ux * 16 - uy * 9},${end.y - uy * 16 + ux * 9}L${end.x},${end.y}L${end.x - ux * 16 + uy * 9},${end.y - uy * 16 - ux * 9}`
+  return { steps: L.steps.map((st) => polyPath(st.poly)), line: polyPath(path, false), head, start: path[0], spiral: stairsVariant(props.f) === 'spiral', r: L.radius ?? 0 }
+})
 </script>
 
 <template>
@@ -93,6 +112,17 @@ const FILL = '#ffffff'
   <g v-else-if="f.kind === 'ps'">
     <rect :x="-w / 2" :y="-d / 2" :width="w" :height="d" fill="url(#hatch-ps)" :stroke="LINE" stroke-width="1.5" />
     <text :transform="`rotate(${-f.rot})`" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="700" :fill="LINE" paint-order="stroke" stroke="#fff" stroke-width="3">PS</text>
+  </g>
+
+  <!-- 楼梯：外框 + 踏步线 + 上楼箭头（起步处小圆） -->
+  <g v-else-if="f.kind === 'stairs' && stairs">
+    <rect :x="-w / 2" :y="-d / 2" :width="w" :height="d" fill="#fbf7f0" :stroke="LINE" stroke-width="1.2" :stroke-dasharray="stairs.spiral ? '4 3' : undefined" />
+    <circle v-if="stairs.spiral" cx="0" cy="0" :r="stairs.r" :fill="FILL" :stroke="LINE" stroke-width="1.2" />
+    <path v-for="(p, i) in stairs.steps" :key="i" :d="p" fill="none" :stroke="LINE" stroke-width="0.9" />
+    <circle v-if="stairs.spiral" cx="0" cy="0" r="6" :fill="LINE" />
+    <path :d="stairs.line" fill="none" stroke="#3f6652" stroke-width="2" />
+    <path :d="stairs.head" fill="none" stroke="#3f6652" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round" />
+    <circle :cx="stairs.start.x" :cy="stairs.start.y" r="5" :fill="FILL" stroke="#3f6652" stroke-width="2" />
   </g>
 
   <!-- 空调外机：机身 + 风扇 -->

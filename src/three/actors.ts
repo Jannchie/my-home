@@ -293,6 +293,13 @@ export class ActorLayer {
   private air: NavGrid | null = null
   private bowls: Vec[] = []
   private deliver: { p: Vec; h: number }[] = []
+  /**
+   * 多层户型：每层一个 ActorLayer（宠物只在自己那层走动），group 放在楼层高度上（Sandbox3D 设 group.position.y），
+   * elev 是楼层本身的 elevation（家具模型的 position.y 里含它，不含分层拉开的偏移）。单层户型都是 0。
+   */
+  elev = 0
+  /** 不能走的区域（上层的楼梯洞口），建导航网格时用 */
+  holes: Vec[][] = []
 
   constructor(private getObj: (id: string) => THREE.Object3D | undefined) {}
 
@@ -368,15 +375,15 @@ export class ActorLayer {
       part.getWorldPosition(p)
       part.getWorldQuaternion(q)
       const dir = new THREE.Vector3(0, 0, 1).applyQuaternion(q)
-      // 宠物的骨架原点就在地面上；机器人的部件原点在底面
-      return { spot: { x: p.x, y: p.z, z: kind === 'cat' || kind === 'dog' || kind === 'rabbit' ? obj.position.y : p.y, h: Math.atan2(dir.x, dir.z) }, reps: [part] }
+      // 宠物的骨架原点就在地面上；机器人的部件原点在底面（高度换算到本层的局部坐标）
+      return { spot: { x: p.x, y: p.z, z: kind === 'cat' || kind === 'dog' || kind === 'rabbit' ? obj.position.y - this.elev : p.y - this.group.position.y, h: Math.atan2(dir.x, dir.z) }, reps: [part] }
     }
     const dock = def.actor?.dock
     if (dock && def.actor?.role === 'home') {
       const p = obj.localToWorld(new THREE.Vector3(...dock))
-      return { spot: { x: p.x, y: p.z, z: p.y, h }, reps: [] }
+      return { spot: { x: p.x, y: p.z, z: p.y - this.group.position.y, h }, reps: [] }
     }
-    return { spot: { x: obj.position.x, y: obj.position.z, z: obj.position.y, h }, reps: def.actor?.role === 'body' ? [obj] : [] }
+    return { spot: { x: obj.position.x, y: obj.position.z, z: obj.position.y - this.elev, h }, reps: def.actor?.role === 'body' ? [obj] : [] }
   }
 
   /** 场景（家具、房间）或模式变了之后调用；plan 传原始对象 */
@@ -432,9 +439,9 @@ export class ActorLayer {
     const plan = this.plan!
     const ignore = new Set<string>()
     for (const a of this.actors.values()) if (a.d.role === 'body') ignore.add(a.d.src)
-    this.nav = new NavGrid(plan, { ignore })
+    this.nav = new NavGrid(plan, { ignore, holes: this.holes })
     const nav = this.nav
-    this.air = [...this.actors.values()].some((a) => a.dr) ? new NavGrid(plan, { ignore, minH: AIR_MIN }) : null
+    this.air = [...this.actors.values()].some((a) => a.dr) ? new NavGrid(plan, { ignore, minH: AIR_MIN, holes: this.holes }) : null
     this.bowls = []
     this.deliver = []
     for (const f of plan.furniture) {
