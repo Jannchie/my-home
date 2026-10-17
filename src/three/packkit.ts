@@ -58,6 +58,27 @@ export function definer(defaults: Partial<AssetDef> = {}, wrap?: (build: Build, 
     define(id, name, category, dims, pals, wrap ? wrap(build, extra) : build, { ...defaults, ...extra })
 }
 
+// ---------- 声明坐标跟着模型平移 ----------
+
+/**
+ * build 之后再把模型整体平移 off（fit 按包围盒重定心）时，写在 build 坐标系里的 surface / surfaceShape / surfaces / screens
+ * 要跟着平移同样的量，否则摆上去的东西、夹式摄像头、便签会和模型错开。返回平移后的副本（不改原对象）。
+ */
+export function shiftDeclared(extra: Partial<AssetDef>, [dx, dy, dz]: [number, number, number]): Partial<AssetDef> {
+  if (!dx && !dy && !dz) return extra
+  const r = (v: number) => Math.round(v * 1000) / 1000
+  const poly = (p: Poly): Poly => p.map(([x, z]) => [r(x + dx), r(z + dz)])
+  const out: Partial<AssetDef> = { ...extra }
+  if (extra.surface !== undefined) out.surface = r(extra.surface + dy)
+  if (extra.surfaceShape) out.surfaceShape = extra.surfaceShape.map(poly)
+  if (extra.surfaces) out.surfaces = extra.surfaces.map((l) => ({ ...l, y: r(l.y + dy), ...(l.shape ? { shape: l.shape.map(poly) } : {}) }))
+  if (extra.screens) out.screens = extra.screens.map((s) => ({ ...s, x: r(s.x + dx), y: r(s.y + dy), z: r(s.z + dz) }))
+  return out
+}
+
+/** 有没有写在 build 坐标系里、需要跟着平移的声明 */
+export const hasDeclaredCoords = (e: Partial<AssetDef>) => e.surface !== undefined || !!e.surfaceShape || !!e.surfaces || !!e.screens
+
 // ---------- 开发期断言 ----------
 
 const EPS = 0.05
@@ -90,7 +111,7 @@ export const MOUNT_TOL_ABOVE = 5
 /**
  * 要建模的检查：
  *   mount：壁挂件模型最低点 ≈ mount；
- *   screens：屏幕面板顶边中点正下方一点（沿面板厚度中心）必须落在某个网格的包围盒里，且那个网格的顶面和顶边齐平
+ *   screens：屏幕面板顶边中点正下方、面板厚度前后两侧的两点必须落在同一个网格的包围盒里，且那个网格的顶面和顶边齐平
  *   （面板坐标没跟着模型平移时，夹式摄像头、便签会悬空）。
  */
 export function modelProblems(def: AssetDef, root: THREE.Object3D): string[] {
@@ -117,15 +138,18 @@ export function modelProblems(def: AssetDef, root: THREE.Object3D): string[] {
 /** 屏幕面板和几何对不上的原因；对得上返回空串 */
 export function screenMismatch(s: ScreenPanel, boxes: THREE.Box3[]): string {
   const top = s.y + s.h
-  const probe = new THREE.Vector3(s.x, top - 0.5, s.z)
-  const hits = boxes.filter((b) => b.containsPoint(probe))
+  // 面板厚度方向的前后两点（各往里收 0.15cm）都要落在同一个网格里：面板前后错开超过约 0.1cm 就能发现
+  const half = Math.max(0, s.t / 2 - 0.15)
+  const ry = s.ry ?? 0
+  const probes = [-half, half].map((v) => new THREE.Vector3(s.x + v * Math.sin(ry), top - 0.5, s.z + v * Math.cos(ry)))
+  const hits = boxes.filter((b) => probes.every((p) => b.containsPoint(p)))
   if (!hits.length) {
     // 找最近的面板状网格，报出偏差方便定位
     const near = boxes
       .filter((b) => Math.abs(b.max.y - top) < 2 && b.min.x <= s.x && b.max.x >= s.x)
       .map((b) => (b.min.z + b.max.z) / 2 - s.z)
       .sort((a, b) => Math.abs(a) - Math.abs(b))[0]
-    return `顶边中点 (${s.x}, ${top}, ${s.z}) 不在任何网格里${near !== undefined ? `（最近的面板 z 偏 ${near.toFixed(2)}）` : ''}`
+    return `顶边中点 (${s.x}, ${top}, ${s.z}) 前后两侧不在同一个网格里${near !== undefined ? `（最近的面板 z 偏 ${near.toFixed(2)}）` : ''}`
   }
   if (!hits.some((b) => Math.abs(b.max.y - top) <= 1)) return `顶边 ${top} 与网格顶面 ${hits.map((b) => b.max.y.toFixed(2)).join(' / ')} 不齐`
   return ''

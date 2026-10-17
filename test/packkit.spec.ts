@@ -6,7 +6,6 @@ import { ASSETS } from '/src/three/assets'
 import { modelProblems, staticProblems } from '/src/three/packkit'
 
 const KNOWN: Record<string, string> = {
-  'of-aio': '一体机的 screens 坐标写在 fit 重定心之前的坐标系里，夹式摄像头 / 贴纸离屏幕 1.5cm（待修）',
   'vb-sc-retro': 'surface 92 比柜顶 91.8 高 0.2cm（待修）',
   'vb-dr-mcm': 'surface 78 比柜顶 77.8 高 0.2cm（待修）',
 }

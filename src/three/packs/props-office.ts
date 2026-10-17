@@ -6,6 +6,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus } from '../toon'
 import { C, CLIP_DROP, S, G, SWING_OPEN, clipLevels, glow, movable, rng, shell, rectPoly, type AssetCategory, type AssetDef, type StyleTag, type SurfaceDef } from '../kit'
+import { hasDeclaredCoords, shiftDeclared } from '../packkit'
 
 type Pal = [StyleTag, string[]]
 const M = S.modern
@@ -39,6 +40,9 @@ function def(
   exact = false,
 ): AssetDef {
   const mount = extra.mount ?? 0
+  // fit 会把模型重定心：手写的 surface / surfaces / screens 写在 build 的坐标系里，要跟着平移同样的量
+  // （之前没跟：一体机的夹式摄像头 / 便签离屏幕 1.5cm，电竞曲面屏 0.66cm）
+  if (!exact && hasDeclaredCoords(extra)) extra = shiftDeclared(extra, fitOffset(build(pals[0][1]), mount))
   return {
     id,
     name,
@@ -55,11 +59,16 @@ function def(
   }
 }
 
-/** 按包围盒居中：x/z 居中，底面落到 mount 高度 */
-function fit(g: THREE.Group, mount = 0) {
+/** fit 对模型的平移量：x/z 居中，底面落到 mount 高度 */
+function fitOffset(g: THREE.Group, mount = 0): [number, number, number] {
   const box = new THREE.Box3().setFromObject(g, true)
   const c = box.getCenter(new THREE.Vector3())
-  g.position.set(-c.x, mount - box.min.y, -c.z)
+  return [-c.x, mount - box.min.y, -c.z]
+}
+
+/** 按包围盒居中：x/z 居中，底面落到 mount 高度 */
+function fit(g: THREE.Group, mount = 0) {
+  g.position.set(...fitOffset(g, mount))
   return G(g)
 }
 
