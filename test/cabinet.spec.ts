@@ -15,7 +15,7 @@ import { doorSwings } from '/src/place'
 import { fixtureBox } from '/src/model'
 import { ASSET_MAP, ASSETS } from '/src/three/assets'
 import { countDoors, poseDoors } from '/src/three/kit'
-import { floorY, roomAt } from '/src/three/house'
+import { floorY, furnitureModel, roomAt } from '/src/three/house'
 import { JP_OPTS, range } from './helpers'
 
 const OPENABLE = ASSETS.filter((a) => a.openable)
@@ -144,6 +144,58 @@ describe('旧存档迁移', () => {
   test('放不进位的宽度时退到最窄的一档', () => {
     const f = legacyCabinet(spot('s', 'shoe', 150, 40, 38))!
     expect(ASSET_MAP.get(f.asset)!.series).toBe('cb-shoe-tall')
+  })
+})
+
+describe('柜门 / 抽屉子树合并网格', () => {
+  const solid = (root: THREE.Object3D) => {
+    let n = 0
+    root.traverse((o) => {
+      if ((o as THREE.Mesh).isMesh && !o.userData.isOutline) n++
+    })
+    return n
+  }
+  test('合并后会动的部件还在、开关后的外形和未合并的模型一致，网格数下降', () => {
+    const bad: string[] = []
+    let rawMeshes = 0
+    let mergedMeshes = 0
+    for (const a of OPENABLE) {
+      const raw = a.build(a.palettes[0])
+      for (const open of [false, true]) {
+        const g = furnitureModel({ id: 'x', asset: a.id, x: 0, y: 0, rot: 0, open })
+        if (countDoors(g) !== countDoors(raw)) bad.push(`${a.id} 会动的部件数变了`)
+        poseDoors(raw, open)
+        raw.updateMatrixWorld(true)
+        g.updateMatrixWorld(true)
+        const rb = new THREE.Box3().setFromObject(raw, true)
+        const gb = new THREE.Box3().setFromObject(g, true)
+        if (rb.min.distanceTo(gb.min) > 0.05 || rb.max.distanceTo(gb.max) > 0.05) bad.push(`${a.id} open=${open} 外形不一致`)
+        // 每个门 / 抽屉子树里：同材质的零件只剩一个网格
+        g.traverse((o) => {
+          if (!o.userData.door) return
+          const mats = new Map<string, number>()
+          const walk = (x: THREE.Object3D) => {
+            for (const c of x.children) {
+              if (c.userData.door || c.userData.isOutline) continue
+              const m = c as THREE.Mesh
+              if (m.isMesh && !Object.keys(c.userData).some((k) => k !== 'noOutline') && !Array.isArray(m.material) && !m.material.transparent) {
+                const k = `${m.material.uuid}|${m.castShadow}|${m.receiveShadow}|${!!c.userData.noOutline}`
+                mats.set(k, (mats.get(k) ?? 0) + 1)
+              }
+              if (!Object.keys(c.userData).some((k) => k !== 'noOutline')) walk(c)
+            }
+          }
+          walk(o)
+          for (const [k, n] of mats) if (n > 1 && !k.includes('undefined')) bad.push(`${a.id} 门里同材质还有 ${n} 个网格`)
+        })
+        if (!open) {
+          rawMeshes += solid(raw)
+          mergedMeshes += solid(g)
+        }
+      }
+    }
+    expect(bad.slice(0, 10)).toEqual([])
+    expect(mergedMeshes).toBeLessThan(rawMeshes * 0.5)
   })
 })
 
