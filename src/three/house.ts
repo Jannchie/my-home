@@ -379,9 +379,12 @@ function fadeParts(o: THREE.Object3D) {
   const hulls: THREE.Object3D[] = []
   o.traverse((c) => {
     if (c.userData.isOutline) hulls.push(c)
-    else if ((c as THREE.Mesh).isMesh) {
+    else if ((c as THREE.Mesh).isMesh && !c.userData.fadeTwin) {
       const mesh = c as THREE.Mesh
-      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+      // 楼层淡出期间第一次走到这里时，网格上挂的是楼层淡出的透明副本：按它记下的原材质算（Sandbox3D fadeFloor）
+      const src = (m: THREE.Material) => (m.userData.floorSource as THREE.Material | undefined) ?? m
+      const solid = Array.isArray(mesh.material) ? mesh.material.map(src) : src(mesh.material)
+      const mats = Array.isArray(solid) ? solid : [solid]
       const ghost = mats.map((m) => {
         const g = m.clone()
         g.onBeforeCompile = m.onBeforeCompile
@@ -390,7 +393,7 @@ function fadeParts(o: THREE.Object3D) {
         g.depthWrite = false
         return g
       })
-      parts.push({ mesh, solid: mesh.material, ghost, base: mats.map((m) => (m.transparent ? m.opacity : 1)) })
+      parts.push({ mesh, solid, ghost, base: mats.map((m) => (m.transparent ? m.opacity : 1)) })
     }
   })
   o.userData.parts = { parts, hulls }

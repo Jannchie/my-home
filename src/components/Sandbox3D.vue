@@ -111,6 +111,8 @@ const activeFloorField = () => (activeFloor.value === baseFloorId(plan.value) ? 
 const floorAnim = new Map<string, { extra: number; target: number; show: boolean; hideAt: boolean; alpha: number }>()
 /** 分层拉开时层与层之间多拉开的距离 */
 const EXPLODE_GAP = 230
+/** 楼层淡入淡出的时长（秒） */
+const FLOOR_FADE_S = 0.45
 /** 只显示到当前层时，上面的层往上滑走的距离（滑完再隐藏） */
 const HIDE_LIFT = 320
 let floorsMoving = false
@@ -163,13 +165,14 @@ function floorTargets(snap = false) {
 function stepFloors(dt: number) {
   if (!floorsMoving) return false
   let busy = false
-  const k = 1 - Math.exp(-dt * 9)
+  const k = 1 - Math.exp(-dt * 6)
   for (const st of floorAnim.values()) {
-    // 淡入淡出和滑动一起走：藏起来的层边往上滑边变透明，回来时边落下边显现
+    // 淡入淡出和滑动一起走：藏起来的层边往上滑边变透明，回来时边落下边显现。
+    // 透明度按固定时长匀速推进（显示时再套 smoothstep），不用指数缓动——那样头几帧就淡没了，看不清过程
     const at = st.hideAt ? 0 : 1
-    if (Math.abs(at - st.alpha) < 0.01) st.alpha = at
-    else {
-      st.alpha += (at - st.alpha) * k
+    if (st.alpha !== at) {
+      const step = dt / FLOOR_FADE_S
+      st.alpha = at > st.alpha ? Math.min(at, st.alpha + step) : Math.max(at, st.alpha - step)
       busy = true
     }
     const d = st.target - st.extra
@@ -187,56 +190,109 @@ function stepFloors(dt: number) {
   return true
 }
 /**
- * 整层淡入淡出：各层共用同一批（缓存的）材质，不能直接改透明度——渐变期间给这一层换上它自己的透明副本，
- * 完全不透明后换回原材质。描边外壳是不透明的，淡出时藏起来。
+ * 整层淡入淡出，效果要像「整层作为一张图层调透明度」：
+ * 每个网格各自半透明的话，背面、内墙、家具会互相透出来，乱成一团。所以淡出期间每个网格挂一个只写深度的替身
+ * （透明队列里先画，renderOrder 小），再画半透明的颜色（depthFunc ≤）：同一层里只有最前面的表面上色，
+ * 后面的被自己层的深度挡掉，整层均匀地透出下层。后处理（夜晚、画面效果）照常作用在一起。
+ * 各层共用同一批缓存材质，所以渐变期间换上这一层自己的透明副本，完全不透明后换回。
+ * 墙体让开（stepCutaway）也会换材质：这里在每帧渲染前最后统一套用（syncFloorFades），以这里为准。
+ * 描边外壳不透明，淡出时藏起来；淡到一半以下不再投影。
  */
+const FADE_ORDER = 20
+const depthOnlyMat = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true, transparent: true })
 const floorFadeMats = new Map<string, WeakMap<THREE.Material, THREE.Material>>()
-/** 某层某个材质的透明副本（按层缓存） */
-function fadeGhost(floorId: string, m: THREE.Material) {
-  let cache = floorFadeMats.get(floorId)
-  if (!cache) floorFadeMats.set(floorId, (cache = new WeakMap()))
-  let g = cache.get(m)
-  if (!g) {
-    g = m.clone()
-    g.onBeforeCompile = m.onBeforeCompile
-    g.customProgramCacheKey = m.customProgramCacheKey
-    g.transparent = true
-    g.depthWrite = false
-    g.userData.baseOpacity = m.transparent ? m.opacity : 1
-    cache.set(m, g)
-  }
-  return g
-}
 function fadeFloor(root: THREE.Object3D, floorId: string, alpha: number) {
   const faded = alpha < 0.995
   if (!faded && !root.userData.floorFaded) return
+  let cache = floorFadeMats.get(floorId)
+  if (!cache) floorFadeMats.set(floorId, (cache = new WeakMap()))
   const ghost = (m: THREE.Material) => {
-    const g = fadeGhost(floorId, m)
+    let g = cache!.get(m)
+    if (!g) {
+      g = m.clone()
+      g.onBeforeCompile = m.onBeforeCompile
+      g.customProgramCacheKey = m.customProgramCacheKey
+      g.transparent = true
+      g.depthWrite = false
+      g.depthFunc = THREE.LessEqualDepth
+      g.userData.baseOpacity = m.transparent ? m.opacity : 1
+      g.userData.floorGhost = true
+      // 记住原材质：别的地方（墙体让开）可能把副本当成实心材质记下来，靠它找回原件
+      g.userData.floorSource = m
+      cache!.set(m, g)
+    }
     g.opacity = (g.userData.baseOpacity as number) * alpha
     return g
   }
+  const meshes: THREE.Mesh[] = []
   root.traverse((n) => {
     if (n.userData.isOutline) {
-      n.visible = !faded
+      if (n.userData.fadeHidden === undefined) n.userData.fadeHidden = !n.visible
+      n.visible = !faded && !n.userData.fadeHidden
+      if (!faded) delete n.userData.fadeHidden
       return
     }
-    const mesh = n as THREE.Mesh
-    if (!mesh.isMesh) return
-    if (faded) {
-      const solid = (mesh.userData.floorSolid ??= mesh.material) as THREE.Material | THREE.Material[]
-      mesh.material = Array.isArray(solid) ? solid.map(ghost) : ghost(solid)
-    } else if (mesh.userData.floorSolid) {
-      mesh.material = mesh.userData.floorSolid
-      delete mesh.userData.floorSolid
-    }
+    if ((n as THREE.Mesh).isMesh && !n.userData.fadeTwin) meshes.push(n as THREE.Mesh)
   })
+  for (const mesh of meshes) {
+    const ud = mesh.userData
+    if (faded) {
+      // 当前材质若不是我们的透明副本，就是「实心」材质（可能刚被墙体让开换过），记下来
+      ud.floorSolid = solidOf(mesh.material as THREE.Material | THREE.Material[])
+      const solid = ud.floorSolid as THREE.Material | THREE.Material[]
+      mesh.material = Array.isArray(solid) ? solid.map(ghost) : ghost(solid)
+      if (ud.floorOrder === undefined) {
+        ud.floorOrder = mesh.renderOrder
+        ud.floorShadow = mesh.castShadow
+      }
+      mesh.renderOrder = FADE_ORDER + 1
+      mesh.castShadow = !!ud.floorShadow && alpha > 0.5
+      // 深度替身：共用几何体，跟着网格走（作为子节点）；原本就透明的（玻璃）不写深度，免得挡住后面的东西
+      const glassy = (Array.isArray(solid) ? solid : [solid]).every((m) => m.transparent)
+      if (!ud.floorTwin && !glassy && !(mesh as THREE.InstancedMesh).isInstancedMesh && !(mesh as THREE.SkinnedMesh).isSkinnedMesh) {
+        const twin = new THREE.Mesh(mesh.geometry, depthOnlyMat)
+        twin.userData.fadeTwin = true
+        twin.renderOrder = FADE_ORDER
+        twin.raycast = () => {}
+        mesh.add(twin)
+        ud.floorTwin = twin
+      }
+    } else if (ud.floorSolid || isFloorGhost(mesh.material as THREE.Material | THREE.Material[])) {
+      mesh.material = ud.floorSolid ?? solidOf(mesh.material as THREE.Material | THREE.Material[])
+      mesh.renderOrder = ud.floorOrder ?? 0
+      mesh.castShadow = !!ud.floorShadow
+      ;(ud.floorTwin as THREE.Mesh | undefined)?.removeFromParent()
+      delete ud.floorSolid
+      delete ud.floorTwin
+      delete ud.floorOrder
+      delete ud.floorShadow
+    }
+  }
   root.userData.floorFaded = faded
+}
+/** 材质（或材质数组）里的楼层淡出副本换回原材质 */
+const unghost = (m: THREE.Material) => ((m.userData.floorSource as THREE.Material | undefined) ?? m)
+function solidOf(m: THREE.Material | THREE.Material[]) {
+  return Array.isArray(m) ? m.map(unghost) : unghost(m)
+}
+const isFloorGhost = (m: THREE.Material | THREE.Material[]) => (Array.isArray(m) ? m : [m]).some((x) => !!x?.userData?.floorGhost)
+
+/** 渲染前统一套用各层的淡入淡出（在墙体让开之后，以楼层淡出为准） */
+function syncFloorFades() {
+  const a = (id: string) => {
+    const t = floorAnim.get(id)?.alpha ?? 1
+    return t * t * (3 - 2 * t)
+  }
+  for (const fg of floorGroups) fadeFloor(fg.group, fg.floor.id, a(fg.floor.id))
+  for (const [id, g] of furnLayers) fadeFloor(g, id, a(id))
+  for (const [id, l] of actorLayers) fadeFloor(l.group, id, a(id))
 }
 
 /**
- * 透明副本是新的着色器变体：第一次切换楼层时要同步编译十来个程序（实测卡 3 秒多）。
- * 多层户型搭好 / 换了家具模型后，空闲时把各层的透明副本临时换上，用 compileAsync 在后台
- * （KHR_parallel_shader_compile）编译好再换回去。直接画到屏幕和经后处理画到渲染目标是两种变体，两种都编。
+ * 预热楼层淡入淡出的着色器：透明副本（和深度替身的 depthOnlyMat）是新的着色器变体，被藏起来的楼层的原材质也从没画过，
+ * 第一次切换楼层时要同步编译十来个程序（实测卡 2 秒多）。多层户型重搭后空闲时，各层原样编一遍，
+ * 再用 fadeFloor 临时套上淡出状态编一遍，立刻复原；compileAsync 在后台编译（KHR_parallel_shader_compile）。
+ * 直接画到屏幕和经后处理画到渲染目标是两种变体，两种都编。主线程约 0.2 秒，所以只在重搭房子时做。
  */
 let warmTimer = 0
 let warmTarget: THREE.WebGLRenderTarget | null = null
@@ -245,31 +301,28 @@ function prewarmFloorFade() {
   if (!isMultiFloor(plan.value)) return
   warmTimer = window.setTimeout(() => {
     if (!stage || !isMultiFloor(plan.value)) return
-    const roots: [THREE.Object3D, string][] = [
-      ...floorGroups.map((fg) => [fg.group, fg.floor.id] as [THREE.Object3D, string]),
-      ...[...furnLayers].map(([id, g]) => [g, id] as [THREE.Object3D, string]),
-      ...[...actorLayers].map(([id, a]) => [a.group, id] as [THREE.Object3D, string]),
-    ]
-    const swapped: [THREE.Mesh, THREE.Material | THREE.Material[]][] = []
+    // 正在淡入淡出的层不碰（它的程序本来就在编了）
+    const roots = [
+      ...floorGroups.map((fg) => [fg.group, fg.floor.id] as const),
+      ...[...furnLayers].map(([id, g]) => [g as THREE.Object3D, id] as const),
+      ...[...actorLayers].map(([id, a]) => [a.group as THREE.Object3D, id] as const),
+    ].filter(([root]) => !root.userData.floorFaded)
     const renderer = stage.renderer
     const prev = renderer.getRenderTarget()
-    try {
-      for (const [root, id] of roots)
-        root.traverse((n) => {
-          const mesh = n as THREE.Mesh
-          if (!mesh.isMesh || n.userData.isOutline || mesh.userData.floorSolid) return
-          const solid = mesh.material
-          swapped.push([mesh, solid])
-          mesh.material = Array.isArray(solid) ? solid.map((m) => fadeGhost(id, m)) : fadeGhost(id, solid)
-        })
-      warmTarget ??= new THREE.WebGLRenderTarget(1, 1)
-      for (const target of [null, warmTarget]) {
-        renderer.setRenderTarget(target)
+    const target = (warmTarget ??= new THREE.WebGLRenderTarget(1, 1))
+    const compile = () => {
+      for (const t of [null, target]) {
+        renderer.setRenderTarget(t)
         for (const [root] of roots) renderer.compileAsync(root, stage.camera, stage.scene).catch(() => {})
       }
+    }
+    try {
+      compile()
+      for (const [root, id] of roots) fadeFloor(root, id, 0.5)
+      compile()
     } finally {
       renderer.setRenderTarget(prev)
-      for (const [mesh, solid] of swapped) mesh.material = solid
+      for (const [root, id] of roots) fadeFloor(root, id, 1)
     }
   }, 400)
 }
@@ -280,19 +333,16 @@ function applyFloorPose() {
     const st = floorAnim.get(fg.floor.id)
     fg.group.position.y = fg.floor.elevation + (st?.extra ?? 0)
     fg.group.visible = st?.show ?? true
-    fadeFloor(fg.group, fg.floor.id, st?.alpha ?? 1)
   }
   for (const [id, g] of furnLayers) {
     const st = floorAnim.get(id)
     g.position.y = st?.extra ?? 0
     g.visible = st?.show ?? true
-    fadeFloor(g, id, st?.alpha ?? 1)
   }
   for (const [id, a] of actorLayers) {
     const st = floorAnim.get(id)
     a.group.position.y = (floorById(plan.value, id)?.elevation ?? 0) + (st?.extra ?? 0)
     a.group.visible = st?.show ?? true
-    fadeFloor(a.group, id, st?.alpha ?? 1)
   }
   if (lights) {
     if (isMultiFloor(plan.value)) {
@@ -703,7 +753,6 @@ function syncFurniture() {
   // 读原始对象：拖动时每帧都要过一遍全部家具，走响应式代理的开销比计算本身还大
   const p = toRaw(plan.value)
   const alive = new Set<string>()
-  let built = false
   for (const f of p.furniture) {
     alive.add(f.id)
     const key = `${f.asset}#${f.color ?? 0}#${f.colors?.join(',') ?? ''}#${f.patterns ? JSON.stringify(f.patterns) : ''}#${f.open ? 1 : 0}`
@@ -715,7 +764,6 @@ function syncFurniture() {
       }
       o = { obj: furnitureModel(f), key }
       objs.set(f.id, o)
-      built = true
       fx.set(f.id, o.obj, ASSET_MAP.get(f.asset)?.fx)
     }
     // 按楼层放进各层的组（换了楼层就挪过去）
@@ -751,7 +799,6 @@ function syncFurniture() {
   applyFloorPose()
   updateCutaway()
   syncActors()
-  if (built) prewarmFloorFade()
   dirty = true
 }
 
@@ -1748,6 +1795,7 @@ function loop() {
     updateCompass()
   }
   if (moved || dirty) {
+    syncFloorFades()
     if (shadowDirty) stage.renderer.shadowMap.needsUpdate = true
     stage.render()
     dirty = false
