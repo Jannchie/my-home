@@ -163,6 +163,11 @@ if (outFile) fs.writeFileSync(outFile, JSON.stringify(result))
 if (baseFile) {
   const base = JSON.parse(fs.readFileSync(baseFile, 'utf8')) as typeof result
   const diffs: string[] = []
+  // 素材顺序（ASSETS 的顺序影响一键布置的随机挑选）
+  const ka = Object.keys(base).filter((id) => !only || only.test(id))
+  const kb = Object.keys(result).filter((id) => !only || only.test(id))
+  const firstDiff = ka.findIndex((id, i) => kb[i] !== id)
+  if (firstDiff >= 0) diffs.push(`素材顺序从第 ${firstDiff} 个起不同：${ka[firstDiff]} vs ${kb[firstDiff]}`)
   const count = { bbox: 0, tris: 0, geo: 0, tree: 0, meta: 0, dp: 0 }
   for (const id of new Set([...Object.keys(base), ...Object.keys(result)])) {
     if (only && !only.test(id)) continue

@@ -14,7 +14,8 @@ const exportNames = (src: string) => [...src.matchAll(/^export\s+(?:function|con
 
 const shared = new Map<string, string>()
 for (const f of ['geo.ts', 'packkit.ts', 'cabinetKit.ts']) for (const n of exportNames(read(f))) shared.set(n, f)
-const packs = fs.readdirSync(path.join(DIR, 'packs')).filter((f) => f.endsWith('.ts') && f !== 'index.ts')
+// 包文件和包的建模子模块（packs/<包>/*.ts，大包拆出来的建模函数）都查
+const packs = (fs.readdirSync(path.join(DIR, 'packs'), { recursive: true }) as string[]).map((f) => f.split(path.sep).join('/')).filter((f) => f.endsWith('.ts') && f !== 'index.ts')
 
 test('素材包不重新定义共用工具的名字', () => {
   const bad: string[] = []
@@ -24,6 +25,15 @@ test('素材包不重新定义共用工具的名字', () => {
 
 test('素材包之间不互相 import', () => {
   const bad: string[] = []
-  for (const f of packs) for (const m of read(`packs/${f}`).matchAll(/from '\.\/([\w-]+)'/g)) bad.push(`${f} → ${m[1]}`)
+  for (const f of packs) {
+    // 包自己的子模块：packs/<包>.ts 可以引 ./<包>/*，packs/<包>/*.ts 之间可以互相引；别的相对路径都算跨包
+    const own = f.includes('/') ? f.split('/')[0] : f.replace(/\.ts$/, '')
+    for (const m of read(`packs/${f}`).matchAll(/from '(\.\.?\/[^']+)'/g)) {
+      const spec = m[1]
+      const target = path.posix.normalize(path.posix.join(path.posix.dirname(`packs/${f}`), spec))
+      const inside = target === `packs/${own}` || target.startsWith(`packs/${own}/`)
+      if (target.startsWith('packs/') && !inside) bad.push(`${f} → ${spec}`)
+    }
+  }
   expect(bad).toEqual([])
 })
