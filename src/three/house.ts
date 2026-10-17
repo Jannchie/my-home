@@ -1435,6 +1435,9 @@ export interface HouseOpts {
   noBase?: boolean
 }
 
+/** 给 buildHouse 的各部分打标记（userData.part）：3D 设计图（blueprint.ts）按它分主次线、略去窗帘边饰 */
+const part = <T extends THREE.Object3D>(o: T, k: string) => ((o.userData.part = k), o)
+
 export function buildHouse(plan: Plan, wallH: number, opts: HouseOpts = {}) {
   const root = new THREE.Group()
   const pts = plan.rooms.flatMap((r) => r.points)
@@ -1468,21 +1471,21 @@ export function buildHouse(plan: Plan, wallH: number, opts: HouseOpts = {}) {
     floors.add(structureSlab(opts.outline, [...(opts.stairHoles ?? []).map((h) => h.poly), ...inner], plan.wallOuter))
   }
   mergeMeshes(floors)
-  root.add(floors)
+  root.add(part(floors, 'floor'))
 
   const infos = openingInfos(plan)
   const walls = buildWalls(plan, wallH, infos, opts)
-  root.add(walls)
+  root.add(part(walls, 'wall'))
   const ops = buildOpenings(infos, wallH)
   addOutlines(ops)
-  root.add(ops)
+  root.add(part(ops, 'opening'))
   const rails = balconyRails(plan, wallH)
-  root.add(rails)
-  root.add(buildShowers(plan))
-  root.add(buildWallDevices(plan, infos, wallH))
-  root.add(buildPaperHolders(plan))
-  root.add(buildCurtains(plan, infos, wallH))
-  root.add(buildTrims(plan, infos, wallH))
+  root.add(part(rails, 'rail'))
+  root.add(part(buildShowers(plan), 'fixture'))
+  root.add(part(buildWallDevices(plan, infos, wallH), 'detail'))
+  root.add(part(buildPaperHolders(plan), 'detail'))
+  root.add(part(buildCurtains(plan, infos, wallH), 'curtain'))
+  root.add(part(buildTrims(plan, infos, wallH), 'trim'))
 
   // 实墙段：楼梯洞口栏杆（贴着墙的边不装）、楼梯扶手（贴墙的一侧装靠墙扶手）
   const ws: WallLine[] = wallSegments(plan.rooms)
@@ -1495,7 +1498,7 @@ export function buildHouse(plan: Plan, wallH: number, opts: HouseOpts = {}) {
     for (const h of opts.stairHoles) if (!voids.some((v) => pointInPolygon(centroid(h.poly), v.points))) rails.add(holeRails(h.poly, h.arrival, ws))
     mergeMeshes(rails)
     addOutlines(rails)
-    root.add(rails)
+    root.add(part(rails, 'rail'))
   }
   // 上层挑空边的栏杆（走廊 / 起居一侧不砌墙），出梯口那一段让开
   if (opts.upper) {
@@ -1511,7 +1514,7 @@ export function buildHouse(plan: Plan, wallH: number, opts: HouseOpts = {}) {
       mergeMeshes(g)
       addOutlines(g)
       g.userData.voidRails = true
-      root.add(g)
+      root.add(part(g, 'rail'))
     }
   }
 
@@ -1529,7 +1532,7 @@ export function buildHouse(plan: Plan, wallH: number, opts: HouseOpts = {}) {
     addOutlines(base)
     addOutlines(top)
   }
-  root.add(fx)
+  root.add(part(fx, 'fixture'))
   return root
 }
 

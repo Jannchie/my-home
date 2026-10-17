@@ -23,8 +23,9 @@ export interface FloorGroup {
 /**
  * 搭整栋房子。wallH：单层户型的墙高（沙盘的「墙高」滑杆）；多层户型每层用 Floor.height，
  * wallHFor 可以按层改（例如当前层跟着滑杆压低）。
+ * bare：3D 设计图用的「素模」——不搭展示底座和用地；墙压低（剖切）的楼层不加外墙装饰、挑空旁的外墙也不通高。
  */
-export function buildBuilding(plan: Plan, wallH: number, wallHFor?: (f: Floor) => number): { root: THREE.Group; floors: FloorGroup[] } {
+export function buildBuilding(plan: Plan, wallH: number, wallHFor?: (f: Floor) => number, opts: { bare?: boolean } = {}): { root: THREE.Group; floors: FloorGroup[] } {
   const root = new THREE.Group()
   const fs = planFloors(plan)
   const ex = plan.exterior
@@ -32,15 +33,15 @@ export function buildBuilding(plan: Plan, wallH: number, wallHFor?: (f: Floor) =
   const parts = ex ? roofParts(plan) : []
   /** 户建的附加部分：外墙装饰、屋顶、用地 */
   const dress = (fg: FloorGroup, view: Plan, i: number) => {
-    if (ex) fg.group.add(facadeExtras(view, fg.wallH, ex, i === 0))
+    if (ex && !(opts.bare && fg.wallH < fg.floor.height)) fg.group.add(facadeExtras(view, fg.wallH, ex, i === 0))
     const roof = roofGroup(plan, fg.floor.id, parts)
     if (roof) {
       fg.group.add(roof)
       fg.roof = roof
     }
-    if (plan.site && i === 0) fg.group.add(buildSite(plan.site))
+    if (plan.site && i === 0 && !opts.bare) fg.group.add(buildSite(plan.site))
   }
-  const extra: HouseOpts = { facade, noBase: !!plan.site }
+  const extra: HouseOpts = { facade, noBase: !!plan.site || !!opts.bare }
   if (!isMultiFloor(plan)) {
     const group = buildHouse(plan, wallH, extra)
     group.userData.floorId = fs[0].id
@@ -61,7 +62,7 @@ export function buildBuilding(plan: Plan, wallH: number, wallHFor?: (f: Floor) =
       outline: i > 0 ? floorOutline(view.rooms) : null,
       holes: slabHoles(plan, f.id),
       stairHoles: stairHoles(plan, f.id),
-      tall: above && voids.length ? { zones: voids.map((r) => r.points), extra: above.elevation + above.height - (f.elevation + H) } : undefined,
+      tall: above && voids.length && !(opts.bare && H < f.height) ? { zones: voids.map((r) => r.points), extra: above.elevation + above.height - (f.elevation + H) } : undefined,
       rise: riseOf(plan, f.id),
     })
     group.position.y = f.elevation
