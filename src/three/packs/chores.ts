@@ -19,7 +19,7 @@ const HOSE = '#6f737a'
 
 function def(id: string, name: string, category: AssetCategory, [w, d, h]: Dims, pals: Pal[], build: Build, extra: Partial<AssetDef> = {}): AssetDef {
   // 普通形态统一在 xz 上居中、最低点贴地（壁挂的只居中）；挂起形态、带特效点或层板坐标的保持原样
-  if (extra.form !== 'hanging' && !extra.fx && !extra.surfaces) build = normalize(build, !extra.mount)
+  if (extra.form !== 'hanging' && !extra.fx && !extra.surfaces) build = normalizeLoose(build, !extra.mount)
   return {
     id,
     name,
@@ -39,7 +39,7 @@ const prop = (id: string, name: string, category: AssetCategory, dims: Dims, pal
 
 // ---------- 小工具 ----------
 
-function normalize(build: Build, toFloor: boolean): Build {
+function normalizeLoose(build: Build, toFloor: boolean): Build {
   return (p) => {
     const g = build(p)
     const b = box3Loose(g)

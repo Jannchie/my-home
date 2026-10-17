@@ -128,7 +128,7 @@ function scatter(g: THREE.Group, r: number, y: number, n: number, color: string,
 }
 
 /** 把包围盒在 xz 上居中（植物、工具）；壁挂件另外把底边放到 mount 高度 */
-function settle(g: THREE.Group, mount?: number) {
+function settleAt(g: THREE.Group, mount?: number) {
   g.updateMatrixWorld(true)
   const b = new THREE.Box3().setFromObject(g, true)
   g.position.x -= (b.min.x + b.max.x) / 2
@@ -140,7 +140,7 @@ function settle(g: THREE.Group, mount?: number) {
 function A(id: string, name: string, category: AssetCategory, [w, d, h]: [number, number, number], pals: Pals, build: Build, extra: Partial<AssetDef> & { keep?: boolean } = {}): AssetDef {
   const { keep, ...rest } = extra
   const hang = rest.form === 'hanging'
-  const b: Build = keep || hang ? build : (p) => settle(build(p), rest.mount)
+  const b: Build = keep || hang ? build : (p) => settleAt(build(p), rest.mount)
   return { id, name, category, w, d, h, ...pals, ...rest, build: b }
 }
 

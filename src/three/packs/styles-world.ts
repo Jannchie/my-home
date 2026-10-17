@@ -6,7 +6,7 @@
 import * as THREE from 'three'
 import { ball, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, SWING_OPEN, hangingPipe, holePanel, movable, paintPanel, pipeHook, rectPoly, ellipsePoly, type AssetDef, type Hole, type Poly, type StyleTag, type SurfaceDef } from '../kit'
-import { batten, cappedTube, cylX, cylZ, glassPane, lit, mesh, noOutlineDeep, rod3, type TubeOpts, type V3 } from '../geo'
+import { batten, cappedTube, centerGroup, cylX, cylZ, glassPane, lit, mesh, noOutlineDeep, rod3, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, R } from '../packkit'
 
 /** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
@@ -174,17 +174,6 @@ function lowerSeat(g: THREE.Group, y0: number, dy: number) {
     m.geometry = geo
   })
   return g
-}
-
-/** 把模型在 xz 上居中（只用于没有 surface 声明的自由造型） */
-function centerXZ(g: THREE.Group) {
-  g.updateMatrixWorld(true)
-  const box = new THREE.Box3().setFromObject(g, true)
-  const out = new THREE.Group()
-  g.position.x -= (box.min.x + box.max.x) / 2
-  g.position.z -= (box.min.z + box.max.z) / 2
-  out.add(g)
-  return out
 }
 
 /**
@@ -791,7 +780,7 @@ function screen4(p: string[]) {
     px += dx * (PW + 0.4)
     pz += dz * (PW + 0.4)
   }
-  return centerXZ(g)
+  return centerGroup(g)
 }
 
 /** 宫灯落地灯：车旋立柱托六角宫灯，龙头挂钩垂流苏 */
@@ -853,7 +842,7 @@ function lanternStand(p: string[]) {
   for (let k = 0; k < 6; k++) g.add(noOutlineDeep(torus(13.05, 0.3, shade(silk, -0.25), { x: lx, y: 140, ry: (k / 6) * Math.PI }, Math.PI * 2)))
   g.add(cyl(5, 5, 2.4, cap, { x: lx, y: 125 }, 16))
   g.add(cyl(0.6, 1.8, 12, cap, { x: lx, y: 113 }, 8))
-  return centerXZ(g)
+  return centerGroup(g)
 }
 
 /** 月洞门装饰框：粉墙圆洞 + 黛瓦檐 */
@@ -1022,7 +1011,7 @@ function zhongtang(p: string[]) {
   scroll(0, 62, 150, `sw-zt-c-${paper}`, paintShanshui(paper, CN.ink, '#c0392b'))
   scroll(-52, 20, 142, `sw-zt-l-${paper}`, paintCalligraphy(paper, CN.ink, '松竹梅岁寒'))
   scroll(52, 20, 142, `sw-zt-r-${paper}`, paintCalligraphy(paper, CN.ink, '山水月清风'))
-  return centerXZ(g)
+  return centerGroup(g)
 }
 
 /** 山水盆景台：圆面三弯腿花几 + 白石盆里假山与小松 */
@@ -1513,7 +1502,7 @@ function baroqueMirror(p: string[]) {
   g.add(m)
   g.add(rbox(80, 3, 8, frame, { z: 2 }, 1))
   void H
-  return centerXZ(g)
+  return centerGroup(g)
 }
 
 /** 半圆玄关桌（console）：半圆台面 + 三条锥形腿 + 弧形裙板 */
@@ -1678,7 +1667,7 @@ function barnDoor(p: string[]) {
     g.add(rbox(3.4, 16, 0.6, metal, { x: wx, y: y0 + DH - 15, z: 5.7 }, 0.2))
     g.add(ball(0.7, shade(metal, 0.2), { x: wx, y: y0 + DH - 10, z: 6 }))
   }
-  return centerXZ(g)
+  return centerGroup(g)
 }
 
 /** 温莎摇椅：马鞍座、梳背纺锤杆、弧形摇板 */
@@ -2015,7 +2004,7 @@ function blanketLadder(p: string[]) {
   }
   drape(0.72, blanketA, 40, 24, true)
   drape(0.36, blanketB, 28, 18, false)
-  return centerXZ(g)
+  return centerGroup(g)
 }
 
 /** 草编篮层架：三层木架，下两层各放两只草编篮（篮里叠着毛巾） */
@@ -2211,7 +2200,7 @@ function armZaisu(p: string[]) {
     g.add(rbox(3.6, 18, 3.6, wood, { x: s * 26.5, y: 4, z: -18 }, 0.8))
     g.add(rbox(3, 2.4, 30, wood, { x: s * 26.5, y: 4, z: -1.5 }, 0.6))
   }
-  return centerXZ(g)
+  return centerGroup(g)
 }
 
 /** 一枚板座卓：自然边厚实木板 + 两片拱形板脚 */
@@ -2291,7 +2280,7 @@ function maruAndon(p: string[]) {
   }
   g.add(torus(14, 0.8, wood, { y: 76, rx: Math.PI / 2 }))
   g.add(cappedTube([[-14, 76, 0], [-12, 84, 0], [0, 88, 0], [12, 84, 0], [14, 76, 0]], 0.9, wood, { ...TUBE, caps: false }))
-  return centerXZ(g)
+  return centerGroup(g)
 }
 
 /** 障子三折屏：组子格心 + 和纸，下部腰板 */
@@ -2322,7 +2311,7 @@ function shojiScreen(p: string[]) {
     px += dx * (PW + 0.4)
     pz += dz * (PW + 0.4)
   }
-  return centerXZ(g)
+  return centerGroup(g)
 }
 
 /** 置き床：可移动的床之间台，黑漆床框 */
@@ -2524,7 +2513,7 @@ function edisonLamp(p: string[]) {
     g.add(cappedTube([[16 + Math.sin(a) * 2.4, 139, Math.cos(a) * 2.4], [16 + Math.sin(a) * 5.6, 134, Math.cos(a) * 5.6], [16 + Math.sin(a) * 2, 127.6, Math.cos(a) * 2]], 0.3, pipeC, { ...TUBE, caps: false }))
   }
   g.add(torus(5.2, 0.35, pipeC, { x: 16, y: 134, rx: Math.PI / 2 }))
-  return centerXZ(g)
+  return centerGroup(g)
 }
 
 /** 工具车：多抽屉推车，顶部托盘、两侧把手、万向轮 */
@@ -2611,7 +2600,7 @@ function inNightstand(p: string[]) {
 type Extra = Partial<Omit<AssetDef, 'id' | 'name' | 'category' | 'w' | 'd' | 'h' | 'build' | 'palettes' | 'paletteStyles'>>
 function D(id: string, name: string, category: AssetDef['category'], dims: [number, number, number], pals: Pal[], build: AssetDef['build'], extra: Extra = {}): AssetDef {
   // 统一在 xz 上居中（个别造型的拉手、雕花、斜靠让包围盒偏了 1~2cm）
-  return A({ id, name, category, w: dims[0], d: dims[1], h: dims[2], build: (p) => centerXZ(build(p)), ...extra }, pals)
+  return A({ id, name, category, w: dims[0], d: dims[1], h: dims[2], build: (p) => centerGroup(build(p)), ...extra }, pals)
 }
 
 const HALF_MOON: Poly = [[-46, -17], ...Array.from({ length: 13 }, (_, i) => { const a = Math.PI - (i / 12) * Math.PI; return [Math.cos(a) * 46, -17 + Math.sin(a) * 35] as [number, number] }), [46, -17]]

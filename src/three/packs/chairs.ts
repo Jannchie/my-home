@@ -6,7 +6,7 @@ import * as THREE from 'three'
 import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js'
 import { ball, capsule, cyl, puck, rbox, shade, toon, torus, tray, useAnisotropy } from '../toon'
 import { C, G, ellipsePoly, holePanel, legs, slab, type AssetDef, type Hole } from '../kit'
-import { UP, cappedTube, mesh, strut, strutBox, tube, type TubeOpts, type V2, type V3 } from '../geo'
+import { UP, cappedTube, fitChildren, mesh, strut, strutBox, tube, type TubeOpts, type V2, type V3 } from '../geo'
 import { I, J, M, N, R, type Pal } from '../packkit'
 
 /** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
@@ -183,15 +183,6 @@ function starBase(R0: number, top: number, frame: string, n = 5) {
   }
   g.add(cyl(3.2, 3.6, Math.min(18, top - 14), INK, { y: 10 }, 14))
   g.add(cyl(2.2, 2.2, top - 11, CHROME, { y: 11 }, 12))
-  return g
-}
-
-/** 包围盒对齐：xz 居中、底面贴 0 */
-function fit(g: THREE.Group) {
-  g.updateMatrixWorld(true)
-  const b = new THREE.Box3().setFromObject(g, true)
-  const off = new THREE.Vector3(-(b.min.x + b.max.x) / 2, -b.min.y, -(b.min.z + b.max.z) / 2)
-  for (const c of g.children) c.position.add(off)
   return g
 }
 
@@ -1461,7 +1452,7 @@ const BISTRO_PAL = pal(['retro', [R.cream, R.teal]], ['retro', [R.caramel, R.mus
 // ---------- 素材 ----------
 
 type Def = Omit<AssetDef, 'palettes'> & ReturnType<typeof pal>
-const A = (d: Def): AssetDef => ({ ...d, build: (p) => fit(d.build(p)) })
+const A = (d: Def): AssetDef => ({ ...d, build: (p) => fitChildren(d.build(p)) })
 
 export const CHAIRS: AssetDef[] = [
   // 餐椅

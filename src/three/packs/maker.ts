@@ -8,7 +8,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, movable, paintPanel, rectPoly, rng, shell, type AssetCategory, type AssetDef, type Poly, type SurfaceDef } from '../kit'
-import { P, PI, batten, cappedTube, cylX, cylZ, ghostDeep, lit, noOutlineDeep, rod3, type TubeOpts, type V3 } from '../geo'
+import { P, PI, batten, cappedTube, cylX, cylZ, fitGroup, ghostDeep, lit, noOutlineDeep, rod3, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, PROP, R, type PalFlat } from '../packkit'
 
 /** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
@@ -65,18 +65,6 @@ function helix(R: number, pitch: number, turns: number, perTurn = 12): V3[] {
     const a = (i / perTurn) * PI * 2
     return [Math.cos(a) * R, (i / perTurn) * pitch, Math.sin(a) * R]
   })
-}
-
-/** 把组摆正：x / z 居中，最低点落在 y0 */
-function fit(g: THREE.Object3D, y0 = 0) {
-  const outer = new THREE.Group()
-  outer.add(g)
-  outer.updateMatrixWorld(true)
-  const b = new THREE.Box3().setFromObject(outer, true)
-  g.position.x -= (b.min.x + b.max.x) / 2
-  g.position.z -= (b.min.z + b.max.z) / 2
-  g.position.y += y0 - b.min.y
-  return outer
 }
 
 /** 平放的画面：w × d，画布顶边朝后（-z），(x, z) 为中心，y 为高度 */
@@ -871,7 +859,7 @@ function esp32(p: string[]) {
   g.add(chip(0.5, 0.5, -1.15, t, 0.4, 4, 4))
   g.add(rbox(0.65, 0.18, 0.35, CHIP, { x: -1.15, y: t, z: -0.55 }, 0.04))
   g.add(flatGlow(0.2, 0.14, acc, -1.75, t, 0.05))
-  return fit(g)
+  return fitGroup(g)
 }
 
 function bluePill(p: string[]) {
@@ -892,7 +880,7 @@ function bluePill(p: string[]) {
   g.add(header(4, 1, 2.45, t, 0, 'z'))
   g.add(flatGlow(0.2, 0.12, '#ff4a3a', 1.6, t, 0.7))
   g.add(flatGlow(0.2, 0.12, acc, 1.6, t, -0.7))
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 面包板本体 + 孔阵画面；返回孔面高度 */
@@ -971,7 +959,7 @@ function pcbStack(p: string[]) {
   g.add(rbox(5.06, PCB_T, 7.06, b, { x: 9, y: 4 * PCB_T, z: 1, ry: 0.2 }, 0.05))
   const pt = paintTop(5, 7, `mk-pcb-${b}-62-5x7`, drawPcb(b, 62, isLight(b) ? '#3a3a3c' : '#ffffff', 0.6), 0, 0, 0)
   g.add(P(G(pt), 9, 5 * PCB_T + 0.05, 1, 0, 0.2))
-  return fit(g)
+  return fitGroup(g)
 }
 
 function smdReels(p: string[]) {
@@ -993,7 +981,7 @@ function smdReels(p: string[]) {
     g.add(rbox(0.8, 0.05, 5.5, tape, { x, y: 0, z: rr + 2.75 }, 0.02))
     for (let k = 0; k < 6; k++) g.add(noOutlineDeep(rbox(0.3, 0.05, 0.3, '#3a3a3c', { x, y: 0.04, z: rr + 0.8 + k * 0.8 }, 0.02)))
   }
-  return fit(g)
+  return fitGroup(g)
 }
 const REEL_PALS: PalFlat[] = [
   ['modern', '#3a7fd0', '#f4f4f2', '#3d3f44'],
@@ -1034,7 +1022,7 @@ function partsBox(p: string[]) {
   g.add(ghostDeep(rbox(W, 0.25, D, tint, { y: H }, 0.2), tint, 0.3))
   for (const x of [-5, 5]) g.add(rbox(1.6, 1.4, 0.4, latch, { x, y: H - 0.9, z: D / 2 + 0.1 }, 0.15))
   g.add(rbox(W - 2, 0.6, 0.5, latch, { y: H - 0.2, z: -D / 2 - 0.15 }, 0.2))
-  return fit(g)
+  return fitGroup(g)
 }
 const CASE_PALS: PalFlat[] = [
   ['modern', '#3a7fd0', GLASS],
@@ -1078,7 +1066,7 @@ function dupontLying(p: string[]) {
   top.position.set(0.5, 0, 0.3)
   g.add(top)
   g.add(rbox(0.6, 0.35, 6.4, tie, { x: 2, y: 0, z: 0 }, 0.12))
-  return fit(g)
+  return fitGroup(g)
 }
 /** J 形钩（storage-forms 同款尺寸）：横臂 y = -2 沿 +z 伸出 L */
 const J_ARM = -2
@@ -1161,7 +1149,7 @@ function servoSet(p: string[]) {
     g.add(cyl(2.3, 2.3, 2.7, rim, { x: 9.5, y: -0.05, z: 0 }, 24))
     g.add(cyl(0.6, 0.6, 2.8, shade(rim, -0.15), { x: 9.5, y: -0.1, z: 0 }, 12))
   }
-  return fit(g)
+  return fitGroup(g)
 }
 const SERVO_PALS: PalFlat[] = [
   ['modern', '#2f6db5', '#f2c230', '#f2c230'],
@@ -1212,7 +1200,7 @@ function robotCar(p: string[]) {
   })
   g.add(cappedTube([[-2.2, 6.2, -4], [-3.0, 7.0, 0], [-1.8, 5.2, 3.6], [-0.6, 4.95, 4.2]], 0.06, '#e8453c', TUBE))
   g.add(cappedTube([[-1.8, 6.2, -4], [-2.5, 6.8, 0], [-1.4, 5.2, 3.6], [-0.2, 4.95, 4.2]], 0.06, '#2b2b2b', TUBE))
-  return fit(g)
+  return fitGroup(g)
 }
 const CAR_PALS: PalFlat[] = [
   ['modern', '#3d3f44', '#f2c230', '#1f6fb2'],
@@ -1255,7 +1243,7 @@ function ledStrip(p: string[]) {
     g.add(cappedTube([[e[0] + dz * o, 0.1, e[2] - dx * o], [e[0] + dx * 1.5 + dz * o, 0.08, e[2] + dz * 1.5 - dx * o], [e[0] + dx * 3 + dz * o * 1.5, 0.08, e[2] + dz * 3 - dx * o * 1.5]], 0.07, c, TUBE))
   })
   g.add(P(rbox(1.0, 0.5, 0.8, '#f4f4f2', {}, 0.08), e[0] + dx * 3.4, 0.0, e[2] + dz * 3.4, 0, Math.atan2(dx, dz)))
-  return fit(g)
+  return fitGroup(g)
 }
 const STRIP_PALS: PalFlat[] = [
   ['modern', '#f4f4f2', '#f4f4f2', '#fff2b8'],
@@ -1282,7 +1270,7 @@ function batteryBox(p: string[]) {
   for (const [x, z] of [[4.2, -6.0], [4.4, -5.2]]) g.add(noOutlineDeep(cylX(0.04, 0.6, SOLDER, x + 0.3, 0.08, z, 6)))
   g.add(P(aaBattery(0, 0.72, 0, wrap, band), -1.0, 0, 5.0, 0, PI / 2 - 0.2))
   g.add(P(aaBattery(0, 0.72, 0, wrap, band), 2.4, 0, 4.4, 0, PI / 2 + 0.3))
-  return fit(g)
+  return fitGroup(g)
 }
 const BATT_PALS: PalFlat[] = [
   ['modern', '#26272b', '#2f5fb5', '#f4f4f2'],
@@ -1312,7 +1300,7 @@ function charger18650(p: string[]) {
   g.add(cell18650(6.6, 0, -2.2, w1, true))
   g.add(cell18650(8.5, 0, -2.2, w2, true))
   g.add(P(cell18650(0, 0, 0, w2, false), 7.6, 0.9, 2.6, 0, 0.5))
-  return fit(g)
+  return fitGroup(g)
 }
 const CELL_PALS: PalFlat[] = [
   ['modern', '#d7d8db', '#2f5fb5', '#3a9a5a'],
@@ -1334,7 +1322,7 @@ function oledModule(p: string[]) {
   g.add(rbox(2.6, 1.7, 0.12, '#111216', { y: by + 0.7, z: z + 0.09 }, 0.04))
   g.add(paintPanel(2.3, 1.25, `mk-oled-${glowC}`, drawOled(glowC), { y: by + 0.92, z: z + 0.2 }, 0.95))
   for (const [i, c] of ['#2b2b2b', '#e8453c', '#f2d23a', '#3a8ee8'].entries()) g.add(jumper([bbX(n, 7 + i), bbZ(4)], [bbX(n, 3 + i * 3), bbZ(8)], T, 0.5 + i * 0.12, c))
-  return fit(g)
+  return fitGroup(g)
 }
 const OLED_PALS: PalFlat[] = [
   ['modern', '#f4f4f2', '#1f6fb2', '#7ad0ff'],
@@ -1372,7 +1360,7 @@ function solderStation(p: string[]) {
   g.add(aimAt(G(cyl(0.25, 0.1, 1.4, '#9a9da3', {}, 10), cyl(0.25, 0.25, 4.5, CHROME, { y: 1.4 }, 10), cyl(0.55, 0.45, 0.8, '#2b2b2b', { y: 5.9 }, 14), capsule(0.7, 6.5, unit, { y: 6.5 }), cyl(0.35, 0.5, 1.4, '#2b2b2b', { y: 14.0 }, 12)), at(0.5), at(2)))
   const end = at(16)
   g.add(cappedTube([end, [5, end[1] + 0.3, end[2] + 1.8], [3.5, 6, 11], [0, 0.3, 10.8], [-4, 0.4, 9.2], [-5.0, 2.5, 7.8], [-5.0, 4.0, 7.3]], 0.2, '#2b2b2b', TUBE))
-  return fit(g)
+  return fitGroup(g)
 }
 const STATION_PALS: PalFlat[] = [
   ['industrial', I.iron, I.steel, '#ff8c3a'],
@@ -1405,7 +1393,7 @@ function hotAirStation(p: string[]) {
   g.add(cylZ(0.75, 2.4, METAL, 7.6, gy, 7.2, 16))
   g.add(cylZ(0.45, 1.6, CHROME, 7.6, gy, 9.2, 12))
   g.add(cappedTube([[7.6, gy, -7.8], [7.6, gy - 0.6, -10.2], [10.6, 3.2, -8.5], [11.3, 1.0, 0], [9.2, 0.6, 10.5], [4.0, 0.8, 11.8], [1.0, 2.2, 9.5]], 0.45, '#5a5d63', TUBE))
-  return fit(g)
+  return fitGroup(g)
 }
 
 function desolderPump(p: string[]) {
@@ -1419,7 +1407,7 @@ function desolderPump(p: string[]) {
   g.add(cylZ(0.25, 3.5, CHROME, 0, 1.0, -9.0, 10))
   g.add(cylZ(0.9, 1.0, grip, 0, 1.0, -11.2, 18))
   g.add(rbox(0.8, 0.6, 1.4, btn, { y: 1.8, z: 2.5 }, 0.2))
-  return fit(g)
+  return fitGroup(g)
 }
 const PUMP_PALS: PalFlat[] = [
   ['modern', M.silver, '#e8453c', M.black],
@@ -1441,7 +1429,7 @@ function solderSpool(p: string[]) {
   g.add(rbox(1.2, 0.9, 0.9, stand, { x: 0.5, y: 0.9, z: 2.55 }, 0.2))
   g.add(cylZ(0.25, 1.0, METAL, 0.5, 2.0, 2.6, 10))
   g.add(cappedTube([[0.5, yc, 2.4], [0.5, 4.2, 2.7], [0.5, 2.6, 2.4], [0.5, 2.0, 2.0], [0.5, 2.0, 3.2], [0.6, 1.4, 4.6], [1.0, 0.06, 6.0], [2.6, 0.06, 6.8]], 0.05, SOLDER, { ...TUBE, seg: 60 }))
-  return fit(g)
+  return fitGroup(g)
 }
 const SPOOL_PALS: PalFlat[] = [
   ['industrial', I.iron, '#2f7d4a', '#ffffff'],
@@ -1464,7 +1452,7 @@ function fluxSet(p: string[]) {
   g.add(cylX(0.12, 2.5, '#f4f4f2', -5.4, 0.5, 5.2, 8))
   g.add(cylX(0.45, 0.2, '#f4f4f2', -6.7, 0.5, 5.2, 12))
   g.add(P(cyl(0.12, 0.35, 1.6, '#3a8ee8', {}, 10), 3.8, 0.5, 5.2, 0, 0, -PI / 2))
-  return fit(g)
+  return fitGroup(g)
 }
 const FLUX_PALS: PalFlat[] = [
   ['industrial', METAL, '#2f7d4a', '#2f7d4a'],
@@ -1497,7 +1485,7 @@ function helpingHands(p: string[]) {
   lens.rotation.x = -PI / 4
   g.add(lens)
   g.add(rod3([0, 17.3, -3], [0, 17.8 + 3.18, 2.6 - 3.18], 0.3, rodC))
-  return fit(g)
+  return fitGroup(g)
 }
 const HH_PALS: PalFlat[] = [
   ['industrial', I.iron, CHROME, '#e8453c'],
@@ -1533,7 +1521,7 @@ function multimeter(p: string[]) {
     const tail = new THREE.Vector3(0, 0.45, 4.5).applyAxisAngle(new THREE.Vector3(0, 1, 0), ang).add(probe.position)
     g.add(cappedTube([[jx0, 4.8, 6.6], [jx0 + 0.6, 5.6, 7.8], [4.5, 2.6, 10.2], [px + 0.4, 0.3, 9.4], [tail.x, 0.45, tail.z + 0.6], [tail.x, 0.45, tail.z]], 0.16, col, TUBE))
   }
-  return fit(g)
+  return fitGroup(g)
 }
 const METER_PALS: PalFlat[] = [
   ['industrial', '#f2c230', '#3d3f44', '#e8453c'],
@@ -1574,7 +1562,7 @@ function oscilloscope(p: string[]) {
     g.add(P(cyl(0.08, 0.3, 1.8, CHROME, {}, 8), px - 4.6, 0.5, pz, 0, 0, PI / 2))
     g.add(cappedTube([[x0, 2.6, 8.0], [x0 + 0.3, 1.6, 9.6], [x0 - 1.5, 0.3, pz - 1.0], [px + 6, 0.3, pz + 0.2], [px + 4.2, 0.5, pz]], 0.15, '#2b2b2b', TUBE))
   }
-  return fit(g)
+  return fitGroup(g)
 }
 const SCOPE_PALS: PalFlat[] = [
   ['modern', M.light, M.char, '#5cff7a'],
@@ -1605,7 +1593,7 @@ function benchPsu(p: string[]) {
     g.add(cappedTube([[x, 3.6, 14.1], [x, 3.0, 15.0], [x * 0.9 + (ex - x) * 0.3, 0.8, 16.8], [(x + ex) / 2, 0.3, 19], [ex, 0.32, ez - 1.2]], 0.15, col, TUBE))
     g.add(gator(ex, 0, ez - 1.3, col))
   }
-  return fit(g)
+  return fitGroup(g)
 }
 const PSU_PALS: PalFlat[] = [
   ['industrial', '#3a3a3c', '#26272b', '#2b2b2b'],
@@ -1631,7 +1619,7 @@ function sigGen(p: string[]) {
     g.add(cylZ(0.75, 0.2, '#3a3a3c', x, 3.0, 13.3, 16))
   }
   g.add(rbox(1.0, 1.0, 0.4, knob, { x: 7.4, y: 4.6, z: 13.3 }, 0.15))
-  return fit(g)
+  return fitGroup(g)
 }
 
 function logicAnalyzer(p: string[]) {
@@ -1650,7 +1638,7 @@ function logicAnalyzer(p: string[]) {
   })
   g.add(cappedTube([[0, 0.8, -2.8], [0, 0.4, -4.6], [2.2, 0.15, -7.4], [4.4, 0.15, -8.2]], 0.15, '#2b2b2b', TUBE))
   g.add(P(rbox(1.2, 0.6, 1.8, '#2b2b2b', {}, 0.15), 5.4, 0.0, -8.5, 0, PI / 2 - 0.3))
-  return fit(g)
+  return fitGroup(g)
 }
 const LA_PALS: PalFlat[] = [
   ['modern', '#c8473a', '#ffffff'],
@@ -1678,7 +1666,7 @@ function usbMicroscope(p: string[]) {
   g.add(chip(0.8, 0.8, 0.3, 1.41, 0.2, 5, 5))
   g.add(cappedTube([[0, 16.5, 0], [0, 17.8, 0.5], [2.2, 17.2, 3.0], [5.0, 8.0, 5.2], [6.6, 0.15, 6.4], [8.4, 0.15, 8.6]], 0.15, '#2b2b2b', TUBE))
   g.add(P(rbox(1.2, 0.5, 1.8, '#2b2b2b', {}, 0.15), 9.0, 0, 9.5, 0, 0.7))
-  return fit(g)
+  return fitGroup(g)
 }
 const MICRO_PALS: PalFlat[] = [
   ['modern', M.black, M.silver, '#ffffff'],
@@ -1706,9 +1694,9 @@ function glueGun(p: string[]) {
   gun.add(cappedTube([[0, -9.3, -4.6], [0, -9.6, -6.5], [1.2, -9.5, -10], [3.5, -9.5, -12]], 0.22, '#2b2b2b', TUBE))
   gun.add(P(rbox(1.6, 1.2, 2.2, '#2b2b2b', {}, 0.2), 4.2, -9.6, -12.8, 0, 0.6))
   gun.rotation.x = 0.12
-  const g = fit(gun)
+  const g = fitGroup(gun)
   for (let i = 0; i < 3; i++) g.add(cylZ(0.55, 10, '#f4f2e8', 3.2 + i * 1.15, 0.55, 2, 14))
-  return fit(g)
+  return fitGroup(g)
 }
 
 function eScrewdriver(p: string[]) {
@@ -1725,7 +1713,7 @@ function eScrewdriver(p: string[]) {
   g.add(tray(9, 1.2, 5.5, 0.2, caseC, { x: 7.5 }, 0.15))
   g.add(rbox(9, 5.5, 0.25, caseC, { x: 7.5, y: 0.6, z: -2.9 }, 0.15))
   for (let i = 0; i < 10; i++) for (const z of [-1.2, 1.2]) g.add(P(cyl(0.2, 0.2, 2.5, METAL, {}, 6), 3.9 + i * 0.8, 0.45, z, PI / 2))
-  return fit(g)
+  return fitGroup(g)
 }
 
 function rotaryTool(p: string[]) {
@@ -1752,7 +1740,7 @@ function rotaryTool(p: string[]) {
     g.add(i % 2 ? cyl(0.45, 0.45, 0.8, c, { x, y: 1.0, z }, 12) : ball(0.4, c, { x, y: 1.4, z }))
   }
   g.add(ghostDeep(rbox(13, 0.25, 8, GLASS, { x: 1, y: 1.6, z: -7.5 }, 0.15), GLASS, 0.3))
-  return fit(g)
+  return fitGroup(g)
 }
 
 const TOOL_PALS: PalFlat[] = [
@@ -1781,7 +1769,7 @@ function stripperBody(p: string[]): [THREE.Group, V3] {
   return [g, ring]
 }
 function stripperLying(p: string[]) {
-  return fit(stripperBody(p)[0])
+  return fitGroup(stripperBody(p)[0])
 }
 function stripperHanging(p: string[]) {
   const [body, ring] = stripperBody(p)
@@ -1812,7 +1800,7 @@ function esdStrap(p: string[]) {
   g.add(cappedTube(coil, 0.07, cord, { ...TUBE, seg: 700 }))
   g.add(cappedTube([[12.04, 0.45, 0.35], [13.2, 0.12, 0.8], [14.2, 0.12, 0.2]], 0.07, cord, TUBE))
   g.add(gator(14.6, 0, 0, clip, PI / 2))
-  return fit(g)
+  return fitGroup(g)
 }
 const ESD_PALS: PalFlat[] = [
   ['modern', '#3a7fd0', '#3a7fd0', '#e8453c'],
@@ -1856,7 +1844,7 @@ function magLamp(p: string[]) {
   g.add(lit(P(torus(6.3, 0.4, glowC), 0, 28.9, 6, PI / 2), glowC, 0.95))
   g.add(ghostDeep(cyl(6.1, 6.1, 0.4, GLASS, { y: 29.7, z: 6 }, 36), GLASS, 0.35))
   g.add(cylZ(0.6, 2.0, head, 0, 30, 14.4, 12))
-  return fit(g)
+  return fitGroup(g)
 }
 const MAG_PALS: PalFlat[] = [
   ['modern', M.white, M.white, '#ffffff'],
@@ -1888,7 +1876,7 @@ function benchVise(p: string[]) {
   g.children[g.children.length - 1].position.set(0, 5.6, 10.6)
   g.add(cylX(0.4, 10, CHROME, 0, 5.6, 11.0, 10))
   for (const s of [-1, 1]) g.add(ball(0.65, CHROME, { x: s * 5.2, y: 5.6, z: 11.0 }))
-  return fit(g)
+  return fitGroup(g)
 }
 const VISE_PALS: PalFlat[] = [
   ['industrial', '#2f5fb5', '#5a5d63'],
@@ -1917,7 +1905,7 @@ function drillSet(p: string[]) {
     const r = 0.1 + i * 0.045
     g.add(cylZ(r, 7 + i * 0.5, GOLD, 7.2 + i * 0.85, 0.25 + r, 0, 8))
   }
-  return fit(g)
+  return fitGroup(g)
 }
 
 function angleGrinder(p: string[]) {
@@ -1938,7 +1926,7 @@ function angleGrinder(p: string[]) {
   g.add(cappedTube([[22.4, 3.6, 0], [24.5, 2.0, 0.5], [25.5, 0.25, 3], [23, 0.25, 6], [19, 0.25, 6.5]], 0.25, '#2b2b2b', TUBE))
   g.add(P(rbox(1.8, 1.2, 2.6, '#2b2b2b', {}, 0.2), 17.6, 0, 6.5, 0, PI / 2))
   g.rotation.z = -0.06
-  return fit(g)
+  return fitGroup(g)
 }
 
 function jigsawScene(p: string[]) {
@@ -2004,7 +1992,7 @@ function jigsawScene(p: string[]) {
   g.add(cappedTube([[-11, 12.5, z], [-13, 10.5, z + 0.5], [-15.5, 7.2, z + 1.5], [-17.3, 6.0, z + 2.5], [-18.6, 2.5, z + 3.5], [-19.2, 0.3, z + 5.5], [-17.5, 0.3, z + 8.0]], 0.25, '#2b2b2b', TUBE))
   const r = rng(43)
   for (let i = 0; i < 14; i++) g.add(noOutlineDeep(cyl(0.25 + r() * 0.3, 0.25 + r() * 0.3, 0.06, shade(wood, 0.12), { x: 2 + r() * 6, y: 6.82, z: z - 1 + r() * 4 }, 8)))
-  return fit(g)
+  return fitGroup(g)
 }
 
 function tableSaw(p: string[]) {
@@ -2026,7 +2014,7 @@ function tableSaw(p: string[]) {
   g.add(rbox(3, 2.4, 0.8, '#e8453c', { x: -8, y: 5, z: 14.3 }, 0.3))
   g.add(cylZ(1.8, 3, '#2b2b2b', 4, 6, -15.4, 18))
   g.add(cylZ(1.2, 1.4, '#3a3a3c', 11, 6, 14.6, 16))
-  return fit(g)
+  return fitGroup(g)
 }
 const MACHINE_PALS: PalFlat[] = [
   ['industrial', '#5a6f8a', '#f2c230', '#c9a06a'],
@@ -2061,7 +2049,7 @@ function drillPress(p: string[]) {
   g.add(rbox(3.6, 4.4, 1, acc, { x: -4, y: 43, z: 10.3 }, 0.4))
   g.add(cylZ(0.5, 0.5, '#4caf50', -4, 46, 10.9, 12))
   g.add(cylZ(0.5, 0.5, '#e8453c', -4, 44.2, 10.9, 12))
-  return fit(g)
+  return fitGroup(g)
 }
 
 function laserCutter(p: string[]) {
@@ -2085,7 +2073,7 @@ function laserCutter(p: string[]) {
   g.add(rbox(20, 0.8, 1.6, '#2b2b2b', { y: 19.3, z: 24 }, 0.3))
   g.add(lit(rbox(2.2, 0.2, 1.0, '#7ad0ff', { x: 28, y: 19.4, z: 24 }, 0.08), '#7ad0ff', 0.8))
   g.add(cylZ(4, 6, '#9a9da3', 26, 9, -27, 22))
-  return fit(g)
+  return fitGroup(g)
 }
 const LASER_PALS: PalFlat[] = [
   ['modern', M.white, '#e86a2a', M.char],
@@ -2124,7 +2112,7 @@ function cnc3018(p: string[]) {
   g.add(rbox(0.3, 6, 8, '#2f7d4a', { x: -20.5, y: 5, z: -8 }, 0.05))
   g.add(cylX(1.6, 0.8, '#2b2b2b', -21.1, 9, -8))
   for (const [i, c] of ['#e8453c', '#2b2b2b', '#3a8ee8'].entries()) g.add(cappedTube([[-20.4, 10.5 - i * 0.4, -10.5], [-19, 23, -11], [-4, 25.5, -9], [-1.5 + i * 0.5, 25.7, -6.5]], 0.1, c, TUBE))
-  return fit(g)
+  return fitGroup(g)
 }
 const CNC_PALS: PalFlat[] = [
   ['modern', M.silver, M.black, M.white],
@@ -2299,7 +2287,7 @@ function sawhorse(p: string[]) {
     }
   for (const sx of [-1, 1]) g.add(rbox(1.5, 14, 12, brace, { x: sx * 31, y: 50, z: 0 }, 0.3))
   for (const sz of [-1, 1]) g.add(rbox(76, 6, 1.8, brace, { y: 20, z: sz * 15.6 }, 0.3))
-  return fit(g)
+  return fitGroup(g)
 }
 const HORSE_PALS: PalFlat[] = [
   ['industrial', '#d9b98c', '#c9a06a'],
@@ -2322,7 +2310,7 @@ function lumber(p: string[]) {
     g.add(rbox(2.5, 0.15, 28.2, strap, { x, y: 9.5 }, 0.05))
     for (const s of [-1, 1]) g.add(rbox(2.5, 9.6, 0.15, strap, { x, y: 0.05, z: s * 13.95 }, 0.05))
   }
-  return fit(g)
+  return fitGroup(g)
 }
 const LUMBER_PALS: PalFlat[] = [
   ['nordic', '#e8cfa0', '#d9b98c', '#3a7fd0'],
@@ -2367,7 +2355,7 @@ function screwSorter(p: string[]) {
   lid.rotation.x = -1.8
   g.add(lid)
   for (const x of [-7, 7]) g.add(rbox(2, 1.4, 0.5, shade(caseC, -0.15), { x, y: H - 1.0, z: D / 2 + 0.15 }, 0.15))
-  return fit(g)
+  return fitGroup(g)
 }
 const SORTER_PALS: PalFlat[] = [
   ['industrial', '#c46a3a', '#e8e2d8'],
@@ -2389,7 +2377,7 @@ function sandpaper(p: string[]) {
   g.add(rbox(11, 2.5, 6.5, block, { x: 12, z: -1 }, 0.4))
   g.add(rbox(11.4, 2.8, 6.0, grit2, { x: 12, y: -0.15, z: -1 }, 0.3))
   for (let i = 0; i < 3; i++) g.add(rbox(14, 0.06, 11, i % 2 ? grit1 : grit2, { x: 13, y: i * 0.07, z: 6.5, ry: i * 0.08 }, 0.02))
-  return fit(g)
+  return fitGroup(g)
 }
 const SAND_PALS: PalFlat[] = [
   ['industrial', '#b5583a', '#4a4a48', '#c99a62'],
@@ -2433,7 +2421,7 @@ function teardown(p: string[]) {
   g.add(rbox(9, 0.3, 0.8, '#3a7fd0', { x: -14, z: 10.5, ry: 0.3 }, 0.1))
   g.add(cappedTube([[-17, 0.08, 8.5], [-19, 0.08, 6], [-21, 0.08, 2], [-19.6, 0.08, -2], [-17.5, 0.08, -3.5]], 0.07, '#4caf50', TUBE))
   g.add(cappedTube([[-16, 0.08, 9.5], [-18, 0.08, 9.0], [-20.5, 0.08, 6.5], [-21.5, 0.08, 4.5]], 0.07, '#f2d23a', TUBE))
-  return fit(g)
+  return fitGroup(g)
 }
 const TEAR_PALS: PalFlat[] = [
   ['modern', M.white, '#2f7d4a', M.char],
@@ -2466,7 +2454,7 @@ function wipSoldering(p: string[]) {
   g.add(P(cyl(0.05, 0.05, 1.5, SOLDER, {}, 6), 9.3, 0.6, 7.0, PI / 2 + 0.2, 0.2))
   g.add(cup(1.6, 1.4, 0.6, 0.1, '#f4f4f2', { x: -9.5, z: 4 }))
   for (let i = 0; i < 4; i++) g.add(noOutlineDeep(P(cyl(0.11, 0.11, 0.6, '#e6c9a0', {}, 8), -9.5 + (i - 1.5) * 0.5, 0.25, 4 + (i % 2) * 0.4, 0, 0.3 * i, PI / 2)))
-  return fit(g)
+  return fitGroup(g)
 }
 const WIP_PALS: PalFlat[] = [
   ['industrial', I.iron, '#2f7d4a', '#2f7d4a'],
@@ -2489,8 +2477,8 @@ const BENCH_SURF = (peg: boolean): Partial<AssetDef> => ({
 
 export const MAKER: AssetDef[] = [
   // 电子 / 单片机
-  def('mk-arduino', 'Arduino 开发板', 'hobby', [7.3, 5.4, 1.5], BOARD_PALS, (p) => fit(arduinoParts(p[0], p[1], p[2])), PROP),
-  def('mk-raspi', '树莓派', 'hobby', [8.8, 6, 2], PI_PALS, (p) => fit(raspiParts(p[0], p[1], p[2])), PROP),
+  def('mk-arduino', 'Arduino 开发板', 'hobby', [7.3, 5.4, 1.5], BOARD_PALS, (p) => fitGroup(arduinoParts(p[0], p[1], p[2])), PROP),
+  def('mk-raspi', '树莓派', 'hobby', [8.8, 6, 2], PI_PALS, (p) => fitGroup(raspiParts(p[0], p[1], p[2])), PROP),
   def('mk-esp32', 'ESP32 开发板', 'hobby', [5.4, 2.9, 1.5], BOARD_PALS, esp32, PROP),
   def('mk-bluepill', 'STM32 蓝丸板', 'hobby', [5.5, 2.4, 1.9], [['modern', '#2f5fb5', HDR, '#7cff8a'], ['industrial', '#2a2b30', HDR, '#7cff8a'], ['cute', '#9b6fd0', HDR, C.pink]], bluePill, PROP),
   def('mk-breadboard-full', '面包板', 'hobby', [16.5, 5.5, 2.6], BB_PALS, breadboardFull, { ...PROP, family: 'mk-breadboard', sizeLabel: '830 孔' }),

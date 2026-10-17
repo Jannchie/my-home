@@ -5,7 +5,7 @@
 import * as THREE from 'three'
 import { ball, cup, cyl, puck, rbox, shade, toon, torus, tray, useAnisotropy } from '../toon'
 import { C, G, SWING_OPEN, ellipsePoly, movable, rectPoly, rng, slab, type AssetCategory, type AssetDef, type DoorMotion, type Poly, type SurfaceDef } from '../kit'
-import { PI, clearDeep, lit, mesh, noOutlineDeep, rod3, tube, type TubeOpts, type V3 } from '../geo'
+import { PI, clearDeep, fitChildrenBuild, lit, mesh, noOutlineDeep, rod3, tube, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, R, type Build, type Pal3 } from '../packkit'
 
 /** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
@@ -162,18 +162,6 @@ function shift(g: THREE.Group, dx: number, dz: number) {
   return g
 }
 
-/** 平移到 xz 居中、最低点贴地 */
-function fit(build: Build): Build {
-  return (p) => {
-    const g = build(p)
-    g.updateMatrixWorld(true)
-    const b = new THREE.Box3().setFromObject(g, true)
-    const off = new THREE.Vector3(-(b.min.x + b.max.x) / 2, -b.min.y, -(b.min.z + b.max.z) / 2)
-    for (const c of g.children) c.position.add(off)
-    return g
-  }
-}
-
 /**
  * 定义一款。带 surface / surfaces / fx 的（坐标要和声明对得上）builder 自己保证居中贴地，其余自动 fit。
  */
@@ -192,7 +180,7 @@ function vb(id: string, name: string, family: string, sizeLabel: string, categor
     paletteStyles: pals.map((x) => x[0]),
     styles: [...new Set(pals.map((x) => x[0]))],
     ...extra,
-    build: keep ? build : fit(build),
+    build: keep ? build : fitChildrenBuild(build),
   }
 }
 

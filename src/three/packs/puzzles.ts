@@ -5,21 +5,11 @@
 import * as THREE from 'three'
 import { ball, cyl, rbox, shade, toon, torus } from '../toon'
 import { C, S, rng, type AssetCategory, type AssetDef } from '../kit'
-import { G, P, PI } from '../geo'
+import { G, P, PI, fitGroup } from '../geo'
 import { CN, M, N, R, type PalFlat } from '../packkit'
 
 function def(id: string, name: string, category: AssetCategory, [w, d, h]: [number, number, number], pals: PalFlat[], build: (p: string[]) => THREE.Group, extra: Partial<AssetDef> = {}): AssetDef {
   return { id, name, category, w, d, h, palettes: pals.map((x) => x.slice(1)), paletteStyles: pals.map((x) => x[0]), styles: [...new Set(pals.map((x) => x[0]))], build, prop: true, ...extra }
-}
-function fit(g: THREE.Object3D, y0 = 0) {
-  const outer = new THREE.Group()
-  outer.add(g)
-  outer.updateMatrixWorld(true)
-  const b = new THREE.Box3().setFromObject(outer, true)
-  g.position.x -= (b.min.x + b.max.x) / 2
-  g.position.z -= (b.min.z + b.max.z) / 2
-  g.position.y += y0 - b.min.y
-  return outer
 }
 
 /** 魔方配色：[芯, 6 种贴纸色] */
@@ -65,7 +55,7 @@ function cube(n: number, s: number, scrambled: boolean, tilt = 0) {
     }
     g.add(body, top)
     g.rotation.y = 0.35
-    return fit(g)
+    return fitGroup(g)
   }
 }
 
@@ -101,13 +91,13 @@ function pyraminx([core, ...cols]: string[]) {
   const g = G(m)
   // 芯色的细棱：三个底角各一颗小球（角块）
   g.add(ball(0.6, core, { x: 0, y: 0, z: 0 }))
-  return fit(g)
+  return fitGroup(g)
 }
 /** 五魔方（正十二面体，十二面各一色） */
 function megaminx([, ...cols]: string[]) {
   const all = [...cols, ...cols.map((x) => shade(x, 0.15))]
   const m = polyColored(new THREE.DodecahedronGeometry(4.2), 3, all)
-  return fit(G(m))
+  return fitGroup(G(m))
 }
 /** 镜面魔方：大小不一的银色块（打乱后形状参差） */
 function mirrorCube([metal]: string[]) {
@@ -124,7 +114,7 @@ function mirrorCube([metal]: string[]) {
         g.add(m)
       }
   g.rotation.y = 0.5
-  return fit(g)
+  return fitGroup(g)
 }
 /** 三阶魔方放在亚克力底座上展示 */
 function cubeOnStand(p: string[]) {
@@ -142,7 +132,7 @@ function cubeOnStand(p: string[]) {
   c.position.y = 2.6
   c.rotation.set(0.62, 0.78, 0)
   g.add(c)
-  return fit(g)
+  return fitGroup(g)
 }
 /** 魔方收藏展示架：三层阶梯亚克力架，摆满各种魔方：[架子色, 魔方芯, 贴纸…] */
 function cubeShelf([frame, core, ...cols]: string[]) {
@@ -163,7 +153,7 @@ function cubeShelf([frame, core, ...cols]: string[]) {
     m.position.set((i % 3 - 1) * 10.5, t * 8 + 1, -t * 4 + 4)
     g.add(m)
   })
-  return fit(g)
+  return fitGroup(g)
 }
 /** 速拧计时器垫：[垫子, 计时器, 屏] */
 function speedTimer([mat, body, screen]: string[]) {
@@ -179,7 +169,7 @@ function speedTimer([mat, body, screen]: string[]) {
   const c = cube(3, 5.6, true)(CUBE_PALS[0].slice(1))
   c.position.set(7, 0.4, 5)
   g.add(c)
-  return fit(g)
+  return fitGroup(g)
 }
 
 // ---------- 其他益智玩具 ----------
@@ -194,7 +184,7 @@ function lubanLock([wood]: string[]) {
     g.add(rbox(t, t, L, o > 0 ? shade(wood, 0.06) : wood, { x: o, y: 4 - t / 2, z: 0 }, 0.2))
     g.add(rbox(t, L, t, shade(wood, -0.05), { x: 0, y: 0, z: o }, 0.2))
   }
-  return fit(g)
+  return fitGroup(g)
 }
 /** 孔明锁（拆开散放）：[木色] */
 function lubanApart([wood]: string[]) {
@@ -204,7 +194,7 @@ function lubanApart([wood]: string[]) {
     const m = rbox(8, 1.6, 1.6, i % 2 ? wood : shade(wood, -0.08), {}, 0.2)
     g.add(P(G(m), (i % 3 - 1) * 4.5, 0, (Math.floor(i / 3) - 0.5) * 5, 0, r() * PI, 0))
   }
-  return fit(g)
+  return fitGroup(g)
 }
 /** 九连环：[环色, 柄色] */
 function nineRings([ring, handle]: string[]) {
@@ -216,7 +206,7 @@ function nineRings([ring, handle]: string[]) {
     g.add(P(torus(1.3, 0.12, ring, {}), x, 4.2, 0, 0, PI / 2))
   }
   g.add(P(rbox(17, 0.4, 0.5, ring, {}, 0.1), 0, 4.2, 1.3))
-  return fit(g)
+  return fitGroup(g)
 }
 /** 华容道：木框 + 滑块（曹操大块）：[框, 块, 大块] */
 function huarong([frame, block, big]: string[]) {
@@ -240,7 +230,7 @@ function huarong([frame, block, big]: string[]) {
     [3, 4, 1, 1, shade(block, -0.1)],
   ]
   for (const [i, j, w, h, c] of pieces) g.add(rbox(w * u - 0.25, 1.1, h * u - 0.25, c, { x: -5.4 + (i + w / 2) * u, y: 1, z: -6.75 + (j + h / 2) * u }, 0.25))
-  return fit(g)
+  return fitGroup(g)
 }
 /** 七巧板（木托 + 七块）：[托, 色 1, 色 2] */
 function tangram([tray, a, b]: string[]) {
@@ -267,7 +257,7 @@ function tangram([tray, a, b]: string[]) {
     [[s / 2, s / 2], [s, 0], [s, s]],
   ]
   parts.forEach((p, i) => g.add(tri(p.map(([x, z]): [number, number] => [x * 0.96, z * 0.96]), cols[i], 0.85)))
-  return fit(g)
+  return fitGroup(g)
 }
 /** 汉诺塔：[底座, 盘色] */
 function hanoi([base, disc]: string[]) {
@@ -275,7 +265,7 @@ function hanoi([base, disc]: string[]) {
   g.add(rbox(24, 1.4, 8, base, {}, 0.4))
   for (const x of [-7.5, 0, 7.5]) g.add(cyl(0.35, 0.35, 9, shade(base, -0.1), { x, y: 1.4 }, 8))
   for (let i = 0; i < 6; i++) g.add(cyl(3.4 - i * 0.45, 3.4 - i * 0.45, 0.9, shade(disc, (i - 3) * 0.06), { x: i < 4 ? -7.5 : 0, y: 1.4 + (i < 4 ? i : i - 4) * 0.95 }, 20))
-  return fit(g)
+  return fitGroup(g)
 }
 /** 指尖陀螺：[主体, 轴承盖] */
 function spinner([body, cap]: string[]) {
@@ -286,7 +276,7 @@ function spinner([body, cap]: string[]) {
     g.add(P(rbox(2.6, 0.9, 1.6, body, {}, 0.4), Math.cos(a) * 1.3, 0, Math.sin(a) * 1.3, 0, -a))
   }
   g.add(cyl(1.4, 1.4, 1.2, cap, {}, 20))
-  return fit(g)
+  return fitGroup(g)
 }
 /** 解压捏捏：kind 包子 / 猫团子：[主色, 点缀] */
 function squishy(kind: 'bun' | 'cat') {
@@ -300,7 +290,7 @@ function squishy(kind: 'bun' | 'cat') {
       for (const s of [-1, 1]) g.add(P(cyl(0.01, 1, 1.6, body, {}, 4), s * 1.6, 4.4, 0, 0, PI / 4, s * 0.25))
       for (const s of [-1, 1]) g.add(ball(0.32, accent, { x: s * 1, y: 3.1, z: 2.55 }))
     }
-    return fit(g)
+    return fitGroup(g)
   }
 }
 /** 俄罗斯方块积木（几块堆叠） */
@@ -312,7 +302,7 @@ function tetris([a, b, c, d]: string[]) {
   for (const [x, y] of [[0, 1], [1, 1], [1, 2], [2, 2]]) cellAt(x, y, b)
   for (const [x, y] of [[2, 1], [3, 1], [3, 2], [3, 3]]) cellAt(x, y, c)
   for (const [x, y] of [[0, 2], [0, 3], [1, 3], [2, 3]]) cellAt(x, y, d)
-  return fit(g)
+  return fitGroup(g)
 }
 
 const WOOD: PalFlat[] = [

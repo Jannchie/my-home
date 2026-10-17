@@ -7,7 +7,7 @@
 import * as THREE from 'three'
 import { ball, cup, cyl, puck, rbox, shade, torus } from '../toon'
 import { C, G, holePanel, shell, type AssetDef } from '../kit'
-import { PI, cappedTube, mesh, strut, strutBox, type TubeOpts, type V3 } from '../geo'
+import { PI, cappedTube, fitChildren, mesh, strut, strutBox, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, R, type Pal } from '../packkit'
 
 /** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
@@ -22,15 +22,6 @@ const CHROME = M.silver
 const INK = M.black
 
 // ---------- 小工具 ----------
-
-/** 包围盒对齐：xz 居中、底面贴 0 */
-function fit(g: THREE.Group) {
-  g.updateMatrixWorld(true)
-  const b = new THREE.Box3().setFromObject(g, true)
-  const off = new THREE.Vector3(-(b.min.x + b.max.x) / 2, -b.min.y, -(b.min.z + b.max.z) / 2)
-  for (const c of g.children) c.position.add(off)
-  return g
-}
 
 /** 绕局部 pivot 旋转一组部件（靠背后仰、折叠） */
 function hinge(pivot: V3, rx: number, ...parts: THREE.Object3D[]) {
@@ -696,7 +687,7 @@ const LADDER_PAL = pal(['nordic', [N.oak, '#d9c08a']], ['nordic', [N.white, N.li
 // ---------- 素材 ----------
 
 type Def = Omit<AssetDef, 'palettes'> & ReturnType<typeof pal>
-const A = (d: Def): AssetDef => ({ ...d, build: (p) => fit(d.build(p)) })
+const A = (d: Def): AssetDef => ({ ...d, build: (p) => fitChildren(d.build(p)) })
 
 export const CHAIRS_MORE: AssetDef[] = [
   // 折叠椅

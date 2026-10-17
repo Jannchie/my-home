@@ -8,7 +8,7 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, S, G, glow, holePanel, paintPanel, rng, slab, type AssetCategory, type AssetDef, type Hole, type Poly } from '../kit'
-import { P, PI, cylX, cylZ, ghost, lit, noOutline, type V3 } from '../geo'
+import { P, PI, cylX, cylZ, fitGroup, ghost, lit, noOutline, type V3 } from '../geo'
 import { J, M, N, R, type Pal } from '../packkit'
 
 type Draw = (g: CanvasRenderingContext2D, W: number, H: number) => void
@@ -47,18 +47,10 @@ function def(
     palettes: pals.map((x) => x[1]),
     paletteStyles: pals.map((x) => x[0]),
     styles: [...new Set(pals.map((x) => x[0]))],
-    build: (p) => fit(build(p)),
+    build: (p) => fitGroup(build(p)),
     prop: true,
     ...extra,
   }
-}
-
-/** 按包围盒居中：x/z 居中，底面落到 y = 0 */
-function fit(g: THREE.Group) {
-  const box = new THREE.Box3().setFromObject(g, true)
-  const c = box.getCenter(new THREE.Vector3())
-  g.position.set(-c.x, -box.min.y, -c.z)
-  return G(g)
 }
 
 // ---------- 小工具 ----------

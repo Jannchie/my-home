@@ -4,6 +4,7 @@
 import { ball, cyl, puck, rbox, shade, torus } from '../toon'
 import { C, G, ellipsePoly, legs, lPoly, rectPoly, slab, type AssetDef, type Poly } from '../kit'
 import { I, J, M, N, R, type Pal } from '../packkit'
+import { fitPoly } from '../geo'
 
 // ---------- 配色 ----------
 
@@ -65,14 +66,6 @@ const MODERN_PAL = pal(
 
 // ---------- 形状 ----------
 
-/** 把任意多边形缩放平移到恰好填满 w × d */
-function fit(poly: Poly, w: number, d: number): Poly {
-  const xs = poly.map((p) => p[0])
-  const zs = poly.map((p) => p[1])
-  const [x0, x1, z0, z1] = [Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)]
-  return poly.map(([x, z]): [number, number] => [((x - x0) / (x1 - x0) - 0.5) * w, ((z - z0) / (z1 - z0) - 0.5) * d])
-}
-
 /** 半圆，直边贴在 z = zb（背面） */
 const halfPoly = (r: number, zb: number, n = 20): Poly =>
   Array.from({ length: n + 1 }, (_, i): [number, number] => {
@@ -82,7 +75,7 @@ const halfPoly = (r: number, zb: number, n = 20): Poly =>
 
 /** 腰形 / 豆形：椭圆背面中间凹进去 */
 const kidneyPoly = (w: number, d: number) =>
-  fit(
+  fitPoly(
     Array.from({ length: 48 }, (_, i): [number, number] => {
       const a = (i / 48) * Math.PI * 2
       const c = Math.cos(a)
@@ -96,7 +89,7 @@ const kidneyPoly = (w: number, d: number) =>
 
 /** 云朵：六个圆鼓鼓的瓣 */
 const cloudPoly = (w: number, d: number) =>
-  fit(
+  fitPoly(
     Array.from({ length: 72 }, (_, i): [number, number] => {
       const a = (i / 72) * Math.PI * 2
       const r = 0.88 + 0.12 * Math.abs(Math.cos(3 * a))

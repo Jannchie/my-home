@@ -145,7 +145,7 @@ function bedding(g: THREE.Group, w: number, len: number, y0: number, z0: number,
 }
 
 /** 把模型在 xz 上居中（只用于没有 surface 声明的自由造型） */
-function centerXZ(g: THREE.Group) {
+function centerGroupLoose(g: THREE.Group) {
   const box = new THREE.Box3().setFromObject(g)
   const out = new THREE.Group()
   g.position.x -= (box.min.x + box.max.x) / 2
@@ -321,7 +321,7 @@ function recliner(p: string[], open: boolean) {
   } else {
     g.add(rbox(54, 26, 3, main, { y: 8, z: 44.5 }, 1.5))
   }
-  return centerXZ(g)
+  return centerGroupLoose(g)
 }
 
 /** 双人卡座：贴墙，竖条拉扣靠背 */
@@ -336,7 +336,7 @@ function booth(p: string[]) {
   g.add(rbox(130, 104, 8, base, { z: -27 }, 2))
   g.add(rbox(132, 3, 10, shade(base, -0.08), { y: 104, z: -27 }, 1))
   for (let i = 0; i < 5; i++) g.add(rbox(24.4, 50, 9, main, { x: -50.8 + i * 25.4, y: 52, z: -18.5, rx: -0.06 }, 4.5))
-  return centerXZ(g)
+  return centerGroupLoose(g)
 }
 
 /** 云朵沙发：一团团鼓起的软包 */
@@ -531,7 +531,7 @@ function roundBed(p: string[]) {
   g.add(puck(86, 6, duvet, { y: 53, z: 14 }))
   for (const s of [-1, 1]) g.add(rbox(48, 12, 30, C.white, { x: s * 27, y: 54, z: -70, rx: -0.15 }, 5))
   g.add(puck(13, 9, duvet, { x: 0, y: 62, z: -58, rx: 1.3 }))
-  return centerXZ(g)
+  return centerGroupLoose(g)
 }
 
 /** 铁艺床：圆管床头床尾 + 小圆圈装饰，床底净空约 28cm */
@@ -646,7 +646,7 @@ function hotelBed(p: string[]) {
   for (const sx of [-1, 1]) for (const z of [100, 132]) g.add(rbox(3, 33, 3, leg, { x: sx * 70, z }, 0.8))
   g.add(rbox(150, 3, 40, frame, { y: 33, z: 116 }, 1))
   g.add(rbox(148, 9, 38, uph, { y: 36, z: 116 }, 4))
-  return centerXZ(g)
+  return centerGroupLoose(g)
 }
 
 /** 跑车儿童床 */

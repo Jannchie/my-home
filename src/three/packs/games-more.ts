@@ -10,7 +10,7 @@
 import * as THREE from 'three'
 import { ball, cup, cyl, rbox, shade, toon, tray } from '../toon'
 import { C, paintPanel, rng, type AssetCategory, type AssetDef } from '../kit'
-import { G, P, PI, noOutline } from '../geo'
+import { G, P, PI, fitGroup, noOutline } from '../geo'
 import { CL, CN, F, I, J, M, N, R, type PalFlat } from '../packkit'
 
 type Draw = (g: CanvasRenderingContext2D, W: number, H: number) => void
@@ -21,17 +21,6 @@ const RED = '#c8302a'
 
 function def(id: string, name: string, category: AssetCategory, [w, d, h]: [number, number, number], pals: PalFlat[], build: (p: string[]) => THREE.Group, extra: Partial<AssetDef> = {}): AssetDef {
   return { id, name, category, w, d, h, palettes: pals.map((x) => x.slice(1)), paletteStyles: pals.map((x) => x[0]), styles: [...new Set(pals.map((x) => x[0]))], build, prop: true, ...extra }
-}
-/** 摆正：水平居中，最低点放到 0 */
-function fit(g: THREE.Object3D) {
-  const outer = new THREE.Group()
-  outer.add(g)
-  outer.updateMatrixWorld(true)
-  const b = new THREE.Box3().setFromObject(outer, true)
-  g.position.x -= (b.min.x + b.max.x) / 2
-  g.position.z -= (b.min.z + b.max.z) / 2
-  g.position.y -= b.min.y
-  return outer
 }
 /** 平放的画面：w × d，(x, z) 为中心，y 为高度 */
 const paintTop = (w: number, d: number, key: string, draw: Draw, x: number, y: number, z: number, ry = 0) => {
@@ -213,7 +202,7 @@ function junqi(state: 'setup' | 'mid' | 'flip') {
       for (let i = 0; i < 7; i++) g.add(jqPiece(i % 2 ? a : b, 20.5 + (i % 2) * 0.6, i * 0.9, -6 + (i % 3) * 0.4, 0.3 * (i % 3)))
       for (let i = 0; i < 5; i++) g.add(jqPiece(i % 2 ? b : a, -20.6, i * 0.9, 8 - (i % 2) * 0.5, -0.2 * (i % 3)))
     }
-    return fit(g)
+    return fitGroup(g)
   }
 }
 /** 军旗收好：纸盒（盖子斜靠在旁边）+ 两色棋子分格 + 折起来的棋盘 */
@@ -227,7 +216,7 @@ function junqiBoxed([wood, a, b]: string[]) {
   g.add(P(G(rbox(25, 0.6, 16, RED, {}, 0.3), noOutline(rbox(12, 0.05, 6, '#f6d36a', { y: 0.6 }, 0.1))), 0, 8.6, -9.4, -PI / 2 + 0.15))
   // 折好的棋盘
   g.add(rbox(17.6, 1.4, 28.6, wood, { x: 22, z: 0 }, 0.4))
-  return fit(g)
+  return fitGroup(g)
 }
 const JQ_P: PalFlat[] = [
   ['chinese', '#ead3a0', RED, '#2f5fa8'],
@@ -293,7 +282,7 @@ function doushou(state: 'start' | 'mid') {
         g.add(dsPiece(col, x, 0.85, z))
       }
     if (state === 'mid') for (let i = 0; i < 3; i++) g.add(dsPiece(i % 2 ? a : b, 15.6, i * 0.8, -4 + i * 0.3))
-    return fit(g)
+    return fitGroup(g)
   }
 }
 const DS_P: PalFlat[] = [
@@ -375,7 +364,7 @@ function feixing(state: 'start' | 'mid') {
       })
     })
     g.add(die(1.8, dieCol, DARK, state === 'mid' ? 2 : 0, 0.65, state === 'mid' ? -1 : 0, 0.4, state === 'mid' ? 6 : 1))
-    return fit(g)
+    return fitGroup(g)
   }
 }
 const FX_P: PalFlat[] = [
@@ -421,7 +410,7 @@ function gomoku(state: 'mid' | 'win') {
       g.add(cup(3.8, 3.6, 3.6, 0.4, box, { x: s * 20.5, z: s * 8 }))
       for (let k = 0; k < 5; k++) g.add(ball(0.75, black ? DARK : '#f8f6f0', { x: s * 20.5 + Math.cos(k * 1.3) * 1.6, y: 3.2, z: s * 8 + Math.sin(k * 1.3) * 1.6 }, [1, 0.4, 1]))
     }
-    return fit(g)
+    return fitGroup(g)
   }
 }
 const GOMOKU_P: PalFlat[] = [
@@ -458,7 +447,7 @@ function pokerGame(seats: 3 | 4) {
       // 掼蛋：两副牌，一个牌墩没抓完
       g.add(deck(back, 14, y, -12, 0.2, 2.4))
     }
-    return fit(g)
+    return fitGroup(g)
   }
 }
 const POKER_GAME_P: PalFlat[] = [
@@ -512,7 +501,7 @@ function paijiu(state: 'wall' | 'open') {
       for (let i = 0; i < 4; i++) for (let l = 0; l < 2; l++) g.add(pjTile(body, pipA, pipB, false, 0, 0, (i - 1.5) * (PJ_W + 0.15), l * PJ_H, 0))
       g.add(die(1.4, '#fbfaf6', DARK, 6, 0, 5, 0.5, 3), die(1.4, '#fbfaf6', DARK, -6, 0, -5.6, -0.3, 5))
     }
-    return fit(g)
+    return fitGroup(g)
   }
 }
 const PJ_P: PalFlat[] = [
@@ -544,7 +533,7 @@ function dominoes([body, pip, edge]: string[]) {
   for (const s of [-1, 1]) for (let i = 0; i < 6; i++) g.add(P(G(rbox(W, D, 1, body, {}, 0.3)), (i - 2.5) * (W + 0.3), 0, s * 14, 0, s > 0 ? 0 : PI))
   // 牌库（背面朝上）
   for (let i = 0; i < 7; i++) g.add(P(G(rbox(W, 1, D, edge, {}, 0.3)), 20 + (i % 3) * 2.8, 0, -6 + Math.floor(i / 3) * 5.2, 0, (r() - 0.5) * 0.6))
-  return fit(g)
+  return fitGroup(g)
 }
 const DOMINO_P: PalFlat[] = [
   ['classic', IVORY, DARK, '#3a3a3c'],
@@ -587,7 +576,7 @@ function hanafudaMat([mat, back, box]: string[]) {
   // 牌盒（垫子外、桌面上）
   g.add(rbox(6.6, 2.6, 9.6, box, { x: 28.6, z: 14 }, 0.4))
   g.add(noOutline(rbox(3, 0.05, 5, '#f2e6cc', { x: 28.6, y: 2.6, z: 14 }, 0.1)))
-  return fit(g)
+  return fitGroup(g)
 }
 const HANA_MAT_P: PalFlat[] = [
   ['japanese', '#7a2e3a', J.sumi, RED],
@@ -636,7 +625,7 @@ function sugoroku([paper, a, b]: string[]) {
   g.add(paintTop(53.6, 37.6, `bg-sugoroku-${paper}-${a}-${b}`, sugorokuDraw(paper, a, b), 0, 0.14, 0))
   for (const [x, z, col] of [[-16, 10, RED], [-10, 13, '#3a86d8'], [8, -7, '#3aa860'], [4, 3, '#f0c02a']] as const) g.add(koma(col, x, 0.15, z))
   g.add(die(1.6, '#fbfaf6', DARK, 20, 0.15, 12, 0.5, 3))
-  return fit(g)
+  return fitGroup(g)
 }
 /** 双六收好：卷起来的纸（系着绳）+ 一小盒棋子 */
 function sugorokuRolled([paper, a]: string[]) {
@@ -644,7 +633,7 @@ function sugorokuRolled([paper, a]: string[]) {
   g.add(P(cyl(2.4, 2.4, 38, paper, {}, 20), 0, 2.4, 0, 0, 0, PI / 2))
   for (const x of [-8, 8]) g.add(P(cyl(2.55, 2.55, 0.8, a, {}, 20), x, 2.4, 0, 0, 0, PI / 2))
   g.add(rbox(7, 2.4, 5, a, { x: 6, z: 5.6 }, 0.5))
-  return fit(g)
+  return fitGroup(g)
 }
 const SUGO_P: PalFlat[] = [
   ['japanese', '#f4ead2', J.shu, '#3f7a4a'],
@@ -700,7 +689,7 @@ function checkers(state: 'start' | 'mid') {
           // 升王：叠两枚
           if (state === 'mid' && jj === (side > 0 ? 0 : 7)) g.add(disc(1.7, 0.7, col, x, y + 0.7, z))
         }
-    return fit(g)
+    return fitGroup(g)
   }
 }
 const CK_P: PalFlat[] = [
@@ -777,7 +766,7 @@ function propertyGame([base, band, money]: string[]) {
   const notes = ['#f4f1ea', '#f6c6d0', '#f6e08a', '#a8d8a0', '#a8c8f0', '#f0b878', '#e8a0a0']
   notes.forEach((col, k) => g.add(rbox(6.4, 0.6 + (k % 3) * 0.3, 3.4, col, { x: 30, z: -16 + k * 4.4 }, 0.1)))
   g.add(rbox(1.2, 0.8, 30, money, { x: 34, z: -2.8 }, 0.3))
-  return fit(g)
+  return fitGroup(g)
 }
 function cone(r: number, h: number, col: string) {
   return cyl(0.05, r, h, col, {}, 16)
@@ -789,7 +778,7 @@ function propertyBoxed([base, band]: string[]) {
   g.add(noOutline(rbox(40, 0.06, 6, band, { y: 5, z: -2 }, 0.1)))
   g.add(noOutline(rbox(12, 0.06, 4, '#3a3a3c', { y: 5, z: 6 }, 0.1)))
   for (let k = 0; k < 3; k++) g.add(rbox(6.4, 0.5, 3.4, ['#f6e08a', '#a8d8a0', '#f6c6d0'][k], { x: 16 + k * 0.5, y: 5 + k * 0.5, z: 7 - k * 0.3 }, 0.1))
-  return fit(g)
+  return fitGroup(g)
 }
 const PROP_P: PalFlat[] = [
   ['retro', '#dfe8d0', R.red, R.caramel],
@@ -864,7 +853,7 @@ function words(state: 'play' | 'boxed') {
       for (let i = 0; i < 5; i++) g.add(tile(-8 + i * 2.3, 5.45, 4, i))
       g.add(ball(4, '#7a2e3a', { x: 25, y: 3, z: 2 }, [1, 0.75, 1]))
     }
-    return fit(g)
+    return fitGroup(g)
   }
 }
 const WORDS_P: PalFlat[] = [
@@ -894,7 +883,7 @@ function chipCase(open: boolean) {
     if (!open) {
       g.add(rbox(42.4, 1, 22.4, shell, { y: 7 }, 0.4))
       g.add(rbox(10, 1.4, 2, DARK, { y: 4.4, z: 11.4 }, 0.5))
-      return fit(g)
+      return fitGroup(g)
     }
     g.add(rbox(40.4, 0.6, 20.4, lining, { y: 0.8 }, 0.2))
     // 五排横躺的筹码（在槽里，只露出上半截）
@@ -902,7 +891,7 @@ function chipCase(open: boolean) {
     g.add(deck('#c8302a', 16, 1.4, -4, PI / 2, 1.6), deck('#2f5fa8', 16, 1.4, 4, PI / 2, 1.6))
     // 盖子立着
     g.add(P(G(tray(42, 6, 22, 0.8, shell, {}, 0.4)), 0, 7, -11.2, -PI / 2 - 0.12))
-    return fit(g)
+    return fitGroup(g)
   }
 }
 /** 德州扑克牌局：椭圆绒面垫，五张公共牌，各家面前的两张手牌和筹码，中间的底池，庄家按钮 */
@@ -929,7 +918,7 @@ function holdem([felt, rim, back]: string[]) {
   // 底池
   for (let c = 0; c < 3; c++) g.add(chips(CHIP_COLS[c + 1], 3 + c * 2, -3 + c * 3.4, y, 5.4))
   g.add(noOutline(cyl(1.6, 1.6, 0.5, '#ffffff', { x: 12, y, z: 4 }, 20)))
-  return fit(g)
+  return fitGroup(g)
 }
 const CHIP_CASE_P: PalFlat[] = [
   ['modern', '#c3c7cc', '#26262a'],
@@ -966,7 +955,7 @@ function jengaMid([wood]: string[]) {
   // 抽出来的几块：顶上横放两块、桌上散几块
   g.add(rbox(L, H, Wb - 0.08, wood, { y: 18 * H, z: -Wb }, 0.2))
   for (let k = 0; k < 4; k++) g.add(P(rbox(L, H, Wb - 0.08, shade(wood, 0.03), {}, 0.2), 9 + k * 1.4, 0, -3 + k * 2.8, 0, (r() - 0.5) * 1.2))
-  return fit(g)
+  return fitGroup(g)
 }
 
 // ---------- 通用：桌游盒子摞、骰子、计分本 ----------
@@ -988,7 +977,7 @@ function boxStack(sizes: [number, number, number][], seed: number) {
       g.add(P(b, (r() - 0.5) * 1.6, y, (r() - 0.5) * 1.2, 0, (r() - 0.5) * 0.12))
       y += h
     })
-    return fit(g)
+    return fitGroup(g)
   }
 }
 const BOX_P: PalFlat[] = [
@@ -1000,7 +989,7 @@ const BOX_P: PalFlat[] = [
 ]
 /** 两颗六面骰 */
 function dicePair([a, pip, b]: string[]) {
-  return fit(G(die(1.6, a, pip, 0, 0, 0, 0.3, 6), die(1.6, b, pip, 2.6, 0, 1.2, -0.5, 3)))
+  return fitGroup(G(die(1.6, a, pip, 0, 0, 0, 0.3, 6), die(1.6, b, pip, 2.6, 0, 1.2, -0.5, 3)))
 }
 /** 多面骰套装 + 皮质骰盘（六边形托盘里的 D20 / D12 / D10 / D8 / D6 / D4） */
 function diceRpg([tray0, d1, d2]: string[]) {
@@ -1021,7 +1010,7 @@ function diceRpg([tray0, d1, d2]: string[]) {
   g.add(poly(new THREE.TetrahedronGeometry(1), d2, -3, 3, 1.1))
   g.add(die(1.6, d1, '#ffffff', 2.4, 0.9, 2.2, 0.3, 4))
   g.add(poly(new THREE.OctahedronGeometry(1, 0), d2, 5.6, 2.8, 1))
-  return fit(g)
+  return fitGroup(g)
 }
 const DICE_P: PalFlat[] = [
   ['modern', '#fbfaf6', DARK, '#c8302a'],
@@ -1041,7 +1030,7 @@ function scorePad([cover, paper, pencil]: string[]) {
   for (let i = 0; i < 6; i++) g.add(noOutline(rbox(9, 0.03, 0.08, '#9fb4c7', { y: 0.9, z: -5 + i * 2.2 }, 0.01)))
   for (let i = 0; i < 3; i++) g.add(noOutline(rbox(0.08, 0.03, 12, '#9fb4c7', { y: 0.9, x: -2 + i * 3, z: 0.3 }, 0.01)))
   g.add(P(cyl(0.38, 0.38, 13, pencil, {}, 6), 7.2, 0.4, 1, PI / 2, 0.3))
-  return fit(g)
+  return fitGroup(g)
 }
 const PAD_P: PalFlat[] = [
   ['modern', '#3d3f44', PAPER, '#e0a526'],

@@ -5,7 +5,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, face, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, SWING_OPEN, ellipsePoly, glow, holePanel, movable, paintPanel, rectPoly, rng, shell, type AssetCategory, type AssetDef, type Poly, type SurfaceDef } from '../kit'
-import { G, P, batten, clearMat, cylX, cylZ, lit, noOutlineDeep, rod3, tube, type TubeOpts, type V3 } from '../geo'
+import { G, P, batten, clearMat, cylX, cylZ, fitGroup, lit, noOutlineDeep, rod3, tube, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, PROP, R, type PalFlat } from '../packkit'
 
 /** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
@@ -130,16 +130,6 @@ function openBox(w: number, h: number, d: number, t: number, color: string, y0 =
   g.add(rbox(w - t * 2 + 0.4, t, d, color, { y: y0 }, 0.5))
   g.add(rbox(w - t * 2 + 0.4, h - t * 2 + 0.4, 1, shade(color, -0.06), { y: y0 + t - 0.2, z: -d / 2 + 0.5 }, 0.3))
   return g
-}
-
-/** 门板 / 抽屉面：贴在 z = zf 处（背面嵌进 0.3） */
-/** 自由造型的模型：xz 居中、最低点落到地面（没有 surfaces 坐标依赖时用） */
-function centered(g: THREE.Group) {
-  const box = new THREE.Box3().setFromObject(g, true)
-  g.position.x -= (box.min.x + box.max.x) / 2
-  g.position.z -= (box.min.z + box.max.z) / 2
-  g.position.y -= box.min.y
-  return G(g)
 }
 
 /** 整体沿 z 平移（正面把手、门板凸出时让包围盒居中），surfaces 的坐标同步减去 */
@@ -268,7 +258,7 @@ function futonSofa(open: boolean) {
       back.position.set(0, 12 + 31, -27.5)
       g.add(back)
       g.add(rbox(44, 30, 12, acc, { x: -28, y: 26, z: -10, rx: -0.25 }, 5))
-      return centered(g)
+      return fitGroup(g)
     }
     // 展开：床垫全平
     g.add(rbox(120, 12, 190, wood, { y: 0 }, 1.5))
@@ -287,7 +277,7 @@ function lazyCube(p: string[]) {
   // 坐下去的凹陷：顶面中间一块略深的布
   g.add(rbox(48, 6, 48, shade(fab, -0.05), { y: 37 }, 3))
   g.add(rbox(18, 3, 2.4, acc, { y: 30, z: 32.6 }, 1))
-  return centered(g)
+  return fitGroup(g)
 }
 
 /** 贝壳懒人沙发：圆鼓鼓的座 + 身后扇形张开的一圈鼓瓣（像打开的扇贝），中间瓣最高、两侧渐低 */
@@ -313,7 +303,7 @@ function lazyShell(p: string[]) {
     pivot.add(lobe)
     g.add(pivot)
   }
-  return centered(g)
+  return fitGroup(g)
 }
 
 /** 长条豆袋（躺倒的长枕形） */
@@ -345,7 +335,7 @@ function daybed(p: string[]) {
   g.add(rbox(92, 34, 12, fab, { x: -34, y: 36, z: -26 }, 5))
   // 圆筒抱枕
   g.add(cylX(8, 40, acc, 50, 46, 8))
-  return centered(g)
+  return fitGroup(g)
 }
 
 /** 收纳软凳：方盒 + 软包盖 */
@@ -815,7 +805,7 @@ function tripodLamp(p: string[]) {
   g.add(cyl(0.8, 0.8, 14, metal, { y: 118 }, 8))
   g.add(drum(22, 24, 28, shadeC, { y: 122 }))
   g.add(bulb(4, 0, 132, 0))
-  return centered(g)
+  return fitGroup(g)
 }
 
 /** 和纸灯笼落地灯（细金属三脚撑起长椭圆纸灯） */
@@ -835,7 +825,7 @@ function akariFloor(p: string[]) {
     g.add(noOutlineDeep(P(torus(r, 0.25, rib), 0, cy + dy, 0, Math.PI / 2)))
   }
   g.add(cyl(0.6, 0.6, 3, metal, { y: cy + 51 }, 8))
-  return centered(g)
+  return fitGroup(g)
 }
 
 /** 北欧木杆落地灯：圆木底座 + 细木杆 + 亚麻筒罩 */
@@ -1331,7 +1321,7 @@ function cloudRug(p: string[]) {
   const g = new THREE.Group()
   g.add(rugBase(flatShape(cloudPoly(160, 110), 1.6, main)))
   g.add(rugBase(flatShape(cloudPoly(160, 110).map(([x, z]): [number, number] => [x * 0.78, z * 0.74 - 2]), 2, sub), false))
-  return centered(g)
+  return fitGroup(g)
 }
 
 /** 小熊头地毯 */
@@ -1577,7 +1567,7 @@ function doormat(kind: 'rect' | 'half' | 'cat') {
       g.add(rugBase(flatShape(ellipsePoly(5, 2.5, s * 18, 10, 12), 1.9, a), false))
     }
     g.add(rugBase(flatShape(ellipsePoly(2.4, 1.6, 0, 8, 12), 2, b), false))
-    return centered(g)
+    return fitGroup(g)
   }
 }
 
@@ -1867,7 +1857,7 @@ function stickyNotes(p: string[]) {
   const flags = [a, b, c, '#9fd8ff']
   flags.forEach((f, i) => g.add(rbox(1.2, 0.6, 4.4, f, { x: 4 + i * 1.3, y: 1.4, z: -3 }, 0.1)))
   g.add(rbox(6.4, 1.4, 5, C.white, { x: 5.2, y: 0, z: -3 }, 0.3))
-  return centered(g)
+  return fitGroup(g)
 }
 
 /** 落地地球仪：木三脚 + 子午圈 + 球（陆块用压扁小球贴在球面上） */
@@ -1900,7 +1890,7 @@ function floorGlobe(p: string[]) {
   mer.position.y = cy
   g.add(mer)
   g.add(cyl(0.6, 0.6, 3.6, BRASS, { y: 46.6 }, 8))
-  return centered(g)
+  return fitGroup(g)
 }
 
 /** 桌面白板：A 字小画架 + 白板 + 笔槽 */
@@ -1937,7 +1927,7 @@ function deskWhiteboard(p: string[]) {
   g.add(rbox(40, 1.6, 0.6, frame, { y: 1.4, z: 4.2 }, 0.2))
   g.add(P(cyl(0.6, 0.6, 11, ink, {}, 8), -6, 2.2, 2.8, 0, 0, Math.PI / 2))
   g.add(P(cyl(0.6, 0.6, 11, acc, {}, 8), 7, 2.2, 2.8, 0, 0, Math.PI / 2))
-  return centered(g)
+  return fitGroup(g)
 }
 
 /** 桌面收纳抽屉：三层小抽屉柜 */
@@ -1949,7 +1939,7 @@ function deskDrawers(p: string[]) {
     g.add(front(27.6, 5.6, fr, 0, 1.2 + i * 6, 11))
     g.add(rbox(6, 0.8, 0.8, knob, { y: 3.4 + i * 6, z: 12.6 }, 0.3))
   }
-  return centered(g)
+  return fitGroup(g)
 }
 
 /** 猫咪书立 + 一排书 */
@@ -2033,7 +2023,7 @@ function sharpener(p: string[]) {
   g.add(cylX(0.9, 2.2, metal, 5.1, 5.8, 0))
   g.add(rbox(0.6, 5, 0.8, metal, { x: 6.2, y: 5.6, z: 0 }, 0.2))
   g.add(P(cyl(0.8, 0.8, 2.4, acc, {}, 10), 7.5, 10.2, 0, 0, 0, Math.PI / 2))
-  return centered(g)
+  return fitGroup(g)
 }
 
 /** 打孔机 */
@@ -2086,7 +2076,7 @@ function pencilCase(p: string[]) {
   const cols = [acc, '#5a6b8c', C.red, C.leaf]
   cols.forEach((c, i) => g.add(P(pen(13, c, shade(c, -0.2), 0, 0, 0), -5 + i * 2.4, 1.6 + i * 0.25, -1.4 + (i % 2) * 2.4, 0, 0, -Math.PI / 2 + 0.35)))
   g.add(rbox(3, 1.4, 2, C.white, { x: 6.5, y: 0.6, z: 1.6 }, 0.4))
-  return centered(g)
+  return fitGroup(g)
 }
 
 /** A4 纸堆：拆开一半包装的复印纸 + 散页 */
@@ -2097,7 +2087,7 @@ function paperReam(p: string[]) {
   g.add(rbox(21.2, 5.1, 6, band, { z: 4 }, 0.3))
   g.add(rbox(20.8, 0.8, 18, paper, { y: 5, z: -5.6 }, 0.1))
   g.add(rbox(21, 0.12, 29.7, paper, { y: 5.85, z: 0, ry: 0.05 }, 0.04))
-  return centered(g)
+  return fitGroup(g)
 }
 
 /** 软木板（壁挂）：木框 + 软木 + 钉着的便签和照片 */
@@ -2413,7 +2403,7 @@ function blocksTower(p: string[]) {
   g.add(block(2, pal[4], 0, 20, 0, -0.05, 8))
   g.add(block(0, pal[5], 0, 24, 0, 0.3, 7))
   g.add(block(3, pal[6], 0, 31, 0, 0, 7))
-  return centered(g)
+  return fitGroup(g)
 }
 
 /** 散落的积木 + 打开的木箱 */
@@ -2429,7 +2419,7 @@ function blocksScatter(p: string[]) {
     const z = -16 + r() * 32
     g.add(block(i % 5, pal[i % pal.length], x, 0, z, r() * Math.PI, 5))
   }
-  return centered(g)
+  return fitGroup(g)
 }
 
 /** 拼接地垫：3 × 3 块 EVA，彼此留细缝，带锯齿接口 */
@@ -2511,7 +2501,7 @@ function rideCar(p: string[]) {
   g.add(P(torus(5, 1, acc), 10, 33, 0, 0, Math.PI / 2, 0.35))
   // 车灯
   for (const s of [-1, 1]) g.add(lit(ball(2.4, C.lemon, { x: 33, y: 16, z: s * 8 }, [0.5, 1, 1]), C.lemon, 0.5))
-  return centered(g)
+  return fitGroup(g)
 }
 
 /** 玩偶屋：两层开放式小屋 + 人字屋顶 */
@@ -2577,7 +2567,7 @@ function rockerUnicorn(p: string[]) {
   g.add(f)
   // 把手
   g.add(cylZ(0.8, 16, wood, 23, 57, 0, 10))
-  return centered(g)
+  return fitGroup(g)
 }
 
 /** 爬行隧道：双面布筒 + 一圈圈弹簧骨 */
@@ -2645,7 +2635,7 @@ function bookSling(p: string[]) {
       g.add(bk)
     }
   }
-  return centered(g)
+  return fitGroup(g)
 }
 
 /** 玩具收纳柜：木框 + 三排斜放的收纳筐 */
@@ -2689,7 +2679,7 @@ function pikler(p: string[]) {
     for (const zs of [-1, 1]) g.add(cylX(1.4, 86, rung, 0, y, zs * 36 * (1 - t)))
   }
   g.add(cylX(1.6, 88, rung, 0, H, 0))
-  return centered(g)
+  return fitGroup(g)
 }
 
 /** 学步推车：带把手的木推车，车斗里装积木 */
@@ -2704,7 +2694,7 @@ function walker(p: string[]) {
   g.add(cylX(1.6, 34, acc, 0, 47, -17))
   const r = rng(3)
   for (let i = 0; i < 6; i++) g.add(block(i % 3, TOY[i], -10 + (i % 3) * 9, i < 3 ? 9.2 : 9.2 + (i % 3 === 2 ? 2.25 : 4.5), -4, r(), 4.5))
-  return centered(g)
+  return fitGroup(g)
 }
 
 /** 成长椅（可调节座板与脚踏的高脚椅） */
@@ -2720,7 +2710,7 @@ function growthChair(p: string[]) {
   g.add(rbox(36, 2, 24, seat, { y: 47.8, z: -1 }, 0.9))
   for (const y of [62, 72]) g.add(rbox(40, 6, 1.8, wood, { y, z: 22 - (32 * (y + 3)) / 79 }, 0.6))
   g.add(cylX(0.9, 46, acc, 0, 4, 0))
-  return centered(g)
+  return fitGroup(g)
 }
 
 /** 婴儿推车：展开（篮式车身 + 遮阳篷 + 推把）/ 折叠 */
@@ -2753,7 +2743,7 @@ function stroller(open: boolean) {
       g.add(hood)
       g.add(rbox(36, 8, 22, shade(cloth, 0.1), { y: 22, z: 4 }, 2))
       for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(1.2, 10.5, 1.2, frame, { x: sx * 16, y: 29, z: 4 + sz * 9 }, 0.3))
-      return centered(g)
+      return fitGroup(g)
     }
     // 折叠：前后轮并拢，车架折成扁平一束
     for (const sx of [-1, 1]) {
@@ -2765,7 +2755,7 @@ function stroller(open: boolean) {
     g.add(cylX(1.6, 44, acc, 0, 80, -2))
     g.add(rbox(38, 46, 9, cloth, { y: 22, z: 2 }, 3))
     g.add(rbox(38, 10, 12, acc, { y: 58, z: 1 }, 3))
-    return centered(g)
+    return fitGroup(g)
   }
 }
 
@@ -2843,7 +2833,7 @@ function shapeSorter(p: string[]) {
   g.add(top)
   g.add(cyl(1.6, 1.6, 2.8, a, { x: 9, z: 4 }, 16))
   g.add(rbox(3.2, 3.2, 3.2, b, { x: 9.6, z: -3, ry: 0.4 }, 0.4))
-  return centered(g)
+  return fitGroup(g)
 }
 
 /** 叠叠圈 */
@@ -2880,7 +2870,7 @@ function kidsEasel(p: string[]) {
   g.add(tray(47.6, 4, 9, 0.8, tray0, { y: 50, z: -13 }, 0.3))
   for (let i = 0; i < 4; i++) g.add(P(cyl(0.6, 0.6, 6, TOY[i], {}, 8), -9 + i * 5, 51.8, 13, 0, 0, Math.PI / 2))
   g.add(P(cyl(0.6, 0.6, 6, a, {}, 8), 0, 51.8, -13, 0, 0, Math.PI / 2))
-  return centered(g)
+  return fitGroup(g)
 }
 
 const KID_WOOD: PalFlat[] = [

@@ -7,7 +7,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, ellipsePoly, holePanel, rectPoly, slab, type AssetCategory, type AssetDef, type Poly } from '../kit'
-import { P, PI, box3, cylX, cylZ, ghost, lit, noOutline, rod3, taperRod3, type V3 } from '../geo'
+import { P, PI, cylX, cylZ, fitBuild, ghost, lit, noOutline, rod3, taperRod3, type V3 } from '../geo'
 import { I, M, N, R, type Build, type PalFlat } from '../packkit'
 
 const STEEL = '#c3c7cc'
@@ -25,7 +25,7 @@ const PAPER = '#f1ead2'
 
 function def(id: string, name: string, category: AssetCategory, [w, d, h]: V3, pals: PalFlat[], build: Build, extra: Partial<AssetDef> = {}): AssetDef {
   // 普通形态：xz 居中、最低点贴地；挂起 / 壁挂 / 带层板坐标的保持原样
-  if (extra.form !== 'hanging' && extra.mount === undefined && !extra.surfaces) build = normalize(build)
+  if (extra.form !== 'hanging' && extra.mount === undefined && !extra.surfaces) build = fitBuild(build)
   return {
     id,
     name,
@@ -44,18 +44,6 @@ const prop = (id: string, name: string, category: AssetCategory, dims: V3, pals:
   def(id, name, category, dims, pals, build, { prop: true, ...extra })
 
 // ---------- 小工具 ----------
-
-function normalize(build: Build): Build {
-  return (p) => {
-    const inner = build(p)
-    const g = G(inner)
-    const b = box3(g)
-    inner.position.x -= (b.min.x + b.max.x) / 2
-    inner.position.z -= (b.min.z + b.max.z) / 2
-    inner.position.y -= b.min.y
-    return g
-  }
-}
 
 /** 双面材质（开口的壳：头盔、帐篷、飞盘） */
 function dbl<T extends THREE.Mesh>(m: T): T {

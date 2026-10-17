@@ -7,7 +7,7 @@
 import * as THREE from 'three'
 import { ball, cup, cyl, rbox, shade, toon, torus, tray } from '../toon'
 import { C, glow, paintPanel, pinwheelWalls, type AssetCategory, type AssetDef } from '../kit'
-import { G, P, PI, cylX, cylZ, noOutline } from '../geo'
+import { G, P, PI, cylX, cylZ, fitGroup, noOutline } from '../geo'
 import { CL, CN, F, I, J, M, N, PROP, type PalFlat } from '../packkit'
 
 type Draw = (g: CanvasRenderingContext2D, W: number, H: number) => void
@@ -19,17 +19,6 @@ function def(id: string, name: string, category: AssetCategory, [w, d, h]: [numb
   return { id, name, category, w, d, h, palettes: pals.map((x) => x.slice(1)), paletteStyles: pals.map((x) => x[0]), styles: [...new Set(pals.map((x) => x[0]))], build, ...extra }
 }
 
-/** 摆正：水平居中，最低点放到 y0（壁挂物传安装高度） */
-function fit(g: THREE.Object3D, y0 = 0) {
-  const outer = new THREE.Group()
-  outer.add(g)
-  outer.updateMatrixWorld(true)
-  const b = new THREE.Box3().setFromObject(outer, true)
-  g.position.x -= (b.min.x + b.max.x) / 2
-  g.position.z -= (b.min.z + b.max.z) / 2
-  g.position.y += y0 - b.min.y
-  return outer
-}
 /** 平放的画面：w × d，(x, z) 为中心，y 为高度 */
 const paintTop = (w: number, d: number, key: string, draw: Draw, x: number, y: number, z: number) => paintPanel(w, d, key, draw, { x, y, z: z + d / 2, rx: -PI / 2 })
 
@@ -74,7 +63,7 @@ function trophyCup(mat: Mat) {
     const top = G(cyl(1, 2.6, 3, '#fff', { y }, 16), ball(1.7, '#fff', { y: y + 4.2 }), cyl(0.8, 1.3, 3, '#fff', { y: y + 5 }, 12), cup(6.4, 2.6, 10, 0.4, '#fff', { y: y + 8 }))
     for (const s of [-1, 1]) top.add(torus(3, 0.5, '#fff', { x: s * 6.1, y: y + 13.6, rz: -s * PI / 2 }, PI))
     g.add(finish(top, mat))
-    return fit(g)
+    return fitGroup(g)
   }
 }
 /** 三层大奖杯：高底座 + 立柱 + 带盖大杯 */
@@ -86,7 +75,7 @@ function trophyTall(mat: Mat) {
     const top = G(cyl(1.4, 3.2, 4, '#fff', { y }, 16), ball(2.2, '#fff', { y: y + 5.6 }), cup(8.2, 3.2, 13, 0.5, '#fff', { y: y + 7 }), cyl(8.4, 8.4, 1, '#fff', { y: y + 20 }, 24), ball(1.8, '#fff', { y: y + 22.6 }))
     for (const s of [-1, 1]) top.add(torus(4.2, 0.6, '#fff', { x: s * 8, y: y + 15, rz: -s * PI / 2 }, PI))
     g.add(finish(top, mat))
-    return fit(g)
+    return fitGroup(g)
   }
 }
 /** 星形 */
@@ -105,7 +94,7 @@ function trophyStar(mat: Mat) {
     star.castShadow = true
     const top = G(cyl(0.9, 1.4, 9, '#fff', { y }, 12), P(star, 0, y + 9 + 5, 0))
     g.add(finish(top, mat))
-    return fit(g)
+    return fitGroup(g)
   }
 }
 /** 月桂环：圆环 + 两侧叶片 + 中心圆章 */
@@ -119,7 +108,7 @@ function trophyLaurel(mat: Mat) {
       top.add(P(ball(1, '#fff', {}, [1, 1.9, 0.5]), Math.cos(a) * 7.6, cy + Math.sin(a) * 7.6, 0, 0, 0, a))
     }
     g.add(finish(top, mat))
-    return fit(g)
+    return fitGroup(g)
   }
 }
 /** 水晶方尖碑（只有水晶款） */
@@ -127,7 +116,7 @@ function trophyObelisk([base, plate]: string[]) {
   const [g, y] = trophyBase(9, 9, base, plate)
   const ob = P(cyl(1.2, 3.4, 18, '#fff', {}, 4), 0, y, 0, 0, PI / 4)
   g.add(finish(G(ob), 'crystal'))
-  return fit(g)
+  return fitGroup(g)
 }
 
 const TROPHY_BASES: PalFlat[] = [
@@ -169,7 +158,7 @@ function medalStand(mat: Mat) {
     ;((medal.children[1] as THREE.Mesh).material as THREE.Material).dispose?.()
     ;(medal.children[1] as THREE.Mesh).material = toon(shade(METAL[mat], -0.15))
     g.add(medal)
-    return fit(g)
+    return fitGroup(g)
   }
 }
 /** 奖牌展示框（挂墙，三枚：金银铜）：[框色, 衬底色, 缎带色] */
@@ -188,7 +177,7 @@ function medalFrame([frame, backing, ribbon]: string[]) {
   glass.userData.noOutline = true
   glass.castShadow = false
   g.add(glass)
-  return fit(g, MEDAL_FRAME_MOUNT)
+  return fitGroup(g, MEDAL_FRAME_MOUNT)
 }
 
 const medals: AssetDef[] = [
@@ -249,7 +238,7 @@ function certFrame(kind: CertKind, w: number, h: number) {
     const g = new THREE.Group()
     g.add(rbox(w, h, 1.6, frame, {}, 0.35))
     g.add(paintPanel(w - 3, h - 3, `hg-cert-${kind}-${accent}`, certDraw(kind, accent), { y: 1.5, z: 0.82 }))
-    return fit(g, CERT_MOUNT)
+    return fitGroup(g, CERT_MOUNT)
   }
 }
 const CERT_FRAMES: PalFlat[] = [
@@ -266,7 +255,7 @@ function certFolder([cover, foil]: string[]) {
   g.add(rbox(24, 1.4, 17, cover, {}, 0.4))
   g.add(noOutline(rbox(8, 0.1, 1.2, foil, { y: 1.42, z: -2 }, 0.05)))
   g.add(noOutline(cyl(2, 2, 0.1, foil, { y: 1.42, z: 3 }, 20)))
-  return fit(g)
+  return fitGroup(g)
 }
 /** 一摞证书夹 */
 function certStack([cover, foil]: string[]) {
@@ -275,14 +264,14 @@ function certStack([cover, foil]: string[]) {
   cols.forEach((c, i) => {
     g.add(P(G(rbox(24, 1.4, 17, c, {}, 0.4), noOutline(rbox(8, 0.1, 1.2, foil, { y: 1.42, z: -2 }, 0.05))), (i % 2 ? 0.8 : -0.6), i * 1.45, (i % 2 ? -0.5 : 0.4), 0, (i - 1.5) * 0.06))
   })
-  return fit(g)
+  return fitGroup(g)
 }
 /** 毕业证书筒（横放）：[筒身, 盖子] */
 function certTube([body, lid]: string[]) {
   const g = new THREE.Group()
   g.add(cylX(3.2, 30, body, 0, 3.2, 0, 20))
   for (const s of [-1, 1]) g.add(cylX(3.5, 2.6, lid, s * 15.6, 3.2, 0, 20))
-  return fit(g)
+  return fitGroup(g)
 }
 /** 证书收纳盒（盖子半开，露出一叠证书）：[盒, 标签] */
 function certBox([box, label]: string[]) {
@@ -294,7 +283,7 @@ function certBox([box, label]: string[]) {
   // 盖子：铰链在后沿上方，向后打开
   const lid = G(rbox(35, 1.2, 27, shade(box, 0.06), { z: -13.5 }, 0.5))
   g.add(P(lid, 0, 8, -13, -1.9))
-  return fit(g)
+  return fitGroup(g)
 }
 
 const certs: AssetDef[] = [
@@ -359,14 +348,14 @@ function mjFold([top, felt]: string[]) {
   g.add(cylX(1, 74, DARK, 0, 34.8, 0))
   g.add(rbox(80, 2.4, 80, top, { y: 69.6 }, 0.6))
   g.add(rbox(74, 0.4, 74, felt, { y: 72 }, 0.2))
-  return fit(g)
+  return fitGroup(g)
 }
 /** 折叠麻将桌（收起靠墙立着）：[桌面] */
 function mjFoldClosed([top]: string[]) {
   const g = new THREE.Group()
   g.add(rbox(80, 80, 2.4, top, { y: 1 }, 0.6))
   for (const s of [-1, 1]) g.add(rbox(3, 78, 3, DARK, { x: s * 30, y: 2, z: 2.8 }, 1))
-  return fit(g)
+  return fitGroup(g)
 }
 /** 和室手积麻将桌（座卓式，四边有挡牌的边框，四角有点棒抽屉）：[桌框, 桌布] */
 function jantaku([frame, felt]: string[]) {
@@ -379,13 +368,13 @@ function jantaku([frame, felt]: string[]) {
   }
   g.add(rbox(67, 0.4, 67, felt, { y: 33 }, 0.2))
   for (let k = 0; k < 4; k++) g.add(P(G(rbox(10, 2, 0.6, shade(frame, -0.2), { y: 29.5, z: 37.8 }, 0.3)), 0, 0, 0, 0, (k * PI) / 2))
-  return fit(g)
+  return fitGroup(g)
 }
 /** 麻将牌·砌好牌墙（不带牌垫，直接放在桌面 / 绒面上）：[牌背] */
 function mjWalls([back]: string[]) {
   const g = tileWalls(0, 16, back, 15)
   g.add(rbox(1.4, 1.4, 1.4, '#ffffff', { x: -1, z: 1 }, 0.3), rbox(1.4, 1.4, 1.4, '#ffffff', { x: 1.3, z: -0.6 }, 0.3))
-  return fit(g)
+  return fitGroup(g)
 }
 /** 麻将牌·对局中（牌墙 + 四家手牌 + 舍牌，不带牌垫）：[牌背] */
 function mjHands([back]: string[]) {
@@ -396,7 +385,7 @@ function mjHands([back]: string[]) {
     side.add(rbox(6 * 2.6, 0.7, 7, back, { z: 5.5 }, 0.25), rbox(6 * 2.6, 1.2, 7, IVORY, { y: 0.7, z: 5.5 }, 0.25))
     g.add(P(side, 0, 0, 0, 0, (k * PI) / 2))
   }
-  return fit(g)
+  return fitGroup(g)
 }
 const FELTS: PalFlat[] = [
   ['chinese', CN.rosewood, '#2f8a5a'],
@@ -484,7 +473,7 @@ function goBoardFlat(fill: number) {
     g.add(rbox(45, 2.4, 42, wood, {}, 0.4))
     g.add(paintTop(44, 41, `hg-goboard-${wood}-${line}`, gridDraw(19, wood, line, true), 0, 2.45, 0))
     if (fill) g.add(goStones(44, 41, 2.45, fill, 13 + Math.round(fill * 100)))
-    return fit(g)
+    return fitGroup(g)
   }
 }
 /** 棋罐：罐身 + 盖子（斜放在一旁露出棋子）：[罐色, 编织纹色] stone 黑 / 白 */
@@ -498,7 +487,7 @@ function goBowl(stone: 'black' | 'white', woven: boolean) {
     for (let k = 0; k < 6; k++) g.add(ball(0.95, col, { x: Math.cos(k) * 2, y: 6.6, z: Math.sin(k) * 2 }, [1, 0.42, 1]))
     // 盖子靠在罐边
     g.add(P(G(ball(4.6, body, {}, [1, 0.3, 1])), 1.8, 7.6, -1.2, 0.12, 0, -0.1))
-    return fit(g)
+    return fitGroup(g)
   }
 }
 /** 中式方桌式棋桌（只是桌子，桌面浅色）：[桌木, 桌面] */
@@ -507,14 +496,14 @@ function qizhuo([wood, top]: string[]) {
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(5, 70, 5, wood, { x: sx * 32, z: sz * 32 }, 0.8))
   g.add(rbox(66, 6, 66, wood, { y: 64 }, 0.8))
   g.add(rbox(74, 3, 74, top, { y: 70 }, 1))
-  return fit(g)
+  return fitGroup(g)
 }
 /** 独脚圆桌（游戏桌）：[桌木] */
 function roundGameTable([wood]: string[]) {
   const g = new THREE.Group()
   g.add(cyl(18, 22, 3, wood, {}, 24), cyl(4, 5, 64, wood, { y: 3 }, 16))
   g.add(cyl(32, 32, 3.4, wood, { y: 67 }, 32))
-  return fit(g)
+  return fitGroup(g)
 }
 /** 日式足付き碁盤（厚盘 + 四只脚，盘上有棋局）：[盘木, 脚] */
 function goBan([wood, leg]: string[]) {
@@ -523,7 +512,7 @@ function goBan([wood, leg]: string[]) {
   g.add(rbox(45, 15, 42, wood, { y: 9 }, 0.6))
   g.add(paintTop(44, 41, `hg-goban-${wood}`, gridDraw(19, wood, '#3a2a1e', true), 0, 24.05, 0))
   g.add(goStones(44, 41, 24.05, 0.12, 5))
-  return fit(g)
+  return fitGroup(g)
 }
 /** 日式足付き将棋盤（盘上摆着对局）：[盘木, 脚] */
 function shogiBan([wood, leg]: string[]) {
@@ -534,7 +523,7 @@ function shogiBan([wood, leg]: string[]) {
   let s = 9
   const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296)
   for (let i = 0; i < 16; i++) g.add(P(rbox(2.4, 0.8, 2.8, '#e9cf98', {}, 0.2), (Math.floor(rnd() * 9) - 4) * 3.3, 21, (Math.floor(rnd() * 9) - 4) * 3.6, 0, rnd() < 0.5 ? 0 : PI))
-  return fit(g)
+  return fitGroup(g)
 }
 const BOARD_WOOD: PalFlat[] = [
   ['chinese', '#e3c27f', '#3a2a1e'],
@@ -599,7 +588,7 @@ function poolTable([wood, felt, rail]: string[]) {
   g.add(ball(2.8, '#fbf8f0', { x: -50, y: 79.8, z: 0 }))
   // 球杆斜放在台面上
   g.add(P(cyl(0.7, 1.3, 140, '#d9b98c', {}, 10), -20, 78.4, 22, 0, 0, PI / 2 - 0.01))
-  return fit(g)
+  return fitGroup(g)
 }
 const DART_MOUNT = 150
 /** 飞镖盘：[外圈, 色环 1, 色环 2] */
@@ -644,7 +633,7 @@ function dartboard([rim, c1, c2]: string[]) {
     [8, 16],
   ] as [number, number][])
     g.add(P(G(cyl(0.25, 0.25, 7, '#c9ced6', {}, 6), rbox(1.6, 2.4, 0.1, '#c8473a', { y: 5.6 }, 0.05)), x, y, 1.8, PI / 2 - 0.15))
-  return fit(g, DART_MOUNT)
+  return fitGroup(g, DART_MOUNT)
 }
 /** 飞镖柜（门打开，两侧小黑板记分）：[柜木, 色环 1, 色环 2] */
 function dartCabinet([wood, c1, c2]: string[]) {
@@ -661,7 +650,7 @@ function dartCabinet([wood, c1, c2]: string[]) {
     const door = G(rbox(27, 60, 2, wood, { x: s * 13.5 }, 0.6), noOutline(rbox(22, 46, 0.2, '#2f3a33', { x: s * 13.5, y: 7, z: 1.05 }, 0.1)))
     g.add(P(door, s * 28, 0, 3.5, 0, -s * 0.35))
   }
-  return fit(g, DART_MOUNT - 7)
+  return fitGroup(g, DART_MOUNT - 7)
 }
 const westGames: AssetDef[] = [
   def('hg-pool-table', '台球桌', 'hobby', [226, 126, 85], [
@@ -714,7 +703,7 @@ function hexLights([a, b, c]: string[]) {
     m.userData.noOutline = true
     g.add(m, P(cyl(9, 9, 1, '#2a2a2e', {}, 6), x, y, 0.5, PI / 2, 0, PI / 6))
   })
-  return fit(g, HEX_MOUNT)
+  return fitGroup(g, HEX_MOUNT)
 }
 const FOAM_MOUNT = 120
 /** 吸音棉（3 × 2 块，楔形纹路交替）：[色 1, 色 2] */
@@ -731,7 +720,7 @@ function acousticPanels([a, b]: string[]) {
       }
       g.add(P(cell, (i - 1) * 30, j * 30, 0))
     }
-  return fit(g, FOAM_MOUNT)
+  return fitGroup(g, FOAM_MOUNT)
 }
 const duo: AssetDef[] = [
   def('hg-duo-gaming-desk', '双人电竞台', 'study', [240, 75, 75], [

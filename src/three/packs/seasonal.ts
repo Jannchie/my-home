@@ -156,7 +156,7 @@ const scaled = (g: THREE.Group, k: number) => {
 // ---------- 定义工具 ----------
 
 /** 把模型按约定摆正（见文件头） */
-function settle(g: THREE.Group, e: Partial<AssetDef>) {
+function settleByForm(g: THREE.Group, e: Partial<AssetDef>) {
   g.updateMatrixWorld(true)
   const b = new THREE.Box3().setFromObject(g, true)
   if (e.form === 'hanging') {
@@ -186,7 +186,7 @@ function A(id: string, name: string, category: AssetCategory, [w, d, h]: [number
     paletteStyles: pals.map((p) => p[0]),
     styles,
     ...extra,
-    build: (p) => settle(build(p), extra),
+    build: (p) => settleByForm(build(p), extra),
   }
 }
 

@@ -5,7 +5,7 @@ import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, ellipsePoly, glow, rectPoly, rng, shell, slab, type AssetCategory, type AssetDef, type Poly } from '../kit'
 import { hollow, swingDoor } from './styles-world'
-import { P, PI, batten, cylX, cylZ, ghostOutlined, litOutlined, noOutline, rod3, type V3 } from '../geo'
+import { P, PI, batten, centerGroup, cylX, cylZ, ghostOutlined, litOutlined, noOutline, rod3, type V3 } from '../geo'
 import { I, J, M, N, PROP, R, type PalFlat } from '../packkit'
 
 const MIR = '#cfdfe9'
@@ -1210,17 +1210,6 @@ const CUPS: AssetDef[] = [
 // 爱好 / 模型
 // ======================================================================
 
-/** 把 g 在 xz 上居中（不动 y）：造型不对称的素材用 */
-function centered(g: THREE.Group) {
-  g.updateMatrixWorld(true)
-  const c = new THREE.Box3().setFromObject(g, true).getCenter(new THREE.Vector3())
-  const out = new THREE.Group()
-  g.position.x -= c.x
-  g.position.z -= c.z
-  out.add(g)
-  return out
-}
-
 /** xy 平面的薄片（尾翼等），pts 为 [x, y] */
 function finXY(pts: [number, number][], t: number, color: string) {
   const s = new THREE.Shape(pts.map(([x, y]) => new THREE.Vector2(x, y)))
@@ -1368,7 +1357,7 @@ function airliner(p: string[]) {
   pl.add(P(finXY([[-11, 1.2], [-15.6, 1.2], [-17.6, 7.5], [-15.2, 7.5]], 0.5, tail), 0, 0, 0))
   pl.add(wings([[-12.5, 0.8], [-15.5, 0.8], [-17.2, 6.5], [-15.8, 6.5]], 0.4, body, 0.3))
   pl.rotation.z = 0.08
-  return centered(planeStand(pl, 16.5, base))
+  return centerGroup(planeStand(pl, 16.5, base))
 }
 
 function fighter(p: string[]) {
@@ -1385,7 +1374,7 @@ function fighter(p: string[]) {
   }
   pl.add(cylX(1.1, 1.2, '#3a3a3c', -10.4, 0, 0, 14))
   pl.rotation.set(0.12, 0, 0.14)
-  return centered(planeStand(pl, 13.5, base))
+  return centerGroup(planeStand(pl, 13.5, base))
 }
 
 function propPlane(p: string[]) {
@@ -1408,7 +1397,7 @@ function propPlane(p: string[]) {
   pl.add(finXY([[-11, 0.8], [-14, 0.8], [-14.5, 5], [-12.5, 5]], 0.4, acc))
   pl.add(wings([[-11.5, 0.6], [-14.5, 0.6], [-14.5, 5.5], [-12.8, 5.5]], 0.35, body, 0.2))
   pl.rotation.z = 0.08
-  return centered(planeStand(pl, 15, base, 13))
+  return centerGroup(planeStand(pl, 15, base, 13))
 }
 
 function helicopter(p: string[]) {
@@ -1430,7 +1419,7 @@ function helicopter(p: string[]) {
     pl.add(cylX(0.4, 13, '#3a3a3c', 0, -5.8, s * 3.6, 10))
     for (const x of [-3, 3]) pl.add(rod3([x, -5.8, s * 3.6], [x, -2.8, s * 2.2], 0.3, '#3a3a3c', 6))
   }
-  return centered(planeStand(pl, 14, base, 11))
+  return centerGroup(planeStand(pl, 14, base, 11))
 }
 
 function drone(p: string[]) {
@@ -1745,7 +1734,7 @@ function airbrushSet(p: string[]) {
   g.add(ab)
   const pts: V3[] = [[2, 3, 3.5], [3.8, 0.4, 4.5], [5.4, 0.4, 5.2], [4.6, 8, 4], [5.4, 14.6, 2]]
   for (let i = 0; i < pts.length - 1; i++) g.add(rod3(pts[i], pts[i + 1], 0.3, hose, 6))
-  return centered(g)
+  return centerGroup(g)
 }
 
 function jigsaw(p: string[]) {
@@ -1847,7 +1836,7 @@ function telescope(p: string[]) {
   g.add(rod3(at(-40), at(-44), 1.6, mount, 12))
   const e = at(-44)
   g.add(cyl(1.1, 1.1, 5, RUBBER, { x: e[0], y: e[1], z: e[2] }, 12))
-  return centered(g)
+  return centerGroup(g)
 }
 
 /** 吉他（含支架）；k 缩放（尤克里里用） */
@@ -1885,7 +1874,7 @@ function guitar(k: number) {
     g.add(rod3([0, 8, 6], [0, 23, -14.8], 1, stand, 8))
     g.add(cylX(0.9, 8, stand, 0, 80.5, -10.6, 10))
     for (const s of [-1, 1]) g.add(rod3([s * 3.6, 80.5, -10.6], [s * 3.6, 84, -9.6], 0.8, RUBBER, 8))
-    const out = centered(g)
+    const out = centerGroup(g)
     out.scale.setScalar(k)
     return out
   }
@@ -1944,7 +1933,7 @@ function easel(p: string[]) {
   P(cv, 0, 72.5, 9, -0.08, 0, 0)
   g.add(cv)
   g.add(rbox(6, 3, 5, wood, { y: 120.5, z: 3 }, 0.6))
-  return centered(g)
+  return centerGroup(g)
 }
 const EASEL_PALS: PalFlat[] = [
   ['nordic', N.oak, N.blue, N.sage],
@@ -2138,7 +2127,7 @@ const HOBBY_ITEMS: AssetDef[] = [
       ['cute', C.white, C.pink, C.lemon],
       ['modern', M.char, M.silver, '#e05a3a'],
     ],
-    (p) => centered(gunpla(p)),
+    (p) => centerGroup(gunpla(p)),
     PROP,
   ),
   def(
@@ -2320,7 +2309,7 @@ function floorArch(p: string[]) {
   const pan = mirrorPanel((s) => archOutline(s, 60, 166), (s) => archOutline(s, 52, 158, 4), (s) => archOutline(s, 52.6, 158.6, 3.7), 3, frame, back, [-9, 112, 46])
   const at = leanPanel(g, pan, 3, -0.1)
   kickstand(g, at(0, 115, -1.5), 34, frame)
-  return centered(g)
+  return centerGroup(g)
 }
 
 function floorCheval(p: string[]) {
@@ -2357,7 +2346,7 @@ function floorLed(p: string[]) {
   pan.add(noOutline(P(led, 0, 0, 1.2)))
   const at = leanPanel(g, pan, 3, -0.1)
   kickstand(g, at(0, 110, -1.5), 32, frame)
-  return centered(g)
+  return centerGroup(g)
 }
 
 function floorLean(p: string[]) {
@@ -2365,7 +2354,7 @@ function floorLean(p: string[]) {
   const g = new THREE.Group()
   const pan = mirrorPanel((s) => rrOutline(s, 70, 180, 2), (s) => rrOutline(s, 62, 172, 1, 4), (s) => rrOutline(s, 62.6, 172.6, 1.2, 3.7), 3.5, frame, back, [-10, 120, 56])
   leanPanel(g, pan, 3.5, -0.17)
-  return centered(g)
+  return centerGroup(g)
 }
 
 function floorWheel(p: string[]) {
@@ -2462,7 +2451,7 @@ function tableTrifold(p: string[]) {
   const r = panel(9)
   r.children.forEach((c) => (c.position.x += 4.5))
   g.add(P(r, 9, 2, -2.5, 0, -0.6, 0))
-  return centered(g)
+  return centerGroup(g)
 }
 
 function handMirror(p: string[]) {
@@ -2483,7 +2472,7 @@ function handMirror(p: string[]) {
   g.add(m)
   const a = new THREE.Vector3(0, 0, -0.8).applyEuler(new THREE.Euler(th, 0, 0)).add(m.position)
   g.add(batten([0, 0.8, -3.6], [0, a.y, a.z], 0.8, 0.4, brass, 0.15))
-  return centered(g)
+  return centerGroup(g)
 }
 
 const TABLE_MIR_PALS: PalFlat[] = [

@@ -5,7 +5,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, paintLandscape, paintPanel, pinwheelWalls, rng, type AssetCategory, type AssetDef } from '../kit'
-import { G, P, PI, cylX, cylZ, ghostOutlined, litOutlined, noOutline, rod3, taperRod3, type V2, type V3 } from '../geo'
+import { G, P, PI, cylX, cylZ, fitGroup, ghostOutlined, litOutlined, noOutline, rod3, taperRod3, type V2, type V3 } from '../geo'
 import { I, J, M, N, PROP, R, type PalFlat } from '../packkit'
 
 type Draw = (g: CanvasRenderingContext2D, W: number, H: number) => void
@@ -44,7 +44,7 @@ function def(
   }
 }
 /** build 结果再摆正一次 */
-const F = (b: (p: string[]) => THREE.Group) => (p: string[]) => fit(b(p))
+const F = (b: (p: string[]) => THREE.Group) => (p: string[]) => fitGroup(b(p))
 
 // ---------- 小工具 ----------
 
@@ -85,18 +85,6 @@ function flat(pts: V2[], depth: number, color: string, smooth = true, bevel = 0.
   m.castShadow = true
   m.receiveShadow = true
   return m
-}
-
-/** 把组摆正：x / z 居中，最低点落在 y0 */
-function fit(g: THREE.Object3D, y0 = 0) {
-  const outer = new THREE.Group()
-  outer.add(g)
-  outer.updateMatrixWorld(true)
-  const b = new THREE.Box3().setFromObject(outer, true)
-  g.position.x -= (b.min.x + b.max.x) / 2
-  g.position.z -= (b.min.z + b.max.z) / 2
-  g.position.y += y0 - b.min.y
-  return outer
 }
 
 /** 平放的画面：w × d，画布顶边朝后（-z），(x, z) 为中心，y 为高度 */
@@ -532,7 +520,7 @@ function eGuitarWall(p: string[]) {
   // 墙板 + 挂钩（托住琴头下面的琴颈）
   g.add(rbox(8, 12, 1.6, shade(p[2], -0.1), { y: top - 26, z: 0.8 }, 0.6))
   for (const s of [-1, 1]) g.add(rod3([s * 3.6, top - 22, 1.6], [s * 3.6, top - 22.8, 7.6], 0.6, DARK), ball(0.9, RUBBER, { x: s * 3.6, y: top - 22.4, z: 7.8 }))
-  return fit(g, E_GUITAR_MOUNT)
+  return fitGroup(g, E_GUITAR_MOUNT)
 }
 
 /** 吉他音箱：[外皮, 网布, 面板] */
@@ -569,7 +557,7 @@ function saxStand(p: string[]) {
   g.add(rod3([3, 9, 0], [3, 12.3, 0], 0.7, stand))
   g.add(rod3([3, 9, 0], [-6, 44, -5], 0.7, stand))
   g.add(rod3([-6, 44, -5], [-2, 44, -2.5], 0.6, RUBBER))
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 小号（平放）：[管身, 按键, 吹嘴] */
@@ -589,7 +577,7 @@ function trumpet(p: string[]) {
     g.add(cyl(0.4, 0.4, 2, METAL, { x, y: 11.5 }, 8), puck(1, 0.8, key, { x, y: 13.4 }))
   }
   g.add(cylX(0.9, 3, mouth, -18.5, y2, 0, 12))
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 长笛（打开的琴盒）：[琴盒, 内衬, 笛身] */
@@ -602,7 +590,7 @@ function fluteCase(p: string[]) {
   for (const [len, z, x] of pieces) g.add(cylX(0.95, len, silver, x, 3.15, z, 14))
   for (let i = 0; i < 8; i++) g.add(ball(0.55, silver, { x: -14 + i * 3.6, y: 4.1, z: -2.8 }, [1, 0.5, 1]))
   g.add(ball(0.5, silver, { x: -8, y: 4, z: 0 }, [1.4, 0.6, 1]))
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 单簧管（立在支架上）：[管身, 按键, 支架] */
@@ -633,7 +621,7 @@ function harmonica(p: string[]) {
   h.add(rbox(10.6, 0.6, 2.8, cover, {}, 0.25), rbox(10.6, 0.6, 2.8, cover, { y: 1.6 }, 0.25))
   for (let i = 0; i < 10; i++) h.add(noOutline(rbox(0.55, 0.5, 0.2, DARK, { x: -4.5 + i, y: 0.85, z: 1.25 }, 0.1)))
   g.add(P(h, 0.5, 0, 2.6))
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 手风琴（立放）：[琴身, 风箱, 点缀] */
@@ -696,7 +684,7 @@ function harp(p: string[]) {
     const c = i % 7 === 0 ? '#d65a3c' : i % 7 === 3 ? '#3d5a80' : str
     g.add(noOutline(taperRod3([x, yb, 0], [x, yt, 0], 0.15, 0.15, c, 4)))
   }
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 三味线（立在架上）：[木色, 皮面, 架子] */
@@ -717,7 +705,7 @@ function shamisen(p: string[]) {
   const L = 62
   g.add(rbox(4, 2 + L * Math.cos(t) - 1, 3, stand, { y: 2, z: 4 - L * Math.sin(t) - 1.2 - 1.5 }, 0.8))
   g.add(rbox(8, 2, 4, stand, { y: 1 + L * Math.cos(t), z: 4 - L * Math.sin(t) - 1.2 - 1.5 }, 0.6))
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 筝（和风长琴）：[木色, 琴柱, 架] */
@@ -774,7 +762,7 @@ function taiko(p: string[]) {
   }
   for (const z of [-16, 6]) g.add(rbox(58, 4, 4, stand, { y: 6, z }, 1))
   for (const s of [-1, 1]) g.add(rod3([s * 6, 1, 22], [s * 3, 1, 4], 1, '#e8c89a'))
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 尺八（插在座上）：[竹色, 节, 座] */
@@ -810,7 +798,7 @@ function smallInstruments(p: string[]) {
   // 卡祖笛
   g.add(cylX(1.1, 9, acc, 10, 1.1, 8, 12))
   g.add(cyl(0.9, 0.9, 1, a, { x: 10, y: 1.5, z: 8 }, 12))
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 合成器 / MIDI 键盘：[机身, 白键, 点缀] */
@@ -870,7 +858,7 @@ function musicStand(p: string[]) {
   desk.add(paintPanel(21, 28, `int-score-${paper}-a`, drawScore(paper, ink, 7), { x: -10.8, y: 1.6, z: 0.9 }))
   desk.add(paintPanel(21, 28, `int-score-${paper}-b`, drawScore(paper, ink, 11), { x: 10.8, y: 1.6, z: 0.9 }))
   g.add(P(desk, 0, 99, 0, -0.42))
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 节拍器：[机身, 刻度面, 摆锤] */
@@ -943,7 +931,7 @@ const mangaStack = (n: number) => (p: string[]) => {
     book.add(noOutline(rbox(3.2, 0.9, 0.2, '#ffffff', { x: -5, y: 0.3, z: 5.75 }, 0.05)))
     g.add(P(book, x, i * 1.5, z, 0, ry))
   }
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 漫画全套（一排立放 + 书挡）：书脊画在一张贴图上 [系列 A, 系列 B, 书挡] */
@@ -984,7 +972,7 @@ function mangaRow(p: string[]) {
     g.add(rbox(0.4, 15, 11, end, { x: s * ((n * t) / 2 + 0.25) }, 0.15))
     g.add(rbox(5, 0.4, 11, end, { x: s * ((n * t) / 2 + 2.7) }, 0.15))
   }
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 无脸小人偶（少女型），站在底座上，高约 11 */
@@ -1071,7 +1059,7 @@ function itaBag(p: string[]) {
   g.add(taperRod3([13, 22, 4], [15.2, 17, 5.2], 0.12, 0.12, METAL, 6))
   g.add(ball(1.8, badge, { x: 15.4, y: 15.4, z: 5.4 }))
   for (const s of [-1, 1]) g.add(ball(0.6, badge, { x: 15.4 + s * 1.2, y: 16.8, z: 5.4 }))
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 亚克力立牌：[底色, 角色发色, 角色衣服] */
@@ -1134,7 +1122,7 @@ function penlights(p: string[]) {
     g.add(litOutlined(ball(1.15, c, { x: x + 10, y: 1.15, z }), c, 0.7))
     g.add(rbox(1.6, 0.6, 0.6, shade(c, -0.2), { x: x - 6, y: 2.4, z }, 0.2))
   })
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 海报筒（两支立放）：[主色, 副色, 盖] */
@@ -1145,7 +1133,7 @@ function posterTubes(p: string[]) {
   g.add(cyl(3.2, 3.2, 54, b, { x: 5, z: 1.4 }, 20), cyl(3.5, 3.5, 3.5, capC, { x: 5, y: 52, z: 1.4 }, 20), cyl(3.5, 3.5, 2.5, capC, { x: 5, z: 1.4 }, 20))
   g.add(cyl(4.15, 4.15, 2, DARK, { x: -2.6, y: 40 }, 20))
   g.add(taperRod3([-2.6, 41, 4.1], [-2.6, 66, 4.2], 0.5, 0.5, DARK, 6))
-  return fit(g)
+  return fitGroup(g)
 }
 
 // ---------- 运动 ----------
@@ -1216,7 +1204,7 @@ function tennis(p: string[]) {
   g.add(P(racket(frame, grip, 15, 12, 20, 9, 0.9), 16, 0, -2))
   g.add(ball(3.3, ballC, { x: -14, y: 3.3, z: 9 }))
   g.add(noOutline(P(torus(3.0, 0.15, '#ffffff', {}), -14, 3.3, 9, 0.6, 0, 0.4)))
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 羽毛球拍 + 球：[拍框, 握把, 羽毛] */
@@ -1227,8 +1215,8 @@ function badminton(p: string[]) {
   const sh = new THREE.Group()
   sh.add(ball(1.4, IVORY, { y: 1.4 }))
   sh.add(cup(3.3, 1.3, 6.5, 0.15, feather, { y: 1.4 }))
-  g.add(P(fit(P(G(sh), 0, 0, 0, 0, 0, -(PI / 2 + 0.28))), -10, 0, 9))
-  return fit(g)
+  g.add(P(fitGroup(P(G(sh), 0, 0, 0, 0, 0, -(PI / 2 + 0.28))), -10, 0, 9))
+  return fitGroup(g)
 }
 
 /** 棒球手套 + 球棒 + 球：[手套皮, 球棒木, 缝线] */
@@ -1237,7 +1225,7 @@ function baseball(p: string[]) {
   const g = new THREE.Group()
   const bat = G(cyl(3.2, 1.4, 82, wood, {}, 18), puck(2.2, 1.4, wood, { y: -1.2 }), cyl(1.5, 1.5, 22, DARK, { y: 0.2 }, 12))
   const e = Math.asin((3.2 - 1.4) / 82)
-  g.add(P(fit(P(G(bat), 0, 0, 0, 0, 0, -PI / 2 + e)), 0, 0, 9))
+  g.add(P(fitGroup(P(G(bat), 0, 0, 0, 0, 0, -PI / 2 + e)), 0, 0, 9))
   const glove = new THREE.Group()
   glove.add(ball(7, leather, { y: 3.9 }, [1, 0.55, 1.1]))
   for (let i = 0; i < 4; i++) glove.add(P(capsule(1.5, 5, leather), -4.2 + i * 2.6, 6, -8.2 + Math.abs(i - 1.5) * 0.6, -PI / 2 + 0.5))
@@ -1250,7 +1238,7 @@ function baseball(p: string[]) {
   glove.scale.setScalar(1.5)
   // 手套的腕口圆筒最低到 -1（×1.5 = -1.5）：抬起 1.5 贴地，否则 fit 会把整体抬高、球棒悬空
   g.add(P(glove, -24, 1.5, -9))
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 滑板（平放）：[板面底色, 砂纸, 轮子] */
@@ -1274,7 +1262,7 @@ function skateboardFlat(p: string[]) {
 
 /** 滑板（立靠墙）：板面贴墙，轮子朝外 */
 function skateboardStand(p: string[]) {
-  return fit(P(G(skateboardFlat(p)), 0, 0, 0, -0.14, -PI / 2, PI / 2))
+  return fitGroup(P(G(skateboardFlat(p)), 0, 0, 0, -0.14, -PI / 2, PI / 2))
 }
 
 /** 冲浪板（靠墙）：[板色, 条纹, 尾鳍] */
@@ -1287,7 +1275,7 @@ function surfboard(p: string[]) {
   b.add(noOutline(rbox(1.2, 160, 0.3, stripe, { y: 10, z: 3.35 }, 0.1)))
   b.add(P(flat(pts.map(([x, y]): V2 => [x * 0.55, y * 0.06 + 120]), 0.4, stripe, true, 0.1), 0, 0, 3.3))
   for (const [x, y, s] of [[0, 6, 1], [-11, 18, 0.85], [11, 18, 0.85]] as V3[]) b.add(P(flat([[0, 0], [9 * s, 0], [3 * s, 9 * s]], 0.8, fin, false, 0.2), x, y, 3, 0, -PI / 2))
-  return fit(P(G(b), 0, 0, 0, -0.1))
+  return fitGroup(P(G(b), 0, 0, 0, -0.1))
 }
 
 /** 滑雪板（靠墙）：[板色, 固定器, 绑带] */
@@ -1305,7 +1293,7 @@ function snowboard(p: string[]) {
     bd.add(rbox(10.4, 3.4, 1, strap, { y: 1, z: 4.6 }, 0.5), rbox(10.4, 3, 1, strap, { y: 7, z: 4 }, 0.5))
     b.add(P(bd, 0, cy, 0, 0, 0, ang))
   }
-  return fit(P(G(b), 0, 0, 0, -0.1))
+  return fitGroup(P(G(b), 0, 0, 0, -0.1))
 }
 
 /** 高尔夫球包：[包身, 饰边, 球杆套] */
@@ -1328,7 +1316,7 @@ function golfBag(p: string[]) {
       g.add(ball(1.6, k === 1 ? '#ffffff' : cover, { x, y: top + 7.2, z }))
     } else g.add(P(rbox(1.2, 3.6, 6, METAL, { y: -0.4 }, 0.3), x, top, z, 0, k * 0.7))
   }
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 拳击手套（一对）：[皮色, 护腕, 点缀] */
@@ -1343,7 +1331,7 @@ function boxingGloves(p: string[]) {
     g.add(P(cyl(5.2, 5.2, 2, acc, {}, 18), x, 5.5, -9, PI / 2))
     g.add(noOutline(rbox(4, 0.4, 3, acc, { x, y: 12.2, z: 3 }, 0.2)))
   }
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 半球（开口朝下），y 是底面 */
@@ -1371,7 +1359,7 @@ function bikeHelmet(p: string[]) {
   g.add(P(rbox(12, 0.5, 3.5, shellC, {}, 0.2), 0, 5, 13.2, 0.3))
   for (const s of [-1, 1]) g.add(taperRod3([s * 8, 1.2, 3], [s * 3, 0.4, 8], 0.4, 0.4, DARK, 6))
   g.add(rbox(3, 1, 2, DARK, { y: 0, z: 8 }, 0.3))
-  return fit(g)
+  return fitGroup(g)
 }
 
 // ---------- 桌游 / 棋牌 ----------
@@ -1470,7 +1458,7 @@ function goBoard(p: string[]) {
     g.add(puck(5.4, 1.8, bowl, { x, y: 8 + (s > 0 ? 0 : 0), z: 14 }))
     if (s < 0) for (let k = 0; k < 3; k++) g.add(ball(1.1, c, { x: x + 4 + k * 1.6, y: 0.5, z: 20 - k }, [1, 0.45, 1]))
   }
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 国际象棋棋子 */
@@ -1523,7 +1511,7 @@ function chess(p: string[]) {
   // 被吃掉的黑象躺在棋盘边（沿 +z 平放，底座半径 1.4 → 抬 1.4 正好贴地；以前 translateY 在旋转后的局部系里，象一半陷进地面，整盘被 fit 抬高）
   g.add(P(chessPiece('b', black), 21, 1.4, 1.8, PI / 2))
   g.add(P(chessPiece('p', white), 20.5, 0, -6), P(chessPiece('n', white, 0.8), 21, 0, -1))
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 麻将牌面：rows × cols 张牌 */
@@ -1629,7 +1617,7 @@ function poker(p: string[]) {
     for (let k = 1; k < n; k += 2) g.add(noOutline(cyl(2.02, 2.02, 0.12, i % 4 === 1 ? chip : '#ffffff', { x, y: 0.3 + k * 0.34, z }, 20)))
   })
   g.add(cyl(2, 2, 0.34, chip, { x: 4, y: 0.3, z: 8, rz: 0.1 }, 20))
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 桌游盒子堆：[盒色 1, 盒色 2, 盒色 3] */
@@ -1665,7 +1653,7 @@ function boardGames(p: string[]) {
     g.add(P(box, i === 2 ? -4 : 0, y, i === 2 ? 4 : 0, 0, ry))
     y += h
   })
-  return fit(g)
+  return fitGroup(g)
 }
 
 // ---------- 手作 ----------
@@ -1691,7 +1679,7 @@ function knittingBasket(p: string[]) {
   }
   yarn(4.5, y1, 20, 4.5, 8, 4)
   g.add(noOutline(taperRod3([12, 15.5, 4], [17, 1, 8], 0.15, 0.15, y1, 4)))
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 缝纫机：[机身, 点缀, 线] */
@@ -1713,7 +1701,7 @@ function sewingMachine(p: string[]) {
   g.add(cylZ(1.8, 1.2, acc, 13.5, 14, 7.4, 16))
   g.add(noOutline(taperRod3([8, 33, 0], [-14, 29.8, 4], 0.06, 0.06, thread, 4)))
   g.add(rbox(16, 0.3, 10, shade(thread, 0.3), { x: -8, y: 5.4, z: 3 }, 0.1))
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 刺绣绷（绣好的花）+ 绣线 + 剪刀：[木绷, 布, 线] */
@@ -1766,7 +1754,7 @@ function embroidery(p: string[]) {
     g.add(P(rbox(6, 0.3, 0.7, METAL, {}, 0.1), 11.5, 0.2 + (s > 0 ? 0.3 : 0), 6, 0, s * 0.12))
     g.add(torus(1, 0.3, thread, { x: 7.2, y: 0.35, z: 6 + s * 1.4, rx: PI / 2 }))
   }
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 书法套装：毛毡 + 半纸 + 砚台 + 毛笔 + 文镇 [毛毡, 墨, 笔杆] */
@@ -1795,7 +1783,7 @@ function calligraphy(p: string[]) {
   g.add(taperRod3([6.5, 1.6, 12], [19, 1.6, 7], 0.45, 0.42, bamboo))
   g.add(taperRod3([6.5, 1.6, 12], [3.8, 1.2, 13.2], 0.55, 0.12, '#1e1e22'))
   g.add(puck(2, 1.6, J.washi, { x: 18, y: 0.4, z: 13 }))
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 水彩套装：画本 + 颜料盒 + 画笔 + 洗笔杯 [盒色, 天色, 山色] */
@@ -1821,7 +1809,7 @@ function watercolor(p: string[]) {
   g.add(ghostOutlined(cup(3.2, 3, 8, 0.3, GLASS, { x: jx, z: 0 }), GLASS, 0.35))
   g.add(cyl(2.8, 2.7, 5, shade(sky, 0.15), { x: jx, y: 0.3, z: 0 }, 20))
   g.add(taperRod3([jx, 3, 0], [jx + 2.5, 11, 1], 0.3, 0.3, hill, 8))
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 陶艺转盘：[机身, 托盘, 陶泥] */
@@ -1839,7 +1827,7 @@ function potteryWheel(p: string[]) {
   g.add(rbox(12, 1.5, 14, pan, { x: -29, y: 22 }, 0.5))
   g.add(rbox(5, 2.5, 4, C.lemon, { x: -30, y: 23.5, z: -2 }, 1))
   g.add(taperRod3([-27, 24.2, 4], [-33, 24.2, 3], 0.3, 0.3, METAL, 6))
-  return fit(g)
+  return fitGroup(g)
 }
 
 // ---------- 学习 / 研究 ----------
@@ -1862,7 +1850,7 @@ function microscope(p: string[]) {
   g.add(taperRod3([0, 27.6, -2], [0, 31.5, -5.5], 1.1, 1.1, metal, 12))
   g.add(taperRod3([0, 31.5, -5.5], [0, 33, -6.8], 1.35, 1.35, DARK, 12))
   g.add(noOutline(rbox(7, 0.15, 2.5, '#eaf4ff', { y: 13, z: 2 }, 0.05)))
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 化学烧瓶组：试管架 + 锥形瓶 + 烧杯 [木架, 液体 1, 液体 2] */
@@ -1888,7 +1876,7 @@ function chemSet(p: string[]) {
   g.add(cyl(3.2, 3.2, 5, l2, { x: bx, y: 0.3 }, 20))
   g.add(ghostOutlined(cup(3.5, 3.5, 9, 0.2, GLASS, { x: bx }), GLASS, 0.3))
   for (let k = 0; k < 3; k++) g.add(noOutline(rbox(1.4, 0.15, 0.1, '#ffffff', { x: bx, y: 3 + k * 2, z: 3.55 }, 0.03)))
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 水平放的带洞板：在 xz 平面，宽 w、深 d */
@@ -1968,7 +1956,7 @@ function starChart(p: string[]) {
     c.arc(W * 0.82, H * 0.2, H * 0.06, 0, PI * 2)
     c.fill()
   }, { y: 2.5, z: -0.3 }))
-  return fit(g, STAR_MOUNT)
+  return fitGroup(g, STAR_MOUNT)
 }
 
 /** 地图卷轴（摊开）：[纸色, 墨色, 轴木] */
@@ -2023,7 +2011,7 @@ function mapScroll(p: string[]) {
     g.add(cylZ(2.2, 28, shade(paper, -0.05), s * 19.6, 2.2, 0, 20))
     for (const z of [-1, 1]) g.add(cylZ(1, 2.4, wood, s * 19.6, 2.2, z * 15.2, 12))
   }
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 参考书堆 + 便签：[书色 1, 书色 2, 便签] */
@@ -2046,7 +2034,7 @@ function refBooks(p: string[]) {
   })
   g.add(rbox(7.5, 1, 7.5, note, { x: 4, y, z: 2 }, 0.2))
   g.add(taperRod3([-8, y + 0.5, 4], [4, y + 0.5, -4], 0.5, 0.5, DARK, 8))
-  return fit(g)
+  return fitGroup(g)
 }
 
 // ---------- 收藏 ----------
@@ -2085,7 +2073,7 @@ function recordRow(p: string[]) {
   const cover = G(rbox(31.4, 31.4, 0.5, a, {}, 0.12), paintPanel(30.6, 30.6, `int-sleeve-${a}-${b}`, drawSleeve(a, b, 3), { y: 0.4, z: 0.3 }))
   cover.add(P(cyl(15, 15, 0.3, '#1e1e22', {}, 32), 6, 15.7, -0.05, PI / 2))
   g.add(P(cover, 0, 0, 15.7 + 31.4 * Math.sin(0.08) + 0.6, -0.08))
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 黑胶唱片架（2×2 格，塞满唱片）：[柜体, 唱片色 1, 唱片色 2] */
@@ -2190,7 +2178,7 @@ function medalRack(p: string[]) {
     g.add(cylZ(3.4, 0.6, metals[i], x, my, 2.2))
     g.add(noOutline(cylZ(2.4, 0.2, shade(metals[i], -0.12), x, my, 2.6, 20)))
   }
-  return fit(g, MEDAL_MOUNT)
+  return fitGroup(g, MEDAL_MOUNT)
 }
 
 /** 明信片画 */
@@ -2271,7 +2259,7 @@ function postcardWall(p: string[]) {
     g.add(noOutline(taperRod3([-W / 2 + t0 * W, yA, 1.6], [-W / 2 + t1 * W, yB, 1.6], 0.12, 0.12, DARK, 4)))
     if (i > 0) g.add(litOutlined(ball(0.9, light, { x: -W / 2 + t0 * W, y: yA - 1, z: 1.6 }, [1, 1.3, 1]), light, 0.8))
   }
-  return fit(g, POSTCARD_MOUNT)
+  return fitGroup(g, POSTCARD_MOUNT)
 }
 
 /** 多肉组合（木托盘 + 四个小盆）：[托盘, 盆色, 多肉色] */
@@ -2307,7 +2295,7 @@ function succulentSet(p: string[]) {
     g.add(noOutline(ball(2.2, shade(leafC, -0.05), { x: xs[3] + Math.cos(a) * 0.2, y: ry + 1.8, z: Math.sin(a) * 0.2 }, [0.25, 0.9, 1.02]).rotateY(a)))
   }
   g.add(ball(0.6, C.lemon, { x: xs[3], y: ry + 3.9 }))
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 矿石标本盒（4×3 格）：[木盒, 点缀, 衬底] */
@@ -2368,7 +2356,7 @@ function catToys(p: string[]) {
   g.add(noOutline(taperRod3([14, 0.4, 13], [20, 0.3, 17], 0.08, 0.08, '#ffffff', 4)))
   g.add(ball(1.6, feather, { x: 21, y: 1.6, z: 17.5 }))
   for (let k = 0; k < 4; k++) g.add(petal(5, k % 2 ? feather : shade(feather, 0.2), 21.5, 1.2, 17.5, -0.8 + k * 0.5, 0.25, 0.3, 0.12))
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 旅行箱（立放）：[箱色, 点缀, 贴纸] */
@@ -2390,7 +2378,7 @@ function suitcaseStand(p: string[]) {
   g.add(rbox(1, 3, 10, acc, { x: 20.3, y: 40 }, 0.4))
   g.add(P(rbox(0.3, 6, 4, sticker, {}, 0.1), 20.9, 32, 2, 0, 0, 0.08))
   for (const [x, y, r, c] of [[-10, 50, 3, sticker], [6, 22, 2.4, acc], [11, 54, 2, C.white]] as [number, number, number, string][]) g.add(noOutline(cylZ(r, 0.2, c, x, y, 12.55, 20)))
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 旅行箱（打开平放）：[箱色, 内衬, 衣物] */
@@ -2409,7 +2397,7 @@ function suitcaseOpen(p: string[]) {
   g.add(rbox(14, 3, 10, C.pink, { x: 16, y: 2, z: -14 }, 1))
   for (const s of [-1, 1]) g.add(noOutline(P(rbox(1.6, 0.3, 36, DARK, {}, 0.1), 20.6, 2.2, 14, 0, s * 0.5)))
   for (const s of [-1, 1]) g.add(cylX(1.8, 1.4, RUBBER, -20.6 + s * 14, 3, -32.6, 14))
-  return fit(g)
+  return fitGroup(g)
 }
 
 const RAINCOAT_MOUNT = 95
@@ -2435,7 +2423,7 @@ function raincoat(p: string[]) {
     g.add(ball(0.9, btn, { x: 1.2, y, z: 9 + rr * 0.45 + 0.2 }, [1, 1, 0.5]))
   }
   for (const s of [-1, 1]) g.add(noOutline(rbox(7, 1.2, 0.4, shade(coat, -0.12), { x: s * 8, y: top - 62, z: 9 + 18 * 0.45 + 0.4 }, 0.2)))
-  return fit(g, RAINCOAT_MOUNT)
+  return fitGroup(g, RAINCOAT_MOUNT)
 }
 
 /** 一个快递纸箱：底面中心 */
@@ -2468,7 +2456,7 @@ const cartons = (n: number) => (p: string[]) => {
     g.add(P(carton(w, h, d, i % 2 ? shade(c, 0.05) : c, n * 10 + i), 0, y, 0, 0, ry))
     y += h
   })
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 零食堆：薯片袋 + 饼干棒 + 糖果 + 杯面 [袋色, 盒色, 点缀] */
@@ -2498,7 +2486,7 @@ function snackPile(p: string[]) {
     for (const s of [-1, 1]) g.add(P(cyl(0.2, 0.9, 1, c, {}, 8), x + s * 2, 1.2, z, 0, 0, s * PI / 2))
   })
   g.add(cyl(4.5, 3.4, 9.5, '#ffffff', { x: -14, z: -6 }, 20), puck(4.7, 0.5, METAL, { x: -14, y: 9.5, z: -6 }), cyl(4.15, 3.95, 2.5, acc, { x: -14, y: 5, z: -6 }, 20))
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 能量饮料罐堆（3-2-1 金字塔 + 一罐）：[罐色, 条纹, 拉环] */
@@ -2517,7 +2505,7 @@ function energyCans(p: string[]) {
   for (let i = 0; i < 2; i++) can(-2.7 + i * 5.4, hh, 0)
   can(0, hh * 2, 0)
   can(9.5, 0, 5)
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 咖啡豆罐：铁罐 + 陶罐 + 玻璃罐 + 量勺 [铁罐, 陶罐, 标签] */
@@ -2538,7 +2526,7 @@ function coffeeCanisters(p: string[]) {
   g.add(cup(1.8, 1.6, 1.6, 0.2, METAL, { x: -2, z: 7 }))
   g.add(taperRod3([-0.5, 0.9, 7], [5, 0.6, 8.5], 0.35, 0.35, METAL, 6))
   for (let k = 0; k < 4; k++) g.add(ball(0.7, BEAN, { x: -4.5 + k * 1.1, y: 0.4, z: 9.5 + (k % 2) }, [1, 0.6, 1.3]))
-  return fit(g)
+  return fitGroup(g)
 }
 
 // ---------- 钓鱼 ----------
@@ -2589,7 +2577,7 @@ const rodStanding = (sea: boolean) => (p: string[]) => {
   const L = sea ? 240 : 195
   const lean = sea ? 0.075 : 0.085
   const g = rodAlong(rodPath(L, lean, sea ? 7 : 6), p[0], p[1], p[2], sea)
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 竿袋（平放）：[袋色, 拉链, 带子] */
@@ -2604,7 +2592,7 @@ const rodBag = (sea: boolean) => (p: string[]) => {
   g.add(rbox(16, 1.2, 3, strap, { y: 10 }, 0.5))
   for (const s of [-1, 1]) g.add(rbox(2.4, 1, 14.4, strap, { x: s * (L / 2 - 14), y: 4 }, 0.4))
   g.add(noOutline(taperRod3([-(L / 2 - 14), 5, 7.3], [L / 2 - 14, 5, 7.3], 0.5, 0.5, strap, 6)))
-  return fit(g)
+  return fitGroup(g)
 }
 
 const ROD_RACK_MOUNT = 150
@@ -2628,7 +2616,7 @@ function rodRack(p: string[]) {
     const rod = rodAlong(pts, cols[k], k === 1 ? '#3a3b40' : '#c8a070', reel, k === 1)
     g.add(P(rod, 0, y, 5.5))
   }
-  return fit(g, ROD_RACK_MOUNT)
+  return fitGroup(g, ROD_RACK_MOUNT)
 }
 
 /** 拟饵：小鱼形 + 钩 */
@@ -2648,7 +2636,7 @@ const tackleBox = (open: boolean) => (p: string[]) => {
     for (const s of [-1, 1]) g.add(rbox(3, 3, 1, latch, { x: s * 11, y: 10.5, z: D / 2 + 0.4 }, 0.4))
     for (const s of [-1, 1]) g.add(rbox(2, 3, 3, DARK, { x: s * 8, y: 18 }, 0.5))
     g.add(rbox(18, 1.6, 3, DARK, { y: 20.4 }, 0.6))
-    return fit(g)
+    return fitGroup(g)
   }
   g.add(tray(W, 12, D, 1, box))
   g.add(rbox(W - 2, 1, D - 2, shade(box, 0.15), { y: 9 }, 0.3))
@@ -2664,7 +2652,7 @@ const tackleBox = (open: boolean) => (p: string[]) => {
   for (let i = 0; i < 6; i++) lid.add(lure(lc[11 - i], -W / 2 + 4 + i * 5.6, 1.6, 0, PI / 2))
   g.add(P(lid, 0, 12, -D / 2, -(PI / 2 + 0.25)).translateZ(0))
   for (const s of [-1, 1]) g.add(rbox(3, 3, 1, latch, { x: s * 11, y: 8.5, z: D / 2 + 0.4 }, 0.4))
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 钓鱼冷藏箱：[箱体, 盖, 把手] */
@@ -2683,7 +2671,7 @@ function fishCooler(p: string[]) {
   g.add(rbox(10, 6, 0.6, '#ffffff', { x: -12, y: 8, z: 15.1 }, 0.3))
   g.add(cylZ(1.2, 1.4, DARK, 18, 3, 15.4, 12))
   for (const s of [-1, 1]) g.add(rbox(3, 4, 1.2, DARK, { x: s * 18, y: 24, z: 15.4 }, 0.4))
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 折叠钓鱼凳（三脚）：[凳面, 腿] */
@@ -2704,7 +2692,7 @@ function fishingStool(p: string[]) {
   }
   const tri = flat(feet.map(([x, z]): V2 => [-x * 0.95, -z * 0.95]), 1.2, seat, true, 0.3)
   g.add(P(tri, 0, top + 0.6, 0, PI / 2))
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 鱼篓（竹编，背面平）：[竹色, 盖, 皮带] */
@@ -2725,7 +2713,7 @@ function fishCreel(p: string[]) {
   g.add(cup(2.6, 2.2, 2, 0.4, lid, { x: 4, y: 23.3 }))
   g.add(taperRod3([-11.5, 20, 0], [-6, 34, 0], 0.8, 0.8, strap, 8), taperRod3([11.5, 20, 0], [6, 34, 0], 0.8, 0.8, strap, 8), taperRod3([-6, 34, 0], [6, 34, 0], 0.8, 0.8, strap, 8))
   g.add(rbox(3, 3, 0.8, METAL, { y: 17, z: 8.2 }, 0.3))
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 抄网（靠墙立着）：[杆色, 网框, 网] */
@@ -2752,7 +2740,7 @@ function landingNet(p: string[]) {
   hoopG.position.set(...top)
   hoopG.rotation.x = -lean
   g.add(hoopG)
-  return fit(g)
+  return fitGroup(g)
 }
 
 // ---------- 桌游扩充：盒子、摆开的桌游、更多棋牌 ----------
@@ -2886,7 +2874,7 @@ function bgShelfRow(p: string[]) {
     g.add(P(b, x + t / 2, 0, (30 - d) / 2))
     x += t + 0.1
   })
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 六角地块版图（摆开在玩）：[海, 点缀, 骰子] */
@@ -2930,7 +2918,7 @@ function bgHex(p: string[]) {
   }
   g.add(P(die(1.6, dieC, '#26262a', 5, 2, 0.3), 22, 0, 10), P(die(1.6, dieC, '#26262a', 3, 6, -0.4), 24.5, 0, 11.5))
   for (let k = 0; k < 4; k++) g.add(P(cardStack(4.4, 6.6, 6 + k * 2, '#ffffff', terrain[k], `int-hexcard-${k}`), -26 + (k % 2) * 5.2, 0, -8 + Math.floor(k / 2) * 7.4))
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 铁路地图版图：[版图底, 火车色 1, 火车色 2] */
@@ -2995,7 +2983,7 @@ function bgTrain(p: string[]) {
   // 牌堆 + 散落的车厢
   g.add(P(cardStack(5.6, 8.6, 14, '#ffffff', t2, 'int-traincards'), BW / 2 + 4, 0, -6))
   for (let k = 0; k < 4; k++) g.add(P(rbox(2, 0.9, 0.9, k % 2 ? t1 : t2, {}, 0.15), BW / 2 + 2.5 + (k % 2) * 3, 0, 4 + k * 1.6, 0, k * 0.5))
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 卡牌面：彩色边框 + 中央图形 + 角标 */
@@ -3063,7 +3051,7 @@ function cardGame(p: string[]) {
   const opp = fanHand(6, UNO_COLS, 0, -14, false, back, 2, PI)
   opp.position.y = y
   g.add(opp)
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** UNO 风卡牌（一副 + 几张摊开）[牌背, —, —] */
@@ -3078,7 +3066,7 @@ function unoCards(p: string[]) {
     const n = Math.floor(r() * 10)
     g.add(P(card(5.7, 8.8, '#ffffff', `int-pc-${col}-${n}`, drawPlayCard(col, n)), 2 + k * 3.2, k * 0.11, (k % 2) * 1.5, 0, (k - 2) * 0.15))
   }
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 骰子游戏：毛毡骰盘 + 骰盅 + 五颗骰子 [骰盅, 毡, 骰子] */
@@ -3091,7 +3079,7 @@ function diceGame(p: string[]) {
   for (const [x, z, t, f, ry] of pos) g.add(P(die(1.8, dieC, '#26262a', t, f, ry), x, 1.4, z))
   // 骰盅倒扣在旁边
   g.add(P(G(cup(4.4, 3.8, 10, 0.5, cupC), torus(4.3, 0.35, shade(cupC, 0.2), { y: 9.8, rx: PI / 2 })), 19, 10.2, 0, PI))
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 大富翁式环形棋盘：[版图底, 地产色, 点缀] */
@@ -3147,7 +3135,7 @@ function bgLoop(p: string[]) {
   g.add(P(die(1.5, '#ffffff', '#26262a', 4, 2, 0.4), 4, 0.52, 3), P(die(1.5, '#ffffff', '#26262a', 6, 3, -0.2), 6.5, 0.52, 4.5))
   const money = ['#f4f4f2', '#ffd6e0', '#ffe08f', '#a6e3cc', '#a8d4f4', '#e0c08a']
   money.forEach((c, i) => g.add(rbox(10, 0.3 + (i % 3) * 0.2, 5, c, { x: S0 / 2 + 7, z: -16 + i * 6 }, 0.05)))
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 推理桌游：房间版图 + 角色棋子 + 线索卡 [版图色, 墙色, 点缀] */
@@ -3197,7 +3185,7 @@ function bgMystery(p: string[]) {
     for (let k = 0; k < 6; k++) c.fillRect(W * 0.75, H * (0.1 + k * 0.13), W * 0.08, H * 0.03)
   }), S0 / 2 + 6, 0, 6, 0, -0.2))
   g.add(taperRod3([S0 / 2 + 3, 0.4, 10], [S0 / 2 + 10, 0.4, 7], 0.35, 0.35, DARK, 6))
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 国际象棋（摆好的开局）：[棋盘框, 白子, 黑子] */
@@ -3218,7 +3206,7 @@ function chessOpening(p: string[]) {
     g.add(P(chessPiece(order[f], white, PI), x, 2.35, 14), P(chessPiece('p', white, PI), x, 2.35, 10))
     g.add(P(chessPiece(order[f], black, 0), x, 2.35, -14), P(chessPiece('p', black, 0), x, 2.35, -10))
   }
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 中国象棋：[棋盘木, 红方, 黑方] */
@@ -3282,7 +3270,7 @@ function xiangqi(p: string[]) {
     piece(7, cannon, side)
     for (const i of [0, 2, 4, 6, 8]) piece(i, pawnRow, side)
   }
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 黑白棋（中局）：[棋盘, 黑子, 白子] */
@@ -3309,7 +3297,7 @@ function reversi(p: string[]) {
       const top = r() < 0.5 ? dark : light
       g.add(cyl(1.6, 1.6, 0.2, top === dark ? light : dark, { x, y: 1.6, z }, 20), cyl(1.6, 1.6, 0.2, top, { x, y: 1.8, z }, 20))
     }
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 跳棋（六角星盘 + 弹珠）：[盘色, 星色, 点缀] */
@@ -3358,7 +3346,7 @@ function chineseCheckers(p: string[]) {
     if (sector % 2 === 1 && sector !== 3) return
     g.add(ball(0.75, cols[sector], { x, y: 1.6 + 0.55, z }))
   })
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 双陆棋（打开的棋盒）：[框, 三角 1, 棋子 1] */
@@ -3403,7 +3391,7 @@ function backgammon(p: string[]) {
   pt(1, 3, true, 3, chk)
   g.add(P(die(1.4, '#ffffff', '#26262a', 6, 3, 0.4), 5, 1, 0), P(die(1.4, '#ffffff', '#26262a', 2, 1, -0.3), 8, 1, 1.5))
   g.add(P(die(2, '#f4ead2', '#26262a', 2, 4, 0.2), -6, 1, 0))
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 花札（散开的小牌）：[牌背, 主色, 点缀] */
@@ -3444,7 +3432,7 @@ function hanafuda(p: string[]) {
   const r = rng(13)
   for (let k = 0; k < 8; k++) g.add(P(card(W0, D0, '#26262a', `int-hana-${k}-${a}-${acc}`, cardDraw(k), 0.08), -2 + (k % 4) * 4, 0, -5 + Math.floor(k / 4) * 6.2, 0, (r() - 0.5) * 0.2))
   for (let k = 0; k < 5; k++) g.add(P(card(W0, D0, '#26262a', `int-hana-${k + 8}-${a}-${acc}`, cardDraw(k + 8), 0.08), -3 + k * 1.6, k * 0.09, 9, 0, (k - 2) * 0.18))
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 百人一首 / かるた（散在榻榻米上的牌）：[榻榻米, 牌边, 字色] */
@@ -3482,7 +3470,7 @@ function karuta(p: string[]) {
         place(x, z, side > 0 ? 0 : PI + (r() - 0.5) * 0.1, seed++)
       }
   place(4, 0, 0.6, 99)
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 叠叠乐：stacked = 叠好的塔；否则倒塌散落 [木色, —, —] */
@@ -3517,7 +3505,7 @@ const jenga = (stacked: boolean) => (p: string[]) => {
         g.add(P(rbox(L, T, Wb - 0.05, col(), {}, 0.15), Math.cos(a) * rr, 0, Math.sin(a) * rr * 0.85, 0, -a + (r() - 0.5) * 0.3))
       }
   }
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 拼图（拼到一半）：底板 + 已拼部分 + 散落拼块 + 盒盖 [底板, 天色, 山色] */
@@ -3557,7 +3545,7 @@ function jigsaw(p: string[]) {
     const pc = G(rbox(2.5, 0.25, 2.5, c, {}, 0.05), puck(0.55, 0.25, c, { x: 1.4 }), puck(0.55, 0.25, c, { z: 1.4 }))
     g.add(P(pc, x, 0.65, z, 0, r() * PI * 2))
   }
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 七巧板（木盘里拼好的正方形 + 两块拿出来） [盘, 色 1, 色 2] */
@@ -3588,7 +3576,7 @@ function tangram(p: string[]) {
     else if (i === 3) g.add(P(G(lay), 12.5, -0.8, -5, 0, -0.4))
     else g.add(lay)
   })
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 鲁班锁（六根榫木互锁）+ 拆下的一根 [木色] */
@@ -3607,7 +3595,7 @@ function burrPuzzle(p: string[]) {
   }
   g.add(rbox(4, 0.6, 4, shade(wood, -0.2), { x: 9 }, 0.2))
   g.add(P(rbox(L, s, s, c(1), {}, 0.12), 10, 0, 4, 0, 0.4))
-  return fit(g)
+  return fitGroup(g)
 }
 
 // =====================================================================
@@ -4317,7 +4305,7 @@ function chessBoxed(p: string[]) {
       }
   }, 0, 7.05, 0))
   g.add(rbox(3, 0.5, 1, shade(frame, -0.3), { x: 13, y: 7, z: 0 }, 0.2))
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 折叠棋盘合上：两片对折，外面露出半张棋盘格，后边两个合页、前边一个搭扣 [框, 白, 黑] */
@@ -4333,7 +4321,7 @@ function chessFolded(p: string[]) {
   }, 0, 5.6, 0))
   for (const x of [-11, 11]) g.add(cylX(0.6, 5, METAL, x, 2.7, -9.1))
   g.add(rbox(3, 2.4, 0.6, METAL, { y: 1.5, z: 9.1 }, 0.2))
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 残局：双方只剩几个子，吃掉的子横躺在两侧 [框, 白, 黑] */
@@ -4344,7 +4332,7 @@ function chessEndgame(p: string[]) {
   chessPut(g, [['k', 6, 1, true], ['r', 0, 4, true], ['p', 5, 1, true], ['p', 6, 2, true], ['p', 7, 1, true], ['k', 5, 6, false], ['r', 3, 6, false], ['p', 6, 5, false], ['p', 7, 4, false], ['b', 2, 3, false]], white, black)
   chessTaken(g, ['q', 'r', 'n', 'n', 'b', 'p', 'p', 'p', 'p', 'p'], black, 1)
   chessTaken(g, ['q', 'r', 'n', 'n', 'b', 'b', 'p', 'p', 'p', 'p', 'p'], white, -1)
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 打开的棋谱书：两页各画一个小棋图 + 几行字，中心 (x, z) [封面色] */
@@ -4390,7 +4378,7 @@ function chessStudy(p: string[]) {
   g.add(openBook(shade(frame, -0.1), `int-chess-book-${frame}`, 33, 2, -0.12))
   g.add(cylX(0.35, 13, '#e8c040', 32, 0.75, 13.5))
   g.add(P(cyl(0.01, 0.35, 1.2, '#f2d9b0', {}, 8), 25.4, 0.75, 13.5, 0, 0, PI / 2))
-  return fit(g)
+  return fitGroup(g)
 }
 
 /** 散乱收拾中：盘上剩几个子、有的倒了，前面打开的木盒里已经装了一半 [框, 白, 黑] */
@@ -4410,7 +4398,7 @@ function chessMessy(p: string[]) {
   }
   g.add(P(box, 0, 0, 29))
   g.add(rbox(30, 0.8, 15, shade(frame, -0.12), { x: -30, y: 0, z: 22 }, 0.3))
-  return fit(g)
+  return fitGroup(g)
 }
 
 // ---------- 围棋 ----------
@@ -4443,7 +4431,7 @@ function goState(p: string[], stones: [number, number, boolean][], bowls: 'close
       for (let k = 0; k < prisoners; k++) g.add(ball(1.1, other, { x: x + Math.cos(k * 2.4) * Math.min(3.2, 0.9 * Math.sqrt(k)), y: 0.9 + (k > 10 ? 0.45 : 0), z: Math.sin(k * 2.4) * Math.min(3.2, 0.9 * Math.sqrt(k)) }, [1, 0.45, 1]))
     }
   }
-  return fit(g)
+  return fitGroup(g)
 }
 const goEmpty = (p: string[]) => goState(p, [], 'closed')
 const goOpening = (p: string[]) =>
@@ -4510,7 +4498,7 @@ function shogiState(p: string[], rows: string[], held: [number, number] = [0, 0]
     for (let k = 0; k < n; k++) koma(x - 4 + (k % 3) * 4, 4, z - 3 + Math.floor(k / 3) * 4, s > 0, false)
   }
   extra?.(g)
-  return fit(g)
+  return fitGroup(g)
 }
 const SHOGI_MID = ['o.o.Oo.oo', '.O....oO.', 'o.oooo..o', '..o...o..', '.o..x..o.', '..x...x..', 'xx.xxx.xx', '.X.....X.', 'x.xxXx.xx']
 const shogiMid = (p: string[]) => shogiState(p, SHOGI_MID, [3, 2])
@@ -4529,7 +4517,7 @@ function shogiBoxed(p: string[]) {
   }, 0, 3.05, 0))
   g.add(rbox(10, 4.6, 7.4, shade(piece, -0.12), { y: 3, z: 0 }, 0.4), rbox(10.2, 1, 7.6, shade(piece, -0.2), { y: 7.2, z: 0 }, 0.3))
   g.add(rbox(4, 0.3, 1, shade(piece, -0.35), { y: 8.15 }, 0.1))
-  return fit(g)
+  return fitGroup(g)
 }
 
 // ---------- 中国象棋 ----------
@@ -4591,7 +4579,7 @@ function xqState(p: string[], pieces: [number, number, boolean][], taken: [numbe
   // 被吃掉的子：在棋盘两侧叠成小摞（红方吃的黑子放红方右手边）
   for (const [s, n, col] of [[1, taken[0], black], [-1, taken[1], red]] as [number, number, string][])
     for (let k = 0; k < n; k++) piece(s * 23.5, Math.floor(k / 2) * 1, s * (8 + (k % 2) * 4), col)
-  return fit(g)
+  return fitGroup(g)
 }
 const XQ_MID: [number, number, boolean][] = [
   [4, 9, true], [3, 9, true], [5, 9, true], [0, 9, true], [2, 7, true], [6, 9, true], [8, 8, true], [4, 7, true], [1, 5, true], [0, 6, true], [4, 5, true], [6, 6, true], [8, 6, true],
@@ -4616,7 +4604,7 @@ function xqBoxed(p: string[]) {
     c.fill()
   }, 0, 6.15, 0))
   g.add(cylX(2.2, 30, '#f2e6cc', 0, 2.2, 11), torus(2.25, 0.25, red, { x: -10, y: 2.2, z: 11, ry: PI / 2 }), torus(2.25, 0.25, red, { x: 10, y: 2.2, z: 11, ry: PI / 2 }))
-  return fit(g)
+  return fitGroup(g)
 }
 
 // ---------- 黑白棋 ----------
@@ -4641,7 +4629,7 @@ function reversiState(p: string[], cells: [number, number, boolean][]) {
     const z = -14 + j * 4
     g.add(cyl(1.6, 1.6, 0.2, d ? light : dark, { x, y: 1.9, z }, 20), cyl(1.6, 1.6, 0.2, d ? dark : light, { x, y: 2.1, z }, 20))
   }
-  return fit(g)
+  return fitGroup(g)
 }
 const reversiOpening = (p: string[]) => reversiState(p, [[3, 3, false], [4, 4, false], [3, 4, true], [4, 3, true]])
 function reversiFull(p: string[]) {
@@ -4666,7 +4654,7 @@ function reversiBoxed(p: string[]) {
     c.fillStyle = light
     c.fillRect(W * 0.2, H * 0.86, W * 0.6, H * 0.03)
   }, 0, 4.25, 0))
-  return fit(g)
+  return fitGroup(g)
 }
 
 // ---------- 跳棋 ----------
@@ -4723,7 +4711,7 @@ function ccPlaying(p: string[]) {
     const [x, z] = holes[h]
     g.add(ball(0.75, cols[k % 3], { x, y: 2.15, z }))
   }
-  return fit(g)
+  return fitGroup(g)
 }
 /** 收拾中：盘空了，弹珠都倒进旁边的小碗里 */
 function ccTidy(p: string[]) {
@@ -4737,7 +4725,7 @@ function ccTidy(p: string[]) {
     const rr = Math.min(4, 0.9 * Math.sqrt(k))
     g.add(ball(0.75, cols[k % 6], { x: 27 + Math.cos(a) * rr, y: 1.3 + (k > 12 ? 1.2 : 0.2) + rr * 0.3, z: 10 + Math.sin(a) * rr }))
   }
-  return fit(g)
+  return fitGroup(g)
 }
 
 // ---------- 双陆棋 ----------
@@ -4781,7 +4769,7 @@ function bgmState(p: string[], points: [number, number, boolean][], dice = true)
     for (let k = 0; k < n; k++) g.add(cyl(1.5, 1.5, 0.6, mine ? chk : other, { x, y: 1 + Math.floor(k / 5) * 0.6, z: (top ? -1 : 1) * (17.9 - 1.5 - (k % 5) * 3) }, 18))
   }
   if (dice) g.add(P(die(1.4, '#ffffff', '#26262a', 5, 3, 0.4), 5, 1, 0), P(die(1.4, '#ffffff', '#26262a', 1, 2, -0.3), 8, 1, 1.5))
-  return fit(g)
+  return fitGroup(g)
 }
 const bgmOpening = (p: string[]) =>
   bgmState(p, [[24, 2, true], [13, 5, true], [8, 3, true], [6, 5, true], [1, 2, false], [12, 5, false], [17, 3, false], [19, 5, false]], false)
@@ -4808,7 +4796,7 @@ function bgmClosed(p: string[]) {
   }, 0, 5.4, 0))
   for (const z of [-8, 8]) g.add(rbox(1, 2.6, 2.4, METAL, { x: 12.5, y: 1.4, z }, 0.3))
   g.add(cylZ(0.6, 10, METAL, -14, 2.7, 0, 8), rbox(2.6, 1, 1, METAL, { x: -13, y: 2.2, z: -5 }, 0.2), rbox(2.6, 1, 1, METAL, { x: -13, y: 2.2, z: 5 }, 0.2))
-  return fit(g)
+  return fitGroup(g)
 }
 
 // ---------- 扑克 ----------
@@ -4861,7 +4849,7 @@ function pokerBoxed(p: string[]) {
   const cs = G(rbox(18, 6, 12, '#c8ccd2', {}, 0.8), rbox(18.2, 0.6, 12.2, '#9a9ea6', { y: 3 }, 0.2), rbox(6, 1.2, 1.2, '#26262a', { y: 2.2, z: 6.4 }, 0.4))
   cs.add(rbox(8, 0.3, 4, chip, { y: 6, z: -2 }, 0.1))
   g.add(P(cs, 5, 0, 0))
-  return fit(g)
+  return fitGroup(g)
 }
 /** 整副叠放：理齐的一副牌 + 打开的空盒 + 几摞筹码 [桌垫, 牌背, 筹码主色] */
 function pokerDeck(p: string[]) {
@@ -4871,7 +4859,7 @@ function pokerDeck(p: string[]) {
   g.add(P(pokerBox(back, true), 4.5, 0, -1, 0, -0.3))
   chipStack(g, 12, 3, 10, chip, '#ffffff')
   chipStack(g, 12.5, -2, 7, '#ffffff', chip)
-  return fit(g)
+  return fitGroup(g)
 }
 /** 发牌中：毡垫上牌堆居中，四家面前各发了两张（背面朝上），旁边是筹码 [桌垫, 牌背, 筹码主色] */
 function pokerDealing(p: string[]) {
@@ -4890,7 +4878,7 @@ function pokerDealing(p: string[]) {
   })
   // 发到一半：一张牌正滑向下家
   g.add(P(card(6.3, 8.8, '#ffffff', `int-pokerback-${back}`, pokerBack(back), 0.12), 8, y, 5, 0, 1.1))
-  return fit(g)
+  return fitGroup(g)
 }
 
 // ---------- 花札 ----------
@@ -4921,7 +4909,7 @@ function hanaBoxed(p: string[]) {
   const [back] = p
   const g = new THREE.Group()
   g.add(hanaBox(back, -2.6, 0, 0.05), hanaBox(back === '#26262a' ? '#c8302a' : '#26262a', 2.6, 0.3, -0.08))
-  return fit(g)
+  return fitGroup(g)
 }
 /** 整副叠放：理齐的一叠（48 张）+ 打开的空盒 [牌背, 主色, 点缀] */
 function hanaStack(p: string[]) {
@@ -4930,7 +4918,7 @@ function hanaStack(p: string[]) {
   g.add(P(cardStack(3.3, 5.4, 22, '#26262a', back, `int-hana-back-${back}`, hanaBack(back)), -3, 0, 0, 0, 0.08))
   const box = G(tray(4.4, 2.2, 6.4, 0.3, back), rbox(4.4, 0.3, 6.4, back, { x: 4.6, z: 0 }, 0.1))
   g.add(P(box, 3.5, 0, 0.4, 0, -0.15))
-  return fit(g)
+  return fitGroup(g)
 }
 /** 发牌中：中间牌山，场上 8 张背面朝上两排，两家手里各 8 张背面朝上叠成扇形 [牌背, 主色, 点缀] */
 function hanaDealing(p: string[]) {
@@ -4941,7 +4929,7 @@ function hanaDealing(p: string[]) {
   for (let k = 0; k < 8; k++) g.add(P(card(3.3, 5.4, '#26262a', `int-hana-b1-${back}`, hanaBack(back), 0.08), -3 + (k % 4) * 4, 0, -3.2 + Math.floor(k / 4) * 6.4, 0, (r() - 0.5) * 0.2))
   for (const [z, ry] of [[10, 0], [-10, PI]] as [number, number][])
     for (let k = 0; k < 8; k++) g.add(P(G(P(card(3.3, 5.4, '#26262a', `int-hana-b1-${back}`, hanaBack(back), 0.08), 0, 0, -2.4)), (k - 3.5) * 1.3 * (ry ? -1 : 1), k * 0.09, z, 0, ry + (k - 3.5) * 0.12))
-  return fit(g)
+  return fitGroup(g)
 }
 
 // ---------- UNO 风卡牌 ----------
@@ -4970,7 +4958,7 @@ function unoBoxed(p: string[]) {
     c.ellipse(W / 2, H * 0.5, W * 0.22, H * 0.12, -0.4, 0, PI * 2)
     c.fill()
   }, 0, 3.42, 0)))
-  return fit(g)
+  return fitGroup(g)
 }
 /** 发牌中：牌堆 + 翻开的第一张，三家面前各一叠 7 张背面朝上 [牌背, 桌垫] */
 function unoDealing(p: string[]) {
@@ -4982,7 +4970,7 @@ function unoDealing(p: string[]) {
   g.add(P(card(5.7, 8.8, '#ffffff', `int-pc-${UNO_COLS[2]}-7`, drawPlayCard(UNO_COLS[2], 7)), 3.5, y, 0, 0, 0.2))
   for (const [x, z, ry] of [[0, 10.5, 0], [-15, -4, PI / 2], [15, -4, -PI / 2]] as [number, number, number][])
     g.add(P(cardStack(5.7, 8.8, 7, '#ffffff', back, `int-uno-deal-${back}`, unoBack(back)), x, y, z, 0, ry + 0.1))
-  return fit(g)
+  return fitGroup(g)
 }
 
 // ---------- 百人一首 ----------
@@ -4997,7 +4985,7 @@ function karutaBoxed(p: string[]) {
     c.fillStyle = ink
     c.fillRect(W * 0.1, H * 0.4, W * 0.8, H * 0.2)
   }, 0, 7.02, 0))
-  return fit(g)
+  return fitGroup(g)
 }
 /** 整叠：读札（带画的那叠）和取札两叠理好，盒子开着放在旁边 [榻榻米, 牌边, 字色] */
 function karutaStacks(p: string[]) {
@@ -5024,7 +5012,7 @@ function karutaStacks(p: string[]) {
     for (let k = 0; k < 3; k++) c.fillRect(W * (0.22 + k * 0.22), H * 0.14, W * 0.07, H * 0.7)
   }), -1.5, 0, 0.4, 0, -0.06))
   g.add(P(G(tray(20, 4, 13.6, 0.6, ink), rbox(0.6, 3.4, 12.4, ink, { y: 0.6 }, 0.2)), 12, 0, 0))
-  return fit(g)
+  return fitGroup(g)
 }
 
 // ---------- 麻将 ----------
@@ -5136,7 +5124,7 @@ function mjCase(p: string[]) {
   g.add(P(torus(5, 0.7, shade(box, -0.25), {}, PI), 0, 10, 0))
   for (const x of [-5, 5]) g.add(rbox(2, 1, 2, METAL, { x, y: 10, z: 0 }, 0.3))
   g.add(rbox(6, 0.3, 3, back, { x: 0, y: 10, z: 7 }, 0.1))
-  return fit(g)
+  return fitGroup(g)
 }
 /** 牌垫上洗牌：方形毡垫，牌背面朝上散开 [桌垫, 牌背, 箱色] */
 function mjMatShuffle(p: string[]) {
@@ -5144,7 +5132,7 @@ function mjMatShuffle(p: string[]) {
   const g = G(rbox(70, 0.4, 70, mat, {}, 0.2))
   mjScatter(g, back, 0.4, 24, 80, 9)
   g.add(rbox(1.4, 1.4, 1.4, '#ffffff', { x: 30, y: 0.4, z: 30 }, 0.3), rbox(1.4, 1.4, 1.4, '#ffffff', { x: 28, y: 0.4, z: 31.5, ry: 0.5 }, 0.3))
-  return fit(g)
+  return fitGroup(g)
 }
 /** 牌垫上砌好牌墙：四面各 17 墩 [桌垫, 牌背, 箱色] */
 function mjMatWalls(p: string[]) {
@@ -5152,7 +5140,7 @@ function mjMatWalls(p: string[]) {
   const g = G(rbox(70, 0.4, 70, mat, {}, 0.2))
   mjRing(g, 17, back, 0.4, 9)
   for (const [x, z] of [[-1.2, 0.5], [1.4, -0.8]] as V2[]) g.add(rbox(1.4, 1.4, 1.4, '#ffffff', { x, y: 0.4, z }, 0.3))
-  return fit(g)
+  return fitGroup(g)
 }
 
 // ---------- 素材声明 ----------

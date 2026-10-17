@@ -9,7 +9,7 @@
 import * as THREE from 'three'
 import { ball, cup, cyl, rbox, shade, torus, tray } from '../toon'
 import { C, G, holePanel, paintAbstract, paintFlower, paintLandscape, paintPanel, rng, shell, type AssetCategory, type AssetDef, type StyleTag } from '../kit'
-import { PI, clearDeep, cylZFrom, mesh, noOutlineDeep, tube, type TubeOpts, type V3 } from '../geo'
+import { PI, clearDeep, cylZFrom, fitGroup, mesh, noOutlineDeep, tube, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, R, type Build, type Pal } from '../packkit'
 
 /** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
@@ -98,16 +98,6 @@ function hash(s: string) {
 
 // ---------- 定义工具 ----------
 
-/** 把模型按约定摆正：落地的底面在 0、xz 居中；壁挂的最低点 = mount */
-function settle(g: THREE.Group, e: Partial<AssetDef>) {
-  g.updateMatrixWorld(true)
-  const b = new THREE.Box3().setFromObject(g, true)
-  g.position.x -= (b.min.x + b.max.x) / 2
-  g.position.z -= (b.min.z + b.max.z) / 2
-  g.position.y += (e.mount ?? 0) - b.min.y
-  return G(g)
-}
-
 function A(id: string, name: string, category: AssetCategory, [w, d, h]: [number, number, number], pals: Pal[], build: Build, extra: Partial<AssetDef> = {}): AssetDef {
   return {
     id,
@@ -120,7 +110,7 @@ function A(id: string, name: string, category: AssetCategory, [w, d, h]: [number
     paletteStyles: pals.map((p) => p[0]),
     styles: [...new Set(pals.map((p) => p[0]))],
     ...extra,
-    build: (p) => settle(build(p), extra),
+    build: (p) => fitGroup(build(p), extra.mount ?? 0),
   }
 }
 

@@ -9,7 +9,7 @@
 import * as THREE from 'three'
 import { ball, cup, cyl, face, puck, rbox, toon, torus } from '../toon'
 import { C, type AssetDef } from '../kit'
-import { G, P, lit, litOutlined, rod3, tube, type TubeOpts, type V3 } from '../geo'
+import { G, P, fitGroup, lit, litOutlined, rod3, tube, type TubeOpts, type V3 } from '../geo'
 import { CL, CN, F, I, J, M, N, R, type PalFlat } from '../packkit'
 
 /** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
@@ -113,15 +113,6 @@ function mountAt(g: THREE.Group, y: number) {
   g.position.x -= (box.min.x + box.max.x) / 2
   g.position.z -= (box.min.z + box.max.z) / 2
   g.position.y += y - box.min.y
-  return G(g)
-}
-
-/** xz 居中、落地 */
-function centered(g: THREE.Group) {
-  const box = new THREE.Box3().setFromObject(g, true)
-  g.position.x -= (box.min.x + box.max.x) / 2
-  g.position.z -= (box.min.z + box.max.z) / 2
-  g.position.y -= box.min.y
   return G(g)
 }
 
@@ -548,7 +539,7 @@ function oakArm(p: string[]) {
   head.rotation.x = -0.55
   head.position.set(0, 21, 12.5)
   g.add(head)
-  return centered(g)
+  return fitGroup(g)
 }
 
 /** 摇臂壁灯：木底座、水平长臂，末端挂锥形布罩 */
@@ -718,7 +709,7 @@ function surveyor(p: string[]) {
   g.add(P(cyl(11, 11, 20, metal, {}, 28), 0, 130, -2, Math.PI / 2))
   g.add(P(cyl(11.6, 11.6, 2, metal, {}, 28), 0, 130, 8.6, Math.PI / 2))
   g.add(P(lit(cyl(10, 10, 0.6, light, {}, 28), light), 0, 130, 9.4, Math.PI / 2))
-  return centered(g)
+  return fitGroup(g)
 }
 
 /** 水管落地灯：法兰底座、竖管、弯头、横管、三通往下吊一颗灯泡，管上一个阀门手轮 */
@@ -737,7 +728,7 @@ function pipeFloor(p: string[]) {
   g.add(cyl(1.7, 1.7, 6, pipe, { x: 24, y: 121 }, 14))
   g.add(cyl(2.2, 2.2, 4, socket, { x: 24, y: 117 }, 14))
   g.add(bulb(3.8, 24, 112, 0, 1.3))
-  return centered(g)
+  return fitGroup(g)
 }
 
 /** 铁笼台灯：方木块底座 + 黄铜灯头 + 铁丝笼 */
@@ -762,7 +753,7 @@ function pipeTable(p: string[]) {
   g.add(ball(1.8, pipe, { x: 11, y: 22 }))
   g.add(cyl(1.7, 1.7, 3.2, socket, { x: 11, y: 18 }, 12))
   g.add(bulb(2.8, 11, 14.2, 0, 1.3))
-  return centered(g)
+  return fitGroup(g)
 }
 
 /** 摇臂建筑师台灯：两节平行弹簧臂 + 金属斗罩（罩内一圈发光） */
@@ -781,7 +772,7 @@ function architect(p: string[]) {
   head.rotation.x = -0.45
   head.position.set(0, 23, 14)
   g.add(head)
-  return centered(g)
+  return fitGroup(g)
 }
 
 /** 铁笼壁灯 */
@@ -846,7 +837,7 @@ function tulipFloor(p: string[]) {
     g.add(lathe([[0, 0], [2.4, 0.4], [5.4, 4], [6.6, 8.5], [6.2, 11]], glass, { x: ex, y: y - 0.8, z: ez }, 28, 0.45))
     g.add(bulb(2, ex, y + 3, ez))
   }
-  return centered(g)
+  return fitGroup(g)
 }
 
 /** 蒂芙尼彩玻璃落地灯：古铜立柱 + 锥形彩色玻璃罩 */
@@ -962,7 +953,7 @@ function cloudFloor(p: string[]) {
   const c = cloud(34, cloudC, 0.45, 0.85)
   c.position.y = 128
   g.add(c)
-  return centered(g)
+  return fitGroup(g)
 }
 
 /** 熊熊落地灯：坐着的小熊抱着灯杆，顶上带波浪边的鼓形罩 */
@@ -988,7 +979,7 @@ function bearFloor(p: string[]) {
     g.add(lit(ball(1.6, shadeC, { x: Math.sin(a) * 17, y: 116, z: -4 + Math.cos(a) * 17 }), shadeC, 0.42))
   }
   g.add(bulb(3, 0, 126, -4))
-  return centered(g)
+  return fitGroup(g)
 }
 
 /** 菌盖轮廓（[半径, 高]）：落地款、台灯款 */
@@ -1054,7 +1045,7 @@ function rainCloud(p: string[]) {
     g.add(cyl(0.12, 0.12, l, '#9aa7b8', { x, y: 17 - l }, 4))
     g.add(lit(ball(1.1, drop, { x, y: 16.4 - l }, [1, 1.4, 1]), drop))
   }
-  return centered(g)
+  return fitGroup(g)
 }
 
 /** 兔子台灯：整只软胶兔子发光（身体、头、耳朵） */
@@ -1089,7 +1080,7 @@ function rainbowTable(p: string[]) {
     g.add(cl)
   }
   g.add(rbox(26, 1.6, 7, cloudC, {}, 0.6))
-  return centered(g)
+  return fitGroup(g)
 }
 
 /** 小蘑菇台灯：带白点的发光菌盖 */
@@ -1158,7 +1149,7 @@ function silkSquareFloor(p: string[]) {
   }
   // 顶上四角起翘
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(P(rbox(2, 2, 7, accent, {}, 0.5), sx * 15, 149, sz * 15, 0.35 * -sz, Math.atan2(sx, sz), 0))
-  return centered(g)
+  return fitGroup(g)
 }
 
 /** 竹节落地灯：方石底座、竹节灯杆、圆筒绢纱罩 */
@@ -1190,7 +1181,7 @@ function lotusFloor(p: string[]) {
   leafG.position.set(0, 140, 10)
   g.add(leafG)
   g.add(bulb(3, 0, 144, 10))
-  return centered(g)
+  return fitGroup(g)
 }
 
 /** 宫灯台灯：六角绢纱灯体、上下木檐，六角挂小流苏 */
@@ -1330,7 +1321,7 @@ function candelabraFloor(p: string[]) {
   }
   // 两颗水晶坠
   for (const s of [-1, 1]) g.add(ball(1, CRYSTAL, { x: s * 7, y: 125.5 }, [1, 1.6, 1]))
-  return centered(g)
+  return fitGroup(g)
 }
 
 /** 欧式上照落地灯：叶饰立柱顶着一只雪花石膏碗，向上发光 */
@@ -1487,7 +1478,7 @@ function hookLantern(p: string[]) {
   g.add(tube([[0, 142, 0], [0, 150, 0], [6, 156, 0], [13, 152, 0], [14, 146, 0]], 1, iron, { ...TUBE, seg: 24 }))
   g.add(cyl(0.25, 0.25, 4, iron, { x: 14, y: 142 }, 4))
   g.add(lantern(iron, glass, 14, 117))
-  return centered(g)
+  return fitGroup(g)
 }
 
 /** 马灯（飓风灯）：油壶底座、玻璃罩、护丝、顶盖与提手（y0 为底面） */
@@ -1523,7 +1514,7 @@ function turnedWoodFloor(p: string[]) {
 /** 马灯台灯 */
 function hurricaneTable(p: string[]) {
   const [metal, glass] = p
-  return centered(G(lantern(metal, glass, 0, 0, 1.1)))
+  return fitGroup(G(lantern(metal, glass, 0, 0, 1.1)))
 }
 
 /** 陶罐瓶灯：粗陶酒罐灯座（带小把手）+ 亚麻鼓罩 */

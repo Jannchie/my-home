@@ -9,7 +9,7 @@ import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js'
 import { ball, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, legs, paintPanel, rectPoly, rng, rod, type AssetCategory, type AssetDef, type Poly } from '../kit'
 import { swingDoor } from './styles-world'
-import { G, P, PI, UP, ghost, lit, mesh, noOutline, type V3 } from '../geo'
+import { G, P, PI, UP, fitGroup, ghost, lit, mesh, noOutline, type V3 } from '../geo'
 import { I, J, M, N, PROP, R, type PalFlat } from '../packkit'
 
 type RY = [number, number]
@@ -60,18 +60,7 @@ function ghost2<T extends THREE.Mesh>(m: T, color: string, a = 0.28): T {
   return m
 }
 
-/** 摆正：水平居中、最低点落到 y0 */
-function fit(g: THREE.Object3D, y0 = 0) {
-  const outer = new THREE.Group()
-  outer.add(g)
-  outer.updateMatrixWorld(true)
-  const b = new THREE.Box3().setFromObject(outer, true)
-  g.position.x -= (b.min.x + b.max.x) / 2
-  g.position.z -= (b.min.z + b.max.z) / 2
-  g.position.y += y0 - b.min.y
-  return outer
-}
-const F = (b: (p: string[]) => THREE.Group) => (p: string[]) => fit(b(p))
+const F = (b: (p: string[]) => THREE.Group) => (p: string[]) => fitGroup(b(p))
 
 /** 平放的画面：w × d，画布顶边朝后（-z），(x, z) 为中心，y 为高度 */
 function paintTop(w: number, d: number, key: string, draw: Draw, x: number, y: number, z: number) {
@@ -1298,7 +1287,7 @@ function domeSpecimen(p: string[]) {
   g.add(P(dome, 0, 2.95, 0))
   g.add(ghost(ball(0.9, GLASS, { y: 2.95 + 20.5 + 0.7 }), GLASS, 0.4))
   g.add(cyl(3.4, 3.8, 1.4, M.black, { y: 3 }, 24))
-  const c = fit(quartzCluster([xtal, rockC], 8))
+  const c = fitGroup(quartzCluster([xtal, rockC], 8))
   c.scale.setScalar(0.66)
   g.add(P(c, 0, 4.4, 0))
   return g
@@ -1570,7 +1559,7 @@ function coinFrame(W: number, H: number, cols: number, rows: number, desk: boole
         fr.add(rbox(sx * 0.5, sy * 0.1, 0.2, plate, { x, y: y - rr - sy * 0.2, z: 0.7 }, 0.05))
       }
     if (!desk) return G(P(fr, 0, 140, -D / 2))
-    return fit(standUp(fr, H, frame))
+    return fitGroup(standUp(fr, H, frame))
   }
 }
 
@@ -1772,7 +1761,7 @@ function stampFrame(W: number, H: number, cols: number, rows: number, desk: bool
     const fr = frameBox(W, H, D, fb, frame, mat)
     fr.add(paintPanel(W - fb * 2 - 0.2, H - fb * 2 - 0.2, `col-stampmat-${mat}-${cols}x${rows}`, drawStampMat(mat, cols, rows), { y: fb + 0.1, z: 0.9 }))
     if (!desk) return G(P(fr, 0, 135, -D / 2))
-    return fit(standUp(fr, H, frame))
+    return fitGroup(standUp(fr, H, frame))
   }
 }
 

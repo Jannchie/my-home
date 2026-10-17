@@ -6,7 +6,7 @@
 import * as THREE from 'three'
 import { ball, cyl, rbox, shade, toon, torus } from '../toon'
 import { C, glow, type AssetCategory, type AssetDef } from '../kit'
-import { G, P, PI, cylZ, lit, noOutline } from '../geo'
+import { G, P, PI, cylZ, fitGroup, lit, noOutline } from '../geo'
 import { CL, I, M, N, type PalFlat } from '../packkit'
 
 const LENS = '#1d2230'
@@ -16,20 +16,9 @@ const BLACK = '#26262a'
 function def(id: string, name: string, category: AssetCategory, [w, d, h]: [number, number, number], pals: PalFlat[], build: (p: string[]) => THREE.Group, extra: Partial<AssetDef> = {}): AssetDef {
   return { id, name, category, w, d, h, palettes: pals.map((x) => x.slice(1)), paletteStyles: pals.map((x) => x[0]), styles: [...new Set(pals.map((x) => x[0]))], build, ...extra }
 }
-/** 摆正：水平居中，最低点放到 y0（壁挂物传安装高度）；keepZ 时不动 z（壁挂物背面贴墙） */
-function fit(g: THREE.Object3D, y0 = 0, keepZ = false) {
-  const outer = new THREE.Group()
-  outer.add(g)
-  outer.updateMatrixWorld(true)
-  const b = new THREE.Box3().setFromObject(outer, true)
-  g.position.x -= (b.min.x + b.max.x) / 2
-  if (!keepZ) g.position.z -= (b.min.z + b.max.z) / 2
-  g.position.y += y0 - b.min.y
-  return outer
-}
 /** 壁挂物：背面（最小 z）贴到 -d/2，水平居中，最低点 = mount */
 function fitWall(g: THREE.Object3D, mount: number, d: number) {
-  const outer = fit(g, mount, true)
+  const outer = fitGroup(g, mount, true)
   outer.updateMatrixWorld(true)
   const b = new THREE.Box3().setFromObject(outer, true)
   g.position.z += -d / 2 - b.min.z
@@ -58,7 +47,7 @@ function petDome([body, base, acc]: string[]) {
     g.add(noOutline(lit(ball(0.22, '#7a2a2a', { x: Math.cos(a) * 2.2, y: 10.3 + Math.sin(a) * 2.2, z: 4.3 }), '#8a2a2a', 0.3)))
   }
   g.add(led(0, 7.2, 4.15))
-  return fit(g)
+  return fitGroup(g)
 }
 /** 萌系猫耳款：圆滚滚的头 + 两只耳朵 + 圆脸盘（镜头像鼻子）：[机身, 耳内 / 脸盘, 底座] */
 function petEars([body, inner, base]: string[]) {
@@ -75,7 +64,7 @@ function petEars([body, inner, base]: string[]) {
   g.add(P(ball(2.6, BLACK, {}, [1, 0.9, 0.3]), 0, 8.6, 4.4))
   g.add(lens(1.05, 0, 8.6, 4.75))
   g.add(led(0, 6.2, 4.7, inner, 0.35))
-  return fit(g)
+  return fitGroup(g)
 }
 /** 零食投喂款：方圆机身 + 顶上透明零食仓 + 前方出粮口（地上散着几颗零食）：[机身, 面板, 零食] */
 function petTreat([body, face, treat]: string[]) {
@@ -97,7 +86,7 @@ function petTreat([body, face, treat]: string[]) {
   g.add(cyl(5.3, 5.3, 1.4, shade(body, -0.08), { y: 27 }, 24))
   g.add(cyl(1.2, 1.2, 0.8, face, { y: 28.4 }, 12))
   for (const [x, z] of [[-2, 10], [1.4, 11.4], [3.2, 9.6]]) g.add(ball(0.9, treat, { x, y: 0.55, z }, [1, 0.6, 1]))
-  return fit(g)
+  return fitGroup(g)
 }
 /** 激光逗猫款：矮圆底座 + 球头，镜头下方一个红色激光头，红点打在前面地上：[机身, 底座, 点缀] */
 function petLaser([body, base, acc]: string[]) {
@@ -111,7 +100,7 @@ function petLaser([body, base, acc]: string[]) {
   g.add(cylZ(0.6, 1.4, acc, 0, 8.1, 4.1, 12))
   g.add(lit(cylZ(0.3, 0.3, '#ff3030', 0, 8.1, 4.9, 10), '#ff3030', 1))
   g.add(torus(5.05, 0.3, acc, { y: 3, rx: PI / 2 }))
-  return fit(g)
+  return fitGroup(g)
 }
 /** 平板底座款：圆盘底座 + 斜靠的屏幕（屏上是爪印通话界面），顶边中间是摄像头：[外壳, 底座, 屏幕色] */
 function petTablet([shell, base, screen]: string[]) {
@@ -131,7 +120,7 @@ function petTablet([shell, base, screen]: string[]) {
   panel.add(lens(0.55, 0, 13, 0.7))
   g.add(P(panel, 0, 2.6, -1.2, -0.28))
   g.add(P(rbox(3, 7, 1.4, base, {}, 0.6), 0, 1.6, -3.6, 0.5))
-  return fit(g)
+  return fitGroup(g)
 }
 
 const PET_P: PalFlat[] = [
@@ -176,7 +165,7 @@ function secPanTilt([body, base]: string[]) {
   g.add(P(ball(2.7, BLACK, {}, [1, 1.2, 0.4]), 0, 9.4, 2.8))
   g.add(lens(0.9, 0, 10, 3.7))
   g.add(led(0, 7.6, 3.75))
-  return fit(g)
+  return fitGroup(g)
 }
 /** 磁吸小方块：圆形磁吸底座 + 圆角方块机身：[机身, 底座] */
 function secCube([body, base]: string[]) {
@@ -186,7 +175,7 @@ function secCube([body, base]: string[]) {
   g.add(P(rbox(5.4, 5.4, 4.4, body, {}, 1.4), 0, 2.4, 0, -0.12))
   g.add(lens(1, 0, 5.3, 2.2))
   g.add(led(1.6, 6.6, 2.15))
-  return fit(g)
+  return fitGroup(g)
 }
 const SEC_MOUNT = 212
 /** 壁挂半球：墙座 + L 形支臂 + 朝下的烟色半球罩：[机身, 支架] */
@@ -244,7 +233,7 @@ function babyCam([body, light, acc]: string[]) {
   g.add(lens(0.8, 0, 12.8, 3.2))
   // 两只小耳朵（小熊）
   for (const s of [-1, 1]) g.add(ball(1.1, acc, { x: s * 2.2, y: 15.2 }, [1, 1, 0.6]))
-  return fit(g)
+  return fitGroup(g)
 }
 /** 婴儿监视器接收器：带屏幕的手持机，靠支脚斜立，顶上一根短天线：[外壳, 屏幕色, 按键] */
 function babyRecv([shell, screen, key]: string[]) {
@@ -260,7 +249,7 @@ function babyRecv([shell, screen, key]: string[]) {
   body.add(ball(0.55, shell, { x: 4.5, y: 12.5 }))
   g.add(P(body, 0, 0.6, 0, -0.22))
   g.add(P(rbox(6, 6.5, 0.6, shade(shell, -0.1), {}, 0.3), 0, 0, -2.4, -0.55))
-  return fit(g)
+  return fitGroup(g)
 }
 const BABY_P: PalFlat[] = [
   ['cute', C.white, C.lemon, C.sky],
@@ -339,7 +328,7 @@ function actionKit([body, mount, bag]: string[]) {
   g.add(rbox(9, 4, 6.4, bag, { x: 10, z: -0.6 }, 1.8))
   g.add(rbox(8.6, 0.4, 0.4, shade(bag, -0.2), { x: 10, y: 3.6, z: 2.6 }, 0.15))
   for (const k of [0, 1]) g.add(P(rbox(3.4, 1, 4, BLACK, {}, 0.3), 3.6 + k * 0.4, k, 4.6, 0, 0.3 + k * 0.2))
-  return fit(g)
+  return fitGroup(g)
 }
 const action: AssetDef[] = [
   def('hc-action-kit', '运动相机套装', 'hobby', [18.2, 10.9, 9.5], [

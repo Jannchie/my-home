@@ -10,7 +10,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, face, leaf, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, SWING_OPEN, ellipsePoly, movable, paintPanel, rectPoly, rng, shell, type AssetCategory, type AssetDef, type DoorMotion, type SurfaceDef } from '../kit'
-import { PI, cylXLegacy, cylZLegacy, lit, noOutlineDeep, rod3, taperRod3, type V3 } from '../geo'
+import { PI, cylXLegacy, cylZLegacy, fitInPlace, lit, noOutlineDeep, rod3, taperRod3, type V3 } from '../geo'
 import { I, J, M, N, R, type Build, type Dims, type Pal } from '../packkit'
 
 const COFFEE = '#7a4a32'
@@ -42,20 +42,11 @@ const prop = (id: string, name: string, category: AssetCategory, dims: Dims, pal
 
 // ---------- 小工具 ----------
 
-/** 包围盒居中：xz 居中，最低点放到 y0（壁挂件给安装高度） */
-function fit<T extends THREE.Object3D>(o: T, y0 = 0): T {
-  o.updateMatrixWorld(true)
-  const b = new THREE.Box3().setFromObject(o, true)
-  o.position.x -= (b.min.x + b.max.x) / 2
-  o.position.z -= (b.min.z + b.max.z) / 2
-  o.position.y += y0 - b.min.y
-  return o
-}
 /** 把 build 包一层：结果自动居中落地 */
 const fitted = (b: Build, y0 = 0): Build => (p) => {
   const g = new THREE.Group()
   g.add(b(p))
-  return fit(g, y0)
+  return fitInPlace(g, y0)
 }
 
 // ---------- 可开合：门、抽屉 ----------
@@ -161,7 +152,7 @@ function airSlim(p: string[]) {
   g.add(noOutlineDeep(rbox(w - 12, 2.4, 1, DARK, { y: 1.6, z: 6.6 }, 0.4)))
   g.add(rbox(w - 14, 0.8, 4.6, shade(main, -0.05), { y: 0.6, z: 8.2, rx: 0.22 }, 0.3))
   g.add(airLed(w / 2 - 8, 5.55, 7.85))
-  return fit(g, AIRCON_MOUNT)
+  return fitInPlace(g, AIRCON_MOUNT)
 }
 
 /** 高端款：前面板鼓起、上方是感应眼、面板上有温度显示屏、双导风板 */
@@ -203,7 +194,7 @@ function airPremium(p: string[]) {
   ])
     g.add(rbox(w - 18, 0.9, 4.4, shade(main, -0.05), { y, z, rx }, 0.3))
   g.add(airLed(-w / 2 + 9, 8.2, 7.55, '#8fd3ff'))
-  return fit(g, AIRCON_MOUNT)
+  return fitInPlace(g, AIRCON_MOUNT)
 }
 
 /** 木纹面板：机身是素色，正面一整块木纹板，两端露出机身 */
@@ -217,7 +208,7 @@ function airWood(p: string[]) {
   g.add(noOutlineDeep(rbox(w - 14, 3, 1, DARK, { y: 2.2, z: 7.1 }, 0.4)))
   g.add(rbox(w - 16, 1, 4.6, acc, { y: 1, z: 8.6, rx: 0.3 }, 0.3))
   g.add(airLed(w / 2 - 3, 8, 7.6))
-  return fit(g, AIRCON_MOUNT)
+  return fitInPlace(g, AIRCON_MOUNT)
 }
 
 /** 黑色：棱角分明的机身，上沿斜切，正面一条发光线 */
@@ -232,7 +223,7 @@ function airBlack(p: string[]) {
   g.add(lit(rbox(30, 0.5, 0.6, light, { y: 12.2, z: 9.6 }, 0.2), light, 0.9))
   g.add(noOutlineDeep(rbox(w - 12, 3.6, 1, '#141518', { y: 2.4, z: 9.2 }, 0.4)))
   g.add(rbox(w - 14, 0.9, 5, trim, { y: 0.8, z: 10.6, rx: 0.3 }, 0.3))
-  return fit(g, AIRCON_MOUNT)
+  return fitInPlace(g, AIRCON_MOUNT)
 }
 
 /** 圆润可爱款：胶囊形机身，圆鼓鼓的前脸，彩色圆点按钮 */
@@ -250,7 +241,7 @@ function airRound(p: string[]) {
   // 三颗圆点
   ;[dot, C.mint, C.lemon].forEach((c, i) => g.add(ball(1, c, { x: w / 2 - 22 + i * 3, y: 19.5, z: 9.9 }, [1, 1, 0.5])))
   g.add(airLed(-w / 2 + 18, 19.5, 9.9, '#ffb0c4'))
-  return fit(g, AIRCON_MOUNT)
+  return fitInPlace(g, AIRCON_MOUNT)
 }
 
 // =====================================================================

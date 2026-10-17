@@ -10,7 +10,7 @@
 import * as THREE from 'three'
 import { ball, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, glow, holePanel, rng, shell, type AssetDef } from '../kit'
-import { P, PI, cappedTube, litDeep, noOutlineDeep, rod3, type TubeOpts, type V3 } from '../geo'
+import { P, PI, cappedTube, centerXZInPlace, fitBuild, litDeep, noOutlineDeep, rod3, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, R, type Build, type Dims, type Pal } from '../packkit'
 
 /** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
@@ -34,7 +34,7 @@ const BIRD_HOME = { scope: 'house' as const, max: 1, group: 'ph-bird-cage' }
 // ---------- 定义 ----------
 
 function def(id: string, name: string, [w, d, h]: Dims, pals: Pal[], build: Build, extra: Partial<AssetDef> = {}): AssetDef {
-  if (extra.form !== 'hanging') build = normalize(build)
+  if (extra.form !== 'hanging') build = fitBuild(build)
   return {
     id,
     name,
@@ -51,28 +51,7 @@ function def(id: string, name: string, [w, d, h]: Dims, pals: Pal[], build: Buil
 }
 const prop = (id: string, name: string, dims: Dims, pals: Pal[], build: Build, extra: Partial<AssetDef> = {}) => def(id, name, dims, pals, build, { prop: true, ...extra })
 
-/** 落地并在 xz 上居中 */
-function normalize(build: Build): Build {
-  return (p) => {
-    const g = build(p)
-    g.updateMatrixWorld(true)
-    const b = new THREE.Box3().setFromObject(g, true)
-    g.position.x -= (b.min.x + b.max.x) / 2
-    g.position.z -= (b.min.z + b.max.z) / 2
-    g.position.y -= b.min.y
-    return G(g)
-  }
-}
-
 // ---------- 小工具 ----------
-
-/** 只在 xz 上居中（挂起形态：吊环可能因门扣、抽屉把手略偏，整体挪回挂点正下方） */
-function centerXZ(g: THREE.Object3D) {
-  g.updateMatrixWorld(true)
-  const b = new THREE.Box3().setFromObject(g, true)
-  g.position.x -= (b.min.x + b.max.x) / 2
-  g.position.z -= (b.min.z + b.max.z) / 2
-}
 
 /** 半透明件（玻璃、亚克力、水）：整棵子树换成半透明材质、不描边 */
 function clear<T extends THREE.Object3D>(o: T, color: string, a = 0.25): T {
@@ -831,7 +810,7 @@ function domeStanding(p: string[]) {
 function domeHanging(p: string[]) {
   const { g, ringTop } = domeBirdcage(p)
   g.position.y = -0.5 - ringTop
-  centerXZ(g)
+  centerXZInPlace(g)
   return G(g)
 }
 
@@ -983,7 +962,7 @@ function bambooStanding(p: string[]) {
 function bambooHanging(p: string[]) {
   const { g, ringTop } = bambooCage(p)
   g.position.y = -0.5 - ringTop
-  centerXZ(g)
+  centerXZInPlace(g)
   return G(g)
 }
 

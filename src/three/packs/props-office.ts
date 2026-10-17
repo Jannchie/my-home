@@ -5,9 +5,9 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus } from '../toon'
-import { C, CLIP_DROP, G, SWING_OPEN, clipLevels, glow, movable, rng, shell, rectPoly, type AssetCategory, type AssetDef, type SurfaceDef } from '../kit'
+import { C, CLIP_DROP, SWING_OPEN, clipLevels, glow, movable, rng, shell, rectPoly, type AssetCategory, type AssetDef, type SurfaceDef } from '../kit'
 import { I, J, M, N, R, hasDeclaredCoords, shiftDeclared, type Pal } from '../packkit'
-import { P, PI, cylX, cylZ, ghostOutlined, litOutlined, noOutline, rod3 } from '../geo'
+import { P, PI, cylX, cylZ, fitGroup, fitOffset, ghostOutlined, litOutlined, noOutline, rod3 } from '../geo'
 
 const SCREEN = '#bfe3ff'
 const DARK = '#2c2e34'
@@ -46,23 +46,10 @@ function def(
     palettes: pals.map((x) => x[1]),
     paletteStyles: pals.map((x) => x[0]),
     styles: [...new Set(pals.map((x) => x[0]))],
-    build: exact ? build : (p) => fit(build(p), mount),
+    build: exact ? build : (p) => fitGroup(build(p), mount),
     prop: true,
     ...extra,
   }
-}
-
-/** fit 对模型的平移量：x/z 居中，底面落到 mount 高度 */
-function fitOffset(g: THREE.Group, mount = 0): [number, number, number] {
-  const box = new THREE.Box3().setFromObject(g, true)
-  const c = box.getCenter(new THREE.Vector3())
-  return [-c.x, mount - box.min.y, -c.z]
-}
-
-/** 按包围盒居中：x/z 居中，底面落到 mount 高度 */
-function fit(g: THREE.Group, mount = 0) {
-  g.position.set(...fitOffset(g, mount))
-  return G(g)
 }
 
 // ---------- 小工具 ----------

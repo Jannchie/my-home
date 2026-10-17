@@ -109,7 +109,7 @@ function gridHoles(w: number, h: number, r: number, hole: number, pitch: number,
 type Def = Omit<AssetDef, 'palettes' | 'paletteStyles' | 'prop' | 'category'> & { pals: Pal3[]; category?: AssetDef['category']; raw?: boolean }
 
 /** 把模型在 xz 上挪到包围盒中心（fx 坐标按挪之前的写，所以带 fx 的素材都做成左右前后对称） */
-function centered(build: (p: string[]) => THREE.Group) {
+function centeredLoose(build: (p: string[]) => THREE.Group) {
   return (p: string[]) => {
     const inner = build(p)
     const b = new THREE.Box3().setFromObject(inner)
@@ -130,7 +130,7 @@ function def(o: Def): AssetDef {
     paletteStyles: ps,
     styles: styles ?? [...new Set(ps)],
     prop: true,
-    build: raw ? build : centered(build),
+    build: raw ? build : centeredLoose(build),
   }
 }
 

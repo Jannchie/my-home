@@ -6,7 +6,7 @@
 import * as THREE from 'three'
 import { ball, cup, cyl, rbox, shade, torus, tray } from '../toon'
 import { C, G, type AssetCategory, type AssetDef } from '../kit'
-import { PI, clearDeep, mesh, noOutlineDeep, rod3 } from '../geo'
+import { PI, clearDeep, fitChildren, mesh, noOutlineDeep, rod3 } from '../geo'
 import { I, J, M, N, R, type Build, type Pal3 } from '../packkit'
 
 const COPPER = '#c7814a'
@@ -67,14 +67,6 @@ function xyPrism(pts: [number, number][], depth: number, color: string, at: { x?
   const m = mesh(geo, color)
   m.position.set(at.x ?? 0, at.y ?? 0, at.z ?? 0)
   return m
-}
-/** 把模型的包围盒挪到 xz 居中、最低点在 y0 */
-function settle(g: THREE.Group, y0 = 0) {
-  g.updateMatrixWorld(true)
-  const b = new THREE.Box3().setFromObject(g, true)
-  const off = new THREE.Vector3(-(b.min.x + b.max.x) / 2, y0 - b.min.y, -(b.min.z + b.max.z) / 2)
-  for (const c of g.children) c.position.add(off)
-  return g
 }
 
 // ======================================================================
@@ -184,7 +176,7 @@ function pailDipper(p: string[]) {
   g.add(rod3([rAt(7) - 0.6, 7, 0], [rAt(7) + 3.2, 12.2, 0], 1, handle))
   g.add(ball(1.2, handle, { x: rAt(7) + 3.2, y: 12.2 }))
   g.add(rbox(1.2, 3.6, 3.2, shade(handle, -0.08), { x: rAt(6.4) + 0.2, y: 6.4 }, 0.4))
-  return settle(g)
+  return fitChildren(g)
 }
 
 /** 北欧粉彩圆角款：圆润底角的车削桶身，粗圆口沿，两侧小耳朵，一道细色带 */
@@ -267,7 +259,7 @@ function mopTube(p: string[]) {
   g.add(cyl(1.5, 1.5, 16, grip, { y: 101.6 }, 14))
   g.add(cyl(1.7, 1.7, 1.2, shade(grip, -0.12), { y: 117.6 }, 14))
   g.add(torus(1.3, 0.35, shade(grip, -0.12), { y: 120.1 }))
-  return settle(g)
+  return fitChildren(g)
 }
 
 /** 帆布清洁用品收纳篮：中间隔开，左格放喷壶和清洁剂瓶，右格放叠好的抹布和海绵；两条提带 */
@@ -351,7 +343,7 @@ function wallToolRack(p: string[]) {
   g.add(rbox(22.2, 0.5, 1.4, bristle, { x: dx, y: dy - 0.2, z: dz + 6.6 }, 0.2))
   g.add(cyl(1.1, 1.1, 88, tool, { x: dx, y: dy + 7.6, z: zp }, 12))
   g.add(rbox(2.6, 2, 3.4, shade(tool, -0.15), { x: dx, y: dy + 6.4, z: zp + 0.8 }, 0.6))
-  return settle(g, RACK_MOUNT)
+  return fitChildren(g, RACK_MOUNT)
 }
 
 // ======================================================================

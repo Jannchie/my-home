@@ -319,9 +319,10 @@ export function fitInPlace<T extends THREE.Object3D>(o: T, y0 = 0): T {
   return o
 }
 
-/** 就地平移 g 使 x / z 居中、底面贴 y0，再外包一层 Group 返回 */
-export function fitWrap(g: THREE.Object3D, y0 = 0) {
-  return G(fitInPlace(g, y0))
+/** fitInPlace / fitGroup 会给模型的平移量 [dx, dy, dz]（手写的 surface / screens 要跟着平移时用，见 packkit.shiftDeclared） */
+export function fitOffset(o: THREE.Object3D, y0 = 0): [number, number, number] {
+  const b = box3(o)
+  return [-(b.min.x + b.max.x) / 2, y0 - b.min.y, -(b.min.z + b.max.z) / 2]
 }
 
 /** 只把 x / z 居中（高度不动），就地平移 o。返回 o */
@@ -332,6 +333,28 @@ export function centerXZInPlace<T extends THREE.Object3D>(o: T): T {
   o.position.z -= (b.min.z + b.max.z) / 2
   return o
 }
+
+/** 只把 x / z 居中（高度不动），再外包一层 Group 返回 */
+export function centerGroup(g: THREE.Object3D) {
+  return G(centerXZInPlace(g))
+}
+
+type BuildFn = (p: string[]) => THREE.Group
+/** build 包装：每次建模后 fitGroup（x / z 居中、底面贴 y0） */
+export const fitBuild =
+  (build: BuildFn, y0 = 0): BuildFn =>
+  (p) =>
+    fitGroup(build(p), y0)
+/** build 包装：每次建模后 fitChildren（不加新层） */
+export const fitChildrenBuild =
+  (build: BuildFn, y0 = 0): BuildFn =>
+  (p) =>
+    fitChildren(build(p), y0)
+/** build 包装：每次建模后 centerGroup（只居中 x / z） */
+export const centerBuild =
+  (build: BuildFn): BuildFn =>
+  (p) =>
+    centerGroup(build(p))
 
 /** 平面多边形按自身外接矩形缩放到 w × d、并居中（L 形、云朵形桌面） */
 export function fitPoly(poly: [number, number][], w: number, d: number): [number, number][] {

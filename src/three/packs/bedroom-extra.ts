@@ -255,7 +255,7 @@ const LINGERIE: ChestSpec[] = [
   { w: 48, d: 42, h: 104, rows: [18, 16, 14, 12, 11, 10], plinth: 12, knob: 'ring', legs: true },
 ]
 /** 打开时拉出的抽屉超出柜体前沿：整体往后挪，让占地仍以原点为中心 */
-function centered(build: (p: string[]) => THREE.Group) {
+function centerZBuild(build: (p: string[]) => THREE.Group) {
   return (p: string[]) => {
     const g = build(p)
     const b = new THREE.Box3().setFromObject(g, true)
@@ -286,7 +286,7 @@ const CHESTS: AssetDef[] = [
   ...([3, 5] as const).flatMap((n) =>
     ([false, true] as const).map((open) => {
       const s: ChestSpec = { w: 26, d: 20, h: n === 3 ? 22 : 32, rows: Array(n).fill(1), plinth: 1, knob: 'ball' }
-      return def(`be-mini-drawers-${n}-${open ? 'open' : 'closed'}`, '桌上小抽屉柜', [s.w, s.d + (open ? pullOut(s.d) + 1.5 : 0.9), s.h], CHEST_PALS, centered(chest(s, open)), {
+      return def(`be-mini-drawers-${n}-${open ? 'open' : 'closed'}`, '桌上小抽屉柜', [s.w, s.d + (open ? pullOut(s.d) + 1.5 : 0.9), s.h], CHEST_PALS, centerZBuild(chest(s, open)), {
         family: 'be-mini-drawers',
         sizeLabel: `${n} 格`,
         form: open ? 'open' : 'closed',
@@ -534,7 +534,7 @@ const VANITIES: AssetDef[] = [
   def('be-vanity-fold-open', '折叠镜化妆桌', [80, 45, 97.5], VANITY_PALS, vanityFold(true), { family: 'be-vanity-fold', form: 'open', formLabel: '镜子立起', surface: 73, surfaceShape: VANITY_SURF(80, 45, 2), surfaces: deskSurfaces(80, 45, 73), openable: true }),
   def('be-vanity-fold-closed', '折叠镜化妆桌', [80, 45, 75], VANITY_PALS, vanityFold(false), { family: 'be-vanity-fold', form: 'closed', surface: 73, surfaceShape: VANITY_SURF(80, 45, 2), surfaces: deskSurfaces(80, 45, 73), openable: true }),
   def('be-vanity-tri', '三面镜梳妆台', [90, 45, 143], VANITY_PALS, vanityTri, { surface: 74, surfaceShape: VANITY_SURF(90, 45, -8), surfaces: deskSurfaces(90, 45, 74), openable: true }),
-  def('be-kyodai', '和风鏡台', [46, 33, 107], KYODAI_PALS, centered(kyodai), { category: 'japanese', surface: 30, surfaceShape: [rectPoly(-21, -4, 21, 15)], surfaces: KYODAI_SURF, openable: true }),
+  def('be-kyodai', '和风鏡台', [46, 33, 107], KYODAI_PALS, centerZBuild(kyodai), { category: 'japanese', surface: 30, surfaceShape: [rectPoly(-21, -4, 21, 15)], surfaces: KYODAI_SURF, openable: true }),
   def('be-vanity-hollywood', '好莱坞灯泡化妆台', [100, 45, 135], VANITY_PALS, vanityHollywood, { surface: 75, surfaceShape: VANITY_SURF(100, 45, -15), surfaces: deskSurfaces(100, 45, 75), openable: true }),
   def('be-vanity-wall', '北欧圆镜化妆桌', [70, 38, 168], VANITY_PALS, vanityWall, { surface: 74, surfaceShape: VANITY_SURF(70, 38, -15), surfaces: deskSurfaces(70, 38, 74), openable: true }),
   def('be-vanity-stool', '化妆凳', [29, 29, 46.8], [...VANITY_PALS.map(([s, c]): Pal => [s, [c[0], c[1]]])], stool),
