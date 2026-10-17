@@ -7,11 +7,11 @@ import { generatePlan } from '/src/generate-region'
 import { allocateRooms, generateHousehold, lowMobility, memberRooms, type Household, type Member } from '/src/household'
 import { applyFixesHouse, decorateHouse } from '/src/decorate'
 import { checklist } from '/src/checklist'
-import { baseFloorId, floorOf, floorView, planFloors } from '/src/floors'
-import { stairClearZones, stairFootprint, stairUnderZone, stairWalk, underZonePoly } from '/src/stairs'
+import { baseFloorId, floorOf, floorView, planFloors, riseOf } from '/src/floors'
+import { stairClearZones, stairFootprint, stairKeepOut, stairUnderZone, stairWalk, underZonePoly } from '/src/stairs'
 import { HouseNav } from '/src/nav'
 import { voidRailSegments } from '/src/walls'
-import { add, bbox, mul, openingGeom, pointInPolygon, type Furniture, type Plan, type Region } from '/src/model'
+import { add, bbox, fixtureBox, mul, openingGeom, pointInPolygon, type Furniture, type Plan, type Region } from '/src/model'
 import { furnitureBox, overlapsOthers, yardBlocked } from '/src/snap'
 import { yardFurniture } from '/src/yard'
 import { isMainAppliance } from '/src/appliance'
@@ -111,6 +111,38 @@ describe('全户统一分配房间', () => {
 })
 
 describe('按层布置的协调', () => {
+  test('设备和落地家具不压楼梯的留空区（起步处、楼梯下储物角开口前）', () => {
+    expect(
+      each(({ plan }) =>
+        plan.fixtures
+          .filter((f) => f.kind === 'stairs' && !f.id.endsWith('~hole'))
+          .flatMap((st) =>
+            stairKeepOut(st, riseOf(plan, floorOf(plan, st))).flatMap((zone) => {
+              const zb = bbox(zone)
+              return plan.fixtures
+                .filter((x) => x !== st && x.kind !== 'stairs' && floorOf(plan, x) === floorOf(plan, st))
+                .filter((x) => {
+                  const b = fixtureBox(x)
+                  return Math.min(b.x1, zb.x1) - Math.max(b.x0, zb.x0) > 2 && Math.min(b.y1, zb.y1) - Math.max(b.y0, zb.y0) > 2
+                })
+                .map((x) => `${x.kind} 压到楼梯留空区`)
+                .concat(
+                  plan.furniture
+                    .filter((x) => !x.z && floorOf(plan, x) === floorOf(plan, st))
+                    .filter((x) => {
+                      const d = ASSET_MAP.get(x.asset)
+                      if (!d || d.mount || d.stick || d.h < 5) return false
+                      const b = furnitureBox(x.asset, x.x, x.y, x.rot)
+                      return Math.min(b.x1, zb.x1) - Math.max(b.x0, zb.x0) > 4 && Math.min(b.y1, zb.y1) - Math.max(b.y0, zb.y0) > 4
+                    })
+                    .map((x) => `${x.asset} 压到楼梯留空区`),
+                )
+            }),
+          ),
+      ),
+    ).toEqual([])
+  })
+
   test('冰箱、洗衣机全户各一台（不每层都放）', () => {
     expect(
       each(({ plan }) => {

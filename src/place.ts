@@ -25,6 +25,8 @@ import {
   type Vec,
 } from './model'
 import { isOpenBetween, sharedIntervals, wallThicknessAt } from './walls'
+import { stairKeepOut } from './stairs'
+import { floorOf, riseOf } from './floors'
 
 export type PlaceCtx = Pick<Plan, 'rooms' | 'openings' | 'fixtures' | 'wall' | 'wallOuter'>
 
@@ -113,6 +115,24 @@ export function boxInsideWalls(b: Box, room: Room, ctx: Pick<Plan, 'rooms' | 'wa
  * sash：通往阳台的落地窗（掃き出し窓）也是出入口，留出 50 的通行空间（家具用；设备摆放不传，保持户型生成结果不变）。
  */
 export function clearances(room: Room, ctx: PlaceCtx, avoidWindows: boolean, sash = false): Box[] {
+  return [...openingClearances(room, ctx, avoidWindows, sash), ...stairClearances(room, ctx)]
+}
+
+/**
+ * 这个房间里的楼梯要留空的地方（起步处、楼梯下储物角的开口前，见 stairKeepOut）。
+ * ctx 带楼层表时按真实层间高算储物角，否则按常见的 270。
+ */
+function stairClearances(room: Room, ctx: PlaceCtx): Box[] {
+  const plan = ctx as Partial<Plan>
+  return ctx.fixtures
+    .filter((f) => f.kind === 'stairs' && !f.id.endsWith('~hole'))
+    .flatMap((f) => stairKeepOut(f, plan.floors ? riseOf(plan as Plan, floorOf(plan as Plan, f)) : 270))
+    .filter((poly) => poly.some((q) => pointInPolygon(q, room.points)) || pointInPolygon(centroidOf(poly), room.points))
+    .map(bbox)
+}
+const centroidOf = (poly: Vec[]) => poly.reduce((a, q) => ({ x: a.x + q.x / poly.length, y: a.y + q.y / poly.length }), { x: 0, y: 0 })
+
+function openingClearances(room: Room, ctx: PlaceCtx, avoidWindows: boolean, sash = false): Box[] {
   return openingsOn(room, ctx).flatMap(({ o, owner, e, center }) => {
     if (o.kind === 'window' && !avoidWindows && !(sash && isSashWindow(ctx, owner, e, center))) return []
     // 指向本房间内部的法线

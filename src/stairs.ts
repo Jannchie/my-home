@@ -390,7 +390,7 @@ function arrivalOut(L: StairLayout): { mid: Vec; out: Vec } {
 export const STAIR_CLEAR = 80
 
 /**
- * 楼梯口要留空的地方（平面坐标的包围盒）：这一层楼梯的起步处（梯段宽 × STAIR_CLEAR），
+ * 楼梯口要留空的地方（平面坐标的包围盒）：这一层楼梯的起步处（梯段宽 × STAIR_CLEAR）和楼梯下储物角的开口前，
  * 以及从下层通上来的楼梯在这一层的出梯口外侧（出梯口长 × STAIR_CLEAR）。一键布置、检查补漏把它们当障碍。
  */
 export function stairClearZones(p: Plan, floorId: string): Box[] {
@@ -403,10 +403,9 @@ export function stairClearZones(p: Plan, floorId: string): Box[] {
     const D = fixtureDepth(f)
     const rooms = p.rooms.filter((r) => floorOf(p, r) === floorId)
     if (from === floorId && stairsVariant(f) !== 'spiral') {
-      const p0 = L.path[0]
-      const h = runWidth(f) / 2
-      out.push(bbox([w({ x: p0.x - h, y: D / 2 }), w({ x: p0.x + h, y: D / 2 }), w({ x: p0.x - h, y: D / 2 + STAIR_CLEAR }), w({ x: p0.x + h, y: D / 2 + STAIR_CLEAR })]))
-      out.push(...passage(p, rooms, w({ x: p0.x, y: D / 2 + STAIR_CLEAR / 2 })))
+      // 起步处 + 楼梯下储物角的开口前
+      out.push(...stairKeepOut(f, riseOf(p, from)).map(bbox))
+      out.push(...passage(p, rooms, w({ x: L.path[0].x, y: D / 2 + STAIR_CLEAR / 2 })))
     }
     if (isMultiFloor(p) && floorAbove(p, from)?.id === floorId) {
       const { mid, out: o } = arrivalOut(L)
@@ -514,6 +513,39 @@ export function stairUnderZone(f: Fixture, rise: number): UnderZone | null {
     return { x0: -W / 2, x1: W / 2, y0: -D / 2, y1: -D / 2 + s, clear: UNDER_CEIL - 5, fronts: [{ x: -sx, y: 0 }] }
   }
   return null
+}
+
+/** 楼梯下敞开的储物角：开口前要留空的进深（蹲下取放） */
+export const STAIR_NOOK_CLEAR = 60
+
+/** 起步处要留空的地方（平面坐标的四个角）：第一跑的梯段宽 × STAIR_CLEAR，在局部 +y 一端外侧 */
+function startZone(f: Fixture, L: StairLayout): Vec[] {
+  const w = stairToWorld(f)
+  const D = fixtureDepth(f)
+  const p0 = L.path[0]
+  const h = runWidth(f) / 2
+  return rectPoints(p0.x - h, D / 2, p0.x + h, D / 2 + STAIR_CLEAR).map(w)
+}
+
+/**
+ * 楼梯周围不能放设备 / 家具的地方（平面坐标的多边形）：起步处第一级前方，以及楼梯下敞开的储物角的开口前方。
+ * 旋转楼梯只留起步处（按第一级扇形的外缘方向）不好算，先不留。
+ */
+export function stairKeepOut(f: Fixture, rise: number): Vec[][] {
+  const v = stairsVariant(f)
+  if (v === 'spiral') return []
+  const w = stairToWorld(f)
+  const out: Vec[][] = [startZone(f, stairLayout(f, rise))]
+  if (f.under === 'open') {
+    const z = stairUnderZone(f, rise)
+    if (z)
+      for (const n of z.fronts) {
+        const edge = n.x > 0 ? z.x1 : z.x0
+        const far = edge + n.x * STAIR_NOOK_CLEAR
+        out.push(rectPoints(Math.min(edge, far), z.y0, Math.max(edge, far), z.y1).map(w))
+      }
+  }
+  return out
 }
 
 /** 楼梯下的储物角在平面上的范围（四个角） */
