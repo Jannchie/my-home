@@ -45,7 +45,8 @@ function snapshot(n: number) {
       const plan = generatePlan({ seed, ...OPTS, region }).plan
       const hh = generateHousehold(plan, seed)
       plan.household = hh
-      plan.furniture = decorate(plan, seed, 'auto', hh)
+      // DECOR_SEED_OFFSET：只换一键布置的随机种子（户型、住户不变），用来估计「纯随机」带来的差异有多大
+      plan.furniture = decorate(plan, seed + Number(process.env.DECOR_SEED_OFFSET ?? 0), 'auto', hh)
       const furniture: Record<string, number> = {}
       for (const f of [...plan.furniture].sort((a, b) => a.asset.localeCompare(b.asset))) furniture[f.asset] = (furniture[f.asset] ?? 0) + 1
       const cl: Record<string, string> = {}
