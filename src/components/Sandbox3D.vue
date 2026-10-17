@@ -2871,6 +2871,10 @@ section {
   padding: 16px 18px;
   border-bottom: 1px solid var(--border);
 }
+/* 楼层切换条（FloorBar）：沙盘标题下 */
+.floors {
+  margin: 8px 0 12px;
+}
 h3 {
   margin: 0 0 10px;
   font-size: var(--fs-md);
