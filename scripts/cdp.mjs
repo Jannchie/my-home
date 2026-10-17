@@ -1,6 +1,6 @@
 // 极简 CDP 客户端：起一个独立的无头 Chromium（临时 profile，不碰用户浏览器），返回 send / eval / close。
 // 只给录制脚本（record-promo.mjs）这类离线工具用。
-import { spawn } from 'node:child_process'
+import { execSync, spawn } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -37,7 +37,22 @@ export async function launch({ width, height, port = 9350, gpu = true } = {}) {
     ...(gpu ? ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] : ['--use-angle=swiftshader', '--enable-unsafe-swiftshader']),
     'about:blank',
   ]
-  const proc = spawn(findChrome(), args, { stdio: 'ignore' })
+  const proc = spawn(findChrome(), args, { stdio: 'ignore', detached: process.platform !== 'win32' })
+  // Windows 上 proc.kill() 只结束启动进程，渲染 / GPU 子进程会留下来：按进程树强杀。
+  // 脚本正常退出、报错、Ctrl+C 时也要杀，否则每次失败重试都会留下一整套 Chrome。
+  let dead = false
+  const killTree = () => {
+    if (dead) return
+    dead = true
+    try {
+      if (process.platform === 'win32') execSync(`taskkill /PID ${proc.pid} /T /F`, { stdio: 'ignore' })
+      else process.kill(-proc.pid, 'SIGKILL')
+    } catch {
+      proc.kill('SIGKILL')
+    }
+  }
+  process.once('exit', killTree)
+  for (const sig of ['SIGINT', 'SIGTERM']) process.once(sig, () => (killTree(), process.exit(1)))
   let list
   for (let i = 0; i < 100; i++) {
     try {
@@ -93,7 +108,7 @@ export async function launch({ width, height, port = 9350, gpu = true } = {}) {
     on: (fn) => listeners.push(fn),
     async close() {
       ws.close()
-      proc.kill()
+      killTree()
       await sleep(300)
       try {
         fs.rmSync(profile, { recursive: true, force: true })
