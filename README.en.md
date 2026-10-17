@@ -2,7 +2,7 @@
   <img src="public/icon-512.png" width="88" alt="" />
   <h1 align="center">My Home</h1>
   <p align="center">
-    <a href="https://home.jannchie.com"><b>Try it online</b></a>
+    <a href="https://home.jannchie.com/en/"><b>Try it online</b></a>
   </p>
   <p align="center">
     <a href="README.md">中文</a> · <a href="README.ja.md">日本語</a> · English
