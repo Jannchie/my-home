@@ -138,15 +138,23 @@ export function outlineColor(fill: THREE.Color) {
   return new THREE.Color().setHSL(hsl.h, Math.min(1, hsl.s * 0.8 + 0.1), Math.max(0.12, hsl.l * 0.32))
 }
 
-/** 给 root 下所有网格加描边（userData.noOutline 的跳过） */
-export function addOutlines(root: THREE.Object3D) {
+/**
+ * 给 root 下所有网格加描边（userData.noOutline 的跳过）。
+ * minSize：包围球直径小于它（cm）的网格不加（每个外壳都是一次 draw call；太小的零件描边只有几个像素）。
+ */
+export function addOutlines(root: THREE.Object3D, opts: { minSize?: number } = {}) {
   const meshes: THREE.Mesh[] = []
   root.traverse((o) => {
     if ((o as THREE.Mesh).isMesh && !o.userData.noOutline && !o.userData.isOutline) meshes.push(o as THREE.Mesh)
   })
+  if (opts.minSize) root.updateMatrixWorld(true)
   for (const m of meshes) {
     const mat = m.material as THREE.MeshToonMaterial
     if (mat.transparent) continue
+    if (opts.minSize) {
+      if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere()
+      if (m.geometry.boundingSphere!.radius * 2 * m.matrixWorld.getMaxScaleOnAxis() < opts.minSize) continue
+    }
     const hull = new THREE.Mesh(m.geometry, outlineMaterial(outlineColor(mat.color)))
     hull.userData.isOutline = true
     hull.raycast = () => {}
@@ -342,7 +350,8 @@ function mergeable(o: THREE.Object3D): o is THREE.Mesh {
 /**
  * 把模型里材质、投影设置、描边标记都相同的网格合成一个（顶点烘进模型局部坐标）。
  * 家具由几十上百个小零件拼成，合并后 draw call 降到「每种材质一个」，外观完全一样：
- * 描边外壳沿逐顶点法线外扩，合并前后结果相同。带 userData 的（游动的鱼、门窗信息等）和半透明的不动。
+ * 描边外壳沿逐顶点法线外扩，合并前后结果相同。带 userData 的（游动的鱼、门窗信息等）和半透明的不动；
+ * 柜门 / 抽屉子树（userData.door）不和柜体合并，但子树内部单独合并（开合时整棵子树一起动）。
  * 要在 addOutlines 之前调用。
  */
 export function mergeMeshes(root: THREE.Object3D) {
@@ -350,7 +359,11 @@ export function mergeMeshes(root: THREE.Object3D) {
   const inv = new THREE.Matrix4().copy(root.matrixWorld).invert()
   const buckets = new Map<string, THREE.Mesh[]>()
   const walk = (o: THREE.Object3D) => {
-    if (o !== root && Object.keys(o.userData).some((k) => k !== 'noOutline')) return // 有业务标记的子树整体保留
+    if (o !== root && Object.keys(o.userData).some((k) => k !== 'noOutline')) {
+      // 柜门 / 抽屉（kit.ts movable）：子树作为整体开合，内部零件在子树自己的局部坐标里照样按材质合并
+      if (o.userData.door) mergeMeshes(o)
+      return // 有业务标记的子树整体保留
+    }
     for (const c of o.children) walk(c)
     if (o !== root && mergeable(o)) {
       const m = o as THREE.Mesh
