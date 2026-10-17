@@ -9,7 +9,10 @@ import { generateHousehold } from '/src/household'
 import { rectPoints, type Fixture, type Furniture, type Plan } from '/src/model'
 import { isPersonal } from '/src/stow'
 import { normalizePlan } from '/src/store'
-import { pickSurface, propsOn, supportOf, toLocal } from '/src/surface'
+import { pickSurface, propsOn, supportOf, toLocal, toWorld } from '/src/surface'
+import { furnitureBox } from '/src/snap'
+import { doorSwings } from '/src/place'
+import { fixtureBox } from '/src/model'
 import { ASSET_MAP, ASSETS } from '/src/three/assets'
 import { countDoors, poseDoors } from '/src/three/kit'
 import { floorY, roomAt } from '/src/three/house'
@@ -251,6 +254,35 @@ describe('一键布置', () => {
     expect(inside('shoe-storage', 'shoe')).toBe(true)
     expect(inside('wardrobe', 'clothing')).toBe(true)
     expect(all.some(({ cab }) => cab.open)).toBe(true)
+  })
+
+  test('开着的柜子：门扇 / 抽屉伸出柜体的部分不压别的家具、设备，不挡房门的开合范围', () => {
+    const bad: string[] = []
+    for (const { region, seed, plan } of plans)
+      for (const cab of plan.furniture.filter((f) => f.open && !f.z)) {
+        const def = ASSET_MAP.get(cab.asset)!
+        const g = def.build(def.palettes[0])
+        g.updateMatrixWorld(true)
+        const closed = new THREE.Box3().setFromObject(g, true)
+        poseDoors(g, true)
+        g.updateMatrixWorld(true)
+        const open = new THREE.Box3().setFromObject(g, true)
+        const mine = new Set([cab.id, ...propsOn(plan, cab).map((o) => o.id)])
+        const others = plan.furniture.filter((o) => !mine.has(o.id) && !o.z && !ASSET_MAP.get(o.asset)!.mount && ASSET_MAP.get(o.asset)!.h > 3).map((o) => ({ o, b: furnitureBox(o.asset, o.x, o.y, o.rot) }))
+        const fixtures = plan.fixtures.filter((fx) => !['builtin', 'fridge', 'washer'].includes(fx.kind)).map(fixtureBox)
+        const swings = plan.rooms.flatMap((r) => doorSwings(r, plan))
+        const inB = (b: { x0: number; y0: number; x1: number; y1: number }, p: { x: number; y: number }) => p.x > b.x0 + 2 && p.x < b.x1 - 2 && p.y > b.y0 + 2 && p.y < b.y1 - 2
+        for (let x = open.min.x; x <= open.max.x; x += 5)
+          for (let z = open.min.z; z <= open.max.z; z += 5) {
+            if (x > closed.min.x - 1 && x < closed.max.x + 1 && z > closed.min.z - 1 && z < closed.max.z + 1) continue
+            const p = toWorld(cab, x, z)
+            const hit = others.find(({ b }) => inB(b, p))
+            if (hit) bad.push(`${region} ${seed}: 开着的 ${cab.asset} 压到 ${hit.o.asset}`)
+            if (fixtures.some((b) => inB(b, p))) bad.push(`${region} ${seed}: 开着的 ${cab.asset} 压到设备`)
+            if (swings.some((b) => inB(b, p))) bad.push(`${region} ${seed}: 开着的 ${cab.asset} 挡房门`)
+          }
+      }
+    expect([...new Set(bad)]).toEqual([])
   })
 
   test('检查清单：收纳位上的柜子按家具计数；拿掉后一键补齐放回位上', () => {

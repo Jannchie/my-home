@@ -6,7 +6,13 @@
 // 柜内收纳是额外的：放在所有外面的摆设之后，只用日常收纳类的东西。能体现住户个性的物品（兴趣、收藏、手办、奖杯、乐器、
 // 相机、绿植、装饰摆件、书…）不往关着门的柜子里放，留在外面看得到的地方（isPersonal）。
 
-import { pointInPolygon, uid, type Fixture, type Furniture, type Plan, type Room } from './model'
+import * as THREE from 'three'
+import { edgesOf, fixtureBox, pointInPolygon, projectToSegment, uid, type Fixture, type Furniture, type Plan, type Room } from './model'
+import { propsOn, toWorld } from './surface'
+import { furnitureBox } from './snap'
+import { poseDoors } from './three/kit'
+import { isIndoor } from './walls'
+import { clearances } from './place'
 import { cabinetsOn, fitsSpot, poseOnStorageSpot, setOpen, SPOT_CABINET_TYPES } from './cabinet'
 import { ASSET_MAP, ASSETS, type AssetDef, type StyleTag } from './three/assets'
 import type { Region } from './model'
@@ -253,6 +259,59 @@ export function stowAll(c: StowCtx, skip: (f: Furniture) => boolean = () => fals
       d.style = base
     }
   })
-  // 默认多数关着门；少数开着（开着的展示里面）
-  for (const cab of cabs) if (rand() < 0.2) setOpen({ furniture: d.out }, cab, true)
+  // 默认多数关着门；少数开着（开着的展示里面）。门扇 / 抽屉打开后扫过的地方碰到墙、别的家具、设备的不开
+  for (const cab of cabs) if (rand() < 0.2 && canOpen(c, cab)) setOpen({ furniture: d.out }, cab, true)
+}
+
+/** 素材关着 / 开着的实际模型包围盒（局部坐标，按素材缓存） */
+const openBoxes = new Map<string, { closed: THREE.Box3; open: THREE.Box3 }>()
+function boxesOf(asset: string) {
+  let b = openBoxes.get(asset)
+  if (!b) {
+    const def = ASSET_MAP.get(asset)!
+    const g = def.build(def.palettes[0] ?? [])
+    g.updateMatrixWorld(true)
+    const closed = new THREE.Box3().setFromObject(g, true)
+    poseDoors(g, true)
+    g.updateMatrixWorld(true)
+    openBoxes.set(asset, (b = { closed, open: new THREE.Box3().setFromObject(g, true) }))
+  }
+  return b
+}
+
+/**
+ * 柜子能不能开着：打开后伸出柜体的部分（门扇、抽屉）每 4cm 取一个点，都要在室内、离墙面有半个墙厚，
+ * 且不碰到别的东西（落地家具、壁挂物、设备；高度范围有重叠才算）。柜子自己和里面的东西不算。
+ */
+export function canOpen(c: StowCtx, cab: Furniture) {
+  const { d, plan } = c
+  const { closed, open } = boxesOf(cab.asset)
+  const base = cab.z ?? 0
+  const y0 = base + open.min.y
+  const y1 = base + open.max.y
+  const mine = new Set([cab.id, ...propsOn({ furniture: d.out }, cab).map((o) => o.id)])
+  const half = Math.max(plan.wall, plan.wallOuter ?? plan.wall) / 2
+  const others = d.out
+    .filter((o) => !mine.has(o.id))
+    .flatMap((o) => {
+      const od = ASSET_MAP.get(o.asset)
+      if (!od || od.h <= 3) return []
+      const z0 = od.mount ?? o.z ?? 0
+      if (Math.min(y1, z0 + od.h) - Math.max(y0, z0) <= 2) return []
+      return [furnitureBox(o.asset, o.x, o.y, o.rot)]
+    })
+  const solid = plan.fixtures.filter((fx) => fx.kind !== 'builtin' && fx.kind !== 'fridge' && fx.kind !== 'washer').map(fixtureBox)
+  // 门扇开合范围、门口前的通道（clearances）也不能挡
+  const doorZones = new Map<string, ReturnType<typeof clearances>>()
+  const zonesOf = (r: Room) => doorZones.get(r.id) ?? doorZones.set(r.id, clearances(r, plan, false)).get(r.id)!
+  const inBox = (b: { x0: number; y0: number; x1: number; y1: number }, p: { x: number; y: number }) => p.x > b.x0 + 1 && p.x < b.x1 - 1 && p.y > b.y0 + 1 && p.y < b.y1 - 1
+  for (let x = open.min.x; x <= open.max.x + 0.01; x += Math.max(1, Math.min(4, open.max.x - open.min.x)))
+    for (let z = open.min.z; z <= open.max.z + 0.01; z += Math.max(1, Math.min(4, open.max.z - open.min.z))) {
+      if (x > closed.min.x - 0.5 && x < closed.max.x + 0.5 && z > closed.min.z - 0.5 && z < closed.max.z + 0.5) continue
+      const p = toWorld(cab, x, z)
+      const room = plan.rooms.find((r) => isIndoor(r) && pointInPolygon(p, r.points))
+      if (!room || edgesOf(room.points).some((e) => projectToSegment(p, e.a, e.b).d < half)) return false
+      if (others.some((b) => inBox(b, p)) || solid.some((b) => inBox(b, p)) || zonesOf(room).some((b) => inBox(b, p))) return false
+    }
+  return true
 }

@@ -52,6 +52,10 @@ export interface PlaceSpec {
   underWindow?: boolean
   /** 覆盖默认的使用空间进深（家具用） */
   front?: number
+  /** 通往阳台的落地窗前留出通行空间，underWindow 也不能挡在落地窗前（家具用） */
+  sash?: boolean
+  /** 使用空间靠近本体的 45（椅子的位置）也不能压门的开合范围、门前通道（家具用：书桌前的椅子不挡门） */
+  guardFront?: boolean
 }
 
 export function boxInside(b: Box, room: Room) {
@@ -64,13 +68,53 @@ export function boxInside(b: Box, room: Room) {
   return !room.points.some((p) => p.x > b.x0 + e && p.x < b.x1 - e && p.y > b.y0 + e && p.y < b.y1 - e)
 }
 
+const innerCache = new WeakMap<Room, { rooms: Room[]; inner: Room }>()
+/**
+ * 房间的墙面轮廓：房间多边形是墙体中心线，每条边按墙厚的一半往里收（一条边一部分是外墙、一部分是内墙时按厚的算）。
+ * 在房间里找空地的家具（茶几、餐桌、餐椅、挤一挤的小东西）要整块落在这个轮廓里，才不会嵌进墙里。
+ */
+export function innerRoom(room: Room, ctx: Pick<Plan, 'rooms' | 'wall' | 'wallOuter'>): Room {
+  const hit = innerCache.get(room)
+  if (hit && hit.rooms === ctx.rooms) return hit.inner
+  const edges = edgesOf(room.points)
+  const half = edges.map((e) => {
+    let t = 0
+    const n = Math.max(1, Math.ceil(e.length / 30))
+    for (let k = 0; k <= n; k++) {
+      const s = Math.min(e.length - 2, Math.max(2, (e.length * k) / n))
+      t = Math.max(t, wallThicknessAt(ctx, add(e.a, mul(e.dir, s)), e.out, room) / 2)
+    }
+    return t
+  })
+  const pts: Vec[] = []
+  edges.forEach((e, i) => {
+    const j = (i + edges.length - 1) % edges.length
+    const prev = edges[j]
+    const nPrev = mul(prev.out, -half[j])
+    const nCur = mul(e.out, -half[i])
+    if (prev.dir.x * e.dir.x + prev.dir.y * e.dir.y > 0.99) {
+      // 共线的两条边：墙厚不同处错一个台阶
+      pts.push(add(e.a, nPrev), add(e.a, nCur))
+    } else pts.push(add(add(e.a, nPrev), nCur))
+  })
+  const inner = { ...room, points: pts }
+  innerCache.set(room, { rooms: ctx.rooms, inner })
+  return inner
+}
+
+/** 盒子整块在房间的墙面轮廓内（不嵌进墙里） */
+export function boxInsideWalls(b: Box, room: Room, ctx: Pick<Plan, 'rooms' | 'wall' | 'wallOuter'>) {
+  return boxInside(b, innerRoom(room, ctx))
+}
+
 /**
  * 本房间边界上的门窗前方要留空的矩形区：
  * 开扇扫进本房间的门 = 门宽 × 门宽；折れ戸 = 门宽 × 半门宽；其余（开向另一侧、引き戸、窗）= 门宽 × 50 通行空间。
+ * sash：通往阳台的落地窗（掃き出し窓）也是出入口，留出 50 的通行空间（家具用；设备摆放不传，保持户型生成结果不变）。
  */
-export function clearances(room: Room, ctx: PlaceCtx, avoidWindows: boolean): Box[] {
+export function clearances(room: Room, ctx: PlaceCtx, avoidWindows: boolean, sash = false): Box[] {
   return openingsOn(room, ctx).flatMap(({ o, owner, e, center }) => {
-    if (o.kind === 'window' && !avoidWindows) return []
+    if (o.kind === 'window' && !avoidWindows && !(sash && isSashWindow(ctx, owner, e, center))) return []
     // 指向本房间内部的法线
     const into = pointInPolygon(add(center, mul(e.out, 5)), room.points) ? e.out : mul(e.out, -1)
     const swingsIn = (o.kind === 'door' || o.kind === 'folding') && (owner.id === room.id ? o.swing === 'in' : o.swing === 'out')
@@ -79,6 +123,26 @@ export function clearances(room: Room, ctx: PlaceCtx, avoidWindows: boolean): Bo
     const p1 = add(center, mul(e.dir, o.width / 2))
     return [bbox([p0, p1, add(p0, mul(into, depth)), add(p1, mul(into, depth))])]
   })
+}
+
+/** 开向本房间的门扇（平开门 = 门宽 × 门宽，折れ戸 = 门宽 × 半门宽）扫过的范围 */
+export function doorSwings(room: Room, ctx: PlaceCtx): Box[] {
+  return openingsOn(room, ctx).flatMap(({ o, owner, e, center }) => {
+    if (o.kind !== 'door' && o.kind !== 'folding') return []
+    if (!(owner.id === room.id ? o.swing === 'in' : o.swing === 'out')) return []
+    const into = pointInPolygon(add(center, mul(e.out, 5)), room.points) ? e.out : mul(e.out, -1)
+    const depth = (o.kind === 'door' ? o.width : o.width / 2) + 5
+    const p0 = add(center, mul(e.dir, -o.width / 2))
+    const p1 = add(center, mul(e.dir, o.width / 2))
+    return [bbox([p0, p1, add(p0, mul(into, depth)), add(p1, mul(into, depth))])]
+  })
+}
+
+/** 窗的一侧是阳台、另一侧是户内：落地窗（和 house.ts 的 sash 判定一致：窗外半墙厚 + 15 落在阳台里；阳台自己的窗反过来看） */
+export function isSashWindow(ctx: Pick<Plan, 'rooms' | 'wall' | 'wallOuter'>, owner: Room, e: { out: Vec }, center: Vec) {
+  const t = wallThicknessAt(ctx, center, e.out, owner)
+  const outside = ctx.rooms.find((r) => r !== owner && pointInPolygon(add(center, mul(e.out, t / 2 + 15)), r.points))
+  return (owner.kind === 'balcony') !== (outside?.kind === 'balcony') && !!outside
 }
 
 /** 边的外侧（墙背后）是户内房间：阳台上贴着建筑外墙的那一面 */
@@ -93,7 +157,7 @@ function backedByHouse(e: { a: Vec; b: Vec; out: Vec }, ctx: PlaceCtx) {
  * 联合摆放（洗衣机 + 洗面台、厨房 + 冰箱）要遍历这些候选。
  */
 export function placeCandidates(room: Room, ctx: PlaceCtx, spec: PlaceSpec): Fixture[] {
-  const guards = clearances(room, ctx, !!spec.avoidWindows)
+  const guards = clearances(room, ctx, !!spec.avoidWindows, !!spec.sash)
   const inRoom = ctx.fixtures.filter((f) => pointInPolygon({ x: f.x, y: f.y }, room.points))
   const obstacles = inRoom.map(fixtureBox)
   // 已有设备前方的使用空间：新设备不能占
@@ -113,7 +177,7 @@ export function placeCandidates(room: Room, ctx: PlaceCtx, spec: PlaceSpec): Fix
   edges.forEach(({ i, e }, rank) => {
     // 只和边有关的量，每条边算一次
     const blocked: [number, number][] = ctx.openings
-      .filter((o) => o.roomId === room.id && o.edge === i && !(spec.underWindow && o.kind === 'window'))
+      .filter((o) => o.roomId === room.id && o.edge === i && !(spec.underWindow && o.kind === 'window' && !(spec.sash && isSashWindow(ctx, room, e, add(e.a, mul(e.dir, o.offset))))))
       .map((o): [number, number] => [o.offset - o.width / 2 - 20, o.offset + o.width / 2 + 20])
     for (const p of passages) for (const [lo, hi] of sharedIntervals(e, p)) blocked.push([lo - 20, hi + 20])
     const inward = mul(e.out, -1)
@@ -147,6 +211,10 @@ export function placeCandidates(room: Room, ctx: PlaceCtx, spec: PlaceSpec): Fix
           const fb = bbox([add(a, mul(inward, spec.depth)), add(b, mul(inward, spec.depth + front))])
           if (!boxInside(fb, room)) continue
           if (obstacles.some((o) => boxOverlaps(o, fb))) continue
+          if (spec.guardFront) {
+            const near = bbox([add(a, mul(inward, spec.depth)), add(b, mul(inward, spec.depth + Math.min(front, 45)))])
+            if (guards.some((g) => boxOverlaps(g, near))) continue
+          }
         }
         const center = mul(add(add(a, b), mul(inward, spec.depth)), 0.5)
         if (spec.near && spec.nearMax !== undefined && dist(center, spec.near) > spec.nearMax) continue

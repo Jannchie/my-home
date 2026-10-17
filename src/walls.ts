@@ -94,8 +94,12 @@ export function wallSegments(rooms: Room[]): WallSegment[] {
   return segs
 }
 
-/** 边上某点的墙厚：外侧紧挨着户内房间就是隔墙，否则是外墙 */
+/**
+ * 边上某点的墙厚：外侧紧挨着户内房间就是隔墙，否则是外墙。
+ * 从阳台这一侧看，背后的户内房间隔着的是建筑外墙（wallSegments 里也是 outer），按外墙算。
+ */
 export function wallThicknessAt(plan: Pick<Plan, 'rooms' | 'wall' | 'wallOuter'>, p: Vec, out: Vec, self?: Room) {
+  if (self && !isIndoor(self)) return plan.wallOuter
   const probe = add(p, mul(out, 3))
   const inner = plan.rooms.some((r) => r !== self && isIndoor(r) && pointInPolygon(probe, r.points))
   return inner ? plan.wall : plan.wallOuter

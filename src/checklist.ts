@@ -2,7 +2,7 @@
 
 import { sharedIntervals } from './walls'
 import { edgesOf, pointInPolygon, type BuiltinType, type Furniture, type Plan, type Room } from './model'
-import { cabinetsOn } from './cabinet'
+import { cabinetsOn, spotInRoom } from './cabinet'
 import { ASSET_MAP, type AssetDef } from './three/assets'
 import { JOBS, type Household } from './household'
 import { hasTag, type Sel, type Tag } from './three/tags'
@@ -97,7 +97,7 @@ export function checklist(plan: Plan, hh?: Household): CheckItem[] {
   const firstBalcony = plan.rooms.find((r) => r.kind === 'balcony')
   const serviceBalcony = plan.rooms.find((r) => r.kind === 'balcony' && r.name === '生活阳台')
   /** 房间里空着的收纳位（还没放柜子）：补救时把柜子放到位上，没有就靠墙放 */
-  const emptySpot = (r: Room, type: BuiltinType) => plan.fixtures.some((x) => x.kind === 'builtin' && (x.builtinType ?? 'shoe') === type && pointInPolygon(x, r.points) && !cabinetsOn(plan.furniture, x).length)
+  const emptySpot = (r: Room, type: BuiltinType) => plan.fixtures.some((x) => x.kind === 'builtin' && (x.builtinType ?? 'shoe') === type && spotInRoom(x, r.points) && !cabinetsOn(plan.furniture, x).length)
   const spotFix = (r: Room, type: BuiltinType, fallback: Fix): Fix => (emptySpot(r, type) ? { how: 'spot', type } : fallback)
 
   for (const r of plan.rooms) {
@@ -134,7 +134,7 @@ export function checklist(plan: Plan, hh?: Household): CheckItem[] {
       // 玄关太小时鞋架、伞架会放到相邻的走廊里，也算；鞋柜位上的鞋柜是家具（嵌墙壁龛里的柜子中心可能在墙里，按位算进玄关）
       const fe = [...f, ...plan.rooms.filter((o) => o.kind === 'hall' && edgesOf(r.points).some((e) => sharedIntervals(e, o).length > 0)).flatMap((o) => inRoom(plan, o))]
       const onSpots = plan.fixtures
-        .filter((x) => x.kind === 'builtin' && (x.builtinType ?? 'shoe') === 'shoe' && pointInPolygon(x, r.points))
+        .filter((x) => x.kind === 'builtin' && (x.builtinType ?? 'shoe') === 'shoe' && spotInRoom(x, r.points))
         .flatMap((x) => cabinetsOn(plan.furniture, x))
         .filter((c) => !fe.includes(c))
       item(r, '鞋柜 / 鞋架', count([...fe, ...onSpots], TAGS.shoeCab), 1, spotFix(r, 'shoe', { how: 'wall', sel: /^shoe-cabinet$/ }))
@@ -143,7 +143,7 @@ export function checklist(plan: Plan, hh?: Household): CheckItem[] {
     }
     const hasFx = (kind: string) => plan.fixtures.some((x) => x.kind === kind && pointInPolygon(x, r.points))
     // 食品柜位：要有一件食品柜
-    const pantrySpots = plan.fixtures.filter((x) => x.kind === 'builtin' && x.builtinType === 'pantry' && pointInPolygon(x, r.points))
+    const pantrySpots = plan.fixtures.filter((x) => x.kind === 'builtin' && x.builtinType === 'pantry' && spotInRoom(x, r.points))
     if (pantrySpots.length) item(r, '食品柜', count([...f, ...pantrySpots.flatMap((x) => cabinetsOn(plan.furniture, x))].filter((x, i, a) => a.indexOf(x) === i), 'pantry'), 1, spotFix(r, 'pantry', { how: 'wall', sel: 'pantry' }))
     if (r.kind === 'wash' && region !== 'jp') {
       // 欧美的 Laundry：只看洗衣用品

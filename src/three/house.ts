@@ -44,6 +44,7 @@ import {
 } from './assets'
 import { edgesOf } from '../model'
 import { showerSpot } from '../bathroom'
+import { curtainSpec } from '../curtains'
 import { showerCurtainModel, showerModel } from './packs/bath-extra'
 
 /** 地面高度：玄関土间、阳台比室内低 */
@@ -826,9 +827,10 @@ function buildCurtains(plan: Plan, infos: OpeningInfo[], H: number) {
     const color = room.curtain === false ? null : (room.curtain ?? (room.kind === 'ldk' || room.kind === 'western' ? '#f1e6d6' : null))
     if (!color) continue
     const into = mul(info.out, -1)
-    const rodY = Math.min(info.y1 + 12, H - 4)
-    if (rodY < 60) continue
-    const bottom = info.sash ? 1 : Math.max(0, info.y0 - 15)
+    // 杆高、下摆（窗下有厨房台面、洗面台这类设备时下摆收到设备顶面以上），见 curtains.ts
+    const spec = curtainSpec(plan, info, H)
+    if (!spec) continue
+    const { rodY, bottom } = spec
     const len = rodY - bottom - 2
     const W = info.width + 30
     const obj = new THREE.Group()

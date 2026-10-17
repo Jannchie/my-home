@@ -55,6 +55,14 @@ export function spotOf(plan: Pick<Plan, 'fixtures' | 'furniture'>, f: Furniture)
   return plan.fixtures.find((fx) => fx.kind === 'builtin' && cabinetsOn([f], fx).length > 0) ?? null
 }
 
+/** 收纳位朝着哪个房间开：中心在房间里，或者正面前方 5cm 在房间里（嵌墙壁龛的中心在墙后的隔壁） */
+export function spotInRoom(fx: Fixture, pts: Plan['rooms'][number]['points']) {
+  if (pointInPolygon(fx, pts)) return true
+  const a = (fx.rot * Math.PI) / 180
+  const k = fixtureDepth(fx) / 2 + 5
+  return pointInPolygon({ x: fx.x - Math.sin(a) * k, y: fx.y + Math.cos(a) * k }, pts)
+}
+
 // ---------- 开 / 关 ----------
 
 /**

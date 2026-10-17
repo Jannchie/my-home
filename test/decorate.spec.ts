@@ -13,12 +13,6 @@ import { genJp, penetration, range, rectCorners } from './helpers'
 
 const SEEDS = range(1, 40)
 
-/**
- * 现状阈值：这些检查目前还有少量已知问题，先按「不许变多」守住（数字略宽于现状），修好后收紧。
- *   overlap  落地家具互相穿插：seed 5 desk-chair 与 c2-ergo 两把椅子重叠约 24cm
- *   prop     台面摆件占地超出台面：厨房台面上的刀架、砧板、电热水壶等压进灶台 / 水槽开口 1–3cm（约 19 件）
- */
-const LIMIT = { overlap: 2, prop: 24 }
 /** 淋浴台面（decorate.bathExtras 摆在离地 60.4 的位置）不是 surface 层，supportOf 找不到支撑面，单独放过 */
 const SHOWER_COUNTER_Z = 60.4
 
@@ -73,7 +67,7 @@ describe('一键布置 seed 1..40', () => {
         }
       return out
     })
-    expect(bad.length, bad.join('\n')).toBeLessThanOrEqual(LIMIT.overlap)
+    expect(bad).toEqual([])
   })
 
   test('落地家具不压设备本体（冰箱 / 洗衣机放在冰箱位 / 洗衣机位上、洗衣机置物架跨在洗衣机位上除外）', () => {
@@ -130,7 +124,7 @@ describe('一键布置 seed 1..40', () => {
       }
     }
     expect(noSupport).toEqual([])
-    expect(overflow.length, overflow.join('\n')).toBeLessThanOrEqual(LIMIT.prop)
+    expect(overflow).toEqual([])
   })
 
 
