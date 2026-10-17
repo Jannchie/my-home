@@ -16,6 +16,7 @@ import { area, labelPointAvoiding, pointInPolygon, edgesOf, fixtureBox, fixtureD
 import type { AssetDef, StyleTag } from './kit'
 import { ASSET_MAP } from './assets'
 import { hasTag } from './tags'
+import { floorViews } from '../floors'
 import { addOutlines, ball, cup, cyl, rbox, toon, torus, useAnisotropy } from './toon'
 
 // ---------- 设置 ----------
@@ -139,7 +140,8 @@ function diningTable(plan: Plan, room: Room, defs: Map<string, AssetDef>) {
  */
 export function roomLightSpecs(plan: Plan, defs: Map<string, AssetDef> = new Map(), styleOf?: (roomId: string) => StyleTag | undefined): RoomLightSpec[] {
   const out: RoomLightSpec[] = []
-  roomSpecsInto(out, plan, defs)
+  // 多层户型按层算（同一位置上下两层的房间各管各的设备、餐桌）；高度是本层地面起算，楼层的高度由调用方加上
+  for (const { view } of floorViews(plan)) roomSpecsInto(out, view, defs)
   // 吸顶灯 / 吊灯按房间风格换造型；和室一律用和风的
   const kinds = new Map(plan.rooms.map((r) => [r.id, r.kind]))
   for (const s of out) styleSpec(s, kinds.get(s.roomId) === 'japanese' ? 'japanese' : styleOf?.(s.roomId))
@@ -148,7 +150,7 @@ export function roomLightSpecs(plan: Plan, defs: Map<string, AssetDef> = new Map
 
 function roomSpecsInto(out: RoomLightSpec[], plan: Plan, defs: Map<string, AssetDef>) {
   for (const room of plan.rooms) {
-    if (room.points.length < 3) continue
+    if (room.points.length < 3 || room.kind === 'void') continue
     const A = area(room.points)
     const r = Math.sqrt(A / Math.PI)
     const kitchens = plan.fixtures.filter((f) => f.kind === 'kitchen' && pointInPolygon(f, room.points))
@@ -915,6 +917,11 @@ export class IndoorLights {
   private lampsPerRoom = 2
   private dirty = true
   private tmp = new THREE.Vector3()
+  /**
+   * 多层户型：房间所在楼层的抬升高度（楼层 elevation + 分层拉开的偏移），null = 这一层隐藏（灯具淡出、不打光）。
+   * 房间灯的规格（RoomLightSpec）都是按本层地面算的，这里统一加上。单层户型不设，等于 0。
+   */
+  private liftOf: ((roomId: string | null) => number | null) | null = null
 
   constructor(poolSize = POOL_HIGH) {
     this.group.name = 'indoor-lights'
@@ -957,7 +964,7 @@ export class IndoorLights {
       }
       if (rig) this.dropRig(rig)
       const { obj, glows } = fixtureModel(s)
-      obj.position.set(s.x, s.fy, s.y)
+      obj.position.set(s.x, s.fy + (this.liftOf?.(s.roomId) ?? 0), s.y)
       obj.rotation.y = s.ry
       if (s.kind !== 'wall') {
         // 和墙一样的淡出标记（法线为 0：只在半墙 / 全部压低时、或在所指房间前面时淡出）
@@ -969,6 +976,7 @@ export class IndoorLights {
       if (s.primary) {
         const R = Math.max(120, Math.sqrt(area(room.points) / Math.PI) * 1.25)
         decal = poolDecal(room.points, s.x, s.y, R, floorY(room) + 0.4)
+        decal.position.y = this.liftOf?.(s.roomId) ?? 0
         this.group.add(decal)
       }
       rig = { spec: s, key, fixture: obj, glows, decal, level: 0, target: 0, kelvin: new THREE.Color() }
@@ -1034,6 +1042,7 @@ export class IndoorLights {
         }
         if (want) {
           lamp.decal = poolDecal(room!.points, f.x, f.y, 95, floorY(room!) + 0.5)
+          lamp.decal.position.y = this.liftOf?.(room!.id) ?? 0
           lamp.decal.userData.key = dkey
           this.group.add(lamp.decal)
         }
@@ -1128,6 +1137,28 @@ export class IndoorLights {
     this.dirty = true
   }
 
+  /**
+   * 多层户型：设置各房间的抬升高度（见 liftOf），挪好房间灯具和光斑。楼层动画（分层拉开、隐藏上层）每帧调用。
+   * fn 传 null 恢复单层的样子。
+   */
+  setLift(fn: ((roomId: string | null) => number | null) | null) {
+    this.liftOf = fn
+    for (const rig of this.rooms.values()) {
+      const y = fn?.(rig.spec.roomId)
+      if (rig.fixture) rig.fixture.position.y = rig.spec.fy + (y ?? 0)
+      // 阳台壁灯不走淡出（挂在墙上），隐藏楼层时直接藏起来
+      if (rig.fixture && rig.spec.kind === 'wall') rig.fixture.visible = y !== null
+      if (rig.decal) rig.decal.position.y = y ?? 0
+    }
+    for (const l of this.lamps.values()) if (l.decal) l.decal.position.y = fn?.(l.roomId) ?? 0
+    this.dirty = true
+  }
+
+  /** 房间所在楼层被隐藏（只显示到当前层时的上层） */
+  private hiddenRoom(id: string | null) {
+    return !!this.liftOf && this.liftOf(id) === null
+  }
+
   private apply() {
     const night = this.state.night
     const power = this.state.power
@@ -1142,15 +1173,16 @@ export class IndoorLights {
         g.mat.emissiveIntensity = 0.15 + 0.4 * e * Math.min(1.2, power)
         tintGlow(g.mat.emissive, g.color, rig.kelvin, e)
       }
+      const hidden = this.hiddenRoom(s.roomId)
       if (rig.decal) {
         const m = rig.decal.material as THREE.MeshBasicMaterial
         m.color.copy(rig.kelvin)
         m.opacity = 0.06 * e * power
-        rig.decal.visible = e > 0.01
+        rig.decal.visible = e > 0.01 && !hidden
       }
-      if (rig.target > 0 || lv > 0) {
+      if ((rig.target > 0 || lv > 0) && !hidden) {
         const pri = (s.primary ? 2e6 : 1e6) + Math.min(9e5, s.distance * s.distance * 0.01)
-        cands.push({ pri, x: s.x, y: s.h, z: s.y, color: rig.kelvin, i: s.intensity * e * power, d: s.distance })
+        cands.push({ pri, x: s.x, y: s.h + (this.liftOf?.(s.roomId) ?? 0), z: s.y, color: rig.kelvin, i: s.intensity * e * power, d: s.distance })
       }
     }
     // 灯具家具：每个房间离房间中心近的前 N 盏打光，其余只发光
@@ -1162,13 +1194,14 @@ export class IndoorLights {
         g.mat.emissiveIntensity = glowIntensity(g.base, night, e, g.color.r * 0.3 + g.color.g * 0.59 + g.color.b * 0.11, g.area)
         tintGlow(g.mat.emissive, g.color, kel, e)
       }
+      const hidden = this.hiddenRoom(l.roomId)
       if (l.decal) {
         const m = l.decal.material as THREE.MeshBasicMaterial
         m.color.copy(kel)
         m.opacity = 0.05 * e * power
-        l.decal.visible = e > 0.01
+        l.decal.visible = e > 0.01 && !hidden
       }
-      if (!(l.target > 0 || l.level > 0) || !this.lampsPerRoom) continue
+      if (!(l.target > 0 || l.level > 0) || !this.lampsPerRoom || hidden) continue
       l.obj.updateWorldMatrix(true, false)
       const w = l.obj.localToWorld(this.tmp.copy(l.local))
       const rc = this.roomCenter(l.roomId)
@@ -1217,7 +1250,8 @@ export class IndoorLights {
   applyCutaway(center: Vec, dir: Vec | null, depth: number | null, hideAll: boolean) {
     for (const o of this.fixtures.children) {
       const f = o.userData.fade as { x: number; y: number }
-      let hide = hideAll
+      // 隐藏楼层的灯具一起淡出
+      let hide = hideAll || this.hiddenRoom(o.userData.lightRoomId ?? null)
       if (!hide && dir && depth !== null) hide = (f.x - center.x) * dir.x + (f.y - center.y) * dir.y > depth + 30
       o.userData.target = hide ? 1 : 0
     }
@@ -1225,7 +1259,7 @@ export class IndoorLights {
 
   /** 3D 里点中的天花板灯具 → 房间 id */
   pickRoom(ray: THREE.Raycaster) {
-    const hit = ray.intersectObject(this.fixtures, true).find((h) => h.object.visible && !h.object.userData.isOutline)
+    const hit = ray.intersectObject(this.fixtures, true).find((h) => h.object.visible && !h.object.userData.isOutline && !this.hiddenRoom(lightRoomOf(h.object)))
     let o: THREE.Object3D | null = hit?.object ?? null
     while (o && !o.userData.lightRoomId) o = o.parent
     return (o?.userData.lightRoomId as string) ?? null
@@ -1237,6 +1271,12 @@ export class IndoorLights {
     this.rooms.clear()
     this.lamps.clear()
   }
+}
+
+/** 灯具网格所属的房间（往上找 lightRoomId） */
+function lightRoomOf(o: THREE.Object3D | null): string | null {
+  while (o && !o.userData.lightRoomId) o = o.parent
+  return (o?.userData.lightRoomId as string) ?? null
 }
 
 /** 是不是「真正的灯」的发光材质（和 post.ts 的夜间加亮判断一致） */

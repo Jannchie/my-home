@@ -322,6 +322,7 @@ export const UI: Record<string, Entry> = {
   玄関: ['玄関', 'Entrance'],
   収納: ['収納', 'Storage'],
   バルコニー: ['バルコニー', 'Balcony'],
+  挑空: ['吹き抜け', 'Void'],
   其他: ['その他', 'Other'],
   开门: ['開き戸', 'Hinged door'],
   '引き戸（推拉）': ['引き戸', 'Sliding door'],
@@ -562,6 +563,13 @@ export const UI: Record<string, Entry> = {
   这份户型的数据丢失了: ['この間取りのデータが見つかりません', 'This plan’s data is missing'],
   '{name} 副本': ['{name} のコピー', '{name} copy'],
   '已复制为「{name}」': ['「{name}」として複製しました', 'Duplicated as “{name}”'],
+  // ---------- 多楼层 ----------
+  挑空: ['吹き抜け', 'Void (double height)'],
+  楼梯: ['階段', 'Stairs'],
+  直跑: ['直階段', 'Straight'],
+  'L 形': ['L 字階段', 'L-shaped'],
+  'U 形': ['折り返し階段', 'U-shaped'],
+  旋转: ['らせん階段', 'Spiral'],
 }
 
 // ---------- 素材的细分类型（three/typeLabels.ts）：已有同名词条的不覆盖，后面的分组表照常覆盖 ----------

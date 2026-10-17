@@ -22,6 +22,7 @@ export type RoomKind =
   | 'entrance'
   | 'storage'
   | 'balcony'
+  | 'void'
   | 'other'
 
 export const ROOM_KINDS: Record<RoomKind, { label: string; fill: string }> = {
@@ -37,6 +38,7 @@ export const ROOM_KINDS: Record<RoomKind, { label: string; fill: string }> = {
   entrance: { label: '玄関', fill: '#e2ddd3' },
   storage: { label: '収納', fill: '#e9e4ea' },
   balcony: { label: 'バルコニー', fill: '#f4f2ee' },
+  void: { label: '挑空', fill: '#f7f6f2' },
   other: { label: '其他', fill: '#eeeeee' },
 }
 
@@ -59,6 +61,8 @@ export interface Room {
   light?: 'auto' | 'on' | 'off'
   /** 房间灯色温（K），不填跟随全局 */
   lightK?: number
+  /** 所在楼层（Plan.floors 的 id）；不填 = 最底下那层（单层户型、旧存档都不写） */
+  floor?: string
 }
 
 /**
@@ -114,6 +118,8 @@ export interface Opening {
   hinge: 'start' | 'end'
   /** in = 开向本房间内，out = 开向外侧 */
   swing: 'in' | 'out'
+  /** 所在楼层：门窗跟着所在房间（roomId）走，这个字段只是冗余标记，读写都以房间为准（floors.ts openingFloor） */
+  floor?: string
 }
 
 /**
@@ -123,7 +129,10 @@ export interface Opening {
  * builtin 是「收纳位」（鞋柜位 / 衣柜位 / 食品柜位）：嵌墙的是墙里留出的壁龛，不嵌墙的是靠墙预留的一块地方；
  * 柜子本身是家具（cabinet.ts、packs/cabinets.ts），一键布置按位的尺寸挑一件放上去。
  */
-export type FixtureKind = 'kitchen' | 'bathtub' | 'toilet' | 'basin' | 'washer' | 'fridge' | 'ps' | 'outdoor' | 'builtin'
+export type FixtureKind = 'kitchen' | 'bathtub' | 'toilet' | 'basin' | 'washer' | 'fridge' | 'ps' | 'outdoor' | 'builtin' | 'stairs'
+/** 楼梯形式：直跑 / L 形（一个转角平台）/ U 形（两跑折返）/ 旋转 */
+export type StairsVariant = 'straight' | 'l' | 'u' | 'spiral'
+export const STAIRS_VARIANTS: Record<StairsVariant, string> = { straight: '直跑', l: 'L 形', u: 'U 形', spiral: '旋转' }
 export type KitchenVariant = 'wall' | 'facing'
 export type ToiletType = 'basic' | 'washlet' | 'tankless'
 export type BuiltinType = 'shoe' | 'closet' | 'pantry'
@@ -162,6 +171,17 @@ export interface Fixture {
   recessed?: boolean
   /** @deprecated 旧存档：以前收纳位本身画柜子、带柜门开关；迁移时转成柜体家具的 open（cabinet.ts migrateCabinets） */
   open?: boolean
+  /**
+   * 仅楼梯：形式（缺省直跑）。楼梯放在下层，通到上面一层（floors.ts floorAbove）。
+   * 局部坐标里起步在 +y 一端，往 -y 方向上楼；rot 决定整体朝向（见 stairs.ts stairLayout）
+   */
+  stairs?: StairsVariant
+  /** 仅 L / U / 旋转楼梯：上楼时往哪边拐（缺省 left） */
+  turn?: 'left' | 'right'
+  /** 仅 L 形楼梯：梯段宽（缺省 90，不超过占地宽 / 深的一半） */
+  run?: number
+  /** 所在楼层（Plan.floors 的 id）；不填 = 最底下那层 */
+  floor?: string
   x: number
   y: number
   /** 沿墙长度 */
@@ -182,6 +202,7 @@ export const FIXTURES: Record<FixtureKind, { label: string; w: number; d: number
   ps: { label: 'PS 管道井', w: 50, d: 50, front: 0 },
   outdoor: { label: '空调外机', w: 80, d: 30, front: 0 },
   builtin: { label: '收纳位', w: 90, d: 38, front: 0 },
+  stairs: { label: '楼梯', w: 90, d: 360, front: 0 },
 }
 
 /** 厨房各段进深：壁付け只有主台面；対面 = 背面食器棚 + 通道 + 主台面 */
@@ -254,6 +275,19 @@ export interface Furniture {
   light?: 'on' | 'off'
   /** 仅可开合的柜子（素材 openable）：柜门 / 抽屉打开着；不填 = 关着 */
   open?: boolean
+  /** 所在楼层（Plan.floors 的 id）；不填 = 最底下那层 */
+  floor?: string
+}
+
+/**
+ * 楼层。elevation：这一层地面（结构楼板顶面）离 1F 地面的高度；height：这一层的墙高（地面到天花）。
+ * 上一层的楼板夹在两层之间：下层天花 = elevation + height，上层楼板底 = 上层 elevation - SLAB（floors.ts）。
+ */
+export interface Floor {
+  id: string
+  name: string
+  elevation: number
+  height: number
 }
 
 export interface Plan {
@@ -271,6 +305,11 @@ export interface Plan {
   openings: Opening[]
   fixtures: Fixture[]
   furniture: Furniture[]
+  /**
+   * 楼层（按 elevation 从低到高）。不填 = 单层户型（旧存档都是）；房间 / 设备 / 家具的 floor 不填就是第一项（最底层）。
+   * 只有一层时不写这个字段，存档和以前完全一样
+   */
+  floors?: Floor[]
   /** 住户设定：一键布置按它来分配房间、选风格和摆兴趣物品 */
   household?: Household
   /** 户型的地区风格：jp 日式（缺省，旧存档都是）/ cn 中式 / west 欧美；影响检查清单、一键布置和住户 */

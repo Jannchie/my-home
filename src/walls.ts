@@ -23,8 +23,10 @@ export function isOpenBetween(a: Room, b: Room) {
   return isOpenPair(a.kind, b.kind) || isAlcoveOpen(a, b) || isAlcoveOpen(b, a) || (!!a.openGroup && a.openGroup === b.openGroup)
 }
 
-/** 户内房间（阳台不算） */
-export const isIndoor = (r: Room) => r.kind !== 'balcony'
+/** 户内房间（阳台、挑空不算） */
+export const isIndoor = (r: Room) => r.kind !== 'balcony' && r.kind !== 'void'
+/** 挑空（多层户型里上层标出来的通高区域：没有楼板，下层的外墙在这里通高） */
+export const isVoid = (r: Pick<Room, 'kind'>) => r.kind === 'void'
 
 /** 边 e 上与 other 房间共用的区间（沿 e 的距离） */
 export function sharedIntervals(e: EdgeInfo, other: Room): [number, number][] {
@@ -74,8 +76,24 @@ function splitEdge(L: number, tagged: { lo: number; hi: number; kind: WallKind }
   return out
 }
 
-/** 所有户内房间边界的墙段（共用墙两侧各出一份，位置重合，不影响绘制） */
+/**
+ * 所有户内房间边界的墙段（共用墙两侧各出一份，位置重合，不影响绘制）。
+ * 多层户型的房间按楼层（Room.floor）分开各算各的：不同楼层的房间互不当作邻居。
+ */
 export function wallSegments(rooms: Room[]): WallSegment[] {
+  const first = rooms[0]?.floor
+  if (rooms.some((r) => r.floor !== first)) {
+    const groups = new Map<string, Room[]>()
+    for (const r of rooms) {
+      const k = r.floor ?? ''
+      groups.set(k, [...(groups.get(k) ?? []), r])
+    }
+    return [...groups.values()].flatMap(floorWallSegments)
+  }
+  return floorWallSegments(rooms)
+}
+
+function floorWallSegments(rooms: Room[]): WallSegment[] {
   const indoor = rooms.filter(isIndoor)
   const segs: WallSegment[] = []
   for (const r of indoor) {
@@ -101,6 +119,6 @@ export function wallSegments(rooms: Room[]): WallSegment[] {
 export function wallThicknessAt(plan: Pick<Plan, 'rooms' | 'wall' | 'wallOuter'>, p: Vec, out: Vec, self?: Room) {
   if (self && !isIndoor(self)) return plan.wallOuter
   const probe = add(p, mul(out, 3))
-  const inner = plan.rooms.some((r) => r !== self && isIndoor(r) && pointInPolygon(probe, r.points))
+  const inner = plan.rooms.some((r) => r !== self && isIndoor(r) && (!self || r.floor === self.floor) && pointInPolygon(probe, r.points))
   return inner ? plan.wall : plan.wallOuter
 }

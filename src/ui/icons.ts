@@ -54,6 +54,11 @@ import {
   IconJson,
   IconLanguages,
   IconLayers,
+  IconStairs,
+  IconStairsUp,
+  IconDashedCircle,
+  IconLayoutRows,
+  IconHome,
   IconLayoutGrid,
   IconListCheck,
   IconMagnet,
@@ -218,6 +223,12 @@ export const ICONS = {
   // 素材库
   search: IconSearch,
   allCategories: IconLayers,
+  floors: IconLayers, // 楼层
+  floorAdd: IconPlus,
+  floorUp: IconStairsUp,
+  floorAll: IconHome, // 楼层显示：全部
+  floorUpto: IconStairsUp, // 只到当前层
+  floorExplode: IconLayoutRows, // 分层拉开
   placeInSandbox: IconDiorama,
   // 门窗
   doorFlip: IconDoor,
@@ -278,6 +289,7 @@ export const ROOM_ICONS = {
   entrance: IconShoe,
   storage: IconWardrobe, // 新增
   balcony: IconBalcony, // 新增
+  void: IconDashedCircle, // 挑空（多层户型）
   other: IconCube,
 } satisfies Record<RoomKind, AppIcon>
 
@@ -292,6 +304,7 @@ export const FIXTURE_ICONS = {
   ps: IconPipe, // 新增：PS 管道井
   outdoor: IconAirConditionerOutdoor, // 新增：空调外机
   builtin: IconWardrobe, // 新增：内置收纳
+  stairs: IconStairs, // 楼梯（多层户型）
 } satisfies Record<FixtureKind, AppIcon>
 
 /** 素材分类（CATEGORY_LABELS） */
