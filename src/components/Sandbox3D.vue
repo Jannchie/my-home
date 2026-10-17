@@ -296,7 +296,7 @@ function syncFloorFades() {
 /**
  * 预热楼层淡入淡出的着色器：透明副本（和深度替身的 depthOnlyMat）是新的着色器变体，被藏起来的楼层的原材质也从没画过，
  * 第一次切换楼层时要同步编译十来个程序（实测卡 2 秒多）。多层户型重搭后空闲时，各层原样编一遍，
- * 再用 fadeFloor 临时套上淡出状态编一遍，立刻复原；compileAsync 在后台编译（KHR_parallel_shader_compile）。
+ * 再用 fadeFloor 临时翻到另一种状态（显示的层淡出、藏起来的层显示）编一遍，立刻复原；compileAsync 在后台编译（KHR_parallel_shader_compile）。
  * 直接画到屏幕和经后处理画到渲染目标是两种变体，两种都编。主线程约 0.2 秒，所以只在重搭房子时做。
  */
 let warmTimer = 0
@@ -306,12 +306,13 @@ function prewarmFloorFade() {
   if (!isMultiFloor(plan.value)) return
   warmTimer = window.setTimeout(() => {
     if (!stage || !isMultiFloor(plan.value)) return
-    // 正在淡入淡出的层不碰（它的程序本来就在编了）
+    // 正在淡入淡出的层不碰（它的程序本来就在编了）。「只到当前层」藏起来的上层（完全淡出）也要编：
+    // 它现在挂的是透明副本，原材质（墙纸花纹、屏幕等）一次都没编过，第一次切上去会现编好几个程序
     const roots: [THREE.Object3D, string][] = [
       ...floorGroups.map((fg) => [fg.group, fg.floor.id] as [THREE.Object3D, string]),
       ...[...furnLayers].map(([id, g]) => [g, id] as [THREE.Object3D, string]),
       ...actors.roots(),
-    ].filter(([root]) => !root.userData.floorFaded)
+    ].filter(([root, id]) => !root.userData.floorFaded || floorAlpha(id) <= 0)
     const renderer = stage.renderer
     const prev = renderer.getRenderTarget()
     const target = (warmTarget ??= new THREE.WebGLRenderTarget(1, 1))
@@ -322,12 +323,27 @@ function prewarmFloorFade() {
       }
     }
     try {
+      // 先按现状编一遍，再把每层翻到另一种状态（显示的层套上淡出，藏起来的层换回原材质）再编一遍
       compile()
-      for (const [root, id] of roots) fadeFloor(root, id, 0.5)
+      const hidden = roots.filter(([root]) => root.userData.floorFaded).map(([root]) => root)
+      for (const [root, id] of roots) fadeFloor(root, id, root.userData.floorFaded ? 1 : 0.5)
       compile()
+      // 藏起来的层的贴图（墙纸、屏幕、花纹）也从没上传过：顺手传上去，切过去的那一帧少卡几十毫秒
+      const seen = new Set<THREE.Texture>()
+      for (const root of hidden)
+        root.traverse((o) => {
+          const m = (o as THREE.Mesh).material
+          if (!m) return
+          for (const mat of Array.isArray(m) ? m : [m])
+            for (const v of Object.values(mat))
+              if ((v as THREE.Texture | null)?.isTexture && !seen.has(v as THREE.Texture)) {
+                seen.add(v as THREE.Texture)
+                renderer.initTexture(v as THREE.Texture)
+              }
+        })
     } finally {
       renderer.setRenderTarget(prev)
-      for (const [root, id] of roots) fadeFloor(root, id, 1)
+      for (const [root, id] of roots) fadeFloor(root, id, floorAlpha(id))
     }
   }, 400)
 }
