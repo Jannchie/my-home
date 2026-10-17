@@ -95,6 +95,7 @@ const GROUPS: Group[] = [
       { keys: [['dbl']], label: '聚焦到家具' },
       { keys: [['rclick']], label: '家具的快捷菜单' },
       { keys: [['P']], label: '布置 / 预览' },
+      { keys: [['O']], label: '外观视图（屋顶、完整外墙）' },
       { keys: [['F']], label: '重置视角' },
       { keys: [['C']], label: '切换墙体显示' },
       { keys: [['Q'], ['E']], label: '旋转 90°（按住 Shift 为 15°）' },

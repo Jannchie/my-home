@@ -73,6 +73,8 @@ function renderOffscreen(p: Plan, wallH: number): HTMLCanvasElement | null {
     const v = new THREE.Vector3().subVectors(s.camera.position, c)
     const l = Math.hypot(v.x, v.z) || 1
     floors.forEach((fg, i) => {
+      // 户建的屋顶不画：缩略图要看得到室内
+      if (fg.roof) fg.roof.visible = false
       if (i === floors.length - 1) applyCutaway(fg.group, center, { x: v.x / l, y: v.z / l }, null, false, true)
       else applyCutaway(fg.group, center, null)
       stepCutaway(fg.group, 10, { style: 'cut', opacity: 0, cut: 60 }, true)
