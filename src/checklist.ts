@@ -6,7 +6,7 @@ import { cabinetsOn, spotInRoom } from './cabinet'
 import { ASSET_MAP, type AssetDef } from './three/assets'
 import { JOBS, type Household } from './household'
 import { hasTag, type Sel, type Tag } from './three/tags'
-import { floorViews } from './floors'
+import { baseFloorId, floorOf, floorViews, isMultiFloor } from './floors'
 
 /** 补救动作：交给 decorate.ts 的 applyFixes 执行；sel 是要补的素材（语义标签或点名的 id，见 three/tags.ts） */
 export type Fix =
@@ -32,6 +32,27 @@ export interface CheckItem {
   /** 内置设备（开关、对讲）：自动具备，不需要补 */
   builtin?: boolean
   fix?: Fix
+  /**
+   * 多层户型：条目属于哪一层（房间条目 = 房间所在层；按层的条目 = 那一层，例如每层的垃圾桶）。
+   * 全户条目（洗衣机、床、餐椅…）不填；一键补齐时按 fixFloor 决定补到哪层。
+   */
+  floor?: string
+  /** 按层的条目（不属于某个房间，而是「每层都要有」） */
+  perFloor?: boolean
+}
+
+/**
+ * 补救时交给哪一层处理：房间条目 → 房间所在层；按层 / 带楼层的条目 → 那一层；
+ * 床、书桌 → 每一层（各层给本层分到的人补）；其余全户条目 → 最底层。单层户型都是那一层。
+ */
+export function fixFloor(plan: Plan, it: CheckItem): string | '*' {
+  if (it.roomId) {
+    const r = plan.rooms.find((x) => x.id === it.roomId)
+    if (r) return floorOf(plan, r)
+  }
+  if (it.floor) return it.floor
+  if (it.fix?.how === 'bed' || it.fix?.how === 'desk') return '*'
+  return baseFloorId(plan)
 }
 
 const inRoom = (plan: Plan, room: Room) => plan.furniture.filter((f) => pointInPolygon(f, room.points))
@@ -88,16 +109,33 @@ const TAGS = {
  */
 export function checklist(plan: Plan, hh?: Household): CheckItem[] {
   const out: CheckItem[] = []
+  const multi = isMultiFloor(plan)
+  /** 正在列的楼层（多层户型的房间条目、按层条目带上它） */
+  let cur: { id: string; name: string } | null = null
   const item = (room: Room | null, label: string, have: number, need: number, fix?: Fix, builtin = false) =>
-    out.push({ key: `${room?.id ?? 'home'}|${label}`, roomId: room?.id ?? null, roomName: room?.name ?? '全屋', label, have, need, fix, builtin })
+    out.push({ key: `${room?.id ?? 'home'}|${label}`, roomId: room?.id ?? null, roomName: room?.name ?? '全屋', label, have, need, fix, builtin, ...(multi && cur ? { floor: cur.id } : {}) })
+  /** 按层的条目：每层都要有一份（多层户型才列） */
+  const floorItem = (label: string, have: number, need: number, fix?: Fix) =>
+    cur && out.push({ key: `floor:${cur.id}|${label}`, roomId: null, roomName: cur.name, label, have, need, fix, floor: cur.id, perFloor: true })
   const all = plan.furniture
   const habit = (r: Room) => r.kind === 'western' || r.kind === 'japanese' || r.kind === 'ldk'
   // 地区：日式的玄関鞋柜、浴室洗い場（浴凳、洗面桶）、给汤遥控是日本特有；欧美中央空调不挂壁挂机、室内穿鞋
   const region = plan.region ?? 'jp'
   // 多层户型：房间的条目按层算（每层当作一份子户型，房间里有什么只看同一层的家具），全屋的条目按全户汇总
-  for (const { view } of floorViews(plan)) roomItems(view)
+  for (const { floor, view } of floorViews(plan)) {
+    cur = floor
+    roomItems(view)
+    if (multi) floorItems(view)
+  }
+  cur = null
   homeItems()
   return out
+
+  /** 按层的条目：每层一个垃圾桶（厕所的卷纸、马桶刷按房间已经逐个列了） */
+  function floorItems(view: Plan) {
+    const on = view.furniture.filter((f) => view.rooms.some((r) => pointInPolygon(f, r.points)))
+    floorItem('垃圾桶', count(on, 'trash-bin'), 1, { how: 'wall', sel: /^(vb-bin-square|vb-bin-pedal|of-waste-basket)$/ })
+  }
 
   function roomItems(plan: Plan) {
     const diningRoom = plan.rooms.some((r) => r.kind === 'dining')
@@ -194,7 +232,12 @@ export function checklist(plan: Plan, hh?: Household): CheckItem[] {
 
   function homeItems() {
     // 洗衣机（家具）：有洗衣机位或洗面所的户型全屋要有一台
-    if (plan.fixtures.some((x) => x.kind === 'washer') || plan.rooms.some((r) => r.kind === 'wash')) item(null, '洗衣机', countIf(all, (d) => d.type === 'washer'), 1, { how: 'appliance', kind: 'washer' })
+    if (plan.fixtures.some((x) => x.kind === 'washer') || plan.rooms.some((r) => r.kind === 'wash')) {
+      item(null, '洗衣机', countIf(all, (d) => d.type === 'washer'), 1, { how: 'appliance', kind: 'washer' })
+      // 全户一台：补的时候补到洗衣机位（没有位就是洗面所）所在的那层
+      const at = plan.fixtures.find((x) => x.kind === 'washer') ?? plan.rooms.find((r) => r.kind === 'wash')
+      if (multi && at) out[out.length - 1].floor = floorOf(plan, at)
+    }
 
     // ---------- 住户相关 ----------
     if (hh) {

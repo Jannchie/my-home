@@ -34,14 +34,14 @@ import { JIcon } from '@jannchie/icons-vue'
 import { CATEGORY_ICONS, ICONS, VIEW_ICONS, WALL_MODE_ICONS } from '../ui/icons'
 import { SIZE_LABELS, assetName, browse, canHang, cardName, categoriesOf, displayName, formFor, paletteFor, siblings, typesIn, variantLabel, type Filter, type SizeClass } from '../three/catalog'
 import { typeLabel } from '../three/typeLabels'
-import { INTERESTS, KIND_LABELS, LV_LABELS, ROLE_LABELS, TRAITS, describe, levelOf } from '../household'
+import { INTERESTS, KIND_LABELS, LV_LABELS, ROLE_LABELS, TRAITS, describe, levelOf, memberRooms } from '../household'
 import { checklist, missing } from '../checklist'
 import { accentOf } from '../wallpaper'
 import { patternPreview } from '../three/fabric'
 import type { PatternKind } from '../three/patterns'
 import { isTyping } from '../dom'
 import { lang, roomName, t, tAuto, tSoft } from '../i18n'
-import { bbox, centroid, edgesOf, type Furniture, type Plan, type WallTrim } from '../model'
+import { bbox, centroid, edgesOf, type Furniture, type Plan, type Room, type WallTrim } from '../model'
 import { roomStyles } from '../decorate'
 import { wallThicknessAt } from '../walls'
 import {
@@ -1577,11 +1577,36 @@ const checkItems = computed(() => {
   return checklist(p, p.household)
 })
 const missingItems = computed(() => missing(checkItems.value))
+/**
+ * 清单分组：房间条目按房间（多层户型带楼层，两层都有的「トイレ」分开），按层的条目归到「2F · 每层」，全户条目归到「全屋」。
+ * 返回 [分组键, 显示名, 条目]。
+ */
 const checkGroups = computed(() => {
-  const m = new Map<string, typeof checkItems.value>()
-  for (const it of checkItems.value) m.set(it.roomName, [...(m.get(it.roomName) ?? []), it])
-  return [...m.entries()]
+  const p = toRaw(plan.value)
+  const multi = isMultiFloor(p)
+  const fname = (id?: string) => (id ? (floorById(p, id)?.name ?? '') : '')
+  const m = new Map<string, { label: string; items: typeof checkItems.value }>()
+  for (const it of checkItems.value) {
+    const key = it.roomId ? `r:${it.roomId}` : it.perFloor ? `f:${it.floor}` : 'home'
+    const label = it.roomId ? (multi ? `${fname(it.floor)} · ` : '') + roomName(it.roomName) : it.perFloor ? `${fname(it.floor)} · ${t('每层')}` : roomName(it.roomName)
+    const g = m.get(key) ?? { label, items: [] }
+    g.items.push(it)
+    m.set(key, g)
+  }
+  return [...m.entries()].map(([k, g]) => [k, g.label, g.items] as const)
 })
+/** 住户面板：每个人住的房间（多层户型带楼层） */
+const memberRoomMap = computed(() => {
+  void planVer.value
+  const p = toRaw(plan.value)
+  return p.household ? memberRooms(p, p.household) : new Map<string, Room>()
+})
+function memberRoomLabel(id: string) {
+  const r = memberRoomMap.value.get(id)
+  if (!r) return ''
+  const p = toRaw(plan.value)
+  return (isMultiFloor(p) ? `${floorById(p, floorOf(p, r))?.name ?? ''} · ` : '') + roomName(r.name)
+}
 const placingName = computed(() => {
   const d = placing.value ? ASSET_MAP.get(placing.value.asset) : undefined
   return d ? assetName(d) : ''
@@ -2421,6 +2446,7 @@ defineExpose({ resetView })
             <span class="m-role">{{ t(ROLE_LABELS[m.role]) }}</span>
             <span class="m-desc num">{{ describe(m) }}</span>
           </div>
+          <div v-if="memberRoomLabel(m.id)" class="m-room"><JIcon :icon="ICONS.household" :size="12" class="ico-muted" />{{ memberRoomLabel(m.id) }}</div>
           <div class="chips">
             <span v-for="tr in m.traits" :key="tr" class="chip trait">{{ t(TRAITS[tr].label) }}</span>
             <span v-for="i in m.interests" :key="i" class="chip" :title="t(LV_LABELS[levelOf(m, i) || 1])">{{ t(INTERESTS[i].label) }} <span class="num">Lv.{{ levelOf(m, i) || 1 }}</span></span>
@@ -2438,8 +2464,8 @@ defineExpose({ resetView })
           <button class="mini primary" :disabled="!missingItems.some((i) => i.fix)" @click="fixChecklist(missingItems)"><JIcon :icon="ICONS.checkFixAll" :size="14" />{{ t('一键补齐') }}</button>
         </div>
         <template v-if="clOpen">
-          <div v-for="[room, items] in checkGroups" :key="room" class="cl-room">
-            <div class="cl-name">{{ roomName(room) }}</div>
+          <div v-for="[key, label, items] in checkGroups" :key="key" class="cl-room">
+            <div class="cl-name">{{ label }}</div>
             <div v-for="it in items" :key="it.key" class="cl-item" :class="{ ok: it.builtin || it.have >= it.need }">
               <JIcon class="mark" :icon="it.builtin || it.have >= it.need ? ICONS.checkOk : ICONS.checkMissing" :size="14" />
               <span class="cl-label">{{ tAuto(it.label) }}</span>
@@ -3266,6 +3292,14 @@ h3 {
 }
 .m-desc {
   margin-left: auto;
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
+.m-room {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
   font-size: var(--fs-xs);
   color: var(--text-muted);
 }

@@ -5,13 +5,14 @@
 
 import * as THREE from 'three'
 import type { Fixture, Vec } from '../model'
-import { stairLayout, stairsVariant, subtractSpan, type StairRail } from '../stairs'
+import { UNDER_CEIL, stairLayout, stairUnderZone, stairsVariant, stepHollow, subtractSpan, type StairRail } from '../stairs'
 import { rbox, toon } from './toon'
 
 const TREAD = '#d6a273'
 const BODY = '#f3ece0'
 const RAIL = '#8a6a52'
 const POST = '#f7f3ec'
+const DOOR = '#e2c9a6'
 /** 扶手高（离踏面） */
 const RAIL_H = 85
 
@@ -77,8 +78,10 @@ export function stairsModel(f: Fixture, rise: number) {
       const z1 = Math.max(...ys)
       const w = x1 - x0
       const d = z1 - z0
-      const body = new THREE.Mesh(new THREE.BoxGeometry(w, Math.max(0.5, s.top - 3), d), toon(BODY))
-      body.position.set((x0 + x1) / 2, (s.top - 3) / 2, (z0 + z1) / 2)
+      // 楼梯下敞开的储物角：高处那几级的实心踏步从 UNDER_CEIL 起，下面掏空
+      const y0 = stepHollow(f, rise, s) ? UNDER_CEIL : 0
+      const body = new THREE.Mesh(new THREE.BoxGeometry(w, Math.max(0.5, s.top - 3 - y0), d), toon(BODY))
+      body.position.set((x0 + x1) / 2, y0 + (s.top - 3 - y0) / 2, (z0 + z1) / 2)
       body.castShadow = true
       body.receiveShadow = true
       g.add(body)
@@ -86,6 +89,22 @@ export function stairsModel(f: Fixture, rise: number) {
     }
   }
   for (const r of L.rails) railModel(r, g)
+  // 楼梯下封起来的收纳间：开口那一侧（直跑两侧都画，贴墙的一侧被墙挡住）一扇小门
+  const uz = f.under === 'closet' ? stairUnderZone(f, rise) : null
+  if (uz) {
+    const len = uz.y1 - uz.y0
+    const dw = Math.min(70, len - 24)
+    const dh = UNDER_CEIL - 12
+    if (dw > 30)
+      for (const n of uz.fronts) {
+        const x = n.x > 0 ? uz.x1 : n.x < 0 ? uz.x0 : (uz.x0 + uz.x1) / 2
+        const cz = (uz.y0 + uz.y1) / 2
+        const panel = rbox(1.2, dh, dw, DOOR, { x: x + n.x * 0.6, y: 2, z: cz }, 0.5)
+        panel.castShadow = false
+        g.add(panel)
+        g.add(rbox(1.4, 2.4, 8, RAIL, { x: x + n.x * 1.4, y: dh * 0.55, z: cz + dw / 2 - 8 }, 0.6))
+      }
+  }
   g.userData.stairs = true
   return g
 }

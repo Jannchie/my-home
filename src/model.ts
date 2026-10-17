@@ -180,6 +180,11 @@ export interface Fixture {
   turn?: 'left' | 'right'
   /** 仅 L 形楼梯：梯段宽（缺省 90，不超过占地宽 / 深的一半） */
   run?: number
+  /**
+   * 仅直跑 / L 形楼梯：楼梯下方高处的空间怎么用（缺省 = 实心封死）。
+   * open 敞开的储物角（下面放矮柜、收纳箱），closet 封起来做收纳间（侧面一扇小门）。见 stairs.ts stairUnderZone
+   */
+  under?: 'open' | 'closet'
   /** 所在楼层（Plan.floors 的 id）；不填 = 最底下那层 */
   floor?: string
   x: number

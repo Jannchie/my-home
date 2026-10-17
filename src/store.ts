@@ -2,7 +2,7 @@ import { computed, reactive, ref, toRaw, watch } from 'vue'
 import { orientDoors } from './doors'
 import { migrateAppliances } from './appliance'
 import { migrateCabinets, migrateOpenForms, setOpen } from './cabinet'
-import { applyFixes, decorate, roomStyles } from './decorate'
+import { applyFixesHouse, decorateHouse, roomStyles } from './decorate'
 import { autoWallpapers } from './wallpaper'
 import type { CheckItem } from './checklist'
 import { generateHousehold } from './household'
@@ -17,10 +17,9 @@ import { generatePlan } from './generate-region'
 import { lang, t } from './i18n'
 import { initialRoute } from './router'
 import { edgeInfo, emptyPlan, projectToSegment, type Fixture, type FixtureKind, type Floor, type Furniture, type Opening, type Plan, type Room, type Vec, type Wallpaper, uid } from './model'
-import { withStairHoles } from './stairs'
 import { normalizeExterior, styleExterior } from './exterior'
 import { yardFurniture } from './yard'
-import { BASE_FLOOR_ID, DEFAULT_FLOOR_H, SLAB, baseFloor, baseFloorId, floorBelow, floorById, floorOf, floorOutline, floorView, isMultiFloor, nextFloorId, normalizeFloors, perFloorFurniture, planFloors, stampFloor } from './floors'
+import { BASE_FLOOR_ID, DEFAULT_FLOOR_H, SLAB, baseFloor, baseFloorId, floorBelow, floorById, floorOf, floorOutline, floorView, isMultiFloor, nextFloorId, normalizeFloors, planFloors, stampFloor } from './floors'
 
 export type Tool = 'select' | 'rect' | 'poly' | 'door' | 'window' | 'fixture'
 
@@ -796,12 +795,11 @@ export function redecorate() {
 }
 
 /**
- * 一键布置：多层户型每层当作独立户型分别布置（第一期；楼梯在子户型里是设备，周围照常留空），
- * 家具打上所在楼层。单层户型和以前完全一样。
+ * 一键布置：多层户型从下往上逐层布置（decorateHouse：房间分配全户统一，全户限量的东西不每层都放，
+ * 楼梯口留空），家具打上所在楼层。单层户型和以前完全一样。
  */
 function furnish(p: Plan, seed: number) {
-  const base = baseFloorId(p)
-  const inside = perFloorFurniture(p, (view, fl) => decorate(withStairHoles(p, view, fl.id), fl.id === base ? seed : seed + Math.round(fl.elevation), sandbox.style, p.household))
+  const inside = decorateHouse(p, seed, sandbox.style, p.household)
   // 户建：院子里再摆几件户外物件（yard.ts）
   return p.site ? [...inside, ...yardFurniture(p, seed)] : inside
 }
@@ -824,8 +822,8 @@ function ensureOutdoorUnits(p: Plan) {
 /** 按住户自动贴墙纸（居室用主人的风格） */
 function papers(p: Plan, seed: number) {
   const raw = toRaw(p)
-  const styles = new Map<string, StyleTag>()
-  for (const fl of planFloors(raw)) for (const [k, v] of roomStyles(floorView(raw, fl.id), raw.household)) styles.set(k, v)
+  // 房间分配全户统一：整份户型一起算
+  const styles = roomStyles(raw, raw.household)
   autoWallpapers(p, raw.household, (r) => styles.get(r.id), seed)
 }
 
@@ -848,16 +846,9 @@ export function rerollWallpapers() {
 export function fixChecklist(items: CheckItem[]) {
   mutate((p) => {
     p.household ??= generateHousehold(toRaw(p))
-    // 多层户型按层补：房间相关的条目交给房间所在的那层，全户的条目交给最底层
+    // 多层户型按层补：房间条目交给房间所在层，每层的条目交给那层，全户条目交给对应的层（checklist.ts fixFloor）
     const raw = toRaw(p)
-    const base = baseFloorId(raw)
-    p.furniture = perFloorFurniture(raw, (view, fl) =>
-      applyFixes(
-        withStairHoles(raw, view, fl.id),
-        isMultiFloor(raw) ? items.filter((it) => (it.roomId ? view.rooms.some((r) => r.id === it.roomId) : fl.id === base)) : items,
-        raw.household,
-      ),
-    )
+    p.furniture = applyFixesHouse(raw, items, raw.household)
     // 空调外机是设备，applyFixes 管不到：按室内机台数补够
     ensureOutdoorUnits(p)
   })

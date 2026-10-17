@@ -28,7 +28,7 @@ import { WALL, WALL_OUTER, createCtx, planArea, planViolations, type Ctx } from 
 import { bedroomCloset, placeBathroom, placeKitchen, roomLinks, shoeCabinet } from './generate-band'
 import { isIndoor, sharedIntervals } from './walls'
 import { DEFAULT_FLOOR_H, SLAB, floorOf, floorView, planFloors, stampFloor } from './floors'
-import { stairHoleConflicts, stairLinks } from './stairs'
+import { stairHoleConflicts, stairLinks, withStairKeepout } from './stairs'
 import { jp, t } from './i18n'
 
 export type Dwelling = 'apartment' | 'house' | 'duplex'
@@ -669,8 +669,9 @@ function furnish({ c, plan, placed }: HouseLayout): Plan {
   const region = plan.region ?? 'jp'
   for (const fl of planFloors(plan)) {
     const view = floorView(plan, fl.id)
-    // 子户型的设备数组是筛出来的副本：摆好的设备同时记到原户型里
-    view.fixtures = [...view.fixtures]
+    // 子户型的设备数组是筛出来的副本：摆好的设备同时记到原户型里。
+    // 上层的楼梯洞口、楼梯口留空的地方当作障碍（只在这份子户型里，不写回户型）
+    view.fixtures = withStairKeepout(plan, view, fl.id).fixtures.slice()
     orientDoors(view)
     const commit = (fs: Fixture[]) => {
       for (const f of fs) if (!plan.fixtures.includes(f)) plan.fixtures.push(stampFloor(plan, f, fl.id))

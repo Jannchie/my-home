@@ -1,7 +1,9 @@
 // 住户设定：先推算这套房子住着怎样一户人家（家庭构成、每个人的年龄 / 职业 / 性格 / 兴趣），
 // 再据此决定统一的装修风格、房间分配和每个房间里放什么。
 
-import { area, type Plan } from './model'
+import { area, edgesOf, regionOf, type Plan, type Room } from './model'
+import { floorOf, isMultiFloor, planFloors } from './floors'
+import { sharedIntervals } from './walls'
 import { ASSETS, type AssetCategory, type AssetDef, type StyleTag } from './three/assets'
 import { rng } from './three/kit'
 import { hasTag, type Sel, type Tag } from './three/tags'
@@ -435,4 +437,138 @@ export function interestWall(id: InterestId) {
 export function jobDeskProps(job: JobId) {
   const tags = JOBS[job].desk
   return tags ? ASSETS.filter((d) => d.prop && d.form !== 'hanging' && hasTag(d, ...tags)) : []
+}
+
+// ---------- 房间分配（全户统一） ----------
+
+/** 空居室的用途 */
+export type RoomPurpose = 'study' | 'library' | 'gaming' | 'music' | 'theater' | 'hobby' | 'gym' | 'play' | 'guest' | 'closet' | 'cards'
+
+/** 全户的房间分配：每个成员恰好住一间居室（夫妻同室；房间不够时孩子和父母睡），多余的居室按兴趣做功能房 */
+export interface Allocation {
+  /** 每个居室住着谁 */
+  occupants: Map<string, Member[]>
+  /** 多出来的居室：给谁当书房 / 兴趣房 */
+  studyOf: Map<string, Member>
+  /** 没人住的居室做什么用 */
+  purposeOf: Map<string, RoomPurpose>
+}
+
+/** 行动不便（楼层优先 1F）：长辈、70 岁以上 */
+export const lowMobility = (m: Member) => m.role === 'elder' || m.age >= 70
+
+/**
+ * 按住户分配居室（洋室 + 和室），整套房子一起分（多层户型不按层各分一次）：
+ *   夫妻住最大的洋室；长辈优先和室；孩子、室友各一间；房间不够时孩子和父母睡、长辈挤进最大的房间；
+ *   剩下的居室不留空，按工作和兴趣排出功能房（书房、电竞房、音乐室…），一间一种用途。
+ * 多层户型另外：
+ *   - 长辈 / 行动不便者先分，优先 1F（1F 和室 > 1F 洋室 > 其他层和室 > 其他）；
+ *   - 孩子优先和父母同层，其次相邻的层；
+ *   - 1F 和 LDK 相连的和室算全家共用（客间 / 家族室），只在长辈要住或房间不够时才分给个人。
+ * 单层户型的结果和以前完全一样（一键布置的输出不变）。
+ */
+export function allocateRooms(plan: Plan, hh: Household): Allocation {
+  const occupants = new Map<string, Member[]>()
+  const studyOf = new Map<string, Member>()
+  const purposeOf = new Map<string, RoomPurpose>()
+  const multi = isMultiFloor(plan)
+  const fs = planFloors(plan)
+  const base = fs[0].id
+  const level = (r: Room) => Math.max(0, fs.findIndex((f) => f.id === floorOf(plan, r)))
+  const rooms = plan.rooms.filter((r) => r.kind === 'western' || r.kind === 'japanese').sort((a, b) => area(b.points) - area(a.points))
+  // 欧美的 Office 是书房，最后才拿来住人
+  if (regionOf(plan) === 'west') rooms.sort((a, b) => Number(a.name === 'Office') - Number(b.name === 'Office'))
+  // 多层：1F 和 LDK 相连的和室是全家共用的，排到最后
+  const ldks = multi ? plan.rooms.filter((r) => r.kind === 'ldk' && floorOf(plan, r) === base) : []
+  const sharedSet = new Set(rooms.filter((r) => multi && r.kind === 'japanese' && floorOf(plan, r) === base && ldks.some((l) => edgesOf(r.points).some((e) => sharedIntervals(e, l).length > 0))).map((r) => r.id))
+  const shared = (r: Room) => sharedSet.has(r.id)
+  if (multi) rooms.sort((a, b) => Number(shared(a)) - Number(shared(b)))
+  const free = [...rooms]
+  /** 按偏好依次找：第一个有命中的偏好胜出；都没有就取第一间 */
+  const take = (...prefs: ((r: Room) => boolean)[]) => {
+    for (const p of prefs) {
+      const i = free.findIndex(p)
+      if (i >= 0) return free.splice(i, 1)[0]
+    }
+    return free.splice(0, 1)[0]
+  }
+  const isParent = (m: Member) => m.role === 'self' || m.role === 'partner'
+  const couple = hh.members.filter(isParent)
+  const groups: Member[][] = []
+  if (hh.kind === 'roommates') for (const m of hh.members) groups.push([m])
+  else if (multi) {
+    // 长辈先挑（要住 1F），再是夫妻、孩子
+    for (const m of hh.members.filter((m) => !isParent(m) && lowMobility(m))) groups.push([m])
+    if (couple.length) groups.push(couple)
+    for (const m of hh.members.filter((m) => m.role === 'child' && !lowMobility(m)).sort((a, b) => b.age - a.age)) groups.push([m])
+  } else {
+    groups.push(couple)
+    for (const m of hh.members.filter((m) => m.role === 'elder')) groups.push([m])
+    for (const m of hh.members.filter((m) => m.role === 'child').sort((a, b) => b.age - a.age)) groups.push([m])
+  }
+  let parentsRoom: Room | undefined
+  for (const g of groups) {
+    if (!free.length) {
+      // 房间不够：小孩和父母睡，长辈 / 大孩子挤进最大的房间
+      const room = (multi && g[0]?.role === 'child' && parentsRoom) || rooms[0]
+      if (room) occupants.set(room.id, [...(occupants.get(room.id) ?? []), ...g])
+      continue
+    }
+    let room: Room
+    if (!multi) room = take(g[0]?.role === 'elder' ? (r) => r.kind === 'japanese' : (r) => r.kind === 'western')
+    else if (g[0] && !isParent(g[0]) && lowMobility(g[0])) {
+      const on1 = (r: Room) => level(r) === 0
+      room = take((r) => on1(r) && r.kind === 'japanese', on1, (r) => r.kind === 'japanese')
+    } else if (g[0]?.role === 'child' && parentsRoom) {
+      const pl = level(parentsRoom)
+      const own = (r: Room) => !shared(r)
+      room = take((r) => own(r) && level(r) === pl && r.kind === 'western', (r) => own(r) && level(r) === pl, (r) => own(r) && Math.abs(level(r) - pl) === 1, own)
+    } else room = take((r) => !shared(r) && r.kind === 'western', (r) => !shared(r))
+    occupants.set(room.id, g)
+    if (g.some(isParent)) parentsRoom = room
+  }
+  // 剩下的居室不留空：按住户的工作和兴趣排出功能房，一间一种用途
+  const adults = hh.members.filter((m) => m.age >= 18)
+  const has = (it: InterestId) => hh.members.filter((m) => m.interests.includes(it))
+  const wanted: [RoomPurpose, Member | undefined][] = []
+  const want = (p: RoomPurpose, who: Member[] | Member | undefined) => {
+    const m = Array.isArray(who) ? who[0] : who
+    if (m && !wanted.some(([q]) => q === p)) wanted.push([p, m])
+  }
+  // 骨灰级（Lv.4）的兴趣先挑一整间专用房
+  const lv4 = (it: InterestId) => hh.members.filter((m) => levelOf(m, it) >= 4)
+  want('cards', lv4('boardgames'))
+  want('gaming', lv4('gaming').concat(lv4('streaming')))
+  want('music', lv4('music'))
+  want('gym', lv4('fitness'))
+  want('library', lv4('reading'))
+  want('hobby', [...lv4('otaku'), ...lv4('collecting'), ...lv4('photo'), ...lv4('tech')])
+  want('study', adults.find((m) => JOBS[m.job].wfh))
+  want('gaming', has('gaming').concat(has('streaming')))
+  want('music', has('music'))
+  want('theater', has('movies'))
+  want('hobby', [...has('maker'), ...has('models'), ...has('crafts'), ...has('collecting'), ...has('otaku'), ...has('boardgames'), ...has('photo')])
+  want('gym', [...has('fitness'), ...has('sports'), ...has('outdoor')])
+  want('play', hh.members.filter((m) => m.role === 'child' && m.age < 10))
+  want('library', has('reading'))
+  want('study', adults[0])
+  want('guest', adults[0] ?? hh.members[0])
+  want('closet', adults[0] ?? hh.members[0])
+  for (const r of free) {
+    // 和室优先当客房 / 茶室式的书房（全家共用的和室只当客房），洋室按顺序分
+    const i = shared(r) ? Math.max(0, wanted.findIndex(([p]) => p === 'guest')) : r.kind === 'japanese' ? Math.max(0, wanted.findIndex(([p]) => p === 'guest' || p === 'study' || p === 'library')) : 0
+    const [p, m] = wanted.splice(i, 1)[0] ?? ['guest', hh.members[0]]
+    purposeOf.set(r.id, p)
+    // 全家共用的和室不记在某个人名下
+    if (m && !shared(r)) studyOf.set(r.id, m)
+  }
+  return { occupants, studyOf, purposeOf }
+}
+
+/** 每个成员住的房间（UI：住户面板显示每人的房间和楼层） */
+export function memberRooms(plan: Plan, hh: Household): Map<string, Room> {
+  const a = allocateRooms(plan, hh)
+  const out = new Map<string, Room>()
+  for (const r of plan.rooms) for (const m of a.occupants.get(r.id) ?? []) out.set(m.id, r)
+  return out
 }

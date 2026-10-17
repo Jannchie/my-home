@@ -1,7 +1,9 @@
 // 家具吸附：拖动 / 放置时，边缘贴墙面，或和其他家具、设备的边线、中线对齐。
 
 import { ASSET_MAP } from './three/assets'
-import { edgesOf, fixtureBox, isAxisEdge, mul, add, rotFacingWall, type Box, type Plan, type Vec } from './model'
+import { bbox, edgesOf, fixtureBox, isAxisEdge, mul, add, rotFacingWall, type Box, type Fixture, type Plan, type Vec } from './model'
+import { floorOf, riseOf } from './floors'
+import { stairUnderZone, underZonePoly } from './stairs'
 import { wallThicknessAt } from './walls'
 import { roomAt } from './three/house'
 
@@ -170,7 +172,16 @@ export function overlapsOthers(plan: Plan, selfId: string | null, asset: string,
   }
   if (plan.furniture.some((f) => solid(f.id, f.asset, f.z) && boxHit(me, shrink(furnitureBox(f.asset, f.x, f.y, f.rot), 2)))) return true
   // 冰箱位 / 洗衣机位 / 收纳位只是预留的空间，冰箱、洗衣机、柜子（以及别的家具）可以放在上面
-  return plan.fixtures.some((f) => f.kind !== 'outdoor' && f.kind !== 'fridge' && f.kind !== 'washer' && f.kind !== 'builtin' && boxHit(me, fixtureBox(f)))
+  return plan.fixtures.some((f) => f.kind !== 'outdoor' && f.kind !== 'fridge' && f.kind !== 'washer' && f.kind !== 'builtin' && boxHit(me, fixtureBox(f)) && !underStairs(plan, f, me, def.h))
+}
+
+/** 楼梯下敞开的储物角里放得下的东西（整块在储物角里、不高于它）不算撞到楼梯 */
+function underStairs(plan: Plan, f: Fixture, me: Box, h: number) {
+  if (f.kind !== 'stairs' || f.under !== 'open' || f.id.endsWith('~hole')) return false
+  const z = stairUnderZone(f, riseOf(plan, floorOf(plan, f)))
+  if (!z || h > z.clear) return false
+  const b = bbox(underZonePoly(f, z))
+  return me.x0 >= b.x0 - 1 && me.x1 <= b.x1 + 1 && me.y0 >= b.y0 - 1 && me.y1 <= b.y1 + 1
 }
 
 const shrink = (b: Box, k: number): Box => ({ x0: b.x0 + k, y0: b.y0 + k, x1: b.x1 - k, y1: b.y1 - k })
