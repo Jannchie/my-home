@@ -15,6 +15,7 @@ import * as THREE from 'three'
 import type { Furniture, Plan, Vec } from '../model'
 import { ASSET_MAP, ASSETS } from './assets'
 import type { ActorSpec, AssetDef } from './kit'
+import { hasTag } from './tags'
 import { effectivePalette } from './colors'
 import { NavGrid, type NavClass } from '../nav'
 import { placeFurniture } from './house'
@@ -275,12 +276,12 @@ const SHADOW_GEO = new THREE.CircleGeometry(1, 28).rotateX(-Math.PI / 2)
 SHADOW_GEO.userData.shared = true
 const SHADOW_MAT = new THREE.MeshBasicMaterial({ color: '#2b2030', transparent: true, opacity: 0.16, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })
 
-/** Kachaka 会去「送东西」的家具：沙发、床、书桌、餐桌前 */
-const DELIVER_RE = /sofa|couch|bed(?!-side)|desk|dining|kotatsu|沙发|ソファ|床|书桌|餐桌|被炉|矮桌|茶几/
+/** Kachaka 会去「送东西」的家具：沙发、床、书桌、餐桌、矮桌、茶几前 */
+const isDeliverTarget = (def: AssetDef) => hasTag(def, 'sofa', 'bed', 'bedding', 'desk', 'dining-table', 'low-table', 'coffee-table')
 /** 无人机的巡航下限：顶端低于它的家具从上面飞过去（空中网格只把更高的算障碍） */
 const AIR_MIN = 118
 /** 宠物会去吃饭的地方 */
-const BOWL_RE = /pet-bowl|食碗/
+const isPetBowl = (def: AssetDef) => hasTag(def, 'pet-bowl')
 
 export class ActorLayer {
   group = new THREE.Group()
@@ -439,11 +440,10 @@ export class ActorLayer {
     for (const f of plan.furniture) {
       const def = ASSET_MAP.get(f.asset)
       if (!def) continue
-      const text = `${def.id} ${def.name}`
-      if (BOWL_RE.test(text) && !(f.z ?? 0)) {
+      if (isPetBowl(def) && !(f.z ?? 0)) {
         const p = nav.nearest('pet', { x: f.x, y: f.y }, 12, 60)
         if (p) this.bowls.push(p)
-      } else if (DELIVER_RE.test(text) && !def.prop && !def.mount && !(f.z ?? 0)) {
+      } else if (isDeliverTarget(def) && !def.prop && !def.mount && !(f.z ?? 0)) {
         const h = (-f.rot * Math.PI) / 180
         const fw = fwd(h)
         const p = nav.nearest('robot', { x: f.x + fw.x * (def.d / 2 + 40), y: f.y + fw.y * (def.d / 2 + 40) }, 26, 70)

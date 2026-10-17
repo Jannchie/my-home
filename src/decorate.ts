@@ -1089,7 +1089,7 @@ class Decorator {
     if (!pd?.surfaces?.length) return
     const ok = (a: AssetDef) => !!a.prop && !a.stick && a.form !== 'hanging'
     const bodies = this.find(/^of-camera-(mirrorless|dslr|film)$|^of-action-cam$/, ok)
-    const extras = this.find(/^of-lens-|^of-camera-instant$/, ok)
+    const extras = this.find(['lens', /^of-camera-instant$/], ok)
     this.reserved.add(cab.id)
     this.noLimit = true
     try {
@@ -1127,7 +1127,7 @@ class Decorator {
     const walls = (sel: Sel) => this.find(sel, (a) => !!a.mount)
     if (n) {
       if (n >= 2 && this.rand() < 0.6 && (!this.occupants.get(room.id)?.length || area(room.points) / 10000 >= 12)) this.floorOf(room, /^(col-lit-showcase|lv-display)$/, { front: 40 })
-      const cups = this.find(/^(hg-trophy|int-trophy)/, (a) => !!a.prop)
+      const cups = this.find('trophy', (a) => !!a.prop)
       this.scatter(room, this.shuffle(cups).slice(0, n + 2), n + 1)
       if (comp.some((it) => ['sports', 'fitness', 'outdoor', 'boardgames', 'puzzles', 'gaming'].includes(it))) {
         if (this.rand() < 0.5) this.scatter(room, this.find(/^hg-medal-(gold|silver|bronze)$/), 1 + Math.floor(this.rand() * 2))
@@ -2453,7 +2453,7 @@ class Decorator {
     const fridge = this.out.find((f) => !f.z && isMainAppliance(ASSET_MAP.get(f.asset), 'fridge') && pointInPolygon(f, room.points))
     const fridgeDef = fridge && ASSET_MAP.get(fridge.asset)
     if (this.rand() < 0.6) {
-      const bags = this.find(/^bag-/, (a) => !!a.prop && !a.stick && (a.form === 'open' || a.form === 'closed' || a.form === 'standing') && Math.max(a.w, a.d) <= 40)
+      const bags = this.find('shopping-bag', (a) => !!a.prop && !a.stick && (a.form === 'open' || a.form === 'closed' || a.form === 'standing') && Math.max(a.w, a.d) <= 40)
       if (!bags.length) return
       const def = this.pick(bags)
       const base = fridge && fridgeDef ? fridge : kitchen

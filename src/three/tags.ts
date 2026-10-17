@@ -2,11 +2,14 @@
 // 名字只用于显示。改名、翻译不会改变布置结果。
 //
 // 词表是受控的（Tag 联合类型，写错编译报错）：
-//   功能       这件东西是什么（bed、desk、kettle、towel、plant…），每件素材至少一个
-//   摆放       能放在哪 / 怎么摆（high-ok 可放 >140cm 高处、bed-ok 可放床上、fridge-door 可贴冰箱门…）
+//   功能       这件东西是什么：细分（bed、desk、kettle、towel、plant…，业务规则按它们查）+ 粗分类（decor、food、tool…），每件素材至少一个
+//   属性       for-kids、diatomite…
+//   摆放       能放在哪 / 怎么摆（high-ok 可放 >140cm 高处、bed-ok 可放床上、fridge-door 可贴冰箱门、set-piece 成套专用…）
 //   兴趣       hobby:<InterestId>：和 household.ts 的兴趣对应（落地 / 摆件 / 壁挂按素材本身的形态区分）
 //
-// 标签来源：src/three/tags.generated.ts（迁移脚本 scripts/migrate-tags.mts 生成的初始表）与 def.tags（新素材直接写）合并。
+// 标签来源：src/three/tags.generated.ts（迁移脚本 scripts/migrate-tags.mts 生成的初始表，pnpm gen:tags）与 def.tags 合并。
+// 新素材直接在 def 里写 tags；test/tags.spec.ts 会检查每件素材都有功能标签、只用词表里的值，
+// 以及业务代码里没有按名字 / id 子串判断类别的正则（选择器只允许锚定在 id 开头的正则，用来点名具体素材或成套系列）。
 
 import type { AssetDef } from './kit'
 import type { InterestId } from '../household'
@@ -62,6 +65,7 @@ export const FURNITURE_TAGS = [
   'laundry-stand', // 晾衣架
   'hamper', // 脏衣篓
   'cat-tower',
+  'pet-bowl', // 宠物食碗（预览时宠物会去吃饭）
   'litter-box',
   'aquarium',
   'luggage',
@@ -185,11 +189,59 @@ export const ITEM_TAGS = [
   'water-bottle',
   'hat',
   'bag', // 包（挎包、手提包、双肩包）
+  'trophy', // 奖杯
   'coin', // 硬币收藏
   'stamp', // 邮票收藏
   'mineral', // 矿石、化石、水晶标本
   'dog', // 狗用品（宠物分类）
   'cat', // 猫用品（宠物分类）
+] as const
+
+/**
+ * 功能：粗分类。保证每件素材至少有一个「这是什么」；业务规则需要更细的判断时用上面的细分标签。
+ */
+export const COARSE_TAGS = [
+  'rug', // 地毯、地垫、脚垫
+  'audio', // 音响、收音机、播放器
+  'home-camera', // 家用摄像头（宠物 / 安防 / 婴儿监视器 / 门铃）
+  'robot',
+  'drone',
+  'model', // 模型（飞机、火车、高达）
+  'puzzle', // 益智玩具、魔方、拼图
+  'clothing',
+  'stationery', // 文具、便签、日历、白板
+  'office-machine', // 打印机、扫描仪、碎纸机
+  'electronics', // 手机、移动电源、遥控器、数码小件
+  'fan',
+  'heater',
+  'fridge',
+  'washer', // 洗衣机、干衣机
+  'appliance', // 其他家电
+  'cleaning', // 清洁用品、资源回收
+  'hook-rack', // 洞洞板、挂钩排、挂架
+  'shopping-bag',
+  'food',
+  'drink',
+  'tableware', // 餐具、餐垫、酒器
+  'cookware', // 锅、炉、厨房小电器
+  'kitchenware', // 其他厨房用品
+  'personal-care', // 纸巾、湿巾、药、指甲剪
+  'sundries', // 日用杂货（蚊香、钥匙、遥控器、线香…）
+  'tool', // 工具
+  'garden-tool',
+  'pet-supply',
+  'instrument', // 乐器
+  'sports-gear', // 运动 / 健身用品
+  'outdoor-gear', // 登山露营用品
+  'fishing-gear',
+  'craft-tool', // 手作工具（缝纫、刺绣、水彩、3D 打印）
+  'science-kit', // 望远镜、显微镜、地球仪、化学烧瓶
+  'decor', // 装饰、节日摆设、挂画
+  'curtain',
+  'partition', // 屏风、隔断
+  'platform', // 小上がり等地台
+  'vanity', // 梳妆台
+  'counter', // 中岛、吧台
 ] as const
 
 /** 属性 */
@@ -216,7 +268,7 @@ export const PLACEMENT_TAGS = [
 ] as const
 
 /** 「这是什么」类标签（每件素材至少要有一个） */
-export const FUNCTION_TAGS = [...FURNITURE_TAGS, ...DEVICE_TAGS, ...LIGHT_PLANT_TAGS, ...KITCHEN_TAGS, ...HYGIENE_TAGS, ...ITEM_TAGS] as const
+export const FUNCTION_TAGS = [...FURNITURE_TAGS, ...DEVICE_TAGS, ...LIGHT_PLANT_TAGS, ...KITCHEN_TAGS, ...HYGIENE_TAGS, ...ITEM_TAGS, ...COARSE_TAGS] as const
 
 type FixedTag =
   | (typeof FURNITURE_TAGS)[number]
@@ -225,6 +277,7 @@ type FixedTag =
   | (typeof KITCHEN_TAGS)[number]
   | (typeof HYGIENE_TAGS)[number]
   | (typeof ITEM_TAGS)[number]
+  | (typeof COARSE_TAGS)[number]
   | (typeof ATTR_TAGS)[number]
   | (typeof PLACEMENT_TAGS)[number]
 
