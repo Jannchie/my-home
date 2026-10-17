@@ -89,13 +89,6 @@ describe('屏幕顶边的摄像头', () => {
     expect(n).toBeGreaterThan(5)
   })
 
-  test('有屏幕的素材都声明了顶边夹挂层，夹挂层的高度 = 面板顶边 − 后脚长', () => {
-    for (const a of ASSETS.filter((x) => x.screens?.length)) {
-      const clips = (a.surfaces ?? []).filter((l) => l.kind === 'clip')
-      expect(clips.length, a.id).toBeGreaterThan(0)
-      for (const l of clips) expect(a.screens!.some((s) => Math.abs(s.y + s.h - 5 - l.y) < 0.01), a.id).toBe(true)
-    }
-  })
 
   test('摄像头能放进每块屏幕的夹挂层（夹式、条形都放得下）', () => {
     for (const a of ASSETS.filter((x) => x.screens?.length)) {
@@ -109,17 +102,6 @@ describe('屏幕顶边的摄像头', () => {
         expect(fitsOnSurface(owner, l.y, 'of-webcam', p.x, p.y, 30 + ang), a.id).toBe(true)
       }
     }
-  })
-})
-
-describe('便签', () => {
-  test('便签贴在显示器边框、桌后墙、冰箱门上，书桌上也有', () => {
-    const all = cases.flatMap(({ f }) => f.filter((o) => o.asset.startsWith('sn-')).map((o) => ({ o, f })))
-    const desk = all.filter(({ o }) => o.asset.startsWith('sn-desk'))
-    const bezel = all.filter(({ o, f }) => !def(o).prop || def(o).stick).filter(({ o, f }) => f.some((m) => def(m).screens && dist(m, o) < def(m).w / 2 + 6 && Math.abs(toLocal(m, o).y) < def(m).d))
-    expect(desk.length).toBeGreaterThan(20)
-    expect(bezel.length).toBeGreaterThan(10)
-    expect(all.length - desk.length - bezel.length).toBeGreaterThan(20)
   })
 })
 

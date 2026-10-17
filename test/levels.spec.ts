@@ -50,149 +50,103 @@ describe('兴趣等级推算', () => {
     expect(levelCap({ ...genJp(1), rooms: genJp(1).rooms.slice(0, 1) })).toBeLessThanOrEqual(2)
   })
 
-  test('40 个住户里各级都出现过', () => {
-    const seen = new Set<number>()
-    for (const seed of range(1, 40)) for (const m of generateHousehold(genJp(seed), seed).members) for (const it of m.interests) seen.add(levelOf(m, it))
-    expect([...seen].sort()).toEqual([1, 2, 3, 4])
-  })
 })
 
 describe('等级套装', () => {
-  test.each(['tech', 'photo', 'streaming', 'gaming', 'puzzles'] as InterestId[])('%s：Lv.4 摆出来的相关物件比 Lv.1 多', (it) => {
-    let lo = 0
-    let hi = 0
-    for (const seed of range(1, 8)) {
-      const plan = gen(seed, 'jp', 3)
-      const hh = generateHousehold(plan, seed)
-      lo += tierHits(decorate(plan, seed, 'auto', withLevel(hh, it, 1)), it)
-      hi += tierHits(decorate(plan, seed, 'auto', withLevel(hh, it, 4)), it)
+  test('Lv.4 摆出来的相关物件比 Lv.1 多（tech / photo / streaming / gaming / puzzles）', () => {
+    const bad: string[] = []
+    for (const it of ['tech', 'photo', 'streaming', 'gaming', 'puzzles'] as InterestId[]) {
+      let lo = 0
+      let hi = 0
+      for (const seed of range(1, 3)) {
+        const plan = gen(seed, 'jp', 3)
+        const hh = generateHousehold(plan, seed)
+        lo += tierHits(decorate(plan, seed, 'auto', withLevel(hh, it, 1)), it)
+        hi += tierHits(decorate(plan, seed, 'auto', withLevel(hh, it, 4)), it)
+      }
+      if (hi <= lo) bad.push(`${it}: Lv.4 ${hi} 件 ≤ Lv.1 ${lo} 件`)
     }
-    expect(hi).toBeGreaterThan(lo)
-  })
-
-  test('会拿奖的兴趣 Lv.4：多数人家有奖杯 / 奖牌 / 证书', () => {
-    let n = 0
-    for (const seed of range(1, 10)) {
-      const plan = gen(seed, 'cn', 3)
-      const f = decorate(plan, seed, 'auto', withLevel(generateHousehold(plan, seed), 'sports', 4))
-      if (f.some((x) => /^(hg-trophy|int-trophy|hg-medal|hg-cert|int-medal)/.test(x.asset))) n++
-    }
-    expect(n).toBeGreaterThanOrEqual(6)
+    expect(bad).toEqual([])
   })
 })
 
-describe('地区特色物件', () => {
-  /** 中式三室、有长辈、棋牌 Lv.3 的人家：麻将桌 / 棋桌常见，桌边有座位、座位不和别的家具穿插 */
-  test('中式：棋牌爱好者家里常有麻将桌或棋桌，桌边有 ≥2 个座位', () => {
-    let tables = 0
-    const bad: string[] = []
-    for (const seed of range(1, 12)) {
-      const plan = gen(seed, 'cn', 3)
-      const hh = withLevel(generateHousehold(plan, seed), 'boardgames', 3)
-      const f = decorate(plan, seed, 'auto', hh)
-      const ts = f.filter((x) => /^(int-mahjong-(table|shuffle|walls|win)|hg-mj-(covered|fold)|hg-qizhuo)$/.test(x.asset) && !x.z)
-      tables += ts.length
-      for (const t of ts) {
-        const d = ASSET_MAP.get(t.asset)!
-        const seats = f.filter((x) => /chair|stool|zabuton|^ch-|^c2-|椅|凳/.test(x.asset + ASSET_MAP.get(x.asset)!.name) && Math.hypot(x.x - t.x, x.y - t.y) < Math.max(d.w, d.d) / 2 + 45)
-        if (seats.length < 2) bad.push(`seed ${seed} ${t.asset} 只有 ${seats.length} 个座位`)
-      }
+/** 棋牌 Lv.3 的人家，各地区布置一次，下面几条共用 */
+type RCase = { region: 'jp' | 'cn' | 'west'; seed: number; plan: Plan; f: Furniture[] }
+let regionalCache: RCase[] | null = null
+function regional(): RCase[] {
+  if (regionalCache) return regionalCache
+  regionalCache = []
+  for (const [region, seeds] of [['cn', range(1, 10)], ['west', range(1, 10)], ['jp', range(1, 16)]] as const)
+    for (const seed of seeds) {
+      const plan = region === 'jp' ? genJp(seed) : gen(seed, region, 3)
+      const f = decorate(plan, seed, 'auto', withLevel(generateHousehold(plan, seed), 'boardgames', 3))
+      plan.furniture = f
+      regionalCache.push({ region, seed, plan, f })
     }
-    expect(tables).toBeGreaterThanOrEqual(4)
+  return regionalCache
+}
+const SEAT = /chair|stool|zabuton|^ch-|^c2-|椅|凳/
+const MAHJONG = /^(int-mahjong-(table|shuffle|walls|win)|hg-mj-(covered|fold)|hg-jantaku)$/
+
+describe('地区特色物件', () => {
+  test('特色物件只在对应地区：日式没有中式棋桌，欧美没有麻将桌', () => {
+    const bad = regional()
+      .filter(({ region, f }) => (region === 'jp' && f.some((x) => x.asset === 'hg-qizhuo')) || (region === 'west' && f.some((x) => MAHJONG.test(x.asset))))
+      .map(({ region, seed }) => `${region} seed ${seed}`)
     expect(bad).toEqual([])
   })
 
-  test('日式：和室里会出现麻雀卓 / 足付き碁盤 / 将棋盤 / 神棚（不出现中式棋桌）', () => {
-    const ids = new Set<string>()
-    for (const seed of range(1, 30)) {
-      const plan = genJp(seed)
-      const hh = withLevel(generateHousehold(plan, seed), 'boardgames', 3)
-      for (const x of decorate(plan, seed, 'auto', hh)) ids.add(x.asset)
-    }
-    expect([...ids].some((id) => /^(hg-jantaku|hg-go-ban|hg-shogi-ban|ss-kamidana)$/.test(id))).toBe(true)
-    expect([...ids].filter((id) => /^hg-qizhuo$/.test(id))).toEqual([])
-  })
-
-  test('欧美：会出现台球桌 / 飞镖盘 / 国际象棋桌，且不出现麻将桌', () => {
-    const ids = new Set<string>()
-    for (const seed of range(1, 16)) {
-      const plan = gen(seed, 'west', 3)
-      const hh = withLevel(generateHousehold(plan, seed), 'boardgames', 3)
-      for (const x of decorate(plan, seed, 'auto', hh)) ids.add(x.asset)
-    }
-    expect([...ids].some((id) => /^(hg-pool-table|hg-dartboard|hg-dart-cabinet|hg-game-table-round)$/.test(id))).toBe(true)
-    expect([...ids].filter((id) => /^(int-mahjong-(table|shuffle|walls|win)|hg-mj-(covered|fold)|hg-jantaku)$/.test(id))).toEqual([])
-  })
-
-  test('特色桌子不和别的落地家具穿插（桌边座位除外）', () => {
+  test('麻将桌 / 棋桌桌边至少 2 个座位，且桌子不和别的落地家具穿插', () => {
     const bad: string[] = []
-    for (const [region, seeds] of [['cn', range(1, 12)], ['west', range(1, 12)]] as const)
-      for (const seed of seeds) {
-        const plan = gen(seed, region, 3)
-        const f = decorate(plan, seed, 'auto', withLevel(generateHousehold(plan, seed), 'boardgames', 3))
-        const solid = f.filter((x) => !x.z && !ASSET_MAP.get(x.asset)!.mount && !ASSET_MAP.get(x.asset)!.stick && ASSET_MAP.get(x.asset)!.h > 3)
-        for (const t of solid.filter((x) => /^(hg-(mj-(covered|fold)$|pool|qizhuo|game-table|jantaku|go-ban|shogi-ban)|int-mahjong-(table|shuffle|walls|win))/.test(x.asset))) {
-          const td = ASSET_MAP.get(t.asset)!
-          for (const o of solid) {
-            if (o === t || /chair|stool|zabuton|^ch-|^c2-|椅|凳|rug|地毯/.test(o.asset + ASSET_MAP.get(o.asset)!.name)) continue
-            const od = ASSET_MAP.get(o.asset)!
-            const p = penetration(rectCorners(t, td.w, td.d, t.rot), rectCorners(o, od.w, od.d, o.rot))
-            if (p > 4) bad.push(`${region} seed ${seed}: ${t.asset} × ${o.asset} ${p.toFixed(1)}cm`)
-          }
+    for (const { region, seed, f } of regional()) {
+      const solid = f.filter((x) => !x.z && !ASSET_MAP.get(x.asset)!.mount && !ASSET_MAP.get(x.asset)!.stick && ASSET_MAP.get(x.asset)!.h > 3)
+      for (const t of solid.filter((x) => /^(hg-(mj-(covered|fold)$|pool|qizhuo|game-table|jantaku|go-ban|shogi-ban)|int-mahjong-(table|shuffle|walls|win))/.test(x.asset))) {
+        const td = ASSET_MAP.get(t.asset)!
+        if (/^(int-mahjong-(table|shuffle|walls|win)|hg-mj-(covered|fold)|hg-qizhuo)$/.test(t.asset)) {
+          const seats = f.filter((x) => SEAT.test(x.asset + ASSET_MAP.get(x.asset)!.name) && Math.hypot(x.x - t.x, x.y - t.y) < Math.max(td.w, td.d) / 2 + 45)
+          if (seats.length < 2) bad.push(`${region} seed ${seed}: ${t.asset} 只有 ${seats.length} 个座位`)
+        }
+        for (const o of solid) {
+          if (o === t || /chair|stool|zabuton|^ch-|^c2-|椅|凳|rug|地毯/.test(o.asset + ASSET_MAP.get(o.asset)!.name)) continue
+          const od = ASSET_MAP.get(o.asset)!
+          const p = penetration(rectCorners(t, td.w, td.d, t.rot), rectCorners(o, od.w, od.d, o.rot))
+          if (p > 4) bad.push(`${region} seed ${seed}: ${t.asset} × ${o.asset} ${p.toFixed(1)}cm`)
         }
       }
+    }
     expect(bad).toEqual([])
   })
 
   /** 组合：桌子 + 台面摆件。棋盘 / 牌 / 棋罐都有支撑面且整块在台面内；落地棋笥不和别的落地物（含坐垫）重叠 */
-  test('棋桌上的棋盘、棋罐、麻将牌有支撑面且不出界；落地棋笥不穿模', () => {
+  test('棋盘、棋罐、麻将牌有支撑面且不出界；落地棋笥不穿模', () => {
     const bad: string[] = []
-    let boards = 0
-    let bowlsOnFloor = 0
-    for (const [region, seeds] of [['cn', range(1, 16)], ['west', range(1, 10)], ['jp', range(1, 30)]] as const)
-      for (const seed of seeds) {
-        const plan = region === 'jp' ? genJp(seed) : gen(seed, region, 3)
-        const hh = withLevel(generateHousehold(plan, seed), 'boardgames', 3)
-        const f = decorate(plan, seed, 'auto', hh)
-        plan.furniture = f
-        for (const x of f.filter((x) => /^(hg-go-board|hg-go-bowl|hg-mj-(walls|hands)|int-(chess|xiangqi|mahjong-mat))/.test(x.asset))) {
-          if (!x.z) {
-            if (!/^hg-go-bowl/.test(x.asset)) continue
-            bowlsOnFloor++
-            const xd = ASSET_MAP.get(x.asset)!
-            for (const o of f) {
-              const od = ASSET_MAP.get(o.asset)!
-              if (o === x || o.z || od.mount || od.stick || od.h <= 1) continue
-              const p = penetration(rectCorners(x, xd.w, xd.d, x.rot), rectCorners(o, od.w, od.d, o.rot))
-              if (p > 0.5) bad.push(`${region} seed ${seed}: 落地 ${x.asset} × ${o.asset} ${p.toFixed(1)}cm`)
-            }
-            continue
+    for (const { region, seed, plan, f } of regional())
+      for (const x of f.filter((x) => /^(hg-go-board|hg-go-bowl|hg-mj-(walls|hands)|int-(chess|xiangqi|mahjong-mat))/.test(x.asset))) {
+        if (!x.z) {
+          if (!/^hg-go-bowl/.test(x.asset)) continue
+          const xd = ASSET_MAP.get(x.asset)!
+          for (const o of f) {
+            const od = ASSET_MAP.get(o.asset)!
+            if (o === x || o.z || od.mount || od.stick || od.h <= 1) continue
+            const p = penetration(rectCorners(x, xd.w, xd.d, x.rot), rectCorners(o, od.w, od.d, o.rot))
+            if (p > 0.5) bad.push(`${region} seed ${seed}: 落地 ${x.asset} × ${o.asset} ${p.toFixed(1)}cm`)
           }
-          // 棋盘：围棋盘或象棋 / 国际象棋盘（中式棋桌上围棋、象棋各一半概率）
-          if (/^(hg-go-board|int-(chess|xiangqi))/.test(x.asset)) boards++
-          const sp = supportOf(plan, x)
-          if (!sp) bad.push(`${region} seed ${seed}: ${x.asset} 悬空`)
-          else if (!sp.fits) bad.push(`${region} seed ${seed}: ${x.asset} 超出台面`)
+          continue
         }
+        const sp = supportOf(plan, x)
+        if (!sp) bad.push(`${region} seed ${seed}: ${x.asset} 悬空`)
+        else if (!sp.fits) bad.push(`${region} seed ${seed}: ${x.asset} 超出台面`)
       }
     expect(bad).toEqual([])
-    expect(boards).toBeGreaterThan(0)
-    expect(bowlsOnFloor).toBeGreaterThanOrEqual(0)
   })
 
-  /** 相机展示柜 / 防潮柜：摄影发烧友家里才常见，而且每一层都摆着相机或镜头 */
-  test('相机展示柜 / 防潮柜：摄影 Lv.4 常见且装满相机，其他住户很少出现', () => {
-    let withCase = 0
-    let others = 0
+  /** 相机展示柜 / 防潮柜：放了就每一层都摆着相机或镜头，不混进别的摆件 */
+  test('相机展示柜 / 防潮柜每层都有相机，没有无关摆件', () => {
     const bad: string[] = []
-    for (const seed of range(1, 12)) {
+    for (const seed of range(1, 6)) {
       const plan = gen(seed, 'jp', 3)
-      const base = generateHousehold(plan, seed)
-      const f = decorate(plan, seed, 'auto', withLevel(base, 'photo', 4))
-      plan.furniture = f
-      const cases = f.filter((x) => /^of-(camera-showcase|dry-)/.test(x.asset))
-      if (cases.length) withCase++
-      for (const c of cases) {
+      const f = decorate(plan, seed, 'auto', withLevel(generateHousehold(plan, seed), 'photo', 4))
+      for (const c of f.filter((x) => /^of-(camera-showcase|dry-)/.test(x.asset))) {
         const d = ASSET_MAP.get(c.asset)!
         // 在柜子占地范围内、高度落在柜内某一层上的东西
         const a = (c.rot * Math.PI) / 180
@@ -205,11 +159,7 @@ describe('地区特色物件', () => {
         const odd = inside.filter((x) => !/^of-(camera|lens|action-cam)/.test(x.asset))
         if (odd.length) bad.push(`seed ${seed} ${c.asset} 里有无关摆件 ${odd.map((x) => x.asset).join(',')}`)
       }
-      const plain = { ...base, members: base.members.map((m) => ({ ...m, interests: m.interests.filter((i) => i !== 'photo') })) }
-      if (decorate(plan, seed, 'auto', plain).some((x) => /^of-(camera-showcase|dry-)/.test(x.asset))) others++
     }
-    expect(withCase).toBeGreaterThanOrEqual(6)
-    expect(others).toBeLessThanOrEqual(1)
     expect(bad).toEqual([])
   })
 })

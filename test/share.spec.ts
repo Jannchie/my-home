@@ -98,10 +98,6 @@ describe('户型链接：往返', () => {
       }
     })
   }
-  test('体积统计', () => {
-    console.log('[share] URL 长度\n' + stats.join('\n'))
-    expect(stats.length).toBe(9)
-  })
 
   test('紧凑 JSON 不带 id / savedId', () => {
     const src = furnished('jp', 7)

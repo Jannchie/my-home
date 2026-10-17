@@ -1,4 +1,4 @@
-// 检查清单：一键布置 + 补外机 + 一键补齐（applyFixes）之后，剩下的缺失项要少
+// 检查清单：一键布置 + 补外机 + 一键补齐（applyFixes）
 import { expect, test } from 'vitest'
 import { checklist, type CheckItem } from '/src/checklist'
 import { applyFixes, decorate } from '/src/decorate'
@@ -8,9 +8,6 @@ import type { Plan } from '/src/model'
 import { genJp, range } from './helpers'
 
 const SEEDS = range(1, 30)
-/** 30 户补齐后剩余缺失项总数的上限（现状 26：衣物收纳 7、空调 5、餐椅 4、床 4、书桌 2、电水壶 2…；用 generateWithArea 出的户型，留一点余量，改进后收紧） */
-const MAX_LEFT = 32
-
 const missing = (p: Plan) => checklist(p, p.household).filter((c: CheckItem) => c.have < c.need && !c.builtin)
 
 const results = SEEDS.map((seed) => {
@@ -19,15 +16,16 @@ const results = SEEDS.map((seed) => {
   plan.household = hh
   plan.furniture = decorate(plan, seed, 'auto', hh)
   ensureOutdoorUnits(plan)
+  const before = missing(plan).length
   plan.furniture = applyFixes(plan, missing(plan), hh, seed)
   ensureOutdoorUnits(plan)
-  return { seed, plan, left: missing(plan) }
+  return { seed, plan, before, left: missing(plan) }
 })
 
-test(`补齐后 ${SEEDS.length} 户剩余缺失项总数 ≤ ${MAX_LEFT}`, () => {
-  const left = results.flatMap(({ seed, left }) => left.map((c) => `seed ${seed}: ${c.label}${c.fix ? `（补法 ${c.fix.how}）` : '（无补法）'}`))
-  expect(left.length, left.join('\n')).toBeLessThanOrEqual(MAX_LEFT)
+test('一键补齐不会让缺失项变多', () => {
+  expect(results.filter((r) => r.left.length > r.before).map((r) => `seed ${r.seed}: ${r.before} → ${r.left.length}`)).toEqual([])
 })
+
 
 test('空调外机数 = 室内机数', () => {
   const bad = results

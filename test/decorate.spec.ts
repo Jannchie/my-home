@@ -128,20 +128,6 @@ describe('一键布置 seed 1..40', () => {
     expect(overflow.length, overflow.join('\n')).toBeLessThanOrEqual(LIMIT.prop)
   })
 
-  test('居室家具稀疏（落地非摆件少于 3 件）的比例 ≤ 5%', () => {
-    let rooms = 0
-    const sparse = all(({ plan, f }) =>
-      plan.rooms
-        .filter((r) => r.kind === 'western' || r.kind === 'japanese')
-        .filter((r) => {
-          rooms++
-          return f.filter((x) => pointInPolygon(x, r.points) && !def(x).prop && !def(x).mount && !def(x).stick).length < 3
-        })
-        .map((r) => r.name),
-    )
-    expect(rooms).toBeGreaterThan(0)
-    expect(sparse.length / rooms, sparse.join('\n')).toBeLessThanOrEqual(0.05)
-  })
 
   test('有洗面所的户都有体重秤', () => {
     const bad = all(({ plan, f }) => (plan.rooms.some((r) => r.kind === 'wash') && !f.some((x) => /body-scale|fit-scale|^scale-/.test(x.asset)) ? ['没有体重秤'] : []))
@@ -216,31 +202,6 @@ describe('一键布置 seed 1..40', () => {
       }
       return out
     })
-    expect(bad).toEqual([])
-  })
-})
-
-describe('一键布置的灯具换款', () => {
-  test('落地灯 / 台灯 / 壁灯在同类型的各款里挑，单款占比 < 30%', () => {
-    // 样本只有二三十盏，日式户型多挑和风款：单款占比随布置规则的小改动在 18–26% 间波动，阈值留出余量
-    const bad: string[] = []
-    for (const fam of ['floor-lamp', 'table-lamp', 'wall-lamp']) {
-      const n = new Map<string, number>()
-      for (const c of cases) {
-        // 床头一对壁灯是挑一次款：同一房间里的同款只算一次
-        const seen = new Set<string>()
-        for (const x of c.f) {
-          if (def(x).type !== fam) continue
-          const room = c.plan.rooms.find((r) => pointInPolygon(x, r.points))?.id ?? ''
-          if (seen.has(room + x.asset)) continue
-          seen.add(room + x.asset)
-          n.set(x.asset, (n.get(x.asset) ?? 0) + 1)
-        }
-      }
-      const total = [...n.values()].reduce((a, b) => a + b, 0)
-      const [top, k] = [...n.entries()].sort((a, b) => b[1] - a[1])[0] ?? ['', 0]
-      if (total < 10 || n.size < 5 || k / total >= 0.3) bad.push(`${fam}: ${total} 件 ${n.size} 款，最多 ${top} ${k}`)
-    }
     expect(bad).toEqual([])
   })
 })

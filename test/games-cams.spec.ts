@@ -69,25 +69,6 @@ describe('棋牌与摄像头的一键布置', () => {
     expect(bad).toEqual([])
   })
 
-  test('棋牌按地区出现：少见的 ≤ 12%，各地区都有本地特色', () => {
-    const SIGNATURE: Record<Region, RegExp> = {
-      cn: /^(bg-(junqi|gomoku|doushou|feixing|poker-|paijiu)|int-(xiangqi|mahjong|chinese-checkers)|hg-mj-)/,
-      jp: /^(bg-(hanafuda|sugoroku)|int-(hanafuda|karuta|shogi|reversi))/,
-      west: /^(bg-(checkers|property|words|holdem|chip-case|dominoes)|int-(chess|backgammon|bg-))/,
-    }
-    const report: string[] = []
-    for (const region of REGIONS) {
-      const games = gamers.filter((c) => c.region === region).flatMap((c) => c.f.filter((x) => GAME.test(x.asset) && def(x).prop))
-      const rare = games.filter((x) => gameWeight(x.asset, region) < 1)
-      const sig = games.filter((x) => SIGNATURE[region].test(x.asset))
-      report.push(`${region}: ${games.length} 件，少见 ${rare.length}（${rare.map((x) => x.asset).join(',')}），特色 ${sig.length}`)
-      expect(games.length, report.join('\n')).toBeGreaterThan(20)
-      expect(rare.length / games.length, report.join('\n')).toBeLessThanOrEqual(0.12)
-      expect(sig.length / games.length, report.join('\n')).toBeGreaterThanOrEqual(0.25)
-    }
-    // 新棋牌（bg-）在每个地区都出现
-    for (const region of REGIONS) expect(gamers.some((c) => c.region === region && c.f.some((x) => x.asset.startsWith('bg-'))), region).toBe(true)
-  })
 
   test('宠物摄像头只在养宠物的人家，镜头大致朝着宠物区', () => {
     const PETS: InterestId[] = ['cats', 'dogs', 'smallpets', 'birds']

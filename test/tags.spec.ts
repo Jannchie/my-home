@@ -179,18 +179,16 @@ function lint(file: string) {
 }
 
 describe('业务代码不按名字 / id 子串判断素材类别', () => {
-  test('lint 本身能抓到违规写法', () => {
-    const sample = strip("const a = /desk|书桌/.test(x)\nconst b = /^ok$/\nconst c = /^a|b/\nif (/WIC/.test(room.name)) {}\n")
-    const hits = [...sample.matchAll(REGEX_LIT)].map((m) => m[2])
-    expect(hits).toEqual(['desk|书桌', '^ok$', '^a|b', 'WIC'])
+  test('lint 能抓到违规写法，且确实扫到了这些文件里的正则（防止空转）', () => {
+    const sample = strip('const a = /desk|书桌/.test(x)\nconst b = /^ok$/\nconst c = /^a|b/\nif (/WIC/.test(room.name)) {}\n')
+    expect([...sample.matchAll(REGEX_LIT)].map((m) => m[2])).toEqual(['desk|书桌', '^ok$', '^a|b', 'WIC'])
     expect(branches('^a|b').every((b) => b.startsWith('^'))).toBe(false)
     expect(branches('^(a|b)$').every((b) => b.startsWith('^'))).toBe(true)
-  })
-
-  test('扫描确实读到了这些文件里的正则（防止 lint 空转）', () => {
     const n = FILES.reduce((s, f) => s + [...strip(fs.readFileSync(path.join(ROOT, f), 'utf8')).matchAll(REGEX_LIT)].length, 0)
     expect(n).toBeGreaterThan(100)
   })
 
-  for (const f of FILES) test(f, () => expect(lint(f)).toEqual([]))
+  test('业务文件里没有按名字 / id 子串的类别匹配', () => {
+    expect(FILES.flatMap((f) => lint(f))).toEqual([])
+  })
 })
