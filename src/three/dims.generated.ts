@@ -60,8 +60,6 @@ export const DIMS: DimsTable = {
   "cb-shoe-tall-60": [60, 41, 225, 0],
   "cb-shoe-tall-75": [75, 41, 225, 0],
   "cb-shoe-tall-90": [90, 41, 225, 0],
-  "cl-herb-mint": [14, 12, 18, 0],
-  "cl-sweet-potato": [18, 20, 20, 0],
   "col-pottery-jars": [30, 14, 15, 0],
   "col-stamp-tools": [28, 20, 2, 0],
   "fit-bench-flat": [52, 125, 46, 0],

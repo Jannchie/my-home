@@ -211,13 +211,35 @@ function place(mesh: THREE.Mesh, at: At = {}) {
  */
 const q = (n: number) => (Math.abs(n) >= 0.1 ? Math.round(n * 10) / 10 : Math.round(n * 1000) / 1000)
 
+/**
+ * 体素细分按尺寸自适应：圆角 / 球 / 圆环越小，屏幕上越看不出棱角（卡通描边又会把轮廓压成一条线），
+ * 小件用更少的段数。圆角盒 3 段时每个约 590 个三角面、1 段约 110 个；球 24×16 约 770、12×8 约 190。
+ */
+export function rboxSegments(r: number) {
+  return r >= 4 ? 3 : r >= 1.5 ? 2 : 1
+}
+export function ballSegments(r: number): [number, number] {
+  return r >= 8 ? [24, 16] : r >= 3 ? [16, 12] : [12, 8]
+}
+/**
+ * 圆环：[管截面段数, 一整圈的段数]。管截面只看管粗（细管 8 段）；一整圈的段数只看环的半径（r < 4 的小环 24 段）。
+ * 不能因为管细或环不大就减圈上的段数：贴着杯子、花瓶、桶身的箍（cup / cyl 都是 32 / 24 段）折线和器身对不上，
+ * 会一截截陷进去（截图对比里 r≈6 的陶罐箍降到 24 段就成了虚线）。不满一圈的按弧长比例减段（至少 6 段）。
+ */
+export function torusSegments(r: number, tube: number, arc: number): [number, number] {
+  const radial = tube < 1.5 ? 8 : 10
+  const full = r < 4 ? 24 : 32
+  return [radial, Math.max(6, Math.ceil((full * arc) / (Math.PI * 2)))]
+}
+
 /** 圆角盒，at.y 是底面高度（不是中心），摆东西更顺手 */
 export function rbox(w: number, h: number, d: number, color: THREE.ColorRepresentation, at: At = {}, radius?: number) {
   w = q(w)
   h = q(h)
   d = q(d)
   const r = q(Math.max(0.01, Math.min(radius ?? Math.min(w, h, d) * 0.18, Math.min(w, h, d) / 2 - 0.01)))
-  const g = cached(`rb${w},${h},${d},${r}`, () => new RoundedBoxGeometry(w, h, d, 3, r))
+  const seg = rboxSegments(r)
+  const g = cached(`rb${w},${h},${d},${r},${seg}`, () => new RoundedBoxGeometry(w, h, d, seg, r))
   return place(new THREE.Mesh(g, toon(color)), { ...at, y: (at.y ?? 0) + h / 2 })
 }
 
@@ -294,7 +316,8 @@ export function tray(w: number, h: number, d: number, t: number, color: THREE.Co
 /** 球 / 椭球，at.y 为球心；scale 用于压扁 */
 export function ball(r: number, color: THREE.ColorRepresentation, at: At = {}, scale?: [number, number, number]) {
   r = q(r)
-  const g = cached(`sp${r}`, () => new THREE.SphereGeometry(r, 24, 16))
+  const [ws, hs] = ballSegments(r)
+  const g = cached(`sp${r},${ws}x${hs}`, () => new THREE.SphereGeometry(r, ws, hs))
   const m = place(new THREE.Mesh(g, toon(color)), at)
   if (scale) m.scale.set(...scale)
   return m
@@ -313,7 +336,8 @@ export function torus(r: number, tube: number, color: THREE.ColorRepresentation,
   tube = q(tube)
   // 弧度取整到 0.001（按 0.1 取整的话，半径大的圆环弧长误差会超过 0.05cm）
   arc = Math.abs(arc - Math.PI * 2) < 1e-4 ? Math.PI * 2 : Math.round(arc * 1000) / 1000
-  const g = cached(`to${r},${tube},${arc}`, () => new THREE.TorusGeometry(r, tube, 10, 32, arc))
+  const [radial, tubular] = torusSegments(r, tube, arc)
+  const g = cached(`to${r},${tube},${arc},${radial}x${tubular}`, () => new THREE.TorusGeometry(r, tube, radial, tubular, arc))
   return place(new THREE.Mesh(g, toon(color)), at)
 }
 
