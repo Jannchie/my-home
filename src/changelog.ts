@@ -12,6 +12,33 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '1.4.0',
+    date: '2026-10-17',
+    notes: {
+      zh: [
+        '可以生成两层户建：日式户建（含部分二阶）、欧美两层住宅、中式独栋别墅，楼梯上下对齐，二层卫生间叠在一层用水区上方',
+        '可以生成复式：日式与中式复式，客厅上方挑空',
+        '户建带屋顶（双坡、四坡、单坡、平顶）、外墙（板材、抹灰、砖）、门廊，以及院子、围栏和停车位；院子里会摆户外桌椅、菜园箱、自行车等',
+        '3D 新增"外观"视图（快捷键 O），显示屋顶和完整外墙；布置时屋顶自动隐藏，俯视时会让开',
+        '生成选项新增"住宅类型"：公寓、户建、复式或随机',
+      ],
+      ja: [
+        '2 階建ての戸建てを生成可能に：日本の戸建て（部分二階を含む）、欧米の 2 階建て、中国の一戸建て。階段は上下でそろい、2 階の水回りは 1 階の水回りの真上',
+        'メゾネットを生成可能に：日本・中国のメゾネット、リビング上部は吹き抜け',
+        '戸建てには屋根（切妻・寄棟・片流れ・陸屋根）、外壁（サイディング・塗り壁・レンガ）、玄関ポーチ、庭・フェンス・駐車場が付きます。庭にはガーデンテーブルや菜園、自転車などを配置',
+        '3D に「外観」表示（ショートカット O）を追加。屋根と外壁全体を表示します。配置中は屋根を自動で隠し、真上から見るときはよけます',
+        '生成オプションに「住宅タイプ」（マンション・戸建て・メゾネット・ランダム）を追加',
+      ],
+      en: [
+        'Generate two-story houses: Japanese houses (including partial second floors), Western two-story homes and Chinese villas, with stairs aligned between floors and upstairs bathrooms above the downstairs plumbing',
+        'Generate duplexes: Japanese and Chinese duplex apartments with a double-height living room',
+        'Houses get roofs (gable, hip, shed, flat), exterior walls (siding, stucco, brick), a porch, plus a yard, fence and parking; the yard is furnished with outdoor seating, planters, bikes and more',
+        'New Exterior view in 3D (shortcut O) showing roofs and full exterior walls; the roof hides while you furnish and moves out of the way from above',
+        'A building type option for generation: apartment, house, duplex or random',
+      ],
+    },
+  },
+  {
     version: '1.3.0',
     date: '2026-10-17',
     notes: {
