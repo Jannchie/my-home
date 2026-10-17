@@ -29,7 +29,7 @@ import {
 } from './model'
 import { ASSET_MAP, type AssetDef } from './three/assets'
 import { hasTag } from './three/tags'
-import { boxInsideWalls, clearanceZones, isSashWindow } from './place'
+import { boxInsideWalls, clearanceZones, innerRoom, isSashWindow } from './place'
 import { furnitureBox } from './snap'
 import { toWorld } from './surface'
 import { curtainSpecs, fixtureSpans, windowSpan } from './curtains'
@@ -40,6 +40,18 @@ import { isOpenBetween, sharedIntervals, wallThicknessAt } from './walls'
 
 /** 平面包围盒重叠（各边留 0.5 的容差：贴着放不算） */
 export const boxesOverlap = (a: Box, b: Box) => a.x0 < b.x1 - 0.5 && b.x0 < a.x1 - 0.5 && a.y0 < b.y1 - 0.5 && b.y0 < a.y1 - 0.5
+
+/** 点集的包围盒 */
+const boxOf = (pts: Vec[]): Box => ({ x0: Math.min(...pts.map((p) => p.x)), y0: Math.min(...pts.map((p) => p.y)), x1: Math.max(...pts.map((p) => p.x)), y1: Math.max(...pts.map((p) => p.y)) })
+
+/** 点到线段的距离 */
+function distToSeg(p: Vec, a: Vec, b: Vec) {
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  const L2 = dx * dx + dy * dy
+  const t = L2 < 1e-9 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / L2))
+  return Math.hypot(p.x - a.x - dx * t, p.y - a.y - dy * t)
+}
 
 /** 平面包围盒按 k 往外扩（k < 0 往里收） */
 export const grow = (b: Box, k: number): Box => ({ x0: b.x0 - k, y0: b.y0 - k, x1: b.x1 + k, y1: b.y1 + k })
@@ -91,6 +103,9 @@ export const AC_CLEAR = 170
 
 /** 碰撞用的设备：马桶水箱比座便宽（toiletModel 的水箱 w + 6），按实际宽度算，旁边的马桶刷、垃圾桶不会贴进水箱里 */
 export const solidFixture = (f: Fixture): Fixture => (f.kind === 'toilet' ? { ...f, w: f.w + 6 } : f)
+
+/** 按层布置时塞进子户型的留空区（楼梯口 / 出梯口和通道、挑空栏杆里侧，见 stairs.ts withStairKeepout） */
+const isKeepout = (f: Fixture) => f.id.startsWith('stair-clear-') || f.id.startsWith('void-rail-')
 
 // ---------- 占用的分层 ----------
 
@@ -161,15 +176,19 @@ export type ZoneKind =
   | 'fixture'
   /** 设备前方的使用空间 */
   | 'fixture-front'
+  /** 床边下床的空间（摆床时登记，之后的落地家具不能占） */
+  | 'bedside'
 
 /** 门窗前的几类：门扇扫过的范围、门前通道、落地窗前、腰窗前 */
 export const OPENING_ZONES: ReadonlySet<ZoneKind> = new Set<ZoneKind>(['door-swing', 'door-front', 'sash', 'window'])
 /** 「硬」的几类（门前通道、设备使用空间可以临时占，这些不行）：设备本体、楼梯口留空区、楼梯洞口、挑空栏杆里侧 */
-export const HARD_ZONES: ReadonlySet<ZoneKind> = new Set<ZoneKind>(['fixture', 'stair', 'stair-hole', 'void-rail'])
+export const HARD_ZONES: ReadonlySet<ZoneKind> = new Set<ZoneKind>(['fixture', 'stair', 'stair-hole', 'void-rail', 'bedside'])
 /** 门洞前（门扇扫过的范围、门前通道）：人要进出的地方 */
 export const DOOR_ZONES: ReadonlySet<ZoneKind> = new Set<ZoneKind>(['door-swing', 'door-front'])
 /** 楼梯起步处 / 储物角开口前 / 出梯口和它们的通道 */
 export const STAIR_ZONES: ReadonlySet<ZoneKind> = new Set<ZoneKind>(['stair'])
+/** 落地的东西一律不能压的留空区（Occupancy.canPlace 直接查） */
+export const KEEP_ZONES: ReadonlySet<ZoneKind> = new Set<ZoneKind>(['stair', 'stair-hole', 'void-rail', 'bedside'])
 /** 门扇扫过的范围 */
 export const SWING_ZONES: ReadonlySet<ZoneKind> = new Set<ZoneKind>(['door-swing'])
 
@@ -266,11 +285,31 @@ export class Occupancy {
   }
 
   private zoneCache = new Map<string, Zone[]>()
+  /** 布置过程中登记的留空区（床边下床的空间…），按房间 */
+  private held = new Map<string, Zone[]>()
+
+  /** 登记一块留空区：之后地上的东西都要让开（zones / floorBlockers / ctx 都带上它） */
+  hold(room: Room, box: Box, kind: ZoneKind, id?: string) {
+    const z = this.held.get(room.id) ?? []
+    z.push({ box, kind, id })
+    this.held.set(room.id, z)
+  }
+
+  /** 撤掉某件东西登记的留空区（那件东西被拿掉时） */
+  release(id: string) {
+    for (const [k, z] of this.held) this.held.set(k, z.filter((x) => x.id !== id))
+  }
   /**
    * 房间的平面禁放区。sash：通往阳台的落地窗前也留出通行空间（家具默认留）；windows：腰窗前也留（设备的 avoidWindows）。
    * 设备（含按层布置时塞进来的楼梯留空区、洞口）按设备中心在不在房间里算，和 placeCandidates 一致。
    */
   zones(room: Room, o: { sash?: boolean; windows?: boolean } = {}): Zone[] {
+    const held = this.held.get(room.id)
+    const base = this.staticZones(room, o)
+    return held?.length ? [...base, ...held] : base
+  }
+
+  private staticZones(room: Room, o: { sash?: boolean; windows?: boolean }): Zone[] {
     const sash = o.sash ?? true
     const key = `${room.id}|${sash ? 1 : 0}${o.windows ? 1 : 0}`
     let z = this.zoneCache.get(key)
@@ -278,16 +317,38 @@ export class Occupancy {
     z = []
     // 门窗前（门扇扫过的范围、门前通道、落地窗前、腰窗前）和楼梯的起步处 / 储物角开口前：规则在 place.ts 的 clearanceZones
     for (const c of clearanceZones(room, this.plan, !!o.windows, sash)) z.push({ box: c.box, kind: c.kind })
+    // 按层布置时塞进来的楼梯口留空区 / 通道、挑空栏杆里侧可能跨好几个房间：切到每个房间里的那一块
+    for (const piece of this.keepoutPieces()) if (piece.room === room.id) z.push({ box: piece.box, kind: piece.kind, id: piece.id })
     for (const f of this.plan.fixtures) {
-      if (!pointInPolygon({ x: f.x, y: f.y }, room.points)) continue
+      if (isKeepout(f) || !pointInPolygon({ x: f.x, y: f.y }, room.points)) continue
       const box = fixtureBox(solidFixture(f))
-      const kind: ZoneKind = f.id.startsWith('stair-clear-') ? 'stair' : f.id.startsWith('void-rail-') ? 'void-rail' : f.id.endsWith('~hole') ? 'stair-hole' : 'fixture'
+      const kind: ZoneKind = f.id.endsWith('~hole') ? 'stair-hole' : 'fixture'
       z.push({ box, kind, id: f.id })
       const fb = frontBox(f)
       if (fb) z.push({ box: fb, kind: 'fixture-front', id: f.id })
     }
     this.zoneCache.set(key, z)
     return z
+  }
+
+  private pieceCache: { box: Box; kind: ZoneKind; id: string; room: string }[] | null = null
+  /** 留空区设备（stair-clear-* / void-rail-*）和每个房间包围盒的交集，交集中心在那个房间里的才算 */
+  keepoutPieces() {
+    if (this.pieceCache) return this.pieceCache
+    const out: { box: Box; kind: ZoneKind; id: string; room: string }[] = []
+    for (const f of this.plan.fixtures) {
+      if (!isKeepout(f)) continue
+      const b = fixtureBox(f)
+      const kind: ZoneKind = f.id.startsWith('void-rail-') ? 'void-rail' : 'stair'
+      for (const r of this.plan.rooms) {
+        const rb = boxOf(r.points)
+        const box = { x0: Math.max(b.x0, rb.x0), y0: Math.max(b.y0, rb.y0), x1: Math.min(b.x1, rb.x1), y1: Math.min(b.y1, rb.y1) }
+        if (box.x1 - box.x0 < 1 || box.y1 - box.y0 < 1) continue
+        if (!pointInPolygon({ x: (box.x0 + box.x1) / 2, y: (box.y0 + box.y1) / 2 }, r.points)) continue
+        out.push({ box, kind, id: f.id, room: r.id })
+      }
+    }
+    return (this.pieceCache = out)
   }
 
   private faceCache = new Map<string, WallFace[]>()
@@ -371,7 +432,10 @@ export class Occupancy {
         const c = bodyCenter(f.asset, f.x, f.y, f.rot)
         return { id: f.id, kind: 'ps', x: c.x, y: c.y, w: def.w, d: def.d, rot: Math.round(f.rot / 90) * 90 }
       })
-    return { ...this.plan, fixtures: [...this.plan.fixtures.map(solidFixture), ...solid] }
+    // 登记的留空区、切到各房间里的楼梯口留空区（placeCandidates 按设备中心在不在房间里认）
+    const boxes = [...[...this.held.values()].flat().map((z) => z.box), ...this.keepoutPieces().map((p) => p.box)]
+    const held = boxes.map((b, i): Fixture => ({ id: `held-${i}`, kind: 'ps', x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2, w: b.x1 - b.x0, d: b.y1 - b.y0, rot: 0 }))
+    return { ...this.plan, fixtures: [...this.plan.fixtures.map(solidFixture), ...solid, ...held] }
   }
 
   /**
@@ -420,6 +484,14 @@ export class Occupancy {
     if (o.room && o.fixtureFree && this.zoneBoxes(o.room, [HARD_ZONES]).some((z) => boxesOverlap(box, z))) return no('over-fixture')
     if (o.room && o.openings !== undefined && this.nearOpening(o.room, box, o.openings)) return no('opening')
     if (layer === 'prop' && (z ?? 0) + def.h > this.ceiling - 8) return no('ceiling')
+    // 落地的东西不压留空区：楼梯口 / 储物角开口 / 出梯口和通道、楼梯洞口、挑空栏杆里侧、床边下床的空间
+    if (layer === 'floor') {
+      const fp = footprint(asset, x, y, rot)
+      for (const r of this.plan.rooms) {
+        if (!boxesOverlap(fp, boxOf(r.points))) continue
+        for (const z0 of this.zones(r)) if (KEEP_ZONES.has(z0.kind) && boxesOverlap(fp, z0.box)) return no(z0.kind)
+      }
+    }
     const thin = !upper(layer) && def.h <= 3
     const fbox = furnitureBox(asset, x, y, rot)
     const surface = layer === 'prop' && !o.noSurface
@@ -438,7 +510,7 @@ export class Occupancy {
       }
       let pair: boolean
       if (layer === 'hang') pair = !b.thin
-      else if (layer === 'wall') pair = upper(b.layer) ? !!o.walls : !b.thin || !!o.reserve
+      else if (layer === 'wall') pair = b.layer === 'hang' || (b.layer === 'wall' ? !!o.walls : !b.thin || !!o.reserve)
       else pair = upper(b.layer)
       if (fp && !pair && b.layer === 'floor' && !this.flat.has(id)) {
         if (boxOverlaps(fp, footprint(f.asset, f.x, f.y, f.rot))) return no('solid', id)
@@ -467,6 +539,89 @@ export class Occupancy {
       const p = [add(a, mul(op.e.out, 25)), add(b, mul(op.e.out, -25))]
       return boxesOverlap(box, { x0: Math.min(p[0].x, p[1].x), y0: Math.min(p[0].y, p[1].y), x1: Math.max(p[0].x, p[1].x), y1: Math.max(p[0].y, p[1].y) })
     })
+  }
+
+  private entryCache = new Map<string, Vec[]>()
+  /**
+   * 房间的出入口（主要通道的端点）：门洞、和隔壁敞开的边、通往阳台的落地窗，各取开口中点往房间里 35 的点。
+   */
+  entrances(room: Room): Vec[] {
+    let pts = this.entryCache.get(room.id)
+    if (pts) return pts
+    pts = []
+    for (const { o, owner, e, center } of openingsOn(room, this.plan)) {
+      if (o.kind === 'window' && !isSashWindow(this.plan, owner, e, center)) continue
+      const into = pointInPolygon(add(center, mul(e.out, 5)), room.points) ? e.out : mul(e.out, -1)
+      pts.push(add(center, mul(into, 35)))
+    }
+    for (const r of this.plan.rooms) {
+      if (r.id === room.id || !isOpenBetween(room, r)) continue
+      for (const e of edgesOf(room.points))
+        for (const [lo, hi] of sharedIntervals(e, r)) if (hi - lo > 60) pts.push(add(add(e.a, mul(e.dir, (lo + hi) / 2)), mul(e.out, -35)))
+    }
+    this.entryCache.set(room.id, pts)
+    return pts
+  }
+
+  /**
+   * 主要通道：房间里 blockers 之外，宽 2r 的人能不能从第一个出入口走到其余每个出入口（10cm 格子上的连通性，墙面按墙面轮廓算）。
+   * 返回走不到的出入口个数。出入口附近 40 以内找最近的能站的格子当起止点（门洞两侧常有家具贴着）。
+   */
+  blockedEntrances(room: Room, blockers: Box[], r = 30, entries = this.entrances(room)): number {
+    if (entries.length < 2) return 0
+    const inner = innerRoom(room, this.plan)
+    const b = boxOf(inner.points)
+    const step = 10
+    const nx = Math.max(1, Math.ceil((b.x1 - b.x0) / step))
+    const ny = Math.max(1, Math.ceil((b.y1 - b.y0) / step))
+    const free = new Uint8Array(nx * ny)
+    const edges = edgesOf(inner.points)
+    const grown = blockers.map((k) => grow(k, r - 2))
+    for (let j = 0; j < ny; j++)
+      for (let i = 0; i < nx; i++) {
+        const p = { x: b.x0 + (i + 0.5) * step, y: b.y0 + (j + 0.5) * step }
+        if (!pointInPolygon(p, inner.points)) continue
+        if (grown.some((k) => p.x > k.x0 && p.x < k.x1 && p.y > k.y0 && p.y < k.y1)) continue
+        if (edges.some((e) => distToSeg(p, e.a, e.b) < r - 2)) continue
+        free[j * nx + i] = 1
+      }
+    const cellOf = (p: Vec) => {
+      let best = -1
+      let bd = 40
+      for (let j = Math.max(0, Math.floor((p.y - 40 - b.y0) / step)); j < Math.min(ny, Math.ceil((p.y + 40 - b.y0) / step)); j++)
+        for (let i = Math.max(0, Math.floor((p.x - 40 - b.x0) / step)); i < Math.min(nx, Math.ceil((p.x + 40 - b.x0) / step)); i++) {
+          if (!free[j * nx + i]) continue
+          const d = Math.hypot(b.x0 + (i + 0.5) * step - p.x, b.y0 + (j + 0.5) * step - p.y)
+          if (d < bd) ((bd = d), (best = j * nx + i))
+        }
+      return best
+    }
+    const cells = entries.map(cellOf)
+    const start = cells.find((c) => c >= 0)
+    if (start === undefined) return entries.length - 1
+    const seen = new Uint8Array(nx * ny)
+    const q = [start]
+    seen[start] = 1
+    while (q.length) {
+      const c = q.pop()!
+      const i = c % nx
+      const j = (c - i) / nx
+      for (const [di, dj] of [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ]) {
+        const a = i + di
+        const k = j + dj
+        if (a < 0 || k < 0 || a >= nx || k >= ny) continue
+        const n = k * nx + a
+        if (!free[n] || seen[n]) continue
+        seen[n] = 1
+        q.push(n)
+      }
+    }
+    return cells.filter((c) => c !== start && (c < 0 || !seen[c])).length
   }
 
   /** canPlace 的布尔版 */

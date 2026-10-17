@@ -30,7 +30,7 @@ import { fitsOnFixture, fitsOnSurface, fixtureTop, toLocal, toWorld } from './su
 import { COMPETITIVE, INTEREST_TIERS, JOBS, interestFloor, interestProps, interestStickers, interestWall, jobDeskProps, levelOf, topLevel, type Household, type InterestId, type Member, type Tier } from './household'
 import { furnitureBox } from './snap'
 import { floorOf } from './floors'
-import { deskExtras, workstations } from './workstation'
+import { deskExtras, settleDesks, workstations } from './workstation'
 import { appliancesOn, isApplianceOf, isMainAppliance, poseOnSpot, type SpotKind } from './appliance'
 import { cornerSpots, showerBoxes, showerSpot } from './bathroom'
 import { lidSizeFor } from './three/packs/bath-extra'
@@ -52,6 +52,7 @@ import { allocateRooms, type Allocation, type RoomPurpose } from './household'
 import { baseFloorId, floorViews, isMultiFloor, riseOf, stampFloor } from './floors'
 import { stairHoles, stairToWorld, stairUnderZone, stairWalk, withStairKeepout } from './stairs'
 import { NavGrid } from './nav'
+import { arrange, bedSides, isDoubleBed, type Slot } from './arrange'
 import { HARD_ZONES, OPENING_ZONES, Occupancy, STAIR_ZONES, SWING_ZONES, bodyCenter, boxesOverlap, footprint, type PlaceOpts, type ZoneKind } from './occupancy'
 
 export type { RoomPurpose }
@@ -396,15 +397,11 @@ class Decorator {
     const id = this.acModel
     const def = ASSET_MAP.get(id)!
     const door = firstDoorCenter(room, this.plan)
-    // 要避开的：已经挂上墙的东西、高过 170 的家具（衣柜、高书柜…），以及高的设备（内置收纳、厨房吊柜、冰箱位）
-    const inRoom = (p: Vec) => pointInPolygon(p, room.points)
-    const blockers = [
-      ...this.out.filter((o) => inRoom(o) && (ASSET_MAP.get(o.asset)?.mount || (!o.z && (ASSET_MAP.get(o.asset)?.h ?? 0) > 170))).map(asFixture),
-      ...this.plan.fixtures.filter((f) => inRoom(f) && (f.kind === 'builtin' || f.kind === 'kitchen' || f.kind === 'fridge' || f.kind === 'stairs')),
-    ]
+    // 贴墙候选只先避开已经挂上墙的东西（平面错开）；高度上的规则交给占用表：空调连同下方到 170 的空间不能碰到高家具（衣柜、高书柜、冰箱）、
+    // 别的壁挂物、设备（吊柜、抽油烟机、楼梯），也不挂在设备上方
     const spec: PlaceSpec = { kind: 'ps', lengths: [def.w], depth: def.d, front: 0, far: door, centered: true }
+    const f = placeCandidates(room, { ...this.plan, fixtures: this.mountedIn(room) }, spec).find((c) => this.canPlace(id, c.x, c.y, c.rot, undefined, { walls: true, room, inside: false, fixtureFree: true }))
     // 找不到空墙段就不挂（宁可这间没有空调，也不嵌进柜子里）
-    const f = placeCandidates(room, { ...this.plan, fixtures: blockers }, spec)[0]
     if (f) this.push(id, f.x, f.y, f.rot, true)
   }
 
@@ -1052,32 +1049,37 @@ class Decorator {
   }
 
   /**
-   * 按住户的职业和兴趣布置：工作台上的设备、兴趣家具（落地）、兴趣摆件（散放到台面 / 层板上）、墙上挂的东西。
+   * 按住户的职业和兴趣布置：兴趣家具（落地，phase = floor，和别的落地家具一起在挂墙之前摆），
+   * 工作台上的设备、兴趣摆件（散放到台面 / 层板上）、墙上挂的东西（phase = items，在功能性的东西之后）。
    * 东西多少看性格（clutter）。
    */
-  personalize(room: Room) {
+  personalize(room: Room, phase: Phase) {
     const people = this.peopleIn(room)
     if (!people.length) return
     const k = this.clutter
+    const items = phase === 'items'
     for (const m of people) {
       if (m.age < 3) continue
       const desk = this.out.find((o) => pointInPolygon(o, room.points) && hasTag(ASSET_MAP.get(o.asset), 'table') && ASSET_MAP.get(o.asset)?.surface)
       const deskProps = jobDeskProps(m.job)
-      if (desk && deskProps.length) for (let i = 0; i < 2; i++) this.onLevel(desk, this.pick(deskProps).id, (this.rand() - 0.5) * 0.6, (this.rand() - 0.5) * 0.4, 0)
+      if (items && desk && deskProps.length) for (let i = 0; i < 2; i++) this.onLevel(desk, this.pick(deskProps).id, (this.rand() - 0.5) * 0.6, (this.rand() - 0.5) * 0.4, 0)
       // 等级套装和奖杯证书只摆一处：有自己的兴趣房 / 书房就摆在那里，卧室里不重复
       if (!this.ownsHobbyRoom(m, room)) {
         for (const it of m.interests) {
           const tiers = INTEREST_TIERS[it]
-          if (tiers) this.tierItems(room, tiers.slice(0, levelOf(m, it) || 1))
+          if (tiers) this.tierItems(room, tiers.slice(0, levelOf(m, it) || 1), phase)
         }
-        this.honors(room, m)
+        this.honors(room, m, phase)
       }
       // 益智小物：益智 / 棋牌爱好者、学生、程序员偶尔在桌上 / 架子上放一件
-      if (!m.interests.includes('puzzles') && (m.interests.includes('boardgames') || ['student', 'schoolkid', 'programmer'].includes(m.job)) && this.rand() < 0.3) this.scatter(room, interestProps('puzzles'), 1)
+      if (items && !m.interests.includes('puzzles') && (m.interests.includes('boardgames') || ['student', 'schoolkid', 'programmer'].includes(m.job)) && this.rand() < 0.3) this.scatter(room, interestProps('puzzles'), 1)
       for (const it of m.interests) {
         const lv = levelOf(m, it) || 1
-        const floor = interestFloor(it)
-        if (floor.length && this.rand() < (0.45 + 0.15 * lv) * k) this.wall(room, this.pick(floor).id, { front: 40 })
+        if (!items) {
+          const floor = interestFloor(it)
+          if (floor.length && this.rand() < (0.45 + 0.15 * lv) * k) this.wall(room, this.pick(floor).id, { front: 40 })
+          continue
+        }
         const props = it === 'boardgames' ? this.regionalGames(interestProps(it)) : interestProps(it)
         if (props.length) this.scatter(room, props, Math.max(1, Math.round((0.5 + 0.5 * lv) * k)))
         const wall = interestWall(it)
@@ -1087,7 +1089,7 @@ class Decorator {
       }
     }
     // 墙上的装饰：挂钟、挂画（不按兴趣）
-    if (this.rand() < 0.5 * k) {
+    if (items && this.rand() < 0.5 * k) {
       const deco = this.find(['wall-art', 'clock'], (a) => !!a.mount)
       if (deco.length) this.mount(room, this.pick(deco).id)
     }
@@ -1101,16 +1103,18 @@ class Decorator {
   }
 
   /** 按等级套装摆：每一级的落地、摆件、壁挂各挑一件 */
-  tierItems(room: Room, tiers: Tier[]) {
+  tierItems(room: Room, tiers: Tier[], phase: Phase = 'all') {
     // 住人的卧室里只放小件落地设备（主机、小防潮柜）；绿幕、机柜、大展示柜、钢琴这类大件要有专门的兴趣房
     const bedroom = !!this.occupants.get(room.id)?.length
     const small = (a: AssetDef) => Math.max(a.w, a.d) <= 70 && a.h <= 120
     for (const t of tiers) {
-      for (const sel of t.floor ?? []) {
-        const f = this.floorOf(room, sel, { front: 40 }, bedroom ? (a) => small(a) || (CAMERA_CASE.test(a.id) && area(room.points) / 10000 >= 10) : undefined)
-        // 相机展示柜 / 防潮柜：先把每一层每一格装满相机和镜头
-        if (f && CAMERA_CASE.test(f.asset)) this.fillCameras(f)
-      }
+      if (phase !== 'items')
+        for (const sel of t.floor ?? []) {
+          const f = this.floorOf(room, sel, { front: 40 }, bedroom ? (a) => small(a) || (CAMERA_CASE.test(a.id) && area(room.points) / 10000 >= 10) : undefined)
+          // 相机展示柜 / 防潮柜：先把每一层每一格装满相机和镜头
+          if (f && CAMERA_CASE.test(f.asset)) this.fillCameras(f)
+        }
+      if (phase === 'floor') continue
       for (const sel of t.props ?? []) {
         const c = this.find(sel, (a) => !!a.prop && !a.stick && !a.form?.includes('hanging'))
         // 棋牌按地区加权（中式军旗 / 斗地主、日式花札 / 双六、欧美跳棋 / 拼字…）；其他素材权重都是 1，等同均匀挑
@@ -1170,12 +1174,17 @@ class Decorator {
    * 荣誉展示：会拿奖的兴趣到了 Lv.3 / Lv.4，摆奖杯（多了先放一个展示柜）、奖牌、证书；
    * 上学的孩子常有奖状（中式更常见）；上过大学的大人偶尔把毕业证书挂起来，更多是收在证书夹 / 筒 / 盒里。
    */
-  honors(room: Room, m: Member) {
+  honors(room: Room, m: Member, phase: Phase = 'all') {
     const comp = m.interests.filter((it) => COMPETITIVE.includes(it) && levelOf(m, it) >= 3)
     const n = comp.reduce((a, it) => a + levelOf(m, it) - 2, 0)
     const walls = (sel: Sel) => this.find(sel, (a) => !!a.mount)
-    if (n) {
+    if (phase === 'floor') {
+      // 落地的只有奖杯展示柜
       if (n >= 2 && this.rand() < 0.6 && (!this.occupants.get(room.id)?.length || area(room.points) / 10000 >= 12)) this.floorOf(room, /^(col-lit-showcase|lv-display)$/, { front: 40 })
+      return
+    }
+    if (n) {
+      if (phase === 'all' && n >= 2 && this.rand() < 0.6 && (!this.occupants.get(room.id)?.length || area(room.points) / 10000 >= 12)) this.floorOf(room, /^(col-lit-showcase|lv-display)$/, { front: 40 })
       const cups = this.find('trophy', (a) => !!a.prop)
       this.scatter(room, this.shuffle(cups).slice(0, n + 2), n + 1)
       if (comp.some((it) => ['sports', 'fitness', 'outdoor', 'boardgames', 'puzzles', 'gaming'].includes(it))) {
@@ -1463,12 +1472,15 @@ class Decorator {
   }
 
   /** 全家共同的兴趣放在客厅：养猫、园艺、水族、乐器、鸟笼 / 小动物笼（笼子全屋限一只，主人房间里已经有了就不再摆） */
-  shared(room: Room) {
+  shared(room: Room, phase: Phase) {
     const hh = this.household
     if (!hh) return
     const all = new Set<InterestId>(hh.members.flatMap((m) => m.interests))
     // 茶几 / 电视柜上的益智小物
-    if ((all.has('puzzles') || all.has('boardgames')) && this.rand() < 0.3) this.scatter(room, interestProps('puzzles'), 1)
+    if (phase === 'items') {
+      if ((all.has('puzzles') || all.has('boardgames')) && this.rand() < 0.3) this.scatter(room, interestProps('puzzles'), 1)
+      return
+    }
     for (const it of ['cats', 'dogs', 'plants', 'aquarium', 'music', 'birds', 'smallpets'] as InterestId[]) {
       if (!all.has(it)) continue
       if ((it === 'birds' || it === 'smallpets') && this.rand() < 0.4) continue
@@ -1508,16 +1520,11 @@ class Decorator {
       }
   }
 
-  /** 补一张床：按住户 / 面积挑规格，放不下就换小一号 */
+  /** 补一张床：按住户 / 面积挑规格、按床的打分规则挑位置（放不下就换小一号），床头柜跟着床 */
   bedIn(room: Room) {
-    const sizes = ['bed-semi-single', 'bed-single', 'bed-semi-double', 'bed-double', 'bed-queen']
-    const people = this.occupants.get(room.id) ?? []
-    const couple = people.filter((m) => m.role === 'self' || m.role === 'partner').length >= 2
-    const m2 = area(room.points) / 10000
-    let want = m2 < 7 ? 0 : m2 < 9 ? 1 : m2 < 11 ? 2 : m2 < 13.5 ? 3 : 4
-    if (couple) want = Math.max(3, want)
-    for (let i = want; i >= 0; i--) if (this.wall(room, sizes[i], { front: 30 })) return true
-    return false
+    const [bed] = this.major(room, [{ kind: 'bed', options: this.bedOptions(room).map((o) => ({ ...o, spec: { ...o.spec, front: 30 } })), miss: 200 }])
+    if (bed) this.bedPlaced(room, bed)
+    return !!bed
   }
 
   /** 床上的毛绒玩偶：不是必有；有的话从各种玩偶里随机挑 1–3 只，位置、朝向都随意，别摆得太规整 */
@@ -1821,13 +1828,26 @@ class Decorator {
     const big = area(room.points) / 10000 > 14 || size >= 3
     // 欧美客厅：L 形转角沙发（sectional）优先
     const sectional = this.region === 'west' ? this.shuffle(['lm-corner-sofa-l', 'lm-corner-sofa-r', 'lv-sofa-l-left', 'lv-sofa-l-right'].filter((id) => ASSET_MAP.has(id))) : []
-    let sofa: Furniture | null = null
-    for (const id of sectional) if ((sofa = this.wall(room, id, { front: 120, far: kc }))) break
-    sofa ??= this.wall(room, big ? 'sofa3' : 'sofa2', { front: 150, far: kc }) ?? this.wall(room, 'sofa2', { front: 110, far: kc })
+    // 沙发和电视柜一起挑位置（arrange.ts）：沙发背靠墙、离厨房远，电视柜和沙发相对、隔 2–3m、中间不被大件挡住
+    const sofas: Slot['options'] = [
+      ...sectional.map((id, i) => ({ asset: id, spec: { front: 120 }, bias: -i })),
+      { asset: big ? 'sofa3' : 'sofa2', spec: { front: 150 }, bias: sectional.length ? -10 : 0 },
+      { asset: 'sofa2', spec: { front: 110 }, bias: -15 },
+    ]
+    const [sofa, tv] = this.major(room, [
+      { kind: 'sofa', options: sofas, far: kc, miss: 150 },
+      { kind: 'tv', options: [{ asset: this.vary('tv-board'), spec: { front: 120, centered: true } }], miss: 40 },
+    ])
     if (sofa) {
       const fd = frontDir(sofa.rot)
       const def = ASSET_MAP.get(sofa.asset)!
-      const tableAt = add({ x: sofa.x, y: sofa.y }, mul(fd, def.d / 2 + 60))
+      // 茶几、地毯在沙发前 60；电视柜正对着、离得近时放在两者之间
+      let ahead = 60
+      if (tv && Math.round(Math.abs(tv.rot - sofa.rot)) === 180) {
+        const gap = Math.abs((tv.x - sofa.x) * fd.x + (tv.y - sofa.y) * fd.y) - def.d / 2 - ASSET_MAP.get(tv.asset)!.d / 2
+        ahead = Math.min(60, Math.max(35, gap * 0.4))
+      }
+      const tableAt = add({ x: sofa.x, y: sofa.y }, mul(fd, def.d / 2 + ahead))
       const rugAsset = this.rand() < 0.5 ? 'rug-round' : 'rug'
       // 地毯铺在茶几位置；贴到墙边时往房间里挪，不让边缘压进墙里
       const rug = this.vary(rugAsset)
@@ -1840,12 +1860,17 @@ class Decorator {
         break
       }
       this.freePush(room, 'coffee-table', 0, tableAt, 10)
-      this.wall(room, 'tv-board', { front: 120, near: add({ x: sofa.x, y: sofa.y }, mul(fd, 320)), nearMax: 600, centered: true })
       if (this.rand() < 0.7) this.freePush(room, 'beanbag', 0, add(tableAt, mul({ x: fd.y, y: -fd.x }, 110)), 5)
-      // 沙发旁的落地灯（扶手边，靠墙）
+      // 沙发旁的落地灯：贴着沙发扶手、靠墙（锚在沙发上），两侧都放不下才在附近靠墙找
       if (this.rand() < 0.55) {
         const s = this.rand() < 0.5 ? 1 : -1
-        this.wall(room, 'floor-lamp', { near: add({ x: sofa.x, y: sofa.y }, mul({ x: fd.y, y: -fd.x }, s * (def.w / 2 + 25))), nearMax: 90, centered: false })
+        const lamp = this.vary('floor-lamp')
+        const ld = ASSET_MAP.get(lamp)!
+        const back = add({ x: sofa.x, y: sofa.y }, mul(fd, -def.d / 2 + ld.d / 2 + 1))
+        const side = { x: fd.y, y: -fd.x }
+        const at = (k: number) => add(back, mul(side, k * (def.w / 2 + ld.w / 2 + 4)))
+        if (!this.anchored(room, lamp, at(s).x, at(s).y, sofa.rot) && !this.anchored(room, lamp, at(-s).x, at(-s).y, sofa.rot))
+          this.wall(room, 'floor-lamp', { near: add({ x: sofa.x, y: sofa.y }, mul(side, s * (def.w / 2 + 25))), nearMax: 90, centered: false })
       }
     }
     // 中式 / 欧美有独立的餐厅（客餐厅一体但分区）：餐桌摆在餐厅里
@@ -1957,8 +1982,13 @@ class Decorator {
         break
       }
       case 'theater': {
-        const sofa = this.floorOf(room, 'sofa', { front: 120 }, (a) => a.w <= 200)
-        this.floorOf(room, ['tv-stand', 'hifi'], { front: 120 })
+        // 沙发和电视柜 / 音响相对摆（同客厅的打分规则）
+        const sofaIds = this.shuffle(this.find('sofa', (a) => !a.prop && !a.mount && !a.stick && !a.fixture && a.w <= 200)).slice(0, 3)
+        const tvIds = this.shuffle(this.find(['tv-stand', 'hifi'], (a) => !a.prop && !a.mount && !a.stick && !a.fixture && Math.max(a.w, a.d) <= 240)).slice(0, 2)
+        const [sofa] = this.major(room, [
+          { kind: 'sofa', options: sofaIds.map((a, i) => ({ asset: a.id, spec: { front: 120 }, bias: -i })), miss: 60 },
+          { kind: 'tv', options: tvIds.map((a, i) => ({ asset: a.id, spec: { front: 120 }, bias: -i })), miss: 30 },
+        ])
         const screen = this.find('projector-screen', (a) => !!a.mount)
         if (screen.length) this.mount(room, this.pick(screen).id)
         if (sofa) this.freePush(room, this.pick(['coffee-table', 'rug-round']), 0, c, 10, true)
@@ -2014,8 +2044,12 @@ class Decorator {
         break
       case 'guest':
         if (room.kind === 'japanese') this.wall(room, 'futon', { front: 20 })
-        else this.wall(room, this.pick(['bed-single', 'bed-semi-double', 'lv-sofa-bed']), { front: 45 }) ?? this.wall(room, 'bed-semi-single', { front: 30 })
-        this.wall(room, 'nightstand', { front: 30 })
+        else {
+          // 客房的床：同样按床的规则挑位置，床头柜跟着床
+          const [bed] = this.major(room, [{ kind: 'bed', options: [{ asset: this.pick(['bed-single', 'bed-semi-double', 'lv-sofa-bed']), spec: { front: 45 } }, { asset: 'bed-semi-single', spec: { front: 30 }, bias: -30 }], miss: 100 }])
+          if (bed) this.bedPlaced(room, bed)
+        }
+        if (room.kind === 'japanese') this.wall(room, 'nightstand', { front: 30 })
         this.floorOf(room, 'luggage', { front: 30 })
         this.floorOf(room, ['clothes-rail', 'coat-rack'], { front: 40 })
         break
@@ -2031,65 +2065,157 @@ class Decorator {
   /** 书房 / 兴趣房：没有床，大书桌 + 椅子 + 书架 */
   study(room: Room) {
     const desks = this.find(/^(tbl-desk-(120|140|160|l-left|l-right)|desk$)/, (a) => !a.prop)
-    const desk = this.wall(room, desks.length ? this.pick(desks).id : 'desk', { front: 80, underWindow: true }) ?? this.wall(room, 'desk', { front: 70 }) ?? this.wall(room, 'desk', { front: 45, underWindow: true })
+    // 书桌和书架一起挑位置（书桌靠窗 / 侧对窗、背后不对门；书架占完整的墙段）
+    const [desk] = this.major(room, [
+      {
+        kind: 'desk',
+        options: [
+          { asset: desks.length ? this.pick(desks).id : 'desk', spec: { front: 80, underWindow: true } },
+          { asset: 'desk', spec: { front: 70 }, bias: -5 },
+          { asset: 'desk', spec: { front: 45, underWindow: true }, bias: -10 },
+        ],
+        miss: 100,
+      },
+      { kind: 'cabinet', options: [{ asset: this.vary(this.pick(['bookshelf', 'bookshelf', 'dresser'])), spec: { front: 50 } }], miss: 20 },
+    ])
     if (desk) {
       const owner = this.studyOf.get(room.id)
       const gaming = owner?.interests.includes('gaming') ? this.find('gaming-chair', (a) => !a.prop) : []
       this.seatAt(room, desk, gaming.length ? this.pick(gaming).id : this.chairAsset(), ASSET_MAP.get(desk.asset)!.d / 2 + 12)
     }
-    this.wall(room, this.pick(['bookshelf', 'bookshelf', 'dresser']), { front: 50 })
   }
 
   western(room: Room) {
     if (this.studyOf.has(room.id) && !this.occupants.get(room.id)?.length) return this.funcRoom(room)
-    const door = firstDoorCenter(room, this.plan)
     const m2 = area(room.points) / 10000
     const people = this.occupants.get(room.id) ?? []
-    const couple = people.filter((m) => m.role === 'self' || m.role === 'partner').length >= 2
     const kid = people.length === 1 && people[0].role === 'child' ? people[0] : null
-    // 按住户和面积挑床：夫妻 double / queen，小孩婴儿床 / 儿童床，其余按面积；放不下就换小一号
-    const sizes = ['bed-semi-single', 'bed-single', 'bed-semi-double', 'bed-double', 'bed-queen']
-    let want = m2 < 7 ? 0 : m2 < 9 ? 1 : m2 < 11 ? 2 : m2 < 13.5 ? 3 : 4
-    if (couple) want = Math.max(this.region === 'west' ? 4 : 3, want)
-    else if (people.length) want = Math.min(want, this.region === 'west' ? 3 : 2)
-    let bed: Furniture | null = null
-    // 婴儿床 / 儿童床有多种款式：同系列里随便挑一款，放不下再换
-    const tryKid = (id: string) => {
-      for (const v of this.shuffle(sameType(id))) if ((bed = this.wall(room, v, { front: 40, far: door }))) return
-    }
-    if (kid && kid.age < 3) tryKid('kid-crib')
-    if (!bed && kid && kid.age < 10) tryKid('kid-bed')
-    for (let i = want; i >= 0 && !bed; i--) bed = this.wall(room, sizes[i], { front: 45, far: door })
-    bed ??= this.wall(room, 'bed-semi-single', { front: 30 })
-    if (bed) {
-      const def = ASSET_MAP.get(bed.asset)!
-      const head = add({ x: bed.x, y: bed.y }, mul(frontDir(bed.rot), -def.d / 2))
-      this.wall(room, 'nightstand', { near: head, nearMax: def.w / 2 + 40 })
-      if (this.rand() < 0.6) this.wall(room, 'bear', { near: head, nearMax: def.w / 2 + 80 })
-      // 床头两侧的壁灯：古典 / 和 / 中式 / 乡村 / 复古多一些
-      if (this.rand() < (SCONCE_STYLES.has(this.style) ? 0.4 : 0.22)) this.bedSconces(room, bed)
-      this.plushOnBed(bed, people)
-    }
-    // 中式 / 欧美的卧室没有日式的押入れ / クローゼット：没有嵌入式衣柜和衣帽间时先放衣柜（在书桌之前占墙）
+    const beds = this.bedOptions(room)
+    // 中式 / 欧美的卧室没有日式的押入れ / クローゼット：没有嵌入式衣柜和衣帽间时要放衣柜
     const hasCloset = this.plan.fixtures.some((x) => x.kind === 'builtin' && x.builtinType === 'closet' && pointInPolygon(x, room.points)) || this.plan.rooms.some((o) => o.kind === 'storage' && edgesOf(room.points).some((e) => sharedIntervals(e, o).length > 0))
     const earlyWardrobe = this.region !== 'jp' && !hasCloset
-    if (earlyWardrobe) this.wall(room, 'wardrobe', { front: 60 }) ?? this.wall(room, 'dresser', { front: 50 }) ?? this.wall(room, 'wardrobe', { front: 0 })
     const needsDesk = !people.length || people.some((m) => JOBS[m.job].wfh || m.job === 'student' || m.job === 'schoolkid') || this.rand() < 0.4
     const kidDesk = kid && kid.age >= 6 && kid.age < 13 && ASSET_MAP.has('kid-desk')
-    // 房间挤（落地窗前、门的开合范围都不能占）：桌前少留一点空间再试，椅子照样放得下
     const deskId = kidDesk ? 'kid-desk' : 'desk'
-    const desk = needsDesk && !(kid && kid.age < 6) ? (this.wall(room, deskId, { front: 70, underWindow: true }) ?? this.wall(room, deskId, { front: 45, underWindow: true })) : null
+    const slots: Slot[] = [{ kind: 'bed', options: beds, miss: 200 }]
+    if (earlyWardrobe)
+      slots.push({
+        kind: 'cabinet',
+        options: [
+          { asset: this.vary('wardrobe'), spec: { front: 60 } },
+          { asset: this.vary('dresser'), spec: { front: 50 }, bias: -8 },
+          { asset: this.vary('wardrobe'), spec: { front: 0 }, bias: -15 },
+        ],
+        miss: 40,
+      })
+    // 房间挤（落地窗前、门的开合范围都不能占）：桌前少留一点空间也行，椅子照样放得下
+    if (needsDesk && !(kid && kid.age < 6))
+      slots.push({
+        kind: 'desk',
+        options: [
+          { asset: deskId, spec: { front: 70, underWindow: true } },
+          { asset: deskId, spec: { front: 45, underWindow: true }, bias: -6 },
+        ],
+        miss: 40,
+      })
+    if (!earlyWardrobe && m2 >= 7.5) slots.push({ kind: 'cabinet', options: [{ asset: this.vary(this.pick(['wardrobe', 'dresser', 'bookshelf'])), spec: { front: 60 } }], miss: 15 })
+    const [bed, , desk] = (() => {
+      const got = this.major(room, slots)
+      return [got[0], got[1], got[slots.findIndex((x) => x.kind === 'desk')] ?? null]
+    })()
+    if (bed) {
+      this.bedPlaced(room, bed)
+      const def = ASSET_MAP.get(bed.asset)!
+      const head = add({ x: bed.x, y: bed.y }, mul(frontDir(bed.rot), -def.d / 2))
+      if (this.rand() < 0.6) this.wall(room, 'bear', { near: head, nearMax: def.w / 2 + 80 })
+    }
     if (desk) {
       const gamer = people.some((m) => m.interests.includes('gaming'))
       const gaming = gamer ? this.find('gaming-chair', (a) => !a.prop) : []
       this.seatAt(room, desk, kidDesk && ASSET_MAP.has('kid-chair') ? 'kid-chair' : gaming.length ? this.pick(gaming).id : this.chairAsset(), 38)
     }
-    if (!earlyWardrobe && m2 >= 7.5) this.wall(room, this.pick(['wardrobe', 'dresser', 'bookshelf']), { front: 60 })
     const b = bbox(room.points)
     this.freePush(room, 'rug-round', 0, { x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 }, 0, true)
     // 猫爬架只给养猫的人家（猫本身由会动的角色负责，不再随手摆不会动的猫摆件）
     const cats = this.household?.members.some((m) => m.interests.includes('cats')) ?? false
     this.corner(room, ['monstera', 'stand-mirror', ...(cats ? ['cat-tower'] : []), 'beanbag', 'floor-lamp'])
+  }
+
+  /** 每个居室的床（之后挂床头壁灯、摆床上的玩偶用） */
+  beds = new Map<string, Furniture>()
+
+  /**
+   * 床的备选：按住户和面积挑规格（夫妻 double / queen，小孩婴儿床 / 儿童床，其余按面积），放不下就换小一号（越小扣分越多），
+   * 最后是少留床前空间的小单人床
+   */
+  bedOptions(room: Room): Slot['options'] {
+    const m2 = area(room.points) / 10000
+    const people = this.occupants.get(room.id) ?? []
+    const couple = people.filter((m) => m.role === 'self' || m.role === 'partner').length >= 2
+    const kid = people.length === 1 && people[0].role === 'child' ? people[0] : null
+    const sizes = ['bed-semi-single', 'bed-single', 'bed-semi-double', 'bed-double', 'bed-queen']
+    let want = m2 < 7 ? 0 : m2 < 9 ? 1 : m2 < 11 ? 2 : m2 < 13.5 ? 3 : 4
+    if (couple) want = Math.max(this.region === 'west' ? 4 : 3, want)
+    else if (people.length) want = Math.min(want, this.region === 'west' ? 3 : 2)
+    const beds: Slot['options'] = []
+    // 婴儿床 / 儿童床有多种款式：同系列里随便挑几款
+    if (kid && kid.age < 3) for (const v of this.shuffle(sameType('kid-crib')).slice(0, 3)) beds.push({ asset: v, spec: { front: 40 } })
+    if (kid && kid.age < 10) for (const v of this.shuffle(sameType('kid-bed')).slice(0, 3)) beds.push({ asset: v, spec: { front: 40 }, bias: -5 })
+    for (let i = want; i >= 0; i--) beds.push({ asset: sizes[i], spec: { front: 45 }, bias: -12 * (want - i) - (beds.length ? 10 : 0) })
+    beds.push({ asset: 'bed-semi-single', spec: { front: 30 }, bias: -60 })
+    return beds
+  }
+
+  /** 床摆好之后：记下来、登记下床的空间（双人床两侧，单人床空着的那一侧），床头柜跟着床放 */
+  bedPlaced(room: Room, bed: Furniture) {
+    this.beds.set(room.id, bed)
+    const hard = this.hardIn(room)
+    const sides = bedSides(bed)
+    const keep = isDoubleBed(bed.asset) ? sides : sides.filter((b) => this.inside(b, room) && !hard.some((h) => boxesOverlap(h, b)))
+    for (const b of keep) this.occ.hold(room, b, 'bedside', bed.id)
+    this.nightstands(room, bed)
+  }
+
+  /**
+   * 大件按「候选 + 打分」摆（arrange.ts）：几样大件一起挑位置，返回和 slots 对应的家具（放不下的为 null）。
+   */
+  major(room: Room, slots: Slot[]): (Furniture | null)[] {
+    const picks = arrange({ plan: this.plan, room, occ: this.occ, rand: this.rand, ctx: this.ctx(), canPlace: (a, x, y, r) => this.canPlace(a, x, y, r) }, slots)
+    return picks.map((p) => (p && this.allow(p.asset, p) ? this.push(p.asset, p.x, p.y, p.rot) : null))
+  }
+
+  /**
+   * 床头柜跟着床：贴着床头那面墙放在床的一侧（离门远的一侧优先），双人床两侧各一个（放得下的话）。
+   * 两侧都放不下才退回在床头附近靠墙找空位。
+   */
+  nightstands(room: Room, bed: Furniture) {
+    const def = ASSET_MAP.get(bed.asset)!
+    const f = frontDir(bed.rot)
+    const side = { x: f.y, y: -f.x }
+    const back = add({ x: bed.x, y: bed.y }, mul(f, -def.d / 2))
+    const door = firstDoorCenter(room, this.plan)
+    const order = [-1, 1].sort((a, b) => (door ? dist(add(back, mul(side, b * def.w)), door) - dist(add(back, mul(side, a * def.w)), door) : 0))
+    const id = this.vary('nightstand')
+    const nd = ASSET_MAP.get(id)!
+    const want = def.w >= 120 && !hasTag(def, 'crib') ? 2 : 1
+    let n = 0
+    for (const k of order) {
+      if (n >= want) break
+      const p = add(add(back, mul(f, nd.d / 2 + 1)), mul(side, k * (def.w / 2 + nd.w / 2 + 3)))
+      if (this.anchored(room, id, p.x, p.y, bed.rot)) n++
+    }
+    if (!n) this.wall(room, 'nightstand', { near: back, nearMax: def.w / 2 + 40 })
+  }
+
+  /**
+   * 跟着主件放的配套件：在 (x, y, rot) 这个锚点放 asset，要整块在房间里、不压禁放区（门窗前、设备和它的使用空间、楼梯口）和已摆的家具，
+   * 立体上不冲突、数量限制允许。放下了返回家具。
+   */
+  anchored(room: Room, asset: string, x: number, y: number, rot: number) {
+    const fp = footprint(asset, x, y, rot)
+    if (!this.inside(fp, room) || this.obstacles(room).some((o) => boxOverlaps(o, fp))) return null
+    if (!this.canPlace(asset, x, y, rot) || !this.allow(asset, { x, y })) return null
+    return this.push(asset, x, y, rot)
   }
 
   japanese(room: Room) {
@@ -2443,7 +2569,8 @@ class Decorator {
   }
 
   /** 卧室：化妆台（爱美妆、女性；长辈 / 和室用鏡台）+ 化妆凳 + 化妆品；内衣柜。面积不够就省略 */
-  bedroomExtras(room: Room) {
+  bedroomExtras(room: Room, phase: Phase) {
+    if (phase === 'items') return this.vanityDress(room)
     const people = this.occupants.get(room.id) ?? []
     const m2 = area(room.points) / 10000
     if (!people.length || m2 < 6) return
@@ -2475,10 +2602,7 @@ class Decorator {
           const fp = footprint('be-vanity-stool', p.x, p.y, v.rot)
           if (this.inside(fp, room) && !this.obstacles(room).some((o) => boxOverlaps(o, fp))) this.push('be-vanity-stool', p.x, p.y, (v.rot + 180) % 360)
         }
-        const cos = this.find('cosmetics', (a) => !!a.prop && a.form !== 'hanging' && a.category === 'toiletry')
-        let n = Math.round((beauty ? 5 : 3) * this.clutter)
-        for (let i = 0; i < 20 && n > 0 && cos.length; i++) if (this.onLevel(v, this.pick(cos).id, (this.rand() - 0.5) * 0.8, 0.05 + this.rand() * 0.3, Math.round((this.rand() - 0.5) * 30))) n--
-        if (this.rand() < 0.4) this.onLevel(v, this.pick(['be-mini-drawers-3-closed', 'be-mini-drawers-3-open']), (this.rand() < 0.5 ? -1 : 1) * 0.3, 0.1)
+        this.vanities.set(room.id, { v, beauty })
       }
     }
     // 落地挂衣杆（衣服多的人）：离墙挪出一点，侧挂的衣服不顶墙；衣服在 wearDress 里挂
@@ -2498,6 +2622,20 @@ class Decorator {
       const opts = this.find(/^be-lingerie-\d+/, (a) => a.form !== 'open')
       if (opts.length) this.wall(room, this.pick(opts).id, { front: 45 })
     }
+  }
+
+  /** 每个居室的化妆台（化妆品在个人物件那一步再摆） */
+  vanities = new Map<string, { v: Furniture; beauty: boolean }>()
+
+  /** 化妆台上的化妆品、小抽屉 */
+  vanityDress(room: Room) {
+    const got = this.vanities.get(room.id)
+    if (!got) return
+    const { v, beauty } = got
+    const cos = this.find('cosmetics', (a) => !!a.prop && a.form !== 'hanging' && a.category === 'toiletry')
+    let n = Math.round((beauty ? 5 : 3) * this.clutter)
+    for (let i = 0; i < 20 && n > 0 && cos.length; i++) if (this.onLevel(v, this.pick(cos).id, (this.rand() - 0.5) * 0.8, 0.05 + this.rand() * 0.3, Math.round((this.rand() - 0.5) * 30))) n--
+    if (this.rand() < 0.4) this.onLevel(v, this.pick(['be-mini-drawers-3-closed', 'be-mini-drawers-3-open']), (this.rand() < 0.5 ? -1 : 1) * 0.3, 0.1)
   }
 
   // ---------- 购物袋（packs/shopping-bags.ts） ----------
@@ -2736,6 +2874,12 @@ class Decorator {
     for (const r of rooms) for (const id of ids) if (this.wall(r, id, { front: 30 })) return
   }
 
+  /**
+   * 一键布置的流程：
+   *   0. 冰箱 / 洗衣机、收纳位上的柜子、楼梯下储物角（后面的东西都要避开它们）；
+   *   1. 每个房间的落地家具：大件按候选 + 打分一起挑位置（arrange.ts），配套件跟着主件放，再放其他落地的；
+   *   2. 墙上的东西（空调、床头壁灯）；3. 功能性的小件；4. 个人和兴趣物件；5. 装饰；6. 柜内收纳、便签。
+   */
   run() {
     this.assign()
     // 冰箱、洗衣机先放：后面的冰箱贴、洗衣液、置物架、购物袋都要找它们
@@ -2795,59 +2939,72 @@ class Decorator {
           break
         }
       }
-      // 空调在家具摆好之后再挂：避开衣柜、高书柜和内置收纳（先挂的话，后摆的高家具会顶到空调里）。
-      // 欧美住宅多是中央空调，不挂壁挂机
-      if ((r.kind === 'ldk' || r.kind === 'western' || r.kind === 'japanese') && this.region !== 'west') this.aircon(r)
-      // 衣物：收纳间挂满衣服；卧室的化妆台、内衣柜；洗面所层板上叠放毛巾
+      // 衣物：收纳间装挂杆挂满衣服；卧室的化妆台、挂衣杆、内衣柜；兴趣家具；客厅的宠物用品
       if (r.kind === 'storage') this.closetDress(r)
-      if (r.kind === 'western' || r.kind === 'japanese') this.bedroomExtras(r)
-      if (r.kind === 'wash' || r.kind === 'bath') this.foldedTowels(r)
-      if (r.kind === 'western' || r.kind === 'japanese') this.personalize(r)
-      if (r.kind === 'ldk') this.shared(r)
-      if (r.kind === 'ldk' || r.kind === 'western' || r.kind === 'japanese') this.artWall(r)
+      if (r.kind === 'western' || r.kind === 'japanese') this.bedroomExtras(r, 'floor')
+      if (r.kind === 'western' || r.kind === 'japanese') this.personalize(r, 'floor')
+      if (r.kind === 'ldk') this.shared(r, 'floor')
     }
     this.style = this.baseStyle
     if (isMultiFloor(this.plan)) this.floorTrash()
+    // 地区特色：牌桌、棋桌、茶台、神棚…
     this.specialties()
-    // 厨房台面：烹饪用具优先摆这里
+
+    // 2. 落地的都定好之后再挂墙上的东西：空调（欧美住宅多是中央空调，不挂壁挂机）、床头壁灯。
+    //    空调在占用表里连同下方到 170 的空间一起登记，之后不会再有高家具摆到它下面
+    for (const r of this.plan.rooms) {
+      this.style = this.styleFor(r)
+      if ((r.kind === 'ldk' || r.kind === 'western' || r.kind === 'japanese') && this.region !== 'west') this.aircon(r)
+      const bed = this.beds.get(r.id)
+      // 床头两侧的壁灯：古典 / 和 / 中式 / 乡村 / 复古多一些
+      if (bed && this.rand() < (SCONCE_STYLES.has(this.style) ? 0.4 : 0.22)) this.bedSconces(r, bed)
+    }
+    this.style = this.baseStyle
+
+    // 3. 功能性的小件：书桌上的电脑（在别的摆件之前，免得桌面先被占满）、厨房吊柜 / 搁板和厨具、马桶上方的搁板、
+    //    桌柜上的主角（电视、台灯、笔记本…）、挂衣杆上的衣服 / 毛巾杆上的毛巾、层板上叠放的毛巾
+    this.computersForChairs()
     for (const fx of this.plan.fixtures) if (fx.kind === 'kitchen') this.kitchenWall(fx)
     for (const fx of this.plan.fixtures) if (fx.kind === 'toilet') this.toiletWall(fx)
     for (const fx of this.plan.fixtures) if (fx.kind === 'kitchen') this.kitchenDress(fx)
-    for (const fr of this.out.filter((f) => !f.z && isMainAppliance(ASSET_MAP.get(f.asset), 'fridge'))) if (this.rand() < 0.4 + 0.4 * this.clutter) this.fridgeMagnets(fr)
-    // 购物袋：玄关门扇内侧的磁吸挂钩 + 环保袋，厨房地上的购物袋 / 墙上挂钩里的袋中袋
-    this.shoppingBags()
-    // 挂衣杆、衣桁、壁内收纳挂衣服，毛巾杆搭毛巾
+    this.dress()
     this.wearDress()
-    // 电脑椅前面的桌上要有电脑（在 dress 之前补，免得桌面先被摆件占满）
-    this.computersForChairs()
+    for (const r of this.plan.rooms) if (r.kind === 'wash' || r.kind === 'bath') this.foldedTowels(r)
+
+    // 4. 个人和兴趣物件：职业 / 兴趣摆件、等级套装、奖杯证书、墙上的兴趣挂件和贴纸、化妆品、全家共同的小物，机器人、摄像头
+    for (const r of this.plan.rooms) {
+      this.style = this.styleFor(r)
+      if (r.kind === 'western' || r.kind === 'japanese') {
+        this.bedroomExtras(r, 'items')
+        this.personalize(r, 'items')
+      }
+      if (r.kind === 'ldk') this.shared(r, 'items')
+    }
+    this.style = this.baseStyle
     this.robots()
     // 摄像头：宠物区的宠物摄像头、婴儿床边的婴儿监视器、玄关 / 客厅的安防摄像头、门口的可视门铃 / 猫眼
     homeCams({ d: this, plan: this.plan, rand: this.rand, household: this.household })
-    this.dress()
+    // 兴趣摆件里新出现的主机交给书桌、夹式摄像头夹到屏幕顶边
+    settleDesks({ d: this, plan: this.plan, rand: this.rand, household: this.household })
+
+    // 5. 装饰：墙上的艺术品、床上的玩偶、冰箱贴、购物袋，开放格子每一格补一件
+    for (const r of this.plan.rooms) {
+      this.style = this.styleFor(r)
+      if (r.kind === 'ldk' || r.kind === 'western' || r.kind === 'japanese') this.artWall(r)
+      const bed = this.beds.get(r.id)
+      if (bed && this.out.includes(bed)) this.plushOnBed(bed, this.occupants.get(r.id) ?? [])
+    }
+    this.style = this.baseStyle
+    for (const fr of this.out.filter((f) => !f.z && isMainAppliance(ASSET_MAP.get(f.asset), 'fridge'))) if (this.rand() < 0.4 + 0.4 * this.clutter) this.fridgeMagnets(fr)
+    // 购物袋：玄关门扇内侧的磁吸挂钩 + 环保袋，厨房地上的购物袋 / 墙上挂钩里的袋中袋
+    this.shoppingBags()
     // 多宝格、书架、展示柜这类开放格子：最后补一遍，每一格都至少放一件
     this.fillCompartments()
-    // 柜门里 / 抽屉里收东西（外面的摆设都放完之后，只收日常用品）；少数柜子开着门
-    stowAll({ d: this, plan: this.plan, rand: this.rand }, (f) => this.reserved.has(f.id))
-    // 便签：贴屏幕边框、桌后墙、冰箱门，书桌上散几张
-    deskExtras({ d: this, plan: this.plan, rand: this.rand, household: this.household })
-    this.reseatAircons()
-    return this.out
-  }
 
-  /** 后面的步骤可能把高家具摆到了空调下面：重叠的空调摘下来重新找墙挂（找不到就不挂） */
-  reseatAircons() {
-    for (const ac of this.out.filter((o) => o.asset === this.acModel)) {
-      const b = furnitureBox(ac.asset, ac.x, ac.y, ac.rot)
-      const under = this.out.some((o) => {
-        if (o === ac || o.z || (ASSET_MAP.get(o.asset)?.h ?? 0) <= 170) return false
-        const c = furnitureBox(o.asset, o.x, o.y, o.rot)
-        return Math.min(b.x1, c.x1) - Math.max(b.x0, c.x0) > 2 && Math.min(b.y1, c.y1) - Math.max(b.y0, c.y0) > 2
-      })
-      if (!under) continue
-      const room = this.plan.rooms.find((r) => pointInPolygon(ac, r.points))
-      this.out.splice(this.out.indexOf(ac), 1)
-      if (room) this.aircon(room)
-    }
+    // 6. 柜门里 / 抽屉里收东西（外面的摆设都放完之后，只收日常用品）；少数柜子开着门。最后贴便签
+    stowAll({ d: this, plan: this.plan, rand: this.rand }, (f) => this.reserved.has(f.id))
+    deskExtras({ d: this, plan: this.plan, rand: this.rand, household: this.household })
+    return this.out
   }
 
   /**
@@ -3082,6 +3239,9 @@ const LIMITS: [string, Tag | Tag[], 'house' | 'room' | 'surface', number][] = [
   ['keyboard', 'keyboard', 'surface', 1],
   ['cup', 'cup', 'house', 0],
 ]
+
+/** 分步布置：floor = 落地家具那一步，items = 摆件 / 壁挂那一步，all = 一步做完（检查清单补齐等单独调用） */
+type Phase = 'floor' | 'items' | 'all'
 
 /** 兴趣类的功能房：主人的等级套装、奖杯证书摆在这里 */
 const HOBBY_PURPOSES: RoomPurpose[] = ['study', 'library', 'gaming', 'music', 'theater', 'hobby', 'gym', 'cards']
