@@ -14,7 +14,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, face, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, glow, paintAbstract, paintFlower, paintLandscape, paintPanel, rectPoly, rng, shell, type AssetCategory, type AssetDef, type Fx } from '../kit'
-import { PI, clearDeep, noOutlineDeep, type V3 } from '../geo'
+import { PI, clearDeep, noOutlineDeep, rod3, type V3 } from '../geo'
 import { I, J, M, N, R, type Build, type Pal } from '../packkit'
 
 const GOLD = '#e3b549'
@@ -41,16 +41,6 @@ function litAll<T extends THREE.Object3D>(o: T, color: string, k = 0.8): T {
     c.userData.noOutline = true
   })
   return o
-}
-/** 两点之间的一根杆 */
-function bar(a: V3, b: V3, r: number, color: string, seg = 8) {
-  const va = new THREE.Vector3(...a)
-  const vb = new THREE.Vector3(...b)
-  const dir = vb.clone().sub(va)
-  const m = cyl(r, r, dir.length(), color, {}, seg)
-  m.position.copy(va).add(vb).multiplyScalar(0.5)
-  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize())
-  return m
 }
 /** 平滑曲线管（绳子、花环、弯钩） */
 function tube(pts: V3[], r: number, color: string, seg = 24, radial = 6) {
@@ -135,7 +125,7 @@ function bamboo(r: number, h: number, color: string, at: V3 = [0, 0, 0], slope =
 }
 /** J 钩：横臂在 y = -2 从 z = -1 伸到 zFront，钩尾在板内竖到 y ≈ 0；返回钩子 */
 function jHook(zFront: number, color = '#b8bcc2') {
-  return G(bar([0, -2, -1], [0, -2, zFront], 0.25, color), bar([0, -2, -1], [0, -0.25, -1], 0.25, color))
+  return G(rod3([0, -2, -1], [0, -2, zFront], 0.25, color, 8), rod3([0, -2, -1], [0, -0.25, -1], 0.25, color, 8))
 }
 /** 三方（神前供台）：方盘 + 带圆孔的台座 */
 function sanbo(w: number, h: number, wood: string) {
@@ -229,7 +219,7 @@ function kadomatsu(p: string[]) {
   for (const s of [-1, 1]) {
     const b0: V3 = [s * 11, 40, 9]
     const b1: V3 = [s * 16, 56, 11]
-    g.add(bar(b0, b1, 0.45, '#6e4f37'))
+    g.add(rod3(b0, b1, 0.45, '#6e4f37', 8))
     for (let k = 0; k < 4; k++) {
       const t = 0.3 + k * 0.22
       g.add(ball(1.3, acc, { x: b0[0] + (b1[0] - b0[0]) * t + (k % 2 ? 1.2 : -1.2), y: b0[1] + (b1[1] - b0[1]) * t, z: b0[2] + 1 }))
@@ -259,7 +249,7 @@ function shimekazari(p: string[]) {
   const g = new THREE.Group()
   g.add(torus(9, 1.8, straw, { y: 34 }))
   g.add(noOutlineDeep(torus(9, 0.5, shade(straw, -0.25), { y: 34, z: 1.5 })))
-  for (let i = -4; i <= 4; i++) g.add(bar([i * 0.9, 26, 0.8], [i * 2.2, 4, 1.4], 0.4, i % 2 ? straw : shade(straw, 0.06)))
+  for (let i = -4; i <= 4; i++) g.add(rod3([i * 0.9, 26, 0.8], [i * 2.2, 4, 1.4], 0.4, i % 2 ? straw : shade(straw, 0.06), 8))
   g.add(rbox(6, 2.4, 3.6, acc, { y: 24.8, z: -0.6 }, 0.6))
   for (const s of [-1, 1]) g.add(sprig(11, PINE, [s * 2, 31, 2.6], s * (PI / 2) - s * 0.2, 0.15, 0.4))
   g.add(ball(4, '#f29a2e', { y: 32, z: 4 }))
@@ -367,7 +357,7 @@ function setsubun(p: string[]) {
   m.rotation.x = -0.18
   g.add(m)
   g.add(rbox(10, 1.2, 6, wood, { x: -4, z: -2 }, 0.3))
-  g.add(bar([-4, 1, -5], [-4, 6, -4.8], 0.4, wood))
+  g.add(rod3([-4, 1, -5], [-4, 6, -4.8], 0.4, wood, 8))
   return g
 }
 
@@ -471,7 +461,7 @@ function hinaTiers(p: string[]) {
   g.add(rbox(10, 6, 7, SUMI, { x: 0, y: 16, z: zc(0) }, 0.6))
   for (const s of [-1, 1]) g.add(torus(3.2, 0.45, '#6e4f37', { x: s * 5.6, y: 17.2, z: zc(0), ry: PI / 2 }))
   g.add(rbox(8, 6, 6, SUMI, { x: 30, y: 14, z: zc(0) }, 1.2))
-  g.add(bar([25, 19.8, zc(0)], [35, 19.8, zc(0)], 0.4, GOLD))
+  g.add(rod3([25, 19.8, zc(0)], [35, 19.8, zc(0)], 0.4, GOLD, 8))
   return g
 }
 
@@ -522,7 +512,7 @@ function koinobori(p: string[]) {
   g.add(cyl(1.4, 1.6, 168, '#e9e6df', { y: 12 }, 10))
   g.add(ball(2.6, GOLD, { y: 183 }))
   const wheel = G(torus(5, 0.35, J.shu))
-  for (let k = 0; k < 8; k++) wheel.add(bar([0, 0, 0], [Math.cos((k * PI) / 4) * 5, Math.sin((k * PI) / 4) * 5, 0], 0.25, k % 2 ? '#3d6fb5' : GOLD))
+  for (let k = 0; k < 8; k++) wheel.add(rod3([0, 0, 0], [Math.cos((k * PI) / 4) * 5, Math.sin((k * PI) / 4) * 5, 0], 0.25, k % 2 ? '#3d6fb5' : GOLD, 8))
   wheel.position.set(0, 177, 2)
   g.add(wheel)
   // 吹流：五色
@@ -591,11 +581,11 @@ function tanabata(p: string[]) {
     const y = 62 + i * 9
     const L = 26 - i * 1.5
     const end: V3 = [Math.cos(a) * L, y + 10, Math.sin(a) * L * 0.7]
-    g.add(bar([0, y, 0], end, 0.55, bam))
+    g.add(rod3([0, y, 0], end, 0.55, bam, 8))
     for (let k = 0; k < 5; k++) g.add(sprig(9 + rand() * 3, k % 2 ? '#5f9e4f' : '#78b45a', end, PI / 2 - a + (rand() - 0.5) * 1.6, 0.35 + rand() * 0.4, 0.28))
     const mid: V3 = [end[0] * 0.6, y + 6, end[2] * 0.6]
     for (const [pt, k] of [[end, 0], [mid, 1]] as [V3, number][]) {
-      g.add(bar([pt[0], pt[1] - 1, pt[2]], [pt[0], pt[1] - 4, pt[2]], 0.08, '#ffffff'))
+      g.add(rod3([pt[0], pt[1] - 1, pt[2]], [pt[0], pt[1] - 4, pt[2]], 0.08, '#ffffff', 8))
       g.add(rbox(3.2, 10, 0.25, papers[(i * 2 + k) % papers.length], { x: pt[0], y: pt[1] - 14, z: pt[2], ry: -a }, 0.1))
     }
   }
@@ -609,16 +599,16 @@ function furinBody(p: string[], top: V3) {
   const g = new THREE.Group()
   const [x, y, z] = top
   const bt = y - 4
-  g.add(bar([x, y, z], [x, bt, z], 0.08, J.shu))
+  g.add(rod3([x, y, z], [x, bt, z], 0.08, J.shu, 8))
   const dome = lathe([[0, 0], [4.3, 0], [4.2, 1.5], [3.8, 3.4], [2.5, 4.6], [0.6, 5], [0, 5.05], [0, 4.6], [2.3, 4.2], [3.4, 3.2], [3.8, 1.5], [3.9, 0]], glassC, 24)
   clearDeep(dome, glassC, 0.45)
   dome.position.set(x, bt - 5, z)
   g.add(dome)
   g.add(noOutlineDeep(torus(4.1, 0.2, fish, { x, y: bt - 4.9, z, rx: PI / 2 })))
   for (const [a, yy] of [[0.3, 2.2], [2.2, 1.8], [-1.6, 2.8]]) g.add(noOutlineDeep(ball(0.8, fish, { x: x + Math.sin(a) * 4.05, y: bt - 5 + yy, z: z + Math.cos(a) * 4.05, ry: a }, [0.4, 0.6, 1.3])))
-  g.add(bar([x, bt - 0.5, z], [x, bt - 7.5, z], 0.06, '#ffffff'))
+  g.add(rod3([x, bt - 0.5, z], [x, bt - 7.5, z], 0.06, '#ffffff', 8))
   g.add(clearDeep(ball(0.45, glassC, { x, y: bt - 6.6, z }), glassC, 0.6))
-  g.add(bar([x, bt - 7.5, z], [x, bt - 10, z], 0.06, '#ffffff'))
+  g.add(rod3([x, bt - 7.5, z], [x, bt - 10, z], 0.06, '#ffffff', 8))
   g.add(rbox(3.6, 12, 0.2, paper, { x, y: bt - 22, z }, 0.05))
   return g
 }
@@ -690,7 +680,7 @@ function katoriButa(p: string[]) {
     pts.push([Math.cos(a) * r, PIG_Y + Math.sin(a) * r, 1.5])
   }
   g.add(tube(pts, 0.32, coil, 180, 5))
-  g.add(bar([0, PIG_Y + 7.6, 1.5], [0, PIG_Y, 1.5], 0.06, '#9aa0a6'))
+  g.add(rod3([0, PIG_Y + 7.6, 1.5], [0, PIG_Y, 1.5], 0.06, '#9aa0a6', 8))
   return g
 }
 
@@ -724,7 +714,7 @@ function susuki(p: string[]) {
     const lean = 0.12 + rand() * 0.25
     const L = 45 + rand() * 18
     const top: V3 = [Math.cos(a) * Math.sin(lean) * L, 21 + Math.cos(lean) * L, Math.sin(a) * Math.sin(lean) * L * 0.8]
-    g.add(bar([0, 21, 0], top, 0.22, stem))
+    g.add(rod3([0, 21, 0], top, 0.22, stem, 8))
     const pl = ball(3.2, plume, {}, [0.4, 1.9, 0.4])
     pl.position.set(top[0] * 1.06, top[1] + 3, top[2] * 1.06)
     pl.rotation.set(Math.sin(a) * lean, 0, -Math.cos(a) * lean)
@@ -805,7 +795,7 @@ function kamidana(p: string[]) {
   g.add(rbox(24, 1.2, 9, roof, { y: y0 + 16.5, z: -1.8, rx: 0.55 }, 0.4))
   g.add(rbox(24, 1.2, 9, roof, { y: y0 + 16.5, z: -8.2, rx: -0.55 }, 0.4))
   g.add(rbox(25, 1.6, 1.6, shade(roof, -0.1), { y: y0 + 19.6, z: -5 }, 0.4))
-  for (const s of [-1, 1]) g.add(bar([s * 4, y0 + 20.8, -5], [s * 5.5, y0 + 23.5, -5], 0.35, shade(roof, -0.1)))
+  for (const s of [-1, 1]) g.add(rod3([s * 4, y0 + 20.8, -5], [s * 5.5, y0 + 23.5, -5], 0.35, shade(roof, -0.1), 8))
   // 注连绳 + 纸垂：两端系在棚板前角的细柱上
   for (const s of [-1, 1]) g.add(rbox(1.6, 24, 1.6, wood, { x: s * 29, y: 10.5, z: 13 }, 0.3))
   g.add(tube([[-30, 34, 13], [-14, 30.5, 14], [0, 29.8, 14.2], [14, 30.5, 14], [30, 34, 13]], 0.9, rope, 32, 8))
@@ -1164,7 +1154,7 @@ function fanHead(r: number, cage: string, blade: string, motor: string, nBlade =
   for (const z of [3.6, -3.4]) {
     for (let k = 0; k < spokes; k++) {
       const a = (k / spokes) * PI * 2
-      g.add(bar([Math.cos(a) * r * 0.16, Math.sin(a) * r * 0.16, z], [Math.cos(a) * r, Math.sin(a) * r, 0], 0.12, cage, 4))
+      g.add(rod3([Math.cos(a) * r * 0.16, Math.sin(a) * r * 0.16, z], [Math.cos(a) * r, Math.sin(a) * r, 0], 0.12, cage, 4))
     }
     g.add(noOutlineDeep(torus(r * 0.6, 0.12, cage, { z: z * 0.66 })))
   }
@@ -1285,14 +1275,14 @@ function keroseneConv(p: string[]) {
   g.add(win)
   for (let k = 0; k < 6; k++) {
     const a = -0.36 + (k / 5) * 0.72
-    g.add(bar([Math.sin(a) * 21.6, 20, Math.cos(a) * 21.6], [Math.sin(a) * 21.6, 33, Math.cos(a) * 21.6], 0.25, M.silver, 6))
+    g.add(rod3([Math.sin(a) * 21.6, 20, Math.cos(a) * 21.6], [Math.sin(a) * 21.6, 33, Math.cos(a) * 21.6], 0.25, M.silver, 6))
   }
   g.add(torus(21.3, 0.5, M.silver, { y: 33.3, rx: PI / 2 }))
   g.add(torus(21.3, 0.5, M.silver, { y: 19.7, rx: PI / 2 }))
   g.add(cyl(1.8, 1.8, 1.6, M.char, { x: 9, y: 10, z: 21.1, rx: PI / 2 }, 14))
   g.add(noOutlineDeep(rbox(4, 2, 0.5, '#f4f4f2', { x: -8, y: 9.5, z: 20.7 }, 0.2)))
   g.add(cyl(23, 23, 1.6, top, { y: 47 }, 32))
-  for (let k = 0; k < 3; k++) g.add(bar([Math.cos(k * 2.1) * 22, 47, Math.sin(k * 2.1) * 22], [Math.cos(k * 2.1) * 22.4, 42, Math.sin(k * 2.1) * 22.4], 0.4, top))
+  for (let k = 0; k < 3; k++) g.add(rod3([Math.cos(k * 2.1) * 22, 47, Math.sin(k * 2.1) * 22], [Math.cos(k * 2.1) * 22.4, 42, Math.sin(k * 2.1) * 22.4], 0.4, top, 8))
   // 水壶
   const ky = 48.6
   g.add(lathe([[0, 0], [8, 0], [9.6, 3], [9.2, 6], [6.2, 8.6], [3, 9.2], [0, 9.2]], kettle, 28).translateY(ky))
@@ -1543,10 +1533,10 @@ function cuckooClock(p: string[]) {
     g.add(sprig(6, roof, [Math.cos(a) * 7.5 * (k % 2 ? 1 : -1) * 0 + Math.cos(a) * 7.5, by + 26 + 6 + Math.sin(a) * 1.5, 6.2], a > PI / 2 ? -PI / 2 : PI / 2, -0.5, 0.45))
   }
   g.add(ball(2, shade(roof, -0.1), { y: by + 33.5, z: 2 }, [1.4, 0.9, 0.9]))
-  g.add(bar([0, by, 4.5], [0, 15, 4.5], 0.25, BRASS))
+  g.add(rod3([0, by, 4.5], [0, 15, 4.5], 0.25, BRASS, 8))
   g.add(ball(3.6, roof, { y: 13, z: 4.5 }, [0.8, 1, 0.2]))
   for (const s of [-1, 1]) {
-    g.add(bar([s * 4.5, by, 2.5], [s * 4.5, by - 26 + s * 4, 2.5], 0.12, '#5a4a3a', 4))
+    g.add(rod3([s * 4.5, by, 2.5], [s * 4.5, by - 26 + s * 4, 2.5], 0.12, '#5a4a3a', 4))
     const py = by - 30 + s * 4
     g.add(ball(2.2, '#7a4a2a', { x: s * 4.5, y: py, z: 2.5 }, [1, 1.9, 1]))
     g.add(cyl(0.8, 1.2, 1, '#5a4a3a', { x: s * 4.5, y: py + 3.9, z: 2.5 }, 8))
@@ -1613,7 +1603,7 @@ function pendulumClock(p: string[]) {
   g.add(clockHands(0, 48, 6.2, 8.5, SUMI))
   g.add(clearDeep(rbox(23, 31, 0.3, '#cfeeff', { y: 3.5, z: 5.4 }, 0.1), '#cfeeff', 0.3))
   g.add(rbox(2, 1.2, 5.4, metal, { y: 34.6, z: -2.3 }, 0.2))
-  g.add(bar([0, 35, 0], [0, 13, 0], 0.3, metal))
+  g.add(rod3([0, 35, 0], [0, 13, 0], 0.3, metal, 8))
   g.add(disc(3.6, metal, 0, 11, 0.8, 0.8))
   for (const s of [-1, 1]) g.add(noOutlineDeep(cyl(0.6, 0.6, 0.5, metal, { x: s * 4, y: 44, z: 6.15, rx: PI / 2 }, 10)))
   return g
@@ -1751,12 +1741,12 @@ function macrame(p: string[]) {
     const shrink = 1 - Math.abs(r - 3) * 0.12
     const cur: V3[] = xs.map((x, i): V3 => [x * shrink + (r % 2 ? (i % 2 ? -1.2 : 1.2) : 0), y, 1.6])
     cur.forEach((pt, i) => {
-      g.add(bar(prev[i], pt, 0.35, cord, 5))
+      g.add(rod3(prev[i], pt, 0.35, cord, 5))
       if (i % 2 === r % 2) g.add(ball(1.05, r === 3 && i % 4 === 1 ? bead : cord, { x: pt[0], y: pt[1], z: pt[2] }))
     })
     prev = cur
   }
-  prev.forEach((pt, i) => g.add(bar(pt, [pt[0] * 1.05, pt[1] - 18 - (i % 3) * 3 - Math.abs(i - 5.5) * -1.2, 1.6], 0.4, cord, 5)))
+  prev.forEach((pt, i) => g.add(rod3(pt, [pt[0] * 1.05, pt[1] - 18 - (i % 3) * 3 - Math.abs(i - 5.5) * -1.2, 1.6], 0.4, cord, 5)))
   return g
 }
 
@@ -1853,8 +1843,8 @@ function wireGrid(p: string[]) {
   for (let k = 0; k <= 10; k++) {
     const v = -S0 / 2 + k * 6
     const r = k % 10 === 0 ? 0.45 : 0.22
-    g.add(bar([v, 0, 0.5], [v, S0, 0.5], r, wire, 6))
-    g.add(bar([-S0 / 2, v + S0 / 2, 0.9], [S0 / 2, v + S0 / 2, 0.9], r, wire, 6))
+    g.add(rod3([v, 0, 0.5], [v, S0, 0.5], r, wire, 6))
+    g.add(rod3([-S0 / 2, v + S0 / 2, 0.9], [S0 / 2, v + S0 / 2, 0.9], r, wire, 6))
   }
   const shots: [number, number, number, number, number][] = [
     [-15, 40, 14, 10, 0.05],
@@ -1997,7 +1987,7 @@ function sensuDeco(p: string[]) {
   }
   for (let i = 0; i <= n; i++) {
     const a = a0 + ((a1 - a0) * i) / n
-    g.add(bar([0, 0, -0.2], [Math.cos(a) * (r0 + 1), Math.sin(a) * (r0 + 1), -0.2], 0.35, rib, 5))
+    g.add(rod3([0, 0, -0.2], [Math.cos(a) * (r0 + 1), Math.sin(a) * (r0 + 1), -0.2], 0.35, rib, 5))
   }
   g.add(cyl(1, 1, 1.4, GOLD, { y: 0, z: -0.9, rx: PI / 2 }, 12))
   g.add(disc(4.5, accent, 6, 19, 1.2, 0.3, 20))

@@ -7,7 +7,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cyl, face, puck, rbox, shade, toon, torus } from '../toon'
 import { C, ellipsePoly, glow, holePanel, movable, rectPoly, slab, type AssetDef, type SurfaceDef } from '../kit'
-import { meshWith, type V3 } from '../geo'
+import { cylX, cylZ, meshWith, rod3, type V3 } from '../geo'
 import { I, J, M, N, R, type Pal3 } from '../packkit'
 
 type Base = Omit<AssetDef, 'palettes' | 'paletteStyles'>
@@ -30,32 +30,6 @@ function A(base: Base, pals: Pal3[]): AssetDef {
 // =====================================================================
 // 小工具
 // =====================================================================
-
-/** 两端已知的 3D 细杆 */
-function rod3(a: V3, b: V3, r: number, color: string, seg = 10) {
-  const va = new THREE.Vector3(...a)
-  const vb = new THREE.Vector3(...b)
-  const m = cyl(r, r, va.distanceTo(vb), color, {}, seg)
-  m.position.copy(va).add(vb).multiplyScalar(0.5)
-  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), vb.clone().sub(va).normalize())
-  return m
-}
-
-/** 沿 x 的水平圆柱，(x, y, z) 为轴心 */
-function cylX(r: number, len: number, color: string, x: number, y: number, z: number, seg = 16) {
-  const m = cyl(r, r, len, color, {}, seg)
-  m.rotation.z = Math.PI / 2
-  m.position.set(x, y, z)
-  return m
-}
-
-/** 沿 z 的水平圆柱，(x, y, z) 为轴心 */
-function cylZ(r: number, len: number, color: string, x: number, y: number, z: number, seg = 16) {
-  const m = cyl(r, r, len, color, {}, seg)
-  m.rotation.x = Math.PI / 2
-  m.position.set(x, y, z)
-  return m
-}
 
 /** 一排竖栏杆（沿 x 排开），x0..x1 之间均分 n 根，不含两端 */
 function barsX(g: THREE.Group, x0: number, x1: number, n: number, y0: number, y1: number, z: number, r: number, c: string) {
@@ -460,8 +434,8 @@ function cribWa(p: string[]) {
   }
   for (const sx of [-1, 1]) {
     const x = sx * 60.6
-    g.add(cylZ(1.6, 69.2, bamboo, x, 40, 0))
-    g.add(cylZ(1.6, 69.2, bamboo, x, 15, 0))
+    g.add(cylZ(1.6, 69.2, bamboo, x, 40, 0, 16))
+    g.add(cylZ(1.6, 69.2, bamboo, x, 15, 0, 16))
     barsZ(g, -34.6, 34.6, 8, 14, 41, x, 1.1, bar)
   }
   // 榻榻米：面 + 两侧縁
@@ -551,7 +525,7 @@ function carBed(p: string[]) {
   g.add(rbox(30, 8, 0.8, C.ink, { y: 18, z: 101.8 }, 0.3))
   g.add(rbox(84, 16, 1.6, '#4a5a6a', { y: 48, z: 66, rx: -0.5 }, 0.6))
   // 方向盘
-  g.add(cylZ(1, 8, C.ink, -20, 44, 62))
+  g.add(cylZ(1, 8, C.ink, -20, 44, 62, 16))
   g.add(torus(6.5, 1.3, C.ink, { x: -20, y: 44, z: 58 }))
   // 车尾：后挡板 + 尾翼
   g.add(rbox(88.4, 50, 4, body, { y: 4, z: -100 }, 1.2))

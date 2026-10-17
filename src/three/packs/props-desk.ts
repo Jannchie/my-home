@@ -5,7 +5,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, face, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, clipLevels, glow, rng, rod, shell, type AssetCategory, type AssetDef, type Fx, type ScreenPanel, paintPanel, paintLandscape } from '../kit'
-import { P, ghostOutlined, litOutlined, noOutline } from '../geo'
+import { P, cylX, cylZ, ghostOutlined, litOutlined, noOutline } from '../geo'
 import { I, J, M, N, R, type Pal } from '../packkit'
 
 // ---------- 配色 / 定义 ----------
@@ -46,14 +46,6 @@ function def(
 function screensOf(screens: ScreenPanel[]): Partial<AssetDef> {
   return { screens, surfaces: clipLevels(screens) }
 }
-
-/** 沿 x 的横圆柱，给中心 */
-const cylX = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 16) =>
-  P(cyl(r, r, len, color, {}, seg), x, y, z, 0, 0, Math.PI / 2)
-
-/** 沿 z 的圆柱（朝前的圆盘、旋钮），给中心 */
-const cylZ = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 24) =>
-  P(cyl(r, r, len, color, {}, seg), x, y, z, Math.PI / 2)
 
 /** 屏幕上的发光圆点（太阳、云） */
 const disc = (r: number, color: string, x: number, y: number, z: number, k = 0.7) => noOutline(litOutlined(cylZ(r, 0.6, color, x, y, z), color, k))

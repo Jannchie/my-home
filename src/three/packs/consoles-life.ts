@@ -8,7 +8,7 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, S, G, glow, holePanel, paintPanel, rng, slab, type AssetCategory, type AssetDef, type Hole, type Poly } from '../kit'
-import { P, PI, ghost, lit, noOutline, type V3 } from '../geo'
+import { P, PI, cylX, cylZ, ghost, lit, noOutline, type V3 } from '../geo'
 import { J, M, N, R, type Pal } from '../packkit'
 
 type Draw = (g: CanvasRenderingContext2D, W: number, H: number) => void
@@ -62,11 +62,6 @@ function fit(g: THREE.Group) {
 }
 
 // ---------- 小工具 ----------
-
-/** 沿 x 的横圆柱，给中心 */
-const cylX = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 16) => P(cyl(r, r, len, color, {}, seg), x, y, z, 0, 0, PI / 2)
-/** 沿 z 的圆柱，给中心 */
-const cylZ = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 20) => P(cyl(r, r, len, color, {}, seg), x, y, z, PI / 2)
 
 /** 指示灯小球 */
 const led = (x: number, y: number, z: number, color: string, r = 0.25) => lit(ball(r, color, { x, y, z }), color, 0.9)
@@ -222,7 +217,7 @@ function pillY(g: THREE.Group, x: number, y: number, z: number, len: number, col
 
 function stickZ(g: THREE.Group, x: number, y: number, z: number, r: number, cap: string) {
   g.add(cylZ(r * 0.5, 0.6, BLACK, x, y, z + 0.2, 12))
-  g.add(cylZ(r, 0.45, cap, x, y, z + 0.6))
+  g.add(cylZ(r, 0.45, cap, x, y, z + 0.6, 20))
 }
 function btn4Z(g: THREE.Group, x: number, y: number, z: number, spread: number, r: number, color: string) {
   for (const [dx, dy] of [
@@ -542,7 +537,7 @@ function xone(p: string[]) {
   g.add(rbox(14.5, 0.4, 26.6, gloss, { x: -8.8, y: 7.7 }, 0.15))
   for (let i = 0; i < 18; i++) g.add(rbox(0.45, 0.35, 25, shade(body, -0.12), { x: 0.6 + i * 0.88, y: 7.75 }, 0.12))
   g.add(rbox(13, 0.3, 0.4, BLACK, { x: -7.5, y: 4, z: 13.75 }, 0.1))
-  g.add(lit(cylZ(0.7, 0.3, acc, 13.6, 4.2, 13.8), acc, 0.9))
+  g.add(lit(cylZ(0.7, 0.3, acc, 13.6, 4.2, 13.8, 20), acc, 0.9))
   return g
 }
 
@@ -563,7 +558,7 @@ function x360(p: string[]) {
   g.add(frontExtrude(pts, 25.8, body, 0, 0.6))
   g.add(rbox(19, 0.7, 0.4, trim, { x: -4, y: 4.1, z: 12.95 }, 0.2))
   g.add(lit(torus(1.25, 0.2, ring, { x: 11.5, y: 4.4, z: 13.0 }), ring, 0.8))
-  g.add(cylZ(0.9, 0.4, M.silver, 11.5, 4.4, 13.0))
+  g.add(cylZ(0.9, 0.4, M.silver, 11.5, 4.4, 13.0, 20))
   for (let i = 0; i < 6; i++) g.add(rbox(0.3, 4.2, 0.4, shade(body, -0.15), { x: -14.2 + i * 0.7, y: 1.8, z: 12.9 }, 0.1))
   return g
 }
@@ -963,7 +958,7 @@ const CLAM_3DS: Clam = {
     for (const s of [-1, 1]) for (let i = 0; i < 3; i++) g.add(ball(0.1, BLACK, { x: s * 5.4, y: 3.2 + i * 0.4, z: 0.65 }))
   },
   outer: (g, p) => {
-    for (const s of [-1, 1]) g.add(cylZ(0.3, 0.2, BLACK, s * 1.0, 6.6, -0.55))
+    for (const s of [-1, 1]) g.add(cylZ(0.3, 0.2, BLACK, s * 1.0, 6.6, -0.55, 20))
     g.add(rbox(10, 0.3, 0.2, p[2], { y: 5.6, z: -0.55 }, 0.08))
   },
 }
@@ -988,7 +983,7 @@ const CLAM_SP: Clam = {
     g.add(rbox(6.2, 4.4, 0.2, BLACK, { y: 2.4, z: 0.7 }, 0.1))
     g.add(vScreen(5.8, 3.9, 'puzzle', puzzleScene, 0, 2.65, 0.83))
   },
-  outer: (g, p) => g.add(cylZ(1.0, 0.2, p[2], 0, 4.8, -0.65)),
+  outer: (g, p) => g.add(cylZ(1.0, 0.2, p[2], 0, 4.8, -0.65, 20)),
 }
 
 const CLAM_DSL: Clam = {
@@ -1589,7 +1584,7 @@ function piggyBank(p: string[]) {
   const g = new THREE.Group()
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(cyl(1.0, 1.1, 2.2, body, { x: sx * 2.6, z: sz * 3.2 }, 12))
   g.add(ball(5, body, { y: 6.0 }, [1, 0.9, 1.25]))
-  g.add(cylZ(1.6, 1.4, snout, 0, 6.2, 6.3))
+  g.add(cylZ(1.6, 1.4, snout, 0, 6.2, 6.3, 20))
   for (const s of [-1, 1]) g.add(cylZ(0.3, 0.3, BLACK, s * 0.6, 6.2, 7.0, 10))
   for (const s of [-1, 1]) g.add(P(cyl(0.05, 1.2, 1.8, snout, {}, 4), s * 2.4, 10.0, 2.4, -0.3, PI / 4, -s * 0.4))
   g.add(rbox(3.0, 0.6, 0.45, BLACK, { y: 10.2 }, 0.15))

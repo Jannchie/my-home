@@ -5,7 +5,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, glow, rng, holePanel, paintPanel, rectPoly, type AssetCategory, type AssetDef } from '../kit'
-import { P, ghost, litOutlined, noOutline } from '../geo'
+import { P, cylX, cylZ, ghost, litOutlined, noOutline } from '../geo'
 import { I, J, M, N, PROP, R, type Pal } from '../packkit'
 
 // ---------- 配色 / 定义 ----------
@@ -42,11 +42,6 @@ function def(
 }
 
 // ---------- 小工具 ----------
-
-/** 沿 x 的横圆柱，给中心 */
-const cylX = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 20) => P(cyl(r, r, len, color, {}, seg), x, y, z, 0, 0, Math.PI / 2)
-/** 沿 z 的圆柱（朝前的圆盘、旋钮），给中心 */
-const cylZ = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 24) => P(cyl(r, r, len, color, {}, seg), x, y, z, Math.PI / 2)
 
 /** 小指示灯 */
 const led = (x: number, y: number, z: number, color: string, r = 0.4) => noOutline(litOutlined(ball(r, color, { x, y, z }), color, 0.9))
@@ -447,15 +442,15 @@ function filmProjector(on: boolean) {
     g.add(stick3([rx, 16.5, -5], [rx, 33, -12], 0.7, metal))
     for (const z of [12, -12]) {
       for (const dx of [-0.9, 0.9]) g.add(P(reelDisc(10.5, 0.35, reel), rx + dx, 33, z, 0, Math.PI / 2))
-      g.add(cylX(6.5, 1.5, '#3a2f2a', rx, 33, z))
-      g.add(cylX(1.3, 2.8, metal, rx, 33, z))
+      g.add(cylX(6.5, 1.5, '#3a2f2a', rx, 33, z, 20))
+      g.add(cylX(1.3, 2.8, metal, rx, 33, z, 20))
     }
     // 胶片
     g.add(stick3([rx, 26, 8], [rx, 15, 9.2], 0.25, '#3a2f2a'))
     g.add(stick3([rx, 26, -16], [rx, 15, -9.2], 0.25, '#3a2f2a'))
     // 侧面摇柄
-    g.add(cylX(2.2, 1, metal, -13.4, 10, 2))
-    g.add(cylX(0.6, 2, DARK, -14.6, 11.5, 2))
+    g.add(cylX(2.2, 1, metal, -13.4, 10, 2, 20))
+    g.add(cylX(0.6, 2, DARK, -14.6, 11.5, 2, 20))
     if (on) g.add(P(beam(4, 4, 26, 15, 30, 0.8), 4, 10.5, f))
     return ctr(g)
   }
@@ -482,13 +477,13 @@ function tripodScreen(open: boolean) {
       g.add(puck(1.6, 1.2, RUBBER, { x: fx, z: fz - 3 }))
     }
     // 卷轴盒
-    g.add(cylX(4, 170, metal, 0, 95, 3))
+    g.add(cylX(4, 170, metal, 0, 95, 3, 20))
     for (const s of [-1, 1]) g.add(P(rbox(3, 9, 9, acc, {}, 1.5), s * 86, 90.5, 3))
     g.add(rbox(6, 6, 5, acc, { y: 92, z: -1 }, 1))
     if (open) {
       g.add(rbox(160, 120, 0.4, border, { y: 99, z: 3 }, 0.2))
       g.add(movie(152, 108, 'sunset', { y: 104, z: 3.5 }))
-      g.add(cylX(0.8, 162, metal, 0, 219.5, 3))
+      g.add(cylX(0.8, 162, metal, 0, 219.5, 3, 20))
       g.add(stick3([0, 226, -3], [0, 226, 3], 0.6, metal))
       g.add(cyl(0.4, 0.4, 6, metal, { y: 220, z: 3 }, 8))
     } else {
@@ -583,7 +578,7 @@ function tripodStand(p: string[]) {
   g.add(cyl(2, 2, 8, foot, { y: 58 }, 16))
   g.add(cyl(1.6, 1.6, 50, metal, { y: 60 }, 16))
   g.add(cyl(1.1, 1.1, 8, shade(metal, -0.15), { y: 106 }, 16))
-  g.add(cylX(1.6, 4, foot, 2.5, 108, 0))
+  g.add(cylX(1.6, 4, foot, 2.5, 108, 0, 20))
   g.add(rbox(10, 3, 8, foot, { y: 113 }, 1))
   g.add(rbox(36, 1.5, 28, plate, { y: STAND_TOP - 1.5 }, 0.5))
   for (const s of [-1, 1]) {
@@ -605,7 +600,7 @@ function armStand(p: string[]) {
   g.add(rbox(40, 3, 40, base, { z: -25 }, 1.2))
   g.add(cyl(2.4, 2.8, 4, base, { y: 3, z: -38 }, 20))
   g.add(cyl(1.8, 1.8, 141, metal, { y: 6, z: -38 }, 16))
-  g.add(cylX(1.2, 3.5, base, 2.8, 120, -38))
+  g.add(cylX(1.2, 3.5, base, 2.8, 120, -38, 20))
   g.add(rbox(5, 5, 5, base, { y: 143, z: -38 }, 1))
   g.add(P(cyl(1.5, 1.5, 78, metal, {}, 16), 0, 145.5, 4, Math.PI / 2))
   g.add(rbox(6, 2, 6, base, { y: 146, z: 33 }, 0.8))
@@ -663,7 +658,7 @@ function boombox(p: string[]) {
   g.add(cyl(2.4, 2.4, 0.3, '#dfe3ea', { y: 22.3, z: 0.5 }, 24))
   for (let i = 0; i < 6; i++) g.add(rbox(2.8, 1, 2.2, i === 5 ? C.red : '#c9ccd2', { x: -9 + i * 3.6, y: 21.5, z: 5.3 }, 0.3))
   for (const s of [-1, 1]) g.add(cyl(1, 1, 8.5, acc, { x: s * 19, y: 21.5 }, 12))
-  g.add(cylX(1.3, 40, acc, 0, 30.3, 0))
+  g.add(cylX(1.3, 40, acc, 0, 30.3, 0, 20))
   g.add(cylX(0.35, 30, '#c3c7cc', 2, 22.3, -5.4, 8))
   return ctr(g)
 }
@@ -1213,11 +1208,11 @@ function popcornCart(p: string[]) {
       const a = (k / 8) * Math.PI * 2
       g.add(stick3([x, 15, -10], [x, 15 + Math.sin(a) * 13, -10 + Math.cos(a) * 13], 0.5, gold))
     }
-    g.add(cylX(2, 3, gold, x, 15, -10))
+    g.add(cylX(2, 3, gold, x, 15, -10, 20))
     g.add(cyl(1.4, 1.4, 16, gold, { x: s * 26, z: 14 }, 12))
     g.add(puck(2.2, 1.2, DARK, { x: s * 26, z: 14 }))
   }
-  g.add(cylX(0.9, 60, DARK, 0, 15, -10))
+  g.add(cylX(0.9, 60, DARK, 0, 15, -10, 20))
   g.add(rbox(60, 46, 40, red, { y: 16 }, 2))
   g.add(rbox(48, 28, 0.6, cream, { y: 24, z: 20.1 }, 0.4))
   g.add(rbox(56, 2, 0.8, gold, { y: 57, z: 20.1 }, 0.3))
@@ -1240,7 +1235,7 @@ function popcornCart(p: string[]) {
   g.add(rbox(32, 1, 1.2, gold, { y: 118.5, z: 21.5 }, 0.3))
   // 推把
   for (const s of [-1, 1]) g.add(stick3([s * 22, 52, -20], [s * 22, 72, -34], 1, gold))
-  g.add(cylX(1.4, 48, DARK, 0, 72, -34))
+  g.add(cylX(1.4, 48, DARK, 0, 72, -34, 20))
   return ctr(g)
 }
 

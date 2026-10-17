@@ -7,7 +7,7 @@
 import * as THREE from 'three'
 import { ball, cup, cyl, puck, rbox, shade, torus } from '../toon'
 import { C, G, holePanel, shell, type AssetDef } from '../kit'
-import { PI, UP, ZAX, dist, mesh, type V3 } from '../geo'
+import { PI, mesh, strut, strutBox, type V3 } from '../geo'
 import { I, J, M, N, R, type Pal } from '../packkit'
 
 // ---------- 配色 ----------
@@ -19,29 +19,6 @@ const CHROME = M.silver
 const INK = M.black
 
 // ---------- 小工具 ----------
-
-/** 把沿 y 的部件摆到 a → b 之间；局部 z 尽量对齐世界 z（轴向接近 z 时改为对齐世界 y） */
-function orient(m: THREE.Object3D, a: V3, b: V3) {
-  const va = new THREE.Vector3(...a)
-  const vb = new THREE.Vector3(...b)
-  const y = vb.clone().sub(va).normalize()
-  const ref = Math.abs(y.dot(ZAX)) > 0.9 ? UP : ZAX
-  const z = ref.clone().addScaledVector(y, -ref.dot(y)).normalize()
-  const x = new THREE.Vector3().crossVectors(y, z)
-  m.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, z))
-  m.position.copy(va.add(vb).multiplyScalar(0.5))
-  return m
-}
-
-/** 两点间的圆杆（r 在 a 端，r2 在 b 端） */
-function bar(a: V3, b: V3, r: number, color: string, r2 = r, seg = 10) {
-  return orient(mesh(new THREE.CylinderGeometry(r2, r, dist(a, b), seg), color), a, b)
-}
-
-/** 两点间的方料：竖料 sx = 宽（x）、sz = 深（z）；沿 x 的横料 sx = 高、sz = 深；沿 z 的横料 sx = 宽、sz = 高 */
-function beam(a: V3, b: V3, sx: number, sz: number, color: string, round = 0.6) {
-  return orient(rbox(sx, dist(a, b), sz, color, {}, Math.min(round, sx / 2 - 0.05, sz / 2 - 0.05)), a, b)
-}
 
 /** 平滑弯管（经过所有点），两端补圆头 */
 function pipe(pts: V3[], r: number, color: string, closed = false) {
@@ -81,7 +58,7 @@ function starBase(r0: number, top: number, frame: string) {
     const a = (i / 5) * PI * 2
     const sx = Math.sin(a)
     const sz = Math.cos(a)
-    g.add(beam([0, 8.5, 0], [sx * r0, 6.8, sz * r0], 3.4, 3.4, frame))
+    g.add(strutBox([0, 8.5, 0], [sx * r0, 6.8, sz * r0], 3.4, 3.4, frame))
     g.add(cyl(0.9, 0.9, 2.4, INK, { x: sx * r0, y: 4.4, z: sz * r0 }, 8))
     g.add(ball(2.5, INK, { x: sx * r0, y: 2.5, z: sz * r0 }, [0.7, 1, 1]))
   }
@@ -109,22 +86,22 @@ const foldPad = (open: boolean) => (p: string[]) => {
   const r = 1.2
   if (open) {
     for (const s of [-1, 1]) {
-      g.add(bar([s * 20, 0, -17], [s * 20, 84, -21.5], r, frame))
-      g.add(bar([s * 18, 0, 19], [s * 18, 43, 14], r, frame))
-      g.add(bar([s * 18, 43, 14], [s * 20, 43, -17.5], r, frame))
+      g.add(strut([s * 20, 0, -17], [s * 20, 84, -21.5], r, frame))
+      g.add(strut([s * 18, 0, 19], [s * 18, 43, 14], r, frame))
+      g.add(strut([s * 18, 43, 14], [s * 20, 43, -17.5], r, frame))
       g.add(rbox(2.6, 1, 3.4, INK, { x: s * 20, z: -17 }, 0.4), rbox(2.6, 1, 3.4, INK, { x: s * 18, z: 19 }, 0.4))
     }
-    g.add(bar([-18, 9, 19], [18, 9, 19], r, frame), bar([-20, 9, -17], [20, 9, -17], r, frame))
+    g.add(strut([-18, 9, 19], [18, 9, 19], r, frame), strut([-20, 9, -17], [20, 9, -17], r, frame))
     g.add(rbox(37, 1.2, 33, shade(frame, -0.2), { y: 41.6, z: -1.5 }, 0.4))
     g.add(rbox(39, 4.6, 35, pad, { y: 42.8, z: -1.5 }, 2))
     g.add(hinge([0, 68, -20.5], -0.06, rbox(37, 19, 4, pad, { y: 59, z: -20.5 }, 1.8)))
   } else {
     for (const s of [-1, 1]) {
-      g.add(bar([s * 20, 0, -1.5], [s * 20, 84, -1.5], r, frame))
-      g.add(bar([s * 18, 0, 1.5], [s * 18, 62, 1.5], r, frame))
+      g.add(strut([s * 20, 0, -1.5], [s * 20, 84, -1.5], r, frame))
+      g.add(strut([s * 18, 0, 1.5], [s * 18, 62, 1.5], r, frame))
       g.add(rbox(2.6, 1, 3, INK, { x: s * 20, z: -1.5 }, 0.4), rbox(2.6, 1, 3, INK, { x: s * 18, z: 1.5 }, 0.4))
     }
-    g.add(bar([-20, 9, -1.5], [20, 9, -1.5], r, frame))
+    g.add(strut([-20, 9, -1.5], [20, 9, -1.5], r, frame))
     g.add(rbox(39, 35, 4.6, pad, { y: 22, z: 2.6 }, 2))
     g.add(rbox(37, 19, 4, pad, { y: 59, z: -2.4 }, 1.8))
   }
@@ -139,20 +116,20 @@ const xSlat = (open: boolean) => (p: string[]) => {
     // 长腿：前脚 (z 20) → 靠背顶 (z -21, y 86)；短腿：后脚 (z -18) → 座前 (z 16, y 44)
     const zA = (y: number) => 20 - (41 * y) / 86
     for (const s of [-1, 1]) {
-      g.add(beam([s * 21, 0, 20], [s * 21, 86, -21], 2.4, 3.6, frame))
-      g.add(beam([s * 18.4, 0, -18], [s * 18.4, 44, 16], 2.4, 3.4, frame))
+      g.add(strutBox([s * 21, 0, 20], [s * 21, 86, -21], 2.4, 3.6, frame))
+      g.add(strutBox([s * 18.4, 0, -18], [s * 18.4, 44, 16], 2.4, 3.4, frame))
       g.add(cyl(0.9, 0.9, 1.2, CHROME, { x: s * 22.4, y: 26, z: zA(26) - 0.3, rz: PI / 2 }, 10))
     }
-    g.add(beam([-20, 8, 20 - (41 * 8) / 86], [20, 8, 20 - (41 * 8) / 86], 2.4, 2.4, frame))
-    g.add(beam([-17.4, 6, -15.5], [17.4, 6, -15.5], 2.4, 2.4, frame))
+    g.add(strutBox([-20, 8, 20 - (41 * 8) / 86], [20, 8, 20 - (41 * 8) / 86], 2.4, 2.4, frame))
+    g.add(strutBox([-17.4, 6, -15.5], [17.4, 6, -15.5], 2.4, 2.4, frame))
     for (let i = 0; i < 6; i++) g.add(rbox(38.6, 2, 4.6, slat, { y: 44, z: -14 + i * 5.6 }, 0.6))
     for (const y of [62, 71, 80]) g.add(rbox(40, 6, 1.8, slat, { y, z: zA(y + 3) - 2.2, rx: 0.45 }, 0.6))
   } else {
     for (const s of [-1, 1]) {
-      g.add(beam([s * 21, 0, 0], [s * 21, 94, 0], 2.4, 3.6, frame))
-      g.add(beam([s * 18.4, 0, 3.2], [s * 18.4, 48, 3.2], 2.4, 3.4, frame))
+      g.add(strutBox([s * 21, 0, 0], [s * 21, 94, 0], 2.4, 3.6, frame))
+      g.add(strutBox([s * 18.4, 0, 3.2], [s * 18.4, 48, 3.2], 2.4, 3.4, frame))
     }
-    g.add(beam([-20, 8, 0], [20, 8, 0], 2.4, 2.4, frame))
+    g.add(strutBox([-20, 8, 0], [20, 8, 0], 2.4, 2.4, frame))
     for (let i = 0; i < 6; i++) g.add(rbox(38.6, 4.6, 2, slat, { y: 17 + i * 5.6, z: 5.4 }, 0.6))
     for (const y of [64, 73, 82]) g.add(rbox(40, 6, 1.8, slat, { y, z: -2.8 }, 0.6))
   }
@@ -165,16 +142,16 @@ const directorTall = (open: boolean) => (p: string[]) => {
   const g = new THREE.Group()
   const hx = open ? 24 : 4.5
   for (const sx of [-1, 1]) {
-    for (const sz of [-1, 1]) g.add(beam([sx * hx, 0, sz * 20], [sx * hx, 95, sz * 20], 3, 3, frame))
-    g.add(beam([sx * hx, 75, -20], [sx * hx, 122, -21], 3, 3, frame))
-    g.add(beam([sx * (hx + 0.5), 96.5, -22], [sx * (hx + 0.5), 96.5, 23], 5, 2.4, frame))
-    if (open) g.add(beam([sx * hx, 74, -18.5], [sx * hx, 74, 18.5], 2.6, 2.6, frame))
+    for (const sz of [-1, 1]) g.add(strutBox([sx * hx, 0, sz * 20], [sx * hx, 95, sz * 20], 3, 3, frame))
+    g.add(strutBox([sx * hx, 75, -20], [sx * hx, 122, -21], 3, 3, frame))
+    g.add(strutBox([sx * (hx + 0.5), 96.5, -22], [sx * (hx + 0.5), 96.5, 23], 5, 2.4, frame))
+    if (open) g.add(strutBox([sx * hx, 74, -18.5], [sx * hx, 74, 18.5], 2.6, 2.6, frame))
   }
   for (const sz of [-1, 1]) {
-    g.add(beam([-hx + 1, 38, sz * 20], [hx - 1, 70, sz * 20], 2.2, 2.2, frame))
-    g.add(beam([hx - 1, 38, sz * 20], [-hx + 1, 70, sz * 20], 2.2, 2.2, frame))
+    g.add(strutBox([-hx + 1, 38, sz * 20], [hx - 1, 70, sz * 20], 2.2, 2.2, frame))
+    g.add(strutBox([hx - 1, 38, sz * 20], [-hx + 1, 70, sz * 20], 2.2, 2.2, frame))
   }
-  g.add(beam([-hx - 1.5, 27, 21.2], [hx + 1.5, 27, 21.2], 3.4, 3.4, shade(frame, -0.1)))
+  g.add(strutBox([-hx - 1.5, 27, 21.2], [hx + 1.5, 27, 21.2], 3.4, 3.4, shade(frame, -0.1)))
   if (open) {
     g.add(rbox(46, 1, 38, canvas, { y: 74.5 }, 0.4))
     g.add(rbox(48, 20, 1, canvas, { y: 100, z: -21.2 }, 0.4))
@@ -196,7 +173,7 @@ function moonChair(p: string[]) {
   for (const sx of [-1, 1])
     for (const sz of [-1, 1]) {
       // 四根腿在坐兜底下交叉，收在底部圆垫下面（以前一直伸到对侧 y = 34，从布兜里面戳出来）
-      g.add(bar([sx * 27, 0, sz * 25], [-sx * 2, 19.5, -sz * 2 + 2], 1.1, frame))
+      g.add(strut([sx * 27, 0, sz * 25], [-sx * 2, 19.5, -sz * 2 + 2], 1.1, frame))
       g.add(ball(1.8, INK, { x: sx * 27, y: 1.8, z: sz * 25 }, [1, 1, 1]))
     }
   return g
@@ -210,14 +187,14 @@ const campArm = (open: boolean) => (p: string[]) => {
   if (open) {
     for (const sx of [-1, 1]) {
       for (const sz of [-1, 1]) {
-        g.add(bar([sx * 26, 0, sz * 21], [sx * 26, 60, sz * 21], r, frame))
+        g.add(strut([sx * 26, 0, sz * 21], [sx * 26, 60, sz * 21], r, frame))
         g.add(ball(1.6, INK, { x: sx * 26, y: 1.6, z: sz * 21 }))
       }
-      g.add(bar([sx * 26, 6, -21], [sx * 26, 38, 21], r, frame), bar([sx * 26, 6, 21], [sx * 26, 38, -21], r, frame))
-      g.add(bar([sx * 25, 38, -21], [sx * 25, 92, -30], r, frame))
+      g.add(strut([sx * 26, 6, -21], [sx * 26, 38, 21], r, frame), strut([sx * 26, 6, 21], [sx * 26, 38, -21], r, frame))
+      g.add(strut([sx * 25, 38, -21], [sx * 25, 92, -30], r, frame))
       g.add(rbox(7, 1.4, 44, cloth, { x: sx * 26, y: 60 }, 0.6))
     }
-    for (const sz of [-1, 1]) g.add(bar([-26, 6, sz * 21], [26, 36, sz * 21], r, frame), bar([26, 6, sz * 21], [-26, 36, sz * 21], r, frame))
+    for (const sz of [-1, 1]) g.add(strut([-26, 6, sz * 21], [26, 36, sz * 21], r, frame), strut([26, 6, sz * 21], [-26, 36, sz * 21], r, frame))
     // 吊床式坐面：中间低
     g.add(rbox(48, 1.2, 40, cloth, { y: 36 }, 0.5))
     g.add(rbox(48, 3, 30, cloth, { y: 34 }, 1.2))
@@ -227,7 +204,7 @@ const campArm = (open: boolean) => (p: string[]) => {
   } else {
     for (let i = 0; i < 8; i++) {
       const a = (i / 8) * PI * 2
-      g.add(bar([Math.cos(a) * 5.5, 0, Math.sin(a) * 5.5], [Math.cos(a) * 4, 92, Math.sin(a) * 4], r, frame))
+      g.add(strut([Math.cos(a) * 5.5, 0, Math.sin(a) * 5.5], [Math.cos(a) * 4, 92, Math.sin(a) * 4], r, frame))
     }
     g.add(cyl(7.5, 7, 54, cloth, { y: 22 }, 16), torus(7.6, 0.8, holder, { y: 40, rx: PI / 2 }), torus(7.4, 0.8, holder, { y: 64, rx: PI / 2 }))
     for (let i = 0; i < 4; i++) g.add(ball(1.4, INK, { x: Math.cos((i * PI) / 2 + 0.4) * 5.5, y: 1.4, z: Math.sin((i * PI) / 2 + 0.4) * 5.5 }))
@@ -243,22 +220,22 @@ const foldHighStool = (open: boolean) => (p: string[]) => {
   if (open) {
     const zA = (y: number) => 18 - (32 * y) / 66.5
     for (const s of [-1, 1]) {
-      g.add(bar([s * 16, 0, 18], [s * 16, 66.5, -14], r, frame))
-      g.add(bar([s * 13.5, 0, -18], [s * 13.5, 66.5, 14], r, frame))
+      g.add(strut([s * 16, 0, 18], [s * 16, 66.5, -14], r, frame))
+      g.add(strut([s * 13.5, 0, -18], [s * 13.5, 66.5, 14], r, frame))
       g.add(rbox(2.8, 1, 3.4, INK, { x: s * 16, z: 18 }, 0.4), rbox(2.8, 1, 3.4, INK, { x: s * 13.5, z: -18 }, 0.4))
       g.add(cyl(1, 1, 3, CHROME, { x: s * 14.8, y: 31.5, z: 2.8, rz: PI / 2 }, 10))
     }
-    g.add(bar([-16, 24, zA(24)], [16, 24, zA(24)], 1.5, frame))
-    g.add(bar([-13.5, 4, -16], [13.5, 4, -16], r, frame))
+    g.add(strut([-16, 24, zA(24)], [16, 24, zA(24)], 1.5, frame))
+    g.add(strut([-13.5, 4, -16], [13.5, 4, -16], r, frame))
     g.add(rbox(34, 2.2, 30, shade(frame, -0.15), { y: 66.3 }, 0.6))
     g.add(rbox(35, 4.2, 31, seat, { y: 67.4 }, 1.6))
   } else {
     for (const s of [-1, 1]) {
-      g.add(bar([s * 16, 0, 0], [s * 16, 74, 0], r, frame))
-      g.add(bar([s * 13.5, 0, 2.6], [s * 13.5, 74, 2.6], r, frame))
+      g.add(strut([s * 16, 0, 0], [s * 16, 74, 0], r, frame))
+      g.add(strut([s * 13.5, 0, 2.6], [s * 13.5, 74, 2.6], r, frame))
       g.add(rbox(2.8, 1, 3, INK, { x: s * 16 }, 0.4))
     }
-    g.add(bar([-16, 24, 0], [16, 24, 0], 1.5, frame))
+    g.add(strut([-16, 24, 0], [16, 24, 0], 1.5, frame))
     g.add(rbox(35, 31, 4.2, seat, { y: 44, z: -3.4 }, 1.6))
   }
   return g
@@ -293,11 +270,11 @@ const bench = (len: number) => (p: string[]) => {
   const g = G(rbox(len, 4.2, 28, wood, { y: 40.8 }, 0.9))
   const hx = len / 2 - 12
   for (const sx of [-1, 1]) {
-    for (const sz of [-1, 1]) g.add(beam([sx * hx, 40.8, sz * 9], [sx * (hx + 4), 0, sz * 12], 4, 4, leg))
-    g.add(beam([sx * (hx + 1.8), 16, -11], [sx * (hx + 1.8), 16, 11], 3.4, 3, leg))
-    g.add(beam([sx * hx, 38.2, -11], [sx * hx, 38.2, 11], 4, 3, leg))
+    for (const sz of [-1, 1]) g.add(strutBox([sx * hx, 40.8, sz * 9], [sx * (hx + 4), 0, sz * 12], 4, 4, leg))
+    g.add(strutBox([sx * (hx + 1.8), 16, -11], [sx * (hx + 1.8), 16, 11], 3.4, 3, leg))
+    g.add(strutBox([sx * hx, 38.2, -11], [sx * hx, 38.2, 11], 4, 3, leg))
   }
-  g.add(beam([-hx - 1.8, 18, 0], [hx + 1.8, 18, 0], 4, 2.6, leg))
+  g.add(strutBox([-hx - 1.8, 18, 0], [hx + 1.8, 18, 0], 4, 2.6, leg))
   return g
 }
 
@@ -306,12 +283,12 @@ function frameStool(p: string[]) {
   const [top, leg] = p
   const g = G(rbox(36, 3, 36, top, { y: 42 }, 0.8))
   for (const sx of [-1, 1])
-    for (const sz of [-1, 1]) g.add(beam([sx * 15, 0, sz * 15], [sx * 15.5, 42, sz * 15.5], 3.4, 3.4, leg))
+    for (const sz of [-1, 1]) g.add(strutBox([sx * 15, 0, sz * 15], [sx * 15.5, 42, sz * 15.5], 3.4, 3.4, leg))
   for (const s of [-1, 1]) {
-    g.add(beam([-14, 38, s * 15.5], [14, 38, s * 15.5], 4, 1.8, leg))
-    g.add(beam([s * 15.5, 38, -14], [s * 15.5, 38, 14], 1.8, 4, leg))
-    g.add(beam([-14, 12, s * 15.1], [14, 12, s * 15.1], 2.2, 2, leg))
-    g.add(beam([s * 15.1, 17, -14], [s * 15.1, 17, 14], 2, 2.2, leg))
+    g.add(strutBox([-14, 38, s * 15.5], [14, 38, s * 15.5], 4, 1.8, leg))
+    g.add(strutBox([s * 15.5, 38, -14], [s * 15.5, 38, 14], 1.8, 4, leg))
+    g.add(strutBox([-14, 12, s * 15.1], [14, 12, s * 15.1], 2.2, 2, leg))
+    g.add(strutBox([s * 15.1, 17, -14], [s * 15.1, 17, 14], 2, 2.2, leg))
   }
   return g
 }
@@ -323,7 +300,7 @@ const ironStool = (h: number) => (p: string[]) => {
   const spread = h > 50 ? 20 : 17
   for (let i = 0; i < 4; i++) {
     const a = (i / 4) * PI * 2 + PI / 4
-    g.add(beam([Math.cos(a) * 11, h - 4.6, Math.sin(a) * 11], [Math.cos(a) * spread, 0, Math.sin(a) * spread], 2.4, 2.4, frame, 0.4))
+    g.add(strutBox([Math.cos(a) * 11, h - 4.6, Math.sin(a) * 11], [Math.cos(a) * spread, 0, Math.sin(a) * spread], 2.4, 2.4, frame, 0.4))
   }
   if (h > 50) {
     const y = h * 0.34
@@ -335,7 +312,7 @@ const ironStool = (h: number) => (p: string[]) => {
     for (let i = 0; i < 4; i++) {
       const a0 = (i / 4) * PI * 2 + PI / 4
       const a1 = a0 + PI / 2
-      g.add(bar([Math.cos(a0) * k, y, Math.sin(a0) * k], [Math.cos(a1) * k, y, Math.sin(a1) * k], 0.8, frame))
+      g.add(strut([Math.cos(a0) * k, y, Math.sin(a0) * k], [Math.cos(a1) * k, y, Math.sin(a1) * k], 0.8, frame))
     }
   }
   return g
@@ -346,12 +323,12 @@ const woodBar = (h: number) => (p: string[]) => {
   const [wood, pad] = p
   const g = G(rbox(40, 4, 36, wood, { y: h - 5.5 }, 1.2), rbox(36, 2, 31, pad, { y: h - 1.8, z: 1 }, 0.9))
   for (const sx of [-1, 1])
-    for (const sz of [-1, 1]) g.add(bar([sx * 15, h - 5.5, sz * 13], [sx * 19, 0, sz * 17], 1.8, wood, 1.6))
+    for (const sz of [-1, 1]) g.add(strut([sx * 15, h - 5.5, sz * 13], [sx * 19, 0, sz * 17], 1.8, wood, 1.6))
   const fy = h * 0.33
   const k = (y: number) => 1 - y / (h - 5.5)
   const fx = 15 + 4 * k(fy)
-  g.add(bar([-fx, fy, 13 + 4 * k(fy)], [fx, fy, 13 + 4 * k(fy)], 1.6, wood))
-  for (const s of [-1, 1]) g.add(bar([s * fx, fy + 6, -13 - 4 * k(fy + 6)], [s * fx, fy + 6, 13 + 4 * k(fy + 6)], 1.2, wood))
+  g.add(strut([-fx, fy, 13 + 4 * k(fy)], [fx, fy, 13 + 4 * k(fy)], 1.6, wood))
+  for (const s of [-1, 1]) g.add(strut([s * fx, fy + 6, -13 - 4 * k(fy + 6)], [s * fx, fy + 6, 13 + 4 * k(fy + 6)], 1.2, wood))
   // 低靠背
   const arc: V3[] = [
     [-18, h + 12, -9],
@@ -366,7 +343,7 @@ const woodBar = (h: number) => (p: string[]) => {
     [0, -16],
     [14, -12],
   ])
-    g.add(bar([x, h - 1.5, z * 0.92], [x, h + 12.5, z], 1, wood))
+    g.add(strut([x, h - 1.5, z * 0.92], [x, h + 12.5, z], 1, wood))
   return g
 }
 
@@ -377,19 +354,19 @@ const stepFold = (open: boolean) => (p: string[]) => {
   const r = 1.2
   if (open) {
     for (const s of [-1, 1]) {
-      g.add(bar([s * 20, 0, 22], [s * 20, 52, -10], r, frame))
-      g.add(bar([s * 21.5, 0, -22], [s * 21.5, 52, -13], r, frame))
+      g.add(strut([s * 20, 0, 22], [s * 20, 52, -10], r, frame))
+      g.add(strut([s * 21.5, 0, -22], [s * 21.5, 52, -13], r, frame))
       g.add(rbox(3, 1, 4, INK, { x: s * 20, z: 22 }, 0.4), rbox(3, 1, 4, INK, { x: s * 21.5, z: -22 }, 0.4))
     }
-    g.add(bar([-21.5, 22, -16.5], [21.5, 22, -16.5], r, frame))
+    g.add(strut([-21.5, 22, -16.5], [21.5, 22, -16.5], r, frame))
     g.add(rbox(38, 2.4, 15, tread, { y: 24, z: 7 }, 0.6))
     g.add(rbox(44, 2.4, 22, tread, { y: 52, z: -11.5 }, 0.6))
     for (const z of [3, 7, 11]) g.add(rbox(34, 0.4, 1.2, shade(tread, -0.25), { y: 26.2, z }, 0.15))
     for (const z of [-18, -13, -8, -3]) g.add(rbox(40, 0.4, 1.2, shade(tread, -0.25), { y: 54.2, z }, 0.15))
   } else {
     for (const s of [-1, 1]) {
-      g.add(bar([s * 20, 0, 1.2], [s * 20, 60, 1.2], r, frame))
-      g.add(bar([s * 21.5, 0, -1.2], [s * 21.5, 58, -1.2], r, frame))
+      g.add(strut([s * 20, 0, 1.2], [s * 20, 60, 1.2], r, frame))
+      g.add(strut([s * 21.5, 0, -1.2], [s * 21.5, 58, -1.2], r, frame))
     }
     g.add(rbox(38, 15, 2.4, tread, { y: 24, z: 3.6 }, 0.6))
     g.add(rbox(44, 22, 2.4, tread, { y: 38, z: -3.6 }, 0.6))
@@ -404,7 +381,7 @@ function lowStool(p: string[]) {
   const g = G(top)
   for (let i = 0; i < 3; i++) {
     const a = (i / 3) * PI * 2 + PI / 2
-    g.add(bar([Math.cos(a) * 8, 20.9, Math.sin(a) * 8], [Math.cos(a) * 13, 0, Math.sin(a) * 13], 1.6, leg, 1.3))
+    g.add(strut([Math.cos(a) * 8, 20.9, Math.sin(a) * 8], [Math.cos(a) * 13, 0, Math.sin(a) * 13], 1.6, leg, 1.3))
   }
   return g
 }
@@ -436,7 +413,7 @@ const stackStool = (n: number) => (p: string[]) => {
     const one = G(cyl(15.5, 15, 2.6, body, { y: 43 }, 28), cyl(14, 14, 0.4, acc, { y: 45.6 }, 28))
     for (let i = 0; i < 4; i++) {
       const a = (i / 4) * PI * 2 + PI / 4
-      one.add(bar([Math.cos(a) * 18.5, 0, Math.sin(a) * 18.5], [Math.cos(a) * 12, 43.2, Math.sin(a) * 12], 1.2, body, 2.2, 8))
+      one.add(strut([Math.cos(a) * 18.5, 0, Math.sin(a) * 18.5], [Math.cos(a) * 12, 43.2, Math.sin(a) * 12], 1.2, body, 2.2, 8))
     }
     one.add(torus(15, 0.6, body, { y: 18, rx: PI / 2 }))
     one.position.y = y0
@@ -451,10 +428,10 @@ function pianoBench(p: string[]) {
   const g = G(rbox(72, 9, 33, wood, { y: 36 }, 0.8))
   g.add(rbox(74, 4.6, 35, pad, { y: 45 }, 1.8), buttons(66, 28, 49.6, 6, 2, shade(pad, -0.15)))
   for (const sx of [-1, 1])
-    for (const sz of [-1, 1]) g.add(beam([sx * 33, 0, sz * 14], [sx * 33.5, 36, sz * 14.5], 3.6, 3.6, wood))
+    for (const sz of [-1, 1]) g.add(strutBox([sx * 33, 0, sz * 14], [sx * 33.5, 36, sz * 14.5], 3.6, 3.6, wood))
   g.add(rbox(66, 1.4, 1, shade(wood, -0.2), { x: 0, y: 40, z: 16.6 }, 0.3))
-  g.add(beam([-32.5, 10, 0], [32.5, 10, 0], 3, 2.4, wood))
-  for (const s of [-1, 1]) g.add(beam([s * 33.2, 10, -12], [s * 33.2, 10, 12], 2.4, 3, wood))
+  g.add(strutBox([-32.5, 10, 0], [32.5, 10, 0], 3, 2.4, wood))
+  for (const s of [-1, 1]) g.add(strutBox([s * 33.2, 10, -12], [s * 33.2, 10, 12], 2.4, 3, wood))
   return g
 }
 
@@ -519,19 +496,19 @@ const ergo = (foot: boolean) => (p: string[]) => {
   back.add(pipe(loop, 1.4, frame, true))
   back.add(rbox(hw * 2 - 4, backH - 2, 0.8, net, { y: 0.5, z: -0.6 }, 0.3))
   back.add(rbox(32, 9, 3.4, frame, { y: 8, z: 1.4 }, 1.4))
-  back.add(beam([0, backH - 2, -1.6], [0, backH + 10, -2.4], 5, 2, frame))
+  back.add(strutBox([0, backH - 2, -1.6], [0, backH + 10, -2.4], 5, 2, frame))
   back.add(rbox(32, 12, 4.4, seat, { y: backH + 9, z: -0.4 }, 2))
   back.position.set(0, 52, -25.5)
   g.add(hinge([0, 52, -25.5], -0.14, back))
   // 扶手：竖杆 + 可调扶手垫
   for (const s of [-1, 1]) {
-    g.add(beam([s * 23, 41, -4], [s * 27, 48, -4], 2.4, 5, frame))
-    g.add(beam([s * 27, 47, -4], [s * 27, 63, -4], 3, 4, frame))
+    g.add(strutBox([s * 23, 41, -4], [s * 27, 48, -4], 2.4, 5, frame))
+    g.add(strutBox([s * 27, 47, -4], [s * 27, 63, -4], 3, 4, frame))
     g.add(rbox(8, 2.6, 25, seat, { x: s * 27, y: 63, z: 0 }, 1.1))
     g.add(rbox(1.4, 3, 1.4, INK, { x: s * 25.6, y: 55, z: -1.8 }, 0.4))
   }
   if (foot) {
-    for (const s of [-1, 1]) g.add(beam([s * 15, 40, 18], [s * 15, 37.5, 44], 2.4, 2, CHROME))
+    for (const s of [-1, 1]) g.add(strutBox([s * 15, 40, 18], [s * 15, 37.5, 44], 2.4, 2, CHROME))
     g.add(rbox(38, 3.4, 16, seat, { y: 36.4, z: 50 }, 1.4))
     g.add(rbox(40, 1.6, 17, frame, { y: 35, z: 50 }, 0.6))
   }
@@ -582,8 +559,8 @@ function kneelRock(p: string[]) {
     m.position.x = s * 19 + (s < 0 ? 0 : 2.4)
     g.add(m)
   }
-  g.add(beam([-18, 6, 0], [18, 6, 0], 3.4, 3.4, wood))
-  g.add(beam([-18, 46, -27], [18, 46, -27], 3, 3, wood))
+  g.add(strutBox([-18, 6, 0], [18, 6, 0], 3.4, 3.4, wood))
+  g.add(strutBox([-18, 46, -27], [18, 46, -27], 3, 3, wood))
   g.add(hinge([0, 50, -27], 0.32, rbox(42, 6, 30, pad, { y: 50, z: -15 }, 2.4)))
   g.add(hinge([0, 18, 20], 0.5, rbox(42, 5, 18, pad, { y: 15, z: 20 }, 2)))
   return g
@@ -607,7 +584,7 @@ function ballStool(p: string[]) {
   const g = G(torus(18, 1.5, frame, { y: 10, rx: PI / 2 }))
   for (let i = 0; i < 4; i++) {
     const a = (i / 4) * PI * 2 + PI / 4
-    g.add(bar([Math.cos(a) * 19, 4.5, Math.sin(a) * 19], [Math.cos(a) * 17.5, 10, Math.sin(a) * 17.5], 1.2, frame))
+    g.add(strut([Math.cos(a) * 19, 4.5, Math.sin(a) * 19], [Math.cos(a) * 17.5, 10, Math.sin(a) * 17.5], 1.2, frame))
     g.add(ball(2.4, INK, { x: Math.cos(a) * 19, y: 2.4, z: Math.sin(a) * 19 }, [0.7, 1, 1]))
   }
   g.add(ball(24, ballC, { y: 28.5 }))
@@ -637,7 +614,7 @@ function bentwood(p: string[]) {
   // 后腿一直弯上去成靠背
   for (const s of [-1, 1]) {
     g.add(pipe([[s * 15, 0, -18], [s * 14, 30, -15], [s * 14, 44, -15], [s * 15, 70, -19], [s * 12, 86, -21]], 1.4, wood))
-    g.add(bar([s * 15, 0, 18], [s * 13, 42.5, 13], 1.4, wood, 1.6))
+    g.add(strut([s * 15, 0, 18], [s * 13, 42.5, 13], 1.4, wood, 1.6))
   }
   g.add(pipe([[-12, 86, -21], [-6, 88.5, -22.5], [0, 89, -23], [6, 88.5, -22.5], [12, 86, -21]], 1.4, wood))
   g.add(pipe([[-14, 58, -16.5], [-9, 64, -19], [0, 66, -20], [9, 64, -19], [14, 58, -16.5]], 1, wood))
@@ -651,16 +628,16 @@ function ladderBack(p: string[]) {
   const g = new THREE.Group()
   for (const s of [-1, 1]) {
     g.add(cyl(1.8, 1.8, 46, wood, { x: s * 21, z: 17 }, 12), ball(2.1, wood, { x: s * 21, y: 46, z: 17 }))
-    g.add(bar([s * 20, 0, -17], [s * 19.5, 98, -21], 1.8, wood, 1.6, 12), ball(2, wood, { x: s * 19.5, y: 98.5, z: -21 }))
+    g.add(strut([s * 20, 0, -17], [s * 19.5, 98, -21], 1.8, wood, 1.6, 12), ball(2, wood, { x: s * 19.5, y: 98.5, z: -21 }))
   }
   // 编织座：一块带格纹的软垫面，边框是横档
   g.add(rbox(41, 3, 35, rush, { y: 42 }, 1))
   for (let i = 0; i < 7; i++) g.add(rbox(41.2, 0.3, 0.6, shade(rush, -0.2), { y: 45, z: -15 + i * 5 }, 0.1))
-  for (const sz of [-1, 1]) g.add(bar([-21, 43, sz * 17], [21, 43, sz * 17], 1.3, wood))
-  for (const sx of [-1, 1]) g.add(bar([sx * 21, 43, -17], [sx * 21, 43, 17], 1.3, wood))
+  for (const sz of [-1, 1]) g.add(strut([-21, 43, sz * 17], [21, 43, sz * 17], 1.3, wood))
+  for (const sx of [-1, 1]) g.add(strut([sx * 21, 43, -17], [sx * 21, 43, 17], 1.3, wood))
   for (const y of [14, 24]) {
-    g.add(bar([-21, y, 17], [21, y, 17], 1, wood))
-    for (const sx of [-1, 1]) g.add(bar([sx * 21, y + 4, -17], [sx * 21, y + 4, 17], 1, wood))
+    g.add(strut([-21, y, 17], [21, y, 17], 1, wood))
+    for (const sx of [-1, 1]) g.add(strut([sx * 21, y + 4, -17], [sx * 21, y + 4, 17], 1, wood))
   }
   for (const [y, h] of [
     [60, 6],
@@ -668,7 +645,7 @@ function ladderBack(p: string[]) {
     [88, 7],
   ]) {
     const z = -17 - (4 * y) / 98
-    g.add(beam([-19.5, y, z - 0.5], [19.5, y, z - 0.5], h, 1.6, wood))
+    g.add(strutBox([-19.5, y, z - 0.5], [19.5, y, z - 0.5], h, 1.6, wood))
   }
   return g
 }

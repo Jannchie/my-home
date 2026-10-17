@@ -6,7 +6,7 @@
 import * as THREE from 'three'
 import { ball, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, SWING_OPEN, hangingPipe, holePanel, movable, paintPanel, pipeHook, rectPoly, ellipsePoly, type AssetDef, type Hole, type Poly, type StyleTag, type SurfaceDef } from '../kit'
-import { glassPane, lit, mesh, noOutlineDeep, type V3 } from '../geo'
+import { batten, cylX, cylZ, glassPane, lit, mesh, noOutlineDeep, rod3, type V3 } from '../geo'
 import { I, J, M, N, R } from '../packkit'
 
 type P2 = [number, number]
@@ -29,42 +29,6 @@ const IRON = '#2f2f31'
 // =====================================================================
 // 小工具
 // =====================================================================
-
-/** 两端已知的 3D 细杆 */
-function rod3(a: V3, b: V3, r: number, color: string, seg = 10) {
-  const va = new THREE.Vector3(...a)
-  const vb = new THREE.Vector3(...b)
-  const m = cyl(r, r, va.distanceTo(vb), color, {}, seg)
-  m.position.copy(va).add(vb).multiplyScalar(0.5)
-  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), vb.clone().sub(va).normalize())
-  return m
-}
-
-/** 两端已知的方截面梁 */
-function beam(a: V3, b: V3, sx: number, sz: number, color: string) {
-  const va = new THREE.Vector3(...a)
-  const vb = new THREE.Vector3(...b)
-  const m = rbox(sx, va.distanceTo(vb), sz, color, {}, Math.min(sx, sz) * 0.25)
-  m.position.copy(va).add(vb).multiplyScalar(0.5)
-  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), vb.clone().sub(va).normalize())
-  return m
-}
-
-/** 沿 x 的水平圆柱，(x, y, z) 为轴心 */
-function cylX(r: number, len: number, color: string, x: number, y: number, z: number, seg = 16) {
-  const m = cyl(r, r, len, color, {}, seg)
-  m.rotation.z = Math.PI / 2
-  m.position.set(x, y, z)
-  return m
-}
-
-/** 沿 z 的水平圆柱，(x, y, z) 为轴心 */
-function cylZ(r: number, len: number, color: string, x: number, y: number, z: number, seg = 16) {
-  const m = cyl(r, r, len, color, {}, seg)
-  m.rotation.x = Math.PI / 2
-  m.position.set(x, y, z)
-  return m
-}
 
 /** 沿折线的圆管（弯曲的扶手、搭脑、卷曲腿），两端加小圆球封口 */
 function pipe(pts: V3[], r: number, color: string, caps = true, seg = 0) {
@@ -644,7 +608,7 @@ function qiaotouTable(p: string[]) {
   }
   for (const s of [-1, 1]) {
     // 腿：侧脚（下端外撇）
-    for (const z of [-16, 16]) g.add(beam([s * 69, 80, z], [s * 71, 4, z * 1.05], 4.4, 3.6, wood))
+    for (const z of [-16, 16]) g.add(batten([s * 69, 80, z], [s * 71, 4, z * 1.05], 4.4, 3.6, wood))
     // 挡板：如意云头开光
     g.add(holePanel(30, 52, 1.6, panel, [{ kind: 'circle', x: 0, y: 34, r: 8 }, { kind: 'arch', x: 0, y: 8, w: 12, h: 14 }], { x: s * 70, y: 16, ry: Math.PI / 2 }))
     g.add(rod3([s * 70, 14, -16], [s * 70, 14, 16], 1.1, wood))
@@ -682,7 +646,7 @@ function tiaoBench(p: string[]) {
   const g = new THREE.Group()
   g.add(rbox(110, 5, 24, wood, { y: 43 }, 1))
   for (const sx of [-1, 1]) {
-    for (const sz of [-1, 1]) g.add(beam([sx * 44, 43.5, sz * 7], [sx * 49, 0.2, sz * 10.5], 3.4, 2.6, wood))
+    for (const sz of [-1, 1]) g.add(batten([sx * 44, 43.5, sz * 7], [sx * 49, 0.2, sz * 10.5], 3.4, 2.6, wood))
     g.add(rod3([sx * 46.8, 16, -9], [sx * 46.8, 16, 9], 1, dark))
   }
   for (const s of [-1, 1]) g.add(prism([[-38, 43], [38, 43], [38, 40], [30, 38.6], [-30, 38.6], [-38, 40]], 1.4, dark, s * 8.2))
@@ -1187,7 +1151,7 @@ function recamier(p: string[]) {
   }
   scroll(-76, -1, 44)
   scroll(76, 1, 30)
-  g.add(cylZ(8, 46, CL.cream, -58, 47, -2))
+  g.add(cylZ(8, 46, CL.cream, -58, 47, -2, 16))
   return g
 }
 
@@ -1700,7 +1664,7 @@ function barnDoor(p: string[]) {
   for (let i = 0; i < 6; i++) g.add(rbox(DW / 6 - 0.3, DH, 3, i % 2 ? shade(wood, -0.05) : wood, { x: dx - DW / 2 + DW / 12 + (i * DW) / 6, y: y0, z: 2 }, 0.4))
   for (const y of [y0, y0 + DH - 14]) g.add(rbox(DW, 14, 2, brace, { x: dx, y, z: 4.4 }, 0.5))
   for (const s of [-1, 1]) g.add(rbox(13, DH - 28 + 0.4, 2, brace, { x: dx + s * (DW / 2 - 6.5), y: y0 + 13.8, z: 4.4 }, 0.5))
-  g.add(beam([dx - DW / 2 + 15, y0 + 16, 4.4], [dx + DW / 2 - 15, y0 + DH - 16, 4.4], 12, 2, brace))
+  g.add(batten([dx - DW / 2 + 15, y0 + 16, 4.4], [dx + DW / 2 - 15, y0 + DH - 16, 4.4], 12, 2, brace))
   // 拉手
   const hx = dx + DW / 2 - 6.5
   g.add(rod3([hx, y0 + 86, 8.6], [hx, y0 + 122, 8.6], 1, metal))
@@ -1780,8 +1744,8 @@ function farmBench(p: string[]) {
   g.add(rbox(160, 4.5, 36, top, { y: 41.5 }, 1))
   for (const s of [-1, 1]) {
     const x = s * 62
-    g.add(beam([x, 40.3, -14], [x, 0.8, 14], 4, 4, base))
-    g.add(beam([x, 40.3, 14], [x, 0.8, -14], 4, 4, base))
+    g.add(batten([x, 40.3, -14], [x, 0.8, 14], 4, 4, base))
+    g.add(batten([x, 40.3, 14], [x, 0.8, -14], 4, 4, base))
     g.add(rbox(4.4, 4, 34, base, { x, y: 37.5 }, 0.8))
   }
   g.add(rbox(128, 4, 4, base, { y: 18.75 }, 0.8))
@@ -1821,7 +1785,7 @@ function hutch(p: string[]) {
       const plate = cylZ(10, 1.2, C.white, k * 25, y + 12, -21.4, 28)
       plate.rotation.x = Math.PI / 2 - 0.12
       g.add(plate)
-      g.add(noOutlineDeep(cylZ(6.6, 0.4, k % 2 ? FH.denim : FH.barn, k * 25, y + 12, -20.6, 24)).rotateX(-0.12))
+      g.add(noOutlineDeep(cylZ(6.6, 0.4, k % 2 ? FH.denim : FH.barn, k * 25, y + 12, -20.6)).rotateX(-0.12))
     }
   }
   // 玻璃门（铰链在外侧）
@@ -2042,7 +2006,7 @@ function blanketLadder(p: string[]) {
   const [wood, blanketA, blanketB] = p
   const g = new THREE.Group()
   const at = (t: number): [number, number] => [0.25 + t * 167, 14 - t * 26]
-  for (const s of [-1, 1]) g.add(beam([s * 22, 0.25, 14], [s * 22, 167.25, -12], 4.4, 3, wood))
+  for (const s of [-1, 1]) g.add(batten([s * 22, 0.25, 14], [s * 22, 167.25, -12], 4.4, 3, wood))
   for (const t of [0.18, 0.36, 0.54, 0.72, 0.9]) {
     const [y, z] = at(t)
     g.add(cylX(1.4, 40, wood, 0, y, z, 12))
@@ -2188,7 +2152,7 @@ function plaidDogBed(p: string[]) {
   g.add(rbox(88, 7, 68, base, {}, 3))
   g.add(cylX(8, 72, fabric, 0, 15, -26))
   for (const s of [-1, 1]) {
-    g.add(cylZ(8, 52, fabric, s * 36, 15, 0))
+    g.add(cylZ(8, 52, fabric, s * 36, 15, 0, 16))
     g.add(ball(8, fabric, { x: s * 36, y: 15, z: -26 }))
     g.add(ball(8, fabric, { x: s * 36, y: 15, z: 26 }))
   }
@@ -2203,14 +2167,14 @@ function xbackChair(p: string[]) {
   const g = new THREE.Group()
   for (const s of [-1, 1]) {
     g.add(rbox(3.6, 44, 3.6, wood, { x: s * 19.5, z: 19.5 }, 0.6))
-    g.add(beam([s * 19.5, 0, -19], [s * 19.5, 88, -21.5], 3.6, 3.6, wood))
+    g.add(batten([s * 19.5, 0, -19], [s * 19.5, 88, -21.5], 3.6, 3.6, wood))
     g.add(rbox(2.4, 2.4, 36, dark, { x: s * 19.5, y: 14 }, 0.5))
   }
   const zAt = (y: number) => -19 - 2.5 * (y / 88)
   g.add(rbox(36, 7, 2.6, wood, { y: 80, z: zAt(83.5) }, 0.6))
   g.add(rbox(36, 3, 2.2, wood, { y: 50, z: zAt(51.5) }, 0.5))
-  g.add(beam([-17, 53, zAt(53)], [17, 80, zAt(80)], 2.6, 1.8, wood))
-  g.add(beam([17, 53, zAt(53)], [-17, 80, zAt(80)], 2.6, 1.8, wood))
+  g.add(batten([-17, 53, zAt(53)], [17, 80, zAt(80)], 2.6, 1.8, wood))
+  g.add(batten([17, 53, zAt(53)], [-17, 80, zAt(80)], 2.6, 1.8, wood))
   g.add(rbox(44, 4, 42, wood, { y: 42 }, 1))
   g.add(rbox(38, 1.6, 35, seat, { y: 45.6 }, 0.6))
   for (let k = -3; k <= 3; k++) g.add(noOutlineDeep(rbox(0.6, 0.3, 34, shade(seat, -0.15), { x: k * 5, y: 47.2 }, 0.1)))

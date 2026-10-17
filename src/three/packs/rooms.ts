@@ -5,20 +5,10 @@ import * as THREE from 'three'
 import { ball, capsule, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, SWING_OPEN, holePanel, legs, lPoly, movable, rectPoly, rng, rod, shell, slab, type AssetDef, type DoorMotion, type SurfaceDef } from '../kit'
 import { soft, type SoftFn } from './more-variety'
-import { glassPane, type V3 } from '../geo'
+import { glassPane, rod3, type V3 } from '../geo'
 import { I, J, M, N, R, type Pal3 } from '../packkit'
 
 // ---------- 小工具 ----------
-
-/** 两端已知的 3D 细杆 */
-function rod3(a: V3, b: V3, r: number, color: string, seg = 10) {
-  const va = new THREE.Vector3(...a)
-  const vb = new THREE.Vector3(...b)
-  const m = cyl(r, r, va.distanceTo(vb), color, {}, seg)
-  m.position.copy(va).add(vb).multiplyScalar(0.5)
-  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), vb.clone().sub(va).normalize())
-  return m
-}
 
 /**
  * 开口柜体：两块侧板、出沿 0.6 的顶板、底板、背板。

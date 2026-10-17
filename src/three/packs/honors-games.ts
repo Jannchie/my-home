@@ -7,7 +7,7 @@
 import * as THREE from 'three'
 import { ball, cup, cyl, rbox, shade, toon, torus, tray } from '../toon'
 import { C, glow, paintPanel, pinwheelWalls, type AssetCategory, type AssetDef } from '../kit'
-import { G, P, PI, noOutline } from '../geo'
+import { G, P, PI, cylX, cylZ, noOutline } from '../geo'
 import { CL, CN, F, I, J, M, N, PROP, type PalFlat } from '../packkit'
 
 type Draw = (g: CanvasRenderingContext2D, W: number, H: number) => void
@@ -32,10 +32,6 @@ function fit(g: THREE.Object3D, y0 = 0) {
 }
 /** 平放的画面：w × d，(x, z) 为中心，y 为高度 */
 const paintTop = (w: number, d: number, key: string, draw: Draw, x: number, y: number, z: number) => paintPanel(w, d, key, draw, { x, y, z: z + d / 2, rx: -PI / 2 })
-/** 朝前的圆盘（z 方向的圆柱），给中心 */
-const cylZ = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 24) => P(cyl(r, r, len, color, {}, seg), x, y, z, PI / 2)
-/** 沿 x 的横圆柱，给中心 */
-const cylX = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 16) => P(cyl(r, r, len, color, {}, seg), x, y, z, 0, 0, PI / 2)
 
 // ---------- 材质：金 / 银 / 铜 / 水晶 ----------
 

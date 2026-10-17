@@ -9,7 +9,7 @@
 import * as THREE from 'three'
 import { ball, cup, cyl, face, puck, rbox, toon, torus } from '../toon'
 import { C, type AssetDef } from '../kit'
-import { G, P, lit, litOutlined, type V3 } from '../geo'
+import { G, P, lit, litOutlined, rod3, type V3 } from '../geo'
 import { CL, CN, F, I, J, M, N, R, type PalFlat } from '../packkit'
 
 const BRASS = '#d4b25a'
@@ -89,16 +89,6 @@ function lathe(profile: [number, number][], color: string, at: { x?: number; y?:
   m.position.set(at.x ?? 0, at.y ?? 0, at.z ?? 0)
   m.castShadow = true
   m.receiveShadow = true
-  return m
-}
-
-/** 两端已知的细杆 */
-function rod3(a: V3, b: V3, r: number, color: string, seg = 10) {
-  const va = new THREE.Vector3(...a)
-  const vb = new THREE.Vector3(...b)
-  const m = cyl(r, r, va.distanceTo(vb), color, {}, seg)
-  m.position.copy(va).add(vb).multiplyScalar(0.5)
-  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), vb.clone().sub(va).normalize())
   return m
 }
 

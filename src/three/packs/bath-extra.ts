@@ -9,7 +9,7 @@
 import * as THREE from 'three'
 import { ball, cyl, rbox, shade, toon, torus } from '../toon'
 import { C, G, rectPoly, type AssetCategory, type AssetDef } from '../kit'
-import { PI } from '../geo'
+import { PI, cylXLegacy, cylZLegacy } from '../geo'
 import { I, J, M, N, R, type Build, type Dims, type Pal } from '../packkit'
 
 const CHROME = '#d9dee6'
@@ -34,14 +34,6 @@ const prop = (id: string, name: string, category: AssetCategory, dims: Dims, pal
   asset(id, name, category, dims, pals, build, { prop: true, ...extra })
 
 // ---------- 小工具 ----------
-
-/** 沿 x / z 的横圆柱，(x, y, z) 为中心 */
-function cylX(r: number, len: number, color: string, x: number, y: number, z: number, seg = 12) {
-  return cyl(r, r, len, color, { x, y: y - len / 2, z, rz: PI / 2 }, seg)
-}
-function cylZ(r: number, len: number, color: string, x: number, y: number, z: number, seg = 12) {
-  return cyl(r, r, len, color, { x, y: y - len / 2, z, rx: PI / 2 }, seg)
-}
 
 /** 落地居中 */
 function ground<T extends THREE.Object3D>(o: T): T {
@@ -111,18 +103,18 @@ function showerHead(metal: string, body: string, tilt = 0.3) {
 function mixer(metal: string, body: string, x: number, y: number, z0: number, spout: number) {
   const g = new THREE.Group()
   const L = 26
-  g.add(cylX(2.6, L, metal, x, y, z0, 18))
+  g.add(cylXLegacy(2.6, L, metal, x, y, z0, 18))
   // 偏心管 + 墙上的装饰盖
   for (const s of [-1, 1]) {
     const px = x + s * 8.5
-    g.add(cylZ(1.1, z0, metal, px, y, z0 / 2, 10))
-    g.add(cylZ(3, 0.8, metal, px, y, 0.4, 16))
+    g.add(cylZLegacy(1.1, z0, metal, px, y, z0 / 2, 10))
+    g.add(cylZLegacy(3, 0.8, metal, px, y, 0.4, 16))
   }
   // 两个旋钮：左温度（带刻度的大圆钮），右水量（带拨杆）
   for (const s of [-1, 1]) {
     const kx = x + s * (L / 2 + 2.2)
-    g.add(cylX(3.4, 4.4, body, kx, y, z0, 20))
-    g.add(cylX(3.6, 0.8, metal, x + s * (L / 2 + 0.2), y, z0, 20))
+    g.add(cylXLegacy(3.4, 4.4, body, kx, y, z0, 20))
+    g.add(cylXLegacy(3.6, 0.8, metal, x + s * (L / 2 + 0.2), y, z0, 20))
     g.add(rbox(0.8, 4.6, 0.8, metal, { x: kx + s * 1.9, y: y - 2.3, z: z0 + 3.2 }, 0.3))
   }
   const red = rbox(0.6, 1.4, 0.4, '#ff8f86', { x: x - L / 2 - 2.2, y: y + 2.2, z: z0 + 3.4 }, 0.15)
@@ -130,7 +122,7 @@ function mixer(metal: string, body: string, x: number, y: number, z0: number, sp
   g.add(red)
   // 吐水口（往前伸再朝下）
   if (spout > 0) {
-    g.add(cylZ(1.2, spout, metal, x, y - 1, z0 + spout / 2 + 1.5, 12))
+    g.add(cylZLegacy(1.2, spout, metal, x, y - 1, z0 + spout / 2 + 1.5, 12))
     g.add(cyl(1.3, 1.3, 2.2, metal, { x, y: y - 3.2, z: z0 + spout + 0.8 }, 12))
   }
   return g
@@ -175,7 +167,7 @@ export function showerModel(o: ShowerOpts, p: string[] = SHOWER_PALS[0][1]) {
     g.add(cyl(1.15, 1.15, y1 - y0, metal, { x: barX, y: y0, z: 4.2 }, 12))
     for (const y of [y0 - 1.5, y1 - 1.5]) {
       g.add(rbox(3.4, 3, 4.6, metal, { x: barX, y, z: 2.3 }, 0.8))
-      g.add(cylZ(2.4, 0.8, metal, barX, y + 1.5, 0.4, 14))
+      g.add(cylZLegacy(2.4, 0.8, metal, barX, y + 1.5, 0.4, 14))
     }
     const sy = side ? 160 : 166
     g.add(rbox(4.4, 5, 4, body, { x: barX, y: sy, z: 4.2 }, 1))
@@ -246,8 +238,8 @@ function mirrorX(g: THREE.Group) {
 export function showerCurtainModel(len: number, bunch: 1 | -1, color = '#e7f1f6', metal = CHROME) {
   const g = new THREE.Group()
   const y = 190
-  g.add(cylX(1.1, len, metal, 0, y, 0, 12))
-  for (const s of [-1, 1]) g.add(cylX(2.4, 1, metal, s * (len / 2 - 0.5), y, 0, 14))
+  g.add(cylXLegacy(1.1, len, metal, 0, y, 0, 12))
+  for (const s of [-1, 1]) g.add(cylXLegacy(2.4, 1, metal, s * (len / 2 - 0.5), y, 0, 14))
   // 帘子：一串交错的竖条，像收拢的褶
   const x0 = bunch * (len / 2 - 4)
   const n = 6
@@ -324,10 +316,10 @@ function lidRolledSmall(p: string[]) {
   const [main, strap] = p
   const g = new THREE.Group()
   const cy = 8.6
-  g.add(cylX(8.2, 59, main, 0, cy, 0, 28))
+  g.add(cylXLegacy(8.2, 59, main, 0, cy, 0, 28))
   for (const s of [-1, 1]) {
-    g.add(cylX(6.8, 0.6, shade(main, -0.1), s * 29.6, cy, 0, 24))
-    g.add(cylX(3.8, 0.6, shade(main, -0.18), s * 29.8, cy, 0, 20))
+    g.add(cylXLegacy(6.8, 0.6, shade(main, -0.1), s * 29.6, cy, 0, 24))
+    g.add(cylXLegacy(3.8, 0.6, shade(main, -0.18), s * 29.8, cy, 0, 20))
     g.add(torus(8.2, 0.42, strap, { x: s * 19, y: cy, ry: PI / 2 }))
   }
   return g
@@ -457,8 +449,8 @@ const HOOK_PALS: Pal[] = [
 const HK = { mount: 160, d: 8.1, tip: 3.05 }
 function hookAt(g: THREE.Group, x: number, y: number, main: string, base: string) {
   const zb = -HK.d / 2
-  g.add(cylZ(2.2, 1.2, base, x, y, zb + 0.6, 18))
-  g.add(cylZ(0.75, HK.tip - (zb + 1.2), main, x, y, (HK.tip + zb + 1.2) / 2, 10))
+  g.add(cylZLegacy(2.2, 1.2, base, x, y, zb + 0.6, 18))
+  g.add(cylZLegacy(0.75, HK.tip - (zb + 1.2), main, x, y, (HK.tip + zb + 1.2) / 2, 10))
   g.add(ball(0.75, main, { x, y, z: HK.tip }))
   g.add(cyl(0.75, 0.75, 2.4, main, { x, y, z: HK.tip }, 10))
   g.add(ball(1.0, main, { x, y: y + 2.4, z: HK.tip }))
@@ -484,8 +476,8 @@ function towelRing(p: string[]) {
   const g = new THREE.Group()
   // 臂端小铰正好压在环顶上（以前环和小铰之间空着 1.8cm，环悬空）
   const top = TR.mount + TR.r * 2 + 2.2
-  g.add(cylZ(2.4, 1.2, base, 0, top, -TR.d / 2 + 0.6, 18))
-  g.add(cylZ(0.8, TR.z - (-TR.d / 2 + 1.2), main, 0, top, (TR.z - TR.d / 2 + 1.2) / 2, 10))
+  g.add(cylZLegacy(2.4, 1.2, base, 0, top, -TR.d / 2 + 0.6, 18))
+  g.add(cylZLegacy(0.8, TR.z - (-TR.d / 2 + 1.2), main, 0, top, (TR.z - TR.d / 2 + 1.2) / 2, 10))
   // 吊环挂在臂端的小铰上，环面平行于墙
   g.add(ball(1.1, main, { y: top, z: TR.z }))
   g.add(torus(TR.r, 0.55, main, { y: TR.mount + 0.55 + TR.r, z: TR.z }))
@@ -499,10 +491,10 @@ function towelBarBath(p: string[]) {
   const y = TBB.mount + 2.4
   for (const s of [-1, 1]) {
     const x = s * (TBB.w / 2 - 2.4)
-    g.add(cylZ(2.4, 1, base, x, y, -TBB.d / 2 + 0.5, 16))
-    g.add(cylZ(0.9, TBB.barZ + TBB.d / 2 - 1, main, x, y, (-TBB.d / 2 + 1 + TBB.barZ) / 2, 10))
+    g.add(cylZLegacy(2.4, 1, base, x, y, -TBB.d / 2 + 0.5, 16))
+    g.add(cylZLegacy(0.9, TBB.barZ + TBB.d / 2 - 1, main, x, y, (-TBB.d / 2 + 1 + TBB.barZ) / 2, 10))
   }
-  g.add(cylX(0.9, TBB.w - 4.8, main, 0, y, TBB.barZ, 12))
+  g.add(cylXLegacy(0.9, TBB.w - 4.8, main, 0, y, TBB.barZ, 12))
   return g
 }
 

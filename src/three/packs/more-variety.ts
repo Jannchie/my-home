@@ -9,7 +9,7 @@
 import * as THREE from 'three'
 import { ball, cup, cyl, rbox, shade, torus, tray } from '../toon'
 import { C, G, holePanel, paintAbstract, paintFlower, paintLandscape, paintPanel, rng, shell, type AssetCategory, type AssetDef, type StyleTag } from '../kit'
-import { PI, clearDeep, mesh, noOutlineDeep, type V3 } from '../geo'
+import { PI, clearDeep, cylZFrom, mesh, noOutlineDeep, type V3 } from '../geo'
 import { I, J, M, N, R, type Build, type Pal } from '../packkit'
 
 type Draw = (g: CanvasRenderingContext2D, W: number, H: number) => void
@@ -48,10 +48,6 @@ function facet(a: V3, b: V3, ra: number, rb: number, color: string, seg = 5) {
 function tube(pts: V3[], r: number, color: string, seg = 24, radial = 6) {
   const curve = new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(...p)))
   return mesh(new THREE.TubeGeometry(curve, seg, r, radial, false), color)
-}
-/** 沿 z 轴的圆柱：圆心 (x, y)，从 z0 伸到 z0 + len */
-function cylZ(r: number, len: number, color: string, x: number, y: number, z0: number, seg = 24) {
-  return cyl(r, r, len, color, { x, y: y - len / 2, z: z0 + len / 2, rx: PI / 2 }, seg)
 }
 /** 平面轮廓挤出的薄片：轮廓在 xy 平面，厚度沿 +z 从 z0 开始 */
 function flat(pts: [number, number][], t: number, color: string, z0 = 0) {
@@ -1353,8 +1349,8 @@ function acrylicFrame(w: number, h: number, metal: string, key: string, draw: Dr
   g.add(clearDeep(rbox(w, h, 0.4, '#eef6fa', { z: 2.8 }, 0.2), '#eef6fa', 0.25))
   for (const sx of [-1, 1])
     for (const y of [2.2, h - 2.2]) {
-      g.add(cylZ(0.8, 1.6, metal, sx * (w / 2 - 2.2), y, 0, 12))
-      g.add(cylZ(1.15, 0.7, metal, sx * (w / 2 - 2.2), y, 3, 16))
+      g.add(cylZFrom(0.8, 1.6, metal, sx * (w / 2 - 2.2), y, 0, 12))
+      g.add(cylZFrom(1.15, 0.7, metal, sx * (w / 2 - 2.2), y, 3, 16))
     }
   return g
 }
@@ -1503,7 +1499,7 @@ function photoSalon(p: string[]) {
   })
   // 圆框
   const [key, draw] = snap(5, tone)
-  g.add(cylZ(10.5, 0.4, shade(fa, -0.15), 58, 52, 0, 32))
+  g.add(cylZFrom(10.5, 0.4, shade(fa, -0.15), 58, 52, 0, 32))
   g.add(torus(10, 1.1, fa, { x: 58, y: 52, z: 1.1 }))
   g.add(paintDisc(9.2, `mvs|c${key}`, draw, 58, 52, 0.75))
   return g
@@ -1527,8 +1523,8 @@ function photoPolaroid(p: string[]) {
     }
     g.add(tube(pts, 0.22, rope, 48, 5))
     for (const s of [-1, 1]) {
-      g.add(cylZ(0.25, 1.6, '#9a9ca1', s * (half + 0.6), top + 0.2, 0, 6))
-      g.add(cylZ(0.6, 0.3, '#9a9ca1', s * (half + 0.6), top + 0.2, 1.6, 12))
+      g.add(cylZFrom(0.25, 1.6, '#9a9ca1', s * (half + 0.6), top + 0.2, 0, 6))
+      g.add(cylZFrom(0.6, 0.3, '#9a9ca1', s * (half + 0.6), top + 0.2, 1.6, 12))
     }
     const xs = li === 0 ? [-42, -21, 0, 21, 42] : [-32, -10, 12, 34]
     xs.forEach((x, i) => {
@@ -1591,7 +1587,7 @@ function photoCork(p: string[]) {
   const [cork, rim, acc] = p
   const g = new THREE.Group()
   const R0 = 30
-  g.add(cylZ(R0, 2, cork, 0, R0, 0, 48))
+  g.add(cylZFrom(R0, 2, cork, 0, R0, 0, 48))
   g.add(torus(R0, 1.1, rim, { y: R0, z: 1.1 }))
   const items: [number, number, number, number, number, 'photo' | 'note'][] = [
     [-12, 40, 14, 10, 0.08, 'photo'],
@@ -1817,13 +1813,13 @@ function decoWoodGeo(p: string[]) {
   cells.forEach(([cx, cy], i) => {
     const depth = 2 + ((i * 3) % 4)
     const color = i === 3 || i === 7 ? acc : i % 3 === 1 ? dark : wood
-    g.add(cylZ(r, depth, color, cx * dx, 30 + cy * dy, 0, 6))
+    g.add(cylZFrom(r, depth, color, cx * dx, 30 + cy * dy, 0, 6))
   })
   // 两个小三角：嵌进蜂窝边上的空位，和六边形连成一整块（原先离得太远，像掉出来的碎片）
   // 六边形平边到中心 r·cos30°，三角内切圆半径 = 外接半径 / 2，再留 0.4cm 缝
   const side = r * Math.cos(PI / 6) + 0.4
-  g.add(cylZ(4, 3, acc, 1.5 * dx + side + 2, 30 + dy, 0, 3))
-  g.add(cylZ(3.5, 2, dark, -dx - side - 1.75, 30, 0, 3))
+  g.add(cylZFrom(4, 3, acc, 1.5 * dx + side + 2, 30 + dy, 0, 3))
+  g.add(cylZFrom(3.5, 2, dark, -dx - side - 1.75, 30, 0, 3))
   // 整体 xz 居中
   const bb = new THREE.Box3().setFromObject(g)
   const cx = (bb.min.x + bb.max.x) / 2
@@ -1852,7 +1848,7 @@ function decoWeaveRound(p: string[]) {
     if (k % 3 === 1) g.add(ball(1.1, bead, { x: x * 1.02, y: y - len * 0.45, z: 1.2 }))
   }
   g.add(tube([[-14, cy + 17, 1.2], [-6, cy + 26, 0.9], [0, cy + 30, 0.6], [6, cy + 26, 0.9], [14, cy + 17, 1.2]], 0.3, ca, 20, 5))
-  g.add(cylZ(0.3, 1.2, '#9a9ca1', 0, cy + 30.4, 0, 6))
+  g.add(cylZFrom(0.3, 1.2, '#9a9ca1', 0, cy + 30.4, 0, 6))
   return g
 }
 
@@ -1865,7 +1861,7 @@ function decoHoop(p: string[]) {
   g.add(torus(R0, 0.45, BRASS, { y: cy, z: 2 }))
   // 挂绳：从环顶到钉子
   g.add(bar([0, cy + R0, 2], [0, cy + R0 + 10, 0.4], 0.15, '#8a7a6a', 4))
-  g.add(cylZ(0.3, 1, '#9a9ca1', 0, cy + R0 + 10, 0, 6))
+  g.add(cylZFrom(0.3, 1, '#9a9ca1', 0, cy + R0 + 10, 0, 6))
   const at = (a: number, k = R0): V3 => [Math.cos(a) * k, cy + Math.sin(a) * k, 2]
   // 花茎沿环切线方向
   for (let k = 0; k < 6; k++) {

@@ -10,7 +10,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cyl, puck, rbox, shade, toon, torus } from '../toon'
 import { C, SWING_OPEN, holePanel, movable, paintPanel, rectPoly, rng, shell, slab, type AssetCategory, type AssetDef, type Poly } from '../kit'
-import { G, P, PI, UP, clearDeep, type V3 } from '../geo'
+import { G, P, PI, clearDeep, cylX, rod3, type V3 } from '../geo'
 import { I, J, M, N, R, type Build, type Dims, type Pal } from '../packkit'
 
 type Tab = [number, number][]
@@ -41,20 +41,6 @@ function asset(id: string, name: string, category: AssetCategory, [w, d, h]: Dim
 }
 
 // ---------- 小工具 ----------
-
-/** 沿 x 的横圆柱，给中心 */
-const cylX = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 16) => P(cyl(r, r, len, color, {}, seg), x, y, z, 0, 0, PI / 2)
-
-/** 两点之间的细杆 */
-function stick(a: V3, b: V3, r: number, color: string, seg = 8) {
-  const va = new THREE.Vector3(...a)
-  const vb = new THREE.Vector3(...b)
-  const dir = vb.clone().sub(va)
-  const m = cyl(r, r, dir.length(), color, {}, seg)
-  m.position.copy(va).add(vb).multiplyScalar(0.5)
-  m.quaternion.setFromUnitVectors(UP, dir.normalize())
-  return m
-}
 
 /** 平滑管子（鞋口包边、鞋带、提手），开放的两端加圆头 */
 function tube(pts: V3[], r: number, color: string, closed = false, seg?: number) {
@@ -368,14 +354,14 @@ function shoeLast(s: LastSpec) {
       const A = at(u, pr, 0.25)
       const B = at(u, PI - pr, 0.25)
       A[1] = B[1] = Math.max(A[1], B[1])
-      g.add(stick(A, B, r, color))
+      g.add(rod3(A, B, r, color, 8))
       for (const p of [A, B]) g.add(ball(r * 1.6, shade(color, -0.25), { x: p[0], y: p[1] - r, z: p[2] }))
     }
     if (bow) {
       const [bx, by, bz] = at(ua, PI / 2, 0.4)
       for (const sx of [-1, 1]) {
         g.add(P(torus(0.9 * (r / 0.22), r, color), bx + sx * 0.9, by + 0.2, bz - 0.2, -1.1, 0, sx * 0.4))
-        g.add(stick([bx, by, bz], [bx + sx * 1.1, by - 0.4, bz + 1.6], r, color))
+        g.add(rod3([bx, by, bz], [bx + sx * 1.1, by - 0.4, bz + 1.6], r, color, 8))
       }
     }
     return g

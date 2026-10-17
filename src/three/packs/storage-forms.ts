@@ -10,7 +10,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, glow, rectPoly, rng, slab, type AssetCategory, type AssetDef, type FormTag, type Poly } from '../kit'
-import { G, P, PI, UP, box3, ghost, type V3 } from '../geo'
+import { G, P, PI, batten, box3, cylX, cylZ, ghost, rod3, type V3 } from '../geo'
 import { I, J, M, N, R, type Build, type Dims, type Pal } from '../packkit'
 
 const STEEL = '#c3c7cc'
@@ -54,32 +54,8 @@ function forms(family: string, name: string, category: AssetCategory, pals: Pal[
 
 // ---------- 小工具 ----------
 
-/** 沿 x 的横圆柱，给中心 */
-const cylX = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 16) => P(cyl(r, r, len, color, {}, seg), x, y, z, 0, 0, PI / 2)
-/** 沿 z 的圆柱，给中心 */
-const cylZ = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 20) => P(cyl(r, r, len, color, {}, seg), x, y, z, PI / 2)
-
-/** 两点之间的细杆 */
-function stick(a: V3, b: V3, r: number, color: string, seg = 8) {
-  const va = new THREE.Vector3(...a)
-  const vb = new THREE.Vector3(...b)
-  const dir = vb.clone().sub(va)
-  const m = cyl(r, r, dir.length(), color, {}, seg)
-  m.position.copy(va).add(vb).multiplyScalar(0.5)
-  m.quaternion.setFromUnitVectors(UP, dir.normalize())
-  return m
-}
-
-/** 两点之间的扁条（截面 w × t，w 沿 x） */
-function bar(a: V3, b: V3, w: number, t: number, color: string) {
-  const va = new THREE.Vector3(...a)
-  const vb = new THREE.Vector3(...b)
-  const dir = vb.clone().sub(va)
-  const m = rbox(w, dir.length(), t, color, {}, Math.min(0.3, t * 0.4, w * 0.4))
-  m.position.copy(va).add(vb).multiplyScalar(0.5)
-  m.quaternion.setFromUnitVectors(UP, dir.normalize())
-  return m
-}
+/** 两点之间的扁条（截面 w × t，w 沿 x；小圆角） */
+const slat = (a: V3, b: V3, w: number, t: number, color: string) => batten(a, b, w, t, color, Math.min(0.3, t * 0.4, w * 0.4))
 
 /** 平滑管子（钩子、线、提手），两端加圆头 */
 function tube(pts: V3[], r: number, color: string, closed = false, seg?: number) {
@@ -170,8 +146,8 @@ const J_UNDER = -2.35
 function jHook(L = 6, color = STEEL) {
   const r = 0.32
   return G(
-    stick([0, J_ARM, -1], [0, J_ARM, L], r, color),
-    stick([0, J_ARM, L], [0, -r, L], r, color),
+    rod3([0, J_ARM, -1], [0, J_ARM, L], r, color, 8),
+    rod3([0, J_ARM, L], [0, -r, L], r, color, 8),
     ball(r, color, { y: J_ARM, z: L }),
     ball(r, color, { y: -r, z: L }),
     cylZ(0.7, 0.3, color, 0, J_ARM, 0.15, 12),
@@ -340,12 +316,12 @@ function pegSet(s: (typeof SET_SIZES)[number]): Build {
     for (const sx of [-1, 1]) {
       const x = sx * (sw / 2 - 5)
       g.add(rbox(1.2, 9, 0.6, STEEL, { x, y: y - 9, z: zf + 0.3 }, 0.2))
-      g.add(stick([x, y - 8.4, zf + 0.6], [x, y - 0.2, SET_D / 2 - 2], 0.3, STEEL))
-      g.add(stick([x, y - 1, zf - 1], [x, y - 1, zf + 0.4], 0.3, STEEL))
+      g.add(rod3([x, y - 8.4, zf + 0.6], [x, y - 0.2, SET_D / 2 - 2], 0.3, STEEL, 8))
+      g.add(rod3([x, y - 1, zf - 1], [x, y - 1, zf + 0.4], 0.3, STEEL, 8))
     }
     // 前沿挡条
-    g.add(stick([-sw / 2 + 1, y + SHELF_T + 1.2, SET_D / 2 - 0.6], [sw / 2 - 1, y + SHELF_T + 1.2, SET_D / 2 - 0.6], 0.3, STEEL))
-    for (const sx of [-1, 1]) g.add(stick([sx * (sw / 2 - 1), y + SHELF_T - 0.2, SET_D / 2 - 0.6], [sx * (sw / 2 - 1), y + SHELF_T + 1.2, SET_D / 2 - 0.6], 0.3, STEEL))
+    g.add(rod3([-sw / 2 + 1, y + SHELF_T + 1.2, SET_D / 2 - 0.6], [sw / 2 - 1, y + SHELF_T + 1.2, SET_D / 2 - 0.6], 0.3, STEEL, 8))
+    for (const sx of [-1, 1]) g.add(rod3([sx * (sw / 2 - 1), y + SHELF_T - 0.2, SET_D / 2 - 0.6], [sx * (sw / 2 - 1), y + SHELF_T + 1.2, SET_D / 2 - 0.6], 0.3, STEEL, 8))
     return g
   }
 }
@@ -375,10 +351,10 @@ function pegShelfBody(p: string[]) {
   for (const sx of [-1, 1]) {
     const x = sx * 11
     g.add(rbox(1.4, 9, 0.6, metal, { x, y: -11.2, z: 0.6 }, 0.2))
-    g.add(stick([x, -10.6, 0.9], [x, -2.3, 10.5], 0.3, metal))
-    for (const y of [-3.2, -9.8]) g.add(stick([x, y, -1], [x, y, 0.6], 0.3, metal))
+    g.add(rod3([x, -10.6, 0.9], [x, -2.3, 10.5], 0.3, metal, 8))
+    for (const y of [-3.2, -9.8]) g.add(rod3([x, y, -1], [x, y, 0.6], 0.3, metal, 8))
   }
-  g.add(stick([-14.2, -0.55, 12], [14.2, -0.55, 12], 0.25, metal))
+  g.add(rod3([-14.2, -0.55, 12], [14.2, -0.55, 12], 0.25, metal, 8))
   return g
 }
 
@@ -388,7 +364,7 @@ function pegCupBody(p: string[], hang: boolean) {
   g.add(cup(3.8, 3.4, 10, 0.4, main, { y: -12.5, z: 5 })) // z 1.2..8.8
   g.add(rbox(5, 8, 0.8, main, { y: -11.5, z: 0.7 }, 0.3))
   g.add(rbox(2.4, 6, 1.2, main, { y: -10.5, z: 1.4 }, 0.3))
-  if (hang) for (const sx of [-1, 1]) g.add(stick([sx * 1.5, -4.2, -1], [sx * 1.5, -4.2, 0.4], 0.28, metal))
+  if (hang) for (const sx of [-1, 1]) g.add(rod3([sx * 1.5, -4.2, -1], [sx * 1.5, -4.2, 0.4], 0.28, metal, 8))
   return g
 }
 
@@ -398,7 +374,7 @@ function wireBasket(w: number, d: number, h: number, color: string, step = 2.4) 
   const x1 = w / 2 - r
   const z1 = d / 2 - r
   const rim = (y: number) => {
-    g.add(stick([-x1, y, -z1], [x1, y, -z1], r, color), stick([-x1, y, z1], [x1, y, z1], r, color), stick([-x1, y, -z1], [-x1, y, z1], r, color), stick([x1, y, -z1], [x1, y, z1], r, color))
+    g.add(rod3([-x1, y, -z1], [x1, y, -z1], r, color, 8), rod3([-x1, y, z1], [x1, y, z1], r, color, 8), rod3([-x1, y, -z1], [-x1, y, z1], r, color, 8), rod3([x1, y, -z1], [x1, y, z1], r, color, 8))
   }
   rim(r)
   rim(h - r)
@@ -407,12 +383,12 @@ function wireBasket(w: number, d: number, h: number, color: string, step = 2.4) 
   const nz = Math.max(2, Math.round(d / step))
   for (let i = 0; i <= nx; i++) {
     const x = -x1 + (2 * x1 * i) / nx
-    for (const z of [-z1, z1]) g.add(stick([x, r, z], [x, h - r, z], r * 0.8, color, 6))
-    g.add(stick([x, r, -z1], [x, r, z1], r * 0.8, color, 6))
+    for (const z of [-z1, z1]) g.add(rod3([x, r, z], [x, h - r, z], r * 0.8, color, 6))
+    g.add(rod3([x, r, -z1], [x, r, z1], r * 0.8, color, 6))
   }
   for (let i = 1; i < nz; i++) {
     const z = -z1 + (2 * z1 * i) / nz
-    for (const x of [-x1, x1]) g.add(stick([x, r, z], [x, h - r, z], r * 0.8, color, 6))
+    for (const x of [-x1, x1]) g.add(rod3([x, r, z], [x, h - r, z], r * 0.8, color, 6))
   }
   return g
 }
@@ -467,7 +443,7 @@ function wallTier(n: number, mount: number): Build {
       for (const sx of [-1, 1]) {
         const x = sx * (TIER_W / 2 - 8)
         g.add(rbox(2.4, 0.6, TIER_D - 3, metal, { x, y: y - 0.6, z: zb + (TIER_D - 3) / 2 + 0.6 }, 0.2))
-        g.add(stick([x, y - TIER_BR + 0.8, zb + 0.9], [x, y - 0.5, zb + TIER_D - 6], 0.35, metal))
+        g.add(rod3([x, y - TIER_BR + 0.8, zb + 0.9], [x, y - 0.5, zb + TIER_D - 6], 0.35, metal, 8))
       }
     }
     for (const sx of [-1, 1]) g.add(rbox(2.4, TIER_BR + (n - 1) * TIER_GAP, 0.6, metal, { x: sx * (TIER_W / 2 - 8), y: mount, z: zb + 0.3 }, 0.2))
@@ -496,7 +472,7 @@ const ladZ = (y: number) => 18 - (36 * y) / LAD.h
 function ladderShelf(p: string[]) {
   const [board, frame] = p
   const g = new THREE.Group()
-  for (const sx of [-1, 1]) g.add(bar([sx * (LAD.w / 2 - 1.5), 0.34, 18.5], [sx * (LAD.w / 2 - 1.5), LAD.h + 0.34, -18.5], 3, 3, frame))
+  for (const sx of [-1, 1]) g.add(slat([sx * (LAD.w / 2 - 1.5), 0.34, 18.5], [sx * (LAD.w / 2 - 1.5), LAD.h + 0.34, -18.5], 3, 3, frame))
   for (const y of LAD.ys) {
     const zf = Math.min(19, ladZ(y) + 3)
     g.add(rbox(LAD.w - 6, 2, zf + 19, board, { y, z: (zf - 19) / 2 }, 0.5))
@@ -555,8 +531,8 @@ function openRack(w: number, d: number, h: number, n: number): Build {
     for (const y of rackYs(h, n)) g.add(rbox(w - 0.4, 2, d - 0.4, board, { y }, 0.5))
     // 背后 X 撑
     const zb = -d / 2 + 0.6
-    g.add(stick([-w / 2 + 3, 8, zb], [w / 2 - 3, h - 2.5, zb], 0.3, frame))
-    g.add(stick([w / 2 - 3, 8, zb], [-w / 2 + 3, h - 2.5, zb], 0.3, frame))
+    g.add(rod3([-w / 2 + 3, 8, zb], [w / 2 - 3, h - 2.5, zb], 0.3, frame, 8))
+    g.add(rod3([w / 2 - 3, 8, zb], [-w / 2 + 3, h - 2.5, zb], 0.3, frame, 8))
     return g
   }
 }
@@ -582,14 +558,14 @@ const WIRE_R = 0.4
 function wireShelf(g: THREE.Group, w: number, d: number, y: number, color: string) {
   const x1 = w / 2 - 1.5
   const z1 = d / 2 - 1.5
-  g.add(stick([-x1, y, -z1], [x1, y, -z1], WIRE_R, color), stick([-x1, y, z1], [x1, y, z1], WIRE_R, color))
-  g.add(stick([-x1, y, -z1], [-x1, y, z1], WIRE_R, color), stick([x1, y, -z1], [x1, y, z1], WIRE_R, color))
+  g.add(rod3([-x1, y, -z1], [x1, y, -z1], WIRE_R, color, 8), rod3([-x1, y, z1], [x1, y, z1], WIRE_R, color, 8))
+  g.add(rod3([-x1, y, -z1], [-x1, y, z1], WIRE_R, color, 8), rod3([x1, y, -z1], [x1, y, z1], WIRE_R, color, 8))
   const n = Math.round((2 * x1) / 3.5)
   for (let i = 1; i < n; i++) {
     const x = -x1 + (2 * x1 * i) / n
-    g.add(stick([x, y, -z1], [x, y, z1], 0.25, color, 6))
+    g.add(rod3([x, y, -z1], [x, y, z1], 0.25, color, 6))
   }
-  for (const z of [-z1 + 4, z1 - 4]) g.add(stick([-x1, y - 0.6, z], [x1, y - 0.6, z], 0.3, color, 6))
+  for (const z of [-z1 + 4, z1 - 4]) g.add(rod3([-x1, y - 0.6, z], [x1, y - 0.6, z], 0.3, color, 6))
 }
 function wireYs(h: number, n: number) {
   return Array.from({ length: n }, (_, i) => 12 + (i * (h - 12.4 - 12)) / (n - 1))
@@ -638,8 +614,8 @@ function kitchenRack(p: string[]) {
     for (const sz of [-1, 1]) g.add(rbox(2.5, KR.h - 0.3, 2.5, frame, { x: sx * (KR.w / 2 - 1.25), z: sz * (KR.d / 2 - 1.25) }, 0.4))
   for (const y of KR.ys) g.add(rbox(KR.w - 0.4, 2, KR.d - 0.4, board, { y }, 0.5))
   // 挂杆：从两根前柱伸出
-  for (const sx of [-1, 1]) g.add(stick([sx * (KR.w / 2 - 1.25), KR_BAR_Y, KR.d / 2 - 1], [sx * (KR.w / 2 - 1.25), KR_BAR_Y, KR.d / 2 + 2.2], 0.5, frame))
-  g.add(stick([-KR.w / 2 + 1.25, KR_BAR_Y, KR.d / 2 + 2.2], [KR.w / 2 - 1.25, KR_BAR_Y, KR.d / 2 + 2.2], 0.6, frame))
+  for (const sx of [-1, 1]) g.add(rod3([sx * (KR.w / 2 - 1.25), KR_BAR_Y, KR.d / 2 - 1], [sx * (KR.w / 2 - 1.25), KR_BAR_Y, KR.d / 2 + 2.2], 0.5, frame, 8))
+  g.add(rod3([-KR.w / 2 + 1.25, KR_BAR_Y, KR.d / 2 + 2.2], [KR.w / 2 - 1.25, KR_BAR_Y, KR.d / 2 + 2.2], 0.6, frame, 8))
   return ground(g)
 }
 const KITCHEN_RACK = asset('sf-kitchen-rack', '厨房置物架', 'storage', [KR.w, 42.8, KR.h], SHELF_PALS, kitchenRack, {
@@ -659,8 +635,8 @@ function counterRack(p: string[]) {
     for (const sz of [-1, 1]) g.add(cyl(0.7, 0.7, sz < 0 ? 36.6 : 34, frame, { x: sx * 21.5, z: sz * 9.5 }, 10))
   for (const y of [2, 32]) g.add(rbox(44, 2, 20, board, { y }, 0.5))
   // 后排立柱加高到顶层挡杆（以前挡杆比立柱高出 2cm，顶上那根悬空）
-  g.add(stick([-21.5, 6, -9.5], [21.5, 6, -9.5], 0.3, frame))
-  g.add(stick([-21.5, 36, -9.5], [21.5, 36, -9.5], 0.3, frame))
+  g.add(rod3([-21.5, 6, -9.5], [21.5, 6, -9.5], 0.3, frame, 8))
+  g.add(rod3([-21.5, 36, -9.5], [21.5, 36, -9.5], 0.3, frame, 8))
   return g
 }
 const COUNTER_RACK = prop('sf-counter-rack', '桌面置物架', 'storage', [44.6, 20.6, 36.6], SHELF_PALS, (p) => ground(counterRack(p)), {
@@ -687,11 +663,11 @@ function bathCorner(p: string[]) {
     // 斜边挡条
     const a: V3 = [BATH.s / 2 - 2, y + 3, -BATH.s / 2 + 0.8]
     const b: V3 = [-BATH.s / 2 + 0.8, y + 3, BATH.s / 2 - 2]
-    g.add(stick(a, b, 0.3, sub))
+    g.add(rod3(a, b, 0.3, sub, 8))
     for (const t of [0.15, 0.5, 0.85]) {
       const x = a[0] + (b[0] - a[0]) * t
       const z = a[2] + (b[2] - a[2]) * t
-      g.add(stick([x, y + BATH.t - 0.2, z], [x, y + 3, z], 0.25, sub, 6))
+      g.add(rod3([x, y + BATH.t - 0.2, z], [x, y + 3, z], 0.25, sub, 6))
     }
   }
   g.add(rbox(2, 50, 0.6, sub, { x: -BATH.s / 2 + 1.5, y: BATH.mount, z: -BATH.s / 2 + 0.3 }, 0.2))
@@ -798,8 +774,8 @@ function towelBar(n: number): Build {
       const y = TB.mount + 2.6 + i * 26
       for (const sx of [-1, 1]) {
         const x = sx * (TB.w / 2 - 3)
-        g.add(cylZ(2.6, 1, metal, x, y, -TB.d / 2 + 0.5))
-        g.add(cylZ(0.9, TB.barZ + TB.d / 2 - 1, metal, x, y, (-TB.d / 2 + 1 + TB.barZ) / 2))
+        g.add(cylZ(2.6, 1, metal, x, y, -TB.d / 2 + 0.5, 20))
+        g.add(cylZ(0.9, TB.barZ + TB.d / 2 - 1, metal, x, y, (-TB.d / 2 + 1 + TB.barZ) / 2, 20))
       }
       g.add(cylX(TB.barR, TB.w - 4, main, 0, y, TB.barZ))
       for (const sx of [-1, 1]) g.add(ball(1.2, main, { x: sx * (TB.w / 2 - 2), y, z: TB.barZ }))
@@ -831,7 +807,7 @@ function hookRail(w: number, n: number): Build {
     g.add(rbox(w, HR.h, 1.8, board, { y: HR.mount, z: -2.8 }, 0.5))
     for (let i = 0; i < n; i++) {
       const x = -((n - 1) * (w / n)) / 2 + i * (w / n)
-      g.add(cylZ(HR.pegR, HR.pegL, peg, x, HR.mount + HR.pegY, 0.4))
+      g.add(cylZ(HR.pegR, HR.pegL, peg, x, HR.mount + HR.pegY, 0.4, 20))
       g.add(ball(1.3, peg, { x, y: HR.mount + HR.pegY, z: 2.9 }, [1, 1, 0.6]))
     }
     return g
@@ -911,8 +887,8 @@ function kitchenBar(p: string[]) {
   const g = new THREE.Group()
   for (const sx of [-1, 1]) {
     const x = sx * (KB.w / 2 - 3)
-    g.add(cylZ(2, 0.8, metal, x, KB.mount + 2, -2.75))
-    g.add(cylZ(0.6, 4.7, metal, x, KB.mount + 2, 0))
+    g.add(cylZ(2, 0.8, metal, x, KB.mount + 2, -2.75, 20))
+    g.add(cylZ(0.6, 4.7, metal, x, KB.mount + 2, 0, 20))
   }
   g.add(cylX(KB.barR, KB.w, metal, 0, KB.mount + 2, KB.barZ))
   return g
@@ -965,8 +941,8 @@ function camHead(p: string[]) {
   const [body, trim, lens] = p
   return G(
     P(capsule(1.6, 6.4, body), 0, 0, 0, 0, 0, PI / 2),
-    cylZ(1.15, 0.6, trim, 0, 0, 1.4),
-    cylZ(0.75, 0.4, lens, 0, 0, 1.7),
+    cylZ(1.15, 0.6, trim, 0, 0, 1.4, 20),
+    cylZ(0.75, 0.4, lens, 0, 0, 1.7, 20),
     ball(0.25, '#7ee08a', { x: 2.4, y: 0.6, z: 1.35 }),
   )
 }
@@ -979,7 +955,7 @@ function camStanding(p: string[]) {
   g.add(cyl(0.5, 0.5, 3.2, trim, { y: 6.2 }, 10))
   for (let i = 0; i < 3; i++) {
     const a = (i / 3) * PI * 2 + PI / 2
-    g.add(stick([0, 6.6, 0], [Math.cos(a) * 5.5, 0.35, Math.sin(a) * 5.5], 0.35, trim))
+    g.add(rod3([0, 6.6, 0], [Math.cos(a) * 5.5, 0.35, Math.sin(a) * 5.5], 0.35, trim, 8))
     g.add(ball(0.5, M.black, { x: Math.cos(a) * 5.5, y: 0.5, z: Math.sin(a) * 5.5 }))
   }
   return ground(g)
@@ -1160,10 +1136,10 @@ function shirtFolded(p: string[]) {
 function hangerFrame(wood: string, withBar: boolean, zc = GARM_Z) {
   const g = G(hangerHook(zc))
   const y0 = -5.4
-  for (const s of [-1, 1]) g.add(bar([0, y0, zc], [s * 19, y0 - 8, zc], 1.4, 0.8, wood))
+  for (const s of [-1, 1]) g.add(slat([0, y0, zc], [s * 19, y0 - 8, zc], 1.4, 0.8, wood))
   g.add(rbox(3, 1.6, 0.9, wood, { y: y0 - 0.9, z: zc }, 0.3))
   if (withBar) {
-    g.add(stick([-18.6, y0 - 8.4, zc], [18.6, y0 - 8.4, zc], 0.45, wood))
+    g.add(rod3([-18.6, y0 - 8.4, zc], [18.6, y0 - 8.4, zc], 0.45, wood, 8))
   }
   return g
 }
@@ -1236,7 +1212,7 @@ function scissorsBody(p: string[]) {
   const g = new THREE.Group()
   for (const s of [-1, 1]) {
     g.add(torus(1.9, 0.55, grip, { x: s * 2.4, y: -2.45 }))
-    g.add(stick([s * 2.1, -4.3, s * 0.25], [0, -7.2, s * 0.25], 0.55, grip))
+    g.add(rod3([s * 2.1, -4.3, s * 0.25], [0, -7.2, s * 0.25], 0.55, grip, 8))
     const b = rbox(1.3, 13, 0.4, metal, {}, 0.15)
     b.position.set(-s * 0.35, -13.2, s * 0.25)
     b.rotation.z = s * 0.06
@@ -1251,9 +1227,9 @@ function pliersBody(p: string[]) {
   // 挂绳环在手柄尾端
   g.add(torus(1.5, 0.25, acc, { x: -1.0, y: -1.8 }))
   for (const s of [-1, 1]) {
-    g.add(bar([s * 1.0, -3.4, 0], [s * 0.9, -12, 0], 1.6, 1.2, grip))
-    g.add(bar([s * 0.8, -12, 0], [s * 0.45, -16, 0], 1.1, 0.8, metal))
-    g.add(bar([s * 0.45, -16, 0], [s * 0.25, -20, 0], 0.8, 0.7, metal))
+    g.add(slat([s * 1.0, -3.4, 0], [s * 0.9, -12, 0], 1.6, 1.2, grip))
+    g.add(slat([s * 0.8, -12, 0], [s * 0.45, -16, 0], 1.1, 0.8, metal))
+    g.add(slat([s * 0.45, -16, 0], [s * 0.25, -20, 0], 0.8, 0.7, metal))
   }
   g.add(cylZ(0.9, 1.1, metal, 0, -15.6, 0, 12))
   return g
@@ -1262,7 +1238,7 @@ function wrenchBody(p: string[]) {
   const [grip, metal] = p
   const g = new THREE.Group()
   g.add(torus(1.4, 0.55, metal, { y: -2 }))
-  g.add(bar([0, -3.6, 0], [0, -16, 0], 1.6, 0.6, metal))
+  g.add(slat([0, -3.6, 0], [0, -16, 0], 1.6, 0.6, metal))
   g.add(rbox(1.7, 6, 0.8, grip, { y: -12 }, 0.3))
   g.add(torus(1.7, 0.75, metal, { y: -18.6, rz: PI * 0.75 }, PI * 1.5))
   return g
@@ -1273,7 +1249,7 @@ function tapeBody(p: string[]) {
   g.add(torus(1.3, 0.25, acc, { y: -1.5 }))
   g.add(rbox(1.6, 1.2, 1, acc, { y: -3.4 }, 0.3))
   g.add(rbox(7.4, 7.4, 3.6, grip, { y: -10.6 }, 2))
-  g.add(cylZ(2.4, 0.4, metal, 0, -6.9, 1.9))
+  g.add(cylZ(2.4, 0.4, metal, 0, -6.9, 1.9, 20))
   g.add(rbox(1.6, 1.8, 2.4, metal, { x: 3.6, y: -10.6 }, 0.3))
   return g
 }
@@ -1300,7 +1276,7 @@ function driversHanging(p: string[]) {
   g.add(rbox(16, 1.8, 3.6, acc, { y: by - 1.8, z: 2.5 }, 0.4))
   for (const x of [-6, 6]) {
     g.add(rbox(1.4, 4, 0.6, metal, { x, y: by - 2.8, z: 0.6 }, 0.2))
-    g.add(stick([x, by - 1, -1], [x, by - 1, 0.6], 0.3, metal))
+    g.add(rod3([x, by - 1, -1], [x, by - 1, 0.6], 0.3, metal, 8))
   }
   DRV_LEN.forEach((len, i) => {
     const d = driver(len, i % 2 ? acc : grip, metal)
@@ -1325,9 +1301,9 @@ function cableBody(p: string[]) {
   g.add(torus(4.2, 0.32, main, { x: 0.4, y: -0.3, z: 0.65 }))
   g.add(torus(4.6, 0.32, main, { x: -0.3, y: -0.2, z: 1.3 }))
   g.add(rbox(2.2, 1.6, 2.4, acc, { y: 3.4, z: 0.65 }, 0.4))
-  g.add(stick([2.8, -3.6, 1.3], [3.6, -8.8, 1.4], 0.32, main))
+  g.add(rod3([2.8, -3.6, 1.3], [3.6, -8.8, 1.4], 0.32, main, 8))
   g.add(rbox(1.4, 2.6, 0.8, plug, { x: 3.6, y: -11.2, z: 1.4 }, 0.3))
-  g.add(stick([-3, -3.4, 0], [-2.2, -7.4, 0.2], 0.32, main))
+  g.add(rod3([-3, -3.4, 0], [-2.2, -7.4, 0.2], 0.32, main, 8))
   g.add(rbox(1.8, 3, 1, plug, { x: -2.2, y: -10.2, z: 0.2 }, 0.3))
   return g
 }
@@ -1522,9 +1498,9 @@ function boxOpen(p: string[]) {
   // 里面的东西
   g.add(rbox(15, 6, 22, shade(acc, 0.25), { x: -8.5, y: 0.8 }, 1))
   g.add(rbox(14, 4, 21, shade(acc, 0.1), { x: -8.5, y: 6.8 }, 1))
-  g.add(cylZ(3.2, 21, shade(lidC, 0.15), 4.6, 0.8 + 3.2, 0))
-  g.add(cylZ(3.2, 21, shade(acc, 0.35), 11.6, 0.8 + 3.2, 0))
-  g.add(cylZ(3, 20, shade(lidC, -0.05), 8.1, 0.8 + 6.4 + 2.8, 0))
+  g.add(cylZ(3.2, 21, shade(lidC, 0.15), 4.6, 0.8 + 3.2, 0, 20))
+  g.add(cylZ(3.2, 21, shade(acc, 0.35), 11.6, 0.8 + 3.2, 0, 20))
+  g.add(cylZ(3, 20, shade(lidC, -0.05), 8.1, 0.8 + 6.4 + 2.8, 0, 20))
   return ground(g)
 }
 
@@ -1673,7 +1649,7 @@ function toiletRoll(p: string[]) {
   const g = G(ring(5.5, 2.2, 10, paper), ring(2.2, 1.9, 10.05, core, { y: -0.03 }))
   const tail = rbox(7, 0.15, 6, paper, { y: 0, z: 7.6 }, 0.05)
   g.add(tail)
-  g.add(bar([0, 0.1, 5.2], [0, 6, 5.4], 7, 0.15, paper))
+  g.add(slat([0, 0.1, 5.2], [0, 6, 5.4], 7, 0.15, paper))
   return ground(g)
 }
 const WIPE_PALS: Pal[] = [
@@ -1714,7 +1690,7 @@ function swabCase(p: string[]) {
     const x = Math.cos(a) * d
     const z = Math.sin(a) * d
     const top = 6.6 + r() * 0.8
-    g.add(stick([x, 0.7, z], [x * 1.05, top, z * 1.05], 0.12, WHITE, 5))
+    g.add(rod3([x, 0.7, z], [x * 1.05, top, z * 1.05], 0.12, WHITE, 5))
     g.add(ball(0.32, WHITE, { x: x * 1.05, y: top, z: z * 1.05 }, [1, 1.4, 1]))
   }
   return ground(g)
@@ -1727,7 +1703,7 @@ const CARE_PALS: Pal[] = [
 ]
 function handCream(p: string[]) {
   const [main, sec] = p
-  const g = G(rbox(4.6, 1.8, 11, main, {}, 0.8), rbox(5, 0.4, 1.2, main, { y: 0.7, z: -5.6 }, 0.15), rbox(2.4, 0.3, 4, sec, { y: 1.65 }, 0.1), cylZ(1.3, 2.2, sec, 0, 0.9, 6.5))
+  const g = G(rbox(4.6, 1.8, 11, main, {}, 0.8), rbox(5, 0.4, 1.2, main, { y: 0.7, z: -5.6 }, 0.15), rbox(2.4, 0.3, 4, sec, { y: 1.65 }, 0.1), cylZ(1.3, 2.2, sec, 0, 0.9, 6.5, 20))
   return ground(g)
 }
 function eyeDrops(p: string[]) {
@@ -1781,7 +1757,7 @@ function charger(p: string[]) {
   g.add(cyl(0.6, 0.6, 1, sec, { x: 0, y: 0.9, z: 2.3, rx: PI / 2 }, 10))
   g.add(torus(3, 0.25, main, { x: 6.6, y: 0.25, rx: PI / 2 }))
   g.add(torus(2.7, 0.25, main, { x: 6.8, y: 0.75, rx: PI / 2 }))
-  g.add(stick([2.3, 0.5, 2.6], [4.4, 0.25, 2.2], 0.25, main))
+  g.add(rod3([2.3, 0.5, 2.6], [4.4, 0.25, 2.2], 0.25, main, 8))
   g.add(rbox(1.2, 0.7, 2.4, sec, { x: 7.6, y: 0, z: 4.2 }, 0.25))
   return ground(g)
 }
@@ -1837,7 +1813,7 @@ function coatTree(p: string[]) {
   for (const a of CT_LOW) {
     const c = Math.cos(a)
     const s = Math.sin(a)
-    g.add(stick([0, 3, 0], [c * 21, 1.4, s * 21], 1.4, wood))
+    g.add(rod3([0, 3, 0], [c * 21, 1.4, s * 21], 1.4, wood, 8))
     g.add(ball(1.4, acc, { x: c * 21, y: 1.4, z: s * 21 }))
   }
   g.add(cyl(1.6, 1.9, 176, wood, { y: 4 }, 16))
@@ -1860,7 +1836,7 @@ const lhZ = (y: number) => 15.5 - (31 * (y - 0.34)) / LH.h
 function ladderHanger(p: string[]) {
   const [wood, , acc] = p
   const g = new THREE.Group()
-  for (const sx of [-1, 1]) g.add(bar([sx * (LH.w / 2 - 1.5), 0.34, 15.5], [sx * (LH.w / 2 - 1.5), LH.h + 0.34, -15.5], 3, 3, wood))
+  for (const sx of [-1, 1]) g.add(slat([sx * (LH.w / 2 - 1.5), 0.34, 15.5], [sx * (LH.w / 2 - 1.5), LH.h + 0.34, -15.5], 3, 3, wood))
   for (const y of LH.rungs) g.add(cylX(1.2, LH.w - 3, y === LH.rungs[LH.rungs.length - 1] ? acc : wood, 0, y, lhZ(y)))
   return g
 }
@@ -1937,8 +1913,8 @@ function doubleRail(p: string[]) {
     }
     g.add(cyl(1.2, 1.2, DRL.upY - 5, frame, { x, y: 5, z: DRL.upZ }, 12))
     g.add(ball(1.2, frame, { x, y: DRL.upY, z: DRL.upZ }))
-    g.add(stick([x, DRL.lowY, DRL.upZ], [x, DRL.lowY, DRL.lowZ], 0.9, frame))
-    g.add(stick([x, DRL.lowY - 22, DRL.upZ], [x, DRL.lowY, DRL.lowZ - 3], 0.7, frame))
+    g.add(rod3([x, DRL.lowY, DRL.upZ], [x, DRL.lowY, DRL.lowZ], 0.9, frame, 8))
+    g.add(rod3([x, DRL.lowY - 22, DRL.upZ], [x, DRL.lowY, DRL.lowZ - 3], 0.7, frame, 8))
     g.add(ball(1.2, frame, { x, y: DRL.lowY, z: DRL.lowZ }))
   }
   g.add(cylX(1.2, DRL.w - 4, frame, 0, DRL.upY, DRL.upZ))
@@ -1971,7 +1947,7 @@ function ikou(p: string[]) {
     const x = sx * IK.post
     g.add(rbox(5, 5, 40, wood, { x }, 0.8))
     g.add(rbox(4, IK.top - 5, 4, wood, { x, y: 5 }, 0.5))
-    g.add(cylZ(0.9, 2.4, metal, x, IK.rodY, 2.4))
+    g.add(cylZ(0.9, 2.4, metal, x, IK.rodY, 2.4, 20))
   }
   g.add(rbox(160, 4, 4.4, wood, { y: IK.top }, 0.8))
   g.add(rbox(132, 3, 3, sub, { y: 120, z: -3 }, 0.5))
@@ -2095,7 +2071,7 @@ function garmentHang(p: string[], g: GSpec) {
     }
   if (g.collar === 'hood') {
     out.add(ball(1, main, { y: yN - 9, z: zc - g.T / 2 - 0.3 }, [11, 12, 1]))
-    for (const s of [-1, 1]) out.add(stick([s * 2, yN - 1, front + 0.2], [s * 2.3, yN - 16, front + 0.2], 0.25, acc, 6))
+    for (const s of [-1, 1]) out.add(rod3([s * 2, yN - 1, front + 0.2], [s * 2.3, yN - 16, front + 0.2], 0.25, acc, 6))
   }
   // 前襟
   if (g.buttons) {
@@ -2239,7 +2215,7 @@ function apronHanging(p: string[]) {
   g.add(rbox(24, 22, 0.8, main, { y: waist, z: S_Z }, 0.3))
   g.add(rbox(54, 46, 1.0, main, { y: waist - 45, z: S_Z }, 0.4))
   g.add(rbox(20, 10, 0.4, acc, { y: waist - 22, z: S_Z + 0.6 }, 0.15))
-  for (const s of [-1, 1]) g.add(bar([s * 26, waist - 1, S_Z + 0.2], [s * 24.5, waist - 30, S_Z + 0.2], 1.4, 0.3, strap))
+  for (const s of [-1, 1]) g.add(slat([s * 26, waist - 1, S_Z + 0.2], [s * 24.5, waist - 30, S_Z + 0.2], 1.4, 0.3, strap))
   return g
 }
 function apronFolded(p: string[]) {

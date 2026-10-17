@@ -11,7 +11,7 @@
 import * as THREE from 'three'
 import { ball, cyl, puck, rbox, toon, torus } from '../toon'
 import { C, type AssetDef, type Poly } from '../kit'
-import { PI, clearDeep, type V3 } from '../geo'
+import { PI, clearDeep, rod3 } from '../geo'
 import { CL, CN, F, I, J, M, N, R, type Build, type Pal } from '../packkit'
 
 /** 层板形状：ins 为向内收的距离（摆放区域用），0 为实际轮廓 */
@@ -36,15 +36,6 @@ const GLASS = '#dff2fb'
 const TILE = '#e9eef0'
 
 // ---------- 小工具 ----------
-
-function stick(a: V3, b: V3, r: number, color: string, seg = 8) {
-  const va = new THREE.Vector3(...a)
-  const vb = new THREE.Vector3(...b)
-  const m = cyl(r, r, va.distanceTo(vb), color, {}, seg)
-  m.position.copy(va).add(vb).multiplyScalar(0.5)
-  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), vb.clone().sub(va).normalize())
-  return m
-}
 
 /** 按多边形挤出一块板（同 kit.slab，但倒角更小，薄板也不会变形） */
 function plank(poly: Poly, t: number, color: string, y: number) {
@@ -126,7 +117,7 @@ function polyline(g: THREE.Group, pts: Poly, y: number, r: number, color: string
   for (let k = 0; k < n; k++) {
     const a = pts[k]
     const b = pts[(k + 1) % pts.length]
-    g.add(stick([a[0], y, a[1]], [b[0], y, b[1]], r, color, 6))
+    g.add(rod3([a[0], y, a[1]], [b[0], y, b[1]], r, color, 6))
   }
   for (const p of pts) g.add(ball(r * 1.05, color, { x: p[0], y, z: p[1] }))
 }
@@ -260,7 +251,7 @@ function unit(u: Unit): Build {
         const r = 0.26
         polyline(g, toward0(poly0, 0.35), y + 0.4, 0.38, main, true)
         const [z0, z1] = range(poly0, 1)
-        for (let z = z0 + 1.4; z < z1 - 0.5; z += 2.1) for (const [a, b] of spansAt(poly0, z, 'z')) if (b - a > 1.2) g.add(stick([a + 0.3, y + r, z], [b - 0.3, y + r, z], r, main, 6))
+        for (let z = z0 + 1.4; z < z1 - 0.5; z += 2.1) for (const [a, b] of spansAt(poly0, z, 'z')) if (b - a > 1.2) g.add(rod3([a + 0.3, y + r, z], [b - 0.3, y + r, z], r, main, 6))
       } else if (u.deck === 'slat') {
         const sw = 2.4
         const [z0, z1] = range(poly0, 1)
@@ -320,10 +311,10 @@ function unit(u: Unit): Build {
         for (const [x, z, s] of spots) {
           if (s === 'b') {
             g.add(rbox(1.4, 6, 0.6, acc, { x, y: y - 6, z: z + 0.3 }, 0.2))
-            g.add(stick([x, y - 5.4, z + 0.6], [x, y - 0.2, z + 5], 0.32, acc, 6))
+            g.add(rod3([x, y - 5.4, z + 0.6], [x, y - 0.2, z + 5], 0.32, acc, 6))
           } else {
             g.add(rbox(0.6, 6, 1.4, acc, { x: x + 0.3, y: y - 6, z }, 0.2))
-            g.add(stick([x + 0.6, y - 5.4, z], [x + 5, y - 0.2, z], 0.32, acc, 6))
+            g.add(rod3([x + 0.6, y - 5.4, z], [x + 5, y - 0.2, z], 0.32, acc, 6))
           }
         }
       } else if (u.hold === 'suction') {
@@ -334,11 +325,11 @@ function unit(u: Unit): Build {
           if (back) {
             g.add(cyl(2.3, 2.3, 0.7, acc, { x, y: yc - 0.35, z: z + 0.36, rx: PI / 2 }, 16))
             g.add(ball(0.9, acc, { x, y: yc, z: z + 1.3 }))
-            g.add(stick([x, yc, z + 1.3], [x, y + 0.3, z + 3.2], 0.35, acc, 6))
+            g.add(rod3([x, yc, z + 1.3], [x, y + 0.3, z + 3.2], 0.35, acc, 6))
           } else {
             g.add(cyl(2.3, 2.3, 0.7, acc, { x: x + 0.36, y: yc - 0.35, z, rz: PI / 2 }, 16))
             g.add(ball(0.9, acc, { x: x + 1.3, y: yc, z }))
-            g.add(stick([x + 1.3, yc, z], [x + 3.2, y + 0.3, z], 0.35, acc, 6))
+            g.add(rod3([x + 1.3, yc, z], [x + 3.2, y + 0.3, z], 0.35, acc, 6))
           }
         }
       } else if (u.hold === 'pole') {
@@ -351,9 +342,9 @@ function unit(u: Unit): Build {
         const pts = samples(ch.map((q) => toward(poly0, q, 1.2)), 6).filter((_, i, a) => i > 0 && i < a.length - 1)
         const pick = pts.length > 3 ? [pts[Math.floor(pts.length * 0.2)], pts[Math.floor(pts.length / 2)], pts[Math.floor(pts.length * 0.8)]] : pts
         for (const [x, z] of pick) {
-          g.add(stick([x, y + 0.1, z], [x, y - 3, z], 0.22, acc, 6))
+          g.add(rod3([x, y + 0.1, z], [x, y - 3, z], 0.22, acc, 6))
           g.add(torus(0.7, 0.22, acc, { x: x + 0.7, y: y - 3, z, rz: PI }, PI))
-          g.add(stick([x + 1.4, y - 3, z], [x + 1.4, y - 2, z], 0.22, acc, 6))
+          g.add(rod3([x + 1.4, y - 3, z], [x + 1.4, y - 2, z], 0.22, acc, 6))
         }
       }
     }
@@ -410,9 +401,9 @@ function unit(u: Unit): Build {
       const z = cz + 5.2
       for (const x of [x0, x1]) {
         g.add(cyl(1.4, 1.4, 0.6, acc, { x, y: u.towel - 0.3, z: cz + 0.3, rx: PI / 2 }, 12))
-        g.add(stick([x, u.towel, cz + 0.5], [x, u.towel, z], 0.45, acc, 8))
+        g.add(rod3([x, u.towel, cz + 0.5], [x, u.towel, z], 0.45, acc, 8))
       }
-      g.add(stick([x0, u.towel, z], [x1, u.towel, z], 0.55, acc, 10))
+      g.add(rod3([x0, u.towel, z], [x1, u.towel, z], 0.55, acc))
     }
     return g
   }

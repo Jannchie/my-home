@@ -85,10 +85,10 @@ function cutout<T extends THREE.Mesh>(m: T): T {
 }
 
 /** 沿 z 的圆柱（朝前的圆盘），给中心 */
-const cylZ = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 24) => P(G(cyl(r, r, len, color, { y: -len / 2 }, seg)), x, y, z, PI / 2)
+const cylZg = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 24) => P(G(cyl(r, r, len, color, { y: -len / 2 }, seg)), x, y, z, PI / 2)
 
 /** 沿 x 的横圆柱，给中心 */
-const cylX = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 20) => P(G(cyl(r, r, len, color, { y: -len / 2 }, seg)), x, y, z, 0, 0, PI / 2)
+const cylXg = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 20) => P(G(cyl(r, r, len, color, { y: -len / 2 }, seg)), x, y, z, 0, 0, PI / 2)
 
 /** yz 平面里的扁撑板（相框背撑） */
 function strutZ(az: number, ay: number, bz: number, by: number, w: number, t: number, color: string, x = 0) {
@@ -101,7 +101,7 @@ function strutZ(az: number, ay: number, bz: number, by: number, w: number, t: nu
 /** 平放的硬币，at.y 为底 */
 const coin = (r: number, color: string, x: number, y: number, z: number, t = 0.22) => puck(r, t, color, { x, y, z })
 /** 竖着朝前的硬币，给中心 */
-const coinZ = (r: number, color: string, x: number, y: number, z: number, t = 0.25) => cylZ(r, t, color, x, y, z, 28)
+const coinZ = (r: number, color: string, x: number, y: number, z: number, t = 0.25) => cylZg(r, t, color, x, y, z, 28)
 
 const COIN_COLS = [GOLD, SILVER, COPPER, SILVER, BRASS, '#b8bcc2']
 
@@ -1472,7 +1472,7 @@ function albumOpen(p: string[], kind: string, drawL: Draw, drawR: Draw) {
     g.add(rbox(16.2, 0.35, 25, cover, { x: s * 8.15 }, 0.15))
     g.add(rbox(15.4, 1, 24.2, '#f3efe6', { x: s * 7.95, y: 0.35 }, 0.15))
   }
-  g.add(cylZ(0.75, 25, cover, 0, 0.75, 0, 16))
+  g.add(cylZg(0.75, 25, cover, 0, 0.75, 0, 16))
   g.add(paintTop(15, 23.8, `col-${kind}-L-${page}`, drawL, -7.95, 1.65, 0))
   g.add(paintTop(15, 23.8, `col-${kind}-R-${page}`, drawR, 7.95, 1.65, 0))
   return g
@@ -1676,7 +1676,7 @@ function cashString(p: string[]) {
   const step = 0.17
   for (let i = 0; i < n; i++) g.add(P(cashCoin(i % 3 ? bronze : shade(bronze, -0.06)), x0 + i * step, y, -2.6, 0, PI / 2, i * 0.3))
   const x1 = x0 + (n - 1) * step
-  g.add(cylX(0.11, x1 - x0 + 1.4, cord, (x0 + x1) / 2, y, -2.6, 8))
+  g.add(cylXg(0.11, x1 - x0 + 1.4, cord, (x0 + x1) / 2, y, -2.6, 8))
   for (const [xa, s] of [
     [x0 - 0.7, -1],
     [x1 + 0.7, 1],
@@ -1702,7 +1702,7 @@ function coinLoupe(p: string[]) {
   const mg = new THREE.Group()
   mg.add(torus(3.4, 0.35, STEEL, { y: 0.35, rx: PI / 2 }))
   mg.add(ghost(cyl(3.3, 3.3, 0.3, GLASS, { y: 0.2 }, 32), GLASS))
-  mg.add(cylX(0.35, 1.2, STEEL, 4.2, 0.4, 0, 12))
+  mg.add(cylXg(0.35, 1.2, STEEL, 4.2, 0.4, 0, 12))
   mg.add(P(G(cyl(0.55, 0.65, 8, handle, { y: 0 }, 14)), 4.7, 0.65, 0, 0, 0, -PI / 2))
   g.add(P(mg, 13, 0, 1.5, 0, 0.5))
   return g

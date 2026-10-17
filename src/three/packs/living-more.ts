@@ -5,7 +5,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, face, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, SWING_OPEN, ellipsePoly, glow, holePanel, movable, paintPanel, rectPoly, rng, shell, type AssetCategory, type AssetDef, type Poly, type SurfaceDef } from '../kit'
-import { G, P, clearMat, lit, noOutlineDeep, type V3 } from '../geo'
+import { G, P, batten, clearMat, cylX, cylZ, lit, noOutlineDeep, rod3, type V3 } from '../geo'
 import { I, J, M, N, PROP, R, type PalFlat } from '../packkit'
 
 const BRASS = '#d4b25a'
@@ -39,39 +39,6 @@ function def(
 }
 
 // ---------- 小工具 ----------
-
-/** 两端已知的 3D 细杆 */
-function rod3(a: V3, b: V3, r: number, color: string, seg = 10) {
-  const va = new THREE.Vector3(...a)
-  const vb = new THREE.Vector3(...b)
-  const m = cyl(r, r, va.distanceTo(vb), color, {}, seg)
-  m.position.copy(va).add(vb).multiplyScalar(0.5)
-  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), vb.clone().sub(va).normalize())
-  return m
-}
-
-/** 两端已知的方截面梁 */
-function beam(a: V3, b: V3, s: number, color: string) {
-  const va = new THREE.Vector3(...a)
-  const vb = new THREE.Vector3(...b)
-  const m = rbox(s, va.distanceTo(vb), s, color, {}, s * 0.25)
-  m.position.copy(va).add(vb).multiplyScalar(0.5)
-  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), vb.clone().sub(va).normalize())
-  return m
-}
-
-/** 沿 x 的水平圆柱，(x, y, z) 为轴心 */
-function cylX(r: number, len: number, color: string, x: number, y: number, z: number, seg = 16) {
-  return P(cyl(r, r, len, color, {}, seg), x, y, z, 0, 0, Math.PI / 2)
-}
-
-/** 沿 z 的水平圆柱，(x, y, z) 为轴心 */
-function cylZ(r: number, len: number, color: string, x: number, y: number, z: number, seg = 16) {
-  const m = cyl(r, r, len, color, {}, seg)
-  m.rotation.x = Math.PI / 2
-  m.position.set(x, y, z)
-  return m
-}
 
 /** xy 平面轮廓沿 z 挤出（厚 depth，中心在 z） */
 function prism(pts: [number, number][], depth: number, color: string, z = 0, bevelMax = 0.5) {
@@ -369,7 +336,7 @@ function daybed(p: string[]) {
   g.add(rbox(160, 8, 64, wood, { y: 16 }, 2))
   g.add(rbox(156, 14, 62, fab, { y: 24 }, 5))
   // 涡卷扶手：横置的大圆柱 + 外沿
-  g.add(cylZ(15, 64, fab, -70, 48, 0, 24))
+  g.add(cylZ(15, 64, fab, -70, 48, 0))
   g.add(rbox(12, 32, 64, fab, { x: -74, y: 24 }, 5))
   // 靠背：左半段
   g.add(rbox(92, 34, 12, fab, { x: -34, y: 36, z: -26 }, 5))
@@ -2662,8 +2629,8 @@ function bookSling(p: string[]) {
   const [wood, cloth, acc] = p
   const g = new THREE.Group()
   for (const s of [-1, 1]) {
-    g.add(beam([s * 29, 0, -13], [s * 29, 70, -5], 2.4, wood))
-    g.add(beam([s * 29, 0, 13], [s * 29, 40, 0], 2.4, wood))
+    g.add(batten([s * 29, 0, -13], [s * 29, 70, -5], 2.4, 2.4, wood))
+    g.add(batten([s * 29, 0, 13], [s * 29, 40, 0], 2.4, 2.4, wood))
   }
   for (let i = 0; i < 3; i++) {
     const y = 14 + i * 20
@@ -2720,9 +2687,9 @@ function pikler(p: string[]) {
   const g = new THREE.Group()
   const H = 74
   for (const s of [-1, 1]) {
-    g.add(beam([s * 44, 0, -36], [s * 44, H, 0], 3.2, wood))
-    g.add(beam([s * 44, 0, 36], [s * 44, H, 0], 3.2, wood))
-    g.add(beam([s * 44, 1.6, -36], [s * 44, 1.6, 36], 3.2, wood))
+    g.add(batten([s * 44, 0, -36], [s * 44, H, 0], 3.2, 3.2, wood))
+    g.add(batten([s * 44, 0, 36], [s * 44, H, 0], 3.2, 3.2, wood))
+    g.add(batten([s * 44, 1.6, -36], [s * 44, 1.6, 36], 3.2, 3.2, wood))
   }
   for (let i = 1; i <= 6; i++) {
     const t = i / 7
@@ -2741,7 +2708,7 @@ function walker(p: string[]) {
   g.add(cylX(1, 42, wood, 0, 6, 11))
   g.add(cylX(1, 42, wood, 0, 6, -11))
   g.add(tray(36, 13, 28, 1.2, wood, { y: 8 }, 0.5))
-  for (const s of [-1, 1]) g.add(beam([s * 16, 18, -12], [s * 16, 47, -17], 2.4, wood))
+  for (const s of [-1, 1]) g.add(batten([s * 16, 18, -12], [s * 16, 47, -17], 2.4, 2.4, wood))
   g.add(cylX(1.6, 34, acc, 0, 47, -17))
   const r = rng(3)
   for (let i = 0; i < 6; i++) g.add(block(i % 3, TOY[i], -10 + (i % 3) * 9, i < 3 ? 9.2 : 9.2 + (i % 3 === 2 ? 2.25 : 4.5), -4, r(), 4.5))
@@ -2753,8 +2720,8 @@ function growthChair(p: string[]) {
   const [wood, seat, acc] = p
   const g = new THREE.Group()
   for (const s of [-1, 1]) {
-    g.add(beam([s * 21, 0, 22], [s * 21, 79, -10], 3.4, wood))
-    g.add(beam([s * 21, 0, -22], [s * 21, 40, 5.8], 3.4, wood))
+    g.add(batten([s * 21, 0, 22], [s * 21, 79, -10], 3.4, 3.4, wood))
+    g.add(batten([s * 21, 0, -22], [s * 21, 40, 5.8], 3.4, 3.4, wood))
   }
   g.add(rbox(40, 1.8, 26, wood, { y: 20, z: 6 }, 0.5))
   g.add(rbox(40, 1.8, 28, wood, { y: 46, z: -1 }, 0.5))
@@ -2818,7 +2785,7 @@ function playpen(p: string[]) {
   for (const s of [-1, 1]) {
     for (const y of [3, 60]) {
       g.add(cylX(1.4, 118, rail, 0, y, s * 58))
-      g.add(cylZ(1.4, 118, rail, s * 58, y, 0))
+      g.add(cylZ(1.4, 118, rail, s * 58, y, 0, 16))
     }
     for (let i = 0; i <= 12; i++) {
       const t = -54 + i * 9
@@ -2907,7 +2874,7 @@ function stackRings(p: string[]) {
 function kidsEasel(p: string[]) {
   const [wood, a, tray0] = p
   const g = new THREE.Group()
-  for (const s of [-1, 1]) for (const zs of [-1, 1]) g.add(beam([s * 25, 0, zs * 22], [s * 25, 98, zs * 3], 3, wood))
+  for (const s of [-1, 1]) for (const zs of [-1, 1]) g.add(batten([s * 25, 0, zs * 22], [s * 25, 98, zs * 3], 3, 3, wood))
   for (const zs of [-1, 1]) {
     const board = rbox(47.6, 40, 1, zs > 0 ? '#fbfcfd' : '#3b4a44', {}, 0.3)
     board.rotation.x = zs * -0.2

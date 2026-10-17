@@ -10,7 +10,7 @@
 import * as THREE from 'three'
 import { ball, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, glow, holePanel, rng, shell, type AssetDef } from '../kit'
-import { P, PI, UP, litDeep, noOutlineDeep, type V3 } from '../geo'
+import { P, PI, litDeep, noOutlineDeep, rod3, type V3 } from '../geo'
 import { I, J, M, N, R, type Build, type Dims, type Pal } from '../packkit'
 
 const WOOD = '#d9b07a'
@@ -83,19 +83,9 @@ function clear<T extends THREE.Object3D>(o: T, color: string, a = 0.25): T {
   return o
 }
 
-/** 两点之间的杆 */
-function stick(a: V3, b: V3, r: number, color: string, seg = 8) {
-  const va = new THREE.Vector3(...a)
-  const vb = new THREE.Vector3(...b)
-  const dir = vb.clone().sub(va)
-  const m = cyl(r, r, dir.length(), color, {}, seg)
-  m.position.copy(va).add(vb).multiplyScalar(0.5)
-  m.quaternion.setFromUnitVectors(UP, dir.normalize())
-  return m
-}
 /** 丝网的一根细丝：不描边 */
 const wire = (a: V3, b: V3, r: number, color: string, castShadow = true) => {
-  const m = noOutlineDeep(stick(a, b, r, color, 5))
+  const m = noOutlineDeep(rod3(a, b, r, color, 5))
   if (!castShadow) m.castShadow = false
   return m
 }
@@ -151,10 +141,10 @@ function frameXY(cx: number, cy: number, w: number, h: number, r: number, color:
   const y0 = cy - h / 2
   const y1 = cy + h / 2
   const g = G(
-    stick([x0, y0, 0], [x1, y0, 0], r, color),
-    stick([x1, y0, 0], [x1, y1, 0], r, color),
-    stick([x1, y1, 0], [x0, y1, 0], r, color),
-    stick([x0, y1, 0], [x0, y0, 0], r, color),
+    rod3([x0, y0, 0], [x1, y0, 0], r, color, 8),
+    rod3([x1, y0, 0], [x1, y1, 0], r, color, 8),
+    rod3([x1, y1, 0], [x0, y1, 0], r, color, 8),
+    rod3([x0, y1, 0], [x0, y0, 0], r, color, 8),
   )
   if (latch) g.add(rbox(1.4, 2.2, 0.8, color, { x: x1 - 0.2, y: cy - 1.1, z: 0.2 }, 0.3))
   return g
@@ -201,10 +191,10 @@ function wireBox(w: number, d: number, y0: number, h: number, color: string, o: 
     [x1, z1],
     [x0, z1],
   ])
-    g.add(stick([x, y0, z], [x, y1, z], fr, color), ball(fr, color, { x, y: y1, z }))
+    g.add(rod3([x, y0, z], [x, y1, z], fr, color, 8), ball(fr, color, { x, y: y1, z }))
   const loop = (y: number, rr: number) => {
-    g.add(stick([x0, y, z0], [x1, y, z0], rr, color), stick([x0, y, z1], [x1, y, z1], rr, color))
-    g.add(stick([x0, y, z0], [x0, y, z1], rr, color), stick([x1, y, z0], [x1, y, z1], rr, color))
+    g.add(rod3([x0, y, z0], [x1, y, z0], rr, color, 8), rod3([x0, y, z1], [x1, y, z1], rr, color, 8))
+    g.add(rod3([x0, y, z0], [x0, y, z1], rr, color, 8), rod3([x1, y, z0], [x1, y, z1], rr, color, 8))
   }
   loop(y0, fr)
   loop(y1, fr)
@@ -216,7 +206,7 @@ function wireBox(w: number, d: number, y0: number, h: number, color: string, o: 
       const z = z0 + (d * i) / n
       g.add(wire([x0, y1, z], [x1, y1, z], r, wc, ws))
     }
-    g.add(stick([0, y1, z0], [0, y1, z1], fr * 0.7, color))
+    g.add(rod3([0, y1, z0], [0, y1, z1], fr * 0.7, color, 8))
   }
   return g
 }
@@ -250,7 +240,7 @@ function domeDoor(rr: number, t: number, s: number, ya: number, yb: number, colo
   for (const tt of [t - s, t + s]) {
     const x = Math.cos(tt) * R2
     const z = Math.sin(tt) * R2
-    g.add(stick([x, ya, z], [x, yb, z], fr, color))
+    g.add(rod3([x, ya, z], [x, yb, z], fr, color, 8))
   }
   g.add(hArc(R2, fr, color, ya, t - s, t + s), hArc(R2, fr, color, yb, t - s, t + s))
   g.add(rbox(1.2, 2, 0.8, color, { x: Math.cos(t + s) * (R2 + 0.3), y: (ya + yb) / 2 - 1, z: Math.sin(t + s) * (R2 + 0.3), ry: -(t + s) + PI / 2 }, 0.3))
@@ -302,8 +292,8 @@ function wheel(rr: number, depth: number, color: string, standColor: string, sta
   }
   g.add(P(cyl(1.1, 1.1, 1.2, shade(color, -0.12), {}, 16), 0, cy, -depth / 2 - 0.8, PI / 2))
   const zs = -depth / 2 - 1.6
-  for (const s of [-1, 1]) g.add(stick([s * rr * 0.6, 0.4, zs], [0, cy, zs], 0.45, standColor))
-  g.add(stick([-rr * 0.6, 0.4, zs], [rr * 0.6, 0.4, zs], 0.4, standColor))
+  for (const s of [-1, 1]) g.add(rod3([s * rr * 0.6, 0.4, zs], [0, cy, zs], 0.45, standColor, 8))
+  g.add(rod3([-rr * 0.6, 0.4, zs], [rr * 0.6, 0.4, zs], 0.4, standColor, 8))
   return g
 }
 
@@ -313,7 +303,7 @@ function bottle(rr: number, h: number, cap: string, nozzle = -1) {
   g.add(clear(cyl(rr, rr, h, C.glass, {}, 16), C.glass, 0.35))
   g.add(clear(cyl(rr - 0.3, rr - 0.3, h * 0.7, WATER, { y: 0.2 }, 16), WATER, 0.45))
   g.add(cyl(rr + 0.15, rr + 0.15, 1.6, cap, { y: -1.2 }, 16))
-  g.add(stick([0, -1.2, 0], [nozzle * 1.5, -4.2, 0], 0.25, STEEL))
+  g.add(rod3([0, -1.2, 0], [nozzle * 1.5, -4.2, 0], 0.25, STEEL, 8))
   g.add(cyl(rr + 0.15, rr + 0.15, 0.8, cap, { y: h - 0.4 }, 16))
   return g
 }
@@ -529,7 +519,7 @@ function hamsterWire(p: string[], W: number, D: number, HW: number) {
   // 正面的门、顶上的提手
   g.add(P(frameXY(W * 0.18, y0 + 8, 14, 11, 0.3, wireC), 0, 0, D / 2 - 0.3 + 0.35))
   const top = y0 + HW
-  g.add(stick([-6, top + 0.4, 0], [6, top + 0.4, 0], 0.35, wireC), stick([-6, top, 0], [-6, top + 0.4, 0], 0.35, wireC), stick([6, top, 0], [6, top + 0.4, 0], 0.35, wireC))
+  g.add(rod3([-6, top + 0.4, 0], [6, top + 0.4, 0], 0.35, wireC, 8), rod3([-6, top, 0], [-6, top + 0.4, 0], 0.35, wireC, 8), rod3([6, top, 0], [6, top + 0.4, 0], 0.35, wireC, 8))
   // 跑轮（后左）、小屋（后右）、水瓶（右侧壁）、食盆（前左）
   const wr = W >= 55 ? 8.5 : 7
   g.add(P(wheel(wr, 6, acc, shade(acc, -0.15), 1.2), -W / 2 + wr + 3, 5.4, -D / 2 + 6.5))
@@ -569,7 +559,7 @@ function hamsterAcrylic(p: string[]) {
   g.add(cyl(4.3, 4.2, 0.4, '#f1e6cc', { x: 4, y: 11.8, z: -D / 2 + 6.5 }, 20))
   // 水瓶架（角落立杆）+ 水瓶
   g.add(cyl(2.2, 2.4, 0.8, acc, { x: W / 2 - 4, y: 9.4, z: D / 2 - 4 }, 16))
-  g.add(stick([W / 2 - 4, 9.4, D / 2 - 4], [W / 2 - 4, 25, D / 2 - 4], 0.35, acc))
+  g.add(rod3([W / 2 - 4, 9.4, D / 2 - 4], [W / 2 - 4, 25, D / 2 - 4], 0.35, acc, 8))
   g.add(P(bottle(1.8, 9, acc), W / 2 - 6.2, 15.5, D / 2 - 4))
   g.add(P(bowl(2.8, CERAMIC), -6, 9.4, 6))
   g.add(P(hamster('#d8d0c8'), 6, 9.4, 7, 0, 0.4))
@@ -727,7 +717,7 @@ function rabbitCage(p: string[]) {
     const x = hx - 7 + i * 2.3
     g.add(wire([x, 30, -D / 2 + 0.5], [x, 44, -D / 2 + 6], 0.18, wireC))
   }
-  g.add(stick([hx - 7.5, 44, -D / 2 + 6], [hx + 7.5, 44, -D / 2 + 6], 0.3, wireC))
+  g.add(rod3([hx - 7.5, 44, -D / 2 + 6], [hx + 7.5, 44, -D / 2 + 6], 0.3, wireC, 8))
   g.add(ball(6, HAY, { x: hx, y: 39, z: -D / 2 + 3.2 }, [1.1, 0.75, 0.45]))
   // 水瓶（右壁内侧）、食盆、便盆（平台下）
   g.add(P(bottle(2.6, 16, deck, -1), W / 2 - 3.4, 26, 6))
@@ -747,7 +737,7 @@ function guineaPen(p: string[]) {
   g.add(tray(W, 12, D, 1.2, base, {}, 0.6))
   g.add(rbox(W - 2.6, 1.4, D - 2.6, fleece, { y: 1.2 }, 0.5))
   g.add(wireBox(W - 0.6, D - 0.6, 12.2, 26, wireC, { gap: 2.5, r: 0.16, frameR: 0.38, top: false }))
-  g.add(stick([0, 12.2, D / 2 - 0.3], [0, 38.2, D / 2 - 0.3], 0.38, wireC), stick([0, 12.2, -D / 2 + 0.3], [0, 38.2, -D / 2 + 0.3], 0.38, wireC))
+  g.add(rod3([0, 12.2, D / 2 - 0.3], [0, 38.2, D / 2 - 0.3], 0.38, wireC, 8), rod3([0, 12.2, -D / 2 + 0.3], [0, 38.2, -D / 2 + 0.3], 0.38, wireC, 8))
   // 半圆草屋隧道
   const tun = new THREE.Group()
   const n = 9
@@ -831,10 +821,10 @@ function domeBirdcage(p: string[], kind: BirdKind = 'budgie') {
   const ry = yTop + 2.2 + ringR + ringT
   g.add(torus(ringR, ringT, wireC, { y: ry - 0.3 }))
   // 栖木、秋千、两个食杯
-  g.add(stick([-rr + 0.6, y0 + 9, 0], [rr - 0.6, y0 + 9, 0], 0.55, WOOD))
+  g.add(rod3([-rr + 0.6, y0 + 9, 0], [rr - 0.6, y0 + 9, 0], 0.55, WOOD, 8))
   const sy = y0 + hw - 3
   g.add(torus(4.5, 0.18, wireC, { y: sy, z: 2 }))
-  g.add(stick([-4, sy - 2, 2], [4, sy - 2, 2], 0.45, WOOD))
+  g.add(rod3([-4, sy - 2, 2], [4, sy - 2, 2], 0.45, WOOD, 8))
   g.add(wire([0, sy + 4.5, 2], [0, yTop - 1.2, 0], 0.12, wireC))
   for (const s of [-1, 1]) {
     g.add(cup(2.4, 1.9, 3, 0.35, acc, { x: s * (rr - 2.4), y: y0 + 4, z: -3 }))
@@ -868,7 +858,7 @@ function birdcageStand(p: string[]) {
   g.add(tube([[0, H - 6, 0], [3, H + 1, 0], [10, H + 3.5, 0], [ax - 3, H + 2.5, 0], [ax, H - 0.5, 0]], 0.9, stand, 40))
   // 支撑涡卷
   g.add(tube([[0, H - 22, 0], [5, H - 16, 0], [10, H - 7, 0], [13, H + 1, 0]], 0.5, stand, 30))
-  g.add(stick([ax, H - 0.5, 0], [ax, H - 3.2, 0], 0.5, stand))
+  g.add(rod3([ax, H - 0.5, 0], [ax, H - 3.2, 0], 0.5, stand, 8))
   g.add(torus(1.4, 0.4, stand, { x: ax, y: H - 4.2, ry: PI / 2 }))
   const { g: cage, ringTop } = domeBirdcage([acc, wireC, acc], 'buncho-white')
   // 鸟笼吊环套在挂钩小环上：吊环内顶 = 小环内底
@@ -899,12 +889,12 @@ function squareCage(p: string[], W: number, D: number, HW: number, birds: [BirdK
   // 栖木（前后方向）
   const pa = y0 + HW * 0.32
   const pb = y0 + HW * 0.58
-  g.add(stick([-W / 4, pa, -D / 2 + 0.6], [-W / 4, pa, D / 2 - 0.6], 0.7, WOOD))
-  g.add(stick([W / 4, pb, -D / 2 + 0.6], [W / 4, pb, D / 2 - 0.6], 0.75, WOODD))
+  g.add(rod3([-W / 4, pa, -D / 2 + 0.6], [-W / 4, pa, D / 2 - 0.6], 0.7, WOOD, 8))
+  g.add(rod3([W / 4, pb, -D / 2 + 0.6], [W / 4, pb, D / 2 - 0.6], 0.75, WOODD, 8))
   // 秋千
   const sy = top - 16
   for (const s of [-1, 1]) g.add(wire([s * 4, top, 2], [s * 4, sy, 2], 0.12, wc))
-  g.add(stick([-4.4, sy, 2], [4.4, sy, 2], 0.5, WOOD))
+  g.add(rod3([-4.4, sy, 2], [4.4, sy, 2], 0.5, WOOD, 8))
   for (let i = 0; i < 4; i++) g.add(ball(0.9, [acc, C.lemon, C.sky, C.pink][i], { x: -4, y: sy + 3 + i * 2.2, z: 2 }))
   // 镜子 + 铃铛（左壁内侧）
   const mx = -W / 2 + 1.6
@@ -985,8 +975,8 @@ function bambooCage(p: string[]) {
   g.add(cyl(0.6, 0.6, 1, acc, { x: 0, y: y0 + 9.4, z: D / 2 + 0.3, rx: PI / 2 }, 10))
   // 栖木（前后方向）、陶瓷食杯
   const pa = y0 + 10
-  g.add(stick([-W / 4, pa, -D / 2 + 1], [-W / 4, pa, D / 2 - 1], 0.6, WOOD))
-  g.add(stick([W / 4, pa + 6, -D / 2 + 1], [W / 4, pa + 6, D / 2 - 1], 0.6, WOOD))
+  g.add(rod3([-W / 4, pa, -D / 2 + 1], [-W / 4, pa, D / 2 - 1], 0.6, WOOD, 8))
+  g.add(rod3([W / 4, pa + 6, -D / 2 + 1], [W / 4, pa + 6, D / 2 - 1], 0.6, WOOD, 8))
   for (const s of [-1, 1]) {
     g.add(cup(2.3, 2, 3, 0.35, CERAMIC, { x: s * 5, y: y0 + 1, z: D / 2 - 3 }))
     g.add(torus(2.15, 0.2, J.ai, { x: s * 5, y: y0 + 3.85, z: D / 2 - 3, rx: PI / 2 }))
@@ -1013,12 +1003,12 @@ function perchStand(p: string[]) {
   g.add(tray(40, 3.5, 28, 1, base, {}, 0.6))
   g.add(rbox(38, 0.4, 26, '#efe4c8', { y: 1 }, 0.15))
   g.add(cyl(1, 1.2, 34, perch, { x: -6, y: 1 }, 12))
-  g.add(stick([-18, 35, 0], [6, 35, 0], 0.9, perch))
-  g.add(stick([-6, 22, 0], [6, 22, 0], 0.8, perch))
-  g.add(stick([6, 22, 0], [6, 35, 0], 0.6, perch))
+  g.add(rod3([-18, 35, 0], [6, 35, 0], 0.9, perch, 8))
+  g.add(rod3([-6, 22, 0], [6, 22, 0], 0.8, perch, 8))
+  g.add(rod3([6, 22, 0], [6, 35, 0], 0.6, perch, 8))
   // 梯子
-  for (const s of [-1, 1]) g.add(stick([12 + s * 2.5, 1, 6], [12 + s * 2.5, 21, 3], 0.35, perch))
-  for (let i = 1; i < 6; i++) g.add(stick([9.5, 1 + i * 3.4, 6 - i * 0.5], [14.5, 1 + i * 3.4, 6 - i * 0.5], 0.3, perch))
+  for (const s of [-1, 1]) g.add(rod3([12 + s * 2.5, 1, 6], [12 + s * 2.5, 21, 3], 0.35, perch, 8))
+  for (let i = 1; i < 6; i++) g.add(rod3([9.5, 1 + i * 3.4, 6 - i * 0.5], [14.5, 1 + i * 3.4, 6 - i * 0.5], 0.3, perch, 8))
   for (const [x, food] of [
     [-14, SEED],
     [-8, WATER],
@@ -1238,7 +1228,7 @@ function medakaBowl(p: string[]) {
 function dogCrate(p: string[], W: number, D: number, H: number) {
   const [wireC, pan, cushion] = p
   const g = new THREE.Group()
-  for (const s of [-1, 1]) g.add(stick([-W / 2 + 1, 0.5, s * (D / 2 - 3)], [W / 2 - 1, 0.5, s * (D / 2 - 3)], 0.5, wireC))
+  for (const s of [-1, 1]) g.add(rod3([-W / 2 + 1, 0.5, s * (D / 2 - 3)], [W / 2 - 1, 0.5, s * (D / 2 - 3)], 0.5, wireC, 8))
   g.add(tray(W - 2, 4, D - 2, 0.6, pan, { y: 1 }, 0.4))
   g.add(wireBox(W, D, 1, H - 1, wireC, { gap: 2.8, r: 0.2, frameR: 0.45, rings: [H * 0.36, H * 0.7], topGap: 3 }))
   const z1 = D / 2 + 0.5
@@ -1302,10 +1292,10 @@ function catCarrier(p: string[]) {
   for (let y = t + 5.5; y <= t + H - 9; y += 1.3) g.add(wire([sx, y, -D / 2 + 6], [sx, y, D / 2 - 6], 0.08, mesh))
   // 包边、拉链、提手、肩带
   for (const y of [0.4, H - 0.4]) {
-    for (const s of [-1, 1]) g.add(stick([-W / 2, y, s * D / 2], [W / 2, y, s * D / 2], 0.5, trim))
-    for (const s of [-1, 1]) g.add(stick([s * W / 2, y, -D / 2], [s * W / 2, y, D / 2], 0.5, trim))
+    for (const s of [-1, 1]) g.add(rod3([-W / 2, y, s * D / 2], [W / 2, y, s * D / 2], 0.5, trim, 8))
+    for (const s of [-1, 1]) g.add(rod3([s * W / 2, y, -D / 2], [s * W / 2, y, D / 2], 0.5, trim, 8))
   }
-  for (const sx2 of [-1, 1]) for (const sz of [-1, 1]) g.add(stick([sx2 * W / 2, 0.4, sz * D / 2], [sx2 * W / 2, H - 0.4, sz * D / 2], 0.5, trim))
+  for (const sx2 of [-1, 1]) for (const sz of [-1, 1]) g.add(rod3([sx2 * W / 2, 0.4, sz * D / 2], [sx2 * W / 2, H - 0.4, sz * D / 2], 0.5, trim, 8))
   for (const s of [-1, 1]) g.add(tube([[-9, H, s * 6], [-6, H + 9, s * 6], [6, H + 9, s * 6], [9, H, s * 6]], 0.8, trim, 24))
   g.add(rbox(3, 2, 0.6, STEEL, { x: W / 2 - 8, y: H - 2.5, z: D / 2 + 0.2 }, 0.3))
   // 猫在里面探头

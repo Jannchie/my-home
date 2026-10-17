@@ -11,7 +11,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, SWING_OPEN, ellipsePoly, holePanel, movable, rectPoly, rng, rod, shell, slab, type AssetCategory, type AssetDef, type Hole, type Poly, type StyleTag, type SurfaceDef } from '../kit'
-import { PI, box3, clearDeep, type V3 } from '../geo'
+import { PI, box3, clearDeep, cylXLegacy, cylZLegacy, rod3 } from '../geo'
 import { I, J, M, N, R, type Build, type Dims, type Pal } from '../packkit'
 
 const STEEL = '#c3c7cc'
@@ -50,24 +50,6 @@ function ground<T extends THREE.Object3D>(o: T): T {
   o.position.y -= b.min.y
   o.position.z -= (b.min.z + b.max.z) / 2
   return o
-}
-
-/** 沿 x / z 的横圆柱，(x, y, z) 为中心 */
-function cylX(r: number, len: number, color: string, x: number, y: number, z: number, seg = 12) {
-  return cyl(r, r, len, color, { x, y: y - len / 2, z, rz: PI / 2 }, seg)
-}
-function cylZ(r: number, len: number, color: string, x: number, y: number, z: number, seg = 12) {
-  return cyl(r, r, len, color, { x, y: y - len / 2, z, rx: PI / 2 }, seg)
-}
-
-/** 两点之间的细杆（3D） */
-function stick(a: V3, b: V3, r: number, color: string, seg = 8) {
-  const va = new THREE.Vector3(...a)
-  const vb = new THREE.Vector3(...b)
-  const m = cyl(r, r, va.distanceTo(vb), color, {}, seg)
-  m.position.copy(va).add(vb).multiplyScalar(0.5)
-  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), vb.clone().sub(va).normalize())
-  return m
 }
 
 /** 空心圆管（卷纸、纸芯）：带小倒角，at.y 为底 */
@@ -120,7 +102,7 @@ const ITEM_TOP = -6
 function sHook(color = STEEL) {
   return G(
     torus(1.2, 0.25, color, { y: -1.45, z: 0.2, ry: PI / 2 }, PI * 1.25),
-    stick([0, -2.3, 1.05], [0, -4, 1.05], 0.25, color),
+    rod3([0, -2.3, 1.05], [0, -4, 1.05], 0.25, color, 8),
     torus(0.8, 0.25, color, { y: -4, z: 1.85, rx: PI, ry: -PI / 2 }, PI * 1.2),
   )
 }
@@ -364,11 +346,11 @@ function rack(s: RackSpec): Build {
     for (const t of s.tops) {
       g.add(rbox(s.w, BOARD_T, s.d, board, { y: t - BOARD_T }, 0.4))
       const ry = t + RAIL_H
-      g.add(cylX(0.5, px * 2, frame, 0, ry, -pz))
-      for (const sx of [-1, 1]) g.add(cylZ(0.5, pz * 2, frame, sx * px, ry, 0))
+      g.add(cylXLegacy(0.5, px * 2, frame, 0, ry, -pz))
+      for (const sx of [-1, 1]) g.add(cylZLegacy(0.5, pz * 2, frame, sx * px, ry, 0))
     }
-    for (const y of s.braces) for (const sx of [-1, 1]) g.add(cylZ(0.7, pz * 2, frame, sx * px, y, 0))
-    if (s.hookBar) g.add(cylX(1.0, px * 2, frame, 0, s.hookBar, pz))
+    for (const y of s.braces) for (const sx of [-1, 1]) g.add(cylZLegacy(0.7, pz * 2, frame, sx * px, y, 0))
+    if (s.hookBar) g.add(cylXLegacy(1.0, px * 2, frame, 0, s.hookBar, pz))
     return g
   }
 }
@@ -449,7 +431,7 @@ function tpHolder(p: string[]) {
   const cy = m + 6.2
   g.add(rbox(14, 13.4, 1, main, { y: m, z: back + 0.5 }, 0.4))
   g.add(rbox(1.2, 2, cz - back - 1 + 1, main, { x: 6.3, y: cy - 1, z: (back + 1 + cz + 1) / 2 }, 0.3))
-  g.add(cylX(1.1, 12.6, STEEL, 0, cy, cz))
+  g.add(cylXLegacy(1.1, 12.6, STEEL, 0, cy, cz))
   g.add(rollX(paper, 0, cy, cz))
   // 垂下来的纸尾
   g.add(rbox(10.2, 6, 0.2, paper, { y: cy - 6, z: cz + ROLL_R + 0.1 }, 0.05))
@@ -469,7 +451,7 @@ function tpHolderDouble(p: string[]) {
   g.add(rbox(32, 12.4, 1, main, { y: m, z: back + 0.5 }, 0.4))
   for (const x of [-15.4, 0, 15.4]) g.add(rbox(1.2, 12.4, cz - back + 1, main, { x, y: m, z: (back + 1 + cz + 2) / 2 - 0.5 }, 0.3))
   for (const sx of [-1, 1]) {
-    g.add(cylX(1.1, 15.4, STEEL, sx * 7.7, cy, cz))
+    g.add(cylXLegacy(1.1, 15.4, STEEL, sx * 7.7, cy, cz))
     g.add(rollX(paper, sx * 7.7, cy, cz))
   }
   g.add(rbox(10.2, 6, 0.2, paper, { x: 7.7, y: cy - 6, z: cz + ROLL_R + 0.1 }, 0.05))
@@ -555,7 +537,7 @@ function toiletCleaner(p: string[]) {
   return G(
     rbox(8, 15, 5.6, main, {}, 2.2),
     cyl(1.6, 2.4, 1.5, main, { y: 14.6 }, 16),
-    stick([0, 15.6, 0], [2.6, 20.6, 0], 1.1, main, 12),
+    rod3([0, 15.6, 0], [2.6, 20.6, 0], 1.1, main, 12),
     ball(1.4, cap, { x: 2.7, y: 20.8 }),
     rbox(6.4, 6, 0.4, label, { y: 4, z: 2.9 }, 0.2),
   )
@@ -690,10 +672,10 @@ function bathLidRolled(p: string[]) {
   const [main, strap] = p
   const g = new THREE.Group()
   const cy = 9.45
-  g.add(cylX(9, 72, main, 0, cy, 0, 28))
+  g.add(cylXLegacy(9, 72, main, 0, cy, 0, 28))
   for (const sx of [-1, 1]) {
-    g.add(cylX(7.6, 0.6, shade(main, -0.1), sx * 36.1, cy, 0, 24))
-    g.add(cylX(4.4, 0.6, shade(main, -0.18), sx * 36.3, cy, 0, 20))
+    g.add(cylXLegacy(7.6, 0.6, shade(main, -0.1), sx * 36.1, cy, 0, 24))
+    g.add(cylXLegacy(4.4, 0.6, shade(main, -0.18), sx * 36.3, cy, 0, 20))
     g.add(torus(9, 0.45, strap, { x: sx * 24, y: cy, ry: PI / 2 }))
   }
   return g
@@ -760,7 +742,7 @@ function bathSaltJar(p: string[]) {
   g.add(clearDeep(cup(5, 5, 12, 0.4, GLASS), GLASS, 0.35))
   g.add(cyl(4.5, 4.55, 7, salt, { y: 0.4 }, 24))
   g.add(puck(1.5, 0.8, J.hinoki, { x: 0.6, y: 7.3 }))
-  g.add(stick([1.4, 7.8, 0], [3.2, 11, 0.4], 0.3, J.hinoki))
+  g.add(rod3([1.4, 7.8, 0], [3.2, 11, 0.4], 0.3, J.hinoki, 8))
   g.add(puck(5.5, 1.6, lid, { y: 11.6 }))
   g.add(torus(5.1, 0.25, twine, { y: 10.4, rx: PI / 2 }))
   return g
@@ -783,7 +765,7 @@ function cornerShelf(n: number): Build {
       const y = m + i * CORNER_GAP
       g.add(slab(TRI(), 1.2, main, y))
       // 斜边挡杆 + 两根小立杆
-      g.add(stick([10.2, y + 2.8, -11], [-11, y + 2.8, 10.2], 0.35, main))
+      g.add(rod3([10.2, y + 2.8, -11], [-11, y + 2.8, 10.2], 0.35, main, 8))
       for (const [x, z] of [
         [9.6, -10.4],
         [-10.4, 9.6],
@@ -813,11 +795,11 @@ function wireBasket(p: string[]) {
   const yb = m + r
   const yt = m + h - 3.5
   // 底：沿 x 的密排钢丝 + 外框
-  for (let z = z0; z <= z1 + 0.01; z += (z1 - z0) / 6) g.add(cylX(r, w - 0.6, main, 0, yb, z, 6))
-  for (const sx of [-1, 1]) g.add(cylZ(r, d - 0.6, main, sx * x0, yb, 0, 6))
+  for (let z = z0; z <= z1 + 0.01; z += (z1 - z0) / 6) g.add(cylXLegacy(r, w - 0.6, main, 0, yb, z, 6))
+  for (const sx of [-1, 1]) g.add(cylZLegacy(r, d - 0.6, main, sx * x0, yb, 0, 6))
   // 上沿框
-  for (const z of [z0, z1]) g.add(cylX(r * 1.3, w - 0.6, main, 0, yt, z, 6))
-  for (const sx of [-1, 1]) g.add(cylZ(r * 1.3, d - 0.6, main, sx * x0, yt, 0, 6))
+  for (const z of [z0, z1]) g.add(cylXLegacy(r * 1.3, w - 0.6, main, 0, yt, z, 6))
+  for (const sx of [-1, 1]) g.add(cylZLegacy(r * 1.3, d - 0.6, main, sx * x0, yt, 0, 6))
   // 竖丝：前、后、两侧
   for (let i = 0; i <= 10; i++) {
     const x = -x0 + (i * x0 * 2) / 10
@@ -918,12 +900,12 @@ function towelStand(p: string[]) {
   for (const sx of [-1, 1]) {
     const x = sx * px
     for (const sz of [-1, 1]) g.add(cyl(1.3, 1.3, 81, main, { x, y: 1.5, z: sz * 11 }, 12))
-    g.add(cylZ(1.5, 25, main, x, 82, 0))
+    g.add(cylZLegacy(1.5, 25, main, x, 82, 0))
     for (const sz of [-1, 1]) g.add(ball(1.5, main, { x, y: 82, z: sz * 12.5 }))
     g.add(rbox(3.6, 1.5, d, acc, { x }, 0.6))
-    g.add(cylZ(1.0, 22, main, x, 45, 0))
+    g.add(cylZLegacy(1.0, 22, main, x, 45, 0))
   }
-  for (const [y, z] of TS_BARS) g.add(cylX(TS.barR, px * 2, main, 0, y, z))
+  for (const [y, z] of TS_BARS) g.add(cylXLegacy(TS.barR, px * 2, main, 0, y, z))
   return g
 }
 
@@ -937,10 +919,10 @@ function towelShelf(p: string[]) {
     const x = sx * (w / 2 - 4)
     g.add(rbox(2, 22, 1, metal, { x, y: m, z: -d / 2 + 0.5 }, 0.3))
     g.add(rbox(2, 1.4, d - 1, metal, { x, y: m + 18.6, z: 0.5 }, 0.3))
-    g.add(stick([x, m + 3.4, -d / 2 + 1], [x, m + 18.6, d / 2 - 6], 0.5, metal))
-    g.add(stick([x, m + 1, -d / 2 + 1], [x, m + TW.barY, TW.barZ], 0.5, metal))
+    g.add(rod3([x, m + 3.4, -d / 2 + 1], [x, m + 18.6, d / 2 - 6], 0.5, metal, 8))
+    g.add(rod3([x, m + 1, -d / 2 + 1], [x, m + TW.barY, TW.barZ], 0.5, metal, 8))
   }
-  g.add(cylX(TW.barR, w - 6, metal, 0, m + TW.barY, TW.barZ))
+  g.add(cylXLegacy(TW.barR, w - 6, metal, 0, m + TW.barY, TW.barZ))
   g.add(rbox(w, 1.8, d, board, { y: m + 20 }, 0.5))
   return g
 }
@@ -1119,7 +1101,7 @@ function fabricSpray(p: string[]) {
     cyl(1.5, 3.3, 2, main, { y: 15 }, 20),
     cyl(1.4, 1.4, 1.4, head, { y: 16.9 }, 14),
     rbox(3.2, 4.4, 6.4, head, { y: 18.2, z: 1.4 }, 0.8),
-    cylZ(0.75, 1.4, shade(head, -0.15), 0, 21.2, 5.2),
+    cylZLegacy(0.75, 1.4, shade(head, -0.15), 0, 21.2, 5.2),
     rbox(1.4, 3.5, 1, head, { y: 14.8, z: 4 }, 0.4),
     rbox(4.6, 6, 0.4, label, { y: 4, z: 3.35 }, 0.2),
   ))
@@ -1173,10 +1155,10 @@ function ironModel(p: string[]) {
   const top: Poly = IRON_POLY.map(([x, z]) => [x * 0.9, z * 0.9 - 0.6])
   g.add(slab(top, 5, main, 1.3))
   g.add(rbox(2.6, 2, 15, handle, { y: 10.6, z: -2 }, 0.9))
-  g.add(stick([0, 6, 4.5], [0, 11.2, 4.6], 1.1, handle))
-  g.add(stick([0, 6, -9], [0, 11.2, -8.8], 1.1, handle))
+  g.add(rod3([0, 6, 4.5], [0, 11.2, 4.6], 1.1, handle, 8))
+  g.add(rod3([0, 6, -9], [0, 11.2, -8.8], 1.1, handle, 8))
   g.add(cyl(1.6, 1.6, 0.8, shade(main, -0.2), { y: 6.1, z: 2 }, 16))
-  g.add(cylZ(0.6, 3, '#555555', 0, 3.5, -13.2))
+  g.add(cylZLegacy(0.6, 3, '#555555', 0, 3.5, -13.2))
   return ground(g)
 }
 
@@ -1204,8 +1186,8 @@ function ironingBoardOpen(p: string[]) {
     g.add(rod(-38, 1, 30, IB_Y - 0.5, 0.9, frame, sz * 12))
     g.add(rod(38, 1, -30, IB_Y - 0.5, 0.9, frame, sz * 9.5))
   }
-  g.add(cylZ(1, 26, frame, -38, 1, 0))
-  g.add(cylZ(1, 21, frame, 38, 1, 0))
+  g.add(cylZLegacy(1, 26, frame, -38, 1, 0))
+  g.add(cylZLegacy(1, 21, frame, 38, 1, 0))
   for (const sz of [-1, 1]) {
     g.add(ball(1.2, '#4a4a4a', { x: -38, y: 1.2, z: sz * 13 }))
     g.add(ball(1.2, '#4a4a4a', { x: 38, y: 1.2, z: sz * 10.5 }))
@@ -1217,9 +1199,9 @@ function ironingBoardFolded(p: string[]) {
   const flat = new THREE.Group()
   flat.add(slab(boardPoly(), 2, cover, 2.4))
   flat.add(rbox(70, 1, 20, frame, { x: -5, y: 1.4 }, 0.3))
-  for (const z of [-12, -9.5, 9.5, 12]) flat.add(cylX(0.9, 76, frame, -4, 1.0, z))
-  flat.add(cylZ(1, 26, frame, -42, 1.0, 0))
-  flat.add(cylZ(1, 21, frame, 34, 1.0, 0))
+  for (const z of [-12, -9.5, 9.5, 12]) flat.add(cylXLegacy(0.9, 76, frame, -4, 1.0, z))
+  flat.add(cylZLegacy(1, 26, frame, -42, 1.0, 0))
+  flat.add(cylZLegacy(1, 21, frame, 34, 1.0, 0))
   flat.rotation.z = PI / 2
   const outer = G(flat)
   outer.rotation.y = PI / 2
@@ -1272,8 +1254,8 @@ function clearCase(c: CaseSpec, open: boolean): Build {
       const len = c.d - 6
       const cy = 0.6 + c.r + 0.05 + layer * Math.sqrt(4 * c.r * c.r - 4.5 * 4.5)
       const col = i % 2 ? towelB : towelA
-      g.add(cylZ(c.r, len, col, x, cy, z, 18))
-      g.add(cylZ(c.r * 0.35, len + 0.4, shade(col, -0.12), x, cy, z, 10))
+      g.add(cylZLegacy(c.r, len, col, x, cy, z, 18))
+      g.add(cylZLegacy(c.r * 0.35, len + 0.4, shade(col, -0.12), x, cy, z, 10))
     })
     if (!open) {
       g.add(rbox(c.w + 0.8, 1.6, c.d + 0.8, lid, { y: c.h - 0.2 }, 0.6))
@@ -1668,7 +1650,7 @@ function reedDiffuser(p: string[]) {
     [-1.4, -2.2],
     [1.4, 2.6],
   ]
-  ends.forEach(([x, z], i) => g.add(stick([x * 0.05, 1, z * 0.05], [x, 24 + (i % 3), z], 0.15, reed, 5)))
+  ends.forEach(([x, z], i) => g.add(rod3([x * 0.05, 1, z * 0.05], [x, 24 + (i % 3), z], 0.15, reed, 5)))
   return g
 }
 
@@ -1761,7 +1743,7 @@ function charcoalBag(p: string[]) {
   const [cloth, ribbon] = p
   return ground(G(
     rbox(9, 3.6, 11, cloth, {}, 1.6),
-    cylZ(1.2, 1.6, cloth, 0, 1.8, 6.1),
+    cylZLegacy(1.2, 1.6, cloth, 0, 1.8, 6.1),
     torus(1.25, 0.3, ribbon, { y: 1.8, z: 6.1 }),
     ball(1.8, cloth, { y: 1.8, z: 7.7 }, [1.2, 0.8, 0.5]),
   ))

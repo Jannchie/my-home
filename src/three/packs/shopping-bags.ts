@@ -13,7 +13,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cyl, rbox, shade, toon, torus, tray } from '../toon'
 import { C, paintPanel, rng, type AssetCategory, type AssetDef, type FormTag, type Poly } from '../kit'
-import { G, P, PI, type V3 } from '../geo'
+import { G, P, PI, cylZFrom, type V3 } from '../geo'
 import { I, J, M, N, R, type Build, type Dims, type Pal } from '../packkit'
 
 // ---------- 定义 ----------
@@ -36,9 +36,6 @@ function asset(id: string, name: string, category: AssetCategory, [w, d, h]: Dim
 }
 
 // ---------- 小工具 ----------
-
-/** 沿 z 的圆柱：从 z0 往 +z 长 len */
-const cylZ = (r: number, len: number, color: string, x: number, y: number, z0: number, seg = 20) => P(cyl(r, r, len, color, {}, seg), x, y, z0 + len / 2, PI / 2)
 
 /** 平滑管子（提手、绳、钩子），两端圆头 */
 function tube(pts: V3[], r: number, color: string, seg?: number) {
@@ -816,8 +813,8 @@ function jArm(x: number, y: number, z0: number, color: string) {
 function magnetNatural(p: string[]) {
   const [main, metal] = p
   const g = new THREE.Group()
-  g.add(cylZ(2.4, 1.3, main, 0, 0, 0, 24))
-  g.add(cylZ(1.6, 0.4, shade(main, -0.1), 0, 0, 1.2, 20))
+  g.add(cylZFrom(2.4, 1.3, main, 0, 0, 0, 24))
+  g.add(cylZFrom(1.6, 0.4, shade(main, -0.1), 0, 0, 1.2, 20))
   g.add(jArm(0, 0, 1.0, metal))
   return { g, hooks: [{ x: 0, y: 0 }] }
 }

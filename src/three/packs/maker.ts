@@ -8,7 +8,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, movable, paintPanel, rectPoly, rng, shell, type AssetCategory, type AssetDef, type Poly, type SurfaceDef } from '../kit'
-import { P, PI, ghostDeep, lit, noOutlineDeep, type V3 } from '../geo'
+import { P, PI, batten, cylX, cylZ, ghostDeep, lit, noOutlineDeep, rod3, type V3 } from '../geo'
 import { I, J, M, N, PROP, R, type PalFlat } from '../packkit'
 
 type Draw = (g: CanvasRenderingContext2D, W: number, H: number) => void
@@ -47,32 +47,8 @@ function def(id: string, name: string, category: AssetCategory, [w, d, h]: [numb
 // 小工具
 // ======================================================================
 
-/** 沿 x / z 的横圆柱，给中心 */
-const cylX = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 20) => P(cyl(r, r, len, color, {}, seg), x, y, z, 0, 0, PI / 2)
-const cylZ = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 20) => P(cyl(r, r, len, color, {}, seg), x, y, z, PI / 2)
-
-/** 两端已知的 3D 圆杆 */
-function bar(a: V3, b: V3, r: number, color: string, seg = 10) {
-  const va = new THREE.Vector3(...a)
-  const vb = new THREE.Vector3(...b)
-  const m = cyl(r, r, va.distanceTo(vb), color, {}, seg)
-  m.position.copy(va).add(vb).multiplyScalar(0.5)
-  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), vb.clone().sub(va).normalize())
-  return m
-}
-
-/** 两端已知的方材：截面 w × t */
-function beam(a: V3, b: V3, w: number, t: number, color: string, r = 0.4) {
-  const va = new THREE.Vector3(...a)
-  const vb = new THREE.Vector3(...b)
-  const m = rbox(w, va.distanceTo(vb), t, color, {}, r)
-  m.position.copy(va).add(vb).multiplyScalar(0.5)
-  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), vb.clone().sub(va).normalize())
-  return m
-}
-
 /** 把沿 +y 建的零件摆到 a，指向 b */
-function orient<T extends THREE.Object3D>(o: T, a: V3, b: V3): T {
+function aimAt<T extends THREE.Object3D>(o: T, a: V3, b: V3): T {
   const va = new THREE.Vector3(...a)
   o.position.copy(va)
   o.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(...b).sub(va).normalize())
@@ -741,7 +717,7 @@ function resistor(x1: number, x2: number, z: number, top: number, body = '#e6c9a
   bands.forEach((b, i) => g.add(noOutlineDeep(cylX(0.128, 0.05, b, cx - 0.2 + i * 0.12 + (i === 3 ? 0.06 : 0), y, z, 12))))
   for (const x of [x1, x2]) {
     g.add(noOutlineDeep(rbox(0.05, 0.57, 0.05, PIN, { x, y: top - 0.25, z }, 0.01)))
-    g.add(noOutlineDeep(bar([x, y, z], [cx + Math.sign(cx - x) * -0.3, y, z], 0.025, PIN, 6)))
+    g.add(noOutlineDeep(rod3([x, y, z], [cx + Math.sign(cx - x) * -0.3, y, z], 0.025, PIN, 6)))
   }
   return g
 }
@@ -759,7 +735,7 @@ function eCap(x1: number, x2: number, z: number, top: number, body = '#2b4fa0', 
 function ceramicCap(x1: number, x2: number, z: number, top: number, color = '#f2963a') {
   const cx = (x1 + x2) / 2
   const g = G(ball(0.22, color, { x: cx, y: top + 0.55, z }, [1, 1, 0.4]))
-  for (const x of [x1, x2]) g.add(noOutlineDeep(bar([x, top - 0.25, z], [cx + (x - cx) * 0.5, top + 0.45, z], 0.025, PIN, 6)))
+  for (const x of [x1, x2]) g.add(noOutlineDeep(rod3([x, top - 0.25, z], [cx + (x - cx) * 0.5, top + 0.45, z], 0.025, PIN, 6)))
   return g
 }
 
@@ -1031,7 +1007,7 @@ function smdReels(p: string[]) {
   ;[-2.25, -0.75, 0.75, 2.25].forEach((x, i) => {
     for (const s of [-1, 1]) g.add(cylX(8.9, 0.12, cols[i], x + s * 0.58, yc, 0, 40))
     g.add(cylX(6.2 - i * 0.6, 1.0, tape, x, yc, 0, 32))
-    g.add(cylX(1.4, 1.3, shade(cols[i], -0.15), x, yc, 0, 16))
+    g.add(cylX(1.4, 1.3, shade(cols[i], -0.15), x, yc, 0))
   })
   for (const [i, x] of [[0, -2.25], [2, 0.75]] as const) {
     const rr = 6.2 - i * 0.6
@@ -1130,7 +1106,7 @@ function dupontLying(p: string[]) {
 const J_ARM = -2
 function jHook(L: number, color = METAL) {
   const r = 0.32
-  return G(bar([0, J_ARM, -1], [0, J_ARM, L], r, color), bar([0, J_ARM, L], [0, -r, L], r, color), ball(r, color, { y: J_ARM, z: L }), ball(r, color, { y: -r, z: L }), cylZ(0.7, 0.3, color, 0, J_ARM, 0.15, 12))
+  return G(rod3([0, J_ARM, -1], [0, J_ARM, L], r, color), rod3([0, J_ARM, L], [0, -r, L], r, color), ball(r, color, { y: J_ARM, z: L }), ball(r, color, { y: -r, z: L }), cylZ(0.7, 0.3, color, 0, J_ARM, 0.15, 12))
 }
 function dupontHanging(p: string[]) {
   const [housing, tie, set] = p
@@ -1273,7 +1249,7 @@ function ledStrip(p: string[]) {
   const yc = 5
   for (const s of [-1, 1]) g.add(cylX(5, 0.15, reel, s * 0.65, yc, 0, 36))
   g.add(cylX(4.2, 1.1, strip, 0, yc, 0, 32))
-  g.add(cylX(1.5, 1.3, shade(reel, -0.15), 0, yc, 0, 16))
+  g.add(cylX(1.5, 1.3, shade(reel, -0.15), 0, yc, 0))
   for (let k = 0; k < 18; k++) {
     const a = (k / 18) * PI * 2
     g.add(lit(P(rbox(0.5, 0.12, 0.45, glowC, {}, 0.04), 0, yc + Math.sin(a) * 4.27, Math.cos(a) * 4.27, PI / 2 - a), glowC, 0.5))
@@ -1410,12 +1386,12 @@ function solderStation(p: string[]) {
   const A: V3 = [5, 4.0, -4.2]
   const dir = new THREE.Vector3(0, 5, 5.5).normalize()
   const at = (k: number): V3 => [A[0], A[1] + dir.y * k, A[2] + dir.z * k]
-  const coil = orient(G(tube(helix(1.3, 0.55, 12), 0.1, CHROME, false, 300)), A, at(1))
+  const coil = aimAt(G(tube(helix(1.3, 0.55, 12), 0.1, CHROME, false, 300)), A, at(1))
   g.add(coil)
-  g.add(bar([5, 1.2, -4.2], A, 0.35, holder))
-  g.add(bar([5, 1.2, -0.5], at(4.5), 0.25, holder))
+  g.add(rod3([5, 1.2, -4.2], A, 0.35, holder))
+  g.add(rod3([5, 1.2, -0.5], at(4.5), 0.25, holder))
   // 烙铁
-  g.add(orient(G(cyl(0.25, 0.1, 1.4, '#9a9da3', {}, 10), cyl(0.25, 0.25, 4.5, CHROME, { y: 1.4 }, 10), cyl(0.55, 0.45, 0.8, '#2b2b2b', { y: 5.9 }, 14), capsule(0.7, 6.5, unit, { y: 6.5 }), cyl(0.35, 0.5, 1.4, '#2b2b2b', { y: 14.0 }, 12)), at(0.5), at(2)))
+  g.add(aimAt(G(cyl(0.25, 0.1, 1.4, '#9a9da3', {}, 10), cyl(0.25, 0.25, 4.5, CHROME, { y: 1.4 }, 10), cyl(0.55, 0.45, 0.8, '#2b2b2b', { y: 5.9 }, 14), capsule(0.7, 6.5, unit, { y: 6.5 }), cyl(0.35, 0.5, 1.4, '#2b2b2b', { y: 14.0 }, 12)), at(0.5), at(2)))
   const end = at(16)
   g.add(tube([end, [5, end[1] + 0.3, end[2] + 1.8], [3.5, 6, 11], [0, 0.3, 10.8], [-4, 0.4, 9.2], [-5.0, 2.5, 7.8], [-5.0, 4.0, 7.3]], 0.2, '#2b2b2b'))
   return fit(g)
@@ -1445,8 +1421,8 @@ function hotAirStation(p: string[]) {
     g.add(rbox(4, 1.2, 1, unit, { x: 7.6, y: 5.6, z }, 0.3))
   }
   const gy = 6.5 + 1.7
-  g.add(cylZ(1.7, 13, gun, 7.6, gy, -0.5, 24))
-  for (const z of [-3, -1.5]) g.add(cylZ(1.78, 0.5, '#2b2b2b', 7.6, gy, z, 24))
+  g.add(cylZ(1.7, 13, gun, 7.6, gy, -0.5))
+  for (const z of [-3, -1.5]) g.add(cylZ(1.78, 0.5, '#2b2b2b', 7.6, gy, z))
   g.add(cylZ(1.5, 1.0, '#2b2b2b', 7.6, gy, -7.3, 20))
   g.add(cylZ(0.75, 2.4, METAL, 7.6, gy, 7.2, 16))
   g.add(cylZ(0.45, 1.6, CHROME, 7.6, gy, 9.2, 12))
@@ -1505,8 +1481,8 @@ function fluxSet(p: string[]) {
   g.add(paintTop(3.8, 3.8, `mk-flux-${tin}-${label}`, drawRoundTag(label, '#ffffff', 'FLUX', 'NO-CLEAN  RMA'), 3, 0.55, -1.5))
   g.add(P(capsule(0.55, 8, pen), -1, 0.55, 3.0, 0, 0, PI / 2))
   g.add(P(cyl(0.3, 0.5, 1.0, '#f4f4f2', {}, 12), 3.85, 0.55, 3.0, 0, 0, -PI / 2))
-  g.add(cylX(0.5, 7, '#f2d9a0', -0.5, 0.5, 5.2, 16))
-  g.add(cylX(0.62, 0.3, '#f4f4f2', -4.1, 0.62, 5.2, 16))
+  g.add(cylX(0.5, 7, '#f2d9a0', -0.5, 0.5, 5.2))
+  g.add(cylX(0.62, 0.3, '#f4f4f2', -4.1, 0.62, 5.2))
   g.add(cylX(0.12, 2.5, '#f4f4f2', -5.4, 0.5, 5.2, 8))
   g.add(cylX(0.45, 0.2, '#f4f4f2', -6.7, 0.5, 5.2, 12))
   g.add(P(cyl(0.12, 0.35, 1.6, '#3a8ee8', {}, 10), 3.8, 0.5, 5.2, 0, 0, -PI / 2))
@@ -1526,7 +1502,7 @@ function helpingHands(p: string[]) {
   for (const s of [-1, 1]) {
     g.add(cyl(0.35, 0.35, 7.2, rodC, { x: s * 5.5, y: 1.8 }, 10))
     g.add(ball(0.6, rodC, { x: s * 5.5, y: 9, z: 0 }))
-    g.add(bar([s * 5.5, 9, 0], [s * 4.0, 10.9, 0.8], 0.3, rodC))
+    g.add(rod3([s * 5.5, 9, 0], [s * 4.0, 10.9, 0.8], 0.3, rodC))
     g.add(ball(0.45, rodC, { x: s * 4.0, y: 10.9, z: 0.8 }))
     // 鳄鱼夹夹住 PCB 边
     g.add(rbox(2.3, 0.18, 0.55, clipC, { x: s * 2.85, y: 10.98, z: 0.8, rz: s * 0.08 }, 0.05))
@@ -1542,7 +1518,7 @@ function helpingHands(p: string[]) {
   lens.position.set(0, 17.8, 2.6)
   lens.rotation.x = -PI / 4
   g.add(lens)
-  g.add(bar([0, 17.3, -3], [0, 17.8 + 3.18, 2.6 - 3.18], 0.3, rodC))
+  g.add(rod3([0, 17.3, -3], [0, 17.8 + 3.18, 2.6 - 3.18], 0.3, rodC))
   return fit(g)
 }
 const HH_PALS: PalFlat[] = [
@@ -1746,9 +1722,9 @@ function glueGun(p: string[]) {
   gun.add(P(rbox(2.8, 1.2, 3.4, acc, {}, 0.5), 0, -8.7, -3.8, -0.28))
   gun.add(cylZ(0.55, 4.0, '#f4f2e8', 0, 0.2, -7.6, 14))
   // 支架（钢丝）
-  gun.add(bar([-0.9, -1.4, 4.5], [-0.9, -5.6, 5.4], 0.12, METAL))
-  gun.add(bar([0.9, -1.4, 4.5], [0.9, -5.6, 5.4], 0.12, METAL))
-  gun.add(bar([-0.9, -5.6, 5.4], [0.9, -5.6, 5.4], 0.12, METAL))
+  gun.add(rod3([-0.9, -1.4, 4.5], [-0.9, -5.6, 5.4], 0.12, METAL))
+  gun.add(rod3([0.9, -1.4, 4.5], [0.9, -5.6, 5.4], 0.12, METAL))
+  gun.add(rod3([-0.9, -5.6, 5.4], [0.9, -5.6, 5.4], 0.12, METAL))
   gun.add(tube([[0, -9.3, -4.6], [0, -9.6, -6.5], [1.2, -9.5, -10], [3.5, -9.5, -12]], 0.22, '#2b2b2b'))
   gun.add(P(rbox(1.6, 1.2, 2.2, '#2b2b2b', {}, 0.2), 4.2, -9.6, -12.8, 0, 0.6))
   gun.rotation.x = 0.12
@@ -1783,7 +1759,7 @@ function rotaryTool(p: string[]) {
   g.add(cylX(0.1, 3.2, CHROME, 13.0, 2.0, 0, 6))
   g.add(cylX(0.5, 0.4, '#b5583a', 14.6, 2.0, 0, 12))
   g.add(rbox(3, 0.6, 1.2, acc, { x: 1.5, y: 3.85 }, 0.2))
-  g.add(cylX(0.9, 0.5, acc, -6.5, 3.6, 0, 16))
+  g.add(cylX(0.9, 0.5, acc, -6.5, 3.6, 0))
   g.add(lit(rbox(0.4, 0.1, 0.3, '#7cff8a', { x: -2.5, y: 3.98 }, 0.04), '#7cff8a'))
   g.add(torus(0.6, 0.15, METAL, { x: -9.3, y: 2.0 }))
   // 配件盒
@@ -1891,12 +1867,12 @@ function magLamp(p: string[]) {
   const el: V3 = [0, 34, -20]
   const nk: V3 = [0, 30.5, -2.5]
   for (const s of [-1, 1]) {
-    g.add(bar([s * 0.8, pv[1], pv[2]], [s * 0.8, el[1], el[2]], 0.35, head))
-    g.add(bar([s * 0.8, el[1], el[2]], [s * 0.8, nk[1], nk[2]], 0.3, head))
+    g.add(rod3([s * 0.8, pv[1], pv[2]], [s * 0.8, el[1], el[2]], 0.35, head))
+    g.add(rod3([s * 0.8, el[1], el[2]], [s * 0.8, nk[1], nk[2]], 0.3, head))
   }
   g.add(cylX(0.8, 2.6, '#3a3a3c', ...pv, 14))
   g.add(cylX(0.8, 2.6, '#3a3a3c', ...el, 14))
-  g.add(orient(G(tube(helix(0.4, 0.3, 30, 8), 0.06, CHROME, false, 300)), [0, 6, -14.6], [0, 33, -19.9]))
+  g.add(aimAt(G(tube(helix(0.4, 0.3, 30, 8), 0.06, CHROME, false, 300)), [0, 6, -14.6], [0, 33, -19.9]))
   g.add(rbox(2, 2, 3, head, { y: 29.6, z: -2.2 }, 0.4))
   g.add(P(torus(7.5, 1.6, head), 0, 30, 6, PI / 2))
   g.add(lit(P(torus(6.3, 0.4, glowC), 0, 28.9, 6, PI / 2), glowC, 0.95))
@@ -2101,7 +2077,7 @@ function drillPress(p: string[]) {
   for (let k = 0; k < 3; k++) {
     const a = (k / 3) * PI * 2 + 0.4
     const e: V3 = [7.6, 45 + Math.sin(a) * 8, 4 + Math.cos(a) * 8]
-    g.add(bar([7.6, 45, 4], e, 0.35, CHROME))
+    g.add(rod3([7.6, 45, 4], e, 0.35, CHROME))
     g.add(ball(0.9, '#2b2b2b', { x: e[0], y: e[1], z: e[2] }))
   }
   g.add(rbox(3.6, 4.4, 1, acc, { x: -4, y: 43, z: 10.3 }, 0.4))
@@ -2168,7 +2144,7 @@ function cnc3018(p: string[]) {
   g.add(rbox(4.2, 4.2, 4.2, '#2b2b2b', { x: 22.3, y: 15, z: -8 }, 0.3))
   g.add(rbox(4.2, 4.2, 4.2, '#2b2b2b', { y: 23.5, z: -6.5 }, 0.3))
   g.add(rbox(0.3, 6, 8, '#2f7d4a', { x: -20.5, y: 5, z: -8 }, 0.05))
-  g.add(cylX(1.6, 0.8, '#2b2b2b', -21.1, 9, -8, 16))
+  g.add(cylX(1.6, 0.8, '#2b2b2b', -21.1, 9, -8))
   for (const [i, c] of ['#e8453c', '#2b2b2b', '#3a8ee8'].entries()) g.add(tube([[-20.4, 10.5 - i * 0.4, -10.5], [-19, 23, -11], [-4, 25.5, -9], [-1.5 + i * 0.5, 25.7, -6.5]], 0.1, c))
   return fit(g)
 }
@@ -2341,7 +2317,7 @@ function sawhorse(p: string[]) {
   g.add(rbox(90, 8.9, 3.8, wood, { y: 61.1 }, 0.4))
   for (const sx of [-1, 1])
     for (const sz of [-1, 1]) {
-      g.add(beam([sx * 35, 61.5, sz * 2.6], [sx * 39, 0.6, sz * 22], 6.4, 3.8, wood))
+      g.add(batten([sx * 35, 61.5, sz * 2.6], [sx * 39, 0.6, sz * 22], 6.4, 3.8, wood, 0.4))
     }
   for (const sx of [-1, 1]) g.add(rbox(1.5, 14, 12, brace, { x: sx * 31, y: 50, z: 0 }, 0.3))
   for (const sz of [-1, 1]) g.add(rbox(76, 6, 1.8, brace, { y: 20, z: sz * 15.6 }, 0.3))
@@ -2426,11 +2402,11 @@ function sandpaper(p: string[]) {
   const [grit1, grit2, block] = p
   const g = new THREE.Group()
   g.add(cylX(3.5, 10, grit1, 0, 3.5, 0, 28))
-  g.add(cylX(1.2, 10.1, '#c99a62', 0, 3.5, 0, 16))
+  g.add(cylX(1.2, 10.1, '#c99a62', 0, 3.5, 0))
   g.add(noOutlineDeep(cylX(0.9, 10.2, '#5a4030', 0, 3.5, 0, 14)))
   g.add(rbox(10, 0.06, 7, grit1, { y: 0, z: 3.6 }, 0.02))
   g.add(cylX(2.8, 10, grit2, 0, 2.8, -7.5, 28))
-  g.add(cylX(1.0, 10.1, '#c99a62', 0, 2.8, -7.5, 16))
+  g.add(cylX(1.0, 10.1, '#c99a62', 0, 2.8, -7.5))
   g.add(noOutlineDeep(cylX(0.75, 10.2, '#5a4030', 0, 2.8, -7.5, 14)))
   g.add(rbox(11, 2.5, 6.5, block, { x: 12, z: -1 }, 0.4))
   g.add(rbox(11.4, 2.8, 6.0, grit2, { x: 12, y: -0.15, z: -1 }, 0.3))
@@ -2506,8 +2482,8 @@ function wipSoldering(p: string[]) {
   for (const [x, z] of [[1, 1.5], [2.2, 1.5], [1, 0.8], [-3.5, 2], [-3.2, 2], [0.4, -2.6], [0.65, -2.6]]) g.add(ball(0.12, SOLDER, { x, y: t, z }))
   g.add(lit(ball(0.1, '#ffd27a', { x: 2.2, y: t + 0.02, z: 0.8 }), '#ffd27a', 1))
   // 镊子、焊锡笔、散件
-  g.add(beam([-6, 0.15, 6], [3, 0.15, 7.2], 0.4, 0.15, METAL, 0.05))
-  g.add(beam([-6, 0.15, 6.3], [3, 0.6, 6.4], 0.4, 0.15, METAL, 0.05))
+  g.add(batten([-6, 0.15, 6], [3, 0.15, 7.2], 0.4, 0.15, METAL, 0.05))
+  g.add(batten([-6, 0.15, 6.3], [3, 0.6, 6.4], 0.4, 0.15, METAL, 0.05))
   g.add(P(capsule(0.6, 7, acc), 8.5, 0.6, 2.5, PI / 2, 0.2))
   g.add(P(cyl(0.05, 0.05, 1.5, SOLDER, {}, 6), 9.3, 0.6, 7.0, PI / 2 + 0.2, 0.2))
   g.add(cup(1.6, 1.4, 0.6, 0.1, '#f4f4f2', { x: -9.5, z: 4 }))

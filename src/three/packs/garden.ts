@@ -9,7 +9,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, holePanel, rectPoly, rng, type AssetCategory, type AssetDef, type StyleTag } from '../kit'
-import { PI, clearMat, lit, noOutline, type V3 } from '../geo'
+import { PI, clearMat, lit, noOutline, rod3, taperRod3, type V3 } from '../geo'
 import { I, J, M, N, R, type Build } from '../packkit'
 
 const SOIL = '#7f5f45'
@@ -42,20 +42,6 @@ function sty(groups: Partial<Record<StyleTag, string[][]>>) {
 }
 type Pals = ReturnType<typeof sty>
 
-/** 两点之间的一根杆 */
-function stick(a: V3, b: V3, r: number, color: string, seg = 8) {
-  return taper(a, b, r, r, color, seg)
-}
-/** 两点之间的圆台：a 端半径 r0，b 端半径 r1 */
-function taper(a: V3, b: V3, r0: number, r1: number, color: string, seg = 12) {
-  const va = new THREE.Vector3(...a)
-  const vb = new THREE.Vector3(...b)
-  const dir = vb.clone().sub(va)
-  const m = cyl(r1, r0, dir.length(), color, {}, seg)
-  m.position.copy(va).add(vb).multiplyScalar(0.5)
-  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize())
-  return m
-}
 /** 两点之间的胶囊（握把、手指） */
 function capsAlong(a: V3, b: V3, r: number, color: string) {
   const va = new THREE.Vector3(...a)
@@ -261,7 +247,7 @@ function ceramicPot(R: number, h: number, color: string, wood: string, stand = f
     const legR = (y: number) => R + 6 + ((R + 1.9 - (R + 6)) * y) / (yr + 2)
     for (let k = 0; k < 4; k++) {
       const a = PI / 4 + (k * PI) / 2
-      g.add(stick([Math.cos(a) * legR(yr + 2), yr + 2, Math.sin(a) * legR(yr + 2)], [Math.cos(a) * legR(0), 0.35, Math.sin(a) * legR(0)], 1.1, wood, 10))
+      g.add(rod3([Math.cos(a) * legR(yr + 2), yr + 2, Math.sin(a) * legR(yr + 2)], [Math.cos(a) * legR(0), 0.35, Math.sin(a) * legR(0)], 1.1, wood))
     }
     const half = legR(y0 - 0.7) - 0.4
     for (let k = 0; k < 2; k++) g.add(rbox(half * 2, 1.4, 2.4, shade(wood, -0.06), { y: y0 - 1.4, ry: PI / 4 + (k * PI) / 2 }, 0.4))
@@ -354,8 +340,8 @@ function bowlPot(R: number, H: number, color: string): Pot {
  */
 function hangRig(g: THREE.Group, pc: number, yb: number, yt: number, prof: [number, number][], rope: string) {
   const zc = pc + 0.7
-  g.add(stick([0, -2, -1], [0, -2, zc], 0.3, STEEL))
-  g.add(stick([0, -2, zc], [0, -0.3, zc + 0.6], 0.3, STEEL))
+  g.add(rod3([0, -2, -1], [0, -2, zc], 0.3, STEEL, 8))
+  g.add(rod3([0, -2, zc], [0, -0.3, zc + 0.6], 0.3, STEEL, 8))
   g.add(torus(1.4, 0.3, STEEL, { y: -3.4, z: pc }))
   g.add(ball(0.9, rope, { y: -5.6, z: pc }))
   const H = yt - yb
@@ -363,13 +349,13 @@ function hangRig(g: THREE.Group, pc: number, yb: number, yt: number, prof: [numb
     const a = (k * PI * 2) / 3 + PI / 2
     const P = (r: number, y: number): V3 => [Math.cos(a) * r, y, pc + Math.sin(a) * r]
     const rim = rAt(prof, H) + 0.3
-    g.add(noOutline(stick([0, -5.8, pc], P(rim, yt + 0.4), 0.2, rope, 5)))
+    g.add(noOutline(rod3([0, -5.8, pc], P(rim, yt + 0.4), 0.2, rope, 5)))
     g.add(noOutline(tube([P(rim, yt + 0.4), P(rAt(prof, H * 0.6) + 0.35, yb + H * 0.6), P(rAt(prof, H * 0.2) + 0.35, yb + H * 0.2), [0, yb - 1.2, pc]], 0.2, rope, 16, 5)))
   }
   g.add(ball(0.9, rope, { y: yb - 1.5, z: pc }))
   for (let k = 0; k < 6; k++) {
     const a = (k / 6) * PI * 2
-    g.add(noOutline(stick([0, yb - 2, pc], [Math.cos(a) * 1.2, yb - 9, pc + Math.sin(a) * 1.2], 0.18, rope, 4)))
+    g.add(noOutline(rod3([0, yb - 2, pc], [Math.cos(a) * 1.2, yb - 9, pc + Math.sin(a) * 1.2], 0.18, rope, 4)))
   }
 }
 
@@ -460,8 +446,8 @@ function selfWater(p: string[]) {
   g.add(clearMat(cyl(0.7, 0.7, 23, GLASS, { x: ix, y: 0.6, z: iz }, 12), GLASS, 0.45))
   g.add(cyl(0.5, 0.5, 1.2, ind, { x: ix, y: 3.6, z: iz }, 10))
   g.add(cyl(1.0, 1.0, 1.0, ind, { x: ix, y: 23.4, z: iz }, 12))
-  g.add(stick([0, 5.2, 8.4], [0, 6.8, 10.9], 1.0, pot, 12))
-  g.add(taper([0, 6.8, 10.9], [0, 7.3, 11.6], 1.25, 1.25, ind, 12))
+  g.add(rod3([0, 5.2, 8.4], [0, 6.8, 10.9], 1.0, pot, 12))
+  g.add(taperRod3([0, 6.8, 10.9], [0, 7.3, 11.6], 1.25, 1.25, ind, 12))
   const soil = 8 + 13 - 1.6
   const sr = 9.4 + (1.0 * (13 - 1.6)) / 13 - 0.8 - 0.25
   g.add(soilDisc(sr, soil))
@@ -499,7 +485,7 @@ function seedTray(cols: number, rows: number, pitch: number): Build {
       if (rand() < 0.62) {
         const sh = 1.4 + rand() * 2.4
         const top: V3 = [cx + (rand() - 0.5) * 0.6, soilTop + sh, cz + (rand() - 0.5) * 0.6]
-        g.add(noOutline(stick([cx, soilTop - 0.2, cz], top, 0.12, '#9ccf6a', 4)))
+        g.add(noOutline(rod3([cx, soilTop - 0.2, cz], top, 0.12, '#9ccf6a', 4)))
         const yaw = rand() * PI
         for (const s of [0, PI]) g.add(sprig(1.4 + sh * 0.15, '#8fd16a', top, yaw + s, -0.15, 0.6))
         if (sh > 3) g.add(sprig(1.5, LEAF, top, yaw + PI / 2, -0.8, 0.55))
@@ -591,7 +577,7 @@ function heartTuft(g: THREE.Group, soilY: number, r: number, n: number, seed: nu
     const base: V3 = [cx + Math.cos(a) * rr, soilY - 0.2, cz + Math.sin(a) * rr]
     const pitch = -1.0 + rand() * 0.5
     const tip = along(base, dirOf(yawTo(a), pitch), 3 + rand() * 2.5)
-    g.add(noOutline(stick(base, tip, 0.18, STEM, 5)))
+    g.add(noOutline(rod3(base, tip, 0.18, STEM, 5)))
     g.add(sprig(5.2 + rand() * 1.5, POTHOS[i % 3], tip, yawTo(a), pitch + 0.75, 0.72))
   }
 }
@@ -639,7 +625,7 @@ function ivyHoop(p: string[]) {
   const lx = 4.5
   const ly = yc - Math.sqrt(R * R - lx * lx)
   const a0 = Math.atan2(ly - yc, lx)
-  for (const s of [-1, 1]) g.add(stick([s * lx, y - 3, 0], [s * lx, ly, 0], 0.22, wire, 6))
+  for (const s of [-1, 1]) g.add(rod3([s * lx, y - 3, 0], [s * lx, ly, 0], 0.22, wire, 6))
   g.add(torus(R, 0.22, wire, { y: yc, rz: a0 }, PI - 2 * a0))
   const rand = rng(31)
   const cols = ['#3f8a4a', '#5aa865', '#4f9a52']
@@ -682,7 +668,7 @@ function monsteraKid(p: string[]) {
     const tilt = 0.3 + rand() * 0.25
     const base: V3 = [0, y - 0.3, 0]
     const tip = along(base, dirOf(yawTo(a), -(PI / 2 - tilt)), L)
-    g.add(noOutline(stick(base, tip, 0.45, LEAF_D, 6)))
+    g.add(noOutline(rod3(base, tip, 0.45, LEAF_D, 6)))
     const lr = 5 + rand() * 1.2
     const lf = ball(lr, i % 2 ? LEAF : shade(LEAF, -0.06), {}, [0.85, 0.16, 1])
     lf.rotation.set(0.45, yawTo(a), 0, 'YXZ')
@@ -708,7 +694,7 @@ function rubberTree(p: string[]) {
   const g = P.g
   const y = P.soil
   const top = y + 64
-  g.add(taper([0, y - 1, 0], [0.6, top, 0.3], 1.3, 0.7, '#7d6a4a', 10))
+  g.add(taperRod3([0, y - 1, 0], [0.6, top, 0.3], 1.3, 0.7, '#7d6a4a'))
   const rand = rng(7)
   let k = 0
   for (let h = y + 12; h < top - 3; h += 4, k++) {
@@ -716,11 +702,11 @@ function rubberTree(p: string[]) {
     const f = (h - y) / (top - y)
     const base: V3 = [0.6 * f, h, 0.3 * f]
     const tip = along(base, dirOf(yawTo(a), -0.7), 2.2)
-    g.add(noOutline(stick(base, tip, 0.25, '#6b7d45', 5)))
+    g.add(noOutline(rod3(base, tip, 0.25, '#6b7d45', 5)))
     const len = 12.5 + rand() * 2.5 - f * 3
     g.add(sprig(len, k % 2 ? '#2f6b3a' : '#3a7d44', tip, yawTo(a), -0.55 + rand() * 0.4, 0.58, 0.14))
   }
-  g.add(taper([0.6, top, 0.3], [0.7, top + 4, 0.3], 0.55, 0.15, '#c0504d', 8))
+  g.add(taperRod3([0.6, top, 0.3], [0.7, top + 4, 0.3], 0.55, 0.15, '#c0504d', 8))
   for (const a of [0.8, 3.8]) g.add(sprig(7, '#4c9150', [0.6, top - 0.5, 0.3], yawTo(a), -1.2, 0.42, 0.14))
   return g
 }
@@ -765,7 +751,7 @@ function orchid(p: string[]) {
     g.add(sprig(len, '#3f8a4a', [0, y + 0.8, 0], yaw, pitch, 0.42, 0.16))
   for (const a of [0.9, 2.6]) g.add(noOutline(tube([[Math.cos(a), y + 0.6, Math.sin(a)], [Math.cos(a) * 5, y + 1.6, Math.sin(a) * 5], [Math.cos(a) * 6.9, y - 0.6, Math.sin(a) * 6.9], [Math.cos(a) * 7.3, y - 3.6, Math.sin(a) * 7.3]], 0.35, '#c9d6b8', 12, 6)))
   // 支架 + 夹子
-  g.add(stick([-0.8, y - 4, -1.2], [-0.8, y + 34, -1.2], 0.28, BAMBOO, 6))
+  g.add(rod3([-0.8, y - 4, -1.2], [-0.8, y + 34, -1.2], 0.28, BAMBOO, 6))
   const spike: V3[] = [[0.2, y + 0.8, -0.4], [-0.4, y + 14, -0.9], [-0.5, y + 27, -0.9], [-0.3, y + 32.5, 1.2], [0, y + 33, 6], [0.3, y + 30.5, 10.5], [0.5, y + 26.5, 13.5]]
   g.add(noOutline(tube(spike, 0.28, '#5d7a3a', 30, 5)))
   for (const yy of [y + 12, y + 24]) g.add(rbox(1.0, 1.0, 1.4, C.lemon, { x: -0.6, y: yy, z: -1.0 }, 0.3))
@@ -812,7 +798,7 @@ function succulentBowl(p: string[]) {
     g.add(capsule(0.45, 0.6, k % 3 ? '#8fcf6a' : '#d96f6a', { x: -4.8 + Math.cos(a) * d, y: y + ht * 0.6, z: -3.6 + Math.sin(a) * d, rz: (rand() - 0.5) * 0.6 }))
   }
   // 玉树小苗
-  g.add(stick([0.2, y - 0.2, -6], [0.6, y + 4, -6.2], 0.35, '#8a7a4a', 6))
+  g.add(rod3([0.2, y - 0.2, -6], [0.6, y + 4, -6.2], 0.35, '#8a7a4a', 6))
   for (let k = 0; k < 5; k++) g.add(sprig(2, '#5f9e4a', [0.6, y + 2.4 + k * 0.4, -6.2], (k * PI * 2) / 5, -0.4, 0.65, 0.35))
   return g
 }
@@ -871,7 +857,7 @@ function herb(kind: 'mint' | 'basil' | 'rosemary'): Build {
         const L = 6 + rand() * 4
         const dir = dirOf(yawTo(a), -(PI / 2 - 0.25 - rand() * 0.35))
         const tip = along(base, dir, L)
-        g.add(noOutline(stick(base, tip, 0.17, '#6b8f4a', 5)))
+        g.add(noOutline(rod3(base, tip, 0.17, '#6b8f4a', 5)))
         for (const f of [0.45, 0.72, 1]) {
           const q = along(base, dir, L * f)
           const yaw = yawTo(a) + (f === 0.72 ? 0 : PI / 2)
@@ -885,7 +871,7 @@ function herb(kind: 'mint' | 'basil' | 'rosemary'): Build {
         const L = 11 + rand() * 3
         const dir = dirOf(yawTo(a), -(PI / 2 - 0.18))
         const tip = along(base, dir, L)
-        g.add(noOutline(stick(base, tip, 0.28, '#6f9a4a', 6)))
+        g.add(noOutline(rod3(base, tip, 0.28, '#6f9a4a', 6)))
         ;[0.3, 0.58, 0.82].forEach((f, j) => {
           const q = along(base, dir, L * f)
           const yaw = yawTo(a) + (j % 2 ? 0 : PI / 2)
@@ -900,7 +886,7 @@ function herb(kind: 'mint' | 'basil' | 'rosemary'): Build {
         const base: V3 = [Math.cos(a) * d, y - 0.2, Math.sin(a) * d]
         const L = 13 + rand() * 6
         const dir = dirOf(yawTo(a), -(PI / 2 - 0.08 - rand() * 0.22))
-        g.add(noOutline(stick(base, along(base, dir, L), 0.22, '#7a7a50', 5)))
+        g.add(noOutline(rod3(base, along(base, dir, L), 0.22, '#7a7a50', 5)))
         for (let f = 0.25; f < 1.01; f += 0.11) {
           const q = along(base, dir, L * f)
           for (let k = 0; k < 3; k++) g.add(noOutline(sprig(2, k % 2 ? '#5d7d5a' : '#6f8f68', q, (k * PI * 2) / 3 + f * 5, -0.75, 0.2, 0.2)))
@@ -928,7 +914,7 @@ function tomato(p: string[]) {
   const apex: V3 = [0, y + 86, 0]
   for (let k = 0; k < 3; k++) {
     const a = (k / 3) * PI * 2 + PI / 2
-    g.add(stick([Math.cos(a) * 10, y - 6, Math.sin(a) * 10], apex, 0.5, BAMBOO, 6))
+    g.add(rod3([Math.cos(a) * 10, y - 6, Math.sin(a) * 10], apex, 0.5, BAMBOO, 6))
   }
   g.add(torus(1.0, 0.35, ROPE, { y: y + 82, rx: PI / 2 }))
   g.add(torus(4.0, 0.25, ROPE, { y: y + 50, rx: PI / 2 }))
@@ -946,17 +932,17 @@ function tomato(p: string[]) {
     const a = k * 2.2 + rand() * 0.4
     const L = 6.5
     const dir = dirOf(yawTo(a), -0.15)
-    g.add(noOutline(stick(b, along(b, dir, L), 0.2, '#6f9a4a', 5)))
+    g.add(noOutline(rod3(b, along(b, dir, L), 0.2, '#6f9a4a', 5)))
     for (const f of [0.35, 0.65]) for (const s of [-1, 1]) g.add(sprig(3.2, k % 2 ? '#4f9e5b' : '#5fae5a', along(b, dir, L * f), yawTo(a) + s * 1.1, 0.15, 0.55))
     g.add(sprig(3.4, '#4f9e5b', along(b, dir, L), yawTo(a), 0.1, 0.55))
     if (k === 2 || k === 4 || k === 5 || k === 7) {
       const ta = a + PI * 0.8
       const t0: V3 = [b[0] + Math.cos(ta) * 1.2, b[1] - 0.5, b[2] + Math.sin(ta) * 1.2]
       const t1: V3 = [b[0] + Math.cos(ta) * 4.2, b[1] - 2.5, b[2] + Math.sin(ta) * 4.2]
-      g.add(noOutline(stick(t0, t1, 0.15, '#6f9a4a', 4)))
+      g.add(noOutline(rod3(t0, t1, 0.15, '#6f9a4a', 4)))
       for (let j = 0; j < 5; j++) {
         const q: V3 = [t1[0] + Math.cos(ta + j) * 1.3, t1[1] - 1.6 - j * 1.3, t1[2] + Math.sin(ta + j) * 1.3]
-        g.add(noOutline(stick(t1, q, 0.08, '#6f9a4a', 4)))
+        g.add(noOutline(rod3(t1, q, 0.08, '#6f9a4a', 4)))
         g.add(ball(1.25, fruit[(j + k) % fruit.length], { x: q[0], y: q[1] - 1, z: q[2] }))
         g.add(noOutline(ball(0.5, LEAF_D, { x: q[0], y: q[1] + 0.2, z: q[2] }, [1, 0.3, 1])))
       }
@@ -969,7 +955,7 @@ function tomato(p: string[]) {
 /** 草莓：三出复叶 / 草莓果 */
 function strawLeaf(g: THREE.Group, base: V3, yaw: number, pitch: number, len: number, color: string) {
   const tip = along(base, dirOf(yaw, pitch), len)
-  g.add(noOutline(stick(base, tip, 0.14, '#6f9a4a', 4)))
+  g.add(noOutline(rod3(base, tip, 0.14, '#6f9a4a', 4)))
   for (const d of [-0.6, 0, 0.6]) g.add(sprig(2.4, color, tip, yaw + d, pitch + 0.45, 0.75))
 }
 function berry(g: THREE.Group, top: V3, red = '#e8403a') {
@@ -997,7 +983,7 @@ function strawberryJar(p: string[]) {
     g.add(cyl(1.9, 1.9, 0.6, SOIL, { x: mouth[0], y: mouth[1] - 0.3, z: mouth[2] }, 12))
     for (let k = 0; k < 3; k++) strawLeaf(g, mouth, yawTo(a) + (k - 1) * 0.8, -0.5, 2.2, greens[k % 2])
     const bt: V3 = [mouth[0] + Math.cos(a) * 2.2, mouth[1] - 0.8, mouth[2] + Math.sin(a) * 2.2]
-    g.add(noOutline(stick(mouth, bt, 0.1, '#6f9a4a', 4)))
+    g.add(noOutline(rod3(mouth, bt, 0.1, '#6f9a4a', 4)))
     berry(g, bt, rand() < 0.3 ? '#f6b26b' : '#e8403a')
   }
   for (let k = 0; k < 7; k++) strawLeaf(g, [0, y - 0.2, 0], (k / 7) * PI * 2 + 0.3, -0.8 + (k % 2) * 0.3, 4 + (k % 3), greens[k % 2])
@@ -1025,7 +1011,7 @@ function sunflower(p: string[]) {
     const a = k * 2.5
     const base: V3 = [0, yy, 0.3]
     const tip = along(base, dirOf(yawTo(a), -0.4), 2)
-    g.add(noOutline(stick(base, tip, 0.22, '#6a9a3a', 5)))
+    g.add(noOutline(rod3(base, tip, 0.22, '#6a9a3a', 5)))
     g.add(sprig(9 - k * 0.6 + rand(), k % 2 ? '#5aa04a' : '#4f9445', tip, yawTo(a), 0.2, 0.78, 0.14))
   }
   const head = new THREE.Group()
@@ -1060,7 +1046,7 @@ function lavender(p: string[]) {
     const dir = dirOf(yawTo(a), -(PI / 2 - 0.1 - rand() * 0.22))
     const L = 18 + rand() * 7
     const tip = along(base, dir, L)
-    g.add(noOutline(stick(base, tip, 0.13, '#8fa88a', 4)))
+    g.add(noOutline(rod3(base, tip, 0.13, '#8fa88a', 4)))
     g.add(aim(capsAlong([0, 0, 0], [0, 3.6, 0], 0.55, i % 3 ? '#8e6bbf' : '#a585d3'), tip, dir))
   }
   return g
@@ -1099,12 +1085,12 @@ function rose(p: string[]) {
     const L = 20 + rand() * 9
     const dir = dirOf(yawTo(a), -(PI / 2 - 0.18 - rand() * 0.12))
     const tip = along(base, dir, L)
-    g.add(noOutline(stick(base, tip, 0.3, '#4f7a3a', 6)))
+    g.add(noOutline(rod3(base, tip, 0.3, '#4f7a3a', 6)))
     for (const f of [0.35, 0.6, 0.82]) {
       const q = along(base, dir, L * f)
       const la = a + f * 7
       const lt = along(q, dirOf(yawTo(la), -0.1), 2.6)
-      g.add(noOutline(stick(q, lt, 0.12, '#4f7a3a', 4)))
+      g.add(noOutline(rod3(q, lt, 0.12, '#4f7a3a', 4)))
       for (const d of [-0.7, 0, 0.7]) g.add(sprig(2.6, '#3f7a3f', lt, yawTo(la) + d, 0.1, 0.62, 0.14))
     }
     bloom(g, [tip[0], tip[1] + 0.3, tip[2]], i === 4 ? 0.75 : 1.15, flower)
@@ -1136,7 +1122,7 @@ function hydrangea(p: string[]) {
     [[4.6, y + 17, -1.2], 5.6],
     [[0.4, y + 21, -4.8], 4.8],
   ]
-  for (const [c] of heads) g.add(noOutline(stick([c[0] * 0.3, y - 0.3, c[2] * 0.3], [c[0], c[1] - 3, c[2]], 0.4, '#5f8f4a', 6)))
+  for (const [c] of heads) g.add(noOutline(rod3([c[0] * 0.3, y - 0.3, c[2] * 0.3], [c[0], c[1] - 3, c[2]], 0.4, '#5f8f4a', 6)))
   const rand = rng(121)
   for (let k = 0; k < 9; k++) {
     const a = (k / 9) * PI * 2 + rand() * 0.3
@@ -1164,7 +1150,7 @@ function pineBonsai(p: string[]) {
     [[4.5, y + 22.5, 0.8], 0.7],
   ]
   for (let i = 0; i < trunk.length - 1; i++) {
-    g.add(taper(trunk[i][0], trunk[i + 1][0], trunk[i][1], trunk[i + 1][1], '#7a5a42', 10))
+    g.add(taperRod3(trunk[i][0], trunk[i + 1][0], trunk[i][1], trunk[i + 1][1], '#7a5a42'))
     g.add(ball(trunk[i + 1][1], '#7a5a42', { x: trunk[i + 1][0][0], y: trunk[i + 1][0][1], z: trunk[i + 1][0][2] }))
   }
   g.add(ball(2.6, '#7a5a42', { x: -5, y, z: 1 }, [1.3, 0.5, 1.2]))
@@ -1176,7 +1162,7 @@ function pineBonsai(p: string[]) {
     [5, [3.5, y + 26, 0], 0.95],
   ]
   for (const [ti, c, s] of pads) {
-    g.add(stick(trunk[ti][0], [c[0], c[1] - 0.5, c[2]], 0.45, '#7a5a42', 6))
+    g.add(rod3(trunk[ti][0], [c[0], c[1] - 0.5, c[2]], 0.45, '#7a5a42', 6))
     pinePad(g, c, s)
   }
   for (const [x, z, r] of [[-9, 4, 2.2], [-2, 5, 1.8], [3, -5, 2.4], [-10, -4, 1.6], [6, 4, 1.4]]) g.add(ball(r, MOSS, { x, y: y, z }, [1, 0.35, 0.9]))
@@ -1226,12 +1212,12 @@ function canBig(p: string[]) {
   g.add(noOutline(cyl(3.3, 3.3, 0.35, '#3b4248', { x: -3.5, y: H - 0.05 }, 20)))
   const s0: V3 = [6, 5, 0]
   const s1: V3 = [26, 26, 0]
-  g.add(taper(s0, s1, 1.5, 0.8, body))
-  g.add(stick([R - 0.3, 15, 0], [16.5, 16.5, 0], 0.35, body))
+  g.add(taperRod3(s0, s1, 1.5, 0.8, body, 12))
+  g.add(rod3([R - 0.3, 15, 0], [16.5, 16.5, 0], 0.35, body, 8))
   const d = new THREE.Vector3(s1[0] - s0[0], s1[1] - s0[1], 0).normalize()
   const P = (k: number): V3 => [s1[0] + d.x * k, s1[1] + d.y * k, 0]
-  g.add(taper(P(-0.6), P(2.2), 0.9, 2.6, acc))
-  g.add(taper(P(2.1), P(2.5), 2.5, 2.5, shade(acc, -0.15)))
+  g.add(taperRod3(P(-0.6), P(2.2), 0.9, 2.6, acc, 12))
+  g.add(taperRod3(P(2.1), P(2.5), 2.5, 2.5, shade(acc, -0.15), 12))
   g.add(tube([[6.5, H - 0.6, 0], [4.5, H + 8, 0], [-3.5, H + 8.5, 0], [-7.5, H - 0.6, 0]], 0.7, body, 20, 8))
   g.add(tube([[-R + 0.4, H - 3, 0], [-R - 4.5, H - 6, 0], [-R - 4.5, 9, 0], [-R + 0.4, 5, 0]], 0.65, body, 20, 8))
   return g
@@ -1245,10 +1231,10 @@ function canSmall(p: string[]) {
   g.add(cup(2.4, 2.6, 2.6, 0.4, acc, { x: -2.4, y: 12.6 }))
   const s0: V3 = [4.5, 5, 0]
   const s1: V3 = [19, 16.5, 0]
-  g.add(taper(s0, s1, 0.95, 0.5, body))
+  g.add(taperRod3(s0, s1, 0.95, 0.5, body, 12))
   const d = new THREE.Vector3(s1[0] - s0[0], s1[1] - s0[1], 0).normalize()
   const P = (k: number): V3 => [s1[0] + d.x * k, s1[1] + d.y * k, 0]
-  g.add(taper(P(-0.4), P(1.6), 0.6, 1.6, acc))
+  g.add(taperRod3(P(-0.4), P(1.6), 0.6, 1.6, acc, 12))
   g.add(tube([[3.2, 12.3, 0], [1.5, 18, 0], [-4, 17.5, 0], [-5.8, 11, 0]], 0.75, body, 16, 8))
   return g
 }
@@ -1260,7 +1246,7 @@ function sprayer(p: string[]) {
   g.add(clearMat(cyl(4, 4, 13, bottle, {}, 24), bottle, 0.5))
   g.add(band(4.05, 4.05, 3.6, 3.6, 1.2, shade(bottle, -0.1), 0))
   g.add(clearMat(cyl(3.7, 3.7, 8.5, WATER, { y: 1.2 }, 24), WATER, 0.5))
-  g.add(noOutline(stick([0, 0.6, 0.6], [0, 15.5, 0], 0.18, '#f4f4f2', 4)))
+  g.add(noOutline(rod3([0, 0.6, 0.6], [0, 15.5, 0], 0.18, '#f4f4f2', 4)))
   g.add(cyl(1.9, 4, 2, bottle, { y: 13 }, 24))
   g.add(cyl(1.7, 1.7, 1.2, bottle, { y: 15 }, 16))
   g.add(cyl(2.0, 2.0, 1.6, head, { y: 16.2 }, 16))
@@ -1274,23 +1260,23 @@ function sprayer(p: string[]) {
 function trowel(p: string[]) {
   const [handle, blade] = p
   const g = new THREE.Group()
-  g.add(stick([-15, 1.5, 0], [-4, 1.5, 0], 1.5, handle, 14))
+  g.add(rod3([-15, 1.5, 0], [-4, 1.5, 0], 1.5, handle, 14))
   g.add(torus(1.3, 0.25, ROPE, { x: -16.4, y: 0.3, rx: PI / 2 }))
-  g.add(stick([-4.2, 1.5, 0], [-2, 1.5, 0], 1.2, STEEL, 14))
-  g.add(stick([-2.2, 1.5, 0], [1.6, 1.05, 0], 0.4, STEEL, 8))
+  g.add(rod3([-4.2, 1.5, 0], [-2, 1.5, 0], 1.2, STEEL, 14))
+  g.add(rod3([-2.2, 1.5, 0], [1.6, 1.05, 0], 0.4, STEEL, 8))
   g.add(ball(6.5, blade, { x: 7.6, y: 1.05 }, [1, 0.16, 0.48]))
-  g.add(stick([1.4, 1.2, 0], [9, 1.2, 0], 0.3, shade(blade, -0.1), 6))
+  g.add(rod3([1.4, 1.2, 0], [9, 1.2, 0], 0.3, shade(blade, -0.1), 6))
   return g
 }
 /** 手耙：平放，五根耙齿 */
 function rake(p: string[]) {
   const [handle, head] = p
   const g = new THREE.Group()
-  g.add(stick([-15, 1.5, 0], [-4, 1.5, 0], 1.5, handle, 14))
+  g.add(rod3([-15, 1.5, 0], [-4, 1.5, 0], 1.5, handle, 14))
   g.add(torus(1.3, 0.25, ROPE, { x: -16.4, y: 0.3, rx: PI / 2 }))
-  g.add(stick([-4.2, 1.5, 0], [-2, 1.5, 0], 1.2, STEEL, 14))
-  g.add(stick([-2.2, 1.5, 0], [0.2, 1.5, 0], 0.45, head, 8))
-  g.add(stick([0, 1.5, -4.4], [0, 1.5, 4.4], 0.5, head, 8))
+  g.add(rod3([-4.2, 1.5, 0], [-2, 1.5, 0], 1.2, STEEL, 14))
+  g.add(rod3([-2.2, 1.5, 0], [0.2, 1.5, 0], 0.45, head, 8))
+  g.add(rod3([0, 1.5, -4.4], [0, 1.5, 4.4], 0.5, head, 8))
   for (const z of [-4, -2, 0, 2, 4]) g.add(tube([[0, 1.5, z], [3, 1.8, z * 1.12], [5.8, 1.3, z * 1.22], [6.6, 0.35, z * 1.28]], 0.33, head, 12, 6))
   return g
 }
@@ -1301,8 +1287,8 @@ function pruner(p: string[]) {
   const y = 0.9
   g.add(capsAlong([-12, y, -2.4], [-2.6, y, -0.8], 0.9, grip))
   g.add(capsAlong([-12, y, 2.4], [-2.6, y, 0.8], 0.9, grip2))
-  g.add(stick([-3, y, -0.9], [1, y, 0], 0.55, STEEL))
-  g.add(stick([-3, y, 0.9], [1, y, 0], 0.55, STEEL))
+  g.add(rod3([-3, y, -0.9], [1, y, 0], 0.55, STEEL, 8))
+  g.add(rod3([-3, y, 0.9], [1, y, 0], 0.55, STEEL, 8))
   g.add(ball(4, STEEL, { x: 4.6, y: y + 0.15, z: -0.3, ry: 0.15 }, [1, 0.12, 0.33]))
   g.add(ball(3.4, '#8a8f96', { x: 4.1, y: y - 0.12, z: 0.4, ry: -0.2 }, [1, 0.2, 0.38]))
   g.add(cyl(0.8, 0.8, 1.6, '#55585e', { x: 1, y: y - 0.75 }, 12))
@@ -1428,25 +1414,25 @@ function toolRack(p: string[]) {
   for (const x of [-27, 27]) g.add(cyl(0.6, 0.6, 0.4, STEEL, { x, y: yp + 3.6 - 0.2, z: zb + 2.1, rx: PI / 2 }, 10))
   const zc = zb + 5
   const peg = (x: number) => {
-    g.add(stick([x, yp, zb + 1.5], [x, yp + 0.5, zb + 8], 0.45, shade(wood, -0.12), 10))
+    g.add(rod3([x, yp, zb + 1.5], [x, yp + 0.5, zb + 8], 0.45, shade(wood, -0.12)))
     g.add(ball(0.75, shade(wood, -0.12), { x, y: yp + 0.55, z: zb + 8.2 }))
   }
   // 小铲
   let x = -23
   peg(x)
   g.add(torus(1.2, 0.2, ROPE, { x, y: yp - 0.75, z: zc }))
-  g.add(stick([x, yp - 1.8, zc], [x, yp - 12, zc], 1.3, handle, 12))
-  g.add(stick([x, yp - 11.8, zc], [x, yp - 13.6, zc], 1.05, STEEL, 12))
-  g.add(stick([x, yp - 13.5, zc], [x, yp - 16, zc + 0.3], 0.35, STEEL, 6))
+  g.add(rod3([x, yp - 1.8, zc], [x, yp - 12, zc], 1.3, handle, 12))
+  g.add(rod3([x, yp - 11.8, zc], [x, yp - 13.6, zc], 1.05, STEEL, 12))
+  g.add(rod3([x, yp - 13.5, zc], [x, yp - 16, zc + 0.3], 0.35, STEEL, 6))
   g.add(ball(5.5, blade, { x, y: yp - 20.5, z: zc + 0.4 }, [0.48, 1, 0.16]))
   // 耙子
   x = -11.5
   peg(x)
   g.add(torus(1.2, 0.2, ROPE, { x, y: yp - 0.75, z: zc }))
-  g.add(stick([x, yp - 1.8, zc], [x, yp - 12, zc], 1.3, handle, 12))
-  g.add(stick([x, yp - 11.8, zc], [x, yp - 13.6, zc], 1.05, STEEL, 12))
-  g.add(stick([x, yp - 13.5, zc], [x, yp - 15.5, zc], 0.4, blade, 6))
-  g.add(stick([x - 3.6, yp - 15.5, zc], [x + 3.6, yp - 15.5, zc], 0.45, blade, 6))
+  g.add(rod3([x, yp - 1.8, zc], [x, yp - 12, zc], 1.3, handle, 12))
+  g.add(rod3([x, yp - 11.8, zc], [x, yp - 13.6, zc], 1.05, STEEL, 12))
+  g.add(rod3([x, yp - 13.5, zc], [x, yp - 15.5, zc], 0.4, blade, 6))
+  g.add(rod3([x - 3.6, yp - 15.5, zc], [x + 3.6, yp - 15.5, zc], 0.45, blade, 6))
   for (const dx of [-3.3, -1.1, 1.1, 3.3]) g.add(tube([[x + dx, yp - 15.5, zc], [x + dx * 1.1, yp - 18.5, zc + 0.5], [x + dx * 1.2, yp - 21, zc + 1.6]], 0.3, blade, 8, 5))
   // 修枝剪
   x = 0
@@ -1454,8 +1440,8 @@ function toolRack(p: string[]) {
   g.add(torus(1.0, 0.18, '#55585e', { x, y: yp - 0.6, z: zc }))
   g.add(capsAlong([x - 1.0, yp - 1.8, zc], [x - 2.2, yp - 10, zc], 0.85, C.red))
   g.add(capsAlong([x + 1.0, yp - 1.8, zc], [x + 2.2, yp - 10, zc], 0.85, shade(C.red, -0.1)))
-  g.add(stick([x - 2, yp - 10, zc], [x, yp - 12.5, zc], 0.5, STEEL))
-  g.add(stick([x + 2, yp - 10, zc], [x, yp - 12.5, zc], 0.5, STEEL))
+  g.add(rod3([x - 2, yp - 10, zc], [x, yp - 12.5, zc], 0.5, STEEL, 8))
+  g.add(rod3([x + 2, yp - 10, zc], [x, yp - 12.5, zc], 0.5, STEEL, 8))
   g.add(ball(3.4, STEEL, { x: x - 0.3, y: yp - 15.5, z: zc }, [0.32, 1, 0.12]))
   g.add(ball(2.9, '#8a8f96', { x: x + 0.4, y: yp - 15.2, z: zc + 0.35 }, [0.36, 1, 0.18]))
   // 手套搭在木钉上
@@ -1489,8 +1475,8 @@ function pottingBench(p: string[]) {
     g.add(rbox(2, 9, 10, dk, { x: sx * 40, y: 119, z: -18 }, 0.4))
   }
   // 挂杆
-  for (const x of [-40, 40]) g.add(stick([x, 112, -23], [x, 112, -21], 0.5, STEEL, 8))
-  g.add(stick([-42, 112, -21.2], [42, 112, -21.2], 0.55, STEEL, 10))
+  for (const x of [-40, 40]) g.add(rod3([x, 112, -23], [x, 112, -21], 0.5, STEEL, 8))
+  g.add(rod3([-42, 112, -21.2], [42, 112, -21.2], 0.55, STEEL))
   return g
 }
 
@@ -1547,12 +1533,12 @@ function floorLight(p: string[]) {
   const g = new THREE.Group()
   for (let k = 0; k < 3; k++) {
     const a = (k / 3) * PI * 2 + PI / 2
-    g.add(stick([0, 42, 0], [Math.cos(a) * 24, 1.2, Math.sin(a) * 24], 0.8, body, 8))
+    g.add(rod3([0, 42, 0], [Math.cos(a) * 24, 1.2, Math.sin(a) * 24], 0.8, body, 8))
     g.add(puck(1.6, 1.2, RUBBER, { x: Math.cos(a) * 24.4, z: Math.sin(a) * 24.4 }))
   }
   g.add(cyl(1.8, 1.8, 6, body, { y: 39 }, 14))
-  g.add(stick([0, 39, 0], [0, 148, 0], 1.1, body, 12))
-  g.add(stick([-17, 148, 0], [17, 148, 0], 0.8, body, 10))
+  g.add(rod3([0, 39, 0], [0, 148, 0], 1.1, body, 12))
+  g.add(rod3([-17, 148, 0], [17, 148, 0], 0.8, body))
   g.add(cyl(1.6, 1.6, 3, body, { y: 146.5 }, 12))
   g.add(rbox(3, 6, 2.4, shade(body, 0.1), { y: 96, z: 1.4 }, 0.5))
   g.add(lit(ball(0.4, '#7dff9a', { y: 100, z: 2.7 }), '#7dff9a', 0.9))
@@ -1591,19 +1577,19 @@ function hoseReel(p: string[]) {
   for (const s of [-1, 1]) {
     const x = s * 17
     g.add(rbox(3, 2.4, 40, frame, { x }, 0.8))
-    g.add(stick([x, 2, -17], [x, 44, 0], 1.0, frame, 10))
-    g.add(stick([x, 2, 17], [x, 44, 0], 1.0, frame, 10))
+    g.add(rod3([x, 2, -17], [x, 44, 0], 1.0, frame))
+    g.add(rod3([x, 2, 17], [x, 44, 0], 1.0, frame))
     g.add(rbox(2.4, 6, 6, frame, { x, y: ax - 3 }, 0.6))
   }
-  g.add(stick([-17, 44, 0], [17, 44, 0], 1.2, frame, 10))
-  g.add(stick([-8, 44, 0], [8, 44, 0], 1.6, RUBBER, 12))
-  g.add(stick([-18, ax, 0], [18.6, ax, 0], 0.9, STEEL, 10))
+  g.add(rod3([-17, 44, 0], [17, 44, 0], 1.2, frame))
+  g.add(rod3([-8, 44, 0], [8, 44, 0], 1.6, RUBBER, 12))
+  g.add(rod3([-18, ax, 0], [18.6, ax, 0], 0.9, STEEL))
   g.add(cyl(8, 8, 28, shade(frame, 0.1), { y: ax - 14, rz: PI / 2 }, 20))
   for (const x of [-14.5, 14.5]) g.add(cyl(15, 15, 1, frame, { x, y: ax - 0.5, rz: PI / 2 }, 28))
   for (const [r, x0, x1] of [[9.2, -12.6, 12.6], [10.8, -12.6, 12.6], [12.4, -12.6, 3]] as [number, number, number][])
     for (let x = x0; x <= x1 + 0.01; x += 1.68) g.add(torus(r, 0.8, hose, { x, y: ax, ry: PI / 2 }))
-  g.add(stick([18.6, ax, 0], [18.6, ax + 8, 3], 0.7, STEEL, 8))
-  g.add(stick([18.6, ax + 8, 3], [22.6, ax + 8, 3], 0.9, acc, 10))
+  g.add(rod3([18.6, ax, 0], [18.6, ax + 8, 3], 0.7, STEEL, 8))
+  g.add(rod3([18.6, ax + 8, 3], [22.6, ax + 8, 3], 0.9, acc))
   g.add(tube([[3, ax - 12.4, 4], [3, 6, 16], [6, 1.1, 22], [11, 1.0, 25.5]], 0.8, hose, 20, 8))
   g.add(capsAlong([11, 1.2, 25.5], [17, 1.2, 28], 1.2, acc))
   g.add(capsAlong([16, 1.0, 28], [14.5, 1.0, 31.5], 0.9, acc))
@@ -1617,7 +1603,7 @@ function gardenCart(p: string[]) {
   g.add(tray(64, 22, 38, 1.4, body, { y: 18 }, 0.6))
   for (const s of [-1, 1]) g.add(rbox(60, 2.5, 3, '#55585e', { y: 15.5, z: s * 12 }, 0.5))
   for (const x of [-22, 22]) {
-    g.add(stick([x, 9, -21], [x, 9, 21], 0.8, STEEL, 8))
+    g.add(rod3([x, 9, -21], [x, 9, 21], 0.8, STEEL, 8))
     for (const s of [-1, 1]) {
       g.add(rbox(3, 7.5, 3, '#55585e', { x, y: 8.5, z: s * 12 }, 0.5))
       g.add(cyl(9, 9, 4, RUBBER, { x, y: 9 - 2, z: s * 21.5, rx: PI / 2 }, 24))
@@ -1625,8 +1611,8 @@ function gardenCart(p: string[]) {
     }
   }
   g.add(rbox(4, 4, 6, '#55585e', { x: 33, y: 13.5 }, 0.6))
-  g.add(stick([34, 15.5, 0], [44, 70, 0], 1.0, STEEL, 10))
-  g.add(stick([44, 70, -7], [44, 70, 7], 1.4, wheel, 12))
+  g.add(rod3([34, 15.5, 0], [44, 70, 0], 1.0, STEEL))
+  g.add(rod3([44, 70, -7], [44, 70, 7], 1.4, wheel, 12))
   return g
 }
 

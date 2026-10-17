@@ -5,7 +5,7 @@
 import * as THREE from 'three'
 import { ball, cup, cyl, puck, rbox, shade, toon, torus, tray, useAnisotropy } from '../toon'
 import { C, G, SWING_OPEN, ellipsePoly, movable, rectPoly, rng, slab, type AssetCategory, type AssetDef, type DoorMotion, type Poly, type SurfaceDef } from '../kit'
-import { PI, clearDeep, lit, mesh, noOutlineDeep, type V3 } from '../geo'
+import { PI, clearDeep, lit, mesh, noOutlineDeep, rod3, type V3 } from '../geo'
 import { I, J, M, N, R, type Build, type Pal3 } from '../packkit'
 
 const SOIL = '#8b6a4f'
@@ -22,16 +22,6 @@ const BOOKC = ['#c96f5a', '#e3b549', '#6f8fa8', '#8aa37b', '#efe6d6', '#5a4646',
 
 // ---------- 小工具 ----------
 
-/** 两点之间的一根杆 */
-function stick(a: V3, b: V3, r: number, color: string, seg = 8) {
-  const va = new THREE.Vector3(...a)
-  const vb = new THREE.Vector3(...b)
-  const dir = vb.clone().sub(va)
-  const m = cyl(r, r, dir.length(), color, {}, seg)
-  m.position.copy(va).add(vb).multiplyScalar(0.5)
-  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize())
-  return m
-}
 /** 沿折线平滑过去的圆管 */
 function tube(pts: V3[], r: number, color: string, segs = 24, radial = 8) {
   const curve = new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(...p)))
@@ -292,7 +282,7 @@ function pachira(p: string[]) {
   for (let i = 0; i < 7; i++) {
     const a = (i / 7) * PI * 2 + rand() * 0.3
     const tip: V3 = [Math.cos(a) * 15, 110 + rand() * 12, Math.sin(a) * 15]
-    g.add(noOutlineDeep(stick(top, tip, 0.4, STEM, 5)))
+    g.add(noOutlineDeep(rod3(top, tip, 0.4, STEM, 5)))
     for (let k = -2; k <= 2; k++) {
       const ang = a + k * 0.42
       g.add(blade(18 - Math.abs(k) * 2.2, 0.36, 0.08, k % 2 ? C.leafD : C.leaf, tip, new THREE.Vector3(Math.cos(ang), -0.22 + Math.abs(k) * 0.05, Math.sin(ang))))
@@ -346,7 +336,7 @@ function monsteraBasket(p: string[]) {
     const L = 29 + rand() * 6
     const tilt = Math.min(0.14 + rand() * 0.2, Math.asin(Math.min(1, 12 / h)))
     const tip: V3 = [Math.cos(a) * Math.sin(tilt) * h, 26 + Math.cos(tilt) * h, Math.sin(a) * Math.sin(tilt) * h]
-    g.add(noOutlineDeep(stick([0, 26, 0], tip, 0.75, C.leafD, 6)))
+    g.add(noOutlineDeep(rod3([0, 26, 0], tip, 0.75, C.leafD, 6)))
     const leaf = monsteraLeaf(L, i % 2 ? C.leaf : shade(C.leaf, -0.08))
     const lg = G(leaf)
     lg.position.set(...tip)
@@ -631,7 +621,7 @@ function ctTray(p: string[]) {
     const tx = c * 27
     const tz = s * 27
     // 发夹腿：两根杆在地面并到一起
-    for (const sd of [-1, 1]) g.add(stick([c * 31, 0.6, s * 31], [tx - s * sd * 5, 34.6, tz + c * sd * 5], 0.6, leg, 6))
+    for (const sd of [-1, 1]) g.add(rod3([c * 31, 0.6, s * 31], [tx - s * sd * 5, 34.6, tz + c * sd * 5], 0.6, leg, 6))
     g.add(ball(1.1, leg, { x: c * 31, y: 0.9, z: s * 31 }, [1, 0.8, 1]))
   }
   return g
@@ -696,7 +686,7 @@ function bsLadder(p: string[]) {
   const g = new THREE.Group()
   const zf = (y: number) => 14 - (17 * y) / 178
   for (const sx of [-1, 1]) {
-    g.add(stick([sx * 36, 0, 14], [sx * 36, 178, -3], 1.9, wood, 10))
+    g.add(rod3([sx * 36, 0, 14], [sx * 36, 178, -3], 1.9, wood))
     g.add(cyl(1.6, 1.6, 178, shade(wood, -0.06), { x: sx * 36, z: -14 }, 10))
   }
   const ys = [10, 46, 82, 116, 148]
@@ -908,7 +898,7 @@ function flReading(p: string[]) {
   const g = G(puck(17, 3, metal))
   g.add(cyl(1.2, 1.2, 118, metal, { y: 2.5 }, 10))
   g.add(ball(2, joint, { y: 120 }))
-  g.add(stick([0, 120, 0], [14, 138, 0], 0.9, metal))
+  g.add(rod3([0, 120, 0], [14, 138, 0], 0.9, metal, 8))
   g.add(ball(1.8, joint, { x: 14, y: 138 }))
   const head = new THREE.Group()
   head.add(cup(8.5, 3.2, 13, 0.6, shadeC, { rx: PI }))
@@ -949,7 +939,7 @@ function scRetro(p: string[]) {
   const w = 84
   const d = 36
   const g = new THREE.Group()
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(stick([sx * 38, 0.5, sz * 14.5], [sx * 35, 18.5, sz * 12], 1.4, leg, 10))
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rod3([sx * 38, 0.5, sz * 14.5], [sx * 35, 18.5, sz * 12], 1.4, leg))
   // 空心柜体 + 中间一块层板
   for (const o of hollow(w, 18, 92, -18, 15, main, 1.6, 0.8)) g.add(o)
   g.add(rbox(w - 3.2, 1.6, 31, main, { y: 54, z: -2 }, 0.3))
@@ -1144,7 +1134,7 @@ function drMcm(p: string[]) {
   const w = 86
   const d = 44
   const g = new THREE.Group()
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(stick([sx * 40, 0.6, sz * 18], [sx * 36, 20.5, sz * 15], 1.5, leg, 10))
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rod3([sx * 40, 0.6, sz * 18], [sx * 36, 20.5, sz * 15], 1.5, leg))
   for (const o of hollow(w, 20, 78, -22, 20, main, 1.6, 1)) g.add(o)
   g.add(rbox(1.6, 58 - 3.2, d - 4, main, { y: 21.6, z: -1 }, 0.3))
   const fz = d / 2 - 2 + 0.7
@@ -1467,7 +1457,7 @@ function fruitWire(p: string[]) {
   }
   for (let k = 0; k < 10; k++) {
     const a = (k / 10) * PI * 2
-    g.add(stick([Math.cos(a) * 6.5, 0.4, Math.sin(a) * 6.5], [Math.cos(a) * 11.7, 10.6, Math.sin(a) * 11.7], 0.28, wire, 5))
+    g.add(rod3([Math.cos(a) * 6.5, 0.4, Math.sin(a) * 6.5], [Math.cos(a) * 11.7, 10.6, Math.sin(a) * 11.7], 0.28, wire, 5))
   }
   g.add(cyl(7, 7, 0.4, shade(wire, 0.1), { y: 1.2 }, 24))
   apple(g, -3, 1.6, 2, appleC)

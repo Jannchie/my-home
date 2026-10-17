@@ -6,7 +6,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray, type At } from '../toon'
 import { C, G, glow, paintPanel, rectPoly, rng, shell, type AssetCategory, type AssetDef, type Fx } from '../kit'
-import { P, PI, UP, clearMat, lit, noOutline, type V3 } from '../geo'
+import { P, PI, clearMat, cylX, cylZ, lit, noOutline, rod3, type V3 } from '../geo'
 import { I, J, M, N, R, type Build, type Dims, type Pal } from '../packkit'
 
 const STEEL = '#c3c7cc'
@@ -45,22 +45,6 @@ function normalize(build: Build, toFloor: boolean): Build {
     if (toFloor) g.position.y -= b.min.y
     return G(g)
   }
-}
-
-/** 沿 x 的横圆柱，给中心 */
-const cylX = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 16) => P(cyl(r, r, len, color, {}, seg), x, y, z, 0, 0, PI / 2)
-/** 沿 z 的圆柱，给中心 */
-const cylZ = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 20) => P(cyl(r, r, len, color, {}, seg), x, y, z, PI / 2)
-
-/** 两点之间的细杆 */
-function stick(a: V3, b: V3, r: number, color: string, seg = 10) {
-  const va = new THREE.Vector3(...a)
-  const vb = new THREE.Vector3(...b)
-  const dir = vb.clone().sub(va)
-  const m = cyl(r, r, dir.length(), color, {}, seg)
-  m.position.copy(va).add(vb).multiplyScalar(0.5)
-  m.quaternion.setFromUnitVectors(UP, dir.normalize())
-  return m
 }
 
 /** 平滑管子（软管、把手、钩子），两端加圆头 */
@@ -197,14 +181,14 @@ function canisterVac(p: string[]) {
     g.add(cylX(3.4, 3.3, acc, s * 13.6, 7.5, -20, 20))
   }
   g.add(ball(2.5, M.char, { y: 2.5, z: -2 }))
-  g.add(cylZ(3.2, 2.4, sub, 0, 14, 3.6))
+  g.add(cylZ(3.2, 2.4, sub, 0, 14, 3.6, 20))
   g.add(lit(ball(0.8, acc, { x: -6, y: 24.4, z: -9 }), acc, 0.7))
   // 地刷 + 金属管 + 握把
   g.add(rbox(28, 4, 9, sub, { z: 25 }, 1.8))
   g.add(rbox(28.4, 1.2, 1.4, acc, { y: 0.4, z: 28.9 }, 0.5))
   g.add(ball(2.4, sub, { y: 5, z: 23.5 }))
-  g.add(stick([0, 5, 23.5], [0, 76, 15], 1.5, STEEL, 14))
-  g.add(stick([0, 76, 15], [0, 82, 13.5], 2.3, main, 14))
+  g.add(rod3([0, 5, 23.5], [0, 76, 15], 1.5, STEEL, 14))
+  g.add(rod3([0, 76, 15], [0, 82, 13.5], 2.3, main, 14))
   g.add(tube([[0, 82, 13.5], [0, 87, 12.4], [0, 91.5, 9.6]], 1.6, main))
   g.add(rbox(2.6, 2.4, 1.6, acc, { y: 84.5, z: 13.2 }, 0.6))
   // 软管：从机身吸口绕到握把
@@ -233,14 +217,14 @@ function cordlessVacBody(main: string, sub: string, acc: string) {
   g.add(rbox(25, 4.5, 10, sub, { z: 3 }, 2))
   g.add(cylX(1.6, 22, acc, 0, 2.2, 8))
   g.add(ball(2.4, sub, { y: 5.2, z: 1 }))
-  g.add(stick([0, 5.2, 1], [0, 66, -1], 1.3, STEEL, 14))
+  g.add(rod3([0, 5.2, 1], [0, 66, -1], 1.3, STEEL, 14))
   g.add(rbox(8, 18, 10, main, { y: 64, z: -1 }, 3))
   g.add(clearMat(cyl(3.6, 3.6, 13, C.glass, { y: 65, z: 7.2 }, 20), C.glass, 0.5))
   g.add(cyl(3.8, 3.8, 1.4, acc, { y: 78, z: 7.2 }, 20))
   g.add(cyl(3.2, 3.2, 1, M.char, { y: 64.4, z: 7.2 }, 20))
   g.add(rbox(5, 8, 4, sub, { y: 70, z: -7.6 }, 1.2))
-  g.add(stick([0, 81, -4], [0, 98, -7.5], 1.5, main, 12))
-  g.add(stick([0, 98, -7.5], [0, 81.5, 2], 1.2, main, 12))
+  g.add(rod3([0, 81, -4], [0, 98, -7.5], 1.5, main, 12))
+  g.add(rod3([0, 98, -7.5], [0, 81.5, 2], 1.2, main, 12))
   g.add(ball(1.5, main, { y: 98, z: -7.5 }))
   g.add(lit(ball(0.6, acc, { y: 79, z: 4.1 }), acc, 0.7))
   return g
@@ -343,11 +327,11 @@ function steamMop(p: string[]) {
   g.add(rbox(28.6, 1.2, 13.6, C.white, { z: 1.5 }, 0.5))
   g.add(rbox(28, 3.5, 13, sub, { y: 0.9, z: 1.5 }, 1.8))
   g.add(ball(2.4, sub, { y: 5.4, z: 1 }))
-  g.add(stick([0, 5.4, 1], [0, 30, -1], 1.8, main))
+  g.add(rod3([0, 5.4, 1], [0, 30, -1], 1.8, main))
   g.add(rbox(10, 34, 8, main, { y: 28, z: -1.5 }, 3.5))
   g.add(clearMat(rbox(7, 16, 1.2, C.glass, { y: 36, z: 2.4 }, 0.5), C.glass, 0.55))
   g.add(lit(ball(0.7, acc, { y: 56, z: 2.5 }), acc, 0.7))
-  g.add(stick([0, 62, -1.5], [0, 104.5, -3.1], 1.3, STEEL, 14))
+  g.add(rod3([0, 62, -1.5], [0, 104.5, -3.1], 1.3, STEEL, 14))
   g.add(rbox(4, 10, 4, main, { y: 104, z: -3.2 }, 1.5))
   g.add(cylX(1.4, 12, main, 0, 115, -3.2))
   // 电线挂钩 + 绕好的线
@@ -424,9 +408,9 @@ function flatMopModel(main: string, sub: string, lean = 4) {
   for (const s of [-1, 1]) g.add(rbox(3, 0.4, 3, shade(main, -0.15), { x: s * 10.5, y: 2.8 }, 0.3))
   g.add(ball(1.5, sub, { y: 3.8 }))
   const top: V3 = [0, 116, -lean]
-  g.add(stick([0, 3.8, 0], top, 1.1, sub, 12))
-  for (const t of [0.35, 0.68]) g.add(stick([0, 3.8 + 112.2 * t - 0.8, -lean * t], [0, 3.8 + 112.2 * t + 0.8, -lean * t], 1.4, shade(sub, -0.12), 12))
-  g.add(stick([0, 96, -lean * 0.82], top, 1.6, main, 12))
+  g.add(rod3([0, 3.8, 0], top, 1.1, sub, 12))
+  for (const t of [0.35, 0.68]) g.add(rod3([0, 3.8 + 112.2 * t - 0.8, -lean * t], [0, 3.8 + 112.2 * t + 0.8, -lean * t], 1.4, shade(sub, -0.12), 12))
+  g.add(rod3([0, 96, -lean * 0.82], top, 1.6, main, 12))
   g.add(ball(1.6, main, { y: 116, z: -lean }))
   return g
 }
@@ -440,10 +424,10 @@ function spongeMop(p: string[]) {
   const g = new THREE.Group()
   g.add(rbox(27, 5, 6, sponge, {}, 1))
   g.add(rbox(28, 2, 7, main, { y: 4.6 }, 0.8))
-  g.add(stick([0, 6.6, 0], [0, 118, -3], 1.2, STEEL, 12))
-  g.add(stick([0, 6.5, 1.9], [0, 56, 1.2], 0.5, STEEL, 8))
+  g.add(rod3([0, 6.6, 0], [0, 118, -3], 1.2, STEEL, 12))
+  g.add(rod3([0, 6.5, 1.9], [0, 56, 1.2], 0.5, STEEL, 8))
   g.add(rbox(3, 14, 2.4, acc, { y: 44, z: 1.4 }, 0.8))
-  g.add(stick([0, 100, -2.5], [0, 118, -3], 1.6, main, 12))
+  g.add(rod3([0, 100, -2.5], [0, 118, -3], 1.6, main, 12))
   g.add(torus(1.2, 0.35, main, { y: 120.2, z: -3 }))
   return g
 }
@@ -926,8 +910,8 @@ function linterBody(handle: string, paper = '#fbf7ec') {
   const g = new THREE.Group()
   g.add(cylX(3.3, 10.2, paper, 0, 3.3, 0, 24))
   g.add(cylX(1.2, 10.8, handle, 0, 3.3, 0, 12))
-  g.add(stick([5.2, 3.3, 0], [5.2, 7.4, 0], 0.6, handle, 8))
-  g.add(stick([5.2, 7.4, 0], [0, 9, 0], 0.6, handle, 8))
+  g.add(rod3([5.2, 3.3, 0], [5.2, 7.4, 0], 0.6, handle, 8))
+  g.add(rod3([5.2, 7.4, 0], [0, 9, 0], 0.6, handle, 8))
   g.add(cyl(1.1, 1.3, 10.6, handle, { y: 8.6 }, 14))
   g.add(ball(1.1, handle, { y: 19.2 }))
   g.add(torus(0.9, 0.25, handle, { y: LR_TOP - 0.3 }))
@@ -991,11 +975,11 @@ function pinchFrame(frame: string, pin: string, hanging: boolean) {
   ]
   corners.forEach(([x, z], i) => {
     const [x2, z2] = corners[(i + 1) % 4]
-    g.add(stick([x, 0, z], [x2, 0, z2], 0.5, frame, 8))
+    g.add(rod3([x, 0, z], [x2, 0, z2], 0.5, frame, 8))
     g.add(ball(0.6, frame, { x, z }))
   })
-  g.add(stick([-h, 0, 0], [h, 0, 0], 0.35, frame, 8))
-  g.add(stick([0, 0, -h], [0, 0, h], 0.35, frame, 8))
+  g.add(rod3([-h, 0, 0], [h, 0, 0], 0.35, frame, 8))
+  g.add(rod3([0, 0, -h], [0, 0, h], 0.35, frame, 8))
   const ts = [-10.5, -3.5, 3.5, 10.5]
   for (const t of ts)
     for (const [x, z, ax] of [
@@ -1021,7 +1005,7 @@ function pinchHangerLying(p: string[]) {
   const g = new THREE.Group()
   g.add(P(pinchFrame(frame, pin, false), 0, 1.5, 0))
   g.add(ball(0.9, frame, { y: 2.2 }))
-  g.add(stick([0, 2.4, 0], [0, 2.4, -8], 0.35, frame, 8))
+  g.add(rod3([0, 2.4, 0], [0, 2.4, -8], 0.35, frame, 8))
   g.add(torus(1.3, 0.35, frame, { y: 2.4, z: -9.3, rx: PI / 2 }))
   return ground(g)
 }
@@ -1038,7 +1022,7 @@ function pinchHangerHanging(p: string[]) {
     [h, -h],
     [h, h],
     [-h, h],
-  ]) g.add(stick([0, -10.6, zc], [x, y, zc + z], 0.25, frame, 6))
+  ]) g.add(rod3([0, -10.6, zc], [x, y, zc + z], 0.25, frame, 6))
   g.add(P(pinchFrame(frame, pin, true), 0, y, zc))
   return g
 }

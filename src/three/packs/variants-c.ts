@@ -6,7 +6,7 @@
 import * as THREE from 'three'
 import { ball, cup, cyl, rbox, shade, torus, tray } from '../toon'
 import { C, G, type AssetCategory, type AssetDef } from '../kit'
-import { PI, clearDeep, mesh, noOutlineDeep, type V3 } from '../geo'
+import { PI, clearDeep, mesh, noOutlineDeep, rod3 } from '../geo'
 import { I, J, M, N, R, type Build, type Pal3 } from '../packkit'
 
 const COPPER = '#c7814a'
@@ -33,15 +33,6 @@ function band(rAt: (y: number) => number, y0: number, y1: number, color: string,
     ],
     color,
   )
-}
-/** 两点之间的一根杆 */
-function stick(a: V3, b: V3, r: number, color: string, seg = 10) {
-  const va = new THREE.Vector3(...a)
-  const vb = new THREE.Vector3(...b)
-  const m = cyl(r, r, va.distanceTo(vb), color, {}, seg)
-  m.position.copy(va).add(vb).multiplyScalar(0.5)
-  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), vb.clone().sub(va).normalize())
-  return m
 }
 /** 圆角矩形轮廓（xy 平面） */
 function rrPath(p: THREE.Path, w: number, d: number, r: number) {
@@ -190,7 +181,7 @@ function pailDipper(p: string[]) {
   g.add(band(rAt, 1.6, 3, hoop, 0.32))
   g.add(band(rAt, 7.6, 9, hoop, 0.32))
   // 柄：从桶壁里穿出，斜向上翘；根部一块垫木
-  g.add(stick([rAt(7) - 0.6, 7, 0], [rAt(7) + 3.2, 12.2, 0], 1, handle))
+  g.add(rod3([rAt(7) - 0.6, 7, 0], [rAt(7) + 3.2, 12.2, 0], 1, handle))
   g.add(ball(1.2, handle, { x: rAt(7) + 3.2, y: 12.2 }))
   g.add(rbox(1.2, 3.6, 3.2, shade(handle, -0.08), { x: rAt(6.4) + 0.2, y: 6.4 }, 0.4))
   return settle(g)

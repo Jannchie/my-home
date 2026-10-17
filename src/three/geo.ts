@@ -211,6 +211,19 @@ export const cylX = (r: number, len: number, color: string, x: number, y: number
 /** 沿 z 轴横放的圆柱，(x, y, z) 为中心 */
 export const cylZ = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 24) => P(cyl(r, r, len, color, {}, seg), x, y, z, PI / 2)
 
+/**
+ * 旧写法的横放圆柱（bath-extra / variants-a / wet 用）：先按「底面在 y - len / 2」摆，再绕 z / x 轴转 90°。
+ * 体素长度量化到 0.1cm，所以中心比 y 偏 (q(len) - len) / 2（≤ 0.025cm）。新代码用 cylX / cylZ；
+ * 这里保留是为了让已有模型逐顶点不变。
+ */
+export function cylXLegacy(r: number, len: number, color: string, x: number, y: number, z: number, seg = 12) {
+  return cyl(r, r, len, color, { x, y: y - len / 2, z, rz: PI / 2 }, seg)
+}
+/** 见 cylXLegacy */
+export function cylZLegacy(r: number, len: number, color: string, x: number, y: number, z: number, seg = 12) {
+  return cyl(r, r, len, color, { x, y: y - len / 2, z, rx: PI / 2 }, seg)
+}
+
 /** 沿 z 轴横放的圆柱，从 z0 往 +z 伸出 len（(x, y) 为轴心） */
 export const cylZFrom = (r: number, len: number, color: string, x: number, y: number, z0: number, seg = 20) => P(cyl(r, r, len, color, {}, seg), x, y, z0 + len / 2, PI / 2)
 

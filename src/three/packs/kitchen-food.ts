@@ -9,7 +9,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, SWING_OPEN, movable, rectPoly, rng, type AssetCategory, type AssetDef, type DoorMotion, type Fx, type StyleTag, type SurfaceDef } from '../kit'
-import { PI, UP, box3, hcyl, lit, noOutlineDeep, type V3 } from '../geo'
+import { PI, box3, hcyl, lit, noOutlineDeep, rod3, type V3 } from '../geo'
 import { I, J, M, N, R, type Build, type Pal3 } from '../packkit'
 
 // ---------- 固定色 ----------
@@ -53,7 +53,7 @@ const ONION = '#c97f3c'
 // ---------- 小工具 ----------
 
 /** 半透明（玻璃、透明塑料、保鲜膜），不描边 */
-function glassy<T extends THREE.Object3D>(o: T, color = GLASS, k = 0.38): T {
+function glassGhost<T extends THREE.Object3D>(o: T, color = GLASS, k = 0.38): T {
   o.traverse((c) => {
     const m = c as THREE.Mesh
     if (m.isMesh) {
@@ -71,17 +71,6 @@ function PG<T extends THREE.Object3D>(o: T, x = 0, y = 0, z = 0, rx = 0, ry = 0,
   g.position.set(x, y, z)
   g.rotation.set(rx, ry, rz)
   return g
-}
-
-/** 两点之间的细杆 */
-function stick(a: V3, b: V3, r: number, color: string, seg = 8) {
-  const va = new THREE.Vector3(...a)
-  const vb = new THREE.Vector3(...b)
-  const dir = vb.clone().sub(va)
-  const m = cyl(r, r, dir.length(), color, {}, seg)
-  m.position.copy(va).add(vb).multiplyScalar(0.5)
-  m.quaternion.setFromUnitVectors(UP, dir.normalize())
-  return m
 }
 
 /** 沿折线的圆管（铁丝、把手、香蕉…） */
@@ -332,24 +321,24 @@ function dishRack2(p: string[], full: boolean) {
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(cyl(0.45, 0.45, 36, frame, { x: sx * (W / 2 - 2), y: 1, z: sz * (D / 2 - 2) }, 8))
   // 下层：竖条碗栏（沿 x 一排）
   const y1 = 4
-  for (const sz of [-1, 1]) g.add(stick([-W / 2 + 2, y1, sz * (D / 2 - 2)], [W / 2 - 2, y1, sz * (D / 2 - 2)], 0.4, frame))
-  for (const sx of [-1, 1]) g.add(stick([sx * (W / 2 - 2), y1, -D / 2 + 2], [sx * (W / 2 - 2), y1, D / 2 - 2], 0.4, frame))
+  for (const sz of [-1, 1]) g.add(rod3([-W / 2 + 2, y1, sz * (D / 2 - 2)], [W / 2 - 2, y1, sz * (D / 2 - 2)], 0.4, frame, 8))
+  for (const sx of [-1, 1]) g.add(rod3([sx * (W / 2 - 2), y1, -D / 2 + 2], [sx * (W / 2 - 2), y1, D / 2 - 2], 0.4, frame, 8))
   for (let i = 0; i < 9; i++) {
     const x = -W / 2 + 6 + i * 3.2
-    g.add(stick([x, y1, -3], [x, y1 + 9, -3], 0.25, frame))
-    g.add(stick([x, y1, 3], [x, y1 + 6, 3], 0.25, frame))
+    g.add(rod3([x, y1, -3], [x, y1 + 9, -3], 0.25, frame, 8))
+    g.add(rod3([x, y1, 3], [x, y1 + 6, 3], 0.25, frame, 8))
   }
-  for (let i = 0; i < 7; i++) g.add(stick([-W / 2 + 2, y1, -D / 2 + 3 + i * 3.6], [W / 2 - 2, y1, -D / 2 + 3 + i * 3.6], 0.22, frame))
+  for (let i = 0; i < 7; i++) g.add(rod3([-W / 2 + 2, y1, -D / 2 + 3 + i * 3.6], [W / 2 - 2, y1, -D / 2 + 3 + i * 3.6], 0.22, frame, 8))
   // 右侧筷子筒
   g.add(tray(6, 12, 6, 0.4, acc, { x: W / 2 - 5.5, y: y1 + 0.3, z: D / 2 - 5.5 }, 0.5))
   // 上层：浅网篮
   const y2 = 22
-  for (const sz of [-1, 1]) g.add(stick([-W / 2 + 2, y2, sz * (D / 2 - 2)], [W / 2 - 2, y2, sz * (D / 2 - 2)], 0.4, frame))
-  for (const sx of [-1, 1]) g.add(stick([sx * (W / 2 - 2), y2, -D / 2 + 2], [sx * (W / 2 - 2), y2, D / 2 - 2], 0.4, frame))
-  for (let i = 0; i < 7; i++) g.add(stick([-W / 2 + 2, y2, -D / 2 + 3 + i * 3.6], [W / 2 - 2, y2, -D / 2 + 3 + i * 3.6], 0.22, frame))
-  for (const sz of [-1, 1]) g.add(stick([-W / 2 + 2, y2 + 4, sz * (D / 2 - 2)], [W / 2 - 2, y2 + 4, sz * (D / 2 - 2)], 0.3, frame))
+  for (const sz of [-1, 1]) g.add(rod3([-W / 2 + 2, y2, sz * (D / 2 - 2)], [W / 2 - 2, y2, sz * (D / 2 - 2)], 0.4, frame, 8))
+  for (const sx of [-1, 1]) g.add(rod3([sx * (W / 2 - 2), y2, -D / 2 + 2], [sx * (W / 2 - 2), y2, D / 2 - 2], 0.4, frame, 8))
+  for (let i = 0; i < 7; i++) g.add(rod3([-W / 2 + 2, y2, -D / 2 + 3 + i * 3.6], [W / 2 - 2, y2, -D / 2 + 3 + i * 3.6], 0.22, frame, 8))
+  for (const sz of [-1, 1]) g.add(rod3([-W / 2 + 2, y2 + 4, sz * (D / 2 - 2)], [W / 2 - 2, y2 + 4, sz * (D / 2 - 2)], 0.3, frame, 8))
   // 顶上把手横杆
-  for (const sx of [-1, 1]) g.add(stick([sx * (W / 2 - 2), 37, -D / 2 + 2], [sx * (W / 2 - 2), 37, D / 2 - 2], 0.45, frame))
+  for (const sx of [-1, 1]) g.add(rod3([sx * (W / 2 - 2), 37, -D / 2 + 2], [sx * (W / 2 - 2), 37, D / 2 - 2], 0.45, frame, 8))
   if (full) {
     const r = rng(7)
     // 下层竖插的盘子
@@ -378,7 +367,7 @@ function dishRack2(p: string[], full: boolean) {
       g.add(m)
     }
     // 筷子
-    for (let i = 0; i < 4; i++) g.add(stick([W / 2 - 6.5 + (i % 2) * 2, y1 + 1, D / 2 - 6.5 + Math.floor(i / 2) * 2], [W / 2 - 6 + (i % 2) * 2.4, y1 + 21, D / 2 - 6 + Math.floor(i / 2) * 2.4], 0.3, i % 2 ? C.woodD : '#a3442f'))
+    for (let i = 0; i < 4; i++) g.add(rod3([W / 2 - 6.5 + (i % 2) * 2, y1 + 1, D / 2 - 6.5 + Math.floor(i / 2) * 2], [W / 2 - 6 + (i % 2) * 2.4, y1 + 21, D / 2 - 6 + Math.floor(i / 2) * 2.4], 0.3, i % 2 ? C.woodD : '#a3442f', 8))
   }
   return g
 }
@@ -408,7 +397,7 @@ function spiceCarousel(p: string[]) {
       const a = (i / 6) * PI * 2 + (lvl > 5 ? 0.5 : 0)
       const x = Math.cos(a) * 8
       const z = Math.sin(a) * 8
-      g.add(glassy(cyl(2, 2, 8, GLASS, { x, y: lvl, z }, 14)))
+      g.add(glassGhost(cyl(2, 2, 8, GLASS, { x, y: lvl, z }, 14)))
       g.add(noOutlineDeep(cyl(1.7, 1.7, 5, ['#c0392b', '#e8c27a', '#7a8b3a', '#5a3a2a', '#e8e0d0', '#d8742a'][i], { x, y: lvl + 0.3, z }, 12)))
       g.add(cyl(2.1, 2.1, 1.6, cap, { x, y: lvl + 8, z }, 14))
       g.add(noOutlineDeep(rbox(2, 2, 0.3, lab, { x: x + Math.cos(a) * 2.05, y: lvl + 3, z: z + Math.sin(a) * 2.05, ry: -a + PI / 2 }, 0.1)))
@@ -434,7 +423,7 @@ function spiceShelf(p: string[]) {
     [1, '#f0d77a', 11],
   ]
   for (const [x, c, h] of bots) {
-    g.add(glassy(bottle(2.4, h, 0.8, h * 0.55, GLASS, { x, y: 2.2, z: -1 })))
+    g.add(glassGhost(bottle(2.4, h, 0.8, h * 0.55, GLASS, { x, y: 2.2, z: -1 })))
     g.add(noOutlineDeep(cyl(2.1, 2.1, h * 0.5, c, { x, y: 2.5, z: -1 }, 16)))
     g.add(cyl(0.95, 0.95, 1.2, acc, { x, y: 2.2 + h, z: -1 }, 12))
     g.add(noOutlineDeep(rbox(2.6, 3, 0.3, lab, { x, y: 4.5, z: 1.5 }, 0.1)))
@@ -451,7 +440,7 @@ function spiceShelf(p: string[]) {
   // 上层：小香料瓶一排
   for (let i = 0; i < 6; i++) {
     const x = -14 + i * 5.6
-    g.add(glassy(cyl(1.8, 1.8, 7, GLASS, { x, y: 16.2, z: 0 }, 14)))
+    g.add(glassGhost(cyl(1.8, 1.8, 7, GLASS, { x, y: 16.2, z: 0 }, 14)))
     g.add(noOutlineDeep(cyl(1.5, 1.5, 4.5, ['#c0392b', '#7a8b3a', '#e8c27a', '#3a2a22', '#d8742a', '#a4b86a'][i], { x, y: 16.5, z: 0 }, 12)))
     g.add(cyl(1.9, 1.9, 1.6, i % 2 ? acc : M.black, { x, y: 23.2, z: 0 }, 14))
   }
@@ -481,7 +470,7 @@ function knifeMagnet(p: string[]) {
   g.add(torus(1.6, 0.4, acc, { x: 14, y: KNIFE_MOUNT + 22.2, z: -0.4 }))
   g.add(torus(1.6, 0.4, acc, { x: 17.4, y: KNIFE_MOUNT + 22.2, z: -0.4 }))
   // 打板
-  g.add(stick([15.6, KNIFE_MOUNT + 20.4, -0.4], [15.6, KNIFE_MOUNT + 22, -0.4], 0.4, acc))
+  g.add(rod3([15.6, KNIFE_MOUNT + 20.4, -0.4], [15.6, KNIFE_MOUNT + 22, -0.4], 0.4, acc, 8))
   return g
 }
 
@@ -492,24 +481,24 @@ function utensilCrock(p: string[]) {
   g.add(cup(6, 5.4, 15, 0.6, pot))
   g.add(noOutlineDeep(cyl(5.3, 5.3, 0.4, shade(pot, -0.2), { y: 13 }, 24)))
   // 木铲
-  g.add(stick([-2, 2, 0], [-3.5, 30, -1], 0.6, wood))
+  g.add(rod3([-2, 2, 0], [-3.5, 30, -1], 0.6, wood, 8))
   g.add(rbox(5, 7, 0.6, wood, { x: -3.8, y: 28, z: -1.1, rz: 0.05 }, 0.3))
   // 汤勺
-  g.add(stick([2, 2, 1], [3, 31, 2], 0.45, acc))
+  g.add(rod3([2, 2, 1], [3, 31, 2], 0.45, acc, 8))
   const b = cup(3.2, 2.6, 2.6, 0.25, acc)
   b.position.set(3.2, 31, 2.5)
   b.rotation.x = PI * 0.92
   g.add(b)
   // 打蛋器
-  g.add(stick([0, 2, -2.5], [0.5, 22, -3], 0.5, M.black))
+  g.add(rod3([0, 2, -2.5], [0.5, 22, -3], 0.5, M.black, 8))
   for (let i = 0; i < 4; i++) {
     const a = (i / 4) * PI
     const pts = arc([0.5, 25.5, -3], 3.5, -PI / 2, PI * 1.5, 12, 'xy').map(([x, y]): V3 => [0.5 + (x - 0.5) * Math.cos(a), y + (y > 25.5 ? (y - 25.5) * 0.8 : 0), -3 + (x - 0.5) * Math.sin(a)])
     g.add(tube(pts, 0.12, STEEL, false, 24))
   }
   // 长筷子
-  g.add(stick([1.5, 2, -1], [5, 33, -2], 0.3, wood))
-  g.add(stick([2.2, 2, -0.5], [6, 33, -1.2], 0.3, wood))
+  g.add(rod3([1.5, 2, -1], [5, 33, -2], 0.3, wood, 8))
+  g.add(rod3([2.2, 2, -0.5], [6, 33, -1.2], 0.3, wood, 8))
   return g
 }
 
@@ -540,9 +529,9 @@ function kitchenWagon(p: string[], tiers: number) {
     for (let i = 0; i < 12; i++) for (const s of [-1, 1]) g.add(noOutlineDeep(rbox(0.4, 3.6, 0.3, shade(basket, -0.15), { x: -W / 2 + 4 + i * 3.4, y: y + 0.8, z: s * (D / 2 - 0.25) }, 0.1)))
   }
   // 侧面推手
-  g.add(stick([W / 2 - 1.2, top - 2, -D / 2 + 4], [W / 2 + 2.5, top - 2, -D / 2 + 4], 0.6, acc))
-  g.add(stick([W / 2 - 1.2, top - 2, D / 2 - 4], [W / 2 + 2.5, top - 2, D / 2 - 4], 0.6, acc))
-  g.add(stick([W / 2 + 2.5, top - 2, -D / 2 + 4], [W / 2 + 2.5, top - 2, D / 2 - 4], 0.8, acc))
+  g.add(rod3([W / 2 - 1.2, top - 2, -D / 2 + 4], [W / 2 + 2.5, top - 2, -D / 2 + 4], 0.6, acc, 8))
+  g.add(rod3([W / 2 - 1.2, top - 2, D / 2 - 4], [W / 2 + 2.5, top - 2, D / 2 - 4], 0.6, acc, 8))
+  g.add(rod3([W / 2 + 2.5, top - 2, -D / 2 + 4], [W / 2 + 2.5, top - 2, D / 2 - 4], 0.8, acc, 8))
   // 推手让包围盒右偏，整体左移居中
   g.position.x = -WAGON_DX
   return G(g)
@@ -556,7 +545,7 @@ function riceCabinet(p: string[]) {
   g.add(rbox(26, 2, 42, shade(body, -0.08), { y: 46 }, 0.8))
   g.add(rbox(20, 30, 0.6, front, { y: 12, z: 20 }, 0.6))
   // 米量窗
-  g.add(glassy(rbox(5, 18, 0.4, GLASS, { y: 18, z: 20.4 }, 0.2)))
+  g.add(glassGhost(rbox(5, 18, 0.4, GLASS, { y: 18, z: 20.4 }, 0.2)))
   g.add(noOutlineDeep(rbox(4, 12, 0.3, RICE, { y: 18.5, z: 20.25 }, 0.2)))
   // 计量按钮
   g.add(hcyl(2.4, 2.4, 1.2, acc, 0, 39, 20.6, 'z', 20))
@@ -575,21 +564,21 @@ function bagStand(p: string[]) {
   const D = 30
   const H = 68
   for (const sx of [-1, 1]) {
-    g.add(stick([sx * (W / 2 - 1), 0.8, -D / 2 + 1], [sx * (W / 2 - 1), 0.8, D / 2 - 1], 0.8, frame))
-    g.add(stick([sx * (W / 2 - 1), 0.8, -D / 2 + 1], [sx * (W / 2 - 1), H - 0.8, -D / 2 + 1], 0.8, frame))
+    g.add(rod3([sx * (W / 2 - 1), 0.8, -D / 2 + 1], [sx * (W / 2 - 1), 0.8, D / 2 - 1], 0.8, frame, 8))
+    g.add(rod3([sx * (W / 2 - 1), 0.8, -D / 2 + 1], [sx * (W / 2 - 1), H - 0.8, -D / 2 + 1], 0.8, frame, 8))
   }
-  g.add(stick([-W / 2 + 1, H - 0.8, -D / 2 + 1], [W / 2 - 1, H - 0.8, -D / 2 + 1], 0.8, frame))
-  g.add(stick([-W / 2 + 1, 0.8, -D / 2 + 1], [W / 2 - 1, 0.8, -D / 2 + 1], 0.8, frame))
+  g.add(rod3([-W / 2 + 1, H - 0.8, -D / 2 + 1], [W / 2 - 1, H - 0.8, -D / 2 + 1], 0.8, frame, 8))
+  g.add(rod3([-W / 2 + 1, 0.8, -D / 2 + 1], [W / 2 - 1, 0.8, -D / 2 + 1], 0.8, frame, 8))
   // 挂袋方框的背面横杆
-  g.add(stick([-W / 2 + 1, H - 6, -D / 2 + 1], [W / 2 - 1, H - 6, -D / 2 + 1], 0.6, frame))
+  g.add(rod3([-W / 2 + 1, H - 6, -D / 2 + 1], [W / 2 - 1, H - 6, -D / 2 + 1], 0.6, frame, 8))
   const tints = [acc, '#8fb8de', '#f2c94c']
   for (let i = 0; i < 3; i++) {
     const x = -24 + i * 24
     // 袋口方框（从背杆伸出）
-    for (const sx of [-1, 1]) g.add(stick([x + sx * 10, H - 6, -D / 2 + 1], [x + sx * 10, H - 6, D / 2 - 1.5], 0.45, frame))
-    g.add(stick([x - 10, H - 6, D / 2 - 1.5], [x + 10, H - 6, D / 2 - 1.5], 0.45, frame))
+    for (const sx of [-1, 1]) g.add(rod3([x + sx * 10, H - 6, -D / 2 + 1], [x + sx * 10, H - 6, D / 2 - 1.5], 0.45, frame, 8))
+    g.add(rod3([x - 10, H - 6, D / 2 - 1.5], [x + 10, H - 6, D / 2 - 1.5], 0.45, frame, 8))
     // 半透明垃圾袋：口沿翻在框上
-    g.add(glassy(tray(20.5, H - 9, D - 3, 0.3, bag, { x, y: 1.7, z: 0.5 }, 0.2), bag, 0.55))
+    g.add(glassGhost(tray(20.5, H - 9, D - 3, 0.3, bag, { x, y: 1.7, z: 0.5 }, 0.2), bag, 0.55))
     g.add(noOutlineDeep(rbox(21.4, 1.2, D - 2, bag, { x, y: H - 6.8, z: 0.5 }, 0.3)))
     // 颜色标签牌
     g.add(rbox(10, 4, 0.5, tints[i], { x, y: H - 12, z: D / 2 - 0.8 }, 0.3))
@@ -608,7 +597,7 @@ function glassContainers(p: string[]) {
   ]
   let y = 0
   for (const [w, h, d, c] of sizes) {
-    g.add(glassy(tray(w, h, d, 0.5, GLASS, { y }, 0.8)))
+    g.add(glassGhost(tray(w, h, d, 0.5, GLASS, { y }, 0.8)))
     g.add(rbox(w + 0.6, 1.2, d + 0.6, c, { y: y + h }, 0.5))
     // 四边锁扣
     for (const s of [-1, 1]) g.add(rbox(4, 2, 0.6, shade(c, -0.1), { y: y + h - 1, z: s * (d / 2 + 0.5) }, 0.2))
@@ -629,8 +618,8 @@ function canisters(p: string[]) {
     [9, 15, '#d8a35c'],
   ]
   for (const [x, h, fill] of jars) {
-    g.add(glassy(cup(4, 4, h, 0.4, GLASS, { x })))
-    if (fill === '#f1d58a') for (let i = 0; i < 12; i++) g.add(noOutlineDeep(stick([x - 2.5 + (i % 4) * 1.6, 0.6, -1.5 + Math.floor(i / 4) * 1.5], [x - 2.4 + (i % 4) * 1.6, h - 3, -1.5 + Math.floor(i / 4) * 1.5], 0.28, fill)))
+    g.add(glassGhost(cup(4, 4, h, 0.4, GLASS, { x })))
+    if (fill === '#f1d58a') for (let i = 0; i < 12; i++) g.add(noOutlineDeep(rod3([x - 2.5 + (i % 4) * 1.6, 0.6, -1.5 + Math.floor(i / 4) * 1.5], [x - 2.4 + (i % 4) * 1.6, h - 3, -1.5 + Math.floor(i / 4) * 1.5], 0.28, fill, 8)))
     else g.add(noOutlineDeep(cyl(3.5, 3.5, h * 0.7, fill, { x, y: 0.5 }, 18)))
     g.add(puck(4.5, 2.2, lid, { x, y: h - 0.3 }))
     g.add(noOutlineDeep(cyl(4.05, 4.05, 2.5, band, { x, y: h * 0.45 }, 24)))
@@ -690,7 +679,7 @@ function ladleBody(p: string[]) {
   b.rotation.x = PI / 2
   b.position.set(0, 3.6, -1.8)
   g.add(b)
-  g.add(stick([0, 6.5, 0], [0, 7.4, 0.2], 0.5, head))
+  g.add(rod3([0, 6.5, 0], [0, 7.4, 0.2], 0.5, head, 8))
   return g
 }
 /** 锅铲（フライ返し） */
@@ -728,9 +717,9 @@ function tongsBody(p: string[]) {
   const [arm, grip] = p
   const g = new THREE.Group()
   for (const s of [-1, 1]) {
-    g.add(stick([s * 0.6, 22, 0], [s * 2.2, 2, 0], 0.5, arm))
+    g.add(rod3([s * 0.6, 22, 0], [s * 2.2, 2, 0], 0.5, arm, 8))
     g.add(rbox(2, 2.2, 1.2, grip, { x: s * 2.2, y: 0, z: 0, rz: s * 0.08 }, 0.4))
-    g.add(stick([s * 0.8, 20, 0], [s * 1.5, 12, 0], 0.75, grip))
+    g.add(rod3([s * 0.8, 20, 0], [s * 1.5, 12, 0], 0.75, grip, 8))
   }
   g.add(torus(1, 0.32, arm, { y: 24 }))
   return g
@@ -768,7 +757,7 @@ function boardStand(p: string[]) {
   const [frame, board1, board2] = p
   const g = new THREE.Group()
   g.add(rbox(28, 1, 12, frame, {}, 0.4))
-  for (const z of [-3.5, 0.5, 4.5]) for (const sx of [-1, 1]) g.add(stick([sx * 12, 1, z], [sx * 12, 9, z], 0.35, frame))
+  for (const z of [-3.5, 0.5, 4.5]) for (const sx of [-1, 1]) g.add(rod3([sx * 12, 1, z], [sx * 12, 9, z], 0.35, frame, 8))
   // 两块板斜靠
   const b1 = rbox(30, 22, 1.8, board1, {}, 0.6)
   b1.position.set(0, 12, -2.6)
@@ -787,7 +776,7 @@ function panRack(p: string[]) {
   const [frame, pan, acc] = p
   const g = new THREE.Group()
   const L = 36
-  for (const sx of [-1, 1]) g.add(stick([sx * 10, 0.6, -L / 2], [sx * 10, 0.6, L / 2], 0.6, frame))
+  for (const sx of [-1, 1]) g.add(rod3([sx * 10, 0.6, -L / 2], [sx * 10, 0.6, L / 2], 0.6, frame, 8))
   for (let i = 0; i < 4; i++) {
     const z = -L / 2 + 2 + i * 10.5
     g.add(tube([[-10, 0.6, z], [-10, 14, z], [10, 14, z], [10, 0.6, z]], 0.45, frame, false, 24))
@@ -802,10 +791,10 @@ function panRack(p: string[]) {
     m.rotation.x = PI / 2
     m.position.set(0, r + 1.2, z + 2.2)
     g.add(m)
-    g.add(stick([0, r * 2 + 0.5, z], [0, r * 2 + 13, z + 6], 0.9, M.black))
+    g.add(rod3([0, r * 2 + 0.5, z], [0, r * 2 + 13, z + 6], 0.9, M.black, 8))
   }
   // 玻璃锅盖
-  const lid = glassy(cyl(11, 11, 0.6, GLASS, {}, 28))
+  const lid = glassGhost(cyl(11, 11, 0.6, GLASS, {}, 28))
   lid.rotation.x = PI / 2
   lid.position.set(0, 12, 10.5)
   g.add(lid)
@@ -829,8 +818,8 @@ function rangeRack(p: string[]) {
   // 侧面挂钩杆
   g.add(hcyl(0.5, 0.5, MW.d - 6, acc, MW.w / 2 - 1.2 + 0.0, 75, 0, 'z'))
   // 背面加强斜撑
-  g.add(stick([-MW.w / 2 + 2, MW.shelves[1] + 2, -MW.d / 2 + 1], [MW.w / 2 - 2, MW.shelves[2], -MW.d / 2 + 1], 0.5, frame))
-  g.add(stick([MW.w / 2 - 2, MW.shelves[1] + 2, -MW.d / 2 + 1], [-MW.w / 2 + 2, MW.shelves[2], -MW.d / 2 + 1], 0.5, frame))
+  g.add(rod3([-MW.w / 2 + 2, MW.shelves[1] + 2, -MW.d / 2 + 1], [MW.w / 2 - 2, MW.shelves[2], -MW.d / 2 + 1], 0.5, frame, 8))
+  g.add(rod3([MW.w / 2 - 2, MW.shelves[1] + 2, -MW.d / 2 + 1], [-MW.w / 2 + 2, MW.shelves[2], -MW.d / 2 + 1], 0.5, frame, 8))
   return g
 }
 
@@ -840,9 +829,9 @@ function counterRack(p: string[]) {
   const g = new THREE.Group()
   for (const sx of [-1, 1]) {
     for (const sz of [-1, 1]) g.add(cyl(1, 1, 40, frame, { x: sx * 27, z: sz * 16 }, 10))
-    g.add(stick([sx * 27, 20, -16], [sx * 27, 20, 16], 0.6, frame))
+    g.add(rod3([sx * 27, 20, -16], [sx * 27, 20, 16], 0.6, frame, 8))
   }
-  g.add(stick([-27, 20, -16], [27, 20, -16], 0.6, frame))
+  g.add(rod3([-27, 20, -16], [27, 20, -16], 0.6, frame, 8))
   g.add(rbox(58, 2, 36, board, { y: 40 }, 0.5))
   return g
 }
@@ -957,7 +946,7 @@ function cupboard(p: string[], W: number) {
     const ks = i % 2 ? -1 : 1
     const parts: THREE.Object3D[] = [rbox(dw - 0.6, 2.4, 1, door, { x, y: k.upBottom, z: zz }, 0.3), rbox(dw - 0.6, 2.4, 1, door, { x, y: k.upBottom + hh - 2.4, z: zz }, 0.3)]
     for (const s of [-1, 1]) parts.push(rbox(2.4, hh, 1, door, { x: x + s * (dw / 2 - 1.5), y: k.upBottom, z: zz }, 0.3))
-    parts.push(glassy(rbox(dw - 5, hh - 4.6, 0.3, GLASS, { x, y: k.upBottom + 2.3, z: zz }, 0.1), GLASS, 0.25))
+    parts.push(glassGhost(rbox(dw - 5, hh - 4.6, 0.3, GLASS, { x, y: k.upBottom + 2.3, z: zz }, 0.1), GLASS, 0.25))
     parts.push(rbox(1, 6, 1, knob, { x: x + ks * (dw / 2 - 3.6), y: k.upBottom + 8, z: zz + 0.9 }, 0.3))
     g.add(swingAt(parts, x - ks * (dw / 2 - 0.3), zz - 0.5, ks > 0))
   }
@@ -1076,7 +1065,7 @@ function soyDish(p: string[]) {
   g.add(liquid(2.3, DISH_IN + 0.3, SOY, -3.5))
   // 酱油壶
   g.add(lathe([[0, 0], [2.6, 0], [3, 1.5], [2.8, 5], [1.4, 6.6], [1.2, 7.6], [0, 7.6]], pot, { x: 4.5 }))
-  g.add(stick([6.8, 4, 0], [8.4, 5.6, 0], 0.4, pot))
+  g.add(rod3([6.8, 4, 0], [8.4, 5.6, 0], 0.4, pot, 8))
   g.add(puck(1.6, 1, acc, { x: 4.5, y: 7.4 }))
   return g
 }
@@ -1092,7 +1081,7 @@ function glassTumblers(p: string[]) {
   ]
   for (const [x, h, r, dr] of list) {
     g.add(puck(r + 1, 0.4, coaster, { x }))
-    g.add(glassy(cup(r, r * 0.88, h, 0.25, g1, { x, y: 0.4 }), g1, 0.4))
+    g.add(glassGhost(cup(r, r * 0.88, h, 0.25, g1, { x, y: 0.4 }), g1, 0.4))
     if (dr) g.add(noOutlineDeep(cyl(r - 0.35, r * 0.88 - 0.3, h * 0.6, dr, { x, y: 0.75 }, 20)))
   }
   return g
@@ -1112,7 +1101,7 @@ function mugTree(p: string[]) {
     const ax = Math.cos(a)
     const az = Math.sin(a)
     // 枝：从杆上斜伸出，末端微微上翘
-    g.add(stick([0, y, 0], [ax * 7, y + 3, az * 7], 0.4, wood))
+    g.add(rod3([0, y, 0], [ax * 7, y + 3, az * 7], 0.4, wood, 8))
     g.add(ball(0.6, wood, { x: ax * 7, y: y + 3, z: az * 7 }))
     // 杯子正立，杯柄（局部 +x）朝杆、挂在枝头上
     const mug = new THREE.Group()
@@ -1138,7 +1127,7 @@ function wineGlasses(p: string[]) {
     s.add(cyl(3.2, 3.4, 0.4, gl, { y: 0 }, 20))
     s.add(cyl(0.4, 0.4, 9, gl, { y: 0.4 }, 8))
     s.add(lathe([[0.4, 9.4], [3, 11.5], [4, 15], [3.4, 20], [3.2, 20], [3.75, 15], [2.8, 11.8], [0, 10]], gl))
-    glassy(s, gl, 0.45)
+    glassGhost(s, gl, 0.45)
     if (full) s.add(noOutlineDeep(lathe([[0, 10.1], [2.7, 11.8], [3.6, 14.2], [0, 14.2]], wine)))
     s.position.set(x, 0.6, 0)
     g.add(s)
@@ -1152,10 +1141,10 @@ function beerMugs(p: string[]) {
   const g = new THREE.Group()
   for (const x of [-5, 5]) {
     g.add(puck(4.8, 0.4, coaster, { x }))
-    g.add(glassy(cup(3.8, 3.6, 15, 0.4, gl, { x, y: 0.4 }), gl, 0.4))
+    g.add(glassGhost(cup(3.8, 3.6, 15, 0.4, gl, { x, y: 0.4 }), gl, 0.4))
     g.add(noOutlineDeep(cyl(3.4, 3.2, 11, BEER, { x, y: 0.8 }, 20)))
     g.add(puck(3.6, 3, FOAM, { x, y: 11.4 }))
-    g.add(glassy(torus(2.6, 0.6, gl, { x: x + (x < 0 ? -3.5 : 3.5), y: 8, rx: 0, ry: 0 }, PI), gl, 0.45).rotateZ(x < 0 ? PI / 2 : -PI / 2))
+    g.add(glassGhost(torus(2.6, 0.6, gl, { x: x + (x < 0 ? -3.5 : 3.5), y: 8, rx: 0, ry: 0 }, PI), gl, 0.45).rotateZ(x < 0 ? PI / 2 : -PI / 2))
   }
   g.add(noOutlineDeep(rbox(3, 0.3, 3, acc, { x: 0, y: 0, z: 4 }, 0.2)))
   return g
@@ -1182,7 +1171,7 @@ function dripSet(p: string[]) {
   const g = new THREE.Group()
   // 分享壶（玻璃）+ 滤杯
   const sx = -4
-  g.add(glassy(lathe([[0, 0], [4.8, 0], [5.2, 2], [5.2, 8], [4.2, 11], [4.2, 12.5], [3.9, 12.5], [3.9, 11], [4.9, 8], [4.9, 2], [0, 0.4]], GLASS), GLASS, 0.4).translateX(sx))
+  g.add(glassGhost(lathe([[0, 0], [4.8, 0], [5.2, 2], [5.2, 8], [4.2, 11], [4.2, 12.5], [3.9, 12.5], [3.9, 11], [4.9, 8], [4.9, 2], [0, 0.4]], GLASS), GLASS, 0.4).translateX(sx))
   g.add(noOutlineDeep(cyl(4.7, 4.9, 3.2, COFFEE, { x: sx, y: 0.5 }, 24)))
   g.add(tube([[sx - 5, 9.5, 0], [sx - 7.2, 8, 0], [sx - 7, 4, 0], [sx - 5, 2.5, 0]], 0.5, server, false, 20))
   g.add(cup(5.6, 2.4, 6.5, 0.35, dripper, { x: sx, y: 12.5 }))
@@ -1207,7 +1196,7 @@ function kyusuSet(p: string[]) {
   g.add(lathe([[0, 0], [3.6, 0], [4.8, 2.5], [4.8, 5], [3.6, 7.2], [2.8, 7.4], [0, 7.4]], pot, { x: -7, y: 1.4 }))
   g.add(dome(2.9, 1.4, pot, { x: -7, y: 8.6 }))
   g.add(ball(0.7, pot, { x: -7, y: 10.2 }))
-  g.add(stick([-7 + 4.4, 1.4 + 3.6, 0], [-7 + 7.2, 1.4 + 6.4, 0], 0.7, pot))
+  g.add(rod3([-7 + 4.4, 1.4 + 3.6, 0], [-7 + 7.2, 1.4 + 6.4, 0], 0.7, pot, 8))
   g.add(hcyl(1.1, 1.3, 6, pot, -7, 1.4 + 4, -6, 'z', 12))
   for (const x of [4, 11]) {
     g.add(cup(3, 2.5, 7.6, 0.3, cups, { x, y: 1.4, z: 1 }))
@@ -1450,7 +1439,7 @@ function breadBag(p: string[]) {
   loaf.add(noOutlineDeep(rbox(10, 9.5, 0.3, BREAD, { y: 0.5, z: 11.05 }, 0.8)))
   g.add(loaf)
   // 袋子（半透明）+ 扎口 + 标签
-  g.add(glassy(rbox(12.4, 15.6, 24, bag, { y: -0.2 }, 2.4), bag, 0.35))
+  g.add(glassGhost(rbox(12.4, 15.6, 24, bag, { y: -0.2 }, 2.4), bag, 0.35))
   g.add(noOutlineDeep(rbox(12.5, 6, 10, lab, { y: 3.5, z: -2 }, 0.6)))
   g.add(ball(2, bag, { y: 7.5, z: -13.5 }, [1, 1, 0.8]))
   g.add(rbox(3, 1, 1.4, tie, { y: 7, z: -12.6 }, 0.3))
@@ -1535,7 +1524,7 @@ function apples(p: string[]) {
   for (const [x, , z] of pos) {
     const c = x > 3 ? '#9cc24a' : acc
     g.add(ball(4, c, { x, y: DISH_IN + 3.7, z }, [1, 0.92, 1]))
-    g.add(stick([x, DISH_IN + 7, z], [x + 0.3, DISH_IN + 8.6, z], 0.25, '#6e4f37'))
+    g.add(rod3([x, DISH_IN + 7, z], [x + 0.3, DISH_IN + 8.6, z], 0.25, '#6e4f37', 8))
     if (x < 0) g.add(ball(1.2, LEAF, { x: x + 1, y: DISH_IN + 8, z }, [1, 0.2, 0.5]))
   }
   return g
@@ -1638,7 +1627,7 @@ function grapes(p: string[]) {
     }
   })
   g.add(ball(1.3, berry, { x: -2.9, y: cy + 1.4, z: 0 }, [1, 1.1, 1]))
-  g.add(stick([-5.5, cy + 0.8, 0], [-7.2, cy + 1.8, 0.5], 0.35, '#6e5a3a'))
+  g.add(rod3([-5.5, cy + 0.8, 0], [-7.2, cy + 1.8, 0.5], 0.35, '#6e5a3a', 8))
   return g
 }
 
@@ -1707,9 +1696,9 @@ function onionPotatoBags(p: string[]) {
 function eggCarton(p: string[]) {
   const [carton, lab] = p
   const g = new THREE.Group()
-  g.add(glassy(tray(26, 4, 11, 0.3, carton, {}, 0.6), carton, 0.55))
+  g.add(glassGhost(tray(26, 4, 11, 0.3, carton, {}, 0.6), carton, 0.55))
   // 盖子打开翻在后面（平躺）
-  g.add(glassy(tray(26, 3, 11, 0.3, carton, { y: 0, z: -11.4 }, 0.6), carton, 0.55))
+  g.add(glassGhost(tray(26, 3, 11, 0.3, carton, { y: 0, z: -11.4 }, 0.6), carton, 0.55))
   g.add(noOutlineDeep(rbox(16, 0.3, 6, lab, { y: 0.32, z: -11.4 }, 0.2)))
   for (let i = 0; i < 10; i++) {
     const x = -10 + (i % 5) * 5
@@ -1824,7 +1813,7 @@ function seasoningBottles(p: string[]) {
     [8, 4.2, 26, '#f0d77a', '#ffd84d'],
   ]
   for (const [x, r, h, liq, cap] of list) {
-    g.add(glassy(bottle(r, h, 1.3, h * 0.6, GLASS, { x }), GLASS, 0.35))
+    g.add(glassGhost(bottle(r, h, 1.3, h * 0.6, GLASS, { x }), GLASS, 0.35))
     g.add(noOutlineDeep(cyl(r - 0.35, r - 0.35, h * 0.55, liq, { x, y: 0.4 }, 18)))
     g.add(cyl(1.5, 1.5, 2.2, cap, { x, y: h }, 14))
     g.add(noOutlineDeep(cyl(r + 0.05, r + 0.05, h * 0.25, lab, { x, y: h * 0.18 }, 18)))
@@ -1863,7 +1852,7 @@ function waterCase(p: string[], open = true) {
     for (let i = 0; i < 6; i++) {
       const x = -10 + (i % 3) * 10
       const z = i < 3 ? -5 : 5
-      g.add(glassy(bottle(4.7, 30, 1.4, 22, '#bfe6ff', { x, y: 0.5, z }), '#bfe6ff', 0.45))
+      g.add(glassGhost(bottle(4.7, 30, 1.4, 22, '#bfe6ff', { x, y: 0.5, z }), '#bfe6ff', 0.45))
       g.add(cyl(1.6, 1.6, 2, cap, { x, y: 30.5, z }, 12))
     }
   if (!open) {
@@ -1961,7 +1950,7 @@ function wineRack(p: string[]) {
 function petBottles(p: string[]) {
   const [liq, lab, cap] = p
   const g = new THREE.Group()
-  g.add(glassy(bottle(5.2, 31, 1.4, 24, '#e8f6ff', {}), '#e8f6ff', 0.4))
+  g.add(glassGhost(bottle(5.2, 31, 1.4, 24, '#e8f6ff', {}), '#e8f6ff', 0.4))
   g.add(noOutlineDeep(cyl(4.8, 4.8, 22, liq, { y: 0.4 }, 20)))
   g.add(noOutlineDeep(cyl(5.24, 5.24, 7, lab, { y: 10 }, 20)))
   g.add(cyl(1.6, 1.6, 2, cap, { y: 31 }, 12))
@@ -1969,7 +1958,7 @@ function petBottles(p: string[]) {
     [9.5, -2, TEA],
     [9, 5, '#f2a03c'],
   ] as const) {
-    g.add(glassy(bottle(3.3, 20, 1.3, 14, '#e8f6ff', { x, z }), '#e8f6ff', 0.4))
+    g.add(glassGhost(bottle(3.3, 20, 1.3, 14, '#e8f6ff', { x, z }), '#e8f6ff', 0.4))
     g.add(noOutlineDeep(cyl(3, 3, 14, c, { x, y: 0.4, z }, 16)))
     g.add(noOutlineDeep(cyl(3.34, 3.34, 5, lab, { x, y: 7, z }, 16)))
     g.add(cyl(1.5, 1.5, 1.6, cap, { x, y: 20, z }, 12))
@@ -2043,7 +2032,7 @@ function dinnerForTwo(p: string[]) {
     set.add(bowl(4.5, 4, acc, { x: 12, y: 0.3, z: -9 }))
     set.add(noOutlineDeep(ball(3.4, '#8fcf6a', { x: 12, y: 3.7, z: -9 }, [1, 0.4, 1])))
     set.add(noOutlineDeep(ball(0.9, TOMATO, { x: 13, y: 4.6, z: -8.5 })))
-    set.add(glassy(cup(3.4, 3, 11, 0.25, GLASS, { x: -12, y: 0.3, z: -9 })))
+    set.add(glassGhost(cup(3.4, 3, 11, 0.25, GLASS, { x: -12, y: 0.3, z: -9 })))
     set.add(noOutlineDeep(cyl(3, 2.7, 6, '#fff3d0', { x: -12, y: 0.6, z: -9 }, 18)))
     set.position.z = s * 17
     set.rotation.y = s > 0 ? 0 : PI
@@ -2070,7 +2059,7 @@ function nabeSet(p: string[]) {
   // 炉架 + 蓝火
   for (let i = 0; i < 4; i++) {
     const a = (i / 4) * PI * 2 + PI / 4
-    g.add(stick([Math.cos(a) * 6, 10, Math.sin(a) * 6], [Math.cos(a) * 11, 11.4, Math.sin(a) * 11], 0.5, M.black))
+    g.add(rod3([Math.cos(a) * 6, 10, Math.sin(a) * 6], [Math.cos(a) * 11, 11.4, Math.sin(a) * 11], 0.5, M.black, 8))
   }
   g.add(lit(torus(3.5, 0.6, '#5fa8ff', { y: 10.4, rx: PI / 2 }), '#5fa8ff', 0.8))
   // 土锅
@@ -2130,7 +2119,7 @@ function takoParty(p: string[]) {
     g.add(noOutlineDeep(rbox(1.2, 0.2, 0.4, '#7cc46a', { x: x + 0.4, y: 4.6, z, ry: i }, 0.05)))
   }
   // 牙签 + 酱汁瓶
-  g.add(stick([px + 2, 3, 0], [px + 4, 9, 1], 0.12, C.woodL))
+  g.add(rod3([px + 2, 3, 0], [px + 4, 9, 1], 0.12, C.woodL, 8))
   g.add(bottle(2.2, 13, 0.9, 8, acc, { x: px, y: 0, z: 13.5 }))
   g.add(cyl(0.95, 0.4, 2.4, acc, { x: px, y: 13, z: 13.5 }, 10))
   return g
@@ -2867,7 +2856,7 @@ function cans(p: string[], kind: 'single' | 'six' | 'case' | 'short' | 'slim') {
   if (kind === 'six') {
     for (let i = 0; i < 6; i++) g.add(drinkCan(3.3, 12.2, body, band, STEEL, { x: -6.7 + (i % 3) * 6.7, z: i < 3 ? -3.35 : 3.35 }))
     // 顶上的塑料提环
-    g.add(glassy(rbox(20.4, 0.4, 13.6, '#f4f4f4', { y: 11.2 }, 0.2), '#f4f4f4', 0.55))
+    g.add(glassGhost(rbox(20.4, 0.4, 13.6, '#f4f4f4', { y: 11.2 }, 0.2), '#f4f4f4', 0.55))
     for (let i = 0; i < 6; i++) g.add(torus(3, 0.25, acc, { x: -6.7 + (i % 3) * 6.7, y: 11.4, z: i < 3 ? -3.35 : 3.35, rx: PI / 2 }))
   }
   if (kind === 'case') g.add(sealedCase(41, 12.8, 27.4, body, band))
@@ -2879,17 +2868,17 @@ function glassBottle(p: string[], kind: 'soda' | 'milk' | 'juice' | 'beer' | 'sp
   const [lab, cap, liq] = p
   const g = new THREE.Group()
   if (kind === 'soda') {
-    g.add(glassy(lathe([[0, 0], [2.8, 0], [2.9, 0.4], [2.9, 9], [2.2, 12], [1.3, 16], [1.3, 18.6], [0, 18.6]], GLASS), '#cfe9d8', 0.45))
+    g.add(glassGhost(lathe([[0, 0], [2.8, 0], [2.9, 0.4], [2.9, 9], [2.2, 12], [1.3, 16], [1.3, 18.6], [0, 18.6]], GLASS), '#cfe9d8', 0.45))
     g.add(noOutlineDeep(lathe([[0, 0.4], [2.55, 0.4], [2.55, 9], [1.95, 12], [1.1, 15], [0, 15]], liq)))
     g.add(noOutlineDeep(cyl(2.95, 2.95, 4, lab, { y: 3 }, 20)))
     g.add(cyl(1.5, 1.4, 0.9, cap, { y: 18.4 }, 16))
   } else if (kind === 'milk') {
-    g.add(glassy(lathe([[0, 0], [3.1, 0], [3.2, 0.4], [3.2, 7.5], [2.4, 10.5], [2.2, 12.6], [0, 12.6]], GLASS), GLASS, 0.4))
+    g.add(glassGhost(lathe([[0, 0], [3.1, 0], [3.2, 0.4], [3.2, 7.5], [2.4, 10.5], [2.2, 12.6], [0, 12.6]], GLASS), GLASS, 0.4))
     g.add(noOutlineDeep(lathe([[0, 0.3], [2.9, 0.3], [2.9, 7.4], [2.15, 10.3], [2, 11.6], [0, 11.6]], MILK)))
     g.add(cyl(2.4, 2.4, 0.4, cap, { y: 12.5 }, 20))
     g.add(noOutlineDeep(cyl(2.6, 2.4, 1.2, lab, { y: 11.9 }, 20)))
   } else if (kind === 'juice') {
-    g.add(glassy(lathe([[0, 0], [3.2, 0], [3.3, 0.4], [3.3, 11], [2.4, 13.5], [2, 15], [0, 15]], GLASS), GLASS, 0.4))
+    g.add(glassGhost(lathe([[0, 0], [3.2, 0], [3.3, 0.4], [3.3, 11], [2.4, 13.5], [2, 15], [0, 15]], GLASS), GLASS, 0.4))
     g.add(noOutlineDeep(lathe([[0, 0.4], [3, 0.4], [3, 10.8], [2.2, 13], [0, 13]], liq)))
     g.add(noOutlineDeep(cyl(3.35, 3.35, 5, lab, { y: 3.5 }, 20)))
     g.add(cyl(2.2, 2.2, 1.4, cap, { y: 14.8 }, 20))
@@ -2911,15 +2900,15 @@ function petBottle(p: string[], big: boolean) {
   const [liq, lab, cap] = p
   const g = new THREE.Group()
   if (!big) {
-    g.add(glassy(bottle(3.3, 19.6, 1.35, 13.5, PET, {}), PET, 0.4))
+    g.add(glassGhost(bottle(3.3, 19.6, 1.35, 13.5, PET, {}), PET, 0.4))
     g.add(noOutlineDeep(bottle(3.05, 16.5, 1.1, 13.3, liq, { y: 0.3 })))
     g.add(noOutlineDeep(cyl(3.35, 3.35, 6, lab, { y: 5 }, 20)))
     g.add(cyl(1.5, 1.5, 1.6, cap, { y: 19.4 }, 14))
     return g
   }
   // 2L 方瓶：方身 + 圆肩
-  g.add(glassy(rbox(9.6, 23, 9.6, PET, {}, 2), PET, 0.4))
-  g.add(glassy(lathe([[4.8, 0], [4.8, 1], [3, 4.5], [1.6, 6.2], [1.6, 8], [0, 8]], PET, { y: 23 }), PET, 0.4))
+  g.add(glassGhost(rbox(9.6, 23, 9.6, PET, {}, 2), PET, 0.4))
+  g.add(glassGhost(lathe([[4.8, 0], [4.8, 1], [3, 4.5], [1.6, 6.2], [1.6, 8], [0, 8]], PET, { y: 23 }), PET, 0.4))
   g.add(noOutlineDeep(rbox(9, 21.6, 9, liq, { y: 0.4 }, 1.8)))
   g.add(noOutlineDeep(rbox(10.2, 7, 10.2, lab, { y: 9 }, 2))) // 比瓶身每边凸出 0.3，避免和瓶身侧面闪烁
   g.add(cyl(1.7, 1.7, 2, cap, { y: 31 }, 14))
@@ -2943,7 +2932,7 @@ function tetra(p: string[], kind: 'soy1l' | 'soy200' | 'juice125') {
     g.add(cyl(1.3, 1.3, 1.2, acc, { x: 1.4, y: h, z: 1.4 }, 14))
     g.add(rbox(w, 0.6, 1, body, { y: h, z: -d / 2 + 0.5 }, 0.2))
   }
-  if (kind === 'soy200') g.add(glassy(rbox(0.8, 9, 0.8, '#f4f4f4', { x: w / 2 + 0.75, y: 0.6 }, 0.3), '#f4f4f4', 0.6))
+  if (kind === 'soy200') g.add(glassGhost(rbox(0.8, 9, 0.8, '#f4f4f4', { x: w / 2 + 0.75, y: 0.6 }, 0.3), '#f4f4f4', 0.6))
   if (kind === 'juice125') g.add(PG(cyl(0.3, 0.3, 6, acc, {}, 8), 1.2, h - 1, 0.6, 0, 0, -0.35))
   return g
 }
@@ -2974,12 +2963,12 @@ function yogurt(p: string[], kind: 'tub' | 'four') {
 function fridgePot(p: string[]) {
   const [lid, liq, acc] = p
   const g = new THREE.Group()
-  g.add(glassy(cup(5.2, 5, 25, 0.3, GLASS), GLASS, 0.35))
+  g.add(glassGhost(cup(5.2, 5, 25, 0.3, GLASS), GLASS, 0.35))
   g.add(noOutlineDeep(cyl(4.85, 4.75, 19, liq, { y: 0.3 }, 24)))
   g.add(puck(5.6, 2.4, lid, { y: 24.4 }))
   g.add(rbox(3, 1.4, 3, lid, { y: 25, z: 5 }, 0.5))
   g.add(cyl(1.4, 1.4, 1, acc, { y: 26.6 }, 12))
-  g.add(glassy(tube([[-5, 21, 0], [-8.6, 19, 0], [-8.6, 6, 0], [-5, 4, 0]], 0.8, GLASS, false, 20), GLASS, 0.5))
+  g.add(glassGhost(tube([[-5, 21, 0], [-8.6, 19, 0], [-8.6, 6, 0], [-5, 4, 0]], 0.8, GLASS, false, 20), GLASS, 0.5))
   return g
 }
 
@@ -2989,11 +2978,11 @@ function fridgePot(p: string[]) {
 function bigBottle(r: number, h: number, y0: number, fill = 0.75) {
   const g = new THREE.Group()
   const pts: [number, number][] = [[0, 0], [2.2, 0], [2.2, 3], [r * 0.55, 4.5], [r, 8], [r, h - 2], [r - 2, h], [0, h]]
-  g.add(glassy(lathe(pts, '#bfe6ff', { y: y0 }, 28), '#bfe6ff', 0.35))
+  g.add(glassGhost(lathe(pts, '#bfe6ff', { y: y0 }, 28), '#bfe6ff', 0.35))
   // 倒扣时水在下面（靠瓶口一侧）
   const wh = (h - 8) * fill
-  g.add(glassy(cyl(r - 0.5, r - 0.5, wh, '#7cc4f0', { y: y0 + 8 }, 28), '#7cc4f0', 0.4))
-  g.add(glassy(lathe([[0, 0.3], [1.9, 0.3], [1.9, 3], [r * 0.52, 4.6], [r - 0.5, 8], [0, 8]], '#7cc4f0', { y: y0 }), '#7cc4f0', 0.4))
+  g.add(glassGhost(cyl(r - 0.5, r - 0.5, wh, '#7cc4f0', { y: y0 + 8 }, 28), '#7cc4f0', 0.4))
+  g.add(glassGhost(lathe([[0, 0.3], [1.9, 0.3], [1.9, 3], [r * 0.52, 4.6], [r - 0.5, 8], [0, 8]], '#7cc4f0', { y: y0 }), '#7cc4f0', 0.4))
   // 桶身的加强环（不透明细圈，看得出是个桶）
   for (const k of [0.35, 0.7]) g.add(torus(r + 0.05, 0.25, '#9fd2f2', { y: y0 + 8 + (h - 10) * k, rx: PI / 2 }))
   return g
@@ -3038,7 +3027,7 @@ function waterServer(p: string[], top: boolean) {
   for (const sx of [-1, 1]) g.add(rbox(1.5, 60, D, body, { x: sx * (W / 2 - 0.75) }, 0.8))
   g.add(rbox(W - 3, 1.5, D, body, {}, 0.5))
   g.add(rbox(W - 3, 60, 1.5, body, { z: -D / 2 + 0.75 }, 0.5))
-  g.add(glassy(rbox(W - 3, 56, 0.4, GLASS, { y: 1.5, z: D / 2 - 0.5 }, 0.3), '#d8e2ea', 0.3))
+  g.add(glassGhost(rbox(W - 3, 56, 0.4, GLASS, { y: 1.5, z: D / 2 - 0.5 }, 0.3), '#d8e2ea', 0.3))
   g.add(rbox(W - 3, 3, 1.2, panel, { y: 1.5, z: D / 2 - 0.6 }, 0.4))
   // 柜里的水桶（瓶口朝上立放，吸水管插进桶口）
   const b = bigBottle(12, 36, 0)
@@ -3139,7 +3128,7 @@ function takeoutBento(p: string[]) {
     g.add(ball(1.8, '#b86a2a', { x, y: 2.6, z }, [1.1, 0.8, 1]))
   g.add(noOutlineDeep(ball(1.4, acc, { x: -6, y: 3, z: 4.5 }, [1.4, 0.3, 1])))
   // 透明盖（倒扣的浅盒）+ 价签
-  g.add(glassy(tray(22.4, 3.2, 16.4, 0.3, GLASS, { y: 6.8, rx: PI }, 0.8), GLASS, 0.3))
+  g.add(glassGhost(tray(22.4, 3.2, 16.4, 0.3, GLASS, { y: 6.8, rx: PI }, 0.8), GLASS, 0.3))
   g.add(noOutlineDeep(rbox(6, 0.2, 3.5, sticker, { x: 5, y: 6.85, z: 4 }, 0.1)))
   return g
 }
@@ -3171,7 +3160,7 @@ function sandwichPack(p: string[]) {
     h.position.z = dz
     g.add(h)
   }
-  g.add(glassy(triPrism(7.2, 12, 8.4, film, -4.2), film, 0.3))
+  g.add(glassGhost(triPrism(7.2, 12, 8.4, film, -4.2), film, 0.3))
   g.add(noOutlineDeep(rbox(6, 3, 0.2, label, { x: -3, y: 2, z: 4.3 }, 0.3)))
   return g
 }
@@ -3195,7 +3184,7 @@ function tofuPack(p: string[]) {
   const g = new THREE.Group()
   g.add(tray(11.6, 4.2, 8.6, 0.3, trayC, {}, 0.5))
   g.add(noOutlineDeep(rbox(10.6, 3.6, 7.6, TOFU, { y: 0.3 }, 0.4)))
-  g.add(glassy(rbox(11.8, 0.2, 8.8, '#ffffff', { y: 4.2 }, 0.05), '#ffffff', 0.4))
+  g.add(glassGhost(rbox(11.8, 0.2, 8.8, '#ffffff', { y: 4.2 }, 0.05), '#ffffff', 0.4))
   g.add(noOutlineDeep(rbox(7, 0.15, 4, label, { y: 4.4 }, 0.2)))
   g.add(noOutlineDeep(ball(1, acc, { x: -2.2, y: 4.55, z: 0 }, [1, 0.1, 1])))
   return g
@@ -3229,7 +3218,7 @@ function noodleCase(p: string[]) {
 function candyJar(p: string[]) {
   const [lid, a, b] = p
   const g = new THREE.Group()
-  g.add(glassy(lathe([[0, 0], [5.8, 0], [6.2, 1], [6.4, 10], [5.2, 13], [4.6, 14], [0, 14]], GLASS), GLASS, 0.3))
+  g.add(glassGhost(lathe([[0, 0], [5.8, 0], [6.2, 1], [6.4, 10], [5.2, 13], [4.6, 14], [0, 14]], GLASS), GLASS, 0.3))
   const cols = [a, b, '#ffd84d', '#7ed37a', '#ff8a5c', C.white]
   const r = rng(21)
   for (let i = 0; i < 26; i++) {
@@ -3322,7 +3311,7 @@ function pudding3(p: string[]) {
   const g = new THREE.Group()
   for (let i = 0; i < 3; i++) {
     const x = (i - 1) * 7.4
-    g.add(glassy(cup(3.6, 2.6, 6.4, 0.25, cupC, { x }), cupC, 0.45))
+    g.add(glassGhost(cup(3.6, 2.6, 6.4, 0.25, cupC, { x }), cupC, 0.45))
     g.add(noOutlineDeep(cyl(3.3, 2.4, 5.4, '#f6d675', { x, y: 0.3 }, 20)))
     g.add(noOutlineDeep(cyl(2.45, 2.4, 0.8, caramel, { x, y: 0.3 }, 20)))
   }
@@ -3413,8 +3402,8 @@ function vegBag(p: string[]) {
   g.add(ball(7, '#a6d47a', { x: 7, y: 24, z: 0 }, [1, 0.9, 0.85]))
   g.add(ball(6.5, '#cbe8a0', { x: 7, y: 24.8, z: 0.4 }, [1, 0.85, 0.8]))
   for (let i = 0; i < 3; i++) {
-    g.add(stick([-9 + i * 1.8, 6, -2 + i], [-11 + i * 1.8, 34, -3 + i], 1, '#f4f4e6'))
-    g.add(stick([-11 + i * 1.8, 34, -3 + i], [-12.5 + i * 2.2, 50, -3.5 + i], 0.85, NEGI))
+    g.add(rod3([-9 + i * 1.8, 6, -2 + i], [-11 + i * 1.8, 34, -3 + i], 1, '#f4f4e6', 8))
+    g.add(rod3([-11 + i * 1.8, 34, -3 + i], [-12.5 + i * 2.2, 50, -3.5 + i], 0.85, NEGI, 8))
   }
   for (let i = 0; i < 2; i++) {
     const c = cyl(1.4, 0.3, 16, '#f08a3c', {}, 10)

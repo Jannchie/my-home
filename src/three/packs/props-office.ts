@@ -7,7 +7,7 @@ import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus } from '../toon'
 import { C, CLIP_DROP, G, SWING_OPEN, clipLevels, glow, movable, rng, shell, rectPoly, type AssetCategory, type AssetDef, type SurfaceDef } from '../kit'
 import { I, J, M, N, R, hasDeclaredCoords, shiftDeclared, type Pal } from '../packkit'
-import { P, PI, ghostOutlined, litOutlined, noOutline } from '../geo'
+import { P, PI, cylX, cylZ, ghostOutlined, litOutlined, noOutline, rod3 } from '../geo'
 
 const SCREEN = '#bfe3ff'
 const DARK = '#2c2e34'
@@ -67,11 +67,6 @@ function fit(g: THREE.Group, mount = 0) {
 
 // ---------- 小工具 ----------
 
-/** 沿 x 的横圆柱，给中心 */
-const cylX = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 16) => P(cyl(r, r, len, color, {}, seg), x, y, z, 0, 0, PI / 2)
-/** 沿 z 的圆柱，给中心 */
-const cylZ = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 24) => P(cyl(r, r, len, color, {}, seg), x, y, z, PI / 2)
-
 /** 指示灯小球 */
 const led = (x: number, y: number, z: number, color: string, r = 0.3) => noOutline(litOutlined(ball(r, color, { x, y, z }), color, 0.9))
 
@@ -85,17 +80,6 @@ function flat(w: number, d: number, color: string, x: number, y: number, z: numb
 
 /** 绕 x 轴转 a 后局部点 (y, z) 的新坐标 */
 const rotX = (a: number, y: number, z: number): [number, number] => [y * Math.cos(a) - z * Math.sin(a), y * Math.sin(a) + z * Math.cos(a)]
-
-/** 两点之间的细杆（三维） */
-function rod3(a: [number, number, number], b: [number, number, number], r: number, color: string, seg = 10) {
-  const A = new THREE.Vector3(...a)
-  const B = new THREE.Vector3(...b)
-  const dir = B.clone().sub(A)
-  const m = cyl(r, r, dir.length(), color, {}, seg)
-  m.position.copy(A).add(B).multiplyScalar(0.5)
-  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize())
-  return m
-}
 
 /** 两点之间的扁板（支架、纸张托板） */
 function strut3(a: [number, number, number], b: [number, number, number], w: number, t: number, color: string) {

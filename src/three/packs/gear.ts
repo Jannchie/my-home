@@ -7,7 +7,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, ellipsePoly, holePanel, rectPoly, slab, type AssetCategory, type AssetDef, type Poly } from '../kit'
-import { P, PI, box3, ghost, lit, noOutline, type V3 } from '../geo'
+import { P, PI, box3, cylX, cylZ, ghost, lit, noOutline, rod3, taperRod3, type V3 } from '../geo'
 import { I, M, N, R, type Build, type PalFlat } from '../packkit'
 
 const STEEL = '#c3c7cc'
@@ -65,23 +65,8 @@ function dbl<T extends THREE.Mesh>(m: T): T {
   return m
 }
 
-/** 沿 x 的横圆柱，给中心 */
-const cylX = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 20) => P(cyl(r, r, len, color, {}, seg), x, y, z, 0, 0, PI / 2)
-/** 沿 z 的圆柱，给中心 */
-const cylZ = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 20) => P(cyl(r, r, len, color, {}, seg), x, y, z, PI / 2)
 /** 平放的圆环（在 xz 平面），给中心 */
 const ringFlat = (r: number, t: number, color: string, x: number, y: number, z: number, arc = PI * 2) => torus(r, t, color, { x, y, z, rx: PI / 2 }, arc)
-
-/** 3D 两点之间的圆杆 / 圆台：a 端半径 r，b 端半径 rb */
-function bar(a: V3, b: V3, r: number, color: string, rb = r, seg = 10) {
-  const va = new THREE.Vector3(...a)
-  const vb = new THREE.Vector3(...b)
-  const dir = vb.clone().sub(va)
-  const m = cyl(rb, r, Math.max(0.01, dir.length()), color, {}, seg)
-  m.position.copy(va).add(vb).multiplyScalar(0.5)
-  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize())
-  return m
-}
 
 /** 沿平滑曲线的管子（绳、带子、把手、钩子） */
 function tubeLine(pts: V3[], r: number, color: string, closed = false, seg?: number) {
@@ -124,7 +109,7 @@ function sphPatch(r: number, color: string, phi0: number, dphi: number, th0: num
 }
 
 /** 让物体的局部 x 轴对齐 s、局部 z 轴对齐 f */
-function orient<T extends THREE.Object3D>(o: T, f: V3, s: V3): T {
+function orientFS<T extends THREE.Object3D>(o: T, f: V3, s: V3): T {
   const F = new THREE.Vector3(...f).normalize()
   const Sv = new THREE.Vector3(...s).normalize()
   o.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(Sv, F.clone().cross(Sv), F))
@@ -188,17 +173,17 @@ function pole(a: V3, b: V3, shaft: string, grip: string, strap: string, o: { r?:
     return [v.x, v.y, v.z]
   }
   const g = G()
-  g.add(bar(at(0), at(6), 0.22, DARK, 0.55))
+  g.add(taperRod3(at(0), at(6), 0.22, 0.55, DARK))
   if (o.sections !== false) {
-    g.add(bar(at(6), at(L * 0.42), r * 0.75, shaft))
-    g.add(bar(at(L * 0.42), at(L * 0.72), r * 0.88, shaft))
-    g.add(bar(at(L * 0.72), at(L - 13), r, shaft))
-    g.add(bar(at(L * 0.42 - 1), at(L * 0.42 + 1.4), r * 0.88 + 0.35, strap))
-    g.add(bar(at(L * 0.72 - 1), at(L * 0.72 + 1.4), r + 0.35, strap))
-  } else g.add(bar(at(6), at(L - 13), r, shaft))
+    g.add(rod3(at(6), at(L * 0.42), r * 0.75, shaft))
+    g.add(rod3(at(L * 0.42), at(L * 0.72), r * 0.88, shaft))
+    g.add(rod3(at(L * 0.72), at(L - 13), r, shaft))
+    g.add(rod3(at(L * 0.42 - 1), at(L * 0.42 + 1.4), r * 0.88 + 0.35, strap))
+    g.add(rod3(at(L * 0.72 - 1), at(L * 0.72 + 1.4), r + 0.35, strap))
+  } else g.add(rod3(at(6), at(L - 13), r, shaft))
   const bk = o.basket ?? 2.6
-  g.add(bar(at(7.2), at(7.9), bk, grip, bk, 16))
-  g.add(bar(at(L - 14), at(L - 1.5), 1.6, grip, 1.85, 12))
+  g.add(taperRod3(at(7.2), at(7.9), bk, bk, grip, 16))
+  g.add(taperRod3(at(L - 14), at(L - 1.5), 1.6, 1.85, grip, 12))
   g.add(ball(1.85, grip, { x: at(L - 1.5)[0], y: at(L - 1.5)[1], z: at(L - 1.5)[2] }))
   // 腕带：从握把顶垂下的一个扁环
   // 立着时腕带往下垂；平放时腕带摊在地上（往 +z 伸、略往下贴地）
@@ -214,7 +199,7 @@ function biner(col: string, r = 2.6, t = 0.42, lock = false) {
   const ring = torus(r, t, col)
   ring.scale.set(0.62, 1, 1)
   const g = G(ring)
-  if (lock) g.add(bar([r * 0.62, -r * 0.35, 0], [r * 0.62, r * 0.3, 0], t + 0.35, '#e3b549'))
+  if (lock) g.add(rod3([r * 0.62, -r * 0.35, 0], [r * 0.62, r * 0.3, 0], t + 0.35, '#e3b549'))
   return g
 }
 
@@ -237,8 +222,8 @@ function tennisRacket(frame: string, grip: string, str: string) {
     const hh = 12 * Math.sqrt(Math.max(0, 1 - (x / 10.1) ** 2))
     g.add(noOutline(cyl(0.12, 0.12, hh * 2, str, { x, y: 52 - hh }, 6)))
   }
-  for (const s of [-1, 1]) g.add(bar([s * 1.4, 30, 0], [s * 7, 41.5, 0], 0.7, frame))
-  g.add(bar([-5.8, 40.2, 0], [5.8, 40.2, 0], 0.6, frame))
+  for (const s of [-1, 1]) g.add(rod3([s * 1.4, 30, 0], [s * 7, 41.5, 0], 0.7, frame))
+  g.add(rod3([-5.8, 40.2, 0], [5.8, 40.2, 0], 0.6, frame))
   g.add(rbox(2.8, 30, 2.4, grip, {}, 0.8))
   g.add(rbox(3.2, 1.4, 2.8, frame, {}, 0.5))
   return g
@@ -276,7 +261,7 @@ function volleyball(p: string[]) {
     [[0, -1, 0], [0, 0, 1], c],
   ]
   for (const [f, s, col] of faces) {
-    const m = noOutline(orient(sphPatch(r + 0.3, col, PI / 2 - 0.66, 1.32, PI / 2 - 0.27, 0.54), f, s))
+    const m = noOutline(orientFS(sphPatch(r + 0.3, col, PI / 2 - 0.66, 1.32, PI / 2 - 0.27, 0.54), f, s))
     m.position.y = r
     g.add(m)
   }
@@ -338,7 +323,7 @@ function shuttle(cork: string) {
 }
 function shuttleTube(p: string[]) {
   const [a, b, c] = p
-  const g = G(cylX(4.2, 30, a, 0, 4.5, 0), cylX(4.5, 3, b, -15.5, 4.5, 0), cylX(4.5, 3, b, 15.5, 4.5, 0), cylX(4.5, 7, c, 0, 4.5, 0))
+  const g = G(cylX(4.2, 30, a, 0, 4.5, 0, 20), cylX(4.5, 3, b, -15.5, 4.5, 0, 20), cylX(4.5, 3, b, 15.5, 4.5, 0, 20), cylX(4.5, 7, c, 0, 4.5, 0, 20))
   g.add(P(shuttle('#e8d2b0'), -4, 1.4, 10, 0, 0.3, PI / 2 - 0.25))
   return g
 }
@@ -718,8 +703,8 @@ function headlamp(p: string[]) {
   band.scale.set(1, 1, 2.6)
   const g = G(band)
   g.add(rbox(6.2, 3.6, 3, b, { y: 0, z: 10.4 }, 0.9))
-  g.add(lit(cylZ(1.3, 0.6, LAMP, -0.8, 1.8, 12.1), LAMP, 0.8))
-  g.add(lit(cylZ(0.5, 0.6, STITCH, 1.8, 1.8, 12.1), STITCH, 0.5))
+  g.add(lit(cylZ(1.3, 0.6, LAMP, -0.8, 1.8, 12.1, 20), LAMP, 0.8))
+  g.add(lit(cylZ(0.5, 0.6, STITCH, 1.8, 1.8, 12.1, 20), STITCH, 0.5))
   g.add(rbox(1.6, 0.6, 1.2, c, { y: 3.5, z: 10.4 }, 0.25))
   g.add(rbox(5, 3, 2.2, b, { y: 0, z: -9.8 }, 0.6))
   return g
@@ -727,9 +712,9 @@ function headlamp(p: string[]) {
 
 function iceAxe(p: string[]) {
   const [a, b, c] = p
-  const g = G(bar([-30, 1.5, 0], [8, 1.5, 0], 1.3, a, 1.3, 14), bar([8, 1.5, 0], [26, 1.5, -0.8], 1.3, a, 1.3, 14))
-  g.add(bar([-29, 1.5, 0], [-15, 1.5, 0], 1.55, b, 1.55, 14))
-  g.add(bar([-30, 1.5, 0], [-35, 1.5, 0], 1.2, STEEL, 0.15))
+  const g = G(taperRod3([-30, 1.5, 0], [8, 1.5, 0], 1.3, 1.3, a, 14), taperRod3([8, 1.5, 0], [26, 1.5, -0.8], 1.3, 1.3, a, 14))
+  g.add(taperRod3([-29, 1.5, 0], [-15, 1.5, 0], 1.55, 1.55, b, 14))
+  g.add(taperRod3([-30, 1.5, 0], [-35, 1.5, 0], 1.2, 0.15, STEEL))
   g.add(rbox(4.2, 2.6, 6, STEEL, { x: 26.6, y: 0.2, z: -0.8 }, 0.5))
   g.add(
     tubeLine(
@@ -878,7 +863,7 @@ function tentPitched(p: string[]) {
   ]) {
     const s: V3 = [SX * Math.cos(az) * Math.cos(e), 1 + SY * Math.sin(e), SZ * Math.sin(az) * Math.cos(e)]
     const t: V3 = [SX * 1.28 * Math.cos(az), 0.4, SZ * 1.35 * Math.sin(az)]
-    g.add(bar(s, t, 0.18, N.linen, 0.18, 6))
+    g.add(taperRod3(s, t, 0.18, 0.18, N.linen, 6))
     g.add(cyl(0.5, 0.2, 3, STEEL, { x: t[0], y: 0, z: t[2] }, 8))
   }
   return g
@@ -892,7 +877,7 @@ function campStove(p: string[]) {
   g.add(tubeLine([[1.4, 11, 0], [3.5, 11.4, 1], [4.6, 10.6, 2.4]], 0.3, c))
   for (let i = 0; i < 3; i++) {
     const t = (i / 3) * PI * 2
-    g.add(bar([Math.cos(t) * 1.6, 12.6, Math.sin(t) * 1.6], [Math.cos(t) * 5, 14.6, Math.sin(t) * 5], 0.25, STEEL))
+    g.add(rod3([Math.cos(t) * 1.6, 12.6, Math.sin(t) * 1.6], [Math.cos(t) * 5, 14.6, Math.sin(t) * 5], 0.25, STEEL))
   }
   g.add(cup(6.5, 6.5, 9, 0.3, STEEL, { y: 14.7 }))
   g.add(puck(6.8, 1, c, { y: 23.4 }))
@@ -1006,7 +991,7 @@ function massageBalls(p: string[]) {
   const cy = 4.8
   g.add(ball(3.8, b, { x: 0, y: cy }))
   for (const d of fib(26)) g.add(onSphere(cyl(0.05, 0.55, 1.1, b, {}, 6), d, 3.8 + 0.4, [0, cy, 0]))
-  g.add(ball(3.6, c, { x: 9.5, y: 3.6, z: -3.3 }), ball(3.6, c, { x: 9.5, y: 3.6, z: 3.3 }), cylZ(2.9, 5, c, 9.5, 3.6, 0))
+  g.add(ball(3.6, c, { x: 9.5, y: 3.6, z: -3.3 }), ball(3.6, c, { x: 9.5, y: 3.6, z: 3.3 }), cylZ(2.9, 5, c, 9.5, 3.6, 0, 20))
   return g
 }
 
@@ -1191,7 +1176,7 @@ function swimSet(p: string[]) {
     goggles.add(ghost(puck(2.3, 1.4, c, { x: s * 3.1, y: 0.2 }), c, 0.6))
     goggles.add(ringFlat(2.4, 0.38, b, s * 3.1, 1.0, 0))
   }
-  goggles.add(bar([-0.8, 1, 0], [0.8, 1, 0], 0.28, b))
+  goggles.add(rod3([-0.8, 1, 0], [0.8, 1, 0], 0.28, b))
   const strap = ringFlat(7.5, 0.35, b, 0, 0.35, -5)
   strap.scale.set(1, 0.55, 1)
   goggles.add(strap)
@@ -1208,7 +1193,7 @@ function fin(a: string, b: string) {
   ]
   const g = G(slab(blade, 1, b, 0))
   g.add(rbox(10, 5.5, 17, a, { z: -18 }, 2.5))
-  for (const s of [-1, 1]) g.add(bar([s * 5.6, 1, -10], [s * 10.4, 1, 37], 0.7, a))
+  for (const s of [-1, 1]) g.add(rod3([s * 5.6, 1, -10], [s * 10.4, 1, 37], 0.7, a))
   return g
 }
 function snorkelFins(p: string[]) {

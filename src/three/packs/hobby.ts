@@ -5,7 +5,7 @@ import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, ellipsePoly, glow, rectPoly, rng, shell, slab, type AssetCategory, type AssetDef, type Poly } from '../kit'
 import { hollow, swingDoor } from './styles-world'
-import { P, PI, ghostOutlined, litOutlined, noOutline, type V3 } from '../geo'
+import { P, PI, batten, cylX, cylZ, ghostOutlined, litOutlined, noOutline, rod3, type V3 } from '../geo'
 import { I, J, M, N, PROP, R, type PalFlat } from '../packkit'
 
 const MIR = '#cfdfe9'
@@ -41,31 +41,6 @@ function def(
 }
 
 // ---------- 小工具 ----------
-
-/** 沿 x 的横圆柱，给中心 */
-const cylX = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 24) => P(cyl(r, r, len, color, {}, seg), x, y, z, 0, 0, PI / 2)
-/** 沿 z 的圆柱，给中心 */
-const cylZ = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 24) => P(cyl(r, r, len, color, {}, seg), x, y, z, PI / 2)
-
-/** 两端已知的 3D 圆杆 */
-function bar(a: V3, b: V3, r: number, color: string, seg = 10) {
-  const va = new THREE.Vector3(...a)
-  const vb = new THREE.Vector3(...b)
-  const m = cyl(r, r, va.distanceTo(vb), color, {}, seg)
-  m.position.copy(va).add(vb).multiplyScalar(0.5)
-  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), vb.clone().sub(va).normalize())
-  return m
-}
-
-/** 两端已知的方管：截面 w（x 向）× t */
-function beam(a: V3, b: V3, w: number, t: number, color: string, r = 0.6) {
-  const va = new THREE.Vector3(...a)
-  const vb = new THREE.Vector3(...b)
-  const m = rbox(w, va.distanceTo(vb), t, color, {}, r)
-  m.position.copy(va).add(vb).multiplyScalar(0.5)
-  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), vb.clone().sub(va).normalize())
-  return m
-}
 
 /** xy 平面里的形状挤出成板，厚 t（z 居中） */
 function extrudeXY(shape: THREE.Shape, t: number, color: string, bevel = 0.3) {
@@ -161,9 +136,9 @@ function dumbbellHex(len: number, r: number, head: string, handle: string, acc: 
   for (const s of [-1, 1]) {
     const hd = P(cyl(r, r, hl, head, {}, 6), s * (len / 2 - hl / 2), k, 0, 0, 0, PI / 2)
     g.add(hd)
-    g.add(cylX(r * 0.45, 0.6, acc, s * (len / 2), k, 0, 16))
+    g.add(cylX(r * 0.45, 0.6, acc, s * (len / 2), k, 0))
   }
-  g.add(cylX(r * 0.32, len - 2 * hl + 1, handle, 0, k, 0, 16))
+  g.add(cylX(r * 0.32, len - 2 * hl + 1, handle, 0, k, 0))
   return g
 }
 
@@ -173,16 +148,16 @@ function dumbbellRound(len: number, r: number, plate: string, handle: string, ac
   const tp = Math.max(1.6, r * 0.3)
   const radii = [r, r, r * 0.82]
   const end = len / 2
-  g.add(cylX(Math.max(1.3, r * 0.2), len - 1, handle, 0, r, 0, 16))
+  g.add(cylX(Math.max(1.3, r * 0.2), len - 1, handle, 0, r, 0))
   for (const s of [-1, 1]) {
     let x = end - 1.6
-    g.add(cylX(r * 0.36, 1.6, acc, s * (end - 0.8), r, 0, 16))
+    g.add(cylX(r * 0.36, 1.6, acc, s * (end - 0.8), r, 0))
     for (const rr of radii) {
       g.add(cylX(rr, tp, plate, s * (x - tp / 2), r, 0, 28))
-      g.add(cylX(rr * 0.35, tp + 0.4, shade(plate, 0.12), s * (x - tp / 2), r, 0, 16))
+      g.add(cylX(rr * 0.35, tp + 0.4, shade(plate, 0.12), s * (x - tp / 2), r, 0))
       x -= tp + 0.15
     }
-    g.add(cylX(r * 0.4, 1.2, acc, s * (x - 0.6), r, 0, 16))
+    g.add(cylX(r * 0.4, 1.2, acc, s * (x - 0.6), r, 0))
   }
   return g
 }
@@ -209,8 +184,8 @@ function adjustableDumbbell(p: string[]) {
     g.add(cylX(4.2, 1.6, acc, s * 20.1, cy, 0, 20))
     g.add(cylX(1.6, 1.0, handle, s * 21.2, cy, 0, 12))
   }
-  g.add(cylX(1.7, 15, handle, 0, cy, 0, 16))
-  g.add(cylX(2.1, 9, RUBBER, 0, cy, 0, 16))
+  g.add(cylX(1.7, 15, handle, 0, cy, 0))
+  g.add(cylX(2.1, 9, RUBBER, 0, cy, 0))
   return g
 }
 
@@ -254,12 +229,12 @@ function barbellG(len: number, plate: string, barC: string, small: string) {
   const g = new THREE.Group()
   g.add(cylX(1.4, len - 30, barC, 0, 0, 0, 12))
   for (const s of [-1, 1]) {
-    g.add(cylX(3.6, 2, barC, s * (len / 2 - 26), 0, 0, 16))
-    g.add(cylX(2.5, 24, barC, s * (len / 2 - 13), 0, 0, 16))
+    g.add(cylX(3.6, 2, barC, s * (len / 2 - 26), 0, 0))
+    g.add(cylX(2.5, 24, barC, s * (len / 2 - 13), 0, 0))
     g.add(cylX(22.5, 4.5, plate, s * (len / 2 - 22.8), 0, 0, 32))
     g.add(cylX(5, 5.1, shade(plate, 0.15), s * (len / 2 - 22.8), 0, 0, 20))
     g.add(cylX(16, 3, small, s * (len / 2 - 19.1), 0, 0, 32))
-    g.add(cylX(3.6, 2.4, acc2(barC), s * (len / 2 - 16.2), 0, 0, 16))
+    g.add(cylX(3.6, 2.4, acc2(barC), s * (len / 2 - 16.2), 0, 0))
   }
   return g
 }
@@ -278,7 +253,7 @@ function weightBench(angle: number) {
     // 前后脚
     g.add(rbox(50, 5, 8, frame, { z: 58.5 }, 1.5))
     g.add(rbox(46, 5, 8, frame, { z: -58.5 }, 1.5))
-    for (const s of [-1, 1]) g.add(cylX(3, 3, RUBBER, s * 24.5, 3, -58.5, 16))
+    for (const s of [-1, 1]) g.add(cylX(3, 3, RUBBER, s * 24.5, 3, -58.5))
     g.add(rbox(7, 7, 117, frame, { y: 4 }, 1.2))
     // 座垫
     g.add(rbox(6, 28, 6, frame, { y: 10, z: 30 }, 1))
@@ -295,7 +270,7 @@ function weightBench(angle: number) {
     g.add(rbox(6, 28, 6, frame, { y: 10, z: 15 }, 1))
     // 靠背撑杆
     const sup = new THREE.Vector3(0, 0, -44).applyAxisAngle(new THREE.Vector3(1, 0, 0), angle).add(new THREE.Vector3(0, 36.9, 15))
-    if (angle > 0.05) g.add(beam([0, 11, Math.min(sup.z + 12, -10)], [0, sup.y, sup.z], 5, 4, frame))
+    if (angle > 0.05) g.add(batten([0, 11, Math.min(sup.z + 12, -10)], [0, sup.y, sup.z], 5, 4, frame, 0.6))
     else g.add(rbox(6, 26, 6, frame, { y: 10, z: -34 }, 1))
     // 前脚压腿滚筒
     g.add(cylX(5, 14, pad, -10, 22, 52, 20))
@@ -332,11 +307,11 @@ function powerRack(full: boolean) {
         g.add(rbox(4, 4, 90, CHROME, { x: sx * (px - 5), y: 88, z: 0 }, 0.6))
         // 杠铃片挂杆 + 片
         g.add(rbox(6, 10, 6, frame, { x: sx * px, y: 25, z: -39 }, 0.8))
-        g.add(cylX(2.4, 15, CHROME, sx * (px + 10.5), 30, -39, 16))
+        g.add(cylX(2.4, 15, CHROME, sx * (px + 10.5), 30, -39))
         g.add(cylX(22.5, 4.5, plate, sx * (px + 6.6), 30, -39, 32))
         g.add(cylX(16, 3, acc, sx * (px + 10.6), 30, -39, 32))
       } else {
-        g.add(beam([sx * px, 5, -45], [sx * px, 90, 7], 5, 5, frame))
+        g.add(batten([sx * px, 5, -45], [sx * px, 90, 7], 5, 5, frame, 0.6))
       }
       // J 钩
       g.add(rbox(4, 6, 7, CHROME, { x: sx * px, y: 136, z: zs[zs.length - 1] + (full ? -4.5 : 5) }, 0.8))
@@ -445,8 +420,8 @@ function abWheel(p: string[]) {
   g.add(cylX(4, 6.6, hub, 0, cy, 0, 20))
   g.add(cylX(1.2, 22, CHROME, 0, cy, 0, 12))
   for (const s of [-1, 1]) {
-    g.add(cylX(2, 10, grip, s * 12, cy, 0, 16))
-    g.add(cylX(2.3, 0.8, hub, s * 16.6, cy, 0, 16))
+    g.add(cylX(2, 10, grip, s * 12, cy, 0))
+    g.add(cylX(2.3, 0.8, hub, s * 16.6, cy, 0))
   }
   return g
 }
@@ -460,14 +435,14 @@ function pullupBar(p: string[]) {
   // 前把手
   g.add(cylX(1.6, 72, frame, 0, y0 + 2.4, 10, 14))
   for (const s of [-1, 1]) {
-    g.add(cylX(2.2, 14, grip, s * 27, y0 + 2.4, 10, 16))
+    g.add(cylX(2.2, 14, grip, s * 27, y0 + 2.4, 10))
     // 外侧宽握
-    g.add(bar([s * 36, y0 + 2.4, 10], [s * 46, y0 + 8, 6], 1.6, frame))
+    g.add(rod3([s * 36, y0 + 2.4, 10], [s * 46, y0 + 8, 6], 1.6, frame))
     g.add(P(capsule(2.1, 6, grip), s * 43, y0 + 6.5, 7.5, 0, 0, s * -1.05))
     // 侧边勾臂：前 → 上后方 → 门框后方下勾
-    g.add(bar([s * 33, y0 + 2.4, 10], [s * 33, y0 + 19, -6], 1.6, frame))
-    g.add(bar([s * 33, y0 + 19, -6], [s * 33, y0 + 19, -10.7], 1.6, frame))
-    g.add(bar([s * 33, y0 + 19, -10.7], [s * 33, y0 + 10, -10.7], 1.6, frame))
+    g.add(rod3([s * 33, y0 + 2.4, 10], [s * 33, y0 + 19, -6], 1.6, frame))
+    g.add(rod3([s * 33, y0 + 19, -6], [s * 33, y0 + 19, -10.7], 1.6, frame))
+    g.add(rod3([s * 33, y0 + 19, -10.7], [s * 33, y0 + 10, -10.7], 1.6, frame))
     g.add(rbox(5, 4, 2, acc, { x: s * 33, y: y0 + 9, z: -11.3 }, 0.6))
     g.add(rbox(5, 2.4, 6, acc, { x: s * 33, y: y0 + 19, z: -8.5 }, 0.6))
   }
@@ -501,7 +476,7 @@ function treadmill(W: number, D: number, H: number, gym: boolean) {
     const uz = z0 + hoodD * 0.45
     const topY = H - 16
     const tz = uz + (gym ? 8 : 6)
-    for (const s of [-1, 1]) g.add(beam([s * (W / 2 - railW / 2), deckH + 4, uz], [s * (W / 2 - railW / 2), topY, tz], railW - 3, 6, body))
+    for (const s of [-1, 1]) g.add(batten([s * (W / 2 - railW / 2), deckH + 4, uz], [s * (W / 2 - railW / 2), topY, tz], railW - 3, 6, body, 0.6))
     const con = new THREE.Group()
     const cd = gym ? 28 : 20
     con.add(rbox(W - 2, 12, cd, shade(body, 0.08), {}, 3))
@@ -515,9 +490,9 @@ function treadmill(W: number, D: number, H: number, gym: boolean) {
     const hl = gym ? 60 : 36
     for (const s of [-1, 1]) {
       const x = s * (W / 2 - railW / 2)
-      g.add(bar([x, hy, tz], [x, hy, tz + hl], 2, body))
-      g.add(bar([x, hy, tz + hl * 0.35], [x, hy, tz + hl], 2.5, RUBBER))
-      if (gym) g.add(bar([x, hy, tz + hl], [x, deckH, tz + hl + 22], 2, body))
+      g.add(rod3([x, hy, tz], [x, hy, tz + hl], 2, body))
+      g.add(rod3([x, hy, tz + hl * 0.35], [x, hy, tz + hl], 2.5, RUBBER))
+      if (gym) g.add(rod3([x, hy, tz + hl], [x, deckH, tz + hl + 22], 2, body))
     }
     return g
   }
@@ -542,12 +517,12 @@ function spinBike(p: string[]) {
   g.add(cylX(7, 5.6, shade(fly, -0.2), 0, 29, -26, 20))
   g.add(cylX(21.3, 1.4, RUBBER, -3.4, 29, -26, 36))
   // 车架
-  g.add(beam([0, 8, -44], [0, 100.5, -46], 6, 6, frame))
-  g.add(beam([0, 8, 26], [0, 80, 18], 6, 6, frame))
-  g.add(beam([0, 70, -45], [0, 62, 19], 6, 6, frame))
+  g.add(batten([0, 8, -44], [0, 100.5, -46], 6, 6, frame, 0.6))
+  g.add(batten([0, 8, 26], [0, 80, 18], 6, 6, frame, 0.6))
+  g.add(batten([0, 70, -45], [0, 62, 19], 6, 6, frame, 0.6))
   // 曲柄座的横梁：从飞轮轴穿过曲柄接到座管上（以前曲柄和脚踏整组悬空）
-  g.add(beam([0, 30, -20], [0, 30, 23.5], 4, 4, frame))
-  g.add(beam([0, 78, 18], [0, 92, 20], 3.5, 3.5, CHROME))
+  g.add(batten([0, 30, -20], [0, 30, 23.5], 4, 4, frame, 0.6))
+  g.add(batten([0, 78, 18], [0, 92, 20], 3.5, 3.5, CHROME, 0.6))
   g.add(rbox(16, 5, 27, seat, { y: 91, z: 22 }, 2.2))
   // 车把
   g.add(cylX(1.6, 48, frame, 0, 101, -46, 12))
@@ -563,7 +538,7 @@ function spinBike(p: string[]) {
   g.add(cylX(7, 10.4, shade(frame, 0.1), 0, 30, 4, 24))
   for (const s of [-1, 1]) {
     const dz = s * 9
-    g.add(beam([s * 6, 30, 4], [s * 6, 30 + dz * 0.6, 4 + dz * 0.8], 1.8, 2, CHROME))
+    g.add(batten([s * 6, 30, 4], [s * 6, 30 + dz * 0.6, 4 + dz * 0.8], 1.8, 2, CHROME, 0.6))
     g.add(rbox(10, 2, 6, RUBBER, { x: s * 11, y: 29 + dz * 0.6, z: 4 + dz * 0.8 }, 0.6))
   }
   return g
@@ -582,15 +557,15 @@ function rower(p: string[]) {
   g.add(rbox(44, 4, 8, frame, { z: 99 }, 1.5))
   g.add(rbox(8, 26, 6, frame, { y: 4, z: 97 }, 1))
   // 导轨
-  g.add(beam([0, 30, 100], [0, 24, -60], 9, 5, CHROME, 1))
+  g.add(batten([0, 30, 100], [0, 24, -60], 9, 5, CHROME, 1))
   // 风阻轮罩
   g.add(cylX(24, 22, fly, 0, 30, -78, 36))
   g.add(cylX(10, 22.6, shade(fly, -0.2), 0, 30, -78, 24))
   g.add(cylX(24.4, 2, frame, -10.8, 30, -78, 36))
   g.add(cylX(24.4, 2, frame, 10.8, 30, -78, 36))
-  g.add(beam([0, 4, -99], [0, 20, -78], 10, 6, frame))
+  g.add(batten([0, 4, -99], [0, 20, -78], 10, 6, frame, 0.6))
   // 显示器臂
-  g.add(beam([0, 50, -72], [0, 76, -52], 3, 3, frame))
+  g.add(batten([0, 50, -72], [0, 76, -52], 3, 3, frame, 0.6))
   g.add(rbox(18, 14, 4, frame, { y: 70, z: -51 }, 1.2))
   g.add(glow(14, 9, SCREEN, { y: 72.5, z: -48.8 }, 0.5))
   // 脚踏
@@ -617,19 +592,19 @@ function elliptical(p: string[]) {
   g.add(cylX(24, 22, cover, 0, 30, 52, 36))
   g.add(cylX(10, 22.6, acc, 0, 30, 52, 24))
   // 前立柱 + 控制台
-  g.add(beam([0, 6, -66], [0, 132, -58], 8, 7, frame))
+  g.add(batten([0, 6, -66], [0, 132, -58], 8, 7, frame, 0.6))
   g.add(P(rbox(30, 10, 16, cover, {}, 2.5), 0, 128, -56, -0.4, 0, 0))
   g.add(P(glow(20, 6, SCREEN, { y: 2.5, z: 8.2 }, 0.5), 0, 128, -56, -0.4, 0, 0))
   g.add(cylX(1.6, 30, frame, 0, 118, -55, 12))
   for (const s of [-1, 1]) {
     const x = s * 13
     // 脚踏连杆
-    g.add(beam([x, 30, 52], [x, 26, -36], 4, 5, CHROME, 0.8))
+    g.add(batten([x, 30, 52], [x, 26, -36], 4, 5, CHROME, 0.8))
     g.add(rbox(14, 3, 34, RUBBER, { x, y: 28.5, z: -12 }, 1))
     // 摆臂
-    g.add(bar([x, 26, -36], [s * 27, 95, -58], 2, frame))
-    g.add(bar([s * 27, 95, -58], [s * 27, 160, -50], 2, frame))
-    g.add(bar([s * 27, 125, -55], [s * 27, 158, -50], 2.6, RUBBER))
+    g.add(rod3([x, 26, -36], [s * 27, 95, -58], 2, frame))
+    g.add(rod3([s * 27, 95, -58], [s * 27, 160, -50], 2, frame))
+    g.add(rod3([s * 27, 125, -55], [s * 27, 158, -50], 2.6, RUBBER))
     g.add(cylX(3, 6, frame, s * 27, 95, -58, 14))
     // 曲柄轴头比连杆宽一点，两侧面不和连杆共面
     g.add(cylX(3.5, 4.8, acc, x, 30, 52 + s * 0.01, 14))
@@ -670,11 +645,11 @@ function punchingBagHang(p: string[]) {
   const z0 = -31
   g.add(rbox(20, 30, 2, frame, { y: y + 130, z: z0 + 1 }, 0.6))
   g.add(rbox(6, 6, 46, frame, { y: y + 154, z: z0 + 2 + 23 }, 1))
-  g.add(beam([0, y + 133, z0 + 2], [0, y + 154, z0 + 30], 4, 4, frame))
+  g.add(batten([0, y + 133, z0 + 2], [0, y + 154, z0 + 30], 4, 4, frame, 0.6))
   g.add(cyl(1, 1, 5, CHROME, { y: y + 149, z: 14 }, 8))
   for (let i = 0; i < 4; i++) {
     const a = (i / 4) * PI * 2 + PI / 4
-    g.add(bar([0, y + 149.5, 14], [Math.cos(a) * 13, y + 119, 14 + Math.sin(a) * 13], 0.35, CHROME, 6))
+    g.add(rod3([0, y + 149.5, 14], [Math.cos(a) * 13, y + 119, 14 + Math.sin(a) * 13], 0.35, CHROME, 6))
   }
   g.add(capsule(17, 85, bag, { y, z: 14 }))
   g.add(cyl(17.3, 17.3, 6, band, { y: y + 70, z: 14 }, 28))
@@ -1019,8 +994,8 @@ function glassTea(p: string[]) {
   g.add(cyl(3.0, 2.95, 6.4, tea, { y: 0.6 }, 24))
   g.add(ghostOutlined(cup(3.8, 3.4, 9.5, 0.4, glass), glass, 0.35))
   g.add(ghostOutlined(cyl(3.3, 3.3, 0.5, glass, { y: 0.05 }, 24), glass, 0.4))
-  g.add(bar([2.6, 7.0, 0.4], [3.75, 9.5, 0.4], 0.06, '#f4f0e6', 4))
-  g.add(bar([3.9, 9.5, 0.4], [3.85, 6.2, 0.4], 0.06, '#f4f0e6', 4))
+  g.add(rod3([2.6, 7.0, 0.4], [3.75, 9.5, 0.4], 0.06, '#f4f0e6', 4))
+  g.add(rod3([3.9, 9.5, 0.4], [3.85, 6.2, 0.4], 0.06, '#f4f0e6', 4))
   g.add(rbox(1.6, 2, 0.3, tag, { x: 3.85, y: 4.2, z: 0.4, ry: PI / 2 }, 0.1))
   return g
 }
@@ -1098,7 +1073,7 @@ function teaTraySet(p: string[]) {
   g.add(ball(4, pot, { x: tx, y: y + 3.6, z: -3 }, [1, 0.8, 1]))
   g.add(cyl(1.8, 2.0, 0.6, pot, { x: tx, y: y + 6.6, z: -3 }, 20))
   g.add(ball(0.6, pot, { x: tx, y: y + 7.4, z: -3 }))
-  g.add(bar([tx + 3.4, y + 3.2, -3], [tx + 6.4, y + 6.0, -3], 0.55, pot, 10))
+  g.add(rod3([tx + 3.4, y + 3.2, -3], [tx + 6.4, y + 6.0, -3], 0.55, pot))
   g.add(torus(1.9, 0.45, pot, { x: tx - 4.6, y: y + 3.8, z: -3 }))
   // 公道杯
   g.add(cyl(2.0, 2.0, 3.6, BLACK_TEA, { x: -1.5, y: y + 0.4, z: 5 }, 20))
@@ -1267,7 +1242,7 @@ function spool(x: number, y: number, z: number, fil: string, flange = '#3d3f44',
   const g = new THREE.Group()
   for (const s of [-1, 1]) g.add(cylX(r, 0.8, flange, x + s * 3.2, y, z, 32))
   g.add(cylX(r - 1.5, 5.6, fil, x, y, z, 32))
-  g.add(cylX(r * 0.28, 7.2, shade(flange, 0.2), x, y, z, 16))
+  g.add(cylX(r * 0.28, 7.2, shade(flange, 0.2), x, y, z))
   return g
 }
 
@@ -1302,7 +1277,7 @@ function printerFdm(p: string[]) {
   for (const s of [-1, 1]) g.add(rbox(1.5, 12, 3, ext, { x: s * 4.6, y: 50, z: -8 }, 0.4))
   g.add(cylX(1, 10.6, CHROME, 0, 60.5, -8, 12))
   g.add(spool(0, 60.5, -8, fil, '#3d3f44'))
-  g.add(bar([0, 51, -1.6], [2, 25.2, -5.5], 0.25, fil, 6))
+  g.add(rod3([0, 51, -1.6], [2, 25.2, -5.5], 0.25, fil, 6))
   return g
 }
 
@@ -1389,7 +1364,7 @@ function airliner(p: string[]) {
   pl.add(noOutline(rbox(26, 0.4, 4.9, tail, { x: -1, y: -0.5 }, 0.2)))
   pl.add(noOutline(P(ball(1.6, '#3a4658', {}, [1, 0.5, 1.1]), 14.6, 0.9, 0)))
   pl.add(wings([[4, 1.5], [-2, 1.5], [-8, 18], [-5, 18]], 0.6, body, -1.2))
-  for (const s of [-1, 1]) pl.add(cylX(1.1, 4.5, tail, 0.6, -2.2, s * 7, 16))
+  for (const s of [-1, 1]) pl.add(cylX(1.1, 4.5, tail, 0.6, -2.2, s * 7))
   pl.add(P(finXY([[-11, 1.2], [-15.6, 1.2], [-17.6, 7.5], [-15.2, 7.5]], 0.5, tail), 0, 0, 0))
   pl.add(wings([[-12.5, 0.8], [-15.5, 0.8], [-17.2, 6.5], [-15.8, 6.5]], 0.4, body, 0.3))
   pl.rotation.z = 0.08
@@ -1418,7 +1393,7 @@ function propPlane(p: string[]) {
   const pl = new THREE.Group()
   pl.add(rbox(12, 4, 3.6, body, { x: 4, y: -2 }, 1.2))
   pl.add(P(cyl(0.8, 1.7, 12, body, {}, 16), -8, 0.3, 0, 0, 0, PI / 2))
-  pl.add(cylX(1.7, 2, acc, 11, 0, 0, 16))
+  pl.add(cylX(1.7, 2, acc, 11, 0, 0))
   pl.add(ball(0.8, acc, { x: 12.2 }))
   pl.add(P(rbox(0.4, 9, 1, '#3a3a3c', {}, 0.2), 12.6, 0, 0, 0.4, 0, 0))
   pl.add(noOutline(rbox(6, 1.3, 3.9, '#3a4658', { x: 5, y: 0.4 }, 0.3)))
@@ -1426,8 +1401,8 @@ function propPlane(p: string[]) {
   pl.add(noOutline(rbox(4.7, 0.4, 3, acc, { x: 4.5, y: 2.2, z: 13.2 }, 0.1)))
   pl.add(noOutline(rbox(4.7, 0.4, 3, acc, { x: 4.5, y: 2.2, z: -13.2 }, 0.1)))
   for (const s of [-1, 1]) {
-    pl.add(bar([4, -1.5, s * 1.8], [4.5, 2, s * 8], 0.2, body, 6))
-    pl.add(bar([5, -2, s * 1.4], [5, -4, s * 3], 0.25, '#3a3a3c', 6))
+    pl.add(rod3([4, -1.5, s * 1.8], [4.5, 2, s * 8], 0.2, body, 6))
+    pl.add(rod3([5, -2, s * 1.4], [5, -4, s * 3], 0.25, '#3a3a3c', 6))
     pl.add(cylZ(0.9, 0.6, '#3a3a3c', 5, -4.2, s * 3.3, 14))
   }
   pl.add(finXY([[-11, 0.8], [-14, 0.8], [-14.5, 5], [-12.5, 5]], 0.4, acc))
@@ -1453,7 +1428,7 @@ function helicopter(p: string[]) {
   }
   for (const s of [-1, 1]) {
     pl.add(cylX(0.4, 13, '#3a3a3c', 0, -5.8, s * 3.6, 10))
-    for (const x of [-3, 3]) pl.add(bar([x, -5.8, s * 3.6], [x, -2.8, s * 2.2], 0.3, '#3a3a3c', 6))
+    for (const x of [-3, 3]) pl.add(rod3([x, -5.8, s * 3.6], [x, -2.8, s * 2.2], 0.3, '#3a3a3c', 6))
   }
   return centered(planeStand(pl, 14, base, 11))
 }
@@ -1467,7 +1442,7 @@ function drone(p: string[]) {
     for (const sz of [-1, 1]) {
       const ex = sx * 10.5
       const ez = sz * 10.5
-      g.add(beam([sx * 3, 5, sz * 4], [ex, 5, ez], 1.6, 1.2, body, 0.4))
+      g.add(batten([sx * 3, 5, sz * 4], [ex, 5, ez], 1.6, 1.2, body, 0.4))
       g.add(cyl(1.3, 1.3, 1.8, '#3a3d44', { x: ex, y: 4.4, z: ez }, 14))
       g.add(cyl(0.3, 0.3, 0.8, CHROME, { x: ex, y: 6.2, z: ez }, 8))
       g.add(P(rbox(9, 0.2, 0.9, prop, {}, 0.1), ex, 6.8, ez, 0, sx * sz * 0.6 + 0.3, 0))
@@ -1478,7 +1453,7 @@ function drone(p: string[]) {
   g.add(cylZ(0.6, 0.4, '#5ac8fa', 0, 1.8, 5.8, 12))
   for (const s of [-1, 1]) {
     g.add(cylZ(0.4, 10, body, s * 4.6, 0.4, 0, 8))
-    for (const z of [-3, 3]) g.add(bar([s * 3.5, 3.6, z], [s * 4.6, 0.6, z], 0.3, body, 6))
+    for (const z of [-3, 3]) g.add(rod3([s * 3.5, 3.6, z], [s * 4.6, 0.6, z], 0.3, body, 6))
   }
   return g
 }
@@ -1727,11 +1702,11 @@ function workMat(p: string[]) {
   g.add(cylX(0.5, 1.5, CHROME, -6.4, 1.05, 10, 12))
   g.add(rbox(1.8, 0.6, 0.15, CHROME, { x: -4.8, y: 0.75, z: 10 }, 0.05))
   // 镊子
-  for (const dz of [-0.6, 0.6]) g.add(bar([4, 0.85, 10.5], [13, 0.85, 10.5 + dz], 0.2, CHROME, 6))
+  for (const dz of [-0.6, 0.6]) g.add(rod3([4, 0.85, 10.5], [13, 0.85, 10.5 + dz], 0.2, CHROME, 6))
   // 水口钳
   for (const dz of [-1.6, 1.6]) {
-    g.add(bar([11, 0.95, -1], [18, 0.95, -1 + dz], 0.35, acc, 8))
-    g.add(bar([14.5, 1.0, -1 + dz / 2], [18, 1.0, -1 + dz], 0.55, '#3a3a3c', 8))
+    g.add(rod3([11, 0.95, -1], [18, 0.95, -1 + dz], 0.35, acc, 8))
+    g.add(rod3([14.5, 1.0, -1 + dz / 2], [18, 1.0, -1 + dz], 0.55, '#3a3a3c', 8))
   }
   g.add(rbox(2.2, 0.8, 1.2, '#5a5c60', { x: 10, y: 0.6, z: -1 }, 0.2))
   // 颜料瓶
@@ -1769,7 +1744,7 @@ function airbrushSet(p: string[]) {
   P(ab, 8.2, 9.5, 2, 0, 0, -1.1)
   g.add(ab)
   const pts: V3[] = [[2, 3, 3.5], [3.8, 0.4, 4.5], [5.4, 0.4, 5.2], [4.6, 8, 4], [5.4, 14.6, 2]]
-  for (let i = 0; i < pts.length - 1; i++) g.add(bar(pts[i], pts[i + 1], 0.3, hose, 6))
+  for (let i = 0; i < pts.length - 1; i++) g.add(rod3(pts[i], pts[i + 1], 0.3, hose, 6))
   return centered(g)
 }
 
@@ -1825,7 +1800,7 @@ function celestialGlobe(p: string[]) {
   g.add(torus(13.6, 0.7, brass, { y: 24, rx: PI / 2 }))
   for (let i = 0; i < 3; i++) {
     const a = (i / 3) * PI * 2 + PI / 6
-    g.add(bar([Math.cos(a) * 6.5, 2.4, Math.sin(a) * 6.5], [Math.cos(a) * 13.6, 23.4, Math.sin(a) * 13.6], 0.45, brass, 8))
+    g.add(rod3([Math.cos(a) * 6.5, 2.4, Math.sin(a) * 6.5], [Math.cos(a) * 13.6, 23.4, Math.sin(a) * 13.6], 0.45, brass, 8))
   }
   g.add(ball(12, sphere, { y: 24 }))
   const rand = rng(5)
@@ -1850,10 +1825,10 @@ function telescope(p: string[]) {
     return [Math.cos(a) * 32, 0.6, Math.sin(a) * 32]
   })
   for (const f of feet) {
-    g.add(bar(apex, f, 1.3, mount, 8))
+    g.add(rod3(apex, f, 1.3, mount, 8))
     g.add(ball(1.4, RUBBER, { x: f[0], y: 1.4, z: f[2] }))
     const m: V3 = [f[0] * 0.5, 45.3, f[2] * 0.5]
-    g.add(bar([0, 45, 0], m, 0.5, mount, 6))
+    g.add(rod3([0, 45, 0], m, 0.5, mount, 6))
   }
   g.add(puck(6, 1.2, mount, { y: 44.5 }))
   g.add(cyl(3, 3.5, 6, mount, { y: 88 }, 16))
@@ -1864,12 +1839,12 @@ function telescope(p: string[]) {
     const v = c.clone().addScaledVector(dir, t).add(new THREE.Vector3(0, Math.cos(PI / 6), Math.sin(PI / 6)).multiplyScalar(up))
     return [v.x, v.y, v.z]
   }
-  g.add(bar(at(-40), at(28), 5.5, tube, 24))
-  g.add(bar(at(28), at(40), 6.3, acc, 24))
-  g.add(bar(at(-3), at(3), 6, mount, 24))
-  g.add(bar(at(-6, 7.8), at(10, 7.8), 1.4, tube, 12))
-  g.add(bar(at(-4, 5.5), at(-4, 6.8), 0.5, mount, 6))
-  g.add(bar(at(-40), at(-44), 1.6, mount, 12))
+  g.add(rod3(at(-40), at(28), 5.5, tube, 24))
+  g.add(rod3(at(28), at(40), 6.3, acc, 24))
+  g.add(rod3(at(-3), at(3), 6, mount, 24))
+  g.add(rod3(at(-6, 7.8), at(10, 7.8), 1.4, tube, 12))
+  g.add(rod3(at(-4, 5.5), at(-4, 6.8), 0.5, mount, 6))
+  g.add(rod3(at(-40), at(-44), 1.6, mount, 12))
   const e = at(-44)
   g.add(cyl(1.1, 1.1, 5, RUBBER, { x: e[0], y: e[1], z: e[2] }, 12))
   return centered(g)
@@ -1900,16 +1875,16 @@ function guitar(k: number) {
     // 支架
     g.add(cylX(1, 30, stand, 0, 8, 6, 12))
     for (const s of [-1, 1]) {
-      g.add(bar([s * 15, 8, 6], [s * 18, 0.8, 16], 1, stand, 8))
+      g.add(rod3([s * 15, 8, 6], [s * 18, 0.8, 16], 1, stand, 8))
       g.add(ball(1.1, RUBBER, { x: s * 18, y: 1.1, z: 16 }))
-      g.add(bar([s * 12, 8, 6], [s * 12, 11, 11.5], 0.9, RUBBER, 8))
-      g.add(bar([0, 4, -16], [s * 16, 0.8, -24], 1, stand, 8))
+      g.add(rod3([s * 12, 8, 6], [s * 12, 11, 11.5], 0.9, RUBBER, 8))
+      g.add(rod3([0, 4, -16], [s * 16, 0.8, -24], 1, stand, 8))
       g.add(ball(1.1, RUBBER, { x: s * 16, y: 1.1, z: -24 }))
     }
-    g.add(bar([0, 4, -16], [0, 80.5, -10.6], 1.1, stand, 8))
-    g.add(bar([0, 8, 6], [0, 23, -14.8], 1, stand, 8))
+    g.add(rod3([0, 4, -16], [0, 80.5, -10.6], 1.1, stand, 8))
+    g.add(rod3([0, 8, 6], [0, 23, -14.8], 1, stand, 8))
     g.add(cylX(0.9, 8, stand, 0, 80.5, -10.6, 10))
-    for (const s of [-1, 1]) g.add(bar([s * 3.6, 80.5, -10.6], [s * 3.6, 84, -9.6], 0.8, RUBBER, 8))
+    for (const s of [-1, 1]) g.add(rod3([s * 3.6, 80.5, -10.6], [s * 3.6, 84, -9.6], 0.8, RUBBER, 8))
     const out = centered(g)
     out.scale.setScalar(k)
     return out
@@ -1927,8 +1902,8 @@ function keyboard(p: string[]) {
   const [body, stand, acc] = p
   const g = new THREE.Group()
   for (const z of [-2.5, 2.5]) {
-    g.add(bar([-28, 1.5, z], [28, 72, z], 1.4, stand, 10))
-    g.add(bar([28, 1.5, z], [-28, 72, z], 1.4, stand, 10))
+    g.add(rod3([-28, 1.5, z], [28, 72, z], 1.4, stand))
+    g.add(rod3([28, 1.5, z], [-28, 72, z], 1.4, stand))
   }
   g.add(cylZ(1.8, 7, CHROME, 0, 36.75, 0, 14))
   for (const s of [-1, 1]) {
@@ -1953,9 +1928,9 @@ function keyboard(p: string[]) {
 function easel(p: string[]) {
   const [wood, a, b] = p
   const g = new THREE.Group()
-  g.add(beam([0, 0, 10], [0, 175, -4], 4, 3, wood))
-  for (const s of [-1, 1]) g.add(beam([s * 30, 0, 12], [s * 2, 160, -2.8], 3, 2.5, wood))
-  g.add(beam([0, 0, -36], [0, 150, -3.4], 3, 2.5, wood))
+  g.add(batten([0, 0, 10], [0, 175, -4], 4, 3, wood, 0.6))
+  for (const s of [-1, 1]) g.add(batten([s * 30, 0, 12], [s * 2, 160, -2.8], 3, 2.5, wood, 0.6))
+  g.add(batten([0, 0, -36], [0, 150, -3.4], 3, 2.5, wood, 0.6))
   g.add(rbox(64, 2.5, 6, wood, { y: 70, z: 9 }, 0.6))
   g.add(rbox(64, 4, 1, wood, { y: 70, z: 11.6 }, 0.4))
   const cv = new THREE.Group()
@@ -2335,7 +2310,7 @@ function leanPanel(g: THREE.Group, pan: THREE.Group, t: number, th: number) {
 /** 背撑腿：从 a 撑到地面上后方 back 处 */
 function kickstand(g: THREE.Group, a: V3, back: number, color: string) {
   const f: V3 = [a[0], 1.2, a[2] - back]
-  g.add(beam(a, f, 4, 2, color))
+  g.add(batten(a, f, 4, 2, color, 0.6))
   g.add(rbox(5, 1.2, 4, RUBBER, { x: f[0], y: 0, z: f[2] }, 0.4))
 }
 
@@ -2400,7 +2375,7 @@ function floorWheel(p: string[]) {
     g.add(rbox(6, 4, 40, frame, { x: s * 22, y: 5 }, 1))
     for (const z of [-17, 17]) {
       g.add(rbox(1.2, 2, 2, frame, { x: s * 22, y: 3.6, z }, 0.3))
-      g.add(cylX(2.4, 1.6, RUBBER, s * 22, 2.4, z, 16))
+      g.add(cylX(2.4, 1.6, RUBBER, s * 22, 2.4, z))
     }
     g.add(rbox(4, 150, 4, frame, { x: s * 23, y: 9 }, 0.8))
   }
@@ -2507,7 +2482,7 @@ function handMirror(p: string[]) {
   P(m, 0, 21, -0.8, th, 0, 0)
   g.add(m)
   const a = new THREE.Vector3(0, 0, -0.8).applyEuler(new THREE.Euler(th, 0, 0)).add(m.position)
-  g.add(beam([0, 0.8, -3.6], [0, a.y, a.z], 0.8, 0.4, brass, 0.15))
+  g.add(batten([0, 0.8, -3.6], [0, a.y, a.z], 0.8, 0.4, brass, 0.15))
   return centered(g)
 }
 
@@ -2544,7 +2519,7 @@ function wallSun(p: string[]) {
   for (let i = 0; i < 24; i++) {
     const a = (i / 24) * PI * 2
     const r1 = i % 2 ? 31 : 39
-    g.add(bar([Math.cos(a) * 15.5, Math.sin(a) * 15.5, 0], [Math.cos(a) * r1, Math.sin(a) * r1, 0], i % 2 ? 0.35 : 0.5, frame, 6))
+    g.add(rod3([Math.cos(a) * 15.5, Math.sin(a) * 15.5, 0], [Math.cos(a) * r1, Math.sin(a) * r1, 0], i % 2 ? 0.35 : 0.5, frame, 6))
     if (!(i % 2)) g.add(ball(1, tip, { x: Math.cos(a) * 39, y: Math.sin(a) * 39 }))
   }
   g.position.set(0, WALL_MIR_MOUNT + 40, 0.25)
