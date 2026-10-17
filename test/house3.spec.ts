@@ -360,19 +360,29 @@ describe('第二期的补齐', () => {
         const lm = buildLightMask(plan)!
         const v = plan.rooms.find((r) => r.kind === 'void')!
         if (segs.some((s) => lm.rooms.get(s.room.id)?.group !== lm.rooms.get(v.id)?.group)) out.push('挑空和走廊不在同一个灯光组')
-        // 栏杆段中点 1.5m 高处没有墙
+        // 栏杆段中点 1.5m 高处没有墙。墙体按朝向 / 高度合批后一个网格里有好几段墙，包围盒会盖住段与段之间的空当：
+        // 改成从正上方往下打射线，数点上方穿过的面数，奇数 = 点在某个封闭的墙块里面
         g.updateMatrixWorld(true)
-        const boxes: THREE.Box3[] = []
+        const probes: THREE.Mesh[] = []
+        const both = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })
         g.traverse((o) => {
           let p: THREE.Object3D | null = o
           while (p && !p.userData.voidRails) p = p.parent
-          if ((o as THREE.Mesh).isMesh && !p) boxes.push(new THREE.Box3().setFromObject(o))
+          if (!(o as THREE.Mesh).isMesh || p || o.userData.isOutline) return
+          const probe = new THREE.Mesh((o as THREE.Mesh).geometry, both)
+          probe.matrixWorld.copy(o.matrixWorld)
+          probe.matrixAutoUpdate = false
+          probe.matrixWorldAutoUpdate = false
+          probes.push(probe)
         })
+        const rc = new THREE.Raycaster()
         for (const s of segs) {
           const len = Math.hypot(s.b.x - s.a.x, s.b.y - s.a.y)
           if (len < 60) continue
           const m = new THREE.Vector3((s.a.x + s.b.x) / 2, g.position.y + 150, (s.a.y + s.b.y) / 2)
-          if (boxes.some((b) => b.containsPoint(m))) out.push('挑空边还有墙')
+          rc.set(new THREE.Vector3(m.x, 1e4, m.z), new THREE.Vector3(0, -1, 0))
+          rc.far = 1e4 - m.y
+          if (probes.some((pm) => rc.intersectObject(pm, false).length % 2 === 1)) out.push('挑空边还有墙')
         }
         return [...new Set(out)]
       }),
