@@ -4,15 +4,10 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, face, puck, rbox, shade, toon, torus, tray } from '../toon'
-import { C, S, SWING_OPEN, ellipsePoly, glow, holePanel, movable, paintPanel, rectPoly, rng, shell, type AssetCategory, type AssetDef, type Poly, type StyleTag, type SurfaceDef } from '../kit'
+import { C, SWING_OPEN, ellipsePoly, glow, holePanel, movable, paintPanel, rectPoly, rng, shell, type AssetCategory, type AssetDef, type Poly, type SurfaceDef } from '../kit'
+import { G, P, noOutlineDeep, type V3 } from '../geo'
+import { I, J, M, N, PROP, R, type PalFlat } from '../packkit'
 
-type V3 = [number, number, number]
-type Pal = [StyleTag, ...string[]]
-const N = S.nordic
-const M = S.modern
-const J = S.japanese
-const I = S.industrial
-const R = S.retro
 const BRASS = '#d4b25a'
 const CHROME = '#d0d5db'
 const TIRE = '#3a3a3c'
@@ -24,7 +19,7 @@ function def(
   name: string,
   category: AssetCategory,
   [w, d, h]: [number, number, number],
-  pals: Pal[],
+  pals: PalFlat[],
   build: (p: string[]) => THREE.Group,
   extra: Partial<AssetDef> = {},
 ): AssetDef {
@@ -42,21 +37,8 @@ function def(
     ...extra,
   }
 }
-const PROP: Partial<AssetDef> = { prop: true }
 
 // ---------- 小工具 ----------
-
-function G(...c: THREE.Object3D[]) {
-  const g = new THREE.Group()
-  for (const o of c) g.add(o)
-  return g
-}
-
-function P<T extends THREE.Object3D>(o: T, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0): T {
-  o.position.set(x, y, z)
-  o.rotation.set(rx, ry, rz)
-  return o
-}
 
 /** 自发光（灯罩、灯泡、火苗），不描边 */
 function lit<T extends THREE.Mesh>(m: T, color: string, k = 0.7): T {
@@ -69,12 +51,6 @@ function lit<T extends THREE.Mesh>(m: T, color: string, k = 0.7): T {
 function clear<T extends THREE.Mesh>(m: T, color = C.glass, a = 0.32): T {
   m.material = toon(color, { transparent: a })
   return m
-}
-
-/** 不描边的小贴片 */
-function flat<T extends THREE.Object3D>(o: T): T {
-  o.traverse((c) => (c.userData.noOutline = true))
-  return o
 }
 
 /** 两端已知的 3D 细杆 */
@@ -264,7 +240,7 @@ function liveDrawerLevel(o: { w: number; h: number; x: number; y: number; zf: nu
 // 沙发
 // =====================================================================
 
-const SOFA_PALS: Pal[] = [
+const SOFA_PALS: PalFlat[] = [
   ['nordic', N.linen, N.oak, N.sage],
   ['modern', M.gray, M.black, M.light],
   ['industrial', I.leather, I.iron, I.concrete],
@@ -444,7 +420,7 @@ function knitPouf(p: string[]) {
   return g
 }
 
-const FUTON_PALS: Pal[] = [
+const FUTON_PALS: PalFlat[] = [
   ['japanese', J.ai, J.hinoki, J.washi],
   ['nordic', N.gray, N.oak, N.mustard],
   ['modern', M.char, M.walnut, M.light],
@@ -548,7 +524,7 @@ export const LM_SOFAS: AssetDef[] = [
 // 茶几 / 电视柜
 // =====================================================================
 
-const WOOD_PALS: Pal[] = [
+const WOOD_PALS: PalFlat[] = [
   ['nordic', N.oak, N.white, N.gray],
   ['modern', M.walnut, M.char, M.silver],
   ['industrial', I.walnut, I.iron, I.steel],
@@ -910,7 +886,7 @@ function akariFloor(p: string[]) {
     const dy = i * 11
     const r = 22 * Math.sqrt(Math.max(0, 1 - (dy / 52) ** 2)) + 0.15
     if (r < 3) continue
-    g.add(flat(P(torus(r, 0.25, rib), 0, cy + dy, 0, Math.PI / 2)))
+    g.add(noOutlineDeep(P(torus(r, 0.25, rib), 0, cy + dy, 0, Math.PI / 2)))
   }
   g.add(cyl(0.6, 0.6, 3, metal, { y: cy + 51 }, 8))
   return centered(g)
@@ -1164,7 +1140,7 @@ function candleTray(p: string[]) {
   return g
 }
 
-const LAMP_SHADE_PALS: Pal[] = [
+const LAMP_SHADE_PALS: PalFlat[] = [
   ['nordic', N.linen, N.oak, N.white],
   ['modern', M.white, M.black, M.silver],
   ['industrial', I.concrete, I.walnut, I.iron],
@@ -2085,7 +2061,7 @@ function deskMat(p: string[]) {
   const [main, edge] = p
   const g = new THREE.Group()
   g.add(rbox(80, 0.3, 40, edge, {}, 0.12))
-  g.add(flat(rbox(78, 0.4, 38, main, {}, 0.15)))
+  g.add(noOutlineDeep(rbox(78, 0.4, 38, main, {}, 0.15)))
   return g
 }
 
@@ -2184,7 +2160,7 @@ function corkBoard(p: string[]) {
   const [frame, a, b] = p
   const g = new THREE.Group()
   g.add(rbox(60, 45, 1.6, frame, { z: 0 }, 0.6))
-  g.add(flat(rbox(56, 41, 1.8, '#c9995e', { y: 2, z: 0 }, 0.3)))
+  g.add(noOutlineDeep(rbox(56, 41, 1.8, '#c9995e', { y: 2, z: 0 }, 0.3)))
   const notes: [number, number, number, string, number][] = [
     [-17, 26, 9, a, 0.08],
     [-2, 22, 12, PAPER, -0.05],
@@ -2193,13 +2169,13 @@ function corkBoard(p: string[]) {
     [8, 6, 14, C.white, 0.04],
   ]
   for (const [x, y, s, c, rz] of notes) {
-    g.add(flat(rbox(s, s * 0.85, 0.2, c, { x, y, z: 1, rz }, 0.05)))
+    g.add(noOutlineDeep(rbox(s, s * 0.85, 0.2, c, { x, y, z: 1, rz }, 0.05)))
     g.add(ball(0.7, C.red, { x, y: y + s * 0.85 - 1.2, z: 1.6 }))
   }
   return mountAt(g, CORK_Y)
 }
 
-const DESK_PALS: Pal[] = [
+const DESK_PALS: PalFlat[] = [
   ['cute', C.white, C.pink, C.sky],
   ['nordic', N.oak, N.sage, N.mustard],
   ['modern', M.char, M.gray, M.white],
@@ -2554,7 +2530,7 @@ function trainTrack(p: string[]) {
   const seg = perim / n + 0.15
   for (const [x, z, ang] of pts) {
     g.add(rbox(seg, 1.2, 4, wood, { x, z, ry: ang }, 0.2))
-    for (const s of [-1, 1]) g.add(flat(rbox(seg, 0.2, 0.5, shade(wood, -0.18), { x: x + s * 1.1 * Math.sin(ang), y: 1.1, z: z + s * 1.1 * Math.cos(ang), ry: ang }, 0.05)))
+    for (const s of [-1, 1]) g.add(noOutlineDeep(rbox(seg, 0.2, 0.5, shade(wood, -0.18), { x: x + s * 1.1 * Math.sin(ang), y: 1.1, z: z + s * 1.1 * Math.cos(ang), ry: ang }, 0.05)))
   }
   // 小火车：车头 + 两节车厢，停在前直道上
   const car = (x: number, col: string, head: boolean) => {
@@ -2884,8 +2860,8 @@ function playKitchen(p: string[]) {
   g.children[g.children.length - 1].rotation.x = Math.PI / 2
   // 炉头（偏左）、水槽（偏右）
   for (const [x, z] of [[-24, -4], [-12, 6]] as [number, number][]) {
-    g.add(flat(cyl(4.5, 4.5, 0.5, M.char, { x, y: 50, z }, 20)))
-    g.add(flat(P(torus(3, 0.35, C.red), x, 50.6, z, Math.PI / 2)))
+    g.add(noOutlineDeep(cyl(4.5, 4.5, 0.5, M.char, { x, y: 50, z }, 20)))
+    g.add(noOutlineDeep(P(torus(3, 0.35, C.red), x, 50.6, z, Math.PI / 2)))
   }
   g.add(tray(20, 6, 16, 1, CHROME, { x: 22, y: 44.5, z: 2 }, 0.4))
   g.add(rod3([22, 50, -12], [22, 60, -10], 0.8, CHROME))
@@ -2961,7 +2937,7 @@ function kidsEasel(p: string[]) {
   return centered(g)
 }
 
-const KID_WOOD: Pal[] = [
+const KID_WOOD: PalFlat[] = [
   ['nordic', N.oak, N.white, N.sage],
   ['cute', C.woodL, C.pink, C.mint],
   ['modern', M.white, M.light, M.char],

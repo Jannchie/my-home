@@ -3,15 +3,10 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
-import { C, G, S, SWING_OPEN, holePanel, legs, lPoly, movable, rectPoly, rng, rod, shell, slab, type AssetDef, type DoorMotion, type StyleTag, type SurfaceDef } from '../kit'
+import { C, G, SWING_OPEN, holePanel, legs, lPoly, movable, rectPoly, rng, rod, shell, slab, type AssetDef, type DoorMotion, type SurfaceDef } from '../kit'
 import { soft, type SoftFn } from './more-variety'
-
-type V3 = [number, number, number]
-const N = S.nordic
-const M = S.modern
-const J = S.japanese
-const I = S.industrial
-const R = S.retro
+import { type V3 } from '../geo'
+import { I, J, M, N, R, type Pal3 } from '../packkit'
 
 // ---------- 小工具 ----------
 
@@ -125,11 +120,10 @@ const cell = (x0: number, x1: number, d: number) => [rectPoly(x0 + 0.4, -d / 2 +
 const barX = (x0: number, x1: number, y: number, z: number, r: number, c: string) => rod3([x0, y, z], [x1, y, z], r, c)
 const barZ = (z0: number, z1: number, y: number, x: number, r: number, c: string) => rod3([x, y, z0], [x, y, z1], r, c)
 
-type Pal = [StyleTag, string, string, string]
 type Base = Omit<AssetDef, 'palettes' | 'paletteStyles'>
 
 /** 组装素材定义：配色带风格标注；styles 不给就取配色里出现过的风格 */
-function A(base: Base, pals: Pal[]): AssetDef {
+function A(base: Base, pals: Pal3[]): AssetDef {
   return {
     ...base,
     palettes: pals.map((p) => [p[1], p[2], p[3]]),
@@ -141,7 +135,7 @@ function A(base: Base, pals: Pal[]): AssetDef {
 // ---------- 常用配色 ----------
 
 /** 软包：[面料, 抱枕 1, 抱枕 2] */
-const UPH: Pal[] = [
+const UPH: Pal3[] = [
   ['cute', C.pink, C.white, C.lemon],
   ['cute', C.sky, C.lemon, C.pink],
   ['nordic', N.gray, N.mustard, N.white],
@@ -150,7 +144,7 @@ const UPH: Pal[] = [
   ['retro', R.mustard, R.teal, R.cream],
 ]
 /** 柜子：[柜体, 门板, 把手] */
-const CAB: Pal[] = [
+const CAB: Pal3[] = [
   ['cute', C.white, C.sakura, C.lemon],
   ['cute', C.woodL, C.mint, C.pink],
   ['nordic', N.white, N.oak, N.oak],
@@ -1312,7 +1306,7 @@ function kidBed(p: string[]) {
 // 素材表
 // =====================================================================
 
-const CUTE_KIDS: Pal[] = [
+const CUTE_KIDS: Pal3[] = [
   ['cute', C.woodL, C.pink, C.mint],
   ['cute', C.white, C.sky, C.lemon],
   ['cute', C.white, C.sakura, C.lilac],
@@ -1321,7 +1315,7 @@ const CUTE_KIDS: Pal[] = [
   ['modern', M.white, M.light, M.char],
 ]
 
-const BEDS3: Pal[] = [
+const BEDS3: Pal3[] = [
   ['cute', C.woodL, C.pink, C.lemon],
   ['cute', C.white, C.sky, C.pink],
   ['nordic', N.oak, N.blue, N.mustard],
@@ -1330,7 +1324,7 @@ const BEDS3: Pal[] = [
   ['industrial', I.iron, I.concrete, I.rust],
 ]
 
-const CUBE: Pal[] = [
+const CUBE: Pal3[] = [
   ['cute', C.white, C.sakura, C.mint],
   ['cute', C.woodL, C.sky, C.lemon],
   ['nordic', N.white, N.linen, N.sage],

@@ -5,37 +5,20 @@
 // 每个 build 最后经 fit() 把包围盒对齐到占地中心、底面贴 y = 0。
 
 import * as THREE from 'three'
-import { ball, cup, cyl, puck, rbox, shade, toon, torus } from '../toon'
-import { C, G, S, holePanel, shell, type AssetDef, type StyleTag } from '../kit'
-
-type V3 = [number, number, number]
+import { ball, cup, cyl, puck, rbox, shade, torus } from '../toon'
+import { C, G, holePanel, shell, type AssetDef } from '../kit'
+import { PI, UP, ZAX, dist, mesh, type V3 } from '../geo'
+import { I, J, M, N, R, type Pal } from '../packkit'
 
 // ---------- 配色 ----------
 
-type Pal = [StyleTag, string[]]
 function pal(...xs: Pal[]) {
   return { palettes: xs.map((x) => x[1]), paletteStyles: xs.map((x) => x[0]), styles: [...new Set(xs.map((x) => x[0]))] }
 }
-const N = S.nordic
-const M = S.modern
-const J = S.japanese
-const I = S.industrial
-const R = S.retro
 const CHROME = M.silver
 const INK = M.black
-const PI = Math.PI
 
 // ---------- 小工具 ----------
-
-function mesh(geo: THREE.BufferGeometry, color: string) {
-  const m = new THREE.Mesh(geo, toon(color))
-  m.castShadow = true
-  m.receiveShadow = true
-  return m
-}
-
-const UP = new THREE.Vector3(0, 1, 0)
-const ZAX = new THREE.Vector3(0, 0, 1)
 
 /** 把沿 y 的部件摆到 a → b 之间；局部 z 尽量对齐世界 z（轴向接近 z 时改为对齐世界 y） */
 function orient(m: THREE.Object3D, a: V3, b: V3) {
@@ -49,7 +32,6 @@ function orient(m: THREE.Object3D, a: V3, b: V3) {
   m.position.copy(va.add(vb).multiplyScalar(0.5))
   return m
 }
-const dist = (a: V3, b: V3) => Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2])
 
 /** 两点间的圆杆（r 在 a 端，r2 在 b 端） */
 function bar(a: V3, b: V3, r: number, color: string, r2 = r, seg = 10) {

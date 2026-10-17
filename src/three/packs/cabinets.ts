@@ -9,11 +9,9 @@
 import type { AssetDef, StyleTag } from '../kit'
 import type { Tag } from '../tags'
 import { cabinetModel, cabinetSurfaces, type CabSection, type CabSpec, type DoorStyle } from '../cabinetKit'
+import { type Pal3 } from '../packkit'
 
-/** [门色, 柜体色, 点缀色] 按风格 */
-type Pal = [StyleTag, string, string, string]
-
-const WOOD: Pal[] = [
+const WOOD: Pal3[] = [
   ['nordic', '#f3efe6', '#e6d3b3', '#b89f7e'],
   ['nordic', '#ead7b8', '#f3ead9', '#8f7a5e'],
   ['modern', '#f4f4f2', '#e8e8e6', '#9aa0a8'],
@@ -31,7 +29,7 @@ const WOOD: Pal[] = [
   ['chinese', '#6b3a2a', '#c9a27a', '#c9a25a'],
 ]
 /** 襖（押入れ）：[纸色, 柜体色, 边框色] */
-const FUSUMA: Pal[] = [
+const FUSUMA: Pal3[] = [
   ['japanese', '#f6f0e1', '#e9d2a6', '#6e4f37'],
   ['japanese', '#efe6cf', '#d9b98c', '#3e3a39'],
   ['japanese', '#e8eef0', '#e9d2a6', '#3d5a80'],
@@ -39,7 +37,7 @@ const FUSUMA: Pal[] = [
   ['retro', '#f4e7c8', '#d9b98c', '#a8683a'],
 ]
 
-const pals = (list: Pal[], only?: StyleTag[]) => {
+const pals = (list: Pal3[], only?: StyleTag[]) => {
   const xs = only ? list.filter(([s]) => only.includes(s)) : list
   return { palettes: xs.map(([, a, b, c]) => [a, b, c]), paletteStyles: xs.map(([s]) => s), styles: [...new Set(xs.map(([s]) => s))] }
 }
@@ -55,7 +53,7 @@ interface Family {
   widths: number[]
   base?: number
   sections: (w: number) => CabSection[]
-  pal: Pal[]
+  pal: Pal3[]
   styles?: StyleTag[]
   pipeZ?: number
 }

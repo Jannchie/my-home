@@ -8,18 +8,9 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
-import { C, G, S, SWING_OPEN, movable, rectPoly, rng, type AssetCategory, type AssetDef, type DoorMotion, type Fx, type StyleTag, type SurfaceDef } from '../kit'
-
-const PI = Math.PI
-const N = S.nordic
-const M = S.modern
-const J = S.japanese
-const I = S.industrial
-const R = S.retro
-
-type V3 = [number, number, number]
-type Build = (p: string[]) => THREE.Group
-type Pal = [StyleTag, string, string, string]
+import { C, G, SWING_OPEN, movable, rectPoly, rng, type AssetCategory, type AssetDef, type DoorMotion, type Fx, type StyleTag, type SurfaceDef } from '../kit'
+import { PI, UP, box3, hcyl, noOutlineDeep, type V3 } from '../geo'
+import { I, J, M, N, R, type Build, type Pal3 } from '../packkit'
 
 // ---------- 固定色 ----------
 const STEEL = '#c3c7cc'
@@ -61,13 +52,6 @@ const ONION = '#c97f3c'
 
 // ---------- 小工具 ----------
 
-function noLine<T extends THREE.Object3D>(o: T): T {
-  o.traverse((c) => {
-    c.userData.noOutline = true
-  })
-  return o
-}
-
 /** 半透明（玻璃、透明塑料、保鲜膜），不描边 */
 function glassy<T extends THREE.Object3D>(o: T, color = GLASS, k = 0.38): T {
   o.traverse((c) => {
@@ -89,23 +73,13 @@ function lit<T extends THREE.Mesh>(m: T, color: string, k = 0.6): T {
 }
 
 /** 包一层再摆放（rbox / cyl 自带的 position 不会被覆盖） */
-function P<T extends THREE.Object3D>(o: T, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0) {
+function PG<T extends THREE.Object3D>(o: T, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0) {
   const g = G(o)
   g.position.set(x, y, z)
   g.rotation.set(rx, ry, rz)
   return g
 }
 
-/** 横放的圆柱：(x, y, z) 是中心；axis='x' 时 rTop 朝 +x，'z' 时朝 +z */
-function hcyl(rTop: number, rBottom: number, len: number, color: string, x: number, y: number, z: number, axis: 'x' | 'z' = 'x', seg = 16) {
-  const m = cyl(rTop, rBottom, len, color, {}, seg)
-  m.position.set(x, y, z)
-  if (axis === 'x') m.rotation.z = -PI / 2
-  else m.rotation.x = PI / 2
-  return m
-}
-
-const UP = new THREE.Vector3(0, 1, 0)
 /** 两点之间的细杆 */
 function stick(a: V3, b: V3, r: number, color: string, seg = 8) {
   const va = new THREE.Vector3(...a)
@@ -215,7 +189,7 @@ const DISH_IN = 0.7
 
 /** 容器里的液面：薄圆片，top 为液面高度 */
 function liquid(r: number, top: number, color: string, x = 0, z = 0) {
-  return noLine(cyl(r, r, 0.3, color, { x, y: top - 0.3, z }, 28))
+  return noOutlineDeep(cyl(r, r, 0.3, color, { x, y: top - 0.3, z }, 28))
 }
 
 /** 半球（开口朝下），y 为底面，高 h */
@@ -280,11 +254,6 @@ function can(r: number, h: number, color: string, top = STEEL, at: { x?: number;
   return g
 }
 
-function box3(o: THREE.Object3D) {
-  o.updateMatrixWorld(true)
-  return new THREE.Box3().setFromObject(o, true)
-}
-
 /** 挂起：把本体移到挂点下方（顶面 topY），本体背面不小于 z = 0.3 */
 function hangAt<T extends THREE.Object3D>(o: T, topY: number, xOff = 0): T {
   const b = box3(o)
@@ -306,7 +275,7 @@ function sHook(color = STEEL) {
 // ---------- 定义 ----------
 
 interface Def extends Omit<AssetDef, 'palettes' | 'paletteStyles' | 'styles' | 'category' | 'prop' | 'build'> {
-  pals: Pal[]
+  pals: Pal3[]
   category?: AssetCategory
   prop?: boolean
   styles?: StyleTag[]
@@ -330,7 +299,7 @@ function normalized(build: Build, toFloor: boolean): Build {
 }
 
 function shifted(build: Build, [dx, dz]: [number, number]): Build {
-  return (p) => P(build(p), dx, 0, dz)
+  return (p) => PG(build(p), dx, 0, dz)
 }
 
 function def(o: Def): AssetDef {
@@ -429,7 +398,7 @@ function dishRackMini(p: string[]) {
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(cyl(0.5, 0.5, 2.5, frame, { x: sx * 14, y: 1.5, z: sz * 9.5 }, 8))
   g.add(tray(32, 10, 22, 0.6, frame, { y: 3.5 }, 0.3))
   // 栅格：网篮侧面的竖条用浅色贴片表示
-  for (let i = 0; i < 9; i++) g.add(noLine(rbox(0.5, 7, 0.3, shade(frame, -0.12), { x: -12 + i * 3, y: 5.5, z: 11.2 }, 0.1)))
+  for (let i = 0; i < 9; i++) g.add(noOutlineDeep(rbox(0.5, 7, 0.3, shade(frame, -0.12), { x: -12 + i * 3, y: 5.5, z: 11.2 }, 0.1)))
   return g
 }
 
@@ -447,9 +416,9 @@ function spiceCarousel(p: string[]) {
       const x = Math.cos(a) * 8
       const z = Math.sin(a) * 8
       g.add(glassy(cyl(2, 2, 8, GLASS, { x, y: lvl, z }, 14)))
-      g.add(noLine(cyl(1.7, 1.7, 5, ['#c0392b', '#e8c27a', '#7a8b3a', '#5a3a2a', '#e8e0d0', '#d8742a'][i], { x, y: lvl + 0.3, z }, 12)))
+      g.add(noOutlineDeep(cyl(1.7, 1.7, 5, ['#c0392b', '#e8c27a', '#7a8b3a', '#5a3a2a', '#e8e0d0', '#d8742a'][i], { x, y: lvl + 0.3, z }, 12)))
       g.add(cyl(2.1, 2.1, 1.6, cap, { x, y: lvl + 8, z }, 14))
-      g.add(noLine(rbox(2, 2, 0.3, lab, { x: x + Math.cos(a) * 2.05, y: lvl + 3, z: z + Math.sin(a) * 2.05, ry: -a + PI / 2 }, 0.1)))
+      g.add(noOutlineDeep(rbox(2, 2, 0.3, lab, { x: x + Math.cos(a) * 2.05, y: lvl + 3, z: z + Math.sin(a) * 2.05, ry: -a + PI / 2 }, 0.1)))
     }
   return g
 }
@@ -473,9 +442,9 @@ function spiceShelf(p: string[]) {
   ]
   for (const [x, c, h] of bots) {
     g.add(glassy(bottle(2.4, h, 0.8, h * 0.55, GLASS, { x, y: 2.2, z: -1 })))
-    g.add(noLine(cyl(2.1, 2.1, h * 0.5, c, { x, y: 2.5, z: -1 }, 16)))
+    g.add(noOutlineDeep(cyl(2.1, 2.1, h * 0.5, c, { x, y: 2.5, z: -1 }, 16)))
     g.add(cyl(0.95, 0.95, 1.2, acc, { x, y: 2.2 + h, z: -1 }, 12))
-    g.add(noLine(rbox(2.6, 3, 0.3, lab, { x, y: 4.5, z: 1.5 }, 0.1)))
+    g.add(noOutlineDeep(rbox(2.6, 3, 0.3, lab, { x, y: 4.5, z: 1.5 }, 0.1)))
   }
   // 盐罐、糖罐
   for (const [x, c] of [
@@ -483,14 +452,14 @@ function spiceShelf(p: string[]) {
     [13.5, '#fff3dd'],
   ] as const) {
     g.add(cup(2.6, 2.6, 7, 0.3, lab, { x, y: 2.2, z: 0 }))
-    g.add(noLine(cyl(2.25, 2.25, 5.5, c, { x, y: 2.5, z: 0 }, 16)))
+    g.add(noOutlineDeep(cyl(2.25, 2.25, 5.5, c, { x, y: 2.5, z: 0 }, 16)))
     g.add(puck(2.8, 1, acc, { x, y: 9.2, z: 0 }))
   }
   // 上层：小香料瓶一排
   for (let i = 0; i < 6; i++) {
     const x = -14 + i * 5.6
     g.add(glassy(cyl(1.8, 1.8, 7, GLASS, { x, y: 16.2, z: 0 }, 14)))
-    g.add(noLine(cyl(1.5, 1.5, 4.5, ['#c0392b', '#7a8b3a', '#e8c27a', '#3a2a22', '#d8742a', '#a4b86a'][i], { x, y: 16.5, z: 0 }, 12)))
+    g.add(noOutlineDeep(cyl(1.5, 1.5, 4.5, ['#c0392b', '#7a8b3a', '#e8c27a', '#3a2a22', '#d8742a', '#a4b86a'][i], { x, y: 16.5, z: 0 }, 12)))
     g.add(cyl(1.9, 1.9, 1.6, i % 2 ? acc : M.black, { x, y: 23.2, z: 0 }, 14))
   }
   return g
@@ -502,7 +471,7 @@ function knifeMagnet(p: string[]) {
   const [bar, handle, acc] = p
   const g = new THREE.Group()
   g.add(rbox(42, 4.5, 1.8, bar, { y: KNIFE_MOUNT + 18, z: -1.6 }, 0.8))
-  g.add(noLine(rbox(40, 0.6, 0.3, acc, { y: KNIFE_MOUNT + 20, z: -0.55 }, 0.1)))
+  g.add(noOutlineDeep(rbox(40, 0.6, 0.3, acc, { y: KNIFE_MOUNT + 20, z: -0.55 }, 0.1)))
   // 刀：刀刃朝下，刀身贴着磁条
   const knives: [number, number, number][] = [
     [-15, 20.5, 4.6],
@@ -528,7 +497,7 @@ function utensilCrock(p: string[]) {
   const [pot, wood, acc] = p
   const g = new THREE.Group()
   g.add(cup(6, 5.4, 15, 0.6, pot))
-  g.add(noLine(cyl(5.3, 5.3, 0.4, shade(pot, -0.2), { y: 13 }, 24)))
+  g.add(noOutlineDeep(cyl(5.3, 5.3, 0.4, shade(pot, -0.2), { y: 13 }, 24)))
   // 木铲
   g.add(stick([-2, 2, 0], [-3.5, 30, -1], 0.6, wood))
   g.add(rbox(5, 7, 0.6, wood, { x: -3.8, y: 28, z: -1.1, rz: 0.05 }, 0.3))
@@ -575,7 +544,7 @@ function kitchenWagon(p: string[], tiers: number) {
   for (const y of ys) {
     g.add(tray(W - 1, 5, D - 1, 0.6, basket, { y }, 0.3))
     // 网格感：前后侧面的细竖条
-    for (let i = 0; i < 12; i++) for (const s of [-1, 1]) g.add(noLine(rbox(0.4, 3.6, 0.3, shade(basket, -0.15), { x: -W / 2 + 4 + i * 3.4, y: y + 0.8, z: s * (D / 2 - 0.25) }, 0.1)))
+    for (let i = 0; i < 12; i++) for (const s of [-1, 1]) g.add(noOutlineDeep(rbox(0.4, 3.6, 0.3, shade(basket, -0.15), { x: -W / 2 + 4 + i * 3.4, y: y + 0.8, z: s * (D / 2 - 0.25) }, 0.1)))
   }
   // 侧面推手
   g.add(stick([W / 2 - 1.2, top - 2, -D / 2 + 4], [W / 2 + 2.5, top - 2, -D / 2 + 4], 0.6, acc))
@@ -595,10 +564,10 @@ function riceCabinet(p: string[]) {
   g.add(rbox(20, 30, 0.6, front, { y: 12, z: 20 }, 0.6))
   // 米量窗
   g.add(glassy(rbox(5, 18, 0.4, GLASS, { y: 18, z: 20.4 }, 0.2)))
-  g.add(noLine(rbox(4, 12, 0.3, RICE, { y: 18.5, z: 20.25 }, 0.2)))
+  g.add(noOutlineDeep(rbox(4, 12, 0.3, RICE, { y: 18.5, z: 20.25 }, 0.2)))
   // 计量按钮
   g.add(hcyl(2.4, 2.4, 1.2, acc, 0, 39, 20.6, 'z', 20))
-  g.add(noLine(rbox(2.4, 0.5, 0.3, C.white, { y: 38.8, z: 21.3 }, 0.1)))
+  g.add(noOutlineDeep(rbox(2.4, 0.5, 0.3, C.white, { y: 38.8, z: 21.3 }, 0.1)))
   // 接米抽屉
   g.add(rbox(18, 8, 2, shade(front, -0.05), { y: 2, z: 20.5 }, 0.6))
   g.add(rbox(8, 1.5, 1.2, acc, { y: 6.5, z: 22 }, 0.5))
@@ -628,7 +597,7 @@ function bagStand(p: string[]) {
     g.add(stick([x - 10, H - 6, D / 2 - 1.5], [x + 10, H - 6, D / 2 - 1.5], 0.45, frame))
     // 半透明垃圾袋：口沿翻在框上
     g.add(glassy(tray(20.5, H - 9, D - 3, 0.3, bag, { x, y: 1.7, z: 0.5 }, 0.2), bag, 0.55))
-    g.add(noLine(rbox(21.4, 1.2, D - 2, bag, { x, y: H - 6.8, z: 0.5 }, 0.3)))
+    g.add(noOutlineDeep(rbox(21.4, 1.2, D - 2, bag, { x, y: H - 6.8, z: 0.5 }, 0.3)))
     // 颜色标签牌
     g.add(rbox(10, 4, 0.5, tints[i], { x, y: H - 12, z: D / 2 - 0.8 }, 0.3))
   }
@@ -653,7 +622,7 @@ function glassContainers(p: string[]) {
     y += h + 1.2
   }
   // 最下层里装了点东西
-  g.add(noLine(rbox(18, 3, 12, acc, { y: 0.6 }, 1)))
+  g.add(noOutlineDeep(rbox(18, 3, 12, acc, { y: 0.6 }, 1)))
   return g
 }
 
@@ -668,10 +637,10 @@ function canisters(p: string[]) {
   ]
   for (const [x, h, fill] of jars) {
     g.add(glassy(cup(4, 4, h, 0.4, GLASS, { x })))
-    if (fill === '#f1d58a') for (let i = 0; i < 12; i++) g.add(noLine(stick([x - 2.5 + (i % 4) * 1.6, 0.6, -1.5 + Math.floor(i / 4) * 1.5], [x - 2.4 + (i % 4) * 1.6, h - 3, -1.5 + Math.floor(i / 4) * 1.5], 0.28, fill)))
-    else g.add(noLine(cyl(3.5, 3.5, h * 0.7, fill, { x, y: 0.5 }, 18)))
+    if (fill === '#f1d58a') for (let i = 0; i < 12; i++) g.add(noOutlineDeep(stick([x - 2.5 + (i % 4) * 1.6, 0.6, -1.5 + Math.floor(i / 4) * 1.5], [x - 2.4 + (i % 4) * 1.6, h - 3, -1.5 + Math.floor(i / 4) * 1.5], 0.28, fill)))
+    else g.add(noOutlineDeep(cyl(3.5, 3.5, h * 0.7, fill, { x, y: 0.5 }, 18)))
     g.add(puck(4.5, 2.2, lid, { x, y: h - 0.3 }))
-    g.add(noLine(cyl(4.05, 4.05, 2.5, band, { x, y: h * 0.45 }, 24)))
+    g.add(noOutlineDeep(cyl(4.05, 4.05, 2.5, band, { x, y: h * 0.45 }, 24)))
     g.add(ball(0.9, acc, { x, y: h + 2.3 }))
   }
   return g
@@ -691,8 +660,8 @@ function wrapRack(p: string[]) {
     [8.8, box2, '#d8dde3'],
   ] as const) {
     g.add(rbox(31, 5.6, 6, c, { y, z: 0 }, 0.4))
-    g.add(noLine(rbox(29, 1.6, 0.3, shade(c, -0.2), { y: y + 2, z: 3.1 }, 0.1)))
-    g.add(noLine(hcyl(1.6, 1.6, 29, roll, 0, y + 3.8, 1.2)))
+    g.add(noOutlineDeep(rbox(29, 1.6, 0.3, shade(c, -0.2), { y: y + 2, z: 3.1 }, 0.1)))
+    g.add(noOutlineDeep(hcyl(1.6, 1.6, 29, roll, 0, y + 3.8, 1.2)))
   }
   return g
 }
@@ -736,7 +705,7 @@ function turnerBody(p: string[]) {
   const [head, handle] = p
   const g = new THREE.Group()
   g.add(rbox(8, 9, 0.5, head, { y: 0 }, 0.4))
-  for (let i = 0; i < 3; i++) g.add(noLine(rbox(0.8, 5, 0.3, shade(head, -0.25), { x: -2.2 + i * 2.2, y: 2.5, z: 0.25 }, 0.1)))
+  for (let i = 0; i < 3; i++) g.add(noOutlineDeep(rbox(0.8, 5, 0.3, shade(head, -0.25), { x: -2.2 + i * 2.2, y: 2.5, z: 0.25 }, 0.1)))
   g.add(rbox(1.8, 4, 0.6, head, { y: 9 }, 0.3))
   g.add(rbox(2.2, 16, 1.2, handle, { y: 13 }, 0.5))
   g.add(torus(0.8, 0.3, handle, { y: 29.8 }))
@@ -812,7 +781,7 @@ function boardStand(p: string[]) {
   b1.position.set(0, 12, -2.6)
   b1.rotation.x = -0.12
   g.add(b1)
-  g.add(noLine(rbox(4, 1.2, 0.3, shade(board1, -0.2), { y: 20, z: -1.2, rx: -0.12 }, 0.4)))
+  g.add(noOutlineDeep(rbox(4, 1.2, 0.3, shade(board1, -0.2), { y: 20, z: -1.2, rx: -0.12 }, 0.4)))
   const b2 = rbox(26, 19, 1, board2, {}, 0.5)
   b2.position.set(0, 10.8, 2.2)
   b2.rotation.x = -0.1
@@ -848,7 +817,7 @@ function panRack(p: string[]) {
   lid.position.set(0, 12, 10.5)
   g.add(lid)
   g.add(hcyl(1.6, 1.6, 2.2, acc, 0, 12, 12, 'z', 14))
-  g.add(noLine(torus(11, 0.4, STEEL, { y: 12, z: 10.5 })))
+  g.add(noOutlineDeep(torus(11, 0.4, STEEL, { y: 12, z: 10.5 })))
   return g
 }
 
@@ -1000,7 +969,7 @@ function cupboard(p: string[], W: number) {
     g.add(swingAt(parts, x - ks * (dw / 2 - 0.3), zz - 0.5, ks > 0))
   }
   // 门把手往前凸 0.8，整体后移让包围盒前后居中
-  return P(g, 0, 0, -0.4)
+  return PG(g, 0, 0, -0.4)
 }
 
 // ======================================================================
@@ -1040,7 +1009,7 @@ function plateStack(p: string[], r: number, n: number) {
   const h = r > 11 ? 2.8 : 2.2
   for (let i = 0; i < n; i++) {
     g.add(dish(r, h, i % 3 === 1 ? b : a, { y: i * 1.25 }))
-    g.add(noLine(torus(r - 0.25, 0.12, rim, { y: i * 1.25 + h + 0.05, rx: PI / 2 })))
+    g.add(noOutlineDeep(torus(r - 0.25, 0.12, rim, { y: i * 1.25 + h + 0.05, rx: PI / 2 })))
   }
   return g
 }
@@ -1066,7 +1035,7 @@ function bento2(p: string[], open: boolean) {
   g.add(tray(W, 5, D, 0.5, box, { x: x1 }, 1.4))
   g.add(tray(W, 4.6, D, 0.5, box, { x: x2 }, 1.4))
   // 下层：白饭 + 梅干 + 芝麻
-  g.add(noLine(rbox(W - 1.4, 3.6, D - 1.4, RICE, { x: x1, y: 0.5 }, 0.8)))
+  g.add(noOutlineDeep(rbox(W - 1.4, 3.6, D - 1.4, RICE, { x: x1, y: 0.5 }, 0.8)))
   g.add(ball(0.9, '#c8303f', { x: x1, y: 4.1, z: 0 }))
   // 上层：玉子烧、炸鸡、西兰花、小番茄、分隔叶
   g.add(rbox(4, 2.4, 2.6, TAMAGO, { x: x2 - 5, y: 0.5, z: -2.3 }, 0.6))
@@ -1082,7 +1051,7 @@ function bento2(p: string[], open: boolean) {
     g.add(cyl(0.4, 0.5, 2.2, '#8bc46a', { x: x2 + 5, y: 0.5, z: dz }, 8))
   }
   g.add(ball(1.2, TOMATO, { x: x2 + 2.5, y: 1.8, z: 2.6 }))
-  g.add(noLine(rbox(0.3, 3.4, D - 1.6, '#3f9a4a', { x: x2 + 3.4, y: 0.5 }, 0.1)))
+  g.add(noOutlineDeep(rbox(0.3, 3.4, D - 1.6, '#3f9a4a', { x: x2 + 3.4, y: 0.5 }, 0.1)))
   // 盖子竖靠在后面
   const l = rbox(W + 0.4, 1.4, D + 0.4, lid, {}, 1.4)
   l.position.set(0, (D + 0.4) / 2 + 0.2, -D / 2 - 2)
@@ -1097,7 +1066,7 @@ function chawanmushi(p: string[]) {
   const g = new THREE.Group()
   g.add(dish(6.5, 1.4, saucer))
   g.add(cup(3.8, 3, 7, 0.35, cupC, { y: DISH_IN }))
-  g.add(noLine(cyl(3.4, 3.4, 0.3, '#f5dc8a', { y: DISH_IN + 5.6 }, 20)))
+  g.add(noOutlineDeep(cyl(3.4, 3.4, 0.3, '#f5dc8a', { y: DISH_IN + 5.6 }, 20)))
   // 盖子：浅碟倒扣 + 钮
   g.add(dome(4, 1.6, cupC, { y: DISH_IN + 7 }))
   g.add(cyl(0.8, 1, 0.9, cupC, { y: DISH_IN + 8.4 }, 12))
@@ -1131,7 +1100,7 @@ function glassTumblers(p: string[]) {
   for (const [x, h, r, dr] of list) {
     g.add(puck(r + 1, 0.4, coaster, { x }))
     g.add(glassy(cup(r, r * 0.88, h, 0.25, g1, { x, y: 0.4 }), g1, 0.4))
-    if (dr) g.add(noLine(cyl(r - 0.35, r * 0.88 - 0.3, h * 0.6, dr, { x, y: 0.75 }, 20)))
+    if (dr) g.add(noOutlineDeep(cyl(r - 0.35, r * 0.88 - 0.3, h * 0.6, dr, { x, y: 0.75 }, 20)))
   }
   return g
 }
@@ -1177,7 +1146,7 @@ function wineGlasses(p: string[]) {
     s.add(cyl(0.4, 0.4, 9, gl, { y: 0.4 }, 8))
     s.add(lathe([[0.4, 9.4], [3, 11.5], [4, 15], [3.4, 20], [3.2, 20], [3.75, 15], [2.8, 11.8], [0, 10]], gl))
     glassy(s, gl, 0.45)
-    if (full) s.add(noLine(lathe([[0, 10.1], [2.7, 11.8], [3.6, 14.2], [0, 14.2]], wine)))
+    if (full) s.add(noOutlineDeep(lathe([[0, 10.1], [2.7, 11.8], [3.6, 14.2], [0, 14.2]], wine)))
     s.position.set(x, 0.6, 0)
     g.add(s)
   }
@@ -1191,11 +1160,11 @@ function beerMugs(p: string[]) {
   for (const x of [-5, 5]) {
     g.add(puck(4.8, 0.4, coaster, { x }))
     g.add(glassy(cup(3.8, 3.6, 15, 0.4, gl, { x, y: 0.4 }), gl, 0.4))
-    g.add(noLine(cyl(3.4, 3.2, 11, BEER, { x, y: 0.8 }, 20)))
+    g.add(noOutlineDeep(cyl(3.4, 3.2, 11, BEER, { x, y: 0.8 }, 20)))
     g.add(puck(3.6, 3, FOAM, { x, y: 11.4 }))
     g.add(glassy(torus(2.6, 0.6, gl, { x: x + (x < 0 ? -3.5 : 3.5), y: 8, rx: 0, ry: 0 }, PI), gl, 0.45).rotateZ(x < 0 ? PI / 2 : -PI / 2))
   }
-  g.add(noLine(rbox(3, 0.3, 3, acc, { x: 0, y: 0, z: 4 }, 0.2)))
+  g.add(noOutlineDeep(rbox(3, 0.3, 3, acc, { x: 0, y: 0, z: 4 }, 0.2)))
   return g
 }
 
@@ -1206,7 +1175,7 @@ function tokkuriSet(p: string[]) {
   g.add(tray(24, 1.6, 14, 0.6, trayC, {}, 0.5))
   // 德利：中心在 (0, 0.6, 0)
   g.add(lathe([[0, 0], [3.4, 0], [4, 2], [4, 7], [2, 11], [1.2, 13], [1.6, 14.2], [1.1, 14.4], [0.9, 13.6], [0, 13.6]], ware, { y: 0.6 }))
-  g.add(noLine(cyl(4.02, 4.02, 1.2, acc, { y: 5.6 }, 24)))
+  g.add(noOutlineDeep(cyl(4.02, 4.02, 1.2, acc, { y: 5.6 }, 24)))
   for (const x of [-7.5, 7.5]) {
     g.add(cup(2.4, 1.5, 3.2, 0.25, ware, { x, y: 0.6, z: 2 }))
     g.add(liquid(2, 3.4, '#fbf3d8', x, 2))
@@ -1221,12 +1190,12 @@ function dripSet(p: string[]) {
   // 分享壶（玻璃）+ 滤杯
   const sx = -4
   g.add(glassy(lathe([[0, 0], [4.8, 0], [5.2, 2], [5.2, 8], [4.2, 11], [4.2, 12.5], [3.9, 12.5], [3.9, 11], [4.9, 8], [4.9, 2], [0, 0.4]], GLASS), GLASS, 0.4).translateX(sx))
-  g.add(noLine(cyl(4.7, 4.9, 3.2, COFFEE, { x: sx, y: 0.5 }, 24)))
+  g.add(noOutlineDeep(cyl(4.7, 4.9, 3.2, COFFEE, { x: sx, y: 0.5 }, 24)))
   g.add(tube([[sx - 5, 9.5, 0], [sx - 7.2, 8, 0], [sx - 7, 4, 0], [sx - 5, 2.5, 0]], 0.5, server, false, 20))
   g.add(cup(5.6, 2.4, 6.5, 0.35, dripper, { x: sx, y: 12.5 }))
   g.add(puck(5.2, 0.6, dripper, { x: sx, y: 12.3 }))
-  g.add(noLine(cup(5.1, 2.2, 6.3, 0.15, '#f4efe4', { x: sx, y: 13 })))
-  g.add(noLine(cyl(3.8, 3.8, 0.3, COFFEE, { x: sx, y: 16 }, 20)))
+  g.add(noOutlineDeep(cup(5.1, 2.2, 6.3, 0.15, '#f4efe4', { x: sx, y: 13 })))
+  g.add(noOutlineDeep(cyl(3.8, 3.8, 0.3, COFFEE, { x: sx, y: 16 }, 20)))
   // 细口手冲壶
   const kx = 10
   g.add(lathe([[0, 0], [5.2, 0], [5.6, 1], [5.6, 9], [4.5, 11.5], [2, 12.5], [0, 12.5]], kettle, { x: kx }))
@@ -1260,11 +1229,11 @@ function placemat(p: string[], shape: 'rect' | 'round') {
   const g = new THREE.Group()
   if (shape === 'rect') {
     g.add(rbox(45, 0.4, 32, mat, {}, 0.15))
-    for (const s of [-1, 1]) g.add(noLine(rbox(45, 0.08, 1.2, border, { y: 0.4, z: s * 13.5 }, 0.03)))
-    for (let i = 0; i < 9; i++) g.add(noLine(rbox(0.3, 0.06, 26, shade(mat, -0.06), { x: -20 + i * 5, y: 0.4 }, 0.02)))
+    for (const s of [-1, 1]) g.add(noOutlineDeep(rbox(45, 0.08, 1.2, border, { y: 0.4, z: s * 13.5 }, 0.03)))
+    for (let i = 0; i < 9; i++) g.add(noOutlineDeep(rbox(0.3, 0.06, 26, shade(mat, -0.06), { x: -20 + i * 5, y: 0.4 }, 0.02)))
   } else {
     g.add(cyl(19, 19, 0.4, mat, {}, 40))
-    g.add(noLine(torus(17.5, 0.35, border, { y: 0.42, rx: PI / 2 })))
+    g.add(noOutlineDeep(torus(17.5, 0.35, border, { y: 0.42, rx: PI / 2 })))
   }
   g.add(chopsticks(23, chop, 0, 0.4, shape === 'rect' ? 11 : 10))
   return g
@@ -1314,7 +1283,7 @@ function donburi(p: string[]) {
   const [b, lid, acc] = p
   const g = new THREE.Group()
   g.add(bowl(8, 7.5, b))
-  g.add(noLine(torus(7.3, 0.25, acc, { y: 6.4, rx: PI / 2 })))
+  g.add(noOutlineDeep(torus(7.3, 0.25, acc, { y: 6.4, rx: PI / 2 })))
   const l = bowl(7.6, 2.8, lid, {}, 0.35, 0.36)
   l.rotation.x = PI
   l.position.y = 10.4
@@ -1333,7 +1302,7 @@ function riceBowl(p: string[]) {
   g.add(bowl(5.8, 6, b))
   g.add(riceMound(bowlIn(5.8, 6, 5.2), 2.4, 5.2))
   g.add(hashioki(shade(b, -0.12), 0, 0, 7.4, PI / 2))
-  g.add(P(chopsticks(22, chop, 0, 0, 0), 0, 0.9, 7.4))
+  g.add(PG(chopsticks(22, chop, 0, 0, 0), 0, 0.9, 7.4))
   return g
 }
 const RICE_FX: Fx[] = [{ kind: 'steam', x: 0, y: 8, z: 0, scale: 0.7, height: 18 }]
@@ -1343,7 +1312,7 @@ function misoSoup(p: string[]) {
   const [b, inner] = p
   const g = new THREE.Group()
   g.add(bowl(6, 6.5, b))
-  g.add(noLine(bowl(5.62, 6.1, inner, { y: 0.06 }, 0.1)))
+  g.add(noOutlineDeep(bowl(5.62, 6.1, inner, { y: 0.06 }, 0.1)))
   const top = 5.3
   g.add(liquid(bowlIn(6, 6.5, top), top, MISO))
   for (const [x, z] of [
@@ -1351,13 +1320,13 @@ function misoSoup(p: string[]) {
     [1.2, 1.4],
     [1.8, -1.6],
   ])
-    g.add(noLine(rbox(1.3, 0.6, 1.3, TOFU, { x, y: top - 0.4, z }, 0.15)))
+    g.add(noOutlineDeep(rbox(1.3, 0.6, 1.3, TOFU, { x, y: top - 0.4, z }, 0.15)))
   for (const [x, z] of [
     [-1.6, 1.8],
     [0.2, 0],
   ])
-    g.add(noLine(ball(1, '#2f5a2a', { x, y: top, z }, [1.2, 0.15, 0.7])))
-  for (let i = 0; i < 6; i++) g.add(noLine(cyl(0.3, 0.3, 0.25, NEGI, { x: -2.5 + i, y: top, z: 2.6 - (i % 3) }, 8)))
+    g.add(noOutlineDeep(ball(1, '#2f5a2a', { x, y: top, z }, [1.2, 0.15, 0.7])))
+  for (let i = 0; i < 6; i++) g.add(noOutlineDeep(cyl(0.3, 0.3, 0.25, NEGI, { x: -2.5 + i, y: top, z: 2.6 - (i % 3) }, 8)))
   return g
 }
 const MISO_FX: Fx[] = [{ kind: 'steam', x: 0, y: 6.5, z: 0, scale: 0.7, height: 16 }]
@@ -1367,18 +1336,18 @@ function kitsuneUdon(p: string[]) {
   const [b, , acc] = p
   const g = new THREE.Group()
   g.add(bowl(9.5, 8, b))
-  g.add(noLine(torus(9, 0.3, acc, { y: 7.2, rx: PI / 2 })))
+  g.add(noOutlineDeep(torus(9, 0.3, acc, { y: 7.2, rx: PI / 2 })))
   const top = 6.6
   g.add(liquid(bowlIn(9.5, 8, top), top, BROTH))
   // 粗面条
-  for (let i = 0; i < 7; i++) g.add(noLine(tube(arc([0, top - 0.1, 0], 2 + i * 0.75, 0.3 * i, 0.3 * i + 2.2, 6, 'xz'), 0.4, '#fbf3df', false, 16)))
+  for (let i = 0; i < 7; i++) g.add(noOutlineDeep(tube(arc([0, top - 0.1, 0], 2 + i * 0.75, 0.3 * i, 0.3 * i + 2.2, 6, 'xz'), 0.4, '#fbf3df', false, 16)))
   // 油豆腐皮
   g.add(rbox(7, 1, 5, '#d99a45', { x: -1.5, y: top - 0.4, z: -1.5, ry: 0.3 }, 0.5))
   g.add(rbox(6, 1, 4.5, '#cf8d3c', { x: 2.5, y: top - 0.3, z: 1.5, ry: -0.4 }, 0.5))
   // 鱼板 + 葱
   g.add(cyl(1.8, 1.8, 0.6, '#ffffff', { x: 3.5, y: top - 0.2, z: -3.5 }, 16))
-  g.add(noLine(cyl(1.2, 1.2, 0.62, '#ff9db0', { x: 3.5, y: top - 0.2, z: -3.5 }, 16)))
-  for (let i = 0; i < 6; i++) g.add(noLine(cyl(0.35, 0.35, 0.3, NEGI, { x: -4 + i * 0.8, y: top + 0.5, z: 3.5 - (i % 2) }, 8)))
+  g.add(noOutlineDeep(cyl(1.2, 1.2, 0.62, '#ff9db0', { x: 3.5, y: top - 0.2, z: -3.5 }, 16)))
+  for (let i = 0; i < 6; i++) g.add(noOutlineDeep(cyl(0.35, 0.35, 0.3, NEGI, { x: -4 + i * 0.8, y: top + 0.5, z: 3.5 - (i % 2) }, 8)))
   return g
 }
 const UDON_FX: Fx[] = [{ kind: 'steam', x: 0, y: 8, z: 0, scale: 1, height: 20 }]
@@ -1390,14 +1359,14 @@ function curryRice(p: string[]) {
   const dd = dish(13, 3.2, d)
   dd.scale.z = 0.72
   g.add(dd)
-  const ring = noLine(torus(12.7, 0.2, rim, { y: 3.25, rx: PI / 2 }))
+  const ring = noOutlineDeep(torus(12.7, 0.2, rim, { y: 3.25, rx: PI / 2 }))
   ring.scale.y = 0.72 // 圆环转平后，局部 y 对应世界 z
   g.add(ring)
   // 饭在左、咖喱在右
   const rice = riceMound(5.5, 2.6, DISH_IN, RICE, -4, 0)
   rice.scale.z = 1.25
   g.add(rice)
-  const roux = noLine(cyl(6.2, 6.6, 0.8, CURRY, { x: 3.5, y: DISH_IN }, 28))
+  const roux = noOutlineDeep(cyl(6.2, 6.6, 0.8, CURRY, { x: 3.5, y: DISH_IN }, 28))
   roux.scale.z = 0.95
   g.add(roux)
   for (const [x, z, c] of [
@@ -1407,7 +1376,7 @@ function curryRice(p: string[]) {
     [6.5, -1.8, '#e9d8a6'],
   ] as const)
     g.add(rbox(1.6, 1.2, 1.6, c, { x, y: DISH_IN + 0.5, z, ry: x }, 0.4))
-  g.add(noLine(rbox(0.8, 0.4, 2.2, '#e14b4b', { x: -6.5, y: DISH_IN + 1.2, z: 2.5 }, 0.15)))
+  g.add(noOutlineDeep(rbox(0.8, 0.4, 2.2, '#e14b4b', { x: -6.5, y: DISH_IN + 1.2, z: 2.5 }, 0.15)))
   // 勺子斜放在盘沿
   g.add(rbox(1.2, 0.35, 12, spoon, { x: 9, y: 2.6, z: 1, ry: 0.25, rx: 0.12 }, 0.15))
   return g
@@ -1418,9 +1387,9 @@ function sushiOke(p: string[]) {
   const [wood, band, acc] = p
   const g = new THREE.Group()
   g.add(cup(15, 14, 7, 0.9, wood))
-  for (const y of [1.6, 5]) g.add(noLine(torus(14.4 + (y > 3 ? 0.4 : 0), 0.35, band, { y, rx: PI / 2 })))
+  for (const y of [1.6, 5]) g.add(noOutlineDeep(torus(14.4 + (y > 3 ? 0.4 : 0), 0.35, band, { y, rx: PI / 2 })))
   const top = 5.6
-  g.add(noLine(cyl(13.8, 13.8, 0.4, RICE, { y: top - 0.4 }, 32)))
+  g.add(noOutlineDeep(cyl(13.8, 13.8, 0.4, RICE, { y: top - 0.4 }, 32)))
   // 散寿司：蛋丝、三文鱼、鲔鱼、黄瓜、虾、紫苏
   const r = rng(3)
   const tops = [SALMON, TUNA, TAMAGO, CUCUMBER, '#ff8a5c', '#f5c542']
@@ -1433,9 +1402,9 @@ function sushiOke(p: string[]) {
   for (let i = 0; i < 18; i++) {
     const a = r() * PI * 2
     const d = Math.sqrt(r()) * 12
-    g.add(noLine(ball(0.4, '#ff6a3c', { x: Math.cos(a) * d, y: top + 0.5, z: Math.sin(a) * d })))
+    g.add(noOutlineDeep(ball(0.4, '#ff6a3c', { x: Math.cos(a) * d, y: top + 0.5, z: Math.sin(a) * d })))
   }
-  g.add(noLine(ball(2.2, acc, { x: -3, y: top + 0.1, z: 4 }, [1, 0.12, 1.4])))
+  g.add(noOutlineDeep(ball(2.2, acc, { x: -3, y: top + 0.1, z: 4 }, [1, 0.12, 1.4])))
   return g
 }
 
@@ -1443,7 +1412,7 @@ function sushiOke(p: string[]) {
 function onigiriTrio(p: string[]) {
   const [leaf, , acc] = p
   const g = new THREE.Group()
-  g.add(noLine(ball(11, leaf, { y: 0.3 }, [1.15, 0.03, 0.6])))
+  g.add(noOutlineDeep(ball(11, leaf, { y: 0.3 }, [1.15, 0.03, 0.6])))
   const fills = ['#e14b4b', SALMON, acc]
   for (let i = 0; i < 3; i++) {
     const x = -7 + i * 7
@@ -1467,7 +1436,7 @@ function onigiriTrio(p: string[]) {
     // 海苔
     o.add(rbox(3.6, 3.2, 4, NORI, { y: -0.3 }, 0.3))
     // 顶上露馅
-    o.add(noLine(ball(0.8, fills[i], { y: s * 1.2, z: 1.85 }, [1, 1, 0.3])))
+    o.add(noOutlineDeep(ball(0.8, fills[i], { y: s * 1.2, z: 1.85 }, [1, 1, 0.3])))
     o.position.set(x, 0.65, 0)
     o.rotation.y = (i - 1) * 0.25
     g.add(o)
@@ -1485,11 +1454,11 @@ function breadBag(p: string[]) {
   const top = hcyl(5.5, 5.5, 22, CRUST, 0, 9, 0, 'z', 20)
   top.scale.x = 1
   loaf.add(top)
-  loaf.add(noLine(rbox(10, 9.5, 0.3, BREAD, { y: 0.5, z: 11.05 }, 0.8)))
+  loaf.add(noOutlineDeep(rbox(10, 9.5, 0.3, BREAD, { y: 0.5, z: 11.05 }, 0.8)))
   g.add(loaf)
   // 袋子（半透明）+ 扎口 + 标签
   g.add(glassy(rbox(12.4, 15.6, 24, bag, { y: -0.2 }, 2.4), bag, 0.35))
-  g.add(noLine(rbox(12.5, 6, 10, lab, { y: 3.5, z: -2 }, 0.6)))
+  g.add(noOutlineDeep(rbox(12.5, 6, 10, lab, { y: 3.5, z: -2 }, 0.6)))
   g.add(ball(2, bag, { y: 7.5, z: -13.5 }, [1, 1, 0.8]))
   g.add(rbox(3, 1, 1.4, tie, { y: 7, z: -12.6 }, 0.3))
   return g
@@ -1506,7 +1475,7 @@ function toastPlate(p: string[]) {
   ] as const) {
     const s = new THREE.Group()
     s.add(rbox(9.6, 1.4, 10, '#e2a865', {}, 1))
-    s.add(noLine(rbox(8.4, 0.3, 8.8, '#f3c47c', { y: 1.3 }, 0.6)))
+    s.add(noOutlineDeep(rbox(8.4, 0.3, 8.8, '#f3c47c', { y: 1.3 }, 0.6)))
     s.add(ball(4.8, '#e2a865', { y: 0.7, z: -4.2 }, [1, 0.15, 0.5]))
     s.position.set(x, y, 0)
     s.rotation.y = ry
@@ -1522,14 +1491,14 @@ function baguettes(p: string[]) {
   const [bag, stripe] = p
   const g = new THREE.Group()
   g.add(tray(14, 30, 8, 0.25, bag, {}, 0.2))
-  for (const s of [-1, 1]) g.add(noLine(rbox(14.1, 1.4, 8.1, stripe, { y: 8 + s * 3 }, 0.1)))
+  for (const s of [-1, 1]) g.add(noOutlineDeep(rbox(14.1, 1.4, 8.1, stripe, { y: 8 + s * 3 }, 0.1)))
   for (const [x, ry, h] of [
     [-3, 0.05, 62],
     [3, -0.06, 56],
   ] as const) {
     const b = G(capsule(2.8, h - 5.6, CRUST))
     // 表面的割纹
-    for (let i = 0; i < 5; i++) b.add(noLine(rbox(2.2, 0.4, 0.4, '#f0c98a', { y: h - 26 + i * 5, z: 2.55, rz: 0.5 }, 0.1)))
+    for (let i = 0; i < 5; i++) b.add(noOutlineDeep(rbox(2.2, 0.4, 0.4, '#f0c98a', { y: h - 26 + i * 5, z: 2.55, rz: 0.5 }, 0.1)))
     b.position.set(x, 0.3, 0)
     b.rotation.z = ry
     g.add(b)
@@ -1555,7 +1524,7 @@ function donutBox(p: string[]) {
     const t = torus(2.6, 1.62, glaze[i], { x, y: 2.5, z, rx: PI / 2 })
     t.scale.z = 0.7
     g.add(t)
-    if (i % 2 === 0) for (let k = 0; k < 5; k++) g.add(noLine(rbox(0.9, 0.3, 0.3, ['#ff5a6e', '#4fb7e8', '#ffd84d', '#7ed37a', '#ffffff'][k], { x: x + Math.cos(k * 1.3) * 2.6, y: 3.6, z: z + Math.sin(k * 1.3) * 2.6, ry: k }, 0.1)))
+    if (i % 2 === 0) for (let k = 0; k < 5; k++) g.add(noOutlineDeep(rbox(0.9, 0.3, 0.3, ['#ff5a6e', '#4fb7e8', '#ffd84d', '#7ed37a', '#ffffff'][k], { x: x + Math.cos(k * 1.3) * 2.6, y: 3.6, z: z + Math.sin(k * 1.3) * 2.6, ry: k }, 0.1)))
   }
   return g
 }
@@ -1615,13 +1584,13 @@ function mikanBox(p: string[]) {
     f.rotation.x = -s * 0.9
     g.add(f)
   }
-  g.add(noLine(rbox(16, 6, 0.3, print, { y: 4, z: 13.05 }, 0.3)))
+  g.add(noOutlineDeep(rbox(16, 6, 0.3, print, { y: 4, z: 13.05 }, 0.3)))
   const r = rng(5)
   for (let i = 0; i < 24; i++) {
     const x = -14 + (i % 6) * 5.6 + (r() - 0.5)
     const z = -9 + Math.floor(i / 6) * 6 + (r() - 0.5)
     g.add(ball(3, acc, { x, y: 12.4 + (r() - 0.5) * 0.6, z }, [1, 0.85, 1]))
-    if (i % 3 === 0) g.add(noLine(cyl(0.5, 0.5, 0.3, LEAF, { x, y: 14.9, z }, 8)))
+    if (i % 3 === 0) g.add(noOutlineDeep(cyl(0.5, 0.5, 0.3, LEAF, { x, y: 14.9, z }, 8)))
   }
   return g
 }
@@ -1640,16 +1609,16 @@ function watermelonHalf(p: string[]) {
   for (let i = 0; i < 8; i++) {
     const a = (i / 8) * PI * 2
     const s = tube(arc([0, DISH_IN + R0 * 0.82, 0], R0 + 0.05, -PI / 2 + 0.25, -0.02, 6, 'yz').map(([, y, z]): V3 => [z * Math.sin(a), DISH_IN + R0 * 0.82 + (y - DISH_IN - R0 * 0.82) * 0.82, z * Math.cos(a)]), 0.35, shade(rind, -0.2), false, 12)
-    g.add(noLine(s))
+    g.add(noOutlineDeep(s))
   }
   const top = DISH_IN + R0 * 0.82
   g.add(cyl(R0, R0, 0.4, '#f4f7dc', { y: top }, 32))
-  g.add(noLine(cyl(R0 - 1, R0 - 1, 0.42, flesh, { y: top + 0.02 }, 32)))
+  g.add(noOutlineDeep(cyl(R0 - 1, R0 - 1, 0.42, flesh, { y: top + 0.02 }, 32)))
   const r = rng(9)
   for (let i = 0; i < 22; i++) {
     const a = r() * PI * 2
     const dd = 2 + Math.sqrt(r()) * 7
-    g.add(noLine(ball(0.35, '#2b2020', { x: Math.cos(a) * dd, y: top + 0.42, z: Math.sin(a) * dd }, [1, 0.3, 1.5])))
+    g.add(noOutlineDeep(ball(0.35, '#2b2020', { x: Math.cos(a) * dd, y: top + 0.42, z: Math.sin(a) * dd }, [1, 0.3, 1.5])))
   }
   return g
 }
@@ -1685,7 +1654,7 @@ function vegBasket(p: string[]) {
   const [basket, rim] = p
   const g = new THREE.Group()
   g.add(tray(44, 10, 28, 0.8, basket, {}, 1.2))
-  for (const s of [-1, 1]) g.add(noLine(rbox(44.2, 1.2, 28.2, rim, { y: 4 + s * 2.5 }, 0.5)))
+  for (const s of [-1, 1]) g.add(noOutlineDeep(rbox(44.2, 1.2, 28.2, rim, { y: 4 + s * 2.5 }, 0.5)))
   // 白菜（横躺）
   const hk = new THREE.Group()
   hk.add(capsule(6, 14, HAKUSAI))
@@ -1748,7 +1717,7 @@ function eggCarton(p: string[]) {
   g.add(glassy(tray(26, 4, 11, 0.3, carton, {}, 0.6), carton, 0.55))
   // 盖子打开翻在后面（平躺）
   g.add(glassy(tray(26, 3, 11, 0.3, carton, { y: 0, z: -11.4 }, 0.6), carton, 0.55))
-  g.add(noLine(rbox(16, 0.3, 6, lab, { y: 0.32, z: -11.4 }, 0.2)))
+  g.add(noOutlineDeep(rbox(16, 0.3, 6, lab, { y: 0.32, z: -11.4 }, 0.2)))
   for (let i = 0; i < 10; i++) {
     const x = -10 + (i % 5) * 5
     const z = i < 5 ? -2.4 : 2.4
@@ -1778,7 +1747,7 @@ function milkCarton(p: string[], big: boolean) {
   m.castShadow = true
   g.add(m)
   g.add(rbox(0.6, 1.4, w - 0.6, body, { y: h + 2.5 }, 0.2))
-  g.add(noLine(rbox(w + 0.1, h * 0.35, w + 0.1, band, { y: h * 0.2 }, 0.2)))
+  g.add(noOutlineDeep(rbox(w + 0.1, h * 0.35, w + 0.1, band, { y: h * 0.2 }, 0.2)))
   g.add(cyl(0.9, 0.9, 0.8, cap, { x: w / 4, y: h + 1.1, z: w / 4 - 0.4 }, 12).rotateX(-0.75))
   return g
 }
@@ -1788,16 +1757,16 @@ function cupNoodle(p: string[], open: boolean) {
   const [body, band, lid] = p
   const g = new THREE.Group()
   g.add(cup(4.8, 3.6, 10.5, 0.3, body))
-  g.add(noLine(cup(4.82, 4.1, 3.6, 0.05, band, { y: 5.4 })))
+  g.add(noOutlineDeep(cup(4.82, 4.1, 3.6, 0.05, band, { y: 5.4 })))
   if (!open) {
     g.add(cyl(5, 5, 0.3, lid, { y: 10.5 }, 28))
     g.add(rbox(2, 0.3, 2, lid, { z: 5.4, y: 10.5 }, 0.1))
     return g
   }
   g.add(liquid(4.4, 9, '#d9a35a'))
-  for (let i = 0; i < 5; i++) g.add(noLine(tube(arc([0, 8.9, 0], 1 + i * 0.7, i, i + 2.4, 6, 'xz'), 0.22, NOODLE, false, 12)))
-  g.add(noLine(rbox(1.4, 0.3, 1.4, '#ffd75e', { x: 1.5, y: 8.9, z: -1 }, 0.1)))
-  g.add(noLine(rbox(1.2, 0.3, 1.2, '#e86a4a', { x: -1.8, y: 8.9, z: 0.8 }, 0.1)))
+  for (let i = 0; i < 5; i++) g.add(noOutlineDeep(tube(arc([0, 8.9, 0], 1 + i * 0.7, i, i + 2.4, 6, 'xz'), 0.22, NOODLE, false, 12)))
+  g.add(noOutlineDeep(rbox(1.4, 0.3, 1.4, '#ffd75e', { x: 1.5, y: 8.9, z: -1 }, 0.1)))
+  g.add(noOutlineDeep(rbox(1.2, 0.3, 1.2, '#e86a4a', { x: -1.8, y: 8.9, z: 0.8 }, 0.1)))
   // 掀开一半的盖子（翻起靠在后面）
   const l = cyl(5, 5, 0.3, lid, {}, 28)
   l.position.set(0, 10.5 + 3.6, -4.8)
@@ -1818,7 +1787,7 @@ function snackBags(p: string[]) {
     s.add(rbox(w, h - 2.4, w * 0.3, color, { y: 1.2 }, w * 0.14))
     s.add(rbox(w * 0.96, 1.4, 1, shade(color, -0.1), { y: h - 1.6 }, 0.3))
     s.add(rbox(w * 0.96, 1.4, 1, shade(color, -0.1), { y: 0.2 }, 0.3))
-    s.add(noLine(ball(w * 0.22, '#ffd75e', { y: h * 0.5, z: w * 0.15 + 0.05 }, [1, 1, 0.12])))
+    s.add(noOutlineDeep(ball(w * 0.22, '#ffd75e', { y: h * 0.5, z: w * 0.15 + 0.05 }, [1, 1, 0.12])))
     s.position.set(x, 0, z)
     s.rotation.y = ry
     // 靠立：袋子略倾斜
@@ -1847,7 +1816,7 @@ function cannedFood(p: string[]) {
     for (let i = 0; i < n; i++) {
       const x = (i - (n - 1) / 2) * (r * 2 + 0.2)
       g.add(can(r, h, cols[k++ % 3], STEEL, { x, y }))
-      g.add(noLine(cyl(r + 0.03, r + 0.03, h * 0.5, '#ffffff', { x, y: y + h * 0.25 }, 20)))
+      g.add(noOutlineDeep(cyl(r + 0.03, r + 0.03, h * 0.5, '#ffffff', { x, y: y + h * 0.25 }, 20)))
     }
   return g
 }
@@ -1863,9 +1832,9 @@ function seasoningBottles(p: string[]) {
   ]
   for (const [x, r, h, liq, cap] of list) {
     g.add(glassy(bottle(r, h, 1.3, h * 0.6, GLASS, { x }), GLASS, 0.35))
-    g.add(noLine(cyl(r - 0.35, r - 0.35, h * 0.55, liq, { x, y: 0.4 }, 18)))
+    g.add(noOutlineDeep(cyl(r - 0.35, r - 0.35, h * 0.55, liq, { x, y: 0.4 }, 18)))
     g.add(cyl(1.5, 1.5, 2.2, cap, { x, y: h }, 14))
-    g.add(noLine(cyl(r + 0.05, r + 0.05, h * 0.25, lab, { x, y: h * 0.18 }, 18)))
+    g.add(noOutlineDeep(cyl(r + 0.05, r + 0.05, h * 0.25, lab, { x, y: h * 0.18 }, 18)))
   }
   return g
 }
@@ -1878,12 +1847,12 @@ function riceSack(p: string[], kg: 5 | 10) {
   const d = kg === 5 ? 40 : 52
   const h = kg === 5 ? 9 : 11
   g.add(rbox(w, h, d, bag, {}, h * 0.45))
-  g.add(noLine(rbox(w * 0.7, 0.3, d * 0.45, print, { y: h - 0.05, z: -d * 0.05 }, 0.3)))
-  g.add(noLine(rbox(w * 0.4, 0.3, d * 0.12, acc, { y: h + 0.05, z: d * 0.27 }, 0.2)))
+  g.add(noOutlineDeep(rbox(w * 0.7, 0.3, d * 0.45, print, { y: h - 0.05, z: -d * 0.05 }, 0.3)))
+  g.add(noOutlineDeep(rbox(w * 0.4, 0.3, d * 0.12, acc, { y: h + 0.05, z: d * 0.27 }, 0.2)))
   // 两端压封
   for (const s of [-1, 1]) g.add(rbox(w * 0.9, 2, 3, shade(bag, -0.08), { y: h * 0.4, z: s * (d / 2 - 0.5) }, 0.5))
   // 提手孔
-  g.add(noLine(rbox(6, 0.3, 1.5, shade(bag, -0.35), { y: h - 0.1, z: -d / 2 + 4 }, 0.5)))
+  g.add(noOutlineDeep(rbox(6, 0.3, 1.5, shade(bag, -0.35), { y: h - 0.1, z: -d / 2 + 4 }, 0.5)))
   return g
 }
 
@@ -1895,8 +1864,8 @@ function waterCase(p: string[], open = true) {
   const D = 22
   const H = 31
   g.add(tray(W, H, D, 0.5, card, {}, 0.2))
-  g.add(noLine(rbox(14, 9, 0.3, print, { y: 12, z: D / 2 + 0.05 }, 0.5)))
-  g.add(noLine(rbox(W + 0.6, 3, D + 0.6, print, { y: 3 }, 0.1)))
+  g.add(noOutlineDeep(rbox(14, 9, 0.3, print, { y: 12, z: D / 2 + 0.05 }, 0.5)))
+  g.add(noOutlineDeep(rbox(W + 0.6, 3, D + 0.6, print, { y: 3 }, 0.1)))
   if (open)
     for (let i = 0; i < 6; i++) {
       const x = -10 + (i % 3) * 10
@@ -1907,7 +1876,7 @@ function waterCase(p: string[], open = true) {
   if (!open) {
     // 封箱：顶盖合上 + 胶带
     g.add(rbox(W, 0.5, D, card, { y: H - 0.5 }, 0.1))
-    g.add(noLine(rbox(5, 0.2, D + 0.2, '#e8d9b8', { y: H }, 0.05)))
+    g.add(noOutlineDeep(rbox(5, 0.2, D + 0.2, '#e8d9b8', { y: H }, 0.05)))
     return g
   }
   // 两片外翻盖
@@ -1928,7 +1897,7 @@ function beerSixPack(p: string[]) {
     const x = -6.8 + (i % 3) * 6.8
     const z = i < 3 ? -3.4 : 3.4
     g.add(can(3.3, 12.2, canC, top, { x, z }))
-    g.add(noLine(cyl(3.33, 3.33, 3, band, { x, y: 4, z }, 20)))
+    g.add(noOutlineDeep(cyl(3.33, 3.33, 3, band, { x, y: 4, z }, 20)))
   }
   // 纸提手
   g.add(rbox(21, 0.4, 14, '#c99a52', { y: 12.3 }, 0.1))
@@ -1944,8 +1913,8 @@ function beerCrate(p: string[]) {
   const D = 33
   g.add(tray(W, 24, D, 1, crate, {}, 0.6))
   // 侧面把手孔（深色贴片）
-  for (const s of [-1, 1]) g.add(noLine(rbox(0.3, 3.5, 12, shade(crate, -0.35), { x: s * (W / 2 + 0.05), y: 17 })))
-  g.add(noLine(rbox(18, 5, 0.3, lab, { y: 10, z: D / 2 + 0.05 }, 0.5)))
+  for (const s of [-1, 1]) g.add(noOutlineDeep(rbox(0.3, 3.5, 12, shade(crate, -0.35), { x: s * (W / 2 + 0.05), y: 17 })))
+  g.add(noOutlineDeep(rbox(18, 5, 0.3, lab, { y: 10, z: D / 2 + 0.05 }, 0.5)))
   for (let i = 0; i < 20; i++) {
     const x = -20 + (i % 5) * 10
     const z = -12 + Math.floor(i / 5) * 8
@@ -1960,8 +1929,8 @@ function isshobin(p: string[]) {
   const [glass, lab, cap] = p
   const g = new THREE.Group()
   g.add(bottle(5, 39, 1.5, 24, glass, {}))
-  g.add(noLine(cyl(5.04, 5.04, 12, lab, { y: 8 }, 24)))
-  g.add(noLine(rbox(3, 9, 0.3, '#d14b3c', { y: 9.5, z: 5.05 }, 0.2)))
+  g.add(noOutlineDeep(cyl(5.04, 5.04, 12, lab, { y: 8 }, 24)))
+  g.add(noOutlineDeep(rbox(3, 9, 0.3, '#d14b3c', { y: 9.5, z: 5.05 }, 0.2)))
   g.add(cyl(1.8, 1.8, 3, cap, { y: 38 }, 14))
   return g
 }
@@ -1974,7 +1943,7 @@ function wineRack(p: string[]) {
   const D = 28
   for (const sx of [-1, 1]) g.add(rbox(1.8, 26, D, wood, { x: sx * (W / 2 - 0.9) }, 0.5))
   for (const y of [1, 12.5]) for (const sz of [-1, 1]) g.add(hcyl(0.7, 0.7, W - 3.6, wood, 0, y + 3, sz * 10, 'x', 10))
-  for (const y of [1, 12.5]) for (const sz of [-1, 1]) for (let i = 0; i < 3; i++) g.add(noLine(rbox(3.4, 1.2, 1.6, shade(wood, -0.08), { x: -10 + i * 10, y: y + 3.6, z: sz * 10 }, 0.3)))
+  for (const y of [1, 12.5]) for (const sz of [-1, 1]) for (let i = 0; i < 3; i++) g.add(noOutlineDeep(rbox(3.4, 1.2, 1.6, shade(wood, -0.08), { x: -10 + i * 10, y: y + 3.6, z: sz * 10 }, 0.3)))
   g.add(rbox(W, 1.6, D, wood, { y: 24.4 }, 0.5))
   // 瓶子平躺（瓶口朝前）
   const slots: [number, number][] = [
@@ -1987,7 +1956,7 @@ function wineRack(p: string[]) {
     const b = new THREE.Group()
     b.add(bottle(3.7, 30, 1.25, 20, glassC, {}))
     b.add(cyl(1.32, 1.32, 4, foil, { y: 26.5 }, 12))
-    b.add(noLine(cyl(3.74, 3.74, 6, '#f4ecd8', { y: 6 }, 18)))
+    b.add(noOutlineDeep(cyl(3.74, 3.74, 6, '#f4ecd8', { y: 6 }, 18)))
     b.rotation.x = PI / 2
     b.position.set(x, y + 3.6 + 3.7 + 0.3, -15)
     g.add(b)
@@ -2000,16 +1969,16 @@ function petBottles(p: string[]) {
   const [liq, lab, cap] = p
   const g = new THREE.Group()
   g.add(glassy(bottle(5.2, 31, 1.4, 24, '#e8f6ff', {}), '#e8f6ff', 0.4))
-  g.add(noLine(cyl(4.8, 4.8, 22, liq, { y: 0.4 }, 20)))
-  g.add(noLine(cyl(5.24, 5.24, 7, lab, { y: 10 }, 20)))
+  g.add(noOutlineDeep(cyl(4.8, 4.8, 22, liq, { y: 0.4 }, 20)))
+  g.add(noOutlineDeep(cyl(5.24, 5.24, 7, lab, { y: 10 }, 20)))
   g.add(cyl(1.6, 1.6, 2, cap, { y: 31 }, 12))
   for (const [x, z, c] of [
     [9.5, -2, TEA],
     [9, 5, '#f2a03c'],
   ] as const) {
     g.add(glassy(bottle(3.3, 20, 1.3, 14, '#e8f6ff', { x, z }), '#e8f6ff', 0.4))
-    g.add(noLine(cyl(3, 3, 14, c, { x, y: 0.4, z }, 16)))
-    g.add(noLine(cyl(3.34, 3.34, 5, lab, { x, y: 7, z }, 16)))
+    g.add(noOutlineDeep(cyl(3, 3, 14, c, { x, y: 0.4, z }, 16)))
+    g.add(noOutlineDeep(cyl(3.34, 3.34, 5, lab, { x, y: 7, z }, 16)))
     g.add(cyl(1.5, 1.5, 1.6, cap, { x, y: 20, z }, 12))
   }
   return g
@@ -2037,20 +2006,20 @@ function teishoku(p: string[]) {
     [-1.2, -1],
     [1.4, 0.8],
   ])
-    g.add(noLine(rbox(1.2, 0.5, 1.2, TOFU, { x: 3 + dx, y: y0 + 4.7, z: 6 + dz }, 0.15)))
+    g.add(noOutlineDeep(rbox(1.2, 0.5, 1.2, TOFU, { x: 3 + dx, y: y0 + 4.7, z: 6 + dz }, 0.15)))
   // 后左：长方盘烤鲑鱼 + 萝卜泥
   g.add(tray(18, 1.6, 9, 0.5, dishC, { x: -8, y: y0, z: -7.5 }, 0.5))
   g.add(rbox(9, 1.8, 5, '#f08a62', { x: -9.5, y: y0 + 0.5, z: -7.5, ry: 0.1 }, 0.9))
-  g.add(noLine(rbox(8, 0.3, 1, '#c8603e', { x: -9.5, y: y0 + 2.3, z: -7.5, ry: 0.1 }, 0.1)))
+  g.add(noOutlineDeep(rbox(8, 0.3, 1, '#c8603e', { x: -9.5, y: y0 + 2.3, z: -7.5, ry: 0.1 }, 0.1)))
   g.add(ball(1.6, DAIKON, { x: -2.5, y: y0 + 1.6, z: -7 }, [1, 0.7, 1]))
   // 后右：小钵（菠菜）
   g.add(bowl(4.2, 4, bowlC, { x: 10, y: y0, z: -7 }))
-  g.add(noLine(ball(2.6, '#3f8a3a', { x: 10, y: y0 + 3.4, z: -7 }, [1, 0.45, 1])))
-  g.add(noLine(ball(0.8, '#e8d8a8', { x: 10.3, y: y0 + 4.5, z: -7.2 }, [1, 0.4, 1])))
+  g.add(noOutlineDeep(ball(2.6, '#3f8a3a', { x: 10, y: y0 + 3.4, z: -7 }, [1, 0.45, 1])))
+  g.add(noOutlineDeep(ball(0.8, '#e8d8a8', { x: 10.3, y: y0 + 4.5, z: -7.2 }, [1, 0.4, 1])))
   // 右前：渍物小碟
   g.add(dish(3.4, 1, dishC, { x: 14.5, y: y0, z: 5 }))
-  g.add(noLine(rbox(2, 0.6, 1.2, '#f5d547', { x: 14.5, y: y0 + DISH_IN, z: 4.4 }, 0.2)))
-  g.add(noLine(rbox(1.8, 0.6, 1.1, '#a8467a', { x: 14.5, y: y0 + DISH_IN, z: 5.8 }, 0.2)))
+  g.add(noOutlineDeep(rbox(2, 0.6, 1.2, '#f5d547', { x: 14.5, y: y0 + DISH_IN, z: 4.4 }, 0.2)))
+  g.add(noOutlineDeep(rbox(1.8, 0.6, 1.1, '#a8467a', { x: 14.5, y: y0 + DISH_IN, z: 5.8 }, 0.2)))
   // 筷子（最前）
   g.add(chopsticks(22, J.dark, -3, y0 + 0.9, 13))
   g.add(hashioki(shade(dishC, -0.1), 8.5, y0, 13))
@@ -2070,7 +2039,7 @@ function dinnerForTwo(p: string[]) {
     set.add(rbox(40, 0.3, 28, mat, {}, 0.1))
     set.add(dish(12, 2.4, plateC, { y: 0.3 }))
     set.add(ball(4.2, '#7a3e22', { x: -1.5, y: 0.3 + DISH_IN + 1.2, z: 1 }, [1.2, 0.42, 0.9]))
-    set.add(noLine(ball(3.6, '#5a2416', { x: -1.5, y: 0.3 + DISH_IN + 1.8, z: 1 }, [1.15, 0.25, 0.85])))
+    set.add(noOutlineDeep(ball(3.6, '#5a2416', { x: -1.5, y: 0.3 + DISH_IN + 1.8, z: 1 }, [1.15, 0.25, 0.85])))
     set.add(ball(1.4, '#f08a3c', { x: 5, y: 0.3 + DISH_IN + 0.8, z: 2.5 }, [1.3, 0.6, 0.8]))
     set.add(ball(1.6, '#4f9e3b', { x: 5, y: 0.3 + DISH_IN + 1.3, z: -2.5 }))
     // 刀叉
@@ -2079,10 +2048,10 @@ function dinnerForTwo(p: string[]) {
     set.add(rbox(1.2, 0.3, 19, STEEL, { x: 15.5, y: 0.3, z: 0 }, 0.12))
     // 沙拉小碗 + 玻璃杯
     set.add(bowl(4.5, 4, acc, { x: 12, y: 0.3, z: -9 }))
-    set.add(noLine(ball(3.4, '#8fcf6a', { x: 12, y: 3.7, z: -9 }, [1, 0.4, 1])))
-    set.add(noLine(ball(0.9, TOMATO, { x: 13, y: 4.6, z: -8.5 })))
+    set.add(noOutlineDeep(ball(3.4, '#8fcf6a', { x: 12, y: 3.7, z: -9 }, [1, 0.4, 1])))
+    set.add(noOutlineDeep(ball(0.9, TOMATO, { x: 13, y: 4.6, z: -8.5 })))
     set.add(glassy(cup(3.4, 3, 11, 0.25, GLASS, { x: -12, y: 0.3, z: -9 })))
-    set.add(noLine(cyl(3, 2.7, 6, '#fff3d0', { x: -12, y: 0.6, z: -9 }, 18)))
+    set.add(noOutlineDeep(cyl(3, 2.7, 6, '#fff3d0', { x: -12, y: 0.6, z: -9 }, 18)))
     set.position.z = s * 17
     set.rotation.y = s > 0 ? 0 : PI
     g.add(set)
@@ -2104,7 +2073,7 @@ function nabeSet(p: string[]) {
   g.add(rbox(36, 9, 30, stove, {}, 1.4))
   g.add(rbox(34, 1, 28, shade(stove, -0.12), { y: 9 }, 0.5))
   g.add(hcyl(2, 2, 1.6, M.black, -11, 4.5, 15.3, 'z', 16))
-  g.add(noLine(rbox(10, 3, 0.3, shade(stove, -0.25), { x: 6, y: 3, z: 15.05 }, 0.3)))
+  g.add(noOutlineDeep(rbox(10, 3, 0.3, shade(stove, -0.25), { x: 6, y: 3, z: 15.05 }, 0.3)))
   // 炉架 + 蓝火
   for (let i = 0; i < 4; i++) {
     const a = (i / 4) * PI * 2 + PI / 4
@@ -2115,7 +2084,7 @@ function nabeSet(p: string[]) {
   const y = 11.4
   g.add(cup(14, 9, 11, 1, pot, { y }))
   for (const s of [-1, 1]) g.add(rbox(4, 2.2, 5, pot, { x: s * 14.6, y: y + 7.6 }, 0.9))
-  g.add(noLine(torus(13.4, 0.35, acc, { y: y + 8, rx: PI / 2 })))
+  g.add(noOutlineDeep(torus(13.4, 0.35, acc, { y: y + 8, rx: PI / 2 })))
   // 汤面 + 料
   const top = y + 9
   g.add(liquid(12.4, top, BROTH))
@@ -2137,7 +2106,7 @@ function nabeSet(p: string[]) {
     const a = (i / 5) * PI * 2 + 0.2
     g.add(rbox(3.6, 0.5, 2.4, MEAT, { x: Math.cos(a) * 9.8, y: top, z: Math.sin(a) * 9.8, ry: -a + 0.6 }, 0.2))
   }
-  g.add(noLine(cyl(1.3, 1.3, 0.5, '#f08a3c', { y: top, z: 0 }, 5)))
+  g.add(noOutlineDeep(cyl(1.3, 1.3, 0.5, '#f08a3c', { y: top, z: 0 }, 5)))
   return g
 }
 const NABE_FX: Fx[] = [{ kind: 'steam', x: 0, y: NABE_TOP - 1.6, z: 0, scale: 1.6, height: 32 }]
@@ -2164,8 +2133,8 @@ function takoParty(p: string[]) {
     const x = px - 3 + (i % 2) * 6
     const z = -6 + Math.floor(i / 2) * 6
     g.add(ball(2.3, '#c98a3c', { x, y: 2.6, z }))
-    g.add(noLine(ball(2, '#5a2e1c', { x, y: 3.5, z }, [1, 0.35, 1])))
-    g.add(noLine(rbox(1.2, 0.2, 0.4, '#7cc46a', { x: x + 0.4, y: 4.6, z, ry: i }, 0.05)))
+    g.add(noOutlineDeep(ball(2, '#5a2e1c', { x, y: 3.5, z }, [1, 0.35, 1])))
+    g.add(noOutlineDeep(rbox(1.2, 0.2, 0.4, '#7cc46a', { x: x + 0.4, y: 4.6, z, ry: i }, 0.05)))
   }
   // 牙签 + 酱汁瓶
   g.add(stick([px + 2, 3, 0], [px + 4, 9, 1], 0.12, C.woodL))
@@ -2190,9 +2159,9 @@ function okonomiyakiGrill(p: string[]) {
     [11, -2, 7.5],
   ] as const) {
     g.add(cyl(r, r, 2, '#d9a050', { x, y: 5.6, z }, 28))
-    g.add(noLine(cyl(r - 0.6, r - 0.6, 0.3, '#5a2e1c', { x, y: 7.6, z }, 28)))
-    for (let i = 0; i < 4; i++) g.add(noLine(rbox(r * 1.5, 0.12, 0.5, '#fff5c8', { x, y: 7.95, z: z - r * 0.5 + i * r * 0.33 }, 0.05)))
-    for (let i = 0; i < 8; i++) g.add(noLine(rbox(0.9, 0.15, 0.6, '#f4b8c0', { x: x + Math.cos(i * 2.3) * r * 0.5, y: 8.05, z: z + Math.sin(i * 2.3) * r * 0.5, ry: i }, 0.05)))
+    g.add(noOutlineDeep(cyl(r - 0.6, r - 0.6, 0.3, '#5a2e1c', { x, y: 7.6, z }, 28)))
+    for (let i = 0; i < 4; i++) g.add(noOutlineDeep(rbox(r * 1.5, 0.12, 0.5, '#fff5c8', { x, y: 7.95, z: z - r * 0.5 + i * r * 0.33 }, 0.05)))
+    for (let i = 0; i < 8; i++) g.add(noOutlineDeep(rbox(0.9, 0.15, 0.6, '#f4b8c0', { x: x + Math.cos(i * 2.3) * r * 0.5, y: 8.05, z: z + Math.sin(i * 2.3) * r * 0.5, ry: i }, 0.05)))
   }
   // 小铲
   for (const s of [-1, 1]) {
@@ -2209,8 +2178,8 @@ function temakiParty(p: string[]) {
   const g = new THREE.Group()
   // 饭桶（白饭）
   g.add(cup(13, 12, 7, 0.9, wood, { x: -14 }))
-  g.add(noLine(torus(12.6, 0.35, shade(wood, -0.3), { x: -14, y: 2, rx: PI / 2 })))
-  g.add(noLine(cyl(12, 12, 0.4, RICE, { x: -14, y: 5.2 }, 32)))
+  g.add(noOutlineDeep(torus(12.6, 0.35, shade(wood, -0.3), { x: -14, y: 2, rx: PI / 2 })))
+  g.add(noOutlineDeep(cyl(12, 12, 0.4, RICE, { x: -14, y: 5.2 }, 32)))
   g.add(rbox(4, 0.5, 8, C.woodL, { x: -12, y: 5.6, z: 2, ry: 0.4 }, 0.2))
   // 配料长盘
   g.add(tray(26, 1.6, 18, 0.5, plateC, { x: 13, z: -2 }, 0.6))
@@ -2222,16 +2191,16 @@ function temakiParty(p: string[]) {
   ]
   for (const [c, dx] of items)
     for (let i = 0; i < 4; i++) g.add(rbox(4, 1, 1.4, c, { x: 13 + dx, y: 0.5 + i * 0.05, z: -8 + i * 1.8, ry: 0.2 }, 0.3))
-  g.add(noLine(ball(2.4, '#ff6a3c', { x: 13 - 6, y: 1.1, z: 3.5 }, [1, 0.35, 1])))
-  g.add(noLine(ball(2.2, '#4f9e5b', { x: 13 + 1, y: 1, z: 3.5 }, [1, 0.12, 1.4])))
-  g.add(noLine(ball(2, '#f6e9c8', { x: 13 + 7, y: 1, z: 3.5 }, [1, 0.4, 1])))
+  g.add(noOutlineDeep(ball(2.4, '#ff6a3c', { x: 13 - 6, y: 1.1, z: 3.5 }, [1, 0.35, 1])))
+  g.add(noOutlineDeep(ball(2.2, '#4f9e5b', { x: 13 + 1, y: 1, z: 3.5 }, [1, 0.12, 1.4])))
+  g.add(noOutlineDeep(ball(2, '#f6e9c8', { x: 13 + 7, y: 1, z: 3.5 }, [1, 0.4, 1])))
   // 海苔一叠
   for (let i = 0; i < 4; i++) g.add(rbox(10, 0.15, 10, NORI, { x: -4, y: i * 0.16, z: 13, ry: i * 0.08 }, 0.05))
   // 酱油碟 + 小碗山葵
   g.add(dish(4, 1.2, acc, { x: 10, z: 13 }))
   g.add(liquid(2, DISH_IN + 0.3, SOY, 10, 13))
   g.add(dish(3, 1, acc, { x: 18, z: 13 }))
-  g.add(noLine(ball(1, '#a6c95a', { x: 18, y: DISH_IN + 0.3, z: 13 }, [1, 0.6, 1])))
+  g.add(noOutlineDeep(ball(1, '#a6c95a', { x: 18, y: DISH_IN + 0.3, z: 13 }, [1, 0.6, 1])))
   return g
 }
 
@@ -2253,7 +2222,7 @@ function sukiyaki(p: string[]) {
   for (let i = 0; i < 3; i++) g.add(rbox(3.4, 1.8, 3.4, '#e8c58a', { x: -2 + i * 3.6, y: top - 1.4, z: -2 }, 0.3))
   for (let i = 0; i < 4; i++) g.add(hcyl(0.9, 0.9, 4, '#f4f4e6', -3 + i * 2.4, top - 0.5, 3, 'x', 10))
   g.add(dome(1.8, 1, SHIITAKE, { x: 4, y: top - 0.6, z: 3 }))
-  g.add(noLine(ball(2.4, '#3f8a3a', { x: -6, y: top - 0.4, z: 2 }, [1, 0.35, 1])))
+  g.add(noOutlineDeep(ball(2.4, '#3f8a3a', { x: -6, y: top - 0.4, z: 2 }, [1, 0.35, 1])))
   // 蛋液碗两只（放在锅前两边）
   for (const s of [-1, 1]) {
     g.add(bowl(4, 4, bowlC, { x: s * 11, z: 18 }))
@@ -2268,108 +2237,108 @@ const SUKI_FX: Fx[] = [{ kind: 'steam', x: 0, y: 5, z: 0, scale: 1.3, height: 26
 // 配色表
 // ======================================================================
 
-const RACK_PALS: Pal[] = [
+const RACK_PALS: Pal3[] = [
   ['modern', STEEL, M.white, M.char],
   ['nordic', N.white, N.oakL, N.sage],
   ['cute', C.white, C.sakura, C.pink],
   ['industrial', M.black, I.concrete, I.rust],
 ]
-const SPICE_PALS: Pal[] = [
+const SPICE_PALS: Pal3[] = [
   ['nordic', N.oak, N.white, N.linen],
   ['modern', M.black, M.silver, M.white],
   ['japanese', J.wood, J.sumi, J.washi],
   ['industrial', I.walnut, I.iron, '#e8dcc4'],
   ['cute', C.woodL, C.pink, C.white],
 ]
-const KNIFE_PALS: Pal[] = [
+const KNIFE_PALS: Pal3[] = [
   ['modern', M.char, M.black, M.silver],
   ['nordic', N.oak, N.oakL, N.white],
   ['industrial', I.walnut, I.walnut, I.iron],
   ['japanese', J.hinoki, J.dark, J.sumi],
 ]
-const CROCK_PALS: Pal[] = [
+const CROCK_PALS: Pal3[] = [
   ['nordic', N.white, N.oak, STEEL],
   ['japanese', J.ai, J.wood, STEEL],
   ['retro', R.mustard, R.caramel, R.cream],
   ['industrial', I.concrete, I.walnut, M.black],
   ['cute', C.mint, C.woodL, C.pink],
 ]
-const WAGON_PALS: Pal[] = [
+const WAGON_PALS: Pal3[] = [
   ['modern', M.white, M.white, M.char],
   ['nordic', N.white, N.sage, N.oak],
   ['industrial', I.iron, I.iron, I.walnut],
   ['cute', C.white, C.mint, C.pink],
   ['retro', R.cream, R.teal, R.mustard],
 ]
-const RICE_CAB_PALS: Pal[] = [
+const RICE_CAB_PALS: Pal3[] = [
   ['modern', M.white, M.light, M.char],
   ['nordic', N.white, N.oakL, N.sage],
   ['japanese', J.hinoki, J.wood, J.shu],
   ['cute', C.white, C.sakura, C.pink],
 ]
-const BAG_STAND_PALS: Pal[] = [
+const BAG_STAND_PALS: Pal3[] = [
   ['modern', M.white, '#e8ecef', '#d65a3c'],
   ['industrial', M.black, '#e8ecef', I.rust],
   ['nordic', N.white, '#eef1ea', N.sage],
   ['cute', C.white, '#fff0f4', C.pink],
 ]
-const LID_PALS: Pal[] = [
+const LID_PALS: Pal3[] = [
   ['modern', M.white, M.light, '#e9d8a6'],
   ['nordic', N.sage, N.blue, '#e9d8a6'],
   ['cute', C.pink, C.sky, '#ffd8a8'],
   ['industrial', M.char, I.concrete, '#c9a77c'],
 ]
-const CANISTER_PALS: Pal[] = [
+const CANISTER_PALS: Pal3[] = [
   ['nordic', N.oak, N.white, N.oak],
   ['modern', M.black, M.white, M.silver],
   ['retro', R.orange, R.cream, R.caramel],
   ['cute', C.lemon, C.white, C.pink],
 ]
-const WRAP_PALS: Pal[] = [
+const WRAP_PALS: Pal3[] = [
   ['modern', M.white, '#e86a5a', '#4a7fc0'],
   ['nordic', N.oak, '#e86a5a', '#4a7fc0'],
   ['industrial', M.black, '#e86a5a', '#4a7fc0'],
   ['cute', C.mint, '#ff9db0', '#a8d4f4'],
 ]
-const RAIL_PALS: Pal[] = [
+const RAIL_PALS: Pal3[] = [
   ['modern', STEEL, STEEL, M.black],
   ['industrial', M.black, I.iron, I.walnut],
   ['nordic', N.white, N.white, N.oak],
   ['retro', BRASS, BRASS, R.caramel],
 ]
-const TOOL_PALS: Pal[] = [
+const TOOL_PALS: Pal3[] = [
   ['modern', STEEL, M.black, M.black],
   ['nordic', STEEL, N.oak, N.oak],
   ['cute', STEEL, C.pink, C.pink],
   ['industrial', STEEL_D, I.walnut, I.walnut],
   ['retro', STEEL, R.teal, R.teal],
 ]
-const BOARD_PALS: Pal[] = [
+const BOARD_PALS: Pal3[] = [
   ['nordic', N.white, N.oak, N.sage],
   ['modern', M.black, M.walnut, M.white],
   ['japanese', J.sumi, J.hinoki, J.washi],
   ['cute', C.white, C.woodL, C.pink],
 ]
-const PANRACK_PALS: Pal[] = [
+const PANRACK_PALS: Pal3[] = [
   ['modern', M.black, M.char, M.black],
   ['nordic', N.white, '#e9e4dc', N.oak],
   ['industrial', I.iron, I.iron, I.walnut],
   ['cute', C.white, C.pink, C.woodL],
 ]
-const SHELF_PALS: Pal[] = [
+const SHELF_PALS: Pal3[] = [
   ['nordic', N.white, N.oak, N.sage],
   ['modern', M.black, M.char, M.silver],
   ['industrial', I.iron, I.walnut, I.rust],
   ['japanese', J.sumi, J.wood, J.shu],
   ['cute', C.white, C.woodL, C.pink],
 ]
-const GAP_PALS: Pal[] = [
+const GAP_PALS: Pal3[] = [
   ['modern', M.white, M.light, M.char],
   ['nordic', N.white, N.oak, N.sage],
   ['industrial', M.black, I.walnut, I.rust],
   ['cute', C.white, C.pink, C.sky],
 ]
-const CUPBOARD_PALS: Pal[] = [
+const CUPBOARD_PALS: Pal3[] = [
   ['modern', M.white, M.light, M.char],
   ['nordic', N.white, N.oak, M.black],
   ['japanese', J.wood, J.hinoki, J.sumi],
@@ -2378,111 +2347,111 @@ const CUPBOARD_PALS: Pal[] = [
 ]
 
 // 餐具
-const WASHOKU_PALS: Pal[] = [
+const WASHOKU_PALS: Pal3[] = [
   ['japanese', J.washi, '#9b2d26', J.dark],
   ['japanese', '#e9e2d0', J.sumi, J.shu],
   ['nordic', N.white, N.oak, N.oak],
   ['modern', M.white, M.black, M.black],
   ['cute', C.white, C.pink, C.pink],
 ]
-const CHOP_PALS: Pal[] = [
+const CHOP_PALS: Pal3[] = [
   ['japanese', J.shu, J.sumi, J.washi],
   ['nordic', N.oak, N.oakL, N.sage],
   ['modern', M.black, M.silver, M.white],
   ['cute', C.pink, C.sky, C.lemon],
 ]
-const PLATE_PALS: Pal[] = [
+const PLATE_PALS: Pal3[] = [
   ['nordic', N.white, N.linen, N.blue],
   ['japanese', J.washi, '#d8d0bc', J.ai],
   ['modern', M.white, M.light, M.black],
   ['retro', R.cream, R.mustard, R.teal],
   ['cute', C.white, C.sakura, C.pink],
 ]
-const BENTO_PALS: Pal[] = [
+const BENTO_PALS: Pal3[] = [
   ['japanese', J.sumi, J.shu, J.shu],
   ['japanese', J.hinoki, J.wood, J.ai],
   ['cute', C.white, C.pink, C.mint],
   ['modern', M.char, M.light, M.black],
   ['nordic', N.sage, N.white, N.oak],
 ]
-const CHAWAN_PALS: Pal[] = [
+const CHAWAN_PALS: Pal3[] = [
   ['japanese', J.washi, J.wood, J.wood],
   ['japanese', J.ai, J.sumi, J.hinoki],
   ['modern', M.white, M.black, M.walnut],
   ['nordic', N.white, N.oak, N.oak],
 ]
-const SOY_PALS: Pal[] = [
+const SOY_PALS: Pal3[] = [
   ['japanese', J.washi, J.ai, J.shu],
   ['modern', M.white, M.white, M.black],
   ['nordic', N.linen, N.white, N.oak],
   ['cute', C.white, C.white, C.pink],
 ]
-const TUMBLER_PALS: Pal[] = [
+const TUMBLER_PALS: Pal3[] = [
   ['modern', GLASS, '#f5a25d', M.char],
   ['nordic', GLASS, '#f5d58a', N.oak],
   ['retro', '#e8f5d0', R.orange, R.caramel],
   ['cute', '#ffe6ee', '#ff9db0', C.white],
 ]
-const MUGTREE_PALS: Pal[] = [
+const MUGTREE_PALS: Pal3[] = [
   ['nordic', N.oak, N.white, N.sage],
   ['modern', M.black, M.white, M.char],
   ['retro', R.caramel, R.mustard, R.teal],
   ['cute', C.woodL, C.pink, C.sky],
   ['industrial', I.walnut, I.concrete, I.rust],
 ]
-const WINE_PALS: Pal[] = [
+const WINE_PALS: Pal3[] = [
   ['modern', GLASS, WINE_R, M.black],
   ['nordic', GLASS, WINE_R, N.oak],
   ['industrial', GLASS, WINE_R, I.walnut],
   ['retro', '#f2ead0', '#e8c24a', R.caramel],
 ]
-const BEER_PALS: Pal[] = [
+const BEER_PALS: Pal3[] = [
   ['industrial', I.walnut, GLASS, I.rust],
   ['modern', M.char, GLASS, M.white],
   ['retro', R.cream, GLASS, R.red],
   ['nordic', N.oak, GLASS, N.sage],
 ]
-const TOKKURI_PALS: Pal[] = [
+const TOKKURI_PALS: Pal3[] = [
   ['japanese', J.washi, J.dark, J.ai],
   ['japanese', '#c9b79a', J.sumi, J.shu],
   ['retro', R.cream, R.caramel, R.teal],
   ['modern', M.white, M.black, M.char],
 ]
-const DRIP_PALS: Pal[] = [
+const DRIP_PALS: Pal3[] = [
   ['modern', STEEL, M.white, M.black],
   ['nordic', N.white, N.white, N.oak],
   ['industrial', '#c7773e', '#8a6a52', I.walnut],
   ['retro', R.cream, R.mustard, R.caramel],
   ['cute', C.white, C.pink, C.woodL],
 ]
-const KYUSU_PALS: Pal[] = [
+const KYUSU_PALS: Pal3[] = [
   ['japanese', '#8a4a2a', J.washi, J.wood],
   ['japanese', J.ai, '#e9e2d0', J.dark],
   ['modern', M.black, M.white, M.walnut],
   ['nordic', N.white, N.linen, N.oak],
   ['cute', C.mint, C.white, C.woodL],
 ]
-const MAT_PALS: Pal[] = [
+const MAT_PALS: Pal3[] = [
   ['japanese', J.tatami, J.dark, J.dark],
   ['nordic', N.linen, N.sage, N.oak],
   ['modern', M.char, M.gray, M.black],
   ['cute', C.sakura, C.pink, C.pink],
   ['retro', R.mustard, R.caramel, R.red],
 ]
-const COASTER_PALS: Pal[] = [
+const COASTER_PALS: Pal3[] = [
   ['nordic', N.oak, N.white, N.oak],
   ['japanese', J.hinoki, J.ai, J.wood],
   ['modern', M.char, M.gray, M.black],
   ['cute', C.pink, C.mint, C.white],
   ['retro', R.orange, R.cream, R.teal],
 ]
-const CUTLERY_PALS: Pal[] = [
+const CUTLERY_PALS: Pal3[] = [
   ['nordic', N.oak, N.oakL, N.oak],
   ['modern', M.white, M.light, M.black],
   ['industrial', I.walnut, I.walnut, M.black],
   ['cute', C.mint, C.white, C.pink],
 ]
-const DON_PALS: Pal[] = [
+const DON_PALS: Pal3[] = [
   ['japanese', J.ai, J.ai, J.washi],
   ['japanese', J.shu, J.sumi, J.washi],
   ['retro', R.cream, R.teal, R.red],
@@ -2490,177 +2459,177 @@ const DON_PALS: Pal[] = [
 ]
 
 // 食物：换盛器
-const RICEBOWL_PALS: Pal[] = [
+const RICEBOWL_PALS: Pal3[] = [
   ['japanese', J.washi, J.sumi, J.dark],
   ['japanese', J.ai, J.ai, J.shu],
   ['nordic', N.white, N.oak, N.oak],
   ['cute', C.white, C.pink, C.pink],
   ['modern', M.black, M.black, M.black],
 ]
-const MISO_PALS: Pal[] = [
+const MISO_PALS: Pal3[] = [
   ['japanese', '#3a1f1a', '#9b2d26', J.shu],
   ['japanese', J.sumi, J.sumi, J.shu],
   ['nordic', N.oak, N.oak, N.oak],
   ['modern', M.black, M.char, M.black],
 ]
-const UDON_PALS: Pal[] = [
+const UDON_PALS: Pal3[] = [
   ['japanese', J.washi, J.washi, J.ai],
   ['japanese', J.sumi, J.sumi, J.shu],
   ['retro', R.cream, R.cream, R.red],
   ['modern', M.white, M.white, M.black],
 ]
-const CURRY_PALS: Pal[] = [
+const CURRY_PALS: Pal3[] = [
   ['retro', R.cream, R.teal, STEEL],
   ['modern', M.white, M.light, STEEL],
   ['nordic', N.white, N.blue, N.oak],
   ['cute', C.white, C.pink, C.woodL],
 ]
-const OKE_PALS: Pal[] = [
+const OKE_PALS: Pal3[] = [
   ['japanese', J.hinoki, '#b07a3a', '#5a9e3a'],
   ['japanese', J.shu, J.sumi, '#5a9e3a'],
   ['nordic', N.oakL, N.oak, '#5a9e3a'],
 ]
-const ONIGIRI_PALS: Pal[] = [
+const ONIGIRI_PALS: Pal3[] = [
   ['japanese', '#7cae5a', J.wood, '#e9c0a0'],
   ['nordic', N.oakL, N.oak, '#e8d27a'],
   ['modern', '#3e3f44', M.char, '#e9c0a0'],
   ['cute', C.mint, C.woodL, '#ffc6a0'],
 ]
-const BREADBAG_PALS: Pal[] = [
+const BREADBAG_PALS: Pal3[] = [
   ['modern', '#f4f8fb', '#4a7fc0', '#e8eef5'],
   ['retro', '#fdf8ea', R.red, R.mustard],
   ['cute', '#fff6fa', C.pink, C.sakura],
   ['nordic', '#f6f6f0', N.sage, N.linen],
 ]
-const TOAST_PALS: Pal[] = [
+const TOAST_PALS: Pal3[] = [
   ['nordic', N.oak, N.white, STEEL],
   ['industrial', I.walnut, I.iron, STEEL],
   ['japanese', J.hinoki, J.washi, J.wood],
   ['cute', C.woodL, C.pink, C.pink],
 ]
-const BAGUETTE_PALS: Pal[] = [
+const BAGUETTE_PALS: Pal3[] = [
   ['nordic', KRAFT, N.white, N.white],
   ['retro', KRAFT, R.red, R.red],
   ['modern', '#f4f2ec', M.black, M.black],
   ['industrial', '#b58f62', I.iron, I.iron],
 ]
-const DONUT_PALS: Pal[] = [
+const DONUT_PALS: Pal3[] = [
   ['retro', R.cream, R.orange, '#7ad3c8'],
   ['cute', C.white, C.pink, C.lilac],
   ['modern', M.white, M.char, '#f7a8c4'],
   ['nordic', N.linen, N.sage, '#f2c94c'],
 ]
-const APPLE_PALS: Pal[] = [
+const APPLE_PALS: Pal3[] = [
   ['nordic', N.oak, N.oak, '#e0453a'],
   ['japanese', J.wood, J.dark, '#d63a3a'],
   ['modern', M.white, M.white, '#e0453a'],
   ['retro', R.cream, R.caramel, '#d6503a'],
 ]
-const BANANA_PALS: Pal[] = [
+const BANANA_PALS: Pal3[] = [
   ['nordic', N.oak, N.oak, '#5a4630'],
   ['modern', M.black, M.black, '#5a4630'],
   ['industrial', I.iron, I.walnut, '#5a4630'],
   ['cute', C.woodL, C.pink, '#5a4630'],
 ]
-const MIKAN_PALS: Pal[] = [
+const MIKAN_PALS: Pal3[] = [
   ['japanese', CARD, '#3a7a3a', '#ff9a2a'],
   ['retro', CARD, R.red, '#ff9a2a'],
   ['nordic', '#d8c4a4', N.sage, '#ffa438'],
 ]
-const MELON_PALS: Pal[] = [
+const MELON_PALS: Pal3[] = [
   ['nordic', '#3f8f3a', '#ff5a5a', N.white],
   ['japanese', '#35803a', '#ff5a5a', J.washi],
   ['cute', '#4f9e3b', '#ff6a7a', C.sky],
   ['modern', '#3f8f3a', '#ff5a5a', M.light],
 ]
-const GRAPE_PALS: Pal[] = [
+const GRAPE_PALS: Pal3[] = [
   ['modern', M.white, M.white, '#5a3a7a'],
   ['nordic', N.linen, N.oak, '#5a3a7a'],
   ['cute', C.white, C.lilac, '#9fcf6a'],
   ['japanese', J.washi, J.wood, '#4a2f6a'],
 ]
-const VEG_PALS: Pal[] = [
+const VEG_PALS: Pal3[] = [
   ['japanese', '#c9a568', '#a8813e', J.wood],
   ['nordic', '#d9c8a4', N.oak, N.oak],
   ['industrial', '#8a6a4a', I.iron, I.iron],
   ['cute', '#f0d8b0', C.pink, C.pink],
 ]
-const NETBAG_PALS: Pal[] = [
+const NETBAG_PALS: Pal3[] = [
   ['retro', '#d64a3a', '#e0a526', R.cream],
   ['modern', '#d64a3a', '#3a8a5a', M.white],
   ['nordic', '#c85a4a', '#7a9a6a', N.linen],
 ]
-const EGG_PALS: Pal[] = [
+const EGG_PALS: Pal3[] = [
   ['modern', '#eef4f8', '#e8a640', M.white],
   ['nordic', '#d8cbb0', N.sage, N.white],
   ['cute', '#ffeef3', C.pink, C.white],
 ]
-const MILK_PALS: Pal[] = [
+const MILK_PALS: Pal3[] = [
   ['modern', M.white, '#4a7fc0', M.white],
   ['retro', R.cream, R.red, R.red],
   ['cute', C.white, C.pink, C.pink],
   ['nordic', N.white, N.sage, N.oak],
 ]
-const NOODLE_PALS: Pal[] = [
+const NOODLE_PALS: Pal3[] = [
   ['retro', M.white, R.red, '#f2ecd8'],
   ['modern', M.white, M.black, M.light],
   ['cute', C.white, C.pink, '#fff3c8'],
   ['industrial', '#e8e0d0', I.rust, '#d8cfc0'],
 ]
-const SNACK_PALS: Pal[] = [
+const SNACK_PALS: Pal3[] = [
   ['retro', R.orange, R.red, R.teal],
   ['cute', C.pink, C.sky, C.lemon],
   ['modern', M.char, M.silver, '#d65a3c'],
   ['nordic', N.mustard, N.sage, N.blue],
 ]
-const CAN_PALS: Pal[] = [
+const CAN_PALS: Pal3[] = [
   ['retro', R.red, R.teal, R.mustard],
   ['industrial', I.rust, I.steel, '#6a7a4a'],
   ['modern', M.white, M.char, M.silver],
   ['cute', C.pink, C.mint, C.lemon],
 ]
-const SEASON_PALS: Pal[] = [
+const SEASON_PALS: Pal3[] = [
   ['japanese', J.shu, '#e8c24a', J.washi],
   ['modern', M.black, M.white, M.white],
   ['retro', R.red, R.mustard, R.cream],
   ['nordic', N.white, N.oak, N.linen],
 ]
-const SACK_PALS: Pal[] = [
+const SACK_PALS: Pal3[] = [
   ['japanese', J.washi, J.ai, J.shu],
   ['retro', R.cream, R.red, R.mustard],
   ['nordic', N.linen, N.sage, N.oak],
   ['modern', M.white, M.char, '#4a7fc0'],
 ]
-const WATER_PALS: Pal[] = [
+const WATER_PALS: Pal3[] = [
   ['modern', CARD, '#4a9ad8', '#3a7ac8'],
   ['nordic', '#e2d6c0', N.blue, N.white],
   ['cute', CARD, C.sky, C.pink],
 ]
-const SIXPACK_PALS: Pal[] = [
+const SIXPACK_PALS: Pal3[] = [
   ['modern', M.silver, M.black, STEEL],
   ['retro', R.mustard, R.red, STEEL],
   ['japanese', '#2f4a8a', J.washi, STEEL],
   ['cute', C.sky, C.white, STEEL],
 ]
-const CRATE_PALS: Pal[] = [
+const CRATE_PALS: Pal3[] = [
   ['retro', '#d6463a', '#e0a526', R.cream],
   ['industrial', '#4a5a4a', '#c9a24a', I.concrete],
   ['modern', '#3d5a8a', '#d8d8d8', M.white],
   ['japanese', '#c8a03a', J.shu, J.washi],
 ]
-const SAKE_PALS: Pal[] = [
+const SAKE_PALS: Pal3[] = [
   ['japanese', '#3f6b3a', J.washi, J.shu],
   ['japanese', '#5a3a1f', J.washi, J.sumi],
   ['retro', '#3f6b3a', R.cream, R.mustard],
   ['modern', '#2a2c30', M.white, M.black],
 ]
-const WINERACK_PALS: Pal[] = [
+const WINERACK_PALS: Pal3[] = [
   ['nordic', N.oak, '#2f4a2a', '#7a1f33'],
   ['industrial', I.walnut, '#2f4a2a', M.black],
   ['modern', M.black, '#2f3a2a', '#c3a052'],
   ['retro', R.caramel, '#3a2a1f', R.red],
 ]
-const PET_PALS: Pal[] = [
+const PET_PALS: Pal3[] = [
   ['modern', '#f2a03c', M.white, M.white],
   ['cute', '#ff9db0', C.white, C.pink],
   ['retro', '#d64a3a', R.cream, R.red],
@@ -2668,46 +2637,46 @@ const PET_PALS: Pal[] = [
 ]
 
 // 餐桌摆设
-const TEISHOKU_PALS: Pal[] = [
+const TEISHOKU_PALS: Pal3[] = [
   ['japanese', J.dark, '#9b2d26', J.washi],
   ['japanese', J.hinoki, J.sumi, '#e9e2d0'],
   ['nordic', N.oak, N.sage, N.white],
   ['modern', M.black, M.black, M.white],
   ['cute', C.woodL, C.pink, C.white],
 ]
-const DINNER_PALS: Pal[] = [
+const DINNER_PALS: Pal3[] = [
   ['nordic', N.white, N.linen, N.sage],
   ['modern', M.white, M.char, M.black],
   ['retro', R.cream, R.mustard, R.teal],
   ['cute', C.white, C.sakura, C.pink],
   ['industrial', I.concrete, '#8a6a4a', I.iron],
 ]
-const NABE_PALS: Pal[] = [
+const NABE_PALS: Pal3[] = [
   ['japanese', M.char, '#e9e2d0', J.ai],
   ['japanese', M.silver, '#6e4f37', J.shu],
   ['retro', R.red, R.cream, R.teal],
   ['modern', M.white, M.black, M.silver],
   ['cute', C.pink, C.white, C.pink],
 ]
-const TAKO_PALS: Pal[] = [
+const TAKO_PALS: Pal3[] = [
   ['retro', R.red, R.cream, '#5a2e1c'],
   ['modern', M.white, M.white, M.black],
   ['cute', C.pink, C.white, C.pink],
   ['japanese', J.sumi, J.washi, J.shu],
 ]
-const GRILL_PALS: Pal[] = [
+const GRILL_PALS: Pal3[] = [
   ['modern', M.white, M.black, M.black],
   ['industrial', M.black, I.walnut, I.walnut],
   ['retro', R.mustard, R.caramel, R.caramel],
   ['cute', C.sky, C.white, C.pink],
 ]
-const TEMAKI_PALS: Pal[] = [
+const TEMAKI_PALS: Pal3[] = [
   ['japanese', J.hinoki, J.washi, J.ai],
   ['japanese', J.shu, J.sumi, J.washi],
   ['nordic', N.oakL, N.white, N.blue],
   ['modern', M.walnut, M.black, M.white],
 ]
-const SUKI_PALS: Pal[] = [
+const SUKI_PALS: Pal3[] = [
   ['japanese', I.iron, J.washi, J.dark],
   ['japanese', I.iron, J.ai, J.shu],
   ['modern', M.black, M.white, M.black],
@@ -2878,8 +2847,8 @@ const MILK = '#fbfaf4'
 /** 一罐饮料：罐身 + 标签色带 + 拉环；at.y 为底面 */
 function drinkCan(r: number, h: number, body: string, band: string, top = STEEL, at: { x?: number; y?: number; z?: number } = {}) {
   const g = can(r, h, body, top)
-  g.add(noLine(cyl(r + 0.03, r + 0.03, h * 0.28, band, { y: h * 0.38 }, 20)))
-  g.add(noLine(rbox(1, 0.2, 1.6, STEEL_D, { y: h, z: r * 0.35 }, 0.1)))
+  g.add(noOutlineDeep(cyl(r + 0.03, r + 0.03, h * 0.28, band, { y: h * 0.38 }, 20)))
+  g.add(noOutlineDeep(rbox(1, 0.2, 1.6, STEEL_D, { y: h, z: r * 0.35 }, 0.1)))
   g.position.set(at.x ?? 0, at.y ?? 0, at.z ?? 0)
   return g
 }
@@ -2888,10 +2857,10 @@ function drinkCan(r: number, h: number, body: string, band: string, top = STEEL,
 function sealedCase(w: number, h: number, d: number, band: string, mark: string) {
   const g = new THREE.Group()
   g.add(rbox(w, h, d, CARD, {}, 0.4))
-  g.add(noLine(rbox(w + 0.6, h * 0.3, d + 0.6, band, { y: h * 0.35 }, 0.2)))
-  g.add(noLine(rbox(5, h * 0.6, 0.3, mark, { x: w * 0.3, y: h * 0.18, z: d / 2 + 0.5 }, 0.6)))
-  g.add(noLine(rbox(6, 0.2, d + 0.2, '#e8d9b8', { y: h }, 0.05)))
-  for (const s of [-1, 1]) g.add(noLine(rbox(0.3, 2, 6, shade(CARD, -0.3), { x: s * (w / 2 + 0.05), y: h - 4 }, 0.5)))
+  g.add(noOutlineDeep(rbox(w + 0.6, h * 0.3, d + 0.6, band, { y: h * 0.35 }, 0.2)))
+  g.add(noOutlineDeep(rbox(5, h * 0.6, 0.3, mark, { x: w * 0.3, y: h * 0.18, z: d / 2 + 0.5 }, 0.6)))
+  g.add(noOutlineDeep(rbox(6, 0.2, d + 0.2, '#e8d9b8', { y: h }, 0.05)))
+  for (const s of [-1, 1]) g.add(noOutlineDeep(rbox(0.3, 2, 6, shade(CARD, -0.3), { x: s * (w / 2 + 0.05), y: h - 4 }, 0.5)))
   return g
 }
 
@@ -2918,27 +2887,27 @@ function glassBottle(p: string[], kind: 'soda' | 'milk' | 'juice' | 'beer' | 'sp
   const g = new THREE.Group()
   if (kind === 'soda') {
     g.add(glassy(lathe([[0, 0], [2.8, 0], [2.9, 0.4], [2.9, 9], [2.2, 12], [1.3, 16], [1.3, 18.6], [0, 18.6]], GLASS), '#cfe9d8', 0.45))
-    g.add(noLine(lathe([[0, 0.4], [2.55, 0.4], [2.55, 9], [1.95, 12], [1.1, 15], [0, 15]], liq)))
-    g.add(noLine(cyl(2.95, 2.95, 4, lab, { y: 3 }, 20)))
+    g.add(noOutlineDeep(lathe([[0, 0.4], [2.55, 0.4], [2.55, 9], [1.95, 12], [1.1, 15], [0, 15]], liq)))
+    g.add(noOutlineDeep(cyl(2.95, 2.95, 4, lab, { y: 3 }, 20)))
     g.add(cyl(1.5, 1.4, 0.9, cap, { y: 18.4 }, 16))
   } else if (kind === 'milk') {
     g.add(glassy(lathe([[0, 0], [3.1, 0], [3.2, 0.4], [3.2, 7.5], [2.4, 10.5], [2.2, 12.6], [0, 12.6]], GLASS), GLASS, 0.4))
-    g.add(noLine(lathe([[0, 0.3], [2.9, 0.3], [2.9, 7.4], [2.15, 10.3], [2, 11.6], [0, 11.6]], MILK)))
+    g.add(noOutlineDeep(lathe([[0, 0.3], [2.9, 0.3], [2.9, 7.4], [2.15, 10.3], [2, 11.6], [0, 11.6]], MILK)))
     g.add(cyl(2.4, 2.4, 0.4, cap, { y: 12.5 }, 20))
-    g.add(noLine(cyl(2.6, 2.4, 1.2, lab, { y: 11.9 }, 20)))
+    g.add(noOutlineDeep(cyl(2.6, 2.4, 1.2, lab, { y: 11.9 }, 20)))
   } else if (kind === 'juice') {
     g.add(glassy(lathe([[0, 0], [3.2, 0], [3.3, 0.4], [3.3, 11], [2.4, 13.5], [2, 15], [0, 15]], GLASS), GLASS, 0.4))
-    g.add(noLine(lathe([[0, 0.4], [3, 0.4], [3, 10.8], [2.2, 13], [0, 13]], liq)))
-    g.add(noLine(cyl(3.35, 3.35, 5, lab, { y: 3.5 }, 20)))
+    g.add(noOutlineDeep(lathe([[0, 0.4], [3, 0.4], [3, 10.8], [2.2, 13], [0, 13]], liq)))
+    g.add(noOutlineDeep(cyl(3.35, 3.35, 5, lab, { y: 3.5 }, 20)))
     g.add(cyl(2.2, 2.2, 1.4, cap, { y: 14.8 }, 20))
   } else if (kind === 'beer') {
     g.add(bottle(3.1, 21, 1.15, 12.5, '#6b3a16', {}))
-    g.add(noLine(cyl(3.14, 3.14, 6.5, lab, { y: 3.5 }, 20)))
-    g.add(noLine(rbox(2.4, 3, 0.3, cap, { y: 5.2, z: 3.12 }, 0.2)))
+    g.add(noOutlineDeep(cyl(3.14, 3.14, 6.5, lab, { y: 3.5 }, 20)))
+    g.add(noOutlineDeep(rbox(2.4, 3, 0.3, cap, { y: 5.2, z: 3.12 }, 0.2)))
     g.add(cyl(1.4, 1.3, 0.9, cap, { y: 20.6 }, 14))
   } else {
     g.add(bottle(3.9, 27, 1.3, 13, '#4f8a4a', {}))
-    g.add(noLine(cyl(3.95, 3.95, 6, lab, { y: 5 }, 22)))
+    g.add(noOutlineDeep(cyl(3.95, 3.95, 6, lab, { y: 5 }, 22)))
     g.add(cyl(1.5, 1.5, 2, cap, { y: 26.6 }, 14))
   }
   return g
@@ -2950,16 +2919,16 @@ function petBottle(p: string[], big: boolean) {
   const g = new THREE.Group()
   if (!big) {
     g.add(glassy(bottle(3.3, 19.6, 1.35, 13.5, PET, {}), PET, 0.4))
-    g.add(noLine(bottle(3.05, 16.5, 1.1, 13.3, liq, { y: 0.3 })))
-    g.add(noLine(cyl(3.35, 3.35, 6, lab, { y: 5 }, 20)))
+    g.add(noOutlineDeep(bottle(3.05, 16.5, 1.1, 13.3, liq, { y: 0.3 })))
+    g.add(noOutlineDeep(cyl(3.35, 3.35, 6, lab, { y: 5 }, 20)))
     g.add(cyl(1.5, 1.5, 1.6, cap, { y: 19.4 }, 14))
     return g
   }
   // 2L 方瓶：方身 + 圆肩
   g.add(glassy(rbox(9.6, 23, 9.6, PET, {}, 2), PET, 0.4))
   g.add(glassy(lathe([[4.8, 0], [4.8, 1], [3, 4.5], [1.6, 6.2], [1.6, 8], [0, 8]], PET, { y: 23 }), PET, 0.4))
-  g.add(noLine(rbox(9, 21.6, 9, liq, { y: 0.4 }, 1.8)))
-  g.add(noLine(rbox(10.2, 7, 10.2, lab, { y: 9 }, 2))) // 比瓶身每边凸出 0.3，避免和瓶身侧面闪烁
+  g.add(noOutlineDeep(rbox(9, 21.6, 9, liq, { y: 0.4 }, 1.8)))
+  g.add(noOutlineDeep(rbox(10.2, 7, 10.2, lab, { y: 9 }, 2))) // 比瓶身每边凸出 0.3，避免和瓶身侧面闪烁
   g.add(cyl(1.7, 1.7, 2, cap, { y: 31 }, 14))
   return g
 }
@@ -2975,14 +2944,14 @@ function tetra(p: string[], kind: 'soy1l' | 'soy200' | 'juice125') {
   const g = new THREE.Group()
   const [w, d, h] = kind === 'soy1l' ? [7, 7, 19.5] : kind === 'soy200' ? [6.3, 4, 10.5] : [5.2, 3.6, 8.6]
   g.add(rbox(w, h, d, body, {}, 0.3))
-  g.add(noLine(rbox(w + 0.6, h * 0.4, d + 0.6, band, { y: h * 0.18 }, 0.25)))
-  g.add(noLine(ball(w * 0.18, acc, { y: h * 0.72, z: d / 2 + 0.02 }, [1, 1, 0.1])))
+  g.add(noOutlineDeep(rbox(w + 0.6, h * 0.4, d + 0.6, band, { y: h * 0.18 }, 0.25)))
+  g.add(noOutlineDeep(ball(w * 0.18, acc, { y: h * 0.72, z: d / 2 + 0.02 }, [1, 1, 0.1])))
   if (kind === 'soy1l') {
     g.add(cyl(1.3, 1.3, 1.2, acc, { x: 1.4, y: h, z: 1.4 }, 14))
     g.add(rbox(w, 0.6, 1, body, { y: h, z: -d / 2 + 0.5 }, 0.2))
   }
   if (kind === 'soy200') g.add(glassy(rbox(0.8, 9, 0.8, '#f4f4f4', { x: w / 2 + 0.75, y: 0.6 }, 0.3), '#f4f4f4', 0.6))
-  if (kind === 'juice125') g.add(P(cyl(0.3, 0.3, 6, acc, {}, 8), 1.2, h - 1, 0.6, 0, 0, -0.35))
+  if (kind === 'juice125') g.add(PG(cyl(0.3, 0.3, 6, acc, {}, 8), 1.2, h - 1, 0.6, 0, 0, -0.35))
   return g
 }
 
@@ -2992,8 +2961,8 @@ function yogurt(p: string[], kind: 'tub' | 'four') {
   const g = new THREE.Group()
   if (kind === 'tub') {
     g.add(cup(5.4, 4.6, 8.4, 0.3, body))
-    g.add(noLine(cyl(5.1, 5.1, 0.3, MILK, { y: 7.6 }, 24)))
-    g.add(noLine(cup(5.42, 4.95, 4, 0.05, band, { y: 2.4 })))
+    g.add(noOutlineDeep(cyl(5.1, 5.1, 0.3, MILK, { y: 7.6 }, 24)))
+    g.add(noOutlineDeep(cup(5.42, 4.95, 4, 0.05, band, { y: 2.4 })))
     g.add(puck(5.8, 1.4, lid, { y: 8.2 }))
     return g
   }
@@ -3001,10 +2970,10 @@ function yogurt(p: string[], kind: 'tub' | 'four') {
     const x = (i % 2 ? 1 : -1) * 3.6
     const z = i < 2 ? -3.6 : 3.6
     g.add(cup(3.3, 2.8, 6, 0.25, body, { x, z }))
-    g.add(noLine(cyl(3.05, 3.05, 0.3, MILK, { x, y: 5.4, z }, 20)))
+    g.add(noOutlineDeep(cyl(3.05, 3.05, 0.3, MILK, { x, y: 5.4, z }, 20)))
   }
   g.add(rbox(14.4, 0.3, 14.4, lid, { y: 6 }, 0.1))
-  g.add(noLine(rbox(14.6, 2.6, 14.6, band, { y: 1.6 }, 0.2)))
+  g.add(noOutlineDeep(rbox(14.6, 2.6, 14.6, band, { y: 1.6 }, 0.2)))
   return g
 }
 
@@ -3013,7 +2982,7 @@ function fridgePot(p: string[]) {
   const [lid, liq, acc] = p
   const g = new THREE.Group()
   g.add(glassy(cup(5.2, 5, 25, 0.3, GLASS), GLASS, 0.35))
-  g.add(noLine(cyl(4.85, 4.75, 19, liq, { y: 0.3 }, 24)))
+  g.add(noOutlineDeep(cyl(4.85, 4.75, 19, liq, { y: 0.3 }, 24)))
   g.add(puck(5.6, 2.4, lid, { y: 24.4 }))
   g.add(rbox(3, 1.4, 3, lid, { y: 25, z: 5 }, 0.5))
   g.add(cyl(1.4, 1.4, 1, acc, { y: 26.6 }, 12))
@@ -3049,7 +3018,7 @@ function taps(trayC: string, y: number, zf: number, trayY: number, w = 16) {
     g.add(cyl(0.6, 0.6, 1.2, STEEL, { x, y: y - 1.2, z: zf + 3 }, 10))
   }
   g.add(tray(w - 1, 1.4, 6.5, 0.4, trayC, { y: trayY, z: zf + 3.5 }, 0.4))
-  g.add(noLine(rbox(w - 2.4, 0.2, 5.2, STEEL_D, { y: trayY + 1.1, z: zf + 3.5 }, 0.05)))
+  g.add(noOutlineDeep(rbox(w - 2.4, 0.2, 5.2, STEEL_D, { y: trayY + 1.1, z: zf + 3.5 }, 0.05)))
   return g
 }
 
@@ -3068,7 +3037,7 @@ function waterServer(p: string[], top: boolean) {
     g.add(lit(ball(0.5, '#7fe0a8', { x: 4, y: 95.5, z: D / 2 + 0.4 }), '#7fe0a8', 0.8))
     g.add(cyl(7, 8, 1.5, panel, { y: H }, 24))
     g.add(bigBottle(13, 38, H + 1.5))
-    for (let i = 0; i < 4; i++) g.add(noLine(rbox(16, 0.6, 0.3, shade(body, -0.15), { y: 6 + i * 1.6, z: D / 2 + 0.05 }, 0.1)))
+    for (let i = 0; i < 4; i++) g.add(noOutlineDeep(rbox(16, 0.6, 0.3, shade(body, -0.15), { y: 6 + i * 1.6, z: D / 2 + 0.05 }, 0.1)))
     return g
   }
   const H = 112
@@ -3114,15 +3083,15 @@ function pizzaBox(p: string[], open: boolean) {
   const S = 33
   if (!open) {
     g.add(rbox(S, 4.4, S, box, {}, 0.4))
-    g.add(noLine(cyl(9, 9, 0.2, print, { y: 4.4 }, 28)))
-    g.add(noLine(cyl(6, 6, 0.25, top, { y: 4.4 }, 28)))
+    g.add(noOutlineDeep(cyl(9, 9, 0.2, print, { y: 4.4 }, 28)))
+    g.add(noOutlineDeep(cyl(6, 6, 0.25, top, { y: 4.4 }, 28)))
     return g
   }
   g.add(tray(S, 4.2, S, 0.4, box, {}, 0.3))
   // 盖子立在后面（盖内侧朝前，印着圆标）
   const lid = new THREE.Group()
   lid.add(rbox(S, 0.4, S, box, {}, 0.2))
-  lid.add(noLine(cyl(9, 9, 0.2, print, { y: 0.4 }, 28)))
+  lid.add(noOutlineDeep(cyl(9, 9, 0.2, print, { y: 0.4 }, 28)))
   lid.rotation.x = PI / 2 - 0.06
   lid.position.set(0, S / 2 + 0.2, -S / 2 - 0.2)
   g.add(lid)
@@ -3130,16 +3099,16 @@ function pizzaBox(p: string[], open: boolean) {
   const y = 0.4
   g.add(torus(14.2, 1.1, '#d9a050', { y: y + 1, rx: PI / 2 }))
   g.add(cyl(14, 14, 1, '#e8b468', { y }, 40))
-  g.add(noLine(cyl(13.2, 13.2, 0.3, '#d8442e', { y: y + 1 }, 40)))
-  g.add(noLine(cyl(12.4, 12.4, 0.35, '#ffe08a', { y: y + 1.1 }, 40)))
+  g.add(noOutlineDeep(cyl(13.2, 13.2, 0.3, '#d8442e', { y: y + 1 }, 40)))
+  g.add(noOutlineDeep(cyl(12.4, 12.4, 0.35, '#ffe08a', { y: y + 1.1 }, 40)))
   const r = rng(13)
   for (let i = 0; i < 14; i++) {
     const a = r() * PI * 2
     const d = 2 + r() * 9
     g.add(cyl(1.6, 1.6, 0.4, '#c8303f', { x: Math.cos(a) * d, y: y + 1.35, z: Math.sin(a) * d }, 14))
   }
-  for (let i = 0; i < 10; i++) g.add(noLine(torus(0.8, 0.22, '#3f8a3a', { x: Math.cos(i * 2.1) * (3 + (i % 4) * 2.4), y: y + 1.6, z: Math.sin(i * 2.1) * (3 + (i % 4) * 2.4), rx: PI / 2 })))
-  for (let i = 0; i < 4; i++) g.add(noLine(rbox(28, 0.1, 0.2, '#b8803c', { y: y + 1.75, ry: (i * PI) / 4 }, 0.02)))
+  for (let i = 0; i < 10; i++) g.add(noOutlineDeep(torus(0.8, 0.22, '#3f8a3a', { x: Math.cos(i * 2.1) * (3 + (i % 4) * 2.4), y: y + 1.6, z: Math.sin(i * 2.1) * (3 + (i % 4) * 2.4), rx: PI / 2 })))
+  for (let i = 0; i < 4; i++) g.add(noOutlineDeep(rbox(28, 0.1, 0.2, '#b8803c', { y: y + 1.75, ry: (i * PI) / 4 }, 0.02)))
   return g
 }
 
@@ -3151,11 +3120,11 @@ function chineseTakeout(p: string[]) {
   const m = lathe([[0, 0], [5.4, 0], [7.6, 10], [7.3, 10], [5.1, 0.35], [0, 0.35]], box, {}, 4)
   m.rotation.y = PI / 4
   g.add(m)
-  g.add(noLine(rbox(4, 4, 0.2, print, { y: 3, z: 4, rx: -0.22 }, 1)))
+  g.add(noOutlineDeep(rbox(4, 4, 0.2, print, { y: 3, z: 4, rx: -0.22 }, 1)))
   g.add(tube([[-6.6, 9, 0], [-5, 15, 0], [5, 15, 0], [6.6, 9, 0]], 0.12, handle, false, 24))
-  for (let i = 0; i < 8; i++) g.add(noLine(tube(arc([0, 8.6, 0], 1 + i * 0.6, i * 0.9, i * 0.9 + 2.6, 6, 'xz'), 0.3, '#d9a050', false, 12)))
-  g.add(noLine(ball(1, '#3f8a3a', { x: 2, y: 9, z: -1 }, [1.3, 0.3, 1])))
-  g.add(noLine(rbox(1.4, 0.4, 1, '#f08a3c', { x: -2, y: 9, z: 1.5 }, 0.2)))
+  for (let i = 0; i < 8; i++) g.add(noOutlineDeep(tube(arc([0, 8.6, 0], 1 + i * 0.6, i * 0.9, i * 0.9 + 2.6, 6, 'xz'), 0.3, '#d9a050', false, 12)))
+  g.add(noOutlineDeep(ball(1, '#3f8a3a', { x: 2, y: 9, z: -1 }, [1.3, 0.3, 1])))
+  g.add(noOutlineDeep(rbox(1.4, 0.4, 1, '#f08a3c', { x: -2, y: 9, z: 1.5 }, 0.2)))
   g.add(chopsticks(20, '#ead7b8', 0, 0, 9.5))
   return g
 }
@@ -3166,7 +3135,7 @@ function takeoutBento(p: string[]) {
   const g = new THREE.Group()
   g.add(tray(22, 3.6, 16, 0.4, base, {}, 0.8))
   g.add(rbox(0.4, 3, 15, base, { x: 3, y: 0.4 }, 0.1))
-  g.add(noLine(rbox(11.6, 2.6, 14.6, RICE, { x: -2.7, y: 0.4 }, 1)))
+  g.add(noOutlineDeep(rbox(11.6, 2.6, 14.6, RICE, { x: -2.7, y: 0.4 }, 1)))
   g.add(ball(0.9, '#c8303f', { x: -2.7, y: 3, z: 0 }))
   for (const [x, z] of [
     [5.5, -4],
@@ -3175,10 +3144,10 @@ function takeoutBento(p: string[]) {
     [8.4, 4.5],
   ])
     g.add(ball(1.8, '#b86a2a', { x, y: 2.6, z }, [1.1, 0.8, 1]))
-  g.add(noLine(ball(1.4, acc, { x: -6, y: 3, z: 4.5 }, [1.4, 0.3, 1])))
+  g.add(noOutlineDeep(ball(1.4, acc, { x: -6, y: 3, z: 4.5 }, [1.4, 0.3, 1])))
   // 透明盖（倒扣的浅盒）+ 价签
   g.add(glassy(tray(22.4, 3.2, 16.4, 0.3, GLASS, { y: 6.8, rx: PI }, 0.8), GLASS, 0.3))
-  g.add(noLine(rbox(6, 0.2, 3.5, sticker, { x: 5, y: 6.85, z: 4 }, 0.1)))
+  g.add(noOutlineDeep(rbox(6, 0.2, 3.5, sticker, { x: 5, y: 6.85, z: 4 }, 0.1)))
   return g
 }
 
@@ -3204,13 +3173,13 @@ function sandwichPack(p: string[]) {
     const h = new THREE.Group()
     h.add(triPrism(6.3, 10.6, 0.8, BREAD, -1.5, 0.2))
     h.add(triPrism(6.1, 10.2, 0.8, filling, -0.5))
-    h.add(noLine(triPrism(6.2, 10.3, 0.3, '#7cc46a', 0.3)))
+    h.add(noOutlineDeep(triPrism(6.2, 10.3, 0.3, '#7cc46a', 0.3)))
     h.add(triPrism(6.3, 10.6, 0.8, BREAD, 0.7, 0.2))
     h.position.z = dz
     g.add(h)
   }
   g.add(glassy(triPrism(7.2, 12, 8.4, film, -4.2), film, 0.3))
-  g.add(noLine(rbox(6, 3, 0.2, label, { x: -3, y: 2, z: 4.3 }, 0.3)))
+  g.add(noOutlineDeep(rbox(6, 3, 0.2, label, { x: -3, y: 2, z: 4.3 }, 0.3)))
   return g
 }
 
@@ -3220,9 +3189,9 @@ function natto(p: string[]) {
   const g = new THREE.Group()
   for (let i = 0; i < 3; i++) {
     g.add(rbox(9.6, 3.5, 7.6, box, { y: i * 3.55 }, 0.6))
-    g.add(noLine(rbox(9.7, 0.3, 7.7, shade(box, -0.08), { y: i * 3.55 + 2.2 }, 0.1)))
+    g.add(noOutlineDeep(rbox(9.7, 0.3, 7.7, shade(box, -0.08), { y: i * 3.55 + 2.2 }, 0.1)))
   }
-  g.add(noLine(rbox(6, 0.2, 4.5, label, { y: 10.66 }, 0.3)))
+  g.add(noOutlineDeep(rbox(6, 0.2, 4.5, label, { y: 10.66 }, 0.3)))
   g.add(rbox(2.4, 10.8, 7.8, tape, { y: -0.05 }, 0.2))
   return g
 }
@@ -3232,10 +3201,10 @@ function tofuPack(p: string[]) {
   const [trayC, label, acc] = p
   const g = new THREE.Group()
   g.add(tray(11.6, 4.2, 8.6, 0.3, trayC, {}, 0.5))
-  g.add(noLine(rbox(10.6, 3.6, 7.6, TOFU, { y: 0.3 }, 0.4)))
+  g.add(noOutlineDeep(rbox(10.6, 3.6, 7.6, TOFU, { y: 0.3 }, 0.4)))
   g.add(glassy(rbox(11.8, 0.2, 8.8, '#ffffff', { y: 4.2 }, 0.05), '#ffffff', 0.4))
-  g.add(noLine(rbox(7, 0.15, 4, label, { y: 4.4 }, 0.2)))
-  g.add(noLine(ball(1, acc, { x: -2.2, y: 4.55, z: 0 }, [1, 0.1, 1])))
+  g.add(noOutlineDeep(rbox(7, 0.15, 4, label, { y: 4.4 }, 0.2)))
+  g.add(noOutlineDeep(ball(1, acc, { x: -2.2, y: 4.55, z: 0 }, [1, 0.1, 1])))
   return g
 }
 
@@ -3244,7 +3213,7 @@ function noodleCase(p: string[]) {
   const [card, lidC, band] = p
   const g = new THREE.Group()
   g.add(tray(40, 11, 30, 0.5, card, {}, 0.2))
-  g.add(noLine(rbox(16, 5, 0.3, lidC, { y: 3, z: 15.05 }, 0.5)))
+  g.add(noOutlineDeep(rbox(16, 5, 0.3, lidC, { y: 3, z: 15.05 }, 0.5)))
   for (const s of [-1, 1]) {
     const f = rbox(40, 0.4, 9, card, {}, 0.1)
     f.position.set(0, 11 + Math.sin(0.9) * 4.5, s * (15 + Math.cos(0.9) * 4.5))
@@ -3255,7 +3224,7 @@ function noodleCase(p: string[]) {
     const x = -14.4 + (i % 4) * 9.6
     const z = -9.6 + Math.floor(i / 4) * 9.6
     g.add(cup(4.6, 3.5, 10.5, 0.3, C.white, { x, y: 0.5, z }))
-    g.add(noLine(cup(4.62, 4.1, 3.4, 0.05, band, { x, y: 5.6, z })))
+    g.add(noOutlineDeep(cup(4.62, 4.1, 3.4, 0.05, band, { x, y: 5.6, z })))
     g.add(cyl(4.7, 4.7, 0.3, lidC, { x, y: 11, z }, 24))
   }
   return g
@@ -3286,11 +3255,11 @@ function cookieTin(p: string[], open: boolean) {
   const [tin, band, acc] = p
   const g = new THREE.Group()
   g.add(cup(10, 10, 6.5, 0.3, tin))
-  g.add(noLine(cup(10.03, 10.03, 1.2, 0.05, band, { y: 2.6 })))
+  g.add(noOutlineDeep(cup(10.03, 10.03, 1.2, 0.05, band, { y: 2.6 })))
   if (!open) {
     g.add(puck(10.3, 2, tin, { y: 5.6 }))
-    g.add(noLine(cyl(6, 6, 0.2, band, { y: 7.6 }, 28)))
-    g.add(noLine(cyl(3, 3, 0.25, acc, { y: 7.6 }, 20)))
+    g.add(noOutlineDeep(cyl(6, 6, 0.2, band, { y: 7.6 }, 28)))
+    g.add(noOutlineDeep(cyl(3, 3, 0.25, acc, { y: 7.6 }, 20)))
     return g
   }
   const pos: [number, number][] = [[0, 0], ...Array.from({ length: 6 }, (_, i): [number, number] => [Math.cos((i / 6) * PI * 2) * 5.6, Math.sin((i / 6) * PI * 2) * 5.6])]
@@ -3298,7 +3267,7 @@ function cookieTin(p: string[], open: boolean) {
     g.add(cup(2.5, 2.1, 1.8, 0.1, '#f4ece0', { x, y: 0.3, z }))
     g.add(puck(2.1, 1.2, i % 3 === 0 ? CHOCO : i % 3 === 1 ? '#e8b468' : '#d99a55', { x, y: 1.4, z }))
   })
-  const l = G(puck(10.3, 2, tin), noLine(cyl(6, 6, 0.2, band, { y: 2 }, 28)))
+  const l = G(puck(10.3, 2, tin), noOutlineDeep(cyl(6, 6, 0.2, band, { y: 2 }, 28)))
   l.rotation.x = PI / 2 - 0.15
   l.position.set(0, 10.3, -11.4)
   g.add(l)
@@ -3312,7 +3281,7 @@ function chocolate(p: string[]) {
   const cols = [a, b, a]
   for (let i = 0; i < 3; i++) {
     g.add(rbox(16, 1, 8, cols[i], { y: i * 1.02, ry: (i - 1) * 0.08 }, 0.3))
-    g.add(noLine(rbox(5, 0.1, 8.1, shade(cols[i], 0.25), { y: i * 1.02 + 0.3, ry: (i - 1) * 0.08 }, 0.02)))
+    g.add(noOutlineDeep(rbox(5, 0.1, 8.1, shade(cols[i], 0.25), { y: i * 1.02 + 0.3, ry: (i - 1) * 0.08 }, 0.02)))
   }
   g.add(rbox(16, 0.3, 8, foil, { x: 2, z: 10, ry: -0.1 }, 0.1))
   const bar = new THREE.Group()
@@ -3329,15 +3298,15 @@ function chips(p: string[], kind: 'bag' | 'tube') {
   const g = new THREE.Group()
   if (kind === 'tube') {
     g.add(cyl(3.8, 3.8, 23, body, {}, 24))
-    g.add(noLine(cyl(3.83, 3.83, 7, band, { y: 8 }, 24)))
-    g.add(noLine(ball(1.8, acc, { y: 11.5, z: 3.7 }, [1, 1, 0.12])))
+    g.add(noOutlineDeep(cyl(3.83, 3.83, 7, band, { y: 8 }, 24)))
+    g.add(noOutlineDeep(ball(1.8, acc, { y: 11.5, z: 3.7 }, [1, 1, 0.12])))
     g.add(puck(4, 1.4, '#f4f4f4', { y: 22.4 }))
     return g
   }
   g.add(rbox(18, 23, 5.4, body, { y: 1.2 }, 2.4))
   for (const y of [0.2, 23.6]) g.add(rbox(17.6, 1.6, 1.2, shade(body, -0.1), { y }, 0.3))
-  g.add(noLine(rbox(14, 5, 0.2, band, { y: 15, z: 2.72 }, 1)))
-  for (let i = 0; i < 3; i++) g.add(noLine(ball(2, acc, { x: -4 + i * 4, y: 8 + (i % 2), z: 2.6 }, [1, 0.8, 0.12])))
+  g.add(noOutlineDeep(rbox(14, 5, 0.2, band, { y: 15, z: 2.72 }, 1)))
+  for (let i = 0; i < 3; i++) g.add(noOutlineDeep(ball(2, acc, { x: -4 + i * 4, y: 8 + (i % 2), z: 2.6 }, [1, 0.8, 0.12])))
   return g
 }
 
@@ -3346,9 +3315,9 @@ function iceCream(p: string[]) {
   const [cupC, ice, lid] = p
   const g = new THREE.Group()
   g.add(cup(4.2, 3.4, 5, 0.25, cupC, { x: -5 }))
-  g.add(noLine(cyl(3.9, 3.9, 0.3, ice, { x: -5, y: 4.4 }, 24)))
+  g.add(noOutlineDeep(cyl(3.9, 3.9, 0.3, ice, { x: -5, y: 4.4 }, 24)))
   g.add(dome(3.4, 1.6, ice, { x: -5, y: 4.6 }))
-  g.add(P(rbox(1.2, 0.3, 6, C.woodL, {}, 0.15), -4, 6.4, 1.5, 0.7, 0.3))
+  g.add(PG(rbox(1.2, 0.3, 6, C.woodL, {}, 0.15), -4, 6.4, 1.5, 0.7, 0.3))
   g.add(cup(4.2, 3.4, 5, 0.25, cupC, { x: 5 }))
   g.add(puck(4.4, 1, lid, { x: 5, y: 4.7 }))
   return g
@@ -3361,8 +3330,8 @@ function pudding3(p: string[]) {
   for (let i = 0; i < 3; i++) {
     const x = (i - 1) * 7.4
     g.add(glassy(cup(3.6, 2.6, 6.4, 0.25, cupC, { x }), cupC, 0.45))
-    g.add(noLine(cyl(3.3, 2.4, 5.4, '#f6d675', { x, y: 0.3 }, 20)))
-    g.add(noLine(cyl(2.45, 2.4, 0.8, caramel, { x, y: 0.3 }, 20)))
+    g.add(noOutlineDeep(cyl(3.3, 2.4, 5.4, '#f6d675', { x, y: 0.3 }, 20)))
+    g.add(noOutlineDeep(cyl(2.45, 2.4, 0.8, caramel, { x, y: 0.3 }, 20)))
   }
   g.add(rbox(22.4, 0.3, 7.6, lid, { y: 6.4 }, 0.1))
   return g
@@ -3382,7 +3351,7 @@ function dango(p: string[]) {
     g.add(hcyl(0.2, 0.2, 17, C.woodL, 0, 2.4, z, 'x', 6))
     cs.forEach((c, i) => g.add(ball(1.4, c, { x: -3.2 + i * 2.8, y: 2.4, z })))
   }
-  g.add(noLine(ball(0.6, acc, { x: 7, y: 1.3, z: 3.5 }, [1, 0.3, 1])))
+  g.add(noOutlineDeep(ball(0.6, acc, { x: 7, y: 1.3, z: 3.5 }, [1, 0.3, 1])))
   return g
 }
 
@@ -3394,7 +3363,7 @@ function dorayaki(p: string[]) {
   const one = (x: number, y: number, z: number, rz: number) => {
     const d = new THREE.Group()
     d.add(puck(4.2, 1.6, '#b8742a', { y: 0 }))
-    d.add(noLine(puck(3.8, 0.8, '#5a2e2a', { y: 1.4 })))
+    d.add(noOutlineDeep(puck(3.8, 0.8, '#5a2e2a', { y: 1.4 })))
     d.add(puck(4.2, 1.6, '#b8742a', { y: 2 }))
     d.position.set(x, y, z)
     d.rotation.z = rz
@@ -3410,14 +3379,14 @@ function daifuku(p: string[]) {
   const [plateC, paper] = p
   const g = new THREE.Group()
   g.add(rbox(18, 1, 12, plateC, {}, 0.5))
-  g.add(noLine(rbox(14, 0.1, 9, paper, { y: 1, ry: 0.15 }, 0.02)))
+  g.add(noOutlineDeep(rbox(14, 0.1, 9, paper, { y: 1, ry: 0.15 }, 0.02)))
   for (const [x, c, ex] of [
     [-4.6, '#fffaf0', null],
     [0, '#ffd6e0', '#e8495a'],
     [4.6, '#c8dfa8', null],
   ] as const) {
     g.add(ball(2.6, c, { x, y: 1.1 + 1.9, z: 0 }, [1, 0.72, 1]))
-    if (ex) g.add(noLine(ball(0.9, ex, { x, y: 1.1 + 3.6, z: 0.3 }, [1, 0.6, 1])))
+    if (ex) g.add(noOutlineDeep(ball(0.9, ex, { x, y: 1.1 + 3.6, z: 0.3 }, [1, 0.6, 1])))
   }
   return g
 }
@@ -3446,7 +3415,7 @@ function vegBag(p: string[]) {
   const [bag, handle, print] = p
   const g = new THREE.Group()
   g.add(tray(34, 28, 14, 0.4, bag, {}, 1.5))
-  g.add(noLine(rbox(10, 10, 0.2, print, { y: 10, z: 7.1 }, 2)))
+  g.add(noOutlineDeep(rbox(10, 10, 0.2, print, { y: 10, z: 7.1 }, 2)))
   for (const s of [-1, 1]) g.add(tube([[-7, 27.5, s * 6.8], [-6, 38, s * 6], [6, 38, s * 6], [7, 27.5, s * 6.8]], 0.8, handle, false, 24))
   g.add(ball(7, '#a6d47a', { x: 7, y: 24, z: 0 }, [1, 0.9, 0.85]))
   g.add(ball(6.5, '#cbe8a0', { x: 7, y: 24.8, z: 0.4 }, [1, 0.85, 0.8]))
@@ -3466,14 +3435,14 @@ function vegBag(p: string[]) {
 // ---------- 配色 ----------
 
 // 罐装饮料：[罐身, 标签色带, 点缀]，每组是一种口味（不写品牌）
-const CAN_FLAVOR_PALS: Pal[] = [
+const CAN_FLAVOR_PALS: Pal3[] = [
   ['retro', '#d6343a', '#f4f4f4', '#d6343a'], // 可乐
   ['japanese', '#3f8a4a', '#e9e2d0', '#3f8a4a'], // 绿茶
   ['industrial', '#5a3a2a', '#d9b98c', '#3a2a22'], // 咖啡
   ['modern', '#dfe6ec', '#4a9ad8', '#c3c7cc'], // 碳酸水
   ['cute', '#1f2a3a', '#a6f03c', '#a6f03c'], // 能量饮料
 ]
-const GLASS_BOTTLE_PALS: Pal[] = [
+const GLASS_BOTTLE_PALS: Pal3[] = [
   ['retro', R.cream, R.red, '#f5e6a8'],
   ['modern', M.white, M.char, '#f2a03c'],
   ['nordic', N.linen, N.sage, '#f5d58a'],
@@ -3481,7 +3450,7 @@ const GLASS_BOTTLE_PALS: Pal[] = [
   ['japanese', J.washi, J.ai, '#e8c24a'],
 ]
 // 宝特瓶：[饮料色, 标签色带, 瓶盖]
-const PET_FLAVOR_PALS: Pal[] = [
+const PET_FLAVOR_PALS: Pal3[] = [
   ['japanese', '#b7c96a', '#3f8a4a', '#3f8a4a'], // 绿茶
   ['modern', '#e8f4fb', '#3a7ac8', '#3a7ac8'], // 运动饮料
   ['retro', '#f2a03c', R.orange, R.red], // 橙汁
@@ -3489,133 +3458,133 @@ const PET_FLAVOR_PALS: Pal[] = [
   ['nordic', '#d8a35c', N.oak, N.white], // 麦茶
 ]
 // 矿泉水：[标签色带, 瓶盖, —]
-const WATERB_PALS: Pal[] = [
+const WATERB_PALS: Pal3[] = [
   ['modern', '#3a7ac8', '#3a7ac8', '#3a7ac8'],
   ['nordic', N.blue, N.white, N.white],
   ['japanese', J.ai, J.washi, J.washi],
   ['cute', C.sky, C.pink, C.pink],
 ]
-const WATER_CASE24_PALS: Pal[] = [
+const WATER_CASE24_PALS: Pal3[] = [
   ['modern', '#3a7ac8', '#e8f4fb', CARD],
   ['nordic', N.blue, N.white, CARD],
   ['japanese', J.ai, J.washi, CARD],
   ['cute', C.sky, C.pink, CARD],
 ]
-const TETRA_PALS: Pal[] = [
+const TETRA_PALS: Pal3[] = [
   ['nordic', N.white, N.sage, '#d9b98c'],
   ['modern', M.white, M.char, '#4a9ad8'],
   ['retro', R.cream, R.orange, R.red],
   ['cute', C.white, C.pink, C.lemon],
 ]
-const YOGURT_PALS: Pal[] = [
+const YOGURT_PALS: Pal3[] = [
   ['modern', M.white, '#4a7fc0', '#4a7fc0'],
   ['cute', C.white, C.pink, C.pink],
   ['nordic', N.white, N.sage, N.linen],
   ['retro', R.cream, R.red, R.mustard],
 ]
-const FRIDGE_POT_PALS: Pal[] = [
+const FRIDGE_POT_PALS: Pal3[] = [
   ['modern', M.white, '#d8a35c', M.char],
   ['nordic', N.sage, WATER, N.white],
   ['cute', C.pink, '#d8a35c', C.white],
   ['japanese', J.ai, TEA, J.washi],
 ]
-const SERVER_PALS: Pal[] = [
+const SERVER_PALS: Pal3[] = [
   ['modern', M.white, M.char, M.light],
   ['industrial', M.black, I.iron, I.steel],
   ['nordic', N.white, N.oak, N.linen],
   ['cute', C.white, C.sky, C.mint],
   ['retro', R.cream, R.teal, R.cream],
 ]
-const PIZZA_PALS: Pal[] = [
+const PIZZA_PALS: Pal3[] = [
   ['retro', '#f4ecd8', R.red, R.mustard],
   ['industrial', KRAFT, I.iron, I.rust],
   ['modern', M.white, M.black, '#d8442e'],
   ['cute', C.white, C.pink, C.lemon],
 ]
-const TAKEOUT_PALS: Pal[] = [
+const TAKEOUT_PALS: Pal3[] = [
   ['retro', M.white, R.red, STEEL],
   ['modern', M.white, M.black, STEEL],
   ['industrial', KRAFT, I.iron, STEEL],
   ['cute', C.white, C.pink, STEEL],
 ]
-const TAKEOUT_BENTO_PALS: Pal[] = [
+const TAKEOUT_BENTO_PALS: Pal3[] = [
   ['modern', M.black, '#f2c94c', '#4f9e3b'],
   ['japanese', J.shu, J.washi, '#4f9e3b'],
   ['industrial', I.iron, '#e8dcc4', '#4f9e3b'],
   ['cute', C.pink, C.white, '#4f9e3b'],
 ]
-const SANDWICH_PALS: Pal[] = [
+const SANDWICH_PALS: Pal3[] = [
   ['modern', '#eaf4fb', '#3a7ac8', EGG_Y],
   ['retro', '#eaf4fb', R.red, '#f4b8c0'],
   ['cute', '#fff0f4', C.pink, '#ffd75e'],
   ['nordic', '#f4f6f0', N.sage, '#e8b468'],
 ]
-const NATTO_PALS: Pal[] = [
+const NATTO_PALS: Pal3[] = [
   ['japanese', M.white, J.shu, J.ai],
   ['retro', '#f4ecd8', R.red, R.mustard],
   ['modern', M.white, M.black, '#3a7ac8'],
 ]
-const TOFU_PALS: Pal[] = [
+const TOFU_PALS: Pal3[] = [
   ['japanese', M.white, J.ai, J.shu],
   ['modern', M.white, M.char, '#3a7ac8'],
   ['nordic', '#eef1ea', N.sage, N.oak],
 ]
-const NOODLE_CASE_PALS: Pal[] = [
+const NOODLE_CASE_PALS: Pal3[] = [
   ['retro', CARD, R.red, R.red],
   ['modern', CARD, M.black, M.char],
   ['cute', CARD, C.pink, C.pink],
 ]
-const CANDY_PALS: Pal[] = [
+const CANDY_PALS: Pal3[] = [
   ['cute', C.pink, '#ff5a8a', '#6ac4f0'],
   ['retro', R.red, R.orange, R.teal],
   ['nordic', N.oak, '#f2a0a0', '#9fc8e8'],
   ['modern', M.silver, '#e8495a', '#4a9ad8'],
 ]
-const TIN_PALS: Pal[] = [
+const TIN_PALS: Pal3[] = [
   ['retro', '#2f5a8a', R.cream, R.red],
   ['nordic', N.blue, N.white, N.mustard],
   ['cute', C.pink, C.white, C.mint],
   ['industrial', I.iron, I.rust, '#d4a64a'],
 ]
-const CHOCO_PALS: Pal[] = [
+const CHOCO_PALS: Pal3[] = [
   ['retro', R.red, R.caramel, '#d4d4d4'],
   ['modern', M.black, M.white, '#d4d4d4'],
   ['cute', C.pink, C.lilac, '#e8d4a0'],
   ['nordic', N.blue, N.mustard, '#d4d4d4'],
 ]
 // 薯片：每组一种口味
-const CHIPS_PALS: Pal[] = [
+const CHIPS_PALS: Pal3[] = [
   ['retro', '#f2c94c', R.red, '#e8b468'], // 原味
   ['cute', '#9fd36a', C.white, '#e8b468'], // 海苔盐
   ['modern', '#3a5fb8', M.white, '#e8b468'], // 淡盐
   ['industrial', '#c8473a', I.iron, '#d99a55'], // 烧烤
   ['nordic', '#e8a640', N.white, '#e8b468'], // 黄油酱油
 ]
-const ICE_PALS: Pal[] = [
+const ICE_PALS: Pal3[] = [
   ['retro', R.cream, '#fff6e0', R.red],
   ['cute', C.white, '#ffc8d6', C.pink],
   ['modern', M.white, '#a8683a', M.black],
   ['japanese', J.washi, '#b7c96a', J.ai],
 ]
-const PUDDING_PALS: Pal[] = [
+const PUDDING_PALS: Pal3[] = [
   ['retro', '#fff8e0', R.red, '#8a4a1a'],
   ['cute', '#fff0f4', C.pink, '#8a4a1a'],
   ['modern', '#ffffff', M.char, '#6a3a1a'],
 ]
-const WAGASHI_PALS: Pal[] = [
+const WAGASHI_PALS: Pal3[] = [
   ['japanese', J.washi, J.washi, J.shu],
   ['japanese', J.sumi, '#f6e8d4', J.shu],
   ['nordic', N.white, N.linen, N.sage],
   ['modern', M.black, M.white, M.white],
   ['cute', C.sakura, C.white, C.pink],
 ]
-const BASKET_PALS: Pal[] = [
+const BASKET_PALS: Pal3[] = [
   ['nordic', '#d9c8a4', N.oak, N.oak],
   ['japanese', '#c9a568', '#a8813e', J.wood],
   ['industrial', '#8a6a4a', I.walnut, I.walnut],
   ['cute', '#f0d8b0', C.pink, C.pink],
 ]
-const ECO_PALS: Pal[] = [
+const ECO_PALS: Pal3[] = [
   ['nordic', N.linen, N.oak, N.sage],
   ['modern', M.char, M.black, M.white],
   ['japanese', J.ai, J.sumi, J.washi],

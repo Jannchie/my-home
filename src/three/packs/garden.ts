@@ -8,17 +8,9 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
-import { C, G, S, holePanel, rectPoly, rng, type AssetCategory, type AssetDef, type StyleTag } from '../kit'
-
-const N = S.nordic
-const M = S.modern
-const J = S.japanese
-const I = S.industrial
-const RT = S.retro
-const PI = Math.PI
-
-type V3 = [number, number, number]
-type Build = (p: string[]) => THREE.Group
+import { C, G, holePanel, rectPoly, rng, type AssetCategory, type AssetDef, type StyleTag } from '../kit'
+import { PI, noOutline, type V3 } from '../geo'
+import { I, J, M, N, R, type Build } from '../packkit'
 
 const SOIL = '#7f5f45'
 const TERRA = '#c8794e'
@@ -50,10 +42,6 @@ function sty(groups: Partial<Record<StyleTag, string[][]>>) {
 }
 type Pals = ReturnType<typeof sty>
 
-function noOL<T extends THREE.Object3D>(o: T): T {
-  o.userData.noOutline = true
-  return o
-}
 /** 发光件 */
 function lit<T extends THREE.Mesh>(m: T, color: string, k = 0.8): T {
   m.material = toon(color, { emissive: k })
@@ -164,7 +152,7 @@ function scatter(g: THREE.Group, r: number, y: number, n: number, color: string,
   for (let i = 0; i < n; i++) {
     const a = rand() * PI * 2
     const d = Math.sqrt(rand()) * (r - size - 0.2)
-    g.add(noOL(ball(size * (0.7 + rand() * 0.5), color, { x: Math.cos(a) * d, y: y + 0.05, z: Math.sin(a) * d }, [1, 0.5, 0.9])))
+    g.add(noOutline(ball(size * (0.7 + rand() * 0.5), color, { x: Math.cos(a) * d, y: y + 0.05, z: Math.sin(a) * d }, [1, 0.5, 0.9])))
   }
 }
 
@@ -234,7 +222,7 @@ function glazedPot(R: number, h: number, color: string, accent: string, seed = 1
     const len = 1.4 + rand() * 1.6
     const y = yr - len / 2
     const r = rAt(prof, y) - 0.08
-    g.add(noOL(ball(0.6, accent, { x: Math.cos(a) * r, y, z: Math.sin(a) * r, ry: yawTo(a) }, [1, len / 1.2, 0.45])))
+    g.add(noOutline(ball(0.6, accent, { x: Math.cos(a) * r, y, z: Math.sin(a) * r, ry: yawTo(a) }, [1, len / 1.2, 0.45])))
   }
   const soil = h - 1.6
   const sr = rAt(prof, soil) - t - 0.3
@@ -255,7 +243,7 @@ function cementRound(R: number, h: number, color: string): Pot {
     const a = rand() * PI * 2
     const y = 2 + rand() * (h - 5)
     const r = rB + ((R - rB) * y) / h
-    g.add(noOL(ball(0.28, shade(color, -0.18), { x: Math.cos(a) * r, y, z: Math.sin(a) * r }, [1, 1, 1])))
+    g.add(noOutline(ball(0.28, shade(color, -0.18), { x: Math.cos(a) * r, y, z: Math.sin(a) * r }, [1, 1, 1])))
   }
   return { g, soil, r: sr, top: h }
 }
@@ -386,13 +374,13 @@ function hangRig(g: THREE.Group, pc: number, yb: number, yt: number, prof: [numb
     const a = (k * PI * 2) / 3 + PI / 2
     const P = (r: number, y: number): V3 => [Math.cos(a) * r, y, pc + Math.sin(a) * r]
     const rim = rAt(prof, H) + 0.3
-    g.add(noOL(stick([0, -5.8, pc], P(rim, yt + 0.4), 0.2, rope, 5)))
-    g.add(noOL(tube([P(rim, yt + 0.4), P(rAt(prof, H * 0.6) + 0.35, yb + H * 0.6), P(rAt(prof, H * 0.2) + 0.35, yb + H * 0.2), [0, yb - 1.2, pc]], 0.2, rope, 16, 5)))
+    g.add(noOutline(stick([0, -5.8, pc], P(rim, yt + 0.4), 0.2, rope, 5)))
+    g.add(noOutline(tube([P(rim, yt + 0.4), P(rAt(prof, H * 0.6) + 0.35, yb + H * 0.6), P(rAt(prof, H * 0.2) + 0.35, yb + H * 0.2), [0, yb - 1.2, pc]], 0.2, rope, 16, 5)))
   }
   g.add(ball(0.9, rope, { y: yb - 1.5, z: pc }))
   for (let k = 0; k < 6; k++) {
     const a = (k / 6) * PI * 2
-    g.add(noOL(stick([0, yb - 2, pc], [Math.cos(a) * 1.2, yb - 9, pc + Math.sin(a) * 1.2], 0.18, rope, 4)))
+    g.add(noOutline(stick([0, yb - 2, pc], [Math.cos(a) * 1.2, yb - 9, pc + Math.sin(a) * 1.2], 0.18, rope, 4)))
   }
 }
 
@@ -437,11 +425,11 @@ function hangingPotStand(p: string[]) {
   for (let k = 0; k < 3; k++) {
     const a = (k * PI * 2) / 3 + PI / 2
     const P2 = (r: number, y: number): V3 => [Math.cos(a) * r, y, Math.sin(a) * r]
-    g.add(noOL(tube([P2(rim, HANG_H + 0.4), [Math.cos(a) * 4, HANG_H + 4, 2 + Math.sin(a) * 3], knot], 0.2, rope, 12, 5)))
-    g.add(noOL(tube([P2(rim, HANG_H + 0.4), P2(rAt(prof, 6) + 0.35, 6), P2(rAt(prof, 2) + 0.35, 2), P2(HANG_R * 0.45, 0.2)], 0.2, rope, 12, 5)))
+    g.add(noOutline(tube([P2(rim, HANG_H + 0.4), [Math.cos(a) * 4, HANG_H + 4, 2 + Math.sin(a) * 3], knot], 0.2, rope, 12, 5)))
+    g.add(noOutline(tube([P2(rim, HANG_H + 0.4), P2(rAt(prof, 6) + 0.35, 6), P2(rAt(prof, 2) + 0.35, 2), P2(HANG_R * 0.45, 0.2)], 0.2, rope, 12, 5)))
   }
   g.add(ball(0.9, rope, { x: knot[0], y: knot[1], z: knot[2] }))
-  g.add(noOL(tube([knot, [0, HANG_H + 3, HANG_R + 1], [0, HANG_H * 0.5, HANG_R + 2.2], [0, 0.4, HANG_R + 3.4]], 0.2, rope, 12, 5)))
+  g.add(noOutline(tube([knot, [0, HANG_H + 3, HANG_R + 1], [0, HANG_H * 0.5, HANG_R + 2.2], [0, 0.4, HANG_R + 3.4]], 0.2, rope, 12, 5)))
   g.add(torus(1.4, 0.3, STEEL, { y: 0.3, z: HANG_R + 4.8, rx: PI / 2 }))
   return g
 }
@@ -477,7 +465,7 @@ function selfWater(p: string[]) {
   g.add(band(8.85, 9.0, 8.3, 8.4, 1.0, pot, 0))
   g.add(clear(cyl(8.3, 8.2, 4.2, WATER, { y: 0.4 }), WATER, 0.55))
   g.add(cup(10.4, 9.4, 13, 0.8, pot, { y: 8 }))
-  g.add(noOL(tube([[0, 8.2, 0], [0.8, 5.5, 0.6], [-0.6, 3, -0.4], [1.5, 1, 1.2]], 0.35, '#efe3c8')))
+  g.add(noOutline(tube([[0, 8.2, 0], [0.8, 5.5, 0.6], [-0.6, 3, -0.4], [1.5, 1, 1.2]], 0.35, '#efe3c8')))
   const ix = -6.4
   const iz = 4.2
   g.add(clear(cyl(0.7, 0.7, 23, GLASS, { x: ix, y: 0.6, z: iz }, 12), GLASS, 0.45))
@@ -522,7 +510,7 @@ function seedTray(cols: number, rows: number, pitch: number): Build {
       if (rand() < 0.62) {
         const sh = 1.4 + rand() * 2.4
         const top: V3 = [cx + (rand() - 0.5) * 0.6, soilTop + sh, cz + (rand() - 0.5) * 0.6]
-        g.add(noOL(stick([cx, soilTop - 0.2, cz], top, 0.12, '#9ccf6a', 4)))
+        g.add(noOutline(stick([cx, soilTop - 0.2, cz], top, 0.12, '#9ccf6a', 4)))
         const yaw = rand() * PI
         for (const s of [0, PI]) g.add(sprig(1.4 + sh * 0.15, '#8fd16a', top, yaw + s, -0.15, 0.6))
         if (sh > 3) g.add(sprig(1.5, LEAF, top, yaw + PI / 2, -0.8, 0.55))
@@ -595,7 +583,7 @@ function trail(g: THREE.Group, cx: number, cz: number, a: number, rIn: number, r
   const s = Math.sin(a)
   const P = (r: number, y: number): V3 => [cx + c * r, y, cz + s * r]
   const pts = [P(rIn - 1.5, soilY + 0.2), P(rimR + 0.1, rimY + 1.2), P(rimR + 1.3, rimY - 1), P(rimR + 1.9, (rimY + endY) / 2), P(rimR + 1.7 + rand(), endY)]
-  g.add(noOL(tube(pts, 0.22, STEM, 28, 5)))
+  g.add(noOutline(tube(pts, 0.22, STEM, 28, 5)))
   const curve = curveOf(pts)
   const n = Math.max(3, Math.floor((rimY - endY + 6) / 3.2))
   for (let k = 1; k <= n; k++) {
@@ -614,7 +602,7 @@ function heartTuft(g: THREE.Group, soilY: number, r: number, n: number, seed: nu
     const base: V3 = [cx + Math.cos(a) * rr, soilY - 0.2, cz + Math.sin(a) * rr]
     const pitch = -1.0 + rand() * 0.5
     const tip = along(base, dirOf(yawTo(a), pitch), 3 + rand() * 2.5)
-    g.add(noOL(stick(base, tip, 0.18, STEM, 5)))
+    g.add(noOutline(stick(base, tip, 0.18, STEM, 5)))
     g.add(sprig(5.2 + rand() * 1.5, POTHOS[i % 3], tip, yawTo(a), pitch + 0.75, 0.72))
   }
 }
@@ -674,7 +662,7 @@ function ivyHoop(p: string[]) {
       const th = th0 + ((th1 - th0) * k) / 8
       pts.push([Math.cos(th) * R, yc + Math.sin(th) * R, 0.6 * Math.sin(k * 1.4 + s)])
     }
-    g.add(noOL(tube(pts, 0.2, '#6f8a4a', 40, 5)))
+    g.add(noOutline(tube(pts, 0.2, '#6f8a4a', 40, 5)))
     const curve = curveOf(pts)
     for (let k = 1; k <= 11; k++) {
       const q = curve.getPoint(k / 11.5)
@@ -685,7 +673,7 @@ function ivyHoop(p: string[]) {
   for (const a of [0.6, 2.4, 4.3]) {
     const b: V3 = [Math.cos(a) * 4, y, Math.sin(a) * 4]
     const e: V3 = [Math.cos(a) * 8.4, y - 3, Math.sin(a) * 8.4]
-    g.add(noOL(tube([b, [Math.cos(a) * 7, y + 1.8, Math.sin(a) * 7], e], 0.2, '#6f8a4a', 10, 5)))
+    g.add(noOutline(tube([b, [Math.cos(a) * 7, y + 1.8, Math.sin(a) * 7], e], 0.2, '#6f8a4a', 10, 5)))
     g.add(sprig(3.6, cols[0], e, yawTo(a), 0.5, 0.8))
     g.add(sprig(3.2, cols[1], [Math.cos(a) * 7, y + 1.6, Math.sin(a) * 7], yawTo(a + 0.6), 0.1, 0.8))
   }
@@ -705,7 +693,7 @@ function monsteraKid(p: string[]) {
     const tilt = 0.3 + rand() * 0.25
     const base: V3 = [0, y - 0.3, 0]
     const tip = along(base, dirOf(yawTo(a), -(PI / 2 - tilt)), L)
-    g.add(noOL(stick(base, tip, 0.45, LEAF_D, 6)))
+    g.add(noOutline(stick(base, tip, 0.45, LEAF_D, 6)))
     const lr = 5 + rand() * 1.2
     const lf = ball(lr, i % 2 ? LEAF : shade(LEAF, -0.06), {}, [0.85, 0.16, 1])
     lf.rotation.set(0.45, yawTo(a), 0, 'YXZ')
@@ -718,7 +706,7 @@ function monsteraKid(p: string[]) {
       const slit = ball(0.9, shade(LEAF, -0.25), {}, [0.25, 0.25, 1])
       slit.rotation.set(0.45, yawTo(a) + s * 0.6, 0, 'YXZ')
       slit.position.set(q[0] + Math.sin(side) * s * lr * 0.5, q[1] - 0.2 + 0.55, q[2] + Math.cos(side) * s * lr * 0.5)
-      g.add(noOL(slit))
+      g.add(noOutline(slit))
     }
   }
   g.add(capsule(0.7, 6, '#a6d97a', { y: y - 0.5, rz: 0.12 }))
@@ -739,7 +727,7 @@ function rubberTree(p: string[]) {
     const f = (h - y) / (top - y)
     const base: V3 = [0.6 * f, h, 0.3 * f]
     const tip = along(base, dirOf(yawTo(a), -0.7), 2.2)
-    g.add(noOL(stick(base, tip, 0.25, '#6b7d45', 5)))
+    g.add(noOutline(stick(base, tip, 0.25, '#6b7d45', 5)))
     const len = 12.5 + rand() * 2.5 - f * 3
     g.add(sprig(len, k % 2 ? '#2f6b3a' : '#3a7d44', tip, yawTo(a), -0.55 + rand() * 0.4, 0.58, 0.14))
   }
@@ -773,7 +761,7 @@ function orchidFlower(g: THREE.Group, at: V3, s: number, petal: string, lip: str
   fg.add(ball(1.0 * s, petal, { y: 1.5 * s, z: -0.1 }, [0.85, 1.1, 0.22]))
   for (const k of [-1, 1]) fg.add(ball(0.9 * s, petal, { x: k * 0.8 * s, y: -1.3 * s, z: -0.1 }, [0.75, 1.1, 0.22]))
   fg.add(ball(0.75 * s, lip, { y: -0.35 * s, z: 0.35 * s }, [1, 0.9, 0.7]))
-  fg.add(noOL(ball(0.35 * s, C.lemon, { y: 0.25 * s, z: 0.45 * s })))
+  fg.add(noOutline(ball(0.35 * s, C.lemon, { y: 0.25 * s, z: 0.45 * s })))
   fg.position.set(...at)
   fg.rotation.x = 0.25
   g.add(fg)
@@ -786,11 +774,11 @@ function orchid(p: string[]) {
   scatter(g, P.r, y - 0.1, 16, BARK, 41, 0.75)
   for (const [yaw, len, pitch] of [[PI / 2, 11, -0.1], [-PI / 2, 10.5, -0.05], [PI / 2 + 0.25, 8, -0.35], [-PI / 2 + 0.3, 7.5, -0.4]] as [number, number, number][])
     g.add(sprig(len, '#3f8a4a', [0, y + 0.8, 0], yaw, pitch, 0.42, 0.16))
-  for (const a of [0.9, 2.6]) g.add(noOL(tube([[Math.cos(a), y + 0.6, Math.sin(a)], [Math.cos(a) * 5, y + 1.6, Math.sin(a) * 5], [Math.cos(a) * 6.9, y - 0.6, Math.sin(a) * 6.9], [Math.cos(a) * 7.3, y - 3.6, Math.sin(a) * 7.3]], 0.35, '#c9d6b8', 12, 6)))
+  for (const a of [0.9, 2.6]) g.add(noOutline(tube([[Math.cos(a), y + 0.6, Math.sin(a)], [Math.cos(a) * 5, y + 1.6, Math.sin(a) * 5], [Math.cos(a) * 6.9, y - 0.6, Math.sin(a) * 6.9], [Math.cos(a) * 7.3, y - 3.6, Math.sin(a) * 7.3]], 0.35, '#c9d6b8', 12, 6)))
   // 支架 + 夹子
   g.add(stick([-0.8, y - 4, -1.2], [-0.8, y + 34, -1.2], 0.28, BAMBOO, 6))
   const spike: V3[] = [[0.2, y + 0.8, -0.4], [-0.4, y + 14, -0.9], [-0.5, y + 27, -0.9], [-0.3, y + 32.5, 1.2], [0, y + 33, 6], [0.3, y + 30.5, 10.5], [0.5, y + 26.5, 13.5]]
-  g.add(noOL(tube(spike, 0.28, '#5d7a3a', 30, 5)))
+  g.add(noOutline(tube(spike, 0.28, '#5d7a3a', 30, 5)))
   for (const yy of [y + 12, y + 24]) g.add(rbox(1.0, 1.0, 1.4, C.lemon, { x: -0.6, y: yy, z: -1.0 }, 0.3))
   const curve = curveOf(spike)
   for (let k = 0; k < 5; k++) {
@@ -851,7 +839,7 @@ function cactusBall(g: THREE.Group, x: number, z: number, y: number, r: number, 
     const a = (i * PI) / ribs
     const yy = y + r * 0.72 + (i % 2 ? 0.25 : -0.3) * r
     const rr = r * Math.sqrt(1 - ((yy - (y + r * 0.72)) / (r * 0.93)) ** 2) + 0.05
-    g.add(noOL(ball(0.22, '#fffbe8', { x: x + Math.sin(a) * rr, y: yy, z: z + Math.cos(a) * rr })))
+    g.add(noOutline(ball(0.22, '#fffbe8', { x: x + Math.sin(a) * rr, y: yy, z: z + Math.cos(a) * rr })))
   }
 }
 function cactusGroup(p: string[]) {
@@ -874,8 +862,8 @@ function cactusGroup(p: string[]) {
   // 花
   const fy = y - 0.5 + 3.5 * 0.72 + 3.5 * 0.93
   for (let k = 0; k < 6; k++) g.add(sprig(1.8, C.pink, [1.8, fy, -0.5], (k * PI) / 3, -0.6, 0.6, 0.2))
-  g.add(noOL(ball(0.5, C.lemon, { x: 1.8, y: fy + 0.6, z: -0.5 })))
-  for (const [x, z] of [[-11, 3.5], [5.5, 3.6], [11.2, -3.3], [-3, -4]]) g.add(noOL(ball(0.7, '#e9e3d6', { x, y: y + 0.1, z }, [1, 0.55, 0.9])))
+  g.add(noOutline(ball(0.5, C.lemon, { x: 1.8, y: fy + 0.6, z: -0.5 })))
+  for (const [x, z] of [[-11, 3.5], [5.5, 3.6], [11.2, -3.3], [-3, -4]]) g.add(noOutline(ball(0.7, '#e9e3d6', { x, y: y + 0.1, z }, [1, 0.55, 0.9])))
   return g
 }
 
@@ -894,7 +882,7 @@ function herb(kind: 'mint' | 'basil' | 'rosemary'): Build {
         const L = 6 + rand() * 4
         const dir = dirOf(yawTo(a), -(PI / 2 - 0.25 - rand() * 0.35))
         const tip = along(base, dir, L)
-        g.add(noOL(stick(base, tip, 0.17, '#6b8f4a', 5)))
+        g.add(noOutline(stick(base, tip, 0.17, '#6b8f4a', 5)))
         for (const f of [0.45, 0.72, 1]) {
           const q = along(base, dir, L * f)
           const yaw = yawTo(a) + (f === 0.72 ? 0 : PI / 2)
@@ -908,7 +896,7 @@ function herb(kind: 'mint' | 'basil' | 'rosemary'): Build {
         const L = 11 + rand() * 3
         const dir = dirOf(yawTo(a), -(PI / 2 - 0.18))
         const tip = along(base, dir, L)
-        g.add(noOL(stick(base, tip, 0.28, '#6f9a4a', 6)))
+        g.add(noOutline(stick(base, tip, 0.28, '#6f9a4a', 6)))
         ;[0.3, 0.58, 0.82].forEach((f, j) => {
           const q = along(base, dir, L * f)
           const yaw = yawTo(a) + (j % 2 ? 0 : PI / 2)
@@ -923,12 +911,12 @@ function herb(kind: 'mint' | 'basil' | 'rosemary'): Build {
         const base: V3 = [Math.cos(a) * d, y - 0.2, Math.sin(a) * d]
         const L = 13 + rand() * 6
         const dir = dirOf(yawTo(a), -(PI / 2 - 0.08 - rand() * 0.22))
-        g.add(noOL(stick(base, along(base, dir, L), 0.22, '#7a7a50', 5)))
+        g.add(noOutline(stick(base, along(base, dir, L), 0.22, '#7a7a50', 5)))
         for (let f = 0.25; f < 1.01; f += 0.11) {
           const q = along(base, dir, L * f)
-          for (let k = 0; k < 3; k++) g.add(noOL(sprig(2, k % 2 ? '#5d7d5a' : '#6f8f68', q, (k * PI * 2) / 3 + f * 5, -0.75, 0.2, 0.2)))
+          for (let k = 0; k < 3; k++) g.add(noOutline(sprig(2, k % 2 ? '#5d7d5a' : '#6f8f68', q, (k * PI * 2) / 3 + f * 5, -0.75, 0.2, 0.2)))
         }
-        if (i % 3 === 0) g.add(noOL(ball(0.4, '#a9b8f0', { x: along(base, dir, L)[0], y: along(base, dir, L)[1] + 0.2, z: along(base, dir, L)[2] })))
+        if (i % 3 === 0) g.add(noOutline(ball(0.4, '#a9b8f0', { x: along(base, dir, L)[0], y: along(base, dir, L)[1] + 0.2, z: along(base, dir, L)[2] })))
       }
     }
     // 标签
@@ -961,7 +949,7 @@ function tomato(p: string[]) {
     const r = 3.2 - k * 0.15
     pts.push([Math.cos(k * 1.1) * r, yy, Math.sin(k * 1.1) * r])
   }
-  g.add(noOL(tube(pts, 0.5, '#6f9a4a', 60, 6)))
+  g.add(noOutline(tube(pts, 0.5, '#6f9a4a', 60, 6)))
   const rand = rng(71)
   const fruit = ['#e8463a', '#e8463a', '#ef6a3a', '#f29a3a', '#9ccf5a']
   for (let k = 1; k <= 9; k++) {
@@ -969,22 +957,22 @@ function tomato(p: string[]) {
     const a = k * 2.2 + rand() * 0.4
     const L = 6.5
     const dir = dirOf(yawTo(a), -0.15)
-    g.add(noOL(stick(b, along(b, dir, L), 0.2, '#6f9a4a', 5)))
+    g.add(noOutline(stick(b, along(b, dir, L), 0.2, '#6f9a4a', 5)))
     for (const f of [0.35, 0.65]) for (const s of [-1, 1]) g.add(sprig(3.2, k % 2 ? '#4f9e5b' : '#5fae5a', along(b, dir, L * f), yawTo(a) + s * 1.1, 0.15, 0.55))
     g.add(sprig(3.4, '#4f9e5b', along(b, dir, L), yawTo(a), 0.1, 0.55))
     if (k === 2 || k === 4 || k === 5 || k === 7) {
       const ta = a + PI * 0.8
       const t0: V3 = [b[0] + Math.cos(ta) * 1.2, b[1] - 0.5, b[2] + Math.sin(ta) * 1.2]
       const t1: V3 = [b[0] + Math.cos(ta) * 4.2, b[1] - 2.5, b[2] + Math.sin(ta) * 4.2]
-      g.add(noOL(stick(t0, t1, 0.15, '#6f9a4a', 4)))
+      g.add(noOutline(stick(t0, t1, 0.15, '#6f9a4a', 4)))
       for (let j = 0; j < 5; j++) {
         const q: V3 = [t1[0] + Math.cos(ta + j) * 1.3, t1[1] - 1.6 - j * 1.3, t1[2] + Math.sin(ta + j) * 1.3]
-        g.add(noOL(stick(t1, q, 0.08, '#6f9a4a', 4)))
+        g.add(noOutline(stick(t1, q, 0.08, '#6f9a4a', 4)))
         g.add(ball(1.25, fruit[(j + k) % fruit.length], { x: q[0], y: q[1] - 1, z: q[2] }))
-        g.add(noOL(ball(0.5, LEAF_D, { x: q[0], y: q[1] + 0.2, z: q[2] }, [1, 0.3, 1])))
+        g.add(noOutline(ball(0.5, LEAF_D, { x: q[0], y: q[1] + 0.2, z: q[2] }, [1, 0.3, 1])))
       }
     }
-    if (k === 6 || k === 8) for (let j = 0; j < 5; j++) g.add(noOL(sprig(0.9, C.lemon, along(b, dir, 2), (j * PI * 2) / 5, -0.2, 0.6)))
+    if (k === 6 || k === 8) for (let j = 0; j < 5; j++) g.add(noOutline(sprig(0.9, C.lemon, along(b, dir, 2), (j * PI * 2) / 5, -0.2, 0.6)))
   }
   return g
 }
@@ -992,12 +980,12 @@ function tomato(p: string[]) {
 /** 草莓：三出复叶 / 草莓果 */
 function strawLeaf(g: THREE.Group, base: V3, yaw: number, pitch: number, len: number, color: string) {
   const tip = along(base, dirOf(yaw, pitch), len)
-  g.add(noOL(stick(base, tip, 0.14, '#6f9a4a', 4)))
+  g.add(noOutline(stick(base, tip, 0.14, '#6f9a4a', 4)))
   for (const d of [-0.6, 0, 0.6]) g.add(sprig(2.4, color, tip, yaw + d, pitch + 0.45, 0.75))
 }
 function berry(g: THREE.Group, top: V3, red = '#e8403a') {
   g.add(cyl(1.0, 0.25, 2.0, red, { x: top[0], y: top[1] - 2, z: top[2] }, 10))
-  g.add(noOL(cyl(0.9, 0.9, 0.25, LEAF_D, { x: top[0], y: top[1] - 0.1, z: top[2] }, 8)))
+  g.add(noOutline(cyl(0.9, 0.9, 0.25, LEAF_D, { x: top[0], y: top[1] - 0.1, z: top[2] }, 8)))
 }
 /** 草莓罐：鼓肚陶罐，侧面几个小口袋各种一株，果子从口沿垂下 */
 function strawberryJar(p: string[]) {
@@ -1020,18 +1008,18 @@ function strawberryJar(p: string[]) {
     g.add(cyl(1.9, 1.9, 0.6, SOIL, { x: mouth[0], y: mouth[1] - 0.3, z: mouth[2] }, 12))
     for (let k = 0; k < 3; k++) strawLeaf(g, mouth, yawTo(a) + (k - 1) * 0.8, -0.5, 2.2, greens[k % 2])
     const bt: V3 = [mouth[0] + Math.cos(a) * 2.2, mouth[1] - 0.8, mouth[2] + Math.sin(a) * 2.2]
-    g.add(noOL(stick(mouth, bt, 0.1, '#6f9a4a', 4)))
+    g.add(noOutline(stick(mouth, bt, 0.1, '#6f9a4a', 4)))
     berry(g, bt, rand() < 0.3 ? '#f6b26b' : '#e8403a')
   }
   for (let k = 0; k < 7; k++) strawLeaf(g, [0, y - 0.2, 0], (k / 7) * PI * 2 + 0.3, -0.8 + (k % 2) * 0.3, 4 + (k % 3), greens[k % 2])
   for (const a of [0.6, 2.5, 4.4]) {
     const r0 = rAt(prof, 26) + 0.6
     const top: V3 = [Math.cos(a) * r0, 25.2, Math.sin(a) * r0]
-    g.add(noOL(tube([[Math.cos(a) * 3, y + 3, Math.sin(a) * 3], [Math.cos(a) * (r0 - 0.5), 27, Math.sin(a) * (r0 - 0.5)], top], 0.1, '#6f9a4a', 8, 4)))
+    g.add(noOutline(tube([[Math.cos(a) * 3, y + 3, Math.sin(a) * 3], [Math.cos(a) * (r0 - 0.5), 27, Math.sin(a) * (r0 - 0.5)], top], 0.1, '#6f9a4a', 8, 4)))
     berry(g, top)
   }
-  for (let j = 0; j < 5; j++) g.add(noOL(sprig(1.0, C.white, [1.5, y + 5, -1], (j * PI * 2) / 5, -0.3, 0.7)))
-  g.add(noOL(ball(0.35, C.lemon, { x: 1.5, y: y + 5.3, z: -1 })))
+  for (let j = 0; j < 5; j++) g.add(noOutline(sprig(1.0, C.white, [1.5, y + 5, -1], (j * PI * 2) / 5, -0.3, 0.7)))
+  g.add(noOutline(ball(0.35, C.lemon, { x: 1.5, y: y + 5.3, z: -1 })))
   return g
 }
 
@@ -1041,14 +1029,14 @@ function sunflower(p: string[]) {
   const g = P.g
   const y = P.soil
   const top: V3 = [0, y + 40, 1.5]
-  g.add(noOL(tube([[0, y - 0.5, 0], [0.5, y + 15, 0.2], [-0.3, y + 30, 0.6], top], 0.6, '#6a9a3a', 20, 8)))
+  g.add(noOutline(tube([[0, y - 0.5, 0], [0.5, y + 15, 0.2], [-0.3, y + 30, 0.6], top], 0.6, '#6a9a3a', 20, 8)))
   const rand = rng(91)
   for (let k = 0; k < 6; k++) {
     const yy = y + 6 + k * 5.6
     const a = k * 2.5
     const base: V3 = [0, yy, 0.3]
     const tip = along(base, dirOf(yawTo(a), -0.4), 2)
-    g.add(noOL(stick(base, tip, 0.22, '#6a9a3a', 5)))
+    g.add(noOutline(stick(base, tip, 0.22, '#6a9a3a', 5)))
     g.add(sprig(9 - k * 0.6 + rand(), k % 2 ? '#5aa04a' : '#4f9445', tip, yawTo(a), 0.2, 0.78, 0.14))
   }
   const head = new THREE.Group()
@@ -1074,7 +1062,7 @@ function lavender(p: string[]) {
   for (let i = 0; i < 30; i++) {
     const a = rand() * PI * 2
     const d = rand() * 4
-    g.add(noOL(sprig(5 + rand() * 2, i % 2 ? '#8fa88a' : '#7f9a7a', [Math.cos(a) * d, y - 0.2, Math.sin(a) * d], yawTo(a), -1.15 + rand() * 0.5, 0.18, 0.2)))
+    g.add(noOutline(sprig(5 + rand() * 2, i % 2 ? '#8fa88a' : '#7f9a7a', [Math.cos(a) * d, y - 0.2, Math.sin(a) * d], yawTo(a), -1.15 + rand() * 0.5, 0.18, 0.2)))
   }
   for (let i = 0; i < 18; i++) {
     const a = rand() * PI * 2
@@ -1083,7 +1071,7 @@ function lavender(p: string[]) {
     const dir = dirOf(yawTo(a), -(PI / 2 - 0.1 - rand() * 0.22))
     const L = 18 + rand() * 7
     const tip = along(base, dir, L)
-    g.add(noOL(stick(base, tip, 0.13, '#8fa88a', 4)))
+    g.add(noOutline(stick(base, tip, 0.13, '#8fa88a', 4)))
     g.add(aim(capsAlong([0, 0, 0], [0, 3.6, 0], 0.55, i % 3 ? '#8e6bbf' : '#a585d3'), tip, dir))
   }
   return g
@@ -1092,7 +1080,7 @@ function lavender(p: string[]) {
 /** 玫瑰花朵 */
 function bloom(g: THREE.Group, at: V3, s: number, color: string) {
   const [x, y, z] = at
-  g.add(noOL(cyl(0.8 * s, 0.4 * s, 0.8 * s, LEAF_D, { x, y: y - 0.4 * s, z }, 8)))
+  g.add(noOutline(cyl(0.8 * s, 0.4 * s, 0.8 * s, LEAF_D, { x, y: y - 0.4 * s, z }, 8)))
   g.add(ball(0.95 * s, shade(color, -0.08), { x, y: y + 0.9 * s, z }))
   for (let k = 0; k < 5; k++) {
     const f = (k / 5) * PI * 2
@@ -1122,12 +1110,12 @@ function rose(p: string[]) {
     const L = 20 + rand() * 9
     const dir = dirOf(yawTo(a), -(PI / 2 - 0.18 - rand() * 0.12))
     const tip = along(base, dir, L)
-    g.add(noOL(stick(base, tip, 0.3, '#4f7a3a', 6)))
+    g.add(noOutline(stick(base, tip, 0.3, '#4f7a3a', 6)))
     for (const f of [0.35, 0.6, 0.82]) {
       const q = along(base, dir, L * f)
       const la = a + f * 7
       const lt = along(q, dirOf(yawTo(la), -0.1), 2.6)
-      g.add(noOL(stick(q, lt, 0.12, '#4f7a3a', 4)))
+      g.add(noOutline(stick(q, lt, 0.12, '#4f7a3a', 4)))
       for (const d of [-0.7, 0, 0.7]) g.add(sprig(2.6, '#3f7a3f', lt, yawTo(la) + d, 0.1, 0.62, 0.14))
     }
     bloom(g, [tip[0], tip[1] + 0.3, tip[2]], i === 4 ? 0.75 : 1.15, flower)
@@ -1159,7 +1147,7 @@ function hydrangea(p: string[]) {
     [[4.6, y + 17, -1.2], 5.6],
     [[0.4, y + 21, -4.8], 4.8],
   ]
-  for (const [c] of heads) g.add(noOL(stick([c[0] * 0.3, y - 0.3, c[2] * 0.3], [c[0], c[1] - 3, c[2]], 0.4, '#5f8f4a', 6)))
+  for (const [c] of heads) g.add(noOutline(stick([c[0] * 0.3, y - 0.3, c[2] * 0.3], [c[0], c[1] - 3, c[2]], 0.4, '#5f8f4a', 6)))
   const rand = rng(121)
   for (let k = 0; k < 9; k++) {
     const a = (k / 9) * PI * 2 + rand() * 0.3
@@ -1220,7 +1208,7 @@ function kokedama(p: string[]) {
     const yy = 0.95 - (i / 13) * 1.4
     const rr = Math.sqrt(1 - yy * yy)
     const th = i * 2.39996
-    g.add(noOL(ball(1.5 + rand() * 0.6, i % 2 ? '#6c9a42' : '#8dbb5a', { x: Math.cos(th) * rr * R * 0.88, y: cy + yy * R * 0.88, z: Math.sin(th) * rr * R * 0.88 }, [1, 0.6, 1])))
+    g.add(noOutline(ball(1.5 + rand() * 0.6, i % 2 ? '#6c9a42' : '#8dbb5a', { x: Math.cos(th) * rr * R * 0.88, y: cy + yy * R * 0.88, z: Math.sin(th) * rr * R * 0.88 }, [1, 0.6, 1])))
   }
   g.add(torus(R + 0.05, 0.13, string, { y: cy + 0.8, rx: PI / 2 + 0.2 }))
   for (const ry of [0.5, 1.6, 2.6]) g.add(torus(R + 0.05, 0.13, string, { y: cy, ry }))
@@ -1246,7 +1234,7 @@ function canBig(p: string[]) {
   g.add(torus(R + 0.02, 0.45, dk, { y: H - 0.3, rx: PI / 2 }))
   for (const y of [7.5, 14.5]) g.add(torus(R + 0.4 - (0.4 * y) / H + 0.02, 0.28, dk, { y, rx: PI / 2 }))
   g.add(torus(3.6, 0.55, dk, { x: -3.5, y: H + 0.1, rx: PI / 2 }))
-  g.add(noOL(cyl(3.3, 3.3, 0.35, '#3b4248', { x: -3.5, y: H - 0.05 }, 20)))
+  g.add(noOutline(cyl(3.3, 3.3, 0.35, '#3b4248', { x: -3.5, y: H - 0.05 }, 20)))
   const s0: V3 = [6, 5, 0]
   const s1: V3 = [26, 26, 0]
   g.add(taper(s0, s1, 1.5, 0.8, body))
@@ -1283,7 +1271,7 @@ function sprayer(p: string[]) {
   g.add(clear(cyl(4, 4, 13, bottle, {}, 24), bottle, 0.5))
   g.add(band(4.05, 4.05, 3.6, 3.6, 1.2, shade(bottle, -0.1), 0))
   g.add(clear(cyl(3.7, 3.7, 8.5, WATER, { y: 1.2 }, 24), WATER, 0.5))
-  g.add(noOL(stick([0, 0.6, 0.6], [0, 15.5, 0], 0.18, '#f4f4f2', 4)))
+  g.add(noOutline(stick([0, 0.6, 0.6], [0, 15.5, 0], 0.18, '#f4f4f2', 4)))
   g.add(cyl(1.9, 4, 2, bottle, { y: 13 }, 24))
   g.add(cyl(1.7, 1.7, 1.2, bottle, { y: 15 }, 16))
   g.add(cyl(2.0, 2.0, 1.6, head, { y: 16.2 }, 16))
@@ -1373,7 +1361,7 @@ function apronHang(p: string[]) {
   const [main, acc] = p
   const g = new THREE.Group()
   const z = 1.2
-  g.add(noOL(tube([[-11, -22, z], [-6, -6, 0.9], [0, -0.4, 0.8], [6, -6, 0.9], [11, -22, z]], 0.4, acc, 24, 6)))
+  g.add(noOutline(tube([[-11, -22, z], [-6, -6, 0.9], [0, -0.4, 0.8], [6, -6, 0.9], [11, -22, z]], 0.4, acc, 24, 6)))
   g.add(rbox(26, 26, 0.8, main, { y: -48, z }, 0.4))
   g.add(rbox(54, 50, 1.0, main, { y: -98, z }, 0.5))
   g.add(rbox(40, 16, 0.5, acc, { y: -76, z: z + 0.55 }, 0.3))
@@ -1397,8 +1385,8 @@ function soilBag(p: string[]) {
   scatter(g, 4, 43.5, 6, '#e9e3d6', 141, 0.4)
   g.add(rbox(22, 17, 0.6, label, { y: 12, z: 7.85 }, 0.3))
   g.add(rbox(16, 2.4, 0.4, acc, { y: 23, z: 8.05 }, 0.2))
-  for (const [x, r] of [[-3, 0.5], [3, -0.5]] as [number, number][]) g.add(noOL(ball(2.6, LEAF, { x, y: 19, z: 8.25, rz: r }, [0.5, 1, 0.2])))
-  g.add(noOL(cyl(0.3, 0.3, 4, LEAF_D, { y: 14.5, z: 8.25 }, 6)))
+  for (const [x, r] of [[-3, 0.5], [3, -0.5]] as [number, number][]) g.add(noOutline(ball(2.6, LEAF, { x, y: 19, z: 8.25, rz: r }, [0.5, 1, 0.2])))
+  g.add(noOutline(cyl(0.3, 0.3, 4, LEAF_D, { y: 14.5, z: 8.25 }, 6)))
   g.add(rbox(14, 1.4, 0.4, shade(label, -0.25), { y: 15, z: 8.05 }, 0.2))
   return g
 }
@@ -1412,8 +1400,8 @@ function fertilizer(p: string[]) {
   g.add(cyl(1.5, 1.5, 1.6, body, { x: 2, y: 16.6 }, 14))
   g.add(cyl(1.9, 1.9, 2.4, cap, { x: 2, y: 18 }, 16))
   g.add(rbox(7, 8.5, 0.4, label, { y: 3.5, z: 2.75 }, 0.3))
-  g.add(noOL(ball(1.4, LEAF, { x: -1.2, y: 8.6, z: 3.0, rz: 0.5 }, [0.55, 1, 0.25])))
-  g.add(noOL(ball(1.2, LEAF_D, { x: 0.8, y: 8.2, z: 3.0, rz: -0.5 }, [0.55, 1, 0.25])))
+  g.add(noOutline(ball(1.4, LEAF, { x: -1.2, y: 8.6, z: 3.0, rz: 0.5 }, [0.55, 1, 0.25])))
+  g.add(noOutline(ball(1.2, LEAF_D, { x: 0.8, y: 8.2, z: 3.0, rz: -0.5 }, [0.55, 1, 0.25])))
   g.add(rbox(5, 0.8, 0.5, shade(label, -0.3), { y: 5.2, z: 2.8 }, 0.2))
   return g
 }
@@ -1493,7 +1481,7 @@ function toolRack(p: string[]) {
   x = 23
   peg(x)
   g.add(cyl(2.6, 2.6, 3.6, ROPE, { x, y: yp + 0.3 - 1.8, z: zc + 0.6, rx: PI / 2 }, 18))
-  g.add(noOL(tube([[x + 2.4, yp - 0.4, zc + 1.2], [x + 2.8, yp - 6, zc + 1.4], [x + 2.2, yp - 12, zc + 1.1]], 0.15, ROPE, 8, 4)))
+  g.add(noOutline(tube([[x + 2.4, yp - 0.4, zc + 1.2], [x + 2.8, yp - 6, zc + 1.4], [x + 2.2, yp - 12, zc + 1.1]], 0.15, ROPE, 8, 4)))
   return g
 }
 
@@ -1557,11 +1545,11 @@ function clipLight(p: string[]) {
   for (let k = 1; k < 12; k++) {
     const q = curve.getPoint(k / 12)
     const tq = curve.getTangent(k / 12)
-    g.add(noOL(aim(torus(0.5, 0.12, shade(body, -0.15), { rx: PI / 2 }), [q.x, q.y, q.z], [tq.x, tq.y, tq.z])))
+    g.add(noOutline(aim(torus(0.5, 0.12, shade(body, -0.15), { rx: PI / 2 }), [q.x, q.y, q.z], [tq.x, tq.y, tq.z])))
   }
   g.add(rbox(18, 1.6, 3.4, body, { y: 33.2, z: 7.4 }, 0.6))
   g.add(lit(rbox(16.4, 0.4, 2.4, light, { y: 32.95, z: 7.4 }, 0.15), light, 0.9))
-  g.add(noOL(tube([[0, 0.6, -3.8], [0, 0.3, -6], [3, 0.3, -7.5], [7, 0.3, -7]], 0.25, RUBBER, 12, 5)))
+  g.add(noOutline(tube([[0, 0.6, -3.8], [0, 0.3, -6], [3, 0.3, -7.5], [7, 0.3, -7]], 0.25, RUBBER, 12, 5)))
   return g
 }
 /** 落地植物补光灯：三脚架 + 立杆 + 两只灯板（发光） */
@@ -1601,8 +1589,8 @@ function compostBin(p: string[]) {
   for (const s of [-1, 1]) g.add(rbox(1.4, 4.5, 3, shade(lid, -0.1), { x: s * 13.4, y: 31.4 }, 0.4))
   g.add(cyl(1.3, 1.3, 3, STEEL, { y: 4 - 1.5, z: 12.4, rx: PI / 2 }, 12))
   g.add(rbox(1.2, 2.6, 1.2, lid, { y: 4.8, z: 13.6 }, 0.4))
-  g.add(noOL(ball(2.4, LEAF, { x: -1.4, y: 21, z: 12.75, rz: 0.5 }, [0.55, 1, 0.2])))
-  g.add(noOL(ball(2.2, LEAF_D, { x: 1.4, y: 20.4, z: 12.75, rz: -0.5 }, [0.55, 1, 0.2])))
+  g.add(noOutline(ball(2.4, LEAF, { x: -1.4, y: 21, z: 12.75, rz: 0.5 }, [0.55, 1, 0.2])))
+  g.add(noOutline(ball(2.2, LEAF_D, { x: 1.4, y: 20.4, z: 12.75, rz: -0.5 }, [0.55, 1, 0.2])))
   return g
 }
 
@@ -1658,14 +1646,14 @@ function gardenCart(p: string[]) {
 // ======================================================================
 
 const TERRA_PAL = sty({ retro: [[TERRA], ['#a8603f']], nordic: [['#e3c9b0']], industrial: [['#b5654a']], japanese: [['#8f5a3c']] })
-const GLAZED_PAL = sty({ cute: [[C.sky, C.white], [C.pink, C.cream], [C.mint, C.white]], retro: [[RT.teal, RT.mustard]], japanese: [[J.ai, J.washi]] })
+const GLAZED_PAL = sty({ cute: [[C.sky, C.white], [C.pink, C.cream], [C.mint, C.white]], retro: [[R.teal, R.mustard]], japanese: [[J.ai, J.washi]] })
 const CEMENT_PAL = sty({ industrial: [[I.concrete], ['#8d8a86']], modern: [[M.light], [M.char]] })
 const CERAMIC_PAL = sty({ nordic: [[N.white, N.oak], [N.sage, N.oakL], [N.blue, N.oak]], modern: [[M.white, M.walnut], [M.black, M.walnut]] })
 const RATTAN_PAL = sty({ nordic: [['#d8b98a']], japanese: [['#b08a5a']], cute: [['#ecd8b0']], retro: [['#a8683a']] })
 const WOODBOX_PAL = sty({ nordic: [[N.oak], [N.white]], japanese: [[J.wood]], industrial: [[I.walnut]], cute: [[C.woodL]] })
-const ENAMEL_PAL = sty({ retro: [[RT.cream, '#2f4a6a'], [RT.mustard, RT.cream]], cute: [[C.white, C.sky], [C.mint, C.white]], nordic: [[N.white, M.char]] })
+const ENAMEL_PAL = sty({ retro: [[R.cream, '#2f4a6a'], [R.mustard, R.cream]], cute: [[C.white, C.sky], [C.mint, C.white]], nordic: [[N.white, M.char]] })
 const BONSAI_PAL = sty({ japanese: [[J.sumi], ['#7a4a35'], [J.ai], ['#c9c2b0']], modern: [[M.char]] })
-const HANG_PAL = sty({ nordic: [[N.white, ROPE], [N.sage, ROPE]], cute: [[C.pink, C.cream]], modern: [[M.char, M.light]], retro: [[TERRA, RT.cream]] })
+const HANG_PAL = sty({ nordic: [[N.white, ROPE], [N.sage, ROPE]], cute: [[C.pink, C.cream]], modern: [[M.char, M.light]], retro: [[TERRA, R.cream]] })
 const WALL_PAL = sty({ nordic: [[N.white, N.oak]], cute: [[C.mint, C.woodL], [C.pink, C.white]], modern: [[M.char, M.black]], industrial: [[I.concrete, I.iron]] })
 const SELF_PAL = sty({ modern: [[M.white, C.red], [M.char, C.lemon]], cute: [[C.mint, C.red], [C.pink, C.red]], nordic: [[N.gray, N.mustard]] })
 const SEED_PAL = sty({ industrial: [['#2e2e30']], modern: [[M.char]], cute: [['#7cc47e']], retro: [[TERRA]] })
@@ -1673,32 +1661,32 @@ const TERRARIUM_PAL = sty({ nordic: [['#c9a26b']], modern: [[M.black]], industri
 
 /** 盆栽：盆的颜色 */
 const PLANT_POT = sty({ cute: [[C.sakura], [C.sky]], nordic: [[N.white]], modern: [[M.char]], retro: [[TERRA]] })
-const PLANT_GLAZED = sty({ cute: [[C.white, C.sky], [C.sakura, C.white]], nordic: [[N.sage, N.white]], modern: [[M.char, M.silver]], retro: [[RT.teal, RT.mustard]] })
+const PLANT_GLAZED = sty({ cute: [[C.white, C.sky], [C.sakura, C.white]], nordic: [[N.sage, N.white]], modern: [[M.char, M.silver]], retro: [[R.teal, R.mustard]] })
 const PLANT_CEMENT = sty({ industrial: [[I.concrete]], modern: [[M.char], [M.light]], nordic: [[N.white]] })
 const PLANT_TERRA = sty({ retro: [[TERRA]], nordic: [['#e3c9b0']], industrial: [['#b5654a']], cute: [[C.sakura]] })
 const ORCHID_PAL = sty({ cute: [[C.white, '#f7c4dc', '#d9548a'], [C.sky, C.white, '#e9a33a']], nordic: [[N.white, '#f2e9f7', '#b05ab0']], modern: [[M.black, C.white, '#d9548a']] })
-const ROSE_PAL = sty({ cute: [[C.white, '#ff7f9a'], [C.sky, '#fff1a8']], nordic: [[N.white, '#f5c9c9']], retro: [[RT.cream, '#c8473a']], modern: [[M.char, '#fafafa']] })
+const ROSE_PAL = sty({ cute: [[C.white, '#ff7f9a'], [C.sky, '#fff1a8']], nordic: [[N.white, '#f5c9c9']], retro: [[R.cream, '#c8473a']], modern: [[M.char, '#fafafa']] })
 const HYDRA_PAL = sty({ cute: [[C.white, '#8fb3e8'], [C.sakura, '#f2a7c3']], nordic: [[N.white, '#b49be0']], japanese: [[J.ai, '#a6c4f0']], modern: [[M.char, '#f1f1f6']] })
 const KOKE_PAL = sty({ japanese: [[J.sumi, ROPE], [J.washi, '#8a6a4a'], ['#7a4a35', ROPE]], nordic: [[N.white, ROPE]], modern: [[M.char, M.light]] })
 
 /** 工具 */
-const CAN_BIG_PAL = sty({ industrial: [['#b8bfc6', '#9aa1a8'], ['#4d5a52', '#b8bfc6']], retro: [[RT.teal, '#d6a436'], [RT.red, RT.cream]], nordic: [[N.white, N.oak]] })
+const CAN_BIG_PAL = sty({ industrial: [['#b8bfc6', '#9aa1a8'], ['#4d5a52', '#b8bfc6']], retro: [[R.teal, '#d6a436'], [R.red, R.cream]], nordic: [[N.white, N.oak]] })
 const CAN_SMALL_PAL = sty({ cute: [[C.mint, C.white], [C.pink, C.white], [C.lemon, C.sky]], nordic: [[N.white, N.sage]], modern: [[M.char, M.light]] })
-const SPRAY_PAL = sty({ cute: [[C.sky, C.white], [C.pink, C.white], [C.mint, C.lemon]], modern: [[M.light, M.black]], retro: [[RT.cream, RT.orange]] })
-const HANDTOOL_PAL = sty({ nordic: [[N.oak, STEEL]], industrial: [[I.walnut, '#7c8085']], cute: [[C.pink, STEEL], [C.mint, STEEL]], retro: [[RT.red, '#9aa1a8']] })
-const PRUNER_PAL = sty({ retro: [[RT.red, shade(RT.red, -0.1)]], cute: [[C.pink, C.sakura], [C.sky, C.white]], industrial: [[I.iron, I.rust]], nordic: [[N.sage, N.white]] })
-const GLOVE_PAL = sty({ cute: [[C.pink, C.white], [C.lemon, C.mint]], nordic: [[N.linen, N.sage]], retro: [[RT.mustard, RT.teal]], industrial: [['#9a5f3a', I.iron]] })
-const APRON_PAL = sty({ nordic: [[N.linen, N.oak], [N.sage, N.linen]], industrial: [['#5a5f52', I.leather]], retro: [[RT.olive, RT.mustard]], cute: [[C.sakura, C.white]] })
-const SOILBAG_PAL = sty({ nordic: [['#e8e1d4', '#f7f5f0', '#7da35a']], retro: [[RT.orange, RT.cream, RT.olive]], industrial: [['#5a5f52', '#e8e1d4', I.rust]], cute: [[C.mint, C.white, C.pink]] })
-const FERT_PAL = sty({ cute: [[C.white, C.pink, C.cream], [C.lemon, C.mint, C.white]], modern: [[M.white, M.black, M.light]], retro: [[RT.cream, RT.teal, RT.mustard]], nordic: [[N.white, N.sage, N.linen]] })
-const LABEL_PAL = sty({ industrial: [['#b8bfc6']], retro: [[RT.teal], [RT.red]], cute: [[C.sky]], nordic: [[N.white]] })
+const SPRAY_PAL = sty({ cute: [[C.sky, C.white], [C.pink, C.white], [C.mint, C.lemon]], modern: [[M.light, M.black]], retro: [[R.cream, R.orange]] })
+const HANDTOOL_PAL = sty({ nordic: [[N.oak, STEEL]], industrial: [[I.walnut, '#7c8085']], cute: [[C.pink, STEEL], [C.mint, STEEL]], retro: [[R.red, '#9aa1a8']] })
+const PRUNER_PAL = sty({ retro: [[R.red, shade(R.red, -0.1)]], cute: [[C.pink, C.sakura], [C.sky, C.white]], industrial: [[I.iron, I.rust]], nordic: [[N.sage, N.white]] })
+const GLOVE_PAL = sty({ cute: [[C.pink, C.white], [C.lemon, C.mint]], nordic: [[N.linen, N.sage]], retro: [[R.mustard, R.teal]], industrial: [['#9a5f3a', I.iron]] })
+const APRON_PAL = sty({ nordic: [[N.linen, N.oak], [N.sage, N.linen]], industrial: [['#5a5f52', I.leather]], retro: [[R.olive, R.mustard]], cute: [[C.sakura, C.white]] })
+const SOILBAG_PAL = sty({ nordic: [['#e8e1d4', '#f7f5f0', '#7da35a']], retro: [[R.orange, R.cream, R.olive]], industrial: [['#5a5f52', '#e8e1d4', I.rust]], cute: [[C.mint, C.white, C.pink]] })
+const FERT_PAL = sty({ cute: [[C.white, C.pink, C.cream], [C.lemon, C.mint, C.white]], modern: [[M.white, M.black, M.light]], retro: [[R.cream, R.teal, R.mustard]], nordic: [[N.white, N.sage, N.linen]] })
+const LABEL_PAL = sty({ industrial: [['#b8bfc6']], retro: [[R.teal], [R.red]], cute: [[C.sky]], nordic: [[N.white]] })
 const RACK_PAL = sty({ nordic: [[N.oak, N.oakL, STEEL]], industrial: [[I.walnut, I.walnut, '#7c8085']], cute: [[C.woodL, C.pink, STEEL]], japanese: [[J.wood, J.hinoki, STEEL]] })
-const BENCH_PAL = sty({ nordic: [[N.oak, N.oakL]], industrial: [[I.walnut, I.concrete]], japanese: [[J.wood, J.hinoki]], cute: [[C.woodL, C.white]], retro: [[RT.caramel, RT.cream]] })
+const BENCH_PAL = sty({ nordic: [[N.oak, N.oakL]], industrial: [[I.walnut, I.concrete]], japanese: [[J.wood, J.hinoki]], cute: [[C.woodL, C.white]], retro: [[R.caramel, R.cream]] })
 const STAND_PAL = sty({ nordic: [[N.oak], [N.white]], industrial: [[I.walnut]], japanese: [[J.wood]], cute: [[C.woodL]] })
 const LIGHT_PAL = sty({ modern: [[M.black, '#f2a0e8'], [M.white, '#fff2c8']], industrial: [[I.iron, '#ff9adf']], nordic: [[N.white, '#fff6d8']], cute: [[C.sakura, '#ffe9f4']] })
-const COMPOST_PAL = sty({ nordic: [[N.sage, N.white], [N.white, N.gray]], modern: [[M.char, M.black]], cute: [[C.mint, C.white]], retro: [[RT.olive, RT.cream]] })
-const HOSE_PAL = sty({ industrial: [[I.iron, '#4f9e5b', I.rust]], modern: [[M.char, M.gray, '#e2702f']], retro: [[RT.teal, RT.mustard, RT.orange]], cute: [[C.white, C.mint, C.pink]] })
-const CART_PAL = sty({ retro: [[RT.red, RT.cream]], industrial: [['#4d5a52', '#c3c7cc']], cute: [[C.sky, C.white], [C.mint, C.white]], nordic: [[N.sage, N.white]] })
+const COMPOST_PAL = sty({ nordic: [[N.sage, N.white], [N.white, N.gray]], modern: [[M.char, M.black]], cute: [[C.mint, C.white]], retro: [[R.olive, R.cream]] })
+const HOSE_PAL = sty({ industrial: [[I.iron, '#4f9e5b', I.rust]], modern: [[M.char, M.gray, '#e2702f']], retro: [[R.teal, R.mustard, R.orange]], cute: [[C.white, C.mint, C.pink]] })
+const CART_PAL = sty({ retro: [[R.red, R.cream]], industrial: [['#4d5a52', '#c3c7cc']], cute: [[C.sky, C.white], [C.mint, C.white]], nordic: [[N.sage, N.white]] })
 
 // ======================================================================
 // 素材列表

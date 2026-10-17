@@ -5,6 +5,7 @@ import * as THREE from 'three'
 import { ball, capsule, cup, cyl, face, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, S, ellipsePoly, glow, holePanel, legs, rectPoly, rng, shell, type AssetDef, type Fx, type StyleTag, paintPanel, paintLandscape, paintFlower, paintAbstract } from '../kit'
 import { drawerLv, drawerOf, hollow, slideDoor, swingDoor } from './styles-world'
+import { PI, noOutline, type V3 } from '../geo'
 
 const { nordic: N, modern: M, japanese: J, industrial: I, retro: R } = S
 
@@ -22,14 +23,8 @@ function sty(groups: Partial<Record<StyleTag, string[][]>>) {
 
 // ---------- 小工具 ----------
 
-type V3 = [number, number, number]
 const SOIL = '#8b6a4f'
-const PI = Math.PI
 
-function noOL<T extends THREE.Object3D>(o: T): T {
-  o.userData.noOutline = true
-  return o
-}
 /** 发光件（灯泡、指示灯、火苗） */
 function lit(m: THREE.Mesh, color: string, k = 0.7) {
   m.material = toon(color, { emissive: k })
@@ -74,7 +69,7 @@ function pot(rTop: number, rBot: number, h: number, t: number, color: string, at
 }
 /** 竖直面上的圆片（画、表盘），中心在 (x, y, z)，朝 +z */
 function disc(r: number, color: string, x: number, y: number, z: number, t = 0.4, seg = 24) {
-  return noOL(cyl(r, r, t, color, { x, y: y - t / 2, z, rx: PI / 2 }, seg))
+  return noOutline(cyl(r, r, t, color, { x, y: y - t / 2, z, rx: PI / 2 }, seg))
 }
 
 // ======================================================================
@@ -156,11 +151,11 @@ function byobu(p: string[]) {
     // 框底着地（以前整扇屏风离地 2cm 悬空）
     const pg = G(rbox(seg, 148, 2, frame, {}, 0.8), rbox(seg - 4, 138, 2.8, paper, { y: 5 }, 0.4))
     // 金云
-    pg.add(noOL(rbox(seg - 4, 9, 0.6, acc, { y: 104 + (i % 3) * 7, z: 1.9 }, 0.3)))
-    pg.add(noOL(rbox(seg - 4, 6, 0.6, acc, { y: 30 + ((i + 1) % 2) * 6, z: 1.9 }, 0.3)))
+    pg.add(noOutline(rbox(seg - 4, 9, 0.6, acc, { y: 104 + (i % 3) * 7, z: 1.9 }, 0.3)))
+    pg.add(noOutline(rbox(seg - 4, 6, 0.6, acc, { y: 30 + ((i + 1) % 2) * 6, z: 1.9 }, 0.3)))
     if (i === 4) pg.add(disc(7, J.shu, 0, 128, 1.9))
     if (i < 3)
-      for (let k = 0; k < 3; k++) pg.add(noOL(ball(1.4, C.sakura, { x: -8 + k * 7, y: 70 + ((k * 13 + i * 7) % 24), z: 1.6 }, [1, 1, 0.3])))
+      for (let k = 0; k < 3; k++) pg.add(noOutline(ball(1.4, C.sakura, { x: -8 + k * 7, y: 70 + ((k * 13 + i * 7) % 24), z: 1.6 }, [1, 1, 0.3])))
     pg.position.set((xs[i] + xs[i + 1]) / 2, 0, (zs[i] + zs[i + 1]) / 2)
     pg.rotation.y = Math.atan2(-(zs[i + 1] - zs[i]), dx)
     g.add(pg)
@@ -182,11 +177,11 @@ function tsuitate(p: string[]) {
   // 墨竹
   const zf = 1.9
   for (const [x, h] of [[-18, 56], [-10, 46]]) {
-    g.add(noOL(rbox(1.8, h, 0.6, J.sumi, { x, y: 33, z: zf }, 0.3)))
-    for (let k = 1; k < 4; k++) g.add(noOL(rbox(2.6, 0.6, 0.7, J.sumi, { x, y: 33 + (h * k) / 4, z: zf + 0.1 }, 0.2)))
+    g.add(noOutline(rbox(1.8, h, 0.6, J.sumi, { x, y: 33, z: zf }, 0.3)))
+    for (let k = 1; k < 4; k++) g.add(noOutline(rbox(2.6, 0.6, 0.7, J.sumi, { x, y: 33 + (h * k) / 4, z: zf + 0.1 }, 0.2)))
   }
   for (const [x, y, rz] of [[-13, 84, 0.6], [-22, 80, -0.5], [-6, 72, 0.9], [-14, 66, -0.3]]) {
-    const m = noOL(ball(4, J.sumi, { x, y, z: zf }, [1, 0.3, 0.1]))
+    const m = noOutline(ball(4, J.sumi, { x, y, z: zf }, [1, 0.3, 0.1]))
     m.rotation.z = rz
     g.add(m)
   }
@@ -252,7 +247,7 @@ function zaisu(p: string[]) {
   back.position.set(0, 7, -10)
   back.rotation.x = -0.35
   g.add(back)
-  for (const s of [-1, 1]) g.add(noOL(cyl(2, 2, 1, shade(main, -0.3), { x: s * 22.5, y: 9, z: -10, rz: PI / 2 }, 12)))
+  for (const s of [-1, 1]) g.add(noOutline(cyl(2, 2, 1, shade(main, -0.3), { x: s * 22.5, y: 9, z: -10, rz: PI / 2 }, 12)))
   return g
 }
 
@@ -272,9 +267,9 @@ function kakejiku(p: string[]) {
   // 画心：朱日、远山、一行字
   const z = -0.15
   g.add(disc(4.5, J.shu, 7, y0 + 96, z))
-  g.add(noOL(ball(9, shade(J.ai, 0.3), { x: -4, y: y0 + 30, z }, [1.4, 0.9, 0.04])))
-  g.add(noOL(ball(6, shade(J.ai, 0.15), { x: 7, y: y0 + 28, z: z + 0.15 }, [1.3, 0.9, 0.04])))
-  for (let k = 0; k < 5; k++) g.add(noOL(rbox(k % 2 ? 2.4 : 3.2, 0.9, 0.3, J.sumi, { x: -9, y: y0 + 106 - k * 6, z }, 0.2)))
+  g.add(noOutline(ball(9, shade(J.ai, 0.3), { x: -4, y: y0 + 30, z }, [1.4, 0.9, 0.04])))
+  g.add(noOutline(ball(6, shade(J.ai, 0.15), { x: 7, y: y0 + 28, z: z + 0.15 }, [1.3, 0.9, 0.04])))
+  for (let k = 0; k < 5; k++) g.add(noOutline(rbox(k % 2 ? 2.4 : 3.2, 0.9, 0.3, J.sumi, { x: -9, y: y0 + 106 - k * 6, z }, 0.2)))
   return g
 }
 
@@ -286,7 +281,7 @@ function ikebana(p: string[]) {
   g.add(rbox(38, 3, 38, main, { y: 55 }, 1))
   // 水盘
   g.add(cup(14, 12, 5, 1, vase, { y: 58 }))
-  g.add(noOL(clear(cyl(12.2, 12.2, 0.4, C.glass, { y: 61.4 }), C.glass, 0.6)))
+  g.add(noOutline(clear(cyl(12.2, 12.2, 0.4, C.glass, { y: 61.4 }), C.glass, 0.6)))
   // 天地人
   const base: V3 = [2, 61, 0]
   const lines: [V3, string, number][] = [
@@ -461,13 +456,13 @@ function birdOfParadise(p: string[]) {
     const t = 0.1 + rand() * 0.18
     const L = 45 + rand() * 35
     const tip = along(base, dirOf(yawTo(a), -(PI / 2 - t)), L)
-    g.add(noOL(stick(base, tip, 0.9, C.leafD, 6)))
+    g.add(noOutline(stick(base, tip, 0.9, C.leafD, 6)))
     g.add(sprig(44, i % 2 ? C.leaf : C.leafD, tip, yawTo(a), -(PI / 2 - t * 1.4), 0.36))
   }
   // 鹤望兰花
   const a = 1.0
   const tip = along(base, dirOf(yawTo(a), -(PI / 2 - 0.22)), 62)
-  g.add(noOL(stick(base, tip, 0.8, C.leafD, 6)))
+  g.add(noOutline(stick(base, tip, 0.8, C.leafD, 6)))
   g.add(sprig(14, C.leafD, tip, yawTo(a + 1.5), -0.15, 0.28))
   for (const [da, pit, c] of [[1.2, -1.1, C.orange], [1.5, -0.8, C.orange], [1.0, -0.9, R.orange], [1.4, -0.5, '#7a8ff0']] as [number, number, string][])
     g.add(sprig(10, c, tip, yawTo(a + da), pit, 0.25))
@@ -484,7 +479,7 @@ function alocasia(p: string[]) {
     const t = 0.12 + rand() * 0.18
     const L = 40 + rand() * 30
     const tip = along(base, dirOf(yawTo(a), -(PI / 2 - t)), L)
-    g.add(noOL(stick(base, tip, 0.9, '#6f9a52', 6)))
+    g.add(noOutline(stick(base, tip, 0.9, '#6f9a52', 6)))
     g.add(sprig(30, i % 2 ? C.leafD : '#5aa865', tip, yawTo(a), -0.6, 0.85))
   }
   return g
@@ -502,7 +497,7 @@ function hangingPlant(p: string[]) {
   g.add(torus(1.4, 0.35, J.sumi, { y: y0 + 64.6, ry: PI / 2 }))
   for (let k = 0; k < 3; k++) {
     const a = (k / 3) * PI * 2 + 0.5
-    g.add(noOL(stick([0, y0 + 64, 0], [Math.cos(a) * 12, y0 + 31.5, Math.sin(a) * 12], 0.25, C.cream, 4)))
+    g.add(noOutline(stick([0, y0 + 64, 0], [Math.cos(a) * 12, y0 + 31.5, Math.sin(a) * 12], 0.25, C.cream, 4)))
   }
   g.add(pot(13, 9, 20, 1.4, potC, { y: y0 + 12 }))
   // 吊兰叶
@@ -515,7 +510,7 @@ function hangingPlant(p: string[]) {
   }
   // 垂下的小苗
   for (const [x, z] of [[-14, 8], [12, 10]]) {
-    g.add(noOL(stick([x * 0.6, y0 + 30, z * 0.5], [x, y0 + 6, z], 0.25, C.leafD, 4)))
+    g.add(noOutline(stick([x * 0.6, y0 + 30, z * 0.5], [x, y0 + 6, z], 0.25, C.leafD, 4)))
     for (let k = 0; k < 4; k++) g.add(sprig(7, C.leaf, [x, y0 + 5, z], yawTo((k / 4) * PI * 2), -0.5, 0.2))
   }
   return g
@@ -572,7 +567,7 @@ function flowerRack(p: string[]) {
       const kind = ci % 3
       const c = cols[ci++ % cols.length]
       if (kind === 0) {
-        g.add(noOL(stick([x, fy - 1, pz], [x, fy + 4, pz], 0.3, C.leafD, 4)))
+        g.add(noOutline(stick([x, fy - 1, pz], [x, fy + 4, pz], 0.3, C.leafD, 4)))
         for (let k = 0; k < 5; k++) {
           const a = (k / 5) * PI * 2
           g.add(ball(1.6, c, { x: x + Math.cos(a) * 1.8, y: fy + 4, z: pz + Math.sin(a) * 1.8 }, [1, 0.5, 1]))
@@ -627,8 +622,8 @@ function dogHouse(p: string[]) {
   g.add(rbox(52, 5, 60, shade(acc, 0.12), { y: 4 }, 2.2))
   g.add(ball(6, C.cream, { x: 12, y: 10, z: -16 }, [1.4, 0.6, 1]))
   // 门牌
-  g.add(noOL(rbox(14, 4.6, 0.6, C.cream, { y: 31.5, z: 35.4 }, 0.8)))
-  g.add(noOL(ball(1.2, acc, { y: 33.8, z: 35.8 }, [1, 1, 0.4])))
+  g.add(noOutline(rbox(14, 4.6, 0.6, C.cream, { y: 31.5, z: 35.4 }, 0.8)))
+  g.add(noOutline(ball(1.2, acc, { y: 33.8, z: 35.8 }, [1, 1, 0.4])))
   return g
 }
 
@@ -639,7 +634,7 @@ function catBed(p: string[]) {
   g.add(torus(19, 5, main, { y: 9, rx: PI / 2 }))
   g.add(puck(15, 4, sub, { y: 4.5 }))
   g.add(ball(3, acc, { x: 6, y: 11.2, z: 3 }))
-  g.add(noOL(torus(3, 0.3, shade(acc, -0.1), { x: 6, y: 11.2, z: 3, ry: 0.6 })))
+  g.add(noOutline(torus(3, 0.3, shade(acc, -0.1), { x: 6, y: 11.2, z: 3, ry: 0.6 })))
   return g
 }
 
@@ -650,13 +645,13 @@ function litterBox(p: string[]) {
   g.add(tray(52, 14, 42, 1.6, sub, {}, 0.7))
   g.add(rbox(48.6, 8, 38.6, '#e8dcc6', { y: 1.4 }, 1.5))
   const rand = rng(11)
-  for (let k = 0; k < 9; k++) g.add(noOL(ball(1.6 + rand(), '#ddcfb5', { x: (rand() - 0.5) * 40, y: 9.3, z: (rand() - 0.5) * 30 }, [1.3, 0.35, 1])))
+  for (let k = 0; k < 9; k++) g.add(noOutline(ball(1.6 + rand(), '#ddcfb5', { x: (rand() - 0.5) * 40, y: 9.3, z: (rand() - 0.5) * 30 }, [1.3, 0.35, 1])))
   // 罩子：空心外壳，正面开拱形入口（下沿 15 高于猫砂面 9.4）
   const hood = shell(50, 22, 40, 1.5, main, { front: [{ kind: 'arch', x: 0, y: 1.5, w: 19, h: 17 }], bottom: false })
   hood.position.y = 13.5
   g.add(hood)
   g.add(rbox(18, 3, 5, sub, { y: 35 }, 1.4))
-  for (let k = 0; k < 3; k++) g.add(noOL(rbox(1, 0.6, 10, shade(main, -0.15), { x: -6 + k * 6, y: 35.2, z: -12 }, 0.2)))
+  for (let k = 0; k < 3; k++) g.add(noOutline(rbox(1, 0.6, 10, shade(main, -0.15), { x: -6 + k * 6, y: 35.2, z: -12 }, 0.2)))
   return g
 }
 
@@ -671,10 +666,10 @@ function petBowl(p: string[]) {
     const r = rand() * 4
     g.add(ball(1.1, '#c98b52', { x: -9.5 + Math.cos(a) * r, y: 5 + rand() * 1.5, z: Math.sin(a) * r }, [1, 0.7, 1]))
   }
-  g.add(noOL(clear(cyl(5.8, 5.8, 0.3, C.sky, { x: 9.5, y: 7 }), C.sky, 0.6)))
+  g.add(noOutline(clear(cyl(5.8, 5.8, 0.3, C.sky, { x: 9.5, y: 7 }), C.sky, 0.6)))
   // 爪印
-  g.add(noOL(ball(1.4, C.pink, { y: 1.5, z: 10.2 }, [1, 1, 0.25])))
-  for (let k = 0; k < 3; k++) g.add(noOL(ball(0.6, C.pink, { x: -1.2 + k * 1.2, y: 2.7 - (k % 2) * 0.3, z: 10.1 }, [1, 1, 0.3])))
+  g.add(noOutline(ball(1.4, C.pink, { y: 1.5, z: 10.2 }, [1, 1, 0.25])))
+  for (let k = 0; k < 3; k++) g.add(noOutline(ball(0.6, C.pink, { x: -1.2 + k * 1.2, y: 2.7 - (k % 2) * 0.3, z: 10.1 }, [1, 1, 0.3])))
   return g
 }
 
@@ -732,15 +727,15 @@ function hamsterCage(p: string[]) {
   g.add(rbox(46, 3, 30, C.cream, { y: 1.5 }, 0.6))
   g.add(rbox(50, 1.5, 34, wire, { y: 36 }, 0.6))
   for (let x = -24; x <= 24; x += 3)
-    for (const s of [-1, 1]) g.add(noOL(cyl(0.25, 0.25, 26, wire, { x, y: 10, z: s * 16.6 }, 4)))
+    for (const s of [-1, 1]) g.add(noOutline(cyl(0.25, 0.25, 26, wire, { x, y: 10, z: s * 16.6 }, 4)))
   for (let z = -13.5; z <= 13.5; z += 3)
-    for (const s of [-1, 1]) g.add(noOL(cyl(0.25, 0.25, 26, wire, { x: s * 24.6, y: 10, z }, 4)))
+    for (const s of [-1, 1]) g.add(noOutline(cyl(0.25, 0.25, 26, wire, { x: s * 24.6, y: 10, z }, 4)))
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(cyl(0.6, 0.6, 26, wire, { x: sx * 24.6, y: 10, z: sz * 16.6 }, 6))
   // 跑轮
   g.add(torus(7, 0.8, acc, { x: -12, y: 14, z: -6 }))
   for (let k = 0; k < 6; k++) {
     const a = (k / 6) * PI * 2
-    g.add(noOL(stick([-12, 14, -6], [-12 + Math.cos(a) * 7, 14 + Math.sin(a) * 7, -6], 0.3, acc, 4)))
+    g.add(noOutline(stick([-12, 14, -6], [-12 + Math.cos(a) * 7, 14 + Math.sin(a) * 7, -6], 0.3, acc, 4)))
   }
   g.add(stick([-12, 14, -7], [-12, 4.5, -11], 0.6, acc, 6))
   // 小屋 + 水瓶
@@ -833,12 +828,12 @@ function fishModel(kind: number, k = 1) {
   const tail = ball(s * 0.7, f.fin, { x: -lx * s - s * 0.35 }, f.tail)
   g.add(tail)
   g.add(ball(s * 0.5, f.fin, { x: -0.1 * s, y: ly * s * 0.85 }, [1.1, 0.7, 0.14]))
-  if (f.stripe) g.add(noOL(ball(s * 0.55, f.stripe, { x: -0.2 * s, y: -0.1 * s }, [1.6, 0.35, lz * 1.9])))
+  if (f.stripe) g.add(noOutline(ball(s * 0.55, f.stripe, { x: -0.2 * s, y: -0.1 * s }, [1.6, 0.35, lz * 1.9])))
   for (const side of [-1, 1]) {
     const ex = lx * s * 0.58
     const ez = side * lz * s * 0.62
-    g.add(noOL(ball(s * 0.26, C.white, { x: ex, y: ly * s * 0.22, z: ez })))
-    g.add(noOL(ball(s * 0.15, '#2a2226', { x: ex + s * 0.08, y: ly * s * 0.24, z: ez + side * s * 0.14 })))
+    g.add(noOutline(ball(s * 0.26, C.white, { x: ex, y: ly * s * 0.22, z: ez })))
+    g.add(noOutline(ball(s * 0.15, '#2a2226', { x: ex + s * 0.08, y: ly * s * 0.24, z: ez + side * s * 0.14 })))
   }
   return { g, half: lx * s + s * 0.35 + s * 0.7 * f.tail[0] }
 }
@@ -1075,7 +1070,7 @@ function bicycle(p: string[]) {
     g.add(ball(2, C.steel, { x, y: WY }))
     for (let k = 0; k < 12; k++) {
       const a = (k / 12) * PI * 2
-      g.add(noOL(stick([x, WY, 0], [x + Math.cos(a) * 28.4, WY + Math.sin(a) * 28.4, 0], 0.22, C.steel, 4)))
+      g.add(noOutline(stick([x, WY, 0], [x + Math.cos(a) * 28.4, WY + Math.sin(a) * 28.4, 0], 0.22, C.steel, 4)))
     }
     g.add(torus(34.5, 1.1, main, { x, y: WY, rz: 0.15 * PI }, 0.7 * PI))
   }
@@ -1155,7 +1150,7 @@ function outdoorStorage(p: string[]) {
   for (const s of [-1, 1]) {
     const x = s * 21.6
     const parts: THREE.Object3D[] = [rbox(42.8, 72, 1.6, main, { x, y: 1, z: 23.8 }, 0.6)]
-    for (const y of [15, 30, 45, 60]) parts.push(noOL(rbox(38, 0.8, 0.6, shade(main, -0.12), { x, y, z: 24.7 }, 0.2)))
+    for (const y of [15, 30, 45, 60]) parts.push(noOutline(rbox(38, 0.8, 0.6, shade(main, -0.12), { x, y, z: 24.7 }, 0.2)))
     if (s > 0) parts.push(rbox(10, 4, 1.5, acc, { y: 68, z: 25.3 }, 0.6))
     g.add(swingDoor(parts, s * 43, 24.6, s < 0 ? 'left' : 'right'))
   }
@@ -1171,7 +1166,7 @@ function mopBucket(p: string[]) {
   const [main, sub] = p
   const g = new THREE.Group()
   g.add(cup(14, 12, 28, 1.4, main, { x: -4 }))
-  g.add(noOL(clear(cyl(11.8, 11.8, 0.3, C.sky, { x: -4, y: 20 }), C.sky, 0.6)))
+  g.add(noOutline(clear(cyl(11.8, 11.8, 0.3, C.sky, { x: -4, y: 20 }), C.sky, 0.6)))
   g.add(torus(14.2, 0.6, J.sumi, { x: -4, y: 27, rx: -1.2 }, PI))
   for (const s of [-1, 1]) g.add(ball(1.2, sub, { x: -4 + s * 14.2, y: 27 }))
   g.add(ball(9, C.white, { x: -4, y: 17 }, [1, 0.6, 1]))
@@ -1195,7 +1190,7 @@ function futonRack(p: string[]) {
     // 中心放在 (y 77, z ±11.5)，绕中心倾斜
     const slab = G(rbox(120, 66, 4, main, { y: -33 }, 2))
     // 绑带比被子略窄，两端不和被子侧面共面
-    for (const y of [-21, -3, 15]) slab.add(noOL(rbox(119.2, 4, 0.6, acc, { y, z: s * 2.3 }, 0.3)))
+    for (const y of [-21, -3, 15]) slab.add(noOutline(rbox(119.2, 4, 0.6, acc, { y, z: s * 2.3 }, 0.3)))
     slab.position.set(0, 77, s * 11.5)
     slab.rotation.x = -s * 0.2
     g.add(slab)
@@ -1267,8 +1262,8 @@ function floorFan(p: string[]) {
     const a = (k / 16) * PI * 2
     const rx = Math.cos(a) * 19
     const ry = Math.sin(a) * 19
-    g.add(noOL(stick([0, cy, 4], [rx, cy + ry, 3.5], 0.22, sub, 4)))
-    if (k % 2 === 0) g.add(noOL(stick([rx, cy + ry, 3.5], [rx, cy + ry, -1.5], 0.25, sub, 4)))
+    g.add(noOutline(stick([0, cy, 4], [rx, cy + ry, 3.5], 0.22, sub, 4)))
+    if (k % 2 === 0) g.add(noOutline(stick([rx, cy + ry, 3.5], [rx, cy + ry, -1.5], 0.25, sub, 4)))
   }
   for (let i = 0; i < 3; i++) {
     const a = (i / 3) * PI * 2 + 0.3
@@ -1296,14 +1291,14 @@ function retroFan(p: string[]) {
   // 后网罩的辐条：把网罩固定到电机壳上（以前网罩整圈悬空，和电机不相连）
   for (let k = 0; k < 6; k++) {
     const a = (k / 6) * PI * 2 + PI / 6
-    g.add(noOL(stick([Math.cos(a) * 3.5, cy + Math.sin(a) * 3.5, -2.6], [Math.cos(a) * 13, cy + Math.sin(a) * 13, -2], 0.3, sub, 4)))
+    g.add(noOutline(stick([Math.cos(a) * 3.5, cy + Math.sin(a) * 3.5, -2.6], [Math.cos(a) * 13, cy + Math.sin(a) * 13, -2], 0.3, sub, 4)))
   }
-  for (const r of [5, 9.5]) g.add(noOL(torus(r, 0.25, sub, { y: cy, z: 3 })))
+  for (const r of [5, 9.5]) g.add(noOutline(torus(r, 0.25, sub, { y: cy, z: 3 })))
   for (let k = 0; k < 12; k++) {
     const a = (k / 12) * PI * 2
-    g.add(noOL(stick([0, cy, 3.2], [Math.cos(a) * 14, cy + Math.sin(a) * 14, 2.5], 0.2, sub, 4)))
+    g.add(noOutline(stick([0, cy, 3.2], [Math.cos(a) * 14, cy + Math.sin(a) * 14, 2.5], 0.2, sub, 4)))
     // 前后网罩外圈之间的连接筋
-    g.add(noOL(stick([Math.cos(a) * 14, cy + Math.sin(a) * 14, 2.5], [Math.cos(a) * 13, cy + Math.sin(a) * 13, -2], 0.25, sub, 4)))
+    g.add(noOutline(stick([Math.cos(a) * 14, cy + Math.sin(a) * 14, 2.5], [Math.cos(a) * 13, cy + Math.sin(a) * 13, -2], 0.25, sub, 4)))
   }
   for (let i = 0; i < 4; i++) {
     const a = (i / 4) * PI * 2 + 0.4
@@ -1330,13 +1325,13 @@ function industrialFan(p: string[]) {
   const cy = 104
   g.add(torus(26, 1.2, sub, { y: cy, z: 4 }))
   g.add(torus(26, 1, sub, { y: cy, z: -3 }))
-  for (const r of [9, 17]) g.add(noOL(torus(r, 0.35, sub, { y: cy, z: 4.6 })))
+  for (const r of [9, 17]) g.add(noOutline(torus(r, 0.35, sub, { y: cy, z: 4.6 })))
   for (let k = 0; k < 20; k++) {
     const a = (k / 20) * PI * 2
     const x = Math.cos(a) * 26
     const y = cy + Math.sin(a) * 26
-    g.add(noOL(stick([0, cy, 5], [x, y, 4], 0.3, sub, 4)))
-    if (k % 2 === 0) g.add(noOL(stick([x, y, 4], [x, y, -3], 0.3, sub, 4)))
+    g.add(noOutline(stick([0, cy, 5], [x, y, 4], 0.3, sub, 4)))
+    if (k % 2 === 0) g.add(noOutline(stick([x, y, 4], [x, y, -3], 0.3, sub, 4)))
   }
   for (let i = 0; i < 3; i++) {
     const a = (i / 3) * PI * 2
@@ -1352,11 +1347,11 @@ function purifier(p: string[]) {
   const [main, sub, acc] = p
   const g = new THREE.Group()
   g.add(rbox(38, 66, 22, main, {}, 5))
-  for (let k = -2; k <= 2; k++) g.add(noOL(rbox(30, 0.6, 1, shade(main, -0.18), { y: 65.9, z: k * 3 }, 0.2)))
+  for (let k = -2; k <= 2; k++) g.add(noOutline(rbox(30, 0.6, 1, shade(main, -0.18), { y: 65.9, z: k * 3 }, 0.2)))
   g.add(rbox(32, 50, 1, sub, { y: 5, z: 11.2 }, 0.8))
-  g.add(noOL(torus(3, 0.5, acc, { y: 60, z: 11.3 })))
+  g.add(noOutline(torus(3, 0.5, acc, { y: 60, z: 11.3 })))
   g.add(lit(ball(0.8, '#7fe0a8', { x: 8, y: 60, z: 11.3 }), '#7fe0a8', 0.8))
-  for (let k = 0; k < 8; k++) g.add(noOL(rbox(0.6, 40, 1, shade(main, -0.12), { x: 19.1, y: 10, z: -8 + k * 2.3 }, 0.2)))
+  for (let k = 0; k < 8; k++) g.add(noOutline(rbox(0.6, 40, 1, shade(main, -0.12), { x: 19.1, y: 10, z: -8 + k * 2.3 }, 0.2)))
   return g
 }
 
@@ -1366,10 +1361,10 @@ function purifierTower(p: string[]) {
   const g = new THREE.Group()
   g.add(cyl(13, 13, 2, sub, {}, 32))
   g.add(cyl(12.6, 12.6, 56, main, { y: 2 }, 32))
-  for (let k = 0; k < 12; k++) g.add(noOL(torus(12.7, 0.25, shade(main, -0.12), { y: 6 + k * 3.6, rx: PI / 2 })))
+  for (let k = 0; k < 12; k++) g.add(noOutline(torus(12.7, 0.25, shade(main, -0.12), { y: 6 + k * 3.6, rx: PI / 2 })))
   g.add(cyl(12.6, 12.6, 10, sub, { y: 58 }, 32))
   g.add(cup(10, 10, 3, 1.2, shade(sub, -0.1), { y: 66.5 }))
-  g.add(noOL(cyl(8.6, 8.6, 0.4, J.sumi, { y: 67 }, 24)))
+  g.add(noOutline(cyl(8.6, 8.6, 0.4, J.sumi, { y: 67 }, 24)))
   g.add(lit(torus(5, 0.35, acc, { y: 67.8, rx: PI / 2 }), acc, 0.8))
   return g
 }
@@ -1413,7 +1408,7 @@ function robotVac(p: string[]) {
   for (const s of [-1, 1])
     for (let k = 0; k < 3; k++) {
       const a = (k / 3) * PI * 2
-      g.add(noOL(stick([s * 11, 0.6, 11], [s * 11 + Math.cos(a) * 4, 0.4, 11 + Math.sin(a) * 4], 0.2, sub, 4)))
+      g.add(noOutline(stick([s * 11, 0.6, 11], [s * 11 + Math.cos(a) * 4, 0.4, 11 + Math.sin(a) * 4], 0.2, sub, 4)))
     }
   return g
 }
@@ -1464,13 +1459,13 @@ function wallClock(p: string[]) {
   const cy = CLOCK_MOUNT + 16
   const g = new THREE.Group()
   g.add(puck(16, 4, main, { y: cy - 2, z: -1, rx: PI / 2 }))
-  g.add(noOL(cyl(13.5, 13.5, 0.6, dial, { y: cy - 0.3, z: 1.2, rx: PI / 2 }, 32)))
+  g.add(noOutline(cyl(13.5, 13.5, 0.6, dial, { y: cy - 0.3, z: 1.2, rx: PI / 2 }, 32)))
   for (let k = 0; k < 12; k++) {
     const a = (k / 12) * PI * 2
-    g.add(noOL(ball(k % 3 ? 0.5 : 0.9, J.sumi, { x: Math.cos(a) * 11, y: cy + Math.sin(a) * 11, z: 1.6 }, [1, 1, 0.4])))
+    g.add(noOutline(ball(k % 3 ? 0.5 : 0.9, J.sumi, { x: Math.cos(a) * 11, y: cy + Math.sin(a) * 11, z: 1.6 }, [1, 1, 0.4])))
   }
   const hand = (len: number, wd: number, ang: number, z: number) => {
-    const hg = G(noOL(rbox(wd, len, 0.4, J.sumi, { y: -1 }, 0.2)))
+    const hg = G(noOutline(rbox(wd, len, 0.4, J.sumi, { y: -1 }, 0.2)))
     hg.position.set(0, cy, z)
     hg.rotation.z = ang
     return hg
@@ -1486,15 +1481,15 @@ function wallClockMinimal(p: string[]) {
   const cy = CLOCK_MOUNT + 18
   const g = new THREE.Group()
   g.add(torus(17.4, 1.2, main, { y: cy, z: 0.2 }))
-  g.add(noOL(cyl(17, 17, 0.6, dial, { y: cy - 0.3, z: -0.4, rx: PI / 2 }, 40)))
+  g.add(noOutline(cyl(17, 17, 0.6, dial, { y: cy - 0.3, z: -0.4, rx: PI / 2 }, 40)))
   for (let k = 0; k < 4; k++) {
     const a = (k / 4) * PI * 2
-    const m = noOL(rbox(0.8, 3, 0.4, main, { x: Math.cos(a) * 14, y: cy + Math.sin(a) * 14 - 1.5, z: 0.2 }, 0.1))
+    const m = noOutline(rbox(0.8, 3, 0.4, main, { x: Math.cos(a) * 14, y: cy + Math.sin(a) * 14 - 1.5, z: 0.2 }, 0.1))
     m.rotation.z = a - PI / 2
     g.add(m)
   }
   const hand = (len: number, wd: number, ang: number, z: number, c: string) => {
-    const hg = G(noOL(rbox(wd, len, 0.3, c, { y: -1.5 }, 0.1)))
+    const hg = G(noOutline(rbox(wd, len, 0.3, c, { y: -1.5 }, 0.1)))
     hg.position.set(0, cy, z)
     hg.rotation.z = ang
     return hg
@@ -1510,7 +1505,7 @@ function artFrame(g: THREE.Group, w: number, h: number, d: number, y0: number, f
   const zb = -d / 2
   g.add(rbox(w, h, 2.4, frame, { y: y0, z: zb + 1.2 }, Math.min(1, w * 0.04)))
   const front = zb + 2.4
-  g.add(noOL(rbox(w - 5, h - 5, 0.6, canvas, { y: y0 + 2.5, z: front + 0.1 }, 0.2)))
+  g.add(noOutline(rbox(w - 5, h - 5, 0.6, canvas, { y: y0 + 2.5, z: front + 0.1 }, 0.2)))
   return [front + 0.65, front + 0.95, front + 1.25]
 }
 

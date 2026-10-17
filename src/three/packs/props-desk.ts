@@ -4,16 +4,11 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, face, puck, rbox, shade, toon, torus, tray } from '../toon'
-import { C, S, clipLevels, glow, rng, rod, shell, type AssetCategory, type AssetDef, type Fx, type ScreenPanel, type StyleTag, paintPanel, paintLandscape } from '../kit'
+import { C, clipLevels, glow, rng, rod, shell, type AssetCategory, type AssetDef, type Fx, type ScreenPanel, paintPanel, paintLandscape } from '../kit'
+import { P, noOutline } from '../geo'
+import { I, J, M, N, R, type Pal } from '../packkit'
 
 // ---------- 配色 / 定义 ----------
-
-type Pal = [StyleTag, string[]]
-const N = S.nordic
-const M = S.modern
-const J = S.japanese
-const I = S.industrial
-const R = S.retro
 
 const SCREEN = '#bfe3ff'
 const SKIN = '#ffe3d1'
@@ -52,12 +47,6 @@ function screensOf(screens: ScreenPanel[]): Partial<AssetDef> {
   return { screens, surfaces: clipLevels(screens) }
 }
 
-function P<T extends THREE.Object3D>(o: T, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0): T {
-  o.position.set(x, y, z)
-  o.rotation.set(rx, ry, rz)
-  return o
-}
-
 /** 自发光材质（灯罩、灯泡、火苗） */
 function lit<T extends THREE.Mesh>(m: T, color: string, k = 0.5): T {
   m.material = toon(color, { emissive: k })
@@ -71,11 +60,6 @@ function ghost<T extends THREE.Mesh>(m: T, color: string, a = 0.45): T {
   return m
 }
 
-const noLine = <T extends THREE.Object3D>(o: T): T => {
-  o.userData.noOutline = true
-  return o
-}
-
 /** 沿 x 的横圆柱，给中心 */
 const cylX = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 16) =>
   P(cyl(r, r, len, color, {}, seg), x, y, z, 0, 0, Math.PI / 2)
@@ -85,7 +69,7 @@ const cylZ = (r: number, len: number, color: string, x: number, y: number, z: nu
   P(cyl(r, r, len, color, {}, seg), x, y, z, Math.PI / 2)
 
 /** 屏幕上的发光圆点（太阳、云） */
-const disc = (r: number, color: string, x: number, y: number, z: number, k = 0.7) => noLine(lit(cylZ(r, 0.6, color, x, y, z), color, k))
+const disc = (r: number, color: string, x: number, y: number, z: number, k = 0.7) => noOutline(lit(cylZ(r, 0.6, color, x, y, z), color, k))
 
 /** yz 平面里的细杆 */
 function rodZ(az: number, ay: number, bz: number, by: number, r: number, color: string, x = 0) {
@@ -185,7 +169,7 @@ function laptop(p: string[]) {
   lid.add(glow(13, 9, '#ffffff', { x: -6, y: 8, z: 0.95 }, 0.6))
   lid.add(glow(13, 1.6, acc, { x: -6, y: 15.6, z: 1.35 }, 0.6))
   lid.add(glow(9, 6, '#fff3b0', { x: 8.5, y: 5, z: 0.95 }, 0.6))
-  lid.add(noLine(ball(2.6, acc, { y: 13, z: -0.55 }, [1, 1, 0.15])))
+  lid.add(noOutline(ball(2.6, acc, { y: 13, z: -0.55 }, [1, 1, 0.15])))
   g.add(P(lid, 0, 1, bz - 11.6, -0.2))
   return g
 }
@@ -200,7 +184,7 @@ function monitor(sw: number, sh: number, bw: number, bd: number) {
     g.add(rbox(4, lift + 8, 2.4, stand, { y: 1, z: -5.2 }, 0.8))
     const s = screenPanel(sw, sh, frame, 2, 2)
     desktopUI(s.g, s.gw, s.gh, s.y0, s.z, acc)
-    s.g.add(noLine(ball(0.35, '#9be7b5', { x: sw / 2 - 3, y: 1, z: 1.05 })))
+    s.g.add(noOutline(ball(0.35, '#9be7b5', { x: sw / 2 - 3, y: 1, z: 1.05 })))
     g.add(P(s.g, 0, lift, -2.2))
     return g
   }
@@ -270,7 +254,7 @@ function tv(sw: number, sh: number, bw: number, bd: number) {
     pn.add(glow(gw * 0.45, gh * 0.14, '#6fcf8a', { x: gw * 0.27, y: b, z: z2 + 0.3 }, 0.5))
     pn.add(disc(gh * 0.08, '#4fae6a', gw * 0.16, b + gh * 0.24, z2 + 0.6, 0.5))
     pn.add(glow(gh * 0.025, gh * 0.08, '#b98a5e', { x: gw * 0.16, y: b + gh * 0.13, z: z2 + 0.5 }, 0.4))
-    pn.add(noLine(ball(0.4, acc, { x: sw / 2 - 4, y: 0.5, z: 1.25 })))
+    pn.add(noOutline(ball(0.4, acc, { x: sw / 2 - 4, y: 0.5, z: 1.25 })))
     g.add(P(pn, 0, lift, 0))
     return g
   }
@@ -382,7 +366,7 @@ function alarmClock(p: string[]) {
   g.add(cylZ(5.1, 0.4, C.white, 0, 8, 2.3, 32))
   for (let i = 0; i < 4; i++) {
     const a = (i / 4) * Math.PI * 2
-    g.add(noLine(ball(0.35, hand, { x: Math.cos(a) * 4.1, y: 8 + Math.sin(a) * 4.1, z: 2.55 })))
+    g.add(noOutline(ball(0.35, hand, { x: Math.cos(a) * 4.1, y: 8 + Math.sin(a) * 4.1, z: 2.55 })))
   }
   g.add(rbox(0.5, 3.2, 0.3, hand, { y: 7.8, z: 2.65, rz: 0.5 }, 0.2))
   g.add(rbox(0.5, 2.2, 0.3, hand, { y: 7.9, z: 2.95, rz: -1.9 }, 0.2))
@@ -417,7 +401,7 @@ function digitalFrame(p: string[]) {
   f.add(disc(1.8, '#fff3a0', 5.5, 10.6, 1.25))
   f.add(glow(12, 3.4, '#8fdc9c', { x: -3.5, y: 1.3, z: 1.15 }, 0.5))
   f.add(glow(8, 2.2, '#6fcf8a', { x: 5, y: 1.3, z: 1.45 }, 0.5))
-  f.add(noLine(ball(0.3, acc, { x: 10, y: 0.7, z: 0.75 })))
+  f.add(noOutline(ball(0.3, acc, { x: 10, y: 0.7, z: 0.75 })))
   g.add(P(f, 0, 0, 2.7, -0.18))
   g.add(strutZ(-3.8, 0, 2.7 - 9 * Math.sin(0.18) - 0.7, 9 * Math.cos(0.18), 4, 0.8, shade(frame, -0.08)))
   return g
@@ -524,7 +508,7 @@ function typewriter(p: string[]) {
   g.add(cylX(1.8, 32, M.char, 0, 14.6, -7))
   for (const s of [-1, 1]) g.add(cylX(2, 1.6, acc, s * 16.8, 14.6, -7))
   g.add(rbox(21, 16, 0.3, C.white, { y: 13.5, z: -8.4, rx: -0.15 }, 0.1))
-  for (let i = 0; i < 3; i++) g.add(noLine(rbox(14 - i * 3, 0.3, 0.3, M.gray, { x: -2, y: 25 - i * 1.5, z: -9.6 + i * 0.22, rx: -0.15 }, 0.1)))
+  for (let i = 0; i < 3; i++) g.add(noOutline(rbox(14 - i * 3, 0.3, 0.3, M.gray, { x: -2, y: 25 - i * 1.5, z: -9.6 + i * 0.22, rx: -0.15 }, 0.1)))
   g.add(rod(-17.5, 15.5, -21, 18, 0.35, M.silver, -7))
   g.add(ball(0.7, acc, { x: -21, y: 18, z: -7 }))
   return g
@@ -589,7 +573,7 @@ function openBook(p: string[]) {
   for (const s of [-1, 1]) {
     g.add(rbox(15, 0.4, 21, cover, { x: s * 7.6, y: 0.45, rz: -s * 0.06 }, 0.15))
     g.add(rbox(14.2, 1.2, 20, C.cream, { x: s * 7.4, y: 0.75, rz: -s * 0.1 }, 0.4))
-    for (let i = 0; i < 6; i++) g.add(noLine(rbox(10, 0.2, 0.4, '#c9b9a6', { x: s * 7.4, y: 2, z: -7 + i * 2.6, rz: -s * 0.1 }, 0.1)))
+    for (let i = 0; i < 6; i++) g.add(noOutline(rbox(10, 0.2, 0.4, '#c9b9a6', { x: s * 7.4, y: 2, z: -7 + i * 2.6, rz: -s * 0.1 }, 0.1)))
   }
   g.add(rbox(1.2, 0.3, 8, mark, { x: 1.2, y: 1.95, z: 9 }, 0.1))
   return g
@@ -632,7 +616,7 @@ function stickyNotes(p: string[]) {
   for (let i = 0; i < 3; i++) g.add(rbox(7.6, 1, 7.6, p[i], { y: i, ry: (i - 1) * 0.08 }, 0.12))
   g.add(rbox(7.6, 0.15, 7.6, p[2], { y: 3.05, z: -0.2, rx: -0.12, ry: 0.08 }, 0.05))
   g.add(rbox(7.6, 0.15, 7.6, p[0], { x: 6, y: 0.05, z: 3, ry: 0.5 }, 0.05))
-  for (let i = 0; i < 3; i++) g.add(noLine(rbox(4.5 - i, 0.1, 0.3, '#8a7a7a', { x: 5.6, y: 0.25, z: 1.8 + i * 1.1, ry: 0.5 }, 0.04)))
+  for (let i = 0; i < 3; i++) g.add(noOutline(rbox(4.5 - i, 0.1, 0.3, '#8a7a7a', { x: 5.6, y: 0.25, z: 1.8 + i * 1.1, ry: 0.5 }, 0.04)))
   return g
 }
 
@@ -696,7 +680,7 @@ function deskCalendar(p: string[]) {
       pg.add(rbox(14, 10, 0.3, C.white, { y: 0.3, z: 0.4 }, 0.1))
       pg.add(rbox(14, 2.2, 0.3, head, { y: 8, z: 0.6 }, 0.1))
       for (let i = 0; i < 6; i++)
-        for (let j = 0; j < 4; j++) pg.add(noLine(rbox(1.2, 0.8, 0.2, j === 1 && i === 3 ? mark : '#c9bdb3', { x: -5.5 + i * 2.2, y: 1.2 + j * 1.6, z: 0.6 }, 0.05)))
+        for (let j = 0; j < 4; j++) pg.add(noOutline(rbox(1.2, 0.8, 0.2, j === 1 && i === 3 ? mark : '#c9bdb3', { x: -5.5 + i * 2.2, y: 1.2 + j * 1.6, z: 0.6 }, 0.05)))
       pg.add(torus(1, 0.15, mark, { x: 1.1, y: 3.6, z: 0.8 }))
     }
     g.add(P(pg, 0, 0, s * 3.3, -s * 0.3))
@@ -713,9 +697,9 @@ function miniBlackboard(p: string[]) {
   for (const s of [-1, 1]) f.add(rbox(1, 19, 0.8, frame, { x: s * 7.6, z: -0.9 }, 0.3))
   f.add(rbox(17, 12, 1, frame, { y: 4 }, 0.5))
   f.add(rbox(15, 10, 0.4, board, { y: 5, z: 0.4 }, 0.15))
-  for (const s of [-1, 1]) f.add(noLine(ball(1.1, chalk, { x: s * 0.75 + 2.5, y: 11, z: 0.65 }, [1, 1, 0.15])))
-  f.add(noLine(rbox(1.6, 1.6, 0.2, chalk, { x: 2.5, y: 9.1, z: 0.65, rz: Math.PI / 4 }, 0.05)))
-  for (let i = 0; i < 3; i++) f.add(noLine(rbox(6 - i * 1.2, 0.3, 0.2, C.white, { x: -3.2, y: 12 - i * 1.6, z: 0.65 }, 0.05)))
+  for (const s of [-1, 1]) f.add(noOutline(ball(1.1, chalk, { x: s * 0.75 + 2.5, y: 11, z: 0.65 }, [1, 1, 0.15])))
+  f.add(noOutline(rbox(1.6, 1.6, 0.2, chalk, { x: 2.5, y: 9.1, z: 0.65, rz: Math.PI / 4 }, 0.05)))
+  for (let i = 0; i < 3; i++) f.add(noOutline(rbox(6 - i * 1.2, 0.3, 0.2, C.white, { x: -3.2, y: 12 - i * 1.6, z: 0.65 }, 0.05)))
   f.add(rbox(15, 0.8, 1.6, frame, { y: 3.6, z: 0.9 }, 0.3))
   f.add(cylX(0.3, 2.2, C.white, -3, 4.7, 1, 8))
   g.add(P(f, 0, 0, 4, -0.2))
@@ -760,7 +744,7 @@ function globe(p: string[]) {
     const lat = (r() - 0.5) * 2.2
     const lon = r() * Math.PI * 2
     const v = new THREE.Vector3(Math.cos(lat) * Math.cos(lon), Math.sin(lat), Math.cos(lat) * Math.sin(lon)).multiplyScalar(R0 + 0.05)
-    const m = noLine(ball(2.6 + r() * 1.6, land, {}, [1, 0.8, 0.18]))
+    const m = noOutline(ball(2.6 + r() * 1.6, land, {}, [1, 0.8, 0.18]))
     m.position.copy(v)
     m.lookAt(0, 0, 0)
     earth.add(m)
@@ -807,7 +791,7 @@ function hourglass(p: string[]) {
   const steps = (a: number, b: number, n: number) => Array.from({ length: n + 1 }, (_, i) => a + ((b - a) * i) / n)
   // 玻璃：从底盖到顶盖的连续轮廓
   const glass: [number, number][] = steps(HG.y0, HG.y1, 28).map((y) => [hgRadius(y), y])
-  g.add(ghost(noLine(lathe([[0, HG.y0], ...glass, [0, HG.y1]], C.glass)), C.glass, 0.3))
+  g.add(ghost(noOutline(lathe([[0, HG.y0], ...glass, [0, HG.y1]], C.glass)), C.glass, 0.3))
   // 上泡的沙：贴着泡底（细颈往上）到平整的沙面，沙面中间微微凹下
   const top = mid + 2.6
   const upper: [number, number][] = steps(mid + 0.1, top, 8).map((y) => [hgRadius(y) * 0.94, y])
@@ -867,7 +851,7 @@ function miniCactus(p: string[]) {
     g.add(petal(1.6, flower, 0, 12.1, 0, a, 0.5, 0.6, 0.3))
   }
   g.add(ball(0.5, C.lemon, { y: 12.4 }))
-  for (let i = 0; i < 6; i++) g.add(noLine(ball(0.18, C.white, { x: Math.cos(i * 1.3) * 2.42, y: 5 + (i % 3) * 1.6, z: Math.sin(i * 1.3) * 2.42 })))
+  for (let i = 0; i < 6; i++) g.add(noOutline(ball(0.18, C.white, { x: Math.cos(i * 1.3) * 2.42, y: 5 + (i % 3) * 1.6, z: Math.sin(i * 1.3) * 2.42 })))
   return g
 }
 
@@ -1003,7 +987,7 @@ function candles(p: string[]) {
     g.add(cyl(r, r, h, wax, { x, y: 1, z }, 20))
     g.add(ball(0.5, shade(wax, -0.04), { x: x + r * 0.8, y: 1 + h - 1, z: z + r * 0.5 }, [0.8, 1.6, 0.8]))
     g.add(rbox(0.2, 0.9, 0.2, C.ink, { x, y: 1 + h - 0.1, z }, 0.05))
-    g.add(noLine(lit(ball(0.3, '#ffcf5a', { x, y: 1 + h + 1.2, z }, [1, 1.7, 1]), '#ffcf5a', 0.95)))
+    g.add(noOutline(lit(ball(0.3, '#ffcf5a', { x, y: 1 + h + 1.2, z }, [1, 1.7, 1]), '#ffcf5a', 0.95)))
   }
   return g
 }
@@ -1132,7 +1116,7 @@ function manekiNeko(p: string[]) {
   g.add(ball(4.2, body, { y: 11.5 }))
   for (const s of [-1, 1]) {
     g.add(cyl(0.1, 1.8, 2.6, body, { x: s * 2.6, y: 14.2, rz: -s * 0.35 }, 10))
-    g.add(noLine(cyl(0.05, 1, 1.4, '#ffb6c8', { x: s * 2.55, y: 14.6, z: 0.6, rz: -s * 0.35 }, 10)))
+    g.add(noOutline(cyl(0.05, 1, 1.4, '#ffb6c8', { x: s * 2.55, y: 14.6, z: 0.6, rz: -s * 0.35 }, 10)))
   }
   g.add(capsule(1.2, 2.6, body, { x: 3.9, y: 7.4, rz: -0.25 }))
   g.add(ball(1.4, body, { x: 4.9, y: 12.4 }))
@@ -1163,8 +1147,8 @@ function incense(p: string[]) {
   g.add(rbox(13, 1, 4.5, dish, {}, 0.5))
   g.add(ball(0.8, shade(dish, -0.12), { x: -5, y: 1.1 }))
   g.add(rod(-5, 1.2, 1.5, 8.6, 0.12, stick))
-  g.add(noLine(lit(ball(0.22, '#ff7a45', { x: 1.6, y: 8.7 }), '#ff7a45', 1)))
-  for (let i = 0; i < 3; i++) g.add(noLine(ball(0.25, '#b8b0a8', { x: -1 + i * 1.6, y: 1, z: 0.6 - i * 0.3 }, [1, 0.5, 1])))
+  g.add(noOutline(lit(ball(0.22, '#ff7a45', { x: 1.6, y: 8.7 }), '#ff7a45', 1)))
+  for (let i = 0; i < 3; i++) g.add(noOutline(ball(0.25, '#b8b0a8', { x: -1 + i * 1.6, y: 1, z: 0.6 - i * 0.3 }, [1, 0.5, 1])))
   return g
 }
 

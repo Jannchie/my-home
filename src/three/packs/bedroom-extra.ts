@@ -5,16 +5,9 @@
 //   - 化妆台都有台面（surface / surfaceShape 避开镜子），化妆品是独立的摆件（toiletry 类）。
 
 import * as THREE from 'three'
-import { C, movable, rectPoly, S, type AssetDef, type StyleTag, type SurfaceDef } from '../kit'
+import { C, movable, rectPoly, type AssetDef, type SurfaceDef } from '../kit'
 import { ball, cyl, rbox, shade, toon, torus } from '../toon'
-
-type Pal = [StyleTag, string[]]
-
-const N = S.nordic
-const M = S.modern
-const J = S.japanese
-const I = S.industrial
-const R = S.retro
+import { I, J, M, N, R, type Pal } from '../packkit'
 
 function def(id: string, name: string, [w, d, h]: [number, number, number], pals: Pal[], build: (p: string[]) => THREE.Group, extra: Partial<AssetDef> = {}): AssetDef {
   return {

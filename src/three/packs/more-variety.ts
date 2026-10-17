@@ -8,19 +8,12 @@
 
 import * as THREE from 'three'
 import { ball, cup, cyl, rbox, shade, toon, torus, tray } from '../toon'
-import { C, G, S, holePanel, paintAbstract, paintFlower, paintLandscape, paintPanel, rng, shell, type AssetCategory, type AssetDef, type StyleTag } from '../kit'
+import { C, G, holePanel, paintAbstract, paintFlower, paintLandscape, paintPanel, rng, shell, type AssetCategory, type AssetDef, type StyleTag } from '../kit'
+import { PI, mesh, noOutlineDeep, type V3 } from '../geo'
+import { I, J, M, N, R, type Build, type Pal } from '../packkit'
 
-type V3 = [number, number, number]
-type Pal = [StyleTag, string[]]
-type Build = (p: string[]) => THREE.Group
 type Draw = (g: CanvasRenderingContext2D, W: number, H: number) => void
 
-const PI = Math.PI
-const N = S.nordic
-const M = S.modern
-const J = S.japanese
-const I = S.industrial
-const R = S.retro
 const GOLD = '#d6ad55'
 const BRASS = '#c9a45c'
 const CHROME = '#cfd3d8'
@@ -29,18 +22,6 @@ const CHROME = '#cfd3d8'
 // 小工具
 // ======================================================================
 
-function noOL<T extends THREE.Object3D>(o: T): T {
-  o.traverse((c) => {
-    c.userData.noOutline = true
-  })
-  return o
-}
-function mesh(geo: THREE.BufferGeometry, color: string) {
-  const m = new THREE.Mesh(geo, toon(color))
-  m.castShadow = true
-  m.receiveShadow = true
-  return m
-}
 /** 半透明件（亚克力板） */
 function clear<T extends THREE.Object3D>(o: T, color: string, a = 0.3): T {
   o.traverse((c) => {
@@ -1339,7 +1320,7 @@ function barFrame(w: number, h: number, b: number, t: number, color: string, key
   const iw = w - b * 2
   const ih = h - b * 2
   if (mat) {
-    g.add(noOL(rbox(iw, ih, 0.3, mat, { y: b, z: 0.6 }, 0.05)))
+    g.add(noOutlineDeep(rbox(iw, ih, 0.3, mat, { y: b, z: 0.6 }, 0.05)))
     g.add(paintPanel(iw * 0.74, ih * 0.74, key, draw, { y: b + ih * 0.13, z: 1.05 }))
   } else g.add(paintPanel(iw, ih, key, draw, { y: b, z: 0.75 }))
   return g
@@ -1629,7 +1610,7 @@ function photoCork(p: string[]) {
   ]
   items.forEach(([x, y, w, h, rz, kind], i) => {
     const it = kind === 'photo' ? G(print(w, h, i + 1, shade(acc, -0.1))) : G(rbox(w, h, 0.2, i % 2 ? '#fff4a8' : shade(acc, 0.35), { z: 0.1 }, 0.05))
-    if (kind === 'note') for (let k = 0; k < 3; k++) it.add(noOL(rbox(w * 0.7, 0.25, 0.1, '#8a7a6a', { y: h * (0.25 + k * 0.2), z: 0.25 }, 0.03)))
+    if (kind === 'note') for (let k = 0; k < 3; k++) it.add(noOutlineDeep(rbox(w * 0.7, 0.25, 0.1, '#8a7a6a', { y: h * (0.25 + k * 0.2), z: 0.25 }, 0.03)))
     it.add(ball(0.75, acc, { x: 0, y: h - 1.4, z: 1.0 }))
     it.add(cyl(0.3, 0.3, 0.8, acc, { y: h - 1.4 - 0.4, z: 0.4, rx: PI / 2 }, 8))
     it.position.set(x, y - h / 2, 2.3)

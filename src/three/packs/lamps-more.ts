@@ -8,18 +8,10 @@
 
 import * as THREE from 'three'
 import { ball, cup, cyl, face, puck, rbox, toon, torus } from '../toon'
-import { C, S, type AssetDef, type StyleTag } from '../kit'
+import { C, type AssetDef } from '../kit'
+import { G, P, type V3 } from '../geo'
+import { CL, CN, F, I, J, M, N, R, type PalFlat } from '../packkit'
 
-type V3 = [number, number, number]
-type Pal = [StyleTag, ...string[]]
-const N = S.nordic
-const M = S.modern
-const J = S.japanese
-const I = S.industrial
-const R = S.retro
-const CN = S.chinese
-const CL = S.classic
-const F = S.farmhouse
 const BRASS = '#d4b25a'
 const CHROME = '#d0d5db'
 const WARM = '#ffe2a0'
@@ -34,7 +26,7 @@ const FAMILY: Record<Kind, string> = { floor: 'floor-lamp', table: 'table-lamp',
 /** 壁灯底边离地高度 */
 const WALL_Y = 150
 
-function def(id: string, name: string, kind: Kind, sizeLabel: string, [w, d, h]: [number, number, number], pals: Pal[], build: (p: string[]) => THREE.Group, mount = WALL_Y): AssetDef {
+function def(id: string, name: string, kind: Kind, sizeLabel: string, [w, d, h]: [number, number, number], pals: PalFlat[], build: (p: string[]) => THREE.Group, mount = WALL_Y): AssetDef {
   return {
     id,
     name,
@@ -54,18 +46,6 @@ function def(id: string, name: string, kind: Kind, sizeLabel: string, [w, d, h]:
 }
 
 // ---------- 小工具 ----------
-
-function G(...c: THREE.Object3D[]) {
-  const g = new THREE.Group()
-  for (const o of c) g.add(o)
-  return g
-}
-
-function P<T extends THREE.Object3D>(o: T, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0): T {
-  o.position.set(x, y, z)
-  o.rotation.set(rx, ry, rz)
-  return o
-}
 
 /** 发光部件（灯罩、和纸、玻璃）：emissive ≥ 0.3 才会被 lights.ts 当作灯的发光面 */
 function lit<T extends THREE.Mesh>(m: T, color: string, k = 0.42, outline = true): T {

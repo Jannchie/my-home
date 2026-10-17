@@ -10,23 +10,12 @@
 
 import * as THREE from 'three'
 import { ball, cyl, puck, rbox, toon, torus } from '../toon'
-import { C, S, type AssetDef, type Poly, type StyleTag } from '../kit'
+import { C, type AssetDef, type Poly } from '../kit'
+import { PI, type V3 } from '../geo'
+import { CL, CN, F, I, J, M, N, R, type Build, type Pal } from '../packkit'
 
-const PI = Math.PI
-type V3 = [number, number, number]
-type Pal = [StyleTag, string[]]
-type Build = (p: string[]) => THREE.Group
 /** 层板形状：ins 为向内收的距离（摆放区域用），0 为实际轮廓 */
 type Shape = (ins?: number) => Poly
-
-const M = S.modern
-const N = S.nordic
-const J = S.japanese
-const I = S.industrial
-const R = S.retro
-const CH = S.chinese
-const CL = S.classic
-const F = S.farmhouse
 
 // ---------- 材质色 ----------
 const STEEL = '#d4d8dd'
@@ -41,7 +30,7 @@ const TEAK = '#a8703f'
 const TEAK_D = '#7a4e2a'
 const MARBLE = '#f1eee8'
 const STONE_D = '#5d6166'
-const BRASS = CH.brass
+const BRASS = CN.brass
 const BRASS_D = '#9c7a3c'
 const GLASS = '#dff2fb'
 const TILE = '#e9eef0'
@@ -570,7 +559,7 @@ const SPECS: Spec[] = [
     pals: [
       ['retro', [BRASS, BRASS_D]],
       ['classic', [CL.gold, '#a8894c']],
-      ['chinese', [BRASS, CH.ink]],
+      ['chinese', [BRASS, CN.ink]],
     ],
   },
   {
@@ -615,7 +604,7 @@ const SPECS: Spec[] = [
     pals: [
       ['classic', [MARBLE, CL.gold, TILE]],
       ['modern', [STONE_D, M.gray, M.light]],
-      ['chinese', [CH.celadon, BRASS, CH.ivory]],
+      ['chinese', [CN.celadon, BRASS, CN.ivory]],
     ],
   },
   {
@@ -685,7 +674,7 @@ const SPECS: Spec[] = [
     u: { w: 23, d: 23, shape: fanS(-10.7, -10.7, 21.8), ys: tiers(94, 27, 2), deck: 'slab', t: 2.4, hold: 'tile' },
     pals: [
       ['classic', [MARBLE, CL.gold, TILE]],
-      ['chinese', [CH.ivory, BRASS, CH.celadon]],
+      ['chinese', [CN.ivory, BRASS, CN.celadon]],
       ['modern', [WHITE, M.gray, M.light]],
       ['japanese', [J.washi, J.sumi, '#cfd6c4']],
     ],
@@ -745,7 +734,7 @@ const SPECS: Spec[] = [
       ['classic', [MARBLE, CL.gold, TILE]],
       ['modern', [STONE_D, M.gray, M.light]],
       ['japanese', [J.washi, J.sumi, '#cfd6c4']],
-      ['chinese', [CH.ivory, BRASS, CH.celadon]],
+      ['chinese', [CN.ivory, BRASS, CN.celadon]],
     ],
   },
   {

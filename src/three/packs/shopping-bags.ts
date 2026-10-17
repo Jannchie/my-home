@@ -12,19 +12,9 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cyl, rbox, shade, toon, torus, tray } from '../toon'
-import { C, S, paintPanel, rng, type AssetCategory, type AssetDef, type FormTag, type Poly, type StyleTag } from '../kit'
-
-const PI = Math.PI
-type V3 = [number, number, number]
-type Pal = [StyleTag, string[]]
-type Dims = [number, number, number]
-type Build = (p: string[]) => THREE.Group
-
-const N = S.nordic
-const M = S.modern
-const J = S.japanese
-const I = S.industrial
-const R = S.retro
+import { C, paintPanel, rng, type AssetCategory, type AssetDef, type FormTag, type Poly } from '../kit'
+import { G, P, PI, type V3 } from '../geo'
+import { I, J, M, N, R, type Build, type Dims, type Pal } from '../packkit'
 
 // ---------- 定义 ----------
 
@@ -46,18 +36,6 @@ function asset(id: string, name: string, category: AssetCategory, [w, d, h]: Dim
 }
 
 // ---------- 小工具 ----------
-
-const G = (...c: THREE.Object3D[]) => {
-  const g = new THREE.Group()
-  for (const o of c) g.add(o)
-  return g
-}
-
-function P<T extends THREE.Object3D>(o: T, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0): T {
-  o.position.set(x, y, z)
-  o.rotation.set(rx, ry, rz)
-  return o
-}
 
 /** 沿 z 的圆柱：从 z0 往 +z 长 len */
 const cylZ = (r: number, len: number, color: string, x: number, y: number, z0: number, seg = 20) => P(cyl(r, r, len, color, {}, seg), x, y, z0 + len / 2, PI / 2)

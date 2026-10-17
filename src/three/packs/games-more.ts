@@ -9,40 +9,18 @@
 
 import * as THREE from 'three'
 import { ball, cup, cyl, rbox, shade, toon, tray } from '../toon'
-import { C, S, paintPanel, rng, type AssetCategory, type AssetDef, type StyleTag } from '../kit'
+import { C, paintPanel, rng, type AssetCategory, type AssetDef } from '../kit'
+import { G, P, PI, noOutline } from '../geo'
+import { CL, CN, F, I, J, M, N, R, type PalFlat } from '../packkit'
 
-type Pal = [StyleTag, ...string[]]
 type Draw = (g: CanvasRenderingContext2D, W: number, H: number) => void
-const PI = Math.PI
-const N = S.nordic
-const M = S.modern
-const J = S.japanese
-const I = S.industrial
-const R = S.retro
-const CN = S.chinese
-const CL = S.classic
-const FH = S.farmhouse
 const IVORY = '#f6f0e1'
 const PAPER = '#fbf8f0'
 const DARK = '#26262a'
 const RED = '#c8302a'
 
-function def(id: string, name: string, category: AssetCategory, [w, d, h]: [number, number, number], pals: Pal[], build: (p: string[]) => THREE.Group, extra: Partial<AssetDef> = {}): AssetDef {
+function def(id: string, name: string, category: AssetCategory, [w, d, h]: [number, number, number], pals: PalFlat[], build: (p: string[]) => THREE.Group, extra: Partial<AssetDef> = {}): AssetDef {
   return { id, name, category, w, d, h, palettes: pals.map((x) => x.slice(1)), paletteStyles: pals.map((x) => x[0]), styles: [...new Set(pals.map((x) => x[0]))], build, prop: true, ...extra }
-}
-function P<T extends THREE.Object3D>(o: T, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0): T {
-  o.position.set(x, y, z)
-  o.rotation.set(rx, ry, rz)
-  return o
-}
-function grp(...c: THREE.Object3D[]) {
-  const g = new THREE.Group()
-  for (const o of c) g.add(o)
-  return g
-}
-const noLine = <T extends THREE.Object3D>(o: T): T => {
-  o.userData.noOutline = true
-  return o
 }
 /** 摆正：水平居中，最低点放到 0 */
 function fit(g: THREE.Object3D) {
@@ -58,7 +36,7 @@ function fit(g: THREE.Object3D) {
 /** 平放的画面：w × d，(x, z) 为中心，y 为高度 */
 const paintTop = (w: number, d: number, key: string, draw: Draw, x: number, y: number, z: number, ry = 0) => {
   const m = paintPanel(w, d, key, draw, { x: 0, y: 0, z: d / 2, rx: -PI / 2 })
-  return P(grp(m), x, y, z, 0, ry)
+  return P(G(m), x, y, z, 0, ry)
 }
 /** 一块平板棋盘：板身 + 顶面画面；返回 [组, 顶面高度] */
 function board(w: number, d: number, t: number, wood: string, key: string, draw: Draw): [THREE.Group, number] {
@@ -92,14 +70,14 @@ function card(back: string, faceUp: boolean, x: number, y: number, z: number, ry
   g.add(rbox(w, 0.22, d, faceUp ? PAPER : '#ffffff', {}, 0.08))
   if (faceUp) {
     const col = suit % 2 ? RED : DARK
-    g.add(noLine(rbox(w * 0.22, 0.05, w * 0.22, col, { x: -w * 0.3, y: 0.22, z: -d * 0.34 }, 0.02)))
-    g.add(noLine(rbox(w * 0.36, 0.05, w * 0.36, col, { y: 0.22 }, 0.02)))
-  } else g.add(noLine(rbox(w - 0.8, 0.05, d - 0.8, back, { y: 0.22 }, 0.05)))
+    g.add(noOutline(rbox(w * 0.22, 0.05, w * 0.22, col, { x: -w * 0.3, y: 0.22, z: -d * 0.34 }, 0.02)))
+    g.add(noOutline(rbox(w * 0.36, 0.05, w * 0.36, col, { y: 0.22 }, 0.02)))
+  } else g.add(noOutline(rbox(w - 0.8, 0.05, d - 0.8, back, { y: 0.22 }, 0.05)))
   return P(g, x, y, z, 0, ry)
 }
 /** 一副叠好的牌：n 张高 */
 function deck(back: string, x: number, y: number, z: number, ry = 0, h = 1.6, w = CARD_W, d = CARD_D) {
-  const g = grp(rbox(w, h, d, '#f4f1ea', {}, 0.15), noLine(rbox(w - 0.8, 0.05, d - 0.8, back, { y: h }, 0.05)))
+  const g = G(rbox(w, h, d, '#f4f1ea', {}, 0.15), noOutline(rbox(w - 0.8, 0.05, d - 0.8, back, { y: h }, 0.05)))
   return P(g, x, y, z, 0, ry)
 }
 /** 扇形摊开的一手牌（背朝上，平放在桌上）：围绕 (x, z) 处、朝 dir 方向（ry）展开 n 张 */
@@ -129,17 +107,17 @@ function die(s: number, body: string, pip: string, x: number, y: number, z: numb
     6: [[-1, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [1, 1]],
   }
   const pc = (n: number) => (n === 1 && pip === DARK ? RED : pip)
-  for (const [u, v] of LAY[top]) g.add(noLine(ball(r, pc(top), { x: u * q, y: s + 0.02, z: v * q }, [1, 0.3, 1])))
+  for (const [u, v] of LAY[top]) g.add(noOutline(ball(r, pc(top), { x: u * q, y: s + 0.02, z: v * q }, [1, 0.3, 1])))
   const front = top === 1 ? 2 : 1
-  for (const [u, v] of LAY[front]) g.add(noLine(ball(r, pc(front), { x: u * q, y: s / 2 + v * q, z: s / 2 + 0.02 }, [1, 1, 0.3])))
+  for (const [u, v] of LAY[front]) g.add(noOutline(ball(r, pc(front), { x: u * q, y: s / 2 + v * q, z: s / 2 + 0.02 }, [1, 1, 0.3])))
   const side = top === 3 || top === 4 ? 2 : 3
-  for (const [u, v] of LAY[side]) g.add(noLine(ball(r, pc(side), { x: s / 2 + 0.02, y: s / 2 + v * q, z: u * q }, [0.3, 1, 1])))
+  for (const [u, v] of LAY[side]) g.add(noOutline(ball(r, pc(side), { x: s / 2 + 0.02, y: s / 2 + v * q, z: u * q }, [0.3, 1, 1])))
   return P(g, x, y, z, 0, ry)
 }
 /** 圆片棋子（跳棋 / 斗兽棋 / 筹码）：顶面一圈浅色 */
 function disc(r: number, h: number, color: string, x: number, y: number, z: number, ring = true) {
-  const g = grp(cyl(r, r, h, color, {}, 20))
-  if (ring) g.add(noLine(cyl(r * 0.62, r * 0.62, 0.06, shade(color, 0.14), { y: h }, 20)))
+  const g = G(cyl(r, r, h, color, {}, 20))
+  if (ring) g.add(noOutline(cyl(r * 0.62, r * 0.62, 0.06, shade(color, 0.14), { y: h }, 20)))
   return P(g, x, y, z)
 }
 
@@ -208,7 +186,7 @@ const jqDraw = (wood: string, line: string): Draw => (c, W, H) => {
 }
 /** 一枚军旗棋子：平放的长方块，顶面一道军衔色条 */
 const jqPiece = (color: string, x: number, y: number, z: number, ry = 0, flipped = false) =>
-  P(grp(rbox(3.4, 0.9, 2.3, flipped ? '#e9e2cf' : color, {}, 0.3), noLine(rbox(2.2, 0.05, 1, flipped ? shade(color, -0.1) : '#fff6e0', { y: 0.9 }, 0.1))), x, y, z, 0, ry)
+  P(G(rbox(3.4, 0.9, 2.3, flipped ? '#e9e2cf' : color, {}, 0.3), noOutline(rbox(2.2, 0.05, 1, flipped ? shade(color, -0.1) : '#fff6e0', { y: 0.9 }, 0.1))), x, y, z, 0, ry)
 function junqi(state: 'setup' | 'mid' | 'flip') {
   return ([wood, a, b]: string[]) => {
     const [g, y] = board(34, 56, 0.6, wood, `bg-jq-${wood}`, jqDraw(shade(wood, 0.08), '#3a2a1e'))
@@ -246,12 +224,12 @@ function junqiBoxed([wood, a, b]: string[]) {
   for (const [s, col] of [[-1, a], [1, b]] as const)
     for (let i = 0; i < 12; i++) g.add(jqPiece(col, s * 5.8 + ((i % 3) - 1) * 3.4, 0.6 + Math.floor(i / 9) * 0.9, -4.6 + (Math.floor(i / 3) % 3) * 4.3, (i % 2) * 0.1))
   // 盖子立在后面
-  g.add(P(grp(rbox(25, 0.6, 16, RED, {}, 0.3), noLine(rbox(12, 0.05, 6, '#f6d36a', { y: 0.6 }, 0.1))), 0, 8.6, -9.4, -PI / 2 + 0.15))
+  g.add(P(G(rbox(25, 0.6, 16, RED, {}, 0.3), noOutline(rbox(12, 0.05, 6, '#f6d36a', { y: 0.6 }, 0.1))), 0, 8.6, -9.4, -PI / 2 + 0.15))
   // 折好的棋盘
   g.add(rbox(17.6, 1.4, 28.6, wood, { x: 22, z: 0 }, 0.4))
   return fit(g)
 }
-const JQ_P: Pal[] = [
+const JQ_P: PalFlat[] = [
   ['chinese', '#ead3a0', RED, '#2f5fa8'],
   ['retro', '#e8d6a8', R.red, '#3a3a3c'],
   ['cute', C.woodL, C.red, C.sky],
@@ -288,8 +266,8 @@ const dsDraw = (grass: string, water: string, line: string): Draw => (c, W, H) =
 /** 斗兽棋子：圆片 + 顶面一个小兽头（耳朵） */
 const dsPiece = (color: string, x: number, y: number, z: number) => {
   const g = disc(1.5, 0.8, color, 0, 0, 0)
-  g.add(noLine(ball(0.55, '#fff6e0', { y: 0.86 }, [1, 0.3, 1])))
-  for (const s of [-1, 1]) g.add(noLine(ball(0.25, '#fff6e0', { x: s * 0.45, y: 0.86, z: -0.45 }, [1, 0.3, 1])))
+  g.add(noOutline(ball(0.55, '#fff6e0', { y: 0.86 }, [1, 0.3, 1])))
+  for (const s of [-1, 1]) g.add(noOutline(ball(0.25, '#fff6e0', { x: s * 0.45, y: 0.86, z: -0.45 }, [1, 0.3, 1])))
   return P(g, x, y, z)
 }
 const DS_START: [number, number][] = [[0, 0], [6, 0], [1, 1], [5, 1], [0, 2], [2, 2], [4, 2], [6, 2]]
@@ -318,7 +296,7 @@ function doushou(state: 'start' | 'mid') {
     return fit(g)
   }
 }
-const DS_P: Pal[] = [
+const DS_P: PalFlat[] = [
   ['chinese', '#9cc47a', '#7fb8e6', RED, '#2f5fa8'],
   ['cute', '#bfe3a6', C.sky, C.pink, '#7aa8e0'],
   ['retro', '#a8b86a', R.teal, R.red, R.mustard],
@@ -375,7 +353,7 @@ const fxDraw = (base: string): Draw => (c, W, H) => {
 }
 /** 飞机棋子：圆底座 + 机身 + 机翼 */
 const plane = (col: string, x: number, y: number, z: number, ry = 0) =>
-  P(grp(cyl(0.9, 1, 0.5, col, {}, 16), cyl(0.35, 0.5, 2, col, { y: 0.5 }, 10), rbox(2, 0.25, 0.6, col, { y: 1.5 }, 0.1), ball(0.4, col, { y: 2.5 })), x, y, z, 0, ry)
+  P(G(cyl(0.9, 1, 0.5, col, {}, 16), cyl(0.35, 0.5, 2, col, { y: 0.5 }, 10), rbox(2, 0.25, 0.6, col, { y: 1.5 }, 0.1), ball(0.4, col, { y: 2.5 })), x, y, z, 0, ry)
 function feixing(state: 'start' | 'mid') {
   return ([base, frame, dieCol]: string[]) => {
     const g = new THREE.Group()
@@ -400,7 +378,7 @@ function feixing(state: 'start' | 'mid') {
     return fit(g)
   }
 }
-const FX_P: Pal[] = [
+const FX_P: PalFlat[] = [
   ['cute', '#fff6e0', C.sky, C.white],
   ['retro', R.cream, R.teal, '#fbfaf6'],
   ['modern', '#f4f4f2', M.char, '#fbfaf6'],
@@ -446,7 +424,7 @@ function gomoku(state: 'mid' | 'win') {
     return fit(g)
   }
 }
-const GOMOKU_P: Pal[] = [
+const GOMOKU_P: PalFlat[] = [
   ['chinese', '#e3c27f', '#3a2a1e', '#8a5a34'],
   ['modern', '#efe7d6', '#3d3f44', '#3d3f44'],
   ['nordic', N.oakL, '#4a3a2e', N.oak],
@@ -483,7 +461,7 @@ function pokerGame(seats: 3 | 4) {
     return fit(g)
   }
 }
-const POKER_GAME_P: Pal[] = [
+const POKER_GAME_P: PalFlat[] = [
   ['chinese', '#2f7a4a', '#b8352b', CN.rosewood],
   ['modern', '#3d5a80', '#26262a', M.char],
   ['retro', '#2f6a4a', R.red, R.caramel],
@@ -497,9 +475,9 @@ const PJ_D = 5.6
 const PJ_H = 1
 /** 一块骨牌：面朝上露出上下两半的点数（a / b），否则只看到牌背 */
 function pjTile(body: string, pipA: string, pipB: string, faceUp: boolean, a: number, b: number, x: number, y: number, z: number, ry = 0, w = PJ_W, d = PJ_D) {
-  const g = grp(rbox(w, PJ_H, d, body, {}, 0.3))
+  const g = G(rbox(w, PJ_H, d, body, {}, 0.3))
   if (faceUp) {
-    g.add(noLine(rbox(w * 0.8, 0.04, 0.12, pipA === '#ffffff' ? shade(body, 0.3) : shade(body, -0.25), { y: PJ_H }, 0.02)))
+    g.add(noOutline(rbox(w * 0.8, 0.04, 0.12, pipA === '#ffffff' ? shade(body, 0.3) : shade(body, -0.25), { y: PJ_H }, 0.02)))
     const LAY: Record<number, [number, number][]> = {
       0: [],
       1: [[0, 0]],
@@ -510,7 +488,7 @@ function pjTile(body: string, pipA: string, pipB: string, faceUp: boolean, a: nu
       6: [[-1, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [1, 1]],
     }
     for (const [half, n] of [[-1, a], [1, b]] as const)
-      for (const [u, v] of LAY[n]) g.add(noLine(ball(w * 0.08, n === 1 || n === 4 ? pipB : pipA, { x: u * w * 0.24, y: PJ_H + 0.02, z: half * d * 0.25 + v * d * 0.12 }, [1, 0.3, 1])))
+      for (const [u, v] of LAY[n]) g.add(noOutline(ball(w * 0.08, n === 1 || n === 4 ? pipB : pipA, { x: u * w * 0.24, y: PJ_H + 0.02, z: half * d * 0.25 + v * d * 0.12 }, [1, 0.3, 1])))
   }
   return P(g, x, y, z, 0, ry)
 }
@@ -537,7 +515,7 @@ function paijiu(state: 'wall' | 'open') {
     return fit(g)
   }
 }
-const PJ_P: Pal[] = [
+const PJ_P: PalFlat[] = [
   ['chinese', '#26262a', '#ffffff', RED],
   ['retro', '#f2e6cc', DARK, RED],
   ['classic', IVORY, DARK, RED],
@@ -563,14 +541,14 @@ function dominoes([body, pip, edge]: string[]) {
     if (k === 7) x -= D
   }
   // 两家手牌立着
-  for (const s of [-1, 1]) for (let i = 0; i < 6; i++) g.add(P(grp(rbox(W, D, 1, body, {}, 0.3)), (i - 2.5) * (W + 0.3), 0, s * 14, 0, s > 0 ? 0 : PI))
+  for (const s of [-1, 1]) for (let i = 0; i < 6; i++) g.add(P(G(rbox(W, D, 1, body, {}, 0.3)), (i - 2.5) * (W + 0.3), 0, s * 14, 0, s > 0 ? 0 : PI))
   // 牌库（背面朝上）
-  for (let i = 0; i < 7; i++) g.add(P(grp(rbox(W, 1, D, edge, {}, 0.3)), 20 + (i % 3) * 2.8, 0, -6 + Math.floor(i / 3) * 5.2, 0, (r() - 0.5) * 0.6))
+  for (let i = 0; i < 7; i++) g.add(P(G(rbox(W, 1, D, edge, {}, 0.3)), 20 + (i % 3) * 2.8, 0, -6 + Math.floor(i / 3) * 5.2, 0, (r() - 0.5) * 0.6))
   return fit(g)
 }
-const DOMINO_P: Pal[] = [
+const DOMINO_P: PalFlat[] = [
   ['classic', IVORY, DARK, '#3a3a3c'],
-  ['farmhouse', FH.white, FH.navy, FH.barn],
+  ['farmhouse', F.white, F.navy, F.barn],
   ['modern', '#26262a', '#ffffff', '#3d3f44'],
 ]
 
@@ -581,10 +559,10 @@ const HANA_D = 5.4
 /** 花札牌面：红边框 + 季节色块（12 种） */
 const HANA_FACES = ['#d65a3c', '#e98fb0', '#f2c14e', '#8a4fb0', '#3f7a4a', '#c8302a', '#e07a3a', '#2f5fa8', '#f0d050', '#b8352b', '#3a3a3c', '#7fa48f']
 const hanaCard = (back: string, faceUp: boolean, k: number, x: number, y: number, z: number, ry = 0) => {
-  const g = grp(rbox(HANA_W, 0.3, HANA_D, faceUp ? '#f2e6cc' : back, {}, 0.1))
+  const g = G(rbox(HANA_W, 0.3, HANA_D, faceUp ? '#f2e6cc' : back, {}, 0.1))
   if (faceUp) {
-    g.add(noLine(rbox(HANA_W - 0.6, 0.05, HANA_D - 0.6, HANA_FACES[k % 12], { y: 0.3 }, 0.05)))
-    g.add(noLine(ball(0.6, k % 3 ? '#fbf8f0' : '#26262a', { y: 0.36, z: -0.8 }, [1, 0.2, 1])))
+    g.add(noOutline(rbox(HANA_W - 0.6, 0.05, HANA_D - 0.6, HANA_FACES[k % 12], { y: 0.3 }, 0.05)))
+    g.add(noOutline(ball(0.6, k % 3 ? '#fbf8f0' : '#26262a', { y: 0.36, z: -0.8 }, [1, 0.2, 1])))
   }
   return P(g, x, y, z, 0, ry)
 }
@@ -597,7 +575,7 @@ function hanafudaMat([mat, back, box]: string[]) {
   const y = 4
   for (let i = 0; i < 8; i++) g.add(hanaCard(back, true, i * 3, ((i % 4) - 1.5) * 4.4, y, (Math.floor(i / 4) - 0.5) * 6.4, (i % 3) * 0.05))
   // 山札（背面朝上一叠）
-  g.add(P(grp(rbox(HANA_W, 2, HANA_D, '#e8dcc0', {}, 0.1), noLine(rbox(HANA_W - 0.4, 0.05, HANA_D - 0.4, back, { y: 2 }, 0.05))), 11.6, y, 0, 0, 0.1))
+  g.add(P(G(rbox(HANA_W, 2, HANA_D, '#e8dcc0', {}, 0.1), noOutline(rbox(HANA_W - 0.4, 0.05, HANA_D - 0.4, back, { y: 2 }, 0.05))), 11.6, y, 0, 0, 0.1))
   // 两家：手牌扇形 + 得札（面朝上错开摆）
   for (const s of [-1, 1]) {
     for (let i = 0; i < 7; i++) {
@@ -608,10 +586,10 @@ function hanafudaMat([mat, back, box]: string[]) {
   }
   // 牌盒（垫子外、桌面上）
   g.add(rbox(6.6, 2.6, 9.6, box, { x: 28.6, z: 14 }, 0.4))
-  g.add(noLine(rbox(3, 0.05, 5, '#f2e6cc', { x: 28.6, y: 2.6, z: 14 }, 0.1)))
+  g.add(noOutline(rbox(3, 0.05, 5, '#f2e6cc', { x: 28.6, y: 2.6, z: 14 }, 0.1)))
   return fit(g)
 }
-const HANA_MAT_P: Pal[] = [
+const HANA_MAT_P: PalFlat[] = [
   ['japanese', '#7a2e3a', J.sumi, RED],
   ['japanese', J.ai, '#7a2e2e', J.sumi],
   ['retro', R.mustard, R.red, R.red],
@@ -651,7 +629,7 @@ const sugorokuDraw = (paper: string, a: string, b: string): Draw => (c, W, H) =>
   c.lineTo(cx + W * 0.025, cy - H * 0.035)
   c.fill()
 }
-const koma = (col: string, x: number, y: number, z: number) => P(grp(cyl(0.6, 1, 2.2, col, {}, 12), ball(0.7, col, { y: 2.4 })), x, y, z)
+const koma = (col: string, x: number, y: number, z: number) => P(G(cyl(0.6, 1, 2.2, col, {}, 12), ball(0.7, col, { y: 2.4 })), x, y, z)
 function sugoroku([paper, a, b]: string[]) {
   const g = new THREE.Group()
   g.add(rbox(54, 0.12, 38, shade(paper, -0.05), {}, 0.05))
@@ -668,7 +646,7 @@ function sugorokuRolled([paper, a]: string[]) {
   g.add(rbox(7, 2.4, 5, a, { x: 6, z: 5.6 }, 0.5))
   return fit(g)
 }
-const SUGO_P: Pal[] = [
+const SUGO_P: PalFlat[] = [
   ['japanese', '#f4ead2', J.shu, '#3f7a4a'],
   ['retro', R.cream, R.red, R.teal],
   ['cute', '#fff6e6', C.pink, C.sky],
@@ -725,9 +703,9 @@ function checkers(state: 'start' | 'mid') {
     return fit(g)
   }
 }
-const CK_P: Pal[] = [
+const CK_P: PalFlat[] = [
   ['classic', CL.walnut, '#f0e2c4', '#3a2a22', '#b8352b', '#26262a'],
-  ['farmhouse', FH.oak, FH.white, FH.barn, FH.barn, FH.iron],
+  ['farmhouse', F.oak, F.white, F.barn, F.barn, F.iron],
   ['modern', M.char, '#f4f4f2', '#3d3f44', '#c8473a', '#26262a'],
   ['retro', R.caramel, R.cream, R.red, R.red, '#3a3a3c'],
 ]
@@ -767,7 +745,7 @@ const propDraw = (base: string, band: string): Draw => (c, W, H) => {
 /** 小房子 / 旅馆 */
 const house = (col: string, x: number, y: number, z: number, big = false) => {
   const w = big ? 1.6 : 0.9
-  const g = grp(rbox(w, 0.7, 0.9, col, {}, 0.1))
+  const g = G(rbox(w, 0.7, 0.9, col, {}, 0.1))
   const roof = P(cyl(0, 0.75, 0.55, col, {}, 4), 0, 0.7, 0, 0, PI / 4)
   roof.scale.set(w / 1.06, 1, 0.9 / 1.06)
   g.add(roof)
@@ -788,10 +766,10 @@ function propertyGame([base, band, money]: string[]) {
     g.add(house(k % 4 === 3 ? '#d84a3a' : '#3aa860', (i + 0.5) * u - 24.8, y, (j + 0.25) * u - 24.8, k % 4 === 3))
   }
   // 四枚棋子（自创：小帽子、小车、小船、小狗形状换成简单几何）
-  g.add(P(grp(cyl(0.9, 0.9, 0.3, '#c9ced6', {}, 16), cyl(0.55, 0.55, 1.2, '#c9ced6', { y: 0.3 }, 16)), -22, y, 8))
-  g.add(P(grp(rbox(2, 0.8, 1.1, '#c9ced6', {}, 0.3), rbox(1, 0.6, 1, '#c9ced6', { y: 0.8, x: -0.2 }, 0.2)), 22, y, -14, 0, PI / 2))
-  g.add(P(grp(cone(0.9, 1.8, '#c9ced6')), 6, y, 22.4))
-  g.add(P(grp(ball(0.8, '#c9ced6', { y: 0.8 }), cyl(0.9, 0.9, 0.3, '#c9ced6', {}, 16)), -22.4, y, -18))
+  g.add(P(G(cyl(0.9, 0.9, 0.3, '#c9ced6', {}, 16), cyl(0.55, 0.55, 1.2, '#c9ced6', { y: 0.3 }, 16)), -22, y, 8))
+  g.add(P(G(rbox(2, 0.8, 1.1, '#c9ced6', {}, 0.3), rbox(1, 0.6, 1, '#c9ced6', { y: 0.8, x: -0.2 }, 0.2)), 22, y, -14, 0, PI / 2))
+  g.add(P(G(cone(0.9, 1.8, '#c9ced6')), 6, y, 22.4))
+  g.add(P(G(ball(0.8, '#c9ced6', { y: 0.8 }), cyl(0.9, 0.9, 0.3, '#c9ced6', {}, 16)), -22.4, y, -18))
   // 中央的两叠卡片、两颗骰子
   g.add(deck('#f0a03a', -10, y, -10, PI / 4, 1, 4.4, 6.6), deck('#3a86d8', 6, y, 9, PI / 4, 1, 4.4, 6.6))
   g.add(die(1.4, '#fbfaf6', DARK, 2, y, -4, 0.3, 4), die(1.4, '#fbfaf6', DARK, 4.2, y, -2.6, -0.5, 2))
@@ -808,14 +786,14 @@ function cone(r: number, h: number, col: string) {
 function propertyBoxed([base, band]: string[]) {
   const g = new THREE.Group()
   g.add(rbox(51, 5, 26, base, {}, 0.6))
-  g.add(noLine(rbox(40, 0.06, 6, band, { y: 5, z: -2 }, 0.1)))
-  g.add(noLine(rbox(12, 0.06, 4, '#3a3a3c', { y: 5, z: 6 }, 0.1)))
+  g.add(noOutline(rbox(40, 0.06, 6, band, { y: 5, z: -2 }, 0.1)))
+  g.add(noOutline(rbox(12, 0.06, 4, '#3a3a3c', { y: 5, z: 6 }, 0.1)))
   for (let k = 0; k < 3; k++) g.add(rbox(6.4, 0.5, 3.4, ['#f6e08a', '#a8d8a0', '#f6c6d0'][k], { x: 16 + k * 0.5, y: 5 + k * 0.5, z: 7 - k * 0.3 }, 0.1))
   return fit(g)
 }
-const PROP_P: Pal[] = [
+const PROP_P: PalFlat[] = [
   ['retro', '#dfe8d0', R.red, R.caramel],
-  ['farmhouse', FH.linen, FH.barn, FH.oak],
+  ['farmhouse', F.linen, F.barn, F.oak],
   ['classic', '#e6ead8', CL.wine, CL.walnut],
   ['cute', '#f6ecd0', C.pink, C.woodL],
 ]
@@ -847,14 +825,14 @@ const wordsDraw = (base: string, dl: string, tw: string): Draw => (c, W, H) => {
 }
 /** 字母方块：象牙色小方块，顶面一道深色笔画（示意字母） */
 const tile = (x: number, y: number, z: number, k: number, ry = 0) => {
-  const g = grp(rbox(1.9, 0.5, 2.1, '#f3e6c8', {}, 0.2))
-  g.add(noLine(rbox(k % 3 ? 0.9 : 0.25, 0.04, k % 3 ? 0.22 : 1.1, '#3a2a22', { y: 0.5, x: k % 2 ? -0.1 : 0.1 }, 0.05)))
-  if (k % 4 === 1) g.add(noLine(rbox(0.22, 0.04, 1.1, '#3a2a22', { y: 0.5, x: -0.35 }, 0.05)))
+  const g = G(rbox(1.9, 0.5, 2.1, '#f3e6c8', {}, 0.2))
+  g.add(noOutline(rbox(k % 3 ? 0.9 : 0.25, 0.04, k % 3 ? 0.22 : 1.1, '#3a2a22', { y: 0.5, x: k % 2 ? -0.1 : 0.1 }, 0.05)))
+  if (k % 4 === 1) g.add(noOutline(rbox(0.22, 0.04, 1.1, '#3a2a22', { y: 0.5, x: -0.35 }, 0.05)))
   return P(g, x, y, z, 0, ry)
 }
 /** 字母架（斜面小木架 + 7 枚方块） */
 const rack = (col: string, x: number, z: number, ry: number) => {
-  const g = grp(rbox(17, 1.2, 2.6, col, {}, 0.3))
+  const g = G(rbox(17, 1.2, 2.6, col, {}, 0.3))
   for (let i = 0; i < 7; i++) g.add(P(tile(0, 0, 0, i + 2), (i - 3) * 2.2, 1.2, 0.2, -0.5))
   return P(g, x, 0, z, 0, ry)
 }
@@ -882,16 +860,16 @@ function words(state: 'play' | 'boxed') {
       g.add(cyl(1.4, 2.2, 2.6, '#7a2e3a', { x: 24, y: 5.6, z: -8 }, 12))
     } else {
       g.add(rbox(38, 5.4, 20, base, {}, 0.6))
-      g.add(noLine(rbox(30, 0.06, 4, tw, { y: 5.4, z: -3 }, 0.1)))
+      g.add(noOutline(rbox(30, 0.06, 4, tw, { y: 5.4, z: -3 }, 0.1)))
       for (let i = 0; i < 5; i++) g.add(tile(-8 + i * 2.3, 5.45, 4, i))
       g.add(ball(4, '#7a2e3a', { x: 25, y: 3, z: 2 }, [1, 0.75, 1]))
     }
     return fit(g)
   }
 }
-const WORDS_P: Pal[] = [
+const WORDS_P: PalFlat[] = [
   ['classic', '#e6dcc0', '#9cc6e0', '#d8605a', CL.walnut],
-  ['farmhouse', '#ebe2c8', '#a8c4d8', FH.barn, FH.oak],
+  ['farmhouse', '#ebe2c8', '#a8c4d8', F.barn, F.oak],
   ['modern', '#e9e6df', '#9fb4c7', '#c8473a', M.char],
   ['retro', R.cream, R.teal, R.red, R.caramel],
 ]
@@ -904,7 +882,7 @@ const chips = (col: string, n: number, x: number, y: number, z: number) => {
   const g = new THREE.Group()
   for (let i = 0; i < n; i++) {
     g.add(cyl(1.95, 1.95, 0.33, col, { y: i * 0.34 }, 20))
-    if (i % 2 === 0) g.add(noLine(cyl(1.97, 1.97, 0.12, i % 4 ? '#ffffff' : shade(col, 0.3), { y: i * 0.34 + 0.1 }, 20)))
+    if (i % 2 === 0) g.add(noOutline(cyl(1.97, 1.97, 0.12, i % 4 ? '#ffffff' : shade(col, 0.3), { y: i * 0.34 + 0.1 }, 20)))
   }
   return P(g, x, y, z)
 }
@@ -923,7 +901,7 @@ function chipCase(open: boolean) {
     for (let k = 0; k < 5; k++) g.add(P(cyl(1.95, 1.95, 30, CHIP_COLS[k], {}, 20), -4, 3.2, -8 + k * 3.95, 0, 0, PI / 2))
     g.add(deck('#c8302a', 16, 1.4, -4, PI / 2, 1.6), deck('#2f5fa8', 16, 1.4, 4, PI / 2, 1.6))
     // 盖子立着
-    g.add(P(grp(tray(42, 6, 22, 0.8, shell, {}, 0.4)), 0, 7, -11.2, -PI / 2 - 0.12))
+    g.add(P(G(tray(42, 6, 22, 0.8, shell, {}, 0.4)), 0, 7, -11.2, -PI / 2 - 0.12))
     return fit(g)
   }
 }
@@ -932,7 +910,7 @@ function holdem([felt, rim, back]: string[]) {
   const g = new THREE.Group()
   const mat = cyl(30, 30, 0.6, rim, {}, 48)
   mat.scale.set(1, 1, 0.7)
-  const top = noLine(cyl(28, 28, 0.08, felt, { y: 0.6 }, 48))
+  const top = noOutline(cyl(28, 28, 0.08, felt, { y: 0.6 }, 48))
   top.scale.set(1, 1, 0.68)
   g.add(mat, top)
   const y = 0.7
@@ -950,19 +928,19 @@ function holdem([felt, rim, back]: string[]) {
   }
   // 底池
   for (let c = 0; c < 3; c++) g.add(chips(CHIP_COLS[c + 1], 3 + c * 2, -3 + c * 3.4, y, 5.4))
-  g.add(noLine(cyl(1.6, 1.6, 0.5, '#ffffff', { x: 12, y, z: 4 }, 20)))
+  g.add(noOutline(cyl(1.6, 1.6, 0.5, '#ffffff', { x: 12, y, z: 4 }, 20)))
   return fit(g)
 }
-const CHIP_CASE_P: Pal[] = [
+const CHIP_CASE_P: PalFlat[] = [
   ['modern', '#c3c7cc', '#26262a'],
   ['industrial', I.steel, '#3a3a3c'],
   ['classic', '#a8916a', CL.wine],
 ]
-const HOLDEM_P: Pal[] = [
+const HOLDEM_P: PalFlat[] = [
   ['classic', '#2f7a4a', CL.walnut, CL.wine],
   ['modern', '#3d5a80', M.black, '#26262a'],
   ['industrial', '#3a5a3c', I.leather, I.rust],
-  ['farmhouse', '#2f6a4a', FH.oak, FH.navy],
+  ['farmhouse', '#2f6a4a', F.oak, F.navy],
 ]
 
 // ---------- 叠叠乐（抽到一半） ----------
@@ -1003,32 +981,32 @@ function boxStack(sizes: [number, number, number][], seed: number) {
       const col = pal[k % pal.length]
       const b = new THREE.Group()
       b.add(rbox(w, h, d, col, {}, 0.4))
-      b.add(noLine(rbox(w * 0.7, 0.06, d * 0.45, shade(col, k % 2 ? 0.25 : -0.2), { y: h, z: -d * 0.08 }, 0.1)))
-      b.add(noLine(rbox(w * 0.3, 0.06, d * 0.14, '#fbf8f0', { y: h, x: -w * 0.18, z: d * 0.3 }, 0.05)))
+      b.add(noOutline(rbox(w * 0.7, 0.06, d * 0.45, shade(col, k % 2 ? 0.25 : -0.2), { y: h, z: -d * 0.08 }, 0.1)))
+      b.add(noOutline(rbox(w * 0.3, 0.06, d * 0.14, '#fbf8f0', { y: h, x: -w * 0.18, z: d * 0.3 }, 0.05)))
       // 盒身侧面一条（书脊似的标题带）
-      b.add(noLine(rbox(w * 0.6, h * 0.35, 0.06, shade(col, 0.3), { y: h * 0.32, z: d / 2 }, 0.05)))
+      b.add(noOutline(rbox(w * 0.6, h * 0.35, 0.06, shade(col, 0.3), { y: h * 0.32, z: d / 2 }, 0.05)))
       g.add(P(b, (r() - 0.5) * 1.6, y, (r() - 0.5) * 1.2, 0, (r() - 0.5) * 0.12))
       y += h
     })
     return fit(g)
   }
 }
-const BOX_P: Pal[] = [
+const BOX_P: PalFlat[] = [
   ['cute', C.pink, C.sky, C.lemon, C.mint, C.lilac],
   ['retro', R.teal, R.orange, R.mustard, R.red, R.olive],
   ['modern', '#3d3f44', '#c8473a', '#8a8d93', '#3d6fb8', '#e0a526'],
   ['nordic', N.blue, N.sage, N.mustard, N.oakL, N.gray],
-  ['farmhouse', FH.barn, FH.navy, FH.butter, FH.sage, FH.linen],
+  ['farmhouse', F.barn, F.navy, F.butter, F.sage, F.linen],
 ]
 /** 两颗六面骰 */
 function dicePair([a, pip, b]: string[]) {
-  return fit(grp(die(1.6, a, pip, 0, 0, 0, 0.3, 6), die(1.6, b, pip, 2.6, 0, 1.2, -0.5, 3)))
+  return fit(G(die(1.6, a, pip, 0, 0, 0, 0.3, 6), die(1.6, b, pip, 2.6, 0, 1.2, -0.5, 3)))
 }
 /** 多面骰套装 + 皮质骰盘（六边形托盘里的 D20 / D12 / D10 / D8 / D6 / D4） */
 function diceRpg([tray0, d1, d2]: string[]) {
   const g = new THREE.Group()
   g.add(tray(18, 2.2, 14, 0.9, tray0, {}, 0.6))
-  g.add(noLine(rbox(16.4, 0.1, 12.4, shade(tray0, -0.25), { y: 0.9 }, 0.1)))
+  g.add(noOutline(rbox(16.4, 0.1, 12.4, shade(tray0, -0.25), { y: 0.9 }, 0.1)))
   const poly = (geo: THREE.BufferGeometry, col: string, x: number, z: number, s: number) => {
     const m = new THREE.Mesh(geo, toon(col))
     m.castShadow = true
@@ -1045,12 +1023,12 @@ function diceRpg([tray0, d1, d2]: string[]) {
   g.add(poly(new THREE.OctahedronGeometry(1, 0), d2, 5.6, 2.8, 1))
   return fit(g)
 }
-const DICE_P: Pal[] = [
+const DICE_P: PalFlat[] = [
   ['modern', '#fbfaf6', DARK, '#c8302a'],
   ['cute', C.pink, '#ffffff', C.sky],
   ['retro', R.cream, '#3a2a22', R.red],
 ]
-const RPG_P: Pal[] = [
+const RPG_P: PalFlat[] = [
   ['industrial', I.leather, '#6b4ea0', '#2f8a8a'],
   ['classic', CL.wine, '#c8a96a', '#3b4a66'],
   ['modern', DARK, '#c8473a', '#3d6fb8'],
@@ -1060,12 +1038,12 @@ function scorePad([cover, paper, pencil]: string[]) {
   const g = new THREE.Group()
   g.add(rbox(10.4, 0.6, 15, cover, {}, 0.2))
   g.add(rbox(9.8, 0.3, 14, paper, { y: 0.6, z: 0.3 }, 0.1))
-  for (let i = 0; i < 6; i++) g.add(noLine(rbox(9, 0.03, 0.08, '#9fb4c7', { y: 0.9, z: -5 + i * 2.2 }, 0.01)))
-  for (let i = 0; i < 3; i++) g.add(noLine(rbox(0.08, 0.03, 12, '#9fb4c7', { y: 0.9, x: -2 + i * 3, z: 0.3 }, 0.01)))
+  for (let i = 0; i < 6; i++) g.add(noOutline(rbox(9, 0.03, 0.08, '#9fb4c7', { y: 0.9, z: -5 + i * 2.2 }, 0.01)))
+  for (let i = 0; i < 3; i++) g.add(noOutline(rbox(0.08, 0.03, 12, '#9fb4c7', { y: 0.9, x: -2 + i * 3, z: 0.3 }, 0.01)))
   g.add(P(cyl(0.38, 0.38, 13, pencil, {}, 6), 7.2, 0.4, 1, PI / 2, 0.3))
   return fit(g)
 }
-const PAD_P: Pal[] = [
+const PAD_P: PalFlat[] = [
   ['modern', '#3d3f44', PAPER, '#e0a526'],
   ['cute', C.sky, PAPER, C.pink],
   ['retro', R.red, R.cream, R.mustard],

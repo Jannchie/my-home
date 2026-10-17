@@ -4,27 +4,12 @@
 
 import * as THREE from 'three'
 import { ball, cyl, rbox, shade, toon, torus } from '../toon'
-import { C, S, rng, type AssetCategory, type AssetDef, type StyleTag } from '../kit'
+import { C, S, rng, type AssetCategory, type AssetDef } from '../kit'
+import { G, P, PI } from '../geo'
+import { CN, M, N, R, type PalFlat } from '../packkit'
 
-type Pal = [StyleTag, ...string[]]
-const PI = Math.PI
-const M = S.modern
-const N = S.nordic
-const R = S.retro
-const CN = S.chinese
-
-function def(id: string, name: string, category: AssetCategory, [w, d, h]: [number, number, number], pals: Pal[], build: (p: string[]) => THREE.Group, extra: Partial<AssetDef> = {}): AssetDef {
+function def(id: string, name: string, category: AssetCategory, [w, d, h]: [number, number, number], pals: PalFlat[], build: (p: string[]) => THREE.Group, extra: Partial<AssetDef> = {}): AssetDef {
   return { id, name, category, w, d, h, palettes: pals.map((x) => x.slice(1)), paletteStyles: pals.map((x) => x[0]), styles: [...new Set(pals.map((x) => x[0]))], build, prop: true, ...extra }
-}
-function P<T extends THREE.Object3D>(o: T, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0): T {
-  o.position.set(x, y, z)
-  o.rotation.set(rx, ry, rz)
-  return o
-}
-function grp(...c: THREE.Object3D[]) {
-  const g = new THREE.Group()
-  for (const o of c) g.add(o)
-  return g
 }
 function fit(g: THREE.Object3D, y0 = 0) {
   const outer = new THREE.Group()
@@ -38,7 +23,7 @@ function fit(g: THREE.Object3D, y0 = 0) {
 }
 
 /** 魔方配色：[芯, 6 种贴纸色] */
-const CUBE_PALS: Pal[] = [
+const CUBE_PALS: PalFlat[] = [
   ['modern', M.black, '#d94b45', '#f08a3c', '#f2d14b', '#4fae6a', '#3f7fd0', M.white],
   ['cute', C.white, C.pink, C.peach, C.lemon, C.mint, C.sky, C.lilac],
   ['retro', R.cream, R.red, R.orange, R.mustard, R.olive, R.teal, '#ffffff'],
@@ -113,7 +98,7 @@ function pyraminx([core, ...cols]: string[]) {
   const c = new THREE.Vector3().fromBufferAttribute(p, 2)
   const nrm = b.clone().sub(a).cross(c.clone().sub(a)).normalize()
   m.quaternion.setFromUnitVectors(nrm, new THREE.Vector3(0, -1, 0))
-  const g = grp(m)
+  const g = G(m)
   // 芯色的细棱：三个底角各一颗小球（角块）
   g.add(ball(0.6, core, { x: 0, y: 0, z: 0 }))
   return fit(g)
@@ -122,7 +107,7 @@ function pyraminx([core, ...cols]: string[]) {
 function megaminx([, ...cols]: string[]) {
   const all = [...cols, ...cols.map((x) => shade(x, 0.15))]
   const m = polyColored(new THREE.DodecahedronGeometry(4.2), 3, all)
-  return fit(grp(m))
+  return fit(G(m))
 }
 /** 镜面魔方：大小不一的银色块（打乱后形状参差） */
 function mirrorCube([metal]: string[]) {
@@ -144,7 +129,7 @@ function mirrorCube([metal]: string[]) {
 /** 三阶魔方放在亚克力底座上展示 */
 function cubeOnStand(p: string[]) {
   const g = new THREE.Group()
-  const stand = grp(cyl(4, 4.4, 1, '#eef4f8', {}, 24), cyl(1.6, 2.2, 1.6, '#eef4f8', { y: 1 }, 16))
+  const stand = G(cyl(4, 4.4, 1, '#eef4f8', {}, 24), cyl(1.6, 2.2, 1.6, '#eef4f8', { y: 1 }, 16))
   stand.traverse((m) => {
     const mesh = m as THREE.Mesh
     if (mesh.isMesh) {
@@ -184,7 +169,7 @@ function cubeShelf([frame, core, ...cols]: string[]) {
 function speedTimer([mat, body, screen]: string[]) {
   const g = new THREE.Group()
   g.add(rbox(32, 0.4, 22, mat, {}, 0.2))
-  const timer = grp(rbox(18, 2.6, 8, body, {}, 1.2))
+  const timer = G(rbox(18, 2.6, 8, body, {}, 1.2))
   for (const s of [-1, 1]) timer.add(cyl(2.6, 2.8, 0.6, shade(body, -0.2), { x: s * 6, y: 2.4 }, 20))
   const disp = rbox(5, 0.2, 1.8, screen, { y: 2.5 }, 0.1)
   disp.material = toon(screen, { emissive: 0.6 })
@@ -217,7 +202,7 @@ function lubanApart([wood]: string[]) {
   const r = rng(5)
   for (let i = 0; i < 6; i++) {
     const m = rbox(8, 1.6, 1.6, i % 2 ? wood : shade(wood, -0.08), {}, 0.2)
-    g.add(P(grp(m), (i % 3 - 1) * 4.5, 0, (Math.floor(i / 3) - 0.5) * 5, 0, r() * PI, 0))
+    g.add(P(G(m), (i % 3 - 1) * 4.5, 0, (Math.floor(i / 3) - 0.5) * 5, 0, r() * PI, 0))
   }
   return fit(g)
 }
@@ -330,7 +315,7 @@ function tetris([a, b, c, d]: string[]) {
   return fit(g)
 }
 
-const WOOD: Pal[] = [
+const WOOD: PalFlat[] = [
   ['chinese', '#c9955a'],
   ['nordic', N.oak],
   ['japanese', '#e9d2a6'],

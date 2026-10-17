@@ -2,20 +2,15 @@
 // 桌子本体保持空的，声明 surface（顶面高度）；不规则桌面用同一个多边形挤出并作为 surfaceShape。
 
 import { ball, cyl, puck, rbox, shade, torus } from '../toon'
-import { C, G, S, ellipsePoly, legs, lPoly, rectPoly, slab, type AssetDef, type Poly, type StyleTag } from '../kit'
+import { C, G, ellipsePoly, legs, lPoly, rectPoly, slab, type AssetDef, type Poly } from '../kit'
+import { I, J, M, N, R, type Pal } from '../packkit'
 
 // ---------- 配色 ----------
 
-type Pal = [StyleTag, string[]]
 /** 带风格标注的配色组：展开成 palettes / paletteStyles / styles */
 function pal(...xs: Pal[]) {
   return { palettes: xs.map((x) => x[1]), paletteStyles: xs.map((x) => x[0]), styles: [...new Set(xs.map((x) => x[0]))] }
 }
-const N = S.nordic
-const M = S.modern
-const J = S.japanese
-const I = S.industrial
-const R = S.retro
 
 /** 书桌：[桌面, 框架, 点缀] */
 const DESK_PAL = pal(

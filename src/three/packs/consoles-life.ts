@@ -7,17 +7,11 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
-import { C, S, G, glow, holePanel, paintPanel, rng, slab, type AssetCategory, type AssetDef, type Hole, type Poly, type StyleTag } from '../kit'
+import { C, S, G, glow, holePanel, paintPanel, rng, slab, type AssetCategory, type AssetDef, type Hole, type Poly } from '../kit'
+import { P, PI, noOutline, type V3 } from '../geo'
+import { J, M, N, R, type Pal } from '../packkit'
 
-type Pal = [StyleTag, string[]]
-type V3 = [number, number, number]
 type Draw = (g: CanvasRenderingContext2D, W: number, H: number) => void
-
-const M = S.modern
-const N = S.nordic
-const R = S.retro
-const J = S.japanese
-const PI = Math.PI
 
 const BLACK = '#1f2024'
 const DARK = '#2c2e34'
@@ -69,12 +63,6 @@ function fit(g: THREE.Group) {
 
 // ---------- 小工具 ----------
 
-function P<T extends THREE.Object3D>(o: T, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0): T {
-  o.position.set(x, y, z)
-  o.rotation.set(rx, ry, rz)
-  return o
-}
-
 function lit<T extends THREE.Mesh>(m: T, color: string, k = 0.6): T {
   m.material = toon(color, { emissive: k })
   m.userData.noOutline = true
@@ -87,11 +75,6 @@ function ghost<T extends THREE.Mesh>(m: T, color: string, a = 0.3): T {
   m.castShadow = false
   m.userData.noOutline = true
   return m
-}
-
-const noLine = <T extends THREE.Object3D>(o: T): T => {
-  o.userData.noOutline = true
-  return o
 }
 
 /** 沿 x 的横圆柱，给中心 */
@@ -1559,7 +1542,7 @@ function petBottle(g: THREE.Group, liquid: string, label: string, capC: string, 
   mat.side = THREE.DoubleSide
   const m = new THREE.Mesh(new THREE.LatheGeometry(prof.map(([r, y]) => new THREE.Vector2(r * s, y * s)), 28), mat)
   m.position.set(x, 0, z)
-  noLine(m)
+  noOutline(m)
   g.add(m)
   g.add(ghost(cyl(3.15 * s, 2.9 * s, (level - 0.4) * s, liquid, { x, y: 0.4 * s, z }, 24), liquid, 0.7))
   g.add(cyl(3.35 * s, 3.35 * s, 5.5 * s, label, { x, y: 4 * s, z }, 28))

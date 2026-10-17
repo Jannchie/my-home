@@ -5,15 +5,11 @@
 
 import * as THREE from 'three'
 import { ball, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
-import { C, S, SWING_OPEN, hangingPipe, holePanel, movable, paintPanel, pipeHook, rectPoly, ellipsePoly, type AssetDef, type Hole, type Poly, type StyleTag, type SurfaceDef } from '../kit'
+import { C, SWING_OPEN, hangingPipe, holePanel, movable, paintPanel, pipeHook, rectPoly, ellipsePoly, type AssetDef, type Hole, type Poly, type StyleTag, type SurfaceDef } from '../kit'
+import { mesh, noOutlineDeep, type V3 } from '../geo'
+import { I, J, M, N, R } from '../packkit'
 
-type V3 = [number, number, number]
 type P2 = [number, number]
-const M = S.modern
-const N = S.nordic
-const J = S.japanese
-const I = S.industrial
-const R = S.retro
 
 /** 新中式：红木 / 黄花梨 / 鸡翅木、朱漆、铜饰、黛瓦、素绢 */
 const CN = { rose: '#6b2f22', huali: '#b9773f', wenge: '#3f2b22', zitan: '#3a2220', lacquer: '#b8352b', jade: '#5f8f7a', ink: '#2f2b2a', gold: '#c9a45a', brass: '#c79a4a', silk: '#efe4c8', indigo: '#2f4a6b', celadon: '#9fbfa8', tile: '#4a4d52', wall: '#f1ede4', cane: '#c9a66b' }
@@ -33,13 +29,6 @@ const IRON = '#2f2f31'
 // =====================================================================
 // 小工具
 // =====================================================================
-
-function meshOf(geo: THREE.BufferGeometry, color: string) {
-  const m = new THREE.Mesh(geo, toon(color))
-  m.castShadow = true
-  m.receiveShadow = true
-  return m
-}
 
 /** 两端已知的 3D 细杆 */
 function rod3(a: V3, b: V3, r: number, color: string, seg = 10) {
@@ -81,14 +70,14 @@ function cylZ(r: number, len: number, color: string, x: number, y: number, z: nu
 function pipe(pts: V3[], r: number, color: string, caps = true, seg = 0) {
   const curve = new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(...p)), false, 'centripetal')
   const g = new THREE.Group()
-  g.add(meshOf(new THREE.TubeGeometry(curve, seg || Math.max(12, pts.length * 8), r, 10, false), color))
+  g.add(mesh(new THREE.TubeGeometry(curve, seg || Math.max(12, pts.length * 8), r, 10, false), color))
   if (caps) for (const p of [pts[0], pts[pts.length - 1]]) g.add(ball(r, color, { x: p[0], y: p[1], z: p[2] }))
   return g
 }
 
 /** 旋转体：轮廓 [半径, 高度]，at 为底面中心 */
 function lathe(profile: P2[], color: string, at: { x?: number; y?: number; z?: number } = {}, seg = 24) {
-  const m = meshOf(new THREE.LatheGeometry(profile.map(([r, y]) => new THREE.Vector2(Math.max(0.001, r), y)), seg), color)
+  const m = mesh(new THREE.LatheGeometry(profile.map(([r, y]) => new THREE.Vector2(Math.max(0.001, r), y)), seg), color)
   m.position.set(at.x ?? 0, at.y ?? 0, at.z ?? 0)
   return m
 }
@@ -102,7 +91,7 @@ function extrude(s: THREE.Shape, depth: number) {
 
 /** xy 平面轮廓沿 z 挤出（厚 depth，中心在 z） */
 function prism(pts: P2[], depth: number, color: string, z = 0, x = 0) {
-  const m = meshOf(extrude(new THREE.Shape(pts.map(([a, b]) => new THREE.Vector2(a, b))), depth), color)
+  const m = mesh(extrude(new THREE.Shape(pts.map(([a, b]) => new THREE.Vector2(a, b))), depth), color)
   m.position.set(x, 0, z)
   return m
 }
@@ -140,12 +129,6 @@ function lattice(w: number, h: number, cols: number, rows: number, bar = 2.4, ma
   const ch = (h - margin * 2 - bar * (rows - 1)) / rows
   for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) holes.push({ kind: 'rect', x: -w / 2 + margin + cw / 2 + i * (cw + bar), y: margin + j * (ch + bar), w: cw, h: ch, r: 0.4 })
   return holes
-}
-
-/** 不描边 */
-function noOL<T extends THREE.Object3D>(o: T) {
-  o.traverse((c) => (c.userData.noOutline = true))
-  return o
 }
 
 // ---------- 可开合的柜子：门 / 抽屉做成会动的部件（见 kit.ts movable / poseDoors） ----------
@@ -532,7 +515,7 @@ function guanmaoChair(p: string[]) {
   // S 形靠背板
   const splat: P2[] = [[-Z + 0.5, 49], [-Z + 1.6, 62], [-Z + 2.2, 74], [-Z + 0.8, 88], [-Z - 1.2, 100], [-Z - 2.6, 107]]
   g.add(sidePrism(strip(splat, 1.6), 17, wood, 0))
-  g.add(noOL(cylX(3.2, 0.5, shade(wood, -0.12), 0, 93, -Z - 0.15 + 1.2 - 0.6)))
+  g.add(noOutlineDeep(cylX(3.2, 0.5, shade(wood, -0.12), 0, 93, -Z - 0.15 + 1.2 - 0.6)))
   // 座面：大边框 + 软屉
   g.add(rbox(52, 4, 43, wood, { y: 46 }, 1))
   g.add(rbox(45, 0.8, 36, mat, { y: 49.6 }, 0.3))
@@ -738,7 +721,7 @@ function fangji(p: string[]) {
 /** 一套茶具：茶盘 + 紫砂壶 + 公道杯 + 四只品茗杯，at 为茶盘底面中心 */
 function teaSet(g: THREE.Group, x: number, y: number, z: number, trayC: string, pot: string) {
   g.add(tray(54, 3.4, 32, 1.4, trayC, { x, y, z }, 0.6))
-  for (let k = -3; k <= 3; k++) g.add(noOL(rbox(1, 0.4, 28, shade(trayC, -0.12), { x: x + k * 6.6, y: y + 1.4, z }, 0.15)))
+  for (let k = -3; k <= 3; k++) g.add(noOutlineDeep(rbox(1, 0.4, 28, shade(trayC, -0.12), { x: x + k * 6.6, y: y + 1.4, z }, 0.15)))
   // 紫砂壶
   const px = x - 14
   g.add(ball(5.4, pot, { x: px, y: y + 5.5, z: z - 2 }, [1, 0.78, 1]))
@@ -923,7 +906,7 @@ function lanternStand(p: string[]) {
   g.add(cyl(0.3, 0.3, 10, IRON, { x: lx, y: 156 }, 6))
   g.add(cyl(5, 5, 2.4, cap, { x: lx, y: 153.6 }, 16))
   g.add(lit(ball(13, silk, { x: lx, y: 140 }, [1, 0.88, 1]), silk, 0.5))
-  for (let k = 0; k < 6; k++) g.add(noOL(torus(13.05, 0.3, shade(silk, -0.25), { x: lx, y: 140, ry: (k / 6) * Math.PI }, Math.PI * 2)))
+  for (let k = 0; k < 6; k++) g.add(noOutlineDeep(torus(13.05, 0.3, shade(silk, -0.25), { x: lx, y: 140, ry: (k / 6) * Math.PI }, Math.PI * 2)))
   g.add(cyl(5, 5, 2.4, cap, { x: lx, y: 125 }, 16))
   g.add(cyl(0.6, 1.8, 12, cap, { x: lx, y: 113 }, 8))
   return centerXZ(g)
@@ -941,8 +924,8 @@ function moonGate(p: string[]) {
     for (const sy of [-1, 1]) {
       const cx = sx * 53
       const cy = 101 + sy * 82
-      g.add(noOL(rbox(10, 1.6, 0.6, trim, { x: cx, y: cy - 0.8, z: 5.2 }, 0.2)))
-      g.add(noOL(rbox(1.6, 10, 0.6, trim, { x: cx - sx * 4.2, y: cy - (sy > 0 ? 9.2 : 0.8), z: 5.2 }, 0.2)))
+      g.add(noOutlineDeep(rbox(10, 1.6, 0.6, trim, { x: cx, y: cy - 0.8, z: 5.2 }, 0.2)))
+      g.add(noOutlineDeep(rbox(1.6, 10, 0.6, trim, { x: cx - sx * 4.2, y: cy - (sy > 0 ? 9.2 : 0.8), z: 5.2 }, 0.2)))
     }
   // 檐口与瓦
   g.add(rbox(136, 6, 16, tile, { y: 196 }, 1))
@@ -1114,7 +1097,7 @@ function penjing(p: string[]) {
   g.add(cyl(20, 20, 3, wood, { y: 67 }, 32))
   // 石盆
   g.add(tray(38, 4, 24, 1.2, potC, { y: 70 }, 0.6))
-  g.add(noOL(rbox(35, 0.4, 21, '#9fc3cf', { y: 72.3 }, 0.1)))
+  g.add(noOutlineDeep(rbox(35, 0.4, 21, '#9fc3cf', { y: 72.3 }, 0.1)))
   // 假山：几块叠石
   const rockC = [rock, shade(rock, 0.1), shade(rock, -0.1)]
   for (const [x, y, z, rr, sy, c] of [[-8, 77, -2, 5, 2.4, 0], [-5, 85, -3, 3.4, 2.2, 1], [-9, 91, -2, 2.2, 1.8, 2], [6, 76, 2, 3.6, 1.5, 1], [9, 80, 1, 2.2, 1.6, 2]] as number[][])
@@ -1150,7 +1133,7 @@ function carving(x: number, y: number, z: number, s: number, color: string) {
   const g = new THREE.Group()
   for (const k of [-1, 1]) g.add(torus(s * 0.45, s * 0.12, color, { x: x + k * s * 0.7, y, z }, Math.PI * 1.5))
   g.add(ball(s * 0.45, color, { x, y: y + s * 0.1, z }, [1, 0.8, 0.35]))
-  return noOL(g)
+  return noOutlineDeep(g)
 }
 
 /** 路易式扶手椅：卷曲腿、椭圆软包靠背、扶手垫，描金框 */
@@ -1214,7 +1197,7 @@ function recamier(p: string[]) {
   const scroll = (x: number, s: number, h: number) => {
     g.add(sidePrism([[-31, 25], [31, 25], [31, 25 + h], [-31, 25 + h]], 12, fabric, x))
     g.add(cylZ(9, 64, fabric, x + s * 3, 25 + h, 0, 20))
-    for (const z of [-32.4, 32.4]) g.add(noOL(torus(5.6, 1, gold, { x: x + s * 3, y: 25 + h, z }, Math.PI * 2)))
+    for (const z of [-32.4, 32.4]) g.add(noOutlineDeep(torus(5.6, 1, gold, { x: x + s * 3, y: 25 + h, z }, Math.PI * 2)))
   }
   scroll(-76, -1, 44)
   scroll(76, 1, 30)
@@ -1251,7 +1234,7 @@ function clSideboard(p: string[]) {
     const parts: THREE.Object3D[] = [
       rbox(46, 58, 1.2, body, { x, y: 22, z: 23.2 }, 0.6),
       rbox(36, 46, 0.6, shade(body, -0.05), { x, y: 28, z: 23.95 }, 0.4),
-      noOL(torus(7, 0.5, gold, { x, y: 51, z: 24.5 })),
+      noOutlineDeep(torus(7, 0.5, gold, { x, y: 51, z: 24.5 })),
       ball(1.3, gold, { x: x + (x < 0 ? 19 : -19), y: 52, z: 24.6 }),
     ]
     g.add(swingDoor(parts, x + s * 23, 22.6, s < 0 ? 'left' : 'right'))
@@ -1487,7 +1470,7 @@ function empireBookcase(p: string[]) {
   g.add(rbox(w, 4, d, body, { y: 176 }, 1))
   g.add(rbox(w + 2, 2.4, d + 2, gold, { y: 180 }, 0.8))
   g.add(prism([[-(w / 2 + 1), 182.4], [w / 2 + 1, 182.4], [0, h]], d - 4, body, -1))
-  g.add(noOL(cylZ(3.2, 0.6, gold, 0, 187.4, d / 2 - 2.6, 16)))
+  g.add(noOutlineDeep(cylZ(3.2, 0.6, gold, 0, 187.4, d / 2 - 2.6, 16)))
   return g
 }
 function empireSurfaces() {
@@ -1552,7 +1535,7 @@ function clArmoire(p: string[]) {
     const parts: THREE.Object3D[] = [
       rbox(55, 160, 1.4, body, { x, y: 18, z: 29.2 }, 0.6),
       prism(arch, 0.8, panel, 30.2, x),
-      noOL(rbox(14, 1, 0.4, gold, { x, y: 90, z: 30.8 }, 0.2)),
+      noOutlineDeep(rbox(14, 1, 0.4, gold, { x, y: 90, z: 30.8 }, 0.2)),
       rbox(1.6, 14, 1.6, gold, { x: x - s * 23.5, y: 92, z: 31 }, 0.6),
     ]
     g.add(swingDoor(parts, x + s * 27.5, 28.5, s < 0 ? 'left' : 'right'))
@@ -1580,7 +1563,7 @@ function baroqueMirror(p: string[]) {
   m.add(gm)
   m.add(carving(0, 172, 2.6, 7, accent))
   m.add(carving(0, 4, 2.6, 5, accent))
-  for (const s of [-1, 1]) m.add(noOL(ball(2.4, accent, { x: s * 38, y: 150, z: 1 })))
+  for (const s of [-1, 1]) m.add(noOutlineDeep(ball(2.4, accent, { x: s * 38, y: 150, z: 1 })))
   m.position.y = 0.3
   m.rotation.x = -tilt
   g.add(m)
@@ -1621,7 +1604,7 @@ function demilune(p: string[]) {
     const shape = new THREE.Shape(poly.map(([x, z]) => new THREE.Vector2(x, -z)))
     const geo = new THREE.ExtrudeGeometry(shape, { depth: t, bevelEnabled: false, curveSegments: 4 })
     geo.rotateX(-Math.PI / 2)
-    const m = meshOf(geo, color)
+    const m = mesh(geo, color)
     m.position.y = y
     return m
   } }
@@ -1663,13 +1646,12 @@ function clNightstand(p: string[]) {
 }
 const CL_NS_SURFACES: SurfaceDef[] = [23.5, 39].map((y) => drawerLv(-18, 18, y, 13, 16.3, 30))
 
-
 /** 按多边形挤出的平板（[x, z] 多边形，底面在 y，厚 t，不倒角） */
 function slabY(poly: Poly, t: number, color: string, y: number) {
   const shape = new THREE.Shape(poly.map(([x, z]) => new THREE.Vector2(x, -z)))
   const geo = new THREE.ExtrudeGeometry(shape, { depth: t, bevelEnabled: false, curveSegments: 4 })
   geo.rotateX(-Math.PI / 2)
-  const m = meshOf(geo, color)
+  const m = mesh(geo, color)
   m.position.y = y
   return m
 }
@@ -1845,7 +1827,7 @@ function hutch(p: string[]) {
   g.add(rbox(136, 3, 32, body, { y: 192, z: -10 }, 0.8))
   g.add(rbox(146, 5, 37, body, { y: 195, z: -8.5 }, 1))
   g.add(rbox(130.4, 101, 1.2, back, { y: 91, z: -25.2 }, 0.3))
-  for (let x = -60; x <= 60; x += 7.5) g.add(noOL(rbox(0.6, 100, 0.3, shade(back, -0.1), { x, y: 91.5, z: -24.45 }, 0.1)))
+  for (let x = -60; x <= 60; x += 7.5) g.add(noOutlineDeep(rbox(0.6, 100, 0.3, shade(back, -0.1), { x, y: 91.5, z: -24.45 }, 0.1)))
   for (const y of [125, 158]) {
     g.add(rbox(130.4, 2, 30, body, { y, z: -10 }, 0.5))
     g.add(cylX(0.5, 130.4, FH.black, 0, y + 6, -18))
@@ -1853,7 +1835,7 @@ function hutch(p: string[]) {
       const plate = cylZ(10, 1.2, C.white, k * 25, y + 12, -21.4, 28)
       plate.rotation.x = Math.PI / 2 - 0.12
       g.add(plate)
-      g.add(noOL(cylZ(6.6, 0.4, k % 2 ? FH.denim : FH.barn, k * 25, y + 12, -20.6, 24)).rotateX(-0.12))
+      g.add(noOutlineDeep(cylZ(6.6, 0.4, k % 2 ? FH.denim : FH.barn, k * 25, y + 12, -20.6, 24)).rotateX(-0.12))
     }
   }
   // 玻璃门（铰链在外侧）
@@ -1910,7 +1892,7 @@ function fhIronBed(p: string[]) {
     const x = -X + (2 * X * i) / 12
     g.add(rod3([x, 46, Z], [x, 84, Z], 0.8, iron))
   }
-  for (const s of [-1, 1]) g.add(noOL(torus(4, 0.6, BRASS, { x: s * 30, y: archY(30) - 8, z: -Z })))
+  for (const s of [-1, 1]) g.add(noOutlineDeep(torus(4, 0.6, BRASS, { x: s * 30, y: archY(30) - 8, z: -Z })))
   g.add(rbox(W - 8, 3, D - 8, shade(iron, -0.3), { y: 33 }, 0.8))
   g.add(rbox(W - 10, 22, D - 10, sheet, { y: 36 }, 5))
   for (const s of [-1, 1]) g.add(rbox(58, 12, 34, C.white, { x: s * 34, y: 57, z: -Z + 28, rx: -0.12 }, 5))
@@ -2039,7 +2021,7 @@ function stoneFireplace(p: string[]) {
   }
   // 木梁炉架
   g.add(rbox(170, 12, 30, beamC, { y: 120 }, 1.4))
-  for (let k = -3; k <= 3; k++) g.add(noOL(rbox(18, 0.4, 0.3, shade(beamC, -0.15), { x: k * 22, y: 126, z: 15.05 }, 0.1)))
+  for (let k = -3; k <= 3; k++) g.add(noOutlineDeep(rbox(18, 0.4, 0.3, shade(beamC, -0.15), { x: k * 22, y: 126, z: 15.05 }, 0.1)))
   return g
 }
 
@@ -2084,7 +2066,7 @@ function blanketLadder(p: string[]) {
     g.add(rbox(36, 1.4, 5.2, color, { y: y + 1.2, z }, 0.6))
     g.add(rbox(36, front, 1.2, color, { y: y + 1.6 - front, z: z + 2.4 }, 0.5))
     g.add(rbox(36, back, 1.2, color, { y: y + 1.6 - back, z: z - 2.4 }, 0.5))
-    g.add(noOL(rbox(36.2, 3, 1.9, shade(color, -0.15), { y: y + 1.6 - front * 0.5, z: z + 2.4 }, 0.3)))
+    g.add(noOutlineDeep(rbox(36.2, 3, 1.9, shade(color, -0.15), { y: y + 1.6 - front * 0.5, z: z + 2.4 }, 0.3)))
     if (fringe) for (let k = -8; k <= 8; k++) g.add(cyl(0.3, 0.3, 2.4, shade(color, -0.1), { x: k * 2.1, y: y + 1.6 - front - 2.2, z: z + 2.4 }, 4))
   }
   drape(0.72, blanketA, 40, 24, true)
@@ -2104,8 +2086,8 @@ function basketShelf(p: string[]) {
     for (const s of [-1, 1]) {
       const x = s * 15.8
       g.add(tray(30, 22, 28, 1.2, basket, { x, y, z: 1 }, 0.8))
-      for (let k = 0; k < 4; k++) g.add(noOL(rbox(30.4, 1, 0.4, shade(basket, -0.14), { x, y: y + 3.5 + k * 5, z: 15.2 }, 0.2)))
-      for (const t of [-1, 1]) g.add(noOL(torus(3, 0.5, shade(basket, -0.1), { x: x + t * 15.2, y: y + 17, z: 1, ry: Math.PI / 2 }, Math.PI)))
+      for (let k = 0; k < 4; k++) g.add(noOutlineDeep(rbox(30.4, 1, 0.4, shade(basket, -0.14), { x, y: y + 3.5 + k * 5, z: 15.2 }, 0.2)))
+      for (const t of [-1, 1]) g.add(noOutlineDeep(torus(3, 0.5, shade(basket, -0.1), { x: x + t * 15.2, y: y + 17, z: 1, ry: Math.PI / 2 }, Math.PI)))
       g.add(rbox(24, 12, 22, cloth, { x, y: y + 1.2, z: 1 }, 2))
     }
   return g
@@ -2163,7 +2145,7 @@ function reclaimedShelf(p: string[]) {
   levels.forEach((y, i) => {
     for (let k = 0; k < 2; k++) g.add(rbox(w - 6, 4, d / 2, shade(tones[i], k ? -0.04 : 0), { y, z: (k ? 1 : -1) * (d / 4) }, 0.6))
   })
-  for (const sx of [-1, 1]) g.add(noOL(cylZ(1, 0.6, accent, sx * (w / 2 - 1.5), 120, d / 2 + 0.1, 8)))
+  for (const sx of [-1, 1]) g.add(noOutlineDeep(cylZ(1, 0.6, accent, sx * (w / 2 - 1.5), 120, d / 2 + 0.1, 8)))
   return g
 }
 function reclaimedSurfaces() {
@@ -2203,9 +2185,9 @@ function farmBookcase(p: string[]) {
   g.add(rbox(w + 3, 4, d + 2.5, body, { y: top }, 0.8))
   g.add(rbox(w + 5, 2, d + 4, shade(body, -0.05), { y: top + 4 }, 0.6))
   g.add(rbox(w - 5 + 0.4, top - 10, 1.2, back, { y: 9, z: -d / 2 + 0.8 }, 0.3))
-  for (let x = -(w / 2 - 7); x <= w / 2 - 6; x += 6.5) g.add(noOL(rbox(0.5, top - 12, 0.3, shade(back, -0.1), { x, y: 10, z: -d / 2 + 1.55 }, 0.1)))
+  for (let x = -(w / 2 - 7); x <= w / 2 - 6; x += 6.5) g.add(noOutlineDeep(rbox(0.5, top - 12, 0.3, shade(back, -0.1), { x, y: 10, z: -d / 2 + 1.55 }, 0.1)))
   // 做旧：边角磨出底色
-  for (const s of [-1, 1]) g.add(noOL(rbox(0.6, 10, 0.3, accent, { x: s * (w / 2 - 0.9), y: 60, z: d / 2 + 0.05 }, 0.1)))
+  for (const s of [-1, 1]) g.add(noOutlineDeep(rbox(0.6, 10, 0.3, accent, { x: s * (w / 2 - 0.9), y: 60, z: d / 2 + 0.05 }, 0.1)))
   return g
 }
 function farmBookSurfaces() {
@@ -2245,7 +2227,7 @@ function xbackChair(p: string[]) {
   g.add(beam([17, 53, zAt(53)], [-17, 80, zAt(80)], 2.6, 1.8, wood))
   g.add(rbox(44, 4, 42, wood, { y: 42 }, 1))
   g.add(rbox(38, 1.6, 35, seat, { y: 45.6 }, 0.6))
-  for (let k = -3; k <= 3; k++) g.add(noOL(rbox(0.6, 0.3, 34, shade(seat, -0.15), { x: k * 5, y: 47.2 }, 0.1)))
+  for (let k = -3; k <= 3; k++) g.add(noOutlineDeep(rbox(0.6, 0.3, 34, shade(seat, -0.15), { x: k * 5, y: 47.2 }, 0.1)))
   g.add(rbox(36, 2.4, 2.4, dark, { y: 10, z: 19.5 }, 0.5))
   return g
 }
@@ -2306,10 +2288,10 @@ function ichimaiZataku(p: string[]) {
   const [wood, leg, edge] = p
   const g = new THREE.Group()
   g.add(slabY(zatakuPoly(), 6, wood, 28))
-  for (let k = -2; k <= 2; k++) g.add(noOL(rbox(110 - Math.abs(k) * 14, 0.3, 0.6, shade(wood, -0.1), { x: k * 6, y: 34, z: k * 13, ry: 0.04 * k }, 0.1)))
+  for (let k = -2; k <= 2; k++) g.add(noOutlineDeep(rbox(110 - Math.abs(k) * 14, 0.3, 0.6, shade(wood, -0.1), { x: k * 6, y: 34, z: k * 13, ry: 0.04 * k }, 0.1)))
   const legOutline: P2[] = [[-31, 0], [-18, 0], ...Array.from({ length: 11 }, (_, i) => { const a = Math.PI - (i / 10) * Math.PI; return [Math.cos(a) * 18, Math.sin(a) * 17] as P2 }).slice(1, -1), [18, 0], [31, 0], [31, 28], [-31, 28]]
   for (const s of [-1, 1]) g.add(sidePrism(legOutline, 6, leg, s * 52))
-  g.add(noOL(rbox(140, 1.2, 0.6, edge, { y: 30.5, z: 39.2 }, 0.2)))
+  g.add(noOutlineDeep(rbox(140, 1.2, 0.6, edge, { y: 30.5, z: 39.2 }, 0.2)))
   return g
 }
 
@@ -2332,13 +2314,13 @@ function kurumaDansu(p: string[]) {
   for (let k = 0; k < 3; k++) {
     const y = 16 + k * 25
     const front: THREE.Object3D[] = [rbox(47, 23, 1.2, shade(wood, 0.04), { x: -25, y, z: 23.3 }, 0.5), rbox(10, 6, 0.4, iron, { x: -25, y: y + 13, z: 24.1 }, 0.3), torus(2.8, 0.5, iron, { x: -25, y: y + 11, z: 24.5 }, Math.PI * 2)]
-    for (const s of [-1, 1]) front.push(noOL(rbox(4, 4, 0.3, iron, { x: -25 + s * 21.4, y: y + 0.4, z: 24.05 }, 0.1)))
+    for (const s of [-1, 1]) front.push(noOutlineDeep(rbox(4, 4, 0.3, iron, { x: -25 + s * 21.4, y: y + 0.4, z: 24.05 }, 0.1)))
     g.add(drawerOf(front, -48.5, -1.5, y, 23, 22.7, 42, inner))
   }
   // 右：两扇拉门（后轨固定，前轨带锁板推到左边）
   g.add(rbox(25, 73, 0.9, shade(wood, 0.04), { x: 11.5, y: 16.5, z: 23.3 }, 0.4))
   g.add(slideDoor([rbox(25, 73, 0.9, shade(wood, 0.04), { x: 36, y: 16.5, z: 24.2 }, 0.4), rbox(8, 12, 0.4, iron, { x: 23, y: 48, z: 24.9 }, 0.3), ball(1.2, iron, { x: 23, y: 54, z: 25.2 })], -24.5))
-  for (const s of [-1, 1]) for (const y of [14.6, 89.6]) g.add(noOL(rbox(6, 2.4, 0.4, iron, { x: s * 47, y, z: 23.2 }, 0.1)))
+  for (const s of [-1, 1]) for (const y of [14.6, 89.6]) g.add(noOutlineDeep(rbox(6, 2.4, 0.4, iron, { x: s * 47, y, z: 23.2 }, 0.1)))
   return g
 }
 const KURUMA_SURFACES: SurfaceDef[] = [
@@ -2361,7 +2343,7 @@ function maruAndon(p: string[]) {
   for (const y of [15, 44, 73]) g.add(torus(13.6, 0.7, wood, { y, rx: Math.PI / 2 }))
   for (let k = 0; k < 12; k++) {
     const a = (k / 12) * Math.PI * 2
-    g.add(noOL(cyl(0.2, 0.2, 57, shade(paper, -0.12), { x: Math.sin(a) * 13.05, y: 15.5, z: Math.cos(a) * 13.05 }, 4)))
+    g.add(noOutlineDeep(cyl(0.2, 0.2, 57, shade(paper, -0.12), { x: Math.sin(a) * 13.05, y: 15.5, z: Math.cos(a) * 13.05 }, 4)))
   }
   g.add(torus(14, 0.8, wood, { y: 76, rx: Math.PI / 2 }))
   g.add(pipe([[-14, 76, 0], [-12, 84, 0], [0, 88, 0], [12, 84, 0], [14, 76, 0]], 0.9, wood, false))
@@ -2407,7 +2389,7 @@ function okidoko(p: string[]) {
   g.add(rbox(116, 2.6, 41, board, { y: 10, z: -1 }, 0.6))
   g.add(rbox(122, 13, 4, frame, { z: 20.5 }, 0.8))
   for (const s of [-1, 1]) g.add(rbox(3, 13, 41, frame, { x: s * 59.5, z: -2 }, 0.8))
-  g.add(noOL(rbox(30, 0.6, 0.4, accent, { y: 6, z: 22.6 }, 0.1)))
+  g.add(noOutlineDeep(rbox(30, 0.6, 0.4, accent, { y: 6, z: 22.6 }, 0.1)))
   return g
 }
 
@@ -2421,7 +2403,7 @@ function chigaidana(p: string[]) {
   g.add(rbox(85.2, 2.4, 34.8, wood, { y: 30, z: 0.4 }, 0.5))
   // 地袋：两扇拉门，前轨那扇推到右边
   for (const [x, z] of [[-21.2, 17.2], [21.2, 16.2]] as P2[]) {
-    const parts = [rbox(42.2, 26, 0.9, door, { x, y: 3.8, z }, 0.3), noOL(cylZ(1.6, 0.4, dark, x + (x < 0 ? 16 : -16), 16.8, z + 0.6, 12))]
+    const parts = [rbox(42.2, 26, 0.9, door, { x, y: 3.8, z }, 0.3), noOutlineDeep(cylZ(1.6, 0.4, dark, x + (x < 0 ? 16 : -16), 16.8, z + 0.6, 12))]
     if (x < 0) g.add(slideDoor(parts, 42.4))
     else for (const o of parts) g.add(o)
   }
@@ -2433,7 +2415,7 @@ function chigaidana(p: string[]) {
   g.add(rbox(85.2, 2, 34.4, wood, { y: 88, z: 0.4 }, 0.4))
   // 天袋：同样两扇拉门
   for (const [x, z] of [[-21.2, 17.2], [21.2, 16.2]] as P2[]) {
-    const parts = [rbox(42.2, 19.6, 0.9, door, { x, y: 90.2, z }, 0.3), noOL(cylZ(1.4, 0.4, dark, x + (x < 0 ? 16 : -16), 100, z + 0.6, 12))]
+    const parts = [rbox(42.2, 19.6, 0.9, door, { x, y: 90.2, z }, 0.3), noOutlineDeep(cylZ(1.4, 0.4, dark, x + (x < 0 ? 16 : -16), 100, z + 0.6, 12))]
     if (x < 0) g.add(slideDoor(parts, 42.4))
     else for (const o of parts) g.add(o)
   }
@@ -2450,7 +2432,7 @@ function zafuSet(p: string[]) {
   g.add(puck(18, 14, zafu, { y: 6.6 }))
   for (let k = 0; k < 16; k++) {
     const a = (k / 16) * Math.PI * 2
-    g.add(noOL(rbox(0.6, 9, 0.6, shade(zafu, -0.15), { x: Math.sin(a) * 17.9, y: 9, z: Math.cos(a) * 17.9, ry: a }, 0.2)))
+    g.add(noOutlineDeep(rbox(0.6, 9, 0.6, shade(zafu, -0.15), { x: Math.sin(a) * 17.9, y: 9, z: Math.cos(a) * 17.9, ry: a }, 0.2)))
   }
   g.add(ball(1.2, tassel, { y: 20.6 }))
   return g
@@ -2513,8 +2495,8 @@ function locker3(p: string[]) {
   for (let i = 0; i < 3; i++) {
     const x = (i - 1) * 29.4
     const parts: THREE.Object3D[] = [rbox(28.4, 168, 1, shade(metal, 0.04), { x, y: 9, z: 22.9 }, 0.4)]
-    for (const y0 of [150, 18]) for (let k = 0; k < 5; k++) parts.push(noOL(rbox(16, 0.8, 0.4, dark, { x, y: y0 + k * 2.2, z: 23.55 }, 0.1)))
-    parts.push(noOL(rbox(6, 3.4, 0.4, plate, { x, y: 138, z: 23.55 }, 0.2)))
+    for (const y0 of [150, 18]) for (let k = 0; k < 5; k++) parts.push(noOutlineDeep(rbox(16, 0.8, 0.4, dark, { x, y: y0 + k * 2.2, z: 23.55 }, 0.1)))
+    parts.push(noOutlineDeep(rbox(6, 3.4, 0.4, plate, { x, y: 138, z: 23.55 }, 0.2)))
     parts.push(rbox(1.8, 12, 2, dark, { x: x + 10, y: 86, z: 24 }, 0.5))
     parts.push(torus(1.2, 0.35, plate, { x: x + 10, y: 85, z: 25.2 }, Math.PI * 2))
     g.add(swingDoor(parts, x - 14.2, 22.4, 'left'))
@@ -2543,7 +2525,7 @@ function weldBench(p: string[]) {
   }
   g.add(rbox(142, 1.4, 62, shade(frame, 0.15), { y: 16 }, 0.3))
   g.add(rbox(150, 6, 70, top, { y: 84 }, 0.8))
-  for (let x = -60; x <= 60; x += 15) g.add(noOL(rbox(0.4, 0.3, 69, shade(top, -0.1), { x, y: 90 }, 0.1)))
+  for (let x = -60; x <= 60; x += 15) g.add(noOutlineDeep(rbox(0.4, 0.3, 69, shade(top, -0.1), { x, y: 90 }, 0.1)))
   // 台钳
   g.add(rbox(16, 4, 12, vise, { x: 60, y: 90, z: -24 }, 0.8))
   g.add(rbox(16, 8, 3, vise, { x: 60, y: 94, z: -17 }, 0.6))
@@ -2638,7 +2620,7 @@ function concreteSide(p: string[]) {
   }
   g.add(rbox(38.2, 1.8, 38.2, wood, { y: 12.4 }, 0.4))
   g.add(rbox(45, 5, 45, concrete, { y: 50 }, 0.8))
-  for (const [x, z] of [[-12, -8], [6, 10], [14, -14], [-6, 15], [16, 4]] as P2[]) g.add(noOL(cyl(0.5, 0.5, 0.2, shade(concrete, -0.2), { x, y: 55, z }, 8)))
+  for (const [x, z] of [[-12, -8], [6, 10], [14, -14], [-6, 15], [16, 4]] as P2[]) g.add(noOutlineDeep(cyl(0.5, 0.5, 0.2, shade(concrete, -0.2), { x, y: 55, z }, 8)))
   return g
 }
 
@@ -2673,7 +2655,7 @@ function inNightstand(p: string[]) {
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(2.4, 12.4, 2.4, IRON, { x: sx * 18.5, z: sz * 15.5 }, 0.3))
   g.add(hollow(40, 40, 34, metal, { y: 12 }, 1.2))
   g.add(rbox(37.6, 1.2, 33, shade(metal, 0.06), { y: 30.6, z: 0.5 }, 0.2))
-  for (const y of [13.5, 32]) g.add(drawerOf([rbox(36, 17, 1, shade(metal, 0.05), { y, z: 17.3 }, 0.4), noOL(rbox(8, 3, 0.4, label, { y: y + 12, z: 17.95 }, 0.2)), rbox(10, 1.6, 2, CHROME, { y: y + 7, z: 18.4 }, 0.5)], -18, 18, y, 17, 16.8, 30, shade(metal, 0.08)))
+  for (const y of [13.5, 32]) g.add(drawerOf([rbox(36, 17, 1, shade(metal, 0.05), { y, z: 17.3 }, 0.4), noOutlineDeep(rbox(8, 3, 0.4, label, { y: y + 12, z: 17.95 }, 0.2)), rbox(10, 1.6, 2, CHROME, { y: y + 7, z: 18.4 }, 0.5)], -18, 18, y, 17, 16.8, 30, shade(metal, 0.08)))
   g.add(rbox(42, 3, 36, wood, { y: 52 }, 0.8))
   return g
 }

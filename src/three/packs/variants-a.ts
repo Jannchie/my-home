@@ -9,19 +9,9 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, face, leaf, puck, rbox, shade, toon, torus, tray } from '../toon'
-import { C, S, SWING_OPEN, ellipsePoly, movable, paintPanel, rectPoly, rng, shell, type AssetCategory, type AssetDef, type DoorMotion, type StyleTag, type SurfaceDef } from '../kit'
-
-const PI = Math.PI
-type V3 = [number, number, number]
-type Pal = [StyleTag, string[]]
-type Dims = [number, number, number]
-type Build = (p: string[]) => THREE.Group
-
-const N = S.nordic
-const M = S.modern
-const J = S.japanese
-const I = S.industrial
-const R = S.retro
+import { C, SWING_OPEN, ellipsePoly, movable, paintPanel, rectPoly, rng, shell, type AssetCategory, type AssetDef, type DoorMotion, type SurfaceDef } from '../kit'
+import { PI, noOutlineDeep, type V3 } from '../geo'
+import { I, J, M, N, R, type Build, type Dims, type Pal } from '../packkit'
 
 const COFFEE = '#7a4a32'
 const CREAM = '#fffaf2'
@@ -115,12 +105,6 @@ function stick(a: V3, b: V3, r: number, color: string, seg = 8, r2 = r) {
   m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), vb.clone().sub(va).normalize())
   return m
 }
-function noLine<T extends THREE.Object3D>(o: T): T {
-  o.traverse((c) => {
-    c.userData.noOutline = true
-  })
-  return o
-}
 /** 半透明材质（透明的不描边） */
 function glassy<T extends THREE.Object3D>(o: T, color = GLASS, k = 0.4): T {
   o.traverse((c) => {
@@ -195,7 +179,7 @@ function airSlim(p: string[]) {
   g.add(rbox(w, 24, 17, main, { z: -1.5 }, 2))
   g.add(rbox(w - 3, 16, 1.2, shade(main, 0.03), { y: 6.6, z: 7.4 }, 0.5))
   g.add(rbox(w - 3, 0.7, 0.9, line, { y: 5.2, z: 7.3 }, 0.25))
-  g.add(noLine(rbox(w - 12, 2.4, 1, DARK, { y: 1.6, z: 6.6 }, 0.4)))
+  g.add(noOutlineDeep(rbox(w - 12, 2.4, 1, DARK, { y: 1.6, z: 6.6 }, 0.4)))
   g.add(rbox(w - 14, 0.8, 4.6, shade(main, -0.05), { y: 0.6, z: 8.2, rx: 0.22 }, 0.3))
   g.add(airLed(w / 2 - 8, 5.55, 7.85))
   return fit(g, AIRCON_MOUNT)
@@ -233,7 +217,7 @@ function airPremium(p: string[]) {
     ),
   )
   // 出风口 + 双导风板
-  g.add(noLine(rbox(w - 16, 4.2, 1.2, DARK, { y: 3, z: 6.6 }, 0.5)))
+  g.add(noOutlineDeep(rbox(w - 16, 4.2, 1.2, DARK, { y: 3, z: 6.6 }, 0.5)))
   for (const [y, z, rx] of [
     [2.4, 8.3, 0.3],
     [0.4, 7.6, 0.5],
@@ -251,7 +235,7 @@ function airWood(p: string[]) {
   g.add(rbox(w, 27, 19, main, { z: -2 }, 4))
   g.add(rbox(w - 10, 18, 1.4, wood, { y: 7.5, z: 7.8 }, 0.6))
   g.add(paintPanel(w - 12, 16.4, 'va-air-wood-' + wood, woodGrain(wood), { y: 8.3, z: 8.8 }))
-  g.add(noLine(rbox(w - 14, 3, 1, DARK, { y: 2.2, z: 7.1 }, 0.4)))
+  g.add(noOutlineDeep(rbox(w - 14, 3, 1, DARK, { y: 2.2, z: 7.1 }, 0.4)))
   g.add(rbox(w - 16, 1, 4.6, acc, { y: 1, z: 8.6, rx: 0.3 }, 0.3))
   g.add(airLed(w / 2 - 3, 8, 7.6))
   return fit(g, AIRCON_MOUNT)
@@ -267,7 +251,7 @@ function airBlack(p: string[]) {
   g.add(rbox(w, 8, 16, shade(main, 0.04), { y: 19, z: -3.2, rx: -0.28 }, 1))
   g.add(rbox(w - 4, 0.9, 1, trim, { y: 15.6, z: 9.7 }, 0.3))
   g.add(lit(rbox(30, 0.5, 0.6, light, { y: 12.2, z: 9.6 }, 0.2), light, 0.9))
-  g.add(noLine(rbox(w - 12, 3.6, 1, '#141518', { y: 2.4, z: 9.2 }, 0.4)))
+  g.add(noOutlineDeep(rbox(w - 12, 3.6, 1, '#141518', { y: 2.4, z: 9.2 }, 0.4)))
   g.add(rbox(w - 14, 0.9, 5, trim, { y: 0.8, z: 10.6, rx: 0.3 }, 0.3))
   return fit(g, AIRCON_MOUNT)
 }
@@ -280,7 +264,7 @@ function airRound(p: string[]) {
   g.add(rbox(w, 29, 22, main, { z: -1.5 }, 11))
   g.add(rbox(w - 12, 18, 3, shade(main, 0.04), { y: 7.5, z: 8.4 }, 1.5))
   // 半圆形出风口和圆弧导风板
-  g.add(noLine(rbox(w - 30, 3.6, 1, DARK, { y: 2.6, z: 9.2 }, 1.6)))
+  g.add(noOutlineDeep(rbox(w - 30, 3.6, 1, DARK, { y: 2.6, z: 9.2 }, 1.6)))
   g.add(rbox(w - 32, 1, 4, sub, { y: 1.4, z: 10.4, rx: 0.35 }, 0.45))
   // 两侧的圆鼓包（左右侧板）
   for (const s of [-1, 1]) g.add(ball(6, sub, { x: s * (w / 2 - 4.5), y: 14, z: 2 }, [0.6, 1.4, 1.2]))
@@ -386,7 +370,7 @@ function standLift(p: string[]) {
     // 吊绳：两根晾杆各两根
     for (const z of [z1, z2]) {
       const xr = x - s * 6
-      g.add(noLine(cyl(0.18, 0.18, top - 3.4 - by, '#d0d4da', { x: xr, y: by, z }, 4)))
+      g.add(noOutlineDeep(cyl(0.18, 0.18, top - 3.4 - by, '#d0d4da', { x: xr, y: by, z }, 4)))
       g.add(rbox(3, 3, 3, frame, { x: xr, y: by - 1.6, z }, 0.8))
     }
   }
@@ -435,7 +419,7 @@ function standBamboo(p: string[]) {
 
 /** 一株小花：茎 + 叶 + 花头（五瓣），(x, y, z) 是茎底 */
 function flower(g: THREE.Group, x: number, y: number, z: number, h: number, petal: string, center = C.lemon) {
-  g.add(noLine(cyl(0.45, 0.45, h, C.leafD, { x, y, z }, 4)))
+  g.add(noOutlineDeep(cyl(0.45, 0.45, h, C.leafD, { x, y, z }, 4)))
   g.add(leaf(6, C.leaf, { x: x + 2.8, y: y + h * 0.4, z, ry: PI / 2, rz: 0.4 }))
   for (let k = 0; k < 5; k++) {
     const a = (k / 5) * PI * 2 + x
@@ -480,7 +464,7 @@ function planterWood(p: string[]) {
       const a = (k / 6) * PI * 2 + r()
       g2.add(leaf(6, k % 2 ? herb : shade(herb, -0.1), { x: x + Math.cos(a) * 1.4, y: 26 + r() * 10, z: Math.sin(a) * 1.4, ry: -a, rz: 0.5 }))
     }
-    g2.add(noLine(cyl(0.4, 0.4, 14, C.leafD, { x, y: 23 }, 4)))
+    g2.add(noOutlineDeep(cyl(0.4, 0.4, 14, C.leafD, { x, y: 23 }, 4)))
     g.add(g2)
   }
   return g
@@ -504,7 +488,7 @@ function planterTerracotta(p: string[]) {
     const x = -22 + i * 8.8
     const z = (i % 2 ? 2.5 : -2.5) * 0.9
     const h = 18 + (i % 3) * 4
-    g.add(noLine(cyl(0.45, 0.45, h, C.leafD, { x, y: 15.5, z }, 4)))
+    g.add(noOutlineDeep(cyl(0.45, 0.45, h, C.leafD, { x, y: 15.5, z }, 4)))
     g.add(leaf(10, C.leaf, { x: x + 1.2, y: 22, z, rz: -0.3, ry: 0.3 }))
     // 郁金香：杯形花头 + 三片花瓣
     g.add(cup(1.9, 1.3, 4.2, 0.3, petal, { x, y: 15.5 + h - 0.5, z }))
@@ -534,7 +518,7 @@ function planterTiered(p: string[]) {
   g.add(rbox(w - 4, 4, 1.6, shade(wood, -0.1), { y: 3, z: -d / 2 + 1.2 }, 0.4))
   const potAt = (x: number, y: number, z: number, kind: number) => {
     g.add(cup(5, 3.8, 8, 0.6, pot, { x, y, z }))
-    g.add(noLine(cyl(4.3, 4.3, 0.4, SOIL, { x, y: y + 6.6, z }, 18)))
+    g.add(noOutlineDeep(cyl(4.3, 4.3, 0.4, SOIL, { x, y: y + 6.6, z }, 18)))
     if (kind === 0) {
       // 多肉：一圈肥厚的叶
       for (let k = 0; k < 7; k++) {
@@ -595,7 +579,7 @@ function planterCubes(p: string[]) {
     g.add(rbox(15.4, 0.6, 15.4, SOIL, { x, y: 15.5 }, 0.2))
   }
   // 黄杨球
-  g.add(noLine(cyl(0.7, 0.7, 4, '#7a5a43', { x: -20.5, y: 16 }, 6)))
+  g.add(noOutlineDeep(cyl(0.7, 0.7, 4, '#7a5a43', { x: -20.5, y: 16 }, 6)))
   g.add(ball(8.5, green, { x: -20.5, y: 27.5 }))
   // 虎尾兰：竖直的长叶
   for (let k = 0; k < 6; k++) {
@@ -704,7 +688,7 @@ function nsRound(p: string[]) {
   g.add(cyl(r - 2, r - 2, 3, base, {}, 32))
   // 柜身：空心鼓（cup），正面挖口用一块深色弧板代替开口内壁
   g.add(cup(r - 1.5, r - 1.5, h - 5, 1.2, main, { y: 3 }))
-  g.add(noLine(cyl(r - 2.7, r - 2.7, 0.5, shade(main, -0.2), { y: 4.2 }, 32)))
+  g.add(noOutlineDeep(cyl(r - 2.7, r - 2.7, 0.5, shade(main, -0.2), { y: 4.2 }, 32)))
   g.add(cyl(r, r, 2.4, top, { y: h - 2.4 }, 40))
   // 正面的弧形门：门缝两条竖线 + 圆拉手
   for (const a of [-0.42, 0.42]) g.add(rbox(0.5, 30, 0.6, shade(main, -0.2), { x: Math.sin(a) * (r - 1.35), y: 8, z: Math.cos(a) * (r - 1.35), ry: a }, 0.2))
@@ -815,7 +799,7 @@ function knife(handleC: string, bl: number, hl: number, bw: number, blade = M.si
   m.castShadow = true
   g.add(m)
   g.add(rbox(Math.min(bw, 2.4), hl, 1.6, handleC, { y: -0.2 }, 0.6))
-  for (const y of [hl * 0.3, hl * 0.7]) g.add(noLine(ball(0.25, M.silver, { x: 0, y, z: 0.8 })))
+  for (const y of [hl * 0.3, hl * 0.7]) g.add(noOutlineDeep(ball(0.25, M.silver, { x: 0, y, z: 0.8 })))
   return g
 }
 
@@ -854,7 +838,7 @@ function knifeTub(p: string[]) {
   // 填充的细棒（顶面一层深色圆片表示）
   const fill = cyl(5.3, 5.3, 0.4, '#2a2a2e', { y: 15.4 }, 24)
   fill.scale.set(1, 1, 1.6)
-  g.add(noLine(fill))
+  g.add(noOutlineDeep(fill))
   const spots: [number, number, number, number][] = [
     [-1.8, -5, 0.12, 15],
     [1.6, -2, -0.1, 13],
@@ -1100,7 +1084,7 @@ function vaseIkebana(p: string[]) {
   g.add(d)
   const w = cyl(6.8, 6.8, 0.3, WATER, { y: 2.5 }, 28)
   w.scale.set(1, 1, 0.66)
-  g.add(noLine(w))
+  g.add(noOutlineDeep(w))
   g.add(puck(1.8, 1, '#4a4a50', { x: -2, y: 0.6 }))
   // 弯枝：三段折线
   const pts: V3[] = [
@@ -1136,7 +1120,7 @@ function vaseJar(p: string[]) {
   const [glassC, bloom, ribbon] = p
   const g = new THREE.Group()
   g.add(glassy(cup(5.2, 5.6, 12, 0.4, glassC), glassC, 0.38))
-  g.add(noLine(cyl(4.7, 5.1, 6, WATER, { y: 0.4 }, 24)))
+  g.add(noOutlineDeep(cyl(4.7, 5.1, 6, WATER, { y: 0.4 }, 24)))
   g.add(torus(5.25, 0.45, ribbon, { y: 9.5, rx: PI / 2 }))
   g.add(rbox(2, 2.4, 0.6, ribbon, { x: 2, y: 7.6, z: 5.2, rz: 0.3 }, 0.2))
   const r = rng(5)
@@ -1659,7 +1643,7 @@ function rackMesh(p: string[]) {
   const bz = z - 1.6
   for (const y of [120, 148, 176]) {
     // 篮底：前后向的细丝 + 一圈底框，篮壁 5cm 高
-    g.add(noLine(rbox(2 * bx, 0.3, 2 * bz, shade(basket, -0.2), { y: y + 0.2 }, 0.1)))
+    g.add(noOutlineDeep(rbox(2 * bx, 0.3, 2 * bz, shade(basket, -0.2), { y: y + 0.2 }, 0.1)))
     for (let i = 0; i <= 12; i++) g.add(cylZ(0.25, 2 * bz, basket, -bx + (i * 2 * bx) / 12, y + 0.6, 0, 5))
     for (const yy of [y + 0.6, y + 5]) {
       for (const s of [-1, 1]) {
@@ -1798,7 +1782,7 @@ function tbCeramic(p: string[]) {
 // =====================================================================
 
 function liquid(r: number, top: number, color: string, x = 0, z = 0) {
-  return noLine(cyl(r, r, 0.3, color, { x, y: top - 0.3, z }, 28))
+  return noOutlineDeep(cyl(r, r, 0.3, color, { x, y: top - 0.3, z }, 28))
 }
 function cupHandle(r: number, tube: number, color: string, x: number, y: number) {
   return torus(r, tube, color, { x, y, rz: -PI / 2 }, PI)
@@ -1823,9 +1807,9 @@ function coffeeLatte(p: string[]) {
   g.add(cup(5, 2.6, 5.4, 0.4, main, { y: 0.4 }))
   g.add(liquid(4.5, 5.3, '#c99a6e'))
   // 心形拉花：两个圆 + 一个尖
-  g.add(noLine(ball(0.9, CREAM, { x: -0.6, y: 5.32, z: -0.3 }, [1, 0.1, 1])))
-  g.add(noLine(ball(0.9, CREAM, { x: 0.6, y: 5.32, z: -0.3 }, [1, 0.1, 1])))
-  g.add(noLine(ball(0.9, CREAM, { y: 5.31, z: 0.6 }, [0.9, 0.1, 1.1])))
+  g.add(noOutlineDeep(ball(0.9, CREAM, { x: -0.6, y: 5.32, z: -0.3 }, [1, 0.1, 1])))
+  g.add(noOutlineDeep(ball(0.9, CREAM, { x: 0.6, y: 5.32, z: -0.3 }, [1, 0.1, 1])))
+  g.add(noOutlineDeep(ball(0.9, CREAM, { y: 5.31, z: 0.6 }, [0.9, 0.1, 1.1])))
   g.add(cupHandle(1.3, 0.38, main, 4.4, 3.6))
   g.add(spoon(acc, 1.4, 5.2, 0.3))
   return g
@@ -1838,7 +1822,7 @@ function coffeeEspresso(p: string[]) {
   g.add(saucer(5, sub))
   g.add(cup(2.5, 2, 4, 0.35, main, { y: 0.4 }))
   g.add(liquid(2.05, 4.0, '#5a3322'))
-  g.add(noLine(ball(1.6, '#c98a4f', { y: 4.02 }, [1, 0.08, 1])))
+  g.add(noOutlineDeep(ball(1.6, '#c98a4f', { y: 4.02 }, [1, 0.08, 1])))
   g.add(cupHandle(1, 0.3, main, 2.4, 2.6))
   g.add(rbox(1.3, 1.3, 1.3, C.white, { x: -2.8, y: 0.7, z: 2.2, ry: 0.4 }, 0.2))
   g.add(spoon(acc, 0.6, 3.6, 0.2))
@@ -1850,10 +1834,10 @@ function coffeeGlass(p: string[]) {
   const [coaster, glassC, acc] = p
   const g = new THREE.Group()
   g.add(puck(5.2, 0.8, coaster))
-  g.add(noLine(cyl(3.1, 2.7, 3.6, '#e8d2b0', { y: 1.2 }, 24)))
-  g.add(noLine(cyl(3.3, 3.1, 3, COFFEE, { y: 4.8 }, 24)))
+  g.add(noOutlineDeep(cyl(3.1, 2.7, 3.6, '#e8d2b0', { y: 1.2 }, 24)))
+  g.add(noOutlineDeep(cyl(3.3, 3.1, 3, COFFEE, { y: 4.8 }, 24)))
   g.add(glassy(cup(3.7, 3.2, 9, 0.4, glassC), glassC, 0.32).translateY(0.8))
-  g.add(noLine(cyl(0.35, 0.35, 10, acc, { x: 1.4, y: 2, z: 0.4, rz: -0.18 }, 8)))
+  g.add(noOutlineDeep(cyl(0.35, 0.35, 10, acc, { x: 1.4, y: 2, z: 0.4, rz: -0.18 }, 8)))
   return g
 }
 

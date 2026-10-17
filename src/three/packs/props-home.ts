@@ -3,14 +3,9 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, face, leaf, puck, rbox, shade, toon, torus, tray } from '../toon'
-import { C, S, glow, holePanel, rng, rod, shell, type AssetDef, type Fx, type StyleTag } from '../kit'
-
-const PI = Math.PI
-const N = S.nordic
-const M = S.modern
-const J = S.japanese
-const I = S.industrial
-const R = S.retro
+import { C, glow, holePanel, rng, rod, shell, type AssetDef, type Fx } from '../kit'
+import { PI, hcyl, noOutlineDeep } from '../geo'
+import { I, J, M, N, R, type Pal3 } from '../packkit'
 
 // 食物 / 液体的固定色
 const RICE = '#fffdf6'
@@ -29,13 +24,6 @@ const BRASS = '#e9c46a'
 
 // ---------- 小工具 ----------
 
-function noLine<T extends THREE.Object3D>(o: T): T {
-  o.traverse((c) => {
-    c.userData.noOutline = true
-  })
-  return o
-}
-
 /** 半透明玻璃（透明材质不描边） */
 function glassy<T extends THREE.Object3D>(o: T, color: string, k = 0.45): T {
   o.traverse((c) => {
@@ -44,18 +32,9 @@ function glassy<T extends THREE.Object3D>(o: T, color: string, k = 0.45): T {
   return o
 }
 
-/** 横放的圆柱 / 圆台：(x, y, z) 是中心；axis='x' 时顶端（rTop）朝 +x，'z' 时朝 +z */
-function hcyl(rTop: number, rBottom: number, len: number, color: string, x: number, y: number, z: number, axis: 'x' | 'z' = 'x', seg = 16) {
-  const m = cyl(rTop, rBottom, len, color, {}, seg)
-  m.position.set(x, y, z)
-  if (axis === 'x') m.rotation.z = -PI / 2
-  else m.rotation.x = PI / 2
-  return m
-}
-
 /** 容器里的液面：薄圆片，top 是液面高度 */
 function liquid(r: number, top: number, color: string, x = 0, z = 0) {
-  return noLine(cyl(r, r, 0.3, color, { x, y: top - 0.3, z }, 28))
+  return noOutlineDeep(cyl(r, r, 0.3, color, { x, y: top - 0.3, z }, 28))
 }
 
 /** 杯把手：竖直的半圆环，side=1 在 +x 侧 */
@@ -104,8 +83,7 @@ function at<T extends THREE.Object3D>(o: T, x: number, y: number, z: number, ry 
 /** 平底盘：浅 cup */
 const dish = (r: number, color: string, a: { x?: number; y?: number; z?: number } = {}, h = 1.2) => cup(r, r * 0.7, h, 0.45, color, a)
 
-type Pal = [StyleTag, string, string, string]
-type Def = Omit<AssetDef, 'palettes' | 'paletteStyles' | 'prop'> & { pals: Pal[] }
+type Def = Omit<AssetDef, 'palettes' | 'paletteStyles' | 'prop'> & { pals: Pal3[] }
 
 function def(o: Def): AssetDef {
   const { pals, styles, ...rest } = o
@@ -176,7 +154,7 @@ function coffeeCup(p: string[]) {
   g.add(cup(6.5, 4, 1, 0.4, sub))
   g.add(cup(3.8, 2.8, 5.5, 0.45, main, { y: 0.4 }))
   g.add(liquid(3.1, 5.3, COFFEE))
-  g.add(noLine(ball(0.9, CREAM, { y: 5.32, z: 0.3 }, [1, 0.12, 0.9])))
+  g.add(noOutlineDeep(ball(0.9, CREAM, { y: 5.32, z: 0.3 }, [1, 0.12, 0.9])))
   g.add(handle(1.4, 0.4, main, 3.4, 3.4))
   g.add(rbox(4.6, 0.25, 0.7, C.steel, { x: 0.6, y: 0.75, z: 4.4, ry: 0.35 }, 0.1))
   g.add(ball(0.7, C.steel, { x: -1.6, y: 0.95, z: 5.1 }, [1, 0.3, 1.4]))
@@ -428,7 +406,7 @@ function cake(p: string[]) {
     g.add(cyl(0.06, 0.06, 0.5, C.ink, { x, y: 12.8, z }, 4))
     const f = ball(0.25, C.lamp, { x, y: 13.5, z }, [1, 1.6, 1])
     f.material = toon(C.lamp, { emissive: 0.8 })
-    g.add(noLine(f))
+    g.add(noOutlineDeep(f))
   }
   return g
 }
@@ -466,7 +444,7 @@ function donutPlate(p: string[]) {
     g.add(torus(2.4, 1.12, ices[i], { x, y: 2.25, z, rx: PI / 2 }))
     for (let j = 0; j < 7; j++) {
       const b = (j / 7) * PI * 2 + i
-      g.add(noLine(rbox(0.55, 0.2, 0.2, sp[(i + j) % sp.length], { x: x + Math.cos(b) * 2.4, y: 3.3, z: z + Math.sin(b) * 2.4, ry: b * 2 }, 0.08)))
+      g.add(noOutlineDeep(rbox(0.55, 0.2, 0.2, sp[(i + j) % sp.length], { x: x + Math.cos(b) * 2.4, y: 3.3, z: z + Math.sin(b) * 2.4, ry: b * 2 }, 0.08)))
     }
   }
   return g
@@ -496,7 +474,7 @@ function sushi(p: string[]) {
   const nigiri = (x: number, color: string, stripes: boolean, band: boolean) => {
     g.add(rbox(4.4, 1.8, 2.6, RICE, { x, y: 2.8 }, 0.8))
     g.add(rbox(5, 0.7, 3, color, { x, y: 4.45 }, 0.3))
-    if (stripes) for (const k of [-1.2, 0, 1.2]) g.add(noLine(rbox(0.35, 0.2, 2.6, '#ffe6da', { x: x + k, y: 5.05, rz: 0.4 }, 0.08)))
+    if (stripes) for (const k of [-1.2, 0, 1.2]) g.add(noOutlineDeep(rbox(0.35, 0.2, 2.6, '#ffe6da', { x: x + k, y: 5.05, rz: 0.4 }, 0.08)))
     if (band) g.add(rbox(1.1, 2.7, 3.2, NORI, { x, y: 2.7 }, 0.3))
   }
   nigiri(-9.5, '#ff9e7a', true, false)
@@ -516,16 +494,16 @@ function ramen(p: string[]) {
   g.add(torus(9.62, 0.35, band, { y: 7.5, rx: PI / 2 }))
   g.add(liquid(8.6, 7.6, '#f0c27a'))
   g.add(puck(5, 0.5, '#f3d36b', { y: 7.25 }))
-  for (let i = 0; i < 5; i++) g.add(noLine(torus(1.1, 0.25, '#f6dc7f', { x: -1 + i * 0.6, y: 7.75, z: -1 + (i % 2), rx: PI / 2 })))
+  for (let i = 0; i < 5; i++) g.add(noOutlineDeep(torus(1.1, 0.25, '#f6dc7f', { x: -1 + i * 0.6, y: 7.75, z: -1 + (i % 2), rx: PI / 2 })))
   g.add(puck(2.6, 0.7, '#d9946b', { x: -3, y: 7.4, z: 2 }))
-  g.add(noLine(torus(2.2, 0.2, '#b8714a', { x: -3, y: 8.1, z: 2, rx: PI / 2 })))
+  g.add(noOutlineDeep(torus(2.2, 0.2, '#b8714a', { x: -3, y: 8.1, z: 2, rx: PI / 2 })))
   g.add(ball(1.8, C.white, { x: 3, y: 7.7, z: 2.5 }, [1, 0.5, 1.3]))
   g.add(ball(1, '#ffa726', { x: 3, y: 8.3, z: 2.5 }, [1, 0.35, 1]))
   g.add(puck(1.6, 0.5, C.white, { x: 2.5, y: 7.5, z: -2.5 }))
-  g.add(noLine(torus(0.8, 0.18, C.pink, { x: 2.5, y: 8.05, z: -2.5, rx: PI / 2 })))
+  g.add(noOutlineDeep(torus(0.8, 0.18, C.pink, { x: 2.5, y: 8.05, z: -2.5, rx: PI / 2 })))
   g.add(rbox(4.5, 5.5, 0.3, NORI, { x: -2, y: 6.5, z: -6.8, rx: -0.3 }, 0.1))
   const r = rng(5)
-  for (let i = 0; i < 8; i++) g.add(noLine(cyl(0.45, 0.45, 0.3, C.leaf, { x: (r() - 0.5) * 6, y: 7.8, z: (r() - 0.5) * 3 + 0.5 }, 8)))
+  for (let i = 0; i < 8; i++) g.add(noOutlineDeep(cyl(0.45, 0.45, 0.3, C.leaf, { x: (r() - 0.5) * 6, y: 7.8, z: (r() - 0.5) * 3 + 0.5 }, 8)))
   const cs = chopsticks(sticks)
   cs.position.set(0, 9.3, 4)
   g.add(cs)
@@ -596,7 +574,7 @@ function tetsubin(p: string[]) {
     const rr = 7.5 * Math.sqrt(1 - (dy / 6.15) ** 2)
     for (let i = 0; i < n; i++) {
       const a = (i / n) * PI * 2 + dy
-      g.add(noLine(ball(0.42, shade(iron, 0.06), { x: x0 + Math.cos(a) * rr, y: 6.2 + dy, z: Math.sin(a) * rr })))
+      g.add(noOutlineDeep(ball(0.42, shade(iron, 0.06), { x: x0 + Math.cos(a) * rr, y: 6.2 + dy, z: Math.sin(a) * rr })))
     }
   }
   g.add(puck(3.6, 1.2, iron, { x: x0, y: 11.6 }))
@@ -752,7 +730,7 @@ function cuttingBoard(p: string[]) {
   for (let i = 0; i < 3; i++) {
     const s = new THREE.Group()
     s.add(cyl(3, 3, 0.7, TOMATO, {}, 24))
-    s.add(noLine(puck(2.2, 0.2, '#ffb0a0', { y: 0.65 })))
+    s.add(noOutlineDeep(puck(2.2, 0.2, '#ffb0a0', { y: 0.65 })))
     s.position.set(-1 + i * 2.2, 2.3 + i * 0.25, 3)
     s.rotation.z = -0.22
     g.add(s)
@@ -837,7 +815,7 @@ function makeupMirror(p: string[]) {
   glass.rotation.x = PI / 2
   glass.position.set(0, 0, 0)
   glass.material = toon(C.glass, { emissive: 0.15 })
-  m.add(noLine(glass))
+  m.add(noOutlineDeep(glass))
   const bk = cyl(7.9, 7.9, 0.8, back, {}, 32)
   bk.rotation.x = PI / 2
   bk.position.set(0, 0, -0.75)
@@ -898,7 +876,7 @@ function towelRoll(p: string[]) {
   for (let i = -1; i <= 1; i++) {
     const c = cols[i + 1]
     g.add(hcyl(2.8, 2.8, 12, c, i * 7.2, 3.6, 0, 'z', 20))
-    g.add(noLine(torus(1.4, 0.25, shade(c, -0.14), { x: i * 7.2, y: 3.6, z: 6.1 })))
+    g.add(noOutlineDeep(torus(1.4, 0.25, shade(c, -0.14), { x: i * 7.2, y: 3.6, z: 6.1 })))
   }
   return g
 }
@@ -1028,7 +1006,7 @@ function bunnyPlush(p: string[]) {
   g.add(ball(5, fur, { y: 14 }))
   for (const s of [-1, 1]) {
     g.add(capsule(1.4, 5, fur, { x: s * 2, y: 17.5, rz: -s * 0.15 }))
-    g.add(noLine(capsule(0.75, 3.6, inner, { x: s * 2.05, y: 18.2, z: 0.85, rz: -s * 0.15 })))
+    g.add(noOutlineDeep(capsule(0.75, 3.6, inner, { x: s * 2.05, y: 18.2, z: 0.85, rz: -s * 0.15 })))
     g.add(ball(1.6, fur, { x: s * 2.6, y: 7, z: 4 }))
     g.add(ball(2, fur, { x: s * 2.8, y: 1.3, z: 3.4 }, [1, 0.65, 1.3]))
     g.add(ball(1, ribbon, { x: s * 1.1, y: 9.6, z: 3.2 }, [1.2, 0.8, 0.5]))
@@ -1062,7 +1040,7 @@ function showaThermos(p: string[]) {
     const rr = 7.1 - (y - 2) * (0.4 / 22)
     f.position.set(Math.sin(th) * rr, y, Math.cos(th) * rr)
     f.rotation.y = th
-    g.add(noLine(f))
+    g.add(noOutlineDeep(f))
   }
   g.add(puck(7.1, 3, trim, { y: 23.5 }))
   g.add(ball(4.5, trim, { y: 26 }, [1, 0.6, 1]))

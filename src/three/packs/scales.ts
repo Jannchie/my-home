@@ -3,9 +3,8 @@
 
 import * as THREE from 'three'
 import { cyl, rbox, shade, toon, torus } from '../toon'
-import { C, glow, type AssetDef, type StyleTag } from '../kit'
-
-type Pal = [StyleTag, string[]]
+import { C, glow, type AssetDef } from '../kit'
+import { type Pal } from '../packkit'
 
 const def = (id: string, sizeLabel: string, [w, d, h]: [number, number, number], pals: Pal[], build: (p: string[]) => THREE.Group): AssetDef => ({
   id,

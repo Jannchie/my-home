@@ -5,6 +5,7 @@
 import * as THREE from 'three'
 import { rbox, shade, toon } from '../toon'
 import { type AssetDef, type StyleTag } from '../kit'
+import { noOutline } from '../geo'
 
 const T = 0.12
 const PALS: [StyleTag, string[]][] = [
@@ -15,11 +16,6 @@ const PALS: [StyleTag, string[]][] = [
   ['retro', ['#ffc27a', '#6a4a30', '#a8d8ff', '#bdeea0']],
   ['industrial', ['#d6c4ff', '#4a4070', '#ffe680', '#a8d8ff']],
 ]
-
-const flat = <T extends THREE.Object3D>(o: T) => {
-  o.userData.noOutline = true
-  return o
-}
 
 /** 平面形状 → 薄片（正面朝 +z，背面贴在 z = 0） */
 function sheet(shape: THREE.Shape, color: string, z = 0) {
@@ -67,7 +63,7 @@ function cloudShape(w: number, h: number) {
 /** 一笔手写线条（细长扁条），从 (x0, y0) 到 (x1, y1) */
 function stroke(x0: number, y0: number, x1: number, y1: number, ink: string, z: number, w = 0.22) {
   const len = Math.hypot(x1 - x0, y1 - y0)
-  const m = flat(rbox(len, w, 0.04, ink, {}, 0.02))
+  const m = noOutline(rbox(len, w, 0.04, ink, {}, 0.02))
   m.position.set((x0 + x1) / 2, (y0 + y1) / 2 - w / 2, z)
   m.rotation.z = Math.atan2(y1 - y0, x1 - x0)
   return m
@@ -116,7 +112,7 @@ function doodle(kind: Doodle, w: number, h: number, ink: string, acc: string, z:
       const a1 = ((i + 1) / 12) * Math.PI * 2
       g.add(stroke(Math.cos(a0) * r, Math.sin(a0) * r, Math.cos(a1) * r, Math.sin(a1) * r, ink, z, 0.2))
     }
-    for (const s of [-1, 1]) g.add(flat(rbox(0.35, 0.5, 0.04, ink, { x: s * r * 0.35, y: r * 0.1, z }, 0.1)))
+    for (const s of [-1, 1]) g.add(noOutline(rbox(0.35, 0.5, 0.04, ink, { x: s * r * 0.35, y: r * 0.1, z }, 0.1)))
     g.add(poly([[-r * 0.5, -r * 0.25], [-r * 0.2, -r * 0.5], [r * 0.2, -r * 0.5], [r * 0.5, -r * 0.25]], ink, z, 0.2))
   } else if (kind === 'star') {
     const r = Math.min(w, h) * 0.3
@@ -167,7 +163,7 @@ function note(spec: NoteSpec, p: string[], z0 = 0) {
   const shape = spec.shape === 'heart' ? heartShape(w, h) : spec.shape === 'cloud' ? cloudShape(w, h) : rectShape(w, h, cut)
   g.add(sheet(shape, paper, z0))
   // 顶上一条胶带的背胶区（略深）
-  if (spec.shape === 'square' || spec.shape === 'strip') g.add(flat(rbox(w - 0.2, Math.min(1.4, h * 0.2), 0.03, shade(paper, -0.05), { y: h / 2 - Math.min(1.4, h * 0.2) - 0.1, z: z0 + T + 0.01 }, 0.01)))
+  if (spec.shape === 'square' || spec.shape === 'strip') g.add(noOutline(rbox(w - 0.2, Math.min(1.4, h * 0.2), 0.03, shade(paper, -0.05), { y: h / 2 - Math.min(1.4, h * 0.2) - 0.1, z: z0 + T + 0.01 }, 0.01)))
   g.add(doodle(spec.doodle, w * (spec.shape === 'heart' ? 0.7 : 0.9), h * (spec.shape === 'heart' ? 0.6 : 0.85), ink, acc, z0 + T + 0.03))
   if (spec.curl) g.add(curl(w, h, cut, paper, z0))
   return g
@@ -208,7 +204,7 @@ function tabs(fan: boolean) {
       const m = new THREE.Group()
       m.add(sheet(rectShape(1.5, 5), cols[i], 0))
       // 下半截是透明胶片：画成浅色
-      m.add(flat(rbox(1.5, 2.2, 0.03, '#f4f6f8', { y: -2.5, z: T + 0.01 }, 0.01)))
+      m.add(noOutline(rbox(1.5, 2.2, 0.03, '#f4f6f8', { y: -2.5, z: T + 0.01 }, 0.01)))
       if (fan) {
         m.position.set(-1 + i * 0.9, -0.5, i * 0.03)
         m.rotation.z = (-25 + i * 16) * (Math.PI / 180)

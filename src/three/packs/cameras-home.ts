@@ -5,34 +5,16 @@
 
 import * as THREE from 'three'
 import { ball, cyl, rbox, shade, toon, torus } from '../toon'
-import { C, S, glow, type AssetCategory, type AssetDef, type StyleTag } from '../kit'
+import { C, glow, type AssetCategory, type AssetDef } from '../kit'
+import { G, P, PI, noOutline } from '../geo'
+import { CL, I, M, N, type PalFlat } from '../packkit'
 
-type Pal = [StyleTag, ...string[]]
-const PI = Math.PI
-const N = S.nordic
-const M = S.modern
-const I = S.industrial
-const CL = S.classic
 const LENS = '#1d2230'
 const GLASS = '#3d6a9a'
 const BLACK = '#26262a'
 
-function def(id: string, name: string, category: AssetCategory, [w, d, h]: [number, number, number], pals: Pal[], build: (p: string[]) => THREE.Group, extra: Partial<AssetDef> = {}): AssetDef {
+function def(id: string, name: string, category: AssetCategory, [w, d, h]: [number, number, number], pals: PalFlat[], build: (p: string[]) => THREE.Group, extra: Partial<AssetDef> = {}): AssetDef {
   return { id, name, category, w, d, h, palettes: pals.map((x) => x.slice(1)), paletteStyles: pals.map((x) => x[0]), styles: [...new Set(pals.map((x) => x[0]))], build, ...extra }
-}
-function P<T extends THREE.Object3D>(o: T, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0): T {
-  o.position.set(x, y, z)
-  o.rotation.set(rx, ry, rz)
-  return o
-}
-function grp(...c: THREE.Object3D[]) {
-  const g = new THREE.Group()
-  for (const o of c) g.add(o)
-  return g
-}
-const noLine = <T extends THREE.Object3D>(o: T): T => {
-  o.userData.noOutline = true
-  return o
 }
 /** 摆正：水平居中，最低点放到 y0（壁挂物传安装高度）；keepZ 时不动 z（壁挂物背面贴墙） */
 function fit(g: THREE.Object3D, y0 = 0, keepZ = false) {
@@ -61,7 +43,7 @@ const lit = (m: THREE.Mesh, color: string, k = 0.8) => {
 }
 /** 镜头：黑色镜面 + 蓝玻璃 + 高光，朝 +z；(x, y) 为中心，z 为镜面所在平面 */
 function lens(r: number, x: number, y: number, z: number, rim = LENS) {
-  return grp(cylZ(r, 0.5, rim, x, y, z + 0.25), cylZ(r * 0.62, 0.4, GLASS, x, y, z + 0.6), noLine(ball(r * 0.18, '#ffffff', { x: x + r * 0.22, y: y + r * 0.22, z: z + 0.82 }, [1, 1, 0.4])))
+  return G(cylZ(r, 0.5, rim, x, y, z + 0.25), cylZ(r * 0.62, 0.4, GLASS, x, y, z + 0.6), noOutline(ball(r * 0.18, '#ffffff', { x: x + r * 0.22, y: y + r * 0.22, z: z + 0.82 }, [1, 1, 0.4])))
 }
 /** 状态灯 */
 const led = (x: number, y: number, z: number, color = '#5fe08a', r = 0.25) => lit(ball(r, color, { x, y, z }, [1, 1, 0.5]), color, 0.9)
@@ -79,7 +61,7 @@ function petDome([body, base, acc]: string[]) {
   g.add(lens(1.2, 0, 10.3, 4.35))
   for (let k = 0; k < 6; k++) {
     const a = (k / 6) * PI * 2
-    g.add(noLine(lit(ball(0.22, '#7a2a2a', { x: Math.cos(a) * 2.2, y: 10.3 + Math.sin(a) * 2.2, z: 4.3 }), '#8a2a2a', 0.3)))
+    g.add(noOutline(lit(ball(0.22, '#7a2a2a', { x: Math.cos(a) * 2.2, y: 10.3 + Math.sin(a) * 2.2, z: 4.3 }), '#8a2a2a', 0.3)))
   }
   g.add(led(0, 7.2, 4.15))
   return fit(g)
@@ -158,24 +140,24 @@ function petTablet([shell, base, screen]: string[]) {
   return fit(g)
 }
 
-const PET_P: Pal[] = [
+const PET_P: PalFlat[] = [
   ['modern', M.white, '#e8e9ec', '#7ec8e3'],
   ['cute', C.pink, C.white, C.lemon],
   ['nordic', N.white, N.oak, N.sage],
   ['modern', M.char, M.black, '#f2a65a'],
 ]
-const PET_EARS_P: Pal[] = [
+const PET_EARS_P: PalFlat[] = [
   ['cute', C.white, C.pink, C.sakura],
   ['cute', '#f6d7a8', '#ffb6a3', C.white],
   ['nordic', N.gray, N.linen, N.white],
   ['modern', M.char, '#f0a0a8', M.black],
 ]
-const PET_TREAT_P: Pal[] = [
+const PET_TREAT_P: PalFlat[] = [
   ['modern', M.white, M.light, '#b5763c'],
   ['nordic', N.white, N.oakL, '#b5763c'],
   ['cute', C.sky, C.white, '#c98a52'],
 ]
-const PET_TABLET_P: Pal[] = [
+const PET_TABLET_P: PalFlat[] = [
   ['modern', M.black, M.char, '#7fb8e6'],
   ['cute', C.white, C.mint, '#ffc6d6'],
   ['nordic', N.white, N.oak, '#a9c7b8'],
@@ -240,7 +222,7 @@ function secWallBullet([body, arm]: string[]) {
   g.add(P(cam, 0, 8.6, 5.6, 0.3))
   return fitWall(g, SEC_MOUNT, 22)
 }
-const SEC_P: Pal[] = [
+const SEC_P: PalFlat[] = [
   ['modern', M.white, M.light],
   ['modern', M.black, M.char],
   ['nordic', N.white, N.gray],
@@ -277,8 +259,8 @@ function babyRecv([shell, screen, key]: string[]) {
   body.add(rbox(12, 9, 2, shell, {}, 1))
   body.add(glow(8.2, 5.6, screen, { x: -0.9, y: 2.4, z: 1.05 }, 0.6))
   // 屏上睡着的宝宝（一颗头 + 被子）
-  body.add(noLine(lit(ball(0.9, '#ffe2c8', { x: -2.6, y: 5.2, z: 1.45 }, [1, 1, 0.2]), '#ffe2c8', 0.5)))
-  body.add(noLine(lit(rbox(4, 1.6, 0.2, '#ffd6e0', { x: -0.6, y: 4.2, z: 1.4 }, 0.5), '#ffd6e0', 0.5)))
+  body.add(noOutline(lit(ball(0.9, '#ffe2c8', { x: -2.6, y: 5.2, z: 1.45 }, [1, 1, 0.2]), '#ffe2c8', 0.5)))
+  body.add(noOutline(lit(rbox(4, 1.6, 0.2, '#ffd6e0', { x: -0.6, y: 4.2, z: 1.4 }, 0.5), '#ffd6e0', 0.5)))
   for (let i = 0; i < 3; i++) body.add(cylZ(0.5, 0.4, key, 4.4, 2.2 + i * 1.9, 1.1, 12))
   body.add(cyl(0.35, 0.45, 3.4, shell, { x: 4.5, y: 9 }, 10))
   body.add(ball(0.55, shell, { x: 4.5, y: 12.5 }))
@@ -286,13 +268,13 @@ function babyRecv([shell, screen, key]: string[]) {
   g.add(P(rbox(6, 6.5, 0.6, shade(shell, -0.1), {}, 0.3), 0, 0, -2.4, -0.55))
   return fit(g)
 }
-const BABY_P: Pal[] = [
+const BABY_P: PalFlat[] = [
   ['cute', C.white, C.lemon, C.sky],
   ['cute', C.white, '#ffd1a8', C.pink],
   ['nordic', N.white, '#ffe6b8', N.sage],
   ['modern', M.white, '#fff0c8', M.gray],
 ]
-const BABY_RECV_P: Pal[] = [
+const BABY_RECV_P: PalFlat[] = [
   ['cute', C.white, '#9fd0f0', C.pink],
   ['nordic', N.white, '#a9c7b8', N.oak],
   ['modern', M.char, '#7fb8e6', M.light],
@@ -322,8 +304,8 @@ function peepholeScreen([shell, screen]: string[]) {
   g.add(rbox(13, 19, 1.8, shell, {}, 1.2))
   g.add(glow(10.6, 13.6, screen, { y: 3.8, z: 0.95 }, 0.55))
   // 画面：门外走廊（地面 + 门框）
-  g.add(noLine(lit(rbox(10, 3, 0.2, shade(screen, -0.18), { y: 4.2, z: 1.3 }, 0.1), shade(screen, -0.18), 0.4)))
-  g.add(noLine(lit(rbox(3.4, 7.6, 0.2, shade(screen, 0.15), { x: 2.2, y: 7.2, z: 1.3 }, 0.1), shade(screen, 0.15), 0.4)))
+  g.add(noOutline(lit(rbox(10, 3, 0.2, shade(screen, -0.18), { y: 4.2, z: 1.3 }, 0.1), shade(screen, -0.18), 0.4)))
+  g.add(noOutline(lit(rbox(3.4, 7.6, 0.2, shade(screen, 0.15), { x: 2.2, y: 7.2, z: 1.3 }, 0.1), shade(screen, 0.15), 0.4)))
   g.add(cylZ(0.9, 0.4, shade(shell, -0.15), 0, 1.8, 0.95, 16))
   return fitWall(g, PEEP_MOUNT, 2.2)
 }

@@ -5,37 +5,20 @@
 import * as THREE from 'three'
 import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js'
 import { ball, capsule, cyl, puck, rbox, shade, toon, torus, tray, useAnisotropy } from '../toon'
-import { C, G, S, ellipsePoly, holePanel, legs, slab, type AssetDef, type Hole, type StyleTag } from '../kit'
-
-type V2 = [number, number]
-type V3 = [number, number, number]
+import { C, G, ellipsePoly, holePanel, legs, slab, type AssetDef, type Hole } from '../kit'
+import { UP, ZAX, dist, mesh, type V2, type V3 } from '../geo'
+import { I, J, M, N, R, type Pal } from '../packkit'
 
 // ---------- 配色 ----------
 
-type Pal = [StyleTag, string[]]
 /** 带风格标注的配色组：展开成 palettes / paletteStyles / styles */
 function pal(...xs: Pal[]) {
   return { palettes: xs.map((x) => x[1]), paletteStyles: xs.map((x) => x[0]), styles: [...new Set(xs.map((x) => x[0]))] }
 }
-const N = S.nordic
-const M = S.modern
-const J = S.japanese
-const I = S.industrial
-const R = S.retro
 const CHROME = M.silver
 const INK = M.black
 
 // ---------- 小工具 ----------
-
-function mesh(geo: THREE.BufferGeometry, color: string) {
-  const m = new THREE.Mesh(geo, toon(color))
-  m.castShadow = true
-  m.receiveShadow = true
-  return m
-}
-
-const UP = new THREE.Vector3(0, 1, 0)
-const ZAX = new THREE.Vector3(0, 0, 1)
 
 /** 把沿 y 的部件摆到 a → b 之间；局部 z 尽量对齐世界 z（轴向接近 z 时改为对齐世界 y） */
 function orient(m: THREE.Object3D, a: V3, b: V3) {
@@ -49,7 +32,6 @@ function orient(m: THREE.Object3D, a: V3, b: V3) {
   m.position.copy(va.add(vb).multiplyScalar(0.5))
   return m
 }
-const dist = (a: V3, b: V3) => Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2])
 
 /** 两点间的圆杆（r 在 a 端，r2 在 b 端） */
 function bar(a: V3, b: V3, r: number, color: string, r2 = r, seg = 10) {

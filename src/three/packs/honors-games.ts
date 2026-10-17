@@ -6,41 +6,19 @@
 
 import * as THREE from 'three'
 import { ball, cup, cyl, rbox, shade, toon, torus, tray } from '../toon'
-import { C, S, glow, paintPanel, pinwheelWalls, type AssetCategory, type AssetDef, type StyleTag } from '../kit'
+import { C, glow, paintPanel, pinwheelWalls, type AssetCategory, type AssetDef } from '../kit'
+import { G, P, PI, noOutline } from '../geo'
+import { CL, CN, F, I, J, M, N, PROP, type PalFlat } from '../packkit'
 
-type Pal = [StyleTag, ...string[]]
 type Draw = (g: CanvasRenderingContext2D, W: number, H: number) => void
-const PI = Math.PI
-const N = S.nordic
-const M = S.modern
-const J = S.japanese
-const CN = S.chinese
-const CL = S.classic
-const FH = S.farmhouse
-const I = S.industrial
 const IVORY = '#f6f0e1'
 const PAPER = '#fbf8f0'
 const DARK = '#26262a'
 
-function def(id: string, name: string, category: AssetCategory, [w, d, h]: [number, number, number], pals: Pal[], build: (p: string[]) => THREE.Group, extra: Partial<AssetDef> = {}): AssetDef {
+function def(id: string, name: string, category: AssetCategory, [w, d, h]: [number, number, number], pals: PalFlat[], build: (p: string[]) => THREE.Group, extra: Partial<AssetDef> = {}): AssetDef {
   return { id, name, category, w, d, h, palettes: pals.map((x) => x.slice(1)), paletteStyles: pals.map((x) => x[0]), styles: [...new Set(pals.map((x) => x[0]))], build, ...extra }
 }
-const PROP = { prop: true }
 
-function P<T extends THREE.Object3D>(o: T, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0): T {
-  o.position.set(x, y, z)
-  o.rotation.set(rx, ry, rz)
-  return o
-}
-function grp(...c: THREE.Object3D[]) {
-  const g = new THREE.Group()
-  for (const o of c) g.add(o)
-  return g
-}
-const noLine = <T extends THREE.Object3D>(o: T): T => {
-  o.userData.noOutline = true
-  return o
-}
 /** 摆正：水平居中，最低点放到 y0（壁挂物传安装高度） */
 function fit(g: THREE.Object3D, y0 = 0) {
   const outer = new THREE.Group()
@@ -89,7 +67,7 @@ function trophyBase(w: number, d: number, base: string, plate: string, tiers = 2
     g.add(rbox(w * k, h, d * k, i % 2 ? shade(base, 0.08) : base, { y }, 0.5))
     y += h
   }
-  g.add(noLine(rbox(w * 0.45, 1.6, 0.2, plate, { y: 0.8, z: d / 2 + 0.12 }, 0.05)))
+  g.add(noOutline(rbox(w * 0.45, 1.6, 0.2, plate, { y: 0.8, z: d / 2 + 0.12 }, 0.05)))
   return [g, y]
 }
 
@@ -97,7 +75,7 @@ function trophyBase(w: number, d: number, base: string, plate: string, tiers = 2
 function trophyCup(mat: Mat) {
   return ([base, plate]: string[]) => {
     const [g, y] = trophyBase(14, 10, base, plate)
-    const top = grp(cyl(1, 2.6, 3, '#fff', { y }, 16), ball(1.7, '#fff', { y: y + 4.2 }), cyl(0.8, 1.3, 3, '#fff', { y: y + 5 }, 12), cup(6.4, 2.6, 10, 0.4, '#fff', { y: y + 8 }))
+    const top = G(cyl(1, 2.6, 3, '#fff', { y }, 16), ball(1.7, '#fff', { y: y + 4.2 }), cyl(0.8, 1.3, 3, '#fff', { y: y + 5 }, 12), cup(6.4, 2.6, 10, 0.4, '#fff', { y: y + 8 }))
     for (const s of [-1, 1]) top.add(torus(3, 0.5, '#fff', { x: s * 6.1, y: y + 13.6, rz: -s * PI / 2 }, PI))
     g.add(finish(top, mat))
     return fit(g)
@@ -109,7 +87,7 @@ function trophyTall(mat: Mat) {
     const [g, y0] = trophyBase(20, 14, base, plate, 3)
     g.add(rbox(10, 9, 8, shade(base, 0.1), { y: y0 }, 0.6))
     const y = y0 + 9
-    const top = grp(cyl(1.4, 3.2, 4, '#fff', { y }, 16), ball(2.2, '#fff', { y: y + 5.6 }), cup(8.2, 3.2, 13, 0.5, '#fff', { y: y + 7 }), cyl(8.4, 8.4, 1, '#fff', { y: y + 20 }, 24), ball(1.8, '#fff', { y: y + 22.6 }))
+    const top = G(cyl(1.4, 3.2, 4, '#fff', { y }, 16), ball(2.2, '#fff', { y: y + 5.6 }), cup(8.2, 3.2, 13, 0.5, '#fff', { y: y + 7 }), cyl(8.4, 8.4, 1, '#fff', { y: y + 20 }, 24), ball(1.8, '#fff', { y: y + 22.6 }))
     for (const s of [-1, 1]) top.add(torus(4.2, 0.6, '#fff', { x: s * 8, y: y + 15, rz: -s * PI / 2 }, PI))
     g.add(finish(top, mat))
     return fit(g)
@@ -129,7 +107,7 @@ function trophyStar(mat: Mat) {
     geo.translate(0, 0, -0.6)
     const star = new THREE.Mesh(geo, toon('#fff'))
     star.castShadow = true
-    const top = grp(cyl(0.9, 1.4, 9, '#fff', { y }, 12), P(star, 0, y + 9 + 5, 0))
+    const top = G(cyl(0.9, 1.4, 9, '#fff', { y }, 12), P(star, 0, y + 9 + 5, 0))
     g.add(finish(top, mat))
     return fit(g)
   }
@@ -139,7 +117,7 @@ function trophyLaurel(mat: Mat) {
   return ([base, plate]: string[]) => {
     const [g, y] = trophyBase(12, 7, base, plate)
     const cy = y + 12
-    const top = grp(cyl(0.9, 1.3, 4, '#fff', { y }, 12), torus(6.5, 0.7, '#fff', { y: cy, rx: 0 }), cylZ(3.4, 0.8, '#fff', 0, cy, 0))
+    const top = G(cyl(0.9, 1.3, 4, '#fff', { y }, 12), torus(6.5, 0.7, '#fff', { y: cy, rx: 0 }), cylZ(3.4, 0.8, '#fff', 0, cy, 0))
     for (let k = 0; k < 9; k++) {
       const a = -PI / 2 + 0.5 + (k / 8) * (PI * 2 - 1)
       top.add(P(ball(1, '#fff', {}, [1, 1.9, 0.5]), Math.cos(a) * 7.6, cy + Math.sin(a) * 7.6, 0, 0, 0, a))
@@ -152,11 +130,11 @@ function trophyLaurel(mat: Mat) {
 function trophyObelisk([base, plate]: string[]) {
   const [g, y] = trophyBase(9, 9, base, plate)
   const ob = P(cyl(1.2, 3.4, 18, '#fff', {}, 4), 0, y, 0, 0, PI / 4)
-  g.add(finish(grp(ob), 'crystal'))
+  g.add(finish(G(ob), 'crystal'))
   return fit(g)
 }
 
-const TROPHY_BASES: Pal[] = [
+const TROPHY_BASES: PalFlat[] = [
   ['modern', DARK, METAL.gold],
   ['classic', '#ecebe6', CL.gold],
   ['retro', '#7a4e2e', '#e6bf55'],
@@ -187,10 +165,10 @@ function medalStand(mat: Mat) {
     const back = rbox(7.5, 13, 0.4, '#e9f4fb', { y: 1 }, 0.1)
     back.material = toon('#e9f4fb', { transparent: 0.4 })
     back.userData.noOutline = true
-    g.add(P(grp(back), 0, 0, -1.2, -0.12))
+    g.add(P(G(back), 0, 0, -1.2, -0.12))
     // 缎带搭在背板顶上，奖牌垂在前面
     for (const s of [-1, 1]) g.add(P(rbox(1.6, 8, 0.15, s > 0 ? r1 : r2, {}, 0.05), s * 0.9, 6, 0.1, -0.1, 0, -s * 0.18))
-    const medal = grp(cylZ(3, 0.5, '#fff', 0, 4.4, 0.6), noLine(cylZ(2.1, 0.2, '#fff', 0, 4.4, 0.95, 20)))
+    const medal = G(cylZ(3, 0.5, '#fff', 0, 4.4, 0.6), noOutline(cylZ(2.1, 0.2, '#fff', 0, 4.4, 0.95, 20)))
     finish(medal, mat)
     ;((medal.children[1] as THREE.Mesh).material as THREE.Material).dispose?.()
     ;(medal.children[1] as THREE.Mesh).material = toon(shade(METAL[mat], -0.15))
@@ -203,11 +181,11 @@ const MEDAL_FRAME_MOUNT = 140
 function medalFrame([frame, backing, ribbon]: string[]) {
   const g = new THREE.Group()
   g.add(rbox(42, 32, 3, frame, {}, 0.6))
-  g.add(noLine(rbox(38, 28, 0.3, backing, { y: 2, z: 1.4 }, 0.1)))
+  g.add(noOutline(rbox(38, 28, 0.3, backing, { y: 2, z: 1.4 }, 0.1)))
   ;(['gold', 'silver', 'bronze'] as Mat[]).forEach((m, i) => {
     const x = -12 + i * 12
     for (const s of [-1, 1]) g.add(P(rbox(2, 11, 0.15, s > 0 ? ribbon : shade(ribbon, -0.15), {}, 0.05), x + s * 1.2, 15, 1.7, 0, 0, -s * 0.12))
-    g.add(finish(grp(cylZ(3.6, 0.5, '#fff', x, 12, 1.9)), m))
+    g.add(finish(G(cylZ(3.6, 0.5, '#fff', x, 12, 1.9)), m))
   })
   const glass = rbox(40, 30, 0.2, '#e9f4fb', { y: 1, z: 1.6 }, 0.05)
   glass.material = toon('#e9f4fb', { transparent: 0.22 })
@@ -278,20 +256,20 @@ function certFrame(kind: CertKind, w: number, h: number) {
     return fit(g, CERT_MOUNT)
   }
 }
-const CERT_FRAMES: Pal[] = [
+const CERT_FRAMES: PalFlat[] = [
   ['modern', DARK, '#b8352b'],
   ['classic', CL.gold, CL.wine],
   ['nordic', N.oak, '#3d6fb8'],
   ['chinese', CN.rosewood, CN.lacquer],
-  ['farmhouse', FH.white, FH.navy],
+  ['farmhouse', F.white, F.navy],
 ]
 
 /** 证书夹（合上平放）：[封皮, 烫金] */
 function certFolder([cover, foil]: string[]) {
   const g = new THREE.Group()
   g.add(rbox(24, 1.4, 17, cover, {}, 0.4))
-  g.add(noLine(rbox(8, 0.1, 1.2, foil, { y: 1.42, z: -2 }, 0.05)))
-  g.add(noLine(cyl(2, 2, 0.1, foil, { y: 1.42, z: 3 }, 20)))
+  g.add(noOutline(rbox(8, 0.1, 1.2, foil, { y: 1.42, z: -2 }, 0.05)))
+  g.add(noOutline(cyl(2, 2, 0.1, foil, { y: 1.42, z: 3 }, 20)))
   return fit(g)
 }
 /** 一摞证书夹 */
@@ -299,7 +277,7 @@ function certStack([cover, foil]: string[]) {
   const g = new THREE.Group()
   const cols = [cover, shade(cover, -0.18), '#3b4a66', cover]
   cols.forEach((c, i) => {
-    g.add(P(grp(rbox(24, 1.4, 17, c, {}, 0.4), noLine(rbox(8, 0.1, 1.2, foil, { y: 1.42, z: -2 }, 0.05))), (i % 2 ? 0.8 : -0.6), i * 1.45, (i % 2 ? -0.5 : 0.4), 0, (i - 1.5) * 0.06))
+    g.add(P(G(rbox(24, 1.4, 17, c, {}, 0.4), noOutline(rbox(8, 0.1, 1.2, foil, { y: 1.42, z: -2 }, 0.05))), (i % 2 ? 0.8 : -0.6), i * 1.45, (i % 2 ? -0.5 : 0.4), 0, (i - 1.5) * 0.06))
   })
   return fit(g)
 }
@@ -314,11 +292,11 @@ function certTube([body, lid]: string[]) {
 function certBox([box, label]: string[]) {
   const g = new THREE.Group()
   g.add(tray(34, 8, 26, 0.8, box, {}, 0.6))
-  g.add(noLine(rbox(10, 3, 0.2, label, { y: 2.5, z: 13.15 }, 0.1)))
+  g.add(noOutline(rbox(10, 3, 0.2, label, { y: 2.5, z: 13.15 }, 0.1)))
   // 一叠证书竖着插在盒里，上沿露出盒口
   for (let i = 0; i < 6; i++) g.add(P(rbox(30, 22, 0.35, i % 2 ? PAPER : '#fff4dc', {}, 0.1), 0, 0.8, -9 + i * 3.2, -0.12))
   // 盖子：铰链在后沿上方，向后打开
-  const lid = grp(rbox(35, 1.2, 27, shade(box, 0.06), { z: -13.5 }, 0.5))
+  const lid = G(rbox(35, 1.2, 27, shade(box, 0.06), { z: -13.5 }, 0.5))
   g.add(P(lid, 0, 8, -13, -1.9))
   return fit(g)
 }
@@ -342,7 +320,7 @@ const certs: AssetDef[] = [
   def('hg-cert-tube', '证书收纳', 'study', [36, 8, 8], [
     ['classic', CL.navy, CL.gold],
     ['modern', DARK, '#c9ced6'],
-    ['farmhouse', FH.barn, FH.iron],
+    ['farmhouse', F.barn, F.iron],
   ], certTube, { ...PROP, family: 'hg-cert-stored', sizeLabel: '毕业证书筒' }),
   def('hg-cert-box', '证书收纳', 'storage', [35, 36, 34], [
     ['nordic', N.linen, N.oak],
@@ -362,7 +340,7 @@ function tileWalls(y: number, seed: number, back: string, n = 17) {
   const g = new THREE.Group()
   const L = n * 2.6
   for (const w of pinwheelWalls(L, 3.5, seed)) {
-    const side = grp(rbox(L, 1.9, 3.5, IVORY, {}, 0.25), rbox(L, 0.7, 3.5, back, { y: 1.9 }, 0.25), rbox(L, 1.2, 3.5, IVORY, { y: 2.6 }, 0.25), rbox(L, 0.7, 3.5, back, { y: 3.8 }, 0.25))
+    const side = G(rbox(L, 1.9, 3.5, IVORY, {}, 0.25), rbox(L, 0.7, 3.5, back, { y: 1.9 }, 0.25), rbox(L, 1.2, 3.5, IVORY, { y: 2.6 }, 0.25), rbox(L, 0.7, 3.5, back, { y: 3.8 }, 0.25))
     g.add(P(side, w.x, y, w.z, 0, w.ry))
   }
   return g
@@ -373,7 +351,7 @@ function mjCovered([frame, , cover]: string[]) {
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(5, 68, 5, frame, { x: sx * 38, z: sz * 38 }, 1))
   g.add(rbox(88, 3, 88, frame, { y: 68 }, 1))
   g.add(rbox(89, 5, 89, cover, { y: 70.4 }, 1.4))
-  for (let k = 0; k < 4; k++) g.add(P(grp(rbox(89, 14, 0.8, shade(cover, -0.08), { z: 44.6 }, 0.3)), 0, 60, 0, 0, (k * PI) / 2))
+  for (let k = 0; k < 4; k++) g.add(P(G(rbox(89, 14, 0.8, shade(cover, -0.08), { z: 44.6 }, 0.3)), 0, 60, 0, 0, (k * PI) / 2))
   return g
 }
 /** 折叠麻将桌（打开，桌面铺着绒面）：[桌面, 绒面] */
@@ -381,7 +359,7 @@ function mjFold([top, felt]: string[]) {
   const g = new THREE.Group()
   const a = 0.5
   const L = 69.6 / Math.cos(a)
-  for (const s of [-1, 1]) for (const t of [-1, 1]) g.add(P(grp(rbox(3, L, 3, DARK, { y: -L / 2 }, 1)), s * 34, 34.8, 0, t * a))
+  for (const s of [-1, 1]) for (const t of [-1, 1]) g.add(P(G(rbox(3, L, 3, DARK, { y: -L / 2 }, 1)), s * 34, 34.8, 0, t * a))
   g.add(cylX(1, 74, DARK, 0, 34.8, 0))
   g.add(rbox(80, 2.4, 80, top, { y: 69.6 }, 0.6))
   g.add(rbox(74, 0.4, 74, felt, { y: 72 }, 0.2))
@@ -404,7 +382,7 @@ function jantaku([frame, felt]: string[]) {
     g.add(rbox(4, 2.2, 67, frame, { x: s * 35.5, y: 33 }, 0.8))
   }
   g.add(rbox(67, 0.4, 67, felt, { y: 33 }, 0.2))
-  for (let k = 0; k < 4; k++) g.add(P(grp(rbox(10, 2, 0.6, shade(frame, -0.2), { y: 29.5, z: 37.8 }, 0.3)), 0, 0, 0, 0, (k * PI) / 2))
+  for (let k = 0; k < 4; k++) g.add(P(G(rbox(10, 2, 0.6, shade(frame, -0.2), { y: 29.5, z: 37.8 }, 0.3)), 0, 0, 0, 0, (k * PI) / 2))
   return fit(g)
 }
 /** 麻将牌·砌好牌墙（不带牌垫，直接放在桌面 / 绒面上）：[牌背] */
@@ -424,14 +402,14 @@ function mjHands([back]: string[]) {
   }
   return fit(g)
 }
-const FELTS: Pal[] = [
+const FELTS: PalFlat[] = [
   ['chinese', CN.rosewood, '#2f8a5a'],
   ['modern', DARK, '#3d6fb8'],
   ['retro', '#7a4e2e', '#b8352b'],
   ['japanese', J.dark, '#3f7a4a'],
   ['cute', C.woodL, C.mint],
 ]
-const TILE_BACKS: Pal[] = [
+const TILE_BACKS: PalFlat[] = [
   ['chinese', '#2f8a5a'],
   ['modern', '#3d6fb8'],
   ['retro', '#e2702f'],
@@ -523,7 +501,7 @@ function goBowl(stone: 'black' | 'white', woven: boolean) {
     g.add(cyl(4.4, 4.6, 0.6, shade(body, -0.08), { y: 6.8 }, 20))
     for (let k = 0; k < 6; k++) g.add(ball(0.95, col, { x: Math.cos(k) * 2, y: 6.6, z: Math.sin(k) * 2 }, [1, 0.42, 1]))
     // 盖子靠在罐边
-    g.add(P(grp(ball(4.6, body, {}, [1, 0.3, 1])), 1.8, 7.6, -1.2, 0.12, 0, -0.1))
+    g.add(P(G(ball(4.6, body, {}, [1, 0.3, 1])), 1.8, 7.6, -1.2, 0.12, 0, -0.1))
     return fit(g)
   }
 }
@@ -562,13 +540,13 @@ function shogiBan([wood, leg]: string[]) {
   for (let i = 0; i < 16; i++) g.add(P(rbox(2.4, 0.8, 2.8, '#e9cf98', {}, 0.2), (Math.floor(rnd() * 9) - 4) * 3.3, 21, (Math.floor(rnd() * 9) - 4) * 3.6, 0, rnd() < 0.5 ? 0 : PI))
   return fit(g)
 }
-const BOARD_WOOD: Pal[] = [
+const BOARD_WOOD: PalFlat[] = [
   ['chinese', '#e3c27f', '#3a2a1e'],
   ['japanese', '#e8c98a', '#3a2a1e'],
   ['nordic', '#ead7b8', '#4a3a2e'],
   ['retro', '#d9a868', '#3a2a1e'],
 ]
-const BOWLS: Pal[] = [
+const BOWLS: PalFlat[] = [
   ['chinese', '#8a5a34', '#5a3b2a'],
   ['japanese', '#b88a5a', '#6e4f37'],
   ['nordic', '#d9b98c', '#b8955f'],
@@ -583,7 +561,7 @@ const gameTables: AssetDef[] = [
   def('hg-game-table-round', '棋桌', 'hobby', [64, 64, 70.4], [
     ['classic', CL.walnut],
     ['modern', DARK],
-    ['farmhouse', FH.oak],
+    ['farmhouse', F.oak],
     ['nordic', N.oak],
   ], roundGameTable, { surface: 70.4, surfaceShape: [[[-22, -22], [22, -22], [22, 22], [-22, 22]]], family: 'hg-game-table', sizeLabel: '独脚圆桌' }),
   def('hg-go-board', '围棋盘', 'hobby', [45, 42, 2.6], BOARD_WOOD, goBoardFlat(0), { ...PROP, family: 'hg-go-board', sizeLabel: '空盘' }),
@@ -616,7 +594,7 @@ function poolTable([wood, felt, rail]: string[]) {
     g.add(rbox(10, 5, 106, rail, { x: s * 108, y: 76 }, 1))
   }
   // 袋口
-  for (const sx of [-1, 0, 1]) for (const sz of [-1, 1]) g.add(noLine(cyl(4.2, 4.2, 0.6, '#1d1d1f', { x: sx * 103, y: 76.9, z: sz * 53 }, 16)))
+  for (const sx of [-1, 0, 1]) for (const sz of [-1, 1]) g.add(noOutline(cyl(4.2, 4.2, 0.6, '#1d1d1f', { x: sx * 103, y: 76.9, z: sz * 53 }, 16)))
   // 三角摆好的球 + 母球
   const cols = ['#e3b549', '#3d6fb8', '#c8473a', '#6b4ea0', '#e2702f', '#2f8a5a', '#7a2e3a', '#26262a']
   let k = 0
@@ -669,7 +647,7 @@ function dartboard([rim, c1, c2]: string[]) {
     [-6, 20],
     [8, 16],
   ] as [number, number][])
-    g.add(P(grp(cyl(0.25, 0.25, 7, '#c9ced6', {}, 6), rbox(1.6, 2.4, 0.1, '#c8473a', { y: 5.6 }, 0.05)), x, y, 1.8, PI / 2 - 0.15))
+    g.add(P(G(cyl(0.25, 0.25, 7, '#c9ced6', {}, 6), rbox(1.6, 2.4, 0.1, '#c8473a', { y: 5.6 }, 0.05)), x, y, 1.8, PI / 2 - 0.15))
   return fit(g, DART_MOUNT)
 }
 /** 飞镖柜（门打开，两侧小黑板记分）：[柜木, 色环 1, 色环 2] */
@@ -684,7 +662,7 @@ function dartCabinet([wood, c1, c2]: string[]) {
   g.add(board)
   for (const s of [-1, 1]) {
     // 门打开约 160°：从柜边向外、稍微朝前
-    const door = grp(rbox(27, 60, 2, wood, { x: s * 13.5 }, 0.6), noLine(rbox(22, 46, 0.2, '#2f3a33', { x: s * 13.5, y: 7, z: 1.05 }, 0.1)))
+    const door = G(rbox(27, 60, 2, wood, { x: s * 13.5 }, 0.6), noOutline(rbox(22, 46, 0.2, '#2f3a33', { x: s * 13.5, y: 7, z: 1.05 }, 0.1)))
     g.add(P(door, s * 28, 0, 3.5, 0, -s * 0.35))
   }
   return fit(g, DART_MOUNT - 7)
@@ -692,18 +670,18 @@ function dartCabinet([wood, c1, c2]: string[]) {
 const westGames: AssetDef[] = [
   def('hg-pool-table', '台球桌', 'hobby', [226, 126, 85], [
     ['classic', CL.walnut, '#2f7a4a', '#5a3b2a'],
-    ['farmhouse', FH.oak, '#7a2e3a', FH.iron],
+    ['farmhouse', F.oak, '#7a2e3a', F.iron],
     ['modern', DARK, '#3d6fb8', '#3d3f44'],
     ['industrial', I.iron, '#5a5f66', I.walnut],
   ], poolTable),
   def('hg-dartboard', '飞镖盘', 'hobby', [46, 12, 46], [
     ['modern', DARK, '#c8473a', '#2f8a5a'],
     ['industrial', I.iron, I.rust, '#3a5a3c'],
-    ['farmhouse', FH.iron, FH.barn, FH.sage],
+    ['farmhouse', F.iron, F.barn, F.sage],
   ], dartboard, { mount: DART_MOUNT, family: 'hg-dart', sizeLabel: '单盘' }),
   def('hg-dart-cabinet', '飞镖盘', 'hobby', [112, 30, 60], [
     ['classic', CL.walnut, '#c8473a', '#2f8a5a'],
-    ['farmhouse', FH.oak, FH.barn, FH.sage],
+    ['farmhouse', F.oak, F.barn, F.sage],
     ['industrial', I.walnut, I.rust, '#3a5a3c'],
   ], dartCabinet, { mount: DART_MOUNT - 7, family: 'hg-dart', sizeLabel: '飞镖柜（门打开）' }),
 ]

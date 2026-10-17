@@ -9,20 +9,11 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cyl, puck, rbox, shade, toon, torus } from '../toon'
-import { C, S, SWING_OPEN, holePanel, movable, paintPanel, rectPoly, rng, shell, slab, type AssetCategory, type AssetDef, type Poly, type StyleTag } from '../kit'
+import { C, SWING_OPEN, holePanel, movable, paintPanel, rectPoly, rng, shell, slab, type AssetCategory, type AssetDef, type Poly } from '../kit'
+import { G, P, PI, UP, type V3 } from '../geo'
+import { I, J, M, N, R, type Build, type Dims, type Pal } from '../packkit'
 
-const PI = Math.PI
-type V3 = [number, number, number]
-type Pal = [StyleTag, string[]]
-type Dims = [number, number, number]
-type Build = (p: string[]) => THREE.Group
 type Tab = [number, number][]
-
-const N = S.nordic
-const M = S.modern
-const J = S.japanese
-const I = S.industrial
-const R = S.retro
 
 const WHITE = '#ffffff'
 const INSOLE = '#efe4d0'
@@ -51,22 +42,9 @@ function asset(id: string, name: string, category: AssetCategory, [w, d, h]: Dim
 
 // ---------- 小工具 ----------
 
-function P<T extends THREE.Object3D>(o: T, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0): T {
-  o.position.set(x, y, z)
-  o.rotation.set(rx, ry, rz)
-  return o
-}
-
-const G = (...c: THREE.Object3D[]) => {
-  const g = new THREE.Group()
-  for (const o of c) g.add(o)
-  return g
-}
-
 /** 沿 x 的横圆柱，给中心 */
 const cylX = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 16) => P(cyl(r, r, len, color, {}, seg), x, y, z, 0, 0, PI / 2)
 
-const UP = new THREE.Vector3(0, 1, 0)
 /** 两点之间的细杆 */
 function stick(a: V3, b: V3, r: number, color: string, seg = 8) {
   const va = new THREE.Vector3(...a)

@@ -8,17 +8,10 @@
 
 import * as THREE from 'three'
 import { GARMENT_LABELS, buildGarment, buildHanger, foldedRow, garment, garmentRow, hashSeed, measureGarment, ROW_ENVELOPE, WARDROBE_LABELS, type GarmentKind, type GarmentSpec, type HangerMat, type HangerType, type Wardrobe } from '../garments'
-import { rectPoly, S, type AssetCategory, type AssetDef, type FormTag, type StyleTag } from '../kit'
+import { rectPoly, type AssetCategory, type AssetDef, type FormTag, type StyleTag } from '../kit'
 import type { PatternKind } from '../patterns'
 import { cyl, rbox, shade } from '../toon'
-
-type Pal = [StyleTag, string[]]
-
-const N = S.nordic
-const M = S.modern
-const J = S.japanese
-const I = S.industrial
-const R = S.retro
+import { I, J, M, N, R, type Pal } from '../packkit'
 
 /** 衣物通用配色：[主色, 副色, 点缀色] */
 const WEAR: Pal[] = [

@@ -7,19 +7,13 @@ import * as THREE from 'three'
 import { ParametricGeometry } from 'three/addons/geometries/ParametricGeometry.js'
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js'
 import { ball, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
-import { C, S, legs, paintPanel, rectPoly, rng, rod, type AssetCategory, type AssetDef, type Poly, type StyleTag } from '../kit'
+import { C, legs, paintPanel, rectPoly, rng, rod, type AssetCategory, type AssetDef, type Poly } from '../kit'
 import { swingDoor } from './styles-world'
+import { G, P, PI, UP, mesh, noOutline, type V3 } from '../geo'
+import { I, J, M, N, PROP, R, type PalFlat } from '../packkit'
 
-type V3 = [number, number, number]
 type RY = [number, number]
-type Pal = [StyleTag, ...string[]]
 type Draw = (g: CanvasRenderingContext2D, W: number, H: number) => void
-const N = S.nordic
-const M = S.modern
-const J = S.japanese
-const I = S.industrial
-const R = S.retro
-const PI = Math.PI
 
 const GOLD = '#e3b549'
 const SILVER = '#cfd3d8'
@@ -35,7 +29,7 @@ function def(
   name: string,
   category: AssetCategory,
   [w, d, h]: [number, number, number],
-  pals: Pal[],
+  pals: PalFlat[],
   build: (p: string[]) => THREE.Group,
   extra: Partial<AssetDef> = {},
 ): AssetDef {
@@ -53,33 +47,8 @@ function def(
     ...extra,
   }
 }
-const PROP = { prop: true }
 
 // ---------- 小工具 ----------
-
-function P<T extends THREE.Object3D>(o: T, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0): T {
-  o.position.set(x, y, z)
-  o.rotation.set(rx, ry, rz)
-  return o
-}
-
-function grp(...c: THREE.Object3D[]) {
-  const g = new THREE.Group()
-  for (const o of c) g.add(o)
-  return g
-}
-
-const noLine = <T extends THREE.Object3D>(o: T): T => {
-  o.userData.noOutline = true
-  return o
-}
-
-function mesh(geo: THREE.BufferGeometry, color: string) {
-  const m = new THREE.Mesh(geo, toon(color))
-  m.castShadow = true
-  m.receiveShadow = true
-  return m
-}
 
 /** 半透明（玻璃、亚克力），不描边 */
 function ghost<T extends THREE.Mesh>(m: T, color: string, a = 0.32): T {
@@ -130,10 +99,10 @@ function cutout<T extends THREE.Mesh>(m: T): T {
 }
 
 /** 沿 z 的圆柱（朝前的圆盘），给中心 */
-const cylZ = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 24) => P(grp(cyl(r, r, len, color, { y: -len / 2 }, seg)), x, y, z, PI / 2)
+const cylZ = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 24) => P(G(cyl(r, r, len, color, { y: -len / 2 }, seg)), x, y, z, PI / 2)
 
 /** 沿 x 的横圆柱，给中心 */
-const cylX = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 20) => P(grp(cyl(r, r, len, color, { y: -len / 2 }, seg)), x, y, z, 0, 0, PI / 2)
+const cylX = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 20) => P(G(cyl(r, r, len, color, { y: -len / 2 }, seg)), x, y, z, 0, 0, PI / 2)
 
 /** yz 平面里的扁撑板（相框背撑） */
 function strutZ(az: number, ay: number, bz: number, by: number, w: number, t: number, color: string, x = 0) {
@@ -228,21 +197,21 @@ function latheRaw(pts: RY[], color: string, seg = 40) {
 
 /** 瓶身上的环带纹 */
 function band(v: Vessel, y: number, color: string, tube = 0.2) {
-  return noLine(torus(v.r(y) + tube * 0.15, tube, color, { y, rx: PI / 2 }))
+  return noOutline(torus(v.r(y) + tube * 0.15, tube, color, { y, rx: PI / 2 }))
 }
 
 /** 瓶身上浮出的小纹样贴片：高度 y、方位角 a，宽 sw 高 sh */
 function patch(v: Vessel, y: number, a: number, sw: number, sh: number, color: string) {
   const r = v.r(y)
   const s = v.r(y + 0.4) - v.r(y - 0.4)
-  const m = noLine(ball(1, color, { z: r }, [sw, sh, 0.16]))
+  const m = noOutline(ball(1, color, { z: r }, [sw, sh, 0.16]))
   m.rotation.x = Math.atan2(s, 0.8)
-  return P(grp(m), 0, y, 0, 0, a)
+  return P(G(m), 0, y, 0, 0, a)
 }
 
 // ---------- 花瓶 / 瓷器 ----------
 
-const VASE_PALS: Pal[] = [
+const VASE_PALS: PalFlat[] = [
   ['japanese', '#f5f2ea', J.ai, J.dark],
   ['japanese', '#a9cbb7', '#6f9a84', J.dark],
   ['retro', '#e0b04a', '#8a4b2a', R.caramel],
@@ -268,7 +237,7 @@ function meiping(p: string[]) {
     0.45,
     body,
   )
-  const g = grp(v.m, band(v, 1.6, deco), band(v, 4.2, deco, 0.14), band(v, 25.6, deco))
+  const g = G(v.m, band(v, 1.6, deco), band(v, 4.2, deco, 0.14), band(v, 25.6, deco))
   for (let i = 0; i < 6; i++) {
     g.add(patch(v, 16, (i * PI) / 3 + 0.3, 1.7, 1.2, deco))
     g.add(patch(v, 10.5, (i * PI) / 3 + 0.3 + PI / 6, 0.8, 0.6, deco))
@@ -296,15 +265,15 @@ function hulu(p: string[]) {
     0.4,
     body,
   )
-  const g = grp(v.m, band(v, 1.2, deco), band(v, 26.2, deco, 0.15))
-  g.add(noLine(torus(v.r(15.6) + 0.2, 0.28, cord, { y: 15.6, rx: PI / 2 })))
+  const g = G(v.m, band(v, 1.2, deco), band(v, 26.2, deco, 0.15))
+  g.add(noOutline(torus(v.r(15.6) + 0.2, 0.28, cord, { y: 15.6, rx: PI / 2 })))
   // 绳结 + 垂下的穗
   g.add(ball(0.55, cord, { x: 0, y: 15.5, z: v.r(15.6) + 0.5 }))
   const kz = v.r(15.6) + 0.45
   const ey = 13.2
   const ez = v.r(ey) + 0.45
   const L = Math.hypot(ez - kz, 15.4 - ey)
-  g.add(P(grp(cyl(0.35, 0.15, L, cord, { y: -L })), 0, 15.4, kz, -Math.atan2(ez - kz, 15.4 - ey)))
+  g.add(P(G(cyl(0.35, 0.15, L, cord, { y: -L })), 0, 15.4, kz, -Math.atan2(ez - kz, 15.4 - ey)))
   for (let i = 0; i < 5; i++) g.add(patch(v, 7.5, (i * 2 * PI) / 5, 1.4, 1.1, deco))
   return g
 }
@@ -328,7 +297,7 @@ function yuhuchun(p: string[]) {
     0.4,
     body,
   )
-  const g = grp(v.m, band(v, 1.8, deco), band(v, 12.6, deco, 0.16), band(v, 21.6, deco, 0.14), band(v, 28, deco, 0.14))
+  const g = G(v.m, band(v, 1.8, deco), band(v, 12.6, deco, 0.16), band(v, 21.6, deco, 0.14), band(v, 28, deco, 0.14))
   for (let i = 0; i < 8; i++) g.add(patch(v, 18.5, (i * PI) / 4, 0.35, 1.5, deco))
   return g
 }
@@ -351,7 +320,7 @@ function tianqiu(p: string[]) {
     0.45,
     body,
   )
-  const g = grp(v.m, band(v, 1, deco), band(v, 22.8, deco), band(v, 33.6, deco, 0.15))
+  const g = G(v.m, band(v, 1, deco), band(v, 22.8, deco), band(v, 33.6, deco, 0.15))
   for (let i = 0; i < 7; i++) {
     const a = (i * 2 * PI) / 7
     g.add(patch(v, 11.5, a, 2.2, 1.6, deco))
@@ -379,7 +348,7 @@ function longneck(p: string[]) {
     0.35,
     body,
   )
-  return grp(v.m, band(v, 6.4, deco, 0.16), band(v, 28.6, deco, 0.12))
+  return G(v.m, band(v, 6.4, deco, 0.16), band(v, 28.6, deco, 0.12))
 }
 
 /** 砧青瓷鱼耳瓶：直筒腹、长颈、颈上一对耳 */
@@ -400,7 +369,7 @@ function kinuta(p: string[]) {
     0.4,
     body,
   )
-  const g = grp(v.m)
+  const g = G(v.m)
   for (const s of [-1, 1]) {
     g.add(torus(1.1, 0.34, body, { x: s * (v.r(21) + 0.9), y: 21.2 }))
     g.add(ball(0.5, body, { x: s * (v.r(22) + 0.2), y: 22.3 }, [1.2, 0.7, 0.8]))
@@ -412,7 +381,7 @@ function kinuta(p: string[]) {
 /** 青花将军罐（带盔顶盖，放在木座上） */
 function bwJar(p: string[]) {
   const [body, blue, wood] = p
-  const g = grp(puck(7.6, 1.6, wood), puck(6.8, 0.6, shade(wood, -0.08), { y: 1.4 }))
+  const g = G(puck(7.6, 1.6, wood), puck(6.8, 0.6, shade(wood, -0.08), { y: 1.4 }))
   const y0 = 1.9
   const v = vessel(
     [
@@ -428,7 +397,7 @@ function bwJar(p: string[]) {
     0.5,
     body,
   )
-  const jar = grp(v.m)
+  const jar = G(v.m)
   for (const y of [1.5, 4.8, 16.6, 19.8]) jar.add(band(v, y, blue, 0.2))
   for (let i = 0; i < 8; i++) {
     const a = (i * PI) / 4
@@ -451,7 +420,7 @@ function bwJar(p: string[]) {
     body,
   )
   jar.add(P(lid, 0, v.top + 0.05, 0))
-  jar.add(noLine(torus(6.95, 0.18, blue, { y: v.top + 0.45, rx: PI / 2 })))
+  jar.add(noOutline(torus(6.95, 0.18, blue, { y: v.top + 0.45, rx: PI / 2 })))
   jar.add(ball(1.5, body, { y: v.top + 5.3 }))
   jar.add(cyl(0.2, 0.7, 1.4, body, { y: v.top + 6.4 }))
   g.add(P(jar, 0, y0, 0))
@@ -477,7 +446,7 @@ function bwVase(p: string[]) {
     0.45,
     body,
   )
-  const g = grp(v.m)
+  const g = G(v.m)
   for (const y of [1.4, 4, 17.6, 22, 33.6]) g.add(band(v, y, blue, 0.18))
   for (let i = 0; i < 7; i++) {
     const a = (i * 2 * PI) / 7
@@ -490,7 +459,7 @@ function bwVase(p: string[]) {
   return g
 }
 
-const BW_PALS: Pal[] = [
+const BW_PALS: PalFlat[] = [
   ['japanese', '#f5f3ec', '#2f4d8a', J.dark],
   ['retro', '#f5f0e6', '#b8443a', R.caramel],
   ['modern', '#f4f4f2', M.black, M.black],
@@ -580,7 +549,7 @@ function imariPlate(Rp: number) {
       [0, 1.8],
     ]
     plate.add(latheRaw(pts.map(([r, y]) => [r * s, y * s] as RY), ground, 48))
-    plate.add(noLine(torus(14.85 * s, 0.22 * s, GOLD, { y: 3.4 * s, rx: PI / 2 })))
+    plate.add(noOutline(torus(14.85 * s, 0.22 * s, GOLD, { y: 3.4 * s, rx: PI / 2 })))
     const D = 20.8 * s
     plate.add(cutout(paintTop(D, D, `col-imari-${ground}-${blue}-${red}`, drawImari(ground, blue, red, GOLD), 0, 1.9 * s + 0.3, 0)))
     const a = PI / 2 - 0.26
@@ -601,7 +570,7 @@ function imariPlate(Rp: number) {
   }
 }
 
-const IMARI_PALS: Pal[] = [
+const IMARI_PALS: PalFlat[] = [
   ['japanese', '#f7f3ea', '#2f4d8a', '#c8473a', J.dark],
   ['japanese', '#f6f0e1', '#4f8a6a', '#d65a3c', J.wood],
   ['retro', '#f4e7c8', '#2f5f8a', '#c8473a', R.caramel],
@@ -627,10 +596,10 @@ function chawan(color: string) {
 /** 茶碗收藏：长木板上三只不同釉色的抹茶碗 */
 function chawanSet(p: string[]) {
   const [a, b, c, board] = p
-  const g = grp(rbox(48, 1.5, 16, board, {}, 0.5))
+  const g = G(rbox(48, 1.5, 16, board, {}, 0.5))
   ;[a, b, c].forEach((col, i) => {
     const v = chawan(col)
-    const bowl = grp(v.m, band(v, 3.4, shade(col, -0.12), 0.18), band(v, 0.5, '#c9a27a', 0.25))
+    const bowl = G(v.m, band(v, 3.4, shade(col, -0.12), 0.18), band(v, 0.5, '#c9a27a', 0.25))
     for (let k = 0; k < 6; k++) bowl.add(patch(v, 6.4, (k * PI) / 3 + i, 0.5, 1.2, shade(col, 0.12)))
     g.add(P(bowl, -15.2 + i * 15.2, 1.5, 0, 0, i * 0.7))
   })
@@ -726,7 +695,7 @@ function circleClip(draw: Draw): Draw {
 /** 九谷烧风小碟组：漆托盘里五只豆皿 */
 function kutaniSet(p: string[]) {
   const [body, trayC] = p
-  const g = grp(tray(36, 2.2, 23, 1, trayC))
+  const g = G(tray(36, 2.2, 23, 1, trayC))
   const dish: RY[] = [
     [0, 0.4],
     [3, 0.4],
@@ -749,14 +718,14 @@ function kutaniSet(p: string[]) {
     [5.5, 5],
   ]
   spots.forEach(([x, z], i) => {
-    const d = grp(latheRaw(dish, body, 32))
+    const d = G(latheRaw(dish, body, 32))
     d.add(cutout(paintTop(7.2, 7.2, `col-kutani-${i}`, circleClip(KUTANI[i]), 0, 1.05, 0)))
     g.add(P(d, x, 1, z, 0, i * 0.5))
   })
   return g
 }
 
-const GLASS_PALS: Pal[] = [
+const GLASS_PALS: PalFlat[] = [
   ['modern', GLASS],
   ['retro', '#e8b46a'],
   ['nordic', '#9fd6b0'],
@@ -771,7 +740,7 @@ function glassVase(ctrl: RY[], water: number) {
     const t = 0.35
     const v = vessel(ctrl, t, col)
     ghost(v.m, col, 0.38)
-    const g = grp(v.m)
+    const g = G(v.m)
     const wp: RY[] = []
     const floor = t * 1.3 + 0.05
     for (let k = 0; k <= 8; k++) {
@@ -801,7 +770,7 @@ function potteryJars(p: string[]) {
     0.45,
     a,
   )
-  const j1 = grp(v1.m, band(v1, 5, shade(a, -0.15), 0.2))
+  const j1 = G(v1.m, band(v1, 5, shade(a, -0.15), 0.2))
   for (let k = 0; k < 5; k++) j1.add(patch(v1, 8.1, (k * 2 * PI) / 5, 0.6, 1, shade(a, 0.15)))
   g.add(P(j1, -9.5, 0, 0.5))
   const v2 = vessel(
@@ -815,7 +784,7 @@ function potteryJars(p: string[]) {
     0.45,
     b,
   )
-  const j2 = grp(v2.m)
+  const j2 = G(v2.m)
   j2.add(P(solid([[4.9, 0], [4.7, 0.6], [3, 1.3], [1.2, 1.5]], b), 0, v2.top + 0.02))
   j2.add(ball(0.8, shade(b, -0.15), { y: v2.top + 1.9 }, [1, 0.8, 1]))
   j2.add(band(v2, 3.8, shade(b, -0.15), 0.18))
@@ -831,7 +800,7 @@ function potteryJars(p: string[]) {
     0.35,
     c,
   )
-  const j3 = grp(v3.m, band(v3, 3, shade(c, -0.12), 0.16), band(v3, 8, shade(c, -0.12), 0.16))
+  const j3 = G(v3.m, band(v3, 3, shade(c, -0.12), 0.16), band(v3, 8, shade(c, -0.12), 0.16))
   j3.add(P(solid([[2.2, 0], [2.2, 1.2], [1.4, 1.6]], shade(c, -0.2)), 0, v3.top - 0.1))
   g.add(P(j3, 10.5, 0, 0.5))
   return g
@@ -840,7 +809,7 @@ function potteryJars(p: string[]) {
 /** 青瓷三足香炉（木座） */
 function censer(p: string[]) {
   const [body, wood] = p
-  const g = grp(puck(7.6, 1.2, wood))
+  const g = G(puck(7.6, 1.2, wood))
   const v = vessel(
     [
       [5, 0],
@@ -853,14 +822,14 @@ function censer(p: string[]) {
     body,
   )
   const y0 = 3.6
-  g.add(P(grp(v.m, band(v, 3.4, shade(body, -0.12), 0.16)), 0, y0, 0))
+  g.add(P(G(v.m, band(v, 3.4, shade(body, -0.12), 0.16)), 0, y0, 0))
   for (let k = 0; k < 3; k++) {
     const a = (k / 3) * PI * 2 + PI / 2
     g.add(cyl(0.45, 0.7, y0 - 1.2 + 0.5, body, { x: Math.cos(a) * 3.6, y: 1.2, z: Math.sin(a) * 3.6 }, 12))
   }
-  for (const s of [-1, 1]) g.add(P(grp(rbox(0.5, 2.6, 2.4, body, {}, 0.2)), s * 6.6, y0 + v.top - 0.4, 0))
+  for (const s of [-1, 1]) g.add(P(G(rbox(0.5, 2.6, 2.4, body, {}, 0.2)), s * 6.6, y0 + v.top - 0.4, 0))
   // 耳的开孔用一块小的深色贴片表示
-  for (const s of [-1, 1]) g.add(noLine(rbox(0.3, 1.2, 1.2, shade(body, -0.25), { x: s * 6.6, y: y0 + v.top + 0.7 }, 0.1)))
+  for (const s of [-1, 1]) g.add(noOutline(rbox(0.3, 1.2, 1.2, shade(body, -0.25), { x: s * 6.6, y: y0 + v.top + 0.7 }, 0.1)))
   return g
 }
 
@@ -902,10 +871,9 @@ function rock(size: V3, color: string, seed: number, x: number, y: number, z: nu
   return m
 }
 
-const UP = new THREE.Vector3(0, 1, 0)
 /** 六方柱晶体：从 from 沿 dir 长出去 */
 function crystal(r: number, len: number, color: string, from: V3, dir: V3, tip = r * 1.7) {
-  const g = grp(cyl(r, r, len, color, {}, 6), cyl(0, r, tip, color, { y: len }, 6))
+  const g = G(cyl(r, r, len, color, {}, 6), cyl(0, r, tip, color, { y: len }, 6))
   g.quaternion.setFromUnitVectors(UP, new THREE.Vector3(...dir).normalize())
   g.position.set(...from)
   return g
@@ -940,7 +908,7 @@ function geodeBody(p: string[], Rr: number, sy: number, sz: number, n: number, s
   const cav = new THREE.Mesh(new THREE.SphereGeometry(1, 28, 16, PI, PI), toon(shade(xtal, -0.12)).clone())
   ;(cav.material as THREE.Material).side = THREE.DoubleSide
   cav.scale.set(cx, cy, cz)
-  noLine(cav)
+  noOutline(cav)
   g.add(cav)
   const r = rng(seed)
   for (let i = 0; i < n; i++) {
@@ -958,7 +926,7 @@ function geodeBody(p: string[], Rr: number, sy: number, sz: number, n: number, s
   return g
 }
 
-const GEODE_PALS: Pal[] = [
+const GEODE_PALS: PalFlat[] = [
   ['nordic', '#8f8a83', '#8e5fbf', '#c7a6e8', '#e8e1d4', N.oak],
   ['modern', '#5b5d61', '#7b4fb0', '#b98ce0', '#d7d8db', M.black],
   ['retro', '#9a8f80', '#e0a526', '#f4d27a', '#f4e7c8', R.caramel],
@@ -970,7 +938,7 @@ function geodeDesk(p: string[]) {
   const base = p[4]
   const Rr = 8.5
   const sy = 1.15
-  const g = grp(rbox(13, 1.6, 9, base, { z: -2.2 }, 0.5))
+  const g = G(rbox(13, 1.6, 9, base, { z: -2.2 }, 0.5))
   g.add(P(geodeBody(p, Rr, sy, 0.62, 34, 5), 0, 1.6 + Rr * sy - 0.6, 0))
   return g
 }
@@ -980,7 +948,7 @@ function geodeCathedral(p: string[]) {
   const base = p[4]
   const Rr = 14
   const sy = 2.1
-  const g = grp(rbox(26, 5, 18, base, { z: -4.5 }, 0.8), rbox(22, 1.2, 14, shade(base, -0.1), { y: 5, z: -4.5 }, 0.4))
+  const g = G(rbox(26, 5, 18, base, { z: -4.5 }, 0.8), rbox(22, 1.2, 14, shade(base, -0.1), { y: 5, z: -4.5 }, 0.4))
   g.add(P(geodeBody(p, Rr, sy, 0.7, 110, 9), 0, 6.2 + Rr * sy - 1.2, 0))
   return g
 }
@@ -988,7 +956,7 @@ function geodeCathedral(p: string[]) {
 /** 水晶簇：扁平母岩 + 一丛六方柱 */
 function quartzCluster(p: string[], seed = 3) {
   const [xtal, rockC] = p
-  const g = grp(rock([7, 1.6, 5.4], rockC, seed, 0, 0, 0, 0, 1, 0.18))
+  const g = G(rock([7, 1.6, 5.4], rockC, seed, 0, 0, 0, 0, 1, 0.18))
   const r = rng(seed * 7 + 1)
   g.add(crystal(1.3, 7.5, xtal, [0, 1.4, 0], [0.05, 1, 0.08]))
   for (let i = 0; i < 13; i++) {
@@ -1007,7 +975,7 @@ function quartzCluster(p: string[], seed = 3) {
 /** 黄铁矿：母岩上长出几块互相穿插的立方晶 */
 function pyrite(p: string[]) {
   const [gold, rockC] = p
-  const g = grp(rock([6.5, 1.5, 5], rockC, 21, 0, 0, 0, 0.4, 1, 0.2))
+  const g = G(rock([6.5, 1.5, 5], rockC, 21, 0, 0, 0, 0.4, 1, 0.2))
   const cubes: [number, number, number, number, number, number, number][] = [
     [3.4, -0.6, 1.2, 0, 0.1, 0.4, 0.05],
     [2.4, 2.6, 1.4, 0.9, 0.25, 0.9, 0.2],
@@ -1037,7 +1005,7 @@ function slice(rx: number, ry: number, k1: number, k2: number, edge: string, key
   }
   const geo = new THREE.ExtrudeGeometry(s, { depth: 0.6, bevelEnabled: false })
   geo.translate(0, 0, -0.3)
-  const g = grp(mesh(geo, edge))
+  const g = G(mesh(geo, edge))
   const W = rx * 2.4
   const H = ry * 2.4
   const dr: Draw = (c, PW, PH) => {
@@ -1085,19 +1053,19 @@ function agateSlice(p: string[]) {
       g.fill()
     }
   })
-  return grp(rbox(10, 1.8, 4.2, wood, {}, 0.5), P(sl, 0, ry * 1.17 + 0.8, 0))
+  return G(rbox(10, 1.8, 4.2, wood, {}, 0.5), P(sl, 0, ry * 1.17 + 0.8, 0))
 }
 
 /** 萤石八面体：外层半透明，里面一颗深色的色带核 */
 function octa(r: number, outer: string, inner: string) {
   const o = ghost(mesh(new THREE.OctahedronGeometry(r), outer), outer, 0.55)
   const i = mesh(new THREE.OctahedronGeometry(r * 0.55), inner)
-  return grp(o, i)
+  return G(o, i)
 }
 
 function fluorite(p: string[]) {
   const [outer, inner, wood] = p
-  const g = grp(rbox(16, 1.2, 8, wood, {}, 0.4))
+  const g = G(rbox(16, 1.2, 8, wood, {}, 0.4))
   // 大的一颗尖朝下插在小台座里
   g.add(cyl(1.4, 1.8, 1.2, shade(wood, -0.15), { x: -3.5, y: 1.2 }, 20))
   g.add(P(octa(3.2, outer, inner), -3.5, 2.4 + 3.2 * 0.75, 0, 0, 0.4))
@@ -1109,7 +1077,7 @@ function fluorite(p: string[]) {
   ]) {
     const o = octa(r, outer, inner)
     o.quaternion.copy(q)
-    const w = grp(o)
+    const w = G(o)
     w.position.set(x, 1.2 + r / Math.sqrt(3), z)
     w.rotation.y = ry
     g.add(w)
@@ -1141,7 +1109,7 @@ function ammonite(p: string[]) {
     // 模块级缓存、多件家具共用：标记共享，disposeUnshared 不释放
     ammoGeo.userData.shared = true
   }
-  const am = grp(mesh(ammoGeo, shell))
+  const am = G(mesh(ammoGeo, shell))
   const basis = (t: number) => {
     const X = new THREE.Vector3(Math.cos(t), Math.sin(t), 0)
     const Y = new THREE.Vector3(0, 0, 1)
@@ -1150,7 +1118,7 @@ function ammonite(p: string[]) {
   }
   for (let t = amTh - PI * 2.3; t < amTh - 0.15; t += 0.17) {
     const Rc = amRc(t)
-    const m = noLine(torus(1, 0.07, rib))
+    const m = noOutline(torus(1, 0.07, rib))
     m.quaternion.copy(basis(t))
     m.scale.set(AM.kr * Rc * 1.01, AM.kz * Rc * 1.01, AM.kr * Rc)
     m.position.set(Rc * Math.cos(t), Rc * Math.sin(t), 0)
@@ -1166,13 +1134,13 @@ function ammonite(p: string[]) {
   am.updateMatrixWorld(true)
   const b = new THREE.Box3().setFromObject(am, true)
   am.position.set(-(b.min.x + b.max.x) / 2, 1.6 - b.min.y - 0.5, 0)
-  return grp(rbox(11, 1.6, 6.5, wood, {}, 0.5), am)
+  return G(rbox(11, 1.6, 6.5, wood, {}, 0.5), am)
 }
 
 /** 三叶虫化石：页岩板上浮雕出的三叶虫 */
 function trilobite(p: string[]) {
   const [matrix, fossil, wood] = p
-  const g = grp(rbox(19, 1.2, 14.5, wood, {}, 0.4))
+  const g = G(rbox(19, 1.2, 14.5, wood, {}, 0.4))
   const poly: Poly = []
   for (let i = 0; i < 18; i++) {
     const a = (i / 18) * PI * 2
@@ -1189,7 +1157,7 @@ function trilobite(p: string[]) {
   t.add(ball(1.1, fossil, { y: 0.35, z: -3.1 }, [0.75, 0.55, 1.1]))
   for (const s of [-1, 1]) {
     t.add(ball(0.45, shade(fossil, -0.1), { x: s * 1.6, y: 0.55, z: -2.6 }))
-    t.add(P(grp(cyl(0.05, 0.3, 3.4, fossil, { y: -1.7 }, 8)), s * 3, 0.12, -0.6, PI / 2, s * 0.15))
+    t.add(P(G(cyl(0.05, 0.3, 3.4, fossil, { y: -1.7 }, 8)), s * 3, 0.12, -0.6, PI / 2, s * 0.15))
   }
   for (let k = 0; k < 9; k++) {
     const z = -1.2 + k * 0.55
@@ -1204,14 +1172,14 @@ function trilobite(p: string[]) {
 /** 陨石标本：铁陨石块 + 立着的维斯台登纹切片 + 铭牌 */
 function meteorite(p: string[]) {
   const [lump, metal, base] = p
-  const g = grp(rbox(19, 1.5, 9, base, {}, 0.4))
+  const g = G(rbox(19, 1.5, 9, base, {}, 0.4))
   g.add(rock([4.4, 2.8, 3.6], lump, 11, -3.6, 1.1, -0.3, 0.6, 2, 0.16))
   for (const [x, y, z, s] of [
     [-5.2, 4.6, 2.2, 0.7],
     [-1.6, 5.2, 1.8, 0.55],
     [-4, 6.4, 0.6, 0.6],
   ])
-    g.add(noLine(ball(s, shade(lump, -0.1), { x, y, z }, [1, 0.5, 1])))
+    g.add(noOutline(ball(s, shade(lump, -0.1), { x, y, z }, [1, 0.5, 1])))
   const sl = slice(3.2, 2.6, 2.1, 0.9, shade(lump, -0.05), `col-widman-${metal}`, (c, W, H, path) => {
     c.fillStyle = shade(lump, -0.05)
     path(1)
@@ -1263,7 +1231,7 @@ function mineralBox(p: string[]) {
   const [wood, pad, frame] = p
   const W = 34
   const D = 26
-  const g = grp(tray(W, 4, D, 1, wood))
+  const g = G(tray(W, 4, D, 1, wood))
   const cw = (32 - 1.5) / 4
   const cd = (24 - 1.5) / 4
   const cx = (i: number) => -16 + cw / 2 + i * (cw + 0.5)
@@ -1334,7 +1302,7 @@ function mineralBox(p: string[]) {
 /** 玻璃罩里的大块矿石：木座 + 双面玻璃钟罩 */
 function domeSpecimen(p: string[]) {
   const [wood, xtal, rockC] = p
-  const g = grp(puck(9.8, 2, wood), puck(8.9, 1.1, shade(wood, -0.1), { y: 1.9 }))
+  const g = G(puck(9.8, 2, wood), puck(8.9, 1.1, shade(wood, -0.1), { y: 1.9 }))
   const pts: THREE.Vector2[] = [V2(8.4, 0), V2(8.4, 12.5)]
   for (let i = 1; i <= 10; i++) {
     const a = (i / 10) * (PI / 2)
@@ -1541,13 +1509,13 @@ function albumStack(p: string[], kind: string, label: Draw) {
   return g
 }
 
-const ALBUM_PALS: Pal[] = [
+const ALBUM_PALS: PalFlat[] = [
   ['retro', '#2f4d8a', '#1f2a44', '#8a2f2f'],
   ['modern', '#2a2b30', '#1c1d21', '#5a5c62'],
   ['nordic', '#a9bfa3', '#2f3a33', '#9fb4c7'],
   ['industrial', I.leather, '#2a2522', I.walnut],
 ]
-const STAMP_ALBUM_PALS: Pal[] = [
+const STAMP_ALBUM_PALS: PalFlat[] = [
   ['retro', '#8a2f2f', '#f4ecd8', '#2f4d8a'],
   ['nordic', '#9fb4c7', '#f7f5f0', '#a9bfa3'],
   ['modern', '#2a2b30', '#26272c', '#5a5c62'],
@@ -1591,7 +1559,7 @@ function frameBox(W: number, H: number, D: number, fb: number, frame: string, ba
 /** 桌面立式：整体后仰 0.17，背后一根撑 */
 function standUp(fr: THREE.Group, H: number, color: string) {
   const a = -0.17
-  const g = grp(P(fr, 0, 0, 0, a))
+  const g = G(P(fr, 0, 0, 0, a))
   const yl = H * 0.55
   g.add(strutZ(yl * Math.sin(a) - 0.3, yl * Math.cos(a), -H * 0.38, 0, 1.6, 0.6, color))
   return g
@@ -1615,12 +1583,12 @@ function coinFrame(W: number, H: number, cols: number, rows: number, desk: boole
         fr.add(coinZ(rr, COIN_COLS[(i + j * 2) % COIN_COLS.length], x, y, 0.6 + 0.3))
         fr.add(rbox(sx * 0.5, sy * 0.1, 0.2, plate, { x, y: y - rr - sy * 0.2, z: 0.7 }, 0.05))
       }
-    if (!desk) return grp(P(fr, 0, 140, -D / 2))
+    if (!desk) return G(P(fr, 0, 140, -D / 2))
     return fit(standUp(fr, H, frame))
   }
 }
 
-const FRAME_PALS: Pal[] = [
+const FRAME_PALS: PalFlat[] = [
   ['retro', I.walnut, '#2f3f6a', BRASS],
   ['modern', M.black, '#7a2a33', BRASS],
   ['nordic', N.oak, '#4f6b5a', SILVER],
@@ -1630,7 +1598,7 @@ const FRAME_PALS: Pal[] = [
 /** 硬币盒：木盒 + 天鹅绒内衬圆槽（真开孔），盖子翻开 */
 function coinCase(p: string[]) {
   const [wood, velvet, brass] = p
-  const g = grp(tray(22, 3.2, 16, 0.8, wood))
+  const g = G(tray(22, 3.2, 16, 0.8, wood))
   g.add(rbox(20.4, 1.6, 14.4, velvet, { y: 0.8 }, 0.2))
   const holes: { kind: 'circle'; x: number; y: number; r: number }[] = []
   const xs = [-6.9, -2.3, 2.3, 6.9]
@@ -1669,11 +1637,11 @@ function holePanelFlat(w: number, d: number, t: number, color: string, holes: { 
 /** 硬币卷：木托盘里码着纸卷，旁边立两卷 + 几枚散币 */
 function coinRolls(p: string[]) {
   const [wood, w1, w2, w3] = p
-  const g = grp(tray(18, 2.2, 11, 0.8, wood))
+  const g = G(tray(18, 2.2, 11, 0.8, wood))
   const roll = (col: string, end: string, x: number, y: number, z: number) => {
-    const r = grp(cyl(1.3, 1.3, 9, col, { y: -4.5 }, 20))
+    const r = G(cyl(1.3, 1.3, 9, col, { y: -4.5 }, 20))
     r.add(puck(1.15, 0.3, end, { y: 4.4 }), puck(1.15, 0.3, end, { y: -4.7 }))
-    r.add(noLine(torus(1.32, 0.08, shade(col, -0.2), { y: 2.6, rx: PI / 2 })), noLine(torus(1.32, 0.08, shade(col, -0.2), { y: -2.6, rx: PI / 2 })))
+    r.add(noOutline(torus(1.32, 0.08, shade(col, -0.2), { y: 2.6, rx: PI / 2 })), noOutline(torus(1.32, 0.08, shade(col, -0.2), { y: -2.6, rx: PI / 2 })))
     return P(r, x, y, z, 0, 0, PI / 2)
   }
   const cols = [w1, w2, w3]
@@ -1684,7 +1652,7 @@ function coinRolls(p: string[]) {
     [11.6, -2.6, 0],
     [12.2, 0.4, 2],
   ]) {
-    const r = grp(cyl(1.3, 1.3, 9, cols[i], { y: 0.3 }, 20), puck(1.15, 0.3, ends[i], { y: 9.2 }), puck(1.15, 0.32, ends[i]))
+    const r = G(cyl(1.3, 1.3, 9, cols[i], { y: 0.3 }, 20), puck(1.15, 0.3, ends[i], { y: 9.2 }), puck(1.15, 0.32, ends[i]))
     g.add(P(r, x, 0, z))
   }
   for (let k = 0; k < 4; k++) g.add(coin(1.15, k % 2 ? COPPER : SILVER, 12 + (k % 2) * 0.15, k * 0.22, 3.6, 0.22))
@@ -1715,7 +1683,7 @@ function cashCoin(color: string) {
 /** 古钱币一串：红绳穿起的一捆方孔钱 + 穗子，旁边扇形摆开几枚，垫着织锦 */
 function cashString(p: string[]) {
   const [bronze, cord, mat] = p
-  const g = grp(rbox(26, 0.3, 13, mat, {}, 0.15))
+  const g = G(rbox(26, 0.3, 13, mat, {}, 0.15))
   const y = 0.3 + 1.3
   const n = 22
   const x0 = -5
@@ -1730,7 +1698,7 @@ function cashString(p: string[]) {
     g.add(ball(0.32, cord, { x: xa, y, z: -2.6 }))
     g.add(rod(xa, y, xa + s * 2.2, 0.75, 0.11, cord, -2.6))
     g.add(ball(0.35, cord, { x: xa + s * 2.2, y: 0.7, z: -2.6 }))
-    g.add(P(grp(cyl(0.12, 0.45, 3, cord, { y: 0 }, 10)), xa + s * 2.5, 0.75, -2.6, 0, 0, -s * PI / 2))
+    g.add(P(G(cyl(0.12, 0.45, 3, cord, { y: 0 }, 10)), xa + s * 2.5, 0.75, -2.6, 0, 0, -s * PI / 2))
   }
   for (let k = 0; k < 5; k++) {
     const a = -0.5 + k * 0.25
@@ -1742,14 +1710,14 @@ function cashString(p: string[]) {
 /** 放大镜 + 硬币托盘 */
 function coinLoupe(p: string[]) {
   const [wood, velvet, handle] = p
-  const g = grp(tray(16, 1.8, 12, 0.7, wood), rbox(14.6, 0.3, 10.6, velvet, { y: 0.7 }, 0.1))
+  const g = G(tray(16, 1.8, 12, 0.7, wood), rbox(14.6, 0.3, 10.6, velvet, { y: 0.7 }, 0.1))
   let k = 0
   for (const x of [-4.5, 0, 4.5]) for (const z of [-2.5, 2.5]) g.add(coin(1.55 - (k % 3) * 0.15, COIN_COLS[k++], x, 1, z, 0.22))
   const mg = new THREE.Group()
   mg.add(torus(3.4, 0.35, STEEL, { y: 0.35, rx: PI / 2 }))
   mg.add(ghost(cyl(3.3, 3.3, 0.3, GLASS, { y: 0.2 }, 32), GLASS, 0.35))
   mg.add(cylX(0.35, 1.2, STEEL, 4.2, 0.4, 0, 12))
-  mg.add(P(grp(cyl(0.55, 0.65, 8, handle, { y: 0 }, 14)), 4.7, 0.65, 0, 0, 0, -PI / 2))
+  mg.add(P(G(cyl(0.55, 0.65, 8, handle, { y: 0 }, 14)), 4.7, 0.65, 0, 0, 0, -PI / 2))
   g.add(P(mg, 13, 0, 1.5, 0, 0.5))
   return g
 }
@@ -1757,7 +1725,7 @@ function coinLoupe(p: string[]) {
 /** 评级币盒：亚克力立架上插着四个透明封装盒 */
 function coinSlabs(p: string[]) {
   const [base, labelC] = p
-  const g = grp(rbox(26, 1.4, 6, base, {}, 0.4))
+  const g = G(rbox(26, 1.4, 6, base, {}, 0.4))
   for (let k = 0; k < 4; k++) {
     const s = new THREE.Group()
     s.add(ghost(rbox(5.6, 8.6, 0.7, GLASS, {}, 0.25), GLASS, 0.3))
@@ -1817,12 +1785,12 @@ function stampFrame(W: number, H: number, cols: number, rows: number, desk: bool
     const fb = 2.2
     const fr = frameBox(W, H, D, fb, frame, mat)
     fr.add(paintPanel(W - fb * 2 - 0.2, H - fb * 2 - 0.2, `col-stampmat-${mat}-${cols}x${rows}`, drawStampMat(mat, cols, rows), { y: fb + 0.1, z: 0.9 }))
-    if (!desk) return grp(P(fr, 0, 135, -D / 2))
+    if (!desk) return G(P(fr, 0, 135, -D / 2))
     return fit(standUp(fr, H, frame))
   }
 }
 
-const STAMP_FRAME_PALS: Pal[] = [
+const STAMP_FRAME_PALS: PalFlat[] = [
   ['retro', I.walnut, '#f4ecd8'],
   ['nordic', N.oak, N.white],
   ['modern', M.black, '#e9e9e6'],
@@ -1833,13 +1801,13 @@ const STAMP_FRAME_PALS: Pal[] = [
 /** 集邮工具：皮垫上的镊子、放大镜、护邮袋（里面夹着邮票）、齿孔尺和散票 */
 function stampTools(p: string[]) {
   const [padC, handle] = p
-  const g = grp(rbox(28, 0.4, 18, padC, {}, 0.2))
+  const g = G(rbox(28, 0.4, 18, padC, {}, 0.2))
   const y0 = 0.4
   // 镊子
   const tw = new THREE.Group()
   for (const s of [-1, 1]) {
     tw.add(rbox(0.45, 0.14, 11, STEEL, { x: s * 0.4, ry: -s * 0.02 }, 0.05))
-    tw.add(noLine(ball(0.4, STEEL, { x: s * 0.3, y: 0.07, z: 5.6 }, [0.9, 0.2, 1.3])))
+    tw.add(noOutline(ball(0.4, STEEL, { x: s * 0.3, y: 0.07, z: 5.6 }, [0.9, 0.2, 1.3])))
   }
   tw.add(rbox(1.6, 0.3, 1.2, STEEL, { z: -5.6 }, 0.1))
   g.add(P(tw, -10, y0, 0, 0, 0.3))
@@ -1847,7 +1815,7 @@ function stampTools(p: string[]) {
   const mg = new THREE.Group()
   mg.add(torus(2.4, 0.25, handle, { y: 0.25, rx: PI / 2 }))
   mg.add(ghost(cyl(2.35, 2.35, 0.22, GLASS, { y: 0.14 }, 28), GLASS, 0.35))
-  mg.add(P(grp(cyl(0.4, 0.45, 5, handle, { y: 0 }, 12)), 2.5, 0.45, 0, 0, 0, -PI / 2))
+  mg.add(P(G(cyl(0.4, 0.45, 5, handle, { y: 0 }, 12)), 2.5, 0.45, 0, 0, 0, -PI / 2))
   g.add(P(mg, 5, y0, -4.8, 0, -0.4))
   // 护邮袋（半透明）里夹着邮票
   for (let k = 0; k < 3; k++) {
@@ -1905,7 +1873,7 @@ function curioCabinet(w: number, d: number, H: number, n: number) {
   return (p: string[]) => {
     const [main, back, knob] = p
     const { floor, inTop, T, ys } = curioSpec(H, n)
-    const g = grp(legs(w - 2, d - 2, 8, shade(main, -0.08), 1.8, 3))
+    const g = G(legs(w - 2, d - 2, 8, shade(main, -0.08), 1.8, 3))
     g.add(rbox(w, 2, d, main, { y: 8 }, 0.6))
     g.add(rbox(w, H - inTop, d, main, { y: inTop }, 0.8))
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(3, inTop - floor, 3, main, { x: sx * (w / 2 - 1.5), y: floor, z: sz * (d / 2 - 1.5) }, 0.5))
@@ -1933,7 +1901,7 @@ function curioSurfaces(w: number, d: number, H: number, n: number) {
   return ys.map((y) => ({ y, h: clear, inside: true, glass: true, shape: [rectPoly(-w / 2 + 3, -d / 2 + 1, w / 2 - 3, d / 2 - 2.5)] }))
 }
 
-const CURIO_PALS: Pal[] = [
+const CURIO_PALS: PalFlat[] = [
   ['retro', '#7a3e2a', '#5e2f22', BRASS],
   ['modern', M.walnut, M.char, M.silver],
   ['nordic', '#f2efe8', N.linen, N.oak],
@@ -1959,7 +1927,7 @@ const BOGU_CELLS: [number, number, number, number][] = [
 function bogu(p: string[]) {
   const [wood, back, acc] = p
   const { w, d, h } = BOGU
-  const g = grp(rbox(w - 4, 6, d - 2, shade(wood, -0.1), {}, 0.6))
+  const g = G(rbox(w - 4, 6, d - 2, shade(wood, -0.1), {}, 0.6))
   g.add(rbox(w, 2, d, wood, { y: 6 }, 0.5), rbox(w, 2, d, wood, { y: h - 2 }, 0.5))
   for (const s of [-1, 1]) g.add(rbox(2, h - 10, d, wood, { x: s * (w / 2 - 1), y: 8 }, 0.5))
   g.add(rbox(w - 4, h - 10, 0.8, back, { y: 8, z: -d / 2 + 0.4 }, 0.2))
@@ -1980,7 +1948,7 @@ function bogu(p: string[]) {
   return g
 }
 
-const BOGU_PALS: Pal[] = [
+const BOGU_PALS: PalFlat[] = [
   ['retro', '#6b3428', '#8a4a36', '#8a4a36'],
   ['japanese', J.dark, J.wood, J.wood],
   ['modern', M.black, M.char, M.char],
@@ -2003,7 +1971,7 @@ function wallShowcase(p: string[]) {
   for (let r = 1; r < 4; r++) g.add(rbox(w - t * 2, b, id, frame, { y: t + r * (wscClear + b) - b, z: iz }, 0.3))
   for (let r = 0; r < 4; r++)
     for (let c = 1; c < 4; c++) g.add(rbox(b, wscClear, id, frame, { x: -w / 2 + t + c * (wscClear + b) - b / 2, y: t + r * (wscClear + b), z: iz }, 0.3))
-  return grp(P(g, 0, WSC.mount, 0))
+  return G(P(g, 0, WSC.mount, 0))
 }
 const wscSurfaces = Array.from({ length: 4 }, (_, r) => ({
   y: WSC.mount + WSC.t + r * (wscClear + WSC.b),
@@ -2034,13 +2002,13 @@ function acrylicRiser(p: string[]) {
   geo.rotateY(-PI / 2)
   geo.translate(15 - 0.2, 0, 0)
   const m = ghost(mesh(geo, col), col, 0.42)
-  return grp(m)
+  return G(m)
 }
 
 /** 玻璃罩展示台座：方柱 + 玻璃方罩 */
 function domePedestal(p: string[]) {
   const [col, metal, inner] = p
-  const g = grp(rbox(34, 6, 34, col, {}, 0.8), rbox(28, 86, 28, col, { y: 6 }, 0.6), rbox(34, 6, 34, col, { y: 92 }, 0.8))
+  const g = G(rbox(34, 6, 34, col, {}, 0.8), rbox(28, 86, 28, col, { y: 6 }, 0.6), rbox(34, 6, 34, col, { y: 92 }, 0.8))
   // 绒布垫浮出台面 0.3（以前顶面和台面共面会闪）
   g.add(rbox(30, 0.4, 30, inner, { y: 97.9 }, 0.1))
   const gy = 98
@@ -2059,7 +2027,7 @@ function domePedestal(p: string[]) {
   return g
 }
 
-const PEDESTAL_PALS: Pal[] = [
+const PEDESTAL_PALS: PalFlat[] = [
   ['modern', M.white, M.silver, M.light],
   ['modern', M.black, BRASS, M.char],
   ['nordic', N.oak, M.black, N.linen],
@@ -2079,7 +2047,7 @@ function litShowcase(p: string[]) {
   const [frame, base, light] = p
   const { w, d, h } = LS
   const { floor, inTop, T, ys } = lsSpec()
-  const g = grp(rbox(w, 6, d, base, {}, 0.6), rbox(w, 6, d, frame, { y: h - 6 }, 0.6))
+  const g = G(rbox(w, 6, d, base, {}, 0.6), rbox(w, 6, d, frame, { y: h - 6 }, 0.6))
   g.add(lit(rbox(w - 6, 0.4, d - 6, light, { y: inTop }, 0.1), light, 0.9))
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(2, inTop + 0.4 - floor, 2, frame, { x: sx * (w / 2 - 1), y: floor, z: sz * (d / 2 - 1) }, 0.3))
   const gh = inTop + 0.4 - floor
@@ -2097,7 +2065,7 @@ function litShowcase(p: string[]) {
   return g
 }
 
-const LS_PALS: Pal[] = [
+const LS_PALS: PalFlat[] = [
   ['modern', M.black, M.black, '#ffe9a8'],
   ['nordic', N.white, N.oak, '#fff4d0'],
   ['modern', M.silver, M.gray, '#d8ecff'],

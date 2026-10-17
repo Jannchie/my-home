@@ -4,11 +4,7 @@
 import * as THREE from 'three'
 import { ball, rbox } from '../toon'
 import { C, S, paintPanel, paintLandscape, type AssetDef, type StyleTag } from '../kit'
-
-const flat = <T extends THREE.Object3D>(o: T) => {
-  o.userData.noOutline = true
-  return o
-}
+import { noOutline } from '../geo'
 
 /** 冰箱贴：小块 + 简单图案 */
 function magnet(shape: 'strawberry' | 'lemon' | 'donut' | 'letter' | 'star') {
@@ -17,28 +13,28 @@ function magnet(shape: 'strawberry' | 'lemon' | 'donut' | 'letter' | 'star') {
     const g = new THREE.Group()
     if (shape === 'strawberry') {
       g.add(ball(2.6, main, { y: -0.4, z: 1.2 }, [1, 1.15, 0.45]))
-      g.add(flat(rbox(3.6, 1.2, 0.6, C.leaf, { y: 1.6, z: 1.4 }, 0.25)))
+      g.add(noOutline(rbox(3.6, 1.2, 0.6, C.leaf, { y: 1.6, z: 1.4 }, 0.25)))
       for (const [x, y] of [
         [-1, 0],
         [1, 0.2],
         [0, -1.2],
         [-0.6, -2],
       ])
-        g.add(flat(ball(0.25, C.lemon, { x, y, z: 2.35 })))
+        g.add(noOutline(ball(0.25, C.lemon, { x, y, z: 2.35 })))
     } else if (shape === 'lemon') {
       g.add(ball(2.8, main, { z: 1.12 }, [1.2, 0.85, 0.4]))
-      g.add(flat(ball(0.6, C.leaf, { x: 3, y: 1, z: 1.2 }, [1.4, 0.7, 0.5])))
+      g.add(noOutline(ball(0.6, C.leaf, { x: 3, y: 1, z: 1.2 }, [1.4, 0.7, 0.5])))
     } else if (shape === 'donut') {
       g.add(ball(2.8, C.peach, { z: 0.98 }, [1, 1, 0.35]))
       g.add(ball(2.4, main, { z: 1.25 }, [1, 1, 0.3]))
-      g.add(flat(ball(0.8, '#ffffff', { z: 1.95 }, [1, 1, 0.3])))
+      g.add(noOutline(ball(0.8, '#ffffff', { z: 1.95 }, [1, 1, 0.3])))
     } else if (shape === 'letter') {
       g.add(rbox(4, 5, 1, main, { y: -2.5, z: 0.5 }, 0.4))
-      g.add(flat(rbox(1.2, 3, 0.4, sub, { x: -0.6, y: -1.5, z: 1.15 }, 0.15)))
-      g.add(flat(rbox(1.2, 1.2, 0.4, sub, { x: 0.6, y: -0.2, z: 1.15 }, 0.15)))
+      g.add(noOutline(rbox(1.2, 3, 0.4, sub, { x: -0.6, y: -1.5, z: 1.15 }, 0.15)))
+      g.add(noOutline(rbox(1.2, 1.2, 0.4, sub, { x: 0.6, y: -0.2, z: 1.15 }, 0.15)))
     } else {
       g.add(ball(2.6, main, { z: 0.91 }, [1, 1, 0.35]))
-      g.add(flat(ball(1, sub, { z: 1.6 }, [1, 1, 0.3])))
+      g.add(noOutline(ball(1, sub, { z: 1.6 }, [1, 1, 0.3])))
     }
     return g
   }
@@ -160,7 +156,7 @@ function poster(w: number, h: number, kind: 'landscape' | 'shapes') {
       [-w / 2 + 1.5, -h / 2 + 1.5],
       [w / 2 - 1.5, -h / 2 + 1.5],
     ])
-      g.add(flat(rbox(3, 1.2, 0.2, '#f3eee2', { x, y: y - 0.6, z: 0.25, rz: 0.6 }, 0.05)))
+      g.add(noOutline(rbox(3, 1.2, 0.2, '#f3eee2', { x, y: y - 0.6, z: 0.25, rz: 0.6 }, 0.05)))
     return g
   }
 }

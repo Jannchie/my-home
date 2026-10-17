@@ -13,18 +13,9 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, face, puck, rbox, shade, toon, torus, tray } from '../toon'
-import { C, G, S, glow, paintAbstract, paintFlower, paintLandscape, paintPanel, rectPoly, rng, shell, type AssetCategory, type AssetDef, type Fx, type StyleTag } from '../kit'
-
-const PI = Math.PI
-const N = S.nordic
-const M = S.modern
-const J = S.japanese
-const I = S.industrial
-const R = S.retro
-
-type V3 = [number, number, number]
-type Pal = [StyleTag, string[]]
-type Build = (p: string[]) => THREE.Group
+import { C, G, glow, paintAbstract, paintFlower, paintLandscape, paintPanel, rectPoly, rng, shell, type AssetCategory, type AssetDef, type Fx } from '../kit'
+import { PI, noOutlineDeep, type V3 } from '../geo'
+import { I, J, M, N, R, type Build, type Pal } from '../packkit'
 
 const GOLD = '#e3b549'
 const BRASS = '#d9b45a'
@@ -43,12 +34,6 @@ const SUMI = '#2f2b2a'
 // 小工具
 // ======================================================================
 
-function noOL<T extends THREE.Object3D>(o: T): T {
-  o.traverse((c) => {
-    c.userData.noOutline = true
-  })
-  return o
-}
 /** 发光件（灯泡、彩灯、火苗、屏幕） */
 function lit<T extends THREE.Object3D>(o: T, color: string, k = 0.8): T {
   o.traverse((c) => {
@@ -143,7 +128,7 @@ function bamboo(r: number, h: number, color: string, at: V3 = [0, 0, 0], slope =
   g.add(m)
   const th = Math.atan(slope)
   const cap = (rr: number, c: string, lift: number) => {
-    const d = noOL(cyl(rr, rr, 0.2, c, {}, 20))
+    const d = noOutlineDeep(cyl(rr, rr, 0.2, c, {}, 20))
     d.scale.z = 1 / Math.cos(th)
     d.rotation.x = th
     d.position.set(0, h - slope * r + lift * Math.cos(th) - 0.1, lift * Math.sin(th))
@@ -179,7 +164,7 @@ function frame(w: number, h: number, b: number, t: number, color: string, key: s
   const iw = w - b * 2
   const ih = h - b * 2
   if (mat) {
-    g.add(noOL(rbox(iw, ih, 0.3, mat, { y: b, z: -t + 0.6 }, 0.05)))
+    g.add(noOutlineDeep(rbox(iw, ih, 0.3, mat, { y: b, z: -t + 0.6 }, 0.05)))
     g.add(paintPanel(iw * 0.72, ih * 0.72, key, draw, { y: b + ih * 0.14, z: -t + 0.95 }))
   } else g.add(paintPanel(iw, ih, key, draw, { y: b, z: -t + 0.7 }))
   g.position.z = t / 2
@@ -265,8 +250,8 @@ function kagamiMochi(p: string[]) {
   const [wood, mochi, orange] = p
   const g = sanbo(24, 12, wood)
   const fy = 12 * 0.7 + 0.7
-  g.add(noOL(rbox(15.6, 0.25, 15.6, J.shu, { y: fy, ry: PI / 4 }, 0.05)))
-  g.add(noOL(rbox(14.6, 0.25, 14.6, PAPER, { y: fy + 0.25, ry: PI / 4 }, 0.05)))
+  g.add(noOutlineDeep(rbox(15.6, 0.25, 15.6, J.shu, { y: fy, ry: PI / 4 }, 0.05)))
+  g.add(noOutlineDeep(rbox(14.6, 0.25, 14.6, PAPER, { y: fy + 0.25, ry: PI / 4 }, 0.05)))
   g.add(puck(8.5, 5.5, mochi, { y: fy + 0.5 }))
   g.add(puck(6.8, 4.6, shade(mochi, -0.02), { y: fy + 5.8 }))
   const oy = fy + 10.2 + 3.2
@@ -280,14 +265,14 @@ function shimekazari(p: string[]) {
   const [straw, paper, acc] = p
   const g = new THREE.Group()
   g.add(torus(9, 1.8, straw, { y: 34 }))
-  g.add(noOL(torus(9, 0.5, shade(straw, -0.25), { y: 34, z: 1.5 })))
+  g.add(noOutlineDeep(torus(9, 0.5, shade(straw, -0.25), { y: 34, z: 1.5 })))
   for (let i = -4; i <= 4; i++) g.add(bar([i * 0.9, 26, 0.8], [i * 2.2, 4, 1.4], 0.4, i % 2 ? straw : shade(straw, 0.06)))
   g.add(rbox(6, 2.4, 3.6, acc, { y: 24.8, z: -0.6 }, 0.6))
   for (const s of [-1, 1]) g.add(sprig(11, PINE, [s * 2, 31, 2.6], s * (PI / 2) - s * 0.2, 0.15, 0.4))
   g.add(ball(4, '#f29a2e', { y: 32, z: 4 }))
   g.add(sprig(3.5, LEAF, [0, 35.5, 4.5], 0.4, -0.3, 0.5))
   for (const s of [-1, 1])
-    for (let k = 0; k < 4; k++) g.add(noOL(rbox(2.6, 4, 0.25, paper, { x: s * 8 + (k % 2 ? 0.9 : -0.9) * s, y: 19 - k * 4, z: 2.4 }, 0.05)))
+    for (let k = 0; k < 4; k++) g.add(noOutlineDeep(rbox(2.6, 4, 0.25, paper, { x: s * 8 + (k % 2 ? 0.9 : -0.9) * s, y: 19 - k * 4, z: 2.4 }, 0.05)))
   // 扇子
   const fan: [number, number][] = [[0, 0]]
   for (let k = 0; k <= 8; k++) {
@@ -311,7 +296,7 @@ function hagoita(p: string[]) {
   pg.add(rbox(3.6, 12, 1.4, paddle, {}, 0.6))
   pg.add(rbox(17, 34, 1.2, paddle, { y: 11, z: 0.1 }, 2))
   pg.add(paintPanel(14, 28, `hagoita|${acc}`, paintFlower(acc, '#ffffff', GOLD), { y: 14, z: 0.75 }))
-  pg.add(noOL(rbox(14.6, 0.6, 0.3, GOLD, { y: 13.6, z: 0.8 }, 0.1)))
+  pg.add(noOutlineDeep(rbox(14.6, 0.6, 0.3, GOLD, { y: 13.6, z: 0.8 }, 0.1)))
   pg.add(ball(1.2, J.shu, { y: 3, z: 0.9 }))
   pg.position.set(0, 3, -1.2)
   pg.rotation.x = -0.14
@@ -356,7 +341,7 @@ function kohakuMochi(p: string[]) {
   g.add(cup(9.5, 7.5, 1.6, 0.6, dish))
   g.add(puck(4, 2.6, white, { x: -4.2, y: 0.6 }))
   g.add(puck(4, 2.6, red, { x: 4.2, y: 0.6 }))
-  g.add(noOL(ball(0.7, shade(red, -0.2), { x: 4.2, y: 3.15, z: 0 }, [1, 0.3, 1])))
+  g.add(noOutlineDeep(ball(0.7, shade(red, -0.2), { x: 4.2, y: 3.15, z: 0 }, [1, 0.3, 1])))
   return g
 }
 
@@ -378,8 +363,8 @@ function setsubun(p: string[]) {
   for (const s of [-1, 1]) {
     m.add(cyl(0, 1.3, 4.5, '#f3e3a4', { x: s * 3.6, y: 6.2, rz: -s * 0.35 }, 12))
     m.add(ball(1.5, '#ffffff', { x: s * 2.6, y: 1.5, z: 2.2 }, [1, 0.8, 0.5]))
-    m.add(noOL(ball(0.7, SUMI, { x: s * 2.6, y: 1.4, z: 2.85 }, [1, 1, 0.4])))
-    m.add(noOL(rbox(3.6, 0.9, 0.4, SUMI, { x: s * 2.6, y: 3.3, z: 2.3, rz: s * 0.3 }, 0.2)))
+    m.add(noOutlineDeep(ball(0.7, SUMI, { x: s * 2.6, y: 1.4, z: 2.85 }, [1, 1, 0.4])))
+    m.add(noOutlineDeep(rbox(3.6, 0.9, 0.4, SUMI, { x: s * 2.6, y: 3.3, z: 2.3, rz: s * 0.3 }, 0.2)))
     m.add(cyl(0, 0.5, 1.4, '#ffffff', { x: s * 1.8, y: -3.6, z: 2.1, rx: PI }, 8))
   }
   m.add(ball(2.6, shade(mask, -0.25), { y: -3.2, z: 1.6 }, [1.2, 0.5, 0.4]))
@@ -403,16 +388,16 @@ function hinaDoll(robe: string, under: string, kind: DollKind) {
   const g = new THREE.Group()
   g.add(lathe([[0, 0], [5.8, 0], [5.6, 1.6], [4.2, 4.5], [2.6, 7.4], [1.4, 8.4], [0, 8.6]], robe, 24))
   for (const s of [-1, 1]) g.add(ball(2.6, robe, { x: s * 3.6, y: 5.4, z: 1 }, [0.9, 1.25, 1]))
-  g.add(noOL(rbox(2, 4.6, 0.4, under, { y: 3, z: 4.3, rx: -0.3 }, 0.15)))
-  g.add(noOL(rbox(2.6, 0.8, 0.4, under, { y: 7.6, z: 1.9, rx: -0.4 }, 0.15)))
+  g.add(noOutlineDeep(rbox(2, 4.6, 0.4, under, { y: 3, z: 4.3, rx: -0.3 }, 0.15)))
+  g.add(noOutlineDeep(rbox(2.6, 0.8, 0.4, under, { y: 7.6, z: 1.9, rx: -0.4 }, 0.15)))
   g.add(ball(2.1, SKIN, { y: 10.4 }))
   g.add(ball(2.25, HAIR, { y: 10.7, z: -0.55 }, [1.04, 1, 0.9]))
-  for (const s of [-1, 1]) g.add(noOL(ball(0.17, SUMI, { x: s * 0.7, y: 10.2, z: 2.02 })))
+  for (const s of [-1, 1]) g.add(noOutlineDeep(ball(0.17, SUMI, { x: s * 0.7, y: 10.2, z: 2.02 })))
   if (kind === 'odairi') {
     g.add(cyl(0.8, 1.1, 3.2, HAIR, { y: 12, z: -0.4, rx: -0.2 }, 12))
     g.add(rbox(0.6, 3.4, 0.25, J.hinoki, { y: 4.4, z: 4.6, rx: -0.2 }, 0.1))
   } else if (kind === 'ohina') {
-    g.add(noOL(rbox(2.8, 0.9, 0.3, GOLD, { y: 12.2, z: 0.4 }, 0.1)))
+    g.add(noOutlineDeep(rbox(2.8, 0.9, 0.3, GOLD, { y: 12.2, z: 0.4 }, 0.1)))
     g.add(rbox(3.2, 2.4, 0.3, GOLD, { y: 4.6, z: 4.6, rx: -0.2 }, 0.1))
   } else if (kind === 'gonin') {
     g.add(cyl(1.4, 1.4, 2.2, J.shu, { y: 4.2, z: 4.6, rx: PI / 2 }, 12))
@@ -425,7 +410,7 @@ function byobu3(w: number, h: number, gold: string, frameC: string) {
   const g = new THREE.Group()
   const pw = w / 3
   for (let i = -1; i <= 1; i++) {
-    const pg = G(rbox(pw, h, 0.8, frameC, {}, 0.3), noOL(rbox(pw - 1.6, h - 1.6, 0.3, gold, { y: 0.8, z: 0.4 }, 0.1)))
+    const pg = G(rbox(pw, h, 0.8, frameC, {}, 0.3), noOutlineDeep(rbox(pw - 1.6, h - 1.6, 0.3, gold, { y: 0.8, z: 0.4 }, 0.1)))
     pg.position.set(i * (pw - 0.4) * Math.cos(i ? 0.25 : 0), 0, i ? 1.2 : 0)
     pg.rotation.y = -i * 0.25
     g.add(pg)
@@ -489,7 +474,7 @@ function hinaTiers(p: string[]) {
   }
   // 第一段：嫁妆（衣柜、牛车、驾笼）
   g.add(rbox(8, 9, 6, SUMI, { x: -30, y: 14, z: zc(0) }, 0.5))
-  for (let k = 0; k < 3; k++) g.add(noOL(rbox(7, 0.4, 0.3, GOLD, { x: -30, y: 16 + k * 2.6, z: zc(0) + 3.05 }, 0.1)))
+  for (let k = 0; k < 3; k++) g.add(noOutlineDeep(rbox(7, 0.4, 0.3, GOLD, { x: -30, y: 16 + k * 2.6, z: zc(0) + 3.05 }, 0.1)))
   g.add(rbox(10, 6, 7, SUMI, { x: 0, y: 16, z: zc(0) }, 0.6))
   for (const s of [-1, 1]) g.add(torus(3.2, 0.45, '#6e4f37', { x: s * 5.6, y: 17.2, z: zc(0), ry: PI / 2 }))
   g.add(rbox(8, 6, 6, SUMI, { x: 30, y: 14, z: zc(0) }, 1.2))
@@ -502,7 +487,7 @@ function hinaPair(p: string[]) {
   const [felt, screen, robe] = p
   const g = new THREE.Group()
   g.add(rbox(58, 3, 32, felt, {}, 0.6))
-  g.add(noOL(rbox(54, 0.4, 28, shade(felt, -0.12), { y: 3 }, 0.1)))
+  g.add(noOutlineDeep(rbox(54, 0.4, 28, shade(felt, -0.12), { y: 3 }, 0.1)))
   const sc = byobu3(48, 25, screen, SUMI)
   sc.position.set(0, 3.4, -14)
   g.add(sc)
@@ -527,8 +512,8 @@ function carp(len: number, body: string) {
   g.add(torus(len * 0.1, len * 0.018, '#f6f0e1', { x: -len * 0.47, ry: PI / 2 }))
   for (const s of [-1, 1]) {
     g.add(ball(len * 0.055, '#ffffff', { x: -len * 0.36, y: len * 0.04, z: s * len * 0.085 }, [1, 1, 0.45]))
-    g.add(noOL(ball(len * 0.028, SUMI, { x: -len * 0.36, y: len * 0.04, z: s * len * 0.1 }, [1, 1, 0.4])))
-    for (let k = 0; k < 3; k++) g.add(noOL(torus(len * 0.05, len * 0.006, shade(body, 0.3), { x: -len * 0.12 + k * len * 0.14, y: -len * 0.01, z: s * len * 0.112 }, PI)))
+    g.add(noOutlineDeep(ball(len * 0.028, SUMI, { x: -len * 0.36, y: len * 0.04, z: s * len * 0.1 }, [1, 1, 0.4])))
+    for (let k = 0; k < 3; k++) g.add(noOutlineDeep(torus(len * 0.05, len * 0.006, shade(body, 0.3), { x: -len * 0.12 + k * len * 0.14, y: -len * 0.01, z: s * len * 0.112 }, PI)))
   }
   const fin = flat([[0, 0], [len * 0.22, len * 0.13], [len * 0.15, 0], [len * 0.22, -len * 0.13]], 0.4, body, -0.2)
   fin.position.x = len * 0.42
@@ -582,13 +567,13 @@ function kabuto(p: string[]) {
   g.add(bowl)
   for (let k = 0; k < 8; k++) {
     const a = (k / 8) * PI * 2
-    g.add(noOL(rbox(0.5, 6, 0.5, gold, { x: Math.sin(a) * 9.4, y: hy + 1, z: Math.cos(a) * 9.4, ry: a }, 0.1)))
+    g.add(noOutlineDeep(rbox(0.5, 6, 0.5, gold, { x: Math.sin(a) * 9.4, y: hy + 1, z: Math.cos(a) * 9.4, ry: a }, 0.1)))
   }
   g.add(torus(10.6, 0.5, gold, { y: hy, rx: PI / 2 }))
   for (let i = 0; i < 3; i++) g.add(cyl(11 + i * 1.6, 12.6 + i * 1.6, 2.6, i === 1 ? cord : lac, { y: hy - 2.6 * (i + 1) }, 28))
   for (const s of [-1, 1]) {
     g.add(rbox(5.5, 6.5, 1, lac, { x: s * 12.5, y: hy - 4, z: 7, ry: s * 0.7 }, 0.4))
-    g.add(noOL(rbox(4.5, 5.5, 0.3, gold, { x: s * 12.85, y: hy - 3.5, z: 7.4, ry: s * 0.7 }, 0.1)))
+    g.add(noOutlineDeep(rbox(4.5, 5.5, 0.3, gold, { x: s * 12.85, y: hy - 3.5, z: 7.4, ry: s * 0.7 }, 0.1)))
     // 锹形
     g.add(rbox(1.6, 20, 0.7, gold, { x: s * 5.2, y: hy + 9, z: 9.6, rz: -s * 0.35 }, 0.3))
   }
@@ -636,8 +621,8 @@ function furinBody(p: string[], top: V3) {
   clear(dome, glassC, 0.45)
   dome.position.set(x, bt - 5, z)
   g.add(dome)
-  g.add(noOL(torus(4.1, 0.2, fish, { x, y: bt - 4.9, z, rx: PI / 2 })))
-  for (const [a, yy] of [[0.3, 2.2], [2.2, 1.8], [-1.6, 2.8]]) g.add(noOL(ball(0.8, fish, { x: x + Math.sin(a) * 4.05, y: bt - 5 + yy, z: z + Math.cos(a) * 4.05, ry: a }, [0.4, 0.6, 1.3])))
+  g.add(noOutlineDeep(torus(4.1, 0.2, fish, { x, y: bt - 4.9, z, rx: PI / 2 })))
+  for (const [a, yy] of [[0.3, 2.2], [2.2, 1.8], [-1.6, 2.8]]) g.add(noOutlineDeep(ball(0.8, fish, { x: x + Math.sin(a) * 4.05, y: bt - 5 + yy, z: z + Math.cos(a) * 4.05, ry: a }, [0.4, 0.6, 1.3])))
   g.add(bar([x, bt - 0.5, z], [x, bt - 7.5, z], 0.06, '#ffffff'))
   g.add(clear(ball(0.45, glassC, { x, y: bt - 6.6, z }), glassC, 0.6))
   g.add(bar([x, bt - 7.5, z], [x, bt - 10, z], 0.06, '#ffffff'))
@@ -663,13 +648,13 @@ function uchiwaBody(p: string[]) {
   g.add(disc(12, faceC, 0, 24, 0.25, 0.5, 40))
   g.add(torus(12, 0.28, shade(faceC, -0.25), { y: 24 }))
   for (const [x, y, r, a] of [[-3.5, 27, 2.4, 0.4], [3.6, 21, 2, -0.3], [0.5, 30.5, 1.4, 0.8]]) {
-    g.add(noOL(ball(r, pattern, { x, y, z: 0.36, rz: a }, [1.6, 0.9, 0.12])))
-    const tail = noOL(flat([[0, 0], [r * 1.2, r * 0.7], [r * 1.2, -r * 0.7]], 0.15, pattern, 0.33))
+    g.add(noOutlineDeep(ball(r, pattern, { x, y, z: 0.36, rz: a }, [1.6, 0.9, 0.12])))
+    const tail = noOutlineDeep(flat([[0, 0], [r * 1.2, r * 0.7], [r * 1.2, -r * 0.7]], 0.15, pattern, 0.33))
     tail.position.x = x + r * 1.3
     tail.position.y = y
     g.add(tail)
   }
-  for (let k = 0; k < 3; k++) g.add(noOL(torus(1 + k * 0.6, 0.1, shade(faceC, -0.15), { x: 4 - k * 0.3, y: 28 - k * 0.6, z: 0.36 }, PI)))
+  for (let k = 0; k < 3; k++) g.add(noOutlineDeep(torus(1 + k * 0.6, 0.1, shade(faceC, -0.15), { x: 4 - k * 0.3, y: 28 - k * 0.6, z: 0.36 }, PI)))
   g.add(cyl(0.7, 0.9, 13.5, handle, {}, 10))
   return g
 }
@@ -699,10 +684,10 @@ function katoriButa(p: string[]) {
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(cyl(1.5, 1.7, 2.2, body, { x: sx * 4.5, z: sz * 4.5 }, 10))
   for (const s of [-1, 1]) {
     g.add(cyl(0, 2.3, 3.6, body, { x: s * 4.6, y: PIG_Y + 7.4, z: 5, rz: -s * 0.4, rx: 0.3 }, 10))
-    g.add(noOL(ball(0.55, SUMI, { x: s * 3.8, y: PIG_Y + 7.9, z: 5.5 })))
+    g.add(noOutlineDeep(ball(0.55, SUMI, { x: s * 3.8, y: PIG_Y + 7.9, z: 5.5 })))
   }
   g.add(torus(1.2, 0.35, body, { y: PIG_Y + 2, z: -8.6 }))
-  g.add(noOL(torus(8.65, 0.25, accent, { y: PIG_Y, z: 2 })))
+  g.add(noOutlineDeep(torus(8.65, 0.25, accent, { y: PIG_Y, z: 2 })))
   // 蚊香（竖直螺旋）+ 挂丝
   const pts: V3[] = []
   for (let k = 0; k <= 72; k++) {
@@ -723,7 +708,7 @@ function tsukimiDango(p: string[]) {
   const [wood, dango, paper] = p
   const g = sanbo(22, 11, wood)
   const fy = 11 * 0.7 + 0.7
-  g.add(noOL(rbox(14, 0.25, 14, paper, { y: fy, ry: PI / 4 }, 0.05)))
+  g.add(noOutlineDeep(rbox(14, 0.25, 14, paper, { y: fy, ry: PI / 4 }, 0.05)))
   const r = 1.8
   const lay = (n: number, y: number) => {
     for (let i = 0; i < n; i++) for (let k = 0; k < n; k++) g.add(ball(r, dango, { x: (i - (n - 1) / 2) * r * 2, y, z: (k - (n - 1) / 2) * r * 2 }))
@@ -768,13 +753,13 @@ function daruma(p: string[]) {
   g.add(ball(8.6, faceC, { y: 19.5, z: 10 }, [1, 0.92, 0.5]))
   for (const s of [-1, 1]) {
     g.add(ball(2, '#ffffff', { x: s * 3.2, y: 20.5, z: 14.1 }, [1, 1, 0.3]))
-    g.add(noOL(torus(2.5, 0.35, SUMI, { x: s * 3.2, y: 22.2, z: 13.9, rz: 0.2 * s }, PI)))
-    g.add(noOL(torus(2.2, 0.35, SUMI, { x: s * 2.4, y: 15.4, z: 14.2, rz: PI + s * 0.5 }, PI * 0.7)))
+    g.add(noOutlineDeep(torus(2.5, 0.35, SUMI, { x: s * 3.2, y: 22.2, z: 13.9, rz: 0.2 * s }, PI)))
+    g.add(noOutlineDeep(torus(2.2, 0.35, SUMI, { x: s * 2.4, y: 15.4, z: 14.2, rz: PI + s * 0.5 }, PI * 0.7)))
   }
-  g.add(noOL(ball(1.05, SUMI, { x: -3.2, y: 20.5, z: 14.75 }, [1, 1, 0.3])))
-  g.add(noOL(ball(0.8, shade(faceC, -0.2), { y: 18, z: 14.4 })))
-  g.add(noOL(ball(6.5, gold, { y: 7.5, z: 11.6, rx: -0.5 }, [1, 0.6, 0.3])))
-  for (const s of [-1, 1]) g.add(noOL(torus(1.8, 0.4, gold, { x: s * 9, y: 13, z: 10.5, ry: s * 0.7 })))
+  g.add(noOutlineDeep(ball(1.05, SUMI, { x: -3.2, y: 20.5, z: 14.75 }, [1, 1, 0.3])))
+  g.add(noOutlineDeep(ball(0.8, shade(faceC, -0.2), { y: 18, z: 14.4 })))
+  g.add(noOutlineDeep(ball(6.5, gold, { y: 7.5, z: 11.6, rx: -0.5 }, [1, 0.6, 0.3])))
+  for (const s of [-1, 1]) g.add(noOutlineDeep(torus(1.8, 0.4, gold, { x: s * 9, y: 13, z: 10.5, ry: s * 0.7 })))
   return g
 }
 
@@ -788,23 +773,23 @@ function maneki(p: string[]) {
   g.add(ball(8, body, { y: 25.5 }, [1.1, 0.95, 0.95]))
   for (const s of [-1, 1]) {
     g.add(cyl(0, 2.7, 4.6, body, { x: s * 5, y: 30, rz: -s * 0.35 }, 10))
-    g.add(noOL(cyl(0, 1.6, 2.8, '#ffb6c8', { x: s * 4.9, y: 30.8, z: 0.9, rz: -s * 0.35 }, 10)))
+    g.add(noOutlineDeep(cyl(0, 1.6, 2.8, '#ffb6c8', { x: s * 4.9, y: 30.8, z: 0.9, rz: -s * 0.35 }, 10)))
     g.add(ball(2.2, body, { x: s * 3.5, y: 4.6, z: 6.5 }, [1, 0.8, 1.2]))
   }
   g.add(face(9, { y: 24.8, z: 7.4 }))
-  g.add(noOL(ball(0.6, '#ff8f9a', { y: 23.4, z: 7.6 })))
+  g.add(noOutlineDeep(ball(0.6, '#ff8f9a', { y: 23.4, z: 7.6 })))
   g.add(torus(6.4, 0.9, collar, { y: 18.6, rx: PI / 2 }))
   g.add(ball(1.4, GOLD, { y: 16.8, z: 6.4 }))
   // 举起的左手
   g.add(capsule(2.1, 7, body, { x: -8.4, y: 16.5, z: 2.5, rz: 0.12 }))
-  g.add(noOL(ball(1, '#ffb6c8', { x: -9.6, y: 26, z: 4.3 }, [1, 1, 0.5])))
+  g.add(noOutlineDeep(ball(1, '#ffb6c8', { x: -9.6, y: 26, z: 4.3 }, [1, 1, 0.5])))
   // 小判
   g.add(ball(4, GOLD, { x: 4, y: 12, z: 7.6, rz: 0.2 }, [0.7, 1, 0.2]))
-  g.add(noOL(rbox(0.5, 4, 0.3, shade(GOLD, -0.2), { x: 4, y: 10, z: 8.4, rz: 0.2 }, 0.1)))
+  g.add(noOutlineDeep(rbox(0.5, 4, 0.3, shade(GOLD, -0.2), { x: 4, y: 10, z: 8.4, rz: 0.2 }, 0.1)))
   g.add(ball(2.2, body, { x: 6.2, y: 14, z: 6 }))
   // 花斑
-  g.add(noOL(ball(3, acc, { x: 4.8, y: 28, z: 4.6 }, [1, 0.8, 0.5])))
-  g.add(noOL(ball(4, acc, { x: -4, y: 12, z: -6.6 }, [1, 0.9, 0.4])))
+  g.add(noOutlineDeep(ball(3, acc, { x: 4.8, y: 28, z: 4.6 }, [1, 0.8, 0.5])))
+  g.add(noOutlineDeep(ball(4, acc, { x: -4, y: 12, z: -6.6 }, [1, 0.9, 0.4])))
   return g
 }
 
@@ -818,7 +803,7 @@ function kamidana(p: string[]) {
   g.add(rbox(36, 2, 18, wood, { y: y0, z: -4 }, 0.4))
   g.add(rbox(18, 13, 12, wood, { y: y0 + 2, z: -5 }, 0.4))
   g.add(rbox(10, 9, 0.6, shade(wood, -0.08), { y: y0 + 3.5, z: 1.1 }, 0.2))
-  g.add(noOL(rbox(0.4, 9, 0.3, GOLD, { y: y0 + 3.5, z: 1.5 }, 0.1)))
+  g.add(noOutlineDeep(rbox(0.4, 9, 0.3, GOLD, { y: y0 + 3.5, z: 1.5 }, 0.1)))
   for (const s of [-1, 1]) {
     g.add(rbox(7, 9, 9, wood, { x: s * 13, y: y0 + 2, z: -5.5 }, 0.4))
     g.add(rbox(10, 1, 7, roof, { x: s * 13, y: y0 + 12.4, z: -3.3, rx: 0.5 }, 0.3))
@@ -832,7 +817,7 @@ function kamidana(p: string[]) {
   for (const s of [-1, 1]) g.add(rbox(1.6, 24, 1.6, wood, { x: s * 29, y: 10.5, z: 13 }, 0.3))
   g.add(tube([[-30, 34, 13], [-14, 30.5, 14], [0, 29.8, 14.2], [14, 30.5, 14], [30, 34, 13]], 0.9, rope, 32, 8))
   for (const x of [-15, 0, 15])
-    for (let k = 0; k < 3; k++) g.add(noOL(rbox(2, 2.8, 0.2, PAPER, { x: x + (k % 2 ? 0.7 : -0.7), y: 27 - k * 2.8, z: 14.4 }, 0.05)))
+    for (let k = 0; k < 3; k++) g.add(noOutlineDeep(rbox(2, 2.8, 0.2, PAPER, { x: x + (k % 2 ? 0.7 : -0.7), y: 27 - k * 2.8, z: 14.4 }, 0.05)))
   // 榊
   for (const s of [-1, 1]) {
     g.add(cup(1.6, 1.3, 5, 0.3, '#fbf8f0', { x: s * 25, y: y0, z: 4 }))
@@ -852,11 +837,11 @@ function butsudan(p: string[]) {
   const g = new THREE.Group()
   g.add(shell(40, 52, 30, 1.5, wood, { front: [{ kind: 'rect', x: 0, y: 3, w: 35, h: 46, r: 0.6 }] }))
   g.add(rbox(42, 3, 32, shade(wood, -0.1), { y: 52 }, 0.6))
-  g.add(noOL(rbox(36, 45, 0.4, inner, { y: 4, z: -13.1 }, 0.1)))
+  g.add(noOutlineDeep(rbox(36, 45, 0.4, inner, { y: 4, z: -13.1 }, 0.1)))
   g.add(rbox(36, 10, 4, shade(wood, -0.08), { y: 1.5, z: -6.5 }, 0.4))
   g.add(rbox(36, 20.1, 4.6, shade(wood, -0.04), { y: 1.4, z: -10.8 }, 0.4))
   g.add(rbox(4.5, 10, 1.2, SUMI, { y: 21.5, z: -11 }, 0.3))
-  g.add(noOL(rbox(1.4, 7, 0.3, GOLD, { y: 23, z: -10.3 }, 0.05)))
+  g.add(noOutlineDeep(rbox(1.4, 7, 0.3, GOLD, { y: 23, z: -10.3 }, 0.05)))
   g.add(ball(2.2, inner, { y: 33.5, z: -11.5 }, [1, 1.2, 0.6]))
   for (const s of [-1, 1]) {
     g.add(cup(1.2, 1, 5, 0.2, metal, { x: s * 9, y: 11.5, z: -6.5 }))
@@ -865,7 +850,7 @@ function butsudan(p: string[]) {
     g.add(lit(ball(0.6, FLAME, { x: s * 13, y: 8.2, z: 4 }, [1, 1.6, 1]), FLAME, 0.9))
     // 打开的门
     g.add(rbox(1.2, 47, 17.5, wood, { x: s * 19.4, y: 3, z: 15 + 8.75 }, 0.3))
-    g.add(noOL(rbox(0.3, 42, 14, inner, { x: s * 18.65, y: 5.5, z: 15 + 8.75 }, 0.05)))
+    g.add(noOutlineDeep(rbox(0.3, 42, 14, inner, { x: s * 18.65, y: 5.5, z: 15 + 8.75 }, 0.05)))
   }
   g.add(cup(3.5, 2.6, 3.2, 0.5, metal, { y: 1.5, z: 5 }))
   g.add(cyl(3, 3, 0.3, '#d9d4c7', { y: 3.6, z: 5 }))
@@ -907,8 +892,8 @@ function omamoriBody(p: string[]) {
   const [cloth, cord, accent] = p
   const g = new THREE.Group()
   g.add(rbox(4.6, 7, 1, cloth, {}, 0.4))
-  g.add(noOL(rbox(1.6, 4.2, 0.2, accent, { y: 1.4, z: 0.55 }, 0.05)))
-  for (const [x, y] of [[-1.5, 5.6], [1.5, 0.8], [1.5, 5.6], [-1.5, 0.8]]) g.add(noOL(ball(0.35, accent, { x, y, z: 0.5 }, [1, 1, 0.3])))
+  g.add(noOutlineDeep(rbox(1.6, 4.2, 0.2, accent, { y: 1.4, z: 0.55 }, 0.05)))
+  for (const [x, y] of [[-1.5, 5.6], [1.5, 0.8], [1.5, 5.6], [-1.5, 0.8]]) g.add(noOutlineDeep(ball(0.35, accent, { x, y, z: 0.5 }, [1, 1, 0.3])))
   g.add(torus(0.55, 0.28, cord, { y: 7.3, rx: PI / 2 }))
   g.add(torus(1.5, 0.16, cord, { y: 9 }))
   return g
@@ -934,7 +919,7 @@ function xmasTree(p: string[]) {
   const g = new THREE.Group()
   const wood = '#b88a5a'
   g.add(tray(40, 26, 40, 1.6, wood, {}, 0.5))
-  for (let k = 0; k < 3; k++) g.add(noOL(rbox(40.4, 1.2, 40.4, shade(wood, -0.15), { y: 4 + k * 8 }, 0.3)))
+  for (let k = 0; k < 3; k++) g.add(noOutlineDeep(rbox(40.4, 1.2, 40.4, shade(wood, -0.15), { y: 4 + k * 8 }, 0.3)))
   g.add(cyl(19, 19, 0.8, '#8b6a4f', { y: 21 }))
   g.add(cyl(3.5, 4, 14, '#7a5a43', { y: 20 }, 10))
   const tiers: [number, number, number][] = [
@@ -1008,7 +993,7 @@ function stocking(main: string, stripe: string) {
   const g = new THREE.Group()
   g.add(rbox(10, 20, 4.4, main, { y: -27 }, 1.6))
   g.add(rbox(15, 8, 4.4, main, { x: 2.5, y: -33, z: 0 }, 3.2))
-  for (const y of [-14, -19, -24]) g.add(noOL(rbox(10.1, 1.6, 0.3, stripe, { y, z: 2.2 }, 0.1)))
+  for (const y of [-14, -19, -24]) g.add(noOutlineDeep(rbox(10.1, 1.6, 0.3, stripe, { y, z: 2.2 }, 0.1)))
   g.add(rbox(11.4, 5, 5.2, '#fbf8f0', { y: -9 }, 1.6))
   g.add(torus(1.4, 0.25, '#fbf8f0', { y: -2.6 }))
   return g
@@ -1047,8 +1032,8 @@ function gifts(p: string[]) {
     const rib = ci === 0 ? p[2] : ci === 2 ? p[0] : '#fbf8f0'
     const bg = new THREE.Group()
     bg.add(rbox(w, h, d, col, {}, 0.6))
-    bg.add(noOL(rbox(w + 0.3, h + 0.3, 2, rib, { y: -0.15 }, 0.2)))
-    bg.add(noOL(rbox(2, h + 0.3, d + 0.3, rib, { y: -0.15 }, 0.2)))
+    bg.add(noOutlineDeep(rbox(w + 0.3, h + 0.3, 2, rib, { y: -0.15 }, 0.2)))
+    bg.add(noOutlineDeep(rbox(2, h + 0.3, d + 0.3, rib, { y: -0.15 }, 0.2)))
     for (const s of [-1, 1]) bg.add(torus(Math.min(w, d) * 0.12, 0.5, rib, { x: s * Math.min(w, d) * 0.12, y: h + 1, rz: s * 0.5 }))
     bg.position.set(x, y, z)
     bg.rotation.y = ry
@@ -1100,14 +1085,14 @@ function easterBasket(p: string[]) {
   const [basket, eggA, eggB] = p
   const g = new THREE.Group()
   g.add(cup(13, 10, 11, 0.8, basket))
-  for (const y of [3, 6, 9]) g.add(noOL(torus(10 + (y / 11) * 3 + 0.05, 0.25, shade(basket, -0.18), { y, rx: PI / 2 })))
+  for (const y of [3, 6, 9]) g.add(noOutlineDeep(torus(10 + (y / 11) * 3 + 0.05, 0.25, shade(basket, -0.18), { y, rx: PI / 2 })))
   g.add(torus(12.4, 0.8, basket, { y: 10.6 }, PI))
   g.add(cyl(11.2, 11.2, 0.8, '#9fd38a', { y: 5.4 }))
   for (let i = 0; i < 10; i++) g.add(sprig(4, '#7cc47a', [Math.cos(i * 0.63) * 9.5, 6, Math.sin(i * 0.63) * 9.5], i * 0.63 + PI / 2, -1, 0.2))
   const cols = [eggA, eggB, C.lemon, C.lilac, C.mint, C.pink]
   ;([[-5, -3, 0.3], [0, 3, -0.2], [5, -2, 0.4], [-2, -6, 0], [3, 6.5, 0.2], [-6.5, 3, -0.3]] as V3[]).forEach(([x, z, rz], i) => {
     g.add(ball(2.3, cols[i], { x, y: 8.3, z, rz }, [1, 1.3, 1]))
-    g.add(noOL(torus(2.3, 0.2, '#ffffff', { x, y: 8.3, z, rx: PI / 2 + rz })))
+    g.add(noOutlineDeep(torus(2.3, 0.2, '#ffffff', { x, y: 8.3, z, rx: PI / 2 + rz })))
   })
   return g
 }
@@ -1130,7 +1115,7 @@ function cakeTier(p: string[]) {
     const a = (i / 12) * PI * 2
     g.add(ball(1, '#fffaf2', { x: Math.cos(a) * 8, y: CAKE_TOP, z: Math.sin(a) * 8 }))
   }
-  g.add(noOL(cyl(13.05, 13.05, 1.2, deco, { y: 9 }, 32)))
+  g.add(noOutlineDeep(cyl(13.05, 13.05, 1.2, deco, { y: 9 }, 32)))
   for (let i = 0; i < 4; i++) {
     const a = (i / 4) * PI * 2 + PI / 4
     g.add(ball(1.5, '#e8414a', { x: Math.cos(a) * 2.3, y: CAKE_TOP + 1, z: Math.sin(a) * 2.3 }, [1, 1.2, 1]))
@@ -1150,7 +1135,7 @@ function balloons(p: string[]) {
   const cols = [p[0], p[1], p[2], p[0], p[1]]
   ;([[-15, 138, 0], [13, 150, -4], [0, 166, 5], [-7, 124, 11], [18, 126, 9]] as V3[]).forEach(([x, y, z], i) => {
     g.add(ball(13, cols[i], { x, y, z }, [1, 1.15, 1]))
-    g.add(noOL(ball(2.6, '#ffffff', { x: x - 5, y: y + 6, z: z + 9.5 }, [0.6, 1, 0.3])))
+    g.add(noOutlineDeep(ball(2.6, '#ffffff', { x: x - 5, y: y + 6, z: z + 9.5 }, [0.6, 1, 0.3])))
     g.add(cyl(0, 1.3, 2.2, cols[i], { x, y: y - 16.6, z }, 8))
     g.add(tube([[0, 2.8, 0], [x * 0.3, (y - 16.6) * 0.45, z * 0.4 + 2], [x, y - 16.6, z]], 0.12, '#ffffff', 20, 4))
   })
@@ -1188,7 +1173,7 @@ function fanHead(r: number, cage: string, blade: string, motor: string, nBlade =
       const a = (k / spokes) * PI * 2
       g.add(bar([Math.cos(a) * r * 0.16, Math.sin(a) * r * 0.16, z], [Math.cos(a) * r, Math.sin(a) * r, 0], 0.12, cage, 4))
     }
-    g.add(noOL(torus(r * 0.6, 0.12, cage, { z: z * 0.66 })))
+    g.add(noOutlineDeep(torus(r * 0.6, 0.12, cage, { z: z * 0.66 })))
   }
   g.add(cyl(r * 0.17, r * 0.17, 0.8, shade(cage, -0.1), { z: 3.4, rx: PI / 2 }, 20))
   g.add(cyl(r * 0.12, r * 0.12, 2.6, motor, { z: -1.2, rx: PI / 2 }, 16))
@@ -1241,7 +1226,7 @@ function fanCirc(p: string[]) {
   housing.rotation.x = PI / 2
   housing.position.set(0, hy, -1)
   g.add(housing)
-  for (let k = 1; k <= 5; k++) g.add(noOL(torus(k * 2, 0.22, shade(body, -0.12), { y: hy, z: 2.6 - (5 - k) * 0.25 })))
+  for (let k = 1; k <= 5; k++) g.add(noOutlineDeep(torus(k * 2, 0.22, shade(body, -0.12), { y: hy, z: 2.6 - (5 - k) * 0.25 })))
   g.add(cyl(2.2, 2.2, 0.8, accent, { y: hy, z: 2.2, rx: PI / 2 }, 16))
   for (let k = 0; k < 5; k++) {
     const a = (k / 5) * PI * 2
@@ -1259,9 +1244,9 @@ function fanTower(p: string[]) {
   const g = new THREE.Group()
   g.add(puck(14, 3, shade(body, -0.06)))
   g.add(rbox(20, 82, 20, body, { y: 3 }, 4.5))
-  g.add(noOL(rbox(12, 62, 0.4, shade(grille, -0.2), { y: 12, z: 10.05 }, 0.2)))
+  g.add(noOutlineDeep(rbox(12, 62, 0.4, shade(grille, -0.2), { y: 12, z: 10.05 }, 0.2)))
   for (let k = 0; k < 9; k++) g.add(rbox(0.6, 62, 0.6, grille, { x: -5 + k * 1.25, y: 12, z: 10.4 }, 0.2))
-  g.add(noOL(rbox(14, 0.4, 10, M.black, { y: 85 }, 0.2)))
+  g.add(noOutlineDeep(rbox(14, 0.4, 10, M.black, { y: 85 }, 0.2)))
   g.add(glow(4, 1.4, accent, { y: 85.4, z: 1, rx: -PI / 2 }, 0.8))
   for (let k = 0; k < 3; k++) g.add(cyl(0.8, 0.8, 0.4, shade(body, -0.2), { x: -4 + k * 4, y: 85.3, z: -2.5 }, 10))
   return g
@@ -1287,10 +1272,10 @@ function ceramicHeater(p: string[]) {
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(cyl(1, 1, 0.8, M.char, { x: sx * 7, z: sz * 5 }, 8))
   g.add(glow(14, 15, EMBER, { y: 9, z: 7.9 }, 0.65))
   for (let k = 0; k < 7; k++) g.add(rbox(15.5, 0.9, 0.9, grille, { y: 8.6 + k * 2.4, z: 8.4 }, 0.3))
-  g.add(noOL(rbox(10, 1.6, 0.4, M.char, { y: 26, z: 8.05 }, 0.2)))
+  g.add(noOutlineDeep(rbox(10, 1.6, 0.4, M.char, { y: 26, z: 8.05 }, 0.2)))
   g.add(cyl(1.2, 1.2, 1.2, accent, { x: 5, y: 30.8, z: 3 }, 12))
   g.add(lit(ball(0.4, '#ff6a4a', { x: -6, y: 26.8, z: 8.3 }), '#ff6a4a', 1))
-  g.add(noOL(rbox(9, 0.4, 3, shade(body, -0.25), { y: 30.62, z: -3 }, 0.2)))
+  g.add(noOutlineDeep(rbox(9, 0.4, 3, shade(body, -0.25), { y: 30.62, z: -3 }, 0.2)))
   return g
 }
 
@@ -1312,7 +1297,7 @@ function keroseneConv(p: string[]) {
   g.add(torus(21.3, 0.5, M.silver, { y: 33.3, rx: PI / 2 }))
   g.add(torus(21.3, 0.5, M.silver, { y: 19.7, rx: PI / 2 }))
   g.add(cyl(1.8, 1.8, 1.6, M.char, { x: 9, y: 10, z: 21.1, rx: PI / 2 }, 14))
-  g.add(noOL(rbox(4, 2, 0.5, '#f4f4f2', { x: -8, y: 9.5, z: 20.7 }, 0.2)))
+  g.add(noOutlineDeep(rbox(4, 2, 0.5, '#f4f4f2', { x: -8, y: 9.5, z: 20.7 }, 0.2)))
   g.add(cyl(23, 23, 1.6, top, { y: 47 }, 32))
   for (let k = 0; k < 3; k++) g.add(bar([Math.cos(k * 2.1) * 22, 47, Math.sin(k * 2.1) * 22], [Math.cos(k * 2.1) * 22.4, 42, Math.sin(k * 2.1) * 22.4], 0.4, top))
   // 水壶
@@ -1333,13 +1318,13 @@ function keroseneFan(p: string[]) {
   const [body, panel, accent] = p
   const g = new THREE.Group()
   g.add(rbox(44, 42, 30, body, {}, 3))
-  g.add(noOL(rbox(34, 12, 0.4, '#3a2a2a', { y: 4, z: 15.05 }, 0.3)))
+  g.add(noOutlineDeep(rbox(34, 12, 0.4, '#3a2a2a', { y: 4, z: 15.05 }, 0.3)))
   g.add(glow(30, 9, EMBER, { y: 5.5, z: 15.1 }, 0.6))
   for (let k = 0; k < 4; k++) g.add(rbox(34, 0.8, 1.2, shade(body, -0.18), { y: 5 + k * 2.6, z: 15.6, rx: 0.4 }, 0.3))
   g.add(rbox(32, 1, 12, panel, { y: 42, z: 5 }, 0.4))
   g.add(glow(8, 2.6, '#9fe3b0', { x: -6, y: 43.1, z: 6, rx: -PI / 2 }, 0.7))
   for (let k = 0; k < 3; k++) g.add(cyl(1.1, 1.1, 0.6, k ? M.silver : accent, { x: 4 + k * 4.2, y: 43, z: 6 }, 12))
-  g.add(noOL(rbox(16, 0.4, 4, shade(body, -0.3), { y: 41.82, z: -9 }, 0.2)))
+  g.add(noOutlineDeep(rbox(16, 0.4, 4, shade(body, -0.3), { y: 41.82, z: -9 }, 0.2)))
   return g
 }
 
@@ -1351,10 +1336,10 @@ function hotCarpet(W: number, D: number): Build {
     g.add(rbox(W, 1.2, D, main, {}, 0.5))
     const t = 0.3
     for (const s of [-1, 1]) {
-      g.add(noOL(rbox(W - 16, t, 2.4, line, { y: 1.2, z: s * (D / 2 - 9) }, 0.1)))
-      g.add(noOL(rbox(2.4, t, D - 16, line, { x: s * (W / 2 - 9), y: 1.2 }, 0.1)))
+      g.add(noOutlineDeep(rbox(W - 16, t, 2.4, line, { y: 1.2, z: s * (D / 2 - 9) }, 0.1)))
+      g.add(noOutlineDeep(rbox(2.4, t, D - 16, line, { x: s * (W / 2 - 9), y: 1.2 }, 0.1)))
     }
-    for (let i = -1; i <= 1; i++) for (let k = -1; k <= 1; k++) g.add(noOL(rbox(16, t, 16, shade(main, -0.08), { x: i * (W / 4), y: 1.2, z: k * (D / 4), ry: PI / 4 }, 0.1)))
+    for (let i = -1; i <= 1; i++) for (let k = -1; k <= 1; k++) g.add(noOutlineDeep(rbox(16, t, 16, shade(main, -0.08), { x: i * (W / 4), y: 1.2, z: k * (D / 4), ry: PI / 4 }, 0.1)))
     g.add(rbox(12, 3, 7, ctrl, { x: W / 2 - 12, y: 1.2, z: D / 2 - 8 }, 1))
     g.add(lit(ball(0.5, '#ff6a4a', { x: W / 2 - 15, y: 4.2, z: D / 2 - 6 }), '#ff6a4a', 1))
     g.add(cyl(1.2, 1.2, 0.5, shade(ctrl, -0.2), { x: W / 2 - 10, y: 4.2, z: D / 2 - 8 }, 12))
@@ -1371,8 +1356,8 @@ function kotatsuRect(p: string[]) {
   g.add(rbox(KR.quilt[0] + 26, 5, KR.quilt[1] + 26, shade(quilt, -0.06), { y: 2 }, 2.4))
   g.add(rbox(KR.quilt[0], KR.topY - 2, KR.quilt[1], quilt, { y: 2 }, 14))
   for (const s of [-1, 1]) {
-    g.add(noOL(rbox(KR.quilt[0] - 30, 0.4, 0.3, shade(quilt, -0.15), { y: 22, z: s * (KR.quilt[1] / 2 + 0.1) }, 0.1)))
-    g.add(noOL(rbox(0.3, 0.4, KR.quilt[1] - 30, shade(quilt, -0.15), { x: s * (KR.quilt[0] / 2 + 0.1), y: 22 }, 0.1)))
+    g.add(noOutlineDeep(rbox(KR.quilt[0] - 30, 0.4, 0.3, shade(quilt, -0.15), { y: 22, z: s * (KR.quilt[1] / 2 + 0.1) }, 0.1)))
+    g.add(noOutlineDeep(rbox(0.3, 0.4, KR.quilt[1] - 30, shade(quilt, -0.15), { x: s * (KR.quilt[0] / 2 + 0.1), y: 22 }, 0.1)))
   }
   g.add(rbox(KR.topW, KR.topT, KR.topD, wood, { y: KR.topY }, 0.8))
   return g
@@ -1385,7 +1370,7 @@ function futonFolded(p: string[]) {
   g.add(rbox(84, 6, 58, mat, {}, 2.4))
   g.add(rbox(80, 10, 55, quilt, { y: 6 }, 4.5))
   g.add(rbox(80, 10, 55, shade(quilt, 0.04), { y: 15.6, x: 1 }, 4.5))
-  for (const y of [10.5, 20.1]) g.add(noOL(rbox(80.4, 1.2, 4, accent, { y, z: 18 }, 0.4)))
+  for (const y of [10.5, 20.1]) g.add(noOutlineDeep(rbox(80.4, 1.2, 4, accent, { y, z: 18 }, 0.4)))
   return g
 }
 
@@ -1410,7 +1395,7 @@ function humidifierSteam(p: string[]) {
   g.add(puck(10, 4, lid, { y: 20 }))
   g.add(cyl(2.4, 2.4, 1.4, shade(lid, -0.15), { y: 23.6 }, 16))
   g.add(torus(6.5, 0.7, shade(lid, -0.1), { y: 24, rx: 0 }, PI))
-  g.add(noOL(rbox(3, 10, 0.4, '#9fd0ee', { y: 6, z: 10.4, rx: -0.045 }, 0.2)))
+  g.add(noOutlineDeep(rbox(3, 10, 0.4, '#9fd0ee', { y: 6, z: 10.4, rx: -0.045 }, 0.2)))
   g.add(glow(3, 1.2, accent, { y: 3, z: 10.9, rx: -0.045 }, 0.9))
   return g
 }
@@ -1425,7 +1410,7 @@ function steamerHand(p: string[]) {
   g.add(capsule(3, 8, body, { y: 9 }))
   g.add(rbox(10, 7, 10, body, { y: 18, z: 1.5 }, 3))
   g.add(rbox(9, 6.4, 0.8, M.silver, { y: 18.3, z: 6.6 }, 0.6))
-  for (let i = -1; i <= 1; i++) for (let k = 0; k < 2; k++) g.add(noOL(cyl(0.4, 0.4, 0.3, M.char, { x: i * 2.4, y: 20 + k * 2.4, z: 7.05, rx: PI / 2 }, 8)))
+  for (let i = -1; i <= 1; i++) for (let k = 0; k < 2; k++) g.add(noOutlineDeep(cyl(0.4, 0.4, 0.3, M.char, { x: i * 2.4, y: 20 + k * 2.4, z: 7.05, rx: PI / 2 }, 8)))
   g.add(rbox(1.8, 3, 1, accent, { y: 13, z: 2.6 }, 0.4))
   return g
 }
@@ -1535,7 +1520,7 @@ function dialDraw(bg: string, ink: string, kind: 'ticks' | 'arabic' | 'roman' | 
 function clockHands(x: number, y: number, z: number, len: number, color: string, sec?: string) {
   const g = new THREE.Group()
   const hand = (l: number, w: number, a: number, dz: number, c: string) => {
-    const hg = G(noOL(rbox(w, l, 0.3, c, { y: -l * 0.15 }, Math.min(0.15, w / 2 - 0.01))))
+    const hg = G(noOutlineDeep(rbox(w, l, 0.3, c, { y: -l * 0.15 }, Math.min(0.15, w / 2 - 0.01))))
     hg.position.set(x, y, z + dz)
     hg.rotation.z = a
     return hg
@@ -1603,7 +1588,7 @@ function waClock(p: string[]) {
   const [wood, dial, ink] = p
   const g = new THREE.Group()
   g.add(rbox(30, 30, 4, wood, {}, 1))
-  g.add(noOL(rbox(27, 27, 0.4, shade(wood, -0.1), { y: 1.5, z: 1.9 }, 0.3)))
+  g.add(noOutlineDeep(rbox(27, 27, 0.4, shade(wood, -0.1), { y: 1.5, z: 1.9 }, 0.3)))
   g.add(torus(12.3, 0.5, shade(wood, -0.25), { y: 15, z: 2.3 }))
   g.add(paintDisc(12, `wa|${dial}|${ink}`, dialDraw(dial, ink, 'kanji'), 0, 15, 2.2))
   g.add(clockHands(0, 15, 2.3, 10, ink))
@@ -1626,7 +1611,7 @@ function pendulumClock(p: string[]) {
   const [wood, dial, metal] = p
   const g = new THREE.Group()
   g.add(shell(30, 62, 12, 1.2, wood, { front: [{ kind: 'rect', x: 0, y: 4, w: 22, h: 30, r: 1 }] }))
-  g.add(noOL(rbox(27.4, 59, 0.3, shade(wood, -0.3), { y: 1.5, z: -4.6 }, 0.1)))
+  g.add(noOutlineDeep(rbox(27.4, 59, 0.3, shade(wood, -0.3), { y: 1.5, z: -4.6 }, 0.1)))
   g.add(rbox(33, 3, 14, shade(wood, -0.12), { y: 62 }, 0.6))
   g.add(flat([[-13, 0], [13, 0], [0, 6]], 1.4, wood, -0.7).translateY(65))
   g.add(rbox(32, 2.4, 13.5, shade(wood, -0.12), { y: -2.4 }, 0.6))
@@ -1637,7 +1622,7 @@ function pendulumClock(p: string[]) {
   g.add(rbox(2, 1.2, 5.4, metal, { y: 34.6, z: -2.3 }, 0.2))
   g.add(bar([0, 35, 0], [0, 13, 0], 0.3, metal))
   g.add(disc(3.6, metal, 0, 11, 0.8, 0.8))
-  for (const s of [-1, 1]) g.add(noOL(cyl(0.6, 0.6, 0.5, metal, { x: s * 4, y: 44, z: 6.15, rx: PI / 2 }, 10)))
+  for (const s of [-1, 1]) g.add(noOutlineDeep(cyl(0.6, 0.6, 0.5, metal, { x: s * 4, y: 44, z: 6.15, rx: PI / 2 }, 10)))
   return g
 }
 
@@ -1817,7 +1802,7 @@ const cubeCells = () => {
 const FLOAT = { mount: 120, w: 120, d: 22, t: 4 }
 function floatShelf(p: string[]) {
   const g = G(rbox(FLOAT.w, FLOAT.t, FLOAT.d, p[0], {}, 0.6))
-  g.add(noOL(rbox(FLOAT.w - 0.2, 0.3, FLOAT.d - 0.2, p[1], { y: FLOAT.t - 0.2 }, 0.05)))
+  g.add(noOutlineDeep(rbox(FLOAT.w - 0.2, 0.3, FLOAT.d - 0.2, p[1], { y: FLOAT.t - 0.2 }, 0.05)))
   return g
 }
 
@@ -1844,7 +1829,7 @@ function corkboard(p: string[]) {
     [20, 6, 8, 8, -0.15, '#bfe3ff'],
   ]
   for (const [x, y, w, h, rz, col] of notes) {
-    g.add(noOL(rbox(w, h, 0.2, col, { x, y, z: z + 0.15, rz }, 0.05)))
+    g.add(noOutlineDeep(rbox(w, h, 0.2, col, { x, y, z: z + 0.15, rz }, 0.05)))
     g.add(ball(0.55, [J.shu, '#3d6fb5', '#5f9e4f'][Math.abs(Math.round(x)) % 3], { x, y: y + h - 1.4, z: z + 0.7 }))
   }
   return g
@@ -1966,7 +1951,7 @@ function kakejiku(kind: 'sansui' | 'sho'): Build {
     const w = 52
     const h = 162
     g.add(rbox(w, h - 6, 0.4, cloth, { y: 3 }, 0.1))
-    g.add(noOL(rbox(w - 10, h - 48, 0.3, shade(cloth, 0.12), { y: 24, z: 0.35 }, 0.05)))
+    g.add(noOutlineDeep(rbox(w - 10, h - 48, 0.3, shade(cloth, 0.12), { y: 24, z: 0.35 }, 0.05)))
     const pw = w - 16
     const ph = h - 64
     const draw: Painter =
@@ -1986,8 +1971,8 @@ function kakejiku(kind: 'sansui' | 'sho'): Build {
             c.fillRect(W * 0.72, H * 0.88, W * 0.1, W * 0.1)
           }
     g.add(paintPanel(pw, ph, `kj|${kind}|${paper}`, draw, { y: 32, z: 0.55 }))
-    for (const y of [30, 32 + ph]) g.add(noOL(rbox(pw, 2, 0.2, GOLD, { y, z: 0.6 }, 0.05)))
-    for (const s of [-1, 1]) g.add(noOL(rbox(1.6, 28, 0.2, shade(cloth, 0.2), { x: s * 7, y: h - 34, z: 0.7 }, 0.05)))
+    for (const y of [30, 32 + ph]) g.add(noOutlineDeep(rbox(pw, 2, 0.2, GOLD, { y, z: 0.6 }, 0.05)))
+    for (const s of [-1, 1]) g.add(noOutlineDeep(rbox(1.6, 28, 0.2, shade(cloth, 0.2), { x: s * 7, y: h - 34, z: 0.7 }, 0.05)))
     g.add(rbox(w + 1, 1.8, 1.4, shade(roller, -0.1), { y: h - 3.4 }, 0.4))
     const bot = cyl(1.3, 1.3, w + 2, roller, {}, 12)
     bot.rotation.z = PI / 2
@@ -2015,7 +2000,7 @@ function sensuDeco(p: string[]) {
     const quad = [pt(r0, s0), pt(R0, s0), pt(R0, s1), pt(r0, s1)]
     g.add(flat(quad, 0.3, i % 2 ? paper : shade(paper, -0.06), i % 2 ? 0.3 : 0))
     const band = [pt(R0 - 5, s0), pt(R0 - 1.5, s0), pt(R0 - 1.5, s1), pt(R0 - 5, s1)]
-    g.add(noOL(flat(band, 0.2, accent, i % 2 ? 0.62 : 0.32)))
+    g.add(noOutlineDeep(flat(band, 0.2, accent, i % 2 ? 0.62 : 0.32)))
   }
   for (let i = 0; i <= n; i++) {
     const a = a0 + ((a1 - a0) * i) / n

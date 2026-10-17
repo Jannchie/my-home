@@ -3,14 +3,9 @@
 
 import * as THREE from 'three'
 import { ball, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
-import { C, S, glow, holePanel, rng, shell, type AssetDef, type Fx, type Hole, type StyleTag } from '../kit'
-
-const PI = Math.PI
-const N = S.nordic
-const M = S.modern
-const J = S.japanese
-const I = S.industrial
-const R = S.retro
+import { C, glow, holePanel, rng, shell, type AssetDef, type Fx, type Hole } from '../kit'
+import { PI, hcyl, noOutlineDeep } from '../geo'
+import { I, J, M, N, R, type Pal3 } from '../packkit'
 
 // 固定色
 const RICE = '#fffdf6'
@@ -27,13 +22,6 @@ const COPPER = '#c7773e'
 const BRASS = '#d4a64a'
 
 // ---------- 小工具 ----------
-
-function noLine<T extends THREE.Object3D>(o: T): T {
-  o.traverse((c) => {
-    c.userData.noOutline = true
-  })
-  return o
-}
 
 /** 半透明玻璃 / 透明塑料（透明材质不描边） */
 function glassy<T extends THREE.Object3D>(o: T, color = GLASS, k = 0.35): T {
@@ -55,20 +43,11 @@ const chip = (w: number, d: number, color: string, x: number, y: number, z: numb
 /** 指示灯 */
 const lamp = (color: string, x: number, y: number, z: number, r = 0.45) => lit(ball(r, color, { x, y, z }), color, 0.8)
 
-/** 横放的圆柱：(x, y, z) 是中心；axis='x' 时 rTop 朝 +x，'z' 时朝 +z */
-function hcyl(rTop: number, rBottom: number, len: number, color: string, x: number, y: number, z: number, axis: 'x' | 'z' = 'x', seg = 16) {
-  const m = cyl(rTop, rBottom, len, color, {}, seg)
-  m.position.set(x, y, z)
-  if (axis === 'x') m.rotation.z = -PI / 2
-  else m.rotation.x = PI / 2
-  return m
-}
-
 /** 正面旋钮：从 z 面往外凸 len */
 function knob(r: number, len: number, color: string, x: number, y: number, z: number) {
   const g = new THREE.Group()
   g.add(hcyl(r, r, len, color, x, y, z + len / 2, 'z', 20))
-  g.add(noLine(rbox(r * 0.3, r * 1.3, 0.3, C.white, { x, y: y - r * 0.15, z: z + len + 0.1 }, 0.1)))
+  g.add(noOutlineDeep(rbox(r * 0.3, r * 1.3, 0.3, C.white, { x, y: y - r * 0.15, z: z + len + 0.1 }, 0.1)))
   return g
 }
 
@@ -93,7 +72,7 @@ function halfDisc(r: number, top: number, color: string, side: 1 | -1) {
 
 /** 容器里的液面：薄圆片，top 是液面高度 */
 function liquid(r: number, top: number, color: string, x = 0, z = 0) {
-  return noLine(cyl(r, r, 0.3, color, { x, y: top - 0.3, z }, 28))
+  return noOutlineDeep(cyl(r, r, 0.3, color, { x, y: top - 0.3, z }, 28))
 }
 
 /** 竖立的圆盘（碗架里的盘子）：盘面朝 ±x，中心 (x, y, z) */
@@ -142,8 +121,7 @@ function gridHoles(w: number, h: number, r: number, hole: number, pitch: number,
 
 // ---------- 定义 ----------
 
-type Pal = [StyleTag, string, string, string]
-type Def = Omit<AssetDef, 'palettes' | 'paletteStyles' | 'prop' | 'category'> & { pals: Pal[]; category?: AssetDef['category']; raw?: boolean }
+type Def = Omit<AssetDef, 'palettes' | 'paletteStyles' | 'prop' | 'category'> & { pals: Pal3[]; category?: AssetDef['category']; raw?: boolean }
 
 /** 把模型在 xz 上挪到包围盒中心（fx 坐标按挪之前的写，所以带 fx 的素材都做成左右前后对称） */
 function centered(build: (p: string[]) => THREE.Group) {
@@ -180,8 +158,8 @@ function airFryerSquare(p: string[]) {
   g.add(rbox(28, 31, 29, body, { y: 0.8, z: -1.5 }, 5)) // z -16 .. 13
   // 抽屉锅
   g.add(rbox(24, 17, 2.4, front, { y: 2.5, z: 13.6 }, 1.2))
-  g.add(noLine(rbox(11, 5, 0.4, '#3b3638', { y: 9.5, z: 14.9 }, 0.3)))
-  g.add(noLine(rbox(9, 0.6, 0.3, '#6a6266', { y: 13.3, z: 15.1 }, 0.1)))
+  g.add(noOutlineDeep(rbox(11, 5, 0.4, '#3b3638', { y: 9.5, z: 14.9 }, 0.3)))
+  g.add(noOutlineDeep(rbox(9, 0.6, 0.3, '#6a6266', { y: 13.3, z: 15.1 }, 0.1)))
   // C 形把手
   g.add(rbox(4.5, 2.2, 4, acc, { y: 13.4, z: 16.4 }, 0.8))
   g.add(rbox(4.5, 2.2, 3.4, acc, { y: 5, z: 16.1 }, 0.8))
@@ -203,11 +181,11 @@ function airFryerRound(p: string[]) {
   g.add(puck(10.6, 3, shade(body, 0.03), { y: 24.8 }))
   // 顶上的圆形触摸屏
   g.add(cyl(4, 4, 0.5, DARK, { y: 27.6 }, 24))
-  g.add(noLine(lit(torus(3.3, 0.18, AMBER, { y: 28.15, rx: PI / 2 }), AMBER, 0.6)))
+  g.add(noOutlineDeep(lit(torus(3.3, 0.18, AMBER, { y: 28.15, rx: PI / 2 }), AMBER, 0.6)))
   g.add(chip(2.6, 1.2, AMBER, 0, 27.75, 0))
   // 抽屉
   g.add(rbox(15, 13, 3, front, { y: 2.2, z: 10.1 }, 1.4))
-  g.add(noLine(rbox(7, 4, 0.4, '#3b3638', { y: 8.5, z: 11.7 }, 0.3)))
+  g.add(noOutlineDeep(rbox(7, 4, 0.4, '#3b3638', { y: 8.5, z: 11.7 }, 0.3)))
   g.add(rbox(4, 2, 3.4, acc, { y: 11.2, z: 12.9 }, 0.7))
   g.add(rbox(4, 2, 3, acc, { y: 4, z: 12.7 }, 0.7))
   g.add(rbox(4, 9.2, 2, acc, { y: 4, z: 15 }, 0.8))
@@ -245,8 +223,8 @@ function ihCooktop(p: string[]) {
   g.add(rbox(29, 4.4, 36, body, { y: 0.6 }, 1.2))
   g.add(rbox(27.6, 0.8, 34.4, top, { y: 4.6 }, 0.3))
   const ring = shade(top, 0.28)
-  g.add(noLine(torus(9.5, 0.18, ring, { y: 5.45, z: -3, rx: PI / 2 })))
-  g.add(noLine(torus(4.5, 0.15, ring, { y: 5.42, z: -3, rx: PI / 2 })))
+  g.add(noOutlineDeep(torus(9.5, 0.18, ring, { y: 5.45, z: -3, rx: PI / 2 })))
+  g.add(noOutlineDeep(torus(4.5, 0.15, ring, { y: 5.42, z: -3, rx: PI / 2 })))
   g.add(chip(5, 1.8, '#ff9a5a', 0, 5, 12.4))
   for (const x of [-9, -6, 6, 9]) g.add(chip(1.4, 1.4, x < 0 ? acc : '#e8e8e8', x, 5, 12.4, 0.35))
   g.add(lamp('#ff6b4a', 11.5, 2.6, 18.1, 0.4))
@@ -259,7 +237,7 @@ function cassetteStove(p: string[]) {
   g.add(rbox(34, 8.5, 28, body, {}, 1.5))
   g.add(rbox(22, 0.6, 24, '#3a3a3c', { x: -4.5, y: 8.2 }, 0.3))
   g.add(cyl(3.6, 4, 1.2, '#2b2b2d', { x: -4.5, y: 8.6 }, 24))
-  g.add(noLine(torus(3, 0.22, '#55565a', { x: -4.5, y: 9.85, rx: PI / 2 })))
+  g.add(noOutlineDeep(torus(3, 0.22, '#55565a', { x: -4.5, y: 9.85, rx: PI / 2 })))
   // 五爪支架
   for (let i = 0; i < 5; i++) {
     const a = (i / 5) * PI * 2 + 0.3
@@ -300,11 +278,11 @@ function takoyaki(p: string[]) {
     for (let j = 0; j < 4; j++) {
       const x = -6.3 + i * 4.2
       const z = -6.3 + j * 4.2
-      g.add(noLine(cyl(1.75, 1.75, 0.3, '#1f1f22', { x, y: 5.6, z }, 18)))
+      g.add(noOutlineDeep(cyl(1.75, 1.75, 0.3, '#1f1f22', { x, y: 5.6, z }, 18)))
       if (r() < 0.75) {
         g.add(ball(1.6, '#e3a752', { x, y: 6.9, z }))
-        g.add(noLine(ball(1.62, '#6b3a1f', { x, y: 7.2, z }, [1, 0.6, 1])))
-        g.add(noLine(ball(0.25, '#4f9e5b', { x: x + 0.4, y: 8.3, z: z - 0.3 })))
+        g.add(noOutlineDeep(ball(1.62, '#6b3a1f', { x, y: 7.2, z }, [1, 0.6, 1])))
+        g.add(noOutlineDeep(ball(0.25, '#4f9e5b', { x: x + 0.4, y: 8.3, z: z - 0.3 })))
       }
     }
   for (const s of [-1, 1]) g.add(rbox(3, 2, 7, acc, { x: s * 13, y: 2.4 }, 0.7))
@@ -374,7 +352,7 @@ function electricSteamer(p: string[]) {
       if (i === 0) g.add(ball(2.6, k % 2 ? '#ffd34d' : '#c9733e', { x, y: y0 + 2.2, z }, [1, 0.7, 1]))
       else {
         g.add(ball(2.4, '#fffaf0', { x, y: y0 + 1.9, z }, [1, 0.62, 1]))
-        g.add(noLine(ball(0.6, '#f4e7c8', { x, y: y0 + 3.3, z })))
+        g.add(noOutlineDeep(ball(0.6, '#f4e7c8', { x, y: y0 + 3.3, z })))
       }
     }
   }
@@ -412,7 +390,7 @@ function toasterOven(p: string[]) {
   for (let i = 0; i < 8; i++) g.add(hcyl(0.2, 0.2, 22, M.silver, cx - 10.5 + i * 3, ry, 0, 'z', 8))
   // 吐司
   g.add(rbox(10, 1.4, 9.6, CRUST, { x: cx - 4, y: ry + 0.2 }, 0.6))
-  g.add(noLine(rbox(9, 0.4, 8.6, BREAD, { x: cx - 4, y: ry + 1.35 }, 0.2)))
+  g.add(noOutlineDeep(rbox(9, 0.4, 8.6, BREAD, { x: cx - 4, y: ry + 1.35 }, 0.2)))
   // 门：框 + 玻璃 + 横把手
   const dz = D / 2 + 0.6
   g.add(holePanel(27, 18, 0.8, panel, [{ kind: 'rect', x: 0, y: 1.6, w: 23, h: 13.6, r: 1 }], { x: cx, y: F + 1.5, z: dz }, 1.2))
@@ -469,8 +447,8 @@ function breadMaker(p: string[]) {
   g.add(feet(20, 28, 0.8, M.black))
   g.add(rbox(25, 26, 34, body, { y: 0.8 }, 4))
   g.add(rbox(23, 2, 24, lid, { y: 26.2, z: -3.5 }, 1.2))
-  g.add(noLine(rbox(13, 0.4, 9, '#3b3437', { y: 28.1, z: -4.5 }, 0.2)))
-  g.add(noLine(rbox(8, 0.3, 4, BREAD, { y: 28.25, z: -4.5 }, 0.2)))
+  g.add(noOutlineDeep(rbox(13, 0.4, 9, '#3b3437', { y: 28.1, z: -4.5 }, 0.2)))
+  g.add(noOutlineDeep(rbox(8, 0.3, 4, BREAD, { y: 28.25, z: -4.5 }, 0.2)))
   g.add(glassy(rbox(13.6, 0.3, 9.6, '#cfe6f0', { y: 28.5, z: -4.5 }, 0.1), '#cfe6f0', 0.35))
   g.add(rbox(7, 1.4, 1.6, acc, { y: 26.6, z: 8.8 }, 0.5))
   // 前上方操作面板
@@ -505,7 +483,7 @@ function donabeRiceCooker(p: string[]) {
   for (const s of [-1, 1]) g.add(torus(2, 0.7, clay, { x: s * 11.8, y: 12.2, rx: PI / 2 }))
   g.add(dome(10.8, 5, acc, { y: 14.6 }))
   g.add(cyl(10.8, 10.8, 0.4, acc, { y: 14.3 }, 32))
-  g.add(noLine(torus(8, 0.18, shade(acc, 0.2), { y: 17.6, rx: PI / 2 })))
+  g.add(noOutlineDeep(torus(8, 0.18, shade(acc, 0.2), { y: 17.6, rx: PI / 2 })))
   g.add(ball(1.6, clay, { y: 19.8 }, [1, 0.6, 1]))
   g.add(rbox(14, 4, 1, M.black, { y: 1.5, z: 13.6 }, 0.5))
   g.add(glow(4, 1.6, LCD, { x: -3, y: 2.7, z: 14.4 }))
@@ -520,7 +498,7 @@ function blender(p: string[]) {
   const g = new THREE.Group()
   g.add(rbox(17, 10, 18, base, {}, 3))
   g.add(knob(2.6, 1.6, acc, 0, 5, 9))
-  g.add(noLine(lit(torus(3.3, 0.18, '#9fe7ff', { y: 5, z: 9.1 }), '#9fe7ff', 0.6)))
+  g.add(noOutlineDeep(lit(torus(3.3, 0.18, '#9fe7ff', { y: 5, z: 9.1 }), '#9fe7ff', 0.6)))
   g.add(cyl(6, 6.5, 1.5, M.black, { y: 10 }, 24))
   g.add(glassy(cup(7.5, 5.5, 22, 0.5, GLASS, { y: 11.5 })))
   g.add(cyl(5.7, 4.9, 9, '#f28aa0', { y: 12.1 }, 24))
@@ -607,7 +585,7 @@ function electricPot(p: string[]) {
   g.add(chip(6, 2.4, LCD, 0, 28.6, -0.5))
   g.add(torus(7.5, 0.6, top, { y: 29.3, z: -3, rx: -PI / 2 }, PI))
   g.add(rbox(3, 14, 1, shade(body, -0.15), { y: 5, z: 11.9 }, 0.4))
-  g.add(noLine(rbox(1.8, 9, 0.6, '#a8d4f4', { y: 5.7, z: 12.4 }, 0.2)))
+  g.add(noOutlineDeep(rbox(1.8, 9, 0.6, '#a8d4f4', { y: 5.7, z: 12.4 }, 0.2)))
   g.add(lamp('#ff6b4a', 5, 3, 12, 0.4))
   return g
 }
@@ -752,7 +730,7 @@ function yukihira(r: number) {
     ])
       for (let i = 0; i < n; i++) {
         const a = (i / n) * PI * 2 + o
-        g.add(noLine(ball(0.6, shade(metal, 0.08), { x: Math.cos(a) * (r - 0.2), y, z: Math.sin(a) * (r - 0.2) }, [0.5, 1, 1]).rotateY(-a)))
+        g.add(noOutlineDeep(ball(0.6, shade(metal, 0.08), { x: Math.cos(a) * (r - 0.2), y, z: Math.sin(a) * (r - 0.2) }, [0.5, 1, 1]).rotateY(-a)))
       }
     for (const s of [-1, 1]) g.add(ball(1, metal, { y: h - 0.4, z: s * (r - 0.1) }, [1, 0.4, 1.3]))
     g.add(hcyl(1, 1.1, 3, metal, r + 1.2, h - 2, 0))
@@ -782,7 +760,7 @@ function tamagoyaki(p: string[]) {
   const g = new THREE.Group()
   g.add(tray(13, 3.2, 18, 0.5, pan, {}, 0.3))
   g.add(rbox(9.6, 3, 6.5, '#ffd34d', { y: 0.5, z: 2 }, 1.4))
-  for (const x of [-2.4, 0, 2.4]) g.add(noLine(rbox(0.5, 0.3, 6.6, '#e8a93a', { x, y: 3.25, z: 2 }, 0.1)))
+  for (const x of [-2.4, 0, 2.4]) g.add(noOutlineDeep(rbox(0.5, 0.3, 6.6, '#e8a93a', { x, y: 3.25, z: 2 }, 0.1)))
   const arm = new THREE.Group()
   arm.add(hcyl(0.8, 0.9, 3, M.gray, 1.5, 0, 0))
   arm.add(hcyl(1.1, 1.3, 15, wood, 10.5, 0, 0))
@@ -819,7 +797,7 @@ function seiro(p: string[]) {
   g.add(cyl(r + 0.3, r + 0.3, 2, bamboo, { y: 14.2 }, 36))
   g.add(torus(r + 0.35, 0.32, band, { y: 15.2, rx: PI / 2 }))
   g.add(dome(r, 3.5, shade(bamboo, 0.05), { y: 16.2 }))
-  for (const rr of [4, 8, 11]) g.add(noLine(torus(rr, 0.15, shade(bamboo, -0.15), { y: 16.2 + 3.5 * Math.sqrt(1 - (rr / r) ** 2), rx: PI / 2 })))
+  for (const rr of [4, 8, 11]) g.add(noOutlineDeep(torus(rr, 0.15, shade(bamboo, -0.15), { y: 16.2 + 3.5 * Math.sqrt(1 - (rr / r) ** 2), rx: PI / 2 })))
   return g
 }
 
@@ -863,7 +841,7 @@ function knifeBlock(p: string[]) {
   for (const [x, z] of slots) {
     blk.add(rbox(2.2, 0.8, 3, M.silver, { x, y: 21.8, z }, 0.3))
     blk.add(rbox(1.8, 9, 2.6, handleC, { x, y: 22.4, z }, 0.7))
-    for (const y of [25, 28.5]) blk.add(noLine(ball(0.3, M.silver, { x: x + 0.9, y, z })))
+    for (const y of [25, 28.5]) blk.add(noOutlineDeep(ball(0.3, M.silver, { x: x + 0.9, y, z })))
   }
   blk.add(cyl(1, 1, 7, M.silver, { x: 0, y: 21.8, z: -5.6 }, 12))
   blk.add(ball(1.2, M.silver, { x: 0, y: 29.4, z: -5.6 }))
@@ -943,7 +921,7 @@ function riceBin(p: string[]) {
   g.add(rbox(19, 1.8, 28, lid, { y: 39.6, z: -4 }, 0.8))
   g.add(rbox(6, 0.6, 1.6, shade(lid, -0.15), { y: 41.2, z: 8 }, 0.25))
   g.add(rbox(12, 18, 0.6, shade(body, -0.1), { y: 17, z: 19.2 }, 0.4))
-  g.add(noLine(rbox(10.6, 10, 0.4, RICE, { y: 17.7, z: 19.6 }, 0.2)))
+  g.add(noOutlineDeep(rbox(10.6, 10, 0.4, RICE, { y: 17.7, z: 19.6 }, 0.2)))
   g.add(glassy(rbox(11, 16.6, 0.3, '#dfeff8', { y: 17.7, z: 19.95 }, 0.1), '#dfeff8', 0.35))
   g.add(rbox(16, 10, 2, acc, { y: 2.5, z: 19.6 }, 0.8))
   g.add(rbox(8, 1.4, 1, shade(acc, -0.15), { y: 9.5, z: 21 }, 0.4))
@@ -978,7 +956,7 @@ function paperTowel(p: string[]) {
   g.add(cyl(0.7, 0.7, 29.6, base, { y: 1.4 }, 10))
   g.add(ball(1.2, acc, { y: 31.6 }))
   g.add(cyl(6, 6, 26, roll, { y: 1.8 }, 32))
-  g.add(noLine(cyl(2, 2, 0.3, '#c9a77c', { y: 27.7 }, 16)))
+  g.add(noOutlineDeep(cyl(2, 2, 0.3, '#c9a77c', { y: 27.7 }, 16)))
   g.add(rbox(7, 9, 0.3, roll, { x: 0, y: 10, z: 6.1 }, 0.1))
   return g
 }
@@ -1055,7 +1033,7 @@ function mosquitoCoil(p: string[]) {
   g.add(tube)
   // 燃烧端（末端在 +x 方向）：灰烬 + 火点
   const end = pts[pts.length - 1]
-  g.add(noLine(ball(0.36, '#d9d4cc', { x: end.x, y: 0.9, z: end.z })))
+  g.add(noOutlineDeep(ball(0.36, '#d9d4cc', { x: end.x, y: 0.9, z: end.z })))
   g.add(lamp('#ff5a2a', end.x - 0.1, 1.15, end.z, 0.25))
   return g
 }
@@ -1100,34 +1078,34 @@ function flySwatter(p: string[]) {
 
 // ---------- 配色 ----------
 
-const APP: Pal[] = [
+const APP: Pal3[] = [
   ['modern', M.white, M.char, M.silver],
   ['modern', M.black, M.char, M.silver],
   ['nordic', N.white, N.oak, N.sage],
   ['cute', C.mint, C.white, C.pink],
   ['retro', R.cream, R.teal, R.orange],
 ]
-const APP2: Pal[] = [
+const APP2: Pal3[] = [
   ['modern', M.black, M.char, M.silver],
   ['modern', M.white, M.light, M.char],
   ['nordic', N.linen, N.gray, N.oak],
   ['cute', C.pink, C.white, C.lemon],
   ['retro', R.mustard, R.cream, R.caramel],
 ]
-const POT: Pal[] = [
+const POT: Pal3[] = [
   ['retro', R.red, M.black, '#7a2a20'],
   ['nordic', N.blue, M.silver, '#5c7088'],
   ['nordic', N.sage, N.oak, '#6f8a6a'],
   ['industrial', I.iron, I.steel, '#1f1f20'],
   ['cute', C.pink, C.white, '#e98fa6'],
 ]
-const PAN: Pal[] = [
+const PAN: Pal3[] = [
   ['modern', M.silver, M.walnut, M.char],
   ['japanese', '#d8d4cc', J.wood, J.sumi],
   ['industrial', I.steel, I.walnut, I.iron],
   ['retro', COPPER, R.caramel, R.cream],
 ]
-const STOCK: Pal[] = [
+const STOCK: Pal3[] = [
   ['modern', M.silver, M.black, M.char],
   ['industrial', I.steel, I.iron, I.walnut],
   ['nordic', N.white, N.oak, N.blue],

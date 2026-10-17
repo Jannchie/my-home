@@ -13,6 +13,7 @@
 import * as THREE from 'three'
 import { cyl, rbox, shade, toon, useAnisotropy } from './toon'
 import { syncMatrix } from './matrices'
+import { G } from './geo'
 import type { Tag } from './tags'
 
 export type AssetCategory =
@@ -366,11 +367,8 @@ export function rng(seed: number) {
   }
 }
 
-export const G = (...c: THREE.Object3D[]) => {
-  const g = new THREE.Group()
-  for (const o of c) g.add(o)
-  return g
-}
+/** 把若干对象放进一个新 Group（实现在 geo.ts，这里转出，老代码照旧从 kit 引入） */
+export { G }
 
 /** 竖直的屏幕 / 发光面板：用很薄的圆角盒，正面朝 +z */
 export function glow(w: number, h: number, color: string, at: { x?: number; y: number; z: number; rx?: number; ry?: number }, k = 0.55) {

@@ -4,16 +4,11 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
-import { C, S, glow, rng, holePanel, paintPanel, rectPoly, type AssetCategory, type AssetDef, type StyleTag } from '../kit'
+import { C, glow, rng, holePanel, paintPanel, rectPoly, type AssetCategory, type AssetDef } from '../kit'
+import { P, noOutline } from '../geo'
+import { I, J, M, N, PROP, R, type Pal } from '../packkit'
 
 // ---------- 配色 / 定义 ----------
-
-type Pal = [StyleTag, string[]]
-const N = S.nordic
-const M = S.modern
-const J = S.japanese
-const I = S.industrial
-const R = S.retro
 
 const DARK = '#2b2b30'
 const RUBBER = '#3a3a3e'
@@ -46,15 +41,7 @@ function def(
   }
 }
 
-const PROP = { prop: true }
-
 // ---------- 小工具 ----------
-
-function P<T extends THREE.Object3D>(o: T, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0): T {
-  o.position.set(x, y, z)
-  o.rotation.set(rx, ry, rz)
-  return o
-}
 
 function lit<T extends THREE.Mesh>(m: T, color: string, k = 0.6): T {
   m.material = toon(color, { emissive: k })
@@ -68,24 +55,19 @@ function ghost<T extends THREE.Mesh>(m: T, color: string, a = 0.35): T {
   return m
 }
 
-const noLine = <T extends THREE.Object3D>(o: T): T => {
-  o.userData.noOutline = true
-  return o
-}
-
 /** 沿 x 的横圆柱，给中心 */
 const cylX = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 20) => P(cyl(r, r, len, color, {}, seg), x, y, z, 0, 0, Math.PI / 2)
 /** 沿 z 的圆柱（朝前的圆盘、旋钮），给中心 */
 const cylZ = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 24) => P(cyl(r, r, len, color, {}, seg), x, y, z, Math.PI / 2)
 
 /** 小指示灯 */
-const led = (x: number, y: number, z: number, color: string, r = 0.4) => noLine(lit(ball(r, color, { x, y, z }), color, 0.9))
+const led = (x: number, y: number, z: number, color: string, r = 0.4) => noOutline(lit(ball(r, color, { x, y, z }), color, 0.9))
 
 /** 朝前的旋钮：z 是安装面 */
 function knob(r: number, len: number, color: string, x: number, y: number, z: number) {
   const g = new THREE.Group()
   g.add(cylZ(r, len + 0.2, color, x, y, z + len / 2 - 0.1, 20))
-  g.add(noLine(rbox(r * 0.18, r * 0.7, 0.3, shade(color, -0.35), { x, y: y + r * 0.2, z: z + len + 0.05 }, 0.05)))
+  g.add(noOutline(rbox(r * 0.18, r * 0.7, 0.3, shade(color, -0.35), { x, y: y + r * 0.2, z: z + len + 0.05 }, 0.05)))
   return g
 }
 
@@ -688,7 +670,7 @@ function boombox(p: string[]) {
   g.add(rbox(8, 2.6, 0.3, '#6a7080', { y: 5.2, z: 8.35 }, 0.1))
   for (const s of [-1, 1]) g.add(cylZ(0.8, 0.3, '#f4f4f2', s * 2.2, 6.5, 8.55, 12))
   g.add(glow(14, 3.2, '#ffd27a', { y: 13.6, z: 8.1 }, 0.5))
-  g.add(noLine(rbox(0.3, 2.8, 0.3, C.red, { x: 2, y: 13.8, z: 8.6 }, 0.1)))
+  g.add(noOutline(rbox(0.3, 2.8, 0.3, C.red, { x: 2, y: 13.8, z: 8.6 }, 0.1)))
   g.add(cyl(6, 6, 0.6, shade(body, -0.1), { y: 21.8, z: 0.5 }, 32))
   g.add(cyl(2.4, 2.4, 0.3, '#dfe3ea', { y: 22.3, z: 0.5 }, 24))
   for (let i = 0; i < 6; i++) g.add(rbox(2.8, 1, 2.2, i === 5 ? C.red : '#c9ccd2', { x: -9 + i * 3.6, y: 21.5, z: 5.3 }, 0.3))
@@ -784,7 +766,7 @@ function cassetteDeck(p: string[]) {
     [8, 0.3],
   ] as const) {
     g.add(glow(5.6, 3.2, meter, { x, y: 7.8, z: 14.8 }, 0.6))
-    g.add(noLine(rbox(0.25, 2.6, 0.2, DARK, { x, y: 7.9, z: 15.3, rz: a }, 0.05)))
+    g.add(noOutline(rbox(0.25, 2.6, 0.2, DARK, { x, y: 7.9, z: 15.3, rz: a }, 0.05)))
   }
   for (let i = 0; i < 6; i++) g.add(rbox(2.6, 1.6, 2, '#d9dce1', { x: -0.5 + i * 3, y: 3, z: 14.9 }, 0.3))
   g.add(knob(1.5, 1.2, shade(face, -0.2), 17.5, 9, 14.6))
@@ -897,13 +879,13 @@ function tubeAmp(p: string[]) {
   for (const x of [-10.5, -3.5, 3.5, 10.5]) {
     g.add(cyl(2, 2, 0.8, DARK, { x, y: 9.6, z: 3.5 }, 16))
     g.add(cyl(0.9, 0.9, 4, '#8a8d93', { x, y: 10.6, z: 3.5 }, 12))
-    g.add(noLine(lit(cyl(0.45, 0.45, 2.6, AMBER, { x, y: 11.4, z: 3.5 }, 8), AMBER, 1.2)))
-    g.add(noLine(lit(ball(1.2, '#ff9a3c', { x, y: 12.6, z: 3.5 }, [1, 1.3, 1]), '#ff9a3c', 0.5)))
+    g.add(noOutline(lit(cyl(0.45, 0.45, 2.6, AMBER, { x, y: 11.4, z: 3.5 }, 8), AMBER, 1.2)))
+    g.add(noOutline(lit(ball(1.2, '#ff9a3c', { x, y: 12.6, z: 3.5 }, [1, 1.3, 1]), '#ff9a3c', 0.5)))
     g.add(ghost(capsule(1.6, 7, '#e8f4ff', { x, y: 10.4, z: 3.5 }), '#e8f4ff', 0.3))
   }
   for (const s of [-1, 1]) g.add(knob(1.8, 1.4, plate, s * 12, 4.5, 13))
   g.add(glow(8, 4, AMBER, { y: 2.6, z: 13.1 }, 0.6))
-  g.add(noLine(rbox(0.25, 3.2, 0.2, DARK, { x: 0.5, y: 2.9, z: 13.6, rz: -0.35 }, 0.05)))
+  g.add(noOutline(rbox(0.25, 3.2, 0.2, DARK, { x: 0.5, y: 2.9, z: 13.6, rz: -0.35 }, 0.05)))
   g.add(led(-16, 2, 13.1, C.red, 0.35))
   return ctr(g)
 }
@@ -943,7 +925,7 @@ function btBall(p: string[]) {
     for (let c = -2; c <= 2; c++) {
       const a = c * 0.26
       const e = (r - 1) * 0.26
-      g.add(noLine(ball(0.4, dot, { x: Math.sin(a) * Math.cos(e) * 6, y: 6 + Math.sin(e) * 6, z: Math.cos(a) * Math.cos(e) * 6 })))
+      g.add(noOutline(ball(0.4, dot, { x: Math.sin(a) * Math.cos(e) * 6, y: 6 + Math.sin(e) * 6, z: Math.cos(a) * Math.cos(e) * 6 })))
     }
   g.add(cyl(1.3, 1.3, 0.6, acc, { y: 11.8 }, 16))
   g.add(P(torus(1.4, 0.35, acc), 4.2, 10.4, 0, 0, Math.PI / 2, -0.8))

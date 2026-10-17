@@ -4,19 +4,9 @@
 
 import * as THREE from 'three'
 import { ball, cup, cyl, puck, rbox, shade, toon, torus, tray, useAnisotropy } from '../toon'
-import { C, G, S, SWING_OPEN, ellipsePoly, movable, rectPoly, rng, slab, type AssetCategory, type AssetDef, type DoorMotion, type Poly, type StyleTag, type SurfaceDef } from '../kit'
-
-const PI = Math.PI
-const N = S.nordic
-const M = S.modern
-const J = S.japanese
-const I = S.industrial
-const R = S.retro
-
-type V3 = [number, number, number]
-/** [风格, 主色, 副色, 点缀色] */
-type Pal = [StyleTag, string, string, string]
-type Build = (p: string[]) => THREE.Group
+import { C, G, SWING_OPEN, ellipsePoly, movable, rectPoly, rng, slab, type AssetCategory, type AssetDef, type DoorMotion, type Poly, type SurfaceDef } from '../kit'
+import { PI, mesh, noOutlineDeep, type V3 } from '../geo'
+import { I, J, M, N, R, type Build, type Pal3 } from '../packkit'
 
 const SOIL = '#8b6a4f'
 const BRASS = '#e9c46a'
@@ -32,12 +22,6 @@ const BOOKC = ['#c96f5a', '#e3b549', '#6f8fa8', '#8aa37b', '#efe6d6', '#5a4646',
 
 // ---------- 小工具 ----------
 
-function noOL<T extends THREE.Object3D>(o: T): T {
-  o.traverse((c) => {
-    c.userData.noOutline = true
-  })
-  return o
-}
 /** 发光件（灯罩、灯泡、指示灯） */
 function lit<T extends THREE.Mesh>(m: T, color: string, k = 0.6): T {
   m.material = toon(color, { emissive: k })
@@ -50,12 +34,6 @@ function glass<T extends THREE.Object3D>(o: T, color: string, a = 0.38): T {
     if ((c as THREE.Mesh).isMesh) (c as THREE.Mesh).material = toon(color, { transparent: a })
   })
   return o
-}
-function mesh(geo: THREE.BufferGeometry, color: string) {
-  const m = new THREE.Mesh(geo, toon(color))
-  m.castShadow = true
-  m.receiveShadow = true
-  return m
 }
 /** 两点之间的一根杆 */
 function stick(a: V3, b: V3, r: number, color: string, seg = 8) {
@@ -224,7 +202,7 @@ function fit(build: Build): Build {
 /**
  * 定义一款。带 surface / surfaces / fx 的（坐标要和声明对得上）builder 自己保证居中贴地，其余自动 fit。
  */
-function vb(id: string, name: string, family: string, sizeLabel: string, category: AssetCategory, [w, d, h]: [number, number, number], pals: Pal[], build: Build, extra: Partial<AssetDef> = {}): AssetDef {
+function vb(id: string, name: string, family: string, sizeLabel: string, category: AssetCategory, [w, d, h]: [number, number, number], pals: Pal3[], build: Build, extra: Partial<AssetDef> = {}): AssetDef {
   const keep = !!(extra.fx || extra.surface !== undefined || extra.surfaces)
   return {
     id,
@@ -327,7 +305,7 @@ function pachira(p: string[]) {
   for (let i = 0; i < 7; i++) {
     const a = (i / 7) * PI * 2 + rand() * 0.3
     const tip: V3 = [Math.cos(a) * 15, 110 + rand() * 12, Math.sin(a) * 15]
-    g.add(noOL(stick(top, tip, 0.4, STEM, 5)))
+    g.add(noOutlineDeep(stick(top, tip, 0.4, STEM, 5)))
     for (let k = -2; k <= 2; k++) {
       const ang = a + k * 0.42
       g.add(blade(18 - Math.abs(k) * 2.2, 0.36, 0.08, k % 2 ? C.leafD : C.leaf, tip, new THREE.Vector3(Math.cos(ang), -0.22 + Math.abs(k) * 0.05, Math.sin(ang))))
@@ -381,7 +359,7 @@ function monsteraBasket(p: string[]) {
     const L = 29 + rand() * 6
     const tilt = Math.min(0.14 + rand() * 0.2, Math.asin(Math.min(1, 12 / h)))
     const tip: V3 = [Math.cos(a) * Math.sin(tilt) * h, 26 + Math.cos(tilt) * h, Math.sin(a) * Math.sin(tilt) * h]
-    g.add(noOL(stick([0, 26, 0], tip, 0.75, C.leafD, 6)))
+    g.add(noOutlineDeep(stick([0, 26, 0], tip, 0.75, C.leafD, 6)))
     const leaf = monsteraLeaf(L, i % 2 ? C.leaf : shade(C.leaf, -0.08))
     const lg = G(leaf)
     lg.position.set(...tip)
@@ -775,7 +753,7 @@ function bsCube(p: string[]) {
     else if (f === 'bin1' || f === 'bin2') {
       const c = f === 'bin1' ? bin1 : bin2
       g.add(rbox(cw - 1.6, ch - 3, d - 4, c, { x: x0 + cw / 2, y, z: 1 }, 1.2))
-      g.add(noOL(rbox(7, 2, 0.4, shade(c, -0.4), { x: x0 + cw / 2, y: y + ch - 11, z: 13.1 }, 0.3)))
+      g.add(noOutlineDeep(rbox(7, 2, 0.4, shade(c, -0.4), { x: x0 + cw / 2, y: y + ch - 11, z: 13.1 }, 0.3)))
     } else if (f === 'deco') {
       g.add(cup(4.5, 3.8, 8, 0.6, C.white, { x: x0 + cw / 2, y, z: 1 }))
       g.add(ball(5, C.leaf, { x: x0 + cw / 2, y: y + 12, z: 1 }, [1, 0.85, 1]))
@@ -995,8 +973,8 @@ function scRetro(p: string[]) {
     const z = fz + (sx < 0 ? 1.4 : 0)
     const x = (sx * w) / 4 - sx * 0.5
     const parts: THREE.Object3D[] = [rbox(w / 2 - 2, 64, 1.2, shade(main, 0.05), { x, y: 23, z }, 0.8), rbox(w / 2 - 9, 54, 0.4, cane, { x, y: 28, z: z + 0.8 }, 0.2)]
-    for (let k = 0; k < 6; k++) parts.push(noOL(rbox(w / 2 - 9.4, 0.3, 0.3, shade(cane, -0.2), { x, y: 31 + k * 9, z: z + 1.1 }, 0.1)))
-    parts.push(noOL(cyl(1.6, 1.6, 0.4, shade(main, -0.35), { x: sx * 34, y: 55, z: z + 0.6, rx: PI / 2 }, 16)))
+    for (let k = 0; k < 6; k++) parts.push(noOutlineDeep(rbox(w / 2 - 9.4, 0.3, 0.3, shade(cane, -0.2), { x, y: 31 + k * 9, z: z + 1.1 }, 0.1)))
+    parts.push(noOutlineDeep(cyl(1.6, 1.6, 0.4, shade(main, -0.35), { x: sx * 34, y: 55, z: z + 0.6, rx: PI / 2 }, 16)))
     if (sx < 0) g.add(moving(parts, [0, 0, 0], { kind: 'slide', dx: w / 2 - 1 }))
     else for (const o of parts) g.add(o)
   }
@@ -1076,7 +1054,7 @@ function scShoji(p: string[]) {
     // 木格栅
     for (let k = 1; k < 4; k++) parts.push(rbox(0.8, 72, 0.6, shade(wood, 0.04), { x: x - (dw - 4) / 2 + (k * (dw - 4)) / 4, y: 15, z: z + 1.1 }, 0.2))
     for (let k = 1; k < 7; k++) parts.push(rbox(dw - 4, 0.8, 0.6, shade(wood, 0.04), { x, y: 15 + (k * 72) / 7 - 0.4, z: z + 1.1 }, 0.2))
-    parts.push(noOL(rbox(1.4, 6, 0.4, shade(wood, -0.4), { x: sx * 34.5, y: 50, z: z + 0.9 }, 0.2)))
+    parts.push(noOutlineDeep(rbox(1.4, 6, 0.4, shade(wood, -0.4), { x: sx * 34.5, y: 50, z: z + 0.9 }, 0.2)))
     // 前面那扇拉到后面那扇前头
     if (sx < 0) g.add(moving(parts, [0, 0, 0], { kind: 'slide', dx: w / 2 - 1.2 }))
     else for (const o of parts) g.add(o)
@@ -1110,9 +1088,9 @@ function scMesh(p: string[]) {
     for (const s2 of [-1, 1]) parts.push(rbox(2, 88, 1.4, frame, { x: x + s2 * (dw / 2 - 1), y: 7, z: fz }, 0.3))
     for (const yy of [7, 93]) parts.push(rbox(dw, 2, 1.4, frame, { x, y: yy, z: fz }, 0.3))
     // 钢丝网
-    for (let k = 1; k < 8; k++) parts.push(noOL(cyl(0.18, 0.18, 86, STEEL, { x: x - dw / 2 + (k * dw) / 8, y: 8, z: fz }, 4)))
+    for (let k = 1; k < 8; k++) parts.push(noOutlineDeep(cyl(0.18, 0.18, 86, STEEL, { x: x - dw / 2 + (k * dw) / 8, y: 8, z: fz }, 4)))
     for (let k = 1; k < 18; k++) {
-      const m = noOL(cyl(0.18, 0.18, dw - 2, STEEL, { x, y: 8 + (k * 86) / 18, z: fz - 0.3, rz: PI / 2 }, 4))
+      const m = noOutlineDeep(cyl(0.18, 0.18, dw - 2, STEEL, { x, y: 8 + (k * 86) / 18, z: fz - 0.3, rz: PI / 2 }, 4))
       m.position.y = 9 + (k * 86) / 18
       parts.push(m)
     }
@@ -1153,11 +1131,11 @@ function drTall(p: string[]) {
   const fz = d / 2 - 2 + 0.7
   const trays = drTallTrays()
   DR_TALL_ROWS.forEach(([y, h], i) => {
-    g.add(drawer([rbox(w - 4, h, 1.4, shade(main, 0.04), { y, z: fz }, 0.8), noOL(rbox(w - 12, 1, 0.4, groove, { y: y + h - 2.6, z: fz + 0.7 }, 0.2))], trays[i], shade(main, 0.08)))
+    g.add(drawer([rbox(w - 4, h, 1.4, shade(main, 0.04), { y, z: fz }, 0.8), noOutlineDeep(rbox(w - 12, 1, 0.4, groove, { y: y + h - 2.6, z: fz + 0.7 }, 0.2))], trays[i], shade(main, 0.08)))
   })
   ;[-1, 1].forEach((sx, k) => {
     const x = (sx * w) / 4 - sx * 0.5
-    g.add(drawer([rbox(w / 2 - 3, 16, 1.4, shade(main, 0.04), { x, y: 92, z: fz }, 0.8), noOL(rbox(w / 2 - 11, 1, 0.4, groove, { x, y: 105, z: fz + 0.7 }, 0.2))], trays[4 + k], shade(main, 0.08)))
+    g.add(drawer([rbox(w / 2 - 3, 16, 1.4, shade(main, 0.04), { x, y: 92, z: fz }, 0.8), noOutlineDeep(rbox(w / 2 - 11, 1, 0.4, groove, { x, y: 105, z: fz + 0.7 }, 0.2))], trays[4 + k], shade(main, 0.08)))
   })
   return g
 }
@@ -1221,7 +1199,7 @@ function drTansu(p: string[]) {
   }
   ;[-24, 2].forEach((x, k) => g.add(drawer([rbox(24, 25, 1.4, shade(wood, 0.04), { x, y: 65, z: fz }, 0.6), ...ring(x, 81)], trays[3 + k], shade(wood, 0.08))))
   // 右上小门：铰链在右
-  g.add(moving([rbox(22, 25, 1.4, shade(wood, -0.06), { x: 27, y: 65, z: fz }, 0.6), noOL(rbox(1.2, 7, 0.4, iron, { x: 19, y: 74, z: fz + 0.9 }, 0.2))], [38, 65, fz - 0.7], swing(false)))
+  g.add(moving([rbox(22, 25, 1.4, shade(wood, -0.06), { x: 27, y: 65, z: fz }, 0.6), noOutlineDeep(rbox(1.2, 7, 0.4, iron, { x: 19, y: 74, z: fz + 0.9 }, 0.2))], [38, 65, fz - 0.7], swing(false)))
   // 包角铁件
   for (const sx of [-1, 1]) for (const y of [6.4, 86.6]) g.add(rbox(5, 3, 0.5, iron, { x: sx * (w / 2 - 2.8), y: y - 1.5, z: fz + 1 }, 0.2))
   return g
@@ -1376,7 +1354,7 @@ function kettleCube(p: string[]) {
   g.add(rbox(2.4, 1.6, 3, body, { x: 6.8, y: 12.4 }, 0.6))
   g.add(rbox(2, 10, 3, lid, { x: -9.6, y: 4 }, 0.9))
   for (const y of [4, 12]) g.add(rbox(3.6, 2, 3, lid, { x: -7.6, y }, 0.8))
-  g.add(noOL(rbox(1.2, 7, 0.4, WATER, { y: 4.4, z: 6.4 }, 0.2)))
+  g.add(noOutlineDeep(rbox(1.2, 7, 0.4, WATER, { y: 4.4, z: 6.4 }, 0.2)))
   return g
 }
 
@@ -1394,7 +1372,7 @@ function epotRound(p: string[]) {
   g.add(rbox(4.4, 4, 4, top, { y: 19.6, z: 10.6 }, 1.2))
   g.add(cyl(0.9, 1, 2, shade(top, -0.12), { y: 18, z: 12 }, 12))
   g.add(cyl(1.6, 1.6, 0.8, acc, { y: 28.4, z: 4.6 }, 16))
-  g.add(noOL(rbox(1.6, 11, 0.6, '#a8d4f4', { y: 5, z: 10.5 }, 0.3)))
+  g.add(noOutlineDeep(rbox(1.6, 11, 0.6, '#a8d4f4', { y: 5, z: 10.5 }, 0.3)))
   g.add(cyl(0.8, 0.8, 0.6, '#d9dee6', { y: 28.4, z: -4 }, 10))
   return shift(g, 0, -1.1)
 }
@@ -1419,9 +1397,9 @@ function epotFloral(p: string[]) {
     const zr = 10.1 - (y - 1.6) * (1.4 / 21) + 0.2
     for (let k = 0; k < 5; k++) {
       const a = (k / 5) * PI * 2
-      g.add(noOL(ball(1.1, flower, { x: x + Math.cos(a) * 1.3, y: y + Math.sin(a) * 1.3, z: zr }, [1, 1, 0.4])))
+      g.add(noOutlineDeep(ball(1.1, flower, { x: x + Math.cos(a) * 1.3, y: y + Math.sin(a) * 1.3, z: zr }, [1, 1, 0.4])))
     }
-    g.add(noOL(ball(0.7, C.lemon, { x, y, z: zr + 0.3 }, [1, 1, 0.4])))
+    g.add(noOutlineDeep(ball(0.7, C.lemon, { x, y, z: zr + 0.3 }, [1, 1, 0.4])))
   }
   return shift(g, 0, -0.6)
 }
@@ -1448,7 +1426,7 @@ function epotSteel(p: string[]) {
   for (let k = 0; k < 18; k++) {
     const a = (k / 18) * PI * 2 + PI / 36
     if (Math.abs(Math.sin(a) - 1) < 0.08) continue
-    g.add(noOL(rbox(0.6, 18, 0.5, shade(steel, -0.14), { x: Math.cos(a) * 9.95, y: 3.6, z: Math.sin(a) * 9.95, ry: -a }, 0.2)))
+    g.add(noOutlineDeep(rbox(0.6, 18, 0.5, shade(steel, -0.14), { x: Math.cos(a) * 9.95, y: 3.6, z: Math.sin(a) * 9.95, ry: -a }, 0.2)))
   }
   g.add(cyl(9.8, 9.8, 2, black, { y: 23 }, 32))
   g.add(ball(9.4, steel, { y: 24.6 }, [1, 0.4, 1]))
@@ -1469,7 +1447,7 @@ function apple(g: THREE.Group, x: number, y: number, z: number, c: string, r = 3
 }
 function citrus(g: THREE.Group, x: number, y: number, z: number, c: string, r = 3) {
   g.add(ball(r, c, { x, y: y + r * 0.9, z }, [1, 0.9, 1]))
-  g.add(noOL(ball(0.5, C.leafD, { x, y: y + r * 1.78, z })))
+  g.add(noOutlineDeep(ball(0.5, C.leafD, { x, y: y + r * 1.78, z })))
 }
 function banana(g: THREE.Group, x: number, y: number, z: number, ry: number) {
   const b = tube(
@@ -1550,7 +1528,7 @@ function fruitWoodBowl(p: string[]) {
   ]
   for (const [x, y, z] of spots) {
     g.add(ball(3, mikan, { x, y: y + 2.4, z }, [1, 0.82, 1]))
-    g.add(noOL(ball(0.5, C.leafD, { x, y: y + 4.9, z })))
+    g.add(noOutlineDeep(ball(0.5, C.leafD, { x, y: y + 4.9, z })))
   }
   g.add(blade(3.6, 0.45, 0.12, leafC, [-0.4, 10.2, 0.2], new THREE.Vector3(1, 0.3, 0.4)))
   return g
@@ -1608,7 +1586,7 @@ function keyBean(p: string[]) {
     return [Math.cos(a) * 9 * r, Math.sin(a) * 6 * r - 0.3]
   })
   const g = G(shapeTray(outline, 0.86, 1.6, ceramic))
-  g.add(noOL(rbox(4, 0.2, 0.5, acc, { x: -4, y: 1.4, z: -4.1, ry: 0.4 }, 0.1)))
+  g.add(noOutlineDeep(rbox(4, 0.2, 0.5, acc, { x: -4, y: 1.4, z: -4.1, ry: 0.4 }, 0.1)))
   g.add(at(key(STEEL), -1.2, 0.6, -0.8, 0.2))
   g.add(torus(1, 0.3, ringC, { x: 3.4, y: 0.9, z: 1.2, rx: PI / 2 }))
   g.add(cyl(1.2, 1.2, 0.3, BRASS, { x: 4.2, y: 0.6, z: -2 }, 16))
@@ -1636,8 +1614,8 @@ function keyCat(p: string[]) {
   for (const sx of [-1, 1]) {
     // 耳朵：头顶（-z）两侧的三角块，底边埋进盘沿
     g.add(prism([[sx * 7.2, -1.6], [sx * 6.6, -6.2], [sx * 3.2, -3.6]], 1.6, ceramic))
-    g.add(noOL(prism([[sx * 6.5, -2.6], [sx * 6.3, -5.2], [sx * 4.4, -3.7]], 0.3, ear, 1.6)))
-    g.add(noOL(ball(1.1, ear, { x: sx * 4.6, y: 0.7, z: 3.4 }, [1, 0.2, 0.7])))
+    g.add(noOutlineDeep(prism([[sx * 6.5, -2.6], [sx * 6.3, -5.2], [sx * 4.4, -3.7]], 0.3, ear, 1.6)))
+    g.add(noOutlineDeep(ball(1.1, ear, { x: sx * 4.6, y: 0.7, z: 3.4 }, [1, 0.2, 0.7])))
   }
   g.add(at(key(STEEL), -1, 0.6, 0.6, 0.3))
   g.add(ball(0.9, bell, { x: -4.4, y: 1.5, z: 1.2 }))
@@ -1671,7 +1649,7 @@ function booksTall(p: string[]) {
     const bw = 22 - i * 1 + r() * 1.2
     const bd = 16 - i * 0.5
     g.add(place(slabBook(bw, t, bd, cols[i]), (r() - 0.5) * 1.2, y, (r() - 0.5) * 0.8, (r() - 0.5) * 0.3))
-    if (i === 1 || i === 4) g.add(noOL(rbox(0.8, 0.2, 3, i === 1 ? C.red : C.lemon, { x: -2 + i, y: y + t * 0.5, z: bd / 2 + 1 }, 0.05)))
+    if (i === 1 || i === 4) g.add(noOutlineDeep(rbox(0.8, 0.2, 3, i === 1 ? C.red : C.lemon, { x: -2 + i, y: y + t * 0.5, z: bd / 2 + 1 }, 0.05)))
     y += t
   }
   return g
@@ -1704,13 +1682,13 @@ function booksVintage(p: string[]) {
     const k = place(slabBook(bw, t, bd, cols[i], '#efe2c4'), (r() - 0.5) * 1, y, (r() - 0.5) * 0.8, (r() - 0.5) * 0.2)
     // 书脊在 -x：竹节 + 烫金线
     for (const z of [-bd / 3, 0, bd / 3]) k.add(rbox(0.6, t + 0.2, 0.8, cols[i], { x: -bw / 2 - 0.1, y: -0.1, z }, 0.25))
-    for (const z of [-bd / 6, bd / 6]) k.add(noOL(rbox(0.3, t * 0.5, 2.4, p[2], { x: -bw / 2 - 0.15, y: t * 0.25, z }, 0.1)))
+    for (const z of [-bd / 6, bd / 6]) k.add(noOutlineDeep(rbox(0.3, t * 0.5, 2.4, p[2], { x: -bw / 2 - 0.15, y: t * 0.25, z }, 0.1)))
     g.add(k)
     y += t
   }
   // 圆眼镜
   for (const sx of [-1, 1]) g.add(torus(1.7, 0.18, DARK, { x: sx * 2.1, y: y + 0.2, z: 1, rx: PI / 2 }))
-  g.add(noOL(cyl(0.12, 0.12, 0.9, DARK, { x: 0, y: y + 0.2, z: 1, rz: PI / 2 }, 6)))
+  g.add(noOutlineDeep(cyl(0.12, 0.12, 0.9, DARK, { x: 0, y: y + 0.2, z: 1, rz: PI / 2 }, 6)))
   g.children[g.children.length - 1].position.y = y + 0.2
   for (const sx of [-1, 1]) g.add(rbox(0.25, 0.25, 6, DARK, { x: sx * 3.8, y: y + 0.08, z: -2.2 }, 0.1))
   return g
@@ -1755,7 +1733,7 @@ function binSquare(p: string[]) {
   const [body, frame, flap] = p
   const g = G(rbox(21, 25, 21, body, {}, 2.5))
   g.add(rbox(22, 4, 22, frame, { y: 24.6 }, 1.8))
-  g.add(noOL(rbox(14, 0.4, 9, shade(frame, -0.4), { y: 28.4, z: 3 }, 0.2)))
+  g.add(noOutlineDeep(rbox(14, 0.4, 9, shade(frame, -0.4), { y: 28.4, z: 3 }, 0.2)))
   g.add(rbox(13.4, 0.8, 8.4, flap, { y: 28.6, z: 3, rx: -0.18 }, 0.3))
   return g
 }
@@ -1769,7 +1747,7 @@ function binDome(p: string[]) {
   g.add(ball(10.6, dome, { y: 24.4 }, [1, 0.8, 1]))
   // 前上方一块贴着圆顶曲面的推盖：θ 是离开正上方的角度，按椭球法线摆正
   const th = 0.7
-  const fl = G(rbox(8.4, 0.8, 6.4, flap, { y: -0.3 }, 0.35), noOL(rbox(9.4, 0.3, 7.4, shade(dome, -0.3), { y: -0.35 }, 0.15)))
+  const fl = G(rbox(8.4, 0.8, 6.4, flap, { y: -0.3 }, 0.35), noOutlineDeep(rbox(9.4, 0.3, 7.4, shade(dome, -0.3), { y: -0.35 }, 0.15)))
   fl.position.set(0, 24.4 + 8.48 * Math.cos(th), 10.6 * Math.sin(th))
   fl.rotation.x = Math.atan2(Math.sin(th), Math.cos(th) / 0.8)
   g.add(fl)
@@ -1808,7 +1786,7 @@ function perfumeTall(p: string[]) {
   const [juice, capC, label] = p
   const g = G(glass(rbox(5.2, 9.5, 3.6, '#eef7ff', {}, 0.8), '#eef7ff', 0.35))
   g.add(rbox(4.4, 7.6, 2.8, juice, { y: 0.6 }, 0.5))
-  g.add(noOL(rbox(2.4, 1.6, 0.3, label, { y: 3.6, z: 1.9 }, 0.1)))
+  g.add(noOutlineDeep(rbox(2.4, 1.6, 0.3, label, { y: 3.6, z: 1.9 }, 0.1)))
   g.add(cyl(0.8, 0.8, 1, STEEL, { y: 9.5 }, 12))
   g.add(rbox(2.6, 4.4, 2.6, capC, { y: 10.4 }, 0.5))
   return g

@@ -3,17 +3,10 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
-import { C, S, ellipsePoly, glow, rectPoly, rng, shell, slab, type AssetCategory, type AssetDef, type Poly, type StyleTag } from '../kit'
+import { C, ellipsePoly, glow, rectPoly, rng, shell, slab, type AssetCategory, type AssetDef, type Poly } from '../kit'
 import { hollow, swingDoor } from './styles-world'
-
-type V3 = [number, number, number]
-type Pal = [StyleTag, ...string[]]
-const N = S.nordic
-const M = S.modern
-const J = S.japanese
-const I = S.industrial
-const R = S.retro
-const PI = Math.PI
+import { P, PI, noOutline, type V3 } from '../geo'
+import { I, J, M, N, PROP, R, type PalFlat } from '../packkit'
 
 const MIR = '#cfdfe9'
 const SCREEN = '#bfe3ff'
@@ -28,7 +21,7 @@ function def(
   name: string,
   category: AssetCategory,
   [w, d, h]: [number, number, number],
-  pals: Pal[],
+  pals: PalFlat[],
   build: (p: string[]) => THREE.Group,
   extra: Partial<AssetDef> = {},
 ): AssetDef {
@@ -48,17 +41,6 @@ function def(
 }
 
 // ---------- 小工具 ----------
-
-function P<T extends THREE.Object3D>(o: T, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0): T {
-  o.position.set(x, y, z)
-  o.rotation.set(rx, ry, rz)
-  return o
-}
-
-const noLine = <T extends THREE.Object3D>(o: T): T => {
-  o.userData.noOutline = true
-  return o
-}
 
 function lit<T extends THREE.Mesh>(m: T, color: string, k = 0.5): T {
   m.material = toon(color, { emissive: k })
@@ -154,7 +136,7 @@ function shine(cx: number, cy: number, m: number, z: number) {
   const strip = (len: number, wd: number) => {
     const s = rbox(wd, len, 0.3, '#ffffff', {}, Math.min(0.12, wd * 0.3))
     s.material = toon('#ffffff', { emissive: 0.4 })
-    return noLine(s)
+    return noOutline(s)
   }
   const ux = Math.cos(a)
   const uy = Math.sin(a)
@@ -168,7 +150,7 @@ function mirrorGlass(shape: THREE.Shape, cx: number, cy: number, m: number) {
   const g = new THREE.Group()
   const gl = extrudeXY(shape, 0.6, MIR, 0)
   gl.material = toon(MIR, { emissive: 0.18 })
-  g.add(noLine(gl))
+  g.add(noOutline(gl))
   g.add(shine(cx, cy, m, 0.75))
   return g
 }
@@ -217,7 +199,7 @@ function dumbbellRound(len: number, r: number, plate: string, handle: string, ac
   return g
 }
 
-const DB_PALS: Pal[] = [
+const DB_PALS: PalFlat[] = [
   ['modern', M.black, CHROME, M.char],
   ['industrial', I.iron, I.steel, I.rust],
   ['cute', C.pink, '#f2f2f2', C.lemon],
@@ -335,7 +317,7 @@ function weightBench(angle: number) {
     return g
   }
 }
-const BENCH_PALS: Pal[] = [
+const BENCH_PALS: PalFlat[] = [
   ['modern', M.black, M.char, M.silver],
   ['industrial', I.leather, I.iron, I.rust],
   ['cute', C.pink, C.white, C.lemon],
@@ -354,7 +336,7 @@ function powerRack(full: boolean) {
       for (const z of zs) {
         g.add(rbox(6, 210, 6, frame, { x: sx * px, y: 5, z }, 0.8))
         // 挂孔
-        for (let y = 40; y < 200; y += 10) g.add(noLine(rbox(1.6, 1.6, 0.4, shade(frame, -0.2), { x: sx * px, y, z: z + 3.1 }, 0.3)))
+        for (let y = 40; y < 200; y += 10) g.add(noOutline(rbox(1.6, 1.6, 0.4, shade(frame, -0.2), { x: sx * px, y, z: z + 3.1 }, 0.3)))
       }
       if (full) {
         g.add(rbox(6, 6, 90, frame, { x: sx * px, y: 209, z: 0 }, 0.8))
@@ -386,8 +368,8 @@ function yogaMat(p: string[]) {
   const [mat, line] = p
   const g = new THREE.Group()
   g.add(rbox(61, 0.6, 173, mat, {}, 0.25))
-  g.add(noLine(rbox(1, 0.4, 160, line, { y: 0.5 }, 0.15)))
-  for (const s of [-1, 1]) g.add(noLine(rbox(50, 0.4, 1, line, { y: 0.5, z: s * 76 }, 0.15)))
+  g.add(noOutline(rbox(1, 0.4, 160, line, { y: 0.5 }, 0.15)))
+  for (const s of [-1, 1]) g.add(noOutline(rbox(50, 0.4, 1, line, { y: 0.5, z: s * 76 }, 0.15)))
   return g
 }
 
@@ -396,7 +378,7 @@ function yogaMatRolled(p: string[]) {
   const g = new THREE.Group()
   g.add(cylX(6.5, 61, mat, 0, 6.5, 0, 28))
   for (const s of [-1, 1])
-    for (const r of [1.6, 3.3, 5]) g.add(noLine(P(torus(r, 0.22, shade(mat, -0.15)), s * 30.55, 6.5, 0, 0, PI / 2, 0)))
+    for (const r of [1.6, 3.3, 5]) g.add(noOutline(P(torus(r, 0.22, shade(mat, -0.15)), s * 30.55, 6.5, 0, 0, PI / 2, 0)))
   void line
   for (const x of [-18, 18]) g.add(P(torus(6.75, 0.4, strap, {}, PI), x, 6.5, 0, 0, PI / 2, 0))
   return g
@@ -552,7 +534,7 @@ function treadmill(W: number, D: number, H: number, gym: boolean) {
     return g
   }
 }
-const TREAD_PALS: Pal[] = [
+const TREAD_PALS: PalFlat[] = [
   ['modern', M.char, RUBBER, '#5ac8fa'],
   ['industrial', I.iron, RUBBER, I.rust],
   ['cute', C.white, '#5b5d66', C.pink],
@@ -598,7 +580,7 @@ function spinBike(p: string[]) {
   }
   return g
 }
-const BIKE_PALS: Pal[] = [
+const BIKE_PALS: PalFlat[] = [
   ['modern', M.black, CHROME, M.char],
   ['industrial', I.iron, I.steel, I.leather],
   ['cute', C.white, C.pink, C.sky],
@@ -673,9 +655,9 @@ function bodyScale(p: string[]) {
   const g = new THREE.Group()
   g.add(rbox(29, 1.2, 29, base, { y: 0 }, 0.5))
   g.add(rbox(30, 1.0, 30, glass, { y: 1.1 }, 0.4))
-  g.add(noLine(lit(rbox(8, 0.5, 3, '#3a3d44', { y: 1.9, z: 10 }, 0.15), '#3a3d44', 0.1)))
-  g.add(noLine(lit(rbox(5, 0.3, 1.6, disp, { y: 2.2, z: 10 }, 0.1), disp, 0.7)))
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(noLine(rbox(6, 0.4, 9, CHROME, { x: sx * 7.5, y: 1.95, z: sz * 6.5 - 1 }, 0.15)))
+  g.add(noOutline(lit(rbox(8, 0.5, 3, '#3a3d44', { y: 1.9, z: 10 }, 0.15), '#3a3d44', 0.1)))
+  g.add(noOutline(lit(rbox(5, 0.3, 1.6, disp, { y: 2.2, z: 10 }, 0.1), disp, 0.7)))
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(noOutline(rbox(6, 0.4, 9, CHROME, { x: sx * 7.5, y: 1.95, z: sz * 6.5 - 1 }, 0.15)))
   return g
 }
 
@@ -720,7 +702,7 @@ function floorTiles(p: string[]) {
       const c = sx * sz > 0 ? a : b
       g.add(rbox(59.6, 1.2, 59.6, c, { x: sx * 30, z: sz * 30 }, 0.4))
       // 表面防滑纹
-      for (let i = 0; i < 3; i++) g.add(noLine(rbox(46, 0.5, 1.2, shade(c, -0.05), { x: sx * 30, y: 0.95, z: sz * 30 - 15 + i * 15 }, 0.2)))
+      for (let i = 0; i < 3; i++) g.add(noOutline(rbox(46, 0.5, 1.2, shade(c, -0.05), { x: sx * 30, y: 0.95, z: sz * 30 - 15 + i * 15 }, 0.2)))
     }
   // 外圈锯齿收边
   for (let i = 0; i < 12; i++) {
@@ -732,8 +714,6 @@ function floorTiles(p: string[]) {
   }
   return g
 }
-
-const PROP = { prop: true }
 
 const FITNESS: AssetDef[] = [
   def('fit-dumbbell-2', '哑铃', 'fitness', [22.6, 8.8, 7.6], DB_PALS, (p) => dumbbellHex(22, 4.4, p[0], p[1], p[2]), { ...PROP, family: 'dumbbell', sizeLabel: '2kg' }),
@@ -1038,7 +1018,7 @@ function teacupSaucer(p: string[]) {
   for (let i = 0; i < 6; i++) {
     const a = (i / 6) * PI * 2 + 0.5
     const rr = rAt(4.6, 2.6, 5.2, 2.8)
-    g.add(noLine(ball(0.4, dot, { x: Math.cos(a) * rr, y: y0 + 2.8, z: Math.sin(a) * rr }, [1, 1, 1])))
+    g.add(noOutline(ball(0.4, dot, { x: Math.cos(a) * rr, y: y0 + 2.8, z: Math.sin(a) * rr }, [1, 1, 1])))
   }
   g.add(cyl(rAt(4.6, 2.6, 5.2, 4.3) - 0.42, rAt(4.6, 2.6, 5.2, 4.3) - 0.42, 0.3, BLACK_TEA, { y: y0 + 4.0 }, 28))
   g.add(torus(1.4, 0.35, porc, { x: rAt(4.6, 2.6, 5.2, 3.4) + 0.95, y: y0 + 3.3 }))
@@ -1095,8 +1075,8 @@ function latteCup(p: string[]) {
   const ri = rAt(5.8, 3.0, 5.8, 5.0) - 0.45
   g.add(cyl(ri, ri, 0.3, COFFEE, { y: y0 + 4.7 }, 28))
   const ty = y0 + 5.0
-  for (const s of [-1, 1]) g.add(noLine(ball(1.3, foam, { x: s * 0.85, y: ty + 0.05, z: -0.4 }, [1, 0.2, 1])))
-  g.add(noLine(P(rbox(1.9, 0.35, 1.9, foam, {}, 0.15), 0, ty + 0.05, 0.55, 0, PI / 4, 0)))
+  for (const s of [-1, 1]) g.add(noOutline(ball(1.3, foam, { x: s * 0.85, y: ty + 0.05, z: -0.4 }, [1, 0.2, 1])))
+  g.add(noOutline(P(rbox(1.9, 0.35, 1.9, foam, {}, 0.15), 0, ty + 0.05, 0.55, 0, PI / 4, 0)))
   g.add(torus(1.5, 0.38, porc, { x: rAt(5.8, 3.0, 5.8, 3.5) + 0.9, y: y0 + 3.4 }))
   return g
 }
@@ -1316,7 +1296,7 @@ function printerFdm(p: string[]) {
   // 打印到一半的小花瓶
   g.add(cyl(5, 5, 0.3, fil, { x: 2, y: 9.75, z: -5.5 }, 28))
   g.add(cup(3.6, 4, 5, 0.5, fil, { x: 2, y: 9.8, z: -5.5 }))
-  for (const y of [1.6, 3.2]) g.add(noLine(torus(rAt(3.6, 4, 5, y) + 0.02, 0.12, shade(fil, -0.12), { x: 2, y: 9.8 + y, z: -5.5, rx: PI / 2 })))
+  for (const y of [1.6, 3.2]) g.add(noOutline(torus(rAt(3.6, 4, 5, y) + 0.02, 0.12, shade(fil, -0.12), { x: 2, y: 9.8 + y, z: -5.5, rx: PI / 2 })))
   // 龙门框架
   for (const s of [-1, 1]) {
     g.add(rbox(3, 40, 3, ext, { x: s * 21, y: 7, z: -8 }, 0.4))
@@ -1405,7 +1385,7 @@ function filamentRack(p: string[]) {
 function planeStand(plane: THREE.Object3D, y: number, base: string, rodTop = y - 1) {
   const g = new THREE.Group()
   g.add(rbox(14, 1.8, 9, base, {}, 0.6))
-  g.add(noLine(rbox(5, 0.4, 1.4, '#d9b25a', { y: 1.6, z: 3 }, 0.15)))
+  g.add(noOutline(rbox(5, 0.4, 1.4, '#d9b25a', { y: 1.6, z: 3 }, 0.15)))
   g.add(cyl(0.4, 0.5, rodTop - 1.8, CHROME, { y: 1.8 }, 10))
   g.add(cyl(0.9, 0.9, 0.6, CHROME, { y: rodTop - 0.6 }, 12))
   plane.position.y = y
@@ -1417,9 +1397,9 @@ function airliner(p: string[]) {
   const [body, tail, base] = p
   const pl = new THREE.Group()
   pl.add(P(capsule(2.2, 28, body), 0, 0, 0, 0, 0, PI / 2))
-  pl.add(noLine(rbox(22, 0.45, 4.9, '#5a6b80', { x: 1, y: 0.4 }, 0.2)))
-  pl.add(noLine(rbox(26, 0.4, 4.9, tail, { x: -1, y: -0.5 }, 0.2)))
-  pl.add(noLine(P(ball(1.6, '#3a4658', {}, [1, 0.5, 1.1]), 14.6, 0.9, 0)))
+  pl.add(noOutline(rbox(22, 0.45, 4.9, '#5a6b80', { x: 1, y: 0.4 }, 0.2)))
+  pl.add(noOutline(rbox(26, 0.4, 4.9, tail, { x: -1, y: -0.5 }, 0.2)))
+  pl.add(noOutline(P(ball(1.6, '#3a4658', {}, [1, 0.5, 1.1]), 14.6, 0.9, 0)))
   pl.add(wings([[4, 1.5], [-2, 1.5], [-8, 18], [-5, 18]], 0.6, body, -1.2))
   for (const s of [-1, 1]) pl.add(cylX(1.1, 4.5, tail, 0.6, -2.2, s * 7, 16))
   pl.add(P(finXY([[-11, 1.2], [-15.6, 1.2], [-17.6, 7.5], [-15.2, 7.5]], 0.5, tail), 0, 0, 0))
@@ -1438,7 +1418,7 @@ function fighter(p: string[]) {
   for (const s of [-1, 1]) {
     pl.add(P(finXY([[-5.5, 0.8], [-9.5, 0.8], [-10.5, 6], [-8.6, 6]], 0.35, acc), 0, 0, s * 1.6, s * 0.3, 0, 0))
     pl.add(rbox(4, 1.6, 1.2, shade(body, -0.1), { x: 3, y: -1, z: s * 1.6 }, 0.4))
-    pl.add(noLine(rbox(2.2, 0.3, 1, acc, { x: -5, y: -0.25, z: s * 6 }, 0.1)))
+    pl.add(noOutline(rbox(2.2, 0.3, 1, acc, { x: -5, y: -0.25, z: s * 6 }, 0.1)))
   }
   pl.add(cylX(1.1, 1.2, '#3a3a3c', -10.4, 0, 0, 14))
   pl.rotation.set(0.12, 0, 0.14)
@@ -1453,10 +1433,10 @@ function propPlane(p: string[]) {
   pl.add(cylX(1.7, 2, acc, 11, 0, 0, 16))
   pl.add(ball(0.8, acc, { x: 12.2 }))
   pl.add(P(rbox(0.4, 9, 1, '#3a3a3c', {}, 0.2), 12.6, 0, 0, 0.4, 0, 0))
-  pl.add(noLine(rbox(6, 1.3, 3.9, '#3a4658', { x: 5, y: 0.4 }, 0.3)))
+  pl.add(noOutline(rbox(6, 1.3, 3.9, '#3a4658', { x: 5, y: 0.4 }, 0.3)))
   pl.add(rbox(4.6, 0.6, 30, body, { x: 4.5, y: 2 }, 0.3))
-  pl.add(noLine(rbox(4.7, 0.4, 3, acc, { x: 4.5, y: 2.2, z: 13.2 }, 0.1)))
-  pl.add(noLine(rbox(4.7, 0.4, 3, acc, { x: 4.5, y: 2.2, z: -13.2 }, 0.1)))
+  pl.add(noOutline(rbox(4.7, 0.4, 3, acc, { x: 4.5, y: 2.2, z: 13.2 }, 0.1)))
+  pl.add(noOutline(rbox(4.7, 0.4, 3, acc, { x: 4.5, y: 2.2, z: -13.2 }, 0.1)))
   for (const s of [-1, 1]) {
     pl.add(bar([4, -1.5, s * 1.8], [4.5, 2, s * 8], 0.2, body, 6))
     pl.add(bar([5, -2, s * 1.4], [5, -4, s * 3], 0.25, '#3a3a3c', 6))
@@ -1476,7 +1456,7 @@ function helicopter(p: string[]) {
   pl.add(P(cyl(0.6, 1.4, 12, body, {}, 14), -11, 0.6, 0, 0, 0, PI / 2))
   pl.add(finXY([[-15.5, 0.5], [-17.4, 0.5], [-18.4, 5], [-16.9, 5]], 0.4, acc))
   pl.add(P(rbox(0.3, 4.4, 0.7, '#3a3a3c', {}, 0.1), -17.4, 3.6, 0.7, 0, 0, 0.5))
-  pl.add(noLine(rbox(5, 0.5, 8.5, acc, { x: -1, y: -1.2 }, 0.2)))
+  pl.add(noOutline(rbox(5, 0.5, 8.5, acc, { x: -1, y: -1.2 }, 0.2)))
   pl.add(cyl(0.5, 0.5, 2.2, '#3a3a3c', { y: 3.8 }, 10))
   pl.add(cyl(1, 1, 0.8, acc, { y: 5.8 }, 14))
   for (let i = 0; i < 4; i++) {
@@ -1503,7 +1483,7 @@ function drone(p: string[]) {
       g.add(cyl(1.3, 1.3, 1.8, '#3a3d44', { x: ex, y: 4.4, z: ez }, 14))
       g.add(cyl(0.3, 0.3, 0.8, CHROME, { x: ex, y: 6.2, z: ez }, 8))
       g.add(P(rbox(9, 0.2, 0.9, prop, {}, 0.1), ex, 6.8, ez, 0, sx * sz * 0.6 + 0.3, 0))
-      g.add(noLine(lit(ball(0.35, sz > 0 ? '#ff6b6b' : '#7fffb2', { x: ex, y: 4.4, z: ez + sz * 1.2 }), sz > 0 ? '#ff6b6b' : '#7fffb2', 0.8)))
+      g.add(noOutline(lit(ball(0.35, sz > 0 ? '#ff6b6b' : '#7fffb2', { x: ex, y: 4.4, z: ez + sz * 1.2 }), sz > 0 ? '#ff6b6b' : '#7fffb2', 0.8)))
     }
   g.add(cyl(0.5, 0.5, 1, '#3a3d44', { y: 2.5, z: 4.5 }, 8))
   g.add(ball(1.3, '#3a3d44', { y: 1.8, z: 4.5 }))
@@ -1590,7 +1570,7 @@ function trainLayout(p: string[]) {
   g.add(stadiumRing(L, r, 3, 0.8, '#a39d94', BT - 0.1, cz))
   for (let i = 0; i < 64; i++) {
     const q = stadiumPt(L, r, i / 64)
-    g.add(noLine(P(rbox(1.1, 0.4, 5.2, '#6e4f37', {}, 0.15), q.x, BT + 0.5, q.z + cz, 0, q.yaw, 0)))
+    g.add(noOutline(P(rbox(1.1, 0.4, 5.2, '#6e4f37', {}, 0.15), q.x, BT + 0.5, q.z + cz, 0, q.yaw, 0)))
   }
   for (const s of [-1, 1]) g.add(stadiumRing(L, r + s * 1.6, 0.22, 0.55, CHROME, BT + 0.85, cz))
   // 后直道上的隧道山
@@ -1607,7 +1587,7 @@ function trainLayout(p: string[]) {
   g.add(P(tun, 0, BT - 0.2, cz - r, 0, PI / 2, 0))
   g.add(tree(-6, BT + 15, cz - r - 2, 1.5, C.leaf))
   g.add(tree(5, BT + 13, cz - r + 4, 1.3))
-  g.add(noLine(ball(2.6, '#f4f4f2', { x: 0, y: BT + 16.6, z: cz - r - 2 }, [1.6, 0.5, 1.4])))
+  g.add(noOutline(ball(2.6, '#f4f4f2', { x: 0, y: BT + 16.6, z: cz - r - 2 }, [1.6, 0.5, 1.4])))
   // 车站
   const pz = cz + r + 6
   g.add(rbox(28, 2.6, 6, '#c9c4bb', { y: BT - 0.1, z: pz }, 0.4))
@@ -1628,7 +1608,7 @@ function trainLayout(p: string[]) {
     const car = new THREE.Group()
     car.add(rbox(8.6, 1, 3, '#3a3a3c', { y: 0 }, 0.3))
     car.add(rbox(8.6, 3.6, 3.4, i === 0 ? trainC : shade(trainC, 0.12), { y: 0.9 }, 0.8))
-    car.add(noLine(rbox(7, 1, 3.8, '#3a4658', { y: 2.6 }, 0.2)))
+    car.add(noOutline(rbox(7, 1, 3.8, '#3a4658', { y: 2.6 }, 0.2)))
     if (i === 0) car.add(ball(1.6, trainC, { x: 4.3, y: 2.3 }, [1, 1, 1.05]))
     P(car, q.x, BT + 1.4, q.z + cz, 0, q.yaw, 0)
     g.add(car)
@@ -1641,15 +1621,15 @@ function shinkansenDisplay(p: string[]) {
   const g = new THREE.Group()
   g.add(rbox(60, 2, 8, wood, {}, 0.6))
   g.add(rbox(56, 0.8, 5, '#a39d94', { y: 1.9 }, 0.3))
-  for (let i = 0; i < 22; i++) g.add(noLine(rbox(1, 0.4, 4.6, '#6e4f37', { x: -26.25 + i * 2.5, y: 2.6 }, 0.1)))
+  for (let i = 0; i < 22; i++) g.add(noOutline(rbox(1, 0.4, 4.6, '#6e4f37', { x: -26.25 + i * 2.5, y: 2.6 }, 0.1)))
   for (const s of [-1, 1]) g.add(rbox(56, 0.5, 0.35, CHROME, { y: 2.9, z: s * 1.4 }, 0.1))
   for (const s of [-1, 1]) {
     const cx = s * 9
     g.add(rbox(17, 3.4, 3.0, white, { x: cx, y: 3.9 }, 0.9))
     g.add(ball(1.5, white, { x: cx + s * 8.4, y: 5.4 }, [4.2, 1.1, 1.0]))
-    g.add(noLine(ball(1, '#2a3444', { x: cx + s * 10.6, y: 6.25 }, [1.8, 0.45, 1.05])))
-    g.add(noLine(rbox(16.6, 0.45, 3.6, stripe, { x: cx, y: 4.8 }, 0.15)))
-    g.add(noLine(rbox(14, 0.8, 3.6, '#3a4658', { x: cx - s * 0.6, y: 6.0 }, 0.2)))
+    g.add(noOutline(ball(1, '#2a3444', { x: cx + s * 10.6, y: 6.25 }, [1.8, 0.45, 1.05])))
+    g.add(noOutline(rbox(16.6, 0.45, 3.6, stripe, { x: cx, y: 4.8 }, 0.15)))
+    g.add(noOutline(rbox(14, 0.8, 3.6, '#3a4658', { x: cx - s * 0.6, y: 6.0 }, 0.2)))
     for (const dx of [-5.5, 5.5]) g.add(rbox(3, 0.7, 2.2, '#3a3a3c', { x: cx + dx, y: 3.3 }, 0.2))
   }
   g.add(rbox(1.6, 2.6, 2.4, '#3a3a3c', { y: 4.2 }, 0.4))
@@ -1661,7 +1641,7 @@ function steamLoco(k: number) {
     const [body, acc, base] = p
     const g = new THREE.Group()
     g.add(rbox(44, 1.5, 8, base, {}, 0.5))
-    for (let i = 0; i < 16; i++) g.add(noLine(rbox(1, 0.3, 5.4, '#6e4f37', { x: -20.25 + i * 2.7, y: 1.4 }, 0.1)))
+    for (let i = 0; i < 16; i++) g.add(noOutline(rbox(1, 0.3, 5.4, '#6e4f37', { x: -20.25 + i * 2.7, y: 1.4 }, 0.1)))
     for (const s of [-1, 1]) g.add(rbox(42, 0.5, 0.4, CHROME, { y: 1.5, z: s * 1.6 }, 0.1))
     const L = new THREE.Group()
     for (const s of [-1, 1]) {
@@ -1673,7 +1653,7 @@ function steamLoco(k: number) {
       L.add(cylZ(1.1, 0.5, acc, 13.4, 3.1, z, 14))
       L.add(cylZ(1.1, 0.5, acc, -4.4, 3.1, z, 14))
       for (const x of [-16.5, -10.5]) L.add(cylZ(1.1, 0.5, acc, x, 3.1, z, 14))
-      L.add(noLine(rbox(10, 0.4, 0.3, CHROME, { x: 4.4, y: 3.3, z: s * 2.05 }, 0.1)))
+      L.add(noOutline(rbox(10, 0.4, 0.3, CHROME, { x: 4.4, y: 3.3, z: s * 2.05 }, 0.1)))
     }
     L.add(rbox(22, 1.2, 2.6, body, { x: 4.5, y: 4.6 }, 0.3))
     L.add(cylX(2.4, 14, body, 7, 8.2, 0, 24))
@@ -1686,7 +1666,7 @@ function steamLoco(k: number) {
     L.add(ball(1, body, { x: 3.5, y: 10.3 }))
     L.add(rbox(6, 7, 5.2, body, { x: -3, y: 5.8 }, 0.5))
     L.add(rbox(7, 0.6, 6, acc, { x: -3, y: 12.8 }, 0.25))
-    L.add(noLine(rbox(2.2, 2.2, 5.8, '#2a2f38', { x: -2.6, y: 9 }, 0.2)))
+    L.add(noOutline(rbox(2.2, 2.2, 5.8, '#2a2f38', { x: -2.6, y: 9 }, 0.2)))
     L.add(P(rbox(1.6, 2, 3.4, acc, {}, 0.3), 17.4, 3.4, 0, 0, 0, -0.5))
     L.add(rbox(12, 5.4, 4.8, body, { x: -13.5, y: 4.6 }, 0.6))
     L.add(rbox(10, 1, 4, '#222326', { x: -13.5, y: 9.6 }, 0.3))
@@ -1724,7 +1704,7 @@ function gunpla(p: string[], k = 1) {
   g.add(rbox(5.4, 3.8, 3.2, sec, { y: 11.8 }, 0.6))
   g.add(rbox(1.2, 1, 1.2, joint, { y: 15.5 }, 0.3))
   g.add(rbox(1.8, 1.8, 1.9, main, { y: 15.8 }, 0.4))
-  g.add(noLine(lit(rbox(1.4, 0.4, 0.3, '#7fffb2', { y: 16.6, z: 1.05 }, 0.1), '#7fffb2', 0.8)))
+  g.add(noOutline(lit(rbox(1.4, 0.4, 0.3, '#7fffb2', { y: 16.6, z: 1.05 }, 0.1), '#7fffb2', 0.8)))
   g.add(rbox(0.5, 0.5, 0.4, acc, { y: 17.2, z: 0.85 }, 0.15))
   for (const s of [-1, 1]) g.add(P(rbox(0.25, 2.2, 0.3, acc, {}, 0.1), s * 0.75, 17.9, 0.8, 0, 0, -s * 0.9))
   g.add(rbox(3.4, 3, 1.6, sec, { y: 12.2, z: -2.3 }, 0.4))
@@ -1740,7 +1720,7 @@ function displayCase(p: string[]) {
   const [base, main, acc] = p
   const g = new THREE.Group()
   g.add(rbox(30, 4, 22, base, {}, 0.8))
-  g.add(noLine(rbox(8, 1.6, 0.4, '#d9b25a', { y: 1.2, z: 11.1 }, 0.15)))
+  g.add(noOutline(rbox(8, 1.6, 0.4, '#d9b25a', { y: 1.2, z: 11.1 }, 0.15)))
   g.add(P(gunpla([main, shade(main, -0.25), acc], 1.25), 0, 4, -0.5))
   g.add(ghost(rbox(28, 30.5, 20, '#dff0ff', { y: 3.7 }, 0.6), '#dff0ff', 0.25))
   g.add(shine(-7, 24, 14, 10.45))
@@ -1752,8 +1732,8 @@ function workMat(p: string[]) {
   const g = new THREE.Group()
   g.add(rbox(45, 0.3, 30, mat, {}, 0.15))
   const grid = shade(mat, 0.14)
-  for (let i = -4; i <= 4; i++) g.add(noLine(rbox(0.2, 0.6, 29, grid, { x: i * 5 }, 0.05)))
-  for (let j = -2; j <= 2; j++) g.add(noLine(rbox(44, 0.6, 0.2, grid, { z: j * 5 + 2.5 }, 0.05)))
+  for (let i = -4; i <= 4; i++) g.add(noOutline(rbox(0.2, 0.6, 29, grid, { x: i * 5 }, 0.05)))
+  for (let j = -2; j <= 2; j++) g.add(noOutline(rbox(44, 0.6, 0.2, grid, { z: j * 5 + 2.5 }, 0.05)))
   // 刻刀
   g.add(cylX(0.45, 10, acc, -12, 1.05, 10, 12))
   g.add(cylX(0.5, 1.5, CHROME, -6.4, 1.05, 10, 12))
@@ -1784,7 +1764,7 @@ function airbrushSet(p: string[]) {
   const [body, acc, hose] = p
   const g = new THREE.Group()
   g.add(rbox(16, 10, 11, body, { x: -6 }, 1.5))
-  for (let i = 0; i < 4; i++) g.add(noLine(rbox(0.5, 5, 0.4, shade(body, -0.15), { x: -12 + i * 1.6, y: 2.5, z: 5.6 }, 0.1)))
+  for (let i = 0; i < 4; i++) g.add(noOutline(rbox(0.5, 5, 0.4, shade(body, -0.15), { x: -12 + i * 1.6, y: 2.5, z: 5.6 }, 0.1)))
   g.add(cylZ(1.8, 0.8, CHROME, -1.5, 6.5, 5.8, 20))
   g.add(cylZ(1.4, 0.4, '#ffffff', -1.5, 6.5, 6.25, 20))
   g.add(cyl(1, 1, 1.2, acc, { x: -10, y: 10 }, 14))
@@ -1865,7 +1845,7 @@ function celestialGlobe(p: string[]) {
     const u = rand() * 2 - 1
     const th = rand() * PI * 2
     const s = Math.sqrt(1 - u * u)
-    g.add(noLine(ball(0.35 + rand() * 0.25, star, { x: s * Math.cos(th) * 12, y: 24 + u * 12, z: s * Math.sin(th) * 12 })))
+    g.add(noOutline(ball(0.35 + rand() * 0.25, star, { x: s * Math.cos(th) * 12, y: 24 + u * 12, z: s * Math.sin(th) * 12 })))
   }
   g.add(P(torus(12.05, 0.22, star), 0, 24, 0, PI / 2 + 0.41, 0, 0))
   g.add(P(torus(12.7, 0.4, brass), 0, 24, 0, 0, 0, 0.41))
@@ -1919,7 +1899,7 @@ function guitar(k: number) {
     gt.add(rbox(8, 1.4, 0.8, neck, { y: 15, z: 4.75 }, 0.3))
     gt.add(rbox(4.6, 40, 2.4, neck, { y: 52, z: 2.5 }, 0.8))
     gt.add(rbox(4.8, 38, 0.6, '#3a2a20', { y: 52.5, z: 3.95 }, 0.2))
-    for (let i = 0; i < 6; i++) gt.add(noLine(rbox(0.08, 76, 0.08, '#e8e8e8', { x: -1.5 + i * 0.6, y: 15.6, z: 5.3 }, 0.02)))
+    for (let i = 0; i < 6; i++) gt.add(noOutline(rbox(0.08, 76, 0.08, '#e8e8e8', { x: -1.5 + i * 0.6, y: 15.6, z: 5.3 }, 0.02)))
     const head = new THREE.Group()
     head.add(rbox(7, 15, 1.6, neck, {}, 0.6))
     for (const s of [-1, 1]) for (let i = 0; i < 3; i++) head.add(cylX(0.5, 2, CHROME, s * 4.2, 4 + i * 4, 0, 8))
@@ -1947,7 +1927,7 @@ function guitar(k: number) {
     return out
   }
 }
-const GUITAR_PALS: Pal[] = [
+const GUITAR_PALS: PalFlat[] = [
   ['nordic', '#e2b77a', '#7a5a43', '#2e2f33'],
   ['retro', '#d27a2c', '#3e2a1e', '#2e2f33'],
   ['modern', M.char, M.black, M.silver],
@@ -1974,8 +1954,8 @@ function keyboard(p: string[]) {
     if (![0, 1, 3, 4, 5].includes(i % 7)) continue
     g.add(rbox(1.3, 1.3, 8, '#222326', { x: -43 + kw * (i + 1), y: 83.2, z: 6.1 }, 0.2))
   }
-  g.add(noLine(lit(rbox(14, 0.4, 5, SCREEN, { y: 82.9, z: -8 }, 0.1), SCREEN, 0.5)))
-  for (const s of [-1, 1]) g.add(noLine(rbox(12, 0.4, 7, '#3a3a3c', { x: s * 38, y: 82.9, z: -7 }, 0.2)))
+  g.add(noOutline(lit(rbox(14, 0.4, 5, SCREEN, { y: 82.9, z: -8 }, 0.1), SCREEN, 0.5)))
+  for (const s of [-1, 1]) g.add(noOutline(rbox(12, 0.4, 7, '#3a3a3c', { x: s * 38, y: 82.9, z: -7 }, 0.2)))
   for (let i = 0; i < 6; i++) g.add(cyl(0.8, 0.8, 1, i % 3 ? M.silver : acc, { x: -26 + i * 3, y: 82.6, z: -8 }, 12))
   for (let i = 0; i < 6; i++) g.add(rbox(1.6, 0.8, 1.2, acc, { x: 12 + i * 2.6, y: 82.7, z: -8 }, 0.2))
   g.add(P(rbox(50, 14, 0.8, body, {}, 0.3), 0, 89.5, -13.5, -0.25, 0, 0))
@@ -2003,7 +1983,7 @@ function easel(p: string[]) {
   g.add(rbox(6, 3, 5, wood, { y: 120.5, z: 3 }, 0.6))
   return centered(g)
 }
-const EASEL_PALS: Pal[] = [
+const EASEL_PALS: PalFlat[] = [
   ['nordic', N.oak, N.blue, N.sage],
   ['retro', R.caramel, R.teal, R.olive],
   ['japanese', J.wood, '#f6f0e1', J.tatami],
@@ -2011,7 +1991,7 @@ const EASEL_PALS: Pal[] = [
   ['industrial', I.walnut, '#c9c4bb', I.rust],
 ]
 
-const MODEL_BASE: Pal[] = [
+const MODEL_BASE: PalFlat[] = [
   ['modern', '#e9ecef', '#2f5fb5', M.black],
   ['retro', R.cream, R.red, R.caramel],
   ['industrial', '#8a8f86', '#6b7a55', I.walnut],
@@ -2411,7 +2391,7 @@ function floorLed(p: string[]) {
   const pan = mirrorPanel((s) => rrOutline(s, 52, 160, 8), (s) => rrOutline(s, 46, 154, 5, 3), (s) => rrOutline(s, 46.6, 154.6, 5.3, 2.7), 3, frame, back, [-8, 112, 42])
   const led = frameOf(rrOutline(new THREE.Shape(), 46, 154, 5, 3), rrOutline(new THREE.Path(), 43, 151, 3.5, 4.5), 0.6, C.lamp)
   led.material = toon(C.lamp, { emissive: 0.8 })
-  pan.add(noLine(P(led, 0, 0, 1.2)))
+  pan.add(noOutline(P(led, 0, 0, 1.2)))
   const at = leanPanel(g, pan, 3, -0.1)
   kickstand(g, at(0, 110, -1.5), 32, frame)
   return centered(g)
@@ -2442,7 +2422,7 @@ function floorWheel(p: string[]) {
   return g
 }
 
-const FLOOR_MIR_PALS: Pal[] = [
+const FLOOR_MIR_PALS: PalFlat[] = [
   ['nordic', N.oak, N.oakL, N.white],
   ['cute', C.white, C.woodL, C.pink],
   ['modern', M.black, M.char, M.silver],
@@ -2456,11 +2436,11 @@ function tableRound(p: string[]) {
   const [frame, base] = p
   const g = new THREE.Group()
   g.add(rbox(14, 2.5, 8, base, {}, 0.6))
-  g.add(noLine(rbox(11, 0.4, 1.4, shade(base, -0.2), { y: 2.3 }, 0.1)))
+  g.add(noOutline(rbox(11, 0.4, 1.4, shade(base, -0.2), { y: 2.3 }, 0.1)))
   const m = new THREE.Group()
   m.add(torus(9.4, 0.7, frame))
   m.add(cylZ(9.6, 0.8, frame, 0, 0, -0.75, 32))
-  m.add(lit(noLine(cylZ(9.2, 0.6, MIR, 0, 0, 0, 32)), MIR, 0.18))
+  m.add(lit(noOutline(cylZ(9.2, 0.6, MIR, 0, 0, 0, 32)), MIR, 0.18))
   m.add(shine(-2.5, 2.5, 11, 0.75))
   P(m, 0, 12.5, 0, -0.06, 0, 0)
   g.add(m)
@@ -2476,8 +2456,8 @@ function tableSwivel(p: string[]) {
   for (const s of [-1, 1]) g.add(cyl(0.4, 0.4, 1.1, frame, { y: 24 + s * 9.55 - 0.55 }, 8))
   const d = new THREE.Group()
   d.add(cylZ(9, 1, rim, 0, 0, 0, 32))
-  d.add(lit(noLine(cylZ(8.6, 0.6, MIR, 0, 0, 0.4, 32)), MIR, 0.18))
-  d.add(lit(noLine(cylZ(8.6, 0.6, '#dde9f2', 0, 0, -0.4, 32)), '#dde9f2', 0.18))
+  d.add(lit(noOutline(cylZ(8.6, 0.6, MIR, 0, 0, 0.4, 32)), MIR, 0.18))
+  d.add(lit(noOutline(cylZ(8.6, 0.6, '#dde9f2', 0, 0, -0.4, 32)), '#dde9f2', 0.18))
   d.add(shine(-2.4, 2.4, 10, 1.15))
   P(d, 0, 24, 0, 0, 0.55, 0)
   g.add(d)
@@ -2492,10 +2472,10 @@ function tableRing(p: string[]) {
   g.add(rbox(3, 10, 2, body, { y: 2 }, 0.5))
   const h = new THREE.Group()
   h.add(cylZ(11.7, 2, body, 0, 0, -0.9, 36))
-  h.add(lit(noLine(cylZ(10, 0.6, MIR, 0, 0, 0.1, 32)), MIR, 0.18))
+  h.add(lit(noOutline(cylZ(10, 0.6, MIR, 0, 0, 0.1, 32)), MIR, 0.18))
   const ring = torus(10.8, 0.9, C.lamp, { z: 0.6 })
   ring.material = toon(C.lamp, { emissive: 0.8 })
-  h.add(noLine(ring))
+  h.add(noOutline(ring))
   h.add(shine(-2.6, 2.6, 11, 0.85))
   P(h, 0, 23, 0, -0.05, 0, 0)
   g.add(h)
@@ -2543,7 +2523,7 @@ function handMirror(p: string[]) {
   return centered(g)
 }
 
-const TABLE_MIR_PALS: Pal[] = [
+const TABLE_MIR_PALS: PalFlat[] = [
   ['cute', C.white, C.woodL, C.pink],
   ['nordic', N.oak, N.white, N.white],
   ['modern', M.black, M.char, M.char],
@@ -2592,17 +2572,17 @@ function wallCabinet(p: string[]) {
   for (const s of [-1, 1]) g.add(rbox(1.5, 11, 12.4, body, { x: s * 29.25, y: y + 1.4, z: -1.3 }, 0.4))
   g.add(hollow(60, 58, 12.4, body, { y: y + 12, z: -1.3 }, 1.2))
   for (const sy of [31, 50]) g.add(rbox(57.4, 1, 11, shade(body, 0.05), { y: y + sy, z: -0.8 }, 0.2))
-  g.add(noLine(lit(rbox(50, 0.4, 2, C.lamp, { y: y + 11.7, z: 2 }, 0.1), C.lamp, 0.8)))
+  g.add(noOutline(lit(rbox(50, 0.4, 2, C.lamp, { y: y + 11.7, z: 2 }, 0.1), C.lamp, 0.8)))
   // 两扇镜门，铰链在外侧
   for (const s of [-1, 1]) {
     const parts = [rbox(29.6, 56, 1.5, door, { x: s * 14.9, y: y + 13, z: 5.65 }, 0.5), P(mirrorGlass(rrOutline(new THREE.Shape(), 26.6, 52, 1, 0), -4, 34, 24), s * 14.9, y + 15, 6.65)]
     g.add(swingDoor(parts, s * 29.7, 6.4, s < 0 ? 'left' : 'right'))
   }
-  g.add(noLine(lit(rbox(40, 0.6, 1, acc, { y: y + 69.4, z: 3 }, 0.2), acc, 0.6)))
+  g.add(noOutline(lit(rbox(40, 0.6, 1, acc, { y: y + 69.4, z: 3 }, 0.2), acc, 0.6)))
   return g
 }
 
-const WALL_MIR_PALS: Pal[] = [
+const WALL_MIR_PALS: PalFlat[] = [
   ['nordic', N.oak, N.white, N.mustard],
   ['modern', M.black, M.char, M.silver],
   ['retro', '#c9a24a', R.caramel, '#c9a24a'],

@@ -10,19 +10,9 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
-import { C, G, S, SWING_OPEN, ellipsePoly, holePanel, movable, rectPoly, rng, rod, shell, slab, type AssetCategory, type AssetDef, type Hole, type Poly, type StyleTag, type SurfaceDef } from '../kit'
-
-const PI = Math.PI
-type V3 = [number, number, number]
-type Pal = [StyleTag, string[]]
-type Dims = [number, number, number]
-type Build = (p: string[]) => THREE.Group
-
-const N = S.nordic
-const M = S.modern
-const J = S.japanese
-const I = S.industrial
-const R = S.retro
+import { C, G, SWING_OPEN, ellipsePoly, holePanel, movable, rectPoly, rng, rod, shell, slab, type AssetCategory, type AssetDef, type Hole, type Poly, type StyleTag, type SurfaceDef } from '../kit'
+import { PI, box3, type V3 } from '../geo'
+import { I, J, M, N, R, type Build, type Dims, type Pal } from '../packkit'
 
 const STEEL = '#c3c7cc'
 const PAPER = '#fbfaf6'
@@ -52,11 +42,6 @@ const prop = (id: string, name: string, category: AssetCategory, dims: Dims, pal
   asset(id, name, category, dims, pals, build, { prop: true, ...extra })
 
 // ---------- 小工具 ----------
-
-function box3(o: THREE.Object3D) {
-  o.updateMatrixWorld(true)
-  return new THREE.Box3().setFromObject(o, true)
-}
 
 /** 落地居中：包围盒底面在 y = 0、xz 居中 */
 function ground<T extends THREE.Object3D>(o: T): T {

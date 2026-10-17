@@ -1,8 +1,9 @@
 // 毛绒玩偶：能摆在床上、沙发上、架子上。大鲨鲨 / 小鲨鲨（趴着的长条鲨鱼）。
 
 import * as THREE from 'three'
-import { ball, toon } from '../toon'
+import { ball } from '../toon'
 import { C, type AssetDef, type StyleTag } from '../kit'
+import { mesh } from '../geo'
 
 /** 身体轮廓：t 从尾（0）到鼻尖（1），半径占最粗处的比例 */
 const PROFILE: [number, number][] = [
@@ -35,14 +36,6 @@ function finGeo(shape: THREE.Shape, thick: number) {
   const g = new THREE.ExtrudeGeometry(shape, { depth: thick, bevelEnabled: true, bevelThickness: thick * 0.45, bevelSize: thick * 0.45, bevelSegments: 3, curveSegments: 14 })
   g.translate(0, 0, -thick / 2)
   return g
-}
-
-/** 毛绒件的网格：和 toon.ts 的体素一样投影、接收阴影 */
-const mesh = (g: THREE.BufferGeometry, color: string) => {
-  const m = new THREE.Mesh(g, toon(color))
-  m.castShadow = true
-  m.receiveShadow = true
-  return m
 }
 
 /** 趴着的鲨鱼：头朝 +x。L 为全长；配色 [背, 肚, 眼] */

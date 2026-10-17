@@ -4,14 +4,10 @@
 
 import * as THREE from 'three'
 import { ball, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
-import { C, S, SWING_OPEN, hangingPipe, holePanel, legs, movable, paintPanel, pipeHook, rectPoly, shell, slab, type AssetDef, type DoorMotion, type Hole, type Poly, type StyleTag, type SurfaceDef } from '../kit'
+import { C, SWING_OPEN, hangingPipe, holePanel, legs, movable, paintPanel, pipeHook, rectPoly, shell, slab, type AssetDef, type DoorMotion, type Hole, type Poly, type SurfaceDef } from '../kit'
+import { meshWith, type V3 } from '../geo'
+import { I, J, M, N, R, type Pal3 } from '../packkit'
 
-type V3 = [number, number, number]
-const N = S.nordic
-const M = S.modern
-const J = S.japanese
-const I = S.industrial
-const R = S.retro
 const BRASS = '#d4b25a'
 const CHROME = '#d0d5db'
 const TIRE = '#3a3a3c'
@@ -54,13 +50,6 @@ function cylZ(r: number, len: number, color: string, x: number, y: number, z: nu
   return m
 }
 
-function meshOf(geo: THREE.BufferGeometry, mat: THREE.Material) {
-  const m = new THREE.Mesh(geo, mat)
-  m.castShadow = true
-  m.receiveShadow = true
-  return m
-}
-
 function extrude(s: THREE.Shape, depth: number) {
   const bevel = Math.min(0.5, depth * 0.2)
   const geo = new THREE.ExtrudeGeometry(s, { depth: Math.max(0.01, depth - bevel * 2), bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelOffset: -bevel, bevelSegments: 1, curveSegments: 20 })
@@ -70,7 +59,7 @@ function extrude(s: THREE.Shape, depth: number) {
 
 /** xy 平面轮廓沿 z 挤出（厚 depth，中心在 z） */
 function prism(pts: [number, number][], depth: number, color: string, z = 0) {
-  const m = meshOf(extrude(new THREE.Shape(pts.map(([a, b]) => new THREE.Vector2(a, b))), depth), toon(color))
+  const m = meshWith(extrude(new THREE.Shape(pts.map(([a, b]) => new THREE.Vector2(a, b))), depth), toon(color))
   m.position.z = z
   return m
 }
@@ -215,11 +204,10 @@ function centerXZ(g: THREE.Group) {
   return out
 }
 
-type Pal = [StyleTag, string, string, string]
 type Base = Omit<AssetDef, 'palettes' | 'paletteStyles'>
 
 /** 组装素材定义：配色带风格标注；styles 不给就取配色里出现过的风格 */
-function A(base: Base, pals: Pal[]): AssetDef {
+function A(base: Base, pals: Pal3[]): AssetDef {
   return {
     ...base,
     palettes: pals.map((p) => [p[1], p[2], p[3]]),
@@ -1197,12 +1185,12 @@ function archCabinet(p: string[]) {
   g.add(pullOut([front(74, 14, 38, sub, 0, 3), knob(0, 10, 20.6, acc, 1.2), drawerTray(70, 10, 32, shade(main, 0.08), 0, 3.5, 18.6)], 20))
   const ff = archOutline(40, 20)
   ff.holes.push(archPath(34, 26))
-  const fm = meshOf(extrude(ff, 2), toon(main))
+  const fm = meshWith(extrude(ff, 2), toon(main))
   fm.position.z = 18
-  const gl = meshOf(extrude(archOutline(34.4, 25.6), 0.4), toon(C.glass, { transparent: 0.32 }))
+  const gl = meshWith(extrude(archOutline(34.4, 25.6), 0.4), toon(C.glass, { transparent: 0.32 }))
   gl.position.z = 18
   g.add(swingAt([fm, gl, knob(31, 80, 19.8, acc, 1.3)], -40, 17, true))
-  const bk = meshOf(extrude(archOutline(40, 20), 1.5), toon(shade(main, -0.06)))
+  const bk = meshWith(extrude(archOutline(40, 20), 1.5), toon(shade(main, -0.06)))
   bk.position.z = -18.25
   g.add(bk)
   for (const s of [-1, 1]) g.add(rbox(2, 115, 34.5, main, { x: s * 39, y: 20 }, 0.6))
@@ -1212,7 +1200,7 @@ function archCabinet(p: string[]) {
   roof.lineTo(-38, yA)
   roof.absarc(0, yA, 38, Math.PI, 0, true)
   roof.lineTo(40, yA)
-  g.add(meshOf(extrude(roof, 34.5), toon(main)))
+  g.add(meshWith(extrude(roof, 34.5), toon(main)))
   for (const y of [60, 100, 132]) glassShelf(g, 75.6, 33, y)
   g.add(lit(rbox(44, 0.6, 3, C.lamp, { y: 160, z: 6 }, 0.2), C.lamp, 0.9))
   return g
@@ -1610,7 +1598,6 @@ function ladderShelf(p: string[]) {
 }
 const LADDER_YS = [30, 70, 110, 150]
 
-
 /** 推拉门衣柜的可摆放层：底板、枕棚、挂衣杆 */
 function slidingWardrobeSurfaces(w: number): SurfaceDef[] {
   const shape = [rectPoly(-w / 2 + 2.5, -28, w / 2 - 2.5, 25)]
@@ -1654,7 +1641,7 @@ function lockerSurfaces(tall: boolean): SurfaceDef[] {
 // =====================================================================
 
 /** 床：[被子, 床单 / 床垫, 床架] */
-const BED: Pal[] = [
+const BED: Pal3[] = [
   ['cute', C.pink, C.white, C.white],
   ['nordic', N.sage, N.white, N.oak],
   ['modern', M.char, M.light, M.walnut],
@@ -1662,7 +1649,7 @@ const BED: Pal[] = [
   ['retro', R.mustard, R.cream, R.caramel],
 ]
 /** 柜子：[柜体, 门板, 把手] */
-const CAB: Pal[] = [
+const CAB: Pal3[] = [
   ['cute', C.white, C.sakura, C.lemon],
   ['nordic', N.white, N.oak, N.oak],
   ['nordic', N.oak, N.oakL, M.black],

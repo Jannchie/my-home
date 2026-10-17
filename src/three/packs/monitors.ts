@@ -4,12 +4,9 @@
 
 import * as THREE from 'three'
 import { cyl, rbox, shade } from '../toon'
-import { C, S, clipLevels, glow, type AssetDef, type ScreenPanel, type StyleTag } from '../kit'
-
-type Pal = [StyleTag, string[]]
-const N = S.nordic
-const M = S.modern
-const I = S.industrial
+import { C, clipLevels, glow, type AssetDef, type ScreenPanel } from '../kit'
+import { P } from '../geo'
+import { I, M, N, type Pal } from '../packkit'
 
 const SCREEN = '#bfe3ff'
 
@@ -21,12 +18,6 @@ const PALS: Pal[] = [
   ['nordic', [N.white, N.oak, N.sage]],
   ['industrial', [I.iron, I.steel, I.rust]],
 ]
-
-function P<T extends THREE.Object3D>(o: T, x = 0, y = 0, z = 0, ry = 0): T {
-  o.position.set(x, y, z)
-  o.rotation.set(0, ry, 0)
-  return o
-}
 
 /** 一块屏幕：外框 + 背后的凸起 + 亮着的画面和几个窗口；原点在面板底边中点、厚度中心 */
 function panel(w: number, h: number, frame: string, acc: string, variant = 0) {
@@ -61,7 +52,7 @@ function stand(g: THREE.Group, x: number, z: number, top: number, color: string,
   const s = new THREE.Group()
   s.add(rbox(22, 1.4, 16, color, { z: -3 }, 0.6))
   s.add(rbox(4, top - 1, 2.4, color, { y: 1, z: -4.2 }, 0.8))
-  g.add(P(s, x, 0, z, ry))
+  g.add(P(s, x, 0, z, 0, ry))
 }
 
 // ---------- 竖屏 ----------
@@ -96,8 +87,8 @@ function triple(p: string[]) {
   g.add(rbox(28, 1.6, 18, st, { z: TRI_Z - 7 }, 0.7))
   g.add(cyl(1.7, 1.7, 30, st, { y: 1, z: TRI_Z - 7 }, 14))
   g.add(rbox(70, 2.6, 2.6, st, { y: 26, z: TRI_Z - 7 }, 1))
-  for (const s of [-1, 1]) g.add(P(rbox(2.6, 2.6, 24, st, {}, 1), s * 36, 26, TRI_Z - 1, -s * 0.9))
-  TRIPLE.forEach((s, i) => g.add(P(panel(s.w, s.h, frame, i === 1 ? '#ffb86b' : acc, i), s.x, s.y, s.z, s.ry ?? 0)))
+  for (const s of [-1, 1]) g.add(P(rbox(2.6, 2.6, 24, st, {}, 1), s * 36, 26, TRI_Z - 1, 0, -s * 0.9))
+  TRIPLE.forEach((s, i) => g.add(P(panel(s.w, s.h, frame, i === 1 ? '#ffb86b' : acc, i), s.x, s.y, s.z, 0, s.ry ?? 0)))
   return g
 }
 
@@ -118,7 +109,7 @@ function combo(p: string[]) {
   const ry = r.ry ?? 0
   stand(g, r.x + Math.sin(ry), r.z + Math.cos(ry), r.y + 28, st, ry)
   g.add(P(panel(l.w, l.h, frame, acc, 1), l.x, l.y, l.z))
-  g.add(P(panel(r.w, r.h, frame, acc, 0), r.x, r.y, r.z, r.ry ?? 0))
+  g.add(P(panel(r.w, r.h, frame, acc, 0), r.x, r.y, r.z, 0, r.ry ?? 0))
   return g
 }
 

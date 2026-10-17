@@ -9,19 +9,9 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
-import { C, S, glow, rectPoly, rng, slab, type AssetCategory, type AssetDef, type FormTag, type Poly, type StyleTag } from '../kit'
-
-const PI = Math.PI
-type V3 = [number, number, number]
-type Pal = [StyleTag, string[]]
-type Dims = [number, number, number]
-type Build = (p: string[]) => THREE.Group
-
-const N = S.nordic
-const M = S.modern
-const J = S.japanese
-const I = S.industrial
-const R = S.retro
+import { C, glow, rectPoly, rng, slab, type AssetCategory, type AssetDef, type FormTag, type Poly } from '../kit'
+import { G, P, PI, UP, box3, type V3 } from '../geo'
+import { I, J, M, N, R, type Build, type Dims, type Pal } from '../packkit'
 
 const STEEL = '#c3c7cc'
 const PAGE = '#fbf6ea'
@@ -64,24 +54,11 @@ function forms(family: string, name: string, category: AssetCategory, pals: Pal[
 
 // ---------- 小工具 ----------
 
-function P<T extends THREE.Object3D>(o: T, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0): T {
-  o.position.set(x, y, z)
-  o.rotation.set(rx, ry, rz)
-  return o
-}
-
-const G = (...c: THREE.Object3D[]) => {
-  const g = new THREE.Group()
-  for (const o of c) g.add(o)
-  return g
-}
-
 /** 沿 x 的横圆柱，给中心 */
 const cylX = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 16) => P(cyl(r, r, len, color, {}, seg), x, y, z, 0, 0, PI / 2)
 /** 沿 z 的圆柱，给中心 */
 const cylZ = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 20) => P(cyl(r, r, len, color, {}, seg), x, y, z, PI / 2)
 
-const UP = new THREE.Vector3(0, 1, 0)
 /** 两点之间的细杆 */
 function stick(a: V3, b: V3, r: number, color: string, seg = 8) {
   const va = new THREE.Vector3(...a)
@@ -155,11 +132,6 @@ function ghost<T extends THREE.Mesh>(m: T, color: string, a = 0.4): T {
   m.castShadow = false
   m.userData.noOutline = true
   return m
-}
-
-function box3(o: THREE.Object3D) {
-  o.updateMatrixWorld(true)
-  return new THREE.Box3().setFromObject(o, true)
 }
 
 /** 落地居中：包围盒底面在 y = 0、xz 居中 */

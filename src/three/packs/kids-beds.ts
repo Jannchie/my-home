@@ -6,17 +6,11 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cyl, face, puck, rbox, shade, toon, torus } from '../toon'
-import { C, S, ellipsePoly, glow, holePanel, movable, rectPoly, slab, type AssetDef, type StyleTag, type SurfaceDef } from '../kit'
+import { C, ellipsePoly, glow, holePanel, movable, rectPoly, slab, type AssetDef, type SurfaceDef } from '../kit'
+import { meshWith, type V3 } from '../geo'
+import { I, J, M, N, R, type Pal3 } from '../packkit'
 
-type V3 = [number, number, number]
-type Pal = [StyleTag, string, string, string]
 type Base = Omit<AssetDef, 'palettes' | 'paletteStyles'>
-
-const N = S.nordic
-const M = S.modern
-const J = S.japanese
-const I = S.industrial
-const R = S.retro
 
 /** 床垫 / 床单白 */
 const MAT = '#fbf8f2'
@@ -24,7 +18,7 @@ const TIRE = '#3a3a3c'
 const STAR = '#ffe08f'
 
 /** 组装素材定义：配色带风格标注；styles 不给就取配色里出现过的风格 */
-function A(base: Base, pals: Pal[]): AssetDef {
+function A(base: Base, pals: Pal3[]): AssetDef {
   return {
     ...base,
     palettes: pals.map((p) => [p[1], p[2], p[3]]),
@@ -36,13 +30,6 @@ function A(base: Base, pals: Pal[]): AssetDef {
 // =====================================================================
 // 小工具
 // =====================================================================
-
-function meshOf(geo: THREE.BufferGeometry, mat: THREE.Material) {
-  const m = new THREE.Mesh(geo, mat)
-  m.castShadow = true
-  m.receiveShadow = true
-  return m
-}
 
 /** 两端已知的 3D 细杆 */
 function rod3(a: V3, b: V3, r: number, color: string, seg = 10) {
@@ -94,7 +81,7 @@ function profile(pts: [number, number][], t: number, color: string, plane: 'xy' 
   const bevel = Math.min(0.5, t * 0.2)
   const geo = new THREE.ExtrudeGeometry(s, { depth: t - bevel * 2, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelOffset: -bevel, bevelSegments: 1, curveSegments: 20 })
   geo.translate(0, 0, -t / 2 + bevel)
-  const m = meshOf(geo, toon(color))
+  const m = meshWith(geo, toon(color))
   if (plane === 'xy') m.position.z = at
   else {
     // 绕 y 转 -90°：局部 x → 世界 z，局部 z（板厚）→ 世界 -x
@@ -110,7 +97,7 @@ function ring(rx: number, rz: number, y: number, r: number, color: string) {
     const a = (i / 48) * Math.PI * 2
     return new THREE.Vector3(Math.cos(a) * rx, y, Math.sin(a) * rz)
   })
-  return meshOf(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, true), 96, r, 8, true), toon(color))
+  return meshWith(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, true), 96, r, 8, true), toon(color))
 }
 
 /** 半透明布面（网纱、帐幔）：双面、不描边 */

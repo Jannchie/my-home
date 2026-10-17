@@ -9,19 +9,9 @@
 
 import * as THREE from 'three'
 import { ball, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
-import { C, G, S, glow, holePanel, rng, shell, type AssetDef, type StyleTag } from '../kit'
-
-const PI = Math.PI
-const N = S.nordic
-const M = S.modern
-const J = S.japanese
-const I = S.industrial
-const R = S.retro
-
-type V3 = [number, number, number]
-type Pal = [StyleTag, string[]]
-type Dims = [number, number, number]
-type Build = (p: string[]) => THREE.Group
+import { C, G, glow, holePanel, rng, shell, type AssetDef } from '../kit'
+import { P, PI, UP, noOutlineDeep, type V3 } from '../geo'
+import { I, J, M, N, R, type Build, type Dims, type Pal } from '../packkit'
 
 const WOOD = '#d9b07a'
 const WOODD = '#a8774a'
@@ -81,15 +71,6 @@ function centerXZ(g: THREE.Object3D) {
   g.position.z -= (b.min.z + b.max.z) / 2
 }
 
-function P<T extends THREE.Object3D>(o: T, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0): T {
-  o.position.set(x, y, z)
-  o.rotation.set(rx, ry, rz)
-  return o
-}
-function noOL<T extends THREE.Object3D>(o: T): T {
-  o.traverse((c) => (c.userData.noOutline = true))
-  return o
-}
 /** 半透明件（玻璃、亚克力、水）：整棵子树换成半透明材质、不描边 */
 function clear<T extends THREE.Object3D>(o: T, color: string, a = 0.25): T {
   o.traverse((c) => {
@@ -111,7 +92,6 @@ function lit<T extends THREE.Object3D>(o: T, color: string, k = 0.8): T {
   return o
 }
 
-const UP = new THREE.Vector3(0, 1, 0)
 /** 两点之间的杆 */
 function stick(a: V3, b: V3, r: number, color: string, seg = 8) {
   const va = new THREE.Vector3(...a)
@@ -124,7 +104,7 @@ function stick(a: V3, b: V3, r: number, color: string, seg = 8) {
 }
 /** 丝网的一根细丝：不描边 */
 const wire = (a: V3, b: V3, r: number, color: string, castShadow = true) => {
-  const m = noOL(stick(a, b, r, color, 5))
+  const m = noOutlineDeep(stick(a, b, r, color, 5))
   if (!castShadow) m.castShadow = false
   return m
 }
@@ -259,7 +239,7 @@ function domeCage(rr: number, y0: number, hw: number, color: string, n = 40, r =
     const x = Math.cos(a) * rr
     const z = -Math.sin(a) * rr
     g.add(wire([x, y0, z], [x, yTop, z], r, color))
-    const m = noOL(arcBar(rr, r, color, PI / 2))
+    const m = noOutlineDeep(arcBar(rr, r, color, PI / 2))
     const mg = G(m)
     mg.rotation.y = a
     mg.position.y = yTop
@@ -360,7 +340,7 @@ function chips(g: THREE.Group, w: number, d: number, y: number, color: string, n
   const rand = rng(seed)
   for (let i = 0; i < n; i++) {
     const m = rbox(0.9 + rand() * 0.8, 0.3, 0.5 + rand() * 0.4, shade(color, (rand() - 0.5) * 0.08), { x: (rand() - 0.5) * w, y: y - 0.1, z: (rand() - 0.5) * d, ry: rand() * PI }, 0.1)
-    g.add(noOL(m))
+    g.add(noOutlineDeep(m))
   }
 }
 
@@ -369,11 +349,11 @@ function chips(g: THREE.Group, w: number, d: number, y: number, color: string, n
 function eyes(g: THREE.Group, r: number, x: number, y: number, z: number, closed = false) {
   for (const s of [-1, 1]) {
     if (closed) {
-      g.add(noOL(ball(r, '#3a2a2a', { x: s * x, y, z }, [1.1, 0.25, 0.5])))
+      g.add(noOutlineDeep(ball(r, '#3a2a2a', { x: s * x, y, z }, [1.1, 0.25, 0.5])))
       continue
     }
-    g.add(noOL(ball(r, '#2a2020', { x: s * x, y, z }, [1, 1.1, 0.7])))
-    g.add(noOL(ball(r * 0.35, '#ffffff', { x: s * x + r * 0.25, y: y + r * 0.35, z: z + r * 0.5 })))
+    g.add(noOutlineDeep(ball(r, '#2a2020', { x: s * x, y, z }, [1, 1.1, 0.7])))
+    g.add(noOutlineDeep(ball(r * 0.35, '#ffffff', { x: s * x + r * 0.25, y: y + r * 0.35, z: z + r * 0.5 })))
   }
 }
 
@@ -386,11 +366,11 @@ function hamster(fur: string, sleep = false, belly = '#fffaf2') {
   const ey = sleep ? 5.0 : 5.3
   for (const s of [-1, 1]) {
     g.add(ball(1, shade(fur, -0.06), { x: s * 1.7, y: ey, z: 1.7 }, [1, 1, 0.45]))
-    g.add(noOL(ball(0.6, '#f4b3b8', { x: s * 1.7, y: ey, z: 2.05 }, [1, 1, 0.3])))
+    g.add(noOutlineDeep(ball(0.6, '#f4b3b8', { x: s * 1.7, y: ey, z: 2.05 }, [1, 1, 0.3])))
   }
   eyes(g, 0.45, 1.35, 3.9, 3.78, sleep)
-  g.add(noOL(ball(0.35, '#f49aa6', { y: 3.25, z: 4.4 })))
-  if (!sleep) for (const s of [-1, 1]) g.add(noOL(ball(0.45, '#f6c6c0', { x: s * 1.1, y: 0.5, z: 3.3 }, [1, 0.6, 1.2])))
+  g.add(noOutlineDeep(ball(0.35, '#f49aa6', { y: 3.25, z: 4.4 })))
+  if (!sleep) for (const s of [-1, 1]) g.add(noOutlineDeep(ball(0.45, '#f6c6c0', { x: s * 1.1, y: 0.5, z: 3.3 }, [1, 0.6, 1.2])))
   return g
 }
 
@@ -403,11 +383,11 @@ function bunny(fur: string, sub = '#fffaf2') {
   for (const s of [-1, 1]) {
     const ear = ball(2, fur, {}, [0.55, 2.2, 0.32])
     g.add(P(ear, s * 1.9, 15.6, 5.4, -0.25, 0, -s * 0.18))
-    const inner = noOL(ball(1.4, '#f6b8c0', {}, [0.5, 1.9, 0.2]))
+    const inner = noOutlineDeep(ball(1.4, '#f6b8c0', {}, [0.5, 1.9, 0.2]))
     g.add(P(inner, s * 1.9, 15.5, 5.85, -0.25, 0, -s * 0.18))
   }
   eyes(g, 0.75, 3.3, 10.3, 10.35)
-  g.add(noOL(ball(0.5, '#f49aa6', { y: 8.7, z: 12.4 })))
+  g.add(noOutlineDeep(ball(0.5, '#f49aa6', { y: 8.7, z: 12.4 })))
   g.add(ball(2, sub, { y: 6, z: -10.3 }))
   return g
 }
@@ -420,7 +400,7 @@ function guineaPig(fur: string, patch: string) {
   g.add(ball(2.6, patch, { y: 6.2, z: 5.4 }, [1.2, 0.95, 1]))
   for (const s of [-1, 1]) g.add(ball(1.2, '#d9a28a', { x: s * 2.8, y: 8, z: 4.6 }, [0.8, 1, 0.35]))
   eyes(g, 0.55, 2.7, 6.8, 7.2)
-  g.add(noOL(ball(0.4, '#e8909a', { y: 5.6, z: 8.7 })))
+  g.add(noOutlineDeep(ball(0.4, '#e8909a', { y: 5.6, z: 8.7 })))
   return g
 }
 
@@ -432,10 +412,10 @@ function chinchilla(fur: string) {
   g.add(ball(4.3, fur, { y: 12.3, z: 2.6 }))
   for (const s of [-1, 1]) {
     g.add(P(ball(2.5, fur, {}, [1, 1.05, 0.3]), s * 2.9, 16.4, 1.4, 0, 0, -s * 0.3))
-    g.add(noOL(P(ball(1.9, '#f2c4c4', {}, [1, 1, 0.2]), s * 2.9, 16.4, 1.62, 0, 0, -s * 0.3)))
+    g.add(noOutlineDeep(P(ball(1.9, '#f2c4c4', {}, [1, 1, 0.2]), s * 2.9, 16.4, 1.62, 0, 0, -s * 0.3)))
   }
   eyes(g, 0.7, 1.9, 13, 6.1)
-  g.add(noOL(ball(0.35, '#e8909a', { y: 11.6, z: 6.9 })))
+  g.add(noOutlineDeep(ball(0.35, '#e8909a', { y: 11.6, z: 6.9 })))
   g.add(ball(2.6, shade(fur, -0.05), { y: 3.2, z: -7 }, [0.9, 0.8, 1.5]))
   return g
 }
@@ -447,7 +427,7 @@ function gecko(body: string) {
   g.add(ball(1.8, body, { y: 1.9, z: 6.3 }, [1.15, 0.8, 1.3]))
   g.add(ball(1.4, body, { y: 1.1, z: -7.2 }, [1, 0.7, 2.4]))
   const rand = rng(11)
-  for (let i = 0; i < 9; i++) g.add(noOL(ball(0.38, '#5a4030', { x: (rand() - 0.5) * 2.6, y: 2.75, z: -3.5 + i * 0.95 }, [1, 0.4, 1])))
+  for (let i = 0; i < 9; i++) g.add(noOutlineDeep(ball(0.38, '#5a4030', { x: (rand() - 0.5) * 2.6, y: 2.75, z: -3.5 + i * 0.95 }, [1, 0.4, 1])))
   for (const [x, z] of [
     [2.2, 3.4],
     [-2.2, 3.4],
@@ -465,7 +445,7 @@ function turtle(shellC: string, skin = '#7a9a3e') {
   g.add(ball(5, shellC, { y: 1.2 }, [1, 0.5, 1.25]))
   g.add(cyl(4.6, 4.6, 0.8, '#e8d49a', { y: 0 }, 24))
   g.add(ball(1.6, skin, { y: 1.8, z: 7 }, [1, 0.9, 1.2]))
-  for (const s of [-1, 1]) g.add(noOL(ball(0.5, '#d8483a', { x: s * 1.3, y: 1.8, z: 6.6 }, [0.4, 0.5, 1.2])))
+  for (const s of [-1, 1]) g.add(noOutlineDeep(ball(0.5, '#d8483a', { x: s * 1.3, y: 1.8, z: 6.6 }, [0.4, 0.5, 1.2])))
   eyes(g, 0.32, 1.05, 2.3, 7.9)
   for (const [x, z] of [
     [3.8, 3.6],
@@ -481,12 +461,12 @@ function turtle(shellC: string, skin = '#7a9a3e') {
 function goldfish(color: string, k = 1, seed = 1) {
   const g = new THREE.Group()
   g.add(ball(1.6, color, {}, [1.3, 1.05, 0.65]))
-  if (seed % 2) g.add(noOL(ball(1, '#fbf6ee', { x: 0.5, y: 0.6, z: 0 }, [1.1, 0.6, 0.7])))
+  if (seed % 2) g.add(noOutlineDeep(ball(1, '#fbf6ee', { x: 0.5, y: 0.6, z: 0 }, [1.1, 0.6, 0.7])))
   for (const s of [-1, 1]) g.add(P(ball(1.4, color, {}, [1, 0.6, 0.12]), -2.6, s * 0.6, s * 0.35, 0, s * 0.35, s * 0.4))
   g.add(P(ball(0.9, color, {}, [1, 0.6, 0.12]), -0.2, 1.7, 0, 0, 0, -0.3))
   for (const s of [-1, 1]) {
-    g.add(noOL(ball(0.28, '#2a2020', { x: 1.45, y: 0.35, z: s * 0.82 }, [0.7, 1, 0.6])))
-    g.add(noOL(ball(0.1, '#ffffff', { x: 1.62, y: 0.45, z: s * 0.9 })))
+    g.add(noOutlineDeep(ball(0.28, '#2a2020', { x: 1.45, y: 0.35, z: s * 0.82 }, [0.7, 1, 0.6])))
+    g.add(noOutlineDeep(ball(0.1, '#ffffff', { x: 1.62, y: 0.45, z: s * 0.9 })))
   }
   g.scale.setScalar(k)
   return g
@@ -497,8 +477,8 @@ function medaka(color = '#f0b562') {
   const g = new THREE.Group()
   g.add(ball(0.55, color, {}, [2.4, 0.75, 0.6]))
   g.add(P(ball(0.5, color, {}, [0.9, 0.7, 0.12]), -1.5, 0, 0))
-  g.add(noOL(ball(0.16, '#1f1a1a', { x: 0.95, y: 0.12, z: 0.25 })))
-  g.add(noOL(ball(0.16, '#1f1a1a', { x: 0.95, y: 0.12, z: -0.25 })))
+  g.add(noOutlineDeep(ball(0.16, '#1f1a1a', { x: 0.95, y: 0.12, z: 0.25 })))
+  g.add(noOutlineDeep(ball(0.16, '#1f1a1a', { x: 0.95, y: 0.12, z: -0.25 })))
   return g
 }
 
@@ -527,13 +507,13 @@ function bird(kind: BirdKind) {
   g.add(P(ball(1.7, c.belly, {}, [0.95, 1.1, 0.8]), 0, 3.0, 0.75, 0.25))
   g.add(ball(1.55, c.head, { y: 6.1, z: 0.6 }))
   for (const s of [-1, 1]) {
-    g.add(noOL(ball(0.5, c.cheek, { x: s * 1.1, y: 5.55, z: 1.25 }, [0.45, 1, 1])))
+    g.add(noOutlineDeep(ball(0.5, c.cheek, { x: s * 1.1, y: 5.55, z: 1.25 }, [0.45, 1, 1])))
     g.add(P(ball(1.6, c.wing, {}, [0.35, 1.3, 1]), s * 1.8, 3.6, -0.4, 0.35))
   }
   g.add(P(cyl(0, 0.45, 1.1, c.beak, {}, 10), 0, 5.65, 2.05, PI / 2 + 0.35))
   eyes(g, 0.3, 1.2, 6.4, 1.15)
   g.add(rbox(1.4, 0.4, 5, c.tail, { y: 1.8, z: -2.7, rx: -0.6 }, 0.18))
-  for (const s of [-1, 1]) g.add(noOL(ball(0.45, '#e9a0a0', { x: s * 0.6, y: 0.25, z: 0.35 }, [1, 0.6, 1.6])))
+  for (const s of [-1, 1]) g.add(noOutlineDeep(ball(0.45, '#e9a0a0', { x: s * 0.6, y: 0.25, z: 0.35 }, [1, 0.6, 1.6])))
   if (kind === 'cockatiel') for (const [dx, rx] of [[0, -0.5], [0.4, -0.3], [-0.4, -0.3]]) g.add(P(ball(1, c.head, {}, [0.22, 1.1, 0.4]), dx, 8.1, 0.2, rx))
   g.scale.setScalar(c.k)
   return g
@@ -682,7 +662,7 @@ function hamsterOrb(p: string[]) {
   for (let i = 0; i < 8; i++) {
     const a = (i / 8) * PI * 2
     const v = new THREE.Vector3(-Math.cos(0.5), Math.sin(a) * Math.sin(0.5), Math.cos(a) * Math.sin(0.5)).multiplyScalar(r - 0.1)
-    g.add(noOL(ball(0.55, shade(band, -0.1), { x: v.x, y: r + v.y, z: v.z }, [0.4, 1, 1])))
+    g.add(noOutlineDeep(ball(0.55, shade(band, -0.1), { x: v.x, y: r + v.y, z: v.z }, [0.4, 1, 1])))
   }
   g.add(P(hamster('#e8b07a'), 0, 0.55, 0, 0, 0.6))
   return g
@@ -1108,7 +1088,7 @@ function terrarium(p: string[]) {
   for (let i = 0; i < 12; i++) g.add(ball(2 + rand() * 2, shade(cork, (rand() - 0.5) * 0.12), { x: (rand() - 0.5) * (W - 10), y: 12 + rand() * (H - 22), z: -D / 2 + 2 }, [1, 1, 0.35]))
   g.add(tube([[-W / 2 + 6, 9, -10], [-10, 18, -6], [6, 24, -12], [18, 30, -14]], 1.1, '#8a6a4a', 30))
   g.add(ball(6.5, '#9b8f84', { x: -16, y: 9, z: 2 }, [1.35, 0.8, 1]))
-  g.add(noOL(rbox(4, 3.6, 0.4, '#3a3230', { x: -16, y: 9, z: 8.6 }, 1.5)))
+  g.add(noOutlineDeep(rbox(4, 3.6, 0.4, '#3a3230', { x: -16, y: 9, z: 8.6 }, 1.5)))
   g.add(cup(4.2, 3.6, 1.8, 0.5, '#8d8478', { x: 10, y: 9, z: 9 }))
   g.add(clear(cyl(3.6, 3.6, 0.9, WATER, { x: 10, y: 9.6, z: 9 }, 20), WATER, 0.5))
   for (let i = 0; i < 5; i++) {
@@ -1244,7 +1224,7 @@ function medakaBowl(p: string[]) {
   for (let i = 0; i < 5; i++) {
     const a = rand() * PI * 2
     const rr = 4 + rand() * 9
-    const pad = noOL(ball(3 + rand() * 0.8, i % 2 ? '#5fa35a' : '#6fb565', {}, [1, 0.05, 1]))
+    const pad = noOutlineDeep(ball(3 + rand() * 0.8, i % 2 ? '#5fa35a' : '#6fb565', {}, [1, 0.05, 1]))
     g.add(P(pad, Math.cos(a) * rr, wy + 0.15, Math.sin(a) * rr))
   }
   // 一朵睡莲
@@ -1344,7 +1324,7 @@ function catCarrier(p: string[]) {
   for (const s of [-1, 1]) cat.add(P(cyl(0, 1.8, 3, '#f2b46a', {}, 4), s * 3, 17.6, 3.6, 0, 0, -s * 0.3))
   eyes(cat, 0.7, 1.9, 13.6, 8.6)
   cat.add(ball(1.8, '#fff6ea', { y: 11.6, z: 8.2 }, [1.3, 0.8, 0.6]))
-  cat.add(noOL(ball(0.4, '#e8909a', { y: 12.5, z: 9.2 })))
+  cat.add(noOutlineDeep(ball(0.4, '#e8909a', { y: 12.5, z: 9.2 })))
   cat.position.set(-4, t, 0)
   g.add(cat)
   return g

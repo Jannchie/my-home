@@ -5,19 +5,9 @@
 
 import * as THREE from 'three'
 import { ball, cup, cyl, rbox, shade, toon, torus, tray } from '../toon'
-import { C, G, S, type AssetCategory, type AssetDef, type StyleTag } from '../kit'
-
-const PI = Math.PI
-const N = S.nordic
-const M = S.modern
-const J = S.japanese
-const I = S.industrial
-const R = S.retro
-
-type V3 = [number, number, number]
-/** [风格, 主色, 副色, 点缀色] */
-type Pal = [StyleTag, string, string, string]
-type Build = (p: string[]) => THREE.Group
+import { C, G, type AssetCategory, type AssetDef } from '../kit'
+import { PI, mesh, noOutlineDeep, type V3 } from '../geo'
+import { I, J, M, N, R, type Build, type Pal3 } from '../packkit'
 
 const COPPER = '#c7814a'
 const BRASS = '#e9c46a'
@@ -25,24 +15,12 @@ const PAD = '#eef1f4'
 
 // ---------- 小工具 ----------
 
-function noOL<T extends THREE.Object3D>(o: T): T {
-  o.traverse((c) => {
-    c.userData.noOutline = true
-  })
-  return o
-}
 /** 半透明件（亚克力、塑料瓶身） */
 function glass<T extends THREE.Object3D>(o: T, color: string, a = 0.42): T {
   o.traverse((c) => {
     if ((c as THREE.Mesh).isMesh) (c as THREE.Mesh).material = toon(color, { transparent: a })
   })
   return o
-}
-function mesh(geo: THREE.BufferGeometry, color: string) {
-  const m = new THREE.Mesh(geo, toon(color))
-  m.castShadow = true
-  m.receiveShadow = true
-  return m
 }
 /** 车削体：pts 为 [半径, 高度] 的轮廓 */
 function lathe(pts: [number, number][], color: string, seg = 32) {
@@ -139,7 +117,7 @@ function pailHinoki(p: string[]) {
     holder.rotation.y = a
     const r = rAt(5.8) + 0.06
     holder.position.set(Math.sin(a) * r, 5.8, Math.cos(a) * r)
-    g.add(noOL(holder))
+    g.add(noOutlineDeep(holder))
   }
   g.add(band(rAt, 1.8, 3.4, hoop, 0.36))
   g.add(band(rAt, 8, 9.6, hoop, 0.36))
@@ -367,7 +345,7 @@ function wallToolRack(p: string[]) {
   // 扫把（x -26）：刷毛底在 y 12
   const bx = -26
   g.add(xyPrism([[-11, 0], [11, 0], [9, 11], [-9, 11]], 3.4, bristle, { x: bx, y: 12, z: zp }))
-  g.add(noOL(rbox(19, 0.5, 3.8, shade(bristle, -0.18), { x: bx, y: 16, z: zp }, 0.2)))
+  g.add(noOutlineDeep(rbox(19, 0.5, 3.8, shade(bristle, -0.18), { x: bx, y: 16, z: zp }, 0.2)))
   g.add(rbox(19, 3, 4.2, shade(tool, -0.08), { x: bx, y: 22.5, z: zp }, 1))
   g.add(cyl(1.2, 2, 4, shade(tool, -0.08), { x: bx, y: 25, z: zp }, 14))
   g.add(cyl(1.1, 1.1, 92, tool, { x: bx, y: 28.5, z: zp }, 12))
@@ -396,7 +374,7 @@ function wallToolRack(p: string[]) {
 // 定义
 // ======================================================================
 
-function vc(id: string, name: string, family: string | undefined, sizeLabel: string | undefined, category: AssetCategory, [w, d, h]: [number, number, number], pals: Pal[], build: Build, extra: Partial<AssetDef> = {}): AssetDef {
+function vc(id: string, name: string, family: string | undefined, sizeLabel: string | undefined, category: AssetCategory, [w, d, h]: [number, number, number], pals: Pal3[], build: Build, extra: Partial<AssetDef> = {}): AssetDef {
   return {
     id,
     name,

@@ -3,9 +3,8 @@
 
 import * as THREE from 'three'
 import { cyl, rbox, shade } from '../toon'
-import { C, carcass, hingedDoor, rectPoly, shelvesIn, type AssetDef, type StyleTag, type SurfaceDef } from '../kit'
-
-type Pal = [StyleTag, string[]]
+import { C, carcass, hingedDoor, rectPoly, shelvesIn, type AssetDef, type SurfaceDef } from '../kit'
+import { type Pal } from '../packkit'
 
 const SHELF_PALS: Pal[] = [
   ['nordic', [C.woodL, '#2f3134']],

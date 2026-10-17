@@ -5,19 +5,9 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray, type At } from '../toon'
-import { C, G, S, glow, paintPanel, rectPoly, rng, shell, type AssetCategory, type AssetDef, type Fx, type StyleTag } from '../kit'
-
-const PI = Math.PI
-const N = S.nordic
-const M = S.modern
-const J = S.japanese
-const I = S.industrial
-const R = S.retro
-
-type V3 = [number, number, number]
-type Pal = [StyleTag, string[]]
-type Dims = [number, number, number]
-type Build = (p: string[]) => THREE.Group
+import { C, G, glow, paintPanel, rectPoly, rng, shell, type AssetCategory, type AssetDef, type Fx } from '../kit'
+import { P, PI, UP, noOutline, type V3 } from '../geo'
+import { I, J, M, N, R, type Build, type Dims, type Pal } from '../packkit'
 
 const STEEL = '#c3c7cc'
 const HOSE = '#6f737a'
@@ -49,7 +39,7 @@ const prop = (id: string, name: string, category: AssetCategory, dims: Dims, pal
 function normalize(build: Build, toFloor: boolean): Build {
   return (p) => {
     const g = build(p)
-    const b = box3(g)
+    const b = box3Loose(g)
     g.position.x -= (b.min.x + b.max.x) / 2
     g.position.z -= (b.min.z + b.max.z) / 2
     if (toFloor) g.position.y -= b.min.y
@@ -57,15 +47,6 @@ function normalize(build: Build, toFloor: boolean): Build {
   }
 }
 
-function P<T extends THREE.Object3D>(o: T, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0): T {
-  o.position.set(x, y, z)
-  o.rotation.set(rx, ry, rz)
-  return o
-}
-function noOL<T extends THREE.Object3D>(o: T): T {
-  o.userData.noOutline = true
-  return o
-}
 /** 发光件（指示灯） */
 function lit(m: THREE.Mesh, color: string, k = 0.7) {
   m.material = toon(color, { emissive: k })
@@ -82,7 +63,6 @@ const cylX = (r: number, len: number, color: string, x: number, y: number, z: nu
 /** 沿 z 的圆柱，给中心 */
 const cylZ = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 20) => P(cyl(r, r, len, color, {}, seg), x, y, z, PI / 2)
 
-const UP = new THREE.Vector3(0, 1, 0)
 /** 两点之间的细杆 */
 function stick(a: V3, b: V3, r: number, color: string, seg = 10) {
   const va = new THREE.Vector3(...a)
@@ -132,14 +112,14 @@ function arcYZ(c: V3, r: number, a0: number, a1: number, n: number): V3[] {
   return out
 }
 
-function box3(o: THREE.Object3D) {
+function box3Loose(o: THREE.Object3D) {
   o.updateMatrixWorld(true)
   return new THREE.Box3().setFromObject(o)
 }
 
 /** 落地并在 xz 上居中（平放形态用） */
 function ground(o: THREE.Object3D) {
-  const b = box3(o)
+  const b = box3Loose(o)
   o.position.x -= (b.min.x + b.max.x) / 2
   o.position.z -= (b.min.z + b.max.z) / 2
   o.position.y -= b.min.y
@@ -148,7 +128,7 @@ function ground(o: THREE.Object3D) {
 
 /** 往上抬，让最低点贴地（斜靠的东西用） */
 function lift(o: THREE.Object3D) {
-  const b = box3(o)
+  const b = box3Loose(o)
   o.position.y -= b.min.y
   return o
 }
@@ -415,7 +395,7 @@ function dehumidifier(p: string[]) {
   g.add(rbox(34, 50, 22, main, { y: 1.5 }, 4))
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(ball(1.5, M.char, { x: sx * 13, y: 1.5, z: sz * 8 }))
   g.add(rbox(28, 0.8, 13, sub, { y: 51.2, z: 1 }, 0.4))
-  for (let i = 0; i < 5; i++) g.add(noOL(rbox(26, 0.4, 0.8, shade(sub, -0.2), { y: 51.8, z: -3.6 + i * 2.3 }, 0.2)))
+  for (let i = 0; i < 5; i++) g.add(noOutline(rbox(26, 0.4, 0.8, shade(sub, -0.2), { y: 51.8, z: -3.6 + i * 2.3 }, 0.2)))
   g.add(rbox(14, 1, 3, shade(main, -0.15), { y: 51.2, z: -8.4 }, 0.4))
   // 前面水箱
   g.add(rbox(30, 20, 1, shade(main, -0.04), { y: 4, z: 10.8 }, 0.5))
@@ -484,7 +464,7 @@ function broomModel(handle: string, head: string, bristle: string, L: number, bw
   const g = new THREE.Group()
   const b = bw / 2
   g.add(vpoly([[-b, 0], [b, 0], [b - 2, 11], [-b + 2, 11]], 3.2, bristle))
-  for (const y of [3.5, 7]) g.add(noOL(rbox(bw - 4 - y * 0.3, 0.5, 3.5, shade(bristle, -0.18), { y }, 0.2)))
+  for (const y of [3.5, 7]) g.add(noOutline(rbox(bw - 4 - y * 0.3, 0.5, 3.5, shade(bristle, -0.18), { y }, 0.2)))
   g.add(rbox(bw - 3, 3, 4.2, head, { y: 10.5 }, 1))
   g.add(cyl(1.3, 2.2, 5, head, { y: 13 }, 14))
   g.add(cyl(1.1, 1.1, L - 19.5, handle, { y: 17.5 }, 12))
@@ -533,7 +513,7 @@ function jpBroom(p: string[]) {
   const g = new THREE.Group()
   const br = new THREE.Group()
   br.add(vpoly([[-16, 0], [16, 0], [8.5, 26], [5, 40], [-5, 40], [-8.5, 26]], 2.6, straw))
-  for (const y of [8, 15]) br.add(noOL(rbox(30 - y * 0.6, 0.4, 2.9, shade(straw, -0.2), { y }, 0.15)))
+  for (const y of [8, 15]) br.add(noOutline(rbox(30 - y * 0.6, 0.4, 2.9, shade(straw, -0.2), { y }, 0.15)))
   for (const [y, w] of [
     [27, 16.6],
     [31, 14.6],
@@ -663,7 +643,7 @@ function bagBox(p: string[]) {
   const [box, bag, acc] = p
   const g = new THREE.Group()
   g.add(rbox(26, 10, 11, box, {}, 0.8))
-  g.add(noOL(rbox(16, 0.4, 2, shade(box, -0.35), { y: 9.9 }, 0.2)))
+  g.add(noOutline(rbox(16, 0.4, 2, shade(box, -0.35), { y: 9.9 }, 0.2)))
   g.add(clear(rbox(12, 5, 0.3, bag, { y: 9.4, z: 0.3, rx: -0.25 }, 0.1), bag, 0.75))
   g.add(paintPanel(22, 7, `chore-bag-${box}-${acc}`, drawLabel(box, acc, [['ゴミ袋', 0.5, 0.38, '#3e3a39'], ['45L · 30枚', 0.82, 0.16, '#3e3a39']], 0.22), { y: 1.4, z: 5.85 }))
   return g
@@ -886,7 +866,7 @@ function clothHanger(p: string[]) {
     arm.add(cylX(0.4, 11, frame, 6.5, 31.4, 0, 8))
     arm.add(cylX(1.1, 9, c, 7.2, 31.4, 0, 14))
     for (const s of [-1, 1]) arm.add(rbox(9, 14, 0.4, c, { x: 7.2, y: 17.4, z: s * 0.85 }, 0.15))
-    arm.add(noOL(rbox(9.1, 0.8, 1.9, shade(c, -0.15), { x: 7.2, y: 19.5 }, 0.2)))
+    arm.add(noOutline(rbox(9.1, 0.8, 1.9, shade(c, -0.15), { x: 7.2, y: 19.5 }, 0.2)))
     arm.rotation.y = PI / 4 + (i * PI) / 2
     g.add(arm)
   }
@@ -904,7 +884,7 @@ function steelWool(p: string[]) {
   ]
   balls.forEach(([x, y, z], i) => {
     g.add(ball(2, wool, { x, y, z }, [1, 0.8, 1]))
-    for (let k = 0; k < 2; k++) g.add(noOL(torus(1.75, 0.12, shade(wool, -0.22), { x, y, z, rx: 0.6 + k * 1.1 + i, ry: k * 0.9 })))
+    for (let k = 0; k < 2; k++) g.add(noOutline(torus(1.75, 0.12, shade(wool, -0.22), { x, y, z, rx: 0.6 + k * 1.1 + i, ry: k * 0.9 })))
   })
   g.add(rbox(4, 1.2, 2.8, pad, { x: 0.6, y: 2.9, z: 2.1, ry: 0.4, rx: -0.2 }, 0.4))
   return g
@@ -918,7 +898,7 @@ function cleanser(p: string[]) {
   g.add(cyl(3.9, 3.9, 1.2, cap, { y: 13.4 }, 28))
   for (let i = 0; i < 6; i++) {
     const a = (i / 6) * PI * 2
-    g.add(noOL(cyl(0.35, 0.35, 0.3, M.char, { x: Math.cos(a) * 1.8 - 0.6, y: 14.5, z: Math.sin(a) * 1.8 }, 8)))
+    g.add(noOutline(cyl(0.35, 0.35, 0.3, M.char, { x: Math.cos(a) * 1.8 - 0.6, y: 14.5, z: Math.sin(a) * 1.8 }, 8)))
   }
   g.add(rbox(2, 0.5, 1.6, cap, { x: 2.2, y: 14.5, z: 0 }, 0.2))
   g.add(rbox(5.6, 8.4, 1.6, can, { y: 2.6, z: 3.3 }, 0.4))
@@ -933,7 +913,7 @@ function deodorizer(p: string[]) {
   g.add(rbox(6.8, 4.4, 4.8, gel, { y: 0.4 }, 0.8))
   g.add(clear(rbox(7.6, 7, 5.6, C.glass, {}, 1), C.glass, 0.35))
   g.add(rbox(8, 3, 6, cap, { y: 6.6 }, 1))
-  for (const x of [-2.2, 0, 2.2]) g.add(noOL(rbox(1, 0.3, 4, shade(cap, -0.25), { x, y: 9.5 }, 0.15)))
+  for (const x of [-2.2, 0, 2.2]) g.add(noOutline(rbox(1, 0.3, 4, shade(cap, -0.25), { x, y: 9.5 }, 0.15)))
   g.add(paintPanel(6, 2.2, `chore-deo-${cap}-${lab}`, drawLabel(cap, null, [['消臭', 0.5, 0.62, lab]]), { y: 7, z: 3.35 }))
   return g
 }

@@ -6,17 +6,9 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
-import { C, G, S, ellipsePoly, holePanel, rectPoly, slab, type AssetCategory, type AssetDef, type Poly, type StyleTag } from '../kit'
-
-const PI = Math.PI
-type V3 = [number, number, number]
-type Pal = [StyleTag, ...string[]]
-type Build = (p: string[]) => THREE.Group
-
-const N = S.nordic
-const M = S.modern
-const I = S.industrial
-const R = S.retro
+import { C, G, ellipsePoly, holePanel, rectPoly, slab, type AssetCategory, type AssetDef, type Poly } from '../kit'
+import { P, PI, box3, noOutline, type V3 } from '../geo'
+import { I, M, N, R, type Build, type PalFlat } from '../packkit'
 
 const STEEL = '#c3c7cc'
 const DARK = '#2e2f33'
@@ -31,7 +23,7 @@ const PAPER = '#f1ead2'
 
 // ---------- 定义 ----------
 
-function def(id: string, name: string, category: AssetCategory, [w, d, h]: V3, pals: Pal[], build: Build, extra: Partial<AssetDef> = {}): AssetDef {
+function def(id: string, name: string, category: AssetCategory, [w, d, h]: V3, pals: PalFlat[], build: Build, extra: Partial<AssetDef> = {}): AssetDef {
   // 普通形态：xz 居中、最低点贴地；挂起 / 壁挂 / 带层板坐标的保持原样
   if (extra.form !== 'hanging' && extra.mount === undefined && !extra.surfaces) build = normalize(build)
   return {
@@ -48,15 +40,10 @@ function def(id: string, name: string, category: AssetCategory, [w, d, h]: V3, p
     ...extra,
   }
 }
-const prop = (id: string, name: string, category: AssetCategory, dims: V3, pals: Pal[], build: Build, extra: Partial<AssetDef> = {}) =>
+const prop = (id: string, name: string, category: AssetCategory, dims: V3, pals: PalFlat[], build: Build, extra: Partial<AssetDef> = {}) =>
   def(id, name, category, dims, pals, build, { prop: true, ...extra })
 
 // ---------- 小工具 ----------
-
-function box3(o: THREE.Object3D) {
-  o.updateMatrixWorld(true)
-  return new THREE.Box3().setFromObject(o, true)
-}
 
 function normalize(build: Build): Build {
   return (p) => {
@@ -68,17 +55,6 @@ function normalize(build: Build): Build {
     inner.position.y -= b.min.y
     return g
   }
-}
-
-function P<T extends THREE.Object3D>(o: T, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0): T {
-  o.position.set(x, y, z)
-  o.rotation.set(rx, ry, rz)
-  return o
-}
-
-const noLine = <T extends THREE.Object3D>(o: T): T => {
-  o.userData.noOutline = true
-  return o
 }
 
 function lit<T extends THREE.Mesh>(m: T, color: string, k = 0.6): T {
@@ -178,7 +154,7 @@ function seam(R: number, color: string, tube = 0.3, a = 0.7) {
     const t = (i / 64) * PI * 2
     pts.push([(a * Math.cos(t) + b * Math.cos(3 * t)) * R, (a * Math.sin(t) - b * Math.sin(3 * t)) * R, c * Math.sin(2 * t) * R])
   }
-  return noLine(tubeLine(pts, tube, color, true, 160))
+  return noOutline(tubeLine(pts, tube, color, true, 160))
 }
 
 /** 带接缝的小球（棒球、垒球、网球），球心在 (x, r, z) */
@@ -273,7 +249,7 @@ function tennisRacket(frame: string, grip: string, str: string) {
   for (let i = -3; i <= 3; i++) {
     const x = i * 2.6
     const hh = 12 * Math.sqrt(Math.max(0, 1 - (x / 10.1) ** 2))
-    g.add(noLine(cyl(0.12, 0.12, hh * 2, str, { x, y: 52 - hh }, 6)))
+    g.add(noOutline(cyl(0.12, 0.12, hh * 2, str, { x, y: 52 - hh }, 6)))
   }
   for (const s of [-1, 1]) g.add(bar([s * 1.4, 30, 0], [s * 7, 41.5, 0], 0.7, frame))
   g.add(bar([-5.8, 40.2, 0], [5.8, 40.2, 0], 0.6, frame))
@@ -314,7 +290,7 @@ function volleyball(p: string[]) {
     [[0, -1, 0], [0, 0, 1], c],
   ]
   for (const [f, s, col] of faces) {
-    const m = noLine(orient(sphPatch(r + 0.3, col, PI / 2 - 0.66, 1.32, PI / 2 - 0.27, 0.54), f, s))
+    const m = noOutline(orient(sphPatch(r + 0.3, col, PI / 2 - 0.66, 1.32, PI / 2 - 0.27, 0.54), f, s))
     m.position.y = r
     g.add(m)
   }
@@ -407,7 +383,7 @@ function bowlingBall(p: string[]) {
     [5.4, 0.6, 0.9, 0.3],
   ]
   for (const [ph, dph, th, dth] of rnd) {
-    const m = noLine(sphPatch(r + 0.3, b, ph, dph, th, dth, 24))
+    const m = noOutline(sphPatch(r + 0.3, b, ph, dph, th, dth, 24))
     m.position.y = r
     g.add(m)
   }
@@ -474,10 +450,10 @@ function netColumn(a: string, b: string, net: string) {
   ]
   for (let k = 0; k < 8; k++) {
     const t = (k / 8) * PI * 2
-    g.add(noLine(tubeLine(prof.map(([rr, y]): V3 => [Math.cos(t) * rr, y, Math.sin(t) * rr]), 0.18, net)))
+    g.add(noOutline(tubeLine(prof.map(([rr, y]): V3 => [Math.cos(t) * rr, y, Math.sin(t) * rr]), 0.18, net)))
   }
-  for (const y of ys) g.add(noLine(torus(11, 0.18, net, { y, rx: PI / 2 })))
-  for (const y of [-23.75, -45.25]) g.add(noLine(torus(9.6, 0.18, net, { y, rx: PI / 2 })))
+  for (const y of ys) g.add(noOutline(torus(11, 0.18, net, { y, rx: PI / 2 })))
+  for (const y of [-23.75, -45.25]) g.add(noOutline(torus(9.6, 0.18, net, { y, rx: PI / 2 })))
   g.add(torus(1.2, 0.35, net, { y: 0.2, rx: PI / 2 }))
   return g
 }
@@ -867,7 +843,7 @@ function sleepPad(p: string[]) {
   const [a, b] = p
   const g = G(cylX(9, 56, a, 0, 9, 0, 28))
   for (const s of [-1, 1]) {
-    for (const r of [2.6, 5, 7.4]) g.add(noLine(torus(r, 0.22, shade(a, -0.18), { x: s * 28.1, y: 9, ry: PI / 2 })))
+    for (const r of [2.6, 5, 7.4]) g.add(noOutline(torus(r, 0.22, shade(a, -0.18), { x: s * 28.1, y: 9, ry: PI / 2 })))
     g.add(torus(9.3, 0.5, b, { x: s * 18, y: 9, ry: PI / 2 }))
   }
   g.add(rbox(56.4, 0.8, 4, shade(a, -0.08), { y: 0, z: 6.6 }, 0.3))
@@ -892,11 +868,11 @@ function tentPitched(p: string[]) {
   const body = dome(1, a, [SX, SY, SZ])
   body.position.y = 1
   g.add(body)
-  const door = noLine(dbl(sphPatch(1, b, PI / 2 - 0.45, 0.9, 0.55, PI / 2 - 0.58)))
+  const door = noOutline(dbl(sphPatch(1, b, PI / 2 - 0.45, 0.9, 0.55, PI / 2 - 0.58)))
   door.scale.set(SX * 1.008, SY * 1.008, SZ * 1.012)
   door.position.y = 1
   g.add(door)
-  const vent = noLine(dbl(sphPatch(1, b, 0, PI * 2, 0, 0.22)))
+  const vent = noOutline(dbl(sphPatch(1, b, 0, PI * 2, 0, 0.22)))
   vent.scale.set(SX * 1.008, SY * 1.008, SZ * 1.012)
   vent.position.y = 1
   g.add(vent)
@@ -974,12 +950,12 @@ function compassMap(p: string[]) {
     [5, 8, [2.5, 4.5]],
   ] as [number, number, number[]][])
     rs.forEach((r, i) => {
-      const m = noLine(torus(r, 0.13, greens[i], { x, y: 0.75, z, rx: PI / 2 }))
+      const m = noOutline(torus(r, 0.13, greens[i], { x, y: 0.75, z, rx: PI / 2 }))
       m.scale.set(1, 0.7, 1)
       g.add(m)
     })
-  g.add(noLine(tubeLine([[-11, 0.73, 4], [-5, 0.73, 6], [0, 0.73, 2], [6, 0.73, -3], [11, 0.73, -2]], 0.18, '#7fb3d8')))
-  for (let i = 0; i < 6; i++) g.add(noLine(rbox(0.9, 0.2, 0.4, STITCH, { x: -8 + i * 2.6, y: 0.62, z: -12 + i * 1.6 }, 0.08)))
+  g.add(noOutline(tubeLine([[-11, 0.73, 4], [-5, 0.73, 6], [0, 0.73, 2], [6, 0.73, -3], [11, 0.73, -2]], 0.18, '#7fb3d8')))
+  for (let i = 0; i < 6; i++) g.add(noOutline(rbox(0.9, 0.2, 0.4, STITCH, { x: -8 + i * 2.6, y: 0.62, z: -12 + i * 1.6 }, 0.08)))
   g.add(ghost(rbox(6, 0.4, 11, GLASS, { x: 6, y: 0.6, z: 5 }, 0.3), GLASS, 0.5))
   g.add(puck(2.9, 1, a, { x: 6, y: 1, z: 6 }))
   g.add(puck(2.3, 0.4, WHITE, { x: 6, y: 1.8, z: 6 }))
@@ -1001,7 +977,7 @@ function yogaBlocks(p: string[]) {
 function yogaStrap(p: string[]) {
   const [a, b] = p
   const g = G(puck(4.6, 3.8, a))
-  for (const r of [1.4, 2.5, 3.6]) g.add(noLine(torus(r, 0.15, shade(a, -0.18), { y: 3.95, rx: PI / 2 })))
+  for (const r of [1.4, 2.5, 3.6]) g.add(noOutline(torus(r, 0.15, shade(a, -0.18), { y: 3.95, rx: PI / 2 })))
   g.add(rbox(3.8, 0.3, 22, a, { z: 15 }, 0.12))
   for (const z of [26.6, 28]) g.add(ringFlat(2.1, 0.3, b, 0, 0.3 + (z - 26.6) * 0.3, z))
   return g
@@ -1022,7 +998,7 @@ function meditationSet(p: string[]) {
   g.add(puck(17, 14, a, { y: 6 }))
   for (let i = 0; i < 16; i++) {
     const t = (i / 16) * PI * 2
-    g.add(noLine(rbox(0.9, 8, 0.9, shade(a, -0.12), { x: Math.cos(t) * 17.05, y: 9, z: Math.sin(t) * 17.05, ry: -t }, 0.3)))
+    g.add(noOutline(rbox(0.9, 8, 0.9, shade(a, -0.12), { x: Math.cos(t) * 17.05, y: 9, z: Math.sin(t) * 17.05, ry: -t }, 0.3)))
   }
   g.add(puck(2, 1, c, { y: 19.7 }))
   return g
@@ -1058,7 +1034,7 @@ function matRack(p: string[]) {
   ;[-24, -12, 12, 24].forEach((x, i) => {
     const col = cols[i]
     g.add(cyl(4.6, 4.6, 61, col, { x, y: 4 }, 20))
-    g.add(noLine(torus(2.4, 0.2, shade(col, -0.2), { x, y: 65.2, rx: PI / 2 })))
+    g.add(noOutline(torus(2.4, 0.2, shade(col, -0.2), { x, y: 65.2, rx: PI / 2 })))
     g.add(torus(4.85, 0.3, shade(col, -0.25), { x, y: 22, rx: PI / 2 }))
   })
   return g
@@ -1079,11 +1055,11 @@ function skiHelmet(p: string[]) {
   g.add(strap)
   const frame = sphPatch(r + 0.65, DARK, PI / 2 - 0.78, 1.56, 1.04, 0.5)
   frame.scale.set(...sc)
-  g.add(noLine(frame))
+  g.add(noOutline(frame))
   const lens = sphPatch(r + 1.0, c, PI / 2 - 0.68, 1.36, 1.1, 0.38)
   lens.scale.set(...sc)
   lens.material = toon(c, { emissive: 0.15 })
-  g.add(noLine(lens))
+  g.add(noOutline(lens))
   for (const x of [-3, 0, 3]) g.add(rbox(1, 0.7, 4, DARK, { x, y: r * sc[1] * Math.sqrt(1 - (x / (r * sc[0])) ** 2) - 0.45, z: -2 }, 0.3))
   g.position.y = -r * sc[1] * Math.cos(PI * 0.56)
   return G(g)
@@ -1152,7 +1128,7 @@ function roadHelmet(p: string[]) {
     ]) {
       const pts: V3[] = []
       for (let i = 0; i <= 6; i++) pts.push(surf(x, z0 + ((z1 - z0) * i) / 6))
-      g.add(noLine(tubeLine(pts, 0.6, DARK)))
+      g.add(noOutline(tubeLine(pts, 0.6, DARK)))
     }
   }
   const mid: V3[] = []
@@ -1221,7 +1197,7 @@ function runBelt(p: string[]) {
 function swimSet(p: string[]) {
   const [a, b, c] = p
   const capG = G(dome(10, a, [0.9, 0.85, 1.05]))
-  const logo = noLine(sphPatch(10.35, b, PI / 2 - 0.35, 0.7, 0.75, 0.45))
+  const logo = noOutline(sphPatch(10.35, b, PI / 2 - 0.35, 0.7, 0.75, 0.45))
   logo.scale.set(0.9, 0.85, 1.05)
   capG.add(logo)
   const goggles = G()
@@ -1297,7 +1273,7 @@ function frisbee(p: string[]) {
   const m = dbl(new THREE.Mesh(geo, toon(a)))
   m.castShadow = true
   const g = G(m)
-  g.add(noLine(torus(8.5, 0.25, b, { y: 2.98, rx: PI / 2 })))
+  g.add(noOutline(torus(8.5, 0.25, b, { y: 2.98, rx: PI / 2 })))
   g.add(puck(3, 0.5, c, { y: 2.78 }))
   return g
 }
@@ -1413,50 +1389,50 @@ function skateWall(p: string[]) {
 // 配色
 // ====================================================================
 
-const BALL_PALS: Pal[] = [
+const BALL_PALS: PalFlat[] = [
   ['modern', WHITE, '#3d5a80', '#ffd65a'],
   ['cute', C.white, C.pink, C.sky],
   ['retro', R.cream, R.teal, R.orange],
   ['nordic', N.white, N.blue, N.mustard],
 ]
-const PACK_PALS: Pal[] = [
+const PACK_PALS: PalFlat[] = [
   ['industrial', '#5a6a4a', I.leather, '#26262a'],
   ['modern', '#3d3f44', '#c8473a', '#24252a'],
   ['nordic', N.blue, N.mustard, '#4a4f55'],
   ['retro', R.orange, R.mustard, '#3a3a3a'],
   ['cute', C.mint, C.lemon, '#5a4646'],
 ]
-const POLE_PALS: Pal[] = [
+const POLE_PALS: PalFlat[] = [
   ['modern', '#3d3f44', '#24252a', '#c8473a'],
   ['industrial', I.steel, '#3a3a3c', I.rust],
   ['nordic', N.gray, '#4a4f55', N.mustard],
   ['retro', R.teal, '#3a3a3a', R.orange],
 ]
-const CLIMB_PALS: Pal[] = [
+const CLIMB_PALS: PalFlat[] = [
   ['modern', '#3d5a80', '#ff7a3a', '#26262a'],
   ['industrial', I.rust, '#5a6a4a', I.iron],
   ['nordic', N.sage, N.mustard, '#4a4f55'],
   ['cute', C.lilac, C.lemon, '#5a4646'],
 ]
-const CAMP_PALS: Pal[] = [
+const CAMP_PALS: PalFlat[] = [
   ['industrial', '#5a6a4a', I.leather, I.iron],
   ['nordic', N.white, N.sage, N.oak],
   ['modern', '#3d3f44', '#c8473a', '#24252a'],
   ['retro', R.orange, R.mustard, R.caramel],
 ]
-const YOGA_PALS: Pal[] = [
+const YOGA_PALS: PalFlat[] = [
   ['nordic', N.sage, N.linen, N.oak],
   ['cute', C.lilac, C.sakura, C.mint],
   ['modern', '#3d3f44', M.light, M.black],
   ['japanese', '#c9cf8e', '#f6f0e1', '#6e4f37'],
 ]
-const SPORT_PALS: Pal[] = [
+const SPORT_PALS: PalFlat[] = [
   ['modern', '#26262a', '#5ad1ff', '#c3c7cc'],
   ['cute', C.pink, C.sky, C.white],
   ['nordic', N.blue, N.white, N.mustard],
   ['retro', R.teal, R.mustard, R.cream],
 ]
-const RACK_PALS: Pal[] = [
+const RACK_PALS: PalFlat[] = [
   ['nordic', N.oak, N.oakL, N.white],
   ['industrial', I.iron, I.walnut, I.steel],
   ['modern', M.white, M.light, M.gray],

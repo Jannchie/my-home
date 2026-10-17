@@ -8,18 +8,9 @@
 
 import * as THREE from 'three'
 import { ball, cyl, rbox, shade, toon, torus } from '../toon'
-import { C, G, S, rectPoly, type AssetCategory, type AssetDef, type StyleTag } from '../kit'
-
-const PI = Math.PI
-type Pal = [StyleTag, string[]]
-type Dims = [number, number, number]
-type Build = (p: string[]) => THREE.Group
-
-const N = S.nordic
-const M = S.modern
-const J = S.japanese
-const I = S.industrial
-const R = S.retro
+import { C, G, rectPoly, type AssetCategory, type AssetDef } from '../kit'
+import { PI } from '../geo'
+import { I, J, M, N, R, type Build, type Dims, type Pal } from '../packkit'
 
 const CHROME = '#d9dee6'
 const MIRROR = '#d6ebf5'

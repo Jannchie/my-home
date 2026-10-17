@@ -3,11 +3,10 @@
 // 模型和骨架在 critters.ts，静态版只是把骨架摆成睡觉 / 待机的姿势。
 
 import * as THREE from 'three'
-import { G, rectPoly, type AssetDef, type ActorSpec, type StyleTag } from '../kit'
+import { G, rectPoly, type AssetDef, type ActorSpec } from '../kit'
 import { creatureStatic, kachakaDock, kachakaLevels, kachakaModel, markActorPart, vacuumModel, KACHAKA, type PoseName } from '../critters'
 import { rbox, shade } from '../toon'
-
-type Pal = [StyleTag, string[]]
+import { type Pal } from '../packkit'
 
 function def(id: string, name: string, [w, d, h]: [number, number, number], pals: Pal[], build: (p: string[]) => THREE.Group, actor: ActorSpec, extra: Partial<AssetDef> = {}): AssetDef {
   return {

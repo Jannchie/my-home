@@ -8,13 +8,13 @@
 // 机器人属于角色类，可以有屏幕眼睛；配件、底座、遥控器之类不加脸。
 
 import * as THREE from 'three'
-import { G, rectPoly, type ActorSpec, type AssetCategory, type AssetDef, type StyleTag } from '../kit'
+import { G, rectPoly, type ActorSpec, type AssetCategory, type AssetDef } from '../kit'
 import { markActorPart } from '../critters'
 import { SERVER_TRAYS, beam, buildRobo, droneModel, lit, roboStatic, screenEye } from '../robots-actors'
 import { ball, capsule, cyl, puck, rbox, shade, torus, tray } from '../toon'
+import { PI } from '../geo'
+import { PROP, type Pal } from '../packkit'
 
-type Pal = [StyleTag, string[]]
-const PI = Math.PI
 const SCREEN = '#1c1f2a'
 const RUBBER = '#2a2a2e'
 const FOAM = '#33353b'
@@ -35,7 +35,6 @@ function def(id: string, name: string, category: AssetCategory, [w, d, h]: [numb
   }
 }
 
-const PROP: Partial<AssetDef> = { prop: true }
 const actor = (kind: ActorSpec['kind'], role: ActorSpec['role'], breed: string, dock?: [number, number, number]): Partial<AssetDef> => ({ actor: { kind, role, breed, ...(dock ? { dock } : {}) } })
 
 // ======================================================================

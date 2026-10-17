@@ -3,9 +3,8 @@
 
 import * as THREE from 'three'
 import { ball, rbox, torus } from '../toon'
-import { C, rod, type AssetDef, type StyleTag } from '../kit'
-
-type Pal = [StyleTag, string[]]
+import { C, rod, type AssetDef } from '../kit'
+import { type Pal } from '../packkit'
 
 const PALS: Pal[] = [
   ['cute', [C.white, C.pink, C.lilac]],
