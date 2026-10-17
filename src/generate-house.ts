@@ -88,6 +88,8 @@ const F2 = '2f'
 const STAIR_L = { w: 180, d: 270 }
 /** 户建的客厅楼梯：2F 南带东端让给走廊（洞口在里面）的宽度 */
 const LIVING_STRIP = 110
+/** 客厅楼梯起步前留出的进深 */
+const STAIR_CLEAR_LIVING = 85
 
 /** 不消耗布局随机序列的确定性哈希（0..1） */
 function seedHash(seed: number, k: number) {
@@ -450,7 +452,9 @@ function layout(seed: number, o: Pick<HouseGenOpts, 'region' | 'dwelling' | 'bed
   if (eastBed && d.wG + d.wSC < 290) d.wSC = 290 - d.wG
   if (o.region === 'west' && d.wG + d.wSC < 220) d.wSC = 220 - d.wG
   // 楼梯形式（用种子的哈希挑，不消耗布局的随机序列：U 形的户型和以前一样）
-  const kind = stairKind(seed, o.region, duplex, s1.cells[s1.cells.length - 1].kind === 'ldk')
+  // 客厅楼梯：起步前要留 80 的地方，南带进深放不下 300 长的梯段就不做
+  const livingRun = Math.min(360, d.dS - WALL / 2 - WALL_OUTER / 2 - STAIR_CLEAR_LIVING)
+  const kind = stairKind(seed, o.region, duplex, s1.cells[s1.cells.length - 1].kind === 'ldk' && livingRun >= 300)
   const living = kind === 'living'
   // 楼梯间宽：U 形 180；L 形要放下 270 长的占地（两侧隔墙各让半个墙厚）；客厅楼梯时这一格做收纳
   const wSt = kind === 'l' ? STAIR_L.d + WALL + 2 : 180
@@ -656,7 +660,7 @@ function layout(seed: number, o: Pick<HouseGenOpts, 'region' | 'dwelling' | 'bed
     kind === 'l'
       ? { id, kind: 'stairs', stairs: 'l', turn: 'right', x: xS + wSt / 2, y: D - WALL_OUTER / 2 - STAIR_L.w / 2 - 1, w: STAIR_L.w, d: STAIR_L.d, rot: 270, ...(under ? { under } : {}) }
       : living
-        ? { id, kind: 'stairs', stairs: 'straight', x: W - WALL_OUTER / 2 - 45 - 1, y: dS - WALL / 2 - 180 - 1, w: 90, d: 360, rot: 180, ...(under ? { under } : {}) }
+        ? { id, kind: 'stairs', stairs: 'straight', x: W - WALL_OUTER / 2 - 45 - 1, y: dS - WALL / 2 - livingRun / 2 - 1, w: 90, d: livingRun, rot: 180, ...(under ? { under } : {}) }
         : { id, kind: 'stairs', stairs: 'u', turn: turnU, x: xS + wSt / 2, y: yN + dN / 2, w: wSt, d: dN, rot: 180 }
 
   // ---------- 用地 ----------

@@ -7,7 +7,7 @@ import { BASE, applyCutaway, bendToWalls, floorY, isPlant, stepCutaway, furnitur
 import { buildBuilding, type FloorGroup } from '../three/building'
 import { baseFloorId, floorById, floorOf, floorView, isMultiFloor, planFloors } from '../floors'
 import FloorBar from './FloorBar.vue'
-import { stairHoles, withStairHoles } from '../stairs'
+import { withStairHoles } from '../stairs'
 import { overlapsOthers, snapFurniture, snapToWall, type Guide } from '../snap'
 import { fitOnSurface, pickSurface, propsOn, snapToClip, snapToHook } from '../surface'
 import { createStage, fitSun, frameCamera, setStageQuality, type Stage } from '../three/stage'
@@ -188,11 +188,8 @@ function applyFloorPose() {
     g.position.y = st?.extra ?? 0
     g.visible = st?.show ?? true
   }
-  for (const [id, a] of actorLayers) {
-    const st = floorAnim.get(id)
-    a.group.position.y = (floorById(plan.value, id)?.elevation ?? 0) + (st?.extra ?? 0)
-    a.group.visible = st?.show ?? true
-  }
+  // 宠物、机器人：按所在楼层（走楼梯时在两层之间）跟着楼层的动画走，所在楼层藏起来时一起藏
+  actors?.relayout()
   if (lights) {
     if (isMultiFloor(plan.value)) {
       const raw = toRaw(plan.value)
@@ -263,33 +260,19 @@ function houseChanged() {
 }
 
 /** 宠物、机器人按楼层分开（各在各的楼层走动） */
-const actorLayers = new Map<string, ActorLayer>()
-function actorLayer(id: string) {
-  let a = actorLayers.get(id)
-  if (!a) {
-    a = new ActorLayer((fid) => objs.get(fid)?.obj)
-    actorLayers.set(id, a)
-    stage?.scene.add(a.group)
-  }
-  return a
-}
+/**
+ * 宠物、机器人：整套房子一层 ActorLayer（多层户型每层一张导航网格，猫狗、机器狗、人形机器人经楼梯上下楼）。
+ * 角色的高度 = 所在楼层的抬升（elevation + 分层拉开 / 隐藏的动画偏移）+ 离本层地面的高度。
+ */
+const actors = new ActorLayer((fid) => objs.get(fid)?.obj)
+actors.lift = (id) => (isMultiFloor(plan.value) ? liftOf(id) : 0)
+actors.elevOf = (id) => (isMultiFloor(plan.value) ? (floorById(plan.value, id)?.elevation ?? 0) : 0)
+actors.shown = (id) => floorAnim.get(id)?.show ?? true
 function syncActors() {
-  const raw = toRaw(plan.value)
-  const fs = planFloors(raw)
-  for (const [id, a] of actorLayers)
-    if (!fs.some((f) => f.id === id)) {
-      a.sync({ ...raw, furniture: [] }, false)
-      a.group.removeFromParent()
-      actorLayers.delete(id)
-    }
-  for (const f of fs) {
-    const a = actorLayer(f.id)
-    a.elev = isMultiFloor(raw) ? f.elevation : 0
-    a.holes = stairHoles(raw, f.id).map((h) => h.poly)
-    a.group.position.y = isMultiFloor(raw) ? liftOf(f.id) : 0
-    a.sync(floorView(raw, f.id), actorsLive())
-  }
+  actors.sync(toRaw(plan.value), actorsLive())
 }
+// 开发时的调试入口（截图脚本用）：看角色位置、让角色去某层某处
+if (import.meta.env.DEV) (window as unknown as { __myhomeActors?: ActorLayer }).__myhomeActors = actors
 /** 室内灯光：房间主灯、灯具家具的光源，入夜自动亮（three/lights.ts） */
 let lights: IndoorLights
 let lastDining = ''
@@ -820,7 +803,7 @@ function pickFurniture(e: PointerEvent): string | null {
     if (id && !ids.includes(id)) ids.push(id)
   }
   // 走动中的宠物 / 机器人：点中就选中它来源的那件家具（选中后角色回到原位静止，方便拖动）
-  if (!ids.length) return actorLayer(activeFloor.value).pick(raycaster)
+  if (!ids.length) return actors.pick(raycaster)
   // 柜子、架子的格子里摆满了东西，点柜子正面多半先碰到摆件：先选容器本身；容器已经选中时再点，才选里面的东西
   const sel = selection.value?.type === 'furniture' ? selection.value.id : null
   const inside = (kid: string, box: string) => {
@@ -1642,8 +1625,7 @@ function loop() {
   }
   // 省电画质：只有动画（粒子、走动的角色）在变时，最多 30fps 重画
   const low = lowPower()
-  let actorsBusy = false
-  for (const a of actorLayers.values()) actorsBusy = a.update(dt) || actorsBusy
+  const actorsBusy = actors.update(dt)
   const anim = fx.update(dt, stage.renderer.domElement.height) || actorsBusy
   // 楼层切换 / 分层拉开的缓动
   if (stepFloors(dt)) {
@@ -1719,7 +1701,7 @@ onMounted(() => {
   stage.renderer.shadowMap.autoUpdate = false
   stage.renderer.shadowMap.needsUpdate = true
   stage.scene.add(furnRoot, frameRoot, guideRoot, fx.group)
-  for (const a of actorLayers.values()) stage.scene.add(a.group)
+  stage.scene.add(actors.group)
   controls = new OrbitControls(stage.camera, canvas.value!)
   controls.enableDamping = true
   controls.dampingFactor = 0.12

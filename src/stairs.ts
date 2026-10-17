@@ -8,7 +8,7 @@
 //   spiral   旋转：扇形踏步绕中心柱转大约 300°。
 // 最后一级踏步和上层地面齐平（落在洞口里），出梯口（arrival）是占地边界上接上层地面的那一段。
 
-import { add, bbox, fixtureDepth, mul, pointInPolygon, rectPoints, type Box, type Fixture, type Plan, type Room, type Vec } from './model'
+import { add, bbox, fixtureDepth, mul, openingGeom, pointInPolygon, rectPoints, type Box, type Fixture, type Plan, type Room, type Vec } from './model'
 import { floorAbove, floorOf, isMultiFloor, riseOf } from './floors'
 import { isVoid, voidRailSegments } from './walls'
 
@@ -375,18 +375,58 @@ export function stairClearZones(p: Plan, floorId: string): Box[] {
     const L = stairLayout(f, riseOf(p, from))
     const w = stairToWorld(f)
     const D = fixtureDepth(f)
+    const rooms = p.rooms.filter((r) => floorOf(p, r) === floorId)
     if (from === floorId && stairsVariant(f) !== 'spiral') {
       const p0 = L.path[0]
       const h = runWidth(f) / 2
       out.push(bbox([w({ x: p0.x - h, y: D / 2 }), w({ x: p0.x + h, y: D / 2 }), w({ x: p0.x - h, y: D / 2 + STAIR_CLEAR }), w({ x: p0.x + h, y: D / 2 + STAIR_CLEAR })]))
+      out.push(...passage(p, rooms, w({ x: p0.x, y: D / 2 + STAIR_CLEAR / 2 })))
     }
     if (isMultiFloor(p) && floorAbove(p, from)?.id === floorId) {
-      const { out: o } = arrivalOut(L)
+      const { mid, out: o } = arrivalOut(L)
       const [a, b] = L.arrival
       out.push(bbox([w(a), w(b), w(add(a, mul(o, STAIR_CLEAR))), w(add(b, mul(o, STAIR_CLEAR)))]))
+      out.push(...passage(p, rooms, w(add(mid, mul(o, STAIR_CLEAR / 2)))))
     }
   }
   return out
+}
+
+/** 楼梯口到所在房间的门（没有门就到房间中心）留一条 70 宽的通道：两段横平竖直的带子，家具不能把楼梯口围起来 */
+const PASS = 70
+function passage(p: Plan, rooms: Room[], e: Vec): Box[] {
+  const room = rooms.find((r) => r.kind !== 'void' && pointInPolygon(e, r.points))
+  if (!room) return []
+  const doors = p.openings.filter((o) => o.kind !== 'window' && (o.roomId === room.id || rooms.some((r) => r.id === o.roomId)))
+  let target: Vec | null = null
+  let best = Infinity
+  for (const o of doors) {
+    const g = openingGeom(p.rooms, o)
+    if (!g) continue
+    // 门洞往房间里面挪 40，带子不伸进墙里
+    const into = pointInPolygon(add(g.center, mul(g.e.out, 20)), room.points) ? g.e.out : mul(g.e.out, -1)
+    const c = add(g.center, mul(into, 40))
+    if (!pointInPolygon(c, room.points)) continue
+    const d = Math.hypot(c.x - e.x, c.y - e.y)
+    if (d < best) {
+      best = d
+      target = c
+    }
+  }
+  target ??= centroidOf(room.points)
+  if (Math.hypot(target.x - e.x, target.y - e.y) < 5) return []
+  const h = PASS / 2
+  const strip = (a: Vec, b: Vec): Box => ({ x0: Math.min(a.x, b.x) - h, y0: Math.min(a.y, b.y) - h, x1: Math.max(a.x, b.x) + h, y1: Math.max(a.y, b.y) + h })
+  // 先横后竖还是先竖后横：拐角在房间里的那一种
+  const c1 = { x: target.x, y: e.y }
+  const c2 = { x: e.x, y: target.y }
+  const corner = pointInPolygon(c1, room.points) ? c1 : c2
+  return [strip(e, corner), strip(corner, target)]
+}
+
+const centroidOf = (pts: Vec[]): Vec => {
+  const b = bbox(pts)
+  return { x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 }
 }
 
 /** 留空的地方当作一件不占使用空间的设备（PS）：只在这份子户型里，不写回户型 */

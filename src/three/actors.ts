@@ -17,7 +17,9 @@ import { ASSET_MAP, ASSETS } from './assets'
 import type { ActorSpec, AssetDef } from './kit'
 import { hasTag } from './tags'
 import { effectivePalette } from './colors'
-import { NavGrid, type NavClass } from '../nav'
+import { HouseNav, NavGrid, type NavClass } from '../nav'
+import { floorOf, floorView, isMultiFloor, planFloors } from '../floors'
+import { stairHoles, type StairWalk } from '../stairs'
 import { placeFurniture } from './house'
 import { propsOn } from '../surface'
 import {
@@ -42,12 +44,19 @@ import { DRONES, buildRobo, droneModel, emptyRoboMotion, poseRobo, type DronePar
 
 type Kind = ActorSpec['kind']
 
-/** 角色在家的位置：x / y 平面坐标，z 世界高度，h 朝向（rotation.y） */
+/** 角色在家的位置：x / y 平面坐标，z 离所在楼层地面的高度，h 朝向（rotation.y），fl 所在楼层 */
 interface Spot {
   x: number
   y: number
   z: number
   h: number
+  fl: string
+}
+
+/** 某层上的目标点（跨层的 go 任务、食盆、送东西的地方） */
+interface FloorSpot {
+  fl: string
+  p: Vec
 }
 
 interface Desc {
@@ -64,7 +73,10 @@ interface Desc {
 
 type Task =
   | { t: 'rest'; pose: PoseName; dur: number; sleep?: boolean; look?: number; lick?: number; wag?: number; face?: number; wave?: number }
-  | { t: 'go'; to: Vec; run?: boolean; sniff?: boolean; path?: Vec[] | null; i?: number; stuck?: number; tries?: number; rr?: number }
+  // fl：目标在哪层（不给 = 本层）；不在本层时 step() 先按 HouseNav.route 展开成「走到楼梯口 → 走楼梯 → 走到目标」
+  | { t: 'go'; to: Vec; fl?: string; run?: boolean; sniff?: boolean; path?: Vec[] | null; i?: number; stuck?: number; tries?: number; rr?: number }
+  // 走一趟楼梯：沿 stairWalk 的路线（up = 往上），s 已走的路程
+  | { t: 'stairs'; walk: StairWalk; up: boolean; pts?: { x: number; y: number; z: number }[]; cum?: number[]; s?: number }
   | { t: 'enter'; spot: Spot }
   | { t: 'leave'; to: Vec }
   | { t: 'turn'; h: number }
@@ -112,11 +124,19 @@ class Actor {
   tasks: Task[] = []
   tt = 0
   /** 起点（body 素材的位置 / 窝） */
-  start: Spot = { x: 0, y: 0, z: 0, h: 0 }
+  start: Spot = { x: 0, y: 0, z: 0, h: 0, fl: '' }
   /** 睡觉的地方（认领的窝，或起点） */
-  sleep: Spot = { x: 0, y: 0, z: 0, h: 0 }
-  /** 进出 sleep 的门口点 */
+  sleep: Spot = { x: 0, y: 0, z: 0, h: 0, fl: '' }
+  /** 进出 sleep 的门口点（在 sleep 那层） */
   door: Vec = { x: 0, y: 0 }
+  /** 现在在哪层（走楼梯时是下面那层，yW 相对下层地面） */
+  fl = ''
+  /** 所在楼层地面的世界高度（ActorLayer.place 每帧算好：含楼层动画；走楼梯时在两层之间插值） */
+  baseY = 0
+  /** 走楼梯时身体的俯仰（上楼抬头 < 0） */
+  pitch = 0
+  /** 走楼梯时脚下踏面的目标高度 */
+  stairZ = 0
   atHome = true
   acts = 0
   pose?: Pose
@@ -172,6 +192,8 @@ class Actor {
     }
     finishActorModel(model)
     this.root.add(model)
+    // 走楼梯时先转朝向再俯仰
+    this.root.rotation.order = 'YXZ'
     // 接触阴影：一块半透明的暗色椭圆
     const sh = new THREE.Mesh(SHADOW_GEO, SHADOW_MAT)
     if (this.rig) sh.scale.set(this.rig.breed.girth * 1.25, 1, this.rig.breed.len * 0.75)
@@ -198,6 +220,8 @@ class Actor {
     this.pos = { x: s.x, y: s.y }
     this.h = s.h
     this.yW = s.z
+    this.fl = s.fl
+    this.pitch = 0
     this.speed = 0
     this.walkW = 0
     this.atHome = true
@@ -229,6 +253,8 @@ class Actor {
     this.pos = { x: s.x, y: s.y }
     this.h = s.h
     this.yW = s.z
+    this.fl = s.fl
+    this.pitch = 0
     this.speed = 0
     this.walkW = 0
     this.acts = 0
@@ -267,8 +293,15 @@ class Actor {
   }
 
   writeTransform() {
-    this.root.position.set(this.pos.x, this.yW, this.pos.y)
-    this.root.rotation.set(0, this.h, 0)
+    this.root.position.set(this.pos.x, this.baseY + this.yW, this.pos.y)
+    this.root.rotation.set(this.pitch, this.h, 0)
+  }
+
+  /** 会走楼梯的：猫、狗、机器狗、人形机器人（扫地机器人、Kachaka、轮式机器人、兔子、无人机只在本层） */
+  get climbs() {
+    if (this.rig) return this.rig.breed.kind === 'cat' || this.rig.breed.kind === 'dog'
+    if (this.robo) return this.robo.breed.type === 'quad' || this.robo.breed.type === 'humanoid'
+    return false
   }
 }
 
@@ -288,20 +321,58 @@ export class ActorLayer {
   private actors = new Map<string, Actor>()
   private plan: Plan | null = null
   private preview = false
-  private nav: NavGrid | null = null
-  /** 无人机用的空中网格（低矮家具不算障碍） */
-  private air: NavGrid | null = null
-  private bowls: Vec[] = []
-  private deliver: { p: Vec; h: number }[] = []
+  /** 整套房子的导航：每层一张网格 + 楼梯连接（nav.ts HouseNav） */
+  private house: HouseNav | null = null
+  /** 无人机用的空中网格（低矮家具不算障碍），按楼层 */
+  private airs = new Map<string, NavGrid>()
+  private bowls: FloorSpot[] = []
+  private deliver: (FloorSpot & { h: number })[] = []
   /**
-   * 多层户型：每层一个 ActorLayer（宠物只在自己那层走动），group 放在楼层高度上（Sandbox3D 设 group.position.y），
-   * elev 是楼层本身的 elevation（家具模型的 position.y 里含它，不含分层拉开的偏移）。单层户型都是 0。
+   * 多层户型：整套房子一个 ActorLayer，group 在原点；角色的世界高度 = lift(所在楼层) + 离本层地面的高度。
+   * lift：楼层地面现在的世界高度（elevation + 分层拉开 / 隐藏的动画偏移），elevOf：楼层本身的 elevation
+   * （家具模型的 position.y 里含它，不含动画偏移），shown：这一层现在显示吗。Sandbox3D 设置；单层户型都是 0 / true。
    */
-  elev = 0
-  /** 不能走的区域（上层的楼梯洞口），建导航网格时用 */
-  holes: Vec[][] = []
+  lift: (floor: string) => number = () => 0
+  elevOf: (floor: string) => number = () => 0
+  shown: (floor: string) => boolean = () => true
 
   constructor(private getObj: (id: string) => THREE.Object3D | undefined) {}
+
+  /** 角色所在楼层的导航网格 */
+  private navOf(a: Actor) {
+    return this.house!.grid(a.fl)
+  }
+
+  /** 按所在楼层（走楼梯时在两层之间插值）摆好角色的高度和显示 */
+  private place(a: Actor) {
+    const t = a.tasks[0]
+    if (this.preview && t?.t === 'stairs' && t.pts) {
+      const w = t.walk
+      const k = Math.max(0, Math.min(1, a.yW / w.rise))
+      const lo = this.lift(w.from)
+      a.baseY = lo + (this.lift(w.to) - lo - w.rise) * k
+      a.root.visible = this.shown(k > 0.5 ? w.to : w.from)
+    } else {
+      a.baseY = this.lift(a.fl)
+      a.root.visible = this.shown(a.fl) && (this.preview || !a.hasRep)
+    }
+    a.writeTransform()
+  }
+
+  /** 楼层动画（分层拉开、只显示到当前层）在动：重新摆一遍所有角色 */
+  relayout() {
+    for (const a of this.actors.values()) this.place(a)
+  }
+
+  /** 调试 / 截图：让某个角色走到某层的某处（跨层会走楼梯） */
+  sendTo(src: string, fl: string, p: Vec) {
+    const a = this.actors.get(src)
+    if (!a || !this.preview) return false
+    a.atHome = false
+    a.tasks = [{ t: 'go', to: p, fl }, { t: 'rest', pose: 'sit', dur: 30, look: 1 }]
+    a.tt = 0
+    return true
+  }
 
   get count() {
     return this.actors.size
@@ -326,7 +397,7 @@ export class ActorLayer {
         if (a.kind === 'cat' || a.kind === 'dog' || a.kind === 'robopet' || a.kind === 'drone') pets.push(d)
       } else homes.push({ f, def, a })
     }
-    // 宠物认领最近的同类窝
+    // 宠物认领最近的同类窝（同层的优先；窝在别的楼层也认，会走楼梯回窝）
     const taken = new Set<string>()
     for (const p of pets) {
       const me = plan.furniture.find((f) => f.id === p.src)!
@@ -334,7 +405,7 @@ export class ActorLayer {
       let bd = Infinity
       for (const h of homes) {
         if (h.a.kind !== p.kind || taken.has(h.f.id) || actorPartDef(h.def) || (p.kind === 'robopet' && h.a.breed !== p.breed)) continue
-        const d = dist(me, h.f)
+        const d = dist(me, h.f) + (floorOf(plan, me) === floorOf(plan, h.f) ? 0 : 5000)
         if (d < bd) {
           bd = d
           best = h.f.id
@@ -362,13 +433,17 @@ export class ActorLayer {
   }
 
   /** 家具在场景里的位置 → 角色在家的位置 */
-  private spotOf(f: Furniture, kind: Kind): { spot: Spot; reps: THREE.Object3D[] } | null {
+  private spotOf(plan: Plan, f: Furniture, kind: Kind): { spot: Spot; reps: THREE.Object3D[] } | null {
     const obj = this.getObj(f.id)
     const def = ASSET_MAP.get(f.asset)
     if (!obj || !def) return null
     obj.updateWorldMatrix(true, true)
     const part = actorPart(obj)
     const h = (-f.rot * Math.PI) / 180
+    const fl = floorOf(plan, f)
+    // 家具模型的 position.y 含楼层 elevation、不含动画偏移（偏移在楼层的组上）；世界坐标两者都含
+    const elev = this.elevOf(fl)
+    const lift = this.lift(fl)
     if (part) {
       const p = new THREE.Vector3()
       const q = new THREE.Quaternion()
@@ -376,14 +451,14 @@ export class ActorLayer {
       part.getWorldQuaternion(q)
       const dir = new THREE.Vector3(0, 0, 1).applyQuaternion(q)
       // 宠物的骨架原点就在地面上；机器人的部件原点在底面（高度换算到本层的局部坐标）
-      return { spot: { x: p.x, y: p.z, z: kind === 'cat' || kind === 'dog' || kind === 'rabbit' ? obj.position.y - this.elev : p.y - this.group.position.y, h: Math.atan2(dir.x, dir.z) }, reps: [part] }
+      return { spot: { x: p.x, y: p.z, z: kind === 'cat' || kind === 'dog' || kind === 'rabbit' ? obj.position.y - elev : p.y - lift, h: Math.atan2(dir.x, dir.z), fl }, reps: [part] }
     }
     const dock = def.actor?.dock
     if (dock && def.actor?.role === 'home') {
       const p = obj.localToWorld(new THREE.Vector3(...dock))
-      return { spot: { x: p.x, y: p.z, z: p.y - this.group.position.y, h }, reps: [] }
+      return { spot: { x: p.x, y: p.z, z: p.y - lift, h, fl }, reps: [] }
     }
-    return { spot: { x: obj.position.x, y: obj.position.z, z: obj.position.y - this.elev, h }, reps: def.actor?.role === 'body' ? [obj] : [] }
+    return { spot: { x: obj.position.x, y: obj.position.z, z: obj.position.y - elev, h, fl }, reps: def.actor?.role === 'body' ? [obj] : [] }
   }
 
   /** 场景（家具、房间）或模式变了之后调用；plan 传原始对象 */
@@ -408,7 +483,7 @@ export class ActorLayer {
       }
       a.d = d
       const src = plan.furniture.find((f) => f.id === d.src)!
-      const s = this.spotOf(src, d.kind)
+      const s = this.spotOf(plan, src, d.kind)
       if (!s) continue
       a.start = s.spot
       a.reps = s.reps
@@ -416,7 +491,7 @@ export class ActorLayer {
       a.sleep = s.spot
       if (d.bed) {
         const bed = plan.furniture.find((f) => f.id === d.bed)
-        const bs = bed && this.spotOf(bed, d.kind)
+        const bs = bed && this.spotOf(plan, bed, d.kind)
         if (bs) a.sleep = bs.spot
       }
     }
@@ -430,7 +505,7 @@ export class ActorLayer {
     else
       for (const a of this.actors.values()) {
         a.placeAtHome()
-        a.root.visible = !a.hasRep
+        this.place(a)
       }
   }
 
@@ -439,35 +514,40 @@ export class ActorLayer {
     const plan = this.plan!
     const ignore = new Set<string>()
     for (const a of this.actors.values()) if (a.d.role === 'body') ignore.add(a.d.src)
-    this.nav = new NavGrid(plan, { ignore, holes: this.holes })
-    const nav = this.nav
-    this.air = [...this.actors.values()].some((a) => a.dr) ? new NavGrid(plan, { ignore, minH: AIR_MIN, holes: this.holes }) : null
+    // 每层一张网格（上层的楼梯洞口挖掉），楼梯把上下层连起来
+    this.house = new HouseNav(plan, { ignore })
+    const house = this.house
+    this.airs.clear()
+    if ([...this.actors.values()].some((a) => a.dr))
+      for (const fl of planFloors(plan)) this.airs.set(fl.id, new NavGrid(isMultiFloor(plan) ? floorView(plan, fl.id) : plan, { ignore, minH: AIR_MIN, holes: stairHoles(plan, fl.id).map((h) => h.poly) }))
     this.bowls = []
     this.deliver = []
     for (const f of plan.furniture) {
       const def = ASSET_MAP.get(f.asset)
       if (!def) continue
+      const fl = floorOf(plan, f)
+      const nav = house.grid(fl)
       if (isPetBowl(def) && !(f.z ?? 0)) {
         const p = nav.nearest('pet', { x: f.x, y: f.y }, 12, 60)
-        if (p) this.bowls.push(p)
+        if (p) this.bowls.push({ fl, p })
       } else if (isDeliverTarget(def) && !def.prop && !def.mount && !(f.z ?? 0)) {
         const h = (-f.rot * Math.PI) / 180
         const fw = fwd(h)
         const p = nav.nearest('robot', { x: f.x + fw.x * (def.d / 2 + 40), y: f.y + fw.y * (def.d / 2 + 40) }, 26, 70)
         // 停在家具前面，脸朝着家具
-        if (p) this.deliver.push({ p, h: h + Math.PI })
+        if (p) this.deliver.push({ fl, p, h: h + Math.PI })
       }
     }
     for (const a of this.actors.values()) {
       for (const o of a.reps) o.visible = false
       a.root.visible = true
-      // 门口点：窝 / 座子正前方，挪到能站的格子
+      // 门口点：窝 / 座子正前方，挪到能站的格子（在窝那层）
       const s = a.sleep
       const fw = fwd(s.h)
       const away = a.cls === 'robot' ? a.r + 22 : a.d.bed || a.d.role === 'home' ? a.r + 30 : 0
-      a.door = nav.nearest(a.cls, { x: s.x + fw.x * away, y: s.y + fw.y * away }, a.r, 120) ?? { x: s.x, y: s.y }
+      a.door = house.grid(s.fl).nearest(a.cls, { x: s.x + fw.x * away, y: s.y + fw.y * away }, a.r, 120) ?? { x: s.x, y: s.y }
       a.reset()
-      a.writeTransform()
+      this.place(a)
       // Kachaka 架子上的东西跟着走
       a.carry = []
       if (((a.kc && a.d.tiers) || a.robo?.breed.deliver) && a.reps[0]) {
@@ -507,8 +587,8 @@ export class ActorLayer {
       }
       a.carry = []
     }
-    this.nav = null
-    this.air = null
+    this.house = null
+    this.airs.clear()
   }
 
   /** 射线点中的活动角色 → 它来源的家具 id（走动中的猫狗也能点选） */
@@ -525,16 +605,41 @@ export class ActorLayer {
 
   /** 每帧调用；返回是否需要重绘 */
   update(dt: number) {
-    if (!this.preview || !this.nav || !this.actors.size) return false
+    if (!this.preview || !this.house || !this.actors.size) return false
     dt = Math.min(dt, 0.05)
     for (const a of this.actors.values()) this.step(a, dt)
     return true
   }
 
+  /**
+   * 跨层的 go：按 HouseNav.route 展开成「走到楼梯口 → 走楼梯 → …… → 走到目标」。
+   * 不会走楼梯的角色、到不了的目标：返回空（这个 go 作废）。
+   */
+  private expand(a: Actor, t: Extract<Task, { t: 'go' }>): Task[] {
+    if (!a.climbs || !this.house) return []
+    const r = a.cls === 'pet' ? a.r + 2 : a.r
+    const legs = this.house.route(a.cls, { floor: a.fl, p: a.pos }, { floor: t.fl!, p: t.to }, r) ?? this.house.route(a.cls, { floor: a.fl, p: a.pos }, { floor: t.fl!, p: t.to }, a.r * 0.8)
+    if (!legs) return []
+    return legs.map((l, i): Task => {
+      if (l.t === 'stairs') return { t: 'stairs', walk: l.walk, up: l.up }
+      const last = i === legs.length - 1
+      const to = l.path[l.path.length - 1]
+      // 先走到折线起点（就近挪过的格子 / 楼梯口外侧），再沿折线走
+      return { t: 'go', to, path: l.path, i: 0, rr: Math.min(r, a.r), ...(last ? { run: t.run, sniff: t.sniff } : {}) }
+    })
+  }
+
+  /** 能去的楼层里随便挑一层（会走楼梯的角色偶尔换层活动） */
+  private otherFloor(a: Actor): string | null {
+    if (!a.climbs || !this.house || this.house.floors.length < 2) return null
+    const fs = this.house.floors.filter((f) => f !== a.fl && this.house!.connected(a.fl, f))
+    return fs.length ? fs[Math.floor(Math.random() * fs.length)] : null
+  }
+
   // ---------- 行为 ----------
 
   private brain(a: Actor): Task[] {
-    const nav = this.nav!
+    const nav = this.navOf(a)
     if (a.robo) return this.roboBrain(a)
     if (a.vac) {
       // 扫地机器人：出门清扫一阵 → 回座 → 充电
@@ -545,7 +650,8 @@ export class ActorLayer {
       if (!a.atHome) return [{ t: 'go', to: a.door }, { t: 'turn', h: a.sleep.h }, { t: 'enter', spot: a.sleep }, { t: 'wait', dur: rnd(12, 25), charge: true }]
       // Kachaka：驮着架子去一两个地方，停一会儿，再回座
       const list: Task[] = [{ t: 'leave', to: a.door }]
-      const pool = [...this.deliver].sort(() => Math.random() - 0.5)
+      // Kachaka 只在本层（上不了楼梯）
+      const pool = this.deliver.filter((d) => d.fl === a.fl).sort(() => Math.random() - 0.5)
       const n = 1 + Math.floor(Math.random() * 2)
       for (let i = 0; i < n; i++) {
         const d = pool[i] ?? (() => {
@@ -571,18 +677,27 @@ export class ActorLayer {
     if (a.acts > 3 + Math.random() * 4) {
       a.acts = 0
       const curl: PoseName = kind === 'rabbit' ? 'loaf' : kind === 'dog' && Math.random() < 0.4 ? 'lie' : 'curl'
-      return [{ t: 'go', to: a.door }, { t: 'enter', spot: a.sleep }, { t: 'rest', pose: curl, dur: rnd(25, 50), sleep: true, face: a.sleep.h }]
+      // 窝可能在别的楼层：go 带上楼层，会走楼梯回去
+      return [{ t: 'go', to: a.door, fl: a.sleep.fl }, { t: 'enter', spot: a.sleep }, { t: 'rest', pose: curl, dur: rnd(25, 50), sleep: true, face: a.sleep.h }]
     }
     const r = Math.random()
     const near = (d: number) => nav.randomSpot('pet', a.r, Math.random, a.pos, d, 10)
-    if (r < 0.15 && this.bowls.length) {
-      const bowl = this.bowls[Math.floor(Math.random() * this.bowls.length)]
-      return [{ t: 'go', to: bowl }, { t: 'rest', pose: 'eat', dur: rnd(4, 7), wag: kind === 'dog' ? 0.6 : 0 }]
+    // 食盆：会走楼梯的可以去别的楼层吃
+    const bowls = this.bowls.filter((b) => b.fl === a.fl || (a.climbs && this.house!.connected(a.fl, b.fl)))
+    if (r < 0.15 && bowls.length) {
+      const bowl = bowls[Math.floor(Math.random() * bowls.length)]
+      return [{ t: 'go', to: bowl.p, fl: bowl.fl }, { t: 'rest', pose: 'eat', dur: rnd(4, 7), wag: kind === 'dog' ? 0.6 : 0 }]
     }
     if (r < 0.25 && kind !== 'rabbit') {
       // 跑一圈
       const p = nav.randomSpot('pet', a.r, Math.random, undefined, Infinity, 15)
       if (p) return [{ t: 'go', to: p, run: true }, { t: 'rest', pose: 'stand', dur: rnd(1.5, 3), look: 1, wag: 1 }]
+    }
+    // 偶尔换一层逛逛（经楼梯）
+    const other = r < 0.4 ? this.otherFloor(a) : null
+    if (other) {
+      const p = this.house!.grid(other).randomSpot('pet', a.r, Math.random, undefined, Infinity, 15)
+      if (p) return [{ t: 'go', to: p, fl: other }, { t: 'rest', pose: 'stand', dur: rnd(1.5, 3), look: 1, wag: kind === 'dog' ? 1 : 0 }]
     }
     const p = near(kind === 'rabbit' ? 180 : 380)
     const go: Task[] = p ? [{ t: 'go', to: p, sniff: kind === 'dog' && Math.random() < 0.5 }] : []
@@ -614,6 +729,14 @@ export class ActorLayer {
   private step(a: Actor, dt: number) {
     if (a.dr) return this.droneStep(a, dt)
     if (!a.tasks.length) a.tasks = this.brain(a)
+    // 目标在别的楼层：展开成经楼梯的几段（到不了就作废这一步）
+    for (let guard = 0; guard < 3; guard++) {
+      const t0 = a.tasks[0]
+      if (t0?.t !== 'go' || !t0.fl || t0.fl === a.fl) break
+      a.tasks.splice(0, 1, ...this.expand(a, t0))
+      a.tt = 0
+    }
+    if (!a.tasks.length) a.tasks = [{ t: 'rest', pose: 'stand', dur: rnd(1, 2), look: 1 }]
     const task = a.tasks[0]
     a.tt += dt
     let done = true
@@ -623,7 +746,7 @@ export class ActorLayer {
       a.tt = 0
     }
     this.animate(a, task, dt)
-    a.writeTransform()
+    this.place(a)
     // 架子上的东西跟着走
     if (a.carry.length) {
       a.root.updateMatrixWorld(true)
@@ -644,7 +767,7 @@ export class ActorLayer {
 
   /** 朝 target 走一步；check = false 时不管障碍（进出窝、座子） */
   private moveTo(a: Actor, target: Vec, vmax: number, dt: number, check = true, r = a.r) {
-    const nav = this.nav!
+    const nav = this.navOf(a)
     const dx = target.x - a.pos.x
     const dy = target.y - a.pos.y
     const d = Math.hypot(dx, dy)
@@ -668,10 +791,68 @@ export class ActorLayer {
     return -1
   }
 
+  /**
+   * 走楼梯：沿 stairWalk 的路线（下楼倒过来）按路程推进，朝向对准前方 15cm，脚下高度取那一级踏面
+   * （animate 里平滑过去，一级一级地起伏），身体按前后 20cm 的坡度俯仰。
+   * 下楼一开始就换到下层（高度 + 层间高），上楼走完才换到上层（高度 − 层间高），高度连续。
+   */
+  private climb(a: Actor, t: Extract<Task, { t: 'stairs' }>, dt: number): boolean {
+    const w = t.walk
+    if (!t.pts) {
+      const pts = t.up ? w.pts : [...w.pts].reverse()
+      // 从现在的位置先走到路线起点（楼梯口外侧）
+      t.pts = [{ x: a.pos.x, y: a.pos.y, z: t.up ? 0 : w.rise }, ...pts]
+      t.cum = [0]
+      for (let i = 1; i < t.pts.length; i++) t.cum.push(t.cum[i - 1] + Math.hypot(t.pts[i].x - t.pts[i - 1].x, t.pts[i].y - t.pts[i - 1].y))
+      t.s = 0
+      if (!t.up) {
+        a.fl = w.from
+        a.yW += w.rise
+      }
+    }
+    const pts = t.pts
+    const cum = t.cum!
+    const total = cum[cum.length - 1]
+    const at = (s: number) => {
+      s = Math.max(0, Math.min(total, s))
+      let i = 1
+      while (i < cum.length - 1 && cum[i] < s) i++
+      const seg = cum[i] - cum[i - 1] || 1
+      const k = (s - cum[i - 1]) / seg
+      return { x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * k, y: pts[i - 1].y + (pts[i].y - pts[i - 1].y) * k, z: k < 0.5 ? pts[i - 1].z : pts[i].z }
+    }
+    const b = a.breed
+    const vmax = (a.robo ? Math.max(18, a.robo.breed.speed) : (b?.walk ?? 30)) * 0.6
+    const ahead = at(t.s! + 15)
+    const dh = wrap(Math.atan2(ahead.x - a.pos.x, ahead.y - a.pos.y) - a.h)
+    if (Math.hypot(ahead.x - a.pos.x, ahead.y - a.pos.y) > 1) this.turnTo(a, a.h + dh, dt)
+    // 朝向偏得多先原地转过来
+    const v = vmax * Math.max(0, Math.min(1, (Math.cos(dh) - 0.3) / 0.5))
+    a.speed += (v - a.speed) * Math.min(1, dt * 5)
+    t.s = Math.min(total, t.s! + a.speed * dt)
+    const p = at(t.s)
+    a.pos = { x: p.x, y: p.y }
+    a.stairZ = p.z
+    const slope = (at(t.s + 20).z - at(t.s - 20).z) / 40
+    a.pitch += (-Math.atan(slope) * 0.75 - a.pitch) * Math.min(1, dt * 6)
+    if (t.s >= total - 0.5 || a.tt > 90) {
+      a.pos = { x: pts[pts.length - 1].x, y: pts[pts.length - 1].y }
+      if (t.up) {
+        a.fl = w.to
+        a.yW -= w.rise
+      } else a.yW = Math.min(a.yW, 1)
+      a.stairZ = 0
+      return true
+    }
+    return false
+  }
+
   /** 执行当前任务，返回是否做完 */
   private run(a: Actor, task: Task, dt: number): boolean {
-    const nav = this.nav!
+    const nav = this.navOf(a)
     switch (task.t) {
+      case 'stairs':
+        return this.climb(a, task, dt)
       case 'rest':
         if (task.face !== undefined) this.turnTo(a, task.face, dt)
         a.speed = 0
@@ -690,6 +871,8 @@ export class ActorLayer {
       }
       case 'enter': {
         const s = task.spot
+        // 窝在别的楼层（没走过去，例如路被堵住）：不硬闯，过一阵再试
+        if (s.fl !== a.fl) return true
         // 机器人没走到座子门口（路被堵住）：不硬闯，就地休息，过一阵再试
         if (a.robo && dist(a.pos, s) > a.r + 60) return true
         if (a.cls === 'robot') {
@@ -792,13 +975,17 @@ export class ActorLayer {
   // ---------- 动画 ----------
 
   private animate(a: Actor, task: Task | undefined, dt: number) {
-    const nav = this.nav!
-    // 高度：地面（土间、阳台低一截）；进窝时跳到垫子上
+    const nav = this.navOf(a)
+    // 高度：地面（土间、阳台低一截）；进窝时跳到垫子上；走楼梯时是脚下那级踏面（一级一级地起伏）
     let yT = nav.floorAt(a.pos)
     const s = a.sleep
     const dHome = dist(a.pos, s)
-    if ((a.atHome || task?.t === 'enter' || task?.t === 'leave') && dHome < 22) yT = s.z
-    a.yW += (yT - a.yW) * Math.min(1, dt * 10)
+    const onStairs = task?.t === 'stairs' && !!task.pts
+    if (onStairs) yT = a.stairZ
+    else if ((a.atHome || task?.t === 'enter' || task?.t === 'leave') && dHome < 22 && s.fl === a.fl) yT = s.z
+    a.yW += (yT - a.yW) * Math.min(1, dt * (onStairs ? 14 : 10))
+    // 下了楼梯慢慢放平
+    if (!onStairs) a.pitch += (0 - a.pitch) * Math.min(1, dt * 6)
 
     if (a.robo) return this.animateRobo(a, task, dt)
     if (a.vac) {
@@ -872,7 +1059,7 @@ export class ActorLayer {
 
   /** 机器狗 / 轮式机器人：出座 → 到处走走、去沙发 / 餐桌前「看看人」→ 回座充电；人形机器人原地待机（转头、挥手） */
   private roboBrain(a: Actor): Task[] {
-    const nav = this.nav!
+    const nav = this.navOf(a)
     const b = a.robo!.breed
     if (!b.roam) {
       const r = Math.random()
@@ -887,14 +1074,21 @@ export class ActorLayer {
     a.acts++
     if (a.acts > 3 + Math.random() * 4) {
       a.acts = 0
-      return [{ t: 'go', to: a.door }, { t: 'turn', h: s.h }, { t: 'enter', spot: s }, { t: 'rest', pose: 'lie', dur: rnd(25, 45), sleep: true }]
+      return [{ t: 'go', to: a.door, fl: s.fl }, { t: 'turn', h: s.h }, { t: 'enter', spot: s }, { t: 'rest', pose: 'lie', dur: rnd(25, 45), sleep: true }]
     }
     const r = Math.random()
-    if (this.deliver.length && r < (b.deliver ? 0.8 : 0.4)) {
-      // 停在沙发 / 床 / 餐桌前，朝着那边东张西望（看人），轮式的偶尔挥挥手
-      const d = this.deliver[Math.floor(Math.random() * this.deliver.length)]
-      const wave = b.type === 'wheel' && Math.random() < 0.4 ? 1 : 0
-      return [{ t: 'go', to: d.p }, { t: 'turn', h: d.h }, { t: 'rest', pose: 'stand', dur: rnd(3, 6), look: 1, wave }]
+    // 机器狗、人形机器人会走楼梯：别的楼层的沙发 / 床前也去；轮式的只在本层
+    const targets = this.deliver.filter((d) => d.fl === a.fl || (a.climbs && this.house!.connected(a.fl, d.fl)))
+    if (targets.length && r < (b.deliver ? 0.8 : 0.4)) {
+      // 停在沙发 / 床 / 餐桌前，朝着那边东张西望（看人），轮式和人形的偶尔挥挥手
+      const d = targets[Math.floor(Math.random() * targets.length)]
+      const wave = b.type !== 'quad' && Math.random() < 0.4 ? 1 : 0
+      return [{ t: 'go', to: d.p, fl: d.fl }, { t: 'turn', h: d.h }, { t: 'rest', pose: 'stand', dur: rnd(3, 6), look: 1, wave }]
+    }
+    const other = r < 0.55 ? this.otherFloor(a) : null
+    if (other) {
+      const q = this.house!.grid(other).randomSpot('robot', a.r, Math.random, undefined, Infinity, 15)
+      if (q) return [{ t: 'go', to: q, fl: other }, { t: 'rest', pose: 'stand', dur: rnd(2, 4), look: 0.8 }]
     }
     const p = nav.randomSpot('robot', a.r, Math.random, a.pos, 380, 10)
     const go: Task[] = p ? [{ t: 'go', to: p }] : []
@@ -954,12 +1148,12 @@ export class ActorLayer {
       a.tt = 0
     }
     this.droneAnimate(a, task, dt)
-    a.writeTransform()
+    this.place(a)
   }
 
-  /** 一趟出勤：起飞 → 在几个房间上空飞一飞、悬停 → 飞回停机点 → 降落 → 充电 */
+  /** 一趟出勤：起飞 → 在几个房间上空飞一飞、悬停 → 飞回停机点 → 降落 → 充电（只在本层飞） */
   private droneBrain(a: Actor): Task[] {
-    const air = this.air
+    const air = this.airs.get(a.fl)
     const s = a.sleep
     const home: Task[] = [{ t: 'fly', to: { x: s.x, y: s.y } }, { t: 'land', spot: s }, { t: 'wait', dur: rnd(20, 40), charge: true }]
     if (!a.atHome) return home
@@ -1002,7 +1196,7 @@ export class ActorLayer {
   }
 
   private droneRun(a: Actor, task: Task, dt: number): boolean {
-    const air = this.air
+    const air = this.airs.get(a.fl)
     const vmax = (DRONES[a.d.breed as DroneType] ?? DRONES.aerial).speed
     const cruiseY = () => a.cruise + Math.sin(a.rm.t * 1.3) * 2
     switch (task.t) {
@@ -1088,7 +1282,7 @@ export class ActorLayer {
     a.blink += dt
     a.setLed(flying ? Math.sin(a.blink * 6) > 0 : Math.sin(a.blink * 1.6) > -0.7)
     // 接触阴影落在地面上，飞得越高越小
-    const floor = this.air?.floorAt(a.pos) ?? this.nav?.floorAt(a.pos) ?? 0
+    const floor = this.airs.get(a.fl)?.floorAt(a.pos) ?? this.house?.grid(a.fl).floorAt(a.pos) ?? 0
     const hgt = Math.max(0, a.yW - floor)
     a.shadow.position.y = floor - a.yW + 0.35
     const sc = a.shadowR * Math.max(0.45, 1 - hgt / 320)
@@ -1097,17 +1291,22 @@ export class ActorLayer {
 
   /** 调试 / 测试用：每个角色的位置 */
   snapshot() {
-    return [...this.actors.values()].map((a) => ({ id: a.d.src, kind: a.d.kind, breed: a.d.breed, x: a.pos.x, y: a.pos.y, h: a.h, r: (a.tasks[0]?.t === 'go' && (a.tasks[0] as { rr?: number }).rr) || a.r, cls: a.cls, task: a.tasks[0]?.t, atHome: a.atHome, z: a.yW }))
+    return [...this.actors.values()].map((a) => ({ id: a.d.src, kind: a.d.kind, breed: a.d.breed, x: a.pos.x, y: a.pos.y, h: a.h, r: (a.tasks[0]?.t === 'go' && (a.tasks[0] as { rr?: number }).rr) || a.r, cls: a.cls, task: a.tasks[0]?.t, atHome: a.atHome, z: a.yW, fl: a.fl, pitch: a.pitch, climbs: a.climbs }))
   }
 
-  /** 测试用：无人机的空中网格 */
+  /** 测试用：无人机的空中网格（最底层） */
   get airGrid() {
-    return this.air
+    return this.airs.values().next().value ?? null
   }
 
-  /** 测试用 */
+  /** 测试用：最底层的导航网格 */
   get grid() {
-    return this.nav
+    return this.house ? this.house.grid(this.house.floors[0]) : null
+  }
+
+  /** 测试用：整套房子的导航 */
+  get houseNav() {
+    return this.house
   }
 }
 

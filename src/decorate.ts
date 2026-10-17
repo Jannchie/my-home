@@ -50,7 +50,8 @@ import { curtainSpecs, fixtureSpans } from './curtains'
 import { hasTag, matchSel, selKey, type Sel, type Tag } from './three/tags'
 import { allocateRooms, type Allocation, type RoomPurpose } from './household'
 import { baseFloorId, floorOf, floorViews, isMultiFloor, riseOf, stampFloor } from './floors'
-import { stairToWorld, stairUnderZone, withStairKeepout } from './stairs'
+import { stairHoles, stairToWorld, stairUnderZone, stairWalk, withStairKeepout } from './stairs'
+import { NavGrid } from './nav'
 
 export type { RoomPurpose }
 
@@ -445,7 +446,7 @@ class Decorator {
     const inRoom = (p: Vec) => pointInPolygon(p, room.points)
     const blockers = [
       ...this.out.filter((o) => inRoom(o) && (ASSET_MAP.get(o.asset)?.mount || (!o.z && (ASSET_MAP.get(o.asset)?.h ?? 0) > 170))).map(asFixture),
-      ...this.plan.fixtures.filter((f) => inRoom(f) && (f.kind === 'builtin' || f.kind === 'kitchen' || f.kind === 'fridge')),
+      ...this.plan.fixtures.filter((f) => inRoom(f) && (f.kind === 'builtin' || f.kind === 'kitchen' || f.kind === 'fridge' || f.kind === 'stairs')),
     ]
     const spec: PlaceSpec = { kind: 'ps', lengths: [def.w], depth: def.d, front: 0, far: door, centered: true }
     // 找不到空墙段就不挂（宁可这间没有空调，也不嵌进柜子里）
@@ -3470,9 +3471,62 @@ export function decorateHouse(plan: Plan, seed = Date.now(), style: StyleTag | '
   for (const { floor, view } of floorViews(plan)) {
     const v = withStairKeepout(plan, view, floor.id)
     const fs = decorate(v, floor.id === base ? seed : seed + Math.round(floor.elevation), style, household, { alloc, prior: out, fixtures: plan.fixtures })
-    for (const f of fs) out.push(stampFloor(plan, f, floor.id))
+    for (const f of unblock(plan, view, floor.id, fs)) out.push(stampFloor(plan, f, floor.id))
   }
   return out
+}
+
+/** 走廊被堵住时拿掉的家具最多几件 */
+const UNBLOCK_MAX = 6
+
+/**
+ * 楼梯口和各房间的门之间要走得通（宠物大小 r = 14 的格子导航）：走廊里两边各摆一件把路堵死、楼梯口被围住时，
+ * 从最后摆的开始拿掉走廊 / 楼梯口所在房间里的落地家具（连同上面的摆件），直到走得通（最多 UNBLOCK_MAX 件）。
+ */
+function unblock(plan: Plan, view: Plan, floorId: string, fs: Furniture[]): Furniture[] {
+  const holes = stairHoles(plan, floorId).map((h) => h.poly)
+  const r = 14
+  // 楼梯起步外侧 / 出梯口外侧
+  const stairKeys: Vec[] = []
+  for (const f of plan.fixtures) {
+    if (f.kind !== 'stairs') continue
+    const w = stairWalk(plan, f)
+    if (w?.from === floorId) stairKeys.push(w.entry)
+    if (w?.to === floorId) stairKeys.push(w.exit)
+  }
+  if (!stairKeys.length) return fs
+  // 要保持通畅的房间：走廊、楼梯口所在的房间；关键点：这些房间里门内侧 30 的点
+  const hubRooms = new Set(view.rooms.filter((x) => x.kind === 'hall' || stairKeys.some((k) => pointInPolygon(k, x.points))).map((x) => x.id))
+  const keys: Vec[] = []
+  for (const o of view.openings) {
+    if (o.kind === 'window') continue
+    const g = openingGeom(view.rooms, o)
+    if (!g) continue
+    for (const k of [30, -30]) {
+      const q = add(g.center, mul(g.e.out, k))
+      if (view.rooms.some((x) => hubRooms.has(x.id) && pointInPolygon(q, x.points))) keys.push(q)
+    }
+  }
+  keys.push(...stairKeys)
+  if (keys.length < 2) return fs
+  let cur = fs
+  for (let guard = 0; guard <= UNBLOCK_MAX; guard++) {
+    const g = new NavGrid({ ...view, furniture: cur }, { holes })
+    const pts = keys.map((k) => g.nearest('pet', k, r, 40)).filter((p): p is Vec => !!p)
+    // 和第一个关键点（最好是楼梯口）连不通的
+    const hub = pts[pts.length - 1]
+    const ok = !hub || pts.every((p) => p === hub || !!g.path('pet', hub, p, r))
+    if (ok || guard === UNBLOCK_MAX) return cur
+    const victim = [...cur].reverse().find((f) => {
+      const d = ASSET_MAP.get(f.asset)
+      if (!d || f.z || d.mount || d.stick || d.h <= 3 || d.fixture) return false
+      return view.rooms.some((x) => hubRooms.has(x.id) && pointInPolygon(f, x.points))
+    })
+    if (!victim) return cur
+    const vb = furnitureBox(victim.asset, victim.x, victim.y, victim.rot)
+    cur = cur.filter((f) => f !== victim && !(f.z && f.x >= vb.x0 && f.x <= vb.x1 && f.y >= vb.y0 && f.y <= vb.y1))
+  }
+  return cur
 }
 
 /**

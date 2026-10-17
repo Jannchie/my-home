@@ -1481,6 +1481,7 @@ export function buildHouse(plan: Plan, wallH: number, opts: HouseOpts = {}) {
       }
       mergeMeshes(g)
       addOutlines(g)
+      g.userData.voidRails = true
       root.add(g)
     }
   }

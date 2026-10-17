@@ -317,7 +317,8 @@ export const ROBO_BREEDS: Record<string, RoboBreed> = {
   server: { type: 'wheel', r: 27, speed: 32, s: 1, roam: true, deliver: true },
   butler: { type: 'wheel', r: 21, speed: 24, s: 1, roam: true },
   helper: { type: 'wheel', r: 23, speed: 20, s: 1, roam: true },
-  humanoid: { type: 'humanoid', r: 24, speed: 0, s: 1, roam: false },
+  // 人形机器人：从站立架上下来在家里走走（会走楼梯），累了回架子待机
+  humanoid: { type: 'humanoid', r: 24, speed: 26, s: 1, roam: true },
 }
 
 interface QuadLeg {
@@ -684,15 +685,21 @@ function buildHumanoid(id: string, b: RoboBreed, pal: string[]): RoboRig {
   const root = new THREE.Group()
   const inner = node()
   root.add(inner)
-  // 下半身（不动）
+  // 下半身：髋关节（y 67）和膝关节（y 34）两级节点，站着时和原来的静态模型一样；走路时摆腿（poseRobo）
+  const legs: QuadLeg[] = []
   for (const sx of [-1, 1]) {
     const x = sx * 9
-    inner.add(rbox(8.4, 4, 20, joint, { x, z: 2.5 }, 1.6))
-    inner.add(cyl(3, 3, 6, joint, { x, y: 2, rz: PI / 2 }, 12))
-    inner.add(rbox(6, 32, 7, main, { x, y: 3.5 }, 2.4))
-    inner.add(cyl(4.2, 4.2, 8, joint, { x, y: 34, rz: PI / 2 }, 16))
-    inner.add(rbox(7.6, 28, 8.6, main, { x, y: 40 }, 2.8))
-    inner.add(cyl(4.8, 4.8, 6, joint, { x, y: 67, rz: PI / 2 }, 16))
+    const hip = node(x, 67, 0)
+    inner.add(hip)
+    hip.add(cyl(4.8, 4.8, 6, joint, { y: 0, rz: PI / 2 }, 16))
+    hip.add(rbox(7.6, 28, 8.6, main, { y: 40 - 67 }, 2.8))
+    const knee = node(0, 34 - 67, 0)
+    hip.add(knee)
+    knee.add(cyl(4.2, 4.2, 8, joint, { y: 0, rz: PI / 2 }, 16))
+    knee.add(rbox(6, 32, 7, main, { y: 3.5 - 34 }, 2.4))
+    knee.add(cyl(3, 3, 6, joint, { y: 2 - 34, rz: PI / 2 }, 12))
+    knee.add(rbox(8.4, 4, 20, joint, { y: -34, z: 2.5 }, 1.6))
+    legs.push({ hip, knee, local: new THREE.Vector3(x, 67, 0) })
   }
   inner.add(rbox(22, 12, 14, joint, { y: 64 }, 4))
   inner.add(cyl(6, 7, 9, joint, { y: 75 }, 18))
@@ -720,7 +727,7 @@ function buildHumanoid(id: string, b: RoboBreed, pal: string[]): RoboRig {
     body.add(sh)
     return { sh, el, side }
   })
-  return { id, breed: b, root, inner, body, head, eyes, legs: [], wheels: [], wheelR: 1, arms, ears: [], standY: 83 }
+  return { id, breed: b, root, inner, body, head, eyes, legs, wheels: [], wheelR: 1, arms, ears: [], standY: 83 }
 }
 
 /** 机器人模型（活动角色和静态素材共用） */
@@ -750,15 +757,22 @@ export function poseRobo(r: RoboRig, m: RoboMotion) {
   for (const e of r.eyes) e.scale.y = Math.max(0.12, m.eyes)
   const look = (Math.sin(m.t * 0.8) * 0.6 + Math.sin(m.t * 2.1) * 0.12) * m.look
   if (r.breed.type === 'humanoid') {
-    // 呼吸 + 重心左右轻晃；转头；右手挥一挥
-    r.body.position.y = r.standY + Math.sin(m.t * 1.6) * 0.25
-    r.body.rotation.set(0, look * 0.25, Math.sin(m.t * 0.7) * 0.015)
+    // 呼吸 + 重心左右轻晃；转头；右手挥一挥；走路时两腿交替前后摆、膝盖在抬腿时弯，手臂反向摆，身体随步子起伏
+    const g = m.gait
+    const step = (side: number) => Math.sin(m.phase + (side > 0 ? 0 : PI))
+    r.body.position.y = r.standY + Math.sin(m.t * 1.6) * 0.25 * (1 - g) - Math.abs(Math.sin(m.phase)) * 1.2 * g
+    r.body.rotation.set(0.04 * g, look * 0.25 * (1 - g), Math.sin(m.t * 0.7) * 0.015 * (1 - g) + Math.sin(m.phase) * 0.03 * g)
     r.head.rotation.set(-0.05 * m.rest, look * 0.8, 0, 'YXZ')
     for (const a of r.arms) {
       const w = a.side > 0 ? m.wave : 0
-      a.sh.rotation.set(-0.05 - w * 0.35, 0, a.side * (0.08 + w * 2.5))
-      if (a.el) a.el.rotation.set(-0.15 - w * 0.4, 0, a.side * w * (0.35 + Math.sin(m.t * 9) * 0.35))
+      a.sh.rotation.set(-0.05 - w * 0.35 + step(-a.side) * 0.4 * g, 0, a.side * (0.08 + w * 2.5))
+      if (a.el) a.el.rotation.set(-0.15 - w * 0.4 - 0.25 * g, 0, a.side * w * (0.35 + Math.sin(m.t * 9) * 0.35))
     }
+    r.legs.forEach((l, i) => {
+      const s = step(i === 0 ? -1 : 1)
+      l.hip.rotation.x = -s * 0.42 * g
+      l.knee.rotation.x = Math.max(0, s) * 0.7 * g
+    })
     return
   }
   // 轮式：起伏、加速前倾、转头、小手扑腾
