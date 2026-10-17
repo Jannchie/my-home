@@ -2,6 +2,8 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import PlanCanvas from './components/PlanCanvas.vue'
 import FloorBar from './components/FloorBar.vue'
+import FloorRail from './components/FloorRail.vue'
+import FixturePlacer from './components/FixturePlacer.vue'
 import InspectorPanel from './components/InspectorPanel.vue'
 import Sandbox3D from './components/Sandbox3D.vue'
 import AssetLibrary from './components/AssetLibrary.vue'
@@ -38,7 +40,7 @@ import {
   mutate,
   newPlan,
   normalizePlan,
-  placeKind,
+  placePicker,
   rotateSelectedFixture,
   sandbox,
   plan,
@@ -85,7 +87,6 @@ const touchHints: Partial<Record<Tool, string>> = {
   poly: '逐点点按添加顶点，点「完成」闭合 · 拖动空白处移动画布',
   door: '点按墙放门',
   window: '点按墙放窗',
-  fixture: '点按放设备，靠近墙会自动贴墙',
 }
 
 async function doGenerate(newSeed = true) {
@@ -382,8 +383,11 @@ function openLink(url: string) {
 const sheet2d = ref<SheetSnap>('peek')
 watch(viewMode, () => (sheet2d.value = 'peek'))
 // 开始画东西时收起抽屉，把画布让出来
-watch(tool, (v) => {
+watch(tool, (v, old) => {
   if (v !== 'select' && device.compact) sheet2d.value = 'peek'
+  // 切到「设备」工具：先打开设备面板挑要放什么；离开时收起
+  if (v === 'fixture' && old !== 'fixture') placePicker.value = true
+  if (v !== 'fixture') placePicker.value = false
 })
 
 const selLabel = computed(() => {
@@ -462,9 +466,6 @@ onBeforeUnmount(() => {
           <JIcon :icon="TOOL_ICONS[tl.id]" />
           <span>{{ t(tl.label) }}</span>
         </button>
-        <select v-model="placeKind" class="kind" :title="t('要放的设备')" @change="tool = 'fixture'">
-          <option v-for="(spec, key) in FIXTURES" :key="key" :value="key">{{ t(spec.label) }}</option>
-        </select>
       </div>
 
       <div class="group hist">
@@ -522,8 +523,11 @@ onBeforeUnmount(() => {
     <main v-if="shownView === '2d'">
       <div class="stage">
         <PlanCanvas ref="canvas" />
-        <!-- 楼层切换（多层户型）：左上角 -->
+        <!-- 楼层切换（多层户型）：左上角是带设置的楼层条，右侧是竖排的快速切换 -->
         <FloorBar />
+        <FloorRail :style="{ '--sheet-h': layout.sheetH + 'px' }" />
+        <!-- 放设备：设备面板 + 放置条（预览在画布里） -->
+        <FixturePlacer :touch="device.coarse" :bottom="barBottom" @picked="device.coarse && canvas?.centerGhost()" @confirm="canvas?.confirmPlace()" />
         <!-- 缩放控件：滚轮 / 捏合之外的可见入口；点百分比回到 100% -->
         <div class="zoom">
           <button class="icon-only" :title="t('缩小')" :aria-label="t('缩小')" @click="canvas?.zoomBy(1 / 1.25)"><JIcon :icon="ICONS.zoomOut" :size="15" /></button>
@@ -564,9 +568,6 @@ onBeforeUnmount(() => {
             <button v-for="tl in tools" :key="tl.id" class="icon-only tool" :class="{ on: tool === tl.id }" :title="t(tl.label)" :aria-label="t(tl.label)" :aria-pressed="tool === tl.id" @click="tool = tl.id">
               <JIcon :icon="TOOL_ICONS[tl.id]" :size="18" />
             </button>
-            <select v-if="tool === 'fixture'" v-model="placeKind" class="kind" :title="t('要放的设备')" :aria-label="t('要放的设备')">
-              <option v-for="(spec, key) in FIXTURES" :key="key" :value="key">{{ t(spec.label) }}</option>
-            </select>
           </div>
         </template>
         <InspectorPanel />

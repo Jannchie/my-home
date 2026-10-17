@@ -252,6 +252,12 @@ export function copyOutlineFromBelow() {
 }
 /** 设备工具当前要放的种类 */
 export const placeKind = ref<FixtureKind>('kitchen')
+/** 放设备：没有贴墙时预览的手动旋转（贴墙时朝向由墙决定） */
+export const placeRot = ref(0)
+/** 放设备：放下后留在放置模式，接着放同一种 */
+export const placeContinuous = ref(false)
+/** 设备面板（选要放的设备）开着 */
+export const placePicker = ref(false)
 export const settings = reactive({ grid: 10, snap: true })
 
 /** 主视图：2D 平面图 / 3D 沙盘 / 素材库 */
