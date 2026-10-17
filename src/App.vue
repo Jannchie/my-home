@@ -515,7 +515,7 @@ onBeforeUnmount(() => {
           <option v-for="l in LANGS" :key="l.id" :value="l.id">{{ l.label }}</option>
         </select>
         <!-- 快捷键、新手引导、作者 X、GitHub 仓库收在一个「更多」里，顶栏在 1280px 以上三语都能一行放下 -->
-        <button ref="deskMoreBtn" class="help-btn more-btn" :class="{ on: !!moreMenu }" :title="t('更多')" :aria-label="t('更多')" :aria-expanded="!!moreMenu" @click="toggleMore"><JIcon :icon="ICONS.more" /></button>
+        <button ref="deskMoreBtn" class="icon-only more-btn" :class="{ on: !!moreMenu }" :title="t('更多')" :aria-label="t('更多')" :aria-expanded="!!moreMenu" @click="toggleMore"><JIcon :icon="ICONS.more" /></button>
       </div>
     </header>
 
@@ -839,9 +839,6 @@ main {
   background: rgba(250, 250, 248, 0.88);
   border-top: 1px solid var(--border);
   pointer-events: none;
-}
-.help-btn {
-  padding: 0 8px;
 }
 .zoom {
   position: absolute;

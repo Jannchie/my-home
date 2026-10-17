@@ -880,8 +880,6 @@ Object.assign(UI, {
   已按设备自动切到省电画质: ['端末に合わせて省電力の画質にしています', 'Using battery-saver quality on this device'],
   已按设备自动使用高画质: ['端末に合わせて高画質にしています', 'Using high quality on this device'],
   在画布上用两根手指拧转也能旋转: ['キャンバス上で 2 本指をひねっても回転できます', 'You can also twist with two fingers on the canvas to rotate'],
-  '点卡片后点按地面放下；长按卡片可直接拖进场景': ['カードをタップしてから床をタップして配置。カードを長押しするとそのままドラッグで置けます', 'Tap a card, then tap the floor to place it; long-press a card to drag it straight in'],
-  '点卡片后在场景里点击放下，也可以直接把卡片拖进场景': ['カードを選んでシーンをクリックして配置。カードをそのままシーンへドラッグしても置けます', 'Click a card, then click in the scene to place it — or drag the card straight into the scene'],
   点按: ['タップ', 'Tap'],
   长按: ['長押し', 'Long-press'],
   单指拖动: ['1 本指ドラッグ', 'One-finger drag'],

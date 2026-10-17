@@ -2993,7 +2993,6 @@ defineExpose({ resetView })
             <option v-for="sz in sizeKeys" :key="sz" :value="sz">{{ t(SIZE_LABELS[sz]) }}</option>
           </select>
         </div>
-        <p class="lib-tip">{{ device.coarse ? t('点卡片后点按地面放下；长按卡片可直接拖进场景') : t('点卡片后在场景里点击放下，也可以直接把卡片拖进场景') }}</p>
         <div class="grid">
           <button
             v-for="g in shownPlaceable"
@@ -3313,11 +3312,6 @@ defineExpose({ resetView })
 .sentinel {
   grid-column: 1 / -1;
   height: 1px;
-}
-.lib-tip {
-  margin: 0 0 8px;
-  font-size: var(--fs-xs);
-  color: var(--text-muted);
 }
 .seg-text {
   flex: 1;

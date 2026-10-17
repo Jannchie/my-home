@@ -177,10 +177,10 @@ label > svg {
   flex: none;
   display: block;
 }
-/* 纯图标按钮：左右内边距收窄成近似方形 */
+/* 纯图标按钮：四边内边距相同，宽高都是「图标 + 2 × 5 + 边框」，正方形；外面定了高度的（如缩放条）再用 aspect-ratio 跟上宽度 */
 button.icon-only {
-  padding-left: 6px;
-  padding-right: 6px;
+  padding: 5px;
+  aspect-ratio: 1;
 }
 /* 标题 / 标签前带图标 */
 .ico-label {
