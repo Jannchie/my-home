@@ -24,7 +24,7 @@ import {
 } from '../model'
 import { isIndoor, sharedIntervals, voidRailSegments, wallSegments, wallThicknessAt } from '../walls'
 import { tatamiLayout } from '../tatami'
-import { addOutlines, ball, capsule, cyl, disposeHooks, mergeMeshes, noTransparentShadows, rbox, shade, toon, useAnisotropy } from './toon'
+import { addOutlines, ball, capsule, cyl, disposeHooks, mergeMeshes, mergeSolidColors, noTransparentShadows, rbox, shade, toon, useAnisotropy } from './toon'
 import { glow, poseDoors, type AssetDef } from './kit'
 import { freezeMatrices, syncMatrix } from './matrices'
 import { hasTag } from './tags'
@@ -1756,6 +1756,19 @@ function trimTemplates() {
   }
 }
 
+/**
+ * 家具纯色材质并成单一顶点色材质（toon.ts mergeSolidColors）的开关：
+ *   false 全关；true 全开（灯具除外）；函数 = 按素材白名单逐步打开（同样排除灯具）。
+ * 灯具排除：没有发光部件的灯（蜡烛类）要挑「上部最浅色的部件」当灯罩（lights.ts prepareLamp），并成一个网格就挑不出来了。
+ * 改了开关会清空模板缓存（已经摆着的家具要重建才生效）。
+ */
+let vcMerge: boolean | ((def: AssetDef) => boolean) = false
+export function setVertexColorMerge(v: boolean | ((def: AssetDef) => boolean)) {
+  vcMerge = v
+  clearFurnitureTemplates()
+}
+export const vertexColorMergeFor = (def: AssetDef) => !hasTag(def, 'light') && (typeof vcMerge === 'function' ? vcMerge(def) : vcMerge)
+
 /** 模板的缓存键：素材 | 配色 | 单件改色 | 花纹（开合不在内） */
 export function furnitureTemplateKey(fu: Pick<Furniture, 'asset' | 'color' | 'colors' | 'patterns'>) {
   return `${fu.asset}|${fu.color ?? 0}|${fu.colors?.join(',') ?? ''}|${fu.patterns ? JSON.stringify(fu.patterns) : ''}`
@@ -1772,6 +1785,8 @@ function buildTemplate(def: AssetDef, fu: Furniture, closeUp: boolean): Furnitur
   if (!closeUp) noTinyShadows(m)
   addOutlines(m, closeUp ? {} : { minSize: TINY_OUTLINE })
   applyPatterns(m, pal, fu.patterns)
+  // 剩下的纯色 toon 零件并成一个顶点色网格 + 一个顶点色描边（花纹、发光、半透明的保持独立）
+  if (vertexColorMergeFor(def)) mergeSolidColors(m)
   // 模型内部的零件不再动（开合只改柜门子树，poseDoors 会同步矩阵）：矩阵算一次就固定
   freezeMatrices(m)
   const own = new Set<THREE.BufferGeometry>()

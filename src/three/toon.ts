@@ -4,7 +4,7 @@
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 // 室内灯的楼层 / 房间遮罩：给所有受光照材质挂上 onBeforeCompile（副作用导入，要在任何材质编译前生效）
-import './lightMask'
+import { injectLightMask } from './lightMask'
 
 // ---------- 赛璐璐阴影 ----------
 // three 自带的 PCF 阴影用逐像素噪点（IGN）旋转采样，边缘是一片网点状的颗粒渐变。
@@ -82,6 +82,8 @@ function gradientMap() {
 }
 
 const toonCache = new Map<string, THREE.MeshToonMaterial>()
+/** 纯色、不透明、不自发光的缓存 toon 材质：可以并进顶点色的单一材质（mergeSolidColors） */
+const plainToons = new WeakSet<THREE.Material>()
 export function toon(color: THREE.ColorRepresentation, opts: { emissive?: number; transparent?: number } = {}) {
   const c = new THREE.Color(color)
   const key = `${c.getHexString()}|${opts.emissive ?? 0}|${opts.transparent ?? 1}`
@@ -97,8 +99,28 @@ export function toon(color: THREE.ColorRepresentation, opts: { emissive?: number
       m.opacity = opts.transparent
       m.depthWrite = false
     }
+    if (!opts.emissive && !m.transparent) plainToons.add(m)
     toonCache.set(key, m)
   }
+  return m
+}
+
+let vcToon: THREE.MeshToonMaterial | null = null
+/**
+ * 顶点色的 toon 材质（家具单材质合并用，所有家具共用一份）：底色白色 × 顶点色 = 原来各材质的颜色，着色结果和原来逐材质完全一样。
+ * 自发光也乘顶点色：悬停高亮、灯罩兜底发光等「按自身颜色自发光」的克隆（emissive = color = 白）因此仍是同色提亮。
+ * 灯光遮罩照常接上（自己设了 onBeforeCompile 就要自己调 injectLightMask）。
+ */
+export function vertexColorToon() {
+  if (vcToon) return vcToon
+  const m = new THREE.MeshToonMaterial({ color: 0xffffff, vertexColors: true, gradientMap: gradientMap() })
+  m.onBeforeCompile = (sh) => {
+    injectLightMask(sh)
+    sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n\ttotalEmissiveRadiance *= vColor.rgb;')
+  }
+  m.customProgramCacheKey = () => 'toon-vertex-color'
+  m.userData.vertexColorToon = true
+  vcToon = m
   return m
 }
 
@@ -149,6 +171,48 @@ export function outlineColor(fill: THREE.Color) {
   const lifted = Math.max(0, (lift - OUTLINE_FLOOR) / (OUTLINE_DARK_L - OUTLINE_FLOOR))
   const s = Math.min(1, (hsl.s * 0.8 + 0.1) * (1 - 0.35 * lifted))
   return new THREE.Color().setHSL(hsl.h, s, l)
+}
+
+let vcOutline: THREE.ShaderMaterial | null = null
+/**
+ * 顶点色描边：颜色逐顶点（属性 ocolor = 合并前各描边外壳的 uColor，已经按 outlineColor 算好），
+ * ocolor.r < 0 的顶点所在零件原来没有描边（太小、noOutline），整片三角形移到裁剪空间外面丢掉。
+ * uLinear / uDim 对应 post.ts 对普通描边 uColor 的临时调整（进线性 composer 时先转回线性、入夜压暗）。
+ */
+export function vertexColorOutline() {
+  if (vcOutline) return vcOutline
+  vcOutline = new THREE.ShaderMaterial({
+    uniforms: { ...outlineUniforms, uLinear: { value: 0 }, uDim: { value: 1 } },
+    vertexShader: /* glsl */ `
+      uniform float uWidth;
+      uniform vec2 uViewport;
+      attribute vec3 ocolor;
+      varying vec3 vOColor;
+      void main() {
+        vOColor = ocolor;
+        if (ocolor.r < 0.0) { gl_Position = vec4(0.0, 0.0, 2.0, 1.0); return; }
+        vec4 clip = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        vec3 n = normalize(normalMatrix * normal);
+        vec2 dir = (projectionMatrix * vec4(n, 0.0)).xy;
+        float l = length(dir);
+        if (l > 1e-5) clip.xy += dir / l * uWidth * 2.0 / uViewport * clip.w;
+        gl_Position = clip;
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform float uLinear;
+      uniform float uDim;
+      varying vec3 vOColor;
+      vec3 toLinear(vec3 c) {
+        return mix(c * 0.0773993808, pow(c * 0.9478672986 + 0.0521327014, vec3(2.4)), vec3(greaterThanEqual(c, vec3(0.04045))));
+      }
+      void main() {
+        vec3 c = uLinear > 0.5 ? toLinear(vOColor) : vOColor;
+        gl_FragColor = vec4(c * uDim, 1.0);
+      }`,
+    side: THREE.BackSide,
+  })
+  vcOutline.userData.vertexColorOutline = true
+  return vcOutline
 }
 
 /**
@@ -531,6 +595,142 @@ export function mergeMeshes(root: THREE.Object3D) {
     for (const m of list) m.removeFromParent()
     root.add(merged)
   }
+}
+
+// ---------- 纯色材质并成一个顶点色材质（每件家具约 1 次填充 + 1 次描边） ----------
+
+/** 能不能并进顶点色网格：纯色缓存 toon 材质、没有业务标记、子节点只有描边外壳、几何体只有常规属性 */
+function solidColored(o: THREE.Object3D): o is THREE.Mesh {
+  const m = o as THREE.Mesh
+  if (!m.isMesh || (m as THREE.InstancedMesh).isInstancedMesh || (m as THREE.SkinnedMesh).isSkinnedMesh) return false
+  if (!m.visible || m.renderOrder !== 0 || Array.isArray(m.material) || !plainToons.has(m.material)) return false
+  for (const k in m.userData) if (k !== 'noOutline') return false
+  if (m.children.some((c) => !c.userData.isOutline || c.children.length)) return false
+  const g = m.geometry
+  if (!g.attributes.position || !g.attributes.normal || Object.keys(g.morphAttributes).length || g.drawRange.start !== 0 || g.drawRange.count !== Infinity) return false
+  for (const k in g.attributes) if (k !== 'position' && k !== 'normal' && k !== 'uv') return false
+  return true
+}
+
+/**
+ * 在 mergeMeshes + addOutlines（+ 花纹）之后调用：把纯色 toon 材质的网格按投影设置合成一个顶点色网格，
+ * 顶点色 = 原材质颜色，描边改成一个读逐顶点颜色的外壳（原来没有描边的零件不画），画面和逐材质时一样。
+ * 花纹（patternMaterial）、发光、半透明、贴图、带业务标记的子树（柜门以外）都不动；柜门 / 抽屉子树内部单独合并。
+ * 返回合并掉的网格数（测试用）。
+ */
+export function mergeSolidColors(root: THREE.Object3D): number {
+  root.updateMatrixWorld(true)
+  const inv = new THREE.Matrix4().copy(root.matrixWorld).invert()
+  const buckets = new Map<string, THREE.Mesh[]>()
+  let merged = 0
+  const walk = (o: THREE.Object3D) => {
+    if (o !== root && Object.keys(o.userData).some((k) => k !== 'noOutline')) {
+      if (o.userData.door) merged += mergeSolidColors(o)
+      return
+    }
+    for (const c of [...o.children]) if (!c.userData.isOutline) walk(c)
+    if (o !== root && solidColored(o)) {
+      const m = o as THREE.Mesh
+      const key = `${+m.castShadow}|${+m.receiveShadow}`
+      let b = buckets.get(key)
+      if (!b) buckets.set(key, (b = []))
+      b.push(m)
+    }
+  }
+  walk(root)
+  const local = new THREE.Matrix4()
+  const nm = new THREE.Matrix3()
+  const col = new THREE.Color()
+  for (const list of buckets.values()) {
+    if (list.length < 2) continue
+    let verts = 0
+    let tris = 0
+    for (const m of list) {
+      const n = m.geometry.attributes.position.count
+      verts += n
+      tris += m.geometry.index ? m.geometry.index.count : n
+    }
+    const pos = new Float32Array(verts * 3)
+    const nor = new Float32Array(verts * 3)
+    const color = new Float32Array(verts * 3)
+    const ocolor = new Float32Array(verts * 3)
+    const index = verts > 65535 ? new Uint32Array(tris) : new Uint16Array(tris)
+    let outlined = false
+    let vo = 0
+    let io = 0
+    for (const m of list) {
+      const g = m.geometry
+      local.multiplyMatrices(inv, m.matrixWorld)
+      nm.getNormalMatrix(local)
+      const flip = local.determinant() < 0
+      const e = local.elements
+      const ne = nm.elements
+      const P = g.attributes.position
+      const N = g.attributes.normal
+      const n = P.count
+      col.copy((m.material as THREE.MeshToonMaterial).color)
+      const hull = m.children.find((c) => c.userData.isOutline) as THREE.Mesh | undefined
+      const oc = (hull?.material as THREE.ShaderMaterial | undefined)?.uniforms?.uColor?.value as THREE.Color | undefined
+      if (oc) outlined = true
+      for (let i = 0; i < n; i++) {
+        const x = P.getX(i)
+        const y = P.getY(i)
+        const z = P.getZ(i)
+        const o3 = (vo + i) * 3
+        pos[o3] = e[0] * x + e[4] * y + e[8] * z + e[12]
+        pos[o3 + 1] = e[1] * x + e[5] * y + e[9] * z + e[13]
+        pos[o3 + 2] = e[2] * x + e[6] * y + e[10] * z + e[14]
+        const a = N.getX(i)
+        const b = N.getY(i)
+        const c = N.getZ(i)
+        const nx = ne[0] * a + ne[3] * b + ne[6] * c
+        const ny = ne[1] * a + ne[4] * b + ne[7] * c
+        const nz = ne[2] * a + ne[5] * b + ne[8] * c
+        const l = Math.hypot(nx, ny, nz) || 1
+        nor[o3] = nx / l
+        nor[o3 + 1] = ny / l
+        nor[o3 + 2] = nz / l
+        color[o3] = col.r
+        color[o3 + 1] = col.g
+        color[o3 + 2] = col.b
+        ocolor[o3] = oc ? oc.r : -1
+        ocolor[o3 + 1] = oc ? oc.g : -1
+        ocolor[o3 + 2] = oc ? oc.b : -1
+      }
+      const ia = g.index?.array
+      const cnt = g.index ? g.index.count : n
+      for (let i = 0; i < cnt; i += 3) {
+        const a = ia ? ia[i] : i
+        const b = ia ? ia[i + 1] : i + 1
+        const c = ia ? ia[i + 2] : i + 2
+        index[io++] = vo + a
+        index[io++] = vo + (flip ? c : b)
+        index[io++] = vo + (flip ? b : c)
+      }
+      vo += n
+    }
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3))
+    geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3))
+    geo.setAttribute('color', new THREE.BufferAttribute(color, 3))
+    geo.setAttribute('ocolor', new THREE.BufferAttribute(ocolor, 3))
+    geo.setIndex(new THREE.BufferAttribute(index, 1))
+    geo.computeBoundingSphere()
+    const fill = new THREE.Mesh(geo, vertexColorToon())
+    fill.castShadow = list[0].castShadow
+    fill.receiveShadow = list[0].receiveShadow
+    // 合并前每个零件各自带 noOutline 标记已经体现在 ocolor 里；整体不再需要 noOutline
+    if (outlined) {
+      const hull = new THREE.Mesh(geo, vertexColorOutline())
+      hull.userData.isOutline = true
+      hull.raycast = () => {}
+      fill.add(hull)
+    } else fill.userData.noOutline = true
+    for (const m of list) m.removeFromParent()
+    root.add(fill)
+    merged += list.length
+  }
+  return merged
 }
 
 /**

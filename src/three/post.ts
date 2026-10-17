@@ -754,6 +754,7 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
     const linear = !!composer
     if (!linear && night < 0.01) return draw()
     const outlines: [THREE.Color, THREE.Color][] = []
+    const vcOutlines: [Record<string, THREE.IUniform>, number, number][] = []
     const boosted: [THREE.MeshStandardMaterial, number][] = []
     const glass: [THREE.MeshStandardMaterial, THREE.Color, number][] = []
     const seen = new Set<THREE.Material>()
@@ -764,6 +765,14 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
         if (seen.has(mat)) continue
         seen.add(mat)
         if (o.userData.isOutline) {
+          // 顶点色描边（家具单材质合并）：同样的换算交给着色器（uLinear：当作 sRGB 的值转回线性；uDim：入夜压暗）
+          if (mat.userData.vertexColorOutline) {
+            const u = (mat as THREE.ShaderMaterial).uniforms
+            vcOutlines.push([u, u.uLinear.value as number, u.uDim.value as number])
+            u.uLinear.value = linear ? 1 : 0
+            u.uDim.value = 1 - 0.7 * night
+            continue
+          }
           const c = (mat as THREE.ShaderMaterial).uniforms?.uColor?.value as THREE.Color | undefined
           if (!c) continue
           outlines.push([c, c.clone()])
@@ -798,6 +807,10 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
       draw()
     } finally {
       for (const [c, orig] of outlines) c.copy(orig)
+      for (const [u, lin, dim] of vcOutlines) {
+        u.uLinear.value = lin
+        u.uDim.value = dim
+      }
       for (const [e, v] of boosted) e.emissiveIntensity = v
       for (const [e, c, v] of glass) {
         e.emissive.copy(c)
