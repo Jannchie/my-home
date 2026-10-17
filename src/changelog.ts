@@ -12,6 +12,30 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '1.3.0',
+    date: '2026-10-17',
+    notes: {
+      zh: [
+        '支持多层户型：平面图可以新增、切换楼层，编辑上层时下层轮廓作为参考，可从下层复制外轮廓',
+        '新增楼梯（直跑、L 形、U 形、旋转），放下后上层楼板自动开洞并加栏杆；支持挑空',
+        '3D 可显示全部楼层、只显示到当前层，或把各层分开查看；拖动、摆放只作用于当前层',
+        '一键布置、检查清单、宠物和户型分享都支持多层；我的户型列表显示楼层数和总面积',
+      ],
+      ja: [
+        '複数階の間取りに対応：間取り図で階を追加・切り替えでき、上の階を編集するときは下の階の輪郭が表示されます。下の階の外形をコピーすることもできます',
+        '階段（直階段・L 字・U 字・らせん）を追加。置くと上の階の床に開口と手すりが自動で付きます。吹き抜けにも対応',
+        '3D では全階表示、現在の階まで表示、階を離して表示を切り替え可能。移動や配置は現在の階だけに作用します',
+        'おまかせ配置、チェックリスト、ペット、共有リンクが複数階に対応。マイ間取りの一覧に階数と合計面積を表示',
+      ],
+      en: [
+        'Multi-floor homes: add and switch floors in the plan editor, see the floor below as a guide while drawing, and copy its outline',
+        'Stairs (straight, L, U and spiral) cut an opening with railings in the floor above; double-height voids are supported',
+        'In 3D, show all floors, floors up to the current one, or an exploded view; moving and placing furniture affects the current floor only',
+        'Auto-furnish, the checklist, pets and share links work with multiple floors; My Homes shows the floor count and total area',
+      ],
+    },
+  },
+  {
     version: '1.2.0',
     date: '2026-10-17',
     notes: {
