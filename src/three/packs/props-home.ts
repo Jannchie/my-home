@@ -871,7 +871,8 @@ function toothbrushCup(p: string[]) {
     g.add(b)
   }
   brush(b1, -0.8, 0.4, 0.15)
-  brush(b2, 0.8, -0.4, -0.18)
+  // 倾角不超过 0.15：杯口处刷柄外沿在内壁（半径 2.7）以内
+  brush(b2, 0.8, -0.4, -0.13)
   return g
 }
 

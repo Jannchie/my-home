@@ -213,7 +213,8 @@ function moonChair(p: string[]) {
   g.add(bowl)
   for (const sx of [-1, 1])
     for (const sz of [-1, 1]) {
-      g.add(bar([sx * 27, 0, sz * 25], [-sx * 15, 34, -sz * 13 + 2], 1.1, frame))
+      // 四根腿在坐兜底下交叉，收在底部圆垫下面（以前一直伸到对侧 y = 34，从布兜里面戳出来）
+      g.add(bar([sx * 27, 0, sz * 25], [-sx * 2, 19.5, -sz * 2 + 2], 1.1, frame))
       g.add(ball(1.8, INK, { x: sx * 27, y: 1.8, z: sz * 25 }, [1, 1, 1]))
     }
   return g

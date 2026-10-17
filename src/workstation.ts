@@ -9,7 +9,7 @@ import { ASSET_MAP, type AssetDef } from './three/assets'
 import { screenPoint, type ScreenPanel } from './three/kit'
 import { fitsOnSurface, snapToClip, toLocal, toWorld } from './surface'
 import { furnitureBox } from './snap'
-import { boxInside } from './place'
+import { boxInsideWalls } from './place'
 import { levelOf, type Household, type Member } from './household'
 import { wallThicknessAt } from './walls'
 import { isMainAppliance } from './appliance'
@@ -26,6 +26,8 @@ export interface DeskHost {
   peopleIn(room: Room): Member[]
   readonly clutter: number
   colorFor(def: AssetDef): number
+  /** 立体上不冲突：不顶到墙上挂的东西、不插进窗帘（见 Decorator.clear3d） */
+  clear3d(asset: string, x: number, y: number, rot: number, z?: number, ignore?: Set<string>): boolean
 }
 export interface DeskCtx {
   d: DeskHost
@@ -234,6 +236,7 @@ function putOn(c: DeskCtx, parent: Furniture, asset: string, lx: number, lz: num
   const box = furnitureBox(asset, f.x, f.y, f.rot)
   const shrink = (b: Box): Box => ({ x0: b.x0 + 0.4, y0: b.y0 + 0.4, x1: b.x1 - 0.4, y1: b.y1 - 0.4 })
   if (c.d.out.some((o) => o !== parent && Math.abs((o.z ?? 0) - z) < 0.6 && !def(o)?.stick && boxOverlaps(shrink(box), shrink(furnitureBox(o.asset, o.x, o.y, o.rot))))) return null
+  if (!c.d.clear3d(asset, f.x, f.y, f.rot, z, new Set([parent.id]))) return null
   c.d.out.push(f)
   c.d.flat.add(f.id)
   c.d.parentOf.set(f.id, parent.id)
@@ -304,7 +307,7 @@ function floorTower(c: DeskCtx, s: Seat, asset: string, side: number, outside = 
   const lz = -dd.d / 2 + tw.d / 2 + (outside ? 1 : tw.h > 40 ? (u.back ?? 4) : 4)
   const p = toWorld(s.desk, lx, lz)
   const box = furnitureBox(asset, p.x, p.y, s.desk.rot)
-  if (!boxInside(box, s.room)) return null
+  if (!boxInsideWalls(box, s.room, c.plan)) return null
   if (c.plan.fixtures.some((fx) => boxOverlaps(box, fixtureBox(fx)))) return null
   const solid = c.d.out.filter((o) => o !== s.desk && !o.z && !c.d.flat.has(o.id) && !def(o)?.mount && !def(o)?.stick && (def(o)?.h ?? 0) > 3)
   const boxOf = (o: Furniture) => {
@@ -313,6 +316,8 @@ function floorTower(c: DeskCtx, s: Seat, asset: string, side: number, outside = 
     return { x0: b.x0 + k, y0: b.y0 + k, x1: b.x1 - k, y1: b.y1 - k }
   }
   if (solid.some((o) => boxOverlaps(box, boxOf(o)))) return null
+  // 墙上挂的东西、窗帘（放到桌子外面、窗边时）
+  if (!c.d.clear3d(asset, p.x, p.y, s.desk.rot)) return null
   // 门的开合范围、过道不能堵：放到桌子外面时也要在房间里留出门前空间
   if (outside && openingsOn(s.room, c.plan).some((o) => o.o.kind !== 'window' && dist(o.center, p) < o.o.width / 2 + tw.w / 2 + 50)) return null
   const f: Furniture = { id: uid('u'), asset, x: round1(p.x), y: round1(p.y), rot: s.desk.rot, color: c.d.colorFor(tw) }
@@ -527,6 +532,8 @@ function wallNotes(c: DeskCtx, s: Seat, mon: Furniture | undefined, n: number) {
     const p = toWorld(s.desk, u, -dd.d / 2 - gap + 0.06)
     if (ops.some((o) => Math.abs((p.x - o.center.x) * e.dir.x + (p.y - o.center.y) * e.dir.y) < o.o.width / 2 + a.w / 2 + 4)) continue
     const box = furnitureBox(a.id, p.x, p.y, s.desk.rot)
+    // 桌子在墙角时，伸出桌边的便签不能贴进侧墙里
+    if (!boxInsideWalls(box, s.room, plan)) continue
     const grown: Box = { x0: box.x0 - 1, y0: box.y0 - 1, x1: box.x1 + 1, y1: box.y1 + 1 }
     const [z0, z1] = [z - a.h / 2, z + a.h / 2]
     const clash = d.out.some((o) => {

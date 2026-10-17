@@ -160,7 +160,7 @@ export const DIMS: DimsTable = {
   "st-kaidan": [151, 50, 181, 0],
   "stand-mirror": [46, 43, 158, 0],
   "tv-board": [150, 44, 44, 0],
-  "umbrella-stand": [35, 28, 80, 0],
+  "umbrella-stand": [28, 25, 80, 0],
   "va-hamper-split-open": [43, 33, 55, 0],
   "vb-books-cross": [21, 21, 13.6, 0],
   "wet-detergent": [14, 11, 29, 0],

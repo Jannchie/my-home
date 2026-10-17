@@ -144,10 +144,17 @@ interface Owner {
   rot: number
   z: number
   levels: Level[]
+  /** 挂在墙上 / 贴在竖直面上的（挂钩排、洞洞板、毛巾杆）：挂起的东西一律朝正前方 */
+  wall?: boolean
+}
+/** 素材是不是挂在墙上 / 贴在竖直面上的 */
+export const isWallOwner = (asset: string) => {
+  const d = ASSET_MAP.get(asset)
+  return !!d && (d.mount !== undefined || !!d.stick)
 }
 function owners(plan: Plan): Owner[] {
   return [
-    ...plan.furniture.map((f) => ({ id: f.id, x: f.x, y: f.y, rot: f.rot, z: f.z ?? 0, levels: levels(f.asset) })),
+    ...plan.furniture.map((f) => ({ id: f.id, x: f.x, y: f.y, rot: f.rot, z: f.z ?? 0, levels: levels(f.asset), wall: isWallOwner(f.asset) })),
     ...plan.fixtures.map((f) => ({ id: f.id, x: f.x, y: f.y, rot: f.rot, z: 0, levels: fixtureLevels(f) })),
   ].filter((o) => o.levels.length)
 }
@@ -156,9 +163,10 @@ function owners(plan: Plan): Owner[] {
 export function fixtureTop(f: Fixture) {
   return fixtureLevels(f)[0]?.y ?? null
 }
-/** 摆件整个占地都在设备台面内 */
-export function fitsOnFixture(f: Fixture, asset: string, x: number, y: number, rot: number) {
-  const lv = fixtureLevels(f)[0]
+/** 摆件整个占地都在设备台面内；z 给了就用这个高度的那一层（对面式厨房背面食器棚 92），否则用第一层 */
+export function fitsOnFixture(f: Fixture, asset: string, x: number, y: number, rot: number, z?: number) {
+  const all = fixtureLevels(f)
+  const lv = z === undefined ? all[0] : all.find((l) => Math.abs(l.y - z) < 0.5)
   return !!lv && corners(asset, x, y, rot).every((c) => inPolys(f, lv.polys, c))
 }
 
@@ -185,7 +193,7 @@ export function propsOn(plan: Plan, f: Furniture, depth = 0): Furniture[] {
 const HOOK_REACH = 12
 
 export function pickSurface(plan: Plan, ray: THREE.Ray, exclude: Set<string>, accept: (kind: SurfaceKind, h: number) => boolean = () => true) {
-  let best: { x: number; y: number; z: number; owner: string; t: number; kind: SurfaceKind; pose: { x: number; y: number; rot: number }; poly: Poly } | null = null
+  let best: { x: number; y: number; z: number; owner: string; t: number; kind: SurfaceKind; pose: { x: number; y: number; rot: number; wall?: boolean }; poly: Poly } | null = null
   const plane = new THREE.Plane()
   const hit = new THREE.Vector3()
   for (const f of owners(plan)) {
@@ -207,7 +215,7 @@ export function pickSurface(plan: Plan, ray: THREE.Ray, exclude: Set<string>, ac
           const d2 = ray.distanceSqToSegment(new THREE.Vector3(a.x, y, a.y), new THREE.Vector3(b.x, y, b.y), onRay, onSeg)
           if (d2 > HOOK_REACH * HOOK_REACH) continue
           const t = onRay.distanceTo(ray.origin) - 40
-          if (!best || t < best.t) best = { x: onSeg.x, y: onSeg.z, z, owner: f.id, t, kind: l.kind, pose: { x: f.x, y: f.y, rot: f.rot }, poly: pl }
+          if (!best || t < best.t) best = { x: onSeg.x, y: onSeg.z, z, owner: f.id, t, kind: l.kind, pose: { x: f.x, y: f.y, rot: f.rot, wall: f.wall }, poly: pl }
         }
         continue
       }
@@ -227,7 +235,7 @@ export function pickSurface(plan: Plan, ray: THREE.Ray, exclude: Set<string>, ac
           if (d2 > HOOK_REACH * HOOK_REACH) continue
           // 挂钩优先于它身后的层板 / 地面：距离打个折扣
           const t = onRay.distanceTo(ray.origin) - 40
-          if (!best || t < best.t) best = { x: onSeg.x, y: onSeg.z, z, owner: f.id, t, kind: l.kind, pose: { x: f.x, y: f.y, rot: f.rot }, poly: pl }
+          if (!best || t < best.t) best = { x: onSeg.x, y: onSeg.z, z, owner: f.id, t, kind: l.kind, pose: { x: f.x, y: f.y, rot: f.rot, wall: f.wall }, poly: pl }
         }
         continue
       }
@@ -238,7 +246,7 @@ export function pickSurface(plan: Plan, ray: THREE.Ray, exclude: Set<string>, ac
       const poly = l.polys.find((pl) => pointInPolygon(lp, pl.map(([px, pz]) => ({ x: px, y: pz }))))
       if (!poly) continue
       const t = hit.distanceTo(ray.origin)
-      if (!best || t < best.t) best = { x: p.x, y: p.y, z, owner: f.id, t, kind: l.kind, pose: { x: f.x, y: f.y, rot: f.rot }, poly }
+      if (!best || t < best.t) best = { x: p.x, y: p.y, z, owner: f.id, t, kind: l.kind, pose: { x: f.x, y: f.y, rot: f.rot, wall: f.wall }, poly }
     }
   }
   return best
@@ -311,15 +319,16 @@ export function supportOf(plan: Plan, f: Furniture): { ownerId: string; fits: bo
 }
 
 /**
- * 挂钩吸附：挂起的东西朝向「从家具中心指向这块挂点带」的方向（洞洞板就是正前方，树形衣帽架是各个钩子朝外），
+ * 挂钩吸附：挂起的东西朝向「从家具中心指向这块挂点带」的方向（树形衣帽架是各个钩子朝外），
+ * 墙上 / 门上的挂钩排、洞洞板、毛巾杆（pose.wall）一律朝正前方——否则两侧的钩子会让毛巾横过来插进墙里；
  * 位置吸到挂点带靠家具一侧的边上（钩尾正好插进板 / 搭在杆上）。返回平面坐标和朝向。
  */
-export function snapToHook(pose: { x: number; y: number; rot: number }, poly: Poly, p: Vec) {
+export function snapToHook(pose: { x: number; y: number; rot: number; wall?: boolean }, poly: Poly, p: Vec) {
   const cx = poly.reduce((s, q) => s + q[0], 0) / poly.length
   const cz = poly.reduce((s, q) => s + q[1], 0) / poly.length
   const len = Math.hypot(cx, cz) || 1
-  const dx = cx / len
-  const dz = cz / len
+  const dx = pose.wall ? 0 : cx / len
+  const dz = pose.wall ? 1 : cz / len
   const l = toLocal(pose, p)
   // 沿朝向方向取挂点带的最内侧，垂直方向保留鼠标位置
   const inner = Math.min(...poly.map(([qx, qz]) => qx * dx + qz * dz))

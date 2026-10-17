@@ -659,17 +659,25 @@ function umbrellaStand(p: string[]) {
   const g = new THREE.Group()
   g.add(cup(11, 10, 48, 1.4, main))
   const cols = [C.pink, C.sky, C.lemon]
+  // 桶内壁半径 11 - 1.4 = 9.6；伞面在桶口高度（48）半径约 2.7。伞尖离中心 3.2、向外倾 0.07 rad：
+  // 桶口处伞面外沿 3.2 + 48 × 0.07 + 2.7 ≈ 9.3，贴着桶口内沿但不穿出桶壁；三把伞彼此也不相交
+  const r0 = 3.2
+  const lean = 0.07
   cols.forEach((c, i) => {
     const a = (i / 3) * Math.PI * 2
-    // 合拢的伞：伞尖在桶底，伞面最宽处靠上，顶上是弯柄
+    // 合拢的伞：伞尖在桶底，伞面最宽处靠上，顶上是弯柄（柄朝外）
     const u = new THREE.Group()
     u.add(cyl(0.5, 0.5, 6, C.ink, { y: 2 }, 6))
     u.add(cyl(3, 0.6, 46, c, { y: 8 }, 10))
     u.add(cyl(0.6, 0.6, 14, C.ink, { y: 54 }, 6))
     u.add(torus(2.6, 0.8, C.woodD, { x: 2.6, y: 68 }, Math.PI))
-    u.position.set(Math.cos(a) * 4.5, 0, Math.sin(a) * 4.5)
-    u.rotation.set(Math.sin(a) * 0.1, a, -Math.cos(a) * 0.1)
-    g.add(u)
+    // 局部 +x 朝外：先绕 z 倒向 +x，再整体转到第 i 个方向
+    u.rotation.z = -lean
+    const slot = new THREE.Group()
+    slot.add(u)
+    slot.position.set(Math.cos(a) * r0, 1.4, Math.sin(a) * r0)
+    slot.rotation.y = -a
+    g.add(slot)
   })
   return g
 }
