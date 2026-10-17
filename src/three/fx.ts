@@ -2,6 +2,7 @@
 // 发射点每帧跟着宿主物体走（家具被拖动、旋转时特效跟着动）。
 
 import { useAnisotropy } from './toon'
+import { syncMatrix } from './matrices'
 import * as THREE from 'three'
 import type { Fx } from './kit'
 
@@ -268,6 +269,8 @@ export class FxLayer {
         const dx = -Math.sin(a) * s.rx * Math.sign(s.speed)
         const dz = Math.cos(a) * s.rz * Math.sign(s.speed)
         obj.rotation.set(0, Math.atan2(-dz, dx), Math.sin(this.t * 6 + phase) * 0.08)
+        // 家具模型是静态矩阵（matrices.ts）
+        if (!obj.matrixAutoUpdate) syncMatrix(obj)
       }
     return this.active
   }

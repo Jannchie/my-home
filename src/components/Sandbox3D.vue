@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, toRaw,
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { ASSET_MAP, CATEGORY_LABELS, STYLE_LABELS, type StyleTag } from '../three/assets'
+import { freezeMatrices, syncMatrix } from '../three/matrices'
 import { BASE, applyCutaway, bendToWalls, floorY, isPlant, stepCutaway, furnitureModel, placeFurniture, roomAt, type WallLook } from '../three/house'
 import { buildBuilding, type FloorGroup } from '../three/building'
 import { baseFloorId, floorById, floorOf, floorView, isMultiFloor, planFloors } from '../floors'
@@ -123,6 +124,8 @@ function furnLayer(id: string) {
   if (!g) {
     g = new THREE.Group()
     g.userData.floorId = id
+    // 静态矩阵：楼层动画挪它时在 applyFloorPose 里手动更新
+    g.matrixAutoUpdate = false
     furnLayers.set(id, g)
     furnRoot.add(g)
   }
@@ -333,13 +336,22 @@ function prewarmFloorFade() {
 function applyFloorPose() {
   for (const fg of floorGroups) {
     const st = floorAnim.get(fg.floor.id)
-    fg.group.position.y = fg.floor.elevation + (st?.extra ?? 0)
     fg.group.visible = st?.show ?? true
+    // 房子、家具都是静态矩阵（matrices.ts）：只在这一层真的挪了时重算它这棵子树
+    const y = fg.floor.elevation + (st?.extra ?? 0)
+    if (fg.group.position.y !== y) {
+      fg.group.position.y = y
+      syncMatrix(fg.group)
+    }
   }
   for (const [id, g] of furnLayers) {
     const st = floorAnim.get(id)
-    g.position.y = st?.extra ?? 0
     g.visible = st?.show ?? true
+    const y = st?.extra ?? 0
+    if (g.position.y !== y) {
+      g.position.y = y
+      syncMatrix(g)
+    }
   }
   // 宠物、机器人：按所在楼层（走楼梯时在两层之间）跟着楼层的动画走（位置、显示、淡入淡出）
   actors?.relayout()
@@ -713,6 +725,8 @@ function rebuildHouse() {
   const wh = sandbox.exterior ? 240 : sandbox.wallHeight
   const built = buildBuilding(raw, wh, (f) => (f.id === activeFloor.value && wh < 240 ? Math.min(f.height, wh) : f.height))
   house = built.root
+  // 房子搭好就不动了（除了墙体压低和楼层滑动，那两处自己更新矩阵）：不再每帧重算上千个对象的矩阵
+  freezeMatrices(house)
   floorGroups = built.floors
   builtActive = activeFloor.value
   stage.scene.add(house)
@@ -760,6 +774,8 @@ function syncFurniture() {
         disposeUnshared(o.obj)
       }
       o = { obj: furnitureModel(f), key }
+      // 根节点也用静态矩阵：placeFurniture 挪动时会更新
+      o.obj.matrixAutoUpdate = false
       objs.set(f.id, o)
       fx.set(f.id, o.obj, ASSET_MAP.get(f.asset)?.fx)
     }
@@ -1875,6 +1891,9 @@ onMounted(() => {
   applySky()
   stage.renderer.shadowMap.autoUpdate = false
   stage.renderer.shadowMap.needsUpdate = true
+  // 场景根和家具根固定在原点：不设成静态矩阵的话，它们每帧 updateMatrix 会逼着整棵树重算世界矩阵
+  stage.scene.matrixAutoUpdate = false
+  furnRoot.matrixAutoUpdate = false
   stage.scene.add(furnRoot, frameRoot, guideRoot, fx.group)
   stage.scene.add(actors.group)
   controls = new OrbitControls(stage.camera, canvas.value!)

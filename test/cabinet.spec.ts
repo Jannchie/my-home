@@ -199,6 +199,28 @@ describe('柜门 / 抽屉子树合并网格', () => {
   })
 })
 
+describe('静态矩阵', () => {
+  test('家具模型内部是静态矩阵；对静态模型 poseDoors 后矩阵和位姿一致', () => {
+    const a = OPENABLE.find((x) => x.id.startsWith('cb-'))!
+    const g = furnitureModel({ id: 'x', asset: a.id, x: 0, y: 0, rot: 0 })
+    let auto = 0
+    g.children[0].traverse((o) => {
+      if (o.matrixAutoUpdate) auto++
+    })
+    expect(auto).toBe(0)
+    poseDoors(g, true)
+    const L = new THREE.Matrix4()
+    let doors = 0
+    g.traverse((o) => {
+      if (!o.userData.door) return
+      doors++
+      L.compose(o.position, o.quaternion, o.scale)
+      expect(o.matrix.equals(L), a.id).toBe(true)
+    })
+    expect(doors).toBeGreaterThan(0)
+  })
+})
+
 describe('打开 / 关上', () => {
   /** 一件柜子 + 门里层板上一件 + 抽屉里一件（上面再叠一件） */
   function setup() {

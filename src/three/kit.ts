@@ -12,6 +12,7 @@
 
 import * as THREE from 'three'
 import { cyl, rbox, shade, toon, useAnisotropy } from './toon'
+import { syncMatrix } from './matrices'
 import type { Tag } from './tags'
 
 export type AssetCategory =
@@ -726,11 +727,14 @@ export function poseDoors(root: THREE.Object3D, open: boolean) {
     const base = (o.userData.doorBase ??= { p: o.position.clone(), r: o.rotation.clone() }) as { p: THREE.Vector3; r: THREE.Euler }
     o.position.copy(base.p)
     o.rotation.copy(base.r)
-    if (!open) return
-    if (m.kind === 'swing') o.rotation.y += m.angle
-    else if (m.kind === 'flap') o.rotation.x += m.angle
-    else if (m.kind === 'slide') o.position.x += m.dx
-    else o.position.z += m.dz
+    if (open) {
+      if (m.kind === 'swing') o.rotation.y += m.angle
+      else if (m.kind === 'flap') o.rotation.x += m.angle
+      else if (m.kind === 'slide') o.position.x += m.dx
+      else o.position.z += m.dz
+    }
+    // 静态矩阵（freezeMatrices）的模型也要跟着变
+    if (!o.matrixAutoUpdate) syncMatrix(o)
   })
 }
 

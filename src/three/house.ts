@@ -26,6 +26,7 @@ import { isIndoor, sharedIntervals, voidRailSegments, wallSegments, wallThicknes
 import { tatamiLayout } from '../tatami'
 import { addOutlines, ball, capsule, cyl, mergeMeshes, rbox, shade, toon, useAnisotropy } from './toon'
 import { glow, poseDoors } from './kit'
+import { freezeMatrices, syncMatrix } from './matrices'
 import { hasTag } from './tags'
 import { fridgeSpotModel, washerSpotModel } from './appliances'
 import { effectivePalette } from './colors'
@@ -439,6 +440,8 @@ export function stepCutaway(root: THREE.Object3D, dt: number, look: WallLook, fo
       const hh = look.style === 'cut' ? Math.max(0, Math.min(wall.h, top - wall.y0)) : wall.h
       o.scale.y = Math.max(hh, 0.01) / wall.h
       o.position.y = wall.y0 + hh / 2
+      // 房子是静态矩阵（Sandbox3D 搭好后 freezeMatrices）
+      if (!o.matrixAutoUpdate) syncMatrix(o)
       if (look.style === 'cut') {
         const { parts } = fadeParts(o)
         for (const p of parts) {
@@ -1546,6 +1549,8 @@ export function furnitureModel(fu: Furniture) {
   applyPatterns(m, pal, fu.patterns)
   // 可开合的柜子：柜门 / 抽屉按 open 摆好（模型本身是关着的）
   if (def.openable) poseDoors(m, !!fu.open)
+  // 模型内部的零件不再动（开合是重建模型）：矩阵算一次就固定，免得每帧上万个对象重算矩阵
+  freezeMatrices(m)
   g.add(m)
   g.userData.furnitureId = fu.id
   g.userData.asset = fu.asset
@@ -1575,10 +1580,12 @@ export function placeFurniture(obj: THREE.Object3D, plan: Plan, fu: Pick<Furnitu
     const elev = floorElevation(plan, floorOf(plan, fu))
     obj.position.set(fu.x, elev + (elev === 0 ? groundAt(plan, fu, room) : floorY(room)) + (fu.z ?? 0), fu.y)
     obj.rotation.y = (-fu.rot * Math.PI) / 180
-    return
+  } else {
+    placeOnFloor(obj, plan, fu.x, fu.y, fu.rot)
+    obj.position.y += fu.z ?? 0
   }
-  placeOnFloor(obj, plan, fu.x, fu.y, fu.rot)
-  obj.position.y += fu.z ?? 0
+  // 沙盘里家具的根节点是静态矩阵（见 matrices.ts）：挪动后手动更新
+  if (!obj.matrixAutoUpdate) syncMatrix(obj)
 }
 
 // ---------- 盆栽贴墙时自动弯曲，避免枝叶穿进墙里 ----------
