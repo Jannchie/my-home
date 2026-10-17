@@ -12,6 +12,8 @@ import GenOptions from './components/GenOptions.vue'
 import BottomSheet, { type SheetSnap } from './components/BottomSheet.vue'
 import ContextMenu, { type MenuEntry } from './components/ContextMenu.vue'
 import UpdatePrompt from './components/UpdatePrompt.vue'
+import ChangelogPanel from './components/ChangelogPanel.vue'
+import { APP_VERSION } from './changelog'
 import SharePanel from './components/SharePanel.vue'
 import { AUTHOR, REPO_URL } from './seo'
 import { currentSaved, detachSaved, initSaved, openPanel, openSharedPlan, quickSave, saved, toast } from './saved'
@@ -322,11 +324,25 @@ function toggleMore() {
   moreMenu.value = { x: r.right - 240, y: r.bottom + 6 }
 }
 /** 桌面顶栏的「更多」：只放帮助和链接（文件、语言按钮都在顶栏上） */
+/** 更新日志面板；版本变了（不是第一次来）时提示一次 */
+const changelogOpen = ref(false)
+const SEEN_KEY = 'my-home:seen-version'
+onMounted(() => {
+  try {
+    const seen = localStorage.getItem(SEEN_KEY)
+    if (seen && seen !== APP_VERSION) toast(t('已更新到 v{v}，可在「更多 → 更新日志」查看', { v: APP_VERSION }))
+    localStorage.setItem(SEEN_KEY, APP_VERSION)
+  } catch {
+    // 读写不了就不提示
+  }
+})
+const changelogItem = computed<MenuEntry>(() => ({ label: t('更新日志'), icon: ICONS.changelog, keys: `v${APP_VERSION}`, action: () => (changelogOpen.value = true) }))
 const deskMoreItems = computed<MenuEntry[]>(() => [
   { label: t('分享链接'), icon: ICONS.shareLink, action: () => (shareOpen.value = true) },
   'sep',
   { label: t('快捷键'), icon: ICONS.keyboard, keys: '?', action: () => (overlays.help = true) },
   { label: t('新手引导'), icon: ICONS.tip, action: () => (overlays.onboarding = true) },
+  changelogItem.value,
   'sep',
   { label: t('作者的 X'), brand: 'x', action: () => openLink(AUTHOR.x) },
   { label: t('GitHub 仓库'), icon: ICONS.github, action: () => openLink(REPO_URL) },
@@ -352,6 +368,7 @@ const moreItems = computed<MenuEntry[]>(() => [
   'sep',
   { label: t(device.coarse ? '手势与快捷键' : '快捷键'), icon: ICONS.keyboard, keys: device.coarse ? undefined : '?', action: () => (overlays.help = true) },
   { label: t('新手引导'), icon: ICONS.tip, action: () => (overlays.onboarding = true) },
+  changelogItem.value,
   'sep',
   { label: t('作者的 X'), brand: 'x', action: () => openLink(AUTHOR.x) },
   { label: t('GitHub 仓库'), icon: ICONS.github, action: () => openLink(REPO_URL) },
@@ -585,6 +602,7 @@ onBeforeUnmount(() => {
     <ShortcutHelp />
     <Onboarding />
     <UpdatePrompt />
+    <ChangelogPanel v-if="changelogOpen" @close="changelogOpen = false" />
   </div>
 </template>
 

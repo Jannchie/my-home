@@ -235,6 +235,7 @@ export const ICONS = {
   github: IconGithub, // 项目仓库链接
   // 内置收纳（3D 里选中时的卡片）
   builtin: IconWardrobe,
+  changelog: IconHistory, // 更新日志
 } satisfies Record<string, AppIcon>
 
 /** 顶栏视图切换 */

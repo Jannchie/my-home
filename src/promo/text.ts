@@ -29,14 +29,17 @@ export function L(zh: string, params: Record<string, string | number> = {}) {
   return s
 }
 
-/** 英文版的住户名字：按原名稳定地映射成英文名（同一户里不重复） */
+/** 英文 / 日语版的住户名字：按原名稳定地映射（同一户里不重复） */
 const EN_NAMES = ['Alex', 'Mia', 'Jordan', 'Chloe', 'Ryan', 'Emma', 'Leo', 'Grace', 'Sam', 'Lily', 'Noah', 'Ava']
+/** 日语版的住户名字：日本常见的名字 */
+const JA_NAMES = ['陽翔', '結衣', '蒼', '美桜', '蓮', '陽菜', '湊', '紬', '大和', '葵', '悠真', '凛']
 export function personName(name: string, taken: Set<string>) {
-  if (lang.value !== 'en') return name
+  if (lang.value === 'zh') return name
+  const list = lang.value === 'ja' ? JA_NAMES : EN_NAMES
   let h = 2166136261
   for (let i = 0; i < name.length; i++) h = Math.imul(h ^ name.charCodeAt(i), 16777619)
-  let k = (h >>> 0) % EN_NAMES.length
-  while (taken.has(EN_NAMES[k])) k = (k + 1) % EN_NAMES.length
-  taken.add(EN_NAMES[k])
-  return EN_NAMES[k]
+  let k = (h >>> 0) % list.length
+  while (taken.has(list[k])) k = (k + 1) % list.length
+  taken.add(list[k])
+  return list[k]
 }

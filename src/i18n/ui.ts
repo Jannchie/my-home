@@ -908,4 +908,6 @@ Object.assign(UI, {
   '这个分享链接来自更新版本的 My Home，刷新页面后再试。': ['この共有リンクは新しいバージョンの My Home で作られています。ページを再読み込みしてからもう一度お試しください。', 'This link was made by a newer version of My Home. Reload the page and try again.'],
   '分享链接已损坏或不完整，没能打开户型。': ['共有リンクが壊れているか途中で切れているため、間取りを開けませんでした。', 'The share link is broken or incomplete, so the plan couldn’t be opened.'],
   '已打开分享的户型「{name}」': ['共有された間取り「{name}」を開きました', 'Opened the shared plan “{name}”'],
+  '更新日志': ['更新履歴', "Changelog"],
+  '已更新到 v{v}，可在「更多 → 更新日志」查看': ['v{v} に更新しました。「その他 → 更新履歴」で内容を確認できます', "Updated to v{v}. See More → Changelog for what's new"],
 } satisfies Record<string, Entry>)
