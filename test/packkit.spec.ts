@@ -6,8 +6,6 @@ import { ASSETS } from '/src/three/assets'
 import { modelProblems, staticProblems } from '/src/three/packkit'
 
 const KNOWN: Record<string, string> = {
-  wardrobe: 'surface 190 比柜顶 188 高 2cm（待修）',
-  'vb-bs-cube': 'surface 171 比柜顶 170.8 高 0.2cm（待修）',
 }
 
 test('素材声明与模型一致', () => {

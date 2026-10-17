@@ -1370,7 +1370,8 @@ export const ASSETS: AssetDef[] = [
     w: 100,
     d: 58,
     h: 190,
-    surface: 190,
+    // 柜顶（顶冠上沿）在 WARDROBE.h = 188
+    surface: WARDROBE.h,
     ...cabinets([
       [C.white, C.pink],
       [C.wood, C.white],

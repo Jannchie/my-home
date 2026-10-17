@@ -1875,7 +1875,7 @@ export const VARIANTS_B: AssetDef[] = [
 
   // —— 书架 ——
   vb('vb-bs-ladder', '书架', 'bookshelf', '梯形', 'storage', [75.6, 31.5, 178.4], [['nordic', N.oak, C.white, ''], ['industrial', I.walnut, I.rust, ''], ['modern', M.white, M.char, ''], ['japanese', J.hinoki, J.sumi, '']], bsLadder),
-  vb('vb-bs-cube', '书架', 'bookshelf', '格子', 'storage', [80, 30, 171], [['cute', C.white, C.pink, C.sky], ['nordic', N.white, N.linen, N.sage], ['modern', M.black, M.gray, M.light], ['nordic', N.oak, N.gray, N.mustard]], bsCube, { surface: 171 }),
+  vb('vb-bs-cube', '书架', 'bookshelf', '格子', 'storage', [80, 30, 171], [['cute', C.white, C.pink, C.sky], ['nordic', N.white, N.linen, N.sage], ['modern', M.black, M.gray, M.light], ['nordic', N.oak, N.gray, N.mustard]], bsCube, { surface: 170.8 }),
   vb('vb-bs-pipe', '书架', 'bookshelf', '水管', 'storage', [86, 30, 172], [['industrial', I.walnut, I.iron, ''], ['industrial', '#b98b5e', '#55575b', ''], ['modern', M.walnut, M.black, ''], ['retro', R.caramel, '#3a3a3c', '']], bsPipe, { surface: 172 }),
   vb('vb-bs-glass', '书架', 'bookshelf', '玻璃门', 'storage', [80, 32, 180], [['retro', R.caramel, BRASS, ''], ['japanese', J.dark, J.hinoki, ''], ['nordic', N.white, N.oak, ''], ['modern', M.walnut, M.black, '']], bsGlass, { surface: 180, surfaces: BS_GLASS_SURF, openable: true }),
   vb('vb-bs-arch', '书架', 'bookshelf', '拱顶', 'storage', [74, 28, 168], [['cute', C.sakura, C.lemon, ''], ['nordic', N.white, N.sage, ''], ['modern', M.light, M.char, ''], ['cute', C.mint, C.white, '']], bsArch),
