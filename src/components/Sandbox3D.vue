@@ -2437,6 +2437,8 @@ function enterBlueprint() {
   if (!bp) {
     bp = new BlueprintView(stage.renderer, canvas.value!)
     bp.resize(viewSize.w, viewSize.h)
+    // 开发时的调试入口（截图脚本导出 PNG 用）
+    if (import.meta.env.DEV) (window as unknown as { __myhomeBlueprint?: BlueprintView }).__myhomeBlueprint = bp
   }
   bp.enter(bpInput(), bpOptions())
 }

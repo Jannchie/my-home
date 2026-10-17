@@ -28,7 +28,7 @@ import { BASE, floorY, furnitureModel, placeFurniture } from './house'
 import { ASSET_MAP } from './assets'
 import { floorAnnotations, fmtDim, fmtLevel, topLevel, SIDES, SIDE_NORMAL, type DimUnit, type FloorAnno, type Side } from '../dimensions'
 import { floorOf, planFloors } from '../floors'
-import { bbox, fmtRoomArea, type Box, type Furniture, type Plan, type Vec } from '../model'
+import { bbox, fmtRoomArea, pointInPolygon, type Box, type Furniture, type Plan, type Vec } from '../model'
 import { roomName, t } from '../i18n'
 
 // ---------- 设置与配色 ----------
@@ -452,7 +452,7 @@ export interface FurnitureFloor {
  * 线条由屏幕空间描线（法线 / 深度突变处）画出来——家具线自然更细、更浅，而且只画看得见的面。
  * model 给出沙盘里现成的家具模型；没有时（测试）现搭一个。
  */
-export function furnitureMeshes(plan: Plan, show: FurnitureShow, material: THREE.Material, model?: (f: Furniture) => THREE.Object3D | undefined): FurnitureFloor[] {
+export function furnitureMeshes(plan: Plan, show: FurnitureShow, material: THREE.Material, model?: (f: Furniture) => THREE.Object3D | undefined, walls: WallShow = 'cut'): FurnitureFloor[] {
   const fs = planFloors(plan)
   const per = new Map<string, THREE.Mesh[]>(fs.map((f) => [f.id, []]))
   if (show === 'none') return fs.map((f) => ({ floorId: f.id, meshes: [] }))
@@ -462,7 +462,10 @@ export function furnitureMeshes(plan: Plan, show: FurnitureShow, material: THREE
   const inv = new THREE.Matrix4()
   for (const f of plan.furniture) {
     if (show === 'large' && !isLargeFurniture(f)) continue
-    if (!ASSET_MAP.has(f.asset)) continue
+    const def = ASSET_MAP.get(f.asset)
+    if (!def) continue
+    // 剖切时墙只到 CUT_H：挂得比剖切面还高的东西（壁挂空调、吊柜、吊灯）和摆在高处的小物会悬在半空，不画
+    if (walls === 'cut' && Math.max(def.mount ?? 0, f.z ?? 0) >= CUT_H - 5) continue
     const obj = model?.(f) ?? furnitureModel(f)
     const fid = floorOf(plan, f)
     const list = per.get(fid)
@@ -567,8 +570,11 @@ function constructionLines(face: Vec[], y0: number, y1: number, ext: number, buf
 
 // ---------- 文字贴图 ----------
 
-/** 贴图的像素密度（相对 CSS 像素）：导出 3× 也够清楚 */
-const TEX_SCALE = 4
+/**
+ * 贴图的像素密度（相对 CSS 像素）：和输出的像素密度一致（屏幕 = 像素比，导出 = 导出倍数，导出时重画一遍文字）。
+ * 不能画得比输出密很多再靠 mipmap 缩小：细笔画会和底色描边平均成一片浅灰。
+ */
+let TEX_SCALE = 2
 const MONO = "'Berkeley Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace"
 function sansFont() {
   try {
@@ -648,8 +654,8 @@ function textTexture(rows: TextRun[][], halo: string, pad = 3, mark?: { color: s
   })
   const tex = new THREE.CanvasTexture(cv)
   tex.colorSpace = THREE.SRGBColorSpace
-  tex.generateMipmaps = true
-  tex.minFilter = THREE.LinearMipmapLinearFilter
+  tex.generateMipmaps = false
+  tex.minFilter = THREE.LinearFilter
   tex.magFilter = THREE.LinearFilter
   tex.anisotropy = 4
   return { tex, w, h }
@@ -669,6 +675,14 @@ interface Label {
   span?: [THREE.Vector3, THREE.Vector3]
   /** 竖向尺寸：文字转 90° */
   vertical?: boolean
+  /**
+   * 朝镜头挪近的距离（cm）：房间名贴着地面，文字往屏幕上方伸出去，会被后面更高的墙头、家具切掉；
+   * 沿视线挪近（正交下屏幕位置不变）后只有真正挡在前面的东西才会挡住它。base 是原位置。
+   */
+  lift?: number
+  base?: THREE.Vector3
+  /** 叠放时被上一层盖住（房间名不显示） */
+  covered?: boolean
 }
 
 // ---------- 场景 ----------
@@ -964,13 +978,14 @@ export class BlueprintView {
       this.structKey = sKey
       rebuilt = true
     }
-    const fKey = `${furniture}|${JSON.stringify(plan.furniture.map((f) => [f.asset, f.x, f.y, f.z, f.rot, f.floor, f.open]))}|${plan.floors?.length ?? 0}`
+    const fKey = `${furniture}|${walls}|${JSON.stringify(plan.furniture.map((f) => [f.asset, f.x, f.y, f.z, f.rot, f.floor, f.open]))}|${plan.floors?.length ?? 0}`
     const furnChanged = fKey !== this.furnKey
     if (furnChanged) {
-      this.furnGeo = furnitureMeshes(plan, furniture, this.fillMats.get('furniture')!, this.model)
+      this.furnGeo = furnitureMeshes(plan, furniture, this.fillMats.get('furniture')!, this.model, walls)
       this.furnKey = fKey
     }
-    const lKey = `${sKey}|${furnChanged ? fKey : this.furnKey}|${unit}|${paper}|${t('设计图')}|${furniture}`
+    TEX_SCALE = this.screenDensity()
+    const lKey = `${sKey}|${furnChanged ? fKey : this.furnKey}|${unit}|${paper}|${t('设计图')}|${furniture}|${TEX_SCALE}`
     if (rebuilt || furnChanged || lKey !== this.labelKey) {
       this.rebuildScene(plan, rebuilt || !this.floors.length, furnChanged || rebuilt)
       this.labelKey = lKey
@@ -1121,6 +1136,9 @@ export class BlueprintView {
           const lb = this.makeLabel(rows, pal.bg, 'room', node.id)
           const room = plan.rooms.find((x) => x.id === r.id)
           lb.sprite.position.set(r.at.x, floorY(room) + 2, r.at.y)
+          lb.base = lb.sprite.position.clone()
+          lb.lift = 260
+          lb.covered = this.floors.slice(i + 1).some((up) => !!up.anno.outline && pointInPolygon(r.at, up.anno.outline))
           lb.sprite.center.set(0.5, 0)
           node.annoGroup.add(lb.sprite)
         }
@@ -1292,8 +1310,13 @@ export class BlueprintView {
       rx = Math.max(rx, Math.abs(p.dot(right)))
       ry = Math.max(ry, Math.abs(p.dot(camUp)))
     }
-    const a = this.size.w / this.size.h
-    this.halfH = Math.max(ry, rx / a) * 1.06
+    // 留白（CSS 像素）：左边放标高文字，上下让开模式条 / 工具条；手机上工具条在底部
+    const { w: W, h: H } = this.size
+    const pad = W < 640 ? { l: 76, r: 6, t: 110, b: 90 } : { l: 120, r: 40, t: 80, b: 48 }
+    this.halfH = Math.max(ry * (H / Math.max(80, H - pad.t - pad.b)), rx * (H / Math.max(80, W - pad.l - pad.r)))
+    // 内容中心挪到留白之后的可用区域中心
+    const wpp = (2 * this.halfH) / H
+    c.addScaledVector(right, (-(pad.l - pad.r) / 2) * wpp).addScaledVector(camUp, ((pad.t - pad.b) / 2) * wpp)
     const dist = Math.max(4000, box.getSize(new THREE.Vector3()).length() * 3)
     this.ortho.zoom = 1
     this.ortho.position.copy(c).addScaledVector(dir, dist)
@@ -1465,16 +1488,18 @@ export class BlueprintView {
       return { x: (p.x * 0.5 + 0.5) * W, y: (-p.y * 0.5 + 0.5) * H, z: p.z }
     }
     const placed: { x0: number; y0: number; x1: number; y1: number }[] = []
+    const toCam = view.clone().normalize()
     const order = [...this.labels].sort((a, b) => PRIO[b.kind] - PRIO[a.kind])
     const wp = new THREE.Vector3()
     for (const lb of order) {
       const sp = lb.sprite
-      let shown = true
+      let shown = !(lb.covered && this.opts.layout === 'stack')
       for (let o: THREE.Object3D | null = sp.parent; o; o = o.parent) if (!o.visible) shown = false
       if (!shown) {
         sp.visible = false
         continue
       }
+      if (lb.base && lb.lift) sp.position.copy(lb.base).addScaledVector(toCam, lb.lift)
       sp.getWorldPosition(wp)
       const k = this.worldPerPx(wp)
       sp.scale.set(lb.w * k, lb.h * k, 1)
@@ -1519,6 +1544,20 @@ export class BlueprintView {
   /**
    * 高分辨率 PNG：按当前视角离屏渲染 scale 倍（受显卡上限和总像素约束），线宽、文字按比例放大；右下角加一行图名。
    */
+  /** 画布的像素比（文字贴图按它画） */
+  private screenDensity() {
+    const pr = this.renderer.getPixelRatio?.() ?? 2
+    return Math.max(1, Math.min(3, pr))
+  }
+
+  /** 按指定像素密度重画全部文字 */
+  private retext(density: number) {
+    if (!this.plan) return
+    TEX_SCALE = density
+    this.buildAnnotations(this.plan, PAPERS[this.opts.paper])
+    this.layout()
+  }
+
   async exportPNG(scale = 3, title = ''): Promise<Blob | null> {
     const { w, h } = this.size
     const maxTex = Math.min(8192, this.renderer.capabilities.maxTextureSize)
@@ -1531,12 +1570,13 @@ export class BlueprintView {
     const buf = new Uint8Array(W * H * 4)
     const prev = this.renderer.getRenderTarget()
     try {
-      this.layout()
+      this.retext(s)
       this.draw(rt)
       this.renderer.readRenderTargetPixels(rt, 0, 0, W, H, buf)
     } finally {
       this.renderer.setRenderTarget(prev)
       rt.dispose()
+      this.retext(this.screenDensity())
       this.needsRender = true
     }
     const cv = document.createElement('canvas')

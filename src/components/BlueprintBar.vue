@@ -138,7 +138,7 @@ const autoUnit = computed(() => unitFor(plan.value.region))
   }
 }
 /* 手机：放到底部，横向滚动 */
-:global(:root.compact) .bp-bar {
+:root.compact .bp-bar {
   top: auto;
   left: 10px;
   right: 10px;
@@ -146,11 +146,11 @@ const autoUnit = computed(() => unitFor(plan.value.region))
   bottom: calc(10px + env(safe-area-inset-bottom, 0px));
   padding: 6px 8px;
 }
-:global(:root.compact) .bp-bar .lb {
+:root.compact .bp-bar .lb {
   display: none;
 }
-:global(:root.coarse) .bp-bar button,
-:global(:root.coarse) .bp-bar select {
+:root.coarse .bp-bar button,
+:root.coarse .bp-bar select {
   height: 40px;
 }
 </style>
