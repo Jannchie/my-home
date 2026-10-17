@@ -375,9 +375,15 @@ class Decorator {
     const id = this.acModel
     const def = ASSET_MAP.get(id)!
     const door = firstDoorCenter(room, this.plan)
-    const ctx = { ...this.plan, fixtures: [] }
+    // 要避开的：已经挂上墙的东西、高过 170 的家具（衣柜、高书柜…），以及高的设备（内置收纳、厨房吊柜、冰箱位）
+    const inRoom = (p: Vec) => pointInPolygon(p, room.points)
+    const blockers = [
+      ...this.out.filter((o) => inRoom(o) && (ASSET_MAP.get(o.asset)?.mount || (!o.z && (ASSET_MAP.get(o.asset)?.h ?? 0) > 170))).map(asFixture),
+      ...this.plan.fixtures.filter((f) => inRoom(f) && (f.kind === 'builtin' || f.kind === 'kitchen' || f.kind === 'fridge')),
+    ]
     const spec: PlaceSpec = { kind: 'ps', lengths: [def.w], depth: def.d, front: 0, far: door, centered: true }
-    const f = placeCandidates(room, ctx, spec)[0]
+    // 找不到空墙段就不挂（宁可这间没有空调，也不嵌进柜子里）
+    const f = placeCandidates(room, { ...this.plan, fixtures: blockers }, spec)[0]
     if (f) this.push(id, f.x, f.y, f.rot, true)
   }
 
@@ -2581,8 +2587,6 @@ class Decorator {
     this.appliances()
     for (const r of this.plan.rooms) {
       this.style = this.styleFor(r)
-      // 欧美住宅多是中央空调，不挂壁挂机
-      if ((r.kind === 'ldk' || r.kind === 'western' || r.kind === 'japanese') && this.region !== 'west') this.aircon(r)
       switch (r.kind) {
         case 'ldk':
           this.ldk(r)
@@ -2629,6 +2633,9 @@ class Decorator {
           break
         }
       }
+      // 空调在家具摆好之后再挂：避开衣柜、高书柜和内置收纳（先挂的话，后摆的高家具会顶到空调里）。
+      // 欧美住宅多是中央空调，不挂壁挂机
+      if ((r.kind === 'ldk' || r.kind === 'western' || r.kind === 'japanese') && this.region !== 'west') this.aircon(r)
       // 衣物：收纳间挂满衣服；卧室的化妆台、内衣柜；洗面所层板上叠放毛巾
       if (r.kind === 'storage') this.closetDress(r)
       if (r.kind === 'western' || r.kind === 'japanese') this.bedroomExtras(r)
@@ -2658,7 +2665,24 @@ class Decorator {
     this.fillCompartments()
     // 便签：贴屏幕边框、桌后墙、冰箱门，书桌上散几张
     deskExtras({ d: this, plan: this.plan, rand: this.rand, household: this.household })
+    this.reseatAircons()
     return this.out
+  }
+
+  /** 后面的步骤可能把高家具摆到了空调下面：重叠的空调摘下来重新找墙挂（找不到就不挂） */
+  reseatAircons() {
+    for (const ac of this.out.filter((o) => o.asset === this.acModel)) {
+      const b = furnitureBox(ac.asset, ac.x, ac.y, ac.rot)
+      const under = this.out.some((o) => {
+        if (o === ac || o.z || (ASSET_MAP.get(o.asset)?.h ?? 0) <= 170) return false
+        const c = furnitureBox(o.asset, o.x, o.y, o.rot)
+        return Math.min(b.x1, c.x1) - Math.max(b.x0, c.x0) > 2 && Math.min(b.y1, c.y1) - Math.max(b.y0, c.y0) > 2
+      })
+      if (!under) continue
+      const room = this.plan.rooms.find((r) => pointInPolygon(ac, r.points))
+      this.out.splice(this.out.indexOf(ac), 1)
+      if (room) this.aircon(room)
+    }
   }
 
   /**
