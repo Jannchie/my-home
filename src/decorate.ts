@@ -3097,7 +3097,7 @@ export function applyFixes(plan: Plan, items: CheckItem[], household?: Household
         break
       case 'bed':
         for (const r of plan.rooms.filter((r) => (r.kind === 'western' || r.kind === 'japanese') && (d.occupants.get(r.id)?.length ?? 0) > 0)) {
-          const hasBed = d.out.some((f) => pointInPolygon(f, r.points) && hasTag(ASSET_MAP.get(f.asset), 'legacy-fix-bed'))
+          const hasBed = d.out.some((f) => pointInPolygon(f, r.points) && hasTag(ASSET_MAP.get(f.asset), 'bed', 'bedding'))
           if (!hasBed) d.bedIn(r)
         }
         break
@@ -3105,7 +3105,7 @@ export function applyFixes(plan: Plan, items: CheckItem[], household?: Household
         for (const r of plan.rooms.filter((r) => r.kind === 'western' || r.kind === 'japanese')) {
           const people = d.peopleIn(r)
           if (!people.some((m) => JOBS[m.job].wfh || m.job === 'student' || m.job === 'schoolkid')) continue
-          if (!d.out.some((f) => pointInPolygon(f, r.points) && hasTag(ASSET_MAP.get(f.asset), 'legacy-fix-desk'))) d.deskIn(r)
+          if (!d.out.some((f) => pointInPolygon(f, r.points) && hasTag(ASSET_MAP.get(f.asset), 'desk'))) d.deskIn(r)
         }
         break
     }

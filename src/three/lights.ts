@@ -115,7 +115,7 @@ export interface RoomLightSpec {
 
 const SMALL_ROOMS: RoomKind[] = ['entrance', 'hall', 'storage', 'toilet', 'wash']
 /** 吊灯挂在上方的餐桌 */
-const isDiningTable = (asset: string) => hasTag(ASSET_MAP.get(asset), 'legacy-light-dining')
+const isDiningTable = (asset: string) => hasTag(ASSET_MAP.get(asset), 'dining-table')
 
 /** 房间里的餐桌（吊灯挂在它上方） */
 function diningTable(plan: Plan, room: Room, defs: Map<string, AssetDef>) {

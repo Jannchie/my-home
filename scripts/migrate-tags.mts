@@ -138,8 +138,6 @@ const RULES: [string, (d: D) => boolean][] = [
   // ----- 床 / 坐具 -----
   ['bed', OLD.isBedDecorate],
   ['bedding', R(/futon|布団|被褥/)],
-  ['legacy-cl-bed', R(/^bed-|kid-crib|kid-bed|futon|bd-bunk|bd-loft|床(?!头|尾|边)|被褥/)],
-  ['legacy-fix-bed', (d) => /^bed-|kid-crib|kid-bed|futon|bd-bunk|bd-loft/.test(d.id)],
   ['crib', R(/kid-crib|婴儿床/)],
   ['kid-bed', R(/kid-bed|儿童床/)],
   ['loft', R(/loft|阁楼/)],
@@ -157,8 +155,6 @@ const RULES: [string, (d: D) => boolean][] = [
   ['desk', and((d) => !!d.surface, R(OLD.DESK_RE), not(R(OLD.NOT_PC_DESK)))],
   ['workbench', and((d) => !!d.surface, R(/工作台|workbench/))],
   ['table', and((d) => !!d.surface && !d.prop && !d.mount, R(/desk|桌/))],
-  ['legacy-fix-desk', (d) => /desk|书桌|学习桌/.test(d.id + d.name)],
-  ['legacy-cl-desk', R(/desk|书桌|学习桌|写字台|电脑桌/)],
   ['gaming-desk', R(/gaming-desk|电竞桌|tbl-desk-(140|160|l-)|L 形/)],
   ['duo-desk', R(/duo|双人/)],
   ['dining-table', R(/dining-table|tbl-dining|餐桌/)],
@@ -189,7 +185,6 @@ const RULES: [string, (d: D) => boolean][] = [
   ['pc', R(/pc-tower|台式机|主机箱/)],
   ['aio-pc', (d) => /aio|一体机|retro-pc/.test(d.id)],
   ['electric-kettle', R(/prop-kettle$|electric-pot|电水壶|电热水瓶/)],
-  ['legacy-light-dining', (d) => OLD.LIGHT_DINING_RE.test(d.id)],
   ['monitor', R(/monitor|显示器/)],
   ['keyboard', R(/keyboard|键盘|^of-kb-|kb-/)],
   ['mouse', R(/mouse|鼠标/)],
@@ -213,13 +208,11 @@ const RULES: [string, (d: D) => boolean][] = [
   ['dehumidifier', R(/dehumidifier(?!-bag)|除湿机/)],
   ['hair-dryer', R(/hair-dryer|吹风机/)],
   ['body-scale', (d) => /^(wet-body-scale|fit-scale|scale-(glass|round|dial|composition))$/.test(d.id)],
-  ['legacy-cl-scale', R(/body-scale|fit-scale|^scale-|体重秤/)],
   // ----- 灯 / 绿植 -----
   ['light', (d) => !d.fixture && !OLD.NOT_LAMP.has(d.id) && (d.category === 'lighting' || OLD.LAMP_RE.test(d.name) || OLD.LAMP_RE.test(d.id))],
   ['lamp', R(/lamp|灯(?!泡)/)],
-  ['desk-lamp', R(/desk-lamp|折臂台灯|lamp-(edison|washi|globe|mushroom)/)],
-  ['table-lamp', R(/table-lamp|床头台灯/)],
-  ['legacy-cl-lamp-fix', R(/prop-table-lamp|prop-desk-lamp|台灯/)],
+  ['desk-lamp', (d) => d.family === 'desk-lamp' || R(/desk-lamp|折臂台灯|书桌灯|lamp-(edison|washi|globe|mushroom)/)(d)],
+  ['table-lamp', (d) => d.family === 'table-lamp' || R(/table-lamp|台灯/)(d)],
   ['plant', (d) => (d.category === 'plants' || (OLD.PLANT_RE.test(T(d)) && d.category !== 'lighting')) && !d.mount],
   // ----- 厨房 -----
   ['cutting-board', R(/prop-cutting-board|砧板|cutting/)],
@@ -249,14 +242,12 @@ const RULES: [string, (d: D) => boolean][] = [
   ['toilet-shelf-ok', R(/toilet-paper|卷纸|卷筒纸|freshener|芳香|香氛|消臭|除湿|succulent|多肉|plant|绿植|incense|香薰|diffuser|tissue|纸巾/)],
   ['bath-stool', R(/bath-stool|浴凳|风呂椅|風呂椅/)],
   ['bath-pail', R(/^wet-bath-pail|洗面桶|風呂桶|洗面器/)],
-  ['bucket', R(/bucket|洗面桶|風呂桶/)],
   ['bath-mat', R(/bath-mat|bx-mat-/)],
   ['diatomite', (d) => /硅藻土|stone|diatom/.test(`${d.id} ${d.sizeLabel ?? ''}`)],
   ['towel', R(/towel|毛巾|浴巾/)],
   ['towel-rail', (d) => hasHook(d) && /towel|毛巾|浴巾|タオル/.test(`${d.id} ${d.family ?? ''} ${d.name}`)],
   ['towel-bar', R(/towel-bar|毛巾杆|浴巾架/)],
   ['detergent', R(/detergent|洗衣液|洗衣粉/)],
-  ['legacy-cl-detergent-fix', R(/detergent|洗衣液/)],
   ['softener', R(/soften|柔软/)],
   ['laundry-supply', R(/detergent|soften|洗衣|柔软/)],
   ['laundry-stand', R(/laundry-stand|晾衣架/)],
@@ -264,7 +255,6 @@ const RULES: [string, (d: D) => boolean][] = [
   ['wet-supply', R(/^wet-|toilet|厕所|トイレ|浴|bath|洗|laundry|deodor|除臭|消臭|detergent/)],
   // ----- 衣物 / 玄关 -----
   ['shoe', R(/shoe(?!-cab|-rack)|鞋(?!柜|架)|sneaker|boots|靴/)],
-  ['legacy-cl-shoe-fix', R(/sneaker|运动鞋|shoe/)],
   ['umbrella-stand', R(/umbrella|伞架/)],
   ['luggage', R(/luggage|行李箱|suitcase/)],
   ['kimono-rack', (d) => /ikou|衣桁/.test(`${d.id} ${d.family ?? ''} ${d.name}`)],
@@ -443,6 +433,12 @@ const REVIEW: Fix[] = [
   { ids: ['c2-ball-stool', 'ch-ball', 'ch-ball-seat', 'fit-yoga-ball', 'gr-ball-rack', 'gr-bat-rack', 'gr-racket-wall', 'hg-pool-table', 'int-golf-bag', 'lm-block-sofa-1', 'lm-block-sofa-2', 'lm-block-sofa-3', 'lm-floor-globe', 'lp-nd-double-globe', 'lp-nd-opal-wall', 'lm-toy-shelf', 'fm-book-sling', 'lm-book-sling'], remove: ['toy'], why: '球椅、台球桌、球架、方块沙发、球形灯、玩具收纳柜、绘本架是家具，不是玩具' },
   { ids: ['lp-cl-crystal-table', 'sw-cl-crystal-lamp'], remove: ['mineral'], why: '水晶烛台灯不是矿物标本' },
   { ids: ['gr-helmet-wall'], remove: ['hat'], why: '头盔 / 帽子壁挂架是挂架' },
+  // ---- 第 5 批：检查清单 / 补齐 / 灯光里各自写的旧判断收敛到同一组标签 ----
+  { ids: ['fm-tatami-bed-100', 'fm-tatami-bed-122', 'fm-tatami-bed-142', 'bd-loft'], add: ['bed'], why: '榻榻米床台、阁楼床是床（旧的「名字以床结尾」判断漏掉了）' },
+  { ids: ['sw-fh-dogbed'], remove: ['bed'], why: '格纹狗床是宠物用品' },
+  { ids: ['out-futon-rack', 'ss-futon-folded', 'lm-futon-sofa', 'lm-futon-sofa-open'], remove: ['bedding'], why: '晾被架、被炉被（futon）不是地铺；地板沙发床已经算床' },
+  { ids: ['wet-toilet-slippers'], remove: ['shoe'], why: '厕所拖鞋不算玄关的鞋子' },
+  { ids: ['sw-cn-baxian', 'tbl-bar-table'], add: ['dining-table'], why: '八仙桌、吧台高桌也是吃饭的桌子（灯光原来就在它们上方挂吊灯）' },
 ]
 
 // ---------- 生成 ----------

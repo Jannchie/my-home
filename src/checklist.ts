@@ -48,7 +48,7 @@ const windowsOf = (plan: Plan, room: Room) => plan.openings.filter((o) => o.room
 /** 各项「有没有」按语义标签数 */
 const TAGS = {
   aircon: 'aircon',
-  bed: 'legacy-cl-bed',
+  bed: ['bed', 'bedding'],
   closet: ['wardrobe', 'dresser', 'clothes-rail'],
   lamp: 'lamp',
   sofa: 'sofa',
@@ -62,7 +62,7 @@ const TAGS = {
   umbrella: 'umbrella-stand',
   shoes: 'shoe',
   detergent: 'detergent',
-  scale: 'legacy-cl-scale',
+  scale: 'body-scale',
   softener: 'softener',
   towel: 'towel',
   dryer: 'hair-dryer',
@@ -70,11 +70,11 @@ const TAGS = {
   shampoo: 'shampoo',
   bodySoap: 'body-soap',
   bathStool: 'bath-stool',
-  bucket: 'bucket',
+  bucket: 'bath-pail',
   toiletPaper: 'toilet-paper',
   toiletBrush: 'toilet-brush',
   laundryStand: 'laundry-stand',
-  desk: 'legacy-cl-desk',
+  desk: 'desk',
   crib: 'crib',
   catTower: 'cat-tower',
   litter: 'litter-box',
@@ -103,11 +103,11 @@ export function checklist(plan: Plan, hh?: Household): CheckItem[] {
       item(r, '开关', 1, 1, undefined, true)
     }
     if (r.kind === 'western' || r.kind === 'japanese') {
-      item(r, '照明（台灯 / 落地灯）', count(f, TAGS.lamp), 1, { how: 'scatter', sel: 'legacy-cl-lamp-fix' })
+      item(r, '照明（台灯 / 落地灯）', count(f, TAGS.lamp), 1, { how: 'scatter', sel: ['table-lamp', 'desk-lamp'] })
       // 和房间共墙的收纳间（クローゼット、押入れ、WIC）或房间里的壁内收纳就算有衣物收纳
       const closetRoom = plan.rooms.some((o) => o.kind === 'storage' && edgesOf(r.points).some((e) => sharedIntervals(e, o).length > 0))
       const builtinCloset = plan.fixtures.some((x) => x.kind === 'builtin' && x.builtinType === 'closet' && pointInPolygon(x, r.points))
-      item(r, '衣物收纳', count(f, TAGS.closet) + (closetRoom || builtinCloset ? 1 : 0), 1, { how: 'wall', sel: /^(wardrobe$|dresser$|be-|sf-garment-rail|.*clothes-rail|.*chest)/ })
+      item(r, '衣物收纳', count(f, TAGS.closet) + (closetRoom || builtinCloset ? 1 : 0), 1, { how: 'wall', sel: ['wardrobe', 'dresser', 'clothes-rail'] })
     }
     if (r.kind === 'ldk') {
       item(r, '沙发', count(f, TAGS.sofa), 1, { how: 'wall', sel: /^sofa2$/ })
@@ -132,15 +132,15 @@ export function checklist(plan: Plan, hh?: Household): CheckItem[] {
       const fe = [...f, ...plan.rooms.filter((o) => o.kind === 'hall' && edgesOf(r.points).some((e) => sharedIntervals(e, o).length > 0)).flatMap((o) => inRoom(plan, o))]
       item(r, '鞋柜 / 鞋架', count(fe, TAGS.shoeCab) + builtinShoe, 1, { how: 'wall', sel: /^shoe-cabinet$/ })
       item(r, '伞架', count(fe, TAGS.umbrella), 1, { how: 'wall', sel: /^umbrella-stand$/ })
-      item(r, '鞋子', count(f, TAGS.shoes, (d) => !!d.prop), 1, { how: 'scatter', sel: 'legacy-cl-shoe-fix' })
+      item(r, '鞋子', count(f, TAGS.shoes, (d) => !!d.prop), 1, { how: 'scatter', sel: 'shoe' })
     }
     const hasFx = (kind: string) => plan.fixtures.some((x) => x.kind === kind && pointInPolygon(x, r.points))
     if (r.kind === 'wash' && region !== 'jp') {
       // 欧美的 Laundry：只看洗衣用品
-      item(r, '洗衣液', count(f, TAGS.detergent), 1, { how: 'fixture', sel: 'legacy-cl-detergent-fix', fixture: 'washer' })
+      item(r, '洗衣液', count(f, TAGS.detergent), 1, { how: 'fixture', sel: 'detergent', fixture: 'washer' })
       if (hasFx('basin')) item(r, '毛巾', count(f, TAGS.towel), 1, { how: 'scatter', sel: 'towel' })
     } else if (r.kind === 'wash') {
-      item(r, '洗衣液', count(f, TAGS.detergent), 1, { how: 'fixture', sel: 'legacy-cl-detergent-fix', fixture: 'washer' })
+      item(r, '洗衣液', count(f, TAGS.detergent), 1, { how: 'fixture', sel: 'detergent', fixture: 'washer' })
       item(r, '柔软剂', count(f, TAGS.softener), 1, { how: 'fixture', sel: 'softener', fixture: 'washer' })
       item(r, '牙刷杯', count(f, TAGS.toothbrush), 1, { how: 'fixture', sel: 'toothbrush', fixture: 'basin' })
       item(r, '毛巾', count(f, TAGS.towel), 1, { how: 'scatter', sel: 'towel' })
@@ -153,7 +153,7 @@ export function checklist(plan: Plan, hh?: Household): CheckItem[] {
       item(r, '沐浴露', count(f, TAGS.bodySoap), 1, { how: 'scatter', sel: /^wet-body-soap$/ })
       if (region === 'jp') {
         item(r, '浴凳', count(f, TAGS.bathStool), 1, { how: 'wall', sel: 'bath-stool' })
-        item(r, '洗面桶', count(f, TAGS.bucket), 1, { how: 'wall', sel: 'bucket' })
+        item(r, '洗面桶', count(f, TAGS.bucket), 1, { how: 'wall', sel: 'bath-pail' })
         item(r, '浴室遥控', 1, 1, undefined, true)
       } else if (hasFx('basin')) {
         item(r, '牙刷杯', count(f, TAGS.toothbrush), 1, { how: 'fixture', sel: 'toothbrush', fixture: 'basin' })

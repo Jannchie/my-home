@@ -79,7 +79,6 @@ export const FURNITURE_TAGS = [
   'bath-mat',
   'bath-stool',
   'bath-pail', // 洗面桶 / 風呂桶
-  'bucket', // 桶（泛指）
   'projector-screen',
 ] as const
 
@@ -216,19 +215,6 @@ export const PLACEMENT_TAGS = [
   'set-piece', // 成套摆放专用的部件（双人桌、棋罐、相机柜），通用查询不返回
 ] as const
 
-/** 迁移期的过渡标签：和旧规则逐字对应，用于证明重构等价；审查后会被功能标签取代 */
-export const LEGACY_TAGS = [
-  'legacy-cl-bed',
-  'legacy-cl-desk',
-  'legacy-cl-detergent-fix',
-  'legacy-cl-lamp-fix',
-  'legacy-cl-scale',
-  'legacy-cl-shoe-fix',
-  'legacy-fix-bed',
-  'legacy-fix-desk',
-  'legacy-light-dining',
-] as const
-
 /** 「这是什么」类标签（每件素材至少要有一个） */
 export const FUNCTION_TAGS = [...FURNITURE_TAGS, ...DEVICE_TAGS, ...LIGHT_PLANT_TAGS, ...KITCHEN_TAGS, ...HYGIENE_TAGS, ...ITEM_TAGS] as const
 
@@ -241,12 +227,11 @@ type FixedTag =
   | (typeof ITEM_TAGS)[number]
   | (typeof ATTR_TAGS)[number]
   | (typeof PLACEMENT_TAGS)[number]
-  | (typeof LEGACY_TAGS)[number]
 
 export type Tag = FixedTag | `hobby:${InterestId}`
 
 /** 固定词表（不含 hobby: 这类带参数的） */
-export const FIXED_TAGS: readonly string[] = [...FUNCTION_TAGS, ...ATTR_TAGS, ...PLACEMENT_TAGS, ...LEGACY_TAGS]
+export const FIXED_TAGS: readonly string[] = [...FUNCTION_TAGS, ...ATTR_TAGS, ...PLACEMENT_TAGS]
 
 /** 有没有其中任一标签 */
 export function hasTag(d: Pick<AssetDef, 'tags'> | undefined | null, ...ts: Tag[]): boolean {
