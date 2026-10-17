@@ -1943,8 +1943,59 @@ function stoneFireplace(p: string[]) {
   const [stone, beamC, hearth] = p
   const g = new THREE.Group()
   g.add(rbox(160, 5, 50, hearth, {}, 1))
-  g.add(holePanel(150, 115, 34, stone, [{ kind: 'arch', x: 0, y: 0, w: 76, h: 72 }], { y: 5, z: -6 }))
-  g.add(rbox(76, 72, 2, '#2a2422', { y: 5, z: -21.6 }, 0.4))
+  // 正面墙：拱门直接做成外轮廓上的一段缺口（Shape 里不放 hole 路径）。
+  // 原来用 holePanel 的 arch 洞时，洞底 y=0 与板底重合，开 bevel 后三角化会把洞口填死；缺口并入外轮廓就不存在这个问题。
+  const R = 38 // 拱洞半径（开口宽 76）
+  const springLocal = 34 // 起拱线（板局部 y）：世界 y = 5 + 34 = 39
+  const wallW = 150
+  const wallH = 115
+  const wallT = 34
+  const shape = new THREE.Shape()
+  shape.moveTo(-wallW / 2, 0)
+  shape.lineTo(-R, 0)
+  shape.lineTo(-R, springLocal)
+  shape.absarc(0, springLocal, R, Math.PI, 0, true)
+  shape.lineTo(R, 0)
+  shape.lineTo(wallW / 2, 0)
+  shape.lineTo(wallW / 2, wallH)
+  shape.lineTo(-wallW / 2, wallH)
+  shape.lineTo(-wallW / 2, 0)
+  const bevel = 0.4
+  const wallGeo = new THREE.ExtrudeGeometry(shape, { depth: wallT - bevel * 2, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelOffset: -bevel, bevelSegments: 1, curveSegments: 20 })
+  wallGeo.translate(0, 0, -wallT / 2 + bevel)
+  const wall = new THREE.Mesh(wallGeo, toon(stone))
+  wall.position.set(0, 5, -6)
+  wall.castShadow = true
+  wall.receiveShadow = true
+  g.add(wall)
+  // 炉膛：暗色内衬套筒（顺拱洞断面挤出，不用 bevel）+ 背板 + 炉底，把石墙的洞口断面盖住，开口才有纵深
+  const soot = '#2e211b'
+  const Ro = R - 0.2 // 套筒外壁，比石洞略小，避免和石头共面
+  const Ri = R - 1.8 // 套筒内壁，形成 1.6cm 的暗色炉口边
+  const lining = new THREE.Shape()
+  lining.moveTo(-Ro, 0)
+  lining.lineTo(Ro, 0)
+  lining.lineTo(Ro, springLocal)
+  lining.absarc(0, springLocal, Ro, 0, Math.PI, false)
+  lining.lineTo(-Ro, 0)
+  const liningHole = new THREE.Path()
+  liningHole.moveTo(-Ri, 1.6)
+  liningHole.lineTo(-Ri, springLocal)
+  liningHole.absarc(0, springLocal, Ri, Math.PI, 0, true)
+  liningHole.lineTo(Ri, 1.6)
+  liningHole.lineTo(-Ri, 1.6)
+  lining.holes.push(liningHole)
+  const liningGeo = new THREE.ExtrudeGeometry(lining, { depth: 31.2, bevelEnabled: false, curveSegments: 20 })
+  liningGeo.translate(0, 5, -20.8)
+  const liner = new THREE.Mesh(liningGeo, toon(soot, { emissive: 0.18 }))
+  liner.castShadow = true
+  liner.receiveShadow = true
+  g.add(liner)
+  // 背板带一点暖色自发光，像被炉火映着，否则炉膛会读成一整块死黑，看不出进深
+  const backer = rbox(74, 74, 2, '#3a2720', { y: 5, z: -21.4 }, 0.4)
+  backer.material = toon('#3a2720', { emissive: 0.4 })
+  g.add(backer)
+  g.add(rbox(70, 1.8, 28, '#1c1411', { y: 5.4, z: -7 }, 0.4))
   // 毛石
   const rnd = (i: number) => Math.abs(Math.sin(i * 91.7 + 3.1) * 1000) % 1
   const inArch = (x: number, y: number) => Math.abs(x) < 42 && (y < 34 + 5 || Math.hypot(x, y - 34) < 42)
@@ -1975,7 +2026,17 @@ function stoneFireplace(p: string[]) {
   for (const s of [-1, 1]) g.add(rbox(2, 8, 18, IRON, { x: s * 20, y: 5, z: -8 }, 0.4))
   g.add(cylX(3.4, 46, '#7a5236', 0, 14, -12))
   g.add(cylX(3, 40, '#8a6040', 0, 14, -4))
-  g.add(cylX(3, 40, '#6a4630', 0, 19.6, -8))
+  g.add(cylX(3, 40, '#6a4630', 0, 16.8, -8))
+  // 余烬：炉底一层炭床 + 几块自发光碎炭（只加材质，不引入 fx / 粒子）
+  const coal = rbox(42, 1.2, 18, '#6e2a12', { y: 7.2, z: -9 }, 0.8)
+  coal.material = toon('#6e2a12', { emissive: 0.45 })
+  g.add(coal)
+  const emberMat = toon('#ff8a3d', { emissive: 1.8 })
+  for (const [x, y, z, s] of [[-16, 8.4, -11, 3], [-6, 8.4, -6, 2.4], [4, 8.4, -13, 2.8], [14, 8.4, -7, 2.2], [-10, 7.2, 2, 2.6], [7, 7.2, 3, 2.2], [-1, 7.2, 4.5, 1.8]] as [number, number, number, number][]) {
+    const m = rbox(s, s * 0.55, s * 0.9, '#ff8a3d', { x, y, z }, s * 0.3)
+    m.material = emberMat
+    g.add(m)
+  }
   // 木梁炉架
   g.add(rbox(170, 12, 30, beamC, { y: 120 }, 1.4))
   for (let k = -3; k <= 3; k++) g.add(noOL(rbox(18, 0.4, 0.3, shade(beamC, -0.15), { x: k * 22, y: 126, z: 15.05 }, 0.1)))
