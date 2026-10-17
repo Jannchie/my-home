@@ -5,6 +5,7 @@ import { decorate, isOpenShelf } from '/src/decorate'
 import { generateHousehold } from '/src/household'
 import { edgesOf, fixtureBox, onBoundary, pointInPolygon, type Furniture, type Plan } from '/src/model'
 import { supportOf, toLocal } from '/src/surface'
+import { cabinetsOn, spotOf } from '/src/cabinet'
 import { ASSET_MAP, type AssetDef } from '/src/three/assets'
 import { bendToWalls, furnitureModel, isPlant, placeFurniture } from '/src/three/house'
 import { wallThicknessAt } from '/src/walls'
@@ -81,6 +82,8 @@ describe('一键布置 seed 1..40', () => {
         plan.fixtures
           // 冰箱位 / 洗衣机位是给机器预留的空间：冰箱、洗衣机、干衣机本来就放在上面
           .filter((fx) => !(fx.kind === 'washer' && ['laundry-rack', 'washer', 'dryer'].includes(def(x).family ?? '')) && !(fx.kind === 'fridge' && def(x).family === 'fridge'))
+          // 收纳位是给柜子预留的空间：柜子本来就放在上面
+          .filter((fx) => !(fx.kind === 'builtin' && cabinetsOn([x], fx).length))
           .flatMap((fx) => {
             const b = fixtureBox(fx)
             const p = penetration(footprint(x), [
@@ -100,6 +103,8 @@ describe('一键布置 seed 1..40', () => {
     const bad = all(({ plan, f }) =>
       f
         .filter(isFloor)
+        // 嵌墙收纳位（壁龛）里的柜子伸进墙里
+        .filter((x) => !spotOf(plan, x)?.recessed)
         .filter((x) => {
           const cs = rectCorners(x, def(x).w - 2, def(x).d - 2, x.rot)
           return !plan.rooms.some((r) => cs.every((c) => pointInPolygon(c, r.points) || onBoundary(r.points, c, 1)))

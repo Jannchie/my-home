@@ -45,6 +45,7 @@ export const TYPE_NAMES: Record<FunctionTag, [zh: string, ja: string, en: string
   'storage-cabinet': ['收纳柜', '収納チェスト', 'Storage cabinet'],
   cabinet: ['柜架', '棚・キャビネット', 'Cabinet'],
   'shoe-storage': ['鞋柜 / 鞋架', '靴箱・シューズラック', 'Shoe storage'],
+  pantry: ['食品柜', 'パントリー収納', 'Pantry cabinet'],
   'washer-rack': ['洗衣机置物架', 'ランドリーラック', 'Laundry rack'],
   'open-rack': ['开放式钢架', 'オープンラック', 'Open rack'],
   'tv-stand': ['电视柜', 'テレビ台', 'TV stand'],

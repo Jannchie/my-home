@@ -55,6 +55,7 @@ export const FURNITURE_TAGS = [
   'storage-cabinet', // 收纳柜、抽屉柜
   'cabinet', // 柜、架（泛指）
   'shoe-storage',
+  'pantry', // 食品柜（パントリー収納）
   'washer-rack', // 洗衣机上方置物架
   'open-rack', // 开放式钢架（リネン庫）
   'tv-stand',

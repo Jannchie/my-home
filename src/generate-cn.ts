@@ -146,6 +146,7 @@ function layout(seed: number, o: { bedrooms: 'random' | 1 | 2 | 3 | 4; corner: '
   const plan: Plan = {
     version: 1,
     appliancesAsFurniture: true,
+    cabinetsAsFurniture: true,
     name: `${t('{n}室{h}厅{b}卫', { n, h: n === 1 ? 1 : 2, b: baths })}${corner ? t('·边户') : ''} ${planArea({ rooms: c.rooms }).toFixed(1)}㎡ #${seed}`,
     wall: WALL,
     wallOuter: WALL_OUTER,

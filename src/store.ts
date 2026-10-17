@@ -1,6 +1,7 @@
 import { reactive, ref, toRaw, watch } from 'vue'
 import { orientDoors } from './doors'
 import { migrateAppliances } from './appliance'
+import { migrateCabinets, setOpen } from './cabinet'
 import { applyFixes, decorate, roomStyles } from './decorate'
 import { autoWallpapers } from './wallpaper'
 import type { CheckItem } from './checklist'
@@ -43,6 +44,9 @@ export function normalizePlan(p: Plan): Plan | null {
   p.wallOuter ??= Math.max(18, Math.round(p.wall * 1.5))
   // 冰箱、洗衣机以前是带款式 / 颜色的设备：换成摆在冰箱位 / 洗衣机位上的同款家具
   migrateAppliances(p)
+  // 收纳位以前自己画柜子：换成摆在位上的同类柜子家具（柜门开关照旧）
+  migrateCabinets(p)
+  for (const f of p.furniture) if (f.open !== undefined && f.open !== true) delete f.open
   // 灯光开关 / 色温：缺省 = 自动、跟随全局；坏数据去掉
   for (const r of p.rooms) {
     if (r.light !== undefined && (!isLightMode(r.light) || r.light === 'auto')) delete r.light
@@ -258,6 +262,13 @@ export function setRoomLightK(id: string, k: number | undefined) {
   })
 }
 /** 灯具开关：undefined = 跟随房间 */
+/** 可开合的柜子：打开 / 关上柜门（id、位置不变，门里的东西不动，抽屉里的东西跟着抽屉走；可撤销） */
+export function setFurnitureOpen(id: string, open: boolean) {
+  const f = findFurniture(id)
+  if (!f || !!f.open === open || !ASSET_MAP.get(f.asset)?.openable) return
+  mutate((p) => setOpen(p, f, open))
+}
+
 export function setFurnitureLight(id: string, v: 'on' | 'off' | undefined) {
   const f = findFurniture(id)
   if (!f || f.light === v) return

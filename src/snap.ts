@@ -169,8 +169,8 @@ export function overlapsOthers(plan: Plan, selfId: string | null, asset: string,
     return id !== selfId && !z && !!d && !d.mount && d.h > 3 && !straddle(def.type, d.type)
   }
   if (plan.furniture.some((f) => solid(f.id, f.asset, f.z) && boxHit(me, shrink(furnitureBox(f.asset, f.x, f.y, f.rot), 2)))) return true
-  // 冰箱位 / 洗衣机位只是预留的空间，冰箱、洗衣机（以及别的家具）可以放在上面
-  return plan.fixtures.some((f) => f.kind !== 'outdoor' && f.kind !== 'fridge' && f.kind !== 'washer' && boxHit(me, fixtureBox(f)))
+  // 冰箱位 / 洗衣机位 / 收纳位只是预留的空间，冰箱、洗衣机、柜子（以及别的家具）可以放在上面
+  return plan.fixtures.some((f) => f.kind !== 'outdoor' && f.kind !== 'fridge' && f.kind !== 'washer' && f.kind !== 'builtin' && boxHit(me, fixtureBox(f)))
 }
 
 const shrink = (b: Box, k: number): Box => ({ x0: b.x0 + k, y0: b.y0 + k, x1: b.x1 - k, y1: b.y1 - k })

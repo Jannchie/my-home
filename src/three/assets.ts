@@ -1063,79 +1063,43 @@ export function outdoorUnitModel(w: number, d: number) {
 }
 
 /**
- * 内置收纳（造作）：从地面做到顶的柜子，正面在 z = d/2。
- *   shoe   下駄箱：下柜 + 中间开放台面（放钥匙、摆件）+ 上柜
- *   closet 壁内收纳：上下两段门
- *   pantry 食品柜：上段玻璃门能看到瓶罐，下段抽屉
- * open 时柜门打开 70°，露出里面的层板。
+ * 收纳位（鞋柜位 / 衣柜位 / 食品柜位）：只是预留的空间，柜子本身是家具（packs/cabinets.ts）。
+ *   嵌墙（recessed）：墙里的壁龛——墙洞、背后和两侧的包墙由 house.ts 做，这里只画洞口一圈细细的包边和壁龛底板；
+ *   靠墙：地面上一圈淡淡的标记（和冰箱位一样）。
+ * 正面在 z = d/2；h 为壁龛高度（和 house.ts 挖墙的高度一致）。
  */
-export function builtinModel(w: number, d: number, type: 'shoe' | 'closet' | 'pantry', open: boolean, h: number) {
+export function storageSpotModel(w: number, d: number, recessed: boolean, h: number) {
   const g = new THREE.Group()
-  const H = Math.min(h, 230)
-  const body = type === 'pantry' ? C.white : C.woodL
-  const door = type === 'pantry' ? '#f4f1ea' : shade(C.woodL, 0.04)
-  const t = 1.8
-  // 柜体：背板、两侧、顶、底（正面敞开，门另外做）
-  g.add(rbox(w, H, t, body, { z: -d / 2 + t / 2 }, 0.4))
-  for (const s of [-1, 1]) g.add(rbox(t, H, d, body, { x: (s * (w - t)) / 2 }, 0.4))
-  g.add(rbox(w, t, d, body, { y: H - t }, 0.4))
-  g.add(rbox(w, 8, d - 2, shade(body, -0.12), { z: -1 }, 0.4))
-  // 层板（和 surface.ts 里内置收纳的 levels 一致）
-  for (const y of builtinShelves(type, H)) g.add(rbox(w - t * 2, 1.6, d - t - 1, body, { y: y - 1.6, z: t / 2 }, 0.3))
-  // 壁内收纳：枕棚下的挂衣杆（两端杆座）
-  if (type === 'closet' && H > CLOSET_PIPE.y + 10) {
-    const pipe = cyl(CLOSET_PIPE.r, CLOSET_PIPE.r, w - t * 2, C.steel, {}, 14)
-    pipe.position.set(0, CLOSET_PIPE.y, t / 2)
-    pipe.rotation.z = Math.PI / 2
-    g.add(pipe)
-    for (const s of [-1, 1]) {
-      const seat = cyl(2.2, 2.2, 1, C.steel, {}, 12)
-      seat.position.set(s * (w / 2 - t - 0.5), CLOSET_PIPE.y, t / 2)
-      seat.rotation.z = Math.PI / 2
-      g.add(seat)
-    }
+  if (recessed) {
+    const trim = '#efe6d6'
+    const tw = 3
+    const z = d / 2 + 0.5
+    for (const s of [-1, 1]) g.add(rbox(tw, h + tw, 1, trim, { x: s * (w / 2 + tw / 2), z }, 0.3))
+    g.add(rbox(w + tw * 2, tw, 1, trim, { y: h, z }, 0.3))
+    // 壁龛底板：比地面高一点点，不和地板共面
+    const floor = rbox(w - 0.4, 0.6, d - 0.4, shade(trim, -0.08), { y: 0.05 }, 0.2)
+    floor.userData.noOutline = true
+    g.add(floor)
+    return g
   }
-  // 柜门：每扇约 45 宽；open 时绕外侧铰链转开
-  const n = Math.max(1, Math.round(w / 45))
-  const dw = w / n
-  const spans: [number, number][] =
-    type === 'shoe' ? [[8, 90], [110, H - t]] : type === 'pantry' ? [[8, 80], [80, H - t]] : [[8, H * 0.7], [H * 0.7, H - t]]
-  spans.forEach(([y0, y1], si) => {
-    for (let i = 0; i < n; i++) {
-      const left = i % 2 === 0
-      const hingeX = -w / 2 + dw * (left ? i : i + 1)
-      const leaf = new THREE.Group()
-      const glass = type === 'pantry' && si === 1
-      const panel = rbox(dw - 0.6, y1 - y0 - 0.6, 1.6, door, { x: left ? dw / 2 : -dw / 2, y: 0.3 }, 0.5)
-      if (glass) {
-        panel.material = toon(C.glass, { transparent: 0.35 })
-        leaf.add(rbox(dw - 0.6, 3, 1.8, door, { x: left ? dw / 2 : -dw / 2, y: 0.3 }, 0.5))
-        leaf.add(rbox(dw - 0.6, 3, 1.8, door, { x: left ? dw / 2 : -dw / 2, y: y1 - y0 - 3.3 }, 0.5))
-      }
-      leaf.add(panel)
-      leaf.add(rbox(1.2, 10, 1.6, C.steel, { x: left ? dw - 3 : -dw + 3, y: (y1 - y0) / 2 - 5, z: 1.2 }, 0.4))
-      leaf.position.set(hingeX, y0, d / 2 - 0.8)
-      if (open) leaf.rotation.y = left ? -1.2 : 1.2
-      g.add(leaf)
-    }
-  })
-  // 食品柜：玻璃门里的瓶罐
-  if (type === 'pantry')
-    for (const [k, y] of builtinShelves(type, H).filter((y) => y > 80).entries())
-      for (let i = 0; i < 4; i++) g.add(cyl(3.5, 3.5, 10 + (i % 2) * 4, [C.peach, C.lemon, C.mint, C.red][(i + k) % 4], { x: -w / 2 + 10 + i * ((w - 20) / 3), y, z: -2 }, 12))
+  const c = '#d5dade'
+  const t = 1.2
+  const mark = (mw: number, md: number, x: number, z: number) => {
+    const m = rbox(mw, 0.3, md, c, { x, z }, 0.1)
+    m.material = toon(c, { transparent: 0.55 })
+    m.userData.noOutline = true
+    m.castShadow = false
+    g.add(m)
+  }
+  for (const s of [-1, 1]) {
+    mark(w - 2, t, 0, (s * (d - 2 - t)) / 2)
+    mark(t, d - 2 - t * 2, (s * (w - 2 - t)) / 2, 0)
+  }
   return g
 }
 
-/** 内置收纳各层板的顶面高度（柜内可摆放的层） */
-export function builtinShelves(type: 'shoe' | 'closet' | 'pantry', H: number): number[] {
-  if (type === 'shoe') return [26, 44, 62, 90, 130, 160, 190].filter((y) => y < H - 10)
-  if (type === 'pantry') return [30, 55, 80, 115, 150, 185].filter((y) => y < H - 10)
-  // 壁内收纳（クローゼット）：枕棚一层，下面是挂衣杆（CLOSET_PIPE），杆下空着放衣装ケース
-  return [178].filter((y) => y < H - 10)
-}
-
-/** 壁内收纳的挂衣杆：杆中心高度、半径（杆在柜内进深的中间）。surface.ts 的挂钩层、一键布置挂衣服都按它算 */
-export const CLOSET_PIPE = { y: 170, r: 1.4 }
+/** 嵌墙收纳位（壁龛）的高度：house.ts 挖墙、包墙和壁龛包边都按它 */
+export const NICHE_H = 230
 
 export function psModel(w: number, d: number, h: number) {
   const g = new THREE.Group()

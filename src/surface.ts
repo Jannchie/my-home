@@ -2,7 +2,7 @@
 
 import * as THREE from 'three'
 import { fixtureDepth, pointInPolygon, type Fixture, type Furniture, type Plan, type Vec } from './model'
-import { ASSET_MAP, builtinShelves, CLOSET_PIPE } from './three/assets'
+import { ASSET_MAP } from './three/assets'
 import { floorY, roomAt } from './three/house'
 import { CLIP_DROP, type Poly, type SurfaceKind } from './three/kit'
 
@@ -20,17 +20,22 @@ export function toWorld(f: Pick<Furniture, 'x' | 'y' | 'rot'>, lx: number, lz: n
   return { x: f.x + lx * Math.cos(a) - lz * Math.sin(a), y: f.y + lx * Math.sin(a) + lz * Math.cos(a) }
 }
 
-interface Level {
+export interface Level {
   /** 离家具底面的高度 */
   y: number
   polys: Poly[]
   kind: SurfaceKind
   /** 净高：放进去的东西不能比它高 */
   h: number
+  /** 在柜门里 / 抽屉里：柜子关着时不能往里放（见 SurfaceDef.inside） */
+  inside?: boolean
 }
 
-/** 一件素材的所有可摆放层：顶面 + 柜内层板 */
-function levels(asset: string): Level[] {
+/**
+ * 一件素材的所有可摆放层：顶面 + 柜内层板。
+ * open：可开合的柜子开着——抽屉格（slide）随抽屉往前拉出。
+ */
+export function levels(asset: string, open = false): Level[] {
   const def = ASSET_MAP.get(asset)
   if (!def) return []
   const full: Poly = [
@@ -41,7 +46,11 @@ function levels(asset: string): Level[] {
   ]
   const out: Level[] = []
   if (def.surface) out.push({ y: def.surface, polys: def.surfaceShape ?? [full], kind: 'shelf', h: Infinity })
-  for (const s of def.surfaces ?? []) out.push({ y: s.y, polys: s.shape ?? [full], kind: s.kind ?? 'shelf', h: s.h ?? Infinity })
+  for (const s of def.surfaces ?? []) {
+    const dz = open && s.slide ? s.slide : 0
+    const polys = s.shape ?? [full]
+    out.push({ y: s.y, polys: dz ? polys.map((pl) => pl.map(([x, z]): [number, number] => [x, z + dz])) : polys, kind: s.kind ?? 'shelf', h: s.h ?? Infinity, inside: !!s.inside && !s.glass })
+  }
   return out
 }
 
@@ -103,17 +112,6 @@ function fixtureLevels(f: Fixture): Level[] {
     case 'toilet':
       // 无水箱马桶没有水箱盖可以摆东西
       return f.toiletType === 'tankless' ? [] : [L(78, rect(-(w + 6) / 2, -d / 2, (w + 6) / 2, -d / 2 + 20))]
-    case 'builtin': {
-      // 柜内层板：门打开时都能放；关着时只有下駄箱中间的开放台面（y = 90）能放
-      const t = f.builtinType ?? 'shoe'
-      const inner = rect(-w / 2 + 2, -d / 2 + 2, w / 2 - 2, d / 2 - 1)
-      const ys = builtinShelves(t, 230)
-      const shown = f.open ? ys : t === 'shoe' ? [90] : []
-      const out: Level[] = shown.map((y, i) => ({ y, polys: [inner], kind: 'shelf' as const, h: (ys[ys.indexOf(y) + 1] ?? 230) - y - 2 + 0 * i }))
-      // 壁内收纳的挂衣杆（门打开时能挂）：挂点带和挂衣杆一样，钩环内顶搭在杆顶
-      if (t === 'closet' && f.open) out.push({ y: CLOSET_PIPE.y + CLOSET_PIPE.r + 0.45, polys: [rect(-w / 2 + 4, 0.9 - 1.7, w / 2 - 4, 0.9 + 1.3)], kind: 'hook', h: CLOSET_PIPE.y - 10 })
-      return out
-    }
     case 'outdoor':
       return [L(60, rect(-(w - 2) / 2, -(d - 2) / 2, (w - 2) / 2, (d - 2) / 2))]
     case 'bathtub': {
@@ -144,10 +142,12 @@ interface Owner {
   rot: number
   z: number
   levels: Level[]
+  /** 可开合的柜子关着门（门里的层不能往里放） */
+  closed?: boolean
 }
 function owners(plan: Plan): Owner[] {
   return [
-    ...plan.furniture.map((f) => ({ id: f.id, x: f.x, y: f.y, rot: f.rot, z: f.z ?? 0, levels: levels(f.asset) })),
+    ...plan.furniture.map((f) => ({ id: f.id, x: f.x, y: f.y, rot: f.rot, z: f.z ?? 0, levels: levels(f.asset, !!f.open), closed: !f.open })),
     ...plan.fixtures.map((f) => ({ id: f.id, x: f.x, y: f.y, rot: f.rot, z: 0, levels: fixtureLevels(f) })),
   ].filter((o) => o.levels.length)
 }
@@ -168,8 +168,8 @@ function inPolys(f: Pick<Furniture, 'x' | 'y' | 'rot'>, polys: Poly[], p: Vec) {
 }
 
 /** 一件家具上（含柜内各层）摆着的东西，递归：托盘上的杯子也算 */
-export function propsOn(plan: Plan, f: Furniture, depth = 0): Furniture[] {
-  const lv = levels(f.asset)
+export function propsOn(plan: Pick<Plan, 'furniture'>, f: Furniture, depth = 0): Furniture[] {
+  const lv = levels(f.asset, !!f.open)
   if (depth > 3 || !lv.length) return []
   const base = f.z ?? 0
   const direct = plan.furniture.filter((o) => o.id !== f.id && lv.some((l) => Math.abs((o.z ?? 0) - (base + l.y)) < 0.5 && inPolys(f, l.polys, o)))
@@ -193,6 +193,8 @@ export function pickSurface(plan: Plan, ray: THREE.Ray, exclude: Set<string>, ac
     const floor = floorY(roomAt(plan, { x: f.x, y: f.y }))
     for (const l of f.levels) {
       if (!accept(l.kind, l.h)) continue
+      // 关着门的柜子：门里的层板放不进去（先打开柜门）
+      if (l.inside && f.closed) continue
       const z = f.z + l.y
       if (l.kind === 'clip') {
         // 屏幕顶边：算射线到顶边中线（窄带两条短边中点的连线，抬到真正的顶边高度）的距离，够近就吸上去
@@ -285,7 +287,7 @@ export function fitOnSurface(plan: Plan, ownerId: string, z: number, asset: stri
 export function fitsOnSurface(owner: Furniture, z: number, asset: string, x: number, y: number, rot: number) {
   // 同一高度可能有好几格（多宝格左右两列的底层、被竖隔板隔开的两小格）：整件落在其中任意一格里就行，不能横跨隔板
   const cs = corners(asset, x, y, rot)
-  return levels(owner.asset).some((l) => Math.abs((owner.z ?? 0) + l.y - z) < 0.5 && cs.every((c) => inPolys(owner, l.polys, c)))
+  return levels(owner.asset, !!owner.open).some((l) => Math.abs((owner.z ?? 0) + l.y - z) < 0.5 && cs.every((c) => inPolys(owner, l.polys, c)))
 }
 
 /**
