@@ -5,8 +5,11 @@
 import * as THREE from 'three'
 import { ball, cup, cyl, puck, rbox, shade, toon, torus, tray, useAnisotropy } from '../toon'
 import { C, G, SWING_OPEN, ellipsePoly, movable, rectPoly, rng, slab, type AssetCategory, type AssetDef, type DoorMotion, type Poly, type SurfaceDef } from '../kit'
-import { PI, clearDeep, lit, mesh, noOutlineDeep, rod3, type V3 } from '../geo'
+import { PI, clearDeep, lit, mesh, noOutlineDeep, rod3, tube, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, R, type Build, type Pal3 } from '../packkit'
+
+/** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
+const TUBE: TubeOpts = {}
 
 const SOIL = '#8b6a4f'
 const BRASS = '#e9c46a'
@@ -22,11 +25,6 @@ const BOOKC = ['#c96f5a', '#e3b549', '#6f8fa8', '#8aa37b', '#efe6d6', '#5a4646',
 
 // ---------- 小工具 ----------
 
-/** 沿折线平滑过去的圆管 */
-function tube(pts: V3[], r: number, color: string, segs = 24, radial = 8) {
-  const curve = new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(...p)))
-  return mesh(new THREE.TubeGeometry(curve, segs, r, radial, false), color)
-}
 /** 旋转体：profile 为 [半径, 高] */
 function lathe(profile: [number, number][], color: string, seg = 32) {
   return mesh(new THREE.LatheGeometry(profile.map(([r, y]) => new THREE.Vector2(r, y)), seg), color)
@@ -245,7 +243,7 @@ function areca(p: string[]) {
     const P0: V3 = [c * 1.5, 30, s * 1.5]
     const P1: V3 = [c * Rr * 0.32, 30 + H, s * Rr * 0.32]
     const P2: V3 = [c * Rr, 30 + H * 0.7, s * Rr]
-    g.add(tube(Array.from({ length: 9 }, (_, k) => bez(P0, P1, P2, k / 8)), 0.55, STEM, 16, 5))
+    g.add(tube(Array.from({ length: 9 }, (_, k) => bez(P0, P1, P2, k / 8)), 0.55, STEM, { ...TUBE, seg: 16, radial: 5 }))
     for (let k = 3; k <= 13; k++) {
       const t = k / 14
       const pos = bez(P0, P1, P2, t)
@@ -275,7 +273,7 @@ function pachira(p: string[]) {
       const r = 2.4 * (1 - j / 26)
       pts.push([Math.cos(ang) * r, y, Math.sin(ang) * r])
     }
-    g.add(tube(pts, 1.5, shade(BARK, k * 0.04), 40, 8))
+    g.add(tube(pts, 1.5, shade(BARK, k * 0.04), { ...TUBE, seg: 40, radial: 8 }))
   }
   const rand = rng(31)
   const top: V3 = [0, 106, 0]
@@ -378,9 +376,9 @@ function cactusGarden(p: string[]) {
   }
   // 主柱 + 两条臂
   column(g, 2, -5, soil - 1, 92, 6.5, CACTUS)
-  g.add(tube([[-3, 50, -5], [-10, 51, -5], [-15, 55, -5], [-15.5, 60, -5]], 4.2, CACTUS, 16, 12))
+  g.add(tube([[-3, 50, -5], [-10, 51, -5], [-15, 55, -5], [-15.5, 60, -5]], 4.2, CACTUS, { ...TUBE, seg: 16, radial: 12 }))
   column(g, -15.5, -5, 59, 22, 4.4, CACTUS)
-  g.add(tube([[7, 62, -5], [14, 63, -5], [18.5, 67, -5], [19, 72, -5]], 3.8, CACTUS, 16, 12))
+  g.add(tube([[7, 62, -5], [14, 63, -5], [18.5, 67, -5], [19, 72, -5]], 3.8, CACTUS, { ...TUBE, seg: 16, radial: 12 }))
   column(g, 19, -5, 71, 16, 4, CACTUS)
   column(g, -12, 9, soil - 1, 50, 5.4, CACTUS_D)
   column(g, 14, 10, soil - 1, 32, 4.6, CACTUS)
@@ -1282,8 +1280,8 @@ function kettleGoose(p: string[]) {
   g.add(cyl(5.4, 6, 12, body, { y: 2 }, 32))
   g.add(puck(5.6, 1.2, shade(body, -0.05), { y: 13.8 }))
   g.add(ball(1, acc, { y: 15.4 }))
-  g.add(tube([[5.2, 4, 0], [8, 5, 0], [9.5, 9, 0], [10.4, 14, 0], [12.4, 15.6, 0]], 0.55, body, 20, 8))
-  g.add(tube([[-5.2, 12.5, 0], [-8.6, 12, 0], [-9.2, 8.5, 0], [-8, 5, 0], [-5.4, 4.6, 0]], 0.9, acc, 20, 8))
+  g.add(tube([[5.2, 4, 0], [8, 5, 0], [9.5, 9, 0], [10.4, 14, 0], [12.4, 15.6, 0]], 0.55, body, { ...TUBE, seg: 20, radial: 8 }))
+  g.add(tube([[-5.2, 12.5, 0], [-8.6, 12, 0], [-9.2, 8.5, 0], [-8, 5, 0], [-5.4, 4.6, 0]], 0.9, acc, { ...TUBE, seg: 20, radial: 8 }))
   g.add(lit(ball(0.5, '#ff6b4a', { y: 0.9, z: 7.4 }), '#ff6b4a', 0.8))
   return g
 }
@@ -1410,7 +1408,7 @@ function epotSteel(p: string[]) {
   g.add(cyl(3.2, 3.2, 1.6, acc, { y: 27.6 }, 20))
   g.add(rbox(4.4, 4, 4.4, black, { y: 19.6, z: 10.6 }, 1.2))
   g.add(cyl(0.9, 1, 2, black, { y: 18, z: 12.2 }, 12))
-  g.add(tube([[-9.4, 22, 0], [-11.4, 20, 0], [-11.4, 10, 0], [-9.6, 8, 0]], 1, black, 16, 8))
+  g.add(tube([[-9.4, 22, 0], [-11.4, 20, 0], [-11.4, 10, 0], [-9.6, 8, 0]], 1, black, { ...TUBE, seg: 16, radial: 8 }))
   return shift(g, 1.3, -1.4)
 }
 
@@ -1427,19 +1425,13 @@ function citrus(g: THREE.Group, x: number, y: number, z: number, c: string, r = 
   g.add(noOutlineDeep(ball(0.5, C.leafD, { x, y: y + r * 1.78, z })))
 }
 function banana(g: THREE.Group, x: number, y: number, z: number, ry: number) {
-  const b = tube(
-    [
+  const b = tube([
       [-6, 2.4, 0],
       [-3, 0.9, 0],
       [0, 0.6, 0],
       [3, 0.9, 0],
       [6, 2.4, 0],
-    ],
-    1.2,
-    '#ffd75a',
-    16,
-    8,
-  )
+    ], 1.2, '#ffd75a', { ...TUBE, seg: 16, radial: 8 })
   const k = G(b)
   k.position.set(x, y + 0.6, z)
   k.rotation.y = ry
@@ -1777,7 +1769,7 @@ function perfumeAtomizer(p: string[]) {
   g.add(ball(1.6, juice, { y: 2.2 }))
   g.add(cyl(0.5, 0.6, 1.6, metal, { y: 4.3 }, 12))
   g.add(cyl(0.6, 0.6, 1, metal, { y: 5.8 }, 12))
-  g.add(tube([[0.5, 6.4, 0], [1.6, 6.6, 0], [2.6, 6, 0], [3.1, 5, 0]], 0.18, metal, 10, 6))
+  g.add(tube([[0.5, 6.4, 0], [1.6, 6.6, 0], [2.6, 6, 0], [3.1, 5, 0]], 0.18, metal, { ...TUBE, seg: 10, radial: 6 }))
   g.add(ball(1.1, bulb, { x: 3.3, y: 4.2 }, [0.9, 1.2, 0.9]))
   g.add(cyl(0.12, 0.12, 2, bulb, { x: 3.3, y: 1.2 }, 6))
   g.add(cyl(0.5, 0.2, 1.2, bulb, { x: 3.3, y: 0 }, 8))

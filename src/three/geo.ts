@@ -250,6 +250,10 @@ export interface TubeOpts {
   closed?: boolean
   /** 接收阴影，默认 true（投影总是开） */
   receive?: boolean
+  /** cappedTube：两端加球帽，默认 true（闭合路径没有球帽） */
+  caps?: boolean
+  /** cappedTube：没有球帽时也包一层 Group，默认 false */
+  group?: boolean
 }
 
 /** 过控制点的弯管（centripetal Catmull-Rom 曲线），两端开口 */
@@ -272,7 +276,7 @@ export function tube(pts: V3[], r: number, color: string, o: TubeOpts = {}) {
  * 两端带球帽的弯管：开口路径返回 Group(管, 球, 球)；闭合路径（或 caps: false）没有球帽，
  * group 为 true 时仍包一层 Group，否则直接返回管。
  */
-export function cappedTube(pts: V3[], r: number, color: string, o: TubeOpts & { caps?: boolean; group?: boolean } = {}): THREE.Object3D {
+export function cappedTube(pts: V3[], r: number, color: string, o: TubeOpts = {}): THREE.Object3D {
   const m = tube(pts, r, color, o)
   if (o.closed || o.caps === false) return o.group ? G(m) : m
   const a = pts[0]

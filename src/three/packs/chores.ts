@@ -6,8 +6,11 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray, type At } from '../toon'
 import { C, G, glow, paintPanel, rectPoly, rng, shell, type AssetCategory, type AssetDef, type Fx } from '../kit'
-import { P, PI, clearMat, cylX, cylZ, lit, noOutline, rod3, type V3 } from '../geo'
+import { P, PI, cappedTube, clearMat, cylX, cylZ, lit, noOutline, rod3, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, R, type Build, type Dims, type Pal } from '../packkit'
+
+/** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
+const TUBE: TubeOpts = { seg: { per: 6, min: 12 }, radial: 10 }
 
 const STEEL = '#c3c7cc'
 const HOSE = '#6f737a'
@@ -45,22 +48,6 @@ function normalize(build: Build, toFloor: boolean): Build {
     if (toFloor) g.position.y -= b.min.y
     return G(g)
   }
-}
-
-/** 平滑管子（软管、把手、钩子），两端加圆头 */
-function tube(pts: V3[], r: number, color: string, seg?: number) {
-  const curve = new THREE.CatmullRomCurve3(
-    pts.map((p) => new THREE.Vector3(...p)),
-    false,
-    'centripetal',
-  )
-  const geo = new THREE.TubeGeometry(curve, seg ?? Math.max(12, pts.length * 6), r, 10, false)
-  const m = new THREE.Mesh(geo, toon(color))
-  m.castShadow = true
-  m.receiveShadow = true
-  const a = pts[0]
-  const b = pts[pts.length - 1]
-  return G(m, ball(r, color, { x: a[0], y: a[1], z: a[2] }), ball(r, color, { x: b[0], y: b[1], z: b[2] }))
 }
 
 /** 竖直的多边形板（xy 平面内的轮廓，沿 z 挤出 t，z 居中） */
@@ -113,7 +100,7 @@ const RING_Y = (r: number, t: number) => S_LOW + 0.25 - (r - t)
 function sHook(bz: number, color = STEEL) {
   const top = arcYZ([0, -1.45, 0.2], 1.2, PI * 1.15, 0, 8)
   const bottom = arcYZ([0, -5.2, bz], 1.2, PI, PI * 2.2, 8)
-  return tube([...top, ...bottom], 0.25, color, 48)
+  return cappedTube([...top, ...bottom], 0.25, color, { ...TUBE, seg: 48 })
 }
 
 // ---------- 标签画 ----------
@@ -175,7 +162,7 @@ function canisterVac(p: string[]) {
   const g = new THREE.Group()
   g.add(rbox(26, 21, 32, main, { y: 2.5, z: -13 }, 8))
   g.add(rbox(18, 2, 16, sub, { y: 22.6, z: -15 }, 1.5))
-  g.add(tube([[0, 24, -21], [0, 28, -18.5], [0, 28, -11.5], [0, 24, -9]], 1.1, sub))
+  g.add(cappedTube([[0, 24, -21], [0, 28, -18.5], [0, 28, -11.5], [0, 24, -9]], 1.1, sub, TUBE))
   for (const s of [-1, 1]) {
     g.add(cylX(7.5, 3, sub, s * 13.5, 7.5, -20, 28))
     g.add(cylX(3.4, 3.3, acc, s * 13.6, 7.5, -20, 20))
@@ -189,10 +176,10 @@ function canisterVac(p: string[]) {
   g.add(ball(2.4, sub, { y: 5, z: 23.5 }))
   g.add(rod3([0, 5, 23.5], [0, 76, 15], 1.5, STEEL, 14))
   g.add(rod3([0, 76, 15], [0, 82, 13.5], 2.3, main, 14))
-  g.add(tube([[0, 82, 13.5], [0, 87, 12.4], [0, 91.5, 9.6]], 1.6, main))
+  g.add(cappedTube([[0, 82, 13.5], [0, 87, 12.4], [0, 91.5, 9.6]], 1.6, main, TUBE))
   g.add(rbox(2.6, 2.4, 1.6, acc, { y: 84.5, z: 13.2 }, 0.6))
   // 软管：从机身吸口绕到握把
-  g.add(tube([[0, 14, 4.2], [4, 16, 10], [9, 28, 13], [10.5, 48, 12.5], [8, 66, 11.5], [0.6, 79, 13.8]], 1.8, HOSE, 60))
+  g.add(cappedTube([[0, 14, 4.2], [4, 16, 10], [9, 28, 13], [10.5, 48, 12.5], [8, 66, 11.5], [0.6, 79, 13.8]], 1.8, HOSE, { ...TUBE, seg: 60 }))
   return g
 }
 
@@ -206,7 +193,7 @@ function handyVac(p: string[]) {
   g.add(clearMat(cyl(3.3, 3.3, 9, C.glass, { y: 11.5, z: 0.9 }, 20), C.glass, 0.5))
   g.add(cyl(3.5, 3.5, 8.5, main, { y: 20.5, z: 0.9 }))
   g.add(puck(3.5, 2, main, { y: 28.5, z: 0.9 }))
-  g.add(tube([[0, 22, -1.8], [0, 23.5, -5.4], [0, 29.5, -6.2], [0, 32, -4.2], [0, 29.8, -1.6]], 1.3, sub))
+  g.add(cappedTube([[0, 22, -1.8], [0, 23.5, -5.4], [0, 29.5, -6.2], [0, 32, -4.2], [0, 29.8, -1.6]], 1.3, sub, TUBE))
   g.add(lit(ball(0.5, acc, { y: 26, z: 4.3 }), acc, 0.7))
   return g
 }
@@ -299,7 +286,7 @@ function robotStationMop(p: string[]) {
     g.add(rbox(19, 12.6, 18, shade(main, -0.04), { x, y: 44, z: -17 }, 2.5))
     g.add(rbox(4, 8, 0.6, c, { x, y: 46, z: -7.9 }, 0.3))
     g.add(rbox(19.4, 1.6, 18.4, sub, { x, y: 56.4, z: -17 }, 0.8))
-    g.add(tube([[x - 5, 58, -17], [x - 3.5, 60, -17], [x + 3.5, 60, -17], [x + 5, 58, -17]], 0.7, sub))
+    g.add(cappedTube([[x - 5, 58, -17], [x - 3.5, 60, -17], [x + 3.5, 60, -17], [x + 5, 58, -17]], 0.7, sub, TUBE))
   }
   g.add(P(robot(main, sub, acc), 0, 0.9, 11)).children.at(-1)!.userData.actorPart = true
   return g
@@ -314,7 +301,7 @@ function windowRobot(p: string[]) {
   g.add(puck(9, 1.4, shade(main, -0.06), { y: 6.6 }))
   g.add(rbox(14, 1.6, 3, sub, { y: 7.4 }, 0.8))
   g.add(lit(ball(0.6, acc, { x: 9, y: 7.1, z: 9 }, [1, 0.5, 1]), acc, 0.7))
-  g.add(tube([[0, 4.5, -12.8], [0, 3.5, -15.5], [2, 0.5, -18], [4, 0.45, -18.8]], 0.4, '#e05a3a'))
+  g.add(cappedTube([[0, 4.5, -12.8], [0, 3.5, -15.5], [2, 0.5, -18], [4, 0.45, -18.8]], 0.4, '#e05a3a', TUBE))
   g.add(torus(3.6, 0.45, '#e05a3a', { x: 7.4, y: 0.45, z: -18.6, rx: PI / 2 }))
   g.add(torus(2.6, 0.45, '#e05a3a', { x: 7.4, y: 1.3, z: -18.6, rx: PI / 2 }))
   return g
@@ -352,12 +339,12 @@ function garmentSteamer(p: string[]) {
   g.add(cyl(1.2, 1.2, 120, STEEL, { y: 29, z: -6 }, 12))
   g.add(cyl(1.6, 1.6, 4, sub, { y: 88, z: -6 }, 12))
   g.add(ball(1.4, sub, { y: 149, z: -6 }))
-  g.add(tube([[-18, 141, -6], [-9, 147, -6], [0, 149, -6], [9, 147, -6], [18, 141, -6]], 0.8, sub))
+  g.add(cappedTube([[-18, 141, -6], [-9, 147, -6], [0, 149, -6], [9, 147, -6], [18, 141, -6]], 0.8, sub, TUBE))
   // 喷头架 + 喷头
   g.add(rbox(4, 5, 4, sub, { y: 108, z: -3.2 }, 1))
   g.add(rbox(8, 12, 6, main, { y: 100, z: 1.5 }, 2.5))
   g.add(rbox(7, 10, 0.8, sub, { y: 101, z: 4.5 }, 0.3))
-  g.add(tube([[6, 29, 3], [10, 45, 8], [9, 75, 8], [4, 94, 4], [0, 101, 1.5]], 1.2, HOSE, 48))
+  g.add(cappedTube([[6, 29, 3], [10, 45, 8], [9, 75, 8], [4, 94, 4], [0, 101, 1.5]], 1.2, HOSE, { ...TUBE, seg: 48 }))
   return g
 }
 
@@ -390,9 +377,9 @@ function miteVac(p: string[]) {
   g.add(rbox(15, 7, 28, main, { y: 0.6 }, 3.5))
   g.add(clearMat(rbox(10, 5, 8, C.glass, { y: 7.2, z: -8 }, 2), C.glass, 0.5))
   g.add(rbox(10.4, 1, 1.2, sub, { y: 7.2, z: -12.4 }, 0.4))
-  g.add(tube([[0, 7.3, -2.6], [0, 12.6, -1], [0, 14.4, 4.5], [0, 12.6, 9.5], [0, 7.3, 11]], 1.4, sub))
+  g.add(cappedTube([[0, 7.3, -2.6], [0, 12.6, -1], [0, 14.4, 4.5], [0, 12.6, 9.5], [0, 7.3, 11]], 1.4, sub, TUBE))
   g.add(lit(ball(0.6, acc, { x: 4.5, y: 7.6, z: 10 }), acc, 0.7))
-  g.add(tube([[0, 3.5, -13.8], [0, 3, -15.5], [0, 0.5, -17], [2.5, 0.5, -18]], 0.45, M.char))
+  g.add(cappedTube([[0, 3.5, -13.8], [0, 3, -15.5], [0, 0.5, -17], [2.5, 0.5, -18]], 0.45, M.char, TUBE))
   return g
 }
 
@@ -706,7 +693,7 @@ function paperBundle(p: string[], kind: 'news' | 'carton') {
     g.add(rbox(1, H, 0.6, string, { z: s * (d / 2 + 0.6), y: 0.05 }, 0.25))
   }
   g.add(ball(1.2, string, { y: H + 0.6 }, [1.4, 0.7, 1.4]))
-  g.add(tube([[0, H + 0.8, 0], [3, H + 0.7, 2.5], [5, H + 0.6, 2]], 0.3, string))
+  g.add(cappedTube([[0, H + 0.8, 0], [3, H + 0.7, 2.5], [5, H + 0.6, 2]], 0.3, string, TUBE))
   return g
 }
 
@@ -1014,7 +1001,7 @@ function pinchHangerHanging(p: string[]) {
   const g = new THREE.Group()
   const { zc, y } = PH
   const top = arcYZ([0, -1.45, 0.2], 1.2, PI * 1.2, -PI * 0.15, 8)
-  g.add(tube([...top, [0, -3.4, 3.5], [0, -6, 9.5], [0, -8.6, zc - 1], [0, -10.4, zc]], 0.35, frame, 40))
+  g.add(cappedTube([...top, [0, -3.4, 3.5], [0, -6, 9.5], [0, -8.6, zc - 1], [0, -10.4, zc]], 0.35, frame, { ...TUBE, seg: 40 }))
   g.add(ball(0.8, frame, { y: -10.6, z: zc }))
   const h = PH.s / 2
   for (const [x, z] of [

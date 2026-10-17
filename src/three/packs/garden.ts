@@ -9,8 +9,11 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, holePanel, rectPoly, rng, type AssetCategory, type AssetDef, type StyleTag } from '../kit'
-import { PI, clearMat, lit, noOutline, rod3, taperRod3, type V3 } from '../geo'
+import { PI, clearMat, lit, noOutline, rod3, taperRod3, tube, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, R, type Build } from '../packkit'
+
+/** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
+const TUBE: TubeOpts = { radial: 6 }
 
 const SOIL = '#7f5f45'
 const TERRA = '#c8794e'
@@ -74,13 +77,6 @@ function sprig(len: number, color: string, base: V3, yaw: number, pitch: number,
   return m
 }
 const curveOf = (pts: V3[]) => new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(...p)))
-/** 沿折线的软管 / 藤蔓 / 绳 */
-function tube(pts: V3[], r: number, color: string, seg = 24, radial = 6) {
-  const m = new THREE.Mesh(new THREE.TubeGeometry(curveOf(pts), seg, r, radial, false), toon(color))
-  m.castShadow = true
-  m.receiveShadow = true
-  return m
-}
 function lathe(pts: [number, number][], color: string, seg = 32, phi: [number, number] = [0, PI * 2]) {
   const m = new THREE.Mesh(new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r, y)), seg, phi[0], phi[1]), toon(color))
   m.castShadow = true
@@ -350,7 +346,7 @@ function hangRig(g: THREE.Group, pc: number, yb: number, yt: number, prof: [numb
     const P = (r: number, y: number): V3 => [Math.cos(a) * r, y, pc + Math.sin(a) * r]
     const rim = rAt(prof, H) + 0.3
     g.add(noOutline(rod3([0, -5.8, pc], P(rim, yt + 0.4), 0.2, rope, 5)))
-    g.add(noOutline(tube([P(rim, yt + 0.4), P(rAt(prof, H * 0.6) + 0.35, yb + H * 0.6), P(rAt(prof, H * 0.2) + 0.35, yb + H * 0.2), [0, yb - 1.2, pc]], 0.2, rope, 16, 5)))
+    g.add(noOutline(tube([P(rim, yt + 0.4), P(rAt(prof, H * 0.6) + 0.35, yb + H * 0.6), P(rAt(prof, H * 0.2) + 0.35, yb + H * 0.2), [0, yb - 1.2, pc]], 0.2, rope, { ...TUBE, seg: 16, radial: 5 })))
   }
   g.add(ball(0.9, rope, { y: yb - 1.5, z: pc }))
   for (let k = 0; k < 6; k++) {
@@ -400,11 +396,11 @@ function hangingPotStand(p: string[]) {
   for (let k = 0; k < 3; k++) {
     const a = (k * PI * 2) / 3 + PI / 2
     const P2 = (r: number, y: number): V3 => [Math.cos(a) * r, y, Math.sin(a) * r]
-    g.add(noOutline(tube([P2(rim, HANG_H + 0.4), [Math.cos(a) * 4, HANG_H + 4, 2 + Math.sin(a) * 3], knot], 0.2, rope, 12, 5)))
-    g.add(noOutline(tube([P2(rim, HANG_H + 0.4), P2(rAt(prof, 6) + 0.35, 6), P2(rAt(prof, 2) + 0.35, 2), P2(HANG_R * 0.45, 0.2)], 0.2, rope, 12, 5)))
+    g.add(noOutline(tube([P2(rim, HANG_H + 0.4), [Math.cos(a) * 4, HANG_H + 4, 2 + Math.sin(a) * 3], knot], 0.2, rope, { ...TUBE, seg: 12, radial: 5 })))
+    g.add(noOutline(tube([P2(rim, HANG_H + 0.4), P2(rAt(prof, 6) + 0.35, 6), P2(rAt(prof, 2) + 0.35, 2), P2(HANG_R * 0.45, 0.2)], 0.2, rope, { ...TUBE, seg: 12, radial: 5 })))
   }
   g.add(ball(0.9, rope, { x: knot[0], y: knot[1], z: knot[2] }))
-  g.add(noOutline(tube([knot, [0, HANG_H + 3, HANG_R + 1], [0, HANG_H * 0.5, HANG_R + 2.2], [0, 0.4, HANG_R + 3.4]], 0.2, rope, 12, 5)))
+  g.add(noOutline(tube([knot, [0, HANG_H + 3, HANG_R + 1], [0, HANG_H * 0.5, HANG_R + 2.2], [0, 0.4, HANG_R + 3.4]], 0.2, rope, { ...TUBE, seg: 12, radial: 5 })))
   g.add(torus(1.4, 0.3, STEEL, { y: 0.3, z: HANG_R + 4.8, rx: PI / 2 }))
   return g
 }
@@ -440,7 +436,7 @@ function selfWater(p: string[]) {
   g.add(band(8.85, 9.0, 8.3, 8.4, 1.0, pot, 0))
   g.add(clearMat(cyl(8.3, 8.2, 4.2, WATER, { y: 0.4 }), WATER, 0.55))
   g.add(cup(10.4, 9.4, 13, 0.8, pot, { y: 8 }))
-  g.add(noOutline(tube([[0, 8.2, 0], [0.8, 5.5, 0.6], [-0.6, 3, -0.4], [1.5, 1, 1.2]], 0.35, '#efe3c8')))
+  g.add(noOutline(tube([[0, 8.2, 0], [0.8, 5.5, 0.6], [-0.6, 3, -0.4], [1.5, 1, 1.2]], 0.35, '#efe3c8', TUBE)))
   const ix = -6.4
   const iz = 4.2
   g.add(clearMat(cyl(0.7, 0.7, 23, GLASS, { x: ix, y: 0.6, z: iz }, 12), GLASS, 0.45))
@@ -558,7 +554,7 @@ function trail(g: THREE.Group, cx: number, cz: number, a: number, rIn: number, r
   const s = Math.sin(a)
   const P = (r: number, y: number): V3 => [cx + c * r, y, cz + s * r]
   const pts = [P(rIn - 1.5, soilY + 0.2), P(rimR + 0.1, rimY + 1.2), P(rimR + 1.3, rimY - 1), P(rimR + 1.9, (rimY + endY) / 2), P(rimR + 1.7 + rand(), endY)]
-  g.add(noOutline(tube(pts, 0.22, STEM, 28, 5)))
+  g.add(noOutline(tube(pts, 0.22, STEM, { ...TUBE, seg: 28, radial: 5 })))
   const curve = curveOf(pts)
   const n = Math.max(3, Math.floor((rimY - endY + 6) / 3.2))
   for (let k = 1; k <= n; k++) {
@@ -637,7 +633,7 @@ function ivyHoop(p: string[]) {
       const th = th0 + ((th1 - th0) * k) / 8
       pts.push([Math.cos(th) * R, yc + Math.sin(th) * R, 0.6 * Math.sin(k * 1.4 + s)])
     }
-    g.add(noOutline(tube(pts, 0.2, '#6f8a4a', 40, 5)))
+    g.add(noOutline(tube(pts, 0.2, '#6f8a4a', { ...TUBE, seg: 40, radial: 5 })))
     const curve = curveOf(pts)
     for (let k = 1; k <= 11; k++) {
       const q = curve.getPoint(k / 11.5)
@@ -648,7 +644,7 @@ function ivyHoop(p: string[]) {
   for (const a of [0.6, 2.4, 4.3]) {
     const b: V3 = [Math.cos(a) * 4, y, Math.sin(a) * 4]
     const e: V3 = [Math.cos(a) * 8.4, y - 3, Math.sin(a) * 8.4]
-    g.add(noOutline(tube([b, [Math.cos(a) * 7, y + 1.8, Math.sin(a) * 7], e], 0.2, '#6f8a4a', 10, 5)))
+    g.add(noOutline(tube([b, [Math.cos(a) * 7, y + 1.8, Math.sin(a) * 7], e], 0.2, '#6f8a4a', { ...TUBE, seg: 10, radial: 5 })))
     g.add(sprig(3.6, cols[0], e, yawTo(a), 0.5, 0.8))
     g.add(sprig(3.2, cols[1], [Math.cos(a) * 7, y + 1.6, Math.sin(a) * 7], yawTo(a + 0.6), 0.1, 0.8))
   }
@@ -749,11 +745,11 @@ function orchid(p: string[]) {
   scatter(g, P.r, y - 0.1, 16, BARK, 41, 0.75)
   for (const [yaw, len, pitch] of [[PI / 2, 11, -0.1], [-PI / 2, 10.5, -0.05], [PI / 2 + 0.25, 8, -0.35], [-PI / 2 + 0.3, 7.5, -0.4]] as [number, number, number][])
     g.add(sprig(len, '#3f8a4a', [0, y + 0.8, 0], yaw, pitch, 0.42, 0.16))
-  for (const a of [0.9, 2.6]) g.add(noOutline(tube([[Math.cos(a), y + 0.6, Math.sin(a)], [Math.cos(a) * 5, y + 1.6, Math.sin(a) * 5], [Math.cos(a) * 6.9, y - 0.6, Math.sin(a) * 6.9], [Math.cos(a) * 7.3, y - 3.6, Math.sin(a) * 7.3]], 0.35, '#c9d6b8', 12, 6)))
+  for (const a of [0.9, 2.6]) g.add(noOutline(tube([[Math.cos(a), y + 0.6, Math.sin(a)], [Math.cos(a) * 5, y + 1.6, Math.sin(a) * 5], [Math.cos(a) * 6.9, y - 0.6, Math.sin(a) * 6.9], [Math.cos(a) * 7.3, y - 3.6, Math.sin(a) * 7.3]], 0.35, '#c9d6b8', { ...TUBE, seg: 12, radial: 6 })))
   // 支架 + 夹子
   g.add(rod3([-0.8, y - 4, -1.2], [-0.8, y + 34, -1.2], 0.28, BAMBOO, 6))
   const spike: V3[] = [[0.2, y + 0.8, -0.4], [-0.4, y + 14, -0.9], [-0.5, y + 27, -0.9], [-0.3, y + 32.5, 1.2], [0, y + 33, 6], [0.3, y + 30.5, 10.5], [0.5, y + 26.5, 13.5]]
-  g.add(noOutline(tube(spike, 0.28, '#5d7a3a', 30, 5)))
+  g.add(noOutline(tube(spike, 0.28, '#5d7a3a', { ...TUBE, seg: 30, radial: 5 })))
   for (const yy of [y + 12, y + 24]) g.add(rbox(1.0, 1.0, 1.4, C.lemon, { x: -0.6, y: yy, z: -1.0 }, 0.3))
   const curve = curveOf(spike)
   for (let k = 0; k < 5; k++) {
@@ -924,7 +920,7 @@ function tomato(p: string[]) {
     const r = 3.2 - k * 0.15
     pts.push([Math.cos(k * 1.1) * r, yy, Math.sin(k * 1.1) * r])
   }
-  g.add(noOutline(tube(pts, 0.5, '#6f9a4a', 60, 6)))
+  g.add(noOutline(tube(pts, 0.5, '#6f9a4a', { ...TUBE, seg: 60, radial: 6 })))
   const rand = rng(71)
   const fruit = ['#e8463a', '#e8463a', '#ef6a3a', '#f29a3a', '#9ccf5a']
   for (let k = 1; k <= 9; k++) {
@@ -990,7 +986,7 @@ function strawberryJar(p: string[]) {
   for (const a of [0.6, 2.5, 4.4]) {
     const r0 = rAt(prof, 26) + 0.6
     const top: V3 = [Math.cos(a) * r0, 25.2, Math.sin(a) * r0]
-    g.add(noOutline(tube([[Math.cos(a) * 3, y + 3, Math.sin(a) * 3], [Math.cos(a) * (r0 - 0.5), 27, Math.sin(a) * (r0 - 0.5)], top], 0.1, '#6f9a4a', 8, 4)))
+    g.add(noOutline(tube([[Math.cos(a) * 3, y + 3, Math.sin(a) * 3], [Math.cos(a) * (r0 - 0.5), 27, Math.sin(a) * (r0 - 0.5)], top], 0.1, '#6f9a4a', { ...TUBE, seg: 8, radial: 4 })))
     berry(g, top)
   }
   for (let j = 0; j < 5; j++) g.add(noOutline(sprig(1.0, C.white, [1.5, y + 5, -1], (j * PI * 2) / 5, -0.3, 0.7)))
@@ -1004,7 +1000,7 @@ function sunflower(p: string[]) {
   const g = P.g
   const y = P.soil
   const top: V3 = [0, y + 40, 1.5]
-  g.add(noOutline(tube([[0, y - 0.5, 0], [0.5, y + 15, 0.2], [-0.3, y + 30, 0.6], top], 0.6, '#6a9a3a', 20, 8)))
+  g.add(noOutline(tube([[0, y - 0.5, 0], [0.5, y + 15, 0.2], [-0.3, y + 30, 0.6], top], 0.6, '#6a9a3a', { ...TUBE, seg: 20, radial: 8 })))
   const rand = rng(91)
   for (let k = 0; k < 6; k++) {
     const yy = y + 6 + k * 5.6
@@ -1218,8 +1214,8 @@ function canBig(p: string[]) {
   const P = (k: number): V3 => [s1[0] + d.x * k, s1[1] + d.y * k, 0]
   g.add(taperRod3(P(-0.6), P(2.2), 0.9, 2.6, acc, 12))
   g.add(taperRod3(P(2.1), P(2.5), 2.5, 2.5, shade(acc, -0.15), 12))
-  g.add(tube([[6.5, H - 0.6, 0], [4.5, H + 8, 0], [-3.5, H + 8.5, 0], [-7.5, H - 0.6, 0]], 0.7, body, 20, 8))
-  g.add(tube([[-R + 0.4, H - 3, 0], [-R - 4.5, H - 6, 0], [-R - 4.5, 9, 0], [-R + 0.4, 5, 0]], 0.65, body, 20, 8))
+  g.add(tube([[6.5, H - 0.6, 0], [4.5, H + 8, 0], [-3.5, H + 8.5, 0], [-7.5, H - 0.6, 0]], 0.7, body, { ...TUBE, seg: 20, radial: 8 }))
+  g.add(tube([[-R + 0.4, H - 3, 0], [-R - 4.5, H - 6, 0], [-R - 4.5, 9, 0], [-R + 0.4, 5, 0]], 0.65, body, { ...TUBE, seg: 20, radial: 8 }))
   return g
 }
 /** 小号塑料浇水壶：圆肚、细长壶嘴 */
@@ -1235,7 +1231,7 @@ function canSmall(p: string[]) {
   const d = new THREE.Vector3(s1[0] - s0[0], s1[1] - s0[1], 0).normalize()
   const P = (k: number): V3 => [s1[0] + d.x * k, s1[1] + d.y * k, 0]
   g.add(taperRod3(P(-0.4), P(1.6), 0.6, 1.6, acc, 12))
-  g.add(tube([[3.2, 12.3, 0], [1.5, 18, 0], [-4, 17.5, 0], [-5.8, 11, 0]], 0.75, body, 16, 8))
+  g.add(tube([[3.2, 12.3, 0], [1.5, 18, 0], [-4, 17.5, 0], [-5.8, 11, 0]], 0.75, body, { ...TUBE, seg: 16, radial: 8 }))
   return g
 }
 
@@ -1277,7 +1273,7 @@ function rake(p: string[]) {
   g.add(rod3([-4.2, 1.5, 0], [-2, 1.5, 0], 1.2, STEEL, 14))
   g.add(rod3([-2.2, 1.5, 0], [0.2, 1.5, 0], 0.45, head, 8))
   g.add(rod3([0, 1.5, -4.4], [0, 1.5, 4.4], 0.5, head, 8))
-  for (const z of [-4, -2, 0, 2, 4]) g.add(tube([[0, 1.5, z], [3, 1.8, z * 1.12], [5.8, 1.3, z * 1.22], [6.6, 0.35, z * 1.28]], 0.33, head, 12, 6))
+  for (const z of [-4, -2, 0, 2, 4]) g.add(tube([[0, 1.5, z], [3, 1.8, z * 1.12], [5.8, 1.3, z * 1.22], [6.6, 0.35, z * 1.28]], 0.33, head, { ...TUBE, seg: 12, radial: 6 }))
   return g
 }
 /** 修枝剪：平放 */
@@ -1336,7 +1332,7 @@ function apronHang(p: string[]) {
   const [main, acc] = p
   const g = new THREE.Group()
   const z = 1.2
-  g.add(noOutline(tube([[-11, -22, z], [-6, -6, 0.9], [0, -0.4, 0.8], [6, -6, 0.9], [11, -22, z]], 0.4, acc, 24, 6)))
+  g.add(noOutline(tube([[-11, -22, z], [-6, -6, 0.9], [0, -0.4, 0.8], [6, -6, 0.9], [11, -22, z]], 0.4, acc, { ...TUBE, seg: 24, radial: 6 })))
   g.add(rbox(26, 26, 0.8, main, { y: -48, z }, 0.4))
   g.add(rbox(54, 50, 1.0, main, { y: -98, z }, 0.5))
   g.add(rbox(40, 16, 0.5, acc, { y: -76, z: z + 0.55 }, 0.3))
@@ -1433,7 +1429,7 @@ function toolRack(p: string[]) {
   g.add(rod3([x, yp - 11.8, zc], [x, yp - 13.6, zc], 1.05, STEEL, 12))
   g.add(rod3([x, yp - 13.5, zc], [x, yp - 15.5, zc], 0.4, blade, 6))
   g.add(rod3([x - 3.6, yp - 15.5, zc], [x + 3.6, yp - 15.5, zc], 0.45, blade, 6))
-  for (const dx of [-3.3, -1.1, 1.1, 3.3]) g.add(tube([[x + dx, yp - 15.5, zc], [x + dx * 1.1, yp - 18.5, zc + 0.5], [x + dx * 1.2, yp - 21, zc + 1.6]], 0.3, blade, 8, 5))
+  for (const dx of [-3.3, -1.1, 1.1, 3.3]) g.add(tube([[x + dx, yp - 15.5, zc], [x + dx * 1.1, yp - 18.5, zc + 0.5], [x + dx * 1.2, yp - 21, zc + 1.6]], 0.3, blade, { ...TUBE, seg: 8, radial: 5 }))
   // 修枝剪
   x = 0
   peg(x)
@@ -1456,7 +1452,7 @@ function toolRack(p: string[]) {
   x = 23
   peg(x)
   g.add(cyl(2.6, 2.6, 3.6, ROPE, { x, y: yp + 0.3 - 1.8, z: zc + 0.6, rx: PI / 2 }, 18))
-  g.add(noOutline(tube([[x + 2.4, yp - 0.4, zc + 1.2], [x + 2.8, yp - 6, zc + 1.4], [x + 2.2, yp - 12, zc + 1.1]], 0.15, ROPE, 8, 4)))
+  g.add(noOutline(tube([[x + 2.4, yp - 0.4, zc + 1.2], [x + 2.8, yp - 6, zc + 1.4], [x + 2.2, yp - 12, zc + 1.1]], 0.15, ROPE, { ...TUBE, seg: 8, radial: 4 })))
   return g
 }
 
@@ -1515,7 +1511,7 @@ function clipLight(p: string[]) {
   g.add(torus(1.0, 0.25, STEEL, { y: 2.0, z: -2.0, ry: PI / 2 }))
   g.add(rbox(3.2, 0.4, 2.2, RUBBER, { y: 1.0, z: 2.3 }, 0.15))
   const neck: V3[] = [[0, 3.4, -2.6], [0, 12, -3.6], [0, 24, -2.2], [0, 31.5, 2], [0, 33.6, 6]]
-  g.add(tube(neck, 0.5, shade(body, -0.05), 30, 8))
+  g.add(tube(neck, 0.5, shade(body, -0.05), { ...TUBE, seg: 30, radial: 8 }))
   const curve = curveOf(neck)
   for (let k = 1; k < 12; k++) {
     const q = curve.getPoint(k / 12)
@@ -1524,7 +1520,7 @@ function clipLight(p: string[]) {
   }
   g.add(rbox(18, 1.6, 3.4, body, { y: 33.2, z: 7.4 }, 0.6))
   g.add(lit(rbox(16.4, 0.4, 2.4, light, { y: 32.95, z: 7.4 }, 0.15), light, 0.9))
-  g.add(noOutline(tube([[0, 0.6, -3.8], [0, 0.3, -6], [3, 0.3, -7.5], [7, 0.3, -7]], 0.25, RUBBER, 12, 5)))
+  g.add(noOutline(tube([[0, 0.6, -3.8], [0, 0.3, -6], [3, 0.3, -7.5], [7, 0.3, -7]], 0.25, RUBBER, { ...TUBE, seg: 12, radial: 5 })))
   return g
 }
 /** 落地植物补光灯：三脚架 + 立杆 + 两只灯板（发光） */
@@ -1545,7 +1541,7 @@ function floorLight(p: string[]) {
   const tilt = 0.35
   const nrm = new THREE.Vector3(0, Math.cos(tilt), Math.sin(tilt))
   for (const s of [-1, 1]) {
-    g.add(tube([[s * 17, 148, 0], [s * 19.5, 146, 2], [s * 19.5, 142.5, 4.2]], 0.5, body, 12, 6))
+    g.add(tube([[s * 17, 148, 0], [s * 19.5, 146, 2], [s * 19.5, 142.5, 4.2]], 0.5, body, { ...TUBE, seg: 12, radial: 6 }))
     const c = new THREE.Vector3(s * 19.5, 140.8, 5)
     g.add(rbox(15, 1.8, 11, body, { x: c.x, y: c.y - 0.9, z: c.z, rx: tilt }, 0.6))
     const pc = c.clone().addScaledVector(nrm, -1.0)
@@ -1590,7 +1586,7 @@ function hoseReel(p: string[]) {
     for (let x = x0; x <= x1 + 0.01; x += 1.68) g.add(torus(r, 0.8, hose, { x, y: ax, ry: PI / 2 }))
   g.add(rod3([18.6, ax, 0], [18.6, ax + 8, 3], 0.7, STEEL, 8))
   g.add(rod3([18.6, ax + 8, 3], [22.6, ax + 8, 3], 0.9, acc))
-  g.add(tube([[3, ax - 12.4, 4], [3, 6, 16], [6, 1.1, 22], [11, 1.0, 25.5]], 0.8, hose, 20, 8))
+  g.add(tube([[3, ax - 12.4, 4], [3, 6, 16], [6, 1.1, 22], [11, 1.0, 25.5]], 0.8, hose, { ...TUBE, seg: 20, radial: 8 }))
   g.add(capsAlong([11, 1.2, 25.5], [17, 1.2, 28], 1.2, acc))
   g.add(capsAlong([16, 1.0, 28], [14.5, 1.0, 31.5], 0.9, acc))
   return g

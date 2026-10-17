@@ -10,8 +10,11 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, glow, rectPoly, rng, slab, type AssetCategory, type AssetDef, type FormTag, type Poly } from '../kit'
-import { G, P, PI, batten, box3, cylX, cylZ, ghost, rod3, type V3 } from '../geo'
+import { G, P, PI, batten, box3, cappedTube, cylX, cylZ, ghost, rod3, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, R, type Build, type Dims, type Pal } from '../packkit'
+
+/** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
+const TUBE: TubeOpts = { seg: { per: 6, min: 12 } }
 
 const STEEL = '#c3c7cc'
 const PAGE = '#fbf6ea'
@@ -56,21 +59,6 @@ function forms(family: string, name: string, category: AssetCategory, pals: Pal[
 
 /** 两点之间的扁条（截面 w × t，w 沿 x；小圆角） */
 const slat = (a: V3, b: V3, w: number, t: number, color: string) => batten(a, b, w, t, color, Math.min(0.3, t * 0.4, w * 0.4))
-
-/** 平滑管子（钩子、线、提手），两端加圆头 */
-function tube(pts: V3[], r: number, color: string, closed = false, seg?: number) {
-  const curve = new THREE.CatmullRomCurve3(
-    pts.map((p) => new THREE.Vector3(...p)),
-    closed,
-    'centripetal',
-  )
-  const geo = new THREE.TubeGeometry(curve, seg ?? Math.max(12, pts.length * 6), r, 8, closed)
-  const m = new THREE.Mesh(geo, toon(color))
-  m.castShadow = true
-  m.receiveShadow = true
-  if (closed) return m
-  return G(m, ball(r, color, { x: pts[0][0], y: pts[0][1], z: pts[0][2] }), ball(r, color, { x: pts[pts.length - 1][0], y: pts[pts.length - 1][1], z: pts[pts.length - 1][2] }))
-}
 
 /** 圆弧上的点；'yz' 平面里 z = cos a、y = sin a；'xy' 平面里 x = cos a、y = sin a */
 function arc(c: V3, r: number, a0: number, a1: number, n: number, plane: 'xy' | 'yz' = 'xy'): V3[] {
@@ -161,13 +149,13 @@ const S_UNDER = S_LOW - 0.3
 function sHook(color = STEEL) {
   const top = arc([0, -1.45, 0.2], 1.2, PI * 1.15, 0, 8, 'yz')
   const bottom = arc([0, -5.2, S_Z], 1.2, PI, PI * 2.2, 8, 'yz')
-  return tube([...top, ...bottom], 0.25, color, false, 48)
+  return cappedTube([...top, ...bottom], 0.25, color, { ...TUBE, seg: 48 })
 }
 
 /** 衣架钩：钩环内顶在 y ≈ -0.5，脖子落到 (0, -5, zc) */
 function hangerHook(zc: number, color = STEEL) {
   const top = arc([0, -1.45, 0.2], 1.2, PI * 1.2, -PI * 0.15, 8, 'yz')
-  return tube([...top, [0, -3.2, (1.4 + zc) / 2], [0, -4.4, zc], [0, -5.4, zc]], 0.22, color, false, 40)
+  return cappedTube([...top, [0, -3.2, (1.4 + zc) / 2], [0, -4.4, zc], [0, -5.4, zc]], 0.22, color, { ...TUBE, seg: 40 })
 }
 
 // ---------- 配色 ----------
@@ -402,7 +390,7 @@ function pegBasketBody(p: string[], hang: boolean) {
   if (hang)
     for (const sx of [-1, 1]) {
       const x = sx * 8
-      g.add(tube([[x, -3.2, 0.8], [x, -2.6, 0.2], [x, -2.6, -1]], 0.25, main, false, 10))
+      g.add(cappedTube([[x, -3.2, 0.8], [x, -2.6, 0.2], [x, -2.6, -1]], 0.25, main, { ...TUBE, seg: 10 }))
     }
   return g
 }
@@ -851,7 +839,7 @@ function doorHooks(p: string[]) {
   for (let i = 0; i < 5; i++) {
     const y = y0 + 4 + i * 9
     for (const sx of [-1, 1]) {
-      g.add(tube([[sx * 1.6, y + 3, 0.6], [sx * 3, y + 1, 1.5], [sx * 3.6, y, 3], [sx * 3.8, y + 1.5, 3.8]], 0.3, main, false, 12))
+      g.add(cappedTube([[sx * 1.6, y + 3, 0.6], [sx * 3, y + 1, 1.5], [sx * 3.6, y, 3], [sx * 3.8, y + 1.5, 3.8]], 0.3, main, { ...TUBE, seg: 12 }))
     }
   }
   return g
@@ -872,7 +860,7 @@ function umbrellaHook(p: string[]) {
   const [board, metal] = p
   const g = new THREE.Group()
   g.add(rbox(UH.w, 8, 1.6, board, { y: UH.mount + 4, z: -4.2 }, 0.5))
-  for (const x of [-12, 0, 12]) g.add(tube([[x, UH.mount + 8, -3.4], [x, UH.mount + 6, -1.5], [x, UH.mount + 4, 1.5], [x, UH.mount + 3.6, 3.8], [x, UH.mount + 5.2, 4.8]], 0.5, metal, false, 14))
+  for (const x of [-12, 0, 12]) g.add(cappedTube([[x, UH.mount + 8, -3.4], [x, UH.mount + 6, -1.5], [x, UH.mount + 4, 1.5], [x, UH.mount + 3.6, 3.8], [x, UH.mount + 5.2, 4.8]], 0.5, metal, { ...TUBE, seg: 14 }))
   return g
 }
 const UMBRELLA_HOOK = asset('sf-umbrella-hook', '伞挂', 'storage', [UH.w, 10.3, 9], SHELF_PALS, umbrellaHook, {
@@ -922,7 +910,7 @@ function phonesBody(p: string[], mic: boolean) {
     g.add(cylX(2.2, 0.4, acc, x + s * 2.0, -7.5, 0, 24))
   }
   if (mic) {
-    g.add(tube([[-Rr - 2, -8.5, 1], [-Rr - 2.2, -11.5, 3.5], [-Rr + 0.5, -14.2, 6], [-Rr + 3.2, -14.8, 6.6]], 0.35, band))
+    g.add(cappedTube([[-Rr - 2, -8.5, 1], [-Rr - 2.2, -11.5, 3.5], [-Rr + 0.5, -14.2, 6], [-Rr + 3.2, -14.8, 6.6]], 0.35, band, TUBE))
     g.add(capsule(0.9, 1, acc, { x: -Rr + 4.2, y: -14.8 - 1.9, z: 6.6 }))
   }
   return g
@@ -994,7 +982,7 @@ function toteHanging(p: string[]) {
   body.position.set(0, top - 36, 0.3 + 5)
   const g = G(body, sHook())
   for (const z of [0.3 + 0.3 + 0.4, 0.3 + 10 - 0.6 - 0.4])
-    g.add(tube([[-7, top - 0.5, z], [-3.5, top + 11, (z + S_Z) / 2], [0, -5.55, S_Z], [3.5, top + 11, (z + S_Z) / 2], [7, top - 0.5, z]], 0.6, strap, false, 30))
+    g.add(cappedTube([[-7, top - 0.5, z], [-3.5, top + 11, (z + S_Z) / 2], [0, -5.55, S_Z], [3.5, top + 11, (z + S_Z) / 2], [7, top - 0.5, z]], 0.6, strap, { ...TUBE, seg: 30 }))
   return g
 }
 
@@ -1015,7 +1003,7 @@ function backpackBody(p: string[], handle: boolean) {
   g.add(ball(0.6, acc, { x: 6, y: 16.6, z: 9.2 }))
   g.add(rbox(16, 1, 0.6, acc, { y: 30, z: 6.9 }, 0.2))
   if (handle) g.add(torus(3, 0.5, trim, { y: 39.6, z: -4 }, PI))
-  for (const s of [-1, 1]) g.add(tube([[s * 7, 37, -6.6], [s * 8.5, 28, -9.2], [s * 9, 14, -9.2], [s * 8, 4, -6.6]], 1, trim))
+  for (const s of [-1, 1]) g.add(cappedTube([[s * 7, 37, -6.6], [s * 8.5, 28, -9.2], [s * 9, 14, -9.2], [s * 8, 4, -6.6]], 1, trim, TUBE))
   return g
 }
 function backpackHanging(p: string[]) {
@@ -1024,7 +1012,7 @@ function backpackHanging(p: string[]) {
   const top = -14
   body.position.set(0, top - 40, 0.3 + 10.2)
   const g = G(body, sHook())
-  g.add(tube([[-3, top - 0.6, 6.5], [-2.2, -8, (6.5 + S_Z) / 2 + 0.5], [0, -5.65, S_Z], [2.2, -8, (6.5 + S_Z) / 2 + 0.5], [3, top - 0.6, 6.5]], 0.5, trim, false, 24))
+  g.add(cappedTube([[-3, top - 0.6, 6.5], [-2.2, -8, (6.5 + S_Z) / 2 + 0.5], [0, -5.65, S_Z], [2.2, -8, (6.5 + S_Z) / 2 + 0.5], [3, top - 0.6, 6.5]], 0.5, trim, { ...TUBE, seg: 24 }))
   return g
 }
 
@@ -1385,7 +1373,7 @@ function basketHanging(p: string[]) {
   const top = -16
   body.position.set(0, top - 14, 0.3 + 9.3)
   const g = G(body, sHook())
-  g.add(tube([[-8, top - 0.6, 0.9], [-4, -10, 1.8], [0, -5.55, S_Z], [4, -10, 1.8], [8, top - 0.6, 0.9]], 0.4, sec, false, 24))
+  g.add(cappedTube([[-8, top - 0.6, 0.9], [-4, -10, 1.8], [0, -5.55, S_Z], [4, -10, 1.8], [8, top - 0.6, 0.9]], 0.4, sec, { ...TUBE, seg: 24 }))
   return g
 }
 
@@ -1804,7 +1792,7 @@ function treeHook(a: number, y: number, r: number, color: string) {
   const c = Math.cos(a)
   const s = Math.sin(a)
   const pt = (d: number, yy: number): V3 => [c * d, yy, s * d]
-  return tube([pt(1.4, y + 5), pt(r * 0.55, y + 1.6), pt(r, y), pt(r + 1.5, y + 1), pt(r + 2, y + 3.2)], 0.5, color, false, 24)
+  return cappedTube([pt(1.4, y + 5), pt(r * 0.55, y + 1.6), pt(r, y), pt(r + 1.5, y + 1), pt(r + 2, y + 3.2)], 0.5, color, { ...TUBE, seg: 24 })
 }
 function coatTree(p: string[]) {
   const [wood, metal, acc] = p
@@ -1863,7 +1851,7 @@ function hallTree(p: string[]) {
   g.add(rbox(HT.w - 4, 2, 22, wood, { y: HT.hatY - 2, z: zb + 1.5 + 11 }, 0.5))
   for (const x of HT_HOOKS) {
     g.add(cylZ(1.2, 0.6, acc, x, HT.hookY + 4, zb + 1.8, 12))
-    g.add(tube([[x, HT.hookY + 4, zb + 1.6], [x, HT.hookY + 1.4, zb + 4.5], [x, HT.hookY, zb + 6.8], [x, HT.hookY + 1, zb + 8.4], [x, HT.hookY + 2.6, zb + 8.8]], 0.45, metal, false, 20))
+    g.add(cappedTube([[x, HT.hookY + 4, zb + 1.6], [x, HT.hookY + 1.4, zb + 4.5], [x, HT.hookY, zb + 6.8], [x, HT.hookY + 1, zb + 8.4], [x, HT.hookY + 2.6, zb + 8.8]], 0.45, metal, { ...TUBE, seg: 20 }))
   }
   return g
 }
@@ -1891,7 +1879,7 @@ function doorRack(p: string[]) {
     g.add(rbox(2.4, 0.6, 4.6, metal, { x, y: y0 + 11.4, z: -2.6 }, 0.2))
     g.add(rbox(2.4, 3, 0.6, metal, { x, y: y0 + 8.4, z: -4.6 }, 0.2))
   }
-  for (const x of DR_X) g.add(tube([[x, y0 + 7.4, 0.5], [x, y0 + 5, 1.6], [x, y0 + 3.2, 3.2], [x, y0 + 4.2, 4.6], [x, y0 + 5.6, 5]], 0.35, metal, false, 16))
+  for (const x of DR_X) g.add(cappedTube([[x, y0 + 7.4, 0.5], [x, y0 + 5, 1.6], [x, y0 + 3.2, 3.2], [x, y0 + 4.2, 4.6], [x, y0 + 5.6, 5]], 0.35, metal, { ...TUBE, seg: 16 }))
   return g
 }
 const DOOR_RACK = asset('sf-door-rack', '门后挂衣架', 'entrance', [45, 10.3, 9.1], ACC_PALS, doorRack, {
@@ -2211,7 +2199,7 @@ function apronHanging(p: string[]) {
   const g = G(sHook())
   const bibTop = -16
   const waist = bibTop - 22
-  g.add(tube([[-10, bibTop - 0.5, S_Z], [-6, -9, S_Z], [0, S_LOW + 0.25 + 0.3, S_Z], [6, -9, S_Z], [10, bibTop - 0.5, S_Z]], 0.3, strap, false, 24))
+  g.add(cappedTube([[-10, bibTop - 0.5, S_Z], [-6, -9, S_Z], [0, S_LOW + 0.25 + 0.3, S_Z], [6, -9, S_Z], [10, bibTop - 0.5, S_Z]], 0.3, strap, { ...TUBE, seg: 24 }))
   g.add(rbox(24, 22, 0.8, main, { y: waist, z: S_Z }, 0.3))
   g.add(rbox(54, 46, 1.0, main, { y: waist - 45, z: S_Z }, 0.4))
   g.add(rbox(20, 10, 0.4, acc, { y: waist - 22, z: S_Z + 0.6 }, 0.15))
@@ -2267,7 +2255,7 @@ function crossBody(p: string[]) {
 function crossStanding(p: string[]) {
   const [, sec] = p
   const g = crossBody(p)
-  g.add(tube([[-11.3, 13.4, 0], [-14, 6, -6], [-12, 0.5, -14], [0, 0.5, -20], [12, 0.5, -14], [14, 6, -6], [11.3, 13.4, 0]], 0.5, sec, false, 40))
+  g.add(cappedTube([[-11.3, 13.4, 0], [-14, 6, -6], [-12, 0.5, -14], [0, 0.5, -20], [12, 0.5, -14], [14, 6, -6], [11.3, 13.4, 0]], 0.5, sec, { ...TUBE, seg: 40 }))
   return ground(g)
 }
 function crossHanging(p: string[]) {
@@ -2276,7 +2264,7 @@ function crossHanging(p: string[]) {
   const top = -40
   body.position.set(0, top - 15, 0.3 + 3.8)
   const g = G(body, sHook())
-  g.add(tube([[-11.3, top - 1.6, 4.1], [-8, top + 14, 3.4], [-3, -10, S_Z + 0.2], [0, -5.75, S_Z], [3, -10, S_Z + 0.2], [8, top + 14, 3.4], [11.3, top - 1.6, 4.1]], 0.5, sec, false, 40))
+  g.add(cappedTube([[-11.3, top - 1.6, 4.1], [-8, top + 14, 3.4], [-3, -10, S_Z + 0.2], [0, -5.75, S_Z], [3, -10, S_Z + 0.2], [8, top + 14, 3.4], [11.3, top - 1.6, 4.1]], 0.5, sec, { ...TUBE, seg: 40 }))
   return g
 }
 function handBag(p: string[]) {
@@ -2295,7 +2283,7 @@ function handHanging(p: string[]) {
   const top = -20
   body.position.set(0, top - 22.6, 0.3 + 6.5)
   const g = G(body, sHook())
-  for (const z of [0.3 + 6.5 - 3.6, 0.3 + 6.5 + 3.6]) g.add(tube([[-8, top - 0.6, z], [-5, top + 8, (z + S_Z) / 2], [0, -5.6, S_Z], [5, top + 8, (z + S_Z) / 2], [8, top - 0.6, z]], 0.7, sec, false, 30))
+  for (const z of [0.3 + 6.5 - 3.6, 0.3 + 6.5 + 3.6]) g.add(cappedTube([[-8, top - 0.6, z], [-5, top + 8, (z + S_Z) / 2], [0, -5.6, S_Z], [5, top + 8, (z + S_Z) / 2], [8, top - 0.6, z]], 0.7, sec, { ...TUBE, seg: 30 }))
   return g
 }
 

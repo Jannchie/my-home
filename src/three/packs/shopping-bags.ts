@@ -11,10 +11,13 @@
 //     这样 snapToHook 算出来的朝向是正前方（顶点平均在 x = 0），而鼠标只有落在某个钩子上才算命中。
 
 import * as THREE from 'three'
-import { ball, capsule, cyl, rbox, shade, toon, torus, tray } from '../toon'
+import { ball, capsule, cyl, rbox, shade, torus, tray } from '../toon'
 import { C, paintPanel, rng, type AssetCategory, type AssetDef, type FormTag, type Poly } from '../kit'
-import { G, P, PI, cylZFrom, type V3 } from '../geo'
+import { G, P, PI, cappedTube, cylZFrom, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, R, type Build, type Dims, type Pal } from '../packkit'
+
+/** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
+const TUBE: TubeOpts = { seg: { per: 8, min: 16 } }
 
 // ---------- 定义 ----------
 
@@ -36,21 +39,6 @@ function asset(id: string, name: string, category: AssetCategory, [w, d, h]: Dim
 }
 
 // ---------- 小工具 ----------
-
-/** 平滑管子（提手、绳、钩子），两端圆头 */
-function tube(pts: V3[], r: number, color: string, seg?: number) {
-  const curve = new THREE.CatmullRomCurve3(
-    pts.map((p) => new THREE.Vector3(...p)),
-    false,
-    'centripetal',
-  )
-  const m = new THREE.Mesh(new THREE.TubeGeometry(curve, seg ?? Math.max(16, pts.length * 8), r, 8, false), toon(color))
-  m.castShadow = true
-  m.receiveShadow = true
-  const a = pts[0]
-  const b = pts[pts.length - 1]
-  return G(m, ball(r, color, { x: a[0], y: a[1], z: a[2] }), ball(r, color, { x: b[0], y: b[1], z: b[2] }))
-}
 
 const box = new THREE.Box3()
 function measure(o: THREE.Object3D) {
@@ -236,17 +224,13 @@ function onigiri(at: V3, rz = 0) {
 
 /** 立着的袋子上的一只提手：从 (±a, y0) 拱到 y0 + h，在 z 平面里 */
 function loop(a: number, y0: number, h: number, z: number, r: number, color: string) {
-  return tube(
-    [
+  return cappedTube([
       [-a, y0, z],
       [-a * 0.85, y0 + h * 0.65, z],
       [0, y0 + h, z],
       [a * 0.85, y0 + h * 0.65, z],
       [a, y0, z],
-    ],
-    r,
-    color,
-  )
+    ], r, color, TUBE)
 }
 
 /** 挂起时的提手内顶 y、搭在钩上的 z（前后两只提手错开一点，免得重合） */
@@ -257,17 +241,13 @@ const HANG_Z = 1.85
 function hangLoop(a: number, yTop: number, z: number, r: number, color: string, dz: number) {
   const apex = HANG_TOP + r
   const zc = HANG_Z + dz
-  return tube(
-    [
+  return cappedTube([
       [-a, yTop, z],
       [-a * 0.45, (yTop + apex) / 2 - 1, (z + zc) / 2],
       [0, apex, zc],
       [a * 0.45, (yTop + apex) / 2 - 1, (z + zc) / 2],
       [a, yTop, z],
-    ],
-    r,
-    color,
-  )
+    ], r, color, TUBE)
 }
 
 /** 前后两只挂起的提手 */
@@ -403,8 +383,7 @@ function toteLying(p: string[]) {
   const g = new THREE.Group()
   g.add(rbox(36, 2.6, 36, main, {}, 1.1))
   g.add(
-    tube(
-      [
+    cappedTube([
         [-8, 3.4, -15],
         [-7.5, 2.4, -19],
         [-6, 0.9, -26],
@@ -412,10 +391,7 @@ function toteLying(p: string[]) {
         [6, 0.9, -26],
         [7.5, 2.4, -19],
         [8, 3.4, -15],
-      ],
-      0.9,
-      handle,
-    ),
+      ], 0.9, handle, TUBE),
   )
   g.add(totePrint(p, 22, 18, { y: 2.9, z: 12, rx: -PI / 2 }))
   return grounded(g)
@@ -556,17 +532,13 @@ function regiHanging(r: number): Build {
     const yTop = cy + r * 0.9
     for (const s of [-1, 1]) {
       g.add(
-        tube(
-          [
+        cappedTube([
             [s * r * 0.6, yTop, zc - r * 0.25],
             [s * r * 0.3, (yTop + HANG_TOP) / 2, (zc + HANG_Z) / 2 - 0.5],
             [s * 0.4, HANG_TOP + 0.45, HANG_Z + s * 0.3],
             [s * r * 0.15, (yTop + HANG_TOP) / 2 - 1, zc + 1],
             [s * r * 0.45, yTop, zc + r * 0.3],
-          ],
-          0.45,
-          shade(main, -0.04),
-        ),
+          ], 0.45, shade(main, -0.04), TUBE),
       )
     }
     return g
@@ -668,7 +640,7 @@ function netOver(rx: number, ry: number, rz: number, cy: number, cz: number, col
       const th = th0 + ((th1 - th0) * k) / 8
       pts.push([rx * Math.cos(th) * Math.cos(ph), cy + ry * Math.sin(th), cz + rz * Math.cos(th) * Math.sin(ph)])
     }
-    g.add(tube(pts, 0.22, color, 32))
+    g.add(cappedTube(pts, 0.22, color, { ...TUBE, seg: 32 }))
   }
   for (const th of [-0.35, 0.35]) {
     const t = torus(1, 0.2 / Math.max(rx, rz), color, { y: cy + ry * Math.sin(th), z: cz, rx: PI / 2 })
@@ -716,17 +688,13 @@ function netHanging(p: string[]) {
   g.add(netOver(7.6, 13, 7, cy, cz, cord, -1.45, 1.4))
   g.add(ball(1.2, cord, { y: -14.4, z: cz }))
   g.add(
-    tube(
-      [
+    cappedTube([
         [-0.5, -14.4, cz],
         [-2, -7, (cz + HANG_Z) / 2 + 0.5],
         [0, HANG_TOP + 0.5, HANG_Z],
         [2, -7, (cz + HANG_Z) / 2 + 0.5],
         [0.5, -14.4, cz],
-      ],
-      0.5,
-      handle,
-    ),
+      ], 0.5, handle, TUBE),
   )
   return g
 }
@@ -796,17 +764,13 @@ const BIG: AssetDef[] = [
 const HOOK_R = 0.36
 const REST_Z = 3.0
 function jArm(x: number, y: number, z0: number, color: string) {
-  return tube(
-    [
+  return cappedTube([
       [x, y, z0],
       [x, y, 2.2],
       [x, y + 0.08, 3.2],
       [x, y + 0.9, 3.95],
       [x, y + 2.1, 4.15],
-    ],
-    HOOK_R,
-    color,
-  )
+    ], HOOK_R, color, TUBE)
 }
 
 /** 磁吸挂钩（原始坐标：磁铁座背面 z = 0，横臂在 y = 0） */

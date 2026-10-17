@@ -7,8 +7,11 @@
 import * as THREE from 'three'
 import { ball, cup, cyl, puck, rbox, shade, torus } from '../toon'
 import { C, G, holePanel, shell, type AssetDef } from '../kit'
-import { PI, mesh, strut, strutBox, type V3 } from '../geo'
+import { PI, cappedTube, mesh, strut, strutBox, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, R, type Pal } from '../packkit'
+
+/** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
+const TUBE: TubeOpts = { seg: { per: 10, min: 16 }, group: true }
 
 // ---------- 配色 ----------
 
@@ -19,18 +22,6 @@ const CHROME = M.silver
 const INK = M.black
 
 // ---------- 小工具 ----------
-
-/** 平滑弯管（经过所有点），两端补圆头 */
-function pipe(pts: V3[], r: number, color: string, closed = false) {
-  const curve = new THREE.CatmullRomCurve3(
-    pts.map((p) => new THREE.Vector3(...p)),
-    closed,
-    'centripetal',
-  )
-  const g = G(mesh(new THREE.TubeGeometry(curve, Math.max(16, pts.length * 10), r, 8, closed), color))
-  if (!closed) for (const p of [pts[0], pts[pts.length - 1]]) g.add(ball(r, color, { x: p[0], y: p[1], z: p[2] }))
-  return g
-}
 
 /** 包围盒对齐：xz 居中、底面贴 0 */
 function fit(g: THREE.Group) {
@@ -337,7 +328,7 @@ const woodBar = (h: number) => (p: string[]) => {
     [11, h + 13, -15.5],
     [18, h + 12, -9],
   ]
-  g.add(pipe(arc, 1.8, wood))
+  g.add(cappedTube(arc, 1.8, wood, TUBE))
   for (const [x, z] of [
     [-14, -12],
     [0, -16],
@@ -448,7 +439,7 @@ function vanityStool(p: string[]) {
     const a = (i / 4) * PI * 2 + PI / 4
     const c = Math.cos(a)
     const s = Math.sin(a)
-    g.add(pipe([[c * 13, 34.5, s * 13], [c * 15.5, 20, s * 15.5], [c * 17.5, 1, s * 17.5]], 1, leg))
+    g.add(cappedTube([[c * 13, 34.5, s * 13], [c * 15.5, 20, s * 15.5], [c * 17.5, 1, s * 17.5]], 1, leg, TUBE))
   }
   g.add(torus(15.8, 0.6, leg, { y: 15, rx: PI / 2 }))
   return g
@@ -479,7 +470,7 @@ const ergo = (foot: boolean) => (p: string[]) => {
   g.add(rbox(52, 2.4, 50, shade(frame, -0.05), { y: 40.6, z: 2 }, 1))
   g.add(rbox(50, 6, 48, seat, { y: 42, z: 3 }, 2.6))
   // 靠背骨架：从座下往后上弯
-  g.add(pipe([[0, 38, -10], [0, 44, -22], [0, 52, -26]], 2.4, frame))
+  g.add(cappedTube([[0, 38, -10], [0, 44, -22], [0, 52, -26]], 2.4, frame, TUBE))
   const backH = foot ? 60 : 52
   const back = new THREE.Group()
   const hw = 24
@@ -493,7 +484,7 @@ const ergo = (foot: boolean) => (p: string[]) => {
     [hw - 2, 0, 0],
     [0, -1, 1],
   ]
-  back.add(pipe(loop, 1.4, frame, true))
+  back.add(cappedTube(loop, 1.4, frame, { ...TUBE, closed: true }))
   back.add(rbox(hw * 2 - 4, backH - 2, 0.8, net, { y: 0.5, z: -0.6 }, 0.3))
   back.add(rbox(32, 9, 3.4, frame, { y: 8, z: 1.4 }, 1.4))
   back.add(strutBox([0, backH - 2, -1.6], [0, backH + 10, -2.4], 5, 2, frame))
@@ -521,8 +512,8 @@ function meshSimple(p: string[]) {
   const g = G(starBase(28, 41, frame))
   g.add(rbox(18, 4, 18, frame, { y: 37 }, 1))
   g.add(rbox(46, 6, 45, seat, { y: 41, z: 2 }, 2.6))
-  for (const s of [-1, 1]) g.add(pipe([[s * 16, 42, -12], [s * 18, 46, -22], [s * 20, 60, -25], [s * 19, 86, -27]], 1.3, frame))
-  g.add(pipe([[-19, 86, -27], [0, 88, -28.5], [19, 86, -27]], 1.3, frame))
+  for (const s of [-1, 1]) g.add(cappedTube([[s * 16, 42, -12], [s * 18, 46, -22], [s * 20, 60, -25], [s * 19, 86, -27]], 1.3, frame, TUBE))
+  g.add(cappedTube([[-19, 86, -27], [0, 88, -28.5], [19, 86, -27]], 1.3, frame, TUBE))
   g.add(hinge([0, 48, -24], -0.1, rbox(37, 38, 0.8, net, { y: 48, z: -24.5 }, 0.3)))
   g.add(hinge([0, 48, -24], -0.1, rbox(37, 2.4, 1.4, frame, { y: 49, z: -24.4 }, 0.5)))
   return g
@@ -613,11 +604,11 @@ function bentwood(p: string[]) {
   const g = G(cyl(21, 21, 3, wood, { y: 42 }, 28), cyl(19, 19, 0.8, seatC, { y: 44.8 }, 28))
   // 后腿一直弯上去成靠背
   for (const s of [-1, 1]) {
-    g.add(pipe([[s * 15, 0, -18], [s * 14, 30, -15], [s * 14, 44, -15], [s * 15, 70, -19], [s * 12, 86, -21]], 1.4, wood))
+    g.add(cappedTube([[s * 15, 0, -18], [s * 14, 30, -15], [s * 14, 44, -15], [s * 15, 70, -19], [s * 12, 86, -21]], 1.4, wood, TUBE))
     g.add(strut([s * 15, 0, 18], [s * 13, 42.5, 13], 1.4, wood, 1.6))
   }
-  g.add(pipe([[-12, 86, -21], [-6, 88.5, -22.5], [0, 89, -23], [6, 88.5, -22.5], [12, 86, -21]], 1.4, wood))
-  g.add(pipe([[-14, 58, -16.5], [-9, 64, -19], [0, 66, -20], [9, 64, -19], [14, 58, -16.5]], 1, wood))
+  g.add(cappedTube([[-12, 86, -21], [-6, 88.5, -22.5], [0, 89, -23], [6, 88.5, -22.5], [12, 86, -21]], 1.4, wood, TUBE))
+  g.add(cappedTube([[-14, 58, -16.5], [-9, 64, -19], [0, 66, -20], [9, 64, -19], [14, 58, -16.5]], 1, wood, TUBE))
   g.add(torus(15.4, 0.9, wood, { y: 20, rx: PI / 2 }))
   return g
 }

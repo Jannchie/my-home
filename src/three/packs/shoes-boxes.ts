@@ -10,8 +10,11 @@
 import * as THREE from 'three'
 import { ball, capsule, cyl, puck, rbox, shade, toon, torus } from '../toon'
 import { C, SWING_OPEN, holePanel, movable, paintPanel, rectPoly, rng, shell, slab, type AssetCategory, type AssetDef, type Poly } from '../kit'
-import { G, P, PI, clearDeep, cylX, rod3, type V3 } from '../geo'
+import { G, P, PI, cappedTube, clearDeep, cylX, rod3, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, R, type Build, type Dims, type Pal } from '../packkit'
+
+/** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
+const TUBE: TubeOpts = { seg: { per: 4, min: 16 } }
 
 type Tab = [number, number][]
 
@@ -41,23 +44,6 @@ function asset(id: string, name: string, category: AssetCategory, [w, d, h]: Dim
 }
 
 // ---------- 小工具 ----------
-
-/** 平滑管子（鞋口包边、鞋带、提手），开放的两端加圆头 */
-function tube(pts: V3[], r: number, color: string, closed = false, seg?: number) {
-  const curve = new THREE.CatmullRomCurve3(
-    pts.map((p) => new THREE.Vector3(...p)),
-    closed,
-    'centripetal',
-  )
-  const geo = new THREE.TubeGeometry(curve, seg ?? Math.max(16, pts.length * 4), r, 8, closed)
-  const m = new THREE.Mesh(geo, toon(color))
-  m.castShadow = true
-  m.receiveShadow = true
-  if (closed) return m
-  const a = pts[0]
-  const b = pts[pts.length - 1]
-  return G(m, ball(r, color, { x: a[0], y: a[1], z: a[2] }), ball(r, color, { x: b[0], y: b[1], z: b[2] }))
-}
 
 /** 竖直的异形板：poly 是 [z, y] 轮廓，板厚 t 沿 x，放在 x0..x0+t */
 function sidePlate(poly: [number, number][], t: number, color: string, x0: number) {
@@ -307,14 +293,14 @@ function shoeLast(s: LastSpec) {
     for (let i = open.length - 1; i >= 0; i--) pts.push(at(open[i].u, open[i].phiMax))
     for (let i = 0; i < open.length; i++) pts.push(at(open[i].u, PI - open[i].phiMax))
     pts.push(at(uOpen, PI / 2))
-    return tube(pts, r, color, true, 80)
+    return cappedTube(pts, r, color, { ...TUBE, closed: true, seg: 80 })
   }
 
   /** 横跨鞋面的拱形（包边、鞋头接缝） */
   function archTube(u: number, r: number, color: string, off = 0, p0 = 0, p1 = PI) {
     const pts: V3[] = []
     for (let i = 0; i <= 12; i++) pts.push(at(u, p0 + ((p1 - p0) * i) / 12, off))
-    return tube(pts, r, color)
+    return cappedTube(pts, r, color, TUBE)
   }
 
   /** 横跨鞋面的带子（魔术贴、凉鞋带）：宽 wz、厚 th，贴在 b 拱上 */
@@ -563,7 +549,7 @@ function loafer(z: ShoeSize, p: string[]) {
   for (let i = 0; i <= 8; i++) seam.push(L.at(0.7 + i * 0.03, PI / 2 + 0.75, 0.05))
   for (let i = 8; i >= 0; i--) seam.push(L.at(0.7 + i * 0.03, PI / 2 - 0.75, 0.05))
   seam.splice(9, 0, L.at(0.97, PI / 2, 0.05))
-  g.add(tube(seam, 0.1, shade(p[0], -0.18)))
+  g.add(cappedTube(seam, 0.1, shade(p[0], -0.18), TUBE))
   return g
 }
 
@@ -754,7 +740,7 @@ function sandal(z: ShoeSize, p: string[]) {
   for (let i = 10; i >= 0; i--) loop.push([L.cx(i * 0.036) + L.a(i * 0.036) + 0.4, hy, L.z(i * 0.036)])
   loop.push([0, hy, L.z(0) - 0.5])
   for (let i = 0; i <= 10; i++) loop.push([L.cx(i * 0.036) - L.a(i * 0.036) - 0.4, hy, L.z(i * 0.036)])
-  g.add(tube(loop, 0.32 * k + 0.1, p[0]))
+  g.add(cappedTube(loop, 0.32 * k + 0.1, p[0], TUBE))
   for (const side of [-1, 1]) {
     const x = L.cx(0.36) + side * (L.a(0.36) + 0.4)
     g.add(rbox(0.5, 3.6 * k, 1.6 * k, p[0], { x, y: L.top0(0.36) - 0.2, z: L.z(0.36) }, 0.15))
@@ -774,7 +760,7 @@ function flipflop(z: ShoeSize, p: string[]) {
   for (const side of [-1, 1]) {
     const end: V3 = [L.cx(0.46) + side * (L.a(0.46) - 0.2), t0 + 0.1, L.z(0.46)]
     const mid: V3 = [(post[0] + end[0]) / 2 + side * 0.6, t0 + 2.2 * k, (post[2] + end[2]) / 2]
-    g.add(tube([post, mid, end], 0.42 * k + 0.1, p[2]))
+    g.add(cappedTube([post, mid, end], 0.42 * k + 0.1, p[2], TUBE))
   }
   return g
 }
@@ -851,7 +837,7 @@ function geta(z: ShoeSize, p: string[]) {
   g.add(cyl(0.45, 0.45, 1.3 * k + 0.1, p[1], { y: top - 0.1, z: bl * 0.3 }, 10))
   for (const side of [-1, 1]) {
     const end: V3 = [side * (bw / 2 - 0.9), top + 0.15, -bl * 0.06]
-    g.add(tube([front, [side * bw * 0.3, top + 2.6 * k, bl * 0.12], end], 0.55 * k + 0.15, p[1]))
+    g.add(cappedTube([front, [side * bw * 0.3, top + 2.6 * k, bl * 0.12], end], 0.55 * k + 0.15, p[1], TUBE))
     g.add(ball(0.5, shade(p[1], -0.2), { x: end[0], y: top + 0.1, z: end[2] }, [1, 0.5, 1]))
   }
   g.add(ball(0.55, p[2], { x: 0, y: front[1] + 0.2, z: front[2] }))
@@ -867,7 +853,7 @@ function zori(z: ShoeSize, p: string[]) {
   const front: V3 = [0, t0 + 1.2 * k, L.z(0.84)]
   for (const side of [-1, 1]) {
     const end: V3 = [side * (L.a(0.4) - 0.3), t0 + 0.2, L.z(0.4)]
-    g.add(tube([front, [side * L.a(0.6) * 0.6, t0 + 2.6 * k, L.z(0.62)], end], 0.6 * k + 0.15, p[1]))
+    g.add(cappedTube([front, [side * L.a(0.6) * 0.6, t0 + 2.6 * k, L.z(0.62)], end], 0.6 * k + 0.15, p[1], TUBE))
   }
   g.add(ball(0.6, p[1], { x: 0, y: front[1], z: front[2] }))
   return g

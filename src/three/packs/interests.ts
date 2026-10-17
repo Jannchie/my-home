@@ -49,7 +49,7 @@ const F = (b: (p: string[]) => THREE.Group) => (p: string[]) => fit(b(p))
 // ---------- 小工具 ----------
 
 /** 沿折线的管子（萨克斯、小号），半径从 r0 渐变到 r1，关节处补球 */
-function tube(pts: V3[], r0: number, r1: number, color: string, seg = 12) {
+function taperPath(pts: V3[], r0: number, r1: number, color: string, seg = 12) {
   const g = new THREE.Group()
   let total = 0
   const acc = [0]
@@ -556,9 +556,9 @@ function saxStand(p: string[]) {
   const [brass, stand, key] = p
   const g = new THREE.Group()
   const sax = new THREE.Group()
-  sax.add(tube([[-9, 72, 0], [-6, 74, 0], [-2, 71, 0], [0, 66, 0]], 0.6, 1.1, brass))
+  sax.add(taperPath([[-9, 72, 0], [-6, 74, 0], [-2, 71, 0], [0, 66, 0]], 0.6, 1.1, brass))
   sax.add(cyl(0.7, 0.9, 4, DARK, {}, 10).translateX(-10.5).translateY(71).rotateZ(1.2))
-  sax.add(tube([[0, 66, 0], [0.3, 46, 0], [1, 24, 0], [3, 14, 0], [8, 11, 0], [12, 15, 0], [13, 24, 0], [13.6, 31, 0]], 1.4, 4.2, brass, 16))
+  sax.add(taperPath([[0, 66, 0], [0.3, 46, 0], [1, 24, 0], [3, 14, 0], [8, 11, 0], [12, 15, 0], [13, 24, 0], [13.6, 31, 0]], 1.4, 4.2, brass, 16))
   sax.add(cup(8, 4.3, 7, 0.4, brass, { x: 13.7, y: 30.5 }))
   for (let i = 0; i < 6; i++) sax.add(ball(0.8, key, { x: 0.6 - i * 0.05, y: 56 - i * 4.5, z: 1.8 + i * 0.25 }, [1, 1, 0.5]))
   for (let i = 0; i < 4; i++) sax.add(ball(1.2, brass, { x: 9 + i * 1.2, y: 15 + i * 3, z: 2.6 }, [1, 1, 0.5]))
@@ -578,10 +578,10 @@ function trumpet(p: string[]) {
   const g = new THREE.Group()
   const y1 = 5
   const y2 = 9.5
-  g.add(tube([[-17, y2, 0], [-6, y2, 0]], 0.55, 0.65, brass))
-  g.add(tube([[-6, y1, 0], [10, y1, 0], [16, y1, 0]], 0.65, 1.2, brass))
-  g.add(tube([[-6, y2, 0], [-10, y2 - 0.2, 0], [-12.5, (y1 + y2) / 2, 0], [-10, y1 + 0.2, 0], [-6, y1, 0]], 0.65, 0.65, brass))
-  g.add(tube([[4, y2, 0], [12, y2, 0], [15, (y1 + y2) / 2, 0], [12, y1 + 0.2, 0]], 0.6, 0.6, brass))
+  g.add(taperPath([[-17, y2, 0], [-6, y2, 0]], 0.55, 0.65, brass))
+  g.add(taperPath([[-6, y1, 0], [10, y1, 0], [16, y1, 0]], 0.65, 1.2, brass))
+  g.add(taperPath([[-6, y2, 0], [-10, y2 - 0.2, 0], [-12.5, (y1 + y2) / 2, 0], [-10, y1 + 0.2, 0], [-6, y1, 0]], 0.65, 0.65, brass))
+  g.add(taperPath([[4, y2, 0], [12, y2, 0], [15, (y1 + y2) / 2, 0], [12, y1 + 0.2, 0]], 0.6, 0.6, brass))
   g.add(cup(6, 1.2, 14, 0.3, brass, { x: 16, y: y1, rz: -PI / 2 }))
   for (let i = 0; i < 3; i++) {
     const x = -3 + i * 2.6
@@ -2557,7 +2557,7 @@ function rodPath(L: number, lean: number, bend: number, n = 16): V3[] {
 /** 一根钓竿（沿给定路径）：握把、卷线器、导环 [竿色, 握把, 卷线器] */
 function rodAlong(pts: V3[], blank: string, grip: string, reel: string, sea: boolean) {
   const g = new THREE.Group()
-  g.add(tube(pts, sea ? 1.1 : 0.8, 0.12, blank, 8))
+  g.add(taperPath(pts, sea ? 1.1 : 0.8, 0.12, blank, 8))
   const at = (s: number): THREE.Vector3 => {
     const f = s * (pts.length - 1)
     const i = Math.min(pts.length - 2, Math.floor(f))

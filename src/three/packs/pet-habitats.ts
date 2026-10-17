@@ -10,8 +10,11 @@
 import * as THREE from 'three'
 import { ball, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, glow, holePanel, rng, shell, type AssetDef } from '../kit'
-import { P, PI, litDeep, noOutlineDeep, rod3, type V3 } from '../geo'
+import { P, PI, cappedTube, litDeep, noOutlineDeep, rod3, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, R, type Build, type Dims, type Pal } from '../packkit'
+
+/** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
+const TUBE: TubeOpts = { seg: { per: 6, min: 12 }, radial: 10, group: true }
 
 const WOOD = '#d9b07a'
 const WOODD = '#a8774a'
@@ -96,18 +99,6 @@ function wireSteel(color: string) {
   const hsl = { h: 0, s: 0, l: 0 }
   c.getHSL(hsl)
   return '#' + new THREE.Color().setHSL(hsl.h, Math.min(hsl.s, 0.2), Math.min(0.6, Math.max(0.44, hsl.l - 0.34))).getHexString()
-}
-
-/** 平滑管子（提手、软管、树枝） */
-function tube(pts: V3[], r: number, color: string, seg?: number, caps = true) {
-  const curve = new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(...p)), false, 'centripetal')
-  const m = new THREE.Mesh(new THREE.TubeGeometry(curve, seg ?? Math.max(12, pts.length * 6), r, 10, false), toon(color))
-  m.castShadow = true
-  m.receiveShadow = true
-  if (!caps) return G(m)
-  const a = pts[0]
-  const b = pts[pts.length - 1]
-  return G(m, ball(r, color, { x: a[0], y: a[1], z: a[2] }), ball(r, color, { x: b[0], y: b[1], z: b[2] }))
 }
 
 /** 圆弧杆：TorusGeometry 的一段，默认在 xy 平面里从 +x 开始逆时针转 arc */
@@ -611,14 +602,14 @@ function hamsterCastle(p: string[]) {
     [px - 10.5, 9, 3],
     [px - 7.6, 6, 2],
   ]
-  g.add(clear(tube(tubeA, 2.6, C.glass, 40, false), C.glass, 0.3))
+  g.add(clear(cappedTube(tubeA, 2.6, C.glass, { ...TUBE, seg: 40, caps: false }), C.glass, 0.3))
   const tubeB: V3[] = [
     [tx + 7, ty + 9, 0],
     [tx + 13, ty + 12, 0],
     [4, ty + 9, -4],
     [6, ty + 0.4, -6],
   ]
-  g.add(clear(tube(tubeB, 2.6, C.glass, 40, false), C.glass, 0.3))
+  g.add(clear(cappedTube(tubeB, 2.6, C.glass, { ...TUBE, seg: 40, caps: false }), C.glass, 0.3))
   for (const [x, y, z, rx, rz] of [
     [cx + W / 2 + 0.6, 17, 4, 0, PI / 2],
     [px - 7.9, 6.2, 2, 0, PI / 2 + 0.6],
@@ -664,7 +655,7 @@ function hamsterCarrier(p: string[]) {
   for (let i = 0; i < 6; i++) for (const yy of [3.3, 6.3, 9.3]) holes.push({ kind: 'circle', x: -6.5 + i * 2.6, y: yy + 0.6, r: 0.6 })
   g.add(holePanel(W + 0.4, D + 0.4, 0.8, lidC, holes, { y: 14.2, z: (D + 0.4) / 2, rx: -PI / 2 }, 1.2))
   // 提手
-  g.add(tube([[-5, 14.6, 0], [-4.2, 18.6, 0], [4.2, 18.6, 0], [5, 14.6, 0]], 0.55, lidC, 24))
+  g.add(cappedTube([[-5, 14.6, 0], [-4.2, 18.6, 0], [4.2, 18.6, 0], [5, 14.6, 0]], 0.55, lidC, { ...TUBE, seg: 24 }))
   for (const s of [-1, 1]) g.add(rbox(1.6, 2.4, 1.6, base, { x: s * (W / 2 + 0.2), y: 6, z: 0 }, 0.4))
   g.add(P(hamster('#f0c08a'), -2, 3.4, 1, 0, 0.3))
   return g
@@ -855,9 +846,9 @@ function birdcageStand(p: string[]) {
   g.add(ball(2.2, stand, { y: 60 }), ball(2.2, stand, { y: H - 2 }))
   // 挂臂：从立杆顶端弯过去，末端朝下是挂钩
   const ax = 22
-  g.add(tube([[0, H - 6, 0], [3, H + 1, 0], [10, H + 3.5, 0], [ax - 3, H + 2.5, 0], [ax, H - 0.5, 0]], 0.9, stand, 40))
+  g.add(cappedTube([[0, H - 6, 0], [3, H + 1, 0], [10, H + 3.5, 0], [ax - 3, H + 2.5, 0], [ax, H - 0.5, 0]], 0.9, stand, { ...TUBE, seg: 40 }))
   // 支撑涡卷
-  g.add(tube([[0, H - 22, 0], [5, H - 16, 0], [10, H - 7, 0], [13, H + 1, 0]], 0.5, stand, 30))
+  g.add(cappedTube([[0, H - 22, 0], [5, H - 16, 0], [10, H - 7, 0], [13, H + 1, 0]], 0.5, stand, { ...TUBE, seg: 30 }))
   g.add(rod3([ax, H - 0.5, 0], [ax, H - 3.2, 0], 0.5, stand, 8))
   g.add(torus(1.4, 0.4, stand, { x: ax, y: H - 4.2, ry: PI / 2 }))
   const { g: cage, ringTop } = domeBirdcage([acc, wireC, acc], 'buncho-white')
@@ -885,7 +876,7 @@ function squareCage(p: string[], W: number, D: number, HW: number, birds: [BirdK
   g.add(P(frameXY(0, y0 + 4 + HW * 0.22, W * 0.32, HW * 0.36, 0.32, wireC), 0, 0, z1))
   for (const s of [-1, 1]) g.add(P(frameXY(s * W * 0.33, y0 + 4.5, 8, 7, 0.28, wireC, false), 0, 0, z1))
   const top = y0 + HW
-  g.add(tube([[-W / 6, top, 0], [-W / 6 + 1, top + 4, 0], [W / 6 - 1, top + 4, 0], [W / 6, top, 0]], 0.45, wireC, 24))
+  g.add(cappedTube([[-W / 6, top, 0], [-W / 6 + 1, top + 4, 0], [W / 6 - 1, top + 4, 0], [W / 6, top, 0]], 0.45, wireC, { ...TUBE, seg: 24 }))
   // 栖木（前后方向）
   const pa = y0 + HW * 0.32
   const pb = y0 + HW * 0.58
@@ -1061,13 +1052,13 @@ function terrarium(p: string[]) {
   g.add(cyl(2, 2, 2.5, frame, { x: lx, y: H + 7.6, z: -4 }, 16))
   g.add(litDeep(ball(2.6, BULB, { x: lx, y: H + 3.6, z: -4 }), BULB, 1))
   g.add(litDeep(cyl(6.8, 6.8, 0.2, '#ffcf8a', { x: lx, y: H + 0.55, z: -4 }, 32), '#ffcf8a', 0.6))
-  g.add(tube([[lx, H + 8.6, -4], [lx - 6, H + 9.5, -8], [-W / 2 + 4, H + 1.5, -D / 2 + 3]], 0.3, '#2a2a2e', 24))
+  g.add(cappedTube([[lx, H + 8.6, -4], [lx - 6, H + 9.5, -8], [-W / 2 + 4, H + 1.5, -D / 2 + 3]], 0.3, '#2a2a2e', { ...TUBE, seg: 24 }))
   // 底砂、软木背景、树枝、躲避石、水盆、多肉
   g.add(rbox(W - 2.4, 4, D - 2.4, '#e3c08a', { y: 5 }, 0.5))
   g.add(rbox(W - 3, H - 12, 1.2, cork, { y: 9, z: -D / 2 + 1.5 }, 0.5))
   const rand = rng(5)
   for (let i = 0; i < 12; i++) g.add(ball(2 + rand() * 2, shade(cork, (rand() - 0.5) * 0.12), { x: (rand() - 0.5) * (W - 10), y: 12 + rand() * (H - 22), z: -D / 2 + 2 }, [1, 1, 0.35]))
-  g.add(tube([[-W / 2 + 6, 9, -10], [-10, 18, -6], [6, 24, -12], [18, 30, -14]], 1.1, '#8a6a4a', 30))
+  g.add(cappedTube([[-W / 2 + 6, 9, -10], [-10, 18, -6], [6, 24, -12], [18, 30, -14]], 1.1, '#8a6a4a', { ...TUBE, seg: 30 }))
   g.add(ball(6.5, '#9b8f84', { x: -16, y: 9, z: 2 }, [1.35, 0.8, 1]))
   g.add(noOutlineDeep(rbox(4, 3.6, 0.4, '#3a3230', { x: -16, y: 9, z: 8.6 }, 1.5)))
   g.add(cup(4.2, 3.6, 1.8, 0.5, '#8d8478', { x: 10, y: 9, z: 9 }))
@@ -1108,7 +1099,7 @@ function turtleTank(p: string[]) {
   // 晒背灯：夹子夹在后沿，灯臂伸到晒台上方
   const lx = 22
   g.add(rbox(4, 5, 2.6, lamp, { x: lx, y: H - 3, z: -D / 2 }, 0.5))
-  g.add(tube([[lx, H + 2, -D / 2], [lx, H + 11, -D / 2 + 1], [lx, H + 14, -D / 2 + 6], [lx, H + 13, -2]], 0.5, lamp, 30))
+  g.add(cappedTube([[lx, H + 2, -D / 2], [lx, H + 11, -D / 2 + 1], [lx, H + 14, -D / 2 + 6], [lx, H + 13, -2]], 0.5, lamp, { ...TUBE, seg: 30 }))
   g.add(P(cup(6, 3.5, 6.5, 0.4, lamp), lx, H + 14.5, 0, PI))
   g.add(litDeep(ball(2.3, BULB, { x: lx, y: H + 10.2, z: 0 }), BULB, 1))
   return g
@@ -1234,7 +1225,7 @@ function dogCrate(p: string[], W: number, D: number, H: number) {
   const z1 = D / 2 + 0.5
   g.add(P(frameXY(W * 0.12, H * 0.45, D * 0.75, H * 0.72, 0.42, wireC), 0, 0, z1))
   g.add(P(frameXY(0, H * 0.45, D * 0.6, H * 0.7, 0.42, wireC), W / 2 + 0.5, 0, 0, 0, PI / 2))
-  g.add(tube([[-6, H, 0], [-5, H + 3.2, 0], [5, H + 3.2, 0], [6, H, 0]], 0.7, '#3d3f44', 24))
+  g.add(cappedTube([[-6, H, 0], [-5, H + 3.2, 0], [5, H + 3.2, 0], [6, H, 0]], 0.7, '#3d3f44', { ...TUBE, seg: 24 }))
   g.add(puck(Math.min(W, D) * 0.45, 4, cushion, { y: 1.6 }))
   g.add(rbox(W - 6, 3.4, D - 6, cushion, { y: 1.6 }, 1.6))
   // 骨头玩具
@@ -1296,7 +1287,7 @@ function catCarrier(p: string[]) {
     for (const s of [-1, 1]) g.add(rod3([s * W / 2, y, -D / 2], [s * W / 2, y, D / 2], 0.5, trim, 8))
   }
   for (const sx2 of [-1, 1]) for (const sz of [-1, 1]) g.add(rod3([sx2 * W / 2, 0.4, sz * D / 2], [sx2 * W / 2, H - 0.4, sz * D / 2], 0.5, trim, 8))
-  for (const s of [-1, 1]) g.add(tube([[-9, H, s * 6], [-6, H + 9, s * 6], [6, H + 9, s * 6], [9, H, s * 6]], 0.8, trim, 24))
+  for (const s of [-1, 1]) g.add(cappedTube([[-9, H, s * 6], [-6, H + 9, s * 6], [6, H + 9, s * 6], [9, H, s * 6]], 0.8, trim, { ...TUBE, seg: 24 }))
   g.add(rbox(3, 2, 0.6, STEEL, { x: W / 2 - 8, y: H - 2.5, z: D / 2 + 0.2 }, 0.3))
   // 猫在里面探头
   const cat = new THREE.Group()

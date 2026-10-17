@@ -14,8 +14,11 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, face, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, glow, paintAbstract, paintFlower, paintLandscape, paintPanel, rectPoly, rng, shell, type AssetCategory, type AssetDef, type Fx } from '../kit'
-import { PI, clearDeep, noOutlineDeep, rod3, type V3 } from '../geo'
+import { PI, clearDeep, noOutlineDeep, rod3, tube, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, R, type Build, type Pal } from '../packkit'
+
+/** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
+const TUBE: TubeOpts = { radial: 6 }
 
 const GOLD = '#e3b549'
 const BRASS = '#d9b45a'
@@ -41,14 +44,6 @@ function litAll<T extends THREE.Object3D>(o: T, color: string, k = 0.8): T {
     c.userData.noOutline = true
   })
   return o
-}
-/** 平滑曲线管（绳子、花环、弯钩） */
-function tube(pts: V3[], r: number, color: string, seg = 24, radial = 6) {
-  const curve = new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(...p)))
-  const m = new THREE.Mesh(new THREE.TubeGeometry(curve, seg, r, radial, false), toon(color))
-  m.castShadow = true
-  m.receiveShadow = true
-  return m
 }
 /** 旋转体：[r, y] 轮廓 */
 function lathe(pts: [number, number][], color: string, seg = 32) {
@@ -619,7 +614,7 @@ function furinStand(p: string[]) {
   const g = new THREE.Group()
   g.add(rbox(12, 1.5, 10, J.dark, {}, 0.5))
   g.add(cyl(0.6, 0.7, 36, J.dark, { x: -4, y: 1.5 }, 8))
-  g.add(tube([[-4, 37, 0], [-2, 39, 0], [1, 38.5, 0], [3, 37, 0]], 0.5, J.dark, 12, 6))
+  g.add(tube([[-4, 37, 0], [-2, 39, 0], [1, 38.5, 0], [3, 37, 0]], 0.5, J.dark, { ...TUBE, seg: 12, radial: 6 }))
   g.add(furinBody(p, [3, 36.6, 0]))
   return g
 }
@@ -650,7 +645,7 @@ function uchiwaStand(p: string[]) {
 }
 function uchiwaHanging(p: string[]) {
   const g = jHook(0.9)
-  g.add(tube([[0, -2, 0.9], [-1.2, -3.2, 0.9], [0, -4.6, 0.9], [1.2, -3.2, 0.9], [0, -2, 0.9]], 0.1, J.shu, 16, 4))
+  g.add(tube([[0, -2, 0.9], [-1.2, -3.2, 0.9], [0, -4.6, 0.9], [1.2, -3.2, 0.9], [0, -2, 0.9]], 0.1, J.shu, { ...TUBE, seg: 16, radial: 4 }))
   const u = uchiwaBody(p)
   u.position.set(0, -4.4 - 36, 0.9)
   g.add(u)
@@ -679,7 +674,7 @@ function katoriButa(p: string[]) {
     const r = 1 + t * 5
     pts.push([Math.cos(a) * r, PIG_Y + Math.sin(a) * r, 1.5])
   }
-  g.add(tube(pts, 0.32, coil, 180, 5))
+  g.add(tube(pts, 0.32, coil, { ...TUBE, seg: 180, radial: 5 }))
   g.add(rod3([0, PIG_Y + 7.6, 1.5], [0, PIG_Y, 1.5], 0.06, '#9aa0a6', 8))
   return g
 }
@@ -798,7 +793,7 @@ function kamidana(p: string[]) {
   for (const s of [-1, 1]) g.add(rod3([s * 4, y0 + 20.8, -5], [s * 5.5, y0 + 23.5, -5], 0.35, shade(roof, -0.1), 8))
   // 注连绳 + 纸垂：两端系在棚板前角的细柱上
   for (const s of [-1, 1]) g.add(rbox(1.6, 24, 1.6, wood, { x: s * 29, y: 10.5, z: 13 }, 0.3))
-  g.add(tube([[-30, 34, 13], [-14, 30.5, 14], [0, 29.8, 14.2], [14, 30.5, 14], [30, 34, 13]], 0.9, rope, 32, 8))
+  g.add(tube([[-30, 34, 13], [-14, 30.5, 14], [0, 29.8, 14.2], [14, 30.5, 14], [30, 34, 13]], 0.9, rope, { ...TUBE, seg: 32, radial: 8 }))
   for (const x of [-15, 0, 15])
     for (let k = 0; k < 3; k++) g.add(noOutlineDeep(rbox(2, 2.8, 0.2, PAPER, { x: x + (k % 2 ? 0.7 : -0.7), y: 27 - k * 2.8, z: 14.4 }, 0.05)))
   // 榊
@@ -985,7 +980,7 @@ function stocking(main: string, stripe: string) {
 function stockingsWall(p: string[]) {
   const [a, b, rope] = p
   const g = new THREE.Group()
-  g.add(tube([[-36, 46, 2], [-18, 42.5, 2.6], [0, 41.8, 2.8], [18, 42.5, 2.6], [36, 46, 2]], 0.6, rope, 32, 6))
+  g.add(tube([[-36, 46, 2], [-18, 42.5, 2.6], [0, 41.8, 2.8], [18, 42.5, 2.6], [36, 46, 2]], 0.6, rope, { ...TUBE, seg: 32, radial: 6 }))
   for (const s of [-1, 1]) g.add(cyl(0.9, 0.9, 2.6, '#c3c7cc', { x: s * 36, y: 46, z: 0, rx: PI / 2 }, 8))
   ;([[-22, a, b], [0, b, a], [22, a, '#fbf8f0']] as [number, string, string][]).forEach(([x, m, st]) => {
     const s = stocking(m, st)
@@ -1120,7 +1115,7 @@ function balloons(p: string[]) {
     g.add(ball(13, cols[i], { x, y, z }, [1, 1.15, 1]))
     g.add(noOutlineDeep(ball(2.6, '#ffffff', { x: x - 5, y: y + 6, z: z + 9.5 }, [0.6, 1, 0.3])))
     g.add(cyl(0, 1.3, 2.2, cols[i], { x, y: y - 16.6, z }, 8))
-    g.add(tube([[0, 2.8, 0], [x * 0.3, (y - 16.6) * 0.45, z * 0.4 + 2], [x, y - 16.6, z]], 0.12, '#ffffff', 20, 4))
+    g.add(tube([[0, 2.8, 0], [x * 0.3, (y - 16.6) * 0.45, z * 0.4 + 2], [x, y - 16.6, z]], 0.12, '#ffffff', { ...TUBE, seg: 20, radial: 4 }))
   })
   return g
 }
@@ -1131,7 +1126,7 @@ function bunting(p: string[]) {
   const yAt = (x: number) => 22 + 8 * (x / 75) ** 2
   const pts: V3[] = []
   for (let k = 0; k <= 10; k++) pts.push([-75 + k * 15, yAt(-75 + k * 15), 1])
-  g.add(tube(pts, 0.25, '#f4efe4', 40, 5))
+  g.add(tube(pts, 0.25, '#f4efe4', { ...TUBE, seg: 40, radial: 5 }))
   for (const s of [-1, 1]) g.add(cyl(0.7, 0.7, 2, '#c3c7cc', { x: s * 75, y: 30, z: 0, rx: PI / 2 }, 8))
   for (let i = 0; i < 12; i++) {
     const x = -66 + i * 12
@@ -1425,7 +1420,7 @@ function sudare(w: number, h: number, reed: boolean): Build {
     g.add(bot)
     for (const s of [-1, 1]) {
       g.add(torus(1.2, 0.2, '#b8bcc2', { x: s * w * 0.3, y: h + 0.9, z: -0.1 }))
-      g.add(tube([[s * w * 0.3, h - 1, 0.6], [s * w * 0.3, h * 0.6, 0.7], [s * w * 0.3, h * 0.45, 0.7]], 0.22, cord, 8, 5))
+      g.add(tube([[s * w * 0.3, h - 1, 0.6], [s * w * 0.3, h * 0.6, 0.7], [s * w * 0.3, h * 0.45, 0.7]], 0.22, cord, { ...TUBE, seg: 8, radial: 5 }))
       g.add(ball(0.7, cord, { x: s * w * 0.3, y: h * 0.45, z: 0.7 }))
     }
     return g
@@ -1718,7 +1713,7 @@ function tapestry(p: string[]) {
   rod.position.set(0, fy + h + 0.6, 0.6)
   g.add(rod)
   for (const s of [-1, 1]) g.add(ball(1.4, '#8a5a30', { x: s * (w / 2 + 4.6), y: fy + h + 0.6, z: 0.6 }))
-  g.add(tube([[-w / 2 - 2, fy + h + 1, 0.6], [0, fy + h + 16, 0.3], [w / 2 + 2, fy + h + 1, 0.6]], 0.2, '#e8dcc0', 16, 4))
+  g.add(tube([[-w / 2 - 2, fy + h + 1, 0.6], [0, fy + h + 16, 0.3], [w / 2 + 2, fy + h + 1, 0.6]], 0.2, '#e8dcc0', { ...TUBE, seg: 16, radial: 4 }))
   return g
 }
 
@@ -1731,7 +1726,7 @@ function macrame(p: string[]) {
   rod.rotation.z = PI / 2
   rod.position.set(0, top, 1)
   g.add(rod)
-  g.add(tube([[-30, top + 0.5, 1], [0, top + 14, 0.6], [30, top + 0.5, 1]], 0.25, cord, 16, 4))
+  g.add(tube([[-30, top + 0.5, 1], [0, top + 14, 0.6], [30, top + 0.5, 1]], 0.25, cord, { ...TUBE, seg: 16, radial: 4 }))
   const n = 12
   const xs = Array.from({ length: n }, (_, i) => -27.5 + i * 5)
   const rows = 7
@@ -1962,7 +1957,7 @@ function kakejiku(kind: 'sansui' | 'sho'): Build {
     bot.position.set(0, 1.3, 0)
     g.add(bot)
     for (const s of [-1, 1]) g.add(cyl(1.8, 1.8, 2.6, shade(roller, -0.2), { x: s * (w / 2 + 2.3), y: 1.3, rz: PI / 2 }, 12))
-    g.add(tube([[-w * 0.3, h - 1.6, 0.4], [0, h + 9, 0.3], [w * 0.3, h - 1.6, 0.4]], 0.18, '#d9c08a', 16, 4))
+    g.add(tube([[-w * 0.3, h - 1.6, 0.4], [0, h + 9, 0.3], [w * 0.3, h - 1.6, 0.4]], 0.18, '#d9c08a', { ...TUBE, seg: 16, radial: 4 }))
     return g
   }
 }

@@ -9,8 +9,11 @@
 import * as THREE from 'three'
 import { ball, cup, cyl, rbox, shade, torus, tray } from '../toon'
 import { C, G, holePanel, paintAbstract, paintFlower, paintLandscape, paintPanel, rng, shell, type AssetCategory, type AssetDef, type StyleTag } from '../kit'
-import { PI, clearDeep, cylZFrom, mesh, noOutlineDeep, type V3 } from '../geo'
+import { PI, clearDeep, cylZFrom, mesh, noOutlineDeep, tube, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, R, type Build, type Pal } from '../packkit'
+
+/** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
+const TUBE: TubeOpts = { radial: 6 }
 
 type Draw = (g: CanvasRenderingContext2D, W: number, H: number) => void
 
@@ -43,11 +46,6 @@ function facet(a: V3, b: V3, ra: number, rb: number, color: string, seg = 5) {
   m.position.copy(va).add(vb).multiplyScalar(0.5)
   m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize())
   return m
-}
-/** 平滑曲线管（绳子、麻线、尾巴） */
-function tube(pts: V3[], r: number, color: string, seg = 24, radial = 6) {
-  const curve = new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(...p)))
-  return mesh(new THREE.TubeGeometry(curve, seg, r, radial, false), color)
 }
 /** 平面轮廓挤出的薄片：轮廓在 xy 平面，厚度沿 +z 从 z0 开始 */
 function flat(pts: [number, number][], t: number, color: string, z0 = 0) {
@@ -552,7 +550,7 @@ function beanCat(p: string[]) {
     ear.rotation.set(-0.25, 0, -s * 0.28)
     g.add(ear)
   }
-  g.add(tube([[6, 10, -33], [14, 12, -40], [22, 24, -40], [20, 36, -36], [14, 40, -35]], 2.6, cloth, 24, 8))
+  g.add(tube([[6, 10, -33], [14, 12, -40], [22, 24, -40], [20, 36, -36], [14, 40, -35]], 2.6, cloth, { ...TUBE, seg: 24, radial: 8 }))
   g.add(ball(2.8, inner, { x: 14, y: 40, z: -35 }))
   return g
 }
@@ -1521,7 +1519,7 @@ function photoPolaroid(p: string[]) {
       const x = -half + (k / 12) * half * 2
       pts.push([x, yAt(x), 1.2])
     }
-    g.add(tube(pts, 0.22, rope, 48, 5))
+    g.add(tube(pts, 0.22, rope, { ...TUBE, seg: 48, radial: 5 }))
     for (const s of [-1, 1]) {
       g.add(cylZFrom(0.25, 1.6, '#9a9ca1', s * (half + 0.6), top + 0.2, 0, 6))
       g.add(cylZFrom(0.6, 0.3, '#9a9ca1', s * (half + 0.6), top + 0.2, 1.6, 12))
@@ -1847,7 +1845,7 @@ function decoWeaveRound(p: string[]) {
     g.add(bar([x, y, 1.2], [x * 1.04, y - len, 1.2], 0.45, k % 2 ? ca : cb, 5))
     if (k % 3 === 1) g.add(ball(1.1, bead, { x: x * 1.02, y: y - len * 0.45, z: 1.2 }))
   }
-  g.add(tube([[-14, cy + 17, 1.2], [-6, cy + 26, 0.9], [0, cy + 30, 0.6], [6, cy + 26, 0.9], [14, cy + 17, 1.2]], 0.3, ca, 20, 5))
+  g.add(tube([[-14, cy + 17, 1.2], [-6, cy + 26, 0.9], [0, cy + 30, 0.6], [6, cy + 26, 0.9], [14, cy + 17, 1.2]], 0.3, ca, { ...TUBE, seg: 20, radial: 5 }))
   g.add(cylZFrom(0.3, 1.2, '#9a9ca1', 0, cy + 30.4, 0, 6))
   return g
 }

@@ -9,8 +9,11 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, SWING_OPEN, movable, rectPoly, rng, type AssetCategory, type AssetDef, type DoorMotion, type Fx, type StyleTag, type SurfaceDef } from '../kit'
-import { PI, box3, hcyl, lit, noOutlineDeep, rod3, type V3 } from '../geo'
+import { PI, box3, cappedTube, hcyl, lit, noOutlineDeep, rod3, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, R, type Build, type Pal3 } from '../packkit'
+
+/** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
+const TUBE: TubeOpts = { seg: { per: 6, min: 12 }, group: true }
 
 // ---------- 固定色 ----------
 const STEEL = '#c3c7cc'
@@ -71,20 +74,6 @@ function PG<T extends THREE.Object3D>(o: T, x = 0, y = 0, z = 0, rx = 0, ry = 0,
   g.position.set(x, y, z)
   g.rotation.set(rx, ry, rz)
   return g
-}
-
-/** 沿折线的圆管（铁丝、把手、香蕉…） */
-function tube(pts: V3[], r: number, color: string, closed = false, seg?: number) {
-  const curve = new THREE.CatmullRomCurve3(
-    pts.map((p) => new THREE.Vector3(...p)),
-    closed,
-    'centripetal',
-  )
-  const m = new THREE.Mesh(new THREE.TubeGeometry(curve, seg ?? Math.max(12, pts.length * 6), r, 8, closed), toon(color))
-  m.castShadow = true
-  m.receiveShadow = true
-  if (closed) return G(m)
-  return G(m, ball(r, color, { x: pts[0][0], y: pts[0][1], z: pts[0][2] }), ball(r, color, { x: pts[pts.length - 1][0], y: pts[pts.length - 1][1], z: pts[pts.length - 1][2] }))
 }
 
 /** 圆弧上的点；'yz' 平面里 z = cos a、y = sin a；'xy' 平面里 x = cos a、y = sin a；'xz' 平面里 x = cos a、z = sin a */
@@ -251,7 +240,7 @@ const S_Z = 2.6
 function sHook(color = STEEL) {
   const top = arc([0, -1.45, 0.2], 1.2, PI * 1.15, 0, 8, 'yz')
   const bottom = arc([0, -5.2, S_Z], 1.2, PI, PI * 2.2, 8, 'yz')
-  return tube([...top, ...bottom], 0.25, color, false, 48)
+  return cappedTube([...top, ...bottom], 0.25, color, { ...TUBE, seg: 48 })
 }
 
 // ---------- 定义 ----------
@@ -494,7 +483,7 @@ function utensilCrock(p: string[]) {
   for (let i = 0; i < 4; i++) {
     const a = (i / 4) * PI
     const pts = arc([0.5, 25.5, -3], 3.5, -PI / 2, PI * 1.5, 12, 'xy').map(([x, y]): V3 => [0.5 + (x - 0.5) * Math.cos(a), y + (y > 25.5 ? (y - 25.5) * 0.8 : 0), -3 + (x - 0.5) * Math.sin(a)])
-    g.add(tube(pts, 0.12, STEEL, false, 24))
+    g.add(cappedTube(pts, 0.12, STEEL, { ...TUBE, seg: 24 }))
   }
   // 长筷子
   g.add(rod3([1.5, 2, -1], [5, 33, -2], 0.3, wood, 8))
@@ -708,7 +697,7 @@ function whiskBody(p: string[]) {
       const yy = 14 - (1 - Math.cos(t)) * 7
       pts.push([xx * Math.cos(a), yy, xx * Math.sin(a)])
     }
-    g.add(tube(pts, 0.13, wire, false, 32))
+    g.add(cappedTube(pts, 0.13, wire, { ...TUBE, seg: 32 }))
   }
   return g
 }
@@ -779,7 +768,7 @@ function panRack(p: string[]) {
   for (const sx of [-1, 1]) g.add(rod3([sx * 10, 0.6, -L / 2], [sx * 10, 0.6, L / 2], 0.6, frame, 8))
   for (let i = 0; i < 4; i++) {
     const z = -L / 2 + 2 + i * 10.5
-    g.add(tube([[-10, 0.6, z], [-10, 14, z], [10, 14, z], [10, 0.6, z]], 0.45, frame, false, 24))
+    g.add(cappedTube([[-10, 0.6, z], [-10, 14, z], [10, 14, z], [10, 0.6, z]], 0.45, frame, { ...TUBE, seg: 24 }))
   }
   // 锅：竖立在两格之间，锅柄朝前上
   const pans: [number, number, string][] = [
@@ -1173,7 +1162,7 @@ function dripSet(p: string[]) {
   const sx = -4
   g.add(glassGhost(lathe([[0, 0], [4.8, 0], [5.2, 2], [5.2, 8], [4.2, 11], [4.2, 12.5], [3.9, 12.5], [3.9, 11], [4.9, 8], [4.9, 2], [0, 0.4]], GLASS), GLASS, 0.4).translateX(sx))
   g.add(noOutlineDeep(cyl(4.7, 4.9, 3.2, COFFEE, { x: sx, y: 0.5 }, 24)))
-  g.add(tube([[sx - 5, 9.5, 0], [sx - 7.2, 8, 0], [sx - 7, 4, 0], [sx - 5, 2.5, 0]], 0.5, server, false, 20))
+  g.add(cappedTube([[sx - 5, 9.5, 0], [sx - 7.2, 8, 0], [sx - 7, 4, 0], [sx - 5, 2.5, 0]], 0.5, server, { ...TUBE, seg: 20 }))
   g.add(cup(5.6, 2.4, 6.5, 0.35, dripper, { x: sx, y: 12.5 }))
   g.add(puck(5.2, 0.6, dripper, { x: sx, y: 12.3 }))
   g.add(noOutlineDeep(cup(5.1, 2.2, 6.3, 0.15, '#f4efe4', { x: sx, y: 13 })))
@@ -1182,8 +1171,8 @@ function dripSet(p: string[]) {
   const kx = 10
   g.add(lathe([[0, 0], [5.2, 0], [5.6, 1], [5.6, 9], [4.5, 11.5], [2, 12.5], [0, 12.5]], kettle, { x: kx }))
   g.add(cyl(1.2, 1.4, 1.2, server, { x: kx, y: 12.4 }, 12))
-  g.add(tube([[kx - 4.6, 2, 0], [kx - 8.6, 8, 0], [kx - 10.6, 13.6, 0], [kx - 12, 14.6, 0]], 0.42, kettle, false, 24))
-  g.add(tube([[kx + 5.4, 9.5, 0], [kx + 8.6, 9, 0], [kx + 8.6, 3, 0], [kx + 5.4, 2.5, 0]], 0.7, server, false, 20))
+  g.add(cappedTube([[kx - 4.6, 2, 0], [kx - 8.6, 8, 0], [kx - 10.6, 13.6, 0], [kx - 12, 14.6, 0]], 0.42, kettle, { ...TUBE, seg: 24 }))
+  g.add(cappedTube([[kx + 5.4, 9.5, 0], [kx + 8.6, 9, 0], [kx + 8.6, 3, 0], [kx + 5.4, 2.5, 0]], 0.7, server, { ...TUBE, seg: 20 }))
   return g
 }
 
@@ -1322,7 +1311,7 @@ function kitsuneUdon(p: string[]) {
   const top = 6.6
   g.add(liquid(bowlIn(9.5, 8, top), top, BROTH))
   // 粗面条
-  for (let i = 0; i < 7; i++) g.add(noOutlineDeep(tube(arc([0, top - 0.1, 0], 2 + i * 0.75, 0.3 * i, 0.3 * i + 2.2, 6, 'xz'), 0.4, '#fbf3df', false, 16)))
+  for (let i = 0; i < 7; i++) g.add(noOutlineDeep(cappedTube(arc([0, top - 0.1, 0], 2 + i * 0.75, 0.3 * i, 0.3 * i + 2.2, 6, 'xz'), 0.4, '#fbf3df', { ...TUBE, seg: 16 })))
   // 油豆腐皮
   g.add(rbox(7, 1, 5, '#d99a45', { x: -1.5, y: top - 0.4, z: -1.5, ry: 0.3 }, 0.5))
   g.add(rbox(6, 1, 4.5, '#cf8d3c', { x: 2.5, y: top - 0.3, z: 1.5, ry: -0.4 }, 0.5))
@@ -1536,7 +1525,7 @@ function bananas(p: string[]) {
   const g = new THREE.Group()
   g.add(puck(8, 1.4, stand))
   g.add(cyl(0.8, 0.8, 30, stand, { y: 1.4 }, 10))
-  g.add(tube(arc([5, 31, 0], 5, PI, 0, 10, 'xy'), 0.6, stand, false, 24))
+  g.add(cappedTube(arc([5, 31, 0], 5, PI, 0, 10, 'xy'), 0.6, stand, { ...TUBE, seg: 24 }))
   // 香蕉：从钩下垂的一束弯条
   for (let i = 0; i < 5; i++) {
     const a = (i - 2) * 0.55
@@ -1547,7 +1536,7 @@ function bananas(p: string[]) {
       const out = Math.sin(t * PI * 0.85) * 5 + t * 2.5
       pts.push([9.5 + Math.cos(a) * out * 0.7, y + t * t * 7, Math.sin(a) * out * 1.3])
     }
-    g.add(tube(pts, 1.5, '#ffd84d', false, 24))
+    g.add(cappedTube(pts, 1.5, '#ffd84d', { ...TUBE, seg: 24 }))
     g.add(ball(0.6, '#5a4630', { x: pts[8][0], y: pts[8][1], z: pts[8][2] }))
   }
   g.add(cyl(1.2, 1, 5.6, acc, { x: 9.5, y: 25.5 }, 10))
@@ -1590,7 +1579,7 @@ function watermelonHalf(p: string[]) {
   g.add(m)
   for (let i = 0; i < 8; i++) {
     const a = (i / 8) * PI * 2
-    const s = tube(arc([0, DISH_IN + R0 * 0.82, 0], R0 + 0.05, -PI / 2 + 0.25, -0.02, 6, 'yz').map(([, y, z]): V3 => [z * Math.sin(a), DISH_IN + R0 * 0.82 + (y - DISH_IN - R0 * 0.82) * 0.82, z * Math.cos(a)]), 0.35, shade(rind, -0.2), false, 12)
+    const s = cappedTube(arc([0, DISH_IN + R0 * 0.82, 0], R0 + 0.05, -PI / 2 + 0.25, -0.02, 6, 'yz').map(([, y, z]): V3 => [z * Math.sin(a), DISH_IN + R0 * 0.82 + (y - DISH_IN - R0 * 0.82) * 0.82, z * Math.cos(a)]), 0.35, shade(rind, -0.2), { ...TUBE, seg: 12 })
     g.add(noOutlineDeep(s))
   }
   const top = DISH_IN + R0 * 0.82
@@ -1746,7 +1735,7 @@ function cupNoodle(p: string[], open: boolean) {
     return g
   }
   g.add(liquid(4.4, 9, '#d9a35a'))
-  for (let i = 0; i < 5; i++) g.add(noOutlineDeep(tube(arc([0, 8.9, 0], 1 + i * 0.7, i, i + 2.4, 6, 'xz'), 0.22, NOODLE, false, 12)))
+  for (let i = 0; i < 5; i++) g.add(noOutlineDeep(cappedTube(arc([0, 8.9, 0], 1 + i * 0.7, i, i + 2.4, 6, 'xz'), 0.22, NOODLE, { ...TUBE, seg: 12 })))
   g.add(noOutlineDeep(rbox(1.4, 0.3, 1.4, '#ffd75e', { x: 1.5, y: 8.9, z: -1 }, 0.1)))
   g.add(noOutlineDeep(rbox(1.2, 0.3, 1.2, '#e86a4a', { x: -1.8, y: 8.9, z: 0.8 }, 0.1)))
   // 掀开一半的盖子（翻起靠在后面）
@@ -2968,7 +2957,7 @@ function fridgePot(p: string[]) {
   g.add(puck(5.6, 2.4, lid, { y: 24.4 }))
   g.add(rbox(3, 1.4, 3, lid, { y: 25, z: 5 }, 0.5))
   g.add(cyl(1.4, 1.4, 1, acc, { y: 26.6 }, 12))
-  g.add(glassGhost(tube([[-5, 21, 0], [-8.6, 19, 0], [-8.6, 6, 0], [-5, 4, 0]], 0.8, GLASS, false, 20), GLASS, 0.5))
+  g.add(glassGhost(cappedTube([[-5, 21, 0], [-8.6, 19, 0], [-8.6, 6, 0], [-5, 4, 0]], 0.8, GLASS, { ...TUBE, seg: 20 }), GLASS, 0.5))
   return g
 }
 
@@ -3103,8 +3092,8 @@ function chineseTakeout(p: string[]) {
   m.rotation.y = PI / 4
   g.add(m)
   g.add(noOutlineDeep(rbox(4, 4, 0.2, print, { y: 3, z: 4, rx: -0.22 }, 1)))
-  g.add(tube([[-6.6, 9, 0], [-5, 15, 0], [5, 15, 0], [6.6, 9, 0]], 0.12, handle, false, 24))
-  for (let i = 0; i < 8; i++) g.add(noOutlineDeep(tube(arc([0, 8.6, 0], 1 + i * 0.6, i * 0.9, i * 0.9 + 2.6, 6, 'xz'), 0.3, '#d9a050', false, 12)))
+  g.add(cappedTube([[-6.6, 9, 0], [-5, 15, 0], [5, 15, 0], [6.6, 9, 0]], 0.12, handle, { ...TUBE, seg: 24 }))
+  for (let i = 0; i < 8; i++) g.add(noOutlineDeep(cappedTube(arc([0, 8.6, 0], 1 + i * 0.6, i * 0.9, i * 0.9 + 2.6, 6, 'xz'), 0.3, '#d9a050', { ...TUBE, seg: 12 })))
   g.add(noOutlineDeep(ball(1, '#3f8a3a', { x: 2, y: 9, z: -1 }, [1.3, 0.3, 1])))
   g.add(noOutlineDeep(rbox(1.4, 0.4, 1, '#f08a3c', { x: -2, y: 9, z: 1.5 }, 0.2)))
   g.add(chopsticks(20, '#ead7b8', 0, 0, 9.5))
@@ -3383,11 +3372,11 @@ function fruitBasket(p: string[]) {
   const t = torus(13.8, 0.6, rim, { y: 9, rx: PI / 2 })
   t.scale.y = 0.7
   g.add(t)
-  g.add(tube(arc([0, 9, 0], 12.5, 0, PI, 16, 'xy'), 0.6, rim, false, 32))
+  g.add(cappedTube(arc([0, 9, 0], 12.5, 0, PI, 16, 'xy'), 0.6, rim, { ...TUBE, seg: 32 }))
   g.add(ball(3.6, '#e0453a', { x: -6, y: 8, z: -1.5 }, [1, 0.92, 1]))
   g.add(ball(3.2, '#ff9a2a', { x: 0, y: 8.5, z: 2.5 }, [1, 0.9, 1]))
   g.add(ball(3.2, '#ff9a2a', { x: -1.5, y: 8.6, z: -3.5 }, [1, 0.9, 1]))
-  for (let i = 0; i < 3; i++) g.add(tube(arc([5, 4, 0], 6.5, PI * 0.55, PI * 0.95, 6, 'xy').map(([x, y]): V3 => [x + 3, y + 3.5, -2 + i * 2]), 1.3, '#ffd84d', false, 12))
+  for (let i = 0; i < 3; i++) g.add(cappedTube(arc([5, 4, 0], 6.5, PI * 0.55, PI * 0.95, 6, 'xy').map(([x, y]): V3 => [x + 3, y + 3.5, -2 + i * 2]), 1.3, '#ffd84d', { ...TUBE, seg: 12 }))
   for (let i = 0; i < 9; i++) g.add(ball(1.1, '#5a3a7a', { x: 6 + (i % 3) * 1.6 - 1, y: 9.5 - Math.floor(i / 3) * 1.3, z: 3 + (i % 2) }))
   return g
 }
@@ -3398,7 +3387,7 @@ function vegBag(p: string[]) {
   const g = new THREE.Group()
   g.add(tray(34, 28, 14, 0.4, bag, {}, 1.5))
   g.add(noOutlineDeep(rbox(10, 10, 0.2, print, { y: 10, z: 7.1 }, 2)))
-  for (const s of [-1, 1]) g.add(tube([[-7, 27.5, s * 6.8], [-6, 38, s * 6], [6, 38, s * 6], [7, 27.5, s * 6.8]], 0.8, handle, false, 24))
+  for (const s of [-1, 1]) g.add(cappedTube([[-7, 27.5, s * 6.8], [-6, 38, s * 6], [6, 38, s * 6], [7, 27.5, s * 6.8]], 0.8, handle, { ...TUBE, seg: 24 }))
   g.add(ball(7, '#a6d47a', { x: 7, y: 24, z: 0 }, [1, 0.9, 0.85]))
   g.add(ball(6.5, '#cbe8a0', { x: 7, y: 24.8, z: 0.4 }, [1, 0.85, 0.8]))
   for (let i = 0; i < 3; i++) {

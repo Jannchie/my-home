@@ -6,8 +6,11 @@
 import * as THREE from 'three'
 import { ball, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, SWING_OPEN, hangingPipe, holePanel, movable, paintPanel, pipeHook, rectPoly, ellipsePoly, type AssetDef, type Hole, type Poly, type StyleTag, type SurfaceDef } from '../kit'
-import { batten, cylX, cylZ, glassPane, lit, mesh, noOutlineDeep, rod3, type V3 } from '../geo'
+import { batten, cappedTube, cylX, cylZ, glassPane, lit, mesh, noOutlineDeep, rod3, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, R } from '../packkit'
+
+/** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
+const TUBE: TubeOpts = { seg: { per: 8, min: 12 }, radial: 10, group: true }
 
 type P2 = [number, number]
 
@@ -29,15 +32,6 @@ const IRON = '#2f2f31'
 // =====================================================================
 // 小工具
 // =====================================================================
-
-/** 沿折线的圆管（弯曲的扶手、搭脑、卷曲腿），两端加小圆球封口 */
-function pipe(pts: V3[], r: number, color: string, caps = true, seg = 0) {
-  const curve = new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(...p)), false, 'centripetal')
-  const g = new THREE.Group()
-  g.add(mesh(new THREE.TubeGeometry(curve, seg || Math.max(12, pts.length * 8), r, 10, false), color))
-  if (caps) for (const p of [pts[0], pts[pts.length - 1]]) g.add(ball(r, color, { x: p[0], y: p[1], z: p[2] }))
-  return g
-}
 
 /** 旋转体：轮廓 [半径, 高度]，at 为底面中心 */
 function lathe(profile: P2[], color: string, at: { x?: number; y?: number; z?: number } = {}, seg = 24) {
@@ -207,7 +201,7 @@ function cabriole(x: number, z: number, top: number, r: number, color: string, o
     [x - ox * k * 0.15, top * 0.25, z - oz * k * 0.15],
     [x + ox * k * 0.25, r * 1.4, z + oz * k * 0.25],
   ]
-  g.add(pipe(pts, r, color, false))
+  g.add(cappedTube(pts, r, color, { ...TUBE, caps: false }))
   g.add(ball(r * 1.15, color, { x: pts[1][0], y: pts[1][1], z: pts[1][2] }, [1, 1.3, 1]))
   const fx = x + ox * k * 0.4
   const fz = z + oz * k * 0.4
@@ -451,17 +445,17 @@ function guanmaoChair(p: string[]) {
   const lr = 1.6
   // 腿：后腿直通搭脑（略向后仰），前腿上延成鹅脖
   for (const s of [-1, 1]) {
-    g.add(pipe([[s * X, 0, -Z], [s * X, 48, -Z], [s * X, 107, -21.5]], lr, wood, false))
-    g.add(pipe([[s * X, 0, Z], [s * X, 48, Z], [s * X, 66, Z - 1.2]], lr, wood, false))
+    g.add(cappedTube([[s * X, 0, -Z], [s * X, 48, -Z], [s * X, 107, -21.5]], lr, wood, { ...TUBE, caps: false }))
+    g.add(cappedTube([[s * X, 0, Z], [s * X, 48, Z], [s * X, 66, Z - 1.2]], lr, wood, { ...TUBE, caps: false }))
     // 扶手：后端插入后腿，前端越过鹅脖出头上翘
-    g.add(pipe([[s * X, 66, -20.3], [s * (X + 0.6), 65.2, 0], [s * (X + 1.4), 66.4, Z], [s * (X + 2.4), 68.4, Z + 4.5]], 1.4, wood))
+    g.add(cappedTube([[s * X, 66, -20.3], [s * (X + 0.6), 65.2, 0], [s * (X + 1.4), 66.4, Z], [s * (X + 2.4), 68.4, Z + 4.5]], 1.4, wood, TUBE))
     // 联帮棍
     g.add(rod3([s * X, 49.5, 3], [s * (X + 0.6), 65.4, 3], 0.8, wood))
     // 侧面赶枨（步步高：前低后高）
     g.add(rod3([s * X, 16, -Z], [s * X, 16, Z], 1, dark))
   }
   // 搭脑：两端出头上翘
-  g.add(pipe([[-29, 110.5, -20], [-24, 108.2, -21.3], [0, 106.6, -22.6], [24, 108.2, -21.3], [29, 110.5, -20]], 1.8, wood))
+  g.add(cappedTube([[-29, 110.5, -20], [-24, 108.2, -21.3], [0, 106.6, -22.6], [24, 108.2, -21.3], [29, 110.5, -20]], 1.8, wood, TUBE))
   // S 形靠背板
   const splat: P2[] = [[-Z + 0.5, 49], [-Z + 1.6, 62], [-Z + 2.2, 74], [-Z + 0.8, 88], [-Z - 1.2, 100], [-Z - 2.6, 107]]
   g.add(sidePrism(strip(splat, 1.6), 17, wood, 0))
@@ -628,8 +622,8 @@ function baxianTable(p: string[]) {
     g.add(rbox(78, 7, 1.6, wood, { y: 69, z: s * (L + 1.2) }, 0.5))
     g.add(rbox(1.6, 7, 78, wood, { x: s * (L + 1.2), y: 69 }, 0.5))
     // 罗锅枨
-    g.add(pipe([[-L, 56, s * L], [-L + 12, 63, s * L], [L - 12, 63, s * L], [L, 56, s * L]], 1.3, dark, false))
-    g.add(pipe([[s * L, 56, -L], [s * L, 63, -L + 12], [s * L, 63, L - 12], [s * L, 56, L]], 1.3, dark, false))
+    g.add(cappedTube([[-L, 56, s * L], [-L + 12, 63, s * L], [L - 12, 63, s * L], [L, 56, s * L]], 1.3, dark, { ...TUBE, caps: false }))
+    g.add(cappedTube([[s * L, 56, -L], [s * L, 63, -L + 12], [s * L, 63, L - 12], [s * L, 56, L]], 1.3, dark, { ...TUBE, caps: false }))
     for (const k of [-14, 14]) {
       g.add(rod3([k, 63, s * L], [k, 69.2, s * L], 1, dark))
       g.add(rod3([s * L, 63, k], [s * L, 69.2, k], 1, dark))
@@ -937,7 +931,7 @@ function drumStool(p: string[]) {
   for (let k = 0; k < 4; k++) {
     const a = (k / 4) * Math.PI * 2 + Math.PI / 4
     const pt = (rr: number, y: number): V3 => [Math.sin(a) * rr, y, Math.cos(a) * rr]
-    g.add(pipe([pt(15, 3.2), pt(18.2, 14), pt(18.8, 23), pt(18.2, 32), pt(15.4, 41.4)], 2.4, wood, false))
+    g.add(cappedTube([pt(15, 3.2), pt(18.2, 14), pt(18.8, 23), pt(18.2, 32), pt(15.4, 41.4)], 2.4, wood, { ...TUBE, caps: false }))
   }
   // 腰部一圈
   g.add(torus(18.6, 1, wood, { y: 23, rx: Math.PI / 2 }))
@@ -1041,7 +1035,7 @@ function penjing(p: string[]) {
     const a = (k / 5) * Math.PI * 2
     g.add(ball(1.6, wood, { x: Math.sin(a) * 17, y: 1.6, z: Math.cos(a) * 17 }))
     const pt = (rr: number, y: number): V3 => [Math.sin(a) * rr, y, Math.cos(a) * rr]
-    g.add(pipe([pt(17, 3.4), pt(15, 20), pt(18.4, 46), pt(16, 66)], 1.6, wood, false))
+    g.add(cappedTube([pt(17, 3.4), pt(15, 20), pt(18.4, 46), pt(16, 66)], 1.6, wood, { ...TUBE, caps: false }))
   }
   g.add(cyl(17, 16, 3, shade(wood, -0.08), { y: 64 }, 32))
   g.add(cyl(20, 20, 3, wood, { y: 67 }, 32))
@@ -1053,7 +1047,7 @@ function penjing(p: string[]) {
   for (const [x, y, z, rr, sy, c] of [[-8, 77, -2, 5, 2.4, 0], [-5, 85, -3, 3.4, 2.2, 1], [-9, 91, -2, 2.2, 1.8, 2], [6, 76, 2, 3.6, 1.5, 1], [9, 80, 1, 2.2, 1.6, 2]] as number[][])
     g.add(ball(rr, rockC[c], { x, y, z }, [1, sy, 0.9]))
   // 小松
-  g.add(pipe([[4, 74, 3], [2, 82, 2], [6, 88, 0], [12, 90, -1]], 0.6, '#6b4a33', false))
+  g.add(cappedTube([[4, 74, 3], [2, 82, 2], [6, 88, 0], [12, 90, -1]], 0.6, '#6b4a33', { ...TUBE, caps: false }))
   for (const [x, y, z, s] of [[2, 84, 3, 3.2], [7, 89, 0, 3.4], [12, 90.5, -1, 2.6]] as number[][]) g.add(ball(s, '#4f7d4a', { x, y, z }, [1.3, 0.45, 1]))
   return g
 }
@@ -1107,9 +1101,9 @@ function louisArmchair(p: string[]) {
   for (const s of [-1, 1]) g.add(rod3([s * 22, 41, -24], [s * 15, 56, -25.5], 1.8, frame))
   // 扶手：弧形扶臂 + 垫 + 卷曲托
   for (const s of [-1, 1]) {
-    g.add(pipe([[s * 26, 58, -22], [s * 28, 64, -8], [s * 29, 64.5, 8], [s * 28.5, 62, 18]], 1.8, frame))
+    g.add(cappedTube([[s * 26, 58, -22], [s * 28, 64, -8], [s * 29, 64.5, 8], [s * 28.5, 62, 18]], 1.8, frame, TUBE))
     g.add(rbox(6, 2.4, 20, fabric, { x: s * 28.4, y: 64.2, z: -2 }, 1.1))
-    g.add(pipe([[s * 28.5, 62, 18], [s * 29.5, 54, 21], [s * 27.5, 46, 21]], 1.8, frame, false))
+    g.add(cappedTube([[s * 28.5, 62, 18], [s * 29.5, 54, 21], [s * 27.5, 46, 21]], 1.8, frame, { ...TUBE, caps: false }))
   }
   return g
 }
@@ -1274,7 +1268,7 @@ function clFireplace(p: string[]) {
     g.add(lathe([[0, 0], [4.4, 0], [4, 1.4], [1.6, 2.4], [1.2, 10], [2, 11], [0, 11]], gold, { x, y, z: 4 }, 16))
     for (const k of [-1, 0, 1]) {
       const cx = x + k * 7
-      if (k) g.add(pipe([[x, y + 10.5, 4], [x + k * 4, y + 11, 4], [cx, y + 13.5, 4]], 0.6, gold, false))
+      if (k) g.add(cappedTube([[x, y + 10.5, 4], [x + k * 4, y + 11, 4], [cx, y + 13.5, 4]], 0.6, gold, { ...TUBE, caps: false }))
       else g.add(cyl(0.7, 0.7, 4.4, gold, { x, y: y + 10.8, z: 4 }, 8))
       g.add(cyl(1.6, 1.2, 1.4, gold, { x: cx, y: y + 13 + (k ? 0 : 2), z: 4 }, 12))
       g.add(cyl(0.9, 0.9, 8, C.cream, { x: cx, y: y + 14.4 + (k ? 0 : 2), z: 4 }, 10))
@@ -1294,7 +1288,7 @@ function crystalFloorLamp(p: string[]) {
   for (let k = 0; k < 3; k++) {
     const a = (k / 3) * Math.PI * 2
     const pt = (rr: number, y: number): V3 => [Math.sin(a) * rr, y, Math.cos(a) * rr]
-    g.add(pipe([pt(2, 18), pt(10, 10), pt(15, 2.7), pt(17, 1.3)], 1.3, metal))
+    g.add(cappedTube([pt(2, 18), pt(10, 10), pt(15, 2.7), pt(17, 1.3)], 1.3, metal, TUBE))
   }
   g.add(lathe([[0, 8], [3, 8], [2, 14], [3.4, 20], [1.4, 26], [1.2, 130], [2.4, 132], [2.4, 134], [0, 134]], metal, {}, 16))
   // 五臂烛台
@@ -1302,7 +1296,7 @@ function crystalFloorLamp(p: string[]) {
   for (let k = 0; k < 5; k++) {
     const a = (k / 5) * Math.PI * 2
     const pt = (rr: number, yy: number): V3 => [Math.sin(a) * rr, yy, Math.cos(a) * rr]
-    g.add(pipe([pt(1, y), pt(8, y - 2), pt(14, y + 2), pt(15, y + 7)], 0.7, metal, false))
+    g.add(cappedTube([pt(1, y), pt(8, y - 2), pt(14, y + 2), pt(15, y + 7)], 0.7, metal, { ...TUBE, caps: false }))
     const [cx, , cz] = pt(15, 0)
     g.add(cyl(2, 1.4, 1.4, metal, { x: cx, y: y + 6.4, z: cz }, 12))
     g.add(cyl(1.6, 2.4, 6, shadeC, { x: cx, y: y + 7.8, z: cz }, 12))
@@ -1384,7 +1378,7 @@ function marbleCoffee(p: string[]) {
   for (let k = 0; k < 4; k++) {
     const a = (k / 4) * Math.PI * 2 + Math.PI / 4
     const pt = (rr: number, y: number): V3 => [Math.sin(a) * rr, y, Math.cos(a) * rr]
-    g.add(pipe([pt(12, 38), pt(22, 30), pt(20, 16), pt(27, 4), pt(31, 1.8)], 1.6, metal))
+    g.add(cappedTube([pt(12, 38), pt(22, 30), pt(20, 16), pt(27, 4), pt(31, 1.8)], 1.6, metal, TUBE))
   }
   g.add(torus(14, 1.4, metal, { y: 22, rx: Math.PI / 2 }))
   g.add(lathe([[0, 14], [4, 14], [6, 18], [3, 26], [5, 34], [12, 38.4], [0, 38.4]], metal, {}, 20))
@@ -1708,7 +1702,7 @@ function windsorRocker(p: string[]) {
   g.add(rbox(50, 4.5, 44, wood, { y: 40 }, 2))
   g.add(rbox(42, 3, 36, cushion, { y: 44.3, z: 2 }, 1.4))
   // 梳背
-  g.add(pipe([[-24, 100, -22], [-12, 103, -26], [0, 104, -27], [12, 103, -26], [24, 100, -22]], 2, wood))
+  g.add(cappedTube([[-24, 100, -22], [-12, 103, -26], [0, 104, -27], [12, 103, -26], [24, 100, -22]], 2, wood, TUBE))
   for (let i = 0; i < 7; i++) {
     const t = -1 + i / 3
     const x = t * 16
@@ -1716,7 +1710,7 @@ function windsorRocker(p: string[]) {
   }
   // 扶手
   for (const s of [-1, 1]) {
-    g.add(pipe([[s * 16.5, 64, -20], [s * 22, 64.5, -4], [s * 24, 63, 12], [s * 23.5, 62.5, 18]], 1.6, wood))
+    g.add(cappedTube([[s * 16.5, 64, -20], [s * 22, 64.5, -4], [s * 24, 63, 12], [s * 23.5, 62.5, 18]], 1.6, wood, TUBE))
     g.add(rod3([s * 21, 44, 13], [s * 24, 62.6, 13], 1.2, wood))
     g.add(rod3([s * 20, 44, 0], [s * 22.8, 63.8, -1], 0.8, wood))
   }
@@ -1830,7 +1824,7 @@ function fhIronBed(p: string[]) {
     g.add(rbox(3, 10, 2 * Z - 4, iron, { x: sx * X, y: 26 }, 0.8))
   }
   const archY = (x: number) => 110 + 12 * (1 - (x / X) ** 2)
-  g.add(pipe(Array.from({ length: 9 }, (_, i) => { const x = -X + (2 * X * i) / 8; return [x, archY(x), -Z] as V3 }), 1.4, iron, false))
+  g.add(cappedTube(Array.from({ length: 9 }, (_, i) => { const x = -X + (2 * X * i) / 8; return [x, archY(x), -Z] as V3 }), 1.4, iron, { ...TUBE, caps: false }))
   g.add(rod3([-X, 58, -Z], [X, 58, -Z], 1.2, iron))
   for (let i = 1; i < 12; i++) {
     const x = -X + (2 * X * i) / 12
@@ -2296,7 +2290,7 @@ function maruAndon(p: string[]) {
     g.add(noOutlineDeep(cyl(0.2, 0.2, 57, shade(paper, -0.12), { x: Math.sin(a) * 13.05, y: 15.5, z: Math.cos(a) * 13.05 }, 4)))
   }
   g.add(torus(14, 0.8, wood, { y: 76, rx: Math.PI / 2 }))
-  g.add(pipe([[-14, 76, 0], [-12, 84, 0], [0, 88, 0], [12, 84, 0], [14, 76, 0]], 0.9, wood, false))
+  g.add(cappedTube([[-14, 76, 0], [-12, 84, 0], [0, 88, 0], [12, 84, 0], [14, 76, 0]], 0.9, wood, { ...TUBE, caps: false }))
   return centerXZ(g)
 }
 
@@ -2527,7 +2521,7 @@ function edisonLamp(p: string[]) {
   g.add(lit(ball(3.8, bulbC, { x: 16, y: 133.4 }, [1, 1.3, 1]), bulbC, 0.9))
   for (let k = 0; k < 6; k++) {
     const a = (k / 6) * Math.PI * 2
-    g.add(pipe([[16 + Math.sin(a) * 2.4, 139, Math.cos(a) * 2.4], [16 + Math.sin(a) * 5.6, 134, Math.cos(a) * 5.6], [16 + Math.sin(a) * 2, 127.6, Math.cos(a) * 2]], 0.3, pipeC, false))
+    g.add(cappedTube([[16 + Math.sin(a) * 2.4, 139, Math.cos(a) * 2.4], [16 + Math.sin(a) * 5.6, 134, Math.cos(a) * 5.6], [16 + Math.sin(a) * 2, 127.6, Math.cos(a) * 2]], 0.3, pipeC, { ...TUBE, caps: false }))
   }
   g.add(torus(5.2, 0.35, pipeC, { x: 16, y: 134, rx: Math.PI / 2 }))
   return centerXZ(g)

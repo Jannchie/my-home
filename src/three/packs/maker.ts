@@ -8,8 +8,11 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, movable, paintPanel, rectPoly, rng, shell, type AssetCategory, type AssetDef, type Poly, type SurfaceDef } from '../kit'
-import { P, PI, batten, cylX, cylZ, ghostDeep, lit, noOutlineDeep, rod3, type V3 } from '../geo'
+import { P, PI, batten, cappedTube, cylX, cylZ, ghostDeep, lit, noOutlineDeep, rod3, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, PROP, R, type PalFlat } from '../packkit'
+
+/** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
+const TUBE: TubeOpts = { seg: { per: 8, min: 16 } }
 
 type Draw = (g: CanvasRenderingContext2D, W: number, H: number) => void
 
@@ -53,23 +56,6 @@ function aimAt<T extends THREE.Object3D>(o: T, a: V3, b: V3): T {
   o.position.copy(va)
   o.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(...b).sub(va).normalize())
   return o
-}
-
-/** 线材：过给定点的平滑软管，两端圆头 */
-function tube(pts: V3[], r: number, color: string, closed = false, seg?: number) {
-  const curve = new THREE.CatmullRomCurve3(
-    pts.map((p) => new THREE.Vector3(...p)),
-    closed,
-    'centripetal',
-  )
-  const geo = new THREE.TubeGeometry(curve, seg ?? Math.max(16, pts.length * 8), r, 8, closed)
-  const m = new THREE.Mesh(geo, toon(color))
-  m.castShadow = true
-  m.receiveShadow = true
-  if (closed) return m
-  const a = pts[0]
-  const b = pts[pts.length - 1]
-  return G(m, ball(r, color, { x: a[0], y: a[1], z: a[2] }), ball(r, color, { x: b[0], y: b[1], z: b[2] }))
 }
 
 /** 螺旋线点（沿 +y），半径 R、螺距 pitch、圈数 turns */
@@ -747,21 +733,16 @@ function jumper(a: [number, number], b: [number, number], top: number, h: number
   const dz = bz - az
   if (h < 0.3) {
     const k = 0.12 / Math.max(0.3, Math.hypot(dx, dz))
-    return tube(
-      [
+    return cappedTube([
         [ax, top - 0.2, az],
         [ax, top + 0.06, az],
         [ax + dx * k, top + 0.1, az + dz * k],
         [bx - dx * k, top + 0.1, bz - dz * k],
         [bx, top + 0.06, bz],
         [bx, top - 0.2, bz],
-      ],
-      r,
-      color,
-    )
+      ], r, color, TUBE)
   }
-  return tube(
-    [
+  return cappedTube([
       [ax, top - 0.2, az],
       [ax, top + h * 0.45, az],
       [ax + dx * 0.25, top + h * 0.92, az + dz * 0.25],
@@ -769,10 +750,7 @@ function jumper(a: [number, number], b: [number, number], top: number, h: number
       [ax + dx * 0.75, top + h * 0.92, az + dz * 0.75],
       [bx, top + h * 0.45, bz],
       [bx, top - 0.2, bz],
-    ],
-    r,
-    color,
-  )
+    ], r, color, TUBE)
 }
 
 /** 杜邦头：黑色方塑料壳，公头带针；沿 dir（单位向量 xz）朝外 */
@@ -1072,7 +1050,7 @@ function dupontRibbon(path: (o: number) => V3[], y: number, wires: string[], hou
   wires.forEach((c, i) => {
     const o = (i - (wires.length - 1) / 2) * 0.27
     const pts = path(o).map(([x, , z]): V3 => [x, y, z])
-    g.add(tube(pts, 0.08, c, false, 80))
+    g.add(cappedTube(pts, 0.08, c, { ...TUBE, seg: 80 }))
     const [a, a2] = [pts[0], pts[1]]
     const [b, b2] = [pts[pts.length - 1], pts[pts.length - 2]]
     g.add(dupontHead(a[0], y + 0.125, a[2], Math.atan2(a[0] - a2[0], a[2] - a2[2]), male, housing))
@@ -1126,7 +1104,7 @@ function dupontHanging(p: string[]) {
       [0.5, top - 3, z],
       [0.6, top - lenR, z],
     ]
-    g.add(tube(pts, 0.08, c, false, 60))
+    g.add(cappedTube(pts, 0.08, c, { ...TUBE, seg: 60 }))
     for (const [x, y, male] of [[-0.55, top - lenL, true], [0.6, top - lenR, i % 2 === 0]] as const) {
       const hd = new THREE.Group()
       hd.add(rbox(0.25, 1.4, 0.25, housing, { y: -1.4 }, 0.03))
@@ -1159,7 +1137,7 @@ function servoSet(p: string[]) {
     g.add(cyl(0.22, 0.22, 0.3, '#f4f4f2', { x: x + 0.55, y: 2.67, z }, 10))
     g.add(rbox(3.0, 0.16, 0.5, '#f4f4f2', { x: x + 0.55, y: 2.97, z }, 0.08))
     g.add(rbox(0.5, 0.16, 1.8, '#f4f4f2', { x: x + 0.55, y: 2.97, z }, 0.08))
-    for (const [i, c] of ['#8a5a3a', '#e8453c', '#f2963a'].entries()) g.add(tube([[x - 1.15, 0.5, z - 0.15 + i * 0.15], [x - 2.0, 0.12, z + 0.2 + i * 0.15], [x - 2.4, 0.08, z + 2.0 + i * 0.15], [x - 1.6, 0.08, z + 3.2 + i * 0.15]], 0.06, c))
+    for (const [i, c] of ['#8a5a3a', '#e8453c', '#f2963a'].entries()) g.add(cappedTube([[x - 1.15, 0.5, z - 0.15 + i * 0.15], [x - 2.0, 0.12, z + 0.2 + i * 0.15], [x - 2.4, 0.08, z + 2.0 + i * 0.15], [x - 1.6, 0.08, z + 3.2 + i * 0.15]], 0.06, c, TUBE))
     g.add(rbox(0.8, 0.25, 1.4, '#1e1e20', { x: x - 1.3, y: 0, z: z + 4.0 }, 0.04))
   }
   // MG996R
@@ -1170,7 +1148,7 @@ function servoSet(p: string[]) {
     g.add(rbox(5.4, 0.25, 2.0, '#2b2b2b', { x, y: 2.8, z }, 0.1))
     g.add(cyl(0.7, 0.7, 0.4, '#2b2b2b', { x: x + 1, y: 3.7, z }, 16))
     g.add(cyl(1.0, 1.0, 0.2, METAL, { x: x + 1, y: 4.1, z }, 20))
-    for (const [i, c] of ['#8a5a3a', '#e8453c', '#f2963a'].entries()) g.add(tube([[x - 2.0, 0.6, z + 0.6 + i * 0.15], [x - 1.5, 0.1, z + 1.8 + i * 0.15], [x - 0.5, 0.08, z + 3.4 + i * 0.15]], 0.06, c))
+    for (const [i, c] of ['#8a5a3a', '#e8453c', '#f2963a'].entries()) g.add(cappedTube([[x - 2.0, 0.6, z + 0.6 + i * 0.15], [x - 1.5, 0.1, z + 1.8 + i * 0.15], [x - 0.5, 0.08, z + 3.4 + i * 0.15]], 0.06, c, TUBE))
     g.add(rbox(0.8, 0.25, 1.4, '#1e1e20', { x: x - 0.1, y: 0, z: z + 4.4 }, 0.04))
   }
   // TT 减速电机 + 轮子（轮子平放）
@@ -1230,10 +1208,10 @@ function robotCar(p: string[]) {
   const wc = ['#e8453c', '#2b2b2b', '#f2d23a', '#4caf50', '#3a8ee8']
   wc.forEach((c, i) => {
     const x = -1.4 + i * 0.5
-    g.add(tube([[x, 4.95, 6.6], [x, 6.6, 7.3], [x * 0.8, 9.8, 4.0], [x - 0.6, 10.2, 2.2], [x - 0.6, 9.15, 1.5]], 0.06, c))
+    g.add(cappedTube([[x, 4.95, 6.6], [x, 6.6, 7.3], [x * 0.8, 9.8, 4.0], [x - 0.6, 10.2, 2.2], [x - 0.6, 9.15, 1.5]], 0.06, c, TUBE))
   })
-  g.add(tube([[-2.2, 6.2, -4], [-3.0, 7.0, 0], [-1.8, 5.2, 3.6], [-0.6, 4.95, 4.2]], 0.06, '#e8453c'))
-  g.add(tube([[-1.8, 6.2, -4], [-2.5, 6.8, 0], [-1.4, 5.2, 3.6], [-0.2, 4.95, 4.2]], 0.06, '#2b2b2b'))
+  g.add(cappedTube([[-2.2, 6.2, -4], [-3.0, 7.0, 0], [-1.8, 5.2, 3.6], [-0.6, 4.95, 4.2]], 0.06, '#e8453c', TUBE))
+  g.add(cappedTube([[-1.8, 6.2, -4], [-2.5, 6.8, 0], [-1.4, 5.2, 3.6], [-0.2, 4.95, 4.2]], 0.06, '#2b2b2b', TUBE))
   return fit(g)
 }
 const CAR_PALS: PalFlat[] = [
@@ -1274,7 +1252,7 @@ function ledStrip(p: string[]) {
   const dz = (e[2] - e2[2]) / Math.hypot(e[0] - e2[0], e[2] - e2[2])
   ;['#e8453c', '#f4f4f2', '#4caf50'].forEach((c, i) => {
     const o = (i - 1) * 0.25
-    g.add(tube([[e[0] + dz * o, 0.1, e[2] - dx * o], [e[0] + dx * 1.5 + dz * o, 0.08, e[2] + dz * 1.5 - dx * o], [e[0] + dx * 3 + dz * o * 1.5, 0.08, e[2] + dz * 3 - dx * o * 1.5]], 0.07, c))
+    g.add(cappedTube([[e[0] + dz * o, 0.1, e[2] - dx * o], [e[0] + dx * 1.5 + dz * o, 0.08, e[2] + dz * 1.5 - dx * o], [e[0] + dx * 3 + dz * o * 1.5, 0.08, e[2] + dz * 3 - dx * o * 1.5]], 0.07, c, TUBE))
   })
   g.add(P(rbox(1.0, 0.5, 0.8, '#f4f4f2', {}, 0.08), e[0] + dx * 3.4, 0.0, e[2] + dz * 3.4, 0, Math.atan2(dx, dz)))
   return fit(g)
@@ -1299,8 +1277,8 @@ function batteryBox(p: string[]) {
     g.add(bat)
   }
   for (const s of [-1, 1]) g.add(noOutlineDeep(rbox(5.8, 1.1, 0.06, METAL, { y: 0.3, z: s * 2.83 }, 0.02)))
-  g.add(tube([[-2.6, 0.9, -3.0], [-3.2, 0.35, -4.4], [-1.5, 0.08, -6.5], [1.8, 0.08, -7.2], [4.2, 0.08, -6.0]], 0.07, '#e8453c'))
-  g.add(tube([[-2.2, 0.9, -3.0], [-2.7, 0.35, -4.1], [-1.2, 0.08, -5.8], [1.8, 0.08, -6.3], [4.4, 0.08, -5.2]], 0.07, '#2b2b2b'))
+  g.add(cappedTube([[-2.6, 0.9, -3.0], [-3.2, 0.35, -4.4], [-1.5, 0.08, -6.5], [1.8, 0.08, -7.2], [4.2, 0.08, -6.0]], 0.07, '#e8453c', TUBE))
+  g.add(cappedTube([[-2.2, 0.9, -3.0], [-2.7, 0.35, -4.1], [-1.2, 0.08, -5.8], [1.8, 0.08, -6.3], [4.4, 0.08, -5.2]], 0.07, '#2b2b2b', TUBE))
   for (const [x, z] of [[4.2, -6.0], [4.4, -5.2]]) g.add(noOutlineDeep(cylX(0.04, 0.6, SOLDER, x + 0.3, 0.08, z, 6)))
   g.add(P(aaBattery(0, 0.72, 0, wrap, band), -1.0, 0, 5.0, 0, PI / 2 - 0.2))
   g.add(P(aaBattery(0, 0.72, 0, wrap, band), 2.4, 0, 4.4, 0, PI / 2 + 0.3))
@@ -1386,14 +1364,14 @@ function solderStation(p: string[]) {
   const A: V3 = [5, 4.0, -4.2]
   const dir = new THREE.Vector3(0, 5, 5.5).normalize()
   const at = (k: number): V3 => [A[0], A[1] + dir.y * k, A[2] + dir.z * k]
-  const coil = aimAt(G(tube(helix(1.3, 0.55, 12), 0.1, CHROME, false, 300)), A, at(1))
+  const coil = aimAt(G(cappedTube(helix(1.3, 0.55, 12), 0.1, CHROME, { ...TUBE, seg: 300 })), A, at(1))
   g.add(coil)
   g.add(rod3([5, 1.2, -4.2], A, 0.35, holder))
   g.add(rod3([5, 1.2, -0.5], at(4.5), 0.25, holder))
   // 烙铁
   g.add(aimAt(G(cyl(0.25, 0.1, 1.4, '#9a9da3', {}, 10), cyl(0.25, 0.25, 4.5, CHROME, { y: 1.4 }, 10), cyl(0.55, 0.45, 0.8, '#2b2b2b', { y: 5.9 }, 14), capsule(0.7, 6.5, unit, { y: 6.5 }), cyl(0.35, 0.5, 1.4, '#2b2b2b', { y: 14.0 }, 12)), at(0.5), at(2)))
   const end = at(16)
-  g.add(tube([end, [5, end[1] + 0.3, end[2] + 1.8], [3.5, 6, 11], [0, 0.3, 10.8], [-4, 0.4, 9.2], [-5.0, 2.5, 7.8], [-5.0, 4.0, 7.3]], 0.2, '#2b2b2b'))
+  g.add(cappedTube([end, [5, end[1] + 0.3, end[2] + 1.8], [3.5, 6, 11], [0, 0.3, 10.8], [-4, 0.4, 9.2], [-5.0, 2.5, 7.8], [-5.0, 4.0, 7.3]], 0.2, '#2b2b2b', TUBE))
   return fit(g)
 }
 const STATION_PALS: PalFlat[] = [
@@ -1426,7 +1404,7 @@ function hotAirStation(p: string[]) {
   g.add(cylZ(1.5, 1.0, '#2b2b2b', 7.6, gy, -7.3, 20))
   g.add(cylZ(0.75, 2.4, METAL, 7.6, gy, 7.2, 16))
   g.add(cylZ(0.45, 1.6, CHROME, 7.6, gy, 9.2, 12))
-  g.add(tube([[7.6, gy, -7.8], [7.6, gy - 0.6, -10.2], [10.6, 3.2, -8.5], [11.3, 1.0, 0], [9.2, 0.6, 10.5], [4.0, 0.8, 11.8], [1.0, 2.2, 9.5]], 0.45, '#5a5d63'))
+  g.add(cappedTube([[7.6, gy, -7.8], [7.6, gy - 0.6, -10.2], [10.6, 3.2, -8.5], [11.3, 1.0, 0], [9.2, 0.6, 10.5], [4.0, 0.8, 11.8], [1.0, 2.2, 9.5]], 0.45, '#5a5d63', TUBE))
   return fit(g)
 }
 
@@ -1462,7 +1440,7 @@ function solderSpool(p: string[]) {
   g.add(paintPanel(3.6, 3.6, `mk-spool-${flange}-${label}`, drawRoundTag(flange, label, 'Sn63', 'Ø0.8mm 250g'), { x: 1.69, y: yc - 1.8, ry: PI / 2 }))
   g.add(rbox(1.2, 0.9, 0.9, stand, { x: 0.5, y: 0.9, z: 2.55 }, 0.2))
   g.add(cylZ(0.25, 1.0, METAL, 0.5, 2.0, 2.6, 10))
-  g.add(tube([[0.5, yc, 2.4], [0.5, 4.2, 2.7], [0.5, 2.6, 2.4], [0.5, 2.0, 2.0], [0.5, 2.0, 3.2], [0.6, 1.4, 4.6], [1.0, 0.06, 6.0], [2.6, 0.06, 6.8]], 0.05, SOLDER, false, 60))
+  g.add(cappedTube([[0.5, yc, 2.4], [0.5, 4.2, 2.7], [0.5, 2.6, 2.4], [0.5, 2.0, 2.0], [0.5, 2.0, 3.2], [0.6, 1.4, 4.6], [1.0, 0.06, 6.0], [2.6, 0.06, 6.8]], 0.05, SOLDER, { ...TUBE, seg: 60 }))
   return fit(g)
 }
 const SPOOL_PALS: PalFlat[] = [
@@ -1553,7 +1531,7 @@ function multimeter(p: string[]) {
     probe.rotation.y = ang
     g.add(probe)
     const tail = new THREE.Vector3(0, 0.45, 4.5).applyAxisAngle(new THREE.Vector3(0, 1, 0), ang).add(probe.position)
-    g.add(tube([[jx0, 4.8, 6.6], [jx0 + 0.6, 5.6, 7.8], [4.5, 2.6, 10.2], [px + 0.4, 0.3, 9.4], [tail.x, 0.45, tail.z + 0.6], [tail.x, 0.45, tail.z]], 0.16, col))
+    g.add(cappedTube([[jx0, 4.8, 6.6], [jx0 + 0.6, 5.6, 7.8], [4.5, 2.6, 10.2], [px + 0.4, 0.3, 9.4], [tail.x, 0.45, tail.z + 0.6], [tail.x, 0.45, tail.z]], 0.16, col, TUBE))
   }
   return fit(g)
 }
@@ -1594,7 +1572,7 @@ function oscilloscope(p: string[]) {
     g.add(P(capsule(0.5, 6.5, '#3a3a3c'), px, 0.5, pz, 0, 0, PI / 2))
     g.add(cylX(0.55, 0.3, col, px + 2.6, 0.55, pz, 14))
     g.add(P(cyl(0.08, 0.3, 1.8, CHROME, {}, 8), px - 4.6, 0.5, pz, 0, 0, PI / 2))
-    g.add(tube([[x0, 2.6, 8.0], [x0 + 0.3, 1.6, 9.6], [x0 - 1.5, 0.3, pz - 1.0], [px + 6, 0.3, pz + 0.2], [px + 4.2, 0.5, pz]], 0.15, '#2b2b2b'))
+    g.add(cappedTube([[x0, 2.6, 8.0], [x0 + 0.3, 1.6, 9.6], [x0 - 1.5, 0.3, pz - 1.0], [px + 6, 0.3, pz + 0.2], [px + 4.2, 0.5, pz]], 0.15, '#2b2b2b', TUBE))
   }
   return fit(g)
 }
@@ -1624,7 +1602,7 @@ function benchPsu(p: string[]) {
   }
   g.add(rbox(1.2, 1.2, 0.4, '#e8453c', { x: -4.8, y: 5.6, z: 12.75 }, 0.15))
   for (const [x, col, ex, ez] of [[-3, '#e8453c', -5.5, 21.5], [0, '#2b2b2b', 2.2, 21.8]] as const) {
-    g.add(tube([[x, 3.6, 14.1], [x, 3.0, 15.0], [x * 0.9 + (ex - x) * 0.3, 0.8, 16.8], [(x + ex) / 2, 0.3, 19], [ex, 0.32, ez - 1.2]], 0.15, col))
+    g.add(cappedTube([[x, 3.6, 14.1], [x, 3.0, 15.0], [x * 0.9 + (ex - x) * 0.3, 0.8, 16.8], [(x + ex) / 2, 0.3, 19], [ex, 0.32, ez - 1.2]], 0.15, col, TUBE))
     g.add(gator(ex, 0, ez - 1.3, col))
   }
   return fit(g)
@@ -1666,11 +1644,11 @@ function logicAnalyzer(p: string[]) {
     const xs = -1.2 + i * 0.27
     const xe = -6 + i * 1.35
     const ze = 9.5 + (i % 3) * 1.4
-    g.add(tube([[xs, 0.8, 3.25], [xs, 0.6, 4.6], [xs + (xe - xs) * 0.5, 0.1, 6.8], [xe, 0.1, ze - 1.6], [xe, 0.3, ze - 0.5]], 0.07, c))
+    g.add(cappedTube([[xs, 0.8, 3.25], [xs, 0.6, 4.6], [xs + (xe - xs) * 0.5, 0.1, 6.8], [xe, 0.1, ze - 1.6], [xe, 0.3, ze - 0.5]], 0.07, c, TUBE))
     g.add(P(capsule(0.3, 1.4, c), xe, 0.3, ze + 0.5, PI / 2))
     g.add(P(cyl(0.05, 0.12, 0.8, CHROME, {}, 6), xe, 0.3, ze + 1.9, PI / 2))
   })
-  g.add(tube([[0, 0.8, -2.8], [0, 0.4, -4.6], [2.2, 0.15, -7.4], [4.4, 0.15, -8.2]], 0.15, '#2b2b2b'))
+  g.add(cappedTube([[0, 0.8, -2.8], [0, 0.4, -4.6], [2.2, 0.15, -7.4], [4.4, 0.15, -8.2]], 0.15, '#2b2b2b', TUBE))
   g.add(P(rbox(1.2, 0.6, 1.8, '#2b2b2b', {}, 0.15), 5.4, 0.0, -8.5, 0, PI / 2 - 0.3))
   return fit(g)
 }
@@ -1698,7 +1676,7 @@ function usbMicroscope(p: string[]) {
   g.add(rbox(4.4, PCB_T, 3.2, '#2f7d4a', { y: 1.2, z: 0 }, 0.04))
   g.add(paintTop(4.3, 3.1, 'mk-pcb-micro', drawPcb('#2f7d4a', 73, '#ffffff', 0.5), 0, 1.21 + PCB_T, 0))
   g.add(chip(0.8, 0.8, 0.3, 1.41, 0.2, 5, 5))
-  g.add(tube([[0, 16.5, 0], [0, 17.8, 0.5], [2.2, 17.2, 3.0], [5.0, 8.0, 5.2], [6.6, 0.15, 6.4], [8.4, 0.15, 8.6]], 0.15, '#2b2b2b'))
+  g.add(cappedTube([[0, 16.5, 0], [0, 17.8, 0.5], [2.2, 17.2, 3.0], [5.0, 8.0, 5.2], [6.6, 0.15, 6.4], [8.4, 0.15, 8.6]], 0.15, '#2b2b2b', TUBE))
   g.add(P(rbox(1.2, 0.5, 1.8, '#2b2b2b', {}, 0.15), 9.0, 0, 9.5, 0, 0.7))
   return fit(g)
 }
@@ -1725,7 +1703,7 @@ function glueGun(p: string[]) {
   gun.add(rod3([-0.9, -1.4, 4.5], [-0.9, -5.6, 5.4], 0.12, METAL))
   gun.add(rod3([0.9, -1.4, 4.5], [0.9, -5.6, 5.4], 0.12, METAL))
   gun.add(rod3([-0.9, -5.6, 5.4], [0.9, -5.6, 5.4], 0.12, METAL))
-  gun.add(tube([[0, -9.3, -4.6], [0, -9.6, -6.5], [1.2, -9.5, -10], [3.5, -9.5, -12]], 0.22, '#2b2b2b'))
+  gun.add(cappedTube([[0, -9.3, -4.6], [0, -9.6, -6.5], [1.2, -9.5, -10], [3.5, -9.5, -12]], 0.22, '#2b2b2b', TUBE))
   gun.add(P(rbox(1.6, 1.2, 2.2, '#2b2b2b', {}, 0.2), 4.2, -9.6, -12.8, 0, 0.6))
   gun.rotation.x = 0.12
   const g = fit(gun)
@@ -1796,7 +1774,7 @@ function stripperBody(p: string[]): [THREE.Group, V3] {
   for (const s of [-1, 1]) {
     g.add(P(capsule(0.7, 10.5, s < 0 ? grip : acc), s * 1.25, 0.75, -1.8, PI / 2, s * 0.06))
   }
-  g.add(P(G(tube(helix(0.35, 0.3, 5), 0.06, METAL, false, 60)), 0, 0.75, 1.2, 0, 0, PI / 2))
+  g.add(P(G(cappedTube(helix(0.35, 0.3, 5), 0.06, METAL, { ...TUBE, seg: 60 })), 0, 0.75, 1.2, 0, 0, PI / 2))
   g.children[g.children.length - 1].position.x = -0.75
   const ring: V3 = [1.25, 0.75, -8.3]
   g.add(P(torus(0.7, 0.2, METAL), ...ring, PI / 2))
@@ -1831,8 +1809,8 @@ function esdStrap(p: string[]) {
   g.add(rbox(1.6, 0.95, 1.3, '#3a3a3c', { x: 2.4, y: 0, z: 0 }, 0.3))
   g.add(cyl(0.4, 0.4, 0.25, METAL, { x: 2.4, y: 0.95, z: 0 }, 12))
   const coil = helix(0.35, 0.24, 36, 10).map(([x, y, z]): V3 => [y + 3.4, x + 0.45, z])
-  g.add(tube(coil, 0.07, cord, false, 700))
-  g.add(tube([[12.04, 0.45, 0.35], [13.2, 0.12, 0.8], [14.2, 0.12, 0.2]], 0.07, cord))
+  g.add(cappedTube(coil, 0.07, cord, { ...TUBE, seg: 700 }))
+  g.add(cappedTube([[12.04, 0.45, 0.35], [13.2, 0.12, 0.8], [14.2, 0.12, 0.2]], 0.07, cord, TUBE))
   g.add(gator(14.6, 0, 0, clip, PI / 2))
   return fit(g)
 }
@@ -1872,7 +1850,7 @@ function magLamp(p: string[]) {
   }
   g.add(cylX(0.8, 2.6, '#3a3a3c', ...pv, 14))
   g.add(cylX(0.8, 2.6, '#3a3a3c', ...el, 14))
-  g.add(aimAt(G(tube(helix(0.4, 0.3, 30, 8), 0.06, CHROME, false, 300)), [0, 6, -14.6], [0, 33, -19.9]))
+  g.add(aimAt(G(cappedTube(helix(0.4, 0.3, 30, 8), 0.06, CHROME, { ...TUBE, seg: 300 })), [0, 6, -14.6], [0, 33, -19.9]))
   g.add(rbox(2, 2, 3, head, { y: 29.6, z: -2.2 }, 0.4))
   g.add(P(torus(7.5, 1.6, head), 0, 30, 6, PI / 2))
   g.add(lit(P(torus(6.3, 0.4, glowC), 0, 28.9, 6, PI / 2), glowC, 0.95))
@@ -1957,7 +1935,7 @@ function angleGrinder(p: string[]) {
   g.add(rbox(3, 0.6, 1.2, acc, { x: 10, y: 6.4 }, 0.2))
   g.add(cylZ(0.9, 9, '#2b2b2b', 1.5, 3.2, -7, 14))
   g.add(cylX(2.4, 1.6, acc, 21.5, 3.6, 0, 18))
-  g.add(tube([[22.4, 3.6, 0], [24.5, 2.0, 0.5], [25.5, 0.25, 3], [23, 0.25, 6], [19, 0.25, 6.5]], 0.25, '#2b2b2b'))
+  g.add(cappedTube([[22.4, 3.6, 0], [24.5, 2.0, 0.5], [25.5, 0.25, 3], [23, 0.25, 6], [19, 0.25, 6.5]], 0.25, '#2b2b2b', TUBE))
   g.add(P(rbox(1.8, 1.2, 2.6, '#2b2b2b', {}, 0.2), 17.6, 0, 6.5, 0, PI / 2))
   g.rotation.z = -0.06
   return fit(g)
@@ -2023,7 +2001,7 @@ function jigsawScene(p: string[]) {
   g.add(rbox(2, 2.6, 2.2, '#2b2b2b', { x: 4.2, y: 7.35, z }, 0.3))
   g.add(rbox(0.9, 7.2, 0.12, CHROME, { x: 4.2, y: 2.8, z }, 0.04))
   g.add(rbox(1.2, 1.4, 1.0, acc, { x: -1.5, y: 14.2, z }, 0.3))
-  g.add(tube([[-11, 12.5, z], [-13, 10.5, z + 0.5], [-15.5, 7.2, z + 1.5], [-17.3, 6.0, z + 2.5], [-18.6, 2.5, z + 3.5], [-19.2, 0.3, z + 5.5], [-17.5, 0.3, z + 8.0]], 0.25, '#2b2b2b'))
+  g.add(cappedTube([[-11, 12.5, z], [-13, 10.5, z + 0.5], [-15.5, 7.2, z + 1.5], [-17.3, 6.0, z + 2.5], [-18.6, 2.5, z + 3.5], [-19.2, 0.3, z + 5.5], [-17.5, 0.3, z + 8.0]], 0.25, '#2b2b2b', TUBE))
   const r = rng(43)
   for (let i = 0; i < 14; i++) g.add(noOutlineDeep(cyl(0.25 + r() * 0.3, 0.25 + r() * 0.3, 0.06, shade(wood, 0.12), { x: 2 + r() * 6, y: 6.82, z: z - 1 + r() * 4 }, 8)))
   return fit(g)
@@ -2145,7 +2123,7 @@ function cnc3018(p: string[]) {
   g.add(rbox(4.2, 4.2, 4.2, '#2b2b2b', { y: 23.5, z: -6.5 }, 0.3))
   g.add(rbox(0.3, 6, 8, '#2f7d4a', { x: -20.5, y: 5, z: -8 }, 0.05))
   g.add(cylX(1.6, 0.8, '#2b2b2b', -21.1, 9, -8))
-  for (const [i, c] of ['#e8453c', '#2b2b2b', '#3a8ee8'].entries()) g.add(tube([[-20.4, 10.5 - i * 0.4, -10.5], [-19, 23, -11], [-4, 25.5, -9], [-1.5 + i * 0.5, 25.7, -6.5]], 0.1, c))
+  for (const [i, c] of ['#e8453c', '#2b2b2b', '#3a8ee8'].entries()) g.add(cappedTube([[-20.4, 10.5 - i * 0.4, -10.5], [-19, 23, -11], [-4, 25.5, -9], [-1.5 + i * 0.5, 25.7, -6.5]], 0.1, c, TUBE))
   return fit(g)
 }
 const CNC_PALS: PalFlat[] = [
@@ -2438,8 +2416,8 @@ function teardown(p: string[]) {
   g.add(rbox(3.2, 0.4, 0.8, '#f4f4f2', { x: -2, y: t, z: -3.6 }, 0.06))
   for (let i = 0; i < 4; i++) g.add(G(cyl(0.35, 0.35, 0.8, '#2b2b2b', { x: -10 + i * 1.0, y: t, z: 3.2 }, 12)))
   g.add(rbox(6, 1.0, 4, '#3a7fd0', { x: -3.5, y: 0.35, z: 4.9 }, 0.3))
-  g.add(tube([[-1.5, 1.2, 4.5], [-0.6, 1.8, 3.5], [-1.2, t + 0.2, 1.0]], 0.06, '#e8453c'))
-  g.add(tube([[-1.5, 1.2, 5.2], [-0.2, 1.9, 4.0], [-0.8, t + 0.2, 1.3]], 0.06, '#2b2b2b'))
+  g.add(cappedTube([[-1.5, 1.2, 4.5], [-0.6, 1.8, 3.5], [-1.2, t + 0.2, 1.0]], 0.06, '#e8453c', TUBE))
+  g.add(cappedTube([[-1.5, 1.2, 5.2], [-0.2, 1.9, 4.0], [-0.8, t + 0.2, 1.3]], 0.06, '#2b2b2b', TUBE))
   // 翻开的上壳（内面朝上）+ 排线
   g.add(tray(22, 2.0, 14, 0.35, shellC, { x: 17 }, 0.6))
   for (let i = 0; i < 4; i++) g.add(cyl(0.6, 0.6, 0.6, acc, { x: 12 + i * 1.6, y: 0.35, z: 3 }, 14))
@@ -2453,8 +2431,8 @@ function teardown(p: string[]) {
   g.add(cylX(0.4, 8, acc, -6, 0.4, 10, 6))
   g.add(cylX(0.1, 3, CHROME, -0.5, 0.4, 10, 6))
   g.add(rbox(9, 0.3, 0.8, '#3a7fd0', { x: -14, z: 10.5, ry: 0.3 }, 0.1))
-  g.add(tube([[-17, 0.08, 8.5], [-19, 0.08, 6], [-21, 0.08, 2], [-19.6, 0.08, -2], [-17.5, 0.08, -3.5]], 0.07, '#4caf50'))
-  g.add(tube([[-16, 0.08, 9.5], [-18, 0.08, 9.0], [-20.5, 0.08, 6.5], [-21.5, 0.08, 4.5]], 0.07, '#f2d23a'))
+  g.add(cappedTube([[-17, 0.08, 8.5], [-19, 0.08, 6], [-21, 0.08, 2], [-19.6, 0.08, -2], [-17.5, 0.08, -3.5]], 0.07, '#4caf50', TUBE))
+  g.add(cappedTube([[-16, 0.08, 9.5], [-18, 0.08, 9.0], [-20.5, 0.08, 6.5], [-21.5, 0.08, 4.5]], 0.07, '#f2d23a', TUBE))
   return fit(g)
 }
 const TEAR_PALS: PalFlat[] = [

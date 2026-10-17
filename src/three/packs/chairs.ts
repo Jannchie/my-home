@@ -6,8 +6,11 @@ import * as THREE from 'three'
 import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js'
 import { ball, capsule, cyl, puck, rbox, shade, toon, torus, tray, useAnisotropy } from '../toon'
 import { C, G, ellipsePoly, holePanel, legs, slab, type AssetDef, type Hole } from '../kit'
-import { UP, mesh, strut, strutBox, type V2, type V3 } from '../geo'
+import { UP, cappedTube, mesh, strut, strutBox, tube, type TubeOpts, type V2, type V3 } from '../geo'
 import { I, J, M, N, R, type Pal } from '../packkit'
+
+/** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
+const TUBE: TubeOpts = { seg: { per: 10, min: 16 } }
 
 // ---------- 配色 ----------
 
@@ -19,21 +22,6 @@ const CHROME = M.silver
 const INK = M.black
 
 // ---------- 小工具 ----------
-
-/** 平滑弯管（经过所有点） */
-function tube(pts: V3[], r: number, color: string, closed = false) {
-  const curve = new THREE.CatmullRomCurve3(
-    pts.map((p) => new THREE.Vector3(...p)),
-    closed,
-    'centripetal',
-  )
-  return mesh(new THREE.TubeGeometry(curve, Math.max(16, pts.length * 10), r, 8, closed), color)
-}
-/** 两端加圆头的弯管 */
-function pipe(pts: V3[], r: number, color: string) {
-  const [a, b] = [pts[0], pts[pts.length - 1]]
-  return G(tube(pts, r, color), ball(r, color, { x: a[0], y: a[1], z: a[2] }), ball(r, color, { x: b[0], y: b[1], z: b[2] }))
-}
 
 /** 把一条 2D 中心线（先样条平滑）加厚 t，得到闭合轮廓 */
 function strip(pts: V2[], t: number, n = 40): V2[] {
@@ -221,7 +209,7 @@ function windsor(p: string[]) {
   for (const sx of [-1, 1]) g.add(strut([sx * lx, 16, -lz], [sx * lx, 16, lz], 1.1, leg))
   g.add(strut([-lx, 16, 0], [lx, 16, 0], 1.1, leg))
   const bow = (t: number): V3 => [Math.cos(t) * (15 + 5 * Math.sin(t)), 43 + 46 * Math.sin(t), -13 - 9 * Math.sin(t)]
-  g.add(tube(Array.from({ length: 17 }, (_, i) => bow((i / 16) * Math.PI)), 1.6, wood))
+  g.add(tube(Array.from({ length: 17 }, (_, i) => bow((i / 16) * Math.PI)), 1.6, wood, TUBE))
   for (let i = 0; i < 7; i++) {
     const [x, y, z] = bow(Math.PI / 2 + (i - 3) * 0.17)
     g.add(strut([x * 0.92, 44, -12], [x, y - 0.5, z], 0.8, wood))
@@ -252,8 +240,7 @@ function wishbone(p: string[]) {
   for (let j = 0; j < 11; j++) g.add(strut([-19.5 + j * 3.9, 44.4, -17.8], [-19.5 + j * 3.9, 44.4, 17.8], 0.55, cord, 0.55, 6))
   // 弯背横梁：两端落在后腿顶
   g.add(
-    pipe(
-      [
+    cappedTube([
         [-23.5, 64, -15],
         [-22.7, 66.5, -20.5],
         [-17, 68.5, -25],
@@ -261,10 +248,7 @@ function wishbone(p: string[]) {
         [17, 68.5, -25],
         [22.7, 66.5, -20.5],
         [23.5, 64, -15],
-      ],
-      1.8,
-      wood,
-    ),
+      ], 1.8, wood, TUBE),
   )
   for (const s of [-1, 1]) g.add(strutBox([s * 9, 69.2, -26.4], [0, 55, -23.8], 4, 1.4, wood))
   g.add(strutBox([0, 56, -23.8], [0, 42.5, -20], 4.5, 1.4, wood))
@@ -397,7 +381,7 @@ function quanyi(p: string[]) {
   const pts: V3[] = [[-16, 67, 26]]
   for (let i = 0; i <= 12; i++) pts.push(railPt(-2.6 + (5.2 * i) / 12))
   pts.push([16, 67, 26])
-  g.add(pipe(pts, 1.7, wood))
+  g.add(cappedTube(pts, 1.7, wood, TUBE))
   for (const s of [-1, 1]) {
     const bp = railPt(s * 0.8)
     const fp = railPt(s * 2.2)
@@ -443,8 +427,7 @@ function cesca(p: string[]) {
   for (const s of [-1, 1]) {
     const x = s * 20.25
     g.add(
-      tube(
-        [
+      tube([
           [x, 1.2, -20],
           [x, 1.2, 12],
           [x, 4, 20],
@@ -455,10 +438,7 @@ function cesca(p: string[]) {
           [x, 46, -18.5],
           [x, 62, -21],
           [x, 82, -22],
-        ],
-        1.2,
-        tubeC,
-      ),
+        ], 1.2, tubeC, TUBE),
     )
     g.add(ball(1.2, tubeC, { x, y: 1.2, z: -20 }), ball(1.2, tubeC, { x, y: 82, z: -22 }))
   }
@@ -748,7 +728,7 @@ function kneelingChair(p: string[]) {
   const ry = (z: number) => 1.8 + 4 * (z / 30) ** 2
   for (const s of [-1, 1]) {
     const x = s * 19
-    g.add(tube(Array.from({ length: 9 }, (_, i): V3 => [x, ry(-30 + i * 7.5), -30 + i * 7.5]), 1.8, wood))
+    g.add(tube(Array.from({ length: 9 }, (_, i): V3 => [x, ry(-30 + i * 7.5), -30 + i * 7.5]), 1.8, wood, TUBE))
     g.add(strutBox([x, ry(-14), -14], [x, 52, 2], 3, 5, wood))
     g.add(strutBox([x, ry(12), 12], [x, 30, 18], 3, 4.5, wood))
   }
@@ -774,16 +754,12 @@ function ballSeat(p: string[]) {
   g.add(ball(26, ballC, { y: 30.6 }))
   for (const s of [-1, 1])
     g.add(
-      tube(
-        [
+      tube([
           [s * 10, 14, -17.3],
           [s * 10, 16, -24],
           [s * 10, 30, -29],
           [s * 10, 48, -28.5],
-        ],
-        1.1,
-        frame,
-      ),
+        ], 1.1, frame, TUBE),
     )
   g.add(rbox(28, 9, 3, frame, { y: 42, z: -29.5, rx: 0.08 }, 1.4))
   return g
@@ -904,8 +880,7 @@ function barcelona(p: string[]) {
   for (const s of [-1, 1]) {
     const x = s * 35
     g.add(
-      tube(
-        [
+      tube([
           [x, 1.3, 32],
           [x, 14, 18],
           [x, 26, 0],
@@ -913,23 +888,16 @@ function barcelona(p: string[]) {
           [x, 44, -24],
           [x, 60, -29],
           [x, 78, -34],
-        ],
-        1.3,
-        frame,
-      ),
+        ], 1.3, frame, TUBE),
     )
     g.add(
-      tube(
-        [
+      tube([
           [x, 1.3, -32],
           [x, 14, -20],
           [x, 26, -4],
           [x, 34, 14],
           [x, 37, 30],
-        ],
-        1.3,
-        frame,
-      ),
+        ], 1.3, frame, TUBE),
     )
   }
   g.add(strut([-35, 44, -24], [35, 44, -24], 1.1, frame))
@@ -1074,7 +1042,7 @@ function stool60(p: string[]) {
   for (let i = 0; i < 3; i++) {
     const a = (i / 3) * Math.PI * 2 + Math.PI
     const pt = (r: number, y: number): V3 => [r * Math.sin(a), y, r * Math.cos(a)]
-    g.add(tube([pt(14.5, 0), pt(14.5, 30), pt(14, 36), pt(12, 39), pt(8.5, 40.8)], 1.7, leg))
+    g.add(tube([pt(14.5, 0), pt(14.5, 30), pt(14, 36), pt(12, 39), pt(8.5, 40.8)], 1.7, leg, TUBE))
   }
   return g
 }
@@ -1314,16 +1282,12 @@ function bistroChair(p: string[]) {
   for (const s of [-1, 1]) {
     g.add(strut([s * 20, 0, 18], [s * 19.2, 44, 14], 1.1, metal))
     g.add(
-      pipe(
-        [
+      cappedTube([
           [s * 20, 0, -20],
           [s * 19.2, 44, -16],
           [s * 19, 66, -17],
           [s * 18.5, 84, -20],
-        ],
-        1.1,
-        metal,
-      ),
+        ], 1.1, metal, TUBE),
     )
     g.add(strut([s * 19.2, 43.5, -16.5], [s * 19.2, 43.5, 16], 1, metal))
     g.add(strut([s * 19.6, 16, 16.8], [s * 19.6, 34, -17.4], 0.7, metal))

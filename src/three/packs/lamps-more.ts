@@ -9,8 +9,11 @@
 import * as THREE from 'three'
 import { ball, cup, cyl, face, puck, rbox, toon, torus } from '../toon'
 import { C, type AssetDef } from '../kit'
-import { G, P, lit, litOutlined, rod3, type V3 } from '../geo'
+import { G, P, lit, litOutlined, rod3, tube, type TubeOpts, type V3 } from '../geo'
 import { CL, CN, F, I, J, M, N, R, type PalFlat } from '../packkit'
+
+/** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
+const TUBE: TubeOpts = { seg: 40, receive: false }
 
 const BRASS = '#d4b25a'
 const CHROME = '#d0d5db'
@@ -89,17 +92,6 @@ function lathe(profile: [number, number][], color: string, at: { x?: number; y?:
   m.position.set(at.x ?? 0, at.y ?? 0, at.z ?? 0)
   m.castShadow = true
   m.receiveShadow = true
-  return m
-}
-
-/** 沿控制点的细管（弯杆、电线、铁艺卷草） */
-function tube(pts: V3[], r: number, color: string, seg = 40, closed = false) {
-  const curve = new THREE.CatmullRomCurve3(
-    pts.map((p) => new THREE.Vector3(...p)),
-    closed,
-  )
-  const m = new THREE.Mesh(new THREE.TubeGeometry(curve, seg, r, 8, closed), toon(color))
-  m.castShadow = true
   return m
 }
 
@@ -294,7 +286,7 @@ function bambooFloor(p: string[]) {
       const r = rx * Math.sqrt(1 - t * t) + 0.45
       pts.push([Math.sin(a) * r, cy + t * ry, Math.cos(a) * r])
     }
-    g.add(tube(pts, 0.32, bamboo, 16))
+    g.add(tube(pts, 0.32, bamboo, { ...TUBE, seg: 16 }))
   }
   for (const t of [-0.55, 0, 0.55]) g.add(ring(rx * Math.sqrt(1 - t * t) + 0.6, 0.4, bamboo, cy + t * ry))
   g.add(cyl(2.4, 3.2, 2.4, bamboo, { y: cy + ry - 1 }, 12))
@@ -337,7 +329,7 @@ function zashikiAndon(p: string[]) {
   g.add(rbox(30, 3, 30, wood, { y: 3 }, 0.8))
   g.add(paperBox(26, 27, 26, paper, wood, 6, 2, 2, 2.2))
   g.add(squareRim(29, 29, 2.4, wood, 33))
-  g.add(tube([[-11, 35, 0], [-8, 41, 0], [0, 43.5, 0], [8, 41, 0], [11, 35, 0]], 0.7, dark, 24))
+  g.add(tube([[-11, 35, 0], [-8, 41, 0], [0, 43.5, 0], [8, 41, 0], [11, 35, 0]], 0.7, dark, { ...TUBE, seg: 24 }))
   return g
 }
 
@@ -456,7 +448,7 @@ function bambooWall(p: string[]) {
   g.add(half)
   for (let k = 0; k <= 8; k++) {
     const a = -Math.PI / 2 + (k / 8) * Math.PI
-    g.add(tube(prof.map(([r, y]): V3 => [Math.sin(a) * (r + 0.4), y + 2, Math.cos(a) * (r + 0.4)]), 0.3, bamboo, 12))
+    g.add(tube(prof.map(([r, y]): V3 => [Math.sin(a) * (r + 0.4), y + 2, Math.cos(a) * (r + 0.4)]), 0.3, bamboo, { ...TUBE, seg: 12 }))
   }
   for (const [r, y] of [prof[0], prof[2], prof[4]]) {
     const t = torus(r + 0.5, 0.4, bamboo, {}, Math.PI)
@@ -692,7 +684,7 @@ function cage(r: number, h: number, metal: string, cy: number, x = 0, z = 0) {
       const rr = r * Math.sqrt(1 - 0.75 * t * t)
       pts.push([x + Math.sin(a) * rr, cy + (t * h) / 2, z + Math.cos(a) * rr])
     }
-    g.add(tube(pts, 0.28, metal, 12))
+    g.add(tube(pts, 0.28, metal, { ...TUBE, seg: 12 }))
   }
   for (const t of [-0.6, 0, 0.6]) g.add(ring(r * Math.sqrt(1 - 0.75 * t * t), 0.35, metal, cy + (t * h) / 2, x, z))
   g.add(bulb(3.6, x, cy, z, 1.35))
@@ -849,7 +841,7 @@ function tulipFloor(p: string[]) {
   for (const [a, y] of heads) {
     const ex = Math.sin(a) * 13
     const ez = Math.cos(a) * 13
-    g.add(tube([[0, 120, 0], [ex * 0.3, y - 14, ez * 0.3], [ex * 0.9, y - 6, ez * 0.9], [ex, y - 2, ez]], 0.6, metal, 24))
+    g.add(tube([[0, 120, 0], [ex * 0.3, y - 14, ez * 0.3], [ex * 0.9, y - 6, ez * 0.9], [ex, y - 2, ez]], 0.6, metal, { ...TUBE, seg: 24 }))
     g.add(cyl(1.6, 1.6, 2, metal, { x: ex, y: y - 2.5, z: ez }, 10))
     g.add(lathe([[0, 0], [2.4, 0.4], [5.4, 4], [6.6, 8.5], [6.2, 11]], glass, { x: ex, y: y - 0.8, z: ez }, 28, 0.45))
     g.add(bulb(2, ex, y + 3, ez))
@@ -923,7 +915,7 @@ function tiffanyMushroom(p: string[]) {
       const t = (j / 6) * (Math.PI / 2)
       arc.push([Math.sin(a) * Math.sin(t) * 13.1, 21 + Math.cos(t) * 9.45, Math.cos(a) * Math.sin(t) * 13.1])
     }
-    g.add(tube(arc, 0.28, bronze, 10))
+    g.add(tube(arc, 0.28, bronze, { ...TUBE, seg: 10 }))
   }
   g.add(ring(13, 0.45, bronze, 21))
   g.add(ball(1.6, bronze, { y: 30.6 }))
@@ -936,7 +928,7 @@ function milkBellWall(p: string[]) {
   const [glass, brass] = p
   const g = new THREE.Group()
   g.add(P(cyl(5.5, 5.5, 1.6, brass, {}, 24), 0, 24, -10, Math.PI / 2))
-  g.add(tube([[0, 24, -9], [0, 25.5, -3], [0, 24, 2], [0, 21, 4]], 0.7, brass, 20))
+  g.add(tube([[0, 24, -9], [0, 25.5, -3], [0, 24, 2], [0, 21, 4]], 0.7, brass, { ...TUBE, seg: 20 }))
   g.add(cyl(2, 2, 2.4, brass, { y: 18.6, z: 4 }, 12))
   const bell = lathe([[8.6, 0], [8.2, 2], [6.6, 6], [4.2, 9.4], [2.2, 10.4]], glass, { y: 8.6, z: 4 }, 16, 0.45)
   g.add(bell)
@@ -950,7 +942,7 @@ function tulipWall(p: string[]) {
   const [glass, brass] = p
   const g = new THREE.Group()
   g.add(P(cyl(4.5, 4.5, 1.6, brass, {}, 20), 0, 6, -8, Math.PI / 2))
-  g.add(tube([[0, 6, -7], [0, 5, -1], [0, 8, 3], [0, 13, 4]], 0.7, brass, 20))
+  g.add(tube([[0, 6, -7], [0, 5, -1], [0, 8, 3], [0, 13, 4]], 0.7, brass, { ...TUBE, seg: 20 }))
   g.add(cyl(1.6, 1.6, 2, brass, { y: 12.8, z: 4 }, 10))
   g.add(lathe([[0, 0], [2.4, 0.4], [5.6, 4], [7, 8.5], [6.6, 11.5]], glass, { y: 14.2, z: 4 }, 28, 0.45))
   g.add(bulb(2, 0, 18.5, 4))
@@ -1188,7 +1180,7 @@ function lotusFloor(p: string[]) {
   const [leaf, stem, base] = p
   const g = new THREE.Group()
   g.add(cyl(14, 15, 3, base, {}, 36))
-  g.add(tube([[0, 3, -8], [0, 60, -9], [0, 120, -7], [0, 148, -2], [0, 153, 6], [0, 150, 10]], 1.3, stem, 48))
+  g.add(tube([[0, 3, -8], [0, 60, -9], [0, 120, -7], [0, 148, -2], [0, 153, 6], [0, 150, 10]], 1.3, stem, { ...TUBE, seg: 48 }))
   const leafG = new THREE.Group()
   leafG.add(lathe([[1.5, 0], [20, -0.2], [19, 3], [14, 6.5], [7, 9], [0, 10]], leaf, {}, 36, 0.42))
   for (let k = 0; k < 12; k++) {
@@ -1329,7 +1321,7 @@ function candelabraFloor(p: string[]) {
   ]
   for (const [s, r] of arms) {
     const x = s * r
-    if (s) g.add(tube([[0, 129, 0], [s * 6, 127, 0], [s * 13, 132, 0], [x, 139, 0]], 0.8, brass, 24))
+    if (s) g.add(tube([[0, 129, 0], [s * 6, 127, 0], [s * 13, 132, 0], [x, 139, 0]], 0.8, brass, { ...TUBE, seg: 24 }))
     const y = s ? 139 : 132
     g.add(cyl(3, 2, 2.2, brass, { x, y }, 16))
     g.add(cyl(1.8, 1.8, s ? 12 : 18, candle, { x, y: y + 2 }, 14))
@@ -1396,7 +1388,7 @@ function pleatUrnTable(p: string[]) {
   const g = new THREE.Group()
   g.add(rbox(13, 2.4, 13, base, {}, 0.6))
   g.add(lathe([[0, 0], [4, 0], [3, 2], [6.5, 6], [7.4, 10], [5.6, 15], [2.6, 18], [3.4, 20], [0, 20]], brass, { y: 2.4 }, 28))
-  for (const s of [-1, 1]) g.add(tube([[s * 5.5, 17, 0], [s * 9, 16, 0], [s * 9, 11, 0], [s * 7, 9.5, 0]], 0.5, brass, 16))
+  for (const s of [-1, 1]) g.add(tube([[s * 5.5, 17, 0], [s * 9, 16, 0], [s * 9, 11, 0], [s * 7, 9.5, 0]], 0.5, brass, { ...TUBE, seg: 16 }))
   g.add(cyl(0.6, 0.6, 9, brass, { y: 22.4 }, 8))
   g.add(pleated(9, 13, 16, shadeC, 27))
   g.add(ring(13, 0.4, brass, 27))
@@ -1412,7 +1404,7 @@ function bouillotte(p: string[]) {
   g.add(cyl(0.8, 0.8, 40, brass, { y: 2 }, 8))
   g.add(ball(1.3, brass, { y: 42.6 }))
   for (const s of [-1, 1]) {
-    g.add(tube([[0, 10, 0], [s * 4, 9, 0], [s * 7, 12, 0], [s * 7.4, 16, 0]], 0.55, brass, 16))
+    g.add(tube([[0, 10, 0], [s * 4, 9, 0], [s * 7, 12, 0], [s * 7.4, 16, 0]], 0.55, brass, { ...TUBE, seg: 16 }))
     g.add(cyl(1.4, 1, 1.6, brass, { x: s * 7.4, y: 16 }, 12))
     g.add(cyl(1, 1, 6, '#f4ede0', { x: s * 7.4, y: 17.4 }, 12))
     g.add(bulb(0.9, s * 7.4, 24.6, 0, 1.7))
@@ -1431,7 +1423,7 @@ function candleSconce(p: string[]) {
   g.children[0].scale.set(1, 1, 1.8)
   g.add(ball(1.4, metal, { y: 21.5, z: -7 }))
   for (const s of [-1, 1]) {
-    g.add(tube([[0, 8, -7], [s * 3, 5, -4], [s * 8, 6, -1], [s * 10, 10, 0]], 0.6, metal, 24))
+    g.add(tube([[0, 8, -7], [s * 3, 5, -4], [s * 8, 6, -1], [s * 10, 10, 0]], 0.6, metal, { ...TUBE, seg: 24 }))
     g.add(cyl(2.4, 1.6, 1.8, metal, { x: s * 10, y: 10 }, 14))
     g.add(cyl(1.4, 1.4, 7, candle, { x: s * 10, y: 11.6 }, 12))
     g.add(bulb(1, s * 10, 20, 0, 1.7))
@@ -1447,7 +1439,7 @@ function shadeSconce(p: string[]) {
   const [shadeC, metal] = p
   const g = new THREE.Group()
   g.add(rbox(6, 16, 1.4, metal, { y: 2, z: -11 }, 0.6))
-  g.add(tube([[0, 6, -10], [0, 5, -5], [0, 9, -1], [0, 13, 0]], 0.6, metal, 20))
+  g.add(tube([[0, 6, -10], [0, 5, -5], [0, 9, -1], [0, 13, 0]], 0.6, metal, { ...TUBE, seg: 20 }))
   g.add(cyl(1.4, 1.2, 2, metal, { y: 12.6 }, 10))
   g.add(pleated(5.5, 8, 9, shadeC, 15, 16))
   g.add(ring(8, 0.3, metal, 15))
@@ -1478,7 +1470,7 @@ function rattanFloor(p: string[]) {
         const a = a0 + dir * t * 0.6
         pts.push([Math.sin(a) * r, cy + yy, Math.cos(a) * r])
       }
-      g.add(tube(pts, 0.25, rattan, 12))
+      g.add(tube(pts, 0.25, rattan, { ...TUBE, seg: 12 }))
     }
   }
   g.add(ring(14.2, 0.6, rattan, cy - 10))
@@ -1492,7 +1484,7 @@ function hookLantern(p: string[]) {
   const g = new THREE.Group()
   g.add(cyl(13, 14, 2.4, base, {}, 28))
   g.add(cyl(1, 1, 140, iron, { y: 2.4 }, 10))
-  g.add(tube([[0, 142, 0], [0, 150, 0], [6, 156, 0], [13, 152, 0], [14, 146, 0]], 1, iron, 24))
+  g.add(tube([[0, 142, 0], [0, 150, 0], [6, 156, 0], [13, 152, 0], [14, 146, 0]], 1, iron, { ...TUBE, seg: 24 }))
   g.add(cyl(0.25, 0.25, 4, iron, { x: 14, y: 142 }, 4))
   g.add(lantern(iron, glass, 14, 117))
   return centered(g)
@@ -1505,10 +1497,10 @@ function lantern(metal: string, glass: string, x: number, y0: number, s = 1) {
   g.add(lathe([[3.2 * s, 0], [5.2 * s, 4 * s], [5.6 * s, 8 * s], [4.2 * s, 12.5 * s], [2.6 * s, 14 * s]], glass, { y: 4 * s }, 24, 0.42))
   for (let k = 0; k < 4; k++) {
     const a = (k / 4) * Math.PI * 2 + Math.PI / 4
-    g.add(tube([[Math.sin(a) * 6 * s, 4 * s, Math.cos(a) * 6 * s], [Math.sin(a) * 6.6 * s, 11 * s, Math.cos(a) * 6.6 * s], [Math.sin(a) * 3.6 * s, 18 * s, Math.cos(a) * 3.6 * s]], 0.3 * s, metal, 10))
+    g.add(tube([[Math.sin(a) * 6 * s, 4 * s, Math.cos(a) * 6 * s], [Math.sin(a) * 6.6 * s, 11 * s, Math.cos(a) * 6.6 * s], [Math.sin(a) * 3.6 * s, 18 * s, Math.cos(a) * 3.6 * s]], 0.3 * s, metal, { ...TUBE, seg: 10 }))
   }
   g.add(cyl(2 * s, 4.4 * s, 2.6 * s, metal, { y: 17.6 * s }, 20))
-  g.add(tube([[-4 * s, 19.5 * s, 0], [-3.4 * s, 24 * s, 0], [0, 25 * s, 0], [3.4 * s, 24 * s, 0], [4 * s, 19.5 * s, 0]], 0.3 * s, metal, 16))
+  g.add(tube([[-4 * s, 19.5 * s, 0], [-3.4 * s, 24 * s, 0], [0, 25 * s, 0], [3.4 * s, 24 * s, 0], [4 * s, 19.5 * s, 0]], 0.3 * s, metal, { ...TUBE, seg: 16 }))
   g.add(bulb(1.6 * s, 0, 9 * s, 0, 1.4))
   g.position.set(x, y0, 0)
   return g
@@ -1540,7 +1532,7 @@ function jugTable(p: string[]) {
   const g = new THREE.Group()
   g.add(lathe([[0, 0], [6.5, 0], [8.4, 4], [8.8, 10], [7, 16], [3.2, 19], [2.6, 21], [3.2, 22], [0, 22]], jug, {}, 28))
   g.add(ring(8.6, 0.5, band, 7))
-  g.add(tube([[2.8, 20, 0], [6.5, 20.5, 0], [7.6, 17, 0], [7.4, 14.5, 0]], 0.7, jug, 12))
+  g.add(tube([[2.8, 20, 0], [6.5, 20.5, 0], [7.6, 17, 0], [7.4, 14.5, 0]], 0.7, jug, { ...TUBE, seg: 12 }))
   g.add(cyl(0.6, 0.6, 8, BRASS, { y: 22 }, 8))
   g.add(shadeOpen(10, 12.5, 15, shadeC, { y: 26 }))
   g.add(ring(12.5, 0.35, band, 26))
@@ -1566,7 +1558,7 @@ function rattanTable(p: string[]) {
         const a = a0 + dir * t * 0.7
         pts.push([Math.sin(a) * Math.cos(ang) * 11.4, cy + Math.sin(ang) * 11.8, Math.cos(a) * Math.cos(ang) * 11.4])
       }
-      g.add(tube(pts, 0.2, rattan, 10))
+      g.add(tube(pts, 0.2, rattan, { ...TUBE, seg: 10 }))
     }
   }
   g.add(ring(11, 0.45, rattan, cy))
@@ -1579,7 +1571,7 @@ function barnWall(p: string[]) {
   const [shadeC, metal, inner] = p
   const g = new THREE.Group()
   g.add(P(cyl(5, 5, 1.4, metal, {}, 20), 0, 18, -16, Math.PI / 2))
-  g.add(tube([[0, 18, -15], [0, 24, -10], [0, 26, -2], [0, 24, 4], [0, 20, 6]], 0.8, metal, 24))
+  g.add(tube([[0, 18, -15], [0, 24, -10], [0, 26, -2], [0, 24, 4], [0, 20, 6]], 0.8, metal, { ...TUBE, seg: 24 }))
   g.add(cyl(1.6, 1.6, 2.4, metal, { y: 18, z: 6 }, 10))
   g.add(dome(11, 6.5, shadeC, 18.6, 2, 0, 0, 6))
   g.add(lit(cyl(10, 10, 0.3, inner, { y: 12.6, z: 6 }, 28), inner, 0.45))

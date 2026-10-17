@@ -5,8 +5,11 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, face, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, SWING_OPEN, ellipsePoly, glow, holePanel, movable, paintPanel, rectPoly, rng, shell, type AssetCategory, type AssetDef, type Poly, type SurfaceDef } from '../kit'
-import { G, P, batten, clearMat, cylX, cylZ, lit, noOutlineDeep, rod3, type V3 } from '../geo'
+import { G, P, batten, clearMat, cylX, cylZ, lit, noOutlineDeep, rod3, tube, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, PROP, R, type PalFlat } from '../packkit'
+
+/** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
+const TUBE: TubeOpts = { seg: 48, receive: false }
 
 const BRASS = '#d4b25a'
 const CHROME = '#d0d5db'
@@ -778,17 +781,6 @@ function pleated(rTop: number, rBot: number, h: number, color: string, y: number
   return m
 }
 
-/** 沿控制点的细管（灯杆、电线、霓虹管） */
-function tube(pts: V3[], r: number, color: string, seg = 48, closed = false) {
-  const curve = new THREE.CatmullRomCurve3(
-    pts.map((p) => new THREE.Vector3(...p)),
-    closed,
-  )
-  const m = new THREE.Mesh(new THREE.TubeGeometry(curve, seg, r, 8, closed), toon(color))
-  m.castShadow = true
-  return m
-}
-
 /** 倒扣的灯罩（cup 翻转），yTop 为灯罩顶 */
 function dome(r: number, h: number, color: string, x: number, yTop: number, z: number, rTop = r * 0.3) {
   const m = cup(r, rTop, h, 0.8, color)
@@ -804,7 +796,7 @@ function arcLamp(p: string[]) {
   const [shadeC, pole, base] = p
   const g = new THREE.Group()
   g.add(rbox(35, 7, 35, base, { z: -54.5 }, 2))
-  g.add(tube([[0, 6, -54.5], [0, 90, -56], [0, 170, -40], [0, 194, 0], [0, 184, 38], [0, 170, 50]], 1.3, pole, 64))
+  g.add(tube([[0, 6, -54.5], [0, 90, -56], [0, 170, -40], [0, 194, 0], [0, 184, 38], [0, 170, 50]], 1.3, pole, { ...TUBE, seg: 64 }))
   g.add(cyl(1.2, 1.2, 4, pole, { y: 166, z: 50 }, 8))
   g.add(dome(22, 18, shadeC, 0, 168, 50, 6))
   g.add(bulb(5, 0, 155, 50))
@@ -932,7 +924,7 @@ function sconce(p: string[]) {
   const [shadeC, metal] = p
   const g = new THREE.Group()
   g.add(rbox(7, 16, 1.6, metal, { y: 2, z: -11.2 }, 0.8))
-  g.add(tube([[0, 9, -11], [0, 9, -4], [0, 12, 2], [0, 14, 4]], 0.7, metal, 24))
+  g.add(tube([[0, 9, -11], [0, 9, -4], [0, 12, 2], [0, 14, 4]], 0.7, metal, { ...TUBE, seg: 24 }))
   g.add(cyl(1.5, 1.2, 2.5, metal, { y: 12.5, z: 4 }, 10))
   g.add(drum(9, 5, 14, shadeC, { y: 14, z: 4 }))
   g.add(bulb(2.4, 0, 18, 4))
@@ -955,7 +947,7 @@ function fairyLights(p: string[]) {
       const t = i / 10
       pts.push([x0 + t * sw, 30 - sag * 4 * t * (1 - t), 0])
     }
-    g.add(tube(pts, 0.25, wire, 40))
+    g.add(tube(pts, 0.25, wire, { ...TUBE, seg: 40 }))
     for (let i = 1; i < 8; i++) {
       const t = i / 8
       const x = x0 + t * sw
@@ -1011,7 +1003,7 @@ function neonSign(p: string[]) {
     const a = -Math.PI * 0.6 + (i / 24) * Math.PI * 1.2
     moon.push([-2.5 + Math.cos(a + Math.PI) * 10, 20 + Math.sin(a + Math.PI) * 10, 0])
   }
-  g.add(lit(tube(moon, 0.6, tubeA, 96, true), tubeA, 0.95))
+  g.add(lit(tube(moon, 0.6, tubeA, { ...TUBE, seg: 96, closed: true }), tubeA, 0.95))
   // 星星
   const star: V3[] = []
   for (let k = 0; k < 10; k++) {
@@ -1019,7 +1011,7 @@ function neonSign(p: string[]) {
     const rr = k % 2 ? 2.6 : 6.5
     star.push([14 + Math.cos(a) * rr, 24 + Math.sin(a) * rr, 0])
   }
-  g.add(lit(tube(star, 0.55, tubeB, 60, true), tubeB, 0.95))
+  g.add(lit(tube(star, 0.55, tubeB, { ...TUBE, seg: 60, closed: true }), tubeB, 0.95))
   g.add(lit(ball(1.2, tubeB, { x: 15, y: 10, z: 0 }), tubeB, 0.95))
   g.add(lit(ball(0.9, tubeA, { x: 6, y: 34, z: 0 }), tubeA, 0.95))
   return mountAt(g, NEON_Y)
