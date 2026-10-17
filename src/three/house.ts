@@ -22,7 +22,7 @@ import {
   type WallTrim,
   edgesOf as roomEdges,
 } from '../model'
-import { isIndoor, sharedIntervals, voidRailSegments, wallSegments, wallThicknessAt } from '../walls'
+import { isIndoor, sharedIntervals, voidRailSegments, wallSegments, wallThicknessAt, type WallSegment } from '../walls'
 import { tatamiLayout } from '../tatami'
 import { addOutlines, ball, capsule, cyl, disposeHooks, mergeMeshes, mergeSolidColors, noTransparentShadows, rbox, shade, toon, useAnisotropy } from './toon'
 import { glow, poseDoors, type AssetDef } from './kit'
@@ -162,13 +162,15 @@ function floorSlab(r: Room, bottom = BASE, holes: Vec[][] = []) {
     if (Math.abs(signedArea(cut)) >= Math.abs(signedArea(r.points)) - 4) return null
     shape.holes.push(new THREE.Path(toV2(insetToward(cut, 0.5))))
   }
-  const top = floorY(r)
+  // 铺榻榻米的和室：楼板低一张榻榻米的厚度，榻榻米面和别的房间地面齐平，楼板只在缝里露出来（深色）
+  const sunk = hasTatami(r)
+  const top = floorY(r) - (sunk ? TATAMI_T : 0)
   bottom = Math.min(bottom, top - 1)
   const depth = top - bottom
   const geo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false })
   geo.rotateX(-Math.PI / 2)
   const sideMat = toon('#e9dccb')
-  const m = new THREE.Mesh(geo, [floorMaterial(r.kind), sideMat])
+  const m = new THREE.Mesh(geo, [sunk ? toon('#8e8a5e') : floorMaterial(r.kind), sideMat])
   m.position.y = bottom
   m.receiveShadow = true
   return m
@@ -242,14 +244,19 @@ function structureSlab(outline: Vec[], holes: Vec[][], wallOuter: number) {
   return m
 }
 
+/** 榻榻米厚度：嵌在降低的楼板里，面和地面齐平 */
+const TATAMI_T = 3
+const hasTatami = (r: Room) => r.kind === 'japanese' && isAxisRect(r.points)
+
 /** 和室：按畳割り铺榻榻米 */
 function tatami(r: Room, wall: number) {
   const g = new THREE.Group()
-  if (!isAxisRect(r.points)) return g
+  if (!hasTatami(r)) return g
   const b = bbox(r.points)
   const k = wall / 2
+  const y = floorY(r) - TATAMI_T
   for (const t of tatamiLayout(b.x0 + k, b.y0 + k, b.x1 - k, b.y1 - k)) {
-    const mat = rbox(t.w - 1.2, 3, t.h - 1.2, t.half ? '#d6dc9c' : '#cfd893', { x: t.x + t.w / 2, z: t.y + t.h / 2 }, 0.8)
+    const mat = rbox(t.w - 1.2, TATAMI_T, t.h - 1.2, t.half ? '#d6dc9c' : '#cfd893', { x: t.x + t.w / 2, y, z: t.y + t.h / 2 }, 0.8)
     mat.castShadow = false
     g.add(mat)
   }
@@ -688,7 +695,7 @@ function buildWalls(plan: Plan, H0: number, infos: OpeningInfo[], opts: HouseOpt
   // 不参与让开 / 压低的部分（墙脚细线、压到地面下的窗台门槛）：全屋按投影设置各合成一个网格
   const statics: THREE.Mesh[] = []
   const stub = (a: Vec, b: Vec, t: number) => {
-    // 墙脚线顶面 2.4：低于榻榻米（3），不和它共面
+    // 墙脚线顶面 2.4（和室里像一圈畳寄せ，高出榻榻米面）
     const m = wallStub(a, b, t + 0.4, bottom, 2.4, isOuter)
     if (m) statics.push(m)
   }
@@ -701,8 +708,9 @@ function buildWalls(plan: Plan, H0: number, infos: OpeningInfo[], opts: HouseOpt
   }
   const seen = new Set<string>()
   const key = (p: Vec) => `${Math.round(p.x)},${Math.round(p.y)}`
-  // 先去重，后面要判断一段墙的端点是不是和另一段共线相接
-  const segs = wallSegments(plan.rooms).filter((s) => {
+  // 共用墙两侧各出一份墙段，而且一侧可能是连成一整段、另一侧在丁字口断开：端点去重去不干净，
+  // 重合的墙面互相抢深度（接缝闪烁），共线判断也会被骗（转角缺一块）。先规范成每条直线上互不重叠的墙段
+  const raw = wallSegments(plan.rooms).filter((s) => {
     if (s.kind === 'open') return false
     const k1 = key(s.a) + '|' + key(s.b)
     const k2 = key(s.b) + '|' + key(s.a)
@@ -710,41 +718,117 @@ function buildWalls(plan: Plan, H0: number, infos: OpeningInfo[], opts: HouseOpt
     seen.add(k1)
     return true
   })
-  /** 端点 p 处有没有另一段共线的墙接着（直墙被内墙交汇点切开的情况）：有就不往外延伸，免得两段重叠闪烁 */
-  const continues = (self: (typeof segs)[number], p: Vec, dir: Vec) =>
-    segs.some((o) => {
-      if (o === self) return false
-      const od = mul({ x: o.b.x - o.a.x, y: o.b.y - o.a.y }, 1 / Math.max(1e-6, dist(o.a, o.b)))
-      if (Math.abs(dir.x * od.y - dir.y * od.x) > 1e-3) return false
-      return dist(o.a, p) < 1 || dist(o.b, p) < 1
-    })
-  const railSegs = opts.upper ? voidRailSegments(plan.rooms) : []
-  for (const s of segs) {
-    const outer = s.kind === 'outer'
-    isOuter = outer
+  /** 一段墙（a→b）的绘制属性：法线、墙脚、高度、两面墙纸；key 相同的相邻墙段并成一段画（丁字口不断开，没有接缝） */
+  const attrsOf = (a: Vec, b: Vec, kind: WallSegment['kind']) => {
+    const outer = kind === 'outer'
     const t = outer ? plan.wallOuter : plan.wall
-    const L = dist(s.a, s.b)
-    const dir = mul({ x: s.b.x - s.a.x, y: s.b.y - s.a.y }, 1 / L)
+    const L = dist(a, b)
+    const dir = mul({ x: b.x - a.x, y: b.y - a.y }, 1 / L)
     // 法线：外墙指向户外（另一侧探一下是不是户内房间）
     let n = { x: -dir.y, y: dir.x }
-    const probe = add(mul(add(s.a, s.b), 0.5), mul(n, t / 2 + 5))
+    const probe = add(mul(add(a, b), 0.5), mul(n, t / 2 + 5))
     if (plan.rooms.some((r) => isIndoor(r) && pointInPolygon(probe, r.points))) n = mul(n, -1)
     // 墙脚落到两侧较低的地面：阳台、土间一侧不悬空，户外一侧一直落到底座
-    const mid = mul(add(s.a, s.b), 0.5)
+    const mid = mul(add(a, b), 0.5)
     const sideY = (k: number) => {
       const r = roomAt(plan, add(mid, mul(n, k * (t / 2 + 5))))
       return r ? floorY(r) : outside
     }
     // 上层是挑空的地方，外墙通高到上层的天花
     const H = outer && opts.tall?.zones.some((z) => pointInPolygon(mid, z) || onBoundary(z, mid, 2)) ? H0 + opts.tall.extra : H0
-    bottom = Math.min(0, sideY(1), sideY(-1))
+    const bot = Math.min(0, sideY(1), sideY(-1))
     // 墙纸：+z 面（朝 (-dir.y, dir.x)）和 -z 面分别取那一侧房间的墙纸
     const n0 = { x: -dir.y, y: dir.x }
-    const paper = (k: number) => {
-      const r = roomAt(plan, add(mid, mul(n0, k * (t / 2 + 5))))
-      return r?.wallpaper ? wallpaperMaterial(r.wallpaper) : null
+    const wp = (k: number) => roomAt(plan, add(mid, mul(n0, k * (t / 2 + 5))))?.wallpaper ?? null
+    const papers: [Wallpaper | null, Wallpaper | null] = [wp(1), wp(-1)]
+    const k = `${kind}|${n.x.toFixed(3)},${n.y.toFixed(3)}|${bot}|${H}|${JSON.stringify(papers)}`
+    return { outer, t, n, H, bottom: bot, papers, k }
+  }
+  type Run = { a: Vec; b: Vec; kind: WallSegment['kind'] } & ReturnType<typeof attrsOf>
+  const segs: Run[] = []
+  {
+    const lines = new Map<string, { d: Vec; c: number; iv: { lo: number; hi: number; kind: WallSegment['kind'] }[] }>()
+    for (const s of raw) {
+      const L = dist(s.a, s.b)
+      if (L < 0.5) continue
+      let d = mul({ x: s.b.x - s.a.x, y: s.b.y - s.a.y }, 1 / L)
+      if (d.x < -1e-6 || (Math.abs(d.x) <= 1e-6 && d.y < 0)) d = mul(d, -1)
+      const c = Math.round((d.x * s.a.y - d.y * s.a.x) * 2) / 2
+      const lk = `${d.x.toFixed(4)},${d.y.toFixed(4)}|${c}`
+      let ln = lines.get(lk)
+      if (!ln) lines.set(lk, (ln = { d, c, iv: [] }))
+      const u = d.x * s.a.x + d.y * s.a.y
+      const v = d.x * s.b.x + d.y * s.b.y
+      ln.iv.push({ lo: Math.min(u, v), hi: Math.max(u, v), kind: s.kind })
     }
-    const faces: [THREE.Material | null, THREE.Material | null] = [paper(1), paper(-1)]
+    for (const { d, c, iv } of lines.values()) {
+      const pt = (u: number) => ({ x: d.x * u - d.y * c, y: d.y * u + d.x * c })
+      const cuts = [...new Set(iv.flatMap((i) => [i.lo, i.hi]))].sort((x, y) => x - y).filter((u, i, a) => i === 0 || u - a[i - 1] > 0.5)
+      let prev: Run | null = null
+      let prevHi = -Infinity
+      for (let i = 1; i < cuts.length; i++) {
+        const lo = cuts[i - 1]
+        const hi = cuts[i]
+        const m = (lo + hi) / 2
+        const cover = iv.filter((x) => x.lo <= m && m <= x.hi)
+        if (!cover.length) continue
+        const kind = cover.some((x) => x.kind === 'inner') ? 'inner' : 'outer'
+        const a = pt(lo)
+        const b = pt(hi)
+        const at = attrsOf(a, b, kind)
+        if (prev && prev.k === at.k && Math.abs(prevHi - lo) < 0.5) {
+          prev.b = b
+          Object.assign(prev, attrsOf(prev.a, b, kind), { a: prev.a, b })
+        } else {
+          prev = { a, b, kind, ...at }
+          segs.push(prev)
+        }
+        prevHi = hi
+      }
+    }
+  }
+  const unit = (s: Run) => mul({ x: s.b.x - s.a.x, y: s.b.y - s.a.y }, 1 / Math.max(1e-6, dist(s.a, s.b)))
+  const along = (s: Run, p: Vec) => {
+    const d = unit(s)
+    return (p.x - s.a.x) * d.x + (p.y - s.a.y) * d.y
+  }
+  /**
+   * 墙段在端点 p 处往外伸多少（负数是缩回）：
+   *   - 有共线的墙接着：不伸，两段刚好对接；
+   *   - 端点顶在一道穿过去的墙上（丁字口）：缩回到那道墙的墙面（嵌进 0.05），顶面不和它的顶面重叠闪烁，也不会从另一面穿出来；
+   *   - 和另一道墙在这里转角（L 形）：厚的（一样厚就取沿 x 的那道）伸满对方半厚、包住转角，
+   *     另一道缩回到它的内面（多留 0.05 嵌进去），外角严丝合缝、墙面也不重叠；
+   *   - 别的情况（斜交、孤立的端头）照旧伸半个墙厚少 0.1。
+   */
+  const extendAt = (self: Run, p: Vec) => {
+    const d = unit(self)
+    const touch = segs.filter((o) => o !== self && projectToSegment(p, o.a, o.b).d < 1)
+    const collinear = (o: Run) => Math.abs(d.x * unit(o).y - d.y * unit(o).x) < 1e-3
+    if (touch.some(collinear)) return 0
+    const perp = touch.filter((o) => Math.abs(d.x * unit(o).x + d.y * unit(o).y) < 1e-3)
+    if (perp.length && perp.length === touch.length) {
+      const through = perp.some((o) => {
+        const u = along(o, p)
+        return u > 1 && u < dist(o.a, o.b) - 1
+      })
+      const tp = Math.max(...perp.map((o) => o.t))
+      if (through || perp.length > 1) return -tp / 2 + 0.05
+      const o = perp[0]
+      const mine = self.t > o.t || (self.t === o.t && Math.abs(d.x) > Math.abs(d.y))
+      return mine ? o.t / 2 : -o.t / 2 + 0.05
+    }
+    return self.t / 2 - 0.1
+  }
+  const railSegs = opts.upper ? voidRailSegments(plan.rooms) : []
+  for (const s of segs) {
+    const { outer, t, n, H } = s
+    isOuter = outer
+    const L = dist(s.a, s.b)
+    const dir = mul({ x: s.b.x - s.a.x, y: s.b.y - s.a.y }, 1 / L)
+    const mid = mul(add(s.a, s.b), 0.5)
+    bottom = s.bottom
+    const n0 = { x: -dir.y, y: dir.x }
+    const faces: [THREE.Material | null, THREE.Material | null] = [s.papers[0] ? wallpaperMaterial(s.papers[0]) : null, s.papers[1] ? wallpaperMaterial(s.papers[1]) : null]
     // 户建外墙的外侧：外墙材质（板材 / 抹灰 / 砖，按世界坐标贴图）
     if (outer && opts.facade) {
       const k = n.x * n0.x + n.y * n0.y > 0 ? 0 : 1
@@ -778,10 +862,9 @@ function buildWalls(plan: Plan, H0: number, infos: OpeningInfo[], opts: HouseOpt
     }
     cuts.sort((a, b) => a.lo - b.lo)
     const at = (u: number) => add(s.a, mul(dir, u))
-    // 两端在转角处各伸出半个墙厚补齐（少伸 0.1，端面藏进相邻墙里，不和它的墙面共面闪烁）；
-    // 和另一段共线相接的一端不伸，两段刚好对接
-    let cur = continues(s, s.a, dir) ? 0 : -(t / 2 - 0.1)
-    const end = L + (continues(s, s.b, dir) ? 0 : t / 2 - 0.1)
+    // 两端按转角 / 丁字口的规则伸出或缩回（extendAt）
+    let cur = -extendAt(s, s.a)
+    const end = L + extendAt(s, s.b)
     for (const c of cuts) {
       const lo = Math.max(cur, c.lo)
       if (lo > cur) {

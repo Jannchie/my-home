@@ -58,6 +58,7 @@ export class SelectFrame {
   private cornerMat: LineMaterial
   private fillMat: THREE.MeshBasicMaterial
   private key = ''
+  private fill: THREE.Mesh | null = null
   private shownAt = 0
   private dir: [number, number][] = []
 
@@ -94,6 +95,7 @@ export class SelectFrame {
     }
     this.corners = []
     this.dir = []
+    this.fill = null
     const hw = w / 2 + PAD
     const hd = d / 2 + PAD
     const r = Math.min(10, hw / 2, hd / 2)
@@ -106,6 +108,7 @@ export class SelectFrame {
       for (const p of pts.slice(1)) s.lineTo(p.x, p.z)
       const fill = new THREE.Mesh(new THREE.ShapeGeometry(s).rotateX(Math.PI / 2), this.fillMat)
       fill.renderOrder = 2
+      this.fill = fill
       this.body.add(fill)
       // 四个角标
       const len = Math.max(r + 4, Math.min(24, hw * 0.45, hd * 0.45))
@@ -156,6 +159,22 @@ export class SelectFrame {
     // 略高于地面，免得和地板深度打架
     this.group.position.set(x, y + 1.5, z)
     this.group.rotation.y = rotY
+    this.body.rotation.x = 0
+    if (this.fill) this.fill.visible = true
+  }
+
+  /**
+   * 壁挂物、贴附物：框立起来贴在它正面（宽 w × 高 h），(x, y, z) 是框的中心，朝向 rotY 同家具模型（正面朝局部 +z）。
+   */
+  showUpright(x: number, y: number, z: number, w: number, h: number, rotY: number) {
+    this.build(w, h)
+    if (!this.group.visible) this.shownAt = performance.now()
+    this.group.visible = true
+    this.group.position.set(x, y, z)
+    this.group.rotation.y = rotY
+    this.body.rotation.x = Math.PI / 2
+    // 立着的填充会像一块玻璃挡在东西前面：只留线框和角标
+    if (this.fill) this.fill.visible = false
   }
 
   hide() {
