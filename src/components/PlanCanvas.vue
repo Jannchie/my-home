@@ -36,8 +36,8 @@ import {
   type Vec,
 } from '../model'
 import { wallSegments, wallThicknessAt } from '../walls'
-import { floorBelow, floorById, floorOf, floorView, isMultiFloor, riseOf } from '../floors'
-import { stairHoleConflicts, stairHoles, stairPlanLines } from '../stairs'
+import { baseFloorId, floorBelow, floorById, floorOf, floorView, isMultiFloor, riseOf } from '../floors'
+import { stairHoleConflicts, stairHoles, stairPlanLines, subtractSpan } from '../stairs'
 import { tatamiLayout } from '../tatami'
 import FixtureGlyph from './FixtureGlyph.vue'
 import { roomName, t } from '../i18n'
@@ -686,8 +686,8 @@ function animateTo(to: { x: number; y: number; s: number }, ms = 260) {
 }
 
 function fitTarget() {
-  // 按全部楼层取景：切换楼层时画面不跳
-  const pts = plan.value.rooms.flatMap((r) => r.points)
+  // 按全部楼层取景：切换楼层时画面不跳；户建连用地一起
+  const pts = [...plan.value.rooms.flatMap((r) => r.points), ...(plan.value.site?.points ?? [])]
   if (!pts.length) return { s: 0.6, x: size.w / 2, y: size.h / 2 }
   const b = bbox(pts)
   // 四周留白；手机上右侧有缩放条、上方有指北针和提示、下方压着底部抽屉，按实际可见区域取景
@@ -969,6 +969,32 @@ const holeViews = computed(() => {
   return stairHoles(p, activeFloor.value).map((h) => ({ id: h.stair.id, d: polyPath(h.poly), bad: bad.has(h.stair.id), arrival: h.arrival, c: centroid(h.poly) }))
 })
 
+/** 户建的用地：只在最底层画（院子草地、通道、车位、围挡；出入口处围挡断开） */
+const siteView = computed(() => {
+  const s = plan.value.site
+  if (!s || activeFloor.value !== baseFloorId(plan.value)) return null
+  const lot = s.points
+  // 围挡：沿边界走一圈，扣掉出入口
+  const fence: string[] = []
+  for (let i = 0; i < lot.length; i++) {
+    const a = lot[i]
+    const b = lot[(i + 1) % lot.length]
+    let spans: [number, number][] = [[0, Math.hypot(b.x - a.x, b.y - a.y)]]
+    for (const g of s.gates) spans = spans.flatMap(([lo, hi]) => subtractSpan(a, b, g).map(([x, y]): [number, number] => [Math.max(lo, x), Math.min(hi, y)]).filter(([x, y]) => y - x > 1))
+    const L = Math.hypot(b.x - a.x, b.y - a.y) || 1
+    const at = (t: number) => `${a.x + ((b.x - a.x) * t) / L},${a.y + ((b.y - a.y) * t) / L}`
+    for (const [lo, hi] of spans) fence.push(`M${at(lo)}L${at(hi)}`)
+  }
+  return {
+    lot: polyPath(lot),
+    paths: s.paths.map((p) => polyPath(p)),
+    parking: s.parking.map((p) => polyPath(p.points)),
+    fence: s.fence === 'none' ? '' : fence.join(''),
+    fenceColor: s.fence === 'hedge' ? '#8fb07a' : s.fence === 'wall' ? '#b9b0a2' : '#a07e5c',
+    fenceW: s.fence === 'hedge' ? 30 : s.fence === 'wall' ? 12 : 6,
+  }
+})
+
 /** 选中房间的边长标注，放在外侧 */
 const dimViews = computed(() => {
   const r = selectedRoom.value
@@ -1068,7 +1094,7 @@ defineExpose({ fit, zoomBy, zoomReset, exportPng, view, cursorInfo, draftCount, 
 // ---------- 导出 PNG ----------
 
 async function exportPng() {
-  const pts = fp.value.rooms.flatMap((r) => r.points)
+  const pts = [...fp.value.rooms.flatMap((r) => r.points), ...(siteView.value ? plan.value.site!.points : [])]
   if (!pts.length || !svg.value) return
   const b = bbox(pts)
   const pad = 60
@@ -1180,6 +1206,13 @@ async function exportPng() {
     <rect class="ui" width="100%" height="100%" fill="url(#grid-major)" />
 
     <g id="world" :transform="`translate(${view.x},${view.y}) scale(${view.s})`">
+      <!-- 户建用地：草地、通道、车位、围挡 -->
+      <g v-if="siteView" pointer-events="none" class="site">
+        <path :d="siteView.lot" fill="#e3edd6" stroke="#9fb48c" :stroke-width="px(1)" />
+        <path v-for="(d, i) in siteView.paths" :key="'sp' + i" :d="d" fill="#e6e1d7" stroke="#bdb5a6" :stroke-width="px(1)" />
+        <path v-for="(d, i) in siteView.parking" :key="'pk' + i" :d="d" fill="#dcdad5" stroke="#a9a49a" :stroke-width="px(1)" stroke-dasharray="10 6" />
+        <path v-if="siteView.fence" :d="siteView.fence" fill="none" :stroke="siteView.fenceColor" :stroke-width="siteView.fenceW" stroke-linecap="round" />
+      </g>
       <!-- 房间填充 -->
       <path
         v-for="v in roomViews"

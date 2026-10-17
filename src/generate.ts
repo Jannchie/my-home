@@ -41,8 +41,10 @@ export interface GenOptions {
   maxArea: number | null
   /** 地区风格：日式 / 中式 / 欧美 / 随机；不填 = 日式（见 generate-region.ts） */
   region?: Region | 'random'
-  /** 中式 / 欧美的卧室数（日式用 type） */
-  bedrooms?: 'random' | 1 | 2 | 3 | 4
+  /** 中式 / 欧美的卧室数（日式公寓用 type）；户建 / 复式各地区都用它 */
+  bedrooms?: 'random' | 1 | 2 | 3 | 4 | 5
+  /** 住宅类型：公寓（平层，缺省）/ 户建（两层 + 用地 + 屋顶）/ 复式（一户两层）/ 随机（按种子，公寓为主）。见 generate-region.ts */
+  dwelling?: 'apartment' | 'house' | 'duplex' | 'random'
 }
 
 export function mulberry32(seed: number) {

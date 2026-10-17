@@ -949,3 +949,42 @@ Object.assign(UI, {
   '透视': ['パース', 'Perspective'],
   '小：画面平、接近等距视图；大：近大远小更明显': ['小さいほど平行投影に近く、大きいほど遠近感が強くなります', 'Low: flatter, close to isometric. High: stronger perspective'],
 } satisfies Record<string, Entry>)
+
+// ---------- 两层户建 / 复式、屋顶与外观（第二期） ----------
+Object.assign(UI, {
+  住宅类型: ['住宅タイプ', 'Home type'],
+  '随机：按种子出公寓或户建，公寓为主': ['ランダム：シードでマンションか戸建てを選びます（マンションが多め）', 'Random: apartment or house by seed (mostly apartments)'],
+  随机类型: ['ランダム', 'Random type'],
+  公寓: ['マンション', 'Apartment'],
+  户建: ['戸建て', 'House'],
+  复式: ['メゾネット', 'Duplex'],
+  层数: ['階数', 'Stories'],
+  '目前只支持两层': ['いまは 2 階建てのみ', 'Two stories only for now'],
+  '{n} 层': ['{n} 階建て', '{n} stories'],
+  建筑面积: ['延床面積', 'Floor area'],
+  '外观：显示屋顶和完整外墙': ['外観：屋根と外壁をすべて表示', 'Exterior: show the roof and full walls'],
+  外观: ['外観', 'Exterior'],
+  '外观视图（屋顶、完整外墙）': ['外観ビュー（屋根・外壁をすべて表示）', 'Exterior view (roof, full walls)'],
+  两层独栋: ['2 階建て一戸建て', 'two-story house'],
+  '{n}室两厅': ['{n}LDK', '{n} bed 2 living'],
+  '·复式': ['・メゾネット', ' · duplex'],
+  '·独栋别墅': ['・一戸建て', ' · villa'],
+  戸建て: ['戸建て', 'House'],
+  部分二階: ['部分二階', 'partial 2F'],
+  メゾネット: ['メゾネット', 'Maisonette'],
+  双坡: ['切妻', 'Gable'],
+  四坡: ['寄棟', 'Hip'],
+  单坡: ['片流れ', 'Shed'],
+  平屋顶: ['陸屋根', 'Flat'],
+  横纹板材: ['サイディング', 'Siding'],
+  抹灰: ['塗り壁', 'Stucco'],
+  砖墙: ['レンガ', 'Brick'],
+  绿篱: ['生垣', 'Hedge'],
+  木栅栏: ['木のフェンス', 'Wood fence'],
+  矮墙: ['ブロック塀', 'Low wall'],
+  无围挡: ['囲いなし', 'No fence'],
+} satisfies Record<string, Entry>)
+Object.assign(ROOM_NAMES, {
+  露台: ['テラス', 'Terrace'],
+  Closet: ['クローゼット', 'Closet'],
+} satisfies Record<string, Entry>)
