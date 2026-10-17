@@ -24,7 +24,16 @@ export interface PostHook {
 }
 
 /**
- * low：省电画质（手机 / 低性能设备，见 src/ui/device.ts）——不开 MSAA、阴影贴图 1024 且不做软阴影。
+ * 阴影边缘的模糊半径（阴影贴图像素）。两档都是 4：省电画质的贴图分辨率减半，边缘在世界里宽一倍，正好掩盖锯齿；
+ * 高画质下两层户建约 3–4cm，柔和但不糊（toon.ts 会把过渡再收紧成干净的两档）。
+ */
+const SHADOW_RADIUS = 4
+
+/**
+ * low：省电画质（手机 / 低性能设备，见 src/ui/device.ts）——不开 MSAA、阴影贴图 1024。
+ * 阴影两档都用 PCFShadowMap（three r180 起 PCFSoftShadowMap 已移除，设了也会退回 PCF 并打警告）：
+ * r186 的 PCF 按 shadow.radius 在圆盘上取样，toon.ts 又把采样改成固定分布 + 收成干净的两档，边缘柔和不起颗粒。
+ * VSM 不用：它要把接收阴影的网格也画进阴影贴图（这里 draw call 是瓶颈），漏光也更明显。
  * 像素比上限两档都是 2：手机屏幕像素比多为 3，限到 1.5 等于半分辨率再拉伸，画面发虚；沙盘只在变化时重画，多出的像素可以接受。
  */
 export function createStage(canvas: HTMLCanvasElement, opts: { preserve?: boolean; shadowSize?: number; low?: boolean } = {}): Stage {
@@ -32,7 +41,7 @@ export function createStage(canvas: HTMLCanvasElement, opts: { preserve?: boolea
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
   renderer.shadowMap.enabled = true
   setMaxAnisotropy(opts.low ? 4 : Math.min(16, renderer.capabilities.getMaxAnisotropy()))
-  renderer.shadowMap.type = opts.low ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap
+  renderer.shadowMap.type = THREE.PCFShadowMap
   renderer.outputColorSpace = THREE.SRGBColorSpace
 
   const scene = new THREE.Scene()
@@ -47,7 +56,7 @@ export function createStage(canvas: HTMLCanvasElement, opts: { preserve?: boolea
   sun.shadow.mapSize.set(shadow, shadow)
   sun.shadow.bias = -0.0004
   sun.shadow.normalBias = 0.6
-  sun.shadow.radius = 4
+  sun.shadow.radius = SHADOW_RADIUS
   scene.add(sun)
   scene.add(sun.target)
 
@@ -79,11 +88,10 @@ export function createStage(canvas: HTMLCanvasElement, opts: { preserve?: boolea
   return stage
 }
 
-/** 运行中切换画质：像素比、阴影贴图尺寸与软阴影（画布本身的 MSAA 建好后改不了，由后处理的 FXAA 兜底） */
+/** 运行中切换画质：像素比、阴影贴图尺寸（画布本身的 MSAA 建好后改不了，由后处理的 FXAA 兜底） */
 export function setStageQuality(stage: Stage, low: boolean) {
   const { renderer, sun } = stage
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-  renderer.shadowMap.type = low ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap
   setMaxAnisotropy(low ? 4 : Math.min(16, renderer.capabilities.getMaxAnisotropy()))
   const size = low ? 1024 : 2048
   if (sun.shadow.mapSize.x !== size) {
