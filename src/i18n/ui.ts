@@ -562,6 +562,9 @@ export const UI: Record<string, Entry> = {
   '已复制为「{name}」': ['「{name}」として複製しました', 'Duplicated as “{name}”'],
 }
 
+// ---------- 素材的细分类型（three/typeLabels.ts）：已有同名词条的不覆盖，后面的分组表照常覆盖 ----------
+for (const [zh, ja, en] of Object.values(TYPE_NAMES)) UI[zh] ??= [ja, en]
+
 /**
  * 房间的默认名（生成器 / ROOM_KINDS / 房间用途给的）。只有名字恰好是这些（或「这些 + 序号」，如 洋室2）时才翻译，
  * 用户自定义的名字原样显示。
@@ -878,6 +881,3 @@ Object.assign(UI, {
   '关上': ['閉める', 'Closed'],
   '再点一次里面的东西可以选中它': ['中の物をもう一度クリックすると選択できます', 'Click an item inside again to select it'],
 } satisfies Record<string, Entry>)
-
-// ---------- 素材的细分类型（three/typeLabels.ts）：界面里已有同名词条的不覆盖 ----------
-for (const [zh, ja, en] of Object.values(TYPE_NAMES)) UI[zh] ??= [ja, en]
