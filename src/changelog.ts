@@ -12,6 +12,33 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '1.7.0',
+    date: '2026-10-18',
+    notes: {
+      zh: [
+        '新增 3D 设计图模式（快捷键 B）：轴测线框、尺寸标注和标高，可导出 PNG',
+        '一键布置更合理：大件家具按候选方案打分挑选，夫妻保留双人床，统一检查通道、门窗和碰撞；冰箱贴不再互相重叠',
+        '墙体修正：丁字口和转角不再有接缝、缺角，内墙不会穿出外墙；和室榻榻米与地面齐平，接缝是凹槽',
+        '墙上的东西更好选中：不会再选到藏起来的挂件或墙后面的家具，选中框改为立着贴在挂件正面',
+        '渲染性能提升：家具合并为单一材质，整屋绘制调用减少约 45%；新增丝带花瓶，修正几件素材的屏幕位置和浮空台面；图标按钮改为正方形',
+      ],
+      ja: [
+        '3D 設計図モードを追加（ショートカット B）：アイソメの線画、寸法線、レベル表示、PNG 書き出し',
+        'おまかせ配置がより自然に：大型家具は候補レイアウトを採点して選び、夫婦はダブルベッドを維持、通路・建具・干渉をまとめてチェック。冷蔵庫のマグネットが重ならないように',
+        '壁を修正：T 字や角の継ぎ目・欠けがなくなり、内壁が外壁を突き抜けないように。和室の畳は床と同じ高さになり、畳の境目は溝に',
+        '壁掛けの物を選びやすく：隠れている壁掛けや壁の向こうの家具を選ばなくなり、選択枠は壁掛けの正面に立てて表示',
+        '描画を高速化：家具を単一マテリアルにまとめ、描画コールを約 45% 削減。リボンの花瓶を追加し、一部素材の画面位置と浮いた天板を修正。アイコンボタンを正方形に',
+      ],
+      en: [
+        'New 3D blueprint view (shortcut B): axonometric line drawing with dimensions and level marks, exportable as PNG',
+        'Smarter auto-furnish: major furniture is chosen by scoring candidate layouts, couples keep a double bed, and paths, doors, windows and collisions are checked together; fridge magnets no longer overlap',
+        "Wall fixes: no more seams or missing corners at T-junctions and corners, and inner walls no longer poke through outer walls; tatami now sits flush with the floor with grooved seams",
+        "Wall items are easier to pick: hidden wall items and furniture behind walls are no longer selected, and the selection frame stands upright on the item's face",
+        'Faster rendering: furniture is merged into a single material, cutting draw calls by about 45%; new ribbon vase, fixed screen positions and floating tops on a few assets; icon buttons are now square',
+      ],
+    },
+  },
+  {
     version: '1.6.0',
     date: '2026-10-17',
     notes: {
