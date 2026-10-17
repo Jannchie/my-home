@@ -52,7 +52,7 @@ import { allocateRooms, type Allocation, type RoomPurpose } from './household'
 import { baseFloorId, floorViews, isMultiFloor, riseOf, stampFloor } from './floors'
 import { stairFootprint, stairToWorld, stairUnderZone, stairWalk, withStairKeepout } from './stairs'
 import { NavGrid } from './nav'
-import { arrange, bedSides, isDoubleBed, type Slot } from './arrange'
+import { arrange, bedSides, pickWidth, twinCenters, type Pick, type Slot } from './arrange'
 import { HARD_ZONES, OPENING_ZONES, Occupancy, STAIR_ZONES, SWING_ZONES, bodyCenter, boxesOverlap, footprint, type PlaceOpts, type ZoneKind } from './occupancy'
 
 export type { RoomPurpose }
@@ -363,19 +363,22 @@ class Decorator {
       }
       // 第 k 件单独拿掉就行的话只挪它；否则前 k 件是一起把路堵死的，一起挪
       const last = pool[lo - 1]
-      const group = this.unreachable(keys, [last]).length < miss.length ? [last] : pool.slice(0, lo)
+      let group = this.unreachable(keys, [last]).length < miss.length ? [last] : pool.slice(0, lo)
       const target = this.unreachable(keys, group).length
       for (const f of group) tried.add(f.id)
       const ok = () => this.unreachable(keys).length <= target
       const moved = this.relocateGroup(group, ok)
       for (const g of moved) tried.add(g.id)
-      // 大件自己挪不开（房间里别的位置都被小件占了）：连同这个房间里不固定的落地家具一起重摆，大件先挑位置
-      if (!moved.length && group.length === 1 && this.fixed.has(group[0].id)) {
+      // 堵路的里面有大件、单挪又挪不开（房间里别的位置都被小件占了，或者是大件和小件一起把路堵死）：
+      // 连同这个房间里不固定的落地家具一起重摆，大件先挑位置（原来的位置也可以用），小件再找不堵路的地方
+      const major = group.find((f) => this.fixed.has(f.id))
+      if (!moved.length && major) {
+        group = [major]
         const room = this.plan.rooms.find((r) => pointInPolygon(group[0], r.points))
         const inRoom = (f: Furniture) => !!room && f !== group[0] && pointInPolygon(f, room.points)
         // 同屋能重摆的大件（衣柜）排在小件前面
         const mates = [...majors.filter(inRoom), ...loose.filter(inRoom)]
-        if (mates.length) for (const g of this.relocateGroup([group[0], ...mates], ok)) tried.add(g.id)
+        if (mates.length) for (const g of this.relocateGroup([group[0], ...mates], ok, new Set([group[0].id]))) tried.add(g.id)
       }
     }
   }
@@ -384,10 +387,10 @@ class Decorator {
    * 一起挪几件：先全拿掉，再一件件照原来的摆法换个位置重摆（避开之前的位置），每件的新位置要立体上不冲突、并满足 ok；
    * 一件最多试 3 次（大件 6 次），不行就不摆了——有大件挪不动时整组放回原处。返回新摆的。
    */
-  relocateGroup(group: Furniture[], ok: () => boolean): Furniture[] {
+  relocateGroup(group: Furniture[], ok: () => boolean, samePose?: ReadonlySet<string>): Furniture[] {
     const kids = this.kidsOf(group)
     try {
-      return this.relocateGroupOnce(group, ok)
+      return this.relocateGroupOnce(group, ok, samePose)
     } finally {
       this.replaceProps(kids)
     }
@@ -403,7 +406,8 @@ class Decorator {
       if (![...chain].some((p) => ids.has(p))) continue
       const d = ASSET_MAP.get(o.asset)
       const room = this.plan.rooms.find((r) => pointInPolygon(o, r.points))
-      if (d?.prop && !d.stick && d.form !== 'hanging' && room) out.push([o.asset, room])
+      // 显示器、电脑这类只摆在书桌上的不另找地方（工位那一步管）
+      if (d?.prop && !d.stick && d.form !== 'hanging' && !d.screens?.length && d.type !== 'pc' && room) out.push([o.asset, room])
     }
     return out
   }
@@ -426,11 +430,13 @@ class Decorator {
     }
   }
 
-  private relocateGroupOnce(group: Furniture[], ok: () => boolean): Furniture[] {
+  private relocateGroupOnce(group: Furniture[], ok: () => boolean, samePose?: ReadonlySet<string>): Furniture[] {
     const keep = group.some((f) => this.fixed.has(f.id)) ? this.checkpoint() : null
     const plans = group.map((f) => {
       const c = bodyCenter(f.asset, f.x, f.y, f.rot)
-      return { f, again: this.recipes.get(f.id), avoid: [footprint(f.asset, c.x, c.y, f.rot)], poses: new Set([this.poseKey(f)]), fixed: this.fixed.has(f.id) }
+      // samePose 里的（整屋重摆时的大件）原来的位置也可以再用
+      const poses = samePose?.has(f.id) ? new Set<string>() : new Set([this.poseKey(f)])
+      return { f, again: this.recipes.get(f.id), avoid: [footprint(f.asset, c.x, c.y, f.rot)], poses, fixed: this.fixed.has(f.id) }
     })
     for (const { f } of plans) this.removeTree(f)
     const placed: Furniture[] = []
@@ -1872,7 +1878,7 @@ class Decorator {
 
   /** 补一张床：按住户 / 面积挑规格、按床的打分规则挑位置（放不下就换小一号），床头柜跟着床 */
   bedIn(room: Room) {
-    const [bed] = this.major(room, [{ kind: 'bed', options: this.bedOptions(room).map((o) => ({ ...o, spec: { ...o.spec, front: 30 } })), miss: BED_MISS }])
+    const [bed] = this.major(room, [this.bedSlot(room, 30)])
     if (bed) this.bedPlaced(room, bed)
     return !!bed
   }
@@ -2448,14 +2454,16 @@ class Decorator {
     const m2 = area(room.points) / 10000
     const people = this.occupants.get(room.id) ?? []
     const kid = people.length === 1 && people[0].role === 'child' ? people[0] : null
-    const beds = this.bedOptions(room)
     // 中式 / 欧美的卧室没有日式的押入れ / クローゼット：没有嵌入式衣柜和衣帽间时要放衣柜
     const hasCloset = this.plan.fixtures.some((x) => x.kind === 'builtin' && x.builtinType === 'closet' && pointInPolygon(x, room.points)) || this.plan.rooms.some((o) => o.kind === 'storage' && edgesOf(room.points).some((e) => sharedIntervals(e, o).length > 0))
     const earlyWardrobe = this.region !== 'jp' && !hasCloset
     const needsDesk = !people.length || people.some((m) => JOBS[m.job].wfh || m.job === 'student' || m.job === 'schoolkid') || this.rand() < 0.4
     const kidDesk = kid && kid.age >= 6 && kid.age < 13 && ASSET_MAP.has('kid-desk')
     const deskId = kidDesk ? 'kid-desk' : 'desk'
-    const slots: Slot[] = [{ kind: 'bed', options: beds, miss: BED_MISS }]
+    const slots: Slot[] = [this.bedSlot(room)]
+    // 两个人住：双人床、并排的两张都放不下（或放了会堵门）、只放得下一张单人床时，再找个地方放第二张单人床，各睡各的
+    const second = this.sharedRoom(room) ? this.secondBedSlot() : null
+    if (second) slots.push(second)
     if (earlyWardrobe)
       slots.push({
         kind: 'cabinet',
@@ -2477,10 +2485,13 @@ class Decorator {
         miss: 110,
       })
     if (!earlyWardrobe && m2 >= 7.5) slots.push({ kind: 'cabinet', options: [{ asset: this.vary(this.pick(['wardrobe', 'dresser', 'bookshelf'])), spec: { front: 60 } }], miss: 15 })
-    const [bed, , desk] = (() => {
-      const got = this.major(room, slots)
-      return [got[0], got[1], got[slots.findIndex((x) => x.kind === 'desk')] ?? null]
-    })()
+    const got = this.major(room, slots)
+    const bed = got[0]
+    const desk = got[slots.findIndex((x) => x.kind === 'desk')] ?? null
+    const bed2 = second ? got[slots.indexOf(second)] : null
+    // 四面墙都被门窗占着、哪儿都靠不了床的小洋室：日式人家铺被褥睡（白天也就这么铺着），几个人住铺几床
+    if (!bed && this.region === 'jp' && people.length) this.futons(room, Math.min(2, people.length))
+    if (bed2 && second) this.bedPlaced(room, bed2, second)
     if (bed) {
       this.bedPlaced(room, bed, slots[0])
       const def = ASSET_MAP.get(bed.asset)!
@@ -2499,11 +2510,60 @@ class Decorator {
     this.corner(room, ['monstera', 'stand-mirror', ...(cats ? ['cat-tower'] : []), 'beanbag', 'floor-lamp'])
   }
 
+  /** 第二张单人床（只在第一张是单人床时才放，见 Slot.afterSingle） */
+  secondBedSlot(): Slot {
+    const options: Slot['options'] = ['bed-single', 'bed-semi-single'].flatMap((id, i) => [
+      { asset: id, spec: { front: 45 }, bias: -10 * i },
+      { asset: id, spec: { front: 45 }, bias: -10 * i - 15, side: true },
+      { asset: id, spec: { front: 10 }, bias: -10 * i - 25 },
+    ])
+    return { kind: 'bed', options, miss: 60, afterSingle: true }
+  }
+
+  /** 在房间中间的空地上并排铺 n 床被褥（找不到地方就少铺） */
+  futons(room: Room, n: number) {
+    const def = ASSET_MAP.get('futon')
+    if (!def) return
+    const c = centroid(room.points)
+    for (const rot of [0, 90]) {
+      const first = this.freePush(room, 'futon', rot, c, 0)
+      if (!first) continue
+      this.fixed.add(first.id)
+      const side = frontDir(rot + 90)
+      for (let k = 1; k < n; k++)
+        for (const s of [1, -1]) {
+          const p = add({ x: first.x, y: first.y }, mul(side, s * k * (def.w + 4)))
+          const f = this.anchored(room, 'futon', p.x, p.y, rot)
+          if (f) {
+            this.fixed.add(f.id)
+            break
+          }
+        }
+      return
+    }
+  }
+
   /** 每个居室的床（之后挂床头壁灯、摆床上的玩偶用） */
   beds = new Map<string, Furniture>()
 
+  /** 床的位置（并排的两张床按合起来的那一块记）：床边留空、床头柜按它算 */
+  private bedPick = new Map<string, Pick>()
+
+  /** 两个人住的房间（夫妻、两人同住）：双人床一侧靠墙也行，放不下双人床先考虑两张单人床并排 */
+  sharedRoom(room: Room) {
+    return (this.occupants.get(room.id)?.length ?? 0) >= 2
+  }
+
+  /** 床的那一格：备选见 bedOptions */
+  bedSlot(room: Room, front?: number): Slot {
+    const options = this.bedOptions(room).map((o) => (front === undefined ? o : { ...o, spec: { ...o.spec, front } }))
+    return { kind: 'bed', options, miss: BED_MISS, shared: this.sharedRoom(room) }
+  }
+
   /**
-   * 床的备选：按住户和面积挑规格（夫妻 double / queen，小孩婴儿床 / 儿童床，其余按面积），放不下就换小一号（越小扣分越多），
+   * 床的备选：按住户和面积挑规格（夫妻 double / queen，小孩婴儿床 / 儿童床，其余按面积），越往后扣分越多：
+   *   两个人住：双人床（两侧都能下床优先，arrange 里一侧靠墙也行）→ 双人床长边贴墙（床头顶墙角）→ 双人床床尾少留空间 → 两张单人床并排 → 单人床；
+   *   一个人住：放不下就换小一号（双人床两侧都要能下床），再不行单人床长边贴墙。
    * 最后是少留床前空间的小单人床
    */
   bedOptions(room: Room): Slot['options'] {
@@ -2519,8 +2579,20 @@ class Decorator {
     // 婴儿床 / 儿童床有多种款式：同系列里随便挑几款
     if (kid && kid.age < 3) for (const v of this.shuffle(sameType('kid-crib')).slice(0, 3)) beds.push({ asset: v, spec: { front: 40 } })
     if (kid && kid.age < 10) for (const v of this.shuffle(sameType('kid-bed')).slice(0, 3)) beds.push({ asset: v, spec: { front: 40 }, bias: -5 })
-    for (let i = want; i >= 0; i--) beds.push({ asset: sizes[i], spec: { front: 45 }, bias: -12 * (want - i) - (beds.length ? 10 : 0) })
-    beds.push({ asset: 'bed-semi-single', spec: { front: 30 }, bias: -60 })
+    const pre = beds.length ? 10 : 0
+    if (this.sharedRoom(room) && want >= 2) {
+      for (let i = want; i >= 2; i--) beds.push({ asset: sizes[i], spec: { front: 45 }, bias: -12 * (want - i) - pre })
+      for (let i = want; i >= 2; i--) beds.push({ asset: sizes[i], spec: { front: 45 }, bias: -12 * (want - i) - 15 - pre, side: true })
+      // 床尾少留一点（两侧能下床就行）
+      for (let i = want; i >= 2; i--) beds.push({ asset: sizes[i], spec: { front: 10 }, bias: -12 * (want - i) - 25 - pre })
+      for (const id of ['bed-single', 'bed-semi-single']) beds.push({ asset: id, spec: { front: 45 }, bias: -45 - pre, twin: true })
+      for (let i = 1; i >= 0; i--) beds.push({ asset: sizes[i], spec: { front: 45 }, bias: -80 - 12 * (1 - i) - pre })
+    } else {
+      for (let i = want; i >= 0; i--) beds.push({ asset: sizes[i], spec: { front: 45 }, bias: -12 * (want - i) - pre })
+      for (let i = Math.min(want, 1); i >= 0; i--) beds.push({ asset: sizes[i], spec: { front: 45 }, bias: -30 - 12 * (want - i) - pre, side: true })
+    }
+    beds.push({ asset: 'bed-semi-single', spec: { front: 30 }, bias: -100 })
+    beds.push({ asset: 'bed-semi-single', spec: { front: 30 }, bias: -110, side: true })
     return beds
   }
 
@@ -2530,17 +2602,21 @@ class Decorator {
    */
   bedPlaced(room: Room, bed: Furniture, slot?: Slot) {
     this.beds.set(room.id, bed)
-    if (slot)
+    if (slot) {
+      // 挪床时不换成更窄的床（夫妻的双人床不会因为让通道变成单人床）：挪不开就放回原处
+      const w = pickWidth(this.bedPick.get(bed.id) ?? bed)
+      const same = { ...slot, options: slot.options.filter((o) => (ASSET_MAP.get(o.asset)?.w ?? 0) * (o.twin ? 2 : 1) >= w - 1) }
       this.recipes.set(bed.id, () => {
-        const [b] = this.major(room, [slot])
+        const [b] = this.major(room, [same])
         if (b) this.bedPlaced(room, b, slot)
         return b
       })
+    }
     const hard = this.hardIn(room)
-    const sides = bedSides(bed)
-    const keep = isDoubleBed(bed.asset) ? sides : sides.filter((b) => this.inside(b, room) && !hard.some((h) => boxesOverlap(h, b)))
-    for (const b of keep) this.occ.hold(room, b, 'bedside', bed.id)
-    this.nightstands(room, bed)
+    const pick = this.bedPick.get(bed.id) ?? bed
+    // 空着的那几侧登记成下床的空间（双人床在一个人住的房间里两侧都空着，两个人住的房间里至少一侧）
+    for (const b of bedSides(pick).filter((b) => this.inside(b, room) && !hard.some((h) => boxesOverlap(h, b)))) this.occ.hold(room, b, 'bedside', bed.id)
+    this.nightstands(room, bed, pick)
   }
 
   /**
@@ -2549,7 +2625,19 @@ class Decorator {
   major(room: Room, slots: Slot[]): (Furniture | null)[] {
     const picks = arrange({ plan: this.plan, room, occ: this.occ, rand: this.rand, ctx: this.ctx(), canPlace: (a, x, y, r) => this.canPlace(a, x, y, r) }, slots)
     return picks.map((p, i) => {
-      const f = p && this.allow(p.asset, p) ? this.push(p.asset, p.x, p.y, p.rot) : null
+      if (p?.twin) {
+        // 两张单人床并排：第一张当「这张床」，第二张跟着它（一起挪、一起拿掉）
+        const [a, b] = twinCenters(p)
+        const f = this.push(p.asset, a.x, a.y, p.rot)
+        const g = this.push(p.asset, b.x, b.y, p.rot)
+        this.groupOf.set(g.id, f.id)
+        this.fixed.add(f.id)
+        this.fixed.add(g.id)
+        this.bedPick.set(f.id, p)
+        return f
+      }
+      // 床不走同款数量限制（两个人住的房间可以有两张同款单人床）
+      const f = p && (slots[i].kind === 'bed' || this.allow(p.asset, p)) ? this.push(p.asset, p.x, p.y, p.rot) : null
       if (f) this.fixed.add(f.id)
       // 衣柜 / 大柜：校验时可以按同样的规则在这个房间里另挑位置（床由 bedPlaced 另设；书桌、沙发、电视柜上摆着电脑、电视，不挪）
       if (f && slots[i].kind === 'cabinet') this.recipes.set(f.id, () => this.major(room, [slots[i]])[0])
@@ -2561,16 +2649,16 @@ class Decorator {
    * 床头柜跟着床：贴着床头那面墙放在床的一侧（离门远的一侧优先），双人床两侧各一个（放得下的话）。
    * 两侧都放不下才退回在床头附近靠墙找空位。
    */
-  nightstands(room: Room, bed: Furniture) {
-    const def = ASSET_MAP.get(bed.asset)!
+  nightstands(room: Room, bed: Furniture, pick: Pick = bed) {
+    const def = { ...ASSET_MAP.get(bed.asset)!, w: pickWidth(pick) }
     const f = frontDir(bed.rot)
     const side = { x: f.y, y: -f.x }
-    const back = add({ x: bed.x, y: bed.y }, mul(f, -def.d / 2))
+    const back = add({ x: pick.x, y: pick.y }, mul(f, -def.d / 2))
     const door = firstDoorCenter(room, this.plan)
     const order = [-1, 1].sort((a, b) => (door ? dist(add(back, mul(side, b * def.w)), door) - dist(add(back, mul(side, a * def.w)), door) : 0))
     const id = this.vary('nightstand')
     const nd = ASSET_MAP.get(id)!
-    const want = def.w >= 120 && !hasTag(def, 'crib') ? 2 : 1
+    const want = (def.w >= 120 && !hasTag(def, 'crib')) || pick.twin ? 2 : 1
     let n = 0
     for (const k of order) {
       if (n >= want) break

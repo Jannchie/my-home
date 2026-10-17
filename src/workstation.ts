@@ -226,7 +226,7 @@ const TOWERS = new WeakMap<DeskHost, Set<string>>()
 
 /**
  * 个人物件摆完之后再收拾一遍工位（工位在功能性的那一步先摆，后面散放的兴趣摆件里可能又有迷你主机、夹式摄像头）：
- * 新出现的主机交给同一房间里还没有主机的座位（主人还没有主机的），放不上就收走；
+ * 新出现的主机交给同一房间里还没有主机的座位（主人还没有主机的），放不上就收走；不在桌面上的显示器收走；
  * 夹式 / 条形摄像头挪到屏幕顶边（电视这时已经摆上了）。
  */
 export function settleDesks(c: DeskCtx) {
@@ -248,6 +248,12 @@ export function settleDesks(c: DeskCtx) {
     s.desktop = o.asset
     if (s.owner) owned.add(s.owner)
     if (!setupDesktop(c, s, weighted)) s.desktop = undefined
+  }
+  // 后来散放到书架、柜子上的显示器（兴趣摆件里的电竞显示器…）收走，和工位那一步一样只认桌面
+  for (const o of [...d.out]) {
+    if (!isMonitor(def(o)) || !d.out.includes(o)) continue
+    const p = d.out.find((x) => x.id === d.parentOf.get(o.id))
+    if (!p || !isDeskDef(def(p)) || Math.abs((o.z ?? 0) - (p.z ?? 0) - def(p)!.surface!) > 0.6) d.out = d.out.filter((x) => x !== o && d.parentOf.get(x.id) !== o.id)
   }
   known.clear()
   for (const o of d.out) if (isTower(def(o))) known.add(o.id)
