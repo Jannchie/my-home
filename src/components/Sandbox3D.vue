@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, toRaw,
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { ASSET_MAP, CATEGORY_LABELS, STYLE_LABELS, type StyleTag } from '../three/assets'
+import { freezeMatrices, syncMatrix } from '../three/matrices'
 import { BASE, applyCutaway, bendToWalls, floorY, isPlant, stepCutaway, furnitureModel, placeFurniture, roomAt, type WallLook } from '../three/house'
 import { buildBuilding, type FloorGroup } from '../three/building'
 import { baseFloorId, floorById, floorOf, floorView, isMultiFloor, planFloors } from '../floors'
@@ -128,6 +129,8 @@ function furnLayer(id: string) {
   if (!g) {
     g = new THREE.Group()
     g.userData.floorId = id
+    // 静态矩阵：楼层动画挪它时在 applyFloorPose 里手动更新
+    g.matrixAutoUpdate = false
     furnLayers.set(id, g)
     furnRoot.add(g)
   }
@@ -298,7 +301,7 @@ function syncFloorFades() {
 /**
  * 预热楼层淡入淡出的着色器：透明副本（和深度替身的 depthOnlyMat）是新的着色器变体，被藏起来的楼层的原材质也从没画过，
  * 第一次切换楼层时要同步编译十来个程序（实测卡 2 秒多）。多层户型重搭后空闲时，各层原样编一遍，
- * 再用 fadeFloor 临时套上淡出状态编一遍，立刻复原；compileAsync 在后台编译（KHR_parallel_shader_compile）。
+ * 再用 fadeFloor 临时翻到另一种状态（显示的层淡出、藏起来的层显示）编一遍，立刻复原；compileAsync 在后台编译（KHR_parallel_shader_compile）。
  * 直接画到屏幕和经后处理画到渲染目标是两种变体，两种都编。主线程约 0.2 秒，所以只在重搭房子时做。
  */
 let warmTimer = 0
@@ -308,12 +311,13 @@ function prewarmFloorFade() {
   if (!isMultiFloor(plan.value)) return
   warmTimer = window.setTimeout(() => {
     if (!stage || !isMultiFloor(plan.value)) return
-    // 正在淡入淡出的层不碰（它的程序本来就在编了）
+    // 正在淡入淡出的层不碰（它的程序本来就在编了）。「只到当前层」藏起来的上层（完全淡出）也要编：
+    // 它现在挂的是透明副本，原材质（墙纸花纹、屏幕等）一次都没编过，第一次切上去会现编好几个程序
     const roots: [THREE.Object3D, string][] = [
       ...floorGroups.map((fg) => [fg.group, fg.floor.id] as [THREE.Object3D, string]),
       ...[...furnLayers].map(([id, g]) => [g, id] as [THREE.Object3D, string]),
       ...actors.roots(),
-    ].filter(([root]) => !root.userData.floorFaded)
+    ].filter(([root, id]) => !root.userData.floorFaded || floorAlpha(id) <= 0)
     const renderer = stage.renderer
     const prev = renderer.getRenderTarget()
     const target = (warmTarget ??= new THREE.WebGLRenderTarget(1, 1))
@@ -324,12 +328,27 @@ function prewarmFloorFade() {
       }
     }
     try {
+      // 先按现状编一遍，再把每层翻到另一种状态（显示的层套上淡出，藏起来的层换回原材质）再编一遍
       compile()
-      for (const [root, id] of roots) fadeFloor(root, id, 0.5)
+      const hidden = roots.filter(([root]) => root.userData.floorFaded).map(([root]) => root)
+      for (const [root, id] of roots) fadeFloor(root, id, root.userData.floorFaded ? 1 : 0.5)
       compile()
+      // 藏起来的层的贴图（墙纸、屏幕、花纹）也从没上传过：顺手传上去，切过去的那一帧少卡几十毫秒
+      const seen = new Set<THREE.Texture>()
+      for (const root of hidden)
+        root.traverse((o) => {
+          const m = (o as THREE.Mesh).material
+          if (!m) return
+          for (const mat of Array.isArray(m) ? m : [m])
+            for (const v of Object.values(mat))
+              if ((v as THREE.Texture | null)?.isTexture && !seen.has(v as THREE.Texture)) {
+                seen.add(v as THREE.Texture)
+                renderer.initTexture(v as THREE.Texture)
+              }
+        })
     } finally {
       renderer.setRenderTarget(prev)
-      for (const [root, id] of roots) fadeFloor(root, id, 1)
+      for (const [root, id] of roots) fadeFloor(root, id, floorAlpha(id))
     }
   }, 400)
 }
@@ -338,13 +357,22 @@ function prewarmFloorFade() {
 function applyFloorPose() {
   for (const fg of floorGroups) {
     const st = floorAnim.get(fg.floor.id)
-    fg.group.position.y = fg.floor.elevation + (st?.extra ?? 0)
     fg.group.visible = st?.show ?? true
+    // 房子、家具都是静态矩阵（matrices.ts）：只在这一层真的挪了时重算它这棵子树
+    const y = fg.floor.elevation + (st?.extra ?? 0)
+    if (fg.group.position.y !== y) {
+      fg.group.position.y = y
+      syncMatrix(fg.group)
+    }
   }
   for (const [id, g] of furnLayers) {
     const st = floorAnim.get(id)
-    g.position.y = st?.extra ?? 0
     g.visible = st?.show ?? true
+    const y = st?.extra ?? 0
+    if (g.position.y !== y) {
+      g.position.y = y
+      syncMatrix(g)
+    }
   }
   // 宠物、机器人：按所在楼层（走楼梯时在两层之间）跟着楼层的动画走（位置、显示、淡入淡出）
   actors?.relayout()
@@ -718,6 +746,8 @@ function rebuildHouse() {
   const wh = sandbox.exterior ? 240 : sandbox.wallHeight
   const built = buildBuilding(raw, wh, (f) => (f.id === activeFloor.value && wh < 240 ? Math.min(f.height, wh) : f.height))
   house = built.root
+  // 房子搭好就不动了（除了墙体压低和楼层滑动，那两处自己更新矩阵）：不再每帧重算上千个对象的矩阵
+  freezeMatrices(house)
   floorGroups = built.floors
   builtActive = activeFloor.value
   stage.scene.add(house)
@@ -765,6 +795,8 @@ function syncFurniture() {
         disposeUnshared(o.obj)
       }
       o = { obj: furnitureModel(f), key }
+      // 根节点也用静态矩阵：placeFurniture 挪动时会更新
+      o.obj.matrixAutoUpdate = false
       objs.set(f.id, o)
       fx.set(f.id, o.obj, ASSET_MAP.get(f.asset)?.fx)
     }
@@ -1823,10 +1855,10 @@ function loop() {
   const low = lowPower()
   const actorsBusy = actors.update(dt)
   const anim = fx.update(dt, stage.renderer.domElement.height) || actorsBusy
-  // 楼层切换 / 分层拉开的缓动
+  // 楼层切换 / 分层拉开的缓动：动画期间沿用旧阴影（每次重画阴影要提交上千次 draw call），停下的那一帧重画一次
   if (stepFloors(dt)) {
     dirty = true
-    sunMoved = true
+    if (!floorsMoving) shadowDirty = true
   }
   if (anim && !(low && now - lastRender < 32)) dirty = true
   if (fading && house) {
@@ -1841,9 +1873,15 @@ function loop() {
     const houseMoved = houseChanged()
     if (houseMoved || furnRoot.userData.cutawayChanged) {
       furnRoot.userData.cutawayChanged = false
-      shadowDirty = true
+      cutawayShadow = true
       dirty = true
     }
+  }
+  // 墙体渐变同理：渐变中保留旧阴影，全部停下后重画一次（转镜头时墙一直在让开，不再每帧重画阴影）
+  if (cutawayShadow && !fading) {
+    cutawayShadow = false
+    shadowDirty = true
+    dirty = true
   }
   // 选中框：出现时缩入，之后角标呼吸（省电画质 / 减少动效时静止，画面不用每帧重画）
   const framesMoving = [selFrame.update(now, low), hoverFrame.update(now, true), ghostFrame.update(now, true)].some(Boolean)
@@ -1863,6 +1901,8 @@ function loop() {
   }
 }
 let lastRender = 0
+/** 墙体渐变改过投影，等渐变结束后重画阴影 */
+let cutawayShadow = false
 
 /** 切到后台 / 锁屏：停掉渲染循环；回来时接着跑（时间步长从头算，不会一下跳很多） */
 function onVisibility() {
@@ -1897,6 +1937,9 @@ onMounted(() => {
   applySky()
   stage.renderer.shadowMap.autoUpdate = false
   stage.renderer.shadowMap.needsUpdate = true
+  // 场景根和家具根固定在原点：不设成静态矩阵的话，它们每帧 updateMatrix 会逼着整棵树重算世界矩阵
+  stage.scene.matrixAutoUpdate = false
+  furnRoot.matrixAutoUpdate = false
   stage.scene.add(furnRoot, frameRoot, guideRoot, fx.group)
   stage.scene.add(actors.group)
   controls = new OrbitControls(stage.camera, canvas.value!)

@@ -26,6 +26,7 @@ import { isIndoor, sharedIntervals, voidRailSegments, wallSegments, wallThicknes
 import { tatamiLayout } from '../tatami'
 import { addOutlines, ball, capsule, cyl, mergeMeshes, rbox, shade, toon, useAnisotropy } from './toon'
 import { glow, poseDoors } from './kit'
+import { freezeMatrices, syncMatrix } from './matrices'
 import { hasTag } from './tags'
 import { fridgeSpotModel, washerSpotModel } from './appliances'
 import { effectivePalette } from './colors'
@@ -439,6 +440,8 @@ export function stepCutaway(root: THREE.Object3D, dt: number, look: WallLook, fo
       const hh = look.style === 'cut' ? Math.max(0, Math.min(wall.h, top - wall.y0)) : wall.h
       o.scale.y = Math.max(hh, 0.01) / wall.h
       o.position.y = wall.y0 + hh / 2
+      // 房子是静态矩阵（Sandbox3D 搭好后 freezeMatrices）
+      if (!o.matrixAutoUpdate) syncMatrix(o)
       if (look.style === 'cut') {
         const { parts } = fadeParts(o)
         for (const p of parts) {
@@ -1544,14 +1547,32 @@ export function furnitureModel(fu: Furniture) {
   const m = def.build(pal)
   // 零件按材质合并，draw call 少一个数量级（描边、花纹、弯曲都在合并后的网格上照常工作）
   mergeMeshes(m)
-  addOutlines(m)
+  noTinyShadows(m)
+  addOutlines(m, { minSize: TINY_OUTLINE })
   applyPatterns(m, pal, fu.patterns)
   // 可开合的柜子：柜门 / 抽屉按 open 摆好（模型本身是关着的）
   if (def.openable) poseDoors(m, !!fu.open)
+  // 模型内部的零件不再动（开合是重建模型）：矩阵算一次就固定，免得每帧上万个对象重算矩阵
+  freezeMatrices(m)
   g.add(m)
   g.userData.furnitureId = fu.id
   g.userData.asset = fu.asset
   return g
+}
+
+/** 包围盒对角线小于这个值（cm）的网格不投影：把手、衣物、小摆件的影子在 2048 的阴影贴图上只有几个像素，却各占一次阴影 draw call */
+const TINY_CASTER = 15
+/** 包围球直径小于这个值（cm）的零件不描边（合并后还单独剩下的小零件：把手、按钮、小摆件里的细节） */
+const TINY_OUTLINE = 10
+function noTinyShadows(root: THREE.Object3D) {
+  root.updateMatrixWorld(true)
+  root.traverse((o) => {
+    const m = o as THREE.Mesh
+    if (!m.isMesh || !m.castShadow) return
+    // 用包围球（合并出来的几何体已经算好，缓存的体素几何体只算一次）：直径 ≈ 包围盒对角线
+    if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere()
+    if (m.geometry.boundingSphere!.radius * 2 * m.matrixWorld.getMaxScaleOnAxis() < TINY_CASTER) m.castShadow = false
+  })
 }
 
 /**
@@ -1564,10 +1585,12 @@ export function placeFurniture(obj: THREE.Object3D, plan: Plan, fu: Pick<Furnitu
     const elev = floorElevation(plan, floorOf(plan, fu))
     obj.position.set(fu.x, elev + (elev === 0 ? groundAt(plan, fu, room) : floorY(room)) + (fu.z ?? 0), fu.y)
     obj.rotation.y = (-fu.rot * Math.PI) / 180
-    return
+  } else {
+    placeOnFloor(obj, plan, fu.x, fu.y, fu.rot)
+    obj.position.y += fu.z ?? 0
   }
-  placeOnFloor(obj, plan, fu.x, fu.y, fu.rot)
-  obj.position.y += fu.z ?? 0
+  // 沙盘里家具的根节点是静态矩阵（见 matrices.ts）：挪动后手动更新
+  if (!obj.matrixAutoUpdate) syncMatrix(obj)
 }
 
 // ---------- 盆栽贴墙时自动弯曲，避免枝叶穿进墙里 ----------

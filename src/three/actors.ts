@@ -16,6 +16,7 @@ import type { Furniture, Plan, Vec } from '../model'
 import { ASSET_MAP, ASSETS } from './assets'
 import type { ActorSpec, AssetDef } from './kit'
 import { hasTag } from './tags'
+import { syncMatrix } from './matrices'
 import { effectivePalette } from './colors'
 import { HouseNav, NavGrid, type NavClass } from '../nav'
 import { floorOf, floorView, isMultiFloor, planFloors } from '../floors'
@@ -594,6 +595,7 @@ export class ActorLayer {
         if (f && plan) placeFurniture(c.obj, plan, f)
         c.obj.quaternion.setFromEuler(c.obj.rotation)
         c.obj.scale.set(1, 1, 1)
+        if (!c.obj.matrixAutoUpdate) syncMatrix(c.obj)
       }
       a.carry = []
     }
@@ -764,6 +766,7 @@ export class ActorLayer {
       for (const c of a.carry) {
         m.multiplyMatrices(a.root.matrixWorld, c.local)
         m.decompose(c.obj.position, c.obj.quaternion, c.obj.scale)
+        if (!c.obj.matrixAutoUpdate) syncMatrix(c.obj)
       }
     }
   }
