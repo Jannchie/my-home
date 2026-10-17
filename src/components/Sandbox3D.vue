@@ -72,6 +72,8 @@ import {
   setRoomLight,
   setRoomLightK,
   setFurnitureLight,
+  FOV_MIN,
+  FOV_MAX,
 } from '../store'
 
 const host = ref<HTMLDivElement>()
@@ -501,6 +503,32 @@ function applySheetOffset(animate = false) {
 watch(
   () => [layout.sheetH, device.compact, device.landscape] as const,
   () => applySheetOffset(true),
+)
+
+/**
+ * 改透视（视角 FOV）：相机沿视线前后移动，让房子在画面里的大小基本不变（推拉变焦），只改近大远小的强弱。
+ * 拉远上限跟着视角放大，窄视角时也能把整栋房子装进画面。
+ */
+function applyFov(fov: number, keepFraming = true) {
+  const cam = stage.camera
+  const old = cam.fov
+  if (keepFraming && controls && Math.abs(old - fov) > 0.01) {
+    const k = Math.tan((old * Math.PI) / 360) / Math.tan((fov * Math.PI) / 360)
+    const off = cam.position.clone().sub(controls.target).multiplyScalar(k)
+    cam.position.copy(controls.target).add(off)
+  }
+  cam.fov = fov
+  cam.updateProjectionMatrix()
+  if (controls) {
+    const scale = Math.tan((30 * Math.PI) / 360) / Math.tan((fov * Math.PI) / 360)
+    controls.maxDistance = 6000 * Math.max(1, scale)
+    controls.update()
+  }
+  dirty = true
+}
+watch(
+  () => sandbox.fov,
+  (v) => applyFov(v),
 )
 
 function resetView() {
@@ -1451,6 +1479,7 @@ onMounted(() => {
   controls.maxPolarAngle = Math.PI * 0.47
   controls.minDistance = 150
   controls.maxDistance = 6000
+  applyFov(sandbox.fov, false)
   controls.screenSpacePanning = true
   controls.autoRotateSpeed = 0.6
   controls.autoRotate = !editing.value && sandbox.autoRotate
@@ -2009,6 +2038,11 @@ defineExpose({ resetView })
           <span>{{ t('墙高') }}</span>
           <input v-model.number="sandbox.wallHeight" type="range" min="40" max="240" step="10" />
           <span class="num val">{{ sandbox.wallHeight }}</span>
+        </label>
+        <label class="row" :title="t('小：画面平、接近等距视图；大：近大远小更明显')">
+          <span>{{ t('透视') }}</span>
+          <input v-model.number="sandbox.fov" type="range" :min="FOV_MIN" :max="FOV_MAX" step="1" />
+          <span class="num val">{{ sandbox.fov }}°</span>
         </label>
         <div class="seg" :title="t('墙体显示 (C 切换)')">
           <button v-for="m in WALL_MODES" :key="m.id" :class="{ on: sandbox.wallMode === m.id }" :title="t(m.label)" :aria-label="t(m.label)" @click="sandbox.wallMode = m.id"><JIcon :icon="WALL_MODE_ICONS[m.id]" /></button>

@@ -910,4 +910,6 @@ Object.assign(UI, {
   '已打开分享的户型「{name}」': ['共有された間取り「{name}」を開きました', 'Opened the shared plan “{name}”'],
   '更新日志': ['更新履歴', "Changelog"],
   '已更新到 v{v}，可在「更多 → 更新日志」查看': ['v{v} に更新しました。「その他 → 更新履歴」で内容を確認できます', "Updated to v{v}. See More → Changelog for what's new"],
+  '透视': ['パース', 'Perspective'],
+  '小：画面平、接近等距视图；大：近大远小更明显': ['小さいほど平行投影に近く、大きいほど遠近感が強くなります', 'Low: flatter, close to isometric. High: stronger perspective'],
 } satisfies Record<string, Entry>)

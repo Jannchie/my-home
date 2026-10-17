@@ -31,6 +31,7 @@ const STORAGE_KEY = 'my-home:plan'
 const LOOK_KEY = 'my-home:look'
 const SKY_KEY = 'my-home:sky'
 const LIGHTS_KEY = 'my-home:lights'
+const FOV_KEY = 'my-home:fov'
 
 /** 校验并补全旧版本数据（早期没有 fixtures / furniture） */
 export function normalizePlan(p: Plan): Plan | null {
@@ -139,7 +140,7 @@ export const WALL_MODES: { id: WallMode; label: string }[] = [
   { id: 'half', label: '内墙半墙' },
   { id: 'down', label: '全部压低' },
 ]
-export const sandbox = reactive({ wallHeight: 240, wallMode: 'half' as WallMode, cutHeight: 60, cutawayOpacity: 0, cutawayHover: true, snap: true, mode: 'edit' as 'edit' | 'preview', autoRotate: true, autoFurnish: true, style: 'auto' as StyleTag | 'random' | 'auto', look: loadLook(), ...loadSky(), ...loadLights(), playing: false })
+export const sandbox = reactive({ wallHeight: 240, wallMode: 'half' as WallMode, cutHeight: 60, cutawayOpacity: 0, cutawayHover: true, snap: true, mode: 'edit' as 'edit' | 'preview', autoRotate: true, autoFurnish: true, style: 'auto' as StyleTag | 'random' | 'auto', look: loadLook(), fov: loadFov(), ...loadSky(), ...loadLights(), playing: false })
 
 /** 设备的当前时间：时刻（小时，含分钟）与月日 */
 export function nowSky() {
@@ -265,6 +266,28 @@ export function setFurnitureLight(id: string, v: 'on' | 'off' | undefined) {
     else f.light = v
   })
 }
+
+/** 3D 沙盘的视角（透视强度，度）：小 = 平、接近等距视图；大 = 近大远小更明显。单独存一个键 */
+export const FOV_MIN = 15
+export const FOV_MAX = 70
+function loadFov() {
+  try {
+    const v = Number(localStorage.getItem(FOV_KEY))
+    return v >= FOV_MIN && v <= FOV_MAX ? v : 35
+  } catch {
+    return 35
+  }
+}
+watch(
+  () => sandbox.fov,
+  (v) => {
+    try {
+      localStorage.setItem(FOV_KEY, String(v))
+    } catch {
+      /* 存储不可用时忽略 */
+    }
+  },
+)
 
 /** 3D 沙盘的画面效果（three/post.ts 的 LookId），单独存一个键，不进户型数据 */
 function loadLook() {
