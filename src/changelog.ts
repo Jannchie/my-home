@@ -12,6 +12,36 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '1.2.0',
+    date: '2026-10-17',
+    notes: {
+      zh: [
+        '内置收纳改为"收纳位 + 柜子"：柜子是普通家具，新增 43 款鞋柜、衣柜、食品柜，按尺寸放进收纳位',
+        '素材库里 160 多款带门或抽屉的柜子都能打开，门里、抽屉里可以收纳东西；一键布置会往柜子里放衣物、鞋、碗盘、食品等日常用品，兴趣物件和收藏品留在外面',
+        '一键布置的穿模大幅减少：不再嵌进墙里、不挡门和落地窗，墙上挂的东西、垂下的毛巾和窗帘不再插进下方的家具',
+        '空调不再和衣柜、冰箱等高家具重叠',
+        '3D 场景新增透视调节，可在接近等距视图和较强的近大远小之间切换',
+        '修正伞架、月亮椅、刷牙杯等模型内部的零件穿插',
+      ],
+      ja: [
+        '造り付け収納を「収納スペース + 家具」に変更。新しい靴箱・ワードローブ・パントリー 43 点をサイズに合わせて配置',
+        '扉や引き出しのある家具 160 点以上を開けられるように。中に物を収納できます。おまかせ配置では衣類・靴・食器・食品などの日用品を中にしまい、趣味の物やコレクションは外に飾ります',
+        'おまかせ配置のめり込みを大幅に削減：壁にめり込まない、ドアや掃き出し窓をふさがない、壁掛け・タオル・カーテンが下の家具に刺さらない',
+        'エアコンがワードローブや冷蔵庫などの背の高い家具と重ならないように',
+        '3D 表示にパース（画角）の調整を追加。平行投影に近い見え方から遠近感の強い見え方まで',
+        '傘立て、ムーンチェア、歯ブラシコップなどモデル内部の部品のめり込みを修正',
+      ],
+      en: [
+        'Built-in storage is now a storage spot plus a cabinet: cabinets are regular furniture, with 43 new shoe cabinets, wardrobes and pantries sized to fit',
+        'Over 160 cabinets with doors or drawers can be opened and used for storage. Auto-furnish stores everyday items such as clothes, shoes, dishes and food inside, and keeps hobby items and collections on display',
+        'Far fewer collisions when furnishing: nothing sinks into walls or blocks doors and balcony doors, and wall-mounted items, hanging towels and curtains no longer cut into furniture below',
+        'Wall air conditioners no longer overlap wardrobes, fridges or other tall furniture',
+        'Adjustable perspective in 3D, from nearly isometric to strong perspective',
+        'Fixed parts clipping through each other inside models such as the umbrella stand, moon chair and toothbrush cups',
+      ],
+    },
+  },
+  {
     version: '1.1.0',
     date: '2026-10-17',
     notes: {
