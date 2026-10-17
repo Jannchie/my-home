@@ -321,7 +321,10 @@ describe('一键布置不穿模（jp / cn / west seed 1..20）', () => {
         const sp = supportOf(plan, it.f)
         const owner = sp && plan.furniture.find((o) => o.id === sp.ownerId)
         if (!owner) return []
-        const lv = (ASSET_MAP.get(owner.asset)!.surfaces ?? []).find((l) => Math.abs((owner.z ?? 0) + l.y - (it.f.z ?? 0)) < 0.5 && l.kind !== 'hook' && l.kind !== 'clip')
+        // 同一高度可能有好几格（多宝格左右两列层高不同）：取摆件中心落在里面的那一格
+        const lp = toLocal(owner, it.f)
+        const inCell = (l: { shape?: [number, number][][] }) => !l.shape?.length || l.shape.some((pl) => pointInPolygon(lp, pl.map(([x, y]) => ({ x, y }))))
+        const lv = (ASSET_MAP.get(owner.asset)!.surfaces ?? []).find((l) => Math.abs((owner.z ?? 0) + l.y - (it.f.z ?? 0)) < 0.5 && l.kind !== 'hook' && l.kind !== 'clip' && inCell(l))
         const h = it.y1 - it.y0
         return lv?.h !== undefined && h > lv.h + 2 ? [`${it.f.asset} 在 ${owner.asset} 里高 ${h.toFixed(1)}，层高 ${lv.h}`] : []
       }),

@@ -13,7 +13,7 @@ import { add, bbox, dist, mul, openingsOn, pointInPolygon, type Box, type Fixtur
 import { boxInsideWalls, isSashWindow, placeCandidates, type PlaceSpec } from './place'
 import { ASSET_MAP } from './three/assets'
 import { hasTag } from './three/tags'
-import { HARD_ZONES, boxesOverlap, footprint, type Occupancy, type WallFace } from './occupancy'
+import { HARD_ZONES, boxesOverlap, footprint, type Occupancy, type PassageGrid, type WallFace } from './occupancy'
 
 /** 一个候选位置（或选定的位置） */
 export interface Pick {
@@ -90,7 +90,11 @@ class Scene {
     const b = bbox(room.points)
     this.center = { x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 }
     this.minDim = Math.min(b.x1 - b.x0, b.y1 - b.y0)
+    this.narrow = occ.passage(room, [...this.hard, ...this.solids], 27)
+    this.wide = occ.passage(room, [...this.hard, ...this.solids], 32)
   }
+  narrow: PassageGrid
+  wide: PassageGrid
 
   /** 背后贴着的那面墙，以及占了那面墙的哪一段 */
   backFace(p: Pick) {
@@ -263,12 +267,20 @@ export function tvFacesSofa(sofa: Pick, tv: Pick) {
   return D >= TV_GAP[0] && D <= TV_GAP[1] && Math.abs(dot(sub(tv, sofa), sideDir(sofa.rot))) <= 120
 }
 
-/** 整体：主要通道走得通、左右均衡 */
+/**
+ * 主要通道：宽 54 走不通的出入口每个扣 150（基本不允许；比校验用的宽 40 留一点余量），宽 64 走不通的每个扣 30。
+ * 每选一样大件都算一次（beam 剪枝时就考虑进去，不只在最后）。
+ */
+function scorePassage(s: Scene, state: (Pick | null)[]) {
+  const boxes = state.filter((p): p is Pick => !!p).map(boxOfPick)
+  return -150 * s.narrow.blocked(boxes) - 30 * s.wide.blocked(boxes)
+}
+
+/** 整体：左右均衡 */
 function scoreFinal(s: Scene, state: (Pick | null)[]) {
   const picks = state.filter((p): p is Pick => !!p)
   const boxes = picks.map(boxOfPick)
-  const blocked = s.env.occ.blockedEntrances(s.env.room, [...s.hard, ...s.solids, ...boxes])
-  let score = -40 * blocked
+  let score = 0
   // 均衡：占地面积加权的重心离房间中心的距离
   let A = 0
   let cx = 0
@@ -289,8 +301,9 @@ function scoreFinal(s: Scene, state: (Pick | null)[]) {
  */
 export function arrange(env: ArrangeEnv, slots: Slot[]): (Pick | null)[] {
   const s = new Scene(env)
-  type State = { picks: (Pick | null)[]; score: number }
-  let beam: State[] = [{ picks: [], score: 0 }]
+  type State = { picks: (Pick | null)[]; score: number; pass: number }
+  const pass0 = scorePassage(s, [])
+  let beam: State[] = [{ picks: [], score: pass0, pass: pass0 }]
   for (const slot of slots) {
     const next: State[] = []
     for (const st of beam) {
@@ -298,7 +311,9 @@ export function arrange(env: ArrangeEnv, slots: Slot[]): (Pick | null)[] {
       // 已选的大件当设备避让；床边下床的空间也要留着（和 Decorator.bedPlaced 登记的一致）
       const held = placed.flatMap((p) => (hasTag(ASSET_MAP.get(p.asset)!, 'bed') ? s.heldSides(p) : [])).map(boxPs)
       const ctx = placed.length ? { ...env.ctx, fixtures: [...env.ctx.fixtures, ...placed.map(asPs), ...held] } : env.ctx
-      const cands = candidates(env, ctx, slot)
+      // 硬条件先筛掉（双人床两侧都要能下床），免得放得下的备选里全是不合格的位置、更小一号的床又没机会试
+      const accept = (p: Pick) => slot.kind !== 'bed' || !isDoubleBed(p.asset) || bedSides(p).every((b) => s.free(b, placed, p))
+      const cands = candidates(env, ctx, slot, accept)
       for (const { p, bias } of cands) {
         const state = [...st.picks, p]
         const flat = state.filter((x): x is Pick => !!x)
@@ -309,9 +324,11 @@ export function arrange(env: ArrangeEnv, slots: Slot[]): (Pick | null)[] {
         else if (slot.kind === 'sofa') sc += scoreSofa(s, p, slot.far)
         else if (slot.kind === 'tv') sc += scoreTv(s, p, state as Pick[], slots)
         if (sc === -Infinity) continue
-        next.push({ picks: state, score: st.score + sc })
+        // 主要通道按整个组合算：换成这一步之后的通道分
+        const pass = scorePassage(s, state)
+        next.push({ picks: state, score: st.score - st.pass + pass + sc, pass })
       }
-      next.push({ picks: [...st.picks, null], score: st.score - (slot.miss ?? 60) })
+      next.push({ picks: [...st.picks, null], score: st.score - (slot.miss ?? 60), pass: st.pass })
     }
     next.sort((a, b) => b.score - a.score)
     beam = next.slice(0, WIDTH)
@@ -326,7 +343,7 @@ export function arrange(env: ArrangeEnv, slots: Slot[]): (Pick | null)[] {
 }
 
 /** 一样大件的候选：按备选顺序，第一个放得下的素材和下一个备选，各取分散开的前若干个（立体上不冲突的） */
-function candidates(env: ArrangeEnv, ctx: Plan, slot: Slot): { p: Pick; bias: number }[] {
+function candidates(env: ArrangeEnv, ctx: Plan, slot: Slot, accept: (p: Pick) => boolean): { p: Pick; bias: number }[] {
   const out: { p: Pick; bias: number }[] = []
   let hits = 0
   for (const opt of slot.options) {
@@ -339,7 +356,9 @@ function candidates(env: ArrangeEnv, ctx: Plan, slot: Slot): { p: Pick; bias: nu
       // 分散开：同一朝向、离已取的候选不到 40 的跳过
       if (kept.some((k) => k.rot === f.rot && Math.hypot(k.x - f.x, k.y - f.y) < 40)) continue
       if (!pointInPolygon(f, env.room.points) || !env.canPlace(opt.asset, f.x, f.y, f.rot)) continue
-      kept.push({ asset: opt.asset, x: f.x, y: f.y, rot: f.rot })
+      const p = { asset: opt.asset, x: f.x, y: f.y, rot: f.rot }
+      if (!accept(p)) continue
+      kept.push(p)
     }
     for (const p of kept) out.push({ p, bias: opt.bias ?? 0 })
     if (kept.length && ++hits >= 2) break

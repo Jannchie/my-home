@@ -215,6 +215,174 @@ export interface WallFace {
   spans: WallSpan[]
 }
 
+// ---------- 校验用的几何 ----------
+
+/** 校验发现的冲突：a 是后摆的那件（要挪走的），b 是撞到的东西 / 设备 */
+export interface Conflict {
+  a: string
+  b?: string
+  reason: string
+}
+
+const isSeat = (d: AssetDef) => hasTag(d, 'chair', 'seat', 'stool', 'floor-cushion')
+const isTable = (d: AssetDef) => !!d.surface && hasTag(d, 'table', 'desk', 'workbench', 'dining-table', 'low-table', 'coffee-table', 'vanity')
+const isTower = (d: AssetDef) => d.type === 'pc' || d.id === 'of-mini-pc'
+
+/** 一件东西本体的有向矩形（按实际朝向，不取整到 90°） */
+function obb(b: Body): Vec[] {
+  const c = bodyCenter(b.f.asset, b.f.x, b.f.y, b.f.rot)
+  const a = (b.f.rot * Math.PI) / 180
+  const cos = Math.cos(a)
+  const sin = Math.sin(a)
+  const w = b.def.w / 2
+  const d = b.def.d / 2
+  return [
+    [-w, -d],
+    [w, -d],
+    [w, d],
+    [-w, d],
+  ].map(([x, y]) => ({ x: c.x + x * cos - y * sin, y: c.y + x * sin + y * cos }))
+}
+const rectPoly = (b: Box): Vec[] => [
+  { x: b.x0, y: b.y0 },
+  { x: b.x1, y: b.y0 },
+  { x: b.x1, y: b.y1 },
+  { x: b.x0, y: b.y1 },
+]
+/** 两个凸多边形的穿透深度（分离轴上投影重叠的最小值；≤ 0 表示不相交） */
+function penetration(a: Vec[], b: Vec[]) {
+  let best = Infinity
+  for (const poly of [a, b])
+    for (let i = 0; i < poly.length; i++) {
+      const p = poly[i]
+      const q = poly[(i + 1) % poly.length]
+      const L = Math.hypot(q.x - p.x, q.y - p.y)
+      if (L < 1e-9) continue
+      const n = { x: -(q.y - p.y) / L, y: (q.x - p.x) / L }
+      let a0 = Infinity
+      let a1 = -Infinity
+      let b0 = Infinity
+      let b1 = -Infinity
+      for (const v of a) {
+        const t = v.x * n.x + v.y * n.y
+        if (t < a0) a0 = t
+        if (t > a1) a1 = t
+      }
+      for (const v of b) {
+        const t = v.x * n.x + v.y * n.y
+        if (t < b0) b0 = t
+        if (t > b1) b1 = t
+      }
+      const o = Math.min(a1, b1) - Math.max(a0, b0)
+      if (o < best) best = o
+      if (best <= 0) return best
+    }
+  return best
+}
+
+// ---------- 主要通道 ----------
+
+/**
+ * 一个房间的主要通道检查：宽 2r 的人能不能从每个出入口走到房间里最大的那块空地（10cm 格子上的连通性，墙面按墙面轮廓算），
+ * 出入口之间也就互相走得通。出入口附近 40 以内找最近的能站的格子当起止点（门洞两侧常有家具贴着）。
+ */
+export class PassageGrid {
+  private x0: number
+  private y0: number
+  private nx: number
+  private ny: number
+  private base: Uint8Array
+  private comp: Int32Array
+  private step = 10
+  constructor(
+    inner: Room,
+    blockers: Box[],
+    private r: number,
+    private entries: Vec[],
+  ) {
+    const b = boxOf(inner.points)
+    this.x0 = b.x0
+    this.y0 = b.y0
+    this.nx = Math.max(1, Math.ceil((b.x1 - b.x0) / this.step))
+    this.ny = Math.max(1, Math.ceil((b.y1 - b.y0) / this.step))
+    this.base = new Uint8Array(this.nx * this.ny)
+    this.comp = new Int32Array(this.nx * this.ny)
+    const edges = edgesOf(inner.points)
+    for (let j = 0; j < this.ny; j++)
+      for (let i = 0; i < this.nx; i++) {
+        const p = this.at(i, j)
+        if (!pointInPolygon(p, inner.points)) continue
+        if (edges.some((e) => distToSeg(p, e.a, e.b) < r - 2)) continue
+        this.base[j * this.nx + i] = 1
+      }
+    for (const k of blockers) this.stamp(this.base, k)
+  }
+
+  private at(i: number, j: number): Vec {
+    return { x: this.x0 + (i + 0.5) * this.step, y: this.y0 + (j + 0.5) * this.step }
+  }
+
+  /** 把盒子（往外扩 r - 2）范围里的格子标成不能走 */
+  private stamp(free: Uint8Array, k: Box) {
+    const g = grow(k, this.r - 2)
+    const i0 = Math.max(0, Math.floor((g.x0 - this.x0) / this.step))
+    const i1 = Math.min(this.nx - 1, Math.ceil((g.x1 - this.x0) / this.step))
+    const j0 = Math.max(0, Math.floor((g.y0 - this.y0) / this.step))
+    const j1 = Math.min(this.ny - 1, Math.ceil((g.y1 - this.y0) / this.step))
+    for (let j = j0; j <= j1; j++)
+      for (let i = i0; i <= i1; i++) {
+        const p = this.at(i, j)
+        if (p.x > g.x0 && p.x < g.x1 && p.y > g.y0 && p.y < g.y1) free[j * this.nx + i] = 0
+      }
+  }
+
+  /** 叠上 extra 之后走不通的出入口个数 */
+  blocked(extra: Box[]): number {
+    if (!this.entries.length) return 0
+    const { nx, ny } = this
+    const free = extra.length ? this.base.slice() : this.base
+    for (const k of extra) this.stamp(free, k)
+    const comp = this.comp.fill(-1)
+    const sizes: number[] = []
+    const q: number[] = []
+    for (let c0 = 0; c0 < nx * ny; c0++) {
+      if (!free[c0] || comp[c0] >= 0) continue
+      const id = sizes.length
+      let n = 0
+      q.push(c0)
+      comp[c0] = id
+      while (q.length) {
+        const c = q.pop()!
+        n++
+        const i = c % nx
+        const j = (c - i) / nx
+        if (i + 1 < nx && free[c + 1] && comp[c + 1] < 0) ((comp[c + 1] = id), q.push(c + 1))
+        if (i > 0 && free[c - 1] && comp[c - 1] < 0) ((comp[c - 1] = id), q.push(c - 1))
+        if (j + 1 < ny && free[c + nx] && comp[c + nx] < 0) ((comp[c + nx] = id), q.push(c + nx))
+        if (j > 0 && free[c - nx] && comp[c - nx] < 0) ((comp[c - nx] = id), q.push(c - nx))
+      }
+      sizes.push(n)
+    }
+    if (!sizes.length) return this.entries.length
+    const main = sizes.indexOf(Math.max(...sizes))
+    let bad = 0
+    for (const p of this.entries) {
+      // 出入口附近 40 以内最近的能站的格子
+      let best = -1
+      let bd = 40
+      for (let j = Math.max(0, Math.floor((p.y - 40 - this.y0) / this.step)); j < Math.min(ny, Math.ceil((p.y + 40 - this.y0) / this.step)); j++)
+        for (let i = Math.max(0, Math.floor((p.x - 40 - this.x0) / this.step)); i < Math.min(nx, Math.ceil((p.x + 40 - this.x0) / this.step)); i++) {
+          if (!free[j * nx + i]) continue
+          const c = this.at(i, j)
+          const d = Math.hypot(c.x - p.x, c.y - p.y)
+          if (d < bd) ((bd = d), (best = j * nx + i))
+        }
+      if (best < 0 || comp[best] !== main) bad++
+    }
+    return bad
+  }
+}
+
 // ---------- 查询 ----------
 
 export interface PlaceOpts {
@@ -293,11 +461,28 @@ export class Occupancy {
     const z = this.held.get(room.id) ?? []
     z.push({ box, kind, id })
     this.held.set(room.id, z)
+    this.keepCache = null
   }
 
   /** 撤掉某件东西登记的留空区（那件东西被拿掉时） */
   release(id: string) {
-    for (const [k, z] of this.held) this.held.set(k, z.filter((x) => x.id !== id))
+    for (const [k, z] of this.held) if (z.some((x) => x.id === id)) this.held.set(k, z.filter((x) => x.id !== id))
+    this.keepCache = null
+  }
+
+  /** 登记的留空区的副本（布置器存档 / 回退用） */
+  heldState() {
+    return new Map([...this.held].map(([k, z]) => [k, [...z]]))
+  }
+  setHeld(m: Map<string, Zone[]>) {
+    this.held = new Map([...m].map(([k, z]) => [k, [...z]]))
+    this.keepCache = null
+  }
+
+  private keepCache: Zone[] | null = null
+  /** 全层落地的东西一律不能压的留空区（KEEP_ZONES），canPlace 每次都查，缓存起来 */
+  private keeps(): Zone[] {
+    return (this.keepCache ??= this.plan.rooms.flatMap((r) => this.zones(r).filter((z) => KEEP_ZONES.has(z.kind))))
   }
   /**
    * 房间的平面禁放区。sash：通往阳台的落地窗前也留出通行空间（家具默认留）；windows：腰窗前也留（设备的 avoidWindows）。
@@ -487,10 +672,7 @@ export class Occupancy {
     // 落地的东西不压留空区：楼梯口 / 储物角开口 / 出梯口和通道、楼梯洞口、挑空栏杆里侧、床边下床的空间
     if (layer === 'floor') {
       const fp = footprint(asset, x, y, rot)
-      for (const r of this.plan.rooms) {
-        if (!boxesOverlap(fp, boxOf(r.points))) continue
-        for (const z0 of this.zones(r)) if (KEEP_ZONES.has(z0.kind) && boxesOverlap(fp, z0.box)) return no(z0.kind)
-      }
+      for (const z0 of this.keeps()) if (boxesOverlap(fp, z0.box)) return no(z0.kind)
     }
     const thin = !upper(layer) && def.h <= 3
     const fbox = furnitureBox(asset, x, y, rot)
@@ -564,64 +746,89 @@ export class Occupancy {
   }
 
   /**
-   * 主要通道：房间里 blockers 之外，宽 2r 的人能不能从第一个出入口走到其余每个出入口（10cm 格子上的连通性，墙面按墙面轮廓算）。
-   * 返回走不到的出入口个数。出入口附近 40 以内找最近的能站的格子当起止点（门洞两侧常有家具贴着）。
+   * 主要通道的格子（PassageGrid）：房间里静态的障碍（blockers）先栅格化，之后每次只叠上要试的家具。
    */
-  blockedEntrances(room: Room, blockers: Box[], r = 30, entries = this.entrances(room)): number {
-    if (entries.length < 2) return 0
-    const inner = innerRoom(room, this.plan)
-    const b = boxOf(inner.points)
-    const step = 10
-    const nx = Math.max(1, Math.ceil((b.x1 - b.x0) / step))
-    const ny = Math.max(1, Math.ceil((b.y1 - b.y0) / step))
-    const free = new Uint8Array(nx * ny)
-    const edges = edgesOf(inner.points)
-    const grown = blockers.map((k) => grow(k, r - 2))
-    for (let j = 0; j < ny; j++)
-      for (let i = 0; i < nx; i++) {
-        const p = { x: b.x0 + (i + 0.5) * step, y: b.y0 + (j + 0.5) * step }
-        if (!pointInPolygon(p, inner.points)) continue
-        if (grown.some((k) => p.x > k.x0 && p.x < k.x1 && p.y > k.y0 && p.y < k.y1)) continue
-        if (edges.some((e) => distToSeg(p, e.a, e.b) < r - 2)) continue
-        free[j * nx + i] = 1
-      }
-    const cellOf = (p: Vec) => {
-      let best = -1
-      let bd = 40
-      for (let j = Math.max(0, Math.floor((p.y - 40 - b.y0) / step)); j < Math.min(ny, Math.ceil((p.y + 40 - b.y0) / step)); j++)
-        for (let i = Math.max(0, Math.floor((p.x - 40 - b.x0) / step)); i < Math.min(nx, Math.ceil((p.x + 40 - b.x0) / step)); i++) {
-          if (!free[j * nx + i]) continue
-          const d = Math.hypot(b.x0 + (i + 0.5) * step - p.x, b.y0 + (j + 0.5) * step - p.y)
-          if (d < bd) ((bd = d), (best = j * nx + i))
+  passage(room: Room, blockers: Box[], r = 30) {
+    return new PassageGrid(innerRoom(room, this.plan), blockers, r, this.entrances(room))
+  }
+
+  // ---------- 统一校验 ----------
+
+  /**
+   * 摆完之后的统一校验（和 test/collisions.spec.ts 同一套规则，按素材声明的尺寸算）：
+   *   - 立体上互不穿插：任意两件（地毯这类薄片除外）在平面和高度上都交叠超过 2cm 就算；支撑链上的上下级、同一件家具上的两件摆件、
+   *     贴附物和非壁挂物不算；落地 × 落地时，桌下的椅子 / 比桌面矮的东西、洗衣机上方置物架、桌下贴着椅子的主机（≤ 5）不算；
+   *   - 不压设备本体（支撑链上的设备除外）、不插进窗帘；
+   *   - 落地的东西不压门扇开合范围、落地窗前、楼梯口 / 洞口 / 挑空栏杆里侧、床边下床的空间。
+   * skip 里的东西（按设计就该嵌在设备里的：楼梯下储物角的柜子）不查设备。返回冲突：[a, b?, 原因]，a 是后摆的那件。
+   */
+  audit(only?: Furniture, skip?: ReadonlySet<string>): Conflict[] {
+    const items = this.items()
+    const order = new Map(items.map((f, i) => [f.id, i]))
+    const bodies = items.map(bodyOf).filter((b): b is Body => !!b && !b.thin)
+    const polys = new Map(bodies.map((b) => [b.f.id, obb(b)]))
+    const out: Conflict[] = []
+    const chainCache = new Map<string, Set<string>>()
+    const chain = (id: string) => chainCache.get(id) ?? chainCache.set(id, this.chainOf(this.parentOf.get(id))).get(id)!
+    const root = (b: Body) => {
+      const c = [...chain(b.f.id)]
+      return c.length ? c[c.length - 1] : b.f.id
+    }
+    const byId = new Map(bodies.map((b) => [b.f.id, b]))
+    const later = (a: Body, b: Body): [Body, Body] => ((order.get(a.f.id) ?? 0) >= (order.get(b.f.id) ?? 0) ? [a, b] : [b, a])
+    const targets = only ? bodies.filter((b) => b.f === only) : bodies
+    for (const A of targets) {
+      const pa = polys.get(A.f.id)!
+      for (const B of bodies) {
+        if (B === A || (!only && (order.get(B.f.id) ?? 0) < (order.get(A.f.id) ?? 0))) continue
+        if (!boxesOverlap(grow(A.box, -1), grow(B.box, -1))) continue
+        if (chain(A.f.id).has(B.f.id) || chain(B.f.id).has(A.f.id)) continue
+        const sa = !!A.def.stick
+        const sb = !!B.def.stick
+        if (sa !== sb && A.def.mount === undefined && B.def.mount === undefined) continue
+        const ra = root(A)
+        const rb = root(B)
+        if (A.layer === 'prop' && B.layer === 'prop' && ra === rb) continue
+        if (Math.min(A.hi, B.hi) - Math.max(A.lo, B.lo) <= 2) continue
+        const pen = penetration(pa, polys.get(B.f.id)!)
+        if (pen <= 2) continue
+        const RA = byId.get(ra) ?? A
+        const RB = byId.get(rb) ?? B
+        if (RA.layer === 'floor' && RB.layer === 'floor' && RA !== RB) {
+          const tuck = (t: Body, u: Body) => isTable(t.def) && (isSeat(u.def) || u.hi <= t.lo + (t.def.surface ?? 0) - 1)
+          if (tuck(RA, RB) || tuck(RB, RA)) continue
+          if (hasTag(RA.def, 'washer-rack') || hasTag(RB.def, 'washer-rack')) continue
+          if (((isSeat(A.def) && isTower(B.def)) || (isSeat(B.def) && isTower(A.def))) && pen <= 5) continue
         }
-      return best
-    }
-    const cells = entries.map(cellOf)
-    const start = cells.find((c) => c >= 0)
-    if (start === undefined) return entries.length - 1
-    const seen = new Uint8Array(nx * ny)
-    const q = [start]
-    seen[start] = 1
-    while (q.length) {
-      const c = q.pop()!
-      const i = c % nx
-      const j = (c - i) / nx
-      for (const [di, dj] of [
-        [1, 0],
-        [-1, 0],
-        [0, 1],
-        [0, -1],
-      ]) {
-        const a = i + di
-        const k = j + dj
-        if (a < 0 || k < 0 || a >= nx || k >= ny) continue
-        const n = k * nx + a
-        if (!free[n] || seen[n]) continue
-        seen[n] = 1
-        q.push(n)
+        const [x, y] = later(A, B)
+        out.push({ a: x.f.id, b: y.f.id, reason: 'collide' })
+      }
+      if (A.def.stick) continue
+      const c = chain(A.f.id)
+      if (!skip?.has(A.f.id))
+        for (const [b, lo, hi, id] of this.fixtureBlocks) {
+          if (c.has(id) || Math.min(A.hi, hi) - Math.max(A.lo, lo) <= 2) continue
+          if (penetration(pa, rectPoly(b)) > 2) {
+            out.push({ a: A.f.id, b: id, reason: 'fixture' })
+            break
+          }
+        }
+      for (const [b, lo, hi] of this.curtains)
+        if (Math.min(A.hi, hi) - Math.max(A.lo, lo) > 2 && penetration(pa, rectPoly(b)) > 1) {
+          out.push({ a: A.f.id, reason: 'curtain' })
+          break
+        }
+      if (A.layer !== 'floor') continue
+      for (const r of this.plan.rooms) {
+        if (!boxesOverlap(A.box, boxOf(r.points))) continue
+        const hit = this.zones(r).find((z) => (KEEP_ZONES.has(z.kind) || z.kind === 'door-swing' || z.kind === 'sash') && z.id !== A.f.id && penetration(pa, rectPoly(z.box)) > 2)
+        if (hit) {
+          out.push({ a: A.f.id, reason: hit.kind })
+          break
+        }
       }
     }
-    return cells.filter((c) => c !== start && (c < 0 || !seen[c])).length
+    return out
   }
 
   /** canPlace 的布尔版 */

@@ -31,6 +31,12 @@ export interface NavOptions {
   holes?: Vec[][]
 }
 
+/** 网格里只和户型有关的一层（房间、墙、门洞），按户型的几何缓存（最多留 8 份） */
+const STATIC = new Map<string, { floor: Float32Array; okPet: Uint8Array; okRobot: Uint8Array; walls: Uint8Array }>()
+function staticKey(plan: Plan, cell: number) {
+  return `${cell}#${plan.wall}#${plan.wallOuter}#${JSON.stringify(plan.rooms)}#${JSON.stringify(plan.openings)}`
+}
+
 export class NavGrid {
   readonly cell: number
   x0 = 0
@@ -55,39 +61,54 @@ export class NavGrid {
       this.ny = Math.ceil((Math.max(...pts.map((p) => p.y)) - this.y0) / C) + 2
     }
     const n = this.nx * this.ny
-    this.floor = new Float32Array(n)
-    const okPet = new Uint8Array(n)
-    const okRobot = new Uint8Array(n)
-    const blocked = new Uint8Array(n)
+    // 房间、墙、门洞只和户型有关：同一份户型反复建网格（一键布置校验通道时）复用这一层
+    const key = staticKey(plan, C)
+    const hit = STATIC.get(key)
+    let okPet: Uint8Array
+    let okRobot: Uint8Array
+    let blocked: Uint8Array
+    if (hit) {
+      this.floor = hit.floor
+      okPet = hit.okPet
+      okRobot = hit.okRobot
+      blocked = hit.walls.slice()
+    } else {
+      this.floor = new Float32Array(n)
+      okPet = new Uint8Array(n)
+      okRobot = new Uint8Array(n)
+      blocked = new Uint8Array(n)
 
-    // 1. 房间：户内优先（和 roomAt 一致）
-    const indoor = plan.rooms.filter((r) => r.kind !== 'balcony')
-    const order = [...indoor, ...plan.rooms.filter((r) => r.kind === 'balcony')]
-    for (let j = 0; j < this.ny; j++)
-      for (let i = 0; i < this.nx; i++) {
-        const p = this.center(i, j)
-        const r: Room | undefined = order.find((q) => pointInPolygon(p, q.points))
-        const k = j * this.nx + i
-        if (!r) continue
-        this.floor[k] = floorY(r)
-        if (!NO_PET.includes(r.kind)) okPet[k] = 1
-        if (!NO_ROBOT.includes(r.kind)) okRobot[k] = 1
+      // 1. 房间：户内优先（和 roomAt 一致）
+      const indoor = plan.rooms.filter((r) => r.kind !== 'balcony')
+      const order = [...indoor, ...plan.rooms.filter((r) => r.kind === 'balcony')]
+      for (let j = 0; j < this.ny; j++)
+        for (let i = 0; i < this.nx; i++) {
+          const p = this.center(i, j)
+          const r: Room | undefined = order.find((q) => pointInPolygon(p, q.points))
+          const k = j * this.nx + i
+          if (!r) continue
+          this.floor[k] = floorY(r)
+          if (!NO_PET.includes(r.kind)) okPet[k] = 1
+          if (!NO_ROBOT.includes(r.kind)) okRobot[k] = 1
+        }
+
+      // 2. 墙：非敞开的墙段按厚度栅格化，门洞挖开
+      const door = new Uint8Array(n)
+      for (const o of plan.openings) {
+        if (o.kind === 'window') continue
+        const g = openingGeom(plan.rooms, o)
+        if (!g) continue
+        const half = o.width / 2 - 4
+        const across = plan.wallOuter / 2 + 4
+        this.stamp(g.center, g.e.dir, half, across, door)
       }
-
-    // 2. 墙：非敞开的墙段按厚度栅格化，门洞挖开
-    const door = new Uint8Array(n)
-    for (const o of plan.openings) {
-      if (o.kind === 'window') continue
-      const g = openingGeom(plan.rooms, o)
-      if (!g) continue
-      const half = o.width / 2 - 4
-      const across = plan.wallOuter / 2 + 4
-      this.stamp(g.center, g.e.dir, half, across, door)
-    }
-    for (const s of wallSegments(plan.rooms)) {
-      if (s.kind === 'open') continue
-      const t = (s.kind === 'outer' ? plan.wallOuter : plan.wall) / 2
-      this.capsule(s.a, s.b, t, blocked, door)
+      for (const s of wallSegments(plan.rooms)) {
+        if (s.kind === 'open') continue
+        const t = (s.kind === 'outer' ? plan.wallOuter : plan.wall) / 2
+        this.capsule(s.a, s.b, t, blocked, door)
+      }
+      STATIC.set(key, { floor: this.floor, okPet, okRobot, walls: blocked.slice() })
+      if (STATIC.size > 8) STATIC.delete(STATIC.keys().next().value!)
     }
 
     // 3. 家具（落地的）、设备

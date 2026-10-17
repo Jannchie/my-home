@@ -2,17 +2,19 @@
 //   - 床头靠墙且不靠窗；
 //   - 双人床两侧留出下床的空间；
 //   - 有电视柜的客厅里，沙发朝着电视柜、距离在合理范围；
+//   - 主要通道可达：起居房间（客厅、居室、走廊、厨房、餐厅）的门口之间走得通（复用宠物导航的格子，宽 40）。
 import { beforeAll, describe, expect, test } from 'vitest'
 import { decorate } from '/src/decorate'
 import { generateHousehold } from '/src/household'
 import { generatePlan } from '/src/generate-region'
-import { add, edgesOf, mul, openingsOn, pointInPolygon, type Furniture, type Plan, type Region } from '/src/model'
+import { add, edgesOf, mul, openingGeom, openingsOn, pointInPolygon, type Furniture, type Plan, type Region } from '/src/model'
 import { bedSides, isDoubleBed, tvFacesSofa } from '/src/arrange'
 import { boxInsideWalls } from '/src/place'
 import { furnitureBox } from '/src/snap'
 import { ASSET_MAP } from '/src/three/assets'
 import { hasTag } from '/src/three/tags'
 import { wallThicknessAt } from '/src/walls'
+import { NavGrid } from '/src/nav'
 import { range } from './helpers'
 
 const OPTS = { type: 'random', style: 'random', corner: 'random', access: 'random', minArea: null, maxArea: null } as const
@@ -108,6 +110,29 @@ describe('大件摆法（jp / cn / west seed 1..20）', () => {
           return sofas.some((s) => tvs.some((t) => tvFacesSofa(s, t))) ? [] : [`沙发没有朝着电视柜（${sofas.map((s) => s.asset).join(',')} / ${tvs.map((t) => t.asset).join(',')}）`]
         }),
     )
+    expect(bad).toEqual([])
+  })
+
+  test('主要通道可达：起居房间的门口之间走得通', () => {
+    const bad = each(({ plan }) => {
+      const g = new NavGrid(plan)
+      const r = 20
+      const keys: { p: { x: number; y: number }; label: string }[] = []
+      for (const o of plan.openings) {
+        if (o.kind === 'window') continue
+        const geo = openingGeom(plan.rooms, o)
+        if (!geo) continue
+        for (const k of [30, -30]) {
+          const q = add(geo.center, mul(geo.e.out, k))
+          const room = plan.rooms.find((x) => pointInPolygon(q, x.points))
+          if (room && ['ldk', 'western', 'japanese', 'hall', 'kitchen', 'dining'].includes(room.kind)) keys.push({ p: q, label: `${room.kind} 的门口` })
+        }
+      }
+      const pts = keys.map((k) => ({ ...k, at: g.nearest('pet', k.p, r, 40) }))
+      const hub = pts.find((k) => k.at)
+      if (!hub) return []
+      return pts.filter((k) => k !== hub && (!k.at || !g.path('pet', hub.at!, k.at, r))).map((k) => `${k.label} 走不到`)
+    })
     expect(bad).toEqual([])
   })
 })
