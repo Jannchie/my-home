@@ -2,7 +2,8 @@
 // （placeCandidates，取分散开的前 N 个），按规则打分，再在组合上做小规模的 beam search，取总分最高的组合。
 //
 // 打分规则（分数越高越好，见各 score* 函数）：
-//   床：床头靠实墙（不靠窗、不靠门所在的墙），不正对门、床尾不堵门；双人床两侧都能下床，单人床一侧靠墙也行；床头边放得下床头柜；离门远一点；
+//   床：床头靠实墙（不靠窗、不靠门所在的墙），不正对门、床尾不堵门；双人床两侧都能下床加分（一个人住的房间是硬条件，
+//     两个人住的房间里一侧靠墙也行），单人床一侧靠墙也行；床头边放得下床头柜；离门远一点；
 //   沙发：背靠墙、离厨房远一点、面朝房间；电视柜：和沙发相对、居中，距离 2–3m（按房间大小缩放），中间没有大件挡着；
 //   书桌：靠窗（窗下）或侧对窗采光，坐着时背后不正对门，椅子拉得开；
 //   衣柜 / 大柜：放在长而完整的墙段上（越长越好、靠墙角加分），不挨着窗；
@@ -21,12 +22,21 @@ export interface Pick {
   x: number
   y: number
   rot: number
+  /** 两张同款单人床并排（x / y 是两张床合起来的中心） */
+  twin?: boolean
 }
 
 /** 一样大件：几个备选（素材 + 贴墙规则，按偏好排，bias 是偏好分），以及打分时按哪类算 */
 export interface Slot {
   kind: 'bed' | 'sofa' | 'tv' | 'desk' | 'cabinet' | 'other'
-  options: { asset: string; spec?: Partial<PlaceSpec>; bias?: number }[]
+  /**
+   * twin：两张同款单人床并排；side：床的长边贴墙、床头顶在墙角（长边可以在腰窗下面），小房间里四面墙都有门窗时用
+   */
+  options: { asset: string; spec?: Partial<PlaceSpec>; bias?: number; twin?: boolean; side?: boolean }[]
+  /** 床：两个人住的房间（夫妻、两人同住），双人床一侧靠墙也行 */
+  shared?: boolean
+  /** 第二张床：只有前面那一格选了一张单人床时才摆（双人床、并排的两张、没放床都跳过这一格） */
+  afterSingle?: boolean
   /** 放不下也行（扣 miss 分）；不是 optional 的放不下同样跳过，只是扣得多 */
   miss?: number
   /** 沙发：离这个点（厨房）远一点 */
@@ -61,11 +71,28 @@ const sub = (a: Vec, b: Vec): Vec => ({ x: a.x - b.x, y: a.y - b.y })
 const rect = (c: Vec, u: Vec, v: Vec, hu: number, hv: number): Box =>
   bbox([add(add(c, mul(u, hu)), mul(v, hv)), add(add(c, mul(u, -hu)), mul(v, -hv)), add(add(c, mul(u, hu)), mul(v, -hv)), add(add(c, mul(u, -hu)), mul(v, hv))])
 
+/** 两张并排的单人床之间的缝 */
+export const TWIN_GAP = 4
+/** 候选占的宽度（并排的两张床合起来算） */
+export const pickWidth = (p: Pick) => {
+  const d = ASSET_MAP.get(p.asset)!
+  return p.twin ? d.w * 2 + TWIN_GAP : d.w
+}
 const asPs = (p: Pick, i: number): Fixture => {
   const d = ASSET_MAP.get(p.asset)!
-  return { id: `arrange-${i}`, kind: 'ps', x: p.x, y: p.y, w: d.w, d: d.d, rot: Math.round(p.rot / 90) * 90 }
+  return { id: `arrange-${i}`, kind: 'ps', x: p.x, y: p.y, w: pickWidth(p), d: d.d, rot: Math.round(p.rot / 90) * 90 }
 }
-const boxOfPick = (p: Pick) => footprint(p.asset, p.x, p.y, p.rot)
+const boxOfPick = (p: Pick) => {
+  if (!p.twin) return footprint(p.asset, p.x, p.y, p.rot)
+  const d = ASSET_MAP.get(p.asset)!
+  return rect(p, sideDir(p.rot), frontDir(p.rot), pickWidth(p) / 2, d.d / 2)
+}
+/** 并排的两张床各自的中心 */
+export function twinCenters(p: Pick): Vec[] {
+  const d = ASSET_MAP.get(p.asset)!
+  const side = sideDir(p.rot)
+  return [-1, 1].map((k) => add(p, mul(side, k * (d.w / 2 + TWIN_GAP / 2))))
+}
 const boxPs = (b: Box, i: number): Fixture => ({ id: `arrange-held-${i}`, kind: 'ps', x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2, w: b.x1 - b.x0, d: b.y1 - b.y0, rot: 0 })
 
 /** 一个房间的打分要用的静态信息 */
@@ -106,15 +133,14 @@ class Scene {
       const off = -dot(sub(back, face.e.a), face.e.out)
       if (Math.abs(off - face.inset) > 6) continue
       const t = dot(sub(back, face.e.a), face.e.dir)
-      return { face, t0: t - d.w / 2, t1: t + d.w / 2 }
+      return { face, t0: t - pickWidth(p) / 2, t1: t + pickWidth(p) / 2 }
     }
     return null
   }
 
-  /** 床边要登记成留空区的下床空间：双人床两侧；单人床空着的那几侧（不贴墙、不压设备和已摆的家具） */
+  /** 床边要登记成留空区的下床空间：空着的那几侧（不贴墙、不压设备和已摆的家具），和 Decorator.bedPlaced 一致 */
   heldSides(p: Pick) {
-    const sides = bedSides(p)
-    return isDoubleBed(p.asset) ? sides : sides.filter((b) => this.free(b, []))
+    return bedSides(p).filter((b) => this.free(b, []))
   }
 
   /** 平面上这块地方空着：在墙面轮廓里，不压设备 / 楼梯口、已摆的家具和这一轮已选的大件 */
@@ -133,18 +159,29 @@ export function isDoubleBed(asset: string) {
   return !!d && hasTag(d, 'bed') && !hasTag(d, 'crib', 'loft') && d.w >= 120
 }
 
-/** 床两侧下床的空间：离床头 46（让开床头柜）到床身 85%，宽 50 */
+/** 床两侧下床的空间：离床头 46（让开床头柜）到床身 85%，宽 50（并排的两张床按外侧两边算） */
 export function bedSides(p: Pick): Box[] {
   const d = ASSET_MAP.get(p.asset)!
   const f = frontDir(p.rot)
   const side = sideDir(p.rot)
+  const w = pickWidth(p)
   const a = 46
   const b = Math.max(a + 30, d.d * 0.85)
-  return [-1, 1].map((k) => rect(add(add(p, mul(f, -d.d / 2 + (a + b) / 2)), mul(side, k * (d.w / 2 + 25))), side, f, 25, (b - a) / 2))
+  return [-1, 1].map((k) => rect(add(add(p, mul(f, -d.d / 2 + (a + b) / 2)), mul(side, k * (w / 2 + 25))), side, f, 25, (b - a) / 2))
+}
+
+/** 要两侧下床的床：双人床，或并排的两张床 */
+const wide = (p: Pick) => !!p.twin || isDoubleBed(p.asset)
+
+/** 床的硬条件：要两侧下床的床，一个人住的房间里两侧都要空着，两个人住的房间里至少一侧空着 */
+function bedOk(s: Scene, p: Pick, state: Pick[], shared: boolean) {
+  if (!wide(p)) return true
+  const n = bedSides(p).filter((b) => s.free(b, state, p)).length
+  return shared ? n >= 1 : n === 2
 }
 
 function scoreBed(s: Scene, p: Pick, state: Pick[]) {
-  const d = ASSET_MAP.get(p.asset)!
+  const d = { ...ASSET_MAP.get(p.asset)!, w: pickWidth(p) }
   const f = frontDir(p.rot)
   const side = sideDir(p.rot)
   let score = 0
@@ -161,11 +198,10 @@ function scoreBed(s: Scene, p: Pick, state: Pick[]) {
     if (dot(v, f) > 0 && Math.abs(dot(v, side)) < d.w / 2 + 20) score -= 20
     if (dist(foot, door.c) < 90) score -= 10
   }
-  // 两侧下床的空间（bedSides）：双人床两侧都要有（放不下就换小一号的床），单人床一侧靠墙也行
+  // 两侧下床的空间（bedSides）：双人床两侧都能下床加 25（硬条件在 bedOk），单人床一侧靠墙也行
   const sideFree = bedSides(p).filter((b) => s.free(b, state, p)).length
-  if (isDoubleBed(p.asset)) {
-    if (sideFree < 2) return -Infinity
-  } else score += sideFree === 0 ? -40 : sideFree === 1 ? 4 : 0
+  if (wide(p)) score += sideFree === 2 ? 25 : 0
+  else score += sideFree === 0 ? -40 : sideFree === 1 ? 4 : 0
   // 床头柜放得下（床头一侧 45 × 40）
   const ns = [-1, 1].some((k) => s.free(rect(add(add(p, mul(f, -d.d / 2 + 21)), mul(side, k * (d.w / 2 + 25))), side, f, 22, 20), state, p))
   if (ns) score += 6
@@ -308,11 +344,18 @@ export function arrange(env: ArrangeEnv, slots: Slot[]): (Pick | null)[] {
     const next: State[] = []
     for (const st of beam) {
       const placed = st.picks.filter((p): p is Pick => !!p)
+      if (slot.afterSingle) {
+        const prev = st.picks[st.picks.length - 1]
+        if (!prev || wide(prev)) {
+          next.push({ picks: [...st.picks, null], score: st.score, pass: st.pass })
+          continue
+        }
+      }
       // 已选的大件当设备避让；床边下床的空间也要留着（和 Decorator.bedPlaced 登记的一致）
       const held = placed.flatMap((p) => (hasTag(ASSET_MAP.get(p.asset)!, 'bed') ? s.heldSides(p) : [])).map(boxPs)
       const ctx = placed.length ? { ...env.ctx, fixtures: [...env.ctx.fixtures, ...placed.map(asPs), ...held] } : env.ctx
-      // 硬条件先筛掉（双人床两侧都要能下床），免得放得下的备选里全是不合格的位置、更小一号的床又没机会试
-      const accept = (p: Pick) => slot.kind !== 'bed' || !isDoubleBed(p.asset) || bedSides(p).every((b) => s.free(b, placed, p))
+      // 硬条件先筛掉（bedOk），免得放得下的备选里全是不合格的位置、更小一号的床又没机会试
+      const accept = (p: Pick) => slot.kind !== 'bed' || bedOk(s, p, placed, !!slot.shared)
       const cands = candidates(env, ctx, slot, accept)
       for (const { p, bias } of cands) {
         const state = [...st.picks, p]
@@ -342,6 +385,24 @@ export function arrange(env: ArrangeEnv, slots: Slot[]): (Pick | null)[] {
   return best?.picks ?? slots.map(() => null)
 }
 
+/**
+ * 长边贴墙的床：候选 f 是沿墙放的「床长 × 床宽」，床头要顶在墙角（那一头再往外 6 就出了墙面轮廓），床头朝那面墙。
+ * 两头都不挨墙的位置不要（床头悬空）。
+ */
+function sideways(env: ArrangeEnv, asset: string, f: Fixture, w: number, len: number): Pick | null {
+  const along = sideDir(f.rot)
+  const into = frontDir(f.rot)
+  for (const k of [-1, 1]) {
+    const h = mul(along, k)
+    const end = add(f, mul(h, len / 2 + 3))
+    if (boxInsideWalls(rect(end, along, into, 3, w / 2 - 2), env.room, env.plan)) continue
+    // 床头朝 h（床的正面 = 局部 +y 朝 -h）
+    const rot = (Math.round((Math.atan2(h.x, -h.y) * 180) / Math.PI / 90) * 90 + 360) % 360
+    return { asset, x: f.x, y: f.y, rot }
+  }
+  return null
+}
+
 /** 一样大件的候选：按备选顺序，第一个放得下的素材和下一个备选，各取分散开的前若干个（立体上不冲突的） */
 function candidates(env: ArrangeEnv, ctx: Plan, slot: Slot, accept: (p: Pick) => boolean): { p: Pick; bias: number }[] {
   const out: { p: Pick; bias: number }[] = []
@@ -349,19 +410,29 @@ function candidates(env: ArrangeEnv, ctx: Plan, slot: Slot, accept: (p: Pick) =>
   for (const opt of slot.options) {
     const def = ASSET_MAP.get(opt.asset)
     if (!def) continue
-    const spec: PlaceSpec = { kind: 'ps', lengths: [def.w], depth: def.d, front: 0, sash: true, guardFront: true, ...opt.spec }
+    const w = opt.twin ? def.w * 2 + TWIN_GAP : def.w
+    // 长边贴墙：沿墙的长度是床长、进深是床宽，长边可以在腰窗下面（落地窗前照样不行）
+    const spec: PlaceSpec = opt.side
+      ? { kind: 'ps', lengths: [def.d], depth: w, front: 0, sash: true, guardFront: true, ...opt.spec, underWindow: true, centered: false }
+      : { kind: 'ps', lengths: [w], depth: def.d, front: 0, sash: true, guardFront: true, ...opt.spec }
     const kept: Pick[] = []
+    // 前两个放得下的备选各取 PER_SLOT 个；床后面的备选（更小的、长边贴墙的…）各取 3 个就够打分取舍
+    const cap = hits >= 2 ? 3 : PER_SLOT
     for (const f of placeCandidates(env.room, ctx, spec)) {
-      if (kept.length >= PER_SLOT) break
+      if (kept.length >= cap) break
+      const p: Pick | null = opt.side ? sideways(env, opt.asset, f, w, def.d) : { asset: opt.asset, x: f.x, y: f.y, rot: f.rot }
+      if (!p) continue
+      if (opt.twin) p.twin = true
       // 分散开：同一朝向、离已取的候选不到 40 的跳过
-      if (kept.some((k) => k.rot === f.rot && Math.hypot(k.x - f.x, k.y - f.y) < 40)) continue
-      if (!pointInPolygon(f, env.room.points) || !env.canPlace(opt.asset, f.x, f.y, f.rot)) continue
-      const p = { asset: opt.asset, x: f.x, y: f.y, rot: f.rot }
+      if (kept.some((k) => k.rot === p.rot && Math.hypot(k.x - p.x, k.y - p.y) < 40)) continue
+      if (!pointInPolygon(p, env.room.points)) continue
+      if (opt.twin ? !twinCenters(p).every((c) => env.canPlace(opt.asset, c.x, c.y, p.rot)) : !env.canPlace(opt.asset, p.x, p.y, p.rot)) continue
       if (!accept(p)) continue
       kept.push(p)
     }
     for (const p of kept) out.push({ p, bias: opt.bias ?? 0 })
-    if (kept.length && ++hits >= 2) break
+    // 床的备选全都看（大一号的床可能堵门、一侧靠墙…交给打分取舍）；别的大件取前两个放得下的备选就够了
+    if (kept.length && ++hits >= 2 && slot.kind !== 'bed') break
   }
   return out
 }
