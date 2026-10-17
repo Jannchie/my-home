@@ -46,7 +46,7 @@ import {
 import { edgesOf } from '../model'
 import { showerSpot } from '../bathroom'
 import { curtainSpec } from '../curtains'
-import { showerCurtainModel, showerModel } from './packs/bath-extra'
+import { showerCurtainModel, showerModel } from './shower'
 import { edgeRail, holeRails, stairsModel, type WallLine } from './stairs3d'
 import { subtractSpan } from '../stairs'
 import { SLAB, floorElevation, floorOf, isMultiFloor } from '../floors'

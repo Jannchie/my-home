@@ -4,7 +4,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, ellipsePoly, glow, rectPoly, rng, shell, slab, type AssetDef, type Poly } from '../kit'
-import { hollow, swingDoor } from './styles-world'
+import { hollow, swingDoor } from '../cabinetKit'
 import { P, PI, batten, centerGroup, cylX, cylZ, ghostOutlined, litOutlined, noOutline, rod3, type V3 } from '../geo'
 import { I, J, M, N, PROP, R, define, type PalFlat } from '../packkit'
 

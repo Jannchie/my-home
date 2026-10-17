@@ -4,7 +4,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, SWING_OPEN, holePanel, legs, lPoly, movable, rectPoly, rng, rod, shell, slab, type AssetDef, type DoorMotion, type SurfaceDef } from '../kit'
-import { soft, type SoftFn } from './more-variety'
+import { soft, type SoftFn } from '../geo'
 import { glassPane, rod3, type V3 } from '../geo'
 import { I, J, M, N, R, withPals, type Pal3 } from '../packkit'
 

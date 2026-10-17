@@ -363,3 +363,54 @@ export function fitPoly(poly: [number, number][], w: number, d: number): [number
   const [x0, x1, z0, z1] = [Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)]
   return poly.map(([x, z]): [number, number] => [((x - x0) / (x1 - x0) - 0.5) * w, ((z - z0) / (z1 - z0) - 0.5) * d])
 }
+
+// ---------- 布料软团 ----------
+
+/** 按位置把重合顶点（球面接缝）的法线取平均 */
+export function smoothNormals(geo: THREE.BufferGeometry) {
+  geo.computeVertexNormals()
+  const pos = geo.attributes.position
+  const nor = geo.attributes.normal
+  const key = (i: number) => `${Math.round(pos.getX(i) * 50)},${Math.round(pos.getY(i) * 50)},${Math.round(pos.getZ(i) * 50)}`
+  const acc = new Map<string, THREE.Vector3>()
+  for (let i = 0; i < pos.count; i++) {
+    const k = key(i)
+    let v = acc.get(k)
+    if (!v) acc.set(k, (v = new THREE.Vector3()))
+    v.x += nor.getX(i)
+    v.y += nor.getY(i)
+    v.z += nor.getZ(i)
+  }
+  for (let i = 0; i < pos.count; i++) {
+    const v = acc.get(key(i))!.clone().normalize()
+    nor.setXYZ(i, v.x, v.y, v.z)
+  }
+}
+
+export type SoftFn = (x: number, y: number, z: number) => V3
+/** 软团：f 把单位球上的点映射成模型坐标；wrinkle 为褶皱幅度（cm），freq 越大褶越密（长毛款用很密的小起伏） */
+export function soft(color: string, f: SoftFn, opts: { wrinkle?: number; freq?: number; seed?: number; seg?: [number, number] } = {}) {
+  const [ws, hs] = opts.seg ?? [48, 32]
+  const geo = new THREE.SphereGeometry(1, ws, hs)
+  const pos = geo.attributes.position
+  const amp = opts.wrinkle ?? 0.7
+  const F = opts.freq ?? 1
+  const sd = opts.seed ?? 1
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i)
+    const y = pos.getY(i)
+    const z = pos.getZ(i)
+    let [X, Y, Z] = f(x, y, z)
+    if (amp && Y > 0.5) {
+      const n = Math.sin(x * 7 * F + sd) * Math.sin(z * 6 * F + sd * 1.7) + 0.5 * Math.sin(y * 9 * F + x * 4 * F + sd * 0.6)
+      const q = Math.hypot(x, z) || 1
+      const k = amp * n * Math.min(1, Y / 4)
+      X += (x / q) * k
+      Z += (z / q) * k
+      Y = Math.max(0, Y + y * k * 0.5)
+    }
+    pos.setXYZ(i, X, Y, Z)
+  }
+  smoothNormals(geo)
+  return mesh(geo, color)
+}

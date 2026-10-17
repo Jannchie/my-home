@@ -4,7 +4,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, face, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, S, ellipsePoly, glow, holePanel, legs, rectPoly, rng, shell, type AssetDef, type Fx, type StyleTag, paintPanel, paintLandscape, paintFlower, paintAbstract } from '../kit'
-import { drawerLv, drawerOf, hollow, slideDoor, swingDoor } from './styles-world'
+import { drawerLv, drawerOf, hollow, slideDoor, swingDoor } from '../cabinetKit'
 import { PI, clearMat, lit, noOutline, rod3, type V3 } from '../geo'
 
 const { nordic: N, modern: M, japanese: J, industrial: I, retro: R } = S

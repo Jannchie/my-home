@@ -6,7 +6,7 @@ import { ball, capsule, cup, cyl, face, leaf, plate, puck, rbox, shade, toon, to
 import { fridgeSpotModel, washerSpotModel } from './appliances'
 import { holePanel, C, G, S, carcass, drawerBox, drawerLevel, ellipsePoly, flapDoor, glow, hangingPipe, hingedDoor, legs, pipeHook, rectPoly, rng, shell, shelvesIn, type AssetDef, type StyleTag } from './kit'
 import { PACKS } from './packs'
-import { soft, type SoftFn } from './packs/more-variety'
+import { soft, type SoftFn } from './geo'
 import { applyDims, warnIfDimsStale } from './dims'
 import { DIMS } from './dims.generated'
 import { GENERATED_TAGS } from './tags.generated'

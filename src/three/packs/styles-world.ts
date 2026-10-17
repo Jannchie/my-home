@@ -5,9 +5,10 @@
 
 import * as THREE from 'three'
 import { ball, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
-import { C, SWING_OPEN, hangingPipe, holePanel, movable, paintPanel, pipeHook, rectPoly, ellipsePoly, type AssetDef, type Hole, type Poly, type StyleTag, type SurfaceDef } from '../kit'
+import { C, hangingPipe, holePanel, paintPanel, pipeHook, rectPoly, ellipsePoly, type AssetDef, type Hole, type Poly, type StyleTag, type SurfaceDef } from '../kit'
 import { batten, cappedTube, centerGroup, cylX, cylZ, glassPane, lit, mesh, noOutlineDeep, rod3, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, R, withPals } from '../packkit'
+import { drawerLv, drawerOf, hollow, slideDoor, swingDoor } from '../cabinetKit'
 
 /** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
 const TUBE: TubeOpts = { seg: { per: 8, min: 12 }, radial: 10, group: true }
@@ -87,65 +88,6 @@ function lattice(w: number, h: number, cols: number, rows: number, bar = 2.4, ma
   const ch = (h - margin * 2 - bar * (rows - 1)) / rows
   for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) holes.push({ kind: 'rect', x: -w / 2 + margin + cw / 2 + i * (cw + bar), y: margin + j * (ch + bar), w: cw, h: ch, r: 0.4 })
   return holes
-}
-
-// ---------- 可开合的柜子：门 / 抽屉做成会动的部件（见 kit.ts movable / poseDoors） ----------
-
-/** 平开门：零件按柜子坐标做好，挂到铰链线 (hx, hz) 上；hinge 为铰链在门的哪一侧（左铰链往外开是负角） */
-export function swingDoor(parts: THREE.Object3D[], hx: number, hz: number, hinge: 'left' | 'right', angle = SWING_OPEN) {
-  const pivot = new THREE.Group()
-  const inner = new THREE.Group()
-  inner.position.set(-hx, 0, -hz)
-  for (const o of parts) inner.add(o)
-  pivot.add(inner)
-  pivot.position.set(hx, 0, hz)
-  return movable(pivot, { kind: 'swing', angle: (hinge === 'left' ? -1 : 1) * angle })
-}
-
-/** 推拉门：零件按柜子坐标做好，打开时沿 x 推 dx */
-export function slideDoor(parts: THREE.Object3D[], dx: number) {
-  const g = new THREE.Group()
-  for (const o of parts) g.add(o)
-  return movable(g, { kind: 'slide', dx })
-}
-
-/** 抽屉盒的底、侧、后板：抽屉口 x0..x1、底边 y0、高 h，面板背面在 zf，盒深 depth（往 -z） */
-function drawerTray(x0: number, x1: number, y0: number, h: number, zf: number, depth: number, color: string) {
-  const w = x1 - x0 - 2
-  const cx = (x0 + x1) / 2
-  const bh = Math.max(2, h - 3)
-  const zc = zf - depth / 2
-  return [
-    rbox(w, 1, depth, color, { x: cx, y: y0 + 0.6, z: zc }, 0.2),
-    rbox(1, bh, depth, color, { x: cx - w / 2 + 0.5, y: y0 + 0.6, z: zc }, 0.2),
-    rbox(1, bh, depth, color, { x: cx + w / 2 - 0.5, y: y0 + 0.6, z: zc }, 0.2),
-    rbox(w - 2, bh, 1, color, { x: cx, y: y0 + 0.6, z: zf - depth + 0.5 }, 0.2),
-  ]
-}
-
-/** 抽屉：面板零件 + 抽屉盒，打开时往前拉 pull（默认盒深的 0.6） */
-export function drawerOf(front: THREE.Object3D[], x0: number, x1: number, y0: number, h: number, zf: number, depth: number, color: string, pull = Math.round(depth * 0.6)) {
-  const g = new THREE.Group()
-  for (const o of [...front, ...drawerTray(x0, x1, y0, h, zf, depth, color)]) g.add(o)
-  return movable(g, { kind: 'drawer', dz: pull })
-}
-
-/** 和 drawerOf 对应的抽屉格（关着时的位置；打开时按 slide 往前移） */
-export function drawerLv(x0: number, x1: number, y0: number, h: number, zf: number, depth: number, pull = Math.round(depth * 0.6)): SurfaceDef {
-  return { y: y0 + 1.6, h: Math.max(2, h - 3.6), inside: true, slide: pull, shape: [rectPoly(x0 + 2.2, zf - depth + 1.2, x1 - 2.2, zf - 0.4)] }
-}
-
-/** 空心柜体：外形 w × h × d（at.y 为底面，x / z 为中心），背板、两侧、顶、底，板厚 t */
-export function hollow(w: number, h: number, d: number, color: string, at: { x?: number; y?: number; z?: number } = {}, t = 1.6, inner = shade(color, 0.05)) {
-  const g = new THREE.Group()
-  const x = at.x ?? 0
-  const y = at.y ?? 0
-  const z = at.z ?? 0
-  for (const s of [-1, 1]) g.add(rbox(t, h, d, color, { x: x + s * (w / 2 - t / 2), y, z }, 0.4))
-  g.add(rbox(w - t * 2 + 0.02, t, d, color, { x, y: y + h - t, z }, 0.4))
-  g.add(rbox(w - t * 2 + 0.02, t, d, color, { x, y, z }, 0.4))
-  g.add(rbox(w - t * 2 + 0.02, h - t * 2 + 0.02, t, inner, { x, y: y + t, z: z - d / 2 + t / 2 }, 0.3))
-  return g
 }
 
 /**

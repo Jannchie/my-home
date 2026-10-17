@@ -8,7 +8,7 @@ import { ParametricGeometry } from 'three/addons/geometries/ParametricGeometry.j
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js'
 import { ball, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, legs, paintPanel, rectPoly, rng, rod, type AssetDef, type Poly } from '../kit'
-import { swingDoor } from './styles-world'
+import { swingDoor } from '../cabinetKit'
 import { G, P, PI, UP, fitGroup, ghost, lit, mesh, noOutline, type V3 } from '../geo'
 import { I, J, M, N, PROP, R, define, type PalFlat } from '../packkit'
 
