@@ -6,7 +6,7 @@
 import * as THREE from 'three'
 import { ball, cyl, rbox, shade, toon, torus } from '../toon'
 import { C, glow, type AssetCategory, type AssetDef } from '../kit'
-import { G, P, PI, noOutline } from '../geo'
+import { G, P, PI, lit, noOutline } from '../geo'
 import { CL, I, M, N, type PalFlat } from '../packkit'
 
 const LENS = '#1d2230'
@@ -36,11 +36,6 @@ function fitWall(g: THREE.Object3D, mount: number, d: number) {
   return outer
 }
 const cylZ = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 24) => P(cyl(r, r, len, color, {}, seg), x, y, z, PI / 2)
-const lit = (m: THREE.Mesh, color: string, k = 0.8) => {
-  m.material = toon(color, { emissive: k })
-  m.userData.noOutline = true
-  return m
-}
 /** 镜头：黑色镜面 + 蓝玻璃 + 高光，朝 +z；(x, y) 为中心，z 为镜面所在平面 */
 function lens(r: number, x: number, y: number, z: number, rim = LENS) {
   return G(cylZ(r, 0.5, rim, x, y, z + 0.25), cylZ(r * 0.62, 0.4, GLASS, x, y, z + 0.6), noOutline(ball(r * 0.18, '#ffffff', { x: x + r * 0.22, y: y + r * 0.22, z: z + 0.82 }, [1, 1, 0.4])))
@@ -131,7 +126,7 @@ function petTablet([shell, base, screen]: string[]) {
   paw.add(ball(1.5, '#ffffff', {}, [1, 0.85, 0.3]))
   for (let k = 0; k < 4; k++) paw.add(ball(0.62, '#ffffff', { x: (k - 1.5) * 1.15, y: 1.8 - Math.abs(k - 1.5) * 0.4 }, [1, 1.2, 0.3]))
   paw.traverse((m) => {
-    if ((m as THREE.Mesh).isMesh) lit(m as THREE.Mesh, '#ffffff', 0.6)
+    if ((m as THREE.Mesh).isMesh) lit(m as THREE.Mesh, '#ffffff')
   })
   panel.add(P(paw, 0, 7, 1.15))
   panel.add(lens(0.55, 0, 13, 0.7))

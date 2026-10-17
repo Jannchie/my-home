@@ -9,7 +9,7 @@
 import * as THREE from 'three'
 import { ball, cup, cyl, face, puck, rbox, toon, torus } from '../toon'
 import { C, type AssetDef } from '../kit'
-import { G, P, type V3 } from '../geo'
+import { G, P, lit, litOutlined, type V3 } from '../geo'
 import { CL, CN, F, I, J, M, N, R, type PalFlat } from '../packkit'
 
 const BRASS = '#d4b25a'
@@ -47,15 +47,8 @@ function def(id: string, name: string, kind: Kind, sizeLabel: string, [w, d, h]:
 
 // ---------- 小工具 ----------
 
-/** 发光部件（灯罩、和纸、玻璃）：emissive ≥ 0.3 才会被 lights.ts 当作灯的发光面 */
-function lit<T extends THREE.Mesh>(m: T, color: string, k = 0.42, outline = true): T {
-  m.material = toon(color, { emissive: k })
-  if (!outline) m.userData.noOutline = true
-  return m
-}
-
 /** 灯泡 / 火苗：小、亮、不描边 */
-const bulb = (r: number, x: number, y: number, z: number, sy = 1) => P(lit(ball(r, WARM, {}, [1, sy, 1]), WARM, 0.85, false), x, y, z)
+const bulb = (r: number, x: number, y: number, z: number, sy = 1) => P(lit(ball(r, WARM, {}, [1, sy, 1]), WARM, 0.85), x, y, z)
 
 /** 开口的灯罩（筒、锥）：双面、发光，at.y 为下沿 */
 function shadeOpen(rTop: number, rBot: number, h: number, color: string, at: { x?: number; y?: number; z?: number } = {}, k = 0.42, seg = 32) {
@@ -156,7 +149,7 @@ function centered(g: THREE.Group) {
  */
 function paperBox(w: number, h: number, d: number, paper: string, wood: string, y: number, nx = 2, ny = 3, post = 1.8, k = 0.42) {
   const g = new THREE.Group()
-  g.add(lit(rbox(w - 0.6, h, d - 0.6, paper, { y }, 0.4), paper, k))
+  g.add(litOutlined(rbox(w - 0.6, h, d - 0.6, paper, { y }, 0.4), paper, k))
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(post, h + 0.4, post, wood, { x: (sx * (w - post)) / 2, y: y - 0.2, z: (sz * (d - post)) / 2 }, 0.3))
   const bar = 0.55
   for (const [len, other, rot] of [
@@ -225,7 +218,7 @@ function cloud(w: number, color: string, k = 0.45, depth = 1) {
     [w / 2 - r * 1.05, r * 0.2, r * 1.1],
     [0, -r * 0.15, r * 1.15],
   ]
-  for (const [x, y, rr] of balls) g.add(lit(ball(rr, color, { x, y }, [1, 0.92, depth]), color, k))
+  for (const [x, y, rr] of balls) g.add(litOutlined(ball(rr, color, { x, y }, [1, 0.92, depth]), color, k))
   return g
 }
 
@@ -301,7 +294,7 @@ function bambooFloor(p: string[]) {
   const cy = 120
   const ry = 22
   const rx = 13
-  g.add(lit(ball(rx, paper, { y: cy }, [1, ry / rx, 1]), paper, 0.42))
+  g.add(litOutlined(ball(rx, paper, { y: cy }, [1, ry / rx, 1]), paper, 0.42))
   // 竹篾：竖向的弧条 + 三道箍
   for (let k = 0; k < 14; k++) {
     const a = (k / 14) * Math.PI * 2
@@ -326,7 +319,7 @@ function ishidoro(p: string[]) {
   g.add(cyl(5.5, 6.5, 26, stone, { y: 7 }, 8))
   g.add(cyl(14, 9, 6, stone, { y: 33 }, 6))
   // 火袋：四根石柱 + 发光的纸窗 + 窗格
-  g.add(lit(rbox(15, 17, 15, paper, { y: 39.2 }, 0.4), paper, 0.42))
+  g.add(litOutlined(rbox(15, 17, 15, paper, { y: 39.2 }, 0.4), paper, 0.42))
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(4, 18, 4, stone, { x: sx * 8, y: 39, z: sz * 8 }, 0.8))
   for (const rot of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
     const f = G(rbox(0.6, 16, 0.6, dark, { y: 39.5, z: 7.8 }, 0.2), rbox(12, 0.6, 0.6, dark, { y: 47.5, z: 7.8 }, 0.2))
@@ -367,7 +360,7 @@ function akariTable(p: string[]) {
     g.add(rod3([Math.cos(a) * 8, 0.4, Math.sin(a) * 8], [0, 9, 0], 0.4, wire, 6))
   }
   const cy = 21
-  g.add(lit(ball(11, paper, { y: cy }, [1, 1.08, 1]), paper, 0.42))
+  g.add(litOutlined(ball(11, paper, { y: cy }, [1, 1.08, 1]), paper, 0.42))
   for (let i = -3; i <= 3; i++) {
     const dy = i * 3.4
     const r = 11 * Math.sqrt(Math.max(0, 1 - (dy / 11.9) ** 2)) + 0.15
@@ -388,7 +381,7 @@ function chochinTable(p: string[]) {
   const cy = 19.5
   g.add(cyl(0.18, 0.18, 4.2, ink, { x, y: 29.8 }, 4))
   g.add(cyl(3.2, 3.2, 1.4, ink, { x, y: 28.4 }, 16))
-  g.add(lit(ball(6.6, paper, { x, y: cy }, [1, 1.32, 1]), paper, 0.45))
+  g.add(litOutlined(ball(6.6, paper, { x, y: cy }, [1, 1.32, 1]), paper, 0.45))
   for (let i = -3; i <= 3; i++) {
     const dy = i * 2.4
     const r = 6.6 * Math.sqrt(Math.max(0, 1 - (dy / 8.7) ** 2)) + 0.12
@@ -403,7 +396,7 @@ function kumikoTable(p: string[]) {
   const [wood, paper, dark] = p
   const g = new THREE.Group()
   g.add(rbox(18, 3, 18, wood, {}, 0.6))
-  g.add(lit(rbox(14, 20, 14, paper, { y: 3 }, 0.3), paper, 0.42))
+  g.add(litOutlined(rbox(14, 20, 14, paper, { y: 3 }, 0.3), paper, 0.42))
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(1.8, 20.4, 1.8, wood, { x: sx * 7.2, y: 2.8, z: sz * 7.2 }, 0.3))
   const ang = Math.atan2(14, 20)
   for (const rot of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
@@ -425,7 +418,7 @@ function washiSconce(p: string[]) {
   const [wood, paper, dark] = p
   const g = new THREE.Group()
   g.add(rbox(18, 30, 1.6, wood, { z: -5.2 }, 0.5))
-  g.add(lit(rbox(14, 26, 7, paper, { y: 2, z: -1 }, 0.3), paper, 0.42))
+  g.add(litOutlined(rbox(14, 26, 7, paper, { y: 2, z: -1 }, 0.3), paper, 0.42))
   for (const s of [-1, 1]) g.add(rbox(1.8, 28, 1.8, wood, { x: s * 7.6, y: 1, z: 2.4 }, 0.4))
   for (const y of [1, 27.2]) g.add(rbox(16.6, 1.8, 1.8, wood, { y, z: 2.4 }, 0.4))
   g.add(rbox(0.6, 25, 0.6, dark, { y: 2.5, z: 2.65 }, 0.2))
@@ -443,7 +436,7 @@ function chochinWall(p: string[]) {
   g.add(cyl(0.18, 0.18, 2.6, ink, { y: 27.6, z: 0 }, 4))
   g.add(cyl(3, 3, 1.3, ink, { y: 26.4 }, 16))
   const cy = 18
-  g.add(lit(ball(6.4, paper, { y: cy }, [1, 1.3, 1]), paper, 0.45))
+  g.add(litOutlined(ball(6.4, paper, { y: cy }, [1, 1.3, 1]), paper, 0.45))
   for (let i = -3; i <= 3; i++) {
     const dy = i * 2.3
     const r = 6.4 * Math.sqrt(Math.max(0, 1 - (dy / 8.3) ** 2)) + 0.12
@@ -530,10 +523,10 @@ function doubleGlobe(p: string[]) {
   g.add(cyl(13, 14, 2.5, base, {}, 32))
   g.add(cyl(0.9, 0.9, 142, metal, { y: 2.5 }, 10))
   g.add(rod3([0, 112, 0], [8, 116, 0], 0.6, metal))
-  g.add(lit(ball(8, glass, { x: 8, y: 124 }), glass, 0.45))
+  g.add(litOutlined(ball(8, glass, { x: 8, y: 124 }), glass, 0.45))
   g.add(cyl(2, 2, 2, metal, { x: 8, y: 115 }, 12))
   g.add(rod3([0, 136, 0], [-7, 140, 0], 0.6, metal))
-  g.add(lit(ball(10, glass, { x: -7, y: 150 }), glass, 0.45))
+  g.add(litOutlined(ball(10, glass, { x: -7, y: 150 }), glass, 0.45))
   g.add(cyl(2.2, 2.2, 2, metal, { x: -7, y: 139 }, 12))
   return g
 }
@@ -597,7 +590,7 @@ function opalWall(p: string[]) {
   g.add(P(cyl(6.5, 6.5, 2, wood, {}, 28), 0, 10, 1, Math.PI / 2))
   g.add(rod3([0, 10, 2], [0, 10, 8], 0.8, metal))
   g.add(cyl(2.4, 2.4, 2.4, metal, { y: 12.4, z: 9.5 }, 12))
-  g.add(lit(ball(7.5, glass, { y: 20, z: 9.5 }), glass, 0.45))
+  g.add(litOutlined(ball(7.5, glass, { y: 20, z: 9.5 }), glass, 0.45))
   return mountAt(g, WALL_Y)
 }
 
@@ -611,7 +604,7 @@ function minimalPole(p: string[]) {
   const g = new THREE.Group()
   g.add(cyl(13, 13, 1.4, base, {}, 40))
   g.add(cyl(0.8, 0.8, 150, metal, { y: 1.4 }, 10))
-  const head = G(cyl(4, 4, 12, metal, {}, 20), lit(cyl(3.5, 3.5, 0.6, light, { y: -0.4 }, 20), light, 0.6, false))
+  const head = G(cyl(4, 4, 12, metal, {}, 20), lit(cyl(3.5, 3.5, 0.6, light, { y: -0.4 }, 20), light))
   head.rotation.x = -0.7
   head.position.set(0, 147, 3.5)
   g.add(head)
@@ -625,8 +618,8 @@ function ledLine(p: string[]) {
   g.add(rbox(28, 2, 16, base, {}, 0.8))
   for (const s of [-1, 1]) g.add(rbox(1.6, 150, 1.6, metal, { x: s * 12, y: 2 }, 0.4))
   g.add(rbox(25.6, 1.6, 1.6, metal, { y: 151 }, 0.4))
-  g.add(lit(rbox(0.8, 146, 1.1, light, { x: -10.8, y: 4 }, 0.2), light, 0.6, false))
-  g.add(lit(rbox(21, 0.8, 1.1, light, { y: 149.8 }, 0.2), light, 0.6, false))
+  g.add(lit(rbox(0.8, 146, 1.1, light, { x: -10.8, y: 4 }, 0.2), light))
+  g.add(lit(rbox(21, 0.8, 1.1, light, { y: 149.8 }, 0.2), light))
   return g
 }
 
@@ -635,7 +628,7 @@ function columnFloor(p: string[]) {
   const [metal, light] = p
   const g = new THREE.Group()
   g.add(cyl(12, 13, 3, metal, {}, 36))
-  g.add(lit(cyl(8.5, 8.5, 108, light, { y: 3 }, 32), light, 0.42))
+  g.add(litOutlined(cyl(8.5, 8.5, 108, light, { y: 3 }, 32), light, 0.42))
   g.add(cyl(9, 9, 2, metal, { y: 111 }, 32))
   return g
 }
@@ -645,7 +638,7 @@ function tubeTable(p: string[]) {
   const [metal, light] = p
   const g = new THREE.Group()
   g.add(cyl(7, 7.4, 2, metal, {}, 28))
-  g.add(lit(cyl(5.4, 5.4, 24, light, { y: 2 }, 28), light, 0.45))
+  g.add(litOutlined(cyl(5.4, 5.4, 24, light, { y: 2 }, 28), light, 0.45))
   g.add(cyl(5.8, 5.8, 1, metal, { y: 26 }, 28))
   return g
 }
@@ -656,7 +649,7 @@ function ringTable(p: string[]) {
   const g = new THREE.Group()
   g.add(rbox(14, 2, 8, metal, {}, 0.8))
   g.add(rbox(2, 3, 2, metal, { y: 2 }, 0.4))
-  g.add(lit(torus(10, 1.2, light, { y: 15.8 }), light, 0.6))
+  g.add(litOutlined(torus(10, 1.2, light, { y: 15.8 }), light))
   return g
 }
 
@@ -668,7 +661,7 @@ function modernArm(p: string[]) {
   g.add(cyl(0.7, 0.7, 34, metal, { y: 1.6, z: -7 }, 10))
   g.add(rod3([0, 35, -7], [0, 35, 3], 0.6, metal))
   g.add(rbox(4, 1.8, 16, metal, { y: 34.2, z: 9 }, 0.6))
-  g.add(lit(rbox(3, 0.4, 13.6, light, { y: 33.9, z: 9.6 }, 0.15), light, 0.6, false))
+  g.add(lit(rbox(3, 0.4, 13.6, light, { y: 33.9, z: 9.6 }, 0.15), light))
   return g
 }
 
@@ -677,7 +670,7 @@ function ledBarWall(p: string[]) {
   const [metal, light] = p
   const g = new THREE.Group()
   g.add(rbox(4, 40, 2.6, metal, { z: -0.3 }, 0.8))
-  g.add(lit(rbox(1.6, 36, 0.6, light, { y: 2, z: 1.1 }, 0.2), light, 0.6, false))
+  g.add(lit(rbox(1.6, 36, 0.6, light, { y: 2, z: 1.1 }, 0.2), light))
   return mountAt(g, 140)
 }
 
@@ -688,8 +681,8 @@ function upDownWall(p: string[]) {
   g.add(rbox(7, 16, 1.2, metal, { z: -6 }, 0.4))
   g.add(rbox(2, 2, 3, metal, { y: 7, z: -4 }, 0.4))
   g.add(cyl(4, 4, 18, metal, { y: -1, z: 0 }, 24))
-  g.add(lit(cyl(3.5, 3.5, 0.6, light, { y: -1.3 }, 24), light, 0.6, false))
-  g.add(lit(cyl(3.5, 3.5, 0.6, light, { y: 16.7 }, 24), light, 0.6, false))
+  g.add(lit(cyl(3.5, 3.5, 0.6, light, { y: -1.3 }, 24), light))
+  g.add(lit(cyl(3.5, 3.5, 0.6, light, { y: 16.7 }, 24), light))
   return mountAt(g, WALL_Y)
 }
 
@@ -742,7 +735,7 @@ function surveyor(p: string[]) {
   for (const s of [-1, 1]) g.add(rbox(1.2, 14, 3, metal, { x: s * 12.2, y: 117 }, 0.4))
   g.add(P(cyl(11, 11, 20, metal, {}, 28), 0, 130, -2, Math.PI / 2))
   g.add(P(cyl(11.6, 11.6, 2, metal, {}, 28), 0, 130, 8.6, Math.PI / 2))
-  g.add(P(lit(cyl(10, 10, 0.6, light, {}, 28), light, 0.6, false), 0, 130, 9.4, Math.PI / 2))
+  g.add(P(lit(cyl(10, 10, 0.6, light, {}, 28), light), 0, 130, 9.4, Math.PI / 2))
   return centered(g)
 }
 
@@ -802,7 +795,7 @@ function architect(p: string[]) {
   }
   g.add(rod3([0, 10, -7], [0, 22, -5], 0.7, spring, 6))
   g.add(ball(1.3, metal, { y: 30, z: -3 }))
-  const head = G(dome(6.5, 8, metal, 8, 1.8), lit(cyl(5.6, 5.6, 0.5, WARM, { y: 0.4 }, 24), WARM, 0.5, false), bulb(2.2, 0, 3, 0), cyl(1.4, 1.4, 3, metal, { y: 8 }, 10))
+  const head = G(dome(6.5, 8, metal, 8, 1.8), lit(cyl(5.6, 5.6, 0.5, WARM, { y: 0.4 }, 24), WARM, 0.5), bulb(2.2, 0, 3, 0), cyl(1.4, 1.4, 3, metal, { y: 8 }, 10))
   head.rotation.x = -0.45
   head.position.set(0, 23, 14)
   g.add(head)
@@ -914,7 +907,7 @@ function lavaLamp(p: string[]) {
     [-1.2, 22.5, 1.8, 1.4],
     [1.4, 28.5, 1.2, 1.2],
   ] as const)
-    g.add(lit(ball(r, blob, { x, y }, [1, sy, 1]), blob, 0.6, false))
+    g.add(lit(ball(r, blob, { x, y }, [1, sy, 1]), blob))
   g.add(lathe([[0, 0], [2.8, 0], [1.4, 6], [0, 6.4]], metal, { y: 33.6 }, 20))
   return g
 }
@@ -1010,7 +1003,7 @@ function bearFloor(p: string[]) {
   g.add(shadeOpen(14, 17, 20, shadeC, { y: 116, z: -4 }))
   for (let k = 0; k < 18; k++) {
     const a = (k / 18) * Math.PI * 2
-    g.add(lit(ball(1.6, shadeC, { x: Math.sin(a) * 17, y: 116, z: -4 + Math.cos(a) * 17 }), shadeC, 0.42, false))
+    g.add(lit(ball(1.6, shadeC, { x: Math.sin(a) * 17, y: 116, z: -4 + Math.cos(a) * 17 }), shadeC, 0.42))
   }
   g.add(bulb(3, 0, 126, -4))
   return centered(g)
@@ -1035,7 +1028,7 @@ function capDot(prof: [number, number][], y0: number, a: number, t: number, r: n
   // 外法线（轮廓切线转 90°）
   const n2 = new THREE.Vector2(h1 - h0, -(r1 - r0)).normalize()
   const n = new THREE.Vector3(Math.sin(a) * n2.x, n2.y, Math.cos(a) * n2.x)
-  const m = lit(ball(r, color, {}, [1, 0.3, 1]), color, 0.45, false)
+  const m = lit(ball(r, color, {}, [1, 0.3, 1]), color, 0.45)
   m.position.set(Math.sin(a) * pr, y0 + ph, Math.cos(a) * pr).addScaledVector(n, 0.25)
   m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), n)
   return m
@@ -1077,7 +1070,7 @@ function rainCloud(p: string[]) {
     [5, 5],
   ] as const) {
     g.add(cyl(0.12, 0.12, l, '#9aa7b8', { x, y: 17 - l }, 4))
-    g.add(lit(ball(1.1, drop, { x, y: 16.4 - l }, [1, 1.4, 1]), drop, 0.6, false))
+    g.add(lit(ball(1.1, drop, { x, y: 16.4 - l }, [1, 1.4, 1]), drop))
   }
   return centered(g)
 }
@@ -1087,10 +1080,10 @@ function bunnyTable(p: string[]) {
   const [body, ear, base] = p
   const g = new THREE.Group()
   g.add(puck(7.5, 2, base))
-  g.add(lit(ball(6.5, body, { y: 8.5 }, [1, 1, 0.9]), body, 0.42))
-  g.add(lit(ball(5.2, body, { y: 18 }), body, 0.42))
+  g.add(litOutlined(ball(6.5, body, { y: 8.5 }, [1, 1, 0.9]), body, 0.42))
+  g.add(litOutlined(ball(5.2, body, { y: 18 }), body, 0.42))
   for (const s of [-1, 1]) {
-    const e = lit(ball(1.6, body, {}, [1, 3.2, 0.7]), body, 0.42)
+    const e = litOutlined(ball(1.6, body, {}, [1, 3.2, 0.7]), body, 0.42)
     P(e, s * 2.4, 26.5, -0.5, 0, 0, -s * 0.2)
     g.add(e)
     const inner = ball(0.9, ear, {}, [1, 2.6, 0.4])
@@ -1107,7 +1100,7 @@ function rainbowTable(p: string[]) {
   const [c1, c2, cloudC, c3] = p
   const g = new THREE.Group()
   const colors = [c1, c2, c3, '#a8d4f4']
-  colors.forEach((c, i) => g.add(lit(torus(11 - i * 2, 0.9, c, { y: 2.5 }, Math.PI), c, 0.5)))
+  colors.forEach((c, i) => g.add(litOutlined(torus(11 - i * 2, 0.9, c, { y: 2.5 }, Math.PI), c, 0.5)))
   for (const s of [-1, 1]) {
     const cl = cloud(9, cloudC, 0.42, 0.7)
     cl.position.set(s * 8, 2.6, 0)
@@ -1173,7 +1166,7 @@ function silkSquareFloor(p: string[]) {
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(2.4, 150, 2.4, wood, { x: sx * 13, z: sz * 13 }, 0.5))
   g.add(squareRim(30, 30, 2.4, wood, 22))
   g.add(rbox(26, 1, 26, wood, { y: 23.4 }, 0.3))
-  g.add(lit(rbox(23.4, 54, 23.4, silk, { y: 92 }, 0.3), silk, 0.42))
+  g.add(litOutlined(rbox(23.4, 54, 23.4, silk, { y: 92 }, 0.3), silk, 0.42))
   g.add(squareRim(30, 30, 2.6, wood, 89.6))
   g.add(squareRim(30, 30, 2.6, wood, 146))
   for (const rot of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
@@ -1225,7 +1218,7 @@ function gongTable(p: string[]) {
   g.add(cyl(9, 10, 2.4, wood, {}, 6))
   g.add(cyl(3, 5, 3, wood, { y: 2.4 }, 6))
   g.add(cyl(8, 8, 1.6, wood, { y: 5.4 }, 6))
-  g.add(lit(cyl(7, 7, 18, silk, { y: 7 }, 6), silk, 0.45))
+  g.add(litOutlined(cyl(7, 7, 18, silk, { y: 7 }, 6), silk, 0.45))
   for (let k = 0; k < 6; k++) {
     const a = (k / 6) * Math.PI * 2
     g.add(cyl(0.6, 0.6, 18, wood, { x: Math.sin(a) * 7.4, y: 7, z: Math.cos(a) * 7.4 }, 6))
@@ -1244,7 +1237,7 @@ function silkFrameTable(p: string[]) {
   const g = new THREE.Group()
   g.add(rbox(22, 3, 12, wood, {}, 0.8))
   for (const s of [-1, 1]) for (const z of [-1, 1]) g.add(rbox(1.8, 30, 1.8, wood, { x: s * 9.6, y: 3, z: z * 4.6 }, 0.4))
-  g.add(lit(rbox(18, 26, 8, silk, { y: 4.5 }, 0.3), silk, 0.42))
+  g.add(litOutlined(rbox(18, 26, 8, silk, { y: 4.5 }, 0.3), silk, 0.42))
   for (const z of [-1, 1]) {
     const f = huiFrame(14, 20, accent, 7.5, 4.15, 0.6)
     f.rotation.y = z > 0 ? 0 : Math.PI
@@ -1287,7 +1280,7 @@ function latticeWall(p: string[]) {
   const [wood, silk, accent] = p
   const g = new THREE.Group()
   g.add(rbox(20, 26, 1.6, wood, { z: -5 }, 0.5))
-  g.add(lit(rbox(16, 22, 6.4, silk, { y: 2, z: -1 }, 0.3), silk, 0.42))
+  g.add(litOutlined(rbox(16, 22, 6.4, silk, { y: 2, z: -1 }, 0.3), silk, 0.42))
   for (const s of [-1, 1]) g.add(rbox(2, 24, 2, wood, { x: s * 8.4, y: 1, z: 1.6 }, 0.4))
   for (const y of [0, 24]) g.add(rbox(20, 2, 8.4, wood, { y, z: -1.6 }, 0.5))
   g.add(huiFrame(12, 16, accent, 5, 2.4, 0.6))
@@ -1304,7 +1297,7 @@ function hexPalaceWall(p: string[]) {
   g.add(cyl(0.2, 0.2, 3, tassel, { y: 31, z: 0 }, 4))
   const y0 = 14
   g.add(cyl(3, 6.4, 2.4, wood, { y: y0 + 14.6 }, 6))
-  g.add(lit(cyl(5.6, 5.6, 14, silk, { y: y0 }, 6), silk, 0.45))
+  g.add(litOutlined(cyl(5.6, 5.6, 14, silk, { y: y0 }, 6), silk, 0.45))
   for (let k = 0; k < 6; k++) {
     const a = (k / 6) * Math.PI * 2
     g.add(cyl(0.5, 0.5, 14, wood, { x: Math.sin(a) * 5.9, y: y0, z: Math.cos(a) * 5.9 }, 6))
@@ -1435,7 +1428,7 @@ function bouillotte(p: string[]) {
     g.add(bulb(0.9, s * 7.4, 24.6, 0, 1.7))
   }
   g.add(dome(12.5, 6, tole, 36, 1.4))
-  g.add(lit(cyl(11.4, 11.4, 0.3, inner, { y: 30.4 }, 32), inner, 0.4, false))
+  g.add(lit(cyl(11.4, 11.4, 0.3, inner, { y: 30.4 }, 32), inner, 0.4))
   g.add(ring(12.5, 0.4, brass, 30))
   return g
 }
@@ -1599,7 +1592,7 @@ function barnWall(p: string[]) {
   g.add(tube([[0, 18, -15], [0, 24, -10], [0, 26, -2], [0, 24, 4], [0, 20, 6]], 0.8, metal, 24))
   g.add(cyl(1.6, 1.6, 2.4, metal, { y: 18, z: 6 }, 10))
   g.add(dome(11, 6.5, shadeC, 18.6, 2, 0, 0, 6))
-  g.add(lit(cyl(10, 10, 0.3, inner, { y: 12.6, z: 6 }, 28), inner, 0.45, false))
+  g.add(lit(cyl(10, 10, 0.3, inner, { y: 12.6, z: 6 }, 28), inner, 0.45))
   g.add(ring(11, 0.4, shadeC, 12.1, 0, 6))
   g.add(bulb(2.4, 0, 14.4, 6))
   return mountAt(g, 145)
@@ -1612,7 +1605,7 @@ function coachWall(p: string[]) {
   g.add(rbox(6, 26, 1.6, metal, { z: -10 }, 0.6))
   g.add(rod3([0, 6, -9], [0, 10, -2], 0.7, metal))
   g.add(rbox(10, 2, 10, metal, { y: 8, z: 0 }, 0.6))
-  g.add(lit(rbox(8, 13, 8, glass, { y: 10 }, 0.3), glass, 0.42))
+  g.add(litOutlined(rbox(8, 13, 8, glass, { y: 10 }, 0.3), glass, 0.42))
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(1, 14, 1, metal, { x: sx * 4.4, y: 9.6, z: sz * 4.4 }, 0.2))
   g.add(cyl(1.6, 7.4, 4, cap, { y: 23 }, 4))
   g.children[g.children.length - 1].rotation.y = Math.PI / 4

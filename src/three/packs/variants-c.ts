@@ -4,9 +4,9 @@
 // 约定见 kit.ts 开头；id 前缀 vc-。容器一律空心（cup / tray / 车削壳），里面的东西低于口沿。
 
 import * as THREE from 'three'
-import { ball, cup, cyl, rbox, shade, toon, torus, tray } from '../toon'
+import { ball, cup, cyl, rbox, shade, torus, tray } from '../toon'
 import { C, G, type AssetCategory, type AssetDef } from '../kit'
-import { PI, mesh, noOutlineDeep, type V3 } from '../geo'
+import { PI, clearDeep, mesh, noOutlineDeep, type V3 } from '../geo'
 import { I, J, M, N, R, type Build, type Pal3 } from '../packkit'
 
 const COPPER = '#c7814a'
@@ -15,13 +15,6 @@ const PAD = '#eef1f4'
 
 // ---------- 小工具 ----------
 
-/** 半透明件（亚克力、塑料瓶身） */
-function glass<T extends THREE.Object3D>(o: T, color: string, a = 0.42): T {
-  o.traverse((c) => {
-    if ((c as THREE.Mesh).isMesh) (c as THREE.Mesh).material = toon(color, { transparent: a })
-  })
-  return o
-}
 /** 车削体：pts 为 [半径, 高度] 的轮廓 */
 function lathe(pts: [number, number][], color: string, seg = 32) {
   return mesh(new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r, y)), seg), color)
@@ -156,7 +149,7 @@ function pailAcrylic(p: string[]) {
   const y0 = 0.6
   const H = 10
   const g = new THREE.Group()
-  g.add(glass(cup(12, 11.4, H, 1.2, tint, { y: y0 }), tint, 0.42))
+  g.add(clearDeep(cup(12, 11.4, H, 1.2, tint, { y: y0 }), tint, 0.42))
   g.add(
     lathe(
       [

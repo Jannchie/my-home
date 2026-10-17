@@ -7,7 +7,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, ellipsePoly, holePanel, rectPoly, slab, type AssetCategory, type AssetDef, type Poly } from '../kit'
-import { P, PI, box3, noOutline, type V3 } from '../geo'
+import { P, PI, box3, ghost, lit, noOutline, type V3 } from '../geo'
 import { I, M, N, R, type Build, type PalFlat } from '../packkit'
 
 const STEEL = '#c3c7cc'
@@ -55,20 +55,6 @@ function normalize(build: Build): Build {
     inner.position.y -= b.min.y
     return g
   }
-}
-
-function lit<T extends THREE.Mesh>(m: T, color: string, k = 0.6): T {
-  m.material = toon(color, { emissive: k })
-  m.userData.noOutline = true
-  return m
-}
-
-/** 半透明（玻璃、亚克力、镜片），不描边 */
-function ghost<T extends THREE.Mesh>(m: T, color: string, a = 0.35): T {
-  m.material = toon(color, { transparent: a })
-  m.castShadow = false
-  m.userData.noOutline = true
-  return m
 }
 
 /** 双面材质（开口的壳：头盔、帐篷、飞盘） */

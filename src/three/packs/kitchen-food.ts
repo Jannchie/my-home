@@ -9,7 +9,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, SWING_OPEN, movable, rectPoly, rng, type AssetCategory, type AssetDef, type DoorMotion, type Fx, type StyleTag, type SurfaceDef } from '../kit'
-import { PI, UP, box3, hcyl, noOutlineDeep, type V3 } from '../geo'
+import { PI, UP, box3, hcyl, lit, noOutlineDeep, type V3 } from '../geo'
 import { I, J, M, N, R, type Build, type Pal3 } from '../packkit'
 
 // ---------- 固定色 ----------
@@ -63,13 +63,6 @@ function glassy<T extends THREE.Object3D>(o: T, color = GLASS, k = 0.38): T {
     }
   })
   return o
-}
-
-/** 自发光（炭火、指示灯、火苗底座） */
-function lit<T extends THREE.Mesh>(m: T, color: string, k = 0.6): T {
-  m.material = toon(color, { emissive: k })
-  m.userData.noOutline = true
-  return m
 }
 
 /** 包一层再摆放（rbox / cyl 自带的 position 不会被覆盖） */

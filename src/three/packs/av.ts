@@ -5,7 +5,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, glow, rng, holePanel, paintPanel, rectPoly, type AssetCategory, type AssetDef } from '../kit'
-import { P, noOutline } from '../geo'
+import { P, ghost, litOutlined, noOutline } from '../geo'
 import { I, J, M, N, PROP, R, type Pal } from '../packkit'
 
 // ---------- 配色 / 定义 ----------
@@ -43,25 +43,13 @@ function def(
 
 // ---------- 小工具 ----------
 
-function lit<T extends THREE.Mesh>(m: T, color: string, k = 0.6): T {
-  m.material = toon(color, { emissive: k })
-  return m
-}
-
-function ghost<T extends THREE.Mesh>(m: T, color: string, a = 0.35): T {
-  m.material = toon(color, { transparent: a })
-  m.castShadow = false
-  m.userData.noOutline = true
-  return m
-}
-
 /** 沿 x 的横圆柱，给中心 */
 const cylX = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 20) => P(cyl(r, r, len, color, {}, seg), x, y, z, 0, 0, Math.PI / 2)
 /** 沿 z 的圆柱（朝前的圆盘、旋钮），给中心 */
 const cylZ = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 24) => P(cyl(r, r, len, color, {}, seg), x, y, z, Math.PI / 2)
 
 /** 小指示灯 */
-const led = (x: number, y: number, z: number, color: string, r = 0.4) => noOutline(lit(ball(r, color, { x, y, z }), color, 0.9))
+const led = (x: number, y: number, z: number, color: string, r = 0.4) => noOutline(litOutlined(ball(r, color, { x, y, z }), color, 0.9))
 
 /** 朝前的旋钮：z 是安装面 */
 function knob(r: number, len: number, color: string, x: number, y: number, z: number) {
@@ -142,7 +130,7 @@ function lens(g: THREE.Group, r: number, len: number, x: number, y: number, z: n
   g.add(cylZ(r + 0.7, 1, ring, x, y, z + 0.3))
   g.add(cylZ(r, len, DARK, x, y, z + len / 2))
   const gl = P(ball(r * 0.82, on ? LIGHT : LENS_OFF, {}, [1, 1, 0.3]), x, y, z + len)
-  if (on) lit(gl, LIGHT, 1.1)
+  if (on) litOutlined(gl, LIGHT, 1.1)
   g.add(gl)
   return z + len + r * 0.25
 }
@@ -430,7 +418,7 @@ function ustProjector(on: boolean) {
     g.add(rbox(50, 7, 0.8, grille, { y: 2.5, z: 16.3 }, 0.4))
     g.add(rbox(50, 0.6, 18, top, { y: 11.8, z: 5 }, 0.3))
     const win = rbox(32, 0.6, 6, on ? LIGHT : LENS_OFF, { y: 11.8, z: -9.5 }, 0.25)
-    if (on) lit(win, LIGHT, 1)
+    if (on) litOutlined(win, LIGHT, 1)
     g.add(win)
     g.add(glow(12, 0.5, on ? CYAN : '#9aa0a8', { y: 9.5, z: 16.4 }, on ? 0.9 : 0.2))
     if (on) g.add(P(beam(30, 3, 54, 4, 48, 0), 0, 12.4, -9.5, -Math.PI / 2 - 0.05))
@@ -449,7 +437,7 @@ function filmProjector(on: boolean) {
     g.add(rbox(10, 8, 10, body, { x: -6, y: 16.5, z: -2 }, 2))
     for (let i = 0; i < 4; i++) {
       const s = rbox(0.6, 5, 1, on ? AMBER : shade(body, -0.3), { x: -11.1, y: 18, z: -5 + i * 2 }, 0.2)
-      if (on) lit(s, AMBER, 0.9)
+      if (on) litOutlined(s, AMBER, 0.9)
       g.add(s)
     }
     const f = lens(g, 2.6, 8, 4, 10.5, 8.8, metal, on)
@@ -879,8 +867,8 @@ function tubeAmp(p: string[]) {
   for (const x of [-10.5, -3.5, 3.5, 10.5]) {
     g.add(cyl(2, 2, 0.8, DARK, { x, y: 9.6, z: 3.5 }, 16))
     g.add(cyl(0.9, 0.9, 4, '#8a8d93', { x, y: 10.6, z: 3.5 }, 12))
-    g.add(noOutline(lit(cyl(0.45, 0.45, 2.6, AMBER, { x, y: 11.4, z: 3.5 }, 8), AMBER, 1.2)))
-    g.add(noOutline(lit(ball(1.2, '#ff9a3c', { x, y: 12.6, z: 3.5 }, [1, 1.3, 1]), '#ff9a3c', 0.5)))
+    g.add(noOutline(litOutlined(cyl(0.45, 0.45, 2.6, AMBER, { x, y: 11.4, z: 3.5 }, 8), AMBER, 1.2)))
+    g.add(noOutline(litOutlined(ball(1.2, '#ff9a3c', { x, y: 12.6, z: 3.5 }, [1, 1.3, 1]), '#ff9a3c', 0.5)))
     g.add(ghost(capsule(1.6, 7, '#e8f4ff', { x, y: 10.4, z: 3.5 }), '#e8f4ff', 0.3))
   }
   for (const s of [-1, 1]) g.add(knob(1.8, 1.4, plate, s * 12, 4.5, 13))

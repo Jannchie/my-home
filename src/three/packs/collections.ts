@@ -9,7 +9,7 @@ import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js'
 import { ball, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, legs, paintPanel, rectPoly, rng, rod, type AssetCategory, type AssetDef, type Poly } from '../kit'
 import { swingDoor } from './styles-world'
-import { G, P, PI, UP, mesh, noOutline, type V3 } from '../geo'
+import { G, P, PI, UP, ghost, lit, mesh, noOutline, type V3 } from '../geo'
 import { I, J, M, N, PROP, R, type PalFlat } from '../packkit'
 
 type RY = [number, number]
@@ -50,26 +50,12 @@ function def(
 
 // ---------- 小工具 ----------
 
-/** 半透明（玻璃、亚克力），不描边 */
-function ghost<T extends THREE.Mesh>(m: T, color: string, a = 0.32): T {
-  m.material = toon(color, { transparent: a })
-  m.castShadow = false
-  m.userData.noOutline = true
-  return m
-}
-
 /** 双面半透明（玻璃罩这类单层曲面） */
 function ghost2<T extends THREE.Mesh>(m: T, color: string, a = 0.28): T {
   const mat = toon(color, { transparent: a }).clone()
   mat.side = THREE.DoubleSide
   m.material = mat
   m.castShadow = false
-  m.userData.noOutline = true
-  return m
-}
-
-function lit<T extends THREE.Mesh>(m: T, color: string, k = 0.8): T {
-  m.material = toon(color, { emissive: k })
   m.userData.noOutline = true
   return m
 }
@@ -1715,7 +1701,7 @@ function coinLoupe(p: string[]) {
   for (const x of [-4.5, 0, 4.5]) for (const z of [-2.5, 2.5]) g.add(coin(1.55 - (k % 3) * 0.15, COIN_COLS[k++], x, 1, z, 0.22))
   const mg = new THREE.Group()
   mg.add(torus(3.4, 0.35, STEEL, { y: 0.35, rx: PI / 2 }))
-  mg.add(ghost(cyl(3.3, 3.3, 0.3, GLASS, { y: 0.2 }, 32), GLASS, 0.35))
+  mg.add(ghost(cyl(3.3, 3.3, 0.3, GLASS, { y: 0.2 }, 32), GLASS))
   mg.add(cylX(0.35, 1.2, STEEL, 4.2, 0.4, 0, 12))
   mg.add(P(G(cyl(0.55, 0.65, 8, handle, { y: 0 }, 14)), 4.7, 0.65, 0, 0, 0, -PI / 2))
   g.add(P(mg, 13, 0, 1.5, 0, 0.5))
@@ -1814,7 +1800,7 @@ function stampTools(p: string[]) {
   // 手持放大镜
   const mg = new THREE.Group()
   mg.add(torus(2.4, 0.25, handle, { y: 0.25, rx: PI / 2 }))
-  mg.add(ghost(cyl(2.35, 2.35, 0.22, GLASS, { y: 0.14 }, 28), GLASS, 0.35))
+  mg.add(ghost(cyl(2.35, 2.35, 0.22, GLASS, { y: 0.14 }, 28), GLASS))
   mg.add(P(G(cyl(0.4, 0.45, 5, handle, { y: 0 }, 12)), 2.5, 0.45, 0, 0, 0, -PI / 2))
   g.add(P(mg, 5, y0, -4.8, 0, -0.4))
   // 护邮袋（半透明）里夹着邮票

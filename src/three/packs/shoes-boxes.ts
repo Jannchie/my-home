@@ -10,7 +10,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cyl, puck, rbox, shade, toon, torus } from '../toon'
 import { C, SWING_OPEN, holePanel, movable, paintPanel, rectPoly, rng, shell, slab, type AssetCategory, type AssetDef, type Poly } from '../kit'
-import { G, P, PI, UP, type V3 } from '../geo'
+import { G, P, PI, UP, clearDeep, type V3 } from '../geo'
 import { I, J, M, N, R, type Build, type Dims, type Pal } from '../packkit'
 
 type Tab = [number, number][]
@@ -71,14 +71,6 @@ function tube(pts: V3[], r: number, color: string, closed = false, seg?: number)
   const a = pts[0]
   const b = pts[pts.length - 1]
   return G(m, ball(r, color, { x: a[0], y: a[1], z: a[2] }), ball(r, color, { x: b[0], y: b[1], z: b[2] }))
-}
-
-/** 半透明：整组换成透明材质（不描边） */
-function clear<T extends THREE.Object3D>(o: T, color: string, a = 0.4): T {
-  o.traverse((c) => {
-    if ((c as THREE.Mesh).isMesh) (c as THREE.Mesh).material = toon(color, { transparent: a })
-  })
-  return o
 }
 
 /** 竖直的异形板：poly 是 [z, y] 轮廓，板厚 t 沿 x，放在 x0..x0+t */
@@ -1087,7 +1079,7 @@ function door(w: number, h: number, kind: DoorKind, color: string, handle: strin
     const f = 4
     for (const s of [-1, 1]) g.add(rbox(f, h, 1.8, color, { x: cx + s * (w / 2 - 0.15 - f / 2), z: 0.9 }, 0.4))
     g.add(rbox(w - 0.3 - 2 * f + 0.4, f, 1.8, color, { x: cx, z: 0.9 }, 0.4), rbox(w - 0.3 - 2 * f + 0.4, f, 1.8, color, { x: cx, y: h - f, z: 0.9 }, 0.4))
-    if (kind === 'glass') g.add(clear(rbox(w - 2 * f + 0.4, h - 2 * f + 0.4, 0.5, C.glass, { x: cx, y: f - 0.2, z: 0.9 }, 0.1), C.glass, 0.3))
+    if (kind === 'glass') g.add(clearDeep(rbox(w - 2 * f + 0.4, h - 2 * f + 0.4, 0.5, C.glass, { x: cx, y: f - 0.2, z: 0.9 }, 0.1), C.glass, 0.3))
     else {
       const n = Math.floor((h - 2 * f - 1) / 3.4)
       for (let i = 0; i < n; i++) g.add(rbox(w - 2 * f + 0.4, 0.5, 2.6, color, { x: cx, y: f + 1 + i * 3.4, z: 0.9, rx: -0.6 }, 0.2))
@@ -1436,7 +1428,7 @@ function boxTray(w: number, h: number, d: number, t: number, color: string, alph
     rbox(t, h, d - 2 * t + 0.1, color, { x: w / 2 - t / 2 }, t * 0.4),
     rbox(t, h, d - 2 * t + 0.1, color, { x: -w / 2 + t / 2 }, t * 0.4),
   )
-  return alpha < 1 ? clear(g, color, alpha) : g
+  return alpha < 1 ? clearDeep(g, color, alpha) : g
 }
 
 /** 绕后上沿开合的盖子：lid 在本地 z ∈ [0, d]、y ∈ [0, th] 内；open 时转到 -100°（立在后面） */
@@ -1652,7 +1644,7 @@ function vacBag(puffy: boolean): Build {
     const h = puffy ? 18 : 6
     const g = new THREE.Group()
     g.add(clothes(w - 6, d - 6, h - 2.5, 0.8, puffy ? 31 : 32))
-    g.add(clear(rbox(w, h, d, p[0], {}, puffy ? 7 : 2.5), p[0], 0.32))
+    g.add(clearDeep(rbox(w, h, d, p[0], {}, puffy ? 7 : 2.5), p[0], 0.32))
     g.add(rbox(w - 4, 0.6, 1.2, p[1], { y: h - (puffy ? 2.4 : 0.9), z: d / 2 - 4 }, 0.25))
     g.add(cyl(3, 3, 0.8, p[2], { y: h - 0.3, x: 12 }, 20), cyl(1.6, 1.6, 1, p[1], { y: h + 0.3, x: 12 }, 16))
     return g
@@ -1688,7 +1680,7 @@ function drawerCab(n: number): Build {
       // 抽屉（盒 + 面板 + 拉手 + 里面的衣服）整个往前拉出
       const dr = G(
         P(boxTray(dw, dh, d - 3, 0.5, CLEAR, 0.4), 0, 0, 0.2),
-        clear(rbox(dw + 0.8, dh + 0.4, 0.6, p[1], { y: -0.1, z: d / 2 - 1.2 }, 0.3), p[1], 0.5),
+        clearDeep(rbox(dw + 0.8, dh + 0.4, 0.6, p[1], { y: -0.1, z: d / 2 - 1.2 }, 0.3), p[1], 0.5),
         rbox(14, 2, 1.2, p[0], { y: dh - 4, z: d / 2 - 0.4 }, 0.5),
         clothes(dw - 2, d - 6, clothH, 0.5, 10 + i * 3 + n),
       )

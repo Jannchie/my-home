@@ -9,7 +9,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, holePanel, rectPoly, rng, type AssetCategory, type AssetDef, type StyleTag } from '../kit'
-import { PI, noOutline, type V3 } from '../geo'
+import { PI, clearMat, lit, noOutline, type V3 } from '../geo'
 import { I, J, M, N, R, type Build } from '../packkit'
 
 const SOIL = '#7f5f45'
@@ -42,17 +42,6 @@ function sty(groups: Partial<Record<StyleTag, string[][]>>) {
 }
 type Pals = ReturnType<typeof sty>
 
-/** 发光件 */
-function lit<T extends THREE.Mesh>(m: T, color: string, k = 0.8): T {
-  m.material = toon(color, { emissive: k })
-  m.userData.noOutline = true
-  return m
-}
-/** 半透明件（玻璃、水） */
-function clear<T extends THREE.Mesh>(m: T, color: string, a = 0.35): T {
-  m.material = toon(color, { transparent: a })
-  return m
-}
 /** 两点之间的一根杆 */
 function stick(a: V3, b: V3, r: number, color: string, seg = 8) {
   return taper(a, b, r, r, color, seg)
@@ -461,14 +450,14 @@ function wallPot(p: string[]) {
 function selfWater(p: string[]) {
   const [pot, ind] = p
   const g = new THREE.Group()
-  g.add(clear(cup(9.2, 8.8, 8, 0.4, GLASS), GLASS, 0.3))
+  g.add(clearMat(cup(9.2, 8.8, 8, 0.4, GLASS), GLASS, 0.3))
   g.add(band(8.85, 9.0, 8.3, 8.4, 1.0, pot, 0))
-  g.add(clear(cyl(8.3, 8.2, 4.2, WATER, { y: 0.4 }), WATER, 0.55))
+  g.add(clearMat(cyl(8.3, 8.2, 4.2, WATER, { y: 0.4 }), WATER, 0.55))
   g.add(cup(10.4, 9.4, 13, 0.8, pot, { y: 8 }))
   g.add(noOutline(tube([[0, 8.2, 0], [0.8, 5.5, 0.6], [-0.6, 3, -0.4], [1.5, 1, 1.2]], 0.35, '#efe3c8')))
   const ix = -6.4
   const iz = 4.2
-  g.add(clear(cyl(0.7, 0.7, 23, GLASS, { x: ix, y: 0.6, z: iz }, 12), GLASS, 0.45))
+  g.add(clearMat(cyl(0.7, 0.7, 23, GLASS, { x: ix, y: 0.6, z: iz }, 12), GLASS, 0.45))
   g.add(cyl(0.5, 0.5, 1.2, ind, { x: ix, y: 3.6, z: iz }, 10))
   g.add(cyl(1.0, 1.0, 1.0, ind, { x: ix, y: 23.4, z: iz }, 12))
   g.add(stick([0, 5.2, 8.4], [0, 6.8, 10.9], 1.0, pot, 12))
@@ -542,7 +531,7 @@ function terrarium(kind: 'jar' | 'globe'): Build {
       }
       prof[0][1] = 0
     }
-    g.add(clear(hollow(prof, t, GLASS), GLASS, 0.28))
+    g.add(clearMat(hollow(prof, t, GLASS), GLASS, 0.28))
     const ri = (y: number) => rAt(prof, y) - t - 0.2
     // 底座 / 软木塞
     if (kind === 'jar') {
@@ -1268,9 +1257,9 @@ function canSmall(p: string[]) {
 function sprayer(p: string[]) {
   const [bottle, head] = p
   const g = new THREE.Group()
-  g.add(clear(cyl(4, 4, 13, bottle, {}, 24), bottle, 0.5))
+  g.add(clearMat(cyl(4, 4, 13, bottle, {}, 24), bottle, 0.5))
   g.add(band(4.05, 4.05, 3.6, 3.6, 1.2, shade(bottle, -0.1), 0))
-  g.add(clear(cyl(3.7, 3.7, 8.5, WATER, { y: 1.2 }, 24), WATER, 0.5))
+  g.add(clearMat(cyl(3.7, 3.7, 8.5, WATER, { y: 1.2 }, 24), WATER, 0.5))
   g.add(noOutline(stick([0, 0.6, 0.6], [0, 15.5, 0], 0.18, '#f4f4f2', 4)))
   g.add(cyl(1.9, 4, 2, bottle, { y: 13 }, 24))
   g.add(cyl(1.7, 1.7, 1.2, bottle, { y: 15 }, 16))

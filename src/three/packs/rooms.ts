@@ -5,7 +5,7 @@ import * as THREE from 'three'
 import { ball, capsule, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, SWING_OPEN, holePanel, legs, lPoly, movable, rectPoly, rng, rod, shell, slab, type AssetDef, type DoorMotion, type SurfaceDef } from '../kit'
 import { soft, type SoftFn } from './more-variety'
-import { type V3 } from '../geo'
+import { glassPane, type V3 } from '../geo'
 import { I, J, M, N, R, type Pal3 } from '../packkit'
 
 // ---------- 小工具 ----------
@@ -72,13 +72,6 @@ function bin(w: number, h: number, d: number, color: string, x: number, y: numbe
   const g = shell(w, h, d, 1.2, color, { top: false, front: [{ kind: 'rect', x: 0, y: h * 0.68, w: w * 0.36, h: 2.6, r: 1.3 }] })
   g.position.set(x, y, z)
   return g
-}
-
-/** 透明玻璃板 */
-function glass(w: number, h: number, t: number, at: { x?: number; y: number; z: number }) {
-  const m = rbox(w, h, t, C.glass, at, 0.2)
-  m.material = toon(C.glass, { transparent: 0.32 })
-  return m
 }
 
 // ---------- 可开合：门、抽屉 ----------
@@ -345,7 +338,7 @@ function tvRetro(p: string[]) {
     fr.add(rbox(40, 2.5, 1.4, sub, { y: 0 }, 0.5))
     fr.add(rbox(40, 2.5, 1.4, sub, { y: dh - 2.5 }, 0.5))
     for (const s of [-1, 1]) fr.add(rbox(2.5, dh, 1.4, sub, { x: s * 18.75 }, 0.5))
-    fr.add(glass(35, dh - 4, 0.5, { y: 2, z: 0 }))
+    fr.add(glassPane(35, dh - 4, 0.5, { y: 2, z: 0 }))
     fr.add(rbox(1.2, 8, 1, acc, { x: i ? -15.5 : 15.5, y: dh / 2 - 4, z: 1 }, 0.4))
     fr.position.set(x, fy + 0.5, z)
     // 前面那扇推到后面那扇的前头
@@ -474,7 +467,7 @@ function displayCabinet(p: string[]) {
     const dw = w / 2 - 1
     for (const y of [0, dh - 3]) fr.add(rbox(dw, 3, 1.6, main, { y }, 0.6))
     for (const k of [-1, 1]) fr.add(rbox(3, dh, 1.6, main, { x: (k * (dw - 3)) / 2 }, 0.6))
-    fr.add(glass(dw - 5, dh - 5, 0.5, { y: 2.5, z: 0 }))
+    fr.add(glassPane(dw - 5, dh - 5, 0.5, { y: 2.5, z: 0 }))
     fr.add(ball(1.4, acc, { x: -s * (dw / 2 - 4), y: dh / 2, z: 1.4 }))
     fr.position.set(s * (dw / 2 + 0.3), y0 + 3, d / 2 + 0.9)
     g.add(moving([fr], [s * (dw + 0.3), y0 + 3, d / 2 + 0.9], swing(s < 0)))

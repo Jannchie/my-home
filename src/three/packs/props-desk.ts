@@ -5,7 +5,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, face, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, clipLevels, glow, rng, rod, shell, type AssetCategory, type AssetDef, type Fx, type ScreenPanel, paintPanel, paintLandscape } from '../kit'
-import { P, noOutline } from '../geo'
+import { P, ghostOutlined, litOutlined, noOutline } from '../geo'
 import { I, J, M, N, R, type Pal } from '../packkit'
 
 // ---------- 配色 / 定义 ----------
@@ -47,19 +47,6 @@ function screensOf(screens: ScreenPanel[]): Partial<AssetDef> {
   return { screens, surfaces: clipLevels(screens) }
 }
 
-/** 自发光材质（灯罩、灯泡、火苗） */
-function lit<T extends THREE.Mesh>(m: T, color: string, k = 0.5): T {
-  m.material = toon(color, { emissive: k })
-  return m
-}
-
-/** 半透明（玻璃、雾气），不描边 */
-function ghost<T extends THREE.Mesh>(m: T, color: string, a = 0.45): T {
-  m.material = toon(color, { transparent: a })
-  m.castShadow = false
-  return m
-}
-
 /** 沿 x 的横圆柱，给中心 */
 const cylX = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 16) =>
   P(cyl(r, r, len, color, {}, seg), x, y, z, 0, 0, Math.PI / 2)
@@ -69,7 +56,7 @@ const cylZ = (r: number, len: number, color: string, x: number, y: number, z: nu
   P(cyl(r, r, len, color, {}, seg), x, y, z, Math.PI / 2)
 
 /** 屏幕上的发光圆点（太阳、云） */
-const disc = (r: number, color: string, x: number, y: number, z: number, k = 0.7) => noOutline(lit(cylZ(r, 0.6, color, x, y, z), color, k))
+const disc = (r: number, color: string, x: number, y: number, z: number, k = 0.7) => noOutline(litOutlined(cylZ(r, 0.6, color, x, y, z), color, k))
 
 /** yz 平面里的细杆 */
 function rodZ(az: number, ay: number, bz: number, by: number, r: number, color: string, x = 0) {
@@ -791,7 +778,7 @@ function hourglass(p: string[]) {
   const steps = (a: number, b: number, n: number) => Array.from({ length: n + 1 }, (_, i) => a + ((b - a) * i) / n)
   // 玻璃：从底盖到顶盖的连续轮廓
   const glass: [number, number][] = steps(HG.y0, HG.y1, 28).map((y) => [hgRadius(y), y])
-  g.add(ghost(noOutline(lathe([[0, HG.y0], ...glass, [0, HG.y1]], C.glass)), C.glass, 0.3))
+  g.add(ghostOutlined(noOutline(lathe([[0, HG.y0], ...glass, [0, HG.y1]], C.glass)), C.glass, 0.3))
   // 上泡的沙：贴着泡底（细颈往上）到平整的沙面，沙面中间微微凹下
   const top = mid + 2.6
   const upper: [number, number][] = steps(mid + 0.1, top, 8).map((y) => [hgRadius(y) * 0.94, y])
@@ -898,7 +885,7 @@ function deskLamp(p: string[]) {
   arm.add(rod(-1, 23, 9, 28, 0.8, main))
   arm.add(ball(1.4, joint, { x: 9, y: 28 }))
   arm.add(P(cyl(2, 5.5, 7, main, {}, 20), 11, 25, 0, 0, 0, 0.35))
-  arm.add(lit(ball(2.2, C.lamp, { x: 12, y: 22.4 }), C.lamp, 0.9))
+  arm.add(litOutlined(ball(2.2, C.lamp, { x: 12, y: 22.4 }), C.lamp, 0.9))
   const inner = new THREE.Group()
   inner.add(P(arm, -2.5))
   inner.rotation.y = -Math.PI / 2
@@ -912,7 +899,7 @@ function tableLamp(p: string[]) {
   g.add(puck(5.5, 1.6, base))
   g.add(ball(5, base, { y: 6 }, [1, 0.95, 1]))
   g.add(cyl(0.7, 0.7, 8, shade(base, -0.15), { y: 10 }, 8))
-  g.add(lit(cyl(6.5, 10, 12, shadeC, { y: 16 }), shadeC, 0.5))
+  g.add(litOutlined(cyl(6.5, 10, 12, shadeC, { y: 16 }), shadeC, 0.5))
   g.add(P(torus(10, 0.5, trim), 0, 16.3, 0, Math.PI / 2))
   g.add(P(torus(6.5, 0.4, trim), 0, 27.8, 0, Math.PI / 2))
   return g
@@ -928,9 +915,9 @@ function edisonLamp(p: string[]) {
   for (const x of [-4, 4]) g.add(ball(1.25, pipe, { x, y: 25 }))
   g.add(cylX(0.9, 8, pipe, 0, 25, 0, 12))
   g.add(cyl(1.4, 1.4, 3, shade(pipe, 0.1), { x: 4, y: 21.6 }, 14))
-  g.add(lit(torus(1.1, 0.16, '#ffb347', { x: 4, y: 18.4 }), '#ffb347', 1))
+  g.add(litOutlined(torus(1.1, 0.16, '#ffb347', { x: 4, y: 18.4 }), '#ffb347', 1))
   g.add(cyl(0.12, 0.12, 3, '#c9a46a', { x: 4, y: 18.4 }, 6))
-  g.add(ghost(ball(3.4, '#fff4d6', { x: 4, y: 18.2 }, [1, 1.25, 1]), '#fff4d6', 0.4))
+  g.add(ghostOutlined(ball(3.4, '#fff4d6', { x: 4, y: 18.2 }, [1, 1.25, 1]), '#fff4d6', 0.4))
   g.add(cylZ(0.8, 1, M.silver, 4, 1.6, 5.7, 12))
   return g
 }
@@ -941,8 +928,8 @@ function mushroomLamp(p: string[]) {
   const g = new THREE.Group()
   g.add(puck(6, 1.5, stem))
   g.add(cyl(1.6, 2.4, 14, stem, { y: 1.4 }, 20))
-  g.add(lit(dome(10, capC, 0, 15.5, 0, 0.75), capC, 0.35))
-  g.add(lit(cyl(9.9, 9.9, 0.5, C.lamp, { y: 15.2 }, 32), C.lamp, 0.8))
+  g.add(litOutlined(dome(10, capC, 0, 15.5, 0, 0.75), capC, 0.35))
+  g.add(litOutlined(cyl(9.9, 9.9, 0.5, C.lamp, { y: 15.2 }, 32), C.lamp, 0.8))
   return g
 }
 
@@ -951,7 +938,7 @@ function washiLamp(p: string[]) {
   const [paper, wood] = p
   const g = new THREE.Group()
   g.add(puck(7.6, 2, wood))
-  g.add(lit(cyl(6.8, 6.8, 22, paper, { y: 2 }, 24), paper, 0.45))
+  g.add(litOutlined(cyl(6.8, 6.8, 22, paper, { y: 2 }, 24), paper, 0.45))
   for (const y of [2.6, 23.4]) g.add(P(torus(7, 0.45, wood), 0, y, 0, Math.PI / 2))
   for (let i = 0; i < 4; i++) {
     const a = (i / 4) * Math.PI * 2 + Math.PI / 4
@@ -967,7 +954,7 @@ function globeLamp(p: string[]) {
   const g = new THREE.Group()
   g.add(cyl(5, 6, 6, base, {}, 24))
   g.add(P(torus(5.1, 0.4, ring), 0, 5.6, 0, Math.PI / 2))
-  g.add(lit(ball(9, light, { y: 14.4 }), light, 0.45))
+  g.add(litOutlined(ball(9, light, { y: 14.4 }), light, 0.45))
   return g
 }
 
@@ -987,7 +974,7 @@ function candles(p: string[]) {
     g.add(cyl(r, r, h, wax, { x, y: 1, z }, 20))
     g.add(ball(0.5, shade(wax, -0.04), { x: x + r * 0.8, y: 1 + h - 1, z: z + r * 0.5 }, [0.8, 1.6, 0.8]))
     g.add(rbox(0.2, 0.9, 0.2, C.ink, { x, y: 1 + h - 0.1, z }, 0.05))
-    g.add(noOutline(lit(ball(0.3, '#ffcf5a', { x, y: 1 + h + 1.2, z }, [1, 1.7, 1]), '#ffcf5a', 0.95)))
+    g.add(noOutline(litOutlined(ball(0.3, '#ffcf5a', { x, y: 1 + h + 1.2, z }, [1, 1.7, 1]), '#ffcf5a', 0.95)))
   }
   return g
 }
@@ -998,7 +985,7 @@ function aromaDiffuser(p: string[]) {
   const [body, base, light] = p
   const g = new THREE.Group()
   g.add(cyl(5.5, 6, 3, base, {}, 28))
-  g.add(lit(P(torus(5.4, 0.35, light), 0, 3.1, 0, Math.PI / 2), light, 0.8))
+  g.add(litOutlined(P(torus(5.4, 0.35, light), 0, 3.1, 0, Math.PI / 2), light, 0.8))
   g.add(ball(5.6, body, { y: 6.4 }, [1, 1.15, 1]))
   g.add(cyl(0.6, 2.6, 4, body, { y: 11 }, 20))
   g.add(cyl(0.7, 0.7, 0.3, M.char, { y: 14.9 }, 12))
@@ -1010,7 +997,7 @@ function miniHumidifier(p: string[]) {
   const [body, cap, light] = p
   const g = new THREE.Group()
   g.add(cyl(4.2, 4.6, 12, body, {}, 28))
-  g.add(lit(P(torus(4.5, 0.3, light), 0, 2.6, 0, Math.PI / 2), light, 0.8))
+  g.add(litOutlined(P(torus(4.5, 0.3, light), 0, 2.6, 0, Math.PI / 2), light, 0.8))
   g.add(puck(4.3, 2, cap, { y: 11.6 }))
   g.add(cyl(1, 1.3, 1.4, shade(cap, -0.1), { y: 13.3 }, 16))
   return g
@@ -1103,7 +1090,7 @@ function gacha(p: string[]) {
     const d = r() * 2.6
     g.add(ball(1.3, cols[i % cols.length], { x: Math.cos(a) * d, y: 10.6 + (i % 3) * 1.8 + r() * 0.5, z: Math.sin(a) * d }))
   }
-  g.add(ghost(ball(5.2, C.glass, { y: 13.2 }), C.glass, 0.35))
+  g.add(ghostOutlined(ball(5.2, C.glass, { y: 13.2 }), C.glass))
   g.add(puck(2.2, 1.4, top, { y: 18 }))
   return g
 }
@@ -1147,7 +1134,7 @@ function incense(p: string[]) {
   g.add(rbox(13, 1, 4.5, dish, {}, 0.5))
   g.add(ball(0.8, shade(dish, -0.12), { x: -5, y: 1.1 }))
   g.add(rod(-5, 1.2, 1.5, 8.6, 0.12, stick))
-  g.add(noOutline(lit(ball(0.22, '#ff7a45', { x: 1.6, y: 8.7 }), '#ff7a45', 1)))
+  g.add(noOutline(litOutlined(ball(0.22, '#ff7a45', { x: 1.6, y: 8.7 }), '#ff7a45', 1)))
   for (let i = 0; i < 3; i++) g.add(noOutline(ball(0.25, '#b8b0a8', { x: -1 + i * 1.6, y: 1, z: 0.6 - i * 0.3 }, [1, 0.5, 1])))
   return g
 }

@@ -8,7 +8,7 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, S, G, glow, holePanel, paintPanel, rng, slab, type AssetCategory, type AssetDef, type Hole, type Poly } from '../kit'
-import { P, PI, noOutline, type V3 } from '../geo'
+import { P, PI, ghost, lit, noOutline, type V3 } from '../geo'
 import { J, M, N, R, type Pal } from '../packkit'
 
 type Draw = (g: CanvasRenderingContext2D, W: number, H: number) => void
@@ -62,20 +62,6 @@ function fit(g: THREE.Group) {
 }
 
 // ---------- 小工具 ----------
-
-function lit<T extends THREE.Mesh>(m: T, color: string, k = 0.6): T {
-  m.material = toon(color, { emissive: k })
-  m.userData.noOutline = true
-  return m
-}
-
-/** 透明件：不描边、不投影 */
-function ghost<T extends THREE.Mesh>(m: T, color: string, a = 0.3): T {
-  m.material = toon(color, { transparent: a })
-  m.castShadow = false
-  m.userData.noOutline = true
-  return m
-}
 
 /** 沿 x 的横圆柱，给中心 */
 const cylX = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 16) => P(cyl(r, r, len, color, {}, seg), x, y, z, 0, 0, PI / 2)
@@ -441,7 +427,7 @@ function ps4(p: string[]) {
   g.add(sideExtrude([[-12.6, 2.8], [15.0, 2.8], [16.0, 5.3], [-11.6, 5.3]], 27.5, body, 0, 0.3))
   g.add(rbox(13.2, 0.3, 26.4, top, { x: -6.6, y: 5.15, z: 2.2 }, 0.12))
   g.add(lit(rbox(0.45, 0.3, 26, light, { x: 3.2, y: 5.2, z: 2.2 }, 0.1), light, 0.85))
-  g.add(lit(rbox(25.5, 0.25, 0.3, light, { y: 2.55, z: 14.4 }, 0.1), light, 0.6))
+  g.add(lit(rbox(25.5, 0.25, 0.3, light, { y: 2.55, z: 14.4 }, 0.1), light))
   return g
 }
 
@@ -1732,7 +1718,7 @@ function takeoutBag(p: string[]) {
     g.add(rbox(17, 0.6, 11, food, { y: y + 2.6 }, 0.3))
     g.add(ball(1.6, '#e28a3a', { x: 3, y: y + 3.4, z: 1 }, [1.3, 0.6, 1]))
     g.add(ball(1.2, '#78c47a', { x: -4, y: y + 3.3, z: -2 }, [1.2, 0.5, 1]))
-    g.add(ghost(rbox(18.2, 1.8, 12.2, '#f4faff', { y: y + 3.0 }, 0.5), '#f4faff', 0.35))
+    g.add(ghost(rbox(18.2, 1.8, 12.2, '#f4faff', { y: y + 3.0 }, 0.5), '#f4faff'))
   }
   g.add(ghost(rbox(22, 11.4, 15, bag, {}, 3), bag, 0.45))
   // 打结的提手

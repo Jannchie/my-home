@@ -5,7 +5,7 @@
 import * as THREE from 'three'
 import { ball, cup, cyl, puck, rbox, shade, toon, torus, tray, useAnisotropy } from '../toon'
 import { C, G, SWING_OPEN, ellipsePoly, movable, rectPoly, rng, slab, type AssetCategory, type AssetDef, type DoorMotion, type Poly, type SurfaceDef } from '../kit'
-import { PI, mesh, noOutlineDeep, type V3 } from '../geo'
+import { PI, clearDeep, lit, mesh, noOutlineDeep, type V3 } from '../geo'
 import { I, J, M, N, R, type Build, type Pal3 } from '../packkit'
 
 const SOIL = '#8b6a4f'
@@ -22,19 +22,6 @@ const BOOKC = ['#c96f5a', '#e3b549', '#6f8fa8', '#8aa37b', '#efe6d6', '#5a4646',
 
 // ---------- 小工具 ----------
 
-/** 发光件（灯罩、灯泡、指示灯） */
-function lit<T extends THREE.Mesh>(m: T, color: string, k = 0.6): T {
-  m.material = toon(color, { emissive: k })
-  m.userData.noOutline = true
-  return m
-}
-/** 半透明件（玻璃） */
-function glass<T extends THREE.Object3D>(o: T, color: string, a = 0.38): T {
-  o.traverse((c) => {
-    if ((c as THREE.Mesh).isMesh) (c as THREE.Mesh).material = toon(color, { transparent: a })
-  })
-  return o
-}
 /** 两点之间的一根杆 */
 function stick(a: V3, b: V3, r: number, color: string, seg = 8) {
   const va = new THREE.Vector3(...a)
@@ -695,7 +682,7 @@ function ctOvalGlass(p: string[]) {
   // 台面下的椭圆木框（玻璃架在上面）
   for (const sz of [-1, 1]) g.add(rbox(62, 2.4, 2.4, wood, { y: 33.6, z: sz * 20 }, 0.8))
   for (const sx of [-1, 1]) g.add(rbox(2.4, 2.4, 38, wood, { x: sx * 30, y: 33.6 }, 0.8))
-  g.add(glass(slab(ellipsePoly(46, 38, 0, 0, 64), 1.2, glassC, 36), glassC, 0.42))
+  g.add(clearDeep(slab(ellipsePoly(46, 38, 0, 0, 64), 1.2, glassC, 36), glassC, 0.42))
   return g
 }
 
@@ -839,7 +826,7 @@ function bsGlass(p: string[]) {
     for (const s2 of [-1, 1]) up.push(rbox(3, dh, 1.6, shade(main, 0.05), { x: x + s2 * (dw / 2 - 1.5), y: y0, z: fz }, 0.5))
     for (const yy of [y0, y0 + dh - 3]) up.push(rbox(dw - 6, 3, 1.6, shade(main, 0.05), { x, y: yy, z: fz }, 0.5))
     up.push(rbox(dw - 6, 1.6, 1.6, shade(main, 0.05), { x, y: y0 + dh / 2 - 0.8, z: fz }, 0.4))
-    up.push(glass(rbox(dw - 5.8, dh - 5.8, 0.4, '#d6eefc', { x, y: y0 + 2.9, z: fz + 0.2 }, 0.1), '#d6eefc', 0.3))
+    up.push(clearDeep(rbox(dw - 5.8, dh - 5.8, 0.4, '#d6eefc', { x, y: y0 + 2.9, z: fz + 0.2 }, 0.1), '#d6eefc', 0.3))
     up.push(ball(0.8, knob, { x: sx * 4, y: y0 + 20, z: front + 2.2 }))
     g.add(moving(up, [hx, y0, front], swing(sx < 0)))
   }
@@ -1316,7 +1303,7 @@ function kettleGlass(p: string[]) {
   const [base, ring, light] = p
   const g = G(puck(8, 2, base))
   g.add(cyl(6.9, 7, 2, ring, { y: 2 }, 32))
-  g.add(glass(cyl(6.3, 6.9, 11.6, WATER, { y: 4 }, 32), WATER, 0.3))
+  g.add(clearDeep(cyl(6.3, 6.9, 11.6, WATER, { y: 4 }, 32), WATER, 0.3))
   g.add(lit(cyl(5.8, 6.3, 6.5, light, { y: 4.2 }, 24), light, 0.45))
   g.add(cyl(6.5, 6.5, 1.6, ring, { y: 15.6 }, 32))
   g.add(puck(5.4, 1.2, base, { y: 16.8 }))
@@ -1410,7 +1397,7 @@ function epotSquare(p: string[]) {
   const g = G(rbox(19, 1.2, 24, top, {}, 0.5))
   g.add(rbox(21, 22, 22, body, { y: 1, z: -1 }, 5))
   g.add(rbox(20.6, 5, 21.6, top, { y: 22.6, z: -1 }, 2.4))
-  g.add(lit(rbox(9, 0.4, 5, screen, { y: 27.5, z: 3.5 }, 0.2), screen, 0.6))
+  g.add(lit(rbox(9, 0.4, 5, screen, { y: 27.5, z: 3.5 }, 0.2), screen))
   g.add(rbox(5, 4, 3.4, top, { y: 18, z: 11 }, 1))
   g.add(cyl(0.9, 1, 2, shade(top, -0.1), { y: 16.4, z: 11.6 }, 12))
   g.add(rbox(10, 1.4, 4, shade(top, -0.1), { y: 1.2, z: 10.4 }, 0.5))
@@ -1774,7 +1761,7 @@ function binRattan(p: string[]) {
 function perfumeDisc(p: string[]) {
   const [juice, capC, foot] = p
   const g = G(cyl(1.6, 1.8, 0.6, foot, {}, 16))
-  g.add(glass(ball(3, '#eef7ff', { y: 3.4 }, [1, 1, 0.64]), '#eef7ff', 0.35))
+  g.add(clearDeep(ball(3, '#eef7ff', { y: 3.4 }, [1, 1, 0.64]), '#eef7ff', 0.35))
   g.add(ball(2.5, juice, { y: 3.2 }, [1, 0.85, 0.5]))
   g.add(cyl(0.7, 0.8, 1, foot, { y: 6.2 }, 12))
   g.add(ball(1.3, capC, { y: 8.2 }))
@@ -1784,7 +1771,7 @@ function perfumeDisc(p: string[]) {
 /** 细长方瓶：高瘦的方玻璃瓶 + 一样高瘦的方瓶盖 [香水, 瓶盖, 标签] */
 function perfumeTall(p: string[]) {
   const [juice, capC, label] = p
-  const g = G(glass(rbox(5.2, 9.5, 3.6, '#eef7ff', {}, 0.8), '#eef7ff', 0.35))
+  const g = G(clearDeep(rbox(5.2, 9.5, 3.6, '#eef7ff', {}, 0.8), '#eef7ff', 0.35))
   g.add(rbox(4.4, 7.6, 2.8, juice, { y: 0.6 }, 0.5))
   g.add(noOutlineDeep(rbox(2.4, 1.6, 0.3, label, { y: 3.6, z: 1.9 }, 0.1)))
   g.add(cyl(0.8, 0.8, 1, STEEL, { y: 9.5 }, 12))
@@ -1796,7 +1783,7 @@ function perfumeTall(p: string[]) {
 function perfumeAtomizer(p: string[]) {
   const [juice, bulb, metal] = p
   const g = G(cyl(1.4, 1.6, 0.5, metal, {}, 16))
-  g.add(glass(ball(2, '#eef7ff', { y: 2.4 }, [1, 1.05, 1]), '#eef7ff', 0.35))
+  g.add(clearDeep(ball(2, '#eef7ff', { y: 2.4 }, [1, 1.05, 1]), '#eef7ff', 0.35))
   g.add(ball(1.6, juice, { y: 2.2 }))
   g.add(cyl(0.5, 0.6, 1.6, metal, { y: 4.3 }, 12))
   g.add(cyl(0.6, 0.6, 1, metal, { y: 5.8 }, 12))
@@ -1811,7 +1798,7 @@ function perfumeAtomizer(p: string[]) {
 function perfumeFacet(p: string[]) {
   const [juice, stopper, collar] = p
   const g = new THREE.Group()
-  const body = glass(cyl(2.7, 3.2, 6, '#eef7ff', {}, 8), '#eef7ff', 0.35)
+  const body = clearDeep(cyl(2.7, 3.2, 6, '#eef7ff', {}, 8), '#eef7ff', 0.35)
   body.scale.z = 0.68
   g.add(body)
   const inner = cyl(2.2, 2.6, 4.8, juice, { y: 0.4 }, 8)

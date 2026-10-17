@@ -6,7 +6,7 @@
 import * as THREE from 'three'
 import { ball, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, SWING_OPEN, hangingPipe, holePanel, movable, paintPanel, pipeHook, rectPoly, ellipsePoly, type AssetDef, type Hole, type Poly, type StyleTag, type SurfaceDef } from '../kit'
-import { mesh, noOutlineDeep, type V3 } from '../geo'
+import { glassPane, lit, mesh, noOutlineDeep, type V3 } from '../geo'
 import { I, J, M, N, R } from '../packkit'
 
 type P2 = [number, number]
@@ -188,20 +188,6 @@ export function hollow(w: number, h: number, d: number, color: string, at: { x?:
   g.add(rbox(w - t * 2 + 0.02, t, d, color, { x, y, z }, 0.4))
   g.add(rbox(w - t * 2 + 0.02, h - t * 2 + 0.02, t, inner, { x, y: y + t, z: z - d / 2 + t / 2 }, 0.3))
   return g
-}
-
-/** 自发光的小件 */
-function lit<T extends THREE.Mesh>(m: T, color: string, k = 0.8) {
-  m.material = toon(color, { emissive: k })
-  m.userData.noOutline = true
-  return m
-}
-
-/** 透明玻璃 */
-function glass(w: number, h: number, t: number, at: { x?: number; y: number; z: number }) {
-  const m = rbox(w, h, t, C.glass, at, 0.2)
-  m.material = toon(C.glass, { transparent: 0.32 })
-  return m
 }
 
 /**
@@ -1847,7 +1833,7 @@ function hutch(p: string[]) {
     for (const t of [-1, 1]) dg.add(rbox(3.4, 94.6, 1.6, body, { x: t * 30.6, y: 3.2 }, 0.5))
     dg.add(rbox(1.6, 94.6, 1.4, body, { y: 3.2 }, 0.4))
     dg.add(rbox(58, 1.6, 1.4, body, { y: 50 }, 0.4))
-    dg.add(glass(58, 94.6, 0.4, { y: 3.2, z: 0 }))
+    dg.add(glassPane(58, 94.6, 0.4, { y: 3.2, z: 0 }))
     dg.add(ball(1.2, FH.black, { x: -s * 28, y: 50, z: 1.6 }))
     dg.position.set(x, 91.4, 6.9)
     g.add(swingDoor([dg], x + s * 32.3, 6.1, s < 0 ? 'left' : 'right'))
@@ -2104,7 +2090,7 @@ function ironLanternLamp(p: string[]) {
   g.add(rbox(22, 2, 22, metal, { y: y0 }, 0.5))
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(1.6, 28, 1.6, metal, { x: sx * 9.6, y: y0 + 2, z: sz * 9.6 }, 0.3))
   for (const [x, z, ry] of [[0, 9.6, 0], [0, -9.6, 0], [9.6, 0, Math.PI / 2], [-9.6, 0, Math.PI / 2]] as number[][]) {
-    const gl = glass(17.6, 26, 0.4, { x, y: y0 + 2, z })
+    const gl = glassPane(17.6, 26, 0.4, { x, y: y0 + 2, z })
     gl.rotation.y = ry
     g.add(gl)
   }

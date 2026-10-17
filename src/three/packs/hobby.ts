@@ -5,7 +5,7 @@ import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, ellipsePoly, glow, rectPoly, rng, shell, slab, type AssetCategory, type AssetDef, type Poly } from '../kit'
 import { hollow, swingDoor } from './styles-world'
-import { P, PI, noOutline, type V3 } from '../geo'
+import { P, PI, ghostOutlined, litOutlined, noOutline, type V3 } from '../geo'
 import { I, J, M, N, PROP, R, type PalFlat } from '../packkit'
 
 const MIR = '#cfdfe9'
@@ -41,18 +41,6 @@ function def(
 }
 
 // ---------- 小工具 ----------
-
-function lit<T extends THREE.Mesh>(m: T, color: string, k = 0.5): T {
-  m.material = toon(color, { emissive: k })
-  return m
-}
-
-/** 半透明（玻璃、亚克力罩），不描边 */
-function ghost<T extends THREE.Mesh>(m: T, color: string, a = 0.35): T {
-  m.material = toon(color, { transparent: a })
-  m.castShadow = false
-  return m
-}
 
 /** 沿 x 的横圆柱，给中心 */
 const cylX = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 24) => P(cyl(r, r, len, color, {}, seg), x, y, z, 0, 0, PI / 2)
@@ -655,8 +643,8 @@ function bodyScale(p: string[]) {
   const g = new THREE.Group()
   g.add(rbox(29, 1.2, 29, base, { y: 0 }, 0.5))
   g.add(rbox(30, 1.0, 30, glass, { y: 1.1 }, 0.4))
-  g.add(noOutline(lit(rbox(8, 0.5, 3, '#3a3d44', { y: 1.9, z: 10 }, 0.15), '#3a3d44', 0.1)))
-  g.add(noOutline(lit(rbox(5, 0.3, 1.6, disp, { y: 2.2, z: 10 }, 0.1), disp, 0.7)))
+  g.add(noOutline(litOutlined(rbox(8, 0.5, 3, '#3a3d44', { y: 1.9, z: 10 }, 0.15), '#3a3d44', 0.1)))
+  g.add(noOutline(litOutlined(rbox(5, 0.3, 1.6, disp, { y: 2.2, z: 10 }, 0.1), disp, 0.7)))
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(noOutline(rbox(6, 0.4, 9, CHROME, { x: sx * 7.5, y: 1.95, z: sz * 6.5 - 1 }, 0.15)))
   return g
 }
@@ -1029,8 +1017,8 @@ function glassTea(p: string[]) {
   const [tea, glass, tag] = p
   const g = new THREE.Group()
   g.add(cyl(3.0, 2.95, 6.4, tea, { y: 0.6 }, 24))
-  g.add(ghost(cup(3.8, 3.4, 9.5, 0.4, glass), glass, 0.35))
-  g.add(ghost(cyl(3.3, 3.3, 0.5, glass, { y: 0.05 }, 24), glass, 0.4))
+  g.add(ghostOutlined(cup(3.8, 3.4, 9.5, 0.4, glass), glass, 0.35))
+  g.add(ghostOutlined(cyl(3.3, 3.3, 0.5, glass, { y: 0.05 }, 24), glass, 0.4))
   g.add(bar([2.6, 7.0, 0.4], [3.75, 9.5, 0.4], 0.06, '#f4f0e6', 4))
   g.add(bar([3.9, 9.5, 0.4], [3.85, 6.2, 0.4], 0.06, '#f4f0e6', 4))
   g.add(rbox(1.6, 2, 0.3, tag, { x: 3.85, y: 4.2, z: 0.4, ry: PI / 2 }, 0.1))
@@ -1114,7 +1102,7 @@ function teaTraySet(p: string[]) {
   g.add(torus(1.9, 0.45, pot, { x: tx - 4.6, y: y + 3.8, z: -3 }))
   // 公道杯
   g.add(cyl(2.0, 2.0, 3.6, BLACK_TEA, { x: -1.5, y: y + 0.4, z: 5 }, 20))
-  g.add(ghost(cup(2.6, 2.4, 6, 0.25, '#e4f4ff', { x: -1.5, y, z: 5 }), '#e4f4ff', 0.35))
+  g.add(ghostOutlined(cup(2.6, 2.4, 6, 0.25, '#e4f4ff', { x: -1.5, y, z: 5 }), '#e4f4ff', 0.35))
   // 品茗杯 ×4
   for (const [x, z] of [[5, -4], [10.5, -4], [5, 3.5], [10.5, 3.5]] as const) {
     g.add(cyl(1.0, 1.1, 0.4, cupC, { x, y, z }, 16))
@@ -1330,7 +1318,7 @@ function printerResin(p: string[]) {
   g.add(rbox(12, 1, 9, CHROME, { y: 26.6, z: 1 }, 0.3))
   g.add(cyl(2, 1.3, 4, resin, { y: 22.6, z: 1 }, 16))
   for (const dx of [-0.8, 0.8]) g.add(cyl(0.12, 0.12, 2, resin, { x: dx, y: 20.6, z: 1 }, 6))
-  g.add(ghost(rbox(21, 30.5, 21, cover, { y: 11.5 }, 1.5), cover, 0.45))
+  g.add(ghostOutlined(rbox(21, 30.5, 21, cover, { y: 11.5 }, 1.5), cover, 0.45))
   return g
 }
 
@@ -1338,7 +1326,7 @@ function printerBox(p: string[]) {
   const [body, acc, glass] = p
   const g = new THREE.Group()
   g.add(shell(38, 46, 38, 1.5, body, { top: false, front: [{ kind: 'rect', x: 0, y: 7, w: 32, h: 35, r: 1.5 }] }))
-  g.add(ghost(rbox(33, 36, 0.6, glass, { y: 6.5, z: 19.4 }, 0.3), glass, 0.3))
+  g.add(ghostOutlined(rbox(33, 36, 0.6, glass, { y: 6.5, z: 19.4 }, 0.3), glass, 0.3))
   g.add(rbox(1, 8, 0.6, acc, { x: 14, y: 20, z: 19.9 }, 0.3))
   g.add(glow(7, 3, SCREEN, { x: -12, y: 2, z: 19.2 }, 0.5))
   // 内部
@@ -1352,11 +1340,11 @@ function printerBox(p: string[]) {
   g.add(rbox(31, 1.6, 2.4, shade(body, -0.1), { y: 39.2, z: 2 }, 0.4))
   g.add(rbox(6, 6, 6, acc, { x: -3, y: 34.5, z: 4.5 }, 0.8))
   g.add(cyl(0.4, 0.1, 1, '#d9b25a', { x: -3, y: 33.5, z: 4.5 }, 8))
-  g.add(ghost(rbox(38, 1, 38, glass, { y: 46 }, 0.4), glass, 0.3))
+  g.add(ghostOutlined(rbox(38, 1, 38, glass, { y: 46 }, 0.4), glass, 0.3))
   // 顶部多色料盒
   g.add(rbox(36, 6, 28, body, { y: 47, z: -3 }, 1.2))
   FIL_COLORS.slice(0, 4).forEach((c, i) => g.add(cylZ(4.2, 5.5, c, -12 + i * 8, 53, -3, 24)))
-  g.add(ghost(rbox(36, 6, 28, glass, { y: 53, z: -3 }, 1.2), glass, 0.35))
+  g.add(ghostOutlined(rbox(36, 6, 28, glass, { y: 53, z: -3 }, 1.2), glass, 0.35))
   return g
 }
 
@@ -1413,7 +1401,7 @@ function fighter(p: string[]) {
   const pl = new THREE.Group()
   pl.add(P(capsule(1.5, 17, body), -0.5, 0, 0, 0, 0, PI / 2))
   pl.add(P(cyl(0.15, 1.5, 5, body, {}, 16), 11.5, 0, 0, 0, 0, -PI / 2))
-  pl.add(ghost(ball(1.3, '#9fd3ff', { x: 6.5, y: 1.2 }, [2.4, 0.9, 0.9]), '#9fd3ff', 0.7))
+  pl.add(ghostOutlined(ball(1.3, '#9fd3ff', { x: 6.5, y: 1.2 }, [2.4, 0.9, 0.9]), '#9fd3ff', 0.7))
   pl.add(wings([[4, 1], [-8.5, 1], [-8.5, 9], [-6.5, 9]], 0.45, body, -0.4))
   for (const s of [-1, 1]) {
     pl.add(P(finXY([[-5.5, 0.8], [-9.5, 0.8], [-10.5, 6], [-8.6, 6]], 0.35, acc), 0, 0, s * 1.6, s * 0.3, 0, 0))
@@ -1452,7 +1440,7 @@ function helicopter(p: string[]) {
   const [body, acc, base] = p
   const pl = new THREE.Group()
   pl.add(ball(4, body, {}, [1.5, 1, 1.05]))
-  pl.add(ghost(ball(3.2, '#9fd3ff', { x: 3, y: 0.7 }, [1, 0.8, 0.95]), '#9fd3ff', 0.7))
+  pl.add(ghostOutlined(ball(3.2, '#9fd3ff', { x: 3, y: 0.7 }, [1, 0.8, 0.95]), '#9fd3ff', 0.7))
   pl.add(P(cyl(0.6, 1.4, 12, body, {}, 14), -11, 0.6, 0, 0, 0, PI / 2))
   pl.add(finXY([[-15.5, 0.5], [-17.4, 0.5], [-18.4, 5], [-16.9, 5]], 0.4, acc))
   pl.add(P(rbox(0.3, 4.4, 0.7, '#3a3a3c', {}, 0.1), -17.4, 3.6, 0.7, 0, 0, 0.5))
@@ -1483,7 +1471,7 @@ function drone(p: string[]) {
       g.add(cyl(1.3, 1.3, 1.8, '#3a3d44', { x: ex, y: 4.4, z: ez }, 14))
       g.add(cyl(0.3, 0.3, 0.8, CHROME, { x: ex, y: 6.2, z: ez }, 8))
       g.add(P(rbox(9, 0.2, 0.9, prop, {}, 0.1), ex, 6.8, ez, 0, sx * sz * 0.6 + 0.3, 0))
-      g.add(noOutline(lit(ball(0.35, sz > 0 ? '#ff6b6b' : '#7fffb2', { x: ex, y: 4.4, z: ez + sz * 1.2 }), sz > 0 ? '#ff6b6b' : '#7fffb2', 0.8)))
+      g.add(noOutline(litOutlined(ball(0.35, sz > 0 ? '#ff6b6b' : '#7fffb2', { x: ex, y: 4.4, z: ez + sz * 1.2 }), sz > 0 ? '#ff6b6b' : '#7fffb2', 0.8)))
     }
   g.add(cyl(0.5, 0.5, 1, '#3a3d44', { y: 2.5, z: 4.5 }, 8))
   g.add(ball(1.3, '#3a3d44', { y: 1.8, z: 4.5 }))
@@ -1704,7 +1692,7 @@ function gunpla(p: string[], k = 1) {
   g.add(rbox(5.4, 3.8, 3.2, sec, { y: 11.8 }, 0.6))
   g.add(rbox(1.2, 1, 1.2, joint, { y: 15.5 }, 0.3))
   g.add(rbox(1.8, 1.8, 1.9, main, { y: 15.8 }, 0.4))
-  g.add(noOutline(lit(rbox(1.4, 0.4, 0.3, '#7fffb2', { y: 16.6, z: 1.05 }, 0.1), '#7fffb2', 0.8)))
+  g.add(noOutline(litOutlined(rbox(1.4, 0.4, 0.3, '#7fffb2', { y: 16.6, z: 1.05 }, 0.1), '#7fffb2', 0.8)))
   g.add(rbox(0.5, 0.5, 0.4, acc, { y: 17.2, z: 0.85 }, 0.15))
   for (const s of [-1, 1]) g.add(P(rbox(0.25, 2.2, 0.3, acc, {}, 0.1), s * 0.75, 17.9, 0.8, 0, 0, -s * 0.9))
   g.add(rbox(3.4, 3, 1.6, sec, { y: 12.2, z: -2.3 }, 0.4))
@@ -1722,7 +1710,7 @@ function displayCase(p: string[]) {
   g.add(rbox(30, 4, 22, base, {}, 0.8))
   g.add(noOutline(rbox(8, 1.6, 0.4, '#d9b25a', { y: 1.2, z: 11.1 }, 0.15)))
   g.add(P(gunpla([main, shade(main, -0.25), acc], 1.25), 0, 4, -0.5))
-  g.add(ghost(rbox(28, 30.5, 20, '#dff0ff', { y: 3.7 }, 0.6), '#dff0ff', 0.25))
+  g.add(ghostOutlined(rbox(28, 30.5, 20, '#dff0ff', { y: 3.7 }, 0.6), '#dff0ff', 0.25))
   g.add(shine(-7, 24, 14, 10.45))
   return g
 }
@@ -1954,7 +1942,7 @@ function keyboard(p: string[]) {
     if (![0, 1, 3, 4, 5].includes(i % 7)) continue
     g.add(rbox(1.3, 1.3, 8, '#222326', { x: -43 + kw * (i + 1), y: 83.2, z: 6.1 }, 0.2))
   }
-  g.add(noOutline(lit(rbox(14, 0.4, 5, SCREEN, { y: 82.9, z: -8 }, 0.1), SCREEN, 0.5)))
+  g.add(noOutline(litOutlined(rbox(14, 0.4, 5, SCREEN, { y: 82.9, z: -8 }, 0.1), SCREEN, 0.5)))
   for (const s of [-1, 1]) g.add(noOutline(rbox(12, 0.4, 7, '#3a3a3c', { x: s * 38, y: 82.9, z: -7 }, 0.2)))
   for (let i = 0; i < 6; i++) g.add(cyl(0.8, 0.8, 1, i % 3 ? M.silver : acc, { x: -26 + i * 3, y: 82.6, z: -8 }, 12))
   for (let i = 0; i < 6; i++) g.add(rbox(1.6, 0.8, 1.2, acc, { x: 12 + i * 2.6, y: 82.7, z: -8 }, 0.2))
@@ -2440,7 +2428,7 @@ function tableRound(p: string[]) {
   const m = new THREE.Group()
   m.add(torus(9.4, 0.7, frame))
   m.add(cylZ(9.6, 0.8, frame, 0, 0, -0.75, 32))
-  m.add(lit(noOutline(cylZ(9.2, 0.6, MIR, 0, 0, 0, 32)), MIR, 0.18))
+  m.add(litOutlined(noOutline(cylZ(9.2, 0.6, MIR, 0, 0, 0, 32)), MIR, 0.18))
   m.add(shine(-2.5, 2.5, 11, 0.75))
   P(m, 0, 12.5, 0, -0.06, 0, 0)
   g.add(m)
@@ -2456,8 +2444,8 @@ function tableSwivel(p: string[]) {
   for (const s of [-1, 1]) g.add(cyl(0.4, 0.4, 1.1, frame, { y: 24 + s * 9.55 - 0.55 }, 8))
   const d = new THREE.Group()
   d.add(cylZ(9, 1, rim, 0, 0, 0, 32))
-  d.add(lit(noOutline(cylZ(8.6, 0.6, MIR, 0, 0, 0.4, 32)), MIR, 0.18))
-  d.add(lit(noOutline(cylZ(8.6, 0.6, '#dde9f2', 0, 0, -0.4, 32)), '#dde9f2', 0.18))
+  d.add(litOutlined(noOutline(cylZ(8.6, 0.6, MIR, 0, 0, 0.4, 32)), MIR, 0.18))
+  d.add(litOutlined(noOutline(cylZ(8.6, 0.6, '#dde9f2', 0, 0, -0.4, 32)), '#dde9f2', 0.18))
   d.add(shine(-2.4, 2.4, 10, 1.15))
   P(d, 0, 24, 0, 0, 0.55, 0)
   g.add(d)
@@ -2472,7 +2460,7 @@ function tableRing(p: string[]) {
   g.add(rbox(3, 10, 2, body, { y: 2 }, 0.5))
   const h = new THREE.Group()
   h.add(cylZ(11.7, 2, body, 0, 0, -0.9, 36))
-  h.add(lit(noOutline(cylZ(10, 0.6, MIR, 0, 0, 0.1, 32)), MIR, 0.18))
+  h.add(litOutlined(noOutline(cylZ(10, 0.6, MIR, 0, 0, 0.1, 32)), MIR, 0.18))
   const ring = torus(10.8, 0.9, C.lamp, { z: 0.6 })
   ring.material = toon(C.lamp, { emissive: 0.8 })
   h.add(noOutline(ring))
@@ -2572,13 +2560,13 @@ function wallCabinet(p: string[]) {
   for (const s of [-1, 1]) g.add(rbox(1.5, 11, 12.4, body, { x: s * 29.25, y: y + 1.4, z: -1.3 }, 0.4))
   g.add(hollow(60, 58, 12.4, body, { y: y + 12, z: -1.3 }, 1.2))
   for (const sy of [31, 50]) g.add(rbox(57.4, 1, 11, shade(body, 0.05), { y: y + sy, z: -0.8 }, 0.2))
-  g.add(noOutline(lit(rbox(50, 0.4, 2, C.lamp, { y: y + 11.7, z: 2 }, 0.1), C.lamp, 0.8)))
+  g.add(noOutline(litOutlined(rbox(50, 0.4, 2, C.lamp, { y: y + 11.7, z: 2 }, 0.1), C.lamp, 0.8)))
   // 两扇镜门，铰链在外侧
   for (const s of [-1, 1]) {
     const parts = [rbox(29.6, 56, 1.5, door, { x: s * 14.9, y: y + 13, z: 5.65 }, 0.5), P(mirrorGlass(rrOutline(new THREE.Shape(), 26.6, 52, 1, 0), -4, 34, 24), s * 14.9, y + 15, 6.65)]
     g.add(swingDoor(parts, s * 29.7, 6.4, s < 0 ? 'left' : 'right'))
   }
-  g.add(noOutline(lit(rbox(40, 0.6, 1, acc, { y: y + 69.4, z: 3 }, 0.2), acc, 0.6)))
+  g.add(noOutline(litOutlined(rbox(40, 0.6, 1, acc, { y: y + 69.4, z: 3 }, 0.2), acc)))
   return g
 }
 

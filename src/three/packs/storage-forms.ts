@@ -10,7 +10,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, glow, rectPoly, rng, slab, type AssetCategory, type AssetDef, type FormTag, type Poly } from '../kit'
-import { G, P, PI, UP, box3, type V3 } from '../geo'
+import { G, P, PI, UP, box3, ghost, type V3 } from '../geo'
 import { I, J, M, N, R, type Build, type Dims, type Pal } from '../packkit'
 
 const STEEL = '#c3c7cc'
@@ -123,14 +123,6 @@ function ring(rO: number, rI: number, h: number, color: string, at: { x?: number
   m.position.set(at.x ?? 0, at.y ?? 0, at.z ?? 0)
   m.castShadow = true
   m.receiveShadow = true
-  return m
-}
-
-/** 半透明（玻璃、亚克力），不描边 */
-function ghost<T extends THREE.Mesh>(m: T, color: string, a = 0.4): T {
-  m.material = toon(color, { transparent: a })
-  m.castShadow = false
-  m.userData.noOutline = true
   return m
 }
 
@@ -1712,7 +1704,7 @@ function maskBox(p: string[]) {
 function swabCase(p: string[]) {
   const [, sec] = p
   const g = new THREE.Group()
-  g.add(ghost(cyl(3.8, 3.8, 8, C.glass, {}, 24), C.glass, 0.35))
+  g.add(ghost(cyl(3.8, 3.8, 8, C.glass, {}, 24), C.glass))
   g.add(cyl(3.9, 3.9, 0.6, sec, {}, 24))
   g.add(puck(4, 1.4, sec, { y: 8 }))
   const r = rng(7)

@@ -5,7 +5,7 @@ import * as THREE from 'three'
 import { ball, capsule, cup, cyl, face, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, S, ellipsePoly, glow, holePanel, legs, rectPoly, rng, shell, type AssetDef, type Fx, type StyleTag, paintPanel, paintLandscape, paintFlower, paintAbstract } from '../kit'
 import { drawerLv, drawerOf, hollow, slideDoor, swingDoor } from './styles-world'
-import { PI, noOutline, type V3 } from '../geo'
+import { PI, clearMat, lit, noOutline, type V3 } from '../geo'
 
 const { nordic: N, modern: M, japanese: J, industrial: I, retro: R } = S
 
@@ -25,17 +25,6 @@ function sty(groups: Partial<Record<StyleTag, string[][]>>) {
 
 const SOIL = '#8b6a4f'
 
-/** 发光件（灯泡、指示灯、火苗） */
-function lit(m: THREE.Mesh, color: string, k = 0.7) {
-  m.material = toon(color, { emissive: k })
-  m.userData.noOutline = true
-  return m
-}
-/** 半透明件（玻璃、水、雾） */
-function clear(m: THREE.Mesh, color: string, a = 0.35) {
-  m.material = toon(color, { transparent: a })
-  return m
-}
 /** 两点之间的一根杆（任意方向） */
 function stick(a: V3, b: V3, r: number, color: string, seg = 8) {
   const va = new THREE.Vector3(...a)
@@ -206,7 +195,7 @@ function butsudan(p: string[]) {
   // 吊灯笼
   for (const s of [-1, 1]) {
     g.add(stick([s * 13, 56, -14], [s * 13, 46, -14], 0.25, gold, 4))
-    g.add(lit(ball(2, '#ffd27a', { x: s * 13, y: 44, z: -14 }, [1, 1.3, 1]), '#ffd27a', 0.6))
+    g.add(lit(ball(2, '#ffd27a', { x: s * 13, y: 44, z: -14 }, [1, 1.3, 1]), '#ffd27a'))
   }
   // 前面的香炉、蜡烛、花、おりん
   g.add(cup(3.4, 2.8, 3.5, 0.5, J.sumi, { y: 6, z: 0 }))
@@ -281,7 +270,7 @@ function ikebana(p: string[]) {
   g.add(rbox(38, 3, 38, main, { y: 55 }, 1))
   // 水盘
   g.add(cup(14, 12, 5, 1, vase, { y: 58 }))
-  g.add(noOutline(clear(cyl(12.2, 12.2, 0.4, C.glass, { y: 61.4 }), C.glass, 0.6)))
+  g.add(noOutline(clearMat(cyl(12.2, 12.2, 0.4, C.glass, { y: 61.4 }), C.glass, 0.6)))
   // 天地人
   const base: V3 = [2, 61, 0]
   const lines: [V3, string, number][] = [
@@ -666,7 +655,7 @@ function petBowl(p: string[]) {
     const r = rand() * 4
     g.add(ball(1.1, '#c98b52', { x: -9.5 + Math.cos(a) * r, y: 5 + rand() * 1.5, z: Math.sin(a) * r }, [1, 0.7, 1]))
   }
-  g.add(noOutline(clear(cyl(5.8, 5.8, 0.3, C.sky, { x: 9.5, y: 7 }), C.sky, 0.6)))
+  g.add(noOutline(clearMat(cyl(5.8, 5.8, 0.3, C.sky, { x: 9.5, y: 7 }), C.sky, 0.6)))
   // 爪印
   g.add(noOutline(ball(1.4, C.pink, { y: 1.5, z: 10.2 }, [1, 1, 0.25])))
   for (let k = 0; k < 3; k++) g.add(noOutline(ball(0.6, C.pink, { x: -1.2 + k * 1.2, y: 2.7 - (k % 2) * 0.3, z: 10.1 }, [1, 1, 0.3])))
@@ -743,7 +732,7 @@ function hamsterCage(p: string[]) {
   hut.position.set(14, 4.5, -6)
   g.add(hut)
   g.add(rbox(10, 1.4, 8, '#f3dfa8', { x: 14, y: 5.3, z: -6 }, 0.6))
-  g.add(clear(capsule(1.8, 9, C.sky, { x: 4, y: 18, z: -14.6 }), C.sky, 0.5))
+  g.add(clearMat(capsule(1.8, 9, C.sky, { x: 4, y: 18, z: -14.6 }), C.sky, 0.5))
   g.add(stick([4, 18, -14.6], [4, 14, -13.6], 0.3, C.steel, 4))
   // 仓鼠
   const ham = '#ffd9a8'
@@ -1166,7 +1155,7 @@ function mopBucket(p: string[]) {
   const [main, sub] = p
   const g = new THREE.Group()
   g.add(cup(14, 12, 28, 1.4, main, { x: -4 }))
-  g.add(noOutline(clear(cyl(11.8, 11.8, 0.3, C.sky, { x: -4, y: 20 }), C.sky, 0.6)))
+  g.add(noOutline(clearMat(cyl(11.8, 11.8, 0.3, C.sky, { x: -4, y: 20 }), C.sky, 0.6)))
   g.add(torus(14.2, 0.6, J.sumi, { x: -4, y: 27, rx: -1.2 }, PI))
   for (const s of [-1, 1]) g.add(ball(1.2, sub, { x: -4 + s * 14.2, y: 27 }))
   g.add(ball(9, C.white, { x: -4, y: 17 }, [1, 0.6, 1]))
@@ -1422,7 +1411,7 @@ function stickVac(p: string[]) {
   g.add(ball(2.2, J.sumi, { y: 8, z: 4 }))
   g.add(stick([0, 8, 4], [0, 74, 1], 1.4, C.steel))
   g.add(rbox(9, 20, 11, main, { y: 74, z: -1 }, 3.5))
-  g.add(clear(cyl(3.6, 3.6, 13, C.glass, { y: 76, z: 7.6 }, 16), C.glass, 0.5))
+  g.add(clearMat(cyl(3.6, 3.6, 13, C.glass, { y: 76, z: 7.6 }, 16), C.glass, 0.5))
   g.add(cyl(3.8, 3.8, 1.5, acc, { y: 89, z: 7.6 }, 16))
   g.add(stick([0, 93, -2], [0, 106, -4], 1.6, sub))
   g.add(ball(2, sub, { y: 106, z: -4 }))
@@ -1441,11 +1430,11 @@ function waterDispenser(p: string[]) {
   g.add(rbox(20, 8, 1, sub, { y: 72, z: 16.2 }, 1))
   g.add(lit(ball(0.6, '#7fe0a8', { x: 6, y: 76, z: 16.8 }), '#7fe0a8', 0.8))
   g.add(cyl(7, 7, 2, sub, { y: 92 }, 20))
-  const b1 = clear(cyl(12, 5, 5, C.sky, { y: 94 }, 24), C.sky, 0.4)
-  const b2 = clear(cyl(13, 13, 24, C.sky, { y: 99 }, 24), C.sky, 0.4)
-  const b3 = clear(puck(13, 6, C.sky, { y: 120 }), C.sky, 0.4)
+  const b1 = clearMat(cyl(12, 5, 5, C.sky, { y: 94 }, 24), C.sky, 0.4)
+  const b2 = clearMat(cyl(13, 13, 24, C.sky, { y: 99 }, 24), C.sky, 0.4)
+  const b3 = clearMat(puck(13, 6, C.sky, { y: 120 }), C.sky, 0.4)
   g.add(b1, b2, b3)
-  g.add(clear(cyl(12.2, 12.2, 16, '#8ec9f2', { y: 99.5 }, 24), '#8ec9f2', 0.45))
+  g.add(clearMat(cyl(12.2, 12.2, 16, '#8ec9f2', { y: 99.5 }, 24), '#8ec9f2', 0.45))
   return g
 }
 
@@ -1624,7 +1613,7 @@ function curtain(p: string[]) {
     g.add(ball(2.4, rodC, { x: s * 99.5, y: ry }))
     g.add(rbox(2, 3, 5.5, rodC, { x: s * 90, y: ry - 1.5, z: -3.25 }, 0.4))
   }
-  g.add(clear(rbox(110, 200, 0.6, C.white, { y: y0 + 10, z: -4.6 }, 0.3), C.white, 0.45))
+  g.add(clearMat(rbox(110, 200, 0.6, C.white, { y: y0 + 10, z: -4.6 }, 0.3), C.white, 0.45))
   for (const s of [-1, 1]) {
     for (let i = 0; i < 6; i++) {
       const x = s * (56 + i * 7.6)

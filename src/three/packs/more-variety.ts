@@ -7,9 +7,9 @@
 //   - 装饰画按画框分系列、按尺寸分规格；同一系列里每组配色对应一幅不同的画（配色名里的风格就是画的风格）。
 
 import * as THREE from 'three'
-import { ball, cup, cyl, rbox, shade, toon, torus, tray } from '../toon'
+import { ball, cup, cyl, rbox, shade, torus, tray } from '../toon'
 import { C, G, holePanel, paintAbstract, paintFlower, paintLandscape, paintPanel, rng, shell, type AssetCategory, type AssetDef, type StyleTag } from '../kit'
-import { PI, mesh, noOutlineDeep, type V3 } from '../geo'
+import { PI, clearDeep, mesh, noOutlineDeep, type V3 } from '../geo'
 import { I, J, M, N, R, type Build, type Pal } from '../packkit'
 
 type Draw = (g: CanvasRenderingContext2D, W: number, H: number) => void
@@ -22,13 +22,6 @@ const CHROME = '#cfd3d8'
 // 小工具
 // ======================================================================
 
-/** 半透明件（亚克力板） */
-function clear<T extends THREE.Object3D>(o: T, color: string, a = 0.3): T {
-  o.traverse((c) => {
-    if ((c as THREE.Mesh).isMesh) (c as THREE.Mesh).material = toon(color, { transparent: a })
-  })
-  return o
-}
 /** 两点之间的一根杆（可以两端不同粗：圆锥） */
 function bar(a: V3, b: V3, r: number, color: string, seg = 8, r2 = r) {
   const va = new THREE.Vector3(...a)
@@ -1355,9 +1348,9 @@ function canvasFrame(w: number, h: number, side: string, key: string, draw: Draw
 /** 亚克力夹：两层透明板夹住画，四角金属钉把它撑离墙面 */
 function acrylicFrame(w: number, h: number, metal: string, key: string, draw: Draw) {
   const g = new THREE.Group()
-  g.add(clear(rbox(w, h, 0.4, '#eef6fa', { z: 1.8 }, 0.2), '#eef6fa', 0.25))
+  g.add(clearDeep(rbox(w, h, 0.4, '#eef6fa', { z: 1.8 }, 0.2), '#eef6fa', 0.25))
   g.add(paintPanel(w - 4, h - 4, key, draw, { y: 2, z: 2.3 }))
-  g.add(clear(rbox(w, h, 0.4, '#eef6fa', { z: 2.8 }, 0.2), '#eef6fa', 0.25))
+  g.add(clearDeep(rbox(w, h, 0.4, '#eef6fa', { z: 2.8 }, 0.2), '#eef6fa', 0.25))
   for (const sx of [-1, 1])
     for (const y of [2.2, h - 2.2]) {
       g.add(cylZ(0.8, 1.6, metal, sx * (w / 2 - 2.2), y, 0, 12))

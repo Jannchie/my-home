@@ -14,7 +14,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, face, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, glow, paintAbstract, paintFlower, paintLandscape, paintPanel, rectPoly, rng, shell, type AssetCategory, type AssetDef, type Fx } from '../kit'
-import { PI, noOutlineDeep, type V3 } from '../geo'
+import { PI, clearDeep, noOutlineDeep, type V3 } from '../geo'
 import { I, J, M, N, R, type Build, type Pal } from '../packkit'
 
 const GOLD = '#e3b549'
@@ -35,17 +35,10 @@ const SUMI = '#2f2b2a'
 // ======================================================================
 
 /** 发光件（灯泡、彩灯、火苗、屏幕） */
-function lit<T extends THREE.Object3D>(o: T, color: string, k = 0.8): T {
+function litAll<T extends THREE.Object3D>(o: T, color: string, k = 0.8): T {
   o.traverse((c) => {
     if ((c as THREE.Mesh).isMesh) (c as THREE.Mesh).material = toon(color, { emissive: k })
     c.userData.noOutline = true
-  })
-  return o
-}
-/** 半透明件（玻璃、水箱）：透明材质不描边 */
-function clear<T extends THREE.Object3D>(o: T, color: string, a = 0.4): T {
-  o.traverse((c) => {
-    if ((c as THREE.Mesh).isMesh) (c as THREE.Mesh).material = toon(color, { transparent: a })
   })
   return o
 }
@@ -419,7 +412,7 @@ function byobu3(w: number, h: number, gold: string, frameC: string) {
 }
 /** 雪洞（座灯）：细柄 + 发光灯罩 */
 function bonbori(h: number) {
-  return G(cyl(1.6, 2, 0.8, SUMI, {}, 12), cyl(0.3, 0.3, h * 0.55, SUMI, { y: 0.8 }, 6), lit(cyl(2, 1.6, h * 0.4, '#fff2b8', { y: h * 0.55 }, 12), '#fff2b8', 0.6), cyl(0.6, 2.1, h * 0.08, SUMI, { y: h * 0.95 - 0.1 }, 12))
+  return G(cyl(1.6, 2, 0.8, SUMI, {}, 12), cyl(0.3, 0.3, h * 0.55, SUMI, { y: 0.8 }, 6), litAll(cyl(2, 1.6, h * 0.4, '#fff2b8', { y: h * 0.55 }, 12), '#fff2b8', 0.6), cyl(0.6, 2.1, h * 0.08, SUMI, { y: h * 0.95 - 0.1 }, 12))
 }
 
 /** 雏人形·五段饰 */
@@ -618,13 +611,13 @@ function furinBody(p: string[], top: V3) {
   const bt = y - 4
   g.add(bar([x, y, z], [x, bt, z], 0.08, J.shu))
   const dome = lathe([[0, 0], [4.3, 0], [4.2, 1.5], [3.8, 3.4], [2.5, 4.6], [0.6, 5], [0, 5.05], [0, 4.6], [2.3, 4.2], [3.4, 3.2], [3.8, 1.5], [3.9, 0]], glassC, 24)
-  clear(dome, glassC, 0.45)
+  clearDeep(dome, glassC, 0.45)
   dome.position.set(x, bt - 5, z)
   g.add(dome)
   g.add(noOutlineDeep(torus(4.1, 0.2, fish, { x, y: bt - 4.9, z, rx: PI / 2 })))
   for (const [a, yy] of [[0.3, 2.2], [2.2, 1.8], [-1.6, 2.8]]) g.add(noOutlineDeep(ball(0.8, fish, { x: x + Math.sin(a) * 4.05, y: bt - 5 + yy, z: z + Math.cos(a) * 4.05, ry: a }, [0.4, 0.6, 1.3])))
   g.add(bar([x, bt - 0.5, z], [x, bt - 7.5, z], 0.06, '#ffffff'))
-  g.add(clear(ball(0.45, glassC, { x, y: bt - 6.6, z }), glassC, 0.6))
+  g.add(clearDeep(ball(0.45, glassC, { x, y: bt - 6.6, z }), glassC, 0.6))
   g.add(bar([x, bt - 7.5, z], [x, bt - 10, z], 0.06, '#ffffff'))
   g.add(rbox(3.6, 12, 0.2, paper, { x, y: bt - 22, z }, 0.05))
   return g
@@ -847,7 +840,7 @@ function butsudan(p: string[]) {
     g.add(cup(1.2, 1, 5, 0.2, metal, { x: s * 9, y: 11.5, z: -6.5 }))
     for (let k = 0; k < 3; k++) g.add(ball(1.2, k ? '#f2a0b4' : '#fbf8f0', { x: s * 9 + (k - 1) * 1.1, y: 17 + k * 0.6, z: -6.5 }))
     g.add(cyl(0.8, 1.2, 6, metal, { x: s * 13, y: 1.5, z: 4 }, 10))
-    g.add(lit(ball(0.6, FLAME, { x: s * 13, y: 8.2, z: 4 }, [1, 1.6, 1]), FLAME, 0.9))
+    g.add(litAll(ball(0.6, FLAME, { x: s * 13, y: 8.2, z: 4 }, [1, 1.6, 1]), FLAME, 0.9))
     // 打开的门
     g.add(rbox(1.2, 47, 17.5, wood, { x: s * 19.4, y: 3, z: 15 + 8.75 }, 0.3))
     g.add(noOutlineDeep(rbox(0.3, 42, 14, inner, { x: s * 18.65, y: 5.5, z: 15 + 8.75 }, 0.05)))
@@ -952,9 +945,9 @@ function xmasTree(p: string[]) {
     const y = 36 + t * 110
     const a = t * PI * 2 * 5
     const r = radiusAt(y) + 0.6
-    g.add(lit(ball(1.1, bulbs[i % 4], { x: Math.cos(a) * r, y, z: Math.sin(a) * r }), bulbs[i % 4], 0.9))
+    g.add(litAll(ball(1.1, bulbs[i % 4], { x: Math.cos(a) * r, y, z: Math.sin(a) * r }), bulbs[i % 4], 0.9))
   }
-  const star = lit(flat(starPts(8, 3.4), 1.6, GOLD, -0.8), GOLD, 0.7)
+  const star = litAll(flat(starPts(8, 3.4), 1.6, GOLD, -0.8), GOLD, 0.7)
   star.position.y = 162
   g.add(star)
   return g
@@ -1064,7 +1057,7 @@ function jackOLantern(p: string[]) {
   const piece = (pts: [number, number][], x: number, y: number) => {
     ray.set(new THREE.Vector3(x, cy + y, 40), new THREE.Vector3(0, 0, -1))
     const hit = ray.intersectObjects(body, false)[0]
-    const pg = G(lit(flat(pts, 1.4, glowC, -0.8), glowC, 0.9))
+    const pg = G(litAll(flat(pts, 1.4, glowC, -0.8), glowC, 0.9))
     if (hit?.face) {
       const n = hit.face.normal.clone().transformDirection(hit.object.matrixWorld)
       pg.position.copy(hit.point)
@@ -1122,7 +1115,7 @@ function cakeTier(p: string[]) {
   }
   for (const [x, , z] of CAKE_CANDLES) {
     g.add(cyl(0.35, 0.35, 6, candle, { x, y: CAKE_TOP, z }, 8))
-    g.add(lit(ball(0.45, FLAME, { x, y: CAKE_TOP + 6.6, z }, [1, 1.7, 1]), FLAME, 1))
+    g.add(litAll(ball(0.45, FLAME, { x, y: CAKE_TOP + 6.6, z }, [1, 1.7, 1]), FLAME, 1))
   }
   return g
 }
@@ -1274,7 +1267,7 @@ function ceramicHeater(p: string[]) {
   for (let k = 0; k < 7; k++) g.add(rbox(15.5, 0.9, 0.9, grille, { y: 8.6 + k * 2.4, z: 8.4 }, 0.3))
   g.add(noOutlineDeep(rbox(10, 1.6, 0.4, M.char, { y: 26, z: 8.05 }, 0.2)))
   g.add(cyl(1.2, 1.2, 1.2, accent, { x: 5, y: 30.8, z: 3 }, 12))
-  g.add(lit(ball(0.4, '#ff6a4a', { x: -6, y: 26.8, z: 8.3 }), '#ff6a4a', 1))
+  g.add(litAll(ball(0.4, '#ff6a4a', { x: -6, y: 26.8, z: 8.3 }), '#ff6a4a', 1))
   g.add(noOutlineDeep(rbox(9, 0.4, 3, shade(body, -0.25), { y: 30.62, z: -3 }, 0.2)))
   return g
 }
@@ -1341,7 +1334,7 @@ function hotCarpet(W: number, D: number): Build {
     }
     for (let i = -1; i <= 1; i++) for (let k = -1; k <= 1; k++) g.add(noOutlineDeep(rbox(16, t, 16, shade(main, -0.08), { x: i * (W / 4), y: 1.2, z: k * (D / 4), ry: PI / 4 }, 0.1)))
     g.add(rbox(12, 3, 7, ctrl, { x: W / 2 - 12, y: 1.2, z: D / 2 - 8 }, 1))
-    g.add(lit(ball(0.5, '#ff6a4a', { x: W / 2 - 15, y: 4.2, z: D / 2 - 6 }), '#ff6a4a', 1))
+    g.add(litAll(ball(0.5, '#ff6a4a', { x: W / 2 - 15, y: 4.2, z: D / 2 - 6 }), '#ff6a4a', 1))
     g.add(cyl(1.2, 1.2, 0.5, shade(ctrl, -0.2), { x: W / 2 - 10, y: 4.2, z: D / 2 - 8 }, 12))
     return g
   }
@@ -1379,8 +1372,8 @@ function humidifierTower(p: string[]) {
   const [body, tank, accent] = p
   const g = new THREE.Group()
   g.add(cyl(12, 12.5, 26, body, {}, 32))
-  g.add(clear(cup(11.8, 11.8, 22, 0.6, tank, { y: 26 }), tank, 0.35))
-  g.add(clear(cyl(11, 11, 14, '#9fd0ee', { y: 26.6 }, 28), '#9fd0ee', 0.45))
+  g.add(clearDeep(cup(11.8, 11.8, 22, 0.6, tank, { y: 26 }), tank, 0.35))
+  g.add(clearDeep(cyl(11, 11, 14, '#9fd0ee', { y: 26.6 }, 28), '#9fd0ee', 0.45))
   g.add(cyl(12, 12, 3, body, { y: 48 }, 32))
   g.add(cyl(3, 3.6, 3, shade(body, -0.12), { y: 51 }, 16))
   g.add(glow(6, 2, accent, { y: 17, z: 12.4 }, 0.8))
@@ -1404,8 +1397,8 @@ function humidifierSteam(p: string[]) {
 function steamerHand(p: string[]) {
   const [body, tank, accent] = p
   const g = new THREE.Group()
-  g.add(clear(cup(4.6, 4.8, 9, 0.5, tank), tank, 0.4))
-  g.add(clear(cyl(4, 4, 5, '#9fd0ee', { y: 0.5 }, 20), '#9fd0ee', 0.5))
+  g.add(clearDeep(cup(4.6, 4.8, 9, 0.5, tank), tank, 0.4))
+  g.add(clearDeep(cyl(4, 4, 5, '#9fd0ee', { y: 0.5 }, 20), '#9fd0ee', 0.5))
   g.add(cyl(4.8, 4.8, 1.2, body, { y: 9 }, 20))
   g.add(capsule(3, 8, body, { y: 9 }))
   g.add(rbox(10, 7, 10, body, { y: 18, z: 1.5 }, 3))
@@ -1618,7 +1611,7 @@ function pendulumClock(p: string[]) {
   g.add(torus(10.3, 0.7, metal, { y: 48, z: 6.4 }))
   g.add(paintDisc(10, `hashira|${dial}`, dialDraw(dial, SUMI, 'roman'), 0, 48, 6.15))
   g.add(clockHands(0, 48, 6.2, 8.5, SUMI))
-  g.add(clear(rbox(23, 31, 0.3, '#cfeeff', { y: 3.5, z: 5.4 }, 0.1), '#cfeeff', 0.3))
+  g.add(clearDeep(rbox(23, 31, 0.3, '#cfeeff', { y: 3.5, z: 5.4 }, 0.1), '#cfeeff', 0.3))
   g.add(rbox(2, 1.2, 5.4, metal, { y: 34.6, z: -2.3 }, 0.2))
   g.add(bar([0, 35, 0], [0, 13, 0], 0.3, metal))
   g.add(disc(3.6, metal, 0, 11, 0.8, 0.8))

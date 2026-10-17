@@ -8,7 +8,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, movable, paintPanel, rectPoly, rng, shell, type AssetCategory, type AssetDef, type Poly, type SurfaceDef } from '../kit'
-import { P, PI, noOutlineDeep, type V3 } from '../geo'
+import { P, PI, ghostDeep, lit, noOutlineDeep, type V3 } from '../geo'
 import { I, J, M, N, PROP, R, type PalFlat } from '../packkit'
 
 type Draw = (g: CanvasRenderingContext2D, W: number, H: number) => void
@@ -46,24 +46,6 @@ function def(id: string, name: string, category: AssetCategory, [w, d, h]: [numb
 // ======================================================================
 // 小工具
 // ======================================================================
-
-function lit<T extends THREE.Mesh>(m: T, color: string, k = 0.6): T {
-  m.material = toon(color, { emissive: k })
-  m.userData.noOutline = true
-  return m
-}
-
-/** 半透明（亚克力、玻璃），整组替换材质，不描边 */
-function ghost<T extends THREE.Object3D>(o: T, color: string, a = 0.35): T {
-  o.traverse((c) => {
-    const m = c as THREE.Mesh
-    if (m.isMesh) {
-      m.material = toon(color, { transparent: a })
-      m.castShadow = false
-    }
-  })
-  return o
-}
 
 /** 沿 x / z 的横圆柱，给中心 */
 const cylX = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 20) => P(cyl(r, r, len, color, {}, seg), x, y, z, 0, 0, PI / 2)
@@ -1072,11 +1054,11 @@ function partsBox(p: string[]) {
   const W = 19
   const D = 12
   const H = 3.2
-  g.add(ghost(tray(W, H, D, 0.25, tint, {}, 0.3), tint, 0.4))
+  g.add(ghostDeep(tray(W, H, D, 0.25, tint, {}, 0.3), tint, 0.4))
   const cw = (W - 0.5) / 6
   const cd = (D - 0.5) / 3
-  for (let i = 1; i < 6; i++) g.add(ghost(rbox(0.12, H - 0.3, D - 0.5, tint, { x: -W / 2 + 0.25 + cw * i, y: 0.2 }, 0.05), tint, 0.4))
-  for (let j = 1; j < 3; j++) g.add(ghost(rbox(W - 0.5, H - 0.3, 0.12, tint, { y: 0.2, z: -D / 2 + 0.25 + cd * j }, 0.05), tint, 0.4))
+  for (let i = 1; i < 6; i++) g.add(ghostDeep(rbox(0.12, H - 0.3, D - 0.5, tint, { x: -W / 2 + 0.25 + cw * i, y: 0.2 }, 0.05), tint, 0.4))
+  for (let j = 1; j < 3; j++) g.add(ghostDeep(rbox(W - 0.5, H - 0.3, 0.12, tint, { y: 0.2, z: -D / 2 + 0.25 + cd * j }, 0.05), tint, 0.4))
   const r = rng(17)
   for (let i = 0; i < 6; i++)
     for (let j = 0; j < 3; j++) {
@@ -1095,7 +1077,7 @@ function partsBox(p: string[]) {
         else g.add(noOutlineDeep(rbox(0.45, 0.35, 0.18, k % 2 ? CHIP : '#f2963a', { x, y, z, ry: r() * PI }, 0.05)))
       }
     }
-  g.add(ghost(rbox(W, 0.25, D, tint, { y: H }, 0.2), tint, 0.3))
+  g.add(ghostDeep(rbox(W, 0.25, D, tint, { y: H }, 0.2), tint, 0.3))
   for (const x of [-5, 5]) g.add(rbox(1.6, 1.4, 0.4, latch, { x, y: H - 0.9, z: D / 2 + 0.1 }, 0.15))
   g.add(rbox(W - 2, 0.6, 0.5, latch, { y: H - 0.2, z: -D / 2 - 0.15 }, 0.2))
   return fit(g)
@@ -1556,7 +1538,7 @@ function helpingHands(p: string[]) {
   g.add(chip(1.0, 1.0, 0.5, 11.01, 0.8, 6, 6))
   g.add(cyl(0.35, 0.35, 15.5, rodC, { y: 1.8, z: -3 }, 10))
   g.add(ball(0.6, rodC, { y: 17.3, z: -3 }))
-  const lens = G(torus(4.5, 0.35, rodC), ghost(P(cyl(4.3, 4.3, 0.25, GLASS, {}, 32), 0, 0, 0, PI / 2), GLASS, 0.35))
+  const lens = G(torus(4.5, 0.35, rodC), ghostDeep(P(cyl(4.3, 4.3, 0.25, GLASS, {}, 32), 0, 0, 0, PI / 2), GLASS, 0.35))
   lens.position.set(0, 17.8, 2.6)
   lens.rotation.x = -PI / 4
   g.add(lens)
@@ -1815,7 +1797,7 @@ function rotaryTool(p: string[]) {
     const c = ['#b5583a', '#f4f4f2', '#c9cdd2', '#3a7fd0'][Math.floor(r() * 4)]
     g.add(i % 2 ? cyl(0.45, 0.45, 0.8, c, { x, y: 1.0, z }, 12) : ball(0.4, c, { x, y: 1.4, z }))
   }
-  g.add(ghost(rbox(13, 0.25, 8, GLASS, { x: 1, y: 1.6, z: -7.5 }, 0.15), GLASS, 0.3))
+  g.add(ghostDeep(rbox(13, 0.25, 8, GLASS, { x: 1, y: 1.6, z: -7.5 }, 0.15), GLASS, 0.3))
   return fit(g)
 }
 
@@ -1918,7 +1900,7 @@ function magLamp(p: string[]) {
   g.add(rbox(2, 2, 3, head, { y: 29.6, z: -2.2 }, 0.4))
   g.add(P(torus(7.5, 1.6, head), 0, 30, 6, PI / 2))
   g.add(lit(P(torus(6.3, 0.4, glowC), 0, 28.9, 6, PI / 2), glowC, 0.95))
-  g.add(ghost(cyl(6.1, 6.1, 0.4, GLASS, { y: 29.7, z: 6 }, 36), GLASS, 0.35))
+  g.add(ghostDeep(cyl(6.1, 6.1, 0.4, GLASS, { y: 29.7, z: 6 }, 36), GLASS, 0.35))
   g.add(cylZ(0.6, 2.0, head, 0, 30, 14.4, 12))
   return fit(g)
 }
@@ -2081,7 +2063,7 @@ function tableSaw(p: string[]) {
   g.add(rbox(3, 0.1, 12, '#e8453c', { x: 3, y: 12.6 }, 0.04))
   g.add(cylX(5.5, 0.18, '#d9dde2', 3, 11, 0, 40))
   g.add(rbox(0.2, 5, 3, METAL, { x: 3, y: 12.6, z: -5.6 }, 0.05))
-  g.add(ghost(rbox(1.8, 5.2, 12, GLASS, { x: 3, y: 12.8 }, 0.4), GLASS, 0.35))
+  g.add(ghostDeep(rbox(1.8, 5.2, 12, GLASS, { x: 3, y: 12.8 }, 0.4), GLASS, 0.35))
   g.add(rbox(2, 3, 32, fence, { x: -6, y: 12.6 }, 0.3))
   g.add(rbox(3, 2, 4, fence, { x: -6, y: 12.4, z: 16.2 }, 0.3))
   g.add(rbox(1.2, 0.4, 14, METAL, { x: 11, y: 12.6 }, 0.1))
@@ -2145,7 +2127,7 @@ function laserCutter(p: string[]) {
   g.add(rbox(70, 1.4, 3, body, { y: 18, z: -23.5 }, 0.4))
   g.add(rbox(70, 1.4, 2, body, { y: 18, z: 24 }, 0.4))
   for (const s of [-1, 1]) g.add(rbox(2, 1.4, 45, body, { x: s * 34, y: 18 }, 0.4))
-  g.add(ghost(rbox(66, 0.5, 45, lid, { y: 18.5, z: 0.5 }, 0.2), lid, 0.4))
+  g.add(ghostDeep(rbox(66, 0.5, 45, lid, { y: 18.5, z: 0.5 }, 0.2), lid, 0.4))
   g.add(rbox(20, 0.8, 1.6, '#2b2b2b', { y: 19.3, z: 24 }, 0.3))
   g.add(lit(rbox(2.2, 0.2, 1.0, '#7ad0ff', { x: 28, y: 19.4, z: 24 }, 0.08), '#7ad0ff', 0.8))
   g.add(cylZ(4, 6, '#9a9da3', 26, 9, -27, 22))
@@ -2218,7 +2200,7 @@ function drawerCab(W: number, D: number, rows: { h: number; n: number }[], plint
         // 每个透明小抽屉（连同里面的零件）都能拉出一半
         const bin = new THREE.Group()
         bin.add(noOutlineDeep(rbox(cw - 1.0, row.h * (0.25 + r() * 0.25), 0.6, c, { x, y: y + 0.3, z: zf + 0.35 }, 0.1)))
-        bin.add(ghost(rbox(cw - 0.45, row.h - 0.45, 0.2, tint, { x, y: y + 0.22, z: zf + 0.85 }, 0.08), tint, 0.4))
+        bin.add(ghostDeep(rbox(cw - 0.45, row.h - 0.45, 0.2, tint, { x, y: y + 0.22, z: zf + 0.85 }, 0.08), tint, 0.4))
         bin.add(rbox(Math.min(cw * 0.4, 4), 0.5, 0.5, handle, { x, y: y + row.h * 0.55, z: zf + 1.15 }, 0.15))
         bin.add(tray(cw - 1.2, row.h - 1.2, D - 3, 0.4, shade(tint, -0.08), { x, y: y + 0.3, z: zf - (D - 3) / 2 }, 0.15))
         g.add(movable(bin, { kind: 'drawer', dz: Math.round(D * 0.5) }))
@@ -2426,7 +2408,7 @@ function screwSorter(p: string[]) {
       }
     }
   const lid = new THREE.Group()
-  lid.add(ghost(rbox(W, 0.3, D, tint, { z: D / 2 }, 0.2), tint, 0.4))
+  lid.add(ghostDeep(rbox(W, 0.3, D, tint, { z: D / 2 }, 0.2), tint, 0.4))
   lid.position.set(0, H, -D / 2)
   lid.rotation.x = -1.8
   g.add(lid)

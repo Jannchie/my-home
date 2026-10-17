@@ -6,7 +6,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray, type At } from '../toon'
 import { C, G, glow, paintPanel, rectPoly, rng, shell, type AssetCategory, type AssetDef, type Fx } from '../kit'
-import { P, PI, UP, noOutline, type V3 } from '../geo'
+import { P, PI, UP, clearMat, lit, noOutline, type V3 } from '../geo'
 import { I, J, M, N, R, type Build, type Dims, type Pal } from '../packkit'
 
 const STEEL = '#c3c7cc'
@@ -47,17 +47,6 @@ function normalize(build: Build, toFloor: boolean): Build {
   }
 }
 
-/** 发光件（指示灯） */
-function lit(m: THREE.Mesh, color: string, k = 0.7) {
-  m.material = toon(color, { emissive: k })
-  m.userData.noOutline = true
-  return m
-}
-/** 半透明件（集尘盒、玻璃、塑料袋） */
-function clear(m: THREE.Mesh, color: string, a = 0.45) {
-  m.material = toon(color, { transparent: a })
-  return m
-}
 /** 沿 x 的横圆柱，给中心 */
 const cylX = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 16) => P(cyl(r, r, len, color, {}, seg), x, y, z, 0, 0, PI / 2)
 /** 沿 z 的圆柱，给中心 */
@@ -209,7 +198,7 @@ function canisterVac(p: string[]) {
   }
   g.add(ball(2.5, M.char, { y: 2.5, z: -2 }))
   g.add(cylZ(3.2, 2.4, sub, 0, 14, 3.6))
-  g.add(lit(ball(0.8, acc, { x: -6, y: 24.4, z: -9 }), acc))
+  g.add(lit(ball(0.8, acc, { x: -6, y: 24.4, z: -9 }), acc, 0.7))
   // 地刷 + 金属管 + 握把
   g.add(rbox(28, 4, 9, sub, { z: 25 }, 1.8))
   g.add(rbox(28.4, 1.2, 1.4, acc, { y: 0.4, z: 28.9 }, 0.5))
@@ -230,11 +219,11 @@ function handyVac(p: string[]) {
   g.add(rbox(12, 3, 12, sub, { z: 0.9 }, 2.5))
   g.add(cyl(2.2, 1.6, 10, M.char, { y: 2, z: 0.9 }, 16))
   g.add(cyl(3.5, 3.5, 1, acc, { y: 11, z: 0.9 }))
-  g.add(clear(cyl(3.3, 3.3, 9, C.glass, { y: 11.5, z: 0.9 }, 20), C.glass, 0.5))
+  g.add(clearMat(cyl(3.3, 3.3, 9, C.glass, { y: 11.5, z: 0.9 }, 20), C.glass, 0.5))
   g.add(cyl(3.5, 3.5, 8.5, main, { y: 20.5, z: 0.9 }))
   g.add(puck(3.5, 2, main, { y: 28.5, z: 0.9 }))
   g.add(tube([[0, 22, -1.8], [0, 23.5, -5.4], [0, 29.5, -6.2], [0, 32, -4.2], [0, 29.8, -1.6]], 1.3, sub))
-  g.add(lit(ball(0.5, acc, { y: 26, z: 4.3 }), acc))
+  g.add(lit(ball(0.5, acc, { y: 26, z: 4.3 }), acc, 0.7))
   return g
 }
 
@@ -246,14 +235,14 @@ function cordlessVacBody(main: string, sub: string, acc: string) {
   g.add(ball(2.4, sub, { y: 5.2, z: 1 }))
   g.add(stick([0, 5.2, 1], [0, 66, -1], 1.3, STEEL, 14))
   g.add(rbox(8, 18, 10, main, { y: 64, z: -1 }, 3))
-  g.add(clear(cyl(3.6, 3.6, 13, C.glass, { y: 65, z: 7.2 }, 20), C.glass, 0.5))
+  g.add(clearMat(cyl(3.6, 3.6, 13, C.glass, { y: 65, z: 7.2 }, 20), C.glass, 0.5))
   g.add(cyl(3.8, 3.8, 1.4, acc, { y: 78, z: 7.2 }, 20))
   g.add(cyl(3.2, 3.2, 1, M.char, { y: 64.4, z: 7.2 }, 20))
   g.add(rbox(5, 8, 4, sub, { y: 70, z: -7.6 }, 1.2))
   g.add(stick([0, 81, -4], [0, 98, -7.5], 1.5, main, 12))
   g.add(stick([0, 98, -7.5], [0, 81.5, 2], 1.2, main, 12))
   g.add(ball(1.5, main, { y: 98, z: -7.5 }))
-  g.add(lit(ball(0.6, acc, { y: 79, z: 4.1 }), acc))
+  g.add(lit(ball(0.6, acc, { y: 79, z: 4.1 }), acc, 0.7))
   return g
 }
 
@@ -281,7 +270,7 @@ function cordlessVacWall(p: string[]) {
   g.add(rbox(5, 4, 3.4, sub, { y: y0 + 71, z: -10 }, 1))
   g.add(rbox(4, 12, 1.4, sub, { x: 9, y: y0 + 34, z: -12.3 }, 0.5))
   g.add(cyl(1.2, 0.7, 12, M.char, { x: 9, y: y0 + 30, z: -10.4 }, 12))
-  g.add(lit(ball(0.5, '#7fe0a8', { y: y0 + 80, z: -11.4 }), '#7fe0a8'))
+  g.add(lit(ball(0.5, '#7fe0a8', { y: y0 + 80, z: -11.4 }), '#7fe0a8', 0.7))
   return g
 }
 
@@ -340,7 +329,7 @@ function windowRobot(p: string[]) {
   g.add(rbox(26, 4.5, 26, main, { y: 2.6 }, 5))
   g.add(puck(9, 1.4, shade(main, -0.06), { y: 6.6 }))
   g.add(rbox(14, 1.6, 3, sub, { y: 7.4 }, 0.8))
-  g.add(lit(ball(0.6, acc, { x: 9, y: 7.1, z: 9 }, [1, 0.5, 1]), acc))
+  g.add(lit(ball(0.6, acc, { x: 9, y: 7.1, z: 9 }, [1, 0.5, 1]), acc, 0.7))
   g.add(tube([[0, 4.5, -12.8], [0, 3.5, -15.5], [2, 0.5, -18], [4, 0.45, -18.8]], 0.4, '#e05a3a'))
   g.add(torus(3.6, 0.45, '#e05a3a', { x: 7.4, y: 0.45, z: -18.6, rx: PI / 2 }))
   g.add(torus(2.6, 0.45, '#e05a3a', { x: 7.4, y: 1.3, z: -18.6, rx: PI / 2 }))
@@ -356,8 +345,8 @@ function steamMop(p: string[]) {
   g.add(ball(2.4, sub, { y: 5.4, z: 1 }))
   g.add(stick([0, 5.4, 1], [0, 30, -1], 1.8, main))
   g.add(rbox(10, 34, 8, main, { y: 28, z: -1.5 }, 3.5))
-  g.add(clear(rbox(7, 16, 1.2, C.glass, { y: 36, z: 2.4 }, 0.5), C.glass, 0.55))
-  g.add(lit(ball(0.7, acc, { y: 56, z: 2.5 }), acc))
+  g.add(clearMat(rbox(7, 16, 1.2, C.glass, { y: 36, z: 2.4 }, 0.5), C.glass, 0.55))
+  g.add(lit(ball(0.7, acc, { y: 56, z: 2.5 }), acc, 0.7))
   g.add(stick([0, 62, -1.5], [0, 104.5, -3.1], 1.3, STEEL, 14))
   g.add(rbox(4, 10, 4, main, { y: 104, z: -3.2 }, 1.5))
   g.add(cylX(1.4, 12, main, 0, 115, -3.2))
@@ -373,7 +362,7 @@ function garmentSteamer(p: string[]) {
   const g = new THREE.Group()
   g.add(rbox(30, 8, 26, sub, {}, 3))
   g.add(rbox(22, 22, 18, main, { y: 7.5, z: -1 }, 4))
-  g.add(clear(rbox(14, 12, 1, C.glass, { y: 10, z: 7.9 }, 0.4), C.glass, 0.5))
+  g.add(clearMat(rbox(14, 12, 1, C.glass, { y: 10, z: 7.9 }, 0.4), C.glass, 0.5))
   g.add(glow(5, 2, acc, { y: 24, z: 8.1 }))
   g.add(rbox(5, 1.2, 4, acc, { x: 9, y: 7.6, z: 9.5 }, 0.5))
   g.add(cyl(1.2, 1.2, 120, STEEL, { y: 29, z: -6 }, 12))
@@ -400,7 +389,7 @@ function dehumidifier(p: string[]) {
   // 前面水箱
   g.add(rbox(30, 20, 1, shade(main, -0.04), { y: 4, z: 10.8 }, 0.5))
   g.add(rbox(10, 1.6, 1, sub, { y: 20.5, z: 11.2 }, 0.5))
-  g.add(clear(rbox(2, 13, 0.8, C.glass, { x: 12, y: 6, z: 11.3 }, 0.3), C.glass, 0.6))
+  g.add(clearMat(rbox(2, 13, 0.8, C.glass, { x: 12, y: 6, z: 11.3 }, 0.3), C.glass, 0.6))
   // 操作面板
   g.add(rbox(20, 6, 0.8, sub, { y: 42, z: 10.9 }, 0.4))
   g.add(glow(6, 2.6, acc, { x: -5, y: 43.7, z: 11.3 }))
@@ -415,10 +404,10 @@ function miteVac(p: string[]) {
   const g = new THREE.Group()
   g.add(rbox(13, 1, 18, M.char, { z: 2 }, 0.4))
   g.add(rbox(15, 7, 28, main, { y: 0.6 }, 3.5))
-  g.add(clear(rbox(10, 5, 8, C.glass, { y: 7.2, z: -8 }, 2), C.glass, 0.5))
+  g.add(clearMat(rbox(10, 5, 8, C.glass, { y: 7.2, z: -8 }, 2), C.glass, 0.5))
   g.add(rbox(10.4, 1, 1.2, sub, { y: 7.2, z: -12.4 }, 0.4))
   g.add(tube([[0, 7.3, -2.6], [0, 12.6, -1], [0, 14.4, 4.5], [0, 12.6, 9.5], [0, 7.3, 11]], 1.4, sub))
-  g.add(lit(ball(0.6, acc, { x: 4.5, y: 7.6, z: 10 }), acc))
+  g.add(lit(ball(0.6, acc, { x: 4.5, y: 7.6, z: 10 }), acc, 0.7))
   g.add(tube([[0, 3.5, -13.8], [0, 3, -15.5], [0, 0.5, -17], [2.5, 0.5, -18]], 0.45, M.char))
   return g
 }
@@ -644,7 +633,7 @@ function bagBox(p: string[]) {
   const g = new THREE.Group()
   g.add(rbox(26, 10, 11, box, {}, 0.8))
   g.add(noOutline(rbox(16, 0.4, 2, shade(box, -0.35), { y: 9.9 }, 0.2)))
-  g.add(clear(rbox(12, 5, 0.3, bag, { y: 9.4, z: 0.3, rx: -0.25 }, 0.1), bag, 0.75))
+  g.add(clearMat(rbox(12, 5, 0.3, bag, { y: 9.4, z: 0.3, rx: -0.25 }, 0.1), bag, 0.75))
   g.add(paintPanel(22, 7, `chore-bag-${box}-${acc}`, drawLabel(box, acc, [['ゴミ袋', 0.5, 0.38, '#3e3a39'], ['45L · 30枚', 0.82, 0.16, '#3e3a39']], 0.22), { y: 1.4, z: 5.85 }))
   return g
 }
@@ -911,7 +900,7 @@ function deodorizer(p: string[]) {
   const [gel, cap, lab] = p
   const g = new THREE.Group()
   g.add(rbox(6.8, 4.4, 4.8, gel, { y: 0.4 }, 0.8))
-  g.add(clear(rbox(7.6, 7, 5.6, C.glass, {}, 1), C.glass, 0.35))
+  g.add(clearMat(rbox(7.6, 7, 5.6, C.glass, {}, 1), C.glass))
   g.add(rbox(8, 3, 6, cap, { y: 6.6 }, 1))
   for (const x of [-2.2, 0, 2.2]) g.add(noOutline(rbox(1, 0.3, 4, shade(cap, -0.25), { x, y: 9.5 }, 0.15)))
   g.add(paintPanel(6, 2.2, `chore-deo-${cap}-${lab}`, drawLabel(cap, null, [['消臭', 0.5, 0.62, lab]]), { y: 7, z: 3.35 }))
@@ -925,7 +914,7 @@ function autoFreshener(p: string[]) {
   g.add(rbox(9, 17, 7, body, {}, 1.6))
   g.add(rbox(9.4, 4, 7.4, cap, { y: 16.6 }, 1.6))
   g.add(cylZ(0.9, 0.6, M.char, 0, 18.6, 3.65, 14))
-  g.add(lit(ball(0.45, '#7fe0a8', { x: 3, y: 14.6, z: 3.5 }), '#7fe0a8'))
+  g.add(lit(ball(0.45, '#7fe0a8', { x: 3, y: 14.6, z: 3.5 }), '#7fe0a8', 0.7))
   g.add(rbox(3, 0.8, 1, shade(body, -0.12), { y: 1.2, z: 3.3 }, 0.3))
   g.add(paintPanel(5.6, 6, `chore-fresh-${body}-${lab}`, drawBubbleLabel(body, lab, 'アロマ', 'AUTO SPRAY', '#3e3a39'), { y: 5, z: 3.85 }))
   return g

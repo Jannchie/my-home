@@ -4,7 +4,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, face, leaf, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, glow, holePanel, rng, rod, shell, type AssetDef, type Fx } from '../kit'
-import { PI, hcyl, noOutlineDeep } from '../geo'
+import { PI, clearDeep, hcyl, noOutlineDeep } from '../geo'
 import { I, J, M, N, R, type Pal3 } from '../packkit'
 
 // 食物 / 液体的固定色
@@ -23,14 +23,6 @@ const TOMATO = '#ff5a4f'
 const BRASS = '#e9c46a'
 
 // ---------- 小工具 ----------
-
-/** 半透明玻璃（透明材质不描边） */
-function glassy<T extends THREE.Object3D>(o: T, color: string, k = 0.45): T {
-  o.traverse((c) => {
-    if ((c as THREE.Mesh).isMesh) (c as THREE.Mesh).material = toon(color, { transparent: k })
-  })
-  return o
-}
 
 /** 容器里的液面：薄圆片，top 是液面高度 */
 function liquid(r: number, top: number, color: string, x = 0, z = 0) {
@@ -165,14 +157,14 @@ function glassPitcher(p: string[]) {
   const [glass, lid, acc] = p
   const g = new THREE.Group()
   const px = -1.5
-  g.add(glassy(cup(4.8, 5.2, 20, 0.5, glass, { x: px }), glass, 0.4))
-  g.add(glassy(cyl(4.3, 4.6, 12.5, WATER, { x: px, y: 0.5 }), WATER, 0.5))
+  g.add(clearDeep(cup(4.8, 5.2, 20, 0.5, glass, { x: px }), glass))
+  g.add(clearDeep(cyl(4.3, 4.6, 12.5, WATER, { x: px, y: 0.5 }), WATER, 0.5))
   g.add(puck(1.6, 0.3, acc, { x: px + 0.5, y: 8, z: 1, rx: 1.2 }))
-  g.add(glassy(handle(3.8, 0.7, glass, px - 4.9, 11, -1), glass, 0.5))
+  g.add(clearDeep(handle(3.8, 0.7, glass, px - 4.9, 11, -1), glass, 0.5))
   g.add(puck(4.7, 1.3, lid, { x: px, y: 19.6 }))
   g.add(ball(0.9, lid, { x: px, y: 21.3 }))
-  g.add(glassy(cup(3, 2.7, 9, 0.4, glass, { x: 7.5 }), glass, 0.4))
-  g.add(glassy(cyl(2.4, 2.3, 6, WATER, { x: 7.5, y: 0.4 }), WATER, 0.5))
+  g.add(clearDeep(cup(3, 2.7, 9, 0.4, glass, { x: 7.5 }), glass))
+  g.add(clearDeep(cyl(2.4, 2.3, 6, WATER, { x: 7.5, y: 0.4 }), WATER, 0.5))
   return g
 }
 
@@ -201,15 +193,15 @@ function creamSoda(p: string[]) {
   const [soda, ice, cherry] = p
   const g = new THREE.Group()
   g.add(puck(4.5, 0.4, '#c9a27a'))
-  g.add(glassy(cyl(2.8, 3, 0.8, C.glass, { y: 0.4 }), C.glass, 0.5))
-  g.add(glassy(cyl(0.7, 0.7, 3, C.glass, { y: 1.2 }), C.glass, 0.5))
-  g.add(glassy(cup(4, 2.6, 12, 0.35, C.glass, { y: 4.2 }), C.glass, 0.35))
-  g.add(glassy(cyl(3.5, 2.3, 10.8, soda, { y: 4.6 }), soda, 0.8))
+  g.add(clearDeep(cyl(2.8, 3, 0.8, C.glass, { y: 0.4 }), C.glass, 0.5))
+  g.add(clearDeep(cyl(0.7, 0.7, 3, C.glass, { y: 1.2 }), C.glass, 0.5))
+  g.add(clearDeep(cup(4, 2.6, 12, 0.35, C.glass, { y: 4.2 }), C.glass, 0.35))
+  g.add(clearDeep(cyl(3.5, 2.3, 10.8, soda, { y: 4.6 }), soda, 0.8))
   for (const [x, z, r] of [
     [-1.2, 0.8, 0.3],
     [1, -1, -0.4],
   ])
-    g.add(glassy(rbox(1.6, 1.6, 1.6, '#ffffff', { x, y: 13.4, z, ry: r }, 0.4), '#ffffff', 0.6))
+    g.add(clearDeep(rbox(1.6, 1.6, 1.6, '#ffffff', { x, y: 13.4, z, ry: r }, 0.4), '#ffffff', 0.6))
   g.add(ball(2.8, ice, { y: 16.6 }, [1, 0.9, 1]))
   g.add(ball(0.9, cherry, { x: 0.5, y: 19.9 }))
   g.add(rod(0.5, 20.6, 1.4, 22, 0.12, C.leafD))
@@ -613,9 +605,9 @@ function pourOver(p: string[]) {
   g.add(torus(4.5, 0.5, shade(wood, -0.15), { y: 17.8, z: 1.5, rx: PI / 2 }))
   g.add(cup(5.4, 2.4, 6, 0.4, dripper, { y: 17.2, z: 1.5 }))
   g.add(liquid(4.2, 22.6, '#6b4a35', 0, 1.5))
-  g.add(glassy(cup(4.2, 4.6, 12, 0.4, C.glass, { y: 1.6, z: 1.5 }), C.glass, 0.4))
+  g.add(clearDeep(cup(4.2, 4.6, 12, 0.4, C.glass, { y: 1.6, z: 1.5 }), C.glass))
   g.add(cyl(4, 4.2, 5, COFFEE, { y: 2, z: 1.5 }))
-  g.add(glassy(handle(2.6, 0.6, C.glass, 4.6, 7.5, 1, 1.5), C.glass, 0.5))
+  g.add(clearDeep(handle(2.6, 0.6, C.glass, 4.6, 7.5, 1, 1.5), C.glass, 0.5))
   return g
 }
 
@@ -659,7 +651,7 @@ function coffeeMaker(p: string[]) {
   g.add(rbox(20, 6, 19, body, { y: 21, z: -2.5 }, 2))
   g.add(glow(6, 1.5, '#bfe9c8', { x: -5, y: 23, z: 7.1 }, 0.5))
   g.add(puck(5.5, 0.5, M.char, { y: 3, z: 3.5 }))
-  g.add(glassy(cup(4.8, 5.4, 13, 0.4, C.glass, { y: 3.5, z: 3.5 }), C.glass, 0.4))
+  g.add(clearDeep(cup(4.8, 5.4, 13, 0.4, C.glass, { y: 3.5, z: 3.5 }), C.glass))
   g.add(cyl(4.5, 4.8, 6, COFFEE, { y: 3.9, z: 3.5 }))
   g.add(puck(5, 1.2, acc, { y: 16.3, z: 3.5 }))
   g.add(handle(3.5, 0.7, acc, 5.3, 10, 1, 3.5))

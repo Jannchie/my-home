@@ -211,6 +211,9 @@ export const cylX = (r: number, len: number, color: string, x: number, y: number
 /** 沿 z 轴横放的圆柱，(x, y, z) 为中心 */
 export const cylZ = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 24) => P(cyl(r, r, len, color, {}, seg), x, y, z, PI / 2)
 
+/** 沿 z 轴横放的圆柱，从 z0 往 +z 伸出 len（(x, y) 为轴心） */
+export const cylZFrom = (r: number, len: number, color: string, x: number, y: number, z0: number, seg = 20) => P(cyl(r, r, len, color, {}, seg), x, y, z0 + len / 2, PI / 2)
+
 /** 横放的圆台：axis 'x'（rTop 朝 +x）或 'z'（rTop 朝 -z），(x, y, z) 为中心 */
 export function hcyl(rTop: number, rBottom: number, len: number, color: string, x: number, y: number, z: number, axis: 'x' | 'z' = 'x', seg = 16) {
   const m = cyl(rTop, rBottom, len, color, {}, seg)

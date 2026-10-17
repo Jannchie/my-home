@@ -5,7 +5,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, paintLandscape, paintPanel, pinwheelWalls, rng, type AssetCategory, type AssetDef } from '../kit'
-import { G, P, PI, noOutline, type V2, type V3 } from '../geo'
+import { G, P, PI, ghostOutlined, litOutlined, noOutline, type V2, type V3 } from '../geo'
 import { I, J, M, N, PROP, R, type PalFlat } from '../packkit'
 
 type Draw = (g: CanvasRenderingContext2D, W: number, H: number) => void
@@ -47,18 +47,6 @@ function def(
 const F = (b: (p: string[]) => THREE.Group) => (p: string[]) => fit(b(p))
 
 // ---------- 小工具 ----------
-
-function lit<T extends THREE.Mesh>(m: T, color: string, k = 0.5): T {
-  m.material = toon(color, { emissive: k })
-  return m
-}
-
-/** 半透明（玻璃、亚克力），不描边 */
-function ghost<T extends THREE.Mesh>(m: T, color: string, a = 0.35): T {
-  m.material = toon(color, { transparent: a })
-  m.castShadow = false
-  return m
-}
 
 /** 沿 x 的横圆柱，给中心 */
 const cylX = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 16) => P(cyl(r, r, len, color, {}, seg), x, y, z, 0, 0, PI / 2)
@@ -297,7 +285,7 @@ function digitalPiano(p: string[]) {
   g.add(rbox(124, 14, 17, body, { y: 78, z: -31.5 }, 0.8))
   g.add(rbox(124, 1.6, 15, white, { y: 78, z: -15.5 }, 0.3))
   g.add(paintTop(123.4, 14.4, `int-keys52-${white}`, drawKeys(52, white, '#26262a', 5, 0.62), 0, 79.9, -15.5))
-  g.add(lit(rbox(8, 0.4, 3, '#9fe0c8', { x: -40, y: 92, z: -27 }, 0.15), '#9fe0c8', 0.6))
+  g.add(litOutlined(rbox(8, 0.4, 3, '#9fe0c8', { x: -40, y: 92, z: -27 }, 0.15), '#9fe0c8'))
   g.add(rbox(70, 3, 2, body, { y: 92, z: -36 }, 0.4))
   g.add(rbox(30, 3, 8, shade(body, -0.1), { z: -30 }, 0.6))
   // 琴凳
@@ -333,7 +321,7 @@ function drumKit(p: string[]) {
   // 底鼓（轴朝前）
   const kick = drum(28, 40, shellC, head, metal)
   g.add(P(kick, 0, 30, 15, PI / 2))
-  g.add(lit(cylZ(9, 0.4, shade(shellC, 0.25), 0, 30, 55.4), shade(shellC, 0.25), 0.1))
+  g.add(litOutlined(cylZ(9, 0.4, shade(shellC, 0.25), 0, 30, 55.4), shade(shellC, 0.25), 0.1))
   for (const s of [-1, 1]) g.add(bar([s * 20, 12, 30], [s * 32, 0.6, 38], 0.8, metal))
   // 嗵鼓
   for (const s of [-1, 1]) g.add(P(drum(10, 16, shellC, head, metal), s * 13, 62, 26, -0.45, 0, -s * 0.15))
@@ -392,7 +380,7 @@ function eDrum(p: string[]) {
   g.add(bar([-50, 80, -5], [-38, 88, 20], 0.8, rack), cym(12, -38, 88, 20))
   // 音源
   g.add(rbox(18, 13, 4, DARK, { x: 50, y: 80, z: -2 }, 1))
-  g.add(lit(rbox(10, 4, 0.4, '#8fe3ff', { x: 50, y: 86, z: 0.1 }, 0.15), '#8fe3ff', 0.6))
+  g.add(litOutlined(rbox(10, 4, 0.4, '#8fe3ff', { x: 50, y: 86, z: 0.1 }, 0.15), '#8fe3ff'))
   g.add(cylZ(1.3, 1, acc, 46, 82, 0.5), cylZ(1.3, 1, acc, 54, 82, 0.5))
   // 凳
   g.add(cyl(1.4, 1.4, 44, rack, { z: -46 }))
@@ -572,7 +560,7 @@ function guitarAmp(p: string[]) {
   for (let i = 0; i < 6; i++) g.add(noOutline(rbox(43, 0.3, 0.2, shade(grille, -0.12), { y: 6.5 + i * 4.2, z: 13.35 }, 0.1)))
   g.add(rbox(44, 7, 0.6, panel, { y: 33, z: 13 }, 0.3))
   for (let i = 0; i < 6; i++) g.add(cylZ(1, 1.4, DARK, -14 + i * 5.2, 36.5, 13.9, 12))
-  g.add(lit(cylZ(0.6, 0.6, '#ff6a5a', 18, 36.5, 13.6, 8), '#ff6a5a', 0.8))
+  g.add(litOutlined(cylZ(0.6, 0.6, '#ff6a5a', 18, 36.5, 13.6, 8), '#ff6a5a', 0.8))
   g.add(rbox(8, 1.6, 0.6, METAL, { x: -15, y: 25, z: 13.4 }, 0.3))
   g.add(rbox(16, 2, 3, DARK, { y: 41.5 }, 0.8))
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(cyl(1.6, 1.6, 1.5, RUBBER, { x: sx * 21, z: sz * 9 }, 10))
@@ -853,7 +841,7 @@ const synth = (n: number, w: number, d: number, pads: boolean) => (p: string[]) 
   g.add(rbox(kw, 1.4, kd, white, { y: 7, z: d / 2 - kd / 2 - 1 }, 0.3))
   g.add(paintTop(kw - 0.4, kd - 0.4, `int-keys${n}-${white}`, drawKeys(n, white, '#26262a', 0, 0.62), 0, 8.7, d / 2 - kd / 2 - 1))
   const zc = -d / 2 + (d - kd) / 2 - 0.5
-  g.add(lit(rbox(w * 0.14, 0.4, d * 0.18, '#8fe3ff', { x: -w * 0.08, y: 7, z: zc }, 0.15), '#8fe3ff', 0.6))
+  g.add(litOutlined(rbox(w * 0.14, 0.4, d * 0.18, '#8fe3ff', { x: -w * 0.08, y: 7, z: zc }, 0.15), '#8fe3ff'))
   for (let i = 0; i < (pads ? 4 : 8); i++) g.add(cyl(1, 1, 1.4, DARK, { x: w * 0.12 + i * (pads ? 4 : 4.2), y: 7, z: zc - 2.2 }, 12), cyl(0.9, 0.9, 1.2, acc, { x: w * 0.12 + i * (pads ? 4 : 4.2), y: 7, z: zc + 2.4 }, 12))
   if (pads) {
     for (let i = 0; i < 8; i++) g.add(rbox(3.4, 0.8, 3.4, i % 2 ? acc : shade(acc, 0.2), { x: -w / 2 + 4 + (i % 4) * 4, y: 7, z: zc - 1.8 + Math.floor(i / 4) * 4 }, 0.5))
@@ -874,7 +862,7 @@ function djDeck(p: string[]) {
     g.add(puck(9, 1.6, platter, { x: s * 21, y: 4.6, z: -3 }))
     g.add(noOutline(cyl(6, 6, 0.3, shade(platter, 0.25), { x: s * 21, y: 6.2, z: -3 }, 28)))
     g.add(cyl(1, 1, 0.6, acc, { x: s * 21, y: 6.4, z: -3 }, 12))
-    for (let i = 0; i < 8; i++) g.add(lit(rbox(3, 0.6, 2.4, i % 2 ? acc : shade(acc, 0.25), { x: s * 21 - 7.2 + (i % 4) * 4.8, y: 4.4, z: 10 + Math.floor(i / 4) * 3 }, 0.4), i % 2 ? acc : shade(acc, 0.25), 0.4))
+    for (let i = 0; i < 8; i++) g.add(litOutlined(rbox(3, 0.6, 2.4, i % 2 ? acc : shade(acc, 0.25), { x: s * 21 - 7.2 + (i % 4) * 4.8, y: 4.4, z: 10 + Math.floor(i / 4) * 3 }, 0.4), i % 2 ? acc : shade(acc, 0.25), 0.4))
   }
   for (let c = 0; c < 2; c++) {
     for (let r = 0; r < 4; r++) g.add(cyl(0.9, 0.9, 1.2, DARK, { x: -2.5 + c * 5, y: 4.6, z: -14 + r * 4 }, 12))
@@ -1043,7 +1031,7 @@ function figRobot(main: string, acc: string, base: string) {
   g.add(rbox(3.6, 3.4, 2.4, main, { y: 4.2 }, 0.4))
   g.add(rbox(2.2, 1, 0.4, acc, { y: 6, z: 1.2 }, 0.15))
   g.add(rbox(2.4, 2.2, 2.2, main, { y: 7.7 }, 0.4))
-  g.add(lit(rbox(1.8, 0.5, 0.3, '#7fe3ff', { y: 8.6, z: 1.1 }, 0.1), '#7fe3ff', 0.7))
+  g.add(litOutlined(rbox(1.8, 0.5, 0.3, '#7fe3ff', { y: 8.6, z: 1.1 }, 0.1), '#7fe3ff', 0.7))
   g.add(cyl(0.12, 0.12, 1.2, acc, { x: 0.6, y: 9.9 }, 6), ball(0.3, acc, { x: 0.6, y: 11.2 }))
   return g
 }
@@ -1066,11 +1054,11 @@ function figureCase(p: string[]) {
   g.add(rbox(40, 3, 25, frame, {}, 0.8))
   g.add(rbox(40, 2.5, 25, frame, { y: 43.5 }, 0.8))
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(1.2, 40.5, 1.2, frame, { x: sx * 19.4, y: 3, z: sz * 11.9 }, 0.3))
-  g.add(ghost(rbox(38.6, 40.5, 0.3, GLASS, { y: 3, z: 12.2 }, 0.1), GLASS, 0.18))
+  g.add(ghostOutlined(rbox(38.6, 40.5, 0.3, GLASS, { y: 3, z: 12.2 }, 0.1), GLASS, 0.18))
   g.add(rbox(38.6, 40.5, 0.4, shade(frame, -0.1), { y: 3, z: -12.1 }, 0.1))
-  for (const s of [-1, 1]) g.add(ghost(rbox(0.3, 40.5, 23.6, GLASS, { x: s * 19.5, y: 3 }, 0.1), GLASS, 0.18))
-  for (const y of [16, 29.5]) g.add(ghost(rbox(38.6, 0.6, 23.6, GLASS, { y }, 0.2), GLASS, 0.4))
-  g.add(lit(rbox(36, 0.4, 1, '#fff4d0', { y: 43.1, z: 10 }, 0.15), '#fff4d0', 0.8))
+  for (const s of [-1, 1]) g.add(ghostOutlined(rbox(0.3, 40.5, 23.6, GLASS, { x: s * 19.5, y: 3 }, 0.1), GLASS, 0.18))
+  for (const y of [16, 29.5]) g.add(ghostOutlined(rbox(38.6, 0.6, 23.6, GLASS, { y }, 0.2), GLASS, 0.4))
+  g.add(litOutlined(rbox(36, 0.4, 1, '#fff4d0', { y: 43.1, z: 10 }, 0.15), '#fff4d0', 0.8))
   const tiers = [3, 16.6, 30.1]
   const makers = [() => figGirl(shade(a, 0.1), b, METAL), () => figRobot(b, a, DARK), () => figChibi(a, shade(b, -0.1), METAL)]
   tiers.forEach((y, ti) => {
@@ -1093,7 +1081,7 @@ function itaBag(p: string[]) {
     g.add(noOutline(cylZ(1.7, 0.2, shade(cols[i], i % 2 ? -0.18 : 0.15), x, y + 0.2, 6.0, 20)))
     g.add(noOutline(ball(0.7, SKIN, { x, y: y + 0.4, z: 6.1 }, [1, 1, 0.3])))
   }
-  g.add(ghost(rbox(25, 18, 0.3, GLASS, { y: 3, z: 6.4 }, 0.15), GLASS, 0.25))
+  g.add(ghostOutlined(rbox(25, 18, 0.3, GLASS, { y: 3, z: 6.4 }, 0.15), GLASS, 0.25))
   for (const s of [-1, 1]) g.add(torus(6, 0.6, trim, { y: 24, z: s * 3 }, PI))
   g.add(rbox(30.4, 2, 10.4, trim, { y: 0 }, 0.8))
   g.add(bar([13, 22, 4], [15.2, 17, 5.2], 0.12, METAL, 0.12, 6))
@@ -1106,9 +1094,9 @@ function itaBag(p: string[]) {
 function acrylicStand(p: string[]) {
   const [bg, hair, dress] = p
   const g = new THREE.Group()
-  g.add(ghost(rbox(9, 0.5, 5.5, GLASS, {}, 0.2), GLASS, 0.5))
+  g.add(ghostOutlined(rbox(9, 0.5, 5.5, GLASS, {}, 0.2), GLASS, 0.5))
   g.add(rbox(8.6, 0.12, 5.1, shade(bg, 0.1), { y: 0.05 }, 0.04))
-  g.add(ghost(rbox(8.6, 14.5, 0.3, GLASS, { y: 0.5 }, 0.3), GLASS, 0.4))
+  g.add(ghostOutlined(rbox(8.6, 14.5, 0.3, GLASS, { y: 0.5 }, 0.3), GLASS, 0.4))
   g.add(paintPanel(8, 13.8, `int-acsta-${bg}-${hair}-${dress}`, (c, W, H) => {
     c.fillStyle = shade(bg, 0.12)
     c.fillRect(0, 0, W, H)
@@ -1158,8 +1146,8 @@ function penlights(p: string[]) {
     const x = (i - 1) * 1.2
     g.add(cylX(1.3, 9, DARK, x - 6.5, 1.3, z, 14))
     g.add(cylX(1.4, 1, METAL, x - 1.5, 1.4, z, 14))
-    g.add(lit(cylX(1.15, 11, c, x + 4.5, 1.15, z, 14), c, 0.7))
-    g.add(lit(ball(1.15, c, { x: x + 10, y: 1.15, z }), c, 0.7))
+    g.add(litOutlined(cylX(1.15, 11, c, x + 4.5, 1.15, z, 14), c, 0.7))
+    g.add(litOutlined(ball(1.15, c, { x: x + 10, y: 1.15, z }), c, 0.7))
     g.add(rbox(1.6, 0.6, 0.6, shade(c, -0.2), { x: x - 6, y: 2.4, z }, 0.2))
   })
   return fit(g)
@@ -1846,7 +1834,7 @@ function watercolor(p: string[]) {
   brush(8.5, '#c8473a', 0.45)
   brush(10.5, '#26262a', 0.35)
   const jx = -22
-  g.add(ghost(cup(3.2, 3, 8, 0.3, GLASS, { x: jx, z: 0 }), GLASS, 0.35))
+  g.add(ghostOutlined(cup(3.2, 3, 8, 0.3, GLASS, { x: jx, z: 0 }), GLASS, 0.35))
   g.add(cyl(2.8, 2.7, 5, shade(sky, 0.15), { x: jx, y: 0.3, z: 0 }, 20))
   g.add(bar([jx, 3, 0], [jx + 2.5, 11, 1], 0.3, hill, 0.3, 8))
   return fit(g)
@@ -1882,7 +1870,7 @@ function microscope(p: string[]) {
   g.add(bar([0, 20, -7.5], [0, 26, -3], 1.8, body, 1.6))
   g.add(rbox(11, 1, 10, DARK, { y: 12, z: 2 }, 0.4))
   g.add(rbox(4, 9, 4, body, { y: 3, z: -4 }, 0.8))
-  g.add(lit(cyl(1.5, 1.5, 1, lamp, { y: 3, z: 2 }, 16), lamp, 0.6))
+  g.add(litOutlined(cyl(1.5, 1.5, 1, lamp, { y: 3, z: 2 }, 16), lamp))
   for (const s of [-1, 1]) g.add(cylX(2.2, 1.4, DARK, s * 2.6, 9, -6, 16))
   g.add(rbox(5, 5, 7, body, { y: 23, z: -2 }, 1))
   g.add(cyl(2.6, 2.2, 1.6, metal, { y: 20.6, z: 1.4 }, 16))
@@ -1906,15 +1894,15 @@ function chemSet(p: string[]) {
   ;[-8, -4, 0, 4, 8].forEach((x, i) => {
     const lh = 4 + (i % 3) * 2.5
     g.add(cyl(0.95, 0.95, lh, cols[i], { x, y: 1.6 }, 12), ball(0.95, cols[i], { x, y: 1.95 }))
-    g.add(ghost(cyl(1.1, 1.1, 13, GLASS, { x, y: 1.9 }, 12), GLASS, 0.3))
+    g.add(ghostOutlined(cyl(1.1, 1.1, 13, GLASS, { x, y: 1.9 }, 12), GLASS, 0.3))
   })
   const fx = 16
   g.add(cyl(3.4, 4.7, 4, l1, { x: fx, y: 0.2 }, 20))
-  g.add(ghost(cyl(1.4, 5, 10, GLASS, { x: fx }, 20), GLASS, 0.3))
-  g.add(ghost(cyl(1.3, 1.3, 4, GLASS, { x: fx, y: 10 }, 16), GLASS, 0.3))
+  g.add(ghostOutlined(cyl(1.4, 5, 10, GLASS, { x: fx }, 20), GLASS, 0.3))
+  g.add(ghostOutlined(cyl(1.3, 1.3, 4, GLASS, { x: fx, y: 10 }, 16), GLASS, 0.3))
   const bx = -16
   g.add(cyl(3.2, 3.2, 5, l2, { x: bx, y: 0.3 }, 20))
-  g.add(ghost(cup(3.5, 3.5, 9, 0.2, GLASS, { x: bx }), GLASS, 0.3))
+  g.add(ghostOutlined(cup(3.5, 3.5, 9, 0.2, GLASS, { x: bx }), GLASS, 0.3))
   for (let k = 0; k < 3; k++) g.add(noOutline(rbox(1.4, 0.15, 0.1, '#ffffff', { x: bx, y: 3 + k * 2, z: 3.55 }, 0.03)))
   return fit(g)
 }
@@ -2297,7 +2285,7 @@ function postcardWall(p: string[]) {
     const yA = H - 3 - Math.sin(t0 * PI) * 7
     const yB = H - 3 - Math.sin(t1 * PI) * 7
     g.add(noOutline(bar([-W / 2 + t0 * W, yA, 1.6], [-W / 2 + t1 * W, yB, 1.6], 0.12, DARK, 0.12, 4)))
-    if (i > 0) g.add(lit(ball(0.9, light, { x: -W / 2 + t0 * W, y: yA - 1, z: 1.6 }, [1, 1.3, 1]), light, 0.8))
+    if (i > 0) g.add(litOutlined(ball(0.9, light, { x: -W / 2 + t0 * W, y: yA - 1, z: 1.6 }, [1, 1.3, 1]), light, 0.8))
   }
   return fit(g, POSTCARD_MOUNT)
 }
@@ -2433,7 +2421,7 @@ function suitcaseOpen(p: string[]) {
   const folds: [number, number, string][] = [[-14, -15, cloth], [-14, 6, shade(cloth, 0.2)], [-28, -10, C.white], [-28, 12, shade(cloth, -0.15)]]
   for (const [x, z, c] of folds) for (let k = 0; k < 2; k++) g.add(rbox(14, 2.6, 18, k ? shade(c, 0.05) : c, { x, y: 2 + k * 2.6, z }, 1))
   g.add(P(capsule(3, 10, C.sky), -21, 5, 25, 0, 0, PI / 2))
-  g.add(ghost(rbox(36, 4, 28, '#9fb4c7', { x: 20.6, y: 2, z: -14 }, 0.8), '#9fb4c7', 0.45))
+  g.add(ghostOutlined(rbox(36, 4, 28, '#9fb4c7', { x: 20.6, y: 2, z: -14 }, 0.8), '#9fb4c7', 0.45))
   g.add(rbox(14, 3, 10, C.pink, { x: 16, y: 2, z: -14 }, 1))
   for (const s of [-1, 1]) g.add(noOutline(P(rbox(1.6, 0.3, 36, DARK, {}, 0.1), 20.6, 2.2, 14, 0, s * 0.5)))
   for (const s of [-1, 1]) g.add(cylX(1.8, 1.4, RUBBER, -20.6 + s * 14, 3, -32.6, 14))
@@ -2561,7 +2549,7 @@ function coffeeCanisters(p: string[]) {
     const a = k * 0.9
     g.add(ball(0.7, BEAN, { x: gx + Math.cos(a) * 2.2, y: 8.4, z: 1 + Math.sin(a) * 2.2 }, [1, 0.6, 1.3]))
   }
-  g.add(ghost(cyl(4, 4, 12, GLASS, { x: gx, z: 1 }, 20), GLASS, 0.3))
+  g.add(ghostOutlined(cyl(4, 4, 12, GLASS, { x: gx, z: 1 }, 20), GLASS, 0.3))
   g.add(puck(4.2, 1.4, METAL, { x: gx, y: 12, z: 1 }))
   g.add(cup(1.8, 1.6, 1.6, 0.2, METAL, { x: -2, z: 7 }))
   g.add(bar([-0.5, 0.9, 7], [5, 0.6, 8.5], 0.35, METAL, 0.35, 6))
@@ -2769,7 +2757,7 @@ function landingNet(p: string[]) {
   const hoopG = new THREE.Group()
   hoopG.add(torus(R, 0.6, hoop, { y: R }))
   hoopG.add(bar([0, -2, 0], [0, 1, 0], 1.1, hoop, 1.1, 8))
-  const bag = ghost(cup(R - 0.3, 3, 30, 0.2, net), net, 0.55)
+  const bag = ghostOutlined(cup(R - 0.3, 3, 30, 0.2, net), net, 0.55)
   bag.position.set(0, R, 30)
   bag.rotation.set(-PI / 2, 0, 0)
   hoopG.add(bag)

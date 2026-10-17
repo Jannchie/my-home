@@ -11,7 +11,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, SWING_OPEN, ellipsePoly, holePanel, movable, rectPoly, rng, rod, shell, slab, type AssetCategory, type AssetDef, type Hole, type Poly, type StyleTag, type SurfaceDef } from '../kit'
-import { PI, box3, type V3 } from '../geo'
+import { PI, box3, clearDeep, type V3 } from '../geo'
 import { I, J, M, N, R, type Build, type Dims, type Pal } from '../packkit'
 
 const STEEL = '#c3c7cc'
@@ -68,14 +68,6 @@ function stick(a: V3, b: V3, r: number, color: string, seg = 8) {
   m.position.copy(va).add(vb).multiplyScalar(0.5)
   m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), vb.clone().sub(va).normalize())
   return m
-}
-
-/** 半透明材质 */
-function glassy<T extends THREE.Object3D>(o: T, color = GLASS, k = 0.35): T {
-  o.traverse((c) => {
-    if ((c as THREE.Mesh).isMesh) (c as THREE.Mesh).material = toon(color, { transparent: k })
-  })
-  return o
 }
 
 /** 空心圆管（卷纸、纸芯）：带小倒角，at.y 为底 */
@@ -426,7 +418,7 @@ function tpPack(nx: number, nz: number, ny: number, handle: boolean): Build {
       for (let iz = 0; iz < nz; iz++)
         for (let iy = 0; iy < ny; iy++) g.add(roll(paper, { x: -W / 2 + ROLL_R + ix * ROLL_R * 2, y: 0.3 + iy * ROLL_H, z: -D / 2 + ROLL_R + iz * ROLL_R * 2 }))
     // 包装膜：半透明外壳 + 印刷带
-    g.add(glassy(rbox(W + 0.6, H + 0.8, D + 0.6, PAPER, {}, 1.5), '#f4fbff', 0.3))
+    g.add(clearDeep(rbox(W + 0.6, H + 0.8, D + 0.6, PAPER, {}, 1.5), '#f4fbff', 0.3))
     g.add(rbox(W + 0.9, H * 0.36, D + 0.9, print, { y: H * 0.3 }, 0.6))
     g.add(rbox(W * 0.5, H * 0.12, 0.4, accent, { y: H * 0.42, z: D / 2 + 0.5 }, 0.2))
     if (handle) {
@@ -514,7 +506,7 @@ function sanitaryBin(p: string[]) {
 function airFreshener(p: string[]) {
   const [gel, capC, acc] = p
   const g = new THREE.Group()
-  g.add(glassy(cup(3.6, 3.6, 8, 0.3, GLASS)))
+  g.add(clearDeep(cup(3.6, 3.6, 8, 0.3, GLASS), GLASS, 0.35))
   g.add(cyl(3.2, 3.25, 5.2, gel, { y: 0.3 }, 20))
   g.add(cup(3.9, 3.9, 2.4, 0.3, capC, { y: 7.2 }))
   g.add(puck(3.9, 0.6, capC, { y: 9.3 }))
@@ -765,7 +757,7 @@ function toyCups(p: string[]) {
 function bathSaltJar(p: string[]) {
   const [salt, lid, twine] = p
   const g = new THREE.Group()
-  g.add(glassy(cup(5, 5, 12, 0.4, GLASS)))
+  g.add(clearDeep(cup(5, 5, 12, 0.4, GLASS), GLASS, 0.35))
   g.add(cyl(4.5, 4.55, 7, salt, { y: 0.4 }, 24))
   g.add(puck(1.5, 0.8, J.hinoki, { x: 0.6, y: 7.3 }))
   g.add(stick([1.4, 7.8, 0], [3.2, 11, 0.4], 0.3, J.hinoki))
@@ -1077,7 +1069,7 @@ function powderBox(p: string[]) {
 function podJar(p: string[]) {
   const [podA, podB, lid] = p
   const g = new THREE.Group()
-  g.add(glassy(cup(6.5, 6.5, 14, 0.4, GLASS)))
+  g.add(clearDeep(cup(6.5, 6.5, 14, 0.4, GLASS), GLASS, 0.35))
   const rand = rng(31)
   for (let layer = 0; layer < 3; layer++)
     for (let i = 0; i < 7; i++) {
@@ -1275,7 +1267,7 @@ function clearCase(c: CaseSpec, open: boolean): Build {
   return (p) => {
     const [lid, towelA, towelB] = p
     const g = new THREE.Group()
-    g.add(glassy(tray(c.w, c.h, c.d, 0.6, '#eef6fa', {}, 0.3), '#eef6fa', 0.4))
+    g.add(clearDeep(tray(c.w, c.h, c.d, 0.6, '#eef6fa', {}, 0.3), '#eef6fa'))
     c.rolls.forEach(([x, layer, z], i) => {
       const len = c.d - 6
       const cy = 0.6 + c.r + 0.05 + layer * Math.sqrt(4 * c.r * c.r - 4.5 * 4.5)
@@ -1666,7 +1658,7 @@ const DRESSING: AssetDef[] = [
 function reedDiffuser(p: string[]) {
   const [oil, reed, collar] = p
   const g = new THREE.Group()
-  g.add(glassy(cup(1.3, 3.5, 9, 0.35, GLASS)))
+  g.add(clearDeep(cup(1.3, 3.5, 9, 0.35, GLASS), GLASS, 0.35))
   g.add(cyl(2.0, 2.9, 4, oil, { y: 0.35 }, 20))
   g.add(torus(1.35, 0.22, collar, { y: 8.6, rx: PI / 2 }))
   const ends: [number, number][] = [
@@ -1726,7 +1718,7 @@ function dehumidifier(w: number, d: number, h: number): Build {
     const [body, film, water] = p
     const hb = h * 0.53
     const g = new THREE.Group()
-    g.add(glassy(tray(w, hb, d, 0.4, GLASS, {}, 0.3), GLASS, 0.4))
+    g.add(clearDeep(tray(w, hb, d, 0.4, GLASS, {}, 0.3), GLASS))
     g.add(rbox(w - 1, hb * 0.45, d - 1, water, { y: 0.4 }, 0.3))
     g.add(rbox(w, h - hb - 0.6, d, body, { y: hb - 0.2 }, 0.6))
     g.add(rbox(w - 0.8, 0.8, d - 0.8, film, { y: h - 0.8 }, 0.3))
@@ -1747,7 +1739,7 @@ function dehumBagBody(p: string[]) {
   const g = new THREE.Group()
   g.add(rbox(12, 2, 1.8, bar, { y: 28 }, 0.6))
   g.add(rbox(11, 16, 1.6, bag, { y: 12.2 }, 0.6))
-  g.add(glassy(rbox(11, 12.4, 1.8, GLASS, {}, 0.6), GLASS, 0.4))
+  g.add(clearDeep(rbox(11, 12.4, 1.8, GLASS, {}, 0.6), GLASS))
   g.add(rbox(10, 5, 1.2, water, { y: 0.4 }, 0.4))
   g.add(rbox(7, 3, 0.3, shade(bag, -0.15), { y: 19, z: 0.85 }, 0.1))
   return g

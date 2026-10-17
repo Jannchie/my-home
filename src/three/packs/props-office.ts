@@ -7,7 +7,7 @@ import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus } from '../toon'
 import { C, CLIP_DROP, G, SWING_OPEN, clipLevels, glow, movable, rng, shell, rectPoly, type AssetCategory, type AssetDef, type SurfaceDef } from '../kit'
 import { I, J, M, N, R, hasDeclaredCoords, shiftDeclared, type Pal } from '../packkit'
-import { P, PI, noOutline } from '../geo'
+import { P, PI, ghostOutlined, litOutlined, noOutline } from '../geo'
 
 const SCREEN = '#bfe3ff'
 const DARK = '#2c2e34'
@@ -67,24 +67,13 @@ function fit(g: THREE.Group, mount = 0) {
 
 // ---------- 小工具 ----------
 
-function lit<T extends THREE.Mesh>(m: T, color: string, k = 0.6): T {
-  m.material = toon(color, { emissive: k })
-  return m
-}
-
-function ghost<T extends THREE.Mesh>(m: T, color: string, a = 0.3): T {
-  m.material = toon(color, { transparent: a })
-  m.castShadow = false
-  return m
-}
-
 /** 沿 x 的横圆柱，给中心 */
 const cylX = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 16) => P(cyl(r, r, len, color, {}, seg), x, y, z, 0, 0, PI / 2)
 /** 沿 z 的圆柱，给中心 */
 const cylZ = (r: number, len: number, color: string, x: number, y: number, z: number, seg = 24) => P(cyl(r, r, len, color, {}, seg), x, y, z, PI / 2)
 
 /** 指示灯小球 */
-const led = (x: number, y: number, z: number, color: string, r = 0.3) => noOutline(lit(ball(r, color, { x, y, z }), color, 0.9))
+const led = (x: number, y: number, z: number, color: string, r = 0.3) => noOutline(litOutlined(ball(r, color, { x, y, z }), color, 0.9))
 
 /** 水平的发光面（平放的屏幕），y 是底面 */
 function flat(w: number, d: number, color: string, x: number, y: number, z: number, k = 0.55, t = 0.3) {
@@ -208,7 +197,7 @@ function gamingHeadset(p: string[]) {
   for (const s of [-1, 1]) {
     g.add(cylX(5, 3.6, body, s * sx, cy, 0, 28))
     g.add(cylX(4.2, 1.4, pad, s * (sx - 2.4), cy, 0, 24))
-    g.add(noOutline(lit(torus(3.3, 0.45, rgb, { x: s * (sx + 1.85), y: cy, ry: PI / 2 }), rgb, 0.85)))
+    g.add(noOutline(litOutlined(torus(3.3, 0.45, rgb, { x: s * (sx + 1.85), y: cy, ry: PI / 2 }), rgb, 0.85)))
     g.add(cylX(1.2, 0.8, shade(body, -0.1), s * (sx + 2.0), cy, 0, 16))
   }
   g.add(torus(sx, 1.0, body, { y: cy + 0.4 }, PI))
@@ -257,7 +246,7 @@ function padPS(body: string, acc: string, btn: string) {
     g.add(ball(0.42, fc[k], { x: 4.5 + Math.cos(a) * 0.95, y: 3.35, z: -1.0 + Math.sin(a) * 0.95 }))
   }
   g.add(rbox(4.4, 0.4, 2.4, shade(body, -0.06), { y: 3.15, z: -2.3 }, 0.2))
-  g.add(noOutline(lit(rbox(3.4, 0.3, 0.3, acc, { y: 3.2, z: -3.65 }, 0.1), acc, 0.8)))
+  g.add(noOutline(litOutlined(rbox(3.4, 0.3, 0.3, acc, { y: 3.2, z: -3.65 }, 0.1), acc, 0.8)))
   return g
 }
 
@@ -290,7 +279,7 @@ function padXbox(p: string[]) {
     [0, -0.95],
   ]
   for (let k = 0; k < 4; k++) g.add(ball(0.45, fc[k], { x: 3.6 + off[k][0], y: 4.15, z: -1.6 + off[k][1] }))
-  g.add(noOutline(lit(ball(0.7, glowc, { y: 4.1, z: -3.3 }, [1, 0.5, 1]), glowc, 0.9)))
+  g.add(noOutline(litOutlined(ball(0.7, glowc, { y: 4.1, z: -3.3 }, [1, 0.5, 1]), glowc, 0.9)))
   return g
 }
 
@@ -330,7 +319,7 @@ function padDock(p: string[]) {
   const [base, body, acc] = p
   const g = new THREE.Group()
   g.add(rbox(34, 3, 8, base, {}, 1.2))
-  g.add(noOutline(lit(rbox(30, 0.4, 0.3, BLUE, { y: 1.2, z: 4.05 }, 0.1), BLUE, 0.8)))
+  g.add(noOutline(litOutlined(rbox(30, 0.4, 0.3, BLUE, { y: 1.2, z: 4.05 }, 0.1), BLUE, 0.8)))
   const th = PI / 2 - 0.25
   for (const s of [-1, 1]) {
     const pad = padPS(body, acc, BLACK)
@@ -443,14 +432,14 @@ function mouseMat(p: string[]) {
   const D = 35
   g.add(rbox(W, 0.4, D, mat, {}, 0.2))
   for (const s of [-1, 1]) {
-    g.add(noOutline(lit(rbox(W + 0.4, 0.5, 0.5, rgb, { z: s * (D / 2), y: 0 }, 0.2), rgb, 0.8)))
-    g.add(noOutline(lit(rbox(0.5, 0.5, D - 0.6, rgb, { x: s * (W / 2), y: 0 }, 0.2), rgb, 0.8)))
+    g.add(noOutline(litOutlined(rbox(W + 0.4, 0.5, 0.5, rgb, { z: s * (D / 2), y: 0 }, 0.2), rgb, 0.8)))
+    g.add(noOutline(litOutlined(rbox(0.5, 0.5, D - 0.6, rgb, { x: s * (W / 2), y: 0 }, 0.2), rgb, 0.8)))
   }
   const mx = 28
   const mz = 3
   g.add(ball(3.2, body, { x: mx, y: 2.3, z: mz }, [1, 0.6, 1.95]))
   g.add(cylX(0.65, 0.8, rgb, mx, 3.95, mz - 2.6, 16))
-  g.add(noOutline(lit(ball(0.7, rgb, { x: mx, y: 3.6, z: mz + 2.8 }, [1, 0.35, 1]), rgb, 0.9)))
+  g.add(noOutline(litOutlined(ball(0.7, rgb, { x: mx, y: 3.6, z: mz + 2.8 }, [1, 0.35, 1]), rgb, 0.9)))
   for (let i = 0; i < 2; i++) g.add(rbox(0.5, 0.6, 1.3, BLACK, { x: mx - 3.05, y: 2.1, z: mz - 1.6 + i * 1.6 }, 0.2))
   return g
 }
@@ -489,10 +478,10 @@ function mechKeyboard(kind: '60' | 'tkl' | 'full', rgb = false) {
       // 键帽下面一层发光板（每行一种颜色，渐变感），从键帽缝里透出来
       for (let ri = 0; ri < nRows; ri++) {
         const col = lights[Math.min(2, Math.floor((ri / nRows) * 3))]
-        g.add(noOutline(lit(rbox(W - 2 * B + 0.2, 0.4, U, col, { y: 2.3, z: rowZ(ri) }, 0.1), col, 0.85)))
+        g.add(noOutline(litOutlined(rbox(W - 2 * B + 0.2, 0.4, U, col, { y: 2.3, z: rowZ(ri) }, 0.1), col, 0.85)))
       }
-      g.add(noOutline(lit(rbox(W - 2, 0.5, 0.4, lights[0], { y: 0.6, z: D / 2 + 0.1 }, 0.1), lights[0], 0.85)))
-      for (const s of [-1, 1]) g.add(noOutline(lit(rbox(0.4, 0.5, D - 2, lights[s < 0 ? 1 : 2], { x: s * (W / 2 + 0.1), y: 0.6 }, 0.1), lights[s < 0 ? 1 : 2], 0.85)))
+      g.add(noOutline(litOutlined(rbox(W - 2, 0.5, 0.4, lights[0], { y: 0.6, z: D / 2 + 0.1 }, 0.1), lights[0], 0.85)))
+      for (const s of [-1, 1]) g.add(noOutline(litOutlined(rbox(0.4, 0.5, D - 2, lights[s < 0 ? 1 : 2], { x: s * (W / 2 + 0.1), y: 0.6 }, 0.1), lights[s < 0 ? 1 : 2], 0.85)))
     } else if (kind === 'full') {
       for (let k = 0; k < 3; k++) g.add(led(W / 2 - B - 5.6 + k * 1.9, 2.55, rowZ(0), GREEN, 0.18))
     }
@@ -677,7 +666,7 @@ function captureCard(p: string[]) {
   const [body, l, cable] = p
   const g = new THREE.Group()
   g.add(rbox(11, 2.2, 7.5, body, {}, 0.8))
-  g.add(noOutline(lit(rbox(6, 0.3, 0.3, l, { y: 2.1, z: 2.6 }, 0.1), l, 0.9)))
+  g.add(noOutline(litOutlined(rbox(6, 0.3, 0.3, l, { y: 2.1, z: 2.6 }, 0.1), l, 0.9)))
   for (const s of [-1, 1]) {
     g.add(rbox(1.8, 0.9, 1.2, BLACK, { x: s * 2.5, y: 0.6, z: -4.3 }, 0.2))
     g.add(rbox(1.6, 0.8, 2.4, cable, { x: s * 2.5, y: 0.65, z: -6.1 }, 0.25))
@@ -744,7 +733,7 @@ function ringLightDesk(p: string[]) {
   g.add(cyl(0.7, 0.7, 13, stand, { y: 7.6 }, 12))
   const cy = 20.6 + 13.5
   g.add(torus(13, 1.5, ring, { y: cy, z: -0.4 }))
-  g.add(noOutline(lit(torus(13, 1.05, light, { y: cy, z: 0.5 }), light, 0.9)))
+  g.add(noOutline(litOutlined(torus(13, 1.05, light, { y: cy, z: 0.5 }), light, 0.9)))
   g.add(rbox(1.2, 13.5, 1, stand, { y: 20.6, z: -0.2 }, 0.3))
   g.add(rbox(7.4, 14.6, 0.9, DARK, { y: cy - 7.3, z: 0.6 }, 0.5))
   g.add(glow(6.6, 13.4, SCREEN, { y: cy - 6.7, z: 1.15 }, 0.5))
@@ -761,7 +750,7 @@ function ringLightFloor(p: string[]) {
   g.add(cyl(1.8, 1.8, 3, shade(stand, -0.1), { y: 126 }, 14))
   const cy = 167 + 23
   g.add(torus(23, 2.2, ring, { y: cy, z: -0.5 }))
-  g.add(noOutline(lit(torus(23, 1.6, light, { y: cy, z: 0.9 }), light, 0.9)))
+  g.add(noOutline(litOutlined(torus(23, 1.6, light, { y: cy, z: 0.9 }), light, 0.9)))
   g.add(rbox(2, 23, 1.6, stand, { y: 167, z: -0.3 }, 0.5))
   g.add(rbox(8, 16, 1, DARK, { y: cy - 8, z: 0.7 }, 0.5))
   g.add(glow(7.2, 14.8, SCREEN, { y: cy - 7.4, z: 1.3 }, 0.5))
@@ -1130,7 +1119,7 @@ function watchDock(p: string[]) {
   const w = new THREE.Group()
   w.add(rbox(4.2, 4.8, 1.2, BLACK, {}, 0.8))
   w.add(glow(3.4, 4.0, '#1a1c22', { y: 0.4, z: 0.55 }, 0.2))
-  w.add(noOutline(lit(torus(1.3, 0.15, faceC, { y: 2.4, z: 0.95 }), faceC, 0.8)))
+  w.add(noOutline(litOutlined(torus(1.3, 0.15, faceC, { y: 2.4, z: 0.95 }), faceC, 0.8)))
   w.add(glow(1.2, 0.5, '#ffffff', { y: 2.2, z: 1.1 }, 0.7))
   w.add(cylZ(0.35, 0.6, M.silver, 2.2, 3.2, 0))
   const band = torus(2.4, 0.55, strap, { y: 2.4, z: -2.0, ry: PI / 2 })
@@ -1268,7 +1257,7 @@ function intercom(p: string[]) {
   g.add(glow(8.4, 6, '#9ad7ff', { x: -3.2, y: 4.8, z: 1.6 }, 0.5))
   g.add(glow(3.4, 2.6, '#fff3b0', { x: -3.2, y: 6, z: 2.0 }, 0.5))
   g.add(cylZ(1.6, 0.6, key, 5.2, 8, 1.4, 28))
-  g.add(noOutline(lit(torus(1.8, 0.16, GREEN, { x: 5.2, y: 8, z: 1.3 }), GREEN, 0.9)))
+  g.add(noOutline(litOutlined(torus(1.8, 0.16, GREEN, { x: 5.2, y: 8, z: 1.3 }), GREEN, 0.9)))
   for (let i = 0; i < 3; i++) g.add(rbox(1.6, 0.8, 0.4, key, { x: 3.4 + i * 1.8, y: 4.4, z: 1.3 }, 0.2))
   for (let i = 0; i < 4; i++) for (let j = 0; j < 2; j++) g.add(noOutline(cylZ(0.18, 0.3, shade(panel, -0.3), -6 + i * 0.8, 1.6 + j * 0.8, 1.25, 8)))
   return g
@@ -1307,7 +1296,7 @@ function shredder(w: number, d: number, h: number) {
     const t = 1
     // 纸篓：正面开窗，看得见碎纸
     g.add(shell(w, bh, d, t, body, { top: false, front: [{ kind: 'rect', x: 0, y: bh * 0.18, w: w * 0.55, h: bh * 0.6, r: 1.5 }] }))
-    g.add(ghost(rbox(w * 0.55 + 1.6, bh * 0.6 + 1.6, 0.3, C.glass, { y: bh * 0.18 - 0.8, z: d / 2 - t - 0.2 }, 0.3), C.glass, 0.3))
+    g.add(ghostOutlined(rbox(w * 0.55 + 1.6, bh * 0.6 + 1.6, 0.3, C.glass, { y: bh * 0.18 - 0.8, z: d / 2 - t - 0.2 }, 0.3), C.glass, 0.3))
     const r = rng(w * 7 + h)
     for (let i = 0; i < Math.round(w * 1.4); i++)
       g.add(rbox(0.5, 0.15, 4 + r() * 3, i % 5 === 0 ? '#dfe8f0' : PAPER, { x: (r() - 0.5) * (w - 4), y: t + r() * bh * 0.4, z: (r() - 0.5) * (d - 6), rx: r() * 0.8, ry: r() * PI }, 0.05))
@@ -1416,7 +1405,7 @@ function labelPrinter(p: string[]) {
   const g = new THREE.Group()
   g.add(rbox(12, 4.6, 20, body, {}, 1.4))
   g.add(flat(8, 2.8, LCD, -0.6, 4.5, -6.4, 0.35))
-  g.add(ghost(rbox(5.4, 0.3, 4, C.glass, { x: 0, y: 4.55, z: -1.6 }, 0.1), C.glass, 0.45))
+  g.add(ghostOutlined(rbox(5.4, 0.3, 4, C.glass, { x: 0, y: 4.55, z: -1.6 }, 0.1), C.glass, 0.45))
   // 色带顶面在机身顶面之上、玻璃窗之内，不和机身顶面共面
   g.add(rbox(4.6, 0.55, 3.4, tape, { y: 4.2, z: -1.6 }, 0.2))
   keyGrid(g, 6, 4, 1.6, 1.2, key, -4, 4.5, 2.2, C.red)
@@ -1479,39 +1468,39 @@ function pcTower(w: number, d: number, h: number, rgb: boolean, fans: number) {
     const c = new THREE.Group()
     if (rgb) {
       c.add(shell(w, h, d, t, body, { right: [{ kind: 'rect', x: 0, y: 2.5, w: d - 2 * t - 3, h: h - 5, r: 1 }] }))
-      c.add(ghost(rbox(0.4, h - 2, d - 2, C.glass, { x: w / 2 + 0.25, y: 1 }, 0.2), C.glass, 0.22))
+      c.add(ghostOutlined(rbox(0.4, h - 2, d - 2, C.glass, { x: w / 2 + 0.25, y: 1 }, 0.2), C.glass, 0.22))
       const ix = -w / 2 + t
       c.add(rbox(0.5, h * 0.62, d * 0.62, inner, { x: ix + 0.3, y: h * 0.3, z: -d * 0.12 }, 0.2))
       c.add(rbox(w - 2 * t, h * 0.2, d - 2 * t, shade(body, -0.06), { y: t }, 0.4))
-      c.add(noOutline(lit(rbox(0.3, 0.6, d - 2 * t - 2, lights[1], { x: w / 2 - t - 0.6, y: t + h * 0.2 }, 0.1), lights[1], 0.85)))
+      c.add(noOutline(litOutlined(rbox(0.3, 0.6, d - 2 * t - 2, lights[1], { x: w / 2 - t - 0.6, y: t + h * 0.2 }, 0.1), lights[1], 0.85)))
       // 显卡 + 侧边灯条
       c.add(rbox(w * 0.5, 4, d * 0.55, DARK, { x: ix + 0.6 + w * 0.25, y: h * 0.42, z: -d * 0.05 }, 0.5))
-      c.add(noOutline(lit(rbox(0.3, 0.8, d * 0.45, lights[2], { x: ix + 0.75 + w * 0.5, y: h * 0.42 + 2.6, z: -d * 0.05 }, 0.1), lights[2], 0.9)))
+      c.add(noOutline(litOutlined(rbox(0.3, 0.8, d * 0.45, lights[2], { x: ix + 0.75 + w * 0.5, y: h * 0.42 + 2.6, z: -d * 0.05 }, 0.1), lights[2], 0.9)))
       // CPU 散热 + 风扇环
       const cx = ix + 0.6 + w * 0.18
       c.add(rbox(w * 0.36, 9, 4, M.silver, { x: cx, y: h * 0.62, z: -d * 0.12 }, 0.4))
-      c.add(noOutline(lit(torus(3.4, 0.35, lights[0], { x: cx, y: h * 0.62 + 4.5, z: -d * 0.12 + 2.3 }), lights[0], 0.9)))
+      c.add(noOutline(litOutlined(torus(3.4, 0.35, lights[0], { x: cx, y: h * 0.62 + 4.5, z: -d * 0.12 + 2.3 }), lights[0], 0.9)))
       // 内存条：顶上一条灯
       for (let i = 0; i < 2; i++) {
         const z = -d * 0.12 + 4 + i * 1.2
         c.add(rbox(0.5, 4, 0.5, DARK, { x: ix + 1.2, y: h * 0.58, z }, 0.1))
-        c.add(noOutline(lit(rbox(0.6, 0.8, 0.6, lights[1 + i], { x: ix + 1.2, y: h * 0.58 + 4, z }, 0.1), lights[1 + i], 0.9)))
+        c.add(noOutline(litOutlined(rbox(0.6, 0.8, 0.6, lights[1 + i], { x: ix + 1.2, y: h * 0.58 + 4, z }, 0.1), lights[1 + i], 0.9)))
       }
       // 前置风扇：每个一种颜色
       const fr = Math.min(4.4, w * 0.22)
       for (let i = 0; i < fans; i++) {
         const fy = h * 0.32 + i * ((h * 0.6) / Math.max(1, fans))
-        c.add(noOutline(lit(torus(fr, 0.45, lights[i % 3], { y: fy + 5, z: d / 2 - t - 1.6 }), lights[i % 3], 0.9)))
+        c.add(noOutline(litOutlined(torus(fr, 0.45, lights[i % 3], { y: fy + 5, z: d / 2 - t - 1.6 }), lights[i % 3], 0.9)))
         c.add(cylZ(1.2, 0.8, DARK, 0, fy + 5, d / 2 - t - 1.6, 14))
       }
-      c.add(noOutline(lit(torus(fr, 0.45, lights[2], { y: h * 0.72, z: -d / 2 + t + 1.6 }), lights[2], 0.9)))
+      c.add(noOutline(litOutlined(torus(fr, 0.45, lights[2], { y: h * 0.72, z: -d / 2 + t + 1.6 }), lights[2], 0.9)))
       c.add(cylZ(1.2, 0.8, DARK, 0, h * 0.72, -d / 2 + t + 1.6, 14))
       // 网孔前面板 + 两侧灯带
       c.add(rbox(w - 1, h - 4, 0.6, shade(body, -0.1), { y: 2, z: d / 2 + 0.35 }, 0.3))
       for (let i = 0; i < 7; i++) c.add(noOutline(rbox(w - 5, 0.4, 0.3, shade(body, -0.22), { y: h * 0.2 + i * h * 0.09, z: d / 2 + 0.75 }, 0.1)))
-      for (const s of [-1, 1]) c.add(noOutline(lit(rbox(0.5, h - 7, 0.4, lights[s < 0 ? 0 : 1], { x: s * (w / 2 - 1.3), y: 3.5, z: d / 2 + 0.8 }, 0.1), lights[s < 0 ? 0 : 1], 0.9)))
+      for (const s of [-1, 1]) c.add(noOutline(litOutlined(rbox(0.5, h - 7, 0.4, lights[s < 0 ? 0 : 1], { x: s * (w / 2 - 1.3), y: 3.5, z: d / 2 + 0.8 }, 0.1), lights[s < 0 ? 0 : 1], 0.9)))
       c.add(cyl(0.9, 0.9, 0.4, M.light, { y: h, z: d / 2 - 3 }, 16))
-      c.add(noOutline(lit(torus(1.0, 0.15, lights[0], { y: h + 0.15, z: d / 2 - 3, rx: PI / 2 }), lights[0], 0.9)))
+      c.add(noOutline(litOutlined(torus(1.0, 0.15, lights[0], { y: h + 0.15, z: d / 2 - 3, rx: PI / 2 }), lights[0], 0.9)))
       for (const s of [-1, 1]) c.add(rbox(1.4, 0.3, 0.6, BLACK, { x: s * 2.6, y: h, z: d / 2 - 3 }, 0.1))
     } else {
       // 朴素版：实心机箱，侧面一排散热孔，平整前面板
@@ -1540,11 +1529,11 @@ function gamingMouse(p: string[]) {
   const [body, l1, l2] = p
   const g = new THREE.Group()
   g.add(ball(3.2, body, { y: 1.95 }, [1, 0.6, 1.95]))
-  const ring = noOutline(lit(torus(3.05, 0.22, l2, { y: 0.75, rx: PI / 2 }), l2, 0.85))
+  const ring = noOutline(litOutlined(torus(3.05, 0.22, l2, { y: 0.75, rx: PI / 2 }), l2, 0.85))
   ring.scale.set(1, 1.95, 1)
   g.add(ring)
   g.add(cylX(0.65, 0.8, l1, 0, 3.55, -2.6, 16))
-  g.add(noOutline(lit(ball(0.7, l1, { y: 3.25, z: 2.8 }, [1, 0.35, 1]), l1, 0.9)))
+  g.add(noOutline(litOutlined(ball(0.7, l1, { y: 3.25, z: 2.8 }, [1, 0.35, 1]), l1, 0.9)))
   for (let i = 0; i < 2; i++) g.add(rbox(0.5, 0.6, 1.3, BLACK, { x: -3.05, y: 1.75, z: -1.6 + i * 1.6 }, 0.2))
   return g
 }
@@ -1556,14 +1545,14 @@ function rgbMousepad(p: string[]) {
   const W = 90
   const D = 40
   g.add(rbox(W, 0.4, D, mat, {}, 0.2))
-  const edge = (col: string, w: number, d: number, x: number, z: number) => g.add(noOutline(lit(rbox(w, 0.5, d, col, { x, z }, 0.2), col, 0.85)))
+  const edge = (col: string, w: number, d: number, x: number, z: number) => g.add(noOutline(litOutlined(rbox(w, 0.5, d, col, { x, z }, 0.2), col, 0.85)))
   edge(a, W / 2, 0.5, -W / 4, D / 2)
   edge(b, W / 2, 0.5, W / 4, D / 2)
   edge(b, W / 2, 0.5, -W / 4, -D / 2)
   edge(c, W / 2, 0.5, W / 4, -D / 2)
   edge(a, 0.5, D - 0.6, -W / 2, 0)
   edge(c, 0.5, D - 0.6, W / 2, 0)
-  g.add(noOutline(lit(rbox(5, 0.2, 2, b, { x: W / 2 - 6, y: 0.38, z: D / 2 - 3 }, 0.1), b, 0.7)))
+  g.add(noOutline(litOutlined(rbox(5, 0.2, 2, b, { x: W / 2 - 6, y: 0.38, z: D / 2 - 3 }, 0.1), b, 0.7)))
   return g
 }
 
@@ -1572,10 +1561,10 @@ function headsetStandRGB(p: string[]) {
   const [stand, l1, l2, pad] = p
   const g = new THREE.Group()
   g.add(puck(7, 2, stand))
-  g.add(noOutline(lit(torus(6.9, 0.35, l1, { y: 0.9, rx: PI / 2 }), l1, 0.9)))
+  g.add(noOutline(litOutlined(torus(6.9, 0.35, l1, { y: 0.9, rx: PI / 2 }), l1, 0.9)))
   g.add(cyl(1.0, 1.0, 22, stand, { y: 2 }, 14))
   g.add(rbox(5, 1.4, 4, stand, { y: 23.8 }, 0.6))
-  g.add(noOutline(lit(rbox(0.4, 18, 0.4, l2, { y: 4, z: 1.05 }, 0.1), l2, 0.85)))
+  g.add(noOutline(litOutlined(rbox(0.4, 18, 0.4, l2, { y: 4, z: 1.05 }, 0.1), l2, 0.85)))
   // 挂着的耳机：头梁搭在托架上，耳罩垂在两侧
   const cy = 18.4
   const shellC = stand === M.white ? M.light : DARK
@@ -1584,7 +1573,7 @@ function headsetStandRGB(p: string[]) {
   for (const s of [-1, 1]) {
     g.add(cylX(4.4, 3.2, shellC, s * 8.4, cy - 2, 0, 28))
     g.add(cylX(3.6, 1.2, pad, s * 6.4, cy - 2, 0, 24))
-    g.add(noOutline(lit(torus(2.9, 0.4, s < 0 ? l1 : l2, { x: s * 10.05, y: cy - 2, ry: PI / 2 }), s < 0 ? l1 : l2, 0.9)))
+    g.add(noOutline(litOutlined(torus(2.9, 0.4, s < 0 ? l1 : l2, { x: s * 10.05, y: cy - 2, ry: PI / 2 }), s < 0 ? l1 : l2, 0.9)))
   }
   return g
 }
@@ -1597,7 +1586,7 @@ function gamingMonitor(p: string[]) {
   for (const s of [-1, 1]) g.add(rod3([0, 1, -6], [s * 22, 1, 9], 1, stand))
   g.add(rbox(5, 1.2, 5, stand, { z: -6 }, 0.6))
   g.add(rbox(5, 24, 3, stand, { y: 1, z: -6.5 }, 1))
-  g.add(noOutline(lit(rbox(0.6, 18, 0.4, l, { y: 4, z: -4.85 }, 0.1), l, 0.85)))
+  g.add(noOutline(litOutlined(rbox(0.6, 18, 0.4, l, { y: 4, z: -4.85 }, 0.1), l, 0.85)))
   // 曲面屏：7 段沿圆弧排列
   const R = 150
   const n = 7
@@ -1616,7 +1605,7 @@ function gamingMonitor(p: string[]) {
     g.add(seg)
   }
   g.add(rbox(30, 16, 3, shade(frame, -0.05), { y: y0 + 9, z: -4.2 }, 1.2))
-  g.add(noOutline(lit(torus(5.5, 0.5, l, { y: y0 + 17, z: -5.75 }), l, 0.9)))
+  g.add(noOutline(litOutlined(torus(5.5, 0.5, l, { y: y0 + 17, z: -5.75 }), l, 0.9)))
   return g
 }
 
@@ -1697,7 +1686,7 @@ function serverRack(p: string[]) {
     y += uh + 1.4
   })
   // 玻璃门
-  c.add(ghost(rbox(W - 2, H - 4, 0.5, C.glass, { y: 2, z: D / 2 + 0.4 }, 0.3), C.glass, 0.25))
+  c.add(ghostOutlined(rbox(W - 2, H - 4, 0.5, C.glass, { y: 2, z: D / 2 + 0.4 }, 0.3), C.glass, 0.25))
   c.add(rbox(1.2, 14, 1.4, M.silver, { x: W / 2 - 4, y: H / 2 - 7, z: D / 2 + 1.3 }, 0.5))
   g.add(P(c, 0, 4, 0))
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
@@ -1729,7 +1718,7 @@ function nas(bays: number) {
     }
     const cx = -W / 2 + 1.8
     g.add(cylZ(0.8, 0.4, M.light, cx, H - 3, D / 2 + 0.2, 16))
-    g.add(noOutline(lit(torus(0.9, 0.12, BLUE, { x: cx, y: H - 3, z: D / 2 + 0.15 }), BLUE, 0.9)))
+    g.add(noOutline(litOutlined(torus(0.9, 0.12, BLUE, { x: cx, y: H - 3, z: D / 2 + 0.15 }), BLUE, 0.9)))
     for (let k = 0; k < 4; k++) g.add(led(cx, H - 6 - k * 1.4, D / 2 + 0.1, k === 0 ? BLUE : GREEN, 0.2))
     g.add(rbox(1.4, 0.6, 0.4, BLACK, { x: cx, y: 2.4, z: D / 2 + 0.1 }, 0.1))
     return g
@@ -1777,7 +1766,7 @@ function ups(p: string[]) {
   g.add(rbox(13, 19, 0.5, panel, { y: 1, z: 17.1 }, 0.5))
   g.add(glow(5.4, 3, '#a8e6ff', { y: 13, z: 17.5 }, 0.5))
   g.add(cylZ(1.2, 0.6, M.light, 0, 8.4, 17.6))
-  g.add(noOutline(lit(torus(1.35, 0.15, l, { y: 8.4, z: 17.5 }), l, 0.9)))
+  g.add(noOutline(litOutlined(torus(1.35, 0.15, l, { y: 8.4, z: 17.5 }), l, 0.9)))
   for (let i = 0; i < 5; i++) g.add(noOutline(rbox(8, 0.4, 0.2, shade(panel, -0.2), { y: 2.4 + i * 0.9, z: 17.45 }, 0.05)))
   return g
 }
@@ -1860,7 +1849,7 @@ function dryCabinet(w: number, d: number, h: number, n: number, foot: number) {
     const fw = 2.2
     const door: THREE.Object3D[] = [rbox(w, fw * 1.6, doorT, body, { y: h - fw * 1.6, z: dz }, 0.4), rbox(w, fw, doorT, body, { y: foot, z: dz }, 0.4)]
     for (const s of [-1, 1]) door.push(rbox(fw, ch - fw * 2.6, doorT, body, { x: s * (w / 2 - fw / 2), y: foot + fw, z: dz }, 0.3))
-    door.push(ghost(rbox(w - fw * 2 + 0.6, ch - fw * 2.6 + 0.6, 0.4, C.glass, { y: foot + fw - 0.3, z: dz }, 0.1), C.glass, 0.2))
+    door.push(ghostOutlined(rbox(w - fw * 2 + 0.6, ch - fw * 2.6 + 0.6, 0.4, C.glass, { y: foot + fw - 0.3, z: dz }, 0.1), C.glass, 0.2))
     door.push(rbox(1, Math.min(14, ch * 0.3), 1.0, M.silver, { x: w / 2 - fw / 2, y: foot + ch * 0.45, z: dFront + 0.3 }, 0.4))
     const sy = h - fw * 1.6 + 0.6
     door.push(glow(5.2, 1.8, disp, { x: -w / 2 + 6, y: sy, z: dFront + 0.1 }, 0.85))
@@ -1895,18 +1884,18 @@ function displayCabinet(w: number, d: number, h: number, n: number) {
     g.add(rbox(w - 2 * t, h - foot - 2 * t, 0.6, shade(frame, 0.08), { y: foot + t, z: -d / 2 + 0.3 }, 0.2))
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(t, h - foot - 2 * t, t, frame, { x: sx * (w / 2 - t / 2), y: foot + t, z: sz * (d / 2 - t / 2) }, 0.4))
     // 侧面玻璃；正面两扇玻璃门（铰链在两侧立柱上，右扇带中缝压条）
-    for (const s of [-1, 1]) g.add(ghost(rbox(0.4, h - foot - 2 * t, d - 2 * t, C.glass, { x: s * (w / 2 - t / 2), y: foot + t }, 0.1), C.glass, 0.2))
+    for (const s of [-1, 1]) g.add(ghostOutlined(rbox(0.4, h - foot - 2 * t, d - 2 * t, C.glass, { x: s * (w / 2 - t / 2), y: foot + t }, 0.1), C.glass, 0.2))
     const gw = (w - 2 * t) / 2
     for (const s of [-1, 1]) {
-      const leaf: THREE.Object3D[] = [ghost(rbox(gw - 0.2, h - foot - 2 * t, 0.4, C.glass, { x: (s * gw) / 2, y: foot + t, z: d / 2 - t / 2 }, 0.1), C.glass, 0.2)]
+      const leaf: THREE.Object3D[] = [ghostOutlined(rbox(gw - 0.2, h - foot - 2 * t, 0.4, C.glass, { x: (s * gw) / 2, y: foot + t, z: d / 2 - t / 2 }, 0.1), C.glass, 0.2)]
       if (s > 0) leaf.push(rbox(0.4, h - foot - 2 * t, 0.6, frame, { y: foot + t, z: d / 2 - 0.3 }, 0.1))
       g.add(hinged(leaf, s * (w / 2 - t), d / 2 - t / 2 - 0.2, s < 0))
     }
     for (const y of ys) {
-      g.add(ghost(rbox(w - 2 * t - 0.2, 0.8, d - 2 * t - 1.2, glassC, { y: y - 0.8, z: -0.6 }, 0.2), glassC, 0.45))
+      g.add(ghostOutlined(rbox(w - 2 * t - 0.2, 0.8, d - 2 * t - 1.2, glassC, { y: y - 0.8, z: -0.6 }, 0.2), glassC, 0.45))
       g.add(rbox(w - 2 * t - 0.2, 0.3, 0.3, frame, { y: y - 0.8, z: d / 2 - t - 1.4 }, 0.1))
     }
-    g.add(noOutline(lit(rbox(w - 2 * t - 2, 0.4, 1.2, light, { y: h - t - 0.4, z: d / 2 - t - 3 }, 0.1), light, 0.9)))
+    g.add(noOutline(litOutlined(rbox(w - 2 * t - 2, 0.4, 1.2, light, { y: h - t - 0.4, z: d / 2 - t - 3 }, 0.1), light, 0.9)))
     return g
   }
   const shape = [rectPoly(x0, z0, -x0, z1)]

@@ -5,7 +5,7 @@
 import * as THREE from 'three'
 import { ball, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, SWING_OPEN, hangingPipe, holePanel, legs, movable, paintPanel, pipeHook, rectPoly, shell, slab, type AssetDef, type DoorMotion, type Hole, type Poly, type SurfaceDef } from '../kit'
-import { meshWith, type V3 } from '../geo'
+import { glassPane, lit, meshWith, type V3 } from '../geo'
 import { I, J, M, N, R, type Pal3 } from '../packkit'
 
 const BRASS = '#d4b25a'
@@ -116,33 +116,19 @@ function front(w: number, h: number, d: number, color: string, x: number, y: num
   return rbox(w, h, 1.6, color, { x, y, z: d / 2 + 0.4 }, 0.8)
 }
 
-/** 透明玻璃板 */
-function glass(w: number, h: number, t: number, at: { x?: number; y: number; z: number }) {
-  const m = rbox(w, h, t, C.glass, at, 0.2)
-  m.material = toon(C.glass, { transparent: 0.32 })
-  return m
-}
-
 /** 玻璃门：框 + 玻璃，at 为底边中点 */
 function glassDoor(w: number, h: number, color: string, x: number, y: number, z: number, bar = 2.5) {
   const g = new THREE.Group()
   g.add(rbox(w, bar, 1.4, color, { y: 0 }, 0.5))
   g.add(rbox(w, bar, 1.4, color, { y: h - bar }, 0.5))
   for (const s of [-1, 1]) g.add(rbox(bar, h - bar * 2 + 0.4, 1.4, color, { x: s * (w / 2 - bar / 2), y: bar - 0.2 }, 0.5))
-  g.add(glass(w - bar * 2 + 0.4, h - bar * 2 + 0.4, 0.5, { y: bar - 0.2, z: 0 }))
+  g.add(glassPane(w - bar * 2 + 0.4, h - bar * 2 + 0.4, 0.5, { y: bar - 0.2, z: 0 }))
   g.position.set(x, y, z)
   return g
 }
 
 const knob = (x: number, y: number, z: number, color: string, r = 1.6) => ball(r, color, { x, y, z })
 const pullBar = (w: number, x: number, y: number, z: number, color: string) => rbox(w, 1.5, 1.5, color, { x, y: y - 0.75, z }, 0.6)
-
-/** 自发光的小件 */
-function lit<T extends THREE.Mesh>(m: T, color: string, k = 0.8) {
-  m.material = toon(color, { emissive: k })
-  m.userData.noOutline = true
-  return m
-}
 
 // ---------- 可开合部件：把原来的门板 / 抽屉面（连同把手）原样收进一个会动的 Group ----------
 
@@ -730,7 +716,7 @@ function carBed(p: string[]) {
   g.add(rbox(50, 9, 30, C.white, { y: 31, z: -84 }, 4))
   for (const s of [-1, 1]) {
     g.add(rbox(4, 8.5, 4, acc, { x: s * 32, y: 60, z: -106 }, 1))
-    g.add(lit(ball(4.5, C.lemon, { x: s * 32, y: 20, z: 110 }, [1, 1, 0.5]), C.lemon, 0.6))
+    g.add(lit(ball(4.5, C.lemon, { x: s * 32, y: 20, z: 110 }, [1, 1, 0.5]), C.lemon))
   }
   g.add(rbox(104, 3, 16, acc, { y: 68, z: -104 }, 1.2))
   g.add(paintPanel(22, 8, 'fm-carbed-plate', drawPlate, { y: 9, z: 110.1 }))
@@ -1207,7 +1193,7 @@ function archCabinet(p: string[]) {
 }
 
 function glassShelf(g: THREE.Group, w: number, d: number, y: number) {
-  g.add(glass(w, 1, d, { y, z: 0 }))
+  g.add(glassPane(w, 1, d, { y, z: 0 }))
 }
 
 // =====================================================================

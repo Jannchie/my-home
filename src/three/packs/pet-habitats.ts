@@ -10,7 +10,7 @@
 import * as THREE from 'three'
 import { ball, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, glow, holePanel, rng, shell, type AssetDef } from '../kit'
-import { P, PI, UP, noOutlineDeep, type V3 } from '../geo'
+import { P, PI, UP, litDeep, noOutlineDeep, type V3 } from '../geo'
 import { I, J, M, N, R, type Build, type Dims, type Pal } from '../packkit'
 
 const WOOD = '#d9b07a'
@@ -79,15 +79,6 @@ function clear<T extends THREE.Object3D>(o: T, color: string, a = 0.25): T {
     m.material = toon(color, { transparent: a })
     m.userData.noOutline = true
     m.castShadow = false
-  })
-  return o
-}
-function lit<T extends THREE.Object3D>(o: T, color: string, k = 0.8): T {
-  o.traverse((c) => {
-    const m = c as THREE.Mesh
-    if (!m.isMesh) return
-    m.material = toon(color, { emissive: k })
-    m.userData.noOutline = true
   })
   return o
 }
@@ -1078,8 +1069,8 @@ function terrarium(p: string[]) {
   const lx = W / 5
   g.add(P(cup(7.5, 4.5, 7.5, 0.4, lamp), lx, H + 8, -4, PI))
   g.add(cyl(2, 2, 2.5, frame, { x: lx, y: H + 7.6, z: -4 }, 16))
-  g.add(lit(ball(2.6, BULB, { x: lx, y: H + 3.6, z: -4 }), BULB, 1))
-  g.add(lit(cyl(6.8, 6.8, 0.2, '#ffcf8a', { x: lx, y: H + 0.55, z: -4 }, 32), '#ffcf8a', 0.6))
+  g.add(litDeep(ball(2.6, BULB, { x: lx, y: H + 3.6, z: -4 }), BULB, 1))
+  g.add(litDeep(cyl(6.8, 6.8, 0.2, '#ffcf8a', { x: lx, y: H + 0.55, z: -4 }, 32), '#ffcf8a', 0.6))
   g.add(tube([[lx, H + 8.6, -4], [lx - 6, H + 9.5, -8], [-W / 2 + 4, H + 1.5, -D / 2 + 3]], 0.3, '#2a2a2e', 24))
   // 底砂、软木背景、树枝、躲避石、水盆、多肉
   g.add(rbox(W - 2.4, 4, D - 2.4, '#e3c08a', { y: 5 }, 0.5))
@@ -1129,7 +1120,7 @@ function turtleTank(p: string[]) {
   g.add(rbox(4, 5, 2.6, lamp, { x: lx, y: H - 3, z: -D / 2 }, 0.5))
   g.add(tube([[lx, H + 2, -D / 2], [lx, H + 11, -D / 2 + 1], [lx, H + 14, -D / 2 + 6], [lx, H + 13, -2]], 0.5, lamp, 30))
   g.add(P(cup(6, 3.5, 6.5, 0.4, lamp), lx, H + 14.5, 0, PI))
-  g.add(lit(ball(2.3, BULB, { x: lx, y: H + 10.2, z: 0 }), BULB, 1))
+  g.add(litDeep(ball(2.3, BULB, { x: lx, y: H + 10.2, z: 0 }), BULB, 1))
   return g
 }
 
@@ -1344,7 +1335,7 @@ function petFountain(p: string[]) {
     g.add(P(ball(1.3, body, {}, [1, 0.3, 0.6]), Math.cos(a) * 1.3, 15.6, Math.sin(a) * 1.3, 0, -a, 0.3))
   }
   g.add(cyl(0.8, 1, 1.4, body, { y: 14.6 }, 12))
-  g.add(lit(cyl(0.7, 0.7, 0.3, light, { y: 16 }, 12), light, 0.9))
+  g.add(litDeep(cyl(0.7, 0.7, 0.3, light, { y: 16 }, 12), light, 0.9))
   g.add(glow(1.2, 0.6, light, { y: 3, z: 9.6 }, 0.9))
   return g
 }

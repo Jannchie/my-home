@@ -5,7 +5,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, face, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, SWING_OPEN, ellipsePoly, glow, holePanel, movable, paintPanel, rectPoly, rng, shell, type AssetCategory, type AssetDef, type Poly, type SurfaceDef } from '../kit'
-import { G, P, noOutlineDeep, type V3 } from '../geo'
+import { G, P, clearMat, lit, noOutlineDeep, type V3 } from '../geo'
 import { I, J, M, N, PROP, R, type PalFlat } from '../packkit'
 
 const BRASS = '#d4b25a'
@@ -39,19 +39,6 @@ function def(
 }
 
 // ---------- 小工具 ----------
-
-/** 自发光（灯罩、灯泡、火苗），不描边 */
-function lit<T extends THREE.Mesh>(m: T, color: string, k = 0.7): T {
-  m.material = toon(color, { emissive: k })
-  m.userData.noOutline = true
-  return m
-}
-
-/** 透明（玻璃、亚克力），透明材质不描边 */
-function clear<T extends THREE.Mesh>(m: T, color = C.glass, a = 0.32): T {
-  m.material = toon(color, { transparent: a })
-  return m
-}
 
 /** 两端已知的 3D 细杆 */
 function rod3(a: V3, b: V3, r: number, color: string, seg = 10) {
@@ -605,7 +592,7 @@ function glassTable(p: string[]) {
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(2.4, 39, 2.4, frame, { x: sx * 53.8, z: sz * 28.8 }, 0.5))
   for (const sz of [-1, 1]) g.add(rbox(105.2, 2, 2.4, frame, { y: 37, z: sz * 28.8 }, 0.5))
   for (const sx of [-1, 1]) g.add(rbox(2.4, 2, 55.2, frame, { x: sx * 53.8, y: 37 }, 0.5))
-  g.add(clear(rbox(110, 1, 60, C.glass, { y: 39 }, 0.3), C.glass, 0.35))
+  g.add(clearMat(rbox(110, 1, 60, C.glass, { y: 39 }, 0.3), C.glass))
   g.add(rbox(105.2, 2, 55.2, shelf, { y: 10 }, 0.6))
   return g
 }
@@ -1046,7 +1033,7 @@ const NEON_Y = 140
 function neonSign(p: string[]) {
   const [tubeA, tubeB, plate] = p
   const g = new THREE.Group()
-  g.add(clear(rbox(50, 40, 0.8, plate, { y: 0, z: -1.1 }, 1), plate, 0.28))
+  g.add(clearMat(rbox(50, 40, 0.8, plate, { y: 0, z: -1.1 }, 1), plate, 0.28))
   // 月亮：两段弧
   const moon: V3[] = []
   for (let i = 0; i <= 24; i++) {
@@ -1099,7 +1086,7 @@ function cloudNightLight(p: string[]) {
     pts.push([x, y])
   }
   pts.push([8, 0], [-8, 0])
-  const cl = lit(prism(pts, 4.5, glowC, 0, 1), glowC, 0.6)
+  const cl = lit(prism(pts, 4.5, glowC, 0, 1), glowC)
   cl.position.y = 2
   g.add(cl)
   g.add(rbox(14, 2.2, 5.5, base, {}, 0.8))
@@ -1113,7 +1100,7 @@ function candleLantern(p: string[]) {
   const g = new THREE.Group()
   g.add(rbox(16, 2, 16, frame, {}, 0.6))
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(1, 20, 1, frame, { x: sx * 7, y: 2, z: sz * 7 }, 0.3))
-  for (const [x, z, ry] of [[0, 7, 0], [0, -7, 0], [7, 0, Math.PI / 2], [-7, 0, Math.PI / 2]] as V3[]) g.add(clear(rbox(13, 19.6, 0.3, C.glass, { x, y: 2.2, z, ry }, 0.1)))
+  for (const [x, z, ry] of [[0, 7, 0], [0, -7, 0], [7, 0, Math.PI / 2], [-7, 0, Math.PI / 2]] as V3[]) g.add(clearMat(rbox(13, 19.6, 0.3, C.glass, { x, y: 2.2, z, ry }, 0.1), C.glass, 0.32))
   g.add(rbox(16, 1.5, 16, frame, { y: 22 }, 0.5))
   g.add(cyl(2, 7.5, 4.5, frame, { y: 23.5 }, 4))
   g.children[g.children.length - 1].rotation.y = Math.PI / 4
@@ -2853,7 +2840,7 @@ function playKitchen(p: string[]) {
   g.add(rbox(34, 2, 30, body, { y: 83, z: -2 }, 0.6))
   // 烤箱门（带玻璃窗）+ 柜门
   g.add(holePanel(32, 38, 1.4, door, [{ kind: 'rect', x: 0, y: 12, w: 22, h: 16, r: 2 }], { x: -17, y: 4, z: 15.5 }))
-  g.add(clear(rbox(23, 17, 0.3, C.glass, { x: -17, y: 15.5, z: 15.3 }, 0.1)))
+  g.add(clearMat(rbox(23, 17, 0.3, C.glass, { x: -17, y: 15.5, z: 15.3 }, 0.1), C.glass, 0.32))
   g.add(cylX(0.8, 18, acc, -17, 38, 17.4))
   g.add(front(32, 38, door, 17, 4, 15))
   g.add(cyl(0.9, 0.9, 1.2, acc, { x: 4, y: 26, z: 17 }, 10))

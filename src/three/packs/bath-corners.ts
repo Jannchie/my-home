@@ -11,7 +11,7 @@
 import * as THREE from 'three'
 import { ball, cyl, puck, rbox, toon, torus } from '../toon'
 import { C, type AssetDef, type Poly } from '../kit'
-import { PI, type V3 } from '../geo'
+import { PI, clearDeep, type V3 } from '../geo'
 import { CL, CN, F, I, J, M, N, R, type Build, type Pal } from '../packkit'
 
 /** 层板形状：ins 为向内收的距离（摆放区域用），0 为实际轮廓 */
@@ -44,14 +44,6 @@ function stick(a: V3, b: V3, r: number, color: string, seg = 8) {
   m.position.copy(va).add(vb).multiplyScalar(0.5)
   m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), vb.clone().sub(va).normalize())
   return m
-}
-
-/** 半透明（玻璃、亚克力） */
-function glassy<T extends THREE.Object3D>(o: T, color = GLASS, k = 0.4): T {
-  o.traverse((c) => {
-    if ((c as THREE.Mesh).isMesh) (c as THREE.Mesh).material = toon(color, { transparent: k })
-  })
-  return o
 }
 
 /** 按多边形挤出一块板（同 kit.slab，但倒角更小，薄板也不会变形） */
@@ -279,7 +271,7 @@ function unit(u: Unit): Build {
         const [x0, x1] = range(poly0, 0)
         for (const x of [x0 + 2.2, x0 + (x1 - x0) * 0.45]) for (const [a, b] of intersect(spansAt(poly0, x - 0.8, 'x'), spansAt(poly0, x + 0.8, 'x'))) g.add(rbox(1.6, 1, b - a - 0.6, u.hold === 'frame' ? main : acc, { x, y: y - 1, z: (a + b) / 2 }, 0.2))
       } else if (u.deck === 'glass' || u.deck === 'acrylic') {
-        g.add(glassy(plank(poly0, t, u.deck === 'acrylic' ? main : GLASS, y), u.deck === 'acrylic' ? main : GLASS, u.deck === 'acrylic' ? 0.55 : 0.4))
+        g.add(clearDeep(plank(poly0, t, u.deck === 'acrylic' ? main : GLASS, y), u.deck === 'acrylic' ? main : GLASS, u.deck === 'acrylic' ? 0.55 : 0.4))
         // 玻璃前沿包一圈金属边（亚克力不包）
         if (u.deck === 'glass') polyline(g, ch.map((q) => toward(poly0, q, 0.2)), y + t / 2, 0.32, main)
       } else {
@@ -310,7 +302,7 @@ function unit(u: Unit): Build {
           const pts = rim.kind === 'panel' ? [...toward0(poly0, tk / 2), toward0(poly0, tk / 2)[0]] : ch.map((q) => toward(poly0, q, tk / 2))
           const wall = new THREE.Group()
           for (let k = 1; k < pts.length; k++) panel(wall, pts[k - 1], pts[k], yb - 0.1, rim.h, tk, u.deck === 'acrylic' ? main : third)
-          g.add(u.deck === 'acrylic' ? glassy(wall, main, 0.55) : wall)
+          g.add(u.deck === 'acrylic' ? clearDeep(wall, main, 0.55) : wall)
         }
       }
 

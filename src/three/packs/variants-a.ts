@@ -10,7 +10,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, face, leaf, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, SWING_OPEN, ellipsePoly, movable, paintPanel, rectPoly, rng, shell, type AssetCategory, type AssetDef, type DoorMotion, type SurfaceDef } from '../kit'
-import { PI, noOutlineDeep, type V3 } from '../geo'
+import { PI, lit, noOutlineDeep, type V3 } from '../geo'
 import { I, J, M, N, R, type Build, type Dims, type Pal } from '../packkit'
 
 const COFFEE = '#7a4a32'
@@ -115,11 +115,6 @@ function glassy<T extends THREE.Object3D>(o: T, color = GLASS, k = 0.4): T {
   })
   return o
 }
-function lit<T extends THREE.Mesh>(m: T, color: string, k = 0.8): T {
-  m.material = toon(color, { emissive: k })
-  m.userData.noOutline = true
-  return m
-}
 /** 车削体：pts 为 [半径, 高度]，自下而上；at.y 为底 */
 function lathe(pts: [number, number][], color: string, at: { x?: number; y?: number; z?: number } = {}, seg = 28) {
   const m = new THREE.Mesh(new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(Math.max(0, r), y)), seg), toon(color))
@@ -168,7 +163,7 @@ const AIRCON_MOUNT = 205
 
 /** 运行指示灯 */
 function airLed(x: number, y: number, z: number, color = '#7fe0a8') {
-  return lit(ball(0.7, color, { x, y, z }), color)
+  return lit(ball(0.7, color, { x, y, z }), color, 0.8)
 }
 
 /** 薄型：方正扁平的整块前面板，底部一条细缝出风 */
