@@ -83,14 +83,20 @@ export const hasDeclaredCoords = (e: Partial<AssetDef>) => e.surface !== undefin
 
 const EPS = 0.05
 
+/** 台面允许比模型顶高出的量（cm）：1mm 以内的浮空看不出来（家电机身比标称高度矮 0.1 之类） */
+const SURFACE_TOL = 0.15
+
+/** 声明的 h 允许比模型矮这么多（和 dims.ts 的校正阈值一致：超过才会被 gen:dims 放大） */
+const H_TOL = 2
+
 /**
- * 只看声明数据的检查：surface ≤ 顶面（壁挂件的 surface 从地面量起，所以是 mount + h）；
+ * 只看声明数据的检查：surface ≤ 顶面（壁挂件的 surface 从地面量起，所以是 mount + h；h 允许比模型矮 2cm 以内，见 dims.ts）；
  * surfaceShape 在 w × d 以内（挂起 / 贴附形态的原点不在占地中心，不查）。
  */
 export function staticProblems(def: AssetDef): string[] {
   const out: string[] = []
   const top = (def.mount ?? 0) + def.h
-  if (def.surface !== undefined && def.surface > top + EPS) out.push(`surface ${def.surface} 高于顶面 ${top}`)
+  if (def.surface !== undefined && def.surface > top + H_TOL + EPS) out.push(`surface ${def.surface} 高于顶面 ${top}`)
   const inside = (poly: Poly) => poly.every(([x, z]) => Math.abs(x) <= def.w / 2 + EPS && Math.abs(z) <= def.d / 2 + EPS)
   if (def.form !== 'hanging' && !def.stick && def.surfaceShape?.some((p) => !inside(p))) out.push(`surfaceShape 超出 ${def.w}×${def.d}`)
   return out
@@ -110,6 +116,7 @@ export const MOUNT_TOL_ABOVE = 5
 
 /**
  * 要建模的检查：
+ *   surface：不高于模型顶面；
  *   mount：壁挂件模型最低点 ≈ mount；
  *   screens：屏幕面板顶边中点正下方、面板厚度前后两侧的两点必须落在同一个网格的包围盒里，且那个网格的顶面和顶边齐平
  *   （面板坐标没跟着模型平移时，夹式摄像头、便签会悬空）。
@@ -124,6 +131,11 @@ export function modelProblems(def: AssetDef, root: THREE.Object3D): string[] {
     if (!m.geometry.boundingBox) m.geometry.computeBoundingBox()
     boxes.push(m.geometry.boundingBox!.clone().applyMatrix4(m.matrixWorld))
   })
+  // 台面不能悬在模型上方（摆上去的东西会浮空）
+  if (def.surface !== undefined && def.form !== 'hanging' && !def.stick && boxes.length) {
+    const maxY = Math.max(...boxes.map((b) => b.max.y))
+    if (def.surface > maxY + SURFACE_TOL) out.push(`surface ${def.surface} 高于模型顶 ${maxY.toFixed(2)}`)
+  }
   if (def.mount !== undefined && def.form !== 'hanging' && !def.stick && boxes.length) {
     const minY = Math.min(...boxes.map((b) => b.min.y))
     if (minY < def.mount - MOUNT_TOL_BELOW || minY > def.mount + MOUNT_TOL_ABOVE) out.push(`mount ${def.mount} 与模型最低点 ${minY.toFixed(2)} 不符`)

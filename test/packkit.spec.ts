@@ -1,13 +1,13 @@
 // 素材声明和模型要对得上（packkit 的开发期断言跑全量）：
-//   surface 不高于顶面、surfaceShape 在占地以内、壁挂件最低点 ≈ mount、屏幕面板（screens）的顶边和几何一致。
+//   surface 不高于顶面和模型顶、surfaceShape 在占地以内、壁挂件最低点 ≈ mount、屏幕面板（screens）的顶边和几何一致。
 // 只做结构性断言。已知问题登记在 KNOWN 里并注明原因；修好后要把那一条删掉（多余的登记也会失败）。
 import { expect, test } from 'vitest'
 import { ASSETS } from '/src/three/assets'
 import { modelProblems, staticProblems } from '/src/three/packkit'
 
 const KNOWN: Record<string, string> = {
-  'vb-sc-retro': 'surface 92 比柜顶 91.8 高 0.2cm（待修）',
-  'vb-dr-mcm': 'surface 78 比柜顶 77.8 高 0.2cm（待修）',
+  wardrobe: 'surface 190 比柜顶 188 高 2cm（待修）',
+  'vb-bs-cube': 'surface 171 比柜顶 170.8 高 0.2cm（待修）',
 }
 
 test('素材声明与模型一致', () => {
