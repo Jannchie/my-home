@@ -142,8 +142,10 @@ function floorTargets(snap = false) {
   fs.forEach((f, i) => {
     let st = floorAnim.get(f.id)
     if (!st) floorAnim.set(f.id, (st = { extra: 0, target: 0, show: true, hideAt: false }))
-    const hide = multi && floorShow.value === 'upto' && i > ai
-    st.target = !multi ? 0 : floorShow.value === 'explode' ? i * EXPLODE_GAP : hide ? HIDE_LIFT : 0
+    // 外观视图：全部楼层叠好
+    const show = sandbox.exterior ? 'all' : floorShow.value
+    const hide = multi && show === 'upto' && i > ai
+    st.target = !multi ? 0 : show === 'explode' ? i * EXPLODE_GAP : hide ? HIDE_LIFT : 0
     st.hideAt = hide
     // 要显示的层：先露出来再滑下去
     if (!hide) st.show = true
@@ -205,8 +207,39 @@ function applyFloorPose() {
   dirty = true
 }
 
-/** 墙体压低：当前层按设置处理，其余楼层保持完整 */
+/**
+ * 屋顶（户建）：外观视图里总是显示；预览模式下显示（这时墙也都是完整的，像看一座模型房子），
+ * 镜头接近正上方往下看（看室内）时屋顶让开、墙恢复压低；布置模式不显示。
+ * 有楼层被「只到当前层」藏起来时也不显示（下层露出来的那块屋顶会挡住当前层）。
+ */
+let roofUp = false
+function roofWanted() {
+  if (sandbox.exterior) return true
+  // 墙高滑杆压低时屋顶会悬空：不显示
+  if (sandbox.mode !== 'preview' || sandbox.wallHeight < 240 || !floorGroups.some((f) => f.roof)) return (roofUp = false)
+  if ([...floorAnim.values()].some((s) => s.hideAt)) return (roofUp = false)
+  // 带回差：俯视角在阈值附近来回时屋顶不闪
+  const polar = controls ? controls.getPolarAngle() : 1
+  roofUp = roofUp ? polar > 0.6 : polar > 0.72
+  return roofUp
+}
+/** 外观样子（墙全部完整）：外观视图，或预览里屋顶盖着的时候（屋顶下面不压低墙） */
+const fullLook = () => sandbox.exterior || (sandbox.mode === 'preview' && roofUp)
+function applyRoofs(want = roofWanted()) {
+  for (const fg of floorGroups) {
+    if (!fg.roof || fg.roof.visible === want) continue
+    fg.roof.visible = want
+    stage.renderer.shadowMap.needsUpdate = true
+    dirty = true
+  }
+}
+
+/** 墙体压低：当前层按设置处理，其余楼层保持完整；外观视图里所有墙都是完整的 */
 function cutawayFloors(center: { x: number; y: number }, dir: { x: number; y: number } | null, depth: number | null) {
+  if (fullLook()) {
+    for (const fg of floorGroups) applyCutaway(fg.group, center, null)
+    return
+  }
   for (const fg of floorGroups) {
     if (fg.floor.id === activeFloor.value || floorGroups.length === 1) applyCutaway(fg.group, center, dir, depth, sandbox.wallMode === 'down', sandbox.wallMode === 'half')
     else applyCutaway(fg.group, center, null)
@@ -338,9 +371,10 @@ let fading = false
 let lastFrame = performance.now()
 function updateCutaway() {
   if (!house) return
+  const roof = roofWanted()
   const v = new THREE.Vector3().subVectors(stage.camera.position, new THREE.Vector3(houseCenter.x, 0, houseCenter.y))
   const l = Math.hypot(v.x, v.z)
-  const dir = sandbox.wallMode !== 'up' && l > 1 ? { x: v.x / l, y: v.z / l } : null
+  const dir = sandbox.wallMode !== 'up' && !fullLook() && l > 1 ? { x: v.x / l, y: v.z / l } : null
   let depth: number | null = null
   const room = hoverRoomId && sandbox.cutawayHover ? plan.value.rooms.find((r) => r.id === hoverRoomId) : undefined
   if (dir && room) {
@@ -350,7 +384,8 @@ function updateCutaway() {
   }
   cutawayFloors(houseCenter, dir, depth)
   // 天花板灯具：墙压低 / 半墙 / 墙很矮时淡出（挡视线），所指房间之前的也淡出；光照保留
-  lights?.applyCutaway(houseCenter, dir, depth, sandbox.wallMode === 'down' || sandbox.wallMode === 'half' || sandbox.wallHeight < 200)
+  lights?.applyCutaway(houseCenter, dir, depth, !fullLook() && (sandbox.wallMode === 'down' || sandbox.wallMode === 'half' || sandbox.wallHeight < 200))
+  applyRoofs(roof)
   fading = true
   updateMounted(dir, depth)
 }
@@ -526,7 +561,9 @@ function rebuildHouse() {
   xraySwapped.length = 0
   const raw = toRaw(plan.value)
   // 多层户型每层用自己的层高；墙高滑杆调低时只压低当前层
-  const built = buildBuilding(raw, sandbox.wallHeight, (f) => (f.id === activeFloor.value && sandbox.wallHeight < 240 ? Math.min(f.height, sandbox.wallHeight) : f.height))
+  // 外观视图：墙一律满高（墙高滑杆不起作用）
+  const wh = sandbox.exterior ? 240 : sandbox.wallHeight
+  const built = buildBuilding(raw, wh, (f) => (f.id === activeFloor.value && wh < 240 ? Math.min(f.height, wh) : f.height))
   house = built.root
   floorGroups = built.floors
   builtActive = activeFloor.value
@@ -1321,6 +1358,7 @@ function onKey(e: KeyboardEvent) {
   if (k === 'r' && !e.repeat) rKey = true
   const step = e.shiftKey ? 15 : 90
   if (k === 'p') setMode(editing.value ? 'preview' : 'edit')
+  if (k === 'o') sandbox.exterior = !sandbox.exterior
   else if (k === 'f') resetView()
   else if (k === 'c') cycleWallMode()
   else if (!editing.value) {
@@ -1904,6 +1942,21 @@ watch(
   { deep: true },
 )
 // 换楼层 / 换楼层显示方式：各层缓动到新位置；墙体压低换到新的当前层
+// 外观视图开关：墙高要换（重搭），楼层叠好，墙恢复完整，屋顶显示
+watch(
+  () => sandbox.exterior,
+  () => {
+    if (!house) return
+    rebuildHouse()
+    floorTargets()
+    updateCutaway()
+    dirty = true
+  },
+)
+watch(
+  () => sandbox.mode,
+  () => updateCutaway(),
+)
 watch([activeFloor, floorShow], () => {
   if (!house) return
   // 墙高滑杆调低时只有当前层是矮墙：换层要重搭
@@ -2115,6 +2168,7 @@ defineExpose({ resetView })
       <div class="modes">
         <button :class="{ on: editing }" :title="t('布置') + ' (P)'" @click="setMode('edit')"><JIcon :icon="ICONS.modeEdit" />{{ t('布置') }}</button>
         <button :class="{ on: !editing }" :title="t('预览') + ' (P)'" @click="setMode('preview')"><JIcon :icon="ICONS.modePreview" />{{ t('预览') }}</button>
+        <button class="ext-toggle" :class="{ on: sandbox.exterior }" :aria-pressed="sandbox.exterior" :title="t('外观：显示屋顶和完整外墙') + ' (O)'" @click="sandbox.exterior = !sandbox.exterior"><JIcon :icon="ICONS.exteriorView" />{{ t('外观') }}</button>
       </div>
       <div v-if="!editing" class="preview-bar">
         <label><input v-model="sandbox.autoRotate" type="checkbox" /><JIcon :icon="ICONS.autoRotate" class="ico-muted" />{{ t('自动旋转') }}</label>
@@ -2220,6 +2274,8 @@ defineExpose({ resetView })
         <div class="meta num">{{ planSize }} · {{ t('家具 {n} 件', { n: counts }) }}</div>
         <!-- 楼层：切换当前层（摆放、拖动、墙体压低都作用于它）、楼层显示方式 -->
         <FloorBar variant="panel" class="floors" />
+        <!-- 外观视图：屋顶、外墙满高、全部楼层（看房子外形；布置时默认是室内视角） -->
+        <label class="row check"><input v-model="sandbox.exterior" type="checkbox" /><JIcon :icon="ICONS.exteriorView" class="ico-muted" />{{ t('外观视图（屋顶、完整外墙）') }}</label>
         <label class="row">
           <span>{{ t('墙高') }}</span>
           <input v-model.number="sandbox.wallHeight" type="range" min="40" max="240" step="10" />

@@ -318,6 +318,57 @@ export interface Plan {
   north?: number
   /** 这份户型来自「我的户型」里的哪份存档（打开 / 保存时写入；撤销到打开之前就没有了，避免误覆盖） */
   savedId?: string
+  /** 户建的用地（院子、通道、围墙 / 绿篱、停车位）；公寓不填 */
+  site?: Site
+  /** 户建的外观（屋顶、外墙材质、雨棚）；公寓不填（不搭屋顶、外墙沿用默认的米白） */
+  exterior?: Exterior
+}
+
+/**
+ * 户建四周的用地（平面坐标，和房间同一套坐标系，只属于最底层）。不是房间：不参与墙体推导、检查和面积。
+ *   points 用地边界；fence 四周的围挡；gate 围挡上的出入口（一段边界，不装围挡）；
+ *   paths 铺装的通道（玄关门到出入口）；parking 停车位（铺装 + 一辆车）。
+ */
+export interface Site {
+  points: Vec[]
+  fence: FenceKind
+  gates: [Vec, Vec][]
+  paths: Vec[][]
+  parking: ParkingSpot[]
+}
+export type FenceKind = 'hedge' | 'fence' | 'wall' | 'none'
+export const FENCE_KINDS: Record<FenceKind, string> = { hedge: '绿篱', fence: '木栅栏', wall: '矮墙', none: '无围挡' }
+export interface ParkingSpot {
+  /** 车位矩形（平面坐标） */
+  points: Vec[]
+  /** 车头朝向（度，顺时针；0 = 朝 -y） */
+  rot: number
+  /** 画一辆车 */
+  car?: boolean
+  /** 车的颜色 */
+  carColor?: string
+}
+
+/** 屋顶：gable 双坡（切妻）/ hip 四坡（寄棟）/ shed 单坡（片流れ）/ flat 平屋顶（带女儿墙） */
+export type RoofKind = 'gable' | 'hip' | 'shed' | 'flat'
+export const ROOF_KINDS: Record<RoofKind, string> = { gable: '双坡', hip: '四坡', shed: '单坡', flat: '平屋顶' }
+/** 外墙材质：siding 横纹板材 / stucco 抹灰 / brick 砖 */
+export type FacadeKind = 'siding' | 'stucco' | 'brick'
+export const FACADE_KINDS: Record<FacadeKind, string> = { siding: '横纹板材', stucco: '抹灰', brick: '砖墙' }
+
+export interface Exterior {
+  roof: RoofKind
+  roofColor: string
+  /** 坡度（升高 / 水平距离），缺省 0.45 */
+  pitch?: number
+  /** 屋檐出挑（cm，从外墙外皮算），缺省 45 */
+  eave?: number
+  facade: FacadeKind
+  wallColor: string
+  /** 窗套、雨棚等的点缀色 */
+  trimColor: string
+  /** 入口门廊：canopy 雨棚 / porch 带柱子的门廊 / none */
+  porch?: 'canopy' | 'porch' | 'none'
 }
 
 export type Region = 'jp' | 'cn' | 'west'

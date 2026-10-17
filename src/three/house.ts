@@ -53,7 +53,7 @@ import { centroid, onBoundary, signedArea } from '../model'
 /** 地面高度：玄関土间、阳台比室内低 */
 const FLOOR_Y: Partial<Record<RoomKind, number>> = { entrance: -12, balcony: -15 }
 export const floorY = (r: Room | undefined) => (r ? (r.flush ? 0 : (FLOOR_Y[r.kind] ?? 0)) : 0)
-const BASE = -26
+export const BASE = -26
 
 export function roomAt(plan: Pick<Plan, 'rooms'>, p: Vec, floor?: string | null) {
   // 阳台和户内重叠时户内优先；floor 给定（多层户型）时只看那一层的房间（undefined 字段 = 最底层，传 null 表示最底层）
@@ -488,7 +488,7 @@ function openingSpan(plan: Plan, kind: string, owner: Room, sash: boolean) {
   return { y0: 90, y1: 190 }
 }
 
-interface OpeningInfo {
+export interface OpeningInfo {
   center: Vec
   dir: Vec
   out: Vec
@@ -502,7 +502,7 @@ interface OpeningInfo {
   owner: Room
 }
 
-function openingInfos(plan: Plan): OpeningInfo[] {
+export function openingInfos(plan: Plan): OpeningInfo[] {
   const out: OpeningInfo[] = []
   for (const o of plan.openings) {
     const owner = plan.rooms.find((r) => r.id === o.roomId)
@@ -575,6 +575,11 @@ function buildWalls(plan: Plan, H0: number, infos: OpeningInfo[], opts: HouseOpt
       return r?.wallpaper ? wallpaperMaterial(r.wallpaper) : null
     }
     const faces: [THREE.Material | null, THREE.Material | null] = [paper(1), paper(-1)]
+    // 户建外墙的外侧：外墙材质（板材 / 抹灰 / 砖，按世界坐标贴图）
+    if (outer && opts.facade) {
+      const k = n.x * n0.x + n.y * n0.y > 0 ? 0 : 1
+      if (!faces[k]) faces[k] = opts.facade
+    }
     // 本段上的门窗
     const cuts: Cut[] = []
     for (const info of infos) {
@@ -1358,8 +1363,14 @@ export function fixtureModel(f: Fixture, wallH: number, rise?: number) {
   }
 }
 
+/** 地面高度：房间里按房间（土间、阳台低一点）；户建院子里（不在房间里、在用地里）落到用地的地面 */
+function groundAt(plan: Pick<Plan, 'site'>, p: Vec, room: Room | undefined) {
+  if (room) return floorY(room)
+  return plan.site && pointInPolygon(p, plan.site.points) ? BASE : 0
+}
+
 function placeOnFloor(obj: THREE.Object3D, plan: Plan, x: number, y: number, rot: number) {
-  obj.position.set(x, floorY(roomAt(plan, { x, y })), y)
+  obj.position.set(x, groundAt(plan, { x, y }, roomAt(plan, { x, y })), y)
   obj.rotation.y = (-rot * Math.PI) / 180
 }
 
@@ -1379,6 +1390,10 @@ export interface HouseOpts {
   tall?: { zones: Vec[][]; extra: number }
   /** 楼梯的层间高 */
   rise?: number
+  /** 外墙外侧的材质（户建，three/exterior.ts facadeMaterial） */
+  facade?: THREE.Material
+  /** 不搭展示底座（户建由用地的地面代替） */
+  noBase?: boolean
 }
 
 export function buildHouse(plan: Plan, wallH: number, opts: HouseOpts = {}) {
@@ -1394,7 +1409,7 @@ export function buildHouse(plan: Plan, wallH: number, opts: HouseOpts = {}) {
   base.receiveShadow = true
   const top = rbox(W, 30, D, '#f5ead8', { x: (b.x0 + b.x1) / 2, y: BASE - 30, z: (b.y0 + b.y1) / 2 }, 10)
   top.receiveShadow = true
-  if (!opts.upper) {
+  if (!opts.upper && !opts.noBase) {
     root.add(base)
     root.add(top)
   }
@@ -1452,8 +1467,10 @@ export function buildHouse(plan: Plan, wallH: number, opts: HouseOpts = {}) {
     m.userData.fixtureId = f.id
     fx.add(m)
   }
-  addOutlines(base)
-  addOutlines(top)
+  if (!opts.upper && !opts.noBase) {
+    addOutlines(base)
+    addOutlines(top)
+  }
   root.add(fx)
   return root
 }
@@ -1483,7 +1500,8 @@ export function furnitureModel(fu: Furniture) {
 export function placeFurniture(obj: THREE.Object3D, plan: Plan, fu: Pick<Furniture, 'x' | 'y' | 'rot' | 'z' | 'floor'>) {
   if (isMultiFloor(plan)) {
     const room = roomAt(plan, { x: fu.x, y: fu.y }, fu.floor ?? null)
-    obj.position.set(fu.x, floorElevation(plan, floorOf(plan, fu)) + floorY(room) + (fu.z ?? 0), fu.y)
+    const elev = floorElevation(plan, floorOf(plan, fu))
+    obj.position.set(fu.x, elev + (elev === 0 ? groundAt(plan, fu, room) : floorY(room)) + (fu.z ?? 0), fu.y)
     obj.rotation.y = (-fu.rot * Math.PI) / 180
     return
   }

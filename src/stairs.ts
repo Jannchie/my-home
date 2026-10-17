@@ -297,3 +297,43 @@ export function subtractSpan(a: Vec, b: Vec, cut: [Vec, Vec], tol = 2): [number,
 }
 
 export const lerpV = (a: Vec, b: Vec, t: number) => add(a, mul({ x: b.x - a.x, y: b.y - a.y }, t))
+
+export interface StairLink {
+  stair: Fixture
+  /** 楼梯所在层、起步处的房间 */
+  lower: Room | undefined
+  /** 上一层出梯口外侧的房间 */
+  upper: Room | undefined
+  from: string
+  to: string
+}
+
+/**
+ * 楼梯把哪两个房间连起来：下层取起步端外侧（找不到就取楼梯中心）所在的房间，上层取出梯口外侧（找不到就取洞口中心）所在的房间。
+ * 跨层可达性检查用它；第三期的楼梯寻路也从这里取上下两端。
+ */
+export function stairLinks(p: Plan): StairLink[] {
+  if (!isMultiFloor(p)) return []
+  const out: StairLink[] = []
+  for (const f of p.fixtures) {
+    if (f.kind !== 'stairs') continue
+    const from = floorOf(p, f)
+    const up = floorAbove(p, from)
+    if (!up) continue
+    const L = stairLayout(f, riseOf(p, from))
+    const w = stairToWorld(f)
+    const center = { x: f.x, y: f.y }
+    const roomsOn = (id: string) => p.rooms.filter((r) => floorOf(p, r) === id)
+    const hit = (rs: Room[], q: Vec) => rs.find((r) => pointInPolygon(q, r.points))
+    const lowRooms = roomsOn(from)
+    const upRooms = roomsOn(up.id)
+    // 起步端外侧：局部 +y 再往外 20；出梯口外侧：出梯口中点背离楼梯中心再往外 20
+    const start = w({ x: L.path[0].x, y: L.path[0].y + 20 })
+    const arr = w(lerpV(L.arrival[0], L.arrival[1], 0.5))
+    const d = { x: arr.x - center.x, y: arr.y - center.y }
+    const l = Math.hypot(d.x, d.y) || 1
+    const beyond = { x: arr.x + (d.x / l) * 20, y: arr.y + (d.y / l) * 20 }
+    out.push({ stair: f, lower: hit(lowRooms, start) ?? hit(lowRooms, center), upper: hit(upRooms, beyond) ?? hit(upRooms, center), from, to: up.id })
+  }
+  return out
+}

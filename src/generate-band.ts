@@ -346,6 +346,17 @@ export function bedroomCloset(plan: Plan, room: Room, lengths = [200, 180, 160, 
 
 /** 所有户内房间是否都能从玄关走到（门 + 敞开边界），阳台从相邻房间的门窗进 */
 export function unreachable(plan: Pick<Plan, 'rooms' | 'openings'>): Room[] {
+  const adj = roomLinks(plan)
+  const start = plan.rooms.find((r) => r.kind === 'entrance')
+  if (!start) return plan.rooms
+  const seen = new Set([start.id])
+  const q = [start.id]
+  while (q.length) for (const n of adj.get(q.shift()!) ?? []) if (!seen.has(n)) (seen.add(n), q.push(n))
+  return plan.rooms.filter((r) => !seen.has(r.id))
+}
+
+/** 单层里房间之间的连通（门、通往阳台的窗、敞开边界 ≥ 60）：房间 id → 相邻可走的房间 id */
+export function roomLinks(plan: Pick<Plan, 'rooms' | 'openings'>): Map<string, Set<string>> {
   const adj = new Map<string, Set<string>>()
   const link = (a: string, b: string) => {
     if (!adj.has(a)) adj.set(a, new Set())
@@ -366,12 +377,7 @@ export function unreachable(plan: Pick<Plan, 'rooms' | 'openings'>): Room[] {
       if (a === b || !isOpenBetween(a, b)) continue
       if (edgesOf(a.points).some((e) => sharedIntervals(e, b).some(([lo, hi]) => hi - lo >= 60))) link(a.id, b.id)
     }
-  const start = plan.rooms.find((r) => r.kind === 'entrance')
-  if (!start) return plan.rooms
-  const seen = new Set([start.id])
-  const q = [start.id]
-  while (q.length) for (const n of adj.get(q.shift()!) ?? []) if (!seen.has(n)) (seen.add(n), q.push(n))
-  return plan.rooms.filter((r) => !seen.has(r.id))
+  return adj
 }
 
 /** 房间两两不重叠（面积交叠 > 1㎠ 视为重叠；采样判断，矩形 / L 形都适用） */

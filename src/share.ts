@@ -66,6 +66,9 @@ interface Compact {
   f?: CFurniture[]
   h?: unknown
   F?: [string, string, number, number][]
+  /** 户建用地 / 外观（结构见 model.ts Site / Exterior；读入时由 normalizePlan 校验） */
+  S?: unknown
+  X?: unknown
 }
 
 const ROOM_DECOR = ['wallpaper', 'curtain', 'light', 'lightK']
@@ -103,6 +106,8 @@ export function toCompact(p: Plan, mode: ShareMode): Compact {
   if (p.region) c.g = p.region
   if (p.north) c.N = r1(p.north)
   if (p.floors && p.floors.length > 1) c.F = p.floors.map((f) => [f.id, f.name, r1(f.elevation), r1(f.height)])
+  if (p.site) c.S = JSON.parse(JSON.stringify(p.site, (_k, v) => (typeof v === 'number' ? r1(v) : v)))
+  if (p.exterior) c.X = p.exterior
   if (mode === 'full') {
     const table: string[] = []
     const ai = new Map<string, number>()
@@ -198,6 +203,8 @@ export function fromCompact(c: unknown): Plan {
   // 楼层表：坏的项丢掉，其余交给 normalizePlan（排序、去重、只剩一层时变回单层）
   if (Array.isArray(o.F)) p.floors = o.F.filter((f) => Array.isArray(f) && isStr(f[0]) && isStr(f[1]) && isNum(f[2]) && isNum(f[3])).map(([id, name, elevation, height]) => ({ id, name, elevation, height }))
   if (isObj(o.h) && Array.isArray((o.h as { members?: unknown }).members)) p.household = o.h as unknown as Plan['household']
+  if (isObj(o.S)) p.site = o.S as unknown as Plan['site']
+  if (isObj(o.X)) p.exterior = o.X as unknown as Plan['exterior']
   return p
 }
 

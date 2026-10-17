@@ -4,6 +4,7 @@ import { computed } from 'vue'
 import { JIcon } from '@jannchie/icons-vue'
 import { REGION_LABELS } from '../model'
 import { LAYOUT_TYPES, STYLE_LABELS } from '../generate'
+import { DWELLING_LABELS, dwellingsFor, houseBedrooms, type Dwelling } from '../generate-house'
 import { jp, t } from '../i18n'
 import { ICONS } from '../ui/icons'
 import { chooseRegion, genOptions, sandbox } from '../store'
@@ -21,7 +22,13 @@ const areaModel = (key: 'minArea' | 'maxArea') =>
   })
 const minArea = areaModel('minArea')
 const maxArea = areaModel('maxArea')
-const jpRegion = computed(() => genOptions.region !== 'cn' && genOptions.region !== 'west')
+// 住宅类型：公寓 / 户建 / 复式（欧美没有复式）；随机 = 按种子，公寓为主
+const dwellings = computed<Dwelling[]>(() => (genOptions.region === 'cn' || genOptions.region === 'jp' ? dwellingsFor(genOptions.region) : genOptions.region === 'west' ? dwellingsFor('west') : ['apartment', 'house', 'duplex']))
+const flat = computed(() => !genOptions.dwelling || genOptions.dwelling === 'apartment' || genOptions.dwelling === 'random')
+const isApartment = computed(() => !genOptions.dwelling || genOptions.dwelling === 'apartment')
+const jpRegion = computed(() => genOptions.region !== 'cn' && genOptions.region !== 'west' && flat.value)
+// 户建 / 复式的卧室数：随地区（中式最多 5 间）
+const houseBeds = computed(() => houseBedrooms(genOptions.region === 'cn' || genOptions.region === 'west' ? genOptions.region : 'jp'))
 </script>
 
 <template>
@@ -33,7 +40,27 @@ const jpRegion = computed(() => genOptions.region !== 'cn' && genOptions.region 
         <option value="random">{{ t('随机地区') }}</option>
       </select>
     </label>
-    <label v-if="!jpRegion" class="field">
+    <label class="field">
+      <span>{{ t('住宅类型') }}</span>
+      <select v-model="genOptions.dwelling" :title="t('随机：按种子出公寓或户建，公寓为主')">
+        <option value="random">{{ t('随机类型') }}</option>
+        <option v-for="d in dwellings" :key="d" :value="d">{{ t(DWELLING_LABELS[d]) }}</option>
+      </select>
+    </label>
+    <label v-if="!flat" class="field">
+      <span>{{ t('层数') }}</span>
+      <select disabled :title="t('目前只支持两层')">
+        <option>{{ t('{n} 层', { n: 2 }) }}</option>
+      </select>
+    </label>
+    <label v-if="!flat" class="field">
+      <span>{{ t('卧室数') }}</span>
+      <select v-model="genOptions.bedrooms">
+        <option value="random">{{ t('随机户型') }}</option>
+        <option v-for="n in houseBeds" :key="n" :value="n">{{ genOptions.region === 'cn' ? t('{n} 室', { n }) : genOptions.region === 'west' ? t('{n} 卧', { n }) : `${n}LDK` }}</option>
+      </select>
+    </label>
+    <label v-else-if="!jpRegion" class="field">
       <span>{{ t('卧室数') }}</span>
       <select v-model="genOptions.bedrooms">
         <option value="random">{{ t('随机户型') }}</option>
@@ -62,7 +89,7 @@ const jpRegion = computed(() => genOptions.region !== 'cn' && genOptions.region 
         <option value="living">{{ t('リビングイン') }}</option>
       </select>
     </label>
-    <label class="field">
+    <label v-if="isApartment || genOptions.dwelling === 'random'" class="field">
       <span>{{ t('住户位置') }}</span>
       <select v-model="genOptions.corner" :title="t('角部屋（侧墙开窗）')">
         <option value="random">{{ t('位置随机') }}</option>
@@ -71,7 +98,7 @@ const jpRegion = computed(() => genOptions.region !== 'cn' && genOptions.region 
       </select>
     </label>
     <div class="field">
-      <span>{{ t('专有面积') }} ㎡</span>
+      <span>{{ isApartment ? t('专有面积') : t('建筑面积') }} ㎡</span>
       <span class="area num">
         <input v-model="minArea" type="number" inputmode="decimal" min="0" :placeholder="t('不限')" :title="t('最小专有面积 ㎡')" :aria-label="t('最小专有面积 ㎡')" />
         <span>–</span>

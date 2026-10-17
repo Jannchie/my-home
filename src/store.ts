@@ -18,6 +18,8 @@ import { lang, t } from './i18n'
 import { initialRoute } from './router'
 import { edgeInfo, emptyPlan, projectToSegment, type Fixture, type FixtureKind, type Floor, type Furniture, type Opening, type Plan, type Room, type Vec, type Wallpaper, uid } from './model'
 import { withStairHoles } from './stairs'
+import { normalizeExterior, styleExterior } from './exterior'
+import { yardFurniture } from './yard'
 import { BASE_FLOOR_ID, DEFAULT_FLOOR_H, SLAB, baseFloor, baseFloorId, floorBelow, floorById, floorOf, floorOutline, floorView, isMultiFloor, nextFloorId, normalizeFloors, perFloorFurniture, planFloors, stampFloor } from './floors'
 
 export type Tool = 'select' | 'rect' | 'poly' | 'door' | 'window' | 'fixture'
@@ -62,6 +64,8 @@ export function normalizePlan(p: Plan): Plan | null {
   for (const f of p.furniture) if (f.light !== undefined && f.light !== 'on' && f.light !== 'off') delete f.light
   // 楼层：没有 floors 的是单层户型（旧存档都是），物件的 floor 一律删掉；坏数据整理掉
   normalizeFloors(p)
+  // 户建的用地 / 外观：坏数据整理掉
+  normalizeExterior(p)
   return p
 }
 
@@ -120,6 +124,7 @@ export const genOptions = reactive<GenOptions>({
   maxArea: null,
   region: initialRegion(),
   bedrooms: 'random',
+  dwelling: 'random',
 })
 
 /** 生成结果提示（面积没满足时） */
@@ -264,7 +269,7 @@ export const WALL_MODES: { id: WallMode; label: string }[] = [
   { id: 'half', label: '内墙半墙' },
   { id: 'down', label: '全部压低' },
 ]
-export const sandbox = reactive({ wallHeight: 240, wallMode: 'half' as WallMode, cutHeight: 60, cutawayOpacity: 0, cutawayHover: true, snap: true, mode: 'edit' as 'edit' | 'preview', autoRotate: true, autoFurnish: true, style: 'auto' as StyleTag | 'random' | 'auto', look: loadLook(), fov: loadFov(), ...loadSky(), ...loadLights(), playing: false })
+export const sandbox = reactive({ wallHeight: 240, wallMode: 'half' as WallMode, cutHeight: 60, cutawayOpacity: 0, cutawayHover: true, snap: true, mode: 'edit' as 'edit' | 'preview', autoRotate: true, autoFurnish: true, style: 'auto' as StyleTag | 'random' | 'auto', look: loadLook(), fov: loadFov(), ...loadSky(), ...loadLights(), playing: false, exterior: false })
 
 /** 设备的当前时间：时刻（小时，含分钟）与月日 */
 export function nowSky() {
@@ -535,6 +540,8 @@ export function generate(newSeed = true) {
   // 生成户型时顺带布置家具（同一个种子，结果可复现）
   // 先推算住户，再按住户布置（同一个种子，结果可复现）
   r.plan.household = generateHousehold(r.plan, r.seed)
+  // 户建的外观颜色跟着住户风格
+  if (r.plan.exterior) styleExterior(r.plan.exterior, r.plan.household.style, r.seed)
   if (sandbox.autoFurnish) {
     r.plan.furniture = furnish(r.plan, r.seed)
     ensureOutdoorUnits(r.plan)
@@ -794,7 +801,9 @@ export function redecorate() {
  */
 function furnish(p: Plan, seed: number) {
   const base = baseFloorId(p)
-  return perFloorFurniture(p, (view, fl) => decorate(withStairHoles(p, view, fl.id), fl.id === base ? seed : seed + Math.round(fl.elevation), sandbox.style, p.household))
+  const inside = perFloorFurniture(p, (view, fl) => decorate(withStairHoles(p, view, fl.id), fl.id === base ? seed : seed + Math.round(fl.elevation), sandbox.style, p.household))
+  // 户建：院子里再摆几件户外物件（yard.ts）
+  return p.site ? [...inside, ...yardFurniture(p, seed)] : inside
 }
 
 /**

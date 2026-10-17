@@ -59,6 +59,7 @@ import {
   IconDashedCircle,
   IconLayoutRows,
   IconHome,
+  IconBuilding,
   IconLayoutGrid,
   IconListCheck,
   IconMagnet,
@@ -187,6 +188,8 @@ export const ICONS = {
   // 3D 沙盘：布置 / 预览
   modeEdit: IconEdit,
   modePreview: IconEye,
+  // 3D 沙盘的「外观」视图：屋顶、外墙全高
+  exteriorView: IconBuilding,
   // 3D 沙盘：一键布置 / 清空 / 吸附 / 跟随鼠标
   autoFurnish: IconSofaSparkle, // 新增
   clearFurniture: IconBroom,
