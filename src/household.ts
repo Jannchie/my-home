@@ -463,7 +463,7 @@ export const lowMobility = (m: Member) => m.role === 'elder' || m.age >= 70
  *   剩下的居室不留空，按工作和兴趣排出功能房（书房、电竞房、音乐室…），一间一种用途。
  * 多层户型另外：
  *   - 长辈 / 行动不便者先分，优先 1F（1F 和室 > 1F 洋室 > 其他层和室 > 其他）；
- *   - 孩子优先和父母同层，其次相邻的层；
+ *   - 孩子优先和父母同层，其次相邻的层；3 岁以下的婴儿和父母同室；
  *   - 1F 和 LDK 相连的和室算全家共用（客间 / 家族室），只在长辈要住或房间不够时才分给个人。
  * 单层户型的结果和以前完全一样（一键布置的输出不变）。
  */
@@ -508,6 +508,11 @@ export function allocateRooms(plan: Plan, hh: Household): Allocation {
   }
   let parentsRoom: Room | undefined
   for (const g of groups) {
+    // 多层：婴儿（3 岁以下）和父母睡一间
+    if (multi && parentsRoom && g[0]?.role === 'child' && g[0].age < 3) {
+      occupants.set(parentsRoom.id, [...(occupants.get(parentsRoom.id) ?? []), ...g])
+      continue
+    }
     if (!free.length) {
       // 房间不够：小孩和父母睡，长辈 / 大孩子挤进最大的房间
       const room = (multi && g[0]?.role === 'child' && parentsRoom) || rooms[0]

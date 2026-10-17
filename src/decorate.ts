@@ -2773,9 +2773,12 @@ class Decorator {
       const mid = { x: (z.x0 + z.x1) / 2, y: (z.y0 + z.y1) / 2 }
       const home = this.plan.rooms.find((r) => pointInPolygon(w(mid), r.points))
       if (!home) continue
+      // 开口外侧 30cm 要在同一个房间里，且没被设备（冰箱位、厨房…）挡住
+      const others = this.plan.fixtures.filter((x) => x !== f && x.kind !== 'ps' && !x.id.endsWith('~hole')).map(fixtureBox)
+      const open = (q: Vec) => pointInPolygon(q, home.points) && !others.some((b) => q.x > b.x0 && q.x < b.x1 && q.y > b.y0 && q.y < b.y1)
       const n = z.fronts.find((q) => {
         const edge = q.x > 0 ? z.x1 : z.x0
-        return pointInPolygon(w({ x: edge + q.x * 30, y: mid.y }), home.points) && pointInPolygon(w({ x: edge + q.x * 30, y: z.y0 + 10 }), home.points) && pointInPolygon(w({ x: edge + q.x * 30, y: z.y1 - 10 }), home.points)
+        return [mid.y, z.y0 + 10, z.y1 - 10].every((y) => open(w({ x: edge + q.x * 30, y })))
       })
       if (!n) continue
       const depthMax = z.x1 - z.x0 - 4

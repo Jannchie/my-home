@@ -272,7 +272,18 @@ function syncActors() {
   actors.sync(toRaw(plan.value), actorsLive())
 }
 // 开发时的调试入口（截图脚本用）：看角色位置、让角色去某层某处
-if (import.meta.env.DEV) (window as unknown as { __myhomeActors?: ActorLayer }).__myhomeActors = actors
+if (import.meta.env.DEV) {
+  const w = window as unknown as { __myhomeActors?: ActorLayer; __myhomeCam?: (target: number[], pos: number[]) => void }
+  w.__myhomeActors = actors
+  // 镜头：target / pos 是世界坐标 [x, 高度, 平面 y]
+  w.__myhomeCam = (target, pos) => {
+    controls.autoRotate = false
+    controls.target.set(target[0], target[1], target[2])
+    stage.camera.position.set(pos[0], pos[1], pos[2])
+    controls.update()
+    dirty = true
+  }
+}
 /** 室内灯光：房间主灯、灯具家具的光源，入夜自动亮（three/lights.ts） */
 let lights: IndoorLights
 let lastDining = ''
