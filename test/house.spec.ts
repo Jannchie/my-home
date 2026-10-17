@@ -240,8 +240,9 @@ describe('平层公寓不受影响', () => {
   })
 
   test('平层生成的指纹和改动前一致', () => {
+    // 名字（户型名、房间名）按运行环境的语言翻译，CI 和本机不同：只比结构，不比显示文字
     const fp = (p: Plan) => {
-      const s = JSON.stringify(normalizeIds(p))
+      const s = JSON.stringify(normalizeIds(p), (k, v) => (k === 'name' ? undefined : v))
       let h = 2166136261
       for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619) >>> 0
       return h.toString(16)
@@ -251,5 +252,5 @@ describe('平层公寓不受影响', () => {
   })
 })
 
-/** 改动前（v1.3.0）平层生成的指纹：jp / cn / west 各取种子 3、77、500 */
-const FINGERPRINTS = ['3b971347,d87f3a7a,343df5d1', '2140434,5989588e,cfbb568c', 'a3f1a2e4,1e4fdfc5,76259b47']
+/** 改动前（v1.3.0）平层生成的指纹（不含名字）：jp / cn / west 各取种子 3、77、500 */
+const FINGERPRINTS = ['647b61e4,c690b2f4,ed6abb68', '2b5f22c5,f281fb39,4fe977f4', '4415e38c,65ad4dbf,c7f4c3c0']
