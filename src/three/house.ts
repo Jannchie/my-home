@@ -24,8 +24,8 @@ import {
 } from '../model'
 import { isIndoor, sharedIntervals, voidRailSegments, wallSegments, wallThicknessAt } from '../walls'
 import { tatamiLayout } from '../tatami'
-import { addOutlines, ball, capsule, cyl, mergeMeshes, noTransparentShadows, rbox, shade, toon, useAnisotropy } from './toon'
-import { glow, poseDoors } from './kit'
+import { addOutlines, ball, capsule, cyl, disposeHooks, mergeMeshes, noTransparentShadows, rbox, shade, toon, useAnisotropy } from './toon'
+import { glow, poseDoors, type AssetDef } from './kit'
 import { freezeMatrices, syncMatrix } from './matrices'
 import { hasTag } from './tags'
 import { fridgeSpotModel, washerSpotModel } from './appliances'
@@ -1708,23 +1708,125 @@ export function buildHouse(plan: Plan, wallH: number, opts: HouseOpts = {}) {
   return root
 }
 
-export function furnitureModel(fu: Furniture) {
-  const def = ASSET_MAP.get(fu.asset)
-  const g = new THREE.Group()
-  if (!def) return g
+// ---------- 家具模板缓存 ----------
+//
+// 同一件素材（同配色、同单件改色、同花纹）建一次「关着门、已合并、已描边、已冻结矩阵」的模板，之后每件家具 clone(true)：
+// 几何体、材质共用，只复制对象树。生成户型、一键布置、切风格时同一种椅子、书、杯子成套出现，省掉重复的 build + 合并。
+//   - 模板自己合并出来的几何体标成 shared：实例被 disposeUnshared 时不会释放（别的实例、模板还在用）；
+//   - 按模板做引用计数：模板被挤出 LRU 且没有实例在用时，才释放它的几何体；
+//   - 绿植贴墙弯折（bendToWalls）先 clone 几何再改，原几何（模板的）不动，可以照常走缓存；
+//   - 柜门开合在实例上摆（poseDoors 记的 doorBase 在实例上），模板永远是关着的。
+
+interface FurnitureTemplate {
+  root: THREE.Object3D
+  /** 模板自己新建的几何体（合并出来的、素材包里不缓存的）：模板释放时一起 dispose */
+  own: THREE.BufferGeometry[]
+  refs: number
+  /** 已经不在缓存里：最后一个实例释放时 dispose */
+  evicted: boolean
+}
+// 一整套户建的家具约 150 种不同的键：上限小于它时，按顺序重建整屋会把 LRU 刷穿（每件都未命中）
+let templateLimit = 256
+const templates = new Map<string, FurnitureTemplate>()
+const templateStats = { hits: 0, misses: 0 }
+
+/** 模板缓存上限（件数）；0 = 不缓存（每次都重新建） */
+export function setFurnitureTemplateLimit(n: number) {
+  templateLimit = Math.max(0, Math.floor(n))
+  trimTemplates()
+}
+/** 调试 / 测试用：缓存件数、命中、未命中 */
+export function furnitureTemplateInfo() {
+  return { size: templates.size, limit: templateLimit, ...templateStats }
+}
+/** 清空模板缓存（没有实例在用的立即释放） */
+export function clearFurnitureTemplates() {
+  for (const t of templates.values()) evictTemplate(t)
+  templates.clear()
+}
+function evictTemplate(t: FurnitureTemplate) {
+  t.evicted = true
+  if (!t.refs) for (const g of t.own) g.dispose()
+}
+function trimTemplates() {
+  while (templates.size > templateLimit) {
+    const [k, t] = templates.entries().next().value as [string, FurnitureTemplate]
+    templates.delete(k)
+    evictTemplate(t)
+  }
+}
+
+/** 模板的缓存键：素材 | 配色 | 单件改色 | 花纹（开合不在内） */
+export function furnitureTemplateKey(fu: Pick<Furniture, 'asset' | 'color' | 'colors' | 'patterns'>) {
+  return `${fu.asset}|${fu.color ?? 0}|${fu.colors?.join(',') ?? ''}|${fu.patterns ? JSON.stringify(fu.patterns) : ''}`
+}
+
+function buildTemplate(def: AssetDef, fu: Furniture, closeUp: boolean): FurnitureTemplate {
   const pal = effectivePalette(def, fu.color ?? 0, fu.colors)
   const m = def.build(pal)
   // 半透明零件（玻璃、水面）不投影
   noTransparentShadows(m)
   // 零件按材质合并，draw call 少一个数量级（描边、花纹、弯曲都在合并后的网格上照常工作）
   mergeMeshes(m)
-  noTinyShadows(m)
-  addOutlines(m, { minSize: TINY_OUTLINE })
+  // 沙盘里远看：太小的零件不投影、不描边（省 draw call）；素材库的近景预览全都保留
+  if (!closeUp) noTinyShadows(m)
+  addOutlines(m, closeUp ? {} : { minSize: TINY_OUTLINE })
   applyPatterns(m, pal, fu.patterns)
-  // 可开合的柜子：柜门 / 抽屉按 open 摆好（模型本身是关着的）
-  if (def.openable) poseDoors(m, !!fu.open)
-  // 模型内部的零件不再动（开合是重建模型）：矩阵算一次就固定，免得每帧上万个对象重算矩阵
+  // 模型内部的零件不再动（开合只改柜门子树，poseDoors 会同步矩阵）：矩阵算一次就固定
   freezeMatrices(m)
+  const own = new Set<THREE.BufferGeometry>()
+  m.traverse((o) => {
+    const g = (o as THREE.Mesh).geometry
+    if (!(o as THREE.Mesh).isMesh || !g || g.userData.shared) return
+    g.userData.shared = true
+    own.add(g)
+  })
+  return { root: m, own: [...own], refs: 0, evicted: false }
+}
+
+/** 从模板复制一份对象树（几何、材质共用）。clone 不复制 raycast：描边外壳要重新设成不可拾取 */
+function instantiate(t: FurnitureTemplate) {
+  const m = t.root.clone(true)
+  m.traverse((o) => {
+    if (o.userData.isOutline) o.raycast = () => {}
+  })
+  return m
+}
+
+/**
+ * 家具模型（关着门的模板的一份实例，再按 fu.open 摆门）。
+ * closeUp：素材库的近景预览——小零件也投影、描边（沙盘里为了 draw call 略去），走另一套模板。
+ */
+export function furnitureModel(fu: Furniture, opts: { closeUp?: boolean } = {}) {
+  const def = ASSET_MAP.get(fu.asset)
+  const g = new THREE.Group()
+  if (!def) return g
+  const closeUp = !!opts.closeUp
+  const key = (closeUp ? 'near|' : '') + furnitureTemplateKey(fu)
+  let t = templates.get(key)
+  if (t) {
+    // LRU：用到的挪到最后
+    templates.delete(key)
+    templates.set(key, t)
+    templateStats.hits++
+  } else {
+    t = buildTemplate(def, fu, closeUp)
+    templateStats.misses++
+    if (templateLimit > 0) {
+      templates.set(key, t)
+      trimTemplates()
+    } else t.evicted = true
+  }
+  const m = instantiate(t)
+  t.refs++
+  const tpl = t
+  // 实例被丢弃（disposeUnshared）时归还引用
+  disposeHooks.set(g, () => {
+    tpl.refs--
+    if (tpl.evicted && !tpl.refs) for (const geo of tpl.own) geo.dispose()
+  })
+  // 可开合的柜子：柜门 / 抽屉按 open 摆好（模板本身是关着的）
+  if (def.openable) poseDoors(m, !!fu.open)
   g.add(m)
   g.userData.furnitureId = fu.id
   g.userData.asset = fu.asset

@@ -5,12 +5,11 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { ASSETS, ASSET_MAP, CATEGORY_LABELS, STYLE_LABELS, type AssetCategory, type StyleTag } from '../three/assets'
 import { SIZE_LABELS, browse, cardName, categoriesOf, countByCategory, displayName, paletteFor, paletteStyle, siblings, sizeClass, typesIn, variantLabel, type Filter, type SizeClass } from '../three/catalog'
 import { typeLabel } from '../three/typeLabels'
-import { addOutlines, disposeUnshared, mergeMeshes, noTransparentShadows } from '../three/toon'
+import { disposeUnshared } from '../three/toon'
+import { furnitureModel } from '../three/house'
 import { createStage, fitSun, frameCamera, type Stage } from '../three/stage'
 import { useThumbs } from '../three/thumbs'
 import { FxLayer } from '../three/fx'
-import { effectivePalette } from '../three/colors'
-import { applyPatterns } from '../three/fabric'
 import type { PatternSpec } from '../three/patterns'
 import ColorEditor from './ColorEditor.vue'
 import BottomSheet, { type SheetSnap } from './BottomSheet.vue'
@@ -98,13 +97,9 @@ function showPreview() {
     disposeUnshared(current)
   }
   const d = def.value
-  const pal = effectivePalette(d, color.value, customColors.value)
-  // 和沙盘里的家具同一套出口：合并同材质零件 → 描边 → 套花纹（半透明件不投影）
-  current = d.build(pal)
-  noTransparentShadows(current)
-  mergeMeshes(current)
-  addOutlines(current)
-  applyPatterns(current, pal, customPatterns.value)
+  // 和沙盘里的家具同一个出口（house.ts furnitureModel）：合并同材质零件 → 描边 → 套花纹，走同一套模板缓存。
+  // 近景版（closeUp）小零件也投影、描边，和沙盘的远景版是两份模板
+  current = furnitureModel({ id: 'preview', asset: d.id, x: 0, y: 0, rot: 0, color: color.value, colors: customColors.value, patterns: customPatterns.value }, { closeUp: true })
   stage.scene.add(current)
   fx.set('preview', current, d.fx)
   stage.renderer.shadowMap.needsUpdate = true

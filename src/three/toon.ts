@@ -547,6 +547,9 @@ export function noTransparentShadows(root: THREE.Object3D) {
   })
 }
 
+/** disposeUnshared 遍历到这些对象时调用的回调（只调一次），house.ts 的家具模板用它做引用计数 */
+export const disposeHooks = new WeakMap<THREE.Object3D, () => void>()
+
 /**
  * 丢弃一棵场景树（移除家具、重建房子时）：释放共享缓存以外的几何体（合并出来的、墙体等每次新建的、
  * 绿植弯曲用的克隆）和淡出用的克隆材质，否则会一直占着显存。
@@ -554,6 +557,12 @@ export function noTransparentShadows(root: THREE.Object3D) {
  */
 export function disposeUnshared(root: THREE.Object3D) {
   root.traverse((o) => {
+    // 登记了释放回调的（家具模板的实例：归还模板引用）
+    const hook = disposeHooks.get(o)
+    if (hook) {
+      disposeHooks.delete(o)
+      hook()
+    }
     const m = o as THREE.Mesh
     if (m.isMesh && !m.geometry.userData.shared) m.geometry.dispose()
     const orig = o.userData.origGeo as THREE.BufferGeometry | undefined

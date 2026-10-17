@@ -7,7 +7,10 @@
 import { expect, test } from 'vitest'
 import * as THREE from 'three'
 import { ASSETS, ASSET_MAP } from '/src/three/assets'
-import { furnitureModel } from '/src/three/house'
+import { furnitureModel, setFurnitureTemplateLimit } from '/src/three/house'
+
+// 关掉家具模板缓存：每次都真的重建，统计和「跨模型复用的几何必须标共享」的检查才有意义
+setFurnitureTemplateLimit(0)
 
 /** 按最大边（cm）分档：小件 / 中件 / 大件（体素按尺寸自适应细分后收紧到这一档） */
 const TIERS = [
