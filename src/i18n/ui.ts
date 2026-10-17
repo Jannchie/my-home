@@ -1002,6 +1002,30 @@ Object.assign(UI, {
   矮墙: ['ブロック塀', 'Low wall'],
   无围挡: ['囲いなし', 'No fence'],
 } satisfies Record<string, Entry>)
+// ---------- 3D 设计图 ----------
+Object.assign(UI, {
+  设计图: ['設計図', 'Blueprint'],
+  '设计图：线框、尺寸标注，可导出 PNG': ['設計図：線画と寸法、PNG で書き出し', 'Blueprint: line drawing with dimensions, exportable as PNG'],
+  '设计图（线框与尺寸标注）': ['設計図（線画と寸法）', 'Blueprint (line drawing with dimensions)'],
+  '设计图 · 单指旋转 · 双指缩放 / 平移': ['設計図 · 1 本指で回転 · 2 本指でズーム / 移動', 'Blueprint · one finger to orbit · two fingers to zoom / pan'],
+  '设计图 · 左键旋转 · 右键平移 · 滚轮缩放 · F 重置视角 · B 或 Esc 返回': ['設計図 · 左ドラッグで回転 · 右ドラッグで移動 · ホイールでズーム · F で視点リセット · B か Esc で戻る', 'Blueprint · left-drag to orbit · right-drag to pan · scroll to zoom · F resets the view · B or Esc to go back'],
+  纸面: ['用紙', 'Paper'],
+  白纸: ['白', 'White'],
+  晒图: ['青焼き', 'Blueprint'],
+  墙体: ['壁', 'Walls'],
+  剖切: ['断面', 'Section cut'],
+  完整墙高: ['壁を全高で', 'Full height'],
+  只显示大件: ['大物だけ', 'Large pieces only'],
+  隐藏: ['非表示', 'Hidden'],
+  尺寸单位: ['寸法の単位', 'Dimension unit'],
+  单位: ['単位', 'Unit'],
+  '自动（{u}）': ['自動（{u}）', 'Auto ({u})'],
+  '正交轴测（点击切换到透视）': ['平行投影のアクソメ（クリックで透視に切替）', 'Orthographic axonometric (click for perspective)'],
+  '透视（点击切换到正交轴测）': ['透視（クリックで平行投影に切替）', 'Perspective (click for orthographic)'],
+  轴测: ['アクソメ', 'Axonometric'],
+  '导出高分辨率 PNG': ['高解像度 PNG を書き出す', 'Export a high-resolution PNG'],
+  墙顶: ['壁天端', 'Wall top'],
+} satisfies Record<string, Entry>)
 Object.assign(ROOM_NAMES, {
   露台: ['テラス', 'Terrace'],
   Closet: ['クローゼット', 'Closet'],
