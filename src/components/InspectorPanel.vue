@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { DEFAULT_STAIR_STYLE, STAIR_STYLES } from '../stairStyles'
 import { FIXTURES, OPENING_LABELS, ROOM_KINDS, area, bbox, edgeInfo, fixtureDepth, fmtArea, fmtJo, fmtRoomArea, isAxisRect, perimeter, rectPoints, type KitchenVariant, type OpeningKind, type RoomKind, TOILET_TYPES, type ToiletType, BUILTIN_TYPES, type BuiltinType } from '../model'
 import { planArea } from '../generate'
 import { RAILING_KINDS, type RailingKind } from '../model'
@@ -83,6 +84,16 @@ function setStairs(v: StairsVariant) {
     f.d = STAIRS_SIZE[v].d
     if (v === 'straight') delete f.turn
     if (v !== 'l') delete f.run
+  })
+}
+
+/** 换楼梯外观样式（经典 = 缺省，不写字段） */
+function setStairStyle(v: string) {
+  const f = fixture.value
+  if (!f) return
+  mutate(() => {
+    if (v === DEFAULT_STAIR_STYLE) delete f.stairStyle
+    else f.stairStyle = v
   })
 }
 
@@ -277,6 +288,12 @@ function setSpotOpen(open: boolean) {
           >{{ t('形式') }}
           <select :value="stairsVariant(fixture)" @change="setStairs(str($event) as StairsVariant)">
             <option v-for="(label, k) in STAIRS_VARIANTS" :key="k" :value="k">{{ t(label) }}</option>
+          </select>
+        </label>
+        <label
+          >{{ t('样式') }}
+          <select :value="fixture.stairStyle ?? DEFAULT_STAIR_STYLE" @change="setStairStyle(str($event))">
+            <option v-for="(st, k) in STAIR_STYLES" :key="k" :value="k">{{ t(st.label) }}</option>
           </select>
         </label>
         <label v-if="stairsVariant(fixture) !== 'straight'"

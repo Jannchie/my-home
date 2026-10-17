@@ -22,6 +22,10 @@ export interface StairStep {
   top: number
 }
 
+/**
+ * 扶手线：楼梯每条可能需要扶手的边都给一条（内侧、外侧都给）。
+ * 装成什么样由 3D 那边决定：贴着墙的段装靠墙扶手，敞开的段装栏杆（见 stairStyles.ts）。
+ */
 export interface StairRail {
   /** 扶手沿线的点（局部坐标）和该处踏面高度 */
   pts: { x: number; y: number; h: number }[]
@@ -132,6 +136,17 @@ export function stairLayout(f: Fixture, rise: number): StairLayout {
         { x: -sx * (W / 2) + sx * t2 / 2, y: yi + 4, h: rise },
       ],
     }
+    // 外侧：第一跑沿 x = xo，绕平台外角，第二跑沿 y = -D/2
+    const xr = xo - sx * 4
+    const outer: StairRail = {
+      pts: [
+        { x: xr, y: D / 2 - t1 / 2, h: r },
+        { x: xr, y: yi, h: (n1 + 1) * r },
+        { x: xr, y: -D / 2 + 4, h: (n1 + 1) * r },
+        { x: xi - (sx * t2) / 2, y: -D / 2 + 4, h: (n1 + 2) * r },
+        { x: -sx * (W / 2) + (sx * t2) / 2, y: -D / 2 + 4, h: rise },
+      ],
+    }
     return {
       steps,
       path: [
@@ -143,7 +158,7 @@ export function stairLayout(f: Fixture, rise: number): StairLayout {
         { x: -sx * (W / 2), y: -D / 2 },
         { x: -sx * (W / 2), y: -D / 2 + s },
       ],
-      rails: [rail],
+      rails: [rail, outer],
     }
   }
   // U：两跑各占一半宽，远端整宽的平台
@@ -177,6 +192,17 @@ export function stairLayout(f: Fixture, rise: number): StairLayout {
           { x: sx * 3, y: y1 + 3, h: (n1 + 1) * r },
           { x: -sx * 3, y: y1 + 3, h: (n1 + 1) * r },
           { x: -sx * 3, y: D / 2 - t2 / 2, h: rise },
+        ],
+      },
+      // 外圈：第一跑外侧往上、沿平台三边、第二跑外侧往上
+      {
+        pts: [
+          { x: sx * (W / 2 - 4), y: D / 2 - t1 / 2, h: r },
+          { x: sx * (W / 2 - 4), y: y1, h: (n1 + 1) * r },
+          { x: sx * (W / 2 - 4), y: -D / 2 + 4, h: (n1 + 1) * r },
+          { x: -sx * (W / 2 - 4), y: -D / 2 + 4, h: (n1 + 1) * r },
+          { x: -sx * (W / 2 - 4), y: y1, h: (n1 + 1) * r },
+          { x: -sx * (W / 2 - 4), y: D / 2 - t2 / 2, h: rise },
         ],
       },
     ],

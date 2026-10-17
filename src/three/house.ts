@@ -46,7 +46,7 @@ import { edgesOf } from '../model'
 import { showerSpot } from '../bathroom'
 import { curtainSpec } from '../curtains'
 import { showerCurtainModel, showerModel } from './packs/bath-extra'
-import { holeRails, stairsModel } from './stairs3d'
+import { holeRails, stairsModel, type WallLine } from './stairs3d'
 import { SLAB, floorElevation, floorOf, isMultiFloor } from '../floors'
 import { centroid, onBoundary, signedArea } from '../model'
 
@@ -275,12 +275,38 @@ const solidShadow = <T extends THREE.Material>(m: T) => {
 const capMat = () => solidShadow(toon('#7a6258'))
 const wallMat = (outer: boolean) => solidShadow(toon(outer ? '#fbf3e6' : '#fff8ef'))
 
+/**
+ * 多材质的盒子：材质相同的面并进同一组。BoxGeometry 每个面一组、每组一个 draw call（阴影里也是），
+ * 墙段六个面大多是同一种墙面材质，合并后一段墙从 6 次降到 2~4 次。返回去重后的材质数组。
+ */
+function boxMesh(geo: THREE.BoxGeometry, mats: THREE.Material[]) {
+  const uniq = [...new Set(mats)]
+  if (uniq.length < mats.length && geo.index) {
+    const src = geo.index.array
+    const out = new (src.constructor as Uint16ArrayConstructor)(src.length)
+    const groups = geo.groups.slice()
+    geo.clearGroups()
+    let o = 0
+    uniq.forEach((m, mi) => {
+      const start = o
+      for (const g of groups) {
+        if (mats[g.materialIndex ?? 0] !== m) continue
+        out.set(src.subarray(g.start, g.start + g.count), o)
+        o += g.count
+      }
+      geo.addGroup(start, o - start, mi)
+    })
+    geo.setIndex(new THREE.BufferAttribute(out, 1))
+  }
+  return new THREE.Mesh(geo, uniq)
+}
+
 /** 墙脚细线：前墙隐藏后仍能看出房间边界（被完整的墙包在里面时看不见） */
 function wallStub(a: Vec, b: Vec, t: number, y0: number, y1: number, outer: boolean) {
   const L = dist(a, b)
   if (L < 0.5) return null
   const side = wallMat(outer)
-  const m = new THREE.Mesh(new THREE.BoxGeometry(L, y1 - y0, t), [side, side, capMat(), side, side, side])
+  const m = boxMesh(new THREE.BoxGeometry(L, y1 - y0, t), [side, side, capMat(), side, side, side])
   const c = mul(add(a, b), 0.5)
   m.position.set(c.x, (y0 + y1) / 2, c.y)
   m.rotation.y = Math.atan2(-(b.y - a.y), b.x - a.x)
@@ -448,7 +474,7 @@ function wallPiece(a: Vec, b: Vec, t: number, y0: number, y1: number, outer: boo
   const side = wallMat(outer)
   // 材质顺序：+x -x +y -y +z -z；顶面画成深色截面，像沙盘模型的剖切
   // 材质顺序：+x -x +y -y +z -z；+z 面朝 (-dir.y, dir.x) 一侧的房间，-z 面朝另一侧
-  const m = new THREE.Mesh(geo, [side, side, capTop ? capMat() : side, side, faces?.[0] ?? side, faces?.[1] ?? side])
+  const m = boxMesh(geo, [side, side, capTop ? capMat() : side, side, faces?.[0] ?? side, faces?.[1] ?? side])
   const c = mul(add(a, b), 0.5)
   // 地面以下的窗台、门槛不挡视线，不参与透明
   if (y1 > 5) tagFade(m, c, n ?? { x: -(b.y - a.y) / L, y: (b.x - a.x) / L }, outer)
@@ -1326,7 +1352,7 @@ function buildShowers(plan: Plan) {
 }
 
 /** rise：楼梯的层间高（不给按墙高 + 楼板厚） */
-export function fixtureModel(f: Fixture, wallH: number, rise?: number) {
+export function fixtureModel(f: Fixture, wallH: number, rise?: number, walls?: WallLine[]) {
   const d = fixtureDepth(f)
   switch (f.kind) {
     case 'kitchen':
@@ -1359,7 +1385,7 @@ export function fixtureModel(f: Fixture, wallH: number, rise?: number) {
     case 'builtin':
       return storageSpotModel(f.w, d, !!f.recessed, Math.min(wallH - 1, NICHE_H))
     case 'stairs':
-      return stairsModel(f, rise ?? wallH + SLAB)
+      return stairsModel(f, rise ?? wallH + SLAB, walls)
   }
 }
 
@@ -1445,11 +1471,11 @@ export function buildHouse(plan: Plan, wallH: number, opts: HouseOpts = {}) {
   root.add(buildCurtains(plan, infos, wallH))
   root.add(buildTrims(plan, infos, wallH))
 
-  // 楼梯洞口四周的栏杆（贴着墙的边不装）
+  // 实墙段：楼梯洞口栏杆（贴着墙的边不装）、楼梯扶手（贴墙的一侧装靠墙扶手）
+  const ws: WallLine[] = wallSegments(plan.rooms)
+    .filter((s) => s.kind !== 'open')
+    .map((s) => ({ a: s.a, b: s.b, t: s.kind === 'outer' ? plan.wallOuter : plan.wall }))
   if (opts.stairHoles?.length) {
-    const ws = wallSegments(plan.rooms)
-      .filter((s) => s.kind !== 'open')
-      .map((s) => ({ a: s.a, b: s.b, t: s.kind === 'outer' ? plan.wallOuter : plan.wall }))
     const rails = new THREE.Group()
     for (const h of opts.stairHoles) rails.add(holeRails(h.poly, h.arrival, ws))
     mergeMeshes(rails)
@@ -1459,7 +1485,7 @@ export function buildHouse(plan: Plan, wallH: number, opts: HouseOpts = {}) {
 
   const fx = new THREE.Group()
   for (const f of plan.fixtures) {
-    const m = fixtureModel(f, wallH, opts.rise)
+    const m = fixtureModel(f, wallH, opts.rise, f.kind === 'stairs' ? ws : undefined)
     mergeMeshes(m)
     addOutlines(m)
     placeOnFloor(m, plan, f.x, f.y, f.rot)
