@@ -36,7 +36,7 @@ export interface DeskCtx {
 
 const def = (f: Furniture) => ASSET_MAP.get(f.asset)
 /** 需要配电脑的椅子 */
-const isOfficeChair = (f: Furniture) => hasTag(def(f), 'legacy-ws-office')
+const isOfficeChair = (f: Furniture) => hasTag(def(f), 'office-chair', 'gaming-chair')
 /** 椅子、凳子 */
 const isSeat = (f: Furniture) => hasTag(def(f), 'seat')
 const isLaptop = (f: Furniture) => hasTag(def(f), 'laptop')
@@ -358,7 +358,7 @@ function setupDesktop(c: DeskCtx, s: Seat, weighted: <T>(items: [T, number][]) =
   // 先试按人挑的那种；被摆件挡住就挪走普通摆件（台灯、杯子之类，dress 之后还会补）再试，最后才减屏
   const order = [...fits.slice(0, 1), ...d.shuffle(fits.slice(1, 3)), ...fits.slice(3)]
   const clear = () => {
-    for (const o of onSeat(c, s)) if (o !== tower && !isLaptop(o) && !hasTag(def(o), 'legacy-kb-id') && !isMonitor(def(o))) d.out = d.out.filter((x) => x !== o && d.parentOf.get(x.id) !== o.id)
+    for (const o of onSeat(c, s)) if (o !== tower && !isLaptop(o) && !isKeyboard(o) && !isMonitor(def(o))) d.out = d.out.filter((x) => x !== o && d.parentOf.get(x.id) !== o.id)
   }
   if (order.length) {
     mon = placeOnDesk(c, s, order[0], 0, 'back', center)

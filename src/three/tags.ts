@@ -69,6 +69,11 @@ export const FURNITURE_TAGS = [
   'guitar',
   'piano',
   'drums',
+  'e-keyboard', // 电子琴
+  'weights', // 哑铃、壶铃、杠铃
+  'yoga', // 瑜伽 / 普拉提用品
+  'cardio', // 跑步机、动感单车、划船机
+  'strength', // 卧推凳、深蹲架、哑铃架
   'yoga-mat',
   'play-mat',
   'bath-mat',
@@ -91,7 +96,6 @@ export const DEVICE_TAGS = [
   'headset', // 耳机、耳麦
   'laptop',
   'game-console',
-  'gamepad',
   'video-game',
   'rice-cooker',
   'kettle',
@@ -177,6 +181,14 @@ export const ITEM_TAGS = [
   'trash-bin',
   'wall-art',
   'music-accessory', // 节拍器、乐谱
+  'record', // 唱片、唱片机
+  'home-theater', // 投影仪、播放机、碟片、爆米花机
+  'water-bottle',
+  'hat',
+  'bag', // 包（挎包、手提包、双肩包）
+  'coin', // 硬币收藏
+  'stamp', // 邮票收藏
+  'mineral', // 矿石、化石、水晶标本
   'dog', // 狗用品（宠物分类）
   'cat', // 猫用品（宠物分类）
 ] as const
@@ -206,40 +218,15 @@ export const PLACEMENT_TAGS = [
 
 /** 迁移期的过渡标签：和旧规则逐字对应，用于证明重构等价；审查后会被功能标签取代 */
 export const LEGACY_TAGS = [
-  'gym-prop',
-  'closet-prop',
-  'theater-prop',
-  'music-prop',
-  'legacy-book-label',
   'legacy-cl-bed',
   'legacy-cl-desk',
   'legacy-cl-detergent-fix',
   'legacy-cl-lamp-fix',
   'legacy-cl-scale',
   'legacy-cl-shoe-fix',
-  'legacy-closet-mirror',
-  'legacy-col-t1',
-  'legacy-col-t2',
-  'legacy-fit-t1',
-  'legacy-fit-t2',
-  'legacy-fit-t3',
-  'legacy-fit-t4',
   'legacy-fix-bed',
   'legacy-fix-desk',
-  'legacy-hobby-desk',
   'legacy-light-dining',
-  'legacy-music-shelf',
-  'legacy-music-t2',
-  'legacy-name-zhuo',
-  'legacy-piano-drum',
-  'legacy-plain-chair',
-  'legacy-reading-chair',
-  'legacy-showcase',
-  'legacy-theater-shelf',
-  'legacy-tp-check',
-  'legacy-wall-deco',
-  'legacy-ws-office',
-  'legacy-kb-id',
 ] as const
 
 /** 「这是什么」类标签（每件素材至少要有一个） */

@@ -973,7 +973,7 @@ class Decorator {
         if (fixtures.some((f) => f.kind === 'toilet')) {
           floorOne('toilet-brush')
           const tp = this.find('toilet-paper', (a) => !!a.prop && a.form !== 'hanging')
-          if (tp.length && !this.out.some((o) => pointInPolygon(o, room.points) && hasTag(ASSET_MAP.get(o.asset), 'legacy-tp-check'))) this.must(room, this.pick(tp).id)
+          if (tp.length && !this.out.some((o) => pointInPolygon(o, room.points) && hasTag(ASSET_MAP.get(o.asset), 'toilet-paper'))) this.must(room, this.pick(tp).id)
         }
         mountOne('towel-bar')
       }
@@ -1039,7 +1039,7 @@ class Decorator {
     }
     // 墙上的装饰：挂钟、挂画（不按兴趣）
     if (this.rand() < 0.5 * k) {
-      const deco = this.find('legacy-wall-deco', (a) => !!a.mount)
+      const deco = this.find(['wall-art', 'clock'], (a) => !!a.mount)
       if (deco.length) this.mount(room, this.pick(deco).id)
     }
   }
@@ -1512,7 +1512,7 @@ class Decorator {
       if (ergo.length) return this.pick(fit.length ? fit : ergo).id
     }
     if (this.style === 'cute' && this.rand() < 0.6) return 'desk-chair'
-    const plain = this.find('legacy-plain-chair', (a) => !a.prop && (a.category === 'study' || a.category === 'dining') && a.id !== 'desk-chair' && (a.styles ?? []).includes(this.style))
+    const plain = this.find('office-chair', (a) => !a.prop && (a.category === 'study' || a.category === 'dining') && a.id !== 'desk-chair' && (a.styles ?? []).includes(this.style))
     const any = plain.length ? plain : this.find('office-chair', (a) => !a.prop && a.id !== 'desk-chair')
     return any.length ? this.pick(any).id : 'dining-chair'
   }
@@ -1836,8 +1836,8 @@ class Decorator {
         this.floorOf(room, 'music-stand', { front: 40 })
         this.floorOf(room, 'guitar', { front: 30 })
         this.floorOf(room, 'stool', { front: 30 })
-        this.floorOf(room, 'legacy-music-shelf', { front: 40 })
-        this.propsOf(room, 'music-prop', 4)
+        this.floorOf(room, ['bookshelf', 'record-shelf'], { front: 40 })
+        this.propsOf(room, ['music-accessory', 'record', 'headset'], 4)
         break
       }
       case 'theater': {
@@ -1846,13 +1846,13 @@ class Decorator {
         const screen = this.find('projector-screen', (a) => !!a.mount)
         if (screen.length) this.mount(room, this.pick(screen).id)
         if (sofa) this.freePush(room, this.pick(['coffee-table', 'rug-round']), 0, c, 10, true)
-        this.floorOf(room, 'legacy-theater-shelf', { front: 40 })
-        this.propsOf(room, 'theater-prop', 4)
+        this.floorOf(room, ['record-shelf', 'bookshelf'], { front: 40 })
+        this.propsOf(room, 'home-theater', 4)
         break
       }
       case 'hobby': {
         const it = owner?.interests.find((i) => ['maker', 'models', 'crafts', 'collecting', 'otaku', 'boardgames', 'photo'].includes(i))
-        const desk = this.floorOf(room, it === 'maker' ? 'workbench' : 'legacy-hobby-desk', { front: 70, underWindow: true })
+        const desk = this.floorOf(room, it === 'maker' ? 'workbench' : ['desk', 'workbench'], { front: 70, underWindow: true })
         seat(desk)
         if (it) for (const a of this.shuffle(interestFloor(it)).slice(0, 3)) this.wall(room, a.id, { front: 40 })
         this.floorOf(room, 'shelving', { front: 40 })
@@ -1889,7 +1889,7 @@ class Decorator {
         for (const a of this.shuffle(ALL().filter((a) => a.category === 'fitness' && !a.prop && !a.mount && Math.max(a.w, a.d) <= 220)).slice(0, 4)) this.wall(room, a.id, { front: 50 })
         this.floorOf(room, 'mirror', { front: 40 })
         this.freePush(room, this.find('yoga-mat')[0]?.id ?? 'rug-round', 0, c, 10, true)
-        this.propsOf(room, 'gym-prop', 4)
+        this.propsOf(room, ['weights', 'towel', 'water-bottle'], 4)
         break
       case 'play':
         this.freePush(room, this.find('play-mat')[0]?.id ?? 'rug-round', 0, c, 0, true)
@@ -1905,8 +1905,8 @@ class Decorator {
         break
       case 'closet':
         for (let i = 0; i < 3; i++) this.floorOf(room, ['wardrobe', 'clothes-rail', 'storage-cabinet'], { front: 60 })
-        this.floorOf(room, 'legacy-closet-mirror', { front: 40 })
-        this.propsOf(room, 'closet-prop', 4)
+        this.floorOf(room, 'mirror', { front: 40 })
+        this.propsOf(room, ['storage-box', 'hat', 'bag'], 4)
         break
     }
     if (room.kind === 'western' && this.rand() < 0.6) this.corner(room, ['monstera', 'floor-lamp', 'beanbag'])
@@ -2786,7 +2786,7 @@ class Decorator {
               ? pools.chinese
               : collectionShelf
                 ? pools.collection
-                : hasTag(pd, 'legacy-book-label') && this.rand() < 0.65
+                : hasTag(pd, 'bookshelf') && this.rand() < 0.65
                   ? pools.books
                   : pools.deco
           ).filter(fits)
@@ -2982,8 +2982,8 @@ const DRESS: Record<string, Dress | ((def: AssetDef) => Dress)> = {
 function dressFor(def: AssetDef): Dress | null {
   if (hasTag(def, 'nightstand')) return NIGHTSTAND
   if (hasTag(def, 'tv-stand', 'tv')) return tvDress(def)
-  if (def.category === 'study' && hasTag(def, 'legacy-name-zhuo')) return DESK
-  if (def.category === 'dining' && hasTag(def, 'legacy-name-zhuo')) return DINING
+  if (def.category === 'study' && hasTag(def, 'table')) return DESK
+  if (def.category === 'dining' && hasTag(def, 'table')) return DINING
   if (hasTag(def, 'coffee-table')) return COFFEE
   return null
 }
