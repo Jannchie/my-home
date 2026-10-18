@@ -9,6 +9,7 @@ import {
   fixtureDepth,
   boxOverlaps,
   dist,
+  dot,
   fixtureBox,
   mul,
   pointInPolygon,
@@ -806,6 +807,8 @@ class Decorator {
     const def = ASSET_MAP.get(asset)
     if (!def?.type) return asset
     if (LAMP_TYPES[def.type]) return this.lampPick(def.type)
+    const own = this.ownShape(def)
+    if (own) return own
     let sib = this.siblings.get(asset)
     if (!sib) {
       const near = (a: number, b: number) => Math.abs(a - b) <= b * 0.1 + 2
@@ -818,6 +821,54 @@ class Decorator {
     if (sib.length < 2 || !(ALWAYS_VARY.has(def.type) || (VARY_TYPES.has(def.type) && def.sizeLabel === '标准'))) return asset
     const styled = sib.filter((a) => a.styles?.includes(this.style))
     return this.pick(styled.length && this.rand() < 0.75 ? styled : sib).id
+  }
+
+  private shapePools = new Map<string, AssetDef[]>()
+  /**
+   * 风格专属造型（见 SHAPE_STYLES）：默认款（sofa2、bed-double、dining-table、tv-board、wardrobe、desk…）在当前风格下没有原生配色、
+   * 只能套派生配色时，八成换成同一细分类型、尺寸相当、带这个风格原生配色的落地家具。
+   * 床按宽度分档（单人 / 双人不混），其余宽、深各差 25% 以内；高度不超过默认款的 1.6 倍 + 10（架子床、华盖床这类不换进来）。
+   * 只有换款候选不为空时才消耗随机数，别的风格的布置结果不受影响。
+   */
+  private ownShape(def: AssetDef): string | null {
+    const st = this.style
+    if (!SHAPE_STYLES.has(st) || def.prop || def.mount || def.stick || isNativeTo(def, st)) return null
+    const key = `${def.id}|${st}`
+    let pool = this.shapePools.get(key)
+    if (!pool) {
+      const bed = def.type === 'bed'
+      const near = (a: number, b: number, k: number, c = 0) => Math.abs(a - b) <= b * k + c
+      const kids = hasTag(def, 'for-kids')
+      pool = ASSETS.filter(
+        (a) =>
+          a.type === def.type &&
+          a.form === def.form &&
+          !a.prop &&
+          !a.mount &&
+          !a.stick &&
+          !a.fixture &&
+          hasTag(a, 'for-kids') === kids &&
+          isNativeTo(a, st) &&
+          (bed ? near(a.w, def.w, 0.06, 2) && near(a.d, def.d, 0.15, 5) : near(a.w, def.w, 0.25) && near(a.d, def.d, 0.25)) &&
+          a.h <= def.h * 1.6 + 10,
+      )
+      this.shapePools.set(key, pool)
+    }
+    if (!pool.length || this.rand() >= 0.8) return null
+    return this.pick(pool).id
+  }
+
+  /** 客厅茶几边的休闲座：专属造型风格摆一把同风格的单人椅（面朝茶几），其余风格是豆袋沙发 */
+  loungeSeat(room: Room, tableAt: Vec, side: Vec) {
+    const st = this.style
+    const chairs = SHAPE_STYLES.has(st) ? this.find('armchair', (a) => isNativeTo(a, st) && !a.prop && !a.mount && !a.fixture && Math.max(a.w, a.d) <= 100) : []
+    if (!chairs.length) return this.freePush(room, 'beanbag', 0, add(tableAt, mul(side, 110)), 5)
+    const id = this.pick(chairs).id
+    const at = add(tableAt, mul(side, 95))
+    // 面朝茶几：四个朝向里挑正面最对着茶几的
+    const want = mul(side, -1)
+    const rot = [0, 90, 180, 270].reduce((b, r) => (dot(frontDir(r), want) > dot(frontDir(b), want) ? r : b), 0)
+    return this.freePush(room, id, rot, at, 5)
   }
 
   private lampPools = new Map<string, AssetDef[]>()
@@ -2196,13 +2247,17 @@ class Decorator {
     const kc = kitchen ? { x: kitchen.x, y: kitchen.y } : undefined
     const size = this.household?.members.length ?? 2
     const big = area(room.points) / 10000 > 14 || size >= 3
+    // 专属造型风格（中式 / 古典 / 乡村）换成本风格的沙发；换上了就不再优先 L 形转角沙发
+    const mainSofa = this.vary(big ? 'sofa3' : 'sofa2')
+    const smallSofa = big ? this.vary('sofa2') : mainSofa
+    const own = mainSofa !== (big ? 'sofa3' : 'sofa2')
     // 欧美客厅：L 形转角沙发（sectional）优先
-    const sectional = this.region === 'west' ? this.shuffle(['lm-corner-sofa-l', 'lm-corner-sofa-r', 'lv-sofa-l-left', 'lv-sofa-l-right'].filter((id) => ASSET_MAP.has(id))) : []
+    const sectional = this.region === 'west' && !own ? this.shuffle(['lm-corner-sofa-l', 'lm-corner-sofa-r', 'lv-sofa-l-left', 'lv-sofa-l-right'].filter((id) => ASSET_MAP.has(id))) : []
     // 沙发和电视柜一起挑位置（arrange.ts）：沙发背靠墙、离厨房远，电视柜和沙发相对、隔 2–3m、中间不被大件挡住
     const sofas: Slot['options'] = [
       ...sectional.map((id, i) => ({ asset: id, spec: { front: 120 }, bias: -i })),
-      { asset: big ? 'sofa3' : 'sofa2', spec: { front: 150 }, bias: sectional.length ? -10 : 0 },
-      { asset: 'sofa2', spec: { front: 110 }, bias: -15 },
+      { asset: mainSofa, spec: { front: 150 }, bias: sectional.length ? -10 : 0 },
+      { asset: smallSofa, spec: { front: 110 }, bias: -15 },
     ]
     const [sofa, tv] = this.major(room, [
       { kind: 'sofa', options: sofas, far: kc, miss: 150 },
@@ -2230,7 +2285,7 @@ class Decorator {
         break
       }
       this.freePush(room, 'coffee-table', 0, tableAt, 10)
-      if (this.rand() < 0.7) this.freePush(room, 'beanbag', 0, add(tableAt, mul({ x: fd.y, y: -fd.x }, 110)), 5)
+      if (this.rand() < 0.7) this.loungeSeat(room, tableAt, { x: fd.y, y: -fd.x })
       // 沙发旁的落地灯：贴着沙发扶手、靠墙（锚在沙发上），两侧都放不下才在附近靠墙找
       if (this.rand() < 0.55) {
         const s = this.rand() < 0.5 ? 1 : -1
@@ -2248,6 +2303,9 @@ class Decorator {
     const cats = this.household?.members.some((m) => m.interests.includes('cats')) ?? false
     this.corner(room, ['monstera', 'monstera', 'floor-lamp', ...(cats ? ['cat-tower'] : [])])
     if (this.rand() < 0.6) this.corner(room, ['bookshelf', 'monstera'])
+    // 专属造型风格：再摆一件本风格的标志性落地件（中式屏风、古典落地座钟 / 壁炉、乡村砖石壁炉…）
+    const st = this.style
+    if (SHAPE_STYLES.has(st) && this.rand() < 0.5) this.floorOf(room, ['clock', 'partition', 'heater'], { front: 60 }, (a) => isNativeTo(a, st))
   }
 
   dining(room: Room, kitchen?: Fixture, small = false, want?: string): Furniture | null {
@@ -2420,7 +2478,7 @@ class Decorator {
         if (room.kind === 'japanese') this.wall(room, 'futon', { front: 20 })
         else {
           // 客房的床：同样按床的规则挑位置，床头柜跟着床
-          const [bed] = this.major(room, [{ kind: 'bed', options: [{ asset: this.pick(['bed-single', 'bed-semi-double', 'lv-sofa-bed']), spec: { front: 45 } }, { asset: 'bed-semi-single', spec: { front: 30 }, bias: -30 }], miss: BED_MISS }])
+          const [bed] = this.major(room, [{ kind: 'bed', options: [{ asset: this.pick([this.vary('bed-single'), this.vary('bed-semi-double'), 'lv-sofa-bed']), spec: { front: 45 } }, { asset: 'bed-semi-single', spec: { front: 30 }, bias: -30 }], miss: BED_MISS }])
           if (bed) this.bedPlaced(room, bed)
         }
         if (room.kind === 'japanese') this.wall(room, 'nightstand', { front: 30 })
@@ -2439,14 +2497,15 @@ class Decorator {
   /** 书房 / 兴趣房：没有床，大书桌 + 椅子 + 书架 */
   study(room: Room) {
     const desks = this.find(/^(tbl-desk-(120|140|160|l-left|l-right)|desk$)/, (a) => !a.prop)
+    const deskAny = this.vary('desk')
     // 书桌和书架一起挑位置（书桌靠窗 / 侧对窗、背后不对门；书架占完整的墙段）
     const [desk] = this.major(room, [
       {
         kind: 'desk',
         options: [
-          { asset: desks.length ? this.pick(desks).id : 'desk', spec: { front: 80, underWindow: true } },
-          { asset: 'desk', spec: { front: 70 }, bias: -5 },
-          { asset: 'desk', spec: { front: 45, underWindow: true }, bias: -10 },
+          { asset: desks.length ? this.vary(this.pick(desks).id) : deskAny, spec: { front: 80, underWindow: true } },
+          { asset: deskAny, spec: { front: 70 }, bias: -5 },
+          { asset: deskAny, spec: { front: 45, underWindow: true }, bias: -10 },
         ],
         miss: 100,
       },
@@ -2469,7 +2528,7 @@ class Decorator {
     const earlyWardrobe = this.region !== 'jp' && !hasCloset
     const needsDesk = !people.length || people.some((m) => JOBS[m.job].wfh || m.job === 'student' || m.job === 'schoolkid') || this.rand() < 0.4
     const kidDesk = kid && kid.age >= 6 && kid.age < 13 && ASSET_MAP.has('kid-desk')
-    const deskId = kidDesk ? 'kid-desk' : 'desk'
+    const deskId = kidDesk ? 'kid-desk' : this.vary('desk')
     const slots: Slot[] = [this.bedSlot(room)]
     // 两个人住：双人床、并排的两张都放不下（或放了会堵门）、只放得下一张单人床时，再找个地方放第二张单人床，各睡各的
     const second = this.sharedRoom(room) ? this.secondBedSlot() : null
@@ -2522,7 +2581,7 @@ class Decorator {
 
   /** 第二张单人床（只在第一张是单人床时才放，见 Slot.afterSingle） */
   secondBedSlot(): Slot {
-    const options: Slot['options'] = ['bed-single', 'bed-semi-single'].flatMap((id, i) => [
+    const options: Slot['options'] = [this.vary('bed-single'), this.vary('bed-semi-single')].flatMap((id, i) => [
       { asset: id, spec: { front: 45 }, bias: -10 * i },
       { asset: id, spec: { front: 45 }, bias: -10 * i - 15, side: true },
       { asset: id, spec: { front: 10 }, bias: -10 * i - 25 },
@@ -2581,7 +2640,7 @@ class Decorator {
     const people = this.occupants.get(room.id) ?? []
     const couple = people.filter((m) => m.role === 'self' || m.role === 'partner').length >= 2
     const kid = people.length === 1 && people[0].role === 'child' ? people[0] : null
-    const sizes = ['bed-semi-single', 'bed-single', 'bed-semi-double', 'bed-double', 'bed-queen']
+    const sizes = ['bed-semi-single', 'bed-single', 'bed-semi-double', 'bed-double', 'bed-queen'].map((id) => this.vary(id))
     let want = m2 < 7 ? 0 : m2 < 9 ? 1 : m2 < 11 ? 2 : m2 < 13.5 ? 3 : 4
     if (couple) want = Math.max(this.region === 'west' ? 4 : 3, want)
     else if (people.length) want = Math.min(want, this.region === 'west' ? 3 : 2)
@@ -2595,7 +2654,7 @@ class Decorator {
       for (let i = want; i >= 2; i--) beds.push({ asset: sizes[i], spec: { front: 45 }, bias: -12 * (want - i) - 15 - pre, side: true })
       // 床尾少留一点（两侧能下床就行）
       for (let i = want; i >= 2; i--) beds.push({ asset: sizes[i], spec: { front: 10 }, bias: -12 * (want - i) - 25 - pre })
-      for (const id of ['bed-single', 'bed-semi-single']) beds.push({ asset: id, spec: { front: 45 }, bias: -45 - pre, twin: true })
+      for (const id of [sizes[1], sizes[0]]) beds.push({ asset: id, spec: { front: 45 }, bias: -45 - pre, twin: true })
       for (let i = 1; i >= 0; i--) beds.push({ asset: sizes[i], spec: { front: 45 }, bias: -80 - 12 * (1 - i) - pre })
     } else {
       for (let i = want; i >= 0; i--) beds.push({ asset: sizes[i], spec: { front: 45 }, bias: -12 * (want - i) - pre })
@@ -3780,6 +3839,15 @@ const LAMP_TYPES: Partial<Record<Tag, { pool: Tag[]; maxSide: number; scope: 'ro
 
 /** 爱在床头挂壁灯的风格 */
 const SCONCE_STYLES = new Set<StyleTag>(['classic', 'japanese', 'chinese', 'farmhouse', 'retro'])
+
+/**
+ * 靠造型认风格的风格：新中式、欧式古典、美式乡村换个颜色还是现代家具的样子，主力家具要换成专属造型（见 Decorator.ownShape），
+ * 客厅还会多摆一件这个风格的标志性落地件（屏风、落地座钟、壁炉…）。
+ */
+const SHAPE_STYLES = new Set<StyleTag>(['chinese', 'classic', 'farmhouse'])
+
+/** 素材有没有这个风格的原生配色（不算派生配色） */
+const isNativeTo = (def: AssetDef, st: StyleTag) => def.palettes.some((_, i) => paletteStyle(def, i) === st)
 
 /**
  * 常换款的细分类型：摆到这一类的默认款（sizeLabel「标准」的那件，代码里点名的 'bookshelf'、'prop-mug' 这类）时，
