@@ -1,16 +1,21 @@
 <script setup lang="ts">
-// 画面里的竖排楼层切换（像地图 App 的室内楼层选择）：最高层在上，当前层高亮，点一下切换；顶部「+」加一层。
-// 平面图和 3D 沙盘的画布右侧都放一个。设置（改名、层高、删除）仍在 FloorBar 里。
+// 3D 沙盘画布右侧的竖排楼层切换（像地图 App 的室内楼层选择）：最高层在上，当前层高亮，点一下切换；顶部「+」加一层。
+// 下面一组是显示方式：全部楼层 / 只到当前层 / 分层拉开 / 外观（单层户型是室内 / 外观），和楼层放在一起。
+// 设置（改名、层高、删除）仍在 FloorBar 里。
 import { computed } from 'vue'
 import { JIcon } from '@jannchie/icons-vue'
 import { ICONS } from '../ui/icons'
 import { t } from '../i18n'
 import { isMultiFloor, planFloors } from '../floors'
-import { activeFloor, addFloor, plan, setFloor } from '../store'
+import { activeFloor, addFloor, floorView3d, floorViews, plan, setFloor, setFloorView, type FloorView } from '../store'
 
 const multi = computed(() => isMultiFloor(plan.value))
 /** 最高层在上 */
 const floors = computed(() => [...planFloors(plan.value)].sort((a, b) => b.elevation - a.elevation))
+const views = computed(() => floorViews(multi.value))
+const VIEW_ICONS: Record<FloorView, (typeof ICONS)[keyof typeof ICONS]> = { all: ICONS.floorAll, upto: ICONS.floorUpto, explode: ICONS.floorExplode, interior: ICONS.floorAll, exterior: ICONS.exteriorView }
+/** 单层户型的「室内」：不是外观就算选中 */
+const isOn = (v: FloorView) => (v === 'interior' ? floorView3d.value !== 'exterior' : floorView3d.value === v)
 </script>
 
 <template>
@@ -30,6 +35,21 @@ const floors = computed(() => [...planFloors(plan.value)].sort((a, b) => b.eleva
         {{ f.name }}
       </button>
     </template>
+    <div class="views" role="radiogroup" :aria-label="t('楼层显示')">
+      <button
+        v-for="v in views"
+        :key="v.id"
+        role="radio"
+        class="vw"
+        :class="{ on: isOn(v.id) }"
+        :aria-checked="isOn(v.id)"
+        :title="t(v.label) + (v.id === 'exterior' ? ' (O)' : '')"
+        :aria-label="t(v.label)"
+        @click="setFloorView(v.id)"
+      >
+        <JIcon :icon="VIEW_ICONS[v.id]" :size="15" />
+      </button>
+    </div>
   </nav>
 </template>
 
@@ -82,6 +102,19 @@ const floors = computed(() => [...planFloors(plan.value)].sort((a, b) => b.eleva
   color: var(--accent-contrast, #fff);
   border-radius: var(--radius-sm);
 }
+.views {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 2px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+.rail .vw.on {
+  background: var(--accent-weak);
+  color: var(--accent-strong);
+}
+.rail .vw:not(.on):hover,
 .rail .lv:not(.on):hover {
   background: var(--surface-2);
   color: var(--text);

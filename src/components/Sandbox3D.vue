@@ -3040,7 +3040,6 @@ defineExpose({ resetView })
         <button :class="{ on: !editing && !blueprint.on }" :title="t('预览') + ' (P)'" @click="leaveBlueprint('preview')"><JIcon :icon="ICONS.modePreview" />{{ t('预览') }}</button>
         <button class="bp-toggle" :class="{ on: blueprint.on }" :aria-pressed="blueprint.on" :title="t('设计图：线框、尺寸标注，可导出 PNG') + ' (B)'" :aria-label="t('设计图')" @click="blueprint.on = !blueprint.on"><JIcon :icon="ICONS.blueprint" /><span class="ml">{{ t('设计图') }}</span></button>
         <button v-if="!blueprint.on" class="walk-toggle" :title="t('漫游：第一人称在房间里走动') + ' (V)'" :aria-label="t('漫游')" @click="enterWalk"><JIcon :icon="ICONS.walk" /><span class="ml">{{ t('漫游') }}</span></button>
-        <button v-if="!blueprint.on" class="ext-toggle" :class="{ on: sandbox.exterior }" :aria-pressed="sandbox.exterior" :title="t('外观：显示屋顶和完整外墙') + ' (O)'" :aria-label="t('外观')" @click="sandbox.exterior = !sandbox.exterior"><JIcon :icon="ICONS.exteriorView" /><span class="ml">{{ t('外观') }}</span></button>
       </div>
       <BlueprintBar v-if="blueprint.on" :busy="bpBusy" @reset="bp?.resetView()" @export="exportBlueprint" />
       <div v-if="!editing && !blueprint.on && !walking" class="preview-bar">
@@ -3201,10 +3200,8 @@ defineExpose({ resetView })
       <section>
         <h3 class="ico-label"><JIcon :icon="VIEW_ICONS['3d']" class="ico-muted" />{{ t('沙盘') }}</h3>
         <div class="meta num">{{ planSize }} · {{ t('家具 {n} 件', { n: counts }) }}</div>
-        <!-- 楼层：切换当前层（摆放、拖动、墙体压低都作用于它）、楼层显示方式 -->
+        <!-- 楼层：切换当前层（摆放、拖动、墙体压低都作用于它）、显示方式（全部楼层 / 只到当前层 / 分层拉开 / 外观） -->
         <FloorBar variant="panel" class="floors" />
-        <!-- 外观视图：屋顶、外墙满高、全部楼层（看房子外形；布置时默认是室内视角） -->
-        <label class="row check"><input v-model="sandbox.exterior" type="checkbox" /><JIcon :icon="ICONS.exteriorView" class="ico-muted" />{{ t('外观视图（屋顶、完整外墙）') }}</label>
         <label class="row">
           <span>{{ t('墙高') }}</span>
           <input v-model.number="sandbox.wallHeight" type="range" min="40" max="240" step="10" />

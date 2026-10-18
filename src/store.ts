@@ -20,6 +20,7 @@ import { edgeInfo, emptyPlan, projectToSegment, type Fixture, type FixtureKind, 
 import { normalizeExterior, styleExterior } from './exterior'
 import { normalizeWindow } from './windows'
 import { yardFurniture } from './yard'
+import { STAIRS_SIZE } from './stairs'
 import { BASE_FLOOR_ID, DEFAULT_FLOOR_H, SLAB, baseFloor, baseFloorId, floorBelow, floorById, floorOf, floorOutline, floorView, isMultiFloor, nextFloorId, normalizeFloors, planFloors, stampFloor } from './floors'
 
 export type Tool = 'select' | 'rect' | 'poly' | 'door' | 'window' | 'fixture'
@@ -280,6 +281,22 @@ export const WALL_MODES: { id: WallMode; label: string }[] = [
   { id: 'down', label: '全部压低' },
 ]
 export const sandbox = reactive({ wallHeight: 240, wallMode: 'half' as WallMode, cutHeight: 60, cutawayOpacity: 0, cutawayHover: true, snap: true, mode: 'edit' as 'edit' | 'preview', autoRotate: true, autoFurnish: true, style: 'auto' as StyleTag | 'random' | 'auto', look: loadLook(), fov: loadFov(), ...loadSky(), ...loadLights(), playing: false, exterior: false })
+
+/**
+ * 3D 沙盘的显示方式：全部楼层 / 只到当前层 / 分层拉开 / 外观，四个是同一级的选项（外观 = 全部楼层叠好、墙满高、盖屋顶）。
+ * 单层户型没有前三种的区别，只有「室内 / 外观」。内部仍是 floorShow + sandbox.exterior 两个状态。
+ */
+export type FloorView = FloorShow | 'interior' | 'exterior'
+export const floorView3d = computed<FloorView>(() => (sandbox.exterior ? 'exterior' : floorShow.value))
+export function setFloorView(v: FloorView) {
+  sandbox.exterior = v === 'exterior'
+  if (v !== 'exterior' && v !== 'interior') floorShow.value = v
+}
+/** 当前户型可选的显示方式 */
+export const floorViews = (multi: boolean): { id: FloorView; label: string }[] => [
+  ...(multi ? FLOOR_SHOWS : [{ id: 'interior' as const, label: '室内' }]),
+  { id: 'exterior', label: '外观' },
+]
 
 /** 设备的当前时间：时刻（小时，含分钟）与月日 */
 export function nowSky() {
@@ -678,6 +695,18 @@ export function rotateSelectedFixture() {
   if (s?.type !== 'fixture') return
   const f = findFixture(s.id)
   if (f) mutate(() => (f.rot = (f.rot + 90) % 360))
+}
+
+/** 换楼梯形式：占地换成这种形式的默认尺寸（中心不动） */
+export function setStairsVariant(f: Fixture, v: NonNullable<Fixture['stairs']>) {
+  mutate(() => {
+    f.stairs = v
+    f.w = STAIRS_SIZE[v].w
+    f.d = STAIRS_SIZE[v].d
+    if (v === 'straight') delete f.turn
+    if (v !== 'l') delete f.run
+    if (v !== 'straight' && v !== 'l') delete f.under
+  })
 }
 
 /** 按规则重新决定所有开门的铰链与开向 */

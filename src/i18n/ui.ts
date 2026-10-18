@@ -1040,6 +1040,7 @@ Object.assign(UI, {
   建筑面积: ['延床面積', 'Floor area'],
   '外观：显示屋顶和完整外墙': ['外観：屋根と外壁をすべて表示', 'Exterior: show the roof and full walls'],
   外观: ['外観', 'Exterior'],
+  室内: ['室内', 'Interior'],
   '外观视图（屋顶、完整外墙）': ['外観ビュー（屋根・外壁をすべて表示）', 'Exterior view (roof, full walls)'],
   两层独栋: ['2 階建て一戸建て', 'two-story house'],
   '{n}室两厅': ['{n}LDK', '{n} bed 2 living'],

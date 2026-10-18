@@ -7,7 +7,7 @@ import { ICONS } from '../ui/icons'
 import { t } from '../i18n'
 import { baseFloorId, floorBelow, isMultiFloor, planFloors } from '../floors'
 import { stairHoleConflicts } from '../stairs'
-import { FLOOR_SHOWS, activeFloor, addFloor, copyOutlineFromBelow, deleteFloor, floorShow, plan, renameFloor, setFloor, setFloorHeight, type FloorShow } from '../store'
+import { activeFloor, addFloor, copyOutlineFromBelow, deleteFloor, floorView3d, floorViews, plan, renameFloor, setFloor, setFloorHeight, setFloorView, type FloorView } from '../store'
 
 const props = withDefaults(defineProps<{ variant?: 'canvas' | 'panel' }>(), { variant: 'canvas' })
 
@@ -54,7 +54,10 @@ function copyOutline() {
   copyOutlineFromBelow()
   open.value = false
 }
-const SHOW_ICONS: Record<FloorShow, (typeof ICONS)[keyof typeof ICONS]> = { all: ICONS.floorAll, upto: ICONS.floorUpto, explode: ICONS.floorExplode }
+const SHOW_ICONS: Record<FloorView, (typeof ICONS)[keyof typeof ICONS]> = { all: ICONS.floorAll, upto: ICONS.floorUpto, explode: ICONS.floorExplode, interior: ICONS.floorAll, exterior: ICONS.exteriorView }
+/** 显示方式：全部楼层 / 只到当前层 / 分层拉开 / 外观（单层户型是室内 / 外观） */
+const shows = computed(() => floorViews(multi.value))
+const showOn = (v: FloorView) => (v === 'interior' ? floorView3d.value !== 'exterior' : floorView3d.value === v)
 </script>
 
 <template>
@@ -77,8 +80,8 @@ const SHOW_ICONS: Record<FloorShow, (typeof ICONS)[keyof typeof ICONS]> = { all:
       <button v-if="multi" class="chip icon-only" :class="{ on: open }" :title="t('楼层设置')" :aria-label="t('楼层设置')" :aria-expanded="open" @click="open = !open"><JIcon :icon="ICONS.generateOptions" :size="14" /></button>
     </div>
     <span v-if="conflicts" class="warn" :title="t('楼梯洞口压到了卧室等房间：把洞口所在的地方改成走廊或挑空，或者挪开楼梯')">{{ t('楼梯洞口和房间重叠') }}</span>
-    <div v-if="props.variant === 'panel' && multi" class="seg shows" :title="t('楼层显示')">
-      <button v-for="m in FLOOR_SHOWS" :key="m.id" :class="{ on: floorShow === m.id }" :title="t(m.label)" :aria-label="t(m.label)" @click="floorShow = m.id">
+    <div v-if="props.variant === 'panel'" class="seg shows" :title="t('楼层显示')">
+      <button v-for="m in shows" :key="m.id" :class="{ on: showOn(m.id) }" :title="t(m.label)" :aria-label="t(m.label)" @click="setFloorView(m.id)">
         <JIcon :icon="SHOW_ICONS[m.id]" :size="15" /><span>{{ t(m.label) }}</span>
       </button>
     </div>
