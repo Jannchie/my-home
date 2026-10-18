@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, toRaw, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, toRaw, watch } from 'vue'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { ASSET_MAP, STYLE_LABELS, type StyleTag } from '../three/assets'
@@ -25,6 +25,7 @@ import { coverInto, liveCapture } from '../three/planThumb'
 import { FxLayer } from '../three/fx'
 import { SelectFrame, WallGuide } from '../three/selectFrame'
 import { ActorLayer } from '../three/actors'
+import { Walker, ceilings } from '../three/walk'
 import ColorEditor from './ColorEditor.vue'
 import SandboxOverlay from './SandboxOverlay.vue'
 import BlueprintBar from './BlueprintBar.vue'
@@ -88,6 +89,7 @@ import {
   FOV_MAX,
   activeFloor,
   floorShow,
+  setFloor,
 } from '../store'
 
 const host = ref<HTMLDivElement>()
@@ -156,7 +158,7 @@ function floorTargets(snap = false) {
     let st = floorAnim.get(f.id)
     if (!st) floorAnim.set(f.id, (st = { extra: 0, target: 0, show: true, hideAt: false, alpha: 1 }))
     // 外观视图：全部楼层叠好
-    const show = sandbox.exterior ? 'all' : floorShow.value
+    const show = fullView() ? 'all' : floorShow.value
     const hide = multi && show === 'upto' && i > ai
     st.target = !multi ? 0 : show === 'explode' ? i * EXPLODE_GAP : hide ? HIDE_LIFT : 0
     st.hideAt = hide
@@ -398,8 +400,12 @@ function applyFloorPose() {
  * 有楼层被「只到当前层」藏起来时也不显示（下层露出来的那块屋顶会挡住当前层）。
  */
 let roofUp = false
+/** 第一人称漫游中（墙、楼层、屋顶按外观视图处理，另加天花板） */
+const walking = ref(false)
+/** 墙全部完整、楼层全部叠好：外观视图或漫游 */
+const fullView = () => sandbox.exterior || walking.value
 function roofWanted() {
-  if (sandbox.exterior) return true
+  if (fullView()) return true
   // 墙高滑杆压低时屋顶会悬空：不显示
   if (sandbox.mode !== 'preview' || sandbox.wallHeight < 240 || !floorGroups.some((f) => f.roof)) return (roofUp = false)
   if ([...floorAnim.values()].some((s) => s.hideAt)) return (roofUp = false)
@@ -409,7 +415,7 @@ function roofWanted() {
   return roofUp
 }
 /** 外观样子（墙全部完整）：外观视图，或预览里屋顶盖着的时候（屋顶下面不压低墙） */
-const fullLook = () => sandbox.exterior || (sandbox.mode === 'preview' && roofUp)
+const fullLook = () => fullView() || (sandbox.mode === 'preview' && roofUp)
 function applyRoofs(want = roofWanted()) {
   for (const fg of floorGroups) {
     if (!fg.roof || fg.roof.visible === want) continue
@@ -607,8 +613,9 @@ function updateMounted(dir: { x: number; y: number } | null, depth: number | nul
     const back = { x: Math.sin(a), y: -Math.cos(a) }
     // 能摆东西的壁挂物（搁板、吊柜、挂杆）一直显示：藏了它，摆在上面、挂在上面的东西就悬在半空了
     const platform = !!def.surface || !!def.surfaces?.length
-    let hide = !platform && sandbox.wallMode === 'down'
-    if (!platform && !hide && sandbox.wallMode === 'half') {
+    const mode = walking.value ? 'up' : sandbox.wallMode
+    let hide = !platform && mode === 'down'
+    if (!platform && !hide && mode === 'half') {
       const k = def.d / 2 + p.wall + 5
       const r = roomAt(p, { x: f.x + back.x * k, y: f.y + back.y * k })
       hide = !!r && r.kind !== 'balcony'
@@ -755,8 +762,8 @@ function rebuildHouse() {
   xraySwapped.length = 0
   const raw = toRaw(plan.value)
   // 多层户型每层用自己的层高；墙高滑杆调低时只压低当前层
-  // 外观视图：墙一律满高（墙高滑杆不起作用）
-  const wh = sandbox.exterior ? 240 : sandbox.wallHeight
+  // 外观视图、漫游：墙一律满高（墙高滑杆不起作用）
+  const wh = fullView() ? 240 : sandbox.wallHeight
   const built = buildBuilding(raw, wh, (f) => (f.id === activeFloor.value && wh < 240 ? Math.min(f.height, wh) : f.height))
   house = built.root
   // 房子搭好就不动了（除了墙体压低和楼层滑动，那两处自己更新矩阵）：不再每帧重算上千个对象的矩阵
@@ -1454,6 +1461,74 @@ function moveDrag(e: PointerEvent) {
 const hovering = ref(false)
 const editing = computed(() => sandbox.mode === 'edit')
 
+// ---------- 第一人称漫游 ----------
+
+let walker: Walker | null = null
+let walkDetach: (() => void) | null = null
+let ceilingRoot: THREE.Group | null = null
+let walkSaved: { pos: THREE.Vector3; target: THREE.Vector3; mode: 'edit' | 'preview'; near: number } | null = null
+const walkLayer = ref<HTMLDivElement>()
+/** 触屏摇杆（屏幕坐标，给界面画） */
+const walkStick = ref<{ x: number; y: number; dx: number; dy: number } | null>(null)
+/** 鼠标锁定中（FPS 式看四周） */
+const walkLocked = ref(false)
+
+/** 进入漫游：预览模式，墙满高、楼层叠好、盖上天花板，镜头交给 Walker */
+async function enterWalk() {
+  if (walking.value || !house) return
+  blueprint.on = false
+  walkSaved = { pos: stage.camera.position.clone(), target: controls.target.clone(), mode: sandbox.mode, near: stage.camera.near }
+  setMode('preview')
+  controls.autoRotate = false
+  controls.enabled = false
+  walking.value = true
+  // 楼层立刻叠好（不播滑动动画）：Walker 按楼层高度定位
+  floorTargets(true)
+  const raw = toRaw(plan.value)
+  walker = new Walker(raw, stage.camera, {
+    lift: liftOf,
+    onFloor: (id) => setFloor(id),
+  })
+  if (isMultiFloor(raw)) setFloor(walker.floor)
+  ceilingRoot = ceilings(raw, (id) => liftOf(id) + (floorGroups.find((g) => g.floor.id === id)?.wallH ?? 240))
+  stage.scene.add(ceilingRoot)
+  stage.camera.fov = 72
+  stage.camera.near = 5
+  stage.camera.updateProjectionMatrix()
+  await nextTick()
+  if (walker && walkLayer.value) walkDetach = walker.attach(walkLayer.value, (st) => (walkStick.value = st), (on) => (walkLocked.value = on))
+  dirty = true
+}
+
+/** 退出漫游：恢复进入前的视角和模式 */
+function exitWalk() {
+  if (!walking.value) return
+  walkDetach?.()
+  walkDetach = null
+  walker = null
+  walkStick.value = null
+  walkLocked.value = false
+  if (ceilingRoot) {
+    stage.scene.remove(ceilingRoot)
+    ceilingRoot.traverse((n) => (n as THREE.Mesh).geometry?.dispose())
+    ceilingRoot = null
+  }
+  walking.value = false
+  controls.enabled = true
+  if (walkSaved) {
+    stage.camera.position.copy(walkSaved.pos)
+    controls.target.copy(walkSaved.target)
+    stage.camera.near = walkSaved.near
+    setMode(walkSaved.mode)
+    walkSaved = null
+  }
+  applyFov(sandbox.fov, false)
+  stage.camera.up.set(0, 1, 0)
+  controls.update()
+  updateCutaway()
+  dirty = true
+}
+
 /** 从设计图回到布置 / 预览 */
 function leaveBlueprint(m: 'edit' | 'preview') {
   blueprint.on = false
@@ -1626,6 +1701,16 @@ function onKey(e: KeyboardEvent) {
   // 快捷键帮助 / 我的户型 / 确认框开着时不响应（Esc 留给它们关闭自己）
   if (overlays.help || saved.panelOpen || saved.confirm) return
   const k = e.key.toLowerCase()
+  // 漫游：Esc / V 退出，其余按键交给 Walker（走路、转身）
+  // （鼠标锁定时浏览器自己吃掉 Esc 用来释放鼠标；刚释放的那一下不算退出）
+  if (walking.value) {
+    if ((e.key === 'Escape' || k === 'v') && !e.repeat && !walker?.locked && performance.now() - (walker?.unlockedAt ?? 0) > 250) exitWalk()
+    return
+  }
+  if (k === 'v' && !e.repeat) {
+    enterWalk()
+    return
+  }
   // 设计图：B 切换，F 重置视角，Esc 退出；其余快捷键不响应
   if (k === 'b' && !e.repeat) {
     blueprint.on = !blueprint.on
@@ -1905,7 +1990,7 @@ function loop() {
     bp.frame()
     return
   }
-  const moved = controls.update()
+  const moved = walker ? walker.update(dt) : controls.update()
   // 时间流逝动画：只有播放时才每帧推进（推进后由 watch 更新光照并标脏）
   if (sandbox.playing) sandbox.time = (sandbox.time + dt * sandbox.speed) % 24
   // 阴影贴图只在场景本身变了时重画：转视角、粒子、选中圈闪烁都不影响投影（静止的户型省掉整整一遍阴影渲染）
@@ -1955,7 +2040,7 @@ function loop() {
   // 灯光渐亮 / 渐灭（开关、黄昏清晨）
   if (lights.step(dt)) dirty = true
   if (moved) {
-    updateCutaway()
+    if (!walker) updateCutaway()
     updateCompass()
   }
   if (moved || dirty) {
@@ -2272,16 +2357,13 @@ watch(
 )
 // 换楼层 / 换楼层显示方式：各层缓动到新位置；墙体压低换到新的当前层
 // 外观视图开关：墙高要换（重搭），楼层叠好，墙恢复完整，屋顶显示
-watch(
-  () => sandbox.exterior,
-  () => {
+watch(fullView, () => {
     if (!house) return
     rebuildHouse()
     floorTargets()
     updateCutaway()
     dirty = true
-  },
-)
+})
 watch(
   () => sandbox.mode,
   () => updateCutaway(),
@@ -2289,7 +2371,7 @@ watch(
 watch([activeFloor, floorShow], () => {
   if (!house) return
   // 墙高滑杆调低时只有当前层是矮墙：换层要重搭
-  if (isMultiFloor(plan.value) && sandbox.wallHeight < 240 && builtActive !== activeFloor.value) rebuildHouse()
+  if (isMultiFloor(plan.value) && sandbox.wallHeight < 240 && !fullView() && builtActive !== activeFloor.value) rebuildHouse()
   floorTargets()
   updateCutaway()
   hoverRoomId = null
@@ -2470,6 +2552,8 @@ const QUALITIES: { id: Quality; label: string }[] = [
 
 /** 底部提示：触屏和鼠标的操作说法不一样 */
 const hudText = computed(() => {
+  // 漫游时顶部有自己的提示
+  if (walking.value) return ''
   if (!editing.value) return device.coarse ? t('预览模式 · 单指旋转 · 双指缩放 / 平移') : t('预览模式 · 左键旋转 · 右键平移 · 滚轮缩放 · 鼠标所指房间前的墙自动处理 · P 或 Esc 回到布置')
   return device.coarse
     ? t('单指旋转 · 双指缩放 / 平移 · 点家具选中，再按住拖动 · 双指拧转旋转 · 长按弹出菜单')
@@ -2559,7 +2643,7 @@ defineExpose({ resetView })
   <div class="sandbox">
     <div ref="host" class="viewport" :class="{ placing: !!placing, hover: hovering, night: nightUi && !blueprint.on, blueprint: blueprint.on }" :style="{ background: blueprint.on ? bpBg : viewportBg, '--sheet-h': (blueprint.on ? 0 : layout.sheetH) + 'px' }">
       <!-- 竖排楼层切换（多层户型；单层时只有「加一层」） -->
-      <FloorRail v-if="!blueprint.on" />
+      <FloorRail v-if="!blueprint.on && !walking" />
       <div v-if="!blueprint.on" class="compass" :class="{ 'under-bar': !editing }" :title="t('北') + ' · ' + t('户型朝向 {n}°', { n: northDeg })">
         <svg viewBox="-20 -20 40 40" width="40" height="40" aria-hidden="true">
           <circle r="18" class="compass-bg" />
@@ -2570,14 +2654,15 @@ defineExpose({ resetView })
           </g>
         </svg>
       </div>
-      <div class="modes">
+      <div v-show="!walking" class="modes">
         <button :class="{ on: editing && !blueprint.on }" :title="t('布置') + ' (P)'" @click="leaveBlueprint('edit')"><JIcon :icon="ICONS.modeEdit" />{{ t('布置') }}</button>
         <button :class="{ on: !editing && !blueprint.on }" :title="t('预览') + ' (P)'" @click="leaveBlueprint('preview')"><JIcon :icon="ICONS.modePreview" />{{ t('预览') }}</button>
         <button class="bp-toggle" :class="{ on: blueprint.on }" :aria-pressed="blueprint.on" :title="t('设计图：线框、尺寸标注，可导出 PNG') + ' (B)'" :aria-label="t('设计图')" @click="blueprint.on = !blueprint.on"><JIcon :icon="ICONS.blueprint" /><span class="ml">{{ t('设计图') }}</span></button>
+        <button v-if="!blueprint.on" class="walk-toggle" :title="t('漫游：第一人称在房间里走动') + ' (V)'" :aria-label="t('漫游')" @click="enterWalk"><JIcon :icon="ICONS.walk" /><span class="ml">{{ t('漫游') }}</span></button>
         <button v-if="!blueprint.on" class="ext-toggle" :class="{ on: sandbox.exterior }" :aria-pressed="sandbox.exterior" :title="t('外观：显示屋顶和完整外墙') + ' (O)'" :aria-label="t('外观')" @click="sandbox.exterior = !sandbox.exterior"><JIcon :icon="ICONS.exteriorView" /><span class="ml">{{ t('外观') }}</span></button>
       </div>
       <BlueprintBar v-if="blueprint.on" :busy="bpBusy" @reset="bp?.resetView()" @export="exportBlueprint" />
-      <div v-if="!editing && !blueprint.on" class="preview-bar">
+      <div v-if="!editing && !blueprint.on && !walking" class="preview-bar">
         <label><input v-model="sandbox.autoRotate" type="checkbox" /><JIcon :icon="ICONS.autoRotate" class="ico-muted" />{{ t('自动旋转') }}</label>
         <select v-model="sandbox.wallMode" :title="t('墙体显示') + ' (C)'">
           <option v-for="m in WALL_MODES" :key="m.id" :value="m.id">{{ t(m.label) }}</option>
@@ -2608,7 +2693,19 @@ defineExpose({ resetView })
         @pointerleave="onPointerLeave"
         @contextmenu.prevent
       />
-      <SandboxOverlay v-if="!blueprint.on" />
+      <SandboxOverlay v-if="!blueprint.on && !walking" />
+      <!-- 漫游：盖在画布上接管指针（不选中、不拖家具），左下是触屏摇杆 -->
+      <div v-if="walking" ref="walkLayer" class="walk-layer" :class="{ locked: walkLocked }">
+        <div v-if="!walkLocked" class="walk-hud">
+          <span v-if="!device.coarse" class="walk-tip">{{ t('点击画面开始：鼠标看四周 · WASD 移动 · Shift 跑 · Esc 释放鼠标') }}</span>
+          <span v-else class="walk-tip">{{ t('左下拖动走路 · 其余地方拖动看四周') }}</span>
+          <button class="primary" @pointerdown.stop @click="exitWalk"><JIcon :icon="ICONS.close" :size="14" />{{ t('退出漫游') }}</button>
+        </div>
+        <span v-if="walkLocked" class="walk-cross" aria-hidden="true" />
+        <div v-if="walkStick" class="walk-stick" :style="{ left: walkStick.x + 'px', top: walkStick.y + 'px' }">
+          <span class="walk-knob" :style="{ transform: `translate(${walkStick.dx}px, ${walkStick.dy}px)` }" />
+        </div>
+      </div>
       <!-- 点中天花板灯具：这个房间的灯光开关与色温 -->
       <div v-if="selectedRoom && editing" class="light-card" :style="{ bottom: device.compact && !device.landscape ? 'calc(var(--sheet-h, 0px) + 10px)' : undefined }">
         <div class="lc-head">
@@ -3108,6 +3205,81 @@ defineExpose({ resetView })
 }
 .viewport.placing canvas {
   cursor: copy;
+}
+.walk-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  touch-action: none;
+  cursor: grab;
+}
+.walk-layer:active {
+  cursor: grabbing;
+}
+:root.coarse .walk-layer,
+.walk-layer:not(.locked) {
+  cursor: pointer;
+}
+.walk-cross {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+.walk-hud {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100% - 32px);
+  padding: 4px 4px 4px 12px;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  cursor: default;
+}
+.walk-tip {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.walk-hud button {
+  flex: none;
+  gap: 4px;
+  height: 30px;
+}
+.walk-stick {
+  position: absolute;
+  width: 112px;
+  height: 112px;
+  margin: -56px 0 0 -56px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.28);
+  border: 2px solid rgba(255, 255, 255, 0.7);
+  pointer-events: none;
+}
+.walk-knob {
+  position: absolute;
+  left: 36px;
+  top: 36px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: var(--shadow-sm);
 }
 .modes {
   position: absolute;

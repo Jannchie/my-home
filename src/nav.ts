@@ -2,10 +2,11 @@
 //   - 10cm 一格；格子可走 = 在允许的房间里、不在墙体里（门洞除外）、不在家具 / 设备的占地里。
 //   - 每格再算「离最近障碍的距离」（clearance），半径 r 的角色只能站在 clearance ≥ r 的格子上，
 //     这样同一张网格可以给大小不同的角色用，不会贴着墙或家具穿模。
-//   - 两类：pet（可以下到玄関土间）、robot（扫地机器人、Kachaka：上不了台阶，不进玄関）。
+//   - 三类：pet（可以下到玄関土间）、robot（扫地机器人、Kachaka：上不了台阶，不进玄関）、
+//     walk（第一人称漫游的人：除挑空以外的房间都能进，配合 sash 从落地窗走到阳台）。
 //   - 找路：8 邻接 A*，再用视线检查拉直路径。
 
-import { fixtureBox, fixtureDepth, openingGeom, pointInPolygon, type Box, type Fixture, type Plan, type Room, type RoomKind, type Vec } from './model'
+import { add, fixtureBox, fixtureDepth, mul, openingGeom, pointInPolygon, type Box, type Fixture, type Plan, type Room, type RoomKind, type Vec } from './model'
 import { wallSegments } from './walls'
 import { ASSET_MAP } from './three/assets'
 import { furnitureBox } from './snap'
@@ -13,7 +14,7 @@ import { floorY } from './three/house'
 import { floorView, isMultiFloor, planFloors } from './floors'
 import { stairHoles, stairWalk, type StairWalk } from './stairs'
 
-export type NavClass = 'pet' | 'robot'
+export type NavClass = 'pet' | 'robot' | 'walk'
 
 const NO_PET: RoomKind[] = ['balcony', 'bath', 'storage', 'void']
 const NO_ROBOT: RoomKind[] = [...NO_PET, 'entrance']
@@ -29,12 +30,16 @@ export interface NavOptions {
   minH?: number
   /** 不能走的区域（多层户型上层的楼梯洞口：第一期宠物不上下楼，各在各的楼层） */
   holes?: Vec[][]
+  /** 通往阳台的落地窗（和 house.ts 的 sash 同一判断）也挖开：第一人称漫游走到阳台上 */
+  sash?: boolean
+  /** 比这矮的落地家具不算障碍（cm）：第一人称漫游时鞋、小凳、玩具这类一步就跨过去 */
+  stepOver?: number
 }
 
 /** 网格里只和户型有关的一层（房间、墙、门洞），按户型的几何缓存（最多留 8 份） */
-const STATIC = new Map<string, { floor: Float32Array; okPet: Uint8Array; okRobot: Uint8Array; walls: Uint8Array }>()
-function staticKey(plan: Plan, cell: number) {
-  return `${cell}#${plan.wall}#${plan.wallOuter}#${JSON.stringify(plan.rooms)}#${JSON.stringify(plan.openings)}`
+const STATIC = new Map<string, { floor: Float32Array; okPet: Uint8Array; okRobot: Uint8Array; okWalk: Uint8Array; walls: Uint8Array }>()
+function staticKey(plan: Plan, cell: number, sash: boolean) {
+  return `${cell}#${sash ? 's' : ''}#${plan.wall}#${plan.wallOuter}#${JSON.stringify(plan.rooms)}#${JSON.stringify(plan.openings)}`
 }
 
 export class NavGrid {
@@ -62,20 +67,23 @@ export class NavGrid {
     }
     const n = this.nx * this.ny
     // 房间、墙、门洞只和户型有关：同一份户型反复建网格（一键布置校验通道时）复用这一层
-    const key = staticKey(plan, C)
+    const key = staticKey(plan, C, !!opts.sash)
     const hit = STATIC.get(key)
     let okPet: Uint8Array
     let okRobot: Uint8Array
+    let okWalk: Uint8Array
     let blocked: Uint8Array
     if (hit) {
       this.floor = hit.floor
       okPet = hit.okPet
       okRobot = hit.okRobot
+      okWalk = hit.okWalk
       blocked = hit.walls.slice()
     } else {
       this.floor = new Float32Array(n)
       okPet = new Uint8Array(n)
       okRobot = new Uint8Array(n)
+      okWalk = new Uint8Array(n)
       blocked = new Uint8Array(n)
 
       // 1. 房间：户内优先（和 roomAt 一致）
@@ -90,14 +98,19 @@ export class NavGrid {
           this.floor[k] = floorY(r)
           if (!NO_PET.includes(r.kind)) okPet[k] = 1
           if (!NO_ROBOT.includes(r.kind)) okRobot[k] = 1
+          if (r.kind !== 'void') okWalk[k] = 1
         }
 
       // 2. 墙：非敞开的墙段按厚度栅格化，门洞挖开
       const door = new Uint8Array(n)
       for (const o of plan.openings) {
-        if (o.kind === 'window') continue
-        const g = openingGeom(plan.rooms, o)
+        const g = o.kind !== 'window' || opts.sash ? openingGeom(plan.rooms, o) : null
         if (!g) continue
+        if (o.kind === 'window') {
+          const k = plan.wallOuter / 2 + 10
+          const sides = [add(g.center, mul(g.e.out, k)), add(g.center, mul(g.e.out, -k))]
+          if (!plan.rooms.some((x) => x.kind === 'balcony' && sides.some((q) => pointInPolygon(q, x.points)))) continue
+        }
         const half = o.width / 2 - 4
         const across = plan.wallOuter / 2 + 4
         this.stamp(g.center, g.e.dir, half, across, door)
@@ -107,7 +120,7 @@ export class NavGrid {
         const t = (s.kind === 'outer' ? plan.wallOuter : plan.wall) / 2
         this.capsule(s.a, s.b, t, blocked, door)
       }
-      STATIC.set(key, { floor: this.floor, okPet, okRobot, walls: blocked.slice() })
+      STATIC.set(key, { floor: this.floor, okPet, okRobot, okWalk, walls: blocked.slice() })
       if (STATIC.size > 8) STATIC.delete(STATIC.keys().next().value!)
     }
 
@@ -118,7 +131,7 @@ export class NavGrid {
       if (opts.minH !== undefined) {
         const bottom = d?.mount ?? f.z ?? 0
         if (!d || d.stick || ignore.has(f.id) || bottom + d.h < opts.minH || bottom > 210) continue
-      } else if (!d || d.mount || d.stick || (f.z ?? 0) > 0.5 || ignore.has(f.id) || d.h < 3) continue
+      } else if (!d || d.mount || d.stick || (f.z ?? 0) > 0.5 || ignore.has(f.id) || d.h < Math.max(3, opts.stepOver ?? 0)) continue
       this.box(furnitureBox(f.asset, f.x, f.y, f.rot), blocked)
     }
     for (const fx of plan.fixtures) this.fixture(fx, blocked)
@@ -164,7 +177,8 @@ export class NavGrid {
       for (let k = 0; k < n; k++) if (d[k]) d[k] -= C / 2
       return d
     }
-    this.clear = { pet: dt(okPet), robot: dt(okRobot) }
+    // walk 只在漫游的网格（sash）上用：别的网格不白算一遍距离变换
+    this.clear = { pet: dt(okPet), robot: dt(okRobot), walk: opts.sash ? dt(okWalk) : new Float32Array(n) }
   }
 
   center(i: number, j: number): Vec {

@@ -5,6 +5,7 @@
 import type { Icon } from '@jannchie/icons'
 import {
   IconAirConditioner,
+  IconFootprint,
   IconBasket,
   IconBook,
   IconGamepad,
@@ -196,6 +197,7 @@ export const ICONS = {
   modePreview: IconEye,
   // 3D 沙盘的「外观」视图：屋顶、外墙全高
   exteriorView: IconBuilding,
+  walk: IconFootprint,
   // 3D 沙盘的「设计图」视图：线框 + 尺寸标注；正交轴测 / 透视
   blueprint: IconRuler,
   ortho: IconIso,
