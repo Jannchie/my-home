@@ -316,16 +316,16 @@ class Decorator {
   }
 
   /** 走不到的端点：以第一个能站的端点为起点，宽 2 × PASSAGE_R 的格子导航（和测试同一套） */
-  private unreachable(keys: Vec[], without: Furniture[] = []): Vec[] {
+  private unreachable(keys: Vec[], without: Furniture[] = [], r = PASSAGE_R): Vec[] {
     // 楼梯口留空区这类伪设备不是实物；楼梯洞口按洞口多边形算
     const fixtures = this.plan.fixtures.filter((f) => !f.id.startsWith('stair-clear-') && !f.id.startsWith('void-rail-') && !f.id.endsWith('~hole'))
     const holes = this.plan.fixtures.filter((f) => f.id.endsWith('~hole')).map((f) => stairFootprint(f))
     const gone = new Set(without.map((f) => f.id))
     const g = new NavGrid({ ...this.plan, fixtures, furniture: gone.size ? this.out.filter((o) => !gone.has(o.id)) : this.out }, { holes })
-    const pts = keys.map((k) => ({ k, at: g.nearest('pet', k, PASSAGE_R, 40) }))
+    const pts = keys.map((k) => ({ k, at: g.nearest('pet', k, r, 40) }))
     const hub = pts.find((p) => p.at)
     if (!hub) return []
-    return pts.filter((p) => p !== hub && (!p.at || !g.path('pet', hub.at!, p.at, PASSAGE_R))).map((p) => p.k)
+    return pts.filter((p) => p !== hub && (!p.at || !g.path('pet', hub.at!, p.at, r))).map((p) => p.k)
   }
 
   /**
@@ -2830,6 +2830,7 @@ class Decorator {
 
   /** 欧美入口（Foyer）：室内穿鞋，放一张窄边桌 / 穿鞋长凳 / 挂衣柜，伞架看运气 */
   foyer(room: Room) {
+    const from = this.out.length
     let main: Furniture | null = null
     for (const id of this.shuffle(['tbl-console', 'tbl-console', 'fm-genkan-bench', 'sf-hall-tree']).filter((x) => ASSET_MAP.has(x))) if ((main = this.wall(room, id, { front: 50 }))) break
     if (this.rand() < 0.5) this.wall(room, 'umbrella-stand')
@@ -2848,12 +2849,14 @@ class Decorator {
     if (this.rand() < 0.35) this.coatTree(room)
     if (this.rand() < 0.3) this.shoeRack(room)
     if (area(room.points) / 10000 >= 5 && this.rand() < 0.2) this.floorOf(room, /^gr-gear-rack$/, { front: 50 })
+    this.entryClear(room, from, main)
   }
 
   /** 日式 / 中式玄关：鞋柜、伞架、穿鞋凳、壁灯，门内脚垫、壁镜、钥匙挂架 / 挂钩排（挂外套、帽子、包），宽敞的再放矮鞋架或衣帽架 */
   genkan(room: Room) {
+    const from = this.out.length
     // 有造作鞋柜就不再放鞋柜家具
-    if (!this.plan.fixtures.some((x) => x.kind === 'builtin' && spotInRoom(x, room.points))) this.wall(room, 'shoe-cabinet')
+    const cabinet = this.plan.fixtures.some((x) => x.kind === 'builtin' && spotInRoom(x, room.points)) ? null : this.wall(room, 'shoe-cabinet')
     if (this.rand() < 0.7) this.wall(room, 'umbrella-stand')
     // 偶尔放一张小穿鞋凳（放不下 wall 会自动跳过）
     if (this.rand() < 0.35 && ASSET_MAP.has('c2-shoe-bench-60')) this.wall(room, 'c2-shoe-bench-60', { front: 40 })
@@ -2871,6 +2874,30 @@ class Decorator {
     if (this.rand() < 0.3) {
       const rail = this.mountAvoiding(room, this.pick(this.find('hook-rack', (a) => !!a.mount && a.series === 'hook-rail' && a.w <= 60)).id, tall)
       if (rail) this.coatsOn(rail, 1 + Math.floor(this.rand() * 2))
+    }
+    this.entryClear(room, from, cabinet)
+  }
+
+  /**
+   * 玄关 / 入口留出宽 2 × ENTRY_R 的通道（大门 → 各个内门）：全屋的主要通道只要求宽 40，玄关两侧都摆了东西时还是挤不过去。
+   * 堵住时按后摆先撤的顺序拿掉这一步摆的落地小件（连同上面挂的、摆的），鞋柜 / 主家具不撤；全撤了也走不通（玄关本来就窄）就不撤
+   */
+  private entryClear(room: Room, from: number, keep: Furniture | null) {
+    const keys: Vec[] = []
+    for (const { o, e, center } of openingsOn(room, this.plan)) {
+      if (o.kind === 'window') continue
+      const into = pointInPolygon(add(center, mul(e.out, 10)), room.points) ? e.out : mul(e.out, -1)
+      keys.push(add(center, mul(into, 30)))
+    }
+    if (keys.length < 2 || !this.unreachable(keys, [], ENTRY_R).length) return
+    const loose = this.out.slice(from).filter((f) => {
+      const d = ASSET_MAP.get(f.asset)
+      return f !== keep && !!d && !f.z && !d.mount && !d.stick && d.h >= 3
+    })
+    if (!loose.length || this.unreachable(keys, loose, ENTRY_R).length) return
+    for (const f of loose.reverse()) {
+      this.removeTree(f)
+      if (!this.unreachable(keys, [], ENTRY_R).length) return
     }
   }
 
@@ -4045,6 +4072,8 @@ const BED_MISS = 1000
 /** 主要通道检查的房间（起居的地方）和通道半宽（宽 40 的人能侧身走过） */
 const PASSAGE_ROOMS = new Set(['ldk', 'western', 'japanese', 'hall', 'kitchen', 'dining'])
 const PASSAGE_R = 20
+/** 玄关 / 入口的通道半宽（宽 60：正面走过去，不用侧身） */
+const ENTRY_R = 30
 
 /** 分步布置：floor = 落地家具那一步，items = 摆件 / 壁挂那一步，all = 一步做完（检查清单补齐等单独调用） */
 type Phase = 'floor' | 'items' | 'all'

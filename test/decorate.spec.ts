@@ -12,6 +12,7 @@ import { cabinetsOn, spotOf } from '/src/cabinet'
 import { ASSET_MAP, type AssetDef } from '/src/three/assets'
 import { bendToWalls, furnitureModel, isPlant, placeFurniture } from '/src/three/house'
 import { wallThicknessAt } from '/src/walls'
+import { NavGrid } from '/src/nav'
 import { JP_OPTS, genJp, penetration, range, rectCorners } from './helpers'
 
 const SEEDS = range(1, 40)
@@ -163,6 +164,35 @@ describe('一键布置 seed 1..40', () => {
     )
     expect(bad).toEqual([])
     // 不是空转：40 户里总有一些玄关铺了脚垫
+    expect(n).toBeGreaterThan(0)
+  })
+
+  test('玄关留出宽 60 的通道：大门到各个内门走得通（玄关本身窄到走不通的除外）', () => {
+    let n = 0
+    const bad = all(({ plan, f }) =>
+      plan.rooms
+        .filter((r) => r.kind === 'entrance')
+        .flatMap((room) => {
+          const keys = openingsOn(room, plan)
+            .filter(({ o }) => o.kind !== 'window')
+            .map(({ e, center }) => {
+              const into = pointInPolygon({ x: center.x + e.out.x * 10, y: center.y + e.out.y * 10 }, room.points) ? 1 : -1
+              return { x: center.x + e.out.x * 30 * into, y: center.y + e.out.y * 30 * into }
+            })
+          if (keys.length < 2) return []
+          const fixtures = plan.fixtures.filter((x) => !x.id.startsWith('stair-clear-') && !x.id.startsWith('void-rail-') && !x.id.endsWith('~hole'))
+          const blocked = (furniture: Furniture[]) => {
+            const g = new NavGrid({ ...plan, fixtures, furniture })
+            const at = keys.map((k) => g.nearest('pet', k, 30, 40))
+            return !at[0] || at.slice(1).some((a) => !a || !g.path('pet', at[0]!, a, 30))
+          }
+          // 空玄关也走不通（太窄，或门口被设备挡着）：不算家具的问题
+          if (blocked(f.filter((x) => !pointInPolygon(x, room.points)))) return []
+          n++
+          return blocked(f) ? [`玄关 ${room.name} 被家具挤得过不去`] : []
+        }),
+    )
+    expect(bad).toEqual([])
     expect(n).toBeGreaterThan(0)
   })
 
