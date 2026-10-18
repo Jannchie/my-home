@@ -1334,6 +1334,8 @@ const WOOD_PAL = pal(
   ['japanese', [J.wood, J.ai, J.washi]],
   ['cute', [C.woodL, C.pink, C.white]],
   ['modern', [M.walnut, M.char, M.black]],
+  ['farmhouse', ['#2f2d2b', '#b5443a', '#c99a63']],
+  ['farmhouse', ['#c99a63', '#9caf8f', '#f2ede2']],
 )
 /** Y 椅：[木, 纸绳] */
 const WISH_PAL = pal(
@@ -1359,7 +1361,7 @@ const TOLIX_PAL = pal(['industrial', [I.iron]], ['industrial', [I.steel]], ['ind
 /** Panton：单一塑料色 */
 const PANTON_PAL = pal(['modern', [M.white]], ['modern', [M.black]], ['retro', [R.red]], ['retro', [R.orange]], ['cute', [C.lemon]], ['cute', [C.pink]])
 /** 圈椅：[木, 坐垫] */
-const QUANYI_PAL = pal(['japanese', ['#7a3b2a', J.shu]], ['japanese', [J.dark, J.ai]], ['japanese', [J.wood, J.tatami]], ['retro', [R.caramel, R.red]], ['nordic', [N.oak, N.linen]])
+const QUANYI_PAL = pal(['japanese', ['#7a3b2a', J.shu]], ['japanese', [J.dark, J.ai]], ['japanese', [J.wood, J.tatami]], ['retro', [R.caramel, R.red]], ['nordic', [N.oak, N.linen]], ['chinese', ['#6b2f22', '#c9a66b']], ['chinese', ['#b9773f', '#9fbfa8']])
 /** 藤编悬臂椅：[藤, 木框, 管] */
 const CANE_PAL = pal(
   ['modern', [J.hinoki, M.black, CHROME]],

@@ -5,186 +5,14 @@
 
 import * as THREE from 'three'
 import { ball, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
-import { C, hangingPipe, holePanel, paintPanel, pipeHook, rectPoly, ellipsePoly, type AssetDef, type Hole, type Poly, type StyleTag, type SurfaceDef } from '../kit'
-import { batten, cappedTube, centerGroup, cylX, cylZ, glassPane, latheAt, lit, mesh, noOutlineDeep, rod3, type TubeOpts, type V3 } from '../geo'
+import { C, hangingPipe, holePanel, paintPanel, pipeHook, rectPoly, ellipsePoly, type AssetDef, type Poly, type SurfaceDef } from '../kit'
+import { batten, cappedTube, centerGroup, cylX, cylZ, glassPane, latheAt, lit, mesh, noOutlineDeep, rod3, type V3 } from '../geo'
 import { I, J, M, N, R, withPals, type Pal3 } from '../packkit'
 import { drawerLv, drawerOf, hollow, slideDoor, swingDoor } from '../cabinetKit'
-
-/** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
-const TUBE: TubeOpts = { seg: { per: 8, min: 12 }, radial: 10, group: true }
-
-type P2 = [number, number]
-
-/** 新中式：红木 / 黄花梨 / 鸡翅木、朱漆、铜饰、黛瓦、素绢 */
-const CHN = { rose: '#6b2f22', huali: '#b9773f', wenge: '#3f2b22', zitan: '#3a2220', lacquer: '#b8352b', jade: '#5f8f7a', ink: '#2f2b2a', gold: '#c9a45a', brass: '#c79a4a', silk: '#efe4c8', indigo: '#2f4a6b', celadon: '#9fbfa8', tile: '#4a4d52', wall: '#f1ede4', cane: '#c9a66b' }
-/** 欧式古典：象牙白 + 金饰、桃花心木、酒红 / 海军蓝丝绒、大理石 */
-const CLS = { ivory: '#f1e8d6', gold: '#c9a54f', cream: '#efe3c4', wine: '#7d2a35', navy: '#2c3a5a', marble: '#ece8e2', vein: '#b8b2aa', mahogany: '#6e3524', sage: '#a7b59a', blush: '#e5bfb5', walnut: '#5e3a26', teal: '#2f5f5f', black: '#2a2626' }
-/** 美式乡村：做旧白、谷仓红、鼠尾草绿、松木 / 深橡木、牛仔蓝、格纹、镀锌铁 */
-const FH = { white: '#f2ede2', barn: '#9e3b2e', sage: '#9caf8f', pine: '#c99a63', oak: '#7a5638', denim: '#5b7391', black: '#2f2d2b', cream: '#efe4cc', plaid: '#b5443a', galv: '#a9adb0', mustard: '#d4a23f', cognac: '#9a5a32', brick: '#a85a44', stone: '#a6a198' }
-
-type Tag = StyleTag
-const ZH: Tag = 'chinese'
-const EU: Tag = 'classic'
-const FA: Tag = 'farmhouse'
-
-const BRASS = '#d4b25a'
-const IRON = '#2f2f31'
-
-// =====================================================================
-// 小工具
-// =====================================================================
-
-function extrude(s: THREE.Shape, depth: number) {
-  const bevel = Math.min(0.5, depth * 0.2)
-  const geo = new THREE.ExtrudeGeometry(s, { depth: Math.max(0.01, depth - bevel * 2), bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelOffset: -bevel, bevelSegments: 1, curveSegments: 20 })
-  geo.translate(0, 0, -depth / 2 + bevel)
-  return geo
-}
-
-/** xy 平面轮廓沿 z 挤出（厚 depth，中心在 z） */
-function prism(pts: P2[], depth: number, color: string, z = 0, x = 0) {
-  const m = mesh(extrude(new THREE.Shape(pts.map(([a, b]) => new THREE.Vector2(a, b))), depth), color)
-  m.position.set(x, 0, z)
-  return m
-}
-
-/** 侧板：轮廓在 zy 平面（[z, y]），沿 x 挤出厚 t，中心在 x */
-function sidePrism(pts: P2[], t: number, color: string, x: number) {
-  const m = prism(pts, t, color)
-  m.rotation.y = -Math.PI / 2
-  m.position.set(x, 0, 0)
-  return m
-}
-
-/** 中心线两侧各偏 t/2 得到的闭合带状轮廓 */
-function strip(pts: P2[], t: number): P2[] {
-  const L: P2[] = []
-  const Rr: P2[] = []
-  for (let i = 0; i < pts.length; i++) {
-    const a = pts[Math.max(0, i - 1)]
-    const b = pts[Math.min(pts.length - 1, i + 1)]
-    const dx = b[0] - a[0]
-    const dy = b[1] - a[1]
-    const l = Math.hypot(dx, dy) || 1
-    const nx = (-dy / l) * (t / 2)
-    const ny = (dx / l) * (t / 2)
-    L.push([pts[i][0] + nx, pts[i][1] + ny])
-    Rr.push([pts[i][0] - nx, pts[i][1] - ny])
-  }
-  return [...L, ...Rr.reverse()]
-}
-
-/** 方格栅洞阵：cols × rows */
-function lattice(w: number, h: number, cols: number, rows: number, bar = 2.4, margin = 3): Hole[] {
-  const holes: Hole[] = []
-  const cw = (w - margin * 2 - bar * (cols - 1)) / cols
-  const ch = (h - margin * 2 - bar * (rows - 1)) / rows
-  for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) holes.push({ kind: 'rect', x: -w / 2 + margin + cw / 2 + i * (cw + bar), y: margin + j * (ch + bar), w: cw, h: ch, r: 0.4 })
-  return holes
-}
-
-/**
- * 把座面压低：y0 以下按比例压缩到 y0 - dy，y0 以上整体下移 dy（靠背、扶手比例不变）。
- * 明式椅子原比例座高约 50（配 85 高的桌子 + 踏脚），和现代 72–75 的桌子搭配会太高。
- */
-function lowerSeat(g: THREE.Group, y0: number, dy: number) {
-  g.updateMatrixWorld(true)
-  const inv = new THREE.Matrix4().copy(g.matrixWorld).invert()
-  const k = (y0 - dy) / y0
-  g.traverse((o) => {
-    const m = o as THREE.Mesh
-    if (!m.isMesh) return
-    const rel = new THREE.Matrix4().multiplyMatrices(inv, m.matrixWorld)
-    const geo = m.geometry.clone()
-    geo.applyMatrix4(rel)
-    const pos = geo.attributes.position
-    for (let i = 0; i < pos.count; i++) {
-      const y = pos.getY(i)
-      pos.setY(i, y < y0 ? y * k : y - dy)
-    }
-    geo.applyMatrix4(rel.clone().invert())
-    geo.computeVertexNormals()
-    geo.computeBoundingBox()
-    geo.computeBoundingSphere()
-    m.geometry = geo
-  })
-  return g
-}
-
-/**
- * 卷曲腿 / 三弯腿：腿顶在 (x, top, z)，膝部朝 (ox, oz) 方向鼓出，脚踝内收、脚尖再外翻落地。
- * foot：'scroll' 卷叶脚（路易式）、'hoof' 马蹄足（明式）、'pad' 圆垫脚（安妮女王）
- */
-function cabriole(x: number, z: number, top: number, r: number, color: string, ox: number, oz: number, foot: 'scroll' | 'hoof' | 'pad' = 'pad', footColor = color) {
-  const g = new THREE.Group()
-  const k = r * 1.6
-  const pts: V3[] = [
-    [x, top, z],
-    [x + ox * k * 0.7, top * 0.82, z + oz * k * 0.7],
-    [x + ox * k * 0.5, top * 0.55, z + oz * k * 0.5],
-    [x - ox * k * 0.15, top * 0.25, z - oz * k * 0.15],
-    [x + ox * k * 0.25, r * 1.4, z + oz * k * 0.25],
-  ]
-  g.add(cappedTube(pts, r, color, { ...TUBE, caps: false }))
-  g.add(ball(r * 1.15, color, { x: pts[1][0], y: pts[1][1], z: pts[1][2] }, [1, 1.3, 1]))
-  const fx = x + ox * k * 0.4
-  const fz = z + oz * k * 0.4
-  if (foot === 'scroll') {
-    g.add(ball(r * 1.15, footColor, { x: fx, y: r * 1.035, z: fz }, [1, 0.9, 1]))
-  } else if (foot === 'hoof') {
-    g.add(rbox(r * 2.4, r * 1.6, r * 2.4, footColor, { x: fx, y: 0, z: fz }, r * 0.5))
-  } else {
-    g.add(puck(r * 1.5, r * 0.9, footColor, { x: fx, y: 0, z: fz }))
-    g.add(ball(r * 1.05, color, { x: fx, y: r * 1.3, z: fz }))
-  }
-  return g
-}
-
-/** 车旋腿（农舍餐桌、四柱床柱）：轮廓自下而上，h 为总高，at 为底 */
-function turnedLeg(h: number, r: number, color: string, at: { x?: number; y?: number; z?: number }, style: 'farm' | 'baluster' = 'farm') {
-  const prof: P2[] =
-    style === 'farm'
-      ? [
-          [0, 0],
-          [r * 0.7, 0],
-          [r * 0.75, h * 0.04],
-          [r * 0.95, h * 0.12],
-          [r * 0.7, h * 0.2],
-          [r * 1.15, h * 0.3],
-          [r * 0.75, h * 0.42],
-          [r * 0.85, h * 0.55],
-          [r * 1.05, h * 0.62],
-          [r * 0.8, h * 0.68],
-          [r * 1.0, h * 0.72],
-          [r * 1.0, h],
-          [0, h],
-        ]
-      : [
-          [0, 0],
-          [r * 1.1, 0],
-          [r * 1.1, h * 0.05],
-          [r * 0.7, h * 0.08],
-          [r * 1.2, h * 0.25],
-          [r * 0.65, h * 0.45],
-          [r * 0.85, h * 0.5],
-          [r * 0.6, h * 0.55],
-          [r * 0.75, h * 0.85],
-          [r * 1.0, h * 0.9],
-          [r * 0.8, h * 0.95],
-          [r * 0.8, h],
-          [0, h],
-        ]
-  return latheAt(prof, color, at, 16, 0.001)
-}
-
-/** 圆形铜饰（中式面叶）：贴在 +z 面上 */
-function brassPlate(x: number, y: number, z: number, r: number, color = BRASS) {
-  const g = new THREE.Group()
-  g.add(cylZ(r, 0.5, color, x, y, z + 0.25, 20))
-  g.add(torus(r * 0.45, 0.35, color, { x, y: y - r * 0.55, z: z + 0.9 }))
-  g.add(ball(0.6, color, { x, y: y + r * 0.1, z: z + 0.6 }))
-  return g
-}
+import { BRASS, CHN, CLS, EU, FA, FH, IRON, TUBE, ZH, brassPlate, cabriole, carving, lattice, lowerSeat, paintPatchwork, prism, sidePrism, slabY, strip, turnedLeg, waistBase, weizi, type P2 } from './styles-world/common'
+import { CN_BED_TOP, CN_BOOKCASE_SURFACES, CN_COFFEE_SURFACES, CN_DESK_SURFACES, CN_DRESSER_SURFACES, CN_TV_SURFACES, CN_WARDROBE_SURFACES, cnBed, cnBookcase, cnCoffee, cnDengguaChair, cnDesk, cnDining, cnDresser, cnQuanyi, cnRound, cnSofa, cnStudyChair, cnTableLamp, cnTvStand, cnWardrobe } from './styles-world/chinese'
+import { CL_DESK_SURFACES, CL_DRESSER_SURFACES, CL_SLEIGH_TOP, CL_TV_SURFACES, CL_VITRINE_SURFACES, clChandelierLamp, clChesterfield, clConsoleMirror, clDesk, clDeskChair, clDining, clDresser, clGrandfatherClock, clQueenAnne, clSleighBed, clTvStand, clVitrine, clWingback } from './styles-world/classic'
+import { FH_BED_TOP, FH_COFFEE_SURFACES, FH_DESK_SURFACES, FH_DRESSER_SURFACES, FH_TV_SURFACES, FH_WARDROBE_SURFACES, fhCoffee, fhDesk, fhDresser, fhPlankBed, fhSlipcover, fhTableLamp, fhTrestle, fhTripodLamp, fhTvStand, fhWardrobe, fhWindsor } from './styles-world/farmhouse'
 
 const r = rectPoly
 
@@ -443,36 +271,6 @@ function meiguiChair(p: string[]) {
   return lowerSeat(g, 45.5, 4.5)
 }
 
-/** 三面围子：背板 + 两侧板，格心开孔 */
-function weizi(g: THREE.Group, w: number, d: number, y0: number, hb: number, hs: number, t: number, color: string, frame: string) {
-  g.add(holePanel(w, hb, t, color, lattice(w, hb, Math.round(w / 22), 2, 2.6, 4), { y: y0, z: -d / 2 + t / 2 }))
-  g.add(rbox(w + 1, 2.4, t + 1.2, frame, { y: y0 + hb, z: -d / 2 + t / 2 }, 0.8))
-  for (const s of [-1, 1]) {
-    g.add(holePanel(d - t, hs, t, color, lattice(d - t, hs, Math.round(d / 22), 2, 2.6, 4), { x: s * (w / 2 - t / 2), y: y0, z: t / 2, ry: Math.PI / 2 }))
-    g.add(rbox(t + 1.2, 2.4, d - t + 0.6, frame, { x: s * (w / 2 - t / 2), y: y0 + hs, z: t / 2 }, 0.8))
-  }
-}
-
-/** 束腰床身 / 台座：腿 + 牙板 + 束腰 + 面板，返回面板顶高 */
-function waistBase(g: THREE.Group, w: number, d: number, legH: number, wood: string, dark: string, leg = 6) {
-  for (const sx of [-1, 1])
-    for (const sz of [-1, 1]) {
-      g.add(rbox(leg, legH, leg, wood, { x: sx * (w / 2 - leg / 2 - 1), y: 2.4, z: sz * (d / 2 - leg / 2 - 1) }, 1))
-      // 内翻马蹄
-      g.add(rbox(leg + 1.4, 3, leg + 1.4, dark, { x: sx * (w / 2 - leg / 2 - 1.4), y: 0, z: sz * (d / 2 - leg / 2 - 1.4) }, 1))
-    }
-  const y1 = legH + 2.4
-  // 牙板：前后两侧，带壸门曲线
-  const a = (len: number): P2[] => [[-len / 2, y1], [len / 2, y1], [len / 2, y1 - 7], [len / 2 - 8, y1 - 8.5], [len / 2 - 14, y1 - 6], [-(len / 2 - 14), y1 - 6], [-(len / 2 - 8), y1 - 8.5], [-len / 2, y1 - 7]]
-  for (const s of [-1, 1]) {
-    g.add(prism(a(w - leg * 2 - 2), 1.6, wood, s * (d / 2 - 1.8)))
-    const side = sidePrism(a(d - leg * 2 - 2), 1.6, wood, s * (w / 2 - 1.8))
-    g.add(side)
-  }
-  g.add(rbox(w - 3, 3, d - 3, dark, { y: y1 }, 0.8))
-  g.add(rbox(w, 5, d, wood, { y: y1 + 3 }, 1.2))
-  return y1 + 8
-}
 
 /** 罗汉床：三面格心围子、束腰马蹄腿，厚坐褥 + 两只圆枕 */
 function luohanBed(p: string[]) {
@@ -983,13 +781,6 @@ const CN_NS_SURFACES: SurfaceDef[] = [{ y: 11.6, h: 25.3, inside: true, shape: [
 // 欧式古典
 // =====================================================================
 
-/** 卷叶雕花：两个相对的涡卷 + 中心贝壳（贴在 +z 面） */
-function carving(x: number, y: number, z: number, s: number, color: string) {
-  const g = new THREE.Group()
-  for (const k of [-1, 1]) g.add(torus(s * 0.45, s * 0.12, color, { x: x + k * s * 0.7, y, z }, Math.PI * 1.5))
-  g.add(ball(s * 0.45, color, { x, y: y + s * 0.1, z }, [1, 0.8, 0.35]))
-  return noOutlineDeep(g)
-}
 
 /** 路易式扶手椅：卷曲腿、椭圆软包靠背、扶手垫，描金框 */
 function louisArmchair(p: string[]) {
@@ -1501,57 +1292,6 @@ function clNightstand(p: string[]) {
 }
 const CL_NS_SURFACES: SurfaceDef[] = [23.5, 39].map((y) => drawerLv(-18, 18, y, 13, 16.3, 30))
 
-/** 按多边形挤出的平板（[x, z] 多边形，底面在 y，厚 t，不倒角） */
-function slabY(poly: Poly, t: number, color: string, y: number) {
-  const shape = new THREE.Shape(poly.map(([x, z]) => new THREE.Vector2(x, -z)))
-  const geo = new THREE.ExtrudeGeometry(shape, { depth: t, bevelEnabled: false, curveSegments: 4 })
-  geo.rotateX(-Math.PI / 2)
-  const m = mesh(geo, color)
-  m.position.y = y
-  return m
-}
-
-/** 拼布被面：方块拼色 + 缝线 */
-function paintPatchwork(a: string, b: string) {
-  return (g: CanvasRenderingContext2D, W: number, H: number) => {
-    const cols = [a, b, '#c86a5a', '#e2c070', '#7a9ab8', '#f3ead8', shade(a, 0.15), '#9caf8f']
-    const n = 6
-    const m = Math.max(1, Math.round(n * (H / W)))
-    const cw = W / n
-    const ch = H / m
-    const rnd = (i: number, j: number) => Math.abs(Math.sin(i * 12.9898 + j * 78.233) * 43758.5453) % 1
-    for (let i = 0; i < n; i++)
-      for (let j = 0; j < m; j++) {
-        g.fillStyle = cols[Math.floor(rnd(i, j) * cols.length)]
-        g.fillRect(i * cw, j * ch, cw + 1, ch + 1)
-        // 半数格子再分成两个三角
-        if (rnd(j, i) > 0.5) {
-          g.fillStyle = cols[Math.floor(rnd(i + 3, j + 7) * cols.length)]
-          g.beginPath()
-          g.moveTo(i * cw, j * ch)
-          g.lineTo((i + 1) * cw, j * ch)
-          g.lineTo(i * cw, (j + 1) * ch)
-          g.closePath()
-          g.fill()
-        }
-      }
-    g.strokeStyle = 'rgba(255,255,255,0.55)'
-    g.setLineDash([4, 4])
-    g.lineWidth = 1.5
-    for (let i = 1; i < n; i++) {
-      g.beginPath()
-      g.moveTo(i * cw, 0)
-      g.lineTo(i * cw, H)
-      g.stroke()
-    }
-    for (let j = 1; j < m; j++) {
-      g.beginPath()
-      g.moveTo(0, j * ch)
-      g.lineTo(W, j * ch)
-      g.stroke()
-    }
-  }
-}
 
 // =====================================================================
 // 美式乡村
@@ -2669,7 +2409,68 @@ export const SW_CHINESE: AssetDef[] = [
     [ZH, CHN.zitan, BRASS, CHN.wenge],
     ['modern', M.walnut, M.silver, M.char],
   ], cnNightstand, { sizeLabel: '中式', surface: 55, surfaces: CN_NS_SURFACES, openable: true }),
+  ...cnHome(),
 ]
+
+/** 新中式补充款：一键布置换款用的主力家具（建模在 styles-world/chinese.ts） */
+function cnHome(): AssetDef[] {
+  const sofa: Pal3[] = [
+    [ZH, CHN.rose, CHN.silk, CHN.zitan],
+    [ZH, CHN.huali, CHN.celadon, CHN.wenge],
+    [ZH, CHN.wenge, CHN.indigo, CHN.zitan],
+    [ZH, CHN.zitan, CHN.lacquer, CHN.wenge],
+  ]
+  const wood: Pal3[] = [
+    [ZH, CHN.rose, CHN.zitan, BRASS],
+    [ZH, CHN.huali, CHN.wenge, BRASS],
+    [ZH, CHN.zitan, CHN.wenge, BRASS],
+    [ZH, CHN.wenge, CHN.zitan, BRASS],
+  ]
+  const cab: Pal3[] = [
+    [ZH, CHN.rose, BRASS, CHN.zitan],
+    [ZH, CHN.huali, BRASS, CHN.wenge],
+    [ZH, CHN.lacquer, BRASS, CHN.ink],
+    [ZH, CHN.zitan, BRASS, CHN.wenge],
+  ]
+  const chair: Pal3[] = [
+    [ZH, CHN.rose, CHN.cane, CHN.zitan],
+    [ZH, CHN.huali, CHN.cane, CHN.wenge],
+    [ZH, CHN.zitan, CHN.silk, CHN.wenge],
+    [ZH, CHN.wenge, CHN.cane, CHN.zitan],
+  ]
+  const bed: Pal3[] = [
+    [ZH, CHN.lacquer, CHN.silk, CHN.rose],
+    [ZH, CHN.indigo, '#f3ecd8', CHN.huali],
+    [ZH, CHN.jade, CHN.silk, CHN.wenge],
+    [ZH, CHN.gold, CHN.silk, CHN.zitan],
+  ]
+  const seat = ['chair', 'seat'] as const
+  return [
+    ...([[170, '双人'], [210, '三人']] as const).map(([w, label]) =>
+      D(`sw-cn-sofa-${w > 190 ? 3 : 2}`, '新中式沙发', 'living', [w, 84.4, 75.8], sofa, cnSofa(w), { sizeLabel: label, series: 'sw-cn-sofa', type: 'sofa', tags: ['sofa'] }),
+    ),
+    D('sw-cn-quanyi-arm', '新中式圈椅', 'living', [59.8, 56.3, 92.4], sofa, cnQuanyi, { type: 'armchair', tags: ['armchair', ...seat] }),
+    D('sw-cn-chaji', '新中式茶几', 'living', [100, 64, 42], wood, cnCoffee, { type: 'coffee-table', tags: ['coffee-table'], surface: 42, surfaces: CN_COFFEE_SURFACES }),
+    D('sw-cn-tv', '新中式电视柜', 'living', [161.2, 44.3, 52], cab, cnTvStand, { type: 'tv-stand', tags: ['tv-stand', 'cabinet'], surface: 48.5, surfaceShape: [r(-71, -21, 71, 21)], surfaces: CN_TV_SURFACES, openable: true }),
+    D('sw-cn-dining', '新中式餐桌', 'dining', [135, 80, 76], wood, cnDining, { type: 'dining-table', tags: ['dining-table', 'table'], surface: 76 }),
+    D('sw-cn-round', '中式圆餐桌', 'dining', [110, 110, 76], wood, cnRound, { type: 'dining-table', tags: ['dining-table', 'table'], surface: 76, surfaceShape: [ellipsePoly(53)] }),
+    D('sw-cn-denggua', '灯挂椅', 'dining', [49.4, 45.7, 100.3], chair, cnDengguaChair, { type: 'dining-chair', tags: ['dining-chair', 'dining-seat', 'multi-ok', ...seat] }),
+    ...([[97, 'Single'], [120, 'Semi-double'], [140, 'Double'], [160, 'Queen']] as const).map(([m, label]) =>
+      D(`sw-cn-bed-${m}`, '新中式床', 'bedroom', [m + 12.4, 212.5, 108], bed, cnBed(m), { sizeLabel: label, series: 'sw-cn-bed', type: 'bed', tags: ['bed'], surface: CN_BED_TOP }),
+    ),
+    D('sw-cn-wardrobe', '新中式衣柜', 'bedroom', [103, 60.2, 198], cab, cnWardrobe, { type: 'wardrobe', tags: ['wardrobe', 'cabinet', 'bed-ok', 'multi-ok'], surfaces: CN_WARDROBE_SURFACES, openable: true }),
+    D('sw-cn-dresser', '闷户橱', 'bedroom', [85.2, 46.3, 88], cab, cnDresser, { type: 'dresser', tags: ['dresser', 'cabinet'], surface: 85.4, surfaceShape: [r(-37.5, -22, 37.5, 22)], surfaces: CN_DRESSER_SURFACES, openable: true }),
+    D('sw-cn-desk', '新中式书桌', 'study', [120, 60, 76], cab, cnDesk, { type: 'desk', tags: ['desk', 'table'], surface: 76, surfaces: CN_DESK_SURFACES, openable: true }),
+    D('sw-cn-study-chair', '南官帽椅', 'study', [52, 46.8, 104.5], chair, cnStudyChair, { type: 'office-chair', tags: ['office-chair', ...seat] }),
+    D('sw-cn-liangge', '亮格柜', 'storage', [86, 39.5, 185], cab, cnBookcase, { type: 'bookshelf', tags: ['bookshelf', 'cabinet', 'high-ok', 'hobby:reading', 'multi-ok', 'open-shelf'], surface: 185, surfaces: CN_BOOKCASE_SURFACES, openable: true }),
+    D('sw-cn-table-lamp', '新中式台灯', 'lighting', [26.4, 26.4, 59.4], [
+      [ZH, CHN.rose, '#fff1c8', CHN.gold],
+      [ZH, CHN.zitan, '#ffe2b0', CHN.lacquer],
+      [ZH, CHN.huali, '#fff1c8', CHN.gold],
+      [ZH, CHN.lacquer, '#fff1c8', CHN.gold],
+    ], cnTableLamp, { prop: true, type: 'table-lamp', tags: ['lamp', 'light', 'table-lamp'] }),
+  ]
+}
 
 /** 欧式古典 */
 export const SW_CLASSIC: AssetDef[] = [
@@ -2784,7 +2585,83 @@ export const SW_CLASSIC: AssetDef[] = [
     [EU, CLS.blush, CLS.ivory, CLS.gold],
     [EU, CLS.sage, CLS.marble, CLS.gold],
   ], clNightstand, { sizeLabel: '法式', surface: 58, surfaces: CL_NS_SURFACES, openable: true }),
+  ...clHome(),
 ]
+
+/** 欧式古典补充款：一键布置换款用的主力家具（建模在 styles-world/classic.ts） */
+function clHome(): AssetDef[] {
+  const sofa: Pal3[] = [
+    [EU, CLS.wine, CLS.mahogany, CLS.gold],
+    [EU, CLS.navy, CLS.walnut, CLS.gold],
+    [EU, '#7a4a2c', CLS.walnut, CLS.gold],
+    [EU, CLS.teal, CLS.mahogany, CLS.gold],
+  ]
+  const soft: Pal3[] = [
+    [EU, CLS.cream, CLS.walnut, CLS.gold],
+    [EU, CLS.wine, CLS.mahogany, CLS.gold],
+    [EU, CLS.sage, CLS.walnut, CLS.gold],
+    [EU, CLS.blush, CLS.ivory, CLS.gold],
+  ]
+  const body: Pal3[] = [
+    [EU, CLS.ivory, CLS.marble, CLS.gold],
+    [EU, CLS.mahogany, CLS.mahogany, CLS.gold],
+    [EU, CLS.walnut, '#3a3636', CLS.gold],
+    [EU, CLS.sage, CLS.ivory, CLS.gold],
+  ]
+  const bed: Pal3[] = [
+    [EU, CLS.wine, CLS.cream, CLS.mahogany],
+    [EU, CLS.navy, CLS.ivory, CLS.walnut],
+    [EU, CLS.sage, CLS.ivory, CLS.ivory],
+    [EU, CLS.blush, CLS.ivory, CLS.walnut],
+  ]
+  const seat = ['chair', 'seat'] as const
+  return [
+    ...([[170, '双人'], [210, '三人']] as const).map(([w, label]) =>
+      D(`sw-cl-chesterfield-${w > 190 ? 3 : 2}`, '切斯特菲尔德沙发', 'living', [w, 91.6, 77], sofa, clChesterfield(w), { sizeLabel: label, series: 'sw-cl-chesterfield', type: 'sofa', tags: ['sofa'] }),
+    ),
+    D('sw-cl-wingback', '翼背扶手椅', 'living', [77.2, 77.5, 108], soft, clWingback, { type: 'armchair', tags: ['armchair', ...seat] }),
+    D('sw-cl-tv', '欧式电视柜', 'living', [160, 47.2, 60.5], body, clTvStand, { type: 'tv-stand', tags: ['tv-stand', 'cabinet'], surface: 60.5, surfaces: CL_TV_SURFACES, openable: true }),
+    ...([[140, 90], [180, 95]] as const).map(([w, d]) =>
+      D(`sw-cl-dining-${w}`, '欧式长餐桌', 'dining', [w, d, 77.6], [
+        [EU, CLS.mahogany, CLS.mahogany, CLS.gold],
+        [EU, CLS.ivory, CLS.walnut, CLS.gold],
+        [EU, CLS.walnut, CLS.walnut, CLS.gold],
+        [EU, CLS.black, CLS.mahogany, CLS.gold],
+      ], clDining(w, d), { sizeLabel: String(w), series: 'sw-cl-dining', type: 'dining-table', tags: ['dining-table', 'table'], surface: 77.6 }),
+    ),
+    D('sw-cl-queenanne', '安妮女王餐椅', 'dining', [44.3, 49.1, 104.5], soft, clQueenAnne, { type: 'dining-chair', tags: ['dining-chair', 'dining-seat', 'multi-ok', ...seat] }),
+    ...([[97, 'Single'], [120, 'Semi-double'], [140, 'Double'], [160, 'Queen']] as const).map(([m, label]) =>
+      D(`sw-cl-sleigh-${m}`, '雪橇床', 'bedroom', [m + 15, 222, 116], bed, clSleighBed(m), { sizeLabel: label, series: 'sw-cl-sleigh', type: 'bed', tags: ['bed'], surface: CL_SLEIGH_TOP }),
+    ),
+    D('sw-cl-dresser', '法式五斗柜', 'bedroom', [92, 48, 86.4], body, clDresser, { type: 'dresser', tags: ['dresser', 'cabinet'], surface: 86.4, surfaces: CL_DRESSER_SURFACES, openable: true }),
+    D('sw-cl-desk', '法式书桌', 'study', [125, 65, 77], [
+      [EU, CLS.mahogany, '#2f4a3a', CLS.gold],
+      [EU, CLS.walnut, CLS.wine, CLS.gold],
+      [EU, CLS.ivory, CLS.navy, CLS.gold],
+      [EU, CLS.black, '#5a3a2a', CLS.gold],
+    ], clDesk, { type: 'desk', tags: ['desk', 'table'], surface: 77, surfaces: CL_DESK_SURFACES, openable: true }),
+    D('sw-cl-desk-chair', '法式书椅', 'study', [56, 52, 84], soft, clDeskChair, { type: 'office-chair', tags: ['office-chair', ...seat] }),
+    D('sw-cl-clock', '落地座钟', 'living', [50, 30.2, 208], [
+      [EU, CLS.mahogany, CLS.ivory, CLS.gold],
+      [EU, CLS.walnut, CLS.cream, CLS.gold],
+      [EU, CLS.ivory, CLS.ivory, CLS.gold],
+      [EU, CLS.black, CLS.cream, CLS.gold],
+    ], clGrandfatherClock, { type: 'clock', tags: ['clock', 'decor'] }),
+    D('sw-cl-console-mirror', '玄关桌配镜', 'entrance', [110, 36, 177], body, clConsoleMirror, { type: 'table', tags: ['table', 'mirror'], surface: 81, surfaceShape: [r(-53, -12.6, 53, 17.4)] }),
+    D('sw-cl-chandelier-lamp', '枝形吊灯式落地灯', 'lighting', [33.4, 55.4, 183], [
+      [EU, CLS.gold, CLS.ivory, '#e8f4ff'],
+      [EU, '#c8ccd2', CLS.cream, '#e8f4ff'],
+      [EU, CLS.black, CLS.ivory, '#e8f4ff'],
+      [EU, CLS.gold, CLS.wine, '#ffe8f0'],
+    ], clChandelierLamp, { type: 'floor-lamp', tags: ['floor-lamp', 'lamp', 'light'] }),
+    D('sw-cl-vitrine', '欧式玻璃陈列柜', 'storage', [94, 45.5, 196], [
+      [EU, CLS.ivory, CLS.sage, CLS.gold],
+      [EU, CLS.mahogany, CLS.wine, CLS.gold],
+      [EU, CLS.walnut, CLS.navy, CLS.gold],
+      [EU, CLS.black, CLS.teal, CLS.gold],
+    ], clVitrine, { type: 'display-cabinet', tags: ['display-cabinet', 'cabinet', 'shelving', 'collection-shelf'], surfaces: CL_VITRINE_SURFACES, openable: true }),
+  ]
+}
 
 /** 美式乡村 */
 export const SW_FARMHOUSE: AssetDef[] = [
@@ -2903,7 +2780,69 @@ export const SW_FARMHOUSE: AssetDef[] = [
     [FA, FH.pine, FH.denim, BRASS],
     [FA, FH.oak, FH.black, BRASS],
   ], fhNightstand, { sizeLabel: '农舍', surface: 57, surfaces: [{ y: 14, shape: [r(-19.3, -15.3, 19.3, 15.3)], h: 22 }, drawerLv(-18, 18, 38, 14, 16.3, 30)], openable: true }),
+  ...fhHome(),
 ]
+
+/** 美式乡村补充款：一键布置换款用的主力家具（建模在 styles-world/farmhouse.ts） */
+function fhHome(): AssetDef[] {
+  const plank: Pal3[] = [
+    [FA, FH.pine, FH.white, FH.black],
+    [FA, FH.oak, FH.black, FH.black],
+    [FA, FH.pine, FH.sage, FH.oak],
+    [FA, FH.oak, FH.oak, FH.black],
+  ]
+  const painted: Pal3[] = [
+    [FA, FH.white, FH.pine, FH.black],
+    [FA, FH.sage, FH.oak, FH.black],
+    [FA, FH.barn, FH.pine, FH.black],
+    [FA, '#7a8ea6', FH.pine, FH.black],
+  ]
+  const windsor: Pal3[] = [
+    [FA, FH.black, FH.pine, FH.black],
+    [FA, FH.barn, FH.oak, FH.barn],
+    [FA, FH.white, FH.pine, FH.white],
+    [FA, FH.sage, FH.oak, FH.sage],
+  ]
+  const seat = ['chair', 'seat'] as const
+  return [
+    ...([[175, '双人'], [215, '三人']] as const).map(([w, label]) =>
+      D(`sw-fh-slipcover-${w > 190 ? 3 : 2}`, '布套沙发', 'living', [w + 4.1, 95, 87.9], [
+        [FA, FH.white, FH.plaid, FH.sage],
+        [FA, FH.cream, FH.denim, FH.mustard],
+        [FA, '#d9d2c3', FH.sage, FH.plaid],
+        [FA, FH.denim, FH.cream, FH.barn],
+      ], fhSlipcover(w), { sizeLabel: label, series: 'sw-fh-slipcover', type: 'sofa', tags: ['sofa'] }),
+    ),
+    D('sw-fh-coffee', '农舍茶几', 'living', [100, 65.8, 45.8], plank, fhCoffee, { type: 'coffee-table', tags: ['coffee-table'], surface: 45.8, surfaces: FH_COFFEE_SURFACES }),
+    D('sw-fh-tv', '谷仓门电视柜', 'living', [160, 51.4, 63], painted, fhTvStand, { type: 'tv-stand', tags: ['tv-stand', 'cabinet'], surface: 63, surfaceShape: [r(-79, -22.5, 79, 22.5)], surfaces: FH_TV_SURFACES, openable: true }),
+    D('sw-fh-trestle', '农舍搁架餐桌', 'dining', [150, 85, 76], plank, fhTrestle, { type: 'dining-table', tags: ['dining-table', 'table'], surface: 76 }),
+    D('sw-fh-windsor', '温莎餐椅', 'dining', [46, 44.1, 96.3], windsor, fhWindsor(false), { type: 'dining-chair', tags: ['dining-chair', 'dining-seat', 'multi-ok', ...seat] }),
+    ...([[97, 'Single'], [120, 'Semi-double'], [140, 'Double'], [160, 'Queen']] as const).map(([m, label]) =>
+      D(`sw-fh-bed-${m}`, '农舍木板床', 'bedroom', [m + 16, 216, 114.6], [
+        [FA, FH.plaid, FH.white, FH.pine],
+        [FA, FH.denim, FH.cream, FH.oak],
+        [FA, FH.sage, FH.white, FH.white],
+        [FA, FH.mustard, FH.cream, FH.oak],
+      ], fhPlankBed(m), { sizeLabel: label, series: 'sw-fh-bed', type: 'bed', tags: ['bed'], surface: FH_BED_TOP }),
+    ),
+    D('sw-fh-wardrobe', '谷仓门衣柜', 'bedroom', [110, 62, 194], painted, fhWardrobe, { type: 'wardrobe', tags: ['wardrobe', 'cabinet', 'bed-ok', 'multi-ok'], surfaces: FH_WARDROBE_SURFACES, openable: true }),
+    D('sw-fh-dresser', '农舍五斗柜', 'bedroom', [88, 46, 88], painted, fhDresser, { type: 'dresser', tags: ['dresser', 'cabinet'], surface: 88, surfaces: FH_DRESSER_SURFACES, openable: true }),
+    D('sw-fh-desk', '车旋腿书桌', 'study', [120, 60, 76], plank, fhDesk, { type: 'desk', tags: ['desk', 'table'], surface: 76, surfaces: FH_DESK_SURFACES, openable: true }),
+    D('sw-fh-desk-chair', '温莎书椅', 'study', [50, 45.9, 96.3], windsor, fhWindsor(true), { type: 'office-chair', tags: ['office-chair', ...seat] }),
+    D('sw-fh-table-lamp', '陶罐台灯', 'lighting', [27.6, 27.6, 41], [
+      [FA, FH.cream, '#efe6d2', FH.denim],
+      [FA, FH.stone, '#efe6d2', FH.barn],
+      [FA, FH.white, FH.cream, FH.black],
+      [FA, FH.sage, '#efe6d2', FH.oak],
+    ], fhTableLamp, { prop: true, type: 'table-lamp', tags: ['lamp', 'light', 'table-lamp'] }),
+    D('sw-fh-tripod-lamp', '三脚木落地灯', 'lighting', [42.7, 44.8, 156], [
+      [FA, FH.pine, '#efe6d2', FH.black],
+      [FA, FH.oak, FH.cream, BRASS],
+      [FA, FH.white, '#efe6d2', FH.black],
+      [FA, FH.black, FH.white, BRASS],
+    ], fhTripodLamp, { type: 'floor-lamp', tags: ['floor-lamp', 'lamp', 'light'] }),
+  ]
+}
 
 /** 和风补充 */
 export const SW_JAPANESE: AssetDef[] = [
