@@ -930,9 +930,9 @@ class Decorator {
         // 高处（> 140，书柜顶、吊柜）只放书、绿植、收纳盒、装饰品，不放耳机、手柄、电器之类
         const high = (y: number) => (parent.z ?? 0) + y > 140
         const okHigh = hasTag(a, 'high-ok')
-        // 床面只放玩偶、书、手机这类随手放的软东西，不放棋牌、电器
-        if (isBed(pd) && !hasTag(a, 'bed-ok')) continue
-        const levels = [...(pd.surface && (okHigh || !high(pd.surface)) ? [undefined] : []), ...(pd.surfaces ?? []).flatMap((l, i) => ((okHigh || !high(l.y)) && !(l.inside && !l.glass) ? [i] : []))]
+        // 床面只放玩偶、书、手机这类随手放的软东西，不放棋牌、电器、整套的书（细则见 onLevelAs）；漫画全套只放柜架
+        const fine = (i: number | undefined) => (bedOk(a) || !isSleepLevel(pd, i)) && (!hasTag(a, 'shelf-only') || shelfOnlyOk(pd, i))
+        const levels = [...(pd.surface && (okHigh || !high(pd.surface)) ? [undefined] : []), ...(pd.surfaces ?? []).flatMap((l, i) => ((okHigh || !high(l.y)) && !(l.inside && !l.glass) ? [i] : []))].filter(fine)
         if (!levels.length) continue
         const lv = this.pick(levels)
         if (this.onLevel(parent, a.id, (this.rand() - 0.5) * 0.7, (this.rand() - 0.5) * 0.6, Math.round((this.rand() - 0.5) * 40), lv)) break
@@ -975,7 +975,8 @@ class Decorator {
    */
   private ownShape(def: AssetDef): string | null {
     const st = this.style
-    if (!SHAPE_STYLES.has(st) || def.prop || def.mount || def.stick || isNativeTo(def, st)) return null
+    // 牌桌 / 棋桌按用途点名摆（自动麻将桌的牌做在模型里，手积麻将桌、折叠麻将桌另摆牌）：不和别的桌子互换造型
+    if (!SHAPE_STYLES.has(st) || def.prop || def.mount || def.stick || isNativeTo(def, st) || GAME_TABLE.test(def.id)) return null
     const key = `${def.id}|${st}`
     let pool = this.shapePools.get(key)
     if (!pool) {
@@ -990,6 +991,7 @@ class Decorator {
           !a.mount &&
           !a.stick &&
           !a.fixture &&
+          !GAME_TABLE.test(a.id) &&
           hasTag(a, 'for-kids') === kids &&
           isNativeTo(a, st) &&
           (bed ? near(a.w, def.w, 0.06, 2) && near(a.d, def.d, 0.15, 5) : near(a.w, def.w, 0.25) && near(a.d, def.d, 0.25)) &&
@@ -1926,7 +1928,8 @@ class Decorator {
       this.out.splice(before)
       return null
     }
-    dress?.(t)
+    // 换款换成了要另摆牌的麻将桌（手积 / 折叠）：照样铺上牌
+    ;(dress ?? (/^(hg-jantaku|hg-mj-fold)$/.test(t.asset) ? (x: Furniture) => this.mahjongSet(x) : undefined))?.(t)
     this.group(t, seats, () => this.gameTable(room, asset, seat, sides, margin, dress))
     return t
   }
@@ -2161,7 +2164,7 @@ class Decorator {
     const young = people.some((m) => m.age < 30)
     const chance = 0.2 + (this.style === 'cute' ? 0.3 : 0) + (young ? 0.15 : 0)
     if (this.rand() > chance) return
-    const pool = this.find('plush', (a) => !!a.prop && !a.form?.includes('hanging') && a.w <= def.w * 0.8)
+    const pool = this.find('plush', (a) => hasTag(a, 'toy') && bedOk(a) && a.w <= def.w * 0.8)
     const n = 1 + Math.floor(this.rand() * this.rand() * 3)
     for (const a of this.shuffle(pool).slice(0, n))
       for (let k = 0; k < 4; k++) if (this.onLevel(bed, a.id, (this.rand() - 0.5) * 0.7, this.rand() * 0.45, Math.round(this.rand() * 360))) break
@@ -4199,6 +4202,16 @@ class Decorator {
     if (!lv || def.h > (lv.h ?? Infinity)) return null
     // 柜门里 / 抽屉里：只有收纳那一步（stowAll）往里放日常用品，别的摆设都放在外面看得到的地方
     if (lv.inside && !lv.glass && !this.isStowing) return null
+    // 漫画全套这类成排的整套只放柜架的层板
+    if (hasTag(def, 'shelf-only') && !shelfOnlyOk(pd, level)) return null
+    // 床垫上：只放随手放的东西（bedOk），最多 BED_PROPS_MAX 件；除了玩偶都不压到枕头那头（床头往里三成）
+    if (isSleepLevel(pd, level)) {
+      if (!bedOk(def)) return null
+      if (this.out.filter((o) => this.parentOf.get(o.id) === parent.id && Math.abs((o.z ?? 0) - ((parent.z ?? 0) + lv.y)) < 0.5).length >= BED_PROPS_MAX) return null
+      const a = (lrot * Math.PI) / 180
+      const half = Math.abs(Math.cos(a)) * (def.d / 2) + Math.abs(Math.sin(a)) * (def.w / 2)
+      if (!hasTag(def, 'plush') && fz * pd.d - half < -pd.d / 2 + pd.d * 0.3) return null
+    }
     const p = toWorld(parent, fx * pd.w, fz * pd.d)
     if (!this.allow(asset, p, parent.id)) return null
     const f: Furniture = { id: uid('u'), asset, x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10, rot: (parent.rot + lrot + 360) % 360, color: this.colorFor(def), z: (parent.z ?? 0) + lv.y }
@@ -4401,6 +4414,37 @@ export const PURPOSE_LABELS: Record<RoomPurpose, string> = {
 /** 床（含儿童床、婴儿床） */
 const isBed = (d: AssetDef) => hasTag(d, 'bed')
 
+/** 一张床的床垫上最多随手放几件（玩偶、在看的书、手机……） */
+export const BED_PROPS_MAX = 3
+
+/**
+ * 能随手放到床垫上的：标了 bed-ok 的摆件。成套部件、只放柜架的（漫画全套）、收藏摆件（毛绒玩偶除外）、
+ * 挂着的形态、高过 50 的都不放。
+ */
+export function bedOk(d: AssetDef) {
+  return !!d.prop && hasTag(d, 'bed-ok') && !hasTag(d, 'set-piece', 'shelf-only') && !(hasTag(d, 'collectible') && !hasTag(d, 'plush')) && !d.form?.includes('hanging') && d.h <= 50
+}
+
+/**
+ * 床的这一层是不是睡觉的那一面（床垫）：level 同 onLevel（undefined = 顶面 surface）。
+ * 柜门里的层、占地不到四成的层（高架床下的书桌 / 层板、床头板上的搁板）不算。
+ */
+export function isSleepLevel(d: AssetDef, level: number | undefined) {
+  if (!isBed(d)) return false
+  const lv = level === undefined ? (d.surface ? { shape: d.surfaceShape, inside: false } : d.surfaces?.[0]) : d.surfaces?.[level]
+  if (!lv || lv.inside || ('kind' in lv && lv.kind && lv.kind !== 'shelf')) return false
+  const area = (pl: Poly) => Math.abs(pl.reduce((s, [x, z], i) => s + x * pl[(i + 1) % pl.length][1] - pl[(i + 1) % pl.length][0] * z, 0)) / 2
+  const a = lv.shape?.length ? lv.shape.reduce((s, pl) => s + area(pl), 0) : d.w * d.d
+  return a >= 0.4 * d.w * d.d
+}
+
+/** 只放柜架的东西（shelf-only，漫画全套）能不能放在 parent 的这一层：书架 / 唱片架 / 展示柜类的任一层，或柜子里面的层板（柜顶、床、桌都不行） */
+export function shelfOnlyOk(pd: AssetDef, level: number | undefined) {
+  if (pd.prop || isBed(pd)) return false
+  if (hasTag(pd, 'bookshelf', 'record-shelf', 'shelving', 'display-cabinet', 'curio-cabinet')) return true
+  return hasTag(pd, 'cabinet', 'storage-cabinet') && level !== undefined
+}
+
 /** 同款系列（同一造型的各尺寸）的成员，不含挂起形态；没有系列就只有自己 */
 function seriesIds(id: string) {
   const s = ASSET_MAP.get(id)?.series
@@ -4430,6 +4474,8 @@ const SCONCE_STYLES = new Set<StyleTag>(['classic', 'japanese', 'chinese', 'farm
  * 客厅还会多摆一件这个风格的标志性落地件（屏风、落地座钟、壁炉…）。
  */
 const SHAPE_STYLES = new Set<StyleTag>(['chinese', 'classic', 'farmhouse'])
+/** 牌桌 / 棋桌（自动麻将桌、折叠 / 和室麻将桌、棋桌、台球桌）：按用途点名摆，不参与风格专属造型的互换 */
+const GAME_TABLE = /^(int-mahjong-(table|shuffle|walls|win)$|hg-mj-|hg-jantaku$|hg-qizhuo$|hg-game-table|hg-pool-table)/
 
 /** 素材有没有这个风格的原生配色（不算派生配色） */
 const isNativeTo = (def: AssetDef, st: StyleTag) => def.palettes.some((_, i) => paletteStyle(def, i) === st)

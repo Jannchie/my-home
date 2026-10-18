@@ -336,7 +336,8 @@ const RULES: [string, (d: D) => boolean][] = [
   ['collectible', (d) => R(/figure|手办|フィギュア|模型|model|minifig|gacha|扭蛋|ガチャ|toy-car|小汽车|车模|ミニカー|mineral|矿石|crystal|水晶|shell|贝壳|snow-?globe|雪景球|trophy|奖杯|doll|人形|ornament|摆件|plush|玩偶|cube|魔方|squishy|捏捏|emo-bot|情感机器人/)(d) && !/box|盒|case|箱|card|牌|^hc-|摄像头|camera/.test(d.id + d.name)],
   // ----- 摆放能力 -----
   ['high-ok', R(OLD.HIGH_OK)],
-  ['bed-ok', R(OLD.BED_OK)],
+  // 床上随手放的只有摆件（家具、设备不会「放到床上」），挂着的形态（挂衣杆上的衣服、挂起的毛巾 / 耳机）也不算
+  ['bed-ok', (d) => !!d.prop && !d.form?.includes('hanging') && R(OLD.BED_OK)(d)],
   ['multi-ok', R(OLD.MULTI_OK)],
   // ----- 成套摆放专用（通用查询不返回） -----
   ['set-piece', (d) => /^hg-duo|^hg-go-bowl/.test(d.id) || CAMERA_CASE.test(d.id)],
@@ -563,6 +564,11 @@ const REVIEW: Fix[] = [
   { ids: ['sw-cn-kang'], add: ['low-table'], why: '炕桌是矮桌' },
   { ids: ['sw-cn-qiaotou', 'lm-zataku', 'sw-jp-zataku'], add: ['table'], why: '翘头案、座卓（「卓」不是「桌」，旧规则漏掉）是桌' },
   { ids: ['lm-zataku', 'sw-jp-zataku'], add: ['low-table'], why: '座卓是矮桌' },
+  // ---- 第 5 批：床上 / 柜架（用户反馈：漫画全卷不该摆在床上，只该在书架上） ----
+  { ids: ['int-manga-row'], remove: ['bed-ok'], add: ['shelf-only'], why: '漫画全套（一整排 + 书挡）是成套收藏：只摆在书架 / 柜架的层板上，不随手放床上、桌上' },
+  { ids: ['int-manga-stack-m', 'int-manga-stack-l', 'int-ref-books', 'prop-book-stack', 'vb-books-tall', 'vb-books-cross', 'vb-books-vintage', 'sf-book-stacked', 'sf-book-standing', 'prop-books-upright', 'lm-cat-bookends'], remove: ['bed-ok'], why: '床上只会有一两本正在看的书：一摞摞的书 / 漫画堆、立着的书、书立夹着的一排书属于书架、书桌' },
+  { ids: ['prop-tablet-stand', 'prop-phone-stand', 'of-phone-live-stand', 'of-phone-stand', 'of-handheld-stand', 'of-tablet-kb', 'cl-switch-oled'], remove: ['bed-ok'], why: '支在支架上的手机 / 平板 / 掌机、带键盘支起来的平板是桌面摆法，床上的是平放的那款' },
+  { ids: ['lp-ct-bunny', 'lp-ct-bear-floor', 'ph-rabbit-cage', 'ch-animal-bear', 'ch-animal-bunny', 'lm-rug-bear', 'lm-dollhouse', 'lm-rocker-unicorn', 'act-rabbit', 'act-rabbit-lop', 'rb-companion', 'rb-companion-nest'], remove: ['plush'], why: '兔子台灯、熊熊落地灯、兔笼、动物靠背椅、小熊地毯、玩偶屋、摇摇马、真兔子、陪伴机器人不是毛绒玩偶（床上摆玩偶时会把台灯摆上床）' },
 ]
 
 // ---------- 生成 ----------

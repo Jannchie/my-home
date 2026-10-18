@@ -5,7 +5,7 @@ import * as THREE from 'three'
 import { decorate } from '/src/decorate'
 import { generateHousehold } from '/src/household'
 import { fixtureDepth, pointInPolygon, type Fixture, type Furniture, type Plan } from '/src/model'
-import { fitsOnFixture, propsOnFixture, supportOf, toLocal, toWorld } from '/src/surface'
+import { fitsOnFixture, propClash, propsOnFixture, supportOf, toLocal, toWorld } from '/src/surface'
 import { pickTub, tubTopPose } from '/src/tubTop'
 import { applyFixtureCarry, captureFixtureProps } from '/src/fixtureCarry'
 import { showerSpot } from '/src/bathroom'
@@ -204,5 +204,25 @@ describe('一键布置的浴缸盖和手动吸附一致', () => {
     }
     expect(bad).toEqual([])
     expect(n).toBeGreaterThan(3)
+  })
+})
+
+describe('浴缸盖和台面摆放检查（propClash）', () => {
+  test('一键布置放在浴缸上的盖子不被当成横跨到区域外（选中框不变红）', () => {
+    let n = 0
+    for (const seed of range(1, 30)) {
+      const plan = genJp(seed)
+      plan.household = generateHousehold(plan, seed)
+      plan.furniture = decorate(plan, seed, 'auto', plan.household)
+      for (const f of plan.furniture) {
+        if (!f.z || !/lid|ふた|furo/i.test(f.asset + (ASSET_MAP.get(f.asset)?.name ?? ''))) continue
+        if (!plan.fixtures.some((x) => x.kind === 'bathtub' && pointInPolygon(f, [
+          { x: x.x - x.w, y: x.y - x.w }, { x: x.x + x.w, y: x.y - x.w }, { x: x.x + x.w, y: x.y + x.w }, { x: x.x - x.w, y: x.y + x.w },
+        ]))) continue
+        n++
+        expect(propClash(plan, f), `seed ${seed} ${f.asset}`).toBe(false)
+      }
+    }
+    expect(n).toBeGreaterThan(0)
   })
 })

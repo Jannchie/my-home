@@ -4,7 +4,7 @@
 // 词表是受控的（Tag 联合类型，写错编译报错）：
 //   功能       这件东西是什么：细分（bed、desk、kettle、towel、plant…，业务规则按它们查）+ 粗分类（decor、food、tool…），每件素材至少一个
 //   属性       for-kids、diatomite…
-//   摆放       能放在哪 / 怎么摆（high-ok 可放 >140cm 高处、bed-ok 可放床上、fridge-door 可贴冰箱门、set-piece 成套专用…）
+//   摆放       能放在哪 / 怎么摆（high-ok 可放 >140cm 高处、bed-ok 可放床上、shelf-only 只放柜架、fridge-door 可贴冰箱门、set-piece 成套专用…）
 //   兴趣       hobby:<InterestId>：和 household.ts 的兴趣对应（落地 / 摆件 / 壁挂按素材本身的形态区分）
 //
 // 标签来源：src/three/tags.generated.ts（迁移脚本 scripts/migrate-tags.mts 生成的初始表，pnpm gen:tags）与 def.tags 合并。
@@ -268,7 +268,8 @@ export const ATTR_TAGS = [
 /** 摆放能力 / 约束 */
 export const PLACEMENT_TAGS = [
   'high-ok', // 可以放到 140cm 以上的高处（书柜顶、吊柜）
-  'bed-ok', // 可以随手放床上
+  'bed-ok', // 可以随手放床上（一两本在看的书、单本漫画、玩偶、手机平板、耳机、叠好的衣物毛巾；整套书、书堆、收藏摆件、挂着的形态都不算）
+  'shelf-only', // 只放柜架层板（书架、唱片架、展示柜…）：漫画全套这类成排的整套，不随手摆到床、桌、茶几上
   'multi-ok', // 同款可以摆很多个（不受「同款每间一个」限制）
   'kitchen-shelf-ok', // 适合厨房墙上搁板
   'toilet-shelf-ok', // 适合马桶上方搁板

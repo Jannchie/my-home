@@ -11,6 +11,12 @@ import { BRASS, CARD, DARK, GOLD, IVORY, METAL, PAPER, paintTop, type Draw } fro
 import { E_GUITAR_MOUNT, accordion, celloStand, clarinetStand, digitalPiano, djDeck, drumKit, eDrum, eGuitarStand, eGuitarWall, fluteCase, grandPiano, guitarAmp, harmonica, harp, koto, metronome, musicStand, saxStand, shakuhachi, shamisen, smallInstruments, synth, taiko, trumpet, uprightPiano, violinCase, violinStand } from './interests/music'
 import { MEDAL_MOUNT, MJ_TH, MJ_TW, POSTCARD_MOUNT, RAINCOAT_MOUNT, ROD_RACK_MOUNT, STAR_MOUNT, UNO_COLS, acrylicStand, backgammon, badminton, baseball, basketball, bgBoxSingle, bgHex, bgLoop, bgMystery, bgShelfRow, bgTrain, bikeHelmet, boardGames, boxingGloves, burrPuzzle, calligraphy, card, cardGame, cardStack, cartons, catToys, chemSet, chess, chessOpening, chessPiece, chineseCheckers, coffeeCanisters, decal, diceGame, die, drawGrid, drawPlayCard, drawTiles, embroidery, energyCans, figureCase, fishCooler, fishCreel, fishingStool, goBoard, golfBag, hanafuda, itaBag, jenga, jigsaw, karuta, knittingBasket, landingNet, mahjong, mangaRow, mangaStack, mapScroll, medalRack, microscope, mineralBox, mjRing, mjWall, penlights, poker, postcardWall, posterTubes, potteryWheel, raincoat, recordRow, refBooks, reversi, rodBag, rodRack, rodStanding, sewingMachine, shogi, skateboardFlat, skateboardStand, snackPile, snowboard, soccerBall, starChart, succulentSet, suitcaseOpen, suitcaseStand, surfboard, tackleBox, tangram, tennis, trophyColumn, trophyCup, trophyStar, unoCards, vinylRack, watercolor, xiangqi } from './interests/props'
 
+/**
+ * 自动麻将桌（牌是桌子模型的一部分）：桌面中间的牌山、手牌、舍牌占着，能放东西的只有四个桌角（放茶杯的地方）。
+ * 牌山风车形围成 ±26 以内的方框，手牌立在 |z| ≈ 33 处但横向不超过 ±18.2，洗牌散在半径 30 以内；绒面到 ±40。
+ */
+const MJ_CORNERS: [number, number][][] = [-1, 1].flatMap((sx) => [-1, 1].map((sz) => [[26.5, 26.5], [39.5, 26.5], [39.5, 39.5], [26.5, 39.5]].map(([x, z]): [number, number] => [sx * x, sz * z])))
+
 // =====================================================================
 // 素材表
 // =====================================================================
@@ -327,7 +333,7 @@ const GAMES: AssetDef[] = [
     ['modern', '#26262a', '#3d6fb8', '#3d6fb8'],
     ['japanese', J.dark, '#3f7a4a', '#2f8a5a'],
     ['cute', C.woodL, C.mint, C.pink],
-  ], mahjong, { surface: 71.5, sizeLabel: '打牌中' }),
+  ], mahjong, { surface: 71.5, surfaceShape: MJ_CORNERS, sizeLabel: '打牌中' }),
   define('int-poker', '扑克牌', 'hobby', [32, 22, 4.4], [
     ['retro', '#2f6a4a', '#c8473a', '#c8473a'],
     ['modern', '#26262a', '#3d6fb8', '#3d6fb8'],
@@ -1590,9 +1596,9 @@ export const INT_GAME_STATES: AssetDef[] = [
   define('int-karuta-boxed', '百人一首（かるた）', 'japanese', [20.3, 13.9, 7], KARUTA_P, karutaBoxed, st('收在盒里')),
   define('int-karuta-stack', '百人一首（かるた）', 'japanese', [32.8, 13.6, 4], KARUTA_P, karutaStacks, st('整叠')),
   // 自动麻将桌（旧：int-mahjong-table = 打牌中）
-  define('int-mahjong-shuffle', '自动麻将桌', 'hobby', [88, 88, 73.4], MJ_P, mjShuffle, { surface: 71.5, sizeLabel: '洗牌中' }),
-  define('int-mahjong-walls', '自动麻将桌', 'hobby', [88, 88, 75.3], MJ_P, mjWalls, { surface: 71.5, sizeLabel: '砌好牌墙' }),
-  define('int-mahjong-win', '自动麻将桌', 'hobby', [88, 88, 75.3], MJ_P, mjWin, { surface: 71.5, sizeLabel: '和牌摊开' }),
+  define('int-mahjong-shuffle', '自动麻将桌', 'hobby', [88, 88, 73.4], MJ_P, mjShuffle, { surface: 71.5, surfaceShape: MJ_CORNERS, sizeLabel: '洗牌中' }),
+  define('int-mahjong-walls', '自动麻将桌', 'hobby', [88, 88, 75.3], MJ_P, mjWalls, { surface: 71.5, surfaceShape: MJ_CORNERS, sizeLabel: '砌好牌墙' }),
+  define('int-mahjong-win', '自动麻将桌', 'hobby', [88, 88, 75.3], MJ_P, mjWin, { surface: 71.5, surfaceShape: MJ_CORNERS, sizeLabel: '和牌摊开' }),
   // 麻将牌（桌面用）
   define('int-mahjong-case', '麻将牌', 'hobby', [38.2, 24.7, 15.7], MJSET_P, mjCase, st('收在牌箱里')),
   define('int-mahjong-mat-shuffle', '麻将牌', 'hobby', [70, 70, 2.3], MJSET_P, mjMatShuffle, st('牌垫上洗牌')),
