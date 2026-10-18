@@ -62,6 +62,28 @@ describe('第一人称漫游', () => {
     }
   })
 
+  test('从出生点走得进每个房间（卫生间、浴室这类窄门、阳台也进得去）', () => {
+    const bad: string[] = []
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+      const plan = genJp(seed)
+      plan.furniture = decorate(plan, seed)
+      const { w } = walkerOf(plan)
+      const g = w.nav.grid(w.floor)
+      for (const r of plan.rooms) {
+        if (r.kind === 'void' || r.kind === 'storage') continue
+        // 房间里有一处能站、走得过去就行（房间中央可能被床、桌子围住）
+        const xs = r.points.map((p) => p.x)
+        const ys = r.points.map((p) => p.y)
+        const spots: { x: number; y: number }[] = []
+        for (let x = Math.min(...xs) + 5; x < Math.max(...xs); x += 10)
+          for (let y = Math.min(...ys) + 5; y < Math.max(...ys); y += 10) if (pointInPolygon({ x, y }, r.points) && g.canStand('walk', { x, y }, 12)) spots.push({ x, y })
+        const step = Math.max(1, Math.floor(spots.length / 12))
+        if (!spots.filter((_, i) => i % step === 0).some((p) => g.path('walk', w.pos, p, 12))) bad.push(`seed ${seed}: ${r.name}（${r.kind}）`)
+      }
+    }
+    expect(bad).toEqual([])
+  })
+
   test('阳台从落地窗走得到', () => {
     let checked = 0
     for (const seed of [1, 2, 3, 4, 5, 6]) {

@@ -38,7 +38,7 @@ import { cornerSpots, showerBoxes, showerSpot } from './bathroom'
 import { lidSizeFor } from './three/packs/bath-extra'
 import { openingsOn, rotFacingWall } from './model'
 import { isWallOwner, snapToHook } from './surface'
-import { sharedIntervals, wallThicknessAt } from './walls'
+import { isOpenBetween, sharedIntervals, wallThicknessAt } from './walls'
 import { edgesOf, projectToSegment } from './model'
 import type { Wardrobe } from './three/garments'
 import { PIPE, PIPE_WIDTHS, ROW_LENGTHS } from './three/packs/garments-pack'
@@ -321,17 +321,27 @@ class Decorator {
     if (this.relocated > before) this.fillCompartments()
   }
 
-  /** 主要通道的端点：起居房间（客厅、居室、走廊、厨房、餐厅）的门口内外 30，和这一层的楼梯起步处 / 出梯口 */
-  private passageKeys(): Vec[] {
-    const keys: Vec[] = []
+  /**
+   * 主要通道的端点：起居房间（客厅、居室、走廊、厨房、餐厅、玄关、洗面所）的门口内外 30（通往阳台的落地窗算门口，只取屋里一侧），
+   * 和这一层的楼梯起步处 / 出梯口。落地窗前常是床和窗之间的窄缝（r = SASH_R）、玄关摆了鞋柜只剩五十来公分（r = ENTRY_KEY_R），侧身挤得过去就行
+   */
+  private passageKeys(): PassageKey[] {
+    const keys: PassageKey[] = []
     for (const o of this.plan.openings) {
-      if (o.kind === 'window') continue
       const g = openingGeom(this.plan.rooms, o)
       if (!g) continue
+      let r: number | undefined
+      if (o.kind === 'window') {
+        const owner = this.plan.rooms.find((x) => x.id === o.roomId)
+        if (!owner || !isSashWindow(this.plan, owner, g.e, g.center)) continue
+        r = SASH_R
+      }
       for (const k of [30, -30]) {
         const q = add(g.center, mul(g.e.out, k))
         const room = this.plan.rooms.find((x) => pointInPolygon(q, x.points))
-        if (room && PASSAGE_ROOMS.has(room.kind)) keys.push(q)
+        if (!room || !PASSAGE_ROOMS.has(room.kind)) continue
+        const kr = r ?? (room.kind === 'entrance' ? ENTRY_KEY_R : undefined)
+        keys.push(kr ? { ...q, r: kr } : q)
       }
     }
     const full = this.house?.plan
@@ -348,16 +358,18 @@ class Decorator {
   }
 
   /** 走不到的端点：以第一个能站的端点为起点，宽 2 × PASSAGE_R 的格子导航（和测试同一套） */
-  private unreachable(keys: Vec[], without: Furniture[] = [], r = PASSAGE_R): Vec[] {
+  private unreachable<K extends PassageKey>(keys: K[], without: Furniture[] = [], r = PASSAGE_R): K[] {
     // 楼梯口留空区这类伪设备不是实物；楼梯洞口按洞口多边形算
     const fixtures = this.plan.fixtures.filter((f) => !f.id.startsWith('stair-clear-') && !f.id.startsWith('void-rail-') && !f.id.endsWith('~hole'))
     const holes = this.plan.fixtures.filter((f) => f.id.endsWith('~hole')).map((f) => stairFootprint(f))
     const gone = new Set(without.map((f) => f.id))
-    const g = new NavGrid({ ...this.plan, fixtures, furniture: gone.size ? this.out.filter((o) => !gone.has(o.id)) : this.out }, { holes })
-    const pts = keys.map((k) => ({ k, at: g.nearest('pet', k, r, 40) }))
-    const hub = pts.find((p) => p.at)
+    // 体重秤、拖鞋这类贴地的小东西一步跨过去，不算堵路
+    const g = new NavGrid({ ...this.plan, fixtures, furniture: gone.size ? this.out.filter((o) => !gone.has(o.id)) : this.out }, { holes, stepOver: STEP_OVER })
+    const pts = keys.map((k) => ({ k, r: Math.min(r, k.r ?? r), at: g.nearest('pet', k, Math.min(r, k.r ?? r), 40) }))
+    // 从按正常宽度能站的端点出发（窄缝那种端点当不了起点）
+    const hub = pts.find((p) => p.at && p.r === r)
     if (!hub) return []
-    return pts.filter((p) => p !== hub && (!p.at || !g.path('pet', hub.at!, p.at, r))).map((p) => p.k)
+    return pts.filter((p) => p !== hub && (!p.at || !g.path('pet', hub.at!, p.at, p.r))).map((p) => p.k)
   }
 
   /**
@@ -377,7 +389,7 @@ class Decorator {
       const loose = this.out
         .filter((f) => {
           const d = ASSET_MAP.get(f.asset)
-          return !!d && !f.z && !d.mount && !d.stick && d.h >= 3 && !this.fixed.has(f.id) && !tried.has(f.id)
+          return !!d && !f.z && !d.mount && !d.stick && d.h >= STEP_OVER && !this.fixed.has(f.id) && !tried.has(f.id)
         })
         .sort((a, b) => near(a) - near(b))
         .slice(0, 30)
@@ -2972,8 +2984,9 @@ class Decorator {
   }
 
   /**
-   * 玄关 / 入口留出宽 2 × ENTRY_R 的通道（大门 → 各个内门）：全屋的主要通道只要求宽 40，玄关两侧都摆了东西时还是挤不过去。
-   * 堵住时按后摆先撤的顺序拿掉这一步摆的落地小件（连同上面挂的、摆的），鞋柜 / 主家具不撤；全撤了也走不通（玄关本来就窄）就不撤
+   * 玄关 / 入口留出宽 2 × ENTRY_R 的通道（大门 → 各个内门、敞开的出口）：全屋的主要通道只要求宽 40，玄关两侧都摆了东西时还是挤不过去。
+   * 堵住时按后摆先撤的顺序拿掉这一步摆的落地小件（连同上面挂的、摆的），鞋柜 / 主家具不撤；玄关窄到宽 60 留不出来时至少留宽 40，
+   * 全撤了也走不通就不撤
    */
   private entryClear(room: Room, from: number, keep: Furniture | null) {
     const keys: Vec[] = []
@@ -2982,15 +2995,28 @@ class Decorator {
       const into = pointInPolygon(add(center, mul(e.out, 10)), room.points) ? e.out : mul(e.out, -1)
       keys.push(add(center, mul(into, 30)))
     }
-    if (keys.length < 2 || !this.unreachable(keys, [], ENTRY_R).length) return
+    // 和客厅 / 走廊之间常常是敞开的（没有门洞）：敞开那一段的中点往玄关里 25 也算出口（对面可能正摆着餐桌，只管玄关里走不走得通）
+    for (const e of edgesOf(room.points))
+      for (const other of this.plan.rooms) {
+        if (other === room || !isOpenBetween(room, other)) continue
+        for (const [lo, hi] of sharedIntervals(e, other)) {
+          if (hi - lo < 60) continue
+          const mid = add(e.a, mul(e.dir, (lo + hi) / 2))
+          const into = pointInPolygon(add(mid, mul(e.out, 10)), room.points) ? e.out : mul(e.out, -1)
+          keys.push(add(mid, mul(into, 25)))
+        }
+      }
+    if (keys.length < 2) return
     const loose = this.out.slice(from).filter((f) => {
       const d = ASSET_MAP.get(f.asset)
       return f !== keep && !!d && !f.z && !d.mount && !d.stick && d.h >= 3
     })
-    if (!loose.length || this.unreachable(keys, loose, ENTRY_R).length) return
+    // 宽 60 留不出来（玄关本身窄）就至少留宽 40
+    const r = [ENTRY_R, PASSAGE_R].find((x) => !this.unreachable(keys, loose, x).length)
+    if (r === undefined || !this.unreachable(keys, [], r).length) return
     for (const f of loose.reverse()) {
       this.removeTree(f)
-      if (!this.unreachable(keys, [], ENTRY_R).length) return
+      if (!this.unreachable(keys, [], r).length) return
     }
   }
 
@@ -4163,9 +4189,17 @@ const LIMITS: [string, Tag | Tag[], 'house' | 'room' | 'surface', number][] = [
 /** 居室里放不下床的扣分：比通道堵住（每个出入口 150 + 30）扣得还多，床一定要摆，通道交给校验再挪别的东西 */
 const BED_MISS = 1000
 
-/** 主要通道检查的房间（起居的地方）和通道半宽（宽 40 的人能侧身走过） */
-const PASSAGE_ROOMS = new Set(['ldk', 'western', 'japanese', 'hall', 'kitchen', 'dining'])
+/** 主要通道检查的房间（起居的地方，加上进出家门的玄关、去浴室要穿过的洗面所）和通道半宽（宽 40 的人能侧身走过） */
+const PASSAGE_ROOMS = new Set(['ldk', 'western', 'japanese', 'hall', 'kitchen', 'dining', 'entrance', 'wash'])
 const PASSAGE_R = 20
+/** 比这矮的落地东西（体重秤、拖鞋、地垫）不算堵路（cm） */
+const STEP_OVER = 10
+/** 通往阳台的落地窗前（常是和床之间的窄缝）的通道半宽：侧身挤得过去 */
+const SASH_R = 12
+/** 玄关里的端点的通道半宽：窄玄关摆了鞋柜只剩五十来公分，侧身过 */
+const ENTRY_KEY_R = 15
+/** 主要通道的端点；r：这一处的通道半宽（不给 = PASSAGE_R） */
+type PassageKey = Vec & { r?: number }
 /** 玄关 / 入口的通道半宽（宽 60：正面走过去，不用侧身） */
 const ENTRY_R = 30
 

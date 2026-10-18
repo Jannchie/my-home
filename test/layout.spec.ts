@@ -10,7 +10,7 @@ import { allocateRooms, generateHousehold } from '/src/household'
 import { generatePlan } from '/src/generate-region'
 import { add, area, edgesOf, mul, openingGeom, openingsOn, pointInPolygon, type Furniture, type Plan, type Region } from '/src/model'
 import { bedSides, isDoubleBed, tvFacesSofa } from '/src/arrange'
-import { boxInsideWalls, placeCandidates } from '/src/place'
+import { boxInsideWalls, isSashWindow, placeCandidates } from '/src/place'
 import { curtainSpecs } from '/src/curtains'
 import { furnitureBox } from '/src/snap'
 import { ASSET_MAP } from '/src/three/assets'
@@ -161,25 +161,28 @@ describe('大件摆法（jp / cn / west seed 1..20）', () => {
     expect(bad).toEqual([])
   })
 
-  test('主要通道可达：起居房间的门口之间走得通', () => {
+  test('主要通道可达：起居房间（含玄关、洗面所）的门口之间走得通，玄关和通往阳台的落地窗前侧身挤得过去', () => {
     const bad = each(({ plan }) => {
-      const g = new NavGrid(plan)
-      const r = 20
-      const keys: { p: { x: number; y: number }; label: string }[] = []
+      // 和一键布置的校验同一套：贴地的小东西（< 10cm）跨过去
+      const g = new NavGrid(plan, { stepOver: 10 })
+      const R = 20
+      const keys: { p: { x: number; y: number }; r: number; label: string }[] = []
       for (const o of plan.openings) {
-        if (o.kind === 'window') continue
         const geo = openingGeom(plan.rooms, o)
         if (!geo) continue
+        const owner = plan.rooms.find((x) => x.id === o.roomId)
+        const sash = o.kind === 'window' && !!owner && isSashWindow(plan, owner, geo.e, geo.center)
+        if (o.kind === 'window' && !sash) continue
         for (const k of [30, -30]) {
           const q = add(geo.center, mul(geo.e.out, k))
           const room = plan.rooms.find((x) => pointInPolygon(q, x.points))
-          if (room && ['ldk', 'western', 'japanese', 'hall', 'kitchen', 'dining'].includes(room.kind)) keys.push({ p: q, label: `${room.kind} 的门口` })
+          if (room && ['ldk', 'western', 'japanese', 'hall', 'kitchen', 'dining', 'entrance', 'wash'].includes(room.kind)) keys.push({ p: q, r: sash ? 12 : room.kind === 'entrance' ? 15 : R, label: `${room.kind} 的${sash ? '落地窗前' : '门口'}` })
         }
       }
-      const pts = keys.map((k) => ({ ...k, at: g.nearest('pet', k.p, r, 40) }))
-      const hub = pts.find((k) => k.at)
+      const pts = keys.map((k) => ({ ...k, at: g.nearest('pet', k.p, k.r, 40) }))
+      const hub = pts.find((k) => k.at && k.r === R)
       if (!hub) return []
-      return pts.filter((k) => k !== hub && (!k.at || !g.path('pet', hub.at!, k.at, r))).map((k) => `${k.label} 走不到`)
+      return pts.filter((k) => k !== hub && (!k.at || !g.path('pet', hub.at!, k.at, k.r))).map((k) => `${k.label} 走不到`)
     })
     expect(bad).toEqual([])
   })
