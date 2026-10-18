@@ -23,12 +23,13 @@
 
 import { orientDoors } from './doors'
 import { placeOnWall, placePair, firstDoorCenter, type PlaceSpec } from './place'
-import { JO, area, bbox, edgesOf, add, mul, pointInPolygon, rectPoints, type Exterior, type FenceKind, type Fixture, type Opening, type OpeningKind, type Plan, type Region, type Room, type RoomKind, type Site, type Vec } from './model'
+import { JO, area, bbox, type Box, edgesOf, openingGeom, add, mul, pointInPolygon, rectPoints, type Exterior, type FenceKind, type Fixture, type Opening, type OpeningKind, type Plan, type Region, type Room, type RoomKind, type Site, type Vec } from './model'
 import { WALL, WALL_OUTER, createCtx, planArea, planViolations, searchWithArea, type Ctx } from './generate'
 import { bedroomCloset, placeBathroom, placeKitchen, roomLinks, shoeCabinet } from './generate-band'
 import { isIndoor, sharedIntervals } from './walls'
 import { DEFAULT_FLOOR_H, SLAB, floorOf, floorView, planFloors, stampFloor } from './floors'
-import { stairHoleConflicts, stairLinks, withStairKeepout } from './stairs'
+import { stairFootprint, stairHoleConflicts, stairLinks, withStairKeepout } from './stairs'
+import { DOOR_PASS } from './stairDoors'
 import { jp, t } from './i18n'
 import { altInt, carveFloors, defaultRule } from './footprint'
 import { defaultRoofCover } from './roofCover'
@@ -429,25 +430,68 @@ function simplifyRing(pts: Vec[]): Vec[] {
   return out
 }
 
-/** 两个房间的共用边上开门：位置靠近 prefer 点（不给就居中），门框离墙角 15 */
-function doorBetween(c: Ctx, a: Room, b: Room, kind: OpeningKind, width: number, swing: Opening['swing'] = 'in', prefer?: Vec, side?: Side) {
-  let best: { e: ReturnType<typeof edgesOf>[number]; lo: number; hi: number } | null = null
+/**
+ * 两个房间的共用边上开门：位置靠近 prefer 点（不给就居中），门框离墙角 15。
+ * avoid：楼梯占地（下层的梯段、上层的洞口，平面坐标的包围盒）。门洞两侧的通行区（门宽 × DOOR_PASS）压到它时，
+ * 先沿这面墙滑开，再换到和 b 共用的别的墙上；都不行才退回原来的位置（合规检查之外，stairDoors.ts 的检查会兜底）。
+ */
+function doorBetween(c: Ctx, a: Room, b: Room, kind: OpeningKind, width: number, swing: Opening['swing'] = 'in', prefer?: Vec, side?: Side, avoid: Box[] = []) {
+  type Span = { e: ReturnType<typeof edgesOf>[number]; lo: number; hi: number }
+  const spans: Span[] = []
   for (const e of edgesOf(a.points)) {
     if (side && e.out.x * SIDE_OUT[side].x + e.out.y * SIDE_OUT[side].y < 0.9) continue
-    for (const [lo, hi] of sharedIntervals(e, b)) if (!best || hi - lo > best.hi - best.lo) best = { e, lo, hi }
+    for (const [lo, hi] of sharedIntervals(e, b)) spans.push({ e, lo, hi })
   }
-  if (!best) return false
-  const { e, lo, hi } = best
-  const w = Math.min(width, hi - lo - 20)
-  if (w < 50) return false
-  const lo2 = lo + w / 2 + 12
-  const hi2 = hi - w / 2 - 12
-  let t0 = (lo2 + hi2) / 2
-  if (prefer) {
-    const tp = (prefer.x - e.a.x) * e.dir.x + (prefer.y - e.a.y) * e.dir.y
-    t0 = Math.max(lo2, Math.min(hi2, tp))
+  if (!spans.length) return false
+  // 原来的挑法：最长的一段共用边（同长取先遇到的）
+  const best = spans.reduce((m, x) => (x.hi - x.lo > m.hi - m.lo ? x : m))
+  /** 一段共用边上能放的门宽和中心的范围 */
+  const range = ({ lo, hi }: Span) => {
+    const w = Math.min(width, hi - lo - 20)
+    return { w, lo2: lo + w / 2 + 12, hi2: hi - w / 2 - 12 }
   }
-  c.open(a, kind, add(e.a, mul(e.dir, t0)), w, swing)
+  const at = (sp: Span, t: number) => add(sp.e.a, mul(sp.e.dir, t))
+  const pick = (sp: Span) => {
+    const { lo2, hi2 } = range(sp)
+    if (!prefer) return (lo2 + hi2) / 2
+    const tp = (prefer.x - sp.e.a.x) * sp.e.dir.x + (prefer.y - sp.e.a.y) * sp.e.dir.y
+    return Math.max(lo2, Math.min(hi2, tp))
+  }
+  /** 门洞两侧的通行区（包围盒） */
+  const passBox = (ctr: Vec, dir: Vec, out: Vec, w: number) => bbox([-1, 1].flatMap((s) => [-1, 1].map((n) => add(ctr, add(mul(dir, s * (w / 2 - 2)), mul(out, n * DOOR_PASS))))))
+  const gap = (p: Box, q: Box) => Math.max(q.x0 - p.x1, p.x0 - q.x1, q.y0 - p.y1, p.y0 - q.y1)
+  /** 门洞通行区离楼梯占地多远（压上了是负数） */
+  const clearance = (sp: Span, t: number, w: number) => (avoid.length ? Math.min(...avoid.map((q) => gap(passBox(at(sp, t), sp.e.dir, sp.e.out, w), q))) : Infinity)
+  const r0 = range(best)
+  if (r0.w < 50) return false
+  let chosen = { sp: best, t: pick(best), w: r0.w }
+  if (clearance(best, chosen.t, r0.w) < 0) {
+    // 沿每段共用边每 5cm 试一个位置：离楼梯留出 20 的优先、不和已有的门挤在一起，其次离原来想要的位置近
+    let top: { sp: Span; t: number; w: number; s: number } | null = null
+    const want = at(best, chosen.t)
+    // 已经开好的门的通行区：挪过去的门别和它们挤在一处
+    const taken = c.openings.flatMap((o) => {
+      const g = o.kind === 'window' ? null : openingGeom(c.rooms, o)
+      return g ? [passBox(g.center, g.e.dir, g.e.out, o.width)] : []
+    })
+    for (const sp of spans) {
+      // 窄的一段（比如 90 宽的收纳南墙）门收窄到放得下两边各 12 的门框
+      const w = Math.min(width, sp.hi - sp.lo - 24)
+      const lo2 = sp.lo + w / 2 + 12
+      const hi2 = sp.hi - w / 2 - 12
+      if (w < 55) continue
+      for (let t = lo2; t <= hi2 + 1e-6; t += Math.max(1, Math.min(5, hi2 - lo2))) {
+        const cl = clearance(sp, t, w)
+        if (cl < 0) continue
+        const p = at(sp, t)
+        const crowd = taken.some((q) => gap(passBox(p, sp.e.dir, sp.e.out, w), q) < -10) ? 200 : 0
+        const s = Math.min(cl, 20) * 5 - Math.hypot(p.x - want.x, p.y - want.y) + (sp === best ? 20 : 0) - crowd
+        if (!top || s > top.s) top = { sp, t, w, s }
+      }
+    }
+    if (top) chosen = top
+  }
+  c.open(a, kind, at(chosen.sp, chosen.t), chosen.w, swing)
   return true
 }
 
@@ -686,6 +730,22 @@ function layout(seed: number, o: Pick<HouseGenOpts, 'region' | 'dwelling' | 'bed
   const rooms2 = c.rooms.splice(0)
   const open2 = c.openings.splice(0)
 
+  // ---------- 楼梯（先定占地：开门要避开它；U 形往哪边拐等门窗之后再定，不改随机序列的顺序） ----------
+  //   u      U 形，占满北带进深，起步和出梯口都在走廊带一侧；
+  //   l      L 形，贴着楼梯间北墙：从东端（玄关那边）起步往西上，西端的平台拐向南，出梯口朝楼梯间南半边的走廊；
+  //   living 客厅楼梯（直跑），贴着客厅东墙从南往北上，出梯口落在 2F 走廊带（户建：2F 南带东端那条走廊里开洞；复式：在挑空里）。
+  const id = `f${seed.toString(36)}st`
+  const look = stairLook(seed, living)
+  const stairs: Fixture =
+    kind === 'l'
+      ? { id, kind: 'stairs', stairs: 'l', turn: 'right', x: xS + wSt / 2, y: D - WALL_OUTER / 2 - STAIR_L.w / 2 - 1, w: STAIR_L.w, d: STAIR_L.d, rot: 270, ...look }
+      : living
+        ? { id, kind: 'stairs', stairs: 'straight', x: W - WALL_OUTER / 2 - 45 - 1, y: dS - WALL / 2 - livingRun / 2 - 1, w: 90, d: livingRun, rot: 180, ...look }
+        : { id, kind: 'stairs', stairs: 'u', turn: 'left', x: xS + wSt / 2, y: yN + dN / 2, w: wSt, d: dN, rot: 180 }
+
+  // 门洞两侧的通行区避开楼梯占地（1F 的梯段、2F 的洞口）
+  const stairBox = [bbox(stairFootprint(stairs))]
+
   // ---------- 门窗（按层：开门只看本层的房间） ----------
   const stairsMid: Vec = { x: xS + wSt / 2, y: yN }
   const doors = (rooms: Room[], hall: Room, floor: '1f' | '2f') => {
@@ -704,7 +764,7 @@ function layout(seed: number, o: Pick<HouseGenOpts, 'region' | 'dwelling' | 'bed
       if (!target) continue
       // 走廊门靠近楼梯（走得少）；其余居中
       // 浅トイレ的门只开在南墙（凹口里），不开到东边的楼梯间
-      doorBetween(c, room, target, def.doorKind ?? 'door', def.doorW ?? 75, def.swing ?? 'in', rule === 'hall' ? (room.kind === 'ldk' ? { x: living ? Math.min(xG + d.wG / 2, W - 260) : xG + d.wG / 2, y: dS } : stairsMid) : undefined, def.shallow && yA > yN ? 's' : undefined)
+      doorBetween(c, room, target, def.doorKind ?? 'door', def.doorW ?? 75, def.swing ?? 'in', rule === 'hall' ? (room.kind === 'ldk' ? { x: living ? Math.min(xG + d.wG / 2, W - 260) : xG + d.wG / 2, y: dS } : stairsMid) : undefined, def.shallow && yA > yN ? 's' : undefined, stairBox)
     }
     for (const { def, room } of mine) for (const [side, w] of Object.entries(def.win ?? {}) as [Side, number][]) windowSide(c, room, side, w, rooms)
     // 阳台：南侧卧室的窗本来就开在南墙上，阳台挨着它们就是落地窗
@@ -724,19 +784,9 @@ function layout(seed: number, o: Pick<HouseGenOpts, 'region' | 'dwelling' | 'bed
   for (const r of rooms2) r.floor = F2
   for (const op of open2) op.floor = F2
 
-  // ---------- 楼梯 ----------
-  //   u      U 形，占满北带进深，起步和出梯口都在走廊带一侧；
-  //   l      L 形，贴着楼梯间北墙：从东端（玄关那边）起步往西上，西端的平台拐向南，出梯口朝楼梯间南半边的走廊；
-  //   living 客厅楼梯（直跑），贴着客厅东墙从南往北上，出梯口落在 2F 走廊带（户建：2F 南带东端那条走廊里开洞；复式：在挑空里）。
+  // U 形楼梯往哪边拐（随机序列的位置和以前一样：门窗之后）
   const turnU = c.chance(0.5) ? 'left' : 'right'
-  const id = `f${seed.toString(36)}st`
-  const look = stairLook(seed, living)
-  const stairs: Fixture =
-    kind === 'l'
-      ? { id, kind: 'stairs', stairs: 'l', turn: 'right', x: xS + wSt / 2, y: D - WALL_OUTER / 2 - STAIR_L.w / 2 - 1, w: STAIR_L.w, d: STAIR_L.d, rot: 270, ...look }
-      : living
-        ? { id, kind: 'stairs', stairs: 'straight', x: W - WALL_OUTER / 2 - 45 - 1, y: dS - WALL / 2 - livingRun / 2 - 1, w: 90, d: livingRun, rot: 180, ...look }
-        : { id, kind: 'stairs', stairs: 'u', turn: turnU, x: xS + wSt / 2, y: yN + dN / 2, w: wSt, d: dN, rot: 180 }
+  if (stairs.stairs === 'u') stairs.turn = turnU
 
   // ---------- 用地 ----------
   let site: Site | undefined

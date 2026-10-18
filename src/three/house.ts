@@ -48,7 +48,7 @@ import { edgesOf } from '../model'
 import { showerSpot, stallWalls, type StallWalls } from '../bathroom'
 import { curtainSpec } from '../curtains'
 import { showerCurtainModel, showerModel } from './shower'
-import { edgeRail, holeRails, stairsModel, type WallLine } from './stairs3d'
+import { edgeRail, holeRails, stairWalls, stairsModel, type WallLine } from './stairs3d'
 import { subtractSpan } from '../stairs'
 import { SLAB, floorElevation, floorOf, isMultiFloor } from '../floors'
 import { centroid, onBoundary, signedArea } from '../model'
@@ -1756,9 +1756,8 @@ export function buildHouse(plan: Plan, wallH: number, opts: HouseOpts = {}) {
   root.add(part(buildTrims(plan, infos, wallH), 'trim'))
 
   // 实墙段：楼梯洞口栏杆（贴着墙的边不装）、楼梯扶手（贴墙的一侧装靠墙扶手）
-  const ws: WallLine[] = wallSegments(plan.rooms)
-    .filter((s) => s.kind !== 'open')
-    .map((s) => ({ a: s.a, b: s.b, t: s.kind === 'outer' ? plan.wallOuter : plan.wall }))
+  //（带门洞：楼梯扶手在门口断开）
+  const ws: WallLine[] = stairWalls(plan)
   if (opts.stairHoles?.length) {
     const rails = new THREE.Group()
     // 开在挑空里的洞口（复式的客厅楼梯）四周没有楼板，不装栏杆（挑空边的栏杆管）

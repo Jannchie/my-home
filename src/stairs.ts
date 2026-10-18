@@ -322,6 +322,38 @@ export function subtractSpan(a: Vec, b: Vec, cut: [Vec, Vec], tol = 2): [number,
   return ([[0, lo], [hi, L]] as [number, number][]).filter(([x, y]) => y - x > 1)
 }
 
+/**
+ * 楼板洞口四周装栏杆的线段（平面坐标）：洞口每条边去掉出梯口和贴着墙的部分（墙段平行、离墙中心线不超过半个墙厚 + 2）。
+ * 3D 的洞口栏杆（stairs3d.ts holeRails）和门口避让检查（stairDoors.ts）共用。
+ */
+export function holeRailSegments(poly: Vec[], open: [Vec, Vec] | undefined, walls: { a: Vec; b: Vec; t: number }[]): [Vec, Vec][] {
+  const out: [Vec, Vec][] = []
+  const n = poly.length
+  for (let i = 0; i < n; i++) {
+    const a = poly[i]
+    const b = poly[(i + 1) % n]
+    const L = Math.hypot(b.x - a.x, b.y - a.y)
+    if (L < 5) continue
+    const u = { x: (b.x - a.x) / L, y: (b.y - a.y) / L }
+    let spans: [number, number][] = open ? subtractSpan(a, b, open) : [[0, L]]
+    for (const w of walls) {
+      const wl = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y)
+      if (wl < 1) continue
+      const wu = { x: (w.b.x - w.a.x) / wl, y: (w.b.y - w.a.y) / wl }
+      if (Math.abs(wu.x * u.y - wu.y * u.x) > 1e-3) continue
+      const off = Math.abs((w.a.x - a.x) * u.y - (w.a.y - a.y) * u.x)
+      if (off > w.t / 2 + 2) continue
+      const t0 = (w.a.x - a.x) * u.x + (w.a.y - a.y) * u.y
+      const t1 = (w.b.x - a.x) * u.x + (w.b.y - a.y) * u.y
+      const lo = Math.min(t0, t1)
+      const hi = Math.max(t0, t1)
+      spans = spans.flatMap(([x, y]): [number, number][] => (hi <= x || lo >= y ? [[x, y]] : ([[x, lo], [hi, y]] as [number, number][]).filter(([p, q]) => q - p > 2)))
+    }
+    for (const [lo, hi] of spans) out.push([add(a, mul(u, lo)), add(a, mul(u, hi))])
+  }
+  return out
+}
+
 export const lerpV = (a: Vec, b: Vec, t: number) => add(a, mul({ x: b.x - a.x, y: b.y - a.y }, t))
 
 export interface StairLink {
