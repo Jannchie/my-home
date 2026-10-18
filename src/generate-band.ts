@@ -9,10 +9,11 @@
 //   块宽取南北两排里宽的那排，窄的那排把差额摊给各房间，北排差得多就补一间收纳（filler）。
 
 import { orientDoors } from './doors'
-import { firstDoorCenter, placeCandidates, placeOnWall, type PlaceSpec } from './place'
+import { firstDoorCenter, innerRoom, placeCandidates, placeOnWall, type PlaceSpec } from './place'
 import { WALL, WALL_OUTER, createCtx, planArea, searchWithArea, type Ctx } from './generate'
 import { add, area, bbox, edgeInfo, edgesOf, mul, openingGeom, pointInPolygon, projectToSegment, rectPoints, uid, type Fixture, type FixtureKind, type KitchenVariant, type OpeningKind, type Plan, type Region, type Room, type RoomKind, type Vec } from './model'
 import { isIndoor, isOpenBetween, sharedIntervals } from './walls'
+import { gridPolygon } from './footprint'
 
 export { createCtx, planArea, WALL, WALL_OUTER, type Ctx }
 
@@ -34,6 +35,17 @@ export interface CellSpec {
   openToC?: boolean
   /** 摆设备时用的角色：kitchen / bath / half / laundry / pantry / wic / master / foyer … */
   tag?: string
+  /**
+   * 北排（走廊模式）房间只占北端这么深（外包尺寸，从北外墙算起）：南边剩下的并进走廊，成一个门前的小凹口，门开在凹口里。
+   * 剩下不到 60 就不切（整排进深）。Half Bath / Bath 用：北排进深按厨房定，整排进深的卫生间会变成细长的走廊。
+   */
+  depth?: number
+  /** 和 depth 一起用：南边剩下的不并进走廊，做成这间（门开向走廊，居中），比如 Pantry 南边的走廊壁橱 */
+  rest?: CellSpec
+  /** 北排走廊门开在靠内侧的墙角（不居中）：窄卫生间要留出一整面长墙放马桶 + 台盆 */
+  doorCorner?: boolean
+  /** 开间就取 min..max 里抽到的值：北排比南排窄时，差额只摊给其余房间（不把卫生间撑大） */
+  fixed?: boolean
 }
 
 export interface BlockSpec {
@@ -69,8 +81,19 @@ export interface BandOut {
   placed: Placed[]
 }
 
-/** 把 diff（10 的倍数）按随机权重摊到各个宽度上：相邻的房间不会被摊成一样宽 */
-function spread(ws: number[], diff: number, rand: () => number) {
+/**
+ * 把 diff（10 的倍数）按随机权重摊到各个宽度上：相邻的房间不会被摊成一样宽。
+ * skip[i] 为真的不参与（固定开间）；全都固定时照常摊给所有房间。
+ */
+function spread(all: number[], diff: number, rand: () => number, skip?: boolean[]) {
+  if (skip?.some(Boolean) && !skip.every(Boolean)) {
+    const idx = all.map((_, i) => i).filter((i) => !skip[i])
+    const sub = idx.map((i) => all[i])
+    spread(sub, diff, rand)
+    idx.forEach((i, k) => (all[i] = sub[k]))
+    return
+  }
+  const ws = all
   if (!ws.length || diff <= 0) return
   const steps = Math.round(diff / 10)
   const wt = ws.map(() => 0.7 + rand() * 0.6)
@@ -115,7 +138,7 @@ export function bandLayout(
       nw.push(fw)
       diff -= fw
     }
-    spread(nw, diff, c.alt)
+    spread(nw, diff, c.alt, north.map((s) => !!s.fixed))
     return { W, sw, nw, north }
   }
   const SL = sizes(blocks.L)
@@ -138,8 +161,20 @@ export function bandLayout(
     const hasS = b.south.length > 0
     const hall = hasN && hasS && !b.suite
     const yS = hall ? dS : yN // 南排的北沿
+    // 北排各间的进深（depth：只占北端，南边并进走廊或做成 rest 那间）
+    // （剩下的做成一间时要 70：壁橱净深 60）
+    const depthOf = (s: CellSpec) => (hall && s.depth && s.depth <= dN - (s.rest ? 70 : 60) ? s.depth : dN)
     if (hall) {
-      const h = c.rect('hall', opts.hallName, X(0), dS, X(S.W), yN)
+      // 走廊带 + 浅房间门前的凹口拼成一个多边形
+      const rects: Vec[][] = [rectPoints(Math.min(X(0), X(S.W)), dS, Math.max(X(0), X(S.W)), yN)]
+      let v = 0
+      S.north.forEach((s, i) => {
+        const dep = depthOf(s)
+        if (dep < dN && !s.rest) rects.push(rectPoints(Math.min(X(v), X(v + S.nw[i])), yN, Math.max(X(v), X(v + S.nw[i])), D - dep))
+        v += S.nw[i]
+      })
+      const pts = rects.length > 1 ? gridPolygon(rects, (p) => rects.some((q) => pointInPolygon(p, q))) : null
+      const h = pts ? c.room('hall', opts.hallName, pts) : c.rect('hall', opts.hallName, X(0), dS, X(S.W), yN)
       h.openGroup = opts.group
     }
     // 南排
@@ -184,8 +219,15 @@ export function bandLayout(
       const u0 = u
       const u1 = u + w
       u = u1
-      const r = c.rect(s.kind, s.name, X(u0), yN, X(u1), D)
+      const dep = depthOf(s)
+      const y0 = D - dep
+      const r = c.rect(s.kind, s.name, X(u0), y0, X(u1), D)
       placed.push({ spec: s, room: r })
+      if (s.rest && dep < dN) {
+        const q = c.rect(s.rest.kind, s.rest.name, X(u0), yN, X(u1), y0)
+        placed.push({ spec: s.rest, room: q })
+        c.open(q, s.rest.doorKind ?? 'door', { x: X((u0 + u1) / 2), y: yN }, Math.min(doorW(s.rest), w - 30))
+      }
       if (s.window) c.open(r, 'window', { x: X((u0 + u1) / 2 + c.windowShift(w, Math.min(w - 60, s.window))), y: D }, Math.min(w - 60, s.window))
       if (s.openToC && i === 0) {
         r.openGroup = opts.group
@@ -193,12 +235,14 @@ export function bandLayout(
       }
       if (s.door === 'none') return
       if ((s.door === 'c' || !hasS) && i === 0) {
-        c.open(r, s.doorKind ?? 'door', { x: X(0), y: (yN + D) / 2 }, Math.min(doorW(s), dN - 40))
+        c.open(r, s.doorKind ?? 'door', { x: X(0), y: (y0 + D) / 2 }, Math.min(doorW(s), dep - 40))
         return
       }
       // 走廊 / 套间主室：开在南沿；门靠近内侧（离 C 列近，走得少）
-      const at = w <= 130 ? (u0 + u1) / 2 : c.chance(0.5) ? u0 + Math.min(50, w / 2) : (u0 + u1) / 2
-      c.open(r, s.doorKind ?? 'door', { x: X(at), y: yN }, Math.min(doorW(s), w - 30))
+      // （随机数只在 w > 130 时抽，和以前一样）
+      const corner = w > 130 && (c.chance(0.5) || !!s.doorCorner)
+      const at = w <= 130 ? (u0 + u1) / 2 : corner ? u0 + Math.min(50, w / 2) : (u0 + u1) / 2
+      c.open(r, s.doorKind ?? 'door', { x: X(at), y: y0 }, Math.min(doorW(s), w - 30))
     })
   }
   block(blocks.L, SL, 'L')
@@ -292,6 +336,11 @@ export interface BathSpec {
   basinW: number[]
   basinD: number
   washer?: boolean
+  /**
+   * 浴缸横在短边那头（欧美 5'×8' 次卫）：浴缸长度不超过短边净宽，这样离门最远的短墙和长墙同档，按「离门远」挑到短墙；
+   * 不然长的浴缸档位优先，会顺着长墙放、把马桶和台盆挤到对面
+   */
+  tubAcross?: boolean
 }
 
 /**
@@ -302,9 +351,15 @@ export function placeBathroom(plan: Plan, room: Room, b: BathSpec): Fixture[] {
   const door = firstDoorCenter(room, plan)
   const bb = bbox(room.points)
   const minDim = Math.min(bb.x1 - bb.x0, bb.y1 - bb.y0)
+  let tubLengths = [170, 160, 150, 140]
+  if (b.tubAcross) {
+    const ib = bbox(innerRoom(room, plan).points)
+    const across = Math.min(ib.x1 - ib.x0, ib.y1 - ib.y0)
+    tubLengths = tubLengths.filter((L) => L <= across || L === 140)
+  }
   const wet: PlaceSpec | null =
     b.wet === 'tub'
-      ? { kind: 'bathtub', fill: false, lengths: [170, 160, 150, 140], depth: Math.min(78, Math.round(minDim * 0.42)), far: door, underWindow: true }
+      ? { kind: 'bathtub', fill: false, lengths: tubLengths, depth: Math.min(78, Math.round(minDim * 0.42)), far: door, underWindow: true }
       : b.wet === 'shower'
         ? { kind: 'bathtub', lengths: [100, 90, 85], depth: 90, far: door, underWindow: true }
         : null

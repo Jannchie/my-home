@@ -3,7 +3,8 @@
 // 骨架见 generate-band.ts（L 块 | C 列 | R 块）：
 //   C 列：南侧 Living Room（外面是 Patio），北侧 Dining | Kitchen 并排，三者开放不砌墙；厨房多是中岛（island）。
 //   L 块：主卧套间 —— 南侧 Primary Bedroom，北侧 Walk-in Closet + Primary Bath（双台盆、浴缸或淋浴、马桶），都从主卧进。
-//   R 块：南排 Bedroom 2..n / Office，北排 Pantry（紧挨厨房）、Laundry（洗衣机 + 烘干机并排）、Bath、Foyer（入户）、Half Bath，
+//   R 块：南排 Bedroom 2..n / Office，北排 Pantry（紧挨厨房）、Laundry（洗衣机 + 烘干机并排）、Bath、Foyer（入户）、Half Bath
+//         （Bath / Half Bath 开间固定、北排太深时只占北端，南边并进走廊成门前凹口），
 //         中间一条 Hallway 通到开放的客餐厨。
 // 入口不下沉（室内可穿鞋），没有日式的鞋柜要求；空调是中央空调，Patio 上放一台室外机。
 
@@ -60,9 +61,11 @@ function layout(seed: number, o: LayoutOpts): RegionLayout {
   }
   const pantry: CellSpec = { kind: 'storage', name: 'Pantry', min: 100, max: 130, door: 'c', doorW: 70, tag: 'pantry' }
   const laundry: CellSpec = { kind: 'wash', name: 'Laundry', min: n === 1 ? 120 : 160, max: n === 1 ? 150 : 190, tag: 'laundry', doorKind: chance(0.3) ? 'folding' : 'door', doorW: 80 }
-  const bath: CellSpec = { kind: 'bath', name: 'Bath', min: 210, max: 250, window: 60, tag: 'bath' }
+  // 次卫（full bath）：5'×8' ～ 6'×9'（净 160～190 × 230～285）。开间固定，北排进深超过 300 时只占北端，南边并进走廊
+  const bath: CellSpec = { kind: 'bath', name: 'Bath', min: 170, max: 200, window: 60, tag: 'bath', fixed: true, doorCorner: true }
   const foyer: CellSpec = { kind: 'entrance', name: 'Foyer', min: 160, max: 200, door: 'none', tag: 'foyer' }
-  const half: CellSpec = { kind: 'bath', name: 'Half Bath', min: 140, max: 160, tag: 'half', doorW: 70 }
+  // Half Bath（powder room）：一个马桶 + 小台盆，净 120～140 × 165～205（约 4'×6'～5'×7'），只占北排的北端
+  const half: CellSpec = { kind: 'bath', name: 'Half Bath', min: 130, max: 150, tag: 'half', doorW: 70, fixed: true }
   const linen: CellSpec = { kind: 'storage', name: 'Linen', min: 90, max: 140, doorW: 60, tag: 'linen' }
   const office: CellSpec = bed('Office', 250, 300, { tag: 'office' })
   const bedN = (k: number) => bed(`Bedroom ${k}`, big ? 300 : 290, big ? 350 : 330)
@@ -97,6 +100,14 @@ function layout(seed: number, o: LayoutOpts): RegionLayout {
     }
   }
   c.sig.push(`n${n}`, withPantry ? 'pantry' : '', south[0] === office ? 'officeIn' : '')
+  // 卫生间的进深（第二条随机序列）：北排太深时只占北端，剩下的成走廊里门前的凹口（不足 60 时 bandLayout 不切）
+  if (service.includes(half)) half.depth = Math.min(altInt(c, 180, 220), dims.dN - 60)
+  if (service.includes(bath) && dims.dN > 300) bath.depth = Math.max(240, Math.min(altInt(c, 260, 300), dims.dN - 60))
+  // Walk-in Pantry 也不做成 3 米多的长条：净深 186～226（门开向厨房），南边剩下的做走廊壁橱（厨房那面墙不缺）
+  if (withPantry) {
+    pantry.depth = altInt(c, 200, 240)
+    pantry.rest = { kind: 'storage', name: 'Closet', min: 0, max: 0, doorKind: 'folding', doorW: 80, tag: 'hallCloset' }
+  }
   const R: BlockSpec = { south, north: [...(withPantry ? [pantry] : []), ...service], filler: linen }
 
   // C 列北半：Dining（靠主卧一侧）| Kitchen（靠服务区一侧）
@@ -212,7 +223,7 @@ function furnish({ c, plan }: { c: Ctx; plan: Plan }): Plan {
     if (r.kind === 'bath') {
       if (r.name === 'Half Bath') placeBathroom(plan, r, { wet: 'none', basins: 1, basinW: [60, 50], basinD: 45 })
       else if (r.name === 'Primary Bath') placeBathroom(plan, r, { wet: c.chance(0.55) ? 'tub' : 'shower', basins: 2, basinW: [75, 70, 65], basinD: 55 })
-      else placeBathroom(plan, r, { wet: c.chance(0.7) ? 'tub' : 'shower', basins: 1, basinW: [80, 70, 60], basinD: 55 })
+      else placeBathroom(plan, r, { wet: c.chance(0.7) ? 'tub' : 'shower', basins: 1, basinW: [80, 70, 60], basinD: 55, tubAcross: true })
     } else if (r.name === 'Laundry') {
       // 洗衣机位：宽的放洗衣机 + 烘干机并排，窄的放叠放款（一键布置按位的宽度挑）
       if (!put(r, { kind: 'washer', lengths: [140, 130], depth: 70 })) put(r, { kind: 'washer', lengths: [70, 64], depth: 68 })

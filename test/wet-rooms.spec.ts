@@ -2,7 +2,9 @@
 //   - 日式トイレ（平层各骨架、户建、复式）：净宽只够一个马桶 + 侧墙卷纸架（78～95），净深 120～170，不长不宽；
 //     马桶背靠一面短墙、朝着长向（门那边）；
 //   - 中式公卫：大部分户型有玻璃淋浴房，和马桶、洗手台在同一间；
-//   - 淋浴房的玻璃：贴墙的边不装，其余每一边都装（墙角、贴一面墙、四面不贴墙，四个朝向），平面符号和 3D 一致。
+//   - 淋浴房的玻璃：贴墙的边不装，其余每一边都装（墙角、贴一面墙、四面不贴墙，四个朝向），平面符号和 3D 一致；
+//   - 欧美（公寓 / 独栋）：Half Bath 是 powder room 的尺寸（净 90～150 × 150～215，不是细长走廊），
+//     次卫 5'×8'～6'×9'（净 150～195 × 220～290），主卫不超过 2.2:1；设备放得下，浴缸横在次卫短边那头。
 import { describe, expect, test } from 'vitest'
 import * as THREE from 'three'
 import { generatePlan } from '/src/generate-region'
@@ -161,5 +163,56 @@ describe('淋浴房的玻璃隔断', () => {
       }
     expect(n).toBeGreaterThan(10)
     expect(bad).toEqual([])
+  })
+})
+
+describe('欧美卫生间的尺寸', () => {
+  const cases: [string, Plan][] = [
+    ...range(1, 70).map((s): [string, Plan] => [`apt#${s}`, gen(s, 'west', 'apartment')]),
+    ...range(1, 30).map((s): [string, Plan] => [`house#${s}`, gen(s, 'west', 'house')]),
+  ]
+  const dims = (plan: Plan, r: Room) => {
+    const b = bbox(innerRoom(r, plan).points)
+    const sx = b.x1 - b.x0
+    const sy = b.y1 - b.y0
+    return { w: Math.min(sx, sy), d: Math.max(sx, sy), longX: sx > sy }
+  }
+  const baths = (name: string) => cases.flatMap(([key, plan]) => plan.rooms.filter((r) => r.kind === 'bath' && r.name === name).map((r) => ({ key, plan, r, ...dims(plan, r) })))
+
+  test('Half Bath：净宽 90～150、净深 150～215，长宽比不超过 1.9', () => {
+    const all = baths('Half Bath')
+    expect(all.length).toBeGreaterThan(40)
+    expect(all.some((x) => x.key.startsWith('apt')) && all.some((x) => x.key.startsWith('house'))).toBe(true)
+    const bad = all.filter(({ w, d }) => w < 90 || w > 150 || d < 150 || d > 215 || d / w > 1.9).map(({ key, w, d }) => `${key} ${Math.round(w)}×${Math.round(d)}`)
+    expect(bad).toEqual([])
+  })
+
+  test('次卫（Bath）：净宽 150～195、净深 220～290，长宽比不超过 2；主卫不超过 2.2:1、净宽不超过 280', () => {
+    const all = baths('Bath')
+    expect(all.length).toBeGreaterThan(60)
+    const bad = all.filter(({ w, d }) => w < 150 || w > 195 || d < 220 || d > 290 || d / w > 2).map(({ key, w, d }) => `${key} ${Math.round(w)}×${Math.round(d)}`)
+    for (const { key, w, d } of baths('Primary Bath')) if (d / w > 2.2 || w > 280) bad.push(`${key} 主卫 ${Math.round(w)}×${Math.round(d)}`)
+    expect(bad).toEqual([])
+  })
+
+  test('设备放得下：Half Bath 马桶 + 台盆，Bath / Primary Bath 再加浴缸或淋浴；次卫的浴缸横在短边那头', () => {
+    const bad: string[] = []
+    let across = 0
+    let tubs = 0
+    for (const { key, plan, r, w, longX } of [...baths('Half Bath'), ...baths('Bath'), ...baths('Primary Bath')]) {
+      const fs = fixturesIn(plan, r)
+      const need = r.name === 'Half Bath' ? ['toilet', 'basin'] : ['toilet', 'basin', 'bathtub']
+      for (const k of need) if (!fs.some((f) => f.kind === k)) bad.push(`${key} ${r.name} 没有 ${k}`)
+      if (r.name === 'Half Bath' && fs.some((f) => f.kind === 'bathtub')) bad.push(`${key} Half Bath 有浴缸`)
+      const tub = fs.find((f) => f.kind === 'bathtub' && !f.shower)
+      if (r.name !== 'Bath' || !tub) continue
+      tubs++
+      // 浴缸的长边（局部 x）沿房间短向，长度接近短边净宽
+      const alongX = Math.round(tub.rot / 90) % 2 === 0
+      if (alongX !== longX && tub.w >= w - 30) across++
+    }
+    expect(bad).toEqual([])
+    expect(tubs).toBeGreaterThan(20)
+    expect(across / tubs).toBeGreaterThan(0.9)
   })
 })

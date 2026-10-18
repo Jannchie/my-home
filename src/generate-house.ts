@@ -50,7 +50,10 @@ interface CellDef {
   /** 摆设备时的角色 */
   tag?: string
   flush?: boolean
-  /** 列上的トイレ只占北端一段进深（净深 136～156），南边让给走廊的一个小凹口，门开在凹口里 */
+  /**
+   * 列上的房间只占北端一段进深，南边让给走廊的一个小凹口，门开在凹口里：
+   * 日式トイレ（净深 136～156）、欧美 Half Bath（净深 166～206）。上下层的列各自决定要不要凹口
+   */
   shallow?: boolean
 }
 
@@ -254,13 +257,14 @@ const WEST: Program = {
     dN: c.rint(270, 290),
     wC: c.rint(190, 230),
     dB: 0,
-    wT: c.rint(150, 180),
+    // 列（1F Half Bath / 2F Walk-in Closet）：净宽 126～146；Half Bath 只占北端（见 col.shallow），省下的开间给 Pantry / 玄关
+    wT: c.rint(140, 160),
     wG: c.rint(200, 240),
     wSC: c.chance(0.6) ? c.rint(100, 140) : 0,
     W: n >= 4 ? c.rint(1240, 1360) : c.rint(1040, 1180),
   }),
   core: { south: { kind: 'wash', name: 'Laundry', door: 'hall', doorKind: 'door', doorW: 80, win: { w: 70 }, tag: 'laundry' } },
-  col: { kind: 'bath', name: 'Half Bath', door: 'hall', doorKind: 'door', doorW: 70, tag: 'halfBath' },
+  col: { kind: 'bath', name: 'Half Bath', door: 'hall', doorKind: 'door', doorW: 70, tag: 'halfBath', shallow: true },
   filler: { kind: 'storage', name: 'Pantry', door: 'hall', doorKind: 'door', doorW: 70, tag: 'pantry' },
   entry: { kind: 'entrance', name: 'Foyer', flush: true, tag: 'foyer' },
   side: { kind: 'storage', name: 'Closet', door: 'w', doorKind: 'door', doorW: 70 },
@@ -276,9 +280,12 @@ const WEST: Program = {
   col2: { kind: 'storage', name: 'Walk-in Closet', door: 'w', doorKind: 'door', doorW: 70, tag: 'wic' },
   filler2: { kind: 'storage', name: 'Linen', door: 'hall', doorKind: 'door', doorW: 60 },
   east2: (c, w, bed) => {
+    // 次卫：开间 170～200（净 160～190，5'×8'～6'×9'），浴缸横在北端；剩下的开间做走廊壁橱
     const bath: CellDef = { kind: 'bath', name: 'Bath', door: 'hall', doorKind: 'door', doorW: 75, win: { n: 70 }, tag: 'fullBath' }
-    if (bed && w >= 520) return [{ def: bath, w: 230 }, { def: { kind: 'western', name: bed, door: 'hall', win: { n: 140, e: 140 }, tag: 'bed' }, w: w - 230 }]
-    const bw = Math.min(w, c.rint(220, 250))
+    if (bed && w >= 520) return [{ def: bath, w: 200 }, { def: { kind: 'western', name: bed, door: 'hall', win: { n: 140, e: 140 }, tag: 'bed' }, w: w - 200 }]
+    let bw = Math.min(w, c.rint(170, 200))
+    // 壁橱至少 90：不够时卫生间让一点（不窄于 170），还不够就卫生间占满
+    if (w - bw < 90 && w - 90 >= 170) bw = w - 90
     return w - bw >= 90 ? [{ def: bath, w: bw }, { def: { kind: 'storage', name: 'Closet', door: 'hall', doorKind: 'door', doorW: 65 }, w: w - bw }] : [{ def: bath, w }]
   },
   bedName: (i) => (i === 0 ? 'Primary Bedroom' : `Bedroom ${i + 1}`),
@@ -490,7 +497,11 @@ function layout(seed: number, o: Pick<HouseGenOpts, 'region' | 'dwelling' | 'bed
   const k = Math.min(P.maxSouth, eastBed ? m - 1 : m)
   // 东侧当卧室要 290 宽以上（4.5 帖 / 7.3㎡）
   if (eastBed && d.wG + d.wSC < 290) d.wSC = 290 - d.wG
-  if (o.region === 'west' && d.wG + d.wSC < 220) d.wSC = 220 - d.wG
+  // 欧美 2F 入口上方是次卫（+ 壁橱），要 220 宽：没有侧间时放宽入口（以前补出一条几厘米宽的侧间）
+  if (o.region === 'west' && d.wG + d.wSC < 220) {
+    if (d.wSC > 0) d.wSC = 220 - d.wG
+    else d.wG = 220
+  }
   // 楼梯形式（用种子的哈希挑，不消耗布局的随机序列：U 形的户型和以前一样）
   // 客厅楼梯：起步前要留 80 的地方，南带进深放不下 300 长的梯段就不做
   const livingRun = Math.min(360, d.dS - WALL / 2 - WALL_OUTER / 2 - STAIR_CLEAR_LIVING)
@@ -535,7 +546,7 @@ function layout(seed: number, o: Pick<HouseGenOpts, 'region' | 'dwelling' | 'bed
   const D = yN + dN
   const xF = wC + wT
   // 浅的トイレ（日式）：只占列的北端 tH，南边 yN..yA 是走廊的凹口（トイレ前）
-  const tH = P.col.shallow ? altInt(c, 150, 170) : 0
+  const tH = !P.col.shallow ? 0 : P.region === 'west' ? Math.min(altInt(c, 180, 220), dN - 60) : altInt(c, 150, 170)
   const yA = tH ? D - tH : yN
   const xS = xF + wF
   const xG = xS + wSt
@@ -549,7 +560,7 @@ function layout(seed: number, o: Pick<HouseGenOpts, 'region' | 'dwelling' | 'bed
 
   // ---------- 1F ----------
   // 走廊：走廊带 + 北带的楼梯间（客厅楼梯时楼梯间做收纳，走廊不含它）；strip = 2F 南带东端让给客厅楼梯洞口的一条
-  const hallPts = (x0: number, strip = 0): Vec[] => [
+  const hallPts = (x0: number, strip = 0, alcove = true): Vec[] => [
     { x: x0, y: dS },
     ...(strip
       ? [
@@ -568,7 +579,7 @@ function layout(seed: number, o: Pick<HouseGenOpts, 'region' | 'dwelling' | 'bed
           { x: xS, y: yN },
         ]),
     // トイレ前的凹口：列的南段并进走廊
-    ...(yA > yN
+    ...(alcove && yA > yN
       ? [
           { x: xF, y: yN },
           { x: xF, y: yA },
@@ -620,7 +631,7 @@ function layout(seed: number, o: Pick<HouseGenOpts, 'region' | 'dwelling' | 'bed
 
   // ---------- 2F ----------
   const x2 = partial ? wC : 0
-  const hall2 = c.room('hall', P.hallName, simplifyRing(hallPts(wC, stripW)))
+  const hall2 = c.room('hall', P.hallName, simplifyRing(hallPts(wC, stripW, !!P.col2.shallow)))
   if (!partial) rec(P.nw2, c.rect(P.nw2.kind, P.nw2.name, 0, dS, wC, D), F2)
   rec(P.col2, c.rect(P.col2.kind, P.col2.name, wC, P.col2.shallow ? yA : yN, xF, D), F2)
   if (xFill > xF) rec(P.filler2, c.rect(P.filler2.kind, P.filler2.name, xF, yN, xFill, D), F2)
@@ -910,7 +921,7 @@ function furnish({ c, plan, placed }: HouseLayout): Plan {
           run(() => placeBathroom(view, r, { wet: c.chance(0.55) ? 'tub' : 'shower', basins: 2, basinW: [75, 70, 65], basinD: 55 }))
           break
         case 'fullBath':
-          run(() => placeBathroom(view, r, { wet: c.chance(0.7) ? 'tub' : 'shower', basins: 1, basinW: [80, 70, 60], basinD: 55 }))
+          run(() => placeBathroom(view, r, { wet: c.chance(0.7) ? 'tub' : 'shower', basins: 1, basinW: [80, 70, 60], basinD: 55, tubAcross: true }))
           break
         case 'ensuite':
           run(() => placeBathroom(view, r, { wet: c.chance(0.3) ? 'tub' : 'shower', basins: c.chance(0.4) ? 2 : 1, basinW: [70, 60], basinD: 50 }))

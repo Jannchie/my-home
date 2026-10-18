@@ -272,6 +272,7 @@ export const ZH_TERMS: Record<string, string> = {
   Office: '书房',
   Pantry: '储藏室',
   Linen: '布草间',
+  Closet: '壁橱',
   Patio: '露台',
 }
 
