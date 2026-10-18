@@ -7,8 +7,9 @@
 // 样式只是挑选这些种类和配色的组合。
 
 import * as THREE from 'three'
-import type { Fixture, Vec } from '../model'
-import { UNDER_CEIL, stairLayout, stairsVariant, stepHollow, subtractSpan, type StairRail } from '../stairs'
+import { openingGeom, type Fixture, type Plan, type Vec } from '../model'
+import { wallSegments } from '../walls'
+import { UNDER_CEIL, holeRailSegments, stairLayout, stairsVariant, stepHollow, type StairRail } from '../stairs'
 import { stairStyle, type StairBody, type StairRailKind, type StairStyle } from '../stairStyles'
 import { rbox, toon } from './toon'
 
@@ -19,8 +20,88 @@ const RAIL_H = 85
 /** 踏板厚 */
 const TREAD_T = 3
 
-/** 墙段（平面坐标的中心线 + 墙厚） */
-export type WallLine = { a: Vec; b: Vec; t: number }
+/** 墙段（平面坐标的中心线 + 墙厚）；gaps：墙上门洞（沿 a → b 的距离区间），扶手到这里断开 */
+export type WallLine = { a: Vec; b: Vec; t: number; gaps?: [number, number][] }
+
+/**
+ * 一层的实墙段（敞开边界不算），带上门洞：楼梯扶手判断贴墙、洞口栏杆判断贴墙都用它。
+ * plan：这一层的子户型（floorView）。
+ */
+export function stairWalls(plan: Pick<Plan, 'rooms' | 'openings' | 'wall' | 'wallOuter'>): WallLine[] {
+  const doors = plan.openings.flatMap((o) => {
+    if (o.kind === 'window') return []
+    const g = openingGeom(plan.rooms, o)
+    return g ? [{ c: g.center, w: o.width }] : []
+  })
+  return wallSegments(plan.rooms)
+    .filter((s) => s.kind !== 'open')
+    .map((s) => {
+      const L = Math.hypot(s.b.x - s.a.x, s.b.y - s.a.y)
+      const u = L > 0 ? { x: (s.b.x - s.a.x) / L, y: (s.b.y - s.a.y) / L } : { x: 0, y: 0 }
+      const gaps = doors.flatMap(({ c, w }): [number, number][] => {
+        const t = (c.x - s.a.x) * u.x + (c.y - s.a.y) * u.y
+        const off = Math.abs((c.x - s.a.x) * u.y - (c.y - s.a.y) * u.x)
+        return off < 1 && t > -1 && t < L + 1 ? [[t - w / 2, t + w / 2]] : []
+      })
+      return { a: s.a, b: s.b, t: s.kind === 'outer' ? plan.wallOuter : plan.wall, ...(gaps.length ? { gaps } : {}) }
+    })
+}
+
+/** 墙上的门洞（局部平面坐标的线段） */
+function doorLines(walls: WallLine[]): [Vec, Vec][] {
+  return walls.flatMap((w) => {
+    const L = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y)
+    if (!w.gaps || L < 1) return []
+    const u = { x: (w.b.x - w.a.x) / L, y: (w.b.y - w.a.y) / L }
+    return w.gaps.map(([lo, hi]): [Vec, Vec] => [{ x: w.a.x + u.x * lo, y: w.a.y + u.y * lo }, { x: w.a.x + u.x * hi, y: w.a.y + u.y * hi }])
+  })
+}
+
+/** 扶手离门洞所在的墙线不超过这么远（cm）就在门洞前断开 */
+const DOOR_RAIL_GAP = 40
+
+/**
+ * 扶手线在门洞前断开：和门洞平行、离门洞的墙线不超过 DOOR_RAIL_GAP 的那一截去掉（多留 5 的余量），剩下的分成几段。
+ * 生成的户型开门会避开楼梯（generate-house.ts），这里兜住手动改出来的户型：扶手不会横在门口。
+ */
+export function cutRailAtDoors(pts: StairRail['pts'], doors: [Vec, Vec][]): StairRail['pts'][] {
+  if (!doors.length) return [pts]
+  const out: StairRail['pts'][] = []
+  let cur: StairRail['pts'] = [pts[0]]
+  const lerpP = (a: StairRail['pts'][number], b: StairRail['pts'][number], t: number) => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, h: a.h + (b.h - a.h) * t })
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const a = pts[i]
+    const b = pts[i + 1]
+    const L = Math.hypot(b.x - a.x, b.y - a.y)
+    const cuts: [number, number][] = []
+    if (L > 1) {
+      const u = { x: (b.x - a.x) / L, y: (b.y - a.y) / L }
+      for (const [p, q] of doors) {
+        const dl = Math.hypot(q.x - p.x, q.y - p.y)
+        if (dl < 1 || Math.abs(((q.x - p.x) / dl) * u.y - ((q.y - p.y) / dl) * u.x) > 0.02) continue
+        if (Math.abs((p.x - a.x) * u.y - (p.y - a.y) * u.x) > DOOR_RAIL_GAP) continue
+        const t0 = (p.x - a.x) * u.x + (p.y - a.y) * u.y
+        const t1 = (q.x - a.x) * u.x + (q.y - a.y) * u.y
+        const lo = Math.max(0, Math.min(t0, t1) - 5)
+        const hi = Math.min(L, Math.max(t0, t1) + 5)
+        if (hi > lo) cuts.push([lo / L, hi / L])
+      }
+    }
+    cuts.sort((m, n) => m[0] - n[0])
+    let pos = 0
+    for (const [lo, hi] of cuts) {
+      if (hi <= pos) continue
+      if (lo > pos) cur.push(lerpP(a, b, lo))
+      if (cur.length > 1) out.push(cur)
+      pos = Math.max(pos, hi)
+      cur = [lerpP(a, b, pos)]
+    }
+    cur.push(b)
+  }
+  if (cur.length > 1) out.push(cur)
+  // 太短的碎段不装
+  return out.filter((r) => r.reduce((s, p, i) => (i ? s + Math.hypot(p.x - r[i - 1].x, p.y - r[i - 1].y) : 0), 0) > 8)
+}
 
 /** 两点之间的一根杆（圆柱） */
 function bar(a: THREE.Vector3, b: THREE.Vector3, r: number, color: string) {
@@ -298,7 +379,8 @@ export function stairsModel(f: Fixture, rise: number, walls: WallLine[] = []) {
   const cos = Math.cos(a)
   const sin = Math.sin(a)
   const toLocal = (p: Vec): Vec => ({ x: (p.x - f.x) * cos + (p.y - f.y) * sin, y: -(p.x - f.x) * sin + (p.y - f.y) * cos })
-  const local = walls.map((w) => ({ a: toLocal(w.a), b: toLocal(w.b), t: w.t }))
+  const local = walls.map((w) => ({ a: toLocal(w.a), b: toLocal(w.b), t: w.t, gaps: w.gaps }))
+  const doors = doorLines(local)
   if (stairsVariant(f) === 'spiral') {
     const pole = new THREE.Mesh(new THREE.CylinderGeometry(6, 6, rise + RAIL_H, 16), toon(style.colors.post))
     pole.position.y = (rise + RAIL_H) / 2
@@ -325,7 +407,8 @@ export function stairsModel(f: Fixture, rise: number, walls: WallLine[] = []) {
     BODY_BUILDERS[style.body]({ runs: stairRuns(rects), rects, style, againstWall }, g)
   }
   for (const r of L.rails)
-    for (const { run, wall } of splitRail(r, local)) RAIL_BUILDERS[wall ? style.railWall : style.railOpen](run, style, g)
+    for (const piece of cutRailAtDoors(r.pts, doors))
+      for (const { run, wall } of splitRail({ pts: piece }, local)) RAIL_BUILDERS[wall ? style.railWall : style.railOpen](run, style, g)
   g.userData.stairs = true
   return g
 }
@@ -357,43 +440,18 @@ export function edgeRail(p: Vec, q: Vec) {
  */
 export function holeRails(poly: Vec[], open: [Vec, Vec] | undefined, walls: { a: Vec; b: Vec; t: number }[]) {
   const g = new THREE.Group()
-  const n = poly.length
-  for (let i = 0; i < n; i++) {
-    const a = poly[i]
-    const b = poly[(i + 1) % n]
-    const L = Math.hypot(b.x - a.x, b.y - a.y)
-    if (L < 5) continue
-    const u = { x: (b.x - a.x) / L, y: (b.y - a.y) / L }
-    let spans: [number, number][] = open ? subtractSpan(a, b, open) : [[0, L]]
-    // 贴墙的部分：墙段平行、离得近，按投影区间扣掉
-    for (const w of walls) {
-      const wl = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y)
-      if (wl < 1) continue
-      const wu = { x: (w.b.x - w.a.x) / wl, y: (w.b.y - w.a.y) / wl }
-      if (Math.abs(wu.x * u.y - wu.y * u.x) > 1e-3) continue
-      const off = Math.abs((w.a.x - a.x) * u.y - (w.a.y - a.y) * u.x)
-      if (off > w.t / 2 + 2) continue
-      const t0 = (w.a.x - a.x) * u.x + (w.a.y - a.y) * u.y
-      const t1 = (w.b.x - a.x) * u.x + (w.b.y - a.y) * u.y
-      const lo = Math.min(t0, t1)
-      const hi = Math.max(t0, t1)
-      spans = spans.flatMap(([x, y]): [number, number][] => (hi <= x || lo >= y ? [[x, y]] : ([[x, lo], [hi, y]] as [number, number][]).filter(([p, q]) => q - p > 2)))
-    }
-    for (const [lo, hi] of spans) {
-      const p = { x: a.x + u.x * lo, y: a.y + u.y * lo }
-      const q = { x: a.x + u.x * hi, y: a.y + u.y * hi }
-      railModel(
-        {
-          pts: [
-            { x: p.x, y: p.y, h: 0 },
-            { x: q.x, y: q.y, h: 0 },
-          ],
-        },
-        g,
-      )
-      // 中间一道横杆
-      g.add(bar(new THREE.Vector3(p.x, 40, p.y), new THREE.Vector3(q.x, 40, q.y), 1.2, POST))
-    }
+  for (const [p, q] of holeRailSegments(poly, open, walls)) {
+    railModel(
+      {
+        pts: [
+          { x: p.x, y: p.y, h: 0 },
+          { x: q.x, y: q.y, h: 0 },
+        ],
+      },
+      g,
+    )
+    // 中间一道横杆
+    g.add(bar(new THREE.Vector3(p.x, 40, p.y), new THREE.Vector3(q.x, 40, q.y), 1.2, POST))
   }
   return g
 }
