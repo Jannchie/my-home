@@ -4,12 +4,13 @@
 // 用地放在最底层的组里。屋顶的组打上 userData.roof，沙盘按视图开关显示 / 隐藏（Sandbox3D.vue）。
 
 import * as THREE from 'three'
-import { FENCE_STYLE, type CarKind, type Exterior, type Plan, type Site, type Vec } from '../model'
-import { roofParts, type RoofPart, type Side } from '../exterior'
-import { FLAT_T, PARAPET, ROOF_T, tessellate, type P3, type RoofRect } from '../roof'
+import { FENCE_STYLE, onBoundary, pointInPolygon, signedArea, type CarKind, type Exterior, type Floor, type Plan, type Site, type Vec } from '../model'
+import { floorOutline, floorView, planFloors, SLAB } from '../floors'
+import { roofExterior, roofParts, type RoofPart, type Side } from '../exterior'
+import { PARAPET, ROOF_T, roofHeightAt, tessellate, type P3, type RoofRect } from '../roof'
 import { subtractSpan } from '../stairs'
-import { addOutlines, cyl, mergeMeshes, rbox, shade, toon, useAnisotropy } from './toon'
-import { BASE, openingInfos } from './house'
+import { addOutlines, cyl, mergeMeshes, pullDepth, rbox, shade, toon, useAnisotropy } from './toon'
+import { BASE, floorY, openingInfos, WALL_PULL } from './house'
 import { injectLightMask } from './lightMask'
 
 // ---------- 外墙材质 ----------
@@ -87,10 +88,8 @@ export function facadeMaterial(ex: Pick<Exterior, 'facade' | 'wallColor'>): THRE
   }
   mat.customProgramCacheKey = () => 'facade-world'
   mat.shadowSide = THREE.FrontSide
-  // 和墙纸一样压过相邻墙段的端面，转角处不闪
-  mat.polygonOffset = true
-  mat.polygonOffsetFactor = -1
-  mat.polygonOffsetUnits = -2
+  // 和墙纸一样压过相邻墙段的端面，转角处不闪（按距离的深度偏移；polygonOffset 掠射角下没有上限，会把墙面拉到屋面、窗套前面）
+  pullDepth(mat, WALL_PULL)
   m = mat
   facadeCache.set(key, m)
   return m
@@ -246,8 +245,8 @@ export function buildRoof(part: RoofPart, ex: Exterior, wallOuter: number): THRE
     const flatSolid = (rs: RoofRect[], z: number, depth: number, mat: THREE.Material) => {
       if (rs.length) g.add(roofSolid(tessellate(rs.map((r) => [[r.x0, r.y0, z], [r.x1, r.y0, z], [r.x1, r.y1, z], [r.x0, r.y1, z]] as P3[])), mat, depth))
     }
-    flatSolid(f.slab, f.slabTop, FLAT_T, roofMaterial(shade(ex.roofColor, 0.25)))
-    flatSolid(f.parapet, f.slabTop + PARAPET, PARAPET, outdoorFacade(wallMat))
+    flatSolid(f.slab, f.slabTop, f.slabTop - f.slabBottom, roofMaterial(shade(ex.roofColor, 0.25)))
+    flatSolid(f.parapet, f.slabTop + PARAPET, f.slabTop + PARAPET - f.parapetBottom, outdoorFacade(wallMat))
     flatSolid(f.coping, f.slabTop + PARAPET + 5, 5, roofMaterial(ex.trimColor))
     return finish(g, part)
   }
@@ -260,7 +259,8 @@ export function buildRoof(part: RoofPart, ex: Exterior, wallOuter: number): THRE
     if (L < 0.5) continue
     const n = { x: -dy / L, y: dx / L }
     const pt = (p: Vec, z: number) => new THREE.Vector3(p.x - n.x * o, z, p.y - n.y * o)
-    g.add(convexPrism([pt(w.a, part.top), pt(w.b, part.top), pt(w.b, w.zb), pt(w.a, w.za)], new THREE.Vector3(n.x * wallOuter, 0, n.y * wallOuter), wallMat))
+    // 底边往下埋进墙顶 1：底面不和墙顶（以及顶到外墙内皮的内墙顶）共面
+    g.add(convexPrism([pt(w.a, part.top - 1), pt(w.b, part.top - 1), pt(w.b, w.zb), pt(w.a, w.za)], new THREE.Vector3(n.x * wallOuter, 0, n.y * wallOuter), wallMat))
   }
   // 屋脊、斜脊：压条（很薄，描边会糊成一道黑线：不描边）；天沟：一道深色细线
   const cap = toon(shade(ex.roofColor, 0.06))
@@ -298,13 +298,162 @@ function finish(g: THREE.Group, part: RoofPart) {
 }
 
 /** 某一层上的屋顶（层局部坐标），没有就返回 null */
-export function roofGroup(plan: Plan, floorId: string, parts = roofParts(plan)): THREE.Group | null {
-  const ex = plan.exterior
+export function roofGroup(plan: Plan, floorId: string, parts = roofParts(plan), ex: Exterior = roofExterior(plan)): THREE.Group | null {
   const mine = parts.filter((p) => p.floor === floorId)
-  if (!ex || !mine.length) return null
+  if (!mine.length) return null
   const g = new THREE.Group()
   for (const p of mine) g.add(buildRoof(p, ex, plan.wallOuter))
   g.userData.roof = true
+  // 户型没有外观设定、现推的缺省屋顶（外观面板不能选中它，预览模式也不盖）
+  if (!plan.exterior) g.userData.derived = true
+  return g
+}
+
+// ---------- 上层阳台的支柱 ----------
+
+/** 阳台支柱的截面边长（cm） */
+export const POST = 10.5
+/** 柱间距上限：挑出的边比它长就在中间加柱 */
+const POST_GAP = 360
+
+export interface BalconyPost {
+  /** 阳台所在的楼层（支柱放进这一层的组，跟着它显示 / 拉开） */
+  floor: string
+  x: number
+  y: number
+  /** 从房体往外的水平方向（跟着外墙一起透明） */
+  out: Vec
+  /** 柱顶（阳台板底）、柱脚，都是离 1F 地面的高度 */
+  top: number
+  bottom: number
+  /** 柱脚落在：下层屋面 / 下层阳台 / 地面 */
+  on: 'roof' | 'balcony' | 'ground'
+  /** 落在屋面上时，是哪一层的屋顶（柱子放进那块屋顶的组，跟着屋顶显示 / 隐藏） */
+  roofFloor?: string
+}
+
+/**
+ * 上层阳台挑出下层外轮廓的部分：在挑出去的阳角（和挑出边上每隔 POST_GAP）立柱，柱脚落在正下方实际承托它的面上——
+ * 下层的屋面（按屋面高度；坡屋面取柱子占地范围内最低处，柱脚不悬空，上坡一侧只埋进屋面几 cm）、下层的阳台地面、
+ * 或者地面（户建的用地 / 展示底座范围内）。下面什么都没有（楼里的复式、底座外）就不立柱，阳台照旧悬挑。
+ * parts：各层的屋顶（roofParts，和 3D 用的同一份）；heightOf：各层实际墙高。
+ */
+export function balconyPosts(plan: Plan, parts: RoofPart[], heightOf: (f: Floor) => number = (f) => f.height): BalconyPost[] {
+  const fs = planFloors(plan)
+  if (fs.length < 2) return []
+  const views = fs.map((f) => floorView(plan, f.id).rooms)
+  const outlines = views.map((rs) => floorOutline(rs))
+  // 地面：用地范围内；没有用地时是展示底座的台面（最底层房间外框往外 70，见 house.ts buildHouse）
+  const pts0 = views[0].flatMap((r) => r.points)
+  if (!pts0.length) return []
+  const bx = pts0.map((p) => p.x)
+  const by = pts0.map((p) => p.y)
+  const pad = 70 - POST
+  const onGround = (p: Vec) => (plan.site ? pointInPolygon(p, plan.site.points) : p.x > Math.min(...bx) - pad && p.x < Math.max(...bx) + pad && p.y > Math.min(...by) - pad && p.y < Math.max(...by) + pad)
+  /** p 正下方（k 层以下）承托面的高度（离 1F 地面）；没有返回 null */
+  const surfaceAt = (p: Vec, k: number): { z: number; on: BalconyPost['on']; roofFloor?: string } | null => {
+    for (let j = k - 1; j >= 0; j--) {
+      const f = fs[j]
+      let z: number | null = null
+      for (const r of parts) {
+        if (r.floor !== f.id) continue
+        // 柱子占地四角 + 中心，取最低的屋面（坡屋面上柱脚不悬空）
+        for (const [dx, dy] of [[0, 0], [-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+          const q = { x: p.x + (dx * POST) / 2, y: p.y + (dy * POST) / 2 }
+          let h = roofHeightAt(r.tris, q)
+          if (h === null) continue
+          // 平屋顶的女儿墙 / 压顶上：落在压顶顶面
+          if (r.flat && r.flat.coping.some((b) => q.x > b.x0 && q.x < b.x1 && q.y > b.y0 && q.y < b.y1)) h = r.flat.slabTop + PARAPET + 5
+          z = z === null ? h : Math.min(z, h)
+        }
+      }
+      if (z !== null) return { z: f.elevation + z, on: 'roof', roofFloor: f.id }
+      const bal = views[j].find((r) => r.kind === 'balcony' && pointInPolygon(p, r.points))
+      if (bal) return { z: f.elevation + floorY(bal), on: 'balcony' }
+      // 落在下层房体顶上却没有屋顶（不该出现）：不立柱
+      if (outlines[j] && pointInPolygon(p, outlines[j]!)) return null
+    }
+    return onGround(p) ? { z: fs[0].elevation + BASE, on: 'ground' } : null
+  }
+  const out: BalconyPost[] = []
+  fs.forEach((f, k) => {
+    const below = outlines[k - 1]
+    if (k === 0 || !below) return
+    const free = (p: Vec) => !pointInPolygon(p, below) && !onBoundary(below, p, 1)
+    const top = f.elevation - SLAB
+    const add = (p: Vec, o: Vec) => {
+      const s = surfaceAt(p, k)
+      if (!s || top - s.z < 5) return
+      out.push({ floor: f.id, x: p.x, y: p.y, out: o, top, bottom: s.z, on: s.on, ...(s.roofFloor ? { roofFloor: s.roofFloor } : {}) })
+    }
+    for (const r of views[k]) {
+      if (r.kind !== 'balcony') continue
+      const P = r.points
+      const sg = Math.sign(signedArea(P))
+      const n = P.length
+      const isFree = P.map(free)
+      const unit = (a: Vec, b: Vec) => {
+        const L = Math.hypot(b.x - a.x, b.y - a.y) || 1
+        return { x: (b.x - a.x) / L, y: (b.y - a.y) / L }
+      }
+      const inset = POST / 2 + 3
+      for (let i = 0; i < n; i++) {
+        const v = P[i]
+        const a = P[(i + n - 1) % n]
+        const b = P[(i + 1) % n]
+        const ua = unit(v, a)
+        const ub = unit(v, b)
+        // 只在挑出去的阳角立柱（阴角、贴着下层外墙的角不立）
+        const convex = Math.sign((v.x - a.x) * (b.y - v.y) - (v.y - a.y) * (b.x - v.x)) === sg
+        if (isFree[i] && convex) {
+          const o = { x: -(ua.x + ub.x), y: -(ua.y + ub.y) }
+          const L = Math.hypot(o.x, o.y) || 1
+          add({ x: v.x + (ua.x + ub.x) * inset, y: v.y + (ua.y + ub.y) * inset }, { x: o.x / L, y: o.y / L })
+        }
+        // 两头都挑出去的长边：中间按间距加柱
+        if (isFree[i] && isFree[(i + 1) % n]) {
+          const L = Math.hypot(b.x - v.x, b.y - v.y)
+          const m = Math.ceil(L / POST_GAP)
+          // 边的内法线：沿 v→b 转 90°，朝多边形里面
+          const inward = { x: -ub.y * sg, y: ub.x * sg }
+          for (let s = 1; s < m; s++) {
+            const t = (L * s) / m
+            add({ x: v.x + ub.x * t + inward.x * inset, y: v.y + ub.y * t + inward.y * inset }, { x: -inward.x, y: -inward.y })
+          }
+        }
+      }
+    }
+  })
+  return out
+}
+
+/** 一层的阳台支柱（层局部坐标，elev = 这一层的 elevation）：方柱 + 落地的柱墩 / 落在屋面上的柱脚金属 */
+export function buildBalconyPosts(posts: BalconyPost[], elev: number): THREE.Group {
+  const g = new THREE.Group()
+  const metal = '#c9ccd0'
+  for (const p of posts) {
+    const item = new THREE.Group()
+    const y0 = p.bottom - elev
+    const y1 = p.top - elev
+    let foot = 0
+    if (p.on === 'ground') {
+      // 地面：一个柱墩（束石）
+      foot = 12
+      item.add(rbox(24, foot + 4, 24, '#cfc9be', { x: p.x, y: y0 - 4, z: p.y }, 2))
+    } else {
+      // 屋面 / 阳台上：柱脚的底板
+      foot = 2
+      item.add(rbox(POST + 8, foot, POST + 8, shade(metal, -0.1), { x: p.x, y: y0, z: p.y }, 0.6))
+    }
+    item.add(rbox(POST, y1 - y0 - foot, POST, metal, { x: p.x, y: y0 + foot, z: p.y }, 1.2))
+    // 柱头的托板：顶在阳台板底
+    item.add(rbox(POST + 6, 3, POST + 6, shade(metal, -0.06), { x: p.x, y: y1 - 3, z: p.y }, 0.6))
+    mergeMeshes(item)
+    tagWall(item, { x: p.x, y: p.y }, p.out)
+    item.userData.balconyPost = true
+    g.add(item)
+  }
+  addOutlines(g)
   return g
 }
 
