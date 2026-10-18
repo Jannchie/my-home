@@ -29,6 +29,7 @@ import {
   polyPath,
   sub,
   centroid,
+  type FenceKind,
   type Fixture,
   type Opening,
   type Room,
@@ -1029,6 +1030,8 @@ const holeViews = computed(() => {
   return stairHoles(p, activeFloor.value).map((h) => ({ id: h.stair.id, d: polyPath(h.poly), bad: bad.has(h.stair.id), arrival: h.arrival, c: centroid(h.poly) }))
 })
 
+/** 平面图上各款围挡的线色、线宽（cm）；改过颜色的用改过的 */
+const FENCE_2D: Partial<Record<FenceKind, [string, number]>> = { hedge: ['#8fb07a', 30], wall: ['#b9b0a2', 12], block: ['#a9aaa4', 12], brick: ['#a65a48', 20], louver: ['#4b4f55', 8], fence: ['#a07e5c', 6], picket: ['#d9d4c8', 6] }
 /** 户建的用地：只在最底层画（院子草地、通道、车位、围挡；出入口处围挡断开） */
 const siteView = computed(() => {
   const s = plan.value.site
@@ -1050,8 +1053,8 @@ const siteView = computed(() => {
     paths: s.paths.map((p) => polyPath(p)),
     parking: s.parking.map((p) => polyPath(p.points)),
     fence: s.fence === 'none' ? '' : fence.join(''),
-    fenceColor: s.fence === 'hedge' ? '#8fb07a' : s.fence === 'wall' ? '#b9b0a2' : '#a07e5c',
-    fenceW: s.fence === 'hedge' ? 30 : s.fence === 'wall' ? 12 : 6,
+    fenceColor: s.fenceColor ?? FENCE_2D[s.fence]?.[0] ?? '#a07e5c',
+    fenceW: FENCE_2D[s.fence]?.[1] ?? 6,
   }
 })
 

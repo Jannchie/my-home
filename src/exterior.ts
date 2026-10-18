@@ -6,7 +6,7 @@
 //   最上层用外观指定的屋顶形式；下层露出的部分贴着上层外墙时做单坡（高的一边靠墙），否则跟最上层一样。
 
 import { floorOutline, floorView, planFloors } from './floors'
-import { pointInPolygon, type Exterior, type FacadeKind, type FenceKind, type Plan, type RoofKind, type Site, type Vec } from './model'
+import { CAR_KINDS, FENCE_HEIGHT_MAX, FENCE_HEIGHT_MIN, FENCE_KINDS, PORCH_KINDS, pointInPolygon, type CarKind, type Exterior, type FacadeKind, type FenceKind, type Plan, type PorchKind, type RoofKind, type Site, type Vec } from './model'
 
 export type Side = 'n' | 's' | 'w' | 'e'
 
@@ -177,7 +177,9 @@ const isPoly = (v: unknown, min = 3): v is Vec[] => Array.isArray(v) && v.length
 const isColor = (v: unknown): v is string => typeof v === 'string' && /^#[0-9a-f]{3,8}$/i.test(v)
 const ROOFS: RoofKind[] = ['gable', 'hip', 'shed', 'flat']
 const FACADES: FacadeKind[] = ['siding', 'stucco', 'brick']
-const FENCES: FenceKind[] = ['hedge', 'fence', 'wall', 'none']
+const FENCES = Object.keys(FENCE_KINDS) as FenceKind[]
+const CARS = Object.keys(CAR_KINDS) as CarKind[]
+const PORCHES = Object.keys(PORCH_KINDS) as PorchKind[]
 
 /** 用地 / 外观：坏数据整理掉（字段缺了补缺省，整体不像样就删） */
 export function normalizeExterior(p: Plan) {
@@ -188,13 +190,15 @@ export function normalizeExterior(p: Plan) {
       const site: Site = {
         points: s.points as Vec[],
         fence: FENCES.includes(s.fence as FenceKind) ? (s.fence as FenceKind) : 'none',
+        ...(isColor(s.fenceColor) ? { fenceColor: s.fenceColor } : {}),
+        ...(isNum(s.fenceHeight) ? { fenceHeight: Math.min(FENCE_HEIGHT_MAX, Math.max(FENCE_HEIGHT_MIN, Math.round(s.fenceHeight))) } : {}),
         gates: Array.isArray(s.gates) ? (s.gates as unknown[]).filter((g): g is [Vec, Vec] => isPoly(g, 2) && (g as Vec[]).length === 2) : [],
         paths: Array.isArray(s.paths) ? (s.paths as unknown[]).filter((x): x is Vec[] => isPoly(x)) : [],
         parking: Array.isArray(s.parking)
           ? (s.parking as unknown[]).flatMap((x) => {
               const o = x as Record<string, unknown>
               if (!o || !isPoly(o.points)) return []
-              return [{ points: o.points as Vec[], rot: isNum(o.rot) ? o.rot : 0, ...(o.car ? { car: true } : {}), ...(isColor(o.carColor) ? { carColor: o.carColor } : {}) }]
+              return [{ points: o.points as Vec[], rot: isNum(o.rot) ? o.rot : 0, ...(o.car ? { car: true } : {}), ...(isColor(o.carColor) ? { carColor: o.carColor } : {}), ...(CARS.includes(o.carKind as CarKind) ? { carKind: o.carKind as CarKind } : {}) }]
             })
           : [],
       }
@@ -214,7 +218,7 @@ export function normalizeExterior(p: Plan) {
       }
       if (isNum(e.pitch)) ex.pitch = Math.min(1.2, Math.max(0.1, e.pitch))
       if (isNum(e.eave)) ex.eave = Math.min(120, Math.max(0, e.eave))
-      if (e.porch === 'canopy' || e.porch === 'porch' || e.porch === 'none') ex.porch = e.porch
+      if (PORCHES.includes(e.porch as PorchKind)) ex.porch = e.porch as PorchKind
       p.exterior = ex
     }
   }

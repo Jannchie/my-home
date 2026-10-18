@@ -4,7 +4,7 @@
 // 用地放在最底层的组里。屋顶的组打上 userData.roof，沙盘按视图开关显示 / 隐藏（Sandbox3D.vue）。
 
 import * as THREE from 'three'
-import type { Exterior, Plan, Site, Vec } from '../model'
+import { FENCE_STYLE, type CarKind, type Exterior, type Plan, type Site, type Vec } from '../model'
 import { roofParts, type RoofPart, type Side } from '../exterior'
 import { subtractSpan } from '../stairs'
 import { addOutlines, cyl, mergeMeshes, rbox, shade, toon, useAnisotropy } from './toon'
@@ -334,24 +334,115 @@ function flat(pts: Vec[], y0: number, y1: number, top: THREE.Material, side: THR
   return m
 }
 
+/** 各车型的尺寸：车身、玻璃舱、车顶、轮子（cm；compact 是旧存档的那一款，数值不能动） */
+const CAR_SPECS: Record<CarKind, { w: number; L: number; y: number; h: number; cw: number; ch: number; cl: number; cz: number; rl: number; r: number; wx: number; wz: number; rails?: boolean }> = {
+  compact: { w: 176, L: 420, y: 20, h: 56, cw: 150, ch: 44, cl: 220, cz: 25, rl: 180, r: 31, wx: 80, wz: 135 },
+  kei: { w: 148, L: 340, y: 20, h: 64, cw: 140, ch: 70, cl: 250, cz: 20, rl: 236, r: 26, wx: 64, wz: 112 },
+  sedan: { w: 180, L: 480, y: 22, h: 48, cw: 152, ch: 40, cl: 220, cz: 15, rl: 170, r: 31, wx: 82, wz: 155 },
+  suv: { w: 186, L: 460, y: 34, h: 68, cw: 164, ch: 54, cl: 280, cz: 40, rl: 250, r: 37, wx: 84, wz: 145, rails: true },
+  minivan: { w: 182, L: 470, y: 24, h: 68, cw: 168, ch: 78, cl: 370, cz: 35, rl: 350, r: 30, wx: 82, wz: 160 },
+}
+
 /** 卡通小汽车：车头朝局部 -z */
-export function carModel(color: string): THREE.Group {
+export function carModel(color: string, kind: CarKind = 'compact'): THREE.Group {
+  const s = CAR_SPECS[kind] ?? CAR_SPECS.compact
   const g = new THREE.Group()
-  g.add(rbox(176, 56, 420, color, { y: 20 }, 16))
-  g.add(rbox(150, 44, 220, '#a9c8d8', { y: 70, z: 25 }, 10))
-  g.add(rbox(146, 8, 180, color, { y: 112, z: 25 }, 4))
+  g.add(rbox(s.w, s.h, s.L, color, { y: s.y }, 16))
+  const gy = s.y + s.h - 6
+  g.add(rbox(s.cw, s.ch, s.cl, '#a9c8d8', { y: gy, z: s.cz }, 10))
+  g.add(rbox(s.cw - 4, 8, s.rl, color, { y: gy + s.ch - 2, z: s.cz }, 4))
+  if (s.rails) for (const sx of [-1, 1]) g.add(rbox(5, 5, s.rl - 30, '#3a3d42', { x: sx * (s.cw / 2 - 12), y: gy + s.ch + 6, z: s.cz }, 2))
   for (const sx of [-1, 1])
     for (const sz of [-1, 1]) {
-      const w = cyl(31, 31, 24, '#2c2c2e', {}, 18)
+      const w = cyl(s.r, s.r, 24, '#2c2c2e', {}, 18)
       w.rotation.z = Math.PI / 2
-      w.position.set(sx * 80, 31, sz * 135)
+      w.position.set(sx * s.wx, s.r, sz * s.wz)
       g.add(w)
     }
   for (const sx of [-1, 1]) {
-    g.add(rbox(30, 12, 4, '#fff6cf', { x: sx * 58, y: 48, z: -211 }, 2))
-    g.add(rbox(28, 10, 4, '#d9534f', { x: sx * 60, y: 50, z: 211 }, 2))
+    g.add(rbox(30, 12, 4, '#fff6cf', { x: sx * (s.w / 2 - 30), y: s.y + 28, z: -(s.L / 2 + 1) }, 2))
+    g.add(rbox(28, 10, 4, '#d9534f', { x: sx * (s.w / 2 - 28), y: s.y + 30, z: s.L / 2 + 1 }, 2))
   }
   return g
+}
+
+/** 围挡实际用的主色和高度（没写就按款式缺省） */
+export function fenceLook(site: Pick<Site, 'fence' | 'fenceColor' | 'fenceHeight'>) {
+  if (site.fence === 'none') return null
+  const d = FENCE_STYLE[site.fence]
+  return { color: site.fenceColor ?? d.color, height: site.fenceHeight ?? d.height, custom: !!site.fenceColor }
+}
+
+/** 一段围挡（沿局部 x 轴，长 len，从 x = 0 起；y = 0 是用地地面；z × zs 朝用地里面） */
+function fenceSpan(kind: Exclude<Site['fence'], 'none'>, len: number, c: string, h: number, custom: boolean, zs: number): THREE.Object3D[] {
+  const out: THREE.Object3D[] = []
+  const bar = (w: number, bh: number, d: number, color: string, x: number, y: number, z: number, r?: number) => out.push(rbox(w, bh, d, color, { x, y, z: z * zs }, r))
+  const mid = len / 2
+  /** 沿长度均匀分布的立柱位置（两端都有）；w = 柱宽，两端往里收半个柱宽（木栅栏是旧款，柱子压在端点上不动） */
+  const posts = (step: number, w = 0) => {
+    const n = Math.max(1, Math.round(len / step))
+    const span = Math.max(0, len - w)
+    return Array.from({ length: n + 1 }, (_, k) => w / 2 + (span * k) / n)
+  }
+  switch (kind) {
+    case 'hedge':
+      bar(len, h, 44, c, mid, 0, 24, 18)
+      break
+    case 'wall':
+      bar(len, h, 14, c, mid, 0, 9, 2)
+      bar(len + 2, 6, 20, custom ? shade(c, -0.12) : '#b8ad9c', mid, h, 9, 2)
+      break
+    case 'fence': {
+      const post = custom ? shade(c, -0.1) : '#9c7a56'
+      for (const x of posts(150)) bar(9, h, 9, post, x, 0, 6, 2)
+      for (const y of [0.35, 0.8]) bar(len, 8, 4, c, mid, h * y - 4, 6, 1)
+      break
+    }
+    case 'block': {
+      // ブロック塀：20cm 一层的砌块，横缝压一道深色；顶上一道压顶
+      bar(len, h, 12, c, mid, 0, 8, 1)
+      const joint = shade(c, -0.12)
+      for (let y = 20; y < h - 4; y += 20) bar(len, 1.2, 12.8, joint, mid, y - 0.6, 8, 0.3)
+      bar(len + 2, 5, 15, shade(c, 0.04), mid, h, 8, 1.5)
+      break
+    }
+    case 'louver': {
+      // 铝百叶目隠しフェンス：两层砌块基础上立柱、横向百叶
+      const base = h >= 100 ? 40 : 0
+      if (base) bar(len, base, 12, '#b9bab4', mid, 0, 8, 1)
+      for (const x of posts(180, 7)) bar(7, h - base, 7, shade(c, -0.08), x, base, 8, 1.5)
+      for (let y = base + 6; y + 9 <= h; y += 14) bar(len, 9, 3, c, mid, y, 8, 1)
+      break
+    }
+    case 'brick': {
+      // 矮砖墙 + 铁艺栏杆，隔一段一根砖柱
+      const b = Math.min(60, Math.round(h * 0.55))
+      const iron = '#33363b'
+      bar(len, b, 20, c, mid, 0, 12, 1.5)
+      bar(len + 2, 5, 24, '#d8d0c4', mid, b, 12, 1.5)
+      const top = h - 4
+      if (top - b > 15) {
+        bar(len, 4, 4, iron, mid, top, 12, 1)
+        bar(len, 3, 3, iron, mid, b + 12, 12, 1)
+        const n = Math.max(1, Math.round(len / 16))
+        for (let k = 1; k < n; k++) bar(2, top - b - 5, 2, iron, (len * k) / n, b + 5, 12, 0.5)
+      }
+      for (const x of posts(320, 30)) {
+        bar(30, h + 4, 30, c, x, 0, 15, 2)
+        bar(32, 5, 32, '#d8d0c4', x, h + 4, 15, 1.5)
+      }
+      break
+    }
+    case 'picket': {
+      // 尖桩栅栏：两道横撑在后，前面一排窄板
+      for (const x of posts(180, 9)) bar(9, h + 4, 9, c, x, 0, 6, 2)
+      for (const y of [0.3, 0.72]) bar(len, 7, 3, shade(c, -0.05), mid, h * y - 3.5, 8, 1)
+      const n = Math.max(1, Math.round(len / 14))
+      for (let k = 0; k < n; k++) bar(8, h - 6, 2, c, (len * (k + 0.5)) / n, 0, 5, 0.8)
+      break
+    }
+  }
+  return out
 }
 
 /** 用地：草地、铺装通道、车位（和车）、围挡；放在最底层的组里（地面在底座高度 BASE） */
@@ -370,20 +461,24 @@ export function buildSite(site: Site): THREE.Group {
   g.add(base)
   g.add(flat(site.points, BASE - 32, BASE, toon('#b9d39c'), toon('#9b7c5c')))
   for (const p of site.paths) g.add(flat(p, BASE, BASE + 2.5, toon('#e2dccf'), toon('#c9c0b0')))
-  for (const s of site.parking) {
+  site.parking.forEach((s, i) => {
     g.add(flat(s.points, BASE, BASE + 2, toon('#d3d0ca'), toon('#b9b5ad')))
     if (s.car) {
-      const car = carModel(s.carColor ?? '#d9534f')
+      const car = carModel(s.carColor ?? '#d9534f', s.carKind)
       const cx = s.points.reduce((a, p) => a + p.x, 0) / s.points.length
       const cy = s.points.reduce((a, p) => a + p.y, 0) / s.points.length
       car.position.set(cx, BASE + 2, cy + 20)
       car.rotation.y = (-s.rot * Math.PI) / 180
+      // 沙盘里点车 → 外观面板里对应的车位（Sandbox3D pickSite）
+      car.userData.sitePick = { kind: 'car', index: i }
       g.add(car)
     }
-  }
+  })
   // 围挡：沿边界一圈，出入口断开
   const fence = new THREE.Group()
-  if (site.fence !== 'none') {
+  const look = fenceLook(site)
+  if (look && site.fence !== 'none') {
+    const kind = site.fence
     const pts = site.points
     for (let i = 0; i < pts.length; i++) {
       const a = pts[i]
@@ -399,43 +494,18 @@ export function buildSite(site: Site): THREE.Group {
       const cxy = { x: (bx0 + bx1) / 2, y: (by0 + by1) / 2 }
       const sgn = (cxy.x - a.x) * inward.x + (cxy.y - a.y) * inward.y > 0 ? 1 : -1
       for (const [lo, hi] of spans) {
-        const len = hi - lo
-        const mid = (lo + hi) / 2
-        const at = (t: number, k: number) => ({ x: a.x + d.x * t + inward.x * sgn * k, z: a.y + d.y * t + inward.y * sgn * k })
-        if (site.fence === 'hedge') {
-          const m = rbox(len, 80, 44, '#7fa86b', {}, 18)
-          const p = at(mid, 24)
-          m.position.set(p.x, BASE + 40, p.z)
-          m.rotation.y = yaw
-          fence.add(m)
-        } else if (site.fence === 'wall') {
-          const m = rbox(len, 105, 14, '#d3cbbd', {}, 2)
-          const p = at(mid, 9)
-          m.position.set(p.x, BASE + 52.5, p.z)
-          m.rotation.y = yaw
-          fence.add(m)
-          const c = rbox(len + 2, 6, 20, '#b8ad9c', {}, 2)
-          c.position.set(p.x, BASE + 108, p.z)
-          c.rotation.y = yaw
-          fence.add(c)
-        } else {
-          const n = Math.max(1, Math.round(len / 150))
-          for (let k = 0; k <= n; k++) {
-            const p = at(lo + (len * k) / n, 6)
-            fence.add(rbox(9, 100, 9, '#9c7a56', { x: p.x, y: BASE, z: p.z }, 2))
-          }
-          for (const y of [35, 80]) {
-            const p = at(mid, 6)
-            const r = rbox(len, 8, 4, '#b48f68', {}, 1)
-            r.position.set(p.x, BASE + y, p.z)
-            r.rotation.y = yaw
-            fence.add(r)
-          }
-        }
+        // 每段在自己的局部坐标里搭（x 沿边、z 朝里），再摆到边上
+        const span = new THREE.Group()
+        // 转过 yaw 之后局部 +z 正好是 inward（= (-d.y, d.x)），sgn 决定朝不朝用地里面
+        for (const m of fenceSpan(kind, hi - lo, look.color, look.height, look.custom, sgn)) span.add(m)
+        span.position.set(a.x + d.x * lo, BASE, a.y + d.y * lo)
+        span.rotation.y = yaw
+        fence.add(span)
       }
     }
   }
   mergeMeshes(fence)
+  fence.userData.sitePick = { kind: 'fence' }
   g.add(fence)
   addOutlines(g)
   return g
