@@ -28,3 +28,11 @@ if (typeof g.document === 'undefined') {
   }
 }
 if (typeof g.window === 'undefined') g.window = globalThis
+
+// 界面语言按 navigator.language 推断，而 Node 的 navigator.language 跟着系统区域设置（本机 ja-JP、CI 上 en-US）：
+// 户型名、房间名等会随之变成不同语言，测试结果就看在哪台机器上跑。这里固定成日语，本机和 CI 一致。
+{
+  const nav = g.navigator as Record<string, unknown> | undefined
+  const pinned = { hardwareConcurrency: nav?.hardwareConcurrency ?? 4, platform: nav?.platform ?? '', userAgent: nav?.userAgent ?? 'node', language: 'ja-JP', languages: ['ja-JP'] }
+  Object.defineProperty(g, 'navigator', { value: pinned, configurable: true, writable: true })
+}
