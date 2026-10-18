@@ -106,6 +106,31 @@ export function normalizeIds(plan: Plan) {
   )
 }
 
+/**
+ * 骨架签名：户内房间按（行，x）排序后的种类序列，左右镜像取字典序小的那个。
+ * 只看房间的相对排布，不看具体尺寸：同一骨架换了宽度、窗位还是同一个签名。
+ */
+export function skeletonSig(plan: Plan) {
+  const rs = plan.rooms.filter((r) => r.kind !== 'balcony' && r.kind !== 'void')
+  const xs = rs.flatMap((r) => r.points.map((p) => p.x))
+  const x0 = Math.min(...xs)
+  const x1 = Math.max(...xs)
+  const cells = rs.map((r) => {
+    const px = r.points.map((p) => p.x)
+    const py = r.points.map((p) => p.y)
+    return { k: `${r.floor ?? ''}${r.kind}`, x: (Math.min(...px) + Math.max(...px)) / 2, y: Math.round((Math.min(...py) + Math.max(...py)) / 2 / 150) }
+  })
+  const key = (mirror: boolean) =>
+    cells
+      .map((c) => ({ ...c, x: mirror ? x1 + x0 - c.x : c.x }))
+      .sort((p, q) => p.y - q.y || p.x - q.x)
+      .map((c) => c.k)
+      .join(',')
+  const a = key(false)
+  const b = key(true)
+  return a < b ? a : b
+}
+
 /** 旋转矩形（中心 c、宽 w、深 d、顺时针角度 rot）的四个角 */
 export function rectCorners(c: Vec, w: number, d: number, rot: number): Vec[] {
   const a = (rot * Math.PI) / 180

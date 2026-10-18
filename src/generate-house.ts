@@ -259,14 +259,14 @@ const WEST: Program = {
   filler: { kind: 'storage', name: 'Pantry', door: 'hall', doorKind: 'door', doorW: 70, tag: 'pantry' },
   entry: { kind: 'entrance', name: 'Foyer', flush: true, tag: 'foyer' },
   side: { kind: 'storage', name: 'Closet', door: 'w', doorKind: 'door', doorW: 70 },
-  south1: (c) => ({
-    cells: [
-      { kind: 'kitchen', name: 'Kitchen', min: 340, max: 390, door: 'open', win: { s: 140 }, tag: 'kitchenRoom' },
-      { kind: 'dining', name: 'Dining', min: 300, max: 360, door: 'open', win: { s: 160 } },
-      { kind: 'ldk', name: 'Living Room', min: 420, max: 9999, fill: true, door: 'open', win: { s: c.rint(240, 300), e: 160 } },
-    ],
-    beds: 0,
-  }),
+  south1: (c) => {
+    const kitchen: SouthDef = { kind: 'kitchen', name: 'Kitchen', min: 340, max: 390, door: 'open', win: { s: 140, e: 120 }, tag: 'kitchenRoom' }
+    const dining: SouthDef = { kind: 'dining', name: 'Dining', min: 300, max: 360, door: 'open', win: { s: 160 } }
+    const living: SouthDef = { kind: 'ldk', name: 'Living Room', min: 420, max: 9999, fill: true, door: 'open', win: { s: c.rint(240, 300), e: 160, w: 160 } }
+    // 开放的客餐厨：厨房在西端（洗衣房旁）/ 夹在餐厅和客厅之间 / 客厅在西端、厨房到东端（不能做客厅楼梯）
+    const v = c.alt()
+    return { cells: v < 0.45 ? [kitchen, dining, living] : v < 0.75 ? [dining, kitchen, living] : [living, dining, kitchen], beds: 0 }
+  },
   nw2: { kind: 'bath', name: 'Primary Bath', door: 's', doorKind: 'door', doorW: 75, win: { w: 70 }, tag: 'primaryBath' },
   col2: { kind: 'storage', name: 'Walk-in Closet', door: 'w', doorKind: 'door', doorW: 70, tag: 'wic' },
   filler2: { kind: 'storage', name: 'Linen', door: 'hall', doorKind: 'door', doorW: 60 },
@@ -324,9 +324,11 @@ const CN: Program = {
       { kind: 'dining', name: '餐厅', min: 300, max: 360, door: 'open', win: { s: 150 } },
       { kind: 'ldk', name: '客厅', min: 420, max: 9999, fill: true, door: 'open', win: { s: c.rint(240, 300), e: 150 } },
     ]
-    // 四室以上：1F 东端一间老人房（卫生间就在旁边）
+    // 四室以上：1F 一间老人房（卫生间就在旁边），在东端或夹在餐厅和客厅之间
     if (!duplex && n >= 4) {
-      cells.push({ kind: 'western', name: '卧室', min: 300, max: 350, door: 'hall', win: { s: 150, e: 120 }, tag: 'bed' })
+      const elder: SouthDef = { kind: 'western', name: '卧室', min: 300, max: 350, door: 'hall', win: { s: 150, e: 120 }, tag: 'bed' }
+      if (c.altChance(0.4)) cells.splice(1, 0, elder)
+      else cells.push(elder)
       return { cells, beds: 1 }
     }
     return { cells, beds: 0 }
@@ -408,10 +410,10 @@ function doorBetween(c: Ctx, a: Room, b: Room, kind: OpeningKind, width: number,
 
 const SIDE_OUT: Record<Side, Vec> = { n: { x: 0, y: 1 }, s: { x: 0, y: -1 }, w: { x: -1, y: 0 }, e: { x: 1, y: 0 } }
 
-/** 房间朝 side 一侧的外墙上开窗：取那一侧最长的一段外墙（外面不是户内房间），居中 */
+/** 房间朝 side 一侧的外墙上开窗：取那一侧最长的一段外墙（外面不是户内房间），大致居中、有时偏向一侧 */
 function windowSide(c: Ctx, r: Room, side: Side, width: number, floorRooms: Room[]) {
   const o = SIDE_OUT[side]
-  let best: { mid: Vec; len: number } | null = null
+  let best: { mid: Vec; len: number; dir: Vec } | null = null
   for (const e of edgesOf(r.points)) {
     if (e.out.x * o.x + e.out.y * o.y < 0.9) continue
     // 沿边切成外侧有 / 没有户内房间的几段，取外侧空着的最长一段
@@ -424,13 +426,14 @@ function windowSide(c: Ctx, r: Room, side: Side, width: number, floorRooms: Room
       if (free && run0 < 0) run0 = s
       if ((!free || k === n) && run0 >= 0) {
         const len = s - run0
-        if (!best || len > best.len) best = { mid: add(e.a, mul(e.dir, (run0 + s) / 2)), len }
+        if (!best || len > best.len) best = { mid: add(e.a, mul(e.dir, (run0 + s) / 2)), len, dir: e.dir }
         run0 = -1
       }
     }
   }
   if (!best || best.len < Math.min(width, 60) + 50) return
-  c.open(r, 'window', best.mid, Math.min(width, best.len - 50))
+  const w = Math.min(width, best.len - 50)
+  c.open(r, 'window', add(best.mid, mul(best.dir, c.windowShift(best.len, w))), w)
 }
 
 const mirrorX = (W: number) => (p: Vec): Vec => ({ x: W - p.x, y: p.y })
@@ -461,6 +464,7 @@ function layout(seed: number, o: Pick<HouseGenOpts, 'region' | 'dwelling' | 'bed
   const livingRun = Math.min(360, d.dS - WALL / 2 - WALL_OUTER / 2 - STAIR_CLEAR_LIVING)
   const kind = stairKind(seed, o.region, duplex, s1.cells[s1.cells.length - 1].kind === 'ldk' && livingRun >= 300)
   const living = kind === 'living'
+  c.sig.push(`n${n}`, kind, partial ? 'partial' : '', s1.cells.map((x) => x.kind).join(','))
   // 楼梯间宽：U 形 180；L 形要放下 270 长的占地（两侧隔墙各让半个墙厚）；客厅楼梯时这一格做收纳
   const wSt = kind === 'l' ? STAIR_L.d + WALL + 2 : 180
   // 户建的客厅楼梯：2F 南带东端让出一条走廊（洞口在里面）
@@ -591,7 +595,8 @@ function layout(seed: number, o: Pick<HouseGenOpts, 'region' | 'dwelling' | 'bed
   const beds2: Room[] = []
   if (k > 0) {
     const mins = Array.from({ length: k }, (_, i) => (i === 0 ? master : 280))
-    const weights = Array.from({ length: k }, (_, i) => (i === 0 ? 1.35 : 1))
+    // 主卧大一些；其余卧室的权重随机，并排的卧室不会一样宽
+    const weights = Array.from({ length: k }, (_, i) => (i === 0 ? 1.35 : 0.8 + c.alt() * 0.4))
     const ws = splitWidths(southEnd - x2, mins, weights)
     let x = x2
     ws.forEach((w, i) => {

@@ -67,6 +67,9 @@ export function createCtx(seed: number) {
   const chance = (p: number) => rand() < p
   const rint = (lo: number, hi: number, step = 10) => lo + Math.floor(rand() * (Math.floor((hi - lo) / step) + 1)) * step
   const pick = <T>(xs: T[]) => xs[Math.floor(rand() * xs.length)]
+  // 第二条随机序列：户型多样化（窗位偏移、宽度摊分、房间排法）用它，不消耗主序列，原有的房间布置不跟着整体变
+  const alt = mulberry32((seed ^ 0x5f3759df) >>> 0)
+  const altChance = (p: number) => alt() < p
 
   const rooms: Room[] = []
   const openings: Opening[] = []
@@ -98,11 +101,31 @@ export function createCtx(seed: number) {
       }
     }
   }
-  /** 在一个矩形房间朝 y 方向的边（顶 / 底）中间开窗 */
+  /** 窗沿墙的偏移：两侧余量够时一半概率往一边偏（离墙角至少留 30，最多偏 80） */
+  const windowShift = (len: number, width: number) => {
+    const slack = Math.min(80, (len - width) / 2 - 30)
+    if (slack < 20 || !altChance(0.5)) return 0
+    return (altChance(0.5) ? -1 : 1) * (20 + Math.floor(alt() * (Math.floor((slack - 20) / 10) + 1)) * 10)
+  }
+  /** 在一个矩形房间朝 y 方向的边（顶 / 底）上开窗：大致居中，有时偏向一侧（避开这面墙上已有的门窗） */
   const windowOn = (r: Room, y: number, width: number) => {
     const xs = r.points.filter((p) => Math.abs(p.y - y) < 1).map((p) => p.x)
     if (xs.length < 2) return
-    open(r, 'window', { x: (Math.min(...xs) + Math.max(...xs)) / 2, y }, Math.min(width, Math.max(...xs) - Math.min(...xs) - 80))
+    const x0 = Math.min(...xs)
+    const x1 = Math.max(...xs)
+    const w = Math.min(width, x1 - x0 - 80)
+    const mid = (x0 + x1) / 2
+    let x = mid + windowShift(x1 - x0, w)
+    // 这面墙上已有的开口（x 区间）：偏过去会碰到就退回正中
+    const taken = openings.flatMap((o) => {
+      if (o.roomId !== r.id) return []
+      const e = edgeInfo(r.points, o.edge)
+      if (Math.abs(e.a.y - y) > 1 || Math.abs(e.b.y - y) > 1) return []
+      const c = e.a.x + e.dir.x * o.offset
+      return [[c - o.width / 2 - 10, c + o.width / 2 + 10] as const]
+    })
+    if (taken.some(([a, b]) => x + w / 2 > a && x - w / 2 < b)) x = mid
+    open(r, 'window', { x, y }, w)
   }
 
   const ctx = {
@@ -110,16 +133,21 @@ export function createCtx(seed: number) {
     chance,
     rint,
     pick,
+    alt,
+    altChance,
     rooms,
     openings,
     room,
     rect,
     bedroom,
     open,
+    windowShift,
     windowOn,
     livingIn: false,
     compact: false,
     tags: [] as string[],
+    /** 骨架签名（不进户型名）：带面积的搜索按它平衡各骨架的出现率 */
+    sig: [] as string[],
     /** 按尺寸档取值：普通档 [lo, hi]，紧凑档 [clo, chi] */
     d: (lo: number, hi: number, clo: number, chi: number) => (ctx.compact ? rint(clo, chi) : rint(lo, hi)),
   }
@@ -302,7 +330,8 @@ function tanojiNaka(c: Ctx): { W: number } {
   // B 列：中洋室 → 前侧洋室
   const naka = bedroom('western', B[0], dL, B[1], dL + hN)
   open(naka, 'sliding', { x: (B[0] + B[1]) / 2, y: dL }, Math.min(ob - 60, rint(160, 180)))
-  if (chance(0.5)) open(naka, 'door', { x: bIn, y: dL + hN - 60 }, 75)
+  // リビングイン 时只从 LDK 进
+  if (chance(0.5) && !c.livingIn) open(naka, 'door', { x: bIn, y: dL + hN - 60 }, 75)
   const fb = bedroom(chance(0.15) ? 'japanese' : 'western', B[0], dL + hN, B[1], D)
   open(fb, 'door', { x: bIn, y: dL + hN + 55 }, 75)
   windowOn(fb, D, rint(120, 170))
@@ -356,8 +385,10 @@ const tatenaga: Builder = (c, type) => {
   if (type === '3LDK') {
     ldk = rect('ldk', 'LDK', X(0), 0, X(wl), yLK)
     const back = bedroom(chance(0.6) ? 'japanese' : 'western', X(wl), 0, X(W), dR)
-    open(back, 'door', { x: X(wl + cw / 2), y: dR }, 75)
+    // リビングイン：只从 LDK 进（和室是宽的引き違い，洋室是普通门）
+    if (!c.livingIn) open(back, 'door', { x: X(wl + cw / 2), y: dR }, 75)
     if (back.kind === 'japanese') open(back, 'door', { x: X(wl), y: dR / 2 }, 120)
+    else if (c.livingIn) open(back, 'door', { x: X(wl), y: dR - 60 }, 80)
     windowOn(back, 0, wr)
   } else {
     ldk = room(
@@ -627,7 +658,8 @@ const single: Builder = (c, type) => {
       : rectPoints(0, 0, W, yR)
     ).map((p) => ({ x: X(p.x), y: p.y })),
   )
-  open(bed, 'window', { x: X(W / 2), y: 0 }, Math.min(W - 80, rint(160, 200)))
+  const bwin = Math.min(W - 80, rint(160, 200))
+  open(bed, 'window', { x: X(W / 2 + c.windowShift(W, bwin)), y: 0 }, bwin)
   if (withCl) {
     const cl = rect('storage', 'クローゼット', X(0), yR - cd, X(wb), yR)
     open(cl, 'sliding', { x: X(wb / 2), y: yR - cd }, wb - 30, 'out')
@@ -723,14 +755,17 @@ function layout(opts: GenOptions): Layout {
   if (!styles.includes(style)) style = styles[0]
   c.compact = c.chance(0.35)
   const corner = opts.corner === 'random' ? c.chance(0.4) : opts.corner === 'yes'
-  // リビングイン：只有ワイドスパン能让两间居室都贴着 LDK
+  // リビングイン：ワイドスパン能让两间居室都贴着 LDK；3LDK 的田の字型 / 縦長リビング 后侧那间也可以从 LDK 进
   // 1K / 1DK 只有一间居室，不区分入口
   if (!isSingle) {
+    const livingOk = style === 'wide' || type === '3LDK'
     if (opts.access === 'living') {
       c.livingIn = true
-      style = 'wide'
+      if (!livingOk) style = 'wide'
     } else if (opts.access === 'random' && style === 'wide') c.livingIn = c.chance(0.3)
+    else if (opts.access === 'random' && livingOk) c.livingIn = c.altChance(0.3)
   }
+  c.sig.push(type, style)
 
   const { W } = BUILDERS[style](c, type)
   c.rooms.unshift({ id: uid('r'), kind: 'balcony', name: 'バルコニー', points: rectPoints(0, -c.rint(120, 180), W, 0), railing: railingFor(opts.seed) })

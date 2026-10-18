@@ -69,11 +69,18 @@ export interface BandOut {
   placed: Placed[]
 }
 
-/** 把 diff（10 的倍数）摊到各个宽度上 */
-function spread(ws: number[], diff: number) {
+/** 把 diff（10 的倍数）按随机权重摊到各个宽度上：相邻的房间不会被摊成一样宽 */
+function spread(ws: number[], diff: number, rand: () => number) {
   if (!ws.length || diff <= 0) return
   const steps = Math.round(diff / 10)
-  for (let k = 0; k < steps; k++) ws[k % ws.length] += 10
+  const wt = ws.map(() => 0.7 + rand() * 0.6)
+  const sum = wt.reduce((a, x) => a + x, 0)
+  let left = steps
+  wt.forEach((w, i) => {
+    const k = i === ws.length - 1 ? left : Math.min(left, Math.round((steps * w) / sum))
+    ws[i] += k * 10
+    left -= k
+  })
 }
 
 /**
@@ -100,7 +107,7 @@ export function bandLayout(
     const sumS = sw.reduce((a, x) => a + x, 0)
     const sumN = nw.reduce((a, x) => a + x, 0)
     const W = Math.max(sumS, sumN)
-    spread(sw, W - sumS)
+    spread(sw, W - sumS, c.alt)
     let diff = W - sumN
     if (north.length && diff >= 100 && b.filler) {
       const fw = Math.min(diff, b.filler.max)
@@ -108,7 +115,7 @@ export function bandLayout(
       nw.push(fw)
       diff -= fw
     }
-    spread(nw, diff)
+    spread(nw, diff, c.alt)
     return { W, sw, nw, north }
   }
   const SL = sizes(blocks.L)
@@ -155,7 +162,7 @@ export function bandLayout(
         : rectPoints(u0, 0, u1, yS)
       const r = c.room(s.kind, s.name, pts.map((p) => ({ x: X(p.x), y: p.y })))
       placed.push({ spec: s, room: r })
-      if (s.window) c.open(r, 'window', { x: X((u0 + u1) / 2), y: 0 }, Math.min(w - 80, s.window))
+      if (s.window) c.open(r, 'window', { x: X((u0 + u1) / 2 + c.windowShift(w, Math.min(w - 80, s.window))), y: 0 }, Math.min(w - 80, s.window))
       // 门：走廊模式开在北沿（靠内侧一端，外侧可能是主卫）；否则开在朝 C 列的侧墙上（走廊带范围内）
       if (s.door !== 'none') {
         if (hall) c.open(r, s.doorKind ?? 'door', { x: X(u0 + Math.min(55, w / 2)), y: dS }, doorW(s))
@@ -179,7 +186,7 @@ export function bandLayout(
       u = u1
       const r = c.rect(s.kind, s.name, X(u0), yN, X(u1), D)
       placed.push({ spec: s, room: r })
-      if (s.window) c.open(r, 'window', { x: X((u0 + u1) / 2), y: D }, Math.min(w - 60, s.window))
+      if (s.window) c.open(r, 'window', { x: X((u0 + u1) / 2 + c.windowShift(w, Math.min(w - 60, s.window))), y: D }, Math.min(w - 60, s.window))
       if (s.openToC && i === 0) {
         r.openGroup = opts.group
         return

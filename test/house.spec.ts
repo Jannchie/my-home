@@ -229,6 +229,23 @@ describe('存档 / 分享', () => {
   })
 })
 
+describe('户建的多样性', () => {
+  test('2F 并排的次卧不会被摊成一样宽', () => {
+    const pairs: [number, number][] = []
+    for (const c of COMBOS)
+      for (const p of plans.get(key(c))!.values()) {
+        const top = planFloors(p)[1].id
+        const beds = p.rooms
+          .filter((r) => floorOf(p, r) === top && r.kind === 'western' && Math.min(...r.points.map((q) => q.y)) < 1)
+          .map((r) => Math.max(...r.points.map((q) => q.x)) - Math.min(...r.points.map((q) => q.x)))
+        // 第一间（主卧）权重固定，只比后面并排的次卧
+        for (let i = 2; i < beds.length; i++) pairs.push([beds[i - 1], beds[i]])
+      }
+    expect(pairs.length).toBeGreaterThan(5)
+    expect(pairs.filter(([a, b]) => a !== b).length / pairs.length).toBeGreaterThan(0.5)
+  })
+})
+
 describe('平层公寓不受影响', () => {
   const regions: Region[] = ['jp', 'cn', 'west']
   test('不填住宅类型 = 公寓：同一种子结果相同（屏蔽 id）', () => {
@@ -271,5 +288,9 @@ describe('平层公寓不受影响', () => {
   })
 })
 
-/** 改动前（v1.3.0）平层生成的指纹（不含名字）：jp / cn / west 各取种子 3、77、500 */
-const FINGERPRINTS = ['647b61e4,c690b2f4,ed6abb68', '2b5f22c5,f281fb39,4fe977f4', '4415e38c,65ad4dbf,c7f4c3c0']
+/**
+ * 平层生成的指纹（不含名字）：jp / cn / west 各取种子 3、77、500。
+ * v1.7 之后为了户型更多样（宽度随机摊、窗位偏移、更多排法）有意更新过一次：这些变化用第二条随机序列，房间布置大多不变，
+ * 窗位、宽度、排法跟着变（jp 500 / cn 500 恰好没有可变的地方，指纹和以前相同）。
+ */
+const FINGERPRINTS = ['9aac4bf8,8ce92b42,ed6abb68', '18726c55,ce1decaf,4fe977f4', '8083dded,295fc497,1d09702a']
