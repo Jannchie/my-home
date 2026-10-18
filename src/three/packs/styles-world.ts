@@ -10,6 +10,9 @@ import { batten, cappedTube, centerGroup, cylX, cylZ, glassPane, latheAt, lit, m
 import { I, J, M, N, R, withPals, type Pal3 } from '../packkit'
 import { drawerLv, drawerOf, hollow, slideDoor, swingDoor } from '../cabinetKit'
 import { BRASS, CHN, CLS, EU, FA, FH, IRON, TUBE, ZH, brassPlate, cabriole, carving, lattice, lowerSeat, paintPatchwork, prism, sidePrism, slabY, strip, turnedLeg, waistBase, weizi, type P2 } from './styles-world/common'
+import { CN_BED_TOP, CN_BOOKCASE_SURFACES, CN_COFFEE_SURFACES, CN_DESK_SURFACES, CN_DRESSER_SURFACES, CN_TV_SURFACES, CN_WARDROBE_SURFACES, cnBed, cnBookcase, cnCoffee, cnDengguaChair, cnDesk, cnDining, cnDresser, cnQuanyi, cnRound, cnSofa, cnStudyChair, cnTableLamp, cnTvStand, cnWardrobe } from './styles-world/chinese'
+import { CL_DESK_SURFACES, CL_DRESSER_SURFACES, CL_SLEIGH_TOP, CL_TV_SURFACES, CL_VITRINE_SURFACES, clChandelierLamp, clChesterfield, clConsoleMirror, clDesk, clDeskChair, clDining, clDresser, clGrandfatherClock, clQueenAnne, clSleighBed, clTvStand, clVitrine, clWingback } from './styles-world/classic'
+import { FH_BED_TOP, FH_COFFEE_SURFACES, FH_DESK_SURFACES, FH_DRESSER_SURFACES, FH_TV_SURFACES, FH_WARDROBE_SURFACES, fhCoffee, fhDesk, fhDresser, fhPlankBed, fhSlipcover, fhTableLamp, fhTrestle, fhTripodLamp, fhTvStand, fhWardrobe, fhWindsor } from './styles-world/farmhouse'
 
 const r = rectPoly
 
@@ -2406,7 +2409,68 @@ export const SW_CHINESE: AssetDef[] = [
     [ZH, CHN.zitan, BRASS, CHN.wenge],
     ['modern', M.walnut, M.silver, M.char],
   ], cnNightstand, { sizeLabel: '中式', surface: 55, surfaces: CN_NS_SURFACES, openable: true }),
+  ...cnHome(),
 ]
+
+/** 新中式补充款：一键布置换款用的主力家具（建模在 styles-world/chinese.ts） */
+function cnHome(): AssetDef[] {
+  const sofa: Pal3[] = [
+    [ZH, CHN.rose, CHN.silk, CHN.zitan],
+    [ZH, CHN.huali, CHN.celadon, CHN.wenge],
+    [ZH, CHN.wenge, CHN.indigo, CHN.zitan],
+    [ZH, CHN.zitan, CHN.lacquer, CHN.wenge],
+  ]
+  const wood: Pal3[] = [
+    [ZH, CHN.rose, CHN.zitan, BRASS],
+    [ZH, CHN.huali, CHN.wenge, BRASS],
+    [ZH, CHN.zitan, CHN.wenge, BRASS],
+    [ZH, CHN.wenge, CHN.zitan, BRASS],
+  ]
+  const cab: Pal3[] = [
+    [ZH, CHN.rose, BRASS, CHN.zitan],
+    [ZH, CHN.huali, BRASS, CHN.wenge],
+    [ZH, CHN.lacquer, BRASS, CHN.ink],
+    [ZH, CHN.zitan, BRASS, CHN.wenge],
+  ]
+  const chair: Pal3[] = [
+    [ZH, CHN.rose, CHN.cane, CHN.zitan],
+    [ZH, CHN.huali, CHN.cane, CHN.wenge],
+    [ZH, CHN.zitan, CHN.silk, CHN.wenge],
+    [ZH, CHN.wenge, CHN.cane, CHN.zitan],
+  ]
+  const bed: Pal3[] = [
+    [ZH, CHN.lacquer, CHN.silk, CHN.rose],
+    [ZH, CHN.indigo, '#f3ecd8', CHN.huali],
+    [ZH, CHN.jade, CHN.silk, CHN.wenge],
+    [ZH, CHN.gold, CHN.silk, CHN.zitan],
+  ]
+  const seat = ['chair', 'seat'] as const
+  return [
+    ...([[170, '双人'], [210, '三人']] as const).map(([w, label]) =>
+      D(`sw-cn-sofa-${w > 190 ? 3 : 2}`, '新中式沙发', 'living', [w, 84.4, 75.8], sofa, cnSofa(w), { sizeLabel: label, series: 'sw-cn-sofa', type: 'sofa', tags: ['sofa'] }),
+    ),
+    D('sw-cn-quanyi-arm', '新中式圈椅', 'living', [59.8, 56.3, 92.4], sofa, cnQuanyi, { type: 'armchair', tags: ['armchair', ...seat] }),
+    D('sw-cn-chaji', '新中式茶几', 'living', [100, 64, 42], wood, cnCoffee, { type: 'coffee-table', tags: ['coffee-table'], surface: 42, surfaces: CN_COFFEE_SURFACES }),
+    D('sw-cn-tv', '新中式电视柜', 'living', [161.2, 44.3, 52], cab, cnTvStand, { type: 'tv-stand', tags: ['tv-stand', 'cabinet'], surface: 48.5, surfaceShape: [r(-71, -21, 71, 21)], surfaces: CN_TV_SURFACES, openable: true }),
+    D('sw-cn-dining', '新中式餐桌', 'dining', [135, 80, 76], wood, cnDining, { type: 'dining-table', tags: ['dining-table', 'table'], surface: 76 }),
+    D('sw-cn-round', '中式圆餐桌', 'dining', [110, 110, 76], wood, cnRound, { type: 'dining-table', tags: ['dining-table', 'table'], surface: 76, surfaceShape: [ellipsePoly(53)] }),
+    D('sw-cn-denggua', '灯挂椅', 'dining', [49.4, 45.7, 100.3], chair, cnDengguaChair, { type: 'dining-chair', tags: ['dining-chair', 'dining-seat', 'multi-ok', ...seat] }),
+    ...([[97, 'Single'], [120, 'Semi-double'], [140, 'Double'], [160, 'Queen']] as const).map(([m, label]) =>
+      D(`sw-cn-bed-${m}`, '新中式床', 'bedroom', [m + 12.4, 212.5, 108], bed, cnBed(m), { sizeLabel: label, series: 'sw-cn-bed', type: 'bed', tags: ['bed'], surface: CN_BED_TOP }),
+    ),
+    D('sw-cn-wardrobe', '新中式衣柜', 'bedroom', [103, 60.2, 198], cab, cnWardrobe, { type: 'wardrobe', tags: ['wardrobe', 'cabinet', 'bed-ok', 'multi-ok'], surfaces: CN_WARDROBE_SURFACES, openable: true }),
+    D('sw-cn-dresser', '闷户橱', 'bedroom', [85.2, 46.3, 88], cab, cnDresser, { type: 'dresser', tags: ['dresser', 'cabinet'], surface: 85.4, surfaceShape: [r(-37.5, -22, 37.5, 22)], surfaces: CN_DRESSER_SURFACES, openable: true }),
+    D('sw-cn-desk', '新中式书桌', 'study', [120, 60, 76], cab, cnDesk, { type: 'desk', tags: ['desk', 'table'], surface: 76, surfaces: CN_DESK_SURFACES, openable: true }),
+    D('sw-cn-study-chair', '南官帽椅', 'study', [52, 46.8, 104.5], chair, cnStudyChair, { type: 'office-chair', tags: ['office-chair', ...seat] }),
+    D('sw-cn-liangge', '亮格柜', 'storage', [86, 39.5, 185], cab, cnBookcase, { type: 'bookshelf', tags: ['bookshelf', 'cabinet', 'high-ok', 'hobby:reading', 'multi-ok', 'open-shelf'], surface: 185, surfaces: CN_BOOKCASE_SURFACES, openable: true }),
+    D('sw-cn-table-lamp', '新中式台灯', 'lighting', [26.4, 26.4, 59.4], [
+      [ZH, CHN.rose, '#fff1c8', CHN.gold],
+      [ZH, CHN.zitan, '#ffe2b0', CHN.lacquer],
+      [ZH, CHN.huali, '#fff1c8', CHN.gold],
+      [ZH, CHN.lacquer, '#fff1c8', CHN.gold],
+    ], cnTableLamp, { prop: true, type: 'table-lamp', tags: ['lamp', 'light', 'table-lamp'] }),
+  ]
+}
 
 /** 欧式古典 */
 export const SW_CLASSIC: AssetDef[] = [
@@ -2521,7 +2585,83 @@ export const SW_CLASSIC: AssetDef[] = [
     [EU, CLS.blush, CLS.ivory, CLS.gold],
     [EU, CLS.sage, CLS.marble, CLS.gold],
   ], clNightstand, { sizeLabel: '法式', surface: 58, surfaces: CL_NS_SURFACES, openable: true }),
+  ...clHome(),
 ]
+
+/** 欧式古典补充款：一键布置换款用的主力家具（建模在 styles-world/classic.ts） */
+function clHome(): AssetDef[] {
+  const sofa: Pal3[] = [
+    [EU, CLS.wine, CLS.mahogany, CLS.gold],
+    [EU, CLS.navy, CLS.walnut, CLS.gold],
+    [EU, '#7a4a2c', CLS.walnut, CLS.gold],
+    [EU, CLS.teal, CLS.mahogany, CLS.gold],
+  ]
+  const soft: Pal3[] = [
+    [EU, CLS.cream, CLS.walnut, CLS.gold],
+    [EU, CLS.wine, CLS.mahogany, CLS.gold],
+    [EU, CLS.sage, CLS.walnut, CLS.gold],
+    [EU, CLS.blush, CLS.ivory, CLS.gold],
+  ]
+  const body: Pal3[] = [
+    [EU, CLS.ivory, CLS.marble, CLS.gold],
+    [EU, CLS.mahogany, CLS.mahogany, CLS.gold],
+    [EU, CLS.walnut, '#3a3636', CLS.gold],
+    [EU, CLS.sage, CLS.ivory, CLS.gold],
+  ]
+  const bed: Pal3[] = [
+    [EU, CLS.wine, CLS.cream, CLS.mahogany],
+    [EU, CLS.navy, CLS.ivory, CLS.walnut],
+    [EU, CLS.sage, CLS.ivory, CLS.ivory],
+    [EU, CLS.blush, CLS.ivory, CLS.walnut],
+  ]
+  const seat = ['chair', 'seat'] as const
+  return [
+    ...([[170, '双人'], [210, '三人']] as const).map(([w, label]) =>
+      D(`sw-cl-chesterfield-${w > 190 ? 3 : 2}`, '切斯特菲尔德沙发', 'living', [w, 91.6, 77], sofa, clChesterfield(w), { sizeLabel: label, series: 'sw-cl-chesterfield', type: 'sofa', tags: ['sofa'] }),
+    ),
+    D('sw-cl-wingback', '翼背扶手椅', 'living', [77.2, 77.5, 108], soft, clWingback, { type: 'armchair', tags: ['armchair', ...seat] }),
+    D('sw-cl-tv', '欧式电视柜', 'living', [160, 47.2, 60.5], body, clTvStand, { type: 'tv-stand', tags: ['tv-stand', 'cabinet'], surface: 60.5, surfaces: CL_TV_SURFACES, openable: true }),
+    ...([[140, 90], [180, 95]] as const).map(([w, d]) =>
+      D(`sw-cl-dining-${w}`, '欧式长餐桌', 'dining', [w, d, 77.6], [
+        [EU, CLS.mahogany, CLS.mahogany, CLS.gold],
+        [EU, CLS.ivory, CLS.walnut, CLS.gold],
+        [EU, CLS.walnut, CLS.walnut, CLS.gold],
+        [EU, CLS.black, CLS.mahogany, CLS.gold],
+      ], clDining(w, d), { sizeLabel: String(w), series: 'sw-cl-dining', type: 'dining-table', tags: ['dining-table', 'table'], surface: 77.6 }),
+    ),
+    D('sw-cl-queenanne', '安妮女王餐椅', 'dining', [44.3, 49.1, 104.5], soft, clQueenAnne, { type: 'dining-chair', tags: ['dining-chair', 'dining-seat', 'multi-ok', ...seat] }),
+    ...([[97, 'Single'], [120, 'Semi-double'], [140, 'Double'], [160, 'Queen']] as const).map(([m, label]) =>
+      D(`sw-cl-sleigh-${m}`, '雪橇床', 'bedroom', [m + 15, 222, 116], bed, clSleighBed(m), { sizeLabel: label, series: 'sw-cl-sleigh', type: 'bed', tags: ['bed'], surface: CL_SLEIGH_TOP }),
+    ),
+    D('sw-cl-dresser', '法式五斗柜', 'bedroom', [92, 48, 86.4], body, clDresser, { type: 'dresser', tags: ['dresser', 'cabinet'], surface: 86.4, surfaces: CL_DRESSER_SURFACES, openable: true }),
+    D('sw-cl-desk', '法式书桌', 'study', [125, 65, 77], [
+      [EU, CLS.mahogany, '#2f4a3a', CLS.gold],
+      [EU, CLS.walnut, CLS.wine, CLS.gold],
+      [EU, CLS.ivory, CLS.navy, CLS.gold],
+      [EU, CLS.black, '#5a3a2a', CLS.gold],
+    ], clDesk, { type: 'desk', tags: ['desk', 'table'], surface: 77, surfaces: CL_DESK_SURFACES, openable: true }),
+    D('sw-cl-desk-chair', '法式书椅', 'study', [56, 52, 84], soft, clDeskChair, { type: 'office-chair', tags: ['office-chair', ...seat] }),
+    D('sw-cl-clock', '落地座钟', 'living', [50, 30.2, 208], [
+      [EU, CLS.mahogany, CLS.ivory, CLS.gold],
+      [EU, CLS.walnut, CLS.cream, CLS.gold],
+      [EU, CLS.ivory, CLS.ivory, CLS.gold],
+      [EU, CLS.black, CLS.cream, CLS.gold],
+    ], clGrandfatherClock, { type: 'clock', tags: ['clock', 'decor'] }),
+    D('sw-cl-console-mirror', '玄关桌配镜', 'entrance', [110, 36, 177], body, clConsoleMirror, { type: 'table', tags: ['table', 'mirror'], surface: 81, surfaceShape: [r(-53, -12.6, 53, 17.4)] }),
+    D('sw-cl-chandelier-lamp', '枝形吊灯式落地灯', 'lighting', [33.4, 55.4, 183], [
+      [EU, CLS.gold, CLS.ivory, '#e8f4ff'],
+      [EU, '#c8ccd2', CLS.cream, '#e8f4ff'],
+      [EU, CLS.black, CLS.ivory, '#e8f4ff'],
+      [EU, CLS.gold, CLS.wine, '#ffe8f0'],
+    ], clChandelierLamp, { type: 'floor-lamp', tags: ['floor-lamp', 'lamp', 'light'] }),
+    D('sw-cl-vitrine', '欧式玻璃陈列柜', 'storage', [94, 45.5, 196], [
+      [EU, CLS.ivory, CLS.sage, CLS.gold],
+      [EU, CLS.mahogany, CLS.wine, CLS.gold],
+      [EU, CLS.walnut, CLS.navy, CLS.gold],
+      [EU, CLS.black, CLS.teal, CLS.gold],
+    ], clVitrine, { type: 'display-cabinet', tags: ['display-cabinet', 'cabinet', 'shelving', 'collection-shelf'], surfaces: CL_VITRINE_SURFACES, openable: true }),
+  ]
+}
 
 /** 美式乡村 */
 export const SW_FARMHOUSE: AssetDef[] = [
@@ -2640,7 +2780,69 @@ export const SW_FARMHOUSE: AssetDef[] = [
     [FA, FH.pine, FH.denim, BRASS],
     [FA, FH.oak, FH.black, BRASS],
   ], fhNightstand, { sizeLabel: '农舍', surface: 57, surfaces: [{ y: 14, shape: [r(-19.3, -15.3, 19.3, 15.3)], h: 22 }, drawerLv(-18, 18, 38, 14, 16.3, 30)], openable: true }),
+  ...fhHome(),
 ]
+
+/** 美式乡村补充款：一键布置换款用的主力家具（建模在 styles-world/farmhouse.ts） */
+function fhHome(): AssetDef[] {
+  const plank: Pal3[] = [
+    [FA, FH.pine, FH.white, FH.black],
+    [FA, FH.oak, FH.black, FH.black],
+    [FA, FH.pine, FH.sage, FH.oak],
+    [FA, FH.oak, FH.oak, FH.black],
+  ]
+  const painted: Pal3[] = [
+    [FA, FH.white, FH.pine, FH.black],
+    [FA, FH.sage, FH.oak, FH.black],
+    [FA, FH.barn, FH.pine, FH.black],
+    [FA, '#7a8ea6', FH.pine, FH.black],
+  ]
+  const windsor: Pal3[] = [
+    [FA, FH.black, FH.pine, FH.black],
+    [FA, FH.barn, FH.oak, FH.barn],
+    [FA, FH.white, FH.pine, FH.white],
+    [FA, FH.sage, FH.oak, FH.sage],
+  ]
+  const seat = ['chair', 'seat'] as const
+  return [
+    ...([[175, '双人'], [215, '三人']] as const).map(([w, label]) =>
+      D(`sw-fh-slipcover-${w > 190 ? 3 : 2}`, '布套沙发', 'living', [w + 4.1, 95, 87.9], [
+        [FA, FH.white, FH.plaid, FH.sage],
+        [FA, FH.cream, FH.denim, FH.mustard],
+        [FA, '#d9d2c3', FH.sage, FH.plaid],
+        [FA, FH.denim, FH.cream, FH.barn],
+      ], fhSlipcover(w), { sizeLabel: label, series: 'sw-fh-slipcover', type: 'sofa', tags: ['sofa'] }),
+    ),
+    D('sw-fh-coffee', '农舍茶几', 'living', [100, 65.8, 45.8], plank, fhCoffee, { type: 'coffee-table', tags: ['coffee-table'], surface: 45.8, surfaces: FH_COFFEE_SURFACES }),
+    D('sw-fh-tv', '谷仓门电视柜', 'living', [160, 51.4, 63], painted, fhTvStand, { type: 'tv-stand', tags: ['tv-stand', 'cabinet'], surface: 63, surfaceShape: [r(-79, -22.5, 79, 22.5)], surfaces: FH_TV_SURFACES, openable: true }),
+    D('sw-fh-trestle', '农舍搁架餐桌', 'dining', [150, 85, 76], plank, fhTrestle, { type: 'dining-table', tags: ['dining-table', 'table'], surface: 76 }),
+    D('sw-fh-windsor', '温莎餐椅', 'dining', [46, 44.1, 96.3], windsor, fhWindsor(false), { type: 'dining-chair', tags: ['dining-chair', 'dining-seat', 'multi-ok', ...seat] }),
+    ...([[97, 'Single'], [120, 'Semi-double'], [140, 'Double'], [160, 'Queen']] as const).map(([m, label]) =>
+      D(`sw-fh-bed-${m}`, '农舍木板床', 'bedroom', [m + 16, 216, 114.6], [
+        [FA, FH.plaid, FH.white, FH.pine],
+        [FA, FH.denim, FH.cream, FH.oak],
+        [FA, FH.sage, FH.white, FH.white],
+        [FA, FH.mustard, FH.cream, FH.oak],
+      ], fhPlankBed(m), { sizeLabel: label, series: 'sw-fh-bed', type: 'bed', tags: ['bed'], surface: FH_BED_TOP }),
+    ),
+    D('sw-fh-wardrobe', '谷仓门衣柜', 'bedroom', [110, 62, 194], painted, fhWardrobe, { type: 'wardrobe', tags: ['wardrobe', 'cabinet', 'bed-ok', 'multi-ok'], surfaces: FH_WARDROBE_SURFACES, openable: true }),
+    D('sw-fh-dresser', '农舍五斗柜', 'bedroom', [88, 46, 88], painted, fhDresser, { type: 'dresser', tags: ['dresser', 'cabinet'], surface: 88, surfaces: FH_DRESSER_SURFACES, openable: true }),
+    D('sw-fh-desk', '车旋腿书桌', 'study', [120, 60, 76], plank, fhDesk, { type: 'desk', tags: ['desk', 'table'], surface: 76, surfaces: FH_DESK_SURFACES, openable: true }),
+    D('sw-fh-desk-chair', '温莎书椅', 'study', [50, 45.9, 96.3], windsor, fhWindsor(true), { type: 'office-chair', tags: ['office-chair', ...seat] }),
+    D('sw-fh-table-lamp', '陶罐台灯', 'lighting', [27.6, 27.6, 41], [
+      [FA, FH.cream, '#efe6d2', FH.denim],
+      [FA, FH.stone, '#efe6d2', FH.barn],
+      [FA, FH.white, FH.cream, FH.black],
+      [FA, FH.sage, '#efe6d2', FH.oak],
+    ], fhTableLamp, { prop: true, type: 'table-lamp', tags: ['lamp', 'light', 'table-lamp'] }),
+    D('sw-fh-tripod-lamp', '三脚木落地灯', 'lighting', [42.7, 44.8, 156], [
+      [FA, FH.pine, '#efe6d2', FH.black],
+      [FA, FH.oak, FH.cream, BRASS],
+      [FA, FH.white, '#efe6d2', FH.black],
+      [FA, FH.black, FH.white, BRASS],
+    ], fhTripodLamp, { type: 'floor-lamp', tags: ['floor-lamp', 'lamp', 'light'] }),
+  ]
+}
 
 /** 和风补充 */
 export const SW_JAPANESE: AssetDef[] = [

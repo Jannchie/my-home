@@ -1604,12 +1604,14 @@ const r = rectPoly
 
 export const FURNITURE_MORE: AssetDef[] = [
   // ---------- 沙发 ----------
-  withPals({ id: 'fm-chesterfield', name: '切斯特菲尔德沙发', category: 'living', w: 198, d: 86, h: 77, styles: ['retro', 'industrial', 'modern'], build: chesterfield }, [
+  withPals({ id: 'fm-chesterfield', name: '切斯特菲尔德沙发', category: 'living', w: 198, d: 86, h: 77, styles: ['retro', 'industrial', 'modern', 'classic'], build: chesterfield }, [
     ['retro', '#7a2e2a', R.cream, '#5a3a28'],
     ['industrial', I.leather, I.rust, I.iron],
     ['retro', '#2f5a46', R.mustard, R.caramel],
     ['modern', M.black, M.light, M.silver],
     ['cute', C.pink, C.white, C.woodD],
+    ['classic', '#7d2a35', '#efe3c4', '#5e3a26'],
+    ['classic', '#2c3a5a', '#f1e8d6', '#6e3524'],
   ]),
   ...[2, 3, 4].map((n) =>
     withPals({ id: `fm-modular-${n}`, name: '模块组合沙发', sizeLabel: `${n} 模块`, category: 'living', w: n * 80 + 28, d: 98, h: 73, build: (p) => modularSofa(n, p) }, [
