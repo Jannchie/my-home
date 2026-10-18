@@ -2,11 +2,12 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
-import { ASSETS, ASSET_MAP, CATEGORY_LABELS, STYLE_LABELS, type AssetCategory, type StyleTag } from '../three/assets'
-import { SIZE_LABELS, browse, cardName, categoriesOf, countByCategory, displayName, paletteFor, paletteStyle, siblings, sizeClass, typesIn, variantLabel, type Filter, type SizeClass } from '../three/catalog'
+import { ASSETS, ASSET_MAP, STYLE_LABELS, type StyleTag } from '../three/assets'
+import { SIZE_LABELS, browse, cardName, countByGroup, displayName, groupsOf, paletteFor, paletteStyle, siblings, sizeClass, typesIn, variantLabel, type Filter, type SizeClass } from '../three/catalog'
 import { TYPE_NAMES, traitLabel, typeLabel } from '../three/typeLabels'
 import type { Tag } from '../three/tags'
 import { INTERESTS, type InterestId } from '../household'
+import { GROUP_NAMES, LIB_ROOMS, ROOM_NAMES_LIB, groupOf, roomOf, type AssetGroup } from '../three/groups'
 import { disposeUnshared } from '../three/toon'
 import { furnitureModel } from '../three/house'
 import { createStage, fitSun, frameCamera, type Stage } from '../three/stage'
@@ -18,19 +19,19 @@ import BottomSheet, { type SheetSnap } from './BottomSheet.vue'
 import { device, lowPower } from '../ui/device'
 import { useProgressive } from '../ui/progressive'
 import { JIcon } from '@jannchie/icons-vue'
-import { CATEGORY_ICONS, ICONS, STYLE_ICONS } from '../ui/icons'
+import { GROUP_ICONS, ICONS, STYLE_ICONS } from '../ui/icons'
 import { placing, selection, viewMode } from '../store'
 import { lang, t } from '../i18n'
 import { routeAsset } from '../router'
 
-const filter = reactive<Filter>({ category: 'all', type: 'all', style: 'all', size: 'all', query: '', fixtures: true })
-// 细分类型：换分类时回到「全部」；只在选了某个分类时列出（全部分类下类型太多）
+const filter = reactive<Filter>({ group: 'all', room: 'all', type: 'all', style: 'all', size: 'all', query: '', fixtures: true })
+// 细分类型：换大类时回到「全部」；只在选了某个大类时列出（全部大类下类型太多）
 watch(
-  () => filter.category,
+  () => filter.group,
   () => (filter.type = 'all'),
 )
-const types = computed(() => (filter.category === 'all' ? [] : typesIn(filter)))
-const categories = categoriesOf(true)
+const types = computed(() => (filter.group === 'all' ? [] : typesIn(filter)))
+const groups = groupsOf(true)
 const styleKeys = Object.keys(STYLE_LABELS) as StyleTag[]
 const sizeKeys = Object.keys(SIZE_LABELS) as SizeClass[]
 const list = computed(() => browse(filter))
@@ -38,9 +39,10 @@ const list = computed(() => browse(filter))
 const { shown, more, vSentinel } = useProgressive(() => list.value, 60)
 /** 手机：详情是底部抽屉（收起时只露出名字和「放进 3D 沙盘」） */
 const sheet = ref<SheetSnap>('peek')
-// 各分类的数量：一次算完缓存起来（以前模板里每个分类按钮每次重渲染都跑一遍 browse）
-const counts = computed(() => countByCategory(filter))
-const countOf = (c: AssetCategory) => counts.value.m.get(c) ?? 0
+// 各大类的数量：一次算完缓存起来（以前模板里每个分类按钮每次重渲染都跑一遍 browse）
+const counts = computed(() => countByGroup(filter))
+const countOf = (g: AssetGroup) => counts.value.m.get(g) ?? 0
+const groupName = (g: AssetGroup) => GROUP_NAMES[g][0]
 const total = computed(() => counts.value.all)
 
 // 地址里带了素材 id（/en/library/sofa-3p）就打开它；选中的素材写回地址（router.ts）
@@ -70,9 +72,9 @@ function tagText(x: Tag) {
   if (x.startsWith('hobby:')) return INTERESTS[x.slice(6) as InterestId]?.label ?? x
   return x in TYPE_NAMES ? typeLabel(x) : traitLabel(x)
 }
-/** 点详情里的标签：在全部分类里按这个标签筛选（分类、类型、搜索清空，风格和尺寸保留） */
+/** 点详情里的标签：在全部大类里按这个标签筛选（大类、房间、类型、搜索清空，风格和尺寸保留） */
 function filterByTag(x: Tag) {
-  Object.assign(filter, { category: 'all', type: 'all', query: '', tag: x })
+  Object.assign(filter, { group: 'all', room: 'all', type: 'all', query: '', tag: x })
   if (device.compact) sheet.value = 'peek'
 }
 
@@ -217,9 +219,9 @@ const dims = (d: { w: number; d: number; h: number }) => `${d.w}×${d.d}×${d.h}
 
 // ---------- 搜索：按 / 聚焦，Esc 清空；没有结果时一键清除筛选 ----------
 const searchInput = ref<HTMLInputElement>()
-const filtered = computed(() => !!filter.query || !!filter.tag || filter.category !== 'all' || filter.type !== 'all' || filter.style !== 'all' || filter.size !== 'all')
+const filtered = computed(() => !!filter.query || !!filter.tag || filter.group !== 'all' || filter.room !== 'all' || filter.type !== 'all' || filter.style !== 'all' || filter.size !== 'all')
 function clearFilters() {
-  Object.assign(filter, { category: 'all', type: 'all', tag: undefined, style: 'all', size: 'all', query: '' })
+  Object.assign(filter, { group: 'all', room: 'all', type: 'all', tag: undefined, style: 'all', size: 'all', query: '' })
 }
 function onSlash(e: KeyboardEvent) {
   const el = e.target as HTMLElement
@@ -246,11 +248,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onSlash))
         <input ref="searchInput" v-model="filter.query" class="search" :placeholder="t('搜索名称 / 类型 / 规格…')" :aria-label="t('搜索名称 / 类型 / 规格…')" @keydown="onSearchKey" />
         <kbd v-if="!filter.query" class="slash" :title="t('按 / 搜索')">/</kbd>
       </label>
-      <button :class="{ on: filter.category === 'all' }" @click="filter.category = 'all'">
+      <button :class="{ on: filter.group === 'all' }" @click="filter.group = 'all'">
         <JIcon :icon="ICONS.allCategories" /><span class="cat-name">{{ t('全部') }}</span><span class="num">{{ total }}</span>
       </button>
-      <button v-for="c in categories" :key="c" :class="{ on: filter.category === c }" :title="t(CATEGORY_LABELS[c])" @click="filter.category = c">
-        <JIcon :icon="CATEGORY_ICONS[c]" /><span class="cat-name">{{ t(CATEGORY_LABELS[c]) }}</span><span class="num">{{ countOf(c) }}</span>
+      <button v-for="g in groups" :key="g" :class="{ on: filter.group === g }" :title="t(groupName(g))" @click="filter.group = g">
+        <JIcon :icon="GROUP_ICONS[g]" /><span class="cat-name">{{ t(groupName(g)) }}</span><span class="num">{{ countOf(g) }}</span>
       </button>
     </nav>
 
@@ -271,6 +273,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onSlash))
           <span class="label">{{ t('风格') }}</span>
           <button :class="{ on: filter.style === 'all' }" @click="filter.style = 'all'">{{ t('全部') }}</button>
           <button v-for="s in styleKeys" :key="s" :class="['style-' + s, { on: filter.style === s }]" @click="filter.style = s"><JIcon :icon="STYLE_ICONS[s]" :size="14" />{{ t(STYLE_LABELS[s]) }}</button>
+        </div>
+        <div class="chips">
+          <span class="label">{{ t('房间') }}</span>
+          <button :class="{ on: filter.room === 'all' }" @click="filter.room = 'all'">{{ t('全部') }}</button>
+          <button v-for="r in LIB_ROOMS" :key="r" :class="{ on: filter.room === r }" @click="filter.room = r">{{ t(ROOM_NAMES_LIB[r][0]) }}</button>
         </div>
         <div class="chips">
           <span class="label">{{ t('尺寸') }}</span>
@@ -322,7 +329,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onSlash))
       <div class="info">
         <div class="title">
           <h2>{{ displayName(def) }}</h2>
-          <span class="tag">{{ t(CATEGORY_LABELS[def.category]) }}</span>
+          <span class="tag">{{ t(groupName(groupOf(def))) }}</span>
+          <span v-if="roomOf(def)" class="tag">{{ t(ROOM_NAMES_LIB[roomOf(def)!][0]) }}</span>
           <span class="tag">{{ t(SIZE_LABELS[sizeClass(def)]) }}</span>
         </div>
         <div v-if="tagGroups.kinds.length || tagGroups.hobbies.length || tagGroups.traits.length" class="tags">

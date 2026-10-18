@@ -5,6 +5,13 @@
 import type { Icon } from '@jannchie/icons'
 import {
   IconAirConditioner,
+  IconBasket,
+  IconBook,
+  IconGamepad,
+  IconHanger,
+  IconMonitor,
+  IconTable,
+  IconTools,
   IconAlertCircle,
   IconBathtub,
   IconBed,
@@ -74,7 +81,6 @@ import {
   IconPlay,
   IconPlug,
   IconPlus,
-  IconPuzzle,
   IconRectangleHorizontal,
   IconRedo,
   IconRefresh,
@@ -94,7 +100,6 @@ import {
   IconTorii,
   IconTrash,
   IconTreePine,
-  IconTv,
   IconUndo,
   IconUser,
   IconUsers,
@@ -113,7 +118,6 @@ import {
   IconChair,
   IconCookingPot,
   IconCurtain,
-  IconDesk,
   IconFloorPlan,
   IconFloorPlanSparkle,
   IconHallway,
@@ -121,12 +125,10 @@ import {
   IconPictureFrame,
   IconPipe,
   IconPottedPlant,
-  IconPumpBottle,
   IconSofaSparkle,
   IconStove,
   IconTatami,
   IconTeddyBear,
-  IconVase,
   IconWall,
   IconWallHalf,
   IconWallLowered,
@@ -140,7 +142,8 @@ import {
 } from '@jannchie/icons'
 import type { FixtureKind, RoomKind } from '../model'
 import type { Tool, ViewMode, WallMode } from '../store'
-import type { AssetCategory, StyleTag } from '../three/kit'
+import type { StyleTag } from '../three/kit'
+import type { AssetGroup } from '../three/groups'
 import type { Household } from '../household'
 
 export type AppIcon = Icon<string>
@@ -317,29 +320,31 @@ export const FIXTURE_ICONS = {
   stairs: IconStairs, // 楼梯（多层户型）
 } satisfies Record<FixtureKind, AppIcon>
 
-/** 素材分类（CATEGORY_LABELS） */
-export const CATEGORY_ICONS = {
-  living: IconSofa,
-  dining: IconChair, // 新增
-  bedroom: IconBed,
-  study: IconDesk, // 新增
-  kids: IconTeddyBear, // 新增
-  japanese: IconTorii,
-  storage: IconWardrobe, // 新增
-  plants: IconPottedPlant, // 新增
-  lighting: IconLampFloor, // 新增
-  tabletop: IconVase, // 新增
-  kitchenware: IconCookingPot, // 新增
-  toiletry: IconPumpBottle, // 新增
-  deco: IconPictureFrame, // 新增
-  pets: IconPaw,
-  fitness: IconDumbbell,
-  hobby: IconPuzzle,
+/** 素材大类（groups.ts GROUP_NAMES） */
+export const GROUP_ICONS = {
+  seating: IconSofa,
+  tables: IconTable,
+  beds: IconBed,
+  storage: IconWardrobe,
+  lighting: IconLampFloor,
+  textile: IconCurtain,
+  decor: IconPictureFrame,
+  plants: IconPottedPlant,
+  kitchen: IconCookingPot,
+  appliance: IconAirConditioner,
+  electronics: IconMonitor,
+  bath: IconBathtub,
+  clothing: IconHanger,
+  books: IconBook,
+  games: IconGamepad,
   music: IconGuitar,
-  entrance: IconShoe,
-  outdoor: IconBalcony, // 新增
-  appliance: IconTv,
-} satisfies Record<AssetCategory, AppIcon>
+  fitness: IconDumbbell,
+  hobby: IconPalette,
+  kids: IconTeddyBear,
+  pets: IconPaw,
+  daily: IconBasket,
+  fixture: IconTools,
+} satisfies Record<AssetGroup, AppIcon>
 
 /** 风格标签（STYLE_LABELS，可选） */
 export const STYLE_ICONS = {

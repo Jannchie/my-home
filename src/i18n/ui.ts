@@ -3,6 +3,7 @@
 // 覆盖率检查：node <scratchpad>/check-i18n.mjs（会列出缺失项）。
 
 import { TRAIT_NAMES, TYPE_NAMES } from '../three/typeLabels'
+import { GROUP_NAMES, ROOM_NAMES_LIB } from '../three/groups'
 
 type Entry = [ja: string, en: string]
 
@@ -262,6 +263,7 @@ export const UI: Record<string, Entry> = {
   家具: ['家具', 'Furniture'],
   '搜索…': ['検索…', 'Search…'],
   全部风格: ['すべてのスタイル', 'All styles'],
+  全部房间: ['すべての部屋', 'All rooms'],
   全部尺寸: ['すべてのサイズ', 'All sizes'],
   '（共 {n} 种规格，放下后可切换）': ['（全 {n} サイズ、配置後に切り替え可）', ' ({n} sizes, switch after placing)'],
   没有匹配的家具: ['該当する家具がありません', 'No matching furniture'],
@@ -624,6 +626,7 @@ export const UI: Record<string, Entry> = {
 // ---------- 素材的细分类型（three/typeLabels.ts）：已有同名词条的不覆盖，后面的分组表照常覆盖 ----------
 for (const [zh, ja, en] of Object.values(TYPE_NAMES)) UI[zh] ??= [ja, en]
 for (const [zh, ja, en] of Object.values(TRAIT_NAMES)) UI[zh] ??= [ja, en]
+for (const [zh, ja, en] of [...Object.values(GROUP_NAMES), ...Object.values(ROOM_NAMES_LIB)]) UI[zh] ??= [ja, en]
 
 /**
  * 房间的默认名（生成器 / ROOM_KINDS / 房间用途给的）。只有名字恰好是这些（或「这些 + 序号」，如 洋室2）时才翻译，

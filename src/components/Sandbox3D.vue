@@ -2,7 +2,8 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, toRaw, watch } from 'vue'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
-import { ASSET_MAP, CATEGORY_LABELS, STYLE_LABELS, type StyleTag } from '../three/assets'
+import { ASSET_MAP, STYLE_LABELS, type StyleTag } from '../three/assets'
+import { GROUP_NAMES, LIB_ROOMS, ROOM_NAMES_LIB } from '../three/groups'
 import { freezeMatrices, syncMatrix } from '../three/matrices'
 import { BASE, applyCutaway, bendToWalls, floorY, isPlant, stepCutaway, furnitureModel, placeFurniture, roomAt, type WallLook } from '../three/house'
 import { buildBuilding, type FloorGroup } from '../three/building'
@@ -37,8 +38,8 @@ import { sandboxBridge } from '../ui/sandboxBridge'
 import { runBusy } from '../ui/feedback'
 import { saved, toast } from '../saved'
 import { JIcon } from '@jannchie/icons-vue'
-import { CATEGORY_ICONS, ICONS, VIEW_ICONS, WALL_MODE_ICONS } from '../ui/icons'
-import { SIZE_LABELS, assetName, browse, canHang, cardName, categoriesOf, displayName, formFor, paletteFor, siblings, typesIn, variantLabel, type Filter, type SizeClass } from '../three/catalog'
+import { GROUP_ICONS, ICONS, VIEW_ICONS, WALL_MODE_ICONS } from '../ui/icons'
+import { SIZE_LABELS, assetName, browse, canHang, cardName, displayName, groupsOf, formFor, paletteFor, siblings, typesIn, variantLabel, type Filter, type SizeClass } from '../three/catalog'
 import { typeLabel } from '../three/typeLabels'
 import { INTERESTS, KIND_LABELS, LV_LABELS, ROLE_LABELS, TRAITS, describe, levelOf, memberRooms } from '../household'
 import { checklist, missing } from '../checklist'
@@ -1780,16 +1781,16 @@ function onCardClick(asset: string) {
   startPlacing(asset)
 }
 
-// ---------- 家具栏：按分类 / 风格 / 尺寸筛选，同系列合成一项 ----------
+// ---------- 家具栏：按大类 / 房间 / 风格 / 尺寸筛选，同系列合成一项 ----------
 
-const libFilter = reactive<Filter>({ category: 'all', type: 'all', style: 'all', size: 'all', query: '', fixtures: false })
-// 细分类型：换分类时回到「全部」，只在选了某个分类时可选
+const libFilter = reactive<Filter>({ group: 'all', room: 'all', type: 'all', style: 'all', size: 'all', query: '', fixtures: false })
+// 细分类型：换大类时回到「全部」，只在选了某个大类时可选
 watch(
-  () => libFilter.category,
+  () => libFilter.group,
   () => (libFilter.type = 'all'),
 )
-const libTypes = computed(() => (libFilter.category === 'all' ? [] : typesIn(libFilter)))
-const categories = categoriesOf(false)
+const libTypes = computed(() => (libFilter.group === 'all' ? [] : typesIn(libFilter)))
+const libGroups = groupsOf(false)
 const styleKeys = Object.keys(STYLE_LABELS) as StyleTag[]
 const sizeKeys = Object.keys(SIZE_LABELS) as SizeClass[]
 const placeable = computed(() => browse(libFilter))
@@ -2976,13 +2977,17 @@ defineExpose({ resetView })
           <input v-model="libFilter.query" class="search" :placeholder="t('搜索…')" :aria-label="t('搜索…')" />
         </label>
         <div class="cats">
-          <button :class="{ on: libFilter.category === 'all' }" @click="libFilter.category = 'all'"><JIcon :icon="ICONS.allCategories" :size="14" />{{ t('全部') }}</button>
-          <button v-for="c in categories" :key="c" :class="{ on: libFilter.category === c }" @click="libFilter.category = c"><JIcon :icon="CATEGORY_ICONS[c]" :size="14" />{{ t(CATEGORY_LABELS[c]) }}</button>
+          <button :class="{ on: libFilter.group === 'all' }" @click="libFilter.group = 'all'"><JIcon :icon="ICONS.allCategories" :size="14" />{{ t('全部') }}</button>
+          <button v-for="g in libGroups" :key="g" :class="{ on: libFilter.group === g }" @click="libFilter.group = g"><JIcon :icon="GROUP_ICONS[g]" :size="14" />{{ t(GROUP_NAMES[g][0]) }}</button>
         </div>
         <div class="filter-row">
           <select v-if="libTypes.length > 1" v-model="libFilter.type">
             <option value="all">{{ t('全部类型') }}</option>
             <option v-for="x in libTypes" :key="x.type" :value="x.type">{{ t(typeLabel(x.type)) }}（{{ x.n }}）</option>
+          </select>
+          <select v-model="libFilter.room">
+            <option value="all">{{ t('全部房间') }}</option>
+            <option v-for="r in LIB_ROOMS" :key="r" :value="r">{{ t(ROOM_NAMES_LIB[r][0]) }}</option>
           </select>
           <select v-model="libFilter.style">
             <option value="all">{{ t('全部风格') }}</option>

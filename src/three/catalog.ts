@@ -1,11 +1,12 @@
 // 素材目录的查询：风格、尺寸分级、规格系列。素材库和沙盘的家具栏共用。
 
 import { ASSETS, ASSET_MAP, type AssetDef } from './assets'
-import { FORM_LABELS, type AssetCategory, type StyleTag } from './kit'
+import { FORM_LABELS, type StyleTag } from './kit'
 import { assetText, lang, t } from '../i18n'
 import { paletteStyleOf, preferredColor, styleSet } from './stylePalettes'
 import { FUNCTION_TAGS, type Tag } from './tags'
 import { typeLabel } from './typeLabels'
+import { GROUPS, groupOf, roomOf, type AssetGroup, type AssetRoom } from './groups'
 
 export type SizeClass = 'S' | 'M' | 'L'
 export const SIZE_LABELS: Record<SizeClass, string> = { S: '小件', M: '中件', L: '大件' }
@@ -53,7 +54,10 @@ export function siblings(def: AssetDef): AssetDef[] {
 }
 
 export interface Filter {
-  category: AssetCategory | 'all'
+  /** 功能大类（groups.ts） */
+  group: AssetGroup | 'all'
+  /** 常用房间（groups.ts）；不给 = 全部 */
+  room?: AssetRoom | 'all'
   /** 细分类型（功能标签）；不给 = 全部 */
   type?: Tag | 'all'
   /** 任意标签（详情里点标签筛选）；不给 = 不限 */
@@ -66,10 +70,11 @@ export interface Filter {
 }
 
 /** 筛选后按系列合并：每个系列一项，代表素材取第一个符合条件的规格 */
-/** 除分类以外的筛选条件 */
+/** 除大类以外的筛选条件 */
 function matches(a: AssetDef, f: Filter, q: string) {
   return (
     (f.fixtures || !a.fixture) &&
+    (!f.room || f.room === 'all' || roomOf(a) === f.room) &&
     (!f.type || f.type === 'all' || a.type === f.type) &&
     (!f.tag || !!a.tags?.includes(f.tag)) &&
     (f.style === 'all' || stylesOf(a).has(f.style)) &&
@@ -95,27 +100,28 @@ function tagHit(a: AssetDef, q: string) {
   return a.tags.some((x) => FUNCTION_SET.has(x) && tagNames!.m.get(x)!.includes(s))
 }
 
-/** 每个分类下 browse 会出几项（等价于逐个分类调 browse 再取长度，但只扫一遍）；all 为全部分类的项数 */
-export function countByCategory(f: Filter) {
+/** 每个大类下 browse 会出几项（等价于逐个大类调 browse 再取长度，但只扫一遍）；all 为全部大类的项数 */
+export function countByGroup(f: Filter) {
   const q = f.query.trim()
-  const keys = new Map<AssetCategory, Set<string>>()
+  const keys = new Map<AssetGroup, Set<string>>()
   const all = new Set<string>()
   for (const a of ASSETS) {
     if (!matches(a, f, q)) continue
     const key = a.series ?? a.id
     all.add(key)
-    let s = keys.get(a.category)
-    if (!s) keys.set(a.category, (s = new Set()))
+    const g = groupOf(a)
+    let s = keys.get(g)
+    if (!s) keys.set(g, (s = new Set()))
     s.add(key)
   }
-  const m = new Map<AssetCategory, number>()
+  const m = new Map<AssetGroup, number>()
   for (const [c, s] of keys) m.set(c, s.size)
   return { all: all.size, m }
 }
 
 export function browse(f: Filter) {
   const q = f.query.trim()
-  const hit = ASSETS.filter((a) => (f.category === 'all' || a.category === f.category) && matches(a, f, q))
+  const hit = ASSETS.filter((a) => (f.group === 'all' || groupOf(a) === f.group) && matches(a, f, q))
   const seen = new Map<string, { rep: AssetDef; items: AssetDef[] }>()
   for (const a of hit) {
     const key = a.series ?? a.id
@@ -126,12 +132,12 @@ export function browse(f: Filter) {
   return [...seen.values()].map((g) => ({ ...g, sizes: seriesOf(g.rep.series ?? g.rep.id).length || 1 }))
 }
 
-/** 当前分类（和其他筛选条件）下有哪些细分类型、各有几款：素材库的「类型」筛选用，按款数从多到少 */
+/** 当前大类（和其他筛选条件）下有哪些细分类型、各有几款：素材库的「类型」筛选用，按款数从多到少 */
 export function typesIn(f: Filter) {
   const q = f.query.trim()
   const m = new Map<Tag, Set<string>>()
   for (const a of ASSETS) {
-    if (!a.type || (f.category !== 'all' && a.category !== f.category) || !matches(a, { ...f, type: 'all' }, q)) continue
+    if (!a.type || (f.group !== 'all' && groupOf(a) !== f.group) || !matches(a, { ...f, type: 'all' }, q)) continue
     let s = m.get(a.type)
     if (!s) m.set(a.type, (s = new Set()))
     s.add(a.series ?? a.id)
@@ -176,6 +182,10 @@ export function formFor(def: AssetDef, kind: 'shelf' | 'hook' | 'floor'): string
 /** 有没有挂起形态（能不能上挂钩） */
 export const canHang = (def: AssetDef) => formFor(def, 'hook') !== null
 
-export const categoriesOf = (fixtures: boolean) => [...new Set(ASSETS.filter((a) => fixtures || !a.fixture).map((a) => a.category))]
+/** 有素材的大类（按 GROUP_NAMES 的顺序） */
+export function groupsOf(fixtures: boolean) {
+  const has = new Set(ASSETS.filter((a) => fixtures || !a.fixture).map(groupOf))
+  return GROUPS.filter((g) => has.has(g))
+}
 
 export { ASSET_MAP }
