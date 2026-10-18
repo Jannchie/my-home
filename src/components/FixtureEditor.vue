@@ -9,6 +9,7 @@ import { floorAbove, floorOf, riseOf } from '../floors'
 import { MAX_RISER, stairsVariant } from '../stairs'
 import { cabinetsOn, setOpen } from '../cabinet'
 import { propsOn } from '../surface'
+import { applyFixtureCarry, captureFixtureProps } from '../fixtureCarry'
 import { ASSET_MAP } from '../three/assets'
 import { displayName } from '../three/catalog'
 import { t } from '../i18n'
@@ -23,7 +24,11 @@ function edit(fn: (f: Fixture, p: Plan) => void) {
   const id = props.fixture.id
   mutate((p) => {
     const f = p.fixtures.find((x) => x.id === id)
-    if (f) fn(f, p)
+    if (!f) return
+    // 台面上的东西（浴缸盖、台面小物）跟着设备改尺寸 / 样式
+    const carry = captureFixtureProps(p, f)
+    fn(f, p)
+    applyFixtureCarry(p, f, carry)
   })
 }
 

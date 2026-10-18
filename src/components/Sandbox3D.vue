@@ -20,6 +20,7 @@ import FloorRail from './FloorRail.vue'
 import { withStairHoles } from '../stairs'
 import { overlapsOthers, snapFurniture, snapToWall, type Guide } from '../snap'
 import { fitOnSurface, pickSurface, propsOn, snapToClip, snapToHook } from '../surface'
+import { pickTub, tubGuides } from '../tubTop'
 import { createStage, fitSun, frameCamera, setStageQuality, type Stage } from '../three/stage'
 import { attachPost, LOOKS, LOOK_MAP, type LookId, type Post } from '../three/post'
 import { CITIES, MONTH_DAYS, compassAxes, skyState, type SkyState } from '../three/sky'
@@ -999,8 +1000,8 @@ function updateRing() {
   if (f.id !== framedId) selFrame.hide()
   framedId = f.id
   frameAt(selFrame, o.obj, f.asset)
-  // 和别的家具 / 设备穿模时提示成红色
-  selFrame.setColor(overlapsOthers(fv(), f.id, f.asset, f.x, f.y, f.rot) ? RING_BAD : RING_OK)
+  // 和别的家具 / 设备穿模时提示成红色（摆在台面 / 浴缸边沿上的东西本来就压在下面的家具、设备上，同摆放预览不查）
+  selFrame.setColor(!f.z && overlapsOthers(fv(), f.id, f.asset, f.x, f.y, f.rot) ? RING_BAD : RING_OK)
   if (hoverId === f.id) hoverFrame.hide()
 }
 
@@ -1414,6 +1415,13 @@ function locate(e: PointerEvent, asset: string, selfId: string | null, exclude: 
     const hangDef = hang ? ASSET_MAP.get(formFor(def, 'hook')!) : undefined
     // 屏幕顶边（clip）只收夹式摄像头这类 screenClip 的东西
     const hit = pickSurface(fv(), localRay(), exclude, (kind, h) => (kind === 'clip' ? !!def.screenClip : kind === 'hook' ? !!hangDef && hangDef.h <= h + 0.5 : def.h <= h + 0.5))
+    // 浴缸盖、浴缸架板：指在浴缸范围里就横跨吸到边沿上（转成和浴缸平行 / 垂直、横向居中），
+    // 除非射线先打中了浴缸上方别的台面（墙上的置物架）
+    const tub = pickTub(fv(), localRay(), asset, rot)
+    if (tub && (!hit || hit.owner === tub.tub || tub.t <= hit.t + 1)) {
+      const fx = fv().fixtures.find((x) => x.id === tub.tub)
+      return { x: tub.x, y: tub.y, z: tub.z, rot: tub.rot, guides: fx ? tubGuides(fx) : [], asset: tub.asset }
+    }
     if (hit) {
       if (hit.kind === 'clip') {
         const c = snapToClip(hit.pose, hit.poly)

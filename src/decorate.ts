@@ -29,6 +29,7 @@ import { artKindOf, parseArt, pickArt } from './three/artwork'
 import { paletteStyle } from './three/catalog'
 import { derivedIndex, hasDerived } from './three/stylePalettes'
 import { fitsOnFixture, fitsOnSurface, fixtureTop, toLocal, toWorld } from './surface'
+import { tubTopPose } from './tubTop'
 import { COMPETITIVE, INTEREST_TIERS, JOBS, interestFloor, interestProps, interestStickers, interestWall, jobDeskProps, levelOf, topLevel, type Household, type InterestId, type Member, type Tier } from './household'
 import { furnitureBox } from './snap'
 import { floorOf } from './floors'
@@ -1350,15 +1351,16 @@ class Decorator {
     return null
   }
 
-  /** 摆到浴缸边沿上：lx / lz 为浴缸局部坐标，lrot 为相对浴缸的转角 */
-  onTub(tub: Fixture, asset: string, lx: number, lz: number, lrot = 0) {
+  /**
+   * 横跨摆到浴缸边沿上，位置和手动摆放的吸附一致（tubTop.tubTopPose）：横向居中，lx 为沿浴缸长边的目标位置（夹到两端之间、靠近端头就顶到端头），
+   * lrot 为想要的相对浴缸的转角（放不下时换和浴缸平行 / 垂直的另一种）
+   */
+  onTub(tub: Fixture, asset: string, lx: number, lrot = 0) {
     const def = ASSET_MAP.get(asset)
-    const top = fixtureTop(tub)
-    if (!def || top === null) return null
-    const p = toWorld(tub, lx, lz)
-    const f: Furniture = { id: uid('u'), asset, x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10, rot: (tub.rot + lrot) % 360, color: this.colorFor(def), z: top }
-    if (!fitsOnFixture(tub, asset, f.x, f.y, f.rot)) return null
-    if (!this.canPlace(asset, f.x, f.y, f.rot, top, { parent: tub.id })) return null
+    const s = def ? tubTopPose(tub, asset, toWorld(tub, lx, 0), tub.rot + lrot) : null
+    if (!def || !s) return null
+    const f: Furniture = { id: uid('u'), asset: s.asset, x: s.x, y: s.y, rot: s.rot, color: this.colorFor(def), z: s.z }
+    if (!this.canPlace(s.asset, f.x, f.y, f.rot, s.z, { parent: tub.id })) return null
     this.out.push(f)
     this.flat.add(f.id)
     this.parentOf.set(f.id, tub.id)
@@ -1376,7 +1378,7 @@ class Decorator {
     const size = lidSizeFor(tub.w, d)
     if (r < 0.4 && size) {
       const id = `bx-lid-${this.rand() < 0.55 ? 'roll' : 'panel'}-${size.w}x${size.d}`
-      if (ASSET_MAP.has(id) && this.onTub(tub, id, 0, 0)) return
+      if (ASSET_MAP.has(id) && this.onTub(tub, id, 0)) return
     }
     if (r < 0.78) {
       // 淋浴在哪一侧：放在另一端
@@ -1384,13 +1386,9 @@ class Decorator {
       const a = (tub.rot * Math.PI) / 180
       const side = s ? Math.sign((s.p.x - tub.x) * Math.cos(a) + (s.p.y - tub.y) * Math.sin(a)) || 1 : 1
       const end = s?.mode === 'over' ? side : -side
-      const opts: [string, number][] = [
-        ['wet-bath-lid-rolled', 9.5],
-        ['bx-lid-rolled-60', 8.6],
-        ['bx-lid-zigzag', 7.4],
-        ['wet-bath-lid-folded', 23],
-      ]
-      for (const [id, half] of opts.sort(() => this.rand() - 0.5)) if (ASSET_MAP.has(id) && this.onTub(tub, id, end * (tub.w / 2 - half - 1), 0, 90)) return
+      const opts = ['wet-bath-lid-rolled', 'bx-lid-rolled-60', 'bx-lid-zigzag', 'wet-bath-lid-folded']
+      // 目标点给到浴缸外，tubTopPose 夹到这一端（端头留 1cm）
+      for (const id of opts.sort(() => this.rand() - 0.5)) if (ASSET_MAP.has(id) && this.onTub(tub, id, end * tub.w, 90)) return
     }
   }
 

@@ -7,6 +7,7 @@ import { autoWallpapers } from './wallpaper'
 import type { CheckItem } from './checklist'
 import { generateHousehold } from './household'
 import { propsOn } from './surface'
+import { applyFixtureCarry, captureFixtureProps } from './fixtureCarry'
 import { ASSET_MAP } from './three/assets'
 import type { StyleTag } from './three/kit'
 import type { PatternSpec } from './three/patterns'
@@ -698,7 +699,13 @@ export function rotateSelectedFixture(deg = 90) {
   const s = selection.value
   if (s?.type !== 'fixture') return
   const f = findFixture(s.id)
-  if (f) mutate(() => (f.rot = (((f.rot + deg) % 360) + 360) % 360))
+  if (!f) return
+  mutate((p) => {
+    // 台面上的东西（浴缸盖、台面小物）跟着一起转
+    const carry = captureFixtureProps(p, f)
+    f.rot = (((f.rot + deg) % 360) + 360) % 360
+    applyFixtureCarry(p, f, carry)
+  })
 }
 
 /** 换楼梯形式（只改数据，不记撤销）：占地换成这种形式的默认尺寸（中心不动），去掉这种形式用不到的字段 */
