@@ -53,10 +53,16 @@ const sizes = computed(() => siblings(def.value))
 const tagGroups = computed(() => {
   const tags = def.value.tags ?? []
   const hobby = (x: Tag) => x.startsWith('hobby:')
+  // 不同标签可能译成同一个词（light / lamp 在日语里都是「照明」）：按当前语言的显示名去重
+  const seen = new Set<string>()
+  const once = (x: Tag) => {
+    const k = t(tagText(x))
+    return !seen.has(k) && !!seen.add(k)
+  }
   return {
-    kinds: tags.filter((x) => x in TYPE_NAMES),
-    hobbies: tags.filter(hobby),
-    traits: tags.filter((x) => !(x in TYPE_NAMES) && !hobby(x) && x !== 'fixture'),
+    kinds: tags.filter((x) => x in TYPE_NAMES && once(x)),
+    hobbies: tags.filter((x) => hobby(x) && once(x)),
+    traits: tags.filter((x) => !(x in TYPE_NAMES) && !hobby(x) && x !== 'fixture' && once(x)),
   }
 })
 /** 标签的显示名（中文，界面上再经 t() 翻译） */

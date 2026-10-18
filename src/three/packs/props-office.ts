@@ -694,13 +694,14 @@ function ringLightFloor(p: string[]) {
   const [stand, ring, light] = p
   const g = new THREE.Group()
   tripodLegs(g, 32, 60, 0.9, stand)
-  g.add(cyl(1.4, 1.4, 70, stand, { y: 58 }, 14))
-  g.add(cyl(1.0, 1.0, 40, M.silver, { y: 127 }, 12))
-  g.add(cyl(1.8, 1.8, 3, shade(stand, -0.1), { y: 126 }, 14))
-  const cy = 167 + 23
+  // 灯圈中心约 155cm（站立时脸的高度），总高 180
+  g.add(cyl(1.4, 1.4, 45, stand, { y: 58 }, 14))
+  g.add(cyl(1.0, 1.0, 40, M.silver, { y: 92 }, 12))
+  g.add(cyl(1.8, 1.8, 3, shade(stand, -0.1), { y: 101 }, 14))
+  const cy = 132 + 23
   g.add(torus(23, 2.2, ring, { y: cy, z: -0.5 }))
   g.add(noOutline(litOutlined(torus(23, 1.6, light, { y: cy, z: 0.9 }), light, 0.9)))
-  g.add(rbox(2, 23, 1.6, stand, { y: 167, z: -0.3 }, 0.5))
+  g.add(rbox(2, 23, 1.6, stand, { y: 132, z: -0.3 }, 0.5))
   g.add(rbox(8, 16, 1, DARK, { y: cy - 8, z: 0.7 }, 0.5))
   g.add(glow(7.2, 14.8, SCREEN, { y: cy - 7.4, z: 1.3 }, 0.5))
   return g
@@ -2110,7 +2111,7 @@ export const PROPS_OFFICE: AssetDef[] = [
     ['industrial', [I.iron, I.steel, I.rust]],
   ], mixer),
   def('of-ring-light', '环形补光灯', 'tabletop', [29, 15, 48.5], STAND, ringLightDesk, { sizeLabel: '桌面款' }),
-  def('of-ring-light-floor', '环形补光灯', 'appliance', [58, 50.5, 215], STAND, ringLightFloor, { sizeLabel: '落地款', prop: undefined }),
+  def('of-ring-light-floor', '环形补光灯', 'appliance', [58, 50.5, 180], STAND, ringLightFloor, { sizeLabel: '落地款', prop: undefined }),
   def('of-softbox', '柔光箱灯', 'appliance', [61.5, 53.5, 199.5], [
     ['modern', [M.black, M.black, '#fffaf0']],
     ['modern', [M.char, M.char, '#fff6e0']],
