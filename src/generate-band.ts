@@ -264,7 +264,8 @@ export function placeKitchen(
       fallback ??= k
       const ctx = { ...plan, fixtures: [...plan.fixtures, k] }
       for (const fr of [room, ...(o.fridgeRooms ?? [])]) {
-        const f = placeOnWall(fr, ctx, { kind: 'fridge', lengths: o.fridge, depth: o.fridgeDepth, near: { x: k.x, y: k.y }, nearMax: k.w / 2 + (fr === room ? 160 : 320) })
+        // 冰箱位不挡通往阳台的落地窗
+        const f = placeOnWall(fr, ctx, { kind: 'fridge', lengths: o.fridge, depth: o.fridgeDepth, near: { x: k.x, y: k.y }, nearMax: k.w / 2 + (fr === room ? 160 : 320), sash: true })
         if (f) {
           plan.fixtures.push(k, f)
           return { k, f }
@@ -333,9 +334,9 @@ export function shoeCabinet(plan: Plan, entry: Room, lengths = [120, 100, 90, 80
   return f
 }
 
-/** 卧室里的嵌入式衣柜（欧美 reach-in closet / 中式定制衣柜） */
+/** 卧室里的嵌入式衣柜（欧美 reach-in closet / 中式定制衣柜）：不挡通往阳台的落地窗 */
 export function bedroomCloset(plan: Plan, room: Room, lengths = [200, 180, 160, 140, 120], depth = 60) {
-  const f = placeOnWall(room, plan, { kind: 'builtin', lengths, depth, front: 70 } as PlaceSpec)
+  const f = placeOnWall(room, plan, { kind: 'builtin', lengths, depth, front: 70, sash: true } as PlaceSpec)
   if (f) plan.fixtures.push({ ...f, builtinType: 'closet' })
   return f
 }

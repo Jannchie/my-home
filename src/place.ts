@@ -54,7 +54,7 @@ export interface PlaceSpec {
   underWindow?: boolean
   /** 覆盖默认的使用空间进深（家具用） */
   front?: number
-  /** 通往阳台的落地窗前留出通行空间，underWindow 也不能挡在落地窗前（家具用） */
+  /** 通往阳台的落地窗前留出通行空间，underWindow 也不能挡在落地窗前（家具用；设备里冰箱位、卧室衣柜也传） */
   sash?: boolean
   /** 使用空间靠近本体的 45（椅子的位置）也不能压门的开合范围、门前通道（家具用：书桌前的椅子不挡门） */
   guardFront?: boolean
@@ -112,7 +112,7 @@ export function boxInsideWalls(b: Box, room: Room, ctx: Pick<Plan, 'rooms' | 'wa
 /**
  * 本房间边界上的门窗前方要留空的矩形区：
  * 开扇扫进本房间的门 = 门宽 × 门宽；折れ戸 = 门宽 × 半门宽；其余（开向另一侧、引き戸、窗）= 门宽 × 50 通行空间。
- * sash：通往阳台的落地窗（掃き出し窓）也是出入口，留出 50 的通行空间（家具用；设备摆放不传，保持户型生成结果不变）。
+ * sash：通往阳台的落地窗（掃き出し窓）也是出入口，留出 50 的通行空间（家具用；设备里只有冰箱位、卧室衣柜传）。
  */
 export function clearances(room: Room, ctx: PlaceCtx, avoidWindows: boolean, sash = false): Box[] {
   return clearanceZones(room, ctx, avoidWindows, sash).map((z) => z.box)
@@ -230,8 +230,13 @@ export function placeCandidates(room: Room, ctx: PlaceCtx, spec: PlaceSpec): Fix
       const hi = e.length - endB - L
       for (let t = lo; t <= hi + 0.01; t += 5) {
         if (blocked.some(([a, b]) => t < b && t + L > a)) continue
-        const a = add(add(e.a, mul(e.dir, t)), mul(inward, inset))
-        const b = add(a, mul(e.dir, L))
+        let a = add(add(e.a, mul(e.dir, t)), mul(inward, inset))
+        let b = add(a, mul(e.dir, L))
+        // 设备坐标会取整：按取整后的位置检查，免得取整后和贴着的设备压进 1 以上
+        const c0 = mul(add(add(a, b), mul(inward, spec.depth)), 0.5)
+        const snap = { x: Math.round(c0.x) - c0.x, y: Math.round(c0.y) - c0.y }
+        a = add(a, snap)
+        b = add(b, snap)
         const box = bbox([a, b, add(a, mul(inward, spec.depth))])
         if (!boxInside(box, room)) continue
         if (guards.some((g) => boxOverlaps(g, box))) continue

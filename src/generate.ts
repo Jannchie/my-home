@@ -826,8 +826,8 @@ function furnish({ c, plan }: Layout): Plan {
     const isLdk = kRoom.kind === 'ldk'
     const variants: KitchenVariant[] = isLdk && c.chance(0.7) ? ['facing', 'wall'] : ['wall', 'facing']
     const lengths = isLdk ? [270, 255, 240, 225, 210, 195, 180] : kRoom.name === 'DK' ? [240, 225, 210, 195, 180] : [180, 165, 150, 135]
-    // 厨房候选（长台面优先）逐个试，直到冰箱位也放得下；都不行就只放厨房
-    const fridge = (k: Fixture): PlaceSpec => ({ kind: 'fridge', lengths: [65, 60], depth: 65, near: { x: k.x, y: k.y }, nearMax: k.w / 2 + 160 })
+    // 厨房候选（长台面优先）逐个试，直到冰箱位也放得下；都不行就只放厨房。冰箱位不挡通往阳台的落地窗
+    const fridge = (k: Fixture): PlaceSpec => ({ kind: 'fridge', lengths: [65, 60], depth: 65, near: { x: k.x, y: k.y }, nearMax: k.w / 2 + 160, sash: true })
     let fallback: Fixture | null = null
     outer: for (const variant of isLdk ? variants : ['wall' as const]) {
       const spec: PlaceSpec = { kind: 'kitchen', variant, lengths, depth: fixtureDepth({ kind: 'kitchen', variant }), edges: 'inner' }
