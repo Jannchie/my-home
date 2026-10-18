@@ -1,15 +1,18 @@
 // 一键布置：seed 1..40 的摆放质量
 import { beforeAll, describe, expect, test } from 'vitest'
 import * as THREE from 'three'
-import { decorate, isOpenShelf } from '/src/decorate'
-import { generateHousehold } from '/src/household'
-import { edgesOf, fixtureBox, onBoundary, pointInPolygon, type Furniture, type Plan } from '/src/model'
+import { decorate, decorateHouse, isOpenShelf } from '/src/decorate'
+import { allocateRooms, generateHousehold, type Household } from '/src/household'
+import { generatePlan } from '/src/generate-region'
+import { baseFloorId, floorOf } from '/src/floors'
+import { hasTag } from '/src/three/tags'
+import { edgesOf, fixtureBox, onBoundary, openingsOn, pointInPolygon, type Furniture, type Plan } from '/src/model'
 import { supportOf, toLocal } from '/src/surface'
 import { cabinetsOn, spotOf } from '/src/cabinet'
 import { ASSET_MAP, type AssetDef } from '/src/three/assets'
 import { bendToWalls, furnitureModel, isPlant, placeFurniture } from '/src/three/house'
 import { wallThicknessAt } from '/src/walls'
-import { genJp, penetration, range, rectCorners } from './helpers'
+import { JP_OPTS, genJp, penetration, range, rectCorners } from './helpers'
 
 const SEEDS = range(1, 40)
 
@@ -145,6 +148,46 @@ describe('一键布置 seed 1..40', () => {
     expect(bad).toEqual([])
   })
 
+  test('门口脚垫铺在玄关里、贴着大门（外墙上的门）内侧', () => {
+    let n = 0
+    const bad = all(({ plan, f }) =>
+      f
+        .filter((x) => /^lm-doormat-/.test(x.asset))
+        .flatMap((x) => {
+          n++
+          const room = plan.rooms.find((r) => pointInPolygon(x, r.points))
+          if (room?.kind !== 'entrance') return [`${x.asset} 不在玄关（${room?.kind}）`]
+          const near = openingsOn(room, plan).some(({ o, e, center }) => o.kind === 'door' && wallThicknessAt(plan, center, e.out, room) >= plan.wallOuter && Math.hypot(x.x - center.x, x.y - center.y) < 45)
+          return near ? [] : [`${x.asset} 离大门太远`]
+        }),
+    )
+    expect(bad).toEqual([])
+    // 不是空转：40 户里总有一些玄关铺了脚垫
+    expect(n).toBeGreaterThan(0)
+  })
+
+  test('走廊不被挤窄：矩形走廊里的落地家具旁边还留着 60 以上的通道', () => {
+    const bad = all(({ plan, f }) =>
+      plan.rooms
+        .filter((r) => r.kind === 'hall' && r.points.length === 4)
+        .flatMap((r) => {
+          const xs = r.points.map((p) => p.x)
+          const ys = r.points.map((p) => p.y)
+          const alongX = Math.max(...xs) - Math.min(...xs) >= Math.max(...ys) - Math.min(...ys)
+          // 窄边的净宽（墙中心线减墙厚）
+          const width = (alongX ? Math.max(...ys) - Math.min(...ys) : Math.max(...xs) - Math.min(...xs)) - plan.wall
+          return f
+            .filter((x) => isFloor(x) && pointInPolygon(x, r.points))
+            .flatMap((x) => {
+              const cs = footprint(x).map((p) => (alongX ? p.y : p.x))
+              const left = width - (Math.max(...cs) - Math.min(...cs))
+              return left < 60 ? [`${x.asset} 只留 ${left.toFixed(0)}cm`] : []
+            })
+        }),
+    )
+    expect(bad).toEqual([])
+  })
+
   test('多宝格、书架、展示柜的开放格子每一格都放了东西', () => {
     const bad = all(({ f }) =>
       f.flatMap((p) => {
@@ -205,4 +248,36 @@ describe('一键布置 seed 1..40', () => {
     })
     expect(bad).toEqual([])
   })
+})
+
+describe('功能房成套布置', () => {
+  test('一个人住的大户建：健身房有有氧 / 力量器械，衣帽间衣柜不超过两个、有挂衣杆或斗柜，客房有床', () => {
+    const got = new Set<string>()
+    const bad: string[] = []
+    for (const seed of range(1, 30)) {
+      const plan = generatePlan({ ...JP_OPTS, seed, region: 'west', dwelling: 'house' }).plan
+      const base = generateHousehold(plan, seed)
+      // 一个爱健身的上班族：自己一间，剩下的依次是健身房、书房、客房、衣帽间
+      const me = { ...base.members[0], role: 'self' as const, age: 35, job: 'office' as const, interests: ['fitness' as const], levels: {} }
+      const hh: Household = { ...base, kind: 'single', members: [me] }
+      plan.household = hh
+      const pur = allocateRooms(plan, hh).purposeOf
+      if (![...pur.values()].some((p) => p === 'gym' || p === 'closet')) continue
+      const f = decorateHouse(plan, seed, 'auto', hh)
+      for (const [rid, p] of pur) {
+        const room = plan.rooms.find((r) => r.id === rid)!
+        const inRoom = f.filter((x) => !x.z && pointInPolygon(x, room.points) && (x.floor ?? baseFloorId(plan)) === floorOf(plan, room) && !ASSET_MAP.get(x.asset)?.prop)
+        const n = (...ts: Parameters<typeof hasTag>[1][]) => inRoom.filter((x) => hasTag(ASSET_MAP.get(x.asset), ...ts)).length
+        got.add(p)
+        if (p === 'gym' && !n('cardio', 'strength', 'weights')) bad.push(`seed ${seed}: 健身房没有器械`)
+        if (p === 'closet') {
+          if (n('wardrobe') > 2) bad.push(`seed ${seed}: 衣帽间 ${n('wardrobe')} 个衣柜`)
+          if (!n('wardrobe', 'garment-rail', 'dresser')) bad.push(`seed ${seed}: 衣帽间没有衣柜 / 挂衣杆 / 斗柜`)
+        }
+        if (p === 'guest' && room.kind === 'western' && !n('bed')) bad.push(`seed ${seed}: 客房没有床`)
+      }
+    }
+    expect(bad).toEqual([])
+    expect(got.has('gym')).toBe(true)
+  }, 300_000)
 })
