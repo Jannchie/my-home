@@ -56,6 +56,25 @@ export function levels(asset: string, open = false): Level[] {
 }
 
 
+/** 点在这几块多边形合起来的外框里 */
+function inBounds(polys: Poly[], p: Vec) {
+  const xs = polys.flatMap((pl) => pl.map((q) => q[0]))
+  const zs = polys.flatMap((pl) => pl.map((q) => q[1]))
+  return p.x >= Math.min(...xs) && p.x <= Math.max(...xs) && p.y >= Math.min(...zs) && p.y <= Math.max(...zs)
+}
+
+/** 离点最近的多边形（按到各条边的距离） */
+function nearestPoly(polys: Poly[], p: Vec) {
+  const segDist = (a: [number, number], b: [number, number]) => {
+    const dx = b[0] - a[0]
+    const dz = b[1] - a[1]
+    const t = Math.max(0, Math.min(1, ((p.x - a[0]) * dx + (p.y - a[1]) * dz) / (dx * dx + dz * dz || 1)))
+    return Math.hypot(p.x - a[0] - dx * t, p.y - a[1] - dz * t)
+  }
+  const dist = (pl: Poly) => Math.min(...pl.map((q, i) => segDist(q, pl[(i + 1) % pl.length])))
+  return polys.reduce((best, pl) => (dist(pl) < dist(best) ? pl : best))
+}
+
 const rect = (x0: number, z0: number, x1: number, z1: number): Poly => [
   [x0, z0],
   [x1, z0],
@@ -168,12 +187,17 @@ export function fixtureTop(f: Fixture) {
 export function fitsOnFixture(f: Fixture, asset: string, x: number, y: number, rot: number, z?: number) {
   const all = fixtureLevels(f)
   const lv = z === undefined ? all[0] : all.find((l) => Math.abs(l.y - z) < 0.5)
-  return !!lv && corners(asset, x, y, rot).every((c) => inPolys(f, lv.polys, c))
+  return !!lv && allInOnePoly(f, lv.polys, corners(asset, x, y, rot))
 }
 
 function inPolys(f: Pick<Furniture, 'x' | 'y' | 'rot'>, polys: Poly[], p: Vec) {
   const l = toLocal(f, p)
   return polys.some((poly) => pointInPolygon(l, poly.map(([x, z]) => ({ x, y: z }))))
+}
+
+/** 几个点是否全都落在同一个多边形里（四角分别落在不同的格子 / 桌角里不算：那样会横跨中间的隔板、水槽、麻将牌） */
+function allInOnePoly(f: Pick<Furniture, 'x' | 'y' | 'rot'>, polys: Poly[], ps: Vec[]) {
+  return polys.some((poly) => ps.every((p) => inPolys(f, [poly], p)))
 }
 
 /** 一件家具上（含柜内各层）摆着的东西，递归：托盘上的杯子也算 */
@@ -247,7 +271,8 @@ export function pickSurface(plan: Plan, ray: THREE.Ray, exclude: Set<string>, ac
       if (!ray.intersectPlane(plane, hit)) continue
       const p = { x: hit.x, y: hit.z }
       const lp = toLocal(f, p)
-      const poly = l.polys.find((pl) => pointInPolygon(lp, pl.map(([px, pz]) => ({ x: px, y: pz }))))
+      // 点在层的外框里、却落在几块区域之间（麻将桌中间的牌、床头的枕头、台面上的水槽）：吸到最近的那块，fitOnSurface 再整件收进去
+      const poly = l.polys.find((pl) => pointInPolygon(lp, pl.map(([px, pz]) => ({ x: px, y: pz })))) ?? (l.polys.length && inBounds(l.polys, lp) ? nearestPoly(l.polys, lp) : undefined)
       if (!poly) continue
       const t = hit.distanceTo(ray.origin)
       if (!best || t < best.t) best = { x: p.x, y: p.y, z, owner: f.id, t, kind: l.kind, pose: { x: f.x, y: f.y, rot: f.rot, wall: f.wall }, poly }
@@ -281,7 +306,7 @@ export function fitOnSurface(plan: Plan, ownerId: string, z: number, asset: stri
   if (!owner || !lv || lv.kind !== 'shelf') return { x, y }
   // 往所在那块多边形的中心收
   const l = toLocal(owner, { x, y })
-  const poly = lv.polys.find((pl) => pointInPolygon(l, pl.map(([px, pz]) => ({ x: px, y: pz })))) ?? lv.polys[0]
+  const poly = lv.polys.find((pl) => pointInPolygon(l, pl.map(([px, pz]) => ({ x: px, y: pz })))) ?? nearestPoly(lv.polys, l)
   const cx = poly.reduce((s, p) => s + p[0], 0) / poly.length
   const cz = poly.reduce((s, p) => s + p[1], 0) / poly.length
   const target = toWorld(owner, cx, cz)
@@ -297,7 +322,7 @@ export function fitOnSurface(plan: Plan, ownerId: string, z: number, asset: stri
 export function fitsOnSurface(owner: Furniture, z: number, asset: string, x: number, y: number, rot: number) {
   // 同一高度可能有好几格（多宝格左右两列的底层、被竖隔板隔开的两小格）：整件落在其中任意一格里就行，不能横跨隔板
   const cs = corners(asset, x, y, rot)
-  return levels(owner.asset, !!owner.open).some((l) => Math.abs((owner.z ?? 0) + l.y - z) < 0.5 && cs.every((c) => inPolys(owner, l.polys, c)))
+  return levels(owner.asset, !!owner.open).some((l) => Math.abs((owner.z ?? 0) + l.y - z) < 0.5 && allInOnePoly(owner, l.polys, cs))
 }
 
 /**
@@ -313,13 +338,57 @@ export function supportOf(plan: Plan, f: Furniture): { ownerId: string; fits: bo
       if (Math.abs(o.z + lv.y - z) >= 0.5) continue
       // 四角都在层内（横跨浴缸边沿的盖子中心落在水面上，也算有支撑）；否则至少中心要在层内
       // 挂钩层：挂着的东西不要求四角都在层内，但中心要在挂钩范围里（不能随便挂到同高度别处的挂杆上）
-      const fits = lv.kind === 'hook' ? inPolys(o, lv.polys, f) : corners(f.asset, f.x, f.y, f.rot).every((c) => inPolys(o, lv.polys, c))
+      const fits = lv.kind === 'hook' ? inPolys(o, lv.polys, f) : allInOnePoly(o, lv.polys, corners(f.asset, f.x, f.y, f.rot))
       if (!fits && !inPolys(o, lv.polys, f)) continue
       if (fits) return { ownerId: o.id, fits }
       found ??= { ownerId: o.id, fits }
     }
   }
   return found
+}
+
+/** 两个凸多边形（平面）是否相交超过 tol（分离轴） */
+function polysOverlap(a: Vec[], b: Vec[], tol: number) {
+  for (const poly of [a, b])
+    for (let i = 0; i < poly.length; i++) {
+      const p = poly[i]
+      const q = poly[(i + 1) % poly.length]
+      const L = Math.hypot(q.x - p.x, q.y - p.y)
+      if (L < 1e-9) continue
+      const n = { x: -(q.y - p.y) / L, y: (q.x - p.x) / L }
+      const pa = a.map((v) => v.x * n.x + v.y * n.y)
+      const pb = b.map((v) => v.x * n.x + v.y * n.y)
+      if (Math.min(Math.max(...pa), Math.max(...pb)) - Math.max(Math.min(...pa), Math.min(...pb)) <= tol) return false
+    }
+  return true
+}
+
+/**
+ * 台面上的摆件是否穿模（手动摆放的红框提示用）：落在某一层的外框里、却没有一块区域整个装得下
+ * （横跨麻将桌中间的牌、水槽、格子隔板），或和同一台面上别的东西（麻将牌、棋盘、杯子…）重叠。
+ * 挂着的、贴附的不算；不在台面上（z = 0）的交给 snap.overlapsOthers。plan 是单层的视图（Sandbox 的 fv()）。
+ */
+export function propClash(plan: Plan, f: Furniture): boolean {
+  const z = f.z ?? 0
+  const def = ASSET_MAP.get(f.asset)
+  if (!z || !def || def.mount || def.stick || def.form?.includes('hanging')) return false
+  const cs = corners(f.asset, f.x, f.y, f.rot)
+  let outside = false
+  let inside = false
+  for (const o of owners(plan)) {
+    if (o.id === f.id) continue
+    for (const lv of o.levels) {
+      if (lv.kind !== 'shelf' || Math.abs(o.z + lv.y - z) >= 0.5 || !inBounds(lv.polys, toLocal(o, f))) continue
+      if (allInOnePoly(o, lv.polys, cs)) inside = true
+      else outside = true
+    }
+  }
+  if (outside && !inside) return true
+  return plan.furniture.some((o) => {
+    if (o.id === f.id || Math.abs((o.z ?? 0) - z) >= 0.5) return false
+    const d = ASSET_MAP.get(o.asset)
+    return !!d && !d.mount && !d.stick && !d.form?.includes('hanging') && polysOverlap(cs, corners(o.asset, o.x, o.y, o.rot), 0.5)
+  })
 }
 
 /**

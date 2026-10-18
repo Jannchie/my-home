@@ -19,7 +19,7 @@ import FloorBar from './FloorBar.vue'
 import FloorRail from './FloorRail.vue'
 import { withStairHoles } from '../stairs'
 import { overlapsOthers, snapFurniture, snapToWall, type Guide } from '../snap'
-import { fitOnSurface, pickSurface, propsOn, snapToClip, snapToHook } from '../surface'
+import { fitOnSurface, pickSurface, propClash, propsOn, snapToClip, snapToHook } from '../surface'
 import { createStage, fitSun, frameCamera, setStageQuality, type Stage } from '../three/stage'
 import { attachPost, LOOKS, LOOK_MAP, type LookId, type Post } from '../three/post'
 import { CITIES, MONTH_DAYS, compassAxes, skyState, type SkyState } from '../three/sky'
@@ -999,8 +999,8 @@ function updateRing() {
   if (f.id !== framedId) selFrame.hide()
   framedId = f.id
   frameAt(selFrame, o.obj, f.asset)
-  // 和别的家具 / 设备穿模时提示成红色
-  selFrame.setColor(overlapsOthers(fv(), f.id, f.asset, f.x, f.y, f.rot) ? RING_BAD : RING_OK)
+  // 和别的家具 / 设备穿模时提示成红色；台面上的摆件和同一台面上的东西（麻将牌、棋盘…）重叠、或横跨到区域外也算
+  selFrame.setColor((f.z ? propClash(fv(), f) : overlapsOthers(fv(), f.id, f.asset, f.x, f.y, f.rot)) ? RING_BAD : RING_OK)
   if (hoverId === f.id) hoverFrame.hide()
 }
 
@@ -1485,7 +1485,8 @@ function updateGhost(e: { clientX: number; clientY: number; altKey: boolean }) {
     // 摆放预览在场景根上：加上当前楼层的动画偏移
     ghost.position.y += floorAnim.get(activeFloor.value)?.extra ?? 0
     frameAt(ghostFrame, ghost, q.asset)
-    ghostFrame.setColor(!q.z && overlapsOthers(fv(), null, q.asset, q.x, q.y, q.rot ?? ghostRot.value) ? RING_BAD : RING_OK)
+    const bad = q.z ? propClash(fv(), { id: '', asset: q.asset, x: q.x, y: q.y, rot: q.rot ?? ghostRot.value, z: q.z, floor: activeFloorField() }) : overlapsOthers(fv(), null, q.asset, q.x, q.y, q.rot ?? ghostRot.value)
+    ghostFrame.setColor(bad ? RING_BAD : RING_OK)
     showGuides(q.guides, activeY())
   }
   dirty = true

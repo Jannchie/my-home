@@ -2459,7 +2459,7 @@ function cnHome(): AssetDef[] {
     ...([[97, 'Single'], [120, 'Semi-double'], [140, 'Double'], [160, 'Queen']] as const).map(([m, label]) =>
       D(`sw-cn-bed-${m}`, '新中式床', 'bedroom', [m + 12.4, 212.5, 108], bed, cnBed(m), { sizeLabel: label, series: 'sw-cn-bed', type: 'bed', tags: ['bed'], surface: CN_BED_TOP }),
     ),
-    D('sw-cn-wardrobe', '新中式衣柜', 'bedroom', [103, 60.2, 198], cab, cnWardrobe, { type: 'wardrobe', tags: ['wardrobe', 'cabinet', 'bed-ok', 'multi-ok'], surfaces: CN_WARDROBE_SURFACES, openable: true }),
+    D('sw-cn-wardrobe', '新中式衣柜', 'bedroom', [103, 60.2, 198], cab, cnWardrobe, { type: 'wardrobe', tags: ['wardrobe', 'cabinet', 'multi-ok'], surfaces: CN_WARDROBE_SURFACES, openable: true }),
     D('sw-cn-dresser', '闷户橱', 'bedroom', [85.2, 46.3, 88], cab, cnDresser, { type: 'dresser', tags: ['dresser', 'cabinet'], surface: 85.4, surfaceShape: [r(-37.5, -22, 37.5, 22)], surfaces: CN_DRESSER_SURFACES, openable: true }),
     D('sw-cn-desk', '新中式书桌', 'study', [120, 60, 76], cab, cnDesk, { type: 'desk', tags: ['desk', 'table'], surface: 76, surfaces: CN_DESK_SURFACES, openable: true }),
     D('sw-cn-study-chair', '南官帽椅', 'study', [52, 46.8, 104.5], chair, cnStudyChair, { type: 'office-chair', tags: ['office-chair', ...seat] }),
@@ -2826,7 +2826,7 @@ function fhHome(): AssetDef[] {
         [FA, FH.mustard, FH.cream, FH.oak],
       ], fhPlankBed(m), { sizeLabel: label, series: 'sw-fh-bed', type: 'bed', tags: ['bed'], surface: FH_BED_TOP }),
     ),
-    D('sw-fh-wardrobe', '谷仓门衣柜', 'bedroom', [110, 62, 194], painted, fhWardrobe, { type: 'wardrobe', tags: ['wardrobe', 'cabinet', 'bed-ok', 'multi-ok'], surfaces: FH_WARDROBE_SURFACES, openable: true }),
+    D('sw-fh-wardrobe', '谷仓门衣柜', 'bedroom', [110, 62, 194], painted, fhWardrobe, { type: 'wardrobe', tags: ['wardrobe', 'cabinet', 'multi-ok'], surfaces: FH_WARDROBE_SURFACES, openable: true }),
     D('sw-fh-dresser', '农舍五斗柜', 'bedroom', [88, 46, 88], painted, fhDresser, { type: 'dresser', tags: ['dresser', 'cabinet'], surface: 88, surfaces: FH_DRESSER_SURFACES, openable: true }),
     D('sw-fh-desk', '车旋腿书桌', 'study', [120, 60, 76], plank, fhDesk, { type: 'desk', tags: ['desk', 'table'], surface: 76, surfaces: FH_DESK_SURFACES, openable: true }),
     D('sw-fh-desk-chair', '温莎书椅', 'study', [50, 45.9, 96.3], windsor, fhWindsor(true), { type: 'office-chair', tags: ['office-chair', ...seat] }),

@@ -247,6 +247,7 @@ export const TRAIT_NAMES: Record<TraitTag, [zh: string, ja: string, en: string]>
   fixture: ['设备', '設備', 'Fixture'],
   'high-ok': ['可放高处', '高所に置ける', 'Fine up high'],
   'bed-ok': ['可放床上', 'ベッドに置ける', 'Fine on a bed'],
+  'shelf-only': ['只放柜架', '棚専用', 'Shelf only'],
   'multi-ok': ['可摆多件', '複数置ける', 'Can repeat'],
   'kitchen-shelf-ok': ['适合厨房搁板', 'キッチン棚向き', 'Kitchen shelf'],
   'toilet-shelf-ok': ['适合马桶上方搁板', 'トイレ棚向き', 'Toilet shelf'],
