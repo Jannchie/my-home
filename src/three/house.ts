@@ -1654,6 +1654,9 @@ function buildShowers(plan: Plan) {
     addOutlines(obj)
     tagFade(obj, s.p, s.wallOut, s.outer)
     obj.userData.shower = true
+    // 3D 里点淋浴也选中这个浴缸（附件：选中框只框浴缸本体）
+    obj.userData.fixtureId = f.id
+    obj.userData.fixtureExtra = true
     g.add(obj)
     if (s.rail) {
       const [p0, p1] = s.rail
@@ -1666,6 +1669,8 @@ function buildShowers(plan: Plan) {
       cur.rotation.y = Math.atan2(-(p1.y - p0.y), p1.x - p0.x)
       mergeMeshes(cur)
       addOutlines(cur)
+      cur.userData.fixtureId = f.id
+      cur.userData.fixtureExtra = true
       g.add(cur)
     }
   }
@@ -1832,7 +1837,7 @@ export function buildHouse(plan: Plan, wallH: number, opts: HouseOpts = {}) {
     mergeMeshes(m)
     addOutlines(m)
     placeOnFloor(m, plan, f.x, f.y, f.rot)
-    // 3D 里点选设备（内置收纳）用
+    // 3D 里点选设备用（fixturePick.ts）；漫游时准星显示设备种类
     m.userData.fixtureId = f.id
     fx.add(m)
   }

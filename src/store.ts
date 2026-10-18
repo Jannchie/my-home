@@ -673,11 +673,12 @@ export function addFixture(f: Omit<Fixture, 'id'>) {
   selection.value = { type: 'fixture', id: fx.id }
 }
 
-export function rotateSelectedFixture() {
+/** 选中的设备转 deg 度（缺省顺时针 90°；3D 沙盘的 Q / 逆时针按钮传 -90），一步撤销 */
+export function rotateSelectedFixture(deg = 90) {
   const s = selection.value
   if (s?.type !== 'fixture') return
   const f = findFixture(s.id)
-  if (f) mutate(() => (f.rot = (f.rot + 90) % 360))
+  if (f) mutate(() => (f.rot = (((f.rot + deg) % 360) + 360) % 360))
 }
 
 /** 按规则重新决定所有开门的铰链与开向 */

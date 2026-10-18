@@ -1185,7 +1185,7 @@ function openMenu(x: number, y: number) {
   } else if (s.type === 'fixture') {
     const f = findFixture(s.id)
     title = f ? t(FIXTURES[f.kind].label) : ''
-    items = [{ label: t('旋转 90°'), icon: ICONS.rotateCw, keys: 'Q', action: rotateSelectedFixture }, 'sep', del]
+    items = [{ label: t('旋转 90°'), icon: ICONS.rotateCw, keys: 'Q', action: () => rotateSelectedFixture() }, 'sep', del]
   } else if (s.type === 'opening') {
     const o = plan.value.openings.find((x) => x.id === s.id)
     if (!o) return
