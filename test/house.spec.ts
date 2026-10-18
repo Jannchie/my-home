@@ -12,6 +12,8 @@ import { normalizePlan } from '/src/store'
 import { decodeShare, encodeShare } from '/src/share'
 import { buildBuilding } from '/src/three/building'
 import { yardFurniture } from '/src/yard'
+import { furnitureBox } from '/src/snap'
+import { ASSET_MAP } from '/src/three/assets'
 import { JP_OPTS, normalizeIds, overlapArea, range } from './helpers'
 
 type Combo = { region: Region; dwelling: 'house' | 'duplex' }
@@ -161,6 +163,15 @@ describe('院子', () => {
           if (rooms1.some((r) => pointInPolygon(f, r.points))) bad.push(`${key(c)} ${s}: ${f.asset} 在房间里`)
           if ([...p.site!.paths, ...p.site!.parking.map((k) => k.points)].some((q) => pointInPolygon(f, q))) bad.push(`${key(c)} ${s}: ${f.asset} 压到通道 / 车位`)
           if (f.floor) bad.push('院子物件不该有楼层标记')
+          // 摆在台面上的（园艺工作台上的苗、浇水壶）：下面要有一件台面高度对得上、占地盖得住它的东西
+          if (f.z) {
+            const fb = furnitureBox(f.asset, f.x, f.y, f.rot)
+            const on = items.some((o) => {
+              const b = furnitureBox(o.asset, o.x, o.y, o.rot)
+              return !o.z && ASSET_MAP.get(o.asset)?.surface === f.z && fb.x0 >= b.x0 - 0.5 && fb.x1 <= b.x1 + 0.5 && fb.y0 >= b.y0 - 0.5 && fb.y1 <= b.y1 + 0.5
+            })
+            if (!on) bad.push(`${key(c)} ${s}: ${f.asset} 悬空`)
+          }
         }
       }
     expect(bad).toEqual([])
