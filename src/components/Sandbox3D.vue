@@ -4103,6 +4103,11 @@ h3 {
   flex: 1;
   accent-color: var(--accent);
 }
+/* 左边的标签不换行、不被右边的控件挤窄（日文「インテリアスタイル」这类长标签），控件自己缩 */
+.row > span:first-child {
+  flex: none;
+  white-space: nowrap;
+}
 .seg {
   display: flex;
   padding: 2px;
@@ -4313,6 +4318,7 @@ h3 {
 }
 .sel-style {
   flex: 1;
+  min-width: 0;
 }
 .filter-row {
   display: flex;

@@ -165,13 +165,25 @@ const showOn = (v: FloorView) => (v === 'interior' ? floorView3d.value !== 'exte
   background: var(--hover);
   border-radius: var(--radius);
 }
+/* 四个选项（全部楼层 / 只到当前层 / 分层拉开 / 外观）：图标在上、名字在下，各占四分之一宽，放不下的名字省略（悬停看全名） */
 .shows button {
-  flex: 1;
-  height: var(--control-h-sm);
-  padding: 0 6px;
+  flex: 1 1 0;
+  min-width: 0;
+  height: auto;
+  min-height: var(--control-h-sm);
+  padding: 4px 2px;
+  flex-direction: column;
+  gap: 2px;
   font-size: var(--fs-xs);
+  line-height: 1.2;
   border-color: transparent;
   background: transparent;
+}
+.shows button span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .shows button.on {
   background: var(--surface);
