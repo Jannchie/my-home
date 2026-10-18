@@ -5,6 +5,7 @@ import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 // 室内灯的楼层 / 房间遮罩：给所有受光照材质挂上 onBeforeCompile（副作用导入，要在任何材质编译前生效）
 import { injectLightMask } from './lightMask'
+import { mangaUniforms } from './manga'
 
 // ---------- 赛璐璐阴影 ----------
 // three 自带的 PCF 阴影用逐像素噪点（IGN）旋转采样，边缘是一片网点状的颗粒渐变。
@@ -126,7 +127,8 @@ export function vertexColorToon() {
 
 /** 描边：沿法线在屏幕空间外扩，线宽不随距离变化；颜色取填充色的深色版本，更像手绘 */
 const outlineCache = new Map<string, THREE.ShaderMaterial>()
-export const outlineUniforms = { uWidth: { value: 1.6 }, uViewport: { value: new THREE.Vector2(800, 600) } }
+// uManga：黑白漫画效果渲染时描边输出墨线标记（manga.ts，R = 1），和受光材质共用同一个 uniform 对象
+export const outlineUniforms = { uWidth: { value: 1.6 }, uViewport: { value: new THREE.Vector2(800, 600) }, uManga: mangaUniforms.uManga }
 function outlineMaterial(color: THREE.Color) {
   const key = color.getHexString()
   let m = outlineCache.get(key)
@@ -146,7 +148,8 @@ function outlineMaterial(color: THREE.Color) {
         }`,
       fragmentShader: /* glsl */ `
         uniform vec3 uColor;
-        void main() { gl_FragColor = vec4(uColor, 1.0); }`,
+        uniform float uManga;
+        void main() { gl_FragColor = uManga > 0.5 ? vec4(1.0, 0.5, 0.5, 1.0) : vec4(uColor, 1.0); }`,
       side: THREE.BackSide,
     })
     outlineCache.set(key, m)
@@ -201,13 +204,14 @@ export function vertexColorOutline() {
     fragmentShader: /* glsl */ `
       uniform float uLinear;
       uniform float uDim;
+      uniform float uManga;
       varying vec3 vOColor;
       vec3 toLinear(vec3 c) {
         return mix(c * 0.0773993808, pow(c * 0.9478672986 + 0.0521327014, vec3(2.4)), vec3(greaterThanEqual(c, vec3(0.04045))));
       }
       void main() {
         vec3 c = uLinear > 0.5 ? toLinear(vOColor) : vOColor;
-        gl_FragColor = vec4(c * uDim, 1.0);
+        gl_FragColor = uManga > 0.5 ? vec4(1.0, 0.5, 0.5, 1.0) : vec4(c * uDim, 1.0);
       }`,
     side: THREE.BackSide,
   })

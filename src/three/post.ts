@@ -5,6 +5,7 @@
 //   → [UnrealBloom 泛光，线性空间]
 //   → Base：线性转 sRGB，并把透明背景合成为与 CSS 一致的径向渐变底（之后的效果作用于整张画面）
 //   → [风格化：水彩 / 漫画网点 / 像素 / 素描，各自一到两个 pass]
+//   黑白漫画例外：材质输出编码（manga.ts），Manga pass 直接读 RenderPass 的结果出网点，替代 Base
 //   → [移轴模糊：横、竖两遍]
 //   → Grade：调色（曝光、对比、饱和、分离色调、褪色、单色 / 棕褐、雾感、暗角、色差、纸纹、颗粒）
 // 选「无」时不建 composer，直接 renderer.render，零额外开销。
@@ -18,9 +19,10 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js'
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { FXAAShader } from 'three/addons/shaders/FXAAShader.js'
+import { mangaUniforms } from './manga'
 import type { Stage } from './stage'
 
-export type LookId = 'none' | 'tiltshift' | 'warm' | 'cool' | 'film' | 'pastel' | 'watercolor' | 'comic' | 'mono' | 'sepia' | 'pixel' | 'sketch'
+export type LookId = 'none' | 'tiltshift' | 'warm' | 'cool' | 'film' | 'pastel' | 'watercolor' | 'comic' | 'manga' | 'manga-coarse' | 'manga-hatch' | 'manga-ink' | 'mono' | 'sepia' | 'pixel' | 'sketch'
 
 interface Grade {
   exposure: number
@@ -77,7 +79,9 @@ export interface LookDef {
   bloom?: { strength: number; radius: number; threshold: number }
   /** 描边粗细倍数 */
   outline?: number
-  stylize?: 'watercolor' | 'comic' | 'pixel' | 'sketch'
+  stylize?: 'watercolor' | 'comic' | 'manga' | 'pixel' | 'sketch'
+  /** 黑白漫画系列（stylize: 'manga'）的画法：网屏格子（CSS 像素）、是否补转折线、上网点 / 排线 / 只留实黑 */
+  manga?: { cell: number; crease: boolean; tone: 'dot' | 'line' | 'ink' }
   /** 移轴：焦点（屏幕 y，0 底 1 顶）、清晰带半宽、过渡宽度、最大模糊半径（CSS 像素） */
   tilt?: { focus: number; band: number; fall: number; max: number }
   grade?: Partial<Grade>
@@ -137,6 +141,42 @@ export const LOOKS: LookDef[] = [
     stylize: 'comic',
     outline: 1.7,
     grade: { saturation: 1.1, contrast: 1.05 },
+  },
+  {
+    id: 'manga',
+    label: '黑白漫画',
+    desc: '按固有色和明暗分档，细网点加转折线',
+    stylize: 'manga',
+    manga: { cell: 4.5, crease: true, tone: 'dot' },
+    outline: 1.4,
+    grade: { paper: 0.12 },
+  },
+  {
+    id: 'manga-coarse',
+    label: '粗网点漫画',
+    desc: '大颗网点、只描外轮廓，像放大印刷的旧漫画',
+    stylize: 'manga',
+    manga: { cell: 7, crease: false, tone: 'dot' },
+    outline: 1.5,
+    grade: { paper: 0.12 },
+  },
+  {
+    id: 'manga-hatch',
+    label: '排线漫画',
+    desc: '斜排线代替网点，暗部交叉排线',
+    stylize: 'manga',
+    manga: { cell: 5, crease: true, tone: 'line' },
+    outline: 1.4,
+    grade: { paper: 0.12 },
+  },
+  {
+    id: 'manga-ink',
+    label: '墨线稿',
+    desc: '只留墨线与实黑，像上网点前的原稿',
+    stylize: 'manga',
+    manga: { cell: 5, crease: true, tone: 'ink' },
+    outline: 1.3,
+    grade: { paper: 0.12 },
   },
   {
     id: 'mono',
@@ -397,6 +437,84 @@ const ComicShader = {
     }`,
 }
 
+/**
+ * 黑白漫画系列：读材质输出的编码（manga.ts：R = 档位 / 4，1 为墨线；GB = 视空间法线 xy），不读颜色。
+ * 档位已经在材质里按固有色 + 明暗算好，这里只管怎么画：
+ *   网点：整页对齐的 45° 圆点网屏（各档同一张网屏，相邻区域之间不出摩尔纹），浅 / 深两档覆盖率 18% / 42%
+ *   排线：45° 斜线，深档再叠一层反向斜线
+ *   墨线稿：不上网点，只留实黑
+ * 转折线：相邻像素法线夹角超过约 37° 处补一条细线（同一物体的两个面落进同一档时，靠它把形体画出来）。
+ * 输入是预乘的（清屏处 alpha 为 0）：先除回 alpha 再解码，背景按 alpha 合成纸色（入夜铺一层深档）。
+ */
+const MangaShader = {
+  uniforms: {
+    tDiffuse: { value: null as THREE.Texture | null },
+    uRes: { value: new THREE.Vector2(1, 1) },
+    uScale: { value: 1 },
+    uNight: { value: 0 },
+    /** 网屏格子（CSS 像素） */
+    uCell: { value: 4.5 },
+    uCrease: { value: 1 },
+    /** 0 网点、1 排线、2 墨线稿 */
+    uTone: { value: 0 },
+  },
+  vertexShader: VERT,
+  fragmentShader: /* glsl */ `
+    uniform sampler2D tDiffuse;
+    uniform vec2 uRes;
+    uniform float uScale, uNight, uCell, uCrease, uTone;
+    varying vec2 vUv;
+    vec4 enc(vec2 uv) {
+      vec4 t = texture2D(tDiffuse, uv);
+      return vec4(t.rgb / max(t.a, 1e-3), clamp(t.a, 0.0, 1.0));
+    }
+    vec3 nrm(vec4 e) {
+      vec2 xy = e.gb * 2.0 - 1.0;
+      return vec3(xy, sqrt(max(0.0, 1.0 - dot(xy, xy))));
+    }
+    float dotInk(float c, float cell) {
+      vec2 rp = mat2(0.7071, -0.7071, 0.7071, 0.7071) * (vUv * uRes) / cell;
+      float d = length(fract(rp) - 0.5);
+      // 圆点面积 = 覆盖率
+      float r = sqrt(c / 3.14159);
+      float aa = 0.7 / cell;
+      return 1.0 - smoothstep(r - aa, r + aa, d);
+    }
+    float lineInk(float c, float cell, float dir) {
+      vec2 p = vUv * uRes;
+      float d = abs(fract((p.x + dir * p.y) * 0.7071 / cell) - 0.5) * 2.0;
+      float aa = 1.0 / cell;
+      return 1.0 - smoothstep(c - aa, c + aa, d);
+    }
+    float toneInk(float lv, float cell) {
+      if (lv > 2.5) return 1.0;
+      if (lv < 0.5 || uTone > 1.5) return 0.0;
+      if (uTone > 0.5) {
+        float h = lineInk(lv < 1.5 ? 0.18 : 0.24, cell, 1.0);
+        return lv < 1.5 ? h : max(h, lineInk(0.24, cell, -1.0));
+      }
+      return dotInk(lv < 1.5 ? 0.18 : 0.42, cell);
+    }
+    float creaseWith(vec3 n0, vec2 off) {
+      vec4 e1 = enc(vUv + off);
+      if (e1.a < 0.99 || e1.r > 0.875) return 0.0;
+      return 1.0 - smoothstep(0.78, 0.9, dot(n0, nrm(e1)));
+    }
+    void main() {
+      vec4 e = enc(vUv);
+      float cell = uCell * uScale;
+      float line = smoothstep(0.8, 0.95, e.r);
+      float ink = max(toneInk(floor(min(e.r * 4.0, 3.0) + 0.5), cell), line);
+      if (uCrease > 0.5 && e.a > 0.99 && line < 0.01) {
+        vec3 n0 = nrm(e);
+        vec2 px = uScale / uRes;
+        ink = max(ink, max(creaseWith(n0, vec2(px.x, 0.0)), creaseWith(n0, vec2(0.0, px.y))));
+      }
+      ink = mix(toneInk(uNight > 0.5 ? 2.0 : 0.0, cell), ink, e.a);
+      gl_FragColor = vec4(mix(vec3(0.985, 0.98, 0.965), vec3(0.09, 0.085, 0.1), ink), 1.0);
+    }`,
+}
+
 /** 像素：按格子取 4 点平均（下采样），再用 4×4 Bayer 抖动量化色阶 */
 const PixelShader = {
   uniforms: {
@@ -597,6 +715,7 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
     kuwahara: ShaderPass
     pigment: ShaderPass
     comic: ShaderPass
+    manga: ShaderPass
     pixel: ShaderPass
     sketch: ShaderPass
     tiltH: ShaderPass
@@ -631,6 +750,7 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
       kuwahara: mk(KuwaharaShader),
       pigment: mk(PigmentShader),
       comic: mk(ComicShader),
+      manga: mk(MangaShader),
       pixel: mk(PixelShader),
       sketch: mk(SketchShader),
       tiltH: mk(TiltShader),
@@ -641,7 +761,8 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
     passes.tiltV.uniforms.uDir.value.set(0, 1)
     passes.fxaa.enabled = needFxaa()
     const p = passes
-    for (const ps of [p.render, p.base, p.kuwahara, p.pigment, p.comic, p.pixel, p.sketch, p.tiltH, p.tiltV, p.grade, p.fxaa]) composer.addPass(ps)
+    // manga 紧跟 RenderPass（读线性的编码，不能先过 Base）；泛光后插在下标 1，漫画模式下不开
+    for (const ps of [p.render, p.manga, p.base, p.kuwahara, p.pigment, p.comic, p.pixel, p.sketch, p.tiltH, p.tiltV, p.grade, p.fxaa]) composer.addPass(ps)
     appliedKey = ''
     syncSize()
   }
@@ -661,7 +782,7 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
     if (!passes) return
     const pr = renderer.getPixelRatio()
     const res = renderer.getDrawingBufferSize(new THREE.Vector2())
-    for (const ps of [passes.kuwahara, passes.pigment, passes.comic, passes.pixel, passes.sketch, passes.tiltH, passes.tiltV, passes.grade]) {
+    for (const ps of [passes.kuwahara, passes.pigment, passes.comic, passes.manga, passes.pixel, passes.sketch, passes.tiltH, passes.tiltV, passes.grade]) {
       const u = ps.uniforms
       u.uRes?.value.copy(res)
       if (u.uScale) u.uScale.value = pr
@@ -684,7 +805,9 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
     const p = passes
     // 泛光：效果自带的，和入夜后灯具的光晕取较强者
     // 阈值高、强度低：只在最亮的发光部件周围留一圈淡晕，不盖住灯具轮廓和屏幕边框
-    const nightBloom = sky.night > 0.02 && !low ? { strength: 0.28 * sky.night, radius: 0.3, threshold: 0.82 } : undefined
+    // 黑白漫画读的是编码不是颜色，不能泛光
+    const manga = look.stylize === 'manga'
+    const nightBloom = sky.night > 0.02 && !low && !manga ? { strength: 0.28 * sky.night, radius: 0.3, threshold: 0.82 } : undefined
     const bloom = nightBloom && (!look.bloom || nightBloom.strength > look.bloom.strength) ? nightBloom : look.bloom
     if (bloom && !p.bloom) {
       // 用到才建（mip 链占显存）
@@ -708,6 +831,15 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
     }
     p.kuwahara.enabled = p.pigment.enabled = look.stylize === 'watercolor'
     p.comic.enabled = look.stylize === 'comic'
+    p.manga.enabled = manga
+    p.base.enabled = !manga
+    if (look.manga) {
+      const um = p.manga.uniforms
+      um.uNight.value = sky.night
+      um.uCell.value = look.manga.cell
+      um.uCrease.value = look.manga.crease ? 1 : 0
+      um.uTone.value = { dot: 0, line: 1, ink: 2 }[look.manga.tone]
+    }
     p.pixel.enabled = look.stylize === 'pixel'
     p.sketch.enabled = look.stylize === 'sketch'
     p.tiltH.enabled = p.tiltV.enabled = !!look.tilt
@@ -747,18 +879,36 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
    *   入夜再整体压暗（否则不受光照的描边在暗场景里会像霓虹灯）。
    * - 入夜：自发光材质（台灯、指示灯、屏幕）加亮，让泛光只落在灯上；窗玻璃透出暖光。
    * （更干净的做法是给 toon.ts 的描边着色器加一个 uniform，但那个文件不在本次改动范围内。）
+   * - 黑白漫画：材质切到编码输出（uManga），并按当前太阳与天光算「完全受光」的受光比；
+   *   粒子、Sprite、加色贴片（灯光光斑）没法编码，这一帧先藏起来。
    * 白天且不走 composer 时什么都不用改，不遍历场景。
    */
   function renderPatched(draw: () => void) {
     const night = sky.night
     const linear = !!composer
     if (!linear && night < 0.01) return draw()
+    const manga = linear && current.stylize === 'manga' && !!passes
+    const hidden: THREE.Object3D[] = []
+    if (manga) {
+      const lum = (c: THREE.Color) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
+      // toon 受光部的色阶是 1，天光取天空色；漫反射 BRDF 带 1/π
+      const ref = (stage.sun.intensity * lum(stage.sun.color) + stage.hemi.intensity * lum(stage.hemi.color)) / Math.PI
+      mangaUniforms.uMangaLitRef.value = Math.max(1e-4, ref)
+      mangaUniforms.uMangaNight.value = night
+      mangaUniforms.uManga.value = 1
+    }
     const outlines: [THREE.Color, THREE.Color][] = []
     const vcOutlines: [Record<string, THREE.IUniform>, number, number][] = []
     const boosted: [THREE.MeshStandardMaterial, number][] = []
     const glass: [THREE.MeshStandardMaterial, THREE.Color, number][] = []
     const seen = new Set<THREE.Material>()
     scene.traverseVisible((o) => {
+      const additive = ((o as THREE.Mesh).material as THREE.Material | undefined)?.blending === THREE.AdditiveBlending
+      if (manga && ((o as THREE.Points).isPoints || (o as THREE.Sprite).isSprite || additive)) {
+        hidden.push(o)
+        o.visible = false
+        return
+      }
       const m = (o as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined
       if (!m) return
       for (const mat of Array.isArray(m) ? m : [m]) {
@@ -806,6 +956,8 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
     try {
       draw()
     } finally {
+      mangaUniforms.uManga.value = 0
+      for (const o of hidden) o.visible = true
       for (const [c, orig] of outlines) c.copy(orig)
       for (const [u, lin, dim] of vcOutlines) {
         u.uLinear.value = lin

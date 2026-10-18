@@ -23,6 +23,7 @@ import { edgesOf, pointInPolygon, type Plan, type Room, type Vec } from '../mode
 import { floorOf, planFloors } from '../floors'
 import { isOpenBetween, isVoid, sharedIntervals, voidRailSegments, wallSegments } from '../walls'
 import { stairHoles } from '../stairs'
+import { injectManga } from './manga'
 
 /** uniform 数组长度：灯池上限（POOL_HIGH）、楼层上限 */
 export const LM_MAX_LIGHTS = 16
@@ -328,8 +329,12 @@ function maskedLightsChunk() {
   return patched
 }
 
-/** 给受光照材质的着色器接上遮罩（onBeforeCompile 里调用） */
+/**
+ * 给受光照材质的着色器接上遮罩（onBeforeCompile 里调用）。
+ * 所有受光材质都经过这里，黑白漫画的编码输出（manga.ts）也顺带接上。
+ */
 export function injectLightMask(sh: THREE.WebGLProgramParametersWithUniforms) {
+  injectManga(sh)
   const chunk = maskedLightsChunk()
   if (!chunk || !sh.fragmentShader.includes('#include <lights_fragment_begin>')) {
     if (!chunk && !warned) {

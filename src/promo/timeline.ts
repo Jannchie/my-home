@@ -62,8 +62,8 @@ export const SEG = {
 
 const STYLE_CUTS: StyleTag[] = ['cute', 'nordic', 'japanese', 'industrial', 'retro', 'chinese', 'classic', 'farmhouse']
 const FINAL_STYLE: StyleTag = 'nordic'
-/** 画面效果：除「原样」外的全部效果，每拍一切 */
-const LOOK_CUTS: LookId[] = LOOKS.filter((l) => l.id !== 'none').map((l) => l.id)
+/** 画面效果：除「原样」外的全部效果，每拍一切（这一段 11 拍；黑白漫画系列是后加的，不进宣传片） */
+const LOOK_CUTS: LookId[] = LOOKS.filter((l) => l.id !== 'none' && l.stylize !== 'manga').map((l) => l.id)
 /** 地区 × 规模：日式 / 中式 / 欧美各一套，由小到大（同一机位，每套一小节） */
 const SIZES: { key: string; region: number; beats: number; type: string }[] = [
   { key: 'jp1ldk', region: 0, beats: 4, type: '1LDK' },
