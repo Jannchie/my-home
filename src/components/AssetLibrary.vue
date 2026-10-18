@@ -4,7 +4,9 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { ASSETS, ASSET_MAP, CATEGORY_LABELS, STYLE_LABELS, type AssetCategory, type StyleTag } from '../three/assets'
 import { SIZE_LABELS, browse, cardName, categoriesOf, countByCategory, displayName, paletteFor, paletteStyle, siblings, sizeClass, typesIn, variantLabel, type Filter, type SizeClass } from '../three/catalog'
-import { typeLabel } from '../three/typeLabels'
+import { TYPE_NAMES, traitLabel, typeLabel } from '../three/typeLabels'
+import type { Tag } from '../three/tags'
+import { INTERESTS, type InterestId } from '../household'
 import { disposeUnshared } from '../three/toon'
 import { furnitureModel } from '../three/house'
 import { createStage, fitSun, frameCamera, type Stage } from '../three/stage'
@@ -46,6 +48,27 @@ const selectedId = ref(routeAsset.value && ASSET_MAP.has(routeAsset.value) ? rou
 const color = ref(0)
 const def = computed(() => ASSET_MAP.get(selectedId.value)!)
 const sizes = computed(() => siblings(def.value))
+
+/** 详情里的标签：功能（这是什么）、兴趣、属性 / 摆放；设备类另有说明，不重复显示 */
+const tagGroups = computed(() => {
+  const tags = def.value.tags ?? []
+  const hobby = (x: Tag) => x.startsWith('hobby:')
+  return {
+    kinds: tags.filter((x) => x in TYPE_NAMES),
+    hobbies: tags.filter(hobby),
+    traits: tags.filter((x) => !(x in TYPE_NAMES) && !hobby(x) && x !== 'fixture'),
+  }
+})
+/** 标签的显示名（中文，界面上再经 t() 翻译） */
+function tagText(x: Tag) {
+  if (x.startsWith('hobby:')) return INTERESTS[x.slice(6) as InterestId]?.label ?? x
+  return x in TYPE_NAMES ? typeLabel(x) : traitLabel(x)
+}
+/** 点详情里的标签：在全部分类里按这个标签筛选（分类、类型、搜索清空，风格和尺寸保留） */
+function filterByTag(x: Tag) {
+  Object.assign(filter, { category: 'all', type: 'all', query: '', tag: x })
+  if (device.compact) sheet.value = 'peek'
+}
 
 /** 自定义配色（放进沙盘时一起带过去） */
 const customColors = ref<string[] | undefined>()
@@ -188,9 +211,9 @@ const dims = (d: { w: number; d: number; h: number }) => `${d.w}×${d.d}×${d.h}
 
 // ---------- 搜索：按 / 聚焦，Esc 清空；没有结果时一键清除筛选 ----------
 const searchInput = ref<HTMLInputElement>()
-const filtered = computed(() => !!filter.query || filter.category !== 'all' || filter.type !== 'all' || filter.style !== 'all' || filter.size !== 'all')
+const filtered = computed(() => !!filter.query || !!filter.tag || filter.category !== 'all' || filter.type !== 'all' || filter.style !== 'all' || filter.size !== 'all')
 function clearFilters() {
-  Object.assign(filter, { category: 'all', type: 'all', style: 'all', size: 'all', query: '' })
+  Object.assign(filter, { category: 'all', type: 'all', tag: undefined, style: 'all', size: 'all', query: '' })
 }
 function onSlash(e: KeyboardEvent) {
   const el = e.target as HTMLElement
@@ -214,7 +237,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onSlash))
     <nav class="cats">
       <label class="search-box">
         <JIcon :icon="ICONS.search" :size="14" class="ico-muted" />
-        <input ref="searchInput" v-model="filter.query" class="search" :placeholder="t('搜索名称 / 规格…')" :aria-label="t('搜索名称 / 规格…')" @keydown="onSearchKey" />
+        <input ref="searchInput" v-model="filter.query" class="search" :placeholder="t('搜索名称 / 类型 / 规格…')" :aria-label="t('搜索名称 / 类型 / 规格…')" @keydown="onSearchKey" />
         <kbd v-if="!filter.query" class="slash" :title="t('按 / 搜索')">/</kbd>
       </label>
       <button :class="{ on: filter.category === 'all' }" @click="filter.category = 'all'">
@@ -227,6 +250,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onSlash))
 
     <div class="main">
       <div class="filters">
+        <div v-if="filter.tag" class="chips">
+          <span class="label">{{ t('标签') }}</span>
+          <button class="on" :title="t('取消标签筛选')" @click="filter.tag = undefined">{{ t(tagText(filter.tag)) }}<JIcon :icon="ICONS.close" :size="12" /></button>
+        </div>
         <div v-if="types.length > 1" class="chips">
           <span class="label">{{ t('类型') }}</span>
           <button :class="{ on: filter.type === 'all' }" @click="filter.type = 'all'">{{ t('全部') }}</button>
@@ -290,8 +317,21 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onSlash))
         <div class="title">
           <h2>{{ displayName(def) }}</h2>
           <span class="tag">{{ t(CATEGORY_LABELS[def.category]) }}</span>
-          <span v-if="def.type" class="tag">{{ t(typeLabel(def.type)) }}</span>
           <span class="tag">{{ t(SIZE_LABELS[sizeClass(def)]) }}</span>
+        </div>
+        <div v-if="tagGroups.kinds.length || tagGroups.hobbies.length || tagGroups.traits.length" class="tags">
+          <div v-if="tagGroups.kinds.length" class="tag-row">
+            <span class="label">{{ t('类型') }}</span>
+            <button v-for="x in tagGroups.kinds" :key="x" :class="{ on: filter.tag === x }" :title="t('筛选同标签的素材')" @click="filterByTag(x)">{{ t(tagText(x)) }}</button>
+          </div>
+          <div v-if="tagGroups.hobbies.length" class="tag-row">
+            <span class="label">{{ t('兴趣') }}</span>
+            <button v-for="x in tagGroups.hobbies" :key="x" :class="{ on: filter.tag === x }" :title="t('筛选同标签的素材')" @click="filterByTag(x)">{{ t(tagText(x)) }}</button>
+          </div>
+          <div v-if="tagGroups.traits.length" class="tag-row">
+            <span class="label">{{ t('特点') }}</span>
+            <button v-for="x in tagGroups.traits" :key="x" :class="{ on: filter.tag === x }" :title="t('筛选同标签的素材')" @click="filterByTag(x)">{{ t(tagText(x)) }}</button>
+          </div>
         </div>
         <div class="dims num">
           {{ t('宽 {w} · 深 {d} · 高 {h} cm', { w: def.w, d: def.d, h: def.h }) }}
@@ -615,6 +655,37 @@ h2 {
   border-radius: 999px;
   background: var(--hover);
   color: var(--text-muted);
+}
+.tags {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.tag-row .label {
+  margin: 0 4px 0 0;
+  min-width: 2.5em;
+}
+.tag-row button {
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
+.tag-row button:hover,
+.tag-row button.on {
+  color: var(--accent-strong);
+  border-color: var(--accent-ring);
+}
+.tag-row button.on {
+  background: var(--accent-weak);
 }
 .dims {
   margin: 6px 0 14px;

@@ -2,9 +2,10 @@
 
 import { ASSETS, ASSET_MAP, type AssetDef } from './assets'
 import { FORM_LABELS, type AssetCategory, type StyleTag } from './kit'
-import { assetText, lang } from '../i18n'
+import { assetText, lang, t } from '../i18n'
 import { paletteStyleOf, preferredColor, styleSet } from './stylePalettes'
-import type { Tag } from './tags'
+import { FUNCTION_TAGS, type Tag } from './tags'
+import { typeLabel } from './typeLabels'
 
 export type SizeClass = 'S' | 'M' | 'L'
 export const SIZE_LABELS: Record<SizeClass, string> = { S: '小件', M: '中件', L: '大件' }
@@ -55,6 +56,8 @@ export interface Filter {
   category: AssetCategory | 'all'
   /** 细分类型（功能标签）；不给 = 全部 */
   type?: Tag | 'all'
+  /** 任意标签（详情里点标签筛选）；不给 = 不限 */
+  tag?: Tag
   style: StyleTag | 'all'
   size: SizeClass | 'all'
   query: string
@@ -68,9 +71,10 @@ function matches(a: AssetDef, f: Filter, q: string) {
   return (
     (f.fixtures || !a.fixture) &&
     (!f.type || f.type === 'all' || a.type === f.type) &&
+    (!f.tag || !!a.tags?.includes(f.tag)) &&
     (f.style === 'all' || stylesOf(a).has(f.style)) &&
     (f.size === 'all' || sizeClass(a) === f.size) &&
-    (!q || a.name.includes(q) || (a.sizeLabel ?? '').includes(q) || a.id.includes(q) || localHit(a, q))
+    (!q || a.name.includes(q) || (a.sizeLabel ?? '').includes(q) || a.id.includes(q) || localHit(a, q) || tagHit(a, q))
   )
 }
 
@@ -79,6 +83,16 @@ function localHit(a: AssetDef, q: string) {
   if (lang.value === 'zh') return false
   const s = q.toLowerCase()
   return assetText(a.name).toLowerCase().includes(s) || assetText(a.sizeLabel).toLowerCase().includes(s)
+}
+
+/** 功能标签的显示名（当前语言、小写）：搜「床」「マグ」「kettle」也能按类型找到 */
+let tagNames: { lang: string; m: Map<string, string> } | null = null
+const FUNCTION_SET = new Set<string>(FUNCTION_TAGS)
+function tagHit(a: AssetDef, q: string) {
+  if (!a.tags) return false
+  if (tagNames?.lang !== lang.value) tagNames = { lang: lang.value, m: new Map(FUNCTION_TAGS.map((x) => [x, t(typeLabel(x)).toLowerCase()])) }
+  const s = q.toLowerCase()
+  return a.tags.some((x) => FUNCTION_SET.has(x) && tagNames!.m.get(x)!.includes(s))
 }
 
 /** 每个分类下 browse 会出几项（等价于逐个分类调 browse 再取长度，但只扫一遍）；all 为全部分类的项数 */

@@ -1,9 +1,10 @@
 // 细分类型（功能标签）的显示名：[中文, 日本語, English]。素材库的「类型」筛选、详情里的类型标签用。
 // 中文直接显示，日 / 英由 i18n/ui.ts 合并进界面词典。新增功能标签时在这里补一行（缺了编译报错）。
 
-import type { FUNCTION_TAGS } from './tags'
+import type { ATTR_TAGS, FUNCTION_TAGS, PLACEMENT_TAGS } from './tags'
 
 type FunctionTag = (typeof FUNCTION_TAGS)[number]
+type TraitTag = (typeof ATTR_TAGS)[number] | (typeof PLACEMENT_TAGS)[number]
 
 export const TYPE_NAMES: Record<FunctionTag, [zh: string, ja: string, en: string]> = {
   bed: ['床', 'ベッド', 'Bed'],
@@ -236,3 +237,25 @@ export const TYPE_NAMES: Record<FunctionTag, [zh: string, ja: string, en: string
 
 /** 细分类型的中文名（界面上再经 t() 翻译） */
 export const typeLabel = (t: string) => TYPE_NAMES[t as FunctionTag]?.[0] ?? t
+
+/** 属性 / 摆放标签的显示名：素材库详情里的「特点」用。新增属性、摆放标签时在这里补一行（缺了编译报错） */
+export const TRAIT_NAMES: Record<TraitTag, [zh: string, ja: string, en: string]> = {
+  'for-kids': ['儿童用', '子ども用', 'For kids'],
+  diatomite: ['硅藻土 / 石材', '珪藻土・石材', 'Diatomite / stone'],
+  fixture: ['设备', '設備', 'Fixture'],
+  'high-ok': ['可放高处', '高所に置ける', 'Fine up high'],
+  'bed-ok': ['可放床上', 'ベッドに置ける', 'Fine on a bed'],
+  'multi-ok': ['可摆多件', '複数置ける', 'Can repeat'],
+  'kitchen-shelf-ok': ['适合厨房搁板', 'キッチン棚向き', 'Kitchen shelf'],
+  'toilet-shelf-ok': ['适合马桶上方搁板', 'トイレ棚向き', 'Toilet shelf'],
+  'fridge-door': ['可贴冰箱门', '冷蔵庫に貼れる', 'Fridge door'],
+  'curio-ok': ['适合多宝格', '飾り棚向き', 'Curio shelf'],
+  collectible: ['收藏品', 'コレクション', 'Collectible'],
+  'open-shelf': ['开放格子', 'オープン棚', 'Open shelving'],
+  'curio-shelf': ['多宝格', '飾り棚', 'Curio cabinet'],
+  'collection-shelf': ['收藏展示柜', 'コレクション棚', 'Collection shelf'],
+  'set-piece': ['成套部件', 'セット専用', 'Set piece'],
+}
+
+/** 属性 / 摆放标签的中文名（界面上再经 t() 翻译） */
+export const traitLabel = (t: string) => TRAIT_NAMES[t as TraitTag]?.[0] ?? t

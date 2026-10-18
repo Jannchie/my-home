@@ -2,7 +2,7 @@
 // 新增界面文字时：模板 / 代码里写 t('中文原文')，再在这里补一行；插值用 {name}。
 // 覆盖率检查：node <scratchpad>/check-i18n.mjs（会列出缺失项）。
 
-import { TYPE_NAMES } from '../three/typeLabels'
+import { TRAIT_NAMES, TYPE_NAMES } from '../three/typeLabels'
 
 type Entry = [ja: string, en: string]
 
@@ -123,7 +123,12 @@ export const UI: Record<string, Entry> = {
   下駄: ['下駄', 'S'],
 
   // ---------- 素材库 ----------
-  '搜索名称 / 规格…': ['名前・サイズで検索…', 'Search name / size…'],
+  '搜索名称 / 类型 / 规格…': ['名前・種類・サイズで検索…', 'Search name / type / size…'],
+  标签: ['タグ', 'Tag'],
+  兴趣: ['趣味', 'Hobby'],
+  特点: ['特徴', 'Traits'],
+  取消标签筛选: ['タグの絞り込みを解除', 'Clear tag filter'],
+  筛选同标签的素材: ['同じタグの素材を表示', 'Show items with this tag'],
   全部: ['すべて', 'All'],
   风格: ['スタイル', 'Style'],
   尺寸: ['サイズ', 'Size'],
@@ -618,6 +623,7 @@ export const UI: Record<string, Entry> = {
 
 // ---------- 素材的细分类型（three/typeLabels.ts）：已有同名词条的不覆盖，后面的分组表照常覆盖 ----------
 for (const [zh, ja, en] of Object.values(TYPE_NAMES)) UI[zh] ??= [ja, en]
+for (const [zh, ja, en] of Object.values(TRAIT_NAMES)) UI[zh] ??= [ja, en]
 
 /**
  * 房间的默认名（生成器 / ROOM_KINDS / 房间用途给的）。只有名字恰好是这些（或「这些 + 序号」，如 洋室2）时才翻译，
