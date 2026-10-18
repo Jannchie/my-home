@@ -61,6 +61,7 @@ export function normalizePlan(p: Plan): Plan | null {
     }
   }
   for (const f of p.furniture) if (f.light !== undefined && f.light !== 'on' && f.light !== 'off') delete f.light
+  for (const f of p.furniture) if (f.art !== undefined && (typeof f.art !== 'string' || !f.art)) delete f.art
   // 楼层：没有 floors 的是单层户型（旧存档都是），物件的 floor 一律删掉；坏数据整理掉
   normalizeFloors(p)
   // 户建的用地 / 外观：坏数据整理掉
@@ -264,7 +265,7 @@ export type ViewMode = '2d' | '3d' | 'lib'
 /** 初值取自地址（/en/3d、/library…，见 router.ts）；之后由 router 双向同步 */
 export const viewMode = ref<ViewMode>(initialRoute.view)
 /** 3D 沙盘里正要摆放的素材 */
-export const placing = ref<{ asset: string; color: number; colors?: string[]; patterns?: (PatternSpec | null)[] } | null>(null)
+export const placing = ref<{ asset: string; color: number; colors?: string[]; patterns?: (PatternSpec | null)[]; art?: string } | null>(null)
 /** 墙体显示：完整 / 前墙透明 / 前墙压低（模拟人生式）/ 全部压低 */
 export type WallMode = 'up' | 'fade' | 'cut' | 'half' | 'down'
 export const WALL_MODES: { id: WallMode; label: string }[] = [
@@ -700,7 +701,7 @@ export function findFurniture(id: string): Furniture | undefined {
 
 export function addFurniture(f: Omit<Furniture, 'id'>) {
   checkpoint()
-  const fu: Furniture = { asset: f.asset, x: f.x, y: f.y, rot: f.rot, color: f.color, id: uid('u'), ...(f.z ? { z: f.z } : {}), ...(f.colors?.length ? { colors: [...f.colors] } : {}), ...(f.patterns?.some(Boolean) ? { patterns: [...f.patterns] } : {}) }
+  const fu: Furniture = { asset: f.asset, x: f.x, y: f.y, rot: f.rot, color: f.color, id: uid('u'), ...(f.z ? { z: f.z } : {}), ...(f.colors?.length ? { colors: [...f.colors] } : {}), ...(f.patterns?.some(Boolean) ? { patterns: [...f.patterns] } : {}), ...(f.art ? { art: f.art } : {}) }
   // 复制的家具留在原来那层；新摆的放在当前楼层
   stampFloor(plan.value, fu, f.floor ?? activeFloor.value)
   plan.value.furniture.push(fu)
@@ -867,6 +868,16 @@ export function commitFurniturePatterns(id: string, patterns: (PatternSpec | nul
   mutate(() => {
     if (patterns?.some(Boolean)) f.patterns = patterns
     else delete f.patterns
+  })
+}
+
+/** 装饰画的画面（artwork.ts）：一次记一次撤销；undefined = 换回素材原来的画 */
+export function setFurnitureArt(id: string, art: string | undefined) {
+  const f = findFurniture(id)
+  if (!f || f.art === art) return
+  mutate(() => {
+    if (art) f.art = art
+    else delete f.art
   })
 }
 

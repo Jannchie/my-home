@@ -4,6 +4,7 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
+import { artFace } from '../artwork'
 import { C, glow, rng, holePanel, paintPanel, rectPoly, type AssetDef } from '../kit'
 import { P, cylX, cylZ, ghost, litOutlined, noOutline } from '../geo'
 import { I, J, M, N, PROP, R, define, type Pal } from '../packkit'
@@ -1023,10 +1024,10 @@ function poster(w: number, h: number, kind: PosterKind, framed: boolean) {
         g.add(rbox(2.4, h - 4.8, 2, f, { x: s * (w / 2 - 1.2), y: -h / 2 + 2.4, z: 1 }, 0.4))
       }
       g.add(rbox(w - 4, h - 4, 0.4, '#f4f4f2', { y: -h / 2 + 2, z: 0.2 }, 0.1))
-      g.add(paintPanel(w - 7, h - 7, key, paintPoster(kind, p), { y: -h / 2 + 3.5, z: 0.75 }))
+      g.add(paintPanel(w - 7, h - 7, ...artFace(0, key, paintPoster(kind, p)), { y: -h / 2 + 3.5, z: 0.75 }))
     } else {
       g.add(rbox(w, h, 0.2, '#f4f4f2', { y: -h / 2, z: 0.1 }, 0.05))
-      g.add(paintPanel(w - 1.6, h - 1.6, key, paintPoster(kind, p), { y: -h / 2 + 0.8, z: 0.5 }))
+      g.add(paintPanel(w - 1.6, h - 1.6, ...artFace(0, key, paintPoster(kind, p)), { y: -h / 2 + 0.8, z: 0.5 }))
       for (const sx of [-1, 1])
         for (const sy of [-1, 1]) g.add(ghost(rbox(5, 1.8, 0.1, '#fff6c8', { x: sx * (w / 2 - 2.6), y: sy * (h / 2 - 2.6) - 0.9, z: 0.8, rz: sx * sy * 0.78 }, 0.05), '#fff6c8', 0.6))
     }

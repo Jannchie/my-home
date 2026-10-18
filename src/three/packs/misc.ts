@@ -3,6 +3,7 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, face, puck, rbox, shade, toon, torus, tray } from '../toon'
+import { artFace, artOverride } from '../artwork'
 import { C, G, S, ellipsePoly, glow, holePanel, legs, rectPoly, rng, shell, type AssetDef, type Fx, type StyleTag, paintPanel, paintLandscape, paintFlower, paintAbstract } from '../kit'
 import { drawerLv, drawerOf, hollow, slideDoor, swingDoor } from '../cabinetKit'
 import { PI, clearMat, lit, noOutline, rod3, type V3 } from '../geo'
@@ -243,7 +244,12 @@ function kakejiku(p: string[]) {
   g.add(rbox(40, 2.4, 2, rodC, { y: y0 + 136, z: -1 }, 0.6))
   for (const s of [-1, 1]) g.add(rod3([s * 13, y0 + 138, -1], [0, y0 + 148, -1], 0.3, J.sumi, 4))
   g.add(ball(0.9, J.sumi, { y: y0 + 148, z: -1 }))
-  // 画心：朱日、远山、一行字
+  // 画心：指定了画面就画在纸上；默认是朱日、远山、一行字（几何体）
+  const pic = artOverride(0)
+  if (pic) {
+    g.add(paintPanel(29, 93, ...pic, { y: y0 + 22.5, z: -0.45 }))
+    return g
+  }
   const z = -0.15
   g.add(disc(4.5, J.shu, 7, y0 + 96, z))
   g.add(noOutline(ball(9, shade(J.ai, 0.3), { x: -4, y: y0 + 30, z }, [1.4, 0.9, 0.04])))
@@ -1496,7 +1502,7 @@ function artMountain(p: string[], s: number) {
   const g = new THREE.Group()
   const [z1] = artFrame(g, w, h, 4, y0, frame, sky)
   // 画面画在贴图上，不会溢出画框
-  g.add(paintPanel(w - 5, h - 5, `art-mountain-${sky}-${acc}`, paintLandscape(sky, shade(J.ai, 0.25), acc), { y: y0 + 2.5, z: z1 }))
+  g.add(paintPanel(w - 5, h - 5, ...artFace(0, `art-mountain-${sky}-${acc}`, paintLandscape(sky, shade(J.ai, 0.25), acc)), { y: y0 + 2.5, z: z1 }))
   return g
 }
 
@@ -1507,7 +1513,7 @@ function artFlower(p: string[], s: number) {
   const y0 = ART_MOUNT
   const g = new THREE.Group()
   const [z1] = artFrame(g, w, h, 4, y0, frame, canvas)
-  g.add(paintPanel(w - 5, h - 5, `art-flower-${canvas}-${acc}`, paintFlower(canvas, C.pink, C.lemon), { y: y0 + 2.5, z: z1 }))
+  g.add(paintPanel(w - 5, h - 5, ...artFace(0, `art-flower-${canvas}-${acc}`, paintFlower(canvas, C.pink, C.lemon)), { y: y0 + 2.5, z: z1 }))
   void acc
   return g
 }
@@ -1519,7 +1525,7 @@ function artAbstract(p: string[], s: number) {
   const y0 = ART_MOUNT
   const g = new THREE.Group()
   const [z1] = artFrame(g, w, h, 4, y0, frame, canvas)
-  g.add(paintPanel(w - 5, h - 5, `art-abstract-${canvas}-${acc}`, paintAbstract(canvas, acc, J.sumi), { y: y0 + 2.5, z: z1 }))
+  g.add(paintPanel(w - 5, h - 5, ...artFace(0, `art-abstract-${canvas}-${acc}`, paintAbstract(canvas, acc, J.sumi)), { y: y0 + 2.5, z: z1 }))
   return g
 }
 

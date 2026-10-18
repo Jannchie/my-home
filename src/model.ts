@@ -276,6 +276,8 @@ export interface Furniture {
   colors?: string[]
   /** 布艺花纹：按配色槽给（下标同 colors），null / 不填 = 纯色 */
   patterns?: (PatternSpec | null)[]
+  /** 仅装饰画 / 海报 / 相框 / 挂轴等（artwork.ts ART_ASSETS）：画面「画种.种子」；不填 = 素材原来的画 */
+  art?: string
   /** 离房间地面的高度：摆在桌面上的东西 = 桌面高度；地上的为 0 / 不填 */
   z?: number
   /** 仅灯具：强制开 / 关；不填 = 跟随所在房间的灯 */

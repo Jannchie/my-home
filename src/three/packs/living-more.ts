@@ -4,6 +4,7 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, face, puck, rbox, shade, toon, torus, tray } from '../toon'
+import { artOverride } from '../artwork'
 import { C, SWING_OPEN, ellipsePoly, glow, holePanel, movable, paintPanel, rectPoly, rng, shell, type AssetDef, type Poly, type SurfaceDef } from '../kit'
 import { G, P, batten, clearMat, cylX, cylZ, fitGroup, lit, noOutlineDeep, rod3, tube, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, PROP, R, define, type PalFlat } from '../packkit'
@@ -2833,8 +2834,11 @@ function kidsEasel(p: string[]) {
   const [wood, a, tray0] = p
   const g = new THREE.Group()
   for (const s of [-1, 1]) for (const zs of [-1, 1]) g.add(batten([s * 25, 0, zs * 22], [s * 25, 98, zs * 3], 3, 3, wood))
+  // 指定了画面（artwork.ts）：白板上夹一张儿童画
+  const pic = artOverride(0)
   for (const zs of [-1, 1]) {
-    const board = rbox(47.6, 40, 1, zs > 0 ? '#fbfcfd' : '#3b4a44', {}, 0.3)
+    const board = G(rbox(47.6, 40, 1, zs > 0 ? '#fbfcfd' : '#3b4a44', { y: -20 }, 0.3))
+    if (zs > 0 && pic) board.add(paintPanel(36, 27, ...pic, { y: -14, z: 0.56 }))
     board.rotation.x = zs * -0.2
     board.position.set(0, 74, zs * 8)
     g.add(board)

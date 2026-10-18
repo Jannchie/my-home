@@ -20,7 +20,8 @@ import { IndoorLights, KELVIN_MAX, KELVIN_MIN, LIGHT_MODES, POOL_HIGH, POOL_LOW,
 import { disposeUnshared } from '../three/toon'
 import { poseDoors } from '../three/kit'
 import { useThumbs } from '../three/thumbs'
-import { normalizeColor } from '../three/stylePalettes'
+import { normalizeColor, paletteStyleOf } from '../three/stylePalettes'
+import { artKindOf, artLabel, cycleArt, parseArt, pickArt, rerollArt } from '../three/artwork'
 import { coverInto, liveCapture } from '../three/planThumb'
 import { FxLayer } from '../three/fx'
 import { SelectFrame, WallGuide } from '../three/selectFrame'
@@ -84,6 +85,7 @@ import {
   setRoomLightK,
   setFurnitureLight,
   setFurnitureOpen,
+  setFurnitureArt,
   FOV_MIN,
   FOV_MAX,
   activeFloor,
@@ -641,6 +643,28 @@ const selectedFurniture = computed(() => {
   return s?.type === 'furniture' ? findFurniture(s.id) ?? null : null
 })
 const selectedDef = computed(() => (selectedFurniture.value ? ASSET_MAP.get(selectedFurniture.value.asset) ?? null : null))
+/** 选中的是装饰画 / 海报 / 相框这类画面可换的素材：画面用途 */
+const selectedArtKind = computed(() => (selectedFurniture.value ? artKindOf(selectedFurniture.value.asset) : undefined))
+/** 户型里已经挂着的画种 → 件数（摆新画时尽量不重复） */
+function usedArtMotifs() {
+  const m = new Map<string, number>()
+  for (const f of plan.value.furniture) {
+    const p = parseArt(f.art)
+    if (p) m.set(p.motif.id, (m.get(p.motif.id) ?? 0) + 1)
+  }
+  return m
+}
+function stepArt(dir: 1 | -1) {
+  const f = selectedFurniture.value
+  const kind = selectedArtKind.value
+  if (f && kind) setFurnitureArt(f.id, cycleArt(f.art, kind, dir))
+}
+function rerollSelectedArt() {
+  const f = selectedFurniture.value
+  const kind = selectedArtKind.value
+  const def = selectedDef.value
+  if (f && kind && def) setFurnitureArt(f.id, rerollArt(f.art, kind, paletteStyleOf(def, f.color ?? 0)))
+}
 
 // ---------- 悬停高亮（鼠标）：指到的家具整体提亮一点 ----------
 // toon 材质按颜色共享，不能直接改：悬停时把这件家具的网格临时换成提亮过的克隆材质（按原材质缓存），移开就换回。
@@ -788,9 +812,9 @@ function rebuildHouse() {
   prewarmFloorFade()
   dirty = true
 }
-/** 家具模型的缓存键：素材 + 配色 + 单件改色 + 花纹（开合不在内） */
-function furnitureKey(asset: string, color: number | undefined, colors: readonly string[] | undefined, patterns: unknown) {
-  return `${asset}#${color ?? 0}#${colors?.join(',') ?? ''}#${patterns ? JSON.stringify(patterns) : ''}`
+/** 家具模型的缓存键：素材 + 配色 + 单件改色 + 花纹 + 画面（开合不在内） */
+function furnitureKey(asset: string, color: number | undefined, colors: readonly string[] | undefined, patterns: unknown, art?: string) {
+  return `${asset}#${color ?? 0}#${colors?.join(',') ?? ''}#${patterns ? JSON.stringify(patterns) : ''}#${art ?? ''}`
 }
 /** 上次搭房子时的当前楼层（墙高滑杆调低时只压低当前层：换层要重搭） */
 let builtActive = ''
@@ -805,7 +829,7 @@ function syncFurniture() {
   for (const f of p.furniture) {
     alive.add(f.id)
     // 开合不进键：开关柜门只重新摆门（poseDoors 会同步静态矩阵），不整件重建
-    const key = furnitureKey(f.asset, f.color, f.colors, f.patterns)
+    const key = furnitureKey(f.asset, f.color, f.colors, f.patterns, f.art)
     let o = objs.get(f.id)
     if (o && o.key === key && o.open !== !!f.open) {
       poseDoors(o.obj, !!f.open)
@@ -880,8 +904,14 @@ function updateRing() {
 let ghostAsset = ''
 function syncGhost(asset = placing.value?.asset) {
   const p = placing.value
-  // 和家具缓存键一致：换配色、单件改色、花纹都要重建预览
-  const key = p ? furnitureKey(asset ?? p.asset, p.color, p.colors, p.patterns) : ''
+  // 装饰画：摆放时就定好一幅画（预览和放下的一样；连续摆放时每放一件换一幅）
+  if (p && !p.art) {
+    const kind = artKindOf(p.asset)
+    const def = ASSET_MAP.get(p.asset)
+    if (kind && def) p.art = pickArt(kind, paletteStyleOf(def, p.color), Math.random, usedArtMotifs())
+  }
+  // 和家具缓存键一致：换配色、单件改色、花纹、画面都要重建预览
+  const key = p ? furnitureKey(asset ?? p.asset, p.color, p.colors, p.patterns, p.art) : ''
   if (key === ghostKey) return
   if (ghost) {
     stage.scene.remove(ghost)
@@ -892,7 +922,7 @@ function syncGhost(asset = placing.value?.asset) {
   ghostFrame.hide()
   if (p) {
     ghostAsset = asset ?? p.asset
-    ghost = furnitureModel({ id: 'ghost', asset: ghostAsset, x: 0, y: 0, rot: ghostRot.value, color: p.color, colors: p.colors, patterns: p.patterns })
+    ghost = furnitureModel({ id: 'ghost', asset: ghostAsset, x: 0, y: 0, rot: ghostRot.value, color: p.color, colors: p.colors, patterns: p.patterns, art: p.art })
     ghost.visible = false
     stage.scene.add(ghost)
   }
@@ -1324,8 +1354,13 @@ function dropPlacing(e: { clientX: number; clientY: number; altKey: boolean }, k
   if (!placing.value) return
   const q = locate(e as PointerEvent, placing.value.asset, null, new Set(), undefined, ghostRot.value)
   if (q) {
-    addFurniture({ asset: q.asset, color: placing.value.color, colors: placing.value.colors, patterns: placing.value.patterns, x: q.x, y: q.y, rot: q.rot ?? ghostRot.value, z: q.z || undefined })
+    addFurniture({ asset: q.asset, color: placing.value.color, colors: placing.value.colors, patterns: placing.value.patterns, art: placing.value.art, x: q.x, y: q.y, rot: q.rot ?? ghostRot.value, z: q.z || undefined })
     if (!keep) placing.value = null
+    else if (placing.value.art) {
+      // 连续摆放：下一件换一幅画
+      placing.value.art = undefined
+      syncGhost()
+    }
   }
   showGuides([])
 }
@@ -2925,6 +2960,16 @@ defineExpose({ resetView })
         <div v-if="selectedSizes.length > 1" class="sizes">
           <button v-for="sz in selectedSizes" :key="sz.id" :class="{ on: sz.id === selectedDef.id }" :title="sz.w + '×' + sz.d + '×' + sz.h" @click="swapSize(sz.id)">{{ variantLabel(sz) }}</button>
         </div>
+        <div v-if="selectedArtKind" class="row art-row">
+          <span class="ico-label"><JIcon :icon="ICONS.artwork" class="ico-muted" />{{ t('画面') }}</span>
+          <div class="art-pick">
+            <button :title="t('上一种画')" :aria-label="t('上一种画')" @click="stepArt(-1)"><JIcon :icon="ICONS.prevItem" /></button>
+            <span class="art-name">{{ selectedFurniture.art ? t(artLabel(selectedFurniture.art) ?? '') : t('原画') }}</span>
+            <button :title="t('下一种画')" :aria-label="t('下一种画')" @click="stepArt(1)"><JIcon :icon="ICONS.nextItem" /></button>
+            <button :title="t('同一种画换一版')" :aria-label="t('同一种画换一版')" @click="rerollSelectedArt"><JIcon :icon="ICONS.random" /></button>
+            <button v-if="selectedFurniture.art" :title="t('恢复原画')" :aria-label="t('恢复原画')" @click="setFurnitureArt(selectedFurniture.id, undefined)"><JIcon :icon="ICONS.reset" /></button>
+          </div>
+        </div>
         <ColorEditor
           :def="selectedDef"
           :color="normalizeColor(selectedDef, selectedFurniture.color ?? 0)"
@@ -3593,6 +3638,30 @@ h3 {
   grid-column: 1 / -1;
   color: var(--text-muted);
   font-size: var(--fs-sm);
+}
+.art-pick {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.art-pick button {
+  flex: none;
+  width: var(--control-h-sm);
+  height: var(--control-h-sm);
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+.art-name {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .sizes {
   display: flex;

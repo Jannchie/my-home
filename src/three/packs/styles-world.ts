@@ -5,6 +5,7 @@
 
 import * as THREE from 'three'
 import { ball, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
+import { artFace } from '../artwork'
 import { C, hangingPipe, holePanel, paintPanel, pipeHook, rectPoly, ellipsePoly, type AssetDef, type Poly, type SurfaceDef } from '../kit'
 import { batten, cappedTube, centerGroup, cylX, cylZ, glassPane, latheAt, lit, mesh, noOutlineDeep, rod3, type V3 } from '../geo'
 import { I, J, M, N, R, withPals, type Pal3 } from '../packkit'
@@ -728,7 +729,7 @@ function zhongtang(p: string[]) {
     g.add(rbox(w + 1, 2, 1.6, rodC, { x, y: y0 + h + 3, z: -0.4 }, 0.5))
     for (const s of [-1, 1]) g.add(rod3([x + s * w * 0.3, y0 + h + 4.6, -0.4], [x, y0 + h + 11, -0.4], 0.25, CHN.ink, 4))
   }
-  scroll(0, 62, 150, `sw-zt-c-${paper}`, paintShanshui(paper, CHN.ink, '#c0392b'))
+  scroll(0, 62, 150, ...artFace(0, `sw-zt-c-${paper}`, paintShanshui(paper, CHN.ink, '#c0392b')))
   scroll(-52, 20, 142, `sw-zt-l-${paper}`, paintCalligraphy(paper, CHN.ink, '松竹梅岁寒'))
   scroll(52, 20, 142, `sw-zt-r-${paper}`, paintCalligraphy(paper, CHN.ink, '山水月清风'))
   return centerGroup(g)

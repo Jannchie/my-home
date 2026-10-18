@@ -3,7 +3,8 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
-import { C, ellipsePoly, glow, rectPoly, rng, shell, slab, type AssetDef, type Poly } from '../kit'
+import { C, ellipsePoly, glow, paintPanel, rectPoly, rng, shell, slab, type AssetDef, type Poly } from '../kit'
+import { artOverride } from '../artwork'
 import { hollow, swingDoor } from '../cabinetKit'
 import { P, PI, batten, centerGroup, cylX, cylZ, ghostOutlined, litOutlined, noOutline, rod3, type V3 } from '../geo'
 import { I, J, M, N, PROP, R, define, type PalFlat } from '../packkit'
@@ -1900,16 +1901,22 @@ function easel(p: string[]) {
   g.add(rbox(64, 4, 1, wood, { y: 70, z: 11.6 }, 0.4))
   const cv = new THREE.Group()
   cv.add(rbox(60, 48, 2.5, '#fbf8f0', {}, 0.4))
+  // 指定了画面（artwork.ts）就画在画布上；默认是几何体拼的风景
+  const pic = artOverride(0)
+  if (pic) cv.add(paintPanel(57, 45, ...pic, { y: 1.5, z: 1.3 }))
+  else paintedCanvas(cv, a, b)
+  P(cv, 0, 72.5, 9, -0.08, 0, 0)
+  g.add(cv)
+  g.add(rbox(6, 3, 5, wood, { y: 120.5, z: 3 }, 0.6))
+  return centerGroup(g)
+}
+function paintedCanvas(cv: THREE.Group, a: string, b: string) {
   cv.add(rbox(56, 22, 0.6, a, { y: 23, z: 1.25 }, 0.2))
   cv.add(rbox(56, 10, 0.6, b, { y: 4, z: 1.25 }, 0.2))
   cv.add(cylZ(4.5, 0.6, '#ffd27a', 14, 36, 1.6, 24))
   cv.add(P(finXY([[-26, 13], [-2, 32], [22, 13]], 0.6, shade(b, -0.12)), 0, 0, 1.55))
   cv.add(cylZ(5, 0.6, shade(b, 0.1), -14, 18, 1.55, 24))
   cv.add(rbox(1.2, 8, 0.6, '#8b6a4f', { x: -14, y: 10, z: 1.75 }, 0.2))
-  P(cv, 0, 72.5, 9, -0.08, 0, 0)
-  g.add(cv)
-  g.add(rbox(6, 3, 5, wood, { y: 120.5, z: 3 }, 0.6))
-  return centerGroup(g)
 }
 const EASEL_PALS: PalFlat[] = [
   ['nordic', N.oak, N.blue, N.sage],
