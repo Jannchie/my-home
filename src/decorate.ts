@@ -25,6 +25,7 @@ import { boxInsideWalls, firstDoorCenter, isSashWindow, placeCandidates, type Pl
 import { fixFloor, type CheckItem } from './checklist'
 import { ASSETS, ASSET_MAP, STYLE_LABELS, type AssetDef, type StyleTag } from './three/assets'
 import { rng, type Poly } from './three/kit'
+import { artKindOf, parseArt, pickArt } from './three/artwork'
 import { paletteStyle } from './three/catalog'
 import { derivedIndex, hasDerived } from './three/stylePalettes'
 import { fitsOnFixture, fitsOnSurface, fixtureTop, toLocal, toWorld } from './surface'
@@ -285,6 +286,25 @@ class Decorator {
    * 布置结束时的统一校验（和测试同一套检查）：立体碰撞、设备、窗帘、留空区（Occupancy.audit），主要通道可达（clearPassages）。
    * 有问题的那件（冲突里后摆、不固定的那件）拿掉后照原来的摆法换个位置重摆（最多 3 次），实在放不下才删掉。
    */
+  /**
+   * 装饰画 / 海报 / 相框 / 挂轴的画面（artwork.ts）：按所在房间的风格挑画种，全户（连同别的楼层）尽量不重复。
+   * only 给了就只给这些家具挑（补齐清单时不动原有的画）。最后才调用：不影响前面摆放的随机序列。
+   */
+  assignArt(only?: Set<string>) {
+    const used = new Map<string, number>()
+    for (const f of [...this.prior, ...this.out]) {
+      const p = parseArt(f.art)
+      if (p) used.set(p.motif.id, (used.get(p.motif.id) ?? 0) + 1)
+    }
+    for (const f of this.out) {
+      if (f.art || (only && !only.has(f.id))) continue
+      const kind = artKindOf(f.asset)
+      if (!kind) continue
+      const room = this.plan.rooms.find((r) => pointInPolygon(f, r.points))
+      f.art = pickArt(kind, room ? this.styleFor(room) : this.baseStyle, this.rand, used)
+    }
+  }
+
   validate() {
     const before = this.relocated
     for (let round = 0; round < 3; round++) {
@@ -3903,6 +3923,7 @@ class Decorator {
 
     // 7. 统一校验：有问题的那件换个位置重摆，实在放不下才删
     this.validate()
+    this.assignArt()
     return this.out
   }
 
@@ -4300,6 +4321,7 @@ export function applyFixes(plan: Plan, items: CheckItem[], household?: Household
   const rand = rng(seed)
   const d = new Decorator({ ...plan, furniture: [] }, rand, household?.style ?? 'cute', household, house)
   d.out = plan.furniture.map((f) => ({ ...f }))
+  const before = new Set(d.out.map((f) => f.id))
   for (const f of d.out) {
     const def = ASSET_MAP.get(f.asset)
     if (!def || f.z || def.mount || def.prop || def.h <= 3) d.flat.add(f.id)
@@ -4410,6 +4432,7 @@ export function applyFixes(plan: Plan, items: CheckItem[], household?: Household
         break
     }
   }
+  d.assignArt(new Set(d.out.filter((f) => !before.has(f.id)).map((f) => f.id)))
   return d.out
 }
 

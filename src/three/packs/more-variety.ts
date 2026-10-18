@@ -8,6 +8,7 @@
 
 import * as THREE from 'three'
 import { ball, cup, cyl, rbox, shade, torus, tray } from '../toon'
+import { artFace } from '../artwork'
 import { C, G, holePanel, paintAbstract, paintFlower, paintLandscape, paintPanel, rng, shell, type AssetDef, type StyleTag } from '../kit'
 import { PI, clearDeep, cylZFrom, fitBuild, mesh, noOutlineDeep, soft, tube, type SoftFn, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, R, definer, type Pal } from '../packkit'
@@ -1284,8 +1285,7 @@ function acrylicFrame(w: number, h: number, metal: string, key: string, draw: Dr
 /** 按画框种类组一幅画 */
 function framed(kind: FrameKind, w: number, h: number, p: string[], pic: PicKind, matKinds: PicKind[] = []) {
   const [frame, a, b, c] = p
-  const draw = drawOf(pic, a, b, c)
-  const key = `mv|${pic}|${a}|${b}|${c}`
+  const [key, draw] = artFace(0, `mv|${pic}|${a}|${b}|${c}`, drawOf(pic, a, b, c))
   const mat = matKinds.includes(pic) ? '#fbf8f1' : undefined
   if (kind === 'wood') return barFrame(w, h, 1.8, 2.4, frame, key, draw, mat)
   if (kind === 'black') return barFrame(w, h, 1.4, 2.2, frame, key, draw, mat)
@@ -1385,6 +1385,10 @@ export const MV_FRAMED: AssetDef[] = [
 const SKIES = ['#bfe3ff', '#ffd9b8', '#d7ecd0', '#f4d6e6', '#c9d4f0', '#fff1c4', '#d8f0ec', '#e9e0f5']
 /** 第 i 张小照片的画面：风景 / 人像 / 花 / 黑白轮换 */
 function snap(i: number, tone: string): [string, Draw] {
+  const [key, draw] = snapDefault(i, tone)
+  return artFace(i, key, draw)
+}
+function snapDefault(i: number, tone: string): [string, Draw] {
   const sky = SKIES[i % SKIES.length]
   switch (i % 4) {
     case 0:

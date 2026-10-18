@@ -13,6 +13,7 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, face, puck, rbox, shade, toon, torus, tray } from '../toon'
+import { artFace } from '../artwork'
 import { C, G, glow, paintAbstract, paintFlower, paintLandscape, paintPanel, rectPoly, rng, shell, type AssetDef, type Fx } from '../kit'
 import { PI, clearDeep, lathe, noOutlineDeep, rod3, tube, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, R, definer, type Build, type Pal } from '../packkit'
@@ -1586,7 +1587,7 @@ function pendulumClock(p: string[]) {
 /** 无框画布（大幅风景） */
 function canvasXL(p: string[]) {
   const [sky, hill, sun] = p
-  return G(rbox(120, 80, 3.5, '#f4f1ea', {}, 0.3), paintPanel(119.6, 79.6, `canvasxl|${sky}|${hill}|${sun}`, paintLandscape(sky, hill, sun), { y: 0.2, z: 1.78 }))
+  return G(rbox(120, 80, 3.5, '#f4f1ea', {}, 0.3), paintPanel(119.6, 79.6, ...artFace(0, `canvasxl|${sky}|${hill}|${sun}`, paintLandscape(sky, hill, sun)), { y: 0.2, z: 1.78 }))
 }
 /** 三联画：一幅抽象画分在三块画布上 */
 function triptych(p: string[]) {
@@ -1602,18 +1603,18 @@ function triptych(p: string[]) {
     }
     const x = (i - 1) * 44
     g.add(rbox(40, 60, 3, shade(ground, -0.08), { x }, 0.3))
-    g.add(paintPanel(39.6, 59.6, `trip|${ground}|${a}|${line}|${i}`, part, { x, y: 0.2, z: 1.53 }))
+    g.add(paintPanel(39.6, 59.6, ...artFace(i, `trip|${ground}|${a}|${line}|${i}`, part, [i, 3]), { x, y: 0.2, z: 1.53 }))
   }
   return g
 }
-const artSquare: Build = (p) => frame(40, 40, 3, 2.6, p[0], `sq|${p.join()}`, paintFlower(p[1], p[2], GOLD), '#fbf8f0')
-const artTall: Build = (p) => frame(50, 70, 1.6, 2.2, p[0], `tall|${p.join()}`, paintAbstract(p[1], p[2], shade(p[0], -0.1)))
+const artSquare: Build = (p) => frame(40, 40, 3, 2.6, p[0], ...artFace(0, `sq|${p.join()}`, paintFlower(p[1], p[2], GOLD)), '#fbf8f0')
+const artTall: Build = (p) => frame(50, 70, 1.6, 2.2, p[0], ...artFace(0, `tall|${p.join()}`, paintAbstract(p[1], p[2], shade(p[0], -0.1))))
 function artMiniSet(p: string[]) {
   const [fr, a, b] = p
   const g = new THREE.Group()
   const draws: Painter[] = [paintLandscape(shade(b, 0.3), a, C.lemon), paintFlower(shade(a, 0.35), b, GOLD), paintAbstract('#fbf8f0', a, b)]
   draws.forEach((d, i) => {
-    const f = frame(20, 25, 1.6, 2, fr, `mini|${p.join()}|${i}`, d, '#fbf8f0')
+    const f = frame(20, 25, 1.6, 2, fr, ...artFace(i, `mini|${p.join()}|${i}`, d), '#fbf8f0')
     f.position.set((i - 1) * 25, i === 1 ? 4 : 0, 0)
     g.add(f)
   })
@@ -1635,7 +1636,7 @@ function photoWall(p: string[]) {
   const skies = ['#bfe3ff', '#ffd9b8', '#d7ecd0', '#f4d6e6', '#c9d4f0', '#fff1c4', '#d8f0ec']
   L.forEach(([w, h, x, y], i) => {
     const d = i % 3 === 0 ? paintLandscape(skies[i], i % 2 ? a : b, '#ffffff') : i % 3 === 1 ? paintFlower(skies[i], i % 2 ? a : b, GOLD) : paintAbstract(skies[i], a, b)
-    const f = frame(w, h, 1.6, 2, i % 2 ? fr : shade(fr, 0.1), `pw|${p.join()}|${i}`, d, i % 2 ? '#fbf8f0' : undefined)
+    const f = frame(w, h, 1.6, 2, i % 2 ? fr : shade(fr, 0.1), ...artFace(i, `pw|${p.join()}|${i}`, d), i % 2 ? '#fbf8f0' : undefined)
     f.position.set(x, y, 0)
     g.add(f)
   })
@@ -1829,7 +1830,7 @@ function wireGrid(p: string[]) {
   shots.forEach(([x, y, w, h, rz], i) => {
     const pg = G(rbox(w, h, 0.25, '#ffffff', {}, 0.05))
     const d = i % 2 ? paintFlower(shade(photo, 0.3), photo, GOLD) : paintLandscape(shade(photo, 0.35), photo, '#ffffff')
-    pg.add(paintPanel(w - 1.2, h - 2.4, `wg|${photo}|${i}`, d, { y: 1.6, z: 0.14 }))
+    pg.add(paintPanel(w - 1.2, h - 2.4, ...artFace(i, `wg|${photo}|${i}`, d), { y: 1.6, z: 0.14 }))
     pg.add(rbox(1.4, 3, 1, clip, { y: h - 1.5, z: 0.4 }, 0.3))
     pg.position.set(x, y - h + 1.5, 1.4)
     pg.rotation.z = rz
@@ -1843,9 +1844,9 @@ function calendar(p: string[]) {
   const [paper, accent, pic] = p
   const g = new THREE.Group()
   g.add(rbox(30, 42, 0.3, paper, {}, 0.05))
-  const land = paintLandscape(shade(pic, 0.35), pic, '#ffffff')
+  const [lk, land] = artFace(0, '', paintLandscape(shade(pic, 0.35), pic, '#ffffff'))
   g.add(
-    paintPanel(28, 40, `cal|${p.join()}`, (c, W, H) => {
+    paintPanel(28, 40, `cal|${p.join()}|${lk}`, (c, W, H) => {
       c.fillStyle = paper
       c.fillRect(0, 0, W, H)
       c.save()
@@ -1927,7 +1928,7 @@ function kakejiku(kind: 'sansui' | 'sho'): Build {
             c.fillStyle = J.shu
             c.fillRect(W * 0.72, H * 0.88, W * 0.1, W * 0.1)
           }
-    g.add(paintPanel(pw, ph, `kj|${kind}|${paper}`, draw, { y: 32, z: 0.55 }))
+    g.add(paintPanel(pw, ph, ...artFace(0, `kj|${kind}|${paper}`, draw), { y: 32, z: 0.55 }))
     for (const y of [30, 32 + ph]) g.add(noOutlineDeep(rbox(pw, 2, 0.2, GOLD, { y, z: 0.6 }, 0.05)))
     for (const s of [-1, 1]) g.add(noOutlineDeep(rbox(1.6, 28, 0.2, shade(cloth, 0.2), { x: s * 7, y: h - 34, z: 0.7 }, 0.05)))
     g.add(rbox(w + 1, 1.8, 1.4, shade(roller, -0.1), { y: h - 3.4 }, 0.4))

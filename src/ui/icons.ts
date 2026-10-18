@@ -28,6 +28,8 @@ import {
   IconCompass,
   IconColorFilter,
   IconChevronDown,
+  IconChevronLeft,
+  IconChevronRight,
   IconChevronUp,
   IconCopy,
   IconShare,
@@ -233,6 +235,9 @@ export const ICONS = {
   delete: IconTrash,
   color: IconPalette,
   pattern: IconLayoutGrid, // 布艺花纹
+  artwork: IconPictureFrame, // 装饰画的画面
+  prevItem: IconChevronLeft,
+  nextItem: IconChevronRight,
   shuffle: IconShuffle, // 随机配色 / 随机花纹 / 重排
   reset: IconReset,
   // 素材库

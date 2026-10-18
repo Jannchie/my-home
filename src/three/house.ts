@@ -31,6 +31,7 @@ import { hasTag } from './tags'
 import { fridgeSpotModel, washerSpotModel } from './appliances'
 import { effectivePalette } from './colors'
 import { applyPatterns, patternMaterial } from './fabric'
+import { withArt } from './artwork'
 import {
   ASSET_MAP,
   C,
@@ -1852,14 +1853,15 @@ export function setVertexColorMerge(v: boolean | ((def: AssetDef) => boolean)) {
 }
 export const vertexColorMergeFor = (def: AssetDef) => !hasTag(def, 'light') && (typeof vcMerge === 'function' ? vcMerge(def) : vcMerge)
 
-/** 模板的缓存键：素材 | 配色 | 单件改色 | 花纹（开合不在内） */
-export function furnitureTemplateKey(fu: Pick<Furniture, 'asset' | 'color' | 'colors' | 'patterns'>) {
-  return `${fu.asset}|${fu.color ?? 0}|${fu.colors?.join(',') ?? ''}|${fu.patterns ? JSON.stringify(fu.patterns) : ''}`
+/** 模板的缓存键：素材 | 配色 | 单件改色 | 花纹 | 画面（开合不在内） */
+export function furnitureTemplateKey(fu: Pick<Furniture, 'asset' | 'color' | 'colors' | 'patterns' | 'art'>) {
+  return `${fu.asset}|${fu.color ?? 0}|${fu.colors?.join(',') ?? ''}|${fu.patterns ? JSON.stringify(fu.patterns) : ''}|${fu.art ?? ''}`
 }
 
 function buildTemplate(def: AssetDef, fu: Furniture, closeUp: boolean): FurnitureTemplate {
   const pal = effectivePalette(def, fu.color ?? 0, fu.colors)
-  const m = def.build(pal)
+  // 装饰画的画面（artwork.ts）：build 里的 artFace 读这个上下文
+  const m = withArt(fu.art, () => def.build(pal))
   // 半透明零件（玻璃、水面）不投影
   noTransparentShadows(m)
   // 零件按材质合并，draw call 少一个数量级（描边、花纹、弯曲都在合并后的网格上照常工作）

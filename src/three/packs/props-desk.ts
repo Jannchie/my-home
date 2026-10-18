@@ -4,6 +4,7 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, face, puck, rbox, shade, toon, torus, tray } from '../toon'
+import { artFace } from '../artwork'
 import { C, clipLevels, glow, rng, rod, shell, type AssetDef, type Fx, type ScreenPanel, paintPanel, paintLandscape } from '../kit'
 import { P, cylX, cylZ, ghostOutlined, litOutlined, noOutline } from '../geo'
 import { I, J, M, N, PROP, R, definer, type Pal } from '../packkit'
@@ -1009,7 +1010,7 @@ function photoFrame(fw: number, fh: number) {
     f.add(rbox(fw, fh, 1.4, frame, {}, 0.5))
     f.add(rbox(fw - 2.4, fh - 2.4, 0.3, C.white, { y: 1.2, z: 0.75 }, 0.1))
     // 照片画在贴图上，内容天然裁在照片范围内
-    f.add(paintPanel(fw - 5, fh - 5, `photo-${photo}-${pic}`, paintLandscape(photo, pic, C.lemon), { y: 2.5, z: 0.95 }))
+    f.add(paintPanel(fw - 5, fh - 5, ...artFace(0, `photo-${photo}-${pic}`, paintLandscape(photo, pic, C.lemon)), { y: 2.5, z: 0.95 }))
     const zf = fh * 0.12
     g.add(P(f, 0, 0, zf, -0.15))
     const hy = fh * 0.62

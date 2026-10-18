@@ -3,6 +3,7 @@
 
 import * as THREE from 'three'
 import { ball, rbox } from '../toon'
+import { artFace } from '../artwork'
 import { C, S, paintPanel, paintLandscape, type AssetDef, type StyleTag } from '../kit'
 import { noOutline } from '../geo'
 
@@ -76,7 +77,7 @@ function polaroid(p: string[]) {
   const [sky, hill, sun] = p
   const g = new THREE.Group()
   g.add(rbox(8.8, 10.7, 0.3, '#fbfbf8', { y: -5.35, z: 0.15 }, 0.1))
-  g.add(paintPanel(7.6, 7.6, `pola-${sky}-${hill}-${sun}`, paintLandscape(sky, hill, sun), { y: -3.85, z: 0.32 }))
+  g.add(paintPanel(7.6, 7.6, ...artFace(0, `pola-${sky}-${hill}-${sun}`, paintLandscape(sky, hill, sun)), { y: -3.85, z: 0.32 }))
   g.add(ball(1, C.red, { y: 4.4, z: 0.75 }, [1, 1, 0.45]))
   return g
 }
@@ -89,8 +90,7 @@ function kidsDrawing(p: string[]) {
     paintPanel(
       21,
       15,
-      `kid-${paper}-${crayon}-${sun}`,
-      (ctx, W, H) => {
+      ...artFace(0, `kid-${paper}-${crayon}-${sun}`, (ctx, W, H) => {
         ctx.fillStyle = paper
         ctx.fillRect(0, 0, W, H)
         ctx.lineWidth = Math.max(2, W * 0.015)
@@ -122,7 +122,7 @@ function kidsDrawing(p: string[]) {
         ctx.moveTo(0, H * 0.84)
         ctx.lineTo(W, H * 0.84)
         ctx.stroke()
-      },
+      }),
       { y: -7.5, z: 0.12 },
     ),
   )
@@ -149,7 +149,7 @@ function poster(w: number, h: number, kind: 'landscape' | 'shapes') {
             ctx.fillRect(W * 0.18, H * 0.68, W * 0.64, H * 0.06)
             ctx.fillRect(W * 0.3, H * 0.78, W * 0.4, H * 0.03)
           }
-    g.add(paintPanel(w, h, `poster-${kind}-${a}-${b}-${c}-${w}`, draw, { y: -h / 2, z: 0.12 }))
+    g.add(paintPanel(w, h, ...artFace(0, `poster-${kind}-${a}-${b}-${c}-${w}`, draw), { y: -h / 2, z: 0.12 }))
     for (const [x, y] of [
       [-w / 2 + 1.5, h / 2 - 1.5],
       [w / 2 - 1.5, h / 2 - 1.5],

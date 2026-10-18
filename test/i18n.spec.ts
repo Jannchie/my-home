@@ -13,6 +13,7 @@ import * as CAT from '/src/three/catalog'
 import * as GEN from '/src/generate'
 import * as HH from '/src/household'
 import * as DEC from '/src/decorate'
+import { MOTIFS } from '/src/three/artMotifs'
 import * as COL from '/src/three/colors'
 import * as PAT from '/src/three/patterns'
 import { ASSETS } from '/src/three/assets'
@@ -67,6 +68,7 @@ function uiKeys() {
     ['household.ts', [...vals(HH.KIND_LABELS), ...vals(HH.ROLE_LABELS), ...label(HH.TRAITS), ...label(HH.INTERESTS), ...label(HH.JOBS)]],
     ['decorate.ts', vals(DEC.PURPOSE_LABELS)],
     ['colors.ts', [...((COL as Record<string, unknown>).SWATCHES as { label: string }[]).map((x) => x.label), '主色', '副色', '点缀色']],
+    ['artMotifs.ts', MOTIFS.map((m) => m.label)],
     ['patterns.ts', ((PAT as Record<string, unknown>).PATTERN_KINDS as { label: string; group: string }[]).flatMap((x) => [x.label, x.group])],
   ]
   for (const [from, ks] of tables) for (const k of ks) add(k, from)
