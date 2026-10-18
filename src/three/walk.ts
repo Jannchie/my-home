@@ -9,13 +9,15 @@
 
 import * as THREE from 'three'
 import { centroid, fixtureBox, pointInPolygon, type Box, type Plan, type Room, type Vec } from '../model'
-import { floorAbove, floorOf, floorView, isMultiFloor, planFloors } from '../floors'
+import { SLAB, floorAbove, floorOf, floorView, isMultiFloor, planFloors } from '../floors'
 import { HouseNav, type NavGrid } from '../nav'
 import { slabHoles, type StairWalk } from '../stairs'
 import { toon } from './toon'
 import { ASSET_MAP } from './assets'
 import { furnitureBox } from '../snap'
 
+/** 头顶到上层楼板底至少留的距离（cm）：楼梯有一段在上层楼板边下面，眼睛按踏步高度算会钻进楼板里，这时低一下头 */
+const HEADROOM = 12
 /** 眼睛离地高度、身体半径（cm） */
 const EYE = 155
 const BODY_R = 12
@@ -85,6 +87,8 @@ export class Walker {
   unlockedAt = 0
   private keys = new Set<string>()
   private stair: OnStair | null = null
+  /** 每层头顶的上层楼板：楼板底下沿的楼层（上一层）、楼板开洞的地方（楼梯洞口、挑空，头顶是空的） */
+  private overhead = new Map<string, { above: string; open: Vec[][] }>()
   private vel = { x: 0, y: 0 }
 
   constructor(
@@ -93,6 +97,10 @@ export class Walker {
     private host: WalkHost,
   ) {
     this.nav = new HouseNav(plan, { sash: true, stepOver: STEP_OVER })
+    for (const f of planFloors(plan)) {
+      const above = floorAbove(plan, f.id)
+      if (above) this.overhead.set(f.id, { above: above.id, open: slabHoles(plan, above.id) })
+    }
     const start = startPoint(plan, this.nav)
     this.floor = start.floor
     this.pos = start.p
@@ -103,6 +111,13 @@ export class Walker {
 
   private grid(): NavGrid {
     return this.nav.grid(this.floor)
+  }
+
+  /** 头顶上层楼板的底面高度（世界坐标）；在楼梯洞口、挑空下面，或最上层，返回 Infinity */
+  private ceilingY(floor: string, p: Vec) {
+    const o = this.overhead.get(floor)
+    if (!o || o.open.some((h) => pointInPolygon(p, h))) return Infinity
+    return this.host.lift(o.above) - SLAB
   }
 
   private groundY() {
@@ -159,7 +174,15 @@ export class Walker {
       this.enterStairs(step)
       target = this.stair ? this.stairY() : this.groundY() + EYE
     }
+    // 头顶是上层楼板（还没走到楼梯洞口底下）：眼睛压到楼板底下，不钻进楼板里
+    // 脚还在上层楼板底下才算（楼梯最后一段已经踩到上层地面上，头顶就不是这块楼板了）
+    const feet = this.stair ? this.host.lift(this.stair.w.from) + this.stairSample().z : this.groundY()
+    const slab = this.ceilingY(this.stair ? this.stair.w.from : this.floor, this.pos)
+    const ceil = feet < slab - 1 ? slab - HEADROOM : Infinity
+    target = Math.min(target, ceil)
     this.eyeY += (target - this.eyeY) * (1 - Math.exp(-dt * 12))
+    // 平滑跟不上的那几帧也不能钻进楼板（走得快时一下就到了楼板边下面）
+    this.eyeY = Math.min(this.eyeY, ceil)
     // 走路的起伏：按走过的距离推进相位，停下、上下楼时幅度收回
     const speed = this.stair ? 0 : Math.hypot(this.vel.x, this.vel.y)
     this.bob += speed * dt * 0.045

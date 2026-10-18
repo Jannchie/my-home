@@ -198,4 +198,34 @@ describe('第一人称漫游', () => {
     for (let i = 0; i < 1200 && w.onStairs; i++) w.update(1 / 60)
     expect(w.floor).toBe(link.from)
   })
+
+  test('上楼梯时头顶是上层楼板的那一段：镜头不钻进楼板（低一下头）', () => {
+    for (const region of ['jp', 'cn', 'west'] as const) {
+      const plan = generatePlan({ ...JP_OPTS, seed: 1, region, dwelling: 'house' }).plan
+      const cam = new THREE.PerspectiveCamera()
+      const w = new Walker(plan, cam, { lift: (id) => floorById(plan, id)?.elevation ?? 0, onFloor: () => {} })
+      const link = w.nav.links[0]
+      const holes = slabHoles(plan, link.to)
+      const slabBottom = floorById(plan, link.to)!.elevation - 30
+      w.floor = link.from
+      w.pos = w.nav.grid(link.from).nearest('walk', link.entry, 15, 60)!
+      w.yaw = Math.atan2(-(link.pts[3].x - w.pos.x), -(link.pts[3].y - w.pos.y))
+      w.hold('shift', true)
+      w.hold('w', true)
+      let under = 0
+      for (let i = 0; i < 1200 && w.floor !== link.to; i++) {
+        w.update(1 / 60)
+        // 已经换到上层（踩上上层地面）的那一帧不算
+        if (w.floor === link.to) break
+        const p = { x: cam.position.x, y: cam.position.z }
+        if (holes.some((h) => pointInPolygon(p, h))) continue
+        // 脚已经到上层楼板以上（最后一步跨上上层地面）：头顶不是这块楼板
+        if (cam.position.y - 150 >= slabBottom) continue
+        under++
+        expect(cam.position.y, `${region} 第 ${i} 帧`).toBeLessThan(slabBottom - 5)
+      }
+      expect(w.floor).toBe(link.to)
+      expect(under).toBeGreaterThan(0)
+    }
+  })
 })
