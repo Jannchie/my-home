@@ -7,6 +7,7 @@ import { GROUP_NAMES, LIB_ROOMS, ROOM_NAMES_LIB } from '../three/groups'
 import { freezeMatrices, syncMatrix } from '../three/matrices'
 import { BASE, applyCutaway, bendToWalls, floorY, isPlant, stepCutaway, furnitureModel, placeFurniture, roomAt, type WallLook } from '../three/house'
 import { buildBuilding, type FloorGroup } from '../three/building'
+import { fenceLook } from '../three/exterior'
 import { baseFloorId, floorById, floorOf, floorView, isMultiFloor, planFloors } from '../floors'
 import FloorBar from './FloorBar.vue'
 import FloorRail from './FloorRail.vue'
@@ -50,7 +51,7 @@ import { patternPreview } from '../three/fabric'
 import type { PatternKind } from '../three/patterns'
 import { isTyping } from '../dom'
 import { lang, roomName, t, tAuto, tSoft } from '../i18n'
-import { FIXTURES, bbox, centroid, edgesOf, pointInPolygon, type Furniture, type Plan, type Room, type WallTrim } from '../model'
+import { CAR_KINDS, FACADE_KINDS, FENCE_HEIGHT_MAX, FENCE_HEIGHT_MIN, FENCE_KINDS, FIXTURES, PORCH_KINDS, ROOF_KINDS, bbox, centroid, edgesOf, pointInPolygon, type CarKind, type FacadeKind, type FenceKind, type Furniture, type Plan, type PorchKind, type RoofKind, type Room, type WallTrim } from '../model'
 import { roomStyles } from '../decorate'
 import { wallThicknessAt } from '../walls'
 import {
@@ -93,6 +94,9 @@ import {
   activeFloor,
   floorShow,
   setFloor,
+  setSite,
+  setParking,
+  setExterior,
 } from '../store'
 
 const host = ref<HTMLDivElement>()
@@ -1467,6 +1471,8 @@ function onTouchUp(e: PointerEvent) {
   if (pr && !pr.moved && !pr.long && e.type !== 'pointercancel') {
     const rid = pr.hitId ? null : pickLightRoom(e)
     selection.value = pr.hitId ? { type: 'furniture', id: pr.hitId } : rid ? { type: 'room', id: rid } : null
+    const sp = pr.hitId || rid ? null : pickSite(e)
+    if (sp) focusSite(sp)
   }
 }
 
@@ -1739,6 +1745,9 @@ function onPointerUp(e: PointerEvent) {
     controls.enabled = true
   } else if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 4) {
     selection.value = null
+    // 点在车、围挡上：打开外观页的对应设置
+    const sp = pickSite(e)
+    if (sp) focusSite(sp)
   }
   down = null
 }
@@ -2455,7 +2464,7 @@ onBeforeUnmount(() => {
 // 房间的灯光开关 / 色温不影响房子本身：比较时剔掉，免得一开灯就整栋重建
 const roomsShape = () => JSON.stringify(plan.value.rooms, (k, v) => (k === 'light' || k === 'lightK' ? undefined : v))
 watch(
-  () => [roomsShape(), plan.value.openings, plan.value.fixtures, plan.value.wall, plan.value.wallOuter, sandbox.wallHeight, plan.value.floors],
+  () => [roomsShape(), plan.value.openings, plan.value.fixtures, plan.value.wall, plan.value.wallOuter, sandbox.wallHeight, plan.value.floors, plan.value.site, plan.value.exterior],
   rebuildHouse,
   { deep: true },
 )
@@ -2552,12 +2561,12 @@ watch(lowPower, applyQuality)
 
 // ---------- 侧栏 / 底部抽屉：标签页 ----------
 // 原来一条长侧栏（设置 + 住户 + 墙纸 + 清单 + 1500 件家具）拆成几页；选中家具时自动切到「属性」页，取消选中回到原来那页。
-type Tab = 'sel' | 'lib' | 'scene' | 'home' | 'decor'
+type Tab = 'sel' | 'lib' | 'scene' | 'home' | 'decor' | 'ext'
 const TAB_KEY = 'my-home:sandbox-tab'
 function loadTab(): Tab {
   try {
     const v = localStorage.getItem(TAB_KEY)
-    if (v === 'lib' || v === 'scene' || v === 'home' || v === 'decor') return v
+    if (v === 'lib' || v === 'scene' || v === 'home' || v === 'decor' || v === 'ext') return v
   } catch {
     /* 读不到就用默认 */
   }
@@ -2565,12 +2574,78 @@ function loadTab(): Tab {
 }
 const tab = ref<Tab>(loadTab())
 let tabBeforeSel: Tab = tab.value === 'sel' ? 'scene' : tab.value
+// ---------- 外观页：户建的屋顶、外墙、围挡、车（Plan.exterior / site） ----------
+const hasOutside = computed(() => !!(plan.value.site || plan.value.exterior))
+// 公寓、换成没有用地的户型时外观页不存在：退回场景页
+watch(
+  hasOutside,
+  (v) => {
+    if (!v && tab.value === 'ext') tab.value = 'scene'
+  },
+  { immediate: true },
+)
+const ROOF_COLORS = ['#4f5866', '#3d4655', '#2f3540', '#686e76', '#6b4a3c', '#a35a46', '#4b5a4e', '#8fb3d9']
+const WALL_COLORS = ['#f2ede3', '#e7dfcf', '#efe7d6', '#d8d4cc', '#cdd6da', '#9aa0a6', '#5d6168', '#b5654c']
+const TRIM_COLORS_EXT = ['#ffffff', '#e9e4d8', '#9c7a56', '#5a4a3e', '#3a3f45', '#7a3b2e']
+const FENCE_COLORS = ['#7fa86b', '#b48f68', '#d3cbbd', '#b9bab4', '#f4f1ea', '#a65a48', '#4b4f55', '#2f3338']
+const CAR_COLORS = ['#d9534f', '#f2f2f2', '#a3a8ad', '#2f3338', '#3b5b8c', '#9fb8a0', '#e6c35c', '#7a4a8c']
+const fenceKinds = Object.keys(FENCE_KINDS) as FenceKind[]
+const carKinds = Object.keys(CAR_KINDS) as CarKind[]
+const roofKinds = Object.keys(ROOF_KINDS) as RoofKind[]
+const facadeKinds = Object.keys(FACADE_KINDS) as FacadeKind[]
+const porchKinds = Object.keys(PORCH_KINDS) as PorchKind[]
+const siteFence = computed(() => (plan.value.site ? fenceLook(plan.value.site) : null))
+/** 坡度（升高 / 水平）→ 角度 */
+const pitchDeg = computed(() => Math.round((Math.atan(plan.value.exterior?.pitch ?? 0.45) * 180) / Math.PI))
+/** 拖滑杆：开始时记一次撤销，中间值不再记 */
+let extCk = false
+function extLive(fn: () => void) {
+  if (!extCk) {
+    checkpoint()
+    extCk = true
+  }
+  fn()
+}
+function extDone() {
+  extCk = false
+  settle()
+}
+/** 3D 里点中的车 / 围挡：外观页里对应那一块高亮 */
+const extFocus = ref<string | null>(null)
+function pickSite(e: { clientX: number; clientY: number }): { kind: 'car' | 'fence'; index?: number } | null {
+  const raw = toRaw(plan.value)
+  if (!raw.site) return null
+  const base = floorGroups.find((g) => g.floor.id === baseFloorId(raw))?.group
+  if (!base) return null
+  setRay(e as PointerEvent)
+  const hit = raycaster.intersectObject(base, true).find((h) => (h.object as THREE.Mesh).isMesh && shown(h.object) && opaqueHit(h))
+  for (let o: THREE.Object3D | null = hit?.object ?? null; o; o = o.parent) if (o.userData.sitePick) return o.userData.sitePick
+  return null
+}
+function focusSite(p: { kind: 'car' | 'fence'; index?: number }) {
+  extFocus.value = p.kind === 'car' ? `car${p.index ?? 0}` : 'fence'
+  tab.value = 'ext'
+  if (device.compact && sheet.value === 'peek') sheet.value = 'half'
+  nextTick(() => document.querySelector(`[data-ext="${extFocus.value}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }))
+}
+watch(tab, (v) => {
+  if (v !== 'ext') extFocus.value = null
+})
+/** 车位的车型下拉：'' = 不停车 */
+function setCar(i: number, v: string) {
+  const sp = plan.value.site?.parking[i]
+  if (!sp) return
+  if (!v) setParking(i, { car: undefined })
+  else setParking(i, { car: true, carKind: v === 'compact' ? undefined : (v as CarKind), carColor: sp.carColor ?? '#d9534f' })
+}
+
 const tabs = computed(() => [
   ...(selectedFurniture.value ? [{ id: 'sel' as Tab, label: t('属性'), icon: ICONS.generateOptions }] : []),
   { id: 'lib' as Tab, label: t('家具'), icon: VIEW_ICONS.lib },
   { id: 'scene' as Tab, label: t('场景'), icon: VIEW_ICONS['3d'] },
   { id: 'home' as Tab, label: t('住户'), icon: ICONS.household },
   { id: 'decor' as Tab, label: t('墙纸'), icon: ICONS.wallpaper },
+  ...(hasOutside.value ? [{ id: 'ext' as Tab, label: t('外观'), icon: ICONS.exteriorView }] : []),
 ])
 watch(
   () => selectedFurniture.value?.id ?? null,
@@ -3106,6 +3181,84 @@ defineExpose({ resetView })
           </div>
         </template>
       </section>
+      </template>
+
+      <template v-else-if="tab === 'ext'">
+      <!-- 外观：户建的屋顶、外墙、围挡、车位上的车（3D 里点车 / 围挡也会跳到这里） -->
+      <section v-if="plan.exterior" class="ext">
+        <h3 class="ico-label"><JIcon :icon="ICONS.extRoof" class="ico-muted" />{{ t('屋顶') }}</h3>
+        <div class="seg seg-text" role="radiogroup" :aria-label="t('屋顶')">
+          <button v-for="k in roofKinds" :key="k" role="radio" :aria-checked="plan.exterior.roof === k" :class="{ on: plan.exterior.roof === k }" @click="setExterior({ roof: k })">{{ t(ROOF_KINDS[k]) }}</button>
+        </div>
+        <div class="wp-row ext-colors" role="group" :aria-label="t('屋顶颜色')">
+          <button v-for="c in ROOF_COLORS" :key="c" class="wp-sw" :class="{ on: plan.exterior.roofColor === c }" :style="{ background: c }" :title="c" @click="setExterior({ roofColor: c })" />
+          <label class="wp-sw ext-pick" :title="t('自选颜色')"><input type="color" :value="plan.exterior.roofColor" :aria-label="t('屋顶颜色')" @change="setExterior({ roofColor: ($event.target as HTMLInputElement).value })" /></label>
+        </div>
+        <template v-if="plan.exterior.roof !== 'flat'">
+          <label class="row ext-slider">
+            <span>{{ t('坡度') }}</span>
+            <input type="range" min="0.1" max="1.2" step="0.05" :value="plan.exterior.pitch ?? 0.45" @input="extLive(() => setExterior({ pitch: +($event.target as HTMLInputElement).value }, false))" @change="extDone" />
+            <span class="num val">{{ pitchDeg }}°</span>
+          </label>
+          <label class="row ext-slider">
+            <span>{{ t('屋檐出挑') }}</span>
+            <input type="range" min="0" max="120" step="5" :value="plan.exterior.eave ?? 45" @input="extLive(() => setExterior({ eave: +($event.target as HTMLInputElement).value }, false))" @change="extDone" />
+            <span class="num val">{{ plan.exterior.eave ?? 45 }}</span>
+          </label>
+        </template>
+        <h3 class="ico-label ext-h"><JIcon :icon="ICONS.extFacade" class="ico-muted" />{{ t('外墙') }}</h3>
+        <div class="seg seg-text" role="radiogroup" :aria-label="t('外墙')">
+          <button v-for="k in facadeKinds" :key="k" role="radio" :aria-checked="plan.exterior.facade === k" :class="{ on: plan.exterior.facade === k }" @click="setExterior({ facade: k })">{{ t(FACADE_KINDS[k]) }}</button>
+        </div>
+        <div class="wp-row ext-colors" role="group" :aria-label="t('外墙颜色')">
+          <button v-for="c in WALL_COLORS" :key="c" class="wp-sw" :class="{ on: plan.exterior.wallColor === c }" :style="{ background: c }" :title="c" @click="setExterior({ wallColor: c })" />
+          <label class="wp-sw ext-pick" :title="t('自选颜色')"><input type="color" :value="plan.exterior.wallColor" :aria-label="t('外墙颜色')" @change="setExterior({ wallColor: ($event.target as HTMLInputElement).value })" /></label>
+        </div>
+        <div class="wp-sub">{{ t('窗套、门框点缀色') }}</div>
+        <div class="wp-row ext-colors" role="group" :aria-label="t('窗套、门框点缀色')">
+          <button v-for="c in TRIM_COLORS_EXT" :key="c" class="wp-sw" :class="{ on: plan.exterior.trimColor === c }" :style="{ background: c }" :title="c" @click="setExterior({ trimColor: c })" />
+          <label class="wp-sw ext-pick" :title="t('自选颜色')"><input type="color" :value="plan.exterior.trimColor" :aria-label="t('窗套、门框点缀色')" @change="setExterior({ trimColor: ($event.target as HTMLInputElement).value })" /></label>
+        </div>
+        <div class="row ext-porch">
+          <span>{{ t('入口') }}</span>
+          <div class="seg seg-text" role="radiogroup" :aria-label="t('入口')">
+            <button v-for="k in porchKinds" :key="k" role="radio" :aria-checked="(plan.exterior.porch ?? 'canopy') === k" :class="{ on: (plan.exterior.porch ?? 'canopy') === k }" @click="setExterior({ porch: k === 'canopy' ? undefined : k })">{{ t(PORCH_KINDS[k]) }}</button>
+          </div>
+        </div>
+      </section>
+      <section v-if="plan.site" class="ext" :class="{ focus: extFocus === 'fence' }" data-ext="fence">
+        <div class="hh-head">
+          <h3 class="ico-label"><JIcon :icon="ICONS.extFence" class="ico-muted" />{{ t('围挡') }}</h3>
+          <span class="spacer" />
+          <button class="mini" :disabled="!plan.site.fenceColor && plan.site.fenceHeight === undefined" :title="t('颜色、高度回到这款的默认值')" @click="setSite({ fenceColor: undefined, fenceHeight: undefined })"><JIcon :icon="ICONS.wallpaperDefault" :size="14" />{{ t('默认') }}</button>
+        </div>
+        <select class="sel-style ext-sel" :value="plan.site.fence" :aria-label="t('围挡')" @change="setSite({ fence: ($event.target as HTMLSelectElement).value as FenceKind })">
+          <option v-for="k in fenceKinds" :key="k" :value="k">{{ t(FENCE_KINDS[k]) }}</option>
+        </select>
+        <template v-if="siteFence">
+          <div class="wp-row ext-colors" role="group" :aria-label="t('围挡颜色')">
+            <button v-for="c in FENCE_COLORS" :key="c" class="wp-sw" :class="{ on: siteFence.color === c }" :style="{ background: c }" :title="c" @click="setSite({ fenceColor: c })" />
+            <label class="wp-sw ext-pick" :title="t('自选颜色')"><input type="color" :value="siteFence.color" :aria-label="t('围挡颜色')" @change="setSite({ fenceColor: ($event.target as HTMLInputElement).value })" /></label>
+          </div>
+          <label class="row ext-slider">
+            <span>{{ t('高度') }}</span>
+            <input type="range" :min="FENCE_HEIGHT_MIN" :max="FENCE_HEIGHT_MAX" step="5" :value="siteFence.height" @input="extLive(() => setSite({ fenceHeight: +($event.target as HTMLInputElement).value }, false))" @change="extDone" />
+            <span class="num val">{{ siteFence.height }}</span>
+          </label>
+        </template>
+      </section>
+      <section v-for="(sp, i) in plan.site?.parking ?? []" :key="i" class="ext" :class="{ focus: extFocus === `car${i}` }" :data-ext="`car${i}`">
+        <h3 class="ico-label"><JIcon :icon="ICONS.extCar" class="ico-muted" />{{ (plan.site?.parking.length ?? 0) > 1 ? t('车位 {n}', { n: i + 1 }) : t('车位') }}</h3>
+        <select class="sel-style ext-sel" :value="sp.car ? (sp.carKind ?? 'compact') : ''" :aria-label="t('车型')" @change="setCar(i, ($event.target as HTMLSelectElement).value)">
+          <option value="">{{ t('不停车') }}</option>
+          <option v-for="k in carKinds" :key="k" :value="k">{{ t(CAR_KINDS[k]) }}</option>
+        </select>
+        <div v-if="sp.car" class="wp-row ext-colors" role="group" :aria-label="t('车身颜色')">
+          <button v-for="c in CAR_COLORS" :key="c" class="wp-sw" :class="{ on: (sp.carColor ?? '#d9534f') === c }" :style="{ background: c }" :title="c" @click="setParking(i, { carColor: c })" />
+          <label class="wp-sw ext-pick" :title="t('自选颜色')"><input type="color" :value="sp.carColor ?? '#d9534f'" :aria-label="t('车身颜色')" @change="setParking(i, { carColor: ($event.target as HTMLInputElement).value })" /></label>
+        </div>
+      </section>
+      <p class="q-note ext-note">{{ t('在 3D 里点车或围挡，也能直接打开这里的设置') }}</p>
       </template>
 
       <section v-else-if="tab === 'sel' && selectedFurniture && selectedDef" class="sel">
@@ -4121,6 +4274,47 @@ h3 {
   padding: 0;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
+}
+/* 外观页 */
+.ext.focus {
+  box-shadow: inset 3px 0 0 var(--accent);
+  background: var(--hover);
+}
+.ext-h {
+  margin-top: 14px;
+}
+.ext-colors {
+  margin: 0 0 10px;
+}
+.ext-sel {
+  width: 100%;
+  margin-bottom: 8px;
+}
+.ext-slider span:first-child,
+.ext-porch > span {
+  min-width: 4.5em;
+}
+.ext-porch .seg {
+  margin-bottom: 0;
+}
+/* 自选颜色：彩色小方块，盖一个透明的取色器 */
+.ext-pick {
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  background: conic-gradient(#e66 0 25%, #6c6 0 50%, #69e 0 75%, #ec6 0);
+}
+.ext-pick input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+}
+.ext-note {
+  padding: 10px 18px 16px;
+  margin: 0;
 }
 .wp-sw.on,
 .wp-pat.on {

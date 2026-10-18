@@ -16,7 +16,7 @@ import { ensureOutdoorUnits as ensureOutdoorUnits1, indoorUnits, planArea, rando
 import { generatePlan } from './generate-region'
 import { lang, t } from './i18n'
 import { initialRoute } from './router'
-import { edgeInfo, emptyPlan, projectToSegment, type Fixture, type FixtureKind, type Floor, type Furniture, type Opening, type Plan, type Room, type Vec, type Wallpaper, uid } from './model'
+import { edgeInfo, emptyPlan, projectToSegment, type Fixture, type FixtureKind, type Floor, type Furniture, type Opening, type Plan, type Room, type Vec, type Wallpaper, type Exterior, type ParkingSpot, type Site, uid } from './model'
 import { normalizeExterior, styleExterior } from './exterior'
 import { yardFurniture } from './yard'
 import { BASE_FLOOR_ID, DEFAULT_FLOOR_H, SLAB, baseFloor, baseFloorId, floorBelow, floorById, floorOf, floorOutline, floorView, isMultiFloor, nextFloorId, normalizeFloors, planFloors, stampFloor } from './floors'
@@ -853,6 +853,40 @@ export function setRoomWallpaper(roomId: string, wp: Wallpaper | undefined) {
     if (wp) r.wallpaper = wp
     else delete r.wallpaper
   })
+}
+
+/** 按补丁改一个对象：值为 undefined 的字段删掉（回到缺省） */
+function patchObj<T extends object>(o: T, patch: Partial<T>) {
+  for (const [k, v] of Object.entries(patch) as [keyof T, T[keyof T] | undefined][]) {
+    if (v === undefined) delete o[k]
+    else o[k] = v
+  }
+}
+
+// 户建的用地 / 外观样式（沙盘「外观」页）。history = false：拖滑杆的中间值，调用方在开始时自己 checkpoint 一次
+
+/** 改用地的围挡（款式、颜色、高度） */
+export function setSite(patch: Partial<Pick<Site, 'fence' | 'fenceColor' | 'fenceHeight'>>, history = true) {
+  const s = plan.value.site
+  if (!s) return
+  if (history) checkpoint()
+  patchObj(s, patch)
+}
+
+/** 改某个车位上的车（有没有车、车型、颜色） */
+export function setParking(i: number, patch: Partial<Pick<ParkingSpot, 'car' | 'carKind' | 'carColor'>>) {
+  const s = plan.value.site?.parking[i]
+  if (!s) return
+  checkpoint()
+  patchObj(s, patch)
+}
+
+/** 改外观（屋顶、外墙、点缀色、门廊） */
+export function setExterior(patch: Partial<Exterior>, history = true) {
+  const e = plan.value.exterior
+  if (!e) return
+  if (history) checkpoint()
+  patchObj(e, patch)
 }
 
 /** 全屋重新随机墙纸 */

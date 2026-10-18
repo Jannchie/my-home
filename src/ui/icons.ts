@@ -78,6 +78,8 @@ import {
   IconMagnet,
   IconMapPin,
   IconPalette,
+  IconBrush,
+  IconCar,
   IconPause,
   IconPaw,
   IconPentagon,
@@ -199,6 +201,11 @@ export const ICONS = {
   modePreview: IconEye,
   // 3D 沙盘的「外观」视图：屋顶、外墙全高
   exteriorView: IconBuilding,
+  // 外观页：屋顶 / 外墙 / 围挡 / 车位
+  extRoof: IconHome,
+  extFacade: IconBrush,
+  extFence: IconWallLowered,
+  extCar: IconCar,
   walk: IconFootprint,
   // 3D 沙盘的「设计图」视图：线框 + 尺寸标注；正交轴测 / 透视
   blueprint: IconRuler,

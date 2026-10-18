@@ -343,12 +343,29 @@ export interface Plan {
 export interface Site {
   points: Vec[]
   fence: FenceKind
+  /** 围挡的主色；不填 = 按款式的缺省色（FENCE_STYLE） */
+  fenceColor?: string
+  /** 围挡高度（cm）；不填 = 按款式的缺省高度 */
+  fenceHeight?: number
   gates: [Vec, Vec][]
   paths: Vec[][]
   parking: ParkingSpot[]
 }
-export type FenceKind = 'hedge' | 'fence' | 'wall' | 'none'
-export const FENCE_KINDS: Record<FenceKind, string> = { hedge: '绿篱', fence: '木栅栏', wall: '矮墙', none: '无围挡' }
+/** 围挡：hedge 绿篱 / fence 木栅栏 / wall 抹灰矮墙 / block 混凝土砌块墙 / louver 铝百叶围栏 / brick 矮砖墙加铁艺栏杆 / picket 白色尖桩栅栏 / none */
+export type FenceKind = 'hedge' | 'fence' | 'wall' | 'block' | 'louver' | 'brick' | 'picket' | 'none'
+export const FENCE_KINDS: Record<FenceKind, string> = { hedge: '绿篱', fence: '木栅栏', wall: '矮墙', block: '砌块墙', louver: '百叶围栏', brick: '砖墙栏杆', picket: '白栅栏', none: '无围挡' }
+/** 各款围挡的缺省主色和高度（旧存档不写 fenceColor / fenceHeight，按这里搭） */
+export const FENCE_STYLE: Record<Exclude<FenceKind, 'none'>, { color: string; height: number }> = {
+  hedge: { color: '#7fa86b', height: 80 },
+  fence: { color: '#b48f68', height: 100 },
+  wall: { color: '#d3cbbd', height: 105 },
+  block: { color: '#b9bab4', height: 120 },
+  louver: { color: '#4b4f55', height: 160 },
+  brick: { color: '#a65a48', height: 110 },
+  picket: { color: '#f4f1ea', height: 90 },
+}
+export const FENCE_HEIGHT_MIN = 40
+export const FENCE_HEIGHT_MAX = 200
 export interface ParkingSpot {
   /** 车位矩形（平面坐标） */
   points: Vec[]
@@ -358,7 +375,15 @@ export interface ParkingSpot {
   car?: boolean
   /** 车的颜色 */
   carColor?: string
+  /** 车型；不填 = compact（旧存档的那一款） */
+  carKind?: CarKind
 }
+/** 车型：compact 小型两厢 / kei 轻型车（高顶小方盒）/ sedan 三厢轿车 / suv / minivan 厢式旅行车 */
+export type CarKind = 'compact' | 'kei' | 'sedan' | 'suv' | 'minivan'
+export const CAR_KINDS: Record<CarKind, string> = { compact: '小型车', kei: '轻型车', sedan: '轿车', suv: 'SUV', minivan: '厢式车' }
+/** 入口门廊 */
+export type PorchKind = 'canopy' | 'porch' | 'none'
+export const PORCH_KINDS: Record<PorchKind, string> = { canopy: '雨棚', porch: '门廊', none: '无' }
 
 /** 屋顶：gable 双坡（切妻）/ hip 四坡（寄棟）/ shed 单坡（片流れ）/ flat 平屋顶（带女儿墙） */
 export type RoofKind = 'gable' | 'hip' | 'shed' | 'flat'
@@ -379,7 +404,7 @@ export interface Exterior {
   /** 窗套、雨棚等的点缀色 */
   trimColor: string
   /** 入口门廊：canopy 雨棚 / porch 带柱子的门廊 / none */
-  porch?: 'canopy' | 'porch' | 'none'
+  porch?: PorchKind
 }
 
 export type Region = 'jp' | 'cn' | 'west'
