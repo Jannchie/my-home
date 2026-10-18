@@ -12,6 +12,36 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '1.8.0',
+    date: '2026-10-18',
+    notes: {
+      zh: [
+        '新增第一人称漫游（快捷键 V）：像 FPS 游戏一样用鼠标看四周、WASD 走动，能上下楼梯、走到阳台；带小地图，准星对着的东西会显示名字',
+        '户型更多样：外轮廓会出现切角、L 形、凹阳台、凸窗和玄关凸出，房间排法、宽度和窗位有更多变化；日式厕所、欧美卫生间的尺寸更合理，中式公卫的玻璃淋浴房补齐了玻璃',
+        '素材库按功能分类（座椅、收纳、灯具……），房间、风格作为筛选条件；详情里显示全部标签，点标签可以筛选同类，搜索也能按类型名找',
+        '新中式、欧式古典、美式乡村各补了一套专属家具；装饰画、海报、相框、挂轴有 55 种可切换的画面；户建的屋顶、外墙、围墙和汽车可以在「外观」里调整',
+        '一键布置更细致：玄关、洗面所、阳台门口留出通道，走廊、储藏间、院子和健身房等房间布置更完整；厨房柜子里放碗盘，马桶边放马桶刷和搋子，日式厕所马桶上方加吊柜',
+        '便签、贴纸改为在贴着的面里旋转；落地补光灯高度修正；厨房灶台旋钮不再和柜门重叠',
+      ],
+      ja: [
+        '一人称のウォークスルーを追加（ショートカット V）：FPS ゲームのようにマウスで見回し WASD で移動、階段の上り下りやベランダへの出入りも可能。ミニマップ付きで、照準の先にある物の名前を表示',
+        '間取りのバリエーションを拡充：外形に欠け・L 字・凹んだバルコニー・出窓・玄関の張り出しが出るように。部屋の並び・幅・窓の位置もより多様に。日本のトイレと欧米のバスルームの寸法を見直し、中国式バスルームのシャワーブースのガラスも全面に',
+        '素材ライブラリを機能別の分類に（椅子・収納・照明など）。部屋とスタイルは絞り込み条件に。詳細にすべてのタグを表示し、タグをクリックで同じタグの素材を表示。種類名でも検索可能に',
+        '中国モダン・ヨーロピアンクラシック・アメリカンカントリーの専用家具をそれぞれ追加。絵・ポスター・写真立て・掛け軸に 55 種類の切り替え可能な絵柄。戸建ての屋根・外壁・塀・車は「外観」で変更可能に',
+        'おまかせ配置をより丁寧に：玄関・洗面所・ベランダの出入口に通路を確保し、廊下・納戸・庭・ジムなどの部屋もより充実。キッチンの棚に食器を収納、トイレのそばにブラシとラバーカップ、日本のトイレには上部収納を追加',
+        '付箋・ステッカーは貼った面の中で回転するように。床置きリングライトの高さを修正。コンロのつまみが扉と重ならないように',
+      ],
+      en: [
+        'New first-person walk mode (shortcut V): look around with the mouse and move with WASD like an FPS, take the stairs and step onto the balcony; includes a minimap and shows the name of whatever is under the crosshair',
+        'More varied floor plans: outlines now get notched corners, L shapes, recessed balconies, bay windows and entrance bump-outs, with more variety in room order, widths and window positions; Japanese toilets and Western bathrooms have realistic sizes, and Chinese shower enclosures have glass on every open side',
+        'The asset library is organized by function (seating, storage, lighting…) with room and style as filters; the detail panel lists every tag, clicking a tag shows similar items, and search matches type names',
+        'New dedicated furniture sets for Chinese, classic European and farmhouse styles; paintings, posters, photo frames and scrolls get 55 switchable artworks; house roofs, facades, fences and cars can be changed under Exterior',
+        'More thoughtful auto-furnish: walkways stay clear at the entrance, washroom and balcony door, and halls, storage rooms, yards and gyms are furnished more fully; kitchen cabinets hold dishes, the toilet brush and plunger sit by the toilet, and Japanese toilets get a cabinet above the tank',
+        'Sticky notes and stickers now rotate within the surface they are stuck to; the floor ring light has a realistic height; stove knobs no longer overlap the cabinet doors',
+      ],
+    },
+  },
+  {
     version: '1.7.0',
     date: '2026-10-18',
     notes: {
