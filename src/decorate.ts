@@ -386,15 +386,22 @@ class Decorator {
       if (!miss.length) return
       const near = (f: Furniture) => Math.min(...miss.map((m) => dist(m, f)))
       // 候选：不固定的落地家具（离走不到的门口由近到远，最多 30 件），排在后面的是有重摆办法的大件（床）
-      const loose = this.out
-        .filter((f) => {
-          const d = ASSET_MAP.get(f.asset)
-          return !!d && !f.z && !d.mount && !d.stick && d.h >= STEP_OVER && !this.fixed.has(f.id) && !tried.has(f.id)
-        })
-        .sort((a, b) => near(a) - near(b))
-        .slice(0, 30)
+      const looseOf = (again: boolean) =>
+        this.out
+          .filter((f) => {
+            const d = ASSET_MAP.get(f.asset)
+            return !!d && !f.z && !d.mount && !d.stick && d.h >= STEP_OVER && !this.fixed.has(f.id) && (again || !tried.has(f.id))
+          })
+          .sort((a, b) => near(a) - near(b))
+          .slice(0, 30)
+      let loose = looseOf(false)
       const majors = this.out.filter((f) => this.fixed.has(f.id) && this.recipes.has(f.id) && !tried.has(f.id)).sort((a, b) => near(a) - near(b))
-      const pool = [...loose, ...majors]
+      let pool = [...loose, ...majors]
+      // 挪过的小件（为了别的门口挪的）可能正好挪到了这个门口前：没挪过的不够用时把它们也算上
+      if (!pool.length || this.unreachable(keys, pool).length >= miss.length) {
+        loose = looseOf(true)
+        pool = [...loose, ...majors]
+      }
       // 全拿掉也走不通：挪家具没用
       if (!pool.length || this.unreachable(keys, pool).length >= miss.length) return
       // 二分：拿掉前 k 件就能少堵一处的最小 k（每试一次要重建一遍导航格子，逐件试太慢）

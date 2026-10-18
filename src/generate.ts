@@ -14,7 +14,7 @@ import { orientDoors } from './doors'
 import { firstDoorCenter, placeCandidates, placeOnWall, placePair, type PlaceSpec } from './place'
 import { JO, add, area, bbox, dist, edgeInfo, edgesOf, fixtureDepth, mul, rotFacingWall, openingGeom, openingsOn, pointInPolygon, projectToSegment, rectPoints, uid, type Fixture, type KitchenVariant, type Opening, type Plan, type RailingKind, type Region, type Room, type RoomKind, type Vec } from './model'
 import { isIndoor, sharedIntervals } from './walls'
-import { carveCorner, defaultRule } from './footprint'
+import { altInt, carveCorner, defaultRule } from './footprint'
 import { jp } from './i18n'
 import { ASSET_MAP } from './three/assets'
 
@@ -226,7 +226,8 @@ const tanoji: Builder = (c, type) => {
   open(bath, 'door', { x: bathX, y: (waterTop + waterBottom) / 2 }, 70)
   open(wash, 'door', { x: aIn, y: (waterTop + waterBottom) / 2 }, 70)
 
-  const tw = c.d(90, 110, 85, 95)
+  // トイレ：开间只够一个马桶 + 侧墙的卷纸架（净宽 80～90），多出来的给 WIC
+  const tw = c.d(90, 100, 90, 100)
   const toiletX = waterLeft ? bIn + tw : bIn - tw
   const toilet = rect('toilet', 'トイレ', bIn, dL, toiletX, dL + hB2)
   open(toilet, 'door', { x: bIn, y: dL + hB2 / 2 }, 70, 'out')
@@ -318,7 +319,7 @@ function tanojiNaka(c: Ctx): { W: number } {
   open(bath, 'door', { x: side(aOut, bw), y: dL + hA2 / 2 }, 70)
   open(wash, 'door', { x: aIn, y: dL + hA2 / 2 }, 70)
   const yT = dL + hA2
-  const tw = c.d(90, 110, 85, 95)
+  const tw = c.d(90, 100, 90, 100)
   const toilet = rect('toilet', 'トイレ', aIn, yT, side(aIn, -tw), yT + hT)
   open(toilet, 'door', { x: aIn, y: yT + hT / 2 }, 70, 'out')
   const cl = rect('storage', '収納', aOut, yT, side(aIn, -tw), yT + hT)
@@ -414,7 +415,7 @@ const tatenaga: Builder = (c, type) => {
   else open(hall, 'door', { x: X(wl + cw / 2), y: dR }, 80, 'out')
 
   // L 列下半
-  const tw = c.d(90, 110, 85, 95)
+  const tw = c.d(90, 100, 90, 100)
   const toilet = rect('toilet', 'トイレ', X(wl - tw), yLK, X(wl), yLK + hT)
   open(toilet, 'door', { x: X(wl), y: yLK + hT / 2 }, 70, 'out')
   const cl = rect('storage', '収納', X(0), yLK, X(wl - tw), yLK + hT)
@@ -464,8 +465,10 @@ const wide: Builder = (c, type) => {
   const bw = c.d(160, 170, 130, 150)
   // 后排两间居室时前排没有居室，水回り和玄関做宽一点、加シューズIN 把开间用掉
   const ww = bothBack ? c.d(170, 200, 150, 170) : c.d(150, 170, 130, 150)
-  const tw = c.d(95, 105, 85, 95)
-  const gw = bothBack ? c.d(170, 200, 150, 170) : c.d(140, 170, 120, 140)
+  // トイレ开间限制在 90～100（净宽 80～90）：多出来的给玄関，少的从玄関扣
+  const tw0 = c.d(95, 105, 85, 95)
+  const tw = Math.max(90, Math.min(100, tw0))
+  const gw = (bothBack ? c.d(170, 200, 150, 170) : c.d(140, 170, 120, 140)) + tw0 - tw
   const sw = bothBack ? rint(110, 140) : 0
   const backW = Array.from({ length: backBeds }, () => (bothBack ? c.d(260, 300, 250, 270) : c.d(280, 330, 250, 280)))
   let wL = type === '1LDK' ? c.d(380, 450, 340, 390) : bothBack ? c.d(400, 460, 380, 420) : c.d(440, 540, 400, 450)
@@ -613,7 +616,7 @@ const single: Builder = (c, type) => {
   const wk = dk ? c.d(290, 340, 260, 300) : c.d(170, 195, 165, 180)
   const W = wb + wk
   const gk = c.d(110, 130, 100, 120)
-  const yR = dk ? c.d(290, 350, 260, 300) : c.d(300, 380, 270, 320) // 洋室进深
+  let yR = dk ? c.d(290, 350, 260, 300) : c.d(300, 380, 270, 320) // 洋室进深
 
   // K / DK 至少要有的进深：台面 + 通道 + 玄関
   const needZ = gk + (dk ? 260 : 220)
@@ -634,11 +637,19 @@ const single: Builder = (c, type) => {
         { kind: 'wash', name: '洗面所', h: c.d(140, 160, 130, 145) },
         { kind: 'toilet', name: 'トイレ', h: c.d(120, 140, 110, 125) },
       ]
+  // トイレ横跨整个水回り列的进深（净 140～170），开间只要一个马桶 + 卷纸架（90～100，净 80～90）。
+  // 上面那次取值照样消耗主序列（后面的随机结果不跟着变），实际开间用第二条序列；水回り列省下的进深给洋室（面积不变）
+  const hzOld = Math.max(needZ, stack.reduce((s, x) => s + x.h, 0))
+  for (const it of stack) if (it.kind === 'toilet') it.h = altInt(c, 90, 100)
   const hz0 = stack.reduce((s, x) => s + x.h, 0)
   // 3点ユニット 没有洗面所，空位做洗濯機置場（朝 K / 玄関敞开的凹位）；否则做收纳
   if (needZ - hz0 >= 70) stack.push(unit ? { kind: 'wash', name: '洗濯機置場', h: needZ - hz0 } : { kind: 'storage', name: '収納', h: needZ - hz0 })
-  else if (needZ > hz0) stack[stack.length - 1].h += needZ - hz0
-  const hz = Math.max(needZ, hz0)
+  else if (needZ > hz0) (stack.find((x) => x.kind === 'wash') ?? stack[stack.length - 1]).h += needZ - hz0
+  // トイレ排在最外（贴着共用廊下一侧的外墙，厚墙）：开间放到 100，净宽才有 86
+  const last = stack[stack.length - 1]
+  if (last.kind === 'toilet') last.h = Math.max(last.h, 100)
+  const hz = Math.max(needZ, stack.reduce((s, x) => s + x.h, 0))
+  yR += hzOld - hz
   const D = yR + hz
 
   // 洋室（水回り列上方切出クローゼット，L 型）

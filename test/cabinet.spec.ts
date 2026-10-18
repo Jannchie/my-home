@@ -282,8 +282,9 @@ describe('打开 / 关上', () => {
 
 describe('一键布置', () => {
   const regions = ['jp', 'cn', 'west'] as const
+  // 每个地区 8 户：厨房吊柜按概率出现（约四分之一的厨房），户数太少时户型稍一变动就可能一件都没有
   const plans = regions.flatMap((region) =>
-    range(1, 6).map((seed) => {
+    range(1, 8).map((seed) => {
       const plan = generatePlan({ seed, ...JP_OPTS, region }).plan
       plan.household = generateHousehold(plan, seed)
       plan.furniture = decorate(plan, seed, 'auto', plan.household)
