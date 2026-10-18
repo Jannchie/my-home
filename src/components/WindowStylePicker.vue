@@ -9,7 +9,8 @@ import { openingInfos } from '../three/house'
 import { useSitePreviews, type SitePreview } from '../three/siteThumbs'
 import { frameColor, gridAllowed, shutterColor } from '../windows'
 
-const props = defineProps<{ opening: Opening }>()
+/** card：3D 沙盘里点中窗浮出的卡片（手机上格子排成一行横向滑） */
+const props = withDefaults(defineProps<{ opening: Opening; variant?: 'panel' | 'card' }>(), { variant: 'panel' })
 
 type StyleChoice = WindowStyle | 'std'
 const STYLE_CHOICES: StyleChoice[] = ['std', ...(Object.keys(WINDOW_STYLES) as WindowStyle[])]
@@ -74,7 +75,7 @@ watchEffect(() => {
 </script>
 
 <template>
-  <div class="win-ed">
+  <div class="win-ed" :class="`v-${variant}`">
     <span class="lbl">{{ t('窗的款式') }}</span>
     <div class="tiles" role="group" :aria-label="t('窗的款式')">
       <button v-for="tile in styleTiles" :key="tile.slot" class="tile" :class="{ on: tile.on }" :aria-pressed="tile.on" :title="t(tile.label)" @click="tile.pick()">
@@ -236,6 +237,21 @@ select {
   height: var(--control-h);
   padding: 0 8px;
   width: 100%;
+}
+/* 浮动卡片窄：格子小一点，一行排四个，卡片别太高 */
+.v-card .tiles {
+  grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+}
+:root.compact .v-card .tiles {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  margin: 0 -2px;
+  padding: 0 2px 2px;
+}
+:root.compact .v-card .tile {
+  flex: 0 0 72px;
+  scroll-snap-align: start;
 }
 :root.coarse .tile {
   min-height: 44px;

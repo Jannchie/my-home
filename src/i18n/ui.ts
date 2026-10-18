@@ -85,6 +85,11 @@ export const UI: Record<string, Entry> = {
   '深 cm': ['奥行 cm', 'Depth cm'],
   '长 cm': ['長さ cm', 'Length cm'],
   '位置 cm': ['位置 cm', 'Offset cm'],
+  // 3D 沙盘的门窗卡片：宽度 / 位置微调按钮
+  变窄: ['狭くする', 'Narrower'],
+  变宽: ['広くする', 'Wider'],
+  沿墙往回挪: ['壁に沿って戻す', 'Move back along the wall'],
+  沿墙往前挪: ['壁に沿って進める', 'Move forward along the wall'],
   面积: ['面積', 'Area'],
   周长: ['周長', 'Perimeter'],
   顶点: ['頂点', 'Vertices'],

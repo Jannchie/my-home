@@ -5,11 +5,13 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { ASSET_MAP, STYLE_LABELS, type StyleTag } from '../three/assets'
 import { GROUP_NAMES, LIB_ROOMS, ROOM_NAMES_LIB } from '../three/groups'
 import { freezeMatrices, syncMatrix } from '../three/matrices'
-import { BASE, applyCutaway, bendToWalls, floorY, isPlant, stepCutaway, furnitureModel, placeFurniture, roomAt, type WallLook } from '../three/house'
+import { BASE, applyCutaway, bendToWalls, floorY, isPlant, openingInfos, stepCutaway, furnitureModel, placeFurniture, roomAt, type WallLook } from '../three/house'
 import { buildBuilding, type FloorGroup } from '../three/building'
 import { carSize } from '../three/exterior'
 import { carChoice, carLabel, parkingIndex, parkingTarget, siteTargets, targetTitle, targetValid, type SiteTarget } from '../siteEdit'
 import SiteEditor from './SiteEditor.vue'
+import OpeningEditor from './OpeningEditor.vue'
+import { firstOpeningHit, openingFrame } from '../three/openingPick'
 import { baseFloorId, floorById, floorOf, floorView, isMultiFloor, planFloors } from '../floors'
 import FloorBar from './FloorBar.vue'
 import FloorRail from './FloorRail.vue'
@@ -43,7 +45,7 @@ import { sandboxBridge } from '../ui/sandboxBridge'
 import { runBusy } from '../ui/feedback'
 import { saved, toast } from '../saved'
 import { JIcon } from '@jannchie/icons-vue'
-import { GROUP_ICONS, ICONS, VIEW_ICONS, WALL_MODE_ICONS } from '../ui/icons'
+import { GROUP_ICONS, ICONS, TOOL_ICONS, VIEW_ICONS, WALL_MODE_ICONS } from '../ui/icons'
 import { SIZE_LABELS, assetName, browse, canHang, cardName, displayName, groupsOf, formFor, paletteFor, siblings, typesIn, variantLabel, type Filter, type SizeClass } from '../three/catalog'
 import { typeLabel } from '../three/typeLabels'
 import { INTERESTS, KIND_LABELS, LV_LABELS, ROLE_LABELS, TRAITS, describe, levelOf, memberRooms } from '../household'
@@ -53,7 +55,7 @@ import { patternPreview } from '../three/fabric'
 import type { PatternKind } from '../three/patterns'
 import { isTyping } from '../dom'
 import { lang, roomName, t, tAuto, tSoft } from '../i18n'
-import { FACADE_KINDS, FENCE_KINDS, FIXTURES, ROOF_KINDS, bbox, centroid, edgesOf, pointInPolygon, type Furniture, type Plan, type Room, type WallTrim } from '../model'
+import { FACADE_KINDS, FENCE_KINDS, FIXTURES, OPENING_LABELS, ROOF_KINDS, bbox, centroid, edgesOf, pointInPolygon, type Furniture, type Plan, type Room, type WallTrim } from '../model'
 import { roomStyles } from '../decorate'
 import { wallThicknessAt } from '../walls'
 import {
@@ -62,6 +64,7 @@ import {
   deleteSelection,
   duplicateSelection,
   findFurniture,
+  findRoom,
   mutate,
   placing,
   plan,
@@ -562,6 +565,7 @@ function localBox(obj: THREE.Object3D): THREE.Box3 {
 const SOLID_MIN = 6
 
 function frameAt(fr: SelectFrame, obj: THREE.Object3D, asset: string) {
+  fr.setOnTop(false)
   const d = ASSET_MAP.get(asset)
   const lb = localBox(obj)
   if (!lb.isEmpty()) {
@@ -851,6 +855,9 @@ function rebuildHouse() {
   updateCutaway()
   // 重建时直接到位，不播渐变
   stepHouse(10, wallLook())
+  // 门窗改了宽度 / 位置 / 款式：选中框跟着新洞口
+  hoverOpId = null
+  if (selection.value?.type === 'opening') updateRing()
   const box = new THREE.Box3().setFromObject(house)
   houseBox = box.isEmpty() ? null : box
   if (houseBox) fitSun(stage.sun, houseBox, skyNow.value?.lightDir)
@@ -938,7 +945,54 @@ function syncFurniture() {
 
 /** 上一次框住的家具：换了一件就重新播「缩入」 */
 let framedId = ''
+/**
+ * 门窗的立体选中框（世界坐标）：洞口宽 × 洞口高 × 墙厚，按当前楼层搭好的房子算（层高、楼层抬升）。
+ * 不在当前楼层、或这层没有这个洞口时返回 null。
+ */
+function openingFrameWorld(id: string) {
+  const fg = floorGroups.find((g) => g.floor.id === activeFloor.value)
+  if (!fg) return null
+  const info = openingInfos(fv()).find((i) => i.o.id === id)
+  if (!info) return null
+  const f = openingFrame(info, fg.wallH)
+  const c = fg.group.localToWorld(new THREE.Vector3(f.x, f.y, f.z))
+  return { ...f, c }
+}
+function showOpeningFrame(fr: SelectFrame, id: string) {
+  const f = openingFrameWorld(id)
+  if (!f) return null
+  fr.setOnTop(true)
+  fr.show3d(f.c.x, f.c.y, f.c.z, f.w, f.h, f.d, f.yaw)
+  return f.c
+}
+/** 选中的门窗的中心（世界坐标）：门窗卡片挨着它摆 */
+let openingAnchor: THREE.Vector3 | null = null
+/** 鼠标指着的门窗（悬停框；家具的悬停框优先） */
+let hoverOpId: string | null = null
+function setHoverOpening(id: string | null) {
+  if (id === hoverOpId) return
+  hoverOpId = id
+  if (!(id && showOpeningFrame(hoverFrame, id)) && !hoverId) hoverFrame.hide()
+  dirty = true
+}
 function updateRing() {
+  const s = selection.value
+  if (s?.type !== 'opening') openingAnchor = null
+  if (s?.type === 'opening') {
+    const key = `op:${s.id}`
+    if (key !== framedId) selFrame.hide()
+    openingAnchor = editing.value && !walking.value ? showOpeningFrame(selFrame, s.id) : null
+    if (openingAnchor) {
+      framedId = key
+      selFrame.setColor(RING_OK)
+      if (hoverOpId === s.id) setHoverOpening(null)
+    } else {
+      selFrame.hide()
+      framedId = ''
+    }
+    dirty = true
+    return
+  }
   const f = selectedFurniture.value
   const o = f && objs.get(f.id)
   if (!f || !o || !editing.value) {
@@ -1133,14 +1187,15 @@ function wallItemNear(far: number) {
   return best
 }
 
-function pickFurniture(e: PointerEvent): string | null {
+/** maxDist：射线在这个距离上已经点中了别的东西（门窗），更远的家具不算 */
+function pickFurniture(e: PointerEvent, maxDist = Infinity): string | null {
   setRay(e)
   // 只点当前楼层的家具（上层隐藏 / 下层被挡住时都不会选到别的楼层）
   const fhits = raycaster.intersectObject(furnLayer(activeFloor.value), true)
   // 墙、楼板挡住的不算：点在墙上不会选到墙后面房间里的家具
   const house = floorGroups.find((g) => g.floor.id === activeFloor.value)?.group
   const wall = house ? raycaster.intersectObject(house, true).find((h) => (h.object as THREE.Mesh).isMesh && shown(h.object) && opaqueHit(h)) : undefined
-  const far = wall ? wall.distance + 0.5 : Infinity
+  const far = Math.min(wall ? wall.distance + 0.5 : Infinity, maxDist)
   // 射线经过的家具（去重、由近到远）
   const ids: string[] = []
   for (const h of fhits) {
@@ -1151,12 +1206,12 @@ function pickFurniture(e: PointerEvent): string | null {
     const id = o?.userData.furnitureId as string | undefined
     if (id && !ids.includes(id)) ids.push(id)
   }
-  if (!ids.length && wall) {
+  if (!ids.length && (wall || maxDist < Infinity)) {
     const id = wallItemNear(far)
     if (id) return id
   }
   // 走动中的宠物 / 机器人：点中就选中它来源的那件家具（选中后角色回到原位静止，方便拖动）
-  if (!ids.length) return actors.pick(raycaster)
+  if (!ids.length) return maxDist < Infinity ? null : actors.pick(raycaster)
   // 柜子、架子的格子里摆满了东西，点柜子正面多半先碰到摆件：先选容器本身；容器已经选中时再点，才选里面的东西
   const sel = selection.value?.type === 'furniture' ? selection.value.id : null
   const inside = (kid: string, box: string) => {
@@ -1174,6 +1229,25 @@ function pickFurniture(e: PointerEvent): string | null {
     if (parent && sel !== top) return parent
   }
   return top
+}
+
+/**
+ * 点中的门窗（只看当前楼层、看得见的）：由近到远找房子的网格，先碰到门窗的组就是它；
+ * 先碰到不透明的墙、楼板就算被挡住。半透明的东西（让开的墙、别的玻璃）穿过去。
+ * 跟着墙让开 / 压低藏起来的门窗（淡出中也算）点不中。返回命中距离，和家具比远近。
+ */
+function pickOpening(e: { clientX: number; clientY: number }): { id: string; dist: number } | null {
+  if (walking.value || !editing.value || blueprint.on) return null
+  const house = floorGroups.find((g) => g.floor.id === activeFloor.value)?.group
+  if (!house) return null
+  setRay(e as PointerEvent)
+  return firstOpeningHit(raycaster.intersectObject(house, true), (o) => shown(o, true), opaqueHit)
+}
+/** 鼠标 / 手指处点中的东西：家具和门窗谁近选谁（家具在门窗之前、门窗玻璃后面的家具不算） */
+function pickAt(e: PointerEvent): { furniture: string | null; opening: string | null } {
+  const op = pickOpening(e)
+  const furniture = pickFurniture(e, op ? op.dist : Infinity)
+  return { furniture, opening: furniture ? null : (op?.id ?? null) }
 }
 
 /**
@@ -1347,7 +1421,7 @@ let down: { x: number; y: number } | null = null
 // 第二根手指落下时，如果正在拖家具，就变成双指拧转旋转家具；否则 OrbitControls 自己处理缩放平移。
 // 长按（不动）= 右键菜单。摆放模式：手指按下就出预览、拖动调整、松手放下。
 const touches = new Map<number, { x: number; y: number }>()
-let press: { id: number; x: number; y: number; hitId: string | null; moved: boolean; long: boolean; timer: number } | null = null
+let press: { id: number; x: number; y: number; hitId: string | null; opId: string | null; moved: boolean; long: boolean; timer: number } | null = null
 let twist: { a0: number; base: number } | null = null
 /** 摆放模式下手指正按着（预览跟着手指） */
 let touchPlacing = false
@@ -1442,9 +1516,10 @@ function onTouchDown(e: PointerEvent) {
     updateGhost(e)
     return
   }
-  const id = pickFurniture(e)
+  const hit = pickAt(e)
+  const id = hit.furniture
   const sel = selection.value?.type === 'furniture' ? selection.value.id : null
-  press = { id: e.pointerId, x: e.clientX, y: e.clientY, hitId: id, moved: false, long: false, timer: 0 }
+  press = { id: e.pointerId, x: e.clientX, y: e.clientY, hitId: id, opId: hit.opening, moved: false, long: false, timer: 0 }
   press.timer = window.setTimeout(() => onLongPress(e.clientX, e.clientY), LONG_PRESS_MS)
   // 按在已选中的家具上：准备拖动（先关掉转视角；动过阈值才真的移动）
   if (id && id === sel) beginDrag(e, id)
@@ -1509,12 +1584,12 @@ function onTouchUp(e: PointerEvent) {
     controls.enabled = true
     return
   }
-  // 点按（没动、没长按）：点到家具选中它，点到空处取消选中
+  // 点按（没动、没长按）：点到家具 / 门窗选中它，点到空处取消选中
   if (pr && !pr.moved && !pr.long && e.type !== 'pointercancel') {
-    const rid = pr.hitId ? null : pickLightRoom(e)
-    selection.value = pr.hitId ? { type: 'furniture', id: pr.hitId } : rid ? { type: 'room', id: rid } : null
+    const rid = pr.hitId || pr.opId ? null : pickLightRoom(e)
+    selection.value = pr.hitId ? { type: 'furniture', id: pr.hitId } : pr.opId ? { type: 'opening', id: pr.opId } : rid ? { type: 'room', id: rid } : null
     // 点在车、围挡（外观视图下屋顶、外墙）上：选中它，旁边浮出编辑卡片
-    selectSite(pr.hitId || rid ? null : pickSite(e))
+    selectSite(pr.hitId || pr.opId || rid ? null : pickSite(e))
   }
 }
 
@@ -1711,7 +1786,8 @@ function onPointerDown(e: PointerEvent) {
     dropPlacing(e, e.shiftKey)
     return
   }
-  const id = pickFurniture(e)
+  const hit = pickAt(e)
+  const id = hit.furniture
   if (id) {
     // 按下只选中；拖过一段距离才开始移动（没选中的要拖得更远），免得点一下手一抖就把家具挪了
     const wasSelected = selection.value?.type === 'furniture' && selection.value.id === id
@@ -1720,8 +1796,8 @@ function onPointerDown(e: PointerEvent) {
     // 按在家具上不转视角
     controls.enabled = false
   } else {
-    // 天花板灯具：选中它所在的房间（浮出灯光开关卡片）
-    const rid = pickLightRoom(e)
+    // 天花板灯具：选中它所在的房间（浮出灯光开关卡片）；门窗和外观对象松手时（没拖动）才选中，按在上面拖动照样转视角
+    const rid = hit.opening ? null : pickLightRoom(e)
     if (rid) selection.value = { type: 'room', id: rid }
     else down = { x: e.clientX, y: e.clientY }
   }
@@ -1765,9 +1841,11 @@ function onPointerMove(e: PointerEvent) {
   }
   // 悬停：换指针、提亮指到的家具（选中的那件已经有选中圈，不再提亮）
   if (e.buttons === 0 && editing.value) {
-    const id = pickFurniture(e)
-    hovering.value = !!id
+    const hit = pickAt(e)
+    const id = hit.furniture
+    hovering.value = !!id || !!hit.opening
     setHover(id && id !== (selection.value?.type === 'furniture' ? selection.value.id : null) ? id : null)
+    setHoverOpening(hit.opening && !(selection.value?.type === 'opening' && selection.value.id === hit.opening) ? hit.opening : null)
   }
 }
 
@@ -1786,9 +1864,11 @@ function onPointerUp(e: PointerEvent) {
     endDrag()
     controls.enabled = true
   } else if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 4) {
-    selection.value = null
+    // 点在门窗上：选中这个洞口（和平面图是同一个选中），旁边浮出门窗卡片
+    const op = pickAt(e).opening
+    selection.value = op ? { type: 'opening', id: op } : null
     // 点在车、围挡（外观视图下屋顶、外墙）上：选中它，旁边浮出编辑卡片；点空处取消
-    selectSite(pickSite(e))
+    selectSite(op ? null : pickSite(e))
   }
   down = null
 }
@@ -1796,6 +1876,7 @@ function onPointerUp(e: PointerEvent) {
 function onPointerLeave() {
   updateHoverRoom(null)
   setHover(null)
+  setHoverOpening(null)
 }
 
 // ---------- 键盘 ----------
@@ -2537,6 +2618,9 @@ watch([activeFloor, floorShow], () => {
     const f = findFurniture(s.id)
     if (f && floorOf(plan.value, f) !== activeFloor.value) selection.value = null
   }
+  // 门窗同理（跟着所在房间的楼层）
+  if (s?.type === 'opening' && !fv().openings.some((o) => o.id === s.id)) selection.value = null
+  updateRing()
   placing.value = null
   dirty = true
 })
@@ -2563,6 +2647,8 @@ watch(selection, () => {
   updateRing()
   applyXray()
 })
+// 门窗的选中框只在布置模式里显示（进漫游、预览时藏起来，回来再显示）
+watch([editing, walking], () => updateRing())
 watch(
   () => sandbox.autoRotate,
   (v) => (controls.autoRotate = v && !editing.value),
@@ -2626,6 +2712,26 @@ watch(
     if (!v && tab.value === 'ext') tab.value = 'scene'
   },
   { immediate: true },
+)
+// ---------- 门窗的选中（布置模式）：点门扇、窗框、玻璃选中洞口（selection 和平面图共用），旁边浮出门窗卡片 ----------
+const selectedOpening = computed(() => {
+  const s = selection.value
+  return s?.type === 'opening' ? (plan.value.openings.find((o) => o.id === s.id) ?? null) : null
+})
+const openingCard = ref<HTMLDivElement>()
+const openingTitle = computed(() => {
+  const o = selectedOpening.value
+  if (!o) return ''
+  const r = findRoom(o.roomId)
+  return r ? `${t(OPENING_LABELS[o.kind])} · ${roomName(r.name)}` : t(OPENING_LABELS[o.kind])
+})
+// 换了一个洞口：卡片先藏着，等 placeSiteCard 摆好位置
+watch(
+  () => selectedOpening.value?.id,
+  () => {
+    if (openingCard.value) openingCard.value.style.visibility = ''
+    dirty = true
+  },
 )
 // ---------- 外观对象的选中（布置模式）：点车、围挡（外观视图下还有屋顶、外墙）选中它，旁边浮出编辑卡片 ----------
 /** 选中的外观对象；和家具 / 房间的选中互斥 */
@@ -2720,10 +2826,13 @@ watch(
 )
 /** 卡片摆在对象旁边：命中点投到屏幕上，放在右侧（放不下就放左侧），不出画面 */
 function placeSiteCard() {
-  const el = siteCard.value
+  placeCardAt(siteCard.value, siteAnchor)
+  placeCardAt(openingCard.value, openingAnchor)
+}
+function placeCardAt(el: HTMLElement | undefined, anchor: THREE.Vector3 | null) {
   const cv = canvas.value
-  if (!el || !cv || !siteAnchor || !siteCardAnchored.value) return
-  const v = siteAnchor.clone().project(stage.camera)
+  if (!el || !cv || !anchor || !siteCardAnchored.value) return
+  const v = anchor.clone().project(stage.camera)
   if (v.z > 1) return
   const W = cv.clientWidth
   const H = cv.clientHeight
@@ -3063,6 +3172,25 @@ defineExpose({ resetView })
           <button class="icon-only lc-close" :title="t('关闭') + ' (Esc)'" :aria-label="t('关闭')" @click="siteSel = null"><JIcon :icon="ICONS.close" :size="14" /></button>
         </div>
         <SiteEditor :key="siteSel" :target="siteSel" variant="card" />
+      </div>
+      <!-- 点中的门窗：款式、尺寸、开向的编辑卡片（和平面图检查器改的是同一个洞口）；手机上停在底部抽屉上方 -->
+      <div
+        v-if="selectedOpening && editing && !walking && !blueprint.on"
+        ref="openingCard"
+        class="light-card site-card opening-card"
+        :class="{ anchored: siteCardAnchored }"
+        role="dialog"
+        :aria-label="openingTitle"
+        :style="{ bottom: device.compact && !device.landscape ? 'calc(var(--sheet-h, 0px) + 10px)' : undefined }"
+        @pointerdown.stop
+        @wheel.stop
+      >
+        <div class="lc-head">
+          <JIcon :icon="selectedOpening.kind === 'window' ? TOOL_ICONS.window : TOOL_ICONS.door" class="ico-muted" />
+          <b>{{ openingTitle }}</b>
+          <button class="icon-only lc-close" :title="t('关闭') + ' (Esc)'" :aria-label="t('关闭')" @click="selection = null"><JIcon :icon="ICONS.close" :size="14" /></button>
+        </div>
+        <OpeningEditor :key="selectedOpening.id" :opening="selectedOpening" />
       </div>
       <div v-if="!plan.rooms.length" class="empty">{{ t('还没有房间。先去 2D 平面图画一个，或者点「随机生成」。') }}</div>
       <div v-if="!device.compact" class="hud">
@@ -4404,6 +4532,10 @@ h3 {
   width: 316px;
   max-height: calc(100% - 100px);
   overflow-y: auto;
+}
+/* 手机：卡片停在底部抽屉上方，最多占画面四成多（上面留出选中的门窗），内容多了在卡片里滚动 */
+:root.compact .opening-card {
+  max-height: min(42%, calc(100% - var(--sheet-h, 0px) - 70px));
 }
 .site-card.anchored {
   right: auto;

@@ -87,6 +87,7 @@ import {
   IconPlay,
   IconPlug,
   IconPlus,
+  IconMinus,
   IconRectangleHorizontal,
   IconRedo,
   IconRefresh,
@@ -262,6 +263,8 @@ export const ICONS = {
   placeInSandbox: IconDiorama,
   // 门窗
   doorFlip: IconDoor,
+  stepDown: IconMinus, // 门窗卡片：宽度 / 位置减一档
+  stepUp: IconPlus, // 加一档
   tidyDoors: IconWand,
   // 操作感：快捷键帮助、聚焦、缩放、加载、新手提示
   keyboard: IconKeyboard,

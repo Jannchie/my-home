@@ -90,6 +90,16 @@ export class SelectFrame {
     this.fillMat.color.set(c)
   }
 
+  /**
+   * 框线压在最上面画（不做深度测试）：门窗前面常挂着窗帘、摆着家具，框会被挡住大半。
+   * 只改线，淡填充照常被遮挡。
+   */
+  setOnTop(on: boolean) {
+    if (this.outlineMat.depthTest === !on) return
+    this.outlineMat.depthTest = !on
+    this.cornerMat.depthTest = !on
+  }
+
   /** 清掉旧形状；形状没变返回 false */
   private reset(key: string) {
     if (key === this.key) return false
