@@ -1,7 +1,7 @@
 // 一键布置里和柜子有关的两步（decorate.ts 调用）：
 //   1. cabinetsOnSpots：每个空着的收纳位（鞋柜位 / 衣柜位 / 食品柜位）上放一件尺寸合适的柜子，款式按地区、风格挑；
 //   2. stowAll：往有柜门 / 抽屉的柜子里收东西——衣柜挂衣服、叠衣服、收纳箱，鞋柜放鞋，食器棚放碗盘杯，
-//      食品柜放食品罐头调味料，洗面柜放洗剂卷纸，电视柜 / 斗柜 / 床头柜放收纳盒和日用杂物；最后少数柜子开着门展示里面。
+//      食品柜放食品罐头调味料（齐腰到齐眼高的层、玻璃门里放碗盘），厨房一带的柜子优先放盘子碗、再是杯子，低处放锅具，洗面柜放洗剂卷纸，电视柜 / 斗柜 / 床头柜放收纳盒和日用杂物；最后少数柜子开着门展示里面。
 //
 // 柜内收纳是额外的：放在所有外面的摆设之后，只用日常收纳类的东西。能体现住户个性的物品（兴趣、收藏、手办、奖杯、乐器、
 // 相机、绿植、装饰摆件、书…）不往关着门的柜子里放，留在外面看得到的地方（isPersonal）。
@@ -9,7 +9,7 @@
 import * as THREE from 'three'
 import { edgesOf, fixtureBox, pointInPolygon, projectToSegment, uid, type Fixture, type Furniture, type Plan, type Room } from './model'
 import { propsOn, toWorld } from './surface'
-import { poseDoors } from './three/kit'
+import { poseDoors, type SurfaceDef } from './three/kit'
 import { isIndoor } from './walls'
 import { DOOR_ZONES, STAIR_ZONES, type Occupancy } from './occupancy'
 import { cabinetsOn, fitsSpot, poseOnStorageSpot, setOpen, SPOT_CABINET_TYPES } from './cabinet'
@@ -113,17 +113,17 @@ export function isPersonal(def: AssetDef) {
   )
 }
 
-type StowKind = 'clothes' | 'folded' | 'shoes' | 'food' | 'dishes' | 'wet' | 'sundries'
+type StowKind = 'clothes' | 'folded' | 'shoes' | 'food' | 'dishes' | 'cookware' | 'wet' | 'sundries'
 
-/** 这件柜子里该收什么 */
-function stowKind(def: AssetDef, room?: Room): StowKind {
+/** 这件柜子里该收什么；kitchen：在厨房里，或在 LDK 的厨房一带（离整体厨房不远） */
+function stowKind(def: AssetDef, room?: Room, kitchen = false): StowKind {
   if (hasTag(def, 'shoe-storage')) return 'shoes'
   if (hasTag(def, 'pantry')) return 'food'
   if (hasTag(def, 'wardrobe')) return 'clothes'
   if (hasTag(def, 'dresser')) return 'folded'
   if (hasTag(def, 'wet-supply') || room?.kind === 'wash' || room?.kind === 'bath' || room?.kind === 'toilet') return 'wet'
   if (hasTag(def, 'tv-stand', 'nightstand', 'bookshelf')) return 'sundries'
-  if (def.category === 'kitchenware' || def.category === 'dining' || room?.kind === 'kitchen' || room?.kind === 'dining') return 'dishes'
+  if (def.category === 'kitchenware' || def.category === 'dining' || kitchen || room?.kind === 'kitchen' || room?.kind === 'dining') return 'dishes'
   if (room?.kind === 'western' || room?.kind === 'japanese') return 'folded'
   return 'sundries'
 }
@@ -133,6 +133,7 @@ const POOL_TAGS: Record<Exclude<StowKind, 'clothes'>, Tag[]> = {
   shoes: ['shoe'],
   food: ['food', 'drink', 'spice', 'oil-bottle'],
   dishes: ['tableware', 'cup', 'mug', 'teacup', 'coffee-cup', 'tea-set'],
+  cookware: ['cookware'],
   wet: ['toilet-paper', 'detergent', 'softener', 'towel', 'laundry-supply', 'shampoo', 'body-soap', 'wet-supply'],
   sundries: ['storage-box', 'sundries', 'stationery', 'personal-care', 'electronics', 'cleaning'],
 }
@@ -148,7 +149,10 @@ const KIND_FILTER: Partial<Record<StowKind, (a: AssetDef) => boolean>> = {
   clothes: clothesBox,
   folded: clothesBox,
   food: (a) => PANTRY.test(a.id),
-  dishes: (a) => !hasTag(a, 'food', 'cookware', 'appliance'),
+  // 漱口杯（toothbrush）不是餐具；餐垫、杯垫平平一张，不往柜子里收
+  dishes: (a) => !hasTag(a, 'food', 'cookware', 'appliance', 'toothbrush') && !/placemat|coasters/.test(a.id),
+  // 锅、平底锅、蒸笼这类；台面上专门摆的家电（电饭煲、水壶、烤面包机、空气炸锅、压力锅、咖啡器具）不收进柜子
+  cookware: (a) => !hasTag(a, 'food', 'appliance', 'rice-cooker', 'kettle', 'electric-kettle', 'toaster', 'air-fryer', 'pressure-cooker', 'coffee-gear', 'outdoor-gear'),
   sundries: (a) => !hasTag(a, 'food', 'drink', 'tableware', 'cookware', 'wet-supply'),
 }
 
@@ -166,6 +170,9 @@ function poolFor(c: StowCtx, kind: StowKind): AssetDef[] {
   return p
 }
 
+/** 盘子、碗、成套餐具（不是杯子、茶具、酒器）：碗柜里优先放这些 */
+export const isPlateLike = (a: AssetDef) => hasTag(a, 'tableware') && !hasTag(a, 'cup', 'mug', 'teacup', 'coffee-cup', 'tea-set', 'drink')
+
 /** 一层的局部包围盒 */
 function bounds(def: AssetDef, i: number) {
   const s = def.surfaces![i]
@@ -178,15 +185,16 @@ function bounds(def: AssetDef, i: number) {
   return { x0: Math.min(...xs), x1: Math.max(...xs), z0: Math.min(...zs), z1: Math.max(...zs) }
 }
 
-/** 沿一层从左往右摆一排东西（不要求摆满，fill 为大约摆到几成） */
-function fillLevel(c: StowCtx, cab: Furniture, def: AssetDef, i: number, pool: AssetDef[], fill: number) {
+/** 沿一层从左往右摆一排东西（不要求摆满，fill 为大约摆到几成）；prefer 命中的先摆，摆完了才轮到别的 */
+function fillLevel(c: StowCtx, cab: Furniture, def: AssetDef, i: number, pool: AssetDef[], fill: number, prefer?: (a: AssetDef) => boolean) {
   const { d, rand } = c
   const lv = def.surfaces![i]
   const b = bounds(def, i)
   const depth = b.z1 - b.z0
   const width = b.x1 - b.x0
   const fits = (a: AssetDef) => a.h <= (lv.h ?? 40) - 0.5 && Math.min(a.w, a.d) <= depth - 0.5 && Math.min(a.w, a.d) <= width - 0.5
-  const cands = d.shuffle(pool.filter(fits))
+  const fit = pool.filter(fits)
+  const cands = prefer ? [...d.shuffle(fit.filter(prefer)), ...d.shuffle(fit.filter((a) => !prefer(a)))] : d.shuffle(fit)
   if (!cands.length) return 0
   let x = b.x0 + 0.5 + rand() * 2
   const stop = b.x0 + width * fill
@@ -217,15 +225,38 @@ function fillLevel(c: StowCtx, cab: Furniture, def: AssetDef, i: number, pool: A
   return n
 }
 
+/**
+ * 某一层收什么：食品柜齐腰到齐眼高的层（75–165）和玻璃门里放碗盘，其余放食品；
+ * 厨房一带落地柜的低层（< 45）先放锅具再放碗盘；碗柜的层先放盘子、碗，少数层先放杯子
+ */
+function levelPlan(c: StowCtx, kind: StowKind, def: AssetDef, cab: Furniture, lv: SurfaceDef, kitchen: boolean): { pool: AssetDef[]; prefer?: (a: AssetDef) => boolean } | null {
+  const y = (cab.z ?? 0) + lv.y
+  const k: StowKind = kind === 'food' && (lv.glass || (y >= 75 && y <= 165)) ? 'dishes' : kind
+  // 玻璃门里看得见：只放碗盘（其他种类的柜子玻璃格按展示格对待，不在这里收）
+  if (lv.glass && k !== 'dishes') return null
+  if (k === 'dishes') {
+    const dishes = poolFor(c, 'dishes')
+    if (kitchen && !def.mount && !lv.glass && y < 45) return { pool: [...poolFor(c, 'cookware'), ...dishes], prefer: (a) => hasTag(a, 'cookware') }
+    const cups = !lv.glass && c.rand() < 0.3
+    return { pool: dishes, prefer: cups ? (a) => !isPlateLike(a) : isPlateLike }
+  }
+  return { pool: poolFor(c, k) }
+}
+
 /** 一件柜子里收东西：每个门里的层按概率摆一些，衣柜的挂衣杆挂衣服 */
-function stowInto(c: StowCtx, cab: Furniture, wds: Wardrobe[], room?: Room) {
+function stowInto(c: StowCtx, cab: Furniture, wds: Wardrobe[], room?: Room, kitchen = false) {
   const { d, rand } = c
   const def = ASSET_MAP.get(cab.asset)!
-  const kind = stowKind(def, room)
+  const kind = stowKind(def, room, kitchen)
   const pool = poolFor(c, kind)
   let n = 0
   ;(def.surfaces ?? []).forEach((lv, i) => {
-    if (!lv.inside || lv.glass) return
+    if (!lv.inside) return
+    if (lv.glass) {
+      const plan = kind === 'dishes' || kind === 'food' ? levelPlan(c, kind, def, cab, lv, kitchen) : null
+      if (plan && rand() < 0.85) n += fillLevel(c, cab, def, i, plan.pool, 0.4 + rand() * 0.4, plan.prefer)
+      return
+    }
     if (lv.kind === 'hook') {
       if (kind !== 'clothes' || rand() < 0.1) return
       const b = bounds(def, i)
@@ -238,6 +269,12 @@ function stowInto(c: StowCtx, cab: Furniture, wds: Wardrobe[], room?: Room) {
     // 衣柜挂衣杆下面的地板只放矮的收纳箱 / 叠好的衣服（衣服下摆在上面）
     const hang = kind === 'clothes' && (def.surfaces ?? []).some((h) => h.kind === 'hook' && h.y > lv.y && h.y - (h.h ?? 0) - 2 < lv.y + (lv.h ?? 0))
     const p = hang ? pool.filter((a) => a.h <= 40) : pool
+    if (kind === 'dishes' || kind === 'food') {
+      // 碗柜、食品柜几乎每层都收着东西
+      const plan = levelPlan(c, kind, def, cab, lv, kitchen)
+      if (plan && rand() < 0.85) n += fillLevel(c, cab, def, i, plan.pool, 0.45 + rand() * 0.5, plan.prefer)
+      return
+    }
     if (rand() < (kind === 'shoes' || kind === 'clothes' ? 0.85 : 0.65)) n += fillLevel(c, cab, def, i, p, 0.45 + rand() * 0.5)
   })
   return n
@@ -250,18 +287,26 @@ function stowInto(c: StowCtx, cab: Furniture, wds: Wardrobe[], room?: Room) {
 export function stowAll(c: StowCtx, skip: (f: Furniture) => boolean = () => false) {
   const { d, rand } = c
   const cabs = d.out.filter((f) => !f.z && ASSET_MAP.get(f.asset)?.openable && !skip(f))
+  const kitchens = c.plan.fixtures.filter((f) => f.kind === 'kitchen')
   d.stowing(() => {
     for (const cab of cabs) {
       const room = roomOf(c.plan, cab)
       const base = d.style
       if (room) d.style = d.styleFor(room)
       const people = room ? d.peopleIn(room) : []
-      stowInto(c, cab, d.wardrobesFor(people.length ? people : undefined), room)
+      stowInto(c, cab, d.wardrobesFor(people.length ? people : undefined), room, !!room && kitchens.some((k) => nearKitchen(k, cab, room)))
       d.style = base
     }
   })
   // 默认多数关着门；少数开着（开着的展示里面）。门扇 / 抽屉打开后扫过的地方碰到墙、别的家具、设备的不开
   for (const cab of cabs) if (rand() < 0.2 && canOpen(c, cab)) setOpen({ furniture: d.out }, cab, true)
+}
+
+/** 柜子在这间房的整体厨房一带：厨房在同一间房里，柜子中心离厨房占地不到 120cm（吊柜、旁边的食器棚） */
+function nearKitchen(k: Fixture, cab: Furniture, room: Room) {
+  if (!pointInPolygon(k, room.points)) return false
+  const b = fixtureBox(k)
+  return Math.hypot(Math.max(b.x0 - cab.x, 0, cab.x - b.x1), Math.max(b.y0 - cab.y, 0, cab.y - b.y1)) < 120
 }
 
 /** 素材关着 / 开着的实际模型包围盒（局部坐标，按素材缓存） */
