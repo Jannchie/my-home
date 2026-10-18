@@ -26,7 +26,7 @@ import { coverInto, liveCapture } from '../three/planThumb'
 import { FxLayer } from '../three/fx'
 import { SelectFrame, WallGuide } from '../three/selectFrame'
 import { ActorLayer } from '../three/actors'
-import { Walker, ceilings } from '../three/walk'
+import { Walker, ceilings, drawMiniMap, miniMapData, type MiniMapData } from '../three/walk'
 import ColorEditor from './ColorEditor.vue'
 import SandboxOverlay from './SandboxOverlay.vue'
 import BlueprintBar from './BlueprintBar.vue'
@@ -50,7 +50,7 @@ import { patternPreview } from '../three/fabric'
 import type { PatternKind } from '../three/patterns'
 import { isTyping } from '../dom'
 import { lang, roomName, t, tAuto, tSoft } from '../i18n'
-import { bbox, centroid, edgesOf, type Furniture, type Plan, type Room, type WallTrim } from '../model'
+import { FIXTURES, bbox, centroid, edgesOf, pointInPolygon, type Furniture, type Plan, type Room, type WallTrim } from '../model'
 import { roomStyles } from '../decorate'
 import { wallThicknessAt } from '../walls'
 import {
@@ -1507,6 +1507,63 @@ const walkLayer = ref<HTMLDivElement>()
 const walkStick = ref<{ x: number; y: number; dx: number; dy: number } | null>(null)
 /** 鼠标锁定中（FPS 式看四周） */
 const walkLocked = ref(false)
+/** 小地图画布、所在房间、准星对着的东西 */
+const walkMap = ref<HTMLCanvasElement>()
+const walkRoom = ref('')
+const walkTarget = ref('')
+const MINI_SIZE = 168
+let mini: { floor: string; data: MiniMapData } | null = null
+let lastMini = 0
+let lastAim = 0
+
+/** 小地图：按楼层缓存要画的东西，自己走动 / 转身时重画（最多每秒 15 次） */
+function drawWalkMap(now: number, force = false) {
+  const c = walkMap.value
+  if (!walker || !c || (!force && now - lastMini < 66)) return
+  lastMini = now
+  const raw = toRaw(plan.value)
+  if (mini?.floor !== walker.floor) mini = { floor: walker.floor, data: miniMapData(raw, walker.floor) }
+  const dpr = Math.min(2, window.devicePixelRatio || 1)
+  if (c.width !== MINI_SIZE * dpr) c.width = c.height = MINI_SIZE * dpr
+  const ctx = c.getContext('2d')
+  if (!ctx) return
+  drawMiniMap(ctx, mini.data, walker.pos, walker.yaw, MINI_SIZE, dpr)
+  const room = mini.data.rooms.find((r) => pointInPolygon(walker!.pos, r.points))
+  const fl = isMultiFloor(raw) ? floorById(raw, walker.floor)?.name ?? '' : ''
+  walkRoom.value = [fl, room ? roomName(room.name) : ''].filter(Boolean).join(' · ')
+}
+
+/** 准星对着的东西（6 米以内、没被墙挡住）：家具显示名字，设备（马桶、厨房…）显示种类；每秒查 10 次 */
+const aimRay = new THREE.Raycaster()
+function aimWalk(now: number) {
+  if (!walker || now - lastAim < 100) return
+  lastAim = now
+  aimRay.setFromCamera(new THREE.Vector2(0, 0), stage.camera)
+  aimRay.far = 600
+  const hits = aimRay.intersectObject(furnRoot, true)
+  const wall = house ? aimRay.intersectObject(house, true).find((h) => (h.object as THREE.Mesh).isMesh && shown(h.object) && opaqueHit(h)) : undefined
+  const far = wall ? wall.distance + 0.5 : Infinity
+  let text = ''
+  for (const h of hits) {
+    if (h.distance > far) break
+    if (!shown(h.object, true)) continue
+    let o: THREE.Object3D | null = h.object
+    while (o && !o.userData.furnitureId) o = o.parent
+    const f = o ? findFurniture(o.userData.furnitureId as string) : undefined
+    const d = f && ASSET_MAP.get(f.asset)
+    if (d) {
+      text = displayName(d)
+      break
+    }
+  }
+  if (!text && wall) {
+    let o: THREE.Object3D | null = wall.object
+    while (o && !o.userData.fixtureId) o = o.parent
+    const fx = o ? plan.value.fixtures.find((x) => x.id === o!.userData.fixtureId) : undefined
+    if (fx) text = t(FIXTURES[fx.kind].label)
+  }
+  walkTarget.value = text
+}
 
 /** 进入漫游：预览模式，墙满高、楼层叠好、盖上天花板，镜头交给 Walker */
 async function enterWalk() {
@@ -1532,6 +1589,7 @@ async function enterWalk() {
   stage.camera.updateProjectionMatrix()
   await nextTick()
   if (walker && walkLayer.value) walkDetach = walker.attach(walkLayer.value, (st) => (walkStick.value = st), (on) => (walkLocked.value = on))
+  drawWalkMap(performance.now(), true)
   dirty = true
 }
 
@@ -1543,6 +1601,9 @@ function exitWalk() {
   walker = null
   walkStick.value = null
   walkLocked.value = false
+  walkTarget.value = ''
+  walkRoom.value = ''
+  mini = null
   if (ceilingRoot) {
     stage.scene.remove(ceilingRoot)
     ceilingRoot.traverse((n) => (n as THREE.Mesh).geometry?.dispose())
@@ -2026,6 +2087,10 @@ function loop() {
     return
   }
   const moved = walker ? walker.update(dt) : controls.update()
+  if (walker) {
+    if (moved) drawWalkMap(now)
+    aimWalk(now)
+  }
   // 时间流逝动画：只有播放时才每帧推进（推进后由 watch 更新光照并标脏）
   if (sandbox.playing) sandbox.time = (sandbox.time + dt * sandbox.speed) % 24
   // 阴影贴图只在场景本身变了时重画：转视角、粒子、选中圈闪烁都不影响投影（静止的户型省掉整整一遍阴影渲染）
@@ -2736,7 +2801,12 @@ defineExpose({ resetView })
           <span v-else class="walk-tip">{{ t('左下拖动走路 · 其余地方拖动看四周') }}</span>
           <button class="primary" @pointerdown.stop @click="exitWalk"><JIcon :icon="ICONS.close" :size="14" />{{ t('退出漫游') }}</button>
         </div>
-        <span v-if="walkLocked" class="walk-cross" aria-hidden="true" />
+        <span v-if="walkLocked || device.coarse" class="walk-cross" aria-hidden="true" />
+        <span v-if="(walkLocked || device.coarse) && walkTarget" class="walk-target">{{ walkTarget }}</span>
+        <div class="walk-mini">
+          <canvas ref="walkMap" :style="{ width: MINI_SIZE + 'px', height: MINI_SIZE + 'px' }" />
+          <span v-if="walkRoom" class="walk-room">{{ walkRoom }}</span>
+        </div>
         <div v-if="walkStick" class="walk-stick" :style="{ left: walkStick.x + 'px', top: walkStick.y + 'px' }">
           <span class="walk-knob" :style="{ transform: `translate(${walkStick.dx}px, ${walkStick.dy}px)` }" />
         </div>
@@ -3264,6 +3334,49 @@ defineExpose({ resetView })
 :root.coarse .walk-layer,
 .walk-layer:not(.locked) {
   cursor: pointer;
+}
+.walk-target {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + 16px);
+  transform: translateX(-50%);
+  max-width: 60%;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(30, 28, 25, 0.62);
+  color: #fff;
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+.walk-mini {
+  position: absolute;
+  right: 16px;
+  bottom: calc(var(--sheet-h, 0px) + 16px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+}
+.walk-mini canvas {
+  display: block;
+  border-radius: 50%;
+  box-shadow: var(--shadow-sm);
+}
+.walk-room {
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: rgba(30, 28, 25, 0.62);
+  color: #fff;
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+:root.compact .walk-mini canvas {
+  width: 120px !important;
+  height: 120px !important;
 }
 .walk-cross {
   position: absolute;

@@ -8,11 +8,13 @@
 // 沙盘（Sandbox3D.vue）负责进出时切换墙体显示、楼层显示和天花板，这里只管位置、朝向和输入。
 
 import * as THREE from 'three'
-import { centroid, pointInPolygon, type Plan, type Vec } from '../model'
-import { floorAbove, floorOf, isMultiFloor, planFloors } from '../floors'
+import { centroid, fixtureBox, pointInPolygon, type Box, type Plan, type Room, type Vec } from '../model'
+import { floorAbove, floorOf, floorView, isMultiFloor, planFloors } from '../floors'
 import { HouseNav, type NavGrid } from '../nav'
 import { slabHoles, type StairWalk } from '../stairs'
 import { toon } from './toon'
+import { ASSET_MAP } from './assets'
+import { furnitureBox } from '../snap'
 
 /** 眼睛离地高度、身体半径（cm） */
 const EYE = 155
@@ -452,4 +454,107 @@ function ceilingGeometry(pts: Vec[], holes: Vec[][]): THREE.BufferGeometry | nul
   // 平面 (x, y) → 世界 (x, h, y)：绕 x 轴转 +90°
   geo.rotateX(Math.PI / 2)
   return geo
+}
+
+// ---------- 小地图 ----------
+
+/** 小地图要画的东西（按楼层算一次）：房间、落地家具和设备的占地 */
+export interface MiniMapData {
+  rooms: Room[]
+  boxes: Box[]
+}
+
+export function miniMapData(plan: Plan, floor: string): MiniMapData {
+  const view = isMultiFloor(plan) ? floorView(plan, floor) : plan
+  const boxes: Box[] = []
+  for (const f of view.furniture) {
+    const d = ASSET_MAP.get(f.asset)
+    if (!d || f.z || d.mount || d.stick || d.h < 30) continue
+    boxes.push(furnitureBox(f.asset, f.x, f.y, f.rot))
+  }
+  for (const fx of view.fixtures) if (!fx.id.startsWith('stair-clear-')) boxes.push(fixtureBox(fx))
+  return { rooms: view.rooms, boxes }
+}
+
+const MINI_FILL: Partial<Record<Room['kind'], string>> = {
+  balcony: '#dfe7d6',
+  bath: '#d6e6ee',
+  wash: '#d6e6ee',
+  toilet: '#d6e6ee',
+  kitchen: '#efe3cf',
+  entrance: '#e6ded3',
+  hall: '#ece6dc',
+  storage: '#e2ddd5',
+  void: 'rgba(0, 0, 0, 0)',
+}
+
+/**
+ * 画小地图：以自己为中心、前方朝上的圆形地图（半径 range cm）。房间按用途上浅色，墙线、家具占地，中间是自己和视野扇形。
+ * size：画布的 CSS 边长；画布本身按 dpr 放大。
+ */
+export function drawMiniMap(ctx: CanvasRenderingContext2D, d: MiniMapData, pos: Vec, yaw: number, size: number, dpr: number, range = 450, fov = 72) {
+  const c = size / 2
+  const k = c / range
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  ctx.clearRect(0, 0, size, size)
+  ctx.save()
+  ctx.beginPath()
+  ctx.arc(c, c, c - 1, 0, Math.PI * 2)
+  ctx.fillStyle = 'rgba(40, 38, 34, 0.55)'
+  ctx.fill()
+  ctx.clip()
+  ctx.save()
+  ctx.translate(c, c)
+  ctx.rotate(yaw)
+  ctx.scale(k, k)
+  ctx.translate(-pos.x, -pos.y)
+  const path = (pts: Vec[]) => {
+    ctx.beginPath()
+    pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)))
+    ctx.closePath()
+  }
+  for (const r of d.rooms) {
+    path(r.points)
+    ctx.fillStyle = MINI_FILL[r.kind] ?? '#f4efe6'
+    ctx.fill()
+  }
+  ctx.fillStyle = 'rgba(120, 104, 86, 0.55)'
+  for (const b of d.boxes) ctx.fillRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0)
+  ctx.strokeStyle = '#4a4036'
+  ctx.lineWidth = 2.2 / k
+  ctx.lineJoin = 'round'
+  for (const r of d.rooms) {
+    if (r.kind === 'void') continue
+    path(r.points)
+    ctx.stroke()
+  }
+  ctx.restore()
+  // 自己：视野扇形 + 箭头（前方朝上）
+  const half = (fov * Math.PI) / 360
+  const g = ctx.createRadialGradient(c, c, 0, c, c, c * 0.7)
+  g.addColorStop(0, 'rgba(255, 214, 120, 0.55)')
+  g.addColorStop(1, 'rgba(255, 214, 120, 0)')
+  ctx.beginPath()
+  ctx.moveTo(c, c)
+  ctx.arc(c, c, c * 0.7, -Math.PI / 2 - half, -Math.PI / 2 + half)
+  ctx.closePath()
+  ctx.fillStyle = g
+  ctx.fill()
+  ctx.beginPath()
+  ctx.moveTo(c, c - 7)
+  ctx.lineTo(c + 5, c + 5)
+  ctx.lineTo(c, c + 2.5)
+  ctx.lineTo(c - 5, c + 5)
+  ctx.closePath()
+  ctx.fillStyle = '#ff8a3d'
+  ctx.strokeStyle = '#fff'
+  ctx.lineWidth = 1.5
+  ctx.fill()
+  ctx.stroke()
+  ctx.restore()
+  ctx.beginPath()
+  ctx.arc(c, c, c - 1, 0, Math.PI * 2)
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)'
+  ctx.lineWidth = 2
+  ctx.stroke()
 }
