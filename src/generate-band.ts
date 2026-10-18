@@ -10,7 +10,7 @@
 
 import { orientDoors } from './doors'
 import { firstDoorCenter, placeCandidates, placeOnWall, type PlaceSpec } from './place'
-import { WALL, WALL_OUTER, createCtx, planArea, type Ctx } from './generate'
+import { WALL, WALL_OUTER, createCtx, planArea, searchWithArea, type Ctx } from './generate'
 import { add, area, bbox, edgeInfo, edgesOf, mul, openingGeom, pointInPolygon, projectToSegment, rectPoints, uid, type Fixture, type FixtureKind, type KitchenVariant, type OpeningKind, type Plan, type Region, type Room, type RoomKind, type Vec } from './model'
 import { isIndoor, isOpenBetween, sharedIntervals } from './walls'
 
@@ -69,11 +69,18 @@ export interface BandOut {
   placed: Placed[]
 }
 
-/** 把 diff（10 的倍数）摊到各个宽度上 */
-function spread(ws: number[], diff: number) {
+/** 把 diff（10 的倍数）按随机权重摊到各个宽度上：相邻的房间不会被摊成一样宽 */
+function spread(ws: number[], diff: number, rand: () => number) {
   if (!ws.length || diff <= 0) return
   const steps = Math.round(diff / 10)
-  for (let k = 0; k < steps; k++) ws[k % ws.length] += 10
+  const wt = ws.map(() => 0.7 + rand() * 0.6)
+  const sum = wt.reduce((a, x) => a + x, 0)
+  let left = steps
+  wt.forEach((w, i) => {
+    const k = i === ws.length - 1 ? left : Math.min(left, Math.round((steps * w) / sum))
+    ws[i] += k * 10
+    left -= k
+  })
 }
 
 /**
@@ -100,7 +107,7 @@ export function bandLayout(
     const sumS = sw.reduce((a, x) => a + x, 0)
     const sumN = nw.reduce((a, x) => a + x, 0)
     const W = Math.max(sumS, sumN)
-    spread(sw, W - sumS)
+    spread(sw, W - sumS, c.alt)
     let diff = W - sumN
     if (north.length && diff >= 100 && b.filler) {
       const fw = Math.min(diff, b.filler.max)
@@ -108,7 +115,7 @@ export function bandLayout(
       nw.push(fw)
       diff -= fw
     }
-    spread(nw, diff)
+    spread(nw, diff, c.alt)
     return { W, sw, nw, north }
   }
   const SL = sizes(blocks.L)
@@ -155,7 +162,7 @@ export function bandLayout(
         : rectPoints(u0, 0, u1, yS)
       const r = c.room(s.kind, s.name, pts.map((p) => ({ x: X(p.x), y: p.y })))
       placed.push({ spec: s, room: r })
-      if (s.window) c.open(r, 'window', { x: X((u0 + u1) / 2), y: 0 }, Math.min(w - 80, s.window))
+      if (s.window) c.open(r, 'window', { x: X((u0 + u1) / 2 + c.windowShift(w, Math.min(w - 80, s.window))), y: 0 }, Math.min(w - 80, s.window))
       // 门：走廊模式开在北沿（靠内侧一端，外侧可能是主卫）；否则开在朝 C 列的侧墙上（走廊带范围内）
       if (s.door !== 'none') {
         if (hall) c.open(r, s.doorKind ?? 'door', { x: X(u0 + Math.min(55, w / 2)), y: dS }, doorW(s))
@@ -179,7 +186,7 @@ export function bandLayout(
       u = u1
       const r = c.rect(s.kind, s.name, X(u0), yN, X(u1), D)
       placed.push({ spec: s, room: r })
-      if (s.window) c.open(r, 'window', { x: X((u0 + u1) / 2), y: D }, Math.min(w - 60, s.window))
+      if (s.window) c.open(r, 'window', { x: X((u0 + u1) / 2 + c.windowShift(w, Math.min(w - 60, s.window))), y: D }, Math.min(w - 60, s.window))
       if (s.openToC && i === 0) {
         r.openGroup = opts.group
         return
@@ -264,7 +271,8 @@ export function placeKitchen(
       fallback ??= k
       const ctx = { ...plan, fixtures: [...plan.fixtures, k] }
       for (const fr of [room, ...(o.fridgeRooms ?? [])]) {
-        const f = placeOnWall(fr, ctx, { kind: 'fridge', lengths: o.fridge, depth: o.fridgeDepth, near: { x: k.x, y: k.y }, nearMax: k.w / 2 + (fr === room ? 160 : 320) })
+        // 冰箱位不挡通往阳台的落地窗
+        const f = placeOnWall(fr, ctx, { kind: 'fridge', lengths: o.fridge, depth: o.fridgeDepth, near: { x: k.x, y: k.y }, nearMax: k.w / 2 + (fr === room ? 160 : 320), sash: true })
         if (f) {
           plan.fixtures.push(k, f)
           return { k, f }
@@ -333,9 +341,9 @@ export function shoeCabinet(plan: Plan, entry: Room, lengths = [120, 100, 90, 80
   return f
 }
 
-/** 卧室里的嵌入式衣柜（欧美 reach-in closet / 中式定制衣柜） */
+/** 卧室里的嵌入式衣柜（欧美 reach-in closet / 中式定制衣柜）：不挡通往阳台的落地窗 */
 export function bedroomCloset(plan: Plan, room: Room, lengths = [200, 180, 160, 140, 120], depth = 60) {
-  const f = placeOnWall(room, plan, { kind: 'builtin', lengths, depth, front: 70 } as PlaceSpec)
+  const f = placeOnWall(room, plan, { kind: 'builtin', lengths, depth, front: 70, sash: true } as PlaceSpec)
   if (f) plan.fixtures.push({ ...f, builtinType: 'closet' })
   return f
 }
@@ -407,6 +415,7 @@ export function prepareDoors(plan: Plan) {
 }
 
 export interface RegionGen {
+  region: Region
   /** 第一阶段：房间 + 门窗（面积就此确定） */
   layout: (seed: number, opts: { bedrooms: 'random' | 1 | 2 | 3 | 4; corner: 'random' | 'yes' | 'no' }) => { c: Ctx; plan: Plan }
   /** 第二阶段：设备 */
@@ -415,26 +424,26 @@ export interface RegionGen {
   violations: (plan: Plan, checkFixtures: boolean) => string[]
 }
 
-/** 和日式 generateWithArea 同一套路：从 seed 起依次试，第一个面积合格且合规的胜出，否则给最接近的 */
-export function generateRegionWithArea(gen: RegionGen, opts: { seed: number; bedrooms?: 'random' | 1 | 2 | 3 | 4; corner: 'random' | 'yes' | 'no'; minArea: number | null; maxArea: number | null }, attempts = 400) {
-  const lo = opts.minArea ?? 0
-  const hi = opts.maxArea ?? Infinity
+/** 和日式 generateWithArea 同一套路（searchWithArea）：面积合格且合规、通过骨架抽签的第一个胜出，否则给最接近的 */
+export function generateRegionWithArea(
+  gen: RegionGen,
+  opts: { seed: number; bedrooms?: 'random' | 1 | 2 | 3 | 4; corner: 'random' | 'yes' | 'no'; minArea: number | null; maxArea: number | null },
+  attempts = 400,
+  keep?: (seed: number) => boolean,
+) {
   const lo2 = { bedrooms: opts.bedrooms ?? 'random', corner: opts.corner }
-  let best: { seed: number; score: number } | null = null
-  for (let i = 0; i < attempts; i++) {
-    const seed = (opts.seed + i) % 1_000_000
-    const l = gen.layout(seed, lo2)
-    const a = planArea(l.plan)
-    const gap = a < lo ? lo - a : a > hi ? a - hi : 0
-    const layoutOk = gen.violations(l.plan, false).length === 0
-    if (gap === 0 && layoutOk) {
-      const plan = gen.furnish(l)
-      if (gen.violations(plan, true).length === 0) return { plan, seed, matched: true }
-    }
-    const score = gap + (layoutOk ? 0 : 1e6) + (gap === 0 ? 1e5 : 0)
-    if (!best || score < best.score) best = { seed, score }
-  }
-  return { plan: gen.furnish(gen.layout(best!.seed, lo2)), seed: best!.seed, matched: false }
+  return searchWithArea({
+    seed: opts.seed,
+    minArea: opts.minArea,
+    maxArea: opts.maxArea,
+    attempts,
+    key: `${gen.region}|${lo2.bedrooms}|${lo2.corner}`,
+    keep,
+    layout: (seed) => gen.layout(seed, lo2),
+    layoutOk: (l) => gen.violations(l.plan, false).length === 0,
+    furnish: gen.furnish,
+    ok: (plan) => gen.violations(plan, true).length === 0,
+  })
 }
 
 /** 面积（㎡） */

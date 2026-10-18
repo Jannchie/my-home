@@ -70,7 +70,8 @@ function layout(seed: number, o: { bedrooms: 'random' | 1 | 2 | 3 | 4; corner: '
     south = [office]
     service = [laundry, foyer]
   } else if (n === 2) {
-    south = [bedN(2), office]
+    // Office 靠客厅还是靠外侧随机
+    south = c.altChance(0.5) ? [bedN(2), office] : [office, bedN(2)]
     service = [laundry, bath, foyer]
   } else if (n === 3) {
     south = [bedN(2), bedN(3)]
@@ -79,11 +80,20 @@ function layout(seed: number, o: { bedrooms: 'random' | 1 | 2 | 3 | 4; corner: '
     south = [bedN(2), bedN(3), bedN(4)]
     service = [laundry, bath, foyer, half]
   }
-  // 北排顺序随机一点：玄关别总在同一个位置；Pantry 永远紧挨厨房
-  // （玄关不紧挨厨房：和玄关之间的墙不能放设备，小厨房会放不下冰箱）
-  if (chance(0.5) && service.length >= 3 && service[0] !== foyer && service[1] !== foyer) [service[0], service[1]] = [service[1], service[0]]
-  else if (chance(0.5) && service.length >= 4) [service[2], service[3]] = [service[3], service[2]]
+  // 北排顺序打乱：玄关别总在同一个位置；Pantry 永远紧挨厨房
+  // （玄关不紧挨厨房：和玄关之间的墙不能放设备，小厨房会放不下冰箱；隔着 Pantry 就没关系）
   const withPantry = n >= 2 && chance(n >= 3 ? 0.6 : 0.35)
+  if (service.length >= 3) {
+    for (let i = service.length - 1; i > 0; i--) {
+      const j = Math.floor(c.alt() * (i + 1))
+      ;[service[i], service[j]] = [service[j], service[i]]
+    }
+    if (!withPantry && service[0] === foyer) {
+      const j = 1 + Math.floor(c.alt() * (service.length - 1))
+      ;[service[0], service[j]] = [service[j], service[0]]
+    }
+  }
+  c.sig.push(`n${n}`, withPantry ? 'pantry' : '', south[0] === office ? 'officeIn' : '')
   const R: BlockSpec = { south, north: [...(withPantry ? [pantry] : []), ...service], filler: linen }
 
   // C 列北半：Dining（靠主卧一侧）| Kitchen（靠服务区一侧）
@@ -194,4 +204,4 @@ function violations(plan: Plan, checkFixtures: boolean): string[] {
   return out
 }
 
-export const WEST: RegionGen = { layout, furnish, violations }
+export const WEST: RegionGen = { region: 'west', layout, furnish, violations }

@@ -2,7 +2,7 @@
 // 住宅类型不选（或选公寓）时平层生成和以前一样。
 import { describe, expect, test } from 'vitest'
 import * as THREE from 'three'
-import { generatePlan, dwellingFor } from '/src/generate-region'
+import { generatePlan, dwellingFor, regionFor } from '/src/generate-region'
 import { houseViolations } from '/src/generate-house'
 import { floorOf, floorOutline, floorView, planFloors } from '/src/floors'
 import { stairHoleConflicts, stairHoles, stairLinks, stairFootprint, overlapArea as stairOverlap } from '/src/stairs'
@@ -240,6 +240,23 @@ describe('存档 / 分享', () => {
   })
 })
 
+describe('户建的多样性', () => {
+  test('2F 并排的次卧不会被摊成一样宽', () => {
+    const pairs: [number, number][] = []
+    for (const c of COMBOS)
+      for (const p of plans.get(key(c))!.values()) {
+        const top = planFloors(p)[1].id
+        const beds = p.rooms
+          .filter((r) => floorOf(p, r) === top && r.kind === 'western' && Math.min(...r.points.map((q) => q.y)) < 1)
+          .map((r) => Math.max(...r.points.map((q) => q.x)) - Math.min(...r.points.map((q) => q.x)))
+        // 第一间（主卧）权重固定，只比后面并排的次卧
+        for (let i = 2; i < beds.length; i++) pairs.push([beds[i - 1], beds[i]])
+      }
+    expect(pairs.length).toBeGreaterThan(5)
+    expect(pairs.filter(([a, b]) => a !== b).length / pairs.length).toBeGreaterThan(0.5)
+  })
+})
+
 describe('平层公寓不受影响', () => {
   const regions: Region[] = ['jp', 'cn', 'west']
   test('不填住宅类型 = 公寓：同一种子结果相同（屏蔽 id）', () => {
@@ -252,7 +269,7 @@ describe('平层公寓不受影响', () => {
       }
   })
 
-  test('住宅类型随机：落到公寓的种子和直接选公寓结果相同；以公寓为主', () => {
+  test('住宅类型随机：落到公寓时，用结果种子直接选公寓得到同一方案；以公寓为主', () => {
     let apt = 0
     for (let k = 0; k < 40; k++) {
       const seed = k * 1000 + 17
@@ -261,15 +278,31 @@ describe('平层公寓不受影响', () => {
         if (d !== 'apartment') continue
         apt++
         if (k % 8) continue
-        const a = generatePlan({ ...JP_OPTS, seed, region, dwelling: 'random' }).plan
-        const b = generatePlan({ ...JP_OPTS, seed, region }).plan
-        expect(JSON.stringify(normalizeIds(a))).toBe(JSON.stringify(normalizeIds(b)))
+        // 随机类型往后试种子时只试散列到公寓的种子，起始种子没抽中时结果种子会往后挪
+        const a = generatePlan({ ...JP_OPTS, seed, region, dwelling: 'random' })
+        const b = generatePlan({ ...JP_OPTS, seed: a.seed, region }).plan
+        expect(dwellingFor({ seed: a.seed, dwelling: 'random', maxArea: null }, region)).toBe('apartment')
+        expect(JSON.stringify(normalizeIds(a.plan))).toBe(JSON.stringify(normalizeIds(b)))
       }
     }
     expect(apt).toBeGreaterThan(60)
   })
 
-  test('平层生成的指纹和改动前一致', () => {
+  test('随机地区 / 类型按种子散列：相邻种子不扎堆；结果种子重新生成是同一地区、同一方案', () => {
+    const got = new Set(range(0, 29).map((s) => `${regionFor({ seed: 5000 + s, region: 'random' })}/${dwellingFor({ seed: 5000 + s, dwelling: 'random', maxArea: null }, 'jp')}`))
+    expect(got.size).toBeGreaterThanOrEqual(6)
+    for (const seed of [11, 4242, 90001]) {
+      const opts = { ...JP_OPTS, seed, region: 'random' as const, dwelling: 'random' as const, minArea: 60, maxArea: 85 }
+      const a = generatePlan(opts)
+      expect(regionFor({ seed: a.seed, region: 'random' })).toBe(regionFor(opts))
+      expect(dwellingFor({ ...opts, seed: a.seed }, regionFor(opts))).toBe(dwellingFor(opts, regionFor(opts)))
+      const b = generatePlan({ ...opts, seed: a.seed })
+      expect(b.seed).toBe(a.seed)
+      expect(JSON.stringify(normalizeIds(b.plan))).toBe(JSON.stringify(normalizeIds(a.plan)))
+    }
+  })
+
+  test('平层生成的指纹固定（同一种子的结果不会无意中变掉）', () => {
     // 名字（户型名、房间名）按运行环境的语言翻译，CI 和本机不同：只比结构，不比显示文字
     const fp = (p: Plan) => {
       const s = JSON.stringify(normalizeIds(p), (k, v) => (k === 'name' ? undefined : v))
@@ -282,5 +315,9 @@ describe('平层公寓不受影响', () => {
   })
 })
 
-/** 改动前（v1.3.0）平层生成的指纹（不含名字）：jp / cn / west 各取种子 3、77、500 */
-const FINGERPRINTS = ['647b61e4,c690b2f4,ed6abb68', '2b5f22c5,f281fb39,4fe977f4', '4415e38c,65ad4dbf,c7f4c3c0']
+/**
+ * 平层生成的指纹（不含名字）：jp / cn / west 各取种子 3、77、500。
+ * v1.7 之后为了户型更多样（宽度随机摊、窗位偏移、更多排法）有意更新过一次：这些变化用第二条随机序列，房间布置大多不变，
+ * 窗位、宽度、排法跟着变（jp 500 / cn 500 恰好没有可变的地方，指纹和以前相同）。
+ */
+const FINGERPRINTS = ['9aac4bf8,8ce92b42,ed6abb68', '18726c55,ce1decaf,4fe977f4', '8083dded,295fc497,1d09702a']

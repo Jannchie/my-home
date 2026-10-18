@@ -70,21 +70,40 @@ function layout(seed: number, o: { bedrooms: 'random' | 1 | 2 | 3 | 4; corner: '
   const [third, fourth] = chance(0.5) ? ['书房', '儿童房'] : ['儿童房', '书房']
   const second = bed('次卧', 290, 340, rint(140, 170))
 
+  // 几种排法（都满足：厨房在 R 块北排第一间、紧挨餐厅；每间都从走廊 / 客餐厅进）
   let L: BlockSpec
   let R: BlockSpec
+  c.sig.push(`n${n}`)
   if (n === 1) {
     L = { south: [master], north: [pubBath], filler }
     R = { south: [], north: [kitchen] }
   } else if (n === 2) {
-    L = { south: [master], north: [pubBath], filler }
-    R = { south: [second], north: [kitchen] }
+    if (c.altChance(0.35)) {
+      // 公卫挪到厨房旁边：主卧独占 L 块（加深到走廊带，门开向客厅）
+      c.sig.push('bathByKitchen')
+      L = { south: [master], north: [] }
+      R = { south: [second], north: [kitchen, pubBath], filler }
+    } else {
+      L = { south: [master], north: [pubBath], filler }
+      R = { south: [second], north: [kitchen] }
+    }
   } else if (n === 3) {
-    // 公卫放在主卧这一侧：北排（次卧 + 公卫）比主卧宽，主卧顺势做大，是全屋最大的卧室
-    L = { south: [master], north: [bed(third, 270, 310, rint(120, 150)), pubBath], filler }
+    // 公卫放在主卧这一侧：北排（次卧 + 公卫）比主卧宽，主卧顺势做大，是全屋最大的卧室；
+    // 公卫靠客餐厅一侧还是外侧随机
+    const third3 = bed(third, 270, 310, rint(120, 150))
+    const bathIn = c.altChance(0.4)
+    if (bathIn) c.sig.push('bathIn')
+    L = { south: [master], north: bathIn ? [pubBath, third3] : [third3, pubBath], filler }
     R = { south: [second], north: [kitchen], filler }
   } else {
+    // 次卧和第四间谁靠客厅随机
+    const south4 = [second, bed(fourth, 270, 320, rint(130, 160))]
+    if (c.altChance(0.5)) {
+      south4.reverse()
+      c.sig.push('swap')
+    }
     L = { south: [master], north: [bed(third, 280, 330, rint(120, 150))], filler }
-    R = { south: [second, bed(fourth, 270, 320, rint(130, 160))], north: [kitchen, pubBath], filler }
+    R = { south: south4, north: [kitchen, pubBath], filler }
   }
 
   // ---------- C 列北半：餐厅 + 玄关（在远离厨房的一侧）+ 可能有储藏间 ----------
@@ -226,4 +245,4 @@ function violations(plan: Plan, checkFixtures: boolean): string[] {
   return out
 }
 
-export const CN: RegionGen = { layout, furnish, violations }
+export const CN: RegionGen = { region: 'cn', layout, furnish, violations }
