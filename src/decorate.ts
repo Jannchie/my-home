@@ -235,11 +235,22 @@ class Decorator {
       if (!g) return fail()
       if (ok(g)) {
         this.recipes.set(g.id, again)
+        this.carryOver(id, g)
         return g
       }
       cur = g
     }
     return fail()
+  }
+
+  /**
+   * 重摆成功的家具接上原来那件的身份：专用柜（相机展示柜 / 防潮柜）换了 id 照样是专用柜，柜里的相机重新摆满
+   * （否则跟着被拿掉的摆件重新找地方时会塞进新柜子里）
+   */
+  private carryOver(fromId: string, to: Furniture) {
+    if (!this.reserved.has(fromId)) return
+    this.reserved.add(to.id)
+    if (CAMERA_CASE.test(to.asset)) this.fillCameras(to)
   }
 
   /** 布置状态的存档点（重摆大件失败时整个放回去） */
@@ -432,7 +443,9 @@ class Decorator {
 
   private relocateGroupOnce(group: Furniture[], ok: () => boolean, samePose?: ReadonlySet<string>): Furniture[] {
     const keep = group.some((f) => this.fixed.has(f.id)) ? this.checkpoint() : null
-    const plans = group.map((f) => {
+    // 大件（床、衣柜）先挑位置，小件再找不堵路的地方：小件先摆的话大件常常哪儿都放不下，整组又放回原处
+    const order = [...group].sort((a, b) => Number(this.fixed.has(b.id)) - Number(this.fixed.has(a.id)))
+    const plans = order.map((f) => {
       const c = bodyCenter(f.asset, f.x, f.y, f.rot)
       // samePose 里的（整屋重摆时的大件）原来的位置也可以再用
       const poses = samePose?.has(f.id) ? new Set<string>() : new Set([this.poseKey(f)])
@@ -465,6 +478,7 @@ class Decorator {
       }
       if (got) {
         this.recipes.set(got.id, p.again!)
+        this.carryOver(p.f.id, got)
         placed.push(got)
       } else if (p.fixed && keep) {
         this.restore(keep)

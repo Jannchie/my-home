@@ -27,13 +27,16 @@ import {
   type BlockSpec,
   type CellSpec,
   type Ctx,
+  type LayoutOpts,
   type RegionGen,
+  type RegionLayout,
 } from './generate-band'
+import { altInt, bump, carveCorner, defaultRule } from './footprint'
 import { t } from './i18n'
 
 const GROUP = 'west-great'
 
-function layout(seed: number, o: { bedrooms: 'random' | 1 | 2 | 3 | 4; corner: 'random' | 'yes' | 'no' }): { c: Ctx; plan: Plan } {
+function layout(seed: number, o: LayoutOpts): RegionLayout {
   const c = createCtx(seed)
   const { rint, chance, pick } = c
   const n = o.bedrooms === 'random' ? pick([1, 2, 2, 3, 3, 3, 4, 4]) : o.bedrooms
@@ -122,6 +125,7 @@ function layout(seed: number, o: { bedrooms: 'random' | 1 | 2 | 3 | 4; corner: '
   if (ms && chance(0.3)) [px0, px1] = [Math.min(px0, ms[0]), Math.max(px1, ms[1])]
   balconyAlong(c, 'Patio', px0, px1, 0, -rint(200, 280), pick<Room['railing']>(['bars', 'bars', 'louver', 'glass']))
 
+  const shaped = !o.plain && shapeWest(c)
   if (corner) cornerWindows(c, W, { ldk: 200, dining: 140, kitchen: 100, western: 140, bath: 60 })
 
   const full = c.rooms.filter((r) => r.kind === 'bath' && r.name !== 'Half Bath').length
@@ -140,7 +144,52 @@ function layout(seed: number, o: { bedrooms: 'random' | 1 | 2 | 3 | 4; corner: '
     furniture: [],
     region: 'west',
   }
-  return { c, plan }
+  return { c, plan, ...(shaped ? { plain: () => layout(seed, { ...o, plain: true }) } : {}) }
+}
+
+/**
+ * 外轮廓变形（只用 c.alt，见 footprint.ts）：
+ *   约 30%：切掉一个外墙角（角上的卧室 / 收纳变成 L 形或变浅；挨着 Patio 的角不切）；
+ *   约 25%：南侧一间卧室做凸窗（bay window：南墙中间往外凸 60–90，窗挪到凸出部分）；
+ *   约 12%：Foyer 往北凸出一块（入户门挪到凸出部分）。
+ */
+function shapeWest(c: Ctx) {
+  const t = { rooms: c.rooms, openings: c.openings }
+  const rule = defaultRule({ western: 8.5, storage: 1 })
+  let done = false
+  if (c.altChance(0.3)) {
+    const k0 = Math.floor(c.alt() * 4)
+    const all = ['ne', 'se', 'nw', 'sw'] as const
+    for (let i = 0; i < 4; i++) if (carveCorner(c, t, all[(k0 + i) % 4], rule, { w: [0.35, 0.6], d: [0.3, 0.5] })) {
+      done = true
+      break
+    }
+  }
+  if (c.altChance(0.25)) {
+    const beds = c.rooms.filter((r) => r.kind === 'western' && r.points.length === 4 && r.points.some((p) => Math.abs(p.y) < 1))
+    const start = Math.floor(c.alt() * Math.max(1, beds.length))
+    const depth = altInt(c, 60, 90)
+    const want = altInt(c, 170, 240)
+    const shift = c.alt() - 0.5
+    for (let i = 0; i < beds.length; i++) {
+      const r = beds[(start + i) % beds.length]
+      const xs = r.points.map((p) => p.x)
+      const [x0, x1] = [Math.min(...xs), Math.max(...xs)]
+      const w = Math.min(want, x1 - x0 - 100)
+      if (w < 150) continue
+      const mid = (x0 + x1) / 2 + Math.round((shift * (x1 - x0 - w - 100)) / 10) * 10
+      if (bump(t, r, 's', mid - w / 2, mid + w / 2, depth)) {
+        done = true
+        break
+      }
+    }
+  }
+  if (c.altChance(0.12)) {
+    const g = c.rooms.find((r) => r.kind === 'entrance')
+    const xs = g?.points.map((p) => p.x) ?? []
+    if (g && bump(t, g, 'n', Math.min(...xs), Math.max(...xs), altInt(c, 60, 100))) done = true
+  }
+  return done
 }
 
 function furnish({ c, plan }: { c: Ctx; plan: Plan }): Plan {

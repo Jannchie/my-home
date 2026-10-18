@@ -104,6 +104,27 @@ export function innerRoom(room: Room, ctx: Pick<Plan, 'rooms' | 'wall' | 'wallOu
   return inner
 }
 
+const reflexCache = new WeakMap<Room, { rooms: Room[]; boxes: Box[] }>()
+/**
+ * 凹多边形房间（L 形）的阴角：墙中心线的拐点往两边各占半个墙厚，这一块是墙体。
+ * 贴墙摆的东西只按所靠的那面墙让出半厚，伸到阴角旁边时要另外避开这里。
+ */
+export function reflexCorners(room: Room, ctx: Pick<Plan, 'rooms' | 'wall' | 'wallOuter'>): Box[] {
+  const hit = reflexCache.get(room)
+  if (hit && hit.rooms === ctx.rooms) return hit.boxes
+  const es = edgesOf(room.points)
+  const boxes: Box[] = []
+  es.forEach((e, i) => {
+    const prev = es[(i + es.length - 1) % es.length]
+    // 往外法线方向拐 = 阴角（外法线朝左拐的话 prev.out 和 e.dir 同向）
+    if (prev.out.x * e.dir.x + prev.out.y * e.dir.y < 0.5) return
+    const h = Math.max(wallThicknessAt(ctx, add(e.a, mul(e.dir, 2)), e.out, room), wallThicknessAt(ctx, add(e.a, mul(prev.dir, -2)), prev.out, room)) / 2
+    boxes.push({ x0: e.a.x - h, y0: e.a.y - h, x1: e.a.x + h, y1: e.a.y + h })
+  })
+  reflexCache.set(room, { rooms: ctx.rooms, boxes })
+  return boxes
+}
+
 /** 盒子整块在房间的墙面轮廓内（不嵌进墙里） */
 export function boxInsideWalls(b: Box, room: Room, ctx: Pick<Plan, 'rooms' | 'wall' | 'wallOuter'>) {
   return boxInside(b, innerRoom(room, ctx))
@@ -196,6 +217,7 @@ export function placeCandidates(room: Room, ctx: PlaceCtx, spec: PlaceSpec): Fix
   const front = spec.front ?? fixtureFront({ kind: spec.kind, variant: spec.variant })
   // 没有墙的敞开边：和玄関之间的通行口、洗濯機置場的开口
   const passages = ctx.rooms.filter((r) => r.id !== room.id && ((r.kind === 'entrance' && room.kind !== 'entrance') || isOpenBetween(room, r)))
+  const corners = reflexCorners(room, ctx)
 
   const edges = edgesOf(room.points)
     .map((e, i) => ({ i, e }))
@@ -214,9 +236,10 @@ export function placeCandidates(room: Room, ctx: PlaceCtx, spec: PlaceSpec): Fix
     const inward = mul(e.out, -1)
     const mid = add(e.a, mul(e.dir, e.length / 2))
     const inset = wallThicknessAt(ctx, mid, e.out, room) / 2
-    // 两端让出相邻墙的半厚（按两端各自的墙厚）
-    const lo = wallThicknessAt(ctx, add(e.a, mul(e.dir, 1)), mul(e.dir, -1), room) / 2
-    const endB = wallThicknessAt(ctx, add(e.b, mul(e.dir, -1)), e.dir, room) / 2
+    // 两端让出相邻墙的半厚（按两端各自的墙厚）。探点往房间里挪一点，不落在这条边的延长线上
+    // （延长线正好是隔壁房间的边界时会误判成隔墙：L 形 / 凹口旁的房间，端头那面其实是外墙）
+    const lo = wallThicknessAt(ctx, add(add(e.a, mul(e.dir, 1)), mul(inward, 3)), mul(e.dir, -1), room) / 2
+    const endB = wallThicknessAt(ctx, add(add(e.b, mul(e.dir, -1)), mul(inward, 3)), e.dir, room) / 2
     const full = e.length - ctx.wallOuter
     const farBonus = spec.far ? dist(mid, spec.far) * 10 : 0
 
@@ -239,6 +262,7 @@ export function placeCandidates(room: Room, ctx: PlaceCtx, spec: PlaceSpec): Fix
         b = add(b, snap)
         const box = bbox([a, b, add(a, mul(inward, spec.depth))])
         if (!boxInside(box, room)) continue
+        if (corners.some((g) => boxOverlaps(g, box))) continue
         if (guards.some((g) => boxOverlaps(g, box))) continue
         if (obstacles.some((o) => boxOverlaps(o, box))) continue
         if (fronts.some((o) => boxOverlaps(o, box))) continue
