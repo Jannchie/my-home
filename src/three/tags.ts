@@ -166,6 +166,8 @@ export const HYGIENE_TAGS = [
   'toilet-paper',
   'toilet-brush',
   'sanitary-bin',
+  'plunger', // 马桶搋子
+  'sanitary', // 生理用品（卫生巾、护垫）
   'air-freshener',
   'towel',
   'detergent',
