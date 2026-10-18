@@ -46,6 +46,32 @@ export function thumbnail(assetId: string, color = 0): string {
   return url
 }
 
+/** 已经渲染过的缩略图（没有返回 undefined；不触发渲染） */
+export const cachedThumb = (key: string) => cache.get(key)
+
+/**
+ * 任意模型的缩略图（外观编辑器的围挡 / 车型 / 屋顶等预览）：同一个离屏舞台、同一份缓存。
+ * build 只在缓存没有时调用（返回的模型要自带描边）；box 可以只框住模型的一部分（比如入口那一块），dir 是镜头所在的方向。
+ */
+export function renderThumb(key: string, build: () => THREE.Object3D, opts: { dir?: THREE.Vector3; margin?: number; box?: (obj: THREE.Object3D) => THREE.Box3 } = {}): string {
+  const hit = cache.get(key)
+  if (hit) return hit
+  const s = getStage()
+  // 描边由 build 自己加（整栋房子搭出来就带描边，再加一遍会叠两层）
+  const obj = build()
+  s.scene.add(obj)
+  obj.updateMatrixWorld(true)
+  const whole = new THREE.Box3().setFromObject(obj)
+  fitSun(s.sun, whole)
+  frameCamera(s.camera, opts.box ? opts.box(obj) : whole, opts.dir ?? new THREE.Vector3(0.75, 0.62, 1).normalize(), opts.margin ?? 1.0)
+  s.render()
+  const url = s.renderer.domElement.toDataURL('image/png')
+  s.scene.remove(obj)
+  disposeUnshared(obj)
+  cache.set(key, url)
+  return url
+}
+
 /**
  * 组件里用的缩略图：thumbs[key] 有值就显示。key = `${assetId}#${color}`
  *

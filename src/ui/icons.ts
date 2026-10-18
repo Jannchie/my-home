@@ -80,6 +80,7 @@ import {
   IconPalette,
   IconBrush,
   IconCar,
+  IconBan,
   IconPause,
   IconPaw,
   IconPentagon,
@@ -206,6 +207,8 @@ export const ICONS = {
   extFacade: IconBrush,
   extFence: IconWallLowered,
   extCar: IconCar,
+  // 外观编辑器里「不要」这一项（无围挡、不停车）
+  extNone: IconBan,
   walk: IconFootprint,
   // 3D 沙盘的「设计图」视图：线框 + 尺寸标注；正交轴测 / 透视
   blueprint: IconRuler,

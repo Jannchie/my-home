@@ -1051,7 +1051,8 @@ Object.assign(UI, {
   车型: ['車種', 'Car type'],
   不停车: ['車なし', 'No car'],
   车身颜色: ['ボディの色', 'Body color'],
-  '在 3D 里点车或围挡，也能直接打开这里的设置': ['3D で車や塀をクリックしてもここを開けます', 'Click a car or the fence in 3D to jump here'],
+  '布置模式下在 3D 里点车、围挡（外观视图里还有屋顶、外墙），会在旁边弹出编辑卡片': ['配置モードで 3D の車や塀（外観ビューでは屋根・外壁も）をクリックすると、そばに編集カードが開きます', 'In Arrange mode, click a car or the fence in 3D (also the roof or walls in Exterior view) to edit it in a card right next to it'],
+  颜色: ['色', 'Color'],
 } satisfies Record<string, Entry>)
 // ---------- 3D 设计图 ----------
 Object.assign(UI, {
