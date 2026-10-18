@@ -1,7 +1,8 @@
 // 户建外观的编辑对象（3D 沙盘里点中的围挡 / 车位上的车 / 屋顶 / 外墙）和编辑器共用的小工具。
 // 编辑器组件 SiteEditor.vue 在浮动卡片和侧栏「外观」页里各用一份，逻辑都在这里或 store 的 setSite / setParking / setExterior。
 
-import { CAR_KINDS, FACADE_KINDS, FENCE_KINDS, PORCH_KINDS, ROOF_KINDS, type CarKind, type FacadeKind, type FenceKind, type ParkingSpot, type Plan, type PorchKind, type RoofKind } from './model'
+import { CAR_KINDS, FACADE_KINDS, FENCE_KINDS, PORCH_KINDS, ROOF_COVERS, ROOF_KINDS, type CarKind, type Exterior, type FacadeKind, type FenceKind, type ParkingSpot, type Plan, type PorchKind, type RoofCover, type RoofKind } from './model'
+import { FLAT_COVERS, PITCHED_COVERS, activeCover } from './roofCover'
 
 /** 编辑对象：fence 围挡 / roof 屋顶 / facade 外墙（含入口）/ parking:i 第 i 个车位上的车 */
 export type SiteTarget = 'fence' | 'roof' | 'facade' | `parking:${number}`
@@ -57,6 +58,12 @@ export const CAR_CHOICES: CarChoice[] = ['none', ...(Object.keys(CAR_KINDS) as C
 export const ROOF_CHOICES = Object.keys(ROOF_KINDS) as RoofKind[]
 export const FACADE_CHOICES = Object.keys(FACADE_KINDS) as FacadeKind[]
 export const PORCH_CHOICES = Object.keys(PORCH_KINDS) as PorchKind[]
+/** 屋面材料的选项：素面（不写字段）+ 这种屋顶能铺的材料 */
+export type CoverChoice = RoofCover | 'plain'
+export const coverChoices = (roof: RoofKind): CoverChoice[] => ['plain', ...(roof === 'flat' ? FLAT_COVERS : PITCHED_COVERS)]
+/** 现在选中的是哪一项（没写、或和屋顶形式对不上都算素面） */
+export const coverChoice = (ex: Pick<Exterior, 'roof' | 'roofCover'>): CoverChoice => activeCover(ex) ?? 'plain'
+export const coverLabel = (c: CoverChoice) => (c === 'plain' ? '素面' : ROOF_COVERS[c])
 export const carLabel = (c: CarChoice) => (c === 'none' ? '不停车' : CAR_KINDS[c])
 
 export const ROOF_COLORS = ['#4f5866', '#3d4655', '#2f3540', '#686e76', '#6b4a3c', '#a35a46', '#4b5a4e', '#8fb3d9']

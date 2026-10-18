@@ -16,7 +16,8 @@ const KINDS: RoofKind[] = ['gable', 'hip', 'shed', 'flat']
 const REGIONS = ['jp', 'west', 'cn'] as const
 const SEEDS = range(1, 16)
 const base = new Map(REGIONS.flatMap((region) => SEEDS.map((seed) => [`${region}/${seed}`, generatePlan({ ...JP_OPTS, seed, region, dwelling: 'house' }).plan] as const)))
-const withRoof = (p: Plan, roof: RoofKind): Plan => ({ ...p, exterior: { ...p.exterior!, roof } })
+// 只看屋顶形状：去掉生成器写的屋面材料（材料的面数预算在 roof-cover.spec.ts）
+const withRoof = (p: Plan, roof: RoofKind): Plan => ({ ...p, exterior: { ...p.exterior!, roof, roofCover: undefined } })
 
 interface Ctx {
   /** 本层外轮廓、上层外轮廓、上层阳台 */

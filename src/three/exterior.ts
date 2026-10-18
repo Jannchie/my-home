@@ -11,6 +11,8 @@ import { subtractSpan } from '../stairs'
 import { addOutlines, cyl, mergeMeshes, rbox, shade, toon, useAnisotropy } from './toon'
 import { BASE, openingInfos } from './house'
 import { injectLightMask } from './lightMask'
+import { activeCover } from '../roofCover'
+import { coverCaps, coverMeshes, valleyLift } from './roofCover'
 
 // ---------- 外墙材质 ----------
 
@@ -240,6 +242,8 @@ export function buildRoof(part: RoofPart, ex: Exterior, wallOuter: number): THRE
   const g = new THREE.Group()
   const wallMat = facadeMaterial(ex)
   const o = wallOuter / 2
+  // 屋面材料（瓦、金属板、平屋顶的碎石 / 绿化…）：铺在屋面实体上面的一层，见 three/roofCover.ts
+  const cover = activeCover(ex)
   if (part.flat) {
     const f = part.flat
     // 每一层做成一整块实心（相邻的矩形之间不留描边接缝）
@@ -247,11 +251,13 @@ export function buildRoof(part: RoofPart, ex: Exterior, wallOuter: number): THRE
       if (rs.length) g.add(roofSolid(tessellate(rs.map((r) => [[r.x0, r.y0, z], [r.x1, r.y0, z], [r.x1, r.y1, z], [r.x0, r.y1, z]] as P3[])), mat, depth))
     }
     flatSolid(f.slab, f.slabTop, FLAT_T, roofMaterial(shade(ex.roofColor, 0.25)))
+    if (cover && f.slab.length) for (const m of coverMeshes(tessellate(f.slab.map((r) => [[r.x0, r.y0, f.slabTop], [r.x1, r.y0, f.slabTop], [r.x1, r.y1, f.slabTop], [r.x0, r.y1, f.slabTop]] as P3[])), cover, ex.roofColor)) g.add(m)
     flatSolid(f.parapet, f.slabTop + PARAPET, PARAPET, outdoorFacade(wallMat))
     flatSolid(f.coping, f.slabTop + PARAPET + 5, 5, roofMaterial(ex.trimColor))
     return finish(g, part)
   }
   g.add(roofSolid(part.tris, roofMaterial(ex.roofColor)))
+  if (cover) for (const m of [...coverMeshes(part.tris, cover, ex.roofColor), ...coverCaps(part.creases, cover, ex.roofColor)]) g.add(m)
   // 屋面下补齐的外墙（山墙三角、单坡的高墙、下屋两端）：沿墙中心线、墙厚 wallOuter
   for (const w of part.walls) {
     const dx = w.b.x - w.a.x
@@ -269,9 +275,11 @@ export function buildRoof(part: RoofPart, ex: Exterior, wallOuter: number): THRE
     const A = new THREE.Vector3(c.a[0], c.a[2], c.a[1])
     const B = new THREE.Vector3(c.b[0], c.b[2], c.b[1])
     if (c.kind === 'valley') {
-      valley.push(A.x, A.y + 0.6, A.z, B.x, B.y + 0.6, B.z)
+      const up = 0.6 + valleyLift(cover)
+      valley.push(A.x, A.y + up, A.z, B.x, B.y + up, B.z)
       continue
     }
+    if (cover) continue // 脊瓦由 coverCaps 搭
     const u = B.clone().sub(A)
     const side = new THREE.Vector3(-u.z, 0, u.x).normalize().multiplyScalar(c.kind === 'ridge' ? 7 : 6)
     const lift = new THREE.Vector3(0, 1, 0)

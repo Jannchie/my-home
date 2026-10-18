@@ -16,14 +16,14 @@ export type SitePreview =
   | { t: 'fence'; kind: Exclude<FenceKind, 'none'>; color?: string; height?: number }
   | { t: 'car'; kind: CarKind; color: string }
   /** 一座小房子：focus 决定镜头框住哪里（整个屋顶 / 一段外墙 / 入口） */
-  | { t: 'house'; focus: 'roof' | 'facade' | 'entrance'; ex: Exterior }
+  | { t: 'house'; focus: 'roof' | 'cover' | 'facade' | 'entrance'; ex: Exterior }
 
 /** 缓存键：画面相关的参数都在里面，不相关的（比如看屋顶时的点缀色以外）也带上，宁可多渲染一张不画错 */
 export function previewKey(p: SitePreview): string {
   if (p.t === 'fence') return `site:fence|${p.kind}|${p.color ?? ''}|${p.height ?? ''}`
   if (p.t === 'car') return `site:car|${p.kind}|${p.color}`
   const e = p.ex
-  return `site:house|${p.focus}|${e.roof}|${e.roofColor}|${e.pitch ?? ''}|${e.eave ?? ''}|${e.facade}|${e.wallColor}|${e.trimColor}|${e.porch ?? ''}`
+  return `site:house|${p.focus}|${e.roof}|${e.roofColor}|${e.pitch ?? ''}|${e.eave ?? ''}|${e.facade}|${e.wallColor}|${e.trimColor}|${e.porch ?? ''}|${e.roofCover ?? ''}`
 }
 
 /** 预览用的小房子：一间 480 × 400 的起居室 + 东南角一个玄关（南墙上入户门），南墙一扇窗；平面 +y 朝南（3D 的 +z） */
@@ -87,6 +87,8 @@ const DIRS = {
   // 车头朝 -z：从左前上方看
   car: new THREE.Vector3(0.85, 0.6, -1).normalize(),
   roof: new THREE.Vector3(0.75, 0.85, 1).normalize(),
+  // 屋面材料：凑近西南角的檐口，看得清瓦行和檐口的瓦头
+  cover: new THREE.Vector3(-0.6, 0.9, 1).normalize(),
   facade: new THREE.Vector3(-0.5, 0.25, 1).normalize(),
   entrance: new THREE.Vector3(0.6, 0.4, 1).normalize(),
 }
@@ -99,7 +101,7 @@ export function renderPreview(p: SitePreview): string {
   const focus = p.focus
   return renderThumb(key, () => previewObject(p), {
     dir: DIRS[focus],
-    margin: focus === 'roof' ? 0.9 : focus === 'entrance' ? 0.95 : 0.7,
+    margin: focus === 'roof' ? 0.9 : focus === 'entrance' ? 0.95 : focus === 'cover' ? 0.8 : 0.7,
     box:
       focus === 'roof'
         ? undefined
@@ -107,6 +109,7 @@ export function renderPreview(p: SitePreview): string {
             // 平面坐标 → 3D：x 不变，平面 y = 3D z；抬起了 -BASE
             const y0 = -BASE
             if (focus === 'entrance') return new THREE.Box3(new THREE.Vector3(450, 0, 380), new THREE.Vector3(730, y0 + 290, 600))
+            if (focus === 'cover') return new THREE.Box3(new THREE.Vector3(-70, y0 + 240, 120), new THREE.Vector3(300, y0 + 380, 470))
             // 外墙：西南角一段没有窗的墙（材质纹理看得清，转角带一点立体感）
             return new THREE.Box3(new THREE.Vector3(-10, y0 + 30, 380), new THREE.Vector3(150, y0 + 200, 420))
           },

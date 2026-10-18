@@ -24,6 +24,9 @@ import {
   WALL_COLORS,
   carChoice,
   carLabel,
+  coverChoice,
+  coverChoices,
+  coverLabel,
   carPatch,
   liveEdit,
   parkingIndex,
@@ -84,6 +87,18 @@ const roofTiles = computed<Tile[]>(() => {
   if (!e) return []
   return ROOF_CHOICES.map((k) => ({ slot: `roof:${k}`, label: ROOF_KINDS[k], on: e.roof === k, preview: { t: 'house', focus: 'roof', ex: { ...e, roof: k } }, pick: () => setExterior({ roof: k }) }))
 })
+const coverTiles = computed<Tile[]>(() => {
+  const e = ex.value
+  if (!e) return []
+  const cur = coverChoice(e)
+  return coverChoices(e.roof).map((k) => ({
+    slot: `cover:${k}`,
+    label: coverLabel(k),
+    on: cur === k,
+    preview: { t: 'house', focus: 'cover', ex: { ...e, roofCover: k === 'plain' ? undefined : k } },
+    pick: () => setExterior({ roofCover: k === 'plain' ? undefined : k }),
+  }))
+})
 const facadeTiles = computed<Tile[]>(() => {
   const e = ex.value
   if (!e) return []
@@ -105,7 +120,7 @@ const porchTiles = computed<Tile[]>(() => {
 /** 这个编辑器里出现的全部格子（排队渲染预览图） */
 const tiles = computed(() => {
   if (props.target === 'fence') return fenceTiles.value
-  if (props.target === 'roof') return roofTiles.value
+  if (props.target === 'roof') return [...roofTiles.value, ...coverTiles.value]
   if (props.target === 'facade') return [...facadeTiles.value, ...porchTiles.value]
   return carTiles.value
 })
@@ -169,6 +184,13 @@ watchEffect(() => {
     <template v-else-if="target === 'roof' && ex">
       <div class="tiles" role="group" :aria-label="t('屋顶')">
         <button v-for="tile in roofTiles" :key="tile.slot" class="tile" :class="{ on: tile.on }" :aria-pressed="tile.on" :title="t(tile.label)" @click="tile.pick()">
+          <span class="pv"><img v-if="previews[tile.slot]" :src="previews[tile.slot]" alt="" draggable="false" /></span>
+          <span class="tl">{{ t(tile.label) }}</span>
+        </button>
+      </div>
+      <div class="ed-sub">{{ t('屋面材料') }}</div>
+      <div class="tiles" role="group" :aria-label="t('屋面材料')">
+        <button v-for="tile in coverTiles" :key="tile.slot" class="tile" :class="{ on: tile.on }" :aria-pressed="tile.on" :title="t(tile.label)" @click="tile.pick()">
           <span class="pv"><img v-if="previews[tile.slot]" :src="previews[tile.slot]" alt="" draggable="false" /></span>
           <span class="tl">{{ t(tile.label) }}</span>
         </button>

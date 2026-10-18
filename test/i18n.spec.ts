@@ -61,7 +61,7 @@ function uiKeys() {
   const vals = (o: object | undefined) => Object.values(o ?? {}) as unknown[]
   const label = (o: object | undefined) => vals(o).map((x) => (x as { label?: string }).label)
   const tables: [string, unknown[]][] = [
-    ['model.ts', [...label(M.ROOM_KINDS), ...vals(M.OPENING_LABELS), ...label(M.FIXTURES), ...vals(M.TOILET_TYPES), ...vals(M.BUILTIN_TYPES), ...vals(M.WASHER_STYLES), ...vals(M.FRIDGE_STYLES), ...vals(M.RAILING_KINDS), ...vals(M.FENCE_KINDS), ...vals(M.CAR_KINDS), ...vals(M.PORCH_KINDS), ...vals(M.ROOF_KINDS), ...vals(M.FACADE_KINDS)]],
+    ['model.ts', [...label(M.ROOM_KINDS), ...vals(M.OPENING_LABELS), ...label(M.FIXTURES), ...vals(M.TOILET_TYPES), ...vals(M.BUILTIN_TYPES), ...vals(M.WASHER_STYLES), ...vals(M.FRIDGE_STYLES), ...vals(M.RAILING_KINDS), ...vals(M.FENCE_KINDS), ...vals(M.CAR_KINDS), ...vals(M.PORCH_KINDS), ...vals(M.ROOF_KINDS), ...vals(M.FACADE_KINDS), ...vals(M.ROOF_COVERS)]],
     ['kit.ts', [...vals(KIT.CATEGORY_LABELS), ...vals(KIT.STYLE_LABELS), ...vals((KIT as Record<string, object>).FORM_LABELS)]],
     ['catalog.ts', vals((CAT as Record<string, object>).SIZE_LABELS)],
     ['generate.ts', vals(GEN.STYLE_LABELS)],

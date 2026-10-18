@@ -31,6 +31,7 @@ import { DEFAULT_FLOOR_H, SLAB, floorOf, floorView, planFloors, stampFloor } fro
 import { stairHoleConflicts, stairLinks, withStairKeepout } from './stairs'
 import { jp, t } from './i18n'
 import { altInt, carveFloors, defaultRule } from './footprint'
+import { defaultRoofCover } from './roofCover'
 
 export type Dwelling = 'apartment' | 'house' | 'duplex'
 export const DWELLING_LABELS: Record<Dwelling, string> = { apartment: '公寓', house: '户建', duplex: '复式' }
@@ -104,6 +105,11 @@ function seedHash(seed: number, k: number) {
   let h = (Math.imul(seed | 0, 2654435761) ^ Math.imul(k + 7, 40503)) >>> 0
   h = Math.imul(h ^ (h >>> 15), 2246822507) >>> 0
   return ((h ^ (h >>> 13)) >>> 0) / 4294967296
+}
+
+/** 新生成的户建写上按地区挑的屋面材料（不消耗布局随机序列；旧存档没有这个字段，照旧是素面） */
+function withCover(ex: Exterior, region: Region, seed: number): Exterior {
+  return { ...ex, roofCover: defaultRoofCover(region, ex.roof, seedHash(seed, 11)) }
 }
 
 export type HouseStairKind = 'u' | 'l' | 'living'
@@ -797,7 +803,7 @@ function layout(seed: number, o: Pick<HouseGenOpts, 'region' | 'dwelling' | 'bed
     furniture: [],
     floors,
     region: o.region,
-    ...(site ? { site, exterior: P.exterior(c) } : {}),
+    ...(site ? { site, exterior: withCover(P.exterior(c), o.region, seed) } : {}),
     // 户建：院子 / 阳台一侧（y = 0，平面图上方）朝南，3D 的日照从院子那边来
     ...(site ? { north: 180 } : {}),
   }

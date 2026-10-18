@@ -6,7 +6,7 @@
 
 import { floorOutline, floorView, planFloors } from './floors'
 import { roofShape, type RoofRect, type RoofShape } from './roof'
-import { CAR_KINDS, FENCE_HEIGHT_MAX, FENCE_HEIGHT_MIN, FENCE_KINDS, PORCH_KINDS, pointInPolygon, type CarKind, type Exterior, type FacadeKind, type FenceKind, type Plan, type PorchKind, type RoofKind, type Site, type Vec } from './model'
+import { CAR_KINDS, FENCE_HEIGHT_MAX, FENCE_HEIGHT_MIN, FENCE_KINDS, PORCH_KINDS, pointInPolygon, type CarKind, type Exterior, type FacadeKind, type FenceKind, type Plan, type PorchKind, type RoofCover, type RoofKind, ROOF_COVERS, type Site, type Vec } from './model'
 
 export type Side = 'n' | 's' | 'w' | 'e'
 export type { RoofRect }
@@ -138,6 +138,7 @@ export function normalizeExterior(p: Plan) {
       if (isNum(e.pitch)) ex.pitch = Math.min(1.2, Math.max(0.1, e.pitch))
       if (isNum(e.eave)) ex.eave = Math.min(120, Math.max(0, e.eave))
       if (PORCHES.includes(e.porch as PorchKind)) ex.porch = e.porch as PorchKind
+      if (typeof e.roofCover === 'string' && Object.hasOwn(ROOF_COVERS, e.roofCover)) ex.roofCover = e.roofCover as RoofCover
       p.exterior = ex
     }
   }

@@ -391,6 +391,22 @@ export const ROOF_KINDS: Record<RoofKind, string> = { gable: '双坡', hip: '四
 /** 外墙材质：siding 横纹板材 / stucco 抹灰 / brick 砖 */
 export type FacadeKind = 'siding' | 'stucco' | 'brick'
 export const FACADE_KINDS: Record<FacadeKind, string> = { siding: '横纹板材', stucco: '抹灰', brick: '砖墙' }
+/**
+ * 屋面材料（和屋顶形式无关，只对合适的形式生效）。坡屋顶：kawara 和瓦（J 形桟瓦）/ spanish 西班牙瓦（S 形陶瓦）/ cement 平板瓦 /
+ * shingle 沥青瓦 / slate 石板瓦（彩色石棉瓦）/ metal 金属板（立边咬合）；平屋顶：membrane 防水卷材 / gravel 碎石 / green 屋顶绿化。
+ */
+export type RoofCover = 'kawara' | 'spanish' | 'cement' | 'shingle' | 'slate' | 'metal' | 'membrane' | 'gravel' | 'green'
+export const ROOF_COVERS: Record<RoofCover, string> = {
+  kawara: '和瓦',
+  spanish: '西班牙瓦',
+  cement: '平板瓦',
+  shingle: '沥青瓦',
+  slate: '石板瓦',
+  metal: '金属板',
+  membrane: '防水卷材',
+  gravel: '碎石',
+  green: '屋顶绿化',
+}
 
 export interface Exterior {
   roof: RoofKind
@@ -405,6 +421,8 @@ export interface Exterior {
   trimColor: string
   /** 入口门廊：canopy 雨棚 / porch 带柱子的门廊 / none */
   porch?: PorchKind
+  /** 屋面材料；不填 = 素面（旧存档的样子）。和屋顶形式对不上时（平屋顶配瓦等）也按素面搭 */
+  roofCover?: RoofCover
 }
 
 export type Region = 'jp' | 'cn' | 'west'
