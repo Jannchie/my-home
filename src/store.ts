@@ -693,23 +693,27 @@ export function addFixture(f: Omit<Fixture, 'id'>) {
   selection.value = { type: 'fixture', id: fx.id }
 }
 
-export function rotateSelectedFixture() {
+/** 选中的设备转 deg 度（缺省顺时针 90°；3D 沙盘的 Q / 逆时针按钮传 -90），一步撤销 */
+export function rotateSelectedFixture(deg = 90) {
   const s = selection.value
   if (s?.type !== 'fixture') return
   const f = findFixture(s.id)
-  if (f) mutate(() => (f.rot = (f.rot + 90) % 360))
+  if (f) mutate(() => (f.rot = (((f.rot + deg) % 360) + 360) % 360))
 }
 
-/** 换楼梯形式：占地换成这种形式的默认尺寸（中心不动） */
+/** 换楼梯形式（只改数据，不记撤销）：占地换成这种形式的默认尺寸（中心不动），去掉这种形式用不到的字段 */
+export function applyStairsVariant(f: Fixture, v: NonNullable<Fixture['stairs']>) {
+  f.stairs = v
+  f.w = STAIRS_SIZE[v].w
+  f.d = STAIRS_SIZE[v].d
+  if (v === 'straight') delete f.turn
+  if (v !== 'l') delete f.run
+  if (v !== 'straight' && v !== 'l') delete f.under
+}
+
+/** 换楼梯形式，一步撤销（检查器、楼梯右键菜单） */
 export function setStairsVariant(f: Fixture, v: NonNullable<Fixture['stairs']>) {
-  mutate(() => {
-    f.stairs = v
-    f.w = STAIRS_SIZE[v].w
-    f.d = STAIRS_SIZE[v].d
-    if (v === 'straight') delete f.turn
-    if (v !== 'l') delete f.run
-    if (v !== 'straight' && v !== 'l') delete f.under
-  })
+  mutate(() => applyStairsVariant(f, v))
 }
 
 /** 按规则重新决定所有开门的铰链与开向 */
