@@ -12,6 +12,33 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '1.10.0',
+    date: '2026-10-19',
+    notes: {
+      zh: [
+        '3D 沙盘里能直接点选窗户、门、楼梯和设备；门可以换款式、颜色、把手，还能加侧窗和亮子；楼梯右键菜单可以改形状、样式和转向',
+        '外观视图并入楼层显示选项，和全部楼层、只到当前层、分层拉开放在一起；门廊按门前空间定尺寸，并优先于围栏摆下',
+        '第一人称漫游：楼梯和平地一样自由走，不再沿路线拉着走或自动转向；忽略鼠标锁定时的位移毛刺；修正楼梯间一楼和二楼之间透出的黑缝和接缝',
+        '浴缸盖、浴缸置物架能吸附到浴缸边上；漫画全卷之类不再摆到床上，麻将台上的东西不再和麻将牌穿模；阳台外墙灯随墙一起隐藏',
+        '选中高亮改成独立的覆盖层，取消选择后不会残留；修正较长标签和楼层显示选项溢出',
+      ],
+      ja: [
+        '3D ジオラマで窓・ドア・階段・設備を直接選択できるように。ドアはデザイン・色・取っ手を変えられ、袖窓や欄間も追加可能。階段は右クリックメニューで形・スタイル・向きを変更できます',
+        '外観ビューを階の表示オプションに統合し、全階・現在階まで・分解表示と並べました。ポーチは玄関前の広さに合わせて大きさを決め、塀より優先して配置',
+        'ウォークスルー：階段も床と同じように自由に歩けるようになり、ルートに沿って引っぱられたり勝手に向きが変わったりしません。マウスロック中の視点の跳びを無視。階段室で 1 階と 2 階の間に見えていた黒い隙間とつなぎ目を修正',
+        '風呂ふた・バスラックが浴槽の縁にスナップするように。漫画全巻などはベッドの上に置かず、麻雀卓の上の小物が牌にめり込まないように。バルコニーの外壁照明は壁と一緒に隠れます',
+        '選択ハイライトを独立したオーバーレイにし、選択解除後に残らないように。長いラベルや階の表示オプションがはみ出す問題を修正',
+      ],
+      en: [
+        'Select windows, doors, stairs and fixtures directly in the 3D sandbox; doors get styles, colors, handles, sidelights and transoms; a stairs context menu changes shape, style and turn',
+        'The exterior view is now a floor display option next to all floors / up to current / exploded; the entrance porch is sized to the space in front of the door and takes priority over the fence',
+        'Walkthrough: stairs are walked freely like the floor, with no path pulling or auto-turning; pointer-lock mouse spikes are ignored; fixed the dark gap and seam between floors in the stairwell',
+        'Bath lids and tub caddies snap onto the bathtub rim; manga sets stay off beds and props no longer clip into mahjong tiles; balcony wall lamps hide with their wall',
+        'Hover and selection highlights are an overlay that never lingers after deselecting; long labels and floor display options no longer overflow',
+      ],
+    },
+  },
+  {
     version: '1.9.0',
     date: '2026-10-18',
     notes: {
