@@ -1135,40 +1135,49 @@ function paperHolder(remote = false) {
   return g
 }
 
+/** 卷纸架的安装高度（离地） */
+export const PAPER_HOLDER_Y = 70
+
 /**
- * 马桶旁边的卷纸架：找马桶左右两侧较近的那面墙，装在离地 70、比马桶中心靠前 15 的位置（伸手够得着）。
- * 两侧都没有 70cm 以内的墙就不装。
+ * 马桶旁边的卷纸架：找马桶左右两侧较近的那面墙，装在离地 70、比马桶中心靠前 15 的位置（坐着伸手够得着）。
+ * 两侧都没有 70cm 以内的墙就不装。返回墙面上的安装点（p）、朝墙的方向（side）和半个墙厚。
  */
+export function paperHolderSpot(plan: Plan, f: Fixture): { p: Vec; side: Vec; half: number } | null {
+  const room = roomAt(plan, f)
+  if (!room) return null
+  const a = (f.rot * Math.PI) / 180
+  const right = { x: Math.cos(a), y: Math.sin(a) }
+  const front = { x: -Math.sin(a), y: Math.cos(a) }
+  let best: { t: number; side: Vec; half: number } | null = null
+  for (const s of [-1, 1]) {
+    const dir = mul(right, s)
+    for (const e of edgesOf(room.points)) {
+      // 射线 center + dir·t 与墙段相交
+      const den = dir.x * -e.dir.y + dir.y * e.dir.x
+      if (Math.abs(den) < 1e-6) continue
+      const ex = e.a.x - f.x
+      const ey = e.a.y - f.y
+      const t = (ex * -e.dir.y + ey * e.dir.x) / den
+      const u = (ex * dir.y - ey * dir.x) / den
+      if (t <= 0 || u > 0 || u < -e.length) continue
+      const half = wallThicknessAt(plan, add2(f, mul(dir, t)), dir, room) / 2
+      if (t - half > 70) continue
+      if (!best || t - half < best.t) best = { t: t - half, side: dir, half }
+    }
+  }
+  if (!best) return null
+  return { p: add2(add2(f, mul(best.side, best.t - 0.2)), mul(front, 15)), side: best.side, half: best.half }
+}
+
 function buildPaperHolders(plan: Plan) {
   const g = new THREE.Group()
   for (const f of plan.fixtures) {
     if (f.kind !== 'toilet') continue
-    const room = roomAt(plan, f)
-    if (!room) continue
-    const a = (f.rot * Math.PI) / 180
-    const right = { x: Math.cos(a), y: Math.sin(a) }
-    const front = { x: -Math.sin(a), y: Math.cos(a) }
-    let best: { t: number; side: Vec; half: number } | null = null
-    for (const s of [-1, 1]) {
-      const dir = mul(right, s)
-      for (const e of edgesOf(room.points)) {
-        // 射线 center + dir·t 与墙段相交
-        const den = dir.x * -e.dir.y + dir.y * e.dir.x
-        if (Math.abs(den) < 1e-6) continue
-        const ex = e.a.x - f.x
-        const ey = e.a.y - f.y
-        const t = (ex * -e.dir.y + ey * e.dir.x) / den
-        const u = (ex * dir.y - ey * dir.x) / den
-        if (t <= 0 || u > 0 || u < -e.length) continue
-        const half = wallThicknessAt(plan, add2(f, mul(dir, t)), dir, room) / 2
-        if (t - half > 70) continue
-        if (!best || t - half < best.t) best = { t: t - half, side: dir, half }
-      }
-    }
+    const best = paperHolderSpot(plan, f)
     if (!best) continue
-    const p = add2(add2(f, mul(best.side, best.t - 0.2)), mul(front, 15))
+    const p = best.p
     const obj = paperHolder((f.toiletType ?? 'washlet') !== 'basic')
-    obj.position.set(p.x, 70, p.y)
+    obj.position.set(p.x, PAPER_HOLDER_Y, p.y)
     // 正面朝房间里（远离墙）
     obj.rotation.y = Math.atan2(-best.side.x, -best.side.y)
     mergeMeshes(obj)

@@ -11,7 +11,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, SWING_OPEN, ellipsePoly, holePanel, movable, rectPoly, rng, rod, shell, slab, type AssetCategory, type AssetDef, type Hole, type Poly, type StyleTag, type SurfaceDef } from '../kit'
-import { PI, box3, clearDeep, cylXLegacy, cylZLegacy, rod3 } from '../geo'
+import { PI, box3, clearDeep, cylXLegacy, cylZLegacy, latheAt, rod3 } from '../geo'
 import { I, J, M, N, R, define, type Build, type Dims, type Pal } from '../packkit'
 
 const STEEL = '#c3c7cc'
@@ -365,6 +365,9 @@ const TOILET_CAB: WetCabSpec = { w: 45, d: 18, plinth: 0, secs: [{ kind: 'open',
 const TOILET_CAB_MOUNT = 150
 // 厕所窄柜：放卷纸的下柜 + 上面开放格
 const TOILET_SLIM: WetCabSpec = { w: 20, d: 36, plinth: 4, secs: [{ kind: 'door', h: 50 }, { kind: 'open', h: 22 }] }
+// 马桶上方吊戸棚（トイレ吊戸棚）：底下一条开放格放芳香剂 / 一卷备用纸，门里两层放卷纸、卫生巾、清洁剂（进深 27：4 卷装放得进）
+const TOILET_UPPER = (w: number): WetCabSpec => ({ w, d: 27, plinth: 0, secs: [{ kind: 'open', h: 14 }, { kind: 'door', h: 40, doors: 2 }] })
+const TOILET_UPPER_MOUNT = 150
 
 // 卷纸：叠放 / 4 卷装 / 12 卷装
 function tpStack(p: string[]) {
@@ -526,6 +529,59 @@ function toiletCleaner(p: string[]) {
     rbox(6.4, 6, 0.4, label, { y: 4, z: 2.9 }, 0.2),
   )
 }
+
+// 马桶搋子（ラバーカップ）：橡胶碗 + 长柄
+function plunger(p: string[]) {
+  const [rubber, handle, cap] = p
+  return G(
+    latheAt([[0, 0.3], [6.3, 0.3], [6.8, 0.9], [6.5, 3.2], [5.3, 5.8], [3.1, 7.6], [1.7, 8.4], [0, 8.4]], rubber, {}, 28),
+    // 碗口一圈稍深的翻边
+    torus(6.4, 0.45, shade(rubber, -0.12), { y: 0.6, rx: PI / 2 }),
+    cyl(1.6, 1.9, 2.2, rubber, { y: 7.6 }, 14),
+    cyl(1.05, 1.05, 37, handle, { y: 8.6 }, 12),
+    capsule(1.3, 1.6, cap, { y: 45.2 }),
+  )
+}
+
+// 卫生巾（袋装）：软塑料包装 + 印刷带 + 顶部提手开口
+function padsPack(p: string[]) {
+  const [pack, print, accent] = p
+  return G(
+    rbox(16, 13.4, 8.4, pack, {}, 2.6),
+    rbox(16.3, 4.2, 8.7, print, { y: 3.6 }, 1.2),
+    rbox(7, 2.6, 0.4, accent, { x: -3, y: 8.8, z: 4.3 }, 0.6),
+    ball(1.1, accent, { x: 4.6, y: 9.9, z: 4.25 }, [1, 1, 0.3]),
+    // 顶上的提手：一条压边 + 椭圆开口
+    rbox(15, 1, 2.2, shade(pack, -0.05), { y: 13.2 }, 0.4),
+    rbox(4.4, 0.6, 1.2, shade(print, -0.15), { y: 13.6 }, 0.3),
+  )
+}
+
+// 护垫（盒装）：扁纸盒 + 抽取口
+function linerBox(p: string[]) {
+  const [box, print, accent] = p
+  return G(
+    rbox(12.4, 9, 6.4, box, {}, 0.5),
+    rbox(12.6, 2.6, 6.6, print, { y: 1 }, 0.3),
+    rbox(7, 0.3, 2.4, shade(box, -0.18), { y: 9, z: 0 }, 0.6),
+    ball(1.2, accent, { x: -3.6, y: 6, z: 3.2 }, [1, 1, 0.3]),
+    rbox(4.6, 1, 0.3, accent, { x: 1.8, y: 6, z: 3.25 }, 0.15),
+  )
+}
+
+const PLUNGER_PALS: Pal[] = [
+  ['modern', ['#2e2f33', M.white, M.char]],
+  ['retro', ['#8c2f2a', '#c49a6c', '#5a3a26']],
+  ['nordic', [N.gray, N.oak, N.white]],
+  ['cute', [C.pink, C.white, C.sakura]],
+]
+const PADS_PALS: Pal[] = [
+  ['cute', [C.white, C.pink, C.sakura]],
+  ['nordic', ['#eef3f7', N.blue, N.sage]],
+  ['modern', [M.white, '#7f8fa6', M.char]],
+  ['japanese', [J.washi, '#b98aa8', J.shu]],
+  ['retro', [R.cream, R.teal, R.orange]],
+]
 
 // =====================================================================
 // 浴室
@@ -1320,6 +1376,17 @@ const TOILET: AssetDef[] = [
     surfaces: cabSurfaces(TOILET_CAB, TOILET_CAB_MOUNT),
     openable: true,
   }),
+  ...[60, 75].map((w) =>
+    define(`wet-toilet-upper-cab-${w}`, '马桶上方收纳柜', 'storage', [w, 27, cabLayout(TOILET_UPPER(w)).h], CAB_PALS, cabinet(TOILET_UPPER(w), TOILET_UPPER_MOUNT), {
+      sizeLabel: `${w}`,
+      type: 'cabinet',
+      series: 'wet-toilet-upper-cab',
+      tags: ['cabinet', 'wet-supply'],
+      mount: TOILET_UPPER_MOUNT,
+      surfaces: cabSurfaces(TOILET_UPPER(w), TOILET_UPPER_MOUNT),
+      openable: true,
+    }),
+  ),
   define('wet-toilet-slim-cabinet', '厕所角落窄柜', 'storage', [TOILET_SLIM.w, TOILET_SLIM.d, cabLayout(TOILET_SLIM).h], CAB_PALS, cabinet(TOILET_SLIM), {
     surface: cabLayout(TOILET_SLIM).h,
     surfaces: cabSurfaces(TOILET_SLIM),
@@ -1350,6 +1417,9 @@ const TOILET: AssetDef[] = [
     ['modern', [M.black, M.black, M.char]],
   ], toiletBrush, { sizeLabel: '标准' }),
   prop('wet-sanitary-bin', '卫生桶', 'toiletry', [13.6, 20.6, 25.1], PLA_PALS, sanitaryBin),
+  prop('wet-plunger', '马桶搋子', 'toiletry', [13.8, 13.8, 47.4], PLUNGER_PALS, plunger, { type: 'plunger', tags: ['plunger', 'cleaning', 'wet-supply'] }),
+  prop('wet-sanitary-pads', '卫生巾', 'toiletry', [16.3, 8.7, 14.2], PADS_PALS, padsPack, { sizeLabel: '袋装', type: 'sanitary', series: 'wet-sanitary-pads', tags: ['sanitary', 'personal-care', 'wet-supply'] }),
+  prop('wet-panty-liners', '护垫', 'toiletry', [12.6, 6.6, 9.3], PADS_PALS, linerBox, { sizeLabel: '盒装', type: 'sanitary', tags: ['sanitary', 'personal-care', 'wet-supply'] }),
   prop('wet-air-freshener', '芳香剂', 'toiletry', [7.8, 7.8, 9.9], [
     ['cute', [C.pink, C.white, C.sakura]],
     ['nordic', [N.sage, N.white, N.oak]],

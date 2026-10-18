@@ -155,6 +155,8 @@ export const TYPE_NAMES: Record<FunctionTag, [zh: string, ja: string, en: string
   'toilet-paper': ['卷纸', 'トイレットペーパー', 'Toilet paper'],
   'toilet-brush': ['马桶刷', 'トイレブラシ', 'Toilet brush'],
   'sanitary-bin': ['卫生桶', 'サニタリーボックス', 'Sanitary bin'],
+  plunger: ['马桶搋子', 'ラバーカップ', 'Plunger'],
+  sanitary: ['生理用品', '生理用品', 'Sanitary products'],
   'air-freshener': ['芳香剂', '芳香剤', 'Air freshener'],
   towel: ['毛巾', 'タオル', 'Towel'],
   detergent: ['洗衣液', '洗濯洗剤', 'Detergent'],

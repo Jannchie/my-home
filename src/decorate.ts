@@ -45,7 +45,7 @@ import { PIPE, PIPE_WIDTHS, ROW_LENGTHS } from './three/packs/garments-pack'
 import { floorY, roomAt } from './three/house'
 import { openingGeom, regionOf, type Region } from './model'
 import { gameWeight } from './three/packs/games-more'
-import { homeCams } from './homecams'
+import { homeCams, strayPetCams } from './homecams'
 import { cabinetsOnSpots, stowAll } from './stow'
 import { spotInRoom } from './cabinet'
 import { fixtureSpans } from './curtains'
@@ -702,22 +702,10 @@ class Decorator {
    * 挤一挤：在房间里找一处贴墙、不和设备本体 / 立着的家具重叠的位置（门开合范围、设备前方的活动空间可以占用），
    * 背面朝最近的墙。给检查清单补齐和小房间里的小东西兜底用。
    */
-  squeeze(room: Room, asset: string) {
+  squeeze(room: Room, asset: string, extra: Box[] = [], cost: (p: Vec) => number = () => 0) {
     const def = ASSET_MAP.get(asset)
     if (!def || !this.allow(asset, centroid(room.points))) return null
-    const solid = [
-      // 设备本体、楼梯口留空区、门扇的开合范围（平开门、折门扫过的地方）、已摆的实体家具
-      ...this.hardIn(room, [SWING_ZONES]),
-      // 门洞正前方的通道（门宽 × 进深 60）：门的开合范围可以占，但不能堵在门口。通往阳台的落地窗同样是出入口
-      ...openingsOn(room, this.plan)
-        .filter(({ o, owner, e, center }) => o.kind !== 'window' || isSashWindow(this.plan, owner, e, center))
-        .map(({ o, e, center }) => {
-          // 门洞可能记在隔壁房间的墙上（法线朝隔壁外侧）：通道一律朝本房间一侧
-          const into = pointInPolygon(add(center, mul(e.out, 10)), room.points) ? e.out : mul(e.out, -1)
-          const pts = [-1, 1].flatMap((sd) => [0, 60].map((k) => add(add(center, mul(e.dir, (sd * o.width) / 2)), mul(into, k))))
-          return { x0: Math.min(...pts.map((p) => p.x)), y0: Math.min(...pts.map((p) => p.y)), x1: Math.max(...pts.map((p) => p.x)), y1: Math.max(...pts.map((p) => p.y)) }
-        }),
-    ]
+    const solid = [...this.squeezeSolids(room), ...extra]
     const b = bbox(room.points)
     const edges = edgesOf(room.points)
     const spots: { p: Vec; rot: number; score: number }[] = []
@@ -734,11 +722,99 @@ class Decorator {
         const rot = rotFacingWall(best.out)
         const fp = footprint(asset, x, y, rot)
         if (!this.inside(fp, room) || solid.some((o) => boxOverlaps(o, fp)) || !this.canPlace(asset, x, y, rot)) continue
-        spots.push({ p, rot, score: best.d + this.rand() * 8 })
+        spots.push({ p, rot, score: best.d + this.rand() * 8 + cost(p) })
       }
     spots.sort((a, b) => a.score - b.score)
     const s = spots[0]
     return s ? this.push(asset, s.p.x, s.p.y, s.rot) : null
+  }
+
+  /** 挤一挤时也不能占的地方：设备本体、楼梯口留空区、门扇开合范围、已摆的实体家具、门洞正前方的通道 */
+  squeezeSolids(room: Room): Box[] {
+    return [
+      // 设备本体、楼梯口留空区、门扇的开合范围（平开门、折门扫过的地方）、已摆的实体家具
+      ...this.hardIn(room, [SWING_ZONES]),
+      // 门洞正前方的通道（门宽 × 进深 60）：门的开合范围可以占，但不能堵在门口。通往阳台的落地窗同样是出入口
+      ...openingsOn(room, this.plan)
+        .filter(({ o, owner, e, center }) => o.kind !== 'window' || isSashWindow(this.plan, owner, e, center))
+        .map(({ o, e, center }) => {
+          // 门洞可能记在隔壁房间的墙上（法线朝隔壁外侧）：通道一律朝本房间一侧
+          const into = pointInPolygon(add(center, mul(e.out, 10)), room.points) ? e.out : mul(e.out, -1)
+          const pts = [-1, 1].flatMap((sd) => [0, 60].map((k) => add(add(center, mul(e.dir, (sd * o.width) / 2)), mul(into, k))))
+          return { x0: Math.min(...pts.map((p) => p.x)), y0: Math.min(...pts.map((p) => p.y)), x1: Math.max(...pts.map((p) => p.x)), y1: Math.max(...pts.map((p) => p.y)) }
+        }),
+    ]
+  }
+
+  /**
+   * 马桶旁边的地上（马桶刷、搋子、卫生桶、备用卷纸）：贴着马桶侧面 2–30cm、靠后墙或侧墙放，
+   * 不超出马桶前沿（不挡坐下的位置），也不占门扇开合范围和门口通道。放不下返回 null。
+   */
+  besideToilet(room: Room, fx: Fixture, asset: string): Furniture | null {
+    asset = this.vary(asset)
+    const def = ASSET_MAP.get(asset)
+    if (!def || !this.allow(asset, fx)) return null
+    const fd = fixtureDepth(fx)
+    const half = fx.w / 2 + 3
+    const solid = this.squeezeSolids(room)
+    const spots: { p: Vec; rot: number; score: number }[] = []
+    const dirOf = (lx: number, lz: number) => {
+      const p = toWorld(fx, lx, lz)
+      return { x: p.x - fx.x, y: p.y - fx.y }
+    }
+    // 放不放得下：在墙里、不压到实物；against：往某个方向挪 5cm 就出墙（= 贴着那面墙）
+    const fits = (x: number, y: number, rot: number) => {
+      const fp = footprint(asset, x, y, rot)
+      return this.inside(fp, room) && !solid.some((o) => boxOverlaps(o, fp)) && this.canPlace(asset, x, y, rot)
+    }
+    const against = (x: number, y: number, rot: number, dir: Vec) => !this.inside(footprint(asset, x + dir.x * 5, y + dir.y * 5, rot), room)
+    for (const s of [-1, 1]) {
+      const side = dirOf(s, 0)
+      const back = dirOf(0, -1)
+      // 背面贴后墙（和马桶同向）/ 背面贴侧墙（转 90°）
+      for (const [rot, hx, hz] of [
+        [fx.rot, def.w / 2, def.d / 2],
+        [rotFacingWall(side), def.d / 2, def.w / 2],
+      ] as const) {
+        for (const gap of [2, 5, 9, 14, 20, 26]) {
+          const lx = s * (half + gap + hx)
+          // 前后：从贴着后墙往前挪，最多挪到马桶前沿往里 12cm
+          for (let lz = -fd / 2 + hz + 1; lz + hz <= fd / 2 - 12; lz += 4) {
+            const p = toWorld(fx, lx, lz)
+            const toBack = against(p.x, p.y, rot, back)
+            const toSide = against(p.x, p.y, rot, side)
+            if (!toBack && !toSide) continue
+            // 转了 90° 的要贴侧墙；和马桶同向的要贴后墙
+            if (rot === fx.rot ? !toBack : !toSide) continue
+            if (!fits(p.x, p.y, rot)) continue
+            spots.push({ p, rot, score: gap + (lz + fd / 2 - hz) * 0.4 + this.rand() * 4 })
+          }
+        }
+      }
+    }
+    if (!spots.length) return null
+    spots.sort((a, b) => a.score - b.score)
+    const s = spots[0]
+    return this.push(asset, s.p.x, s.p.y, s.rot)
+  }
+
+  /**
+   * 马桶旁边贴着放不下时（马桶和浴缸、墙挨得太紧）：在房间里找一处贴墙、离马桶最近的位置，
+   * 不放在马桶正前方（坐下、起身的地方），离马桶超过 80cm 就不放。
+   */
+  nearToilet(room: Room, fx: Fixture, asset: string): Furniture | null {
+    const fd = fixtureDepth(fx)
+    const body = fixtureBox(fx)
+    // 马桶正前方：马桶宽 + 两边各 10、往前 70
+    const pts = [-1, 1].flatMap((s) => [fd / 2, fd / 2 + 70].map((z) => toWorld(fx, s * (fx.w / 2 + 10), z)))
+    const front = { x0: Math.min(...pts.map((p) => p.x)), y0: Math.min(...pts.map((p) => p.y)), x1: Math.max(...pts.map((p) => p.x)), y1: Math.max(...pts.map((p) => p.y)) }
+    const gap = (p: Vec) => Math.hypot(Math.max(body.x0 - p.x, 0, p.x - body.x1), Math.max(body.y0 - p.y, 0, p.y - body.y1))
+    const f = this.squeeze(room, asset, [front], (p) => gap(p) * 3)
+    if (f && gap(f) > 80) {
+      this.removeTree(f)
+      return null
+    }
+    return f
   }
 
   /** 地上摆东西要让开的：禁放区（门窗前、落地窗前、楼梯口、设备本体和使用空间）+ 已摆的实体家具 */
@@ -1036,15 +1112,68 @@ class Decorator {
 
   /** 马桶正上方：搁板或吊柜，放卷纸备用、芳香剂、小绿植 */
   toiletWall(fx: Fixture) {
-    if (this.rand() > 0.7) return
-    const id = this.pick(['ws-toilet-shelf', 'ws-toilet-shelf-1', 'ws-toilet-cab'])
-    const shelf = this.mountAbove(fx, id)
-    const d = shelf && ASSET_MAP.get(id)
+    const room = this.plan.rooms.find((r) => pointInPolygon(fx, r.points))
+    if (!room) return
+    // 日式独立厕所大多装了吊戸棚 / 搁板（放备用卷纸、生理用品）；别的地区、三件套卫浴里少一些
+    const jp = this.region === 'jp' && room.kind === 'toilet'
+    if (this.rand() > (jp ? 0.88 : room.kind === 'toilet' ? 0.45 : 0.3)) return
+    const cabinet = this.rand() < (jp ? 0.8 : 0.5)
+    // 吊柜：能放下的最宽一款优先（吊戸棚 75 → 60 / 旧款 60 → 窄款 45）；搁板：双层 / 单层随机
+    const ids = cabinet
+      ? ['wet-toilet-upper-cab-75', this.rand() < 0.7 ? 'wet-toilet-upper-cab-60' : 'ws-toilet-cab', 'wet-toilet-wall-cabinet']
+      : this.shuffle(['ws-toilet-shelf', 'ws-toilet-shelf-1'])
+    let shelf: Furniture | null = null
+    for (const id of ids) if ((shelf = this.overToilet(room, fx, id))) break
+    const d = shelf && ASSET_MAP.get(shelf.asset)
     if (!shelf || !d) return
-    const props = this.find('toilet-shelf-ok', (a) => !!a.prop && a.h < 20 && a.w < 30 && !a.form?.includes('hanging'))
-    const levels = [...(d.surface ? [undefined] : []), ...(d.surfaces ?? []).map((_, i) => i)]
-    for (const a of this.shuffle(props).slice(0, 1 + Math.floor(this.rand() * 3)))
-      for (let t = 0; t < 4; t++) if (this.onLevel(shelf, a.id, (this.rand() - 0.5) * 0.7, 0, 0, this.pick(levels))) break
+    // 外面看得见的层（开放搁板、吊柜底下的开放格）：先放一卷 / 一叠备用卷纸，再放一两件芳香剂、小绿植、纸巾盒
+    const levels = [...(d.surface ? [undefined] : []), ...(d.surfaces ?? []).flatMap((l, i) => (l.inside ? [] : [i]))]
+    if (!levels.length) return
+    const visible = (a: AssetDef) => !!a.prop && !a.mount && a.form !== 'hanging'
+    const rolls = this.find('toilet-paper', (a) => visible(a) && a.h < 36 && Math.max(a.w, a.d) < 25)
+    const deco = this.find('toilet-shelf-ok', (a) => visible(a) && a.h < 20 && a.w < 22 && !hasTag(a, 'toilet-paper', 'humidifier', 'appliance'))
+    const put = (a: AssetDef) => {
+      for (let t = 0; t < 6; t++) if (this.onLevel(shelf!, a.id, (this.rand() - 0.5) * 0.7, 0, 0, this.pick(levels))) return true
+      return false
+    }
+    if (rolls.length && this.rand() < 0.85) for (const a of this.shuffle(rolls).slice(0, 3)) if (put(a)) break
+    for (const a of this.shuffle(deco).slice(0, Math.floor(this.rand() * 3))) put(a)
+  }
+
+  /**
+   * 马桶上方的墙上挂吊柜 / 搁板：先试马桶背后那面墙（水箱上方），挂不上（窗、门、旁边的高家具）再试左右侧墙（窄厕所）。
+   * 不碰窗和门洞两侧、门扇开合范围、别的壁挂物和设备；不伸出墙外。
+   */
+  overToilet(room: Room, fx: Fixture, asset: string): Furniture | null {
+    const def = ASSET_MAP.get(asset)
+    if (!def?.mount || !this.allow(asset, fx)) return null
+    const fd = fixtureDepth(fx)
+    const swing = this.occ.zoneBoxes(room, [SWING_ZONES])
+    const ok = (p: Vec, rot: number) =>
+      this.canPlace(asset, p.x, p.y, rot, undefined, { walls: true, room, openings: 5 }) && !swing.some((z) => boxesOverlap(footprint(asset, p.x, p.y, rot), z))
+    const at = (p: Vec, rot: number) => this.push(asset, Math.round(p.x * 10) / 10, Math.round(p.y * 10) / 10, rot, true)
+    const back = toWorld(fx, 0, -fd / 2 + def.d / 2)
+    if (ok(back, fx.rot)) return at(back, fx.rot)
+    // 侧墙：沿马桶前后方向挂在水箱 / 座圈上方，背面往侧墙推到贴墙为止
+    for (const s of this.shuffle([-1, 1])) {
+      const o = toWorld(fx, s, 0)
+      const side = { x: o.x - fx.x, y: o.y - fx.y }
+      const rot = rotFacingWall(side)
+      const lz = -fd / 2 + def.w / 2 + 2
+      // 侧墙离马桶不超过 45：再远就不算「马桶上方」了
+      let p: Vec | null = null
+      let wall = false
+      for (let k = fx.w / 2; k <= fx.w / 2 + 45; k += 1) {
+        const q = toWorld(fx, s * (k + def.d / 2), lz)
+        if (!this.inside(footprint(asset, q.x, q.y, rot), room)) {
+          wall = true
+          break
+        }
+        p = q
+      }
+      if (p && wall && ok(p, rot)) return at(p, rot)
+    }
+    return null
   }
 
   /** 摆一件东西到固定设备的台面上（厨房台面、洗面台、洗衣机顶、马桶水箱盖） */
@@ -1416,6 +1545,30 @@ class Decorator {
     }
   }
 
+  /**
+   * 马桶旁边地上的东西：马桶刷（必备）、搋子、卫生桶、备用卷纸，都挨着马桶侧面靠墙放。
+   * 马桶刷旁边实在放不下才退回到房间里别处贴墙（检查清单要求一定有）；其余放不下就不放。
+   */
+  toiletFloor(room: Room, fx: Fixture) {
+    const small = (a: AssetDef) => !a.mount && !a.stick && a.form !== 'hanging' && Math.max(a.w, a.d) < 40
+    // 重摆（validate / clearPassages 挪动时）照样摆回马桶边
+    const place = (id: string, must: boolean): Furniture | null => this.remember(this.besideToilet(room, fx, id) ?? (must ? this.nearToilet(room, fx, id) : null), () => place(id, must))
+    const one = (sel: Sel, filter: (a: AssetDef) => boolean = () => true, must = false) => {
+      const cand = this.find(sel, (a) => small(a) && filter(a))
+      return cand.length ? place(this.pick(cand).id, must) : null
+    }
+    const own = room.kind === 'toilet'
+    if (!one('toilet-brush', undefined, true)) {
+      const cand = this.find('toilet-brush', (a) => !a.mount && a.form !== 'hanging' && Math.max(a.w, a.d) < 70)
+      if (cand.length) this.wall(room, this.pick(cand).id)
+    }
+    if (this.rand() < (this.region === 'jp' ? 0.55 : 0.35)) one('plunger')
+    // 卫生桶：独立厕所里多半有；三件套卫浴里少一些。窄身款优先（宽的垃圾桶塞不进马桶边）
+    if (this.rand() < (own ? 0.7 : 0.4)) one('sanitary-bin', (a) => Math.min(a.w, a.d) <= 22)
+    // 备用卷纸叠放 / 整袋放在马桶边地上
+    if (own && this.rand() < 0.3) one('toilet-paper', (a) => a.h > 15)
+  }
+
   /** 浴室里：浴缸盖、浴室毛巾杆（挂面巾）、淋浴台面上的小东西 */
   bathExtras(room: Room) {
     const shower = showerBoxes(this.plan, room)
@@ -1467,9 +1620,10 @@ class Decorator {
       const cand = this.find(sel, (a) => !a.mount && a.form !== 'hanging' && Math.max(a.w, a.d) < 70)
       if (cand.length) this.wall(room, this.pick(cand).id)
     }
+    const toilet = fixtures.find((f) => f.kind === 'toilet')
     if (room.kind === 'toilet') {
-      floorOne('toilet-brush')
-      if (this.rand() < 0.6) floorOne('sanitary-bin')
+      if (toilet) this.toiletFloor(room, toilet)
+      else floorOne('toilet-brush')
     } else if (room.kind === 'bath') {
       // 浴室墙上的收纳：转角架（多种造型）/ 普通壁挂置物架 / 不放（bathStorage）
       this.bathStorage(room)
@@ -1479,8 +1633,8 @@ class Decorator {
         if (this.rand() < 0.6) floorOne('bath-pail')
       } else {
         // 中式 / 欧美没有日式洗い場（浴凳、洗面桶）；马桶、洗手台和淋浴同在一间：补马桶刷、毛巾杆
-        if (fixtures.some((f) => f.kind === 'toilet')) {
-          floorOne('toilet-brush')
+        if (toilet) {
+          this.toiletFloor(room, toilet)
           const tp = this.find('toilet-paper', (a) => !!a.prop && a.form !== 'hanging')
           if (tp.length && !this.out.some((o) => pointInPolygon(o, room.points) && hasTag(ASSET_MAP.get(o.asset), 'toilet-paper'))) this.must(room, this.pick(tp).id)
         }
@@ -3962,6 +4116,8 @@ class Decorator {
 
     // 7. 统一校验：有问题的那件换个位置重摆，实在放不下才删
     this.validate()
+    // 宠物区被挪走后，对着空地方的宠物摄像头拿掉
+    for (const c of strayPetCams(this.out)) this.removeTree(c)
     this.assignArt()
     this.tiltStuck()
     return this.out

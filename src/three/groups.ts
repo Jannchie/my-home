@@ -232,6 +232,8 @@ const TYPE_GROUP: Record<FunctionTag, AssetGroup> = {
   'toilet-paper': 'bath',
   'toilet-brush': 'bath',
   'sanitary-bin': 'bath',
+  plunger: 'bath',
+  sanitary: 'bath',
   'air-freshener': 'bath',
   towel: 'bath',
   detergent: 'bath',
