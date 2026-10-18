@@ -18,6 +18,7 @@ import { lang, t } from './i18n'
 import { initialRoute } from './router'
 import { edgeInfo, emptyPlan, projectToSegment, type Fixture, type FixtureKind, type Floor, type Furniture, type Opening, type Plan, type Room, type Vec, type Wallpaper, type Exterior, type ParkingSpot, type Site, uid } from './model'
 import { normalizeExterior, styleExterior } from './exterior'
+import { normalizeWindow } from './windows'
 import { yardFurniture } from './yard'
 import { BASE_FLOOR_ID, DEFAULT_FLOOR_H, SLAB, baseFloor, baseFloorId, floorBelow, floorById, floorOf, floorOutline, floorView, isMultiFloor, nextFloorId, normalizeFloors, planFloors, stampFloor } from './floors'
 
@@ -65,6 +66,8 @@ export function normalizePlan(p: Plan): Plan | null {
   for (const f of p.furniture) if (f.spin !== undefined && (typeof f.spin !== 'number' || !Number.isFinite(f.spin) || !f.spin)) delete f.spin
   // 楼层：没有 floors 的是单层户型（旧存档都是），物件的 floor 一律删掉；坏数据整理掉
   normalizeFloors(p)
+  // 窗的款式：坏值、缺省值去掉（门上不带窗字段）
+  for (const o of p.openings) normalizeWindow(o)
   // 户建的用地 / 外观：坏数据整理掉
   normalizeExterior(p)
   return p

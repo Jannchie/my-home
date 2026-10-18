@@ -20,6 +20,7 @@ import {
   type Fixture,
   type FixtureKind,
   type KitchenVariant,
+  type Opening,
   type Plan,
   type Room,
   type Vec,
@@ -27,6 +28,7 @@ import {
 import { isOpenBetween, sharedIntervals, wallThicknessAt } from './walls'
 import { stairKeepOut } from './stairs'
 import { floorOf, riseOf } from './floors'
+import { sashAllowed } from './windows'
 
 export type PlaceCtx = Pick<Plan, 'rooms' | 'openings' | 'fixtures' | 'wall' | 'wallOuter'>
 
@@ -164,7 +166,7 @@ const centroidOf = (poly: Vec[]) => poly.reduce((a, q) => ({ x: a.x + q.x / poly
 function openingClearances(room: Room, ctx: PlaceCtx, avoidWindows: boolean, sash = false): { box: Box; kind: ClearanceKind }[] {
   return openingsOn(room, ctx).flatMap(({ o, owner, e, center }) => {
     if (o.kind === 'window' && !avoidWindows && !sash) return []
-    const isSash = o.kind === 'window' && isSashWindow(ctx, owner, e, center)
+    const isSash = o.kind === 'window' && isSashWindow(ctx, owner, e, center, o)
     if (o.kind === 'window' && !avoidWindows && !isSash) return []
     // 指向本房间内部的法线
     const into = pointInPolygon(add(center, mul(e.out, 5)), room.points) ? e.out : mul(e.out, -1)
@@ -191,7 +193,9 @@ export function doorSwings(room: Room, ctx: PlaceCtx): Box[] {
 }
 
 /** 窗的一侧是阳台、另一侧是户内：落地窗（和 house.ts 的 sash 判定一致：窗外半墙厚 + 15 落在阳台里；阳台自己的窗反过来看） */
-export function isSashWindow(ctx: Pick<Plan, 'rooms' | 'wall' | 'wallOuter'>, owner: Room, e: { out: Vec }, center: Vec) {
+export function isSashWindow(ctx: Pick<Plan, 'rooms' | 'wall' | 'wallOuter'>, owner: Room, e: { out: Vec }, center: Vec, o?: Pick<Opening, 'sill'>) {
+  // 朝阳台但窗台改成腰窗 / 高窗 / 地窗的：普通的窗，走不出去
+  if (!sashAllowed(o)) return false
   const t = wallThicknessAt(ctx, center, e.out, owner)
   const outside = ctx.rooms.find((r) => r !== owner && pointInPolygon(add(center, mul(e.out, t / 2 + 15)), r.points))
   return (owner.kind === 'balcony') !== (outside?.kind === 'balcony') && !!outside
@@ -230,7 +234,7 @@ export function placeCandidates(room: Room, ctx: PlaceCtx, spec: PlaceSpec): Fix
   edges.forEach(({ i, e }, rank) => {
     // 只和边有关的量，每条边算一次
     const blocked: [number, number][] = ctx.openings
-      .filter((o) => o.roomId === room.id && o.edge === i && !(spec.underWindow && o.kind === 'window' && !(spec.sash && isSashWindow(ctx, room, e, add(e.a, mul(e.dir, o.offset))))))
+      .filter((o) => o.roomId === room.id && o.edge === i && !(spec.underWindow && o.kind === 'window' && !(spec.sash && isSashWindow(ctx, room, e, add(e.a, mul(e.dir, o.offset)), o))))
       .map((o): [number, number] => [o.offset - o.width / 2 - 20, o.offset + o.width / 2 + 20])
     for (const p of passages) for (const [lo, hi] of sharedIntervals(e, p)) blocked.push([lo - 20, hi + 20])
     const inward = mul(e.out, -1)

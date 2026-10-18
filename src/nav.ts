@@ -13,6 +13,7 @@ import { furnitureBox } from './snap'
 import { floorY } from './three/house'
 import { floorView, isMultiFloor, planFloors } from './floors'
 import { stairHoles, stairWalk, type StairWalk } from './stairs'
+import { sashAllowed } from './windows'
 
 export type NavClass = 'pet' | 'robot' | 'walk'
 
@@ -109,7 +110,7 @@ export class NavGrid {
         if (o.kind === 'window') {
           const k = plan.wallOuter / 2 + 10
           const sides = [add(g.center, mul(g.e.out, k)), add(g.center, mul(g.e.out, -k))]
-          if (!plan.rooms.some((x) => x.kind === 'balcony' && sides.some((q) => pointInPolygon(q, x.points)))) continue
+          if (!sashAllowed(o) || !plan.rooms.some((x) => x.kind === 'balcony' && sides.some((q) => pointInPolygon(q, x.points)))) continue
         }
         const half = o.width / 2 - 4
         const across = plan.wallOuter / 2 + 4

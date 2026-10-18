@@ -108,7 +108,7 @@ class Scene {
     const { plan, room, occ } = env
     for (const { o, owner, e, center } of openingsOn(room, plan)) {
       if (o.kind !== 'window') this.doors.push({ c: center, w: o.width })
-      else if (isSashWindow(plan, owner, e, center)) this.doors.push({ c: center, w: o.width })
+      else if (isSashWindow(plan, owner, e, center, o)) this.doors.push({ c: center, w: o.width })
       else this.windows.push({ c: center, w: o.width })
     }
     this.hard = occ.zoneBoxes(room, [HARD_ZONES])

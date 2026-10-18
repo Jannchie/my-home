@@ -16,6 +16,7 @@ import { displayName } from '../three/catalog'
 import { LIGHT_MODES, type LightMode } from '../three/lights'
 import { roomName, t } from '../i18n'
 import { JIcon } from '@jannchie/icons-vue'
+import WindowStylePicker from './WindowStylePicker.vue'
 import { FIXTURE_ICONS, ICONS, ROOM_ICONS, TOOL_ICONS } from '../ui/icons'
 
 /** 房间灯（3D 沙盘夜里的灯光，见 three/lights.ts） */
@@ -259,6 +260,7 @@ function setSpotOpen(open: boolean) {
           >{{ t('位置 cm') }}<input type="number" step="10" :value="Math.round(opening.o.offset)" @change="mutate(() => (opening!.o.offset = num($event)))"
         /></label>
       </div>
+      <WindowStylePicker v-if="opening.o.kind === 'window'" :opening="opening.o" />
       <div v-if="opening.o.kind === 'door' || opening.o.kind === 'folding'" class="actions">
         <button @click="mutate(() => (opening!.o.hinge = opening!.o.hinge === 'start' ? 'end' : 'start'))">{{ t('左右翻转') }}</button>
         <button @click="mutate(() => (opening!.o.swing = opening!.o.swing === 'in' ? 'out' : 'in'))">{{ t('内外翻转') }}</button>

@@ -4,7 +4,7 @@
 // 紧凑 JSON（版本 1）：
 //   { n 名字, w 内墙厚, o 外墙厚, g? 地区, N? 朝向,
 //     r 房间 [[名字, 种类, 顶点（0.1cm 整数，首点绝对值、之后逐点差分，x/y 交错）, 其余字段?]],
-//     d 门窗 [[房间序号, 种类, 边, 位置, 宽, 铰链 / 开向（bit0 = end，bit1 = out）]],
+//     d 门窗 [[房间序号, 种类, 边, 位置, 宽, 铰链 / 开向（bit0 = end，bit1 = out）, 其余字段?（窗的款式等）]],
 //     x 设备 [[种类, x, y, 宽, 旋转, 其余字段?（stackOn 换成设备序号）]],
 //     a? 素材表 [素材 id…], f? 家具 [[素材表序号, x, y, 旋转, 配色序号?, 其余字段?]], h? 住户,
 //     F? 楼层 [[id, 名字, 地面高, 层高]]（多层户型才有；房间 / 设备 / 家具的 floor 跟着「其余字段」走，门窗跟着房间） }
@@ -50,7 +50,7 @@ function trim<T extends unknown[]>(a: T): T {
 // ---------- 紧凑 JSON ----------
 
 type CRoom = [string, string, number[], Record<string, unknown>?]
-type COpening = [number, string, number, number, number, number]
+type COpening = [number, string, number, number, number, number, Record<string, unknown>?]
 type CFixture = [string, number, number, number, number, Record<string, unknown>?]
 type CFurniture = [number, number, number, number, (number | null)?, Record<string, unknown>?]
 interface Compact {
@@ -72,6 +72,7 @@ interface Compact {
 }
 
 const ROOM_DECOR = ['wallpaper', 'curtain', 'light', 'lightK']
+const OPENING_CODED = ['id', 'kind', 'roomId', 'edge', 'offset', 'width', 'hinge', 'swing', 'floor']
 
 export function toCompact(p: Plan, mode: ShareMode): Compact {
   const roomIdx = new Map(p.rooms.map((r, i) => [r.id, i]))
@@ -95,7 +96,8 @@ export function toCompact(p: Plan, mode: ShareMode): Compact {
     }),
     d: p.openings
       .filter((o) => roomIdx.has(o.roomId))
-      .map((o) => [roomIdx.get(o.roomId)!, o.kind, o.edge, r1(o.offset), r1(o.width), (o.hinge === 'end' ? 1 : 0) | (o.swing === 'out' ? 2 : 0)]),
+      // 第 7 项：没单独编码的字段（窗的款式 / 窗框 / 格条 / 窗台 / 护窗板）；旧版本解码只读前 6 项，多出来的忽略
+      .map((o) => trim<COpening>([roomIdx.get(o.roomId)!, o.kind, o.edge, r1(o.offset), r1(o.width), (o.hinge === 'end' ? 1 : 0) | (o.swing === 'out' ? 2 : 0), rest(o, OPENING_CODED)])),
     x: p.fixtures.map((f) => {
       const extra = rest(f, ['id', 'kind', 'x', 'y', 'w', 'rot', 'stackOn'])
       const s = f.stackOn !== undefined ? fixIdx.get(f.stackOn) : undefined
@@ -159,7 +161,9 @@ export function fromCompact(c: unknown): Plan {
     if (!isNum(ri) || !rooms[ri] || !isStr(kind) || !isNum(edge) || !isNum(offset) || !isNum(width) || !isNum(hs)) bad('opening')
     if (edge < 0 || edge >= rooms[ri].points.length) bad('opening edge')
     // 门窗的楼层跟着房间（normalizePlan 里同步）
-    return { id: uid('o'), kind: kind as Opening['kind'], roomId: rooms[ri].id, edge, offset, width, hinge: hs & 1 ? 'end' : 'start', swing: hs & 2 ? 'out' : 'in' }
+    // 其余字段（窗的款式等）原样带上，由 normalizePlan 校验
+    const extra = isObj(cd[6]) ? cd[6] : {}
+    return { ...extra, id: uid('o'), kind: kind as Opening['kind'], roomId: rooms[ri].id, edge, offset, width, hinge: hs & 1 ? 'end' : 'start', swing: hs & 2 ? 'out' : 'in' }
   })
 
   const fixIds = o.x.map(() => uid('f'))

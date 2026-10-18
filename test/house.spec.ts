@@ -331,14 +331,18 @@ describe('平层公寓不受影响', () => {
 
   test('平层生成的指纹固定（同一种子的结果不会无意中变掉）', () => {
     // 名字（户型名、房间名）按运行环境的语言翻译，CI 和本机不同：只比结构，不比显示文字
-    const fp = (p: Plan) => {
-      const s = JSON.stringify(normalizeIds(p), (k, v) => (k === 'name' ? undefined : v))
+    const hash = (s: string) => {
       let h = 2166136261
       for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619) >>> 0
       return h.toString(16)
     }
-    const got = regions.map((region) => [3, 77, 500].map((seed) => fp(generatePlan({ ...JP_OPTS, seed, region }).plan)).join(','))
-    expect(got).toEqual(FINGERPRINTS)
+    // 布局指纹不含窗的款式字段（windows.ts styleWindows 用独立的种子散列配窗，不动布局）：配窗前后布局指纹不变
+    const fp = (p: Plan) => hash(JSON.stringify(normalizeIds(p), (k, v) => (k === 'name' || WINDOW_KEYS.includes(k) ? undefined : v)))
+    const plans = regions.map((region) => [3, 77, 500].map((seed) => generatePlan({ ...JP_OPTS, seed, region }).plan))
+    expect(plans.map((ps) => ps.map(fp).join(','))).toEqual(FINGERPRINTS)
+    // 窗的款式单独一份指纹（改配窗规则时有意更新）
+    const wfp = (p: Plan) => hash(JSON.stringify(p.openings.map((o) => WINDOW_KEYS.map((k) => (o as unknown as Record<string, unknown>)[k] ?? null))))
+    expect(plans.map((ps) => ps.map(wfp).join(','))).toEqual(WINDOW_FINGERPRINTS)
   })
 })
 
@@ -354,3 +358,7 @@ describe('平层公寓不受影响', () => {
  * 北排太深时也只占北端；Walk-in Pantry 南段做走廊壁橱；次卫浴缸横在短边那头），所以 west 三个都变了（jp、cn 不变）。
  */
 const FINGERPRINTS = ['6b5573c8,8ce92b42,7c58228d', '365edb2,5cce789f,4aba042d', '19e93620,e82eb711,484af907']
+/** 窗的款式字段（不进布局指纹） */
+const WINDOW_KEYS = ['windowStyle', 'frame', 'grid', 'sill', 'shutters']
+/** 生成户型配的窗款式（windows.ts styleWindows）的指纹：jp / cn / west 各取种子 3、77、500 */
+const WINDOW_FINGERPRINTS = ['989c2533,15e8217c,3a53d410', '818e3c4d,1605eb73,5ed071b3', 'ba71e153,ae73a688,428c0ae2']
