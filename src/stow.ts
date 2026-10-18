@@ -113,11 +113,12 @@ export function isPersonal(def: AssetDef) {
   )
 }
 
-type StowKind = 'clothes' | 'folded' | 'shoes' | 'food' | 'dishes' | 'cookware' | 'wet' | 'sundries'
+type StowKind = 'clothes' | 'folded' | 'shoes' | 'food' | 'dishes' | 'cookware' | 'wet' | 'toilet' | 'sundries'
 
-/** 这件柜子里该收什么；kitchen：在厨房里，或在 LDK 的厨房一带（离整体厨房不远） */
-function stowKind(def: AssetDef, room?: Room, kitchen = false): StowKind {
+/** 这件柜子里该收什么；kitchen：在厨房里，或在 LDK 的厨房一带（离整体厨房不远）；toilet：独立厕所里，或挂在马桶上方 */
+function stowKind(def: AssetDef, room?: Room, kitchen = false, toilet = false): StowKind {
   if (hasTag(def, 'shoe-storage')) return 'shoes'
+  if (toilet) return 'toilet'
   if (hasTag(def, 'pantry')) return 'food'
   if (hasTag(def, 'wardrobe')) return 'clothes'
   if (hasTag(def, 'dresser')) return 'folded'
@@ -135,6 +136,8 @@ const POOL_TAGS: Record<Exclude<StowKind, 'clothes'>, Tag[]> = {
   dishes: ['tableware', 'cup', 'mug', 'teacup', 'coffee-cup', 'tea-set'],
   cookware: ['cookware'],
   wet: ['toilet-paper', 'detergent', 'softener', 'towel', 'laundry-supply', 'shampoo', 'body-soap', 'wet-supply'],
+  // 厕所吊柜：备用卷纸、生理用品为主，再是芳香剂、清洁剂、消臭剂
+  toilet: ['toilet-paper', 'sanitary', 'air-freshener', 'cleaning', 'toilet-shelf-ok'],
   sundries: ['storage-box', 'sundries', 'stationery', 'personal-care', 'electronics', 'cleaning'],
 }
 
@@ -154,6 +157,11 @@ const KIND_FILTER: Partial<Record<StowKind, (a: AssetDef) => boolean>> = {
   // 锅、平底锅、蒸笼这类；台面上专门摆的家电（电饭煲、水壶、烤面包机、空气炸锅、压力锅、咖啡器具）不收进柜子
   cookware: (a) => !hasTag(a, 'food', 'appliance', 'rice-cooker', 'kettle', 'electric-kettle', 'toaster', 'air-fryer', 'pressure-cooker', 'coffee-gear', 'outdoor-gear'),
   sundries: (a) => !hasTag(a, 'food', 'drink', 'tableware', 'cookware', 'wet-supply'),
+  // 卷纸、生理用品、芳香剂、厕所清洁剂、消臭剂（马桶刷、搋子这类落地用的不收；洗衣、洗澡用的东西也不放厕所）
+  toilet: (a) =>
+    hasTag(a, 'toilet-paper', 'sanitary', 'air-freshener') ||
+    (a.category === 'toiletry' && a.h >= 8 && hasTag(a, 'cleaning') && !hasTag(a, 'toilet-brush', 'plunger')) ||
+    (hasTag(a, 'toilet-shelf-ok') && hasTag(a, 'wet-supply') && !hasTag(a, 'humidifier'))
 }
 
 const poolCache = new Map<string, AssetDef[]>()
@@ -247,7 +255,7 @@ function levelPlan(c: StowCtx, kind: StowKind, def: AssetDef, cab: Furniture, lv
 function stowInto(c: StowCtx, cab: Furniture, wds: Wardrobe[], room?: Room, kitchen = false) {
   const { d, rand } = c
   const def = ASSET_MAP.get(cab.asset)!
-  const kind = stowKind(def, room, kitchen)
+  const kind = stowKind(def, room, kitchen, room?.kind === 'toilet' || (!!def.mount && overToilet(c.plan, cab)))
   const pool = poolFor(c, kind)
   let n = 0
   ;(def.surfaces ?? []).forEach((lv, i) => {
@@ -269,6 +277,13 @@ function stowInto(c: StowCtx, cab: Furniture, wds: Wardrobe[], room?: Room, kitc
     // 衣柜挂衣杆下面的地板只放矮的收纳箱 / 叠好的衣服（衣服下摆在上面）
     const hang = kind === 'clothes' && (def.surfaces ?? []).some((h) => h.kind === 'hook' && h.y > lv.y && h.y - (h.h ?? 0) - 2 < lv.y + (lv.h ?? 0))
     const p = hang ? pool.filter((a) => a.h <= 40) : pool
+    if (kind === 'toilet') {
+      // 厕所吊柜几乎每层都有东西：第一层先放卷纸，往上的层多半先放卫生巾 / 护垫
+      const first = n === 0
+      const prefer = first || rand() < 0.3 ? (a: AssetDef) => hasTag(a, 'toilet-paper') : (a: AssetDef) => hasTag(a, 'sanitary')
+      if (first || rand() < 0.85) n += fillLevel(c, cab, def, i, p, 0.5 + rand() * 0.45, prefer)
+      return
+    }
     if (kind === 'dishes' || kind === 'food') {
       // 碗柜、食品柜几乎每层都收着东西
       const plan = levelPlan(c, kind, def, cab, lv, kitchen)
@@ -300,6 +315,11 @@ export function stowAll(c: StowCtx, skip: (f: Furniture) => boolean = () => fals
   })
   // 默认多数关着门；少数开着（开着的展示里面）。门扇 / 抽屉打开后扫过的地方碰到墙、别的家具、设备的不开
   for (const cab of cabs) if (rand() < 0.2 && canOpen(c, cab)) setOpen({ furniture: d.out }, cab, true)
+}
+
+/** 壁挂的柜子在马桶正上方一带（三件套卫浴里的马桶上方吊柜）：离马桶中心不到 60 */
+function overToilet(plan: Plan, cab: Furniture) {
+  return plan.fixtures.some((f) => f.kind === 'toilet' && Math.hypot(f.x - cab.x, f.y - cab.y) < 60)
 }
 
 /** 柜子在这间房的整体厨房一带：厨房在同一间房里，柜子中心离厨房占地不到 120cm（吊柜、旁边的食器棚） */

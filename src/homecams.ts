@@ -115,6 +115,22 @@ function petCams(c: CamCtx) {
   }
 }
 
+/**
+ * 摆完后统一校验时宠物窝 / 爬架可能被挪了位置：镜头不再朝着任何宠物区（夹角 > 60°）的宠物摄像头，返回给调用方拿掉。
+ */
+export function strayPetCams(out: Furniture[]): Furniture[] {
+  const spots = out.filter((f) => !f.z && isPetSpot(def(f)))
+  return out.filter((c) => {
+    if (!c.asset.startsWith('hc-pet-')) return false
+    const a = (c.rot * Math.PI) / 180
+    const front = { x: -Math.sin(a), y: Math.cos(a) }
+    return !spots.some((s) => {
+      const L = Math.hypot(s.x - c.x, s.y - c.y) || 1
+      return (front.x * (s.x - c.x) + front.y * (s.y - c.y)) / L >= 0.5
+    })
+  })
+}
+
 /** 婴儿监视器：摄像头在婴儿床边，接收器在父母卧室 */
 function babyMonitor(c: CamCtx) {
   const { d, plan, rand, household: hh } = c
