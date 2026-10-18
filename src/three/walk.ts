@@ -9,9 +9,9 @@
 
 import * as THREE from 'three'
 import { centroid, pointInPolygon, type Plan, type Vec } from '../model'
-import { floorOf, isMultiFloor, planFloors } from '../floors'
+import { floorAbove, floorOf, isMultiFloor, planFloors } from '../floors'
 import { HouseNav, type NavGrid } from '../nav'
-import type { StairWalk } from '../stairs'
+import { slabHoles, type StairWalk } from '../stairs'
 import { toon } from './toon'
 
 /** 眼睛离地高度、身体半径（cm） */
@@ -392,23 +392,64 @@ export function startPoint(plan: Plan, nav: HouseNav): { floor: string; p: Vec; 
   return { floor: planFloors(plan)[0].id, p: center, yaw: 0 }
 }
 
-/** 漫游时盖在各个户内房间上的天花板（不投影、不受阴影，只挡住上面的天空 / 上层楼板的背面） */
+/**
+ * 漫游时盖在各个户内房间上的天花板（不投影、不受阴影，只挡住上面的天空 / 上层楼板的背面）。
+ * 上一层楼板开洞的地方（楼梯洞口、挑空）不盖，抬头看得到上层、楼梯走得上去。
+ */
 export function ceilings(plan: Plan, heightOf: (floor: string) => number): THREE.Group {
   const g = new THREE.Group()
   const mat = toon('#f3efe8')
   mat.side = THREE.DoubleSide
+  const multi = isMultiFloor(plan)
+  const holesOf = new Map<string, Vec[][]>()
+  for (const f of planFloors(plan)) {
+    const above = floorAbove(plan, f.id)
+    holesOf.set(f.id, above ? slabHoles(plan, above.id) : [])
+  }
   for (const r of plan.rooms) {
     if (r.kind === 'balcony' || r.kind === 'void' || r.points.length < 3) continue
-    const shape = new THREE.Shape(r.points.map((p) => new THREE.Vector2(p.x, p.y)))
-    const geo = new THREE.ShapeGeometry(shape)
-    // 平面 (x, y) → 世界 (x, h, y)：绕 x 轴转 +90°
-    geo.rotateX(Math.PI / 2)
+    const floor = multi ? floorOf(plan, r) : planFloors(plan)[0].id
+    const geo = ceilingGeometry(r.points, holesOf.get(floor) ?? [])
+    if (!geo) continue
     const m = new THREE.Mesh(geo, mat)
-    m.position.y = heightOf(isMultiFloor(plan) ? floorOf(plan, r) : planFloors(plan)[0].id) - 0.5
+    m.position.y = heightOf(floor) - 0.5
     m.castShadow = false
     m.receiveShadow = false
     m.raycast = () => {}
     g.add(m)
   }
   return g
+}
+
+/**
+ * 一个房间的天花板几何体（世界坐标 (x, 0, y)）。没碰到洞口就是整块多边形；碰到时按房间和洞口的顶点坐标切成格子，
+ * 去掉中心落在洞口里的格子（房间都是横平竖直的，洞口是楼梯占地或挑空房间，格子切得准）。
+ */
+function ceilingGeometry(pts: Vec[], holes: Vec[][]): THREE.BufferGeometry | null {
+  const xs0 = pts.map((p) => p.x)
+  const ys0 = pts.map((p) => p.y)
+  const box = { x0: Math.min(...xs0), y0: Math.min(...ys0), x1: Math.max(...xs0), y1: Math.max(...ys0) }
+  const hit = holes.filter((h) => h.some((p) => p.x > box.x0 && p.x < box.x1 && p.y > box.y0 && p.y < box.y1) || pts.some((p) => pointInPolygon(p, h)) || pointInPolygon({ x: (box.x0 + box.x1) / 2, y: (box.y0 + box.y1) / 2 }, h))
+  let geo: THREE.BufferGeometry
+  if (!hit.length) geo = new THREE.ShapeGeometry(new THREE.Shape(pts.map((p) => new THREE.Vector2(p.x, p.y))))
+  else {
+    const cut = (vs: number[], lo: number, hi: number) => [...new Set(vs.filter((v) => v >= lo && v <= hi).map((v) => Math.round(v * 10) / 10))].sort((a, b) => a - b)
+    const xs = cut([...xs0, ...hit.flat().map((p) => p.x)], box.x0, box.x1)
+    const ys = cut([...ys0, ...hit.flat().map((p) => p.y)], box.y0, box.y1)
+    const pos: number[] = []
+    for (let i = 0; i + 1 < xs.length; i++)
+      for (let j = 0; j + 1 < ys.length; j++) {
+        const c = { x: (xs[i] + xs[i + 1]) / 2, y: (ys[j] + ys[j + 1]) / 2 }
+        if (!pointInPolygon(c, pts) || hit.some((h) => pointInPolygon(c, h))) continue
+        const [a, b, d, e] = [xs[i], xs[i + 1], ys[j], ys[j + 1]]
+        pos.push(a, d, 0, b, d, 0, b, e, 0, a, d, 0, b, e, 0, a, e, 0)
+      }
+    if (!pos.length) return null
+    geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+    geo.computeVertexNormals()
+  }
+  // 平面 (x, y) → 世界 (x, h, y)：绕 x 轴转 +90°
+  geo.rotateX(Math.PI / 2)
+  return geo
 }

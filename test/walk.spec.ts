@@ -1,7 +1,9 @@
 // 第一人称漫游（three/walk.ts）：走动时不穿墙、不穿家具，能沿楼梯上下楼，能走到阳台。
 import { describe, expect, test } from 'vitest'
 import * as THREE from 'three'
-import { Walker } from '/src/three/walk'
+import { Walker, ceilings } from '/src/three/walk'
+import { slabHoles } from '/src/stairs'
+import { floorAbove, planFloors } from '/src/floors'
 import { decorate } from '/src/decorate'
 import { floorById, isMultiFloor } from '/src/floors'
 import { pointInPolygon, type Plan } from '/src/model'
@@ -103,5 +105,35 @@ describe('第一人称漫游', () => {
       checked++
     }
     expect(checked).toBeGreaterThan(0)
+  })
+
+  test('天花板在上层楼板开洞的地方（楼梯洞口）是空的，别处盖着', () => {
+    for (const region of ['jp', 'cn', 'west'] as const) {
+      const plan = generatePlan({ ...JP_OPTS, seed: 1, region, dwelling: 'house' }).plan
+      const lift = (id: string) => floorById(plan, id)!.elevation
+      const H = (id: string) => lift(id) + floorById(plan, id)!.height
+      const root = ceilings(plan, H)
+      root.traverse((n) => ((n as THREE.Mesh).isMesh ? ((n as THREE.Mesh).raycast = THREE.Mesh.prototype.raycast) : 0))
+      root.updateMatrixWorld(true)
+      const ray = new THREE.Raycaster()
+      // 从这一层地面往上 100 打一条射线，碰到的第一块天花板要在这一层顶上
+      const covered = (floor: string, x: number, y: number) => {
+        ray.set(new THREE.Vector3(x, lift(floor) + 100, y), new THREE.Vector3(0, 1, 0))
+        ray.far = H(floor) - lift(floor)
+        return ray.intersectObject(root, true).length > 0
+      }
+      const f1 = planFloors(plan)[0].id
+      const holes = slabHoles(plan, floorAbove(plan, f1)!.id)
+      expect(holes.length, region).toBeGreaterThan(0)
+      for (const h of holes) {
+        const c = h.reduce((a, p) => ({ x: a.x + p.x / h.length, y: a.y + p.y / h.length }), { x: 0, y: 0 })
+        expect(covered(f1, c.x, c.y), `${region} 楼梯洞口被天花板盖住`).toBe(false)
+      }
+      const ldk = plan.rooms.find((r) => (r.floor ?? f1) === f1 && r.kind === 'ldk' && !holes.some((h) => r.points.some((p) => pointInPolygon(p, h))))
+      if (ldk) {
+        const c = ldk.points.reduce((a, p) => ({ x: a.x + p.x / ldk.points.length, y: a.y + p.y / ldk.points.length }), { x: 0, y: 0 })
+        if (pointInPolygon(c, ldk.points)) expect(covered(f1, c.x, c.y), `${region} 客厅没有天花板`).toBe(true)
+      }
+    }
   })
 })
