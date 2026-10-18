@@ -793,6 +793,23 @@ function buildWalls(plan: Plan, H0: number, infos: OpeningInfo[], opts: HouseOpt
     seen.add(k1)
     return true
   })
+  /**
+   * 墙段 a→b 往上多砌的部分会不会埋在上层楼板里：沿墙逐段取点，墙的两侧各自要么在上层外轮廓里（楼板底下），
+   * 要么是户外（这一层没有房间，也就没有屋顶）。一侧是这一层露出来盖屋顶的部分时不砌，免得从屋顶穿出去
+   */
+  const underSlab = (a: Vec, b: Vec, n: Vec, t: number, cover: Vec[] | null) => {
+    if (!cover) return false
+    const side = (p: Vec) => pointInPolygon(p, cover) || !plan.rooms.some((r) => pointInPolygon(p, r.points))
+    // 沿墙每 20cm 取一点（离两端各让 1cm，端点正好落在轮廓边上时判不准）
+    const L = dist(a, b)
+    const k = Math.max(1, Math.ceil(L / 20))
+    for (let i = 0; i <= k; i++) {
+      const u = Math.min(L - 1, Math.max(1, (L * i) / k))
+      const p = add(a, mul({ x: (b.x - a.x) / L, y: (b.y - a.y) / L }, u))
+      if (!side(add(p, mul(n, t / 2 + 2))) || !side(add(p, mul(n, -(t / 2 + 2))))) return false
+    }
+    return true
+  }
   /** 墙段 a→b 有没有一处贴着这些区域的边（沿墙每 10cm 取一点；墙比洞口边长时只贴一部分也算，多砌的部分埋在楼板里） */
   const alongZone = (a: Vec, b: Vec, zones: Vec[][], tol: number) => {
     const n = Math.max(1, Math.ceil(dist(a, b) / 10))
@@ -822,7 +839,7 @@ function buildWalls(plan: Plan, H0: number, infos: OpeningInfo[], opts: HouseOpt
     const H =
       outer && opts.tall?.zones.some((z) => pointInPolygon(mid, z) || onBoundary(z, mid, 2))
         ? H0 + opts.tall.extra
-        : opts.under && alongZone(a, b, opts.under.zones, t / 2 + 3)
+        : opts.under && alongZone(a, b, opts.under.zones, t / 2 + 3) && underSlab(a, b, n, t, opts.under.cover)
           ? H0 + opts.under.extra
           : H0
     const bot = Math.min(0, sideY(1), sideY(-1))
@@ -1857,7 +1874,7 @@ export interface HouseOpts {
    * 上一层楼板上的楼梯洞口：贴着洞口的墙（内墙、外墙都算）往上再砌 extra（= 楼板厚），一直接到上层地面，
    * 楼梯间里一楼和二楼的墙面连成一片，不在楼板的位置露出一道截面
    */
-  under?: { zones: Vec[][]; extra: number }
+  under?: { zones: Vec[][]; extra: number; cover: Vec[] | null }
   /** 楼梯的层间高 */
   rise?: number
   /** 外墙外侧的材质（户建，three/exterior.ts facadeMaterial） */

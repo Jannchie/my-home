@@ -79,7 +79,7 @@ export function buildBuilding(plan: Plan, wallH: number, wallHFor?: (f: Floor) =
       stairHoles: stairHoles(plan, f.id),
       tall: above && voids.length && !(opts.bare && H < f.height) ? { zones: voids.map((r) => r.points), extra: above.elevation + above.height - (f.elevation + H) } : undefined,
       // 楼梯间：贴着上层楼梯洞口的墙砌到上层地面（墙压低的那一层不砌）
-      under: above && H >= f.height ? { zones: stairHoles(plan, above.id).map((h) => h.poly), extra: above.elevation - (f.elevation + H) } : undefined,
+      under: above && H >= f.height ? { zones: stairHoles(plan, above.id).map((h) => h.poly), extra: above.elevation - (f.elevation + H), cover: floorOutline(floorView(plan, above.id).rooms) } : undefined,
       rise: riseOf(plan, f.id),
     })
     group.position.y = f.elevation
