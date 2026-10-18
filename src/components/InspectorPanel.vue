@@ -5,10 +5,10 @@ import { FIXTURES, OPENING_LABELS, ROOM_KINDS, area, bbox, edgeInfo, fixtureDept
 import { planArea } from '../generate'
 import { RAILING_KINDS, type RailingKind } from '../model'
 import { isIndoor } from '../walls'
-import { deleteSelection, duplicateSelection, findFixture, findRoom, mutate, plan, floorPlan, rotateSelectedFixture, selection, settings, tidyDoors, setRoomLight, setRoomLightK } from '../store'
+import { deleteSelection, duplicateSelection, findFixture, findRoom, mutate, plan, floorPlan, rotateSelectedFixture, selection, setStairsVariant, settings, tidyDoors, setRoomLight, setRoomLightK } from '../store'
 import { STAIRS_VARIANTS, type StairsVariant } from '../model'
 import { floorAbove, floorOf, isMultiFloor, planFloors, riseOf, floorView } from '../floors'
-import { MAX_RISER, STAIRS_SIZE, stairsVariant } from '../stairs'
+import { MAX_RISER, stairsVariant } from '../stairs'
 import { cabinetsOn, setOpen } from '../cabinet'
 import { propsOn } from '../surface'
 import { ASSET_MAP } from '../three/assets'
@@ -75,18 +75,8 @@ const stairInfo = computed(() => {
   const n = Math.max(3, Math.ceil(rise / MAX_RISER))
   return { to: floorAbove(plan.value, from), rise, n, riser: rise / n }
 })
-/** 换楼梯形式：占地换成这种形式的默认尺寸（中心不动） */
 function setStairs(v: StairsVariant) {
-  const f = fixture.value
-  if (!f) return
-  mutate(() => {
-    f.stairs = v
-    f.w = STAIRS_SIZE[v].w
-    f.d = STAIRS_SIZE[v].d
-    if (v === 'straight') delete f.turn
-    if (v !== 'l') delete f.run
-    if (v !== 'straight' && v !== 'l') delete f.under
-  })
+  if (fixture.value) setStairsVariant(fixture.value, v)
 }
 /** 楼梯下的用法：'' = 按外观样式 */
 function setUnder(v: string) {

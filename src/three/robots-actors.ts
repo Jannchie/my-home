@@ -765,7 +765,7 @@ export function poseRobo(r: RoboRig, m: RoboMotion) {
     r.head.rotation.set(-0.05 * m.rest, look * 0.8, 0, 'YXZ')
     for (const a of r.arms) {
       const w = a.side > 0 ? m.wave : 0
-      a.sh.rotation.set(-0.05 - w * 0.35 + step(-a.side) * 0.4 * g, 0, a.side * (0.08 + w * 2.5))
+      a.sh.rotation.set(-0.05 - w * 0.35 + step(a.side) * 0.4 * g, 0, a.side * (0.08 + w * 2.5))
       if (a.el) a.el.rotation.set(-0.15 - w * 0.4 - 0.25 * g, 0, a.side * w * (0.35 + Math.sin(m.t * 9) * 0.35))
     }
     r.legs.forEach((l, i) => {

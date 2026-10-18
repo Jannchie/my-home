@@ -22,18 +22,25 @@ import { t } from '../i18n'
 import { overlays } from '../ui/feedback'
 import { saved } from '../saved'
 import { device } from '../ui/device'
+import { FIXTURES, STAIRS_VARIANTS, type Fixture } from '../model'
+import { stairsVariant } from '../stairs'
+import { DEFAULT_STAIR_STYLE, STAIR_STYLES } from '../stairStyles'
 import {
   WALL_MODES,
   checkpoint,
   deleteSelection,
   duplicateSelection,
+  findFixture,
   findFurniture,
+  mutate,
   placing,
   plan,
   redecorate,
+  rotateSelectedFixture,
   rotateSelectedFurniture,
   sandbox,
   selection,
+  setStairsVariant,
   swapFurnitureAsset,
 } from '../store'
 
@@ -81,6 +88,8 @@ raf = requestAnimationFrame(track)
 // ---------- 画布事件（桥接好之后再挂） ----------
 
 let rDown: { x: number; y: number } | null = null
+/** 这次右键按下后拖过（按最远距离算，拖出去又拖回原处也算） */
+let rDragged = false
 /** 最近一次在画布上按下的时间：区分「在场景里点选」和「从家具栏放下」 */
 let lastCanvasDown = 0
 /** 最近一次按下是手指：安卓长按会发 contextmenu，触屏的菜单由 Sandbox3D 的长按判定负责，这里忽略 */
@@ -90,21 +99,23 @@ function onDown(e: PointerEvent) {
   lastCanvasDown = performance.now()
   lastTouch = e.pointerType !== 'mouse'
   menu.value = null
-  if (e.button === 2) rDown = { x: e.clientX, y: e.clientY }
+  if (e.button === 2) (rDown = { x: e.clientX, y: e.clientY }), (rDragged = false)
   pressing.value = true
 }
 function onUp() {
   pressing.value = false
 }
 function onMove(e: PointerEvent) {
+  if (!rDown || !(e.buttons & 2) || Math.hypot(e.clientX - rDown.x, e.clientY - rDown.y) <= 6) return
+  rDragged = true
   // 右键按下就弹菜单的平台（macOS）：一拖就当平移，把菜单收起
-  if (menu.value && rDown && e.buttons & 2 && Math.hypot(e.clientX - rDown.x, e.clientY - rDown.y) > 6) menu.value = null
+  menu.value = null
 }
 function onContext(e: MouseEvent) {
   const b = sandboxBridge.value
   if (!b || !editing.value || placing.value || lastTouch) return
   // 右键拖动是平移视角：拖过了就不弹菜单
-  if (rDown && Math.hypot(e.clientX - rDown.x, e.clientY - rDown.y) > 6) return
+  if (rDragged || (rDown && Math.hypot(e.clientX - rDown.x, e.clientY - rDown.y) > 6)) return
   const id = b.pick(e)
   if (id) selection.value = { type: 'furniture', id }
   openMenu(e.clientX, e.clientY, id)
@@ -234,11 +245,52 @@ function cycleWall() {
   sandbox.wallMode = WALL_MODES[(i + 1) % WALL_MODES.length].id
 }
 
+/** 楼梯的快捷菜单：形式、样式、上楼方向（和检查器里的选项一样），旋转、删除 */
+function stairsMenu(x: number, y: number, s: Fixture) {
+  const v = stairsVariant(s)
+  const style = s.stairStyle ?? DEFAULT_STAIR_STYLE
+  const turn = s.turn ?? 'left'
+  const check = (on: boolean) => (on ? ' ✓' : '')
+  menu.value = {
+    x,
+    y,
+    title: t(FIXTURES.stairs.label),
+    items: [
+      { label: t('旋转 90°'), icon: ICONS.rotateCw, action: rotateSelectedFixture },
+      'sep',
+      { header: t('形式') },
+      ...Object.entries(STAIRS_VARIANTS).map(([k, label]) => ({ label: t(label) + check(k === v), disabled: k === v, action: () => setStairsVariant(s, k as typeof v) })),
+      'sep',
+      { header: t('样式') },
+      ...Object.entries(STAIR_STYLES).map(([k, st]) => ({
+        label: t(st.label) + check(k === style),
+        disabled: k === style,
+        action: () => mutate(() => (k === DEFAULT_STAIR_STYLE ? delete s.stairStyle : (s.stairStyle = k))),
+      })),
+      ...(v !== 'straight'
+        ? ([
+            'sep',
+            { header: t('上楼方向') },
+            ...(['left', 'right'] as const).map((k) => ({ label: t(k === 'left' ? '往左拐' : '往右拐') + check(k === turn), disabled: k === turn, action: () => mutate(() => (s.turn = k)) })),
+          ] as MenuEntry[])
+        : []),
+      'sep',
+      { label: t('删除'), icon: ICONS.delete, keys: 'Del', danger: true, action: deleteSelection },
+    ],
+  }
+}
+
 function openMenu(x: number, y: number, id: string | null) {
   const b = sandboxBridge.value
   const f = id ? findFurniture(id) : undefined
   const def = f ? ASSET_MAP.get(f.asset) : undefined
-  if (f && def) {
+  // 没点中家具时看看是不是楼梯
+  const sid = !f && b ? b.pickStairs({ clientX: x, clientY: y }) : null
+  const stairs = sid ? findFixture(sid) : undefined
+  if (stairs) {
+    selection.value = { type: 'fixture', id: stairs.id }
+    stairsMenu(x, y, stairs)
+  } else if (f && def) {
     const sizes = siblings(def)
     menu.value = {
       x,

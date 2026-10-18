@@ -12,6 +12,8 @@ export interface SandboxBridge {
   object(id: string): THREE.Object3D | undefined
   /** 屏幕坐标处的家具 id（含走动中的宠物 / 机器人对应的家具） */
   pick(e: { clientX: number; clientY: number }): string | null
+  /** 屏幕坐标处的楼梯（设备）id：当前楼层、没被墙挡住 */
+  pickStairs(e: { clientX: number; clientY: number }): string | null
   resetView(): void
   /** 标记需要重画 */
   redraw(): void
