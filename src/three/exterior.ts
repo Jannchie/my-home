@@ -6,6 +6,7 @@
 import * as THREE from 'three'
 import { FENCE_STYLE, type CarKind, type Exterior, type Plan, type Site, type Vec } from '../model'
 import { roofParts, type RoofPart, type Side } from '../exterior'
+import { FLAT_T, PARAPET, ROOF_T, tessellate, type P3, type RoofRect } from '../roof'
 import { subtractSpan } from '../stairs'
 import { addOutlines, cyl, mergeMeshes, rbox, shade, toon, useAnisotropy } from './toon'
 import { BASE, openingInfos } from './house'
@@ -95,7 +96,7 @@ export function facadeMaterial(ex: Pick<Exterior, 'facade' | 'wallColor'>): THRE
   return m
 }
 
-// ---------- 凸多面体（屋面、山墙） ----------
+// ---------- 凸多面体（山墙、屋脊压条、平屋顶的板） ----------
 
 /** 凸多边形 P 和 P + off 之间的实心棱柱（法线朝外，平面着色） */
 function convexPrism(P: THREE.Vector3[], off: THREE.Vector3, mat: THREE.Material) {
@@ -133,116 +134,170 @@ function convexPrism(P: THREE.Vector3[], off: THREE.Vector3, mat: THREE.Material
   return mesh
 }
 
-/** 屋面厚度 */
-const T = 10
+/** 屋面三角形（平面 x, y, 高度）→ 有厚度的实心屋面：上表面、下表面（往下 ROOF_T）、四周的封檐板 */
+export function roofSolid(tris: number[], mat: THREE.Material, T = ROOF_T): THREE.Mesh {
+  const pos: number[] = []
+  const P = (k: number, dz = 0) => new THREE.Vector3(tris[k], tris[k + 2] + dz, tris[k + 1])
+  const ab = new THREE.Vector3()
+  const ac = new THREE.Vector3()
+  /** 按期望的法线方向 want 定绕向 */
+  const tri = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, want: THREE.Vector3) => {
+    ab.subVectors(b, a)
+    ac.subVectors(c, a)
+    const n = ab.clone().cross(ac)
+    if (n.lengthSq() < 1e-10) return
+    const [p, q, r] = n.dot(want) < 0 ? [a, c, b] : [a, b, c]
+    pos.push(p.x, p.y, p.z, q.x, q.y, q.z, r.x, r.y, r.z)
+  }
+  const up = new THREE.Vector3(0, 1, 0)
+  const down = new THREE.Vector3(0, -1, 0)
+  const key = (x: number, y: number, z: number) => `${x.toFixed(3)},${y.toFixed(3)},${z.toFixed(3)}`
+  const edges = new Map<string, { a: number; b: number; c: number; n: number }>()
+  for (let k = 0; k < tris.length; k += 9) {
+    tri(P(k), P(k + 3), P(k + 6), up)
+    tri(P(k, -T), P(k + 3, -T), P(k + 6, -T), down)
+    for (let m = 0; m < 3; m++) {
+      const a = k + m * 3
+      const b = k + ((m + 1) % 3) * 3
+      const c = k + ((m + 2) % 3) * 3
+      const ka = key(tris[a], tris[a + 1], tris[a + 2])
+      const kb = key(tris[b], tris[b + 1], tris[b + 2])
+      const ek = ka < kb ? `${ka}|${kb}` : `${kb}|${ka}`
+      const e = edges.get(ek)
+      if (e) e.n++
+      else edges.set(ek, { a, b, c, n: 1 })
+    }
+  }
+  // 只属于一个三角形的边是屋面外缘：竖着补一圈封檐板，法线朝离开三角形的方向
+  for (const e of edges.values()) {
+    if (e.n !== 1) continue
+    const a = P(e.a)
+    const b = P(e.b)
+    const c = P(e.c)
+    const d = new THREE.Vector3(b.x - a.x, 0, b.z - a.z)
+    const out = new THREE.Vector3(-d.z, 0, d.x)
+    if (out.dot(new THREE.Vector3(c.x - a.x, 0, c.z - a.z)) > 0) out.negate()
+    const a2 = P(e.a, -T)
+    const b2 = P(e.b, -T)
+    tri(a, b, b2, out)
+    tri(a, b2, a2, out)
+  }
+  const geo = new THREE.BufferGeometry()
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+  geo.computeVertexNormals()
+  const mesh = new THREE.Mesh(geo, mat)
+  mesh.castShadow = true
+  mesh.receiveShadow = true
+  return mesh
+}
 
+const roofMatCache = new Map<string, THREE.Material>()
 /**
- * 一块屋顶（层局部坐标）。在 (u, v) 局部框架里算：u 沿屋脊，v 横跨；ridge 决定 u 是 x 还是 y。
+ * 屋面材质：和 toon 一样，但室内灯的遮罩取一个不存在的房间编号（所有受遮罩的室内灯都不照）。屋面在最上层房间的正上方，
+ * 按高度会被归到那一层的房间里，房间灯就会在屋面上照出一个个光斑。
  */
+function roofMaterial(color: string): THREE.Material {
+  let m = roofMatCache.get(color)
+  if (m) return m
+  const base = toon(color) as THREE.MeshToonMaterial
+  const mat = new THREE.MeshToonMaterial({ color: base.color.clone(), gradientMap: base.gradientMap })
+  mat.onBeforeCompile = (sh) => {
+    injectLightMask(sh)
+    sh.fragmentShader = sh.fragmentShader.replace('lmCell = vec4( lmF, lmFetch( lmP.xz, lmF ) );', `lmCell = vec4( lmF, 250.0, 0.0, 0.0 );`)
+  }
+  mat.customProgramCacheKey = () => 'roof-outdoor'
+  m = mat
+  roofMatCache.set(color, m)
+  return m
+}
+
+const outdoorCache = new Map<string, THREE.Material>()
+/** 外墙材质的「户外」版本（女儿墙内侧也不被房间灯照亮），做法同 roofMaterial */
+function outdoorFacade(mat: THREE.Material): THREE.Material {
+  let m = outdoorCache.get(mat.uuid)
+  if (m) return m
+  const c = mat.clone()
+  const key = mat.customProgramCacheKey()
+  c.onBeforeCompile = (sh, r) => {
+    mat.onBeforeCompile(sh, r)
+    sh.fragmentShader = sh.fragmentShader.replace('lmCell = vec4( lmF, lmFetch( lmP.xz, lmF ) );', 'lmCell = vec4( lmF, 250.0, 0.0, 0.0 );')
+  }
+  c.customProgramCacheKey = () => `${key}-outdoor`
+  m = c
+  outdoorCache.set(mat.uuid, m)
+  return m
+}
+
+const valleyCache = new Map<string, THREE.LineBasicMaterial>()
+const valleyMaterial = (color: string) => {
+  let m = valleyCache.get(color)
+  if (!m) valleyCache.set(color, (m = new THREE.LineBasicMaterial({ color })))
+  return m
+}
+
+/** 一层的屋顶（层局部坐标）：屋面、屋脊压条、屋面下补齐的外墙；平屋顶是屋面板 + 女儿墙 + 压顶 */
 export function buildRoof(part: RoofPart, ex: Exterior, wallOuter: number): THREE.Group {
   const g = new THREE.Group()
-  const roofMat = toon(ex.roofColor)
   const wallMat = facadeMaterial(ex)
-  const H = part.top
   const o = wallOuter / 2
-  const e = ex.eave ?? 45
-  const pitch = ex.pitch ?? 0.45
-  const { x0, y0, x1, y1 } = part.rect
-  // 单坡按高的一边选框架：v 沿坡度方向
-  const alongX = part.kind === 'shed' ? part.high === 'n' || part.high === 's' : part.ridge === 'x'
-  const [u0, u1, v0, v1] = alongX ? [x0, x1, y0, y1] : [y0, y1, x0, x1]
-  const P = (u: number, v: number, z: number) => (alongX ? new THREE.Vector3(u, z, v) : new THREE.Vector3(v, z, u))
-  const uAxis = alongX ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 0, 1)
-  const zFace = H + 2
-
-  /** 竖直的山墙片：(v, z) 凸多边形，放在 u = uc 的墙中心线上，厚 wallOuter */
-  const gableWall = (uc: number, vz: [number, number][]) => {
-    const pts = vz.map(([v, z]) => P(uc - o, v, z))
-    g.add(convexPrism(pts, uAxis.clone().multiplyScalar(wallOuter), wallMat))
-  }
-
-  if (part.kind === 'flat') {
-    const k = o + Math.min(e, 12)
-    const slab = convexPrism([P(u0 - k, v0 - k, H + 14), P(u1 + k, v0 - k, H + 14), P(u1 + k, v1 + k, H + 14), P(u0 - k, v1 + k, H + 14)], new THREE.Vector3(0, -14, 0), toon(shade(ex.roofColor, 0.25)))
-    g.add(slab)
-    // 女儿墙：沿外墙一圈，高 60，顶上压一道点缀色的压顶
-    const ph = 60
-    const edges: [number, number, number, number][] = [
-      [u0 - o, v0 - o, u1 + o, v0 + o],
-      [u0 - o, v1 - o, u1 + o, v1 + o],
-      [u0 - o, v0 + o, u0 + o, v1 - o],
-      [u1 - o, v0 + o, u1 + o, v1 - o],
-    ]
-    for (const [a0, b0, a1, b1] of edges) {
-      g.add(convexPrism([P(a0, b0, H + 14), P(a1, b0, H + 14), P(a1, b1, H + 14), P(a0, b1, H + 14)], new THREE.Vector3(0, ph, 0), wallMat))
-      g.add(convexPrism([P(a0 - 2, b0 - 2, H + 14 + ph), P(a1 + 2, b0 - 2, H + 14 + ph), P(a1 + 2, b1 + 2, H + 14 + ph), P(a0 - 2, b1 + 2, H + 14 + ph)], new THREE.Vector3(0, 5, 0), toon(ex.trimColor)))
+  if (part.flat) {
+    const f = part.flat
+    // 每一层做成一整块实心（相邻的矩形之间不留描边接缝）
+    const flatSolid = (rs: RoofRect[], z: number, depth: number, mat: THREE.Material) => {
+      if (rs.length) g.add(roofSolid(tessellate(rs.map((r) => [[r.x0, r.y0, z], [r.x1, r.y0, z], [r.x1, r.y1, z], [r.x0, r.y1, z]] as P3[])), mat, depth))
     }
+    flatSolid(f.slab, f.slabTop, FLAT_T, roofMaterial(shade(ex.roofColor, 0.25)))
+    flatSolid(f.parapet, f.slabTop + PARAPET, PARAPET, outdoorFacade(wallMat))
+    flatSolid(f.coping, f.slabTop + PARAPET + 5, 5, roofMaterial(ex.trimColor))
     return finish(g, part)
   }
-
-  const U0 = u0 - o - e
-  const U1 = u1 + o + e
-  if (part.kind === 'shed') {
-    const hiPos = part.high === 'n' || part.high === 'e'
-    const lowFace = hiPos ? v0 - o : v1 + o
-    const highFace = part.against ? (hiPos ? v1 - o : v0 + o) : hiPos ? v1 + o : v0 - o
-    const Vlow = hiPos ? lowFace - e : lowFace + e
-    const Vhigh = part.against ? (hiPos ? v1 - o : v0 + o) : hiPos ? highFace + e : highFace - e
-    const span = Math.abs(Vhigh - Vlow)
-    const p = Math.min(pitch, 150 / Math.max(1, span))
-    const zLow = zFace - p * e
-    const zAt = (v: number) => zLow + p * Math.abs(v - Vlow)
-    g.add(convexPrism([P(U0, Vlow, zLow), P(U1, Vlow, zLow), P(U1, Vhigh, zAt(Vhigh)), P(U0, Vhigh, zAt(Vhigh))], new THREE.Vector3(0, -T, 0), roofMat))
-    // 两侧的梯形山墙
-    const vHiWall = part.against ? Vhigh : highFace
-    for (const uc of [u0, u1]) gableWall(uc, [[lowFace, H], [vHiWall, H], [vHiWall, Math.max(H, zAt(vHiWall) - T - 1)], [lowFace, Math.max(H, zAt(lowFace) - T - 1)]])
-    // 高的一边（不贴上层时）：墙顶以上补一道墙到屋面下
-    if (!part.against) {
-      const vc = hiPos ? v1 : v0
-      const top = zAt(highFace) - T - 1
-      if (top > H + 1) g.add(convexPrism([P(u0 - o, vc - o, H), P(u1 + o, vc - o, H), P(u1 + o, vc + o, H), P(u0 - o, vc + o, H)], new THREE.Vector3(0, top - H, 0), wallMat))
-    }
-    return finish(g, part)
+  g.add(roofSolid(part.tris, roofMaterial(ex.roofColor)))
+  // 屋面下补齐的外墙（山墙三角、单坡的高墙、下屋两端）：沿墙中心线、墙厚 wallOuter
+  for (const w of part.walls) {
+    const dx = w.b.x - w.a.x
+    const dy = w.b.y - w.a.y
+    const L = Math.hypot(dx, dy)
+    if (L < 0.5) continue
+    const n = { x: -dy / L, y: dx / L }
+    const pt = (p: Vec, z: number) => new THREE.Vector3(p.x - n.x * o, z, p.y - n.y * o)
+    g.add(convexPrism([pt(w.a, part.top), pt(w.b, part.top), pt(w.b, w.zb), pt(w.a, w.za)], new THREE.Vector3(n.x * wallOuter, 0, n.y * wallOuter), wallMat))
   }
-
-  const V0 = v0 - o - e
-  const V1 = v1 + o + e
-  const Vm = (V0 + V1) / 2
-  const zE = zFace - pitch * e
-  const zr = zE + pitch * (Vm - V0)
+  // 屋脊、斜脊：压条（很薄，描边会糊成一道黑线：不描边）；天沟：一道深色细线
   const cap = toon(shade(ex.roofColor, 0.06))
-  // 屋脊压条很薄，描边会糊成一道黑线：不描边
-  const ridgeCap = (ua: number, ub: number) => {
-    const m = convexPrism([P(ua, Vm - 7, zr + 1), P(ub, Vm - 7, zr + 1), P(ub, Vm + 7, zr + 1), P(ua, Vm + 7, zr + 1)], new THREE.Vector3(0, 6, 0), cap)
+  const valley: number[] = []
+  for (const c of part.creases) {
+    const A = new THREE.Vector3(c.a[0], c.a[2], c.a[1])
+    const B = new THREE.Vector3(c.b[0], c.b[2], c.b[1])
+    if (c.kind === 'valley') {
+      valley.push(A.x, A.y + 0.6, A.z, B.x, B.y + 0.6, B.z)
+      continue
+    }
+    const u = B.clone().sub(A)
+    const side = new THREE.Vector3(-u.z, 0, u.x).normalize().multiplyScalar(c.kind === 'ridge' ? 7 : 6)
+    const lift = new THREE.Vector3(0, 1, 0)
+    const m = convexPrism([A.clone().sub(side).add(lift), B.clone().sub(side).add(lift), B.clone().add(side).add(lift), A.clone().add(side).add(lift)], new THREE.Vector3(0, c.kind === 'ridge' ? 6 : 5, 0), cap)
     m.userData.noOutline = true
     g.add(m)
   }
-  if (part.kind === 'gable') {
-    g.add(convexPrism([P(U0, V0, zE), P(U1, V0, zE), P(U1, Vm, zr), P(U0, Vm, zr)], new THREE.Vector3(0, -T, 0), roofMat))
-    g.add(convexPrism([P(U0, V1, zE), P(U0, Vm, zr), P(U1, Vm, zr), P(U1, V1, zE)], new THREE.Vector3(0, -T, 0), roofMat))
-    for (const uc of [u0, u1]) gableWall(uc, [[v0 - o, H], [v1 + o, H], [(v0 + v1) / 2, zr - T - 1]])
-    ridgeCap(U0, U1)
-  } else {
-    const hs = (V1 - V0) / 2
-    let ua = U0 + hs
-    let ub = U1 - hs
-    if (ua > ub) ua = ub = (U0 + U1) / 2
-    g.add(convexPrism([P(U0, V0, zE), P(U1, V0, zE), P(ub, Vm, zr), P(ua, Vm, zr)], new THREE.Vector3(0, -T, 0), roofMat))
-    g.add(convexPrism([P(U1, V1, zE), P(U0, V1, zE), P(ua, Vm, zr), P(ub, Vm, zr)], new THREE.Vector3(0, -T, 0), roofMat))
-    g.add(convexPrism([P(U0, V1, zE), P(U0, V0, zE), P(ua, Vm, zr)], new THREE.Vector3(0, -T, 0), roofMat))
-    g.add(convexPrism([P(U1, V0, zE), P(U1, V1, zE), P(ub, Vm, zr)], new THREE.Vector3(0, -T, 0), roofMat))
-    if (ub - ua > 1) ridgeCap(ua, ub)
+  if (valley.length) {
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(valley, 3))
+    const lines = new THREE.LineSegments(geo, valleyMaterial(shade(ex.roofColor, -0.25)))
+    lines.raycast = () => {}
+    g.add(lines)
   }
   return finish(g, part)
 }
 
 function finish(g: THREE.Group, part: RoofPart) {
+  // 同材质的块合成一个网格（外墙补块、平屋顶的板 / 女儿墙），再描边
+  mergeMeshes(g)
   addOutlines(g)
   g.userData.roofPart = part
   return g
 }
 
-/** 某一层上的所有屋顶块（层局部坐标），没有就返回 null */
+/** 某一层上的屋顶（层局部坐标），没有就返回 null */
 export function roofGroup(plan: Plan, floorId: string, parts = roofParts(plan)): THREE.Group | null {
   const ex = plan.exterior
   const mine = parts.filter((p) => p.floor === floorId)
