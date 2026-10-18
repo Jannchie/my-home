@@ -2,7 +2,7 @@
 import { describe, expect, test } from 'vitest'
 import * as THREE from 'three'
 import { MouseFilter, Walker, ceilings } from '/src/three/walk'
-import { slabHoles } from '/src/stairs'
+import { slabHoles, type StairWalk } from '/src/stairs'
 import { floorAbove, planFloors } from '/src/floors'
 import { decorate } from '/src/decorate'
 import { floorById, isMultiFloor } from '/src/floors'
@@ -16,6 +16,20 @@ const walkerOf = (plan: Plan) => {
   const floors: string[] = []
   const w = new Walker(plan, new THREE.PerspectiveCamera(), { lift: (id) => floorById(plan, id)?.elevation ?? 0, onFloor: (id) => floors.push(id) })
   return { w, floors }
+}
+
+/**
+ * 像玩家一样上下楼：每帧把视角转向楼梯路线（stairWalk.pts）前方一小段的点，按住前进键。
+ * 走楼梯本身不再帮忙转向，拐角平台得自己转过去。
+ */
+const steer = (w: Walker, link: StairWalk, up: boolean) => {
+  const pts = up ? link.pts : [...link.pts].reverse()
+  let at = 0
+  return () => {
+    for (let i = at; i < Math.min(pts.length, at + 12); i++) if (Math.hypot(pts[i].x - w.pos.x, pts[i].y - w.pos.y) < Math.hypot(pts[at].x - w.pos.x, pts[at].y - w.pos.y)) at = i
+    const t = pts[Math.min(pts.length - 1, at + 4)]
+    w.yaw = Math.atan2(-(t.x - w.pos.x), -(t.y - w.pos.y))
+  }
 }
 
 describe('第一人称漫游', () => {
@@ -37,9 +51,11 @@ describe('第一人称漫游', () => {
   })
 
   test('走到楼梯口朝楼梯走：上到二楼，再掉头下到一楼', () => {
-    for (const region of ['jp', 'cn', 'west'] as const) {
-      const plan = generatePlan({ ...JP_OPTS, seed: 1, region, dwelling: 'house' }).plan
-      plan.furniture = decorateHouse(plan, 1)
+    // duplex seed 3：直梯在挑空里，出梯口紧挨着挑空边，上层网格离出梯口一拃多才站得下
+    const cases = [...(['jp', 'cn', 'west'] as const).map((region) => ({ region, seed: 1, dwelling: 'house' as const })), { region: 'jp' as const, seed: 3, dwelling: 'duplex' as const }]
+    for (const { region, seed, dwelling } of cases) {
+      const plan = generatePlan({ ...JP_OPTS, seed, region, dwelling }).plan
+      plan.furniture = decorateHouse(plan, seed)
       expect(isMultiFloor(plan)).toBe(true)
       const { w, floors } = walkerOf(plan)
       const link = w.nav.links[0]
@@ -47,20 +63,26 @@ describe('第一人称漫游', () => {
       // 站到起步口外侧，面朝楼梯
       w.floor = link.from
       w.pos = w.nav.grid(link.from).nearest('walk', link.entry, 18, 60)!
-      const face = (q: { x: number; y: number }) => (w.yaw = Math.atan2(-(q.x - w.pos.x), -(q.y - w.pos.y)))
-      face(link.pts[3])
+      let turn = steer(w, link, true)
       w.hold('w', true)
-      for (let i = 0; i < 1200 && w.floor !== link.to; i++) w.update(1 / 60)
+      for (let i = 0; i < 1200 && w.floor !== link.to; i++) {
+        turn()
+        w.update(1 / 60)
+      }
       expect(w.floor, `${region} 上楼`).toBe(link.to)
       expect(floors).toEqual([link.to])
       w.hold('w', false)
       for (let i = 0; i < 30; i++) w.update(1 / 60)
       // 回到出梯口外侧，面朝楼梯往下走
       w.pos = w.nav.grid(link.to).nearest('walk', link.exit, 18, 60)!
-      face(link.pts[link.pts.length - 4])
+      turn = steer(w, link, false)
       w.hold('w', true)
-      for (let i = 0; i < 1200 && w.floor !== link.from; i++) w.update(1 / 60)
+      for (let i = 0; i < 1200 && (w.floor !== link.from || w.onStairs); i++) {
+        turn()
+        w.update(1 / 60)
+      }
       expect(w.floor, `${region} 下楼`).toBe(link.from)
+      expect(w.onStairs, `${region} 下楼`).toBe(false)
     }
   })
 
@@ -156,18 +178,30 @@ describe('第一人称漫游', () => {
     expect(w.yaw).toBe(yaw0)
   })
 
-  test('上楼梯时镜头朝向只由玩家控制（拐角平台处也不自动转）', () => {
-    const plan = generatePlan({ ...JP_OPTS, seed: 1, region: 'jp', dwelling: 'house' }).plan
-    const { w } = walkerOf(plan)
-    const link = w.nav.links[0]
-    w.floor = link.from
-    w.pos = w.nav.grid(link.from).nearest('walk', link.entry, 15, 60)!
-    w.yaw = Math.atan2(-(link.pts[3].x - w.pos.x), -(link.pts[3].y - w.pos.y))
-    const yaw0 = w.yaw
-    w.hold('w', true)
-    for (let i = 0; i < 1200 && w.floor !== link.to; i++) w.update(1 / 60)
-    expect(w.floor).toBe(link.to)
-    expect(w.yaw).toBe(yaw0)
+  test('楼梯上不沿路线拉着走、不自动转向：横着朝扶手走就停在扶手前', () => {
+    for (const region of ['jp', 'cn', 'west'] as const) {
+      const plan = generatePlan({ ...JP_OPTS, seed: 1, region, dwelling: 'house' }).plan
+      const { w } = walkerOf(plan)
+      const link = w.nav.links[0]
+      w.floor = link.from
+      w.pos = w.nav.grid(link.from).nearest('walk', link.entry, 15, 60)!
+      w.yaw = Math.atan2(-(link.pts[8].x - w.pos.x), -(link.pts[8].y - w.pos.y))
+      w.hold('w', true)
+      for (let i = 0; i < 50; i++) w.update(1 / 60)
+      expect(w.onStairs, region).toBe(true)
+      // 转 90° 朝梯段侧面走
+      const t = { x: link.pts[8].x - link.entry.x, y: link.pts[8].y - link.entry.y }
+      const tl = Math.hypot(t.x, t.y)
+      w.yaw += Math.PI / 2
+      const yaw0 = w.yaw
+      const p0 = { ...w.pos }
+      for (let i = 0; i < 120; i++) w.update(1 / 60)
+      expect(w.yaw, region).toBe(yaw0)
+      expect(w.onStairs, region).toBe(true)
+      // 沿楼梯方向几乎没动（不会被拉着上楼），横向被扶手 / 墙挡住，走不了多远
+      expect(Math.abs(((w.pos.x - p0.x) * t.x + (w.pos.y - p0.y) * t.y) / tl), region).toBeLessThan(15)
+      expect(Math.hypot(w.pos.x - p0.x, w.pos.y - p0.y), region).toBeLessThan(60)
+    }
   })
 
   test('鼠标位移过滤：锁定后的头一下、单次几百像素的毛刺丢掉，正常移动和快速甩动保留', () => {
@@ -192,10 +226,11 @@ describe('第一人称漫游', () => {
     w.pos = w.nav.grid(link.from).nearest('walk', link.entry, 15, 60)!
     w.yaw = Math.atan2(-(link.pts[3].x - w.pos.x), -(link.pts[3].y - w.pos.y))
     w.hold('w', true)
-    for (let i = 0; i < 40; i++) w.update(1 / 60)
+    for (let i = 0; i < 50; i++) w.update(1 / 60)
     expect(w.onStairs).toBe(true)
     w.look(-Math.PI / 0.0042, 0)
     for (let i = 0; i < 1200 && w.onStairs; i++) w.update(1 / 60)
+    expect(w.onStairs).toBe(false)
     expect(w.floor).toBe(link.from)
   })
 
@@ -209,11 +244,12 @@ describe('第一人称漫游', () => {
       const slabBottom = floorById(plan, link.to)!.elevation - 30
       w.floor = link.from
       w.pos = w.nav.grid(link.from).nearest('walk', link.entry, 15, 60)!
-      w.yaw = Math.atan2(-(link.pts[3].x - w.pos.x), -(link.pts[3].y - w.pos.y))
+      const turn = steer(w, link, true)
       w.hold('shift', true)
       w.hold('w', true)
       let under = 0
       for (let i = 0; i < 1200 && w.floor !== link.to; i++) {
+        turn()
         w.update(1 / 60)
         // 已经换到上层（踩上上层地面）的那一帧不算
         if (w.floor === link.to) break

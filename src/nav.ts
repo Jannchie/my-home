@@ -35,6 +35,8 @@ export interface NavOptions {
   sash?: boolean
   /** 比这矮的落地家具不算障碍（cm）：第一人称漫游时鞋、小凳、玩具这类一步就跨过去 */
   stepOver?: number
+  /** 楼梯占地、上层的楼梯洞口不算障碍：第一人称漫游自己按脚下的踏步处理楼梯（walk.ts） */
+  freeStairs?: boolean
 }
 
 /** 网格里只和户型有关的一层（房间、墙、门洞），按户型的几何缓存（最多留 8 份） */
@@ -135,7 +137,7 @@ export class NavGrid {
       } else if (!d || d.mount || d.stick || (f.z ?? 0) > 0.5 || ignore.has(f.id) || d.h < Math.max(3, opts.stepOver ?? 0)) continue
       this.box(furnitureBox(f.asset, f.x, f.y, f.rot), blocked)
     }
-    for (const fx of plan.fixtures) this.fixture(fx, blocked)
+    for (const fx of plan.fixtures) if (!(opts.freeStairs && fx.kind === 'stairs')) this.fixture(fx, blocked)
     for (const h of opts.holes ?? [])
       for (let j = 0; j < this.ny; j++)
         for (let i = 0; i < this.nx; i++) if (pointInPolygon(this.center(i, j), h)) blocked[j * this.nx + i] = 1
@@ -472,7 +474,7 @@ export class HouseNav {
     this.floors = fs.map((f) => f.id)
     for (const f of fs) {
       const view = isMultiFloor(plan) ? floorView(plan, f.id) : plan
-      this.grids.set(f.id, new NavGrid(view, { ...opts, holes: stairHoles(plan, f.id).map((h) => h.poly) }))
+      this.grids.set(f.id, new NavGrid(view, { ...opts, holes: opts.freeStairs ? [] : stairHoles(plan, f.id).map((h) => h.poly) }))
     }
     if (isMultiFloor(plan))
       for (const fx of plan.fixtures) {

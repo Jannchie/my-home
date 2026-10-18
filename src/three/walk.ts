@@ -2,16 +2,17 @@
 //   - 能走的地方：除挑空以外的房间（含卫浴、收纳、阳台；阳台从落地窗出去），由 nav.ts 的 walk 网格判断，
 //     碰到墙和家具时贴着滑过去，不穿模。
 //   - 地面高度跟着脚下的房间走（玄関土间低一截），眼睛高度缓动过去，跨台阶不会一下跳。
-//   - 楼梯：走到起步口（或上层的出梯口）朝楼梯方向走，就沿 stairs.ts 的 stairWalk 路线上下楼，前后键沿楼梯前进后退。
+//   - 楼梯：和平地一样自由走，脚下的高度取踩着的那级踏面（stairs.ts 的 stairLayout）；高差太大的地方（梯段之间、
+//     楼梯侧面）跨不过去，扶手挡人。下层从踏步低的一头踏上去，上层只能从出梯口下去。不沿路线拉着走、不自动转向。
 //   - 操作和 FPS 游戏一样：点一下画面锁定鼠标，移动鼠标看四周；WASD / 方向键前后左右平移，Shift 跑；
 //     Esc 先释放鼠标，再按一次退出（沙盘处理）。触屏左下摇杆走、其余地方拖动看四周。
 // 沙盘（Sandbox3D.vue）负责进出时切换墙体显示、楼层显示和天花板，这里只管位置、朝向和输入。
 
 import * as THREE from 'three'
-import { centroid, fixtureBox, pointInPolygon, type Box, type Plan, type Room, type Vec } from '../model'
+import { centroid, edgesOf, fixtureBox, onBoundary, pointInPolygon, projectToSegment, type Box, type Plan, type Room, type Vec } from '../model'
 import { SLAB, floorAbove, floorOf, floorView, isMultiFloor, planFloors } from '../floors'
 import { HouseNav, type NavGrid } from '../nav'
-import { slabHoles, type StairWalk } from '../stairs'
+import { slabHoles, stairFootprint, stairLayout, stairToWorld, type StairWalk } from '../stairs'
 import { toon } from './toon'
 import { ASSET_MAP } from './assets'
 import { furnitureBox } from '../snap'
@@ -26,10 +27,15 @@ const STEP_OVER = 30
 /** 步行 / 跑步速度（cm/s） */
 const WALK_V = 140
 const RUN_V = 300
-/** 离楼梯口多近、朝着楼梯走就踏上楼梯 */
-const STAIR_REACH = 30
-/** 走的方向和楼梯走向夹角在这以内（cos）才踏上楼梯：只是从楼梯口旁边的门经过时不会被「吸」上楼梯 */
-const STAIR_ALIGN = 0.7
+/** 一步能跨上 / 跨下的高差（cm）：比一级踏步高一点，梯段之间、楼梯侧面跨不过去 */
+const STEP_UP = 30
+/** 上层踏进楼梯 / 从楼梯走到上层：离出梯口这么近才算从出梯口过（cm） */
+const ARRIVE = 8
+/**
+ * 出梯口外侧这么深的一条（cm）当楼梯的延伸：出梯口紧挨着挑空边、墙角时，上层网格离出梯口一两拃才站得下，
+ * 这一条里按上层地面高度走，走到站得下的地方才算上了楼（反过来从上层也经这一条踏上楼梯）
+ */
+const STRIP = 30
 /** 鼠标锁定刚开始的这段时间（ms）不认鼠标位移；单次位移超过这个（像素）且远大于最近的平均值时当作浏览器的毛刺丢掉 */
 const LOCK_SETTLE_MS = 100
 const SPIKE_PX = 120
@@ -41,13 +47,81 @@ export interface WalkHost {
   onFloor(floor: string): void
 }
 
-/** 楼梯上的状态：沿路线的弧长 s；dir = 前进键往哪走（+1 上楼、-1 下楼）；yaw0 = 定下 dir 时的视角朝向 */
-interface OnStair {
-  w: StairWalk
-  cum: number[]
-  s: number
-  dir: 1 | -1
-  yaw0: number
+/** 一段楼梯（平面坐标）：踏面、扶手、占地、出梯口，和占地边上当墙的点（不是楼梯口的那几段） */
+interface Flight {
+  from: string
+  to: string
+  rise: number
+  foot: Vec[]
+  steps: { poly: Vec[]; top: number }[]
+  rails: [Vec, Vec][]
+  arrival: [Vec, Vec]
+  /** 从下层看：里面的踏面高过 STEP_UP 的那几段边（采样点）；从上层看：出梯口以外的边 */
+  edge: { lower: Vec[]; upper: Vec[] }
+  /** 出梯口朝外（上层地面那边）的单位法线 */
+  out: Vec
+}
+
+/** 脚下的踏面高度（离下层地面）：几级踏面都沾边时取最接近 near 的；不在踏面上是地面（0） */
+function stepTop(fl: Flight, q: Vec, near: number) {
+  let best = 0
+  let bd = Infinity
+  for (const s of fl.steps) {
+    if (!pointInPolygon(q, s.poly) && !onBoundary(s.poly, q, 0.5)) continue
+    const d = Math.abs(s.top - near)
+    if (d < bd) {
+      bd = d
+      best = s.top
+    }
+  }
+  return best
+}
+
+function flightOf(l: StairWalk): Flight {
+  const L = stairLayout(l.stair, l.rise)
+  const w = stairToWorld(l.stair)
+  const foot = stairFootprint(l.stair)
+  const fl: Flight = {
+    from: l.from,
+    to: l.to,
+    rise: l.rise,
+    foot,
+    steps: L.steps.map((s) => ({ poly: s.poly.map(w), top: s.top })),
+    rails: L.rails.flatMap((r) => r.pts.slice(1).map((b, i) => [w(r.pts[i]), w(b)] as [Vec, Vec])),
+    arrival: [w(L.arrival[0]), w(L.arrival[1])],
+    edge: { lower: [], upper: [] },
+    out: { x: 0, y: 0 },
+  }
+  const c = centroid(foot)
+  const [a, b] = fl.arrival
+  const al = Math.hypot(b.x - a.x, b.y - a.y) || 1
+  fl.out = { x: -(b.y - a.y) / al, y: (b.x - a.x) / al }
+  if (fl.out.x * (a.x - c.x) + fl.out.y * (a.y - c.y) < 0) fl.out = { x: -fl.out.x, y: -fl.out.y }
+  for (const e of edgesOf(foot)) {
+    const n = Math.max(1, Math.ceil(e.length / 4))
+    for (let k = 0; k <= n; k++) {
+      const m = { x: e.a.x + ((e.b.x - e.a.x) * k) / n, y: e.a.y + ((e.b.y - e.a.y) * k) / n }
+      const l2 = Math.hypot(c.x - m.x, c.y - m.y) || 1
+      const inner = { x: m.x + ((c.x - m.x) / l2) * 3, y: m.y + ((c.y - m.y) / l2) * 3 }
+      if (stepTop(fl, inner, 0) > STEP_UP) fl.edge.lower.push(m)
+      if (segD(m, fl.arrival) > 1) fl.edge.upper.push(m)
+    }
+  }
+  return fl
+}
+
+/** 在出梯口外侧那一条里（不含楼梯占地） */
+function inStrip(fl: Flight, q: Vec) {
+  const [a, b] = fl.arrival
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  const t = ((q.x - a.x) * dx + (q.y - a.y) * dy) / (dx * dx + dy * dy || 1)
+  const d = (q.x - a.x) * fl.out.x + (q.y - a.y) * fl.out.y
+  return t >= 0 && t <= 1 && d > 0 && d <= STRIP
+}
+
+function segD(p: Vec, s: [Vec, Vec]) {
+  return projectToSegment(p, s[0], s[1]).d
 }
 
 /**
@@ -86,7 +160,9 @@ export class Walker {
   locked = false
   unlockedAt = 0
   private keys = new Set<string>()
-  private stair: OnStair | null = null
+  private flights: Flight[]
+  /** 在楼梯上：哪段楼梯、脚下踏面离下层地面多高（这时 floor 是楼梯的下层） */
+  private on: { fl: Flight; h: number } | null = null
   /** 每层头顶的上层楼板：楼板底下沿的楼层（上一层）、楼板开洞的地方（楼梯洞口、挑空，头顶是空的） */
   private overhead = new Map<string, { above: string; open: Vec[][] }>()
   private vel = { x: 0, y: 0 }
@@ -96,12 +172,13 @@ export class Walker {
     private camera: THREE.PerspectiveCamera,
     private host: WalkHost,
   ) {
-    this.nav = new HouseNav(plan, { sash: true, stepOver: STEP_OVER })
+    this.nav = new HouseNav(plan, { sash: true, stepOver: STEP_OVER, freeStairs: true })
+    this.flights = this.nav.links.map(flightOf)
     for (const f of planFloors(plan)) {
       const above = floorAbove(plan, f.id)
       if (above) this.overhead.set(f.id, { above: above.id, open: slabHoles(plan, above.id) })
     }
-    const start = startPoint(plan, this.nav)
+    const start = startPoint(plan, this.nav, (floor, p) => this.flights.some((fl) => (fl.from === floor || fl.to === floor) && pointInPolygon(p, fl.foot)))
     this.floor = start.floor
     this.pos = start.p
     this.yaw = start.yaw
@@ -121,7 +198,7 @@ export class Walker {
   }
 
   private groundY() {
-    return this.host.lift(this.floor) + this.grid().floorAt(this.pos)
+    return this.on ? this.host.lift(this.on.fl.from) + this.on.h : this.host.lift(this.floor) + this.grid().floorAt(this.pos)
   }
 
   private ok(p: Vec) {
@@ -136,7 +213,7 @@ export class Walker {
 
   /** 楼梯上吗（测试、界面用） */
   get onStairs() {
-    return !!this.stair
+    return !!this.on
   }
 
   /** 转动视角（像素；k = 每像素多少弧度） */
@@ -167,24 +244,18 @@ export class Walker {
     this.vel.y += (want.y - this.vel.y) * a
     const step = { x: this.vel.x * dt, y: this.vel.y * dt }
 
-    let target: number
-    if (this.stair) target = this.climb(fwd * v * dt)
-    else {
-      this.slide(step)
-      this.enterStairs(step)
-      target = this.stair ? this.stairY() : this.groundY() + EYE
-    }
+    this.slide(step)
     // 头顶是上层楼板（还没走到楼梯洞口底下）：眼睛压到楼板底下，不钻进楼板里
     // 脚还在上层楼板底下才算（楼梯最后一段已经踩到上层地面上，头顶就不是这块楼板了）
-    const feet = this.stair ? this.host.lift(this.stair.w.from) + this.stairSample().z : this.groundY()
-    const slab = this.ceilingY(this.stair ? this.stair.w.from : this.floor, this.pos)
+    const feet = this.groundY()
+    const slab = this.ceilingY(this.floor, this.pos)
     const ceil = feet < slab - 1 ? slab - HEADROOM : Infinity
-    target = Math.min(target, ceil)
+    const target = Math.min(feet + EYE, ceil)
     this.eyeY += (target - this.eyeY) * (1 - Math.exp(-dt * 12))
     // 平滑跟不上的那几帧也不能钻进楼板（走得快时一下就到了楼板边下面）
     this.eyeY = Math.min(this.eyeY, ceil)
-    // 走路的起伏：按走过的距离推进相位，停下、上下楼时幅度收回
-    const speed = this.stair ? 0 : Math.hypot(this.vel.x, this.vel.y)
+    // 走路的起伏：按走过的距离推进相位，停下时幅度收回
+    const speed = Math.hypot(this.vel.x, this.vel.y)
     this.bob += speed * dt * 0.045
     this.bobAmp += ((speed > 20 ? 1 : 0) - this.bobAmp) * (1 - Math.exp(-dt * 8))
     this.apply()
@@ -198,105 +269,103 @@ export class Walker {
     return m
   }
 
-  /** 按小步走，被挡住时分别试 x、y 方向（贴着墙滑过去）；出生点卡在障碍里时允许往空处走 */
+  /** 按小步走，被挡住时分别试 x、y 方向（贴着墙、扶手滑过去） */
   private slide(d: Vec) {
     const L = Math.hypot(d.x, d.y)
     if (L < 1e-4) return
     const n = Math.ceil(L / 3)
     const sx = d.x / n
     const sy = d.y / n
-    const g = this.grid()
     for (let i = 0; i < n; i++) {
       const p = this.pos
-      const stuck = !this.ok(p)
-      const better = (q: Vec) => (stuck ? g.clearAt('walk', q) > g.clearAt('walk', p) : this.ok(q))
-      const both = { x: p.x + sx, y: p.y + sy }
-      if (better(both)) this.pos = both
-      else if (better({ x: p.x + sx, y: p.y })) this.pos = { x: p.x + sx, y: p.y }
-      else if (better({ x: p.x, y: p.y + sy })) this.pos = { x: p.x, y: p.y + sy }
-      else break
+      if (!this.step({ x: p.x + sx, y: p.y + sy }) && !this.step({ x: p.x + sx, y: p.y }) && !this.step({ x: p.x, y: p.y + sy })) break
     }
   }
 
-  /** 站在楼梯口、朝楼梯方向走：踏上楼梯 */
-  private enterStairs(d: Vec) {
-    const L = Math.hypot(d.x, d.y)
-    if (L < 1e-4) return
-    for (const w of this.nav.links) {
-      const n = w.pts.length
-      if (n < 2) continue
-      const up = w.from === this.floor
-      if (!up && w.to !== this.floor) continue
-      const end = up ? w.entry : w.exit
-      if (Math.hypot(this.pos.x - end.x, this.pos.y - end.y) > STAIR_REACH) continue
-      const next = up ? w.pts[Math.min(n - 1, 3)] : w.pts[Math.max(0, n - 4)]
-      const tx = next.x - end.x
-      const ty = next.y - end.y
-      const tl = Math.hypot(tx, ty) || 1
-      if ((d.x * tx + d.y * ty) / (L * tl) < STAIR_ALIGN) continue
-      const cum = [0]
-      for (let i = 1; i < n; i++) cum.push(cum[i - 1] + Math.hypot(w.pts[i].x - w.pts[i - 1].x, w.pts[i].y - w.pts[i - 1].y))
-      this.stair = { w, cum, s: up ? 0 : cum[n - 1], dir: up ? 1 : -1, yaw0: this.yaw }
-      this.floor = w.from
-      this.pos = this.stairPoint()
-      return
+  /** 走一小步到 q：走得过去就走过去（含踏上 / 走下楼梯、换层），返回是否走了 */
+  private step(q: Vec): boolean {
+    const p = this.pos
+    const on = this.on
+    if (on) {
+      const fl = on.fl
+      if (pointInPolygon(q, fl.foot)) {
+        const h = stepTop(fl, q, on.h)
+        if (Math.abs(h - on.h) > STEP_UP || this.railBlocks(fl, p, q)) return false
+        on.h = h
+        this.pos = q
+        this.setFloor(fl.from)
+        return true
+      }
+      // 出梯口外侧那一条：按上层地面走，站得下了就算上了楼
+      if (on.h >= fl.rise - STEP_UP && inStrip(fl, q)) {
+        on.h = fl.rise
+        this.pos = q
+        if (this.nav.grid(fl.to).canStand('walk', q, BODY_R)) {
+          this.on = null
+          this.setFloor(fl.to)
+        }
+        return true
+      }
+      // 走出楼梯占地：低的一头接下层地面，顶上从出梯口接上层地面
+      const to = on.h <= STEP_UP ? fl.from : on.h >= fl.rise - STEP_UP && segD(q, fl.arrival) < ARRIVE ? fl.to : null
+      if (!to || !this.nav.grid(to).canStand('walk', q, BODY_R)) return false
+      this.on = null
+      this.setFloor(to)
+      this.pos = q
+      return true
     }
+    // 上层：出梯口跟前站不下的那一条，当楼梯的延伸走进去（不换层）
+    for (const fl of this.flights)
+      if (fl.to === this.floor && inStrip(fl, q) && !this.ok(q)) {
+        this.on = { fl, h: fl.rise }
+        this.pos = q
+        return true
+      }
+    for (const fl of this.flights) {
+      const up = fl.from === this.floor
+      if ((!up && fl.to !== this.floor) || !pointInPolygon(q, fl.foot)) continue
+      // 下层：踏上低的那几级；上层：只从出梯口踏上最上面几级（别处是楼梯洞口）
+      const h = stepTop(fl, q, up ? 0 : fl.rise)
+      if (up ? h > STEP_UP : h < fl.rise - STEP_UP || segD(p, fl.arrival) > ARRIVE) return false
+      if (this.railBlocks(fl, p, q)) return false
+      this.on = { fl, h }
+      this.setFloor(fl.from)
+      this.pos = q
+      return true
+    }
+    // 楼梯占地边上不是楼梯口的那几段当墙；出生点卡在障碍里时允许往空处走
+    if (this.edgeBlocks(p, q)) return false
+    const g = this.grid()
+    if (this.ok(p) ? !this.ok(q) : g.clearAt('walk', q) <= g.clearAt('walk', p)) return false
+    this.pos = q
+    return true
   }
 
-  /**
-   * 楼梯上：前进键沿楼梯往 dir 方向走、后退键反过来（拐角平台、U 形折返处朝向和走向不一致也照样走）；
-   * 玩家自己把视角转过 120° 以上（掉头了）才换方向，楼梯本身拐弯不算。走到头就换层。
-   * 镜头朝向只由玩家控制，不自动转（以前会顺着楼梯拐弯转，靠近楼梯口时像是镜头被拽走）。
-   */
-  private climb(along: number): number {
-    const st = this.stair!
-    const { w, cum } = st
-    const turned = Math.abs(Math.atan2(Math.sin(this.yaw - st.yaw0), Math.cos(this.yaw - st.yaw0)))
-    if (turned > (Math.PI * 2) / 3) {
-      st.dir = st.dir === 1 ? -1 : 1
-      st.yaw0 = this.yaw
-    }
-    st.s += along * st.dir
-    const total = cum[cum.length - 1]
-    if (st.s >= total) return this.leaveStairs(w.to, w.exit)
-    if (st.s <= 0) return this.leaveStairs(w.from, w.entry)
-    this.pos = this.stairPoint()
-    return this.stairY()
+  /** 离扶手不到身体半径、还在往扶手靠 */
+  private railBlocks(fl: Flight, p: Vec, q: Vec) {
+    return fl.rails.some((r) => {
+      const d = segD(q, r)
+      return d < BODY_R && d < segD(p, r)
+    })
   }
 
-  private leaveStairs(floor: string, at: Vec) {
-    this.stair = null
-    const changed = floor !== this.floor
+  /** 离楼梯占地边（当墙的那几段）不到身体半径、还在往那靠 */
+  private edgeBlocks(p: Vec, q: Vec) {
+    for (const fl of this.flights) {
+      const pts = fl.from === this.floor ? fl.edge.lower : fl.to === this.floor ? fl.edge.upper : null
+      if (!pts) continue
+      for (const m of pts) {
+        const d = Math.hypot(q.x - m.x, q.y - m.y)
+        if (d < BODY_R && d < Math.hypot(p.x - m.x, p.y - m.y)) return true
+      }
+    }
+    return false
+  }
+
+  private setFloor(floor: string) {
+    if (floor === this.floor) return
     this.floor = floor
-    this.pos = this.grid().nearest('walk', at, BODY_R, 60) ?? { ...at }
-    if (changed) this.host.onFloor(floor)
-    return this.groundY() + EYE
-  }
-
-  private stairIndex() {
-    const { cum, s } = this.stair!
-    let i = 0
-    while (i + 1 < cum.length && cum[i + 1] < s) i++
-    return i
-  }
-
-  private stairSample() {
-    const { w, cum, s } = this.stair!
-    const i = this.stairIndex()
-    const j = Math.min(w.pts.length - 1, i + 1)
-    const t = cum[j] > cum[i] ? (s - cum[i]) / (cum[j] - cum[i]) : 0
-    const a = w.pts[i]
-    const b = w.pts[j]
-    return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t }
-  }
-
-  private stairPoint(): Vec {
-    const q = this.stairSample()
-    return { x: q.x, y: q.y }
-  }
-
-  private stairY() {
-    return this.host.lift(this.stair!.w.from) + this.stairSample().z + EYE
+    this.host.onFloor(floor)
   }
 
   private apply() {
@@ -418,7 +487,7 @@ export class Walker {
  * 出生点：玄关里离房子中心最近的能站处，面朝房子中心；没有玄关就在最大的起居房间中央。
  * 多层户型从玄关所在层（一般是最底层）开始。
  */
-export function startPoint(plan: Plan, nav: HouseNav): { floor: string; p: Vec; yaw: number } {
+export function startPoint(plan: Plan, nav: HouseNav, avoid: (floor: string, p: Vec) => boolean = () => false): { floor: string; p: Vec; yaw: number } {
   const indoor = plan.rooms.filter((r) => r.kind !== 'balcony' && r.kind !== 'void')
   const center = centroid((indoor.length ? indoor : plan.rooms).flatMap((r) => r.points))
   const size = (pts: Vec[]) => Math.abs(pts.reduce((s, p, i) => s + p.x * pts[(i + 1) % pts.length].y - pts[(i + 1) % pts.length].x * p.y, 0)) / 2
@@ -431,7 +500,7 @@ export function startPoint(plan: Plan, nav: HouseNav): { floor: string; p: Vec; 
     // 从房间中心往房子中心挪一点（玄关里站在上框边一侧，正对走廊）
     const toward = { x: c.x + (center.x - c.x) * 0.15, y: c.y + (center.y - c.y) * 0.15 }
     const p = g.nearest('walk', pointInPolygon(toward, room!.points) ? toward : c, BODY_R, 150)
-    if (!p) continue
+    if (!p || avoid(floor, p)) continue
     const yaw = Math.atan2(-(center.x - p.x), -(center.y - p.y))
     return { floor, p, yaw: Math.hypot(center.x - p.x, center.y - p.y) < 1 ? 0 : yaw }
   }
