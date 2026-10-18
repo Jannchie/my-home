@@ -346,7 +346,7 @@ class Decorator {
       let r: number | undefined
       if (o.kind === 'window') {
         const owner = this.plan.rooms.find((x) => x.id === o.roomId)
-        if (!owner || !isSashWindow(this.plan, owner, g.e, g.center)) continue
+        if (!owner || !isSashWindow(this.plan, owner, g.e, g.center, o)) continue
         r = SASH_R
       }
       for (const k of [30, -30]) {
@@ -743,7 +743,7 @@ class Decorator {
       ...this.hardIn(room, [SWING_ZONES]),
       // 门洞正前方的通道（门宽 × 进深 60）：门的开合范围可以占，但不能堵在门口。通往阳台的落地窗同样是出入口
       ...openingsOn(room, this.plan)
-        .filter(({ o, owner, e, center }) => o.kind !== 'window' || isSashWindow(this.plan, owner, e, center))
+        .filter(({ o, owner, e, center }) => o.kind !== 'window' || isSashWindow(this.plan, owner, e, center, o))
         .map(({ o, e, center }) => {
           // 门洞可能记在隔壁房间的墙上（法线朝隔壁外侧）：通道一律朝本房间一侧
           const into = pointInPolygon(add(center, mul(e.out, 10)), room.points) ? e.out : mul(e.out, -1)

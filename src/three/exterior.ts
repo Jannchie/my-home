@@ -11,6 +11,7 @@ import { PARAPET, ROOF_T, roofHeightAt, tessellate, type P3, type RoofRect } fro
 import { subtractSpan } from '../stairs'
 import { addOutlines, cyl, mergeMeshes, pullDepth, rbox, shade, toon, useAnisotropy } from './toon'
 import { BASE, floorY, openingInfos, WALL_PULL } from './house'
+import { archRise, roundDiameter } from '../windows'
 import { injectLightMask } from './lightMask'
 import { activeCover } from '../roofCover'
 import { coverCaps, coverMeshes, valleyLift } from './roofCover'
@@ -491,9 +492,22 @@ export function facadeExtras(view: Plan, H: number, ex: Exterior, ground: boolea
     if (o.kind === 'window' && !info.sash) {
       const y0 = info.y0
       const y1 = Math.min(info.y1, H - 2)
-      item.add(piece(w + 14, 7, 4, 0, y1, 2))
-      item.add(piece(w + 20, 6, 9, 0, y0 - 6, 4.5))
-      for (const s of [-1, 1]) item.add(piece(7, y1 - y0, 4, s * (w / 2 + 3.5), y0, 2))
+      if (o.windowStyle === 'round' && info.y1 <= H - 1) {
+        // 圆窗：只在圆的下沿托一块窗台
+        const d = roundDiameter(w, info.y1 - y0)
+        const yb = (y0 + info.y1) / 2 - d / 2
+        item.add(piece(d * 0.7, 5, 8, 0, yb - 5, 4))
+      } else if (o.windowStyle === 'arched' && info.y1 <= H - 1) {
+        // 拱顶窗：两侧窗套到拱脚，拱顶一块拱心石
+        const ys = info.y1 - archRise(w, info.y1 - y0)
+        item.add(piece(w + 20, 6, 9, 0, y0 - 6, 4.5))
+        for (const s of [-1, 1]) item.add(piece(7, ys - y0, 4, s * (w / 2 + 3.5), y0, 2))
+        item.add(piece(14, 16, 5, 0, info.y1 - 9, 2.5))
+      } else {
+        item.add(piece(w + 14, 7, 4, 0, y1, 2))
+        item.add(piece(w + 20, 6, 9, 0, y0 - 6, 4.5))
+        for (const s of [-1, 1]) item.add(piece(7, y1 - y0, 4, s * (w / 2 + 3.5), y0, 2))
+      }
     } else if (ground && o.kind === 'door' && info.owner.kind === 'entrance') {
       // 入户门：门框 + 雨棚（或带柱子的门廊）
       for (const s of [-1, 1]) item.add(piece(8, 205, 5, s * (w / 2 + 4), 0, 2.5))

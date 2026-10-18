@@ -47,6 +47,8 @@ import {
 import { edgesOf } from '../model'
 import { showerSpot, stallWalls, type StallWalls } from '../bathroom'
 import { curtainSpec } from '../curtains'
+import { archRise, frameColor, gridAllowed, roundDiameter, sashAllowed, shutterColor, windowSpan } from '../windows'
+import { spandrelGeometry, windowModel, type WindowModelStyle } from './windows'
 import { showerCurtainModel, showerModel } from './shower'
 import { edgeRail, holeRails, stairsModel, type WallLine } from './stairs3d'
 import { subtractSpan } from '../stairs'
@@ -591,6 +593,41 @@ function wallPiece(a: Vec, b: Vec, t: number, y0: number, y1: number, outer: boo
   return m
 }
 
+/**
+ * 拱顶窗 / 圆窗在矩形墙洞角上补回的墙块（墙面材质同这段墙）；u = 窗中心沿墙段的位置。
+ * 拱顶窗补拱上方两角，圆窗补圆外四角；窗顶顶到天花的不补（拱 / 圆被截掉了，留矩形洞口）。
+ */
+function spandrel(info: OpeningInfo, u: number, a: Vec, dir: Vec, t: number, outer: boolean, n: Vec, faces: [THREE.Material | null, THREE.Material | null], H: number): THREE.Mesh | null {
+  const style = info.o.windowStyle
+  if (style !== 'arched' && style !== 'round') return null
+  if (info.y1 > H - 1) return null
+  const w = info.width
+  const h = info.y1 - info.y0
+  let y0: number
+  let geo: THREE.BufferGeometry | null
+  if (style === 'arched') {
+    const rise = archRise(w, h)
+    y0 = info.y1 - rise
+    geo = spandrelGeometry(w, rise, t, w / 2, rise, -rise / 2, false)
+  } else {
+    const r = roundDiameter(w, h) / 2
+    y0 = info.y0
+    geo = spandrelGeometry(w, h, t, r, r, 0, true)
+  }
+  if (!geo) return null
+  const side = wallMat(outer)
+  const m = new THREE.Mesh(geo, [faces[0] ?? side, faces[1] ?? side, side])
+  const hh = info.y1 - y0
+  const c = add(a, mul(dir, u))
+  tagFade(m, c, n, outer)
+  m.userData.wall = { y0, h: hh }
+  m.position.set(c.x, y0 + hh / 2, c.y)
+  m.rotation.y = Math.atan2(-dir.y, dir.x)
+  m.castShadow = true
+  m.receiveShadow = true
+  return m
+}
+
 const wpCache = new Map<string, THREE.Material>()
 /** 墙纸材质：纯色直接用 toon，带花纹的按世界坐标投影（同一面墙花纹连续） */
 function wallpaperMaterial(w: Wallpaper): THREE.Material {
@@ -609,12 +646,14 @@ function wallpaperMaterial(w: Wallpaper): THREE.Material {
   return m
 }
 
-function openingSpan(plan: Plan, kind: string, owner: Room, sash: boolean) {
-  if (kind !== 'window') return { y0: 0, y1: 200 }
-  if (sash) return { y0: 0, y1: 200 }
-  if (owner.kind === 'bath' || owner.kind === 'toilet' || owner.kind === 'wash') return { y0: 110, y1: 180 }
-  void plan
-  return { y0: 90, y1: 190 }
+function openingSpan(o: Plan['openings'][number], owner: Room, sash: boolean) {
+  if (o.kind !== 'window') return { y0: 0, y1: 200 }
+  return windowSpan(owner, sash, o.sill)
+}
+
+/** 窗用哪种模型：没指定款式的按旧样子（朝阳台的落地推拉窗 / 腰窗单片玻璃） */
+export function windowModelStyle(info: Pick<OpeningInfo, 'o' | 'sash'>): WindowModelStyle {
+  return info.o.windowStyle ?? (info.sash ? 'legacySash' : 'plain')
 }
 
 export interface OpeningInfo {
@@ -642,8 +681,8 @@ export function openingInfos(plan: Plan): OpeningInfo[] {
     const center = add(e.a, mul(e.dir, c))
     const wall = wallThicknessAt(plan, center, e.out, owner)
     const probe = add(center, mul(e.out, wall / 2 + 15))
-    const sash = o.kind === 'window' && plan.rooms.some((x) => x.kind === 'balcony' && pointInPolygon(probe, x.points))
-    out.push({ center, dir: e.dir, out: e.out, width: w, wall, sash, outer: wall >= plan.wallOuter, o, owner, ...openingSpan(plan, o.kind, owner, sash) })
+    const sash = o.kind === 'window' && sashAllowed(o) && plan.rooms.some((x) => x.kind === 'balcony' && pointInPolygon(probe, x.points))
+    out.push({ center, dir: e.dir, out: e.out, width: w, wall, sash, outer: wall >= plan.wallOuter, o, owner, ...openingSpan(o, owner, sash) })
   }
   return out
 }
@@ -854,6 +893,9 @@ function buildWalls(plan: Plan, H0: number, infos: OpeningInfo[], opts: HouseOpt
       const pr = projectToSegment(info.center, s.a, s.b)
       if (pr.d > 1 || Math.abs(dir.x * info.dir.y - dir.y * info.dir.x) > 1e-3) continue
       cuts.push({ lo: pr.t - info.width / 2, hi: pr.t + info.width / 2, y0: info.y0, y1: info.y1 })
+      // 拱顶窗 / 圆窗：矩形洞口的角上补回墙
+      const sp = info.o.kind === 'window' ? spandrel(info, pr.t, s.a, dir, t, outer, n, faces, H) : null
+      if (sp) put(sp)
     }
     // 嵌墙收纳位（壁龛）：正面那段墙整段挖开到壁龛高度（柜子家具伸进墙里）
     for (const f of plan.fixtures) {
@@ -949,9 +991,8 @@ function buildOpenings(infos: OpeningInfo[], H: number) {
       leaf.rotation.y = Math.atan2(-d.y, d.x)
       leaf.userData.info = info
       g.add(leaf)
-    } else if (o.kind === 'sliding' || info.sash) {
-      // 引き違い：两扇错开，一扇推开一半
-      const glass = info.sash
+    } else if (o.kind === 'sliding') {
+      // 引き戸：两扇错开，一扇推开一半（朝阳台的落地推拉窗在下面窗的分支里）
       const t = Math.max(2, wall / 4)
       for (const k of [0, 1]) {
         const pw = w / 2 + 2
@@ -959,17 +1000,9 @@ function buildOpenings(infos: OpeningInfo[], H: number) {
         const off = (k === 0 ? 1 : -1) * (t / 2 + 0.5)
         const c = add(add(center, mul(dir, along)), mul(out, off))
         const panel = new THREE.Group()
-        const h = glass ? top(200) - info.y0 : doorH
-        if (glass) {
-          for (const y of [0, h - 4]) panel.add(rbox(pw, 4, t, '#ffffff', { y }, 0.6))
-          for (const s of [-1, 1]) panel.add(rbox(4, h, t, '#ffffff', { x: (s * (pw - 4)) / 2 }, 0.6))
-          const pane = rbox(pw - 6, h - 8, t + 0.4, C.glass, { y: 4 }, 0.3)
-          pane.material = toon(C.glass, { transparent: 0.45 })
-          panel.add(pane)
-        } else {
-          panel.add(rbox(pw, h, t, '#f3e1c7', {}, 0.8))
-          panel.add(rbox(pw - 10, h - 20, t + 0.4, '#fffaf0', { y: 10 }, 0.5))
-        }
+        const h = doorH
+        panel.add(rbox(pw, h, t, '#f3e1c7', {}, 0.8))
+        panel.add(rbox(pw - 10, h - 20, t + 0.4, '#fffaf0', { y: 10 }, 0.5))
         panel.position.set(c.x, info.y0, c.y)
         panel.rotation.y = yaw
         panel.userData.info = info
@@ -994,17 +1027,25 @@ function buildOpenings(infos: OpeningInfo[], H: number) {
         fold.add(m)
       }
     } else {
-      // 腰窗：白框 + 半透明玻璃
+      // 窗：款式见 three/windows.ts（不填款式 = 旧的腰窗白框 + 半透明玻璃 / 朝阳台的落地推拉窗）
       if (info.y0 >= H) continue
+      const style = windowModelStyle(info)
+      // 旧的落地推拉窗按 200 高截到天花（同以前），其余窗顶碰到天花时不画上框
       const h = top(info.y1) - info.y0
       if (h < 4) continue
-      const frame = new THREE.Group()
-      frame.add(rbox(w, 4, wall + 2, '#ffffff', { y: 0 }, 0.8))
-      if (top(info.y1) === info.y1) frame.add(rbox(w, 4, wall + 2, '#ffffff', { y: h - 4 }, 0.8))
-      for (const s of [-1, 1]) frame.add(rbox(4, h, wall + 2, '#ffffff', { x: (s * (w - 4)) / 2 }, 0.8))
-      const pane = rbox(w - 6, h - 6, 1.4, C.glass, { y: 3 }, 0.3)
-      pane.material = toon(C.glass, { transparent: 0.45 })
-      frame.add(pane)
+      const n0 = { x: -dir.y, y: dir.x }
+      const frame = windowModel({
+        style,
+        w,
+        h,
+        wall,
+        frame: frameColor(o),
+        grid: gridAllowed(o.windowStyle) ? o.grid : undefined,
+        shutters: o.shutters && info.outer ? shutterColor(o) : undefined,
+        out: out.x * n0.x + out.y * n0.y >= 0 ? 1 : -1,
+        hinge: o.hinge,
+        clipped: top(info.y1) !== info.y1,
+      })
       frame.position.set(center.x, info.y0, center.y)
       frame.rotation.y = yaw
       frame.userData.info = info

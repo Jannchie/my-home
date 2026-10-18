@@ -2,6 +2,9 @@
 
 import { add, bbox, edgesOf, fixtureBox, fixtureDepth, mul, pointInPolygon, type Box, type Fixture, type Plan } from './model'
 import { wallThicknessAt } from './walls'
+import { sashAllowed, windowSpan } from './windows'
+
+export { windowSpan }
 
 /** 设备局部坐标 → 平面坐标（同 surface.ts 的 toWorld；这里单独写一份，免得 three/house.ts 和 surface.ts 循环引用） */
 function at(f: Pick<Fixture, 'x' | 'y' | 'rot'>, lx: number, lz: number) {
@@ -71,7 +74,7 @@ export interface CurtainSpec {
 export function curtainSpec(plan: Pick<Plan, 'fixtures'>, o: { center: { x: number; y: number }; dir: { x: number; y: number }; out: { x: number; y: number }; width: number; wall: number; y0: number; y1: number; sash: boolean }, H: number): CurtainSpec | null {
   const rodY = Math.min(o.y1 + 12, H - 4)
   if (rodY < 60) return null
-  let bottom = o.sash ? 1 : Math.max(0, o.y0 - 15)
+  let bottom = o.sash || o.y0 <= 0.5 ? 1 : Math.max(0, o.y0 - 15)
   const face = add(o.center, mul(o.out, -o.wall / 2))
   const half = o.width / 2 + CURTAIN.over
   const ends = [add(face, mul(o.dir, -half)), add(face, mul(o.dir, half))]
@@ -83,13 +86,6 @@ export function curtainSpec(plan: Pick<Plan, 'fixtures'>, o: { center: { x: numb
   // 下摆抬到快碰到杆了：这扇窗就不挂
   if (rodY - bottom < 25) return null
   return { box, rodY, bottom }
-}
-
-/** 窗的高度范围（和 house.ts 的 openingSpan 一致） */
-export function windowSpan(owner: { kind: string }, sash: boolean) {
-  if (sash) return { y0: 0, y1: 200 }
-  if (owner.kind === 'bath' || owner.kind === 'toilet' || owner.kind === 'wash') return { y0: 110, y1: 180 }
-  return { y0: 90, y1: 190 }
 }
 
 /** 全屋会挂窗帘的窗（居室默认挂、和室不挂，房间的 curtain 设定优先），同 house.ts 的 buildCurtains */
@@ -106,8 +102,8 @@ export function curtainSpecs(plan: Plan, H = 240): CurtainSpec[] {
     const c = e.length <= w ? e.length / 2 : Math.max(w / 2, Math.min(e.length - w / 2, o.offset))
     const center = add(e.a, mul(e.dir, c))
     const wall = wallThicknessAt(plan, center, e.out, owner)
-    const sash = plan.rooms.some((x) => x.kind === 'balcony' && pointInPolygon(add(center, mul(e.out, wall / 2 + 15)), x.points))
-    const spec = curtainSpec(plan, { center, dir: e.dir, out: e.out, width: w, wall, sash, ...windowSpan(owner, sash) }, H)
+    const sash = sashAllowed(o) && plan.rooms.some((x) => x.kind === 'balcony' && pointInPolygon(add(center, mul(e.out, wall / 2 + 15)), x.points))
+    const spec = curtainSpec(plan, { center, dir: e.dir, out: e.out, width: w, wall, sash, ...windowSpan(owner, sash, o.sill) }, H)
     if (spec) out.push(spec)
   }
   return out

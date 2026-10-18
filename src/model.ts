@@ -120,6 +120,61 @@ export interface Opening {
   swing: 'in' | 'out'
   /** 所在楼层：门窗跟着所在房间（roomId）走，这个字段只是冗余标记，读写都以房间为准（floors.ts openingFloor） */
   floor?: string
+  // ---- 窗的款式（只对 kind = window 有意义；都不填 = 旧存档的样子：腰窗单片玻璃白框、朝阳台的落地推拉窗） ----
+  /** 开启方式 / 形状 */
+  windowStyle?: WindowStyle
+  /** 窗框颜色，不填 = 白色 */
+  frame?: WindowFrame
+  /** 格条，不填 = 无 */
+  grid?: WindowGrid
+  /** 窗台高度预设；不填 = 按房间（居室腰窗、浴室高一点；朝阳台的是落地窗） */
+  sill?: WindowSill
+  /** 外墙一侧的百叶护窗板（欧美风） */
+  shutters?: boolean
+}
+
+/**
+ * 窗的款式：
+ *   sliding 引き違い（两扇左右推拉）、casement 平开单扇、casement2 平开双扇、combo 固定 + 两侧平开的组合窗、
+ *   doubleHung 上下提拉、fixed 固定景观窗、awning 上悬窗、louver 百叶窗（ジャロジー）、arched 拱顶窗、round 圆窗。
+ */
+export type WindowStyle = 'sliding' | 'casement' | 'casement2' | 'combo' | 'doubleHung' | 'fixed' | 'awning' | 'louver' | 'arched' | 'round'
+export const WINDOW_STYLES: Record<WindowStyle, string> = {
+  sliding: '推拉窗',
+  casement: '平开窗',
+  casement2: '双扇平开窗',
+  combo: '组合窗',
+  doubleHung: '上下提拉窗',
+  fixed: '固定景观窗',
+  awning: '上悬窗',
+  louver: '百叶窗',
+  arched: '拱顶窗',
+  round: '圆窗',
+}
+export type WindowFrame = 'white' | 'black' | 'silver' | 'bronze' | 'wood'
+export const WINDOW_FRAMES: Record<WindowFrame, { label: string; color: string }> = {
+  white: { label: '白色', color: '#ffffff' },
+  black: { label: '黑色', color: '#2f3134' },
+  silver: { label: '铝合金银', color: '#b9bec4' },
+  bronze: { label: '古铜色', color: '#6b5a4a' },
+  wood: { label: '木色', color: '#b88a5c' },
+}
+/** 格条：cross 十字（田字格）、colonial 殖民风细格、shoji 和风细格（障子样）、top 只在上部一排小格 */
+export type WindowGrid = 'none' | 'cross' | 'colonial' | 'shoji' | 'top'
+export const WINDOW_GRIDS: Record<WindowGrid, string> = {
+  none: '无格条',
+  cross: '田字格',
+  colonial: '殖民风格条',
+  shoji: '和风细格',
+  top: '上部小格',
+}
+/** 窗台高度：waist 腰窗（居室 90~190）、high 高窗、low 地窗（贴地的矮窗）、full 落地窗 */
+export type WindowSill = 'waist' | 'high' | 'low' | 'full'
+export const WINDOW_SILLS: Record<WindowSill, string> = {
+  waist: '腰窗',
+  high: '高窗',
+  low: '地窗',
+  full: '落地窗',
 }
 
 /**

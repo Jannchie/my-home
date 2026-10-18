@@ -40,6 +40,7 @@ import { wallSegments, wallThicknessAt } from '../walls'
 import { baseFloorId, floorBelow, floorById, floorOf, floorView, isMultiFloor, riseOf } from '../floors'
 import { stairHoleConflicts, stairHoles, stairPlanLines, subtractSpan } from '../stairs'
 import { tatamiLayout } from '../tatami'
+import { sashAllowed } from '../windows'
 import { stallWalls } from '../bathroom'
 import FixtureGlyph from './FixtureGlyph.vue'
 import { roomName, t } from '../i18n'
@@ -921,6 +922,9 @@ interface OpeningView {
   sash: boolean
   /** 折れ戸的折线 */
   fold: string
+  /** 窗的款式记号：平开窗的开启弧（虚线）、上下提拉 / 百叶窗等的细线 */
+  arcs: string[]
+  marks: string
 }
 
 const openingViews = computed<OpeningView[]>(() => {
@@ -940,9 +944,10 @@ const openingViews = computed<OpeningView[]>(() => {
     const gap = polyPath([add(p0, mul(e.out, h)), add(p1, mul(e.out, h)), add(p1, mul(e.out, -h)), add(p0, mul(e.out, -h))])
     // 窗外是阳台 → 掃き出し窓
     const probe = add(center, mul(e.out, wall / 2 + 15))
-    const sash = o.kind === 'window' && fp.value.rooms.some((x) => x.kind === 'balcony' && pointInPolygon(probe, x.points))
-    const v: OpeningView = { o, gap, leaf: '', arc: '', glass: [], panels: [], sash, fold: '' }
-    if (o.kind === 'sliding' || sash) {
+    const sash = o.kind === 'window' && sashAllowed(o) && fp.value.rooms.some((x) => x.kind === 'balcony' && pointInPolygon(probe, x.points))
+    const v: OpeningView = { o, gap, leaf: '', arc: '', glass: [], panels: [], sash, fold: '', arcs: [], marks: '' }
+    const style = o.kind === 'window' ? o.windowStyle : undefined
+    if (o.kind === 'sliding' || (sash && (!style || style === 'sliding')) || style === 'sliding') {
       // 引き違い：两扇板分别靠墙两侧，在中间重叠一点
       const t = Math.max(2, wall / 4)
       const mid = add(p0, mul(e.dir, w / 2))
@@ -967,18 +972,68 @@ const openingViews = computed<OpeningView[]>(() => {
       v.leaf = `M${hingeP.x},${hingeP.y}L${tip.x},${tip.y}`
       v.arc = `M${tip.x},${tip.y}A${w},${w} 0 0 ${cross > 0 ? 1 : 0} ${other.x},${other.y}`
     } else {
-      // 腰窗：墙两侧框线 + 中间玻璃线
+      // 窗：墙两侧框线 + 中间玻璃线；款式记号叠在上面
       const q = wall / 2 - 1
       for (const k of [-q, 0, q]) {
         const a = add(p0, mul(e.out, k))
         const b = add(p1, mul(e.out, k))
         v.glass.push(`M${a.x},${a.y}L${b.x},${b.y}`)
       }
+      windowMarks(v, style, p0, p1, e.dir, e.out, w, wall)
     }
     out.push(v)
   }
   return out
 })
+
+/**
+ * 平面图里窗的款式记号（建筑图的习惯画法，简化）：
+ *   平开窗 / 组合窗：往户外的开启弧（虚线）；上下提拉：玻璃线画成两道；百叶窗：一排斜短线；
+ *   上悬窗：户外一侧的虚线三角；拱顶 / 圆窗：中间一个小圆；固定窗、推拉窗（上面画成两扇板）不加。
+ */
+function windowMarks(v: OpeningView, style: Opening['windowStyle'], p0: Vec, p1: Vec, dir: Vec, out: Vec, w: number, wall: number) {
+  const P = (p: Vec) => `${p.x},${p.y}`
+  const swing = (hinge: Vec, tip: Vec, len: number) => {
+    // 铰链在 hinge，扇沿墙指向 tip；推开到户外 90°
+    const open = add(hinge, mul(out, len + wall / 2))
+    const h2 = add(hinge, mul(out, wall / 2))
+    const t2 = add(tip, mul(out, wall / 2))
+    const cross = (open.x - h2.x) * (t2.y - h2.y) - (open.y - h2.y) * (t2.x - h2.x)
+    v.arcs.push(`M${P(h2)}L${P(open)}A${len},${len} 0 0 ${cross > 0 ? 1 : 0} ${P(t2)}`)
+  }
+  const mid = add(p0, mul(dir, w / 2))
+  if (style === 'casement') {
+    const [h, t] = v.o.hinge === 'end' ? [p1, p0] : [p0, p1]
+    swing(h, t, w)
+  } else if (style === 'casement2') {
+    swing(p0, mid, w / 2)
+    swing(p1, mid, w / 2)
+  } else if (style === 'combo') {
+    const side = Math.min((w - 8) * 0.26, 60)
+    swing(p0, add(p0, mul(dir, side)), side)
+    swing(p1, add(p1, mul(dir, -side)), side)
+  } else if (style === 'doubleHung') {
+    const a = add(p0, mul(out, 2.5))
+    const b = add(p1, mul(out, 2.5))
+    v.marks = `M${P(a)}L${P(b)}`
+  } else if (style === 'louver') {
+    const n = Math.max(3, Math.round(w / 15))
+    const parts: string[] = []
+    for (let i = 1; i < n; i++) {
+      const c = add(p0, mul(dir, (w * i) / n))
+      parts.push(`M${P(add(add(c, mul(out, -wall / 2 + 1)), mul(dir, -3)))}L${P(add(add(c, mul(out, wall / 2 - 1)), mul(dir, 3)))}`)
+    }
+    v.marks = parts.join('')
+  } else if (style === 'awning') {
+    const a = add(p0, mul(out, wall / 2))
+    const b = add(p1, mul(out, wall / 2))
+    const tip = add(mid, mul(out, wall / 2 + Math.min(25, w * 0.25)))
+    v.arcs.push(`M${P(a)}L${P(tip)}L${P(b)}`)
+  } else if (style === 'arched' || style === 'round') {
+    const r = Math.max(3, wall / 2 - 1)
+    v.marks = `M${P(add(mid, mul(dir, -r)))}A${r},${r} 0 1 0 ${P(add(mid, mul(dir, r)))}A${r},${r} 0 1 0 ${P(add(mid, mul(dir, -r)))}`
+  }
+}
 
 const fixtureViews = computed(() =>
   fp.value.fixtures.map((f) => ({
@@ -1350,13 +1405,15 @@ async function exportPng() {
           <path :d="v.leaf" fill="none" stroke="#2b2925" :stroke-width="4" stroke-linecap="round" />
         </template>
         <template v-else-if="v.panels.length">
-          <path v-for="(g, i) in v.panels" :key="i" :d="g" :fill="v.sash ? '#dceaf0' : '#fff'" stroke="#2b2925" stroke-width="1.5" />
+          <path v-for="(g, i) in v.panels" :key="i" :d="g" :fill="v.o.kind === 'window' ? '#dceaf0' : '#fff'" stroke="#2b2925" stroke-width="1.5" />
         </template>
         <template v-else-if="v.o.kind === 'folding'">
           <path :d="v.fold" fill="none" stroke="#2b2925" stroke-width="2" stroke-linejoin="round" />
         </template>
         <template v-else>
           <path v-for="(g, i) in v.glass" :key="i" :d="g" fill="none" stroke="#2b2925" :stroke-width="i === 1 ? 2.5 : 1.5" />
+          <path v-if="v.marks" :d="v.marks" fill="none" stroke="#2b2925" stroke-width="1.5" />
+          <path v-for="(g, i) in v.arcs" :key="'a' + i" :d="g" fill="none" stroke="#6b665d" stroke-width="1" stroke-dasharray="4 3" vector-effect="non-scaling-stroke" />
         </template>
         <path v-if="isSel('opening', v.o.id)" class="ui" :d="v.gap" fill="none" stroke="#3f6652" :stroke-width="px(2)" />
         <!-- 加粗的点击热区（触屏更粗） -->

@@ -11,6 +11,7 @@ import { CN } from './generate-cn'
 import { WEST } from './generate-west'
 import { dwellingsFor, generateHouseWithArea, houseBedrooms, type Dwelling } from './generate-house'
 import type { Region } from './model'
+import { styleWindows } from './windows'
 
 export const REGIONS: Region[] = ['jp', 'cn', 'west']
 
@@ -34,6 +35,14 @@ export function dwellingFor(opts: Pick<GenOptions, 'seed' | 'dwelling' | 'maxAre
 }
 
 export function generatePlan(opts: GenOptions): GenResult {
+  const r = generateLayout(opts)
+  // 窗的款式按地区配（只写窗的字段，用种子散列，不动布局的随机序列）
+  styleWindows(r.plan, r.plan.region ?? regionFor(opts), r.seed)
+  return r
+}
+
+/** 只出布局（不配窗的款式）：测试用来确认配窗不改布局 */
+export function generateLayout(opts: GenOptions): GenResult {
   const region = regionFor(opts)
   const dw = dwellingFor(opts, region)
   // 随机地区 / 住宅类型：往后试种子时跳过散列到别的地区、类型的种子

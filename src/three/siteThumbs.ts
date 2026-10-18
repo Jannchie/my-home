@@ -4,11 +4,13 @@
 
 import * as THREE from 'three'
 import { onBeforeUnmount, shallowRef } from 'vue'
-import { FENCE_STYLE, type CarKind, type Exterior, type FenceKind, type Plan } from '../model'
+import { FENCE_STYLE, type CarKind, type Exterior, type FenceKind, type Plan, type WindowGrid } from '../model'
 import { buildBuilding } from './building'
 import { carModel, fenceSpan } from './exterior'
 import { BASE } from './house'
-import { addOutlines, rbox } from './toon'
+import { addOutlines, rbox, toon } from './toon'
+import { spandrelGeometry, windowModel, type WindowModelStyle } from './windows'
+import { archRise, roundDiameter } from '../windows'
 import { cachedThumb, renderThumb } from './thumbs'
 
 /** 一张预览图要画什么 */
@@ -17,11 +19,14 @@ export type SitePreview =
   | { t: 'car'; kind: CarKind; color: string }
   /** 一座小房子：focus 决定镜头框住哪里（整个屋顶 / 一段外墙 / 入口） */
   | { t: 'house'; focus: 'roof' | 'cover' | 'facade' | 'entrance'; ex: Exterior }
+  /** 一扇窗嵌在一小段外墙里（门窗检查器的款式 / 格条格子） */
+  | { t: 'window'; style: WindowModelStyle; frame: string; grid?: WindowGrid; shutters?: string }
 
 /** 缓存键：画面相关的参数都在里面，不相关的（比如看屋顶时的点缀色以外）也带上，宁可多渲染一张不画错 */
 export function previewKey(p: SitePreview): string {
   if (p.t === 'fence') return `site:fence|${p.kind}|${p.color ?? ''}|${p.height ?? ''}`
   if (p.t === 'car') return `site:car|${p.kind}|${p.color}`
+  if (p.t === 'window') return `site:window|${p.style}|${p.frame}|${p.grid ?? ''}|${p.shutters ?? ''}`
   const e = p.ex
   return `site:house|${p.focus}|${e.roof}|${e.roofColor}|${e.pitch ?? ''}|${e.eave ?? ''}|${e.facade}|${e.wallColor}|${e.trimColor}|${e.porch ?? ''}|${e.roofCover ?? ''}`
 }
@@ -70,6 +75,8 @@ export function previewObject(p: SitePreview): THREE.Object3D {
     g.add(rbox(len + 40, 4, 90, '#b9d39c', { y: -4, z: 20 }, 2))
   } else if (p.t === 'car') {
     g.add(carModel(p.color, p.kind))
+  } else if (p.t === 'window') {
+    g.add(windowPreview(p))
   } else {
     const plan = previewPlan(p.ex)
     const { root } = buildBuilding(plan, 250, undefined, { bare: true })
@@ -82,6 +89,39 @@ export function previewObject(p: SitePreview): THREE.Object3D {
   return g
 }
 
+/** 预览窗：120 × 110 的窗洞，开在一段浅色外墙上（户外朝 +z，镜头从户外看） */
+const PV_W = 120
+const PV_H = 110
+function windowPreview(p: Extract<SitePreview, { t: 'window' }>): THREE.Group {
+  const g = new THREE.Group()
+  const wall = 18
+  const side = p.shutters ? 85 : 45
+  const W = PV_W + side * 2
+  const mat = toon('#efe7da')
+  const box = (x0: number, x1: number, y0: number, y1: number) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, y1 - y0, wall), mat)
+    m.position.set((x0 + x1) / 2, (y0 + y1) / 2, 0)
+    g.add(m)
+  }
+  box(-W / 2, -PV_W / 2, -35, PV_H + 30)
+  box(PV_W / 2, W / 2, -35, PV_H + 30)
+  box(-PV_W / 2, PV_W / 2, -35, 0)
+  box(-PV_W / 2, PV_W / 2, PV_H, PV_H + 30)
+  if (p.style === 'arched' || p.style === 'round') {
+    const rise = archRise(PV_W, PV_H)
+    const r = roundDiameter(PV_W, PV_H) / 2
+    const geo = p.style === 'arched' ? spandrelGeometry(PV_W, rise, wall, PV_W / 2, rise, -rise / 2, false) : spandrelGeometry(PV_W, PV_H, wall, r, r, 0, true)
+    if (geo) {
+      // 单一材质（几何里的分组被忽略）：描边只认单一填充色
+      const m = new THREE.Mesh(geo, mat)
+      m.position.y = p.style === 'arched' ? PV_H - rise / 2 : PV_H / 2
+      g.add(m)
+    }
+  }
+  g.add(windowModel({ style: p.style, w: PV_W, h: PV_H, wall, frame: p.frame, grid: p.grid, shutters: p.shutters, out: 1 }))
+  return g
+}
+
 const DIRS = {
   fence: new THREE.Vector3(0.45, 0.5, 1).normalize(),
   // 车头朝 -z：从左前上方看
@@ -91,6 +131,8 @@ const DIRS = {
   cover: new THREE.Vector3(-0.6, 0.9, 1).normalize(),
   facade: new THREE.Vector3(-0.5, 0.25, 1).normalize(),
   entrance: new THREE.Vector3(0.6, 0.4, 1).normalize(),
+  // 窗：从户外略偏右上看，看得出开启扇的进深
+  window: new THREE.Vector3(0.38, 0.18, 1).normalize(),
 }
 
 /** 渲染（或取缓存）一张预览图 */
@@ -98,6 +140,12 @@ export function renderPreview(p: SitePreview): string {
   const key = previewKey(p)
   if (p.t === 'fence') return renderThumb(key, () => previewObject(p), { dir: DIRS.fence, margin: 0.85 })
   if (p.t === 'car') return renderThumb(key, () => previewObject(p), { dir: DIRS.car, margin: 1.02 })
+  if (p.t === 'window')
+    return renderThumb(key, () => previewObject(p), {
+      dir: DIRS.window,
+      margin: 0.95,
+      box: () => new THREE.Box3(new THREE.Vector3(-PV_W / 2 - (p.shutters ? 70 : 18), -14, -10), new THREE.Vector3(PV_W / 2 + (p.shutters ? 70 : 18), PV_H + 12, 30)),
+    })
   const focus = p.focus
   return renderThumb(key, () => previewObject(p), {
     dir: DIRS[focus],

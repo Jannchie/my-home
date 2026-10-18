@@ -557,8 +557,9 @@ export class Occupancy {
         if (Math.abs((center.x - e.a.x) * e.out.x + (center.y - e.a.y) * e.out.y) > 2) continue
         const t = (center.x - e.a.x) * e.dir.x + (center.y - e.a.y) * e.dir.y
         if (t < -o.width / 2 || t > e.length + o.width / 2) continue
-        const sash = o.kind === 'window' && isSashWindow(this.plan, owner, oe, center)
-        const [z0, z1] = o.kind === 'window' ? (sash ? [0, 200] : [windowSpan(room, false).y0, windowSpan(room, false).y1]) : [0, 200]
+        const sash = o.kind === 'window' && isSashWindow(this.plan, owner, oe, center, o)
+        const ws = windowSpan(room, sash, o.sill)
+        const [z0, z1] = o.kind === 'window' ? [ws.y0, ws.y1] : [0, 200]
         spans.push({ t0: t - o.width / 2, t1: t + o.width / 2, z0, z1, kind: o.kind === 'window' ? 'window' : 'door' })
       }
       for (const r of open) for (const [lo, hi] of sharedIntervals(e, r)) spans.push({ t0: lo, t1: hi, z0: 0, z1: 1000, kind: 'open' })
@@ -732,7 +733,7 @@ export class Occupancy {
     if (pts) return pts
     pts = []
     for (const { o, owner, e, center } of openingsOn(room, this.plan)) {
-      if (o.kind === 'window' && !isSashWindow(this.plan, owner, e, center)) continue
+      if (o.kind === 'window' && !isSashWindow(this.plan, owner, e, center, o)) continue
       const into = pointInPolygon(add(center, mul(e.out, 5)), room.points) ? e.out : mul(e.out, -1)
       pts.push(add(center, mul(into, 35)))
     }
