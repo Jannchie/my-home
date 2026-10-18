@@ -39,6 +39,7 @@ import { wallSegments, wallThicknessAt } from '../walls'
 import { baseFloorId, floorBelow, floorById, floorOf, floorView, isMultiFloor, riseOf } from '../floors'
 import { stairHoleConflicts, stairHoles, stairPlanLines, subtractSpan } from '../stairs'
 import { tatamiLayout } from '../tatami'
+import { stallWalls } from '../bathroom'
 import FixtureGlyph from './FixtureGlyph.vue'
 import { roomName, t } from '../i18n'
 import { ASSET_MAP } from '../three/assets'
@@ -986,6 +987,7 @@ const fixtureViews = computed(() =>
     selected: isSel('fixture', f.id),
     box: fixtureBox(f),
     front: frontBox(f),
+    stall: f.kind === 'bathtub' && f.shower ? stallWalls(fp.value, f) : undefined,
   })),
 )
 
@@ -1384,7 +1386,7 @@ async function exportPng() {
         :transform="v.transform"
         :style="{ cursor: tool === 'select' ? 'move' : undefined }"
       >
-        <FixtureGlyph :f="v.f" :rise="v.rise" />
+        <FixtureGlyph :f="v.f" :rise="v.rise" :stall="v.stall" />
       </g>
       <!-- 放设备的预览（半透明，不接收点击） -->
       <g v-if="ghost" class="ui ghost" :transform="`translate(${ghost.x},${ghost.y}) rotate(${ghost.rot})`" pointer-events="none">

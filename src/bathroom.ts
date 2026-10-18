@@ -160,6 +160,38 @@ export function showerSpot(ctx: Ctx, tub: Fixture): ShowerSpot | null {
   return { mode: 'over', p, n: F, sx: sxOf(F, mul(R, -end)), outer: half * 2 >= ctx.wallOuter, wallOut: mul(F, -1), full: false, low, rail: ends }
 }
 
+/**
+ * 淋浴房（shower 的浴缸位）四边是否贴着墙（局部坐标：back = -y 背面、front = +y 正面、left = -x、right = +x）。
+ * 贴墙的一边不装玻璃，其余每一边都要有玻璃隔断（门开在正面）。每边取三个点往外打到墙面，都在 4cm 以内才算贴墙。
+ */
+export interface StallWalls {
+  back: boolean
+  front: boolean
+  left: boolean
+  right: boolean
+}
+
+export function stallWalls(ctx: Ctx, f: Fixture): StallWalls {
+  const room = roomOfFixture(ctx, f)
+  const a = (f.rot * Math.PI) / 180
+  const R = { x: Math.cos(a), y: Math.sin(a) }
+  const F = { x: -Math.sin(a), y: Math.cos(a) }
+  const d = fixtureDepth(f)
+  const c = { x: f.x, y: f.y }
+  const against = (dir: Vec, along: Vec, half: number, len: number) =>
+    !!room &&
+    [-0.35, 0, 0.35].every((k) => {
+      const hit = rayWall(ctx, room, add(c, mul(along, k * len)), dir)
+      return !!hit && hit.t <= half + 4
+    })
+  return {
+    back: against(mul(F, -1), R, d / 2, f.w),
+    front: against(F, R, d / 2, f.w),
+    left: against(mul(R, -1), F, f.w / 2, d),
+    right: against(R, F, f.w / 2, d),
+  }
+}
+
 /** 淋浴在墙上占的平面范围（进深 16），一键布置的壁挂物要避开 */
 export function showerBox(s: ShowerSpot): Box {
   const along = { x: s.n.y * s.sx, y: -s.n.x * s.sx }

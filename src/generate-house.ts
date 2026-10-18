@@ -30,7 +30,7 @@ import { isIndoor, sharedIntervals } from './walls'
 import { DEFAULT_FLOOR_H, SLAB, floorOf, floorView, planFloors, stampFloor } from './floors'
 import { stairHoleConflicts, stairLinks, withStairKeepout } from './stairs'
 import { jp, t } from './i18n'
-import { carveFloors, defaultRule } from './footprint'
+import { altInt, carveFloors, defaultRule } from './footprint'
 
 export type Dwelling = 'apartment' | 'house' | 'duplex'
 export const DWELLING_LABELS: Record<Dwelling, string> = { apartment: '公寓', house: '户建', duplex: '复式' }
@@ -50,6 +50,8 @@ interface CellDef {
   /** 摆设备时的角色 */
   tag?: string
   flush?: boolean
+  /** 列上的トイレ只占北端一段进深（净深 136～156），南边让给走廊的一个小凹口，门开在凹口里 */
+  shallow?: boolean
 }
 
 interface SouthDef extends CellDef {
@@ -193,7 +195,7 @@ const JP: Program = {
     dN: c.rint(260, 280),
     wC: c.rint(170, 200),
     dB: c.rint(170, 190),
-    wT: c.rint(90, 110),
+    wT: c.rint(90, 100),
     wG: c.rint(170, 210),
     wSC: c.chance(0.6) ? c.rint(90, 130) : 0,
     W: n >= 4 ? c.rint(880, 1020) : c.rint(820, 960),
@@ -202,7 +204,7 @@ const JP: Program = {
     north: { kind: 'bath', name: '浴室', door: 's', doorKind: 'folding', doorW: 70, win: { w: 70 }, tag: 'jpBath' },
     south: { kind: 'wash', name: '洗面所', door: 'hall', doorKind: 'sliding', doorW: 70, win: { w: 60 }, tag: 'jpWash' },
   },
-  col: { kind: 'toilet', name: 'トイレ', door: 'hall', doorKind: 'door', doorW: 65, swing: 'out', win: { n: 50 }, tag: 'toilet' },
+  col: { kind: 'toilet', name: 'トイレ', door: 'hall', doorKind: 'door', doorW: 65, swing: 'out', win: { n: 50 }, tag: 'toilet', shallow: true },
   filler: { kind: 'storage', name: '収納', door: 'hall', doorKind: 'folding', doorW: 70 },
   entry: { kind: 'entrance', name: '玄関', tag: 'entry' },
   side: { kind: 'storage', name: 'シューズIN', door: 'w', doorKind: 'door', doorW: 65 },
@@ -215,7 +217,7 @@ const JP: Program = {
     return c.chance(0.5) ? { cells: [{ ...wa, door: 'e' }, ldk], beds: 1 } : { cells: [ldk, { ...wa, door: 'w' }], beds: 1 }
   },
   nw2: { kind: 'storage', name: 'WIC', door: 'hall', doorKind: 'door', doorW: 70 },
-  col2: { kind: 'toilet', name: 'トイレ', door: 'hall', doorKind: 'door', doorW: 65, swing: 'out', win: { n: 50 }, tag: 'toilet' },
+  col2: { kind: 'toilet', name: 'トイレ', door: 'hall', doorKind: 'door', doorW: 65, swing: 'out', win: { n: 50 }, tag: 'toilet', shallow: true },
   filler2: { kind: 'storage', name: '収納', door: 'hall', doorKind: 'folding', doorW: 70 },
   east2: (_c, w, bed) => [{ def: bed ? { kind: 'western', name: bed, door: 'hall', win: { n: 120, e: 120 }, tag: 'bed' } : { kind: 'storage', name: '納戸', door: 'hall', doorKind: 'door', doorW: 70, win: { n: 60 } }, w }],
   bedName: (i) => `洋室${i + 1}`,
@@ -392,10 +394,35 @@ function splitWidths(total: number, mins: number[], weights: number[]): number[]
   return ws
 }
 
+/** 去掉多边形里重合的点和共线的中间点 */
+function simplifyRing(pts: Vec[]): Vec[] {
+  let out = pts.filter((p, i) => {
+    const q = pts[(i + pts.length - 1) % pts.length]
+    return Math.abs(p.x - q.x) > 0.5 || Math.abs(p.y - q.y) > 0.5
+  })
+  for (let changed = true; changed && out.length > 3; ) {
+    changed = false
+    for (let i = 0; i < out.length; i++) {
+      const a = out[(i + out.length - 1) % out.length]
+      const b = out[i]
+      const n = out[(i + 1) % out.length]
+      if (Math.abs((b.x - a.x) * (n.y - b.y) - (b.y - a.y) * (n.x - b.x)) < 1e-6) {
+        out = out.filter((_, k) => k !== i)
+        changed = true
+        break
+      }
+    }
+  }
+  return out
+}
+
 /** 两个房间的共用边上开门：位置靠近 prefer 点（不给就居中），门框离墙角 15 */
-function doorBetween(c: Ctx, a: Room, b: Room, kind: OpeningKind, width: number, swing: Opening['swing'] = 'in', prefer?: Vec) {
+function doorBetween(c: Ctx, a: Room, b: Room, kind: OpeningKind, width: number, swing: Opening['swing'] = 'in', prefer?: Vec, side?: Side) {
   let best: { e: ReturnType<typeof edgesOf>[number]; lo: number; hi: number } | null = null
-  for (const e of edgesOf(a.points)) for (const [lo, hi] of sharedIntervals(e, b)) if (!best || hi - lo > best.hi - best.lo) best = { e, lo, hi }
+  for (const e of edgesOf(a.points)) {
+    if (side && e.out.x * SIDE_OUT[side].x + e.out.y * SIDE_OUT[side].y < 0.9) continue
+    for (const [lo, hi] of sharedIntervals(e, b)) if (!best || hi - lo > best.hi - best.lo) best = { e, lo, hi }
+  }
   if (!best) return false
   const { e, lo, hi } = best
   const w = Math.min(width, hi - lo - 20)
@@ -455,6 +482,8 @@ function layout(seed: number, o: Pick<HouseGenOpts, 'region' | 'dwelling' | 'bed
   const d = P.dims(c, n)
   const s1 = P.south1(c, n, duplex)
   let partial = !duplex && c.chance(P.partial)
+  // 部分二階：2F 的トイレ西边没有核心那一列，贴着外墙（厚墙），开间放到 100 才有净宽 86
+  if (partial && P.col2.shallow) d.wT = Math.max(d.wT, 100)
   // 2F 要放几间卧室：南带 k 间，不够的放到东侧（入口上方）
   const m = n - s1.beds
   const eastBed = P.eastBed && m >= 3
@@ -505,6 +534,9 @@ function layout(seed: number, o: Pick<HouseGenOpts, 'region' | 'dwelling' | 'bed
   const yN = dS + hw
   const D = yN + dN
   const xF = wC + wT
+  // 浅的トイレ（日式）：只占列的北端 tH，南边 yN..yA 是走廊的凹口（トイレ前）
+  const tH = P.col.shallow ? altInt(c, 150, 170) : 0
+  const yA = tH ? D - tH : yN
   const xS = xF + wF
   const xG = xS + wSt
   const xSC = xG + d.wG
@@ -535,17 +567,24 @@ function layout(seed: number, o: Pick<HouseGenOpts, 'region' | 'dwelling' | 'bed
           { x: xS, y: D },
           { x: xS, y: yN },
         ]),
-    { x: x0, y: yN },
+    // トイレ前的凹口：列的南段并进走廊
+    ...(yA > yN
+      ? [
+          { x: xF, y: yN },
+          { x: xF, y: yA },
+          { x: x0, y: yA },
+        ]
+      : [{ x: x0, y: yN }]),
   ]
   // 客厅楼梯：楼梯间并进填充间（收纳）
   const xFill = living ? xG : xS
-  const hall1 = c.room('hall', P.hallName, hallPts(wC))
+  const hall1 = c.room('hall', P.hallName, simplifyRing(hallPts(wC)))
   if (P.group) hall1.openGroup = P.group
   if (P.core.north) {
     rec(P.core.north, c.rect(P.core.north.kind, P.core.north.name, 0, D - d.dB, wC, D), F1)
     rec(P.core.south, c.rect(P.core.south.kind, P.core.south.name, 0, dS, wC, D - d.dB), F1)
   } else rec(P.core.south, c.rect(P.core.south.kind, P.core.south.name, 0, dS, wC, D), F1)
-  rec(P.col, c.rect(P.col.kind, P.col.name, wC, yN, xF, D), F1)
+  rec(P.col, c.rect(P.col.kind, P.col.name, wC, P.col.shallow ? yA : yN, xF, D), F1)
   if (xFill > xF) rec(P.filler, c.rect(P.filler.kind, P.filler.name, xF, yN, xFill, D), F1)
   const entry = rec(P.entry, c.rect('entrance', P.entry.name, xG, yN, xSC, D), F1)
   if (d.wSC > 0) rec(P.side, c.rect(P.side.kind, P.side.name, xSC, yN, W, D), F1)
@@ -581,9 +620,9 @@ function layout(seed: number, o: Pick<HouseGenOpts, 'region' | 'dwelling' | 'bed
 
   // ---------- 2F ----------
   const x2 = partial ? wC : 0
-  const hall2 = c.room('hall', P.hallName, hallPts(wC, stripW))
+  const hall2 = c.room('hall', P.hallName, simplifyRing(hallPts(wC, stripW)))
   if (!partial) rec(P.nw2, c.rect(P.nw2.kind, P.nw2.name, 0, dS, wC, D), F2)
-  rec(P.col2, c.rect(P.col2.kind, P.col2.name, wC, yN, xF, D), F2)
+  rec(P.col2, c.rect(P.col2.kind, P.col2.name, wC, P.col2.shallow ? yA : yN, xF, D), F2)
   if (xFill > xF) rec(P.filler2, c.rect(P.filler2.kind, P.filler2.name, xF, yN, xFill, D), F2)
   {
     let x = xG
@@ -647,7 +686,8 @@ function layout(seed: number, o: Pick<HouseGenOpts, 'region' | 'dwelling' | 'bed
       const target = rule === 'hall' ? hall : bySide(room, rule)
       if (!target) continue
       // 走廊门靠近楼梯（走得少）；其余居中
-      doorBetween(c, room, target, def.doorKind ?? 'door', def.doorW ?? 75, def.swing ?? 'in', rule === 'hall' ? (room.kind === 'ldk' ? { x: living ? Math.min(xG + d.wG / 2, W - 260) : xG + d.wG / 2, y: dS } : stairsMid) : undefined)
+      // 浅トイレ的门只开在南墙（凹口里），不开到东边的楼梯间
+      doorBetween(c, room, target, def.doorKind ?? 'door', def.doorW ?? 75, def.swing ?? 'in', rule === 'hall' ? (room.kind === 'ldk' ? { x: living ? Math.min(xG + d.wG / 2, W - 260) : xG + d.wG / 2, y: dS } : stairsMid) : undefined, def.shallow && yA > yN ? 's' : undefined)
     }
     for (const { def, room } of mine) for (const [side, w] of Object.entries(def.win ?? {}) as [Side, number][]) windowSide(c, room, side, w, rooms)
     // 阳台：南侧卧室的窗本来就开在南墙上，阳台挨着它们就是落地窗
