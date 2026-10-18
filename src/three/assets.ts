@@ -889,14 +889,60 @@ export function kitchenModel(w: number, facing: boolean, burners: 2 | 3 = w < 20
     body.position.y = 4
     c.add(body)
     c.add(rbox(w - 4, 6, 58, shade(C.wood, -0.25), { y: 0, z: -2 }, 1))
-    const doors = Math.max(2, Math.round(w / 45))
-    for (let i = 0; i < doors; i++) {
-      const dw = w / doors
-      c.add(rbox(dw - 3, 70, 1.4, i % 2 ? C.sakura : shade(C.sakura, 0.04), { x: -w / 2 + dw * (i + 0.5), y: 9, z: (31 + 0.7) * sinkSide }, 1.2))
-      c.add(rbox(10, 1.6, 2, C.steel, { x: -w / 2 + dw * (i + 0.5), y: 72, z: (32 + 1) * sinkSide }, 0.6))
+    const bx = w / 2 - 48
+    const sx = -w / 2 + w * 0.3
+    // 正面按列分：灶下一列（旋钮面板 + 锅抽屉）、洗碗机一列，其余的空当分成柜门。各列互不重叠，旋钮不会压在柜门 / 拉手上
+    const hobCol: [number, number] | null = withHob ? [bx - 30, bx + 30] : null
+    const dwRight = hobCol ? hobCol[0] : w / 2 - 2
+    const dwx = Math.min(sx + 26 + 31, dwRight - 30)
+    const dwCol: [number, number] | null = o.dishwasher && dwx - 30 >= sx + 25.5 ? [dwx - 30, dwx + 30] : null
+    const fixed = [hobCol, dwCol].filter((s): s is [number, number] => !!s).sort((p, q) => p[0] - q[0])
+    const gaps: [number, number][] = []
+    let cur = -w / 2
+    for (const [a, b] of fixed) {
+      if (a > cur) gaps.push([cur, a])
+      cur = b
+    }
+    if (cur < w / 2) gaps.push([cur, w / 2])
+    const fz = (31 + 0.7) * sinkSide
+    const part = <T extends THREE.Object3D>(m: T, kind: string) => {
+      m.userData.kitchenPart = kind
+      return m
+    }
+    let k = 0
+    for (const [a, b] of gaps) {
+      const len = b - a
+      if (len < 4) continue
+      // 太窄的空当只做一块不带拉手的封板
+      if (len < 15) {
+        c.add(part(rbox(len - 3, 70, 1.4, shade(C.sakura, 0.04), { x: (a + b) / 2, y: 9, z: fz }, 1.2), 'front'))
+        continue
+      }
+      const n = Math.max(1, Math.round(len / 45))
+      const dw = len / n
+      for (let i = 0; i < n; i++, k++) {
+        const x = a + dw * (i + 0.5)
+        c.add(part(rbox(dw - 3, 70, 1.4, k % 2 ? C.sakura : shade(C.sakura, 0.04), { x, y: 9, z: fz }, 1.2), 'front'))
+        c.add(part(rbox(Math.min(10, dw - 9), 1.6, 2, C.steel, { x, y: 72, z: (32 + 1) * sinkSide }, 0.6), 'handle'))
+      }
+    }
+    if (hobCol) {
+      // 灶下：上面一条烤鱼炉 / 旋钮面板，下面锅抽屉；旋钮装在面板上，面板和柜门在同一平面、各占各的列
+      c.add(part(rbox(57, 11, 1.4, '#2f3136', { x: bx, y: 68, z: fz }, 1), 'fascia'))
+      c.add(part(rbox(18, 6, 0.8, '#1a1b1f', { x: bx, y: 70.5, z: (32.4 + 0.4) * sinkSide }, 0.4), 'fascia'))
+      for (const dx of [-20, 20, -14, 14]) c.add(part(cyl(1.6, 1.6, 1.6, '#3a3c42', { x: bx + dx, y: 72.7, z: (32.4 + 0.8) * sinkSide, rx: Math.PI / 2 }, 16), 'knob'))
+      c.add(part(rbox(57, 56, 1.4, shade(C.sakura, 0.04), { x: bx, y: 9, z: fz }, 1.2), 'front'))
+      c.add(part(rbox(10, 1.6, 2, C.steel, { x: bx, y: 59, z: (32 + 1) * sinkSide }, 0.6), 'handle'))
+    }
+    // 洗碗机：水槽右边一列，不锈钢门板 + 顶部横拉手（放不下就不装）
+    if (dwCol) {
+      const panel = part(rbox(57, 70, 1.6, C.steel, { x: dwx, y: 9, z: (31 + 0.8) * sinkSide }, 1), 'front')
+      panel.userData.dishwasher = true
+      c.add(panel)
+      c.add(part(rbox(40, 2, 2.2, shade(C.steel, -0.25), { x: dwx, y: 72, z: (32.6 + 1.1) * sinkSide }, 0.8), 'handle'))
+      c.add(glow(6, 1.6, '#9fe3ff', { x: dwx + 20, y: 76, z: (32.6 + 0.3) * sinkSide }, 0.6))
     }
     // 台面：水槽位置真开孔；台面平放（holePanel 的 y 轴转到 -z）
-    const sx = -w / 2 + w * 0.3
     const zc = 2 * sinkSide
     c.add(holePanel(w + 2, 65, 4, C.steel, [{ kind: 'rect', x: sx, y: 32.5 - zc - 18, w: 52, h: 36, r: 5 }], { y: 86, z: 32.5, rx: -Math.PI / 2 }, 1))
     // 下沉水槽 + 排水口
@@ -907,23 +953,12 @@ export function kitchenModel(w: number, facing: boolean, burners: 2 | 3 = w < 20
     tap.position.set(sx, 88, zc - 23 * sinkSide)
     tap.rotation.y = sinkSide > 0 ? 0 : Math.PI
     c.add(tap)
-    // 三口燃气灶 + 正面旋钮 + 烤鱼炉抽屉（台面上的小家电、厨具由用户 / 一键布置摆放）
-    const bx = w / 2 - 48
-    const front = 32.5 * sinkSide
+    // 灶（台面上的小家电、厨具由用户 / 一键布置摆放）；旋钮、烤鱼炉面板在上面的正面列里
     if (withHob) {
       const hob = o.induction ? inductionHob(burners) : gasHob(sinkSide, burners)
       hob.position.set(bx, 88, 0)
       if (o.induction && sinkSide < 0) hob.rotation.y = Math.PI
       c.add(hob)
-      c.add(rbox(44, 12, 1.4, '#2f3136', { x: bx, y: 70, z: front + 0.4 * sinkSide }, 1))
-      for (const dx of [-20, 20, -14, 14]) c.add(cyl(1.6, 1.6, 1.6, '#3a3c42', { x: bx + dx, y: 77, z: front + 1.2 * sinkSide, rx: Math.PI / 2 }, 16))
-    }
-    // 洗碗机：水槽右边一格，不锈钢门板 + 顶部横拉手（放不下就不装）
-    const dwx = sx + 26 + 31
-    if (o.dishwasher && dwx + 30 <= (withHob ? bx - 23 : w / 2 - 2)) {
-      c.add(rbox(58, 72, 1.6, C.steel, { x: dwx, y: 8, z: front + 0.9 * sinkSide }, 1))
-      c.add(rbox(40, 2, 2.2, shade(C.steel, -0.25), { x: dwx, y: 74, z: front + 2.4 * sinkSide }, 0.8))
-      c.add(glow(6, 1.6, '#9fe3ff', { x: dwx + 20, y: 77, z: front + 1.9 * sinkSide }, 0.6))
     }
     c.position.z = z
     return c

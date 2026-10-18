@@ -6,15 +6,16 @@ import { checklist } from '/src/checklist'
 import { applyFixes, decorate } from '/src/decorate'
 import { generatePlan } from '/src/generate-region'
 import { generateHousehold } from '/src/household'
-import { rectPoints, type Fixture, type Furniture, type Plan } from '/src/model'
-import { isPersonal } from '/src/stow'
+import { pointInPolygon, rectPoints, type Fixture, type Furniture, type Plan } from '/src/model'
+import { isPersonal, isPlateLike } from '/src/stow'
 import { normalizePlan } from '/src/store'
-import { pickSurface, propsOn, supportOf, toLocal, toWorld } from '/src/surface'
+import { fitsOnSurface, levels, pickSurface, propsOn, supportOf, toLocal, toWorld } from '/src/surface'
 import { furnitureBox } from '/src/snap'
 import { doorSwings } from '/src/place'
 import { fixtureBox } from '/src/model'
 import { ASSET_MAP, ASSETS } from '/src/three/assets'
 import { countDoors, poseDoors } from '/src/three/kit'
+import { hasTag } from '/src/three/tags'
 import { floorY, furnitureModel, roomAt } from '/src/three/house'
 import { JP_OPTS, range } from './helpers'
 
@@ -328,6 +329,66 @@ describe('一键布置', () => {
     expect(inside('shoe-storage', 'shoe')).toBe(true)
     expect(inside('wardrobe', 'clothing')).toBe(true)
     expect(all.some(({ cab }) => cab.open)).toBe(true)
+  })
+
+  /** 厨房一带的收纳：厨房吊柜、餐厨类柜子（食器棚、餐边柜）、食品柜 */
+  const kitchenCabs = plans.flatMap(({ region, seed, plan }) =>
+    plan.furniture
+      .filter((f) => {
+        const d = ASSET_MAP.get(f.asset)!
+        return !f.z && d.openable && (f.asset.startsWith('ws-kitchen-cab') || d.type === 'pantry' || d.category === 'dining')
+      })
+      .map((cab) => ({ region, seed, plan, cab, kids: propsOn(plan, cab).filter((o) => supportOf(plan, o)?.ownerId === cab.id) })),
+  )
+
+  test('厨房一带的柜子里收着餐具，盘子、碗优先；厨房吊柜里只有餐具、锅具，没有日用杂物', () => {
+    const bad: string[] = []
+    let plates = 0
+    let cups = 0
+    for (const { region, seed, cab, kids } of kitchenCabs)
+      for (const o of kids) {
+        const od = ASSET_MAP.get(o.asset)!
+        if (isPlateLike(od)) plates++
+        else if (hasTag(od, 'cup', 'mug', 'teacup', 'coffee-cup', 'tea-set')) cups++
+        if (cab.asset.startsWith('ws-kitchen-cab') && !hasTag(od, 'tableware', 'cup', 'mug', 'teacup', 'coffee-cup', 'tea-set', 'cookware')) bad.push(`${region} ${seed}: ${cab.asset} 里有 ${o.asset}`)
+        if (hasTag(od, 'toothbrush', 'wet-supply')) bad.push(`${region} ${seed}: ${cab.asset} 里有 ${o.asset}`)
+      }
+    expect(bad).toEqual([])
+    expect(kitchenCabs.some(({ cab }) => cab.asset.startsWith('ws-kitchen-cab'))).toBe(true)
+    // 每件厨房吊柜都收了东西
+    for (const { cab, kids } of kitchenCabs) if (cab.asset.startsWith('ws-kitchen-cab')) expect(kids.length, cab.asset).toBeGreaterThan(0)
+    expect(plates).toBeGreaterThan(cups)
+    // 食品柜里既有食品也有碗盘（齐腰到齐眼高的层、玻璃门里放碗盘）
+    const pantries = kitchenCabs.filter(({ cab }) => ASSET_MAP.get(cab.asset)!.type === 'pantry')
+    expect(pantries.some(({ kids }) => kids.some((o) => isPlateLike(ASSET_MAP.get(o.asset)!)) && kids.some((o) => hasTag(ASSET_MAP.get(o.asset)!, 'food', 'drink')))).toBe(true)
+  })
+
+  test('柜子里收的东西整件落在那一层里、不高过层高、彼此不重叠', () => {
+    const bad: string[] = []
+    for (const { region, seed, plan } of plans)
+      for (const cab of plan.furniture.filter((f) => ASSET_MAP.get(f.asset)?.openable)) {
+        const lvs = levels(cab.asset, !!cab.open)
+        const kids = propsOn(plan, cab).filter((o) => supportOf(plan, o)?.ownerId === cab.id)
+        const boxes = kids.map((o) => ({ o, b: furnitureBox(o.asset, o.x, o.y, o.rot) }))
+        for (const o of kids) {
+          const od = ASSET_MAP.get(o.asset)!
+          // 同一高度可能有好几格（多宝格左右两列层高不同）：落在哪一格按中心算
+          const l = toLocal(cab, o)
+          const lv = lvs.find((v) => Math.abs((cab.z ?? 0) + v.y - (o.z ?? 0)) < 0.5 && v.polys.some((pl) => pointInPolygon(l, pl.map(([x, z]) => ({ x, y: z })))))
+          if (!lv || lv.kind === 'hook' || lv.kind === 'clip') continue
+          if (!fitsOnSurface(cab, o.z ?? 0, o.asset, o.x, o.y, o.rot)) bad.push(`${region} ${seed}: ${o.asset} 伸出 ${cab.asset} 的层`)
+          if (od.h > lv.h + 0.01) bad.push(`${region} ${seed}: ${o.asset}（高 ${od.h}）顶到 ${cab.asset} 的上一层（层高 ${lv.h}）`)
+        }
+        for (let i = 0; i < boxes.length; i++)
+          for (let j = i + 1; j < boxes.length; j++) {
+            const [p, q] = [boxes[i], boxes[j]]
+            if (Math.abs((p.o.z ?? 0) - (q.o.z ?? 0)) > 0.5) continue
+            const ox = Math.min(p.b.x1, q.b.x1) - Math.max(p.b.x0, q.b.x0)
+            const oy = Math.min(p.b.y1, q.b.y1) - Math.max(p.b.y0, q.b.y0)
+            if (ox > 1 && oy > 1 && (ASSET_MAP.get(cab.asset)!.surfaces ?? []).some((s) => s.inside && Math.abs((cab.z ?? 0) + s.y - (p.o.z ?? 0)) < 0.5)) bad.push(`${region} ${seed}: ${cab.asset} 里 ${p.o.asset} 和 ${q.o.asset} 重叠`)
+          }
+      }
+    expect(bad).toEqual([])
   })
 
   test('开着的柜子：门扇 / 抽屉伸出柜体的部分不压别的家具、设备，不挡房门的开合范围', () => {
