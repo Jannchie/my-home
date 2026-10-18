@@ -5,6 +5,7 @@ import { bbox, edgesOf, fixtureBox, isAxisEdge, mul, add, pointInPolygon, rectPo
 import { floorOf, riseOf } from './floors'
 import { overlapArea, stairUnderZone, underZonePoly } from './stairs'
 import { wallThicknessAt } from './walls'
+import { porchFootprint } from './exterior'
 import { roomAt } from './three/house'
 
 /** 吸附参考线：axis = 'x' 表示竖线 x = v（沿 y 从 a 到 b） */
@@ -187,6 +188,9 @@ export function yardBlocked(plan: Plan, me: Box, c: Vec) {
   const t = plan.wallOuter / 2
   const grown = rectPoints(me.x0 - t, me.y0 - t, me.x1 + t, me.y1 + t)
   if (plan.rooms.some((r) => overlapArea(r.points, grown) > 1)) return true
+  // 入户门前的台阶、门廊柱子（和 3D 同一份尺寸）
+  const porch = porchFootprint(plan)
+  if (porch && overlapArea(porch, corners) > 1) return true
   return plan.site.parking.some((s) => s.car && overlapArea(s.points, corners) > 1)
 }
 

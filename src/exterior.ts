@@ -6,7 +6,7 @@
 
 import { floorOutline, floorView, planFloors } from './floors'
 import { roofShape, type RoofRect, type RoofShape } from './roof'
-import { CAR_KINDS, FENCE_HEIGHT_MAX, FENCE_HEIGHT_MIN, FENCE_KINDS, PORCH_KINDS, pointInPolygon, type CarKind, type Exterior, type FacadeKind, type Floor, type FenceKind, type Plan, type PorchKind, type RoofCover, type RoofKind, ROOF_COVERS, type Site, type Vec } from './model'
+import { CAR_KINDS, FENCE_HEIGHT_MAX, FENCE_HEIGHT_MIN, FENCE_KINDS, PORCH_KINDS, openingGeom, pointInPolygon, type CarKind, type Exterior, type FacadeKind, type Floor, type FenceKind, type Plan, type PorchKind, type RoofCover, type RoofKind, ROOF_COVERS, type Site, type Vec } from './model'
 
 export type Side = 'n' | 's' | 'w' | 'e'
 export type { RoofRect }
@@ -159,4 +159,98 @@ export function normalizeExterior(p: Plan) {
       p.exterior = ex
     }
   }
+}
+
+// ---------- 入户门前的雨棚 / 门廊 ----------
+//
+// 雨棚、门廊的尺寸以前是写死的（门廊出挑 160、比门宽 180），用地北边只留 130～200 时，柱子和台阶会压到围挡、甚至伸出用地。
+// 现在按门前到用地边界的距离算实际尺寸：门廊前沿到围挡至少留一条通行的距离，放不下柱子就退成雨棚，再不行只留门框。
+// 3D（three/exterior.ts facadeExtras）、院子布置和摆放提示（snap.ts yardBlocked）都用这里算出来的同一份。
+
+/** 门廊、雨棚想要的尺寸：比门宽多出的宽度、出挑深度、门前台阶 */
+const PORCH_SIZE = { porch: { extra: 180, depth: 160 }, canopy: { extra: 90, depth: 85, stepExtra: 60, stepDepth: 70 } }
+/** 门廊前沿（柱子）到用地边界至少留的通行距离 */
+export const PORCH_WALK = 60
+/** 门廊至少要这么深才立柱子，再浅就退成雨棚 */
+const PORCH_MIN = 110
+
+export interface PorchShape {
+  /** frame：只有门框（选了「无」，或门前太窄） */
+  kind: 'porch' | 'canopy' | 'frame'
+  /** 顶棚宽、出挑深度（cm） */
+  width: number
+  depth: number
+  /** 门前台阶的宽、深；0 = 没有台阶 */
+  stepW: number
+  stepD: number
+}
+
+/** 门前到用地边界的距离：从门外墙面 face 沿 out 方向打一条射线，碰到用地边界的最近距离；没有用地返回 Infinity */
+export function roomInFront(site: Site | undefined, face: Vec, out: Vec): number {
+  if (!site) return Infinity
+  let best = Infinity
+  const pts = site.points
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i]
+    const b = pts[(i + 1) % pts.length]
+    const ex = b.x - a.x
+    const ey = b.y - a.y
+    const den = out.x * ey - out.y * ex
+    if (Math.abs(den) < 1e-9) continue
+    const t = ((a.x - face.x) * ey - (a.y - face.y) * ex) / den
+    const u = ((a.x - face.x) * out.y - (a.y - face.y) * out.x) / den
+    if (t > 0 && u >= 0 && u <= 1) best = Math.min(best, t)
+  }
+  return best
+}
+
+/** 按门前的空间 room（cm）算雨棚 / 门廊的实际尺寸 */
+export function porchShape(kind: PorchKind, doorW: number, room: number): PorchShape {
+  const frame: PorchShape = { kind: 'frame', width: 0, depth: 0, stepW: 0, stepD: 0 }
+  if (kind === 'none') return frame
+  if (kind === 'porch' && room - PORCH_WALK >= PORCH_MIN) {
+    const depth = Math.min(PORCH_SIZE.porch.depth, room - PORCH_WALK)
+    const width = doorW + PORCH_SIZE.porch.extra
+    return { kind: 'porch', width, depth, stepW: width, stepD: depth }
+  }
+  // 雨棚（门廊放不下时也退成雨棚）：顶棚和台阶都离边界留 30
+  const c = PORCH_SIZE.canopy
+  const depth = Math.min(c.depth, room - 30)
+  if (depth < 40) return frame
+  return { kind: 'canopy', width: doorW + c.extra, depth, stepW: doorW + c.stepExtra, stepD: Math.min(c.stepDepth, depth - 15) }
+}
+
+/** 最底层的入户门（玄关在外墙上的门）：门外墙面中点、沿墙方向、朝外方向、门宽 */
+export function entranceDoor(plan: Plan): { face: Vec; dir: Vec; out: Vec; width: number } | null {
+  const base = planFloors(plan)[0].id
+  const view = floorView(plan, base)
+  for (const o of view.openings) {
+    if (o.kind !== 'door') continue
+    const owner = view.rooms.find((r) => r.id === o.roomId)
+    if (owner?.kind !== 'entrance') continue
+    const g = openingGeom(view.rooms, o)
+    if (!g) continue
+    const probe = (k: number) => ({ x: g.center.x + g.e.out.x * k, y: g.center.y + g.e.out.y * k })
+    // 外墙上的门：门外 30 不在任何房间里（阳台也不算）
+    const outside = (k: number) => !view.rooms.some((r) => pointInPolygon(probe(k), r.points))
+    const out = outside(plan.wallOuter / 2 + 20) ? g.e.out : outside(-(plan.wallOuter / 2 + 20)) ? { x: -g.e.out.x, y: -g.e.out.y } : null
+    if (!out) continue
+    const face = { x: g.center.x + out.x * (plan.wallOuter / 2), y: g.center.y + out.y * (plan.wallOuter / 2) }
+    return { face, dir: g.e.dir, out, width: o.width }
+  }
+  return null
+}
+
+/** 入户门前雨棚 / 门廊（连台阶、柱子）在平面上占的矩形；没有外观设定、没有入户门、只有门框时返回 null */
+export function porchFootprint(plan: Plan): Vec[] | null {
+  if (!plan.exterior) return null
+  const d = entranceDoor(plan)
+  if (!d) return null
+  const s = porchShape(plan.exterior.porch ?? 'canopy', d.width, roomInFront(plan.site, d.face, d.out))
+  if (s.kind === 'frame') return null
+  // 落地的只有台阶和柱子（门廊的柱子在顶棚范围里）；雨棚只有台阶落地
+  const w = s.kind === 'porch' ? s.width : s.stepW
+  const dep = s.kind === 'porch' ? s.depth : s.stepD
+  const at = (along: number, k: number) => ({ x: d.face.x + d.dir.x * along + d.out.x * k, y: d.face.y + d.dir.y * along + d.out.y * k })
+  return [at(-w / 2, 0), at(w / 2, 0), at(w / 2, dep), at(-w / 2, dep)]
 }

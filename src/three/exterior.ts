@@ -6,7 +6,7 @@
 import * as THREE from 'three'
 import { FENCE_STYLE, onBoundary, pointInPolygon, signedArea, type CarKind, type Exterior, type Floor, type Plan, type Site, type Vec } from '../model'
 import { floorOutline, floorView, planFloors, SLAB } from '../floors'
-import { roofExterior, roofParts, type RoofPart, type Side } from '../exterior'
+import { roofExterior, roofParts, type RoofPart, type Side, porchShape, roomInFront } from '../exterior'
 import { PARAPET, ROOF_T, roofHeightAt, tessellate, type P3, type RoofRect } from '../roof'
 import { subtractSpan } from '../stairs'
 import { addOutlines, cyl, mergeMeshes, pullDepth, rbox, shade, toon, useAnisotropy } from './toon'
@@ -509,28 +509,22 @@ export function facadeExtras(view: Plan, H: number, ex: Exterior, ground: boolea
         for (const s of [-1, 1]) item.add(piece(7, y1 - y0, 4, s * (w / 2 + 3.5), y0, 2))
       }
     } else if (ground && o.kind === 'door' && info.owner.kind === 'entrance') {
-      // 入户门：门框 + 雨棚（或带柱子的门廊）
+      // 入户门：门框 + 雨棚（或带柱子的门廊）。尺寸按门前到用地边界的空间收（src/exterior.ts porchShape），不会压到围挡
       for (const s of [-1, 1]) item.add(piece(8, 205, 5, s * (w / 2 + 4), 0, 2.5))
       item.add(piece(w + 16, 8, 5, 0, 203, 2.5))
-      const porch = ex.porch ?? 'canopy'
-      if (porch === 'porch') {
-        const pw = w + 180
-        const pd = 160
-        item.add(piece(pw, 12, pd, 0, 245, pd / 2))
+      const ps = porchShape(ex.porch ?? 'canopy', w, roomInFront(view.site, face, out))
+      if (ps.kind === 'porch') {
+        item.add(piece(ps.width, 12, ps.depth, 0, 245, ps.depth / 2))
         for (const s of [-1, 1]) {
-          const at = { x: face.x + dir.x * (s * (pw / 2 - 16)) + out.x * (pd - 16), y: face.y + dir.y * (s * (pw / 2 - 16)) + out.y * (pd - 16) }
+          const at = { x: face.x + dir.x * (s * (ps.width / 2 - 16)) + out.x * (ps.depth - 16), y: face.y + dir.y * (s * (ps.width / 2 - 16)) + out.y * (ps.depth - 16) }
           const col = cyl(8, 9, 245 - BASE, trim, { x: at.x, y: BASE, z: at.y }, 14)
           item.add(col)
         }
+      } else if (ps.kind === 'canopy') item.add(piece(ps.width, 8, ps.depth, 0, 228, ps.depth / 2))
+      if (ps.stepD > 0) {
         // 门前的台阶（从院子地面到室内地面）
-        const step = rbox(pw, -BASE - 1, pd, '#d9d3c7', {}, 2)
-        step.position.set(face.x + out.x * (pd / 2), BASE + (-BASE - 1) / 2, face.y + out.y * (pd / 2))
-        step.rotation.y = yaw
-        item.add(step)
-      } else if (porch === 'canopy') {
-        item.add(piece(w + 90, 8, 85, 0, 228, 42))
-        const step = rbox(w + 60, -BASE - 1, 70, '#d9d3c7', {}, 2)
-        step.position.set(face.x + out.x * 35, BASE + (-BASE - 1) / 2, face.y + out.y * 35)
+        const step = rbox(ps.stepW, -BASE - 1, ps.stepD, '#d9d3c7', {}, 2)
+        step.position.set(face.x + out.x * (ps.stepD / 2), BASE + (-BASE - 1) / 2, face.y + out.y * (ps.stepD / 2))
         step.rotation.y = yaw
         item.add(step)
       }
