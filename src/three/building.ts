@@ -6,9 +6,9 @@ import * as THREE from 'three'
 import type { Floor, Plan } from '../model'
 import { floorAbove, floorOutline, floorView, isMultiFloor, planFloors, riseOf } from '../floors'
 import { slabHoles, stairHoles } from '../stairs'
-import { roofParts } from '../exterior'
+import { roofExterior, roofParts } from '../exterior'
 import { buildHouse, type HouseOpts } from './house'
-import { buildSite, facadeExtras, facadeMaterial, roofGroup } from './exterior'
+import { balconyPosts, buildBalconyPosts, buildSite, facadeExtras, facadeMaterial, roofGroup } from './exterior'
 import { noTransparentShadows } from './toon'
 
 export interface FloorGroup {
@@ -26,26 +26,38 @@ export interface FloorGroup {
  * wallHFor 可以按层改（例如当前层跟着滑杆压低）。
  * bare：3D 设计图用的「素模」——不搭展示底座和用地；墙压低（剖切）的楼层不加外墙装饰、挑空旁的外墙也不通高。
  */
-export function buildBuilding(plan: Plan, wallH: number, wallHFor?: (f: Floor) => number, opts: { bare?: boolean } = {}): { root: THREE.Group; floors: FloorGroup[] } {
+export function buildBuilding(plan: Plan, wallH: number, wallHFor?: (f: Floor) => number, opts: { bare?: boolean; defaultRoof?: boolean } = {}): { root: THREE.Group; floors: FloorGroup[] } {
   const root = new THREE.Group()
   const fs = planFloors(plan)
   const ex = plan.exterior
   const facade = ex ? facadeMaterial(ex) : undefined
-  const parts = ex ? roofParts(plan) : []
+  const multi = isMultiFloor(plan)
+  /** 各层实际的墙高：屋顶盖在墙顶上（单层户型就是 wallH） */
+  const heightOf = (f: Floor) => (multi ? (wallHFor?.(f) ?? f.height) : wallH)
+  // 屋顶：户建按外观设定；没有外观设定的户型（公寓、复式、手画的）要了才现推一份缺省的（沙盘的外观视图）
+  const roofEx = ex ?? (opts.defaultRoof ? roofExterior(plan) : undefined)
+  const parts = roofEx ? roofParts(plan, roofEx, heightOf) : []
+  // 上层阳台挑出去的部分：支柱落到下层屋面 / 阳台 / 地面上
+  const posts = opts.bare ? [] : balconyPosts(plan, parts, heightOf)
   /** 户建的附加部分：外墙装饰、屋顶、用地 */
   const dress = (fg: FloorGroup, view: Plan, i: number) => {
     if (ex && !(opts.bare && fg.wallH < fg.floor.height)) fg.group.add(facadeExtras(view, fg.wallH, ex, i === 0))
-    const roof = roofGroup(plan, fg.floor.id, parts)
+    const roof = roofEx ? roofGroup(plan, fg.floor.id, parts, roofEx) : null
     if (roof) {
       fg.group.add(roof)
       fg.roof = roof
+      // 立在这块屋顶上的阳台支柱：放进屋顶的组（屋顶藏起来时不悬空）
+      const onRoof = posts.filter((p) => p.roofFloor === fg.floor.id)
+      if (onRoof.length) roof.add(buildBalconyPosts(onRoof, fg.floor.elevation))
     }
+    const mine = posts.filter((p) => p.floor === fg.floor.id && !p.roofFloor)
+    if (mine.length) fg.group.add(buildBalconyPosts(mine, fg.floor.elevation))
     if (plan.site && i === 0 && !opts.bare) fg.group.add(buildSite(plan.site))
     // 外墙装饰、屋顶里的玻璃同样不投影（buildHouse 已处理房体本身）
     noTransparentShadows(fg.group)
   }
   const extra: HouseOpts = { facade, noBase: !!plan.site || !!opts.bare }
-  if (!isMultiFloor(plan)) {
+  if (!multi) {
     const group = buildHouse(plan, wallH, extra)
     group.userData.floorId = fs[0].id
     root.add(group)

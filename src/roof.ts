@@ -590,11 +590,13 @@ export interface WallFill {
 }
 
 export interface FlatRoof {
-  /** 屋面板（互不重叠的矩形）和板顶高度 */
+  /** 屋面板（互不重叠的矩形）和板顶、板底高度（板底比墙顶高 CLEAR：内墙顶面不和板底共面） */
   slab: RoofRect[]
   slabTop: number
-  /** 女儿墙（互不重叠的矩形，从板顶往上 PARAPET）、压顶（再往外各 2cm） */
+  slabBottom: number
+  /** 女儿墙（互不重叠的矩形，坐在外墙上：从墙顶往下 1 一直到板顶往上 PARAPET，盖住板底和墙顶之间的缝）、压顶（再往外各 2cm） */
   parapet: RoofRect[]
+  parapetBottom: number
   coping: RoofRect[]
 }
 
@@ -637,6 +639,8 @@ export const ROOF_T = 10
 export const PARAPET = 60
 /** 平屋顶的屋面板厚 */
 export const FLAT_T = 14
+/** 屋面底（坡屋面在外墙内皮处、平屋面板底）比墙顶至少高多少：内墙顶面不伸进屋面、不和屋面底共面 */
+export const CLEAR = 0.5
 /** 下屋的屋面最多升高多少（再高就压低坡度） */
 const LEAN_MAX = 150
 
@@ -692,7 +696,7 @@ export function roofShape(inp: RoofInput): RoofShape | null {
     const slabTop = H + FLAT_T
     // 平屋面也给一份「上表面」三角形（测试 / 覆盖检查用）
     const tris = tessellate(slabArea.rects().map((b) => [[b.x0, b.y0, slabTop], [b.x1, b.y0, slabTop], [b.x1, b.y1, slabTop], [b.x0, b.y1, slabTop]] as P3[]))
-    return { kind: 'flat', lower, rects, pitch: 0, tris, creases: [], walls: [], flat: { slab: slabArea.rects(), slabTop, parapet: ring.rects(), coping: copingCells.rects() } }
+    return { kind: 'flat', lower, rects, pitch: 0, tris, creases: [], walls: [], flat: { slab: slabArea.rects(), slabTop, slabBottom: H + CLEAR, parapet: ring.rects(), parapetBottom: H - 1, coping: copingCells.rects() } }
   }
 
   // 檐口范围 C
@@ -704,7 +708,11 @@ export function roofShape(inp: RoofInput): RoofShape | null {
     C = combine([D], (p) => D.has(p) && !inAbove(p) && !strips.some((b) => inBox(p, b)), above.flat().map((p) => p.x).concat(strips.flatMap((b) => [b.x0, b.x1])), above.flat().map((p) => p.y).concat(strips.flatMap((b) => [b.y0, b.y1])))
   }
   if (C.empty) return null
-  const zFace = H + 2
+  /**
+   * 屋面在外墙外皮处的高度。至少比墙顶高 2；还要让屋面底在外墙内皮处高出墙顶 CLEAR：内墙（顶在墙顶高度、端头顶到外墙内皮）
+   * 的顶面整个在屋面底下，不伸进屋面板、也不和屋面底共面（坡度小的时候屋面相应抬高一点）。
+   */
+  const faceZ = (p: number) => Math.max(H + 2, H + ROOF_T + CLEAR - p * wallOuter)
 
   // 墙补齐：本层外墙（下屋只取挨着 R 的外墙段）
   const wallLines = (): { a: Vec; b: Vec }[] => {
@@ -751,7 +759,7 @@ export function roofShape(inp: RoofInput): RoofShape | null {
     const v0 = alongY ? C.ys[0] : C.xs[0]
     const span = alongY ? d : w
     const p = Math.min(inp.pitch, LEAN_MAX / Math.max(1, span))
-    const zLow = zFace - p * e
+    const zLow = faceZ(p) - p * e
     const z = (x: number, y: number) => zLow + p * ((alongY ? y : x) - v0)
     const tris = tessellate(C.rects().map((b) => [[b.x0, b.y0, z(b.x0, b.y0)], [b.x1, b.y0, z(b.x1, b.y0)], [b.x1, b.y1, z(b.x1, b.y1)], [b.x0, b.y1, z(b.x0, b.y1)]] as P3[]))
     return { kind: 'shed', lower, rects, pitch: p, tris, creases: [], walls: fills(tris, p) }
@@ -772,10 +780,14 @@ export function roofShape(inp: RoofInput): RoofShape | null {
   if (lower && tmax > 0) {
     // 下屋：屋面最高处不超过 LEAN_MAX，也不挡上一层的窗（窗台离上层地面 ≥ 80）
     const roomTop = (inp.upperRise ?? H + 30) + 80
-    const capByWin = (roomTop - zFace) / Math.max(1, tmax - e)
-    p = Math.max(0.12, Math.min(p, LEAN_MAX / tmax, capByWin))
+    // 屋面的起点 faceZ 跟着坡度变：迭代到稳定（坡度越小起点越高，几步就收敛）
+    const p0 = p
+    for (let i = 0; i < 6; i++) {
+      const capByWin = (roomTop - faceZ(p)) / Math.max(1, tmax - e)
+      p = Math.max(0.12, Math.min(p0, LEAN_MAX / tmax, capByWin))
+    }
   }
-  const zE = zFace - p * e
+  const zE = faceZ(p) - p * e
   const tris = tessellate(faces.map((f) => f.map(([x, y, t]) => [x, y, zE + p * t] as P3)))
   return { kind: inp.kind, lower, rects, pitch: p, tris, creases: creaseLines(tris), walls: fills(tris, p) }
 }

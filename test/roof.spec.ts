@@ -136,7 +136,7 @@ function planCtx(p: Plan, r: RoofPart): Ctx {
   return {
     outline: floorOutline(views[k])!,
     above,
-    balconies: above.length ? views.slice(k + 1).flatMap((rs) => rs.filter((x) => x.kind === 'balcony').map((x) => x.points)) : [],
+    balconies: above.length ? (views[k + 1] ?? []).filter((x) => x.kind === 'balcony').map((x) => x.points) : [],
     top: fs[k].height,
     oe: p.wallOuter / 2 + (p.exterior!.eave ?? 45),
     upperRise: fs[k + 1] ? fs[k + 1].elevation - fs[k].elevation : undefined,

@@ -6,7 +6,7 @@
 
 import { floorOutline, floorView, planFloors } from './floors'
 import { roofShape, type RoofRect, type RoofShape } from './roof'
-import { CAR_KINDS, FENCE_HEIGHT_MAX, FENCE_HEIGHT_MIN, FENCE_KINDS, PORCH_KINDS, pointInPolygon, type CarKind, type Exterior, type FacadeKind, type FenceKind, type Plan, type PorchKind, type RoofCover, type RoofKind, ROOF_COVERS, type Site, type Vec } from './model'
+import { CAR_KINDS, FENCE_HEIGHT_MAX, FENCE_HEIGHT_MIN, FENCE_KINDS, PORCH_KINDS, pointInPolygon, type CarKind, type Exterior, type FacadeKind, type Floor, type FenceKind, type Plan, type PorchKind, type RoofCover, type RoofKind, ROOF_COVERS, type Site, type Vec } from './model'
 
 export type Side = 'n' | 's' | 'w' | 'e'
 export type { RoofRect }
@@ -20,10 +20,25 @@ export interface RoofPart extends RoofShape {
   top: number
 }
 
-/** 户型的屋顶（每层露在外面的部分一块）；没有外观设定（公寓）返回空 */
-export function roofParts(plan: Plan): RoofPart[] {
-  const ex = plan.exterior
-  if (!ex) return []
+/**
+ * 外观视图里屋顶用的外观设定：有 Plan.exterior 就用它；没有的（公寓、复式、手画的户型、旧存档）现推一份缺省的，不写进户型：
+ *   - 有用地（院子）的当作户建：四坡屋顶；
+ *   - 其余当作楼里的一户：平屋顶（屋面板 + 女儿墙），女儿墙和外墙同色。
+ */
+export function roofExterior(plan: Pick<Plan, 'exterior' | 'site'>): Exterior {
+  if (plan.exterior) return plan.exterior
+  return plan.site
+    ? { roof: 'hip', roofColor: '#4f5866', facade: 'stucco', wallColor: DEFAULT_OUTER_WALL, trimColor: '#ffffff' }
+    : { roof: 'flat', roofColor: '#a8a29a', facade: 'stucco', wallColor: DEFAULT_OUTER_WALL, trimColor: '#d8d2c8' }
+}
+/** 没有外观设定时外墙的颜色（three/house.ts 的外墙材质） */
+export const DEFAULT_OUTER_WALL = '#fbf3e6'
+
+/**
+ * 户型的屋顶（每层露在外面的部分一块）。ex 缺省用 roofExterior（没有外观设定的户型也有缺省屋顶）；
+ * heightOf：各层实际的墙高（缺省 Floor.height），屋顶盖在墙顶上。
+ */
+export function roofParts(plan: Plan, ex: Exterior = roofExterior(plan), heightOf: (f: Floor) => number = (f) => f.height): RoofPart[] {
   const fs = planFloors(plan)
   const views = fs.map((f) => floorView(plan, f.id).rooms)
   const outlines = views.map((rs) => floorOutline(rs))
@@ -32,20 +47,22 @@ export function roofParts(plan: Plan): RoofPart[] {
     const mine = outlines[k]
     if (!mine) return
     const above = outlines.slice(k + 1).filter((o): o is Vec[] => !!o)
-    const aboveBalconies = views.slice(k + 1).flatMap((rs) => rs.filter((r) => r.kind === 'balcony').map((r) => r.points))
+    // 阳台板就是下面的顶：只算正上方那一层的阳台（更高楼层挑出来的阳台和这层屋顶之间隔着一层，屋顶照样要盖）
+    const aboveBalconies = (views[k + 1] ?? []).filter((r) => r.kind === 'balcony').map((r) => r.points)
     const next = fs[k + 1]
+    const H = heightOf(f)
     const shape = roofShape({
       kind: ex.roof,
       outline: mine,
       above,
       aboveBalconies: above.length ? aboveBalconies : [],
-      top: f.height,
+      top: H,
       upperRise: next ? next.elevation - f.elevation : undefined,
       wallOuter: plan.wallOuter,
       pitch: ex.pitch ?? 0.45,
       eave: ex.eave ?? 45,
     })
-    if (shape) out.push({ ...shape, floor: f.id, base: f.elevation + f.height, top: f.height })
+    if (shape) out.push({ ...shape, floor: f.id, base: f.elevation + H, top: H })
   })
   return out
 }

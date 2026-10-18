@@ -106,6 +106,30 @@ export function toon(color: THREE.ColorRepresentation, opts: { emissive?: number
   return m
 }
 
+/**
+ * 深度偏移：顶点沿视线往镜头拉近自身距离的 k 倍（透视相机按比例缩视空间坐标，屏幕位置不变；正交相机只动 z）。
+ * 用来让墙纸、边饰、外墙面压过和它共面 / 贴着的相邻面，代替 polygonOffset：polygonOffset 的 factor 项按表面倾斜放大，
+ * 掠射角（和视线几乎平行的内墙面、边饰）时偏移没有上限，内墙的墙纸、顶角线会被拉到外墙、屋面前面（外观视图里穿模）。
+ * 这里的偏移只和距离成正比（k = 4e-4：20m 外 0.8cm），远小于外墙厚、屋面到墙顶的距离；同样拉近的面之间前后关系不变。
+ * 克隆材质时照常拷 onBeforeCompile / customProgramCacheKey 就会带上。
+ */
+export function pullDepth<T extends THREE.Material>(m: T, k: number): T {
+  const before = m.onBeforeCompile
+  const key = m.customProgramCacheKey()
+  const f = (1 - k).toFixed(7)
+  m.onBeforeCompile = function (sh, r) {
+    before.call(this, sh, r)
+    sh.vertexShader = sh.vertexShader.replace(
+      '#include <project_vertex>',
+      `#include <project_vertex>
+  gl_Position = projectionMatrix * ( projectionMatrix[ 2 ][ 3 ] != 0.0 ? vec4( mvPosition.xyz * ${f}, 1.0 ) : vec4( mvPosition.xy, mvPosition.z * ${f}, 1.0 ) );`,
+    )
+  }
+  m.customProgramCacheKey = () => `${key}|pull${f}`
+  m.polygonOffset = false
+  return m
+}
+
 let vcToon: THREE.MeshToonMaterial | null = null
 /**
  * 顶点色的 toon 材质（家具单材质合并用，所有家具共用一份）：底色白色 × 顶点色 = 原来各材质的颜色，着色结果和原来逐材质完全一样。

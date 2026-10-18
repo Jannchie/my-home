@@ -24,7 +24,7 @@ import {
 } from '../model'
 import { isIndoor, sharedIntervals, voidRailSegments, wallSegments, wallThicknessAt, type WallSegment } from '../walls'
 import { tatamiLayout } from '../tatami'
-import { addOutlines, ball, capsule, cyl, disposeHooks, mergeMeshes, mergeSolidColors, noTransparentShadows, rbox, shade, toon, useAnisotropy } from './toon'
+import { addOutlines, ball, capsule, cyl, disposeHooks, mergeMeshes, mergeSolidColors, noTransparentShadows, pullDepth, rbox, shade, toon, useAnisotropy } from './toon'
 import { glow, poseDoors, type AssetDef } from './kit'
 import { freezeMatrices, syncMatrix } from './matrices'
 import { hasTag } from './tags'
@@ -282,6 +282,9 @@ const solidShadow = <T extends THREE.Material>(m: T) => {
   m.shadowSide = THREE.FrontSide
   return m
 }
+/** 墙纸 / 外墙面、边饰往镜头拉近的比例（pullDepth）：边饰比墙纸多一点，始终压在墙纸上 */
+export const WALL_PULL = 4e-4
+export const TRIM_PULL = 6e-4
 const capMat = () => solidShadow(toon('#7a6258'))
 const wallMat = (outer: boolean) => solidShadow(toon(outer ? '#fbf3e6' : '#fff8ef'))
 
@@ -594,15 +597,13 @@ function wallpaperMaterial(w: Wallpaper): THREE.Material {
   const key = JSON.stringify(w)
   let m = wpCache.get(key)
   if (!m) {
-    // 复制一份（toon / 花纹材质是共享缓存），加深度偏移：墙纸面总是压过贴着它的相邻墙端面，交接处不闪
+    // 复制一份（toon / 花纹材质是共享缓存），加深度偏移（pullDepth）：墙纸面总是压过贴着它的相邻墙端面，交接处不闪
     const src = w.pattern ? patternMaterial(w.pattern, true) : toon(w.color)
     m = src.clone()
     m.onBeforeCompile = src.onBeforeCompile
     m.customProgramCacheKey = src.customProgramCacheKey
     m.shadowSide = THREE.FrontSide
-    m.polygonOffset = true
-    m.polygonOffsetFactor = -1
-    m.polygonOffsetUnits = -2
+    pullDepth(m, WALL_PULL)
     wpCache.set(key, m)
   }
   return m
@@ -696,8 +697,8 @@ function buildWalls(plan: Plan, H0: number, infos: OpeningInfo[], opts: HouseOpt
   // 不参与让开 / 压低的部分（墙脚细线、压到地面下的窗台门槛）：全屋按投影设置各合成一个网格
   const statics: THREE.Mesh[] = []
   const stub = (a: Vec, b: Vec, t: number) => {
-    // 墙脚线顶面 2.4（和室里像一圈畳寄せ，高出榻榻米面）
-    const m = wallStub(a, b, t + 0.4, bottom, 2.4, isOuter)
+    // 墙脚线顶面 2.4（和室里像一圈畳寄せ，高出榻榻米面）。外墙的比墙薄：不从外墙面凸出来（户建的外墙材质上会露出一道浅色线）
+    const m = wallStub(a, b, isOuter ? t - 0.4 : t + 0.4, bottom, 2.4, isOuter)
     if (m) statics.push(m)
   }
   /** 本段墙上的墙块（墙、窗台、过梁），段末分进合批的桶，全部建完再合并 */
@@ -800,13 +801,17 @@ function buildWalls(plan: Plan, H0: number, infos: OpeningInfo[], opts: HouseOpt
    *   - 和另一道墙在这里转角（L 形）：厚的（一样厚就取沿 x 的那道）伸满对方半厚、包住转角，
    *     另一道缩回到它的内面（多留 0.05 嵌进去），外角严丝合缝、墙面也不重叠；
    *   - 别的情况（斜交、孤立的端头）照旧伸半个墙厚少 0.1。
+   * 外墙的转角只看外墙：内墙接着一道外墙的方向往里走（外轮廓在这里拐弯）时，两道外墙照常包住转角，
+   * 内墙缩回到拐过去那道外墙的内皮——不然内墙端头会伸进外墙的转角里（外墙内面缺一块，内墙顶也顶进屋檐底下）。
    */
   const extendAt = (self: Run, p: Vec) => {
     const d = unit(self)
-    const touch = segs.filter((o) => o !== self && projectToSegment(p, o.a, o.b).d < 1)
+    let touch = segs.filter((o) => o !== self && projectToSegment(p, o.a, o.b).d < 1)
+    if (self.outer && touch.some((o) => o.outer)) touch = touch.filter((o) => o.outer)
     const collinear = (o: Run) => Math.abs(d.x * unit(o).y - d.y * unit(o).x) < 1e-3
-    if (touch.some(collinear)) return 0
     const perp = touch.filter((o) => Math.abs(d.x * unit(o).x + d.y * unit(o).y) < 1e-3)
+    if (!self.outer && perp.some((o) => o.outer) && touch.some((o) => o.outer && collinear(o))) return -Math.max(...perp.map((o) => o.t)) / 2 + 0.05
+    if (touch.some(collinear)) return 0
     if (perp.length && perp.length === touch.length) {
       const through = perp.some((o) => {
         const u = along(o, p)
@@ -1246,8 +1251,9 @@ function buildCurtains(plan: Plan, infos: OpeningInfo[], H: number) {
 
 const trimCache = new Map<string, THREE.Material>()
 /**
- * 边饰材质：比墙纸（polygonOffset -1 / -2）偏移得更多。墙纸的偏移随表面倾斜变大，斜着看时会把墙纸拉到
- * 只凸出 0.8cm 的腰壁前面，逐像素抢深度成一片网点，而且随视角变化。边饰偏移更大就始终压在墙纸上。
+ * 边饰材质：比墙纸往镜头多拉一点（pullDepth）。偏移只和距离成正比、和表面倾斜无关，所有拉近的面之间前后关系不变，
+ * 只凸出 0.8cm 的腰壁始终压在墙纸上；以前用 polygonOffset（-3 / -6）时偏移随倾斜放大，掠射角下顶角线、踢脚线
+ * 会穿过外墙、屋面露出来。
  */
 function trimMat(color: string) {
   let m = trimCache.get(color)
@@ -1256,9 +1262,7 @@ function trimMat(color: string) {
     m = src.clone()
     m.onBeforeCompile = src.onBeforeCompile
     m.customProgramCacheKey = src.customProgramCacheKey
-    m.polygonOffset = true
-    m.polygonOffsetFactor = -3
-    m.polygonOffsetUnits = -6
+    pullDepth(m, TRIM_PULL)
     trimCache.set(color, m)
   }
   return m

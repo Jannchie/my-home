@@ -404,6 +404,7 @@ function applyFloorPose() {
  * 屋顶（户建）：外观视图里总是显示；预览模式下显示（这时墙也都是完整的，像看一座模型房子），
  * 镜头接近正上方往下看（看室内）时屋顶让开、墙恢复压低；布置模式不显示。
  * 有楼层被「只到当前层」藏起来时也不显示（下层露出来的那块屋顶会挡住当前层）。
+ * 没有外观设定的户型（公寓、复式、手画的）也有现推的缺省屋顶（exterior.ts roofExterior），只在外观视图 / 漫游里盖。
  */
 let roofUp = false
 /** 第一人称漫游中（墙、楼层、屋顶按外观视图处理，另加天花板） */
@@ -413,7 +414,7 @@ const fullView = () => sandbox.exterior || walking.value
 function roofWanted() {
   if (fullView()) return true
   // 墙高滑杆压低时屋顶会悬空：不显示
-  if (sandbox.mode !== 'preview' || sandbox.wallHeight < 240 || !floorGroups.some((f) => f.roof)) return (roofUp = false)
+  if (sandbox.mode !== 'preview' || sandbox.wallHeight < 240 || !floorGroups.some((f) => f.roof && !f.roof.userData.derived)) return (roofUp = false)
   if ([...floorAnim.values()].some((s) => s.hideAt)) return (roofUp = false)
   // 带回差：俯视角在阈值附近来回时屋顶不闪
   const polar = controls ? controls.getPolarAngle() : 1
@@ -424,8 +425,11 @@ function roofWanted() {
 const fullLook = () => fullView() || (sandbox.mode === 'preview' && roofUp)
 function applyRoofs(want = roofWanted()) {
   for (const fg of floorGroups) {
-    if (!fg.roof || fg.roof.visible === want) continue
-    fg.roof.visible = want
+    if (!fg.roof) continue
+    // 没有外观设定的户型（公寓等）现推的缺省屋顶：只在外观视图 / 漫游里盖
+    const show = want && (fullView() || !fg.roof.userData.derived)
+    if (fg.roof.visible === show) continue
+    fg.roof.visible = show
     stage.renderer.shadowMap.needsUpdate = true
     dirty = true
   }
@@ -829,7 +833,7 @@ function rebuildHouse() {
   // 多层户型每层用自己的层高；墙高滑杆调低时只压低当前层
   // 外观视图、漫游：墙一律满高（墙高滑杆不起作用）
   const wh = fullView() ? 240 : sandbox.wallHeight
-  const built = buildBuilding(raw, wh, (f) => (f.id === activeFloor.value && wh < 240 ? Math.min(f.height, wh) : f.height))
+  const built = buildBuilding(raw, wh, (f) => (f.id === activeFloor.value && wh < 240 ? Math.min(f.height, wh) : f.height), { defaultRoof: true })
   house = built.root
   // 房子搭好就不动了（除了墙体压低和楼层滑动，那两处自己更新矩阵）：不再每帧重算上千个对象的矩阵
   freezeMatrices(house)
