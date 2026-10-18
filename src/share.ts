@@ -4,7 +4,7 @@
 // 紧凑 JSON（版本 1）：
 //   { n 名字, w 内墙厚, o 外墙厚, g? 地区, N? 朝向,
 //     r 房间 [[名字, 种类, 顶点（0.1cm 整数，首点绝对值、之后逐点差分，x/y 交错）, 其余字段?]],
-//     d 门窗 [[房间序号, 种类, 边, 位置, 宽, 铰链 / 开向（bit0 = end，bit1 = out）, 其余字段?（窗的款式等）]],
+//     d 门窗 [[房间序号, 种类, 边, 位置, 宽, 铰链 / 开向（bit0 = end，bit1 = out）, 其余字段?（门窗的款式等）]],
 //     x 设备 [[种类, x, y, 宽, 旋转, 其余字段?（stackOn 换成设备序号）]],
 //     a? 素材表 [素材 id…], f? 家具 [[素材表序号, x, y, 旋转, 配色序号?, 其余字段?]], h? 住户,
 //     F? 楼层 [[id, 名字, 地面高, 层高]]（多层户型才有；房间 / 设备 / 家具的 floor 跟着「其余字段」走，门窗跟着房间） }
@@ -96,7 +96,7 @@ export function toCompact(p: Plan, mode: ShareMode): Compact {
     }),
     d: p.openings
       .filter((o) => roomIdx.has(o.roomId))
-      // 第 7 项：没单独编码的字段（窗的款式 / 窗框 / 格条 / 窗台 / 护窗板）；旧版本解码只读前 6 项，多出来的忽略
+      // 第 7 项：没单独编码的字段（窗的款式 / 窗框 / 格条 / 窗台 / 护窗板，门的款式 / 颜色 / 把手 / 侧窗亮子）；旧版本解码只读前 6 项，多出来的忽略
       .map((o) => trim<COpening>([roomIdx.get(o.roomId)!, o.kind, o.edge, r1(o.offset), r1(o.width), (o.hinge === 'end' ? 1 : 0) | (o.swing === 'out' ? 2 : 0), rest(o, OPENING_CODED)])),
     x: p.fixtures.map((f) => {
       const extra = rest(f, ['id', 'kind', 'x', 'y', 'w', 'rot', 'stackOn'])

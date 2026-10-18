@@ -510,8 +510,9 @@ export function facadeExtras(view: Plan, H: number, ex: Exterior, ground: boolea
       }
     } else if (ground && o.kind === 'door' && info.owner.kind === 'entrance') {
       // 入户门：门框 + 雨棚（或带柱子的门廊）
-      for (const s of [-1, 1]) item.add(piece(8, 205, 5, s * (w / 2 + 4), 0, 2.5))
-      item.add(piece(w + 16, 8, 5, 0, 203, 2.5))
+      // 门框高度跟着墙洞（带亮子的门洞更高）
+      for (const s of [-1, 1]) item.add(piece(8, info.y1 + 5, 5, s * (w / 2 + 4), 0, 2.5))
+      item.add(piece(w + 16, 8, 5, 0, info.y1 + 3, 2.5))
       const porch = ex.porch ?? 'canopy'
       if (porch === 'porch') {
         const pw = w + 180

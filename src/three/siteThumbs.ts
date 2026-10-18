@@ -4,7 +4,9 @@
 
 import * as THREE from 'three'
 import { onBeforeUnmount, shallowRef } from 'vue'
-import { FENCE_STYLE, type CarKind, type Exterior, type FenceKind, type Plan, type WindowGrid } from '../model'
+import { FENCE_STYLE, type CarKind, type DoorHandle, type DoorLeafStyle, type DoorLites, type Exterior, type FenceKind, type Plan, type WindowGrid } from '../model'
+import { sidelightWidth, type DoorKind } from '../doorStyles'
+import { doorLeafModel, liteModel } from './doorModels'
 import { buildBuilding } from './building'
 import { carModel, fenceSpan } from './exterior'
 import { BASE } from './house'
@@ -21,12 +23,15 @@ export type SitePreview =
   | { t: 'house'; focus: 'roof' | 'cover' | 'facade' | 'entrance'; ex: Exterior }
   /** 一扇窗嵌在一小段外墙里（门窗检查器的款式 / 格条格子） */
   | { t: 'window'; style: WindowModelStyle; frame: string; grid?: WindowGrid; shutters?: string }
+  /** 一扇关着的门嵌在一小段室内墙里（门窗检查器的门款式格子）；style 不填 = 平板 */
+  | { t: 'door'; kind: DoorKind; style?: DoorLeafStyle; color: string; handle: DoorHandle; handleColor: string; lites?: DoorLites }
 
 /** 缓存键：画面相关的参数都在里面，不相关的（比如看屋顶时的点缀色以外）也带上，宁可多渲染一张不画错 */
 export function previewKey(p: SitePreview): string {
   if (p.t === 'fence') return `site:fence|${p.kind}|${p.color ?? ''}|${p.height ?? ''}`
   if (p.t === 'car') return `site:car|${p.kind}|${p.color}`
   if (p.t === 'window') return `site:window|${p.style}|${p.frame}|${p.grid ?? ''}|${p.shutters ?? ''}`
+  if (p.t === 'door') return `site:door|${p.kind}|${p.style ?? ''}|${p.color}|${p.handle}|${p.handleColor}|${p.lites ?? ''}`
   const e = p.ex
   return `site:house|${p.focus}|${e.roof}|${e.roofColor}|${e.pitch ?? ''}|${e.eave ?? ''}|${e.facade}|${e.wallColor}|${e.trimColor}|${e.porch ?? ''}|${e.roofCover ?? ''}`
 }
@@ -77,6 +82,8 @@ export function previewObject(p: SitePreview): THREE.Object3D {
     g.add(carModel(p.color, p.kind))
   } else if (p.t === 'window') {
     g.add(windowPreview(p))
+  } else if (p.t === 'door') {
+    g.add(doorPreview(p))
   } else {
     const plan = previewPlan(p.ex)
     const { root } = buildBuilding(plan, 250, undefined, { bare: true })
@@ -122,6 +129,65 @@ function windowPreview(p: Extract<SitePreview, { t: 'window' }>): THREE.Group {
   return g
 }
 
+/** 预览门：开门 90 宽、推拉门 / 谷仓门 150 宽、折叠门 80 宽（带侧窗的开门 120 宽），高 200，开在一段米白的室内墙上（镜头在 +z） */
+const PV_DOOR_H = 200
+export function doorPreviewWidth(p: Pick<Extract<SitePreview, { t: 'door' }>, 'kind' | 'lites' | 'style'>) {
+  if (p.kind === 'sliding') return 150
+  if (p.kind === 'folding') return 80
+  return p.lites === 'side' || p.lites === 'both' ? 120 : 90
+}
+function doorPreview(p: Extract<SitePreview, { t: 'door' }>): THREE.Group {
+  const g = new THREE.Group()
+  const wall = 12
+  const W = doorPreviewWidth(p)
+  const transom = p.kind === 'door' && (p.lites === 'top' || p.lites === 'both')
+  const H = transom ? 226 : PV_DOOR_H
+  const side = 40
+  // 墙比常见的白门深一点，白色门扇的轮廓看得清
+  const mat = toon('#d9d0c1')
+  const box = (x0: number, x1: number, y0: number, y1: number, z = 0, d = wall) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, y1 - y0, d), mat)
+    m.position.set((x0 + x1) / 2, (y0 + y1) / 2, z)
+    g.add(m)
+  }
+  box(-W / 2 - side, -W / 2, 0, H + 25)
+  box(W / 2, W / 2 + side, 0, H + 25)
+  box(-W / 2, W / 2, H, H + 25)
+  // 地板
+  g.add(rbox(W + side * 2 + 20, 3, 30, '#c9a97e', { y: -3, z: 10 }, 1))
+  const leaf = (w: number, h: number, t: number, handleSide: -1 | 0 | 1) => doorLeafModel({ style: p.style, w, h, t, color: p.color, handle: p.handle, handleColor: p.handleColor, handleSide })
+  if (p.kind === 'door') {
+    const sl = p.lites === 'side' || p.lites === 'both' ? sidelightWidth(W) : 0
+    const lw = W - 4 - sl
+    const m = leaf(lw, PV_DOOR_H - 4, 3.6, 1)
+    m.position.set(-W / 2 + 2 + lw / 2, 1, 0)
+    g.add(m)
+    if (sl) g.add(liteModel(W / 2 - sl, W / 2, 0, PV_DOOR_H - 2, 4, p.color))
+    if (transom) g.add(liteModel(-W / 2, W / 2, PV_DOOR_H, H, 4, p.color))
+  } else if (p.kind === 'sliding' && p.style === 'barn') {
+    // 谷仓门：挂在墙面上（镜头一侧），关着
+    const m = leaf(W + 8, PV_DOOR_H + 3, 3.6, -1)
+    m.position.set(0, 0, wall / 2 + 3.3)
+    g.add(m)
+    g.add(rbox(W * 1.6, 3, 2, '#2f3134', { y: PV_DOOR_H + 6, z: wall / 2 + 3.3 }, 0.6))
+  } else if (p.kind === 'sliding') {
+    for (const k of [0, 1]) {
+      const pw = W / 2 + 2
+      const m = leaf(pw, PV_DOOR_H - 1, 3, k === 0 ? -1 : 1)
+      m.position.set((k === 0 ? -1 : 1) * (W / 4 - 1), 0, (k === 0 ? 1 : -1) * 2)
+      g.add(m)
+    }
+  } else {
+    for (const k of [0, 1]) {
+      const lw = W / 2 - 1
+      const m = leaf(lw, PV_DOOR_H - 1, 2.4, k === 1 ? -1 : 0)
+      m.position.set((k === 0 ? -1 : 1) * (W / 4), 0, 0)
+      g.add(m)
+    }
+  }
+  return g
+}
+
 const DIRS = {
   fence: new THREE.Vector3(0.45, 0.5, 1).normalize(),
   // 车头朝 -z：从左前上方看
@@ -133,6 +199,8 @@ const DIRS = {
   entrance: new THREE.Vector3(0.6, 0.4, 1).normalize(),
   // 窗：从户外略偏右上看，看得出开启扇的进深
   window: new THREE.Vector3(0.38, 0.18, 1).normalize(),
+  // 门：从室内正前方略偏右上看
+  door: new THREE.Vector3(0.26, 0.08, 1).normalize(),
 }
 
 /** 渲染（或取缓存）一张预览图 */
@@ -146,6 +214,14 @@ export function renderPreview(p: SitePreview): string {
       margin: 0.95,
       box: () => new THREE.Box3(new THREE.Vector3(-PV_W / 2 - (p.shutters ? 70 : 18), -14, -10), new THREE.Vector3(PV_W / 2 + (p.shutters ? 70 : 18), PV_H + 12, 30)),
     })
+  if (p.t === 'door') {
+    const W = doorPreviewWidth(p) + (p.kind === 'sliding' && p.style === 'barn' ? 20 : 0)
+    return renderThumb(key, () => previewObject(p), {
+      dir: DIRS.door,
+      margin: 0.95,
+      box: () => new THREE.Box3(new THREE.Vector3(-W / 2 - 12, -4, -8), new THREE.Vector3(W / 2 + 12, PV_DOOR_H + 14 + (p.lites === 'top' || p.lites === 'both' ? 26 : 0), 14)),
+    })
+  }
   const focus = p.focus
   return renderThumb(key, () => previewObject(p), {
     dir: DIRS[focus],

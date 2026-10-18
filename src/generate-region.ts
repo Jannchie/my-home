@@ -12,6 +12,7 @@ import { WEST } from './generate-west'
 import { dwellingsFor, generateHouseWithArea, houseBedrooms, type Dwelling } from './generate-house'
 import type { Region } from './model'
 import { styleWindows } from './windows'
+import { styleDoors } from './doorStyles'
 
 export const REGIONS: Region[] = ['jp', 'cn', 'west']
 
@@ -38,10 +39,12 @@ export function generatePlan(opts: GenOptions): GenResult {
   const r = generateLayout(opts)
   // 窗的款式按地区配（只写窗的字段，用种子散列，不动布局的随机序列）
   styleWindows(r.plan, r.plan.region ?? regionFor(opts), r.seed)
+  // 门的款式同理（只写门的款式字段）
+  styleDoors(r.plan, r.plan.region ?? regionFor(opts), r.seed)
   return r
 }
 
-/** 只出布局（不配窗的款式）：测试用来确认配窗不改布局 */
+/** 只出布局（不配门窗的款式）：测试用来确认配窗不改布局 */
 export function generateLayout(opts: GenOptions): GenResult {
   const region = regionFor(opts)
   const dw = dwellingFor(opts, region)

@@ -208,7 +208,7 @@ describe('生成户型的缺省款式', () => {
           const o = { ...opts, seed, region, dwelling }
           const a = generatePlan(o).plan
           const b = generateLayout(o).plan
-          const strip = (p: Plan) => JSON.stringify({ ...p, openings: p.openings.map(({ id: _i, windowStyle: _s, frame: _f, grid: _g, sill: _l, shutters: _h, ...r }) => r) }, (k, v) => (k === 'id' || k === 'roomId' || k === 'stackOn' || k === 'savedId' ? undefined : v))
+          const strip = (p: Plan) => JSON.stringify({ ...p, openings: p.openings.map(({ id: _i, windowStyle: _s, frame: _f, grid: _g, sill: _l, shutters: _h, doorStyle: _ds, doorColor: _dc, doorHandle: _dh, handleFinish: _hf, doorLites: _dl, ...r }) => r) }, (k, v) => (k === 'id' || k === 'roomId' || k === 'stackOn' || k === 'savedId' ? undefined : v))
           expect(strip(a)).toBe(strip(b))
           expect(a.openings.some((x) => x.windowStyle), `${region} ${seed} ${dwelling}`).toBe(true)
           // 不改窗台高度（落地窗、窗帘、一键布置都不受影响）
