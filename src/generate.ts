@@ -967,31 +967,110 @@ export interface GenResult {
   matched: boolean
 }
 
+/** 不消耗布局随机序列的种子哈希（0..1），k 区分用途 */
+export function seedUnit(seed: number, k: number) {
+  let h = (Math.imul(seed | 0, 2654435761) ^ Math.imul(k + 0x3c6e, 40503)) >>> 0
+  h = Math.imul(h ^ (h >>> 16), 2246822507) >>> 0
+  h = Math.imul(h ^ (h >>> 13), 3266489909) >>> 0
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296
+}
+
+/** 各组选项下骨架（c.sig + c.tags 拼成的签名）的出现次数：按固定的一组样本种子估，和起始种子无关 */
+const sigStats = new Map<string, Map<string, number>>()
+
+export interface AreaSearch<L extends { c: Ctx; plan: Plan }> {
+  seed: number
+  minArea: number | null
+  maxArea: number | null
+  /** 试多少个候选种子（keep 筛掉的不算） */
+  attempts: number
+  /** 同一组选项的缓存键（不含种子） */
+  key: string
+  /** 只考虑这些种子（随机地区 / 住宅类型：结果种子要能还原出同一地区、同一类型） */
+  keep?: (seed: number) => boolean
+  layout: (seed: number) => L
+  layoutOk: (l: L) => boolean
+  furnish: (l: L) => Plan
+  ok: (plan: Plan, l: L) => boolean
+}
+
 /**
- * 带面积限制的生成：从 seed 开始依次试后面的种子，
- * 第一个「落在面积范围内且符合表示规约」的方案胜出；都不行就返回最接近的合规方案。
+ * 带面积限制的生成（日式 / 中式 / 欧美 / 户建共用）：从 seed 开始依次试后面的种子，
+ * 「落在面积范围内且合规」并且通过骨架抽签的第一个方案胜出；都不行就返回最接近的合规方案。
  * 面积只取决于布局，所以先只做布局，面积合格的才摆设备。
+ *
+ * 骨架抽签（签名 = c.sig + c.tags）：面积限制会让最容易达标的骨架（比如 40㎡ 的田の字型）占绝大多数。
+ * 先用一组固定的样本种子数出各骨架在这组选项下达标的次数，常见的骨架按比例只收一部分（种子哈希抽签，最少收三成），
+ * 少见的骨架照收。抽签只看候选种子本身，所以用结果种子重新生成还是同一个方案。
+ * 只在设了面积范围时抽签：不限面积时各骨架本来就按生成器里的比例出现，也免得相邻种子被抽签挤到同一个方案上。
  */
-export function generateWithArea(opts: GenOptions, attempts = 600): GenResult {
-  const lo = opts.minArea ?? 0
-  const hi = opts.maxArea ?? Infinity
-  let best: { seed: number; score: number } | null = null
-  for (let i = 0; i < attempts; i++) {
-    const seed = (opts.seed + i) % 1_000_000
-    const l = layout({ ...opts, seed })
+export function searchWithArea<L extends { c: Ctx; plan: Plan }>(o: AreaSearch<L>): GenResult {
+  const lo = o.minArea ?? 0
+  const hi = o.maxArea ?? Infinity
+  const sig = (l: L) => [...l.c.sig, ...l.c.tags].join('|')
+  const inArea = (l: L) => {
     const a = planArea(l.plan)
-    const gap = a < lo ? lo - a : a > hi ? a - hi : 0
-    // 帖数只看布局：不合规的布局不必再摆设备
-    const layoutOk = planViolations(l.plan, false).length === 0
+    return a < lo ? lo - a : a > hi ? a - hi : 0
+  }
+  const lottery = o.minArea != null || o.maxArea != null
+  const statKey = `${o.key}|${o.minArea}|${o.maxArea}`
+  let stats = sigStats.get(statKey)
+  if (!stats) {
+    stats = new Map()
+    const n = lottery ? Math.min(o.attempts, 120) : 0
+    for (let k = 0; k < n; k++) {
+      const l = o.layout((k * 7919 + 104729) % 1_000_000)
+      if (inArea(l) === 0 && o.layoutOk(l)) stats.set(sig(l), (stats.get(sig(l)) ?? 0) + 1)
+    }
+    if (sigStats.size > 64) sigStats.clear()
+    sigStats.set(statKey, stats)
+  }
+  const cMin = stats.size ? Math.min(...stats.values()) : 0
+  const accept = (seed: number, l: L) => !lottery || seedUnit(seed, 11) < Math.max(0.3, (cMin + 1) / ((stats.get(sig(l)) ?? 0) + 1))
+
+  let best: { seed: number; score: number } | null = null
+  let first: { plan: Plan; seed: number } | null = null
+  for (let i = 0, tried = 0; tried < o.attempts && i < o.attempts * 50; i++) {
+    const seed = (o.seed + i) % 1_000_000
+    if (o.keep && !o.keep(seed)) continue
+    tried++
+    const l = o.layout(seed)
+    const gap = inArea(l)
+    // 规约只看布局：不合规的布局不必再摆设备
+    const layoutOk = o.layoutOk(l)
     if (gap === 0 && layoutOk) {
-      const plan = furnish(l)
-      if (planViolations(plan).length === 0) return { plan, seed, matched: true }
+      const lucky = accept(seed, l)
+      if (lucky || !first) {
+        const plan = o.furnish(l)
+        if (o.ok(plan, l)) {
+          if (lucky) return { plan, seed, matched: true }
+          first = { plan, seed }
+        }
+      }
     }
     // 兜底：面积最接近的方案（不合规的排在后面；gap 为 0 走到这里说明设备放不下）
     const score = gap + (layoutOk ? 0 : 1e6) + (gap === 0 ? 1e5 : 0)
     if (!best || score < best.score) best = { seed, score }
   }
-  return { plan: generateJapanese({ ...opts, seed: best!.seed }), seed: best!.seed, matched: false }
+  // 没有抽中的：退回第一个合格的
+  if (first) return { ...first, matched: true }
+  return { plan: o.furnish(o.layout(best!.seed)), seed: best!.seed, matched: false }
+}
+
+/** 日式：带面积限制的生成（见 searchWithArea） */
+export function generateWithArea(opts: GenOptions, attempts = 600, keep?: (seed: number) => boolean): GenResult {
+  return searchWithArea({
+    seed: opts.seed,
+    minArea: opts.minArea,
+    maxArea: opts.maxArea,
+    attempts,
+    key: `jp|${opts.type}|${opts.style}|${opts.corner}|${opts.access}`,
+    keep,
+    layout: (seed) => layout({ ...opts, seed }),
+    layoutOk: (l) => planViolations(l.plan, false).length === 0,
+    furnish,
+    ok: (plan) => planViolations(plan).length === 0,
+  })
 }
 
 /** 区间 [lo, hi] 扣掉若干区间后剩下的几段 */

@@ -2,7 +2,7 @@
 // 住宅类型不选（或选公寓）时平层生成和以前一样。
 import { describe, expect, test } from 'vitest'
 import * as THREE from 'three'
-import { generatePlan, dwellingFor } from '/src/generate-region'
+import { generatePlan, dwellingFor, regionFor } from '/src/generate-region'
 import { houseViolations } from '/src/generate-house'
 import { floorOf, floorOutline, floorView, planFloors } from '/src/floors'
 import { stairHoleConflicts, stairHoles, stairLinks, stairFootprint, overlapArea as stairOverlap } from '/src/stairs'
@@ -258,7 +258,7 @@ describe('平层公寓不受影响', () => {
       }
   })
 
-  test('住宅类型随机：落到公寓的种子和直接选公寓结果相同；以公寓为主', () => {
+  test('住宅类型随机：落到公寓时，用结果种子直接选公寓得到同一方案；以公寓为主', () => {
     let apt = 0
     for (let k = 0; k < 40; k++) {
       const seed = k * 1000 + 17
@@ -267,15 +267,31 @@ describe('平层公寓不受影响', () => {
         if (d !== 'apartment') continue
         apt++
         if (k % 8) continue
-        const a = generatePlan({ ...JP_OPTS, seed, region, dwelling: 'random' }).plan
-        const b = generatePlan({ ...JP_OPTS, seed, region }).plan
-        expect(JSON.stringify(normalizeIds(a))).toBe(JSON.stringify(normalizeIds(b)))
+        // 随机类型往后试种子时只试散列到公寓的种子，起始种子没抽中时结果种子会往后挪
+        const a = generatePlan({ ...JP_OPTS, seed, region, dwelling: 'random' })
+        const b = generatePlan({ ...JP_OPTS, seed: a.seed, region }).plan
+        expect(dwellingFor({ seed: a.seed, dwelling: 'random', maxArea: null }, region)).toBe('apartment')
+        expect(JSON.stringify(normalizeIds(a.plan))).toBe(JSON.stringify(normalizeIds(b)))
       }
     }
     expect(apt).toBeGreaterThan(60)
   })
 
-  test('平层生成的指纹和改动前一致', () => {
+  test('随机地区 / 类型按种子散列：相邻种子不扎堆；结果种子重新生成是同一地区、同一方案', () => {
+    const got = new Set(range(0, 29).map((s) => `${regionFor({ seed: 5000 + s, region: 'random' })}/${dwellingFor({ seed: 5000 + s, dwelling: 'random', maxArea: null }, 'jp')}`))
+    expect(got.size).toBeGreaterThanOrEqual(6)
+    for (const seed of [11, 4242, 90001]) {
+      const opts = { ...JP_OPTS, seed, region: 'random' as const, dwelling: 'random' as const, minArea: 60, maxArea: 85 }
+      const a = generatePlan(opts)
+      expect(regionFor({ seed: a.seed, region: 'random' })).toBe(regionFor(opts))
+      expect(dwellingFor({ ...opts, seed: a.seed }, regionFor(opts))).toBe(dwellingFor(opts, regionFor(opts)))
+      const b = generatePlan({ ...opts, seed: a.seed })
+      expect(b.seed).toBe(a.seed)
+      expect(JSON.stringify(normalizeIds(b.plan))).toBe(JSON.stringify(normalizeIds(a.plan)))
+    }
+  })
+
+  test('平层生成的指纹固定（同一种子的结果不会无意中变掉）', () => {
     // 名字（户型名、房间名）按运行环境的语言翻译，CI 和本机不同：只比结构，不比显示文字
     const fp = (p: Plan) => {
       const s = JSON.stringify(normalizeIds(p), (k, v) => (k === 'name' ? undefined : v))

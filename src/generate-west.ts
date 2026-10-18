@@ -204,4 +204,4 @@ function violations(plan: Plan, checkFixtures: boolean): string[] {
   return out
 }
 
-export const WEST: RegionGen = { layout, furnish, violations }
+export const WEST: RegionGen = { region: 'west', layout, furnish, violations }

@@ -245,4 +245,4 @@ function violations(plan: Plan, checkFixtures: boolean): string[] {
   return out
 }
 
-export const CN: RegionGen = { layout, furnish, violations }
+export const CN: RegionGen = { region: 'cn', layout, furnish, violations }

@@ -10,7 +10,7 @@
 
 import { orientDoors } from './doors'
 import { firstDoorCenter, placeCandidates, placeOnWall, type PlaceSpec } from './place'
-import { WALL, WALL_OUTER, createCtx, planArea, type Ctx } from './generate'
+import { WALL, WALL_OUTER, createCtx, planArea, searchWithArea, type Ctx } from './generate'
 import { add, area, bbox, edgeInfo, edgesOf, mul, openingGeom, pointInPolygon, projectToSegment, rectPoints, uid, type Fixture, type FixtureKind, type KitchenVariant, type OpeningKind, type Plan, type Region, type Room, type RoomKind, type Vec } from './model'
 import { isIndoor, isOpenBetween, sharedIntervals } from './walls'
 
@@ -415,6 +415,7 @@ export function prepareDoors(plan: Plan) {
 }
 
 export interface RegionGen {
+  region: Region
   /** 第一阶段：房间 + 门窗（面积就此确定） */
   layout: (seed: number, opts: { bedrooms: 'random' | 1 | 2 | 3 | 4; corner: 'random' | 'yes' | 'no' }) => { c: Ctx; plan: Plan }
   /** 第二阶段：设备 */
@@ -423,26 +424,26 @@ export interface RegionGen {
   violations: (plan: Plan, checkFixtures: boolean) => string[]
 }
 
-/** 和日式 generateWithArea 同一套路：从 seed 起依次试，第一个面积合格且合规的胜出，否则给最接近的 */
-export function generateRegionWithArea(gen: RegionGen, opts: { seed: number; bedrooms?: 'random' | 1 | 2 | 3 | 4; corner: 'random' | 'yes' | 'no'; minArea: number | null; maxArea: number | null }, attempts = 400) {
-  const lo = opts.minArea ?? 0
-  const hi = opts.maxArea ?? Infinity
+/** 和日式 generateWithArea 同一套路（searchWithArea）：面积合格且合规、通过骨架抽签的第一个胜出，否则给最接近的 */
+export function generateRegionWithArea(
+  gen: RegionGen,
+  opts: { seed: number; bedrooms?: 'random' | 1 | 2 | 3 | 4; corner: 'random' | 'yes' | 'no'; minArea: number | null; maxArea: number | null },
+  attempts = 400,
+  keep?: (seed: number) => boolean,
+) {
   const lo2 = { bedrooms: opts.bedrooms ?? 'random', corner: opts.corner }
-  let best: { seed: number; score: number } | null = null
-  for (let i = 0; i < attempts; i++) {
-    const seed = (opts.seed + i) % 1_000_000
-    const l = gen.layout(seed, lo2)
-    const a = planArea(l.plan)
-    const gap = a < lo ? lo - a : a > hi ? a - hi : 0
-    const layoutOk = gen.violations(l.plan, false).length === 0
-    if (gap === 0 && layoutOk) {
-      const plan = gen.furnish(l)
-      if (gen.violations(plan, true).length === 0) return { plan, seed, matched: true }
-    }
-    const score = gap + (layoutOk ? 0 : 1e6) + (gap === 0 ? 1e5 : 0)
-    if (!best || score < best.score) best = { seed, score }
-  }
-  return { plan: gen.furnish(gen.layout(best!.seed, lo2)), seed: best!.seed, matched: false }
+  return searchWithArea({
+    seed: opts.seed,
+    minArea: opts.minArea,
+    maxArea: opts.maxArea,
+    attempts,
+    key: `${gen.region}|${lo2.bedrooms}|${lo2.corner}`,
+    keep,
+    layout: (seed) => gen.layout(seed, lo2),
+    layoutOk: (l) => gen.violations(l.plan, false).length === 0,
+    furnish: gen.furnish,
+    ok: (plan) => gen.violations(plan, true).length === 0,
+  })
 }
 
 /** 面积（㎡） */

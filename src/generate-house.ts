@@ -24,7 +24,7 @@
 import { orientDoors } from './doors'
 import { placeOnWall, placePair, firstDoorCenter, type PlaceSpec } from './place'
 import { JO, area, bbox, edgesOf, add, mul, pointInPolygon, rectPoints, type Exterior, type FenceKind, type Fixture, type Opening, type OpeningKind, type Plan, type Region, type Room, type RoomKind, type Site, type Vec } from './model'
-import { WALL, WALL_OUTER, createCtx, planArea, planViolations, type Ctx } from './generate'
+import { WALL, WALL_OUTER, createCtx, planArea, planViolations, searchWithArea, type Ctx } from './generate'
 import { bedroomCloset, placeBathroom, placeKitchen, roomLinks, shoeCabinet } from './generate-band'
 import { isIndoor, sharedIntervals } from './walls'
 import { DEFAULT_FLOOR_H, SLAB, floorOf, floorView, planFloors, stampFloor } from './floors'
@@ -932,25 +932,20 @@ export function houseViolations(l: Pick<HouseLayout, 'plan' | 'want'>, checkFixt
   return out
 }
 
-/** 和平层同一套路：从 seed 起依次试，第一个面积合格且合规的胜出，否则给最接近的 */
-export function generateHouseWithArea(opts: HouseGenOpts, attempts = 300): { plan: Plan; seed: number; matched: boolean } {
-  const lo = opts.minArea ?? 0
-  const hi = opts.maxArea ?? Infinity
-  let best: { seed: number; score: number } | null = null
-  for (let i = 0; i < attempts; i++) {
-    const seed = (opts.seed + i) % 1_000_000
-    const l = layout(seed, opts)
-    const a = planArea(l.plan)
-    const gap = a < lo ? lo - a : a > hi ? a - hi : 0
-    const layoutOk = houseViolations(l, false).length === 0
-    if (gap === 0 && layoutOk) {
-      const plan = furnish(l)
-      if (houseViolations(l, true).length === 0) return { plan, seed, matched: true }
-    }
-    const score = gap + (layoutOk ? 0 : 1e6) + (gap === 0 ? 1e5 : 0)
-    if (!best || score < best.score) best = { seed, score }
-  }
-  return { plan: furnish(layout(best!.seed, opts)), seed: best!.seed, matched: false }
+/** 和平层同一套路（searchWithArea）：面积合格且合规、通过骨架抽签的第一个胜出，否则给最接近的 */
+export function generateHouseWithArea(opts: HouseGenOpts, attempts = 300, keep?: (seed: number) => boolean): { plan: Plan; seed: number; matched: boolean } {
+  return searchWithArea({
+    seed: opts.seed,
+    minArea: opts.minArea,
+    maxArea: opts.maxArea,
+    attempts,
+    key: `house|${opts.region}|${opts.dwelling}|${opts.bedrooms}`,
+    keep,
+    layout: (seed) => layout(seed, opts),
+    layoutOk: (l) => houseViolations(l, false).length === 0,
+    furnish,
+    ok: (_plan, l) => houseViolations(l, true).length === 0,
+  })
 }
 
 /** 测试用：只做布局 + 设备，不试种子 */

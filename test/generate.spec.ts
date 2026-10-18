@@ -1,8 +1,8 @@
 // 日式户型生成器：seed 1..100 的结构不变量
 import { describe, expect, test } from 'vitest'
-import { planViolations } from '/src/generate'
+import { generateWithArea, planViolations } from '/src/generate'
 import { edgeInfo, fixtureBox, boxOverlaps, pointInPolygon, onBoundary, type Plan } from '/src/model'
-import { genJp, normalizeIds, overlapArea, range, reachable, roomGraph } from './helpers'
+import { JP_OPTS, genJp, normalizeIds, overlapArea, range, reachable, roomGraph, skeletonSig } from './helpers'
 
 const SEEDS = range(1, 100)
 const plans = new Map<number, Plan>(SEEDS.map((s) => [s, genJp(s)]))
@@ -86,5 +86,31 @@ describe('日式生成器 seed 1..100', () => {
   test('同 seed 两次生成结构相同（屏蔽 id）', () => {
     const diff = SEEDS.filter((s) => s % 5 === 0).filter((s) => JSON.stringify(normalizeIds(genJp(s))) !== JSON.stringify(normalizeIds(plans.get(s)!)))
     expect(diff).toEqual([])
+  })
+})
+
+describe('日式生成器的多样性', () => {
+  test('骨架签名足够多样（seed 1..100）', () => {
+    expect(new Set([...plans.values()].map(skeletonSig)).size).toBeGreaterThanOrEqual(25)
+  })
+
+  test('面积限制下单一骨架不会占大多数（40–50㎡）', () => {
+    const styles = range(1, 60).map((s) => generateWithArea({ ...JP_OPTS, seed: s * 1013, minArea: 40, maxArea: 50 }).plan.name.match(/田の字型|縦長リビング|ワイドスパン|シングル/)?.[0] ?? '?')
+    const top = Math.max(...[...new Set(styles)].map((k) => styles.filter((x) => x === k).length))
+    expect(new Set(styles).size).toBeGreaterThanOrEqual(3)
+    expect(top / styles.length).toBeLessThanOrEqual(0.6)
+  })
+
+  test('居室的窗不总在墙正中', () => {
+    let off = 0
+    let all = 0
+    for (const p of plans.values())
+      for (const o of p.openings) {
+        const r = p.rooms.find((x) => x.id === o.roomId)!
+        if (o.kind !== 'window' || (r.kind !== 'western' && r.kind !== 'japanese' && r.kind !== 'ldk')) continue
+        all++
+        if (Math.abs(o.offset - edgeInfo(r.points, o.edge).length / 2) > 5) off++
+      }
+    expect(off / all).toBeGreaterThan(0.15)
   })
 })
