@@ -12,6 +12,33 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '1.9.0',
+    date: '2026-10-18',
+    notes: {
+      zh: [
+        '屋顶重做：L 形等复杂户型的双坡、四坡、单坡、平屋顶都是一整片，屋脊和天沟正确相交；新增和瓦、西班牙瓦、平板瓦、沥青瓦、石板瓦、金属板等屋面材料；公寓和复式在外观视图里也有屋顶',
+        '窗户可以换款式：推拉、平开、上下提拉、固定、上悬、百叶、拱顶、圆窗等，另有窗框颜色、格条、窗台高度和百叶护窗板；生成的户型按地区配默认款式',
+        '在 3D 里直接点车、围栏（外观视图里还有屋顶、外墙）就能弹出编辑卡片，各种款式用预览图挑选',
+        '二楼阳台下面加了支柱，落在屋面或地面上；生成的户型里门不会再被楼梯、扶手或楼梯洞口挡住',
+        '有厚度的家具选中时显示立体框；新增四种黑白漫画画面效果；修正外墙和屋面在某些角度透出内墙的问题',
+      ],
+      ja: [
+        '屋根を作り直し：L 字などの複雑な間取りでも切妻・寄棟・片流れ・陸屋根が一枚につながり、棟と谷が正しく交わるように。和瓦・洋瓦（S 瓦）・平板瓦・アスファルトシングル・スレート・ガルバリウムなどの屋根材を追加。マンションやメゾネットにも外観ビューで屋根が付きます',
+        '窓のタイプを選べるように：引き違い・開き窓・上げ下げ窓・FIX・すべり出し・ジャロジー・アーチ・丸窓など。サッシの色、格子、窓の高さ、外側の鎧戸も選べます。生成した間取りは地域に合った窓に',
+        '3D で車や塀（外観ビューでは屋根・外壁も）をクリックすると編集カードが開き、各タイプをプレビュー画像から選べます',
+        '2 階バルコニーの下に柱を追加し、屋根や地面で支えるように。生成した間取りでドアが階段・手すり・吹き抜けにふさがれないように',
+        '厚みのある家具は立体の枠で選択表示。モノクロ漫画の画面エフェクトを 4 種類追加。角度によって外壁や屋根から内壁が透けて見える問題を修正',
+      ],
+      en: [
+        'Rebuilt roofs: gable, hip, shed and flat roofs on L-shaped and other complex houses are one continuous surface with proper ridges and valleys; new roof coverings (kawara, Spanish tile, flat tile, asphalt shingle, slate, standing-seam metal and more); apartments and duplexes now get a roof in the exterior view',
+        'Choose window styles: sliding, casement, double-hung, fixed, awning, jalousie, arched, round and more, with frame colors, grilles, sill heights and shutters; generated plans get region-appropriate windows',
+        'Click a car or fence in 3D (and the roof or facade in the exterior view) to open an editing card, with preview tiles for every style',
+        'Upper-floor balconies now stand on posts that reach the roof or ground below; generated doors are no longer blocked by stairs, handrails or stairwell openings',
+        'Furniture with thickness gets a 3D box selection frame; four new black-and-white manga looks; inner walls no longer show through facades and roofs at some angles',
+      ],
+    },
+  },
+  {
     version: '1.8.0',
     date: '2026-10-18',
     notes: {
