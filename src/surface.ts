@@ -2,6 +2,7 @@
 
 import * as THREE from 'three'
 import { fixtureDepth, pointInPolygon, type Fixture, type Furniture, type Plan, type Vec } from './model'
+import { floorOf } from './floors'
 import { ASSET_MAP } from './three/assets'
 import { floorY, roomAt } from './three/house'
 import { CLIP_DROP, type Poly, type SurfaceKind } from './three/kit'
@@ -29,7 +30,19 @@ export interface Level {
   h: number
   /** 在柜门里 / 抽屉里：柜子关着时不能往里放（见 SurfaceDef.inside） */
   inside?: boolean
+  /** 浴缸边沿：围着开口的一圈窄带，东西可以横跨开口压在相对的两条边沿上（见 straddles） */
+  rim?: Rim
 }
+
+/** 开口外沿 w × d（局部坐标居中）、边沿带宽 band；横跨的东西最多伸出外沿 over */
+export interface Rim {
+  w: number
+  d: number
+  band: number
+  over: number
+}
+/** 横跨浴缸的东西（卷起的盖子比浴缸窄边长几厘米）最多伸出浴缸外沿多少 */
+export const RIM_OVERHANG = 10
 
 /**
  * 一件素材的所有可摆放层：顶面 + 柜内层板。
@@ -120,6 +133,7 @@ function fixtureLevels(f: Fixture): Level[] {
       if (f.shower) return []
       // 浴缸边沿（bathtubModel：tray 高 55、壁厚 7）：四条边沿带，中间是水面，不能放东西。
       // 盖子、浴缸架板、卷起的浴缸盖横跨浴缸时四个角都落在边沿带上
+      // 卷起的盖子、架板比浴缸窄边长一点也行：两端压住边沿、伸出外沿不超过 RIM_OVERHANG（rim / straddles）
       const r = 7.5
       return [
         {
@@ -127,6 +141,7 @@ function fixtureLevels(f: Fixture): Level[] {
           polys: [rect(-w / 2, -d / 2, w / 2, -d / 2 + r), rect(-w / 2, d / 2 - r, w / 2, d / 2), rect(-w / 2, -d / 2, -w / 2 + r, d / 2), rect(w / 2 - r, -d / 2, w / 2, d / 2)],
           kind: 'shelf',
           h: Infinity,
+          rim: { w, d, band: r, over: RIM_OVERHANG },
         },
       ]
     }
@@ -168,7 +183,36 @@ export function fixtureTop(f: Fixture) {
 export function fitsOnFixture(f: Fixture, asset: string, x: number, y: number, rot: number, z?: number) {
   const all = fixtureLevels(f)
   const lv = z === undefined ? all[0] : all.find((l) => Math.abs(l.y - z) < 0.5)
-  return !!lv && corners(asset, x, y, rot).every((c) => inPolys(f, lv.polys, c))
+  return !!lv && onLevel(f, lv, asset, x, y, rot)
+}
+
+/** 摆件整块落在这一层上：四角都在层的区域内，或横跨浴缸开口压在边沿上 */
+function onLevel(o: Pick<Furniture, 'x' | 'y' | 'rot'>, lv: Level, asset: string, x: number, y: number, rot: number) {
+  return corners(asset, x, y, rot).every((c) => inPolys(o, lv.polys, c)) || (!!lv.rim && straddles(o, lv.rim, asset, x, y, rot))
+}
+
+/**
+ * 横跨开口：摆件在某个方向上两端都压住相对的两条边沿（各压进至少 1cm、伸出外沿不超过 over），
+ * 另一个方向不出外沿（压在两条侧边沿上），或者也横跨（盖子四边都压着）。
+ */
+export function straddles(o: Pick<Furniture, 'x' | 'y' | 'rot'>, rim: Rim, asset: string, x: number, y: number, rot: number) {
+  const def = ASSET_MAP.get(asset)
+  if (!def) return false
+  const cs = [
+    [-1, -1],
+    [1, -1],
+    [1, 1],
+    [-1, 1],
+  ].map(([sx, sz]) => toLocal(o, toWorld({ x, y, rot }, (sx * def.w) / 2, (sz * def.d) / 2)))
+  const xs = cs.map((c) => c.x)
+  const ys = cs.map((c) => c.y)
+  const e = 0.05
+  const span = (a0: number, a1: number, half: number) => a0 <= -half + rim.band - 1 && a0 >= -half - rim.over - e && a1 >= half - rim.band + 1 && a1 <= half + rim.over + e
+  const inside = (a0: number, a1: number, half: number) => a0 >= -half - e && a1 <= half + e
+  const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)]
+  const sx = span(x0, x1, rim.w / 2)
+  const sy = span(y0, y1, rim.d / 2)
+  return (sx || sy) && (sx || inside(x0, x1, rim.w / 2)) && (sy || inside(y0, y1, rim.d / 2))
 }
 
 function inPolys(f: Pick<Furniture, 'x' | 'y' | 'rot'>, polys: Poly[], p: Vec) {
@@ -184,6 +228,19 @@ export function propsOn(plan: Pick<Plan, 'furniture'>, f: Furniture, depth = 0):
   // 多层户型：只看同一层的东西（上层同一位置桌上的摆件不算在下层的桌子上）
   const direct = plan.furniture.filter((o) => o.id !== f.id && o.floor === f.floor && lv.some((l) => Math.abs((o.z ?? 0) - (base + l.y)) < 0.5 && inPolys(f, l.polys, o)))
   return direct.flatMap((o) => [o, ...propsOn(plan, o, depth + 1)])
+}
+
+/**
+ * 直接摆在设备台面上的东西（浴缸边沿上的盖子、厨房台面 / 洗面台上的小物）：高度对得上，
+ * 且中心在台面区域内、或四角都压在台面上（横跨浴缸的盖子中心在水面上）。只算直接的一层，上面再叠的用 propsOn。
+ */
+export function propsOnFixture(plan: Pick<Plan, 'furniture' | 'floors'>, fx: Fixture): Furniture[] {
+  const lv = fixtureLevels(fx)
+  if (!lv.length) return []
+  const fl = floorOf(plan, fx)
+  return plan.furniture.filter(
+    (o) => (o.z ?? 0) > 0 && floorOf(plan, o) === fl && lv.some((l) => Math.abs((o.z ?? 0) - l.y) < 0.5 && (inPolys(fx, l.polys, o) || onLevel(fx, l, o.asset, o.x, o.y, o.rot))),
+  )
 }
 
 /**
@@ -313,7 +370,7 @@ export function supportOf(plan: Plan, f: Furniture): { ownerId: string; fits: bo
       if (Math.abs(o.z + lv.y - z) >= 0.5) continue
       // 四角都在层内（横跨浴缸边沿的盖子中心落在水面上，也算有支撑）；否则至少中心要在层内
       // 挂钩层：挂着的东西不要求四角都在层内，但中心要在挂钩范围里（不能随便挂到同高度别处的挂杆上）
-      const fits = lv.kind === 'hook' ? inPolys(o, lv.polys, f) : corners(f.asset, f.x, f.y, f.rot).every((c) => inPolys(o, lv.polys, c))
+      const fits = lv.kind === 'hook' ? inPolys(o, lv.polys, f) : onLevel(o, lv, f.asset, f.x, f.y, f.rot)
       if (!fits && !inPolys(o, lv.polys, f)) continue
       if (fits) return { ownerId: o.id, fits }
       found ??= { ownerId: o.id, fits }

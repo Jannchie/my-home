@@ -43,6 +43,7 @@ import { stairHoleConflicts, stairHoles, stairPlanLines, subtractSpan } from '..
 import { tatamiLayout } from '../tatami'
 import { sashAllowed } from '../windows'
 import { stallWalls } from '../bathroom'
+import { applyFixtureCarry, captureFixtureProps, type FixtureCarry } from '../fixtureCarry'
 import FixtureGlyph from './FixtureGlyph.vue'
 import { roomName, t } from '../i18n'
 import { ASSET_MAP } from '../three/assets'
@@ -93,7 +94,7 @@ type Drag =
   | { kind: 'vertex'; roomId: string; index: number; orig: Vec }
   | { kind: 'edge'; roomId: string; index: number; start: Vec; orig: Vec[] }
   | { kind: 'opening'; id: string; orig: Pick<Opening, 'roomId' | 'edge' | 'offset'> }
-  | { kind: 'fixture'; id: string; start: Vec; orig: Vec }
+  | { kind: 'fixture'; id: string; start: Vec; orig: Vec; carry: FixtureCarry }
   | { kind: 'rect'; start: Vec; end: Vec }
   | { kind: 'ghost'; start: Vec; orig: Vec }
 const drag = ref<Drag | null>(null)
@@ -219,7 +220,10 @@ function abortDrag() {
     if (r) r.points[d.index] = { ...d.orig }
   } else if (d.kind === 'fixture') {
     const f = findFixture(d.id)
-    if (f) Object.assign(f, d.orig)
+    if (f) {
+      Object.assign(f, d.orig)
+      applyFixtureCarry(plan.value, f, d.carry)
+    }
   } else if (d.kind === 'opening') {
     const o = plan.value.openings.find((x) => x.id === d.id)
     if (o) Object.assign(o, d.orig)
@@ -306,7 +310,7 @@ function onPointerDown(e: PointerEvent) {
       const f = findFixture(hit.id!)!
       selection.value = { type: 'fixture', id: f.id }
       checkpoint()
-      drag.value = { kind: 'fixture', id: f.id, start: w, orig: { x: f.x, y: f.y } }
+      drag.value = { kind: 'fixture', id: f.id, start: w, orig: { x: f.x, y: f.y }, carry: captureFixtureProps(plan.value, f) }
     } else if (hit.hit === 'opening') {
       const o = plan.value.openings.find((x) => x.id === hit.id)!
       selection.value = { type: 'opening', id: hit.id! }
@@ -557,6 +561,8 @@ function onPointerMove(e: PointerEvent) {
     if (!f) return
     f.x = d.orig.x + snapGrid(w.x - d.start.x)
     f.y = d.orig.y + snapGrid(w.y - d.start.y)
+    // 浴缸盖、台面小物跟着设备走
+    applyFixtureCarry(plan.value, f, d.carry)
   } else if (d.kind === 'opening') {
     const o = plan.value.openings.find((o) => o.id === d.id)
     if (!o) return
