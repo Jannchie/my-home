@@ -27,14 +27,17 @@ import {
   type BlockSpec,
   type CellSpec,
   type Ctx,
+  type LayoutOpts,
   type RegionGen,
+  type RegionLayout,
 } from './generate-band'
+import { altInt, bump, carve, carveCorner, defaultRule } from './footprint'
 import { railingFor } from './generate'
 import { t } from './i18n'
 
 const GROUP = 'cn-public'
 
-function layout(seed: number, o: { bedrooms: 'random' | 1 | 2 | 3 | 4; corner: 'random' | 'yes' | 'no' }): { c: Ctx; plan: Plan } {
+function layout(seed: number, o: LayoutOpts): RegionLayout {
   const c = createCtx(seed)
   const { rint, chance, pick } = c
   const n = o.bedrooms === 'random' ? pick([1, 2, 2, 3, 3, 3, 4]) : o.bedrooms
@@ -150,7 +153,7 @@ function layout(seed: number, o: { bedrooms: 'random' | 1 | 2 | 3 | 4; corner: '
   const ms = spanAt(masterRoom, 0)
   if (ms && chance(0.35)) [bx0, bx1] = [Math.min(bx0, ms[0]), Math.max(bx1, ms[1])]
   const rail = pick<Room['railing']>(['glass', 'glass', 'bars', 'mixed', railingFor(seed)])
-  balconyAlong(c, '景观阳台', bx0, bx1, 0, -rint(140, 180), rail)
+  const view = balconyAlong(c, '景观阳台', bx0, bx1, 0, -rint(140, 180), rail)
   // 生活阳台：厨房北侧，推拉门进
   const kRoom = band.placed.find((p) => p.spec.tag === 'kitchen')!.room
   const ks = spanAt(kRoom, D)
@@ -159,6 +162,7 @@ function layout(seed: number, o: { bedrooms: 'random' | 1 | 2 | 3 | 4; corner: '
     c.open(kRoom, 'sliding', { x: (ks[0] + ks[1]) / 2, y: D }, Math.min(ks[1] - ks[0] - 50, 150))
   }
 
+  const shaped = !o.plain && shapeCn(c, view)
   if (corner) cornerWindows(c, W, { ldk: 180, dining: 120, western: 120, bath: 60, kitchen: 90 })
 
   const baths = c.rooms.filter((r) => r.kind === 'bath').length
@@ -175,7 +179,65 @@ function layout(seed: number, o: { bedrooms: 'random' | 1 | 2 | 3 | 4; corner: '
     furniture: [],
     region: 'cn',
   }
-  return { c, plan }
+  return { c, plan, ...(shaped ? { plain: () => layout(seed, { ...o, plain: true }) } : {}) }
+}
+
+/**
+ * 外轮廓变形（只用 c.alt，见 footprint.ts）：
+ *   约 30%：凹阳台 —— 景观阳台嵌进客厅：整个开间嵌进去（客厅整体变浅；一半和外墙齐平，一半仍挑出一截），
+ *          客厅面积不够时只嵌一半多（客厅变 L 形，阳台一段嵌进去一段挑出）；
+ *   约 25%：切掉一个外墙角（先试北侧），角上的卧室 / 储藏间变成 L 形或变浅；
+ *   约 12%：玄关往北凸出一块（入户门挪到凸出部分）。
+ */
+function shapeCn(c: Ctx, view: Room) {
+  const t = { rooms: c.rooms, openings: c.openings }
+  const rule = defaultRule({ ldk: 14.5, western: 7.5, dining: 6 })
+  let done = false
+  const living = c.rooms.find((r) => r.kind === 'ldk')
+  if (c.altChance(0.3) && living) {
+    const ys = view.points.map((p) => p.y)
+    const bx = view.points.map((p) => p.x)
+    const lx = living.points.map((p) => p.x)
+    const p = -Math.min(...ys)
+    const full = c.altChance(0.5)
+    const di = full ? altInt(c, 120, 160) : altInt(c, 80, 120)
+    // 只嵌在客厅前面（阳台连到主卧时，主卧那一段照旧挑出）
+    const [x0, x1] = [Math.max(Math.min(...bx), Math.min(...lx)), Math.min(Math.max(...bx), Math.max(...lx))]
+    // 整个客厅开间嵌进去；客厅面积不够就只嵌一半多（靠哪边随机），客厅变 L 形、阳台一段嵌进去一段挑出
+    const w = Math.round(((x1 - x0) * 0.55) / 10) * 10
+    const left = c.altChance(0.5)
+    const spans: [number, number][] = [[x0, x1], left ? [x0, x0 + w] : [x1 - w, x1], left ? [x1 - w, x1] : [x0, x0 + w]]
+    const rule = defaultRule({ ldk: 14.5 }, 0.8)
+    for (const [a0, a1] of spans) {
+      if (!carve(t, { x0: a0, y0: 0, x1: a1, y1: di }, rule, view)) continue
+      done = true
+      view.name = '凹阳台'
+      // 整个开间都嵌进去、阳台只在客厅前面：整个嵌进去的去掉挑出的部分，否则挑出的部分收一点（总进深别太深）
+      if (a0 === x0 && a1 === x1 && Math.min(...bx) === x0 && Math.max(...bx) === x1) {
+        const out = full ? 0 : Math.max(60, Math.round((p - di / 2) / 10) * 10)
+        view.points = [
+          { x: x0, y: -out },
+          { x: x1, y: -out },
+          { x: x1, y: di },
+          { x: x0, y: di },
+        ]
+      }
+      break
+    }
+  }
+  if (c.altChance(0.25)) {
+    const order = c.altChance(0.5) ? (['ne', 'nw', 'se', 'sw'] as const) : (['nw', 'ne', 'sw', 'se'] as const)
+    for (const k of order) if (carveCorner(c, t, k, rule, { w: [0.35, 0.6], d: [0.3, 0.55] })) {
+      done = true
+      break
+    }
+  }
+  if (c.altChance(0.12)) {
+    const g = c.rooms.find((r) => r.kind === 'entrance')
+    const xs = g?.points.map((p) => p.x) ?? []
+    if (g && bump(t, g, 'n', Math.min(...xs), Math.max(...xs), altInt(c, 60, 100))) done = true
+  }
+  return done
 }
 
 function furnish({ c, plan }: { c: Ctx; plan: Plan }): Plan {

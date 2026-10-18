@@ -414,10 +414,24 @@ export function prepareDoors(plan: Plan) {
   orientDoors(plan)
 }
 
+export interface LayoutOpts {
+  bedrooms: 'random' | 1 | 2 | 3 | 4
+  corner: 'random' | 'yes' | 'no'
+  /** 不做外轮廓变形（footprint.ts）：变形方案不合格时的退路 */
+  plain?: boolean
+}
+
+export interface RegionLayout {
+  c: Ctx
+  plan: Plan
+  /** 外轮廓变形过：同一种子不变形的方案 */
+  plain?: () => RegionLayout
+}
+
 export interface RegionGen {
   region: Region
   /** 第一阶段：房间 + 门窗（面积就此确定） */
-  layout: (seed: number, opts: { bedrooms: 'random' | 1 | 2 | 3 | 4; corner: 'random' | 'yes' | 'no' }) => { c: Ctx; plan: Plan }
+  layout: (seed: number, opts: LayoutOpts) => RegionLayout
   /** 第二阶段：设备 */
   furnish: (l: { c: Ctx; plan: Plan }) => Plan
   /** 合规：返回问题列表（空 = 合格）；checkFixtures = false 时只看布局 */

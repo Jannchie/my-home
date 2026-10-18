@@ -14,6 +14,7 @@ import { orientDoors } from './doors'
 import { firstDoorCenter, placeCandidates, placeOnWall, placePair, type PlaceSpec } from './place'
 import { JO, add, area, bbox, dist, edgeInfo, edgesOf, fixtureDepth, mul, rotFacingWall, openingGeom, openingsOn, pointInPolygon, projectToSegment, rectPoints, uid, type Fixture, type KitchenVariant, type Opening, type Plan, type RailingKind, type Region, type Room, type RoomKind, type Vec } from './model'
 import { isIndoor, sharedIntervals } from './walls'
+import { carveCorner, defaultRule } from './footprint'
 import { jp } from './i18n'
 import { ASSET_MAP } from './three/assets'
 
@@ -736,6 +737,8 @@ export const WALL_OUTER = 18
 interface Layout {
   c: Ctx
   plan: Plan
+  /** 外轮廓变形过：同一种子不变形的方案（searchWithArea 在变形方案不合格时退回它） */
+  plain?: () => Layout
 }
 
 /** 阳台扶手墙样式：按种子单独取（不动主随机序列，同一种子的户型不变） */
@@ -746,7 +749,7 @@ export function railingFor(seed: number): RailingKind {
 }
 
 /** 第一阶段：房间、门窗（不含设备）。面积在这一步就确定了 */
-function layout(opts: GenOptions): Layout {
+function layout(opts: GenOptions, plain = false): Layout {
   const c = createCtx(opts.seed)
   const type: LayoutType = opts.type === 'random' ? c.pick<LayoutType>(['1K', '1DK', '1LDK', '2LDK', '2LDK', '3LDK', '3LDK']) : opts.type
   const isSingle = type === '1K' || type === '1DK'
@@ -768,7 +771,9 @@ function layout(opts: GenOptions): Layout {
   c.sig.push(type, style)
 
   const { W } = BUILDERS[style](c, type)
-  c.rooms.unshift({ id: uid('r'), kind: 'balcony', name: 'バルコニー', points: rectPoints(0, -c.rint(120, 180), W, 0), railing: railingFor(opts.seed) })
+  const balcony: Room = { id: uid('r'), kind: 'balcony', name: 'バルコニー', points: rectPoints(0, -c.rint(120, 180), W, 0), railing: railingFor(opts.seed) }
+  c.rooms.unshift(balcony)
+  const shaped = !plain && shapeJp(c, balcony)
 
   // 角部屋：外侧山墙开窗
   if (corner) {
@@ -842,7 +847,29 @@ function layout(opts: GenOptions): Layout {
     fixtures: [],
     furniture: [],
   }
-  return { c, plan }
+  return { c, plan, ...(shaped ? { plain: () => layout(opts, true) } : {}) }
+}
+
+/**
+ * 外轮廓变形（只用 c.alt）：
+ *   一半试一次：北侧（共用廊下一侧）切掉一角，角上的居室 / 收纳变成 L 形或变浅；
+ *   四成试一次：南侧一角缩进去，阳台跟着拐进来（L 形阳台），角上的 LDK / 居室变成 L 形或变浅。
+ */
+function shapeJp(c: Ctx, balcony: Room) {
+  const t = { rooms: c.rooms, openings: c.openings }
+  const rule = defaultRule()
+  let done = false
+  if (c.altChance(0.5)) {
+    const first = c.altChance(0.5) ? 'ne' : 'nw'
+    for (const k of [first, first === 'ne' ? 'nw' : 'ne'] as const) if (!done && carveCorner(c, t, k, rule, { w: [0.35, 0.6], d: [0.3, 0.55] })) done = true
+  }
+  if (c.altChance(0.4)) {
+    const first = c.altChance(0.5) ? 'se' : 'sw'
+    let south = false
+    for (const k of [first, first === 'se' ? 'sw' : 'se'] as const) if (!south && carveCorner(c, t, k, rule, { w: [0.35, 0.6], d: [0.25, 0.4], max: 180 }, balcony)) south = true
+    done ||= south
+  }
+  return done
 }
 
 /** 第二阶段：摆设备（厨房、冰箱、浴缸、马桶、洗面台、洗衣机位、PS、空调外机） */
@@ -978,7 +1005,7 @@ export function seedUnit(seed: number, k: number) {
 /** 各组选项下骨架（c.sig + c.tags 拼成的签名）的出现次数：按固定的一组样本种子估，和起始种子无关 */
 const sigStats = new Map<string, Map<string, number>>()
 
-export interface AreaSearch<L extends { c: Ctx; plan: Plan }> {
+export interface AreaSearch<L extends { c: Ctx; plan: Plan; plain?: () => L }> {
   seed: number
   minArea: number | null
   maxArea: number | null
@@ -1004,7 +1031,7 @@ export interface AreaSearch<L extends { c: Ctx; plan: Plan }> {
  * 少见的骨架照收。抽签只看候选种子本身，所以用结果种子重新生成还是同一个方案。
  * 只在设了面积范围时抽签：不限面积时各骨架本来就按生成器里的比例出现，也免得相邻种子被抽签挤到同一个方案上。
  */
-export function searchWithArea<L extends { c: Ctx; plan: Plan }>(o: AreaSearch<L>): GenResult {
+export function searchWithArea<L extends { c: Ctx; plan: Plan; plain?: () => L }>(o: AreaSearch<L>): GenResult {
   const lo = o.minArea ?? 0
   const hi = o.maxArea ?? Infinity
   const sig = (l: L) => [...l.c.sig, ...l.c.tags].join('|')
@@ -1028,33 +1055,37 @@ export function searchWithArea<L extends { c: Ctx; plan: Plan }>(o: AreaSearch<L
   const cMin = stats.size ? Math.min(...stats.values()) : 0
   const accept = (seed: number, l: L) => !lottery || seedUnit(seed, 11) < Math.max(0.3, (cMin + 1) / ((stats.get(sig(l)) ?? 0) + 1))
 
-  let best: { seed: number; score: number } | null = null
+  let best: { seed: number; score: number; plain: boolean } | null = null
   let first: { plan: Plan; seed: number } | null = null
   for (let i = 0, tried = 0; tried < o.attempts && i < o.attempts * 50; i++) {
     const seed = (o.seed + i) % 1_000_000
     if (o.keep && !o.keep(seed)) continue
     tried++
-    const l = o.layout(seed)
-    const gap = inArea(l)
-    // 规约只看布局：不合规的布局不必再摆设备
-    const layoutOk = o.layoutOk(l)
-    if (gap === 0 && layoutOk) {
-      const lucky = accept(seed, l)
-      if (lucky || !first) {
-        const plan = o.furnish(l)
-        if (o.ok(plan, l)) {
-          if (lucky) return { plan, seed, matched: true }
-          first = { plan, seed }
-        }
+    // 外轮廓变形过的方案（L.plain）不合格时，再试同一种子不变形的方案：变形不会让原来合格的种子失效
+    for (let l: L | undefined = o.layout(seed), plain = false; l; l = !plain && l.plain ? l.plain() : undefined, plain = true) {
+      const gap = inArea(l)
+      // 规约只看布局：不合规的布局不必再摆设备
+      const layoutOk = o.layoutOk(l)
+      if (gap === 0 && layoutOk) {
+        const lucky = accept(seed, l)
+        if (lucky || !first) {
+          const plan = o.furnish(l)
+          if (o.ok(plan, l)) {
+            if (lucky) return { plan, seed, matched: true }
+            first = { plan, seed }
+            break
+          }
+        } else break
       }
+      // 兜底：面积最接近的方案（不合规的排在后面；gap 为 0 走到这里说明设备放不下）
+      const score = gap + (layoutOk ? 0 : 1e6) + (gap === 0 ? 1e5 : 0)
+      if (!best || score < best.score) best = { seed, score, plain }
     }
-    // 兜底：面积最接近的方案（不合规的排在后面；gap 为 0 走到这里说明设备放不下）
-    const score = gap + (layoutOk ? 0 : 1e6) + (gap === 0 ? 1e5 : 0)
-    if (!best || score < best.score) best = { seed, score }
   }
   // 没有抽中的：退回第一个合格的
   if (first) return { ...first, matched: true }
-  return { plan: o.furnish(o.layout(best!.seed)), seed: best!.seed, matched: false }
+  const l = o.layout(best!.seed)
+  return { plan: o.furnish(best!.plain && l.plain ? l.plain() : l), seed: best!.seed, matched: false }
 }
 
 /** 日式：带面积限制的生成（见 searchWithArea） */

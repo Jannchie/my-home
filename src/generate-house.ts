@@ -30,6 +30,7 @@ import { isIndoor, sharedIntervals } from './walls'
 import { DEFAULT_FLOOR_H, SLAB, floorOf, floorView, planFloors, stampFloor } from './floors'
 import { stairHoleConflicts, stairLinks, withStairKeepout } from './stairs'
 import { jp, t } from './i18n'
+import { carveFloors, defaultRule } from './footprint'
 
 export type Dwelling = 'apartment' | 'house' | 'duplex'
 export const DWELLING_LABELS: Record<Dwelling, string> = { apartment: '公寓', house: '户建', duplex: '复式' }
@@ -79,6 +80,8 @@ export interface HouseLayout {
   placed: Placed[]
   /** 要的卧室数（合规检查用：没凑够就换种子） */
   want: number
+  /** 外轮廓变形过（L 形）：同一种子不变形的方案 */
+  plain?: () => HouseLayout
 }
 
 const F1 = '1f'
@@ -442,7 +445,7 @@ const mirrorX = (W: number) => (p: Vec): Vec => ({ x: W - p.x, y: p.y })
 // 第一阶段：房间、门窗、楼梯、用地
 // ---------------------------------------------------------------------------
 
-function layout(seed: number, o: Pick<HouseGenOpts, 'region' | 'dwelling' | 'bedrooms'>): HouseLayout {
+function layout(seed: number, o: Pick<HouseGenOpts, 'region' | 'dwelling' | 'bedrooms'> & { plain?: boolean }): HouseLayout {
   const P = PROGRAMS[o.region]
   const c = createCtx(seed)
   const duplex = o.dwelling === 'duplex'
@@ -610,14 +613,19 @@ function layout(seed: number, o: Pick<HouseGenOpts, 'region' | 'dwelling' | 'bed
     beds2.push(rec(def, c.rect('western', def.name, x2, 0, southEnd, dS), F2))
   }
   if (voidW > 0) c.rect('void', '挑空', southEnd, 0, W, dS)
-  // 阳台：2F 南侧挑出
+  // 外轮廓变形（户建）：南侧一角两层一起切掉，L 形的房子（客厅楼梯贴着东端，只切西端）
+  const shaped = !o.plain && !duplex && shapeHouse(c, rooms1, c.rooms, W, dS, !living)
+  // 阳台：2F 南侧挑出（只挑在南墙还在 y = 0 的那一段前面）
   if (P.balcony && beds2.length) {
     const b = P.balcony(c)
     const span = b.span === 'master' || beds2.length === 1 ? [beds2[0]] : b.span === 'two' ? beds2.slice(0, 2) : beds2
-    const bx0 = Math.min(...span.flatMap((r) => r.points.map((p) => p.x)))
-    const bx1 = Math.max(...span.flatMap((r) => r.points.map((p) => p.x)))
-    const bal = c.rect('balcony', b.name, bx0, -b.depth, bx1, 0)
-    bal.railing = b.railing
+    const front = span.flatMap((r) => r.points.filter((p) => Math.abs(p.y) < 1).map((p) => p.x))
+    const bx0 = Math.min(...front)
+    const bx1 = Math.max(...front)
+    if (front.length && bx1 - bx0 >= 150) {
+      const bal = c.rect('balcony', b.name, bx0, -b.depth, bx1, 0)
+      bal.railing = b.railing
+    }
   }
   const rooms2 = c.rooms.splice(0)
   const open2 = c.openings.splice(0)
@@ -743,7 +751,41 @@ function layout(seed: number, o: Pick<HouseGenOpts, 'region' | 'dwelling' | 'bed
     ...(site ? { north: 180 } : {}),
   }
   plan.name = P.name(beds, { partial, duplex, area: planArea(plan), seed, beds, baths })
-  return { c, plan, placed, want: n }
+  return { c, plan, placed, want: n, ...(shaped ? { plain: () => layout(seed, { ...o, plain: true }) } : {}) }
+}
+
+/**
+ * 户建的 L 形外轮廓（约 40%，只用 c.alt）：南侧一角（镜像之前的西端 / 东端）1F、2F 一起切掉一块，
+ * 角上的房间变成 L 形或变浅（用水房间、厨房、走廊不切）；切掉的地方是院子。屋顶按外轮廓自动拼成交叉的两块。
+ */
+function shapeHouse(c: Ctx, f1: Room[], f2: Room[], W: number, dS: number, eastOk: boolean) {
+  if (!c.altChance(0.4)) return false
+  const rule = defaultRule({ ldk: 16.5, dining: 6, western: 7.3 }, 0.75)
+  const sides = eastOk && c.altChance(0.5) ? ['e', 'w'] : ['w', 'e']
+  const r10 = (v: number) => Math.round(v / 10) * 10
+  const ds = [0.5, 0.42, 0.34].map((k) => r10(dS * k))
+  const d0 = Math.floor(c.alt() * ds.length)
+  const wk = c.alt()
+  for (const side of sides) {
+    if (side === 'e' && !eastOk) continue
+    // 凹口宽度：贴着 1F / 2F 角上那间房的开间取（整间 / 一部分），切出来的房间不会剩下一条窄边
+    const at = (rooms: Room[]) => rooms.find((r) => pointInPolygon({ x: side === 'w' ? 5 : W - 5, y: 5 }, r.points))
+    const widths = [at(f1), at(f2)].flatMap((r) => {
+      if (!r) return []
+      const xs = r.points.map((p) => p.x)
+      const rw = Math.max(...xs) - Math.min(...xs)
+      return [rw, r10(rw * (0.4 + wk * 0.2))]
+    })
+    const ws = [...new Set(widths)].filter((w) => w >= 200 && w <= W * 0.5)
+    const w0 = Math.floor(c.alt() * Math.max(1, ws.length))
+    for (let i = 0; i < ws.length; i++)
+      for (let j = 0; j < ds.length; j++) {
+        const w = ws[(w0 + i) % ws.length]
+        const d = ds[(d0 + j) % ds.length]
+        if (carveFloors([f1, f2], { x0: side === 'w' ? 0 : W - w, x1: side === 'w' ? w : W, y0: 0, y1: d }, rule)) return true
+      }
+  }
+  return false
 }
 
 // ---------------------------------------------------------------------------
