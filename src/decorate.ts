@@ -1660,7 +1660,8 @@ class Decorator {
       const scales = this.find('body-scale')
       if (scales.length) {
         const flat = scales.filter((d) => d.h < 10)
-        const first = this.pick(scales)
+        // 带扶手的体组成计站着要占一块地方：宽敞的洗面所才放
+        const first = this.pick(flat.length && area(room.points) / 10000 < 3.5 ? flat : scales)
         // 贴墙放不下就换扁平款、少留一点前方空间再试，最后在空地上找个角落
         this.wall(room, first.id, { front: 20 }) ??
           this.wall(room, this.pick(flat).id, { front: 0 }) ??
