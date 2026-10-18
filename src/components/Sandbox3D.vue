@@ -32,6 +32,7 @@ import { FxLayer } from '../three/fx'
 import { SelectFrame, WallGuide } from '../three/selectFrame'
 import { ActorLayer } from '../three/actors'
 import { Walker, ceilings, drawMiniMap, miniMapData, type MiniMapData } from '../three/walk'
+import { Highlight } from '../three/highlight'
 import ColorEditor from './ColorEditor.vue'
 import SandboxOverlay from './SandboxOverlay.vue'
 import BlueprintBar from './BlueprintBar.vue'
@@ -723,50 +724,17 @@ function rerollSelectedArt() {
 }
 
 // ---------- 悬停高亮（鼠标）：指到的家具整体提亮一点 ----------
-// toon 材质按颜色共享，不能直接改：悬停时把这件家具的网格临时换成提亮过的克隆材质（按原材质缓存），移开就换回。
-// 描边壳不动（它的 uniform 和全局描边宽度联动）。
+// 提亮是独立的叠加层（three/highlight.ts），不换家具自己的材质，和墙体让开、楼层淡出这些换材质的系统互不干扰
 let hoverId: string | null = null
-const hiMats = new Map<THREE.Material, THREE.Material>()
-const hiSwapped: [THREE.Mesh, THREE.Material | THREE.Material[]][] = []
-function brighter(mat: THREE.Material) {
-  let h = hiMats.get(mat)
-  if (!h) {
-    h = mat.clone()
-    // clone 不带着色器钩子（花纹布料、宠物毛色），要手动接上
-    h.onBeforeCompile = mat.onBeforeCompile
-    h.customProgramCacheKey = mat.customProgramCacheKey
-    const e = h as THREE.MeshToonMaterial
-    if (e.emissive) {
-      // 本身发光的（灯、屏幕）稍微再亮一点；其余加一层很淡的同色自发光
-      if (e.emissive.r + e.emissive.g + e.emissive.b > 0.01) e.emissiveIntensity *= 1.25
-      else {
-        // 按自身颜色发一点光：浅色、深色都是「同色提亮」，不会整块发白
-        e.emissive = (e.color ?? new THREE.Color('#ffffff')).clone()
-        e.emissiveIntensity = 0.2
-      }
-    }
-    hiMats.set(mat, h)
-  }
-  return h
-}
+const hoverHi = new Highlight(0.2)
 function setHover(id: string | null) {
   if (id === hoverId) return
-  for (const [m, mat] of hiSwapped) m.material = mat
-  hiSwapped.length = 0
   hoverId = id
   const o = id ? objs.get(id)?.obj : undefined
   const hf = id ? findFurniture(id) : undefined
   if (o && hf) frameAt(hoverFrame, o, hf.asset)
   else hoverFrame.hide()
-  if (o) {
-    o.traverse((n) => {
-      const m = n as THREE.Mesh
-      if (!m.isMesh || n.userData.isOutline) return
-      const orig = m.material
-      hiSwapped.push([m, orig])
-      m.material = Array.isArray(orig) ? orig.map(brighter) : brighter(orig)
-    })
-  }
+  hoverHi.set(o ? [o] : [])
   dirty = true
 }
 
@@ -881,7 +849,7 @@ function furnitureKey(asset: string, color: number | undefined, colors: readonly
 let builtActive = ''
 
 function syncFurniture() {
-  // 模型可能要重建：先把悬停时换上的提亮材质、选中容器的半透明材质还回去
+  // 模型可能要重建：先取消悬停，把选中容器的半透明材质还回去
   if (hoverId) setHover(null)
   clearXray()
   // 读原始对象：拖动时每帧都要过一遍全部家具，走响应式代理的开销比计算本身还大
@@ -1185,6 +1153,18 @@ function wallItemNear(far: number) {
     }
   }
   return best
+}
+
+/** 屏幕坐标处的楼梯：只看当前楼层，射线碰到的第一个不透明面属于楼梯才算（右键 / 长按弹楼梯菜单） */
+function pickStairs(e: PointerEvent): string | null {
+  setRay(e)
+  const house = floorGroups.find((g) => g.floor.id === activeFloor.value)?.group
+  if (!house) return null
+  const hit = raycaster.intersectObject(house, true).find((h) => (h.object as THREE.Mesh).isMesh && shown(h.object) && opaqueHit(h))
+  let o: THREE.Object3D | null = hit?.object ?? null
+  while (o && !o.userData.fixtureId) o = o.parent
+  const f = o ? plan.value.fixtures.find((x) => x.id === o!.userData.fixtureId) : undefined
+  return f?.kind === 'stairs' ? f.id : null
 }
 
 /** maxDist：射线在这个距离上已经点中了别的东西（门窗），更远的家具不算 */
@@ -2275,6 +2255,9 @@ function loop() {
   if (framesMoving) dirty = true
   // 灯光渐亮 / 渐灭（开关、黄昏清晨）
   if (lights.step(dt)) dirty = true
+  // 高亮叠加层跟上目标（拖动、墙体让开、楼层淡出时）
+  const hoverMoved = hoverHi.sync()
+  if (siteHL.sync() || hoverMoved) dirty = true
   if (moved) {
     if (!walker) updateCutaway()
     updateCompass()
@@ -2328,7 +2311,7 @@ onMounted(() => {
   // 场景根和家具根固定在原点：不设成静态矩阵的话，它们每帧 updateMatrix 会逼着整棵树重算世界矩阵
   stage.scene.matrixAutoUpdate = false
   furnRoot.matrixAutoUpdate = false
-  stage.scene.add(furnRoot, frameRoot, guideRoot, fx.group)
+  stage.scene.add(furnRoot, frameRoot, guideRoot, fx.group, hoverHi.root, siteHL.root)
   stage.scene.add(actors.group)
   controls = new OrbitControls(stage.camera, canvas.value!)
   controls.enableDamping = true
@@ -2385,6 +2368,7 @@ onMounted(() => {
     controls,
     object: (id) => objs.get(id)?.obj,
     pick: (e) => pickFurniture(e as PointerEvent),
+    pickStairs: (e) => pickStairs(e as PointerEvent),
     resetView,
     redraw: () => (dirty = true),
     showProps: () => {
@@ -2579,8 +2563,8 @@ onBeforeUnmount(() => {
   document.removeEventListener('visibilitychange', onVisibility)
   endCardPress()
   setHover(null)
-  for (const m of hiMats.values()) m.dispose()
-  hiMats.clear()
+  hoverHi.dispose()
+  siteHL.dispose()
   for (const f of [selFrame, hoverFrame, ghostFrame, wallGuide]) f.dispose()
   placing.value = null
 })
@@ -2782,28 +2766,16 @@ function siteObjects(s: SiteTarget): THREE.Object3D[] {
     })
   return out
 }
-// 选中高亮：和家具悬停一样把部件换成提亮的材质（brighter），车脚下再加一个和家具一样的选中框。
-// 墙体让开、楼层淡出也会换材质：还原时只还原还是我们换上的那份
-const siteHi: [THREE.Mesh, THREE.Material | THREE.Material[], THREE.Material | THREE.Material[]][] = []
+// 选中高亮：和家具悬停一样用提亮的叠加层（three/highlight.ts，不碰部件自己的材质），车脚下再加一个和家具一样的选中框。
+// 房子重搭后旧部件已经摘掉，rebuildHouse 末尾会再调一次，套到新模型上
+const siteHL = new Highlight(0.25)
 function applySiteHi() {
-  for (const [m, orig, hi] of siteHi) if (m.material === hi) m.material = orig
-  siteHi.length = 0
   siteFrame.hide()
   dirty = true
   const s = siteSel.value
-  if (!s || !house) return
+  if (!s || !house) return siteHL.clear()
   const objs = siteObjects(s)
-  const meshes = new Set<THREE.Mesh>()
-  for (const o of objs)
-    o.traverse((n) => {
-      if ((n as THREE.Mesh).isMesh && !n.userData.isOutline) meshes.add(n as THREE.Mesh)
-    })
-  for (const m of meshes) {
-    const orig = m.material
-    const hi = Array.isArray(orig) ? orig.map(brighter) : brighter(orig)
-    m.material = hi
-    siteHi.push([m, orig, hi])
-  }
+  siteHL.set(objs)
   const i = parkingIndex(s)
   const sp = i === null ? undefined : toRaw(plan.value).site?.parking[i]
   if (sp?.car && objs[0]) {
