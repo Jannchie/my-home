@@ -156,6 +156,16 @@ function floorMaterial(kind: RoomKind) {
 const toV2 = (pts: Vec[]) => pts.map((p) => new THREE.Vector2(p.x, -p.y))
 
 /**
+ * 挤出体上的洞：绕向要和外轮廓相反。ExtrudeGeometry 只在外轮廓是逆时针时才顺手把洞翻过来，
+ * 外轮廓本来就是顺时针时洞口侧面会朝里——从洞里看是背面，被剔掉，看穿过去（楼梯间里楼板那一层成了一道黑缝）。
+ */
+function holePath(shape: THREE.Shape, pts: Vec[]) {
+  const h = toV2(pts)
+  if (THREE.ShapeUtils.isClockWise(h) === THREE.ShapeUtils.isClockWise(shape.getPoints())) h.reverse()
+  return new THREE.Path(h)
+}
+
+/**
  * 房间地面：从 bottom（缺省底座顶面）挤出到地面高度。holes：要挖掉的区域（上层的楼梯洞口、挑空），
  * 只取和房间相交的部分（凸的洞口按房间裁一下）；洞口盖住整个房间时返回 null。
  */
@@ -165,7 +175,7 @@ function floorSlab(r: Room, bottom = BASE, holes: Vec[][] = []) {
     const cut = clipConvex(r.points, h)
     if (cut.length < 3 || Math.abs(signedArea(cut)) < 4) continue
     if (Math.abs(signedArea(cut)) >= Math.abs(signedArea(r.points)) - 4) return null
-    shape.holes.push(new THREE.Path(toV2(insetToward(cut, 0.5))))
+    shape.holes.push(holePath(shape, insetToward(cut, 0.5)))
   }
   // 铺榻榻米的和室：楼板低一张榻榻米的厚度，榻榻米面和别的房间地面齐平，楼板只在缝里露出来（深色）
   const sunk = hasTatami(r)
@@ -241,7 +251,7 @@ export function offsetPolygon(pts: Vec[], d: number): Vec[] {
 function structureSlab(outline: Vec[], holes: Vec[][], wallOuter: number) {
   const shape = new THREE.Shape(toV2(offsetPolygon(outline, wallOuter / 2)))
   const cut = holes.filter((h) => h.every((p) => pointInPolygon(p, outline) || onBoundary(outline, p, 0.5))).map((h) => insetToward(h, 0.5))
-  for (const h of cut) shape.holes.push(new THREE.Path(toV2(h)))
+  for (const h of cut) shape.holes.push(holePath(shape, h))
   const geo = new THREE.ExtrudeGeometry(shape, { depth: SLAB - 2, bevelEnabled: false })
   geo.rotateX(-Math.PI / 2)
   holeSidesToGroup(geo, cut, 2)

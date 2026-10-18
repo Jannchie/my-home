@@ -47,6 +47,21 @@ describe('楼层之间的接缝', () => {
         if (!m.isMesh || !Array.isArray(m.material) || m.material.length !== 3) return
         for (const gr of m.geometry.groups) if (gr.materialIndex === 2) lined += gr.count
         expect(m.geometry.groups.some((gr) => gr.materialIndex === 1 && gr.count > 0)).toBe(true)
+        // 洞口侧面朝洞里（站在楼梯间里看得见；朝里的话是背面，被剔掉，看穿过去成一道黑缝）
+        const pos = m.geometry.attributes.position
+        const v = [0, 1, 2].map(() => new THREE.Vector3())
+        for (const gr of m.geometry.groups) {
+          if (gr.materialIndex !== 2) continue
+          for (let i = gr.start; i < gr.start + gr.count; i += 3) {
+            v.forEach((p, k) => p.fromBufferAttribute(pos, i + k))
+            const n = new THREE.Vector3().subVectors(v[1], v[0]).cross(new THREE.Vector3().subVectors(v[2], v[0]))
+            const c = { x: (v[0].x + v[1].x + v[2].x) / 3, y: (v[0].z + v[1].z + v[2].z) / 3 }
+            const h = holes.find((q) => edgesOf(q).some((e) => projectToSegment(c, e.a, e.b).d < 2))
+            if (!h) continue // 挑空的洞口
+            const hc = h.reduce((s, p) => ({ x: s.x + p.x / h.length, y: s.y + p.y / h.length }), { x: 0, y: 0 })
+            expect(n.x * (hc.x - c.x) + n.z * (hc.y - c.y), `${region} 洞口侧面 (${c.x.toFixed(0)}, ${c.y.toFixed(0)}) 朝着楼板里面`).toBeGreaterThan(0)
+          }
+        }
       })
       expect(lined).toBeGreaterThan(0)
     })
