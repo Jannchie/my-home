@@ -254,3 +254,27 @@ export function porchFootprint(plan: Plan): Vec[] | null {
   const at = (along: number, k: number) => ({ x: d.face.x + d.dir.x * along + d.out.x * k, y: d.face.y + d.dir.y * along + d.out.y * k })
   return [at(-w / 2, 0), at(w / 2, 0), at(w / 2, dep), at(-w / 2, dep)]
 }
+
+/**
+ * 门廊优先：选了门廊（porch）而门前放不下完整的门廊加通道时，把用地正对大门的那条边（连同上面的出入口、
+ * 门前通道、车位）往外推，让出空间——围挡跟着用地边界走，相当于把围挡往外挪。原地改 plan.site，不消耗随机数。
+ * 返回推了多远（cm；0 = 本来就放得下，或没有门廊 / 用地 / 入户门）。
+ */
+export function makeRoomForPorch(plan: Plan): number {
+  const site = plan.site
+  if (!site || plan.exterior?.porch !== 'porch') return 0
+  const d = entranceDoor(plan)
+  if (!d) return 0
+  const room = roomInFront(site, d.face, d.out)
+  const need = PORCH_SIZE.porch.depth + PORCH_WALK
+  if (!(room < need)) return 0
+  const delta = Math.ceil((need - room) / 10) * 10
+  // 投到门的朝向上、和门前那条边一样远（或更远）的点都往外推
+  const far = (p: Vec) => (p.x - d.face.x) * d.out.x + (p.y - d.face.y) * d.out.y >= room - 1
+  const push = (p: Vec): Vec => (far(p) ? { x: p.x + d.out.x * delta, y: p.y + d.out.y * delta } : p)
+  site.points = site.points.map(push)
+  site.gates = site.gates.map(([a, b]) => [push(a), push(b)])
+  site.paths = site.paths.map((p) => p.map(push))
+  for (const s of site.parking) s.points = s.points.map(push)
+  return delta
+}

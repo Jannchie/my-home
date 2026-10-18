@@ -33,6 +33,7 @@ import { DOOR_PASS } from './stairDoors'
 import { jp, t } from './i18n'
 import { altInt, carveFloors, defaultRule } from './footprint'
 import { defaultRoofCover } from './roofCover'
+import { makeRoomForPorch } from './exterior'
 
 export type Dwelling = 'apartment' | 'house' | 'duplex'
 export const DWELLING_LABELS: Record<Dwelling, string> = { apartment: '公寓', house: '户建', duplex: '复式' }
@@ -857,6 +858,8 @@ function layout(seed: number, o: Pick<HouseGenOpts, 'region' | 'dwelling' | 'bed
     // 户建：院子 / 阳台一侧（y = 0，平面图上方）朝南，3D 的日照从院子那边来
     ...(site ? { north: 180 } : {}),
   }
+  // 门廊优先：门前放不下完整的门廊就把用地（围挡）往外推
+  makeRoomForPorch(plan)
   plan.name = P.name(beds, { partial, duplex, area: planArea(plan), seed, beds, baths })
   return { c, plan, placed, want: n, ...(shaped ? { plain: () => layout(seed, { ...o, plain: true }) } : {}) }
 }

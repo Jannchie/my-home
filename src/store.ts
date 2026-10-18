@@ -17,7 +17,7 @@ import { generatePlan } from './generate-region'
 import { lang, t } from './i18n'
 import { initialRoute } from './router'
 import { edgeInfo, emptyPlan, projectToSegment, type Fixture, type FixtureKind, type Floor, type Furniture, type Opening, type Plan, type Room, type Vec, type Wallpaper, type Exterior, type ParkingSpot, type Site, uid } from './model'
-import { normalizeExterior, styleExterior } from './exterior'
+import { makeRoomForPorch, normalizeExterior, styleExterior } from './exterior'
 import { normalizeWindow } from './windows'
 import { normalizeDoor } from './doorStyles'
 import { yardFurniture } from './yard'
@@ -926,6 +926,8 @@ export function setExterior(patch: Partial<Exterior>, history = true) {
   if (!e) return
   if (history) checkpoint()
   patchObj(e, patch)
+  // 换成门廊：门前放不下就把用地正对大门的那条边（围挡、通道、车位）往外推（同一步撤销）
+  if (patch.porch === 'porch') makeRoomForPorch(plan.value)
 }
 
 /** 全屋重新随机墙纸 */
