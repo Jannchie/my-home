@@ -25,7 +25,12 @@ const STEP_OVER = 30
 const WALK_V = 140
 const RUN_V = 300
 /** 离楼梯口多近、朝着楼梯走就踏上楼梯 */
-const STAIR_REACH = 35
+const STAIR_REACH = 30
+/** 走的方向和楼梯走向夹角在这以内（cos）才踏上楼梯：只是从楼梯口旁边的门经过时不会被「吸」上楼梯 */
+const STAIR_ALIGN = 0.7
+/** 鼠标锁定刚开始的这段时间（ms）不认鼠标位移；单次位移超过这个（像素）且远大于最近的平均值时当作浏览器的毛刺丢掉 */
+const LOCK_SETTLE_MS = 100
+const SPIKE_PX = 120
 
 export interface WalkHost {
   /** 某层地面的世界高度 */
@@ -34,12 +39,33 @@ export interface WalkHost {
   onFloor(floor: string): void
 }
 
-/** 楼梯上的状态：沿路线的弧长 s；dir = 前进键往哪走（+1 上楼、-1 下楼） */
+/** 楼梯上的状态：沿路线的弧长 s；dir = 前进键往哪走（+1 上楼、-1 下楼）；yaw0 = 定下 dir 时的视角朝向 */
 interface OnStair {
   w: StairWalk
   cum: number[]
   s: number
   dir: 1 | -1
+  yaw0: number
+}
+
+/**
+ * 鼠标锁定时的位移过滤：Chrome（尤其 Windows）偶尔会给出一次几百像素的 movementX / Y，视角会一下子横着或竖着跳。
+ * 锁定刚开始的一小段不认；之后单次位移超过 SPIKE_PX 且远大于最近的平均值时当作毛刺丢掉。
+ */
+export class MouseFilter {
+  private since = -Infinity
+  private avg = 8
+  reset(now: number) {
+    this.since = now
+    this.avg = 8
+  }
+  accept(dx: number, dy: number, now: number) {
+    if (now - this.since < LOCK_SETTLE_MS) return false
+    const m = Math.max(Math.abs(dx), Math.abs(dy))
+    if (m > SPIKE_PX && m > this.avg * 6) return false
+    this.avg += (m - this.avg) * 0.2
+    return true
+  }
 }
 
 export class Walker {
@@ -127,7 +153,7 @@ export class Walker {
     const step = { x: this.vel.x * dt, y: this.vel.y * dt }
 
     let target: number
-    if (this.stair) target = this.climb(f, fwd * v * dt, dt)
+    if (this.stair) target = this.climb(fwd * v * dt)
     else {
       this.slide(step)
       this.enterStairs(step)
@@ -184,10 +210,10 @@ export class Walker {
       const tx = next.x - end.x
       const ty = next.y - end.y
       const tl = Math.hypot(tx, ty) || 1
-      if ((d.x * tx + d.y * ty) / (L * tl) < 0.35) continue
+      if ((d.x * tx + d.y * ty) / (L * tl) < STAIR_ALIGN) continue
       const cum = [0]
       for (let i = 1; i < n; i++) cum.push(cum[i - 1] + Math.hypot(w.pts[i].x - w.pts[i - 1].x, w.pts[i].y - w.pts[i - 1].y))
-      this.stair = { w, cum, s: up ? 0 : cum[n - 1], dir: up ? 1 : -1 }
+      this.stair = { w, cum, s: up ? 0 : cum[n - 1], dir: up ? 1 : -1, yaw0: this.yaw }
       this.floor = w.from
       this.pos = this.stairPoint()
       return
@@ -195,27 +221,19 @@ export class Walker {
   }
 
   /**
-   * 楼梯上：前进键沿楼梯往 dir 方向走、后退键反过来（拐角平台处朝向和走向垂直也照样走）；
-   * 明显朝着楼梯的另一头时（掉头了）换方向。走动时镜头顺着楼梯的拐弯转过去。走到头就换层。
+   * 楼梯上：前进键沿楼梯往 dir 方向走、后退键反过来（拐角平台、U 形折返处朝向和走向不一致也照样走）；
+   * 玩家自己把视角转过 120° 以上（掉头了）才换方向，楼梯本身拐弯不算。走到头就换层。
+   * 镜头朝向只由玩家控制，不自动转（以前会顺着楼梯拐弯转，靠近楼梯口时像是镜头被拽走）。
    */
-  private climb(f: Vec, along: number, dt: number): number {
+  private climb(along: number): number {
     const st = this.stair!
     const { w, cum } = st
-    const i = this.stairIndex()
-    const a = w.pts[Math.max(0, i - 2)]
-    const b = w.pts[Math.min(w.pts.length - 1, i + 2)]
-    const tl = Math.hypot(b.x - a.x, b.y - a.y) || 1
-    const t = { x: (b.x - a.x) / tl, y: (b.y - a.y) / tl }
-    const facing = f.x * t.x + f.y * t.y
-    if (Math.abs(facing) > 0.5) st.dir = facing > 0 ? 1 : -1
-    st.s += along * st.dir
-    if (along) {
-      // 朝向缓缓转到楼梯的走向（后退时仍面朝前方）
-      const want = Math.atan2(-t.x * st.dir, -t.y * st.dir)
-      let d = want - this.yaw
-      d = Math.atan2(Math.sin(d), Math.cos(d))
-      this.yaw += d * (1 - Math.exp(-dt * 4))
+    const turned = Math.abs(Math.atan2(Math.sin(this.yaw - st.yaw0), Math.cos(this.yaw - st.yaw0)))
+    if (turned > (Math.PI * 2) / 3) {
+      st.dir = st.dir === 1 ? -1 : 1
+      st.yaw0 = this.yaw
     }
+    st.s += along * st.dir
     const total = cum[cum.length - 1]
     if (st.s >= total) return this.leaveStairs(w.to, w.exit)
     if (st.s <= 0) return this.leaveStairs(w.from, w.entry)
@@ -286,12 +304,14 @@ export class Walker {
     const lockChange = () => {
       const on = document.pointerLockElement === el
       if (this.locked && !on) this.unlockedAt = performance.now()
+      if (on && !this.locked) filter.reset(performance.now())
       this.locked = on
       if (!on) this.keys.clear()
       onLock(on)
     }
+    const filter = new MouseFilter()
     const mmove = (e: MouseEvent) => {
-      if (this.locked) this.look(e.movementX, e.movementY, 0.0022)
+      if (this.locked && filter.accept(e.movementX, e.movementY, performance.now())) this.look(e.movementX, e.movementY, 0.0022)
     }
     // 触屏：落在左下区域是摇杆，其余拖动看四周
     let lookId: number | null = null
@@ -301,7 +321,8 @@ export class Walker {
     const R = 56
     const pdown = (e: PointerEvent) => {
       if (e.pointerType === 'mouse') {
-        if (!this.locked) el.requestPointerLock?.()
+        // 原始鼠标输入（不经过系统指针加速），也能避开大部分位移毛刺；浏览器不支持时退回普通锁定
+        if (!this.locked) Promise.resolve(el.requestPointerLock?.({ unadjustedMovement: true })).catch(() => el.requestPointerLock?.())
         return
       }
       const b = el.getBoundingClientRect()

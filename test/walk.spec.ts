@@ -1,7 +1,7 @@
 // 第一人称漫游（three/walk.ts）：走动时不穿墙、不穿家具，能沿楼梯上下楼，能走到阳台。
 import { describe, expect, test } from 'vitest'
 import * as THREE from 'three'
-import { Walker, ceilings } from '/src/three/walk'
+import { MouseFilter, Walker, ceilings } from '/src/three/walk'
 import { slabHoles } from '/src/stairs'
 import { floorAbove, planFloors } from '/src/floors'
 import { decorate } from '/src/decorate'
@@ -135,5 +135,67 @@ describe('第一人称漫游', () => {
         if (pointInPolygon(c, ldk.points)) expect(covered(f1, c.x, c.y), `${region} 客厅没有天花板`).toBe(true)
       }
     }
+  })
+
+  test('从楼梯口旁边横着走过（比如去旁边的门）：不会被吸上楼梯，镜头朝向不变', () => {
+    const plan = generatePlan({ ...JP_OPTS, seed: 1, region: 'jp', dwelling: 'house' }).plan
+    const { w } = walkerOf(plan)
+    const link = w.nav.links[0]
+    w.floor = link.from
+    w.pos = w.nav.grid(link.from).nearest('walk', link.entry, 15, 60)!
+    // 楼梯走向的垂直方向
+    const t = { x: link.pts[3].x - link.entry.x, y: link.pts[3].y - link.entry.y }
+    const side = { x: -t.y, y: t.x }
+    w.yaw = Math.atan2(-side.x, -side.y)
+    const yaw0 = w.yaw
+    w.hold('w', true)
+    for (let i = 0; i < 90; i++) {
+      w.update(1 / 60)
+      expect(w.onStairs).toBe(false)
+    }
+    expect(w.yaw).toBe(yaw0)
+  })
+
+  test('上楼梯时镜头朝向只由玩家控制（拐角平台处也不自动转）', () => {
+    const plan = generatePlan({ ...JP_OPTS, seed: 1, region: 'jp', dwelling: 'house' }).plan
+    const { w } = walkerOf(plan)
+    const link = w.nav.links[0]
+    w.floor = link.from
+    w.pos = w.nav.grid(link.from).nearest('walk', link.entry, 15, 60)!
+    w.yaw = Math.atan2(-(link.pts[3].x - w.pos.x), -(link.pts[3].y - w.pos.y))
+    const yaw0 = w.yaw
+    w.hold('w', true)
+    for (let i = 0; i < 1200 && w.floor !== link.to; i++) w.update(1 / 60)
+    expect(w.floor).toBe(link.to)
+    expect(w.yaw).toBe(yaw0)
+  })
+
+  test('鼠标位移过滤：锁定后的头一下、单次几百像素的毛刺丢掉，正常移动和快速甩动保留', () => {
+    const f = new MouseFilter()
+    f.reset(0)
+    expect(f.accept(5, 3, 50)).toBe(false)
+    expect(f.accept(5, 3, 200)).toBe(true)
+    for (let i = 0; i < 10; i++) f.accept(12, 4, 210 + i)
+    expect(f.accept(0, 640, 230)).toBe(false)
+    expect(f.accept(900, 0, 231)).toBe(false)
+    // 逐渐加快的快速甩动不当毛刺
+    let ok = 0
+    for (let v = 20; v <= 200; v += 15) if (f.accept(v, 0, 240 + v)) ok++
+    expect(ok).toBe(13)
+  })
+
+  test('楼梯走到一半掉头（视角转 180°）再按前进：往回走下楼', () => {
+    const plan = generatePlan({ ...JP_OPTS, seed: 1, region: 'jp', dwelling: 'house' }).plan
+    const { w } = walkerOf(plan)
+    const link = w.nav.links[0]
+    w.floor = link.from
+    w.pos = w.nav.grid(link.from).nearest('walk', link.entry, 15, 60)!
+    w.yaw = Math.atan2(-(link.pts[3].x - w.pos.x), -(link.pts[3].y - w.pos.y))
+    w.hold('w', true)
+    for (let i = 0; i < 40; i++) w.update(1 / 60)
+    expect(w.onStairs).toBe(true)
+    w.look(-Math.PI / 0.0042, 0)
+    for (let i = 0; i < 1200 && w.onStairs; i++) w.update(1 / 60)
+    expect(w.floor).toBe(link.from)
   })
 })
