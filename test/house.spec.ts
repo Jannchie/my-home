@@ -7,6 +7,7 @@ import { houseViolations } from '/src/generate-house'
 import { floorOf, floorOutline, floorView, planFloors } from '/src/floors'
 import { stairHoleConflicts, stairHoles, stairLinks, stairFootprint, overlapArea as stairOverlap } from '/src/stairs'
 import { roofCovers, roofParts } from '/src/exterior'
+import { roofHeightAt } from '/src/roof'
 import { area, edgeInfo, onBoundary, pointInPolygon, type Plan, type Region } from '/src/model'
 import { normalizePlan } from '/src/store'
 import { decodeShare, encodeShare } from '/src/share'
@@ -123,13 +124,16 @@ describe.each(COMBOS)('$region $dwelling', (c) => {
           const out: string[] = []
           const o2 = floorOutline(floorView(p, '2f').rooms)!
           const o1 = floorOutline(floorView(p, '1f').rooms)!
-          if (!roofCovers(parts.filter((r) => r.floor === '2f').map((r) => r.rect), o2)) out.push('2F 屋顶没盖全')
-          if (!roofCovers(parts.map((r) => r.rect), o1)) out.push('1F 露出部分没盖屋顶')
+          if (!roofCovers(parts.filter((r) => r.floor === '2f').flatMap((r) => r.rects), o2)) out.push('2F 屋顶没盖全')
+          // 1F 露出的部分：要么有屋顶，要么上面是 2F 的阳台（阳台板就是它的顶）
+          const balc = floorView(p, '2f').rooms.filter((r) => r.kind === 'balcony').map((r) => { const xs = r.points.map((v) => v.x); const ys = r.points.map((v) => v.y); return { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) } })
+          if (!roofCovers([...parts.flatMap((r) => r.rects), ...balc], o1)) out.push('1F 露出部分没盖屋顶')
           // 下层的屋顶不伸到上层的范围里
-          for (const r of parts.filter((x) => x.floor === '1f')) {
-            const rp = [{ x: r.rect.x0, y: r.rect.y0 }, { x: r.rect.x1, y: r.rect.y0 }, { x: r.rect.x1, y: r.rect.y1 }, { x: r.rect.x0, y: r.rect.y1 }]
-            if (stairOverlap(rp, o2) > 1) out.push('1F 屋顶伸进了 2F')
-          }
+          for (const r of parts.filter((x) => x.floor === '1f'))
+            for (const b of r.rects) {
+              const rp = [{ x: b.x0, y: b.y0 }, { x: b.x1, y: b.y0 }, { x: b.x1, y: b.y1 }, { x: b.x0, y: b.y1 }]
+              if (stairOverlap(rp, o2) > 1) out.push('1F 屋顶伸进了 2F')
+            }
           return out
         }),
       ).toEqual([])
@@ -138,13 +142,36 @@ describe.each(COMBOS)('$region $dwelling', (c) => {
 })
 
 describe('部分二阶', () => {
-  test('日式户建里有部分二阶：2F 外轮廓比 1F 小，1F 露出的部分有单坡屋顶贴着 2F', () => {
+  test('日式户建里有部分二阶：2F 外轮廓比 1F 小，1F 露出的部分有下屋，屋面朝 2F 外墙升高', () => {
     const ps = [...plans.get('jp/house')!.values()].filter((p) => area(floorOutline(floorView(p, '2f').rooms)!) < area(floorOutline(floorView(p, '1f').rooms)!) - 1)
     expect(ps.length).toBeGreaterThan(0)
     for (const p of ps) {
       const low = roofParts(p).filter((r) => r.floor === '1f')
       expect(low.length).toBeGreaterThan(0)
-      if (p.exterior!.roof !== 'flat') expect(low.every((r) => r.kind === 'shed' && r.against)).toBe(true)
+      if (p.exterior!.roof === 'flat') continue
+      // 下屋最高的地方贴着 2F 外墙（离 2F 外轮廓不到一个墙厚）
+      const o2 = floorOutline(floorView(p, '2f').rooms)!
+      for (const r of low) {
+        let top = -Infinity
+        for (let k = 2; k < r.tris.length; k += 3) top = Math.max(top, r.tris[k])
+        // 沿 2F 外墙外侧一点点取样：屋面在那里达到最高
+        let atWall = -Infinity
+        for (let i = 0; i < o2.length; i++) {
+          const a = o2[i]
+          const b = o2[(i + 1) % o2.length]
+          const L = Math.hypot(b.x - a.x, b.y - a.y)
+          const n = { x: (b.y - a.y) / L, y: -(b.x - a.x) / L }
+          for (let k = 1; k < 40; k++)
+            for (const sgn of [1, -1]) {
+              const q = { x: a.x + ((b.x - a.x) * k) / 40 + n.x * 2 * sgn, y: a.y + ((b.y - a.y) * k) / 40 + n.y * 2 * sgn }
+              if (pointInPolygon(q, o2)) continue
+              const z = roofHeightAt(r.tris, q)
+              if (z !== null) atWall = Math.max(atWall, z)
+            }
+        }
+        expect(r.lower).toBe(true)
+        expect(atWall).toBeGreaterThan(top - 2)
+      }
     }
   })
 })
