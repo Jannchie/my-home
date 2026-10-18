@@ -6,14 +6,28 @@ import { KITCHEN, fixtureDepth, polyPath, type Fixture } from '../model'
 import { jp, t } from '../i18n'
 import { stairLayout, stairsVariant } from '../stairs'
 import { SLAB } from '../floors'
+import type { StallWalls } from '../bathroom'
 
-/** rise：楼梯的层间高（决定级数），不给按 240 + 楼板厚 */
-const props = defineProps<{ f: Fixture; rise?: number }>()
+/** rise：楼梯的层间高（决定级数），不给按 240 + 楼板厚；stall：淋浴房哪几边贴墙（不给 = 只有正面不贴墙） */
+const props = defineProps<{ f: Fixture; rise?: number; stall?: StallWalls }>()
 
 const w = computed(() => props.f.w)
 const d = computed(() => fixtureDepth(props.f))
 const back = computed(() => -d.value / 2)
 const LINE = '#2b2925'
+
+/** 淋浴房的玻璃隔断：每一面不贴墙的边一道（局部坐标，背面朝 -y） */
+const stallGlass = computed(() => {
+  const s = props.stall ?? { back: true, left: true, right: true, front: false }
+  const hw = w.value / 2 - 2
+  const hd = d.value / 2 - 2
+  const out: [number, number, number, number][] = []
+  if (!s.front) out.push([-w.value / 2, hd, w.value / 2, hd])
+  if (!s.back) out.push([-w.value / 2, -hd, w.value / 2, -hd])
+  if (!s.left) out.push([-hw, -d.value / 2, -hw, d.value / 2])
+  if (!s.right) out.push([hw, -d.value / 2, hw, d.value / 2])
+  return out
+})
 const FILL = '#ffffff'
 
 /** 楼梯：踏步线、上楼箭头（局部坐标），起步处画一个小圆 */
@@ -60,12 +74,12 @@ const stairs = computed(() => {
     />
   </g>
 
-  <!-- 淋浴房：方形底盘 + 对角线 + 地漏，正面一道玻璃隔断 -->
+  <!-- 淋浴房：方形底盘 + 对角线 + 地漏，每一面不贴墙的边一道玻璃隔断 -->
   <g v-else-if="f.kind === 'bathtub' && f.shower">
     <rect :x="-w / 2" :y="-d / 2" :width="w" :height="d" rx="2" fill="#eef6f8" :stroke="LINE" stroke-width="1.5" />
     <path :d="`M${-w / 2} ${-d / 2}L${w / 2} ${d / 2}M${w / 2} ${-d / 2}L${-w / 2} ${d / 2}`" :stroke="LINE" stroke-width="0.6" fill="none" />
     <circle cx="0" cy="0" r="4" :fill="FILL" :stroke="LINE" stroke-width="1" />
-    <line :x1="-w / 2" :y1="d / 2 - 2" :x2="w / 2" :y2="d / 2 - 2" :stroke="LINE" stroke-width="2.4" />
+    <line v-for="(l, i) in stallGlass" :key="i" :x1="l[0]" :y1="l[1]" :x2="l[2]" :y2="l[3]" :stroke="LINE" stroke-width="2.4" />
   </g>
 
   <!-- 浴缸：外框 + 圆角内槽 + 排水口 -->

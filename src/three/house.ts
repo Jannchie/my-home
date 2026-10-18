@@ -45,7 +45,7 @@ import {
   NICHE_H,
 } from './assets'
 import { edgesOf } from '../model'
-import { showerSpot } from '../bathroom'
+import { showerSpot, stallWalls, type StallWalls } from '../bathroom'
 import { curtainSpec } from '../curtains'
 import { showerCurtainModel, showerModel } from './shower'
 import { edgeRail, holeRails, stairsModel, type WallLine } from './stairs3d'
@@ -1619,13 +1619,14 @@ function buildShowers(plan: Plan) {
 }
 
 /** rise：楼梯的层间高（不给按墙高 + 楼板厚） */
-export function fixtureModel(f: Fixture, wallH: number, rise?: number, walls?: WallLine[]) {
+/** stall：淋浴房哪几边贴墙（贴墙的边不装玻璃，见 bathroom.ts stallWalls） */
+export function fixtureModel(f: Fixture, wallH: number, rise?: number, walls?: WallLine[], stall?: StallWalls) {
   const d = fixtureDepth(f)
   switch (f.kind) {
     case 'kitchen':
       return kitchenModel(f.w, f.variant === 'facing', f.burners, { island: f.island, dishwasher: f.dishwasher, induction: f.induction })
     case 'bathtub':
-      return bathtubModel(f.w, d, !!f.shower)
+      return bathtubModel(f.w, d, !!f.shower, stall)
     case 'toilet':
       return toiletModel(f.w, d, f.toiletType ?? 'washlet')
     case 'basin':
@@ -1774,7 +1775,7 @@ export function buildHouse(plan: Plan, wallH: number, opts: HouseOpts = {}) {
 
   const fx = new THREE.Group()
   for (const f of plan.fixtures) {
-    const m = fixtureModel(f, wallH, opts.rise, f.kind === 'stairs' ? ws : undefined)
+    const m = fixtureModel(f, wallH, opts.rise, f.kind === 'stairs' ? ws : undefined, f.kind === 'bathtub' && f.shower ? stallWalls(plan, f) : undefined)
     mergeMeshes(m)
     addOutlines(m)
     placeOnFloor(m, plan, f.x, f.y, f.rot)

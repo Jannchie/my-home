@@ -1013,31 +1013,54 @@ export function kitchenModel(w: number, facing: boolean, burners: 2 | 3 = w < 20
   return g
 }
 
-/** 淋浴房：低矮的方形淋浴底盘 + 地漏 + 正面玻璃隔断（一扇固定、一扇推拉，金属框） */
-function showerStallModel(w: number, d: number) {
+/**
+ * 淋浴房：低矮的方形淋浴底盘 + 地漏 + 玻璃隔断（金属框）。walls 标出哪几边贴墙（src/bathroom.ts stallWalls）：
+ * 贴墙的边不装玻璃，其余每一边都装；门（一扇固定、一扇推拉）开在正面（正面贴墙时开在第一面不贴墙的边上）。
+ * 不给 walls 时按三面靠墙（嵌在凹位里）只装正面。
+ */
+export type StallSide = 'front' | 'back' | 'left' | 'right'
+export function showerStallModel(w: number, d: number, walls: Record<StallSide, boolean> = { back: true, left: true, right: true, front: false }) {
   const g = new THREE.Group()
   g.add(tray(w, 6, d, 3, C.white, {}, 2))
   g.add(cyl(3.5, 3.5, 0.4, '#9aa3ad', { y: 3.2, z: 0 }, 16))
   const H = 190
   const metal = '#b9c0c9'
-  const zf = d / 2 - 2
-  const pane = (pw: number, x: number, z: number) => {
-    const p = rbox(pw, H - 8, 0.8, C.glass, { x, y: 7, z }, 0.2)
-    p.material = toon(C.glass, { transparent: 0.3 })
-    p.userData.noOutline = true
-    g.add(p)
+  const open = (['front', 'right', 'left', 'back'] as const).filter((s) => !walls[s])
+  const doorSide = open[0]
+  // 每一边在自己的局部坐标里沿 x 建（长 L，玻璃在 z = 半宽 - 2），再绕 y 转到那一边
+  const SIDE: Record<StallSide, { rot: number; L: number; half: number }> = {
+    front: { rot: 0, L: w, half: d / 2 },
+    back: { rot: Math.PI, L: w, half: d / 2 },
+    right: { rot: Math.PI / 2, L: d, half: w / 2 },
+    left: { rot: -Math.PI / 2, L: d, half: w / 2 },
   }
-  pane(w * 0.55, -w / 2 + (w * 0.55) / 2 + 1, zf)
-  pane(w * 0.5, w / 2 - (w * 0.5) / 2 - 1, zf + 2.2)
-  g.add(rbox(w, 2.4, 4, metal, { y: H - 1, z: zf + 1 }, 0.6))
-  g.add(rbox(w, 1.6, 4, metal, { y: 6, z: zf + 1 }, 0.4))
-  for (const x of [-w / 2 + 1, w / 2 - 1]) g.add(rbox(2.4, H - 6, 4, metal, { x, y: 6, z: zf + 1 }, 0.6))
-  g.add(rbox(1.6, 28, 3, metal, { x: w / 2 - w * 0.5 + 4, y: 90, z: zf + 4.2 }, 0.6))
+  for (const side of open) {
+    const { rot, L, half } = SIDE[side]
+    const s = new THREE.Group()
+    const zf = half - 2
+    const pane = (pw: number, x: number, z: number) => {
+      const p = rbox(pw, H - 8, 0.8, C.glass, { x, y: 7, z }, 0.2)
+      p.material = toon(C.glass, { transparent: 0.3 })
+      p.userData.noOutline = true
+      s.add(p)
+    }
+    if (side === doorSide) {
+      pane(L * 0.55, -L / 2 + (L * 0.55) / 2 + 1, zf)
+      pane(L * 0.5, L / 2 - (L * 0.5) / 2 - 1, zf + 2.2)
+      // 推拉门的把手
+      s.add(rbox(1.6, 28, 3, metal, { x: L / 2 - L * 0.5 + 4, y: 90, z: zf + 4.2 }, 0.6))
+    } else pane(L - 2, 0, zf)
+    s.add(rbox(L, 2.4, 4, metal, { y: H - 1, z: zf + 1 }, 0.6))
+    s.add(rbox(L, 1.6, 4, metal, { y: 6, z: zf + 1 }, 0.4))
+    for (const x of [-L / 2 + 1, L / 2 - 1]) s.add(rbox(2.4, H - 6, 4, metal, { x, y: 6, z: zf + 1 }, 0.6))
+    s.rotation.y = rot
+    g.add(s)
+  }
   return g
 }
 
-export function bathtubModel(w: number, d: number, shower = false) {
-  if (shower) return showerStallModel(w, d)
+export function bathtubModel(w: number, d: number, shower = false, walls?: Record<StallSide, boolean>) {
+  if (shower) return showerStallModel(w, d, walls)
   const g = new THREE.Group()
   g.add(tray(w, 55, d, 7, C.white, {}, 3))
   const water = rbox(w - 14, 1, d - 14, '#9fdcf0', { y: 40 }, 0.4)
