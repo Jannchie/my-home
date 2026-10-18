@@ -1,10 +1,11 @@
-// 3D 沙盘里家具的选中 / 悬停 / 摆放标记：贴合占地形状的圆角矩形「取景框」。
+// 3D 沙盘里家具的选中 / 悬停 / 摆放标记：贴合占地形状的圆角矩形「取景框」；有厚度的东西用立体框（show3d）。
 //
 //   - 一条细实线外框 + 四个加粗的角标（像相机取景框的四个角），内部一层极淡的同色填充；
 //   - 出现时从稍大（112%）缩到贴合，160ms 缓出；之后角标轻轻呼吸（往外 0–2.5cm，周期 1.6s）；
 //   - 悬停用同一套形状的细虚线、无角标无填充，和选中区分开；
 //   - 线宽用 Line2（LineMaterial，单位是屏幕像素），远近缩放时粗细不变；
 //   - 系统要求减少动效、或省电画质时不播动画（静止画面不用每帧重画）。
+//   - 立体框：包围盒的 12 条棱是细线，8 个角各一组三向加粗角标，内部一层极淡的同色填充；缩入、呼吸同平面框。
 // 另带一条「离墙引导线」：拖动时从占地边缘画到最近的墙面，两端各一道短横，配合指针旁的「离墙 N cm」。
 
 import * as THREE from 'three'
@@ -16,6 +17,8 @@ export type FrameStyle = 'select' | 'hover' | 'ghost'
 
 /** 占地外扩一点再画框，框不和家具边缘重叠 */
 const PAD = 8
+/** 立体框比包围盒外扩的距离 */
+const PAD3 = 3
 const APPEAR_MS = 160
 const BREATH_S = 1.6
 const BREATH_CM = 2.5
@@ -61,6 +64,9 @@ export class SelectFrame {
   private fill: THREE.Mesh | null = null
   private shownAt = 0
   private dir: [number, number][] = []
+  /** 立体框的角标往外的方向（x, y, z） */
+  private dir3: [number, number, number][] = []
+  private solid = false
 
   constructor(private style: FrameStyle) {
     const hover = style === 'hover'
@@ -84,18 +90,25 @@ export class SelectFrame {
     this.fillMat.color.set(c)
   }
 
-  /** 按占地（宽 × 深，cm）重建形状；尺寸没变就不动 */
-  private build(w: number, d: number) {
-    const key = `${w}x${d}`
-    if (key === this.key) return
+  /** 清掉旧形状；形状没变返回 false */
+  private reset(key: string) {
+    if (key === this.key) return false
     this.key = key
     for (const c of [...this.body.children]) {
       this.body.remove(c)
-      ;(c as THREE.Mesh).geometry?.dispose()
+      c.traverse((n) => (n as THREE.Mesh).geometry?.dispose())
     }
     this.corners = []
     this.dir = []
+    this.dir3 = []
     this.fill = null
+    return true
+  }
+
+  /** 按占地（宽 × 深，cm）重建形状；尺寸没变就不动 */
+  private build(w: number, d: number) {
+    if (!this.reset(`${w}x${d}`)) return
+    this.solid = false
     const hw = w / 2 + PAD
     const hd = d / 2 + PAD
     const r = Math.min(10, hw / 2, hd / 2)
@@ -177,6 +190,49 @@ export class SelectFrame {
     if (this.fill) this.fill.visible = false
   }
 
+  /** 立体框：包围盒（宽 w × 高 h × 深 d，局部坐标，中心在原点）外扩 PAD3 */
+  private build3d(w: number, h: number, d: number) {
+    if (!this.reset(`3d:${w}x${h}x${d}`)) return
+    this.solid = true
+    const [x, y, z] = [w / 2 + PAD3, h / 2 + PAD3, d / 2 + PAD3]
+    const signs = [-1, 1]
+    // 12 条棱
+    const edges: THREE.Vector3[][] = []
+    for (const sy of signs) for (const sz of signs) edges.push([new THREE.Vector3(-x, sy * y, sz * z), new THREE.Vector3(x, sy * y, sz * z)])
+    for (const sx of signs) for (const sz of signs) edges.push([new THREE.Vector3(sx * x, -y, sz * z), new THREE.Vector3(sx * x, y, sz * z)])
+    for (const sx of signs) for (const sy of signs) edges.push([new THREE.Vector3(sx * x, sy * y, -z), new THREE.Vector3(sx * x, sy * y, z)])
+    for (const e of edges) this.body.add(lineOf(e, this.outlineMat))
+    if (this.style === 'hover') return
+    const fill = new THREE.Mesh(new THREE.BoxGeometry(x * 2, y * 2, z * 2), this.fillMat)
+    fill.renderOrder = 2
+    this.fill = fill
+    this.body.add(fill)
+    // 8 个角：沿三条棱各伸出一小段
+    const len = (v: number) => Math.max(4, Math.min(20, v * 0.7))
+    for (const sx of signs)
+      for (const sy of signs)
+        for (const sz of signs) {
+          const g = new THREE.Group()
+          const c = new THREE.Vector3(sx * x, sy * y, sz * z)
+          g.add(lineOf([c.clone().add(new THREE.Vector3(-sx * len(x), 0, 0)), c, c.clone().add(new THREE.Vector3(0, -sy * len(y), 0))], this.cornerMat))
+          g.add(lineOf([c, c.clone().add(new THREE.Vector3(0, 0, -sz * len(z)))], this.cornerMat))
+          this.corners.push(g)
+          this.dir3.push([sx, sy, sz])
+          this.body.add(g)
+        }
+  }
+
+  /** 立体框：(x, y, z) 是包围盒中心（场景坐标），w × h × d 是局部包围盒尺寸，朝向 rotY 同家具模型 */
+  show3d(x: number, y: number, z: number, w: number, h: number, d: number, rotY: number) {
+    this.build3d(w, h, d)
+    if (!this.group.visible) this.shownAt = performance.now()
+    this.group.visible = true
+    this.group.position.set(x, y, z)
+    this.group.rotation.y = rotY
+    this.body.rotation.x = 0
+    if (this.fill) this.fill.visible = true
+  }
+
   hide() {
     this.group.visible = false
   }
@@ -192,18 +248,20 @@ export class SelectFrame {
     const k = reduce ? 1 : Math.min(1, (now - this.shownAt) / APPEAR_MS)
     const e = 1 - Math.pow(1 - k, 3)
     const s = 1.12 - 0.12 * e
-    this.body.scale.set(s, 1, s)
+    if (this.solid) this.body.scale.setScalar(s)
+    else this.body.scale.set(s, 1, s)
     let moving = k < 1
     if (this.style === 'select' && !reduce && !still) {
       const b = ((1 - Math.cos(((now / 1000) * Math.PI * 2) / BREATH_S)) / 2) * BREATH_CM
-      this.corners.forEach((c, i) => c.position.set(this.dir[i][0] * b, 0, this.dir[i][1] * b))
+      if (this.solid) this.corners.forEach((c, i) => c.position.set(this.dir3[i][0] * b, this.dir3[i][1] * b, this.dir3[i][2] * b))
+      else this.corners.forEach((c, i) => c.position.set(this.dir[i][0] * b, 0, this.dir[i][1] * b))
       moving = true
     } else this.corners.forEach((c) => c.position.set(0, 0, 0))
     return moving
   }
 
   dispose() {
-    for (const c of this.body.children) (c as THREE.Mesh).geometry?.dispose()
+    for (const c of this.body.children) c.traverse((n) => (n as THREE.Mesh).geometry?.dispose())
     this.outlineMat.dispose()
     this.cornerMat.dispose()
     this.fillMat.dispose()

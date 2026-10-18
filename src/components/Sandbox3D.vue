@@ -530,8 +530,43 @@ function syncLineRes(w: number, h: number) {
 /** 在家具模型脚下显示一个框（占地取素材尺寸，朝向取模型的 rotation.y） */
 const frameBox = new THREE.Box3()
 const frameC = new THREE.Vector3()
+/**
+ * 模型在自己坐标系里的包围盒（不含朝向、位置）：只和模型本身有关，算一次记在 userData 上。
+ * 只算真实的网格（描边外壳、隐藏的部件不算）。
+ */
+const localBoxTmp = new THREE.Box3()
+const localInv = new THREE.Matrix4()
+const localRel = new THREE.Matrix4()
+function localBox(obj: THREE.Object3D): THREE.Box3 {
+  const cached = obj.userData.localBox as THREE.Box3 | undefined
+  if (cached) return cached
+  obj.updateMatrixWorld(true)
+  localInv.copy(obj.matrixWorld).invert()
+  const box = new THREE.Box3()
+  obj.traverse((n) => {
+    const m = n as THREE.Mesh
+    if (!m.isMesh || !m.visible || n.userData.isOutline || !m.geometry) return
+    if (!m.geometry.boundingBox) m.geometry.computeBoundingBox()
+    localBoxTmp.copy(m.geometry.boundingBox!).applyMatrix4(localRel.multiplyMatrices(localInv, m.matrixWorld))
+    box.union(localBoxTmp)
+  })
+  obj.userData.localBox = box
+  return box
+}
+/** 三个方向都有一定厚度（cm）的东西用立体框；地毯、挂画、便签这类薄片还是平面框 */
+const SOLID_MIN = 6
+
 function frameAt(fr: SelectFrame, obj: THREE.Object3D, asset: string) {
   const d = ASSET_MAP.get(asset)
+  const lb = localBox(obj)
+  if (!lb.isEmpty()) {
+    const size = lb.getSize(new THREE.Vector3())
+    if (size.x >= SOLID_MIN && size.y >= SOLID_MIN && size.z >= SOLID_MIN) {
+      const c = obj.localToWorld(lb.getCenter(new THREE.Vector3()))
+      fr.show3d(c.x, c.y, c.z, size.x, size.y, size.z, obj.rotation.y)
+      return
+    }
+  }
   // 挂在墙上 / 贴在表面上的东西：脚下没有占地，框立起来贴在它正面（中心取模型包围盒，往前让出半个厚度）
   if (d && (d.mount !== undefined || d.stick)) {
     frameBox.setFromObject(obj).getCenter(frameC)
