@@ -19,8 +19,8 @@ A floor plan editor and toon-shaded 3D diorama in the browser. Generate a layout
 
 - Floor plans: Japanese (1K–3LDK), Chinese and Western generators; or draw rooms, doors, windows and fixtures by hand
 - Auto-furnish based on household makeup, occupations, personalities and hobbies; a checklist fills in missing items
-- 2600+ procedural assets, 9 style palettes, swappable fabric patterns
-- 3D diorama: five wall display modes, sunlight by time, date and city, 12 post-processing looks, wandering pets and robots
+- 2900+ procedural assets, 9 style palettes, swappable fabric patterns
+- 3D diorama: five wall display modes, sunlight by time, date and city, 15 post-processing looks, wandering pets and robots
 - Touch input and offline PWA; UI in English, Chinese and Japanese
 
 No server, no account. Data stays in the browser (localStorage, IndexedDB) and can be exported as JSON.

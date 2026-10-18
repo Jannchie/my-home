@@ -3,6 +3,7 @@ import { PUBLIC_PRECACHE, swSource, swVersion } from './src/pwa/sw'
 import vue from '@vitejs/plugin-vue'
 import { DEFAULT_SITE_URL, jsonLd, SEO, SEO_LANGS, type SeoLang } from './src/seo'
 import { PRODUCT_INTRO, PRODUCT_TAGLINE, UI } from './src/i18n/ui'
+import { AGENT_FILES, agentFile, robotsTxt, type AgentFile } from './src/agentDocs'
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 const tr = (zh: string, l: SeoLang) => (l === 'zh' ? zh : UI[zh][l === 'ja' ? 0 : 1])
@@ -65,13 +66,12 @@ function sitemap(site: string) {
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n${urls}\n</urlset>\n`
 }
 
-const robots = (site: string) => `User-agent: *\nAllow: /\n\nSitemap: ${site}/sitemap.xml\n`
-
 /**
  * SEO 插件：
  * - index.html 里的 __SITE_URL__ 换成站点地址，并按 src/seo.ts 填好中文版 meta / JSON-LD；
- * - 构建时额外输出 zh/ja/en/index.html（各自的 meta、canonical、分享图），以及 sitemap.xml、robots.txt；
- * - 开发时 /robots.txt、/sitemap.xml 也能直接访问。
+ * - 构建时额外输出 zh/ja/en/index.html（各自的 meta、canonical、分享图），以及 sitemap.xml、robots.txt（含 AI 爬虫规则）、
+ *   给 agent 看的 llms.txt（另抄一份到 /.well-known/）、llms-full.txt、index.md（src/agentDocs.ts）；
+ * - 开发时这些文件也能直接访问。
  */
 function seo(site: string): Plugin {
   return {
@@ -89,10 +89,10 @@ function seo(site: string): Plugin {
     },
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
-        const path = (req as { url?: string }).url?.split('?')[0]
-        const body = path === '/robots.txt' ? robots(site) : path === '/sitemap.xml' ? sitemap(site) : null
+        const path = (req as { url?: string }).url?.split('?')[0] ?? ''
+        const body = path === '/robots.txt' ? robotsTxt(site) : path === '/sitemap.xml' ? sitemap(site) : agentFile(path, site)
         if (body == null) return next()
-        res.setHeader('Content-Type', path === '/sitemap.xml' ? 'application/xml; charset=utf-8' : 'text/plain; charset=utf-8')
+        res.setHeader('Content-Type', path === '/sitemap.xml' ? 'application/xml; charset=utf-8' : (AGENT_FILES[path as AgentFile] ?? 'text/plain; charset=utf-8'))
         res.end(body)
       })
     },
@@ -107,7 +107,8 @@ function seo(site: string): Plugin {
           this.emitFile({ type: 'asset', fileName: `${l}/index.html`, source: localize(html, l, SEO[l].path, site) })
         }
         this.emitFile({ type: 'asset', fileName: 'sitemap.xml', source: sitemap(site) })
-        this.emitFile({ type: 'asset', fileName: 'robots.txt', source: robots(site) })
+        this.emitFile({ type: 'asset', fileName: 'robots.txt', source: robotsTxt(site) })
+        for (const path of Object.keys(AGENT_FILES) as AgentFile[]) this.emitFile({ type: 'asset', fileName: path.slice(1), source: agentFile(path, site)! })
       },
     },
   }
