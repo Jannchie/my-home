@@ -707,6 +707,7 @@ export const ROOM_NAMES: Record<string, Entry> = {
   Pantry: ['パントリー', 'Pantry'],
   Patio: ['パティオ', 'Patio'],
   Linen: ['リネン庫', 'Linen closet'],
+  Closet: ['クローゼット', 'Closet'],
 }
 
 // ---------- 产品简介（页面「关于」区、SEO meta、README 共用） ----------
