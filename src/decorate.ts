@@ -305,6 +305,19 @@ class Decorator {
     }
   }
 
+  /**
+   * 贴附物（便签、贴纸）随手一贴总有点歪：在贴着的面里转 -8° ~ 8°（spin）。按 id 算，不动随机序列；已经有角度的不动。
+   */
+  tiltStuck(only?: Set<string>) {
+    for (const f of this.out) {
+      if (f.spin !== undefined || (only && !only.has(f.id)) || !ASSET_MAP.get(f.asset)?.stick) continue
+      let h = 0
+      for (let i = 0; i < f.id.length; i++) h = (h * 31 + f.id.charCodeAt(i)) | 0
+      const spin = (Math.abs(h) % 17) - 8
+      if (spin) f.spin = spin
+    }
+  }
+
   validate() {
     const before = this.relocated
     for (let round = 0; round < 3; round++) {
@@ -3950,6 +3963,7 @@ class Decorator {
     // 7. 统一校验：有问题的那件换个位置重摆，实在放不下才删
     this.validate()
     this.assignArt()
+    this.tiltStuck()
     return this.out
   }
 
@@ -4466,7 +4480,9 @@ export function applyFixes(plan: Plan, items: CheckItem[], household?: Household
         break
     }
   }
-  d.assignArt(new Set(d.out.filter((f) => !before.has(f.id)).map((f) => f.id)))
+  const added = new Set(d.out.filter((f) => !before.has(f.id)).map((f) => f.id))
+  d.assignArt(added)
+  d.tiltStuck(added)
   return d.out
 }
 

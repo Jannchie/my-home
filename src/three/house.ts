@@ -1952,7 +1952,7 @@ function noTinyShadows(root: THREE.Object3D) {
  * 摆家具（世界坐标）。多层户型按家具的 floor 找那一层的房间定地面高度，再加上楼层的 elevation；
  * plan 传整份户型或那一层的子户型都行。
  */
-export function placeFurniture(obj: THREE.Object3D, plan: Plan, fu: Pick<Furniture, 'x' | 'y' | 'rot' | 'z' | 'floor'>) {
+export function placeFurniture(obj: THREE.Object3D, plan: Plan, fu: Pick<Furniture, 'x' | 'y' | 'rot' | 'z' | 'floor'> & Partial<Pick<Furniture, 'asset' | 'spin'>>) {
   if (isMultiFloor(plan)) {
     const room = roomAt(plan, { x: fu.x, y: fu.y }, fu.floor ?? null)
     const elev = floorElevation(plan, floorOf(plan, fu))
@@ -1962,8 +1962,28 @@ export function placeFurniture(obj: THREE.Object3D, plan: Plan, fu: Pick<Furnitu
     placeOnFloor(obj, plan, fu.x, fu.y, fu.rot)
     obj.position.y += fu.z ?? 0
   }
+  applySpin(obj, fu)
   // 沙盘里家具的根节点是静态矩阵（见 matrices.ts）：挪动后手动更新
   if (!obj.matrixAutoUpdate) syncMatrix(obj)
+}
+
+/**
+ * 贴附物在贴着的面里转 spin 度：绕自己的厚度方向（局部 z）、以正中为轴转（模型原点在底边中点，转完把中心挪回原处）。
+ * 欧拉角按 YXZ：先在局部转 spin，再按朝向转。
+ */
+function applySpin(obj: THREE.Object3D, fu: Partial<Pick<Furniture, 'asset' | 'spin'>>) {
+  const d = fu.asset ? ASSET_MAP.get(fu.asset) : undefined
+  if (!d?.stick) return
+  const th = fu.spin ? (-fu.spin * Math.PI) / 180 : 0
+  obj.rotation.order = 'YXZ'
+  obj.rotation.z = th
+  if (!th) return
+  const h = d.h / 2
+  const dx = h * Math.sin(th)
+  const ry = obj.rotation.y
+  obj.position.x += dx * Math.cos(ry)
+  obj.position.y += h * (1 - Math.cos(th))
+  obj.position.z -= dx * Math.sin(ry)
 }
 
 // ---------- 盆栽贴墙时自动弯曲，避免枝叶穿进墙里 ----------

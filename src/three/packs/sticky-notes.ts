@@ -306,16 +306,17 @@ function stuckDef(id: string, name: string, label: string, spec: NoteSpec, tilt:
 
 export const STICKY_NOTES: AssetDef[] = [
   // 贴的
-  stuckDef('sn-square-scribble', '方形便签', '涂鸦 · 左倾', { shape: 'square', doodle: 'scribble' }, -7),
-  stuckDef('sn-square-check', '方形便签', '清单 · 右倾', { shape: 'square', doodle: 'check' }, 5),
-  stuckDef('sn-square-smile', '方形便签', '笑脸', { shape: 'square', doodle: 'smile', slot: 2 }, -2),
-  stuckDef('sn-square-curl', '方形便签', '卷角', { shape: 'square', doodle: 'lines', curl: true }, 4),
-  stuckDef('sn-strip-h', '长条便签', '横条', { shape: 'strip', doodle: 'lines' }, -3),
-  stuckDef('sn-strip-v', '长条便签', '竖条', { shape: 'vstrip', doodle: 'lines', slot: 3 }, 6),
-  stuckDef('sn-heart-l', '心形便签', '左倾', { shape: 'heart', doodle: 'none' }, -8),
-  stuckDef('sn-heart-r', '心形便签', '右倾', { shape: 'heart', doodle: 'star', slot: 2 }, 7),
-  stuckDef('sn-cloud-l', '云朵便签', '左倾', { shape: 'cloud', doodle: 'lines', slot: 3 }, -5),
-  stuckDef('sn-cloud-r', '云朵便签', '右倾', { shape: 'cloud', doodle: 'smile' }, 4),
+  // 贴的单张都端正：歪一点的角度是摆放时的 spin（Furniture.spin，一键布置随机给一点），不做成变体
+  stuckDef('sn-square-scribble', '方形便签', '涂鸦', { shape: 'square', doodle: 'scribble' }, 0),
+  stuckDef('sn-square-check', '方形便签', '清单', { shape: 'square', doodle: 'check' }, 0),
+  stuckDef('sn-square-smile', '方形便签', '笑脸', { shape: 'square', doodle: 'smile', slot: 2 }, 0),
+  stuckDef('sn-square-curl', '方形便签', '卷角', { shape: 'square', doodle: 'lines', curl: true }, 0),
+  stuckDef('sn-strip-h', '长条便签', '横条', { shape: 'strip', doodle: 'lines' }, 0),
+  stuckDef('sn-strip-v', '长条便签', '竖条', { shape: 'vstrip', doodle: 'lines', slot: 3 }, 0),
+  stuckDef('sn-heart-l', '心形便签', '空白', { shape: 'heart', doodle: 'none' }, 0),
+  stuckDef('sn-heart-r', '心形便签', '星星', { shape: 'heart', doodle: 'star', slot: 2 }, 0),
+  stuckDef('sn-cloud-l', '云朵便签', '横线', { shape: 'cloud', doodle: 'lines', slot: 3 }, 0),
+  stuckDef('sn-cloud-r', '云朵便签', '笑脸', { shape: 'cloud', doodle: 'smile' }, 0),
   base('sn-stack', '一叠便签', '同色', [9.6, 1, 9.6], stack(false, -3), { stick: true }),
   base('sn-stack-rainbow', '一叠便签', '彩虹', [9.6, 1, 9.6], stack(true, 4), { stick: true }),
   base('sn-tabs-row', '索引贴', '一排', [9, 0.6, 5.8], tabs(false), { stick: true }),

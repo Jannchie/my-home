@@ -62,6 +62,7 @@ export function normalizePlan(p: Plan): Plan | null {
   }
   for (const f of p.furniture) if (f.light !== undefined && f.light !== 'on' && f.light !== 'off') delete f.light
   for (const f of p.furniture) if (f.art !== undefined && (typeof f.art !== 'string' || !f.art)) delete f.art
+  for (const f of p.furniture) if (f.spin !== undefined && (typeof f.spin !== 'number' || !Number.isFinite(f.spin) || !f.spin)) delete f.spin
   // 楼层：没有 floors 的是单层户型（旧存档都是），物件的 floor 一律删掉；坏数据整理掉
   normalizeFloors(p)
   // 户建的用地 / 外观：坏数据整理掉
@@ -701,7 +702,7 @@ export function findFurniture(id: string): Furniture | undefined {
 
 export function addFurniture(f: Omit<Furniture, 'id'>) {
   checkpoint()
-  const fu: Furniture = { asset: f.asset, x: f.x, y: f.y, rot: f.rot, color: f.color, id: uid('u'), ...(f.z ? { z: f.z } : {}), ...(f.colors?.length ? { colors: [...f.colors] } : {}), ...(f.patterns?.some(Boolean) ? { patterns: [...f.patterns] } : {}), ...(f.art ? { art: f.art } : {}) }
+  const fu: Furniture = { asset: f.asset, x: f.x, y: f.y, rot: f.rot, color: f.color, id: uid('u'), ...(f.z ? { z: f.z } : {}), ...(f.colors?.length ? { colors: [...f.colors] } : {}), ...(f.patterns?.some(Boolean) ? { patterns: [...f.patterns] } : {}), ...(f.art ? { art: f.art } : {}), ...(f.spin ? { spin: f.spin } : {}) }
   // 复制的家具留在原来那层；新摆的放在当前楼层
   stampFloor(plan.value, fu, f.floor ?? activeFloor.value)
   plan.value.furniture.push(fu)
@@ -713,6 +714,13 @@ const normDeg = (r: number) => Math.round((((r % 360) + 360) % 360) * 10) / 10
 
 /** 把家具转 deg 度（桌上的东西绕桌子中心一起转）。不记撤销：调用方负责 mutate / checkpoint + settle */
 function turnFurniture(f: Furniture, deg: number) {
+  // 贴附物（便签、贴纸）：在贴着的面里转，不改贴在哪个面上
+  if (ASSET_MAP.get(f.asset)?.stick) {
+    const s = normDeg((f.spin ?? 0) + deg)
+    if (s) f.spin = s
+    else delete f.spin
+    return
+  }
   const a = (deg * Math.PI) / 180
   for (const k of propsOn(plan.value, f)) {
     const dx = k.x - f.x
@@ -723,6 +731,9 @@ function turnFurniture(f: Furniture, deg: number) {
   }
   f.rot = normDeg(f.rot + deg)
 }
+
+/** 旋转操作改的那个角度：一般是朝向 rot，贴附物是在面里转的 spin */
+export const turnAngle = (f: Pick<Furniture, 'asset' | 'rot' | 'spin'>) => (ASSET_MAP.get(f.asset)?.stick ? f.spin ?? 0 : f.rot)
 
 export function rotateSelectedFurniture(deg: number) {
   const s = selection.value
@@ -740,7 +751,7 @@ export function setSelectedFurnitureRotation(rot: number) {
   if (s?.type !== 'furniture') return
   const f = findFurniture(s.id)
   if (!f) return
-  const delta = ((((normDeg(rot) - f.rot) % 360) + 540) % 360) - 180
+  const delta = ((((normDeg(rot) - turnAngle(f)) % 360) + 540) % 360) - 180
   if (Math.abs(delta) > 0.05) turnFurniture(f, delta)
 }
 

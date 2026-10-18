@@ -64,6 +64,7 @@ import {
   plan,
   rotateSelectedFurniture,
   setSelectedFurnitureRotation,
+  turnAngle,
   checkpoint as checkpointPlan,
   swapFurnitureAsset,
   setFurniturePreset,
@@ -769,7 +770,7 @@ function updateDragHud(e: { clientX: number; clientY: number; altKey?: boolean; 
   dragHud.value = {
     x: Math.round(e.clientX - r.left),
     y: Math.round(e.clientY - r.top),
-    rot: ((Math.round(f.rot) % 360) + 360) % 360,
+    rot: ((Math.round(turnAngle(f)) % 360) + 360) % 360,
     wall: g ? g.gap : null,
     snap: sandbox.snap && !e.altKey,
     touch: !!e.pointerType && e.pointerType !== 'mouse',
@@ -1379,7 +1380,7 @@ function onTouchDown(e: PointerEvent) {
     const s = selection.value
     if (drag && s?.type === 'furniture') {
       // 拖着家具时落下第二根手指：拧转旋转（家具先回到按下时的位置不变，只转角度）
-      twist = { a0: touchAngle(), base: findFurniture(s.id)?.rot ?? 0 }
+      twist = { a0: touchAngle(), base: (() => { const tf = findFurniture(s.id); return tf ? turnAngle(tf) : 0 })() }
       showGuides([])
     } else if (touchPlacing) {
       touchPlacing = false
@@ -1764,7 +1765,7 @@ function onRotateMove(e: PointerEvent) {
   if (ang === null) return false
   if (!rotating) {
     checkpointPlan()
-    rotating = { base: findFurniture(selection.value.id)!.rot, start: ang }
+    rotating = { base: turnAngle(findFurniture(selection.value.id)!), start: ang }
     controls.enabled = false
   }
   let target = rotating.base + (ang - rotating.start)
@@ -1818,7 +1819,10 @@ function onKey(e: KeyboardEvent) {
     return
   }
   if (k === 'r' && !e.repeat) rKey = true
-  const step = e.shiftKey ? 15 : 90
+  // 贴附物（便签、贴纸）在面里转：一次 15°（Shift 5°）
+  const sel = selection.value?.type === 'furniture' ? findFurniture(selection.value.id) : undefined
+  const stuck = !placing.value && !!sel && !!ASSET_MAP.get(sel.asset)?.stick
+  const step = stuck ? (e.shiftKey ? 5 : 15) : e.shiftKey ? 15 : 90
   if (k === 'p') setMode(editing.value ? 'preview' : 'edit')
   if (k === 'o') sandbox.exterior = !sandbox.exterior
   else if (k === 'f') resetView()
@@ -3107,7 +3111,7 @@ defineExpose({ resetView })
       <section v-else-if="tab === 'sel' && selectedFurniture && selectedDef" class="sel">
         <h3>{{ displayName(selectedDef) }}</h3>
         <div class="meta num">
-          {{ selectedDef.w }} × {{ selectedDef.d }} × {{ selectedDef.h }} cm · {{ Math.round(selectedFurniture.rot) }}°<template v-if="selectedFurniture.z"> · {{ t('离地 {n} cm', { n: selectedFurniture.z }) }}</template>
+          {{ selectedDef.w }} × {{ selectedDef.d }} × {{ selectedDef.h }} cm · {{ Math.round(turnAngle(selectedFurniture)) }}°<template v-if="selectedFurniture.z"> · {{ t('离地 {n} cm', { n: selectedFurniture.z }) }}</template>
         </div>
         <div v-if="lampSelected" class="row">
           <span class="ico-label"><JIcon :icon="ICONS.indoorLight" class="ico-muted" />{{ t('灯') }}</span>
@@ -3157,7 +3161,7 @@ defineExpose({ resetView })
             min="0"
             max="359"
             step="1"
-            :value="Math.round(selectedFurniture.rot)"
+            :value="Math.round(turnAngle(selectedFurniture))"
             :aria-label="t('角度')"
             @pointerdown="checkpointPlan()"
             @input="setSelectedFurnitureRotation(Number(($event.target as HTMLInputElement).value))"
@@ -3169,7 +3173,7 @@ defineExpose({ resetView })
             min="0"
             max="359"
             step="1"
-            :value="Math.round(selectedFurniture.rot)"
+            :value="Math.round(turnAngle(selectedFurniture))"
             :aria-label="t('角度')"
             @change="rotateSelectedFurniture(Number(($event.target as HTMLInputElement).value) - selectedFurniture!.rot)"
           /><span class="rot-unit">°</span>
