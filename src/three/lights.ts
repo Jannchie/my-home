@@ -883,7 +883,7 @@ interface RigGlow {
 interface RoomRig {
   spec: RoomLightSpec
   key: string
-  /** 天花板的灯具（墙压低时淡出）；阳台壁灯在墙上，跟着外墙走，不淡出 */
+  /** 灯具本体（墙压低时淡出；阳台壁灯跟着它挂的那面墙藏） */
   fixture: THREE.Group | null
   glows: RigGlow[]
   decal: THREE.Mesh | null
@@ -973,11 +973,10 @@ export class IndoorLights {
       const { obj, glows } = fixtureModel(s)
       obj.position.set(s.x, s.fy + (this.liftOf?.(s.roomId) ?? 0), s.y)
       obj.rotation.y = s.ry
-      if (s.kind !== 'wall') {
-        // 和墙一样的淡出标记（法线为 0：只在半墙 / 全部压低时、或在所指房间前面时淡出）
-        obj.userData.fade = { x: s.x, y: s.y, nx: 0, ny: 0, outer: false }
-        this.fixtures.add(obj)
-      } else this.group.add(obj)
+      // 和墙一样的淡出标记。天花板的灯法线为 0：只在半墙 / 全部压低时、或在所指房间前面时淡出；
+      // 阳台壁灯挂在外墙上，法线是它朝外（朝阳台）的方向：墙被压低 / 半墙，或这面墙是正对镜头的前墙时跟着墙一起藏
+      obj.userData.fade = s.kind === 'wall' ? { x: s.x, y: s.y, nx: Math.sin(s.ry), ny: Math.cos(s.ry), outer: true, onWall: true } : { x: s.x, y: s.y, nx: 0, ny: 0, outer: false }
+      this.fixtures.add(obj)
       obj.userData.lightRoomId = s.roomId
       let decal: THREE.Mesh | null = null
       if (s.primary) {
@@ -1284,15 +1283,18 @@ export class IndoorLights {
   }
 
   /**
-   * 天花板灯具的淡出目标：半墙 / 全部压低 / 墙很矮时全部淡出；前墙压低 / 透明且跟随鼠标时，所指房间之前的房间淡出。
-   * 光照不受影响。
+   * 灯具本体的淡出目标：半墙 / 全部压低 / 墙很矮时全部淡出；前墙压低 / 透明且跟随鼠标时，所指房间之前的房间淡出；
+   * 阳台壁灯挂的那面墙是被让开的前墙时也淡出。光照不受影响。
    */
   applyCutaway(center: Vec, dir: Vec | null, depth: number | null, hideAll: boolean) {
     for (const o of this.fixtures.children) {
-      const f = o.userData.fade as { x: number; y: number }
+      const f = o.userData.fade as { x: number; y: number; nx: number; ny: number; onWall?: boolean }
       // 隐藏楼层的灯具一起淡出
       let hide = hideAll || this.hiddenRoom(o.userData.lightRoomId ?? null)
-      if (!hide && dir && depth !== null) hide = (f.x - center.x) * dir.x + (f.y - center.y) * dir.y > depth + 30
+      const s = dir ? (f.x - center.x) * dir.x + (f.y - center.y) * dir.y : 0
+      // 阳台壁灯：挂的那面墙正对镜头、又在房子靠镜头的一侧（前墙透明 / 压低时被让开的那面）
+      if (!hide && dir && f.onWall) hide = f.nx * dir.x + f.ny * dir.y > 0.3 && s > 25
+      if (!hide && dir && depth !== null) hide = s > depth + 30
       o.userData.target = hide ? 1 : 0
     }
   }

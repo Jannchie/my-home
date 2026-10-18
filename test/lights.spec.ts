@@ -3,8 +3,8 @@ import { describe, expect, test } from 'vitest'
 import * as THREE from 'three'
 import { generatePlan } from '/src/generate-region'
 import { normalizePlan } from '/src/store'
-import { ASSETS } from '/src/three/assets'
-import { DEFAULT_KELVIN, LARGE_GLOW_CAP, autoLevel, glowIntensity, isLampAsset, kelvinColor, lampTarget, lightColor, roomLightSpecs, roomTarget } from '/src/three/lights'
+import { ASSETS, ASSET_MAP } from '/src/three/assets'
+import { DEFAULT_KELVIN, IndoorLights, LARGE_GLOW_CAP, autoLevel, glowIntensity, isLampAsset, kelvinColor, lampTarget, lightColor, roomLightSpecs, roomTarget } from '/src/three/lights'
 import type { Plan } from '/src/model'
 import { JP_OPTS, range } from './helpers'
 
@@ -175,5 +175,36 @@ describe('灯具亮度与按风格的主灯', () => {
       }
       expect(shapes.size).toBeGreaterThan(1)
     }
+  })
+})
+
+describe('阳台壁灯跟着它挂的那面墙', () => {
+  // 阳台壁灯以前放在灯光组里，不跟墙体让开：墙压低 / 半墙时还挂在半空
+  const setup = () => {
+    const plan = generatePlan({ ...JP_OPTS, seed: 1, region: 'jp' }).plan
+    const lights = new IndoorLights(8)
+    lights.syncRooms(plan, ASSET_MAP, () => 0)
+    const lamp = lights.fixtures.children.find((o) => (o.userData.fade as { onWall?: boolean } | undefined)?.onWall)
+    return { plan, lights, lamp }
+  }
+  test('阳台壁灯在灯具组里，带着朝向（朝阳台）', () => {
+    const { lamp } = setup()
+    expect(lamp).toBeTruthy()
+  })
+  test('半墙 / 全部压低（hideAll）时藏起来；外观视图（墙完整）时显示', () => {
+    const { lights, lamp } = setup()
+    lights.applyCutaway({ x: 0, y: 0 }, null, null, true)
+    expect(lamp!.userData.target).toBe(1)
+    lights.applyCutaway({ x: 0, y: 0 }, null, null, false)
+    expect(lamp!.userData.target).toBe(0)
+  })
+  test('前墙让开时：镜头在阳台那一侧（这面墙正对镜头）就藏，在房子另一侧就不藏', () => {
+    const { lights, lamp } = setup()
+    const f = lamp!.userData.fade as { x: number; y: number; nx: number; ny: number }
+    const center = { x: f.x - f.nx * 300, y: f.y - f.ny * 300 }
+    lights.applyCutaway(center, { x: f.nx, y: f.ny }, null, false)
+    expect(lamp!.userData.target).toBe(1)
+    lights.applyCutaway(center, { x: -f.nx, y: -f.ny }, null, false)
+    expect(lamp!.userData.target).toBe(0)
   })
 })
