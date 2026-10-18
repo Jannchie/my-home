@@ -234,19 +234,51 @@ export function offsetPolygon(pts: Vec[], d: number): Vec[] {
 }
 
 /**
- * 上层的结构楼板：外轮廓外扩半个外墙厚（和外墙外皮齐平），从 -SLAB 到 -2（上面再铺各房间的地面），
- * 侧面是截面色，层与层之间露出一道楼板。holes：楼梯洞口、四周被房间围住的挑空。
+ * 上层的结构楼板：外轮廓外扩半个外墙厚（和外墙外皮齐平），从 -SLAB 到 -2（上面再铺各房间的地面）。
+ * 外侧是截面色，层与层之间露出一道楼板；洞口（楼梯洞口、四周被房间围住的挑空）的侧面是收口的浅色，
+ * 站在楼梯间里抬头看，楼板边不是一道截面。
  */
 function structureSlab(outline: Vec[], holes: Vec[][], wallOuter: number) {
   const shape = new THREE.Shape(toV2(offsetPolygon(outline, wallOuter / 2)))
-  for (const h of holes) if (h.every((p) => pointInPolygon(p, outline) || onBoundary(outline, p, 0.5))) shape.holes.push(new THREE.Path(toV2(insetToward(h, 0.5))))
+  const cut = holes.filter((h) => h.every((p) => pointInPolygon(p, outline) || onBoundary(outline, p, 0.5))).map((h) => insetToward(h, 0.5))
+  for (const h of cut) shape.holes.push(new THREE.Path(toV2(h)))
   const geo = new THREE.ExtrudeGeometry(shape, { depth: SLAB - 2, bevelEnabled: false })
   geo.rotateX(-Math.PI / 2)
-  const m = new THREE.Mesh(geo, [toon('#efe6d8'), toon('#b9a48e')])
+  holeSidesToGroup(geo, cut, 2)
+  const m = new THREE.Mesh(geo, [toon('#efe6d8'), toon('#b9a48e'), toon('#e8dccb')])
   m.position.y = -SLAB
   m.receiveShadow = true
   m.castShadow = true
   return m
+}
+
+/**
+ * 挤出体侧面（材质组 1）里贴着洞口边的三角形挪到材质组 mat：按三角形中心离洞口边的距离分。
+ * ExtrudeGeometry 是非索引几何体，按组重排三角形顺序即可。
+ */
+function holeSidesToGroup(geo: THREE.BufferGeometry, holes: Vec[][], mat: number) {
+  if (!holes.length || geo.index) return
+  const pos = geo.attributes.position
+  const tri = (i: number) => ({ x: (pos.getX(i) + pos.getX(i + 1) + pos.getX(i + 2)) / 3, y: (pos.getZ(i) + pos.getZ(i + 1) + pos.getZ(i + 2)) / 3 })
+  const byMat = new Map<number, number[]>()
+  for (const g of geo.groups)
+    for (let i = g.start; i < g.start + g.count; i += 3) {
+      const m = g.materialIndex ?? 0
+      // 挤出后 rotateX(-90°)：平面 y 对应世界 z
+      const k = m === 1 && holes.some((h) => onBoundary(h, tri(i), 0.6)) ? mat : m
+      ;(byMat.get(k) ?? byMat.set(k, []).get(k)!).push(i)
+    }
+  const names = Object.keys(geo.attributes)
+  const src = names.map((n) => geo.attributes[n] as THREE.BufferAttribute)
+  const out = src.map((a) => new Float32Array(a.array.length))
+  geo.clearGroups()
+  let o = 0
+  for (const [m, tris] of [...byMat].sort((a, b) => a[0] - b[0])) {
+    geo.addGroup(o, tris.length * 3, m)
+    for (const i of tris)
+      for (let v = 0; v < 3; v++, o++) src.forEach((a, k) => out[k].set(a.array.subarray((i + v) * a.itemSize, (i + v + 1) * a.itemSize), o * a.itemSize))
+  }
+  names.forEach((n, k) => geo.setAttribute(n, new THREE.BufferAttribute(out[k], src[k].itemSize)))
 }
 
 /** 榻榻米厚度：嵌在降低的楼板里，面和地面齐平 */
@@ -761,6 +793,15 @@ function buildWalls(plan: Plan, H0: number, infos: OpeningInfo[], opts: HouseOpt
     seen.add(k1)
     return true
   })
+  /** 墙段 a→b 有没有一处贴着这些区域的边（沿墙每 10cm 取一点；墙比洞口边长时只贴一部分也算，多砌的部分埋在楼板里） */
+  const alongZone = (a: Vec, b: Vec, zones: Vec[][], tol: number) => {
+    const n = Math.max(1, Math.ceil(dist(a, b) / 10))
+    for (let i = 0; i <= n; i++) {
+      const p = { x: a.x + ((b.x - a.x) * i) / n, y: a.y + ((b.y - a.y) * i) / n }
+      if (zones.some((z) => onBoundary(z, p, tol))) return true
+    }
+    return false
+  }
   /** 一段墙（a→b）的绘制属性：法线、墙脚、高度、两面墙纸；key 相同的相邻墙段并成一段画（丁字口不断开，没有接缝） */
   const attrsOf = (a: Vec, b: Vec, kind: WallSegment['kind']) => {
     const outer = kind === 'outer'
@@ -777,8 +818,13 @@ function buildWalls(plan: Plan, H0: number, infos: OpeningInfo[], opts: HouseOpt
       const r = roomAt(plan, add(mid, mul(n, k * (t / 2 + 5))))
       return r ? floorY(r) : outside
     }
-    // 上层是挑空的地方，外墙通高到上层的天花
-    const H = outer && opts.tall?.zones.some((z) => pointInPolygon(mid, z) || onBoundary(z, mid, 2)) ? H0 + opts.tall.extra : H0
+    // 上层是挑空的地方，外墙通高到上层的天花；贴着上层楼梯洞口的墙砌到上层地面
+    const H =
+      outer && opts.tall?.zones.some((z) => pointInPolygon(mid, z) || onBoundary(z, mid, 2))
+        ? H0 + opts.tall.extra
+        : opts.under && alongZone(a, b, opts.under.zones, t / 2 + 3)
+          ? H0 + opts.under.extra
+          : H0
     const bot = Math.min(0, sideY(1), sideY(-1))
     // 墙纸：+z 面（朝 (-dir.y, dir.x)）和 -z 面分别取那一侧房间的墙纸
     const n0 = { x: -dir.y, y: dir.x }
@@ -1807,6 +1853,11 @@ export interface HouseOpts {
   stairHoles?: { poly: Vec[]; arrival: [Vec, Vec] }[]
   /** 上一层是挑空的区域：这里的外墙通高，墙顶再加 extra */
   tall?: { zones: Vec[][]; extra: number }
+  /**
+   * 上一层楼板上的楼梯洞口：贴着洞口的墙（内墙、外墙都算）往上再砌 extra（= 楼板厚），一直接到上层地面，
+   * 楼梯间里一楼和二楼的墙面连成一片，不在楼板的位置露出一道截面
+   */
+  under?: { zones: Vec[][]; extra: number }
   /** 楼梯的层间高 */
   rise?: number
   /** 外墙外侧的材质（户建，three/exterior.ts facadeMaterial） */
