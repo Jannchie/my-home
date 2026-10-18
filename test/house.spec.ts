@@ -336,8 +336,8 @@ describe('平层公寓不受影响', () => {
       for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619) >>> 0
       return h.toString(16)
     }
-    // 布局指纹不含窗的款式字段（windows.ts styleWindows 用独立的种子散列配窗，不动布局）：配窗前后布局指纹不变
-    const fp = (p: Plan) => hash(JSON.stringify(normalizeIds(p), (k, v) => (k === 'name' || WINDOW_KEYS.includes(k) ? undefined : v)))
+    // 布局指纹不含门窗的款式字段（windows.ts styleWindows / doorStyles.ts styleDoors 用独立的种子散列配门窗，不动布局）：配门窗前后布局指纹不变
+    const fp = (p: Plan) => hash(JSON.stringify(normalizeIds(p), (k, v) => (k === 'name' || WINDOW_KEYS.includes(k) || DOOR_KEYS.includes(k) ? undefined : v)))
     const plans = regions.map((region) => [3, 77, 500].map((seed) => generatePlan({ ...JP_OPTS, seed, region }).plan))
     expect(plans.map((ps) => ps.map(fp).join(','))).toEqual(FINGERPRINTS)
     // 窗的款式单独一份指纹（改配窗规则时有意更新）
@@ -360,5 +360,7 @@ describe('平层公寓不受影响', () => {
 const FINGERPRINTS = ['6b5573c8,8ce92b42,7c58228d', '365edb2,5cce789f,4aba042d', '19e93620,e82eb711,484af907']
 /** 窗的款式字段（不进布局指纹） */
 const WINDOW_KEYS = ['windowStyle', 'frame', 'grid', 'sill', 'shutters']
+/** 门的款式字段（不进布局指纹） */
+const DOOR_KEYS = ['doorStyle', 'doorColor', 'doorHandle', 'handleFinish', 'doorLites']
 /** 生成户型配的窗款式（windows.ts styleWindows）的指纹：jp / cn / west 各取种子 3、77、500 */
 const WINDOW_FINGERPRINTS = ['989c2533,15e8217c,3a53d410', '818e3c4d,1605eb73,5ed071b3', 'ba71e153,ae73a688,428c0ae2']

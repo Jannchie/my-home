@@ -17,6 +17,7 @@ import { LIGHT_MODES, type LightMode } from '../three/lights'
 import { roomName, t } from '../i18n'
 import { JIcon } from '@jannchie/icons-vue'
 import WindowStylePicker from './WindowStylePicker.vue'
+import DoorStylePicker from './DoorStylePicker.vue'
 import { FIXTURE_ICONS, ICONS, ROOM_ICONS, TOOL_ICONS } from '../ui/icons'
 
 /** 房间灯（3D 沙盘夜里的灯光，见 three/lights.ts） */
@@ -255,6 +256,7 @@ function setSpotOpen(open: boolean) {
         <button @click="mutate(() => (opening!.o.hinge = opening!.o.hinge === 'start' ? 'end' : 'start'))">{{ t('左右翻转') }}</button>
         <button @click="mutate(() => (opening!.o.swing = opening!.o.swing === 'in' ? 'out' : 'in'))">{{ t('内外翻转') }}</button>
       </div>
+      <DoorStylePicker v-if="opening.o.kind !== 'window'" :opening="opening.o" />
       <div class="actions">
         <button class="danger" @click="deleteSelection"><JIcon :icon="ICONS.delete" />{{ t('删除') }} <kbd>Del</kbd></button>
       </div>

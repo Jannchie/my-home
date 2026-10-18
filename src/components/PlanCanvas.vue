@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { hasSidelight, sidelightWidth } from '../doorStyles'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import ContextMenu, { type MenuEntry } from './ContextMenu.vue'
 import { ICONS } from '../ui/icons'
@@ -965,12 +966,25 @@ const openingViews = computed<OpeningView[]>(() => {
       v.fold = `M${p0.x},${p0.y}L${apex.x},${apex.y}L${p1.x},${p1.y}`
     } else if (o.kind === 'door') {
       const hingeP = o.hinge === 'start' ? p0 : p1
-      const other = o.hinge === 'start' ? p1 : p0
+      const far = o.hinge === 'start' ? p1 : p0
+      // 带侧窗：门扇让出锁一侧的侧窗（侧窗画成窗的玻璃线）
+      const side = hasSidelight(o) ? sidelightWidth(w) : 0
+      const lw = w - side
+      const u = o.hinge === 'start' ? e.dir : mul(e.dir, -1)
+      const other = add(hingeP, mul(u, lw))
       const sw = o.swing === 'in' ? mul(e.out, -1) : e.out
-      const tip = add(hingeP, mul(sw, w))
+      const tip = add(hingeP, mul(sw, lw))
       const cross = (tip.x - hingeP.x) * (other.y - hingeP.y) - (tip.y - hingeP.y) * (other.x - hingeP.x)
       v.leaf = `M${hingeP.x},${hingeP.y}L${tip.x},${tip.y}`
-      v.arc = `M${tip.x},${tip.y}A${w},${w} 0 0 ${cross > 0 ? 1 : 0} ${other.x},${other.y}`
+      v.arc = `M${tip.x},${tip.y}A${lw},${lw} 0 0 ${cross > 0 ? 1 : 0} ${other.x},${other.y}`
+      if (side) {
+        const q = wall / 2 - 1
+        for (const k of [-q, 0, q]) {
+          const a = add(other, mul(e.out, k))
+          const b = add(far, mul(e.out, k))
+          v.glass.push(`M${a.x},${a.y}L${b.x},${b.y}`)
+        }
+      }
     } else {
       // 窗：墙两侧框线 + 中间玻璃线；款式记号叠在上面
       const q = wall / 2 - 1
@@ -1403,6 +1417,7 @@ async function exportPng() {
         <template v-if="v.o.kind === 'door'">
           <path :d="v.arc" fill="none" stroke="#6b665d" stroke-width="1" stroke-dasharray="4 3" vector-effect="non-scaling-stroke" />
           <path :d="v.leaf" fill="none" stroke="#2b2925" :stroke-width="4" stroke-linecap="round" />
+          <path v-for="(g, i) in v.glass" :key="i" :d="g" fill="none" stroke="#2b2925" :stroke-width="i === 1 ? 2.5 : 1.5" />
         </template>
         <template v-else-if="v.panels.length">
           <path v-for="(g, i) in v.panels" :key="i" :d="g" :fill="v.o.kind === 'window' ? '#dceaf0' : '#fff'" stroke="#2b2925" stroke-width="1.5" />

@@ -131,7 +131,72 @@ export interface Opening {
   sill?: WindowSill
   /** 外墙一侧的百叶护窗板（欧美风） */
   shutters?: boolean
+  // ---- 门的款式（只对 door / sliding / folding 有意义；都不填 = 旧存档的样子：木色平板门、入户门浅蓝、推拉门米色带浅色内框） ----
+  /** 门扇的样式 */
+  doorStyle?: DoorLeafStyle
+  /** 门扇颜色（#rrggbb）；不填 = 按款式 / 门的种类的默认色 */
+  doorColor?: string
+  /** 把手；不填 = 按款式的默认把手 */
+  doorHandle?: DoorHandle
+  /** 把手颜色；不填 = 不锈钢银 */
+  handleFinish?: HandleFinish
+  /** 开门（door）旁的固定玻璃：side 侧窗（锁一侧）、top 门上亮子、both 两者都有 */
+  doorLites?: DoorLites
 }
+
+/**
+ * 门扇样式：
+ *   flush 平板门、panel2 两格门、panel4 四格门、panel6 六格门（凸起的门芯板）、glassTop 上部玻璃门、glassFull 全玻璃格子门（法式门）、
+ *   louver 百叶门、grooved 横纹门（现代风的入户门）、fusuma 襖（素色）、fusumaPattern 襖（花纹）、shoji 障子、barn 谷仓门（明装推拉）。
+ */
+export type DoorLeafStyle = 'flush' | 'panel2' | 'panel4' | 'panel6' | 'glassTop' | 'glassFull' | 'louver' | 'grooved' | 'fusuma' | 'fusumaPattern' | 'shoji' | 'barn'
+export const DOOR_STYLES: Record<DoorLeafStyle, string> = {
+  flush: '平板门',
+  panel2: '两格门',
+  panel4: '四格门',
+  panel6: '六格门',
+  glassTop: '上部玻璃门',
+  glassFull: '玻璃格子门',
+  louver: '百叶门',
+  grooved: '横纹门',
+  fusuma: '襖（素色）',
+  fusumaPattern: '襖（花纹）',
+  shoji: '障子',
+  barn: '谷仓门',
+}
+/** 把手：lever 执手、knob 球形把手、bar 长拉手、pull 嵌入式拉手（引手） */
+export type DoorHandle = 'lever' | 'knob' | 'bar' | 'pull'
+export const DOOR_HANDLES: Record<DoorHandle, string> = {
+  lever: '执手',
+  knob: '球形把手',
+  bar: '长拉手',
+  pull: '嵌入式拉手',
+}
+export type HandleFinish = 'silver' | 'black' | 'brass'
+export const HANDLE_FINISHES: Record<HandleFinish, { label: string; color: string }> = {
+  silver: { label: '不锈钢', color: '#c9ccd1' },
+  black: { label: '黑色', color: '#2b2c2e' },
+  brass: { label: '黄铜', color: '#c9a04a' },
+}
+export type DoorLites = 'side' | 'top' | 'both'
+export const DOOR_LITES: Record<DoorLites, string> = {
+  side: '侧窗',
+  top: '门上亮子',
+  both: '侧窗 + 亮子',
+}
+/** 门的颜色预设（界面色块、生成户型都从这里取） */
+export const DOOR_COLORS: { label: string; color: string }[] = [
+  { label: '白色', color: '#f6f4ef' },
+  { label: '象牙白', color: '#eee4d0' },
+  { label: '浅木色', color: '#e2c49a' },
+  { label: '中木色', color: '#b98757' },
+  { label: '深木色', color: '#6f4b33' },
+  { label: '黑色', color: '#2f3134' },
+  { label: '灰色', color: '#8e949b' },
+  { label: '藏青', color: '#2f4a6b' },
+  { label: '灰绿', color: '#9cb39a' },
+  { label: '砖红', color: '#9a4436' },
+]
 
 /**
  * 窗的款式：

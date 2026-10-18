@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 3D 沙盘里点中门窗时浮出的编辑卡片内容：类型、宽度 / 位置微调、门的开向、窗的款式（复用 WindowStylePicker）、删除。
+// 3D 沙盘里点中门窗时浮出的编辑卡片内容：类型、宽度 / 位置微调、门的开向、窗 / 门的款式（复用 WindowStylePicker / DoorStylePicker）、删除。
 // 每次改动一步撤销；宽度 / 位置顶到头时点按钮不记撤销。
 import { computed } from 'vue'
 import { OPENING_LABELS, type Opening, type OpeningKind } from '../model'
@@ -9,6 +9,7 @@ import { t } from '../i18n'
 import { JIcon } from '@jannchie/icons-vue'
 import { ICONS } from '../ui/icons'
 import WindowStylePicker from './WindowStylePicker.vue'
+import DoorStylePicker from './DoorStylePicker.vue'
 
 const props = defineProps<{ opening: Opening }>()
 
@@ -70,6 +71,7 @@ const swings = computed(() => props.opening.kind === 'door' || props.opening.kin
       <button @click="edit((o) => (o.swing = o.swing === 'in' ? 'out' : 'in'))"><JIcon :icon="ICONS.doorFlip" :size="14" />{{ t('内外翻转') }}</button>
     </div>
     <WindowStylePicker v-if="opening.kind === 'window'" :opening="opening" variant="card" />
+    <DoorStylePicker v-else :opening="opening" variant="card" />
     <div class="acts">
       <button class="danger" @click="deleteSelection"><JIcon :icon="ICONS.delete" :size="14" />{{ t('删除') }}</button>
     </div>
