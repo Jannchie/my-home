@@ -342,6 +342,11 @@ const CAR_SPECS: Record<CarKind, { w: number; L: number; y: number; h: number; c
   suv: { w: 186, L: 460, y: 34, h: 68, cw: 164, ch: 54, cl: 280, cz: 40, rl: 250, r: 37, wx: 84, wz: 145, rails: true },
   minivan: { w: 182, L: 470, y: 24, h: 68, cw: 168, ch: 78, cl: 370, cz: 35, rl: 350, r: 30, wx: 82, wz: 160 },
 }
+/** 车身占地（宽 × 长，cm）：沙盘选中车时脚下的框 */
+export function carSize(kind: CarKind = 'compact') {
+  const s = CAR_SPECS[kind] ?? CAR_SPECS.compact
+  return { w: s.w, L: s.L }
+}
 
 /** 卡通小汽车：车头朝局部 -z */
 export function carModel(color: string, kind: CarKind = 'compact'): THREE.Group {
@@ -373,8 +378,8 @@ export function fenceLook(site: Pick<Site, 'fence' | 'fenceColor' | 'fenceHeight
   return { color: site.fenceColor ?? d.color, height: site.fenceHeight ?? d.height, custom: !!site.fenceColor }
 }
 
-/** 一段围挡（沿局部 x 轴，长 len，从 x = 0 起；y = 0 是用地地面；z × zs 朝用地里面） */
-function fenceSpan(kind: Exclude<Site['fence'], 'none'>, len: number, c: string, h: number, custom: boolean, zs: number): THREE.Object3D[] {
+/** 一段围挡（沿局部 x 轴，长 len，从 x = 0 起；y = 0 是用地地面；z × zs 朝用地里面）。外观编辑器的预览图也用它 */
+export function fenceSpan(kind: Exclude<Site['fence'], 'none'>, len: number, c: string, h: number, custom: boolean, zs: number): THREE.Object3D[] {
   const out: THREE.Object3D[] = []
   const bar = (w: number, bh: number, d: number, color: string, x: number, y: number, z: number, r?: number) => out.push(rbox(w, bh, d, color, { x, y, z: z * zs }, r))
   const mid = len / 2
