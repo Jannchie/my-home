@@ -58,11 +58,12 @@ import { typeLabel } from '../three/typeLabels'
 import { INTERESTS, KIND_LABELS, LV_LABELS, ROLE_LABELS, TRAITS, describe, levelOf, memberRooms } from '../household'
 import { checklist, missing } from '../checklist'
 import { accentOf } from '../wallpaper'
+import { trimPreview } from '../ui/trimPreview'
 import { patternPreview } from '../three/fabric'
 import type { PatternKind } from '../three/patterns'
 import { isTyping } from '../dom'
 import { lang, roomName, t, tAuto, tSoft } from '../i18n'
-import { FACADE_KINDS, FENCE_KINDS, FIXTURES, OPENING_LABELS, ROOF_KINDS, bbox, centroid, edgesOf, pointInPolygon, type Furniture, type Plan, type Room, type WallTrim } from '../model'
+import { FACADE_KINDS, FENCE_KINDS, FIXTURES, OPENING_LABELS, ROOF_KINDS, bbox, centroid, edgesOf, pointInPolygon, houseFlooring, isWoodFloor, roomFlooring, roomWallpaper, takesHouseWallpaper, WOOD_TONES, type Furniture, type Plan, type Room, type Wallpaper, type WallTrim, type WoodTone } from '../model'
 import { roomStyles } from '../decorate'
 import { wallThicknessAt } from '../walls'
 import {
@@ -91,6 +92,9 @@ import {
   rerollHousehold,
   fixChecklist,
   setRoomWallpaper,
+  restyle,
+  setHouseWallpaper,
+  setFlooring,
   rerollWallpapers,
   sandbox,
   selection,
@@ -2449,15 +2453,24 @@ function swapSize(asset: string) {
 
 const counts = computed(() => plan.value.furniture.length)
 
-// ---------- 墙纸 ----------
+// ---------- 内装：墙纸、边饰、地板 ----------
+// 先设全屋，个别房间可以覆盖（房间设了自己的就用自己的，「跟随全屋」清掉覆盖）。范围选择 '' = 全屋
 const paperRooms = computed(() => plan.value.rooms.filter((r) => r.kind !== 'balcony' && r.kind !== 'void'))
-/** 墙纸的房间下拉：多层户型前面加楼层名 */
+/** 房间下拉：多层户型前面加楼层名 */
 const paperRoomLabel = (r: { name: string; floor?: string }) => (isMultiFloor(plan.value) ? `${floorById(plan.value, floorOf(plan.value, r))?.name ?? ''} · ` : '') + roomName(r.name)
 const wpRoomId = ref('')
-const wpRoom = computed(() => plan.value.rooms.find((r) => r.id === wpRoomId.value) ?? paperRooms.value[0])
+const wpRoom = computed(() => (wpRoomId.value ? plan.value.rooms.find((r) => r.id === wpRoomId.value) : undefined))
 watch(paperRooms, (rs) => {
-  if (!rs.some((r) => r.id === wpRoomId.value)) wpRoomId.value = rs[0]?.id ?? ''
+  if (wpRoomId.value && !rs.some((r) => r.id === wpRoomId.value)) wpRoomId.value = ''
 }, { immediate: true })
+/** 当前范围实际用的墙纸（房间没设自己的就是全屋的） */
+const curWp = computed(() => (wpRoom.value ? roomWallpaper(plan.value, wpRoom.value) : plan.value.wallpaper))
+/** 选了房间、这间默认不贴墙纸（浴室、收纳） */
+const wpNone = computed(() => !!wpRoom.value && !wpRoom.value.wallpaper && !takesHouseWallpaper(wpRoom.value))
+function setWp(wp: Wallpaper | undefined) {
+  if (wpRoom.value) setRoomWallpaper(wpRoom.value.id, wp)
+  else setHouseWallpaper(wp)
+}
 const WP_COLORS = ['#fbf7f1', '#f2f2f0', '#fff4f1', '#f3f8ff', '#f4fbf6', '#fff9e8', '#f6f0e1', '#e6e6e4', '#d6d3cd', '#f4e7c8', '#dfe8f0', '#3d3f44']
 const WP_PATTERNS: PatternKind[] = ['stripes', 'dots', 'gingham', 'flowers', 'sakura', 'stars', 'asanoha', 'seigaiha', 'ichimatsu', 'chevron', 'houndstooth', 'argyle']
 /** 边饰预设：颜色用 trimColor */
@@ -2473,18 +2486,38 @@ const TRIMS: { id: string; label: string; make: (c: string) => WallTrim | undefi
 ]
 const trimId = (t?: WallTrim) => (!t ? 'none' : t.wainscot && t.crown ? 'full' : t.wainscot ? (t.wainscot.kind === 'batten' ? 'batten' : 'wainscot') : t.crown ? 'crown' : 'base')
 function setTrim(id: string, color = trimColor.value) {
-  const r = wpRoom.value
-  if (!r) return
   trimColor.value = color
   const t = TRIMS.find((x) => x.id === id)!.make(color)
-  setRoomWallpaper(r.id, { ...(r.wallpaper ?? { color: '#fbf7f1' }), trim: t })
+  setWp({ ...(curWp.value ?? { color: '#fbf7f1' }), trim: t })
+}
+/** 边饰预览：用当前墙色和边饰颜色画 */
+const trimThumb = (id: string) => trimPreview(TRIMS.find((x) => x.id === id)!.make(trimColor.value), curWp.value?.color ?? '#fbf7f1')
+
+/** 用当前墙纸的底色织一张花纹墙纸（低对比） */
+function wpPattern(kind: PatternKind) {
+  const base = curWp.value?.color ?? '#fbf7f1'
+  return { color: base, trim: curWp.value?.trim, pattern: { kind, colors: [base, accentOf(base), accentOf(base, 0.04)], scale: kind === 'stripes' ? 16 : 12, angle: kind === 'stripes' ? (90 as const) : (0 as const), density: 0.3, seed: 7 } }
 }
 
-/** 用当前房间墙纸的底色织一张花纹墙纸（低对比） */
-function wpPattern(kind: PatternKind) {
-  const base = wpRoom.value?.wallpaper?.color ?? '#fbf7f1'
-  return { color: base, trim: wpRoom.value?.wallpaper?.trim, pattern: { kind, colors: [base, accentOf(base), accentOf(base, 0.04)], scale: kind === 'stripes' ? 16 : 12, angle: kind === 'stripes' ? (90 as const) : (0 as const), density: 0.3, seed: 7 } }
+/** 地板：全屋，或木地板房间（瓷砖、榻榻米的房间不能选） */
+const floorScope = computed(() => !wpRoom.value || isWoodFloor(wpRoom.value.kind))
+const curFloor = computed(() => (wpRoom.value ? roomFlooring(plan.value, wpRoom.value) : houseFlooring(plan.value)))
+const TONE_IDS = Object.keys(WOOD_TONES) as WoodTone[]
+/** 当前范围随机换一种木色（不和现在的重复），光泽也随机 */
+function randomFloor() {
+  const cur = curFloor.value?.tone
+  const pool = TONE_IDS.filter((x) => x !== cur)
+  setFlooring(wpRoom.value?.id ?? null, { tone: pool[Math.floor(Math.random() * pool.length)], wax: Math.random() < 0.3 })
 }
+/** 家具换风格（保持布局）：范围和墙纸、地板共用；auto = 按房间（主人 / 全家的风格） */
+const restyleTo = ref<StyleTag | 'auto' | 'random'>('auto')
+const restyleMsg = ref('')
+function runRestyle() {
+  const n = restyle(wpRoom.value?.id ?? null, restyleTo.value)
+  restyleMsg.value = n ? t('换了 {n} 件家具', { n }) : t('没有可以换的家具')
+}
+watch([wpRoomId, restyleTo], () => (restyleMsg.value = ''))
+const toneSwatch = (tn: WoodTone) => `repeating-linear-gradient(0deg, ${WOOD_TONES[tn].base} 0 9px, ${WOOD_TONES[tn].line} 9px 10px)`
 
 // ---------- 检查清单 ----------
 const clOpen = ref(false)
@@ -2920,7 +2953,7 @@ onBeforeUnmount(() => {
 // 房间的灯光开关 / 色温不影响房子本身：比较时剔掉，免得一开灯就整栋重建
 const roomsShape = () => JSON.stringify(plan.value.rooms, (k, v) => (k === 'light' || k === 'lightK' ? undefined : v))
 watch(
-  () => [roomsShape(), plan.value.openings, plan.value.fixtures, plan.value.wall, plan.value.wallOuter, sandbox.wallHeight, plan.value.floors, plan.value.site, plan.value.exterior],
+  () => [roomsShape(), plan.value.openings, plan.value.fixtures, plan.value.wall, plan.value.wallOuter, sandbox.wallHeight, plan.value.floors, plan.value.site, plan.value.exterior, plan.value.wallpaper, plan.value.flooring],
   rebuildHouse,
   { deep: true },
 )
@@ -3215,7 +3248,7 @@ const tabs = computed(() => [
   { id: 'lib' as Tab, label: t('家具'), icon: VIEW_ICONS.lib },
   { id: 'scene' as Tab, label: t('场景'), icon: VIEW_ICONS['3d'] },
   { id: 'home' as Tab, label: t('住户'), icon: ICONS.household },
-  { id: 'decor' as Tab, label: t('墙纸'), icon: ICONS.wallpaper },
+  { id: 'decor' as Tab, label: t('内装'), icon: ICONS.wallpaper },
   ...(hasOutside.value ? [{ id: 'ext' as Tab, label: t('外观'), icon: ICONS.exteriorView }] : []),
 ])
 watch(
@@ -3778,38 +3811,77 @@ defineExpose({ resetView })
         <div class="hh-head">
           <h3 class="ico-label"><JIcon :icon="ICONS.wallpaper" class="ico-muted" />{{ t('墙纸') }}</h3>
           <span class="spacer" />
-          <button class="mini" :title="t('按住户风格重新随机全屋墙纸')" @click="rerollWallpapers"><JIcon :icon="ICONS.wallpaperRandom" :size="14" />{{ t('全屋随机') }}</button>
+          <button class="mini" :title="t('按住户风格重新随机全屋墙纸和地板')" @click="rerollWallpapers"><JIcon :icon="ICONS.wallpaperRandom" :size="14" />{{ t('全屋随机') }}</button>
         </div>
+        <!-- 范围：全屋，或单独一间（覆盖全屋）；墙纸和地板共用 -->
         <div class="row">
           <select v-model="wpRoomId" class="sel-style">
+            <option value="">{{ t('全屋') }}</option>
             <option v-for="r in paperRooms" :key="r.id" :value="r.id">{{ paperRoomLabel(r) }}</option>
           </select>
-          <button class="mini" :disabled="!wpRoom?.wallpaper" @click="setRoomWallpaper(wpRoomId, undefined)"><JIcon :icon="ICONS.wallpaperDefault" :size="14" />{{ t('默认') }}</button>
+          <button v-if="wpRoom" class="mini" :disabled="!wpRoom.wallpaper" @click="setWp(undefined)"><JIcon :icon="ICONS.wallpaperDefault" :size="14" />{{ t('跟随全屋') }}</button>
+          <button v-else class="mini" :disabled="!plan.wallpaper" @click="setWp(undefined)"><JIcon :icon="ICONS.wallpaperDefault" :size="14" />{{ t('默认') }}</button>
         </div>
-        <template v-if="wpRoom">
+        <p v-if="wpRoom" class="q-note">{{ wpRoom.wallpaper ? t('这间单独设置，不跟随全屋') : wpNone ? t('这间默认不贴墙纸，选一种就单独贴') : t('跟随全屋，改了就单独设置这间') }}</p>
+        <p v-else class="q-note">{{ t('没有单独设置的房间都用全屋的') }}</p>
+        <div class="wp-row">
+          <button v-for="c in WP_COLORS" :key="c" class="wp-sw" :class="{ on: curWp?.color === c && !curWp?.pattern }" :style="{ background: c }" :title="c" @click="setWp({ color: c, trim: curWp?.trim })" />
+        </div>
+        <div class="wp-row">
+          <button v-for="k in WP_PATTERNS" :key="k" class="wp-pat" :class="{ on: curWp?.pattern?.kind === k }" :title="k" @click="setWp(wpPattern(k))">
+            <img :src="patternPreview(wpPattern(k).pattern!, 36)" alt="" />
+          </button>
+        </div>
+        <div class="wp-sub ico-label"><JIcon :icon="ICONS.trim" :size="14" />{{ t('边饰') }}</div>
+        <div class="wp-row">
+          <button v-for="tm in TRIMS" :key="tm.id" class="trim-card" :class="{ on: trimId(curWp?.trim) === tm.id }" :title="t(tm.label)" @click="setTrim(tm.id)">
+            <img :src="trimThumb(tm.id)" alt="" />
+            <span>{{ t(tm.label) }}</span>
+          </button>
+        </div>
+        <div v-if="curWp?.trim" class="wp-row">
+          <button v-for="c in TRIM_COLORS" :key="c" class="wp-sw" :class="{ on: trimColor === c }" :style="{ background: c }" :title="c" @click="setTrim(trimId(curWp?.trim), c)" />
+        </div>
+      </section>
+      <section class="wp">
+        <div class="hh-head">
+          <h3 class="ico-label"><JIcon :icon="ICONS.wallpaper" class="ico-muted" />{{ t('地板') }}</h3>
+          <span class="spacer" />
+          <button v-if="floorScope" class="mini" :title="t('随机换一种木地板')" @click="randomFloor"><JIcon :icon="ICONS.wallpaperRandom" :size="14" />{{ t('随机') }}</button>
+          <button v-if="wpRoom && floorScope" class="mini" :disabled="!wpRoom.flooring" @click="setFlooring(wpRoom.id, { tone: undefined, wax: undefined })">{{ t('跟随全屋') }}</button>
+        </div>
+        <p v-if="!floorScope" class="q-note">{{ t('这间不是木地板（瓷砖 / 榻榻米），地板跟着房间类型走') }}</p>
+        <template v-else-if="curFloor">
           <div class="wp-row">
-            <button v-for="c in WP_COLORS" :key="c" class="wp-sw" :class="{ on: wpRoom.wallpaper?.color === c && !wpRoom.wallpaper?.pattern }" :style="{ background: c }" :title="c" @click="setRoomWallpaper(wpRoomId, { color: c, trim: wpRoom.wallpaper?.trim })" />
-          </div>
-          <div class="wp-row">
-            <button
-              v-for="k in WP_PATTERNS"
-              :key="k"
-              class="wp-pat"
-              :class="{ on: wpRoom.wallpaper?.pattern?.kind === k }"
-              :title="k"
-              @click="setRoomWallpaper(wpRoomId, wpPattern(k))"
-            >
-              <img :src="patternPreview(wpPattern(k).pattern!, 36)" alt="" />
+            <button v-for="tn in TONE_IDS" :key="tn" class="tone-card" :class="{ on: curFloor.tone === tn }" :title="t(WOOD_TONES[tn].label)" @click="setFlooring(wpRoom?.id ?? null, { tone: tn })">
+              <span class="tone-sw" :style="{ background: toneSwatch(tn) }" />
+              <span>{{ t(WOOD_TONES[tn].label) }}</span>
             </button>
           </div>
-          <div class="wp-sub ico-label"><JIcon :icon="ICONS.trim" :size="14" />{{ t('边饰') }}</div>
-          <div class="wp-row">
-            <button v-for="tm in TRIMS" :key="tm.id" class="trim-btn" :class="{ on: trimId(wpRoom.wallpaper?.trim) === tm.id }" @click="setTrim(tm.id)">{{ t(tm.label) }}</button>
+          <div class="row">
+            <span>{{ t('光泽') }}</span>
+            <div class="seg seg-text" role="radiogroup" :aria-label="t('光泽')">
+              <button role="radio" :aria-checked="!curFloor.wax" :class="{ on: !curFloor.wax }" @click="setFlooring(wpRoom?.id ?? null, { wax: false })">{{ t('哑光') }}</button>
+              <button role="radio" :aria-checked="curFloor.wax" :class="{ on: curFloor.wax }" @click="setFlooring(wpRoom?.id ?? null, { wax: true })">{{ t('打蜡') }}</button>
+            </div>
           </div>
-          <div v-if="wpRoom.wallpaper?.trim" class="wp-row">
-            <button v-for="c in TRIM_COLORS" :key="c" class="wp-sw" :class="{ on: trimColor === c }" :style="{ background: c }" :title="c" @click="setTrim(trimId(wpRoom.wallpaper?.trim), c)" />
-          </div>
+          <p class="q-note">{{ t('打蜡的地板在漫游里有清楚的倒影（需要开启反射）') }}</p>
         </template>
+      </section>
+      <!-- 家具换风格：位置不动，换成目标风格的同类款（找不到就只换配色） -->
+      <section class="wp">
+        <div class="hh-head">
+          <h3 class="ico-label"><JIcon :icon="ICONS.autoFurnish" class="ico-muted" />{{ t('家具风格') }}</h3>
+        </div>
+        <div class="row">
+          <select v-model="restyleTo" class="sel-style">
+            <option value="auto">{{ wpRoom ? t('按房间主人') : t('按房间（主人 / 全家）') }}</option>
+            <option value="random">{{ t('随机') }}</option>
+            <option v-for="st in styleKeys" :key="st" :value="st">{{ t(STYLE_LABELS[st]) }}</option>
+          </select>
+          <button class="mini" @click="runRestyle">{{ wpRoom ? t('换这间') : t('换全屋') }}</button>
+        </div>
+        <p class="q-note">{{ restyleMsg || t('位置不动，换成同类的这个风格的款；找不到合适的款就只换配色') }}</p>
       </section>
       </template>
 
@@ -4808,20 +4880,43 @@ h3 {
   gap: 4px;
   margin-top: 6px;
 }
-.trim-btn {
-  font-size: var(--fs-sm);
-  height: var(--control-h-sm);
-  padding: 0 10px;
-  border-radius: 999px;
+.trim-card,
+.tone-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 62px;
+  white-space: normal;
+  word-break: keep-all;
+  height: auto;
+  padding: 4px 2px 3px;
+  margin: 0;
+  border-radius: 6px;
   border: 1px solid var(--border);
   background: var(--surface);
-  color: var(--text);
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  line-height: 1.2;
+  text-align: center;
 }
-.trim-btn.on {
-  background: var(--accent-weak);
-  border-color: var(--accent-ring);
+.trim-card img {
+  width: 42px;
+  height: 56px;
+  border-radius: 3px;
+  display: block;
+}
+.tone-sw {
+  width: 42px;
+  height: 28px;
+  border-radius: 3px;
+  display: block;
+}
+.trim-card.on,
+.tone-card.on {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
   color: var(--accent-strong);
-  text-shadow: 0 0 0.6px currentColor; /* 假粗体：选中态不改字重，宽度不跳 */
 }
 .ap + .ap {
   margin-top: 8px;
@@ -5135,7 +5230,6 @@ h3 {
 }
 :root.coarse .cats button,
 :root.coarse .mini,
-:root.coarse .trim-btn,
 :root.coarse .sizes button {
   height: 36px;
 }

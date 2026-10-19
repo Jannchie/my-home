@@ -12,6 +12,9 @@ import {
   mul,
   pointInPolygon,
   projectToSegment,
+  roomFlooring,
+  roomWallpaper,
+  WOOD_TONES,
   type Fixture,
   type Furniture,
   type Plan,
@@ -20,6 +23,7 @@ import {
   type Vec,
   type Wallpaper,
   type WallTrim,
+  type WoodTone,
   edgesOf as roomEdges,
 } from '../model'
 import { isIndoor, sharedIntervals, voidRailSegments, wallSegments, wallThicknessAt, type WallSegment } from '../walls'
@@ -121,11 +125,14 @@ function tileTex(base: string, line: string, cell: number) {
 }
 
 const floorMatCache = new Map<string, THREE.Material>()
-function floorMaterial(kind: RoomKind) {
-  let m = floorMatCache.get(kind)
+/** 地面材质：瓷砖、榻榻米按房间类型；木地板按色调（natural = 按房间类型的原木色，旧存档的样子） */
+function floorMaterial(kind: RoomKind, tone: WoodTone = 'natural') {
+  const key = tone === 'natural' ? kind : `wood-${tone}`
+  let m = floorMatCache.get(key)
   if (m) return m
   let map: THREE.Texture
-  switch (kind) {
+  if (tone !== 'natural') map = woodTex(WOOD_TONES[tone].base, WOOD_TONES[tone].line)
+  else switch (kind) {
     case 'wash':
     case 'toilet':
       map = tileTex('#f4f7f6', '#cfe0e0', 30)
@@ -150,7 +157,7 @@ function floorMaterial(kind: RoomKind) {
       map = woodTex('#ecc79b', '#cfa676')
   }
   m = new THREE.MeshToonMaterial({ map, color: '#ffffff', gradientMap: (toon('#fff') as THREE.MeshToonMaterial).gradientMap })
-  floorMatCache.set(kind, m)
+  floorMatCache.set(key, m)
   return m
 }
 
@@ -170,7 +177,7 @@ function holePath(shape: THREE.Shape, pts: Vec[]) {
  * 房间地面：从 bottom（缺省底座顶面）挤出到地面高度。holes：要挖掉的区域（上层的楼梯洞口、挑空），
  * 只取和房间相交的部分（凸的洞口按房间裁一下）；洞口盖住整个房间时返回 null。
  */
-function floorSlab(r: Room, bottom = BASE, holes: Vec[][] = []) {
+function floorSlab(r: Room, tone: WoodTone, bottom = BASE, holes: Vec[][] = []) {
   const shape = new THREE.Shape(toV2(r.points))
   for (const h of holes) {
     const cut = clipConvex(r.points, h)
@@ -186,7 +193,7 @@ function floorSlab(r: Room, bottom = BASE, holes: Vec[][] = []) {
   const geo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false })
   geo.rotateX(-Math.PI / 2)
   const sideMat = toon('#e9dccb')
-  const m = new THREE.Mesh(geo, [sunk ? toon('#8e8a5e') : floorMaterial(r.kind), sideMat])
+  const m = new THREE.Mesh(geo, [sunk ? toon('#8e8a5e') : floorMaterial(r.kind, tone), sideMat])
   m.position.y = bottom
   m.receiveShadow = true
   return m
@@ -856,7 +863,10 @@ function buildWalls(plan: Plan, H0: number, infos: OpeningInfo[], opts: HouseOpt
     const bot = Math.min(0, sideY(1), sideY(-1))
     // 墙纸：+z 面（朝 (-dir.y, dir.x)）和 -z 面分别取那一侧房间的墙纸
     const n0 = { x: -dir.y, y: dir.x }
-    const wp = (k: number) => roomAt(plan, add(mid, mul(n0, k * (t / 2 + 5))))?.wallpaper ?? null
+    const wp = (k: number) => {
+      const r = roomAt(plan, add(mid, mul(n0, k * (t / 2 + 5))))
+      return (r && roomWallpaper(plan, r)) ?? null
+    }
     const papers: [Wallpaper | null, Wallpaper | null] = [wp(1), wp(-1)]
     const k = `${kind}|${n.x.toFixed(3)},${n.y.toFixed(3)}|${bot}|${H}|${JSON.stringify(papers)}`
     return { outer, t, n, H, bottom: bot, papers, k }
@@ -1501,7 +1511,7 @@ function buildTrims(plan: Plan, infos: OpeningInfo[], H: number) {
     return gg
   }
   for (const room of plan.rooms) {
-    const tr: WallTrim | undefined = room.wallpaper?.trim
+    const tr: WallTrim | undefined = roomWallpaper(plan, room)?.trim
     if (!tr || !isIndoor(room)) continue
     const es = roomEdges(room.points)
     const n = es.length
@@ -1940,7 +1950,8 @@ export function buildHouse(plan: Plan, wallH: number, opts: HouseOpts = {}) {
   for (const r of plan.rooms) {
     // 挑空没有地面
     if (r.kind === 'void') continue
-    const slab = opts.upper ? floorSlab(r, isIndoor(r) ? -2 : -SLAB, holes) : floorSlab(r)
+    const tone = roomFlooring(plan, r)?.tone ?? 'natural'
+    const slab = opts.upper ? floorSlab(r, tone, isIndoor(r) ? -2 : -SLAB, holes) : floorSlab(r, tone)
     if (slab) floors.add(slab)
     if (r.kind === 'japanese') floors.add(tatami(r, plan.wall))
   }

@@ -1,7 +1,7 @@
 // 墙纸：按房间主人的风格自动挑（低对比度的纯色 / 细花纹），也可以手动换。
 
 import { shade } from './three/toon'
-import type { Plan, Room, Wallpaper, WallTrim } from './model'
+import { takesHouseWallpaper, type Plan, type Room, type Wallpaper, type WallTrim, type WoodTone } from './model'
 import type { Household } from './household'
 import { rng, type StyleTag } from './three/kit'
 import type { PatternKind } from './three/patterns'
@@ -78,7 +78,19 @@ const CURTAINS: Record<StyleTag, string[]> = {
   farmhouse: ['#f1ece2', '#9caf91', '#34465e', '#e3d8c4', '#9e3b2f'],
 }
 
-const papered = (r: Room) => r.kind !== 'balcony' && r.kind !== 'bath' && r.kind !== 'storage' && r.kind !== 'void'
+/** 各风格的木地板色调（前面的更常见） */
+const FLOOR_TONES: Record<StyleTag, WoodTone[]> = {
+  cute: ['light', 'white', 'natural'],
+  nordic: ['white', 'light', 'gray'],
+  modern: ['gray', 'white', 'dark'],
+  japanese: ['natural', 'light'],
+  industrial: ['dark', 'walnut', 'gray'],
+  retro: ['walnut', 'natural'],
+  chinese: ['walnut', 'dark'],
+  classic: ['walnut', 'dark', 'natural'],
+  farmhouse: ['natural', 'walnut', 'light'],
+}
+
 
 /**
  * 全屋自动墙纸：居室用住在里面的人的风格，公共空间用全家的风格；浴室、收纳、阳台不贴。
@@ -87,17 +99,24 @@ const papered = (r: Room) => r.kind !== 'balcony' && r.kind !== 'bath' && r.kind
 export function autoWallpapers(plan: Plan, hh: Household | undefined, occupantStyle: (room: Room) => StyleTag | undefined, seed = Date.now()) {
   const rand = rng(seed)
   const base = hh?.style ?? 'nordic'
-  // 公共空间（LDK、廊下、玄関、洗面所、トイレ）统一一种，居室各自不同
+  // 公共空间（LDK、廊下、玄関、洗面所）统一一种，记成全屋墙纸（Plan.wallpaper），这些房间不单独写，改全屋时一起变；
+  // 有主人的居室、トイレ各自单独一种
   const common = wallpaperFor(base, rand, 0.7)
-  const commonTrim = trimFor(base, rand, common.color)
+  common.trim = trimFor(base, rand, common.color)
+  plan.wallpaper = common
+  // 全屋地板按风格挑一种木色，偶尔打蜡；单间的地板覆盖清掉（随机是「重新来一套」）
+  const tones = FLOOR_TONES[base]
+  plan.flooring = { tone: tones[Math.floor(rand() * tones.length)], ...(rand() < 0.3 ? { wax: true } : {}) }
   for (const r of plan.rooms) {
-    if (!papered(r)) {
-      delete r.wallpaper
-      continue
-    }
+    delete r.flooring
     const own = r.kind === 'western' || r.kind === 'japanese' ? occupantStyle(r) : undefined
-    r.wallpaper = own ? wallpaperFor(own, rand, 0.45) : r.kind === 'toilet' ? wallpaperFor(base, rand, 0.3) : { ...common }
-    r.wallpaper.trim = r.kind === 'western' || r.kind === 'japanese' || r.kind === 'toilet' ? trimFor(own ?? base, rand, r.wallpaper.color) : commonTrim
+    const single = takesHouseWallpaper(r) && (!!own || r.kind === 'toilet')
+    if (!single) {
+      delete r.wallpaper
+    } else {
+      r.wallpaper = own ? wallpaperFor(own, rand, 0.45) : wallpaperFor(base, rand, 0.3)
+      r.wallpaper.trim = trimFor(own ?? base, rand, r.wallpaper.color)
+    }
     // 窗帘颜色跟房间风格走（和室不挂）
     if (r.kind === 'western' || r.kind === 'ldk') {
       const cs = CURTAINS[own ?? base]

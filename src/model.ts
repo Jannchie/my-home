@@ -25,6 +25,9 @@ export type RoomKind =
   | 'void'
   | 'other'
 
+/** 铺木地板的房间（3D 里 house.ts floorMaterial 用木纹）：卫浴、玄关、阳台是瓷砖，和室是榻榻米 / 板，挑空没有地面 */
+export const isWoodFloor = (k: RoomKind) => !['wash', 'bath', 'toilet', 'entrance', 'balcony', 'japanese', 'void'].includes(k)
+
 export const ROOM_KINDS: Record<RoomKind, { label: string; fill: string }> = {
   ldk: { label: 'LDK', fill: '#f3e6cf' },
   kitchen: { label: 'キッチン', fill: '#f1e2c8' },
@@ -63,6 +66,25 @@ export interface Room {
   lightK?: number
   /** 所在楼层（Plan.floors 的 id）；不填 = 最底下那层（单层户型、旧存档都不写） */
   floor?: string
+  /** 这间的地板（只对木地板房间有用），覆盖全屋的 Plan.flooring；不填 = 跟随全屋 */
+  flooring?: Flooring
+}
+
+/** 木地板的色调：natural = 按房间类型的原木色（旧存档的样子） */
+export type WoodTone = 'natural' | 'light' | 'white' | 'gray' | 'walnut' | 'dark'
+export const WOOD_TONES: Record<WoodTone, { label: string; base: string; line: string }> = {
+  natural: { label: '原木', base: '#ecc79b', line: '#cfa676' },
+  light: { label: '浅橡木', base: '#f3e2c6', line: '#dcc3a0' },
+  white: { label: '白橡', base: '#efe9e1', line: '#d9d0c4' },
+  gray: { label: '灰木', base: '#cdc6bd', line: '#b2a99e' },
+  walnut: { label: '胡桃木', base: '#a9774e', line: '#8a5d3a' },
+  dark: { label: '深色', base: '#6e4a33', line: '#553724' },
+}
+
+/** 木地板：色调和光泽（打蜡的在漫游里倒影清楚，见 three/reflect.ts）；字段不填 = 原木色、哑光 */
+export interface Flooring {
+  tone?: WoodTone
+  wax?: boolean
 }
 
 /**
@@ -453,7 +475,21 @@ export interface Plan {
   site?: Site
   /** 户建的外观（屋顶、外墙材质、雨棚）；公寓不填（不搭屋顶、外墙沿用默认的米白） */
   exterior?: Exterior
+  /** 全屋墙纸：没设自己墙纸的房间都用它（浴室、收纳、阳台、挑空除外）；不填 = 默认的米白墙 */
+  wallpaper?: Wallpaper
+  /** 全屋木地板：没设自己地板的木地板房间都用它 */
+  flooring?: Flooring
 }
+
+/** 跟随全屋墙纸的房间：浴室（整体浴室）、收纳、阳台、挑空不贴 */
+export const takesHouseWallpaper = (r: Pick<Room, 'kind'>) => r.kind !== 'bath' && r.kind !== 'storage' && r.kind !== 'balcony' && r.kind !== 'void'
+/** 房间实际用的墙纸：自己的优先，没有就用全屋的 */
+export const roomWallpaper = (p: Pick<Plan, 'wallpaper'>, r: Room): Wallpaper | undefined => r.wallpaper ?? (takesHouseWallpaper(r) ? p.wallpaper : undefined)
+/** 全屋的地板（字段补上缺省：原木色、哑光） */
+export const houseFlooring = (p: Pick<Plan, 'flooring'>): Required<Flooring> => ({ tone: p.flooring?.tone ?? 'natural', wax: p.flooring?.wax ?? false })
+/** 房间实际用的地板：全屋的和自己的按字段合并（自己的优先）；不是木地板的房间返回 null */
+export const roomFlooring = (p: Pick<Plan, 'flooring'>, r: Room): Required<Flooring> | null =>
+  isWoodFloor(r.kind) ? { ...houseFlooring(p), ...r.flooring } : null
 
 /**
  * 户建四周的用地（平面坐标，和房间同一套坐标系，只属于最底层）。不是房间：不参与墙体推导、检查和面积。

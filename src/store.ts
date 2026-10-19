@@ -8,7 +8,8 @@ import type { CheckItem } from './checklist'
 import { generateHousehold } from './household'
 import { propsOn } from './surface'
 import { applyFixtureCarry, captureFixtureProps } from './fixtureCarry'
-import { ASSET_MAP } from './three/assets'
+import { ASSET_MAP, STYLE_LABELS } from './three/assets'
+import { furnitureRoom, restyleFurniture } from './restyle'
 import type { StyleTag } from './three/kit'
 import type { PatternSpec } from './three/patterns'
 import { CITIES, DEFAULT_GEO, type Geo } from './three/sky'
@@ -17,7 +18,7 @@ import { ensureOutdoorUnits as ensureOutdoorUnits1, indoorUnits, planArea, rando
 import { generatePlan } from './generate-region'
 import { lang, t } from './i18n'
 import { initialRoute } from './router'
-import { edgeInfo, emptyPlan, projectToSegment, type Fixture, type FixtureKind, type Floor, type Furniture, type Opening, type Plan, type Room, type Vec, type Wallpaper, type Exterior, type ParkingSpot, type Site, uid } from './model'
+import { edgeInfo, emptyPlan, projectToSegment, type Fixture, type FixtureKind, type Floor, type Flooring, type Furniture, type Opening, type Plan, type Room, type Vec, type Wallpaper, type Exterior, type ParkingSpot, type Site, uid } from './model'
 import { makeRoomForPorch, normalizeExterior, styleExterior } from './exterior'
 import { normalizeWindow } from './windows'
 import { normalizeDoor } from './doorStyles'
@@ -899,6 +900,51 @@ export function setRoomWallpaper(roomId: string, wp: Wallpaper | undefined) {
   mutate(() => {
     if (wp) r.wallpaper = wp
     else delete r.wallpaper
+  })
+}
+
+/**
+ * 只换家具风格、不动布局（restyle.ts）。roomId 为 null 时全屋，否则只换这间里的家具。
+ * style：具体风格；'auto' = 按房间（有主人的居室用主人的风格，其余用全家的风格）；'random' = 随机挑一种。返回改动的件数
+ */
+export function restyle(roomId: string | null, style: StyleTag | 'auto' | 'random') {
+  const raw = toRaw(plan.value)
+  const all = Object.keys(STYLE_LABELS) as StyleTag[]
+  const fixed = style === 'random' ? all[Math.floor(Math.random() * all.length)] : style === 'auto' ? null : style
+  const byRoom = fixed ? null : roomStyles(raw, raw.household)
+  const home = raw.household?.style ?? 'nordic'
+  let n = 0
+  mutate((p) => {
+    n = restyleFurniture(p, (f) => {
+      const room = furnitureRoom(p, f)?.id
+      if (roomId && room !== roomId) return undefined
+      return fixed ?? byRoom!.get(room ?? '') ?? home
+    })
+  })
+  return n
+}
+
+/** 全屋墙纸（没设自己墙纸的房间都用它）；undefined = 回到默认的米白墙 */
+export function setHouseWallpaper(wp: Wallpaper | undefined) {
+  mutate((p) => {
+    if (wp) p.wallpaper = wp
+    else delete p.wallpaper
+  })
+}
+
+/**
+ * 木地板：roomId 为 null 时改全屋，否则改这间（覆盖全屋）。patch 里值为 undefined 的字段删掉（回到跟随全屋 / 缺省）；
+ * 改完没有字段了就整个删掉
+ */
+export function setFlooring(roomId: string | null, patch: Partial<Flooring>) {
+  const r = roomId ? findRoom(roomId) : null
+  if (roomId && !r) return
+  mutate((p) => {
+    const host: { flooring?: Flooring } = r ?? p
+    const f = { ...host.flooring }
+    patchObj(f, patch)
+    if (Object.keys(f).length) host.flooring = f
+    else delete host.flooring
   })
 }
 

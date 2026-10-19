@@ -981,23 +981,7 @@ class Decorator {
     const key = `${def.id}|${st}`
     let pool = this.shapePools.get(key)
     if (!pool) {
-      const bed = def.type === 'bed'
-      const near = (a: number, b: number, k: number, c = 0) => Math.abs(a - b) <= b * k + c
-      const kids = hasTag(def, 'for-kids')
-      pool = ASSETS.filter(
-        (a) =>
-          a.type === def.type &&
-          a.form === def.form &&
-          !a.prop &&
-          !a.mount &&
-          !a.stick &&
-          !a.fixture &&
-          !GAME_TABLE.test(a.id) &&
-          hasTag(a, 'for-kids') === kids &&
-          isNativeTo(a, st) &&
-          (bed ? near(a.w, def.w, 0.06, 2) && near(a.d, def.d, 0.15, 5) : near(a.w, def.w, 0.25) && near(a.d, def.d, 0.25)) &&
-          a.h <= def.h * 1.6 + 10,
-      )
+      pool = ASSETS.filter((a) => sameShapeSlot(def, a) && isNativeTo(a, st))
       this.shapePools.set(key, pool)
     }
     if (!pool.length || this.rand() >= 0.8) return null
@@ -4477,6 +4461,20 @@ const SCONCE_STYLES = new Set<StyleTag>(['classic', 'japanese', 'chinese', 'farm
 const SHAPE_STYLES = new Set<StyleTag>(['chinese', 'classic', 'farmhouse'])
 /** 牌桌 / 棋桌（自动麻将桌、折叠 / 和室麻将桌、棋桌、台球桌）：按用途点名摆，不参与风格专属造型的互换 */
 const GAME_TABLE = /^(int-mahjong-(table|shuffle|walls|win)$|hg-mj-|hg-jantaku$|hg-qizhuo$|hg-game-table|hg-pool-table)/
+
+/**
+ * a 能不能顶替 def 的位置换个造型（一键布置按风格换款、家具「只换风格」共用）：同细分类型、同形态，都是落地大件
+ * （不是摆件 / 壁挂 / 贴附物 / 设备），牌桌棋桌不参与，儿童款只和儿童款换；床按宽度分档（单人、双人不混），
+ * 其余宽深差 25% 以内、不高出太多
+ */
+export function sameShapeSlot(def: AssetDef, a: AssetDef) {
+  if (a.id === def.id || a.type !== def.type || a.form !== def.form) return false
+  if (a.prop || a.mount || a.stick || a.fixture || GAME_TABLE.test(a.id) || GAME_TABLE.test(def.id)) return false
+  if (hasTag(a, 'for-kids') !== hasTag(def, 'for-kids')) return false
+  const near = (x: number, y: number, k: number, c = 0) => Math.abs(x - y) <= y * k + c
+  const size = def.type === 'bed' ? near(a.w, def.w, 0.06, 2) && near(a.d, def.d, 0.15, 5) : near(a.w, def.w, 0.25) && near(a.d, def.d, 0.25)
+  return size && a.h <= def.h * 1.6 + 10
+}
 
 /** 素材有没有这个风格的原生配色（不算派生配色） */
 const isNativeTo = (def: AssetDef, st: StyleTag) => def.palettes.some((_, i) => paletteStyle(def, i) === st)
