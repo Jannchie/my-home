@@ -260,6 +260,38 @@ export function settleDesks(c: DeskCtx) {
   screenCams(c, false)
 }
 
+/**
+ * 单独的键盘配一只鼠标：工位、兴趣摆件、通用桌面摆件放上去的键盘都可能没有鼠标（键鼠套装自带的不算）。
+ * 同一台面上键盘旁边 50cm 内没有鼠标，就在键盘右边（放不下就左边）补一只；电竞（RGB）键盘配电竞鼠标
+ */
+function pairMice(c: DeskCtx) {
+  const { d } = c
+  for (const k of [...d.out]) {
+    const kd = def(k)
+    if (!kd || !hasTag(kd, 'keyboard') || hasTag(kd, 'mouse')) continue
+    const parent = d.out.find((x) => x.id === d.parentOf.get(k.id))
+    if (!parent || !def(parent)?.surface) continue
+    const near = d.out.some((m) => m !== k && d.parentOf.get(m.id) === parent.id && hasTag(def(m), 'mouse') && Math.hypot(m.x - k.x, m.y - k.y) < 50)
+    if (near) continue
+    const mouse = /^of-kb-.*-rgb$/.test(k.asset) ? 'of-mouse-rgb' : 'of-mouse'
+    const md = ASSET_MAP.get(mouse)
+    if (!md) continue
+    const lk = toLocal(parent, k)
+    const lrot = (k.rot - parent.rot + 360) % 360
+    // 键盘的局部 x 轴（转过 lrot）方向上，紧挨着键盘
+    const a = (lrot * Math.PI) / 180
+    const gap = kd.w / 2 + md.w / 2 + 5
+    // 键盘的局部 z 轴（往前）方向：右边放不下就稍微往前 / 往后挪一点再试
+    const fz = { x: -Math.sin(a), y: Math.cos(a) }
+    place: for (const side of [1, -1])
+      for (const extra of [0, 4, 8, 14])
+        for (const dz of [0, -3, 3]) {
+          const r = side * (gap + extra)
+          if (putOn(c, parent, mouse, lk.x + Math.cos(a) * r + fz.x * dz, lk.y + Math.sin(a) * r + fz.y * dz, lrot)) break place
+        }
+  }
+}
+
 /** 座位那一段桌面上的东西 */
 function onSeat(c: DeskCtx, s: Seat) {
   const dd = def(s.desk)!
@@ -611,6 +643,8 @@ function fridgeNotes(c: DeskCtx) {
 
 /** 布置最后一步：便签贴屏幕边框 / 桌后墙 / 冰箱门，书桌上散几张（摄像头在 workstations 里已经夹到屏幕顶边） */
 export function deskExtras(c: DeskCtx) {
+  // 键盘配鼠标：放在这里（所有可能摆键盘的步骤——工位、兴趣摆件、开放格子补件——之后）只跑一次
+  pairMice(c)
   const seats = SEATS.get(c.d) ?? []
   for (const s of seats) {
     if (!c.d.out.includes(s.desk)) continue

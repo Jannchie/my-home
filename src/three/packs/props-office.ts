@@ -1488,6 +1488,16 @@ function gamingMouse(p: string[]) {
   return g
 }
 
+/** 普通鼠标（办公用）：[机身, 按键, 滚轮] —— 椭圆机身，前半截一道按键缝，中间一个滚轮 */
+function officeMouse(p: string[]) {
+  const [body, keys, wheel] = p
+  const g = new THREE.Group()
+  g.add(ball(3, body, { y: 1.7 }, [1, 0.55, 1.8]))
+  g.add(rbox(0.25, 0.4, 3.6, keys, { y: 3.05, z: 2.4 }, 0.1))
+  g.add(cylX(0.5, 0.7, wheel, 0, 3.15, 2.6, 12))
+  return g
+}
+
 /** RGB 电竞桌垫（单独）：[垫面, 灯色1, 灯色2, 灯色3] */
 function rgbMousepad(p: string[]) {
   const [mat, a, b, c] = p
@@ -2039,6 +2049,13 @@ export const PROPS_OFFICE: AssetDef[] = [
   def('of-kb-tkl-rgb', '机械键盘', 'tabletop', [38, 14, 3], KB_RGB, mechKeyboard('tkl', true), { sizeLabel: 'TKL · RGB' }),
   def('of-kb-full-rgb', '机械键盘', 'tabletop', [46.5, 14, 3], KB_RGB, mechKeyboard('full', true), { sizeLabel: '全尺寸 · RGB' }),
   def('of-mouse-rgb', '电竞鼠标', 'tabletop', [6.5, 13, 4], RGB_GEAR, gamingMouse),
+  def('of-mouse', '鼠标', 'tabletop', [6, 11, 3.6], [
+    ['modern', [M.char, M.black, M.gray]],
+    ['modern', [M.white, M.light, M.gray]],
+    ['nordic', [N.white, N.linen, N.sage]],
+    ['japanese', [J.washi, J.hinoki, J.shu]],
+    ['retro', [R.cream, '#e6d6b0', R.orange]],
+  ], officeMouse, { prop: true, type: 'mouse', tags: ['mouse'] }),
   def('of-mousepad-rgb', 'RGB 电竞桌垫', 'tabletop', [90.5, 40.5, 0.5], RGB_GEAR.map(([s, [a, b, c, d]]): Pal => [s, [a === M.white ? M.light : a === C.white ? C.sakura : a, b, c, d]]), rgbMousepad),
   def('of-headset-stand-rgb', 'RGB 耳机架 + 耳机', 'tabletop', [21, 14.5, 27], RGB_GEAR.map(([s, [a, b, c]]): Pal => [s, [a, b, c, a === M.black || a === M.char ? M.char : C.white]]), headsetStandRGB),
   def('of-monitor-gaming', '电竞曲面显示器', 'tabletop', [80, 18.5, 49], RGB_GEAR.map(([s, [a, b, c]]): Pal => [s, [a === C.sakura || a === C.white ? C.white : M.black, a === M.white ? M.light : M.char, b === '#ff8fd0' ? b : c]]), gamingMonitor, { screens: [{ x: 0, y: 13, z: -2, w: 80, h: 36, t: 2.2, bow: 5.3 }], surfaces: clipLevels([{ x: 0, y: 13, z: -2, w: 80, h: 36, t: 2.2 }]) }),
