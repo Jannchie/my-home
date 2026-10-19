@@ -8,7 +8,7 @@
 //   - 一键布置：笼子带 limit（全屋各一只），由 household.ts 的 smallpets / birds 兴趣挑出来。
 
 import * as THREE from 'three'
-import { ball, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
+import { ball, cup, cyl, markWater, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, glow, holePanel, rng, shell, type AssetDef } from '../kit'
 import { P, PI, cappedTube, centerXZInPlace, fitBuild, litDeep, noOutlineDeep, rod3, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, R, definer, type Build, type Dims, type Pal } from '../packkit'
@@ -1276,7 +1276,7 @@ function petFountain(p: string[]) {
   g.add(clear(cyl(8.6, 8.6, 6.8, C.glass, { y: 6.2 }, 32), C.glass, 0.3))
   g.add(clear(cyl(8.1, 8.1, 5.8, WATER, { y: 6.5 }, 32), WATER, 0.4))
   g.add(cup(10.2, 8.8, 3, 0.7, accent, { y: 12.6 }))
-  g.add(clear(cyl(9.3, 9.3, 0.3, WATER, { y: 14.6 }, 32), WATER, 0.5))
+  g.add(markWater(clear(cyl(9.3, 9.3, 0.3, WATER, { y: 14.6 }, 32), WATER, 0.5)))
   for (let i = 0; i < 6; i++) {
     const a = (i / 6) * PI * 2
     g.add(P(ball(1.3, body, {}, [1, 0.3, 0.6]), Math.cos(a) * 1.3, 15.6, Math.sin(a) * 1.3, 0, -a, 0.3))

@@ -11,6 +11,7 @@ import { applyFixtureCarry, captureFixtureProps } from './fixtureCarry'
 import { ASSET_MAP, STYLE_LABELS } from './three/assets'
 import { furnitureRoom, restyleFurniture } from './restyle'
 import type { StyleTag } from './three/kit'
+import type { LookAdjust } from './three/post'
 import type { PatternSpec } from './three/patterns'
 import { CITIES, DEFAULT_GEO, type Geo } from './three/sky'
 import { DEFAULT_KELVIN, DEFAULT_POWER, DEFAULT_RANGE, POWER_MAX, POWER_MIN, RANGE_MAX, RANGE_MIN, clampKelvin, isLightMode, type LightMode } from './three/lights'
@@ -41,6 +42,11 @@ const LOOK_KEY = 'my-home:look'
 const SKY_KEY = 'my-home:sky'
 const LIGHTS_KEY = 'my-home:lights'
 const FOV_KEY = 'my-home:fov'
+const FX_KEY = 'my-home:fx'
+const LOOK_ADJ_KEY = 'my-home:look-adjust'
+// 画面增强的默认值（loadFx 在 sandbox 初始化时就会调用，常量要放在它前面）
+const FX_DEFAULT: SandboxFx = { ao: 'walk', reflect: 'walk', volumetric: true }
+const isFxMode = (v: unknown): v is FxMode => v === 'off' || v === 'walk' || v === 'always'
 
 /** 校验并补全旧版本数据（早期没有 fixtures / furniture） */
 export function normalizePlan(p: Plan): Plan | null {
@@ -285,7 +291,7 @@ export const WALL_MODES: { id: WallMode; label: string }[] = [
   { id: 'half', label: '内墙半墙' },
   { id: 'down', label: '全部压低' },
 ]
-export const sandbox = reactive({ wallHeight: 240, wallMode: 'half' as WallMode, cutHeight: 60, cutawayOpacity: 0, cutawayHover: true, snap: true, mode: 'edit' as 'edit' | 'preview', autoRotate: true, autoFurnish: true, style: 'auto' as StyleTag | 'random' | 'auto', look: loadLook(), fov: loadFov(), ...loadSky(), ...loadLights(), playing: false, exterior: false })
+export const sandbox = reactive({ wallHeight: 240, wallMode: 'half' as WallMode, cutHeight: 60, cutawayOpacity: 0, cutawayHover: true, snap: true, mode: 'edit' as 'edit' | 'preview', autoRotate: true, autoFurnish: true, style: 'auto' as StyleTag | 'random' | 'auto', look: loadLook(), lookAdj: loadLookAdj(), fx: loadFx(), fov: loadFov(), ...loadSky(), ...loadLights(), playing: false, exterior: false })
 
 /**
  * 3D 沙盘的显示方式：全部楼层 / 只到当前层 / 分层拉开 / 外观，四个是同一级的选项（外观 = 全部楼层叠好、墙满高、盖屋顶）。
@@ -458,6 +464,27 @@ watch(
   },
 )
 
+/** 画面效果在预设上的调整（three/post.ts LookAdjust，只记改过的参数）；换预设时清空 */
+function loadLookAdj(): LookAdjust {
+  try {
+    const v = JSON.parse(localStorage.getItem(LOOK_ADJ_KEY) || '{}')
+    return v && typeof v === 'object' && !Array.isArray(v) ? (v as LookAdjust) : {}
+  } catch {
+    return {}
+  }
+}
+watch(
+  () => sandbox.lookAdj,
+  (v) => {
+    try {
+      localStorage.setItem(LOOK_ADJ_KEY, JSON.stringify(v))
+    } catch {
+      /* 存储不可用时忽略 */
+    }
+  },
+  { deep: true },
+)
+
 /** 3D 沙盘的画面效果（three/post.ts 的 LookId），单独存一个键，不进户型数据 */
 function loadLook() {
   try {
@@ -475,6 +502,40 @@ watch(
       /* 存储不可用时忽略 */
     }
   },
+)
+
+/**
+ * 画面增强（3D 沙盘，高画质才生效）：环境光遮蔽、反射（地面 / 镜子 / 水面）各有 关 / 仅漫游 / 始终；
+ * 体积光只在漫游时成立（鸟瞰时没有天花板，满屋都被晒到），只有开关。单独存一个键，不进户型数据
+ */
+export type FxMode = 'off' | 'walk' | 'always'
+export interface SandboxFx {
+  ao: FxMode
+  reflect: FxMode
+  volumetric: boolean
+}
+function loadFx(): SandboxFx {
+  try {
+    const v = JSON.parse(localStorage.getItem(FX_KEY) || '{}') as Partial<SandboxFx>
+    return {
+      ao: isFxMode(v.ao) ? v.ao : FX_DEFAULT.ao,
+      reflect: isFxMode(v.reflect) ? v.reflect : FX_DEFAULT.reflect,
+      volumetric: typeof v.volumetric === 'boolean' ? v.volumetric : FX_DEFAULT.volumetric,
+    }
+  } catch {
+    return { ...FX_DEFAULT }
+  }
+}
+watch(
+  () => sandbox.fx,
+  (v) => {
+    try {
+      localStorage.setItem(FX_KEY, JSON.stringify(v))
+    } catch {
+      /* 存储不可用时忽略 */
+    }
+  },
+  { deep: true },
 )
 
 let saveTimer = 0

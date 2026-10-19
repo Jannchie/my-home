@@ -3,7 +3,7 @@
 // 原点在墙面、地面高度，+z 朝房间里，+x 沿墙。
 
 import * as THREE from 'three'
-import { ball, cyl, rbox, shade, toon, torus } from './toon'
+import { ball, cyl, markMirror, rbox, shade, toon, torus } from './toon'
 import { PI, cylXLegacy, cylZLegacy } from './geo'
 import { J, M, N, R, type Pal } from './packkit'
 
@@ -120,6 +120,7 @@ export function showerModel(o: ShowerOpts, p: string[] = SHOWER_PALS[0][1]) {
     const glass = rbox(34, 56, 0.4, MIRROR, { x: mx, y: 95, z: 1.0 }, 0.2)
     glass.material = toon(MIRROR, { emissive: 0.2 })
     glass.userData.noOutline = true
+    markMirror(glass)
     g.add(glass)
   }
   let hx: number

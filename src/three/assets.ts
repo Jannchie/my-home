@@ -2,7 +2,7 @@
 // 约定见 kit.ts 开头。
 
 import * as THREE from 'three'
-import { ball, capsule, cup, cyl, face, leaf, plate, puck, rbox, shade, toon, torus, tray } from './toon'
+import { ball, capsule, cup, cyl, face, leaf, markMirror, markWater, plate, puck, rbox, shade, toon, torus, tray } from './toon'
 import { fridgeSpotModel, washerSpotModel } from './appliances'
 import { holePanel, C, G, S, carcass, drawerBox, drawerLevel, ellipsePoly, flapDoor, glow, hangingPipe, hingedDoor, legs, pipeHook, rectPoly, rng, shell, shelvesIn, type AssetDef, type StyleTag } from './kit'
 import { PACKS } from './packs'
@@ -673,7 +673,7 @@ function standMirror(p: string[]) {
   const z0 = 15
   const mirror = new THREE.Group()
   mirror.add(rbox(44, 152, 6, frame, { y: 0.4 }, 3))
-  mirror.add(glow(36, 142, C.glass, { y: 5.4, z: 3.3 }, 0.15))
+  mirror.add(markMirror(glow(36, 142, C.glass, { y: 5.4, z: 3.3 }, 0.15)))
   mirror.position.z = z0
   mirror.rotation.x = tilt
   g.add(mirror)
@@ -1066,7 +1066,7 @@ export function bathtubModel(w: number, d: number, shower = false, walls?: Recor
   const water = rbox(w - 14, 1, d - 14, '#9fdcf0', { y: 40 }, 0.4)
   water.material = toon('#9fdcf0', { emissive: 0.15 })
   water.userData.noOutline = true
-  g.add(water)
+  g.add(markWater(water))
   // 小黄鸭
   const duck = new THREE.Group()
   duck.add(ball(5, C.lemon, { y: 4 }, [1.2, 0.85, 1]))
@@ -1098,7 +1098,7 @@ export function toiletModel(w: number, d: number, type: 'basic' | 'washlet' | 't
   const water = cyl(w * 0.3, w * 0.3, 0.3, '#bfe3f2', { y: 33, z: bz }, 24)
   water.scale.z = sz
   water.userData.noOutline = true
-  g.add(water)
+  g.add(markWater(water))
   // 座圈和盖子都按马桶口的椭圆轮廓做（外沿和碗口对齐）
   const seatColor = type === 'basic' ? shade(white, -0.02) : '#f6f7f9'
   const R = w * 0.46

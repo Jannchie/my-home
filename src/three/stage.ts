@@ -27,7 +27,7 @@ export interface PostHook {
  * 阴影边缘的模糊半径（阴影贴图像素）。两档都是 4：省电画质的贴图分辨率减半，边缘在世界里宽一倍，正好掩盖锯齿；
  * 高画质下两层户建约 3–4cm，柔和但不糊（toon.ts 会把过渡再收紧成干净的两档）。
  */
-const SHADOW_RADIUS = 4
+export const SHADOW_RADIUS = 4
 
 /**
  * low：省电画质（手机 / 低性能设备，见 src/ui/device.ts）——不开 MSAA、阴影贴图 1024。

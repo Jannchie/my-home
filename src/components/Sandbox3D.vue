@@ -21,11 +21,11 @@ import { withStairHoles } from '../stairs'
 import { overlapsOthers, snapFurniture, snapToWall, type Guide } from '../snap'
 import { fitOnSurface, pickSurface, propClash, propsOn, snapToClip, snapToHook } from '../surface'
 import { pickTub, tubGuides } from '../tubTop'
-import { createStage, fitSun, frameCamera, setStageQuality, type Stage } from '../three/stage'
-import { attachPost, LOOKS, LOOK_MAP, type LookId, type Post } from '../three/post'
+import { SHADOW_RADIUS, createStage, fitSun, frameCamera, setStageQuality, type Stage } from '../three/stage'
+import { attachPost, LOOKS, LOOK_MAP, lookValue, resolveLook, type LookAdjust, type LookAdjustKey, type LookId, type Post } from '../three/post'
 import { CITIES, MONTH_DAYS, compassAxes, skyState, type SkyState } from '../three/sky'
 import { IndoorLights, KELVIN_MAX, KELVIN_MIN, LIGHT_MODES, POOL_HIGH, POOL_LOW, POWER_MAX, POWER_MIN, RANGE_MAX, RANGE_MIN, autoLevel, diningKey, isLampAsset, lightColor, type LightMode } from '../three/lights'
-import { disposeUnshared } from '../three/toon'
+import { disposeUnshared, isReflector } from '../three/toon'
 import { poseDoors } from '../three/kit'
 import { drawerSlots } from '../three/drawers'
 import { Openers, type OpenKey } from '../three/openers'
@@ -38,6 +38,10 @@ import { FxLayer } from '../three/fx'
 import { SelectFrame, WallGuide } from '../three/selectFrame'
 import { ActorLayer } from '../three/actors'
 import { Walker, ceilings, drawMiniMap, miniMapData, type MiniMapData } from '../three/walk'
+import { FloorReflections, clearReflectionSkip, refreshReflectionSkip } from '../three/reflect'
+import { Mirrors } from '../three/mirrors'
+import { setAnimeLook } from '../three/anime'
+import { AnimeSky } from '../three/animeSky'
 import { Highlight } from '../three/highlight'
 import ColorEditor from './ColorEditor.vue'
 import SandboxOverlay from './SandboxOverlay.vue'
@@ -111,6 +115,7 @@ import {
   activeFloor,
   floorShow,
   setFloor,
+  type FxMode,
 } from '../store'
 
 const host = ref<HTMLDivElement>()
@@ -265,7 +270,8 @@ function fadeFloor(root: THREE.Object3D, floorId: string, alpha: number) {
       if (!faded) delete n.userData.fadeHidden
       return
     }
-    if ((n as THREE.Mesh).isMesh && !n.userData.fadeTwin) meshes.push(n as THREE.Mesh)
+    // 镜子上挂的反射面（three/mirrors.ts）不淡出：它的材质带着倒影的渲染目标，克隆不了
+    if ((n as THREE.Mesh).isMesh && !n.userData.fadeTwin && !isReflector(n)) meshes.push(n as THREE.Mesh)
   })
   for (const mesh of meshes) {
     const ud = mesh.userData
@@ -868,6 +874,11 @@ function rebuildHouse() {
   freezeMatrices(house)
   // 门按这次沙盘里开合过的样子摆回去
   openers.bindHouse(house)
+  // 地面反射按新的房间重做
+  if (floorRefl) {
+    dropReflections()
+    syncFx()
+  }
   floorGroups = built.floors
   builtActive = activeFloor.value
   stage.scene.add(house)
@@ -1744,6 +1755,70 @@ const editing = computed(() => sandbox.mode === 'edit')
 let walker: Walker | null = null
 let walkDetach: (() => void) | null = null
 let ceilingRoot: THREE.Group | null = null
+/** 地面反射（three/reflect.ts）和镜子 / 水面的真实反射（three/mirrors.ts）：画面增强里开了、高画质才建 */
+let floorRefl: FloorReflections | null = null
+let mirrors: Mirrors | null = null
+/** 天空背景（three/animeSky.ts）：一直在场景里，画面效果开了天空（LookDef.sky）才显示 */
+const animeSky = new AnimeSky()
+let mirrorScan = 0
+let waterWaves = false
+const reflSize = new THREE.Vector2()
+const bufSize = new THREE.Vector2()
+
+/** 画面增强的某一项在当前模式下开不开（关 / 仅漫游 / 始终） */
+const fxOn = (m: FxMode) => m === 'always' || (m === 'walk' && walking.value)
+
+/** 拆掉反射（地面、镜子 / 水面一起） */
+function dropReflections() {
+  floorRefl?.dispose()
+  mirrors?.dispose()
+  floorRefl = null
+  mirrors = null
+  waterWaves = false
+  clearReflectionSkip()
+}
+
+/**
+ * 按画面增强设置、画质和当前模式（漫游 / 3D）开关各项效果：遮蔽、体积光交给后处理；反射在这里建 / 拆
+ * （地面反射和镜子 / 水面同开同关）
+ */
+function syncFx() {
+  // 体积光只在漫游时成立：鸟瞰时没有天花板，满屋都照得到太阳
+  post.setFx({ ao: fxOn(sandbox.fx.ao), volumetric: walking.value && sandbox.fx.volumetric })
+  const refl = !lowPower() && fxOn(sandbox.fx.reflect)
+  if (!refl) dropReflections()
+  else if (!floorRefl || !mirrors) {
+    floorRefl ??= new FloorReflections(toRaw(plan.value), liftOf)
+    stage.scene.add(floorRefl.root)
+    mirrors ??= new Mirrors()
+    mirrorScan = 0
+    reflSize.set(0, 0)
+  }
+  dirty = true
+}
+
+/** 每帧画之前：挑出开倒影的地面和镜子 / 水面，跟上楼层抬升和画布尺寸 */
+function stepReflections() {
+  if (!floorRefl || !mirrors) return
+  floorRefl.setLift(liftOf)
+  // 家具可能变了（开合、楼层显示）：隔一会儿重新找一遍镜子
+  const now = performance.now()
+  if (now - mirrorScan > 2000) {
+    mirrorScan = now
+    mirrors.scan(stage.scene)
+    refreshReflectionSkip(stage.scene)
+  }
+  stage.camera.updateMatrixWorld()
+  floorRefl.update(stage.camera, walker?.floor ?? activeFloor.value)
+  // 画面里有水面：波纹在动，下一帧也要画
+  waterWaves = mirrors.update(stage.camera, now / 1000, 1 - 0.65 * (skyNow.value?.night ?? 0))
+  const s = stage.renderer.getDrawingBufferSize(bufSize)
+  if (!s.equals(reflSize)) {
+    reflSize.copy(s)
+    floorRefl.setSize(s.x, s.y)
+    mirrors.setSize(s.x, s.y)
+  }
+}
 let walkSaved: { pos: THREE.Vector3; target: THREE.Vector3; mode: 'edit' | 'preview'; near: number } | null = null
 const walkLayer = ref<HTMLDivElement>()
 /** 触屏摇杆（屏幕坐标，给界面画） */
@@ -1988,6 +2063,8 @@ async function enterWalk() {
   stage.camera.fov = 72
   stage.camera.near = 5
   stage.camera.updateProjectionMatrix()
+  syncFx()
+  applyLights()
   await nextTick()
   if (walker && walkLayer.value) {
     walkDetach = walker.attach(walkLayer.value, (st) => (walkStick.value = st), (on) => (walkLocked.value = on))
@@ -2017,6 +2094,8 @@ function exitWalk() {
     ceilingRoot = null
   }
   walking.value = false
+  syncFx()
+  applyLights()
   controls.enabled = true
   if (walkSaved) {
     stage.camera.position.copy(walkSaved.pos)
@@ -2605,7 +2684,7 @@ function loop() {
     dirty = true
     if (!floorsMoving) shadowDirty = true
   }
-  if (anim && !(low && now - lastRender < 32)) dirty = true
+  if ((anim || waterWaves) && !(low && now - lastRender < 32)) dirty = true
   if (fading && house) {
     // 壁挂物按透明方式淡出（压低模式下也是淡出，它们没有矮墙可压）
     const furnBusy = stepCutaway(furnRoot, dt, { ...wallLook(), style: 'fade', opacity: sandbox.wallMode === 'fade' ? sandbox.cutawayOpacity / 100 : 0 })
@@ -2646,6 +2725,8 @@ function loop() {
     placeSiteCard()
     syncFloorFades()
     if (shadowDirty) stage.renderer.shadowMap.needsUpdate = true
+    stepReflections()
+    if (animeSky.mesh.visible) animeSky.follow(stage.camera)
     stage.render()
     dirty = false
     lastRender = now
@@ -2674,6 +2755,7 @@ function applyQuality() {
   // setStageQuality 里的 resize 会重设宽高比，重新套上抽屉偏移
   applySheetOffset()
   post.setLow(low)
+  syncFx()
   // 灯数池大小跟画质：只在切换画质时重编译一次着色器
   lights.setPoolSize(low ? POOL_LOW : POOL_HIGH)
   dirty = true
@@ -2682,7 +2764,9 @@ function applyQuality() {
 onMounted(() => {
   stage = createStage(canvas.value!, { low: lowPower() })
   post = attachPost(stage, { low: lowPower() })
-  post.setLook(sandbox.look)
+  stage.scene.add(animeSky.mesh)
+  post.setLook(effectiveLook.value)
+  syncFx()
   lights = new IndoorLights(lowPower() ? POOL_LOW : POOL_HIGH)
   stage.scene.add(lights.group, lights.fixtures)
   applySky()
@@ -2818,8 +2902,32 @@ function applyLights() {
   stage.hemi.intensity = s.hemiIntensity + 0.55 * fill
   stage.hemi.color.copy(s.hemiSky)
   stage.hemi.groundColor.copy(s.hemiGround).lerp(kel, Math.min(1, 0.6 * fill))
+  stage.sun.color.copy(s.lightColor)
+  // 动画感光照（所有画面效果默认都用，黑白漫画除外；参考 MToon / 原神的室内）：
+  //   - 灯光冷暖分离：朝下的面（天花板、家具底面）带一点青，朝上的面和阳光照到的地方是暖的
+  //     （半球光的「地面色」照的是朝下的面，所以青色放在 groundColor）；入夜逐渐退回原来的配色；
+  //   - 色阶两档、暗面换成阴影色、明暗交界提饱和度、轮廓光（three/anime.ts，toon.ts setToonBands）；
+  //   - 影子边缘利落（阴影半径调小）、彩色描边（toon.ts outlineUniforms.uOutlineTone）；
+  //   - 背景换成蓝天白云（three/animeSky.ts）
+  const anime = effectiveLook.value.material !== 'none'
+  const day = 1 - s.night
+  setAnimeLook(anime, s.night)
+  // 影子边缘利落：阴影的过渡宽度跟着半径走（toon.ts）
+  stage.sun.shadow.radius = anime ? 1.2 : SHADOW_RADIUS
+  animeSky.mesh.visible = !!effectiveLook.value.sky
+  animeSky.setSun(s.lightDir, s.altitude, s.night, s.bg)
+  if (anime) {
+    // 暗面几乎只受天光（两档色阶的暗面不再接收阳光）：天光加亮一些，画面保持高调、干净，暗面不发闷
+    stage.hemi.intensity *= 1 + 0.25 * day
+    stage.hemi.color.lerp(WALK_SKY, 0.4 * day)
+    stage.hemi.groundColor.lerp(WALK_GROUND, 0.35 * day)
+    stage.sun.color.lerp(WALK_SUN, 0.45 * day)
+  }
   dirty = true
 }
+const WALK_SKY = new THREE.Color('#fff1dc')
+const WALK_GROUND = new THREE.Color('#a8cdd4')
+const WALK_SUN = new THREE.Color('#ffd49a')
 
 /** 视口背景：画布透明时露出来的天色（与后处理 Base 的渐变一致） */
 const viewportBg = computed(() => {
@@ -2896,6 +3004,42 @@ function updateCompass() {
 // ---------- 画面效果 ----------
 
 const currentLook = computed(() => LOOK_MAP.get(sandbox.look as LookId) ?? LOOKS[0])
+/** 预设 + 用户的调整合起来的完整参数（交给后处理和灯光） */
+const effectiveLook = computed(() => resolveLook(sandbox.look, sandbox.lookAdj))
+const lookCustom = computed(() => Object.keys(sandbox.lookAdj).length > 0)
+const lookAdjOpen = ref(false)
+/** 选一个预设：调整清空，从这个预设重新开始 */
+function pickLook(id: LookId) {
+  sandbox.look = id
+  sandbox.lookAdj = {}
+}
+/** 改一个参数：和预设本身的值一样就不记（不算自定义） */
+function adjustLook(k: LookAdjustKey, v: number | boolean | string) {
+  const next: LookAdjust = { ...sandbox.lookAdj }
+  ;(next as Record<string, unknown>)[k] = v
+  if (lookValue(resolveLook(sandbox.look), k) === v) delete next[k]
+  sandbox.lookAdj = next
+}
+const lookVal = (k: LookAdjustKey) => lookValue(effectiveLook.value, k)
+/** 调整区的滑杆：参数、标签、范围 */
+const LOOK_SLIDERS: { k: LookAdjustKey; label: string; min: number; max: number; step: number }[] = [
+  { k: 'exposure', label: '曝光', min: 0.7, max: 1.4, step: 0.02 },
+  { k: 'contrast', label: '对比', min: 0.6, max: 1.5, step: 0.02 },
+  { k: 'saturation', label: '饱和度', min: 0, max: 1.8, step: 0.05 },
+  { k: 'bloom', label: '泛光', min: 0, max: 0.6, step: 0.02 },
+  { k: 'vignette', label: '暗角', min: 0, max: 0.9, step: 0.05 },
+  { k: 'grain', label: '颗粒', min: 0, max: 0.15, step: 0.005 },
+  { k: 'outline', label: '描边', min: 0, max: 2.5, step: 0.05 },
+  { k: 'crease', label: '转折线', min: 0, max: 1, step: 0.05 },
+]
+const LOOK_STYLIZE: { id: string; label: string }[] = [
+  { id: 'none', label: '无' },
+  { id: 'pixel', label: '像素' },
+  { id: 'watercolor', label: '水彩' },
+  { id: 'comic', label: '网点' },
+  { id: 'sketch', label: '素描' },
+]
+const numStr = (v: unknown) => (typeof v === 'number' ? (Math.abs(v) < 10 ? v.toFixed(2) : String(v)) : '')
 const lookOpen = ref(false)
 /** 选择器里每种效果的小图：展开时用当前视角逐个渲染一帧（约十几帧，只在展开时做一次） */
 const lookThumbs = ref<Record<string, string>>({})
@@ -2914,7 +3058,7 @@ function makeLookThumbs() {
       out[l.id] = cv.toDataURL('image/jpeg', 0.86)
     }
   } finally {
-    post.setLook(sandbox.look)
+    post.setLook(effectiveLook.value)
     dirty = true
   }
   lookThumbs.value = out
@@ -2937,6 +3081,9 @@ onBeforeUnmount(() => {
   ro?.disconnect()
   controls.dispose()
   post.dispose()
+  // 「动画感」改的是所有 toon 材质共用的色阶和 uniform：离开沙盘时还原，素材库缩略图等别处照常
+  animeSky.dispose()
+  setAnimeLook(false)
   stage.dispose()
   window.removeEventListener('keydown', onKey)
   window.removeEventListener('keyup', onKeyUp)
@@ -3040,12 +3187,16 @@ watch(
 )
 watch(placing, () => syncGhost())
 watch(
-  () => sandbox.look,
-  (v) => {
-    post.setLook(v)
-    dirty = true
-  },
+  () => sandbox.fx,
+  () => syncFx(),
+  { deep: true },
 )
+watch(effectiveLook, (v) => {
+  post.setLook(v)
+  // 动画感光照（material 不是 none）、天空背景跟着效果切
+  applyLights()
+  dirty = true
+})
 watch(() => [sandbox.time, sandbox.month, sandbox.day, sandbox.geo, plan.value.north], applySky)
 watch(
   () => plan.value.north,
@@ -3333,6 +3484,17 @@ const QUALITIES: { id: Quality; label: string }[] = [
   { id: 'low', label: '省电' },
 ]
 
+/** 画面增强：关 / 仅漫游 / 始终 */
+const FX_MODES: { id: FxMode; label: string }[] = [
+  { id: 'off', label: '关' },
+  { id: 'walk', label: '仅漫游' },
+  { id: 'always', label: '始终' },
+]
+const FX_ROWS: { key: 'ao' | 'reflect'; label: string }[] = [
+  { key: 'ao', label: '环境光遮蔽' },
+  { key: 'reflect', label: '反射' },
+]
+
 /** 底部提示：触屏和鼠标的操作说法不一样 */
 const hudText = computed(() => {
   // 漫游时顶部有自己的提示
@@ -3459,7 +3621,7 @@ defineExpose({ resetView })
         </button>
         <label :title="t('画面效果')">
           <JIcon :icon="ICONS.look" class="ico-muted" />
-          <select v-model="sandbox.look" :aria-label="t('画面效果')">
+          <select :value="sandbox.look" :aria-label="t('画面效果')" @change="pickLook(($event.target as HTMLSelectElement).value as LookId)">
             <option v-for="l in LOOKS" :key="l.id" :value="l.id">{{ t(l.label) }}</option>
           </select>
         </label>
@@ -3719,17 +3881,47 @@ defineExpose({ resetView })
           <button class="look-head" :aria-expanded="lookOpen" @click="toggleLooks">
             <JIcon :icon="ICONS.look" class="ico-muted" />
             <span>{{ t('画面效果') }}</span>
-            <span class="look-cur">{{ t(currentLook.label) }}</span>
+            <span class="look-cur">{{ lookCustom ? t('{name}（已调整）', { name: t(currentLook.label) }) : t(currentLook.label) }}</span>
             <JIcon :icon="lookOpen ? ICONS.collapse : ICONS.expand" :size="14" class="ico-muted" />
           </button>
           <div v-if="lookOpen" class="look-grid">
-            <button v-for="l in LOOKS" :key="l.id" class="look-card" :class="{ on: sandbox.look === l.id }" :title="t(l.desc)" @click="sandbox.look = l.id">
+            <button v-for="l in LOOKS" :key="l.id" class="look-card" :class="{ on: sandbox.look === l.id }" :title="t(l.desc)" @click="pickLook(l.id)">
               <img v-if="lookThumbs[l.id]" :src="lookThumbs[l.id]" alt="" />
               <span v-else class="look-ph" />
               <span class="look-name">{{ t(l.label) }}</span>
             </button>
           </div>
           <div class="look-desc">{{ t(currentLook.desc) }}</div>
+          <!-- 调整：在预设上改参数（分层组合：光照、风格化、镜头、调色） -->
+          <button class="look-adj-head" :aria-expanded="lookAdjOpen" @click="lookAdjOpen = !lookAdjOpen">
+            <span>{{ t('调整') }}</span>
+            <span v-if="lookCustom" class="look-adj-dot" />
+            <span class="spacer" />
+            <JIcon :icon="lookAdjOpen ? ICONS.collapse : ICONS.expand" :size="14" class="ico-muted" />
+          </button>
+          <div v-if="lookAdjOpen" class="look-adj">
+            <div class="row fx-row">
+              <span>{{ t('光照') }}</span>
+              <div class="seg seg-text" role="radiogroup" :aria-label="t('光照')">
+                <button v-for="m in ['none', 'anime']" :key="m" role="radio" :aria-checked="lookVal('material') === m" :class="{ on: lookVal('material') === m }" @click="adjustLook('material', m)">{{ t(m === 'anime' ? '动画感' : '原样') }}</button>
+              </div>
+            </div>
+            <div v-if="currentLook.stylize !== 'manga'" class="row fx-row">
+              <span>{{ t('风格化') }}</span>
+              <div class="seg seg-text" role="radiogroup" :aria-label="t('风格化')">
+                <button v-for="st in LOOK_STYLIZE" :key="st.id" role="radio" :aria-checked="lookVal('stylize') === st.id" :class="{ on: lookVal('stylize') === st.id }" @click="adjustLook('stylize', st.id)">{{ t(st.label) }}</button>
+              </div>
+            </div>
+            <label class="row check"><input type="checkbox" :checked="!!lookVal('sky')" @change="adjustLook('sky', ($event.target as HTMLInputElement).checked)" />{{ t('天空（云和星星）') }}</label>
+            <label class="row check"><input type="checkbox" :checked="!!lookVal('tilt')" @change="adjustLook('tilt', ($event.target as HTMLInputElement).checked)" />{{ t('移轴微缩') }}</label>
+            <label class="row check"><input type="checkbox" :checked="!!lookVal('crt')" @change="adjustLook('crt', ($event.target as HTMLInputElement).checked)" />{{ t('显像管') }}</label>
+            <label v-for="sl in LOOK_SLIDERS" :key="sl.k" class="row">
+              <span>{{ t(sl.label) }}</span>
+              <input type="range" :min="sl.min" :max="sl.max" :step="sl.step" :value="lookVal(sl.k) as number" :aria-label="t(sl.label)" @input="adjustLook(sl.k, Number(($event.target as HTMLInputElement).value))" />
+              <span class="num val kval">{{ numStr(lookVal(sl.k)) }}</span>
+            </label>
+            <button class="mini" :disabled="!lookCustom" @click="sandbox.lookAdj = {}">{{ t('恢复预设') }}</button>
+          </div>
         </div>
         <label class="row check"><input v-model="sandbox.snap" type="checkbox" /><JIcon :icon="ICONS.snap" class="ico-muted" />{{ t('贴墙 / 对齐吸附') }} <span v-if="!device.coarse" class="hint">{{ t('按住 Alt 临时关闭') }}</span></label>
         <div class="row">
@@ -3739,6 +3931,15 @@ defineExpose({ resetView })
           </div>
         </div>
         <p v-if="gfx.quality === 'auto'" class="q-note">{{ lowPower() ? t('已按设备自动切到省电画质') : t('已按设备自动使用高画质') }}</p>
+        <!-- 画面增强：高画质才生效；体积光只在漫游里成立 -->
+        <div v-for="r in FX_ROWS" :key="r.key" class="row fx-row">
+          <span>{{ t(r.label) }}</span>
+          <div class="seg seg-text" role="radiogroup" :aria-label="t(r.label)">
+            <button v-for="m in FX_MODES" :key="m.id" role="radio" :aria-checked="sandbox.fx[r.key] === m.id" :class="{ on: sandbox.fx[r.key] === m.id }" @click="sandbox.fx[r.key] = m.id">{{ t(m.label) }}</button>
+          </div>
+        </div>
+        <label class="row check"><input v-model="sandbox.fx.volumetric" type="checkbox" />{{ t('体积光') }} <span class="hint">{{ t('漫游时窗口照进来的光柱') }}</span></label>
+        <p v-if="lowPower()" class="q-note">{{ t('省电画质下不开环境光遮蔽、反射和体积光') }}</p>
         <label class="row">
           <span>{{ t('布置风格') }}</span>
           <select v-model="sandbox.style" class="sel-style">
@@ -4452,6 +4653,12 @@ defineExpose({ resetView })
 .seg-text button {
   font-size: var(--fs-xs);
 }
+.row.fx-row {
+  /* 标签在上、按钮在下：日文、英文的标签很长，并排会把分段按钮挤出面板 */
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
 .q-note {
   margin: -4px 0 10px;
   font-size: var(--fs-xs);
@@ -4618,7 +4825,8 @@ h3 {
 }
 .look-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  /* minmax(0, 1fr)：长名字（日文、英文）不会把某一列撑宽 */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
   margin-top: 8px;
 }
@@ -4649,10 +4857,43 @@ h3 {
   color: var(--accent-strong);
 }
 .look-name {
+  /* 最多两行（日文、英文的名字长），再长才省略；两行的高度固定，卡片一样高 */
   text-align: center;
-  white-space: nowrap;
+  white-space: normal;
+  line-height: 1.25;
+  min-height: 2.5em;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+}
+.look-adj-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  height: var(--control-h-sm);
+  padding: 0 8px;
+  font-size: var(--fs-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.look-adj-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.look-adj {
+  margin-top: 8px;
+}
+/* 滑杆的标签等宽，各行滑杆对齐（日文、英文的标签长一些） */
+.look-adj .row:not(.fx-row):not(.check) > span:first-child {
+  min-width: 5em;
 }
 .look-desc {
   margin-top: 6px;

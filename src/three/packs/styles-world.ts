@@ -4,7 +4,7 @@
 // 布艺部分（坐垫、床品、软包）直接用 palette 槽位颜色 p[0] / p[1]，不 shade，方便主程序识别布面加花纹。
 
 import * as THREE from 'three'
-import { ball, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
+import { ball, cup, cyl, markMirror, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { artFace } from '../artwork'
 import { C, hangingPipe, holePanel, paintPanel, pipeHook, rectPoly, ellipsePoly, type AssetDef, type Poly, type SurfaceDef } from '../kit'
 import { batten, cappedTube, centerGroup, cylX, cylZ, glassPane, latheAt, lit, mesh, noOutlineDeep, rod3, type V3 } from '../geo'
@@ -929,7 +929,7 @@ function clVanity(p: string[]) {
   mg.add(torus(22, 2.2, gold))
   const glassM = ball(21.2, mirrorC, {}, [1, 1, 0.04])
   glassM.material = toon(mirrorC, { emissive: 0.15 })
-  mg.add(glassM)
+  mg.add(markMirror(glassM))
   mg.add(ball(3.6, gold, { y: 23.6, z: 0.4 }, [1.6, 1, 0.5]))
   mg.scale.set(1, 1.3, 1)
   mg.position.set(0, 116, -18)
@@ -1207,7 +1207,7 @@ function baroqueMirror(p: string[]) {
   const inner = outline.map(([x, y]) => [x * 0.82, 8 + y * 0.88] as P2)
   const gm = prism(inner, 0.6, mirrorC, 2.2)
   gm.material = toon(mirrorC, { emissive: 0.15 })
-  m.add(gm)
+  m.add(markMirror(gm))
   m.add(carving(0, 172, 2.6, 7, accent))
   m.add(carving(0, 4, 2.6, 5, accent))
   for (const s of [-1, 1]) m.add(noOutlineDeep(ball(2.4, accent, { x: s * 38, y: 150, z: 1 })))

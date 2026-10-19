@@ -3,7 +3,7 @@
 // 只放建模函数和它们用到的常量，素材表在 ../styles-world.ts（PACKS 只收集 packs/ 下一层的文件）。
 
 import * as THREE from 'three'
-import { ball, cyl, rbox, shade, toon, torus } from '../../toon'
+import { ball, cyl, markMirror, rbox, shade, toon, torus } from '../../toon'
 import { C, paintPanel, rectPoly, type SurfaceDef } from '../../kit'
 import { batten, cappedTube, cylX, cylZ, glassPane, latheAt, lit, noOutlineDeep, rod3, type V3 } from '../../geo'
 import { drawerLv, drawerOf, hollow, swingDoor } from '../../cabinetKit'
@@ -336,7 +336,7 @@ export function clConsoleMirror(p: string[]) {
   mg.add(prism(arch, 3.4, gold))
   const glass = prism(arch.map(([x, y]) => [x * 0.86, 5 + y * 0.86] as P2), 0.6, '#dfe8ee', 1.9)
   glass.material = toon('#dfe8ee', { emissive: 0.15 })
-  mg.add(glass)
+  mg.add(markMirror(glass))
   mg.add(carving(0, 92, 2.2, 7, gold))
   mg.position.set(0, 81, -15.6)
   g.add(mg)

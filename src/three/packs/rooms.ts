@@ -2,7 +2,7 @@
 // 可以摆东西的柜、台顶面一律留空并声明 surface；柜内层板之间可以有书、收纳盒。
 
 import * as THREE from 'three'
-import { ball, capsule, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
+import { ball, capsule, cyl, markMirror, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, SWING_OPEN, holePanel, legs, lPoly, movable, rectPoly, rng, rod, shell, slab, type AssetDef, type DoorMotion, type SurfaceDef } from '../kit'
 import { soft, type SoftFn } from '../geo'
 import { glassPane, rod3, type V3 } from '../geo'
@@ -615,6 +615,7 @@ function vanity(p: string[]) {
   mir.add(torus(22, 2, sub))
   const gl = cyl(21, 21, 0.6, C.glass, { y: -0.3, rx: Math.PI / 2 }, 32)
   gl.userData.noOutline = true
+  markMirror(gl)
   mir.add(gl)
   mir.scale.set(1, 1.35, 1)
   mir.position.set(0, 113, -17)

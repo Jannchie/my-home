@@ -3,7 +3,7 @@
 // 顶面、层板一律留空并声明 surface / surfaces。
 
 import * as THREE from 'three'
-import { ball, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
+import { ball, cup, cyl, markMirror, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, SWING_OPEN, hangingPipe, holePanel, legs, movable, paintPanel, pipeHook, rectPoly, shell, slab, type AssetDef, type DoorMotion, type Hole, type Poly, type SurfaceDef } from '../kit'
 import { batten, cylX, cylZ, glassPane, lit, meshWith, rod3, type V3 } from '../geo'
 import { I, J, M, N, R, withPals, type Pal3 } from '../packkit'
@@ -725,7 +725,7 @@ function slidingWardrobe(w: number, p: string[]) {
     const x = -w / 2 + 2 + span * (i + 0.5)
     const z = i % 2 ? 29.6 : 27.4
     const parts: THREE.Object3D[] = [rbox(dw, 185, 2, sub, { x, y: 9.5, z }, 0.8)]
-    if (i === Math.floor((n - 1) / 2) + (n === 2 ? 1 : 0)) parts.push(rbox(dw - 12, 150, 0.6, '#d8ecf2', { x, y: 25, z: z + 1.1 }, 0.3))
+    if (i === Math.floor((n - 1) / 2) + (n === 2 ? 1 : 0)) parts.push(markMirror(rbox(dw - 12, 150, 0.6, '#d8ecf2', { x, y: 25, z: z + 1.1 }, 0.3)))
     else parts.push(rbox(dw - 8, 177, 0.6, shade(sub, 0.05), { x, y: 13.5, z: z + 1.1 }, 0.3))
     const hx = i === 0 ? dw / 2 - 4 : -(dw / 2 - 4)
     parts.push(rbox(1.6, 40, 1.4, acc, { x: x + hx, y: 80, z: z + 1.6 }, 0.6))
@@ -1169,7 +1169,7 @@ function kyodai(p: string[]) {
     g.add(cylX(0.8, 1.6, metal, s * 21.5, 72, -11, 8))
   }
   g.add(holePanel(42, 64, 2.4, wood, [{ kind: 'rect', x: 0, y: 3, w: 36, h: 58, r: 3 }], { y: 38, z: -11 }))
-  g.add(rbox(36.6, 58.6, 0.5, '#d4e8ef', { y: 40.7, z: -11 }, 0.2))
+  g.add(markMirror(rbox(36.6, 58.6, 0.5, '#d4e8ef', { y: 40.7, z: -11 }, 0.2)))
   g.add(rbox(43, 30, 0.6, cloth, { y: 72, z: -9.3 }, 0.2))
   g.add(rbox(43, 1.2, 3.8, cloth, { y: 102, z: -11 }, 0.4))
   g.add(rbox(43, 10, 0.6, cloth, { y: 92.6, z: -12.6 }, 0.2))

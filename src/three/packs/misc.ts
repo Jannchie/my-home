@@ -2,7 +2,7 @@
 // 约定见 kit.ts 开头。
 
 import * as THREE from 'three'
-import { ball, capsule, cup, cyl, face, puck, rbox, shade, toon, torus, tray } from '../toon'
+import { ball, capsule, cup, cyl, face, markWater, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { artFace, artOverride } from '../artwork'
 import { C, G, S, ellipsePoly, glow, holePanel, legs, rectPoly, rng, shell, type AssetDef, type Fx, type StyleTag, paintPanel, paintLandscape, paintFlower, paintAbstract } from '../kit'
 import { drawerLv, drawerOf, hollow, slideDoor, swingDoor } from '../cabinetKit'
@@ -266,7 +266,7 @@ function ikebana(p: string[]) {
   g.add(rbox(38, 3, 38, main, { y: 55 }, 1))
   // 水盘
   g.add(cup(14, 12, 5, 1, vase, { y: 58 }))
-  g.add(noOutline(clearMat(cyl(12.2, 12.2, 0.4, C.glass, { y: 61.4 }), C.glass, 0.6)))
+  g.add(markWater(noOutline(clearMat(cyl(12.2, 12.2, 0.4, C.glass, { y: 61.4 }), C.glass, 0.6))))
   // 天地人
   const base: V3 = [2, 61, 0]
   const lines: [V3, string, number][] = [
@@ -910,7 +910,7 @@ function tankBody(t: Tank, trim: string, light: string) {
   g.add(rbox(iw, sand - floor, id, SAND, { y: floor - 0.2 }, 0.6))
   // 水体到水面下 0.45（留出水面薄片，避免顶面 z-fighting）；水面比水体亮，斜侧看是一块浅蓝平面
   g.add(see(rbox(w - 1.4, water - floor - 0.45, d - 1.4, WATER, { y: floor }, 0.4), WATER, WATER_A))
-  g.add(see(rbox(w - 1.3, 0.45, d - 1.3, WATER_TOP, { y: water - 0.45 }, 0.2), WATER_TOP, 0.8))
+  g.add(markWater(see(rbox(w - 1.3, 0.45, d - 1.3, WATER_TOP, { y: water - 0.45 }, 0.2), WATER_TOP, 0.8)))
   // 水线：沿内侧玻璃一圈细边，正面看是水面与空气的分界
   for (const s of [-1, 1]) {
     g.add(see(rbox(w - 1.4, 0.5, 0.35, WATERLINE, { y: water - 0.5, z: s * (d / 2 - 0.95) }, 0.1), WATERLINE, 0.8))

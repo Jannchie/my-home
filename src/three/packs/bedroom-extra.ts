@@ -6,7 +6,7 @@
 
 import * as THREE from 'three'
 import { C, movable, rectPoly, type AssetDef, type SurfaceDef } from '../kit'
-import { ball, cyl, rbox, shade, toon, torus } from '../toon'
+import { ball, cyl, markMirror, rbox, shade, toon, torus } from '../toon'
 import { I, J, M, N, R, define, type Pal } from '../packkit'
 
 /** 镜面：浅蓝玻璃色、不描边，竖直朝 +z；(x, y, z) 是镜面中心；round = 圆镜（w 为直径） */
@@ -15,7 +15,7 @@ function mirrorPlate(w: number, h: number, x: number, y: number, z: number, roun
   m.position.set(x, y, z)
   if (round) m.rotation.x = Math.PI / 2
   m.userData.noOutline = true
-  return m
+  return markMirror(m)
 }
 
 function bulb(x: number, y: number, z: number, r = 1.5) {

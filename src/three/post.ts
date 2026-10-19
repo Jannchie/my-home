@@ -2,6 +2,9 @@
 //
 // 结构：
 //   RenderPass（4× MSAA 半浮点目标，描边不起锯齿）
+//   → [环境光遮蔽：画面增强（setFx）开了才有，墙角、家具贴地处压一道淡淡的冷色暗部]
+//   → [体积光：画面增强里开、且在漫游时，窗口斜射进来的光柱（volumetric.ts）]
+//   → [转折线：画面效果带 crease 时（「动画感」），倒角、门缝这些物体内部的转折描一条线（crease.ts）]
 //   → [UnrealBloom 泛光，线性空间]
 //   → Base：线性转 sRGB，并把透明背景合成为与 CSS 一致的径向渐变底（之后的效果作用于整张画面）
 //   → [风格化：水彩 / 漫画网点 / 像素 / 素描，各自一到两个 pass]
@@ -18,11 +21,16 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js'
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js'
+import { createVolumetric, updateVolumetric } from './volumetric'
+import { createCrease, updateCrease } from './crease'
 import { FXAAShader } from 'three/addons/shaders/FXAAShader.js'
+import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js'
 import { mangaUniforms } from './manga'
+import { isReflector } from './toon'
 import type { Stage } from './stage'
 
-export type LookId = 'none' | 'tiltshift' | 'warm' | 'cool' | 'film' | 'pastel' | 'watercolor' | 'comic' | 'manga' | 'manga-coarse' | 'manga-hatch' | 'manga-ink' | 'mono' | 'sepia' | 'pixel' | 'sketch'
+export type LookId = 'none' | 'anime' | 'crt' | 'tiltshift' | 'warm' | 'cool' | 'film' | 'pastel' | 'watercolor' | 'comic' | 'manga' | 'manga-coarse' | 'manga-hatch' | 'manga-ink' | 'mono' | 'sepia' | 'pixel' | 'sketch'
 
 interface Grade {
   exposure: number
@@ -79,18 +87,127 @@ export interface LookDef {
   bloom?: { strength: number; radius: number; threshold: number }
   /** 描边粗细倍数 */
   outline?: number
-  stylize?: 'watercolor' | 'comic' | 'manga' | 'pixel' | 'sketch'
+  /** 画面风格化（一次只能一种）：水彩 / 漫画网点 / 黑白漫画（材质输出编码，manga.ts）/ 像素 / 素描 */
+  stylize?: Stylize
+  /**
+   * 材质 / 光照风格：不填 = 「动画感」（两档色阶、阴影色、冷暖灯光、彩色描边，anime.ts；Sandbox3D 按它切），所有预设默认都用它；
+   * none = 原来的三档色阶、黑描边（黑白漫画系列要按明暗分档出网点，用这个）
+   */
+  material?: 'none'
+  /** 背景换成天空（蓝天白云、夜里星空，animeSky.ts）；不填 = 不换（透明背景上的天色渐变） */
+  sky?: boolean
+  /** 镜头：显像管（弯曲屏幕、扫描线；可以和任何风格化叠加） */
+  crt?: boolean
   /** 黑白漫画系列（stylize: 'manga'）的画法：网屏格子（CSS 像素）、是否补转折线、上网点 / 排线 / 只留实黑 */
   manga?: { cell: number; crease: boolean; tone: 'dot' | 'line' | 'ink' }
   /** 移轴：焦点（屏幕 y，0 底 1 顶）、清晰带半宽、过渡宽度、最大模糊半径（CSS 像素） */
   tilt?: { focus: number; band: number; fall: number; max: number }
   grade?: Partial<Grade>
+  /** 转折线（crease.ts）的浓度：描边画不出来的倒角、门缝、台面转角也描一条线 */
+  crease?: number
 }
+
+export type Stylize = 'watercolor' | 'comic' | 'manga' | 'pixel' | 'sketch'
+
+/**
+ * 画面效果分层，层与层可以组合：材质 / 光照（原样、动画感）、画面风格化（像素、水彩、网点、素描、黑白漫画）、
+ * 镜头（移轴、显像管）、调色（曝光、对比、饱和、暗角、颗粒）、泛光、描边、转折线。
+ * 预设（LOOKS）是这些参数的组合；用户在预设上调过的参数记成 LookAdjust（只记改过的），resolveLook 合起来交给后处理。
+ */
+export interface LookAdjust {
+  material?: 'none' | 'anime'
+  sky?: boolean
+  /** 'none' = 不风格化；黑白漫画的预设不能换风格化（它替换了整条管线） */
+  stylize?: 'none' | Exclude<Stylize, 'manga'>
+  tilt?: boolean
+  crt?: boolean
+  /** 泛光强度（0 = 关） */
+  bloom?: number
+  outline?: number
+  crease?: number
+  exposure?: number
+  contrast?: number
+  saturation?: number
+  vignette?: number
+  grain?: number
+}
+export type LookAdjustKey = keyof LookAdjust
+
+/** 调色类参数（直接写进 grade） */
+const GRADE_KEYS = ['exposure', 'contrast', 'saturation', 'vignette', 'grain'] as const
+
+/** 预设 id + 用户调整 → 交给后处理的完整参数。没有调整时就是预设本身 */
+export function resolveLook(id: string, adj: LookAdjust = {}): LookDef {
+  const base = LOOK_MAP.get(id as LookId) ?? LOOK_MAP.get('none')!
+  if (!Object.keys(adj).length) return base
+  const out: LookDef = { ...base, grade: { ...base.grade } }
+  if (adj.material !== undefined) out.material = adj.material === 'none' ? 'none' : undefined
+  if (adj.sky !== undefined) out.sky = adj.sky
+  if (adj.stylize !== undefined && base.stylize !== 'manga') out.stylize = adj.stylize === 'none' ? undefined : adj.stylize
+  if (adj.tilt !== undefined) out.tilt = adj.tilt ? (base.tilt ?? LOOK_MAP.get('tiltshift')!.tilt) : undefined
+  if (adj.crt !== undefined) out.crt = adj.crt
+  if (adj.bloom !== undefined) out.bloom = adj.bloom > 0 ? { radius: base.bloom?.radius ?? 0.5, threshold: base.bloom?.threshold ?? 0.95, strength: adj.bloom } : undefined
+  if (adj.outline !== undefined) out.outline = adj.outline
+  if (adj.crease !== undefined) out.crease = adj.crease
+  for (const k of GRADE_KEYS) if (adj[k] !== undefined) out.grade![k] = adj[k]
+  return out
+}
+
+/** 某个参数在这套效果里现在的值（界面的滑杆、开关用） */
+export function lookValue(def: LookDef, k: LookAdjustKey): number | boolean | string {
+  switch (k) {
+    case 'material':
+      return def.material ?? 'anime'
+    case 'sky':
+      return !!def.sky
+    case 'stylize':
+      return def.stylize ?? 'none'
+    case 'tilt':
+      return !!def.tilt
+    case 'crt':
+      return !!def.crt
+    case 'bloom':
+      return def.bloom?.strength ?? 0
+    case 'outline':
+      return def.outline ?? 1
+    case 'crease':
+      return creaseOf(def)
+    default:
+      return def.grade?.[k] ?? NEUTRAL[k]
+  }
+}
+
+/** 参数变了才重设 uniform：按对象缓存序列化结果（resolveLook 每次调整都返回新对象，预设本身是同一个对象） */
+const lookKeys = new WeakMap<LookDef, string>()
+function lookKey(d: LookDef) {
+  let k = lookKeys.get(d)
+  if (k === undefined) lookKeys.set(d, (k = JSON.stringify(d)))
+  return k
+}
+
+/** 转折线浓度：预设没写时，动画感光照下默认 0.6（倒角、门缝、台面转角也有线），原来的光照（黑白漫画）下不画 */
+export const creaseOf = (d: LookDef) => d.crease ?? (d.material === 'none' ? 0 : 0.6)
+
+/** 这套效果什么都不做（不用建后处理） */
+const plainLook = (d: LookDef) =>
+  !d.stylize && !d.crt && !d.tilt && !d.bloom && !creaseOf(d) && !d.bg && (d.outline ?? 1) === 1 && Object.entries(d.grade ?? {}).every(([k, v]) => JSON.stringify(v) === JSON.stringify(NEUTRAL[k as keyof Grade]))
 
 const DEFAULT_BG: [string, string, string] = ['#fdfdfb', '#f1f3ef', '#e3e9e5']
 
 export const LOOKS: LookDef[] = [
   { id: 'none', label: '原样', desc: '不加效果，最清楚也最省电' },
+  // 参考原神、新海诚的室内 / 动画背景：暗部是带颜色、被抬亮的蓝紫，亮部偏暖（冷暖分离的主体在灯光和材质上：
+  // Sandbox3D 的 applyLights、anime.ts）；亮处晕开一点柔光，四周压暗一点；描边细、带固有色，内部转折补线（crease.ts）
+  {
+    id: 'anime',
+    label: '动画感',
+    sky: true,
+    desc: '冷暖分离、柔光、细描边，像动画游戏里的室内',
+    bloom: { strength: 0.16, radius: 0.6, threshold: 1.05 },
+    outline: 0.75,
+    crease: 0.85,
+    grade: { exposure: 1.04, contrast: 1.03, saturation: 1.15, shadowTint: [-0.01, -0.005, 0.045], highTint: [0.03, 0.012, -0.02], fade: 0.06, fadeColor: '#7d74a8', vignette: 0.28, vignetteColor: '#3a2f55' },
+  },
   {
     id: 'tiltshift',
     label: '移轴微缩',
@@ -147,6 +264,7 @@ export const LOOKS: LookDef[] = [
     label: '黑白漫画',
     desc: '按固有色和明暗分档，细网点加转折线',
     stylize: 'manga',
+    material: 'none',
     manga: { cell: 4.5, crease: true, tone: 'dot' },
     outline: 1.4,
     grade: { paper: 0.12 },
@@ -156,6 +274,7 @@ export const LOOKS: LookDef[] = [
     label: '粗网点漫画',
     desc: '大颗网点、只描外轮廓，像放大印刷的旧漫画',
     stylize: 'manga',
+    material: 'none',
     manga: { cell: 7, crease: false, tone: 'dot' },
     outline: 1.5,
     grade: { paper: 0.12 },
@@ -165,6 +284,7 @@ export const LOOKS: LookDef[] = [
     label: '排线漫画',
     desc: '斜排线代替网点，暗部交叉排线',
     stylize: 'manga',
+    material: 'none',
     manga: { cell: 5, crease: true, tone: 'line' },
     outline: 1.4,
     grade: { paper: 0.12 },
@@ -174,6 +294,7 @@ export const LOOKS: LookDef[] = [
     label: '墨线稿',
     desc: '只留墨线与实黑，像上网点前的原稿',
     stylize: 'manga',
+    material: 'none',
     manga: { cell: 5, crease: true, tone: 'ink' },
     outline: 1.3,
     grade: { paper: 0.12 },
@@ -198,6 +319,14 @@ export const LOOKS: LookDef[] = [
     grade: { saturation: 1.12, contrast: 1.04 },
   },
   {
+    id: 'crt',
+    label: '显像管',
+    desc: '老电视的弯曲屏幕、扫描线和荧光栅格',
+    crt: true,
+    outline: 1.3,
+    grade: { saturation: 1.22, contrast: 1.1, exposure: 0.98 },
+  },
+  {
     id: 'sketch',
     label: '素描线稿',
     desc: '铅笔线条与排线，画在纸上',
@@ -214,6 +343,9 @@ export const LOOKS: LookDef[] = [
  */
 const NIGHT_GLOW_CAP = 0.6
 const NIGHT_SCREEN_CAP = 0.55
+
+/** 漫游体积光的浓度（每厘米光路的散射量） */
+const VOL_STRENGTH = 0.0028
 
 export const LOOK_MAP = new Map(LOOKS.map((l) => [l.id, l]))
 
@@ -521,7 +653,7 @@ const PixelShader = {
     tDiffuse: { value: null as THREE.Texture | null },
     uRes: { value: new THREE.Vector2(1, 1) },
     uPx: { value: 4 },
-    uLevels: { value: 12 },
+    uLevels: { value: 20 },
   },
   vertexShader: VERT,
   fragmentShader: /* glsl */ `
@@ -540,14 +672,21 @@ const PixelShader = {
       for (int k = 0; k < 16; k++) if (k == i) return m[k] / 16.0 - 0.5;
       return 0.0;
     }
+    float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
     void main() {
       vec2 cell = floor(vUv * uRes / uPx);
       vec2 c0 = (cell + 0.5) * uPx / uRes;
-      vec2 o = uPx * 0.25 / uRes;
-      vec3 c = (texture2D(tDiffuse, c0 + vec2(-o.x, -o.y)).rgb + texture2D(tDiffuse, c0 + vec2(o.x, -o.y)).rgb
-              + texture2D(tDiffuse, c0 + vec2(-o.x, o.y)).rgb + texture2D(tDiffuse, c0 + vec2(o.x, o.y)).rgb) * 0.25;
+      vec2 o = uPx * 0.3 / uRes;
+      // 取格子中心那一点（不平均：平均会把描边抹成灰色的糊边）；格子里有明显更暗的描边，就用描边色（1px 的线不会丢）
+      vec3 c = texture2D(tDiffuse, c0).rgb;
+      vec3 k[4];
+      k[0] = texture2D(tDiffuse, c0 + vec2(-o.x, -o.y)).rgb;
+      k[1] = texture2D(tDiffuse, c0 + vec2(o.x, -o.y)).rgb;
+      k[2] = texture2D(tDiffuse, c0 + vec2(-o.x, o.y)).rgb;
+      k[3] = texture2D(tDiffuse, c0 + vec2(o.x, o.y)).rgb;
+      for (int i = 0; i < 4; i++) if (luma(k[i]) < luma(c) - 0.28) c = k[i];
       float n = uLevels - 1.0;
-      float d = bayer(cell) * 0.2;
+      float d = bayer(cell) * 0.12;
       vec3 q = floor(c * n + 0.5 + d) / n;
       // 近灰色（背景渐变、白墙）按亮度整体量化，避免各通道分别取整后串出彩色色带
       float l = dot(c, vec3(0.299, 0.587, 0.114));
@@ -555,6 +694,70 @@ const PixelShader = {
       float chroma = max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b));
       c = mix(c + (ql - l), q, smoothstep(0.03, 0.1, chroma));
       gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
+    }`,
+}
+
+/**
+ * CRT 显像管：屏幕弯曲（桶形）+ 圆角黑框、低分辨率的扫描线（亮的地方光束更粗）、RGB 荧光栅格、
+ * 一点色差（红蓝错开）、扫描线之间透出的辉光、暗角。分辨率按 CSS 像素算（uScale），高清屏上格子不会变小
+ */
+const CrtShader = {
+  uniforms: {
+    tDiffuse: { value: null as THREE.Texture | null },
+    uRes: { value: new THREE.Vector2(1, 1) },
+    uScale: { value: 1 },
+  },
+  vertexShader: VERT,
+  fragmentShader: /* glsl */ `
+    uniform sampler2D tDiffuse;
+    uniform vec2 uRes;
+    uniform float uScale;
+    varying vec2 vUv;
+    vec2 warp(vec2 uv) {
+      vec2 c = uv * 2.0 - 1.0;
+      c *= 1.0 + c.yx * c.yx * vec2(0.045, 0.065);
+      return c * 0.5 + 0.5;
+    }
+    void main() {
+      vec2 uv = warp(vUv);
+      // 屏幕外（弯曲后露出的角）和圆角：黑框
+      vec2 e = min(uv, 1.0 - uv);
+      vec2 rc = max(vec2(0.018) - e, 0.0);
+      float inside = 1.0 - smoothstep(0.012, 0.018, length(rc)) ;
+      if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) inside = 0.0;
+      // 扫描线：每 4 个 CSS 像素一行；水平方向也按同样的格子取样
+      float lines = uRes.y / (4.0 * uScale);
+      float cols = lines * uRes.x / uRes.y;
+      float y = uv.y * lines;
+      vec2 cell = vec2((floor(uv.x * cols) + 0.5) / cols, (floor(y) + 0.5) / lines);
+      float ca = 0.6 / cols;
+      vec3 c;
+      c.r = texture2D(tDiffuse, cell + vec2(ca, 0.0)).r;
+      c.g = texture2D(tDiffuse, cell).g;
+      c.b = texture2D(tDiffuse, cell - vec2(ca, 0.0)).b;
+      // 相邻两格混一点：显像管的电子束是软的
+      vec3 nb = texture2D(tDiffuse, cell + vec2(1.0 / cols, 0.0)).rgb + texture2D(tDiffuse, cell - vec2(1.0 / cols, 0.0)).rgb;
+      c = mix(c, nb * 0.5, 0.2);
+      // 光束：越亮越粗（扫描线之间的黑缝被亮色填上）
+      float l = dot(c, vec3(0.299, 0.587, 0.114));
+      float dist = abs(fract(y) - 0.5);
+      float w = mix(0.24, 0.42, l);
+      float beam = exp(-dist * dist / (2.0 * w * w)) * 1.05;
+      // 抗摩尔纹：弯曲后扫描线在屏幕上的周期接近像素（边角、缩小看时）就淡成平均亮度，不出干涉条纹
+      float avg = w * 2.5066 * 1.05;
+      beam = mix(beam, avg, smoothstep(0.2, 0.45, fwidth(y)));
+      vec3 col = c * beam;
+      // 荧光栅格：每 3 个 CSS 像素一组 R / G / B 竖条，压得很淡（太强会和扫描线干涉出摩尔纹）
+      float m = mod(floor(gl_FragCoord.x / max(1.0, floor(uScale + 0.5))), 3.0);
+      vec3 mask = m < 0.5 ? vec3(1.05, 0.95, 0.95) : m < 1.5 ? vec3(0.95, 1.05, 0.95) : vec3(0.95, 0.95, 1.05);
+      col *= mask;
+      // 辉光：周围的亮色透过来一点
+      vec3 glow = (texture2D(tDiffuse, cell + vec2(0.0, 2.0 / lines)).rgb + texture2D(tDiffuse, cell - vec2(0.0, 2.0 / lines)).rgb + nb) * 0.25;
+      col += glow * glow * 0.1;
+      // 暗角
+      vec2 v = vUv - 0.5;
+      col *= 1.0 - dot(v, v) * 0.9;
+      gl_FragColor = vec4(mix(vec3(0.03, 0.03, 0.035), col, inside), 1.0);
     }`,
 }
 
@@ -682,8 +885,8 @@ const GradeShader = {
 // ---------- 管线 ----------
 
 export interface Post {
-  /** 切换画面效果；'none' 且不在夜里时拆掉 composer，回到直接渲染 */
-  setLook: (id: string) => void
+  /** 切换画面效果（预设 id，或 resolveLook 合好的完整参数）；什么都不做的效果且不在夜里时拆掉 composer */
+  setLook: (look: string | LookDef) => void
   /** 时间光照给的天色与入夜程度（见 sky.ts） */
   setSky: (bg: [string, string, string], night: number) => void
   /** 临时用某个效果渲染一帧（生成选择器缩略图用），fn 里调用 stage.render() */
@@ -692,6 +895,8 @@ export interface Post {
   setLow: (low: boolean) => void
   /** 室内灯光（three/lights.ts）：窗户夜光的颜色（跟色温）和亮灯程度 0–1 */
   setIndoor: (color: THREE.Color, level: number) => void
+  /** 画面增强（省电画质都不开）：环境光遮蔽、体积光（体积光借遮蔽那一遍的深度图）。开不开由沙盘按模式决定 */
+  setFx: (fx: { ao: boolean; volumetric: boolean }) => void
   dispose: () => void
 }
 
@@ -710,6 +915,11 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
   let composer: EffectComposer | null = null
   let passes: {
     render: RenderPass
+    ao: GTAOPass | null
+    /** 体积光（volumetric.ts），借遮蔽那一遍的深度图 */
+    vol: ShaderPass | null
+    /** 转折线（crease.ts），同样借遮蔽那一遍的法线、深度图 */
+    crease: ShaderPass | null
     bloom: UnrealBloomPass | null
     base: ShaderPass
     kuwahara: ShaderPass
@@ -717,21 +927,26 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
     comic: ShaderPass
     manga: ShaderPass
     pixel: ShaderPass
+    crt: ShaderPass
     sketch: ShaderPass
     tiltH: ShaderPass
     tiltV: ShaderPass
     grade: ShaderPass
     fxaa: ShaderPass
+    /** 后处理画出来的线（转折线）不经过多重采样：高画质下补一遍 SMAA（比 FXAA 清楚，不会把描边抹糊） */
+    smaa: SMAAPass
   } | null = null
   let current: LookDef = LOOK_MAP.get('none')!
   let sky: { bg: [string, string, string]; night: number } = { bg: DEFAULT_BG, night: 0 }
   /** 窗户夜光：颜色跟色温，亮度跟室内亮灯程度（没接室内灯光时按全亮） */
   const windowGlow = WINDOW_GLOW.clone()
   let indoor = 1
+  let fx = { ao: false, volumetric: false }
   /** 上次写进 uniform 的状态（效果或天色变了才重设） */
   let appliedKey = ''
 
   const cssSize = () => renderer.getSize(new THREE.Vector2())
+  const bufRes = new THREE.Vector2()
 
   function build() {
     const pr = renderer.getPixelRatio()
@@ -745,6 +960,9 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
     const mk = (sh: object) => new ShaderPass(sh)
     passes = {
       render: new RenderPass(scene, camera),
+      ao: null,
+      vol: null,
+      crease: null,
       bloom: null,
       base: mk(BaseShader),
       kuwahara: mk(KuwaharaShader),
@@ -752,17 +970,19 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
       comic: mk(ComicShader),
       manga: mk(MangaShader),
       pixel: mk(PixelShader),
+      crt: mk(CrtShader),
       sketch: mk(SketchShader),
       tiltH: mk(TiltShader),
       tiltV: mk(TiltShader),
       grade: mk(GradeShader),
       fxaa: mk(FXAAShader),
+      smaa: new SMAAPass(),
     }
     passes.tiltV.uniforms.uDir.value.set(0, 1)
     passes.fxaa.enabled = needFxaa()
     const p = passes
     // manga 紧跟 RenderPass（读线性的编码，不能先过 Base）；泛光后插在下标 1，漫画模式下不开
-    for (const ps of [p.render, p.manga, p.base, p.kuwahara, p.pigment, p.comic, p.pixel, p.sketch, p.tiltH, p.tiltV, p.grade, p.fxaa]) composer.addPass(ps)
+    for (const ps of [p.render, p.manga, p.base, p.kuwahara, p.pigment, p.comic, p.pixel, p.sketch, p.tiltH, p.tiltV, p.grade, p.crt, p.smaa, p.fxaa]) composer.addPass(ps)
     appliedKey = ''
     syncSize()
   }
@@ -782,14 +1002,14 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
     if (!passes) return
     const pr = renderer.getPixelRatio()
     const res = renderer.getDrawingBufferSize(new THREE.Vector2())
-    for (const ps of [passes.kuwahara, passes.pigment, passes.comic, passes.manga, passes.pixel, passes.sketch, passes.tiltH, passes.tiltV, passes.grade]) {
+    for (const ps of [passes.kuwahara, passes.pigment, passes.comic, passes.manga, passes.pixel, passes.crt, passes.sketch, passes.tiltH, passes.tiltV, passes.grade]) {
       const u = ps.uniforms
       u.uRes?.value.copy(res)
       if (u.uScale) u.uScale.value = pr
     }
     passes.fxaa.uniforms.resolution.value.set(1 / Math.max(1, res.x), 1 / Math.max(1, res.y))
     passes.kuwahara.uniforms.uStep.value = Math.max(1, pr * 0.9)
-    passes.pixel.uniforms.uPx.value = Math.round(5 * pr)
+    passes.pixel.uniforms.uPx.value = Math.round(4 * pr)
     if (current.tilt) {
       passes.tiltH.uniforms.uMax.value = current.tilt.max * pr
       passes.tiltV.uniforms.uMax.value = current.tilt.max * pr
@@ -799,7 +1019,7 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
   function apply() {
     if (!passes || !composer) return
     const look = current
-    const key = look.id + '|' + sky.bg.join() + '|' + sky.night.toFixed(3) + '|' + low
+    const key = lookKey(look) + '|' + sky.bg.join() + '|' + sky.night.toFixed(3) + '|' + low + '|' + fx.ao + '|' + fx.volumetric
     if (key === appliedKey) return
     appliedKey = key
     const p = passes
@@ -809,11 +1029,31 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
     const manga = look.stylize === 'manga'
     const nightBloom = sky.night > 0.02 && !low && !manga ? { strength: 0.28 * sky.night, radius: 0.3, threshold: 0.82 } : undefined
     const bloom = nightBloom && (!look.bloom || nightBloom.strength > look.bloom.strength) ? nightBloom : look.bloom
+    // 遮蔽、体积光、转折线：漫画读的是编码，不能乘、不能加
+    const ao = fx.ao && !low && !manga
+    const vol = fx.volumetric && !low && !manga
+    const crease = creaseOf(look) > 0 && !low && !manga
+    if ((ao || vol || crease) && !p.ao) {
+      p.ao = createAO(renderer, scene, camera)
+      p.vol = createVolumetric()
+      p.crease = createCrease()
+      composer.insertPass(p.ao, 1)
+      composer.insertPass(p.vol, 2)
+      composer.insertPass(p.crease, 3)
+    }
+    // 只开体积光 / 转折线时遮蔽那一遍照样跑（要它的深度、法线图），只是不往画面上乘
+    if (p.ao) {
+      p.ao.enabled = ao || vol || crease
+      p.ao.blendIntensity = ao ? AO_INTENSITY : 0
+    }
+    if (p.vol) p.vol.enabled = vol
+    if (p.crease) p.crease.enabled = crease
+    p.smaa.enabled = crease
     if (bloom && !p.bloom) {
-      // 用到才建（mip 链占显存）
+      // 用到才建（mip 链占显存）；排在遮蔽、体积光后面
       const s = cssSize()
       p.bloom = new UnrealBloomPass(new THREE.Vector2(s.x, s.y), 1, 0.5, 0.8)
-      composer.insertPass(p.bloom, 1)
+      composer.insertPass(p.bloom, p.ao ? 4 : 1)
     }
     if (p.bloom) {
       p.bloom.enabled = !!bloom
@@ -841,6 +1081,7 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
       um.uTone.value = { dot: 0, line: 1, ink: 2 }[look.manga.tone]
     }
     p.pixel.enabled = look.stylize === 'pixel'
+    p.crt.enabled = !!look.crt
     p.sketch.enabled = look.stylize === 'sketch'
     p.tiltH.enabled = p.tiltV.enabled = !!look.tilt
     if (look.tilt) {
@@ -975,6 +1216,8 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
     render() {
       if (!composer) return renderPatched(() => renderer.render(scene, camera))
       apply()
+      if (passes?.crease?.enabled) updateCrease(passes.crease, camera, passes.ao?.normalTexture ?? null, passes.ao?.depthTexture ?? null, renderer.getDrawingBufferSize(bufRes), creaseOf(current))
+      if (passes?.vol?.enabled) updateVolumetric(passes.vol, camera, stage.sun, passes.ao?.depthTexture ?? null, VOL_STRENGTH * (1 - sky.night))
       renderPatched(() => composer!.render())
     },
     resize(w: number, h: number) {
@@ -988,7 +1231,7 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
   /** 按当前效果与天色决定走不走 composer；keep 为真时不拆（生成缩略图途中） */
   function update(keep = false) {
     stage.outlineScale = current.outline ?? 1
-    const need = current.id !== 'none' || sky.night > 0.02 || needFxaa()
+    const need = !plainLook(current) || sky.night > 0.02 || needFxaa() || (!low && (fx.ao || fx.volumetric))
     if (need && !composer) build()
     if (!need && !keep) teardown()
     // 白天「原样」：不接管，直接 renderer.render；夜里即使不走 composer 也要接管来调整材质
@@ -996,8 +1239,8 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
   }
 
   return {
-    setLook(id) {
-      current = LOOK_MAP.get(id as LookId) ?? LOOK_MAP.get('none')!
+    setLook(look) {
+      current = typeof look === 'string' ? resolveLook(look) : look
       update()
     },
     setSky(bg, night) {
@@ -1019,6 +1262,12 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
       windowGlow.copy(WINDOW_GLOW).lerp(color, 0.6)
       indoor = level
     },
+    setFx(v) {
+      if (v.ao === fx.ao && v.volumetric === fx.volumetric) return
+      fx = { ...v }
+      appliedKey = ''
+      update()
+    },
     setLow(v) {
       if (v === low) return
       low = v
@@ -1032,4 +1281,63 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
       teardown()
     },
   }
+}
+
+/**
+ * 画面增强的环境光遮蔽（GTAO，单位厘米）；体积光、转折线也借它的法线 / 深度图。法线 / 深度那一遍额外画一次场景：
+ * - 描边壳、半透明（玻璃、水面）、加色贴片（灯光光斑）、Sprite、反射面不进去：壳会把物体轮廓撑大一圈，玻璃会挡住窗外，
+ *   反射面一画就会触发它再画一遍倒影；
+ * - 双面画：天花板只有一面朝下的面，单面会被剔掉，墙顶那圈就算不出遮蔽。
+ * 合成时按赛璐璐的画法收成一块阴影色：遮蔽过了阈值才上色，边缘只留一小段过渡，不是写实的灰色渐变；
+ * 阴影色偏冷紫（动画里室内阴影的常见画法），压得很浅。
+ * 遮蔽是低频的，高像素比屏上按 CSS 像素算（法线那一遍、GTAO、降噪都少画四分之三的像素），合成时双线性放大。
+ */
+const AO_INTENSITY = 0.9
+
+function createAO(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.PerspectiveCamera) {
+  const pass = new GTAOPass(scene, camera, 1, 1)
+  pass.updateGtaoMaterial({ radius: 12, distanceExponent: 1.5, thickness: 12, distanceFallOff: 0.7, scale: 1.4, samples: 24, screenSpaceRadius: false })
+  pass.updatePdMaterial({ lumaPhi: 20, depthPhi: 2, normalPhi: 3, radius: 10, rings: 4, samples: 32 })
+  pass.blendIntensity = AO_INTENSITY
+  // 高像素比屏按 CSS 像素算（最多减半）：再低的话放大后墙顶、柱子边上会出现一格一格的光晕
+  const setSize = pass.setSize.bind(pass)
+  pass.setSize = (w, h) => {
+    const k = Math.min(2, Math.max(1, renderer.getPixelRatio()))
+    setSize(Math.max(1, Math.ceil(w / k)), Math.max(1, Math.ceil(h / k)))
+  }
+  pass.normalMaterial.side = THREE.DoubleSide
+  const hidden = (pass as unknown as { _visibilityCache: THREE.Object3D[] })._visibilityCache
+  ;(pass as unknown as { _overrideVisibility: () => void })._overrideVisibility = () => {
+    scene.traverse((o) => {
+      if (!o.visible) return
+      const m = (o as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined
+      const mat = Array.isArray(m) ? m[0] : m
+      const skip =
+        (o as THREE.Points).isPoints ||
+        (o as THREE.Line).isLine ||
+        (o as THREE.Sprite).isSprite ||
+        isReflector(o) ||
+        o.userData.isOutline ||
+        (!!mat && (mat.transparent || mat.blending === THREE.AdditiveBlending || !mat.depthWrite))
+      if (!skip) return
+      o.visible = false
+      hidden.push(o)
+    })
+  }
+  const blend = pass.blendMaterial
+  // 线性空间的乘数：比 toon 暗部那一档浅得多，只压一层淡淡的冷紫，提示「这里是角落」而不抢画面
+  blend.uniforms.uShade = { value: new THREE.Vector3(0.85, 0.83, 0.9) }
+  blend.fragmentShader = /* glsl */ `
+    uniform float intensity;
+    uniform vec3 uShade;
+    uniform sampler2D tDiffuse;
+    varying vec2 vUv;
+    void main() {
+      float occ = (1.0 - texture2D(tDiffuse, vUv).r) * intensity;
+      // 两档：浅的遮蔽不画，过了阈值就是一整块阴影
+      float k = smoothstep(0.22, 0.4, occ);
+      gl_FragColor = vec4(mix(vec3(1.0), uShade, k), 1.0);
+    }`
+  blend.needsUpdate = true
+  return pass
 }

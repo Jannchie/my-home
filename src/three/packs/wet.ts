@@ -9,7 +9,7 @@
 //   - 透明容器用半透明材质，里面的内容物低于口沿；泵头、瓶盖都接在瓶口上。
 
 import * as THREE from 'three'
-import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
+import { ball, capsule, cup, cyl, markMirror, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, SWING_OPEN, ellipsePoly, holePanel, movable, rectPoly, rng, rod, shell, slab, type AssetCategory, type AssetDef, type Hole, type Poly, type StyleTag, type SurfaceDef } from '../kit'
 import { PI, box3, clearDeep, cylXLegacy, cylZLegacy, latheAt, rod3 } from '../geo'
 import { I, J, M, N, R, define, type Build, type Dims, type Pal } from '../packkit'
@@ -916,6 +916,7 @@ function mirrorCabinet(p: string[]) {
     leaf.add(rbox(18.3, 55.4, 1.2, body, { x: x - hinge, y: 0, z: 0 }, 0.4))
     const mir = rbox(16.7, 53.8, 0.5, MIRROR, { x: x - hinge, y: 0.8, z: 0.65 }, 0.15)
     mir.material = toon(MIRROR, { emissive: 0.18 })
+    markMirror(mir)
     leaf.add(mir)
     leaf.add(rbox(0.5, 6, 0.3, acc, { x: sx * 0.6 - hinge, y: 1.7, z: 0.75 }, 0.1))
     leaf.position.set(hinge, m + 12.8, front + 0.6)

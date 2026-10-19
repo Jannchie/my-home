@@ -11,7 +11,7 @@
 //   covered 被下面某一段的门一起盖住（那一段写 upto = 本段下标）
 
 import * as THREE from 'three'
-import { cyl, rbox, shade, toon } from './toon'
+import { cyl, markMirror, rbox, shade, toon } from './toon'
 import { SWING_OPEN, carcass, doorRow, drawerBox, drawerLevel, flapDoor, hangingPipe, movable, pipeHook, rectPoly, shelvesIn, slidingDoors, type SurfaceDef } from './kit'
 
 export type DoorStyle = 'flat' | 'frame' | 'louver' | 'glass' | 'fusuma' | 'mirror' | 'slat' | 'cane'
@@ -124,6 +124,7 @@ export function doorPanel(style: DoorStyle, c: string, k: string, th = DOOR_T): 
         const glass = rbox(w - 5, h - 5, 0.5, '#e3edf3', { y: 2.5, z: th / 2 + 0.2 }, 0.2)
         glass.material = toon('#e3edf3', { emissive: 0.12 })
         glass.userData.noOutline = true
+        markMirror(glass)
         return [rbox(w, h, th, c, {}, 0.4), glass]
       }
     case 'slat':

@@ -24,6 +24,7 @@ import { floorOf, planFloors } from '../floors'
 import { isOpenBetween, isVoid, sharedIntervals, voidRailSegments, wallSegments } from '../walls'
 import { stairHoles } from '../stairs'
 import { injectManga } from './manga'
+import { injectAnime } from './anime'
 
 /** uniform 数组长度：灯池上限（POOL_HIGH）、楼层上限 */
 export const LM_MAX_LIGHTS = 16
@@ -375,6 +376,7 @@ function maskedLightsChunk() {
  */
 export function injectLightMask(sh: THREE.WebGLProgramParametersWithUniforms) {
   injectManga(sh)
+  injectAnime(sh)
   const chunk = maskedLightsChunk()
   if (!chunk || !sh.fragmentShader.includes('#include <lights_fragment_begin>')) {
     if (!chunk && !warned) {

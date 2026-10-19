@@ -2,7 +2,7 @@
 // 镜面统一用浅蓝灰 + 少量自发光，加一两道斜向高光条表现反光，不做真实反射。
 
 import * as THREE from 'three'
-import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
+import { ball, capsule, cup, cyl, markMirror, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, ellipsePoly, glow, paintPanel, rectPoly, rng, shell, slab, type AssetDef, type Poly } from '../kit'
 import { artOverride } from '../artwork'
 import { hollow, swingDoor } from '../cabinetKit'
@@ -82,6 +82,8 @@ function shine(cx: number, cy: number, m: number, z: number) {
   const uy = Math.sin(a)
   g.add(P(strip(m * 0.55, Math.max(0.5, m * 0.07)), cx, cy, z, 0, 0, a))
   g.add(P(strip(m * 0.3, Math.max(0.35, m * 0.035)), cx + ux * m * 0.13, cy + uy * m * 0.13 - m * 0.04, z, 0, 0, a))
+  // 画出来的高光：镜子换成真实反射时藏起来（three/mirrors.ts）
+  g.userData.mirrorShine = true
   return g
 }
 
@@ -90,7 +92,7 @@ function mirrorGlass(shape: THREE.Shape, cx: number, cy: number, m: number) {
   const g = new THREE.Group()
   const gl = extrudeXY(shape, 0.6, MIR, 0)
   gl.material = toon(MIR, { emissive: 0.18 })
-  g.add(noOutline(gl))
+  g.add(markMirror(noOutline(gl)))
   g.add(shine(cx, cy, m, 0.75))
   return g
 }
@@ -2375,7 +2377,7 @@ function tableRound(p: string[]) {
   const m = new THREE.Group()
   m.add(torus(9.4, 0.7, frame))
   m.add(cylZ(9.6, 0.8, frame, 0, 0, -0.75, 32))
-  m.add(litOutlined(noOutline(cylZ(9.2, 0.6, MIR, 0, 0, 0, 32)), MIR, 0.18))
+  m.add(markMirror(litOutlined(noOutline(cylZ(9.2, 0.6, MIR, 0, 0, 0, 32)), MIR, 0.18)))
   m.add(shine(-2.5, 2.5, 11, 0.75))
   P(m, 0, 12.5, 0, -0.06, 0, 0)
   g.add(m)
@@ -2391,7 +2393,7 @@ function tableSwivel(p: string[]) {
   for (const s of [-1, 1]) g.add(cyl(0.4, 0.4, 1.1, frame, { y: 24 + s * 9.55 - 0.55 }, 8))
   const d = new THREE.Group()
   d.add(cylZ(9, 1, rim, 0, 0, 0, 32))
-  d.add(litOutlined(noOutline(cylZ(8.6, 0.6, MIR, 0, 0, 0.4, 32)), MIR, 0.18))
+  d.add(markMirror(litOutlined(noOutline(cylZ(8.6, 0.6, MIR, 0, 0, 0.4, 32)), MIR, 0.18)))
   d.add(litOutlined(noOutline(cylZ(8.6, 0.6, '#dde9f2', 0, 0, -0.4, 32)), '#dde9f2', 0.18))
   d.add(shine(-2.4, 2.4, 10, 1.15))
   P(d, 0, 24, 0, 0, 0.55, 0)
@@ -2407,7 +2409,7 @@ function tableRing(p: string[]) {
   g.add(rbox(3, 10, 2, body, { y: 2 }, 0.5))
   const h = new THREE.Group()
   h.add(cylZ(11.7, 2, body, 0, 0, -0.9, 36))
-  h.add(litOutlined(noOutline(cylZ(10, 0.6, MIR, 0, 0, 0.1, 32)), MIR, 0.18))
+  h.add(markMirror(litOutlined(noOutline(cylZ(10, 0.6, MIR, 0, 0, 0.1, 32)), MIR, 0.18)))
   const ring = torus(10.8, 0.9, C.lamp, { z: 0.6 })
   ring.material = toon(C.lamp, { emissive: 0.8 })
   h.add(noOutline(ring))

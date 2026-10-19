@@ -574,7 +574,7 @@ export function ceilings(plan: Plan, heightOf: (floor: string) => number): THREE
  * 一个房间的天花板几何体（世界坐标 (x, 0, y)）。没碰到洞口就是整块多边形；碰到时按房间和洞口的顶点坐标切成格子，
  * 去掉中心落在洞口里的格子（房间都是横平竖直的，洞口是楼梯占地或挑空房间，格子切得准）。
  */
-function ceilingGeometry(pts: Vec[], holes: Vec[][]): THREE.BufferGeometry | null {
+export function ceilingGeometry(pts: Vec[], holes: Vec[][]): THREE.BufferGeometry | null {
   const xs0 = pts.map((p) => p.x)
   const ys0 = pts.map((p) => p.y)
   const box = { x0: Math.min(...xs0), y0: Math.min(...ys0), x1: Math.max(...xs0), y1: Math.max(...ys0) }

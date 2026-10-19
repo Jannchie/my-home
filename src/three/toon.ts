@@ -10,6 +10,7 @@ import { mangaUniforms } from './manga'
 // ---------- 赛璐璐阴影 ----------
 // three 自带的 PCF 阴影用逐像素噪点（IGN）旋转采样，边缘是一片网点状的颗粒渐变。
 // 改成：固定采样分布（不再有颗粒）+ 把阴影收成「亮 / 暗」两档，边缘保留一段柔和但干净的过渡，像动画里的阴影块。
+// 过渡的宽度跟着光源的 shadow.radius 走：平时（半径 4）是 0.12–0.88，「动画感」把半径调小（Sandbox3D），影子边缘利落得多。
 {
   const chunk = THREE.ShaderChunk as unknown as Record<string, string>
   const NOISE = 'interleavedGradientNoise( gl_FragCoord.xy ) * PI2'
@@ -27,24 +28,34 @@ import { mangaUniforms } from './manga'
 					float a = float( k ) * 0.7853982 + 0.3927;
 					shadow += texture( shadowMap, vec3( shadowCoord.xy + vec2( cos( a ), sin( a ) ) * radius * 1.5, shadowCoord.z ) );
 				}
-				shadow = smoothstep( 0.12, 0.88, shadow / 13.0 );`,
+				float shW = clamp( shadowRadius * 0.095, 0.06, 0.38 );
+				shadow = smoothstep( 0.5 - shW, 0.5 + shW, shadow / 13.0 );`,
       )
   }
 }
 
 // 光线贴着表面掠过（月光、低角度的夕阳照在和光线几乎平行的墙上）时，阴影贴图的一个像素被拉成长条，
 // 阴影边缘会变成一排排斜向的网点。这类表面在 toon 着色里本来就落在暗部：按 N·L 把阴影淡掉，走样就看不到了。
+// 同时给 anime.ts（动画感光照）记下两个量：
+//   termEdge：明暗交界的程度——投影的边缘（阴影值在 0 和 1 之间），和「动画感」两档色阶的分界（N·L = 0，见 setToonBands）
+//             两侧几个像素。分界按屏幕上 N·L 的变化率换算成像素宽：大片平面（天花板、墙）N·L 几乎不变，不会整面都算成交界；
+//   sunLit：这一点被太阳照到的程度（投影 × 是否在受光那一侧），1 = 受光面，0 = 暗面或落影。
 {
   const chunk = THREE.ShaderChunk as unknown as Record<string, string>
-  const DIR = 'directLight.color *= ( directLight.visible && receiveShadow ) ? getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, vDirectionalShadowCoord[ i ] ) : 1.0;'
+  const SHADOW = 'getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, vDirectionalShadowCoord[ i ] )'
+  const DIR = `directLight.color *= ( directLight.visible && receiveShadow ) ? ${SHADOW} : 1.0;`
   if (chunk.lights_fragment_begin.includes(DIR)) {
-    chunk.lights_fragment_begin = chunk.lights_fragment_begin.replace(
-      DIR,
-      DIR.replace(
-        'getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, vDirectionalShadowCoord[ i ] )',
-        'mix( 1.0, getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, vDirectionalShadowCoord[ i ] ), smoothstep( 0.04, 0.28, dot( geometryNormal, directLight.direction ) ) )',
-      ),
-    )
+    chunk.lights_fragment_begin =
+      'float termEdge = 0.0;\nfloat sunLit = 0.0;\n' +
+      chunk.lights_fragment_begin.replace(
+        DIR,
+        `float sunNL = dot( geometryNormal, directLight.direction );
+		float sunShade = ( directLight.visible && receiveShadow ) ? mix( 1.0, ${SHADOW}, smoothstep( 0.04, 0.28, sunNL ) ) : 1.0;
+		directLight.color *= sunShade;
+		float sunPx = abs( sunNL ) / max( fwidth( sunNL ), 1e-5 );
+		termEdge = max( termEdge, max( 4.0 * sunShade * ( 1.0 - sunShade ), ( 1.0 - smoothstep( 0.0, 5.0, sunPx ) ) * sunShade ) );
+		sunLit = max( sunLit, ( directLight.visible ? sunShade : 0.0 ) * smoothstep( -0.01, 0.01, sunNL ) );`,
+      )
   }
 }
 
@@ -74,12 +85,32 @@ let gradient: THREE.DataTexture | null = null
 /** 色阶贴图：暗部 / 中间 / 亮部，硬切换出赛璐璐的感觉 */
 function gradientMap() {
   if (gradient) return gradient
-  const data = new Uint8Array([150, 150, 150, 255, 215, 215, 215, 255, 255, 255, 255, 255])
-  gradient = new THREE.DataTexture(data, 3, 1, THREE.RGBAFormat)
+  // 六格：平时 暗暗中中亮亮（分界在 N·L = ±1/3，和以前的三格一样）；「动画感」换成 暗暗暗亮亮亮（分界在 0），见 setToonBands。
+  // 格数建好后不能改（贴图存储是定长的），所以一开始就用六格
+  const data = new Uint8Array(6 * 4)
+  BANDS_NORMAL.forEach((v, i) => data.set([v, v, v, 255], i * 4))
+  gradient = new THREE.DataTexture(data, 6, 1, THREE.RGBAFormat)
   gradient.minFilter = THREE.NearestFilter
   gradient.magFilter = THREE.NearestFilter
   gradient.needsUpdate = true
   return gradient
+}
+
+/**
+ * 色阶：平时三档（暗 / 中 / 亮，分界在 N·L = ±1/3）；「动画感」两档，分界在 N·L = 0——背对太阳就是暗面
+ * （平时背对太阳的面还有 150/255 的阳光，太阳低的时候朝下的天花板会被晒成一片暖色）。
+ * 「动画感」的暗面只接收约四成的直射光（室内灯也一样：太暗的话夜里柜门正面和正对着灯的门缝、侧面反差太大），颜色交给 anime.ts 的阴影色。
+ * 所有 toon 材质共用这一张图，改数据就全部生效（不重编译）。
+ */
+const BANDS_NORMAL = [150, 150, 215, 215, 255, 255]
+const BANDS_ANIME = [110, 110, 110, 255, 255, 255]
+export function setToonBands(two: boolean) {
+  const t = gradientMap()
+  const d = t.image.data as Uint8Array
+  const bands = two ? BANDS_ANIME : BANDS_NORMAL
+  if (bands.every((v, i) => d[i * 4] === v)) return
+  bands.forEach((v, i) => d.set([v, v, v], i * 4))
+  t.needsUpdate = true
 }
 
 const toonCache = new Map<string, THREE.MeshToonMaterial>()
@@ -152,7 +183,16 @@ export function vertexColorToon() {
 /** 描边：沿法线在屏幕空间外扩，线宽不随距离变化；颜色取填充色的深色版本，更像手绘 */
 const outlineCache = new Map<string, THREE.ShaderMaterial>()
 // uManga：黑白漫画效果渲染时描边输出墨线标记（manga.ts，R = 1），和受光材质共用同一个 uniform 对象
-export const outlineUniforms = { uWidth: { value: 1.6 }, uViewport: { value: new THREE.Vector2(800, 600) }, uManga: mangaUniforms.uManga }
+// uOutlineTone：动画感光照的彩色描边（0 = 平时的深色描边，1 = 提亮、提饱和的彩色线，像动画背景的色线），Sandbox3D 设置
+export const outlineUniforms = { uWidth: { value: 1.6 }, uViewport: { value: new THREE.Vector2(800, 600) }, uManga: mangaUniforms.uManga, uOutlineTone: { value: 0 } }
+/** 彩色描边：描边色（填充色的深色版本）提亮六成、饱和度 ×1.25，成了固有色的深色（不用黑线，又看得清零件之间的分界） */
+const OUTLINE_TONE = /* glsl */ `
+  uniform float uOutlineTone;
+  vec3 outlineTone(vec3 c) {
+    vec3 t = c * 1.6;
+    t = min(max(mix(vec3(dot(t, vec3(0.2126, 0.7152, 0.0722))), t, 1.25), 0.0), 1.0);
+    return mix(c, t, uOutlineTone);
+  }`
 function outlineMaterial(color: THREE.Color) {
   const key = color.getHexString()
   let m = outlineCache.get(key)
@@ -173,7 +213,8 @@ function outlineMaterial(color: THREE.Color) {
       fragmentShader: /* glsl */ `
         uniform vec3 uColor;
         uniform float uManga;
-        void main() { gl_FragColor = uManga > 0.5 ? vec4(1.0, 0.5, 0.5, 1.0) : vec4(uColor, 1.0); }`,
+        ${OUTLINE_TONE}
+        void main() { gl_FragColor = uManga > 0.5 ? vec4(1.0, 0.5, 0.5, 1.0) : vec4(outlineTone(uColor), 1.0); }`,
       side: THREE.BackSide,
     })
     outlineCache.set(key, m)
@@ -230,12 +271,13 @@ export function vertexColorOutline() {
       uniform float uDim;
       uniform float uManga;
       varying vec3 vOColor;
+      ${OUTLINE_TONE}
       vec3 toLinear(vec3 c) {
         return mix(c * 0.0773993808, pow(c * 0.9478672986 + 0.0521327014, vec3(2.4)), vec3(greaterThanEqual(c, vec3(0.04045))));
       }
       void main() {
         vec3 c = uLinear > 0.5 ? toLinear(vOColor) : vOColor;
-        gl_FragColor = uManga > 0.5 ? vec4(1.0, 0.5, 0.5, 1.0) : vec4(c * uDim, 1.0);
+        gl_FragColor = uManga > 0.5 ? vec4(1.0, 0.5, 0.5, 1.0) : vec4(outlineTone(c) * uDim, 1.0);
       }`,
     side: THREE.BackSide,
   })
@@ -481,6 +523,24 @@ export function shade(color: string, dl: number, ds = 0) {
   const hsl = { h: 0, s: 0, l: 0 }
   c.getHSL(hsl)
   return '#' + new THREE.Color().setHSL(hsl.h, Math.max(0, Math.min(1, hsl.s + ds)), Math.max(0, Math.min(1, hsl.l + dl))).getHexString()
+}
+
+/** 反射面（three 的 Reflector：地面反射膜、镜子 / 水面上挂的反射面）：淡出、遮蔽、倒影这些遍历都要跳过它 */
+export const isReflector = (o: THREE.Object3D) => !!(o as THREE.Object3D & { isReflector?: boolean }).isReflector
+
+/**
+ * 标记镜面：开着反射时 three/mirrors.ts 给离人近的镜子换上真实的平面反射。
+ * 网格的几何体要是薄片（最薄的那个轴就是镜面法线，朝素材正面 +z 的一侧是镜面）；带标记的网格不参与合并。
+ */
+export function markMirror<T extends THREE.Object3D>(o: T): T {
+  o.userData.mirror = true
+  return o
+}
+
+/** 标记水面：开着反射时 three/mirrors.ts 给水面换上会动的水，离人近的再叠真实倒影。网格要是水平的薄片（朝上的那面是水面） */
+export function markWater<T extends THREE.Object3D>(o: T): T {
+  o.userData.water = true
+  return o
 }
 
 // ---------- 合并静态网格（减少 draw call） ----------

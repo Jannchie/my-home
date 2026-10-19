@@ -2,7 +2,7 @@
 // 全部是 prop：原点在摆件底面中心，可以摆在桌面、柜面、台面上。约定见 kit.ts 开头。
 
 import * as THREE from 'three'
-import { ball, capsule, cup, cyl, face, leaf, puck, rbox, shade, toon, torus, tray } from '../toon'
+import { ball, capsule, cup, cyl, face, leaf, markMirror, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, glow, holePanel, rng, rod, shell, type AssetDef, type Fx } from '../kit'
 import { PI, clearDeep, hcyl, noOutlineDeep } from '../geo'
 import { I, J, M, N, R, type Pal3 } from '../packkit'
@@ -807,7 +807,7 @@ function makeupMirror(p: string[]) {
   glass.rotation.x = PI / 2
   glass.position.set(0, 0, 0)
   glass.material = toon(C.glass, { emissive: 0.15 })
-  m.add(noOutlineDeep(glass))
+  m.add(markMirror(noOutlineDeep(glass)))
   const bk = cyl(7.9, 7.9, 0.8, back, {}, 32)
   bk.rotation.x = PI / 2
   bk.position.set(0, 0, -0.75)
