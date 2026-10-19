@@ -990,6 +990,27 @@ function openingFrameWorld(id: string) {
   const c = fg.group.localToWorld(new THREE.Vector3(f.x, f.y, f.z))
   return { ...f, c }
 }
+/** 门窗选中框的外扩（cm）：洞口四周、墙厚方向（窗帘挂在墙面里侧十来厘米）各算进来多少 */
+const OPENING_PICK_PAD = 6
+const OPENING_PICK_DEPTH = 14
+/** 落在哪个门窗洞口的选中框（外扩后）里：p 是世界坐标，floor 是当前楼层的组 */
+function openingAround(p: THREE.Vector3, floor: THREE.Object3D) {
+  const fg = floorGroups.find((g) => g.group === floor)
+  if (!fg) return null
+  const q = floor.worldToLocal(p.clone())
+  for (const info of openingInfos(fv())) {
+    const f = openingFrame(info, fg.wallH)
+    // 转到洞口自己的坐标：x 沿墙、z 穿墙（同 SelectFrame.show3d 的 yaw）
+    const dx = q.x - f.x
+    const dz = q.z - f.z
+    const c = Math.cos(f.yaw)
+    const sn = Math.sin(f.yaw)
+    const lx = dx * c - dz * sn
+    const lz = dx * sn + dz * c
+    if (Math.abs(lx) <= f.w / 2 + OPENING_PICK_PAD && Math.abs(q.y - f.y) <= f.h / 2 + OPENING_PICK_PAD && Math.abs(lz) <= f.d / 2 + OPENING_PICK_DEPTH) return info.o.id
+  }
+  return null
+}
 function showOpeningFrame(fr: SelectFrame, id: string) {
   const f = openingFrameWorld(id)
   if (!f) return null
@@ -1321,7 +1342,12 @@ function pickHouse(e: { clientX: number; clientY: number }): HouseHit | null {
     }
   }
   const ops = fv().openings
-  return firstHouseHit(hits, (o) => shown(o, true), opaqueHit, (kind, id) => (kind === 'opening' ? ops.some((o) => o.id === id) : fixtureSelectable(id)))
+  const hit = firstHouseHit(hits, (o) => shown(o, true), opaqueHit, (kind, id) => (kind === 'opening' ? ops.some((o) => o.id === id) : fixtureSelectable(id)))
+  if (hit) return hit
+  // 被挡住了：挡住的那一面要是落在某个门窗洞口的选中框里（窗洞侧壁、窗台、过梁、窗帘、斜着看时的墙厚），就算点中这个门窗
+  const block = hits.find((h) => (h.object as THREE.Mesh).isMesh && shown(h.object, true) && opaqueHit(h))
+  const near = block ? openingAround(block.point, house) : null
+  return near ? { kind: 'opening', id: near, dist: block!.distance } : null
 }
 /** 鼠标 / 手指处点中的东西：家具、门窗、设备谁近选谁（家具在门窗、设备之前；门窗玻璃后面、设备里面的家具不算） */
 function pickAt(e: PointerEvent): { furniture: string | null; house: { kind: HouseHitKind; id: string } | null } {
@@ -2563,8 +2589,10 @@ function loop() {
       dirty = true
     }
   }
-  // 墙体渐变同理：渐变中保留旧阴影，全部停下后重画一次（转镜头时墙一直在让开，不再每帧重画阴影）
-  if (cutawayShadow && !fading) {
+  // 墙体渐变：渐变中阴影跟着墙走，但节流（高画质每 50ms、省电每 150ms 重画一次，转镜头时墙一直在让开，不每帧重画）；
+  // 全部停下后再重画一次。以前渐变中一直沿用旧阴影、停下才重画，墙压低时影子是在最后一下突然没的
+  if (cutawayShadow && (!fading || now - lastCutawayShadow > (low ? 150 : 50))) {
+    lastCutawayShadow = now
     cutawayShadow = false
     shadowDirty = true
     dirty = true
@@ -2724,6 +2752,7 @@ const skyNow = shallowRef<SkyState | null>(null)
 /** 太阳方向变了、阴影贴图待重画（loop 里节流） */
 let sunMoved = false
 let lastSunShadow = 0
+let lastCutawayShadow = 0
 
 /** 按 时刻 + 日期 + 地点 + 户型朝向 重算灯光、天色和入夜程度 */
 function applySky() {
