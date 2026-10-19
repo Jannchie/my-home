@@ -26,9 +26,9 @@ import { isIndoor, sharedIntervals, voidRailSegments, wallSegments, wallThicknes
 import { tatamiLayout } from '../tatami'
 import { doorColor, doorHandleOf, doorStyled, handleColor, hasSidelight, hasTransom, LEGACY_DOOR, LEGACY_ENTRANCE, LEGACY_SLIDING, sidelightWidth, TRANSOM_TOP } from '../doorStyles'
 import { doorLeafModel, liteModel } from './doorModels'
-import { barnPose, defaultDoorOpen, foldPose, slidingPose, swingPose, windowMovable } from '../doorMotion'
+import { barnPose, defaultDoorOpen, foldPose, slidingPose, swingPose } from '../doorMotion'
 import { addOutlines, ball, capsule, cyl, disposeHooks, mergeMeshes, mergeSolidColors, noTransparentShadows, pullDepth, rbox, shade, toon, useAnisotropy } from './toon'
-import { glow, poseDoors, type AssetDef } from './kit'
+import { glow, movable, poseDoor, poseDoors, type AssetDef } from './kit'
 import { freezeMatrices, syncMatrix } from './matrices'
 import { hasTag } from './tags'
 import { fridgeSpotModel, washerSpotModel } from './appliances'
@@ -51,7 +51,7 @@ import { edgesOf } from '../model'
 import { showerSpot, stallWalls, type StallWalls } from '../bathroom'
 import { curtainSpec } from '../curtains'
 import { archRise, frameColor, gridAllowed, roundDiameter, sashAllowed, shutterColor, windowSpan } from '../windows'
-import { poseWindow, spandrelGeometry, windowModel, type WindowModelStyle } from './windows'
+import { spandrelGeometry, windowModel, type WindowModelStyle } from './windows'
 import { showerCurtainModel, showerModel } from './shower'
 import { edgeRail, holeRails, stairWalls, stairsModel, type WallLine } from './stairs3d'
 import { subtractSpan } from '../stairs'
@@ -1049,7 +1049,6 @@ export function poseOpening(obj: THREE.Object3D, open: number) {
   const info = obj.userData.info as OpeningInfo
   const part = obj.userData.doorPart as string | undefined
   if (!info || !part) return
-  const yaw = Math.atan2(-info.dir.y, info.dir.x)
   const moved: THREE.Object3D[] = [obj]
   if (part === 'leaf') {
     const s = swingPose(info, open)
@@ -1060,15 +1059,9 @@ export function poseOpening(obj: THREE.Object3D, open: number) {
     const k = part === 'slide' ? 0 : 1
     const c = add(add(info.center, mul(info.dir, s.along[k])), mul(info.out, s.off[k]))
     obj.position.set(c.x, info.y0, c.y)
-  } else if (part === 'barn') {
-    const s = barnPose(info, open)
-    for (const c of obj.children)
-      if (c.userData.barnPanel) {
-        c.position.x = s.slide
-        moved.push(c)
-      }
-  } else if (part === 'window') {
-    poseWindow(obj, open)
+  } else if (part === 'barn' || part === 'window') {
+    // 谷仓门的门板、落地窗的扇：标成会动的部件（kit.ts movable），和柜门一样摆
+    for (const c of obj.children) if (c.userData.door) poseDoor(c, open)
     return
   } else if (part === 'fold') {
     const [a, b, c] = foldPose(info, open)
@@ -1078,8 +1071,7 @@ export function poseOpening(obj: THREE.Object3D, open: number) {
       const [p, q] = i === 0 ? [a, b] : [b, c]
       // 折扇的局部 x 从 p 指向 q（第二扇的起点在折角处）
       leaf.position.set((p.x + q.x) / 2, 0, (p.y + q.y) / 2)
-      if (Math.hypot(q.x - p.x, q.y - p.y) > 1e-6) leaf.rotation.y = Math.atan2(-(q.y - p.y), q.x - p.x)
-      else leaf.rotation.y = yaw
+      leaf.rotation.y = Math.atan2(-(q.y - p.y), q.x - p.x)
       moved.push(leaf)
     }
   }
@@ -1141,10 +1133,8 @@ function buildOpenings(infos: OpeningInfo[], H: number) {
         const rail = '#2f3134'
         barn.add(rbox(w * 2 + 8, 3, 2, rail, { x: w / 2, y: doorH + 6, z: 0 }, 0.6))
         for (const k of [-1, 1]) panel.add(rbox(3, 10, 1.2, rail, { x: (k * s.pw) / 3, y: doorH - 2, z: pt / 2 + 0.6 }, 0.5))
-        // 门板单独合并（带了业务标记的子树 mergeMeshes 不会再合并它）
-        mergeMeshes(panel)
-        panel.userData.barnPanel = true
-        barn.add(panel)
+        // 门板建在关着的位置，开到底推开一个门宽
+        barn.add(movable(panel, { kind: 'slide', dx: barnPose(info, 1).slide }))
         const c = add(center, mul(s.face, s.off))
         barn.position.set(c.x, info.y0, c.y)
         barn.rotation.y = yaw
@@ -1211,14 +1201,11 @@ function buildOpenings(infos: OpeningInfo[], H: number) {
         out: out.x * n0.x + out.y * n0.y >= 0 ? 1 : -1,
         hinge: o.hinge,
         clipped: top(info.y1) !== info.y1,
-        movable: info.sash && windowMovable(style),
+        movable: info.sash,
       })
       frame.position.set(center.x, info.y0, center.y)
-      // 通往阳台的落地窗当门用：能开合（openers.ts），开不了的款式（固定窗）只挡人
-      if (info.sash) {
-        frame.userData.doorPart = 'window'
-        if (!windowMovable(style)) frame.userData.winFixed = true
-      }
+      // 通往阳台的落地窗当门用：推拉 / 平开的扇能开合（openers.ts），开不了的款式（固定窗）只挡人
+      if (info.sash) frame.userData.doorPart = 'window'
       frame.rotation.y = yaw
       frame.userData.info = info
       g.add(frame)

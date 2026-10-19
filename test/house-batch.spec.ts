@@ -29,9 +29,9 @@ describe('房体合批', () => {
     for (const g of ops.children) {
       expect(g.userData.info).toBeTruthy()
       expect(g.userData.fade).toBeTruthy()
-      // 折叠门的两扇、谷仓门的门板、落地窗的推拉 / 平开扇各自开合，各自合并：按会动的那一扇分开数
+      // 折叠门的两扇、会动的部件（谷仓门的门板、落地窗的扇：kit.ts movable）各自开合，各自合并：按会动的那一扇分开数
       const leafOf = (m: THREE.Object3D) => {
-        for (let o: THREE.Object3D | null = m; o && o !== g; o = o.parent) if (o.userData.foldLeaf !== undefined || o.userData.barnPanel || o.userData.winMove) return o.id
+        for (let o: THREE.Object3D | null = m; o && o !== g; o = o.parent) if (o.userData.foldLeaf !== undefined || o.userData.door) return o.id
         return 0
       }
       const mats = meshesIn(g)

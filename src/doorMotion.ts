@@ -23,9 +23,9 @@ export interface DoorGeom {
   sash?: boolean
 }
 
-export type DoorMotionKind = 'door' | 'sliding' | 'barn' | 'folding' | 'window'
+type DoorMotionKind = 'door' | 'sliding' | 'barn' | 'folding' | 'window'
 
-export function doorMotionKind(o: Pick<Opening, 'kind' | 'doorStyle'>, sash = false): DoorMotionKind | null {
+function doorMotionKind(o: Pick<Opening, 'kind' | 'doorStyle'>, sash = false): DoorMotionKind | null {
   if (o.kind === 'door') return 'door'
   if (o.kind === 'sliding') return o.doorStyle === 'barn' ? 'barn' : 'sliding'
   if (o.kind === 'folding') return 'folding'
@@ -36,13 +36,7 @@ export function doorMotionKind(o: Pick<Opening, 'kind' | 'doorStyle'>, sash = fa
 /** 落地窗的模型款式（three/windows.ts WindowModelStyle）：不填款式的是旧的落地推拉窗 */
 export const sashStyle = (o: Pick<Opening, 'windowStyle'>) => o.windowStyle ?? 'legacySash'
 
-/** 落地窗里能开合的款式（推拉、平开）；别的款式（固定窗等）开不了 */
-export const windowMovable = (style: string) => style === 'legacySash' || style === 'sliding' || style === 'casement' || style === 'casement2' || style === 'combo'
-
-/** 落地窗的平开扇开到底的角度 */
-export const WIN_SWING_MAX = Math.PI / 2
-
-/** 开门开到底的角度 */
+/** 开门、落地窗的平开扇开到底的角度 */
 export const SWING_MAX = Math.PI / 2
 /** 折叠门折到底的角度（两扇差不多贴在一起） */
 export const FOLD_MAX = (86 * Math.PI) / 180
@@ -136,46 +130,56 @@ export function doorSegments(g: DoorGeom, open: number): [Vec, Vec][] {
   return []
 }
 
-/** 落地窗挡路的扇（几何同 three/windows.ts windowModel：局部 x 沿墙、z 横穿墙，户外在 out 一侧） */
-function windowSegments(g: DoorGeom, open: number): [Vec, Vec][] {
-  const { center, dir, out, width: w, wall } = g
-  const style = sashStyle(g.o)
-  const n0 = { x: -dir.y, y: dir.x }
-  const sgn = out.x * n0.x + out.y * n0.y >= 0 ? 1 : -1
-  const P = (x: number, z: number) => add(add(center, mul(dir, x)), mul(n0, z))
-  const v = clamp01(open)
+/**
+ * 落地窗各扇的几何（three/windows.ts windowModel 按它建模型、windowSegments 按它挡人）。
+ * 局部坐标：x 沿墙（窗中心 0）、z 横穿墙，z 按户外在 +z 给（用的时候乘上户外那一侧的符号）。
+ *   slide：推拉扇，中心在 x、宽 pw、轨道 z；x1 = 开到底时推到哪（不填 = 不动的那扇）
+ *   swing：平开扇 x0..x1，铰链在 left ? x0 : x1、贴着户外墙面（z）；ajar = 摆成固定样子时推开着的那扇
+ *   fixed：中间固定的玻璃（组合窗）
+ * 开不了的款式（固定窗等）返回 null。
+ */
+export function windowLeaves(style: string, w: number, wall: number, hinge?: 'start' | 'end') {
   if (style === 'legacySash' || style === 'sliding') {
     const legacy = style === 'legacySash'
     const t = Math.max(2, wall / 4)
     const inner = legacy ? w : w - 8
     const pw = inner / 2 + 2
-    const a0 = legacy ? -w / 4 : -inner / 4 + 1
+    const z = t / 2 + 0.5
     const a1 = legacy ? w / 4 : inner / 4 - 1
-    return [a0 + (a1 - a0) * v, a1].map((along, k) => {
-      const off = (k === 0 ? 1 : -1) * (t / 2 + 0.5) * sgn
-      return [P(along - pw / 2, off), P(along + pw / 2, off)] as [Vec, Vec]
-    })
+    return { inner, slide: [{ x: legacy ? -w / 4 : -inner / 4 + 1, x1: a1, z, pw }, { x: a1, z: -z, pw }], swing: [], fixed: null }
   }
   if (style === 'casement' || style === 'casement2' || style === 'combo') {
     const inner = w - 8
-    const z = sgn * (wall / 2 - 3.2 / 2)
-    const a = v * WIN_SWING_MAX
-    const leaves: { x0: number; x1: number; left: boolean }[] = []
-    const segs: [Vec, Vec][] = []
-    if (style === 'casement') leaves.push({ x0: -inner / 2, x1: inner / 2, left: g.o.hinge !== 'end' })
-    else if (style === 'casement2') leaves.push({ x0: -inner / 2, x1: 0, left: true }, { x0: 0, x1: inner / 2, left: false })
-    else {
-      const side = Math.min(inner * 0.26, 60)
-      leaves.push({ x0: -inner / 2, x1: -inner / 2 + side, left: true }, { x0: inner / 2 - side, x1: inner / 2, left: false })
-      segs.push([P(-inner / 2 + side, 0), P(inner / 2 - side, 0)])
-    }
-    for (const L of leaves) {
-      const lw = L.x1 - L.x0
-      const hx = L.left ? L.x0 : L.x1
-      segs.push([P(hx, z), P(hx + (L.left ? 1 : -1) * lw * Math.cos(a), z + sgn * lw * Math.sin(a))])
-    }
-    return segs
+    const z = wall / 2 - 3.2 / 2
+    const leaf = (x0: number, x1: number, left: boolean, ajar: boolean) => ({ x0, x1, left, ajar, z })
+    if (style === 'casement') return { inner, slide: [], swing: [leaf(-inner / 2, inner / 2, hinge !== 'end', true)], fixed: null }
+    if (style === 'casement2') return { inner, slide: [], swing: [leaf(-inner / 2, 0, true, true), leaf(0, inner / 2, false, false)], fixed: null }
+    const side = Math.min(inner * 0.26, 60)
+    return { inner, slide: [], swing: [leaf(-inner / 2, -inner / 2 + side, true, false), leaf(inner / 2 - side, inner / 2, false, true)], fixed: [-inner / 2 + side, inner / 2 - side] as [number, number] }
   }
+  return null
+}
+
+/** 落地窗挡路的扇（几何见 windowLeaves） */
+function windowSegments(g: DoorGeom, open: number): [Vec, Vec][] {
+  const { center, dir, out, width: w, wall } = g
+  const n0 = { x: -dir.y, y: dir.x }
+  const sgn = out.x * n0.x + out.y * n0.y >= 0 ? 1 : -1
+  const P = (x: number, z: number) => add(add(center, mul(dir, x)), mul(n0, z * sgn))
+  const L = windowLeaves(sashStyle(g.o), w, wall, g.o.hinge)
   // 固定窗等开不了的款式：整个洞口挡着
-  return [[P(-w / 2, 0), P(w / 2, 0)]]
+  if (!L) return [[P(-w / 2, 0), P(w / 2, 0)]]
+  const v = clamp01(open)
+  const a = v * SWING_MAX
+  const segs: [Vec, Vec][] = L.slide.map((p) => {
+    const x = p.x1 === undefined ? p.x : p.x + (p.x1 - p.x) * v
+    return [P(x - p.pw / 2, p.z), P(x + p.pw / 2, p.z)]
+  })
+  for (const f of L.swing) {
+    const lw = f.x1 - f.x0
+    const hx = f.left ? f.x0 : f.x1
+    segs.push([P(hx, f.z), P(hx + (f.left ? 1 : -1) * lw * Math.cos(a), f.z + lw * Math.sin(a))])
+  }
+  if (L.fixed) segs.push([P(L.fixed[0], 0), P(L.fixed[1], 0)])
+  return segs
 }

@@ -26,7 +26,8 @@ import { attachPost, LOOKS, LOOK_MAP, type LookId, type Post } from '../three/po
 import { CITIES, MONTH_DAYS, compassAxes, skyState, type SkyState } from '../three/sky'
 import { IndoorLights, KELVIN_MAX, KELVIN_MIN, LIGHT_MODES, POOL_HIGH, POOL_LOW, POWER_MAX, POWER_MIN, autoLevel, diningKey, isLampAsset, lightColor, type LightMode } from '../three/lights'
 import { disposeUnshared } from '../three/toon'
-import { doorParts, poseDoors, type DoorMotion } from '../three/kit'
+import { poseDoors } from '../three/kit'
+import { drawerSlots } from '../three/drawers'
 import { Openers, type OpenKey } from '../three/openers'
 import { drawerContents, slideOffset } from '../cabinet'
 import { useThumbs } from '../three/thumbs'
@@ -524,47 +525,8 @@ const objs = new Map<string, { obj: THREE.Group; key: string; open: boolean }>()
 const openers = new Openers(onDrawerPart)
 /** 跟着拉开的抽屉挪的东西：家具 id → 平面上的偏移、是哪件柜子的抽屉 */
 const drawerShift = new Map<string, { x: number; y: number; owner: string }>()
-/** 素材的抽屉部件（kit.ts doorParts 下标）→ 它的抽屉格（def.surfaces 下标） */
-const drawerSlots = new Map<string, Map<number, number>>()
-
-/** 部件关着时在模型局部坐标里的包围盒（外扩一点） */
-function closedBox(part: THREE.Object3D, model: THREE.Object3D) {
-  const base = part.userData.doorBase as { p: THREE.Vector3; r: THREE.Euler } | undefined
-  const T = base ? new THREE.Matrix4().compose(base.p, new THREE.Quaternion().setFromEuler(base.r), part.scale) : part.matrix.clone()
-  for (let o = part.parent; o && o !== model; o = o.parent) T.premultiply(o.matrix)
-  const box = new THREE.Box3()
-  part.traverse((n) => {
-    const g = (n as THREE.Mesh).geometry
-    if (!(n as THREE.Mesh).isMesh || !g || n.userData.isOutline) return
-    const M = new THREE.Matrix4()
-    for (let o: THREE.Object3D | null = n; o && o !== part; o = o.parent) M.premultiply(o.matrix)
-    if (!g.boundingBox) g.computeBoundingBox()
-    box.union(g.boundingBox!.clone().applyMatrix4(M.premultiply(T)))
-  })
-  return box.expandByScalar(1.5)
-}
-
-/** 抽屉格和抽屉的对应：抽屉格（关着时）的中心落在哪个抽屉盒里（按素材算一次） */
-function drawerSlotsOf(asset: string, root: THREE.Object3D) {
-  let m = drawerSlots.get(asset)
-  if (m) return m
-  m = new Map()
-  drawerSlots.set(asset, m)
-  const def = ASSET_MAP.get(asset)
-  const model = root.children[0]
-  if (!def?.surfaces || !model) return m
-  const boxes = doorParts(model).map((o) => ((o.userData.door as DoorMotion).kind === 'drawer' ? closedBox(o, model) : null))
-  def.surfaces.forEach((sf, i) => {
-    if (!sf.slide || !sf.shape?.length) return
-    const pts = sf.shape.flat()
-    const xs = pts.map((q) => q[0])
-    const zs = pts.map((q) => q[1])
-    const c = new THREE.Vector3((Math.min(...xs) + Math.max(...xs)) / 2, sf.y + 0.5, (Math.min(...zs) + Math.max(...zs)) / 2)
-    const k = boxes.findIndex((b) => !!b?.containsPoint(c))
-    if (k >= 0 && !m!.has(k)) m!.set(k, i)
-  })
-  return m
-}
+/** 某个抽屉里的东西（家具 id:部件下标 → 那一格里的东西）：拉开 / 推回的动画每帧都要，户型变了（syncFurniture）就清掉 */
+const drawerItems = new Map<string, Furniture[]>()
 
 /** 抽屉拉开 / 推回：抽屉格里的东西（连同摆在它们上面的）跟着挪 */
 function onDrawerPart(id: string, part: number, v: number, base: number) {
@@ -573,10 +535,13 @@ function onDrawerPart(id: string, part: number, v: number, base: number) {
   const o = objs.get(id)
   const def = f && ASSET_MAP.get(f.asset)
   if (!f || !o || !def?.surfaces) return
-  const i = drawerSlotsOf(f.asset, o.obj).get(part)
+  const i = drawerSlots(f.asset, o.obj.children[0]).get(part)
   if (i === undefined) return
   const { dx, dy } = slideOffset(f, 0, (v - base) * (def.surfaces[i].slide ?? 0))
-  for (const c of drawerContents(raw, f, i)) {
+  const ik = `${id}:${part}`
+  let items = drawerItems.get(ik)
+  if (!items) drawerItems.set(ik, (items = drawerContents(raw, f, i)))
+  for (const c of items) {
     if (Math.abs(dx) + Math.abs(dy) < 1e-3) drawerShift.delete(c.id)
     else drawerShift.set(c.id, { x: dx, y: dy, owner: id })
     const co = objs.get(c.id)
@@ -945,6 +910,7 @@ function syncFurniture() {
   // 读原始对象：拖动时每帧都要过一遍全部家具，走响应式代理的开销比计算本身还大
   const p = toRaw(plan.value)
   const alive = new Set<string>()
+  drawerItems.clear()
   for (const f of p.furniture) {
     alive.add(f.id)
     // 开合不进键：开关柜门只重新摆门（poseDoors 会同步静态矩阵），不整件重建

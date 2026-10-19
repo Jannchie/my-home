@@ -18,16 +18,16 @@ export const furnKey = (id: string, part: number): OpenKey => `f:${id}:${part}`
 export const doorKey = (id: string): OpenKey => `o:${id}`
 
 interface Live {
-  /** 只摆模型（不挪抽屉里的东西）：拖动时试探屏幕方向用 */
+  /** 只摆模型：拖动时试探屏幕方向也用它 */
   pose: (v: number) => void
-  /** 摆到某个开合程度（连同抽屉里的东西） */
-  apply: (v: number) => void
   /** 现在摆在多少 */
   cur: number
   /** 没动过时的开合程度 */
   base: number
   /** 拾取 / 高亮用的对象 */
   objs: THREE.Object3D[]
+  /** 家具部件：[家具 id, 部件下标]（摆好后通知沙盘挪抽屉里的东西） */
+  part?: [string, number]
 }
 
 /** 动画速度：每秒最少走开合程度的这么多，剩下的按指数缓动收尾 */
@@ -39,15 +39,28 @@ export class Openers {
   private want = new Map<OpenKey, number>()
   private live = new Map<OpenKey, Live>()
   private moving = new Set<OpenKey>()
+  /** 每件家具登记了哪些部件 */
+  private furn = new Map<string, OpenKey[]>()
   /** 房门的几何和所在楼层（漫游挡人用） */
   private doors = new Map<string, { geom: DoorGeom; floor: string }>()
+  /** 各层门板线段的缓存：房门动了就清掉 */
+  private segs = new Map<string, [Vec, Vec][]>()
 
   constructor(private onPart: (furnitureId: string, part: number, v: number, base: number) => void = () => {}) {}
+
+  /** 摆到 v，记下来；家具部件通知沙盘，房门清掉线段缓存 */
+  private put(l: Live, v: number) {
+    l.cur = v
+    l.pose(v)
+    if (l.part) this.onPart(l.part[0], l.part[1], v, l.base)
+    else this.segs.clear()
+  }
 
   /** 房子重建后：找出所有房门，按记下的开合摆好 */
   bindHouse(root: THREE.Object3D) {
     for (const k of [...this.live.keys()]) if (k.startsWith('o:')) this.live.delete(k)
     this.doors.clear()
+    this.segs.clear()
     const groups = new Map<string, THREE.Object3D[]>()
     root.traverse((o) => {
       if (!o.userData.doorPart) return
@@ -55,21 +68,19 @@ export class Openers {
       let f: THREE.Object3D | null = o
       while (f && f.userData.floorId === undefined) f = f.parent
       this.doors.set(info.o.id, { geom: info, floor: (f?.userData.floorId as string) ?? '' })
-      // 开不了的落地窗（固定窗）：只挡人，不能开关
-      if (o.userData.winFixed) return
+      // 落地窗里没有会动的扇（固定窗等）：只挡人，不能开关
+      if (o.userData.doorPart === 'window' && !o.children.some((c) => c.userData.door)) return
       let list = groups.get(info.o.id)
       if (!list) groups.set(info.o.id, (list = []))
       list.push(o)
     })
     for (const [id, objs] of groups) {
-      const info = objs[0].userData.info as OpeningInfo
-      const base = defaultDoorOpen(info.o)
+      const base = defaultDoorOpen((objs[0].userData.info as OpeningInfo).o)
       const key = doorKey(id)
-      const v = this.want.get(key) ?? base
-      const pose = (x: number) => objs.forEach((o) => poseOpening(o, x))
-      const live: Live = { pose, apply: pose, cur: v, base, objs }
+      const live: Live = { pose: (x) => objs.forEach((o) => poseOpening(o, x)), cur: base, base, objs }
       this.live.set(key, live)
-      if (v !== base) live.apply(v)
+      const v = this.want.get(key)
+      if (v !== undefined && v !== base) this.put(live, v)
     }
     for (const k of this.moving) if (!this.live.has(k)) this.moving.delete(k)
   }
@@ -78,44 +89,38 @@ export class Openers {
   bindFurniture(id: string, root: THREE.Object3D, open: boolean) {
     this.unbindFurniture(id, false)
     const base = open ? 1 : 0
-    doorParts(root).forEach((o, i) => {
+    const keys = doorParts(root).map((o, i) => {
       const key = furnKey(id, i)
-      const v = this.want.get(key) ?? base
-      const live: Live = {
-        pose: (x) => poseDoor(o, x),
-        apply: (x) => {
-          poseDoor(o, x)
-          this.onPart(id, i, x, base)
-        },
-        cur: v,
-        base,
-        objs: [o],
-      }
+      // 拾取时直接从部件上读 key（keyOf）
+      o.userData.openKey = key
+      const live: Live = { pose: (x) => poseDoor(o, x), cur: base, base, objs: [o], part: [id, i] }
       this.live.set(key, live)
-      if (v !== base) live.apply(v)
+      const v = this.want.get(key)
+      if (v !== undefined && v !== base) this.put(live, v)
+      return key
     })
+    this.furn.set(id, keys)
   }
 
   /** 家具删掉了 / 整体开关变了（forget）：不再管它的部件 */
   unbindFurniture(id: string, forget = true) {
-    const pre = `f:${id}:`
-    for (const k of [...this.live.keys()])
-      if (k.startsWith(pre)) {
-        this.live.delete(k)
-        this.moving.delete(k)
-      }
-    if (forget) for (const k of [...this.want.keys()]) if (k.startsWith(pre)) this.want.delete(k)
+    for (const k of this.furn.get(id) ?? []) {
+      this.live.delete(k)
+      this.moving.delete(k)
+      if (forget) this.want.delete(k)
+    }
+    this.furn.delete(id)
   }
 
   /** 所有家具部件回到存档里的样子（进入布置模式时：摆放按存档的位置算） */
   resetFurniture() {
-    for (const [k, l] of this.live)
-      if (k.startsWith('f:') && this.want.has(k)) {
-        l.cur = l.base
-        l.apply(l.base)
-        this.moving.delete(k)
-      }
-    for (const k of [...this.want.keys()]) if (k.startsWith('f:')) this.want.delete(k)
+    for (const k of [...this.want.keys()]) {
+      if (!k.startsWith('f:')) continue
+      this.want.delete(k)
+      this.moving.delete(k)
+      const l = this.live.get(k)
+      if (l) this.put(l, l.base)
+    }
   }
 
   has(key: OpenKey) {
@@ -127,8 +132,7 @@ export class Openers {
   }
   /** 要去的开合程度 */
   target(key: OpenKey) {
-    const l = this.live.get(key)
-    return this.want.get(key) ?? l?.base ?? 0
+    return this.want.get(key) ?? this.live.get(key)?.base ?? 0
   }
   objects(key: OpenKey) {
     return this.live.get(key)?.objs ?? []
@@ -143,10 +147,7 @@ export class Openers {
     if (animate) this.moving.add(key)
     else {
       this.moving.delete(key)
-      if (l.cur !== v) {
-        l.cur = v
-        l.apply(v)
-      }
+      if (l.cur !== v) this.put(l, v)
     }
   }
 
@@ -178,8 +179,7 @@ export class Openers {
       }
       const d = t - l.cur
       const s = Math.max(Math.abs(d) * (1 - Math.exp(-dt * EASE)), MIN_SPEED * dt)
-      l.cur = Math.abs(d) <= s ? t : l.cur + Math.sign(d) * s
-      l.apply(l.cur)
+      this.put(l, Math.abs(d) <= s ? t : l.cur + Math.sign(d) * s)
       if (l.cur === t) this.moving.delete(k)
     }
     return this.moving.size > 0
@@ -188,26 +188,23 @@ export class Openers {
   /** 拾取：从命中的对象往上找，属于哪个会动的部件 / 房门 */
   keyOf(o: THREE.Object3D | null): OpenKey | null {
     for (; o; o = o.parent) {
+      if (o.userData.openKey) return o.userData.openKey as OpenKey
       if (o.userData.doorPart) return doorKey((o.userData.info as OpeningInfo).o.id)
-      if (o.userData.door) {
-        let f: THREE.Object3D | null = o.parent
-        while (f && !f.userData.furnitureId) f = f.parent
-        if (!f) return null
-        const i = doorParts(f).indexOf(o)
-        return i < 0 ? null : furnKey(f.userData.furnitureId as string, i)
-      }
       if (o.userData.furnitureId) return null
     }
     return null
   }
 
-  /** 某层所有房门现在挡路的门板线段（平面坐标） */
+  /** 某层所有房门现在挡路的门板线段（平面坐标；房门不动时直接用缓存） */
   segments(floor: string): [Vec, Vec][] {
-    const out: [Vec, Vec][] = []
+    let out = this.segs.get(floor)
+    if (out) return out
+    out = []
     for (const [id, d] of this.doors) {
       if (d.floor !== floor) continue
       out.push(...doorSegments(d.geom, this.live.get(doorKey(id))?.cur ?? defaultDoorOpen(d.geom.o)))
     }
+    this.segs.set(floor, out)
     return out
   }
 }
