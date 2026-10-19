@@ -5,7 +5,7 @@
     <a href="https://home.jannchie.com/ja/"><b>オンラインで試す</b></a>
   </p>
   <p align="center">
-    <a href="README.md">中文</a> · 日本語 · <a href="README.en.md">English</a>
+    <a href="README.md">English</a> · <a href="README.zh.md">中文</a> · 日本語
   </p>
   <p align="center">
     <a href="https://github.com/Jannchie/my-home/releases/latest"><img src="https://img.shields.io/github/v/release/Jannchie/my-home" alt="release" /></a>
