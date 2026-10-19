@@ -26,7 +26,9 @@ import { attachPost, LOOKS, LOOK_MAP, type LookId, type Post } from '../three/po
 import { CITIES, MONTH_DAYS, compassAxes, skyState, type SkyState } from '../three/sky'
 import { IndoorLights, KELVIN_MAX, KELVIN_MIN, LIGHT_MODES, POOL_HIGH, POOL_LOW, POWER_MAX, POWER_MIN, autoLevel, diningKey, isLampAsset, lightColor, type LightMode } from '../three/lights'
 import { disposeUnshared } from '../three/toon'
-import { poseDoors } from '../three/kit'
+import { doorParts, poseDoors, type DoorMotion } from '../three/kit'
+import { Openers, type OpenKey } from '../three/openers'
+import { drawerContents, slideOffset } from '../cabinet'
 import { useThumbs } from '../three/thumbs'
 import { normalizeColor, paletteStyleOf } from '../three/stylePalettes'
 import { artKindOf, artLabel, cycleArt, parseArt, pickArt, rerollArt } from '../three/artwork'
@@ -515,6 +517,88 @@ const fx = new FxLayer()
 /** 会活动的宠物、扫地机器人、Kachaka（预览模式下才动）：整套房子一层，见 actors */
 // open：上次摆好的柜门开合状态（开合只重新摆门，不重建模型）
 const objs = new Map<string, { obj: THREE.Group; key: string; open: boolean }>()
+
+// ---------- 开合：一扇扇门、一个个抽屉（three/openers.ts） ----------
+
+/** 门、抽屉各自的开合（这次打开的沙盘里有效，不进存档）；抽屉拉开时里面的东西跟着挪 */
+const openers = new Openers(onDrawerPart)
+/** 跟着拉开的抽屉挪的东西：家具 id → 平面上的偏移、是哪件柜子的抽屉 */
+const drawerShift = new Map<string, { x: number; y: number; owner: string }>()
+/** 素材的抽屉部件（kit.ts doorParts 下标）→ 它的抽屉格（def.surfaces 下标） */
+const drawerSlots = new Map<string, Map<number, number>>()
+
+/** 部件关着时在模型局部坐标里的包围盒（外扩一点） */
+function closedBox(part: THREE.Object3D, model: THREE.Object3D) {
+  const base = part.userData.doorBase as { p: THREE.Vector3; r: THREE.Euler } | undefined
+  const T = base ? new THREE.Matrix4().compose(base.p, new THREE.Quaternion().setFromEuler(base.r), part.scale) : part.matrix.clone()
+  for (let o = part.parent; o && o !== model; o = o.parent) T.premultiply(o.matrix)
+  const box = new THREE.Box3()
+  part.traverse((n) => {
+    const g = (n as THREE.Mesh).geometry
+    if (!(n as THREE.Mesh).isMesh || !g || n.userData.isOutline) return
+    const M = new THREE.Matrix4()
+    for (let o: THREE.Object3D | null = n; o && o !== part; o = o.parent) M.premultiply(o.matrix)
+    if (!g.boundingBox) g.computeBoundingBox()
+    box.union(g.boundingBox!.clone().applyMatrix4(M.premultiply(T)))
+  })
+  return box.expandByScalar(1.5)
+}
+
+/** 抽屉格和抽屉的对应：抽屉格（关着时）的中心落在哪个抽屉盒里（按素材算一次） */
+function drawerSlotsOf(asset: string, root: THREE.Object3D) {
+  let m = drawerSlots.get(asset)
+  if (m) return m
+  m = new Map()
+  drawerSlots.set(asset, m)
+  const def = ASSET_MAP.get(asset)
+  const model = root.children[0]
+  if (!def?.surfaces || !model) return m
+  const boxes = doorParts(model).map((o) => ((o.userData.door as DoorMotion).kind === 'drawer' ? closedBox(o, model) : null))
+  def.surfaces.forEach((sf, i) => {
+    if (!sf.slide || !sf.shape?.length) return
+    const pts = sf.shape.flat()
+    const xs = pts.map((q) => q[0])
+    const zs = pts.map((q) => q[1])
+    const c = new THREE.Vector3((Math.min(...xs) + Math.max(...xs)) / 2, sf.y + 0.5, (Math.min(...zs) + Math.max(...zs)) / 2)
+    const k = boxes.findIndex((b) => !!b?.containsPoint(c))
+    if (k >= 0 && !m!.has(k)) m!.set(k, i)
+  })
+  return m
+}
+
+/** 抽屉拉开 / 推回：抽屉格里的东西（连同摆在它们上面的）跟着挪 */
+function onDrawerPart(id: string, part: number, v: number, base: number) {
+  const raw = toRaw(plan.value)
+  const f = raw.furniture.find((x) => x.id === id)
+  const o = objs.get(id)
+  const def = f && ASSET_MAP.get(f.asset)
+  if (!f || !o || !def?.surfaces) return
+  const i = drawerSlotsOf(f.asset, o.obj).get(part)
+  if (i === undefined) return
+  const { dx, dy } = slideOffset(f, 0, (v - base) * (def.surfaces[i].slide ?? 0))
+  for (const c of drawerContents(raw, f, i)) {
+    if (Math.abs(dx) + Math.abs(dy) < 1e-3) drawerShift.delete(c.id)
+    else drawerShift.set(c.id, { x: dx, y: dy, owner: id })
+    const co = objs.get(c.id)
+    if (co) placeShifted(co.obj, raw, c)
+  }
+  dirty = true
+}
+
+/** 摆家具，再加上跟着抽屉挪的偏移 */
+function placeShifted(obj: THREE.Object3D, p: Plan, f: Furniture) {
+  placeFurniture(obj, p, f)
+  const sh = drawerShift.get(f.id)
+  if (!sh) return
+  obj.position.x += sh.x
+  obj.position.z += sh.y
+  if (!obj.matrixAutoUpdate) syncMatrix(obj)
+}
+
+/** 某件柜子的抽屉带着挪的东西，全部放回原处（存档里的位置） */
+function clearShifts(owner: string) {
+  for (const [k, sh] of drawerShift) if (sh.owner === owner) drawerShift.delete(k)
+}
 let ghost: THREE.Group | null = null
 let ghostKey = ''
 const ghostRot = ref(0)
@@ -813,6 +897,8 @@ function rebuildHouse() {
   house = built.root
   // 房子搭好就不动了（除了墙体压低和楼层滑动，那两处自己更新矩阵）：不再每帧重算上千个对象的矩阵
   freezeMatrices(house)
+  // 门按这次沙盘里开合过的样子摆回去
+  openers.bindHouse(house)
   floorGroups = built.floors
   builtActive = activeFloor.value
   stage.scene.add(house)
@@ -836,7 +922,7 @@ function rebuildHouse() {
   // 房间变了，家具的地面高度可能也变了
   for (const f of raw.furniture) {
     const o = objs.get(f.id)
-    if (o) placeFurniture(o.obj, raw, f)
+    if (o) placeShifted(o.obj, raw, f)
   }
   applyXray()
   syncActors()
@@ -867,6 +953,10 @@ function syncFurniture() {
     if (o && o.key === key && o.open !== !!f.open) {
       poseDoors(o.obj, !!f.open)
       o.open = !!f.open
+      // 整体开关变了：单独动过的部件作废，跟着整体走
+      openers.unbindFurniture(f.id)
+      clearShifts(f.id)
+      openers.bindFurniture(f.id, o.obj, o.open)
     }
     if (!o || o.key !== key) {
       if (o) {
@@ -878,11 +968,12 @@ function syncFurniture() {
       o.obj.matrixAutoUpdate = false
       objs.set(f.id, o)
       fx.set(f.id, o.obj, ASSET_MAP.get(f.asset)?.fx)
+      openers.bindFurniture(f.id, o.obj, o.open)
     }
     // 按楼层放进各层的组（换了楼层就挪过去）
     const layer = furnLayer(floorOf(p, f))
     if (o.obj.parent !== layer) layer.add(o.obj)
-    placeFurniture(o.obj, p, f)
+    placeShifted(o.obj, p, f)
     // 绿植贴墙时把越过墙面的枝叶弯回来（位置变了才重算）
     if (isPlant(f.asset)) {
       const pk = `${f.x},${f.y},${f.rot},${f.floor ?? ''}`
@@ -898,6 +989,9 @@ function syncFurniture() {
       disposeUnshared(o.obj)
       objs.delete(id)
       fx.remove(id)
+      openers.unbindFurniture(id)
+      clearShifts(id)
+      drawerShift.delete(id)
     }
   updateRing()
   applyXray()
@@ -1691,6 +1785,13 @@ const aimRay = new THREE.Raycaster()
 function aimWalk(now: number) {
   if (!walker || now - lastAim < 100) return
   lastAim = now
+  // 够得着的门 / 抽屉：提亮，提示怎么开关
+  const op = openDrag?.pointer === -1 ? openDrag : pickOpenAim()
+  hoverOpen(op?.key ?? null)
+  if (op) {
+    walkTarget.value = `${openName(op.key)} · ${device.coarse ? t('点按开关') : t('点击 / E 开关 · 按住拖动或滚轮调开合')}`
+    return
+  }
   aimRay.setFromCamera(new THREE.Vector2(0, 0), stage.camera)
   aimRay.far = 600
   const hits = aimRay.intersectObject(furnRoot, true)
@@ -1718,6 +1819,156 @@ function aimWalk(now: number) {
   walkTarget.value = text
 }
 
+// ---------- 开合的交互：预览、漫游里点门 / 抽屉开关，按住拖动调开合程度 ----------
+
+/** 漫游时伸手够得着的距离（cm） */
+const REACH = 260
+/** 射线碰到的第一个看得见的不透明东西是门 / 抽屉才算（墙、别的家具挡着就不算）；local 是命中点在命中网格里的坐标 */
+function pickOpen(ray: THREE.Raycaster, maxDist = Infinity): { key: OpenKey; obj: THREE.Object3D; local: THREE.Vector3 } | null {
+  const fl = activeFloor.value
+  const g = floorGroups.find((x) => x.floor.id === fl)?.group
+  const hits = ray.intersectObject(furnLayer(fl), true)
+  if (g) hits.push(...ray.intersectObject(g, true))
+  hits.sort((a, b) => a.distance - b.distance)
+  for (const h of hits) {
+    if (h.distance > maxDist) break
+    if (!(h.object as THREE.Mesh).isMesh || !shown(h.object, true)) continue
+    const key = openers.keyOf(h.object)
+    if (key && openers.has(key)) return { key, obj: h.object, local: h.object.worldToLocal(h.point.clone()) }
+    if (opaqueHit(h)) return null
+  }
+  return null
+}
+function pickOpenAt(e: { clientX: number; clientY: number }, maxDist = Infinity) {
+  setRay(e as PointerEvent)
+  return pickOpen(raycaster, maxDist)
+}
+/** 漫游：准星对着、够得着的门 / 抽屉 */
+function pickOpenAim() {
+  aimRay.setFromCamera(new THREE.Vector2(0, 0), stage.camera)
+  aimRay.far = Infinity
+  return pickOpen(aimRay, REACH)
+}
+/** 门 / 抽屉的名字（漫游准星下的提示） */
+function openName(key: OpenKey) {
+  if (key.startsWith('o:')) {
+    const o = plan.value.openings.find((x) => x.id === key.slice(2))
+    return o ? t(OPENING_LABELS[o.kind]) : ''
+  }
+  const f = findFurniture(key.split(':')[1])
+  const d = f && ASSET_MAP.get(f.asset)
+  return d ? displayName(d) : ''
+}
+
+/** 按住门 / 抽屉拖动：pointer = -1 是漫游里锁定的鼠标（用 movementX / Y） */
+interface OpenDrag {
+  key: OpenKey
+  obj: THREE.Object3D
+  local: THREE.Vector3
+  pointer: number
+  x: number
+  y: number
+  moved: number
+}
+let openDrag: OpenDrag | null = null
+/** 预览里悬停提亮的门 / 抽屉、漫游里准星对着的 */
+let openHoverKey: OpenKey | null = null
+function hoverOpen(key: OpenKey | null) {
+  if (key === openHoverKey) return
+  openHoverKey = key
+  hoverHi.set(key ? openers.objects(key) : [])
+  dirty = true
+}
+
+const screenV = new THREE.Vector3()
+function toScreen(p: THREE.Vector3) {
+  const r = canvas.value!.getBoundingClientRect()
+  screenV.copy(p).project(stage.camera)
+  return { x: ((screenV.x + 1) / 2) * r.width, y: ((1 - screenV.y) / 2) * r.height }
+}
+/** 开合程度每加 1，按住的那一点在屏幕上往哪边挪多少像素（按现在的位置试探一小步） */
+function openScreenDir(d: OpenDrag) {
+  const v = openers.value(d.key)
+  const eps = v > 0.9 ? -0.08 : 0.08
+  const at = () => toScreen(d.obj.localToWorld(d.local.clone()))
+  const a = at()
+  const b = openers.probe(d.key, v + eps, at)
+  return b ? { x: (b.x - a.x) / eps, y: (b.y - a.y) / eps } : null
+}
+/** 拖动 (dx, dy) 像素：按住的那一点跟着指针走（正对着拉抽屉、推门时屏幕上几乎不动，改成往下拖拉开、往上拖推回） */
+function dragOpen(d: OpenDrag, dx: number, dy: number) {
+  d.moved += Math.abs(dx) + Math.abs(dy)
+  if (d.moved < TAP_SLOP) return
+  let v = openScreenDir(d)
+  if (!v || Math.hypot(v.x, v.y) < 60) v = { x: 0, y: 240 }
+  openers.set(d.key, openers.value(d.key) + (dx * v.x + dy * v.y) / (v.x * v.x + v.y * v.y), false)
+  dirty = true
+}
+/** 松手：没怎么动就是点了一下，开着的关上、关着的打开 */
+function endOpenDrag() {
+  const d = openDrag
+  openDrag = null
+  if (d && d.moved < TAP_SLOP) openers.toggle(d.key)
+  dirty = true
+}
+
+/** 漫游里的开合：锁定鼠标时左键点准星下的门 / 抽屉开关、按住拖动调开合、滚轮微调；触屏点一下开关 */
+let walkOpenDetach: (() => void) | null = null
+function attachWalkOpen(el: HTMLElement) {
+  let tap: { id: number; x: number; y: number; t: number } | null = null
+  const down = (e: PointerEvent) => {
+    if (e.pointerType !== 'mouse') {
+      tap = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now() }
+      return
+    }
+    if (!walker?.locked || e.button !== 0) return
+    const h = pickOpenAim()
+    if (!h) return
+    openDrag = { ...h, pointer: -1, x: 0, y: 0, moved: 0 }
+    walker.holdLook = true
+  }
+  const move = (e: MouseEvent) => {
+    if (openDrag?.pointer === -1) dragOpen(openDrag, e.movementX, e.movementY)
+  }
+  const up = (e: PointerEvent) => {
+    if (e.pointerType === 'mouse') {
+      if (openDrag?.pointer !== -1) return
+      endOpenDrag()
+      if (walker) walker.holdLook = false
+      return
+    }
+    if (tap?.id !== e.pointerId) return
+    if (Math.hypot(e.clientX - tap.x, e.clientY - tap.y) < TAP_SLOP && performance.now() - tap.t < 350) {
+      const h = pickOpenAt(e, REACH)
+      if (h) {
+        openers.toggle(h.key)
+        dirty = true
+      }
+    }
+    tap = null
+  }
+  const wheel = (e: WheelEvent) => {
+    const h = pickOpenAim()
+    if (!h) return
+    e.preventDefault()
+    openers.set(h.key, openers.target(h.key) - e.deltaY * 0.0012)
+    dirty = true
+  }
+  el.addEventListener('pointerdown', down)
+  document.addEventListener('mousemove', move)
+  window.addEventListener('pointerup', up)
+  window.addEventListener('pointercancel', up)
+  el.addEventListener('wheel', wheel, { passive: false })
+  return () => {
+    el.removeEventListener('pointerdown', down)
+    document.removeEventListener('mousemove', move)
+    window.removeEventListener('pointerup', up)
+    window.removeEventListener('pointercancel', up)
+    el.removeEventListener('wheel', wheel)
+    if (openDrag?.pointer === -1) openDrag = null
+  }
+}
+
 /** 进入漫游：预览模式，墙满高、楼层叠好、盖上天花板，镜头交给 Walker */
 async function enterWalk() {
   if (walking.value || !house) return
@@ -1733,6 +1984,7 @@ async function enterWalk() {
   walker = new Walker(raw, stage.camera, {
     lift: liftOf,
     onFloor: (id) => setFloor(id),
+    blockers: (id) => openers.segments(id),
   })
   if (isMultiFloor(raw)) setFloor(walker.floor)
   ceilingRoot = ceilings(raw, (id) => liftOf(id) + (floorGroups.find((g) => g.floor.id === id)?.wallH ?? 240))
@@ -1741,7 +1993,10 @@ async function enterWalk() {
   stage.camera.near = 5
   stage.camera.updateProjectionMatrix()
   await nextTick()
-  if (walker && walkLayer.value) walkDetach = walker.attach(walkLayer.value, (st) => (walkStick.value = st), (on) => (walkLocked.value = on))
+  if (walker && walkLayer.value) {
+    walkDetach = walker.attach(walkLayer.value, (st) => (walkStick.value = st), (on) => (walkLocked.value = on))
+    walkOpenDetach = attachWalkOpen(walkLayer.value)
+  }
   drawWalkMap(performance.now(), true)
   dirty = true
 }
@@ -1751,6 +2006,9 @@ function exitWalk() {
   if (!walking.value) return
   walkDetach?.()
   walkDetach = null
+  walkOpenDetach?.()
+  walkOpenDetach = null
+  hoverOpen(null)
   walker = null
   walkStick.value = null
   walkLocked.value = false
@@ -1787,6 +2045,11 @@ function leaveBlueprint(m: 'edit' | 'preview') {
 /** 切换布置 / 预览：预览时清掉选中、摆放和参考线，家具不可编辑 */
 function setMode(m: 'edit' | 'preview') {
   sandbox.mode = m
+  // 布置时摆放按存档里的位置算：沙盘里拉开的抽屉、柜门都回去
+  if (m === 'edit') {
+    openers.resetFurniture()
+    hoverOpen(null)
+  }
   if (m === 'preview') {
     selection.value = null
     placing.value = null
@@ -1804,7 +2067,18 @@ function onPointerDown(e: PointerEvent) {
   if (controls.autoRotate) sandbox.autoRotate = false
   const touch = e.pointerType !== 'mouse'
   if (touch) touches.set(e.pointerId, { x: e.clientX, y: e.clientY })
-  if (!editing.value) return
+  if (!editing.value) {
+    // 预览：按在门 / 抽屉上，点一下开关、按住拖动调开合（不转视角）
+    if (!walking.value && !openDrag && (touch ? touches.size === 1 : e.button === 0)) {
+      const h = pickOpenAt(e)
+      if (h) {
+        openDrag = { ...h, pointer: e.pointerId, x: e.clientX, y: e.clientY, moved: 0 }
+        controls.enabled = false
+        canvas.value?.setPointerCapture(e.pointerId)
+      }
+    }
+    return
+  }
   setHover(null)
   if (touch) return onTouchDown(e)
   if (e.button !== 0) {
@@ -1838,6 +2112,12 @@ let pendingDrag: { e: PointerEvent; id: string; slop: number } | null = null
 function onPointerMove(e: PointerEvent) {
   if (blueprint.on) return
   const touch = e.pointerType !== 'mouse'
+  if (openDrag && openDrag.pointer === e.pointerId) {
+    dragOpen(openDrag, e.clientX - openDrag.x, e.clientY - openDrag.y)
+    openDrag.x = e.clientX
+    openDrag.y = e.clientY
+    return
+  }
   if (pendingDrag && !touch) {
     if (e.buttons === 0) pendingDrag = null
     else {
@@ -1876,11 +2156,22 @@ function onPointerMove(e: PointerEvent) {
     setHover(id && id !== (selection.value?.type === 'furniture' ? selection.value.id : null) ? id : null)
     const sel = selection.value
     setHoverHouse(hit.house && !(sel && (sel.type === 'opening' || sel.type === 'fixture') && `${sel.type}:${sel.id}` === `${hit.house.kind}:${hit.house.id}`) ? hit.house : null)
+  } else if (e.buttons === 0 && !editing.value && !walking.value && !touch) {
+    // 预览：指着门 / 抽屉时提亮、换手形指针
+    const h = pickOpenAt(e)
+    hovering.value = !!h
+    hoverOpen(h?.key ?? null)
   }
 }
 
 function onPointerUp(e: PointerEvent) {
   if (blueprint.on) return
+  if (openDrag && openDrag.pointer === e.pointerId) {
+    if (e.pointerType !== 'mouse') touches.delete(e.pointerId)
+    endOpenDrag()
+    controls.enabled = true
+    return
+  }
   if (e.pointerType !== 'mouse') {
     touches.delete(e.pointerId)
     if (editing.value) onTouchUp(e)
@@ -1904,6 +2195,7 @@ function onPointerUp(e: PointerEvent) {
 }
 
 function onPointerLeave() {
+  if (!walking.value) hoverOpen(null)
   updateHoverRoom(null)
   setHover(null)
   setHoverHouse(null)
@@ -1962,6 +2254,14 @@ function onKey(e: KeyboardEvent) {
   // 漫游：Esc / V 退出，其余按键交给 Walker（走路、转身）
   // （鼠标锁定时浏览器自己吃掉 Esc 用来释放鼠标；刚释放的那一下不算退出）
   if (walking.value) {
+    if (k === 'e' && !e.repeat) {
+      const h = pickOpenAim()
+      if (h) {
+        openers.toggle(h.key)
+        dirty = true
+      }
+      return
+    }
     if ((e.key === 'Escape' || k === 'v') && !e.repeat && !walker?.locked && performance.now() - (walker?.unlockedAt ?? 0) > 250) exitWalk()
     return
   }
@@ -2260,6 +2560,8 @@ function loop() {
   }
   // 时间流逝动画：只有播放时才每帧推进（推进后由 watch 更新光照并标脏）
   if (sandbox.playing) sandbox.time = (sandbox.time + dt * sandbox.speed) % 24
+  // 门、抽屉开合的动画
+  if (openers.step(dt)) dirty = true
   // 阴影贴图只在场景本身变了时重画：转视角、粒子、选中圈闪烁都不影响投影（静止的户型省掉整整一遍阴影渲染）
   let shadowDirty = dirty
   // 太阳方向变了：阴影贴图要重画，但拖滑杆 / 播放时节流到每 100ms 一次
@@ -3007,7 +3309,7 @@ const QUALITIES: { id: Quality; label: string }[] = [
 const hudText = computed(() => {
   // 漫游时顶部有自己的提示
   if (walking.value) return ''
-  if (!editing.value) return device.coarse ? t('预览模式 · 单指旋转 · 双指缩放 / 平移') : t('预览模式 · 左键旋转 · 右键平移 · 滚轮缩放 · 鼠标所指房间前的墙自动处理 · P 或 Esc 回到布置')
+  if (!editing.value) return device.coarse ? t('预览模式 · 单指旋转 · 双指缩放 / 平移 · 点门、抽屉开关，按住拖动调开合') : t('预览模式 · 左键旋转 · 右键平移 · 滚轮缩放 · 点门、抽屉开关，按住拖动调开合 · 鼠标所指房间前的墙自动处理 · P 或 Esc 回到布置')
   return device.coarse
     ? t('单指旋转 · 双指缩放 / 平移 · 点家具选中，再按住拖动 · 点门窗、设备（厨房、楼梯…）编辑 · 双指拧转旋转 · 长按弹出菜单')
     : t('左键旋转 · 右键平移 · 滚轮缩放 · 点家具选中后拖动（自动贴墙对齐，Alt 关闭）· 点门窗、设备（厨房、楼梯…）编辑 · Q / E 旋转 · Delete 删除 · C 切换墙体显示 · F 重置视角 · P 预览')

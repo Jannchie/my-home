@@ -72,24 +72,12 @@ export function spotInRoom(fx: Fixture, pts: Plan['rooms'][number]['points']) {
 export function setOpen(plan: Pick<Plan, 'furniture'>, f: Furniture, open: boolean) {
   const def = ASSET_MAP.get(f.asset)
   if (!def?.openable || !!f.open === open) return
-  const cur = levels(f.asset, !!f.open)
-  const off = def.surface ? 1 : 0
   const moved = new Set<string>()
-  const base = f.z ?? 0
   ;(def.surfaces ?? []).forEach((s, i) => {
     if (!s.slide && !s.slideX) return
-    const lv = cur[i + off]
-    const on = plan.furniture.filter((o) => {
-      if (o.id === f.id || moved.has(o.id) || Math.abs((o.z ?? 0) - (base + lv.y)) >= 0.5) return false
-      const l = toLocal(f, o)
-      return lv.polys.some((pl) => pointInPolygon(l, pl.map(([x, z]) => ({ x, y: z }))))
-    })
     const k = open ? 1 : -1
-    const o0 = toWorld(f, 0, 0)
-    const o1 = toWorld(f, k * (s.slideX ?? 0), k * (s.slide ?? 0))
-    const dx = o1.x - o0.x
-    const dy = o1.y - o0.y
-    for (const o of on.flatMap((x) => [x, ...propsOn(plan, x)])) {
+    const { dx, dy } = slideOffset(f, k * (s.slideX ?? 0), k * (s.slide ?? 0))
+    for (const o of drawerContents(plan, f, i)) {
       if (moved.has(o.id)) continue
       moved.add(o.id)
       o.x = Math.round((o.x + dx) * 10) / 10
@@ -98,6 +86,31 @@ export function setOpen(plan: Pick<Plan, 'furniture'>, f: Furniture, open: boole
   })
   if (open) f.open = true
   else delete f.open
+}
+
+/** 柜子局部坐标里挪 (lx, lz) 换成平面上挪多少 */
+export function slideOffset(f: Furniture, lx: number, lz: number) {
+  const o0 = toWorld(f, 0, 0)
+  const o1 = toWorld(f, lx, lz)
+  return { dx: o1.x - o0.x, dy: o1.y - o0.y }
+}
+
+/**
+ * 柜子第 i 个可摆放层（def.surfaces 的下标）上的东西，连同摆在它们上面的；层的位置按柜子现在的 open 算。
+ * 抽屉格（slide）里的东西跟着抽屉拉出 / 推回。
+ */
+export function drawerContents(plan: Pick<Plan, 'furniture'>, f: Furniture, i: number): Furniture[] {
+  const def = ASSET_MAP.get(f.asset)
+  if (!def?.surfaces?.[i]) return []
+  const lv = levels(f.asset, !!f.open)[i + (def.surface ? 1 : 0)]
+  const base = f.z ?? 0
+  const on = plan.furniture.filter((o) => {
+    if (o.id === f.id || Math.abs((o.z ?? 0) - (base + lv.y)) >= 0.5) return false
+    const l = toLocal(f, o)
+    return lv.polys.some((pl) => pointInPolygon(l, pl.map(([x, z]) => ({ x, y: z }))))
+  })
+  const seen = new Set<string>()
+  return on.flatMap((x) => [x, ...propsOn(plan, x)]).filter((o) => !seen.has(o.id) && !!seen.add(o.id))
 }
 
 // ---------- 旧存档迁移 ----------

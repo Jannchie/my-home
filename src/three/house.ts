@@ -26,6 +26,7 @@ import { isIndoor, sharedIntervals, voidRailSegments, wallSegments, wallThicknes
 import { tatamiLayout } from '../tatami'
 import { doorColor, doorHandleOf, doorStyled, handleColor, hasSidelight, hasTransom, LEGACY_DOOR, LEGACY_ENTRANCE, LEGACY_SLIDING, sidelightWidth, TRANSOM_TOP } from '../doorStyles'
 import { doorLeafModel, liteModel } from './doorModels'
+import { barnPose, defaultDoorOpen, foldPose, slidingPose, swingPose } from '../doorMotion'
 import { addOutlines, ball, capsule, cyl, disposeHooks, mergeMeshes, mergeSolidColors, noTransparentShadows, pullDepth, rbox, shade, toon, useAnisotropy } from './toon'
 import { glow, poseDoors, type AssetDef } from './kit'
 import { freezeMatrices, syncMatrix } from './matrices'
@@ -1040,6 +1041,48 @@ function buildWalls(plan: Plan, H0: number, infos: OpeningInfo[], opts: HouseOpt
   return g
 }
 
+/**
+ * 把一个洞口的门扇摆到开合程度 open（0 = 关上，1 = 开到底；几何见 doorMotion.ts）。
+ * obj 是 buildOpenings 里带 doorPart 标记的组；房子是静态矩阵时同步矩阵。
+ */
+export function poseOpening(obj: THREE.Object3D, open: number) {
+  const info = obj.userData.info as OpeningInfo
+  const part = obj.userData.doorPart as string | undefined
+  if (!info || !part) return
+  const yaw = Math.atan2(-info.dir.y, info.dir.x)
+  const moved: THREE.Object3D[] = [obj]
+  if (part === 'leaf') {
+    const s = swingPose(info, open)
+    obj.position.set(s.origin.x, 0, s.origin.y)
+    obj.rotation.y = Math.atan2(-s.d.y, s.d.x)
+  } else if (part === 'slide' || part === 'fixed') {
+    const s = slidingPose(info, open)
+    const k = part === 'slide' ? 0 : 1
+    const c = add(add(info.center, mul(info.dir, s.along[k])), mul(info.out, s.off[k]))
+    obj.position.set(c.x, info.y0, c.y)
+  } else if (part === 'barn') {
+    const s = barnPose(info, open)
+    for (const c of obj.children)
+      if (c.userData.barnPanel) {
+        c.position.x = s.slide
+        moved.push(c)
+      }
+  } else if (part === 'fold') {
+    const [a, b, c] = foldPose(info, open)
+    for (const leaf of obj.children) {
+      const i = leaf.userData.foldLeaf as number | undefined
+      if (i === undefined) continue
+      const [p, q] = i === 0 ? [a, b] : [b, c]
+      // 折扇的局部 x 从 p 指向 q（第二扇的起点在折角处）
+      leaf.position.set((p.x + q.x) / 2, 0, (p.y + q.y) / 2)
+      if (Math.hypot(q.x - p.x, q.y - p.y) > 1e-6) leaf.rotation.y = Math.atan2(-(q.y - p.y), q.x - p.x)
+      else leaf.rotation.y = yaw
+      moved.push(leaf)
+    }
+  }
+  for (const m of moved) if (!m.matrixAutoUpdate) syncMatrix(m)
+}
+
 /** 门扇、推拉门、折叠门、窗 */
 function buildOpenings(infos: OpeningInfo[], H: number) {
   const g = new THREE.Group()
@@ -1047,28 +1090,21 @@ function buildOpenings(infos: OpeningInfo[], H: number) {
   for (const info of infos) {
     const { o, center, dir, out, width: w, wall } = info
     const yaw = Math.atan2(-dir.y, dir.x)
-    const p0 = add(center, mul(dir, -w / 2))
-    const p1 = add(center, mul(dir, w / 2))
     const doorH = top(198)
     if (o.kind === 'door') {
-      const hinge = o.hinge === 'start' ? p0 : p1
-      const u = o.hinge === 'start' ? dir : mul(dir, -1)
-      const sw = o.swing === 'in' ? mul(out, -1) : out
-      // 开到一半多一点：既看得出是门，又不挡视线
-      const a = (62 * Math.PI) / 180
-      const d = add(mul(u, Math.cos(a)), mul(sw, Math.sin(a)))
       const leaf = new THREE.Group()
       const isEntrance = info.owner.kind === 'entrance' && wall > 12
       if (!doorStyled(o)) {
         // 旧存档的门扇（数值不能动）
         const color = isEntrance ? LEGACY_ENTRANCE : LEGACY_DOOR
-        leaf.add(rbox(w - 4, doorH - 2, 3.6, color, { x: (w - 4) / 2, y: 1 }, 1.2))
-        leaf.add(rbox(3, 3, 7, C.steel, { x: w - 12, y: Math.min(95, doorH * 0.5) }, 1))
+        // 门扇比门洞窄 1（两侧各留 0.5 的缝），关上时看不到大门缝
+        leaf.add(rbox(w - 1, doorH - 2, 3.6, color, { x: (w - 1) / 2, y: 1 }, 1.2))
+        leaf.add(rbox(3, 3, 7, C.steel, { x: w - 9, y: Math.min(95, doorH * 0.5) }, 1))
       } else {
         // 款式见 three/doorModels.ts；带侧窗时门扇让出锁一侧的侧窗宽度
         const color = doorColor(o, isEntrance)
         const side = hasSidelight(o) ? sidelightWidth(w) : 0
-        const lw = w - 4 - side
+        const lw = w - 1 - side
         const body = doorLeafModel({ style: o.doorStyle, w: lw, h: doorH - 2, t: 3.6, color, handle: doorHandleOf(o), handleColor: handleColor(o), handleSide: 1 })
         body.position.set(lw / 2, 1, 0)
         leaf.add(body)
@@ -1085,40 +1121,38 @@ function buildOpenings(infos: OpeningInfo[], H: number) {
           g.add(lites)
         }
       }
-      leaf.position.set(hinge.x + sw.x * 2, 0, hinge.y + sw.y * 2)
-      leaf.rotation.y = Math.atan2(-d.y, d.x)
       leaf.userData.info = info
+      leaf.userData.doorPart = 'leaf'
       g.add(leaf)
     } else if (o.kind === 'sliding') {
-      // 引き戸：两扇错开，一扇推开一半（朝阳台的落地推拉窗在下面窗的分支里）
+      // 引き戸：两扇错开，起点一侧那扇推开（朝阳台的落地推拉窗在下面窗的分支里）
       const t = Math.max(2, wall / 4)
       if (o.doorStyle === 'barn') {
-        // 谷仓门：一整扇挂在墙面上（开向一侧）的明装轨道上，推开三成多
-        const face = o.swing === 'out' ? out : mul(out, -1)
+        // 谷仓门：一整扇挂在墙面上（开向一侧）的明装轨道上，沿轨道推开
+        const s = barnPose(info, 0)
         const pt = 3.6
-        const off = wall / 2 + pt / 2 + 1.5
-        const slide = w * 0.35
-        const pw = w + 8
         const barn = new THREE.Group()
-        barn.add(doorLeafModel({ style: 'barn', w: pw, h: doorH + 3, t: pt, color: doorColor(o, false), handle: doorHandleOf(o), handleColor: handleColor(o), handleSide: -1 }))
-        barn.children[0].position.x = slide
-        // 轨道 + 两个吊轮
+        const panel = new THREE.Group()
+        panel.add(doorLeafModel({ style: 'barn', w: s.pw, h: doorH + 3, t: pt, color: doorColor(o, false), handle: doorHandleOf(o), handleColor: handleColor(o), handleSide: -1 }))
+        // 轨道（盖住关上和推开到底两个位置）+ 两个吊轮（跟着门板走）
         const rail = '#2f3134'
-        barn.add(rbox(w * 1.8, 3, 2, rail, { x: slide / 2, y: doorH + 6, z: 0 }, 0.6))
-        for (const k of [-1, 1]) barn.add(rbox(3, 10, 1.2, rail, { x: slide + (k * pw) / 3, y: doorH - 2, z: pt / 2 + 0.6 }, 0.5))
-        const c = add(center, mul(face, off))
+        barn.add(rbox(w * 2 + 8, 3, 2, rail, { x: w / 2, y: doorH + 6, z: 0 }, 0.6))
+        for (const k of [-1, 1]) panel.add(rbox(3, 10, 1.2, rail, { x: (k * s.pw) / 3, y: doorH - 2, z: pt / 2 + 0.6 }, 0.5))
+        // 门板单独合并（带了业务标记的子树 mergeMeshes 不会再合并它）
+        mergeMeshes(panel)
+        panel.userData.barnPanel = true
+        barn.add(panel)
+        const c = add(center, mul(s.face, s.off))
         barn.position.set(c.x, info.y0, c.y)
         barn.rotation.y = yaw
         barn.userData.info = info
+        barn.userData.doorPart = 'barn'
         g.add(barn)
         continue
       }
       const styled = doorStyled(o)
       for (const k of [0, 1]) {
         const pw = w / 2 + 2
-        const along = k === 0 ? -w / 4 + w * 0.18 : w / 4
-        const off = (k === 0 ? 1 : -1) * (t / 2 + 0.5)
-        const c = add(add(center, mul(dir, along)), mul(out, off))
         const panel = new THREE.Group()
         const h = doorH
         if (!styled) {
@@ -1133,37 +1167,27 @@ function buildOpenings(infos: OpeningInfo[], H: number) {
           // 把手在两扇各自的外端（推开时手扶的那头）
           panel.add(doorLeafModel({ style: o.doorStyle, w: pw, h, t, color: doorColor(o, false), handle: doorHandleOf(o), handleColor: handleColor(o), handleSide: k === 0 ? -1 : 1 }))
         }
-        panel.position.set(c.x, info.y0, c.y)
         panel.rotation.y = yaw
         panel.userData.info = info
+        panel.userData.doorPart = k === 0 ? 'slide' : 'fixed'
         g.add(panel)
       }
     } else if (o.kind === 'folding') {
-      const into = o.swing === 'in' ? mul(out, -1) : out
-      const apex = add(add(p0, mul(dir, w / 2)), mul(into, w * 0.28))
-      // 两扇折门放进同一个组（同一个洞口、同一种颜色），组内合并成一个网格
+      // 两扇折门放进同一个组（同一个洞口），每扇各自合并、各自转
       const fold = new THREE.Group()
       fold.userData.info = info
+      fold.userData.doorPart = 'fold'
       g.add(fold)
       const styled = doorStyled(o)
-      for (const [i, [a, b]] of [
-        [p0, apex],
-        [apex, p1],
-      ].entries()) {
-        const L = dist(a, b)
-        const c = mul(add(a, b), 0.5)
-        if (!styled) {
-          const m = rbox(L, doorH, 2.4, LEGACY_SLIDING, { y: 0 }, 0.8)
-          m.position.set(c.x, doorH / 2, c.y)
-          m.rotation.y = Math.atan2(-(b.y - a.y), b.x - a.x)
-          fold.add(m)
-        } else {
-          // 拉手在两扇相接的折角处（第二扇的起点 = -x 端）
-          const m = doorLeafModel({ style: o.doorStyle, w: L, h: doorH, t: 2.4, color: doorColor(o, false), handle: doorHandleOf(o), handleColor: handleColor(o), handleSide: i === 1 ? -1 : 0 })
-          m.position.set(c.x, 0, c.y)
-          m.rotation.y = Math.atan2(-(b.y - a.y), b.x - a.x)
-          fold.add(m)
-        }
+      const L = w / 2 - 0.5
+      for (const i of [0, 1]) {
+        const leaf = new THREE.Group()
+        if (!styled) leaf.add(rbox(L, doorH, 2.4, LEGACY_SLIDING, { y: 0 }, 0.8))
+        // 拉手在两扇相接的折角处（第二扇的起点 = -x 端）
+        else leaf.add(doorLeafModel({ style: o.doorStyle, w: L, h: doorH, t: 2.4, color: doorColor(o, false), handle: doorHandleOf(o), handleColor: handleColor(o), handleSide: i === 1 ? -1 : 0 }))
+        mergeMeshes(leaf)
+        leaf.userData.foldLeaf = i
+        fold.add(leaf)
       }
     } else {
       // 窗：款式见 three/windows.ts（不填款式 = 旧的腰窗白框 + 半透明玻璃 / 朝阳台的落地推拉窗）
@@ -1193,6 +1217,7 @@ function buildOpenings(infos: OpeningInfo[], H: number) {
   }
   for (const c of g.children) {
     const info = c.userData.info as OpeningInfo
+    if (c.userData.doorPart) poseOpening(c, defaultDoorOpen(info.o))
     if (info) tagFade(c, info.center, info.out, info.outer)
     // 每个洞口的组（门扇 / 推拉扇 / 窗框）内部按材质合并：窗框 4~5 根白条并成一个，门扇和把手各一个；
     // 玻璃是半透明的，留在组外不合并。业务标记（info、fade）都在组上，让开时整组一起淡出

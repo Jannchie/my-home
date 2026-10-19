@@ -29,9 +29,14 @@ describe('房体合批', () => {
     for (const g of ops.children) {
       expect(g.userData.info).toBeTruthy()
       expect(g.userData.fade).toBeTruthy()
+      // 折叠门的两扇、谷仓门的门板各自开合，各自合并：按会动的那一扇分开数
+      const leafOf = (m: THREE.Object3D) => {
+        for (let o: THREE.Object3D | null = m; o && o !== g; o = o.parent) if (o.userData.foldLeaf !== undefined || o.userData.barnPanel) return o.id
+        return 0
+      }
       const mats = meshesIn(g)
         .filter((m) => !(m.material as THREE.Material).transparent)
-        .map((m) => (m.material as THREE.Material).uuid)
+        .map((m) => `${leafOf(m)}|${(m.material as THREE.Material).uuid}`)
       expect(new Set(mats).size).toBe(mats.length)
     }
   })

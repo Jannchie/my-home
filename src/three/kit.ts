@@ -714,21 +714,30 @@ export function movable<T extends THREE.Object3D>(o: T, m: DoorMotion): T {
 
 /** 按开 / 关摆好模型里所有会动的部件（可以反复调用，不会累积） */
 export function poseDoors(root: THREE.Object3D, open: boolean) {
+  for (const o of doorParts(root)) poseDoor(o, open ? 1 : 0)
+}
+
+/** 模型里会动的部件（门扇、抽屉…），按遍历顺序：同一件素材的模型顺序固定，下标可以当部件的编号 */
+export function doorParts(root: THREE.Object3D) {
+  const out: THREE.Object3D[] = []
   root.traverse((o) => {
-    const m = o.userData.door as DoorMotion | undefined
-    if (!m) return
-    const base = (o.userData.doorBase ??= { p: o.position.clone(), r: o.rotation.clone() }) as { p: THREE.Vector3; r: THREE.Euler }
-    o.position.copy(base.p)
-    o.rotation.copy(base.r)
-    if (open) {
-      if (m.kind === 'swing') o.rotation.y += m.angle
-      else if (m.kind === 'flap') o.rotation.x += m.angle
-      else if (m.kind === 'slide') o.position.x += m.dx
-      else o.position.z += m.dz
-    }
-    // 静态矩阵（freezeMatrices）的模型也要跟着变
-    if (!o.matrixAutoUpdate) syncMatrix(o)
+    if (o.userData.door) out.push(o)
   })
+  return out
+}
+
+/** 把一个会动的部件摆到开合程度 open（0 = 关着，1 = 开到底，中间按比例） */
+export function poseDoor(o: THREE.Object3D, open: number) {
+  const m = o.userData.door as DoorMotion
+  const base = (o.userData.doorBase ??= { p: o.position.clone(), r: o.rotation.clone() }) as { p: THREE.Vector3; r: THREE.Euler }
+  o.position.copy(base.p)
+  o.rotation.copy(base.r)
+  if (m.kind === 'swing') o.rotation.y += m.angle * open
+  else if (m.kind === 'flap') o.rotation.x += m.angle * open
+  else if (m.kind === 'slide') o.position.x += m.dx * open
+  else o.position.z += m.dz * open
+  // 静态矩阵（freezeMatrices）的模型也要跟着变
+  if (!o.matrixAutoUpdate) syncMatrix(o)
 }
 
 /** 模型里会动的部件个数 */

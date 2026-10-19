@@ -1,6 +1,6 @@
 // 第一人称漫游：以人的视角在户型里走动。
 //   - 能走的地方：除挑空以外的房间（含卫浴、收纳、阳台；阳台从落地窗出去），由 nav.ts 的 walk 网格判断，
-//     碰到墙和家具时贴着滑过去，不穿模。
+//     碰到墙和家具时贴着滑过去，不穿模。房门按现在的开合挡人（WalkHost.blockers）：关着的过不去，开着的门扇绕着走。
 //   - 地面高度跟着脚下的房间走（玄関土间低一截），眼睛高度缓动过去，跨台阶不会一下跳。
 //   - 楼梯：和平地一样自由走，脚下的高度取踩着的那级踏面（stairs.ts 的 stairLayout）；高差太大的地方（梯段之间、
 //     楼梯侧面）跨不过去，扶手挡人。下层从踏步低的一头踏上去，上层只能从出梯口下去。不沿路线拉着走、不自动转向。
@@ -45,6 +45,8 @@ export interface WalkHost {
   lift(floor: string): number
   /** 走到了另一层（沙盘跟着切当前层） */
   onFloor(floor: string): void
+  /** 某层现在挡路的门板（关着、半开的房门；平面坐标的线段），不填 = 门洞都走得过 */
+  blockers?(floor: string): [Vec, Vec][]
 }
 
 /** 一段楼梯（平面坐标）：踏面、扶手、占地、出梯口，和占地边上当墙的点（不是楼梯口的那几段） */
@@ -166,6 +168,10 @@ export class Walker {
   /** 每层头顶的上层楼板：楼板底下沿的楼层（上一层）、楼板开洞的地方（楼梯洞口、挑空，头顶是空的） */
   private overhead = new Map<string, { above: string; open: Vec[][] }>()
   private vel = { x: 0, y: 0 }
+  /** 这一帧挡路的门板 */
+  private doors: [Vec, Vec][] = []
+  /** 按住拖着门 / 抽屉时：鼠标、手指不转视角 */
+  holdLook = false
 
   constructor(
     plan: Plan,
@@ -233,6 +239,7 @@ export class Walker {
       side /= l
     }
     const before = { x: this.pos.x, y: this.pos.y, yaw: this.yaw, eye: this.camera.position.y }
+    this.doors = this.host.blockers?.(this.floor) ?? []
     const v = k.has('shift') ? RUN_V : WALK_V
     // 平面上的前、右（镜头默认朝 -z，平面 y 对应世界 z）
     const f = { x: -Math.sin(this.yaw), y: -Math.cos(this.yaw) }
@@ -334,7 +341,7 @@ export class Walker {
       return true
     }
     // 楼梯占地边上不是楼梯口的那几段当墙；出生点卡在障碍里时允许往空处走
-    if (this.edgeBlocks(p, q)) return false
+    if (this.edgeBlocks(p, q) || this.doorBlocks(p, q)) return false
     const g = this.grid()
     if (this.ok(p) ? !this.ok(q) : g.clearAt('walk', q) <= g.clearAt('walk', p)) return false
     this.pos = q
@@ -362,9 +369,18 @@ export class Walker {
     return false
   }
 
+  /** 离门板不到身体半径、还在往门板靠（关着的门过不去，开着的门扇绕着走） */
+  private doorBlocks(p: Vec, q: Vec) {
+    return this.doors.some((s) => {
+      const d = segD(q, s)
+      return d < BODY_R && d < segD(p, s)
+    })
+  }
+
   private setFloor(floor: string) {
     if (floor === this.floor) return
     this.floor = floor
+    this.doors = this.host.blockers?.(floor) ?? []
     this.host.onFloor(floor)
   }
 
@@ -403,7 +419,7 @@ export class Walker {
     }
     const filter = new MouseFilter()
     const mmove = (e: MouseEvent) => {
-      if (this.locked && filter.accept(e.movementX, e.movementY, performance.now())) this.look(e.movementX, e.movementY, 0.0022)
+      if (this.locked && filter.accept(e.movementX, e.movementY, performance.now()) && !this.holdLook) this.look(e.movementX, e.movementY, 0.0022)
     }
     // 触屏：落在左下区域是摇杆，其余拖动看四周
     let lookId: number | null = null
@@ -434,7 +450,7 @@ export class Walker {
     const pmove = (e: PointerEvent) => {
       if (e.pointerId === lookId) {
         // 触屏手指移动幅度大，转得慢一点
-        this.look((e.clientX - last.x) * 0.7, (e.clientY - last.y) * 0.7)
+        if (!this.holdLook) this.look((e.clientX - last.x) * 0.7, (e.clientY - last.y) * 0.7)
         last = { x: e.clientX, y: e.clientY }
       } else if (e.pointerId === stickId) {
         const b = el.getBoundingClientRect()
