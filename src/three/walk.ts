@@ -527,10 +527,28 @@ export function startPoint(plan: Plan, nav: HouseNav, avoid: (floor: string, p: 
  * 漫游时盖在各个户内房间上的天花板（不投影、不受阴影，只挡住上面的天空 / 上层楼板的背面）。
  * 上一层楼板开洞的地方（楼梯洞口、挑空）不盖，抬头看得到上层、楼梯走得上去。
  */
+let ceilingMat: THREE.MeshToonMaterial | null = null
+/**
+ * 天花板材质：双面（只有朝下的一面）；室内灯（点光源）只照到三成——吸顶灯的光源离天花板只有几厘米、正对着它，
+ * 照满了整面天花板会过曝（真实的吸顶灯也主要往下照）。复制一份 toon 材质，不动共享缓存里的那份
+ */
+function ceilingMaterial() {
+  if (ceilingMat) return ceilingMat
+  const src = toon('#f3efe8') as THREE.MeshToonMaterial
+  const m = src.clone()
+  m.side = THREE.DoubleSide
+  m.onBeforeCompile = (sh, r) => {
+    src.onBeforeCompile(sh, r)
+    if (sh.uniforms.lmPointScale) sh.uniforms.lmPointScale.value = 0.3
+  }
+  m.customProgramCacheKey = () => 'walk-ceiling'
+  ceilingMat = m
+  return m
+}
+
 export function ceilings(plan: Plan, heightOf: (floor: string) => number): THREE.Group {
   const g = new THREE.Group()
-  const mat = toon('#f3efe8')
-  mat.side = THREE.DoubleSide
+  const mat = ceilingMaterial()
   const multi = isMultiFloor(plan)
   const holesOf = new Map<string, Vec[][]>()
   for (const f of planFloors(plan)) {

@@ -24,7 +24,7 @@ import { pickTub, tubGuides } from '../tubTop'
 import { createStage, fitSun, frameCamera, setStageQuality, type Stage } from '../three/stage'
 import { attachPost, LOOKS, LOOK_MAP, type LookId, type Post } from '../three/post'
 import { CITIES, MONTH_DAYS, compassAxes, skyState, type SkyState } from '../three/sky'
-import { IndoorLights, KELVIN_MAX, KELVIN_MIN, LIGHT_MODES, POOL_HIGH, POOL_LOW, POWER_MAX, POWER_MIN, autoLevel, diningKey, isLampAsset, lightColor, type LightMode } from '../three/lights'
+import { IndoorLights, KELVIN_MAX, KELVIN_MIN, LIGHT_MODES, POOL_HIGH, POOL_LOW, POWER_MAX, POWER_MIN, RANGE_MAX, RANGE_MIN, autoLevel, diningKey, isLampAsset, lightColor, type LightMode } from '../three/lights'
 import { disposeUnshared } from '../three/toon'
 import { poseDoors } from '../three/kit'
 import { drawerSlots } from '../three/drawers'
@@ -2746,14 +2746,14 @@ function applyLights() {
   const s = skyNow.value
   if (!s || !lights) return
   const power = sandbox.lightPower / 100
-  lights.setState({ global: sandbox.lightMode, kelvin: sandbox.lightK, auto: autoLevel(s.altitude), night: s.night, power })
+  lights.setState({ global: sandbox.lightMode, kelvin: sandbox.lightK, auto: autoLevel(s.altitude), night: s.night, power, range: sandbox.lightRange / 100 })
   const kel = lightColor(sandbox.lightK)
   const avg = lights.averageLevel
   post.setIndoor(kel, avg * Math.min(1.2, power))
   // 夜里开着灯：整体补一点暖色的氛围光（天光加强、地面反光偏暖），让平均亮度上来，不靠灯池中心的高光
   const fill = avg * s.night * power
   // （天光本身保持蓝紫，只加强度、地面反光偏暖：底座、户外仍是夜色）
-  stage.hemi.intensity = s.hemiIntensity + 0.25 * fill
+  stage.hemi.intensity = s.hemiIntensity + 0.55 * fill
   stage.hemi.color.copy(s.hemiSky)
   stage.hemi.groundColor.copy(s.hemiGround).lerp(kel, Math.min(1, 0.6 * fill))
   dirty = true
@@ -2935,7 +2935,7 @@ watch(
     applyLights()
   },
 )
-watch(() => [sandbox.lightMode, sandbox.lightK, sandbox.lightPower], applyLights)
+watch(() => [sandbox.lightMode, sandbox.lightK, sandbox.lightPower, sandbox.lightRange], applyLights)
 
 watch(() => plan.value.furniture, syncFurniture, { deep: true })
 // 布置 / 预览切换：角色回家静止 / 开始活动（素材里的角色部分随之隐藏、复原，阴影贴图要重画）
@@ -3646,6 +3646,11 @@ defineExpose({ resetView })
           <span>{{ t('亮度') }}</span>
           <input v-model.number="sandbox.lightPower" type="range" :min="POWER_MIN" :max="POWER_MAX" step="5" :aria-label="t('亮度')" />
           <span class="num val kval">{{ sandbox.lightPower }}%</span>
+        </label>
+        <label class="row" :title="t('灯光能照多远：调大后房间角落也亮')">
+          <span>{{ t('范围') }}</span>
+          <input v-model.number="sandbox.lightRange" type="range" :min="RANGE_MIN" :max="RANGE_MAX" step="10" :aria-label="t('范围')" />
+          <span class="num val kval">{{ sandbox.lightRange }}%</span>
         </label>
         <p class="q-note">{{ sandbox.lightMode === 'auto' ? t('自动：日落前后渐亮，清晨渐灭。点选天花板的灯或灯具可以单独开关') : t('点选天花板的灯或灯具可以单独开关；单独设过的不受这里影响') }}</p>
         <div class="look">

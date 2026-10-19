@@ -266,18 +266,35 @@ export const lightMaskUniforms = {
   lmLight: { value: new Float32Array(LM_MAX_LIGHTS * 4) },
 }
 
-const PARS = /* glsl */ `
+/**
+ * 房间编号图的读取（GLSL）：uniform、按高度定楼层、取某层某处的编号。受光材质的遮罩和体积光（volumetric.ts）共用，
+ * 编号图的编码（各层上下拼、图外按户外）只在这里写一次。uniform 接 lightMaskUniforms
+ */
+export const LM_FETCH_GLSL = /* glsl */ `
 uniform sampler2D lmMap;
 uniform vec4 lmGrid;
 uniform vec4 lmInfo;
 uniform float lmFloorY[ ${LM_MAX_FLOORS} ];
-uniform vec4 lmLight[ ${LM_MAX_LIGHTS} ];
+// 世界高度 y 落在第几层（各层地面的当前高度，往下留 2cm）
+float lmFloorOf( float y ) {
+	float f = 0.0;
+	for ( int k = 1; k < ${LM_MAX_FLOORS}; k ++ ) {
+		if ( float( k ) < lmInfo.y && y >= lmFloorY[ k ] - 2.0 ) f = float( k );
+	}
+	return f;
+}
 // 第 f 层编号图在 xz 处的 (编号, 上层洞口编号, 下层洞口编号)；图外 = 户外
 vec3 lmFetch( vec2 xz, float f ) {
 	vec2 uv = ( xz - lmGrid.xy ) * lmGrid.zw;
 	if ( uv.x < 0.0 || uv.y < 0.0 || uv.x >= 1.0 || uv.y >= 1.0 ) return vec3( ${LM_OUTDOOR}.0, 0.0, 0.0 );
 	return floor( texture2D( lmMap, vec2( uv.x, ( uv.y + f ) / lmInfo.y ) ).rgb * 255.0 + 0.5 );
 }
+`
+
+const PARS = /* glsl */ `
+${LM_FETCH_GLSL}
+uniform vec4 lmLight[ ${LM_MAX_LIGHTS} ];
+uniform float lmPointScale;
 // L：灯（楼层, 编号, 不受遮罩）；c：片元所在格子（楼层, 编号, 上层洞口编号, 下层洞口编号），c.x < 0 = 遮罩关闭
 float lmPass( vec4 L, vec4 c ) {
 	if ( c.x < -0.5 || L.z > 0.5 ) return 1.0;
@@ -289,15 +306,17 @@ float lmPass( vec4 L, vec4 c ) {
 
 const LOOKUP = /* glsl */ `
 vec4 lmCell = vec4( -1.0 );
+// 片元的世界坐标、是不是水平面（地面、墙顶）：墙体格子里的水平面按灯的方向再归一次房间（见 POINT_PASS）
+vec3 lmWP = vec3( 0.0 );
+float lmFlat = 0.0;
 if ( lmInfo.x > 0.5 ) {
 	// 视空间 → 世界：viewMatrix 是刚体变换，逆 = 转置旋转
 	vec3 lmW = ( vec4( geometryPosition - viewMatrix[ 3 ].xyz, 0.0 ) * viewMatrix ).xyz;
 	vec3 lmN = normalize( ( vec4( geometryNormal, 0.0 ) * viewMatrix ).xyz );
 	vec3 lmP = lmW + lmN * lmInfo.z;
-	float lmF = 0.0;
-	for ( int k = 1; k < ${LM_MAX_FLOORS}; k ++ ) {
-		if ( float( k ) < lmInfo.y && lmP.y >= lmFloorY[ k ] - 2.0 ) lmF = float( k );
-	}
+	lmWP = lmW;
+	lmFlat = abs( lmN.y ) >= 0.7 ? 1.0 : 0.0;
+	float lmF = lmFloorOf( lmP.y );
 	lmCell = vec4( lmF, lmFetch( lmP.xz, lmF ) );
 	// 墙体里的竖直面（墙段端面、门洞侧壁、厚外墙里的门扇）：往镜头那边再走出一个墙厚取样，
 	// 归到看得见它的那一侧（外墙外侧的接缝不会被室内灯照亮）；仍在墙里（或是墙顶这类水平面）就按墙体放行
@@ -313,6 +332,27 @@ if ( lmInfo.x > 0.5 ) {
 `
 
 const POINT = 'getPointLightInfo( pointLight, geometryPosition, directLight );'
+/**
+ * 每盏点光源的遮罩。墙体格子里的水平面（门洞里的地面、房间接缝处的墙脚地面、墙顶）以前对同层的灯一律放行，
+ * 照明范围一大，好几盏灯叠在接缝上，地面亮出一条线：这里往这盏灯的方向走出一个墙厚再取一次样，
+ * 落进房间就按那间算（灯在隔壁房间就照不到这条缝），还在墙里才放行。
+ * lmPointScale：这个材质接收室内灯的比例（每个材质自己的 uniform，默认 1；漫游的天花板设成 0.3，见 walk.ts）
+ */
+// 包一层花括号：three 展开灯的循环时不给每一轮加作用域，lmC 会重复声明
+const POINT_PASS = /* glsl */ `
+		{
+		vec4 lmC = lmCell;
+		if ( lmC.x > -0.5 && lmC.y < 0.5 && lmFlat > 0.5 ) {
+			vec3 lmLW = ( vec4( pointLight.position - viewMatrix[ 3 ].xyz, 0.0 ) * viewMatrix ).xyz;
+			vec2 lmD = lmLW.xz - lmWP.xz;
+			float lmDL = length( lmD );
+			if ( lmDL > 1e-3 ) {
+				vec3 lmC3 = lmFetch( lmWP.xz + lmD / lmDL * lmInfo.w, lmC.x );
+				if ( lmC3.x > 0.5 ) lmC.yzw = lmC3;
+			}
+		}
+		directLight.color *= lmPass( lmLight[ i ], lmC ) * lmPointScale;
+		}`
 const ANCHOR = 'IncidentLight directLight;'
 let patched: string | null = null
 let warned = false
@@ -325,7 +365,7 @@ function maskedLightsChunk() {
     patched = ''
     return patched
   }
-  patched = src.replace(ANCHOR, `${LOOKUP}\n${ANCHOR}`).replace(POINT, `${POINT}\n\t\tdirectLight.color *= lmPass( lmLight[ i ], lmCell );`)
+  patched = src.replace(ANCHOR, `${LOOKUP}\n${ANCHOR}`).replace(POINT, `${POINT}\n${POINT_PASS}`)
   return patched
 }
 
@@ -344,6 +384,8 @@ export function injectLightMask(sh: THREE.WebGLProgramParametersWithUniforms) {
     return
   }
   Object.assign(sh.uniforms, lightMaskUniforms)
+  // 每个材质自己一份（不共享）：要改的材质在自己的 onBeforeCompile 里调完这里再改 value
+  sh.uniforms.lmPointScale = { value: 1 }
   sh.fragmentShader = PARS + sh.fragmentShader.replace('#include <lights_fragment_begin>', chunk)
 }
 

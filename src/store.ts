@@ -12,7 +12,7 @@ import { ASSET_MAP } from './three/assets'
 import type { StyleTag } from './three/kit'
 import type { PatternSpec } from './three/patterns'
 import { CITIES, DEFAULT_GEO, type Geo } from './three/sky'
-import { DEFAULT_KELVIN, DEFAULT_POWER, POWER_MAX, POWER_MIN, clampKelvin, isLightMode, type LightMode } from './three/lights'
+import { DEFAULT_KELVIN, DEFAULT_POWER, DEFAULT_RANGE, POWER_MAX, POWER_MIN, RANGE_MAX, RANGE_MIN, clampKelvin, isLightMode, type LightMode } from './three/lights'
 import { ensureOutdoorUnits as ensureOutdoorUnits1, indoorUnits, planArea, randomSeed, type GenOptions } from './generate'
 import { generatePlan } from './generate-region'
 import { lang, t } from './i18n'
@@ -374,14 +374,15 @@ watch(
  * 室内灯光的全局设置：lightMode 自动（按太阳高度渐亮渐灭）/ 开 / 关，lightK 色温（K），lightPower 亮度（%）。单独存一个键，不进户型数据；
  * 单个房间、单个灯具的开关和色温覆盖存在户型里（Room.light / lightK、Furniture.light）。
  */
-function loadLights(): { lightMode: LightMode; lightK: number; lightPower: number } {
-  const d = { lightMode: 'auto' as LightMode, lightK: DEFAULT_KELVIN, lightPower: DEFAULT_POWER }
+function loadLights(): { lightMode: LightMode; lightK: number; lightPower: number; lightRange: number } {
+  const d = { lightMode: 'auto' as LightMode, lightK: DEFAULT_KELVIN, lightPower: DEFAULT_POWER, lightRange: DEFAULT_RANGE }
   try {
     const raw = JSON.parse(localStorage.getItem(LIGHTS_KEY) || 'null')
     if (raw && typeof raw === 'object') {
       if (isLightMode(raw.mode)) d.lightMode = raw.mode
       if (Number.isFinite(raw.k)) d.lightK = clampKelvin(raw.k)
       if (Number.isFinite(raw.power)) d.lightPower = Math.round(Math.min(POWER_MAX, Math.max(POWER_MIN, raw.power)))
+      if (Number.isFinite(raw.range)) d.lightRange = Math.round(Math.min(RANGE_MAX, Math.max(RANGE_MIN, raw.range)))
     }
   } catch {
     /* 读不到就用默认 */
@@ -389,10 +390,10 @@ function loadLights(): { lightMode: LightMode; lightK: number; lightPower: numbe
   return d
 }
 watch(
-  () => [sandbox.lightMode, sandbox.lightK, sandbox.lightPower],
+  () => [sandbox.lightMode, sandbox.lightK, sandbox.lightPower, sandbox.lightRange],
   () => {
     try {
-      localStorage.setItem(LIGHTS_KEY, JSON.stringify({ mode: sandbox.lightMode, k: sandbox.lightK, power: sandbox.lightPower }))
+      localStorage.setItem(LIGHTS_KEY, JSON.stringify({ mode: sandbox.lightMode, k: sandbox.lightK, power: sandbox.lightPower, range: sandbox.lightRange }))
     } catch {
       /* 存储不可用时忽略 */
     }

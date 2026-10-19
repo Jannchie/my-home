@@ -1018,6 +1018,8 @@ Object.assign(UI, {
   室内灯光: ['室内照明', 'Indoor lights'],
   色温: ['色温度', 'Color temp'],
   亮度: ['明るさ', 'Brightness'],
+  范围: ['範囲', 'Reach'],
+  '灯光能照多远：调大后房间角落也亮': ['明かりが届く距離：大きくすると部屋の隅まで明るくなります', 'How far lights reach: raise it to light up room corners'],
   开: ['オン', 'On'],
   关: ['オフ', 'Off'],
   灯: ['照明', 'Light'],

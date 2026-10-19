@@ -80,7 +80,7 @@ describe('开关与色温', () => {
     expect(Math.abs(cool.r - cool.b)).toBeLessThan(0.1)
     const lum = (c: THREE.Color) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
     expect(lum(lightColor(2700))).toBeCloseTo(lum(lightColor(6500)), 5)
-    expect(DEFAULT_KELVIN).toBe(3000)
+    expect(DEFAULT_KELVIN).toBe(4000)
   })
 
   test('发光部件：白天不变，夜里有上限（不过曝）', () => {
