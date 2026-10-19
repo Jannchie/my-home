@@ -1,8 +1,10 @@
 // 派生配色（虚拟配色）：让每种风格都能覆盖几乎所有素材，而不改动素材原生配色的下标。
 //
 // 编号约定（存档里 Furniture.color）：
-//   0 .. n-1          素材自己的原生配色（含义永远不变）
-//   1000 + 风格序号    该风格的派生配色，风格序号见 STYLE_ORDER（只追加、不改顺序）
+//   0 .. n-1                       素材自己的原生配色（含义永远不变）
+//   1000 + 变体 × 100 + 风格序号    该风格的第「变体」套派生配色，风格序号见 STYLE_ORDER（只追加、不改顺序）；
+//                                  变体 0 就是以前唯一的那套（1000 + 风格序号），旧存档不变
+// 每种风格至少给 MIN_PER_STYLE 套配色：原生的不够就用派生补齐（变体 v 用该风格的第 hash + v 套色板）。
 //
 // 派生规则：
 //   1. 模板：从素材的原生配色里挑「最接近目标风格」的一组（TEMPLATE_PREF），没有就用第 0 组。
@@ -24,9 +26,15 @@ import { LEGACY_FAMILY } from './family.legacy'
 export const STYLE_ORDER: readonly StyleTag[] = ['cute', 'nordic', 'modern', 'japanese', 'industrial', 'retro', 'chinese', 'classic', 'farmhouse']
 export const DERIVED_BASE = 1000
 
+/** 派生配色编号里「变体」的步长 */
+const VARIANT_STRIDE = 100
+/** 每种风格至少有几套配色（原生 + 派生） */
+export const MIN_PER_STYLE = 4
+
 export const isDerived = (color: number | undefined) => (color ?? 0) >= DERIVED_BASE
-export const derivedIndex = (style: StyleTag) => DERIVED_BASE + STYLE_ORDER.indexOf(style)
-export const derivedStyle = (color: number): StyleTag | undefined => STYLE_ORDER[color - DERIVED_BASE]
+export const derivedIndex = (style: StyleTag, variant = 0) => DERIVED_BASE + variant * VARIANT_STRIDE + STYLE_ORDER.indexOf(style)
+export const derivedStyle = (color: number): StyleTag | undefined => STYLE_ORDER[(color - DERIVED_BASE) % VARIANT_STRIDE]
+export const derivedVariant = (color: number) => Math.floor((color - DERIVED_BASE) / VARIANT_STRIDE)
 
 /** 原生第 i 组配色的风格 */
 export const nativeStyle = (def: AssetDef, i: number): StyleTag => def.paletteStyles?.[i] ?? def.styles?.[0] ?? 'cute'
@@ -54,32 +62,52 @@ export const STYLE_KITS: Record<StyleTag, Kit[]> = {
   cute: [
     { light: '#fffaf3', wood: '#f3dcbc', dark: '#6b5b6e', metal: '#e6e1ea', fabric: '#ffd6e0', accent: '#a6e3cc', accent2: '#fff1a8' },
     { light: '#fbf7f1', wood: '#ecd2b0', dark: '#5f6a8a', metal: '#dfe6ee', fabric: '#cfe6fb', accent: '#ffb3c7', accent2: '#d9c8f5' },
+    { light: '#fffdf7', wood: '#f6e2c4', dark: '#6a5a7a', metal: '#ece4f2', fabric: '#e2d4f7', accent: '#ffc9a8', accent2: '#bfe8d6' },
+    { light: '#fff8f4', wood: '#efd6b8', dark: '#5a6e6a', metal: '#e1ece8', fabric: '#c9ecd9', accent: '#ffd38a', accent2: '#ffb3c7' },
+    { light: '#fdfaf6', wood: '#e9cfac', dark: '#7a5a5e', metal: '#f0e4e4', fabric: '#fff0b8', accent: '#9fd4f2', accent2: '#ffb7b2' },
   ],
   nordic: [
     { light: '#f7f5f0', wood: '#d9b98c', dark: '#3f4652', metal: '#b9bfc4', fabric: '#e8e1d4', accent: '#9fb4c7', accent2: '#a9bfa3' },
     { light: '#f3f1ec', wood: '#cfae80', dark: '#4a4f55', metal: '#c9cdd0', fabric: '#d9dde0', accent: '#a9bfa3', accent2: '#e3b549' },
+    { light: '#faf8f4', wood: '#e6cfa8', dark: '#2f3a44', metal: '#d2d5d6', fabric: '#c7cfc4', accent: '#d9a38a', accent2: '#7d93a8' },
+    { light: '#f5f3ef', wood: '#c49a6c', dark: '#3a3f3a', metal: '#b4b9b6', fabric: '#e4d6c3', accent: '#6f8a7a', accent2: '#c98f6a' },
+    { light: '#f8f7f3', wood: '#ead9bd', dark: '#45505c', metal: '#c2c8cc', fabric: '#b9c6cf', accent: '#e0c27a', accent2: '#a7b59a' },
   ],
   modern: [
     { light: '#f4f4f2', wood: '#7a5a43', dark: '#24252a', metal: '#c3c7cc', fabric: '#d7d8db', accent: '#3d3f44', accent2: '#8a8d93' },
     { light: '#efefed', wood: '#a07f62', dark: '#2b2c30', metal: '#9aa0a7', fabric: '#8a8d93', accent: '#2e3a52', accent2: '#cbbba4' },
+    { light: '#f2f1ee', wood: '#5a4334', dark: '#1d1e22', metal: '#b9a37e', fabric: '#4a5560', accent: '#b8835a', accent2: '#d9d2c5' },
+    { light: '#f6f6f4', wood: '#b9a38a', dark: '#33363b', metal: '#d0d3d6', fabric: '#c9c3b8', accent: '#56715e', accent2: '#2a2b2f' },
+    { light: '#ededeb', wood: '#6e5444', dark: '#262a33', metal: '#a5abb3', fabric: '#6b7280', accent: '#a34a3c', accent2: '#e6e2da' },
   ],
   japanese: [
     { light: '#f6f0e1', wood: '#c9a06e', dark: '#3e3a39', metal: '#6e6a66', fabric: '#e7dcc4', accent: '#3d5a80', accent2: '#d65a3c' },
     { light: '#f3eee4', wood: '#e2c597', dark: '#4a3a2e', metal: '#8a8580', fabric: '#d9cdb4', accent: '#6b7f4e', accent2: '#3d5a80' },
+    { light: '#f8f3e8', wood: '#d6b585', dark: '#2f2c2b', metal: '#7a756e', fabric: '#c9d1bf', accent: '#8a6a9a', accent2: '#c9a24a' },
+    { light: '#f1ebdc', wood: '#a87c52', dark: '#38302a', metal: '#6a6560', fabric: '#e4d8c0', accent: '#2f4f6f', accent2: '#7a8f5a' },
+    { light: '#f5efe2', wood: '#ead2a8', dark: '#433a33', metal: '#9a948c', fabric: '#d4c6b0', accent: '#b8463a', accent2: '#5e7a8a' },
   ],
   industrial: [
     { light: '#e2ded8', wood: '#7b5236', dark: '#2e2e30', metal: '#7c8085', fabric: '#9a5f3a', accent: '#c46a3a', accent2: '#5d6b4a' },
     { light: '#d6d3cd', wood: '#8a6242', dark: '#3a3a3c', metal: '#a8a5a0', fabric: '#6e4b33', accent: '#3b5a80', accent2: '#a5543f' },
+    { light: '#cfcbc4', wood: '#6a4630', dark: '#242628', metal: '#8e9297', fabric: '#4a5a4a', accent: '#d08a3a', accent2: '#7a2f2a' },
+    { light: '#e6e2db', wood: '#9a7250', dark: '#33302d', metal: '#b39a72', fabric: '#3f4a58', accent: '#a5543f', accent2: '#c9b38a' },
+    { light: '#dcd8d0', wood: '#5e4231', dark: '#1f2124', metal: '#6f757b', fabric: '#8a6a4a', accent: '#4f6a5a', accent2: '#c46a3a' },
   ],
   retro: [
     { light: '#f4e7c8', wood: '#a8683a', dark: '#4a3426', metal: '#c8b89a', fabric: '#e0a526', accent: '#2f8f8a', accent2: '#e2702f' },
     { light: '#f0e6d6', wood: '#b97d4b', dark: '#3f2e26', metal: '#d0c3a8', fabric: '#8c8c3a', accent: '#c8473a', accent2: '#2f8f8a' },
+    { light: '#f6ead0', wood: '#9a5e34', dark: '#3a2a22', metal: '#d8c08a', fabric: '#d97a5a', accent: '#5a7a3a', accent2: '#e0b02a' },
+    { light: '#efe3cc', wood: '#c48a52', dark: '#2f3a4a', metal: '#b8a888', fabric: '#4f7a8a', accent: '#e2702f', accent2: '#e8c8a0' },
+    { light: '#f3e9d2', wood: '#8a5a3a', dark: '#4a2e2a', metal: '#c9b48e', fabric: '#b0663a', accent: '#3a6a5a', accent2: '#d8a83a' },
   ],
   // 新中式：红木 / 胡桃深木、朱红漆、墨黑、象牙白、玉绿 / 青瓷，黄铜金点缀
   chinese: [
     { light: '#f2eadb', wood: '#6b3a2a', dark: '#2b2624', metal: '#c9a25a', fabric: '#e8dcc6', accent: '#b8352b', accent2: '#7fa48f', spread: 0.3 },
     { light: '#efe8da', wood: '#5a3b2a', dark: '#1f1c1b', metal: '#b8955a', fabric: '#a9c2b0', accent: '#8a2f2a', accent2: '#2f3f5c', spread: 0.3 },
     { light: '#f4efe6', wood: '#7a4a32', dark: '#2b2624', metal: '#c9a25a', fabric: '#d8cdb8', accent: '#b8352b', accent2: '#3f6b5a', spread: 0.3 },
+    { light: '#f0e9dc', wood: '#4a2f24', dark: '#231e1c', metal: '#b89a5a', fabric: '#c9b88e', accent: '#2f5a6a', accent2: '#b8352b', spread: 0.3 },
+    { light: '#f6f0e4', wood: '#8a5a3a', dark: '#2e2a28', metal: '#d0b070', fabric: '#b8cfc4', accent: '#9a3a3a', accent2: '#d8b45a', spread: 0.3 },
   ],
   // 欧式古典：象牙白、香槟金、雾蓝、灰绿、酒红丝绒、浅胡桃
   classic: [
@@ -87,12 +115,16 @@ export const STYLE_KITS: Record<StyleTag, Kit[]> = {
     { light: '#f4ede0', wood: '#e6d8bd', dark: '#4a3a33', metal: '#c8a96a', fabric: '#8fa3b8', accent: '#7a2e3a', accent2: '#a3ae98', spread: 0.35 },
     { light: '#f7f1e6', wood: '#9a7656', dark: '#3b4a66', metal: '#c8b07a', fabric: '#a3ae98', accent: '#8fa3b8', accent2: '#c9a6a0' },
     { light: '#efe6d6', wood: '#dccaa6', dark: '#3a2e2a', metal: '#b8975a', fabric: '#e9dcc3', accent: '#7a2e3a', accent2: '#8fa3b8', spread: 0.35 },
+    { light: '#f5efe4', wood: '#7a5a42', dark: '#2a3a2e', metal: '#c9a96a', fabric: '#6a7f6a', accent: '#c9a6a0', accent2: '#3b4a66' },
+    { light: '#f8f3ea', wood: '#ead9bd', dark: '#4a3340', metal: '#d4b880', fabric: '#c4a6b8', accent: '#5a6a8a', accent2: '#a3ae98', spread: 0.35 },
   ],
   // 美式乡村：做旧白、原木橡木、鼠尾草绿、海军蓝、谷仓红、黄油黄
   farmhouse: [
     { light: '#f1ece2', wood: '#c49a6a', dark: '#3c3a38', metal: '#5a5650', fabric: '#e3d8c4', accent: '#9caf91', accent2: '#34465e' },
     { light: '#f3efe6', wood: '#b88d5e', dark: '#2f3640', metal: '#6b665e', fabric: '#9caf91', accent: '#9e3b2f', accent2: '#efd99a' },
     { light: '#eee8dc', wood: '#cfa676', dark: '#34465e', metal: '#4a4743', fabric: '#a7b8c9', accent: '#9e3b2f', accent2: '#9caf91' },
+    { light: '#f4f0e8', wood: '#a87a4e', dark: '#3a3530', metal: '#6a645a', fabric: '#d8c8a8', accent: '#5a7a5a', accent2: '#c98f4a' },
+    { light: '#f0ebe0', wood: '#d9b88a', dark: '#2e3a34', metal: '#5a5650', fabric: '#c9b8d4', accent: '#34465e', accent2: '#e3c87a' },
   ],
 }
 
@@ -282,11 +314,12 @@ export function canDerive(def: AssetDef) {
   return def.category !== 'plants' && !def.actor && !def.fixture && !FOOD_RE.test(def.id + def.name) && def.palettes.some((p) => p.some(Boolean))
 }
 
-/** 这件素材某风格有没有原生配色 */
-export const hasNative = (def: AssetDef, style: StyleTag) => def.palettes.some((_, i) => nativeStyle(def, i) === style)
-
-/** 某风格是否需要（并能够）提供派生配色：没有原生配色、且素材允许派生 */
-export const hasDerived = (def: AssetDef, style: StyleTag) => canDerive(def) && !hasNative(def, style)
+/** 某风格的派生配色有几套：原生 + 派生凑够 MIN_PER_STYLE（不能派生的素材为 0） */
+export function derivedCount(def: AssetDef, style: StyleTag) {
+  if (!canDerive(def)) return 0
+  const native = def.palettes.filter((_, i) => nativeStyle(def, i) === style).length
+  return Math.max(0, MIN_PER_STYLE - native)
+}
 
 /** 派生用的模板：最接近目标风格的一组原生配色 */
 function templateIndex(def: AssetDef, style: StyleTag) {
@@ -302,15 +335,15 @@ const derivedCache = new Map<string, string[]>()
 /**
  * 某风格的派生配色（确定性，按素材缓存）。不能派生的素材（绿植、角色）返回该风格的原生配色或第 0 组。
  */
-export function derivedPalette(def: AssetDef, style: StyleTag): string[] {
-  const key = `${def.id}|${style}`
+export function derivedPalette(def: AssetDef, style: StyleTag, variant = 0): string[] {
+  const key = `${def.id}|${style}|${variant}`
   const hit = derivedCache.get(key)
   if (hit) return hit
   let out: string[]
   if (!canDerive(def)) {
     const i = def.palettes.findIndex((_, k) => nativeStyle(def, k) === style)
     out = def.palettes[i < 0 ? 0 : i] ?? []
-  } else out = recolor(def, style)
+  } else out = recolor(def, style, variant)
   derivedCache.set(key, out)
   return out
 }
@@ -321,11 +354,12 @@ export function derivedPalette(def: AssetDef, style: StyleTag): string[] {
  */
 export const paletteKey = (def: AssetDef) => LEGACY_FAMILY[def.id] ?? def.id
 
-function recolor(def: AssetDef, style: StyleTag): string[] {
+function recolor(def: AssetDef, style: StyleTag, variant = 0): string[] {
   const tpl = def.palettes[templateIndex(def, style)] ?? def.palettes[0] ?? []
   const n = Math.max(1, ...def.palettes.map((p) => p.length))
   const kits = STYLE_KITS[style]
-  const kit = kits[hashStr(`${paletteKey(def)}|${style}`) % kits.length]
+  // 变体 0 是以前唯一的那套（旧存档不变），之后依次换下一套色板
+  const kit = kits[(hashStr(`${paletteKey(def)}|${style}`) + variant) % kits.length]
   const spread = kit.spread ?? 0.55
   const pr = probe(def, n)
   const bodyShare = Math.max(...pr.map((p) => p.share))
@@ -401,7 +435,7 @@ export interface PaletteEntry {
 export function basePalette(def: AssetDef, color = 0): string[] {
   if (isDerived(color)) {
     const st = derivedStyle(color)
-    return st ? derivedPalette(def, st) : (def.palettes[0] ?? [])
+    return st ? derivedPalette(def, st, derivedVariant(color)) : (def.palettes[0] ?? [])
   }
   return def.palettes[color % def.palettes.length] ?? []
 }
@@ -418,15 +452,35 @@ export function normalizeColor(def: AssetDef, color = 0): number {
   return color % Math.max(1, def.palettes.length)
 }
 
-/** 全部可选配色：原生在前（按原顺序），每个缺原生配色的风格补一项派生 */
+/** 全部可选配色：原生在前（按原顺序），每种风格用派生配色补够 MIN_PER_STYLE 套（和已有的重复的跳过） */
 export function allPalettes(def: AssetDef): PaletteEntry[] {
   const out: PaletteEntry[] = def.palettes.map((colors, i) => ({ index: i, style: nativeStyle(def, i), colors, derived: false }))
-  for (const st of STYLE_ORDER) if (hasDerived(def, st)) out.push({ index: derivedIndex(st), style: st, colors: derivedPalette(def, st), derived: true })
+  const seen = new Set(out.map((e) => e.colors.join()))
+  for (const st of STYLE_ORDER)
+    for (let v = 0; v < derivedCount(def, st); v++) {
+      const colors = derivedPalette(def, st, v)
+      const k = colors.join()
+      if (seen.has(k)) continue
+      seen.add(k)
+      out.push({ index: derivedIndex(st, v), style: st, colors, derived: true })
+    }
   return out
 }
 
+/**
+ * 在某风格的全部配色（原生 + 派生补齐的几套）里按 r（0..1）挑一个编号；这个风格一套都没有返回 null。
+ * 只按套数抽编号、不算出派生配色的颜色（要先探测一遍模型）：一键布置、换风格时每件都调，颜色在显示时才生成
+ */
+export function pickStyleColor(def: AssetDef, style: StyleTag, r: number): number | null {
+  const native = def.palettes.map((_, i) => i).filter((i) => nativeStyle(def, i) === style)
+  const total = native.length + derivedCount(def, style)
+  if (!total) return null
+  const k = Math.min(total - 1, Math.floor(r * total))
+  return k < native.length ? native[k] : derivedIndex(style, k - native.length)
+}
+
 /** 可选配色的个数（原生 + 派生） */
-export const paletteCount = (def: AssetDef) => def.palettes.length + STYLE_ORDER.filter((st) => hasDerived(def, st)).length
+export const paletteCount = (def: AssetDef) => allPalettes(def).length
 
 /** 素材支持的风格（造型 + 原生配色 + 派生配色） */
 export function styleSet(def: AssetDef): Set<StyleTag> {

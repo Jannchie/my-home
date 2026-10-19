@@ -27,7 +27,7 @@ import { ASSETS, ASSET_MAP, STYLE_LABELS, type AssetDef, type StyleTag } from '.
 import { rng, type Poly } from './three/kit'
 import { artKindOf, parseArt, pickArt } from './three/artwork'
 import { paletteStyle } from './three/catalog'
-import { derivedIndex, hasDerived } from './three/stylePalettes'
+import { pickStyleColor } from './three/stylePalettes'
 import { fitsOnFixture, fitsOnSurface, fixtureTop, toLocal, toWorld } from './surface'
 import { tubTopPose } from './tubTop'
 import { COMPETITIVE, INTEREST_TIERS, JOBS, interestFloor, interestProps, interestStickers, interestWall, jobDeskProps, levelOf, topLevel, type Household, type InterestId, type Member, type Tier } from './household'
@@ -649,12 +649,13 @@ class Decorator {
     return same.filter((o) => room && pointInPolygon(o, room.points)).length < lim.max
   }
 
-  /** 按风格挑一组配色：有原生配色就从中挑；没有就用该风格的派生配色（1000 + 风格序号）；都不行才随便挑 */
+  /**
+   * 按风格挑一组配色：在这个风格的全部配色（原生 + 派生补齐的几套）里随机挑；这个风格一套都没有才随便挑。
+   * 只按套数抽编号，不在这里算出派生配色的颜色（要先探测一遍模型，一键布置时每件都算会慢一倍）：颜色在显示时才生成
+   */
   colorFor(def: AssetDef) {
-    const ok = def.palettes.map((_, i) => i).filter((i) => paletteStyle(def, i) === this.style)
-    if (ok.length) return this.pick(ok)
-    const r = this.rand() // 保持随机序列的消耗不变
-    return hasDerived(def, this.style) ? derivedIndex(this.style) : Math.floor(r * def.palettes.length)
+    const r = this.rand()
+    return pickStyleColor(def, this.style, r) ?? Math.floor(r * def.palettes.length)
   }
 
   ctx() {
