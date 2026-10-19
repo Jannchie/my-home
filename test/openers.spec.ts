@@ -143,3 +143,52 @@ describe('家具的柜门、抽屉', () => {
     expect(op.target(furnKey('n1', 1))).toBe(0)
   })
 })
+
+describe('通往阳台的落地窗', () => {
+  /** 洋室（400 × 300）东边是阳台，隔墙上一扇 160 宽的落地窗（不填窗台 = 落地） */
+  const balconyPlan = (style?: Opening['windowStyle']): Plan => ({
+    ...testPlan(),
+    rooms: [
+      { id: 'a', name: '洋室', kind: 'western', points: rectPoints(0, 0, 400, 300) },
+      { id: 'b', name: '阳台', kind: 'balcony', points: rectPoints(400, 0, 560, 300) },
+    ],
+    openings: [{ id: 'w1', kind: 'window', roomId: 'a', edge: 1, offset: 150, width: 160, hinge: 'start', swing: 'in', ...(style ? { windowStyle: style } : {}) }],
+  })
+  const STYLES: (Opening['windowStyle'] | undefined)[] = [undefined, 'sliding', 'casement', 'casement2', 'combo']
+
+  test('推拉、平开的落地窗能开合：3D 的扇和挡路线段对得上', () => {
+    for (const style of STYLES) {
+      const plan = balconyPlan(style)
+      const info = openingInfos(plan)[0]
+      expect(info.sash, String(style)).toBe(true)
+      const root = buildHouse(plan, 240)
+      const objs = doorObjs(root)
+      expect(objs.length, String(style)).toBe(1)
+      const op = new Openers()
+      op.bindHouse(root)
+      expect(op.has(doorKey('w1')), String(style)).toBe(true)
+      for (const v of [0, 0.5, 1]) {
+        poseOpening(objs[0], v)
+        root.updateMatrixWorld(true)
+        const box = new THREE.Box3().setFromObject(objs[0]).expandByScalar(4)
+        for (const [a, b] of doorSegments(info, v))
+          for (const p of [a, b]) expect(box.containsPoint(new THREE.Vector3(p.x, 100, p.y)), `${style} 开 ${v}：(${p.x.toFixed(1)}, ${p.y.toFixed(1)})`).toBe(true)
+      }
+    }
+  })
+
+  test('关着走不到阳台上，开着走得过去；固定窗开不了、一直挡着', () => {
+    for (const style of STYLES) {
+      const plan = balconyPlan(style)
+      // 组合窗中间是固定玻璃：从侧扇那边走
+      expect(walkEast(plan, 0, 94), `${style} 关着`).toBeLessThan(400)
+      expect(walkEast(plan, 1, 94), `${style} 开着`).toBeGreaterThan(430)
+    }
+    const fixed = balconyPlan('fixed')
+    const op = new Openers()
+    op.bindHouse(buildHouse(fixed, 240))
+    expect(op.has(doorKey('w1'))).toBe(false)
+    expect(op.segments('').length).toBe(1)
+    expect(walkEast(fixed, 1, 94)).toBeLessThan(400)
+  })
+})

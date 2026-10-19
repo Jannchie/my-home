@@ -26,7 +26,7 @@ import { isIndoor, sharedIntervals, voidRailSegments, wallSegments, wallThicknes
 import { tatamiLayout } from '../tatami'
 import { doorColor, doorHandleOf, doorStyled, handleColor, hasSidelight, hasTransom, LEGACY_DOOR, LEGACY_ENTRANCE, LEGACY_SLIDING, sidelightWidth, TRANSOM_TOP } from '../doorStyles'
 import { doorLeafModel, liteModel } from './doorModels'
-import { barnPose, defaultDoorOpen, foldPose, slidingPose, swingPose } from '../doorMotion'
+import { barnPose, defaultDoorOpen, foldPose, slidingPose, swingPose, windowMovable } from '../doorMotion'
 import { addOutlines, ball, capsule, cyl, disposeHooks, mergeMeshes, mergeSolidColors, noTransparentShadows, pullDepth, rbox, shade, toon, useAnisotropy } from './toon'
 import { glow, poseDoors, type AssetDef } from './kit'
 import { freezeMatrices, syncMatrix } from './matrices'
@@ -51,7 +51,7 @@ import { edgesOf } from '../model'
 import { showerSpot, stallWalls, type StallWalls } from '../bathroom'
 import { curtainSpec } from '../curtains'
 import { archRise, frameColor, gridAllowed, roundDiameter, sashAllowed, shutterColor, windowSpan } from '../windows'
-import { spandrelGeometry, windowModel, type WindowModelStyle } from './windows'
+import { poseWindow, spandrelGeometry, windowModel, type WindowModelStyle } from './windows'
 import { showerCurtainModel, showerModel } from './shower'
 import { edgeRail, holeRails, stairWalls, stairsModel, type WallLine } from './stairs3d'
 import { subtractSpan } from '../stairs'
@@ -1067,6 +1067,9 @@ export function poseOpening(obj: THREE.Object3D, open: number) {
         c.position.x = s.slide
         moved.push(c)
       }
+  } else if (part === 'window') {
+    poseWindow(obj, open)
+    return
   } else if (part === 'fold') {
     const [a, b, c] = foldPose(info, open)
     for (const leaf of obj.children) {
@@ -1208,8 +1211,14 @@ function buildOpenings(infos: OpeningInfo[], H: number) {
         out: out.x * n0.x + out.y * n0.y >= 0 ? 1 : -1,
         hinge: o.hinge,
         clipped: top(info.y1) !== info.y1,
+        movable: info.sash && windowMovable(style),
       })
       frame.position.set(center.x, info.y0, center.y)
+      // 通往阳台的落地窗当门用：能开合（openers.ts），开不了的款式（固定窗）只挡人
+      if (info.sash) {
+        frame.userData.doorPart = 'window'
+        if (!windowMovable(style)) frame.userData.winFixed = true
+      }
       frame.rotation.y = yaw
       frame.userData.info = info
       g.add(frame)

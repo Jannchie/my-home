@@ -1,7 +1,7 @@
 // 沙盘里一扇扇门、一个个抽屉的开合：每个会动的部件单独开关、单独调开合程度（0 = 关上，1 = 开到底），带缓动动画。
 //   - 家具的部件（kit.ts movable：柜门、抽屉、翻门、推拉门）按「家具 id + 部件下标（kit.ts doorParts 的顺序）」记；
 //     没动过的部件跟着家具的 open（存档里的整体开关）。
-//   - 房门（house.ts buildOpenings 里带 doorPart 标记的组）按洞口 id 记；没动过的门按 doorMotion.ts defaultDoorOpen。
+//   - 房门、通往阳台的落地窗（house.ts buildOpenings 里带 doorPart 标记的组）按洞口 id 记；没动过的门按 doorMotion.ts defaultDoorOpen。
 //   - 开合只在这次打开的沙盘里有效（不进存档、不进撤销）；房子 / 家具模型重建后照样摆回去。
 //   - 抽屉拉出时，抽屉格里的东西由沙盘跟着挪（onPart 回调），模型本身只管部件。
 //   - segments：第一人称漫游按房门现在的开合挡人（门板线段，平面坐标）。
@@ -52,12 +52,14 @@ export class Openers {
     root.traverse((o) => {
       if (!o.userData.doorPart) return
       const info = o.userData.info as OpeningInfo
-      let list = groups.get(info.o.id)
-      if (!list) groups.set(info.o.id, (list = []))
-      list.push(o)
       let f: THREE.Object3D | null = o
       while (f && f.userData.floorId === undefined) f = f.parent
       this.doors.set(info.o.id, { geom: info, floor: (f?.userData.floorId as string) ?? '' })
+      // 开不了的落地窗（固定窗）：只挡人，不能开关
+      if (o.userData.winFixed) return
+      let list = groups.get(info.o.id)
+      if (!list) groups.set(info.o.id, (list = []))
+      list.push(o)
     })
     for (const [id, objs] of groups) {
       const info = objs[0].userData.info as OpeningInfo

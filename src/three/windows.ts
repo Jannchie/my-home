@@ -8,7 +8,9 @@ import * as THREE from 'three'
 import type { WindowGrid, WindowStyle } from '../model'
 import { archRise, roundDiameter } from '../windows'
 import { C } from './assets'
-import { rbox, toon } from './toon'
+import { mergeMeshes, rbox, toon } from './toon'
+import { syncMatrix } from './matrices'
+import { WIN_SWING_MAX } from '../doorMotion'
 
 /** plain = 旧的腰窗（白框 + 一整片玻璃）；legacySash = 旧的落地推拉窗（两扇错开、一扇推开一半） */
 export type WindowModelStyle = WindowStyle | 'plain' | 'legacySash'
@@ -31,6 +33,26 @@ export interface WindowSpec {
   hinge?: 'start' | 'end'
   /** 窗顶被天花截掉了：不画上框（同旧的腰窗） */
   clipped?: boolean
+  /**
+   * 通往阳台的落地窗（当门用）：推拉扇、平开扇能开合（poseWindow；平开扇开到底 90°），
+   * 会动的扇各自合并、标 winMove。不填 = 摆成固定的样子（同以前）
+   */
+  movable?: boolean
+}
+
+/** 落地窗会动的扇：slide = 沿 x 从 x0（关上）推到 x1（开到底）；swing = 绕竖轴从 0 转到 a */
+type WinMove = { kind: 'slide'; x0: number; x1: number } | { kind: 'swing'; a: number }
+
+
+/** 把落地窗会动的扇摆到开合程度 open（0 = 关上，1 = 开到底）；静态矩阵时同步矩阵 */
+export function poseWindow(g: THREE.Object3D, open: number) {
+  for (const c of g.children) {
+    const m = c.userData.winMove as WinMove | undefined
+    if (!m) continue
+    if (m.kind === 'slide') c.position.x = m.x0 + (m.x1 - m.x0) * open
+    else c.rotation.y = m.a * open
+    if (!c.matrixAutoUpdate) syncMatrix(c)
+  }
 }
 
 const glassMat = () => toon(C.glass, { transparent: 0.45 })
@@ -188,6 +210,12 @@ export function windowModel(s: WindowSpec): THREE.Group {
           if (k === 0) panel.add(handle(pw / 2 - 2, hh * 0.5, -out * (t / 2 + 1)))
         }
         panel.position.set(along, y0, off)
+        if (s.movable && k === 0) {
+          // 前轨那扇推到另一扇前面（开到底 = 和另一扇重叠）
+          const x1 = legacy ? w / 4 : inner / 4 - 1
+          panel.userData.winMove = { kind: 'slide', x0: legacy ? -w / 4 : along, x1 } satisfies WinMove
+          mergeMeshes(panel)
+        }
         g.add(panel)
       }
       break
@@ -236,7 +264,11 @@ export function windowModel(s: WindowSpec): THREE.Group {
         leaf.add(handle(L.hingeLeft ? lw / 2 - 4 : -lw / 2 + 4, hh * 0.5, -out * (d / 2 + 1)))
         pivot.add(leaf)
         // 往户外推开
-        if (L.open) pivot.rotation.y = (L.hingeLeft ? -1 : 1) * out * (30 * Math.PI) / 180
+        if (s.movable) {
+          // 当门用：每扇都能往户外推开到 90°
+          pivot.userData.winMove = { kind: 'swing', a: (L.hingeLeft ? -1 : 1) * out * WIN_SWING_MAX } satisfies WinMove
+          mergeMeshes(pivot)
+        } else if (L.open) pivot.rotation.y = (L.hingeLeft ? -1 : 1) * out * (30 * Math.PI) / 180
         g.add(pivot)
       }
       break
