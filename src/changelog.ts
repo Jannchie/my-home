@@ -12,6 +12,36 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '1.11.0',
+    date: '2026-10-19',
+    notes: {
+      zh: [
+        '画面效果改成可组合的参数：光照、风格化、镜头（移轴、显像管）、调色、泛光、描边、转折线、天空背景都能在预设上单独调；新增「动画感」和「显像管」，像素风更清晰',
+        '默认用动画感光照：两档明暗、带颜色的阴影、明暗交界提饱和度、轮廓光、彩色描边，倒角和门缝也有转折线；可开新海诚风的蓝天白云和夜晚星空',
+        '画面增强：环境光遮蔽、反射（打蜡地板和瓷砖地面、镜子、会动的水面）和漫游时窗口照进来的光柱，可分别设为关 / 仅漫游 / 始终',
+        '内装面板：墙纸和木地板可以全屋一起设置、单间覆盖，边饰带预览；家具可以保持布局只换风格；每种风格至少四套配色',
+        '门和抽屉可以逐个开合（带动画，漫游里也能点）；阳台的推拉窗也能开关；一键布置给单独的键盘配鼠标',
+        '室内灯更亮、照得更远（新增照明范围滑杆，默认色温 4000K），修正房间接缝处的亮线和天花板过曝；窗户更容易点中，墙压低时影子跟着淡出',
+      ],
+      ja: [
+        '画面エフェクトを組み合わせ可能なパラメータに：ライティング・スタイライズ・レンズ（ミニチュア、ブラウン管）・色調・ブルーム・輪郭線・稜線・空の背景をプリセットの上から個別に調整できます。「アニメ調」と「ブラウン管」を追加し、ドット絵をくっきりと',
+        'アニメ調のライティングが標準に：2 段階の陰影、色のついた影、明暗の境目の彩度アップ、リムライト、色つきの輪郭線、面取りや隙間の稜線。新海誠風の青空と雲、夜の星空も表示できます',
+        '画質強化：アンビエントオクルージョン、反射（ワックス仕上げの床やタイル床、鏡、揺れる水面）、ウォーク中に窓から差し込む光の筋を、それぞれオフ / ウォーク時 / 常に から選べます',
+        '内装パネル：壁紙とフローリングを家全体でまとめて設定し、部屋ごとに上書き可能に。見切り・装飾はプレビュー付き。家具は配置そのままでスタイルだけ変えられます。各スタイルに配色を 4 種類以上',
+        'ドアと引き出しを 1 つずつ開け閉め（アニメーション付き、ウォーク中もクリック可）。バルコニーの引き違い窓も開閉可能に。おまかせ配置で単体のキーボードにマウスを添えます',
+        '室内照明を明るく、遠くまで届くように（照明範囲スライダーを追加、標準の色温は 4000K）。部屋の境目の光の線と天井の白飛びを修正。窓を選びやすくし、壁を下げると影も一緒に消えるように',
+      ],
+      en: [
+        "Looks are now composable parameters: lighting, stylize, lens (tilt-shift, CRT), color grading, bloom, outlines, crease lines and a sky background can each be adjusted on top of a preset; new Anime and CRT looks, and crisper pixel art",
+        "Anime lighting is the default: two-band shading, tinted shadows, saturated terminators, rim light, colored outlines and crease lines on bevels and gaps; an optional Shinkai-style sky with clouds by day and stars at night",
+        "Effects settings for ambient occlusion, reflections (waxed or tiled floors, mirrors, animated water) and walkthrough light shafts, each Off / Walk only / Always",
+        "Interior panel: set wallpaper and wood flooring for the whole home with per-room overrides, trim choices with previews, restyle furniture without moving it, and at least four palettes per style",
+        "Open and close each door and drawer on its own, with animation and clicks in the walkthrough; balcony sash windows open too; auto-furnish adds a mouse next to loose keyboards",
+        "Brighter indoor lights with a reach slider and a 4000K default; fixed glowing seams between rooms and blown-out ceilings; windows are easier to click and wall shadows fade with lowering walls",
+      ],
+    },
+  },
+  {
     version: '1.10.0',
     date: '2026-10-19',
     notes: {
