@@ -259,6 +259,7 @@ export const ICONS = {
   allCategories: IconLayers,
   floors: IconLayers, // 楼层
   floorAdd: IconPlus,
+  addVertex: IconPlus,
   floorUp: IconStairsUp,
   floorAll: IconHome, // 楼层显示：全部
   floorUpto: IconStairsUp, // 只到当前层

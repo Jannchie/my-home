@@ -294,6 +294,8 @@ export interface Fixture {
   dishwasher?: boolean
   /** 仅厨房：电磁炉 / 电陶炉（黑色微晶面板），不填是燃气灶 */
   induction?: boolean
+  /** 仅厨房：左右翻转（水槽和灶对调；面朝台面看，不填是水槽在左、灶在右） */
+  flip?: boolean
   /** 仅浴缸：淋浴房（方形淋浴底盘 + 玻璃隔断，没有浴缸） */
   shower?: boolean
   /** 仅马桶：basic 普通水箱 / washlet 温水洗净（默认）/ tankless 无水箱一体 */
@@ -356,6 +358,12 @@ export const FIXTURES: Record<FixtureKind, { label: string; w: number; d: number
 
 /** 厨房各段进深：壁付け只有主台面；対面 = 背面食器棚 + 通道 + 主台面 */
 export const KITCHEN = { counter: 65, back: 45, aisle: 90 }
+
+/** 厨房水槽、灶的中心（设备局部 x，和 kitchenModel 一致）：水槽在台面三成处，灶离右端 48；翻转（flip）时左右对调 */
+export function kitchenSlots(f: Pick<Fixture, 'w' | 'flip'>) {
+  const m = f.flip ? -1 : 1
+  return { sink: m * (-f.w / 2 + f.w * 0.3), hob: m * (f.w / 2 - 48) }
+}
 
 export function fixtureDepth(f: Pick<Fixture, 'kind' | 'variant' | 'd'>) {
   if (f.kind === 'kitchen') return f.variant === 'facing' ? KITCHEN.back + KITCHEN.aisle + KITCHEN.counter : KITCHEN.counter

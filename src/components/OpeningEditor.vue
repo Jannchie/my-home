@@ -10,6 +10,7 @@ import { JIcon } from '@jannchie/icons-vue'
 import { ICONS } from '../ui/icons'
 import WindowStylePicker from './WindowStylePicker.vue'
 import DoorStylePicker from './DoorStylePicker.vue'
+import OpeningWidthPresets from './OpeningWidthPresets.vue'
 
 const props = defineProps<{ opening: Opening }>()
 
@@ -58,6 +59,7 @@ const swings = computed(() => props.opening.kind === 'door' || props.opening.kin
         <button class="icon-only" :disabled="!canWider" :title="t('变宽')" :aria-label="t('变宽')" @click="nudge(WIDTH_STEP, 0)"><JIcon :icon="ICONS.stepUp" :size="14" /></button>
       </div>
     </div>
+    <OpeningWidthPresets :opening="opening" />
     <div class="row">
       <span class="k">{{ t('位置 cm') }}</span>
       <div class="step">

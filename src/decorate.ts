@@ -37,7 +37,7 @@ import { deskExtras, settleDesks, workstations } from './workstation'
 import { appliancesOn, isApplianceOf, isMainAppliance, poseOnSpot, type SpotKind } from './appliance'
 import { cornerSpots, showerBoxes, showerSpot } from './bathroom'
 import { lidSizeFor } from './three/packs/bath-extra'
-import { openingsOn, rotFacingWall } from './model'
+import { kitchenSlots, openingsOn, rotFacingWall } from './model'
 import { isWallOwner, snapToHook } from './surface'
 import { isOpenBetween, sharedIntervals, wallThicknessAt } from './walls'
 import { edgesOf, projectToSegment } from './model'
@@ -1198,8 +1198,7 @@ class Decorator {
     const w = fx.w
     const facing = fx.variant === 'facing'
     const d = facing ? 200 : 65
-    const sx = -w / 2 + w * 0.3
-    const bx = w / 2 - 48
+    const { sink: sx, hob: bx } = kitchenSlots(fx)
     const cooks = this.household?.members.some((m) => m.interests.includes('cooking')) ?? false
     const coffee = this.household?.members.some((m) => m.interests.includes('coffee')) ?? false
     const want: Sel[] = [

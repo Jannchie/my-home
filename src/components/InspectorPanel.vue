@@ -12,6 +12,8 @@ import { JIcon } from '@jannchie/icons-vue'
 import WindowStylePicker from './WindowStylePicker.vue'
 import DoorStylePicker from './DoorStylePicker.vue'
 import FixtureEditor from './FixtureEditor.vue'
+import OpeningWidthPresets from './OpeningWidthPresets.vue'
+import { resizedOpening } from '../openingEdit'
 import { FIXTURE_ICONS, ICONS, ROOM_ICONS, TOOL_ICONS } from '../ui/icons'
 
 /** 房间灯（3D 沙盘夜里的灯光，见 three/lights.ts） */
@@ -63,6 +65,18 @@ const floorStats = computed(() => (isMultiFloor(plan.value) ? planFloors(plan.va
 
 const num = (e: Event) => Number((e.target as HTMLInputElement).value)
 const str = (e: Event) => (e.target as HTMLInputElement).value
+
+/** 改门窗宽度：中心不动，宽度、位置夹在墙边内 */
+function setOpeningWidth(w: number) {
+  const o = opening.value?.o
+  if (!o || !Number.isFinite(w)) return
+  const v = resizedOpening(plan.value, o, w)
+  if (!v) return
+  mutate(() => {
+    o.width = v.width
+    o.offset = v.offset
+  })
+}
 
 function setKind(kind: RoomKind) {
   const r = room.value!
@@ -173,12 +187,13 @@ function setRectSize(w: number, h: number) {
             min="30"
             :max="Math.floor(opening.edgeLen)"
             :value="opening.o.width"
-            @change="mutate(() => (opening!.o.width = Math.min(num($event), opening!.edgeLen)))"
+            @change="setOpeningWidth(num($event))"
         /></label>
         <label
           >{{ t('位置 cm') }}<input type="number" step="10" :value="Math.round(opening.o.offset)" @change="mutate(() => (opening!.o.offset = num($event)))"
         /></label>
       </div>
+      <OpeningWidthPresets :opening="opening.o" />
       <WindowStylePicker v-if="opening.o.kind === 'window'" :opening="opening.o" />
       <div v-if="opening.o.kind === 'door' || opening.o.kind === 'folding'" class="actions">
         <button @click="mutate(() => (opening!.o.hinge = opening!.o.hinge === 'start' ? 'end' : 'start'))">{{ t('左右翻转') }}</button>

@@ -43,6 +43,7 @@ import { stairHoleConflicts, stairHoles, stairPlanLines, subtractSpan } from '..
 import { tatamiLayout } from '../tatami'
 import { sashAllowed } from '../windows'
 import { stallWalls } from '../bathroom'
+import { openingFromEnds } from '../openingEdit'
 import { applyFixtureCarry, captureFixtureProps, type FixtureCarry } from '../fixtureCarry'
 import FixtureGlyph from './FixtureGlyph.vue'
 import { roomName, t } from '../i18n'
@@ -58,6 +59,7 @@ import {
   duplicateSelection,
   mutate,
   rotateSelectedFixture,
+  flipKitchen,
   findFixture,
   findRoom,
   insertVertex,
@@ -89,11 +91,13 @@ const spaceDown = ref(false)
  * 编辑类拖动带 orig：双指捏合打断时还原。
  */
 type Drag =
-  | { kind: 'pan'; sx: number; sy: number; ox: number; oy: number; tap?: () => void; menu?: { x: number; y: number; hit: DOMStringMap | null } }
+  | { kind: 'pan'; sx: number; sy: number; ox: number; oy: number; tap?: () => void; menu?: { x: number; y: number; hit: DOMStringMap | null; at: Vec } }
   | { kind: 'room'; id: string; start: Vec; orig: Vec[] }
   | { kind: 'vertex'; roomId: string; index: number; orig: Vec }
   | { kind: 'edge'; roomId: string; index: number; start: Vec; orig: Vec[] }
   | { kind: 'opening'; id: string; orig: Pick<Opening, 'roomId' | 'edge' | 'offset'> }
+  /** 拖门窗的一端改宽度：另一端（fixed，离边起点的距离）不动 */
+  | { kind: 'openingEnd'; id: string; fixed: number; orig: Pick<Opening, 'width' | 'offset'> }
   | { kind: 'fixture'; id: string; start: Vec; orig: Vec; carry: FixtureCarry }
   | { kind: 'rect'; start: Vec; end: Vec }
   | { kind: 'ghost'; start: Vec; orig: Vec }
@@ -224,7 +228,7 @@ function abortDrag() {
       Object.assign(f, d.orig)
       applyFixtureCarry(plan.value, f, d.carry)
     }
-  } else if (d.kind === 'opening') {
+  } else if (d.kind === 'opening' || d.kind === 'openingEnd') {
     const o = plan.value.openings.find((x) => x.id === d.id)
     if (o) Object.assign(o, d.orig)
   }
@@ -235,9 +239,9 @@ function abortDrag() {
 function selectHit(h: DOMStringMap) {
   if (h.hit === 'room') selection.value = { type: 'room', id: h.id! }
   else if (h.hit === 'fixture') selection.value = { type: 'fixture', id: h.id! }
-  else if (h.hit === 'opening') selection.value = { type: 'opening', id: h.id! }
+  else if (h.hit === 'opening' || h.hit === 'opening-end') selection.value = { type: 'opening', id: h.id! }
   else if (h.hit === 'vertex') selection.value = { type: 'vertex', roomId: h.room!, index: Number(h.index) }
-  else if (h.hit === 'edge') selection.value = { type: 'room', id: h.room! }
+  else if (h.hit === 'edge' || h.hit === 'midpoint') selection.value = { type: 'room', id: h.room! }
 }
 
 function clearLongPress() {
@@ -264,7 +268,7 @@ function onPointerDown(e: PointerEvent) {
   if (e.button === 1 || e.button === 2 || (e.button === 0 && spaceDown.value)) {
     // 右键：拖动是平移，没拖就松手弹出快捷菜单
     startPan(e)
-    if (e.button === 2 && drag.value?.kind === 'pan') drag.value.menu = { x: e.clientX, y: e.clientY, hit: tool.value === 'select' ? hitOf(e) : null }
+    if (e.button === 2 && drag.value?.kind === 'pan') drag.value.menu = { x: e.clientX, y: e.clientY, hit: tool.value === 'select' ? hitOf(e) : null, at: toWorld(e) }
     return
   }
   if (e.button !== 0) return
@@ -287,7 +291,7 @@ function onPointerDown(e: PointerEvent) {
         abortDrag()
         selectHit(hit)
         gestureSpent = true
-        openMenu(at.x, at.y)
+        openMenu(at.x, at.y, hit.hit === 'edge' ? { roomId: hit.room!, index: Number(hit.index), at: w } : undefined)
         navigator.vibrate?.(10)
       }, LONG_PRESS_MS)
       // 触屏：没选中的房间 / 设备 / 门窗，拖动是平移画布、点按才选中（放大后满屏都是房间，不然没法单指平移）；
@@ -297,7 +301,20 @@ function onPointerDown(e: PointerEvent) {
         return
       }
     }
-    if (hit.hit === 'vertex') {
+    if (hit.hit === 'opening-end') {
+      // 门窗两端的手柄：拖动改宽度，另一端不动
+      const o = plan.value.openings.find((x) => x.id === hit.id)
+      if (o) {
+        const fixed = hit.end === '0' ? o.offset + o.width / 2 : o.offset - o.width / 2
+        checkpoint()
+        drag.value = { kind: 'openingEnd', id: o.id, fixed, orig: { width: o.width, offset: o.offset } }
+      }
+    } else if (hit.hit === 'midpoint') {
+      // 边中点的「+」：加一个顶点，按住不放就直接拖着它走（点一下就留在中点）
+      checkpoint()
+      const added = addVertexAt(hit.room!, Number(hit.index), w)
+      if (added) drag.value = { kind: 'vertex', roomId: added.r.id, index: added.index, orig: { ...added.v } }
+    } else if (hit.hit === 'vertex') {
       const index = Number(hit.index)
       selection.value = { type: 'vertex', roomId: hit.room!, index }
       checkpoint()
@@ -563,6 +580,15 @@ function onPointerMove(e: PointerEvent) {
     f.y = d.orig.y + snapGrid(w.y - d.start.y)
     // 浴缸盖、台面小物跟着设备走
     applyFixtureCarry(plan.value, f, d.carry)
+  } else if (d.kind === 'openingEnd') {
+    const o = plan.value.openings.find((o) => o.id === d.id)
+    const r = o && findRoom(o.roomId)
+    if (!o || !r || o.edge >= r.points.length) return
+    const e = edgeInfo(r.points, o.edge)
+    const t = projectToSegment(w, e.a, e.b).t
+    const v = openingFromEnds(d.fixed, settings.snap ? snapGrid(t) : t, e.length)
+    o.width = Math.round(v.width)
+    o.offset = Math.round(v.offset * 2) / 2
   } else if (d.kind === 'opening') {
     const o = plan.value.openings.find((o) => o.id === d.id)
     if (!o) return
@@ -647,7 +673,8 @@ function onPointerUp(e: PointerEvent) {
       const h = d.menu.hit
       if (h) {
         selectHit(h)
-        openMenu(d.menu.x, d.menu.y)
+        // 右键点在边上：菜单里多一项「在此添加顶点」
+        openMenu(d.menu.x, d.menu.y, h.hit === 'edge' ? { roomId: h.room!, index: Number(h.index), at: d.menu.at } : undefined)
       }
     } else if (tapped) d.tap?.()
     return
@@ -683,14 +710,20 @@ function onDblClick(e: MouseEvent) {
   if (tool.value !== 'select') return
   const hit = hitOf(e)
   if (hit?.hit !== 'edge') return
-  const r = findRoom(hit.room!)
-  if (!r) return
-  const k = Number(hit.index)
-  const e0 = edgeInfo(r.points, k)
-  const p = projectToSegment(toWorld(e), e0.a, e0.b).point
   checkpoint()
-  insertVertex(r, k, { x: snapGrid(p.x), y: snapGrid(p.y) })
+  addVertexAt(hit.room!, Number(hit.index), toWorld(e))
+}
+
+/** 在房间的第 k 条边上、离 at 最近的点（吸到网格）插入一个顶点并选中它；返回新顶点（调用前先 checkpoint） */
+function addVertexAt(roomId: string, k: number, at: Vec) {
+  const r = findRoom(roomId)
+  if (!r) return null
+  const e0 = edgeInfo(r.points, k)
+  const p = projectToSegment(at, e0.a, e0.b).point
+  const v = { x: snapGrid(p.x), y: snapGrid(p.y) }
+  insertVertex(r, k, v)
   selection.value = { type: 'vertex', roomId: r.id, index: k + 1 }
+  return { r, index: k + 1, v }
 }
 
 /** 以屏幕点 (mx, my) 为中心缩放到 ns */
@@ -795,7 +828,7 @@ function updateHover(e: PointerEvent) {
   let id: string | null = null
   if (tool.value === 'select' && !spaceDown.value) {
     const h = hitOf(e)
-    id = h?.hit === 'room' ? h.id ?? null : h?.hit === 'edge' || h?.hit === 'vertex' ? h.room ?? null : null
+    id = h?.hit === 'room' ? h.id ?? null : h?.hit === 'edge' || h?.hit === 'vertex' || h?.hit === 'midpoint' ? h.room ?? null : null
   }
   if (id !== hoverRoomId.value) hoverRoomId.value = id
 }
@@ -919,6 +952,10 @@ interface OpeningView {
   o: Opening
   /** 遮住墙的矩形 */
   gap: string
+  /** 洞口两端（墙中线上），选中时画改宽度的手柄 */
+  ends: [Vec, Vec]
+  /** 宽度标注的位置、角度 */
+  label: { at: Vec; ang: number }
   /** 门扇 / 窗线 */
   leaf: string
   arc: string
@@ -933,6 +970,12 @@ interface OpeningView {
   arcs: string[]
   marks: string
 }
+
+/** 选中的门窗（画改宽度的手柄） */
+const selOpeningView = computed(() => {
+  const s = selection.value
+  return s?.type === 'opening' ? openingViews.value.find((v) => v.o.id === s.id) ?? null : null
+})
 
 const openingViews = computed<OpeningView[]>(() => {
   const out: OpeningView[] = []
@@ -952,7 +995,11 @@ const openingViews = computed<OpeningView[]>(() => {
     // 窗外是阳台 → 掃き出し窓
     const probe = add(center, mul(e.out, wall / 2 + 15))
     const sash = o.kind === 'window' && sashAllowed(o) && fp.value.rooms.some((x) => x.kind === 'balcony' && pointInPolygon(probe, x.points))
-    const v: OpeningView = { o, gap, leaf: '', arc: '', glass: [], panels: [], sash, fold: '', arcs: [], marks: '' }
+    let ang = (Math.atan2(e.dir.y, e.dir.x) * 180) / Math.PI
+    if (ang > 90) ang -= 180
+    if (ang <= -90) ang += 180
+    const label = { at: add(center, mul(e.out, wall / 2 + px(14))), ang }
+    const v: OpeningView = { o, gap, ends: [p0, p1], label, leaf: '', arc: '', glass: [], panels: [], sash, fold: '', arcs: [], marks: '' }
     const style = o.kind === 'window' ? o.windowStyle : undefined
     if (o.kind === 'sliding' || (sash && (!style || style === 'sliding')) || style === 'sliding') {
       // 引き違い：两扇板分别靠墙两侧，在中间重叠一点
@@ -1192,7 +1239,7 @@ function cancelDraft() {
 
 // ---------- 快捷菜单：触屏长按 / 右键点按 ----------
 const menu = ref<{ x: number; y: number; items: MenuEntry[]; title?: string } | null>(null)
-function openMenu(x: number, y: number) {
+function openMenu(x: number, y: number, edge?: { roomId: string; index: number; at: Vec }) {
   const s = selection.value
   if (!s) return
   const del: MenuEntry = { label: t('删除'), icon: ICONS.delete, keys: 'Del', danger: true, action: deleteSelection }
@@ -1201,11 +1248,25 @@ function openMenu(x: number, y: number) {
   if (s.type === 'room') {
     const r = findRoom(s.id)
     title = r ? roomName(r.name) : ''
-    items = [{ label: t('复制'), icon: ICONS.duplicate, keys: 'Ctrl D', action: duplicateSelection }, 'sep', del]
+    const addVertex: MenuEntry[] = edge
+      ? [
+          {
+            label: t('在此添加顶点'),
+            icon: ICONS.addVertex,
+            keys: t('双击边'),
+            action: () => {
+              checkpoint()
+              addVertexAt(edge.roomId, edge.index, edge.at)
+            },
+          },
+        ]
+      : []
+    items = [...addVertex, { label: t('复制'), icon: ICONS.duplicate, keys: 'Ctrl D', action: duplicateSelection }, 'sep', del]
   } else if (s.type === 'fixture') {
     const f = findFixture(s.id)
     title = f ? t(FIXTURES[f.kind].label) : ''
-    items = [{ label: t('旋转 90°'), icon: ICONS.rotateCw, keys: 'Q', action: () => rotateSelectedFixture() }, 'sep', del]
+    const flip: MenuEntry[] = f?.kind === 'kitchen' ? [{ label: t('左右翻转（水槽和灶对调）'), icon: ICONS.doorFlip, action: () => flipKitchen(f.id) }] : []
+    items = [{ label: t('旋转 90°'), icon: ICONS.rotateCw, keys: 'Q', action: () => rotateSelectedFixture() }, ...flip, 'sep', del]
   } else if (s.type === 'opening') {
     const o = plan.value.openings.find((x) => x.id === s.id)
     if (!o) return
@@ -1440,6 +1501,28 @@ async function exportPng() {
         <!-- 加粗的点击热区（触屏更粗） -->
         <path :d="v.gap" fill="transparent" stroke="transparent" :stroke-width="hitPx(10, 28)" />
       </g>
+      <!-- 选中的门窗：两端的手柄拖动改宽度，旁边标出宽度 -->
+      <g v-if="tool === 'select' && selOpeningView" class="ui">
+        <text
+          :x="selOpeningView.label.at.x"
+          :y="selOpeningView.label.at.y"
+          :font-size="px(11)"
+          text-anchor="middle"
+          dominant-baseline="middle"
+          fill="#3f6652"
+          class="num"
+          :transform="`rotate(${selOpeningView.label.ang} ${selOpeningView.label.at.x} ${selOpeningView.label.at.y})`"
+          pointer-events="none"
+        >
+          {{ Math.round(selOpeningView.o.width) }}
+        </text>
+        <template v-for="(p, i) in selOpeningView.ends" :key="'oe' + i">
+          <circle v-if="touchUI" :cx="p.x" :cy="p.y" :r="px(22)" fill="transparent" data-hit="opening-end" :data-id="selOpeningView.o.id" :data-end="i" />
+          <circle :cx="p.x" :cy="p.y" :r="hitPx(5, 8)" fill="#fff" stroke="#3f6652" :stroke-width="px(1.5)" data-hit="opening-end" :data-id="selOpeningView.o.id" :data-end="i" style="cursor: ew-resize">
+            <title>{{ t('拖动改宽度') }}</title>
+          </circle>
+        </template>
+      </g>
       <!-- 家具（3D 沙盘里摆的）：只画占地，不参与编辑 -->
       <g pointer-events="none">
         <g v-for="v in furnitureViews" :key="'u' + v.f.id" :transform="v.transform">
@@ -1579,6 +1662,20 @@ async function exportPng() {
           :data-index="d.i"
           :style="{ cursor: edgeCursor(d.e) }"
         />
+        <!-- 边中点的「+」：点一下加顶点，按住拖动直接把新顶点拖到位（边太短时不画，免得和顶点挤在一起） -->
+        <g v-for="d in dimViews" :key="'m' + d.i">
+          <template v-if="d.e.length * view.s > 56">
+            <circle :cx="d.mid.x" :cy="d.mid.y" :r="hitPx(6, 11)" fill="#fff" stroke="#3f6652" :stroke-width="px(1.2)" opacity="0.9" data-hit="midpoint" :data-room="selectedRoom.id" :data-index="d.i" style="cursor: copy">
+              <title>{{ t('添加顶点（拖动放到别处）') }}</title>
+            </circle>
+            <path
+              :d="`M ${d.mid.x - hitPx(3, 5)} ${d.mid.y} H ${d.mid.x + hitPx(3, 5)} M ${d.mid.x} ${d.mid.y - hitPx(3, 5)} V ${d.mid.y + hitPx(3, 5)}`"
+              stroke="#3f6652"
+              :stroke-width="px(1.4)"
+              pointer-events="none"
+            />
+          </template>
+        </g>
         <!-- 触屏：顶点外面再垫一圈透明的大热区 -->
         <template v-if="touchUI">
           <circle

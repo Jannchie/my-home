@@ -1,7 +1,7 @@
 // 可摆放面：桌、柜的顶面，以及柜内层板（surfaces）。负责「点在不在某一层上」「射线落在哪一层」「一件家具上摆着哪些东西」。
 
 import * as THREE from 'three'
-import { fixtureDepth, pointInPolygon, type Fixture, type Furniture, type Plan, type Vec } from './model'
+import { fixtureDepth, kitchenSlots, pointInPolygon, type Fixture, type Furniture, type Plan, type Vec } from './model'
 import { floorOf } from './floors'
 import { ASSET_MAP } from './three/assets'
 import { floorY, roomAt } from './three/house'
@@ -100,6 +100,18 @@ const rect = (x0: number, z0: number, x1: number, z1: number): Poly => [
  * 冰箱位 / 洗衣机位没有台面：上面摆的冰箱、洗衣机是家具，顶面由素材的 surface 声明。
  * 设备的局部坐标和家具一样，背面朝 -y（= 模型的 -z）。
  */
+/** 长 w 的台面（-w/2..w/2）扣掉几段（[lo, hi]）后剩下的各段 */
+function gaps(w: number, cut: [number, number][]): [number, number][] {
+  const out: [number, number][] = []
+  let x = -w / 2
+  for (const [lo, hi] of [...cut].sort((a, b) => a[0] - b[0])) {
+    out.push([x, lo])
+    x = hi
+  }
+  out.push([x, w / 2])
+  return out
+}
+
 function fixtureLevels(f: Fixture): Level[] {
   const w = f.w
   const d = fixtureDepth(f)
@@ -107,25 +119,15 @@ function fixtureLevels(f: Fixture): Level[] {
   switch (f.kind) {
     case 'kitchen': {
       // 台面扣掉水槽和灶台（位置和 kitchenModel 一致），东西不会落进水槽、压在灶上
-      const sx = -w / 2 + w * 0.3
-      const bx = w / 2 - 48
+      const { sink: sx, hob: bx } = kitchenSlots(f)
       const z0 = f.variant === 'facing' ? d / 2 - 65 : -d / 2
       const z1 = f.variant === 'facing' ? d / 2 - 6 : d / 2
       // 中岛：灶在背面柜台上，岛台只扣水槽
       const island = f.variant === 'facing' && !!f.island
-      const spans: [number, number][] = island
-        ? [
-            [-w / 2, sx - 27],
-            [sx + 27, w / 2],
-          ]
-        : [
-            [-w / 2, sx - 27],
-            [sx + 27, bx - 31],
-            [bx + 31, w / 2],
-          ]
+      const spans = gaps(w, island ? [[sx - 27, sx + 27]] : [[sx - 27, sx + 27], [bx - 31, bx + 31]])
       const counter: Level = { y: 88, polys: spans.filter(([a, b]) => b - a > 8).map(([a, b]) => rect(a, z0, b, z1)), kind: 'shelf', h: Infinity }
       // 对面式厨房：背面食器棚顶面整块可用（中岛的背面柜台扣掉灶）
-      if (island) return [counter, { y: 92, polys: [rect(-w / 2, -d / 2, bx - 31, -d / 2 + 44), rect(bx + 31, -d / 2, w / 2, -d / 2 + 44)].filter((pl) => Math.abs(pl[1][0] - pl[0][0]) > 8), kind: 'shelf', h: Infinity }]
+      if (island) return [counter, { y: 92, polys: gaps(w, [[bx - 31, bx + 31]]).filter(([a, b]) => b - a > 8).map(([a, b]) => rect(a, -d / 2, b, -d / 2 + 44)), kind: 'shelf', h: Infinity }]
       return f.variant === 'facing' ? [counter, L(92, rect(-w / 2, -d / 2, w / 2, -d / 2 + 44))] : [counter]
     }
     case 'basin': {

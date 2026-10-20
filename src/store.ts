@@ -7,7 +7,7 @@ import { autoWallpapers } from './wallpaper'
 import type { CheckItem } from './checklist'
 import { generateHousehold } from './household'
 import { propsOn } from './surface'
-import { applyFixtureCarry, captureFixtureProps } from './fixtureCarry'
+import { applyFixtureCarry, captureFixtureProps, mirrorFixtureCarry } from './fixtureCarry'
 import { ASSET_MAP, STYLE_LABELS } from './three/assets'
 import { furnitureRoom, restyleFurniture } from './restyle'
 import type { StyleTag } from './three/kit'
@@ -768,6 +768,19 @@ export function rotateSelectedFixture(deg = 90) {
     // 台面上的东西（浴缸盖、台面小物）跟着一起转
     const carry = captureFixtureProps(p, f)
     f.rot = (((f.rot + deg) % 360) + 360) % 360
+    applyFixtureCarry(p, f, carry)
+  })
+}
+
+/** 厨房左右翻转（水槽和灶对调），一步撤销；台面上的东西跟着镜像 */
+export function flipKitchen(id: string) {
+  const f = findFixture(id)
+  if (f?.kind !== 'kitchen') return
+  mutate((p) => {
+    const carry = captureFixtureProps(p, f)
+    if (f.flip) delete f.flip
+    else f.flip = true
+    mirrorFixtureCarry(carry)
     applyFixtureCarry(p, f, carry)
   })
 }

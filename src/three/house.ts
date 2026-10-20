@@ -2027,6 +2027,8 @@ export function buildHouse(plan: Plan, wallH: number, opts: HouseOpts = {}) {
     mergeMeshes(m)
     addOutlines(m)
     placeOnFloor(m, plan, f.x, f.y, f.rot)
+    // 翻转的厨房：整个模型沿局部 x 镜像（水槽、灶、吊柜、抽油烟机一起对调）。three 按世界矩阵的行列式自动翻转正反面，描边壳照常
+    if (f.kind === 'kitchen' && f.flip) m.scale.x = -1
     // 3D 里点选设备用（fixturePick.ts）；漫游时准星显示设备种类
     m.userData.fixtureId = f.id
     fx.add(m)

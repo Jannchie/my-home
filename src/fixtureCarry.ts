@@ -46,6 +46,14 @@ export function captureFixtureProps(plan: Pick<Plan, 'furniture' | 'floors'>, fx
   return { fixture: fx.id, props: out }
 }
 
+/** 设备左右翻转（厨房）时，记下的东西也沿局部 x 镜像：跟着水槽、灶一起对调（灶边的水壶还在灶边，不会落进对调过来的水槽） */
+export function mirrorFixtureCarry(carry: FixtureCarry) {
+  for (const c of carry.props) {
+    c.lx = -c.lx
+    c.lrot = -c.lrot
+  }
+}
+
 const r1 = (v: number) => Math.round(v * 10) / 10
 const norm = (a: number) => ((Math.round(a) % 360) + 360) % 360
 

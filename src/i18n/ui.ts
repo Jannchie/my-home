@@ -69,7 +69,7 @@ export const UI: Record<string, Entry> = {
   未命名户型: ['無題の間取り', 'Untitled plan'],
 
   // ---------- 底部提示 ----------
-  '拖动房间 / 边 / 角点 / 门窗 · 空格或右键拖动平移 · 滚轮缩放': ['部屋・辺・頂点・建具をドラッグ · Space か右ドラッグで移動 · ホイールで拡大縮小', 'Drag rooms / edges / corners / openings · Space or right-drag to pan · Scroll to zoom'],
+  '拖动房间 / 边 / 角点 / 门窗 · 点边中点的 + 或双击边加角点 · 空格或右键拖动平移 · 滚轮缩放': ['部屋・辺・頂点・建具をドラッグ · 辺の中点の + か辺のダブルクリックで頂点を追加 · Space か右ドラッグで移動 · ホイールで拡大縮小', 'Drag rooms / edges / corners / openings · Click the + at an edge midpoint or double-click an edge to add a corner · Space or right-drag to pan · Scroll to zoom'],
   拖拽画出矩形房间: ['ドラッグして四角い部屋を描く', 'Drag to draw a rectangular room'],
   '逐点点击，点回起点 / 双击 / Enter 闭合 · Shift 正交 · Esc 取消': ['クリックで頂点を追加、始点クリック / ダブルクリック / Enter で閉じる · Shift で直交 · Esc で取消', 'Click to add points; click the start / double-click / Enter to close · Shift for right angles · Esc to cancel'],
   点击墙上放门: ['壁をクリックしてドアを配置', 'Click a wall to add a door'],
@@ -944,6 +944,12 @@ Object.assign(UI, {
   右键: ['右クリック', 'Right-click'],
   滚轮: ['ホイール', 'Scroll'],
   双击: ['ダブルクリック', 'Double-click'],
+  常用宽度: ['よく使う幅', 'Common widths'],
+  拖动改宽度: ['ドラッグで幅を変更', 'Drag to resize'],
+  '左右翻转（水槽和灶对调）': ['左右反転（シンクとコンロを入れ替え）', 'Flip left-right (swap sink and hob)'],
+  在此添加顶点: ['ここに頂点を追加', 'Add vertex here'],
+  双击边: ['辺をダブルクリック', 'Double-click edge'],
+  '添加顶点（拖动放到别处）': ['頂点を追加（ドラッグで位置を調整）', 'Add a vertex (drag to place it)'],
   双指捏合: ['2 本指ピンチ', 'Pinch'],
   双指滑动: ['2 本指スワイプ', 'Two-finger swipe'],
   点击: ['クリック', 'Click'],

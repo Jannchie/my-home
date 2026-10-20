@@ -74,7 +74,7 @@ const tools: { id: Tool; label: string; key: string }[] = [
 ]
 
 const hints: Record<Tool, string> = {
-  select: '拖动房间 / 边 / 角点 / 门窗 · 空格或右键拖动平移 · 滚轮缩放',
+  select: '拖动房间 / 边 / 角点 / 门窗 · 点边中点的 + 或双击边加角点 · 空格或右键拖动平移 · 滚轮缩放',
   rect: '拖拽画出矩形房间',
   poly: '逐点点击，点回起点 / 双击 / Enter 闭合 · Shift 正交 · Esc 取消',
   door: '点击墙上放门',

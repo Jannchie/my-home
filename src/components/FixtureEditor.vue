@@ -4,7 +4,7 @@
 import { computed } from 'vue'
 import { DEFAULT_STAIR_STYLE, STAIR_STYLES } from '../stairStyles'
 import { BUILTIN_TYPES, STAIRS_VARIANTS, TOILET_TYPES, fixtureDepth, type BuiltinType, type Fixture, type KitchenVariant, type Plan, type StairsVariant, type ToiletType } from '../model'
-import { applyStairsVariant, deleteSelection, mutate, plan, rotateSelectedFixture } from '../store'
+import { applyStairsVariant, deleteSelection, flipKitchen, mutate, plan, rotateSelectedFixture } from '../store'
 import { floorAbove, floorOf, riseOf } from '../floors'
 import { MAX_RISER, stairsVariant } from '../stairs'
 import { cabinetsOn, setOpen } from '../cabinet'
@@ -167,6 +167,7 @@ function setSpotOpen(open: boolean) {
         <option :value="3">{{ t('三口') }}</option>
       </select>
     </label>
+    <label v-if="fixture.kind === 'kitchen'" class="inline"><input type="checkbox" :checked="!!fixture.flip" @change="flipKitchen(fixture.id)" /> {{ t('左右翻转（水槽和灶对调）') }}</label>
     <div class="row">
       <label
         >{{ t('长 cm') }}<input type="number" step="5" min="20" :value="fixture.w" @change="edit((f) => (f.w = Math.max(20, num($event))))"

@@ -49,7 +49,7 @@ const stairs = computed(() => {
 
 <template>
   <!-- 厨房：対面多一条背面柜；主台面上水槽 + 三口灶 -->
-  <g v-if="f.kind === 'kitchen'">
+  <g v-if="f.kind === 'kitchen'" :transform="f.flip ? 'scale(-1 1)' : undefined">
     <rect v-if="f.variant === 'facing'" :x="-w / 2" :y="back" :width="w" :height="KITCHEN.back" :fill="FILL" :stroke="LINE" stroke-width="1.5" />
     <rect :x="-w / 2" :y="d / 2 - KITCHEN.counter" :width="w" :height="KITCHEN.counter" :fill="FILL" :stroke="LINE" stroke-width="1.5" />
     <rect
