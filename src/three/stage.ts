@@ -44,6 +44,11 @@ export function createStage(canvas: HTMLCanvasElement, opts: { preserve?: boolea
   setMaxAnisotropy(opts.low ? 4 : Math.min(16, renderer.capabilities.getMaxAnisotropy()))
   renderer.shadowMap.type = THREE.PCFShadowMap
   renderer.outputColorSpace = THREE.SRGBColorSpace
+  // 透射（写实材质的磨砂玻璃门）每帧要把不透明的东西再画一张带 4× MSAA、mip 的半精度图：半分辨率，填充、多重采样解析和生成 mip 都省四分之三
+  // （玻璃粗糙度 0.5，取的本来就是糊过的那几级 mip，只是再糊约半级）
+  renderer.transmissionResolutionScale = 0.5
+  // 着色器出错检查（getProgramInfoLog）会等编译完成，把并行编译变回同步卡顿：只在开发时开
+  renderer.debug.checkShaderErrors = import.meta.env.DEV
 
   const scene = new THREE.Scene()
   // 世界矩阵每帧在 render 开头更新一次：一帧里有主画面、法线、倒影好几次 renderer.render，默认每次都把整棵场景树重算一遍
@@ -110,6 +115,20 @@ export function setStageQuality(stage: Stage, low: boolean) {
   renderer.shadowMap.needsUpdate = true
   const s = renderer.getSize(new THREE.Vector2())
   stage.resize(s.x, s.y)
+}
+
+/**
+ * 动态分辨率（dynRes.ts）：像素比按 scale 缩小，最低 1（CSS 像素）。
+ * 返回像素比是否真的变了——变了画布会被清空、后处理目标会重建，调用方要在这一帧重画
+ */
+export function setStageScale(stage: Stage, scale: number) {
+  const base = Math.min(window.devicePixelRatio, 2)
+  const pr = Math.max(Math.min(1, base), base * scale)
+  if (Math.abs(stage.renderer.getPixelRatio() - pr) < 0.01) return false
+  stage.renderer.setPixelRatio(pr)
+  const s = stage.renderer.getSize(new THREE.Vector2())
+  stage.resize(s.x, s.y)
+  return true
 }
 
 /** 默认的太阳方向（指向光源）：左后上方 */

@@ -21,7 +21,8 @@ import { withStairHoles } from '../stairs'
 import { overlapsOthers, snapFurniture, snapToWall, type Guide } from '../snap'
 import { fitOnSurface, pickSurface, propClash, propsOn, snapToClip, snapToHook } from '../surface'
 import { pickTub, tubGuides } from '../tubTop'
-import { SHADOW_RADIUS, createStage, fitSun, frameCamera, setStageQuality, type Stage } from '../three/stage'
+import { SHADOW_RADIUS, createStage, fitSun, frameCamera, setStageQuality, setStageScale, type Stage } from '../three/stage'
+import { DynRes } from '../three/dynRes'
 import { attachPost, LOOKS, LOOK_MAP, lookValue, REAL_LIGHTING, resolveLook, type LookAdjust, type LookAdjustKey, type LookId, type Post } from '../three/post'
 import { CITIES, MONTH_DAYS, compassAxes, skyState, type SkyState } from '../three/sky'
 import { setReflectInterval } from '../three/reflectFrame'
@@ -320,6 +321,8 @@ function fadeFloor(root: THREE.Object3D, floorId: string, alpha: number) {
  * 这一层的不透明度和这个计数都没变时不再遍历整层（藏起来的上层每帧遍历要一毫秒多）
  */
 let fadeEpoch = 0
+/** 户型或家具重搭过就加一（效果选择器的缩略图按它判断要不要重画） */
+let sceneEpoch = 0
 function fadeFloorCached(root: THREE.Object3D, id: string) {
   const alpha = floorAlpha(id)
   const ud = root.userData
@@ -884,6 +887,7 @@ function updateDragHud(e: { clientX: number; clientY: number; altKey?: boolean; 
 // ---------- 场景同步 ----------
 
 function rebuildHouse() {
+  sceneEpoch++
   if (house) {
     stage.scene.remove(house)
     disposeUnshared(house)
@@ -945,6 +949,7 @@ function furnitureKey(asset: string, color: number | undefined, colors: readonly
 let builtActive = ''
 
 function syncFurniture() {
+  sceneEpoch++
   // 模型可能要重建：先取消悬停，把选中容器的半透明材质还回去
   if (hoverId) setHover(null)
   clearXray()
@@ -2860,8 +2865,10 @@ function loop() {
     }
   }
   // 墙体渐变：渐变中阴影跟着墙走，但节流（高画质每 50ms、省电每 150ms 重画一次，转镜头时墙一直在让开，不每帧重画）；
-  // 全部停下后再重画一次。以前渐变中一直沿用旧阴影、停下才重画，墙压低时影子是在最后一下突然没的
-  if (cutawayShadow && ((!fading && !openersMoving) || now - lastCutawayShadow > (low ? 150 : 50))) {
+  // 全部停下后再重画一次。以前渐变中一直沿用旧阴影、停下才重画，墙压低时影子是在最后一下突然没的。
+  // 镜头在转时墙是跟着视角让开的，影子晚一点跟上不显眼：高画质放宽到 150ms，省电画质等墙停下再重画（每次重画是整张太阳阴影）
+  const cutawayGap = moved ? (low ? Infinity : 150) : low ? 150 : 50
+  if (cutawayShadow && ((!fading && !openersMoving) || now - lastCutawayShadow > cutawayGap)) {
     lastCutawayShadow = now
     cutawayShadow = false
     shadowDirty = true
@@ -2878,6 +2885,11 @@ function loop() {
   if (moved) {
     if (!walker) updateCutaway()
     updateCompass()
+  }
+  // 动态分辨率：镜头在动时按帧率降像素比，停下后恢复满分辨率重画一帧
+  if (setStageScale(stage, dynRes.update(now, dt * 1000, moved))) {
+    applySheetOffset()
+    dirty = true
   }
   // 后处理自己还要画（镜头静止时的多帧累积还没收敛、浮尘在飘）：照画，但不从头累积
   const changed = moved || dirty || culledNow
@@ -2902,6 +2914,7 @@ function loop() {
   }
 }
 let lastRender = 0
+const dynRes = new DynRes()
 /** 重画一帧（交给 perfFrame 计时；不每帧新建闭包） */
 const renderStage = () => stage.render()
 /** 墙体渐变改过投影，等渐变结束后重画阴影 */
@@ -3084,7 +3097,7 @@ function applyLights() {
   //   - 灯光冷暖分离：朝下的面（天花板、家具底面）带一点青，朝上的面和阳光照到的地方是暖的
   //     （半球光的「地面色」照的是朝下的面，所以青色放在 groundColor）；入夜逐渐退回原来的配色；
   //   - 色阶两档、暗面换成阴影色、明暗交界提饱和度、轮廓光（three/anime.ts，toon.ts setToonBands）；
-  //   - 影子边缘利落（阴影半径调小）、彩色描边（toon.ts outlineUniforms.uOutlineTone）
+  //   - 影子边缘利落（阴影半径调小）；描边和经典一样是深色线
   // 背景的蓝天白云（three/animeSky.ts）所有画面效果都有，调整里可以关
   const anime = !look.material
   const real = look.material === 'real'
@@ -3196,8 +3209,12 @@ function setNorth(v: number) {
   plan.value.north = ((Math.round(v) % 360) + 360) % 360
 }
 
-/** 3D 指北针：北方在屏幕上相对「镜头正前方」顺时针的角度 */
-const compassAngle = ref(0)
+/**
+ * 3D 指北针：北方在屏幕上相对「镜头正前方」顺时针的角度。
+ * 转视角时每帧都在变：直接写 DOM，不放进响应式（否则整个沙盘组件每帧重渲染一遍）
+ */
+let compassAngle = 0
+const compassNeedle = ref<SVGGElement>()
 function updateCompass() {
   if (!stage) return
   const f = controls.target.clone().sub(stage.camera.position).setY(0)
@@ -3206,7 +3223,9 @@ function updateCompass() {
   const r = new THREE.Vector3(-f.z, 0, f.x)
   const { n } = compassAxes(plan.value.north ?? 0)
   const a = (Math.atan2(n.dot(r), n.dot(f)) * 180) / Math.PI
-  if (Math.abs(a - compassAngle.value) > 0.5) compassAngle.value = a
+  if (Math.abs(a - compassAngle) <= 0.5) return
+  compassAngle = a
+  compassNeedle.value?.setAttribute('transform', `rotate(${a})`)
 }
 
 // ---------- 画面效果 ----------
@@ -3247,22 +3266,35 @@ const LOOK_STYLIZE: { id: string; label: string }[] = [
   { id: 'comic', label: '网点' },
   { id: 'sketch', label: '素描' },
 ]
+/** 当前能起作用的滑杆：转折线省电画质不画 */
+const lookSliders = computed(() => LOOK_SLIDERS.filter((sl) => sl.k !== 'crease' || !lowPower()))
 const numStr = (v: unknown) => (typeof v === 'number' ? (Math.abs(v) < 10 ? v.toFixed(2) : String(v)) : '')
 const lookOpen = ref(false)
 /**
- * 选择器里每种效果的小图：展开时用当前视角渲染，每帧只画一种（一次画完十几种会卡住一下），
- * JPEG 编码用异步的 toBlob；旧图先留着，新图画好一张换一张
+ * 选择器里每种效果的小图：展开时用当前视角渲染。
+ * - 每种效果先在后台编好着色器（post.prepareLook），编好再画：第一次画某个效果不用同步等编译；
+ * - 画完一张隔一帧再画下一张（每张之后还要按当前效果重画一帧主画面），JPEG 编码用异步的 toBlob；
+ * - 镜头、户型家具、时间灯光都没变时（lookThumbKey）再展开直接用上次的图。旧图先留着，新图画好一张换一张
  */
 const lookThumbs = ref<Record<string, string>>({})
 let thumbRun = 0
-function makeLookThumbs() {
+let thumbKey = ''
+function lookThumbKey() {
+  const cam = stage.camera
+  const { look: _l, lookAdj: _a, playing: _p, autoRotate: _r, ...rest } = toRaw(sandbox)
+  return [cam.matrixWorld.elements.map((v) => v.toFixed(2)).join(), cam.projectionMatrix.elements[0].toFixed(4), sceneEpoch, lowPower(), JSON.stringify(rest)].join('|')
+}
+const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()))
+async function makeLookThumbs() {
   if (!house) return
+  const key = lookThumbKey()
+  if (key === thumbKey && LOOKS.every((l) => lookThumbs.value[l.id])) return
   const run = ++thumbRun
-  const queue = [...LOOKS]
-  const step = () => {
-    if (run !== thumbRun || !lookOpen.value || !house) return
-    const l = queue.shift()
-    if (!l) return
+  const live = () => run === thumbRun && lookOpen.value && !!house
+  for (const l of LOOKS) {
+    await post.prepareLook(l.id)
+    await nextFrame()
+    if (!live()) return
     let cv: HTMLCanvasElement | null = null
     try {
       cv = post.withLook(l.id, () => captureView(192, 120))
@@ -3290,9 +3322,10 @@ function makeLookThumbs() {
         0.86,
       )
     }
-    requestAnimationFrame(step)
+    await nextFrame()
+    if (!live()) return
   }
-  requestAnimationFrame(step)
+  thumbKey = key
 }
 function toggleLooks() {
   lookOpen.value = !lookOpen.value
@@ -3832,7 +3865,7 @@ defineExpose({ resetView })
       <div v-if="!blueprint.on" class="compass" :class="{ 'under-bar': !editing }" :title="t('北') + ' · ' + t('户型朝向 {n}°', { n: northDeg })">
         <svg viewBox="-20 -20 40 40" width="40" height="40" aria-hidden="true">
           <circle r="18" class="compass-bg" />
-          <g :transform="`rotate(${compassAngle})`">
+          <g ref="compassNeedle" :transform="`rotate(${compassAngle})`">
             <path d="M0 -14 L5 2 L0 -1 L-5 2 Z" class="compass-n" />
             <path d="M0 14 L5 2 L0 -1 L-5 2 Z" class="compass-s" />
             <text y="-15.5" text-anchor="middle" class="compass-t">N</text>
@@ -4160,7 +4193,7 @@ defineExpose({ resetView })
             <label class="row check"><input type="checkbox" :checked="!!lookVal('sky')" @change="adjustLook('sky', ($event.target as HTMLInputElement).checked)" />{{ t('天空（云和星星）') }}</label>
             <label class="row check"><input type="checkbox" :checked="!!lookVal('tilt')" @change="adjustLook('tilt', ($event.target as HTMLInputElement).checked)" />{{ t('移轴微缩') }}</label>
             <label class="row check"><input type="checkbox" :checked="!!lookVal('crt')" @change="adjustLook('crt', ($event.target as HTMLInputElement).checked)" />{{ t('显像管') }}</label>
-            <label v-for="sl in LOOK_SLIDERS" :key="sl.k" class="row">
+            <label v-for="sl in lookSliders" :key="sl.k" class="row">
               <span>{{ t(sl.label) }}</span>
               <input type="range" :min="sl.min" :max="sl.max" :step="sl.step" :value="lookVal(sl.k) as number" :aria-label="t(sl.label)" @input="adjustLook(sl.k, Number(($event.target as HTMLInputElement).value))" />
               <span class="num val kval">{{ numStr(lookVal(sl.k)) }}</span>

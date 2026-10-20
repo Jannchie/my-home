@@ -15,7 +15,7 @@
 //   → Grade：调色（曝光、对比、饱和、分离色调、褪色、单色 / 棕褐、雾感、暗角、色差、纸纹、颗粒）
 // 选「无」时不建 composer，直接 renderer.render，零额外开销。
 // 省电画质（setLow(true)，手机 / 低性能设备）：画布不开 MSAA，改为始终走 composer（目标不开多重采样），
-// 末尾加一遍 FXAA；入夜的灯光泛光也关掉（泛光的 mip 链很吃填充率）。
+// 末尾加一遍 FXAA；泛光（效果自带的、入夜灯光的）都关掉：泛光的 mip 链很吃填充率，各效果的泛光本来就很淡。
 // 所有效果都是静态的（颗粒按像素坐标固定），沿用沙盘的按需渲染：画面没变就不重画。
 
 import * as THREE from 'three'
@@ -96,9 +96,9 @@ export interface LookDef {
   /** 画面风格化（一次只能一种）：水彩 / 漫画网点 / 黑白漫画（材质输出编码，manga.ts）/ 像素 / 素描 */
   stylize?: Stylize
   /**
-   * 材质 / 光照风格：不填 = 赛璐璐（两档色阶、阴影色、冷暖灯光、彩色描边，anime.ts；Sandbox3D 按它切），大多数预设默认用它；
+   * 材质 / 光照风格：不填 = 赛璐璐（两档色阶、阴影色、冷暖灯光，anime.ts；Sandbox3D 按它切），大多数预设默认用它；
    * none = 原来的三档色阶、黑描边（黑白漫画系列要按明暗分档出网点，用这个）；
-   * real = 写实光照：渲染时换成 PBR 材质（连续的明暗、木纹、布料、绒毛，realistic.ts），「写实」「动画感」预设用它
+   * real = 写实光照：渲染时换成 PBR 材质（连续的明暗、木纹、布料、绒毛，realistic.ts），「写实」类预设用它
    */
   material?: 'none' | 'real'
   /** 不管画面增强的开关，总是开环境光遮蔽（写实要靠它压出墙角、家具底下的暗部） */
@@ -241,9 +241,9 @@ function lookKey(d: LookDef) {
 /** 转折线浓度：预设没写时，动画感光照下默认 0.6（倒角、门缝、台面转角也有线），原来的光照（黑白漫画）下不画 */
 export const creaseOf = (d: LookDef) => d.crease ?? (d.material ? 0 : 0.6)
 
-/** 这套效果什么都不做（不用建后处理） */
-const plainLook = (d: LookDef) =>
-  !d.stylize && !d.crt && !d.tilt && !d.bloom && !creaseOf(d) && !d.bg && (d.outline ?? 1) === 1 && Object.entries(d.grade ?? {}).every(([k, v]) => JSON.stringify(v) === JSON.stringify(NEUTRAL[k as keyof Grade]))
+/** 这套效果什么都不做（不用建后处理）；low：省电画质不开泛光、转折线，只带这两样的效果也算 */
+const plainLook = (d: LookDef, low = false) =>
+  !d.stylize && !d.crt && !d.tilt && (low || (!d.bloom && !creaseOf(d))) && !d.bg && (d.outline ?? 1) === 1 && Object.entries(d.grade ?? {}).every(([k, v]) => JSON.stringify(v) === JSON.stringify(NEUTRAL[k as keyof Grade]))
 
 const DEFAULT_BG: [string, string, string] = ['#fdfdfb', '#f1f3ef', '#e3e9e5']
 
@@ -264,32 +264,24 @@ export const LOOKS: LookDef[] = [
     grade: { exposure: 1.12, contrast: 1.06, saturation: 1.05, vignette: 0.18 },
     lighting: { hemi: 1.05, sun: 1.45 },
   },
-  // 动画感：参考新海诚、京阿尼的室内背景美术。光照和写实一样是连续的明暗、AO、窗口的光斑、光柱和浮尘（realistic.ts、volumetric.ts），
-  // 再画上深色细线（描边 + 转折线），亮部偏暖、暗部偏冷紫，灯具带暖晕；背景是蓝天白云（animeSky.ts）
+  // 动画感：参考新海诚、京阿尼的室内背景美术。赛璐璐光照（两档明暗、带颜色的阴影，anime.ts），窗口的光斑、光柱和浮尘（volumetric.ts），
+  // 深色线条（描边 + 转折线），亮部偏暖、暗部偏冷紫，灯具带暖晕；背景是蓝天白云（animeSky.ts）。
+  // 以前用写实光照（PBR 上收两档明暗）：明暗还是连续的渐变，看起来不像画出来的
   {
     id: 'anime',
     label: '动画感',
     desc: '利落的明暗加深色线条，像动画电影里的室内背景',
-    material: 'real',
+    // 遮蔽按赛璐璐的画法：贴着的一圈收成一块淡淡的阴影色，不是写实的灰色渐变
     ao: true,
-    tone: true,
     // 线条：外轮廓和物体内部的转折都描上清楚的深色线（参考手绘的室内背景，线是画面的骨架）
     outline: 1.1,
     crease: 0.9,
-    // 参考傍晚的室内背景：整体压暗、暗部是淡紫灰（天光偏紫），受光处金橙（阳光偏橙、地面反光偏暖），灯全开带暖晕，光柱浓
-    lighting: { hemi: 0.9, sun: 1.65, up: '#f0e2cf', down: '#cdc8dc', tint: 0.35, sunColor: '#ffcb94', sunTint: 0.35, lamps: true },
-    // 暗部要干净：遮蔽只压贴着的一圈、淡；影子边缘利落（像画出来的阴影块）；明暗分两档（赛璐璐），不加白色边缘光（像塑料）；
-    // 明暗交界的冷暖色带只留一点
-    aoShade: [0.82, 0.8, 0.92, 0.8],
-    aoRadius: 12,
-    softShadow: 1.2,
-    cel: 1,
-    rim: 0,
-    term: 0.3,
-    flatFur: true,
+    // 冷暖：天光照朝上的面（地板、台面）偏暖、朝下的面（天花板）偏冷紫，阳光偏金橙；亮度不另加（赛璐璐光照自己会提亮天光）。
+    // 灯按「室内灯光」的设置走：赛璐璐没有色调映射，白天灯全开会把整个室内冲白
+    lighting: { hemi: 1, sun: 1, up: '#f0e2cf', down: '#cdc8dc', tint: 0.35, sunColor: '#ffcb94', sunTint: 0.35 },
     shafts: 0.9,
-    // 泛光在色调映射之前（线性 HDR）提取：阈值高过阳光照亮的浅色墙面，只让灯泡、屏幕、地上的光斑晕开一圈暖光
-    bloom: { strength: 0.2, radius: 0.6, threshold: 1.5 },
+    // 不做色调映射：阈值高过阳光照亮的白墙（赛璐璐受光面约 1），只让灯泡、屏幕晕开一圈暖光
+    bloom: { strength: 0.16, radius: 0.5, threshold: 1.15 },
     // 墙面是奶油色而不是橘色：整体饱和度略压，暗部的淡紫保留
     grade: { exposure: 1.06, contrast: 1.04, saturation: 0.96, shadowTint: [0.0, -0.008, 0.025], highTint: [0.016, 0.006, -0.012], vignette: 0.2, vignetteColor: '#2e2440' },
   },
@@ -474,6 +466,9 @@ export const REAL_LIGHTING: NonNullable<LookDef['lighting']> = { hemi: 1.05, sun
 export const LOOK_MAP = new Map(LOOKS.map((l) => [l.id, l]))
 
 // ---------- 着色器 ----------
+
+/** 预编译后处理各遍时挂材质用的几何（不画，只是 compile 要一个网格） */
+const QUAD = new THREE.PlaneGeometry(2, 2)
 
 const VERT = /* glsl */ `
   varying vec2 vUv;
@@ -1022,6 +1017,11 @@ export interface Post {
   setSky: (bg: [string, string, string], night: number) => void
   /** 临时用某个效果渲染一帧（生成选择器缩略图用），fn 里调用 stage.render() */
   withLook: <T>(id: string, fn: () => T) => T
+  /**
+   * 在后台编译某个效果要用的着色器（场景材质按这个效果换好之后的样子、后处理各遍），编好后 resolve。
+   * 第一次画某个效果时 three 要同步等着色器链接完（M1 上一个效果能卡几百毫秒）；先用它编好再画就不卡
+   */
+  prepareLook: (id: string) => Promise<void>
   /** 省电画质：无 MSAA + FXAA、不加入夜泛光 */
   setLow: (low: boolean) => void
   /** 室内灯光（three/lights.ts）：窗户夜光的颜色（跟色温）和亮灯程度 0–1 */
@@ -1179,7 +1179,7 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
     // 黑白漫画读的是编码不是颜色，不能泛光
     const manga = look.stylize === 'manga'
     const nightBloom = sky.night > 0.02 && !low && !manga ? { strength: 0.28 * sky.night, radius: 0.3, threshold: 0.82 } : undefined
-    const bloom = nightBloom && (!look.bloom || nightBloom.strength > look.bloom.strength) ? nightBloom : look.bloom
+    const bloom = low ? undefined : nightBloom && (!look.bloom || nightBloom.strength > look.bloom.strength) ? nightBloom : look.bloom
     // 遮蔽、体积光、转折线：漫画读的是编码，不能乘、不能加
     const ao = (fx.ao || !!look.ao) && !low && !manga
     const vol = fx.volumetric && !low && !manga
@@ -1289,7 +1289,6 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
     const manga = linear && current.stylize === 'manga' && !!passes
     const real = linear && current.material === 'real'
     const hidden: THREE.Object3D[] = []
-    const lines = postLines()
     if (manga) {
       const lum = (c: THREE.Color) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
       // toon 受光部的色阶是 1，天光取天空色；漫反射 BRDF 带 1/π
@@ -1310,8 +1309,8 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
         o.visible = false
         return
       }
-      // 写实（描边为 0 时）不画描边壳；后处理描线（postLines）时外轮廓由转折线那一遍画，也不画
-      if (o.userData.isOutline && ((real && !(current.outline ?? 1)) || lines)) {
+      // 写实（描边为 0 时）不画描边壳
+      if (o.userData.isOutline && real && !(current.outline ?? 1)) {
         hidden.push(o)
         o.visible = false
         return
@@ -1411,11 +1410,10 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
   let sceneChanged = true
 
   /**
-   * 后处理描线：画面不风格化、转折线那一遍开着（高画质）时，外轮廓也交给它画（crease.ts 的外轮廓：墨色、约两个 CSS 像素），
-   * 不画描边壳——线是均匀的细墨线（像手绘的室内背景），也省下主画面里约三分之一的 draw call。
-   * 风格化（水彩、网点、素描……）要描边壳的粗线；写实没有描边（outline 0）
+   * 外轮廓一律由描边壳画（粗细 = outline），转折线那一遍只画物体内部的转折（浓度 = crease）。
+   * 以前高画质下开着转折线时外轮廓改由后处理画墨线（crease.ts 的 uSil）、不画描边壳：
+   * 转折线滑杆一过 0 外轮廓的画法就整个换掉、浓度被顶到 1，描边滑杆也不起作用，两档画质的线又不一样，调起来很怪
    */
-  const postLines = () => !!passes?.crease?.enabled && !current.stylize && (current.outline ?? 1) > 0
   let walking = false
 
   /** 多帧累积开不开：省电画质、黑白漫画（编码不能平均）、像素风（要硬边）不开 */
@@ -1474,8 +1472,7 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
       tick++
       jittered(() => {
         if (p.crease?.enabled) {
-          const lines = postLines()
-          updateCrease(p.crease, camera, p.ao?.normalTexture ?? null, p.ao?.depthTexture ?? null, renderer.getDrawingBufferSize(bufRes), lines ? 1 : creaseOf(current), renderer.getPixelRatio(), lines, walking ? WALK_LINE_FOCUS : camera.position.distanceTo(focus))
+          updateCrease(p.crease, camera, p.ao?.normalTexture ?? null, p.ao?.depthTexture ?? null, renderer.getDrawingBufferSize(bufRes), creaseOf(current), renderer.getPixelRatio(), false, walking ? WALK_LINE_FOCUS : camera.position.distanceTo(focus), (current.outline ?? 1) > 0)
         }
         const shafts = VOL_STRENGTH * (current.shafts ?? 1) * (1 - sky.night)
         if (p.vol?.enabled) updateVolumetric(p.vol, camera, stage.sun, p.ao?.depthTexture ?? null, shafts, tick)
@@ -1512,7 +1509,7 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
   /** 按当前效果与天色决定走不走 composer；keep 为真时不拆（生成缩略图途中） */
   function update(keep = false) {
     stage.outlineScale = current.outline ?? 1
-    const need = !plainLook(current) || sky.night > 0.02 || needFxaa() || (!low && (fx.ao || fx.volumetric || fx.dust))
+    const need = !plainLook(current, low) || sky.night > 0.02 || needFxaa() || (!low && (fx.ao || fx.volumetric || fx.dust))
     if (need && !composer) build()
     if (!need && !keep) teardown()
     // 白天「原样」：不接管，直接 renderer.render；夜里即使不走 composer 也要接管来调整材质
@@ -1540,6 +1537,32 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
         update(true)
         if (passes) passes.accum.frame = 0
       }
+    },
+    prepareLook(id) {
+      const keep = current
+      current = LOOK_MAP.get(id as LookId) ?? LOOK_MAP.get('none')!
+      update(true)
+      apply()
+      const jobs: Promise<unknown>[] = []
+      // 画进 composer 的目标和直接上屏是两种着色器变体（输出色彩空间不同）：编译时也要对着同一个目标
+      const target = renderer.getRenderTarget()
+      try {
+        renderer.setRenderTarget(composer ? composer.renderTarget1 : null)
+        renderPatched(() => jobs.push(renderer.compileAsync(scene, camera)))
+        if (composer) {
+          const quads = new THREE.Scene()
+          for (const ps of composer.passes) {
+            const m = ps.enabled ? (ps as ShaderPass).material : undefined
+            if (m) quads.add(new THREE.Mesh(QUAD, m))
+          }
+          jobs.push(renderer.compileAsync(quads, camera))
+        }
+      } finally {
+        renderer.setRenderTarget(target)
+        current = keep
+        update(true)
+      }
+      return Promise.all(jobs).then(() => undefined)
     },
     restart(hard = false) {
       sceneChanged = true
@@ -1609,7 +1632,11 @@ class AccumPass extends Pass {
         uniform sampler2D tHist;
         uniform float uK;
         varying vec2 vUv;
-        void main() { gl_FragColor = mix(texture2D(tHist, vUv), texture2D(tCur, vUv), uK); }`,
+        // 从头来时不读历史：mix(历史, 当前, 1) 在历史里有 NaN 时仍是 NaN（0 × NaN），一个坏像素会永远留在画面上
+        void main() {
+          vec4 cur = texture2D(tCur, vUv);
+          gl_FragColor = uK >= 1.0 ? cur : mix(texture2D(tHist, vUv), cur, uK);
+        }`,
       depthTest: false,
       depthWrite: false,
     })

@@ -54,7 +54,11 @@ export class Highlight {
     this.root.renderOrder = 5
   }
 
-  /** 换一批要高亮的物体（它们下面的所有网格；描边外壳不算） */
+  /**
+   * 换一批要高亮的物体（它们下面的所有网格；描边外壳不算）。
+   * 全透明材质的网格（窗玻璃）不加：叠加层不写深度，玻璃也挡不住后面的东西，推拉窗两扇玻璃的正反面加上后面的窗框，
+   * 同一个像素会被提亮四五次（1.22⁵ ≈ 2.7 倍），再被泛光一晕整扇窗发白。窗框提亮了就看得出选中的是哪扇窗
+   */
   set(objs: Iterable<THREE.Object3D>) {
     this.clear()
     for (const o of objs)
@@ -62,6 +66,7 @@ export class Highlight {
         const src = n as THREE.Mesh
         if (!src.isMesh || n.userData.isOutline || (src as THREE.SkinnedMesh).isSkinnedMesh) return
         const mats = Array.isArray(src.material) ? src.material : [src.material]
+        if (mats.every((x) => !x || x.transparent)) return
         const mat = mats.some((x) => x?.side === THREE.DoubleSide) ? this.mats.double : this.mats.front
         let ov: THREE.Mesh
         const inst = src as THREE.InstancedMesh

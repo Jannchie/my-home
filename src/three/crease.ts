@@ -17,6 +17,7 @@ const CreaseShader = {
     uTexel: { value: new THREE.Vector2(1 / 512, 1 / 512) },
     uDTexel: { value: new THREE.Vector2(1 / 512, 1 / 512) },
     uSil: { value: 0 },
+    uGap: { value: 1 },
     uFocusDist: { value: 300 },
     uNear: { value: 5 },
     uFar: { value: 20000 },
@@ -36,6 +37,7 @@ const CreaseShader = {
     uniform vec2 uTexel;
     uniform vec2 uDTexel;
     uniform float uSil;
+    uniform float uGap;
     uniform float uFocusDist;
     uniform float uNear;
     uniform float uFar;
@@ -51,6 +53,10 @@ const CreaseShader = {
       float a = 1.0 - smoothstep(0.6, 0.93, dot(nrm(uv + tx), nrm(uv - tx)));
       float b = 1.0 - smoothstep(0.6, 0.93, dot(nrm(uv + ty), nrm(uv - ty)));
       return max(a, b);
+    }
+    // 两侧深度连续（同一个面上的折角）：前后叠着的边由描边壳画，这里不再描一条，不然两条线挨着、一粗一细
+    float contAcross(float z0, vec2 off) {
+      return 1.0 - smoothstep(0.03, 0.06, abs(viewZ(vUv + off) - viewZ(vUv - off)) / z0);
     }
     // 深度缝隙：相邻点比这一点远出 4% 以上（门缝、前后叠着）
     float gapWith(float z0, vec2 off) {
@@ -79,6 +85,7 @@ const CreaseShader = {
       vec2 tx = vec2(uTexel.x, 0.0);
       vec2 ty = vec2(0.0, uTexel.y);
       float crease = creaseAt(vUv, tx, ty);
+      if (uGap < 1.0 && crease > 0.05) crease *= min(contAcross(z0, tx), contAcross(z0, ty));
       // 只留连成线的：踢脚线顶面、窗台这类不到一个像素宽的细面，光栅化时一段有一段没有，转折线会断成一串珠子。
       // 横着或竖着往两边各隔 RUN 个像素看，两边都还在线上才算（连续的线横竖总有一个方向两头都是线），珠子去掉
       if (crease > 0.05 && z0 < 7000.0) {
@@ -88,7 +95,7 @@ const CreaseShader = {
         float runY = min(creaseAt(vUv + ry, tx, ty), creaseAt(vUv - ry, tx, ty));
         crease *= smoothstep(0.15, 0.5, max(runX, runY));
       }
-      float gap = max(max(gapWith(z0, tx), gapWith(z0, -tx)), max(gapWith(z0, ty), gapWith(z0, -ty)));
+      float gap = uGap > 0.0 ? max(max(gapWith(z0, tx), gapWith(z0, -tx)), max(gapWith(z0, ty), gapWith(z0, -ty))) : 0.0;
       float e = max(crease, gap);
       // 线色：画面颜色压暗、提一点饱和度
       vec3 c = base.rgb * 0.42;
@@ -139,9 +146,11 @@ export function createCrease() {
 }
 
 /** 每帧画之前：法线、深度图（环境光遮蔽那一遍的），画面尺寸（设备像素，取样按屏幕像素走），镜头远近裁剪面；没有图时 strength 当 0。
- * lines：后处理描线（外轮廓、描线内侧的高光）；focusDist：视线焦点距离（cm），内部转折线、高光从这里往外渐淡 */
-export function updateCrease(pass: ShaderPass, camera: THREE.PerspectiveCamera, normal: THREE.Texture | null, depth: THREE.Texture | null, res: THREE.Vector2, strength: number, pixelRatio: number, lines: boolean, focusDist: number) {
+ * lines：后处理描线（外轮廓、描线内侧的高光）；focusDist：视线焦点距离（cm），内部转折线、高光从这里往外渐淡；
+ * hulls：画着描边壳——物体边缘、缝隙（深度不连续的地方）交给描边，这里只画同一个面上的折角 */
+export function updateCrease(pass: ShaderPass, camera: THREE.PerspectiveCamera, normal: THREE.Texture | null, depth: THREE.Texture | null, res: THREE.Vector2, strength: number, pixelRatio: number, lines: boolean, focusDist: number, hulls = false) {
   const u = pass.uniforms
+  u.uGap.value = hulls ? 0 : 1
   u.uStrength.value = normal && depth ? strength : 0
   if (!normal || !depth) return
   u.tNormal.value = normal

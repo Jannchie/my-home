@@ -79,7 +79,9 @@ import { MAT_ID, type Mat } from './matIds'
       chunk.lights_fragment_begin.replace(POINT, POINT_PATCH).replace(
         DIR,
         `float sunNL = dot( geometryNormal, directLight.direction );
-		float sunShade = ( directLight.visible && receiveShadow ) ? mix( 1.0, ${SHADOW}, smoothstep( 0.04, 0.28, sunNL ) ) : 1.0;
+		// 背光面（权重 0）不取样：13 个取样的结果反正被乘成 0，约一半的片元白取（三元运算只求值选中的那一支）
+		float sunK = smoothstep( 0.04, 0.28, sunNL );
+		float sunShade = ( directLight.visible && receiveShadow && sunK > 0.0 ) ? mix( 1.0, ${SHADOW}, sunK ) : 1.0;
 		directLight.color *= sunShade;
 		float sunPx = abs( sunNL ) / max( fwidth( sunNL ), 1e-5 );
 		termEdge = max( termEdge, max( 4.0 * sunShade * ( 1.0 - sunShade ), ( 1.0 - smoothstep( 0.0, 5.0, sunPx ) ) * sunShade ) );
@@ -213,16 +215,7 @@ export function vertexColorToon() {
 /** 描边：沿法线在屏幕空间外扩，线宽不随距离变化；颜色取填充色的深色版本，更像手绘 */
 const outlineCache = new Map<string, THREE.ShaderMaterial>()
 // uManga：黑白漫画效果渲染时描边输出墨线标记（manga.ts，R = 1），和受光材质共用同一个 uniform 对象
-// uOutlineTone：动画感光照的彩色描边（0 = 平时的深色描边，1 = 提亮、提饱和的彩色线，像动画背景的色线），Sandbox3D 设置
-export const outlineUniforms = { uWidth: { value: 1.6 }, uViewport: { value: new THREE.Vector2(800, 600) }, uManga: mangaUniforms.uManga, uOutlineTone: { value: 0 } }
-/** 彩色描边：描边色（填充色的深色版本）提亮六成、饱和度 ×1.25，成了固有色的深色（不用黑线，又看得清零件之间的分界） */
-const OUTLINE_TONE = /* glsl */ `
-  uniform float uOutlineTone;
-  vec3 outlineTone(vec3 c) {
-    vec3 t = c * 1.6;
-    t = min(max(mix(vec3(dot(t, vec3(0.2126, 0.7152, 0.0722))), t, 1.25), 0.0), 1.0);
-    return mix(c, t, uOutlineTone);
-  }`
+export const outlineUniforms = { uWidth: { value: 1.6 }, uViewport: { value: new THREE.Vector2(800, 600) }, uManga: mangaUniforms.uManga }
 function outlineMaterial(color: THREE.Color) {
   const key = color.getHexString()
   let m = outlineCache.get(key)
@@ -243,8 +236,7 @@ function outlineMaterial(color: THREE.Color) {
       fragmentShader: /* glsl */ `
         uniform vec3 uColor;
         uniform float uManga;
-        ${OUTLINE_TONE}
-        void main() { gl_FragColor = uManga > 0.5 ? vec4(1.0, 0.5, 0.5, 1.0) : vec4(outlineTone(uColor), 1.0); }`,
+        void main() { gl_FragColor = uManga > 0.5 ? vec4(1.0, 0.5, 0.5, 1.0) : vec4(uColor, 1.0); }`,
       side: THREE.BackSide,
     })
     outlineCache.set(key, m)
@@ -301,13 +293,12 @@ export function vertexColorOutline() {
       uniform float uDim;
       uniform float uManga;
       varying vec3 vOColor;
-      ${OUTLINE_TONE}
       vec3 toLinear(vec3 c) {
         return mix(c * 0.0773993808, pow(c * 0.9478672986 + 0.0521327014, vec3(2.4)), vec3(greaterThanEqual(c, vec3(0.04045))));
       }
       void main() {
         vec3 c = uLinear > 0.5 ? toLinear(vOColor) : vOColor;
-        gl_FragColor = uManga > 0.5 ? vec4(1.0, 0.5, 0.5, 1.0) : vec4(outlineTone(c) * uDim, 1.0);
+        gl_FragColor = uManga > 0.5 ? vec4(1.0, 0.5, 0.5, 1.0) : vec4(c * uDim, 1.0);
       }`,
     side: THREE.BackSide,
   })
