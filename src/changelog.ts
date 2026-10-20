@@ -12,6 +12,36 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '1.12.0',
+    date: '2026-10-20',
+    notes: {
+      zh: [
+        '新增「写实」「手办」画面效果：PBR 材质带木纹、布料和绒毛，明暗与反光更柔和；手办是半光泽漆面加一圈柔光',
+        '室内灯会投出影子：每层最显眼的几盏灯各自投影，两盏灯照同一个东西就有两块影子，影子是动画风格的硬边、浅色、略带蓝紫；新增「室外光」滑杆和灯光一键恢复默认',
+        '描线改成后处理墨线，墙角、天花板交界、窗框都有线，凸起的棱边旁留一道高光；暗面分三档、阴影色更鲜；木地板改成长短错缝的木板',
+        '漫游只画看得到的房间（透过门和楼梯洞口看得到的照常画），帧率明显提高；倒影、遮蔽等也更省',
+        '平面图：选中房间后每条边中点有「+」，点一下加角点、按住拖到位，右键边也能加；门窗两端可以直接拖动改宽度，还有常用宽度一键切换',
+        '厨房可以左右翻转（水槽和灶对调，台面上的东西跟着走）；右键家具可以换同类的上一款 / 下一款；F3 打开性能浮窗。修正灯全关后月光从天花板漏进来、楼梯口过亮',
+      ],
+      ja: [
+        '「リアル」「フィギュア」の画面エフェクトを追加：木目・布・毛足のある PBR マテリアルで、陰影と反射がやわらかく。フィギュアは半光沢の塗装にやわらかなリムライト',
+        '室内照明が影を落とすように：各階でいちばん目立つ数灯がそれぞれ影を落とし、2 灯に照らされた物には影が 2 つ。影はアニメ風のくっきりした、淡い、少し青紫の影です。「屋外の光」スライダーと照明の初期化ボタンを追加',
+        '輪郭線をポストプロセスの墨線に：壁の隅、天井の境目、窓枠にも線が入り、出っ張った角の脇にハイライト。暗部は 3 段階、影の色はより鮮やかに。フローリングは長さの揃わない乱尺貼りに',
+        'ウォーク中は見えている部屋だけを描画（ドアや階段の吹き抜け越しに見える部屋はそのまま）、フレームレートが大きく向上。反射やオクルージョンも軽く',
+        '間取り図：部屋を選ぶと各辺の中点に「+」が出て、クリックで頂点を追加、ドラッグでそのまま位置決め。辺の右クリックからも追加できます。建具は両端をドラッグして幅を変えられ、よく使う幅もワンクリックで',
+        'キッチンを左右反転（シンクとコンロを入れ替え、天板の小物も一緒に移動）。家具の右クリックで同じ種類の前 / 次のデザインに切り替え。F3 でパフォーマンス表示。照明をすべて消したときに天井から月明かりが漏れる問題と、階段まわりが明るすぎる問題を修正',
+      ],
+      en: [
+        "New Realistic and Figure looks: PBR materials with wood grain, fabric and fuzz, softer shading and reflections; Figure adds a semi-gloss paint finish with a soft rim light",
+        "Indoor lights cast shadows: the most prominent lamps on each floor each cast their own, so an object lit by two lamps gets two shadows; shadows are anime-style crisp, light and slightly blue-violet. New Outdoor light slider and a reset-to-defaults button for lighting",
+        "Outlines are now post-processed ink lines, including room corners, ceiling edges and window frames, with a highlight beside raised edges; three shadow bands, richer shadow colors, and plank wood floors with staggered lengths",
+        "The walkthrough only draws rooms you can see (rooms visible through doors and stair openings still show), for a much higher frame rate; reflections and ambient occlusion are cheaper too",
+        "Floor plan: a selected room shows a + at each edge midpoint; click to add a corner or drag to place it, or right-click an edge. Drag either end of a door or window to resize it, or pick a common width",
+        "Kitchens can be flipped left-right, swapping sink and hob with counter items following along; right-click furniture to switch to the previous or next design of the same type; F3 opens a performance overlay. Fixed moonlight leaking through the ceiling with all lights off, and overly bright stairwells",
+      ],
+    },
+  },
+  {
     version: '1.11.0',
     date: '2026-10-19',
     notes: {
