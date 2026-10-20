@@ -12,6 +12,33 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '1.13.0',
+    date: '2026-10-21',
+    notes: {
+      zh: [
+        '「动画感」改用赛璐璐光照：两档明暗、带颜色的阴影，保留冷暖色调、环境光遮蔽和光柱；赛璐璐下的金属有了亮暗分明的反光和一道细高光',
+        '描线更清楚：外轮廓统一用深色描边，粗细由「描边」控制；「转折线」只画物体内部的折角，不再和描边叠成两条线，也不再一调就换掉外轮廓的画法',
+        '转视角、漫游时按帧率自动降低分辨率，停下后恢复清晰；省电画质关掉泛光、转动时不再频繁重画墙体阴影；背光面的阴影、磨砂玻璃、指南针也更省',
+        '展开「画面效果」不再卡顿：各效果的着色器在后台编译，视角没变时缩略图直接复用',
+        '修正悬停阳台推拉窗时整扇窗发白',
+      ],
+      ja: [
+        '「アニメ調」をセルシェーディングのライティングに：2 段階の陰影と色のついた影に、寒暖の色味・アンビエントオクルージョン・光の筋はそのまま。セルシェーディングの金属に明暗のはっきりした映り込みと細いハイライト',
+        '線をくっきりと：外側の輪郭はすべて濃い輪郭線で描き、太さは「輪郭線」で調整。「稜線」は物の内側の折れ目だけを描き、輪郭線と二重にならず、調整しても輪郭の描き方が切り替わりません',
+        '視点の回転やウォーク中はフレームレートに応じて解像度を自動で下げ、止まると元の精細さに。省電力画質ではブルームをオフにし、回転中に壁の影を何度も描き直さないように。逆光側の影、すりガラス、方位磁針も軽く',
+        '「画面エフェクト」を開いてもカクつかないように：各エフェクトのシェーダーをバックグラウンドでコンパイルし、視点が変わっていなければサムネイルを再利用',
+        'バルコニーの引き違い窓にカーソルを乗せると窓全体が白飛びする問題を修正',
+      ],
+      en: [
+        "The Anime look now uses cel-shaded lighting: two shading bands and colored shadows, keeping the warm and cool tints, ambient occlusion and light shafts; metal under cel shading gets crisp light and dark reflections plus a thin highlight",
+        "Crisper lines: outer contours are always drawn with dark outlines whose width follows the Outline slider; Crease lines only draw folds inside objects, no longer doubling the outline or switching how contours are drawn",
+        "Resolution drops automatically to keep the frame rate up while orbiting or walking and sharpens again when you stop; Battery saver turns off bloom and no longer keeps redrawing wall shadows while orbiting; back-facing shadows, frosted glass and the compass are cheaper too",
+        "Opening the Look panel no longer stutters: shaders for each look compile in the background, and thumbnails are reused when the view has not changed",
+        "Fixed balcony sliding windows turning white when hovered",
+      ],
+    },
+  },
+  {
     version: '1.12.0',
     date: '2026-10-20',
     notes: {
