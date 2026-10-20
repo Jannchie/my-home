@@ -2,6 +2,7 @@
 
 import * as THREE from 'three'
 import { outlineUniforms, setMaxAnisotropy } from './toon'
+import { beginReflectFrame, prerenderReflections } from './reflectFrame'
 
 export interface Stage {
   renderer: THREE.WebGLRenderer
@@ -45,6 +46,8 @@ export function createStage(canvas: HTMLCanvasElement, opts: { preserve?: boolea
   renderer.outputColorSpace = THREE.SRGBColorSpace
 
   const scene = new THREE.Scene()
+  // 世界矩阵每帧在 render 开头更新一次：一帧里有主画面、法线、倒影好几次 renderer.render，默认每次都把整棵场景树重算一遍
+  scene.matrixWorldAutoUpdate = false
   const camera = new THREE.PerspectiveCamera(30, 1, 5, 20000)
 
   // 天光：上方偏暖白、下方是中性米色（底色不能带彩色，否则会渗进墙脚、缝隙里）
@@ -72,8 +75,13 @@ export function createStage(canvas: HTMLCanvasElement, opts: { preserve?: boolea
       const size = renderer.getDrawingBufferSize(new THREE.Vector2())
       outlineUniforms.uViewport.value.copy(size)
       outlineUniforms.uWidth.value = 1.25 * renderer.getPixelRatio() * stage.outlineScale
+      beginReflectFrame()
+      scene.updateMatrixWorld()
       if (stage.post) stage.post.render()
-      else renderer.render(scene, camera)
+      else {
+        prerenderReflections(renderer, scene, camera)
+        renderer.render(scene, camera)
+      }
     },
     resize(w, h) {
       renderer.setSize(w, h, false)

@@ -59,7 +59,7 @@ export function kelvinColor(k: number, out = new THREE.Color()) {
   return out.setRGB(c(r), c(g), c(b), THREE.SRGBColorSpace)
 }
 
-const lum = (c: THREE.Color) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
+export const lum = (c: THREE.Color) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
 /** 灯光颜色：色温的色相，亮度（相对亮度）固定——换色温只换冷暖，不会冷了就更亮 */
 export function lightColor(k: number, out = new THREE.Color()) {
   kelvinColor(k, out)
@@ -76,6 +76,10 @@ const RANGE_SCALE = 1.5
 export const RANGE_MIN = 50
 export const RANGE_MAX = 250
 export const DEFAULT_RANGE = 100
+/** 室外光（天光、阳光、月光）强度（%）的范围：调低后室内主要靠灯照明，灯的影子更清楚 */
+export const OUTDOOR_MIN = 0
+export const OUTDOOR_MAX = 150
+export const DEFAULT_OUTDOOR = 100
 
 const smooth = (a: number, b: number, x: number) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)))
@@ -874,8 +878,26 @@ export function fixtureModel(s: RoomLightSpec): { obj: THREE.Group; glows: RigGl
   g.traverse((o) => {
     o.castShadow = false
     o.receiveShadow = false
+    // 共享的 toon 材质换成灯具专用的一份：同一个材质被接收阴影、不接收阴影的网格交替使用时，
+    // three 每画一次都要重新查一遍着色器程序（漫游时每帧上千次），这里的网格都不接收阴影，单独一份就不来回切了
+    const m = o as THREE.Mesh
+    if (m.isMesh && !Array.isArray(m.material) && !m.userData.isOutline) m.material = fixtureMat(m.material)
   })
   return { obj: g, glows }
+}
+
+/** 灯具用的材质副本（按原材质缓存，所有灯具共用）；自己发光的部件（glow）本来就是独立材质，不换 */
+const fixtureMats = new WeakMap<THREE.Material, THREE.Material>()
+function fixtureMat(src: THREE.Material) {
+  if (src.userData[LAMP_GLOW]) return src
+  let m = fixtureMats.get(src)
+  if (!m) {
+    m = src.clone()
+    m.onBeforeCompile = src.onBeforeCompile
+    m.customProgramCacheKey = src.customProgramCacheKey
+    fixtureMats.set(src, m)
+  }
+  return m
 }
 
 // ---------- 管理器 ----------
@@ -912,7 +934,11 @@ export interface LightState {
 }
 
 const FADE_SPEED = 2.2 // 每秒
-
+/** 顶灯投影：投影的灯最多几盏（高画质）、阴影贴图边长（立方体六面各一张）、影子浓度、换灯时淡入的速度（每秒） */
+const SHADOW_SLOTS = 4
+const SHADOW_SIZE = 512
+const SHADOW_K = 0.7
+const SHADOW_FADE = 3
 export class IndoorLights {
   /** 点光源 + 地面光斑 */
   readonly group = new THREE.Group()
@@ -936,6 +962,12 @@ export class IndoorLights {
   /** 房间编号图（lightMask.ts）与它的指纹 */
   private mask: LightMaskMap | null = null
   private maskKey = ''
+  /** 可以投影的房间（setShadowRooms）、各投影位现在放的是哪盏灯（位置）、影子淡入的进度 */
+  private shadowRooms: Set<string> | null = null
+  private shadowKeys: string[] = []
+  private shadowFades: number[] = []
+  /** 投影位的个数（setPoolSize 定） */
+  private slots = 0
 
   constructor(poolSize = POOL_HIGH) {
     this.group.name = 'indoor-lights'
@@ -952,8 +984,49 @@ export class IndoorLights {
       this.pool.push(l)
       this.group.add(l)
     }
+    // 前几盏是投影位（高画质）：漫游时这一层最显著的几盏灯放在这里（setShadowRooms），在同一层里走动时投影的灯不变。
+    // 一直开着投影（开关会重编译着色器），不用时阴影浓度为 0
+    this.slots = n >= POOL_HIGH ? Math.min(n, SHADOW_SLOTS) : 0
+    this.pool.forEach((sl, i) => {
+      sl.castShadow = i < this.slots
+      if (!sl.castShadow) return
+      sl.shadow.mapSize.set(SHADOW_SIZE, SHADOW_SIZE)
+      // 立方体阴影的深度是透视的（非线性）：近平面太近时远处精度很差，偏移量稍大就把离墙几十厘米内的影子全吃掉（壁挂、靠墙家具没有影子）。
+      // 近平面放到 5cm，偏移只留约半厘米（1 米处），表面的自阴影交给法线偏移
+      sl.shadow.camera.near = 5
+      sl.shadow.bias = -0.0003
+      sl.shadow.normalBias = 1.5
+      // 取样圈的半径（阴影贴图像素）：轮廓平滑；过渡收得很窄（硬边），见 toon.ts
+      sl.shadow.radius = 3.5
+      sl.shadow.intensity = 0
+      // 只在灯挪了、场景变了（refreshShadows）时重画
+      sl.shadow.autoUpdate = false
+      // 建好就先画一次阴影贴图：投影的灯没有贴图时，有的显卡驱动（ANGLE / D3D11）上整个光照会算坏
+      sl.shadow.needsUpdate = true
+    })
+    this.shadowKeys = []
+    this.shadowFades = []
     this.lampsPerRoom = n >= POOL_HIGH ? 2 : 0
     this.dirty = true
+  }
+
+  /** 可以投影的房间（漫游时镜头所在那一层的房间；null = 不投影）：其中最显著的几盏灯投影 */
+  setShadowRooms(ids: Set<string>) {
+    this.shadowRooms = ids
+    this.dirty = true
+  }
+
+  /** 场景变了（家具、户型、门开合）：投影位的阴影贴图要重画 */
+  refreshShadows() {
+    this.shadowKeys.forEach((key, i) => {
+      if (key) this.pool[i].shadow.needsUpdate = true
+    })
+  }
+
+  /** 有投影位的阴影贴图等着重画（换了一盏灯、场景变了） */
+  shadowPending() {
+    for (let i = 0; i < this.slots; i++) if (this.pool[i].shadow.needsUpdate) return true
+    return false
   }
 
   get poolSize() {
@@ -1165,7 +1238,15 @@ export class IndoorLights {
     }
     for (const rig of this.rooms.values()) approach(rig)
     for (const l of this.lamps.values()) approach(l)
-    if (!busy && !this.dirty) return false
+    // 换了投影的灯：影子淡入，不一下子冒出来（只改阴影浓度，不用重新分配灯）
+    let fading = false
+    this.shadowKeys.forEach((key, i) => {
+      if (!key || this.shadowFades[i] >= 1) return
+      this.shadowFades[i] = Math.min(1, this.shadowFades[i] + dt * SHADOW_FADE)
+      this.pool[i].shadow.intensity = SHADOW_K * this.shadowFades[i]
+      fading = true
+    })
+    if (!busy && !this.dirty) return fading
     this.dirty = false
     this.apply()
     // 应用过一次（开关、色温、位置变了）也要重画
@@ -1205,7 +1286,8 @@ export class IndoorLights {
     const power = this.state.power
     // 候选：[优先级, 位置, 颜色, 强度, 距离]
     type Cand = { pri: number; x: number; y: number; z: number; color: THREE.Color; i: number; d: number; room: string | null }
-    const cands: Cand[] = []
+    const OFF_CAND = { pri: 0, x: 0, y: 0, z: 0, i: 0, d: 1, room: null }
+    let cands: Cand[] = []
     for (const rig of this.rooms.values()) {
       const s = rig.spec
       const lv = rig.level
@@ -1260,6 +1342,34 @@ export class IndoorLights {
       }
     }
     cands.sort((a, b) => b.pri - a.pri)
+    // 投影位：可以投影的房间里开着的灯（主灯、台面灯、台灯落地灯都算），按「亮度 × 照射范围」挑最显著的几盏排到最前面——
+    // 每盏各自投影，两盏灯照同一个东西就有两块影子，叠在一起的地方更暗
+    const slots = this.slots
+    if (slots) {
+      const rooms = this.shadowRooms
+      const lead = rooms
+        ? cands
+            .filter((c) => c.i > 0.05 && c.room && rooms.has(c.room))
+            .sort((a, b) => b.i * b.d - a.i * a.d)
+            .slice(0, slots)
+        : []
+      // 还在里面的灯留在原来的投影位（排名互换时不重画阴影、不重新淡入），新进来的填空出来的位
+      const keyOf = (c: Cand) => `${c.x},${c.y},${c.z}`
+      const placed: (Cand | null)[] = Array.from({ length: slots }, (_, i) => lead.find((c) => keyOf(c) === this.shadowKeys[i]) ?? null)
+      for (const c of lead) if (!placed.includes(c)) placed[placed.indexOf(null)] = c
+      const rest = cands.filter((c) => !lead.includes(c))
+      // 空着的投影位也要占住池子的位置（池子第 i 盏 = 投影位 i）：用后面的普通灯补上，没有就放一盏不亮的
+      cands = placed.map((c) => c ?? rest.shift() ?? { ...OFF_CAND, color: this.globalKelvin }).concat(rest)
+      placed.forEach((c, i) => {
+        const key = c ? keyOf(c) : ''
+        if (key === (this.shadowKeys[i] ?? '')) return
+        this.shadowKeys[i] = key
+        this.shadowFades[i] = 0
+        const sl = this.pool[i]
+        sl.shadow.intensity = 0
+        if (key) sl.shadow.needsUpdate = true
+      })
+    }
     let anyOn = false
     // 池子里第 i 盏灯 = 着色器里的 pointLights[ i ]（场景里只有这些点光源，按加入顺序）：遮罩数组按同样的下标写
     this.pool.forEach((pl, i) => {

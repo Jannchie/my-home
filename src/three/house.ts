@@ -26,6 +26,8 @@ import {
   type WoodTone,
   edgesOf as roomEdges,
 } from '../model'
+import { addPileFringe } from './fringe'
+import { drawPlanks, PLANK_TILE } from './woodGrain'
 import { isIndoor, sharedIntervals, voidRailSegments, wallSegments, wallThicknessAt, type WallSegment } from '../walls'
 import { tatamiLayout } from '../tatami'
 import { doorColor, doorHandleOf, doorStyled, handleColor, hasSidelight, hasTransom, LEGACY_DOOR, LEGACY_ENTRANCE, LEGACY_SLIDING, sidelightWidth, TRANSOM_TOP } from '../doorStyles'
@@ -53,6 +55,9 @@ import {
 } from './assets'
 import { edgesOf } from '../model'
 import { showerSpot, stallWalls, type StallWalls } from '../bathroom'
+import { resolveMats, tagMat } from './mats'
+import { bakeScreens } from './screens'
+import type { Mat } from './matIds'
 import { curtainSpec } from '../curtains'
 import { archRise, frameColor, gridAllowed, roundDiameter, sashAllowed, shutterColor, windowSpan } from '../windows'
 import { spandrelGeometry, windowModel, type WindowModelStyle } from './windows'
@@ -92,26 +97,7 @@ function canvasTex(key: string, size: number, tile: number, draw: (g: CanvasRend
 }
 
 function woodTex(base: string, line: string) {
-  // 一张贴图 = 120cm 见方，6 条地板，每条错缝
-  return canvasTex(`wood${base}`, 256, 120, (g, s) => {
-    g.fillStyle = base
-    g.fillRect(0, 0, s, s)
-    const n = 6
-    const h = s / n
-    g.strokeStyle = line
-    g.lineWidth = 2
-    for (let i = 0; i < n; i++) {
-      g.fillStyle = shade(base, (i % 3) * 0.012 - 0.01)
-      g.fillRect(0, i * h + 1, s, h - 2)
-      g.beginPath()
-      g.moveTo(0, i * h)
-      g.lineTo(s, i * h)
-      const x = ((i * 0.37) % 1) * s
-      g.moveTo(x, i * h)
-      g.lineTo(x, (i + 1) * h)
-      g.stroke()
-    }
-  })
+  return canvasTex(`wood${base}`, 1024, PLANK_TILE, (g, s) => drawPlanks(g, s, base, line))
 }
 
 function tileTex(base: string, line: string, cell: number) {
@@ -157,6 +143,10 @@ function floorMaterial(kind: RoomKind, tone: WoodTone = 'natural') {
       map = woodTex('#ecc79b', '#cfa676')
   }
   m = new THREE.MeshToonMaterial({ map, color: '#ffffff', gradientMap: (toon('#fff') as THREE.MeshToonMaterial).gradientMap })
+  // 写实光照（realistic.ts）的材质和粗糙度：釉面砖最亮、木地板一层淡淡的清漆光泽、榻榻米和阳台、玄关地砖哑光
+  const tile = tone === 'natural' && ['wash', 'toilet', 'bath', 'entrance', 'balcony'].includes(kind)
+  m.userData.mat = tone === 'natural' && kind === 'japanese' ? 'fabric' : tile ? (kind === 'balcony' || kind === 'entrance' ? 'stone' : 'ceramic') : 'wood'
+  m.userData.pbrRoughness = kind === 'japanese' && tone === 'natural' ? 0.92 : kind === 'balcony' ? 0.85 : kind === 'entrance' && tone === 'natural' ? 0.6 : ['wash', 'toilet', 'bath'].includes(kind) && tone === 'natural' ? 0.3 : 0.55
   floorMatCache.set(key, m)
   return m
 }
@@ -1456,6 +1446,8 @@ function buildCurtains(plan: Plan, infos: OpeningInfo[], H: number) {
     mergeMeshes(obj)
     addOutlines(obj)
     tagFade(obj, c, info.out, info.outer)
+    // 写实光照按布料画（褶皱、织纹，mats.ts）
+    tagMat(obj, 'fabric')
     g.add(obj)
   }
   return g
@@ -1851,6 +1843,27 @@ function buildShowers(plan: Plan) {
 /** rise：楼梯的层间高（不给按墙高 + 楼板厚） */
 /** stall：淋浴房哪几边贴墙（贴墙的边不装玻璃，见 bathroom.ts stallWalls） */
 export function fixtureModel(f: Fixture, wallH: number, rise?: number, walls?: WallLine[], stall?: StallWalls) {
+  const m = fixtureShape(f, wallH, rise, walls, stall)
+  // 材质类别（写实光照用，mats.ts）：模型里标了的零件照标的，其余按固定颜色表 / 设备的默认材质
+  if (m) resolveMats(m, { mat: FIXTURE_MAT[f.kind] }, [])
+  return m
+}
+
+/** 设备的默认材质：卫浴是陶瓷 / 釉面，厨房柜门、外机、防水盘是半光的塑料 / 烤漆，楼梯、收纳位、管道井是涂装 */
+const FIXTURE_MAT: Record<Fixture['kind'], Mat> = {
+  kitchen: 'plastic',
+  bathtub: 'ceramic',
+  toilet: 'ceramic',
+  basin: 'ceramic',
+  washer: 'plastic',
+  fridge: 'plastic',
+  outdoor: 'plastic',
+  ps: 'paint',
+  builtin: 'paint',
+  stairs: 'paint',
+}
+
+function fixtureShape(f: Fixture, wallH: number, rise?: number, walls?: WallLine[], stall?: StallWalls) {
   const d = fixtureDepth(f)
   switch (f.kind) {
     case 'kitchen':
@@ -2098,6 +2111,12 @@ function buildTemplate(def: AssetDef, fu: Furniture, closeUp: boolean): Furnitur
   const pal = effectivePalette(def, fu.color ?? 0, fu.colors)
   // 装饰画的画面（artwork.ts）：build 里的 artFace 读这个上下文
   const m = withArt(fu.art, () => def.build(pal))
+  // 屏幕画面一层层的发光小片烘成一张贴图（screens.ts）：写实光照、描边下不露出厚度
+  bakeScreens(m)
+  // 每个零件的材质类别（写实光照用，mats.ts）：要在合并之前写，合并按它分组、写成逐顶点属性
+  resolveMats(m, def, pal)
+  // 地毯、地垫：色块交界和外框长一圈软毛刺（fringe.ts），要在合并之前
+  addPileFringe(m, def)
   // 半透明零件（玻璃、水面）不投影
   noTransparentShadows(m)
   // 零件按材质合并，draw call 少一个数量级（描边、花纹、弯曲都在合并后的网格上照常工作）
@@ -2169,8 +2188,8 @@ export function furnitureModel(fu: Furniture, opts: { closeUp?: boolean } = {}) 
   return g
 }
 
-/** 包围盒对角线小于这个值（cm）的网格不投影：把手、衣物、小摆件的影子在 2048 的阴影贴图上只有几个像素，却各占一次阴影 draw call */
-const TINY_CASTER = 15
+/** 包围盒对角线小于这个值（cm）的网格不投影：螺丝、按钮这类的影子只有几个像素，却各占一次阴影 draw call（阴影贴图只在场景变了时重画，鹿角、把手这种细件留着） */
+const TINY_CASTER = 5
 /** 包围球直径小于这个值（cm）的零件不描边（合并后还单独剩下的小零件：把手、按钮、小摆件里的细节） */
 const TINY_OUTLINE = 10
 function noTinyShadows(root: THREE.Object3D) {

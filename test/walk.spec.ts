@@ -1,7 +1,7 @@
 // 第一人称漫游（three/walk.ts）：走动时不穿墙、不穿家具，能沿楼梯上下楼，能走到阳台。
 import { describe, expect, test } from 'vitest'
 import * as THREE from 'three'
-import { MouseFilter, Walker, ceilings } from '/src/three/walk'
+import { BODY_R, MouseFilter, Walker, ceilings } from '/src/three/walk'
 import { slabHoles, type StairWalk } from '/src/stairs'
 import { floorAbove, planFloors } from '/src/floors'
 import { decorate } from '/src/decorate'
@@ -39,13 +39,13 @@ describe('第一人称漫游', () => {
       plan.furniture = decorate(plan, seed)
       const { w } = walkerOf(plan)
       const g = () => w.nav.grid(w.floor)
-      expect(g().canStand('walk', w.pos, 12), `seed ${seed} 出生点`).toBe(true)
+      expect(g().canStand('walk', w.pos, BODY_R), `seed ${seed} 出生点`).toBe(true)
       w.hold('w', true)
       for (let i = 0; i < 1800; i++) {
         // 每隔一阵转个向，撞墙后会沿墙滑
         if (i % 90 === 0) w.look(((i * 7919) % 400) - 200, 0)
         w.update(1 / 60)
-        if (!w.onStairs) expect(g().canStand('walk', w.pos, 11.9), `seed ${seed} 第 ${i} 帧 (${w.pos.x.toFixed(0)}, ${w.pos.y.toFixed(0)})`).toBe(true)
+        if (!w.onStairs) expect(g().canStand('walk', w.pos, BODY_R - 0.1), `seed ${seed} 第 ${i} 帧 (${w.pos.x.toFixed(0)}, ${w.pos.y.toFixed(0)})`).toBe(true)
       }
     }
   })

@@ -4,6 +4,7 @@
 
 import * as THREE from 'three'
 import { ball, cup, cyl, markMirror, puck, rbox, shade, toon, torus, tray } from '../toon'
+import { duvet as duvetMesh, pillowMesh } from '../bedding'
 import { C, SWING_OPEN, hangingPipe, holePanel, legs, movable, paintPanel, pipeHook, rectPoly, shell, slab, type AssetDef, type DoorMotion, type Hole, type Poly, type SurfaceDef } from '../kit'
 import { batten, cylX, cylZ, glassPane, lit, meshWith, rod3, type V3 } from '../geo'
 import { I, J, M, N, R, withPals, type Pal3 } from '../packkit'
@@ -137,11 +138,12 @@ function bedding(g: THREE.Group, w: number, len: number, y0: number, z0: number,
   const pw = Math.min(62, (w - 16) / pillows - 4)
   for (let i = 0; i < pillows; i++) {
     const x = pillows === 1 ? 0 : (i - 0.5) * (pw + 6)
-    g.add(rbox(pw, 11, 34, C.white, { x, y: top - 1, z: z0 + 24, rx: -0.12 }, 5))
+    g.add(pillowMesh(pw, 12, 34, C.white, { x, y: top - 1, z: z0 + 24, rx: -0.12 }))
   }
+  // 被子：两侧、床尾翻下去垂到床垫一半多（不超过床垫高），床头那端翻折一道被头
   const dz = len - 56
-  g.add(rbox(w + duvetOver * 2, 8, dz, duvet, { y: top - 1, z: z0 + len - dz / 2 }, 4))
-  g.add(rbox(w + duvetOver * 2 + 0.4, 3, 15, duvet, { y: top + 5.5, z: z0 + len - dz + 7.5 }, 1.5))
+  g.add(duvetMesh({ w: w + duvetOver * 2, len: dz, top: top + 4, z1: z0 + len, drop: Math.max(3, Math.min(13, mh - 4)), color: duvet, seed: w + len }))
+  g.add(pillowMesh(w + duvetOver * 2 + 0.4, 4, 15, duvet, { y: top + 3, z: z0 + len - dz + 7.5 }, 0.5))
 }
 
 /** 把模型在 xz 上居中（只用于没有 surface 声明的自由造型） */

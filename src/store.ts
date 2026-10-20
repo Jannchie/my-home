@@ -14,7 +14,7 @@ import type { StyleTag } from './three/kit'
 import type { LookAdjust } from './three/post'
 import type { PatternSpec } from './three/patterns'
 import { CITIES, DEFAULT_GEO, type Geo } from './three/sky'
-import { DEFAULT_KELVIN, DEFAULT_POWER, DEFAULT_RANGE, POWER_MAX, POWER_MIN, RANGE_MAX, RANGE_MIN, clampKelvin, isLightMode, type LightMode } from './three/lights'
+import { DEFAULT_KELVIN, DEFAULT_OUTDOOR, DEFAULT_POWER, DEFAULT_RANGE, OUTDOOR_MAX, OUTDOOR_MIN, POWER_MAX, POWER_MIN, RANGE_MAX, RANGE_MIN, clampKelvin, isLightMode, type LightMode } from './three/lights'
 import { ensureOutdoorUnits as ensureOutdoorUnits1, indoorUnits, planArea, randomSeed, type GenOptions } from './generate'
 import { generatePlan } from './generate-region'
 import { lang, t } from './i18n'
@@ -378,11 +378,11 @@ watch(
 )
 
 /**
- * 室内灯光的全局设置：lightMode 自动（按太阳高度渐亮渐灭）/ 开 / 关，lightK 色温（K），lightPower 亮度（%）。单独存一个键，不进户型数据；
+ * 室内灯光的全局设置：lightMode 自动（按太阳高度渐亮渐灭）/ 开 / 关，lightK 色温（K），lightPower 亮度（%），lightOutdoor 室外光（%）。单独存一个键，不进户型数据；
  * 单个房间、单个灯具的开关和色温覆盖存在户型里（Room.light / lightK、Furniture.light）。
  */
-function loadLights(): { lightMode: LightMode; lightK: number; lightPower: number; lightRange: number } {
-  const d = { lightMode: 'auto' as LightMode, lightK: DEFAULT_KELVIN, lightPower: DEFAULT_POWER, lightRange: DEFAULT_RANGE }
+function loadLights(): { lightMode: LightMode; lightK: number; lightPower: number; lightRange: number; lightOutdoor: number } {
+  const d = { lightMode: 'auto' as LightMode, lightK: DEFAULT_KELVIN, lightPower: DEFAULT_POWER, lightRange: DEFAULT_RANGE, lightOutdoor: DEFAULT_OUTDOOR }
   try {
     const raw = JSON.parse(localStorage.getItem(LIGHTS_KEY) || 'null')
     if (raw && typeof raw === 'object') {
@@ -390,6 +390,7 @@ function loadLights(): { lightMode: LightMode; lightK: number; lightPower: numbe
       if (Number.isFinite(raw.k)) d.lightK = clampKelvin(raw.k)
       if (Number.isFinite(raw.power)) d.lightPower = Math.round(Math.min(POWER_MAX, Math.max(POWER_MIN, raw.power)))
       if (Number.isFinite(raw.range)) d.lightRange = Math.round(Math.min(RANGE_MAX, Math.max(RANGE_MIN, raw.range)))
+      if (Number.isFinite(raw.outdoor)) d.lightOutdoor = Math.round(Math.min(OUTDOOR_MAX, Math.max(OUTDOOR_MIN, raw.outdoor)))
     }
   } catch {
     /* 读不到就用默认 */
@@ -397,10 +398,10 @@ function loadLights(): { lightMode: LightMode; lightK: number; lightPower: numbe
   return d
 }
 watch(
-  () => [sandbox.lightMode, sandbox.lightK, sandbox.lightPower, sandbox.lightRange],
+  () => [sandbox.lightMode, sandbox.lightK, sandbox.lightPower, sandbox.lightRange, sandbox.lightOutdoor],
   () => {
     try {
-      localStorage.setItem(LIGHTS_KEY, JSON.stringify({ mode: sandbox.lightMode, k: sandbox.lightK, power: sandbox.lightPower, range: sandbox.lightRange }))
+      localStorage.setItem(LIGHTS_KEY, JSON.stringify({ mode: sandbox.lightMode, k: sandbox.lightK, power: sandbox.lightPower, range: sandbox.lightRange, outdoor: sandbox.lightOutdoor }))
     } catch {
       /* 存储不可用时忽略 */
     }
@@ -485,12 +486,12 @@ watch(
   { deep: true },
 )
 
-/** 3D 沙盘的画面效果（three/post.ts 的 LookId），单独存一个键，不进户型数据 */
+/** 3D 沙盘的画面效果（three/post.ts 的 LookId），单独存一个键，不进户型数据；没选过的默认「动画感」 */
 function loadLook() {
   try {
-    return localStorage.getItem(LOOK_KEY) || 'none'
+    return localStorage.getItem(LOOK_KEY) || 'anime'
   } catch {
-    return 'none'
+    return 'anime'
   }
 }
 watch(
@@ -1107,4 +1108,23 @@ export function applyColorsToSame(id: string) {
 export function swapFurnitureAsset(id: string, asset: string) {
   const f = findFurniture(id)
   if (f && f.asset !== asset) mutate(() => (f.asset = asset))
+}
+
+/**
+ * 原地换成同类的另一款（catalog.ts sameTypeVariants）：位置、朝向不动。换到别的系列时配色槽的含义不同了，
+ * 自定义颜色和花纹清掉；配色序号超出新款的配色数就回到第一组
+ */
+export function swapFurnitureVariant(id: string, asset: string) {
+  const f = findFurniture(id)
+  const def = ASSET_MAP.get(asset)
+  const old = f && ASSET_MAP.get(f.asset)
+  if (!f || !def || f.asset === asset) return
+  mutate(() => {
+    f.asset = asset
+    if ((old?.series ?? old?.id) !== (def.series ?? def.id)) {
+      delete f.colors
+      delete f.patterns
+    }
+    if ((f.color ?? 0) >= def.palettes.length) f.color = 0
+  })
 }

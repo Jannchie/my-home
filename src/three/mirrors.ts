@@ -22,6 +22,12 @@ const RANGE = { mirror: 700, water: 450 }
 const STICKY = 80
 /** 镜面太小（cm²）的不做：鸟笼里的小镜子之类，反射看不出来还白画一遍场景 */
 const MIN_AREA = 150
+/**
+ * 镜面在画面里太小也不做：包围球半径占画面半高的比例。远处的梳妆镜、桌上的小圆镜在画面里只有几十个像素，
+ * 倒影看不清，却和穿衣镜一样要多画一遍整个场景。正开着的门槛低一点（不来回切）
+ */
+const MIN_SCREEN = 0.07
+const MIN_SCREEN_KEEP = 0.05
 
 const MirrorShader = {
   name: 'MirrorReflect',
@@ -193,6 +199,7 @@ export class Mirrors {
     projView.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)
     frustum.setFromProjectionMatrix(projView)
     const cam = camera.position
+    const halfH = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))
     const cands: { it: Item; d: number }[] = []
     let waves = false
     for (const it of this.items.values()) {
@@ -211,6 +218,8 @@ export class Mirrors {
       tmpS.copy(m.geometry.boundingSphere!).applyMatrix4(m.matrixWorld)
       if (!frustum.intersectsSphere(tmpS)) continue
       if (it.kind === 'water') waves = true
+      const screen = tmpS.radius / Math.max(1, d) / halfH
+      if (screen < (it.refl?.visible ? MIN_SCREEN_KEEP : MIN_SCREEN)) continue
       cands.push({ it, d })
     }
     // 正开着的镜子算近一点：两面差不多远时不来回切（切换的那一帧新镜子还没有倒影，会闪）

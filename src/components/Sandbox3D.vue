@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, toRaw, watch } from 'vue'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
-import { ASSET_MAP, STYLE_LABELS, type StyleTag } from '../three/assets'
+import { ASSET_MAP, STYLE_LABELS, type AssetDef, type StyleTag } from '../three/assets'
 import { GROUP_NAMES, LIB_ROOMS, ROOM_NAMES_LIB } from '../three/groups'
 import { freezeMatrices, syncMatrix } from '../three/matrices'
 import { BASE, applyCutaway, bendToWalls, floorY, isPlant, openingInfos, stepCutaway, furnitureModel, placeFurniture, roomAt, type WallLook } from '../three/house'
@@ -22,9 +22,12 @@ import { overlapsOthers, snapFurniture, snapToWall, type Guide } from '../snap'
 import { fitOnSurface, pickSurface, propClash, propsOn, snapToClip, snapToHook } from '../surface'
 import { pickTub, tubGuides } from '../tubTop'
 import { SHADOW_RADIUS, createStage, fitSun, frameCamera, setStageQuality, type Stage } from '../three/stage'
-import { attachPost, LOOKS, LOOK_MAP, lookValue, resolveLook, type LookAdjust, type LookAdjustKey, type LookId, type Post } from '../three/post'
+import { attachPost, LOOKS, LOOK_MAP, lookValue, REAL_LIGHTING, resolveLook, type LookAdjust, type LookAdjustKey, type LookId, type Post } from '../three/post'
 import { CITIES, MONTH_DAYS, compassAxes, skyState, type SkyState } from '../three/sky'
-import { IndoorLights, KELVIN_MAX, KELVIN_MIN, LIGHT_MODES, POOL_HIGH, POOL_LOW, POWER_MAX, POWER_MIN, RANGE_MAX, RANGE_MIN, autoLevel, diningKey, isLampAsset, lightColor, type LightMode } from '../three/lights'
+import { setReflectInterval } from '../three/reflectFrame'
+import { CULL_MARGIN, CullCache, walkVisibility } from '../walkCull'
+import { furnitureRoom } from '../restyle'
+import { DEFAULT_KELVIN, DEFAULT_OUTDOOR, DEFAULT_POWER, DEFAULT_RANGE, IndoorLights, KELVIN_MAX, KELVIN_MIN, LIGHT_MODES, OUTDOOR_MAX, OUTDOOR_MIN, POOL_HIGH, POOL_LOW, POWER_MAX, POWER_MIN, RANGE_MAX, RANGE_MIN, autoLevel, diningKey, isLampAsset, lightColor, lum, type LightMode } from '../three/lights'
 import { disposeUnshared, isReflector } from '../three/toon'
 import { poseDoors } from '../three/kit'
 import { drawerSlots } from '../three/drawers'
@@ -45,6 +48,8 @@ import { AnimeSky } from '../three/animeSky'
 import { Highlight } from '../three/highlight'
 import ColorEditor from './ColorEditor.vue'
 import SandboxOverlay from './SandboxOverlay.vue'
+import PerfHud from './PerfHud.vue'
+import { perfFrame, perfTick, togglePerf } from '../ui/perf'
 import BlueprintBar from './BlueprintBar.vue'
 import { BlueprintView } from '../three/blueprint'
 import { blueprint, unitOf } from '../blueprintPrefs'
@@ -57,7 +62,7 @@ import { runBusy } from '../ui/feedback'
 import { saved, toast } from '../saved'
 import { JIcon } from '@jannchie/icons-vue'
 import { FIXTURE_ICONS, GROUP_ICONS, ICONS, TOOL_ICONS, VIEW_ICONS, WALL_MODE_ICONS } from '../ui/icons'
-import { SIZE_LABELS, assetName, browse, canHang, cardName, displayName, groupsOf, formFor, paletteFor, siblings, typesIn, variantLabel, type Filter, type SizeClass } from '../three/catalog'
+import { SIZE_LABELS, assetName, browse, canHang, cardName, displayName, groupsOf, formFor, paletteFor, sameTypeVariants, siblings, typesIn, variantLabel, type Filter, type SizeClass } from '../three/catalog'
 import { typeLabel } from '../three/typeLabels'
 import { INTERESTS, KIND_LABELS, LV_LABELS, ROLE_LABELS, TRAITS, describe, levelOf, memberRooms } from '../household'
 import { checklist, missing } from '../checklist'
@@ -67,7 +72,7 @@ import { patternPreview } from '../three/fabric'
 import type { PatternKind } from '../three/patterns'
 import { isTyping } from '../dom'
 import { lang, roomName, t, tAuto, tSoft } from '../i18n'
-import { FACADE_KINDS, FENCE_KINDS, FIXTURES, OPENING_LABELS, ROOF_KINDS, bbox, centroid, edgesOf, pointInPolygon, houseFlooring, isWoodFloor, roomFlooring, roomWallpaper, takesHouseWallpaper, WOOD_TONES, type Furniture, type Plan, type Room, type Wallpaper, type WallTrim, type WoodTone } from '../model'
+import { FACADE_KINDS, FENCE_KINDS, FIXTURES, OPENING_LABELS, ROOF_KINDS, bbox, centroid, edgesOf, pointInPolygon, houseFlooring, isWoodFloor, roomFlooring, roomWallpaper, WOOD_TONES, type Furniture, type Plan, type Room, type Wallpaper, type WallTrim, type WoodTone } from '../model'
 import { roomStyles } from '../decorate'
 import { wallThicknessAt } from '../walls'
 import {
@@ -86,6 +91,7 @@ import {
   turnAngle,
   checkpoint as checkpointPlan,
   swapFurnitureAsset,
+  swapFurnitureVariant,
   setFurniturePreset,
   previewFurnitureColors,
   commitFurnitureColors,
@@ -309,6 +315,25 @@ function fadeFloor(root: THREE.Object3D, floorId: string, alpha: number) {
   }
   root.userData.floorFaded = faded
 }
+/**
+ * 场景里可能换过材质的事（编辑、墙体让开、楼层动画、重建）发生时加一；syncFloorFades 每帧调用，
+ * 这一层的不透明度和这个计数都没变时不再遍历整层（藏起来的上层每帧遍历要一毫秒多）
+ */
+let fadeEpoch = 0
+function fadeFloorCached(root: THREE.Object3D, id: string) {
+  const alpha = floorAlpha(id)
+  const ud = root.userData
+  // 整层藏起来了（只到当前层时的上层）：画不到，不用管；显示出来时重新套一次
+  if (!root.visible) {
+    ud.fadeEpoch = -1
+    return
+  }
+  if (ud.fadeAlpha === alpha && ud.fadeEpoch === fadeEpoch) return
+  fadeFloor(root, id, alpha)
+  ud.fadeAlpha = alpha
+  ud.fadeEpoch = fadeEpoch
+}
+
 /** 材质（或材质数组）里的楼层淡出副本换回原材质 */
 const unghost = (m: THREE.Material) => ((m.userData.floorSource as THREE.Material | undefined) ?? m)
 function solidOf(m: THREE.Material | THREE.Material[]) {
@@ -323,8 +348,8 @@ function floorAlpha(id: string) {
   return t * t * (3 - 2 * t)
 }
 function syncFloorFades() {
-  for (const fg of floorGroups) fadeFloor(fg.group, fg.floor.id, floorAlpha(fg.floor.id))
-  for (const [id, g] of furnLayers) fadeFloor(g, id, floorAlpha(id))
+  for (const fg of floorGroups) fadeFloorCached(fg.group, fg.floor.id)
+  for (const [id, g] of furnLayers) fadeFloorCached(g, id)
   // 角色按所在楼层（走楼梯时按走到的那一层）淡入淡出
   actors.relayout()
 }
@@ -883,6 +908,7 @@ function rebuildHouse() {
   builtActive = activeFloor.value
   stage.scene.add(house)
   lights.syncRooms(raw, ASSET_MAP, floorY, lightStyles(raw))
+  cullVersion++
   floorTargets(true)
   lastDining = roomLightKey(toRaw(plan.value))
   const pts = plan.value.rooms.flatMap((r) => r.points)
@@ -987,6 +1013,7 @@ function syncFurniture() {
   applyFloorPose()
   updateCutaway()
   syncActors()
+  cullVersion++
   dirty = true
 }
 
@@ -1784,7 +1811,8 @@ function dropReflections() {
  */
 function syncFx() {
   // 体积光只在漫游时成立：鸟瞰时没有天花板，满屋都照得到太阳
-  post.setFx({ ao: fxOn(sandbox.fx.ao), volumetric: walking.value && sandbox.fx.volumetric })
+  // 浮尘跟着体积光的开关走，但鸟瞰时也有（落在照得到太阳的房间里）
+  post.setFx({ ao: fxOn(sandbox.fx.ao), volumetric: walking.value && sandbox.fx.volumetric, dust: sandbox.fx.volumetric })
   const refl = !lowPower() && fxOn(sandbox.fx.reflect)
   if (!refl) dropReflections()
   else if (!floorRefl || !mirrors) {
@@ -2051,6 +2079,7 @@ async function enterWalk() {
   walking.value = true
   // 楼层立刻叠好（不播滑动动画）：Walker 按楼层高度定位
   floorTargets(true)
+  poseShadow = true
   const raw = toRaw(plan.value)
   walker = new Walker(raw, stage.camera, {
     lift: liftOf,
@@ -2058,6 +2087,10 @@ async function enterWalk() {
     blockers: (id) => openers.segments(id),
   })
   if (isMultiFloor(raw)) setFloor(walker.floor)
+  post.setWalking(true)
+  setReflectInterval(2)
+  // 开发时给截图脚本摆镜头（同 __myhomeBlueprint）
+  if (import.meta.env.DEV) Object.assign(window, { __myhomeWalker: walker, __myhomeStage: stage })
   ceilingRoot = ceilings(raw, (id) => liftOf(id) + (floorGroups.find((g) => g.floor.id === id)?.wallH ?? 240))
   stage.scene.add(ceilingRoot)
   stage.camera.fov = 72
@@ -2074,6 +2107,91 @@ async function enterWalk() {
   dirty = true
 }
 
+/** 顶灯投影的房间（lights.ts setShadowRooms）：漫游时是镜头所在那一层，鸟瞰时是当前层；换了层（或户型变了）才重设 */
+let shadowFloor = ''
+function syncShadowRooms() {
+  const fl = walker ? walker.floor : activeFloor.value
+  const key = `${cullVersion}|${fl}`
+  if (key === shadowFloor) return
+  shadowFloor = key
+  const raw = toRaw(plan.value)
+  lights.setShadowRooms(new Set(raw.rooms.filter((r) => floorOf(raw, r) === fl).map((r) => r.id)))
+}
+
+/** 楼层摆放一下子变了（进出漫游）：下一帧重画阴影 */
+let poseShadow = false
+
+// ---------- 漫游的可见性剔除（walkCull.ts） ----------
+
+/** 户型 / 家具重建过：剔除要重算（新建的对象默认看得见） */
+let cullVersion = 0
+let cullKey = ''
+/** 看不到的网格（关掉了第 0 层：主镜头和借它画的法线、倒影都不画；重画阴影的那一帧临时打开，见 loop） */
+const culled: THREE.Object3D[] = []
+/** 只和户型有关的东西（门洞、洞口）、家具所在的房间：按 cullVersion 缓存 */
+let cullCache: { version: number; cache: CullCache; furn: Map<string, { floor: string; room: string | null }> } | null = null
+/** 上次算剔除时的镜头：位置、水平朝向、视角，挪得不多就不重算（视锥两边留了 CULL_MARGIN 的余量） */
+const cullAt = { x: NaN, y: NaN, yaw: NaN, fov: NaN, floor: '', version: -1 }
+
+function uncull() {
+  for (const o of culled) o.layers.enable(0)
+  culled.length = 0
+  cullKey = ''
+}
+
+/** 子树里能画出来的网格关掉第 0 层（组本身不画，不用管） */
+function hideTree(root: THREE.Object3D) {
+  root.traverse((o) => {
+    if (!(o as THREE.Mesh).isMesh && !(o as THREE.Line).isLine && !(o as THREE.Points).isPoints) return
+    if (!o.layers.isEnabled(0)) return
+    o.layers.disable(0)
+    culled.push(o)
+  })
+}
+
+/** 平面上某一层的 roomAt 楼层参数（同 restyle.ts furnitureRoom：单层户型不分层，最底层是 null） */
+const roomFloorArg = (raw: Plan, floor: string) => (isMultiFloor(raw) ? (floor === baseFloorId(raw) ? null : floor) : undefined)
+
+/** 漫游中每帧调用：镜头挪得够多（或户型、家具重建过）才重算看得到的房间，和上次不一样才重新挪层；返回是否改过（要重画） */
+function applyWalkCull() {
+  if (!walker) return false
+  const cam = stage.camera
+  cam.getWorldDirection(cullDir)
+  const yaw = Math.atan2(cullDir.z, cullDir.x)
+  const dYaw = Math.abs(((yaw - cullAt.yaw + Math.PI * 3) % (Math.PI * 2)) - Math.PI)
+  const still = cullAt.version === cullVersion && cullAt.floor === walker.floor && cullAt.fov === cam.fov && dYaw < CULL_MARGIN / 2 && Math.hypot(walker.pos.x - cullAt.x, walker.pos.y - cullAt.y) < CULL_MOVE
+  if (still) return false
+  Object.assign(cullAt, { x: walker.pos.x, y: walker.pos.y, yaw, fov: cam.fov, floor: walker.floor, version: cullVersion })
+  const raw = toRaw(plan.value)
+  if (cullCache?.version !== cullVersion) {
+    const furn = new Map<string, { floor: string; room: string | null }>()
+    for (const f of raw.furniture) furn.set(f.id, { floor: floorOf(raw, f), room: furnitureRoom(raw, f)?.id ?? null })
+    cullCache = { version: cullVersion, cache: new CullCache(raw), furn }
+  }
+  const len = Math.hypot(cullDir.x, cullDir.z) || 1
+  const half = Math.atan(Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2) * cam.aspect)
+  const here = roomAt(raw, walker.pos, roomFloorArg(raw, walker.floor))?.id ?? null
+  const vis = walkVisibility(raw, walker.floor, here, walker.pos, { x: cullDir.x / len, y: cullDir.z / len }, half, cullCache.cache)
+  const key = vis ? `${cullVersion}|${[...vis.floors].join()}|${[...vis.rooms].sort().join()}` : `${cullVersion}|all`
+  if (key === cullKey) return false
+  uncull()
+  cullKey = key
+  if (!vis) return true
+  for (const fg of floorGroups) if (!vis.floors.has(fg.floor.id)) hideTree(fg.group)
+  for (const [id, at] of cullCache.furn) {
+    const o = objs.get(id)?.obj
+    if (o && (!vis.floors.has(at.floor) || (at.room && !vis.rooms.has(at.room)))) hideTree(o)
+  }
+  for (const o of lights.fixtures.children) {
+    const id = o.userData.lightRoomId as string | undefined
+    if (id && !vis.rooms.has(id)) hideTree(o)
+  }
+  return true
+}
+const cullDir = new THREE.Vector3()
+/** 镜头走动多远（cm）重算一次剔除 */
+const CULL_MOVE = 15
+
 /** 退出漫游：恢复进入前的视角和模式 */
 function exitWalk() {
   if (!walking.value) return
@@ -2083,6 +2201,10 @@ function exitWalk() {
   walkOpenDetach = null
   hoverOpen(null)
   walker = null
+  poseShadow = true
+  post.setWalking(false)
+  setReflectInterval(4)
+  uncull()
   walkStick.value = null
   walkLocked.value = false
   walkTarget.value = ''
@@ -2325,6 +2447,12 @@ function onKey(e: KeyboardEvent) {
   if (isTyping(e) || e.ctrlKey || e.metaKey || e.altKey) return
   // 快捷键帮助 / 我的户型 / 确认框开着时不响应（Esc 留给它们关闭自己）
   if (overlays.help || saved.panelOpen || saved.confirm) return
+  // 性能调试浮窗（漫游里也能开关）
+  if (e.key === 'F3') {
+    e.preventDefault()
+    togglePerf()
+    return
+  }
   const k = e.key.toLowerCase()
   // 漫游：Esc / V 退出，其余按键交给 Walker（走路、转身）
   // （鼠标锁定时浏览器自己吃掉 Esc 用来释放鼠标；刚释放的那一下不算退出）
@@ -2365,6 +2493,8 @@ function onKey(e: KeyboardEvent) {
   else if (k === 'c') cycleWallMode()
   else if (!editing.value) {
     if (e.key === 'Escape') setMode('edit')
+  } else if ((e.key === '[' || e.key === ']') && selection.value?.type === 'furniture' && !placing.value) {
+    stepVariant(e.key === '[' ? -1 : 1)
   } else if (k === 'q' || k === 'e') {
     const deg = k === 'q' ? -step : step
     if (placing.value) {
@@ -2530,6 +2660,22 @@ function swapSize(asset: string) {
   if (f) swapFurnitureAsset(f.id, asset)
 }
 
+/** 选中家具的同类各款（原地换款）：缩略图按家具现在的配色序号画（超出新款的配色数就用第一组） */
+const selectedVariants = computed(() => (selectedDef.value ? sameTypeVariants(selectedDef.value) : []))
+const variantColor = (d: AssetDef) => ((selectedFurniture.value?.color ?? 0) < d.palettes.length ? (selectedFurniture.value?.color ?? 0) : 0)
+function swapVariant(asset: string) {
+  const f = selectedFurniture.value
+  if (f) swapFurnitureVariant(f.id, asset)
+}
+/** 上一款 / 下一款（[ / ] 键）：在同类各款里轮 */
+function stepVariant(dir: 1 | -1) {
+  const list = selectedVariants.value
+  const d = selectedDef.value
+  if (list.length < 2 || !d) return
+  const i = list.findIndex((x) => x.id === d.id)
+  swapVariant(list[(i + dir + list.length) % list.length].id)
+}
+
 const counts = computed(() => plan.value.furniture.length)
 
 // ---------- 内装：墙纸、边饰、地板 ----------
@@ -2544,8 +2690,6 @@ watch(paperRooms, (rs) => {
 }, { immediate: true })
 /** 当前范围实际用的墙纸（房间没设自己的就是全屋的） */
 const curWp = computed(() => (wpRoom.value ? roomWallpaper(plan.value, wpRoom.value) : plan.value.wallpaper))
-/** 选了房间、这间默认不贴墙纸（浴室、收纳） */
-const wpNone = computed(() => !!wpRoom.value && !wpRoom.value.wallpaper && !takesHouseWallpaper(wpRoom.value))
 function setWp(wp: Wallpaper | undefined) {
   if (wpRoom.value) setRoomWallpaper(wpRoom.value.id, wp)
   else setHouseWallpaper(wp)
@@ -2650,6 +2794,7 @@ const placingName = computed(() => {
 function loop() {
   raf = requestAnimationFrame(loop)
   const now = performance.now()
+  perfTick(now)
   const dt = Math.min(0.1, (now - lastFrame) / 1000)
   lastFrame = now
   // 设计图开着：沙盘停画，只推进设计图的视角
@@ -2657,17 +2802,30 @@ function loop() {
     bp.frame()
     return
   }
+  // 事件、watch 在两帧之间标的脏（编辑、拖动、改设置）：多帧累积要从头来；下面动画标的脏只是让累积少记几帧（post.restart）
+  const edited = dirty
+  if (edited || fading || floorsMoving) fadeEpoch++
   const moved = walker ? walker.update(dt) : controls.update()
+  let culledNow = false
   if (walker) {
     if (moved) drawWalkMap(now)
     aimWalk(now)
+    // 剔除换了一批：只要重画画面（阴影贴图是带着被剔掉的东西画的，不用重画）
+    culledNow = applyWalkCull()
   }
+  syncShadowRooms()
   // 时间流逝动画：只有播放时才每帧推进（推进后由 watch 更新光照并标脏）
   if (sandbox.playing) sandbox.time = (sandbox.time + dt * sandbox.speed) % 24
-  // 门、抽屉开合的动画
-  if (openers.step(dt)) dirty = true
   // 阴影贴图只在场景本身变了时重画：转视角、粒子、选中圈闪烁都不影响投影（静止的户型省掉整整一遍阴影渲染）
-  let shadowDirty = dirty
+  // 进出漫游（楼层一下子摆好、上层显示 / 隐藏）：阴影要按新的摆放重画，不然透过窗户的阳光、月光时有时无
+  let shadowDirty = dirty || poseShadow
+  poseShadow = false
+  // 门、抽屉开合的动画：阴影跟着走，但和墙体渐变一样节流（每次重画是太阳 + 好几张立方体阴影），停下后再重画一次
+  const openersMoving = openers.step(dt)
+  if (openersMoving) {
+    dirty = true
+    cutawayShadow = true
+  }
   // 太阳方向变了：阴影贴图要重画，但拖滑杆 / 播放时节流到每 100ms 一次
   if (sunMoved && now - lastSunShadow > 100) {
     sunMoved = false
@@ -2703,7 +2861,7 @@ function loop() {
   }
   // 墙体渐变：渐变中阴影跟着墙走，但节流（高画质每 50ms、省电每 150ms 重画一次，转镜头时墙一直在让开，不每帧重画）；
   // 全部停下后再重画一次。以前渐变中一直沿用旧阴影、停下才重画，墙压低时影子是在最后一下突然没的
-  if (cutawayShadow && (!fading || now - lastCutawayShadow > (low ? 150 : 50))) {
+  if (cutawayShadow && ((!fading && !openersMoving) || now - lastCutawayShadow > (low ? 150 : 50))) {
     lastCutawayShadow = now
     cutawayShadow = false
     shadowDirty = true
@@ -2721,18 +2879,31 @@ function loop() {
     if (!walker) updateCutaway()
     updateCompass()
   }
-  if (moved || dirty) {
+  // 后处理自己还要画（镜头静止时的多帧累积还没收敛、浮尘在飘）：照画，但不从头累积
+  const changed = moved || dirty || culledNow
+  if (changed || post.wantsFrame()) {
+    if (changed) post.restart(edited)
     placeSiteCard()
     syncFloorFades()
-    if (shadowDirty) stage.renderer.shadowMap.needsUpdate = true
+    // 顶灯投影换了一盏灯（漫游换房间）：只有它的阴影贴图标了要重画（其余的灯 autoUpdate 关着、没标记，不会跟着重画）
+    // 场景变了：太阳和顶灯的阴影一起重画（唯一的入口）；顶灯换了一盏（lights.ts）时它自己标了要重画
+    if (shadowDirty) lights.refreshShadows()
+    if (shadowDirty || lights.shadowPending()) stage.renderer.shadowMap.needsUpdate = true
     stepReflections()
     if (animeSky.mesh.visible) animeSky.follow(stage.camera)
-    stage.render()
+    // 要重画阴影的这一帧：剔除掉的东西临时放回来（three 画阴影贴图时按主镜头的层判断画不画，
+    // 不放回来的话楼上的楼板、隔壁的墙都不进阴影贴图，阳光、月光会从天花板漏下来）。它们在墙后面，多画这一帧看不出来
+    const withCulled = stage.renderer.shadowMap.needsUpdate && culled.length > 0
+    if (withCulled) for (const o of culled) o.layers.enable(0)
+    perfFrame(stage.renderer, renderStage)
+    if (withCulled) for (const o of culled) o.layers.disable(0)
     dirty = false
     lastRender = now
   }
 }
 let lastRender = 0
+/** 重画一帧（交给 perfFrame 计时；不每帧新建闭包） */
+const renderStage = () => stage.render()
 /** 墙体渐变改过投影，等渐变结束后重画阴影 */
 let cutawayShadow = false
 
@@ -2769,6 +2940,8 @@ onMounted(() => {
   syncFx()
   lights = new IndoorLights(lowPower() ? POOL_LOW : POOL_HIGH)
   stage.scene.add(lights.group, lights.fixtures)
+  setReflectInterval(4)
+  if (import.meta.env.DEV) Object.assign(window, { __myhomeStage: stage })
   applySky()
   stage.renderer.shadowMap.autoUpdate = false
   stage.renderer.shadowMap.needsUpdate = true
@@ -2778,6 +2951,7 @@ onMounted(() => {
   stage.scene.add(furnRoot, frameRoot, guideRoot, fx.group, hoverHi.root, siteHL.root)
   stage.scene.add(actors.group)
   controls = new OrbitControls(stage.camera, canvas.value!)
+  post.setFocus(controls.target)
   controls.enableDamping = true
   controls.dampingFactor = 0.12
   controls.maxPolarAngle = Math.PI * 0.47
@@ -2892,7 +3066,10 @@ function applyLights() {
   const s = skyNow.value
   if (!s || !lights) return
   const power = sandbox.lightPower / 100
-  lights.setState({ global: sandbox.lightMode, kelvin: sandbox.lightK, auto: autoLevel(s.altitude), night: s.night, power, range: sandbox.lightRange / 100 })
+  const look = effectiveLook.value
+  const tone = look.lighting ?? (look.material === 'real' ? REAL_LIGHTING : undefined)
+  // 灯光基调要求灯全开（动画感）：只替换「自动」，用户手动选了开 / 关的照用户的
+  lights.setState({ global: tone?.lamps && sandbox.lightMode === 'auto' ? 'on' : sandbox.lightMode, kelvin: sandbox.lightK, auto: autoLevel(s.altitude), night: s.night, power, range: sandbox.lightRange / 100 })
   const kel = lightColor(sandbox.lightK)
   const avg = lights.averageLevel
   post.setIndoor(kel, avg * Math.min(1.2, power))
@@ -2903,18 +3080,19 @@ function applyLights() {
   stage.hemi.color.copy(s.hemiSky)
   stage.hemi.groundColor.copy(s.hemiGround).lerp(kel, Math.min(1, 0.6 * fill))
   stage.sun.color.copy(s.lightColor)
-  // 动画感光照（所有画面效果默认都用，黑白漫画除外；参考 MToon / 原神的室内）：
+  // 赛璐璐光照（大多数画面效果默认都用，黑白漫画、写实类除外；参考 MToon / 原神的室内）：
   //   - 灯光冷暖分离：朝下的面（天花板、家具底面）带一点青，朝上的面和阳光照到的地方是暖的
   //     （半球光的「地面色」照的是朝下的面，所以青色放在 groundColor）；入夜逐渐退回原来的配色；
   //   - 色阶两档、暗面换成阴影色、明暗交界提饱和度、轮廓光（three/anime.ts，toon.ts setToonBands）；
-  //   - 影子边缘利落（阴影半径调小）、彩色描边（toon.ts outlineUniforms.uOutlineTone）；
-  //   - 背景换成蓝天白云（three/animeSky.ts）
-  const anime = effectiveLook.value.material !== 'none'
+  //   - 影子边缘利落（阴影半径调小）、彩色描边（toon.ts outlineUniforms.uOutlineTone）
+  // 背景的蓝天白云（three/animeSky.ts）所有画面效果都有，调整里可以关
+  const anime = !look.material
+  const real = look.material === 'real'
   const day = 1 - s.night
   setAnimeLook(anime, s.night)
-  // 影子边缘利落：阴影的过渡宽度跟着半径走（toon.ts）
-  stage.sun.shadow.radius = anime ? 1.2 : SHADOW_RADIUS
-  animeSky.mesh.visible = !!effectiveLook.value.sky
+  // 影子边缘利落：阴影的过渡宽度跟着半径走（toon.ts）；写实要柔和的半影
+  stage.sun.shadow.radius = anime ? 1.2 : real ? (look.softShadow ?? REAL_SHADOW_RADIUS) : SHADOW_RADIUS
+  animeSky.mesh.visible = look.sky !== false
   animeSky.setSun(s.lightDir, s.altitude, s.night, s.bg)
   if (anime) {
     // 暗面几乎只受天光（两档色阶的暗面不再接收阳光）：天光加亮一些，画面保持高调、干净，暗面不发闷
@@ -2923,8 +3101,38 @@ function applyLights() {
     stage.hemi.groundColor.lerp(WALK_GROUND, 0.35 * day)
     stage.sun.color.lerp(WALK_SUN, 0.45 * day)
   }
+  // 写实 / 动画感的灯光基调（post.ts LookDef.lighting）：写实是阳光加强、天光照常（PBR 不挂全局环境贴图，暗部的补光全靠天光），
+  // 窗口照进来的光斑才显得出来；动画感整体压暗、天光分冷暖、阳光偏金橙。入夜逐渐退回原来的配色
+  if (tone) {
+    stage.hemi.intensity *= 1 + (tone.hemi - 1) * day
+    if (tone.up) stage.hemi.color.lerp(tmpColor.set(tone.up), (tone.tint ?? 0) * day)
+    if (tone.down) stage.hemi.groundColor.lerp(tmpColor.set(tone.down), (tone.tint ?? 0) * day)
+    if (tone.sunColor) stage.sun.color.lerp(tmpColor.set(tone.sunColor), (tone.sunTint ?? 0) * day)
+  }
+  // applyLights 会反复调用：阳光强度每次从天色重算，不能原地乘
+  stage.sun.intensity = s.lightIntensity * (tone?.sun ?? 1)
+  // 漫游：画面几乎全是室内，开着灯时室内的补光是灯光在墙面间来回反射的暖白，不是窗外的蓝紫夜色（鸟瞰时要留着夜色给户外）；
+  // 天花板、家具底面受的是被灯照亮的地板反上来的光，比鸟瞰时亮、偏暖（只调天光，不加光源）
+  if (walking.value) {
+    // 只换颜色、不加亮度：目标色按原来的亮度缩放（灯光色本身可能大于 1，直接混进去楼梯口、走廊这类小空间的墙会被冲白）
+    const room = tmpColor.copy(kel).lerp(WHITE, 0.6)
+    const toward = (c: THREE.Color, k: number) => c.lerp(tmpColor2.copy(room).multiplyScalar(lum(c) / Math.max(1e-4, lum(room))), k)
+    toward(stage.hemi.color, Math.min(1, 0.75 * fill))
+    toward(stage.hemi.groundColor, Math.min(1, fill)).multiplyScalar(WALK_BOUNCE)
+  }
+  // 室外光（天光、阳光、月光）可调：调低后室内主要靠灯照明，灯的影子不被补光冲淡
+  const outdoor = sandbox.lightOutdoor / 100
+  stage.hemi.intensity *= outdoor
+  stage.sun.intensity *= outdoor
   dirty = true
 }
+/** 漫游时朝下的面（天花板）受的反光倍数 */
+const WALK_BOUNCE = 1.35
+const WHITE = new THREE.Color(1, 1, 1)
+/** 写实的阴影半径：比平时利落一点，窗框的影子还看得出形状 */
+const REAL_SHADOW_RADIUS = 2.2
+const tmpColor = new THREE.Color()
+const tmpColor2 = new THREE.Color()
 const WALK_SKY = new THREE.Color('#fff1dc')
 const WALK_GROUND = new THREE.Color('#a8cdd4')
 const WALK_SUN = new THREE.Color('#ffd49a')
@@ -3041,27 +3249,50 @@ const LOOK_STYLIZE: { id: string; label: string }[] = [
 ]
 const numStr = (v: unknown) => (typeof v === 'number' ? (Math.abs(v) < 10 ? v.toFixed(2) : String(v)) : '')
 const lookOpen = ref(false)
-/** 选择器里每种效果的小图：展开时用当前视角逐个渲染一帧（约十几帧，只在展开时做一次） */
+/**
+ * 选择器里每种效果的小图：展开时用当前视角渲染，每帧只画一种（一次画完十几种会卡住一下），
+ * JPEG 编码用异步的 toBlob；旧图先留着，新图画好一张换一张
+ */
 const lookThumbs = ref<Record<string, string>>({})
+let thumbRun = 0
 function makeLookThumbs() {
   if (!house) return
-  const out: Record<string, string> = {}
-  try {
-    for (const l of LOOKS) {
-      const cv = post.withLook(l.id, () => captureView(192, 120))
-      if (!cv) continue
-      // 「原样」画布是透明的（底色来自 CSS），垫上同色底再转 JPEG
+  const run = ++thumbRun
+  const queue = [...LOOKS]
+  const step = () => {
+    if (run !== thumbRun || !lookOpen.value || !house) return
+    const l = queue.shift()
+    if (!l) return
+    let cv: HTMLCanvasElement | null = null
+    try {
+      cv = post.withLook(l.id, () => captureView(192, 120))
+    } finally {
+      post.setLook(effectiveLook.value)
+      // 缩略图画在主画布上：同一帧里立刻按当前效果重画，不然这一帧呈现出来的是别的效果（闪一下）。
+      // 画面已经是对的了，下一帧不用再整帧重画（captureView 会标脏）
+      stage.render()
+      dirty = false
+    }
+    if (cv) {
+      // 「自然」画布是透明的（底色来自 CSS），垫上同色底再转 JPEG
       const ctx = cv.getContext('2d')!
       ctx.globalCompositeOperation = 'destination-over'
       ctx.fillStyle = '#f1f3ef'
       ctx.fillRect(0, 0, cv.width, cv.height)
-      out[l.id] = cv.toDataURL('image/jpeg', 0.86)
+      cv.toBlob(
+        (blob) => {
+          if (!blob || run !== thumbRun) return
+          const old = lookThumbs.value[l.id]
+          if (old) URL.revokeObjectURL(old)
+          lookThumbs.value = { ...lookThumbs.value, [l.id]: URL.createObjectURL(blob) }
+        },
+        'image/jpeg',
+        0.86,
+      )
     }
-  } finally {
-    post.setLook(effectiveLook.value)
-    dirty = true
+    requestAnimationFrame(step)
   }
-  lookThumbs.value = out
+  requestAnimationFrame(step)
 }
 function toggleLooks() {
   lookOpen.value = !lookOpen.value
@@ -3069,6 +3300,8 @@ function toggleLooks() {
 }
 
 onBeforeUnmount(() => {
+  thumbRun++
+  for (const u of Object.values(lookThumbs.value)) URL.revokeObjectURL(u)
   bp?.dispose()
   bp = null
   blueprint.on = false
@@ -3144,7 +3377,7 @@ watch(
     applyLights()
   },
 )
-watch(() => [sandbox.lightMode, sandbox.lightK, sandbox.lightPower, sandbox.lightRange], applyLights)
+watch(() => [sandbox.lightMode, sandbox.lightK, sandbox.lightPower, sandbox.lightRange, sandbox.lightOutdoor], applyLights)
 
 watch(() => plan.value.furniture, syncFurniture, { deep: true })
 // 布置 / 预览切换：角色回家静止 / 开始活动（素材里的角色部分随之隐藏、复原，阴影贴图要重画）
@@ -3432,6 +3665,13 @@ function pickTab(id: Tab) {
 }
 
 // ---------- 室内灯光：开关与色温 ----------
+
+/** 全局灯光设置（开关、色温、亮度、范围、室外光）恢复默认；房间、灯具单独设的开关不动 */
+const LIGHT_DEFAULTS = { lightMode: 'auto' as LightMode, lightK: DEFAULT_KELVIN, lightPower: DEFAULT_POWER, lightRange: DEFAULT_RANGE, lightOutdoor: DEFAULT_OUTDOOR }
+const lightsAreDefault = computed(() => (Object.keys(LIGHT_DEFAULTS) as (keyof typeof LIGHT_DEFAULTS)[]).every((k) => sandbox[k] === LIGHT_DEFAULTS[k]))
+function resetLights() {
+  Object.assign(sandbox, LIGHT_DEFAULTS)
+}
 const LIGHT_LABELS: Record<LightMode, string> = { auto: '自动', on: '开', off: '关' }
 /** 房间单独色温的预设（不填 = 跟随全局） */
 const ROOM_K_PRESETS = [2700, 3000, 3500, 4000, 5000, 6500]
@@ -3502,7 +3742,7 @@ const hudText = computed(() => {
   if (!editing.value) return device.coarse ? t('预览模式 · 单指旋转 · 双指缩放 / 平移 · 点门、抽屉开关，按住拖动调开合') : t('预览模式 · 左键旋转 · 右键平移 · 滚轮缩放 · 点门、抽屉开关，按住拖动调开合 · 鼠标所指房间前的墙自动处理 · P 或 Esc 回到布置')
   return device.coarse
     ? t('单指旋转 · 双指缩放 / 平移 · 点家具选中，再按住拖动 · 点门窗、设备（厨房、楼梯…）编辑 · 双指拧转旋转 · 长按弹出菜单')
-    : t('左键旋转 · 右键平移 · 滚轮缩放 · 点家具选中后拖动（自动贴墙对齐，Alt 关闭）· 点门窗、设备（厨房、楼梯…）编辑 · Q / E 旋转 · Delete 删除 · C 切换墙体显示 · F 重置视角 · P 预览')
+    : t('左键旋转 · 右键平移 · 滚轮缩放 · 点家具选中后拖动（自动贴墙对齐，Alt 关闭）· 点门窗、设备（厨房、楼梯…）编辑 · Q / E 旋转 · [ / ] 换同类款式 · Delete 删除 · C 切换墙体显示 · F 重置视角 · P 预览')
 })
 
 const planSize = computed(() => {
@@ -3638,6 +3878,7 @@ defineExpose({ resetView })
         @contextmenu.prevent
       />
       <SandboxOverlay v-if="!blueprint.on && !walking" />
+      <PerfHud :look="effectiveLook.id" />
       <!-- 漫游：盖在画布上接管指针（不选中、不拖家具），左下是触屏摇杆 -->
       <div v-if="walking" ref="walkLayer" class="walk-layer" :class="{ locked: walkLocked }">
         <div v-if="!walkLocked" class="walk-hud">
@@ -3857,9 +4098,10 @@ defineExpose({ resetView })
         <!-- 室内灯光：全局开关 + 色温；单个房间 / 灯具在 3D 里点选后单独设置 -->
         <div class="row">
           <span class="ico-label"><JIcon :icon="ICONS.indoorLight" class="ico-muted" />{{ t('室内灯光') }}</span>
-          <div class="seg seg-text" role="radiogroup" :aria-label="t('室内灯光')">
+          <div class="seg seg-text" role="radiogroup" :aria-label="t('室内灯光')" :title="t('点选天花板的灯或灯具可以单独开关；单独设过的不受这里影响')">
             <button v-for="m in LIGHT_MODES" :key="m" role="radio" :aria-checked="sandbox.lightMode === m" :class="{ on: sandbox.lightMode === m }" @click="sandbox.lightMode = m">{{ t(LIGHT_LABELS[m]) }}</button>
           </div>
+          <button class="icon-only" :title="t('灯光恢复默认')" :aria-label="t('灯光恢复默认')" :disabled="lightsAreDefault" @click="resetLights"><JIcon :icon="ICONS.reset" /></button>
         </div>
         <label class="row" :title="t('灯光色温：数值低偏暖黄，高偏冷白')">
           <span>{{ t('色温') }}</span>
@@ -3876,12 +4118,16 @@ defineExpose({ resetView })
           <input v-model.number="sandbox.lightRange" type="range" :min="RANGE_MIN" :max="RANGE_MAX" step="10" :aria-label="t('范围')" />
           <span class="num val kval">{{ sandbox.lightRange }}%</span>
         </label>
-        <p class="q-note">{{ sandbox.lightMode === 'auto' ? t('自动：日落前后渐亮，清晨渐灭。点选天花板的灯或灯具可以单独开关') : t('点选天花板的灯或灯具可以单独开关；单独设过的不受这里影响') }}</p>
+        <label class="row" :title="t('天光、阳光和月光的强度：调低后室内主要靠灯照明，灯的影子更清楚')">
+          <span>{{ t('室外光') }}</span>
+          <input v-model.number="sandbox.lightOutdoor" type="range" :min="OUTDOOR_MIN" :max="OUTDOOR_MAX" step="5" :aria-label="t('室外光')" />
+          <span class="num val kval">{{ sandbox.lightOutdoor }}%</span>
+        </label>
         <div class="look">
           <button class="look-head" :aria-expanded="lookOpen" @click="toggleLooks">
             <JIcon :icon="ICONS.look" class="ico-muted" />
             <span>{{ t('画面效果') }}</span>
-            <span class="look-cur">{{ lookCustom ? t('{name}（已调整）', { name: t(currentLook.label) }) : t(currentLook.label) }}</span>
+            <span class="look-cur" :title="t(currentLook.desc)">{{ lookCustom ? t('{name}（已调整）', { name: t(currentLook.label) }) : t(currentLook.label) }}</span>
             <JIcon :icon="lookOpen ? ICONS.collapse : ICONS.expand" :size="14" class="ico-muted" />
           </button>
           <div v-if="lookOpen" class="look-grid">
@@ -3891,7 +4137,6 @@ defineExpose({ resetView })
               <span class="look-name">{{ t(l.label) }}</span>
             </button>
           </div>
-          <div class="look-desc">{{ t(currentLook.desc) }}</div>
           <!-- 调整：在预设上改参数（分层组合：光照、风格化、镜头、调色） -->
           <button class="look-adj-head" :aria-expanded="lookAdjOpen" @click="lookAdjOpen = !lookAdjOpen">
             <span>{{ t('调整') }}</span>
@@ -3903,7 +4148,7 @@ defineExpose({ resetView })
             <div class="row fx-row">
               <span>{{ t('光照') }}</span>
               <div class="seg seg-text" role="radiogroup" :aria-label="t('光照')">
-                <button v-for="m in ['none', 'anime']" :key="m" role="radio" :aria-checked="lookVal('material') === m" :class="{ on: lookVal('material') === m }" @click="adjustLook('material', m)">{{ t(m === 'anime' ? '动画感' : '原样') }}</button>
+                <button v-for="m in ['none', 'anime', 'real']" :key="m" role="radio" :aria-checked="lookVal('material') === m" :class="{ on: lookVal('material') === m }" @click="adjustLook('material', m)">{{ t(m === 'anime' ? '赛璐璐' : m === 'real' ? '写实' : '经典') }}</button>
               </div>
             </div>
             <div v-if="currentLook.stylize !== 'manga'" class="row fx-row">
@@ -3923,14 +4168,13 @@ defineExpose({ resetView })
             <button class="mini" :disabled="!lookCustom" @click="sandbox.lookAdj = {}">{{ t('恢复预设') }}</button>
           </div>
         </div>
-        <label class="row check"><input v-model="sandbox.snap" type="checkbox" /><JIcon :icon="ICONS.snap" class="ico-muted" />{{ t('贴墙 / 对齐吸附') }} <span v-if="!device.coarse" class="hint">{{ t('按住 Alt 临时关闭') }}</span></label>
-        <div class="row">
+        <label class="row check" :title="device.coarse ? undefined : t('按住 Alt 临时关闭')"><input v-model="sandbox.snap" type="checkbox" /><JIcon :icon="ICONS.snap" class="ico-muted" />{{ t('贴墙 / 对齐吸附') }}</label>
+        <div class="row" :title="gfx.quality === 'auto' ? (lowPower() ? t('已按设备自动切到省电画质') : t('已按设备自动使用高画质')) : undefined">
           <span>{{ t('画质') }}</span>
           <div class="seg seg-text" role="radiogroup" :aria-label="t('画质')">
             <button v-for="q in QUALITIES" :key="q.id" role="radio" :aria-checked="gfx.quality === q.id" :class="{ on: gfx.quality === q.id }" @click="setQuality(q.id)">{{ t(q.label) }}</button>
           </div>
         </div>
-        <p v-if="gfx.quality === 'auto'" class="q-note">{{ lowPower() ? t('已按设备自动切到省电画质') : t('已按设备自动使用高画质') }}</p>
         <!-- 画面增强：高画质才生效；体积光只在漫游里成立 -->
         <div v-for="r in FX_ROWS" :key="r.key" class="row fx-row">
           <span>{{ t(r.label) }}</span>
@@ -3938,7 +4182,7 @@ defineExpose({ resetView })
             <button v-for="m in FX_MODES" :key="m.id" role="radio" :aria-checked="sandbox.fx[r.key] === m.id" :class="{ on: sandbox.fx[r.key] === m.id }" @click="sandbox.fx[r.key] = m.id">{{ t(m.label) }}</button>
           </div>
         </div>
-        <label class="row check"><input v-model="sandbox.fx.volumetric" type="checkbox" />{{ t('体积光') }} <span class="hint">{{ t('漫游时窗口照进来的光柱') }}</span></label>
+        <label class="row check" :title="t('漫游时窗口照进来的光柱')"><input v-model="sandbox.fx.volumetric" type="checkbox" />{{ t('体积光') }}</label>
         <p v-if="lowPower()" class="q-note">{{ t('省电画质下不开环境光遮蔽、反射和体积光') }}</p>
         <label class="row">
           <span>{{ t('布置风格') }}</span>
@@ -4023,8 +4267,6 @@ defineExpose({ resetView })
           <button v-if="wpRoom" class="mini" :disabled="!wpRoom.wallpaper" @click="setWp(undefined)"><JIcon :icon="ICONS.wallpaperDefault" :size="14" />{{ t('跟随全屋') }}</button>
           <button v-else class="mini" :disabled="!plan.wallpaper" @click="setWp(undefined)"><JIcon :icon="ICONS.wallpaperDefault" :size="14" />{{ t('默认') }}</button>
         </div>
-        <p v-if="wpRoom" class="q-note">{{ wpRoom.wallpaper ? t('这间单独设置，不跟随全屋') : wpNone ? t('这间默认不贴墙纸，选一种就单独贴') : t('跟随全屋，改了就单独设置这间') }}</p>
-        <p v-else class="q-note">{{ t('没有单独设置的房间都用全屋的') }}</p>
         <div class="wp-row">
           <button v-for="c in WP_COLORS" :key="c" class="wp-sw" :class="{ on: curWp?.color === c && !curWp?.pattern }" :style="{ background: c }" :title="c" @click="setWp({ color: c, trim: curWp?.trim })" />
         </div>
@@ -4063,10 +4305,9 @@ defineExpose({ resetView })
             <span>{{ t('光泽') }}</span>
             <div class="seg seg-text" role="radiogroup" :aria-label="t('光泽')">
               <button role="radio" :aria-checked="!curFloor.wax" :class="{ on: !curFloor.wax }" @click="setFlooring(wpRoom?.id ?? null, { wax: false })">{{ t('哑光') }}</button>
-              <button role="radio" :aria-checked="curFloor.wax" :class="{ on: curFloor.wax }" @click="setFlooring(wpRoom?.id ?? null, { wax: true })">{{ t('打蜡') }}</button>
+              <button role="radio" :aria-checked="curFloor.wax" :class="{ on: curFloor.wax }" :title="t('打蜡的地板在漫游里有清楚的倒影（需要开启反射）')" @click="setFlooring(wpRoom?.id ?? null, { wax: true })">{{ t('打蜡') }}</button>
             </div>
           </div>
-          <p class="q-note">{{ t('打蜡的地板在漫游里有清楚的倒影（需要开启反射）') }}</p>
         </template>
       </section>
       <!-- 家具换风格：位置不动，换成目标风格的同类款（找不到就只换配色） -->
@@ -4080,9 +4321,9 @@ defineExpose({ resetView })
             <option value="random">{{ t('随机') }}</option>
             <option v-for="st in styleKeys" :key="st" :value="st">{{ t(STYLE_LABELS[st]) }}</option>
           </select>
-          <button class="mini" @click="runRestyle">{{ wpRoom ? t('换这间') : t('换全屋') }}</button>
+          <button class="mini" :title="t('位置不动，换成同类的这个风格的款；找不到合适的款就只换配色')" @click="runRestyle">{{ wpRoom ? t('换这间') : t('换全屋') }}</button>
         </div>
-        <p class="q-note">{{ restyleMsg || t('位置不动，换成同类的这个风格的款；找不到合适的款就只换配色') }}</p>
+        <p v-if="restyleMsg" class="q-note">{{ restyleMsg }}</p>
       </section>
       </template>
 
@@ -4099,7 +4340,6 @@ defineExpose({ resetView })
           <SiteEditor v-if="extOpen === tg" :target="tg" class="ext-body" />
         </div>
       </section>
-      <p class="q-note ext-note">{{ t('布置模式下在 3D 里点车、围挡（外观视图里还有屋顶、外墙），会在旁边弹出编辑卡片') }}</p>
       </template>
 
       <section v-else-if="tab === 'sel' && selectedFurniture && selectedDef" class="sel">
@@ -4125,6 +4365,30 @@ defineExpose({ resetView })
         <div v-if="selectedSizes.length > 1" class="sizes">
           <button v-for="sz in selectedSizes" :key="sz.id" :class="{ on: sz.id === selectedDef.id }" :title="sz.w + '×' + sz.d + '×' + sz.h" @click="swapSize(sz.id)">{{ variantLabel(sz) }}</button>
         </div>
+        <!-- 同类换款：位置不动，换成同一类的另一种造型（[ / ] 键轮换） -->
+        <div v-if="selectedVariants.length > 1" class="variants">
+          <div class="variants-head">
+            <span class="ico-label"><JIcon :icon="ICONS.swap" class="ico-muted" />{{ t('同类款式') }}<span class="num muted">{{ selectedVariants.length }}</span></span>
+            <span class="variants-step">
+              <button :title="t('上一款') + ' ([)'" :aria-label="t('上一款')" @click="stepVariant(-1)"><JIcon :icon="ICONS.prevItem" /></button>
+              <button :title="t('下一款') + ' (])'" :aria-label="t('下一款')" @click="stepVariant(1)"><JIcon :icon="ICONS.nextItem" /></button>
+            </span>
+          </div>
+          <div class="variants-strip">
+            <button
+              v-for="v in selectedVariants"
+              :key="v.id"
+              v-thumb="[v.id, variantColor(v)]"
+              class="item"
+              :class="{ on: v.id === selectedDef.id }"
+              :title="displayName(v) + '  ' + v.w + '×' + v.d + '×' + v.h + 'cm'"
+              @click="swapVariant(v.id)"
+            >
+              <img v-if="thumbs[v.id + '#' + variantColor(v)]" :src="thumbs[v.id + '#' + variantColor(v)]" alt="" />
+              <span v-else class="ph" />
+            </button>
+          </div>
+        </div>
         <div v-if="selectedArtKind" class="row art-row">
           <span class="ico-label"><JIcon :icon="ICONS.artwork" class="ico-muted" />{{ t('画面') }}</span>
           <div class="art-pick">
@@ -4147,7 +4411,7 @@ defineExpose({ resetView })
           @commit="(c) => commitFurnitureColors(selectedFurniture!.id, c)"
           @apply-same="applyColorsToSame(selectedFurniture!.id)"
         />
-        <div class="rot-row">
+        <div class="rot-row" :title="device.coarse ? t('在画布上用两根手指拧转也能旋转') : t('按住 R 拖动鼠标自由旋转，按住 Shift 每 15° 吸附')">
           <span class="rot-label">{{ t('角度') }}</span>
           <input
             class="rot-slider"
@@ -4172,7 +4436,6 @@ defineExpose({ resetView })
             @change="rotateSelectedFurniture(Number(($event.target as HTMLInputElement).value) - selectedFurniture!.rot)"
           /><span class="rot-unit">°</span>
         </div>
-        <p class="rot-hint">{{ device.coarse ? t('在画布上用两根手指拧转也能旋转') : t('按住 R 拖动鼠标自由旋转，按住 Shift 每 15° 吸附') }}</p>
         <div class="btns">
           <button class="rot" :title="t('逆时针旋转 90°')" :aria-label="t('逆时针旋转 90°')" @click="rotateSelectedFurniture(-90)"><JIcon :icon="ICONS.rotateCcw" /><span class="num">90°</span></button>
           <button class="rot" :title="t('顺时针旋转 90°')" :aria-label="t('顺时针旋转 90°')" @click="rotateSelectedFurniture(90)"><JIcon :icon="ICONS.rotateCw" /><span class="num">90°</span></button>
@@ -4895,11 +5158,6 @@ h3 {
 .look-adj .row:not(.fx-row):not(.check) > span:first-child {
   min-width: 5em;
 }
-.look-desc {
-  margin-top: 6px;
-  font-size: var(--fs-xs);
-  color: var(--text-muted);
-}
 .preview-bar select {
   font: inherit;
   font-size: var(--fs-sm);
@@ -4997,6 +5255,55 @@ h3 {
   flex-wrap: wrap;
   gap: 4px;
   margin-bottom: 8px;
+}
+.variants {
+  margin-bottom: 8px;
+}
+.variants-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.variants-head .num {
+  margin-left: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.variants-step {
+  display: flex;
+  gap: 2px;
+}
+.variants-step button {
+  width: var(--control-h-sm);
+  height: var(--control-h-sm);
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+.variants-strip {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
+}
+.variants-strip .item {
+  flex: 0 0 auto;
+  width: 56px;
+  height: 56px;
+  padding: 2px;
+  border-radius: var(--radius-sm, 6px);
+}
+.variants-strip .item img,
+.variants-strip .item .ph {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.variants-strip .item.on {
+  border-color: var(--accent-ring);
+  background: var(--accent-weak);
 }
 .sizes button {
   height: var(--control-h-sm);
@@ -5248,10 +5555,6 @@ h3 {
   top: 0;
   visibility: hidden;
 }
-.ext-note {
-  padding: 10px 18px 16px;
-  margin: 0;
-}
 .wp-sw.on,
 .wp-pat.on {
   box-shadow: 0 0 0 2px var(--accent);
@@ -5313,10 +5616,6 @@ h3 {
 }
 .check input {
   flex: none;
-}
-.hint {
-  color: var(--text-muted);
-  font-size: var(--fs-xs);
 }
 .val {
   width: 34px;
@@ -5443,11 +5742,6 @@ h3 {
   font-size: var(--fs-sm);
   color: var(--text-muted);
   margin-left: -4px;
-}
-.rot-hint {
-  margin: 4px 0 0;
-  font-size: var(--fs-xs);
-  color: var(--text-faint);
 }
 .now-row {
   margin-top: -2px;

@@ -6,6 +6,7 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cyl, face, puck, rbox, shade, toon, torus } from '../toon'
+import { duvet, pillowMesh } from '../bedding'
 import { C, ellipsePoly, glow, holePanel, movable, rectPoly, slab, type AssetDef, type SurfaceDef } from '../kit'
 import { cylX, cylZ, meshWith, rod3, type V3 } from '../geo'
 import { I, J, M, N, R, withPals } from '../packkit'
@@ -93,8 +94,11 @@ function pillow(w: number, d: number, color: string, x: number, y: number, z: nu
 
 /** 被子：沿 z 铺（儿童床），靠床头一侧有一道翻折的白被头 */
 function duvetZ(g: THREE.Group, w: number, l: number, y: number, z: number, color: string, x = 0) {
-  g.add(rbox(w, 6, l, color, { x, y, z }, 2.8))
-  g.add(rbox(w + 0.6, 3, 12, MAT, { x, y: y + 4.4, z: z - l / 2 + 6 }, 1.4))
+  // 儿童床四周多有围栏：两侧、床尾只垂下一点点
+  const d = duvet({ w, len: l, top: y + 6, z1: z + l / 2, drop: 2, thick: 3, color, seed: l })
+  d.position.x = x
+  g.add(d)
+  g.add(pillowMesh(w + 0.6, 3.6, 12, MAT, { x, y: y + 4, z: z - l / 2 + 6 }, 0.5))
 }
 
 /** 小被子：沿 x 铺（婴儿床），靠 -x 一侧翻折 */

@@ -6,6 +6,9 @@ import { ball, capsule, cup, cyl, face, leaf, markMirror, markWater, plate, puck
 import { fridgeSpotModel, washerSpotModel } from './appliances'
 import { holePanel, C, G, S, carcass, drawerBox, drawerLevel, ellipsePoly, flapDoor, glow, hangingPipe, hingedDoor, legs, pipeHook, rectPoly, rng, shell, shelvesIn, type AssetDef, type StyleTag } from './kit'
 import { PACKS } from './packs'
+import { tagMat } from './mats'
+import { duvet as duvetMesh, pillowMesh } from './bedding'
+import { MAT_TABLE } from './matTables'
 import { soft, type SoftFn } from './geo'
 import { applyDims, warnIfDimsStale } from './dims'
 import { DIMS } from './dims.generated'
@@ -236,19 +239,21 @@ function diningChair(p: string[]) {
 function bed(w: number, p: string[]) {
   const [duvet, sheet, frame] = p
   const d = 205
-  const g = G(legs(w, d, 10, shade(frame, -0.12), 2.6, 6, false))
-  g.add(rbox(w + 6, 16, d + 4, frame, { y: 10 }, 3))
-  g.add(rbox(w + 8, 70, 8, frame, { z: -d / 2 - 2 }, 3.5))
+  // 床架标成木（第一组配色里床单和床架同色，按颜色认槽会认成床单；白、黑的床架按刷漆画，mats.ts）
+  const g = G(tagMat(legs(w, d, 10, shade(frame, -0.12), 2.6, 6, false), 'wood'))
+  g.add(tagMat(rbox(w + 6, 16, d + 4, frame, { y: 10 }, 3), 'wood'))
+  g.add(tagMat(rbox(w + 8, 70, 8, frame, { z: -d / 2 - 2 }, 3.5), 'wood'))
   g.add(rbox(w - 2, 18, d - 4, sheet, { y: 24 }, 6))
   const pillows = w > 120 ? 2 : 1
   for (let i = 0; i < pillows; i++) {
     const pw = (w - 20) / pillows - 6
     const x = pillows === 1 ? 0 : (i - 0.5) * (pw + 8)
-    g.add(rbox(pw, 12, 38, C.white, { x, y: 40, z: -d / 2 + 30, rx: -0.12 }, 6))
+    g.add(pillowMesh(pw, 12, 38, C.white, { x, y: 40, z: -d / 2 + 30, rx: -0.12 }))
   }
+  // 被子：铺在床垫上（顶面 42），两侧、床尾翻下去垂到床架上方；床头那端翻折一道被头
   const dz = d - 64
-  g.add(rbox(w + 4, 10, dz, duvet, { y: 40, z: d / 2 - dz / 2 }, 5))
-  g.add(rbox(w + 4, 4, 18, shade(duvet, 0.08), { y: 49, z: d / 2 - dz + 9 }, 2))
+  g.add(duvetMesh({ w: w + 2, len: dz, top: 46, z1: d / 2, drop: 13, color: duvet, seed: w }))
+  g.add(pillowMesh(w + 2, 5, 18, shade(duvet, 0.08), { y: 44.5, z: d / 2 - dz + 9 }, 0.5))
   return g
 }
 
@@ -1074,7 +1079,7 @@ export function bathtubModel(w: number, d: number, shower = false, walls?: Recor
   duck.add(ball(1.6, C.orange, { x: 7, y: 9 }, [1.4, 0.6, 1]))
   duck.position.set(-w / 4, 40, 4)
   duck.rotation.y = 0.6
-  g.add(duck)
+  g.add(tagMat(duck, 'plastic'))
   return g
 }
 
@@ -1113,7 +1118,8 @@ export function toiletModel(w: number, d: number, type: 'basic' | 'washlet' | 't
     geo.rotateX(-Math.PI / 2)
     return geo
   }
-  const seat = new THREE.Mesh(flat(ring, 1.6), toon(seatColor))
+  // 座圈、盖子是塑料（写实光照下比陶瓷哑一点，mats.ts）
+  const seat = tagMat(new THREE.Mesh(flat(ring, 1.6), toon(seatColor)), 'plastic')
   seat.position.set(0, 40.6, bz)
   g.add(seat)
   // 铰链：在马桶口后端，但不能伸进水箱 / 机体里
@@ -1121,7 +1127,7 @@ export function toiletModel(w: number, d: number, type: 'basic' | 'washlet' | 't
   const hingeZ = Math.max(bz - R * sz, unitFront + 1)
   const lidShape = new THREE.Shape()
   lidShape.absellipse(0, 0, R + 0.4, (R + 0.4) * sz, 0, Math.PI * 2, false, 0)
-  const lid = new THREE.Mesh(flat(lidShape, 1.8), toon(seatColor))
+  const lid = tagMat(new THREE.Mesh(flat(lidShape, 1.8), toon(seatColor)), 'plastic')
   // 盖子掀起：以后端为轴竖起来，微微往后靠
   lid.position.set(0, 0, -(R + 0.4) * sz)
   const pivot = new THREE.Group()
@@ -1138,15 +1144,15 @@ export function toiletModel(w: number, d: number, type: 'basic' | 'washlet' | 't
     g.add(rbox(w + 6, 4, 20, shade(white, -0.04), { y: 74, z: backZ + 10 }, 2))
     g.add(rbox(4, 1.6, 2, '#cfd3da', { x: w / 2 - 2, y: 66, z: backZ + 18.5 }, 0.6))
     if (type === 'washlet') {
-      // 座圈后部机体 + 侧边控制面板
-      g.add(rbox(w * 0.8, 7, 9, '#f6f7f9', { y: 38, z: backZ + 22 }, 2.4))
-      g.add(rbox(4, 6, 15, '#f6f7f9', { x: w / 2 + 1.4, y: 37, z: bz - 2 }, 1.4))
+      // 座圈后部机体 + 侧边控制面板（塑料）
+      g.add(tagMat(rbox(w * 0.8, 7, 9, '#f6f7f9', { y: 38, z: backZ + 22 }, 2.4), 'plastic'))
+      g.add(tagMat(rbox(4, 6, 15, '#f6f7f9', { x: w / 2 + 1.4, y: 37, z: bz - 2 }, 1.4), 'plastic'))
       for (const [k, c] of [
         [0, '#7fb8e6'],
         [1, '#ff9a8b'],
         [2, '#a6e3cc'],
       ] as const)
-        g.add(ball(0.9, c, { x: w / 2 + 3.6, y: 41, z: bz - 6 + k * 3.4 }, [0.4, 1, 1]))
+        g.add(tagMat(ball(0.9, c, { x: w / 2 + 3.6, y: 41, z: bz - 6 + k * 3.4 }, [0.4, 1, 1]), 'plastic'))
     }
   }
   return g
@@ -1155,21 +1161,22 @@ export function toiletModel(w: number, d: number, type: 'basic' | 'washlet' | 't
 export function basinModel(w: number, d: number) {
   const g = new THREE.Group()
   // 洗面柜做成空心（不封顶），台面开椭圆孔，嵌一个真正下凹的陶瓷盆
+  // 洗面柜柜体、柜门是贴面板（塑料），台面、盆是陶瓷（设备默认）
   const body = shell(w, 78, d, 1.6, C.white, { top: false })
-  g.add(body)
-  g.add(rbox(w - 6, 66, 1.4, C.sky, { y: 6, z: d / 2 + 0.7 }, 1.5))
+  g.add(tagMat(body, 'plastic'))
+  g.add(tagMat(rbox(w - 6, 66, 1.4, C.sky, { y: 6, z: d / 2 + 0.7 }, 1.5), 'plastic'))
   const r = Math.min(w * 0.3, d * 0.34)
   const bz = 3
   g.add(holePanel(w + 2, d + 2, 5, C.white, [{ kind: 'rect', x: 0, y: (d + 2) / 2 - bz - r, w: r * 2.5, h: r * 2, r }], { y: 80.5, z: (d + 2) / 2, rx: -Math.PI / 2 }, 2))
   const bowl = cup(r, r * 0.55, 12, 0.9, '#f4fbff', { y: 71, z: bz })
   bowl.scale.x = 1.25
   g.add(bowl)
-  g.add(cyl(1.6, 1.6, 0.4, '#9aa3ad', { y: 71.95, z: bz }, 16))
+  g.add(tagMat(cyl(1.6, 1.6, 0.4, '#9aa3ad', { y: 71.95, z: bz }, 16), 'metal'))
   const tap = faucet(C.steel, Math.max(6, r * 0.9), 13)
   tap.position.set(0, 83, bz - r - 3.5)
   g.add(tap)
-  g.add(cup(3, 2.6, 10, 0.6, C.pink, { x: w / 2 - 9, y: 83, z: -d / 2 + 8 }))
-  g.add(cyl(0.6, 0.6, 12, C.sky, { x: w / 2 - 9, y: 85, z: -d / 2 + 8, rz: 0.2 }, 4))
+  g.add(tagMat(cup(3, 2.6, 10, 0.6, C.pink, { x: w / 2 - 9, y: 83, z: -d / 2 + 8 }), 'plastic'))
+  g.add(tagMat(cyl(0.6, 0.6, 12, C.sky, { x: w / 2 - 9, y: 85, z: -d / 2 + 8, rz: 0.2 }, 4), 'plastic'))
   return g
 }
 
@@ -1177,11 +1184,12 @@ export function basinModel(w: number, d: number) {
 export function outdoorUnitModel(w: number, d: number) {
   const g = new THREE.Group()
   g.add(rbox(w - 2, 56, d - 2, '#eef0f2', { y: 4 }, 3))
-  for (const s of [-1, 1]) g.add(rbox(4, 4, d - 6, C.ink, { x: s * (w / 2 - 10) }, 1))
+  // 机壳是烤漆钢板（设备默认的半光），脚、风扇护罩、散热格栅是金属
+  for (const s of [-1, 1]) g.add(tagMat(rbox(4, 4, d - 6, C.ink, { x: s * (w / 2 - 10) }, 1), 'metal'))
   const fx = -w * 0.15
-  g.add(torus(19, 2, '#c9d0d8', { x: fx, y: 32, z: (d - 2) / 2 }))
-  for (let i = 0; i < 3; i++) g.add(rbox(36, 1.4, 1.4, '#c9d0d8', { x: fx, y: 31.3, z: (d - 2) / 2, rz: (i * Math.PI) / 3 }, 0.6))
-  for (let i = 0; i < 5; i++) g.add(rbox(w * 0.22, 1.2, 1, '#c9d0d8', { x: w * 0.3, y: 16 + i * 8, z: (d - 2) / 2 + 0.3 }, 0.4))
+  g.add(tagMat(torus(19, 2, '#c9d0d8', { x: fx, y: 32, z: (d - 2) / 2 }), 'metal'))
+  for (let i = 0; i < 3; i++) g.add(tagMat(rbox(36, 1.4, 1.4, '#c9d0d8', { x: fx, y: 31.3, z: (d - 2) / 2, rz: (i * Math.PI) / 3 }, 0.6), 'metal'))
+  for (let i = 0; i < 5; i++) g.add(tagMat(rbox(w * 0.22, 1.2, 1, '#c9d0d8', { x: w * 0.3, y: 16 + i * 8, z: (d - 2) / 2 + 0.3 }, 0.4), 'metal'))
   return g
 }
 
@@ -1576,6 +1584,15 @@ for (const a of ASSETS) {
     a.limitGroup ??= x[2]
   }
   a.series ??= a.id
+  // 材质标注（写实光照用，mats.ts）：def 里写了的优先，否则用标注表（matTables/）
+  const mt = MAT_TABLE[a.id]
+  if (mt) {
+    if (Array.isArray(mt)) a.mats ??= mt
+    else {
+      a.mats ??= mt.mats
+      a.mat ??= mt.mat
+    }
+  }
 }
 
 // 尺寸校正：实测比声明大的放大、陷地的抬起（预计算结果见 dims.generated.ts，由 pnpm gen:dims 生成；规则见 dims.ts）

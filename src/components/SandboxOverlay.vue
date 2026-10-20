@@ -15,7 +15,7 @@ import { sandboxBridge } from '../ui/sandboxBridge'
 import { runBusy } from '../ui/feedback'
 import { toast } from '../saved'
 import { ASSET_MAP } from '../three/assets'
-import { displayName, siblings, variantLabel } from '../three/catalog'
+import { displayName, sameTypeVariants, siblings, variantLabel } from '../three/catalog'
 import { propsOn } from '../surface'
 import { isTyping } from '../dom'
 import { t } from '../i18n'
@@ -42,6 +42,7 @@ import {
   selection,
   setStairsVariant,
   swapFurnitureAsset,
+  swapFurnitureVariant,
 } from '../store'
 
 const editing = computed(() => sandbox.mode === 'edit')
@@ -292,6 +293,10 @@ function openMenu(x: number, y: number, id: string | null) {
     stairsMenu(x, y, stairs)
   } else if (f && def) {
     const sizes = siblings(def)
+    // 同类换款：上一款 / 下一款（和 [ / ] 键一样在同类各款里轮）
+    const variants = sameTypeVariants(def)
+    const vi = variants.findIndex((v) => v.id === def.id)
+    const stepTo = (dir: number) => swapFurnitureVariant(f.id, variants[(vi + dir + variants.length) % variants.length].id)
     menu.value = {
       x,
       y,
@@ -300,6 +305,9 @@ function openMenu(x: number, y: number, id: string | null) {
         { label: t('逆时针旋转 90°'), icon: ICONS.rotateCcw, keys: 'Q', action: () => rotateSelectedFurniture(-90) },
         { label: t('顺时针旋转 90°'), icon: ICONS.rotateCw, keys: 'E', action: () => rotateSelectedFurniture(90) },
         { label: t('聚焦'), icon: ICONS.focus, action: () => focusOn(f.id) },
+        ...(variants.length > 1
+          ? (['sep', { label: t('上一款'), icon: ICONS.prevItem, keys: '[', action: () => stepTo(-1) }, { label: t('下一款'), icon: ICONS.nextItem, keys: ']', action: () => stepTo(1) }] as MenuEntry[])
+          : []),
         ...(sizes.length > 1
           ? (['sep', { header: t('规格') }, ...sizes.map((s) => ({ label: variantLabel(s) + (s.id === def.id ? ' ✓' : ''), disabled: s.id === def.id, action: () => swapFurnitureAsset(f.id, s.id) }))] as MenuEntry[])
           : []),

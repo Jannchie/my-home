@@ -93,12 +93,11 @@ function setRectSize(w: number, h: number) {
         >{{ t('类型') }}
         <span class="ico-select">
           <JIcon :icon="ROOM_ICONS[room.kind]" />
-          <select :value="room.kind" @change="setKind(str($event) as RoomKind)">
+          <select :value="room.kind" :title="room.kind === 'void' ? t('挑空：这一块没有楼板，下层在这里通高（下层的外墙一直砌到这一层的天花）。') : undefined" @change="setKind(str($event) as RoomKind)">
             <option v-for="(k, key) in ROOM_KINDS" :key="key" :value="key">{{ roomName(k.label) }}</option>
           </select>
         </span>
       </label>
-      <p v-if="room.kind === 'void'" class="hint">{{ t('挑空：这一块没有楼板，下层在这里通高（下层的外墙一直砌到这一层的天花）。') }}</p>
       <label v-if="room.kind === 'balcony'"
         >{{ t('扶手墙') }}
         <select :value="room.railing ?? 'mixed'" @change="mutate(() => (room!.railing = str($event) as RailingKind))">
@@ -139,7 +138,6 @@ function setRectSize(w: number, h: number) {
         <button @click="duplicateSelection"><JIcon :icon="ICONS.duplicate" />{{ t('复制') }} <kbd>Ctrl D</kbd></button>
         <button class="danger" @click="deleteSelection"><JIcon :icon="ICONS.delete" />{{ t('删除') }} <kbd>Del</kbd></button>
       </div>
-      <p class="hint">{{ t('拖边可整体推墙；双击边插入顶点；拖角点改形状。') }}</p>
     </template>
 
     <!-- 顶点 -->
@@ -190,7 +188,6 @@ function setRectSize(w: number, h: number) {
       <div class="actions">
         <button class="danger" @click="deleteSelection"><JIcon :icon="ICONS.delete" />{{ t('删除') }} <kbd>Del</kbd></button>
       </div>
-      <p class="hint">{{ t('拖动可沿墙移动，靠近别的墙会吸附过去。') }}</p>
     </template>
 
     <!-- 设备 -->
@@ -213,7 +210,7 @@ function setRectSize(w: number, h: number) {
         <button :title="t('房门向房间内开、トイレ外开、玄関外开；门扇贴墙、开扇互不打架')" @click="tidyDoors"><JIcon :icon="ICONS.tidyDoors" />{{ t('整理门的开向') }}</button>
       </div>
       <dl>
-        <dt>{{ t('专有面积') }}</dt>
+        <dt :title="t('面积按墙中心线计（壁芯面積），1帖 = 1.62㎡。')">{{ t('专有面积') }}</dt>
         <dd class="num">{{ fmtArea(stats.total) }}</dd>
         <template v-for="s in floorStats" :key="s.f.id">
           <dt class="sub">· {{ s.f.name }}</dt>
@@ -229,7 +226,6 @@ function setRectSize(w: number, h: number) {
           <span class="num dim">{{ r.kind === 'balcony' ? fmtArea(area(r.points)) : fmtRoomArea(area(r.points), plan.region) }}</span>
         </li>
       </ul>
-      <p class="hint">{{ t('面积按墙中心线计（壁芯面積），1帖 = 1.62㎡。') }}</p>
     </template>
   </aside>
 </template>
@@ -329,12 +325,6 @@ dd {
 }
 .ico-select select {
   padding-left: 30px;
-}
-.hint {
-  font-size: var(--fs-xs);
-  color: var(--text-muted);
-  line-height: 1.6;
-  margin: 0;
 }
 .rooms {
   list-style: none;

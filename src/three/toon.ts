@@ -6,6 +6,7 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 // 室内灯的楼层 / 房间遮罩：给所有受光照材质挂上 onBeforeCompile（副作用导入，要在任何材质编译前生效）
 import { injectLightMask } from './lightMask'
 import { mangaUniforms } from './manga'
+import { MAT_ID, type Mat } from './matIds'
 
 // ---------- 赛璐璐阴影 ----------
 // three 自带的 PCF 阴影用逐像素噪点（IGN）旋转采样，边缘是一片网点状的颗粒渐变。
@@ -31,6 +32,19 @@ import { mangaUniforms } from './manga'
 				float shW = clamp( shadowRadius * 0.095, 0.06, 0.38 );
 				shadow = smoothstep( 0.5 - shW, 0.5 + shW, shadow / 13.0 );`,
       )
+      // 点光源（漫游时所在房间的顶灯，lights.ts）的立方体阴影：同样加一圈固定方向的采样、收成干净的边
+      .replace(
+        /(sample4\.y \) \* texelSize, dp \) \)\s*\) \* 0\.2;)/,
+        `$1
+				shadow *= 5.0;
+				for ( int k = 0; k < 8; k ++ ) {
+					float a = float( k ) * 0.7853982 + 0.3927;
+					shadow += texture( shadowMap, vec4( bd3D + ( tangent * cos( a ) + bitangent * sin( a ) ) * texelSize * 1.5, dp ) );
+				}
+				// 过渡收得很窄（取样圈照半径放大，轮廓仍然平滑）：硬边但不起锯齿，像动画里的影子块
+				float shW = 0.06;
+				shadow = smoothstep( 0.5 - shW, 0.5 + shW, shadow / 13.0 );`,
+      )
   }
 }
 
@@ -44,10 +58,25 @@ import { mangaUniforms } from './manga'
   const chunk = THREE.ShaderChunk as unknown as Record<string, string>
   const SHADOW = 'getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, vDirectionalShadowCoord[ i ] )'
   const DIR = `directLight.color *= ( directLight.visible && receiveShadow ) ? ${SHADOW} : 1.0;`
-  if (chunk.lights_fragment_begin.includes(DIR)) {
+  // 点光源的投影（漫游时所在房间的顶灯）：只投在朝着灯的面上——背光的面在阴影贴图里是自己挡自己，
+  // 而 toon 色阶下背光面本来还受一部分灯光，照原样乘上阴影会把所有背光面压黑
+  const POINT_SHADOW = 'getPointShadow( pointShadowMap[ i ], pointLightShadow.shadowMapSize, pointLightShadow.shadowIntensity, pointLightShadow.shadowBias, pointLightShadow.shadowRadius, vPointShadowCoord[ i ], pointLightShadow.shadowCameraNear, pointLightShadow.shadowCameraFar )'
+  const POINT = `directLight.color *= ( directLight.visible && receiveShadow ) ? ${POINT_SHADOW} : 1.0;`
+  // lampOcc 记下被顶灯挡住的程度：anime.ts 在输出前再压暗一些（挡住顶灯的家具也挡住了大半从地面、墙面反射来的补光），影子才读得出来
+  // （three 展开的循环不分作用域：变量在下面的总声明里声明一次，这里只赋值，多盏灯投影时不会重复声明）
+  // 只在真的要用时取样（显式分支，立方体阴影一次 13 个取样很贵）：不投影（浓度 0，鸟瞰时）、被房间遮罩挡掉
+  // （lightMask.ts 已经把灯色乘成 0）、背对着灯的片元都跳过
+  const POINT_PATCH = `lampShade = 1.0;
+		if ( directLight.visible && receiveShadow && pointLightShadow.shadowIntensity > 0.0 && max( directLight.color.r, max( directLight.color.g, directLight.color.b ) ) > 1e-4 ) {
+			float lampNL = dot( geometryNormal, directLight.direction );
+			if ( lampNL > 0.04 ) lampShade = mix( 1.0, ${POINT_SHADOW}, smoothstep( 0.04, 0.28, lampNL ) );
+		}
+		lampOcc = max( lampOcc, ( 1.0 - lampShade ) * pointLightShadow.shadowIntensity );
+		directLight.color *= lampShade;`
+  if (chunk.lights_fragment_begin.includes(DIR) && chunk.lights_fragment_begin.includes(POINT)) {
     chunk.lights_fragment_begin =
-      'float termEdge = 0.0;\nfloat sunLit = 0.0;\n' +
-      chunk.lights_fragment_begin.replace(
+      'float termEdge = 0.0;\nfloat sunLit = 0.0;\nfloat lampOcc = 0.0;\nfloat lampShade = 1.0;\n' +
+      chunk.lights_fragment_begin.replace(POINT, POINT_PATCH).replace(
         DIR,
         `float sunNL = dot( geometryNormal, directLight.direction );
 		float sunShade = ( directLight.visible && receiveShadow ) ? mix( 1.0, ${SHADOW}, smoothstep( 0.04, 0.28, sunNL ) ) : 1.0;
@@ -103,7 +132,8 @@ function gradientMap() {
  * 所有 toon 材质共用这一张图，改数据就全部生效（不重编译）。
  */
 const BANDS_NORMAL = [150, 150, 215, 215, 255, 255]
-const BANDS_ANIME = [110, 110, 110, 255, 255, 255]
+// 暗面分三档（背光越多越暗）：同一个物体朝向不同的几个暗面也分得出来（鹿头、厨具的各个面），最暗的也不发黑
+const BANDS_ANIME = [128, 152, 184, 255, 255, 255]
 export function setToonBands(two: boolean) {
   const t = gradientMap()
   const d = t.image.data as Uint8Array
@@ -518,12 +548,20 @@ export function group(...children: THREE.Object3D[]) {
 }
 
 /** 颜色微调：同一色系的深 / 浅版本 */
-export function shade(color: string, dl: number, ds = 0) {
+/** track = false：不登记来源（随机调出来的颜色，不是配色槽，如 woodGrain.ts 的每块地板） */
+export function shade(color: string, dl: number, ds = 0, track = true) {
   const c = new THREE.Color(color)
   const hsl = { h: 0, s: 0, l: 0 }
   c.getHSL(hsl)
-  return '#' + new THREE.Color().setHSL(hsl.h, Math.max(0, Math.min(1, hsl.s + ds)), Math.max(0, Math.min(1, hsl.l + dl))).getHexString()
+  const out = new THREE.Color().setHSL(hsl.h, Math.max(0, Math.min(1, hsl.s + ds)), Math.max(0, Math.min(1, hsl.l + dl))).getHexString()
+  // 记下深浅色是从哪个颜色调出来的：材质标注（mats.ts）按配色槽认零件，shade 出来的底座、阴影色也要认得出是哪一槽
+  const src = c.getHexString()
+  if (track && out !== src && !shadeSrc.has(out)) shadeSrc.set(out, src)
+  return '#' + out
 }
+const shadeSrc = new Map<string, string>()
+/** 由 shade() 调出 hex（不带 #）的那个原色；不是 shade 出来的返回 undefined */
+export const shadeSource = (hex: string) => shadeSrc.get(hex)
 
 /** 反射面（three 的 Reflector：地面反射膜、镜子 / 水面上挂的反射面）：淡出、遮蔽、倒影这些遍历都要跳过它 */
 export const isReflector = (o: THREE.Object3D) => !!(o as THREE.Object3D & { isReflector?: boolean }).isReflector
@@ -534,6 +572,8 @@ export const isReflector = (o: THREE.Object3D) => !!(o as THREE.Object3D & { isR
  */
 export function markMirror<T extends THREE.Object3D>(o: T): T {
   o.userData.mirror = true
+  // 写实光照下按玻璃画（mats.ts）：镜面不透明，按颜色推断不出来
+  o.userData.mat ??= 'glass'
   return o
 }
 
@@ -547,6 +587,8 @@ export function markWater<T extends THREE.Object3D>(o: T): T {
 
 // mask：宠物毛色材质的花纹场（见 critter-geo.ts 的 furMaterial）
 const MERGE_ATTRS = new Set(['position', 'normal', 'uv', 'mask'])
+/** 不算「业务标记」的 userData：带着它们的零件照样合并（noOutline 不描边、mat 材质类别，合并时按 mat 分组 / 写成逐顶点属性） */
+const PLAIN_KEYS = new Set(['noOutline', 'mat'])
 
 /** 能不能并进同材质的大网格：普通不透明网格、没有子节点、没有业务标记、几何体只有常规属性 */
 function mergeable(o: THREE.Object3D): o is THREE.Mesh {
@@ -554,7 +596,7 @@ function mergeable(o: THREE.Object3D): o is THREE.Mesh {
   if (!m.isMesh || (m as THREE.InstancedMesh).isInstancedMesh || (m as THREE.SkinnedMesh).isSkinnedMesh) return false
   if (m.children.length || !m.visible || m.renderOrder !== 0 || Array.isArray(m.material)) return false
   if (m.material.transparent || m.onBeforeRender !== THREE.Object3D.prototype.onBeforeRender) return false
-  for (const k in m.userData) if (k !== 'noOutline') return false
+  for (const k in m.userData) if (!PLAIN_KEYS.has(k)) return false
   const g = m.geometry
   if (!g.attributes.position || Object.keys(g.morphAttributes).length || g.drawRange.start !== 0 || g.drawRange.count !== Infinity) return false
   for (const k in g.attributes) if (!MERGE_ATTRS.has(k)) return false
@@ -573,7 +615,7 @@ export function mergeMeshes(root: THREE.Object3D) {
   const inv = new THREE.Matrix4().copy(root.matrixWorld).invert()
   const buckets = new Map<string, THREE.Mesh[]>()
   const walk = (o: THREE.Object3D) => {
-    if (o !== root && Object.keys(o.userData).some((k) => k !== 'noOutline')) {
+    if (o !== root && Object.keys(o.userData).some((k) => !PLAIN_KEYS.has(k))) {
       // 柜门 / 抽屉（kit.ts movable）：子树作为整体开合，内部零件在子树自己的局部坐标里照样按材质合并
       if (o.userData.door) mergeMeshes(o)
       return // 有业务标记的子树整体保留
@@ -581,7 +623,7 @@ export function mergeMeshes(root: THREE.Object3D) {
     for (const c of o.children) walk(c)
     if (o !== root && mergeable(o)) {
       const m = o as THREE.Mesh
-      const key = `${(m.material as THREE.Material).uuid}|${+m.castShadow}|${+m.receiveShadow}|${+!!m.userData.noOutline}`
+      const key = `${(m.material as THREE.Material).uuid}|${+m.castShadow}|${+m.receiveShadow}|${+!!m.userData.noOutline}|${m.userData.mat ?? ''}`
       let b = buckets.get(key)
       if (!b) buckets.set(key, (b = []))
       b.push(m)
@@ -680,6 +722,7 @@ export function mergeMeshes(root: THREE.Object3D) {
     merged.castShadow = first.castShadow
     merged.receiveShadow = first.receiveShadow
     if (first.userData.noOutline) merged.userData.noOutline = true
+    if (first.userData.mat) merged.userData.mat = first.userData.mat
     for (const m of list) m.removeFromParent()
     root.add(merged)
   }
@@ -692,7 +735,7 @@ function solidColored(o: THREE.Object3D): o is THREE.Mesh {
   const m = o as THREE.Mesh
   if (!m.isMesh || (m as THREE.InstancedMesh).isInstancedMesh || (m as THREE.SkinnedMesh).isSkinnedMesh) return false
   if (!m.visible || m.renderOrder !== 0 || Array.isArray(m.material) || !plainToons.has(m.material)) return false
-  for (const k in m.userData) if (k !== 'noOutline') return false
+  for (const k in m.userData) if (!PLAIN_KEYS.has(k)) return false
   if (m.children.some((c) => !c.userData.isOutline || c.children.length)) return false
   const g = m.geometry
   if (!g.attributes.position || !g.attributes.normal || Object.keys(g.morphAttributes).length || g.drawRange.start !== 0 || g.drawRange.count !== Infinity) return false
@@ -712,7 +755,7 @@ export function mergeSolidColors(root: THREE.Object3D): number {
   const buckets = new Map<string, THREE.Mesh[]>()
   let merged = 0
   const walk = (o: THREE.Object3D) => {
-    if (o !== root && Object.keys(o.userData).some((k) => k !== 'noOutline')) {
+    if (o !== root && Object.keys(o.userData).some((k) => !PLAIN_KEYS.has(k))) {
       if (o.userData.door) merged += mergeSolidColors(o)
       return
     }
@@ -742,6 +785,8 @@ export function mergeSolidColors(root: THREE.Object3D): number {
     const nor = new Float32Array(verts * 3)
     const color = new Float32Array(verts * 3)
     const ocolor = new Float32Array(verts * 3)
+    // 逐顶点的材质编号（mats.ts，写实光照用）
+    const mat = new Float32Array(verts)
     const index = verts > 65535 ? new Uint32Array(tris) : new Uint16Array(tris)
     let outlined = false
     let vo = 0
@@ -760,6 +805,7 @@ export function mergeSolidColors(root: THREE.Object3D): number {
       const hull = m.children.find((c) => c.userData.isOutline) as THREE.Mesh | undefined
       const oc = (hull?.material as THREE.ShaderMaterial | undefined)?.uniforms?.uColor?.value as THREE.Color | undefined
       if (oc) outlined = true
+      mat.fill(MAT_ID[m.userData.mat as Mat] ?? 0, vo, vo + n)
       for (let i = 0; i < n; i++) {
         const x = P.getX(i)
         const y = P.getY(i)
@@ -802,6 +848,7 @@ export function mergeSolidColors(root: THREE.Object3D): number {
     geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3))
     geo.setAttribute('color', new THREE.BufferAttribute(color, 3))
     geo.setAttribute('ocolor', new THREE.BufferAttribute(ocolor, 3))
+    geo.setAttribute('mat', new THREE.BufferAttribute(mat, 1))
     geo.setIndex(new THREE.BufferAttribute(index, 1))
     geo.computeBoundingSphere()
     const fill = new THREE.Mesh(geo, vertexColorToon())

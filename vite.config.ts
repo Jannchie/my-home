@@ -149,7 +149,7 @@ export default defineConfig(({ mode }) => {
     define: { 'import.meta.env.VITE_SITE_URL': JSON.stringify(site) },
     // 代理的 git worktree 在 .claude/worktrees 下：别让它们的改动触发本仓库 dev server 整页刷新。
     // 只忽略本仓库根目录下的 .claude（worktree 自己也在某个 .claude 里，不能按路径片段匹配）
-    server: { watch: { ignored: (p: string) => p.replace(/\\/g, '/').toLowerCase().startsWith(CLAUDE_DIR) } },
+    server: { port: 5199, watch: { ignored: (p: string) => p.replace(/\\/g, '/').toLowerCase().startsWith(CLAUDE_DIR) } },
     build: {
       // 分包：three、素材包、i18n 词典体积大且更新节奏不同，各自成独立 chunk，改业务代码时浏览器缓存仍可复用。
       // Vite 8（rolldown）里 manualChunks 只是兼容写法：它被转成单个 group，而 group 默认会把命中模块的依赖一并收进来，

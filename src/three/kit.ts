@@ -15,6 +15,7 @@ import { cyl, rbox, shade, toon, useAnisotropy } from './toon'
 import { syncMatrix } from './matrices'
 import { G } from './geo'
 import type { Tag } from './tags'
+import type { Mat } from './matIds'
 
 export type AssetCategory =
   | 'living'
@@ -258,6 +259,13 @@ export interface AssetDef {
   /** 尺寸 / 款式的显示名（Queen、120、石灯笼…）；陈设状态也可以写在这里（对局中、收在盒里） */
   sizeLabel?: string
   build: (p: string[]) => THREE.Group
+  /**
+   * 各配色槽的材质（和 palettes 里每组颜色一一对应，mats.ts）：[主色是木, 副色是布, 点缀色是金属] 这样写；
+   * 用某一槽颜色（或它 shade 出的深浅色）的零件按这里算，null / 不写的槽走 mats.ts 的推断。写实光照用，卡通光照不看
+   */
+  mats?: (Mat | null)[]
+  /** 整件的默认材质（推断不出来的零件按它）；不填按类型（mats.ts defaultMat） */
+  mat?: Mat
   /** 设备类：只在 3D 中代替平面图的设备显示，不能作为家具单独摆放 */
   fixture?: boolean
   /** 壁挂：离地安装高度（cm），build 里自己把模型放到这个高度。不占地面，不参与家具之间的碰撞 */

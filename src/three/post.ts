@@ -6,6 +6,8 @@
 //   → [体积光：画面增强里开、且在漫游时，窗口斜射进来的光柱（volumetric.ts）]
 //   → [转折线：画面效果带 crease 时（「动画感」），倒角、门缝这些物体内部的转折描一条线（crease.ts）]
 //   → [UnrealBloom 泛光，线性空间]
+//   → 累积：镜头静止时每帧把投影抖动亚像素、和前几帧取平均（渐进式超采样，几何边缘、阴影边、细纹理的锯齿都抹平）；
+//     镜头一动 / 场景一变就从头来（restart），所以没有拖影
 //   → Base：线性转 sRGB，并把透明背景合成为与 CSS 一致的径向渐变底（之后的效果作用于整张画面）
 //   → [风格化：水彩 / 漫画网点 / 像素 / 素描，各自一到两个 pass]
 //   黑白漫画例外：材质输出编码（manga.ts），Manga pass 直接读 RenderPass 的结果出网点，替代 Base
@@ -19,18 +21,22 @@
 import * as THREE from 'three'
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
+import { isFurShell, setRealStyle, swapToPbr } from './realistic'
+import { setReflectReuse } from './reflectFrame'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js'
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js'
-import { createVolumetric, updateVolumetric } from './volumetric'
+import { createDust, createVolumetric, DUST_BOX_ORBIT, DUST_BOX_WALK, updateDust, updateVolumetric } from './volumetric'
+import { FullScreenQuad, Pass } from 'three/addons/postprocessing/Pass.js'
 import { createCrease, updateCrease } from './crease'
 import { FXAAShader } from 'three/addons/shaders/FXAAShader.js'
 import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js'
 import { mangaUniforms } from './manga'
 import { isReflector } from './toon'
+import { prerenderReflections } from './reflectFrame'
 import type { Stage } from './stage'
 
-export type LookId = 'none' | 'anime' | 'crt' | 'tiltshift' | 'warm' | 'cool' | 'film' | 'pastel' | 'watercolor' | 'comic' | 'manga' | 'manga-coarse' | 'manga-hatch' | 'manga-ink' | 'mono' | 'sepia' | 'pixel' | 'sketch'
+export type LookId = 'none' | 'anime' | 'real' | 'figure' | 'crt' | 'tiltshift' | 'warm' | 'cool' | 'film' | 'pastel' | 'watercolor' | 'comic' | 'manga' | 'manga-coarse' | 'manga-hatch' | 'manga-ink' | 'mono' | 'sepia' | 'pixel' | 'sketch'
 
 interface Grade {
   exposure: number
@@ -90,11 +96,43 @@ export interface LookDef {
   /** 画面风格化（一次只能一种）：水彩 / 漫画网点 / 黑白漫画（材质输出编码，manga.ts）/ 像素 / 素描 */
   stylize?: Stylize
   /**
-   * 材质 / 光照风格：不填 = 「动画感」（两档色阶、阴影色、冷暖灯光、彩色描边，anime.ts；Sandbox3D 按它切），所有预设默认都用它；
-   * none = 原来的三档色阶、黑描边（黑白漫画系列要按明暗分档出网点，用这个）
+   * 材质 / 光照风格：不填 = 赛璐璐（两档色阶、阴影色、冷暖灯光、彩色描边，anime.ts；Sandbox3D 按它切），大多数预设默认用它；
+   * none = 原来的三档色阶、黑描边（黑白漫画系列要按明暗分档出网点，用这个）；
+   * real = 写实光照：渲染时换成 PBR 材质（连续的明暗、木纹、布料、绒毛，realistic.ts），「写实」「动画感」预设用它
    */
-  material?: 'none'
-  /** 背景换成天空（蓝天白云、夜里星空，animeSky.ts）；不填 = 不换（透明背景上的天色渐变） */
+  material?: 'none' | 'real'
+  /** 不管画面增强的开关，总是开环境光遮蔽（写实要靠它压出墙角、家具底下的暗部） */
+  ao?: boolean
+  /**
+   * 写实光照下遮蔽的画法：压向的颜色（线性空间的乘数）和浓度。写实是中性偏暖的灰、浓；
+   * 动画感是淡淡的冷紫、轻（暗部是带颜色的，不是脏灰）。不填 = 写实的
+   */
+  aoShade?: [number, number, number, number]
+  /** 写实光照下遮蔽的取样半径（cm）；不填用写实的 32（墙角、床底下一大片渐暗），动画感只要贴着的一圈 */
+  aoRadius?: number
+  /**
+   * 灯光基调（Sandbox3D applyLights）：天光、阳光强度的倍数；up / down = 朝上的面（地板、台面）/ 朝下的面（天花板）受的天光往哪个颜色偏，
+   * tint 偏多少；阳光往 sunColor 偏 sunTint；lamps：室内灯全开（动画感里灯总是亮着，暖色光晕是画面的一部分）。
+   * 写实光照不填时用 REAL_LIGHTING
+   */
+  lighting?: { hemi: number; sun: number; up?: string; down?: string; tint?: number; sunColor?: string; sunTint?: number; lamps?: boolean }
+  /** 光柱（体积光）浓度的倍数 */
+  shafts?: number
+  /** 手办 / 粘土质感（写实光照上叠的画法：包裹式漫反射、半光泽漆面、边缘光，realistic.ts setFigure） */
+  figure?: boolean
+  /** 写实光照上叠的白色边缘光强度（realistic.ts setRealStyle） */
+  rim?: number
+  /** 写实光照上叠的明暗交界冷暖对比强度 */
+  term?: number
+  /** 毛绒画成纯色、只在轮廓上有毛边（realistic.ts setRealStyle） */
+  flatFur?: boolean
+  /** 赛璐璐明暗（0–1）：阳光、灯光的漫反射收成亮暗两档，高光压弱（realistic.ts setRealStyle） */
+  cel?: number
+  /** 写实光照下阳光阴影的柔和程度（阴影半径，Sandbox3D）；不填用写实的默认 */
+  softShadow?: number
+  /** 线性转 sRGB 之前做色调映射（写实：高光柔和地压下来，不再一片死白） */
+  tone?: boolean
+  /** 背景的天空（蓝天白云、夜里星空，animeSky.ts）：所有效果默认都有；false = 不要（透明背景上的天色渐变） */
   sky?: boolean
   /** 镜头：显像管（弯曲屏幕、扫描线；可以和任何风格化叠加） */
   crt?: boolean
@@ -115,7 +153,7 @@ export type Stylize = 'watercolor' | 'comic' | 'manga' | 'pixel' | 'sketch'
  * 预设（LOOKS）是这些参数的组合；用户在预设上调过的参数记成 LookAdjust（只记改过的），resolveLook 合起来交给后处理。
  */
 export interface LookAdjust {
-  material?: 'none' | 'anime'
+  material?: 'none' | 'anime' | 'real'
   sky?: boolean
   /** 'none' = 不风格化；黑白漫画的预设不能换风格化（它替换了整条管线） */
   stylize?: 'none' | Exclude<Stylize, 'manga'>
@@ -133,6 +171,9 @@ export interface LookAdjust {
 }
 export type LookAdjustKey = keyof LookAdjust
 
+/** 只在写实光照下起作用的参数（写实类预设换回卡通光照时清掉）：LookDef 加了写实专用的字段要补进来 */
+const REAL_ONLY = ['lighting', 'aoShade', 'aoRadius', 'figure', 'softShadow', 'rim', 'term', 'flatFur', 'cel'] as const satisfies readonly (keyof LookDef)[]
+
 /** 调色类参数（直接写进 grade） */
 const GRADE_KEYS = ['exposure', 'contrast', 'saturation', 'vignette', 'grain'] as const
 
@@ -141,7 +182,19 @@ export function resolveLook(id: string, adj: LookAdjust = {}): LookDef {
   const base = LOOK_MAP.get(id as LookId) ?? LOOK_MAP.get('none')!
   if (!Object.keys(adj).length) return base
   const out: LookDef = { ...base, grade: { ...base.grade } }
-  if (adj.material !== undefined) out.material = adj.material === 'none' ? 'none' : undefined
+  if (adj.material !== undefined) {
+    out.material = adj.material === 'anime' ? undefined : adj.material
+    // 写实要的 AO、色调映射跟着材质走（不管是不是写实预设）；其它预设换成写实时描边、转折线没有意义
+    out.ao = adj.material === 'real' || (base.material === 'real' ? false : base.ao)
+    out.tone = adj.material === 'real' || (base.material === 'real' ? false : base.tone)
+    if (adj.material === 'real') {
+      out.outline = 0
+      out.crease = 0
+    } else if (base.material === 'real') {
+      // 写实类预设换回卡通光照：写实专用的灯光基调、遮蔽画法不要
+      for (const k of REAL_ONLY) delete out[k]
+    }
+  }
   if (adj.sky !== undefined) out.sky = adj.sky
   if (adj.stylize !== undefined && base.stylize !== 'manga') out.stylize = adj.stylize === 'none' ? undefined : adj.stylize
   if (adj.tilt !== undefined) out.tilt = adj.tilt ? (base.tilt ?? LOOK_MAP.get('tiltshift')!.tilt) : undefined
@@ -159,7 +212,7 @@ export function lookValue(def: LookDef, k: LookAdjustKey): number | boolean | st
     case 'material':
       return def.material ?? 'anime'
     case 'sky':
-      return !!def.sky
+      return def.sky !== false
     case 'stylize':
       return def.stylize ?? 'none'
     case 'tilt':
@@ -186,7 +239,7 @@ function lookKey(d: LookDef) {
 }
 
 /** 转折线浓度：预设没写时，动画感光照下默认 0.6（倒角、门缝、台面转角也有线），原来的光照（黑白漫画）下不画 */
-export const creaseOf = (d: LookDef) => d.crease ?? (d.material === 'none' ? 0 : 0.6)
+export const creaseOf = (d: LookDef) => d.crease ?? (d.material ? 0 : 0.6)
 
 /** 这套效果什么都不做（不用建后处理） */
 const plainLook = (d: LookDef) =>
@@ -195,18 +248,72 @@ const plainLook = (d: LookDef) =>
 const DEFAULT_BG: [string, string, string] = ['#fdfdfb', '#f1f3ef', '#e3e9e5']
 
 export const LOOKS: LookDef[] = [
-  { id: 'none', label: '原样', desc: '不加效果，最清楚也最省电' },
-  // 参考原神、新海诚的室内 / 动画背景：暗部是带颜色、被抬亮的蓝紫，亮部偏暖（冷暖分离的主体在灯光和材质上：
-  // Sandbox3D 的 applyLights、anime.ts）；亮处晕开一点柔光，四周压暗一点；描边细、带固有色，内部转折补线（crease.ts）
+  // 自然：不调色、不描粗，只有一点很轻的泛光（灯泡、屏幕、亮窗这些接近白的地方晕开一点）
+  { id: 'none', label: '自然', desc: '清楚干净，只有一点柔和的泛光', bloom: { strength: 0.1, radius: 0.5, threshold: 0.92 } },
+  // 写实（realistic.ts）：PBR 材质 + 环境反射、AgX 色调映射、环境光遮蔽，不描边；目标是接近室内照片的光感
+  {
+    id: 'real',
+    label: '写实',
+    desc: 'PBR 材质、柔和的明暗与反光，接近照片',
+    material: 'real',
+    ao: true,
+    tone: true,
+    outline: 0,
+    crease: 0,
+    bloom: { strength: 0.1, radius: 0.5, threshold: 1.8 },
+    grade: { exposure: 1.12, contrast: 1.06, saturation: 1.05, vignette: 0.18 },
+    lighting: { hemi: 1.05, sun: 1.45 },
+  },
+  // 动画感：参考新海诚、京阿尼的室内背景美术。光照和写实一样是连续的明暗、AO、窗口的光斑、光柱和浮尘（realistic.ts、volumetric.ts），
+  // 再画上深色细线（描边 + 转折线），亮部偏暖、暗部偏冷紫，灯具带暖晕；背景是蓝天白云（animeSky.ts）
   {
     id: 'anime',
     label: '动画感',
-    sky: true,
-    desc: '冷暖分离、柔光、细描边，像动画游戏里的室内',
-    bloom: { strength: 0.16, radius: 0.6, threshold: 1.05 },
-    outline: 0.75,
-    crease: 0.85,
-    grade: { exposure: 1.04, contrast: 1.03, saturation: 1.15, shadowTint: [-0.01, -0.005, 0.045], highTint: [0.03, 0.012, -0.02], fade: 0.06, fadeColor: '#7d74a8', vignette: 0.28, vignetteColor: '#3a2f55' },
+    desc: '利落的明暗加深色线条，像动画电影里的室内背景',
+    material: 'real',
+    ao: true,
+    tone: true,
+    // 线条：外轮廓和物体内部的转折都描上清楚的深色线（参考手绘的室内背景，线是画面的骨架）
+    outline: 1.1,
+    crease: 0.9,
+    // 参考傍晚的室内背景：整体压暗、暗部是淡紫灰（天光偏紫），受光处金橙（阳光偏橙、地面反光偏暖），灯全开带暖晕，光柱浓
+    lighting: { hemi: 0.9, sun: 1.65, up: '#f0e2cf', down: '#cdc8dc', tint: 0.35, sunColor: '#ffcb94', sunTint: 0.35, lamps: true },
+    // 暗部要干净：遮蔽只压贴着的一圈、淡；影子边缘利落（像画出来的阴影块）；明暗分两档（赛璐璐），不加白色边缘光（像塑料）；
+    // 明暗交界的冷暖色带只留一点
+    aoShade: [0.82, 0.8, 0.92, 0.8],
+    aoRadius: 12,
+    softShadow: 1.2,
+    cel: 1,
+    rim: 0,
+    term: 0.3,
+    flatFur: true,
+    shafts: 0.9,
+    // 泛光在色调映射之前（线性 HDR）提取：阈值高过阳光照亮的浅色墙面，只让灯泡、屏幕、地上的光斑晕开一圈暖光
+    bloom: { strength: 0.2, radius: 0.6, threshold: 1.5 },
+    // 墙面是奶油色而不是橘色：整体饱和度略压，暗部的淡紫保留
+    grade: { exposure: 1.06, contrast: 1.04, saturation: 0.96, shadowTint: [0.0, -0.008, 0.025], highTint: [0.016, 0.006, -0.012], vignette: 0.2, vignetteColor: '#2e2440' },
+  },
+  // 手办 / 粘土：光滑的半光泽漆面、又软又宽的明暗过渡（交界带一点透光的暖色）、轮廓上一圈柔光；
+  // 影棚式的中性暖光、柔和的影子、带暖色的轻 AO；细描边和转折线勾出造型；轻微移轴，像在拍桌上的模型
+  {
+    id: 'figure',
+    label: '手办',
+    desc: '柔和的漆面与透光感，像桌上的手办、粘土模型',
+    material: 'real',
+    figure: true,
+    rim: 0.6,
+    term: 1,
+    ao: true,
+    tone: true,
+    outline: 0.6,
+    crease: 0.5,
+    softShadow: 4,
+    lighting: { hemi: 1.15, sun: 1.3, up: '#fff1e4', down: '#ebe0f2', tint: 0.4, sunColor: '#fff0dc', sunTint: 0.3 },
+    aoShade: [0.82, 0.74, 0.72, 1.4],
+    shafts: 0.5,
+    bloom: { strength: 0.12, radius: 0.5, threshold: 1.8 },
+    tilt: { focus: 0.45, band: 0.1, fall: 0.35, max: 6 },
+    grade: { exposure: 1.1, contrast: 0.98, saturation: 1.12, vignette: 0.15 },
   },
   {
     id: 'tiltshift',
@@ -344,8 +451,25 @@ export const LOOKS: LookDef[] = [
 const NIGHT_GLOW_CAP = 0.6
 const NIGHT_SCREEN_CAP = 0.55
 
+/** 浮尘的亮度 */
+const DUST_STRENGTH = 2.2
+/** 鸟瞰时浮尘的亮度倍数：远看整屋的颗粒叠在一起，要淡得多 */
+const DUST_ORBIT = 0.3
+/** 多帧累积：收敛到第几帧就停（之后按这个权重滑动平均，浮尘这类一直在动的东西不会拖太长的影） */
+const ACCUM_FRAMES = 16
+/** 场景里有东西在动时累积帧数压到这里（这一帧的权重至少 1 / (ACCUM_SETTLE + 1)） */
+const ACCUM_SETTLE = 7
+
+/** 漫游时后处理描线的视线焦点距离（cm）：内部的转折线从这里往外渐淡 */
+const WALK_LINE_FOCUS = 300
+
 /** 漫游体积光的浓度（每厘米光路的散射量） */
 const VOL_STRENGTH = 0.0028
+
+/** 写实遮蔽的默认画法：中性偏暖的灰、浓（LookDef.aoShade） */
+const REAL_AO_SHADE: [number, number, number, number] = [0.36, 0.34, 0.33, 2.2]
+/** 写实光照没写灯光基调时的默认（LookDef.lighting）：阳光加强、天光照常 */
+export const REAL_LIGHTING: NonNullable<LookDef['lighting']> = { hemi: 1.05, sun: 1.45 }
 
 export const LOOK_MAP = new Map(LOOKS.map((l) => [l.id, l]))
 
@@ -386,11 +510,16 @@ const BaseShader = {
     uBg0: { value: new THREE.Color() },
     uBg1: { value: new THREE.Color() },
     uBg2: { value: new THREE.Color() },
+    uTone: { value: 0 },
   },
   vertexShader: VERT,
   fragmentShader: /* glsl */ `
     uniform sampler2D tDiffuse;
     uniform vec3 uBg0, uBg1, uBg2;
+    uniform float uTone;
+    // Khronos PBR Neutral：three 自带的实现（toneMappingExposure 由渲染器按 1 填）。比 AgX 保色：家具配色是按原色调好的
+    #include <common>
+    #include <tonemapping_pars_fragment>
     varying vec2 vUv;
     vec3 toSRGB(vec3 c) { c = max(c, 0.0); return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c)); }
     vec3 toLinear(vec3 c) { return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(0.04045, c)); }
@@ -402,7 +531,9 @@ const BaseShader = {
       vec3 bg = r < 0.55 ? mix(uBg0, uBg1, r / 0.55) : mix(uBg1, uBg2, clamp((r - 0.55) / 0.45, 0.0, 1.0));
       float a = clamp(t.a, 0.0, 1.0);
       // 画面内容是预乘的（清屏处为 0），泛光叠在背景上也保留
-      gl_FragColor = vec4(toSRGB(t.rgb + toLinear(bg) * (1.0 - a)), 1.0);
+      vec3 col = t.rgb;
+      if (uTone > 0.5) col = NeutralToneMapping(col);
+      gl_FragColor = vec4(toSRGB(col + toLinear(bg) * (1.0 - a)), 1.0);
     }`,
 }
 
@@ -896,7 +1027,22 @@ export interface Post {
   /** 室内灯光（three/lights.ts）：窗户夜光的颜色（跟色温）和亮灯程度 0–1 */
   setIndoor: (color: THREE.Color, level: number) => void
   /** 画面增强（省电画质都不开）：环境光遮蔽、体积光（体积光借遮蔽那一遍的深度图）。开不开由沙盘按模式决定 */
-  setFx: (fx: { ao: boolean; volumetric: boolean }) => void
+  /**
+   * 画面增强（省电画质都不开）：环境光遮蔽、体积光（漫游时的光柱，借遮蔽那一遍的深度图）、浮尘（漫游、鸟瞰都有；漫游时才飘）。
+   * 开不开由沙盘按模式决定
+   */
+  setFx: (fx: { ao: boolean; volumetric: boolean; dust: boolean }) => void
+  /** 鸟瞰时浮尘围绕的焦点（轨道控制的 target，传引用，跟着变） */
+  setFocus: (v: THREE.Vector3) => void
+  /** 漫游中（后处理描线的远近淡出按人眼的距离算） */
+  setWalking: (on: boolean) => void
+  /**
+   * 场景变了（沙盘在「自己要重画」时调用，后处理自己要的帧不调）：多帧累积退回到前几帧的权重，动着的东西（粒子、宠物、拖动的家具）
+   * 只留很短的拖影、静止的部分还保留一点抗锯齿；hard = 从头来。镜头动了不用调，后处理自己比较镜头矩阵
+   */
+  restart: (hard?: boolean) => void
+  /** 后处理自己还要接着画：累积还没收敛、浮尘在飘 */
+  wantsFrame: () => boolean
   dispose: () => void
 }
 
@@ -935,13 +1081,17 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
     fxaa: ShaderPass
     /** 后处理画出来的线（转折线）不经过多重采样：高画质下补一遍 SMAA（比 FXAA 清楚，不会把描边抹糊） */
     smaa: SMAAPass
+    accum: AccumPass
   } | null = null
+  /** 浮尘（volumetric.ts），体积光开着时才建、才挂进场景 */
+  let dust: THREE.Points | null = null
   let current: LookDef = LOOK_MAP.get('none')!
   let sky: { bg: [string, string, string]; night: number } = { bg: DEFAULT_BG, night: 0 }
   /** 窗户夜光：颜色跟色温，亮度跟室内亮灯程度（没接室内灯光时按全亮） */
   const windowGlow = WINDOW_GLOW.clone()
   let indoor = 1
-  let fx = { ao: false, volumetric: false }
+  let fx = { ao: false, volumetric: false, dust: false }
+  let focus = new THREE.Vector3()
   /** 上次写进 uniform 的状态（效果或天色变了才重设） */
   let appliedKey = ''
 
@@ -977,12 +1127,13 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
       grade: mk(GradeShader),
       fxaa: mk(FXAAShader),
       smaa: new SMAAPass(),
+      accum: new AccumPass(),
     }
     passes.tiltV.uniforms.uDir.value.set(0, 1)
     passes.fxaa.enabled = needFxaa()
     const p = passes
     // manga 紧跟 RenderPass（读线性的编码，不能先过 Base）；泛光后插在下标 1，漫画模式下不开
-    for (const ps of [p.render, p.manga, p.base, p.kuwahara, p.pigment, p.comic, p.pixel, p.sketch, p.tiltH, p.tiltV, p.grade, p.crt, p.smaa, p.fxaa]) composer.addPass(ps)
+    for (const ps of [p.render, p.manga, p.accum, p.base, p.kuwahara, p.pigment, p.comic, p.pixel, p.sketch, p.tiltH, p.tiltV, p.grade, p.crt, p.smaa, p.fxaa]) composer.addPass(ps)
     appliedKey = ''
     syncSize()
   }
@@ -1030,11 +1181,11 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
     const nightBloom = sky.night > 0.02 && !low && !manga ? { strength: 0.28 * sky.night, radius: 0.3, threshold: 0.82 } : undefined
     const bloom = nightBloom && (!look.bloom || nightBloom.strength > look.bloom.strength) ? nightBloom : look.bloom
     // 遮蔽、体积光、转折线：漫画读的是编码，不能乘、不能加
-    const ao = fx.ao && !low && !manga
+    const ao = (fx.ao || !!look.ao) && !low && !manga
     const vol = fx.volumetric && !low && !manga
     const crease = creaseOf(look) > 0 && !low && !manga
     if ((ao || vol || crease) && !p.ao) {
-      p.ao = createAO(renderer, scene, camera)
+      p.ao = createAO(renderer, scene, camera, () => sceneVersion)
       p.vol = createVolumetric()
       p.crease = createCrease()
       composer.insertPass(p.ao, 1)
@@ -1045,6 +1196,12 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
     if (p.ao) {
       p.ao.enabled = ao || vol || crease
       p.ao.blendIntensity = ao ? AO_INTENSITY : 0
+      // 写实的遮蔽半径大得多（墙角、床底下一大片渐暗），动画感只要贴着的那一圈
+      const realAo = look.material === 'real'
+      const shade = look.aoShade ?? REAL_AO_SHADE
+      p.ao.blendMaterial.uniforms.uReal.value = realAo ? 1 : 0
+      p.ao.blendMaterial.uniforms.uRealShade.value.set(shade[0], shade[1], shade[2], shade[3])
+      p.ao.updateGtaoMaterial(realAo ? { radius: look.aoRadius ?? 32, thickness: 14, distanceFallOff: 0.85 } : { radius: 12, thickness: 12, distanceFallOff: 0.7 })
     }
     if (p.vol) p.vol.enabled = vol
     if (p.crease) p.crease.enabled = crease
@@ -1065,6 +1222,7 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
     }
     // 背景：纸面类风格用自己的纸色，入夜时逐渐换成天色
     const ub = p.base.uniforms
+    ub.uTone.value = look.tone ? 1 : 0
     for (let i = 0; i < 3; i++) {
       const c = (ub['uBg' + i].value as THREE.Color).set(sky.bg[i])
       if (look.bg) c.lerp(new THREE.Color(look.bg[i]), 1 - sky.night)
@@ -1129,7 +1287,9 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
     const linear = !!composer
     if (!linear && night < 0.01) return draw()
     const manga = linear && current.stylize === 'manga' && !!passes
+    const real = linear && current.material === 'real'
     const hidden: THREE.Object3D[] = []
+    const lines = postLines()
     if (manga) {
       const lum = (c: THREE.Color) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
       // toon 受光部的色阶是 1，天光取天空色；漫反射 BRDF 带 1/π
@@ -1143,9 +1303,15 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
     const boosted: [THREE.MeshStandardMaterial, number][] = []
     const glass: [THREE.MeshStandardMaterial, THREE.Color, number][] = []
     const seen = new Set<THREE.Material>()
-    scene.traverseVisible((o) => {
+    const visit = (o: THREE.Object3D) => {
       const additive = ((o as THREE.Mesh).material as THREE.Material | undefined)?.blending === THREE.AdditiveBlending
       if (manga && ((o as THREE.Points).isPoints || (o as THREE.Sprite).isSprite || additive)) {
+        hidden.push(o)
+        o.visible = false
+        return
+      }
+      // 写实（描边为 0 时）不画描边壳；后处理描线（postLines）时外轮廓由转折线那一遍画，也不画
+      if (o.userData.isOutline && ((real && !(current.outline ?? 1)) || lines)) {
         hidden.push(o)
         o.visible = false
         return
@@ -1193,10 +1359,23 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
         boosted.push([e, v])
         e.emissiveIntensity = v + (cap - v) * night
       }
+    }
+    // 黑白漫画要藏掉每帧临时加进来的浮尘：照原样遍历；其余用缓存的列表（每帧遍历整个场景要近 1ms）
+    if (manga) scene.traverseVisible(visit)
+    else for (const o of patchTargets()) if (o.visible) visit(o)
+    // 写实：材质换成 PBR（在入夜加亮之后换，PBR 材质从原材质同步加亮后的值）
+    setRealStyle({
+      figure: real && current.figure ? 1 : 0,
+      rim: real ? (current.rim ?? 0) : 0,
+      term: real ? (current.term ?? 0) : 0,
+      flatFur: real && current.flatFur ? 1 : 0,
+      cel: real ? (current.cel ?? 0) : 0,
     })
+    const restore = real ? swapToPbr(renderer, scene, (o) => !!o.userData.isOutline) : null
     try {
       draw()
     } finally {
+      restore?.()
       mangaUniforms.uManga.value = 0
       for (const o of hidden) o.visible = true
       for (const [c, orig] of outlines) c.copy(orig)
@@ -1212,13 +1391,115 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
     }
   }
 
+  /**
+   * 场景版本：场景本身变了（编辑、淡出、换家具，Sandbox3D 调 restart(true)）时加一。
+   * renderPatched、遮蔽的法线那一遍按它缓存要处理的对象列表，不每帧遍历整个场景
+   */
+  let sceneVersion = 0
+  const patchTargets = versionedList(scene, () => sceneVersion, (o) => !!(o as THREE.Mesh).material)
+
+  /** 镜头静止的判断：上一帧（不含抖动）的视图 / 投影矩阵 */
+  const lastView = new THREE.Matrix4()
+  const lastProj = new THREE.Matrix4()
+  let dustOn = false
+  /** 浮尘在飘（漫游时）：要一直重画；鸟瞰时停在 dustTime */
+  let dustAnim = false
+  let dustTime = 0
+  /** 每画一帧加一：抖动序号、体积光的取样相位（累积帧数在场景有动画时会被压住不涨，不能拿它当序号） */
+  let tick = 0
+  /** 上一帧之后场景变过（restart）：倒影要重画，不能沿用 */
+  let sceneChanged = true
+
+  /**
+   * 后处理描线：画面不风格化、转折线那一遍开着（高画质）时，外轮廓也交给它画（crease.ts 的外轮廓：墨色、约两个 CSS 像素），
+   * 不画描边壳——线是均匀的细墨线（像手绘的室内背景），也省下主画面里约三分之一的 draw call。
+   * 风格化（水彩、网点、素描……）要描边壳的粗线；写实没有描边（outline 0）
+   */
+  const postLines = () => !!passes?.crease?.enabled && !current.stylize && (current.outline ?? 1) > 0
+  let walking = false
+
+  /** 多帧累积开不开：省电画质、黑白漫画（编码不能平均）、像素风（要硬边）不开 */
+  const accumOn = () => !!passes && !low && current.stylize !== 'manga' && current.stylize !== 'pixel'
+
+  /** 投影抖动亚像素（Halton 2 / 3），叠在已有的 view offset（手机底部面板让出的位置）上，画完还原 */
+  function jittered(draw: () => void) {
+    if (passes!.accum.frame === 0) return draw()
+    const n = tick
+    const halton = (i: number, b: number) => {
+      let f = 1
+      let r = 0
+      while (i > 0) {
+        f /= b
+        r += f * (i % b)
+        i = Math.floor(i / b)
+      }
+      return r
+    }
+    const pr = renderer.getPixelRatio()
+    const size = cssSize()
+    const v = camera.view?.enabled ? { ...camera.view } : null
+    const jx = (halton((n % 16) + 1, 2) - 0.5) / pr
+    const jy = (halton((n % 16) + 1, 3) - 0.5) / pr
+    if (v) camera.setViewOffset(v.fullWidth, v.fullHeight, v.offsetX + jx, v.offsetY + jy, v.width, v.height)
+    else camera.setViewOffset(size.x, size.y, jx, jy, size.x, size.y)
+    camera.updateProjectionMatrix()
+    try {
+      draw()
+    } finally {
+      if (v) camera.setViewOffset(v.fullWidth, v.fullHeight, v.offsetX, v.offsetY, v.width, v.height)
+      else camera.clearViewOffset()
+      camera.updateProjectionMatrix()
+    }
+  }
+
   const hook = {
     render() {
-      if (!composer) return renderPatched(() => renderer.render(scene, camera))
+      if (!composer)
+        return renderPatched(() => {
+          prerenderReflections(renderer, scene, camera)
+          renderer.render(scene, camera)
+        })
       apply()
-      if (passes?.crease?.enabled) updateCrease(passes.crease, camera, passes.ao?.normalTexture ?? null, passes.ao?.depthTexture ?? null, renderer.getDrawingBufferSize(bufRes), creaseOf(current))
-      if (passes?.vol?.enabled) updateVolumetric(passes.vol, camera, stage.sun, passes.ao?.depthTexture ?? null, VOL_STRENGTH * (1 - sky.night))
-      renderPatched(() => composer!.render())
+      const p = passes!
+      // 镜头动了（漫游、转视角）：累积从头来
+      camera.updateMatrixWorld()
+      if (!lastView.equals(camera.matrixWorld) || !lastProj.equals(camera.projectionMatrix)) p.accum.frame = 0
+      lastView.copy(camera.matrixWorld)
+      lastProj.copy(camera.projectionMatrix)
+      p.accum.enabled = accumOn()
+      if (!p.accum.enabled) p.accum.frame = 0
+      // 镜头、场景都没变，只是累积在收敛：倒影沿用上一帧的（reflect.ts）
+      setReflectReuse(p.accum.frame > 0 && !sceneChanged)
+      sceneChanged = false
+      tick++
+      jittered(() => {
+        if (p.crease?.enabled) {
+          const lines = postLines()
+          updateCrease(p.crease, camera, p.ao?.normalTexture ?? null, p.ao?.depthTexture ?? null, renderer.getDrawingBufferSize(bufRes), lines ? 1 : creaseOf(current), renderer.getPixelRatio(), lines, walking ? WALK_LINE_FOCUS : camera.position.distanceTo(focus))
+        }
+        const shafts = VOL_STRENGTH * (current.shafts ?? 1) * (1 - sky.night)
+        if (p.vol?.enabled) updateVolumetric(p.vol, camera, stage.sun, p.ao?.depthTexture ?? null, shafts, tick)
+        // 浮尘：漫游时（体积光开着）围着镜头、慢慢飘；鸟瞰时围着视角焦点、不动（不用一直重画）
+        const walk = !!p.vol?.enabled
+        dustAnim = walk
+        if (walk || dustTime === 0) dustTime = performance.now() / 1000
+        dustOn =
+          fx.dust &&
+          !low &&
+          current.stylize !== 'manga' &&
+          !!(dust ??= createDust()) &&
+          updateDust(dust, camera, stage.sun, stage.hemi, renderer.getDrawingBufferSize(bufRes).y, dustTime, DUST_STRENGTH * (current.shafts ?? 1) * (1 - sky.night) * (walk ? 1 : DUST_ORBIT), walk ? camera.position : focus, walk ? DUST_BOX_WALK : DUST_BOX_ORBIT)
+        if (dustOn) scene.add(dust!)
+        try {
+          renderPatched(() => {
+            // 倒影在最外层先画（reflectFrame.ts）；镜头已经抖过亚像素，和主画面一致
+            prerenderReflections(renderer, scene, camera)
+            composer!.render()
+          })
+        } finally {
+          if (dust) scene.remove(dust)
+        }
+      })
     },
     resize(w: number, h: number) {
       if (!composer) return
@@ -1231,7 +1512,7 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
   /** 按当前效果与天色决定走不走 composer；keep 为真时不拆（生成缩略图途中） */
   function update(keep = false) {
     stage.outlineScale = current.outline ?? 1
-    const need = !plainLook(current) || sky.night > 0.02 || needFxaa() || (!low && (fx.ao || fx.volumetric))
+    const need = !plainLook(current) || sky.night > 0.02 || needFxaa() || (!low && (fx.ao || fx.volumetric || fx.dust))
     if (need && !composer) build()
     if (!need && !keep) teardown()
     // 白天「原样」：不接管，直接 renderer.render；夜里即使不走 composer 也要接管来调整材质
@@ -1251,19 +1532,36 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
       const keep = current
       current = LOOK_MAP.get(id as LookId) ?? LOOK_MAP.get('none')!
       update(true)
+      if (passes) passes.accum.frame = 0
       try {
         return fn()
       } finally {
         current = keep
         update(true)
+        if (passes) passes.accum.frame = 0
       }
+    },
+    restart(hard = false) {
+      sceneChanged = true
+      if (hard) sceneVersion++
+      if (passes) passes.accum.frame = hard ? 0 : Math.min(passes.accum.frame, ACCUM_SETTLE)
+    },
+    wantsFrame() {
+      if (!composer || !passes || stage.post !== hook) return false
+      return (dustOn && dustAnim) || (accumOn() && passes.accum.frame < ACCUM_FRAMES)
     },
     setIndoor(color, level) {
       windowGlow.copy(WINDOW_GLOW).lerp(color, 0.6)
       indoor = level
     },
+    setWalking(on) {
+      walking = on
+    },
+    setFocus(v) {
+      focus = v
+    },
     setFx(v) {
-      if (v.ao === fx.ao && v.volumetric === fx.volumetric) return
+      if (v.ao === fx.ao && v.volumetric === fx.volumetric && v.dust === fx.dust) return
       fx = { ...v }
       appliedKey = ''
       update()
@@ -1279,7 +1577,81 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
       stage.post = null
       stage.outlineScale = 1
       teardown()
+      if (dust) {
+        dust.geometry.dispose()
+        ;(dust.material as THREE.Material).dispose()
+        dust = null
+      }
     },
+  }
+}
+
+/**
+ * 多帧累积（渐进式超采样）：输入是这一帧（投影抖过亚像素），和历史按 1 / (帧数 + 1) 混合，帧数到 ACCUM_FRAMES 之后按固定权重滑动平均。
+ * frame = 0 时直接输出这一帧、清掉历史。两张半浮点历史图来回倒。
+ */
+class AccumPass extends Pass {
+  frame = 0
+  private hist: [THREE.WebGLRenderTarget, THREE.WebGLRenderTarget]
+  private quad: FullScreenQuad
+  private mat: THREE.ShaderMaterial
+  private copy: THREE.ShaderMaterial
+
+  constructor() {
+    super()
+    const mk = () => new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthBuffer: false })
+    this.hist = [mk(), mk()]
+    this.mat = new THREE.ShaderMaterial({
+      uniforms: { tCur: { value: null }, tHist: { value: null }, uK: { value: 1 } },
+      vertexShader: VERT,
+      fragmentShader: /* glsl */ `
+        uniform sampler2D tCur;
+        uniform sampler2D tHist;
+        uniform float uK;
+        varying vec2 vUv;
+        void main() { gl_FragColor = mix(texture2D(tHist, vUv), texture2D(tCur, vUv), uK); }`,
+      depthTest: false,
+      depthWrite: false,
+    })
+    this.copy = new THREE.ShaderMaterial({
+      uniforms: { tDiffuse: { value: null } },
+      vertexShader: VERT,
+      fragmentShader: /* glsl */ `
+        uniform sampler2D tDiffuse;
+        varying vec2 vUv;
+        void main() { gl_FragColor = texture2D(tDiffuse, vUv); }`,
+      depthTest: false,
+      depthWrite: false,
+    })
+    this.quad = new FullScreenQuad(this.mat)
+  }
+
+  setSize(w: number, h: number) {
+    for (const t of this.hist) t.setSize(w, h)
+    this.frame = 0
+  }
+
+  render(renderer: THREE.WebGLRenderer, writeBuffer: THREE.WebGLRenderTarget, readBuffer: THREE.WebGLRenderTarget) {
+    const [prev, next] = this.hist
+    this.mat.uniforms.tCur.value = readBuffer.texture
+    this.mat.uniforms.tHist.value = prev.texture
+    this.mat.uniforms.uK.value = this.frame === 0 ? 1 : Math.max(1 / (this.frame + 1), 1 / ACCUM_FRAMES)
+    this.quad.material = this.mat
+    renderer.setRenderTarget(next)
+    this.quad.render(renderer)
+    this.copy.uniforms.tDiffuse.value = next.texture
+    this.quad.material = this.copy
+    renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer)
+    this.quad.render(renderer)
+    this.hist = [next, prev]
+    this.frame++
+  }
+
+  dispose() {
+    for (const t of this.hist) t.dispose()
+    this.mat.dispose()
+    this.copy.dispose()
+    this.quad.dispose()
   }
 }
 
@@ -1294,7 +1666,29 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
  */
 const AO_INTENSITY = 0.9
 
-function createAO(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.PerspectiveCamera) {
+/** 缓存兜底：隔这么多次取用不管版本也重建一次（漏报的改动最多晚这么久生效） */
+const CACHE_FRAMES = 120
+/** 场景里满足 keep 的对象列表，按 version() 缓存（版本变了、或取用 CACHE_FRAMES 次后重建）：每帧用它代替遍历整个场景 */
+function versionedList(scene: THREE.Object3D, version: () => number, keep: (o: THREE.Object3D) => boolean) {
+  let list: THREE.Object3D[] = []
+  let ver = -1
+  let age = 0
+  return () => {
+    if (ver !== version() || ++age > CACHE_FRAMES) {
+      ver = version()
+      age = 0
+      list = []
+      scene.traverse((o) => {
+        if (keep(o)) list.push(o)
+      })
+    }
+    return list
+  }
+}
+/** 法线那一遍不画的小物件半径（cm）：后处理描线时外轮廓也从这张图里来，只省掉最小的那些 */
+const SMALL_R = 3
+
+function createAO(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.PerspectiveCamera, version: () => number) {
   const pass = new GTAOPass(scene, camera, 1, 1)
   pass.updateGtaoMaterial({ radius: 12, distanceExponent: 1.5, thickness: 12, distanceFallOff: 0.7, scale: 1.4, samples: 24, screenSpaceRadius: false })
   pass.updatePdMaterial({ lumaPhi: 20, depthPhi: 2, normalPhi: 3, radius: 10, rings: 4, samples: 32 })
@@ -1307,34 +1701,54 @@ function createAO(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THR
   }
   pass.normalMaterial.side = THREE.DoubleSide
   const hidden = (pass as unknown as { _visibilityCache: THREE.Object3D[] })._visibilityCache
+  // 要藏的对象按场景版本缓存（每帧遍历整个场景要近 1ms），每帧只翻这张表；
+  // 另外半径 SMALL_R 以下的小物件（笔、按钮）也不画：遮蔽、转折线在它们身上看不出来，省下大把 draw call
+  const ballS = new THREE.Sphere()
+  const skipList = versionedList(scene, version, (o) => {
+    const m = (o as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined
+    const mat = Array.isArray(m) ? m[0] : m
+    if (
+      (o as THREE.Points).isPoints ||
+      (o as THREE.Line).isLine ||
+      (o as THREE.Sprite).isSprite ||
+      isReflector(o) ||
+      isFurShell(o) ||
+      o.userData.isOutline ||
+      (!!mat && (mat.transparent || mat.blending === THREE.AdditiveBlending || !mat.depthWrite))
+    )
+      return true
+    const mesh = o as THREE.Mesh
+    if (!mesh.isMesh || !mesh.geometry) return false
+    if (!mesh.geometry.boundingSphere) mesh.geometry.computeBoundingSphere()
+    return ballS.copy(mesh.geometry.boundingSphere!).applyMatrix4(mesh.matrixWorld).radius < SMALL_R
+  })
   ;(pass as unknown as { _overrideVisibility: () => void })._overrideVisibility = () => {
-    scene.traverse((o) => {
-      if (!o.visible) return
-      const m = (o as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined
-      const mat = Array.isArray(m) ? m[0] : m
-      const skip =
-        (o as THREE.Points).isPoints ||
-        (o as THREE.Line).isLine ||
-        (o as THREE.Sprite).isSprite ||
-        isReflector(o) ||
-        o.userData.isOutline ||
-        (!!mat && (mat.transparent || mat.blending === THREE.AdditiveBlending || !mat.depthWrite))
-      if (!skip) return
+    for (const o of skipList()) {
+      if (!o.visible) continue
       o.visible = false
       hidden.push(o)
-    })
+    }
   }
   const blend = pass.blendMaterial
   // 线性空间的乘数：比 toon 暗部那一档浅得多，只压一层淡淡的冷紫，提示「这里是角落」而不抢画面
   blend.uniforms.uShade = { value: new THREE.Vector3(0.85, 0.83, 0.9) }
+  // 写实：不分档，按遮蔽量连续压暗（中性偏暖的灰）
+  blend.uniforms.uReal = { value: 0 }
+  blend.uniforms.uRealShade = { value: new THREE.Vector4(...REAL_AO_SHADE) }
   blend.fragmentShader = /* glsl */ `
     uniform float intensity;
+    uniform float uReal;
+    uniform vec4 uRealShade;
     uniform vec3 uShade;
     uniform sampler2D tDiffuse;
     varying vec2 vUv;
     void main() {
       float occ = (1.0 - texture2D(tDiffuse, vUv).r) * intensity;
       // 两档：浅的遮蔽不画，过了阈值就是一整块阴影
+      if (uReal > 0.5) {
+        gl_FragColor = vec4(mix(vec3(1.0), uRealShade.rgb, clamp(occ * uRealShade.a, 0.0, 1.0)), 1.0);
+        return;
+      }
       float k = smoothstep(0.22, 0.4, occ);
       gl_FragColor = vec4(mix(vec3(1.0), uShade, k), 1.0);
     }`

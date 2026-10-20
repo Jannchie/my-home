@@ -307,20 +307,18 @@ float lmPass( vec4 L, vec4 c ) {
 
 const LOOKUP = /* glsl */ `
 vec4 lmCell = vec4( -1.0 );
-// 片元的世界坐标、是不是水平面（地面、墙顶）：墙体格子里的水平面按灯的方向再归一次房间（见 POINT_PASS）
+// 片元的世界坐标：仍落在墙体格子里的片元按灯的方向再归一次房间（见 POINT_PASS）
 vec3 lmWP = vec3( 0.0 );
-float lmFlat = 0.0;
 if ( lmInfo.x > 0.5 ) {
 	// 视空间 → 世界：viewMatrix 是刚体变换，逆 = 转置旋转
 	vec3 lmW = ( vec4( geometryPosition - viewMatrix[ 3 ].xyz, 0.0 ) * viewMatrix ).xyz;
 	vec3 lmN = normalize( ( vec4( geometryNormal, 0.0 ) * viewMatrix ).xyz );
 	vec3 lmP = lmW + lmN * lmInfo.z;
 	lmWP = lmW;
-	lmFlat = abs( lmN.y ) >= 0.7 ? 1.0 : 0.0;
 	float lmF = lmFloorOf( lmP.y );
 	lmCell = vec4( lmF, lmFetch( lmP.xz, lmF ) );
 	// 墙体里的竖直面（墙段端面、门洞侧壁、厚外墙里的门扇）：往镜头那边再走出一个墙厚取样，
-	// 归到看得见它的那一侧（外墙外侧的接缝不会被室内灯照亮）；仍在墙里（或是墙顶这类水平面）就按墙体放行
+	// 归到看得见它的那一侧（外墙外侧的接缝不会被室内灯照亮）；仍在墙里（门洞侧壁朝着门洞，往镜头走常常还落在门洞里）就交给 POINT_PASS 按灯归房间
 	if ( lmCell.y < 0.5 && abs( lmN.y ) < 0.7 ) {
 		vec2 lmV = cameraPosition.xz - lmW.xz;
 		float lmL = length( lmV );
@@ -334,8 +332,8 @@ if ( lmInfo.x > 0.5 ) {
 
 const POINT = 'getPointLightInfo( pointLight, geometryPosition, directLight );'
 /**
- * 每盏点光源的遮罩。墙体格子里的水平面（门洞里的地面、房间接缝处的墙脚地面、墙顶）以前对同层的灯一律放行，
- * 照明范围一大，好几盏灯叠在接缝上，地面亮出一条线：这里往这盏灯的方向走出一个墙厚再取一次样，
+ * 每盏点光源的遮罩。墙体格子里的片元（门洞里的地面、房间接缝处的墙脚地面、墙顶、门洞侧壁）以前对同层的灯一律放行，
+ * 照明范围一大，好几盏灯叠在接缝上，亮出一条线（门洞侧壁尤其明显，整层的灯都叠上去）：这里往这盏灯的方向走出一个墙厚再取一次样，
  * 落进房间就按那间算（灯在隔壁房间就照不到这条缝），还在墙里才放行。
  * lmPointScale：这个材质接收室内灯的比例（每个材质自己的 uniform，默认 1；漫游的天花板设成 0.3，见 walk.ts）
  */
@@ -343,7 +341,7 @@ const POINT = 'getPointLightInfo( pointLight, geometryPosition, directLight );'
 const POINT_PASS = /* glsl */ `
 		{
 		vec4 lmC = lmCell;
-		if ( lmC.x > -0.5 && lmC.y < 0.5 && lmFlat > 0.5 ) {
+		if ( lmC.x > -0.5 && lmC.y < 0.5 ) {
 			vec3 lmLW = ( vec4( pointLight.position - viewMatrix[ 3 ].xyz, 0.0 ) * viewMatrix ).xyz;
 			vec2 lmD = lmLW.xz - lmWP.xz;
 			float lmDL = length( lmD );

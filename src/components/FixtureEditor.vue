@@ -116,7 +116,6 @@ function setSpotOpen(open: boolean) {
         ><input type="checkbox" :checked="spotCabinets.every((c) => c.open)" @change="setSpotOpen(!spotCabinets.every((c) => c.open))" />
         {{ t('柜门打开（{name}）', { name: displayName(ASSET_MAP.get(spotCabinets[0].asset)!) }) }}</label
       >
-      <p v-if="!card" class="hint">{{ t('收纳位只是预留的空间（嵌墙的是墙里的壁龛）。柜子本身是家具：一键布置会按位的尺寸放一件鞋柜 / 衣柜 / 食品柜，也可以在 3D 沙盘或素材库里自己换款式和颜色。') }}</p>
     </template>
     <template v-if="fixture.kind === 'stairs'">
       <label
@@ -154,11 +153,6 @@ function setSpotOpen(open: boolean) {
         <dt>{{ t('级数') }}</dt>
         <dd class="num">{{ t('{n} 级 · 每级 {r} cm', { n: stairInfo.n, r: stairInfo.riser.toFixed(1) }) }}</dd>
       </dl>
-      <p v-if="!card" class="hint">{{ t('楼梯放在下层，通到上面一层；上层对应的位置自动开出楼梯洞口。旋转 90° 改朝向，起步处是小圆、箭头指向上楼方向。') }}</p>
-    </template>
-    <template v-if="!card">
-      <p v-if="fixture.kind === 'fridge'" class="hint">{{ t('冰箱位只是预留的空间。冰箱本身是家具：一键布置会按户型和住户风格放一台，也可以在 3D 沙盘或素材库里自己挑款式和颜色。') }}</p>
-      <p v-if="fixture.kind === 'washer'" class="hint">{{ t('洗衣机位是防水盘和给排水口。洗衣机本身是家具：一键布置会按户型和住户风格放一台，也可以在 3D 沙盘或素材库里自己挑款式和颜色。') }}</p>
     </template>
     <label v-if="fixture.kind === 'toilet'"
       >{{ t('类型') }}
@@ -190,7 +184,6 @@ function setSpotOpen(open: boolean) {
       <button @click="rotateSelectedFixture()"><JIcon :icon="ICONS.rotateCw" />{{ t('旋转 90°') }} <kbd>Q</kbd></button>
       <button class="danger" @click="deleteSelection"><JIcon :icon="ICONS.delete" />{{ t('删除') }} <kbd>Del</kbd></button>
     </div>
-    <p v-if="!card && fixture.kind === 'kitchen'" class="hint">{{ t('日式间取り里厨房一般画在 LDK 内，面积计入 LDK 的帖数。要独立厨房，可以画一个「キッチン」类型的房间。') }}</p>
   </div>
 </template>
 
@@ -263,12 +256,6 @@ dd {
 }
 .actions button {
   min-height: var(--control-h);
-}
-.hint {
-  font-size: var(--fs-xs);
-  color: var(--text-muted);
-  line-height: 1.6;
-  margin: 0;
 }
 /* 3D 卡片：紧凑一些（字小一号、间距收紧），按钮平分一行 */
 .fx-ed.card {

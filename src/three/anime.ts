@@ -23,13 +23,17 @@ export const animeUniforms = {
 }
 
 const ANCHOR = '#include <opaque_fragment>'
+/** 顶灯落影处乘的颜色（线性）：浅的蓝紫 */
+const LAMP_SHADE = [0.86, 0.84, 0.98]
 // 三个强度都是 0（不是「动画感」）时整段跳过：uniform 控制的分支，所有片元走同一边，没有额外开销
 const BODY = /* glsl */ `
+	// 顶灯的落影（toon.ts lampOcc）：补光也一起压暗一点，并偏向蓝紫（动画里的影子是浅的、有颜色的）
+	outgoingLight *= mix( vec3( 1.0 ), vec3( ${LAMP_SHADE.map((v) => v.toFixed(2)).join(', ')} ), lampOcc );
 	if ( uAnimeShade + uTermSat + uAnimeRim > 0.0 ) {
 		vec3 anLum = vec3( 0.2126, 0.7152, 0.0722 );
-		// 暗面：乘阴影色、饱和度 ×1.2
+		// 暗面、落影：乘阴影色、饱和度 ×1.5（画里的影子是有颜色的，比受光处更鲜）
 		vec3 anShade = outgoingLight * uAnimeShadeTint;
-		anShade = max( mix( vec3( dot( anShade, anLum ) ), anShade, 1.2 ), 0.0 );
+		anShade = max( mix( vec3( dot( anShade, anLum ) ), anShade, 1.5 ), 0.0 );
 		outgoingLight = mix( outgoingLight, anShade, uAnimeShade * ( 1.0 - sunLit ) );
 		// 交界提饱和度（往外推可能把某个通道推成负的，夹到 0）
 		outgoingLight = max( mix( vec3( dot( outgoingLight, anLum ) ), outgoingLight, 1.0 + uTermSat * termEdge ), 0.0 );
@@ -45,8 +49,8 @@ const BODY = /* glsl */ `
 /** 受光材质（toon / lambert / phong / standard / physical）：由 injectLightMask 在换掉 lights_fragment_begin 之前调用 */
 export function injectAnime(sh: THREE.WebGLProgramParametersWithUniforms) {
   if (!sh.fragmentShader.includes(ANCHOR) || !sh.fragmentShader.includes('#include <lights_fragment_begin>')) return
-  // sunLit / termEdge 由 toon.ts 的全局补丁声明；three 改了那个块、补丁没打上时不注入（否则着色器编译不过）
-  if (!(THREE.ShaderChunk as unknown as Record<string, string>).lights_fragment_begin.includes('sunLit')) return
+  // sunLit / termEdge / lampOcc 由 toon.ts 的全局补丁声明；three 改了那个块、补丁没打上时不注入（否则着色器编译不过）
+  if (!(THREE.ShaderChunk as unknown as Record<string, string>).lights_fragment_begin.includes('lampOcc')) return
   Object.assign(sh.uniforms, animeUniforms)
   sh.fragmentShader = 'uniform float uAnimeShade;\nuniform vec3 uAnimeShadeTint;\nuniform float uTermSat;\nuniform float uAnimeRim;\n' + sh.fragmentShader.replace(ANCHOR, BODY)
 }
@@ -64,6 +68,6 @@ export function setAnimeLook(on: boolean, night = 0) {
   setToonBands(on)
   outlineUniforms.uOutlineTone.value = on ? 1 : 0
   animeUniforms.uTermSat.value = on ? TERM_SAT : 0
-  animeUniforms.uAnimeShade.value = on ? SHADE * (1 - 0.7 * night) : 0
+  animeUniforms.uAnimeShade.value = on ? SHADE * (1 - 0.5 * night) : 0
   animeUniforms.uAnimeRim.value = on ? RIM * (1 - night) : 0
 }

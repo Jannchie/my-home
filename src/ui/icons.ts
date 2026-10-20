@@ -5,6 +5,7 @@
 import type { Icon } from '@jannchie/icons'
 import {
   IconAirConditioner,
+  IconReplace,
   IconFootprint,
   IconBasket,
   IconBook,
@@ -247,6 +248,8 @@ export const ICONS = {
   color: IconPalette,
   pattern: IconLayoutGrid, // 布艺花纹
   artwork: IconPictureFrame, // 装饰画的画面
+  /** 同类换款 */
+  swap: IconReplace,
   prevItem: IconChevronLeft,
   nextItem: IconChevronRight,
   shuffle: IconShuffle, // 随机配色 / 随机花纹 / 重排

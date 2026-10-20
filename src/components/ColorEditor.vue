@@ -109,7 +109,6 @@ const groupsOfKinds = computed(() => {
           <span class="slot-name">{{ slotLabel(i) }}</span>
         </label>
       </div>
-      <div class="hint">{{ t('选中一个颜色槽，再点下面的色块；点色块本身可用取色器选任意颜色') }}</div>
       <div v-for="g in SWATCHES" :key="g.label" class="sw-row">
         <span class="pal-style" :title="t(g.label)">{{ t(g.label) }}</span>
         <div class="tiny">
@@ -132,7 +131,6 @@ const groupsOfKinds = computed(() => {
           <span class="slot-name">{{ slotLabel(i) }}</span>
         </button>
       </div>
-      <div class="hint">{{ t('选一个颜色槽，再选花纹；花纹用这件家具的几种颜色来织（换配色后点「随机花纹」或重新选花纹即可更新）') }}</div>
       <div v-for="[g, kinds] in groupsOfKinds" :key="g" class="pat-group">
         <span class="pal-style">{{ t(g) }}</span>
         <div class="pats">
@@ -286,11 +284,6 @@ const groupsOfKinds = computed(() => {
 .slot-name {
   font-size: var(--fs-xs);
   color: var(--text-muted);
-}
-.hint {
-  font-size: var(--fs-xs);
-  color: var(--text-muted);
-  margin-bottom: 6px;
 }
 .tiny {
   display: flex;

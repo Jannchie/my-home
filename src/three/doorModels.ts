@@ -29,6 +29,8 @@ const paperMat = () => toon('#fbf6e8', { transparent: 0.85 })
 function glass(w: number, h: number, d: number, at: { x?: number; y: number }, paper = false) {
   const m = rbox(Math.max(0.5, w), Math.max(0.5, h), d, C.glass, at, 0.3)
   m.material = paper ? paperMat() : glassMat()
+  // 写实光照下画成磨砂玻璃（门后的东西模糊地透出来，mats.ts）
+  if (!paper) m.userData.mat = 'frosted'
   return m
 }
 

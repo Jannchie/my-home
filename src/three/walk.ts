@@ -21,7 +21,9 @@ import { furnitureBox } from '../snap'
 const HEADROOM = 12
 /** 眼睛离地高度、身体半径（cm） */
 const EYE = 155
-const BODY_R = 12
+export const BODY_R = 9
+/** 漫游用的导航网格格子（cm）：比一键布置用的 10cm 细，侧身挤过 20 来厘米的缝时不会被格子量化挡住 */
+const NAV_CELL = 5
 /** 比这矮的落地家具（鞋、浴凳、玩具）跨过去，不挡路 */
 const STEP_OVER = 30
 /** 步行 / 跑步速度（cm/s） */
@@ -178,7 +180,7 @@ export class Walker {
     private camera: THREE.PerspectiveCamera,
     private host: WalkHost,
   ) {
-    this.nav = new HouseNav(plan, { sash: true, stepOver: STEP_OVER, freeStairs: true })
+    this.nav = new HouseNav(plan, { sash: true, stepOver: STEP_OVER, freeStairs: true, cell: NAV_CELL })
     this.flights = this.nav.links.map(flightOf)
     for (const f of planFloors(plan)) {
       const above = floorAbove(plan, f.id)

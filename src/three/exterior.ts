@@ -13,6 +13,7 @@ import { addOutlines, cyl, mergeMeshes, pullDepth, rbox, shade, toon, useAnisotr
 import { BASE, floorY, openingInfos, WALL_PULL } from './house'
 import { archRise, roundDiameter } from '../windows'
 import { injectLightMask } from './lightMask'
+import { tagMat } from './mats'
 import { activeCover } from '../roofCover'
 import { coverCaps, coverMeshes, valleyLift } from './roofCover'
 
@@ -613,6 +614,8 @@ export function fenceSpan(kind: Exclude<Site['fence'], 'none'>, len: number, c: 
   switch (kind) {
     case 'hedge':
       bar(len, h, 44, c, mid, 0, 24, 18)
+      // 写实光照（写实、动画感）下按灌木画：完全哑光、不加边缘光（realistic.ts）
+      tagMat(out[out.length - 1], 'foliage')
       break
     case 'wall':
       bar(len, h, 14, c, mid, 0, 9, 2)

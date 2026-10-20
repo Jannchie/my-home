@@ -53,6 +53,30 @@ export function siblings(def: AssetDef): AssetDef[] {
   return xs.length > 1 ? xs.slice().sort((a, b) => a.w * a.d - b.w * b.d) : [def]
 }
 
+/**
+ * 同类的各款（编辑时原地换款用）：同一细分类型（type）、同样摆法（形态、贴附、壁挂一致）的各个造型，每个系列一件——
+ * 当前这件所在的系列就是它自己，别的系列取尺寸和它最接近的那件。顺序固定（素材表的顺序），上一款 / 下一款能轮完一圈。
+ * 没有细分类型的只有它自己
+ */
+export function sameTypeVariants(def: AssetDef): AssetDef[] {
+  if (!def.type) return [def]
+  const vol = (a: AssetDef) => Math.log(a.w * a.d * a.h + 1)
+  const dist = (a: AssetDef) => Math.abs(vol(a) - vol(def))
+  const self = def.series ?? def.id
+  const bySeries = new Map<string, AssetDef>()
+  for (const a of ASSETS) {
+    if (a.fixture || a.type !== def.type || (a.form ?? '') !== (def.form ?? '') || !!a.stick !== !!def.stick || (a.mount === undefined) !== (def.mount === undefined) || a.tags?.includes('set-piece')) continue
+    const k = a.series ?? a.id
+    if (k === self) {
+      bySeries.set(k, def)
+      continue
+    }
+    const cur = bySeries.get(k)
+    if (!cur || dist(a) < dist(cur)) bySeries.set(k, a)
+  }
+  return [...bySeries.values()]
+}
+
 export interface Filter {
   /** 功能大类（groups.ts） */
   group: AssetGroup | 'all'

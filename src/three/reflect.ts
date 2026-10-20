@@ -16,6 +16,8 @@ import { slabHoles } from '../stairs'
 import { floorY } from './house'
 import { ceilingGeometry } from './walk'
 import { isReflector } from './toon'
+import { reflectFrame, reflectInterval, reflectReuse, reflectors } from './reflectFrame'
+import { activeFur } from './realistic'
 
 /**
  * 反光的地面：反射强度（贴着地面看时的上限）、模糊半径（倒影纹理的像素）。
@@ -77,8 +79,8 @@ const ReflectShader = {
     }`,
 }
 
-/** 所有反射面（地面反射膜、镜子、水面）：画其中一个的倒影时，别的都先藏起来——不递归，也不会把别处的旧倒影贴进来 */
-const reflectors = new Set<Reflector>()
+// 所有反射面（地面反射膜、镜子、水面）登记在 reflectFrame.ts 的 reflectors 里：画其中一个的倒影时，别的都先藏起来——
+// 不递归，也不会把别处的旧倒影贴进来；主画面之前也按它先画好这一帧的倒影（prerenderReflections）
 
 /**
  * 倒影里不画的东西：描边外壳、粒子、半径 6cm 以下的小物件（杯子、笔、小摆件）。
@@ -101,21 +103,37 @@ export function clearReflectionSkip() {
   skipped = []
 }
 
+/**
+ * 倒影什么时候不重画（沿用上一次画好的倒影纹理）：
+ *   - 用覆盖材质画的预渲染（法线、深度图……；遮蔽那一遍自己会把反射面藏掉，这里兜住其它的）：画出来的倒影没用；
+ *   - 同一帧里已经画过（帧号见 reflectFrame.ts，stage.render 开头加一），或者离上次画还不到 reflectInterval 帧；
+ *   - 镜头和场景都没变、只是多帧累积在收敛（post.ts setReflectReuse）：倒影不会变，抖动的那一点亚像素偏移在糊过的倒影里看不出来
+ */
+const drawnAt = new WeakMap<Reflector, number>()
+
 /** 登记一个 Reflector：包一层它的 onBeforeRender，画倒影期间把其它反射面和 skipped 藏起来 */
 export function guardReflector(mesh: Reflector) {
   reflectors.add(mesh)
   const draw = mesh.onBeforeRender
   mesh.onBeforeRender = function (this: Reflector, ...args: Parameters<typeof draw>) {
+    const scene = args[1] as THREE.Scene
+    const last = drawnAt.get(mesh)
+    const frame = reflectFrame()
+    // 镜头在动时隔几帧画一次（reflectInterval）：倒影本来就糊、半透明，晚一两帧看不出来，省下好几遍场景
+    if (scene.overrideMaterial || (last !== undefined && (frame - last < reflectInterval() || reflectReuse()))) return
+    drawnAt.set(mesh, frame)
     const hidden: THREE.Object3D[] = []
     for (const r of reflectors) {
       if (r === mesh || !r.visible) continue
       r.visible = false
       hidden.push(r)
     }
-    for (const o of skipped) {
-      if (!o.visible) continue
-      o.visible = false
-      hidden.push(o)
+    for (const list of [skipped, activeFur]) {
+      for (const o of list) {
+        if (!o.visible) continue
+        o.visible = false
+        hidden.push(o)
+      }
     }
     try {
       draw.apply(this, args)

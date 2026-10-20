@@ -105,6 +105,7 @@ const GROUPS: Group[] = [
       { keys: [['Alt', 'drag']], label: '拖动时临时关闭吸附' },
       { keys: [['Shift', 'click']], label: '连续摆放同一件家具' },
       { keys: [['Esc']], label: '取消摆放 / 取消选中' },
+      { keys: [['F3']], label: '性能调试浮窗（帧率、耗时、draw call）' },
     ],
   },
 ]
