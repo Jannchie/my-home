@@ -1112,16 +1112,16 @@ function buildOpenings(infos: OpeningInfo[], H: number) {
         const color = doorColor(o, isEntrance)
         const side = hasSidelight(o) ? sidelightWidth(w) : 0
         const lw = w - 1 - side
-        const body = doorLeafModel({ style: o.doorStyle, w: lw, h: doorH - 2, t: 3.6, color, handle: doorHandleOf(o), handleColor: handleColor(o), handleSide: 1 })
+        const body = doorLeafModel({ style: o.doorStyle, w: lw, h: doorH - 2, t: 3.6, color, handle: doorHandleOf(o), handleColor: handleColor(o), handleSide: 1, glass: o.doorGlass })
         body.position.set(lw / 2, 1, 0)
         leaf.add(body)
         if (side || hasTransom(o)) {
           // 侧窗 / 亮子：固定在墙洞里（局部 x 沿墙，同窗）
           const lites = new THREE.Group()
           const sx = o.hinge === 'start' ? 1 : -1
-          if (side) lites.add(liteModel(sx > 0 ? w / 2 - side : -w / 2, sx > 0 ? w / 2 : -w / 2 + side, 0, doorH, 4, color))
+          if (side) lites.add(liteModel(sx > 0 ? w / 2 - side : -w / 2, sx > 0 ? w / 2 : -w / 2 + side, 0, doorH, 4, color, o.doorGlass))
           const yt = top(info.y1)
-          if (hasTransom(o) && yt - 200 >= 8) lites.add(liteModel(-w / 2, w / 2, 200, yt, 4, color))
+          if (hasTransom(o) && yt - 200 >= 8) lites.add(liteModel(-w / 2, w / 2, 200, yt, 4, color, o.doorGlass))
           lites.position.set(center.x, 0, center.y)
           lites.rotation.y = yaw
           lites.userData.info = info
@@ -1170,7 +1170,7 @@ function buildOpenings(infos: OpeningInfo[], H: number) {
           panel.add(rbox(pw - 10, h - 20, t + 0.4, shade(color, 0.08), { y: 10 }, 0.5))
         } else {
           // 把手在两扇各自的外端（推开时手扶的那头）
-          panel.add(doorLeafModel({ style: o.doorStyle, w: pw, h, t, color: doorColor(o, false), handle: doorHandleOf(o), handleColor: handleColor(o), handleSide: k === 0 ? -1 : 1 }))
+          panel.add(doorLeafModel({ style: o.doorStyle, w: pw, h, t, color: doorColor(o, false), handle: doorHandleOf(o), handleColor: handleColor(o), handleSide: k === 0 ? -1 : 1, glass: o.doorGlass }))
         }
         panel.rotation.y = yaw
         panel.userData.info = info
@@ -1195,7 +1195,7 @@ function buildOpenings(infos: OpeningInfo[], H: number) {
         // 拉手：两折 / 四折在每串第二扇的起点（折角处 = -x 端），三折在末扇的外端（+x 端）
         const handleSide = per === 3 ? (j === 2 ? 1 : 0) : j === 1 ? -1 : 0
         if (!styled) leaf.add(rbox(L, doorH, 2.4, LEGACY_SLIDING, { y: 0 }, 0.8))
-        else leaf.add(doorLeafModel({ style: o.doorStyle, w: L, h: doorH, t: 2.4, color: doorColor(o, false), handle: doorHandleOf(o), handleColor: handleColor(o), handleSide }))
+        else leaf.add(doorLeafModel({ style: o.doorStyle, w: L, h: doorH, t: 2.4, color: doorColor(o, false), handle: doorHandleOf(o), handleColor: handleColor(o), handleSide, glass: o.doorGlass }))
         mergeMeshes(leaf)
         leaf.userData.foldLeaf = i
         fold.add(leaf)

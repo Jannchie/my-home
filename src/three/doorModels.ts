@@ -5,7 +5,7 @@
 // 款式、颜色、把手都不填的门不走这里（house.ts 保留原来的几何，旧存档的样子不变）。
 
 import * as THREE from 'three'
-import type { DoorHandle, DoorLeafStyle } from '../model'
+import type { DoorGlass, DoorHandle, DoorLeafStyle } from '../model'
 import { C } from './assets'
 import { ball, rbox, shade, toon } from './toon'
 
@@ -20,18 +20,47 @@ export interface LeafSpec {
   handleColor: string
   /** 把手在哪一侧（-1 = -x 端，1 = +x 端）；0 = 不画把手 */
   handleSide: -1 | 0 | 1
+  /** 玻璃：不填 = 旧的样子（卡通画面半透明、写实下磨砂） */
+  glass?: DoorGlass
 }
 
-const glassMat = () => toon(C.glass, { transparent: 0.45 })
+/** 玻璃材质：旧的（不填）、透明（更通透，写实下是光面玻璃）、磨砂（乳白、不太透，夜里被室内灯照亮） */
+const glassMat = (kind?: DoorGlass) =>
+  kind === 'clear' ? toon(C.glass, { transparent: 0.3 }) : kind === 'frosted' ? toon('#eef2ef', { transparent: 0.8 }) : toon(C.glass, { transparent: 0.45 })
 /** 障子纸：暖白、半透 */
 const paperMat = () => toon('#fbf6e8', { transparent: 0.85 })
 
-function glass(w: number, h: number, d: number, at: { x?: number; y: number }, paper = false) {
+function glass(w: number, h: number, d: number, at: { x?: number; y: number }, paper = false, kind?: DoorGlass) {
   const m = rbox(Math.max(0.5, w), Math.max(0.5, h), d, C.glass, at, 0.3)
-  m.material = paper ? paperMat() : glassMat()
-  // 写实光照下画成磨砂玻璃（门后的东西模糊地透出来，mats.ts）
-  if (!paper) m.userData.mat = 'frosted'
+  m.material = paper ? paperMat() : glassMat(kind)
+  // 写实光照下：透明的画成光面玻璃，其余画成磨砂玻璃（门后的东西模糊地透出来，realistic.ts）
+  if (!paper) m.userData.mat = kind === 'clear' ? 'glass' : 'frosted'
   return m
+}
+
+/**
+ * 平板门扇上开一列玻璃（竖条 / 横条玻璃门）：x0..x1 同宽的几块 holes（[y0, y1]，从下往上、互不重叠），
+ * 门板拆成两侧立板 + 洞之间的横档，每块玻璃四周一圈压条（比门板略凸、深一点）
+ */
+function holed(g: THREE.Group, w: number, h: number, t: number, c: string, x0: number, x1: number, holes: [number, number][], kind?: DoorGlass) {
+  const r = 0.6
+  g.add(rbox(x0 + w / 2 + 0.2, h, t, c, { x: (x0 - w / 2) / 2 + 0.1, y: 0 }, 1.2))
+  g.add(rbox(w / 2 - x1 + 0.2, h, t, c, { x: (x1 + w / 2) / 2 - 0.1, y: 0 }, 1.2))
+  const cw = x1 - x0 + 0.4
+  const cx = (x0 + x1) / 2
+  let y = 0
+  for (const [y0, y1] of holes) {
+    g.add(rbox(cw, y0 - y + 0.2, t, c, { x: cx, y: y - (y ? 0.1 : 0) }, r))
+    y = y1
+  }
+  g.add(rbox(cw, h - y + 0.1, t, c, { x: cx, y: y - 0.1 }, r))
+  const bead = shade(c, -0.07)
+  const b = 1.4
+  for (const [y0, y1] of holes) {
+    g.add(glass(x1 - x0 + 0.4, y1 - y0 + 0.4, 1.2, { x: cx, y: y0 - 0.2 }, false, kind))
+    for (const k of [-1, 1]) g.add(rbox(b, y1 - y0 + 2 * b, t + 0.8, bead, { x: cx + k * ((x1 - x0) / 2 + b / 2), y: y0 - b }, 0.3))
+    for (const yy of [y0 - b, y1]) g.add(rbox(x1 - x0, b, t + 0.8, bead, { x: cx, y: yy }, 0.3))
+  }
 }
 
 /** 凸起的门芯板：深一圈的线脚 + 浅一点的芯板，两面都凸出门扇 */
@@ -57,7 +86,7 @@ function muntins(g: THREE.Group, x0: number, x1: number, y0: number, y1: number,
 }
 
 /** 门扇的面（不含把手） */
-function leafBody(g: THREE.Group, style: DoorLeafStyle | undefined, w: number, h: number, t: number, c: string) {
+function leafBody(g: THREE.Group, style: DoorLeafStyle | undefined, w: number, h: number, t: number, c: string, kind?: DoorGlass) {
   const s = Math.max(5, Math.min(12, w * 0.13))
   switch (style) {
     case undefined:
@@ -93,7 +122,7 @@ function leafBody(g: THREE.Group, style: DoorLeafStyle | undefined, w: number, h
       g.add(rbox(w, 8, t, c, { y: split }, 0.8))
       for (const k of [-1, 1]) g.add(rbox(s, h - split - 8, t, c, { x: (k * (w - s)) / 2, y: split + 8 }, 0.8))
       g.add(rbox(w - 2 * s + 0.4, top, t, c, { y: h - top }, 0.6))
-      g.add(glass(w - 2 * s + 0.4, h - split - 8 - top + 0.4, 1.2, { y: split + 8 - 0.2 }))
+      g.add(glass(w - 2 * s + 0.4, h - split - 8 - top + 0.4, 1.2, { y: split + 8 - 0.2 }, false, kind))
       return
     }
     case 'glassFull': {
@@ -104,8 +133,27 @@ function leafBody(g: THREE.Group, style: DoorLeafStyle | undefined, w: number, h
       frame(g, w, h, t, c, ss, top, bot)
       const gw = w - 2 * ss
       const gh = h - top - bot
-      g.add(glass(gw + 0.4, gh + 0.4, 1.2, { y: bot - 0.2 }))
+      g.add(glass(gw + 0.4, gh + 0.4, 1.2, { y: bot - 0.2 }, false, kind))
       muntins(g, -gw / 2, gw / 2, bot, h - top, gw >= 45 ? 2 : 1, Math.max(1, Math.round(gh / 30)), t * 0.6, c)
+      return
+    }
+    case 'glassStrip': {
+      // 竖条玻璃门：门板正中一条竖向窄玻璃（下沿离地 ~30、上沿离顶 ~24）
+      const gw = Math.max(5, Math.min(14, w * 0.15))
+      holed(g, w, h, t, c, -gw / 2, gw / 2, [[Math.min(30, h * 0.15), h - Math.min(24, h * 0.12)]], kind)
+      return
+    }
+    case 'glassSlits': {
+      // 横条玻璃门：门板中间一列横向窄玻璃（约 55% 宽、每条 ~4 高、间距 ~14）
+      const gw = Math.max(6, w * 0.55)
+      const sh = Math.max(2, Math.min(4.5, h * 0.022))
+      const y0 = h * 0.22
+      const y1 = h * 0.86
+      const n = Math.max(2, Math.round((y1 - y0) / 14))
+      const step = (y1 - y0 - sh) / (n - 1)
+      const holes: [number, number][] = []
+      for (let i = 0; i < n; i++) holes.push([y0 + step * i, y0 + step * i + sh])
+      holed(g, w, h, t, c, -gw / 2, gw / 2, holes, kind)
       return
     }
     case 'louver': {
@@ -232,7 +280,7 @@ export function doorLeafModel(s: LeafSpec): THREE.Group {
   const g = new THREE.Group()
   const { w, h, t, color } = s
   if (w < 4 || h < 4) return g
-  leafBody(g, s.style, w, h, t, color)
+  leafBody(g, s.style, w, h, t, color, s.glass)
   if (s.handleSide) {
     const edge = s.handle === 'pull' ? 5 : s.handle === 'bar' ? 7 : 8
     const x = s.handleSide * (w / 2 - Math.min(edge, w * 0.2))
@@ -241,8 +289,8 @@ export function doorLeafModel(s: LeafSpec): THREE.Group {
   return g
 }
 
-/** 开门旁的固定玻璃（侧窗 / 亮子）：x0..x1 × y0..y1 的一块，框色同门扇，厚 t；中面 z = 0 */
-export function liteModel(x0: number, x1: number, y0: number, y1: number, t: number, color: string): THREE.Group {
+/** 开门旁的固定玻璃（侧窗 / 亮子）：x0..x1 × y0..y1 的一块，框色同门扇，厚 t；中面 z = 0；玻璃同门扇（LeafSpec.glass） */
+export function liteModel(x0: number, x1: number, y0: number, y1: number, t: number, color: string, kind?: DoorGlass): THREE.Group {
   const g = new THREE.Group()
   const w = x1 - x0
   const h = y1 - y0
@@ -251,6 +299,6 @@ export function liteModel(x0: number, x1: number, y0: number, y1: number, t: num
   const cx = (x0 + x1) / 2
   for (const k of [-1, 1]) g.add(rbox(b, h, t, color, { x: cx + (k * (w - b)) / 2, y: y0 }, 0.6))
   for (const y of [y0, y1 - b]) g.add(rbox(w - 2 * b + 0.4, b, t, color, { x: cx, y }, 0.6))
-  g.add(glass(w - 2 * b + 0.4, h - 2 * b + 0.4, 1.2, { x: cx, y: y0 + b - 0.2 }))
+  g.add(glass(w - 2 * b + 0.4, h - 2 * b + 0.4, 1.2, { x: cx, y: y0 + b - 0.2 }, false, kind))
   return g
 }

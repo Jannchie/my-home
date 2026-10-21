@@ -1,7 +1,7 @@
-// 门的款式（Opening.doorStyle / doorColor / doorHandle / handleFinish / doorLites）：默认色、默认把手、读档校验、生成户型时按地区配的缺省款式。
+// 门的款式（Opening.doorStyle / doorColor / doorHandle / handleFinish / doorLites / doorGlass）：默认色、默认把手、读档校验、生成户型时按地区配的缺省款式。
 // 3D 模型在 three/doorModels.ts。都不填的门 = 旧存档的样子（平板门扇 + 小方块把手、入户门浅蓝、推拉门米色带浅色内框）。
 
-import { DOOR_HANDLES, DOOR_LITES, DOOR_STYLES, HANDLE_FINISHES, type DoorHandle, type DoorLeafStyle, type DoorLites, type HandleFinish, type Opening, type OpeningKind, type Plan, type Region, type Room } from './model'
+import { DOOR_GLASS, DOOR_HANDLES, DOOR_LITES, DOOR_STYLES, HANDLE_FINISHES, type DoorGlass, type DoorHandle, type DoorLeafStyle, type DoorLites, type HandleFinish, type Opening, type OpeningKind, type Plan, type Region, type Room } from './model'
 
 export type DoorKind = Exclude<OpeningKind, 'window'>
 export const isDoorKind = (k: OpeningKind): k is DoorKind => k !== 'window'
@@ -13,10 +13,16 @@ export const LEGACY_SLIDING = '#f3e1c7'
 
 /** 各种门可选的款式（界面上按门的种类列出；数据上任何款式放在任何门上都能画） */
 export const STYLES_FOR: Record<DoorKind, DoorLeafStyle[]> = {
-  door: ['flush', 'panel2', 'panel4', 'panel6', 'glassTop', 'glassFull', 'louver', 'grooved'],
-  sliding: ['flush', 'panel2', 'glassTop', 'glassFull', 'louver', 'fusuma', 'fusumaPattern', 'shoji', 'barn'],
-  folding: ['flush', 'panel2', 'glassFull', 'louver', 'shoji'],
+  door: ['flush', 'panel2', 'panel4', 'panel6', 'glassTop', 'glassFull', 'glassStrip', 'glassSlits', 'louver', 'grooved'],
+  sliding: ['flush', 'panel2', 'glassTop', 'glassFull', 'glassStrip', 'glassSlits', 'louver', 'fusuma', 'fusumaPattern', 'shoji', 'barn'],
+  folding: ['flush', 'panel2', 'glassFull', 'glassStrip', 'louver', 'shoji'],
 }
+
+/** 门扇上有玻璃的款式 */
+export const GLASS_STYLES: readonly DoorLeafStyle[] = ['glassTop', 'glassFull', 'glassStrip', 'glassSlits']
+/** 门上有没有能选透明 / 磨砂的玻璃（带玻璃的门扇，或开门旁的侧窗 / 亮子） */
+export const hasDoorGlass = (o: Pick<Opening, 'kind' | 'doorStyle' | 'doorLites'>) =>
+  (!!o.doorStyle && GLASS_STYLES.includes(o.doorStyle)) || (o.kind === 'door' && o.doorLites !== undefined)
 
 /** 门扇颜色：填了用填的；没填按款式（襖是纸色、障子是木框色、谷仓门深木色），其余同旧存档 */
 export function doorColor(o: Pick<Opening, 'kind' | 'doorStyle' | 'doorColor'>, entrance: boolean): string {
@@ -44,8 +50,8 @@ export function doorHandleOf(o: Pick<Opening, 'kind' | 'doorStyle' | 'doorHandle
 export const handleColor = (o: Pick<Opening, 'handleFinish'>) => HANDLE_FINISHES[o.handleFinish ?? 'silver'].color
 
 /** 门有没有设过款式相关的字段（都没设 = 旧存档的样子，3D 走原来的几何） */
-export const doorStyled = (o: Pick<Opening, 'doorStyle' | 'doorColor' | 'doorHandle' | 'handleFinish' | 'doorLites'>) =>
-  o.doorStyle !== undefined || o.doorColor !== undefined || o.doorHandle !== undefined || o.handleFinish !== undefined || o.doorLites !== undefined
+export const doorStyled = (o: Pick<Opening, 'doorStyle' | 'doorColor' | 'doorHandle' | 'handleFinish' | 'doorLites' | 'doorGlass'>) =>
+  o.doorStyle !== undefined || o.doorColor !== undefined || o.doorHandle !== undefined || o.handleFinish !== undefined || o.doorLites !== undefined || o.doorGlass !== undefined
 
 /** 带亮子的开门：墙洞开到多高（门扇还是 198 高，上面一条固定玻璃） */
 export const TRANSOM_TOP = 226
@@ -58,6 +64,7 @@ const STYLES = Object.keys(DOOR_STYLES) as DoorLeafStyle[]
 const HANDLES = Object.keys(DOOR_HANDLES) as DoorHandle[]
 const FINISHES = Object.keys(HANDLE_FINISHES) as HandleFinish[]
 const LITES = Object.keys(DOOR_LITES) as DoorLites[]
+const GLASSES = Object.keys(DOOR_GLASS) as DoorGlass[]
 const HEX = /^#[0-9a-f]{6}$/
 
 /** 读档校验：坏值、缺省值删掉（不锈钢把手不写），窗上的门字段整个去掉；颜色统一成小写 #rrggbb */
@@ -69,6 +76,7 @@ export function normalizeDoor(o: Opening) {
     delete o.handleFinish
     delete o.doorLites
     delete o.foldLeaves
+    delete o.doorGlass
     return
   }
   if (o.doorStyle !== undefined && !STYLES.includes(o.doorStyle)) delete o.doorStyle
@@ -80,6 +88,7 @@ export function normalizeDoor(o: Opening) {
   if (o.doorHandle !== undefined && !HANDLES.includes(o.doorHandle)) delete o.doorHandle
   if (o.handleFinish !== undefined && (!FINISHES.includes(o.handleFinish) || o.handleFinish === 'silver')) delete o.handleFinish
   if (o.doorLites !== undefined && (!LITES.includes(o.doorLites) || o.kind !== 'door')) delete o.doorLites
+  if (o.doorGlass !== undefined && !GLASSES.includes(o.doorGlass)) delete o.doorGlass
   if (o.foldLeaves !== undefined && ((o.foldLeaves !== 3 && o.foldLeaves !== 4) || o.kind !== 'folding')) delete o.foldLeaves
 }
 

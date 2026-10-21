@@ -168,14 +168,17 @@ export interface Opening {
   doorLites?: DoorLites
   /** 折れ戸几扇：3 = 三折（一串折向铰链一侧），4 = 四折（两侧各一组两折、中间对开）；不填 = 两折 */
   foldLeaves?: FoldLeaves
+  /** 门扇（带玻璃的款式）和侧窗 / 亮子的玻璃：clear 透明、frosted 磨砂；不填 = 旧存档的样子（卡通画面半透明、写实下磨砂） */
+  doorGlass?: DoorGlass
 }
 
 /**
  * 门扇样式：
  *   flush 平板门、panel2 两格门、panel4 四格门、panel6 六格门（凸起的门芯板）、glassTop 上部玻璃门、glassFull 全玻璃格子门（法式门）、
+ *   glassStrip 竖条玻璃门（门板正中一条竖向窄玻璃）、glassSlits 横条玻璃门（门板中间一列横向窄玻璃）、
  *   louver 百叶门、grooved 横纹门（现代风的入户门）、fusuma 襖（素色）、fusumaPattern 襖（花纹）、shoji 障子、barn 谷仓门（明装推拉）。
  */
-export type DoorLeafStyle = 'flush' | 'panel2' | 'panel4' | 'panel6' | 'glassTop' | 'glassFull' | 'louver' | 'grooved' | 'fusuma' | 'fusumaPattern' | 'shoji' | 'barn'
+export type DoorLeafStyle = 'flush' | 'panel2' | 'panel4' | 'panel6' | 'glassTop' | 'glassFull' | 'glassStrip' | 'glassSlits' | 'louver' | 'grooved' | 'fusuma' | 'fusumaPattern' | 'shoji' | 'barn'
 export const DOOR_STYLES: Record<DoorLeafStyle, string> = {
   flush: '平板门',
   panel2: '两格门',
@@ -183,6 +186,8 @@ export const DOOR_STYLES: Record<DoorLeafStyle, string> = {
   panel6: '六格门',
   glassTop: '上部玻璃门',
   glassFull: '玻璃格子门',
+  glassStrip: '竖条玻璃门',
+  glassSlits: '横条玻璃门',
   louver: '百叶门',
   grooved: '横纹门',
   fusuma: '襖（素色）',
@@ -210,6 +215,11 @@ export const FOLD_LEAVES: Record<2 | FoldLeaves, string> = {
   2: '两折',
   3: '三折',
   4: '四折（对开）',
+}
+export type DoorGlass = 'clear' | 'frosted'
+export const DOOR_GLASS: Record<DoorGlass, string> = {
+  clear: '透明玻璃',
+  frosted: '磨砂玻璃',
 }
 export const DOOR_LITES: Record<DoorLites, string> = {
   side: '侧窗',

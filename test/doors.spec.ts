@@ -1,4 +1,4 @@
-// 门的款式（Opening.doorStyle / doorColor / doorHandle / handleFinish / doorLites）：3D 模型、读档校验、分享往返、生成户型的缺省款式、预览缓存键。
+// 门的款式（Opening.doorStyle / doorColor / doorHandle / handleFinish / doorLites / doorGlass）：3D 模型、读档校验、分享往返、生成户型的缺省款式、预览缓存键。
 import { describe, expect, test } from 'vitest'
 import * as THREE from 'three'
 import { DOOR_HANDLES, DOOR_LITES, DOOR_STYLES, rectPoints, type DoorHandle, type DoorLeafStyle, type DoorLites, type Opening, type OpeningKind, type Plan } from '/src/model'
@@ -7,14 +7,14 @@ import { decodeShare, encodeShare, toCompact } from '/src/share'
 import { buildHouse, openingInfos } from '/src/three/house'
 import { doorLeafModel } from '/src/three/doorModels'
 import { generateLayout, generatePlan } from '/src/generate-region'
-import { STYLES_FOR, doorColor, doorHandleOf, LEGACY_DOOR, LEGACY_ENTRANCE, roomAcross } from '/src/doorStyles'
+import { GLASS_STYLES, STYLES_FOR, doorColor, hasDoorGlass, doorHandleOf, LEGACY_DOOR, LEGACY_ENTRANCE, roomAcross } from '/src/doorStyles'
 import { previewKey, previewObject, type SitePreview } from '/src/three/siteThumbs'
 import { genJp } from './helpers'
 
 const STYLES = Object.keys(DOOR_STYLES) as DoorLeafStyle[]
 const HANDLES = Object.keys(DOOR_HANDLES) as DoorHandle[]
 const LITES = Object.keys(DOOR_LITES) as DoorLites[]
-const DOOR_KEYS = ['doorStyle', 'doorColor', 'doorHandle', 'handleFinish', 'doorLites']
+const DOOR_KEYS = ['doorStyle', 'doorColor', 'doorHandle', 'handleFinish', 'doorLites', 'doorGlass']
 
 /** 洋室（400 × 300）+ 东边玄关（外墙上入户门）；洋室北墙一扇门，玄关南墙入户门 */
 function testPlan(door: Partial<Opening> = {}, entry: Partial<Opening> = {}): Plan {
@@ -138,6 +138,46 @@ describe('门扇的 3D 模型', () => {
     expect(Math.hypot(lb.max.x - lb.min.x, lb.max.z - lb.min.z)).toBeLessThan(120 - 22)
   })
 
+  test('玻璃：带玻璃的款式都有玻璃；透明 / 磨砂换材质，写实下分别是光面 / 磨砂玻璃；不填同旧的样子', () => {
+    const glassOf = (g: THREE.Object3D) => {
+      const out: THREE.Mesh[] = []
+      g.traverse((c) => {
+        const m = c as THREE.Mesh
+        if (m.isMesh && (m.userData.mat === 'glass' || m.userData.mat === 'frosted')) out.push(m)
+      })
+      return out
+    }
+    for (const style of STYLES) {
+      const spec = { style, w: 80, h: 196, t: 3.6, color: '#f6f4ef', handle: 'lever' as const, handleColor: '#c9ccd1', handleSide: 1 as const }
+      const legacy = glassOf(doorLeafModel(spec))
+      expect(legacy.length > 0, style).toBe(GLASS_STYLES.includes(style))
+      if (!legacy.length) continue
+      const clear = glassOf(doorLeafModel({ ...spec, glass: 'clear' }))
+      const frosted = glassOf(doorLeafModel({ ...spec, glass: 'frosted' }))
+      expect(clear.length).toBe(legacy.length)
+      for (const m of legacy) expect(m.userData.mat).toBe('frosted')
+      for (const m of clear) expect(m.userData.mat).toBe('glass')
+      for (const m of frosted) expect(m.userData.mat).toBe('frosted')
+      const op = (ms: THREE.Mesh[]) => (ms[0].material as THREE.Material).opacity
+      expect(op(clear)).toBeLessThan(op(legacy))
+      expect(op(frosted)).toBeGreaterThan(op(legacy))
+    }
+    // 竖条玻璃在门扇正中、横条玻璃一列好几条
+    const strip = glassOf(doorLeafModel({ style: 'glassStrip', w: 80, h: 196, t: 3.6, color: '#f6f4ef', handle: 'lever', handleColor: '#c9ccd1', handleSide: 1 }))
+    expect(strip.length).toBe(1)
+    const sb = new THREE.Box3().setFromObject(strip[0])
+    expect(Math.abs(sb.min.x + sb.max.x)).toBeLessThan(0.5)
+    expect(sb.max.y - sb.min.y).toBeGreaterThan(120)
+    expect(glassOf(doorLeafModel({ style: 'glassSlits', w: 80, h: 196, t: 3.6, color: '#f6f4ef', handle: 'lever', handleColor: '#c9ccd1', handleSide: 1 })).length).toBeGreaterThan(3)
+    // 侧窗 / 亮子的玻璃也跟着选
+    const root = buildHouse(testPlan({}, { doorStyle: 'glassStrip', doorLites: 'both', doorGlass: 'clear' }), 260)
+    const mats = new Set(openingGroups(root).filter((c) => c.userData.info.o.id === 'd2').flatMap((g) => glassOf(g).map((m) => m.userData.mat)))
+    expect([...mats]).toEqual(['glass'])
+    expect(hasDoorGlass({ kind: 'door', doorStyle: 'panel4' })).toBe(false)
+    expect(hasDoorGlass({ kind: 'door', doorStyle: 'panel4', doorLites: 'side' })).toBe(true)
+    expect(hasDoorGlass({ kind: 'sliding', doorStyle: 'glassStrip' })).toBe(true)
+  })
+
   test('默认颜色 / 把手按款式', () => {
     expect(doorColor({ kind: 'door' }, false)).toBe(LEGACY_DOOR)
     expect(doorColor({ kind: 'door' }, true)).toBe(LEGACY_ENTRANCE)
@@ -162,7 +202,7 @@ describe('门款式的预览图', () => {
     const n = 3 + STYLES_FOR.door.length + STYLES_FOR.sliding.length + STYLES_FOR.folding.length
     expect(keys.size).toBe(n)
     const base: SitePreview = { t: 'door', kind: 'door', style: 'panel4', color: '#f6f4ef', handle: 'lever', handleColor: '#c9ccd1' }
-    const variants: SitePreview[] = [base, { ...base, color: '#2f4a6b' }, { ...base, handle: 'knob' }, { ...base, handleColor: '#c9a04a' }, { ...base, lites: 'side' }, { ...base, lites: 'top' }, { ...base, kind: 'sliding' }]
+    const variants: SitePreview[] = [base, { ...base, color: '#2f4a6b' }, { ...base, handle: 'knob' }, { ...base, handleColor: '#c9a04a' }, { ...base, lites: 'side' }, { ...base, lites: 'top' }, { ...base, kind: 'sliding' }, { ...base, glass: 'clear' }, { ...base, glass: 'frosted' }]
     expect(new Set(variants.map(previewKey)).size).toBe(variants.length)
     for (const v of variants) expect(finite(previewObject(v))).toBe(true)
   })
@@ -177,28 +217,30 @@ describe('读档校验 / 分享', () => {
   test('坏值、缺省值去掉；窗上的门字段、推拉门上的侧窗去掉；颜色统一小写', () => {
     const p = testPlan(
       { doorStyle: 'bogus' as DoorLeafStyle, doorColor: 'red', doorHandle: 'x' as DoorHandle, handleFinish: 'silver', doorLites: 'side' },
-      { doorStyle: 'grooved', doorColor: '#AABBCC', doorHandle: 'bar', handleFinish: 'black', doorLites: 'top' },
+      { doorStyle: 'grooved', doorColor: '#AABBCC', doorHandle: 'bar', handleFinish: 'black', doorLites: 'top', doorGlass: 'bogus' as 'clear' },
     )
-    p.openings.push({ id: 's', kind: 'sliding', roomId: 'a', edge: 3, offset: 100, width: 120, hinge: 'start', swing: 'in', doorStyle: 'shoji', doorLites: 'both' })
-    p.openings.push({ id: 'w', kind: 'window', roomId: 'a', edge: 0, offset: 200, width: 120, hinge: 'start', swing: 'in', doorStyle: 'flush', doorColor: '#000000' })
+    p.openings.push({ id: 's', kind: 'sliding', roomId: 'a', edge: 3, offset: 100, width: 120, hinge: 'start', swing: 'in', doorStyle: 'shoji', doorLites: 'both', doorGlass: 'frosted' })
+    p.openings.push({ id: 'w', kind: 'window', roomId: 'a', edge: 0, offset: 200, width: 120, hinge: 'start', swing: 'in', doorStyle: 'flush', doorColor: '#000000', doorGlass: 'clear' })
     const n = normalizePlan(p)!
     const [a, b, s, w] = n.openings
     for (const k of ['doorStyle', 'doorColor', 'doorHandle', 'handleFinish']) expect(a).not.toHaveProperty(k)
     expect(a.doorLites).toBe('side')
     expect([b.doorStyle, b.doorColor, b.doorHandle, b.handleFinish, b.doorLites]).toEqual(['grooved', '#aabbcc', 'bar', 'black', 'top'])
+    expect(b).not.toHaveProperty('doorGlass')
     expect(s.doorStyle).toBe('shoji')
+    expect(s.doorGlass).toBe('frosted')
     expect(s).not.toHaveProperty('doorLites')
     for (const k of DOOR_KEYS) expect(w).not.toHaveProperty(k)
   })
 
   test('分享链接往返带上门的款式；不带款式的门还是 6 项', async () => {
-    const src = testPlan({ doorStyle: 'glassFull', doorColor: '#9cb39a', doorHandle: 'knob', handleFinish: 'brass' }, { doorStyle: 'panel6', doorLites: 'both' })
+    const src = testPlan({ doorStyle: 'glassFull', doorColor: '#9cb39a', doorHandle: 'knob', handleFinish: 'brass' }, { doorStyle: 'glassStrip', doorLites: 'both', doorGlass: 'frosted' })
     const back = await decodeShare(await encodeShare(src, 'plan'))
     expect(back.ok).toBe(true)
     if (!back.ok) return
     const [a, b] = back.plan.openings
     expect([a.doorStyle, a.doorColor, a.doorHandle, a.handleFinish]).toEqual(['glassFull', '#9cb39a', 'knob', 'brass'])
-    expect([b.doorStyle, b.doorLites]).toEqual(['panel6', 'both'])
+    expect([b.doorStyle, b.doorLites, b.doorGlass]).toEqual(['glassStrip', 'both', 'frosted'])
     const c = toCompact(testPlan(), 'plan')
     for (const d of c.d) expect(d.length).toBe(6)
   })
