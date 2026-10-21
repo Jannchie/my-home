@@ -68,6 +68,7 @@ export function normalizeDoor(o: Opening) {
     delete o.doorHandle
     delete o.handleFinish
     delete o.doorLites
+    delete o.foldLeaves
     return
   }
   if (o.doorStyle !== undefined && !STYLES.includes(o.doorStyle)) delete o.doorStyle
@@ -79,6 +80,7 @@ export function normalizeDoor(o: Opening) {
   if (o.doorHandle !== undefined && !HANDLES.includes(o.doorHandle)) delete o.doorHandle
   if (o.handleFinish !== undefined && (!FINISHES.includes(o.handleFinish) || o.handleFinish === 'silver')) delete o.handleFinish
   if (o.doorLites !== undefined && (!LITES.includes(o.doorLites) || o.kind !== 'door')) delete o.doorLites
+  if (o.foldLeaves !== undefined && ((o.foldLeaves !== 3 && o.foldLeaves !== 4) || o.kind !== 'folding')) delete o.foldLeaves
 }
 
 // ---------- 生成户型时的缺省款式 ----------

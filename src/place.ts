@@ -28,6 +28,7 @@ import {
 import { isOpenBetween, sharedIntervals, wallThicknessAt } from './walls'
 import { stairKeepOut } from './stairs'
 import { floorOf, riseOf } from './floors'
+import { foldCount } from './doorMotion'
 import { sashAllowed } from './windows'
 
 export type PlaceCtx = Pick<Plan, 'rooms' | 'openings' | 'fixtures' | 'wall' | 'wallOuter'>
@@ -171,7 +172,7 @@ function openingClearances(room: Room, ctx: PlaceCtx, avoidWindows: boolean, sas
     // 指向本房间内部的法线
     const into = pointInPolygon(add(center, mul(e.out, 5)), room.points) ? e.out : mul(e.out, -1)
     const swingsIn = (o.kind === 'door' || o.kind === 'folding') && (owner.id === room.id ? o.swing === 'in' : o.swing === 'out')
-    const depth = swingsIn ? (o.kind === 'door' ? o.width : o.width / 2) + 5 : 50
+    const depth = swingsIn ? (o.kind === 'door' ? o.width : foldDepth(o)) + 5 : 50
     const p0 = add(center, mul(e.dir, -o.width / 2))
     const p1 = add(center, mul(e.dir, o.width / 2))
     const kind: ClearanceKind = o.kind !== 'window' ? (swingsIn ? 'door-swing' : 'door-front') : isSash ? 'sash' : 'window'
@@ -179,13 +180,16 @@ function openingClearances(room: Room, ctx: PlaceCtx, avoidWindows: boolean, sas
   })
 }
 
-/** 开向本房间的门扇（平开门 = 门宽 × 门宽，折れ戸 = 门宽 × 半门宽）扫过的范围 */
+/** 折れ戸折开时伸出来多深：一扇的宽（两折半个门宽、三折三分之一、四折四分之一） */
+const foldDepth = (o: Opening) => o.width / foldCount(o)
+
+/** 开向本房间的门扇（平开门 = 门宽 × 门宽，折れ戸 = 门宽 × 一扇宽）扫过的范围 */
 export function doorSwings(room: Room, ctx: PlaceCtx): Box[] {
   return openingsOn(room, ctx).flatMap(({ o, owner, e, center }) => {
     if (o.kind !== 'door' && o.kind !== 'folding') return []
     if (!(owner.id === room.id ? o.swing === 'in' : o.swing === 'out')) return []
     const into = pointInPolygon(add(center, mul(e.out, 5)), room.points) ? e.out : mul(e.out, -1)
-    const depth = (o.kind === 'door' ? o.width : o.width / 2) + 5
+    const depth = (o.kind === 'door' ? o.width : foldDepth(o)) + 5
     const p0 = add(center, mul(e.dir, -o.width / 2))
     const p1 = add(center, mul(e.dir, o.width / 2))
     return [bbox([p0, p1, add(p0, mul(into, depth)), add(p1, mul(into, depth))])]

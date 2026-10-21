@@ -28,7 +28,14 @@ function testPlan(door: Partial<Opening> = {}): Plan {
   }
 }
 
-const KINDS: Partial<Opening>[] = [{ kind: 'door' }, { kind: 'sliding' }, { kind: 'sliding', doorStyle: 'barn' }, { kind: 'folding' }]
+const KINDS: Partial<Opening>[] = [
+  { kind: 'door' },
+  { kind: 'sliding' },
+  { kind: 'sliding', doorStyle: 'barn' },
+  { kind: 'folding' },
+  { kind: 'folding', foldLeaves: 3 },
+  { kind: 'folding', foldLeaves: 4, doorStyle: 'louver' },
+]
 
 /** 门洞口的组（带 doorPart 标记的） */
 const doorObjs = (root: THREE.Object3D) => {
@@ -69,6 +76,26 @@ describe('房门的开合', () => {
           for (const p of [a, b]) expect(box.containsPoint(new THREE.Vector3(p.x, 100, p.y)), `${JSON.stringify(k)} 开 ${v}：(${p.x.toFixed(1)}, ${p.y.toFixed(1)})`).toBe(true)
       }
     }
+  })
+
+  test('折れ戸三折、四折：扇数对得上，四折两侧对开', () => {
+    for (const n of [2, 3, 4] as const) {
+      const plan = testPlan({ kind: 'folding', ...(n === 2 ? {} : { foldLeaves: n }) })
+      const info = openingInfos(plan)[0]
+      const fold = doorObjs(buildHouse(plan, 240))[0]
+      expect(fold.children.filter((c) => c.userData.foldLeaf !== undefined).length).toBe(n)
+      const segs = doorSegments(info, 0)
+      expect(segs.length).toBe(n)
+      // 关着时各扇连成一整条，盖住门洞
+      const ys = segs.flatMap(([a, b]) => [a.y, b.y])
+      expect(Math.min(...ys)).toBeCloseTo(105, 3)
+      expect(Math.max(...ys)).toBeCloseTo(195, 3)
+    }
+    // 四折：开到底时两侧各收一组，中间空出来
+    const four = openingInfos(testPlan({ kind: 'folding', foldLeaves: 4 }))[0]
+    const open = doorSegments(four, 1)
+    expect(open.filter(([a]) => a.y < 150).length).toBe(2)
+    expect(open.every(([a, b]) => Math.abs(a.y - 150) > 35 && Math.abs(b.y - 150) > 35)).toBe(true)
   })
 
   test('没动过的门开着，人走得过去', () => {

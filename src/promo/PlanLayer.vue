@@ -2,6 +2,7 @@
 // 宣传片里的平面图：按 PlanCanvas 的画法画（房间底色、地面图案、墙、门窗、设备、家具占地、房间名），
 // 但视图变换由时间线给出（和 3D 正俯视镜头严格对齐），只读、不响应指针。
 import { computed } from 'vue'
+import { foldPlanPath } from '../doorMotion'
 import { ROOM_KINDS, add, area, bbox, edgeInfo, fixtureBox, fmtRoomArea, isAxisRect, labelPointAvoiding, mul, pointInPolygon, polyPath, type Plan, type Room, type RoomKind, type Vec } from '../model'
 import { isIndoor, wallSegments, wallThicknessAt } from '../walls'
 import { tatamiLayout } from '../tatami'
@@ -107,9 +108,7 @@ const openings = computed(() => {
       ]
       for (const [a, b, k] of halves) v.panels.push(polyPath([add(a, mul(e.out, k + t / 2)), add(b, mul(e.out, k + t / 2)), add(b, mul(e.out, k - t / 2)), add(a, mul(e.out, k - t / 2))]))
     } else if (o.kind === 'folding') {
-      const into = o.swing === 'in' ? mul(e.out, -1) : e.out
-      const apex = add(add(p0, mul(e.dir, w / 2)), mul(into, w * 0.3))
-      v.fold = `M${p0.x},${p0.y}L${apex.x},${apex.y}L${p1.x},${p1.y}`
+      v.fold = foldPlanPath(o, p0, p1, o.swing === 'in' ? mul(e.out, -1) : e.out, o.hinge === 'start')
     } else if (o.kind === 'door') {
       const hingeP = o.hinge === 'start' ? p0 : p1
       const other = o.hinge === 'start' ? p1 : p0

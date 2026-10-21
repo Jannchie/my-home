@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { hasSidelight, sidelightWidth } from '../doorStyles'
+import { foldPlanPath } from '../doorMotion'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import ContextMenu, { type MenuEntry } from './ContextMenu.vue'
 import { ICONS } from '../ui/icons'
@@ -1013,10 +1014,8 @@ const openingViews = computed<OpeningView[]>(() => {
         v.panels.push(polyPath([add(a, mul(e.out, k + t / 2)), add(b, mul(e.out, k + t / 2)), add(b, mul(e.out, k - t / 2)), add(a, mul(e.out, k - t / 2))]))
       }
     } else if (o.kind === 'folding') {
-      // 折れ戸：两扇向开启侧折成 V 字
-      const into = o.swing === 'in' ? mul(e.out, -1) : e.out
-      const apex = add(add(p0, mul(e.dir, w / 2)), mul(into, w * 0.3))
-      v.fold = `M${p0.x},${p0.y}L${apex.x},${apex.y}L${p1.x},${p1.y}`
+      // 折れ戸：各扇向开启侧折成之字形（两折 V 字、四折两个 V 对开）
+      v.fold = foldPlanPath(o, p0, p1, o.swing === 'in' ? mul(e.out, -1) : e.out, o.hinge === 'start')
     } else if (o.kind === 'door') {
       const hingeP = o.hinge === 'start' ? p0 : p1
       const far = o.hinge === 'start' ? p1 : p0

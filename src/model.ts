@@ -164,6 +164,8 @@ export interface Opening {
   handleFinish?: HandleFinish
   /** 开门（door）旁的固定玻璃：side 侧窗（锁一侧）、top 门上亮子、both 两者都有 */
   doorLites?: DoorLites
+  /** 折れ戸几扇：3 = 三折（一串折向铰链一侧），4 = 四折（两侧各一组两折、中间对开）；不填 = 两折 */
+  foldLeaves?: FoldLeaves
 }
 
 /**
@@ -201,6 +203,12 @@ export const HANDLE_FINISHES: Record<HandleFinish, { label: string; color: strin
   brass: { label: '黄铜', color: '#c9a04a' },
 }
 export type DoorLites = 'side' | 'top' | 'both'
+export type FoldLeaves = 3 | 4
+export const FOLD_LEAVES: Record<2 | FoldLeaves, string> = {
+  2: '两折',
+  3: '三折',
+  4: '四折（对开）',
+}
 export const DOOR_LITES: Record<DoorLites, string> = {
   side: '侧窗',
   top: '门上亮子',

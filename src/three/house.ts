@@ -32,7 +32,7 @@ import { isIndoor, sharedIntervals, voidRailSegments, wallSegments, wallThicknes
 import { tatamiLayout } from '../tatami'
 import { doorColor, doorHandleOf, doorStyled, handleColor, hasSidelight, hasTransom, LEGACY_DOOR, LEGACY_ENTRANCE, LEGACY_SLIDING, sidelightWidth, TRANSOM_TOP } from '../doorStyles'
 import { doorLeafModel, liteModel } from './doorModels'
-import { barnPose, defaultDoorOpen, foldPose, slidingPose, swingPose } from '../doorMotion'
+import { barnPose, defaultDoorOpen, foldCount, foldLeaves, foldPose, slidingPose, swingPose } from '../doorMotion'
 import { addOutlines, ball, capsule, cyl, disposeHooks, isReflector, mergeMeshes, mergeSolidColors, noTransparentShadows, pullDepth, rbox, shade, toon, useAnisotropy } from './toon'
 import { glow, movable, poseDoor, poseDoors, type AssetDef } from './kit'
 import { freezeMatrices, syncMatrix } from './matrices'
@@ -1072,12 +1072,12 @@ export function poseOpening(obj: THREE.Object3D, open: number, leaf = openingLea
     for (const c of obj.children) if (c.userData.door && ((c.userData.doorLeaf as number | undefined) ?? 0) === leaf) poseDoor(c, open)
     return
   } else if (part === 'fold') {
-    const [a, b, c] = foldPose(info, open)
+    const segs = foldLeaves(foldPose(info, open))
     for (const leaf of obj.children) {
       const i = leaf.userData.foldLeaf as number | undefined
-      if (i === undefined) continue
-      const [p, q] = i === 0 ? [a, b] : [b, c]
-      // 折扇的局部 x 从 p 指向 q（第二扇的起点在折角处）
+      if (i === undefined || !segs[i]) continue
+      const [p, q] = segs[i]
+      // 折扇的局部 x 从 p 指向 q（起点在靠门框的一端）
       leaf.position.set((p.x + q.x) / 2, 0, (p.y + q.y) / 2)
       leaf.rotation.y = Math.atan2(-(q.y - p.y), q.x - p.x)
       moved.push(leaf)
@@ -1175,18 +1175,23 @@ function buildOpenings(infos: OpeningInfo[], H: number) {
         g.add(panel)
       }
     } else if (o.kind === 'folding') {
-      // 两扇折门放进同一个组（同一个洞口），每扇各自合并、各自转
+      // 折门的各扇放进同一个组（同一个洞口），每扇各自合并、各自转（顺序同 doorMotion.ts foldLeaves）
       const fold = new THREE.Group()
       fold.userData.info = info
       fold.userData.doorPart = 'fold'
       g.add(fold)
       const styled = doorStyled(o)
-      const L = w / 2 - 0.5
-      for (const i of [0, 1]) {
+      const n = foldCount(o)
+      const L = w / n - 0.5
+      // 每串几扇：四折是两串两折
+      const per = n === 4 ? 2 : n
+      for (let i = 0; i < n; i++) {
         const leaf = new THREE.Group()
+        const j = i % per
+        // 拉手：两折 / 四折在每串第二扇的起点（折角处 = -x 端），三折在末扇的外端（+x 端）
+        const handleSide = per === 3 ? (j === 2 ? 1 : 0) : j === 1 ? -1 : 0
         if (!styled) leaf.add(rbox(L, doorH, 2.4, LEGACY_SLIDING, { y: 0 }, 0.8))
-        // 拉手在两扇相接的折角处（第二扇的起点 = -x 端）
-        else leaf.add(doorLeafModel({ style: o.doorStyle, w: L, h: doorH, t: 2.4, color: doorColor(o, false), handle: doorHandleOf(o), handleColor: handleColor(o), handleSide: i === 1 ? -1 : 0 }))
+        else leaf.add(doorLeafModel({ style: o.doorStyle, w: L, h: doorH, t: 2.4, color: doorColor(o, false), handle: doorHandleOf(o), handleColor: handleColor(o), handleSide }))
         mergeMeshes(leaf)
         leaf.userData.foldLeaf = i
         fold.add(leaf)

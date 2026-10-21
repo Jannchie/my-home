@@ -1,9 +1,9 @@
 <script setup lang="ts">
 // 门窗检查器 / 3D 沙盘浮动卡片里门的款式：门扇样式用带 3D 预览图的格子选（同窗的款式），颜色用色块 + 自选，
-// 把手、把手颜色、开门旁的侧窗 / 亮子用下拉 / 色块。每次改动一步撤销。不选款式（「标准」）、不选颜色 = 旧存档的样子。
+// 把手、把手颜色、开门旁的侧窗 / 亮子、折れ戸的折数用下拉 / 色块。每次改动一步撤销。不选款式（「标准」）、不选颜色 = 旧存档的样子。
 import { computed, watchEffect } from 'vue'
 import { t } from '../i18n'
-import { DOOR_COLORS, DOOR_HANDLES, DOOR_LITES, DOOR_STYLES, HANDLE_FINISHES, type DoorHandle, type DoorLeafStyle, type DoorLites, type HandleFinish, type Opening } from '../model'
+import { DOOR_COLORS, DOOR_HANDLES, DOOR_LITES, DOOR_STYLES, FOLD_LEAVES, HANDLE_FINISHES, type DoorHandle, type DoorLeafStyle, type DoorLites, type FoldLeaves, type HandleFinish, type Opening } from '../model'
 import { floorPlan, mutate } from '../store'
 import { openingInfos } from '../three/house'
 import { useSitePreviews, type SitePreview } from '../three/siteThumbs'
@@ -14,10 +14,11 @@ import { ICONS } from '../ui/icons'
 /** card：3D 沙盘里点中门浮出的卡片（手机上格子排成一行横向滑） */
 const props = withDefaults(defineProps<{ opening: Opening; variant?: 'panel' | 'card' }>(), { variant: 'panel' })
 
-type DoorKey = 'doorStyle' | 'doorColor' | 'doorHandle' | 'handleFinish' | 'doorLites'
+type DoorKey = 'doorStyle' | 'doorColor' | 'doorHandle' | 'handleFinish' | 'doorLites' | 'foldLeaves'
 const FINISHES = Object.keys(HANDLE_FINISHES) as HandleFinish[]
 const HANDLES = Object.keys(DOOR_HANDLES) as DoorHandle[]
 const LITES = Object.keys(DOOR_LITES) as DoorLites[]
+const FOLDS = [2, 3, 4] as const
 
 const kind = computed<DoorKind>(() => (isDoorKind(props.opening.kind) ? props.opening.kind : 'door'))
 const info = computed(() => openingInfos(floorPlan.value).find((i) => i.o.id === props.opening.id) ?? null)
@@ -129,6 +130,12 @@ const val = (e: Event) => (e.target as HTMLInputElement).value
       <select :value="opening.doorLites ?? ''" @change="set('doorLites', (($event.target as HTMLSelectElement).value || undefined) as DoorLites | undefined)">
         <option value="">{{ t('无') }}</option>
         <option v-for="k in LITES" :key="k" :value="k">{{ t(DOOR_LITES[k]) }}</option>
+      </select>
+    </label>
+    <label v-if="kind === 'folding'"
+      >{{ t('折数') }}
+      <select :value="opening.foldLeaves ?? 2" @change="set('foldLeaves', (Number(($event.target as HTMLSelectElement).value) === 2 ? undefined : Number(($event.target as HTMLSelectElement).value)) as FoldLeaves | undefined)">
+        <option v-for="k in FOLDS" :key="k" :value="k">{{ t(FOLD_LEAVES[k]) }}</option>
       </select>
     </label>
   </div>

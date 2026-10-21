@@ -4,7 +4,8 @@
 //   door    开门：门扇绕铰链转 0..90°
 //   sliding 引き戸：两扇各自推拉（门扇 0 = 前轨、靠起点一侧，往终点推；门扇 1 = 后轨、靠终点一侧，往起点推）
 //   barn    谷仓门：整扇沿墙面上的明装轨道推开一整个门宽
-//   folding 折れ戸：两扇对折，靠铰链一侧那扇绕铰链转、另一扇的末端沿轨道滑向铰链
+//   folding 折れ戸：两扇对折，靠铰链一侧那扇绕铰链转、另一扇的末端沿轨道滑向铰链；
+//           三折是一串三扇之字形折向铰链（末扇的外端不在轨道上），四折是两侧各一组两折、在中间对开
 //   window  通往阳台的落地窗（当门用）：两扇推拉扇各自推到另一扇那边、平开扇往户外推开到 90°；固定窗等开不了的款式一直挡着
 // 门板线段都是平面坐标，沿门板宽度方向（不计厚度）。
 // 推拉的两扇分开开合：open 是门扇 0（和别的门一样的那个开合），back 是门扇 1（后轨那扇，没动过时关着）。
@@ -14,7 +15,7 @@ import { hasSidelight, sidelightWidth } from './doorStyles'
 
 /** 求开合几何要的门洞信息（three/house.ts OpeningInfo 的一部分） */
 export interface DoorGeom {
-  o: Pick<Opening, 'id' | 'kind' | 'hinge' | 'swing' | 'doorStyle' | 'doorLites' | 'windowStyle'>
+  o: Pick<Opening, 'id' | 'kind' | 'hinge' | 'swing' | 'doorStyle' | 'doorLites' | 'windowStyle' | 'foldLeaves'>
   center: Vec
   dir: Vec
   out: Vec
@@ -84,17 +85,51 @@ export function barnPose(g: DoorGeom, open: number) {
   return { pw: w + 8, slide: clamp01(open) * w, off: g.wall / 2 + 3.6 / 2 + 1.5, face: g.o.swing === 'out' ? g.out : mul(g.out, -1) }
 }
 
-/** 折叠门两扇的端点：铰链 → 折角 → 滑动端 */
-export function foldPose(g: DoorGeom, open: number): [Vec, Vec, Vec] {
+/** 折れ戸是几折（不填 = 两折） */
+export const foldCount = (o: Pick<Opening, 'foldLeaves'>) => o.foldLeaves ?? 2
+
+/**
+ * 折叠门的每一串扇：每串从门框（铰链）出发，依次是各扇的端点（铰链 → 折角 → … → 末端）。
+ * 两折、三折一串（三折之字形折，末扇外端离开轨道）；四折两串，各从门洞一端出发、在中间对开。
+ */
+export function foldPose(g: DoorGeom, open: number): Vec[][] {
   const { o, center, dir, out, width: w } = g
   const into = o.swing === 'in' ? mul(out, -1) : out
-  const h = add(center, mul(dir, ((o.hinge === 'start' ? -1 : 1) * w) / 2))
-  const v = o.hinge === 'start' ? dir : mul(dir, -1)
-  const L = w / 2
+  const n = foldCount(o)
   const a = clamp01(open) * FOLD_MAX
-  const apex = add(h, add(mul(v, L * Math.cos(a)), mul(into, L * Math.sin(a))))
-  return [h, apex, add(h, mul(v, 2 * L * Math.cos(a)))]
+  const chain = (h: Vec, v: Vec, leaves: number, L: number) => {
+    const pts = [h]
+    for (let i = 0; i < leaves; i++) pts.push(add(pts[i], add(mul(v, L * Math.cos(a)), mul(into, (i % 2 ? -1 : 1) * L * Math.sin(a)))))
+    return pts
+  }
+  const start = add(center, mul(dir, -w / 2))
+  const end = add(center, mul(dir, w / 2))
+  if (n === 4) return [chain(start, dir, 2, w / 4), chain(end, mul(dir, -1), 2, w / 4)]
+  const h = o.hinge === 'start' ? start : end
+  return [chain(h, o.hinge === 'start' ? dir : mul(dir, -1), n, w / n)]
 }
+
+/**
+ * 平面图上折れ戸的符号：门洞 p0 → p1，各扇折成之字形（折角伸进开启侧 into，深 0.6 扇宽）；
+ * 两折是 V 字，三折从铰链一端（hingeStart = 在 p0）折出、末端停在开启侧，四折是两个 V 对开
+ */
+export function foldPlanPath(o: Pick<Opening, 'foldLeaves'>, p0: Vec, p1: Vec, into: Vec, hingeStart: boolean) {
+  const n = foldCount(o)
+  const chain = (a: Vec, b: Vec, leaves: number) => {
+    const d = { x: (b.x - a.x) / leaves, y: (b.y - a.y) / leaves }
+    const deep = Math.hypot(d.x, d.y) * 0.6
+    const pts = Array.from({ length: leaves + 1 }, (_, i) => add(add(a, mul(d, i)), mul(into, i % 2 ? deep : 0)))
+    return 'M' + pts.map((p) => `${p.x},${p.y}`).join('L')
+  }
+  if (n === 4) {
+    const mid = mul(add(p0, p1), 0.5)
+    return chain(p0, mid, 2) + chain(p1, mid, 2)
+  }
+  return hingeStart ? chain(p0, p1, n) : chain(p1, p0, n)
+}
+
+/** 折叠门各扇（按 foldPose 的顺序排成一列）：[起点, 终点]，起点在靠门框的一端 */
+export const foldLeaves = (chains: Vec[][]) => chains.flatMap((c) => c.slice(1).map((q, i) => [c[i], q] as [Vec, Vec]))
 
 /** 开到 open（推拉的后轨那扇开到 back）时挡路的门板线段（平面坐标）：门扇、推拉扇、折扇，以及开门旁固定的侧窗 */
 export function doorSegments(g: DoorGeom, open: number, back = 0): [Vec, Vec][] {
@@ -122,13 +157,7 @@ export function doorSegments(g: DoorGeom, open: number, back = 0): [Vec, Vec][] 
     const c = add(add(center, mul(s.face, s.off)), mul(dir, s.slide))
     return [[add(c, mul(dir, -s.pw / 2)), add(c, mul(dir, s.pw / 2))]]
   }
-  if (kind === 'folding') {
-    const [a, b, c] = foldPose(g, open)
-    return [
-      [a, b],
-      [b, c],
-    ]
-  }
+  if (kind === 'folding') return foldLeaves(foldPose(g, open))
   if (kind === 'window') return windowSegments(g, open, back)
   return []
 }
