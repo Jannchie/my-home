@@ -1274,7 +1274,8 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
     // 阈值高、强度低：只在最亮的发光部件周围留一圈淡晕，不盖住灯具轮廓和屏幕边框
     // 黑白漫画读的是编码不是颜色，不能泛光
     const manga = look.stylize === 'manga'
-    const nightBloom = sky.night > 0.02 && !low && !manga ? { strength: 0.28 * sky.night, radius: 0.3, threshold: 0.82 } : undefined
+    // 夜里的泛光比效果自己的强、会接管：阈值不能低于效果自己的（「动画」灯下的浅色地板亮到 0.9 左右，阈值 0.82 时整片晕成一团白）
+    const nightBloom = sky.night > 0.02 && !low && !manga ? { strength: 0.28 * sky.night, radius: 0.3, threshold: Math.max(0.82, look.bloom?.threshold ?? 0) } : undefined
     const bloom = low ? undefined : nightBloom && (!look.bloom || nightBloom.strength > look.bloom.strength) ? nightBloom : look.bloom
     // 遮蔽、体积光、转折线：漫画读的是编码，不能乘、不能加
     const ao = (fx.ao || !!look.ao) && !low && !manga
