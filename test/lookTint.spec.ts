@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { hueTint, lookValue, resolveLook } from '/src/three/post'
+import { bloomTintColor, hueTint, lookValue, resolveLook } from '/src/three/post'
 
 describe('分离色调的色相 / 强度调整', () => {
   it('色相、强度换算回去不变', () => {
@@ -34,5 +34,26 @@ describe('分离色调的色相 / 强度调整', () => {
     const def = resolveLook('none')
     expect(lookValue(def, 'shadowAmt')).toBe(0)
     expect(lookValue(def, 'shadowHue')).toBe(250)
+  })
+})
+
+describe('泛光颜色', () => {
+  it('不染色时是白、亮度保持 1', () => {
+    expect(bloomTintColor(undefined).toArray()).toEqual([1, 1, 1])
+    const c = bloomTintColor({ hue: 20, amt: 1 })
+    expect(0.2126 * c.x + 0.7152 * c.y + 0.0722 * c.z).toBeCloseTo(1, 5)
+  })
+
+  it('色相 20 偏橙红：红多、蓝少', () => {
+    const c = bloomTintColor({ hue: 20, amt: 0.8 })
+    expect(c.x).toBeGreaterThan(c.y)
+    expect(c.y).toBeGreaterThan(c.z)
+  })
+
+  it('调整写进 bloomTint，界面读回来一致', () => {
+    const def = resolveLook('anime', { bloomAmt: 0.6 })
+    expect(def.bloomTint).toEqual({ hue: 25, amt: 0.6 })
+    expect(lookValue(def, 'bloomHue')).toBe(25)
+    expect(lookValue(resolveLook('anime'), 'bloomAmt')).toBe(0)
   })
 })

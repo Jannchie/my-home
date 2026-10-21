@@ -95,6 +95,8 @@ export interface LookDef {
   /** 纸面类风格自带的背景渐变：中心 / 中段 / 边缘（sRGB）；缺省用时间光照给的天色，入夜时也逐渐过渡到天色 */
   bg?: [string, string, string]
   bloom?: { strength: number; radius: number; threshold: number }
+  /** 泛光光晕的颜色：色相（度）、强度（0 = 原色，1 = 很浓）；只染光晕，不改画面本身 */
+  bloomTint?: { hue: number; amt: number }
   /** 描边粗细倍数 */
   outline?: number
   /** 画面风格化（一次只能一种）：水彩 / 漫画网点 / 黑白漫画（材质输出编码，manga.ts）/ 像素 / 素描 */
@@ -192,6 +194,9 @@ export interface LookAdjust {
   shadowAmt?: number
   highHue?: number
   highAmt?: number
+  /** 泛光光晕的颜色（LookDef.bloomTint） */
+  bloomHue?: number
+  bloomAmt?: number
 }
 export type LookAdjustKey = keyof LookAdjust
 
@@ -199,7 +204,7 @@ export type LookAdjustKey = keyof LookAdjust
 const TU = [2 / Math.sqrt(6), -1 / Math.sqrt(6), -1 / Math.sqrt(6)] as const
 const TV = [0, 1 / Math.sqrt(2), -1 / Math.sqrt(2)] as const
 /** 强度是 0 时色相没有意义：暗部默认蓝紫、亮部默认暖橙（拖强度时从这里开始） */
-const TINT_HUE = { shadow: 250, high: 40 }
+const TINT_HUE = { shadow: 250, high: 40, bloom: 25 }
 function tintHue(t: readonly number[], fallback: number) {
   const x = t[0] * TU[0] + t[1] * TU[1] + t[2] * TU[2]
   const y = t[0] * TV[0] + t[1] * TV[1] + t[2] * TV[2]
@@ -211,6 +216,13 @@ export function hueTint(hue: number, amt: number): [number, number, number] {
   const x = Math.cos(a) * amt
   const y = Math.sin(a) * amt
   return [TU[0] * x + TV[0] * y, TU[1] * x + TV[1] * y, TU[2] * x + TV[2] * y]
+}
+/** 泛光光晕乘的颜色：白往这个色相偏，亮度（Rec.709）保持 1，染色不会让光晕变亮变暗 */
+export function bloomTintColor(t: { hue: number; amt: number } | undefined, out = new THREE.Vector3()) {
+  if (!t || t.amt <= 0) return out.set(1, 1, 1)
+  const [r, g, b] = hueTint(t.hue, t.amt * 1.2).map((v) => Math.max(0, 1 + v))
+  const l = 0.2126 * r + 0.7152 * g + 0.0722 * b
+  return out.set(r / l, g / l, b / l)
 }
 /** 色相对应的颜色（界面上的色块） */
 export function hueSwatch(hue: number) {
@@ -257,6 +269,8 @@ export function resolveLook(id: string, adj: LookAdjust = {}): LookDef {
     const now = tintHue(base.grade?.[tk] ?? NEUTRAL[tk], TINT_HUE[side])
     out.grade![tk] = hueTint(adj[hk] ?? now.hue, adj[ak] ?? now.amt)
   }
+  if (adj.bloomHue !== undefined || adj.bloomAmt !== undefined)
+    out.bloomTint = { hue: adj.bloomHue ?? base.bloomTint?.hue ?? TINT_HUE.bloom, amt: adj.bloomAmt ?? base.bloomTint?.amt ?? 0 }
   return out
 }
 
@@ -279,6 +293,10 @@ export function lookValue(def: LookDef, k: LookAdjustKey): number | boolean | st
       return def.outline ?? 1
     case 'crease':
       return creaseOf(def)
+    case 'bloomHue':
+      return def.bloomTint?.hue ?? TINT_HUE.bloom
+    case 'bloomAmt':
+      return def.bloomTint?.amt ?? 0
     case 'shadowHue':
     case 'shadowAmt':
     case 'highHue':
@@ -1319,6 +1337,8 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
         p.bloom.strength = bloom.strength
         p.bloom.radius = bloom.radius
         p.bloom.threshold = bloom.threshold
+        // 光晕的颜色：合成时每一级 mip 乘一个颜色（UnrealBloomPass 的 bloomTintColors），原画面不动
+        for (const v of p.bloom.bloomTintColors) bloomTintColor(look.bloomTint, v)
       }
     }
     // 背景：纸面类风格用自己的纸色，入夜时逐渐换成天色

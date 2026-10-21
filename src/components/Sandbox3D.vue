@@ -3287,6 +3287,8 @@ const LOOK_SLIDERS: { k: LookAdjustKey; label: string; min: number; max: number;
   { k: 'highHue', label: '亮部色相', min: 0, max: 359, step: 1 },
   { k: 'highAmt', label: '亮部强度', min: 0, max: 0.08, step: 0.002 },
   { k: 'bloom', label: '泛光', min: 0, max: 0.6, step: 0.02 },
+  { k: 'bloomHue', label: '泛光色相', min: 0, max: 359, step: 1 },
+  { k: 'bloomAmt', label: '泛光染色', min: 0, max: 1, step: 0.05 },
   { k: 'vignette', label: '暗角', min: 0, max: 0.9, step: 0.05 },
   { k: 'grain', label: '颗粒', min: 0, max: 0.15, step: 0.005 },
   { k: 'outline', label: '描边', min: 0, max: 2.5, step: 0.05 },
@@ -4272,7 +4274,7 @@ defineExpose({ resetView })
             <label v-for="sl in lookSliders" :key="sl.k" class="row">
               <span>{{ t(sl.label) }}</span>
               <input type="range" :min="sl.min" :max="sl.max" :step="sl.step" :value="lookVal(sl.k) as number" :aria-label="t(sl.label)" @input="adjustLook(sl.k, Number(($event.target as HTMLInputElement).value))" />
-              <span v-if="sl.k === 'shadowHue' || sl.k === 'highHue'" class="kval hue-swatch" :style="{ background: hueSwatch(lookVal(sl.k) as number) }" />
+              <span v-if="sl.k === 'shadowHue' || sl.k === 'highHue' || sl.k === 'bloomHue'" class="kval hue-swatch" :style="{ background: hueSwatch(lookVal(sl.k) as number) }" />
               <span v-else class="num val kval">{{ numStr(lookVal(sl.k)) }}</span>
             </label>
             <button class="mini" :disabled="!lookCustom" @click="sandbox.lookAdj = {}">{{ t('恢复预设') }}</button>

@@ -882,6 +882,8 @@ Object.assign(UI, {
   亮部色相: ['ハイライトの色相', 'Highlight hue'],
   亮部强度: ['ハイライトの色の強さ', 'Highlight tint'],
   泛光: ['ブルーム', 'Bloom'],
+  泛光色相: ['ブルームの色相', 'Bloom hue'],
+  泛光染色: ['ブルームの色の強さ', 'Bloom tint'],
   暗角: ['周辺減光', 'Vignette'],
   颗粒: ['粒子', 'Grain'],
   描边: ['輪郭線', 'Outline'],
