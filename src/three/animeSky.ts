@@ -1,6 +1,8 @@
 // 画面效果的天空背景（LookDef.sky，「动画感」预设默认开，其余可以在调整里打开）：跟着镜头走的天球，照新海诚动画（和「新海诚风」的天空照片）的天画——
 //   - 蓝天：天顶深而饱和的钴蓝 → 中段青蓝 → 地平线很窄的一条亮带；
-//   - 积云：体积云（clouds.ts），光线步进烘进一张贴图，这里只取样叠上去；太阳、黄昏、入夜程度变了才重烘；
+//   - 中层积云：投影到一个水平面上，头顶的云大、往地平线越来越小，透视感最强的一层；云体蓝灰、受光的边缘亮白，
+//     朝太阳偏移一点再取一次密度，密度往太阳那边变小的一侧是受光面；
+//     写实（LookDef.clouds = 'volume'）换成体积云（clouds.ts）：光线步进烘进一张贴图，这里只取样叠上去，太阳、黄昏、入夜变了才重烘；
 //   - 高空零散的鱼鳞云；太阳周围一圈光晕；
 //   - 黄昏（太阳低）：地平线变橙、天顶偏蓝紫，云的受光面暖金、中间调粉、背光面紫，朝太阳的云底被照成橙粉；
 //   - 入夜：夜空渐变、斜跨天空的银河、疏密和亮度都不均匀的星星；云换成深蓝灰、月光照亮边缘的夜云，挡住后面的星星。
@@ -105,6 +107,31 @@ const SkyShader = {
       float cov = 0.0;
       float covLit = 0.0;
       if (h > -0.01) {
+        // 中层积云：投影到一个水平面上，头顶的云大、越往地平线越小越扁，往地平线汇聚（参考图里最有透视感的那层）。
+        // 域扭曲让云团翻滚；朝太阳偏移再取一次密度，密度往太阳那边变小的一侧受光
+        if (h > 0.03 && uCloudOn < 0.5) {
+          vec2 p = d.xz / (h + 0.08) * 1.1;
+          vec2 q = vec2(fbm(p * 0.6 + vec2(1.7, 9.2)), fbm(p * 0.6 + vec2(8.3, 2.8)));
+          vec2 pw = p + 1.4 * q;
+          float n = fbm(pw);
+          float c = smoothstep(0.43, 0.48, n) * smoothstep(0.03, 0.12, h);
+          if (c > 0.0) {
+            vec2 off = normalize(sunD.xz + vec2(1e-4)) * 0.12;
+            // 云越厚（密度越高）越暗：云团中间是蓝灰的底，受光的边缘亮白
+            float lit = clamp((n - fbm(pw + off)) * 12.0 + 0.55 + 0.25 * toSun - smoothstep(0.48, 0.66, n) * 0.45, 0.0, 1.0);
+            vec3 cc = cloudColor(lit);
+            // 黄昏：朝太阳那一侧的云底被低低的太阳从下往上照成橙粉色
+            cc = mix(cc, vec3(1.0, 0.6, 0.45), uGolden * max(toSun, 0.0) * (1.0 - lit) * 0.7);
+            // 云边（密度刚过阈值的那一圈）亮一点，轮廓干净
+            cc += vec3(1.0, 0.95, 0.85) * (1.0 - smoothstep(0.43, 0.46, n)) * (0.15 + 0.3 * max(toSun, 0.0));
+            // 远处的云带一点地平线的颜色
+            cc = mix(cc, hor, (1.0 - smoothstep(0.03, 0.25, h)) * 0.4);
+            sky = mix(sky, cc, c);
+            covLit = mix(covLit, lit, c);
+            cov = max(cov, c);
+          }
+        }
+
         // 高空的鱼鳞云（高积云）：零散的小块，受光的一侧边缘亮
         if (h > 0.25) {
           vec2 p = d.xz / (h + 0.05) * 3.2;
@@ -175,6 +202,7 @@ export class AnimeSky {
   readonly mesh: THREE.Mesh
   private mat: THREE.ShaderMaterial
   private clouds = new CloudBaker()
+  private volume = false
   /** 上一次请求烘焙时的光照：变化够大才重烘（拖时间轴时不至于每帧都烘） */
   private baked = { dir: new THREE.Vector3(), golden: -1, night: -1 }
 
@@ -218,9 +246,15 @@ export class AnimeSky {
     this.clouds.request(cloudLight(dir, altitude, golden, night))
   }
 
-  /** 每帧调用：云贴图要重烘时烘几行；新的一张换上的那一帧返回 true（要重画） */
+  /** 积云用体积云（clouds.ts）还是画出来的 2D 云 */
+  setVolume(on: boolean) {
+    this.volume = on
+    this.mat.uniforms.uCloudOn.value = on && this.clouds.ready ? 1 : 0
+  }
+
+  /** 每帧调用：体积云的贴图要重烘时烘几行；新的一张换上的那一帧返回 true（要重画） */
   step(renderer: THREE.WebGLRenderer) {
-    if (!this.mesh.visible || !this.clouds.step(renderer)) return false
+    if (!this.volume || !this.mesh.visible || !this.clouds.step(renderer)) return false
     this.mat.uniforms.uClouds.value = this.clouds.front.texture
     this.mat.uniforms.uCloudOn.value = 1
     return true

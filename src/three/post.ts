@@ -155,6 +155,8 @@ export interface LookDef {
   gi?: number
   /** 背景的天空（蓝天白云、夜里星空，animeSky.ts）：所有效果默认都有；false = 不要（透明背景上的天色渐变） */
   sky?: boolean
+  /** 天空的积云：'volume' = 体积云（clouds.ts，光照像照片，写实用）；不填 = 画出来的动画云 */
+  clouds?: 'volume'
   /** 镜头：显像管（弯曲屏幕、扫描线；可以和任何风格化叠加） */
   crt?: boolean
   /** 黑白漫画系列（stylize: 'manga'）的画法：网屏格子（CSS 像素）、是否补转折线、上网点 / 排线 / 只留实黑 */
@@ -281,6 +283,7 @@ export const LOOKS: LookDef[] = [
     tone: true,
     outline: 0,
     crease: 0,
+    clouds: 'volume',
     bloom: { strength: 0.1, radius: 0.5, threshold: 1.8 },
     grade: { exposure: 1.12, contrast: 1.06, saturation: 1.05, vignette: 0.18 },
     lighting: { hemi: 1.05, sun: 1.45 },

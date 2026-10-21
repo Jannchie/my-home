@@ -3133,6 +3133,7 @@ function applyLights() {
   // 影子边缘利落：阴影的过渡宽度跟着半径走（toon.ts）；写实要柔和的半影
   stage.sun.shadow.radius = anime ? 1.2 : real ? (look.softShadow ?? REAL_SHADOW_RADIUS) : SHADOW_RADIUS
   animeSky.mesh.visible = look.sky !== false
+  animeSky.setVolume(look.clouds === 'volume')
   animeSky.setSun(s.lightDir, s.altitude, s.night, s.bg)
   if (anime) {
     // 暗面几乎只受天光（两档色阶的暗面不再接收阳光）：天光加亮一些，画面保持高调、干净，暗面不发闷
