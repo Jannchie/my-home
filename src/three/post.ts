@@ -35,6 +35,9 @@ import { mangaUniforms } from './manga'
 import { isReflector } from './toon'
 import { prerenderReflections } from './reflectFrame'
 import { createGI, type GI } from './gi'
+import { createFog, updateFog } from './fog'
+import { LUT_SIZE, lutTexture } from './lut'
+import { outlineUniforms } from './toon'
 import type { Stage } from './stage'
 
 export type LookId = 'none' | 'game' | 'anime' | 'real' | 'figure' | 'crt' | 'tiltshift' | 'warm' | 'cool' | 'film' | 'pastel' | 'watercolor' | 'comic' | 'manga' | 'manga-coarse' | 'manga-hatch' | 'manga-ink' | 'mono' | 'sepia' | 'pixel' | 'sketch'
@@ -139,6 +142,15 @@ export interface LookDef {
   tone?: boolean | 'gt'
   /** 风格化 PBR（0–1，realistic.ts setRealStyle 的 styl）：柔和的阳光 ramp、带颜色的暗面、暖色的明暗交界 */
   styl?: number
+  /**
+   * 大气雾（fog.ts）：密度（每米）、高度衰减（cm）、朝太阳那一侧带多少阳光色、最浓到多少。
+   * 起雾的距离按镜头定：漫游时在房间尺度之外（屋里不起雾），鸟瞰时从视角焦点附近开始
+   */
+  fog?: { density: number; height: number; sun: number; max: number }
+  /** 3D LUT 调色（lut.ts）的强度（0–1） */
+  lut?: number
+  /** 线条随距离淡出（描边变细到没有）：漫游时从 start 到 end（cm）；鸟瞰时从视角焦点往后 end - start；lift = 线色提亮、提饱和（0 = 深色线，1 = 带颜色的浅线） */
+  line?: { start: number; end: number; lift: number }
   /** 间接光探针（gi.ts）的强度：按房间烘焙的球谐辐照度替换半球光（靠窗亮、深处暗、颜色互染）；不填 = 不用 */
   gi?: number
   /** 背景的天空（蓝天白云、夜里星空，animeSky.ts）：所有效果默认都有；false = 不要（透明背景上的天色渐变） */
@@ -284,6 +296,9 @@ export const LOOKS: LookDef[] = [
     material: 'real',
     styl: 1,
     gi: 1.25,
+    fog: { density: 0.03, height: 350, sun: 0.12, max: 0.55 },
+    lut: 1,
+    line: { start: 450, end: 1300, lift: 0.55 },
     ao: true,
     aoShade: [0.66, 0.64, 0.8, 1.5],
     aoRadius: 22,
@@ -485,6 +500,13 @@ const DUST_ORBIT = 0.3
 const ACCUM_FRAMES = 16
 /** 场景里有东西在动时累积帧数压到这里（这一帧的权重至少 1 / (ACCUM_SETTLE + 1)） */
 const ACCUM_SETTLE = 7
+
+/** 白天雾色往这个淡天蓝偏 */
+const FOG_SKY = new THREE.Color('#bcd6f0')
+/** 漫游时从多远开始起雾（cm）：比一般房间的进深远，屋里不起雾 */
+const WALK_FOG_START = 900
+/** 鸟瞰时从视角焦点往前多少开始起雾（cm） */
+const ORBIT_FOG_BACK = 300
 
 /** 漫游时后处理描线的视线焦点距离（cm）：内部的转折线从这里往外渐淡 */
 const WALK_LINE_FOCUS = 300
@@ -996,6 +1018,10 @@ const SketchShader = {
 }
 
 /** 最后一遍调色（sRGB 空间） */
+/** 没开 LUT 时挂的占位（1³） */
+const BLANK_LUT = new THREE.Data3DTexture(new Uint8Array(4), 1, 1, 1)
+BLANK_LUT.needsUpdate = true
+
 const GradeShader = {
   uniforms: {
     tDiffuse: { value: null as THREE.Texture | null },
@@ -1018,10 +1044,14 @@ const GradeShader = {
     uCA: { value: 0 },
     uPaper: { value: 0 },
     uGrain: { value: 0 },
+    uLut: { value: BLANK_LUT as THREE.Data3DTexture },
+    uLutMix: { value: 0 },
   },
   vertexShader: VERT,
   fragmentShader: /* glsl */ `
     uniform sampler2D tDiffuse;
+    uniform highp sampler3D uLut;
+    uniform float uLutMix;
     uniform vec2 uRes;
     uniform float uScale, uExposure, uContrast, uSaturation, uFade, uMono, uSepia, uHaze, uVignette, uCA, uPaper, uGrain;
     uniform vec3 uGain, uShadowTint, uHighTint, uFadeColor, uHazeColor, uVigColor;
@@ -1042,6 +1072,8 @@ const GradeShader = {
       c += mix(uShadowTint, uHighTint, smoothstep(0.15, 0.85, l));
       c *= uGain;
       c = clamp(c, 0.0, 1.0);
+      // 3D LUT（lut.ts）：按格子中心取样
+      if (uLutMix > 0.0) c = mix(c, texture(uLut, c * ${((LUT_SIZE - 1) / LUT_SIZE).toFixed(6)} + ${(0.5 / LUT_SIZE).toFixed(6)}).rgb, uLutMix);
       float l2 = luma(c);
       c = mix(c, vec3(l2), uMono);
       vec3 sep = vec3(l2) * vec3(1.08, 0.93, 0.74) + vec3(0.035, 0.02, 0.0);
@@ -1124,6 +1156,8 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
     vol: ShaderPass | null
     /** 转折线（crease.ts），同样借遮蔽那一遍的法线、深度图 */
     crease: ShaderPass | null
+    /** 大气雾（fog.ts），借遮蔽那一遍的深度图 */
+    fog: ShaderPass | null
     bloom: UnrealBloomPass | null
     base: ShaderPass
     kuwahara: ShaderPass
@@ -1148,6 +1182,10 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
   const giOn = () => !low && !!current.gi && current.material === 'real' && current.stylize !== 'manga'
   let current: LookDef = LOOK_MAP.get('none')!
   let sky: { bg: [string, string, string]; night: number } = { bg: DEFAULT_BG, night: 0 }
+  /** 雾的颜色（线性）：天色往淡天蓝偏（白天的背景色接近白，直接用会像起了白雾），入夜就是夜色 */
+  const fogColor = new THREE.Color()
+  const syncFogColor = () => fogColor.set(sky.bg[1]).lerp(FOG_SKY, 0.55 * (1 - sky.night))
+  syncFogColor()
   /** 窗户夜光：颜色跟色温，亮度跟室内亮灯程度（没接室内灯光时按全亮） */
   const windowGlow = WINDOW_GLOW.clone()
   let indoor = 1
@@ -1174,6 +1212,7 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
       ao: null,
       vol: null,
       crease: null,
+      fog: null,
       bloom: null,
       base: mk(BaseShader),
       kuwahara: mk(KuwaharaShader),
@@ -1247,17 +1286,20 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
     const ao = (fx.ao || !!look.ao) && !low && !manga
     const vol = fx.volumetric && !low && !manga
     const crease = creaseOf(look) > 0 && !low && !manga
-    if ((ao || vol || crease) && !p.ao) {
+    const fog = !!look.fog && !low && !manga
+    if ((ao || vol || crease || fog) && !p.ao) {
       p.ao = createAO(renderer, scene, camera, () => sceneVersion)
       p.vol = createVolumetric()
+      p.fog = createFog()
       p.crease = createCrease()
       composer.insertPass(p.ao, 1)
       composer.insertPass(p.vol, 2)
-      composer.insertPass(p.crease, 3)
+      composer.insertPass(p.fog, 3)
+      composer.insertPass(p.crease, 4)
     }
-    // 只开体积光 / 转折线时遮蔽那一遍照样跑（要它的深度、法线图），只是不往画面上乘
+    // 只开体积光 / 转折线 / 雾时遮蔽那一遍照样跑（要它的深度、法线图），只是不往画面上乘
     if (p.ao) {
-      p.ao.enabled = ao || vol || crease
+      p.ao.enabled = ao || vol || crease || fog
       p.ao.blendIntensity = ao ? AO_INTENSITY : 0
       // 写实的遮蔽半径大得多（墙角、床底下一大片渐暗），动画感只要贴着的那一圈
       const realAo = look.material === 'real'
@@ -1267,13 +1309,14 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
       p.ao.updateGtaoMaterial(realAo ? { radius: look.aoRadius ?? 32, thickness: 14, distanceFallOff: 0.85 } : { radius: 12, thickness: 12, distanceFallOff: 0.7 })
     }
     if (p.vol) p.vol.enabled = vol
+    if (p.fog) p.fog.enabled = fog
     if (p.crease) p.crease.enabled = crease
     p.smaa.enabled = crease
     if (bloom && !p.bloom) {
       // 用到才建（mip 链占显存）；排在遮蔽、体积光后面
       const s = cssSize()
       p.bloom = new UnrealBloomPass(new THREE.Vector2(s.x, s.y), 1, 0.5, 0.8)
-      composer.insertPass(p.bloom, p.ao ? 4 : 1)
+      composer.insertPass(p.bloom, p.ao ? 5 : 1)
     }
     if (p.bloom) {
       p.bloom.enabled = !!bloom
@@ -1331,6 +1374,8 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
     u.uCA.value = g.ca
     u.uPaper.value = g.paper
     u.uGrain.value = g.grain
+    u.uLutMix.value = look.lut ?? 0
+    u.uLut.value = look.lut ? lutTexture('game') : BLANK_LUT
     syncSize()
   }
 
@@ -1346,6 +1391,14 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
    * 白天且不走 composer 时什么都不用改，不遍历场景。
    */
   function renderPatched(draw: () => void) {
+    // 线条随距离淡出、带颜色（LookDef.line）：漫游按镜头距离，鸟瞰从视角焦点往后
+    const ln = composer ? current.line : undefined
+    const lf = outlineUniforms.uLineFade.value
+    if (ln) {
+      const base = walking ? 0 : Math.max(0, camera.position.distanceTo(focus) - ln.start)
+      lf.set(base + ln.start, base + ln.end, 1)
+    } else lf.z = 0
+    outlineUniforms.uLineLift.value = ln?.lift ?? 0
     const night = sky.night
     const linear = !!composer
     if (!linear && night < 0.01) return draw()
@@ -1540,6 +1593,12 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
         }
         const shafts = VOL_STRENGTH * (current.shafts ?? 1) * (1 - sky.night)
         if (p.vol?.enabled) updateVolumetric(p.vol, camera, stage.sun, p.ao?.depthTexture ?? null, shafts, tick)
+        const fd = current.fog
+        if (p.fog?.enabled && fd) {
+          // 漫游：屋里不起雾，窗外的街景才淡下去；鸟瞰：从视角焦点往后，房子的后半截、院子、底座往背景里退
+          const start = walking ? WALK_FOG_START : Math.max(0, camera.position.distanceTo(focus) - ORBIT_FOG_BACK)
+          updateFog(p.fog, camera, p.ao?.depthTexture ?? null, { start, density: (fd.density / 100) * (1 - 0.6 * sky.night), height: fd.height, ground: 0, color: fogColor, sun: stage.sun, sunK: fd.sun * (1 - sky.night), max: fd.max })
+        }
         // 浮尘：漫游时（体积光开着）围着镜头、慢慢飘；鸟瞰时围着视角焦点、不动（不用一直重画）
         const walk = !!p.vol?.enabled
         dustAnim = walk
@@ -1591,6 +1650,7 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
     },
     setSky(bg, night) {
       sky = { bg, night }
+      syncFogColor()
       update()
     },
     withLook(id, fn) {

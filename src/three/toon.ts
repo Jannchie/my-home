@@ -215,7 +215,26 @@ export function vertexColorToon() {
 /** 描边：沿法线在屏幕空间外扩，线宽不随距离变化；颜色取填充色的深色版本，更像手绘 */
 const outlineCache = new Map<string, THREE.ShaderMaterial>()
 // uManga：黑白漫画效果渲染时描边输出墨线标记（manga.ts，R = 1），和受光材质共用同一个 uniform 对象
-export const outlineUniforms = { uWidth: { value: 1.6 }, uViewport: { value: new THREE.Vector2(800, 600) }, uManga: mangaUniforms.uManga }
+// uLineFade：线随距离变细到没有（起点, 终点 cm, 开关）；uLineLift：线色提亮、提饱和（0 = 深色线，1 = 带颜色的浅线）。「手游风」用，post.ts 每帧设
+export const outlineUniforms = {
+  uWidth: { value: 1.6 },
+  uViewport: { value: new THREE.Vector2(800, 600) },
+  uManga: mangaUniforms.uManga,
+  uLineFade: { value: new THREE.Vector3(0, 1, 0) },
+  uLineLift: { value: 0 },
+}
+const LINE_VERT_PARS = /* glsl */ `
+        uniform float uWidth;
+        uniform vec2 uViewport;
+        uniform vec3 uLineFade;`
+// 视空间深度（clip.w）超过起点后线宽渐变到 0
+const LINE_WIDTH = /* glsl */ `uWidth * ( uLineFade.z > 0.5 ? 1.0 - smoothstep( uLineFade.x, uLineFade.y, clip.w ) : 1.0 )`
+const LINE_FRAG_PARS = /* glsl */ `
+        uniform float uLineLift;
+        vec3 lineLift( vec3 c ) {
+          float l = dot( c, vec3( 0.2126, 0.7152, 0.0722 ) );
+          return mix( c, min( max( mix( vec3( l ), c, 1.5 ), 0.0 ) * 2.2, 1.0 ), uLineLift );
+        }`
 function outlineMaterial(color: THREE.Color) {
   const key = color.getHexString()
   let m = outlineCache.get(key)
@@ -223,20 +242,20 @@ function outlineMaterial(color: THREE.Color) {
     m = new THREE.ShaderMaterial({
       uniforms: { ...outlineUniforms, uColor: { value: color } },
       vertexShader: /* glsl */ `
-        uniform float uWidth;
-        uniform vec2 uViewport;
+        ${LINE_VERT_PARS}
         void main() {
           vec4 clip = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
           vec3 n = normalize(normalMatrix * normal);
           vec2 dir = (projectionMatrix * vec4(n, 0.0)).xy;
           float l = length(dir);
-          if (l > 1e-5) clip.xy += dir / l * uWidth * 2.0 / uViewport * clip.w;
+          if (l > 1e-5) clip.xy += dir / l * ${LINE_WIDTH} * 2.0 / uViewport * clip.w;
           gl_Position = clip;
         }`,
       fragmentShader: /* glsl */ `
         uniform vec3 uColor;
         uniform float uManga;
-        void main() { gl_FragColor = uManga > 0.5 ? vec4(1.0, 0.5, 0.5, 1.0) : vec4(uColor, 1.0); }`,
+        ${LINE_FRAG_PARS}
+        void main() { gl_FragColor = uManga > 0.5 ? vec4(1.0, 0.5, 0.5, 1.0) : vec4(lineLift(uColor), 1.0); }`,
       side: THREE.BackSide,
     })
     outlineCache.set(key, m)
@@ -274,8 +293,7 @@ export function vertexColorOutline() {
   vcOutline = new THREE.ShaderMaterial({
     uniforms: { ...outlineUniforms, uLinear: { value: 0 }, uDim: { value: 1 } },
     vertexShader: /* glsl */ `
-      uniform float uWidth;
-      uniform vec2 uViewport;
+      ${LINE_VERT_PARS}
       attribute vec3 ocolor;
       varying vec3 vOColor;
       void main() {
@@ -285,10 +303,11 @@ export function vertexColorOutline() {
         vec3 n = normalize(normalMatrix * normal);
         vec2 dir = (projectionMatrix * vec4(n, 0.0)).xy;
         float l = length(dir);
-        if (l > 1e-5) clip.xy += dir / l * uWidth * 2.0 / uViewport * clip.w;
+        if (l > 1e-5) clip.xy += dir / l * ${LINE_WIDTH} * 2.0 / uViewport * clip.w;
         gl_Position = clip;
       }`,
     fragmentShader: /* glsl */ `
+      ${LINE_FRAG_PARS}
       uniform float uLinear;
       uniform float uDim;
       uniform float uManga;
@@ -298,7 +317,7 @@ export function vertexColorOutline() {
       }
       void main() {
         vec3 c = uLinear > 0.5 ? toLinear(vOColor) : vOColor;
-        gl_FragColor = uManga > 0.5 ? vec4(1.0, 0.5, 0.5, 1.0) : vec4(c * uDim, 1.0);
+        gl_FragColor = uManga > 0.5 ? vec4(1.0, 0.5, 0.5, 1.0) : vec4(lineLift(c) * uDim, 1.0);
       }`,
     side: THREE.BackSide,
   })
