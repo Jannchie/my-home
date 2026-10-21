@@ -59,12 +59,13 @@ describe('房门的开合', () => {
       const objs = doorObjs(root)
       expect(objs.length, JSON.stringify(k)).toBeGreaterThan(0)
       for (const v of [0, 0.5, 1]) {
+        // 推拉门的两扇都摆到 v
         for (const o of objs) poseOpening(o, v)
         root.updateMatrixWorld(true)
         const box = new THREE.Box3()
         for (const o of objs) box.union(new THREE.Box3().setFromObject(o))
         box.expandByScalar(4)
-        for (const [a, b] of doorSegments(info, v))
+        for (const [a, b] of doorSegments(info, v, v))
           for (const p of [a, b]) expect(box.containsPoint(new THREE.Vector3(p.x, 100, p.y)), `${JSON.stringify(k)} 开 ${v}：(${p.x.toFixed(1)}, ${p.y.toFixed(1)})`).toBe(true)
       }
     }
@@ -112,6 +113,35 @@ describe('房门的开合', () => {
     const again = buildHouse(testPlan(), 240)
     op.bindHouse(again)
     expect(op.value(key)).toBe(1)
+  })
+
+  test('推拉门两扇各自推拉：拾取认得出是哪一扇，后轨那扇推开后终点一侧走得过去', () => {
+    const plan = testPlan({ kind: 'sliding' })
+    const root = buildHouse(plan, 240)
+    const op = new Openers()
+    op.bindHouse(root)
+    const front = doorKey('d1')
+    const back = doorKey('d1', 1)
+    expect(op.value(front)).toBe(1)
+    expect(op.value(back)).toBe(0)
+    const panels = doorObjs(root)
+    expect(panels.map((o) => op.keyOf(o.children[0] ?? o)).sort()).toEqual([front, back].sort())
+    const backPanel = panels.find((o) => op.keyOf(o) === back)!
+    const x0 = backPanel.position.clone()
+    // 前轨那扇关上、后轨那扇推开：只有后轨那扇动
+    op.set(front, 0, false)
+    op.set(back, 1, false)
+    expect(backPanel.position.distanceTo(x0)).toBeGreaterThan(40)
+    const walk = (y: number) => {
+      const w = new Walker(plan, new THREE.PerspectiveCamera(), { lift: () => 0, onFloor: () => {}, blockers: () => op.segments('') })
+      w.pos = { x: 320, y }
+      w.yaw = -Math.PI / 2
+      w.hold('w', true)
+      for (let i = 0; i < 240; i++) w.update(1 / 60)
+      return w.pos.x
+    }
+    expect(walk(150 + 90 / 4)).toBeGreaterThan(430)
+    expect(walk(150 - 90 / 4)).toBeLessThan(400)
   })
 })
 
@@ -168,10 +198,10 @@ describe('通往阳台的落地窗', () => {
       op.bindHouse(root)
       expect(op.has(doorKey('w1')), String(style)).toBe(true)
       for (const v of [0, 0.5, 1]) {
-        poseOpening(objs[0], v)
+        for (const leaf of [0, 1]) poseOpening(objs[0], v, leaf)
         root.updateMatrixWorld(true)
         const box = new THREE.Box3().setFromObject(objs[0]).expandByScalar(4)
-        for (const [a, b] of doorSegments(info, v))
+        for (const [a, b] of doorSegments(info, v, v))
           for (const p of [a, b]) expect(box.containsPoint(new THREE.Vector3(p.x, 100, p.y)), `${style} 开 ${v}：(${p.x.toFixed(1)}, ${p.y.toFixed(1)})`).toBe(true)
       }
     }
@@ -184,6 +214,12 @@ describe('通往阳台的落地窗', () => {
       expect(walkEast(plan, 0, 94), `${style} 关着`).toBeLessThan(400)
       expect(walkEast(plan, 1, 94), `${style} 开着`).toBeGreaterThan(430)
     }
+    // 推拉落地窗两扇各自开合：后轨那扇单独一个 key，只高亮它自己
+    const op2 = new Openers()
+    op2.bindHouse(buildHouse(balconyPlan('sliding'), 240))
+    expect(op2.has(doorKey('w1', 1))).toBe(true)
+    expect(op2.objects(doorKey('w1', 1)).length).toBe(1)
+    expect(op2.value(doorKey('w1', 1))).toBe(0)
     const fixed = balconyPlan('fixed')
     const op = new Openers()
     op.bindHouse(buildHouse(fixed, 240))

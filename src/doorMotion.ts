@@ -2,11 +2,12 @@
 // 3D（three/house.ts poseOpening）按它摆门扇，第一人称漫游（three/walk.ts）按它的门板线段挡人，两边同一份算法。
 //
 //   door    开门：门扇绕铰链转 0..90°
-//   sliding 引き戸：靠起点一侧那扇（前轨）推到另一扇前面，另一扇不动
+//   sliding 引き戸：两扇各自推拉（门扇 0 = 前轨、靠起点一侧，往终点推；门扇 1 = 后轨、靠终点一侧，往起点推）
 //   barn    谷仓门：整扇沿墙面上的明装轨道推开一整个门宽
 //   folding 折れ戸：两扇对折，靠铰链一侧那扇绕铰链转、另一扇的末端沿轨道滑向铰链
-//   window  通往阳台的落地窗（当门用）：推拉扇推到另一扇前面、平开扇往户外推开到 90°；固定窗等开不了的款式一直挡着
+//   window  通往阳台的落地窗（当门用）：两扇推拉扇各自推到另一扇那边、平开扇往户外推开到 90°；固定窗等开不了的款式一直挡着
 // 门板线段都是平面坐标，沿门板宽度方向（不计厚度）。
+// 推拉的两扇分开开合：open 是门扇 0（和别的门一样的那个开合），back 是门扇 1（后轨那扇，没动过时关着）。
 
 import { add, mul, type Opening, type Vec } from './model'
 import { hasSidelight, sidelightWidth } from './doorStyles'
@@ -42,9 +43,11 @@ export const SWING_MAX = Math.PI / 2
 export const FOLD_MAX = (86 * Math.PI) / 180
 
 /**
- * 没动过的门开着多少：开门半开（62°，看得出是门又不挡视线），推拉 / 谷仓 / 折叠门、落地窗开到底（人走得过去，同以前）
+ * 没动过的门开着多少：开门半开（62°，看得出是门又不挡视线），推拉 / 谷仓 / 折叠门、落地窗开到底（人走得过去，同以前）；
+ * 推拉的后轨那扇（leaf = 1）关着
  */
-export function defaultDoorOpen(o: Pick<Opening, 'kind' | 'doorStyle'>) {
+export function defaultDoorOpen(o: Pick<Opening, 'kind' | 'doorStyle'>, leaf = 0) {
+  if (leaf) return 0
   return doorMotionKind(o) === 'door' ? (62 * Math.PI) / 180 / SWING_MAX : 1
 }
 
@@ -64,14 +67,14 @@ export function swingPose(g: DoorGeom, open: number) {
   return { origin: add(add(hinge, mul(u, 0.5)), mul(sw, 2)), d, leaf: w - 1 - side, side }
 }
 
-/** 推拉门的两扇：板宽、离墙中线的偏移（前轨 +，后轨 -）、两扇中心沿墙的位置（第一扇随开合动） */
-export function slidingPose(g: DoorGeom, open: number) {
+/** 推拉门的两扇：板宽、离墙中线的偏移（前轨 +，后轨 -）、两扇中心沿墙的位置（前轨那扇随 open、后轨那扇随 back 动） */
+export function slidingPose(g: DoorGeom, open: number, back = 0) {
   const w = g.width
   const t = Math.max(2, g.wall / 4)
   return {
     pw: w / 2 + 2,
     off: [t / 2 + 0.5, -(t / 2 + 0.5)],
-    along: [-w / 4 + (clamp01(open) * w) / 2, w / 4],
+    along: [-w / 4 + (clamp01(open) * w) / 2, w / 4 - (clamp01(back) * w) / 2],
   }
 }
 
@@ -93,8 +96,8 @@ export function foldPose(g: DoorGeom, open: number): [Vec, Vec, Vec] {
   return [h, apex, add(h, mul(v, 2 * L * Math.cos(a)))]
 }
 
-/** 开到 open 时挡路的门板线段（平面坐标）：门扇、推拉扇、折扇，以及开门旁固定的侧窗 */
-export function doorSegments(g: DoorGeom, open: number): [Vec, Vec][] {
+/** 开到 open（推拉的后轨那扇开到 back）时挡路的门板线段（平面坐标）：门扇、推拉扇、折扇，以及开门旁固定的侧窗 */
+export function doorSegments(g: DoorGeom, open: number, back = 0): [Vec, Vec][] {
   const kind = doorMotionKind(g.o, g.sash)
   const { center, dir, out, width: w } = g
   if (kind === 'door') {
@@ -108,7 +111,7 @@ export function doorSegments(g: DoorGeom, open: number): [Vec, Vec][] {
     return segs
   }
   if (kind === 'sliding') {
-    const s = slidingPose(g, open)
+    const s = slidingPose(g, open, back)
     return [0, 1].map((k) => {
       const c = add(add(center, mul(dir, s.along[k])), mul(out, s.off[k]))
       return [add(c, mul(dir, -s.pw / 2)), add(c, mul(dir, s.pw / 2))] as [Vec, Vec]
@@ -126,14 +129,14 @@ export function doorSegments(g: DoorGeom, open: number): [Vec, Vec][] {
       [b, c],
     ]
   }
-  if (kind === 'window') return windowSegments(g, open)
+  if (kind === 'window') return windowSegments(g, open, back)
   return []
 }
 
 /**
  * 落地窗各扇的几何（three/windows.ts windowModel 按它建模型、windowSegments 按它挡人）。
  * 局部坐标：x 沿墙（窗中心 0）、z 横穿墙，z 按户外在 +z 给（用的时候乘上户外那一侧的符号）。
- *   slide：推拉扇，中心在 x、宽 pw、轨道 z；x1 = 开到底时推到哪（不填 = 不动的那扇）
+ *   slide：推拉扇（下标 = 门扇 0 / 1），中心在 x、宽 pw、轨道 z；x1 = 开到底时推到哪（推到另一扇那边）
  *   swing：平开扇 x0..x1，铰链在 left ? x0 : x1、贴着户外墙面（z）；ajar = 摆成固定样子时推开着的那扇
  *   fixed：中间固定的玻璃（组合窗）
  * 开不了的款式（固定窗等）返回 null。
@@ -146,7 +149,8 @@ export function windowLeaves(style: string, w: number, wall: number, hinge?: 'st
     const pw = inner / 2 + 2
     const z = t / 2 + 0.5
     const a1 = legacy ? w / 4 : inner / 4 - 1
-    return { inner, slide: [{ x: legacy ? -w / 4 : -inner / 4 + 1, x1: a1, z, pw }, { x: a1, z: -z, pw }], swing: [], fixed: null }
+    const a0 = legacy ? -w / 4 : -inner / 4 + 1
+    return { inner, slide: [{ x: a0, x1: a1, z, pw }, { x: a1, x1: a0, z: -z, pw }], swing: [], fixed: null }
   }
   if (style === 'casement' || style === 'casement2' || style === 'combo') {
     const inner = w - 8
@@ -161,7 +165,7 @@ export function windowLeaves(style: string, w: number, wall: number, hinge?: 'st
 }
 
 /** 落地窗挡路的扇（几何见 windowLeaves） */
-function windowSegments(g: DoorGeom, open: number): [Vec, Vec][] {
+function windowSegments(g: DoorGeom, open: number, back: number): [Vec, Vec][] {
   const { center, dir, out, width: w, wall } = g
   const n0 = { x: -dir.y, y: dir.x }
   const sgn = out.x * n0.x + out.y * n0.y >= 0 ? 1 : -1
@@ -171,8 +175,8 @@ function windowSegments(g: DoorGeom, open: number): [Vec, Vec][] {
   if (!L) return [[P(-w / 2, 0), P(w / 2, 0)]]
   const v = clamp01(open)
   const a = v * SWING_MAX
-  const segs: [Vec, Vec][] = L.slide.map((p) => {
-    const x = p.x1 === undefined ? p.x : p.x + (p.x1 - p.x) * v
+  const segs: [Vec, Vec][] = L.slide.map((p, k) => {
+    const x = p.x + (p.x1 - p.x) * (k ? clamp01(back) : v)
     return [P(x - p.pw / 2, p.z), P(x + p.pw / 2, p.z)]
   })
   for (const f of L.swing) {

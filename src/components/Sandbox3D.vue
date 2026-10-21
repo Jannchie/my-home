@@ -32,7 +32,7 @@ import { DEFAULT_KELVIN, DEFAULT_OUTDOOR, DEFAULT_POWER, DEFAULT_RANGE, IndoorLi
 import { disposeUnshared, isReflector } from '../three/toon'
 import { poseDoors } from '../three/kit'
 import { drawerSlots } from '../three/drawers'
-import { Openers, type OpenKey } from '../three/openers'
+import { Openers, doorIdOf, type OpenKey } from '../three/openers'
 import { drawerContents, slideOffset } from '../cabinet'
 import { useThumbs } from '../three/thumbs'
 import { normalizeColor, paletteStyleOf } from '../three/stylePalettes'
@@ -1955,8 +1955,9 @@ function pickOpenAim() {
 }
 /** 门 / 抽屉的名字（漫游准星下的提示） */
 function openName(key: OpenKey) {
-  if (key.startsWith('o:')) {
-    const o = plan.value.openings.find((x) => x.id === key.slice(2))
+  const id = doorIdOf(key)
+  if (id !== null) {
+    const o = plan.value.openings.find((x) => x.id === id)
     return o ? t(OPENING_LABELS[o.kind]) : ''
   }
   const f = findFurniture(key.split(':')[1])

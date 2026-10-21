@@ -1042,11 +1042,19 @@ function buildWalls(plan: Plan, H0: number, infos: OpeningInfo[], opts: HouseOpt
   return g
 }
 
+/** 一个洞口的组里分开开合的门扇（推拉的两扇各是一扇，见 doorMotion.ts）：组自己标了是哪扇，或者里面会动的部件标了 */
+export function openingLeaves(obj: THREE.Object3D): number[] {
+  if (obj.userData.doorLeaf !== undefined) return [obj.userData.doorLeaf as number]
+  const s = new Set<number>()
+  for (const c of obj.children) if (c.userData.door) s.add((c.userData.doorLeaf as number | undefined) ?? 0)
+  return s.size ? [...s].sort((a, b) => a - b) : [0]
+}
+
 /**
- * 把一个洞口的门扇摆到开合程度 open（0 = 关上，1 = 开到底；几何见 doorMotion.ts）。
+ * 把一个洞口的门扇 leaf 摆到开合程度 open（0 = 关上，1 = 开到底；几何见 doorMotion.ts）。
  * obj 是 buildOpenings 里带 doorPart 标记的组；房子是静态矩阵时同步矩阵。
  */
-export function poseOpening(obj: THREE.Object3D, open: number) {
+export function poseOpening(obj: THREE.Object3D, open: number, leaf = openingLeaves(obj)[0]) {
   const info = obj.userData.info as OpeningInfo
   const part = obj.userData.doorPart as string | undefined
   if (!info || !part) return
@@ -1055,14 +1063,13 @@ export function poseOpening(obj: THREE.Object3D, open: number) {
     const s = swingPose(info, open)
     obj.position.set(s.origin.x, 0, s.origin.y)
     obj.rotation.y = Math.atan2(-s.d.y, s.d.x)
-  } else if (part === 'slide' || part === 'fixed') {
-    const s = slidingPose(info, open)
-    const k = part === 'slide' ? 0 : 1
-    const c = add(add(info.center, mul(info.dir, s.along[k])), mul(info.out, s.off[k]))
+  } else if (part === 'slide') {
+    const s = slidingPose(info, open, open)
+    const c = add(add(info.center, mul(info.dir, s.along[leaf])), mul(info.out, s.off[leaf]))
     obj.position.set(c.x, info.y0, c.y)
   } else if (part === 'barn' || part === 'window') {
-    // 谷仓门的门板、落地窗的扇：标成会动的部件（kit.ts movable），和柜门一样摆
-    for (const c of obj.children) if (c.userData.door) poseDoor(c, open)
+    // 谷仓门的门板、落地窗的扇：标成会动的部件（kit.ts movable），和柜门一样摆；推拉落地窗只摆这一扇
+    for (const c of obj.children) if (c.userData.door && ((c.userData.doorLeaf as number | undefined) ?? 0) === leaf) poseDoor(c, open)
     return
   } else if (part === 'fold') {
     const [a, b, c] = foldPose(info, open)
@@ -1121,7 +1128,7 @@ function buildOpenings(infos: OpeningInfo[], H: number) {
       leaf.userData.doorPart = 'leaf'
       g.add(leaf)
     } else if (o.kind === 'sliding') {
-      // 引き戸：两扇错开，起点一侧那扇推开（朝阳台的落地推拉窗在下面窗的分支里）
+      // 引き戸：两扇错开、各自推拉，没动过时起点一侧那扇推开（朝阳台的落地推拉窗在下面窗的分支里）
       const t = Math.max(2, wall / 4)
       if (o.doorStyle === 'barn') {
         // 谷仓门：一整扇挂在墙面上（开向一侧）的明装轨道上，沿轨道推开
@@ -1163,7 +1170,8 @@ function buildOpenings(infos: OpeningInfo[], H: number) {
         }
         panel.rotation.y = yaw
         panel.userData.info = info
-        panel.userData.doorPart = k === 0 ? 'slide' : 'fixed'
+        panel.userData.doorPart = 'slide'
+        panel.userData.doorLeaf = k
         g.add(panel)
       }
     } else if (o.kind === 'folding') {
@@ -1214,7 +1222,7 @@ function buildOpenings(infos: OpeningInfo[], H: number) {
   }
   for (const c of g.children) {
     const info = c.userData.info as OpeningInfo
-    if (c.userData.doorPart) poseOpening(c, defaultDoorOpen(info.o))
+    if (c.userData.doorPart) for (const k of openingLeaves(c)) poseOpening(c, defaultDoorOpen(info.o, k), k)
     if (info) tagFade(c, info.center, info.out, info.outer)
     // 每个洞口的组（门扇 / 推拉扇 / 窗框）内部按材质合并：窗框 4~5 根白条并成一个，门扇和把手各一个；
     // 玻璃是半透明的，留在组外不合并。业务标记（info、fade）都在组上，让开时整组一起淡出

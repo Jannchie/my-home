@@ -193,9 +193,12 @@ export function windowModel(s: WindowSpec): THREE.Group {
           if (k === 0) panel.add(handle(pw / 2 - 2, hh * 0.5, -out * (t / 2 + 1)))
         }
         // 旧的落地推拉窗摆成固定样子时推开一半多一点
-        panel.position.set(legacy && !s.movable && p.x1 !== undefined ? p.x + w * 0.18 : p.x, y0, p.z * out)
-        // 当门用：前轨那扇推到另一扇前面（开到底 = 和另一扇重叠）
-        if (s.movable && p.x1 !== undefined) movable(panel, { kind: 'slide', dx: p.x1 - p.x })
+        panel.position.set(legacy && !s.movable && k === 0 ? p.x + w * 0.18 : p.x, y0, p.z * out)
+        // 当门用：两扇各自推到另一扇那边（开到底 = 和另一扇重叠），doorLeaf 标出是哪一扇（openers.ts 分开开合）
+        if (s.movable) {
+          movable(panel, { kind: 'slide', dx: p.x1 - p.x })
+          panel.userData.doorLeaf = k
+        }
         g.add(panel)
       })
       break

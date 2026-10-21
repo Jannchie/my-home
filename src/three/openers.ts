@@ -1,7 +1,8 @@
 // 沙盘里一扇扇门、一个个抽屉的开合：每个会动的部件单独开关、单独调开合程度（0 = 关上，1 = 开到底），带缓动动画。
 //   - 家具的部件（kit.ts movable：柜门、抽屉、翻门、推拉门）按「家具 id + 部件下标（kit.ts doorParts 的顺序）」记；
 //     没动过的部件跟着家具的 open（存档里的整体开关）。
-//   - 房门、通往阳台的落地窗（house.ts buildOpenings 里带 doorPart 标记的组）按洞口 id 记；没动过的门按 doorMotion.ts defaultDoorOpen。
+//   - 房门、通往阳台的落地窗（house.ts buildOpenings 里带 doorPart 标记的组）按「洞口 id + 门扇」记（推拉的两扇各自开合，
+//     别的门只有门扇 0）；没动过的门按 doorMotion.ts defaultDoorOpen。
 //   - 开合只在这次打开的沙盘里有效（不进存档、不进撤销）；房子 / 家具模型重建后照样摆回去。
 //   - 抽屉拉出时，抽屉格里的东西由沙盘跟着挪（onPart 回调），模型本身只管部件。
 //   - segments：第一人称漫游按房门现在的开合挡人（门板线段，平面坐标）。
@@ -10,12 +11,15 @@ import * as THREE from 'three'
 import type { Vec } from '../model'
 import { defaultDoorOpen, doorSegments, type DoorGeom } from '../doorMotion'
 import { doorParts, poseDoor } from './kit'
-import { poseOpening, type OpeningInfo } from './house'
+import { openingLeaves, poseOpening, type OpeningInfo } from './house'
 
 /** 一个会动的东西：家具部件或房门 */
 export type OpenKey = string
 export const furnKey = (id: string, part: number): OpenKey => `f:${id}:${part}`
-export const doorKey = (id: string): OpenKey => `o:${id}`
+/** 洞口的门扇 leaf（推拉的后轨那扇是 1，其余都是 0） */
+export const doorKey = (id: string, leaf = 0): OpenKey => (leaf ? `o:${id}#${leaf}` : `o:${id}`)
+/** 房门的 key 是哪个洞口的（不是房门返回 null） */
+export const doorIdOf = (key: OpenKey) => (key.startsWith('o:') ? key.slice(2).replace(/#\d+$/, '') : null)
 
 interface Live {
   /** 只摆模型：拖动时试探屏幕方向也用它 */
@@ -61,7 +65,8 @@ export class Openers {
     for (const k of [...this.live.keys()]) if (k.startsWith('o:')) this.live.delete(k)
     this.doors.clear()
     this.segs.clear()
-    const groups = new Map<string, THREE.Object3D[]>()
+    /** 每扇门：要摆的组、拾取 / 高亮的对象 */
+    const groups = new Map<OpenKey, { info: OpeningInfo; leaf: number; groups: THREE.Object3D[]; objs: THREE.Object3D[] }>()
     root.traverse((o) => {
       if (!o.userData.doorPart) return
       const info = o.userData.info as OpeningInfo
@@ -70,14 +75,20 @@ export class Openers {
       this.doors.set(info.o.id, { geom: info, floor: (f?.userData.floorId as string) ?? '' })
       // 落地窗里没有会动的扇（固定窗等）：只挡人，不能开关
       if (o.userData.doorPart === 'window' && !o.children.some((c) => c.userData.door)) return
-      let list = groups.get(info.o.id)
-      if (!list) groups.set(info.o.id, (list = []))
-      list.push(o)
+      const leaves = openingLeaves(o)
+      for (const leaf of leaves) {
+        const key = doorKey(info.o.id, leaf)
+        let g = groups.get(key)
+        if (!g) groups.set(key, (g = { info, leaf, groups: [], objs: [] }))
+        g.groups.push(o)
+        // 一个组里有好几扇（推拉落地窗）：高亮只亮这一扇
+        if (leaves.length > 1) g.objs.push(...o.children.filter((c) => c.userData.door && c.userData.doorLeaf === leaf))
+        else g.objs.push(o)
+      }
     })
-    for (const [id, objs] of groups) {
-      const base = defaultDoorOpen((objs[0].userData.info as OpeningInfo).o)
-      const key = doorKey(id)
-      const live: Live = { pose: (x) => objs.forEach((o) => poseOpening(o, x)), cur: base, base, objs }
+    for (const [key, g] of groups) {
+      const base = defaultDoorOpen(g.info.o, g.leaf)
+      const live: Live = { pose: (x) => g.groups.forEach((o) => poseOpening(o, x, g.leaf)), cur: base, base, objs: g.objs }
       this.live.set(key, live)
       const v = this.want.get(key)
       if (v !== undefined && v !== base) this.put(live, v)
@@ -185,11 +196,13 @@ export class Openers {
     return this.moving.size > 0
   }
 
-  /** 拾取：从命中的对象往上找，属于哪个会动的部件 / 房门 */
+  /** 拾取：从命中的对象往上找，属于哪个会动的部件 / 房门的哪一扇 */
   keyOf(o: THREE.Object3D | null): OpenKey | null {
+    let leaf = 0
     for (; o; o = o.parent) {
       if (o.userData.openKey) return o.userData.openKey as OpenKey
-      if (o.userData.doorPart) return doorKey((o.userData.info as OpeningInfo).o.id)
+      if (o.userData.doorLeaf !== undefined) leaf = o.userData.doorLeaf as number
+      if (o.userData.doorPart) return doorKey((o.userData.info as OpeningInfo).o.id, leaf)
       if (o.userData.furnitureId) return null
     }
     return null
@@ -202,7 +215,8 @@ export class Openers {
     out = []
     for (const [id, d] of this.doors) {
       if (d.floor !== floor) continue
-      out.push(...doorSegments(d.geom, this.live.get(doorKey(id))?.cur ?? defaultDoorOpen(d.geom.o)))
+      const cur = (leaf: number) => this.live.get(doorKey(id, leaf))?.cur ?? defaultDoorOpen(d.geom.o, leaf)
+      out.push(...doorSegments(d.geom, cur(0), cur(1)))
     }
     this.segs.set(floor, out)
     return out
