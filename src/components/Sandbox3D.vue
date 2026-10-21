@@ -2904,6 +2904,8 @@ function loop() {
   if (framesMoving) dirty = true
   // 灯光渐亮 / 渐灭（开关、黄昏清晨）
   if (lights.step(dt)) dirty = true
+  // 体积云的贴图重烘（three/clouds.ts）：每帧烘几行，整张换上时重画
+  if (animeSky.step(stage.renderer)) dirty = true
   // 高亮叠加层跟上目标（拖动、墙体让开、楼层淡出时）
   const hoverMoved = hoverHi.sync()
   if (siteHL.sync() || hoverMoved) dirty = true
@@ -2979,7 +2981,7 @@ onMounted(() => {
   lights = new IndoorLights(lowPower() ? POOL_LOW : POOL_HIGH)
   stage.scene.add(lights.group, lights.fixtures)
   setReflectInterval(4)
-  if (import.meta.env.DEV) Object.assign(window, { __myhomeStage: stage })
+  if (import.meta.env.DEV) Object.assign(window, { __myhomeStage: stage, __myhomeSky: animeSky })
   applySky()
   stage.renderer.shadowMap.autoUpdate = false
   stage.renderer.shadowMap.needsUpdate = true

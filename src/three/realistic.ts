@@ -126,7 +126,7 @@ const realUniforms = {
   uCel: { value: 0 },
   uStyl: { value: 0 },
   /** 风格化 PBR 的阴影色、交界色（线性空间的乘数） */
-  uStylShade: { value: new THREE.Color().setRGB(0.95, 0.96, 1.02) },
+  uStylShade: { value: new THREE.Color().setRGB(0.9, 0.92, 1.03) },
   uStylWarm: { value: new THREE.Color().setRGB(1.08, 0.96, 0.84) },
 }
 /** 写实光照上叠的画法（post.ts 每帧按画面效果设）：手办质感、边缘光、明暗交界、纯色毛绒、赛璐璐明暗、风格化 PBR */
@@ -283,11 +283,11 @@ function injectDetail(sh: THREE.WebGLProgramParametersWithUniforms, perVertex: b
 		rDiffIrr = mix( rDiffIrr, rCelNL * directLight.color, uCel );
 	}
 	if ( uStyl > 0.0 ) {
-		// 风格化 ramp：受光面整体抬平（只留一点随角度的渐变），交界在 N·L 0–0.3 之间柔和地落进暗面。
+		// 风格化 ramp：受光面整体抬平（只留一点随角度的渐变），交界在 N·L 0–0.1 之间利落地落进暗面（手游角色、场景的明暗分界）。
 		// irradiance = N·L × 光色 × 投影，除掉 N·L 得到光色 × 投影（背光时两者都是 0）
 		float rNL = dot( geometryNormal, directLight.direction );
 		vec3 rLight = irradiance / max( saturate( rNL ), 1e-3 );
-		float rRamp = smoothstep( -0.02, 0.3, rNL ) * ( 0.8 + 0.2 * saturate( rNL ) );
+		float rRamp = smoothstep( 0.0, 0.1, rNL ) * ( 0.82 + 0.18 * saturate( rNL ) );
 		rDiffIrr = mix( rDiffIrr, rRamp * rLight, uStyl );
 	}
 	reflectedLight.directDiffuse += rDiffIrr * BRDF_Lambert( material.diffuseContribution ) * ( 1.0 - F );`,
@@ -321,7 +321,7 @@ function injectDetail(sh: THREE.WebGLProgramParametersWithUniforms, perVertex: b
 	if ( uStyl > 0.0 ) {
 		// 风格化 PBR：暗面乘阴影色、提饱和度（透亮的蓝紫影子）；明暗交界、投影边缘一道暖而饱和的色带
 		float sLum = dot( outgoingLight, vec3( 0.2126, 0.7152, 0.0722 ) );
-		vec3 sShade = max( mix( vec3( sLum ), outgoingLight, 1.18 ), 0.0 ) * uStylShade;
+		vec3 sShade = max( mix( vec3( sLum ), outgoingLight, 1.3 ), 0.0 ) * uStylShade;
 		outgoingLight = mix( outgoingLight, sShade, uStyl * ( 1.0 - sunLit ) );
 		vec3 sWarm = max( mix( vec3( sLum ), outgoingLight, 1.35 ), 0.0 ) * uStylWarm;
 		outgoingLight = mix( outgoingLight, sWarm, uStyl * rTabAccent( vMat ) * termEdge * sunLit * 0.8 );
