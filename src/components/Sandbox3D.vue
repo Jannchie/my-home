@@ -14,7 +14,7 @@ import OpeningEditor from './OpeningEditor.vue'
 import { openingFrame } from '../three/openingPick'
 import { findFixtureModel, firstHouseHit, fixtureFrame, furnitureLimit, type HouseHit, type HouseHitKind } from '../three/fixturePick'
 import FixtureEditor from './FixtureEditor.vue'
-import { baseFloorId, floorBelow, floorById, floorOf, floorView, isMultiFloor, planFloors } from '../floors'
+import { baseFloorId, floorBelow, floorById, floorHeight, floorOf, floorView, isMultiFloor, planFloors } from '../floors'
 import FloorBar from './FloorBar.vue'
 import FloorRail from './FloorRail.vue'
 import { withStairHoles } from '../stairs'
@@ -28,7 +28,7 @@ import { CITIES, MONTH_DAYS, compassAxes, skyState, type SkyState } from '../thr
 import { setReflectInterval } from '../three/reflectFrame'
 import { CULL_MARGIN, CullCache, walkVisibility } from '../walkCull'
 import { furnitureRoom } from '../restyle'
-import { DEFAULT_KELVIN, DEFAULT_OUTDOOR, DEFAULT_POWER, DEFAULT_RANGE, IndoorLights, KELVIN_MAX, KELVIN_MIN, LIGHT_MODES, OUTDOOR_MAX, OUTDOOR_MIN, POOL_HIGH, POOL_LOW, POWER_MAX, POWER_MIN, RANGE_MAX, RANGE_MIN, autoLevel, diningKey, isLampAsset, lightColor, lum, CEILING, ceilingHidden, ownedLightKey, takeOverRoomLights, type LightMode } from '../three/lights'
+import { DEFAULT_KELVIN, DEFAULT_OUTDOOR, DEFAULT_POWER, DEFAULT_RANGE, IndoorLights, KELVIN_MAX, KELVIN_MIN, LIGHT_MODES, OUTDOOR_MAX, OUTDOOR_MIN, POOL_HIGH, POOL_LOW, POWER_MAX, POWER_MIN, RANGE_MAX, RANGE_MIN, autoLevel, diningKey, isLampAsset, lightColor, lum, ceilingHidden, ownedLightKey, takeOverRoomLights, type LightMode } from '../three/lights'
 import { disposeUnshared, isReflector } from '../three/toon'
 import { isWallMounted, poseDoors } from '../three/kit'
 import { drawerSlots } from '../three/drawers'
@@ -461,10 +461,19 @@ let roofUp = false
 const walking = ref(false)
 /** 墙全部完整、楼层全部叠好：外观视图或漫游 */
 const fullView = () => sandbox.exterior || walking.value
+/** 当前层的层高（墙满高）：墙高滑杆的上限 */
+const fullH = computed(() => floorHeight(plan.value, activeFloor.value))
+/** 墙高滑杆压低了当前层（拉到头存 Infinity = 满高，换到更高的楼层也是满高） */
+const wallLowered = () => sandbox.wallHeight < fullH.value
+/** 墙高滑杆：显示、拖动都限在当前层的层高以内 */
+const wallSlider = computed({
+  get: () => Math.min(sandbox.wallHeight, fullH.value),
+  set: (v: number) => (sandbox.wallHeight = v >= fullH.value - 5 ? Infinity : v),
+})
 function roofWanted() {
   if (fullView()) return true
   // 墙高滑杆压低时屋顶会悬空：不显示
-  if (sandbox.mode !== 'preview' || sandbox.wallHeight < 240 || !floorGroups.some((f) => f.roof && !f.roof.userData.derived)) return (roofUp = false)
+  if (sandbox.mode !== 'preview' || wallLowered() || !floorGroups.some((f) => f.roof && !f.roof.userData.derived)) return (roofUp = false)
   if ([...floorAnim.values()].some((s) => s.hideAt)) return (roofUp = false)
   // 带回差：俯视角在阈值附近来回时屋顶不闪
   const polar = controls ? controls.getPolarAngle() : 1
@@ -906,8 +915,8 @@ function rebuildHouse() {
   const raw = toRaw(plan.value)
   // 多层户型每层用自己的层高；墙高滑杆调低时只压低当前层
   // 外观视图、漫游：墙一律满高（墙高滑杆不起作用）
-  const wh = fullView() ? 240 : sandbox.wallHeight
-  const built = buildBuilding(raw, wh, (f) => (f.id === activeFloor.value && wh < 240 ? Math.min(f.height, wh) : f.height), { defaultRoof: true })
+  const wh = fullView() ? Infinity : sandbox.wallHeight
+  const built = buildBuilding(raw, wh, (f) => (f.id === activeFloor.value ? Math.min(f.height, wh) : f.height), { defaultRoof: true })
   house = built.root
   // 房子搭好就不动了（除了墙体压低和楼层滑动，那两处自己更新矩阵）：不再每帧重算上千个对象的矩阵
   freezeMatrices(house)
@@ -2120,7 +2129,7 @@ async function enterWalk() {
   setReflectInterval(2)
   // 开发时给截图脚本摆镜头（同 __myhomeBlueprint）
   if (import.meta.env.DEV) Object.assign(window, { __myhomeWalker: walker, __myhomeStage: stage })
-  ceilingRoot = ceilings(raw, (id) => liftOf(id) + (floorGroups.find((g) => g.floor.id === id)?.wallH ?? 240))
+  ceilingRoot = ceilings(raw, (id) => liftOf(id) + (floorGroups.find((g) => g.floor.id === id)?.wallH ?? floorHeight(raw, id)))
   stage.scene.add(ceilingRoot)
   stage.camera.fov = 72
   stage.camera.near = 5
@@ -3423,7 +3432,7 @@ watch(
 watch([activeFloor, floorShow], () => {
   if (!house) return
   // 墙高滑杆调低时只有当前层是矮墙：换层要重搭
-  if (isMultiFloor(plan.value) && sandbox.wallHeight < 240 && !fullView() && builtActive !== activeFloor.value) rebuildHouse()
+  if (isMultiFloor(plan.value) && Number.isFinite(sandbox.wallHeight) && !fullView() && builtActive !== activeFloor.value) rebuildHouse()
   floorTargets()
   updateCutaway()
   hoverRoomId = null
@@ -3784,7 +3793,7 @@ function tryTakeOver(e: { clientX: number; clientY: number }, houseHit: boolean)
   }
   if (!dev && !main) return false
   // 点的位置：设备是命中点；灯投到天花板下灯具那个高度再比远近（斜着看时地面交点离灯很远）
-  const at = dev ?? raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -(activeY() + CEILING - 15)), new THREE.Vector3())
+  const at = dev ?? raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -(activeY() + fullH.value - 15)), new THREE.Vector3())
   let made: Furniture[] = []
   mutate((plan) => {
     made = dev ? takeOverDevices(plan) : takeOverRoomLights(plan, main!.roomId, main!.specs)
@@ -4139,8 +4148,8 @@ defineExpose({ resetView })
         <FloorBar variant="panel" class="floors" />
         <label class="row">
           <span>{{ t('墙高') }}</span>
-          <input v-model.number="sandbox.wallHeight" type="range" min="40" max="240" step="10" />
-          <span class="num val">{{ sandbox.wallHeight }}</span>
+          <input v-model.number="wallSlider" type="range" min="40" :max="fullH" step="10" />
+          <span class="num val">{{ wallSlider }}</span>
         </label>
         <label class="row" :title="t('小：画面平、接近等距视图；大：近大远小更明显')">
           <span>{{ t('透视') }}</span>

@@ -67,7 +67,8 @@ import { spandrelGeometry, windowModel, type WindowModelStyle } from './windows'
 import { showerCurtainModel, showerModel } from './shower'
 import { edgeRail, holeRails, stairWalls, stairsModel, type WallLine } from './stairs3d'
 import { subtractSpan } from '../stairs'
-import { SLAB, floorElevation, floorOf, isMultiFloor } from '../floors'
+import { SLAB, floorElevation, floorHeight, floorOf, isMultiFloor } from '../floors'
+import { CEILING } from './lightFixtures'
 import { centroid, onBoundary, signedArea } from '../model'
 
 /** 地面高度：玄関土间、阳台比室内低 */
@@ -1852,7 +1853,7 @@ function fixtureShape(f: Fixture, wallH: number, rise?: number, walls?: WallLine
       return g
     }
     case 'ps':
-      return psModel(f.w, d, Math.min(wallH, 240))
+      return psModel(f.w, d, wallH)
     case 'builtin':
       return storageSpotModel(f.w, d, !!f.recessed, Math.min(wallH - 1, NICHE_H))
     case 'stairs':
@@ -2167,9 +2168,12 @@ function noTinyShadows(root: THREE.Object3D) {
   })
 }
 
+/** 吸顶灯 / 吊灯素材的模型按 CEILING 做：摆进某层时整体抬高这么多，贴到这层的天花板下 */
+export const ceilingLift = (plan: Plan, floor: string) => floorHeight(plan, floor) - CEILING
+
 /**
  * 摆家具（世界坐标）。多层户型按家具的 floor 找那一层的房间定地面高度，再加上楼层的 elevation；
- * plan 传整份户型或那一层的子户型都行。
+ * plan 传整份户型或那一层的子户型都行。吸顶灯素材再抬到所在楼层的天花板下（ceilingLift）。
  */
 export function placeFurniture(obj: THREE.Object3D, plan: Plan, fu: Pick<Furniture, 'x' | 'y' | 'rot' | 'z' | 'floor'> & Partial<Pick<Furniture, 'asset' | 'spin'>>) {
   if (isMultiFloor(plan)) {
@@ -2181,6 +2185,7 @@ export function placeFurniture(obj: THREE.Object3D, plan: Plan, fu: Pick<Furnitu
     placeOnFloor(obj, plan, fu.x, fu.y, fu.rot)
     obj.position.y += fu.z ?? 0
   }
+  if (fu.asset && ASSET_MAP.get(fu.asset)?.ceiling) obj.position.y += ceilingLift(plan, floorOf(plan, fu))
   applySpin(obj, fu)
   // 沙盘里家具的根节点是静态矩阵（见 matrices.ts）：挪动后手动更新
   if (!obj.matrixAutoUpdate) syncMatrix(obj)

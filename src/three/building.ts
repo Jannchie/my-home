@@ -22,7 +22,7 @@ export interface FloorGroup {
 }
 
 /**
- * 搭整栋房子。wallH：单层户型的墙高（沙盘的「墙高」滑杆）；多层户型每层用 Floor.height，
+ * 搭整栋房子。wallH：单层户型的墙高（沙盘的「墙高」滑杆，最高到层高）；多层户型每层用 Floor.height，
  * wallHFor 可以按层改（例如当前层跟着滑杆压低）。
  * bare：3D 设计图用的「素模」——不搭展示底座和用地；墙压低（剖切）的楼层不加外墙装饰、挑空旁的外墙也不通高。
  */
@@ -32,6 +32,8 @@ export function buildBuilding(plan: Plan, wallH: number, wallHFor?: (f: Floor) =
   const ex = plan.exterior
   const facade = ex ? facadeMaterial(ex) : undefined
   const multi = isMultiFloor(plan)
+  // 单层户型的墙不高过层高（wallH 给 Infinity = 满高）
+  if (!multi) wallH = Math.min(wallH, fs[0].height)
   /** 各层实际的墙高：屋顶盖在墙顶上（单层户型就是 wallH） */
   const heightOf = (f: Floor) => (multi ? (wallHFor?.(f) ?? f.height) : wallH)
   // 屋顶：户建按外观设定；没有外观设定的户型（公寓、复式、手画的）要了才现推一份缺省的（沙盘的外观视图）

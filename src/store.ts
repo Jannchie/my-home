@@ -25,7 +25,7 @@ import { normalizeWindow } from './windows'
 import { normalizeDoor } from './doorStyles'
 import { yardFurniture } from './yard'
 import { STAIRS_SIZE } from './stairs'
-import { BASE_FLOOR_ID, DEFAULT_FLOOR_H, SLAB, baseFloor, baseFloorId, floorBelow, floorById, floorOf, floorOutline, floorView, isMultiFloor, nextFloorId, normalizeFloors, planFloors, stampFloor } from './floors'
+import { BASE_FLOOR_ID, SLAB, baseFloorId, floorBelow, floorById, floorOf, floorOutline, floorView, isMultiFloor, nextFloorId, normalizeFloors, planFloors, stampFloor } from './floors'
 
 export type Tool = 'select' | 'rect' | 'poly' | 'door' | 'window' | 'fixture'
 
@@ -201,7 +201,6 @@ const onActive = <T extends { floor?: string }>(x: T) => stampFloor(plan.value, 
 export function addFloor() {
   mutate((p) => {
     const fs = planFloors(p).map((f) => ({ ...f }))
-    if (!p.floors?.length) fs[0] = baseFloor(sandbox.wallHeight >= 200 ? sandbox.wallHeight : DEFAULT_FLOOR_H)
     const top = fs[fs.length - 1]
     const id = nextFloorId({ floors: fs })
     const f: Floor = { id, name: id.toUpperCase(), elevation: top.elevation + top.height + SLAB, height: top.height }
@@ -292,7 +291,8 @@ export const WALL_MODES: { id: WallMode; label: string }[] = [
   { id: 'half', label: '内墙半墙' },
   { id: 'down', label: '全部压低' },
 ]
-export const sandbox = reactive({ wallHeight: 240, wallMode: 'half' as WallMode, cutHeight: 60, cutawayOpacity: 0, cutawayHover: true, snap: true, mode: 'edit' as 'edit' | 'preview', autoRotate: true, autoFurnish: true, style: 'auto' as StyleTag | 'random' | 'auto', look: loadLook(), lookAdj: loadLookAdj(), fx: loadFx(), fov: loadFov(), ...loadSky(), ...loadLights(), playing: false, exterior: false })
+// wallHeight：「墙高」滑杆压低当前层的高度，Infinity = 满高（各层的层高）
+export const sandbox = reactive({ wallHeight: Infinity, wallMode: 'half' as WallMode, cutHeight: 60, cutawayOpacity: 0, cutawayHover: true, snap: true, mode: 'edit' as 'edit' | 'preview', autoRotate: true, autoFurnish: true, style: 'auto' as StyleTag | 'random' | 'auto', look: loadLook(), lookAdj: loadLookAdj(), fx: loadFx(), fov: loadFov(), ...loadSky(), ...loadLights(), playing: false, exterior: false })
 
 /**
  * 3D 沙盘的显示方式：全部楼层 / 只到当前层 / 分层拉开 / 外观，四个是同一级的选项（外观 = 全部楼层叠好、墙满高、盖屋顶）。

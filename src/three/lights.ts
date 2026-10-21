@@ -21,7 +21,7 @@ import { hasTag } from './tags'
 import { floorOf, floorViews, planFloors, stampFloor } from '../floors'
 import { buildLightMask, lightMaskKey, setLightMaskEnabled, setLightMaskFloors, setLightMaskLight, setLightMaskMap, type LightMaskMap } from './lightMask'
 import { useAnisotropy } from './toon'
-import { CEILING, LAMP_GLOW, ceilingAssetId, fixtureModel, isMainKind, styleSpec, type FixtureShape, type RigGlow } from './lightFixtures'
+import { LAMP_GLOW, ceilingAssetId, fixtureModel, isMainKind, styleSpec, type FixtureShape, type RigGlow } from './lightFixtures'
 
 export { CEILING, LAMP_GLOW, fixtureModel, styleSpec, type FixtureShape } from './lightFixtures'
 
@@ -126,6 +126,8 @@ export interface RoomLightSpec {
   /** 房间（住户）风格：吸顶灯 / 吊灯按风格换造型；没有就是通用的圆形吸顶灯 */
   style?: StyleTag
   shape?: FixtureShape
+  /** 所在楼层的层高（天花板离地）：吸顶灯贴着它、吊灯的吊杆吊到它；不给按 CEILING */
+  ceil?: number
 }
 
 const SMALL_ROOMS: RoomKind[] = ['entrance', 'hall', 'storage', 'toilet', 'wash']
@@ -155,7 +157,7 @@ function diningTable(plan: Plan, room: Room, defs: Map<string, AssetDef>) {
 export function roomLightSpecs(plan: Plan, defs: Map<string, AssetDef> = new Map(), styleOf?: (roomId: string) => StyleTag | undefined): RoomLightSpec[] {
   let out: RoomLightSpec[] = []
   // 多层户型按层算（同一位置上下两层的房间各管各的设备、餐桌）；高度是本层地面起算，楼层的高度由调用方加上
-  for (const { view } of floorViews(plan)) roomSpecsInto(out, view, defs)
+  for (const { floor, view } of floorViews(plan)) roomSpecsInto(out, view, defs, floor.height)
   // 主灯换成了灯具家具的房间（接管了、或者手动摆了吸顶灯）：不再自动摆吸顶灯 / 吊灯（手元灯、阳台壁灯照旧）
   const owned = ownedLightRooms(plan)
   out = out.filter((s) => !(isMainKind(s.kind) && owned.has(s.roomId)))
@@ -222,7 +224,7 @@ export function takeOverRoomLights(plan: Plan, roomId: string, specs: RoomLightS
 /** 主灯归属的指纹：哪些房间换成了灯具家具（变了要重建房间灯） */
 export const ownedLightKey = (plan: Plan) => [...ownedLightRooms(plan)].sort().join(',')
 
-function roomSpecsInto(out: RoomLightSpec[], plan: Plan, defs: Map<string, AssetDef>) {
+function roomSpecsInto(out: RoomLightSpec[], plan: Plan, defs: Map<string, AssetDef>, H: number) {
   for (const room of plan.rooms) {
     if (room.points.length < 3 || room.kind === 'void') continue
     const A = area(room.points)
@@ -232,7 +234,7 @@ function roomSpecsInto(out: RoomLightSpec[], plan: Plan, defs: Map<string, Asset
     const c = labelPointAvoiding(room.points, boxes)
     // 面积大的房间灯更亮一点（光池更大，中心不变）
     const main = mainLightPower(room, 'ceiling')
-    const base = { roomId: room.id, primary: true, ry: 0 }
+    const base = { roomId: room.id, primary: true, ry: 0, ceil: H }
     if (room.kind === 'balcony') {
       // 靠室内的那面墙：边外侧一点落在别的（非阳台）房间里
       let wall: { p: Vec; n: Vec; len: number } | null = null
@@ -262,8 +264,8 @@ function roomSpecsInto(out: RoomLightSpec[], plan: Plan, defs: Map<string, Asset
         kind: 'counter',
         x: kitchen.x + fx * k,
         y: kitchen.y + fy * k,
-        h: CEILING - 10,
-        fy: CEILING - 5,
+        h: H - 10,
+        fy: H - 5,
         intensity: 0.8,
         distance: Math.max(240, Math.min(420, kitchen.w * 1.2)),
         ry: -a,
@@ -283,10 +285,10 @@ function roomSpecsInto(out: RoomLightSpec[], plan: Plan, defs: Map<string, Asset
       }
     }
     if (SMALL_ROOMS.includes(room.kind) || room.kind === 'bath') {
-      out.push({ ...base, kind: 'small', x: c.x, y: c.y, h: CEILING - 5, fy: CEILING - 6, ...mainLightPower(room, 'small') })
+      out.push({ ...base, kind: 'small', x: c.x, y: c.y, h: H - 5, fy: H - 6, ...mainLightPower(room, 'small') })
       continue
     }
-    out.push({ ...base, kind: 'ceiling', x: c.x, y: c.y, h: CEILING - 5, fy: CEILING - 8, ...main })
+    out.push({ ...base, kind: 'ceiling', x: c.x, y: c.y, h: H - 5, fy: H - 8, ...main })
     if (counter) out.push({ ...counter, primary: false, intensity: 0.55 })
     if (room.kind === 'ldk') {
       const t = diningTable(plan, room, defs)

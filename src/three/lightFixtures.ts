@@ -6,7 +6,7 @@ import type { StyleTag } from './kit'
 import type { RoomLightSpec } from './lights'
 import { addOutlines, ball, cup, cyl, rbox, toon, torus } from './toon'
 
-/** 天花板高度（灯具按真实层高 240 放，和沙盘「墙高」滑杆无关） */
+/** 灯具素材（packs/ceiling-lights.ts）按这个天花板高度做模型；房间灯按所在楼层的层高放（RoomLightSpec.ceil），和沙盘「墙高」滑杆无关 */
 export const CEILING = 240
 
 /** 发光部件的标记：post.ts 的夜间加亮跳过它们，由 lights.ts 按开关 / 色温控制 */
@@ -99,8 +99,9 @@ export const ceilingAssetId = (shape: FixtureShape | undefined, kind: MainKind) 
 export function applyShape(s: RoomLightSpec, shape: FixtureShape) {
   const info = SHAPES[shape]
   s.shape = shape
-  if (s.kind !== 'pendant') s.fy = CEILING - (s.kind === 'small' ? info.small ?? info.hang : info.hang)
-  s.h = Math.min(CEILING - 3, s.fy + info.light)
+  const ceil = s.ceil ?? CEILING
+  if (s.kind !== 'pendant') s.fy = ceil - (s.kind === 'small' ? info.small ?? info.hang : info.hang)
+  s.h = Math.min(ceil - 3, s.fy + info.light)
 }
 
 /** 给房间灯套上风格造型（同一风格有几款时按 variant 固定挑一款） */
@@ -179,7 +180,7 @@ export function fixtureModel(s: RoomLightSpec, { outline = true } = {}): { obj: 
     if (!outline) m.userData.noOutline = true
     return m
   }
-  const top = CEILING - s.fy
+  const top = (s.ceil ?? CEILING) - s.fy
   const small = s.kind === 'small'
   const S = small ? 13 : s.kind === 'pendant' ? 19 : 24
   const rim = '#e9e4da'

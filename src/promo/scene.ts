@@ -10,8 +10,8 @@ import { skyState, type Geo } from '../three/sky'
 import { disposeUnshared } from '../three/toon'
 import { ASSET_MAP } from '../three/assets'
 import { bbox, type Furniture, type Plan } from '../model'
+import { floorHeight } from '../floors'
 
-export const WALL_H = 240
 export const CUT_H = 60
 
 export interface FurnObj {
@@ -36,7 +36,7 @@ export class HouseSet {
   radius: number
 
   constructor(public plan: Plan) {
-    this.house = buildHouse(plan, WALL_H)
+    this.house = buildHouse(plan, floorHeight(plan))
     const b = bbox(plan.rooms.flatMap((r) => r.points))
     this.center = { x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 }
     for (const f of plan.furniture) {

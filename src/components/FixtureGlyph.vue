@@ -5,10 +5,10 @@ import { computed } from 'vue'
 import { KITCHEN, fixtureDepth, polyPath, type Fixture } from '../model'
 import { jp, t } from '../i18n'
 import { stairLayout, stairsVariant } from '../stairs'
-import { SLAB } from '../floors'
+import { DEFAULT_FLOOR_H, SLAB } from '../floors'
 import type { StallWalls } from '../bathroom'
 
-/** rise：楼梯的层间高（决定级数），不给按 240 + 楼板厚；stall：淋浴房哪几边贴墙（不给 = 只有正面不贴墙） */
+/** rise：楼梯的层间高（决定级数），不给按默认层高 + 楼板厚；stall：淋浴房哪几边贴墙（不给 = 只有正面不贴墙） */
 const props = defineProps<{ f: Fixture; rise?: number; stall?: StallWalls }>()
 
 const w = computed(() => props.f.w)
@@ -33,7 +33,7 @@ const FILL = '#ffffff'
 /** 楼梯：踏步线、上楼箭头（局部坐标），起步处画一个小圆 */
 const stairs = computed(() => {
   if (props.f.kind !== 'stairs') return null
-  const L = stairLayout(props.f, props.rise ?? 240 + SLAB)
+  const L = stairLayout(props.f, props.rise ?? DEFAULT_FLOOR_H + SLAB)
   const path = L.path
   const end = path[path.length - 1]
   const prev = path[path.length - 2] ?? path[0]

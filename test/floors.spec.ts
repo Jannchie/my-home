@@ -7,9 +7,11 @@ import { decodeShare, encodeShare } from '/src/share'
 import { wallSegments } from '/src/walls'
 import { floorOf, floorOutline, floorView, isMultiFloor, planFloors, riseOf, SLAB } from '/src/floors'
 import { stairHoleConflicts, stairHoles, stairLayout, slabHoles, STAIRS_SIZE } from '/src/stairs'
-import { area, rectPoints, type Plan } from '/src/model'
+import { area, emptyPlan, rectPoints, type Plan } from '/src/model'
 import { buildBuilding } from '/src/three/building'
-import { buildHouse } from '/src/three/house'
+import { buildHouse, placeFurniture } from '/src/three/house'
+import { ASSETS } from '/src/three/assets'
+import { CEILING } from '/src/three/lightFixtures'
 import { checklist } from '/src/checklist'
 import { decorate } from '/src/decorate'
 import { perFloorFurniture } from '/src/floors'
@@ -205,5 +207,33 @@ describe('3D 多层搭建', () => {
     expect(stairs).not.toBeNull()
     const sb = new THREE.Box3().setFromObject(stairs!)
     expect(sb.max.y).toBeGreaterThan(270)
+  })
+})
+
+describe('按地区的默认层高', () => {
+  test('日式 240、中式和欧美 270：没存楼层表的单层户型按地区取，户建两层都用地区的层高', () => {
+    for (const [region, H] of [['jp', 240], ['cn', 270], ['west', 270]] as const) {
+      const apt = generatePlan({ seed: 3, ...JP_OPTS, region, dwelling: 'apartment' }).plan
+      expect(apt.floors?.length ?? 0).toBe(0)
+      expect(planFloors(apt)[0].height).toBe(H)
+      const house = generatePlan({ seed: 3, ...JP_OPTS, region, dwelling: 'house' }).plan
+      expect(planFloors(house).map((f) => f.height)).toEqual([H, H])
+      expect(riseOf(house, planFloors(house)[0].id)).toBe(H + SLAB)
+      // 单层户型的墙按层高搭（滑杆给 Infinity = 满高）
+      const { floors } = buildBuilding(apt, Infinity)
+      expect(floors[0].wallH).toBe(H)
+    }
+  })
+
+  test('吸顶灯素材贴着所在楼层的天花板：层高多出来多少就整体抬高多少', () => {
+    const asset = ASSETS.find((a) => a.ceiling === 'ceiling')!
+    const plan = (h: number): Plan => ({ ...emptyPlan(), rooms: [{ id: 'r', name: 'R', kind: 'western', points: rectPoints(0, 0, 300, 300) }], floors: [{ id: '1f', name: '1F', elevation: 0, height: h }], furniture: [{ id: 'l', asset: asset.id, x: 150, y: 150, rot: 0 }] })
+    const top = (h: number) => {
+      const obj = new THREE.Group()
+      placeFurniture(obj, plan(h), plan(h).furniture[0])
+      return obj.position.y
+    }
+    expect(top(270) - top(240)).toBeCloseTo(30, 5)
+    expect(top(CEILING)).toBeCloseTo(0, 5)
   })
 })

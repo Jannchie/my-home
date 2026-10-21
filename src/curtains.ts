@@ -2,6 +2,7 @@
 
 import { add, bbox, edgesOf, fixtureBox, fixtureDepth, mul, pointInPolygon, type Box, type Fixture, type Plan } from './model'
 import { wallThicknessAt } from './walls'
+import { floorHeight } from './floors'
 import { sashAllowed, windowSpan } from './windows'
 
 export { windowSpan }
@@ -89,7 +90,7 @@ export function curtainSpec(plan: Pick<Plan, 'fixtures'>, o: { center: { x: numb
 }
 
 /** 全屋会挂窗帘的窗（居室默认挂、和室不挂，房间的 curtain 设定优先），同 house.ts 的 buildCurtains */
-export function curtainSpecs(plan: Plan, H = 240): CurtainSpec[] {
+export function curtainSpecs(plan: Plan, H = floorHeight(plan)): CurtainSpec[] {
   const out: CurtainSpec[] = []
   for (const o of plan.openings) {
     if (o.kind !== 'window') continue

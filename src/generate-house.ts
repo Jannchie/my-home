@@ -27,7 +27,7 @@ import { JO, area, bbox, type Box, edgesOf, openingGeom, add, mul, pointInPolygo
 import { WALL, WALL_OUTER, createCtx, planArea, planViolations, searchWithArea, type Ctx } from './generate'
 import { bedroomCloset, placeBathroom, placeKitchen, roomLinks, shoeCabinet } from './generate-band'
 import { isIndoor, sharedIntervals } from './walls'
-import { DEFAULT_FLOOR_H, SLAB, floorOf, floorView, planFloors, stampFloor } from './floors'
+import { SLAB, regionFloorH, floorOf, floorView, planFloors, stampFloor } from './floors'
 import { stairFootprint, stairHoleConflicts, stairLinks, withStairKeepout } from './stairs'
 import { DOOR_PASS } from './stairDoors'
 import { jp, t } from './i18n'
@@ -836,8 +836,9 @@ function layout(seed: number, o: Pick<HouseGenOpts, 'region' | 'dwelling' | 'bed
     }
   }
 
-  // 1F / 2F：层高都是默认墙高，2F 地面 = 1F 天花 + 楼板
-  const floors = [F1, F2].map((id, i) => ({ id, name: id.toUpperCase(), elevation: i * (DEFAULT_FLOOR_H + SLAB), height: DEFAULT_FLOOR_H }))
+  // 1F / 2F：层高都是这个地区的默认层高，2F 地面 = 1F 天花 + 楼板
+  const H = regionFloorH(o.region)
+  const floors = [F1, F2].map((id, i) => ({ id, name: id.toUpperCase(), elevation: i * (H + SLAB), height: H }))
   const rooms = [...rooms1, ...rooms2]
   const beds = rooms.filter((r) => r.kind === 'western' || r.kind === 'japanese').length
   const baths = rooms.filter((r) => r.kind === 'bath' && r.name !== 'Half Bath').length

@@ -7,25 +7,27 @@
 // floorView(plan, floorId)，当作一份独立的单层户型交给它们。子户型里的房间、设备、家具和原户型是同一批对象，
 // 直接改它们的字段会写回原户型；但往子户型的数组里增删不会，增删要走原户型（store 的 addRoom 等会打上当前楼层）。
 
-import { area, bbox, dist, rectPoints, signedArea, type Floor, type Plan, type Room, type Vec } from './model'
+import { area, bbox, dist, rectPoints, signedArea, type Floor, type Plan, type Region, type Room, type Vec } from './model'
 import { wallSegments } from './walls'
 
 /** 楼板厚（cm）：上层地面到下层天花之间 */
 export const SLAB = 30
-/** 新楼层的默认墙高 */
+/** 新楼层的默认墙高（层高，楼板底到地面）：日式公寓常见的 2.4 m */
 export const DEFAULT_FLOOR_H = 240
+/** 各地区的默认层高：中式、欧美住宅普遍更高（约 2.7 m）。单层户型没存楼层表时按户型的地区取 */
+export const regionFloorH = (r: Region | undefined) => (r === 'cn' || r === 'west' ? 270 : DEFAULT_FLOOR_H)
 /** 单层户型隐含的那一层 */
 export const BASE_FLOOR_ID = '1f'
 export const baseFloor = (height = DEFAULT_FLOOR_H): Floor => ({ id: BASE_FLOOR_ID, name: '1F', elevation: 0, height })
 
-type FloorsOf = Pick<Plan, 'floors'>
+type FloorsOf = Pick<Plan, 'floors'> & Partial<Pick<Plan, 'region'>>
 interface OnFloor {
   floor?: string
 }
 
 /** 户型的楼层表（从低到高）；单层户型给出隐含的 1F */
 export function planFloors(p: FloorsOf): Floor[] {
-  return p.floors?.length ? p.floors : [baseFloor()]
+  return p.floors?.length ? p.floors : [baseFloor(regionFloorH(p.region))]
 }
 
 export const isMultiFloor = (p: FloorsOf) => (p.floors?.length ?? 0) > 1
@@ -35,6 +37,9 @@ export const baseFloorId = (p: FloorsOf) => planFloors(p)[0].id
 export const floorOf = (p: FloorsOf, x: OnFloor) => x.floor ?? baseFloorId(p)
 
 export const floorById = (p: FloorsOf, id: string) => planFloors(p).find((f) => f.id === id)
+
+/** 某层的层高（墙满高）；找不到这层就按最底层 */
+export const floorHeight = (p: FloorsOf, id?: string) => (id ? floorById(p, id) : undefined)?.height ?? planFloors(p)[0].height
 
 /** 某层的上一层 / 下一层（按 elevation） */
 export function floorAbove(p: FloorsOf, id: string): Floor | undefined {

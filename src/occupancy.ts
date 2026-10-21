@@ -449,7 +449,7 @@ export class Occupancy {
   private curtainCache: [Box, number, number][] | null = null
   /** 窗帘占的立体块：[平面包围盒, 底, 顶]，规则同 house.ts 的 buildCurtains */
   get curtains() {
-    return (this.curtainCache ??= curtainSpecs(this.plan).map((c): [Box, number, number] => [c.box, c.bottom, c.rodY + 2.5]))
+    return (this.curtainCache ??= curtainSpecs(this.plan, this.ceiling).map((c): [Box, number, number] => [c.box, c.bottom, c.rodY + 2.5]))
   }
 
   private zoneCache = new Map<string, Zone[]>()

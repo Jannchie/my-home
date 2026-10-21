@@ -6,6 +6,7 @@ import { normalizePlan } from '/src/store'
 import { ASSETS, ASSET_MAP } from '/src/three/assets'
 import { DEFAULT_KELVIN, IndoorLights, LARGE_GLOW_CAP, autoLevel, glowIntensity, isLampAsset, kelvinColor, lampTarget, lightColor, roomLightSpecs, roomTarget, takeOverRoomLights } from '/src/three/lights'
 import type { Plan } from '/src/model'
+import { floorHeight, floorOf } from '/src/floors'
 import { JP_OPTS, range } from './helpers'
 
 const plans: [string, Plan][] = (['jp', 'cn', 'west'] as const).flatMap((region) => range(1, 30).map((seed) => [`${region}#${seed}`, generatePlan({ seed, ...JP_OPTS, region }).plan] as [string, Plan]))
@@ -20,7 +21,8 @@ describe('房间主灯', () => {
         if (prim.length !== 1) bad.push(`${name} ${r.kind}: ${prim.length} 盏主灯`)
       }
       for (const s of specs) {
-        if (!(s.h > 100 && s.h <= 240)) bad.push(`${name} ${s.roomId}: 高度 ${s.h}`)
+        if (!(s.h > 100 && s.h <= floorHeight(p, floorOf(p, p.rooms.find((r) => r.id === s.roomId)!)))) bad.push(`${name} ${s.roomId}: 高度 ${s.h}`)
+        if (s.ceil !== floorHeight(p, floorOf(p, p.rooms.find((r) => r.id === s.roomId)!))) bad.push(`${name} ${s.roomId}: 天花板 ${s.ceil}`)
         if (!(s.intensity > 0 && s.distance > 0)) bad.push(`${name} ${s.roomId}: 强度 / 距离不对`)
       }
     }
@@ -165,7 +167,7 @@ describe('灯具亮度与按风格的主灯', () => {
       for (const [, p] of plans.slice(0, 20)) {
         for (const s of roomLightSpecs(p, new Map(), () => st)) {
           expect(s.h).toBeGreaterThan(100)
-          expect(s.h).toBeLessThanOrEqual(240)
+          expect(s.h).toBeLessThanOrEqual(s.ceil!)
           if (s.kind === 'ceiling' || s.kind === 'small' || s.kind === 'pendant') {
             expect(s.h).toBeGreaterThanOrEqual(s.fy)
             expect(s.shape).toBeTruthy()

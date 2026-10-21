@@ -292,6 +292,13 @@ function stowInto(c: StowCtx, cab: Furniture, wds: Wardrobe[], room?: Room, kitc
     }
     if (rand() < (kind === 'shoes' || kind === 'clothes' ? 0.85 : 0.65)) n += fillLevel(c, cab, def, i, p, 0.45 + rand() * 0.5)
   })
+  // 碗柜、食品柜（厨房吊柜）每层都随机落空时：补满第一层能放的，不留空柜
+  if (!n && (kind === 'dishes' || kind === 'food'))
+    for (const [i, lv] of (def.surfaces ?? []).entries()) {
+      if (!lv.inside || lv.kind === 'hook' || lv.kind === 'clip') continue
+      const plan = levelPlan(c, kind, def, cab, lv, kitchen)
+      if (plan && (n += fillLevel(c, cab, def, i, plan.pool, 0.45 + rand() * 0.5, plan.prefer))) break
+    }
   return n
 }
 
