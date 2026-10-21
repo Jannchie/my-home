@@ -58,6 +58,7 @@ import {
 import { edgesOf } from '../model'
 import { showerSpot, stallWalls, type StallWalls } from '../bathroom'
 import { resolveMats, tagMat } from './mats'
+import { markMetalParts } from './anime'
 import { bakeScreens } from './screens'
 import type { Mat } from './matIds'
 import { curtainSpec } from '../curtains'
@@ -1800,7 +1801,11 @@ function buildShowers(plan: Plan) {
 export function fixtureModel(f: Fixture, wallH: number, rise?: number, walls?: WallLine[], stall?: StallWalls) {
   const m = fixtureShape(f, wallH, rise, walls, stall)
   // 材质类别（写实光照用，mats.ts）：模型里标了的零件照标的，其余按固定颜色表 / 设备的默认材质
-  if (m) resolveMats(m, { mat: FIXTURE_MAT[f.kind] }, [])
+  if (m) {
+    resolveMats(m, { mat: FIXTURE_MAT[f.kind] }, [])
+    // 台面、水槽、拉手这些金属零件：赛璐璐下也画成金属（anime.ts）
+    markMetalParts(m)
+  }
   return m
 }
 
@@ -2084,6 +2089,8 @@ function buildTemplate(def: AssetDef, fu: Furniture, closeUp: boolean): Furnitur
   applyPatterns(m, pal, fu.patterns)
   // 剩下的纯色 toon 零件并成一个顶点色网格 + 一个顶点色描边（花纹、发光、半透明的保持独立）
   if (vertexColorMergeFor(def)) mergeSolidColors(m)
+  // 没并进去的金属零件（柜门子树里的拉手、不合并的素材）：赛璐璐下也画成金属
+  markMetalParts(m)
   // 模型内部的零件不再动（开合只改柜门子树，poseDoors 会同步矩阵）：矩阵算一次就固定
   freezeMatrices(m)
   const own = new Set<THREE.BufferGeometry>()

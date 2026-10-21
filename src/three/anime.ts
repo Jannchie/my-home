@@ -50,14 +50,27 @@ const BODY = /* glsl */ `
 	${ANCHOR}`
 
 // 金属（合并成顶点色网格的家具零件，逐顶点的 mat 属性 = 金属）：卡通材质没有高光，金属画出来和哑光漆一样。
-// 照动画里画金属的办法：按反射方向（世界空间）朝上还是朝下分成亮暗两块，分界利落；朝上一侧再加一道窄的亮带（天空 / 窗户的倒影）。
-// 都是乘在受过光的颜色上：影子里、夜里的金属跟着暗，亮带也按亮度给，不会在暗处发光
+// 照动画里画金属的办法，按反射方向（世界空间）画一张假的「周围环境」：
+//   - 分档的底色：朝下（映着地面、柜体）暗，水平（映着墙）中等，越往上越亮（天花板、天空），一档一档利落地分开，
+//     站着看台面时反射大多朝斜上（仰角 25°–45°），近处亮、远处暗的几档正好横过台面；
+//   - 两条平行的细亮线（窗户、日光灯的倒影），也落在台面那段仰角里，水龙头、拉手这些圆的零件上是一圈亮环；
+//   - 硬边高光：反射对准太阳（照得到时）或正上方的顶灯，一小块亮过泛光阈值的白，会晕开。
+// 底色乘在受过光的颜色上，亮线、高光也按亮度给：影子里、夜里的金属跟着暗，不会在暗处发光
 const METAL_BODY = /* glsl */ `
 		if ( uAnimeMetal > 0.0 && abs( vAnMat - ${MAT_ID.metal}.0 ) < 0.5 ) {
 			vec3 anR = inverseTransformDirection( reflect( - geometryViewDir, normal ), viewMatrix );
-			float anSky = smoothstep( -0.03, 0.03, anR.y );
-			float anBand = smoothstep( 0.45, 0.52, anR.y ) * ( 1.0 - smoothstep( 0.68, 0.75, anR.y ) );
-			vec3 anMetal = outgoingLight * mix( 0.5, 1.3, anSky ) + anBand * 0.6 * dot( outgoingLight, anLum ) * vec3( 1.0, 0.98, 0.95 );
+			float anL = dot( outgoingLight, anLum );
+			float anLv = mix( 0.36, 0.78, smoothstep( -0.06, 0.0, anR.y ) );
+			anLv = mix( anLv, 1.02, smoothstep( 0.36, 0.39, anR.y ) );
+			anLv = mix( anLv, 1.3, smoothstep( 0.6, 0.63, anR.y ) );
+			float anLine = ( smoothstep( 0.462, 0.47, anR.y ) - smoothstep( 0.484, 0.492, anR.y ) ) + 0.7 * ( smoothstep( 0.52, 0.527, anR.y ) - smoothstep( 0.538, 0.545, anR.y ) );
+			float anHot = smoothstep( 0.9, 0.93, anR.y );
+			#if NUM_DIR_LIGHTS > 0
+			vec3 anSunR = inverseTransformDirection( directionalLights[ 0 ].direction, viewMatrix );
+			anHot = max( anHot, smoothstep( 0.982, 0.988, dot( anR, anSunR ) ) * sunLit );
+			#endif
+			// 金属偏一点冷（映着天光）
+			vec3 anMetal = outgoingLight * anLv * vec3( 0.95, 0.98, 1.04 ) + ( anLine * 1.5 + anHot * 2.6 ) * ( 0.25 + anL ) * vec3( 1.0, 0.98, 0.95 );
 			outgoingLight = mix( outgoingLight, anMetal, uAnimeMetal );
 		}`
 
@@ -67,13 +80,40 @@ export function injectAnime(sh: THREE.WebGLProgramParametersWithUniforms) {
   // sunLit / termEdge / lampOcc 由 toon.ts 的全局补丁声明；three 改了那个块、补丁没打上时不注入（否则着色器编译不过）
   if (!(THREE.ShaderChunk as unknown as Record<string, string>).lights_fragment_begin.includes('lampOcc')) return
   Object.assign(sh.uniforms, animeUniforms)
-  // 金属的画法只给合并成顶点色网格的家具（toon + 顶点色，带逐顶点的 mat）；别的材质不声明 mat 属性（绒毛层自己声明了同名属性）
-  const metal = sh.shaderID === 'toon' && sh.vertexColors
-  if (metal) sh.vertexShader = 'attribute float mat;\nvarying float vAnMat;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvAnMat = mat;')
+  // 金属的画法：合并成顶点色网格的家具逐顶点判断（toon + 顶点色，带逐顶点的 mat；别的材质不声明 mat 属性，绒毛层自己声明了同名属性）；
+  // 没合并的金属零件（厨房台面、水槽、设备的拉手……）由 markMetalParts 换成带 ANIME_METAL 宏的材质，整个材质都按金属画
+  const perVertex = sh.shaderID === 'toon' && sh.vertexColors
+  const whole = !perVertex && sh.defines?.ANIME_METAL !== undefined
+  const metal = perVertex || whole
+  if (perVertex) sh.vertexShader = 'attribute float mat;\nvarying float vAnMat;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvAnMat = mat;')
   sh.fragmentShader =
     'uniform float uAnimeShade;\nuniform vec3 uAnimeShadeTint;\nuniform float uTermSat;\nuniform float uAnimeRim;\nuniform float uAnimeMetal;\n' +
-    (metal ? 'varying float vAnMat;\n' : '') +
+    (perVertex ? 'varying float vAnMat;\n' : whole ? `#define vAnMat ${MAT_ID.metal}.0\n` : '') +
     sh.fragmentShader.replace(ANCHOR, BODY.replace('METAL_BODY', metal ? METAL_BODY : ''))
+}
+
+const metalMats = new WeakMap<THREE.Material, THREE.Material>()
+/**
+ * 没合并成顶点色网格的金属零件（userData.mat = 'metal' 的 toon 网格，比如设备的台面、水槽、拉手）：换成同款材质的一份带 ANIME_METAL 宏的克隆，
+ * 赛璐璐下也按金属画（同一个源材质只克隆一次）。要在 resolveMats 之后调用
+ */
+export function markMetalParts(root: THREE.Object3D) {
+  root.traverse((o) => {
+    const mesh = o as THREE.Mesh
+    if (!mesh.isMesh || o.userData.isOutline || o.userData.mat !== 'metal' || Array.isArray(mesh.material)) return
+    const m = mesh.material as THREE.MeshToonMaterial
+    if (!m.isMeshToonMaterial || m.vertexColors || m.defines?.ANIME_METAL !== undefined) return
+    let v = metalMats.get(m)
+    if (!v) {
+      v = m.clone()
+      v.defines = { ...m.defines, ANIME_METAL: '' }
+      // clone 不带 onBeforeCompile / customProgramCacheKey（灯光遮罩、赛璐璐都注入在那里）
+      v.onBeforeCompile = m.onBeforeCompile
+      v.customProgramCacheKey = m.customProgramCacheKey
+      metalMats.set(m, v)
+    }
+    mesh.material = v
+  })
 }
 
 /** 「动画感」的强度：交界饱和度、阴影色、轮廓光 */
