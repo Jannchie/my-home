@@ -12,6 +12,33 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '1.15.0',
+    date: '2026-10-22',
+    notes: {
+      zh: [
+        '新门款式：「竖条玻璃门」（门板中间一条竖向窄玻璃）和「横条玻璃门」（中间一列横向窄玻璃）；门扇、侧窗和亮子的玻璃都可以选透明或磨砂',
+        '默认层高按地区：日本保持 240 cm，中国和欧美默认 270 cm；「墙高」滑杆最高到当前楼层的层高，顶灯、吊灯、管道井和窗帘都跟着实际层高走',
+        '「动画」下的金属更像金属：厨房台面、水槽、水龙头和拉手有分档的反光、两条细亮线，对着灯和太阳的地方会有晕开的高光',
+        '「调整」里新增泛光色相和染色：只给泛光的光晕上色（比如偏橙红），画面本身的颜色不变',
+        '修正餐具柜、食品柜偶尔一件东西都没摆上',
+      ],
+      ja: [
+        '新しいドア：「縦スリットガラス戸」（扉の中央に縦長の細いガラス）と「横スリットガラス戸」（中央に横長の細いガラスが並ぶ）。扉、袖窓、欄間のガラスは透明とすりガラスから選べます',
+        '既定の天井高を地域別に：日本は 240 cm のまま、中国・欧米は 270 cm。「壁の高さ」スライダーは今の階の天井高までになり、シーリングライト、ペンダントライト、PS、カーテンも実際の天井高に合わせます',
+        '「アニメ」の金属をより金属らしく：キッチンの天板、シンク、蛇口、取っ手に段階のある映り込みと細い 2 本の光の線、照明や太陽を映すところににじむハイライト',
+        '「調整」にブルームの色相と色の強さを追加：ブルームの光のにじみだけに色をつけ（たとえば赤みのあるオレンジ）、画面そのものの色は変わりません',
+        '食器棚・食品棚に何も置かれないことがある問題を修正',
+      ],
+      en: [
+        'New doors: Vertical glass strip (one narrow vertical pane down the middle) and Horizontal glass slits (a column of narrow horizontal panes); glass in leaves, sidelights and transoms can be clear or frosted',
+        'Default ceiling height now depends on the region: 240 cm in Japan, 270 cm for China and the West; the Wall height slider goes up to the ceiling height of the current floor, and ceiling lights, pendants, pipe shafts and curtains follow the actual height',
+        'Metal looks more like metal in Anime: kitchen counters, sinks, faucets and handles get banded reflections, two thin glint lines and highlights that bloom where they catch a lamp or the sun',
+        'Adjust adds bloom hue and tint: color only the bloom glow (for example a warm orange-red) without changing the rest of the image',
+        'Fixed dish and food cabinets sometimes ending up empty',
+      ],
+    },
+  },
+  {
     version: '1.14.0',
     date: '2026-10-21',
     notes: {
