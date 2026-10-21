@@ -225,7 +225,7 @@ describe('主灯换成灯具家具（吸顶灯 / 吊灯素材）', () => {
     expect(made.length).toBe(mine.length)
     for (const f of made) {
       const def = ASSET_MAP.get(f.asset)!
-      expect(def.ceiling, f.asset).toBe(true)
+      expect(def.ceiling, f.asset).toBeTruthy()
       expect(isLampAsset(def)).toBe(true)
     }
     expect(roomLightSpecs(p).filter((s) => s.roomId === room.id && s.primary)).toEqual([])

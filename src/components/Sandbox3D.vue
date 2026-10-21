@@ -28,9 +28,9 @@ import { CITIES, MONTH_DAYS, compassAxes, skyState, type SkyState } from '../thr
 import { setReflectInterval } from '../three/reflectFrame'
 import { CULL_MARGIN, CullCache, walkVisibility } from '../walkCull'
 import { furnitureRoom } from '../restyle'
-import { DEFAULT_KELVIN, DEFAULT_OUTDOOR, DEFAULT_POWER, DEFAULT_RANGE, IndoorLights, KELVIN_MAX, KELVIN_MIN, LIGHT_MODES, OUTDOOR_MAX, OUTDOOR_MIN, POOL_HIGH, POOL_LOW, POWER_MAX, POWER_MIN, RANGE_MAX, RANGE_MIN, autoLevel, diningKey, isLampAsset, lightColor, lum, ownedLightKey, takeOverRoomLights, type LightMode } from '../three/lights'
+import { DEFAULT_KELVIN, DEFAULT_OUTDOOR, DEFAULT_POWER, DEFAULT_RANGE, IndoorLights, KELVIN_MAX, KELVIN_MIN, LIGHT_MODES, OUTDOOR_MAX, OUTDOOR_MIN, POOL_HIGH, POOL_LOW, POWER_MAX, POWER_MIN, RANGE_MAX, RANGE_MIN, autoLevel, diningKey, isLampAsset, lightColor, lum, CEILING, ceilingHidden, ownedLightKey, takeOverRoomLights, type LightMode } from '../three/lights'
 import { disposeUnshared, isReflector } from '../three/toon'
-import { poseDoors } from '../three/kit'
+import { isWallMounted, poseDoors } from '../three/kit'
 import { drawerSlots } from '../three/drawers'
 import { Openers, doorIdOf, type OpenKey } from '../three/openers'
 import { takeOverDevices, wallDeviceKey } from '../three/wallDevices'
@@ -670,7 +670,7 @@ function frameAt(fr: SelectFrame, obj: THREE.Object3D, asset: string) {
     }
   }
   // 挂在墙上 / 贴在表面上的东西：脚下没有占地，框立起来贴在它正面（中心取模型包围盒，往前让出半个厚度）
-  if (d && (d.mount !== undefined || d.stick) && !d.ceiling) {
+  if (d && isWallMounted(d)) {
     frameBox.setFromObject(obj).getCenter(frameC)
     const a = obj.rotation.y
     const k = d.d / 2 + 1.5
@@ -756,9 +756,9 @@ function updateMounted(dir: { x: number; y: number } | null, depth: number | nul
     if (def.ceiling) {
       // 吸顶灯 / 吊灯：同房间灯（lights.ts applyCutaway）——半墙 / 全部压低时淡出，前墙让开时所指房间之前的淡出
       const mode = walking.value ? 'up' : sandbox.wallMode
-      const s = dir ? (f.x - houseCenter.x) * dir.x + (f.y - houseCenter.y) * dir.y : 0
+      const s = dir ? (f.x - houseCenter.x) * dir.x + (f.y - houseCenter.y) * dir.y : null
       o.obj.userData.fade ??= { x: f.x, y: f.y, nx: 0, ny: 0, outer: false }
-      o.obj.userData.target = mode !== 'up' || (!!dir && depth !== null && s > depth + 30) ? 1 : 0
+      o.obj.userData.target = ceilingHidden(mode !== 'up', s, depth) ? 1 : 0
       list.push(o.obj)
       continue
     }
@@ -1310,7 +1310,7 @@ function wallItemNear(far: number) {
   for (const f of fv().furniture) {
     const def = ASSET_MAP.get(f.asset)
     const o = objs.get(f.id)?.obj
-    if (!def || !(def.mount || def.stick) || !o || !shown(o, true)) continue
+    if (!def || !isWallMounted(def) || !o || !shown(o, true)) continue
     padBox.setFromObject(o).expandByScalar(WALL_PICK_PAD)
     if (!raycaster.ray.intersectBox(padBox, padHit)) continue
     const d = padHit.distanceTo(raycaster.ray.origin)
@@ -1770,12 +1770,7 @@ function onTouchUp(e: PointerEvent) {
   }
   // 点按（没动、没长按）：点到家具 / 门窗选中它，点到空处取消选中
   if (pr && !pr.moved && !pr.long && e.type !== 'pointercancel') {
-    const dev = pr.hitId ? null : pickWallDevice(e)
-    if (dev) {
-      takeOverDeviceAt(dev)
-      return
-    }
-    if (!pr.hitId && !pr.house && takeOverLightAt(e)) return
+    if (!pr.hitId && tryTakeOver(e, !!pr.house)) return
     const rid = pr.hitId || pr.house ? null : pickLightRoom(e)
     selection.value = pr.hitId ? { type: 'furniture', id: pr.hitId } : pr.house ? houseSel(pr.house) : rid ? { type: 'room', id: rid } : null
     // 点在车、围挡（外观视图下屋顶、外墙）上：选中它，旁边浮出编辑卡片
@@ -2330,12 +2325,7 @@ function onPointerDown(e: PointerEvent) {
     // 按在家具上不转视角
     controls.enabled = false
   } else {
-    const dev = pickWallDevice(e)
-    if (dev) {
-      takeOverDeviceAt(dev)
-      return
-    }
-    if (!hit.house && takeOverLightAt(e)) return
+    if (tryTakeOver(e, !!hit.house)) return
     // 天花板灯具：选中它所在的房间（浮出灯光开关卡片）；门窗和外观对象松手时（没拖动）才选中，按在上面拖动照样转视角
     const rid = hit.house ? null : pickLightRoom(e)
     if (rid) selection.value = { type: 'room', id: rid }
@@ -3401,11 +3391,12 @@ onBeforeUnmount(() => {
 // 房间的灯光开关 / 色温 / 主灯接管不影响房子本身：比较时剔掉，免得一开灯就整栋重建
 const roomsShape = () => JSON.stringify(plan.value.rooms, (k, v) => (k === 'light' || k === 'lightK' || k === 'ownLights' ? undefined : v))
 watch(
-  // 墙上设备接管成家具 / 摆了同款家具：自动画的那几台要去掉
-  () => [roomsShape(), wallDeviceKey(plan.value), plan.value.openings, plan.value.fixtures, plan.value.wall, plan.value.wallOuter, sandbox.wallHeight, plan.value.floors, plan.value.site, plan.value.exterior, plan.value.wallpaper, plan.value.flooring],
+  () => [roomsShape(), plan.value.openings, plan.value.fixtures, plan.value.wall, plan.value.wallOuter, sandbox.wallHeight, plan.value.floors, plan.value.site, plan.value.exterior, plan.value.wallpaper, plan.value.flooring],
   rebuildHouse,
   { deep: true },
 )
+// 墙上设备接管成家具 / 摆了同款家具：自动画的那几台要去掉（指纹是字符串，不深比较：别的家具增删不触发重建）
+watch(() => wallDeviceKey(plan.value), rebuildHouse)
 // 换楼层 / 换楼层显示方式：各层缓动到新位置；墙体压低换到新的当前层
 // 外观视图开关：墙高要换（重搭），楼层叠好，墙恢复完整，屋顶显示
 watch(fullView, () => {
@@ -3754,7 +3745,8 @@ const selectedRoom = computed(() => {
 const selectedOpenable = computed(() => (selectedFurniture.value && selectedDef.value?.openable ? selectedFurniture.value : null))
 /** 屏幕坐标处自动摆的墙上设备（可视对讲、遥控面板，three/wallDevices.ts）的命中点；被墙、门挡住的不算 */
 function pickWallDevice(e: { clientX: number; clientY: number }) {
-  if (walking.value || !editing.value || blueprint.on) return null
+  // 全屋都接管了就没有自动摆的了（悬停时省掉一次整栋房子的射线检测）
+  if (walking.value || !editing.value || blueprint.on || plan.value.devicesAsFurniture) return null
   const house = floorGroups.find((g) => g.floor.id === activeFloor.value)?.group
   if (!house) return null
   setRay(e as PointerEvent)
@@ -3767,34 +3759,28 @@ function pickWallDevice(e: { clientX: number; clientY: number }) {
   }
   return null
 }
-/** 点中自动摆的设备：全屋的对讲、遥控面板接管成挂墙家具（一步撤销），选中点中的那台 */
-function takeOverDeviceAt(p: THREE.Vector3) {
-  if (plan.value.devicesAsFurniture) return
-  let made: Furniture[] = []
-  mutate((plan) => {
-    made = takeOverDevices(plan)
-  })
-  let best: Furniture | null = null
-  for (const f of made) if (!best || Math.hypot(f.x - p.x, f.y - p.z) < Math.hypot(best.x - p.x, best.y - p.z)) best = f
-  if (best) selection.value = { type: 'furniture', id: best.id }
-}
 /**
- * 点中自动摆的房间主灯（吸顶灯 / 吊灯）：这个房间的主灯按原位接管成灯具家具（一步撤销），选中离点的位置最近的那盏。
- * 之后能拖着挪、换款、删掉，也能从素材库再摆。返回有没有接管。
+ * 点中自动摆的东西就接管成家具（一步撤销），选中离点的位置最近的那件，返回有没有接管：
+ *   - 墙上设备：全屋的对讲、遥控面板换成挂墙家具（three/wallDevices.ts）；
+ *   - 房间主灯（吸顶灯 / 吊灯，前面没挡着门窗、设备时）：这个房间的主灯换成灯具家具（lights.ts takeOverRoomLights）。
+ * 之后能拖着挪、换款、删掉，也能从素材库再摆。
  */
-function takeOverLightAt(e: { clientX: number; clientY: number }) {
-  if (walking.value || !editing.value || blueprint.on) return false
-  setRay(e as PointerEvent)
-  const hit = lights.pickMain(raycaster)
-  if (!hit || plan.value.rooms.find((r) => r.id === hit.roomId)?.ownLights) return false
-  // 点的位置投到灯具那个高度（天花板下）再比远近：斜着看时地面交点离灯很远
-  const fl = raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -(activeY() + 225)), new THREE.Vector3())
+function tryTakeOver(e: { clientX: number; clientY: number }, houseHit: boolean) {
+  const dev = pickWallDevice(e)
+  let main: ReturnType<IndoorLights['pickMain']> = null
+  if (!dev && !houseHit && !walking.value && editing.value && !blueprint.on) {
+    setRay(e as PointerEvent)
+    main = lights.pickMain(raycaster)
+  }
+  if (!dev && !main) return false
+  // 点的位置：设备是命中点；灯投到天花板下灯具那个高度再比远近（斜着看时地面交点离灯很远）
+  const at = dev ?? raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -(activeY() + CEILING - 15)), new THREE.Vector3())
   let made: Furniture[] = []
   mutate((plan) => {
-    made = takeOverRoomLights(plan, hit.roomId, hit.specs)
+    made = dev ? takeOverDevices(plan) : takeOverRoomLights(plan, main!.roomId, main!.specs)
   })
   if (!made.length) return false
-  const d = (f: Furniture) => (fl ? Math.hypot(f.x - fl.x, f.y - fl.z) : 0)
+  const d = (f: Furniture) => (at ? Math.hypot(f.x - at.x, f.y - at.z) : 0)
   selection.value = { type: 'furniture', id: made.reduce((a, b) => (d(b) < d(a) ? b : a)).id }
   return true
 }

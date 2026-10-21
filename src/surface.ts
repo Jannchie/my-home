@@ -5,7 +5,7 @@ import { fixtureDepth, kitchenSlots, pointInPolygon, type Fixture, type Furnitur
 import { floorOf } from './floors'
 import { ASSET_MAP } from './three/assets'
 import { floorY, roomAt } from './three/house'
-import { CLIP_DROP, type Poly, type SurfaceKind } from './three/kit'
+import { CLIP_DROP, isWallMounted, type Poly, type SurfaceKind } from './three/kit'
 
 /** 平面坐标 → 家具局部坐标（x, z）；rot 为顺时针角度 */
 export function toLocal(f: Pick<Furniture, 'x' | 'y' | 'rot'>, p: Vec) {
@@ -187,7 +187,7 @@ interface Owner {
 /** 素材是不是挂在墙上 / 贴在竖直面上的 */
 export const isWallOwner = (asset: string) => {
   const d = ASSET_MAP.get(asset)
-  return !!d && (d.mount !== undefined || !!d.stick)
+  return !!d && isWallMounted(d)
 }
 function owners(plan: Plan): Owner[] {
   return [

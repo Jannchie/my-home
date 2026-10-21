@@ -271,10 +271,10 @@ export interface AssetDef {
   /** 壁挂：离地安装高度（cm），build 里自己把模型放到这个高度。不占地面，不参与家具之间的碰撞 */
   mount?: number
   /**
-   * 挂在天花板下（吸顶灯、吊灯）：mount 是灯具底面离地多高。摆放时在这个高度的水平面上自由移动、不贴墙；
-   * 墙压低 / 半墙时和房间灯一样淡出。见 packs/ceiling-lights.ts
+   * 挂在天花板下（吸顶灯、吊灯），值是当哪种房间主灯用（lightFixtures.ts MainKind）：mount 是灯具最低点离地多高。
+   * 摆放时在这个高度的水平面上自由移动、不贴墙；墙压低 / 半墙时和房间灯一样淡出。见 packs/ceiling-lights.ts
    */
-  ceiling?: true
+  ceiling?: 'ceiling' | 'small' | 'pendant'
   /** 顶面高度（cm）：桌、柜、台等，上面可以摆 prop */
   surface?: number
   /** 顶面可摆放的区域（局部坐标多边形，可以多块）；不给就是整个 w × d。L 形、圆形等不规则桌面用 */
@@ -724,6 +724,9 @@ export function movable<T extends THREE.Object3D>(o: T, m: DoorMotion): T {
   o.userData.door = m
   return o
 }
+
+/** 挂在墙上 / 贴在表面上的东西（壁挂物、贴附物；吸顶灯 / 吊灯不算）：贴墙摆、沿墙挪、选中框立在正面 */
+export const isWallMounted = (d: Pick<AssetDef, 'mount' | 'stick' | 'ceiling'>) => (d.mount !== undefined || !!d.stick) && !d.ceiling
 
 /** 按开 / 关摆好模型里所有会动的部件（可以反复调用，不会累积） */
 export function poseDoors(root: THREE.Object3D, open: boolean) {

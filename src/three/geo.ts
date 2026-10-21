@@ -314,6 +314,15 @@ export function fitGroup(g: THREE.Object3D, y0 = 0, keepZ = false) {
   return outer
 }
 
+/** 壁挂物：背面（最小 z）贴到 -d/2，水平居中，最低点 = mount（素材的 mount / d 对得上模型） */
+export function fitWall(g: THREE.Object3D, mount: number, d: number) {
+  const outer = fitGroup(g, mount, true)
+  outer.updateMatrixWorld(true)
+  const b = new THREE.Box3().setFromObject(outer, true)
+  g.position.z += -d / 2 - b.min.z
+  return outer
+}
+
 /** 不包新层：把 g 的每个子节点平移，使整体 x / z 居中、底面贴 y0。返回 g */
 export function fitChildren<T extends THREE.Object3D>(g: T, y0 = 0): T {
   g.updateMatrixWorld(true)

@@ -6,21 +6,13 @@
 import * as THREE from 'three'
 import { ball, cyl, rbox, shade, toon, torus } from '../toon'
 import { C, glow, type AssetDef } from '../kit'
-import { G, P, PI, cylZ, fitGroup, lit, noOutline } from '../geo'
+import { G, P, PI, cylZ, fitGroup, fitWall, lit, noOutline } from '../geo'
 import { CL, I, M, N, define, type PalFlat } from '../packkit'
 
 const LENS = '#1d2230'
 const GLASS = '#3d6a9a'
 const BLACK = '#26262a'
 
-/** 壁挂物：背面（最小 z）贴到 -d/2，水平居中，最低点 = mount */
-function fitWall(g: THREE.Object3D, mount: number, d: number) {
-  const outer = fitGroup(g, mount, true)
-  outer.updateMatrixWorld(true)
-  const b = new THREE.Box3().setFromObject(outer, true)
-  g.position.z += -d / 2 - b.min.z
-  return outer
-}
 /** 镜头：黑色镜面 + 蓝玻璃 + 高光，朝 +z；(x, y) 为中心，z 为镜面所在平面 */
 function lens(r: number, x: number, y: number, z: number, rim = LENS) {
   return G(cylZ(r, 0.5, rim, x, y, z + 0.25), cylZ(r * 0.62, 0.4, GLASS, x, y, z + 0.6), noOutline(ball(r * 0.18, '#ffffff', { x: x + r * 0.22, y: y + r * 0.22, z: z + 0.82 }, [1, 1, 0.4])))

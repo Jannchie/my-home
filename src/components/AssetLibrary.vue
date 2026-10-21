@@ -350,7 +350,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onSlash))
         <div class="dims num">
           {{ t('宽 {w} · 深 {d} · 高 {h} cm', { w: def.w, d: def.d, h: def.h }) }}
           <template v-if="def.surface"> · {{ t('顶面 {n} cm', { n: def.surface }) }}</template>
-          <template v-if="def.mount"> · {{ t('离地 {n} cm（壁挂）', { n: def.mount }) }}</template>
+          <template v-if="def.mount"> · {{ t(def.ceiling ? '离地 {n} cm' : '离地 {n} cm（壁挂）', { n: def.mount }) }}</template>
         </div>
 
         <template v-if="sizes.length > 1">

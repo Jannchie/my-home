@@ -18,10 +18,10 @@ import { area, labelPointAvoiding, pointInPolygon, edgesOf, fixtureBox, fixtureD
 import type { AssetDef, StyleTag } from './kit'
 import { ASSET_MAP } from './assets'
 import { hasTag } from './tags'
-import { floorOf, floorViews, planFloors } from '../floors'
+import { floorOf, floorViews, planFloors, stampFloor } from '../floors'
 import { buildLightMask, lightMaskKey, setLightMaskEnabled, setLightMaskFloors, setLightMaskLight, setLightMaskMap, type LightMaskMap } from './lightMask'
 import { useAnisotropy } from './toon'
-import { CEILING, LAMP_GLOW, fixtureModel, styleSpec, type FixtureShape, type RigGlow } from './lightFixtures'
+import { CEILING, LAMP_GLOW, ceilingAssetId, fixtureModel, isMainKind, styleSpec, type FixtureShape, type RigGlow } from './lightFixtures'
 
 export { CEILING, LAMP_GLOW, fixtureModel, styleSpec, type FixtureShape } from './lightFixtures'
 
@@ -158,25 +158,22 @@ export function roomLightSpecs(plan: Plan, defs: Map<string, AssetDef> = new Map
   for (const { view } of floorViews(plan)) roomSpecsInto(out, view, defs)
   // 主灯换成了灯具家具的房间（接管了、或者手动摆了吸顶灯）：不再自动摆吸顶灯 / 吊灯（手元灯、阳台壁灯照旧）
   const owned = ownedLightRooms(plan)
-  out = out.filter((s) => !(MAIN_KINDS.includes(s.kind) && owned.has(s.roomId)))
+  out = out.filter((s) => !(isMainKind(s.kind) && owned.has(s.roomId)))
   // 吸顶灯 / 吊灯按房间风格换造型；和室一律用和风的
-  const kinds = new Map(plan.rooms.map((r) => [r.id, r.kind]))
-  for (const s of out) styleSpec(s, kinds.get(s.roomId) === 'japanese' ? 'japanese' : styleOf?.(s.roomId))
+  const roomKinds = new Map(plan.rooms.map((r) => [r.id, r.kind]))
+  for (const s of out) styleSpec(s, roomKinds.get(s.roomId) === 'japanese' ? 'japanese' : styleOf?.(s.roomId))
   return out
 }
-
-/** 房间主灯的种类（能换成灯具家具的） */
-const MAIN_KINDS: RoomLightKind[] = ['ceiling', 'small', 'pendant']
-
-/** 吸顶灯 / 吊灯素材（packs/ceiling-lights.ts） */
-export const isCeilingLight = (def: Pick<AssetDef, 'ceiling'> | undefined) => !!def?.ceiling
 
 /** 主灯由灯具家具接管的房间：标了 ownLights，或者房间里摆着吸顶灯 / 吊灯（同一层） */
 export function ownedLightRooms(plan: Plan) {
   const out = new Set<string>()
-  for (const { view } of floorViews(plan)) {
-    const lamps = view.furniture.filter((f) => isCeilingLight(ASSET_MAP.get(f.asset)))
-    for (const r of view.rooms) if (r.ownLights || lamps.some((f) => pointInPolygon(f, r.points))) out.add(r.id)
+  for (const r of plan.rooms) if (r.ownLights) out.add(r.id)
+  for (const f of plan.furniture) {
+    if (!ASSET_MAP.get(f.asset)?.ceiling) continue
+    const fl = floorOf(plan, f)
+    const r = plan.rooms.find((x) => floorOf(plan, x) === fl && pointInPolygon(f, x.points))
+    if (r) out.add(r.id)
   }
   return out
 }
@@ -188,11 +185,21 @@ export function mainLightPower(room: Room, kind: RoomLightKind) {
   if (kind === 'small') return { intensity: room.kind === 'bath' ? 1.0 : 0.85, distance: Math.min(420, Math.max(220, r * 2.4)) }
   return { intensity: 0.95 + Math.min(0.2, A / 1000000), distance: Math.min(800, Math.max(300, r * 2.0)) }
 }
+/** 主灯发光部件的亮度（自动摆的主灯、吸顶灯家具都用它） */
+const mainGlow = (e: number, power: number) => 0.15 + 0.4 * e * Math.min(1.2, power)
+/** 主灯地上光池的不透明度上限 */
+const MAIN_POOL_OPACITY = 0.06
+/** 主灯在点光源池里的优先级：排在副灯、灯具前面，照得远的更靠前 */
+const mainPri = (distance: number) => 2e6 + Math.min(9e5, distance * distance * 0.01)
+
+/**
+ * 天花板下的灯具（房间灯、吸顶灯家具）淡不淡出：半墙 / 全部压低（hideAll）时淡出；前墙让开时，
+ * 在所指房间之前的（s = 沿视线方向离房子中心多远，depth = 所指房间的深度）淡出
+ */
+export const ceilingHidden = (hideAll: boolean, s: number | null, depth: number | null) => hideAll || (s !== null && depth !== null && s > depth + 30)
+
 /** 主灯在地上的光池半径 */
 const poolRadius = (room: Room) => Math.max(120, Math.sqrt(area(room.points) / Math.PI) * 1.25)
-
-/** 主灯接管成灯具家具时的素材：造型 + 用途（packs/ceiling-lights.ts ceilingAssetId） */
-const ceilingAsset = (s: RoomLightSpec) => `cl-${s.shape ?? 'basic'}${s.kind === 'ceiling' ? '' : `-${s.kind}`}`
 
 /**
  * 接管一个房间的主灯：现在自动摆的吸顶灯 / 吊灯（specs 里这个房间的）按原位换成灯具家具，房间标上 ownLights（就地改 plan）。
@@ -203,8 +210,9 @@ export function takeOverRoomLights(plan: Plan, roomId: string, specs: RoomLightS
   if (!room || room.ownLights) return []
   const made: Furniture[] = []
   for (const s of specs) {
-    if (s.roomId !== roomId || !MAIN_KINDS.includes(s.kind) || !ASSET_MAP.has(ceilingAsset(s))) continue
-    made.push({ id: uid('u'), asset: ceilingAsset(s), x: Math.round(s.x * 10) / 10, y: Math.round(s.y * 10) / 10, rot: 0, ...(room.floor ? { floor: room.floor } : {}) })
+    if (s.roomId !== roomId || !isMainKind(s.kind)) continue
+    const asset = ceilingAssetId(s.shape, s.kind)
+    if (ASSET_MAP.has(asset)) made.push(stampFloor<Furniture>(plan, { id: uid('u'), asset, x: Math.round(s.x * 10) / 10, y: Math.round(s.y * 10) / 10, rot: 0 }, floorOf(plan, room)))
   }
   plan.furniture.push(...made)
   room.ownLights = true
@@ -222,9 +230,8 @@ function roomSpecsInto(out: RoomLightSpec[], plan: Plan, defs: Map<string, Asset
     const kitchens = plan.fixtures.filter((f) => f.kind === 'kitchen' && pointInPolygon(f, room.points))
     const boxes = plan.fixtures.filter((f) => pointInPolygon(f, room.points)).map(fixtureBox)
     const c = labelPointAvoiding(room.points, boxes)
-    const dist = Math.min(800, Math.max(300, r * 2.0))
     // 面积大的房间灯更亮一点（光池更大，中心不变）
-    const inten = 0.95 + Math.min(0.2, A / 1000000)
+    const main = mainLightPower(room, 'ceiling')
     const base = { roomId: room.id, primary: true, ry: 0 }
     if (room.kind === 'balcony') {
       // 靠室内的那面墙：边外侧一点落在别的（非阳台）房间里
@@ -271,15 +278,15 @@ function roomSpecsInto(out: RoomLightSpec[], plan: Plan, defs: Map<string, Asset
       const t = diningTable(plan, room, defs)
       if (t && room.kind === 'dining') {
         const top = (t.def?.surface ?? 72) + 78
-        out.push({ ...base, kind: 'pendant', x: t.f.x, y: t.f.y, h: top + 6, fy: top, intensity: inten, distance: dist })
+        out.push({ ...base, kind: 'pendant', x: t.f.x, y: t.f.y, h: top + 6, fy: top, ...main })
         continue
       }
     }
     if (SMALL_ROOMS.includes(room.kind) || room.kind === 'bath') {
-      out.push({ ...base, kind: 'small', x: c.x, y: c.y, h: CEILING - 5, fy: CEILING - 6, intensity: room.kind === 'bath' ? 1.0 : 0.85, distance: Math.min(420, Math.max(220, r * 2.4)) })
+      out.push({ ...base, kind: 'small', x: c.x, y: c.y, h: CEILING - 5, fy: CEILING - 6, ...mainLightPower(room, 'small') })
       continue
     }
-    out.push({ ...base, kind: 'ceiling', x: c.x, y: c.y, h: CEILING - 5, fy: CEILING - 8, intensity: inten, distance: dist })
+    out.push({ ...base, kind: 'ceiling', x: c.x, y: c.y, h: CEILING - 5, fy: CEILING - 8, ...main })
     if (counter) out.push({ ...counter, primary: false, intensity: 0.55 })
     if (room.kind === 'ldk') {
       const t = diningTable(plan, room, defs)
@@ -573,8 +580,7 @@ export class IndoorLights {
       obj.userData.lightRoomId = s.roomId
       let decal: THREE.Mesh | null = null
       if (s.primary) {
-        const R = Math.max(120, Math.sqrt(area(room.points) / Math.PI) * 1.25)
-        decal = poolDecal(room.points, s.x, s.y, R, floorY(room) + 0.4)
+        decal = poolDecal(room.points, s.x, s.y, poolRadius(room), floorY(room) + 0.4)
         decal.position.y = this.liftOf?.(s.roomId) ?? 0
         this.group.add(decal)
       }
@@ -655,12 +661,12 @@ export class IndoorLights {
       }
       const room = roomOf(f)
       lamp.roomId = room?.id ?? null
-      if (lamp.ceiling && room) Object.assign(lamp, mainLightPower(room, f.asset.endsWith('-small') ? 'small' : 'ceiling'))
-      // 落地的灯：地上一圈小光斑；吸顶灯 / 吊灯：和房间主灯一样的大光池（位置变了就重建）
+      if (lamp.ceiling && room) Object.assign(lamp, mainLightPower(room, def.ceiling === 'small' ? 'small' : 'ceiling'))
+      // 落地的灯：地上一圈小光斑；吸顶灯 / 吊灯：和房间主灯一样的大光池（位置、房间形状变了就重建；改房间会换掉 points 数组）
       const want = (lamp.ceiling || (lamp.floor && !f.z)) && room
       const R = lamp.ceiling && room ? poolRadius(room) : 95
-      const dkey = want ? `${f.x},${f.y},${room!.id},${R},${room!.points.map((p) => `${p.x},${p.y}`).join(';')}` : ''
-      if ((lamp.decal?.userData.key ?? '') !== dkey) {
+      const dkey = want ? `${f.x},${f.y},${room!.id},${R}` : ''
+      if ((lamp.decal?.userData.key ?? '') !== dkey || (want && lamp.decal?.userData.points !== room!.points)) {
         if (lamp.decal) {
           lamp.decal.removeFromParent()
           lamp.decal.geometry.dispose()
@@ -671,6 +677,7 @@ export class IndoorLights {
           lamp.decal = poolDecal(room!.points, f.x, f.y, R, floorY(room!) + (lamp.ceiling ? 0.4 : 0.5))
           lamp.decal.position.y = this.liftOf?.(room!.id) ?? 0
           lamp.decal.userData.key = dkey
+          lamp.decal.userData.points = room!.points
           this.group.add(lamp.decal)
         }
       }
@@ -820,18 +827,19 @@ export class IndoorLights {
       const lv = rig.level
       const e = lv * lv * (3 - 2 * lv)
       for (const g of rig.glows) {
-        g.mat.emissiveIntensity = 0.15 + 0.4 * e * Math.min(1.2, power)
+        g.mat.emissiveIntensity = mainGlow(e, power)
         tintGlow(g.mat.emissive, g.color, rig.kelvin, e)
       }
       const hidden = this.hiddenRoom(s.roomId)
       if (rig.decal) {
         const m = rig.decal.material as THREE.MeshBasicMaterial
         m.color.copy(rig.kelvin)
-        m.opacity = 0.06 * e * power
+        m.opacity = MAIN_POOL_OPACITY * e * power
         rig.decal.visible = e > 0.01 && !hidden
       }
       if ((rig.target > 0 || lv > 0) && !hidden) {
-        const pri = (s.primary ? 2e6 : 1e6) + Math.min(9e5, s.distance * s.distance * 0.01)
+        // 副灯（台面灯等）排在主灯后面
+        const pri = mainPri(s.distance) - (s.primary ? 0 : 1e6)
         cands.push({ pri, x: s.x, y: s.h + (this.liftOf?.(s.roomId) ?? 0), z: s.y, color: rig.kelvin, i: s.intensity * e * power, d: s.distance, room: s.roomId })
       }
     }
@@ -842,7 +850,7 @@ export class IndoorLights {
       const kel = this.kelvinOfRoom(l.roomId)
       for (const g of l.glows) {
         // 吸顶灯 / 吊灯的发光部件同房间灯
-        if (l.ceiling) g.mat.emissiveIntensity = 0.15 + 0.4 * e * Math.min(1.2, power)
+        if (l.ceiling) g.mat.emissiveIntensity = mainGlow(e, power)
         else g.mat.emissiveIntensity = glowIntensity(g.base, night, e, g.color.r * 0.3 + g.color.g * 0.59 + g.color.b * 0.11, g.area)
         tintGlow(g.mat.emissive, g.color, kel, e)
       }
@@ -850,7 +858,7 @@ export class IndoorLights {
       if (l.decal) {
         const m = l.decal.material as THREE.MeshBasicMaterial
         m.color.copy(kel)
-        m.opacity = (l.ceiling ? 0.06 : 0.05) * e * power
+        m.opacity = (l.ceiling ? MAIN_POOL_OPACITY : 0.05) * e * power
         l.decal.visible = e > 0.01 && !hidden
       }
       if (!(l.target > 0 || l.level > 0) || hidden) continue
@@ -858,7 +866,7 @@ export class IndoorLights {
       const w = l.obj.localToWorld(this.tmp.copy(l.local))
       if (l.ceiling) {
         // 当房间主灯用：和自动摆的主灯一样排在池子前面，不占「每个房间几盏灯具」的名额
-        cands.push({ pri: 2e6 + Math.min(9e5, l.distance * l.distance * 0.01), x: w.x, y: w.y, z: w.z, color: kel, i: l.intensity * e * power, d: l.distance, room: l.roomId })
+        cands.push({ pri: mainPri(l.distance), x: w.x, y: w.y, z: w.z, color: kel, i: l.intensity * e * power, d: l.distance, room: l.roomId })
         continue
       }
       if (!this.lampsPerRoom) continue
@@ -925,21 +933,27 @@ export class IndoorLights {
     setLightMaskEnabled(anyOn)
   }
 
+  /** 房间灯的色温：房间自己设了就用它（refreshTargets 里 rig.kelvin 也是这么算的），否则跟随全局 */
   private kelvinOfRoom(id: string | null) {
-    if (id) for (const rig of this.rooms.values()) if (rig.spec.roomId === id && rig.spec.primary) return rig.kelvin
     return (id && this.roomK.get(id)) || this.globalKelvin
+  }
+
+  /** 射线碰到的第一个看得见的房间灯具（隐藏楼层的不算）：灯具组 */
+  private hitFixture(ray: THREE.Raycaster) {
+    const hit = ray.intersectObject(this.fixtures, true).find((h) => h.object.visible && !h.object.userData.isOutline && !this.hiddenRoom(lightRoomOf(h.object)))
+    let o: THREE.Object3D | null = hit?.object ?? null
+    while (o && !o.userData.lightRoomId) o = o.parent
+    return o
   }
 
   /** 屏幕射线碰到的自动摆的房间主灯（吸顶灯 / 吊灯；手元灯、阳台壁灯不算）：房间 id 和这个房间现在所有主灯的规格 */
   pickMain(ray: THREE.Raycaster): { roomId: string; specs: RoomLightSpec[] } | null {
-    const hit = ray.intersectObject(this.fixtures, true).find((h) => h.object.visible && !h.object.userData.isOutline && !this.hiddenRoom(lightRoomOf(h.object)))
-    let o: THREE.Object3D | null = hit?.object ?? null
-    while (o && !o.userData.lightRoomId) o = o.parent
-    if (!o) return null
-    const rig = [...this.rooms.values()].find((r) => r.fixture === o)
-    if (!rig || !MAIN_KINDS.includes(rig.spec.kind)) return null
+    const o = this.hitFixture(ray)
+    const rigs = [...this.rooms.values()]
+    const rig = o && rigs.find((r) => r.fixture === o)
+    if (!rig || !isMainKind(rig.spec.kind)) return null
     const roomId = rig.spec.roomId
-    return { roomId, specs: [...this.rooms.values()].filter((r) => r.spec.roomId === roomId).map((r) => r.spec) }
+    return { roomId, specs: rigs.filter((r) => r.spec.roomId === roomId).map((r) => r.spec) }
   }
 
   private roomCenter(id: string | null) {
@@ -960,17 +974,14 @@ export class IndoorLights {
       const s = dir ? (f.x - center.x) * dir.x + (f.y - center.y) * dir.y : 0
       // 阳台壁灯：挂的那面墙正对镜头、又在房子靠镜头的一侧（前墙透明 / 压低时被让开的那面）
       if (!hide && dir && f.onWall) hide = f.nx * dir.x + f.ny * dir.y > 0.3 && s > 25
-      if (!hide && dir && depth !== null) hide = s > depth + 30
+      if (!hide) hide = ceilingHidden(false, dir ? s : null, depth)
       o.userData.target = hide ? 1 : 0
     }
   }
 
   /** 3D 里点中的天花板灯具 → 房间 id */
   pickRoom(ray: THREE.Raycaster) {
-    const hit = ray.intersectObject(this.fixtures, true).find((h) => h.object.visible && !h.object.userData.isOutline && !this.hiddenRoom(lightRoomOf(h.object)))
-    let o: THREE.Object3D | null = hit?.object ?? null
-    while (o && !o.userData.lightRoomId) o = o.parent
-    return (o?.userData.lightRoomId as string) ?? null
+    return (this.hitFixture(ray)?.userData.lightRoomId as string) ?? null
   }
 
   dispose() {
@@ -1031,7 +1042,7 @@ export function prepareLamp(id: string, obj: THREE.Object3D, def: AssetDef): Lam
     return m.geometry.boundingBox!.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, m.matrixWorld))
   }
   // 吸顶灯 / 吊灯素材的发光部件就是房间灯的发光材质（lightFixtures.ts glowMaterial 标了 LAMP_GLOW）
-  const ceiling = isCeilingLight(def)
+  const ceiling = !!def.ceiling
   for (const m of meshes) {
     const mat = m.material as THREE.Material
     if (!(ceiling ? mat.userData[LAMP_GLOW] : isGlow(mat))) continue

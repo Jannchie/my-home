@@ -6,7 +6,7 @@
 
 import { add, mul, rotFacingWall, uid, type Furniture, type Plan, type Vec } from '../model'
 import { isIndoor } from '../walls'
-import { perFloorFurniture } from '../floors'
+import { floorViews, perFloorFurniture } from '../floors'
 import { ASSET_MAP } from './assets'
 import { openingInfos, roomAt, type OpeningInfo } from './house'
 
@@ -65,19 +65,18 @@ export function wallDeviceSpots(plan: Plan, infos: OpeningInfo[]): WallDeviceSpo
       }
     }
   }
-  const owned = (k: WallDeviceKind) => {
-    const a = DEVICE_ASSET[k]
-    return !!a && (!!plan.devicesAsFurniture || plan.furniture.some((f) => f.asset === a))
-  }
-  return out.filter((s) => !owned(s.kind))
+  const owned = ownedDeviceKinds(plan)
+  return out.filter((s) => !owned.has(s.kind))
 }
 
-/** 自动摆哪些设备的指纹（接管了、摆了同款家具都会变）：变了房子要重建 */
-export function wallDeviceKey(plan: Plan) {
-  const own = new Set(Object.values(DEVICE_ASSET))
-  const items = plan.furniture.filter((f) => own.has(f.asset)).map((f) => `${f.asset}@${f.floor ?? ''}`)
-  return `${plan.devicesAsFurniture ? 1 : 0}|${[...new Set(items)].sort().join(',')}`
+/** 不再自动摆的设备：全屋接管了的，或者（这一层）摆了同款家具的 */
+function ownedDeviceKinds(plan: Plan) {
+  const kinds = Object.keys(DEVICE_ASSET) as WallDeviceKind[]
+  return new Set(plan.devicesAsFurniture ? kinds : kinds.filter((k) => plan.furniture.some((f) => f.asset === DEVICE_ASSET[k])))
 }
+
+/** 各层不自动摆哪些设备的指纹（接管了、摆了同款家具都会变）：变了房子要重建 */
+export const wallDeviceKey = (plan: Plan) => floorViews(plan).map(({ view }) => [...ownedDeviceKinds(view)].join(',')).join('|')
 
 /** 设备换成家具时的摆放：背面贴墙面、朝向房间（同 snap.ts snapToWall） */
 function deviceFurniture(s: WallDeviceSpot): Furniture | null {

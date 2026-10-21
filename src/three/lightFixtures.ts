@@ -87,16 +87,28 @@ export const hashStr = (s: string) => {
   return h >>> 0
 }
 
-/** 给房间灯套上风格造型：改 shape / style，吊下来的造型把灯具和光源一起往下移 */
-export function styleSpec(s: RoomLightSpec, style: StyleTag | undefined, variant = hashStr(s.roomId)) {
-  if (!style || !(s.kind === 'ceiling' || s.kind === 'small' || s.kind === 'pendant')) return
-  const t = STYLE_SHAPES[style]
-  const shape = s.kind === 'ceiling' ? t.ceiling[variant % t.ceiling.length] : s.kind === 'small' ? t.small : t.pendant
+/** 房间主灯的种类：吸顶灯、小房间的小吸顶灯、餐桌吊灯（能换成灯具家具的，见 packs/ceiling-lights.ts） */
+export const MAIN_KINDS = ['ceiling', 'small', 'pendant'] as const
+export type MainKind = (typeof MAIN_KINDS)[number]
+export const isMainKind = (k: string): k is MainKind => (MAIN_KINDS as readonly string[]).includes(k)
+
+/** 主灯造型、用途对应的灯具素材 id（packs/ceiling-lights.ts；不填造型 = 通用的圆形吸顶灯） */
+export const ceilingAssetId = (shape: FixtureShape | undefined, kind: MainKind) => `cl-${shape ?? 'basic'}${kind === 'ceiling' ? '' : `-${kind}`}`
+
+/** 换成某款造型：吊下来的造型把灯具和光源一起往下移（餐桌吊灯的高度跟着餐桌，不动） */
+export function applyShape(s: RoomLightSpec, shape: FixtureShape) {
   const info = SHAPES[shape]
-  s.style = style
   s.shape = shape
   if (s.kind !== 'pendant') s.fy = CEILING - (s.kind === 'small' ? info.small ?? info.hang : info.hang)
   s.h = Math.min(CEILING - 3, s.fy + info.light)
+}
+
+/** 给房间灯套上风格造型（同一风格有几款时按 variant 固定挑一款） */
+export function styleSpec(s: RoomLightSpec, style: StyleTag | undefined, variant = hashStr(s.roomId)) {
+  if (!style || !isMainKind(s.kind)) return
+  const t = STYLE_SHAPES[style]
+  s.style = style
+  applyShape(s, s.kind === 'ceiling' ? t.ceiling[variant % t.ceiling.length] : s.kind === 'small' ? t.small : t.pendant)
 }
 
 function glowMaterial(color: string) {
@@ -154,7 +166,7 @@ function cord(g: THREE.Group, y0: number, top: number, color = IRON, canopy = 5)
  * 灯具模型：局部原点在灯具底面中心（吊灯在灯罩下沿）；glows 是要随开关变亮的材质（各自的原色）。
  * top = 天花板离原点多高（吸线、吸顶座画到这里）。
  */
-export function fixtureModel(s: RoomLightSpec): { obj: THREE.Group; glows: RigGlow[] } {
+export function fixtureModel(s: RoomLightSpec, { outline = true } = {}): { obj: THREE.Group; glows: RigGlow[] } {
   const g = new THREE.Group()
   const glows: RigGlow[] = []
   const glow = (color: string) => {
@@ -530,7 +542,8 @@ export function fixtureModel(s: RoomLightSpec): { obj: THREE.Group; glows: RigGl
       }
     }
   }
-  addOutlines(g)
+  // 灯具素材的描边由家具模板统一加（outline = false）
+  if (outline) addOutlines(g)
   g.traverse((o) => {
     o.castShadow = false
     o.receiveShadow = false
