@@ -162,7 +162,9 @@ export function checklist(plan: Plan, hh?: Household): CheckItem[] {
         item(r, '沙发', count(f, TAGS.sofa), 1, { how: 'wall', sel: /^sofa2$/ })
         item(r, '电视', count(f, TAGS.tv), 1, { how: 'scatter', sel: /^prop-tv-43/ })
         if (!diningRoom) item(r, '餐桌', count(f, TAGS.dining), 1, { how: 'wall', sel: /^dining-table$/ })
-        item(r, '可视对讲 / 热水器遥控', 1, 1, undefined, true)
+        // 接管成家具以后（three/wallDevices.ts）按件数算：删掉了就是缺
+        if (plan.devicesAsFurniture) item(r, '可视对讲 / 热水器遥控', Math.min(1, count(all, 'intercom')), 1)
+        else item(r, '可视对讲 / 热水器遥控', 1, 1, undefined, true)
       }
       if (r.kind === 'dining') item(r, '餐桌', count(f, TAGS.dining), 1, { how: 'wall', sel: /^dining-table$/ })
       if (r.kind === 'ldk' || r.kind === 'kitchen') {

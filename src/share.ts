@@ -69,9 +69,11 @@ interface Compact {
   /** 户建用地 / 外观（结构见 model.ts Site / Exterior；读入时由 normalizePlan 校验） */
   S?: unknown
   X?: unknown
+  /** 对讲、遥控面板已经接管成家具（Plan.devicesAsFurniture；只在带家具的分享里） */
+  D?: 1
 }
 
-const ROOM_DECOR = ['wallpaper', 'curtain', 'light', 'lightK']
+const ROOM_DECOR = ['wallpaper', 'curtain', 'light', 'lightK', 'ownLights']
 const OPENING_CODED = ['id', 'kind', 'roomId', 'edge', 'offset', 'width', 'hinge', 'swing', 'floor']
 
 export function toCompact(p: Plan, mode: ShareMode): Compact {
@@ -126,6 +128,7 @@ export function toCompact(p: Plan, mode: ShareMode): Compact {
     })
     c.a = table
     if (p.household) c.h = p.household
+    if (p.devicesAsFurniture) c.D = 1
   }
   return c
 }
@@ -209,6 +212,7 @@ export function fromCompact(c: unknown): Plan {
   if (isObj(o.h) && Array.isArray((o.h as { members?: unknown }).members)) p.household = o.h as unknown as Plan['household']
   if (isObj(o.S)) p.site = o.S as unknown as Plan['site']
   if (isObj(o.X)) p.exterior = o.X as unknown as Plan['exterior']
+  if (o.D === 1) p.devicesAsFurniture = true
   return p
 }
 

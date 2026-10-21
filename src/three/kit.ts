@@ -270,6 +270,11 @@ export interface AssetDef {
   fixture?: boolean
   /** 壁挂：离地安装高度（cm），build 里自己把模型放到这个高度。不占地面，不参与家具之间的碰撞 */
   mount?: number
+  /**
+   * 挂在天花板下（吸顶灯、吊灯）：mount 是灯具底面离地多高。摆放时在这个高度的水平面上自由移动、不贴墙；
+   * 墙压低 / 半墙时和房间灯一样淡出。见 packs/ceiling-lights.ts
+   */
+  ceiling?: true
   /** 顶面高度（cm）：桌、柜、台等，上面可以摆 prop */
   surface?: number
   /** 顶面可摆放的区域（局部坐标多边形，可以多块）；不给就是整个 w × d。L 形、圆形等不规则桌面用 */

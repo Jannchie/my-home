@@ -28,11 +28,12 @@ import { CITIES, MONTH_DAYS, compassAxes, skyState, type SkyState } from '../thr
 import { setReflectInterval } from '../three/reflectFrame'
 import { CULL_MARGIN, CullCache, walkVisibility } from '../walkCull'
 import { furnitureRoom } from '../restyle'
-import { DEFAULT_KELVIN, DEFAULT_OUTDOOR, DEFAULT_POWER, DEFAULT_RANGE, IndoorLights, KELVIN_MAX, KELVIN_MIN, LIGHT_MODES, OUTDOOR_MAX, OUTDOOR_MIN, POOL_HIGH, POOL_LOW, POWER_MAX, POWER_MIN, RANGE_MAX, RANGE_MIN, autoLevel, diningKey, isLampAsset, lightColor, lum, type LightMode } from '../three/lights'
+import { DEFAULT_KELVIN, DEFAULT_OUTDOOR, DEFAULT_POWER, DEFAULT_RANGE, IndoorLights, KELVIN_MAX, KELVIN_MIN, LIGHT_MODES, OUTDOOR_MAX, OUTDOOR_MIN, POOL_HIGH, POOL_LOW, POWER_MAX, POWER_MIN, RANGE_MAX, RANGE_MIN, autoLevel, diningKey, isLampAsset, lightColor, lum, ownedLightKey, takeOverRoomLights, type LightMode } from '../three/lights'
 import { disposeUnshared, isReflector } from '../three/toon'
 import { poseDoors } from '../three/kit'
 import { drawerSlots } from '../three/drawers'
 import { Openers, doorIdOf, type OpenKey } from '../three/openers'
+import { takeOverDevices, wallDeviceKey } from '../three/wallDevices'
 import { drawerContents, slideOffset } from '../cabinet'
 import { useThumbs } from '../three/thumbs'
 import { normalizeColor, paletteStyleOf } from '../three/stylePalettes'
@@ -549,8 +550,8 @@ function lightStyles(p: Plan) {
   const rs = roomStyles(p, hh)
   return (id: string) => rs.get(id) ?? hh.style
 }
-/** 房间灯要重建的指纹：餐桌位置 + 住户风格 */
-const roomLightKey = (p: Plan) => `${diningKey(p)}|${p.household ? `${p.household.style}:${p.household.members.map((m) => m.style).join(',')}` : ''}`
+/** 房间灯要重建的指纹：餐桌位置 + 主灯换成灯具家具的房间 + 住户风格 */
+const roomLightKey = (p: Plan) => `${diningKey(p)}|${ownedLightKey(p)}|${p.household ? `${p.household.style}:${p.household.members.map((m) => m.style).join(',')}` : ''}`
 /** 蒸汽、烟、火苗等动态特效 */
 const fx = new FxLayer()
 /** 会活动的宠物、扫地机器人、Kachaka（预览模式下才动）：整套房子一层，见 actors */
@@ -669,7 +670,7 @@ function frameAt(fr: SelectFrame, obj: THREE.Object3D, asset: string) {
     }
   }
   // 挂在墙上 / 贴在表面上的东西：脚下没有占地，框立起来贴在它正面（中心取模型包围盒，往前让出半个厚度）
-  if (d && (d.mount !== undefined || d.stick)) {
+  if (d && (d.mount !== undefined || d.stick) && !d.ceiling) {
     frameBox.setFromObject(obj).getCenter(frameC)
     const a = obj.rotation.y
     const k = d.d / 2 + 1.5
@@ -752,6 +753,15 @@ function updateMounted(dir: { x: number; y: number } | null, depth: number | nul
     const def = ASSET_MAP.get(f.asset)
     const o = objs.get(f.id)
     if (!def?.mount || !o) continue
+    if (def.ceiling) {
+      // 吸顶灯 / 吊灯：同房间灯（lights.ts applyCutaway）——半墙 / 全部压低时淡出，前墙让开时所指房间之前的淡出
+      const mode = walking.value ? 'up' : sandbox.wallMode
+      const s = dir ? (f.x - houseCenter.x) * dir.x + (f.y - houseCenter.y) * dir.y : 0
+      o.obj.userData.fade ??= { x: f.x, y: f.y, nx: 0, ny: 0, outer: false }
+      o.obj.userData.target = mode !== 'up' || (!!dir && depth !== null && s > depth + 30) ? 1 : 0
+      list.push(o.obj)
+      continue
+    }
     const a = (f.rot * Math.PI) / 180
     const back = { x: Math.sin(a), y: -Math.cos(a) }
     // 能摆东西的壁挂物（搁板、吊柜、挂杆）一直显示：藏了它，摆在上面、挂在上面的东西就悬在半空了
@@ -1522,6 +1532,18 @@ function locate(e: PointerEvent, asset: string, selfId: string | null, exclude: 
     }
     return null
   }
+  if (def.ceiling) {
+    // 吸顶灯 / 吊灯：射线和灯具底面那个高度的水平面求交，在房间里自由移动（不贴墙），朝向不变
+    setRay(e)
+    const self = selfId ? findFurniture(selfId) : undefined
+    const base = activeY() + floorY(roomAt(fv(), self ?? (p ? { x: p.x, y: p.z } : { x: 0, y: 0 })))
+    const hp = raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -(base + (def.mount ?? 0))), new THREE.Vector3())
+    for (const q of [hp, p]) {
+      if (!q || !roomAt(fv(), { x: q.x, y: q.z })) continue
+      return { x: Math.round(q.x * 10) / 10, y: Math.round(q.z * 10) / 10, z: 0, rot, guides: [], asset }
+    }
+    return null
+  }
   if (def.mount) {
     // 鼠标通常指着墙上一米多高的地方：用射线和「挂的高度」那个水平面的交点找墙。
     // 直接用地面交点的话，射线穿过墙才落地，点在房间外面、找不到房间，东西就拖不动
@@ -1748,6 +1770,12 @@ function onTouchUp(e: PointerEvent) {
   }
   // 点按（没动、没长按）：点到家具 / 门窗选中它，点到空处取消选中
   if (pr && !pr.moved && !pr.long && e.type !== 'pointercancel') {
+    const dev = pr.hitId ? null : pickWallDevice(e)
+    if (dev) {
+      takeOverDeviceAt(dev)
+      return
+    }
+    if (!pr.hitId && !pr.house && takeOverLightAt(e)) return
     const rid = pr.hitId || pr.house ? null : pickLightRoom(e)
     selection.value = pr.hitId ? { type: 'furniture', id: pr.hitId } : pr.house ? houseSel(pr.house) : rid ? { type: 'room', id: rid } : null
     // 点在车、围挡（外观视图下屋顶、外墙）上：选中它，旁边浮出编辑卡片
@@ -2302,6 +2330,12 @@ function onPointerDown(e: PointerEvent) {
     // 按在家具上不转视角
     controls.enabled = false
   } else {
+    const dev = pickWallDevice(e)
+    if (dev) {
+      takeOverDeviceAt(dev)
+      return
+    }
+    if (!hit.house && takeOverLightAt(e)) return
     // 天花板灯具：选中它所在的房间（浮出灯光开关卡片）；门窗和外观对象松手时（没拖动）才选中，按在上面拖动照样转视角
     const rid = hit.house ? null : pickLightRoom(e)
     if (rid) selection.value = { type: 'room', id: rid }
@@ -2355,7 +2389,7 @@ function onPointerMove(e: PointerEvent) {
   if (e.buttons === 0 && editing.value) {
     const hit = pickAt(e)
     const id = hit.furniture
-    hovering.value = !!id || !!hit.house
+    hovering.value = !!id || !!hit.house || !!pickWallDevice(e)
     setHover(id && id !== (selection.value?.type === 'furniture' ? selection.value.id : null) ? id : null)
     const sel = selection.value
     setHoverHouse(hit.house && !(sel && (sel.type === 'opening' || sel.type === 'fixture') && `${sel.type}:${sel.id}` === `${hit.house.kind}:${hit.house.id}`) ? hit.house : null)
@@ -3364,10 +3398,11 @@ onBeforeUnmount(() => {
   placing.value = null
 })
 
-// 房间的灯光开关 / 色温不影响房子本身：比较时剔掉，免得一开灯就整栋重建
-const roomsShape = () => JSON.stringify(plan.value.rooms, (k, v) => (k === 'light' || k === 'lightK' ? undefined : v))
+// 房间的灯光开关 / 色温 / 主灯接管不影响房子本身：比较时剔掉，免得一开灯就整栋重建
+const roomsShape = () => JSON.stringify(plan.value.rooms, (k, v) => (k === 'light' || k === 'lightK' || k === 'ownLights' ? undefined : v))
 watch(
-  () => [roomsShape(), plan.value.openings, plan.value.fixtures, plan.value.wall, plan.value.wallOuter, sandbox.wallHeight, plan.value.floors, plan.value.site, plan.value.exterior, plan.value.wallpaper, plan.value.flooring],
+  // 墙上设备接管成家具 / 摆了同款家具：自动画的那几台要去掉
+  () => [roomsShape(), wallDeviceKey(plan.value), plan.value.openings, plan.value.fixtures, plan.value.wall, plan.value.wallOuter, sandbox.wallHeight, plan.value.floors, plan.value.site, plan.value.exterior, plan.value.wallpaper, plan.value.flooring],
   rebuildHouse,
   { deep: true },
 )
@@ -3717,6 +3752,52 @@ const selectedRoom = computed(() => {
 })
 /** 3D 里选中的可开合柜子（有柜门 / 抽屉）：浮出柜门开关卡片 */
 const selectedOpenable = computed(() => (selectedFurniture.value && selectedDef.value?.openable ? selectedFurniture.value : null))
+/** 屏幕坐标处自动摆的墙上设备（可视对讲、遥控面板，three/wallDevices.ts）的命中点；被墙、门挡住的不算 */
+function pickWallDevice(e: { clientX: number; clientY: number }) {
+  if (walking.value || !editing.value || blueprint.on) return null
+  const house = floorGroups.find((g) => g.floor.id === activeFloor.value)?.group
+  if (!house) return null
+  setRay(e as PointerEvent)
+  for (const h of raycaster.intersectObject(house, true)) {
+    if (!(h.object as THREE.Mesh).isMesh || !shown(h.object, true)) continue
+    let o: THREE.Object3D | null = h.object
+    while (o && !o.userData.wallDevice) o = o.parent
+    if (o) return h.point.clone()
+    if (opaqueHit(h)) return null
+  }
+  return null
+}
+/** 点中自动摆的设备：全屋的对讲、遥控面板接管成挂墙家具（一步撤销），选中点中的那台 */
+function takeOverDeviceAt(p: THREE.Vector3) {
+  if (plan.value.devicesAsFurniture) return
+  let made: Furniture[] = []
+  mutate((plan) => {
+    made = takeOverDevices(plan)
+  })
+  let best: Furniture | null = null
+  for (const f of made) if (!best || Math.hypot(f.x - p.x, f.y - p.z) < Math.hypot(best.x - p.x, best.y - p.z)) best = f
+  if (best) selection.value = { type: 'furniture', id: best.id }
+}
+/**
+ * 点中自动摆的房间主灯（吸顶灯 / 吊灯）：这个房间的主灯按原位接管成灯具家具（一步撤销），选中离点的位置最近的那盏。
+ * 之后能拖着挪、换款、删掉，也能从素材库再摆。返回有没有接管。
+ */
+function takeOverLightAt(e: { clientX: number; clientY: number }) {
+  if (walking.value || !editing.value || blueprint.on) return false
+  setRay(e as PointerEvent)
+  const hit = lights.pickMain(raycaster)
+  if (!hit || plan.value.rooms.find((r) => r.id === hit.roomId)?.ownLights) return false
+  // 点的位置投到灯具那个高度（天花板下）再比远近：斜着看时地面交点离灯很远
+  const fl = raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -(activeY() + 225)), new THREE.Vector3())
+  let made: Furniture[] = []
+  mutate((plan) => {
+    made = takeOverRoomLights(plan, hit.roomId, hit.specs)
+  })
+  if (!made.length) return false
+  const d = (f: Furniture) => (fl ? Math.hypot(f.x - fl.x, f.y - fl.z) : 0)
+  selection.value = { type: 'furniture', id: made.reduce((a, b) => (d(b) < d(a) ? b : a)).id }
+  return true
+}
 /** 屏幕坐标处的天花板灯具 → 房间 id */
 function pickLightRoom(e: { clientX: number; clientY: number }) {
   setRay(e as PointerEvent)

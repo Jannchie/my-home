@@ -162,6 +162,9 @@ const TYPE_GROUP: Record<FunctionTag, AssetGroup> = {
   kitchenware: 'kitchen',
   // 家电
   aircon: 'appliance',
+  intercom: 'appliance',
+  'ceiling-light': 'lighting',
+  'control-panel': 'appliance',
   'rice-cooker': 'appliance',
   kettle: 'appliance',
   'electric-kettle': 'appliance',

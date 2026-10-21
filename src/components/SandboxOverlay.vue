@@ -208,8 +208,8 @@ function onKey(e: KeyboardEvent) {
   let dx = k[0].x * k[1] * step
   let dy = k[0].y * k[1] * step
   const def = ASSET_MAP.get(f.asset)
-  if (def?.mount || def?.stick) {
-    // 壁挂物：只沿墙面方向移动（背面朝墙，墙的方向 = 朝向旋转 90°）
+  if ((def?.mount || def?.stick) && !def.ceiling) {
+    // 壁挂物：只沿墙面方向移动（吸顶灯 / 吊灯在天花板下随便挪）（背面朝墙，墙的方向 = 朝向旋转 90°）
     const a = (f.rot * Math.PI) / 180
     const along = { x: Math.cos(a), y: Math.sin(a) }
     const d = dx * along.x + dy * along.y

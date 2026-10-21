@@ -64,6 +64,8 @@ export interface Room {
   light?: 'auto' | 'on' | 'off'
   /** 房间灯色温（K），不填跟随全局 */
   lightK?: number
+  /** 主灯（吸顶灯 / 吊灯）已经接管成灯具家具（three/lights.ts takeOverRoomLights）：不再自动摆，删光了就没有主灯 */
+  ownLights?: true
   /** 所在楼层（Plan.floors 的 id）；不填 = 最底下那层（单层户型、旧存档都不写） */
   floor?: string
   /** 这间的地板（只对木地板房间有用），覆盖全屋的 Plan.flooring；不填 = 跟随全屋 */
@@ -465,6 +467,8 @@ export interface Plan {
   appliancesAsFurniture?: true
   /** 收纳位上的柜子已经是家具。没有这个标记的旧存档：读取时在每个收纳位上补一件同类柜子（cabinet.ts migrateCabinets） */
   cabinetsAsFurniture?: true
+  /** 可视对讲、热水器 / 浴室遥控面板已经接管成挂墙家具（three/wallDevices.ts takeOverDevices）：不再按门自动摆 */
+  devicesAsFurniture?: true
   name: string
   /** 户内隔墙厚 */
   wall: number

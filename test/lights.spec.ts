@@ -4,7 +4,7 @@ import * as THREE from 'three'
 import { generatePlan } from '/src/generate-region'
 import { normalizePlan } from '/src/store'
 import { ASSETS, ASSET_MAP } from '/src/three/assets'
-import { DEFAULT_KELVIN, IndoorLights, LARGE_GLOW_CAP, autoLevel, glowIntensity, isLampAsset, kelvinColor, lampTarget, lightColor, roomLightSpecs, roomTarget } from '/src/three/lights'
+import { DEFAULT_KELVIN, IndoorLights, LARGE_GLOW_CAP, autoLevel, glowIntensity, isLampAsset, kelvinColor, lampTarget, lightColor, roomLightSpecs, roomTarget, takeOverRoomLights } from '/src/three/lights'
 import type { Plan } from '/src/model'
 import { JP_OPTS, range } from './helpers'
 
@@ -208,3 +208,67 @@ describe('阳台壁灯跟着它挂的那面墙', () => {
     expect(lamp!.userData.target).toBe(0)
   })
 })
+
+describe('主灯换成灯具家具（吸顶灯 / 吊灯素材）', () => {
+  const pick = () => {
+    const p = structuredClone(plans.find(([, x]) => x.rooms.some((r) => r.kind === 'western'))![1])
+    const room = p.rooms.find((r) => r.kind === 'western')!
+    return { p, room }
+  }
+
+  test('接管：原位换成同款素材，房间不再自动摆主灯；删光了也不回来', () => {
+    const { p, room } = pick()
+    const specs = roomLightSpecs(p)
+    const mine = specs.filter((s) => s.roomId === room.id && ['ceiling', 'small', 'pendant'].includes(s.kind))
+    expect(mine.length).toBeGreaterThan(0)
+    const made = takeOverRoomLights(p, room.id, specs)
+    expect(made.length).toBe(mine.length)
+    for (const f of made) {
+      const def = ASSET_MAP.get(f.asset)!
+      expect(def.ceiling, f.asset).toBe(true)
+      expect(isLampAsset(def)).toBe(true)
+    }
+    expect(roomLightSpecs(p).filter((s) => s.roomId === room.id && s.primary)).toEqual([])
+    p.furniture = p.furniture.filter((f) => !made.includes(f))
+    expect(roomLightSpecs(p).filter((s) => s.roomId === room.id && s.primary)).toEqual([])
+    // 再接管不会重复加
+    expect(takeOverRoomLights(p, room.id, specs)).toEqual([])
+  })
+
+  test('手动摆一盏吸顶灯：这个房间的自动主灯让出来，别的房间不变', () => {
+    const { p, room } = pick()
+    const before = roomLightSpecs(p).filter((s) => s.primary).length
+    const c = room.points.reduce((a, q) => ({ x: a.x + q.x / room.points.length, y: a.y + q.y / room.points.length }), { x: 0, y: 0 })
+    p.furniture.push({ id: 'cl1', asset: 'cl-led-disc', x: c.x, y: c.y, rot: 0, ...(room.floor ? { floor: room.floor } : {}) })
+    const after = roomLightSpecs(p)
+    expect(after.filter((s) => s.roomId === room.id && s.primary)).toEqual([])
+    expect(after.filter((s) => s.primary).length).toBe(before - 1)
+  })
+
+  test('吸顶灯家具当房间主灯打光：入夜亮起、光源在天花板下、照射范围同自动主灯', () => {
+    const { p, room } = pick()
+    const auto = roomLightSpecs(p).find((s) => s.roomId === room.id && s.primary)!
+    const made = takeOverRoomLights(p, room.id, roomLightSpecs(p))
+    const lights = new IndoorLights(8)
+    lights.syncRooms(p, ASSET_MAP, () => 0)
+    const objs = new Map(made.map((f) => [f.id, { obj: placed(f) }]))
+    lights.syncLamps(p, objs, ASSET_MAP, (f) => p.rooms.find((r) => r.id === room.id && f), () => 0)
+    lights.setState({ global: 'on', kelvin: DEFAULT_KELVIN, auto: 1, night: 1, power: 1 })
+    for (let i = 0; i < 60; i++) lights.step(1 / 30)
+    expect(lights.levelOf(room.id)).toBeCloseTo(1, 3)
+    const pool = lights.group.children.filter((o) => (o as THREE.PointLight).isPointLight) as THREE.PointLight[]
+    const lit = pool.filter((l) => l.intensity > 0 && Math.hypot(l.position.x - made[0].x, l.position.z - made[0].y) < 30)
+    expect(lit.length).toBeGreaterThan(0)
+    expect(lit[0].position.y).toBeLessThan(240)
+    expect(lit[0].position.y).toBeGreaterThan(150)
+    expect(lit[0].distance).toBeGreaterThanOrEqual(auto.distance)
+  })
+})
+
+/** 家具模型摆到它的位置（测试用） */
+function placed(f: Plan['furniture'][number]) {
+  const g = ASSET_MAP.get(f.asset)!.build(ASSET_MAP.get(f.asset)!.palettes[0])
+  g.position.set(f.x, 0, f.y)
+  g.updateMatrixWorld(true)
+  return g
+}

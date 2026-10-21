@@ -34,7 +34,9 @@ import { doorColor, doorHandleOf, doorStyled, handleColor, hasSidelight, hasTran
 import { doorLeafModel, liteModel } from './doorModels'
 import { barnPose, defaultDoorOpen, foldCount, foldLeaves, foldPose, slidingPose, swingPose } from '../doorMotion'
 import { addOutlines, ball, capsule, cyl, disposeHooks, isReflector, mergeMeshes, mergeSolidColors, noTransparentShadows, pullDepth, rbox, shade, toon, useAnisotropy } from './toon'
-import { glow, movable, poseDoor, poseDoors, type AssetDef } from './kit'
+import { movable, poseDoor, poseDoors, type AssetDef } from './kit'
+import { bathRemote, doorbell, intercomMonitor, switchPlate } from './wallDeviceModels'
+import { DEVICE_ASSET, wallDeviceSpots, type WallDeviceKind } from './wallDevices'
 import { freezeMatrices, syncMatrix } from './matrices'
 import { hasTag } from './tags'
 import { fridgeSpotModel, washerSpotModel } from './appliances'
@@ -1236,95 +1238,35 @@ function buildOpenings(infos: OpeningInfo[], H: number) {
   return g
 }
 
-// ---------- 墙上的设备：灯开关、可视对讲、热水器遥控面板、门铃 ----------
+// ---------- 墙上的设备：灯开关、可视对讲、热水器遥控面板、门铃（位置见 wallDevices.ts） ----------
 
-function switchPlate() {
-  const g = new THREE.Group()
-  g.add(rbox(7, 12, 1, '#f8f6f2', { y: -6 }, 0.6))
-  g.add(rbox(3.6, 5.6, 0.8, '#ffffff', { y: -2.8, z: 0.6 }, 0.4))
-  const led = ball(0.35, '#7fe0a8', { y: 3.6, z: 0.6 })
-  led.material = toon('#7fe0a8', { emissive: 0.8 })
-  g.add(led)
-  return g
-}
-function intercomMonitor() {
-  const g = new THREE.Group()
-  g.add(rbox(20, 15, 2.6, '#f5f3ee', { y: -7.5 }, 1))
-  g.add(glow(11, 7.5, '#7fb8e6', { x: -2.5, y: -4.5, z: 1.4 }, 0.5))
-  for (let i = 0; i < 3; i++) g.add(rbox(2.6, 1.6, 0.6, '#cfd3da', { x: 6.2, y: -5.5 + i * 2.6, z: 1.4 }, 0.4))
-  return g
-}
-function bathRemote() {
-  const g = new THREE.Group()
-  g.add(rbox(13, 12, 2, '#f5f3ee', { y: -6 }, 1))
-  g.add(glow(8, 4, '#ffb347', { y: -1.5, z: 1.1 }, 0.6))
-  for (const [x, c] of [
-    [-3.5, '#ff8f86'],
-    [0, '#a8d4f4'],
-    [3.5, '#a6e3cc'],
-  ] as const)
-    g.add(ball(1, c, { x, y: -4.5, z: 1.2 }, [1, 1, 0.5]))
-  return g
-}
-function doorbell() {
-  const g = new THREE.Group()
-  g.add(rbox(8, 13, 2.6, '#e9e6e0', { y: -6.5 }, 0.8))
-  g.add(ball(1.2, '#3a3a3c', { y: 2.5, z: 1.3 }, [1, 1, 0.5]))
-  g.add(cyl(1.6, 1.6, 0.8, '#d9dee6', { y: -3.5, z: 1.3, rx: Math.PI / 2 }, 16))
-  return g
+const DEVICE_MODELS: Record<WallDeviceKind, () => THREE.Group> = {
+  switch: switchPlate,
+  intercom: intercomMonitor,
+  'heater-remote': bathRemote,
+  'bath-remote': bathRemote,
+  doorbell,
 }
 
 /**
- * 每扇门旁边（门把手一侧）离地 120 的灯开关，两侧房间各一个；
- * LDK 门边的可视对讲 + 热水器遥控（日本住宅的标配位置），浴室门内的浴室遥控，玄关门外的门铃。
- * 设备跟着所在的墙一起透明 / 压低。
+ * 自动摆的墙上设备（已经接管成家具的不画）。设备跟着所在的墙一起透明 / 压低。
+ * 能接管的（对讲、遥控面板）标上 wallDevice：沙盘里点中它就接管成挂墙家具。
  */
 function buildWallDevices(plan: Plan, infos: OpeningInfo[], H: number) {
   const g = new THREE.Group()
-  const placed = new Set<string>()
-  const add = (obj: THREE.Object3D, info: OpeningInfo, side: Vec, along: number, y: number) => {
-    if (y + 2 > H) return
-    const p = add2(add2(info.center, mul(info.dir, along)), mul(side, info.wall / 2 + 0.3))
-    obj.position.set(p.x, y, p.y)
+  for (const s of wallDeviceSpots(plan, infos)) {
+    if (s.y + 2 > H) continue
+    const { info, side } = s
+    const obj = DEVICE_MODELS[s.kind]()
+    const p = add2(add2(info.center, mul(info.dir, s.along)), mul(side, info.wall / 2 + 0.3))
+    obj.position.set(p.x, s.y, p.y)
     obj.rotation.y = Math.atan2(side.x, side.y)
     mergeMeshes(obj)
     addOutlines(obj)
+    if (DEVICE_ASSET[s.kind]) obj.userData.wallDevice = s.kind
     // 外墙上的东西（户外的门铃也好、室内的开关也好）跟着那面墙走：用墙的外法线判断；内墙只看朝向不分正反
     tagFade(obj, p, info.outer ? info.out : mul(side, -1), info.outer)
     g.add(obj)
-  }
-  const roomOnSide = (info: OpeningInfo, side: Vec) => roomAt(plan, add2(info.center, mul(side, info.wall / 2 + 20)))
-  for (const info of infos) {
-    if (info.o.kind === 'window') continue
-    // 门把手一侧：开门在铰链对侧，推拉门放在门框右侧
-    const latch = info.o.kind === 'door' ? (info.o.hinge === 'start' ? 1 : -1) : 1
-    const along = latch * (info.width / 2 + 10)
-    for (const sgn of [-1, 1]) {
-      const side = mul(info.out, sgn)
-      const room = roomOnSide(info, side)
-      if (!room) {
-        // 户外一侧：玄关大门外装门铃；同一位置已经装了可视门铃（素材 hc-doorbell-*，一键布置或手动摆的）就不画默认门铃
-        if (info.owner.kind === 'entrance' && info.outer) {
-          const p = add2(add2(info.center, mul(info.dir, along + 6)), mul(side, info.wall / 2))
-          if (!plan.furniture.some((f) => f.asset.startsWith('hc-doorbell') && Math.hypot(f.x - p.x, f.y - p.y) < 40)) add(doorbell(), info, side, along + 6, 145)
-        }
-        continue
-      }
-      if (!isIndoor(room) || room.kind === 'storage') continue
-      const key = `${room.id}|${Math.round(info.center.x)},${Math.round(info.center.y)}`
-      if (placed.has(key)) continue
-      placed.add(key)
-      add(switchPlate(), info, side, along, 125)
-      if (room.kind === 'ldk' && !placed.has('intercom')) {
-        placed.add('intercom')
-        add(intercomMonitor(), info, side, along + latch * 20, 150)
-        add(bathRemote(), info, side, along + latch * 36, 150)
-      }
-      if (room.kind === 'bath' && !placed.has('bath-remote')) {
-        placed.add('bath-remote')
-        add(bathRemote(), info, side, along + latch * 14, 110)
-      }
-    }
   }
   return g
 }

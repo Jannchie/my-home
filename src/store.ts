@@ -70,6 +70,7 @@ export function normalizePlan(p: Plan): Plan | null {
       if (Number.isFinite(r.lightK)) r.lightK = clampKelvin(r.lightK)
       else delete r.lightK
     }
+    if (r.ownLights !== undefined && r.ownLights !== true) delete r.ownLights
   }
   for (const f of p.furniture) if (f.light !== undefined && f.light !== 'on' && f.light !== 'off') delete f.light
   for (const f of p.furniture) if (f.art !== undefined && (typeof f.art !== 'string' || !f.art)) delete f.art

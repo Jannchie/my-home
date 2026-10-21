@@ -96,6 +96,8 @@ export const FURNITURE_TAGS = [
 /** 功能：电器、数码 */
 export const DEVICE_TAGS = [
   'aircon',
+  'intercom', // 可视对讲室内机、门铃室内机
+  'control-panel', // 墙上的热水器 / 浴室遥控面板
   'tv',
   'hifi',
   'pc', // 台式主机
@@ -142,6 +144,7 @@ export const LIGHT_PLANT_TAGS = [
   'light', // 会发光的灯具（灯光模块据此加光源）
   'floor-lamp',
   'wall-lamp',
+  'ceiling-light', // 吸顶灯、吊灯（房间主灯）
   'lamp', // 灯（检查清单「照明」）
   'desk-lamp',
   'table-lamp',
