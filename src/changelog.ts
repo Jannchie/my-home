@@ -12,6 +12,36 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '1.14.0',
+    date: '2026-10-21',
+    notes: {
+      zh: [
+        '「写实」更像室内照片：按房间算的间接光让靠窗的地方亮、房间深处暗，地板、墙面的颜色会互相映染；鸟瞰时远处蒙一层淡淡的空气，天上换成有体积的积云，白天白亮、黄昏被照成金橙、夜里是深色的云和月光照亮的边',
+        '画面效果的名字统一成两个字（自然、写实、动画、手办、微缩、暖阳、冷雾、胶片、粉彩、水彩、网点、漫画……）；「动画」的远处描边会逐渐变细，窗外和鸟瞰时不再糊成一片',
+        '「调整」里新增暗部、亮部的色相和强度：暗部偏蓝紫、亮部偏暖这类分离色调可以自己调',
+        '推拉门、阳台推拉窗可以单独推开任意一扇，漫游时推的是正对着的那扇；折叠门可以选三折或四折（两侧对开）',
+        '自动放置的对讲机、热水器和浴室面板，以及房间的主灯、吊灯，点一下就变成家具：可以选中、拖动、换款式、删除，换上的灯照样照亮房间',
+        '修正「动画」夜里灯下的浅色地板整片晕成一团白',
+      ],
+      ja: [
+        '「リアル」がより室内写真らしく：部屋ごとに計算する間接光で窓際は明るく奥は暗く、床や壁の色が互いに映り込みます。俯瞰では遠くにうっすら空気感がかかり、空は立体的な積雲に。昼は白く輝き、夕方は金色に照らされ、夜は暗い雲の縁が月明かりで光ります',
+        '画面エフェクトの名前を短く統一（ナチュラル、リアル、アニメ、フィギュア、ミニチュア、ウォーム、クールミスト、フィルム、パステル、水彩、網点、モノクロ漫画…）。「アニメ」では遠くの輪郭線がだんだん細くなり、窓の外や俯瞰でも線が潰れません',
+        '「調整」にシャドウ・ハイライトの色相と強さを追加：影を青紫に、明部を暖かく、といったスプリットトーンを自分で調整できます',
+        '引き戸やバルコニーの引き違い窓はどの戸でも個別に開けられ、ウォーク中は正面の戸が動きます。折れ戸は 3 枚折り・4 枚折り（両開き）を選べます',
+        '自動で置かれるインターホン、給湯器・浴室のリモコン、部屋のシーリングライトやペンダントライトは、クリックで家具に変わります。選択・移動・デザイン変更・削除ができ、置き換えた照明もそのまま部屋を照らします',
+        '「アニメ」の夜、照明の下の明るい床が一面白くにじむ問題を修正',
+      ],
+      en: [
+        'Realistic looks more like an interior photo: per-room indirect light makes areas by the windows bright and the back of the room darker, with floor and wall colors bleeding onto each other; from above, distant parts fade into a light haze, and the sky gets volumetric cumulus clouds that are bright white by day, lit gold at dusk and dark with moonlit edges at night',
+        'Look names are now short and consistent (Natural, Realistic, Anime, Figurine, Miniature, Warm, Cool mist, Film, Pastel, Watercolor, Halftone, Manga…); in Anime, distant outlines thin out so views out of the window and from above no longer turn muddy',
+        'Adjust now has shadow and highlight hue and strength, so you can set split toning such as blue-violet shadows and warm highlights yourself',
+        'Any leaf of a sliding door or balcony sliding window can be opened on its own, and in walk mode the leaf you face moves; folding doors can have 3 panels or 4 (a pair from each side)',
+        'Auto-placed intercoms, water-heater and bath panels, and room ceiling lights and pendants turn into furniture with one click: select, drag, swap or delete them, and a replaced light still lights the room',
+        'Fixed light floors under lamps blooming into a white blob at night in Anime',
+      ],
+    },
+  },
+  {
     version: '1.13.0',
     date: '2026-10-21',
     notes: {
