@@ -294,8 +294,8 @@ export const LOOKS: LookDef[] = [
   // 间接光（gi.ts）：按房间烘焙的球谐探针替换屋里的半球光，光只从窗户和灯进来，靠窗亮、深处暗，地板的颜色反到墙上
   {
     id: 'game',
-    label: '手游风',
-    desc: '通透明亮的光感、带颜色的柔和明暗，像开放世界二次元手游',
+    label: '手游',
+    desc: '利落的两档明暗、饱和的蓝紫影子、硬边光斑和手绘感的颜色，像开放世界二次元手游',
     material: 'real',
     styl: 1,
     gi: 1,
@@ -308,20 +308,19 @@ export const LOOKS: LookDef[] = [
     tone: 'gt',
     outline: 0.7,
     crease: 0.3,
-    rim: 0.1,
     flatFur: true,
-    softShadow: 1.1,
-    lighting: { hemi: 1.15, sun: 1.4, up: '#f6f2ff', down: '#ffe4c8', tint: 0.5, sunColor: '#ffdcae', sunTint: 0.4 },
-    shafts: 1.1,
+    softShadow: 0.7,
+    lighting: { hemi: 1.2, sun: 1.6, up: '#f6f2ff', down: '#ffe4c8', tint: 0.5, sunColor: '#ffdcae', sunTint: 0.4 },
+    shafts: 1.5,
     bloom: { strength: 0.16, radius: 0.45, threshold: 1.35 },
-    grade: { exposure: 0.97, contrast: 1.12, saturation: 1.2, shadowTint: [-0.008, 0.0, 0.028], highTint: [0.018, 0.008, -0.012], vignette: 0.18, vignetteColor: '#1e2a48' },
+    grade: { exposure: 0.97, contrast: 1.12, saturation: 1.22, shadowTint: [-0.008, 0.0, 0.028], highTint: [0.018, 0.008, -0.012], vignette: 0.18, vignetteColor: '#1e2a48' },
   },
   // 动画感：参考新海诚、京阿尼的室内背景美术。赛璐璐光照（两档明暗、带颜色的阴影，anime.ts），窗口的光斑、光柱和浮尘（volumetric.ts），
   // 深色线条（描边 + 转折线），亮部偏暖、暗部偏冷紫，灯具带暖晕；背景是蓝天白云（animeSky.ts）。
   // 以前用写实光照（PBR 上收两档明暗）：明暗还是连续的渐变，看起来不像画出来的
   {
     id: 'anime',
-    label: '动画感',
+    label: '动画',
     desc: '利落的明暗加深色线条，像动画电影里的室内背景',
     // 遮蔽按赛璐璐的画法：贴着的一圈收成一块淡淡的阴影色，不是写实的灰色渐变
     ao: true,
@@ -361,40 +360,40 @@ export const LOOKS: LookDef[] = [
   },
   {
     id: 'tiltshift',
-    label: '移轴微缩',
+    label: '微缩',
     desc: '上下虚化、颜色更鲜，像拍桌上的模型',
     tilt: { focus: 0.45, band: 0.06, fall: 0.3, max: 12 },
     grade: { saturation: 1.22, contrast: 1.06, exposure: 1.03, vignette: 0.22 },
   },
   {
     id: 'warm',
-    label: '暖调',
+    label: '暖阳',
     desc: '整体偏暖橙，柔和泛光与暗角',
     bloom: { strength: 0.2, radius: 0.5, threshold: 0.9 },
     grade: { gain: '#fff3e2', exposure: 1.03, saturation: 1.08, contrast: 1.04, shadowTint: [0.02, 0.0, -0.025], highTint: [0.025, 0.01, -0.018], vignette: 0.32, vignetteColor: '#3a1e08' },
   },
   {
     id: 'cool',
-    label: '冷调',
+    label: '冷雾',
     desc: '清冷的蓝灰、低对比，带一层薄雾',
     grade: { gain: '#f2f7ff', contrast: 0.88, saturation: 0.86, exposure: 1.03, shadowTint: [-0.01, 0.005, 0.03], haze: 0.22, hazeColor: '#e9f1f7', fade: 0.06, fadeColor: '#cfdce6' },
   },
   {
     id: 'film',
-    label: '胶片复古',
+    label: '胶片',
     desc: '褪色、偏暖绿，带颗粒和一点色差',
     grade: { contrast: 0.92, saturation: 0.8, gain: '#fff6e6', shadowTint: [-0.015, 0.02, 0.01], highTint: [0.03, 0.015, -0.03], fade: 0.12, fadeColor: '#2a2620', ca: 1.4, vignette: 0.5, vignetteColor: '#1a120a', grain: 0.075 },
   },
   {
     id: 'pastel',
-    label: '粉彩梦幻',
+    label: '粉彩',
     desc: '提亮、降饱和，一层柔光',
     bloom: { strength: 0.16, radius: 0.8, threshold: 0.78 },
     grade: { exposure: 1.03, contrast: 0.86, saturation: 0.78, gain: '#fff8fb', highTint: [0.015, 0.0, 0.02], fade: 0.1, fadeColor: '#f4e4ee' },
   },
   {
     id: 'watercolor',
-    label: '水彩纸',
+    label: '水彩',
     desc: '色块晕开、边缘积色，透出纸纹',
     bg: ['#fcfaf5', '#f6f1e7', '#ece4d4'],
     stylize: 'watercolor',
@@ -403,7 +402,7 @@ export const LOOKS: LookDef[] = [
   },
   {
     id: 'comic',
-    label: '漫画网点',
+    label: '网点',
     desc: '阴影换成网点，描边加粗',
     bg: ['#ffffff', '#fbfbf8', '#f2f2ec'],
     stylize: 'comic',
@@ -412,7 +411,7 @@ export const LOOKS: LookDef[] = [
   },
   {
     id: 'manga',
-    label: '黑白漫画',
+    label: '漫画',
     desc: '按固有色和明暗分档，细网点加转折线',
     stylize: 'manga',
     material: 'none',
@@ -422,7 +421,7 @@ export const LOOKS: LookDef[] = [
   },
   {
     id: 'manga-coarse',
-    label: '粗网点漫画',
+    label: '粗网',
     desc: '大颗网点、只描外轮廓，像放大印刷的旧漫画',
     stylize: 'manga',
     material: 'none',
@@ -432,7 +431,7 @@ export const LOOKS: LookDef[] = [
   },
   {
     id: 'manga-hatch',
-    label: '排线漫画',
+    label: '排线',
     desc: '斜排线代替网点，暗部交叉排线',
     stylize: 'manga',
     material: 'none',
@@ -442,7 +441,7 @@ export const LOOKS: LookDef[] = [
   },
   {
     id: 'manga-ink',
-    label: '墨线稿',
+    label: '墨稿',
     desc: '只留墨线与实黑，像上网点前的原稿',
     stylize: 'manga',
     material: 'none',
@@ -458,20 +457,20 @@ export const LOOKS: LookDef[] = [
   },
   {
     id: 'sepia',
-    label: '棕褐老照片',
+    label: '旧照',
     desc: '暖棕单色、褪色暗角，像旧相册',
     grade: { sepia: 1, contrast: 0.95, fade: 0.08, fadeColor: '#3a2a1a', vignette: 0.55, vignetteColor: '#2a1808', grain: 0.05 },
   },
   {
     id: 'pixel',
-    label: '像素风',
+    label: '像素',
     desc: '降低分辨率、限制色阶，像老游戏',
     stylize: 'pixel',
     grade: { saturation: 1.12, contrast: 1.04 },
   },
   {
     id: 'crt',
-    label: '显像管',
+    label: '荧屏',
     desc: '老电视的弯曲屏幕、扫描线和荧光栅格',
     crt: true,
     outline: 1.3,
@@ -479,7 +478,7 @@ export const LOOKS: LookDef[] = [
   },
   {
     id: 'sketch',
-    label: '素描线稿',
+    label: '素描',
     desc: '铅笔线条与排线，画在纸上',
     bg: ['#fbf9f3', '#f6f2e8', '#ece6d8'],
     stylize: 'sketch',
@@ -1617,7 +1616,8 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
           renderPatched(() => {
             // 间接光探针：用这一帧换好的材质采几个（gi.ts）；探针更新了，累积退回到少量帧，新的间接光很快显出来
             if (giOn()) gi ??= createGI(renderer, scene, camera, stage.sun, stage.hemi)
-            gi?.setGain(current.gi ?? 1)
+            // 夜里灯光的多次反弹在小房间里叠得很快（整屋发白）：入夜时间接光收弱
+            gi?.setGain((current.gi ?? 1) * (1 - 0.6 * sky.night))
             if (gi?.step(giOn(), sceneVersion)) p.accum.frame = Math.min(p.accum.frame, ACCUM_SETTLE)
             // 倒影在最外层先画（reflectFrame.ts）；镜头已经抖过亚像素，和主画面一致
             prerenderReflections(renderer, scene, camera)
