@@ -31,6 +31,7 @@
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import { injectLightMask } from './lightMask'
+import { GI_APPLY, GI_PARS, giUniforms } from './gi'
 import { MAT_ID, MATS, type Mat } from './matIds'
 import { woodish } from './mats'
 
@@ -199,7 +200,7 @@ vec3 rPerturb(vec3 pos, vec3 n, float h, float faceDir) {
  */
 function injectDetail(sh: THREE.WebGLProgramParametersWithUniforms, perVertex: boolean, id: number) {
   if (!sh.vertexShader.includes('#include <begin_vertex>') || !sh.fragmentShader.includes('#include <color_fragment>')) return
-  Object.assign(sh.uniforms, realUniforms)
+  Object.assign(sh.uniforms, realUniforms, giUniforms)
   // 类别：合并的家具逐顶点（varying）；其余网格整个材质只有一种，写成编译期常量——按类别查表的 if 链、各类别细节的分支（rIs）
   // 都被编译器折叠掉，每个片元不再逐个比较（程序缓存键里本来就带着类别，不多出程序）
   sh.vertexShader =
@@ -252,7 +253,7 @@ function injectDetail(sh: THREE.WebGLProgramParametersWithUniforms, perVertex: b
         `float hemiDiffuseWeight = 0.5 * dotNL + 0.5;
 		float rHq = hemiDiffuseWeight * 2.0;
 		hemiDiffuseWeight = mix( hemiDiffuseWeight, ( floor( rHq ) + smoothstep( 0.35, 0.65, fract( rHq ) ) ) * 0.5, uCel );`,
-      ),
+      ) + GI_PARS,
     )
     // 手办质感：统一的半光泽漆面
     .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n  roughnessFactor = mix(roughnessFactor, rFigRough(vMat), uFigure);')
@@ -333,9 +334,11 @@ function injectDetail(sh: THREE.WebGLProgramParametersWithUniforms, perVertex: b
       .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n  metalnessFactor = rTabMetal(vMat);')
       .replace('#include <lights_physical_fragment>', `#include <lights_physical_fragment>\n  #ifdef USE_SHEEN\n  material.sheenColor *= rTabSheen(vMat) * (1.0 - rIs(${I.pile}.0) * uFlatFur);\n  #endif`)
   // 环境贴图只当高光来源：漫反射部分清零，反射按类别缩放
+  // 间接光探针（gi.ts）：替换半球光，要在环境贴图之前（那里只加高光）
   f = f.replace(
     '#include <lights_fragment_maps>',
-    `#include <lights_fragment_maps>
+    `${GI_APPLY}
+  #include <lights_fragment_maps>
   #if defined( RE_IndirectSpecular )
   iblIrradiance = vec3( 0.0 );
   radiance *= mix(rTabEnv(vMat), rFigEnv(vMat), uFigure);

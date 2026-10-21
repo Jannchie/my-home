@@ -397,10 +397,15 @@ for (const C of [THREE.MeshToonMaterial, THREE.MeshLambertMaterial, THREE.MeshPh
 // ---------- 运行时状态 ----------
 
 let mapTex: THREE.DataTexture | null = null
+let mapNow: LightMaskMap | null = null
+
+/** 当前的房间编号图（间接光探针按它布点，gi.ts） */
+export const currentLightMask = () => mapNow
 
 /** 户型变了：换上新的编号图（null = 关掉遮罩） */
 export function setLightMaskMap(m: LightMaskMap | null) {
   const U = lightMaskUniforms
+  mapNow = m
   if (mapTex) mapTex.dispose()
   mapTex = null
   if (!m) {

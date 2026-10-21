@@ -34,6 +34,7 @@ import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js'
 import { mangaUniforms } from './manga'
 import { isReflector } from './toon'
 import { prerenderReflections } from './reflectFrame'
+import { createGI, type GI } from './gi'
 import type { Stage } from './stage'
 
 export type LookId = 'none' | 'game' | 'anime' | 'real' | 'figure' | 'crt' | 'tiltshift' | 'warm' | 'cool' | 'film' | 'pastel' | 'watercolor' | 'comic' | 'manga' | 'manga-coarse' | 'manga-hatch' | 'manga-ink' | 'mono' | 'sepia' | 'pixel' | 'sketch'
@@ -138,6 +139,8 @@ export interface LookDef {
   tone?: boolean | 'gt'
   /** 风格化 PBR（0–1，realistic.ts setRealStyle 的 styl）：柔和的阳光 ramp、带颜色的暗面、暖色的明暗交界 */
   styl?: number
+  /** 间接光探针（gi.ts）的强度：按房间烘焙的球谐辐照度替换半球光（靠窗亮、深处暗、颜色互染）；不填 = 不用 */
+  gi?: number
   /** 背景的天空（蓝天白云、夜里星空，animeSky.ts）：所有效果默认都有；false = 不要（透明背景上的天色渐变） */
   sky?: boolean
   /** 镜头：显像管（弯曲屏幕、扫描线；可以和任何风格化叠加） */
@@ -178,7 +181,7 @@ export interface LookAdjust {
 export type LookAdjustKey = keyof LookAdjust
 
 /** 只在写实光照下起作用的参数（写实类预设换回卡通光照时清掉）：LookDef 加了写实专用的字段要补进来 */
-const REAL_ONLY = ['lighting', 'aoShade', 'aoRadius', 'figure', 'softShadow', 'rim', 'term', 'flatFur', 'cel', 'styl'] as const satisfies readonly (keyof LookDef)[]
+const REAL_ONLY = ['lighting', 'aoShade', 'aoRadius', 'figure', 'softShadow', 'rim', 'term', 'flatFur', 'cel', 'styl', 'gi'] as const satisfies readonly (keyof LookDef)[]
 
 /** 调色类参数（直接写进 grade） */
 const GRADE_KEYS = ['exposure', 'contrast', 'saturation', 'vignette', 'grain'] as const
@@ -272,13 +275,15 @@ export const LOOKS: LookDef[] = [
   },
   // 手游风：参考开放世界二次元手游的室内。风格化 PBR（realistic.ts styl）：阳光按柔和的 ramp 走、暗面是透亮的蓝紫、交界一道暖色；
   // HDR：阳光比天光亮得多（受光面亮过 1），游戏式 filmic 色调映射压下来，泛光阈值卡在 1 附近，阳光照到的地方会晕开；
-  // 天光冷、地面反光暖（天花板、家具底面偏暖）；线条细而淡，只勾外轮廓和主要转折
+  // 天光冷、地面反光暖（天花板、家具底面偏暖）；线条细而淡，只勾外轮廓和主要转折。
+  // 间接光（gi.ts）：按房间烘焙的球谐探针替换屋里的半球光，光只从窗户和灯进来，靠窗亮、深处暗，地板的颜色反到墙上
   {
     id: 'game',
     label: '手游风',
     desc: '通透明亮的光感、带颜色的柔和明暗，像开放世界二次元手游',
     material: 'real',
     styl: 1,
+    gi: 1.25,
     ao: true,
     aoShade: [0.66, 0.64, 0.8, 1.5],
     aoRadius: 22,
@@ -288,7 +293,7 @@ export const LOOKS: LookDef[] = [
     rim: 0.1,
     flatFur: true,
     softShadow: 1.6,
-    lighting: { hemi: 1.3, sun: 1.8, up: '#f6f2ff', down: '#ffe4c8', tint: 0.5, sunColor: '#ffdcae', sunTint: 0.4 },
+    lighting: { hemi: 1.3, sun: 1.55, up: '#f6f2ff', down: '#ffe4c8', tint: 0.5, sunColor: '#ffdcae', sunTint: 0.4 },
     shafts: 1.1,
     bloom: { strength: 0.16, radius: 0.45, threshold: 1.35 },
     grade: { exposure: 1.02, contrast: 1.05, saturation: 1.12, shadowTint: [-0.008, 0.0, 0.028], highTint: [0.018, 0.008, -0.012], vignette: 0.18, vignetteColor: '#1e2a48' },
@@ -1138,6 +1143,9 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
   } | null = null
   /** 浮尘（volumetric.ts），体积光开着时才建、才挂进场景 */
   let dust: THREE.Points | null = null
+  /** 间接光探针（gi.ts），效果要它时才建 */
+  let gi: GI | null = null
+  const giOn = () => !low && !!current.gi && current.material === 'real' && current.stylize !== 'manga'
   let current: LookDef = LOOK_MAP.get('none')!
   let sky: { bg: [string, string, string]; night: number } = { bg: DEFAULT_BG, night: 0 }
   /** 窗户夜光：颜色跟色温，亮度跟室内亮灯程度（没接室内灯光时按全亮） */
@@ -1545,6 +1553,10 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
         if (dustOn) scene.add(dust!)
         try {
           renderPatched(() => {
+            // 间接光探针：用这一帧换好的材质采几个（gi.ts）；探针更新了，累积退回到少量帧，新的间接光很快显出来
+            if (giOn()) gi ??= createGI(renderer, scene, camera, stage.sun, stage.hemi)
+            gi?.setGain(current.gi ?? 1)
+            if (gi?.step(giOn(), sceneVersion)) p.accum.frame = Math.min(p.accum.frame, ACCUM_SETTLE)
             // 倒影在最外层先画（reflectFrame.ts）；镜头已经抖过亚像素，和主画面一致
             prerenderReflections(renderer, scene, camera)
             composer!.render()
@@ -1627,7 +1639,7 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
     },
     wantsFrame() {
       if (!composer || !passes || stage.post !== hook) return false
-      return (dustOn && dustAnim) || (accumOn() && passes.accum.frame < ACCUM_FRAMES)
+      return (dustOn && dustAnim) || (accumOn() && passes.accum.frame < ACCUM_FRAMES) || (giOn() && !!gi?.busy())
     },
     setIndoor(color, level) {
       windowGlow.copy(WINDOW_GLOW).lerp(color, 0.6)
@@ -1656,6 +1668,8 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
       stage.post = null
       stage.outlineScale = 1
       teardown()
+      gi?.dispose()
+      gi = null
       if (dust) {
         dust.geometry.dispose()
         ;(dust.material as THREE.Material).dispose()
