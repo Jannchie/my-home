@@ -487,12 +487,12 @@ watch(
   { deep: true },
 )
 
-/** 3D 沙盘的画面效果（three/post.ts 的 LookId），单独存一个键，不进户型数据；没选过的默认「动画感」 */
+/** 3D 沙盘的画面效果（three/post.ts 的 LookId），单独存一个键，不进户型数据；没选过的默认「手游风」 */
 function loadLook() {
   try {
-    return localStorage.getItem(LOOK_KEY) || 'anime'
+    return localStorage.getItem(LOOK_KEY) || 'game'
   } catch {
-    return 'anime'
+    return 'game'
   }
 }
 watch(

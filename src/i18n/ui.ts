@@ -826,6 +826,8 @@ Object.assign(UI, {
   画面效果: ['画面エフェクト', 'Look'],
   原样: ['なし', 'None'],
   动画感: ['アニメ調', 'Anime'],
+  手游风: ['ゲーム調', 'Game'],
+  '通透明亮的光感、带颜色的柔和明暗，像开放世界二次元手游': ['透明感のある明るい光と色づいたやわらかな陰影。オープンワールドのアニメ調ゲームのように', 'Bright, airy light with soft, colorful shading — like an open-world anime game'],
   写实: ['リアル', 'Realistic'],
   赛璐璐: ['セル調', 'Cel'],
   自然: ['ナチュラル', 'Natural'],

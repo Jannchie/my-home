@@ -36,7 +36,7 @@ import { isReflector } from './toon'
 import { prerenderReflections } from './reflectFrame'
 import type { Stage } from './stage'
 
-export type LookId = 'none' | 'anime' | 'real' | 'figure' | 'crt' | 'tiltshift' | 'warm' | 'cool' | 'film' | 'pastel' | 'watercolor' | 'comic' | 'manga' | 'manga-coarse' | 'manga-hatch' | 'manga-ink' | 'mono' | 'sepia' | 'pixel' | 'sketch'
+export type LookId = 'none' | 'game' | 'anime' | 'real' | 'figure' | 'crt' | 'tiltshift' | 'warm' | 'cool' | 'film' | 'pastel' | 'watercolor' | 'comic' | 'manga' | 'manga-coarse' | 'manga-hatch' | 'manga-ink' | 'mono' | 'sepia' | 'pixel' | 'sketch'
 
 interface Grade {
   exposure: number
@@ -130,8 +130,14 @@ export interface LookDef {
   cel?: number
   /** 写实光照下阳光阴影的柔和程度（阴影半径，Sandbox3D）；不填用写实的默认 */
   softShadow?: number
-  /** 线性转 sRGB 之前做色调映射（写实：高光柔和地压下来，不再一片死白） */
-  tone?: boolean
+  /**
+   * 线性转 sRGB 之前做色调映射（写实：高光柔和地压下来，不再一片死白）。true = Khronos PBR Neutral（保色）；
+   * 'gt' = 游戏式的 filmic（Uchimura / GT 曲线：中段线性、肩部长，亮部按亮度压、保住饱和度），「手游风」用：
+   * 阳光照到的地方可以亮过 1（HDR），压下来是通透的暖白，泛光也有东西可晕
+   */
+  tone?: boolean | 'gt'
+  /** 风格化 PBR（0–1，realistic.ts setRealStyle 的 styl）：柔和的阳光 ramp、带颜色的暗面、暖色的明暗交界 */
+  styl?: number
   /** 背景的天空（蓝天白云、夜里星空，animeSky.ts）：所有效果默认都有；false = 不要（透明背景上的天色渐变） */
   sky?: boolean
   /** 镜头：显像管（弯曲屏幕、扫描线；可以和任何风格化叠加） */
@@ -172,7 +178,7 @@ export interface LookAdjust {
 export type LookAdjustKey = keyof LookAdjust
 
 /** 只在写实光照下起作用的参数（写实类预设换回卡通光照时清掉）：LookDef 加了写实专用的字段要补进来 */
-const REAL_ONLY = ['lighting', 'aoShade', 'aoRadius', 'figure', 'softShadow', 'rim', 'term', 'flatFur', 'cel'] as const satisfies readonly (keyof LookDef)[]
+const REAL_ONLY = ['lighting', 'aoShade', 'aoRadius', 'figure', 'softShadow', 'rim', 'term', 'flatFur', 'cel', 'styl'] as const satisfies readonly (keyof LookDef)[]
 
 /** 调色类参数（直接写进 grade） */
 const GRADE_KEYS = ['exposure', 'contrast', 'saturation', 'vignette', 'grain'] as const
@@ -186,7 +192,7 @@ export function resolveLook(id: string, adj: LookAdjust = {}): LookDef {
     out.material = adj.material === 'anime' ? undefined : adj.material
     // 写实要的 AO、色调映射跟着材质走（不管是不是写实预设）；其它预设换成写实时描边、转折线没有意义
     out.ao = adj.material === 'real' || (base.material === 'real' ? false : base.ao)
-    out.tone = adj.material === 'real' || (base.material === 'real' ? false : base.tone)
+    out.tone = adj.material === 'real' ? (base.material === 'real' ? base.tone : true) : base.material === 'real' ? false : base.tone
     if (adj.material === 'real') {
       out.outline = 0
       out.crease = 0
@@ -263,6 +269,29 @@ export const LOOKS: LookDef[] = [
     bloom: { strength: 0.1, radius: 0.5, threshold: 1.8 },
     grade: { exposure: 1.12, contrast: 1.06, saturation: 1.05, vignette: 0.18 },
     lighting: { hemi: 1.05, sun: 1.45 },
+  },
+  // 手游风：参考开放世界二次元手游的室内。风格化 PBR（realistic.ts styl）：阳光按柔和的 ramp 走、暗面是透亮的蓝紫、交界一道暖色；
+  // HDR：阳光比天光亮得多（受光面亮过 1），游戏式 filmic 色调映射压下来，泛光阈值卡在 1 附近，阳光照到的地方会晕开；
+  // 天光冷、地面反光暖（天花板、家具底面偏暖）；线条细而淡，只勾外轮廓和主要转折
+  {
+    id: 'game',
+    label: '手游风',
+    desc: '通透明亮的光感、带颜色的柔和明暗，像开放世界二次元手游',
+    material: 'real',
+    styl: 1,
+    ao: true,
+    aoShade: [0.66, 0.64, 0.8, 1.5],
+    aoRadius: 22,
+    tone: 'gt',
+    outline: 0.55,
+    crease: 0.3,
+    rim: 0.1,
+    flatFur: true,
+    softShadow: 1.6,
+    lighting: { hemi: 1.3, sun: 1.8, up: '#f6f2ff', down: '#ffe4c8', tint: 0.5, sunColor: '#ffdcae', sunTint: 0.4 },
+    shafts: 1.1,
+    bloom: { strength: 0.16, radius: 0.45, threshold: 1.35 },
+    grade: { exposure: 1.02, contrast: 1.05, saturation: 1.12, shadowTint: [-0.008, 0.0, 0.028], highTint: [0.018, 0.008, -0.012], vignette: 0.18, vignetteColor: '#1e2a48' },
   },
   // 动画感：参考新海诚、京阿尼的室内背景美术。赛璐璐光照（两档明暗、带颜色的阴影，anime.ts），窗口的光斑、光柱和浮尘（volumetric.ts），
   // 深色线条（描边 + 转折线），亮部偏暖、暗部偏冷紫，灯具带暖晕；背景是蓝天白云（animeSky.ts）。
@@ -515,6 +544,29 @@ const BaseShader = {
     // Khronos PBR Neutral：three 自带的实现（toneMappingExposure 由渲染器按 1 填）。比 AgX 保色：家具配色是按原色调好的
     #include <common>
     #include <tonemapping_pars_fragment>
+    // Uchimura（GT）曲线：暗部一小段趾、中段线性（原色不变）、肩部长而平滑地压到 1
+    vec3 gtCurve(vec3 x) {
+      const float P = 1.0, a = 1.0, m = 0.22, l = 0.4, c = 1.33, b = 0.0;
+      float l0 = ((P - m) * l) / a;
+      float S0 = m + l0;
+      float S1 = m + a * l0;
+      float C2 = (a * P) / (P - S1);
+      float CP = -C2 / P;
+      vec3 w0 = 1.0 - smoothstep(0.0, m, x);
+      vec3 w2 = step(m + l0, x);
+      vec3 w1 = 1.0 - w0 - w2;
+      vec3 T = m * pow(max(x / m, 0.0), vec3(c)) + b;
+      vec3 S = P - (P - S1) * exp(CP * (x - S0));
+      vec3 L = m + a * (x - m);
+      return T * w0 + L * w1 + S * w2;
+    }
+    // 逐通道压会把亮部压白、压灰；按亮度压保色但饱和的颜色会溢出。各取一半：阳光照到的地方是暖的、带颜色的亮，不是一片白
+    vec3 gtTone(vec3 c) {
+      c = max(c, 0.0);
+      float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+      vec3 byLum = min(c * (gtCurve(vec3(l)).x / max(l, 1e-4)), 1.0);
+      return mix(gtCurve(c), byLum, 0.5);
+    }
     varying vec2 vUv;
     vec3 toSRGB(vec3 c) { c = max(c, 0.0); return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c)); }
     vec3 toLinear(vec3 c) { return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(0.04045, c)); }
@@ -527,7 +579,8 @@ const BaseShader = {
       float a = clamp(t.a, 0.0, 1.0);
       // 画面内容是预乘的（清屏处为 0），泛光叠在背景上也保留
       vec3 col = t.rgb;
-      if (uTone > 0.5) col = NeutralToneMapping(col);
+      if (uTone > 1.5) col = gtTone(col);
+      else if (uTone > 0.5) col = NeutralToneMapping(col);
       gl_FragColor = vec4(toSRGB(col + toLinear(bg) * (1.0 - a)), 1.0);
     }`,
 }
@@ -1178,7 +1231,9 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
     // 阈值高、强度低：只在最亮的发光部件周围留一圈淡晕，不盖住灯具轮廓和屏幕边框
     // 黑白漫画读的是编码不是颜色，不能泛光
     const manga = look.stylize === 'manga'
-    const nightBloom = sky.night > 0.02 && !low && !manga ? { strength: 0.28 * sky.night, radius: 0.3, threshold: 0.82 } : undefined
+    // HDR（游戏式色调映射）下灯泡、灯罩亮过 1 很多，阈值照效果自己的走，不然整盏灯晕成一团
+    const nightThreshold = look.tone === 'gt' && look.bloom ? look.bloom.threshold : 0.82
+    const nightBloom = sky.night > 0.02 && !low && !manga ? { strength: 0.28 * sky.night, radius: 0.3, threshold: nightThreshold } : undefined
     const bloom = low ? undefined : nightBloom && (!look.bloom || nightBloom.strength > look.bloom.strength) ? nightBloom : look.bloom
     // 遮蔽、体积光、转折线：漫画读的是编码，不能乘、不能加
     const ao = (fx.ao || !!look.ao) && !low && !manga
@@ -1222,7 +1277,7 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
     }
     // 背景：纸面类风格用自己的纸色，入夜时逐渐换成天色
     const ub = p.base.uniforms
-    ub.uTone.value = look.tone ? 1 : 0
+    ub.uTone.value = look.tone === 'gt' ? 2 : look.tone ? 1 : 0
     for (let i = 0; i < 3; i++) {
       const c = (ub['uBg' + i].value as THREE.Color).set(sky.bg[i])
       if (look.bg) c.lerp(new THREE.Color(look.bg[i]), 1 - sky.night)
@@ -1369,6 +1424,7 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
       term: real ? (current.term ?? 0) : 0,
       flatFur: real && current.flatFur ? 1 : 0,
       cel: real ? (current.cel ?? 0) : 0,
+      styl: real ? (current.styl ?? 0) : 0,
     })
     const restore = real ? swapToPbr(renderer, scene, (o) => !!o.userData.isOutline) : null
     try {
