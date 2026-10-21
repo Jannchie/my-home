@@ -1,4 +1,4 @@
-// 3D LUT 调色（画面效果 LookDef.lut，「手游风」用）：参数式调色（post.ts 的 Grade）只能整体调曝光、对比、饱和、冷暖，
+// 3D LUT 调色（画面效果 LookDef.lut；目前没有预设在用，留给调色类预设）：参数式调色（post.ts 的 Grade）只能整体调曝光、对比、饱和、冷暖，
 // 游戏的调色还会按色相分别处理——天空的蓝更饱和、往青偏一点，草木的绿往黄绿偏、更鲜，木头和皮肤的暖色更暖，
 // 暗部带一点蓝紫、亮部带一点暖。这些写成一个 sRGB → sRGB 的函数，烘成 32³ 的 3D 贴图，Grade 里查一次表。
 // 在 OKLab（感知均匀的色彩空间）里调：亮度、色度、色相分开动，调色相不会顺带改亮度。
@@ -52,8 +52,8 @@ const BANDS: { h: number; w: number; chroma: number; shift: number }[] = [
   { h: 330, w: 25, chroma: 0.94, shift: 0 },
 ]
 
-/** 「手游风」的调色函数：sRGB → sRGB */
-export function gameGrade(r: number, g: number, b: number): [number, number, number] {
+/** 鲜明的调色函数（天更蓝、草更鲜、木色更暖）：sRGB → sRGB */
+export function vividGrade(r: number, g: number, b: number): [number, number, number] {
   let [L, A, B] = srgbToOklab(r, g, b)
   // 轻微的 S 曲线（中间调对比），黑白位不动
   const s = L * L * (3 - 2 * L)
@@ -86,7 +86,7 @@ export function gameGrade(r: number, g: number, b: number): [number, number, num
 const cache = new Map<string, THREE.Data3DTexture>()
 
 /** 把调色函数烘成 3D 贴图（按 id 缓存）：R 沿 x、G 沿 y、B 沿 z，取样时按 (c × (N-1) + 0.5) / N 对准格子中心 */
-export function lutTexture(id: string, fn: (r: number, g: number, b: number) => [number, number, number] = gameGrade) {
+export function lutTexture(id: string, fn: (r: number, g: number, b: number) => [number, number, number] = vividGrade) {
   let t = cache.get(id)
   if (t) return t
   const N = LUT_SIZE

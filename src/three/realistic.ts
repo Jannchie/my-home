@@ -22,10 +22,7 @@
 //   - term：明暗交界两侧冷暖对比（阳光的转折处、投影边缘）：受光侧一条细细的暖橙、背光侧一条蓝紫，稍提饱和；
 //   - rim：白色边缘光：圆角、轮廓上一圈，物体从背景里浮出来；
 //   - cel：赛璐璐明暗：阳光、灯光的漫反射收成亮暗两档，天光按朝向收成三档，高光压弱；
-//   - flatFur：长绒是纯色（不长绒毛层、不画织纹和绒光）；地毯边缘、色块交界的毛刺是建模时长的（fringe.ts）；
-//   - styl：二次元手游式的风格化 PBR（「手游风」）：阳光的漫反射按一条柔和的 ramp 走（受光面整体抬平、交界一段短过渡），
-//     暗面（背光、落影）乘一层透亮的阴影色并提饱和度（影子是带颜色的，不是压灰），明暗交界、投影边缘是一道暖而饱和的色带；
-//     高光、环境反射照写实的，靠后面的 HDR 色调映射和泛光把阳光照到的地方提得通透。
+//   - flatFur：长绒是纯色（不长绒毛层、不画织纹和绒光）；地毯边缘、色块交界的毛刺是建模时长的（fringe.ts）。
 // 描边壳在描边为 0 时不画（post.ts renderPatched 藏起来）。
 
 import * as THREE from 'three'
@@ -124,19 +121,14 @@ const realUniforms = {
   uTerm: { value: 0 },
   uFlatFur: { value: 0 },
   uCel: { value: 0 },
-  uStyl: { value: 0 },
-  /** 风格化 PBR 的阴影色、交界色（线性空间的乘数） */
-  uStylShade: { value: new THREE.Color().setRGB(0.74, 0.78, 1.0) },
-  uStylWarm: { value: new THREE.Color().setRGB(1.08, 0.96, 0.84) },
 }
-/** 写实光照上叠的画法（post.ts 每帧按画面效果设）：手办质感、边缘光、明暗交界、纯色毛绒、赛璐璐明暗、风格化 PBR */
-export function setRealStyle(s: { figure: number; rim: number; term: number; flatFur: number; cel: number; styl: number }) {
+/** 写实光照上叠的画法（post.ts 每帧按画面效果设）：手办质感、边缘光、明暗交界、纯色毛绒、赛璐璐明暗 */
+export function setRealStyle(s: { figure: number; rim: number; term: number; flatFur: number; cel: number }) {
   realUniforms.uFigure.value = s.figure
   realUniforms.uRim.value = s.rim
   realUniforms.uTerm.value = s.term
   realUniforms.uFlatFur.value = s.flatFur
   realUniforms.uCel.value = s.cel
-  realUniforms.uStyl.value = s.styl
 }
 
 const PARS_FRAG = /* glsl */ `
@@ -145,13 +137,8 @@ uniform float uRim;
 uniform float uTerm;
 uniform float uFlatFur;
 uniform float uCel;
-uniform float uStyl;
-uniform vec3 uStylShade;
-uniform vec3 uStylWarm;
 varying vec3 vRP;
 varying vec3 vRN;
-varying vec3 vRW;
-varying vec3 vRWN;
 varying float vMat;
 ${NOISE_GLSL}
 ${tableGlsl('rTabRough', (p) => p.rough)}
@@ -207,17 +194,8 @@ function injectDetail(sh: THREE.WebGLProgramParametersWithUniforms, perVertex: b
   // 都被编译器折叠掉，每个片元不再逐个比较（程序缓存键里本来就带着类别，不多出程序）
   sh.vertexShader =
     (perVertex ? 'attribute float mat;\nvarying float vMat;\n' : '') +
-    'varying vec3 vRP;\nvarying vec3 vRN;\nvarying vec3 vRW;\nvarying vec3 vRWN;\n' +
-    sh.vertexShader.replace(
-      '#include <begin_vertex>',
-      `#include <begin_vertex>\n  vRP = position;\n  vRN = normal;${perVertex ? '\n  vMat = mat;' : ''}
-  mat4 rModel = modelMatrix;
-  #ifdef USE_INSTANCING
-  rModel = modelMatrix * instanceMatrix;
-  #endif
-  vRW = (rModel * vec4(position, 1.0)).xyz;
-  vRWN = mat3(rModel) * normal;`,
-    )
+    'varying vec3 vRP;\nvarying vec3 vRN;\n' +
+    sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>\n  vRP = position;\n  vRN = normal;${perVertex ? '\n  vMat = mat;' : ''}`)
   const pars = perVertex ? PARS_FRAG : PARS_FRAG.replace('varying float vMat;', `#define vMat ${id.toFixed(1)}`)
   let f = sh.fragmentShader
     .replace('#include <common>', '#include <common>\n' + pars)
@@ -248,16 +226,6 @@ function injectDetail(sh: THREE.WebGLProgramParametersWithUniforms, perVertex: b
     // 石材 / 混凝土：大块的深浅 + 细斑点
     float speck = rNoise3(vRP * 3.0) - 0.5;
     diffuseColor.rgb *= 0.93 + 0.1 * rNoise3(vRP * 0.12) + 0.1 * speck * rAA(vRP.x + vRP.y + vRP.z, 3.0);
-  }
-  if (uStyl > 0.0) {
-    // 手绘感（手游风）：大块的冷暖、深浅斑驳（一两米一块），加上顺着面横向拖的笔触（细长条纹，远了淡掉），
-    // 纯色面不再是一整片死平的颜色，像画师在底色上又刷了几笔
-    vec3 rAn = abs(normalize(vRWN));
-    vec2 rPc = rAn.y > max(rAn.x, rAn.z) ? vRW.xz : rAn.x > rAn.z ? vec2(vRW.z, vRW.y) : vRW.xy;
-    float rBlot = rNoise3(vRW * 0.006) * 0.6 + rNoise3(vRW * 0.021 + 7.3) * 0.4;
-    float rStroke = (rNoise2(vec2(rPc.x * 0.02, rPc.y * 0.22) + rNoise2(rPc * 0.008) * 4.0) - 0.5) * smoothstep(0.35, 0.65, rNoise2(rPc * 0.015 + 3.7));
-    vec3 rTint = mix(vec3(1.05, 1.0, 0.93), vec3(0.94, 0.98, 1.06), smoothstep(0.3, 0.7, rBlot));
-    diffuseColor.rgb *= mix(vec3(1.0), rTint * (1.0 + 0.16 * (rBlot - 0.5)) * (1.0 + 0.12 * rStroke * rAA(rPc.y, 0.22)), uStyl);
   }`,
     )
     .replace(
@@ -285,7 +253,7 @@ function injectDetail(sh: THREE.WebGLProgramParametersWithUniforms, perVertex: b
         // 赛璐璐明暗下高光压弱（动画背景里只有玻璃、金属、釉面才有清楚的高光，而且是画上去的一小块）
         .replace(
           'reflectedLight.directSpecular += irradiance * specularBRDF * material.multiScatteringCompensation;',
-          'reflectedLight.directSpecular += irradiance * specularBRDF * material.multiScatteringCompensation * ( 1.0 - 0.6 * uCel ) * ( 1.0 - 0.75 * uStyl );',
+          'reflectedLight.directSpecular += irradiance * specularBRDF * material.multiScatteringCompensation * ( 1.0 - 0.6 * uCel );',
         )
         .replace(
         'reflectedLight.directDiffuse += irradiance * BRDF_Lambert( material.diffuseContribution ) * ( 1.0 - F );',
@@ -302,14 +270,6 @@ function injectDetail(sh: THREE.WebGLProgramParametersWithUniforms, perVertex: b
 		float rNL = dot( geometryNormal, directLight.direction );
 		float rCelNL = smoothstep( 0.0, 0.06, rNL ) * ( 0.78 + 0.22 * saturate( rNL ) );
 		rDiffIrr = mix( rDiffIrr, rCelNL * directLight.color, uCel );
-	}
-	if ( uStyl > 0.0 ) {
-		// 风格化 ramp：受光面整体抬平（只留一点随角度的渐变），交界在 N·L 0–0.1 之间利落地落进暗面（手游角色、场景的明暗分界）。
-		// irradiance = N·L × 光色 × 投影，除掉 N·L 得到光色 × 投影（背光时两者都是 0）
-		float rNL = dot( geometryNormal, directLight.direction );
-		vec3 rLight = irradiance / max( saturate( rNL ), 1e-3 );
-		float rRamp = smoothstep( 0.0, 0.1, rNL ) * ( 0.82 + 0.18 * saturate( rNL ) );
-		rDiffIrr = mix( rDiffIrr, rRamp * rLight, uStyl );
 	}
 	reflectedLight.directDiffuse += rDiffIrr * BRDF_Lambert( material.diffuseContribution ) * ( 1.0 - F );`,
       ),
@@ -338,36 +298,6 @@ function injectDetail(sh: THREE.WebGLProgramParametersWithUniforms, perVertex: b
 		float rNV = 1.0 - saturate( dot( normal, normalize( vViewPosition ) ) );
 		float rCurv = mix( 0.2, 1.0, smoothstep( 0.004, 0.03, length( fwidth( normal ) ) ) );
 		outgoingLight += uRim * pow( rNV, 2.2 ) * rCurv * rTabAccent( vMat );
-	}
-	if ( uStyl > 0.0 ) {
-		// 风格化（手游风）：全场景三档明暗——
-		//   - 阳光直射（sunLit）：最亮的一档，偏暖；
-		//   - 没有阳光、但朝着「主光」（太阳和天顶之间的方向）的面：亮档，保持原色；
-		//   - 背着主光的面（天花板、背光的墙和家具侧面）：暗档，乘饱和的蓝紫阴影色。
-		// 室内大部分地方照不到太阳，只按阳光分档的话整屋都是同一档、看起来和「自然」一样；现在每个面按朝向利落地分开。
-		#if NUM_DIR_LIGHTS > 0
-		vec3 sL = directionalLights[ 0 ].direction;
-		vec3 sLc = directionalLights[ 0 ].color;
-		#else
-		vec3 sL = vec3( 0.0, 1.0, 0.0 );
-		vec3 sLc = vec3( 0.0 );
-		#endif
-		vec3 sUp = normalize( ( viewMatrix * vec4( 0.0, 1.0, 0.0, 0.0 ) ).xyz );
-		float sFace = smoothstep( -0.05, 0.05, dot( normal, normalize( sL * 0.6 + sUp * 0.8 ) ) );
-		float sShadeAmt = ( 1.0 - sunLit ) * ( 1.0 - sFace );
-		float sLum = dot( outgoingLight, vec3( 0.2126, 0.7152, 0.0722 ) );
-		vec3 sShade = max( mix( vec3( sLum ), outgoingLight, 1.45 ), 0.0 ) * uStylShade;
-		outgoingLight = mix( outgoingLight, sShade, uStyl * sShadeAmt );
-		outgoingLight *= mix( vec3( 1.0 ), vec3( 1.05, 1.0, 0.93 ), uStyl * sunLit );
-		sLum = dot( outgoingLight, vec3( 0.2126, 0.7152, 0.0722 ) );
-		vec3 sWarm = max( mix( vec3( sLum ), outgoingLight, 1.35 ), 0.0 ) * uStylWarm;
-		outgoingLight = mix( outgoingLight, sWarm, uStyl * rTabAccent( vMat ) * termEdge * sunLit * 0.8 );
-		// 硬边高光：太阳的反射收成一块边缘利落的亮斑（光滑的漆面、瓷砖、金属才有，越光滑越小越亮）
-		float sRough = material.roughness;
-		float sNH = dot( normal, normalize( sL + normalize( vViewPosition ) ) );
-		float sW = mix( 0.004, 0.04, smoothstep( 0.05, 0.6, sRough ) );
-		float sHi = smoothstep( 1.0 - sW - 0.003, 1.0 - sW, sNH ) * ( 1.0 - smoothstep( 0.35, 0.7, sRough ) ) * sunLit;
-		outgoingLight += uStyl * sHi * sLc * 0.12;
 	}
 	#include <opaque_fragment>`,
     )

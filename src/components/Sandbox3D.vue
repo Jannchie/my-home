@@ -23,7 +23,7 @@ import { fitOnSurface, pickSurface, propClash, propsOn, snapToClip, snapToHook }
 import { pickTub, tubGuides } from '../tubTop'
 import { SHADOW_RADIUS, createStage, fitSun, frameCamera, setStageQuality, setStageScale, type Stage } from '../three/stage'
 import { DynRes } from '../three/dynRes'
-import { attachPost, LOOKS, LOOK_MAP, lookValue, REAL_LIGHTING, resolveLook, type LookAdjust, type LookAdjustKey, type LookId, type Post } from '../three/post'
+import { attachPost, hueSwatch, LOOKS, LOOK_MAP, lookValue, REAL_LIGHTING, resolveLook, type LookAdjust, type LookAdjustKey, type LookId, type Post } from '../three/post'
 import { CITIES, MONTH_DAYS, compassAxes, skyState, type SkyState } from '../three/sky'
 import { setReflectInterval } from '../three/reflectFrame'
 import { CULL_MARGIN, CullCache, walkVisibility } from '../walkCull'
@@ -3281,6 +3281,11 @@ const LOOK_SLIDERS: { k: LookAdjustKey; label: string; min: number; max: number;
   { k: 'exposure', label: '曝光', min: 0.7, max: 1.4, step: 0.02 },
   { k: 'contrast', label: '对比', min: 0.6, max: 1.5, step: 0.02 },
   { k: 'saturation', label: '饱和度', min: 0, max: 1.8, step: 0.05 },
+  // 分离色调：暗部偏蓝紫、亮部偏暖这类，色相 + 强度
+  { k: 'shadowHue', label: '暗部色相', min: 0, max: 359, step: 1 },
+  { k: 'shadowAmt', label: '暗部强度', min: 0, max: 0.08, step: 0.002 },
+  { k: 'highHue', label: '亮部色相', min: 0, max: 359, step: 1 },
+  { k: 'highAmt', label: '亮部强度', min: 0, max: 0.08, step: 0.002 },
   { k: 'bloom', label: '泛光', min: 0, max: 0.6, step: 0.02 },
   { k: 'vignette', label: '暗角', min: 0, max: 0.9, step: 0.05 },
   { k: 'grain', label: '颗粒', min: 0, max: 0.15, step: 0.005 },
@@ -4267,7 +4272,8 @@ defineExpose({ resetView })
             <label v-for="sl in lookSliders" :key="sl.k" class="row">
               <span>{{ t(sl.label) }}</span>
               <input type="range" :min="sl.min" :max="sl.max" :step="sl.step" :value="lookVal(sl.k) as number" :aria-label="t(sl.label)" @input="adjustLook(sl.k, Number(($event.target as HTMLInputElement).value))" />
-              <span class="num val kval">{{ numStr(lookVal(sl.k)) }}</span>
+              <span v-if="sl.k === 'shadowHue' || sl.k === 'highHue'" class="kval hue-swatch" :style="{ background: hueSwatch(lookVal(sl.k) as number) }" />
+              <span v-else class="num val kval">{{ numStr(lookVal(sl.k)) }}</span>
             </label>
             <button class="mini" :disabled="!lookCustom" @click="sandbox.lookAdj = {}">{{ t('恢复预设') }}</button>
           </div>
@@ -4657,6 +4663,12 @@ defineExpose({ resetView })
 .kval {
   min-width: 4.2em;
   text-align: right;
+}
+/* 色调滑杆右边的色块：和数值列一样宽，对齐 */
+.hue-swatch {
+  height: 12px;
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.12);
 }
 :root.compact .light-card {
   left: 12px;

@@ -40,7 +40,7 @@ import { LUT_SIZE, lutTexture } from './lut'
 import { outlineUniforms } from './toon'
 import type { Stage } from './stage'
 
-export type LookId = 'none' | 'game' | 'anime' | 'real' | 'figure' | 'crt' | 'tiltshift' | 'warm' | 'cool' | 'film' | 'pastel' | 'watercolor' | 'comic' | 'manga' | 'manga-coarse' | 'manga-hatch' | 'manga-ink' | 'mono' | 'sepia' | 'pixel' | 'sketch'
+export type LookId = 'none' | 'anime' | 'real' | 'figure' | 'crt' | 'tiltshift' | 'warm' | 'cool' | 'film' | 'pastel' | 'watercolor' | 'comic' | 'manga' | 'manga-coarse' | 'manga-hatch' | 'manga-ink' | 'mono' | 'sepia' | 'pixel' | 'sketch'
 
 interface Grade {
   exposure: number
@@ -135,13 +135,9 @@ export interface LookDef {
   /** 写实光照下阳光阴影的柔和程度（阴影半径，Sandbox3D）；不填用写实的默认 */
   softShadow?: number
   /**
-   * 线性转 sRGB 之前做色调映射（写实：高光柔和地压下来，不再一片死白）。true = Khronos PBR Neutral（保色）；
-   * 'gt' = 游戏式的 filmic（Uchimura / GT 曲线：中段线性、肩部长，亮部按亮度压、保住饱和度），「手游风」用：
-   * 阳光照到的地方可以亮过 1（HDR），压下来是通透的暖白，泛光也有东西可晕
+   * 线性转 sRGB 之前做色调映射（写实：高光柔和地压下来，不再一片死白）。true = Khronos PBR Neutral（保色）
    */
-  tone?: boolean | 'gt'
-  /** 风格化 PBR（0–1，realistic.ts setRealStyle 的 styl）：柔和的阳光 ramp、带颜色的暗面、暖色的明暗交界 */
-  styl?: number
+  tone?: boolean
   /**
    * 大气雾（fog.ts）：密度（每米）、高度衰减（cm）、朝太阳那一侧带多少阳光色、最浓到多少。
    * 起雾的距离按镜头定：漫游时在房间尺度之外（屋里不起雾），鸟瞰时从视角焦点附近开始
@@ -191,11 +187,39 @@ export interface LookAdjust {
   saturation?: number
   vignette?: number
   grain?: number
+  /** 暗部 / 亮部色调（分离色调）：色相（度，0 = 红，120 = 绿，240 = 蓝）和强度 */
+  shadowHue?: number
+  shadowAmt?: number
+  highHue?: number
+  highAmt?: number
 }
 export type LookAdjustKey = keyof LookAdjust
 
+// 分离色调的偏移量（RGB 各加多少）↔ 色相 + 强度：在去掉亮度的色度平面上量角度（TU 指向红，TV 指向绿、背向蓝）
+const TU = [2 / Math.sqrt(6), -1 / Math.sqrt(6), -1 / Math.sqrt(6)] as const
+const TV = [0, 1 / Math.sqrt(2), -1 / Math.sqrt(2)] as const
+/** 强度是 0 时色相没有意义：暗部默认蓝紫、亮部默认暖橙（拖强度时从这里开始） */
+const TINT_HUE = { shadow: 250, high: 40 }
+function tintHue(t: readonly number[], fallback: number) {
+  const x = t[0] * TU[0] + t[1] * TU[1] + t[2] * TU[2]
+  const y = t[0] * TV[0] + t[1] * TV[1] + t[2] * TV[2]
+  const amt = Math.hypot(x, y)
+  return { hue: amt < 1e-4 ? fallback : Math.round(((Math.atan2(y, x) * 180) / Math.PI + 360) % 360), amt: Math.round(amt * 1000) / 1000 }
+}
+export function hueTint(hue: number, amt: number): [number, number, number] {
+  const a = (hue * Math.PI) / 180
+  const x = Math.cos(a) * amt
+  const y = Math.sin(a) * amt
+  return [TU[0] * x + TV[0] * y, TU[1] * x + TV[1] * y, TU[2] * x + TV[2] * y]
+}
+/** 色相对应的颜色（界面上的色块） */
+export function hueSwatch(hue: number) {
+  const [r, g, b] = hueTint(hue, 0.45).map((v) => Math.round(Math.min(1, Math.max(0, 0.55 + v)) * 255))
+  return `rgb(${r}, ${g}, ${b})`
+}
+
 /** 只在写实光照下起作用的参数（写实类预设换回卡通光照时清掉）：LookDef 加了写实专用的字段要补进来 */
-const REAL_ONLY = ['lighting', 'aoShade', 'aoRadius', 'figure', 'softShadow', 'rim', 'term', 'flatFur', 'cel', 'styl', 'gi'] as const satisfies readonly (keyof LookDef)[]
+const REAL_ONLY = ['lighting', 'aoShade', 'aoRadius', 'figure', 'softShadow', 'rim', 'term', 'flatFur', 'cel', 'gi', 'fog'] as const satisfies readonly (keyof LookDef)[]
 
 /** 调色类参数（直接写进 grade） */
 const GRADE_KEYS = ['exposure', 'contrast', 'saturation', 'vignette', 'grain'] as const
@@ -226,6 +250,13 @@ export function resolveLook(id: string, adj: LookAdjust = {}): LookDef {
   if (adj.outline !== undefined) out.outline = adj.outline
   if (adj.crease !== undefined) out.crease = adj.crease
   for (const k of GRADE_KEYS) if (adj[k] !== undefined) out.grade![k] = adj[k]
+  for (const [side, tk] of [['shadow', 'shadowTint'], ['high', 'highTint']] as const) {
+    const hk = `${side}Hue` as const
+    const ak = `${side}Amt` as const
+    if (adj[hk] === undefined && adj[ak] === undefined) continue
+    const now = tintHue(base.grade?.[tk] ?? NEUTRAL[tk], TINT_HUE[side])
+    out.grade![tk] = hueTint(adj[hk] ?? now.hue, adj[ak] ?? now.amt)
+  }
   return out
 }
 
@@ -248,6 +279,14 @@ export function lookValue(def: LookDef, k: LookAdjustKey): number | boolean | st
       return def.outline ?? 1
     case 'crease':
       return creaseOf(def)
+    case 'shadowHue':
+    case 'shadowAmt':
+    case 'highHue':
+    case 'highAmt': {
+      const side = k.startsWith('shadow') ? 'shadow' : 'high'
+      const v = tintHue(def.grade?.[`${side}Tint`] ?? NEUTRAL[`${side}Tint`], TINT_HUE[side])
+      return k.endsWith('Hue') ? v.hue : v.amt
+    }
     default:
       return def.grade?.[k] ?? NEUTRAL[k]
   }
@@ -284,36 +323,13 @@ export const LOOKS: LookDef[] = [
     outline: 0,
     crease: 0,
     clouds: 'volume',
+    // 间接光（gi.ts）：按房间烘焙的球谐探针替换屋里的半球光，靠窗亮、深处暗、地板的颜色反到墙上；
+    // 大气雾（fog.ts）：鸟瞰时房子后半截、院子退进空气里，漫游时屋里不起雾
+    gi: 1,
+    fog: { density: 0.03, height: 350, sun: 0.12, max: 0.5 },
     bloom: { strength: 0.1, radius: 0.5, threshold: 1.8 },
     grade: { exposure: 1.12, contrast: 1.06, saturation: 1.05, vignette: 0.18 },
     lighting: { hemi: 1.05, sun: 1.45 },
-  },
-  // 手游风：参考开放世界二次元手游的室内。风格化 PBR（realistic.ts styl）：阳光按柔和的 ramp 走、暗面是透亮的蓝紫、交界一道暖色；
-  // HDR：阳光比天光亮得多（受光面亮过 1），游戏式 filmic 色调映射压下来，泛光阈值卡在 1 附近，阳光照到的地方会晕开；
-  // 天光冷、地面反光暖（天花板、家具底面偏暖）；线条细而淡，只勾外轮廓和主要转折。
-  // 间接光（gi.ts）：按房间烘焙的球谐探针替换屋里的半球光，光只从窗户和灯进来，靠窗亮、深处暗，地板的颜色反到墙上
-  {
-    id: 'game',
-    label: '手游',
-    desc: '利落的两档明暗、饱和的蓝紫影子、硬边光斑和手绘感的颜色，像开放世界二次元手游',
-    material: 'real',
-    styl: 1,
-    gi: 1,
-    fog: { density: 0.03, height: 350, sun: 0.12, max: 0.55 },
-    lut: 1,
-    line: { start: 450, end: 1300, lift: 0.3 },
-    ao: true,
-    aoShade: [0.62, 0.62, 0.76, 1.6],
-    aoRadius: 22,
-    tone: 'gt',
-    outline: 0.7,
-    crease: 0.3,
-    flatFur: true,
-    softShadow: 0.7,
-    lighting: { hemi: 1.2, sun: 1.6, up: '#f6f2ff', down: '#ffe4c8', tint: 0.5, sunColor: '#ffdcae', sunTint: 0.4 },
-    shafts: 1.5,
-    bloom: { strength: 0.16, radius: 0.45, threshold: 1.35 },
-    grade: { exposure: 0.97, contrast: 1.12, saturation: 1.22, shadowTint: [-0.008, 0.0, 0.028], highTint: [0.018, 0.008, -0.012], vignette: 0.18, vignetteColor: '#1e2a48' },
   },
   // 动画感：参考新海诚、京阿尼的室内背景美术。赛璐璐光照（两档明暗、带颜色的阴影，anime.ts），窗口的光斑、光柱和浮尘（volumetric.ts），
   // 深色线条（描边 + 转折线），亮部偏暖、暗部偏冷紫，灯具带暖晕；背景是蓝天白云（animeSky.ts）。
@@ -327,6 +343,8 @@ export const LOOKS: LookDef[] = [
     // 线条：外轮廓和物体内部的转折都描上清楚的深色线（参考手绘的室内背景，线是画面的骨架）
     outline: 1.1,
     crease: 0.9,
+    // 远处的线变细到没有：窗外的栏杆、鸟瞰时院子后头不糊成一团黑
+    line: { start: 600, end: 1600, lift: 0 },
     // 冷暖：天光照朝上的面（地板、台面）偏暖、朝下的面（天花板）偏冷紫，阳光偏金橙；亮度不另加（赛璐璐光照自己会提亮天光）。
     // 灯按「室内灯光」的设置走：赛璐璐没有色调映射，白天灯全开会把整个室内冲白
     lighting: { hemi: 1, sun: 1, up: '#f0e2cf', down: '#cdc8dc', tint: 0.35, sunColor: '#ffcb94', sunTint: 0.35 },
@@ -573,29 +591,6 @@ const BaseShader = {
     // Khronos PBR Neutral：three 自带的实现（toneMappingExposure 由渲染器按 1 填）。比 AgX 保色：家具配色是按原色调好的
     #include <common>
     #include <tonemapping_pars_fragment>
-    // Uchimura（GT）曲线：暗部一小段趾、中段线性（原色不变）、肩部长而平滑地压到 1
-    vec3 gtCurve(vec3 x) {
-      const float P = 1.0, a = 1.0, m = 0.22, l = 0.4, c = 1.33, b = 0.0;
-      float l0 = ((P - m) * l) / a;
-      float S0 = m + l0;
-      float S1 = m + a * l0;
-      float C2 = (a * P) / (P - S1);
-      float CP = -C2 / P;
-      vec3 w0 = 1.0 - smoothstep(0.0, m, x);
-      vec3 w2 = step(m + l0, x);
-      vec3 w1 = 1.0 - w0 - w2;
-      vec3 T = m * pow(max(x / m, 0.0), vec3(c)) + b;
-      vec3 S = P - (P - S1) * exp(CP * (x - S0));
-      vec3 L = m + a * (x - m);
-      return T * w0 + L * w1 + S * w2;
-    }
-    // 逐通道压会把亮部压白、压灰；按亮度压保色但饱和的颜色会溢出。各取一半：阳光照到的地方是暖的、带颜色的亮，不是一片白
-    vec3 gtTone(vec3 c) {
-      c = max(c, 0.0);
-      float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
-      vec3 byLum = min(c * (gtCurve(vec3(l)).x / max(l, 1e-4)), 1.0);
-      return mix(gtCurve(c), byLum, 0.5);
-    }
     varying vec2 vUv;
     vec3 toSRGB(vec3 c) { c = max(c, 0.0); return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c)); }
     vec3 toLinear(vec3 c) { return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(0.04045, c)); }
@@ -608,8 +603,7 @@ const BaseShader = {
       float a = clamp(t.a, 0.0, 1.0);
       // 画面内容是预乘的（清屏处为 0），泛光叠在背景上也保留
       vec3 col = t.rgb;
-      if (uTone > 1.5) col = gtTone(col);
-      else if (uTone > 0.5) col = NeutralToneMapping(col);
+      if (uTone > 0.5) col = NeutralToneMapping(col);
       gl_FragColor = vec4(toSRGB(col + toLinear(bg) * (1.0 - a)), 1.0);
     }`,
 }
@@ -1280,9 +1274,7 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
     // 阈值高、强度低：只在最亮的发光部件周围留一圈淡晕，不盖住灯具轮廓和屏幕边框
     // 黑白漫画读的是编码不是颜色，不能泛光
     const manga = look.stylize === 'manga'
-    // HDR（游戏式色调映射）下灯泡、灯罩亮过 1 很多，阈值照效果自己的走，不然整盏灯晕成一团
-    const nightThreshold = look.tone === 'gt' && look.bloom ? look.bloom.threshold : 0.82
-    const nightBloom = sky.night > 0.02 && !low && !manga ? { strength: 0.28 * sky.night, radius: 0.3, threshold: nightThreshold } : undefined
+    const nightBloom = sky.night > 0.02 && !low && !manga ? { strength: 0.28 * sky.night, radius: 0.3, threshold: 0.82 } : undefined
     const bloom = low ? undefined : nightBloom && (!look.bloom || nightBloom.strength > look.bloom.strength) ? nightBloom : look.bloom
     // 遮蔽、体积光、转折线：漫画读的是编码，不能乘、不能加
     const ao = (fx.ao || !!look.ao) && !low && !manga
@@ -1330,7 +1322,7 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
     }
     // 背景：纸面类风格用自己的纸色，入夜时逐渐换成天色
     const ub = p.base.uniforms
-    ub.uTone.value = look.tone === 'gt' ? 2 : look.tone ? 1 : 0
+    ub.uTone.value = look.tone ? 1 : 0
     for (let i = 0; i < 3; i++) {
       const c = (ub['uBg' + i].value as THREE.Color).set(sky.bg[i])
       if (look.bg) c.lerp(new THREE.Color(look.bg[i]), 1 - sky.night)
@@ -1377,7 +1369,7 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
     u.uPaper.value = g.paper
     u.uGrain.value = g.grain
     u.uLutMix.value = look.lut ?? 0
-    u.uLut.value = look.lut ? lutTexture('game') : BLANK_LUT
+    u.uLut.value = look.lut ? lutTexture('vivid') : BLANK_LUT
     syncSize()
   }
 
@@ -1487,7 +1479,6 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
       term: real ? (current.term ?? 0) : 0,
       flatFur: real && current.flatFur ? 1 : 0,
       cel: real ? (current.cel ?? 0) : 0,
-      styl: real ? (current.styl ?? 0) : 0,
     })
     const restore = real ? swapToPbr(renderer, scene, (o) => !!o.userData.isOutline) : null
     try {

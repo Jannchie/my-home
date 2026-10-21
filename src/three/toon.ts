@@ -215,7 +215,7 @@ export function vertexColorToon() {
 /** 描边：沿法线在屏幕空间外扩，线宽不随距离变化；颜色取填充色的深色版本，更像手绘 */
 const outlineCache = new Map<string, THREE.ShaderMaterial>()
 // uManga：黑白漫画效果渲染时描边输出墨线标记（manga.ts，R = 1），和受光材质共用同一个 uniform 对象
-// uLineFade：线随距离变细到没有（起点, 终点 cm, 开关）；uLineLift：线色提亮、提饱和（0 = 深色线，1 = 带颜色的浅线）。「手游风」用，post.ts 每帧设
+// uLineFade：线随距离变细到没有（起点, 终点 cm, 开关）；uLineLift：线色提亮、提饱和（0 = 深色线，1 = 带颜色的浅线）。「动画」用，post.ts 每帧设
 export const outlineUniforms = {
   uWidth: { value: 1.6 },
   uViewport: { value: new THREE.Vector2(800, 600) },
