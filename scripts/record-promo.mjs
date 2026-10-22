@@ -9,14 +9,9 @@
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import { launch } from './cdp.mjs'
+import { launch, parseArgs, waitFor } from './cdp.mjs'
 
-const args = Object.fromEntries(
-  process.argv.slice(2).reduce((acc, a, i, all) => {
-    if (a.startsWith('--')) acc.push([a.slice(2), all[i + 1] && !all[i + 1].startsWith('--') ? all[i + 1] : true])
-    return acc
-  }, []),
-)
+const args = parseArgs()
 const W = +(args.w ?? 1920)
 const H = +(args.h ?? 1080)
 const FPS = +(args.fps ?? 60)
@@ -33,14 +28,10 @@ process.on('unhandledRejection', async (e) => {
   await browser?.close().catch(() => {})
   process.exit(2)
 })
-const b = await launch({ width: W, height: H, port: +(args.cdp ?? 9350) + Math.floor(Math.random() * 40) })
+const b = await launch({ width: W, height: H, ...(args.cdp ? { port: +args.cdp } : {}) })
 browser = b
 await b.send('Page.navigate', { url: URL })
-for (let i = 0; i < 600; i++) {
-  const ok = await b.evaluate('!!window.__promo').catch(() => false)
-  if (ok) break
-  await new Promise((r) => setTimeout(r, 250))
-}
+await waitFor(b, 'window.__promo', 150000)
 const t0 = Date.now()
 await b.evaluate('window.__promo.ready')
 console.log(`ready in ${((Date.now() - t0) / 1000).toFixed(1)}s`)

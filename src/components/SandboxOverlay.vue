@@ -17,7 +17,7 @@ import { toast } from '../saved'
 import { ASSET_MAP } from '../three/assets'
 import { isWallMounted } from '../three/kit'
 import { displayName, sameTypeVariants, siblings, variantLabel } from '../three/catalog'
-import { propsOn } from '../surface'
+import { carriedBy } from '../surface'
 import { isTyping } from '../dom'
 import { t } from '../i18n'
 import { overlays } from '../ui/feedback'
@@ -222,7 +222,7 @@ function onKey(e: KeyboardEvent) {
   const now = performance.now()
   if (now - lastNudge > 800) checkpoint()
   lastNudge = now
-  const kids = propsOn(plan.value, f)
+  const kids = carriedBy(plan.value, f)
   const r1 = (v: number) => Math.round(v * 10) / 10
   f.x = r1(f.x + dx)
   f.y = r1(f.y + dy)

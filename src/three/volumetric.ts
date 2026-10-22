@@ -12,6 +12,7 @@
 import * as THREE from 'three'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js'
 import { LM_FETCH_GLSL, LM_OUTDOOR, lightMaskUniforms } from './lightMask'
+import { KEEP_ALPHA } from './blend'
 
 /** 沿视线的取样数、最远走多远（cm） */
 const STEPS = 40
@@ -234,8 +235,7 @@ export function createDust() {
     blendEquation: THREE.AddEquation,
     blendSrc: THREE.OneFactor,
     blendDst: THREE.OneFactor,
-    blendSrcAlpha: THREE.ZeroFactor,
-    blendDstAlpha: THREE.OneFactor,
+    ...KEEP_ALPHA,
   })
   for (const k of Object.keys(lightMaskUniforms) as (keyof typeof lightMaskUniforms)[]) mat.uniforms[k] = lightMaskUniforms[k]
   const pts = new THREE.Points(geo, mat)

@@ -22,6 +22,8 @@ const CreaseShader = {
     uNear: { value: 5 },
     uFar: { value: 20000 },
     uStrength: { value: 0 },
+    /** 统一墨色（线性 rgb）和换成它的程度（a）：「插画」的转折线也用描边的那一种暖墨色 */
+    uInk: { value: new THREE.Vector4(0, 0, 0, 0) },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -42,6 +44,7 @@ const CreaseShader = {
     uniform float uNear;
     uniform float uFar;
     uniform float uStrength;
+    uniform vec4 uInk;
     varying vec2 vUv;
 
     float viewZ(vec2 uv) { return -perspectiveDepthToViewZ(texture2D(tDepth, uv).x, uNear, uFar); }
@@ -101,6 +104,7 @@ const CreaseShader = {
       vec3 c = base.rgb * 0.42;
       float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
       c = max(mix(vec3(l), c, 1.3), 0.0);
+      c = mix(c, uInk.rgb, uInk.a);
       // 描边模式：外轮廓（前后叠着的边）粗、墨色；内部的转折线细、是本色压暗的颜色（像画师的线：外粗内细）。
       // 外轮廓的取样间距 1.5 个深度图像素，线约两个 CSS 像素粗
       float sil = 0.0;

@@ -5,7 +5,7 @@
 // 还是放不上（浴缸改成淋浴房、改得比盖子还小）就留在原来的相对位置，不擅自删掉——用户能看到它悬着，自己挪走。
 
 import type { Fixture, Furniture, Plan } from './model'
-import { fitsOnFixture, propsOn, propsOnFixture, toLocal, toWorld } from './surface'
+import { carriedBy, fitsOnFixture, propsOnFixture, toLocal, toWorld } from './surface'
 import { tubTopPose } from './tubTop'
 
 interface CarriedProp {
@@ -37,7 +37,7 @@ export function captureFixtureProps(plan: Pick<Plan, 'furniture' | 'floors'>, fx
     if (seen.has(o.id)) continue
     seen.add(o.id)
     rel(o, true)
-    for (const k of propsOn(plan, o)) {
+    for (const k of carriedBy(plan, o)) {
       if (seen.has(k.id)) continue
       seen.add(k.id)
       rel(k, false, o.id)

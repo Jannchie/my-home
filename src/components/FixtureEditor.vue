@@ -8,7 +8,7 @@ import { applyStairsVariant, deleteSelection, flipKitchen, mutate, plan, rotateS
 import { floorAbove, floorOf, riseOf } from '../floors'
 import { MAX_RISER, stairsVariant } from '../stairs'
 import { cabinetsOn, setOpen } from '../cabinet'
-import { propsOn } from '../surface'
+import { carriedBy } from '../surface'
 import { applyFixtureCarry, captureFixtureProps } from '../fixtureCarry'
 import { ASSET_MAP } from '../three/assets'
 import { displayName } from '../three/catalog'
@@ -71,7 +71,7 @@ function toggleRecessed() {
     const dx = Math.round(-Math.sin(a) * k)
     const dy = Math.round(Math.cos(a) * k)
     const cabs = cabinetsOn(p.furniture, f)
-    for (const o of new Set([...cabs, ...cabs.flatMap((c) => propsOn(p, c))])) {
+    for (const o of new Set([...cabs, ...cabs.flatMap((c) => carriedBy(p, c))])) {
       o.x += dx
       o.y += dy
     }

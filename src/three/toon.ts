@@ -222,6 +222,8 @@ export const outlineUniforms = {
   uManga: mangaUniforms.uManga,
   uLineFade: { value: new THREE.Vector3(0, 1, 0) },
   uLineLift: { value: 0 },
+  /** 统一墨色（线性 rgb）和换成它的程度（a）：「插画」所有描边都用同一种暖墨色，不随填充色变 */
+  uInk: { value: new THREE.Vector4(0, 0, 0, 0) },
 }
 const LINE_VERT_PARS = /* glsl */ `
         uniform float uWidth;
@@ -231,9 +233,11 @@ const LINE_VERT_PARS = /* glsl */ `
 const LINE_WIDTH = /* glsl */ `uWidth * ( uLineFade.z > 0.5 ? 1.0 - smoothstep( uLineFade.x, uLineFade.y, clip.w ) : 1.0 )`
 const LINE_FRAG_PARS = /* glsl */ `
         uniform float uLineLift;
+        uniform vec4 uInk;
         vec3 lineLift( vec3 c ) {
           float l = dot( c, vec3( 0.2126, 0.7152, 0.0722 ) );
-          return mix( c, min( max( mix( vec3( l ), c, 1.5 ), 0.0 ) * 2.2, 1.0 ), uLineLift );
+          c = mix( c, min( max( mix( vec3( l ), c, 1.5 ), 0.0 ) * 2.2, 1.0 ), uLineLift );
+          return mix( c, uInk.rgb, uInk.a );
         }`
 function outlineMaterial(color: THREE.Color) {
   const key = color.getHexString()

@@ -21,6 +21,7 @@ import { hasTag } from './tags'
 import { floorOf, floorViews, planFloors, stampFloor } from '../floors'
 import { buildLightMask, lightMaskKey, setLightMaskEnabled, setLightMaskFloors, setLightMaskLight, setLightMaskMap, type LightMaskMap } from './lightMask'
 import { useAnisotropy } from './toon'
+import { ADDITIVE_KEEP_ALPHA } from './blend'
 import { LAMP_GLOW, ceilingAssetId, fixtureModel, isMainKind, styleSpec, type FixtureShape, type RigGlow } from './lightFixtures'
 
 export { CEILING, LAMP_GLOW, fixtureModel, styleSpec, type FixtureShape } from './lightFixtures'
@@ -411,7 +412,8 @@ function poolDecal(pts: Vec[], cx: number, cy: number, R: number, y: number) {
     transparent: true,
     opacity: 0,
     depthWrite: false,
-    blending: THREE.AdditiveBlending,
+    // 光斑不是光源：颜色相加，alpha 不动（blend.ts）
+    ...ADDITIVE_KEEP_ALPHA,
     side: THREE.DoubleSide,
     polygonOffset: true,
     polygonOffsetFactor: -2,

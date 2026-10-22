@@ -6,7 +6,7 @@ import { applyFixesHouse, decorateHouse, roomStyles } from './decorate'
 import { autoWallpapers } from './wallpaper'
 import type { CheckItem } from './checklist'
 import { generateHousehold } from './household'
-import { propsOn } from './surface'
+import { carriedBy } from './surface'
 import { applyFixtureCarry, captureFixtureProps, mirrorFixtureCarry } from './fixtureCarry'
 import { ASSET_MAP, STYLE_LABELS } from './three/assets'
 import { fitResize } from './resizeFit'
@@ -688,7 +688,7 @@ export function deleteSelection() {
   } else if (s.type === 'furniture') {
     // 桌上的东西一起删
     const f = findFurniture(s.id)
-    const gone = new Set([s.id, ...(f ? propsOn(plan.value, f).map((o) => o.id) : [])])
+    const gone = new Set([s.id, ...(f ? carriedBy(plan.value, f).map((o) => o.id) : [])])
     mutate((p) => {
       p.furniture = p.furniture.filter((o) => !gone.has(o.id))
     })
@@ -708,7 +708,7 @@ export function duplicateSelection() {
     const f = findFurniture(s.id)
     if (!f) return
     // 连同桌上的东西一起复制
-    const kids = propsOn(plan.value, f)
+    const kids = carriedBy(plan.value, f)
     addFurniture({ ...f, x: f.x + 30, y: f.y + 30 })
     for (const k of kids) plan.value.furniture.push({ ...k, id: uid('u'), x: k.x + 30, y: k.y + 30 })
     return
@@ -848,7 +848,7 @@ function turnFurniture(f: Furniture, deg: number) {
     return
   }
   const a = (deg * Math.PI) / 180
-  for (const k of propsOn(plan.value, f)) {
+  for (const k of carriedBy(plan.value, f)) {
     const dx = k.x - f.x
     const dy = k.y - f.y
     k.x = Math.round((f.x + dx * Math.cos(a) - dy * Math.sin(a)) * 10) / 10

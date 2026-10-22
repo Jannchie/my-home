@@ -246,6 +246,38 @@ function allInOnePoly(f: Pick<Furniture, 'x' | 'y' | 'rot'>, polys: Poly[], ps: 
   return polys.some((poly) => ps.every((p) => inPolys(f, [poly], p)))
 }
 
+/** 贴附物离家具侧面多远（cm，往里往外都算）还算贴在这个面上：冰箱门面在素材前沿往里 3cm（一键布置的冰箱贴） */
+const STUCK_GAP = 4
+
+/**
+ * 贴在一件家具侧面上的贴附物（冰箱门上的冰箱贴、便签，柜子侧面的挂钩）：贴附点落在某个侧面上（离面不超过 STUCK_GAP、
+ * 不超出这个面的左右范围），高度在家具的高度范围里，朝向和那个面的外法线一致。
+ * 贴附物不记贴在谁身上（拖着贴时吸到射线打中的任何竖直面），只能按位置认；靠墙放的家具旁边、墙上的贴纸朝向相反，不算
+ */
+function stuckOn(sticks: Furniture[], f: Furniture): Furniture[] {
+  const def = ASSET_MAP.get(f.asset)
+  if (!def || def.stick) return []
+  const base = f.z ?? 0
+  const hw = def.w / 2
+  const hd = def.d / 2
+  return sticks.filter((o) => {
+    if (o.id === f.id || o.floor !== f.floor) return false
+    const z = o.z ?? 0
+    if (z < base - 1 || z > base + def.h + 1) return false
+    const l = toLocal(f, o)
+    // 贴附物的外法线 (-sin rot, cos rot)（Sandbox3D locate），转到家具局部
+    const a = (o.rot * Math.PI) / 180
+    const n = toLocal({ x: 0, y: 0, rot: f.rot }, { x: -Math.sin(a), y: Math.cos(a) })
+    const on = (along: number, across: number, half: number, span: number, sign: number) => Math.abs(across - sign * half) <= STUCK_GAP && Math.abs(along) <= span + 1
+    return (
+      (n.y > 0.9 && on(l.x, l.y, hd, hw, 1)) ||
+      (n.y < -0.9 && on(l.x, l.y, hd, hw, -1)) ||
+      (n.x > 0.9 && on(l.y, l.x, hw, hd, 1)) ||
+      (n.x < -0.9 && on(l.y, l.x, hw, hd, -1))
+    )
+  })
+}
+
 /** 一件家具上（含柜内各层）摆着的东西，递归：托盘上的杯子也算 */
 export function propsOn(plan: Pick<Plan, 'furniture'>, f: Furniture, depth = 0): Furniture[] {
   const lv = levels(f.asset, !!f.open)
@@ -254,6 +286,19 @@ export function propsOn(plan: Pick<Plan, 'furniture'>, f: Furniture, depth = 0):
   // 多层户型：只看同一层的东西（上层同一位置桌上的摆件不算在下层的桌子上）
   const direct = plan.furniture.filter((o) => o.id !== f.id && o.floor === f.floor && lv.some((l) => Math.abs((o.z ?? 0) - (base + l.y)) < 0.5 && inPolys(f, l.polys, o)))
   return direct.flatMap((o) => [o, ...propsOn(plan, o, depth + 1)])
+}
+
+/**
+ * 搬动一件家具时要跟着走的东西：摆在上面、柜子里的（propsOn），加上贴在它和这些东西侧面上的贴附物（冰箱门上的冰箱贴）。
+ * 移动、旋转、微调、删除、复制都用它
+ */
+export function carriedBy(plan: Pick<Plan, 'furniture'>, f: Furniture): Furniture[] {
+  const on = propsOn(plan, f)
+  const sticks = plan.furniture.filter((o) => ASSET_MAP.get(o.asset)?.stick)
+  if (!sticks.length) return on
+  const out = new Set(on)
+  for (const n of [f, ...on]) for (const s of stuckOn(sticks, n)) out.add(s)
+  return [...out]
 }
 
 /**

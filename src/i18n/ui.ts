@@ -923,6 +923,8 @@ Object.assign(UI, {
   '老电视的弯曲屏幕、扫描线和荧光栅格': ['古いテレビの湾曲した画面、走査線、蛍光体の縞', 'Curved old-TV screen with scanlines and a phosphor grille'],
   '降低分辨率、限制色阶，像老游戏': ['解像度と色数を落として、レトロゲーム風に', 'Low resolution and limited colors, like an old game'],
   '铅笔线条与排线，画在纸上': ['えんぴつの線と斜線で、紙に描いたように', 'Pencil lines and hatching on paper'],
+  插画: ['イラスト', 'Illustration'],
+  '暖墨色线条、按朝向分三档的平涂和纯色落影，像手绘的插画': ['温かい墨色の線、面の向きで三段に塗り分けたベタ塗りと単色の影で、手描きのイラストのように', 'Warm ink lines, flat fills in three tones by facing, and solid-color shadows, like a hand-drawn illustration'],
 } satisfies Record<string, Entry>)
 
 // ---------- 3D 沙盘：时间与太阳（three/sky.ts）、户型朝向 ----------

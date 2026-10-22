@@ -234,11 +234,10 @@ button:active:not(:disabled) {
 }
 
 /*
- * 缩略图还没渲染好时的骨架屏：占位块上扫过一道浅光（素材库卡片、家具栏、画面效果小图）。
+ * 缩略图还没渲染好时的骨架屏：占位块上扫过一道浅光（素材库卡片、家具栏）。
  * 只动 background-position，开销很小；系统要求减少动效时不播。
  */
-.ph,
-.look-ph {
+.ph {
   background-color: var(--hover) !important;
   background-image: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.55) 50%, transparent 70%) !important;
   background-size: 220% 100% !important;
@@ -254,8 +253,7 @@ button:active:not(:disabled) {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ph,
-  .look-ph {
+  .ph {
     animation: none;
   }
   * {

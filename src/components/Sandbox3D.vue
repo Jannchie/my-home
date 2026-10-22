@@ -19,7 +19,7 @@ import FloorBar from './FloorBar.vue'
 import FloorRail from './FloorRail.vue'
 import { withStairHoles } from '../stairs'
 import { overlapsOthers, snapFurniture, snapToWall, type Guide } from '../snap'
-import { fitOnSurface, pickSurface, propClash, propsOn, snapToClip, snapToHook, toWorld } from '../surface'
+import { fitOnSurface, pickSurface, carriedBy, propClash, propsOn, snapToClip, snapToHook, toWorld } from '../surface'
 import { RESIZE_SIDES, dragSize, handleLocal, type ResizeDrag, type ResizeSide } from '../furnitureResize'
 import { pickTub, tubGuides } from '../tubTop'
 import { SHADOW_RADIUS, createStage, fitSun, frameCamera, setStageQuality, setStageScale, type Stage } from '../three/stage'
@@ -77,7 +77,7 @@ import { patternPreview } from '../three/fabric'
 import type { PatternKind } from '../three/patterns'
 import { isTyping } from '../dom'
 import { lang, roomName, t, tAuto, tSoft } from '../i18n'
-import { FACADE_KINDS, FENCE_KINDS, FIXTURES, OPENING_LABELS, ROOF_KINDS, bbox, centroid, edgesOf, pointInPolygon, houseFlooring, isWoodFloor, roomFlooring, roomWallpaper, WOOD_TONES, type Furniture, type Plan, type Room, type Wallpaper, type WallTrim, type WoodTone } from '../model'
+import { FACADE_KINDS, FENCE_KINDS, FIXTURES, OPENING_LABELS, ROOF_KINDS, area as polygonArea, bbox, centroid, edgesOf, pointInPolygon, houseFlooring, isWoodFloor, roomFlooring, roomWallpaper, WOOD_TONES, type Furniture, type Plan, type Room, type Wallpaper, type WallTrim, type WoodTone } from '../model'
 import { roomStyles } from '../decorate'
 import { wallThicknessAt } from '../walls'
 import {
@@ -128,6 +128,7 @@ import {
   activeFloor,
   floorShow,
   setFloor,
+  replacePlan,
   type FxMode,
 } from '../store'
 
@@ -327,8 +328,6 @@ function fadeFloor(root: THREE.Object3D, floorId: string, alpha: number) {
  * 这一层的不透明度和这个计数都没变时不再遍历整层（藏起来的上层每帧遍历要一毫秒多）
  */
 let fadeEpoch = 0
-/** 户型或家具重搭过就加一（效果选择器的缩略图按它判断要不要重画） */
-let sceneEpoch = 0
 function fadeFloorCached(root: THREE.Object3D, id: string) {
   const alpha = floorAlpha(id)
   const ud = root.userData
@@ -918,7 +917,6 @@ function updateDragHud(e: { clientX: number; clientY: number; altKey?: boolean; 
 // ---------- 场景同步 ----------
 
 function rebuildHouse() {
-  sceneEpoch++
   if (house) {
     stage.scene.remove(house)
     disposeUnshared(house)
@@ -980,7 +978,6 @@ function furnitureKey(asset: string, color: number | undefined, colors: readonly
 let builtActive = ''
 
 function syncFurniture() {
-  sceneEpoch++
   // 模型可能要重建：先取消悬停，把选中容器的半透明材质还回去
   if (hoverId) setHover(null)
   clearXray()
@@ -1331,6 +1328,8 @@ function syncGhost(asset = placing.value?.asset) {
  * 抽屉展开 / 收起时偏移量缓动过去。
  */
 let viewSize = { w: 1, h: 1 }
+/** 画布有尺寸（后台标签页、隐藏的面板里挂载时是 0） */
+const hasSize = () => viewSize.w >= 1 && viewSize.h >= 1
 let sheetOff = 0
 let sheetTween = 0
 function sheetTarget() {
@@ -1340,6 +1339,8 @@ function setViewOffset(off: number) {
   const cam = stage.camera
   const { w, h } = viewSize
   sheetOff = off
+  // 画布没有尺寸：宽高比、视口偏移都会算成 0 / NaN，等尺寸正常了再设
+  if (!hasSize()) return
   if (off < 0.5) {
     cam.clearViewOffset()
     cam.aspect = w / Math.max(1, h)
@@ -1395,11 +1396,13 @@ watch(
   (v) => applyFov(v),
 )
 
-function resetView() {
-  if (!house) return
-  const box = new THREE.Box3().setFromObject(house)
-  if (box.isEmpty()) return
-  const c = frameCamera(stage.camera, box, new THREE.Vector3(0.35, 1.25, 1).normalize(), 0.9)
+/** 取景时画布还没有尺寸（后台标签页、隐藏的面板里挂载）：按 1 的宽高比先取一个，尺寸正常后（ResizeObserver）再取景一次 */
+let reframePending = false
+/** 从斜上方取景：默认整栋房子；box 给了就取那一块（生成效果预览图时取客厅） */
+function resetView(box = house && new THREE.Box3().setFromObject(house), margin = 0.9) {
+  if (!box || box.isEmpty()) return
+  reframePending = !hasSize()
+  const c = frameCamera(stage.camera, box, new THREE.Vector3(0.35, 1.25, 1).normalize(), margin)
   controls.target.copy(c)
   controls.update()
   updateCutaway()
@@ -1770,7 +1773,7 @@ function beginDrag(e: PointerEvent, id: string) {
   const f = findFurniture(id)!
   const p = floorPoint(e)
   checkpoint()
-  const kids = propsOn(plan.value, f).map((k) => ({ id: k.id, dx: k.x - f.x, dy: k.y - f.y, dz: (k.z ?? 0) - (f.z ?? 0) }))
+  const kids = carriedBy(plan.value, f).map((k) => ({ id: k.id, dx: k.x - f.x, dy: k.y - f.y, dz: (k.z ?? 0) - (f.z ?? 0) }))
   drag = { id, dx: p ? f.x - p.x : 0, dz: p ? f.y - p.z : 0, kids, exclude: new Set([id, ...kids.map((k) => k.id)]) }
   controls.enabled = false
   try {
@@ -3194,6 +3197,8 @@ onMounted(() => {
     viewSize = { w: entry.contentRect.width, h: entry.contentRect.height }
     applySheetOffset()
     bp?.resize(entry.contentRect.width, entry.contentRect.height)
+    // 挂载时画布没有尺寸、按 1 的宽高比临时取的景：有了真实尺寸再取景一次
+    if (reframePending && hasSize()) resetView()
     dirty = true
   })
   ro.observe(host.value!)
@@ -3301,7 +3306,7 @@ function applyLights() {
   const anime = !look.material
   const real = look.material === 'real'
   const day = 1 - s.night
-  setAnimeLook(anime, s.night)
+  setAnimeLook(anime, s.night, look.illust ?? 0)
   // 影子边缘利落：阴影的过渡宽度跟着半径走（toon.ts）；写实要柔和的半影
   stage.sun.shadow.radius = anime ? 1.2 : real ? (look.softShadow ?? REAL_SHADOW_RADIUS) : SHADOW_RADIUS
   animeSky.mesh.visible = look.sky !== false
@@ -3477,71 +3482,74 @@ const LOOK_STYLIZE: { id: string; label: string }[] = [
 const lookSliders = computed(() => LOOK_SLIDERS.filter((sl) => sl.k !== 'crease' || !lowPower()))
 const numStr = (v: unknown) => (typeof v === 'number' ? (Math.abs(v) < 10 ? v.toFixed(2) : String(v)) : '')
 const lookOpen = ref(false)
-/**
- * 选择器里每种效果的小图：展开时用当前视角渲染。
- * - 每种效果先在后台编好着色器（post.prepareLook），编好再画：第一次画某个效果不用同步等编译；
- * - 画完一张隔一帧再画下一张（每张之后还要按当前效果重画一帧主画面），JPEG 编码用异步的 toBlob；
- * - 镜头、户型家具、时间灯光都没变时（lookThumbKey）再展开直接用上次的图。旧图先留着，新图画好一张换一张
- */
-const lookThumbs = ref<Record<string, string>>({})
-let thumbRun = 0
-let thumbKey = ''
-function lookThumbKey() {
-  const cam = stage.camera
-  const { look: _l, lookAdj: _a, playing: _p, autoRotate: _r, ...rest } = toRaw(sandbox)
-  return [cam.matrixWorld.elements.map((v) => v.toFixed(2)).join(), cam.projectionMatrix.elements[0].toFixed(4), sceneEpoch, lowPower(), JSON.stringify(rest)].join('|')
-}
+/** 选择器里每种效果的小图：预先生成好的静态图（public/looks，用 scripts/gen-look-thumbs.mjs 生成），不再按当前视角实时渲染 */
+const lookThumb = (id: string) => `${import.meta.env.BASE_URL}looks/${id}.webp`
 const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()))
-async function makeLookThumbs() {
-  if (!house) return
-  const key = lookThumbKey()
-  if (key === thumbKey && LOOKS.every((l) => lookThumbs.value[l.id])) return
-  const run = ++thumbRun
-  const live = () => run === thumbRun && lookOpen.value && !!house
+/**
+ * 展开选择器时在后台把各效果的着色器编好（post.prepareLook）：第一次切到某个效果时 three 要同步等着色器链接完，
+ * 先编好再切就不卡。一次会话只编一轮
+ */
+let looksWarm = false
+async function warmLooks() {
+  if (looksWarm) return
+  looksWarm = true
   for (const l of LOOKS) {
+    if (!house) return
     await post.prepareLook(l.id)
     await nextFrame()
-    if (!live()) return
-    let cv: HTMLCanvasElement | null = null
-    try {
-      cv = post.withLook(l.id, () => captureView(192, 120))
-    } finally {
-      post.setLook(effectiveLook.value)
-      // 缩略图画在主画布上：同一帧里立刻按当前效果重画，不然这一帧呈现出来的是别的效果（闪一下）。
-      // 画面已经是对的了，下一帧不用再整帧重画（captureView 会标脏）
-      stage.render()
-      dirty = false
-    }
-    if (cv) {
-      // 「自然」画布是透明的（底色来自 CSS），垫上同色底再转 JPEG
+  }
+}
+function toggleLooks() {
+  lookOpen.value = !lookOpen.value
+  if (lookOpen.value) warmLooks()
+}
+
+/**
+ * 开发用：生成选择器的预览图（scripts/gen-look-thumbs.mjs 调用）。setup 载入固定种子的户型和布置、正午、取景客厅；
+ * shot 切到某个效果（光照、天空跟着切，和真用的时候一样），等多帧累积收敛后截一张 webp
+ */
+if (import.meta.env.DEV) {
+  const settle = async (min: number) => {
+    const t0 = performance.now()
+    while (performance.now() - t0 < min || (post.wantsFrame() && performance.now() - t0 < min + 6000)) await nextFrame()
+  }
+  ;(window as unknown as Record<string, unknown>).__myhomeLookThumbs = {
+    ids: LOOKS.map((l) => l.id),
+    async setup() {
+      const { basePlan, furnished } = await import('../promo/plans')
+      replacePlan(furnished(basePlan('jp', 11, 60, 75, '2LDK'), 12))
+      setMode('edit')
+      // timeSet：不跟随当前时间（否则每分钟对一次表，傍晚生成的图就是黄昏）
+      Object.assign(sandbox, { timeSet: true, playing: false, time: 12, month: 5, day: 15, wallMode: 'half', lookAdj: {} })
+      await nextTick()
+      await settle(2500)
+      // 取景最大的那间（客厅）：从斜上方看，房间占满画面
+      const room = [...plan.value.rooms].sort((a, b) => polygonArea(b.points) - polygonArea(a.points))[0]
+      const b = bbox(room.points)
+      resetView(new THREE.Box3(new THREE.Vector3(b.x0, activeY(), b.y0), new THREE.Vector3(b.x1, activeY() + 120, b.y1)), 0.95)
+      await settle(1500)
+    },
+    async shot(id: LookId, w: number, h: number) {
+      sandbox.look = id
+      sandbox.lookAdj = {}
+      await post.prepareLook(id)
+      await nextTick()
+      dirty = true
+      await settle(1200)
+      const cv = captureView(w, h)
+      if (!cv) return null
+      // 「自然」画布是透明的（底色来自 CSS），垫上同色底
       const ctx = cv.getContext('2d')!
       ctx.globalCompositeOperation = 'destination-over'
       ctx.fillStyle = '#f1f3ef'
       ctx.fillRect(0, 0, cv.width, cv.height)
-      cv.toBlob(
-        (blob) => {
-          if (!blob || run !== thumbRun) return
-          const old = lookThumbs.value[l.id]
-          if (old) URL.revokeObjectURL(old)
-          lookThumbs.value = { ...lookThumbs.value, [l.id]: URL.createObjectURL(blob) }
-        },
-        'image/jpeg',
-        0.86,
-      )
-    }
-    await nextFrame()
-    if (!live()) return
+      return cv.toDataURL('image/webp', 0.86)
+    },
   }
-  thumbKey = key
-}
-function toggleLooks() {
-  lookOpen.value = !lookOpen.value
-  if (lookOpen.value) makeLookThumbs()
 }
 
 onBeforeUnmount(() => {
-  thumbRun++
-  for (const u of Object.values(lookThumbs.value)) URL.revokeObjectURL(u)
+  if (import.meta.env.DEV) delete (window as unknown as Record<string, unknown>).__myhomeLookThumbs
   bp?.dispose()
   bp = null
   blueprint.on = false
@@ -4150,7 +4158,7 @@ defineExpose({ resetView })
             <option v-for="l in LOOKS" :key="l.id" :value="l.id">{{ t(l.label) }}</option>
           </select>
         </label>
-        <button @click="resetView"><JIcon :icon="ICONS.resetView" />{{ t('重置视角') }}</button>
+        <button @click="resetView()"><JIcon :icon="ICONS.resetView" />{{ t('重置视角') }}</button>
         <button @click="screenshot"><JIcon :icon="ICONS.screenshot" />{{ t('截图') }}</button>
       </div>
       <canvas
@@ -4438,8 +4446,7 @@ defineExpose({ resetView })
           </button>
           <div v-if="lookOpen" class="look-grid">
             <button v-for="l in LOOKS" :key="l.id" class="look-card" :class="{ on: sandbox.look === l.id }" :title="t(l.desc)" @click="pickLook(l.id)">
-              <img v-if="lookThumbs[l.id]" :src="lookThumbs[l.id]" alt="" />
-              <span v-else class="look-ph" />
+              <img :src="lookThumb(l.id)" alt="" loading="lazy" />
               <span class="look-name">{{ t(l.label) }}</span>
             </button>
           </div>
@@ -4504,7 +4511,7 @@ defineExpose({ resetView })
           <button :disabled="!counts" @click="clearFurniture"><JIcon :icon="ICONS.clearFurniture" />{{ t('清空') }}</button>
         </div>
         <div class="btns">
-          <button @click="resetView"><JIcon :icon="ICONS.resetView" />{{ t('重置视角') }}</button>
+          <button @click="resetView()"><JIcon :icon="ICONS.resetView" />{{ t('重置视角') }}</button>
           <button @click="screenshot"><JIcon :icon="ICONS.screenshotPng" />{{ t('截图 PNG') }}</button>
         </div>
       </section>
@@ -5461,8 +5468,7 @@ h3 {
   border: 1px solid var(--border);
   border-radius: 6px;
 }
-.look-card img,
-.look-ph {
+.look-card img {
   display: block;
   width: 100%;
   aspect-ratio: 8 / 5;

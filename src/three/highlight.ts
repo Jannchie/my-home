@@ -11,8 +11,9 @@
 
 import * as THREE from 'three'
 import { pullDepth } from './toon'
+import { KEEP_ALPHA } from './blend'
 
-/** 叠加材质（按正反面各一份）：结果 = 已有颜色 + 已有颜色 × k；深度往前拉一点，压过目标自己（墙面也拉过深度） */
+/** 叠加材质（按正反面各一份）：结果 = 已有颜色 + 已有颜色 × k，alpha 不变；深度往前拉一点，压过目标自己（墙面也拉过深度） */
 function overlayMaterial(k: number, side: THREE.Side) {
   const m = new THREE.MeshBasicMaterial({
     color: new THREE.Color(k, k, k),
@@ -23,6 +24,8 @@ function overlayMaterial(k: number, side: THREE.Side) {
     blendEquation: THREE.AddEquation,
     blendSrc: THREE.DstColorFactor,
     blendDst: THREE.OneFactor,
+    // 提亮不算发光：alpha 不动（blend.ts）
+    ...KEEP_ALPHA,
     side,
     toneMapped: false,
   })

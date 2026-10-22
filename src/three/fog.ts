@@ -65,7 +65,8 @@ const FogShader = {
       float s = pow(max(dot(ray / max(d, 1e-3), uSunDir), 0.0), 6.0);
       vec3 col = uColor + uSunColor * s;
       // 画面内容是预乘的（清屏处 alpha = 0）：雾按 alpha 加，透明背景上不凭空出现雾
-      gl_FragColor = vec4(mix(base.rgb, col * base.a, f), base.a);
+      // alpha 超过 1 的是泛光的发光标记（anime.ts uGlowMark），覆盖率按 1 算
+      gl_FragColor = vec4(mix(base.rgb, col * min(base.a, 1.0), f), base.a);
     }`,
 }
 

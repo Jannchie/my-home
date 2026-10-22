@@ -21,7 +21,27 @@ export function findChrome() {
   throw new Error('找不到 Chromium：设置 CHROME 环境变量指向 chrome 可执行文件')
 }
 
-export async function launch({ width, height, port = 9350, gpu = true } = {}) {
+/** 命令行参数：--key value / --flag → { key: 'value' | true } */
+export function parseArgs(argv = process.argv.slice(2)) {
+  return Object.fromEntries(
+    argv.reduce((acc, a, i, all) => {
+      if (a.startsWith('--')) acc.push([a.slice(2), all[i + 1] && !all[i + 1].startsWith('--') ? all[i + 1] : true])
+      return acc
+    }, []),
+  )
+}
+
+/** 等页面上的表达式为真（每 250ms 查一次，页面还在加载时求值出错也接着等）；超时返回 false */
+export async function waitFor(b, expr, ms = 60000) {
+  for (let t = 0; t < ms; t += 250) {
+    if (await b.evaluate(`!!(${expr})`).catch(() => false)) return true
+    await sleep(250)
+  }
+  return false
+}
+
+// 调试端口默认在 9350–9389 里随机取：上一次没退干净的实例占着端口时不撞
+export async function launch({ width, height, port = 9350 + Math.floor(Math.random() * 40), gpu = true } = {}) {
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'promo-chrome-'))
   const args = [
     '--headless=new',

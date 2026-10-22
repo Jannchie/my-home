@@ -5,6 +5,7 @@ import { useAnisotropy } from './toon'
 import { syncMatrix } from './matrices'
 import * as THREE from 'three'
 import type { Fx } from './kit'
+import { ADDITIVE_KEEP_ALPHA } from './blend'
 
 interface Spec {
   count: number
@@ -78,7 +79,8 @@ function makeMaterial(additive: boolean) {
       }`,
     transparent: true,
     depthWrite: false,
-    blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
+    // 加色的粒子：alpha 不动（blend.ts），不被当成光源晕开
+    ...(additive ? ADDITIVE_KEEP_ALPHA : { blending: THREE.NormalBlending }),
   })
 }
 

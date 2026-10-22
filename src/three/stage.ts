@@ -89,6 +89,8 @@ export function createStage(canvas: HTMLCanvasElement, opts: { preserve?: boolea
       }
     },
     resize(w, h) {
+      // 画布还没有尺寸（后台标签页、隐藏的面板里挂载）：不动，宽高比是 0 的话取景会算出无穷远、镜头变成 NaN
+      if (!(w >= 1 && h >= 1)) return
       renderer.setSize(w, h, false)
       camera.aspect = w / Math.max(1, h)
       camera.updateProjectionMatrix()
@@ -155,7 +157,9 @@ export function frameCamera(camera: THREE.PerspectiveCamera, box: THREE.Box3, di
   const c = box.getCenter(new THREE.Vector3())
   const r = box.getSize(new THREE.Vector3()).length() / 2
   const fov = (camera.fov * Math.PI) / 180
-  const fit = Math.min(fov, 2 * Math.atan(Math.tan(fov / 2) * camera.aspect))
+  // 宽高比无效（画布没有尺寸）按 1 算，镜头位置总是有限值；调用方等尺寸正常后再取景一次
+  const aspect = camera.aspect > 0 && Number.isFinite(camera.aspect) ? camera.aspect : 1
+  const fit = Math.min(fov, 2 * Math.atan(Math.tan(fov / 2) * aspect))
   const d = (r * margin) / Math.sin(fit / 2)
   camera.position.copy(c).addScaledVector(dir, d)
   camera.lookAt(c)

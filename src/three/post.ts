@@ -38,9 +38,12 @@ import { createGI, type GI } from './gi'
 import { createFog, updateFog } from './fog'
 import { LUT_SIZE, lutTexture } from './lut'
 import { outlineUniforms } from './toon'
+import { animeUniforms } from './anime'
+import { HASH_NOISE } from './glslNoise'
+import { isAdditive } from './blend'
 import type { Stage } from './stage'
 
-export type LookId = 'none' | 'anime' | 'real' | 'figure' | 'crt' | 'tiltshift' | 'warm' | 'cool' | 'film' | 'pastel' | 'watercolor' | 'comic' | 'manga' | 'manga-coarse' | 'manga-hatch' | 'manga-ink' | 'mono' | 'sepia' | 'pixel' | 'sketch'
+export type LookId = 'none' | 'anime' | 'real' | 'figure' | 'crt' | 'tiltshift' | 'warm' | 'cool' | 'film' | 'pastel' | 'watercolor' | 'comic' | 'manga' | 'manga-coarse' | 'manga-hatch' | 'manga-ink' | 'mono' | 'sepia' | 'pixel' | 'sketch' | 'illust'
 
 interface Grade {
   exposure: number
@@ -94,7 +97,11 @@ export interface LookDef {
   desc: string
   /** 纸面类风格自带的背景渐变：中心 / 中段 / 边缘（sRGB）；缺省用时间光照给的天色，入夜时也逐渐过渡到天色 */
   bg?: [string, string, string]
-  bloom?: { strength: number; radius: number; threshold: number }
+  /**
+   * 泛光：只取发光的东西（灯、屏幕、金属的硬边高光，见 anime.ts uGlowMark），受光再亮的表面不晕开。
+   * threshold：亮度超过它的地方也泛一层柔光（粉彩、暖阳要的整体柔光）；不填 = 只有发光的东西
+   */
+  bloom?: { strength: number; radius: number; threshold?: number }
   /** 泛光光晕的颜色：色相（度）、强度（0 = 原色，1 = 很浓）；只染光晕，不改画面本身 */
   bloomTint?: { hue: number; amt: number }
   /** 描边粗细倍数 */
@@ -164,6 +171,11 @@ export interface LookDef {
   grade?: Partial<Grade>
   /** 转折线（crease.ts）的浓度：描边画不出来的倒角、门缝、台面转角也描一条线 */
   crease?: number
+  /**
+   * 插画（anime.ts 的 ILLUST_BODY）：按面的朝向平涂三档、纯色落影；描边和转折线都换成同一种暖墨色（ILLUST_INK）。
+   * 值是平涂的强度，只在赛璐璐光照下起作用；入夜也是平涂（夜色底 + 灯光分档）
+   */
+  illust?: number
 }
 
 export type Stylize = 'watercolor' | 'comic' | 'manga' | 'pixel' | 'sketch'
@@ -258,7 +270,7 @@ export function resolveLook(id: string, adj: LookAdjust = {}): LookDef {
   if (adj.stylize !== undefined && base.stylize !== 'manga') out.stylize = adj.stylize === 'none' ? undefined : adj.stylize
   if (adj.tilt !== undefined) out.tilt = adj.tilt ? (base.tilt ?? LOOK_MAP.get('tiltshift')!.tilt) : undefined
   if (adj.crt !== undefined) out.crt = adj.crt
-  if (adj.bloom !== undefined) out.bloom = adj.bloom > 0 ? { radius: base.bloom?.radius ?? 0.5, threshold: base.bloom?.threshold ?? 0.95, strength: adj.bloom } : undefined
+  if (adj.bloom !== undefined) out.bloom = adj.bloom > 0 ? { radius: base.bloom?.radius ?? 0.5, threshold: base.bloom?.threshold, strength: adj.bloom } : undefined
   if (adj.outline !== undefined) out.outline = adj.outline
   if (adj.crease !== undefined) out.crease = adj.crease
   for (const k of GRADE_KEYS) if (adj[k] !== undefined) out.grade![k] = adj[k]
@@ -328,27 +340,8 @@ const plainLook = (d: LookDef, low = false) =>
 const DEFAULT_BG: [string, string, string] = ['#fdfdfb', '#f1f3ef', '#e3e9e5']
 
 export const LOOKS: LookDef[] = [
-  // 自然：不调色、不描粗，只有一点很轻的泛光（灯泡、屏幕、亮窗这些接近白的地方晕开一点）
-  { id: 'none', label: '自然', desc: '清楚干净，只有一点柔和的泛光', bloom: { strength: 0.1, radius: 0.5, threshold: 0.92 } },
-  // 写实（realistic.ts）：PBR 材质 + 环境反射、AgX 色调映射、环境光遮蔽，不描边；目标是接近室内照片的光感
-  {
-    id: 'real',
-    label: '写实',
-    desc: 'PBR 材质、柔和的明暗与反光，接近照片',
-    material: 'real',
-    ao: true,
-    tone: true,
-    outline: 0,
-    crease: 0,
-    clouds: 'volume',
-    // 间接光（gi.ts）：按房间烘焙的球谐探针替换屋里的半球光，靠窗亮、深处暗、地板的颜色反到墙上；
-    // 大气雾（fog.ts）：鸟瞰时房子后半截、院子退进空气里，漫游时屋里不起雾
-    gi: 1,
-    fog: { density: 0.03, height: 350, sun: 0.12, max: 0.5 },
-    bloom: { strength: 0.1, radius: 0.5, threshold: 1.8 },
-    grade: { exposure: 1.12, contrast: 1.06, saturation: 1.05, vignette: 0.18 },
-    lighting: { hemi: 1.05, sun: 1.45 },
-  },
+  // 自然：不调色、不描粗，只有一点很轻的泛光（灯泡、屏幕这些发光的东西晕开一点）
+  { id: 'none', label: '自然', desc: '清楚干净，只有一点柔和的泛光', bloom: { strength: 0.1, radius: 0.5 } },
   // 动画感：参考新海诚、京阿尼的室内背景美术。赛璐璐光照（两档明暗、带颜色的阴影，anime.ts），窗口的光斑、光柱和浮尘（volumetric.ts），
   // 深色线条（描边 + 转折线），亮部偏暖、暗部偏冷紫，灯具带暖晕；背景是蓝天白云（animeSky.ts）。
   // 以前用写实光照（PBR 上收两档明暗）：明暗还是连续的渐变，看起来不像画出来的
@@ -367,10 +360,42 @@ export const LOOKS: LookDef[] = [
     // 灯按「室内灯光」的设置走：赛璐璐没有色调映射，白天灯全开会把整个室内冲白
     lighting: { hemi: 1, sun: 1, up: '#f0e2cf', down: '#cdc8dc', tint: 0.35, sunColor: '#ffcb94', sunTint: 0.35 },
     shafts: 0.9,
-    // 不做色调映射：阈值高过阳光照亮的白墙（赛璐璐受光面约 1），只让灯泡、屏幕晕开一圈暖光
-    bloom: { strength: 0.16, radius: 0.5, threshold: 1.15 },
+    // 泛光只取发光的东西（灯泡、屏幕、金属高光），阳光照亮的白墙不晕
+    bloom: { strength: 0.16, radius: 0.5 },
     // 墙面是奶油色而不是橘色：整体饱和度略压，暗部的淡紫保留
     grade: { exposure: 1.06, contrast: 1.04, saturation: 0.96, shadowTint: [0.0, -0.008, 0.025], highTint: [0.016, 0.006, -0.012], vignette: 0.2, vignetteColor: '#2e2440' },
+  },
+  // 插画：参考手绘的等距插画（一种墨色的线、外粗内细，按朝向分三档的平涂，纯色的蓝紫落影，纸纹贴在表面上，anime.ts）。
+  // 背景是干净的米色纸，不要天空
+  {
+    id: 'illust',
+    label: '插画',
+    desc: '暖墨色线条、按朝向分三档的平涂和纯色落影，像手绘的插画',
+    bg: ['#f3f0e7', '#efebe1', '#e6e0d2'],
+    sky: false,
+    illust: 1,
+    outline: 1.8,
+    crease: 0.8,
+    grade: { contrast: 1.02 },
+  },
+  // 写实（realistic.ts）：PBR 材质 + 环境反射、AgX 色调映射、环境光遮蔽，不描边；目标是接近室内照片的光感
+  {
+    id: 'real',
+    label: '写实',
+    desc: 'PBR 材质、柔和的明暗与反光，接近照片',
+    material: 'real',
+    ao: true,
+    tone: true,
+    outline: 0,
+    crease: 0,
+    clouds: 'volume',
+    // 间接光（gi.ts）：按房间烘焙的球谐探针替换屋里的半球光，靠窗亮、深处暗、地板的颜色反到墙上；
+    // 大气雾（fog.ts）：鸟瞰时房子后半截、院子退进空气里，漫游时屋里不起雾
+    gi: 1,
+    fog: { density: 0.03, height: 350, sun: 0.12, max: 0.5 },
+    bloom: { strength: 0.1, radius: 0.5 },
+    grade: { exposure: 1.12, contrast: 1.06, saturation: 1.05, vignette: 0.18 },
+    lighting: { hemi: 1.05, sun: 1.45 },
   },
   // 手办 / 粘土：光滑的半光泽漆面、又软又宽的明暗过渡（交界带一点透光的暖色）、轮廓上一圈柔光；
   // 影棚式的中性暖光、柔和的影子、带暖色的轻 AO；细描边和转折线勾出造型；轻微移轴，像在拍桌上的模型
@@ -390,42 +415,9 @@ export const LOOKS: LookDef[] = [
     lighting: { hemi: 1.15, sun: 1.3, up: '#fff1e4', down: '#ebe0f2', tint: 0.4, sunColor: '#fff0dc', sunTint: 0.3 },
     aoShade: [0.82, 0.74, 0.72, 1.4],
     shafts: 0.5,
-    bloom: { strength: 0.12, radius: 0.5, threshold: 1.8 },
+    bloom: { strength: 0.12, radius: 0.5 },
     tilt: { focus: 0.45, band: 0.1, fall: 0.35, max: 6 },
     grade: { exposure: 1.1, contrast: 0.98, saturation: 1.12, vignette: 0.15 },
-  },
-  {
-    id: 'tiltshift',
-    label: '微缩',
-    desc: '上下虚化、颜色更鲜，像拍桌上的模型',
-    tilt: { focus: 0.45, band: 0.06, fall: 0.3, max: 12 },
-    grade: { saturation: 1.22, contrast: 1.06, exposure: 1.03, vignette: 0.22 },
-  },
-  {
-    id: 'warm',
-    label: '暖阳',
-    desc: '整体偏暖橙，柔和泛光与暗角',
-    bloom: { strength: 0.2, radius: 0.5, threshold: 0.9 },
-    grade: { gain: '#fff3e2', exposure: 1.03, saturation: 1.08, contrast: 1.04, shadowTint: [0.02, 0.0, -0.025], highTint: [0.025, 0.01, -0.018], vignette: 0.32, vignetteColor: '#3a1e08' },
-  },
-  {
-    id: 'cool',
-    label: '冷雾',
-    desc: '清冷的蓝灰、低对比，带一层薄雾',
-    grade: { gain: '#f2f7ff', contrast: 0.88, saturation: 0.86, exposure: 1.03, shadowTint: [-0.01, 0.005, 0.03], haze: 0.22, hazeColor: '#e9f1f7', fade: 0.06, fadeColor: '#cfdce6' },
-  },
-  {
-    id: 'film',
-    label: '胶片',
-    desc: '褪色、偏暖绿，带颗粒和一点色差',
-    grade: { contrast: 0.92, saturation: 0.8, gain: '#fff6e6', shadowTint: [-0.015, 0.02, 0.01], highTint: [0.03, 0.015, -0.03], fade: 0.12, fadeColor: '#2a2620', ca: 1.4, vignette: 0.5, vignetteColor: '#1a120a', grain: 0.075 },
-  },
-  {
-    id: 'pastel',
-    label: '粉彩',
-    desc: '提亮、降饱和，一层柔光',
-    bloom: { strength: 0.16, radius: 0.8, threshold: 0.78 },
-    grade: { exposure: 1.03, contrast: 0.86, saturation: 0.78, gain: '#fff8fb', highTint: [0.015, 0.0, 0.02], fade: 0.1, fadeColor: '#f4e4ee' },
   },
   {
     id: 'watercolor',
@@ -435,6 +427,15 @@ export const LOOKS: LookDef[] = [
     stylize: 'watercolor',
     outline: 0.8,
     grade: { saturation: 0.92, exposure: 1.03, contrast: 0.95, paper: 0.55, vignette: 0.15, vignetteColor: '#7a6040' },
+  },
+  {
+    id: 'sketch',
+    label: '素描',
+    desc: '铅笔线条与排线，画在纸上',
+    bg: ['#fbf9f3', '#f6f2e8', '#ece6d8'],
+    stylize: 'sketch',
+    outline: 1.1,
+    grade: { paper: 0.35, vignette: 0.12, vignetteColor: '#6a5a40' },
   },
   {
     id: 'comic',
@@ -486,6 +487,32 @@ export const LOOKS: LookDef[] = [
     grade: { paper: 0.12 },
   },
   {
+    id: 'warm',
+    label: '暖阳',
+    desc: '整体偏暖橙，柔和泛光与暗角',
+    bloom: { strength: 0.2, radius: 0.5, threshold: 0.9 },
+    grade: { gain: '#fff3e2', exposure: 1.03, saturation: 1.08, contrast: 1.04, shadowTint: [0.02, 0.0, -0.025], highTint: [0.025, 0.01, -0.018], vignette: 0.32, vignetteColor: '#3a1e08' },
+  },
+  {
+    id: 'cool',
+    label: '冷雾',
+    desc: '清冷的蓝灰、低对比，带一层薄雾',
+    grade: { gain: '#f2f7ff', contrast: 0.88, saturation: 0.86, exposure: 1.03, shadowTint: [-0.01, 0.005, 0.03], haze: 0.22, hazeColor: '#e9f1f7', fade: 0.06, fadeColor: '#cfdce6' },
+  },
+  {
+    id: 'pastel',
+    label: '粉彩',
+    desc: '提亮、降饱和，一层柔光',
+    bloom: { strength: 0.16, radius: 0.8, threshold: 0.78 },
+    grade: { exposure: 1.03, contrast: 0.86, saturation: 0.78, gain: '#fff8fb', highTint: [0.015, 0.0, 0.02], fade: 0.1, fadeColor: '#f4e4ee' },
+  },
+  {
+    id: 'film',
+    label: '胶片',
+    desc: '褪色、偏暖绿，带颗粒和一点色差',
+    grade: { contrast: 0.92, saturation: 0.8, gain: '#fff6e6', shadowTint: [-0.015, 0.02, 0.01], highTint: [0.03, 0.015, -0.03], fade: 0.12, fadeColor: '#2a2620', ca: 1.4, vignette: 0.5, vignetteColor: '#1a120a', grain: 0.075 },
+  },
+  {
     id: 'mono',
     label: '黑白',
     desc: '只留明暗，像一张黑白照片',
@@ -496,6 +523,13 @@ export const LOOKS: LookDef[] = [
     label: '旧照',
     desc: '暖棕单色、褪色暗角，像旧相册',
     grade: { sepia: 1, contrast: 0.95, fade: 0.08, fadeColor: '#3a2a1a', vignette: 0.55, vignetteColor: '#2a1808', grain: 0.05 },
+  },
+  {
+    id: 'tiltshift',
+    label: '微缩',
+    desc: '上下虚化、颜色更鲜，像拍桌上的模型',
+    tilt: { focus: 0.45, band: 0.06, fall: 0.3, max: 12 },
+    grade: { saturation: 1.22, contrast: 1.06, exposure: 1.03, vignette: 0.22 },
   },
   {
     id: 'pixel',
@@ -512,15 +546,6 @@ export const LOOKS: LookDef[] = [
     outline: 1.3,
     grade: { saturation: 1.22, contrast: 1.1, exposure: 0.98 },
   },
-  {
-    id: 'sketch',
-    label: '素描',
-    desc: '铅笔线条与排线，画在纸上',
-    bg: ['#fbf9f3', '#f6f2e8', '#ece6d8'],
-    stylize: 'sketch',
-    outline: 1.1,
-    grade: { paper: 0.35, vignette: 0.12, vignetteColor: '#6a5a40' },
-  },
 ]
 
 /**
@@ -528,6 +553,14 @@ export const LOOKS: LookDef[] = [
  * 屏幕（带画面贴图的）更低一点，保留画面内容；以前是统一乘 2.5，夜里会过曝成一片白、看不出造型和画面。
  */
 const NIGHT_GLOW_CAP = 0.6
+
+/** 「插画」的墨色（线性）：偏暖的近黑，不是纯黑 */
+const ILLUST_INK = new THREE.Color('#231e16')
+/** 描边 / 转折线的统一墨色 uniform（rgb = 墨色 × k，w = 换成它的程度）：on 为假时不换 */
+function setInk(v: THREE.Vector4, on: boolean, k = 1) {
+  if (on) v.set(ILLUST_INK.r * k, ILLUST_INK.g * k, ILLUST_INK.b * k, 1)
+  else v.w = 0
+}
 const NIGHT_SCREEN_CAP = 0.55
 
 /** 浮尘的亮度 */
@@ -574,17 +607,7 @@ const VERT = /* glsl */ `
 /** 各 pass 共用的小函数：亮度、hash、值噪声 */
 const COMMON = /* glsl */ `
   float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
-  float hash12(vec2 p) {
-    vec3 p3 = fract(vec3(p.xyx) * 0.1031);
-    p3 += dot(p3, p3.yzx + 33.33);
-    return fract((p3.x + p3.y) * p3.z);
-  }
-  float vnoise(vec2 p) {
-    vec2 i = floor(p);
-    vec2 f = fract(p);
-    vec2 u = f * f * (3.0 - 2.0 * f);
-    return mix(mix(hash12(i), hash12(i + vec2(1.0, 0.0)), u.x), mix(hash12(i + vec2(0.0, 1.0)), hash12(i + vec2(1.0, 1.0)), u.x), u.y);
-  }
+  ${HASH_NOISE}
   float fbm(vec2 p) {
     float v = 0.0;
     float a = 0.5;
@@ -1112,6 +1135,29 @@ const GradeShader = {
     }`,
 }
 
+/**
+ * 泛光的取亮：不再按亮度挑（白墙、受光的白桌面、悬停高亮提亮的地方都会晕开），只取发光的部分——
+ * 不透明材质把发光量写在 alpha 里（anime.ts uGlowMark：2 + 发光量），取这一点颜色里发光所占的比例。
+ * 亮度那一支只在效果给了柔光阈值时起作用（threshold 不填时设成够不到的值）
+ */
+function glowOnlyHighPass(bloom: UnrealBloomPass) {
+  const m = bloom.materialHighPassFilter
+  m.fragmentShader = /* glsl */ `
+    uniform sampler2D tDiffuse;
+    uniform float luminosityThreshold;
+    uniform float smoothWidth;
+    varying vec2 vUv;
+    void main() {
+      vec4 texel = texture2D(tDiffuse, vUv);
+      float l = dot(texel.rgb, vec3(0.2126, 0.7152, 0.0722));
+      float glow = clamp(max(texel.a - 2.0, 0.0) / max(l, 1e-3), 0.0, 1.0);
+      float soft = smoothstep(luminosityThreshold, luminosityThreshold + smoothWidth, l);
+      float k = max(glow, soft);
+      gl_FragColor = vec4(texel.rgb * k, min(texel.a, 1.0) * k);
+    }`
+  m.needsUpdate = true
+}
+
 // ---------- 管线 ----------
 
 export interface Post {
@@ -1119,8 +1165,6 @@ export interface Post {
   setLook: (look: string | LookDef) => void
   /** 时间光照给的天色与入夜程度（见 sky.ts） */
   setSky: (bg: [string, string, string], night: number) => void
-  /** 临时用某个效果渲染一帧（生成选择器缩略图用），fn 里调用 stage.render() */
-  withLook: <T>(id: string, fn: () => T) => T
   /**
    * 在后台编译某个效果要用的着色器（场景材质按这个效果换好之后的样子、后处理各遍），编好后 resolve。
    * 第一次画某个效果时 three 要同步等着色器链接完（M1 上一个效果能卡几百毫秒）；先用它编好再画就不卡
@@ -1289,11 +1333,11 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
     appliedKey = key
     const p = passes
     // 泛光：效果自带的，和入夜后灯具的光晕取较强者
-    // 阈值高、强度低：只在最亮的发光部件周围留一圈淡晕，不盖住灯具轮廓和屏幕边框
+    // 只取发光的部件（glowOnlyHighPass）、强度低：在灯具、屏幕周围留一圈淡晕，不盖住轮廓和边框
     // 黑白漫画读的是编码不是颜色，不能泛光
     const manga = look.stylize === 'manga'
-    // 夜里的泛光比效果自己的强、会接管：阈值不能低于效果自己的（「动画」灯下的浅色地板亮到 0.9 左右，阈值 0.82 时整片晕成一团白）
-    const nightBloom = sky.night > 0.02 && !low && !manga ? { strength: 0.28 * sky.night, radius: 0.3, threshold: Math.max(0.82, look.bloom?.threshold ?? 0) } : undefined
+    // 夜里的泛光比效果自己的强、会接管：柔光阈值沿用效果自己的（没有就只晕发光的东西，灯下的浅色地板不会晕成一团白）
+    const nightBloom = sky.night > 0.02 && !low && !manga ? { strength: 0.28 * sky.night, radius: 0.3, threshold: look.bloom?.threshold } : undefined
     const bloom = low ? undefined : nightBloom && (!look.bloom || nightBloom.strength > look.bloom.strength) ? nightBloom : look.bloom
     // 遮蔽、体积光、转折线：漫画读的是编码，不能乘、不能加
     const ao = (fx.ao || !!look.ao) && !low && !manga
@@ -1329,6 +1373,7 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
       // 用到才建（mip 链占显存）；排在遮蔽、体积光后面
       const s = cssSize()
       p.bloom = new UnrealBloomPass(new THREE.Vector2(s.x, s.y), 1, 0.5, 0.8)
+      glowOnlyHighPass(p.bloom)
       composer.insertPass(p.bloom, p.ao ? 5 : 1)
     }
     if (p.bloom) {
@@ -1336,7 +1381,8 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
       if (bloom) {
         p.bloom.strength = bloom.strength
         p.bloom.radius = bloom.radius
-        p.bloom.threshold = bloom.threshold
+        // 没有柔光阈值：亮度这一支永远达不到，只剩发光的东西
+        p.bloom.threshold = bloom.threshold ?? 1e4
         // 光晕的颜色：合成时每一级 mip 乘一个颜色（UnrealBloomPass 的 bloomTintColors），原画面不动
         for (const v of p.bloom.bloomTintColors) bloomTintColor(look.bloomTint, v)
       }
@@ -1414,6 +1460,8 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
       lf.set(base + ln.start, base + ln.end, 1)
     } else lf.z = 0
     outlineUniforms.uLineLift.value = ln?.lift ?? 0
+    // 插画：描边换成统一的暖墨色（线性，进 composer 才有；入夜和别的描边一样压暗）
+    setInk(outlineUniforms.uInk.value, !!composer && !!current.illust, 1 - 0.7 * sky.night)
     const night = sky.night
     const linear = !!composer
     if (!linear && night < 0.01) return draw()
@@ -1434,7 +1482,7 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
     const glass: [THREE.MeshStandardMaterial, THREE.Color, number][] = []
     const seen = new Set<THREE.Material>()
     const visit = (o: THREE.Object3D) => {
-      const additive = ((o as THREE.Mesh).material as THREE.Material | undefined)?.blending === THREE.AdditiveBlending
+      const additive = isAdditive((o as THREE.Mesh).material as THREE.Material | undefined)
       if (manga && ((o as THREE.Points).isPoints || (o as THREE.Sprite).isSprite || additive)) {
         hidden.push(o)
         o.visible = false
@@ -1603,6 +1651,7 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
       tick++
       jittered(() => {
         if (p.crease?.enabled) {
+          setInk(p.crease.uniforms.uInk.value as THREE.Vector4, !!current.illust)
           updateCrease(p.crease, camera, p.ao?.normalTexture ?? null, p.ao?.depthTexture ?? null, renderer.getDrawingBufferSize(bufRes), creaseOf(current), renderer.getPixelRatio(), false, walking ? WALK_LINE_FOCUS : camera.position.distanceTo(focus), (current.outline ?? 1) > 0)
         }
         const shafts = VOL_STRENGTH * (current.shafts ?? 1) * (1 - sky.night)
@@ -1633,7 +1682,13 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
             if (gi?.step(giOn(), sceneVersion)) p.accum.frame = Math.min(p.accum.frame, ACCUM_SETTLE)
             // 倒影在最外层先画（reflectFrame.ts）；镜头已经抖过亚像素，和主画面一致
             prerenderReflections(renderer, scene, camera)
-            composer!.render()
+            // 发光标记只写进主画面（倒影、探针那几次渲染不要）
+            animeUniforms.uGlowMark.value = p.bloom?.enabled ? 1 : 0
+            try {
+              composer!.render()
+            } finally {
+              animeUniforms.uGlowMark.value = 0
+            }
           })
         } finally {
           if (dust) scene.remove(dust)
@@ -1667,19 +1722,6 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
       sky = { bg, night }
       syncFogColor()
       update()
-    },
-    withLook(id, fn) {
-      const keep = current
-      current = LOOK_MAP.get(id as LookId) ?? LOOK_MAP.get('none')!
-      update(true)
-      if (passes) passes.accum.frame = 0
-      try {
-        return fn()
-      } finally {
-        current = keep
-        update(true)
-        if (passes) passes.accum.frame = 0
-      }
     },
     prepareLook(id) {
       const keep = current
@@ -1886,7 +1928,7 @@ function createAO(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THR
       isReflector(o) ||
       isFurShell(o) ||
       o.userData.isOutline ||
-      (!!mat && (mat.transparent || mat.blending === THREE.AdditiveBlending || !mat.depthWrite))
+      (!!mat && (mat.transparent || isAdditive(mat) || !mat.depthWrite))
     )
       return true
     const mesh = o as THREE.Mesh
