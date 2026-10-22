@@ -1168,12 +1168,13 @@ export const PROPS_DESK: AssetDef[] = [
     ['nordic', [N.white, N.oak, N.sage]],
     ['modern', [M.black, M.silver, M.gray]],
   ], monitor(62, 38, 25, 18), { sizeLabel: '27 寸', ...screensOf([{ x: 0, y: 10, z: -2.2, w: 62, h: 38, t: 2 }]) }),
+  // 停用：一件素材里装两块屏（双屏由一键布置用两台单屏组合，见 workstation.ts），只为读旧存档保留
   def('prop-monitor-dual', '双屏显示器', 'tabletop', [110, 24, 47], [
     ['cute', [C.white, C.white, C.pink]],
     ['nordic', [N.white, N.gray, N.sage]],
     ['modern', [M.black, M.char, M.gray]],
     ['industrial', [I.iron, I.steel, I.rust]],
-  ], dualMonitor, screensOf([-1, 1].map((s) => ({ x: s * 27.6, y: 14, z: 3.91, w: 55, h: 33, t: 2, ry: s * -0.25 })))),
+  ], dualMonitor, { tags: ['retired', 'set-piece'], ...screensOf([-1, 1].map((s) => ({ x: s * 27.6, y: 14, z: 3.91, w: 55, h: 33, t: 2, ry: s * -0.25 }))) }),
   def('prop-keyboard-mouse', '键盘鼠标', 'tabletop', [54, 16, 4], [
     ['cute', [C.white, C.sakura, C.pink]],
     ['cute', [C.white, C.sky, C.lemon]],

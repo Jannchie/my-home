@@ -261,6 +261,7 @@ export const TRAIT_NAMES: Record<TraitTag, [zh: string, ja: string, en: string]>
   'curio-shelf': ['多宝格', '飾り棚', 'Curio cabinet'],
   'collection-shelf': ['收藏展示柜', 'コレクション棚', 'Collection shelf'],
   'set-piece': ['成套部件', 'セット専用', 'Set piece'],
+  retired: ['已停用', '廃止', 'Retired'],
 }
 
 /** 属性 / 摆放标签的中文名（界面上再经 t() 翻译） */

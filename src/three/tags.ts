@@ -283,6 +283,7 @@ export const PLACEMENT_TAGS = [
   'curio-shelf', // 多宝格类柜架
   'collection-shelf', // 展示 / 收藏类柜架
   'set-piece', // 成套摆放专用的部件（双人桌、棋罐、相机柜），通用查询不返回
+  'retired', // 停用的旧素材：只为读旧存档保留（摆着的照常显示、能编辑），素材库不列；同时带 set-piece，一键布置不用
 ] as const
 
 /** 「这是什么」类标签（每件素材至少要有一个） */

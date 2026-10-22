@@ -1,5 +1,5 @@
-// 一键布置的电脑工位：台式主机必须配显示器、每人最多一台主机；显示器按职业 / 兴趣挑单屏、双屏、三屏、竖屏、横 + 竖组合，
-// 桌宽不够就减屏；主机放在桌上一侧或桌下（贴着桌腿一侧，不和椅子打架）。
+// 一键布置的电脑工位：台式主机必须配显示器、每人最多一台主机；显示器按职业 / 兴趣挑单屏、双屏、三屏、竖屏、横 + 竖组合、带鱼屏，
+// 多屏都是几台单屏并排摆（两侧往里转一个角度、内侧边贴着中间那台），桌宽不够就减屏；主机放在桌上一侧或桌下（贴着桌腿一侧，不和椅子打架）。
 // 另外两件收尾：夹式 / 条形摄像头一律夹到显示器（或电视）顶边正中，没有屏幕就不放；
 // 便签贴在显示器边框外沿、桌子背后的墙上、冰箱门上，书桌桌面散几张。
 // 由 decorate.ts 的 Decorator 调用（computersForChairs → workstations，最后 deskExtras）。
@@ -56,19 +56,29 @@ const isDeskDef = (d?: AssetDef) => !!d && !!d.surface && !d.prop && !d.mount &&
 const hasClip = (d?: AssetDef) => !!d?.surfaces?.some((l) => l.kind === 'clip' && l.shape?.length)
 const round1 = (v: number) => Math.round(v * 10) / 10
 
-/** 显示器组合 */
-type Rig = 'single' | 'dual' | 'triple' | 'portrait' | 'combo'
-const RIG_IDS: Record<Rig, string[]> = {
-  single: ['prop-monitor', 'prop-monitor-27'],
-  dual: ['prop-monitor-dual'],
-  triple: ['mon-triple-22'],
-  portrait: ['mon-portrait-24'],
-  combo: ['mon-combo-hv'],
-}
+/**
+ * 显示器组合：dual / triple 是同一款单屏并排（两侧往里转），combo 是横屏居中 + 一侧竖屏，ultrawide 是一块带鱼 / 超宽曲面屏。
+ * 一件素材里装多块屏的旧素材（prop-monitor-dual、mon-triple-22、mon-combo-hv）已停用，这里不用
+ */
+type Rig = 'single' | 'dual' | 'triple' | 'portrait' | 'combo' | 'ultrawide'
+/** 横放的单屏（多屏组合也从这里挑） */
+const LANDSCAPE = ['prop-monitor', 'prop-monitor-27', 'mon-slim-22', 'mon-slim-24', 'mon-slim-27', 'mon-pivot-27', 'mon-uhd-32', 'mon-alu-27', 'mon-arm-27', 'mon-round-24']
+const PORTRAIT = ['mon-portrait-24', 'mon-pivot-27-v']
+const ULTRAWIDE = ['mon-uw-34', 'mon-uw-49']
+/** 设计 / 摄影偏好的大屏、铝合金，程序员偏好的窄边框、升降、支臂 */
+const FOR_DESIGN = new Set(['mon-alu-27', 'mon-uhd-32', 'mon-pivot-27'])
+const FOR_CODE = new Set(['mon-slim-22', 'mon-slim-24', 'mon-slim-27', 'mon-pivot-27', 'mon-arm-27'])
+/** 笔记本旁边接的外接屏 */
+const LAPTOP_EXT = ['prop-monitor', 'mon-slim-22', 'mon-slim-24', 'mon-portable-16', 'mon-arm-27']
+/** 两侧屏往里转的角度（度） */
+const SIDE_DEG: Record<'dual' | 'triple' | 'combo', number> = { dual: 14, triple: 28, combo: 22 }
+/** 并排的两台屏幕边框之间留的缝 */
+const SEAM = 0.6
 const FALLBACK: Record<Rig, Rig[]> = {
-  triple: ['dual', 'combo', 'single', 'portrait'],
-  dual: ['combo', 'single', 'portrait'],
+  triple: ['dual', 'combo', 'ultrawide', 'single', 'portrait'],
+  dual: ['combo', 'ultrawide', 'single', 'portrait'],
   combo: ['dual', 'single', 'portrait'],
+  ultrawide: ['single', 'portrait'],
   single: ['portrait'],
   portrait: ['single'],
 }
@@ -94,13 +104,14 @@ function rigWeights(m: Member | undefined): [Rig, number][] {
   const game = m ? levelOf(m, 'gaming') : 0
   const tech = m ? levelOf(m, 'tech') : 0
   const stream = m ? levelOf(m, 'streaming') : 0
-  let w: Record<Rig, number> = { single: 6, dual: 1, triple: 0.1, portrait: 0.3, combo: 0.3 }
-  if (job === 'programmer') w = { single: 1.5, dual: 3, triple: 1.2, portrait: 1, combo: 2.5 }
-  else if (job === 'streamer') w = { single: 1, dual: 3, triple: 2, portrait: 0.4, combo: 1.5 }
-  else if (job === 'designer' || job === 'photographer') w = { single: 3, dual: 2, triple: 0.3, portrait: 0.8, combo: 1 }
-  else if (job === 'engineer' || job === 'researcher' || job === 'musician') w = { single: 3, dual: 2.5, triple: 0.5, portrait: 0.5, combo: 1 }
+  let w: Record<Rig, number> = { single: 6, dual: 1, triple: 0.1, portrait: 0.3, combo: 0.3, ultrawide: 0.4 }
+  if (job === 'programmer') w = { single: 1.5, dual: 3, triple: 1.2, portrait: 1, combo: 2.5, ultrawide: 1.2 }
+  else if (job === 'streamer') w = { single: 1, dual: 3, triple: 2, portrait: 0.4, combo: 1.5, ultrawide: 0.8 }
+  else if (job === 'designer' || job === 'photographer') w = { single: 3, dual: 2, triple: 0.3, portrait: 0.8, combo: 1, ultrawide: 0.8 }
+  else if (job === 'engineer' || job === 'researcher' || job === 'musician') w = { single: 3, dual: 2.5, triple: 0.5, portrait: 0.5, combo: 1, ultrawide: 0.8 }
   if (game >= 2) {
     w.single += 2
+    w.ultrawide += 1
     w.triple += game >= 3 ? 1.2 : 0.2
   }
   if (tech >= 2) {
@@ -212,13 +223,49 @@ export function workstations(c: DeskCtx) {
     if (!laptops.length) continue
     const heavy = !!s.owner && ['programmer', 'designer', 'engineer', 'researcher', 'streamer'].includes(s.owner.job)
     const ext = heavy && rand() < 0.45
-    if (ext) placeOnDesk(c, s, 'prop-monitor', 0, 'back')
+    if (ext) placeOnDesk(c, s, d.pick(LAPTOP_EXT.filter((id) => ASSET_MAP.has(id))), 0, 'back')
     placeOnDesk(c, s, d.pick(laptops).id, ext ? 1 : 0, ext ? 'front' : 'mid')
   }
   SEATS.set(d, seats)
   TOWERS.set(d, new Set(d.out.filter((o) => isTower(def(o))).map((o) => o.id)))
   // 摄像头上屏幕顶边：在 dress / 补格子之前做，挪走书架上的摄像头后那一格还会被补上
   screenCams(c)
+}
+
+/** 落地的主机在这张书桌下，或紧挨着桌子一侧 */
+function beside(desk: Furniture, t: Furniture) {
+  const dd = def(desk)!
+  const l = toLocal(desk, t)
+  return Math.abs(l.x) <= dd.w / 2 + def(t)!.w + 4 && Math.abs(l.y) <= dd.d / 2 + 1
+}
+
+/**
+ * 最后的统一校验（Decorator.validate）会把挡路的书桌换个地方重摆：桌上的东西被当成普通摆件另找地方，落地的主机留在原处。
+ * 收拾一遍：不在书桌桌面上的显示器、不在有显示器的书桌上 / 旁边的主机拿掉；
+ * 不在屏幕顶边上的夹式 / 条形摄像头重新夹到同一房间的屏幕顶边，没有屏幕就拿掉
+ */
+export function tidyDesks(c: DeskCtx) {
+  const { d, plan } = c
+  const drop = (o: Furniture) => (d.out = d.out.filter((x) => x !== o && d.parentOf.get(x.id) !== o.id))
+  const parent = (o: Furniture) => d.out.find((x) => x.id === d.parentOf.get(o.id))
+  const deskUnder = (o: Furniture) => {
+    const p = parent(o)
+    return p && isDeskDef(def(p)) && Math.abs((o.z ?? 0) - (p.z ?? 0) - def(p)!.surface!) <= 0.6 ? p : undefined
+  }
+  for (const m of d.out.filter((o) => isMonitor(def(o)))) if (!deskUnder(m)) drop(m)
+  const desks = d.out.filter((o) => !o.z && isDeskDef(def(o)) && d.out.some((m) => isMonitor(def(m)) && d.parentOf.get(m.id) === o.id))
+  for (const t of d.out.filter((o) => isTower(def(o)))) {
+    const k = deskUnder(t)
+    if (k ? !desks.includes(k) : !desks.some((x) => beside(x, t))) drop(t)
+  }
+  for (const cam of d.out.filter((o) => def(o)?.screenClip)) {
+    const p = parent(cam)
+    if (p && (def(p)?.surfaces ?? []).some((l) => l.kind === 'clip' && Math.abs((p.z ?? 0) + l.y - (cam.z ?? 0)) < 0.5)) continue
+    drop(cam)
+    const room = plan.rooms.find((r) => pointInPolygon(cam, r.points))
+    const screens = room ? d.out.filter((o) => hasClip(def(o)) && pointInPolygon(o, room.points) && !clipped(c, o)) : []
+    if (screens.length) clipOnScreen(c, d.pick(screens), cam.asset)
+  }
 }
 
 /** 工位那一步摆好的主机 */
@@ -300,7 +347,7 @@ function onSeat(c: DeskCtx, s: Seat) {
 }
 
 /** 摆到桌面局部坐标 (lx, lz)：整块在台面内、不和同一台面上的任何东西（含主机）重叠；不受同类数量限制 */
-function putOn(c: DeskCtx, parent: Furniture, asset: string, lx: number, lz: number, lrot = 0) {
+function putOn(c: DeskCtx, parent: Furniture, asset: string, lx: number, lz: number, lrot = 0, ignore?: Set<string>) {
   const pd = def(parent)!
   const a = ASSET_MAP.get(asset)
   if (!a || !pd.surface) return null
@@ -309,7 +356,7 @@ function putOn(c: DeskCtx, parent: Furniture, asset: string, lx: number, lz: num
   const f: Furniture = { id: uid('u'), asset, x: round1(p.x), y: round1(p.y), rot: (parent.rot + lrot + 360) % 360, color: c.d.colorFor(a), z }
   if (!fitsOnSurface(parent, z, asset, f.x, f.y, f.rot)) return null
   // 同一台面上的东西（含主机）重叠不超过 1.8（贴着放）、不顶到墙上挂的东西…（Occupancy.canPlace）
-  if (!c.d.canPlace(asset, f.x, f.y, f.rot, z, { parent: parent.id, surfaceTol: 1.8 })) return null
+  if (!c.d.canPlace(asset, f.x, f.y, f.rot, z, { parent: parent.id, surfaceTol: 1.8, ignore })) return null
   c.d.out.push(f)
   c.d.flat.add(f.id)
   c.d.parentOf.set(f.id, parent.id)
@@ -432,33 +479,165 @@ function setupDesktop(c: DeskCtx, s: Seat, weighted: <T>(items: [T, number][]) =
   const avail = s.zone - 1 - (topSide ? tw.w + 4 : 0)
   const center = s.x - topSide * (tw.w + 4) / 2
   const first = weighted(rigWeights(s.owner))
-  const ids = [first, ...FALLBACK[first]].flatMap((r) => (r === 'single' && gamer ? ['of-monitor-gaming', ...RIG_IDS.single] : RIG_IDS[r]))
-  const fits = ids.filter((id, i) => ids.indexOf(id) === i && ASSET_MAP.has(id)).filter((id) => ASSET_MAP.get(id)!.w <= avail && ASSET_MAP.get(id)!.d <= dd.d * 0.6)
-  let mon: Furniture | null = null
-  // 先试按人挑的那种；被摆件挡住就挪走普通摆件（台灯、杯子之类，dress 之后还会补）再试，最后才减屏
-  const order = [...fits.slice(0, 1), ...d.shuffle(fits.slice(1, 3)), ...fits.slice(3)]
+  const rigs = [first, ...FALLBACK[first]]
+  let rig: Furniture[] | null = null
   const clear = () => {
     for (const o of onSeat(c, s)) if (o !== tower && !isLaptop(o) && !isKeyboard(o) && !isMonitor(def(o))) d.out = d.out.filter((x) => x !== o && d.parentOf.get(x.id) !== o.id)
   }
-  if (order.length) {
-    mon = placeOnDesk(c, s, order[0], 0, 'back', center)
-    if (!mon) {
-      clear()
-      mon = placeOnDesk(c, s, order[0], 0, 'back', center)
+  // 先试按人挑的那种（换两次款）；被摆件挡住就挪走普通摆件（台灯、杯子之类，dress 之后还会补）再试，最后才减屏
+  for (const [i, r] of rigs.entries()) {
+    for (let k = 0; k < 2 && !rig; k++) {
+      const pick = rigUnits(c, s, r, avail, gamer)
+      if (!pick) break
+      rig = placeRig(c, s, pick, center)
+      if (!rig && i === 0 && k === 0) {
+        clear()
+        rig = placeRig(c, s, pick, center)
+      }
     }
+    if (rig) break
   }
-  for (const id of order.slice(1)) if (!mon && (mon = placeOnDesk(c, s, id, 0, 'back', center))) break
-  if (!mon) {
+  if (!rig) {
     if (tower) d.out = d.out.filter((x) => x !== tower)
     return false
   }
-  if (mini) placeOnDesk(c, s, asset, 0, 'back', toLocal(s.desk, mon).x + (ASSET_MAP.get(mon.asset)!.w / 2 + 9) * side)
+  // 整组显示器的左右边（迷你主机放在旁边）和键盘对着的位置（有中间那台就对着它，双屏对着两台中间）
+  const xs = rig.map((m) => [toLocal(s.desk, m).x, ASSET_MAP.get(m.asset)!.w / 2] as const)
+  const lo = Math.min(...xs.map(([x, h]) => x - h))
+  const hi = Math.max(...xs.map(([x, h]) => x + h))
+  const mid = rig.length === 2 && rig[0].asset === rig[1].asset ? (xs[0][0] + xs[1][0]) / 2 : xs[0][0]
+  if (mini) placeOnDesk(c, s, asset, 0, 'back', side > 0 ? hi + 9 : lo - 9)
   // 键盘：座位上还没有就补一把，放在显示器正前方
   if (!onSeat(c, s).some(isKeyboard)) {
     const kb = d.find(gamer ? /^of-kb-.*-rgb$/ : /^(of-kb-(tkl|full|60)|prop-keyboard-mouse)$/, (a) => !!a.prop && a.w <= s.zone * 0.7)
-    if (kb.length) placeOnDesk(c, s, d.pick(kb).id, 0, 'front', toLocal(s.desk, mon).x)
+    if (kb.length) placeOnDesk(c, s, d.pick(kb).id, 0, 'front', mid)
   }
   return true
+}
+
+/** 一组显示器：main 居中正对；sides 是两侧往里转 deg 度的屏（-1 左、1 右），没有 main 时两侧屏的内侧边在中线上相接 */
+interface RigUnits {
+  main?: string
+  sides: [-1 | 1, string][]
+  deg: number
+}
+
+/** 横屏候选里按人挑一款（设计 / 摄影偏好大屏、铝合金，程序员偏好窄边框、升降、支臂，孩子偏好圆润款，玩家的单屏常是电竞曲面） */
+function pickLandscape(c: DeskCtx, s: Seat, maxW: number, gamer: boolean, single: boolean) {
+  const dd = def(s.desk)!
+  const job = s.owner?.job
+  const ok = (id: string) => {
+    const a = ASSET_MAP.get(id)
+    return !!a && a.w <= maxW && a.d <= dd.d * 0.6
+  }
+  const pool: [string, number][] = LANDSCAPE.filter(ok).map((id) => {
+    let w = 1
+    if ((job === 'designer' || job === 'photographer') && FOR_DESIGN.has(id)) w = 4
+    if (job === 'programmer' && FOR_CODE.has(id)) w = 2.5
+    if (s.owner && s.owner.age < 16 && id === 'mon-round-24') w = 3
+    return [id, w]
+  })
+  if (single && gamer && ok('of-monitor-gaming')) pool.push(['of-monitor-gaming', LANDSCAPE.length * 0.6])
+  if (!pool.length) return null
+  let r = c.rand() * pool.reduce((t, [, w]) => t + w, 0)
+  for (const [id, w] of pool) if ((r -= w) <= 0) return id
+  return pool[pool.length - 1][0]
+}
+
+/** 这种组合挑哪几台（宽度按整组算，放不下返回 null） */
+function rigUnits(c: DeskCtx, s: Seat, rig: Rig, avail: number, gamer: boolean): RigUnits | null {
+  const dd = def(s.desk)!
+  const fit = (ids: string[]) => ids.filter((id) => ASSET_MAP.has(id) && ASSET_MAP.get(id)!.w <= avail && ASSET_MAP.get(id)!.d <= dd.d * 0.6)
+  const cos = (deg: number) => Math.cos((deg * Math.PI) / 180)
+  if (rig === 'single') {
+    const id = pickLandscape(c, s, avail, gamer, true)
+    return id ? { main: id, sides: [], deg: 0 } : null
+  }
+  if (rig === 'portrait' || rig === 'ultrawide') {
+    const ids = fit(rig === 'portrait' ? PORTRAIT : ULTRAWIDE)
+    if (!ids.length) return null
+    // 49 寸超宽多半是重度玩家、主播的
+    const big = rig === 'ultrawide' && ids.length > 1 && (gamer || s.owner?.job === 'streamer') && c.rand() < 0.4
+    return { main: rig === 'portrait' ? c.d.pick(ids) : big ? ids[ids.length - 1] : ids[0], sides: [], deg: 0 }
+  }
+  if (rig === 'dual') {
+    const id = pickLandscape(c, s, avail / (2 * cos(SIDE_DEG.dual)) - SEAM, gamer, false)
+    return id ? { sides: [[-1, id], [1, id]], deg: SIDE_DEG.dual } : null
+  }
+  if (rig === 'triple') {
+    const id = pickLandscape(c, s, avail / (1 + 2 * cos(SIDE_DEG.triple)) - SEAM, gamer, false)
+    return id ? { main: id, sides: [[-1, id], [1, id]], deg: SIDE_DEG.triple } : null
+  }
+  // combo：竖屏放在一侧（多半是右边），横屏居中
+  const pv = fit(PORTRAIT)
+  if (!pv.length) return null
+  const p = c.d.pick(pv)
+  const pw = ASSET_MAP.get(p)!.w * cos(SIDE_DEG.combo)
+  const main = pickLandscape(c, s, avail - 2 * pw - SEAM * 2, gamer, false)
+  return main ? { main, sides: [[c.rand() < 0.75 ? 1 : -1, p]], deg: SIDE_DEG.combo } : null
+}
+
+/**
+ * 摆一组显示器：main 靠后居中（找不到位置就往前、往两侧挪），两侧屏转 deg 度、面板内侧边贴着中间那台的边（或中线）；
+ * 转不下就把角度收小再试。整组都在座位那段桌面上，组内互相不查重叠（面板按几何拼好、底座在各自面板后面）。
+ * 返回摆好的显示器（main 在前）；摆不下返回 null，摆了一半的撤掉
+ */
+function placeRig(c: DeskCtx, s: Seat, u: RigUnits, center: number): Furniture[] | null {
+  const dd = def(s.desk)!
+  const half = s.zone / 2
+  const first = ASSET_MAP.get(u.main ?? u.sides[0][1])!
+  const sc0 = first.screens?.[0]
+  if (!sc0) return null
+  const back = -dd.d / 2 + first.d / 2 + 1.5
+  const shifts = u.main ? [0, 1, -1, 2, -2, 3, -3, 4, -4, 6, -6, 8, -8] : [0, 1, -1, 2, -2]
+  const ignore = new Set<string>()
+  /** 一台侧屏：面板内侧边落在 (ex, ez)，往里转 deg */
+  const sideAt = (side: -1 | 1, asset: string, ex: number, ez: number, deg: number) => {
+    const a = ASSET_MAP.get(asset)!
+    const sc = a.screens![0]
+    const r = (side * deg * Math.PI) / 180
+    const qx = sc.x - (side * sc.w) / 2
+    const ox = qx * Math.cos(r) - sc.z * Math.sin(r)
+    const oz = qx * Math.sin(r) + sc.z * Math.cos(r)
+    const lx = ex + side * SEAM - ox
+    const lz = ez - oz
+    const reach = (a.w / 2) * Math.cos(Math.abs(r)) + (a.d / 2) * Math.sin(Math.abs(r))
+    if (Math.abs(lx - s.x) + reach > half + 0.5) return null
+    return putOn(c, s.desk, asset, lx, lz, side * deg, ignore)
+  }
+  for (const dz of [0, 4, 9])
+    for (const k of shifts) {
+      const lx = center + k * 5
+      const lz = back + dz
+      const placed: Furniture[] = []
+      // 中间那台的左右边（没有中间那台时就是两侧屏相接的中线）
+      let edges: Record<string, [number, number]>
+      if (u.main) {
+        if (Math.abs(lx - s.x) + first.w / 2 > half + 0.5) continue
+        const m = putOn(c, s.desk, u.main, lx, lz, 0)
+        if (!m) continue
+        placed.push(m)
+        ignore.add(m.id)
+        edges = { '-1': [lx + sc0.x - sc0.w / 2, lz + sc0.z], '1': [lx + sc0.x + sc0.w / 2, lz + sc0.z] }
+      } else edges = { '-1': [lx - SEAM / 2, lz + sc0.z], '1': [lx + SEAM / 2, lz + sc0.z] }
+      let ok = true
+      for (const [side, asset] of u.sides) {
+        const [ex, ez] = edges[side]
+        let f: Furniture | null = null
+        for (const deg of [u.deg, u.deg * 0.6, u.deg * 0.3]) if ((f = sideAt(side, asset, ex, ez, deg))) break
+        if (!f) {
+          ok = false
+          break
+        }
+        placed.push(f)
+        ignore.add(f.id)
+      }
+      if (ok) return placed
+      const gone = new Set(placed)
+      c.d.out = c.d.out.filter((x) => !gone.has(x))
+      ignore.clear()
+    }
+  return null
 }
 
 // ---------- 收尾：摄像头、便签 ----------

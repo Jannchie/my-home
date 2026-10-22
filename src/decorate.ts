@@ -33,7 +33,7 @@ import { tubTopPose } from './tubTop'
 import { COMPETITIVE, INTEREST_TIERS, JOBS, interestFloor, interestProps, interestStickers, interestWall, jobDeskProps, levelOf, topLevel, type Household, type InterestId, type Member, type Tier } from './household'
 import { furnitureBox } from './snap'
 import { floorOf } from './floors'
-import { deskExtras, settleDesks, workstations } from './workstation'
+import { deskExtras, settleDesks, tidyDesks, workstations } from './workstation'
 import { appliancesOn, isApplianceOf, isMainAppliance, poseOnSpot, type SpotKind } from './appliance'
 import { cornerSpots, showerBoxes, showerSpot } from './bathroom'
 import { lidSizeFor } from './three/packs/bath-extra'
@@ -4109,6 +4109,8 @@ class Decorator {
 
     // 7. 统一校验：有问题的那件换个位置重摆，实在放不下才删
     this.validate()
+    // 挪走重摆的书桌留下的主机、显示器、摄像头收拾一遍
+    tidyDesks({ d: this, plan: this.plan, rand: this.rand, household: this.household })
     // 宠物区被挪走后，对着空地方的宠物摄像头拿掉
     for (const c of strayPetCams(this.out)) this.removeTree(c)
     this.assignArt()

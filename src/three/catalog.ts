@@ -98,6 +98,7 @@ export interface Filter {
 function matches(a: AssetDef, f: Filter, q: string) {
   return (
     (f.fixtures || !a.fixture) &&
+    !a.tags?.includes('retired') &&
     (!f.room || f.room === 'all' || roomOf(a) === f.room) &&
     (!f.type || f.type === 'all' || a.type === f.type) &&
     (!f.tag || !!a.tags?.includes(f.tag)) &&
