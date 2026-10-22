@@ -8,6 +8,7 @@ import { poseOnSpot } from './appliance'
 import { fixtureDepth, pointInPolygon, uid, type BuiltinType, type Fixture, type Furniture, type Plan } from './model'
 import { levels, propsOn, toLocal, toWorld } from './surface'
 import { ASSET_MAP, type AssetDef } from './three/assets'
+import { baseAssetId, resizedId } from './three/resize'
 import type { Tag } from './three/tags'
 
 /** 各种收纳位上算作「那件柜子」的细分类型 */
@@ -124,18 +125,36 @@ const LEGACY_COLORS: Record<BuiltinType, string[]> = {
   pantry: ['#f4f1ea', '#fbf7f1', '#d9dee6'],
 }
 
-/** 某种收纳位能放的、某个系列里放得进的最宽的一件（都放不进就取最窄的） */
-export function widestFor(fx: Fixture, cands: AssetDef[]) {
-  const fit = cands.filter((d) => fitsSpot(d, fx)).sort((a, b) => b.w - a.w)
-  return fit[0] ?? [...cands].sort((a, b) => a.w - b.w)[0]
+/**
+ * 把一款柜子定制成正好填满收纳位（resize.ts 的派生 id）：宽 = 位宽；比位浅的加深到位深，本来就只比位深出 8 以内的（fitsSpot 允许的）
+ * 保持原来的深度，更深的减到位深。调不了、夹到可调范围后放不进返回 undefined
+ */
+export function fitToSpot(def: AssetDef, fx: Fixture): AssetDef | undefined {
+  const base = ASSET_MAP.get(baseAssetId(def.id)) ?? def
+  const sd = fixtureDepth(fx)
+  const fit = ASSET_MAP.get(resizedId(base, fx.w, base.d > sd && base.d <= sd + 8 ? base.d : sd))
+  return fit && fitsSpot(fit, fx) ? fit : undefined
 }
 
-/** 一个旧的内置收纳对应的柜子家具（同类、放得进的最宽一件、旧配色，柜门开关照旧） */
+/**
+ * 收纳位上放这批候选（同一系列 / 同类）里的哪件：优先拿宽度最接近位宽的一档定制成正好填满位（任意宽度的位都不留缝）；
+ * 都调不了就取放得进的最宽一档；都放不进返回 undefined
+ */
+export function fitIn(fx: Fixture, cands: AssetDef[]): AssetDef | undefined {
+  const near = [...cands].sort((a, b) => Math.abs(a.w - fx.w) - Math.abs(b.w - fx.w))
+  for (const d of near) {
+    const fit = fitToSpot(d, fx)
+    if (fit) return fit
+  }
+  return cands.filter((d) => fitsSpot(d, fx)).sort((a, b) => b.w - a.w)[0]
+}
+
+/** 一个旧的内置收纳对应的柜子家具（同类、定制成填满位的尺寸，放不进就取最窄一档；旧配色，柜门开关照旧） */
 export function legacyCabinet(fx: Fixture): Furniture | null {
   if (fx.kind !== 'builtin') return null
   const type = spotType(fx)
   const series = [...ASSET_MAP.values()].filter((d) => d.series === LEGACY_SERIES[type])
-  const def = series.length ? widestFor(fx, series) : undefined
+  const def = series.length ? (fitIn(fx, series) ?? [...series].sort((a, b) => a.w - b.w)[0]) : undefined
   if (!def) return null
   const f: Furniture = { id: uid('u'), asset: def.id, ...poseOnStorageSpot(fx, def.id), color: 0, colors: [...LEGACY_COLORS[type]] }
   if (fx.open) f.open = true

@@ -1,7 +1,7 @@
 // 收纳位 + 柜体家具、可开合的柜子：素材结构、旧存档迁移、开关柜门时里面的东西、一键布置在收纳位上放柜子并往柜里收东西
 import { describe, expect, test } from 'vitest'
 import * as THREE from 'three'
-import { cabinetsOn, LEGACY_OPEN_FORMS, legacyCabinet, migrateCabinets, setOpen } from '/src/cabinet'
+import { cabinetsOn, fitIn, LEGACY_OPEN_FORMS, legacyCabinet, migrateCabinets, setOpen } from '/src/cabinet'
 import { checklist } from '/src/checklist'
 import { applyFixes, decorate } from '/src/decorate'
 import { generatePlan } from '/src/generate-region'
@@ -12,7 +12,7 @@ import { normalizePlan } from '/src/store'
 import { fitsOnSurface, levels, pickSurface, propsOn, supportOf, toLocal, toWorld } from '/src/surface'
 import { furnitureBox } from '/src/snap'
 import { doorSwings } from '/src/place'
-import { fixtureBox } from '/src/model'
+import { fixtureBox, fixtureDepth } from '/src/model'
 import { ASSET_MAP, ASSETS } from '/src/three/assets'
 import { countDoors, poseDoors } from '/src/three/kit'
 import { hasTag } from '/src/three/tags'
@@ -142,9 +142,14 @@ describe('旧存档迁移', () => {
     ])
   })
 
-  test('放不进位的宽度时退到最窄的一档', () => {
-    const f = legacyCabinet(spot('s', 'shoe', 150, 40, 38))!
-    expect(ASSET_MAP.get(f.asset)!.series).toBe('cb-shoe-tall')
+  test('比最窄一档还窄的位：定制成位宽', () => {
+    const def = ASSET_MAP.get(legacyCabinet(spot('s', 'shoe', 150, 40, 38))!.asset)!
+    expect(def.series).toBe('cb-shoe-tall')
+    expect(def.w).toBe(40)
+  })
+  test('调不到位宽（窄过可调范围）时退到最窄的一档', () => {
+    const f = legacyCabinet(spot('s', 'shoe', 150, 10, 38))!
+    expect(f.asset).toBe('cb-shoe-tall-60')
   })
 })
 
@@ -297,13 +302,35 @@ describe('一键布置', () => {
     expect(kinds).toEqual(new Set(['shoe', 'closet', 'pantry']))
   })
 
-  test('每个收纳位上都放着一件同类、不比位宽的柜子', () => {
+  test('非标准宽度的收纳位（含嵌墙壁龛）：柜子宽 = 位宽、深贴合位深，不留缝', () => {
+    // 深：不比位浅，最多比位深出 8（fitsSpot 允许的）
+    const deepEnough = (d: number, fx: Fixture) => d >= fixtureDepth(fx) && d <= fixtureDepth(fx) + 8
+    const recessed: Fixture = { ...spot('n', 'shoe', 250, 77, 38), recessed: true }
+    const plan = spotPlan([spot('s', 'shoe', 120, 107, 38), recessed, spot('c', 'closet', 550, 143, 60), spot('p', 'pantry', 1000, 83, 45)])
+    for (const seed of range(1, 4)) {
+      plan.furniture = decorate(plan, seed, 'auto')
+      for (const fx of plan.fixtures) {
+        const on = cabinetsOn(plan.furniture, fx)
+        expect(on.length, `${seed} ${fx.id}`).toBe(1)
+        const def = ASSET_MAP.get(on[0].asset)!
+        expect(def.w, `${seed} ${on[0].asset}`).toBe(fx.w)
+        expect(deepEnough(def.d, fx), `${seed} ${on[0].asset} 深 ${def.d}`).toBe(true)
+      }
+    }
+    for (const [fx, type] of [[recessed, 'shoe-storage'], [spot('w', 'closet', 0, 233, 58), 'wardrobe'], [spot('q', 'pantry', 0, 67, 40), 'pantry']] as const) {
+      const def = fitIn(fx, ASSETS.filter((a) => a.type === type && !a.prop))!
+      expect(def.w, def.id).toBe(fx.w)
+      expect(deepEnough(def.d, fx), `${def.id} 深 ${def.d}`).toBe(true)
+    }
+  })
+
+  test('每个收纳位上都放着一件同类、正好位宽的柜子', () => {
     const bad: string[] = []
     for (const { region, seed, plan } of plans)
       for (const fx of plan.fixtures.filter((f) => f.kind === 'builtin')) {
         const on = cabinetsOn(plan.furniture, fx)
         if (on.length !== 1) bad.push(`${region} ${seed}: ${fx.builtinType} 位上有 ${on.length} 件柜子`)
-        for (const c of on) if (ASSET_MAP.get(c.asset)!.w > fx.w + 1) bad.push(`${region} ${seed}: ${c.asset} 比位（${fx.w}）宽`)
+        for (const c of on) if (Math.abs(ASSET_MAP.get(c.asset)!.w - fx.w) > 1) bad.push(`${region} ${seed}: ${c.asset} 和位（${fx.w}）不一样宽`)
       }
     expect(bad).toEqual([])
   })

@@ -12,7 +12,7 @@ import { propsOn, toWorld } from './surface'
 import { poseDoors, type SurfaceDef } from './three/kit'
 import { isIndoor } from './walls'
 import { DOOR_ZONES, STAIR_ZONES, type Occupancy } from './occupancy'
-import { cabinetsOn, fitsSpot, poseOnStorageSpot, setOpen, SPOT_CABINET_TYPES } from './cabinet'
+import { cabinetsOn, fitIn, poseOnStorageSpot, setOpen, SPOT_CABINET_TYPES } from './cabinet'
 import { ASSET_MAP, ASSETS, type AssetDef, type StyleTag } from './three/assets'
 import type { Region } from './model'
 import type { Member } from './household'
@@ -69,22 +69,22 @@ function seriesWeights(fx: Fixture, region: Region, room?: Room): [string, numbe
   return [['cb-pantry-glass', 2], ['cb-pantry-drawer', 2], ['cb-pantry-frame', 1]]
 }
 
-/** 收纳位上放哪件柜子：按权重挑款式（当前风格适合的加倍），取放得进的最宽一档；挑中的款都放不进就在同类里找 */
+/** 收纳位上放哪件柜子：按权重挑款式（当前风格适合的加倍），定制成正好填满位的宽深（cabinet.ts fitIn）；挑中的款都放不进就在同类里找 */
 export function cabinetFor(c: StowCtx, fx: Fixture): AssetDef | undefined {
   const { d } = c
   const room = roomOf(c.plan, fx)
   const type = fx.builtinType ?? 'shoe'
-  const sizes = (series: string) => ASSETS.filter((a) => a.series === series && fitsSpot(a, fx)).sort((a, b) => b.w - a.w)
+  const sized = (series: string) => fitIn(fx, ASSETS.filter((a) => a.series === series))
   const opts = seriesWeights(fx, d.region, room)
     .map(([s, w]): [string, number] => {
       const one = ASSETS.find((a) => a.series === s)
-      return [s, sizes(s).length ? w * (one?.styles?.includes(d.style) ? 2 : 1) : 0]
+      return [s, sized(s) ? w * (one?.styles?.includes(d.style) ? 2 : 1) : 0]
     })
     .filter(([, w]) => w > 0)
   const s = d.weighted(opts)
-  if (s) return sizes(s)[0]
-  // 都放不进：同类里放得进的最宽一件
-  return ASSETS.filter((a) => !a.prop && !a.mount && !!a.type && SPOT_CABINET_TYPES[type].includes(a.type) && fitsSpot(a, fx)).sort((a, b) => b.w - a.w)[0]
+  if (s) return sized(s)
+  // 挑中的款都放不进：同类里挑一件定制
+  return fitIn(fx, ASSETS.filter((a) => !a.prop && !a.mount && !!a.type && SPOT_CABINET_TYPES[type].includes(a.type)))
 }
 
 /** 每个空着的收纳位上放一件柜子（only：只补某一种位） */
