@@ -37,7 +37,11 @@ export interface SizeRange {
 export function resizeRange(def: AssetDef | undefined): SizeRange | null {
   if (!def || def.prop || def.stick || def.fixture || def.actor || def.ceiling) return null
   if (!def.resize && (!hasTag(def, ...RESIZABLE) || hasTag(def, ...FIXED))) return null
-  const r = (v: number, lo: number, hi: number, min: number, max: number): [number, number] => [Math.max(min, Math.round(v * lo)), Math.min(max, Math.round(v * hi))]
+  // 范围总是包含原尺寸（7cm 深的钥匙架不能因为下限 10 被强行加深）
+  const r = (v: number, lo: number, hi: number, min: number, max: number): [number, number] => [
+    Math.min(Math.round(v), Math.max(min, Math.round(v * lo))),
+    Math.max(Math.round(v), Math.min(max, Math.round(v * hi))),
+  ]
   return { w: r(def.w, 0.4, 2.5, 15, 400), d: r(def.d, 0.5, 2, 10, 200) }
 }
 

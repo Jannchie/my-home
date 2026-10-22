@@ -6,10 +6,10 @@ import { applyFixesHouse, decorateHouse, roomStyles } from './decorate'
 import { autoWallpapers } from './wallpaper'
 import type { CheckItem } from './checklist'
 import { generateHousehold } from './household'
-import { propsOn, toWorld } from './surface'
+import { propsOn } from './surface'
 import { applyFixtureCarry, captureFixtureProps, mirrorFixtureCarry } from './fixtureCarry'
 import { ASSET_MAP, STYLE_LABELS } from './three/assets'
-import { baseAssetId, resizedId } from './three/resize'
+import { fitResize } from './resizeFit'
 import { furnitureRoom, restyleFurniture } from './restyle'
 import type { StyleTag } from './three/kit'
 import type { LookAdjust } from './three/post'
@@ -1128,21 +1128,16 @@ export function swapFurnitureAsset(id: string, asset: string) {
 
 /**
  * 调宽深（resize.ts）：换成 `原 id@宽x深` 的派生素材，宽度以中心为准、深度以背面为准（靠墙的柜子背面仍贴墙）。
- * 尺寸夹到可调范围里；和原尺寸一样就回到原素材
+ * 尺寸夹到可调范围里；和原尺寸一样就回到原素材。变大后会撞墙、压到旁边的家具 / 设备，就往空的一侧挪或减到放得下（resizeFit.ts）
  */
 export function resizeFurniture(id: string, w: number, d: number) {
   const f = findFurniture(id)
-  const cur = f && ASSET_MAP.get(f.asset)
-  const base = f && ASSET_MAP.get(baseAssetId(f.asset))
-  if (!f || !cur || !base) return
-  const asset = resizedId(base, w, d)
-  const next = ASSET_MAP.get(asset)
-  if (asset === f.asset || !next) return
-  const p = toWorld(f, 0, (next.d - cur.d) / 2)
+  const r = f && fitResize(plan.value, f, w, d)
+  if (!f || !r || (r.asset === f.asset && r.x === f.x && r.y === f.y)) return
   mutate(() => {
-    f.asset = asset
-    f.x = Math.round(p.x * 10) / 10
-    f.y = Math.round(p.y * 10) / 10
+    f.asset = r.asset
+    f.x = r.x
+    f.y = r.y
   })
 }
 
