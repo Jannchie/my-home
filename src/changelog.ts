@@ -12,6 +12,45 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '1.16.0',
+    date: '2026-10-22',
+    notes: {
+      zh: [
+        '新画面效果「插画」：统一的暖墨色线条（外轮廓粗、内部细），按面的朝向平涂成三档，落影是一整块蓝紫色，纸纹贴在物体表面上跟着物体走；入夜也保持平涂，灯照到的地方提亮成暖色',
+        '泛光只来自会发光的东西（灯、屏幕、金属的高光）：被阳光照亮的白墙、悬停高亮的桌面不再整片晕白',
+        '柜子、架子、置物架和桌子可以自由调宽度和深度：选中后拖左右两侧的手柄调宽、拖前面的手柄调深（3D 沙盘和平面图都可以，按住 Shift 以 5 cm 为单位）；收纳位里的柜子按新宽度重排门和抽屉，其余家具只拉伸中间，边框、拉手和腿保持原样；改深度时背面仍贴着墙，碰到墙或旁边的家具会自动往空的一侧让，还放不下就停在放得下的最大尺寸',
+        '一键布置时收纳位里的柜子按位的宽度定做，正好填满，宽度不整齐的位和凹进去的位不再留缝',
+        '显示器、电视、笔记本和平板的屏幕可以选 16 种画面（写代码、终端、表格、设计、修图、游戏、直播、追剧、动画、视频会议、编曲、网页、股票、电子书、壁纸、关闭），在家具面板里切换；一键布置时按主人的职业、兴趣和性格挑画面，电视按房间里的住户挑',
+        '双屏、三屏、横竖屏组合改成几台单独的显示器并排摆放（两侧的向内转一点）；新增 12 款单屏显示器，还有厨房岛台、酒水推车、收纳凳、带轮文件柜、转角置物架和带支架的吊床',
+        '贴在家具侧面的东西（冰箱门上的冰箱贴、便签）在移动、旋转、删除、复制家具时会跟着一起走',
+        '画面效果按类别重新排序；效果的预览图改成预先做好的图片，展开选择器不再卡顿',
+        '修正在后台标签页或隐藏的面板里打开 3D 沙盘时，整个场景是黑的、要刷新才恢复',
+      ],
+      ja: [
+        '新しい画面エフェクト「イラスト」：温かい墨色でそろえた線（外形は太く、内側は細く）、面の向きで三段に塗り分けたベタ塗り、一面の青紫の影、物の表面に貼りついて一緒に動く紙の質感。夜もベタ塗りのままで、照明が当たるところは暖かい色で明るくなります',
+        'ブルームは光るもの（照明、画面、金属のハイライト）からだけに：日差しの当たる白い壁や、ホバーでハイライトした机が一面白くにじまなくなりました',
+        '棚・ラック・キャビネット・テーブルの幅と奥行きを自由に変えられるように：収納スペースのキャビネットは新しい幅に合わせて扉と引き出しを並べ直し、それ以外の家具は中央だけを伸ばして、枠・取っ手・脚はそのまま。選択すると左右のハンドルで幅、手前のハンドルで奥行きをドラッグで変えられます（3D ジオラマでも間取り図でも。Shift で 5 cm 刻み）。奥行きを変えても背面は壁についたまま、壁や隣の家具に当たると空いている側へ自動でずれ、それでも入らなければ収まる最大のサイズで止まります',
+        'おまかせ配置では収納スペースのキャビネットをスペースの幅に合わせて作るので、半端な幅やくぼんだスペースでもすき間が残りません',
+        'モニター・テレビ・ノートパソコン・タブレットの画面を 16 種類から選べるように（コーディング、ターミナル、表計算、デザイン、写真編集、ゲーム、配信、ドラマ、アニメ、ビデオ会議、作曲、Web、株価、電子書籍、壁紙、オフ）。家具パネルで切り替えられ、おまかせ配置では持ち主の仕事・趣味・性格から、テレビは部屋の住人から選びます',
+        'デュアル・トリプル・横縦の組み合わせモニターは、単体のモニターを並べる形に（両端は少し内向き）。単体モニターを 12 種追加し、キッチンアイランド、バーワゴン、収納スツール、キャスター付きファイルワゴン、コーナーシェルフ、スタンド付きハンモックも追加',
+        '家具の側面に貼ったもの（冷蔵庫のマグネットやメモ）は、家具を移動・回転・削除・複製すると一緒についてきます',
+        '画面エフェクトを種類ごとに並べ替え。エフェクトのプレビューは用意済みの画像にしたので、選択パネルを開いても重くなりません',
+        'バックグラウンドのタブや隠れたパネルで 3D ジオラマを開くと、シーンが真っ黒になり再読み込みが必要だった問題を修正',
+      ],
+      en: [
+        "New Illustration look: warm ink lines in one color (thick outlines, thin inner lines), flat fills in three tones by which way each face points, solid blue-violet shadows, and a paper texture that sticks to surfaces as they move; it stays flat at night too, with warm, brighter areas where lamps shine",
+        'Bloom now comes only from things that emit light (lamps, screens, metal highlights): sunlit white walls and a hover-highlighted desk no longer glow white',
+        'Cabinets, shelves, racks and tables can be resized freely in width and depth: closet cabinets rearrange their doors and drawers for the new width, other furniture stretches only in the middle while frames, handles and legs keep their shape; select a piece and drag the side handles for width or the front handle for depth, in both the 3D diorama and the floor plan (hold Shift for 5 cm steps); the back stays against the wall when the depth changes, and a piece that bumps into a wall or its neighbors shifts toward the free side, or stops at the largest size that fits',
+        'One-click decorate builds closet cabinets to the exact width of their spot, so odd widths and recessed niches no longer leave gaps',
+        'Monitors, TVs, laptops and tablets can show one of 16 screens (coding, terminal, spreadsheet, design, photo editing, game, streaming, drama, anime, video call, music production, web, stocks, e-book, wallpaper, off), switched in the furniture panel; one-click decorate picks each screen from its owner’s job, interests and personality, and TVs from the residents of the room',
+        'Dual, triple and landscape-plus-portrait monitor setups are now separate monitors side by side, with the outer ones angled in; 12 new single monitors, plus a kitchen island, bar cart, storage ottoman, rolling file pedestal, corner shelf and hammock with stand',
+        "Things stuck to the side of furniture (fridge magnets, notes) now move, rotate, delete and duplicate along with it",
+        'Visual effects are grouped by kind, and their previews are ready-made images, so opening the picker no longer stutters',
+        'Fixed the 3D diorama showing an all-black scene until reload when opened in a background tab or hidden panel',
+      ],
+    },
+  },
+  {
     version: '1.15.0',
     date: '2026-10-22',
     notes: {
