@@ -65,6 +65,7 @@ import { runBusy } from '../ui/feedback'
 import { saved, toast } from '../saved'
 import { JIcon } from '@jannchie/icons-vue'
 import { baseAssetId, resizeRange } from '../three/resize'
+import { SCREEN_PRESET_MAP, cycleScreen, hasScreen } from '../three/screenContent'
 import { FIXTURE_ICONS, GROUP_ICONS, ICONS, TOOL_ICONS, VIEW_ICONS, WALL_MODE_ICONS } from '../ui/icons'
 import { SIZE_LABELS, assetName, browse, canHang, cardName, displayName, groupsOf, formFor, paletteFor, sameTypeVariants, siblings, typesIn, variantLabel, type Filter, type SizeClass } from '../three/catalog'
 import { typeLabel } from '../three/typeLabels'
@@ -121,6 +122,7 @@ import {
   setFurnitureLight,
   setFurnitureOpen,
   setFurnitureArt,
+  setFurnitureScreen,
   FOV_MIN,
   FOV_MAX,
   activeFloor,
@@ -829,6 +831,13 @@ function stepArt(dir: 1 | -1) {
   const kind = selectedArtKind.value
   if (f && kind) setFurnitureArt(f.id, cycleArt(f.art, kind, dir))
 }
+/** 选中的家具有屏幕：可以换画面预设 */
+const selectedHasScreen = computed(() => hasScreen(selectedDef.value ?? undefined))
+function stepScreen(dir: 1 | -1) {
+  const f = selectedFurniture.value
+  if (f) setFurnitureScreen(f.id, cycleScreen(f.screen, dir))
+}
+const screenLabel = (id?: string) => (id ? SCREEN_PRESET_MAP.get(id)?.label ?? id : '原画面')
 function rerollSelectedArt() {
   const f = selectedFurniture.value
   const kind = selectedArtKind.value
@@ -964,8 +973,8 @@ function rebuildHouse() {
   dirty = true
 }
 /** 家具模型的缓存键：素材 + 配色 + 单件改色 + 花纹 + 画面（开合不在内） */
-function furnitureKey(asset: string, color: number | undefined, colors: readonly string[] | undefined, patterns: unknown, art?: string) {
-  return `${asset}#${color ?? 0}#${colors?.join(',') ?? ''}#${patterns ? JSON.stringify(patterns) : ''}#${art ?? ''}`
+function furnitureKey(asset: string, color: number | undefined, colors: readonly string[] | undefined, patterns: unknown, art?: string, screen?: string) {
+  return `${asset}#${color ?? 0}#${colors?.join(',') ?? ''}#${patterns ? JSON.stringify(patterns) : ''}#${art ?? ''}#${screen ?? ''}`
 }
 /** 上次搭房子时的当前楼层（墙高滑杆调低时只压低当前层：换层要重搭） */
 let builtActive = ''
@@ -982,7 +991,7 @@ function syncFurniture() {
   for (const f of p.furniture) {
     alive.add(f.id)
     // 开合不进键：开关柜门只重新摆门（poseDoors 会同步静态矩阵），不整件重建
-    const key = furnitureKey(f.asset, f.color, f.colors, f.patterns, f.art)
+    const key = furnitureKey(f.asset, f.color, f.colors, f.patterns, f.art, f.screen)
     let o = objs.get(f.id)
     if (o && o.key === key && o.open !== !!f.open) {
       poseDoors(o.obj, !!f.open)
@@ -4693,6 +4702,15 @@ defineExpose({ resetView })
               <img v-if="thumbs[v.id + '#' + variantColor(v)]" :src="thumbs[v.id + '#' + variantColor(v)]" alt="" />
               <span v-else class="ph" />
             </button>
+          </div>
+        </div>
+        <div v-if="selectedHasScreen" class="row art-row">
+          <span class="ico-label"><JIcon :icon="ICONS.artwork" class="ico-muted" />{{ t('屏幕') }}</span>
+          <div class="art-pick">
+            <button :title="t('上一种画面')" :aria-label="t('上一种画面')" @click="stepScreen(-1)"><JIcon :icon="ICONS.prevItem" /></button>
+            <span class="art-name">{{ t(screenLabel(selectedFurniture.screen)) }}</span>
+            <button :title="t('下一种画面')" :aria-label="t('下一种画面')" @click="stepScreen(1)"><JIcon :icon="ICONS.nextItem" /></button>
+            <button v-if="selectedFurniture.screen" :title="t('恢复原画面')" :aria-label="t('恢复原画面')" @click="setFurnitureScreen(selectedFurniture.id, undefined)"><JIcon :icon="ICONS.reset" /></button>
           </div>
         </div>
         <div v-if="selectedArtKind" class="row art-row">

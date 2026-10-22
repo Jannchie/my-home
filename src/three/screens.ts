@@ -6,6 +6,7 @@
 
 import * as THREE from 'three'
 import { toon, useAnisotropy } from './toon'
+import type { ScreenPreset } from './screenContent'
 
 /** 发光片前后最多隔多远（cm）还算同一块屏幕上的画面 */
 const MAX_GAP = 2.5
@@ -61,7 +62,11 @@ const matCache = new Map<string, THREE.MeshToonMaterial>()
 const box = new THREE.Box3()
 const toBase = new THREE.Matrix4()
 
-export function bakeScreens(root: THREE.Object3D) {
+/**
+ * preset：换成某个画面预设（screenContent.ts）。素材自带的发光小片照样删掉，画面改用预设现画；
+ * 没有小片、只有一块发光背景的大屏幕（够大的，免得把指示灯也画上）也换
+ */
+export function bakeScreens(root: THREE.Object3D, preset?: ScreenPreset) {
   const byParent = new Map<THREE.Object3D, THREE.Mesh[]>()
   root.traverse((o) => {
     if (!glowing(o) || !o.parent) return
@@ -91,9 +96,9 @@ export function bakeScreens(root: THREE.Object3D) {
         const mat = m.material as THREE.MeshToonMaterial
         items.push({ mesh: m, x0: box.min.x, x1: box.max.x, y0: box.min.y, y1: box.max.y, z: box.min.z, round: ROUND.test(m.geometry.type), color: mat.color, k: mat.emissiveIntensity })
       }
-      if (!items.length) continue
+      if (!items.length && (!preset || base.w < 8 || base.h < 5)) continue
       items.sort((a, b) => a.z - b.z)
-      const plane = new THREE.Mesh(new THREE.PlaneGeometry(base.w, base.h), screenMaterial(base, items))
+      const plane = new THREE.Mesh(new THREE.PlaneGeometry(base.w, base.h), preset ? presetMaterial(base, preset) : screenMaterial(base, items))
       plane.position.copy(new THREE.Vector3(0, 0, base.d / 2 + 0.02).applyMatrix4(base.mesh.matrix))
       plane.quaternion.copy(base.mesh.quaternion)
       plane.userData.noOutline = true
@@ -143,4 +148,41 @@ function screenMaterial(base: Slab, items: Item[]) {
   m = new THREE.MeshToonMaterial({ color: '#ffffff', map: tex, emissive: '#ffffff', emissiveMap: tex, emissiveIntensity: base.k, gradientMap })
   matCache.set(key, m)
   return m
+}
+
+/** 预设画面的材质：按屏幕尺寸（像素）和预设缓存；关着的屏幕几乎不发光 */
+function presetMaterial(base: Slab, preset: ScreenPreset) {
+  const scale = Math.max(2, Math.min(PX_PER_CM, MAX_PX / Math.max(base.w, base.h)))
+  const W = Math.max(4, Math.round(base.w * scale))
+  const H = Math.max(4, Math.round(base.h * scale))
+  const key = `preset|${preset.id}|${W}x${H}`
+  let m = matCache.get(key)
+  if (m) return m
+  let tex = texCache.get(key)
+  if (!tex) {
+    const cv = document.createElement('canvas')
+    cv.width = W
+    cv.height = H
+    preset.draw(cv.getContext('2d')!, W, H, seeded(`${preset.id}|${W}x${H}`))
+    tex = new THREE.CanvasTexture(cv)
+    tex.colorSpace = THREE.SRGBColorSpace
+    useAnisotropy(tex)
+    texCache.set(key, tex)
+  }
+  const gradientMap = (toon('#ffffff') as THREE.MeshToonMaterial).gradientMap
+  m = new THREE.MeshToonMaterial({ color: '#ffffff', map: tex, emissive: '#ffffff', emissiveMap: tex, emissiveIntensity: preset.id === 'off' ? 0.05 : base.k, gradientMap })
+  matCache.set(key, m)
+  return m
+}
+
+/** 按字符串定种子的随机数（同一预设、同样尺寸的画面每次都一样） */
+function seeded(s: string) {
+  let h = 2166136261
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619)
+  return () => {
+    h = (h + 0x6d2b79f5) | 0
+    let t = Math.imul(h ^ (h >>> 15), 1 | h)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
 }

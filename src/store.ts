@@ -1099,6 +1099,16 @@ export function setFurnitureArt(id: string, art: string | undefined) {
   })
 }
 
+/** 屏幕画面预设（three/screenContent.ts）；undefined = 素材自带的画面 */
+export function setFurnitureScreen(id: string, screen: string | undefined) {
+  const f = findFurniture(id)
+  if (!f || f.screen === screen) return
+  mutate(() => {
+    if (screen) f.screen = screen
+    else delete f.screen
+  })
+}
+
 /** 同款：同一个素材，或同款系列（同一造型的不同尺寸 / 陈设）的家具 */
 export function sameKind(f: Furniture) {
   const s = ASSET_MAP.get(f.asset)?.series

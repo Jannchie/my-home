@@ -448,6 +448,8 @@ export interface Furniture {
   patterns?: (PatternSpec | null)[]
   /** 仅装饰画 / 海报 / 相框 / 挂轴等（artwork.ts ART_ASSETS）：画面「画种.种子」；不填 = 素材原来的画 */
   art?: string
+  /** 仅有屏幕的（显示器、电视、笔记本、平板）：屏幕画面预设（three/screenContent.ts）；不填 = 素材自带的画面 */
+  screen?: string
   /** 仅贴附物（便签、贴纸，AssetDef.stick）：在贴着的那个面里转的角度（度，绕面的法线）；rot 是贴在哪个朝向的面上 */
   spin?: number
   /** 离房间地面的高度：摆在桌面上的东西 = 桌面高度；地上的为 0 / 不填 */

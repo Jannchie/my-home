@@ -14,6 +14,7 @@ import { levelOf, type Household, type Member } from './household'
 import { wallThicknessAt } from './walls'
 import { isMainAppliance } from './appliance'
 import { hasTag, type Sel } from './three/tags'
+import { hasScreen } from './three/screenContent'
 import { HARD_ZONES, type Occupancy, type PlaceOpts } from './occupancy'
 
 /** Decorator 里这里要用到的部分（都是公开成员） */
@@ -305,6 +306,103 @@ export function settleDesks(c: DeskCtx) {
   known.clear()
   for (const o of d.out) if (isTower(def(o))) known.add(o.id)
   screenCams(c, false)
+  screenContents(c)
+}
+
+// ---------- 屏幕画面：按主人挑 ----------
+
+type W = Partial<Record<string, number>>
+const add = (w: W, k: string, v: number) => (w[k] = (w[k] ?? 0) + v)
+/** 各职业在电脑上常开的画面 */
+const JOB_SCREENS: Partial<Record<Member['job'], W>> = {
+  programmer: { code: 4, terminal: 2 },
+  engineer: { terminal: 2, code: 2, sheet: 0.5 },
+  designer: { design: 4 },
+  photographer: { photo: 4 },
+  streamer: { stream: 4, game: 1 },
+  musician: { music: 4 },
+  researcher: { sheet: 2, reading: 1, web: 1 },
+  office: { sheet: 3, meeting: 2, web: 1 },
+  teacher: { meeting: 1, web: 2, reading: 1 },
+  student: { web: 2, reading: 2, video: 1, code: 0.5 },
+  schoolkid: { game: 2, anime: 1, web: 1 },
+  retired: { web: 2, stocks: 1, video: 1 },
+  chef: { web: 2, video: 1 },
+  nurse: { video: 1, web: 1 },
+}
+
+/**
+ * 电脑屏幕（显示器、笔记本、一体机、平板）的画面权重：职业定主调，兴趣、性格再加减。
+ * 电视看全家：孩子、宅、爱游戏的多放动画 / 游戏，其余追剧、新闻，也常关着
+ */
+export function screenWeights(def: AssetDef, people: Member[]): W {
+  const w: W = {}
+  if (def.type === 'tv' || hasTag(def, 'tv')) {
+    add(w, 'video', 3)
+    add(w, 'off', 2)
+    add(w, 'web', 0.5)
+    for (const m of people) {
+      add(w, 'game', levelOf(m, 'gaming') * 0.8)
+      add(w, 'anime', levelOf(m, 'otaku') + (m.age < 13 ? 1.5 : 0))
+      add(w, 'video', levelOf(m, 'movies') * 0.8)
+      if (m.traits.includes('homebody')) add(w, 'video', 0.5)
+    }
+    return w
+  }
+  add(w, 'wallpaper', 0.4)
+  add(w, 'web', 0.6)
+  add(w, 'video', 0.3)
+  add(w, 'off', 0.2)
+  for (const m of people) {
+    for (const [k, v] of Object.entries(JOB_SCREENS[m.job] ?? {})) add(w, k, v!)
+    add(w, 'game', levelOf(m, 'gaming') * 1.2)
+    add(w, 'anime', levelOf(m, 'otaku'))
+    add(w, 'reading', levelOf(m, 'reading') * 0.6)
+    add(w, 'terminal', levelOf(m, 'tech') * 0.5)
+    add(w, 'code', levelOf(m, 'tech') * 0.3)
+    add(w, 'music', levelOf(m, 'music') * 0.6)
+    add(w, 'photo', levelOf(m, 'photo') * 0.8)
+    add(w, 'stream', levelOf(m, 'streaming') * 0.8)
+    add(w, 'video', levelOf(m, 'movies') * 0.6)
+    const tr = m.traits
+    if (tr.includes('rational')) (add(w, 'sheet', 0.6), add(w, 'stocks', 0.4))
+    if (tr.includes('homebody')) (add(w, 'video', 0.6), add(w, 'anime', 0.4))
+    if (tr.includes('minimal')) (add(w, 'wallpaper', 0.8), add(w, 'off', 0.4))
+    if (tr.includes('tidy')) add(w, 'wallpaper', 0.3)
+    if (tr.includes('messy')) add(w, 'web', 0.4)
+    if (tr.includes('cutie')) add(w, 'anime', 0.5)
+    if (tr.includes('nostalgic')) add(w, 'game', 0.3)
+  }
+  return w
+}
+
+/** 按 id 定的 0..1（挑画面不动布置用的随机数流，别的东西的位置不受影响） */
+function hash01(s: string) {
+  let h = 2166136261
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619)
+  return ((h >>> 0) % 100000) / 100000
+}
+
+/**
+ * 给每块屏幕挑画面：工位上的按座位主人，其余（电视、客厅的笔记本）按所在房间的人。
+ * 用户已经选过的不改；同一座位上的几台显示器各挑各的（多屏常常一台写代码、一台开网页）
+ */
+function screenContents(c: DeskCtx) {
+  const { d, plan } = c
+  const seats = SEATS.get(d) ?? []
+  for (const o of d.out) {
+    const a = def(o)
+    if (!a || o.screen || !hasScreen(a)) continue
+    const seat = seats.find((s) => d.parentOf.get(o.id) === s.desk.id && Math.abs(toLocal(s.desk, o).x - s.x) <= s.zone / 2 + 1)
+    const room = plan.rooms.find((r) => pointInPolygon(o, r.points))
+    const people = seat?.owner ? [seat.owner] : room ? d.peopleIn(room) : []
+    const w = Object.entries(screenWeights(a, people)).filter(([, v]) => v! > 0) as [string, number][]
+    let r = hash01(o.id) * w.reduce((t, [, v]) => t + v, 0)
+    for (const [k, v] of w) if ((r -= v) <= 0) {
+      o.screen = k
+      break
+    }
+  }
 }
 
 /**
