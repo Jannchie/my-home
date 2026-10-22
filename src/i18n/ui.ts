@@ -964,6 +964,8 @@ Object.assign(UI, {
   双击: ['ダブルクリック', 'Double-click'],
   常用宽度: ['よく使う幅', 'Common widths'],
   拖动改宽度: ['ドラッグで幅を変更', 'Drag to resize'],
+  拖动改深度: ['ドラッグで奥行きを変更', 'Drag to change depth'],
+  '按住 Shift 每 5 cm 吸附': ['Shift で 5 cm ずつスナップ', 'Hold Shift to snap to 5 cm'],
   '左右翻转（水槽和灶对调）': ['左右反転（シンクとコンロを入れ替え）', 'Flip left-right (swap sink and hob)'],
   在此添加顶点: ['ここに頂点を追加', 'Add vertex here'],
   双击边: ['辺をダブルクリック', 'Double-click edge'],

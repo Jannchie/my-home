@@ -50,6 +50,9 @@ import FixtureGlyph from './FixtureGlyph.vue'
 import { roomName, t } from '../i18n'
 import { ASSET_MAP } from '../three/assets'
 import { effectivePalette } from '../three/colors'
+import { baseAssetId, resizeRange } from '../three/resize'
+import { RESIZE_SIDES, dragSize, handleLocal, type ResizeDrag, type ResizeSide } from '../furnitureResize'
+import { toWorld as furnitureToWorld } from '../surface'
 import { isTyping } from '../dom'
 import {
   addFixture,
@@ -62,6 +65,7 @@ import {
   rotateSelectedFixture,
   flipKitchen,
   findFixture,
+  findFurniture,
   findRoom,
   insertVertex,
   placeKind,
@@ -69,6 +73,7 @@ import {
   placeContinuous,
   placePicker,
   plan,
+  resizeFurniture,
   floorPlan as fp,
   activeFloor,
   selection,
@@ -102,6 +107,8 @@ type Drag =
   | { kind: 'fixture'; id: string; start: Vec; orig: Vec; carry: FixtureCarry }
   | { kind: 'rect'; start: Vec; end: Vec }
   | { kind: 'ghost'; start: Vec; orig: Vec }
+  /** 拖选中家具的手柄改宽深：w、d 是预览的尺寸，松手才提交 */
+  | { kind: 'furnitureSize'; g: ResizeDrag; w: number; d: number }
 const drag = ref<Drag | null>(null)
 
 // ---------- 触控：多指、长按、点按阈值 ----------
@@ -206,6 +213,26 @@ function hitOf(e: Event) {
   return el?.dataset ?? null
 }
 
+/** 家具底下的可编辑元素（家具只能点选，按住拖动还是拖它底下的房间、设备） */
+function hitBelowFurniture(e: PointerEvent) {
+  for (const el of document.elementsFromPoint(e.clientX, e.clientY)) {
+    const h = (el.closest('[data-hit]') as HTMLElement | null)?.dataset
+    if (h && h.hit !== 'furniture' && svg.value?.contains(el)) return h
+  }
+  return null
+}
+
+/** 按住选中家具的手柄：开始预览宽深（不记撤销，松手时 resizeFurniture 记一次） */
+function startFurnitureSize(id: string, side: ResizeSide, at0: Vec) {
+  const f = findFurniture(id)
+  const def = f && ASSET_MAP.get(f.asset)
+  const range = def && resizeRange(ASSET_MAP.get(baseAssetId(def.id)))
+  if (!f || !def || !range) return
+  // 手柄小，按下就开始拖（不等超出点按阈值）
+  if (downAt) downAt.moved = true
+  drag.value = { kind: 'furnitureSize', g: { id, side, f: { x: f.x, y: f.y, rot: f.rot }, w0: def.w, d0: def.d, at0, range }, w: def.w, d: def.d }
+}
+
 /** 平移拖动；tap 是「没动就松手」时要做的事 */
 function startPan(e: PointerEvent, tap?: () => void) {
   drag.value = { kind: 'pan', sx: e.clientX, sy: e.clientY, ox: view.x, oy: view.y, tap }
@@ -216,7 +243,7 @@ function abortDrag() {
   const d = drag.value
   drag.value = null
   guides.value = {}
-  if (!d || d.kind === 'pan' || d.kind === 'rect') return
+  if (!d || d.kind === 'pan' || d.kind === 'rect' || d.kind === 'furnitureSize') return
   if (d.kind === 'room' || d.kind === 'edge') {
     const r = findRoom(d.kind === 'room' ? d.id : d.roomId)
     if (r) r.points = d.orig.map((p) => ({ ...p }))
@@ -276,7 +303,16 @@ function onPointerDown(e: PointerEvent) {
   const w = toWorld(e)
 
   if (tool.value === 'select') {
-    const hit = hitOf(e)
+    let hit = hitOf(e)
+    if (hit?.hit === 'furniture-size') {
+      startFurnitureSize(hit.id!, hit.side as ResizeSide, w)
+      return
+    }
+    // 家具只能点选：按下时按它底下的东西（房间、设备…）处理，没拖动就松手才选中家具
+    if (hit?.hit === 'furniture') {
+      tapFurniture = hit.id!
+      hit = hitBelowFurniture(e)
+    }
     if (!hit) {
       // 空白处：拖动平移画布，点按取消选中
       startPan(e, () => (selection.value = null))
@@ -574,6 +610,8 @@ function onPointerMove(e: PointerEvent) {
     pts[d.index] = add(d.orig[d.index], off)
     pts[(d.index + 1) % n] = add(d.orig[(d.index + 1) % n], off)
     r.points = pts
+  } else if (d.kind === 'furnitureSize') {
+    Object.assign(d, dragSize(d.g, w, e.shiftKey))
   } else if (d.kind === 'fixture') {
     const f = findFixture(d.id)
     if (!f) return
@@ -650,7 +688,17 @@ function resetNorth() {
   plan.value.north = 0
 }
 
+/** 按在家具上：松手时（没拖动、没多指）选中它 */
+let tapFurniture: string | null = null
+
 function onPointerUp(e: PointerEvent) {
+  const tf = tapFurniture && !pinch && !gestureSpent && !!downAt && !downAt.moved && e.type !== 'pointercancel' ? tapFurniture : null
+  tapFurniture = null
+  releasePointer(e)
+  if (tf) selection.value = { type: 'furniture', id: tf }
+}
+
+function releasePointer(e: PointerEvent) {
   pointers.delete(e.pointerId)
   clearLongPress()
   if (pinch) {
@@ -689,6 +737,10 @@ function onPointerUp(e: PointerEvent) {
       addRoom({ name: ROOM_KINDS.western.label, kind: 'western', points: rectPoints(x0, y0, x0 + w, y0 + h) })
       tool.value = 'select'
     }
+    return
+  }
+  if (d.kind === 'furnitureSize') {
+    if (e.type !== 'pointercancel' && (d.w !== d.g.w0 || d.d !== d.g.d0)) resizeFurniture(d.g.id, d.w, d.d)
     return
   }
   settle()
@@ -828,7 +880,8 @@ const hoverRoom = computed(() => (hoverRoomId.value && hoverRoomId.value !== sel
 function updateHover(e: PointerEvent) {
   let id: string | null = null
   if (tool.value === 'select' && !spaceDown.value) {
-    const h = hitOf(e)
+    let h = hitOf(e)
+    if (h?.hit === 'furniture') h = hitBelowFurniture(e)
     id = h?.hit === 'room' ? h.id ?? null : h?.hit === 'edge' || h?.hit === 'vertex' || h?.hit === 'midpoint' ? h.room ?? null : null
   }
   if (id !== hoverRoomId.value) hoverRoomId.value = id
@@ -1122,6 +1175,25 @@ const furnitureViews = computed(() =>
     return [{ f, w: def.w, d: def.d, mounted: !!def.mount, color: pal[0] ?? '#ddd', transform: `translate(${f.x},${f.y}) rotate(${f.rot})` }]
   }),
 )
+
+/** 选中的家具：外框（拖手柄时按预览尺寸，宽以中心为准、深以背面为准），能调宽深的带左右、正面三个手柄 */
+const selFurnitureView = computed(() => {
+  const s = selection.value
+  const v = s?.type === 'furniture' ? furnitureViews.value.find((x) => x.f.id === s.id) : undefined
+  if (!v) return null
+  const g = drag.value?.kind === 'furnitureSize' && drag.value.g.id === v.f.id ? drag.value : null
+  const w = g?.w ?? v.w
+  const d = g?.d ?? v.d
+  const c = furnitureToWorld(v.f, 0, (d - v.d) / 2)
+  const resizable = !!resizeRange(ASSET_MAP.get(baseAssetId(v.f.asset)))
+  const handles = resizable
+    ? RESIZE_SIDES.map((side) => {
+        const l = handleLocal(side, w, d, px(10))
+        return { side, x: l.x, y: l.z, cursor: side === 'front' ? 'ns-resize' : 'ew-resize' }
+      })
+    : []
+  return { f: v.f, w, d, transform: `translate(${c.x},${c.y}) rotate(${v.f.rot})`, handles, dragging: !!g, label: furnitureToWorld(v.f, 0, d - v.d / 2 + px(26)) }
+})
 
 const balconies = computed(() => roomViews.value.filter((v) => v.room.kind === 'balcony'))
 /** 挑空：虚线框 + 对角线 */
@@ -1522,9 +1594,9 @@ async function exportPng() {
           </circle>
         </template>
       </g>
-      <!-- 家具（3D 沙盘里摆的）：只画占地，不参与编辑 -->
-      <g pointer-events="none">
-        <g v-for="v in furnitureViews" :key="'u' + v.f.id" :transform="v.transform">
+      <!-- 家具（3D 沙盘里摆的）：只画占地；能点选（按住拖动还是拖底下的房间），选中后拖手柄调宽深 -->
+      <g :pointer-events="tool === 'select' ? undefined : 'none'">
+        <g v-for="v in furnitureViews" :key="'u' + v.f.id" :transform="v.transform" data-hit="furniture" :data-id="v.f.id">
           <rect
             :x="-v.w / 2"
             :y="-v.d / 2"
@@ -1539,6 +1611,41 @@ async function exportPng() {
           />
           <line :x1="-v.w / 2 + 4" :x2="v.w / 2 - 4" :y1="-v.d / 2 + 3" :y2="-v.d / 2 + 3" stroke="#8a7a70" stroke-width="1.2" />
         </g>
+      </g>
+      <g v-if="tool === 'select' && selFurnitureView" class="ui">
+        <g :transform="selFurnitureView.transform">
+          <rect
+            :x="-selFurnitureView.w / 2"
+            :y="-selFurnitureView.d / 2"
+            :width="selFurnitureView.w"
+            :height="selFurnitureView.d"
+            :rx="Math.min(8, selFurnitureView.w / 4, selFurnitureView.d / 4)"
+            fill="rgba(63,102,82,0.08)"
+            stroke="#3f6652"
+            :stroke-width="px(2)"
+            :stroke-dasharray="selFurnitureView.dragging ? `${px(5)} ${px(3)}` : undefined"
+            pointer-events="none"
+          />
+          <template v-for="h in selFurnitureView.handles" :key="'fh' + h.side">
+            <circle v-if="touchUI" :cx="h.x" :cy="h.y" :r="px(22)" fill="transparent" data-hit="furniture-size" :data-id="selFurnitureView.f.id" :data-side="h.side" />
+            <circle :cx="h.x" :cy="h.y" :r="hitPx(5, 8)" fill="#fff" stroke="#3f6652" :stroke-width="px(1.5)" data-hit="furniture-size" :data-id="selFurnitureView.f.id" :data-side="h.side" :style="{ cursor: h.cursor }">
+              <title>{{ t(h.side === 'front' ? '拖动改深度' : '拖动改宽度') }}</title>
+            </circle>
+          </template>
+        </g>
+        <text
+          v-if="selFurnitureView.handles.length"
+          :x="selFurnitureView.label.x"
+          :y="selFurnitureView.label.y"
+          :font-size="px(11)"
+          text-anchor="middle"
+          dominant-baseline="middle"
+          fill="#3f6652"
+          class="num"
+          pointer-events="none"
+        >
+          {{ selFurnitureView.w }} × {{ selFurnitureView.d }}
+        </text>
       </g>
       <!-- 固定设备（局部坐标，背面朝 -y） -->
       <g

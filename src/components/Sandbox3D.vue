@@ -19,7 +19,8 @@ import FloorBar from './FloorBar.vue'
 import FloorRail from './FloorRail.vue'
 import { withStairHoles } from '../stairs'
 import { overlapsOthers, snapFurniture, snapToWall, type Guide } from '../snap'
-import { fitOnSurface, pickSurface, propClash, propsOn, snapToClip, snapToHook } from '../surface'
+import { fitOnSurface, pickSurface, propClash, propsOn, snapToClip, snapToHook, toWorld } from '../surface'
+import { RESIZE_SIDES, dragSize, handleLocal, type ResizeDrag, type ResizeSide } from '../furnitureResize'
 import { pickTub, tubGuides } from '../tubTop'
 import { SHADOW_RADIUS, createStage, fitSun, frameCamera, setStageQuality, setStageScale, type Stage } from '../three/stage'
 import { DynRes } from '../three/dynRes'
@@ -1152,7 +1153,139 @@ function updateRing() {
   // 和别的家具 / 设备穿模时提示成红色；台面 / 浴缸边沿上的摆件看 propClash：和同一台面上的东西（麻将牌、棋盘…）重叠、或横跨到区域外也算
   selFrame.setColor((f.z ? propClash(fv(), f) : overlapsOthers(fv(), f.id, f.asset, f.x, f.y, f.rot)) ? RING_BAD : RING_OK)
   if (hoverId === f.id) hoverFrame.hide()
+  const g = resizing.value
+  if (g?.id === f.id) previewResizeFrame(o.obj, f.asset, g.w, g.d)
 }
+
+// ---------- 拖手柄调宽深（furnitureResize.ts）----------
+
+/** 选中家具能调宽深时，选中框左右两侧和正面各一个手柄（DOM，投到屏幕上） */
+const resizeHandlesOn = computed(() => editing.value && !walking.value && !blueprint.on && !placing.value && !!selectedRange.value)
+const resizeEls: (HTMLElement | null)[] = []
+/** 手柄在占地外让出的距离（cm），和选中框的外扩差不多 */
+const RESIZE_PAD = 10
+/** 正在拖的手柄：w、d 是预览的尺寸，hx、hy 是提示的位置（画布内像素） */
+const resizing = ref<(ResizeDrag & { w: number; d: number; pointer: number; touch: boolean; hx: number; hy: number }) | null>(null)
+const resizePlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
+const resizeV = new THREE.Vector3()
+
+/** 选中家具：手柄的高度（模型包围盒中部，世界 y）和楼层组的偏移（世界坐标 - 平面坐标） */
+function resizeBasis() {
+  const f = selectedFurniture.value
+  const o = f && objs.get(f.id)
+  if (!f || !o) return null
+  const wp = o.obj.getWorldPosition(new THREE.Vector3())
+  const lb = localBox(o.obj)
+  return { f, y: wp.y + (lb.isEmpty() ? 0 : (lb.min.y + lb.max.y) / 2), ox: wp.x - f.x, oz: wp.z - f.y }
+}
+
+/** 指针指到手柄高度的水平面上的点（平面坐标） */
+function resizePoint(e: PointerEvent, b: NonNullable<ReturnType<typeof resizeBasis>>) {
+  setRay(e)
+  resizePlane.constant = -b.y
+  return raycaster.ray.intersectPlane(resizePlane, resizeV) ? { x: resizeV.x - b.ox, y: resizeV.z - b.oz } : null
+}
+
+/** 每次重画时把手柄摆到选中框边缘（拖动时跟着预览的尺寸），指针按手柄在屏幕上的方向换 */
+function placeResizeHandles() {
+  if (!resizeHandlesOn.value) return
+  const b = resizeBasis()
+  const def = selectedDef.value
+  const cv = canvas.value
+  if (!b || !def || !cv) return
+  const g = resizing.value
+  const w = g?.w ?? def.w
+  const d = g?.d ?? def.d
+  const W = cv.clientWidth
+  const H = cv.clientHeight
+  const screen = (x: number, z: number) => {
+    const p = toWorld(b.f, x, z)
+    const v = resizeV.set(p.x + b.ox, b.y, p.y + b.oz).project(stage.camera)
+    return v.z > 1 ? null : { x: ((v.x + 1) / 2) * W, y: ((1 - v.y) / 2) * H }
+  }
+  const c = screen(0, (d - def.d) / 2)
+  RESIZE_SIDES.forEach((side, i) => {
+    const el = resizeEls[i]
+    if (!el) return
+    const l = handleLocal(side, w, d, RESIZE_PAD)
+    const s = c && screen(l.x, l.z + (d - def.d) / 2)
+    if (!s || s.x < -20 || s.y < -20 || s.x > W + 20 || s.y > H + 20) {
+      el.style.visibility = 'hidden'
+      return
+    }
+    const a = (((Math.atan2(s.y - c.y, s.x - c.x) * 180) / Math.PI + 180 + 22.5) % 180) / 45
+    el.style.cursor = ['ew-resize', 'nwse-resize', 'ns-resize', 'nesw-resize'][Math.floor(a) % 4]
+    el.style.left = `${Math.round(s.x)}px`
+    el.style.top = `${Math.round(s.y)}px`
+    el.style.visibility = 'visible'
+  })
+}
+
+/** 拖动中的选中框：宽以中心为准、深以背面为准，按预览尺寸重画（挂墙的东西框是立着的，不预览） */
+function previewResizeFrame(obj: THREE.Object3D, asset: string, w: number, d: number) {
+  const def = ASSET_MAP.get(asset)
+  if (!def || isWallMounted(def)) return
+  const dw = w - def.w
+  const dd = d - def.d
+  const lb = localBox(obj)
+  const size = lb.getSize(new THREE.Vector3())
+  if (!lb.isEmpty() && size.x >= SOLID_MIN && size.y >= SOLID_MIN && size.z >= SOLID_MIN) {
+    const c = obj.localToWorld(lb.getCenter(new THREE.Vector3()).add(new THREE.Vector3(0, 0, dd / 2)))
+    selFrame.show3d(c.x, c.y, c.z, size.x + dw, size.y, size.z + dd, obj.rotation.y)
+  } else {
+    const c = obj.localToWorld(new THREE.Vector3(0, 0, dd / 2))
+    selFrame.show(c.x, c.y, c.z, w, d, obj.rotation.y)
+  }
+}
+
+function resizeHud(e: PointerEvent) {
+  const r = canvas.value!.getBoundingClientRect()
+  return { hx: Math.round(e.clientX - r.left), hy: Math.round(e.clientY - r.top) }
+}
+
+function onResizeDown(e: PointerEvent, side: ResizeSide) {
+  const b = resizeBasis()
+  const def = selectedDef.value
+  const range = selectedRange.value
+  if (!b || !def || !range || resizing.value || (e.pointerType === 'mouse' && e.button !== 0)) return
+  const at0 = resizePoint(e, b)
+  if (!at0) return
+  ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+  resizing.value = { id: b.f.id, side, f: { x: b.f.x, y: b.f.y, rot: b.f.rot }, w0: def.w, d0: def.d, at0, range, w: def.w, d: def.d, pointer: e.pointerId, touch: e.pointerType !== 'mouse', ...resizeHud(e) }
+  controls.enabled = false
+  setHover(null)
+}
+function onResizeMove(e: PointerEvent) {
+  const g = resizing.value
+  if (!g || e.pointerId !== g.pointer) return
+  Object.assign(g, resizeHud(e))
+  const b = resizeBasis()
+  const at = b && resizePoint(e, b)
+  if (!at) return
+  const s = dragSize(g, at, e.shiftKey)
+  if (s.w === g.w && s.d === g.d) return
+  g.w = s.w
+  g.d = s.d
+  updateRing()
+  dirty = true
+}
+/** 松手：尺寸变了才 resizeFurniture（记一次撤销）；pointercancel 不提交 */
+function onResizeUp(e: PointerEvent, commit = true) {
+  const g = resizing.value
+  if (!g || e.pointerId !== g.pointer) return
+  resizing.value = null
+  controls.enabled = true
+  if (commit && (g.w !== g.w0 || g.d !== g.d0)) resizeFurniture(g.id, g.w, g.d)
+  updateRing()
+  dirty = true
+}
+// 拖到一半选中换了（撤销、键盘切换）：放弃
+watch(selection, (s) => {
+  if (resizing.value && !(s?.type === 'furniture' && s.id === resizing.value.id)) {
+    resizing.value = null
+    controls.enabled = true
+  }
+})
 
 /** 摆放预览当前显示的素材（挂到挂钩上时会换成挂起形态） */
 let ghostAsset = ''
@@ -2952,6 +3085,7 @@ function loop() {
   if (changed || post.wantsFrame()) {
     if (changed) post.restart(edited)
     placeSiteCard()
+    placeResizeHandles()
     syncFloorFades()
     // 顶灯投影换了一盏灯（漫游换房间）：只有它的阴影贴图标了要重画（其余的灯 autoUpdate 关着、没标记，不会跟着重画）
     // 场景变了：太阳和顶灯的阴影一起重画（唯一的入口）；顶灯换了一盏（lights.ts）时它自己标了要重画
@@ -3494,6 +3628,8 @@ watch(selection, () => {
 })
 // 门窗的选中框只在布置模式里显示（进漫游、预览时藏起来，回来再显示）
 watch([editing, walking], () => updateRing())
+// 手柄刚出现时摆到位
+watch(resizeHandlesOn, () => (dirty = true), { flush: 'post' })
 watch(
   () => sandbox.autoRotate,
   (v) => (controls.autoRotate = v && !editing.value),
@@ -4140,6 +4276,27 @@ defineExpose({ resetView })
         <span class="pp-text"><b>{{ t('摆放 {name}', { name: placingName }) }}</b><span>{{ t('按住地面拖到合适位置，松手放下') }}</span></span>
         <button class="icon-only" :title="t('顺时针旋转 90°')" :aria-label="t('顺时针旋转 90°')" @click="ghostRot = (ghostRot + 90) % 360"><JIcon :icon="ICONS.rotateCw" /></button>
         <button @click="placing = null"><JIcon :icon="ICONS.close" />{{ t('取消') }}</button>
+      </div>
+      <!-- 能调宽深的家具：选中框左右两侧拖动改宽、正面拖动改深 -->
+      <template v-if="resizeHandlesOn">
+        <button
+          v-for="(side, i) in RESIZE_SIDES"
+          :key="side"
+          :ref="(el) => (resizeEls[i] = el as HTMLElement | null)"
+          class="resize-handle"
+          :class="{ on: resizing?.side === side }"
+          :title="t(side === 'front' ? '拖动改深度' : '拖动改宽度')"
+          :aria-label="t(side === 'front' ? '拖动改深度' : '拖动改宽度')"
+          @pointerdown.stop.prevent="onResizeDown($event, side)"
+          @pointermove="onResizeMove"
+          @pointerup="onResizeUp"
+          @pointercancel="onResizeUp($event, false)"
+          @contextmenu.prevent
+        />
+      </template>
+      <div v-if="resizing" class="drag-hud" :class="{ touch: resizing.touch }" :style="{ left: resizing.hx + 'px', top: resizing.hy + 'px' }">
+        <span class="num">{{ resizing.w }} × {{ resizing.d }} cm</span>
+        <span v-if="!resizing.touch" class="dh-hint">{{ t('按住 Shift 每 5 cm 吸附') }}</span>
       </div>
       <!-- 拖动 / 旋转家具时跟着指针的提示：角度、离墙距离、吸附 -->
       <div v-if="dragHud" class="drag-hud" :class="{ touch: dragHud.touch }" :style="{ left: dragHud.x + 'px', top: dragHud.y + 'px' }">
@@ -5001,6 +5158,32 @@ defineExpose({ resetView })
   border-radius: 99px;
   box-shadow: var(--shadow);
   pointer-events: none;
+}
+.resize-handle {
+  position: absolute;
+  z-index: 3;
+  width: 16px;
+  height: 16px;
+  min-width: 0;
+  padding: 0;
+  transform: translate(-50%, -50%);
+  visibility: hidden;
+  background: #fff;
+  border: 2px solid #3f6652;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  touch-action: none;
+}
+/* 触屏：看着小、按着大 */
+.resize-handle::before {
+  content: '';
+  position: absolute;
+  inset: -12px;
+  border-radius: 50%;
+}
+.resize-handle:hover,
+.resize-handle.on {
+  background: #3f6652;
 }
 .drag-hud.touch {
   transform: translate(-50%, calc(-100% - 64px));
