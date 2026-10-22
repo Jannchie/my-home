@@ -77,6 +77,11 @@ function family(f: Family): AssetDef[] {
       openable: true,
       tags: [f.type, ...f.tags],
       build: (p) => cabinetModel(spec, p),
+      // 自由调宽深：按新宽度重新分门扇 / 抽屉列
+      resize: (rw, rd) => {
+        const s: CabSpec = { ...spec, w: rw, d: rd, sections: f.sections(rw) }
+        return { surfaces: cabinetSurfaces(s), build: (p) => cabinetModel(s, p) }
+      },
     }
   })
 }

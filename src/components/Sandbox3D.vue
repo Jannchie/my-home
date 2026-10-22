@@ -63,6 +63,7 @@ import { sandboxBridge } from '../ui/sandboxBridge'
 import { runBusy } from '../ui/feedback'
 import { saved, toast } from '../saved'
 import { JIcon } from '@jannchie/icons-vue'
+import { baseAssetId, resizeRange } from '../three/resize'
 import { FIXTURE_ICONS, GROUP_ICONS, ICONS, TOOL_ICONS, VIEW_ICONS, WALL_MODE_ICONS } from '../ui/icons'
 import { SIZE_LABELS, assetName, browse, canHang, cardName, displayName, groupsOf, formFor, paletteFor, sameTypeVariants, siblings, typesIn, variantLabel, type Filter, type SizeClass } from '../three/catalog'
 import { typeLabel } from '../three/typeLabels'
@@ -93,6 +94,7 @@ import {
   turnAngle,
   checkpoint as checkpointPlan,
   swapFurnitureAsset,
+  resizeFurniture,
   swapFurnitureVariant,
   setFurniturePreset,
   previewFurnitureColors,
@@ -2699,6 +2701,24 @@ function swapSize(asset: string) {
   if (f) swapFurnitureAsset(f.id, asset)
 }
 
+/** 选中家具能调的宽深范围（按原素材算）；改过尺寸的显示「原尺寸」按钮 */
+const selectedRange = computed(() => (selectedDef.value ? resizeRange(ASSET_MAP.get(baseAssetId(selectedDef.value.id))) : null))
+const selectedResized = computed(() => !!selectedDef.value && baseAssetId(selectedDef.value.id) !== selectedDef.value.id)
+function resizeSelected(axis: 'w' | 'd', e: Event) {
+  const f = selectedFurniture.value
+  const d = selectedDef.value
+  const v = Number((e.target as HTMLInputElement).value)
+  if (!f || !d || !Number.isFinite(v)) return
+  resizeFurniture(f.id, axis === 'w' ? v : d.w, axis === 'd' ? v : d.d)
+  // 夹到范围里之后输入框显示实际尺寸
+  ;(e.target as HTMLInputElement).value = String(Math.round(axis === 'w' ? selectedDef.value!.w : selectedDef.value!.d))
+}
+function resetSelectedSize() {
+  const f = selectedFurniture.value
+  const base = selectedDef.value && ASSET_MAP.get(baseAssetId(selectedDef.value.id))
+  if (f && base) resizeFurniture(f.id, base.w, base.d)
+}
+
 /** 选中家具的同类各款（原地换款）：缩略图按家具现在的配色序号画（超出新款的配色数就用第一组） */
 const selectedVariants = computed(() => (selectedDef.value ? sameTypeVariants(selectedDef.value) : []))
 const variantColor = (d: AssetDef) => ((selectedFurniture.value?.color ?? 0) < d.palettes.length ? (selectedFurniture.value?.color ?? 0) : 0)
@@ -4486,6 +4506,14 @@ defineExpose({ resetView })
         <div v-if="selectedSizes.length > 1" class="sizes">
           <button v-for="sz in selectedSizes" :key="sz.id" :class="{ on: sz.id === selectedDef.id }" :title="sz.w + '×' + sz.d + '×' + sz.h" @click="swapSize(sz.id)">{{ variantLabel(sz) }}</button>
         </div>
+        <!-- 自由调宽深（柜、架、衣架、桌）：宽度以中心为准、深度以背面为准 -->
+        <div v-if="selectedRange" class="rot-row" :title="t('宽度以中心为准、深度以背面为准调整')">
+          <span class="rot-label">{{ t('宽') }}</span>
+          <input class="rot-num num" type="number" :min="selectedRange.w[0]" :max="selectedRange.w[1]" step="1" :value="Math.round(selectedDef.w)" :aria-label="t('宽')" @change="resizeSelected('w', $event)" /><span class="rot-unit">cm</span>
+          <span class="rot-label">{{ t('深') }}</span>
+          <input class="rot-num num" type="number" :min="selectedRange.d[0]" :max="selectedRange.d[1]" step="1" :value="Math.round(selectedDef.d)" :aria-label="t('深')" @change="resizeSelected('d', $event)" /><span class="rot-unit">cm</span>
+          <button v-if="selectedResized" class="dim-reset" :title="t('恢复原尺寸')" @click="resetSelectedSize">{{ t('原尺寸') }}</button>
+        </div>
         <!-- 同类换款：位置不动，换成同一类的另一种造型（[ / ] 键轮换） -->
         <div v-if="selectedVariants.length > 1" class="variants">
           <div class="variants-head">
@@ -5869,6 +5897,11 @@ h3 {
   font-size: var(--fs-sm);
   color: var(--text-muted);
   margin-left: -4px;
+}
+.dim-reset {
+  margin-left: auto;
+  height: var(--control-h-sm);
+  font-size: var(--fs-sm);
 }
 .now-row {
   margin-top: -2px;

@@ -324,6 +324,11 @@ export interface AssetDef {
    * 新素材直接在这里写；已有素材的初始标签在 tags.generated.ts，加载时合并。
    */
   tags?: Tag[]
+  /**
+   * 按任意宽深重新搭模型（resize.ts）：给了就用它代替通用的分区拉伸，返回要覆盖的字段（build、surfaces…）。
+   * 结构规整、件数随宽度变的（柜门扇数、抽屉列数）写这个
+   */
+  resize?: (w: number, d: number) => Partial<AssetDef>
 }
 
 /**

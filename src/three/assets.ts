@@ -12,6 +12,7 @@ import { MAT_TABLE } from './matTables'
 import { soft, type SoftFn } from './geo'
 import { applyDims, warnIfDimsStale } from './dims'
 import { DIMS } from './dims.generated'
+import { deriveResized } from './resize'
 import { GENERATED_TAGS } from './tags.generated'
 import { TAXONOMY } from './taxonomy.generated'
 
@@ -1598,7 +1599,16 @@ for (const a of ASSETS) {
 // 尺寸校正：实测比声明大的放大、陷地的抬起（预计算结果见 dims.generated.ts，由 pnpm gen:dims 生成；规则见 dims.ts）
 applyDims(ASSETS, DIMS)
 
-export const ASSET_MAP = new Map(ASSETS.map((a) => [a.id, a]))
+/** 素材表：改过宽深的家具（`原 id@宽x深`，resize.ts）查的时候现场派生，不放进表里（遍历只有原素材） */
+class AssetMap extends Map<string, AssetDef> {
+  override get(id: string) {
+    return super.get(id) ?? (id.includes('@') ? deriveResized(id, (b) => super.get(b)) : undefined)
+  }
+  override has(id: string) {
+    return !!this.get(id)
+  }
+}
+export const ASSET_MAP: Map<string, AssetDef> = new AssetMap(ASSETS.map((a) => [a.id, a]))
 if (import.meta.env.DEV && ASSET_MAP.size !== ASSETS.length) {
   const seen = new Set<string>()
   console.warn('素材 id 重复：', ASSETS.filter((a) => seen.has(a.id) || !seen.add(a.id)).map((a) => a.id))

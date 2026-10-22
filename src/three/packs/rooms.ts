@@ -678,6 +678,8 @@ function railHanger(barY: number, color: string, garment: THREE.Group) {
   sg.add(garment)
   sg.rotation.y = Math.PI / 2
   g.add(sg)
+  // 调宽深时整件衣服跟着挂杆平移，不跟着拉宽（resize.ts）
+  g.userData.rigid = true
   return g
 }
 
