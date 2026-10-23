@@ -72,6 +72,8 @@ interface Compact {
   X?: unknown
   /** 对讲、遥控面板已经接管成家具（Plan.devicesAsFurniture；只在带家具的分享里） */
   D?: 1
+  /** 灯开关已经接管成家具（Plan.switchesAsFurniture） */
+  W?: 1
 }
 
 const ROOM_DECOR = ['wallpaper', 'curtain', 'light', 'lightK', 'ownLights']
@@ -132,6 +134,7 @@ export function toCompact(p: Plan, mode: ShareMode): Compact {
     c.a = table
     if (p.household) c.h = p.household
     if (p.devicesAsFurniture) c.D = 1
+    if (p.switchesAsFurniture) c.W = 1
   }
   return c
 }
@@ -216,6 +219,7 @@ export function fromCompact(c: unknown): Plan {
   if (isObj(o.S)) p.site = o.S as unknown as Plan['site']
   if (isObj(o.X)) p.exterior = o.X as unknown as Plan['exterior']
   if (o.D === 1) p.devicesAsFurniture = true
+  if (o.W === 1) p.switchesAsFurniture = true
   return p
 }
 

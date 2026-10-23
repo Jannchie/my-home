@@ -150,7 +150,9 @@ export function checklist(plan: Plan, hh?: Household): CheckItem[] {
       if (habit(r)) {
         if (region !== 'west') item(r, '空调', count(f, TAGS.aircon), 1, { how: 'aircon' })
         if (windowsOf(plan, r) && r.kind !== 'japanese') item(r, '窗帘', r.curtain === false ? 0 : 1, 1, undefined, r.curtain !== false)
-        item(r, '开关', 1, 1, undefined, true)
+        // 灯开关接管成家具以后（three/wallDevices.ts）按房间里的件数算
+        if (plan.switchesAsFurniture) item(r, '开关', Math.min(1, count(f, 'light-switch')), 1)
+        else item(r, '开关', 1, 1, undefined, true)
       }
       if (r.kind === 'western' || r.kind === 'japanese') {
         item(r, '照明（台灯 / 落地灯）', count(f, TAGS.lamp), 1, { how: 'scatter', sel: ['table-lamp', 'desk-lamp'] })

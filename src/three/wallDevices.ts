@@ -2,7 +2,9 @@
 // LDK 门边的可视对讲 + 热水器遥控（日本住宅的标配位置），浴室门内的浴室遥控，玄关门外的门铃。
 // 默认按门自动摆、画在房子里（house.ts buildWallDevices）。对讲和遥控面板可以「接管」成挂墙家具（素材 packs/wall-devices.ts）：
 // 沙盘里点中自动画的那台，全屋的对讲、遥控面板就按现在的位置换成家具（Plan.devicesAsFurniture），之后和别的壁挂物一样
-// 选中、沿墙拖动、删掉，位置记进存档。手动从素材库摆了同款的，那一款也不再自动画。灯开关、门铃跟着门走，不接管。
+// 选中、沿墙拖动、删掉，位置记进存档。手动从素材库摆了同款的，那一款也不再自动画。
+// 灯开关单独接管：点中任意一个，全屋的灯开关换成家具（Plan.switchesAsFurniture）；开关多，手动摆一个不影响别的门边自动画。
+// 门铃跟着门走，不接管。
 
 import { add, mul, rotFacingWall, uid, type Furniture, type Plan, type Vec } from '../model'
 import { isIndoor } from '../walls'
@@ -23,6 +25,7 @@ export interface WallDeviceSpot {
 
 /** 能接管成家具的设备 → 素材 */
 export const DEVICE_ASSET: Partial<Record<WallDeviceKind, string>> = {
+  switch: 'wd-switch',
   intercom: 'wd-intercom',
   'heater-remote': 'wd-heater-remote',
   'bath-remote': 'wd-bath-remote',
@@ -69,11 +72,18 @@ export function wallDeviceSpots(plan: Plan, infos: OpeningInfo[]): WallDeviceSpo
   return out.filter((s) => !owned.has(s.kind))
 }
 
-/** 不再自动摆的设备：全屋接管了的，或者（这一层）摆了同款家具的 */
+/** 对讲、遥控面板（一起接管，Plan.devicesAsFurniture） */
+const PANEL_KINDS: WallDeviceKind[] = ['intercom', 'heater-remote', 'bath-remote']
+
+/** 不再自动摆的设备：全屋接管了的，或者（这一层）摆了同款对讲、遥控面板的 */
 function ownedDeviceKinds(plan: Plan) {
-  const kinds = Object.keys(DEVICE_ASSET) as WallDeviceKind[]
-  return new Set(plan.devicesAsFurniture ? kinds : kinds.filter((k) => plan.furniture.some((f) => f.asset === DEVICE_ASSET[k])))
+  const out = new Set<WallDeviceKind>(plan.devicesAsFurniture ? PANEL_KINDS : PANEL_KINDS.filter((k) => plan.furniture.some((f) => f.asset === DEVICE_ASSET[k])))
+  if (plan.switchesAsFurniture) out.add('switch')
+  return out
 }
+
+/** 这台自动摆的设备已经全屋接管过了吗（接管过的不会再画出来，这里只是保险） */
+const takenOver = (plan: Plan, kind: WallDeviceKind) => (kind === 'switch' ? !!plan.switchesAsFurniture : !!plan.devicesAsFurniture)
 
 /** 各层不自动摆哪些设备的指纹（接管了、摆了同款家具都会变）：变了房子要重建 */
 export const wallDeviceKey = (plan: Plan) => floorViews(plan).map(({ view }) => [...ownedDeviceKinds(view)].join(',')).join('|')
@@ -88,12 +98,19 @@ function deviceFurniture(s: WallDeviceSpot): Furniture | null {
 }
 
 /**
- * 接管：全屋自动摆的对讲、遥控面板按现在的位置换成挂墙家具（就地改 plan），以后不再自动摆。返回新加的家具。
+ * 接管：点中的是灯开关就把全屋自动摆的灯开关、否则把对讲和遥控面板，按现在的位置换成挂墙家具（就地改 plan），
+ * 以后不再自动摆。返回新加的家具。
  */
-export function takeOverDevices(plan: Plan): Furniture[] {
-  if (plan.devicesAsFurniture) return []
-  const made = perFloorFurniture(plan, (view) => wallDeviceSpots(view, openingInfos(view)).flatMap((s) => deviceFurniture(s) ?? []))
+export function takeOverDevices(plan: Plan, kind: WallDeviceKind): Furniture[] {
+  if (takenOver(plan, kind)) return []
+  const pick = (k: WallDeviceKind) => (kind === 'switch' ? k === 'switch' : PANEL_KINDS.includes(k))
+  const made = perFloorFurniture(plan, (view) =>
+    wallDeviceSpots(view, openingInfos(view))
+      .filter((s) => pick(s.kind))
+      .flatMap((s) => deviceFurniture(s) ?? []),
+  )
   plan.furniture.push(...made)
-  plan.devicesAsFurniture = true
+  if (kind === 'switch') plan.switchesAsFurniture = true
+  else plan.devicesAsFurniture = true
   return made
 }

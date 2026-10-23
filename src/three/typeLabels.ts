@@ -86,6 +86,7 @@ export const TYPE_NAMES: Record<FunctionTag, [zh: string, ja: string, en: string
   intercom: ['对讲机', 'インターホン', 'Intercom'],
   'ceiling-light': ['吸顶灯 / 吊灯', 'シーリングライト / ペンダント', 'Ceiling light'],
   'control-panel': ['遥控面板', 'リモコンパネル', 'Control panel'],
+  'light-switch': ['灯开关', 'スイッチ', 'Light switch'],
   tv: ['电视', 'テレビ', 'TV'],
   hifi: ['HiFi 音响', 'オーディオ', 'Hi-fi'],
   pc: ['台式主机', 'デスクトップ PC', 'Desktop PC'],

@@ -608,6 +608,7 @@ export const ASSET_NAMES: Record<string, [string, string]> = {
   "可折叠": ["折りたたみ", "Foldable"],
   "可视门铃": ["スマートドアベル", "Video doorbell"],
   "可视对讲": ["インターホン", "Video intercom"],
+  "灯开关": ["照明スイッチ", "Light switch"],
   "吊床（带支架）": ["ハンモック（スタンド付き）", "Hammock (with stand)"],
   "吧台推车": ["バーワゴン", "Bar cart"],
   "圆形吸顶灯": ["丸型シーリングライト", "Round ceiling light"],

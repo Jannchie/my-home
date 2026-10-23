@@ -1286,7 +1286,7 @@ const DEVICE_MODELS: Record<WallDeviceKind, () => THREE.Group> = {
 
 /**
  * 自动摆的墙上设备（已经接管成家具的不画）。设备跟着所在的墙一起透明 / 压低。
- * 能接管的（对讲、遥控面板）标上 wallDevice：沙盘里点中它就接管成挂墙家具。
+ * 能接管的（灯开关、对讲、遥控面板）标上 wallDevice：沙盘里点中它就接管成挂墙家具。
  */
 function buildWallDevices(plan: Plan, infos: OpeningInfo[], H: number) {
   const g = new THREE.Group()

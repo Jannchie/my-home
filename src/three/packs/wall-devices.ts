@@ -1,17 +1,23 @@
-// 墙上的设备：可视对讲、热水器遥控面板、浴室遥控面板。默认按门自动摆在房子里（three/wallDevices.ts），
+// 墙上的设备：灯开关、可视对讲、热水器遥控面板、浴室遥控面板。默认按门自动摆在房子里（three/wallDevices.ts），
 // 接管 / 手动摆成这里的挂墙素材后可以选中、沿墙拖动。模型同自动摆的（three/wallDeviceModels.ts），安装高度也一样。
 
 import type { AssetDef } from '../kit'
 import { fitWall } from '../geo'
 import { define } from '../packkit'
-import { bathRemote, intercomMonitor } from '../wallDeviceModels'
+import { bathRemote, intercomMonitor, switchPlate } from '../wallDeviceModels'
 
-// 自动摆时的安装高度 150 / 150 / 110，模型在它上下各半个高：最低点 142.5 / 144 / 104
+// 自动摆时的安装高度 125 / 150 / 150 / 110，模型在它上下各半个高：最低点 119 / 142.5 / 144 / 104
+const SWITCH_MOUNT = 119
 const INTERCOM_MOUNT = 142.5
 const HEATER_MOUNT = 144
 const BATH_MOUNT = 104
 
 export const WALL_DEVICES: AssetDef[] = [
+  define('wd-switch', '灯开关', 'appliance', [7, 2, 12], [['modern', '#f8f6f2']], () => fitWall(switchPlate(), SWITCH_MOUNT, 2), {
+    mount: SWITCH_MOUNT,
+    type: 'light-switch',
+    tags: ['light-switch'],
+  }),
   define('wd-intercom', '可视对讲', 'appliance', [20, 3, 15], [['modern', '#f5f3ee']], () => fitWall(intercomMonitor(), INTERCOM_MOUNT, 3), {
     mount: INTERCOM_MOUNT,
     type: 'intercom',

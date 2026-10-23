@@ -501,6 +501,8 @@ export interface Plan {
   cabinetsAsFurniture?: true
   /** 可视对讲、热水器 / 浴室遥控面板已经接管成挂墙家具（three/wallDevices.ts takeOverDevices）：不再按门自动摆 */
   devicesAsFurniture?: true
+  /** 灯开关已经接管成挂墙家具（同上；开关多、每个门边都有，单独一个标记、单独接管）：不再按门自动摆 */
+  switchesAsFurniture?: true
   name: string
   /** 户内隔墙厚 */
   wall: number

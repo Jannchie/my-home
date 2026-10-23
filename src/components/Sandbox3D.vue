@@ -35,7 +35,7 @@ import { disposeUnshared, isReflector } from '../three/toon'
 import { isWallMounted, poseDoors } from '../three/kit'
 import { drawerSlots } from '../three/drawers'
 import { Openers, doorIdOf, type OpenKey } from '../three/openers'
-import { takeOverDevices, wallDeviceKey } from '../three/wallDevices'
+import { takeOverDevices, wallDeviceKey, type WallDeviceKind } from '../three/wallDevices'
 import { drawerContents, slideOffset } from '../cabinet'
 import { useThumbs } from '../three/thumbs'
 import { normalizeColor, paletteStyleOf } from '../three/stylePalettes'
@@ -4003,10 +4003,10 @@ const selectedRoom = computed(() => {
 })
 /** 3D 里选中的可开合柜子（有柜门 / 抽屉）：浮出柜门开关卡片 */
 const selectedOpenable = computed(() => (selectedFurniture.value && selectedDef.value?.openable ? selectedFurniture.value : null))
-/** 屏幕坐标处自动摆的墙上设备（可视对讲、遥控面板，three/wallDevices.ts）的命中点；被墙、门挡住的不算 */
-function pickWallDevice(e: { clientX: number; clientY: number }) {
+/** 屏幕坐标处自动摆的墙上设备（灯开关、可视对讲、遥控面板，three/wallDevices.ts）：种类和命中点；被墙、门挡住的不算 */
+function pickWallDevice(e: { clientX: number; clientY: number }): { kind: WallDeviceKind; at: THREE.Vector3 } | null {
   // 全屋都接管了就没有自动摆的了（悬停时省掉一次整栋房子的射线检测）
-  if (walking.value || !editing.value || blueprint.on || plan.value.devicesAsFurniture) return null
+  if (walking.value || !editing.value || blueprint.on || (plan.value.devicesAsFurniture && plan.value.switchesAsFurniture)) return null
   const house = floorGroups.find((g) => g.floor.id === activeFloor.value)?.group
   if (!house) return null
   setRay(e as PointerEvent)
@@ -4014,14 +4014,14 @@ function pickWallDevice(e: { clientX: number; clientY: number }) {
     if (!(h.object as THREE.Mesh).isMesh || !shown(h.object, true)) continue
     let o: THREE.Object3D | null = h.object
     while (o && !o.userData.wallDevice) o = o.parent
-    if (o) return h.point.clone()
+    if (o) return { kind: o.userData.wallDevice as WallDeviceKind, at: h.point.clone() }
     if (opaqueHit(h)) return null
   }
   return null
 }
 /**
  * 点中自动摆的东西就接管成家具（一步撤销），选中离点的位置最近的那件，返回有没有接管：
- *   - 墙上设备：全屋的对讲、遥控面板换成挂墙家具（three/wallDevices.ts）；
+ *   - 墙上设备：全屋的灯开关，或者全屋的对讲、遥控面板换成挂墙家具（three/wallDevices.ts）；
  *   - 房间主灯（吸顶灯 / 吊灯，前面没挡着门窗、设备时）：这个房间的主灯换成灯具家具（lights.ts takeOverRoomLights）。
  * 之后能拖着挪、换款、删掉，也能从素材库再摆。
  */
@@ -4034,14 +4034,17 @@ function tryTakeOver(e: { clientX: number; clientY: number }, houseHit: boolean)
   }
   if (!dev && !main) return false
   // 点的位置：设备是命中点；灯投到天花板下灯具那个高度再比远近（斜着看时地面交点离灯很远）
-  const at = dev ?? raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -(activeY() + fullH.value - 15)), new THREE.Vector3())
+  const at = dev?.at ?? raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -(activeY() + fullH.value - 15)), new THREE.Vector3())
   let made: Furniture[] = []
   mutate((plan) => {
-    made = dev ? takeOverDevices(plan) : takeOverRoomLights(plan, main!.roomId, main!.specs)
+    made = dev ? takeOverDevices(plan, dev.kind) : takeOverRoomLights(plan, main!.roomId, main!.specs)
   })
   if (!made.length) return false
+  // 只在当前楼层里挑（各层的灯开关常常上下对齐）
+  const here = made.filter((f) => floorOf(plan.value, f) === activeFloor.value)
+  const pool = here.length ? here : made
   const d = (f: Furniture) => (at ? Math.hypot(f.x - at.x, f.y - at.z) : 0)
-  selection.value = { type: 'furniture', id: made.reduce((a, b) => (d(b) < d(a) ? b : a)).id }
+  selection.value = { type: 'furniture', id: pool.reduce((a, b) => (d(b) < d(a) ? b : a)).id }
   return true
 }
 /** 屏幕坐标处的天花板灯具 → 房间 id */

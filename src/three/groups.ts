@@ -165,6 +165,7 @@ const TYPE_GROUP: Record<FunctionTag, AssetGroup> = {
   intercom: 'appliance',
   'ceiling-light': 'lighting',
   'control-panel': 'appliance',
+  'light-switch': 'appliance',
   'rice-cooker': 'appliance',
   kettle: 'appliance',
   'electric-kettle': 'appliance',

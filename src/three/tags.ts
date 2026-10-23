@@ -98,6 +98,7 @@ export const DEVICE_TAGS = [
   'aircon',
   'intercom', // 可视对讲室内机、门铃室内机
   'control-panel', // 墙上的热水器 / 浴室遥控面板
+  'light-switch', // 墙上的灯开关
   'tv',
   'hifi',
   'pc', // 台式主机
