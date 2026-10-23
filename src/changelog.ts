@@ -12,6 +12,27 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '1.17.0',
+    date: '2026-10-23',
+    notes: {
+      zh: [
+        '每一面墙都可以单独选中（平面图里点墙边，3D 沙盘里点墙面）：给这面墙单独换墙纸，或者跟随房间',
+        '墙上可以加内收柱：沿墙顶部横着走的梁，可以调长度、从天花往下垂的高度、往室内突出的深度和沿墙的位置',
+        '门边的灯开关可以挪位置了：在 3D 沙盘里点任意一个开关，全屋的开关就变成挂墙家具，之后能沿墙拖动、删掉，也能从素材库再摆',
+      ],
+      ja: [
+        '壁を 1 面ずつ選べるように（間取り図では壁の辺を、3D ジオラマでは壁面をクリック）：その壁だけ壁紙を変えたり、部屋に合わせたりできます',
+        '壁に梁の出っ張りを追加できるように：壁の上端に沿って走る梁で、長さ、天井から下がる高さ、室内への出幅、壁に沿った位置を調整できます',
+        'ドア横の照明スイッチを動かせるように：3D ジオラマでどれか 1 つをクリックすると家中のスイッチが壁掛け家具になり、壁に沿ってドラッグしたり削除したり、素材ライブラリから追加したりできます',
+      ],
+      en: [
+        'Each wall can be selected on its own (click the wall edge in the floor plan, or the wall face in the 3D diorama) to give it its own wallpaper or follow the room',
+        "Walls can have a beam: it runs along the top of the wall, with adjustable length, drop from the ceiling, depth into the room and position along the wall",
+        'Light switches by the doors can now be moved: click any switch in the 3D diorama and every switch in the house becomes wall-mounted furniture you can drag along the wall, delete, or add again from the asset library',
+      ],
+    },
+  },
+  {
     version: '1.16.0',
     date: '2026-10-22',
     notes: {
