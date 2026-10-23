@@ -11,6 +11,7 @@ import { carSize } from '../three/exterior'
 import { carChoice, carLabel, parkingIndex, parkingTarget, siteTargets, targetTitle, targetValid, type SiteTarget } from '../siteEdit'
 import SiteEditor from './SiteEditor.vue'
 import OpeningEditor from './OpeningEditor.vue'
+import WallEditor from './WallEditor.vue'
 import { openingFrame } from '../three/openingPick'
 import { findFixtureModel, firstHouseHit, fixtureFrame, furnitureLimit, type HouseHit, type HouseHitKind } from '../three/fixturePick'
 import FixtureEditor from './FixtureEditor.vue'
@@ -71,15 +72,16 @@ import { SIZE_LABELS, assetName, browse, canHang, cardName, displayName, groupsO
 import { typeLabel } from '../three/typeLabels'
 import { INTERESTS, KIND_LABELS, LV_LABELS, ROLE_LABELS, TRAITS, describe, levelOf, memberRooms } from '../household'
 import { checklist, missing } from '../checklist'
-import { accentOf } from '../wallpaper'
+import { patternWallpaper, WP_COLORS, WP_PATTERNS } from '../wallpaper'
 import { trimPreview } from '../ui/trimPreview'
 import { patternPreview } from '../three/fabric'
 import type { PatternKind } from '../three/patterns'
 import { isTyping } from '../dom'
 import { lang, roomName, t, tAuto, tSoft } from '../i18n'
-import { FACADE_KINDS, FENCE_KINDS, FIXTURES, OPENING_LABELS, ROOF_KINDS, area as polygonArea, bbox, centroid, edgesOf, pointInPolygon, houseFlooring, isWoodFloor, roomFlooring, roomWallpaper, WOOD_TONES, type Furniture, type Plan, type Room, type Wallpaper, type WallTrim, type WoodTone } from '../model'
+import { FACADE_KINDS, FENCE_KINDS, FIXTURES, OPENING_LABELS, ROOF_KINDS, add, area as polygonArea, bbox, centroid, edgeInfo, edgesOf, mul, pointInPolygon, projectToSegment, houseFlooring, isWoodFloor, roomFlooring, roomWallpaper, WOOD_TONES, type Furniture, type Plan, type Room, type Wallpaper, type WallTrim, type WoodTone } from '../model'
 import { roomStyles } from '../decorate'
 import { wallThicknessAt } from '../walls'
+import { beamsOf, edgeNear } from '../wallFace'
 import {
   addFurniture,
   checkpoint,
@@ -131,6 +133,7 @@ import {
   replacePlan,
   type FxMode,
 } from '../store'
+import type { Selection as PlanSelection } from '../store'
 
 const host = ref<HTMLDivElement>()
 const canvas = ref<HTMLCanvasElement>()
@@ -968,6 +971,7 @@ function rebuildHouse() {
   prewarmFloorFade()
   // 房子重搭了（改外观、围挡、车都会）：选中高亮套到新模型上
   applySiteHi()
+  applyWallHi()
   dirty = true
 }
 /** 家具模型的缓存键：素材 + 配色 + 单件改色 + 花纹 + 画面（开合不在内） */
@@ -1928,9 +1932,10 @@ function onTouchUp(e: PointerEvent) {
   if (pr && !pr.moved && !pr.long && e.type !== 'pointercancel') {
     if (!pr.hitId && tryTakeOver(e, !!pr.house)) return
     const rid = pr.hitId || pr.house ? null : pickLightRoom(e)
-    selection.value = pr.hitId ? { type: 'furniture', id: pr.hitId } : pr.house ? houseSel(pr.house) : rid ? { type: 'room', id: rid } : null
-    // 点在车、围挡（外观视图下屋顶、外墙）上：选中它，旁边浮出编辑卡片
-    selectSite(pr.hitId || pr.house || rid ? null : pickSite(e))
+    // 点在车、围挡（外观视图下屋顶、外墙）上：选中它，旁边浮出编辑卡片；都不是就看点没点在墙面上
+    const site = pr.hitId || pr.house || rid ? null : pickSite(e)
+    selection.value = pr.hitId ? { type: 'furniture', id: pr.hitId } : pr.house ? houseSel(pr.house) : rid ? { type: 'room', id: rid } : site ? null : pickWallSel(e)
+    selectSite(site)
   }
 }
 
@@ -2570,9 +2575,10 @@ function onPointerUp(e: PointerEvent) {
   } else if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 4) {
     // 点在门窗 / 设备上：选中它（和平面图是同一个选中），旁边浮出编辑卡片
     const h = pickAt(e).house
-    selection.value = h ? houseSel(h) : null
-    // 点在车、围挡（外观视图下屋顶、外墙）上：选中它，旁边浮出编辑卡片；点空处取消
-    selectSite(h ? null : pickSite(e))
+    // 点在车、围挡（外观视图下屋顶、外墙）上：选中它，旁边浮出编辑卡片；都不是就看点没点在墙面上（墙纸、内收柱），点空处取消
+    const site = h ? null : pickSite(e)
+    selection.value = h ? houseSel(h) : site ? null : pickWallSel(e)
+    selectSite(site)
   }
   down = null
 }
@@ -2898,8 +2904,6 @@ function setWp(wp: Wallpaper | undefined) {
   if (wpRoom.value) setRoomWallpaper(wpRoom.value.id, wp)
   else setHouseWallpaper(wp)
 }
-const WP_COLORS = ['#fbf7f1', '#f2f2f0', '#fff4f1', '#f3f8ff', '#f4fbf6', '#fff9e8', '#f6f0e1', '#e6e6e4', '#d6d3cd', '#f4e7c8', '#dfe8f0', '#3d3f44']
-const WP_PATTERNS: PatternKind[] = ['stripes', 'dots', 'gingham', 'flowers', 'sakura', 'stars', 'asanoha', 'seigaiha', 'ichimatsu', 'chevron', 'houndstooth', 'argyle']
 /** 边饰预设：颜色用 trimColor */
 const TRIM_COLORS = ['#f4f1ea', '#d2b48c', '#b98b5e', '#7a5638', '#3d3f44', '#c9d6cf']
 const trimColor = ref('#f4f1ea')
@@ -2922,8 +2926,7 @@ const trimThumb = (id: string) => trimPreview(TRIMS.find((x) => x.id === id)!.ma
 
 /** 用当前墙纸的底色织一张花纹墙纸（低对比） */
 function wpPattern(kind: PatternKind) {
-  const base = curWp.value?.color ?? '#fbf7f1'
-  return { color: base, trim: curWp.value?.trim, pattern: { kind, colors: [base, accentOf(base), accentOf(base, 0.04)], scale: kind === 'stripes' ? 16 : 12, angle: kind === 'stripes' ? (90 as const) : (0 as const), density: 0.3, seed: 7 } }
+  return patternWallpaper(kind, curWp.value?.color ?? '#fbf7f1', curWp.value?.trim)
 }
 
 /** 地板：全屋，或木地板房间（瓷砖、榻榻米的房间不能选） */
@@ -3754,6 +3757,88 @@ watch(
     dirty = true
   },
 )
+// ---------- 墙面的选中（布置模式）：点墙面（或墙顶的内收柱 / 梁）选中房间里的那一面墙，旁边浮出墙纸 / 内收柱卡片 ----------
+/** 选中墙面时点中的位置（卡片挨着它）；wallAnchorKey 记是哪面墙的（从平面图选中的没有点中位置，取墙面中点） */
+let wallAnchor: THREE.Vector3 | null = null
+let wallAnchorKey = ''
+/**
+ * 屏幕坐标处点中的墙面：射线最先碰到的不透明面要是墙的竖直面（或内收柱 / 梁的任一面），
+ * 沿面的法线往外探一点落在哪个房间，就是那间房朝里的这一面墙；房间里离命中点最近、和墙面平行的边就是它。
+ */
+function pickWallSel(e: { clientX: number; clientY: number }): PlanSelection {
+  wallAnchor = null
+  if (walking.value || !editing.value || blueprint.on) return null
+  const g = floorGroups.find((x) => x.floor.id === activeFloor.value)?.group
+  if (!g) return null
+  setRay(e as PointerEvent)
+  const h = raycaster.intersectObject(g, true).find((x) => (x.object as THREE.Mesh).isMesh && shown(x.object, true) && opaqueHit(x))
+  if (!h?.face || !h.object.userData.fade || h.object.userData.wall === undefined) return null
+  const n = h.face.normal.clone().transformDirection(h.object.matrixWorld)
+  const nv = { x: n.x, y: n.z }
+  const p = { x: h.point.x, y: h.point.z }
+  const view = fv()
+  // 先看是不是点在内收柱（梁）上：底面、正面、两个端面都算它所在的那面墙；梁底以外的水平面（墙顶）不算
+  const bm = n.y < 0.5 ? beamsOf(view).find((x) => pointInPolygon(p, x.poly) || x.poly.some((q, i) => projectToSegment(p, q, x.poly[(i + 1) % 4]).d < 1)) : undefined
+  let pick: { roomId: string; edge: number } | null = bm ? { roomId: bm.room.id, edge: bm.edge } : null
+  if (!pick && Math.abs(n.y) > 0.5) return null
+  if (!pick) {
+    const r = roomAt(view, { x: p.x + nv.x * 6, y: p.y + nv.y * 6 })
+    if (!r || r.kind === 'void') return null
+    const edge = edgeNear(r, p, { x: -nv.y, y: nv.x }, view.wallOuter / 2 + 4)
+    if (edge < 0) return null
+    pick = { roomId: r.id, edge }
+  }
+  wallAnchor = h.point.clone()
+  wallAnchorKey = `${pick.roomId}:${pick.edge}`
+  return { type: 'wall', ...pick }
+}
+const selectedWall = computed(() => {
+  const s = selection.value
+  if (s?.type !== 'wall') return null
+  const r = plan.value.rooms.find((x) => x.id === s.roomId)
+  return r && s.edge < r.points.length ? { room: r, edge: s.edge } : null
+})
+const wallCard = ref<HTMLDivElement>()
+const wallTitle = computed(() => (selectedWall.value ? `${t('墙面')} · ${roomName(selectedWall.value.room.name)}` : ''))
+watch(
+  () => selectedWall.value && `${selectedWall.value.room.id}:${selectedWall.value.edge}`,
+  () => {
+    if (wallCard.value) wallCard.value.style.visibility = ''
+    applyWallHi()
+  },
+)
+/** 选中墙面的高亮：沿这面墙的墙脚在地面上画一道亮色条（墙压低、让开时也看得见） */
+let wallHi: THREE.Mesh | null = null
+function applyWallHi() {
+  if (wallHi) {
+    wallHi.removeFromParent()
+    wallHi.geometry.dispose()
+    ;(wallHi.material as THREE.Material).dispose()
+    wallHi = null
+  }
+  dirty = true
+  const w = selectedWall.value
+  const g = floorGroups.find((x) => x.floor.id === activeFloor.value)?.group
+  if (!w || !g || !editing.value || walking.value) return
+  const room = toRaw(w.room)
+  const e = edgeInfo(room.points, w.edge)
+  const t2 = wallThicknessAt(toRaw(plan.value), mul(add(e.a, e.b), 0.5), e.out, room) / 2
+  const c = add(mul(add(e.a, e.b), 0.5), mul(e.out, -(t2 + 4)))
+  wallHi = new THREE.Mesh(new THREE.BoxGeometry(e.length, 0.6, 8), new THREE.MeshBasicMaterial({ color: '#f0a040', transparent: true, opacity: 0.85, depthWrite: false }))
+  wallHi.position.set(c.x, floorY(room) + 0.8, c.y)
+  wallHi.rotation.y = Math.atan2(-e.dir.y, e.dir.x)
+  wallHi.renderOrder = 5
+  wallHi.raycast = () => {}
+  g.add(wallHi)
+  wallHi.updateMatrixWorld(true)
+  const key = `${room.id}:${w.edge}`
+  if (wallAnchorKey !== key || !wallAnchor) {
+    wallAnchorKey = key
+    wallAnchor = g.localToWorld(new THREE.Vector3(c.x, floorY(room) + fullH.value / 2, c.y))
+  }
+}
+watch(() => [editing.value, walking.value] as const, applyWallHi)
+
 // ---------- 外观对象的选中（布置模式）：点车、围挡（外观视图下还有屋顶、外墙）选中它，旁边浮出编辑卡片 ----------
 /** 选中的外观对象；和家具 / 房间的选中互斥 */
 const siteSel = ref<SiteTarget | null>(null)
@@ -3838,6 +3923,7 @@ function placeSiteCard() {
   placeCardAt(siteCard.value, siteAnchor)
   placeCardAt(openingCard.value, houseAnchor)
   placeCardAt(fixtureCard.value, houseAnchor)
+  placeCardAt(wallCard.value, wallAnchor)
 }
 function placeCardAt(el: HTMLElement | undefined, anchor: THREE.Vector3 | null) {
   const cv = canvas.value
@@ -4279,6 +4365,25 @@ defineExpose({ resetView })
           <button class="icon-only lc-close" :title="t('关闭') + ' (Esc)'" :aria-label="t('关闭')" @click="selection = null"><JIcon :icon="ICONS.close" :size="14" /></button>
         </div>
         <FixtureEditor :key="selectedFixture.id" :fixture="selectedFixture" variant="card" />
+      </div>
+      <!-- 点中的墙面：这面墙的墙纸、内收柱（和平面图检查器同一套 WallEditor）；手机上停在底部抽屉上方 -->
+      <div
+        v-if="selectedWall && editing && !walking && !blueprint.on"
+        ref="wallCard"
+        class="light-card site-card opening-card"
+        :class="{ anchored: siteCardAnchored }"
+        role="dialog"
+        :aria-label="wallTitle"
+        :style="{ bottom: device.compact && !device.landscape ? 'calc(var(--sheet-h, 0px) + 10px)' : undefined }"
+        @pointerdown.stop
+        @wheel.stop
+      >
+        <div class="lc-head">
+          <JIcon :icon="ICONS.wallFace" class="ico-muted" />
+          <b>{{ wallTitle }}</b>
+          <button class="icon-only lc-close" :title="t('关闭') + ' (Esc)'" :aria-label="t('关闭')" @click="selection = null"><JIcon :icon="ICONS.close" :size="14" /></button>
+        </div>
+        <WallEditor :key="selectedWall.room.id + ':' + selectedWall.edge" :room="selectedWall.room" :edge="selectedWall.edge" />
       </div>
       <div v-if="!plan.rooms.length" class="empty">{{ t('还没有房间。先去 2D 平面图画一个，或者点「随机生成」。') }}</div>
       <div v-if="!device.compact" class="hud">

@@ -4,6 +4,7 @@ import { migrateAppliances } from './appliance'
 import { migrateCabinets, migrateOpenForms, setOpen } from './cabinet'
 import { applyFixesHouse, decorateHouse, roomStyles } from './decorate'
 import { autoWallpapers } from './wallpaper'
+import { mergeWallFaces, normalizeWallFaces, patchWallFace, splitWallFace } from './wallFace'
 import type { CheckItem } from './checklist'
 import { generateHousehold } from './household'
 import { carriedBy } from './surface'
@@ -20,7 +21,7 @@ import { ensureOutdoorUnits as ensureOutdoorUnits1, indoorUnits, planArea, rando
 import { generatePlan } from './generate-region'
 import { lang, t } from './i18n'
 import { initialRoute } from './router'
-import { edgeInfo, emptyPlan, projectToSegment, type Fixture, type FixtureKind, type Floor, type Flooring, type Furniture, type Opening, type Plan, type Room, type Vec, type Wallpaper, type Exterior, type ParkingSpot, type Site, uid } from './model'
+import { edgeInfo, emptyPlan, projectToSegment, type Fixture, type FixtureKind, type Floor, type Flooring, type Furniture, type Opening, type Plan, type Room, type Vec, type WallFace, type Wallpaper, type Exterior, type ParkingSpot, type Site, uid } from './model'
 import { makeRoomForPorch, normalizeExterior, styleExterior } from './exterior'
 import { normalizeWindow } from './windows'
 import { normalizeDoor } from './doorStyles'
@@ -36,6 +37,8 @@ export type Selection =
   | { type: 'fixture'; id: string }
   | { type: 'furniture'; id: string }
   | { type: 'vertex'; roomId: string; index: number }
+  /** 一面墙：房间 roomId 的第 edge 条边朝房间里的那一面（墙纸、内收柱见 wallFace.ts） */
+  | { type: 'wall'; roomId: string; edge: number }
   | null
 
 const STORAGE_KEY = 'my-home:plan'
@@ -72,6 +75,8 @@ export function normalizePlan(p: Plan): Plan | null {
       else delete r.lightK
     }
     if (r.ownLights !== undefined && r.ownLights !== true) delete r.ownLights
+    // 单面墙的墙纸 / 内收柱：坏数据去掉，柱子夹到墙内
+    normalizeWallFaces(r)
   }
   for (const f of p.furniture) if (f.light !== undefined && f.light !== 'on' && f.light !== 'off') delete f.light
   for (const f of p.furniture) if (f.art !== undefined && (typeof f.art !== 'string' || !f.art)) delete f.art
@@ -181,7 +186,7 @@ function selectionFloor(): string | null {
     const o = p.openings.find((x) => x.id === s.id)
     return o ? floorOf(p, findRoom(o.roomId) ?? {}) : null
   }
-  const item = s.type === 'room' ? findRoom(s.id) : s.type === 'vertex' ? findRoom(s.roomId) : s.type === 'fixture' ? findFixture(s.id) : findFurniture(s.id)
+  const item = s.type === 'room' ? findRoom(s.id) : s.type === 'vertex' || s.type === 'wall' ? findRoom(s.roomId) : s.type === 'fixture' ? findFixture(s.id) : findFurniture(s.id)
   return item ? floorOf(p, item) : null
 }
 
@@ -600,6 +605,10 @@ function validateSelection() {
     const r = findRoom(s.roomId)
     if (!r || s.index >= r.points.length) selection.value = null
   }
+  if (s.type === 'wall') {
+    const r = findRoom(s.roomId)
+    if (!r || s.edge >= r.points.length) selection.value = null
+  }
 }
 
 export function undo() {
@@ -732,6 +741,7 @@ export function removeVertex(r: Room, i: number) {
   const ops = plan.value.openings
   plan.value.openings = ops.filter((o) => o.roomId !== r.id || !gone.has(o.edge))
   for (const o of plan.value.openings) if (o.roomId === r.id && o.edge > i) o.edge--
+  mergeWallFaces(r, i)
   r.points.splice(i, 1)
 }
 
@@ -747,6 +757,7 @@ export function insertVertex(r: Room, k: number, p: Vec) {
       o.offset -= split
     }
   }
+  splitWallFace(r, k, split)
   r.points.splice(k + 1, 0, p)
 }
 
@@ -1003,6 +1014,14 @@ export function restyle(roomId: string | null, style: StyleTag | 'auto' | 'rando
 }
 
 /** 全屋墙纸（没设自己墙纸的房间都用它）；undefined = 回到默认的米白墙 */
+/** 改一面墙的设置（墙纸覆盖 / 内收柱），一步撤销；字段给 undefined 就删掉 */
+export function setWallFace(roomId: string, edge: number, patch: Partial<WallFace>) {
+  mutate((p) => {
+    const r = p.rooms.find((x) => x.id === roomId)
+    if (r && edge < r.points.length) patchWallFace(r, edge, patch)
+  })
+}
+
 export function setHouseWallpaper(wp: Wallpaper | undefined) {
   mutate((p) => {
     if (wp) p.wallpaper = wp

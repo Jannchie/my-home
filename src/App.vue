@@ -395,6 +395,7 @@ const selLabel = computed(() => {
   if (!s) return ''
   if (s.type === 'room') return roomName(findRoom(s.id)?.name ?? '')
   if (s.type === 'vertex') return t('顶点')
+  if (s.type === 'wall') return `${t('墙面')} · ${roomName(findRoom(s.roomId)?.name ?? '')}`
   if (s.type === 'fixture') {
     const f = findFixture(s.id)
     return f ? t(FIXTURES[f.kind].label) : ''
@@ -555,7 +556,7 @@ onBeforeUnmount(() => {
           <span class="sel-name">{{ selLabel }}</span>
           <button v-if="selection?.type === 'fixture'" class="icon-only" :title="t('旋转 90°')" :aria-label="t('旋转 90°')" @click="rotateSelectedFixture()"><JIcon :icon="ICONS.rotateCw" /></button>
           <button v-if="selection?.type === 'room'" class="icon-only" :title="t('复制')" :aria-label="t('复制')" @click="duplicateSelection()"><JIcon :icon="ICONS.duplicate" /></button>
-          <button class="icon-only danger" :title="t('删除')" :aria-label="t('删除')" @click="deleteSelection()"><JIcon :icon="ICONS.delete" /></button>
+          <button v-if="selection?.type !== 'wall'" class="icon-only danger" :title="t('删除')" :aria-label="t('删除')" @click="deleteSelection()"><JIcon :icon="ICONS.delete" /></button>
           <button class="props-btn" @click="sheet2d = 'half'"><JIcon :icon="ICONS.generateOptions" />{{ t('属性') }}</button>
         </div>
       </div>

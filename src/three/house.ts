@@ -30,6 +30,7 @@ import { addPileFringe } from './fringe'
 import { drawPlanks, PLANK_TILE } from './woodGrain'
 import { isIndoor, sharedIntervals, voidRailSegments, wallSegments, wallThicknessAt, type WallSegment } from '../walls'
 import { tatamiLayout } from '../tatami'
+import { beamsOf, edgeNear, faceWallpaper } from '../wallFace'
 import { doorColor, doorHandleOf, doorStyled, handleColor, hasSidelight, hasTransom, LEGACY_DOOR, LEGACY_ENTRANCE, LEGACY_SLIDING, sidelightWidth, TRANSOM_TOP } from '../doorStyles'
 import { doorLeafModel, liteModel } from './doorModels'
 import { barnPose, defaultDoorOpen, foldCount, foldLeaves, foldPose, slidingPose, swingPose } from '../doorMotion'
@@ -857,11 +858,13 @@ function buildWalls(plan: Plan, H0: number, infos: OpeningInfo[], opts: HouseOpt
           ? H0 + opts.under.extra
           : H0
     const bot = Math.min(0, sideY(1), sideY(-1))
-    // 墙纸：+z 面（朝 (-dir.y, dir.x)）和 -z 面分别取那一侧房间的墙纸
+    // 墙纸：+z 面（朝 (-dir.y, dir.x)）和 -z 面分别取那一侧房间的墙纸；那间房的这条边单独设了墙纸（Room.walls）就用它
     const n0 = { x: -dir.y, y: dir.x }
     const wp = (k: number) => {
       const r = roomAt(plan, add(mid, mul(n0, k * (t / 2 + 5))))
-      return (r && roomWallpaper(plan, r)) ?? null
+      if (!r) return null
+      const e = r.walls ? edgeNear(r, mid, dir, 1) : -1
+      return (e >= 0 ? faceWallpaper(plan, r, e) : roomWallpaper(plan, r)) ?? null
     }
     const papers: [Wallpaper | null, Wallpaper | null] = [wp(1), wp(-1)]
     const k = `${kind}|${n.x.toFixed(3)},${n.y.toFixed(3)}|${bot}|${H}|${JSON.stringify(papers)}`
@@ -947,6 +950,8 @@ function buildWalls(plan: Plan, H0: number, infos: OpeningInfo[], opts: HouseOpt
     return self.t / 2 - 0.1
   }
   const railSegs = opts.upper ? voidRailSegments(plan.rooms) : []
+  /** 每段墙的合批参数（内收柱 / 梁挂到所在墙段的桶里） */
+  const segBucket: { mid: Vec; n: Vec; outer: boolean; bottom: number; H: number }[] = []
   for (const s of segs) {
     const { outer, t, n, H } = s
     isOuter = outer
@@ -1011,8 +1016,33 @@ function buildWalls(plan: Plan, H0: number, infos: OpeningInfo[], opts: HouseOpt
       put(wallPiece(at(cur), at(end), t, bottom, H, outer, true, n, faces))
       stub(at(cur), at(end), t)
     }
+    segBucket.push({ mid, n, outer, bottom, H })
     bucketPieces(buckets, segIdx++, pieces, mid, n, outer, statics)
     pieces = []
+  }
+  // 内收柱（梁）：沿墙顶部横着走、从天花往下垂的梁，侧面和底面贴这面墙的墙纸；
+  // 挂进所在墙段的合批（让开时一起变透明；压低时按自己的 { y0, h } 缩放，墙压到梁底以下梁就整根藏起来）
+  for (const bi of beamsOf(plan)) {
+    const si = segs.findIndex((sg) => projectToSegment(bi.at, sg.a, sg.b).d < 1 && Math.abs(unit(sg).x * bi.dir.y - unit(sg).y * bi.dir.x) < 1e-3)
+    const sb = segBucket[si]
+    if (!sb) continue
+    const paper = faceWallpaper(plan, bi.room, bi.edge)
+    const side = paper ? wallpaperMaterial(paper) : wallMat(false)
+    // 梁身从墙面里 0.5 起（压进墙一点，交接处没有缝），突出 d；顶面贴着天花（墙顶）
+    const d0 = bi.t / 2 - 0.5
+    const depth = bi.beam.d + 0.5
+    const h = Math.min(bi.beam.h, sb.H - sb.bottom - 1)
+    const y0 = sb.H - h
+    const geo = new THREE.BoxGeometry(bi.beam.w, h, depth)
+    const m = boxMesh(geo, [side, side, capMat(), side, side, side])
+    const c = add(bi.at, mul(bi.inward, d0 + depth / 2))
+    m.position.set(c.x, y0 + h / 2, c.y)
+    m.rotation.y = Math.atan2(-bi.dir.y, bi.dir.x)
+    m.castShadow = true
+    m.receiveShadow = true
+    tagFade(m, c, sb.n, sb.outer)
+    m.userData.wall = { y0, h }
+    bucketPieces(buckets, si, [m], sb.mid, sb.n, sb.outer, statics)
   }
   flushWallBuckets(g, buckets)
   // 墙脚细线、地面下的窗台：从不单独让开，按投影设置各并成一个网格
@@ -1462,8 +1492,10 @@ function buildTrims(plan: Plan, infos: OpeningInfo[], H: number) {
     return gg
   }
   for (const room of plan.rooms) {
-    const tr: WallTrim | undefined = roomWallpaper(plan, room)?.trim
-    if (!tr || !isIndoor(room)) continue
+    if (!isIndoor(room)) continue
+    // 边饰按每面墙的墙纸取（单面墙可以有自己的墙纸 / 边饰，见 wallFace.ts）
+    const trims: (WallTrim | undefined)[] = room.points.map((_, i) => faceWallpaper(plan, room, i)?.trim)
+    if (!trims.some(Boolean)) continue
     const es = roomEdges(room.points)
     const n = es.length
     const half = es.map((e) => wallThicknessAt(plan, mul(add(e.a, e.b), 0.5), e.out, room) / 2)
@@ -1484,6 +1516,8 @@ function buildTrims(plan: Plan, infos: OpeningInfo[], H: number) {
       return es[i].dir.x * p.out.x + es[i].dir.y * p.out.y > 0.5
     }
     es.forEach((e, i) => {
+      const tr = trims[i]
+      if (!tr) return
       const s0 = corner(i)
       const s1 = corner((i + 1) % n)
       const along = (p: Vec) => (p.x - e.a.x) * e.dir.x + (p.y - e.a.y) * e.dir.y

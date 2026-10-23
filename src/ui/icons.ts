@@ -230,6 +230,7 @@ export const ICONS = {
   wallpaperRandom: IconShuffle,
   wallpaperDefault: IconReset,
   trim: IconWallTrim, // 新增：边饰（踢脚线 / 腰壁 / 护墙板 / 顶角线）
+  wallFace: IconWall, // 选中的一面墙（墙纸、内收柱）
   curtain: IconCurtain, // 新增
   // 检查清单
   checklist: IconListCheck,

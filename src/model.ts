@@ -70,6 +70,26 @@ export interface Room {
   floor?: string
   /** 这间的地板（只对木地板房间有用），覆盖全屋的 Plan.flooring；不填 = 跟随全屋 */
   flooring?: Flooring
+  /** 各面墙（按边号：points[i] → points[i+1]）单独的设置：墙纸覆盖、内收柱；没设的边是 null，全没设就不写（见 wallFace.ts） */
+  walls?: (WallFace | null)[]
+}
+
+/**
+ * 房间里某一面墙（房间的一条边朝里的那一面）单独的设置：
+ *   wallpaper 这面墙自己的墙纸，覆盖房间 / 全屋的；不填 = 跟随房间
+ *   beam      内收柱（梁）：沿墙顶部横着走、从天花往下垂、往室内突出的梁（日本公寓常见的「梁の出っ張り」）
+ */
+export interface WallFace {
+  wallpaper?: Wallpaper
+  beam?: WallBeam
+}
+
+/** 内收柱（梁）：w 沿墙方向的长、d 从墙面往室内突出的深、h 从天花往下垂的高（cm）；offset 梁中心到这条边起点的距离 */
+export interface WallBeam {
+  w: number
+  d: number
+  h: number
+  offset: number
 }
 
 /** 木地板的色调：natural = 按房间类型的原木色（旧存档的样子） */

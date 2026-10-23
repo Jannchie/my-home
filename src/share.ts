@@ -3,17 +3,18 @@
 // payload = 版本号（1 个字符）+ base64url(deflate-raw(紧凑 JSON))，压缩用浏览器原生 CompressionStream（Node 18+ 也有）。
 // 紧凑 JSON（版本 1）：
 //   { n 名字, w 内墙厚, o 外墙厚, g? 地区, N? 朝向,
-//     r 房间 [[名字, 种类, 顶点（0.1cm 整数，首点绝对值、之后逐点差分，x/y 交错）, 其余字段?]],
+//     r 房间 [[名字, 种类, 顶点（0.1cm 整数，首点绝对值、之后逐点差分，x/y 交错）, 其余字段?（含各面墙的墙纸 / 内收柱 walls）]],
 //     d 门窗 [[房间序号, 种类, 边, 位置, 宽, 铰链 / 开向（bit0 = end，bit1 = out）, 其余字段?（门窗的款式等）]],
 //     x 设备 [[种类, x, y, 宽, 旋转, 其余字段?（stackOn 换成设备序号）]],
 //     a? 素材表 [素材 id…], f? 家具 [[素材表序号, x, y, 旋转, 配色序号?, 其余字段?]], h? 住户,
 //     F? 楼层 [[id, 名字, 地面高, 层高]]（多层户型才有；房间 / 设备 / 家具的 floor 跟着「其余字段」走，门窗跟着房间） }
 // id 一律不进链接，解码时重新生成；坐标、长度四舍五入到 0.1cm。
-// 「只户型」不带家具、住户和房间的装饰（墙纸、窗帘、灯光覆盖）。
+// 「只户型」不带家具、住户和房间的装饰（墙纸、窗帘、灯光覆盖；单面墙的墙纸也去掉，内收柱保留）。
 // 解码后走 store.normalizePlan（存档迁移），坏数据返回错误码，不抛异常。
 
 import { uid, type Fixture, type Furniture, type Opening, type Plan, type Room } from './model'
 import { normalizePlan } from './store'
+import { wallsWithoutPaper } from './wallFace'
 
 export type ShareMode = 'plan' | 'full'
 export const SHARE_VERSION = '1'
@@ -94,7 +95,9 @@ export function toCompact(p: Plan, mode: ShareMode): Compact {
         px = x
         py = y
       }
-      return trim<CRoom>([r.name, r.kind, pts, rest(r, ['id', 'name', 'kind', 'points', ...(mode === 'plan' ? ROOM_DECOR : [])])])
+      // 「只户型」：各面墙的墙纸覆盖算装饰去掉，内收柱是结构照带
+      const walls = mode === 'plan' && r.walls ? wallsWithoutPaper(r.walls) : r.walls
+      return trim<CRoom>([r.name, r.kind, pts, rest({ ...r, walls }, ['id', 'name', 'kind', 'points', ...(mode === 'plan' ? ROOM_DECOR : [])])])
     }),
     d: p.openings
       .filter((o) => roomIdx.has(o.roomId))

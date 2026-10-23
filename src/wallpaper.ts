@@ -5,6 +5,16 @@ import { takesHouseWallpaper, type Plan, type Room, type Wallpaper, type WallTri
 import type { Household } from './household'
 import { rng, type StyleTag } from './three/kit'
 import type { PatternKind } from './three/patterns'
+import { wallsWithoutPaper } from './wallFace'
+
+/** 手动换墙纸时的色板、花纹（内装页的墙纸、单面墙的编辑卡片共用） */
+export const WP_COLORS = ['#fbf7f1', '#f2f2f0', '#fff4f1', '#f3f8ff', '#f4fbf6', '#fff9e8', '#f6f0e1', '#e6e6e4', '#d6d3cd', '#f4e7c8', '#dfe8f0', '#3d3f44']
+export const WP_PATTERNS: PatternKind[] = ['stripes', 'dots', 'gingham', 'flowers', 'sakura', 'stars', 'asanoha', 'seigaiha', 'ichimatsu', 'chevron', 'houndstooth', 'argyle']
+
+/** 用底色 base 织一张低对比的花纹墙纸（边饰 trim 照带） */
+export function patternWallpaper(kind: PatternKind, base: string, trim?: WallTrim): Wallpaper {
+  return { color: base, trim, pattern: { kind, colors: [base, accentOf(base), accentOf(base, 0.04)], scale: kind === 'stripes' ? 16 : 12, angle: kind === 'stripes' ? 90 : 0, density: 0.3, seed: 7 } }
+}
 
 /** 各风格的墙纸底色 + 适合的花纹 */
 const RECIPES: Record<StyleTag, { colors: string[]; patterns: PatternKind[] }> = {
@@ -109,6 +119,12 @@ export function autoWallpapers(plan: Plan, hh: Household | undefined, occupantSt
   plan.flooring = { tone: tones[Math.floor(rand() * tones.length)], ...(rand() < 0.3 ? { wax: true } : {}) }
   for (const r of plan.rooms) {
     delete r.flooring
+    // 单面墙的墙纸覆盖也清掉（内收柱是结构，留着）
+    if (r.walls) {
+      const walls = wallsWithoutPaper(r.walls)
+      if (walls) r.walls = walls
+      else delete r.walls
+    }
     const own = r.kind === 'western' || r.kind === 'japanese' ? occupantStyle(r) : undefined
     const single = takesHouseWallpaper(r) && (!!own || r.kind === 'toilet')
     if (!single) {

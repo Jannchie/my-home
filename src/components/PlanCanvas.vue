@@ -39,6 +39,7 @@ import {
   type Vec,
 } from '../model'
 import { wallSegments, wallThicknessAt } from '../walls'
+import { beamsOf } from '../wallFace'
 import { baseFloorId, floorBelow, floorById, floorOf, floorView, isMultiFloor, riseOf } from '../floors'
 import { stairHoleConflicts, stairHoles, stairPlanLines, subtractSpan } from '../stairs'
 import { tatamiLayout } from '../tatami'
@@ -269,7 +270,8 @@ function selectHit(h: DOMStringMap) {
   else if (h.hit === 'fixture') selection.value = { type: 'fixture', id: h.id! }
   else if (h.hit === 'opening' || h.hit === 'opening-end') selection.value = { type: 'opening', id: h.id! }
   else if (h.hit === 'vertex') selection.value = { type: 'vertex', roomId: h.room!, index: Number(h.index) }
-  else if (h.hit === 'edge' || h.hit === 'midpoint') selection.value = { type: 'room', id: h.room! }
+  else if (h.hit === 'edge') selection.value = { type: 'wall', roomId: h.room!, edge: Number(h.index) }
+  else if (h.hit === 'midpoint') selection.value = { type: 'room', id: h.room! }
 }
 
 function clearLongPress() {
@@ -357,7 +359,9 @@ function onPointerDown(e: PointerEvent) {
       checkpoint()
       drag.value = { kind: 'vertex', roomId: hit.room!, index, orig: { ...findRoom(hit.room!)!.points[index] } }
     } else if (hit.hit === 'edge') {
+      // 点边：选中这面墙（墙纸、内收柱）；按住拖动照旧整条边平移
       const r = findRoom(hit.room!)!
+      selection.value = { type: 'wall', roomId: r.id, edge: Number(hit.index) }
       checkpoint()
       drag.value = { kind: 'edge', roomId: r.id, index: Number(hit.index), start: w, orig: r.points.map((p) => ({ ...p })) }
     } else if (hit.hit === 'fixture') {
@@ -939,9 +943,24 @@ const gridStep = computed(() => {
 const selectedRoom = computed(() => {
   const s = selection.value
   if (s?.type === 'room') return findRoom(s.id) ?? null
-  if (s?.type === 'vertex') return findRoom(s.roomId) ?? null
+  if (s?.type === 'vertex' || s?.type === 'wall') return findRoom(s.roomId) ?? null
   return null
 })
+
+/** 选中的墙面：沿房间内侧的墙面画一条高亮线 */
+const selWallView = computed(() => {
+  const s = selection.value
+  const r = s?.type === 'wall' ? findRoom(s.roomId) : undefined
+  if (s?.type !== 'wall' || !r || s.edge >= r.points.length) return null
+  const e = edgeInfo(r.points, s.edge)
+  const k = wallThicknessAt(plan.value, mul(add(e.a, e.b), 0.5), e.out, r) / 2 + px(2)
+  const a = add(e.a, mul(e.out, -k))
+  const b = add(e.b, mul(e.out, -k))
+  return `M${a.x},${a.y}L${b.x},${b.y}`
+})
+
+/** 内收柱（梁）：在头顶上，按平面图的惯例画虚线框 */
+const beamViews = computed(() => beamsOf(fp.value).map((b) => ({ key: `${b.room.id}:${b.edge}`, d: polyPath(b.poly) })))
 
 /** 地面图案：水回り铺瓷砖，玄関土间斜线，阳台大块地砖 */
 const FLOOR_PATTERN: Partial<Record<RoomKind, string>> = {
@@ -1316,8 +1335,10 @@ function openMenu(x: number, y: number, edge?: { roomId: string; index: number; 
   const del: MenuEntry = { label: t('删除'), icon: ICONS.delete, keys: 'Del', danger: true, action: deleteSelection }
   let items: MenuEntry[] = []
   let title = ''
-  if (s.type === 'room') {
-    const r = findRoom(s.id)
+  if (s.type === 'room' || s.type === 'wall') {
+    // 墙面（长按 / 右键点到边）：菜单和房间一样（加顶点、复制房间、删除房间）
+    const r = findRoom(s.type === 'room' ? s.id : s.roomId)
+    if (s.type === 'wall' && r) selection.value = { type: 'room', id: r.id }
     title = r ? roomName(r.name) : ''
     const addVertex: MenuEntry[] = edge
       ? [
@@ -1534,6 +1555,7 @@ async function exportPng() {
         <path :d="wallViews.inner" stroke="#3a3732" :stroke-width="plan.wall" stroke-linecap="square" />
         <path :d="wallViews.outer" stroke="#22201c" :stroke-width="plan.wallOuter" stroke-linecap="square" />
         <path :d="wallViews.open" stroke="#5a554d" stroke-width="3" />
+        <path v-for="b in beamViews" :key="b.key" :d="b.d" fill="rgba(58,55,50,0.08)" stroke="#3a3732" :stroke-width="px(1.5)" :stroke-dasharray="`${px(6)} ${px(4)}`" />
       </g>
       <!-- 楼梯洞口（下层的楼梯通上来的地方）：斜线 + 「下」箭头；压到卧室等房间时标红 -->
       <g pointer-events="none">
@@ -1739,6 +1761,7 @@ async function exportPng() {
           :stroke-width="px(2)"
           pointer-events="none"
         />
+        <path v-if="selWallView" :d="selWallView" stroke="#d07a2c" :stroke-width="px(5)" stroke-linecap="round" pointer-events="none" />
         <text
           v-for="d in dimViews"
           :key="'d' + d.i"
