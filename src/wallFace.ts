@@ -3,13 +3,17 @@
 
 import { add, edgeInfo, edgesOf, mul, projectToSegment, roomWallpaper, type Plan, type Room, type Vec, type WallFace, type WallBeam, type Wallpaper } from './model'
 import { wallThicknessAt } from './walls'
+import { clampOffset } from './openingEdit'
 
 /** 内收柱（梁）的最小长 / 深 / 高、最大下垂高度；新加时的缺省深、高（长缺省是整面墙） */
 export const BEAM_MIN = 5
 export const BEAM_MAX_H = 150
-export const BEAM_DEFAULT = { d: 30, h: 40 }
+const BEAM_DEFAULT = { d: 30, h: 40 }
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
+
+/** 一面墙的键（选中、高亮、组件 key 用） */
+export const wallKey = (roomId: string, edge: number) => `${roomId}:${edge}`
 
 /** 第 edge 面墙的设置（没设返回 undefined） */
 export const wallFace = (r: Pick<Room, 'walls'>, edge: number): WallFace | undefined => r.walls?.[edge] ?? undefined
@@ -24,8 +28,7 @@ export function clampBeam(b: WallBeam, L: number): WallBeam {
   const w = Math.max(Math.min(BEAM_MIN, L), Math.min(L, Math.round(b.w)))
   const d = Math.max(BEAM_MIN, Math.round(b.d))
   const h = Math.max(BEAM_MIN, Math.min(BEAM_MAX_H, Math.round(b.h)))
-  const offset = Math.max(w / 2, Math.min(L - w / 2, b.offset))
-  return { w, d, h, offset: Math.round(offset * 10) / 10 }
+  return { w, d, h, offset: Math.round(clampOffset(b.offset, w, L) * 10) / 10 }
 }
 
 /** 新加的梁：整面墙长 */
@@ -47,10 +50,16 @@ export function patchWallFace(r: Room, edge: number, patch: Partial<WallFace>) {
   setWalls(r, walls)
 }
 
-/** 写回 walls：去掉末尾的 null，全空就删字段 */
-function setWalls(r: Room, walls: (WallFace | null)[]) {
+/** 去掉末尾的 null；全空返回 undefined */
+function trimWalls(walls: (WallFace | null)[]) {
   while (walls.length && !walls[walls.length - 1]) walls.pop()
-  if (walls.length) r.walls = walls
+  return walls.length ? walls : undefined
+}
+
+/** 写回 walls：全空就删字段 */
+function setWalls(r: Room, walls: (WallFace | null)[]) {
+  const w = trimWalls(walls)
+  if (w) r.walls = w
   else delete r.walls
 }
 
@@ -105,22 +114,25 @@ export function normalizeWallFaces(r: Room) {
   setWalls(r, walls)
 }
 
-/** 去掉各面墙的墙纸覆盖（只留梁）：分享「只户型」时用，墙纸算装饰 */
+/** 各面墙去掉墙纸覆盖（只留梁，墙纸算装饰、梁是结构）：分享「只户型」时用；全空返回 undefined */
 export function wallsWithoutPaper(walls: (WallFace | null)[]): (WallFace | null)[] | undefined {
-  const out = walls.map((f) => (f?.beam ? { beam: f.beam } : null))
-  while (out.length && !out[out.length - 1]) out.pop()
-  return out.length ? out : undefined
+  return trimWalls(walls.map((f) => (f?.beam ? { beam: f.beam } : null)))
+}
+
+/** 直接去掉这间房各面墙的墙纸覆盖（全屋随机墙纸时用） */
+export function stripWallPapers(r: Room) {
+  if (r.walls) setWalls(r, wallsWithoutPaper(r.walls) ?? [])
 }
 
 /**
  * 房间里离点 p（墙中线上）最近、和方向 dir 平行的边号；离边超过 tol 返回 -1。
  * 3D 里墙段按直线合并过，用它从墙段找回是哪间房的哪条边。
  */
-export function edgeNear(r: Room, p: Vec, dir: Vec | null, tol: number) {
+export function edgeNear(r: Room, p: Vec, dir: Vec, tol: number) {
   let best = -1
   let bd = tol
   edgesOf(r.points).forEach((e, i) => {
-    if (dir && Math.abs(e.dir.x * dir.y - e.dir.y * dir.x) > 1e-3) return
+    if (Math.abs(e.dir.x * dir.y - e.dir.y * dir.x) > 1e-3) return
     const d = projectToSegment(p, e.a, e.b).d
     if (d <= bd) {
       bd = d
@@ -128,6 +140,13 @@ export function edgeNear(r: Room, p: Vec, dir: Vec | null, tol: number) {
     }
   })
   return best
+}
+
+/** 第 edge 面墙朝房间里的墙面线（墙中线往室内让开半个墙厚再加 inset）：平面图、3D 的选中高亮用 */
+export function wallInnerFace(plan: Pick<Plan, 'rooms' | 'wall' | 'wallOuter'>, r: Room, edge: number, inset = 0) {
+  const e = edgeInfo(r.points, edge)
+  const k = -(wallThicknessAt(plan, mul(add(e.a, e.b), 0.5), e.out, r) / 2 + inset)
+  return { e, a: add(e.a, mul(e.out, k)), b: add(e.b, mul(e.out, k)) }
 }
 
 export interface BeamInfo {

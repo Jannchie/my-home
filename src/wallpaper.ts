@@ -5,7 +5,7 @@ import { takesHouseWallpaper, type Plan, type Room, type Wallpaper, type WallTri
 import type { Household } from './household'
 import { rng, type StyleTag } from './three/kit'
 import type { PatternKind } from './three/patterns'
-import { wallsWithoutPaper } from './wallFace'
+import { stripWallPapers } from './wallFace'
 
 /** 手动换墙纸时的色板、花纹（内装页的墙纸、单面墙的编辑卡片共用） */
 export const WP_COLORS = ['#fbf7f1', '#f2f2f0', '#fff4f1', '#f3f8ff', '#f4fbf6', '#fff9e8', '#f6f0e1', '#e6e6e4', '#d6d3cd', '#f4e7c8', '#dfe8f0', '#3d3f44']
@@ -33,7 +33,7 @@ const RECIPES: Record<StyleTag, { colors: string[]; patterns: PatternKind[] }> =
 }
 
 /** 同色系的花色：比底色稍深一点，墙面不至于太花 */
-export const accentOf = (base: string, k = 0.07) => shade(base, -k, 0.08)
+const accentOf = (base: string, k = 0.07) => shade(base, -k, 0.08)
 
 /** 某风格的一张墙纸；plainBias 越大越倾向纯色 */
 export function wallpaperFor(style: StyleTag, rand: () => number, plainBias = 0.55): Wallpaper {
@@ -120,11 +120,7 @@ export function autoWallpapers(plan: Plan, hh: Household | undefined, occupantSt
   for (const r of plan.rooms) {
     delete r.flooring
     // 单面墙的墙纸覆盖也清掉（内收柱是结构，留着）
-    if (r.walls) {
-      const walls = wallsWithoutPaper(r.walls)
-      if (walls) r.walls = walls
-      else delete r.walls
-    }
+    stripWallPapers(r)
     const own = r.kind === 'western' || r.kind === 'japanese' ? occupantStyle(r) : undefined
     const single = takesHouseWallpaper(r) && (!!own || r.kind === 'toilet')
     if (!single) {

@@ -78,10 +78,10 @@ import { patternPreview } from '../three/fabric'
 import type { PatternKind } from '../three/patterns'
 import { isTyping } from '../dom'
 import { lang, roomName, t, tAuto, tSoft } from '../i18n'
-import { FACADE_KINDS, FENCE_KINDS, FIXTURES, OPENING_LABELS, ROOF_KINDS, add, area as polygonArea, bbox, centroid, edgeInfo, edgesOf, mul, pointInPolygon, projectToSegment, houseFlooring, isWoodFloor, roomFlooring, roomWallpaper, WOOD_TONES, type Furniture, type Plan, type Room, type Wallpaper, type WallTrim, type WoodTone } from '../model'
+import { FACADE_KINDS, FENCE_KINDS, FIXTURES, OPENING_LABELS, ROOF_KINDS, add, area as polygonArea, bbox, centroid, edgesOf, mul, pointInPolygon, projectToSegment, houseFlooring, isWoodFloor, roomFlooring, roomWallpaper, WOOD_TONES, type Furniture, type Plan, type Room, type Wallpaper, type WallTrim, type WoodTone } from '../model'
 import { roomStyles } from '../decorate'
 import { wallThicknessAt } from '../walls'
-import { beamsOf, edgeNear } from '../wallFace'
+import { beamsOf, edgeNear, wallInnerFace, wallKey } from '../wallFace'
 import {
   addFurniture,
   checkpoint,
@@ -116,6 +116,7 @@ import {
   rerollWallpapers,
   sandbox,
   selection,
+  selectedWall,
   WALL_MODES,
   settle,
   syncSkyToNow,
@@ -636,13 +637,15 @@ const hoverFrame = new SelectFrame('hover')
 const ghostFrame = new SelectFrame('ghost')
 /** 选中的外观对象（车）脚下的框：和家具的选中框分开，家具那边换选中时会把自己的框藏起来 */
 const siteFrame = new SelectFrame('select')
+/** 选中墙面的墙脚框 */
+const wallFrame = new SelectFrame('select')
 /** 拖动时落到最近墙面的距离引导线 */
 const wallGuide = new WallGuide()
 const frameRoot = new THREE.Group()
-frameRoot.add(selFrame.group, hoverFrame.group, ghostFrame.group, siteFrame.group, wallGuide.group)
+frameRoot.add(selFrame.group, hoverFrame.group, ghostFrame.group, siteFrame.group, wallFrame.group, wallGuide.group)
 /** 线宽按屏幕像素算：跟着画布尺寸更新 */
 function syncLineRes(w: number, h: number) {
-  for (const f of [selFrame, hoverFrame, ghostFrame, siteFrame, wallGuide]) f.setResolution(w, h)
+  for (const f of [selFrame, hoverFrame, ghostFrame, siteFrame, wallFrame, wallGuide]) f.setResolution(w, h)
 }
 /** 在家具模型脚下显示一个框（占地取素材尺寸，朝向取模型的 rotation.y） */
 const frameBox = new THREE.Box3()
@@ -3577,7 +3580,7 @@ onBeforeUnmount(() => {
   setHover(null)
   hoverHi.dispose()
   siteHL.dispose()
-  for (const f of [selFrame, hoverFrame, ghostFrame, wallGuide]) f.dispose()
+  for (const f of [selFrame, hoverFrame, ghostFrame, wallFrame, wallGuide]) f.dispose()
   placing.value = null
 })
 
@@ -3758,15 +3761,13 @@ watch(
   },
 )
 // ---------- 墙面的选中（布置模式）：点墙面（或墙顶的内收柱 / 梁）选中房间里的那一面墙，旁边浮出墙纸 / 内收柱卡片 ----------
-/** 选中墙面时点中的位置（卡片挨着它）；wallAnchorKey 记是哪面墙的（从平面图选中的没有点中位置，取墙面中点） */
-let wallAnchor: THREE.Vector3 | null = null
-let wallAnchorKey = ''
+/** 在 3D 里点中墙面时的命中点（卡片挨着它）；key 记是哪面墙，选中换了别的墙（比如从平面图选的）就不用它 */
+let wallClick: { key: string; point: THREE.Vector3 } | null = null
 /**
  * 屏幕坐标处点中的墙面：射线最先碰到的不透明面要是墙的竖直面（或内收柱 / 梁的任一面），
  * 沿面的法线往外探一点落在哪个房间，就是那间房朝里的这一面墙；房间里离命中点最近、和墙面平行的边就是它。
  */
 function pickWallSel(e: { clientX: number; clientY: number }): PlanSelection {
-  wallAnchor = null
   if (walking.value || !editing.value || blueprint.on) return null
   const g = floorGroups.find((x) => x.floor.id === activeFloor.value)?.group
   if (!g) return null
@@ -3788,54 +3789,35 @@ function pickWallSel(e: { clientX: number; clientY: number }): PlanSelection {
     if (edge < 0) return null
     pick = { roomId: r.id, edge }
   }
-  wallAnchor = h.point.clone()
-  wallAnchorKey = `${pick.roomId}:${pick.edge}`
+  wallClick = { key: wallKey(pick.roomId, pick.edge), point: h.point.clone() }
   return { type: 'wall', ...pick }
 }
-const selectedWall = computed(() => {
-  const s = selection.value
-  if (s?.type !== 'wall') return null
-  const r = plan.value.rooms.find((x) => x.id === s.roomId)
-  return r && s.edge < r.points.length ? { room: r, edge: s.edge } : null
-})
 const wallCard = ref<HTMLDivElement>()
 const wallTitle = computed(() => (selectedWall.value ? `${t('墙面')} · ${roomName(selectedWall.value.room.name)}` : ''))
 watch(
-  () => selectedWall.value && `${selectedWall.value.room.id}:${selectedWall.value.edge}`,
+  () => selectedWall.value && wallKey(selectedWall.value.room.id, selectedWall.value.edge),
   () => {
     if (wallCard.value) wallCard.value.style.visibility = ''
     applyWallHi()
   },
 )
-/** 选中墙面的高亮：沿这面墙的墙脚在地面上画一道亮色条（墙压低、让开时也看得见） */
-let wallHi: THREE.Mesh | null = null
+/** 选中墙面的高亮：沿这面墙的墙脚在地面上画一道选中框（墙压低、让开时也看得见）；
+ * 卡片的锚点：3D 里点中的位置，没有（从平面图选的）就取墙面中点、半墙高 */
+let wallAnchor: THREE.Vector3 | null = null
 function applyWallHi() {
-  if (wallHi) {
-    wallHi.removeFromParent()
-    wallHi.geometry.dispose()
-    ;(wallHi.material as THREE.Material).dispose()
-    wallHi = null
-  }
+  wallFrame.hide()
+  wallAnchor = null
   dirty = true
   const w = selectedWall.value
   const g = floorGroups.find((x) => x.floor.id === activeFloor.value)?.group
   if (!w || !g || !editing.value || walking.value) return
   const room = toRaw(w.room)
-  const e = edgeInfo(room.points, w.edge)
-  const t2 = wallThicknessAt(toRaw(plan.value), mul(add(e.a, e.b), 0.5), e.out, room) / 2
-  const c = add(mul(add(e.a, e.b), 0.5), mul(e.out, -(t2 + 4)))
-  wallHi = new THREE.Mesh(new THREE.BoxGeometry(e.length, 0.6, 8), new THREE.MeshBasicMaterial({ color: '#f0a040', transparent: true, opacity: 0.85, depthWrite: false }))
-  wallHi.position.set(c.x, floorY(room) + 0.8, c.y)
-  wallHi.rotation.y = Math.atan2(-e.dir.y, e.dir.x)
-  wallHi.renderOrder = 5
-  wallHi.raycast = () => {}
-  g.add(wallHi)
-  wallHi.updateMatrixWorld(true)
-  const key = `${room.id}:${w.edge}`
-  if (wallAnchorKey !== key || !wallAnchor) {
-    wallAnchorKey = key
-    wallAnchor = g.localToWorld(new THREE.Vector3(c.x, floorY(room) + fullH.value / 2, c.y))
-  }
+  const { e, a, b } = wallInnerFace(toRaw(plan.value), room, w.edge, 4)
+  const c = mul(add(a, b), 0.5)
+  const at = g.localToWorld(new THREE.Vector3(c.x, floorY(room), c.y))
+  wallFrame.show(at.x, at.y + 0.8, at.z, e.length, 8, Math.atan2(-e.dir.y, e.dir.x))
+  const key = wallKey(room.id, w.edge)
+  wallAnchor = wallClick?.key === key ? wallClick.point : at.clone().setY(at.y + fullH.value / 2)
 }
 watch(() => [editing.value, walking.value] as const, applyWallHi)
 
@@ -4383,7 +4365,7 @@ defineExpose({ resetView })
           <b>{{ wallTitle }}</b>
           <button class="icon-only lc-close" :title="t('关闭') + ' (Esc)'" :aria-label="t('关闭')" @click="selection = null"><JIcon :icon="ICONS.close" :size="14" /></button>
         </div>
-        <WallEditor :key="selectedWall.room.id + ':' + selectedWall.edge" :room="selectedWall.room" :edge="selectedWall.edge" />
+        <WallEditor :key="wallKey(selectedWall.room.id, selectedWall.edge)" :room="selectedWall.room" :edge="selectedWall.edge" />
       </div>
       <div v-if="!plan.rooms.length" class="empty">{{ t('还没有房间。先去 2D 平面图画一个，或者点「随机生成」。') }}</div>
       <div v-if="!device.compact" class="hud">

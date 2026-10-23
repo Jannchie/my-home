@@ -39,7 +39,7 @@ import {
   type Vec,
 } from '../model'
 import { wallSegments, wallThicknessAt } from '../walls'
-import { beamsOf } from '../wallFace'
+import { beamsOf, wallInnerFace, wallKey } from '../wallFace'
 import { baseFloorId, floorBelow, floorById, floorOf, floorView, isMultiFloor, riseOf } from '../floors'
 import { stairHoleConflicts, stairHoles, stairPlanLines, subtractSpan } from '../stairs'
 import { tatamiLayout } from '../tatami'
@@ -78,6 +78,7 @@ import {
   floorPlan as fp,
   activeFloor,
   selection,
+  selectedWall,
   settings,
   settle,
   tool,
@@ -949,18 +950,14 @@ const selectedRoom = computed(() => {
 
 /** 选中的墙面：沿房间内侧的墙面画一条高亮线 */
 const selWallView = computed(() => {
-  const s = selection.value
-  const r = s?.type === 'wall' ? findRoom(s.roomId) : undefined
-  if (s?.type !== 'wall' || !r || s.edge >= r.points.length) return null
-  const e = edgeInfo(r.points, s.edge)
-  const k = wallThicknessAt(plan.value, mul(add(e.a, e.b), 0.5), e.out, r) / 2 + px(2)
-  const a = add(e.a, mul(e.out, -k))
-  const b = add(e.b, mul(e.out, -k))
+  const w = selectedWall.value
+  if (!w) return null
+  const { a, b } = wallInnerFace(plan.value, w.room, w.edge, px(2))
   return `M${a.x},${a.y}L${b.x},${b.y}`
 })
 
 /** 内收柱（梁）：在头顶上，按平面图的惯例画虚线框 */
-const beamViews = computed(() => beamsOf(fp.value).map((b) => ({ key: `${b.room.id}:${b.edge}`, d: polyPath(b.poly) })))
+const beamViews = computed(() => beamsOf(fp.value).map((b) => ({ key: wallKey(b.room.id, b.edge), d: polyPath(b.poly) })))
 
 /** 地面图案：水回り铺瓷砖，玄関土间斜线，阳台大块地砖 */
 const FLOOR_PATTERN: Partial<Record<RoomKind, string>> = {

@@ -158,6 +158,13 @@ const loaded = load()
 export const bootFresh = !loaded
 export const plan = ref<Plan>(loaded ?? generatePlan(genOptions).plan)
 export const selection = ref<Selection>(null)
+/** 选中的墙面（房间 + 边号；边没了是 null）：平面图检查器、3D 卡片、高亮共用 */
+export const selectedWall = computed(() => {
+  const s = selection.value
+  if (s?.type !== 'wall') return null
+  const room = findRoom(s.roomId)
+  return room && s.edge < room.points.length ? { room, edge: s.edge } : null
+})
 export const tool = ref<Tool>('select')
 
 // ---------- 楼层：平面图和 3D 沙盘共用「当前楼层」 ----------
@@ -605,10 +612,7 @@ function validateSelection() {
     const r = findRoom(s.roomId)
     if (!r || s.index >= r.points.length) selection.value = null
   }
-  if (s.type === 'wall') {
-    const r = findRoom(s.roomId)
-    if (!r || s.edge >= r.points.length) selection.value = null
-  }
+  if (s.type === 'wall' && !selectedWall.value) selection.value = null
 }
 
 export function undo() {
@@ -1013,7 +1017,6 @@ export function restyle(roomId: string | null, style: StyleTag | 'auto' | 'rando
   return n
 }
 
-/** 全屋墙纸（没设自己墙纸的房间都用它）；undefined = 回到默认的米白墙 */
 /** 改一面墙的设置（墙纸覆盖 / 内收柱），一步撤销；字段给 undefined 就删掉 */
 export function setWallFace(roomId: string, edge: number, patch: Partial<WallFace>) {
   mutate((p) => {
@@ -1022,6 +1025,7 @@ export function setWallFace(roomId: string, edge: number, patch: Partial<WallFac
   })
 }
 
+/** 全屋墙纸（没设自己墙纸的房间都用它）；undefined = 回到默认的米白墙 */
 export function setHouseWallpaper(wp: Wallpaper | undefined) {
   mutate((p) => {
     if (wp) p.wallpaper = wp

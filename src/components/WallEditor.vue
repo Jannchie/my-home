@@ -26,17 +26,18 @@ function setWp(wp: Wallpaper | undefined) {
 /** 边饰跟着现在的墙纸走（换颜色 / 花纹不丢边饰） */
 const pickColor = (c: string) => setWp({ color: c, trim: curWp.value?.trim })
 const pickPattern = (k: (typeof WP_PATTERNS)[number]) => setWp(patternWallpaper(k, curWp.value?.color ?? '#fbf7f1', curWp.value?.trim))
+/** 花纹缩略图：只跟底色变 */
+const patternThumbs = computed(() => {
+  const base = curWp.value?.color ?? '#fbf7f1'
+  return WP_PATTERNS.map((k) => ({ k, src: patternPreview(patternWallpaper(k, base).pattern!, 32) }))
+})
 
 function setBeam(b: WallBeam | undefined) {
   setWallFace(props.room.id, props.edge, { beam: b && clampBeam(b, L.value) })
 }
-function patchBeam(patch: Partial<WallBeam>) {
-  const b = beam.value
-  if (!b) return
-  const v = Object.values(patch)[0]
-  if (v === undefined || !Number.isFinite(v)) return
+function patchBeam<K extends keyof WallBeam>(k: K, v: WallBeam[K]) {
   // 改长度时中心不动（clampBeam 再把整根夹回墙内）
-  setBeam({ ...b, ...patch })
+  if (beam.value && Number.isFinite(v)) setBeam({ ...beam.value, [k]: v })
 }
 /** 新加的梁缺省占满整面墙 */
 const addBeam = () => setBeam(newBeam(L.value))
@@ -59,8 +60,8 @@ const num = (e: Event) => Number((e.target as HTMLInputElement).value)
       <button v-for="c in WP_COLORS" :key="c" class="sw" :class="{ on: own && curWp?.color === c && !curWp?.pattern }" :style="{ background: c }" :title="c" @click="pickColor(c)" />
     </div>
     <div class="sw-row">
-      <button v-for="k in WP_PATTERNS" :key="k" class="pat" :class="{ on: own && curWp?.pattern?.kind === k }" :title="k" @click="pickPattern(k)">
-        <img :src="patternPreview(patternWallpaper(k, curWp?.color ?? '#fbf7f1').pattern!, 32)" alt="" />
+      <button v-for="p in patternThumbs" :key="p.k" class="pat" :class="{ on: own && curWp?.pattern?.kind === p.k }" :title="p.k" @click="pickPattern(p.k)">
+        <img :src="p.src" alt="" />
       </button>
     </div>
 
@@ -72,11 +73,11 @@ const num = (e: Event) => Number((e.target as HTMLInputElement).value)
     </div>
     <template v-if="beam">
       <div class="grid">
-        <label>{{ t('高 cm') }}<input type="number" :min="BEAM_MIN" :max="BEAM_MAX_H" step="5" :value="beam.h" :title="t('从天花往下垂的高度')" @change="patchBeam({ h: num($event) })" /></label>
-        <label>{{ t('深 cm') }}<input type="number" :min="BEAM_MIN" step="5" :value="beam.d" :title="t('从墙面往室内突出的深度')" @change="patchBeam({ d: num($event) })" /></label>
+        <label>{{ t('高 cm') }}<input type="number" :min="BEAM_MIN" :max="BEAM_MAX_H" step="5" :value="beam.h" :title="t('从天花往下垂的高度')" @change="patchBeam('h', num($event))" /></label>
+        <label>{{ t('深 cm') }}<input type="number" :min="BEAM_MIN" step="5" :value="beam.d" :title="t('从墙面往室内突出的深度')" @change="patchBeam('d', num($event))" /></label>
       </div>
       <div class="grid">
-        <label>{{ t('长 cm') }}<input type="number" :min="BEAM_MIN" :max="Math.floor(L)" step="5" :value="beam.w" :title="t('沿墙方向的长度')" @change="patchBeam({ w: num($event) })" /></label>
+        <label>{{ t('长 cm') }}<input type="number" :min="BEAM_MIN" :max="Math.floor(L)" step="5" :value="beam.w" :title="t('沿墙方向的长度')" @change="patchBeam('w', num($event))" /></label>
         <label
           >{{ t('位置 cm') }}<input
             type="number"
@@ -85,13 +86,13 @@ const num = (e: Event) => Number((e.target as HTMLInputElement).value)
             :max="Math.floor(L - beam.w / 2)"
             :value="Math.round(beam.offset)"
             :title="t('内收柱中心到这面墙起点的距离')"
-            @change="patchBeam({ offset: num($event) })"
+            @change="patchBeam('offset', num($event))"
         /></label>
       </div>
       <div class="acts">
         <button :disabled="beam.w >= Math.floor(L)" @click="setBeam({ ...beam, w: L, offset: L / 2 })">{{ t('整面墙') }}</button>
-        <button @click="patchBeam({ offset: 0 })">{{ t('靠起点') }}</button>
-        <button @click="patchBeam({ offset: L })">{{ t('靠终点') }}</button>
+        <button @click="patchBeam('offset', 0)">{{ t('靠起点') }}</button>
+        <button @click="patchBeam('offset', L)">{{ t('靠终点') }}</button>
       </div>
     </template>
   </div>

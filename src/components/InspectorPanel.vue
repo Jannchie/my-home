@@ -4,7 +4,7 @@ import { FIXTURES, OPENING_LABELS, ROOM_KINDS, area, bbox, edgeInfo, fmtArea, fm
 import { planArea } from '../generate'
 import { RAILING_KINDS, type RailingKind } from '../model'
 import { isIndoor } from '../walls'
-import { deleteSelection, duplicateSelection, findFixture, findRoom, mutate, plan, floorPlan, selection, settings, tidyDoors, setRoomLight, setRoomLightK } from '../store'
+import { deleteSelection, duplicateSelection, findFixture, findRoom, mutate, plan, floorPlan, selection, selectedWall, settings, tidyDoors, setRoomLight, setRoomLightK } from '../store'
 import { isMultiFloor, planFloors, floorView } from '../floors'
 import { LIGHT_MODES, type LightMode } from '../three/lights'
 import { roomName, t } from '../i18n'
@@ -13,6 +13,7 @@ import WindowStylePicker from './WindowStylePicker.vue'
 import DoorStylePicker from './DoorStylePicker.vue'
 import FixtureEditor from './FixtureEditor.vue'
 import WallEditor from './WallEditor.vue'
+import { wallKey } from '../wallFace'
 import OpeningWidthPresets from './OpeningWidthPresets.vue'
 import { resizedOpening } from '../openingEdit'
 import { FIXTURE_ICONS, ICONS, ROOM_ICONS, TOOL_ICONS } from '../ui/icons'
@@ -31,12 +32,6 @@ const vertex = computed(() => {
   if (s?.type !== 'vertex') return null
   const r = findRoom(s.roomId)
   return r ? { room: r, index: s.index, p: r.points[s.index] } : null
-})
-const wall = computed(() => {
-  const s = selection.value
-  if (s?.type !== 'wall') return null
-  const r = findRoom(s.roomId)
-  return r && s.edge < r.points.length ? { room: r, edge: s.edge } : null
 })
 const opening = computed(() => {
   const s = selection.value
@@ -178,11 +173,11 @@ function setRectSize(w: number, h: number) {
     </template>
 
     <!-- 一面墙：墙纸、内收柱 -->
-    <template v-else-if="wall">
-      <header class="ico-label"><JIcon :icon="ICONS.wallFace" class="ico-muted" />{{ t('墙面') }} · {{ roomName(wall.room.name) }}</header>
-      <WallEditor :key="wall.room.id + ':' + wall.edge" :room="wall.room" :edge="wall.edge" />
+    <template v-else-if="selectedWall">
+      <header class="ico-label"><JIcon :icon="ICONS.wallFace" class="ico-muted" />{{ t('墙面') }} · {{ roomName(selectedWall.room.name) }}</header>
+      <WallEditor :key="wallKey(selectedWall.room.id, selectedWall.edge)" :room="selectedWall.room" :edge="selectedWall.edge" />
       <div class="actions">
-        <button @click="selection = { type: 'room', id: wall.room.id }"><JIcon :icon="ROOM_ICONS[wall.room.kind]" />{{ t('选中整个房间') }}</button>
+        <button @click="selection = { type: 'room', id: selectedWall.room.id }"><JIcon :icon="ROOM_ICONS[selectedWall.room.kind]" />{{ t('选中整个房间') }}</button>
       </div>
     </template>
 

@@ -1023,7 +1023,10 @@ function buildWalls(plan: Plan, H0: number, infos: OpeningInfo[], opts: HouseOpt
   // 内收柱（梁）：沿墙顶部横着走、从天花往下垂的梁，侧面和底面贴这面墙的墙纸；
   // 挂进所在墙段的合批（让开时一起变透明；压低时按自己的 { y0, h } 缩放，墙压到梁底以下梁就整根藏起来）
   for (const bi of beamsOf(plan)) {
-    const si = segs.findIndex((sg) => projectToSegment(bi.at, sg.a, sg.b).d < 1 && Math.abs(unit(sg).x * bi.dir.y - unit(sg).y * bi.dir.x) < 1e-3)
+    const si = segs.findIndex((sg) => {
+      const u = unit(sg)
+      return Math.abs(u.x * bi.dir.y - u.y * bi.dir.x) < 1e-3 && projectToSegment(bi.at, sg.a, sg.b).d < 1
+    })
     const sb = segBucket[si]
     if (!sb) continue
     const paper = faceWallpaper(plan, bi.room, bi.edge)
