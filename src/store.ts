@@ -5,7 +5,7 @@ import { migrateCabinets, migrateOpenForms, setOpen } from './cabinet'
 import { applyFixesHouse, decorateHouse, roomStyles } from './decorate'
 import { autoWallpapers } from './wallpaper'
 import { mergeWallFaces, normalizeWallFaces, patchWallFace, splitWallFace, wallFace } from './wallFace'
-import { reseatOnBeam } from './beamMount'
+import { reseatOnBeam, seatOnBeams } from './beamMount'
 import type { CheckItem } from './checklist'
 import { generateHousehold } from './household'
 import { carriedBy } from './surface'
@@ -84,6 +84,8 @@ export function normalizePlan(p: Plan): Plan | null {
   for (const f of p.furniture) if (f.spin !== undefined && (typeof f.spin !== 'number' || !Number.isFinite(f.spin) || !f.spin)) delete f.spin
   // 楼层：没有 floors 的是单层户型（旧存档都是），物件的 floor 一律删掉；坏数据整理掉
   normalizeFloors(p)
+  // 旧存档：梁比「壁挂物挂在梁上」早，那时挂的空调穿在梁里
+  seatOnBeams(p, p.furniture, false)
   // 窗的款式：坏值、缺省值去掉（门上不带窗字段）
   for (const o of p.openings) normalizeWindow(o)
   // 门的款式：同上（窗上不带门字段）
@@ -1034,7 +1036,10 @@ function applyWallFace(p: Plan, roomId: string, edge: number, patch: Partial<Wal
   if (!r || edge >= r.points.length) return
   const before = wallFace(r, edge)?.beam
   patchWallFace(r, edge, patch)
-  if ('beam' in patch) reseatOnBeam(p, r, edge, before, wallFace(r, edge)?.beam)
+  if (!('beam' in patch)) return
+  reseatOnBeam(p, r, edge, before, wallFace(r, edge)?.beam)
+  // 梁伸到墙角：相邻墙上挂着的东西让开
+  seatOnBeams(p, p.furniture, false)
 }
 
 /** 全屋墙纸（没设自己墙纸的房间都用它）；undefined = 回到默认的米白墙 */

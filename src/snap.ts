@@ -6,7 +6,7 @@ import { floorOf, riseOf } from './floors'
 import { overlapArea, stairUnderZone, underZonePoly } from './stairs'
 import { wallThicknessAt } from './walls'
 import { porchFootprint } from './exterior'
-import { mountStandoff } from './beamMount'
+import { fitOnWall } from './beamMount'
 import { roomAt } from './three/house'
 
 /** 吸附参考线：axis = 'x' 表示竖线 x = v（沿 y 从 a 到 b） */
@@ -139,12 +139,14 @@ export function snapToWall(plan: Plan, asset: string, x: number, y: number) {
     // 沿墙方向的位置，留出半个宽度不伸进墙角
     const along = (x - e.a.x) * e.dir.x + (y - e.a.y) * e.dir.y
     const lo = Math.min(def.w / 2 + half, e.length / 2)
-    const t = Math.max(lo, Math.min(e.length - lo, along))
-    const onWall = add(e.a, mul(e.dir, t))
-    const dist = Math.hypot(x - onWall.x, y - onWall.y)
+    const t0 = Math.max(lo, Math.min(e.length - lo, along))
+    const near = add(e.a, mul(e.dir, t0))
+    const dist = Math.hypot(x - near.x, y - near.y)
     if (best && dist >= best.d) continue
-    // 挂的位置碰到这面墙的内收柱（梁）就挂在梁正面
-    const face = half + mountStandoff(plan, room, i, asset, t)
+    // 挂的位置碰到这面墙的内收柱（梁）就挂在梁正面，墙角戳进相邻墙的梁就沿墙让开
+    const fit = fitOnWall(plan, room, i, asset, t0, half)
+    const onWall = add(e.a, mul(e.dir, fit.t))
+    const face = half + fit.standoff
     const c = add(onWall, mul(e.out, -(face + def.d / 2)))
     const horiz = Math.abs(e.dir.x) > 0.5
     best = {

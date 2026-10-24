@@ -4,6 +4,7 @@ import { emptyPlan, rectPoints, uid, type Plan } from '/src/model'
 import { patchWallFace } from '/src/wallFace'
 import { beamStandoff, reseatOnBeam, seatOnBeams } from '/src/beamMount'
 import { snapToWall } from '/src/snap'
+import { normalizePlan } from '/src/store'
 
 /** 一间洋室 0..400 × 0..300，第 0 面墙是上边（y = 0） */
 function plan(): Plan {
@@ -79,5 +80,41 @@ describe('seatOnBeams', () => {
     near(fs[0].y, s.y + 30)
     seatOnBeams(p, fs)
     near(fs[0].y, s.y + 30)
+  })
+})
+
+describe('墙角：相邻墙伸出来的梁', () => {
+  test('吸到侧墙靠墙角处：沿墙让开上边那面墙的梁，不戳进去', () => {
+    const p = plan()
+    const bare = snapToWall(p, 'aircon', 10, 40)!
+    patchWallFace(p.rooms[0], 0, { beam: { w: 400, d: 30, h: 40, offset: 200 } })
+    const on = snapToWall(p, 'aircon', 10, 40)!
+    expect(on.rot).toBe(bare.rot)
+    near(on.x, bare.x)
+    near(on.y - bare.y, 30)
+    // 离墙角远的地方照旧
+    near(snapToWall(p, 'aircon', 10, 200)!.y, 200)
+  })
+
+  test('梁加到墙角：侧墙上挂着的空调跟着让开', () => {
+    const p = plan()
+    const s = snapToWall(p, 'aircon', 10, 40)!
+    const ac = { id: uid('u'), asset: 'aircon', x: s.x, y: s.y, rot: s.rot }
+    p.furniture = [ac]
+    patchWallFace(p.rooms[0], 0, { beam: { w: 400, d: 30, h: 40, offset: 200 } })
+    seatOnBeams(p, p.furniture, false)
+    near(ac.x, s.x)
+    near(ac.y - s.y, 30)
+  })
+})
+
+describe('读旧存档', () => {
+  test('梁位置上穿在梁里的空调挂到梁正面', () => {
+    const p = plan()
+    const s = snapToWall(p, 'aircon', 100, 30)!
+    patchWallFace(p.rooms[0], 0, { beam })
+    p.furniture = [{ id: uid('u'), asset: 'aircon', x: s.x, y: s.y, rot: s.rot }]
+    const q = normalizePlan(JSON.parse(JSON.stringify(p)))!
+    near(q.furniture[0].y, s.y + 30)
   })
 })
