@@ -78,10 +78,11 @@ import { patternPreview } from '../three/fabric'
 import type { PatternKind } from '../three/patterns'
 import { isTyping } from '../dom'
 import { lang, roomName, t, tAuto, tSoft } from '../i18n'
-import { FACADE_KINDS, FENCE_KINDS, FIXTURES, OPENING_LABELS, ROOF_KINDS, add, area as polygonArea, bbox, centroid, edgesOf, mul, pointInPolygon, projectToSegment, houseFlooring, isWoodFloor, roomFlooring, roomWallpaper, WOOD_TONES, type Furniture, type Plan, type Room, type Wallpaper, type WallTrim, type WoodTone } from '../model'
+import { FACADE_KINDS, FENCE_KINDS, FIXTURES, OPENING_LABELS, ROOF_KINDS, add, area as polygonArea, bbox, centroid, edgesOf, mul, pointInPolygon, projectToSegment, houseFlooring, isWoodFloor, roomFlooring, roomWallpaper, WOOD_TONES, edgeInfo, type Furniture, type Plan, type Room, type WallBeam, type Wallpaper, type WallTrim, type WoodTone } from '../model'
 import { roomStyles } from '../decorate'
 import { wallThicknessAt } from '../walls'
-import { beamsOf, edgeNear, wallInnerFace, wallKey } from '../wallFace'
+import { beamsOf, clampBeam, edgeNear, wallFace, wallInnerFace, wallKey } from '../wallFace'
+import { BEAM_GRIPS, axisParam, beamFrame, dragBeam, type BeamGrip } from '../beamDrag'
 import {
   addFurniture,
   checkpoint,
@@ -117,6 +118,7 @@ import {
   sandbox,
   selection,
   selectedWall,
+  setWallFace,
   WALL_MODES,
   settle,
   syncSkyToNow,
@@ -639,13 +641,15 @@ const ghostFrame = new SelectFrame('ghost')
 const siteFrame = new SelectFrame('select')
 /** 选中墙面的墙脚框 */
 const wallFrame = new SelectFrame('select')
+/** 选中墙面上的梁：立体框（拖手柄时按预览尺寸） */
+const beamSelFrame = new SelectFrame('select')
 /** 拖动时落到最近墙面的距离引导线 */
 const wallGuide = new WallGuide()
 const frameRoot = new THREE.Group()
-frameRoot.add(selFrame.group, hoverFrame.group, ghostFrame.group, siteFrame.group, wallFrame.group, wallGuide.group)
+frameRoot.add(selFrame.group, hoverFrame.group, ghostFrame.group, siteFrame.group, wallFrame.group, beamSelFrame.group, wallGuide.group)
 /** 线宽按屏幕像素算：跟着画布尺寸更新 */
 function syncLineRes(w: number, h: number) {
-  for (const f of [selFrame, hoverFrame, ghostFrame, siteFrame, wallFrame, wallGuide]) f.setResolution(w, h)
+  for (const f of [selFrame, hoverFrame, ghostFrame, siteFrame, wallFrame, beamSelFrame, wallGuide]) f.setResolution(w, h)
 }
 /** 在家具模型脚下显示一个框（占地取素材尺寸，朝向取模型的 rotation.y） */
 const frameBox = new THREE.Box3()
@@ -1296,6 +1300,148 @@ function onResizeUp(e: PointerEvent, commit = true) {
 watch(selection, (s) => {
   if (resizing.value && !(s?.type === 'furniture' && s.id === resizing.value.id)) {
     resizing.value = null
+    controls.enabled = true
+  }
+})
+
+// ---------- 拖手柄调内收柱（梁）（beamDrag.ts）----------
+
+/** 选中的墙上有梁：房间、边号、夹过的梁 */
+const selBeam = computed(() => {
+  const w = selectedWall.value
+  const b = w && wallFace(w.room, w.edge)?.beam
+  return w && b ? { room: w.room, edge: w.edge, beam: clampBeam(b, edgeInfo(w.room.points, w.edge).length) } : null
+})
+const BEAM_GRIP_TIPS: Record<(typeof BEAM_GRIPS)[number], string> = { start: '拖动改长度', end: '拖动改长度', front: '拖动改深度', bottom: '拖动改下垂高度' }
+const beamHandlesOn = computed(() => editing.value && !walking.value && !blueprint.on && !placing.value && !!selBeam.value)
+const beamEls: Partial<Record<BeamGrip, HTMLElement | null>> = {}
+type P3 = { x: number; y: number; z: number }
+/**
+ * 正在拖的手柄：start 拖之前的梁；拖动的直线过 p、沿 axis（楼层组局部坐标，按下时定下，预览变了也不跟着跑），
+ * s0 按下时指针在这条线上的位置；beam 预览的梁；hx、hy 是提示的位置
+ */
+const beamDrag = ref<{ grip: BeamGrip; start: WallBeam; p: P3; axis: P3; s0: number; beam: WallBeam; pointer: number; touch: boolean; hx: number; hy: number } | null>(null)
+
+/** 选中的梁在场景里：所在楼层组，和按现在（拖动中是预览）尺寸算的手柄、方向、包围盒（楼层组的局部坐标） */
+function beamBasis() {
+  const s = selBeam.value
+  if (!s) return null
+  const raw = toRaw(plan.value)
+  const room = toRaw(s.room)
+  const fl = floorOf(raw, room)
+  const g = floorGroups.find((x) => x.floor.id === fl)?.group
+  if (!g) return null
+  const e = edgeInfo(room.points, s.edge)
+  const beam = beamDrag.value?.beam ?? s.beam
+  const face = wallThicknessAt(raw, add(e.a, mul(e.dir, beam.offset)), e.out, room) / 2
+  // 墙高和 rebuildHouse 一样：外观视图、漫游满高，否则当前层按墙高滑杆压低（梁跟着墙顶走）
+  const full = floorHeight(raw, fl)
+  const top = !fullView() && fl === activeFloor.value ? Math.min(full, sandbox.wallHeight) : full
+  return { g, room, edge: s.edge, full, top, ...beamFrame(room, s.edge, beam, face, top) }
+}
+const beamW = new THREE.Vector3()
+const beamU = new THREE.Vector3()
+const v3 = (p: P3): P3 => ({ x: p.x, y: p.y, z: p.z })
+
+/** 每次重画时把手柄摆到梁上、选中框套住梁（拖动时跟着预览尺寸），指针按拖动方向在屏幕上的朝向换 */
+function placeBeamHandles() {
+  const b = beamHandlesOn.value ? beamBasis() : null
+  const cv = canvas.value
+  if (!b || !cv) return beamSelFrame.hide()
+  const c = b.g.localToWorld(beamW.set(b.center.x, b.center.y, b.center.z))
+  beamSelFrame.show3d(c.x, c.y, c.z, b.size.w, b.size.h, b.size.d, b.rotY)
+  const W = cv.clientWidth
+  const H = cv.clientHeight
+  const screen = (p: P3) => {
+    const v = b.g.localToWorld(beamW.set(p.x, p.y, p.z)).project(stage.camera)
+    return v.z > 1 ? null : { x: ((v.x + 1) / 2) * W, y: ((1 - v.y) / 2) * H }
+  }
+  for (const grip of BEAM_GRIPS) {
+    const el = beamEls[grip]
+    if (!el) continue
+    const p = b.grips[grip]
+    const s = screen(p)
+    const ax = b.axes[grip]
+    const s2 = screen({ x: p.x + ax.x * 20, y: p.y + ax.y * 20, z: p.z + ax.z * 20 })
+    if (!s || !s2 || s.x < -20 || s.y < -20 || s.x > W + 20 || s.y > H + 20) {
+      el.style.visibility = 'hidden'
+      continue
+    }
+    const a = (((Math.atan2(s2.y - s.y, s2.x - s.x) * 180) / Math.PI + 180 + 22.5) % 180) / 45
+    el.style.cursor = ['ew-resize', 'nwse-resize', 'ns-resize', 'nesw-resize'][Math.floor(a) % 4]
+    el.style.left = `${Math.round(s.x)}px`
+    el.style.top = `${Math.round(s.y)}px`
+    el.style.visibility = 'visible'
+  }
+}
+
+/** 指针在拖动方向上的位置（过 p、沿 axis 的直线上离指针射线最近处的参数，cm） */
+function beamAxisAt(e: PointerEvent, g: THREE.Object3D, p: P3, axis: P3) {
+  setRay(e)
+  const w = g.localToWorld(beamW.set(p.x, p.y, p.z))
+  const u = beamU.set(axis.x, axis.y, axis.z).transformDirection(g.matrixWorld)
+  return axisParam(v3(raycaster.ray.origin), v3(raycaster.ray.direction), v3(w), v3(u))
+}
+
+/** 按下手柄（或梁身，grip = move，at 是按在梁上的点） */
+function beginBeamDrag(e: PointerEvent, grip: BeamGrip, at?: P3) {
+  const b = beamBasis()
+  const s = selBeam.value
+  if (!b || !s || beamDrag.value || (e.pointerType === 'mouse' && e.button !== 0)) return false
+  const p = grip === 'move' ? (at ?? b.center) : b.grips[grip]
+  const axis = b.axes[grip]
+  const s0 = beamAxisAt(e, b.g, p, axis)
+  if (s0 === null) return false
+  beamDrag.value = { grip, start: { ...s.beam }, p, axis, s0, beam: { ...s.beam }, pointer: e.pointerId, touch: e.pointerType !== 'mouse', ...resizeHud(e) }
+  controls.enabled = false
+  setHover(null)
+  return true
+}
+/** 指针下最先碰到的是选中的那根梁（不是挡在前面的墙、家具）：返回按在梁上的点（楼层组局部坐标） */
+function beamHit(e: PointerEvent): P3 | null {
+  const b = beamHandlesOn.value ? beamBasis() : null
+  if (!b) return null
+  setRay(e)
+  const h = raycaster.intersectObject(b.g, true).find((x) => (x.object as THREE.Mesh).isMesh && shown(x.object, true) && opaqueHit(x))
+  if (!h?.face || h.object.userData.wall === undefined) return null
+  const p = b.g.worldToLocal(h.point.clone())
+  const bm = beamsOf(fv()).find((x) => x.room.id === b.room.id && x.edge === b.edge)
+  const q = { x: p.x, y: p.z }
+  if (!bm || p.y < b.top - b.size.h - 1 || !(pointInPolygon(q, bm.poly) || bm.poly.some((a, i) => projectToSegment(q, a, bm.poly[(i + 1) % 4]).d < 1))) return null
+  return { x: p.x, y: p.y, z: p.z }
+}
+function onBeamDown(e: PointerEvent, grip: BeamGrip) {
+  if (beginBeamDrag(e, grip)) (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+}
+function onBeamMove(e: PointerEvent) {
+  const g = beamDrag.value
+  if (!g || e.pointerId !== g.pointer) return
+  Object.assign(g, resizeHud(e))
+  const b = beamBasis()
+  if (!b) return
+  const s = beamAxisAt(e, b.g, g.p, g.axis)
+  if (s === null) return
+  const n = dragBeam(g.start, g.grip, s - g.s0, b.length, b.full - 1, e.shiftKey ? 5 : 1)
+  if (n.w === g.beam.w && n.d === g.beam.d && n.h === g.beam.h && n.offset === g.beam.offset) return
+  g.beam = n
+  dirty = true
+}
+/** 松手：梁变了才 setWallFace（记一次撤销，挂在上面的空调跟着挪）；pointercancel 不提交 */
+function onBeamUp(e: PointerEvent, commit = true) {
+  const g = beamDrag.value
+  if (!g || e.pointerId !== g.pointer) return
+  const s = selBeam.value
+  beamDrag.value = null
+  controls.enabled = true
+  const a = g.start
+  const n = g.beam
+  if (commit && s && (n.w !== a.w || n.d !== a.d || n.h !== a.h || n.offset !== a.offset)) setWallFace(s.room.id, s.edge, { beam: n })
+  dirty = true
+}
+// 拖到一半选中换了（撤销、键盘切换）：放弃
+watch(selBeam, (s) => {
+  if (beamDrag.value && !s) {
+    beamDrag.value = null
     controls.enabled = true
   }
 })
@@ -2489,6 +2635,12 @@ function onPointerDown(e: PointerEvent) {
     // 按在家具上不转视角
     controls.enabled = false
   } else {
+    // 按住选中的梁身：沿墙拖动它的位置
+    const onBeam = hit.house ? null : beamHit(e)
+    if (onBeam && beginBeamDrag(e, 'move', onBeam)) {
+      canvas.value?.setPointerCapture(e.pointerId)
+      return
+    }
     if (tryTakeOver(e, !!hit.house)) return
     // 天花板灯具：选中它所在的房间（浮出灯光开关卡片）；门窗和外观对象松手时（没拖动）才选中，按在上面拖动照样转视角
     const rid = hit.house ? null : pickLightRoom(e)
@@ -2509,6 +2661,7 @@ function onPointerMove(e: PointerEvent) {
     openDrag.y = e.clientY
     return
   }
+  if (beamDrag.value?.pointer === e.pointerId) return onBeamMove(e)
   if (pendingDrag && !touch) {
     if (e.buttons === 0) pendingDrag = null
     else {
@@ -2543,7 +2696,7 @@ function onPointerMove(e: PointerEvent) {
   if (e.buttons === 0 && editing.value) {
     const hit = pickAt(e)
     const id = hit.furniture
-    hovering.value = !!id || !!hit.house || !!pickWallDevice(e)
+    hovering.value = !!id || !!hit.house || !!pickWallDevice(e) || (!id && !hit.house && !!beamHit(e))
     setHover(id && id !== (selection.value?.type === 'furniture' ? selection.value.id : null) ? id : null)
     const sel = selection.value
     setHoverHouse(hit.house && !(sel && (sel.type === 'opening' || sel.type === 'fixture') && `${sel.type}:${sel.id}` === `${hit.house.kind}:${hit.house.id}`) ? hit.house : null)
@@ -2561,6 +2714,11 @@ function onPointerUp(e: PointerEvent) {
     if (e.pointerType !== 'mouse') touches.delete(e.pointerId)
     endOpenDrag()
     controls.enabled = true
+    return
+  }
+  if (beamDrag.value?.pointer === e.pointerId) {
+    onBeamUp(e)
+    down = null
     return
   }
   if (e.pointerType !== 'mouse') {
@@ -3080,7 +3238,7 @@ function loop() {
     dirty = true
   }
   // 选中框：出现时缩入，之后角标呼吸（省电画质 / 减少动效时静止，画面不用每帧重画）
-  const framesMoving = [selFrame.update(now, low), hoverFrame.update(now, true), ghostFrame.update(now, true), siteFrame.update(now, low)].some(Boolean)
+  const framesMoving = [selFrame.update(now, low), hoverFrame.update(now, true), ghostFrame.update(now, true), siteFrame.update(now, low), beamSelFrame.update(now, low)].some(Boolean)
   if (framesMoving) dirty = true
   // 灯光渐亮 / 渐灭（开关、黄昏清晨）
   if (lights.step(dt)) dirty = true
@@ -3104,6 +3262,7 @@ function loop() {
     if (changed) post.restart(edited)
     placeSiteCard()
     placeResizeHandles()
+    placeBeamHandles()
     syncFloorFades()
     // 顶灯投影换了一盏灯（漫游换房间）：只有它的阴影贴图标了要重画（其余的灯 autoUpdate 关着、没标记，不会跟着重画）
     // 场景变了：太阳和顶灯的阴影一起重画（唯一的入口）；顶灯换了一盏（lights.ts）时它自己标了要重画
@@ -3580,7 +3739,7 @@ onBeforeUnmount(() => {
   setHover(null)
   hoverHi.dispose()
   siteHL.dispose()
-  for (const f of [selFrame, hoverFrame, ghostFrame, wallFrame, wallGuide]) f.dispose()
+  for (const f of [selFrame, hoverFrame, ghostFrame, wallFrame, beamSelFrame, wallGuide]) f.dispose()
   placing.value = null
 })
 
@@ -3653,6 +3812,7 @@ watch(selection, () => {
 watch([editing, walking], () => updateRing())
 // 手柄刚出现时摆到位
 watch(resizeHandlesOn, () => (dirty = true), { flush: 'post' })
+watch(beamHandlesOn, () => (dirty = true), { flush: 'post' })
 watch(
   () => sandbox.autoRotate,
   (v) => (controls.autoRotate = v && !editing.value),
@@ -3905,10 +4065,36 @@ function placeSiteCard() {
   placeCardAt(siteCard.value, siteAnchor)
   placeCardAt(openingCard.value, houseAnchor)
   placeCardAt(fixtureCard.value, houseAnchor)
-  placeCardAt(wallCard.value, wallAnchor)
+  placeCardAt(wallCard.value, wallAnchor, beamScreenBox())
 }
-function placeCardAt(el: HTMLElement | undefined, anchor: THREE.Vector3 | null) {
+/** 选中的梁在屏幕上的范围（画布内像素）：墙面卡片避开它，别盖住梁上的手柄 */
+function beamScreenBox() {
+  const b = beamHandlesOn.value ? beamBasis() : null
   const cv = canvas.value
+  if (!b || !cv) return null
+  const W = cv.clientWidth
+  const H = cv.clientHeight
+  const box = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity }
+  for (const p of Object.values(b.grips)) {
+    const v = b.g.localToWorld(beamW.set(p.x, p.y, p.z)).project(stage.camera)
+    if (v.z > 1) continue
+    const x = ((v.x + 1) / 2) * W
+    const y = ((1 - v.y) / 2) * H
+    box.x0 = Math.min(box.x0, x)
+    box.x1 = Math.max(box.x1, x)
+    box.y0 = Math.min(box.y0, y)
+    box.y1 = Math.max(box.y1, y)
+  }
+  return Number.isFinite(box.x0) ? box : null
+}
+/** avoid：要让开的屏幕范围（梁的手柄）：卡片放在它右侧 / 左侧，都放不下就放在它下面 */
+function placeCardAt(el: HTMLElement | undefined, anchor: THREE.Vector3 | null, avoid: { x0: number; y0: number; x1: number; y1: number } | null = null) {
+  const cv = canvas.value
+  // 换到手机布局（停靠在底部）：清掉跟随时设的位置，不然 left 和停靠用的 right 一起把卡片挤窄
+  if (el && !siteCardAnchored.value && el.style.left) {
+    el.style.left = ''
+    el.style.top = ''
+  }
   if (!el || !cv || !anchor || !siteCardAnchored.value) return
   const v = anchor.clone().project(stage.camera)
   if (v.z > 1) return
@@ -3919,10 +4105,17 @@ function placeCardAt(el: HTMLElement | undefined, anchor: THREE.Vector3 | null) 
   const cw = el.offsetWidth
   const ch = el.offsetHeight
   const gap = 28
-  let left = x + gap
-  if (left + cw > W - 12) left = x - gap - cw
+  const [xr, xl] = avoid ? [avoid.x1, avoid.x0] : [x, x]
+  let left = xr + gap
+  let cy = y - ch / 2
+  if (left + cw > W - 12) left = xl - gap - cw
+  if (avoid && left < 12) {
+    // 左右都放不下：放到梁下面，下面不够就放上面（都不够就照常夹在画面里，手柄压在卡片上面）
+    left = (avoid.x0 + avoid.x1) / 2 - cw / 2
+    cy = avoid.y1 + gap + ch <= H - 44 ? avoid.y1 + gap : avoid.y0 - gap - ch >= 56 ? avoid.y0 - gap - ch : cy
+  }
   left = Math.max(12, Math.min(W - cw - 12, left))
-  const top = Math.max(56, Math.min(H - ch - 44, y - ch / 2))
+  const top = Math.max(56, Math.min(H - ch - 44, cy))
   el.style.left = `${Math.round(left)}px`
   el.style.top = `${Math.round(top)}px`
   el.style.visibility = 'visible'
@@ -4404,6 +4597,28 @@ defineExpose({ resetView })
       <div v-if="resizing" class="drag-hud" :class="{ touch: resizing.touch }" :style="{ left: resizing.hx + 'px', top: resizing.hy + 'px' }">
         <span class="num">{{ resizing.w }} × {{ resizing.d }} cm</span>
         <span v-if="!resizing.touch" class="dh-hint">{{ t('按住 Shift 每 5 cm 吸附') }}</span>
+      </div>
+      <!-- 选中墙上的内收柱（梁）：两端拖动改长、正面改深、底面改下垂高度；按住梁身沿墙挪 -->
+      <template v-if="beamHandlesOn">
+        <button
+          v-for="grip in BEAM_GRIPS"
+          :key="grip"
+          :ref="(el) => (beamEls[grip] = el as HTMLElement | null)"
+          class="resize-handle beam-handle"
+          :class="{ on: beamDrag?.grip === grip }"
+          :title="t(BEAM_GRIP_TIPS[grip])"
+          :aria-label="t(BEAM_GRIP_TIPS[grip])"
+          @pointerdown.stop.prevent="onBeamDown($event, grip)"
+          @pointermove="onBeamMove"
+          @pointerup="onBeamUp"
+          @pointercancel="onBeamUp($event, false)"
+          @contextmenu.prevent
+        />
+      </template>
+      <div v-if="beamDrag" class="drag-hud" :class="{ touch: beamDrag.touch }" :style="{ left: beamDrag.hx + 'px', top: beamDrag.hy + 'px' }">
+        <span class="num">{{ t('长 {w} · 深 {d} · 高 {h} cm', { w: beamDrag.beam.w, d: beamDrag.beam.d, h: beamDrag.beam.h }) }}</span>
+        <span v-if="beamDrag.grip === 'move'" class="num">{{ t('离起点 {n} cm', { n: Math.round(beamDrag.beam.offset - beamDrag.beam.w / 2) }) }}</span>
+        <span v-if="!beamDrag.touch" class="dh-hint">{{ t('按住 Shift 每 5 cm 吸附') }}</span>
       </div>
       <!-- 拖动 / 旋转家具时跟着指针的提示：角度、离墙距离、吸附 -->
       <div v-if="dragHud" class="drag-hud" :class="{ touch: dragHud.touch }" :style="{ left: dragHud.x + 'px', top: dragHud.y + 'px' }">
@@ -5295,6 +5510,10 @@ defineExpose({ resetView })
   position: absolute;
   inset: -12px;
   border-radius: 50%;
+}
+/* 梁的手柄压在墙面卡片上面（卡片放不开、挡住梁时也拖得到） */
+.beam-handle {
+  z-index: 7;
 }
 .resize-handle:hover,
 .resize-handle.on {

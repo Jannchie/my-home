@@ -37,9 +37,11 @@ import {
   type Room,
   type RoomKind,
   type Vec,
+  type WallBeam,
 } from '../model'
 import { wallSegments, wallThicknessAt } from '../walls'
-import { beamsOf, wallInnerFace, wallKey } from '../wallFace'
+import { BEAM_MAX_H, beamsOf, clampBeam, wallFace, wallInnerFace, wallKey } from '../wallFace'
+import { dragBeam, type BeamGrip } from '../beamDrag'
 import { baseFloorId, floorBelow, floorById, floorOf, floorView, isMultiFloor, riseOf } from '../floors'
 import { stairHoleConflicts, stairHoles, stairPlanLines, subtractSpan } from '../stairs'
 import { tatamiLayout } from '../tatami'
@@ -79,6 +81,7 @@ import {
   activeFloor,
   selection,
   selectedWall,
+  setWallFace,
   settings,
   settle,
   tool,
@@ -111,6 +114,8 @@ type Drag =
   | { kind: 'ghost'; start: Vec; orig: Vec }
   /** 拖选中家具的手柄改宽深：w、d 是预览的尺寸，松手才提交 */
   | { kind: 'furnitureSize'; g: ResizeDrag; w: number; d: number }
+  /** 拖选中墙上梁的手柄 / 梁身：start 拖之前的梁、at0 按下的点、beam 预览（不改 plan，松手 setWallFace 记一次撤销） */
+  | { kind: 'beam'; roomId: string; edge: number; grip: BeamGrip; start: WallBeam; at0: Vec; beam: WallBeam }
 const drag = ref<Drag | null>(null)
 
 // ---------- 触控：多指、长按、点按阈值 ----------
@@ -245,7 +250,7 @@ function abortDrag() {
   const d = drag.value
   drag.value = null
   guides.value = {}
-  if (!d || d.kind === 'pan' || d.kind === 'rect' || d.kind === 'furnitureSize') return
+  if (!d || d.kind === 'pan' || d.kind === 'rect' || d.kind === 'furnitureSize' || d.kind === 'beam') return
   if (d.kind === 'room' || d.kind === 'edge') {
     const r = findRoom(d.kind === 'room' ? d.id : d.roomId)
     if (r) r.points = d.orig.map((p) => ({ ...p }))
@@ -309,6 +314,12 @@ function onPointerDown(e: PointerEvent) {
     let hit = hitOf(e)
     if (hit?.hit === 'furniture-size') {
       startFurnitureSize(hit.id!, hit.side as ResizeSide, w)
+      return
+    }
+    if (hit?.hit === 'beam' && selBeamView.value) {
+      const v = selBeamView.value
+      if (downAt) downAt.moved = true
+      drag.value = { kind: 'beam', roomId: v.roomId, edge: v.edge, grip: hit.grip as BeamGrip, start: { ...v.beam }, at0: w, beam: { ...v.beam } }
       return
     }
     // 家具只能点选：按下时按它底下的东西（房间、设备…）处理，没拖动就松手才选中家具
@@ -617,6 +628,13 @@ function onPointerMove(e: PointerEvent) {
     r.points = pts
   } else if (d.kind === 'furnitureSize') {
     Object.assign(d, dragSize(d.g, w, e.shiftKey))
+  } else if (d.kind === 'beam') {
+    const r = findRoom(d.roomId)
+    if (!r || d.edge >= r.points.length) return
+    const ed = edgeInfo(r.points, d.edge)
+    // 两端、梁身沿墙方向，正面朝室内
+    const axis = d.grip === 'front' ? mul(ed.out, -1) : ed.dir
+    d.beam = dragBeam(d.start, d.grip, dot(sub(w, d.at0), axis), ed.length, BEAM_MAX_H, e.shiftKey ? 5 : 1)
   } else if (d.kind === 'fixture') {
     const f = findFixture(d.id)
     if (!f) return
@@ -746,6 +764,12 @@ function releasePointer(e: PointerEvent) {
   }
   if (d.kind === 'furnitureSize') {
     if (e.type !== 'pointercancel' && (d.w !== d.g.w0 || d.d !== d.g.d0)) resizeFurniture(d.g.id, d.w, d.d)
+    return
+  }
+  if (d.kind === 'beam') {
+    const a = d.start
+    const b = d.beam
+    if (e.type !== 'pointercancel' && (a.w !== b.w || a.d !== b.d || a.offset !== b.offset)) setWallFace(d.roomId, d.edge, { beam: b })
     return
   }
   settle()
@@ -954,6 +978,30 @@ const selWallView = computed(() => {
   if (!w) return null
   const { a, b } = wallInnerFace(plan.value, w.room, w.edge, px(2))
   return `M${a.x},${a.y}L${b.x},${b.y}`
+})
+
+/** 选中墙面上的梁：框（拖动时按预览尺寸）、两端和正面的手柄、长 × 深的标注 */
+const selBeamView = computed(() => {
+  const w = selectedWall.value
+  const b0 = w && wallFace(w.room, w.edge)?.beam
+  if (!w || !b0 || tool.value !== 'select') return null
+  const e = edgeInfo(w.room.points, w.edge)
+  const g = drag.value?.kind === 'beam' && drag.value.roomId === w.room.id && drag.value.edge === w.edge ? drag.value : null
+  const beam = g?.beam ?? clampBeam(b0, e.length)
+  const face = wallThicknessAt(plan.value, add(e.a, mul(e.dir, beam.offset)), e.out, w.room) / 2
+  const inward = mul(e.out, -1)
+  const at = (along: number, k: number) => add(add(e.a, mul(e.dir, along)), mul(inward, k))
+  const a0 = beam.offset - beam.w / 2
+  const a1 = beam.offset + beam.w / 2
+  const poly = [at(a0, face), at(a1, face), at(a1, face + beam.d), at(a0, face + beam.d)]
+  const along = Math.abs(e.dir.x) > 0.5 ? 'ew-resize' : 'ns-resize'
+  const across = Math.abs(e.dir.x) > 0.5 ? 'ns-resize' : 'ew-resize'
+  const grips = [
+    { grip: 'start' as const, ...at(a0, face + beam.d / 2), cursor: along },
+    { grip: 'end' as const, ...at(a1, face + beam.d / 2), cursor: along },
+    { grip: 'front' as const, ...at(beam.offset, face + beam.d), cursor: across },
+  ]
+  return { roomId: w.room.id, edge: w.edge, beam, d: polyPath(poly), grips, dragging: !!g, label: at(beam.offset, face + beam.d + px(16)), text: `${Math.round(beam.w)} × ${Math.round(beam.d)}` }
 })
 
 /** 内收柱（梁）：在头顶上，按平面图的惯例画虚线框 */
@@ -1831,6 +1879,21 @@ async function exportPng() {
           :data-index="i"
           style="cursor: crosshair"
         />
+      </g>
+      <!-- 选中墙面上的内收柱（梁）：拖梁身沿墙挪、两端改长、内边改深；旁边标出长 × 深 -->
+      <g v-if="selBeamView" class="ui">
+        <path :d="selBeamView.d" fill="rgba(63,102,82,0.12)" stroke="#3f6652" :stroke-width="px(2)" :stroke-dasharray="selBeamView.dragging ? `${px(5)} ${px(3)}` : undefined" data-hit="beam" data-grip="move" :style="{ cursor: 'move' }">
+          <title>{{ t('按住梁身沿墙拖动；两端改长、正面改深、底面改下垂高度') }}</title>
+        </path>
+        <template v-for="h in selBeamView.grips" :key="'bg' + h.grip">
+          <circle v-if="touchUI" :cx="h.x" :cy="h.y" :r="px(22)" fill="transparent" data-hit="beam" :data-grip="h.grip" />
+          <circle :cx="h.x" :cy="h.y" :r="hitPx(5, 8)" fill="#fff" stroke="#3f6652" :stroke-width="px(1.5)" data-hit="beam" :data-grip="h.grip" :style="{ cursor: h.cursor }">
+            <title>{{ t(h.grip === 'front' ? '拖动改深度' : '拖动改长度') }}</title>
+          </circle>
+        </template>
+        <text :x="selBeamView.label.x" :y="selBeamView.label.y" :font-size="px(11)" text-anchor="middle" dominant-baseline="middle" fill="#3f6652" class="num" pointer-events="none">
+          {{ selBeamView.text }}
+        </text>
       </g>
 
       <!-- 对齐参考线 -->
