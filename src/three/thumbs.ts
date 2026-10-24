@@ -1,8 +1,10 @@
 // 素材缩略图：一个离屏渲染器依次渲染，结果缓存成 dataURL。
 
 import * as THREE from 'three'
-import { onBeforeUnmount, shallowRef, type Directive } from 'vue'
+import { onBeforeUnmount, shallowRef, watch, type Directive } from 'vue'
+import { lang } from '../i18n'
 import { ASSET_MAP } from './assets'
+import { lingualKey } from './signLang'
 import { basePalette } from './stylePalettes'
 import { addOutlines, disposeUnshared } from './toon'
 import { createStage, fitSun, frameCamera, type Stage } from './stage'
@@ -24,8 +26,14 @@ function getStage() {
   return stage
 }
 
+/** 缓存键：素材#配色，带字的素材再加 @语言（组件里的 thumbs 仍按 素材#配色 索引） */
+const cacheKey = (assetId: string, color: number) => {
+  const l = lingualKey(ASSET_MAP.get(assetId))
+  return `${assetId}#${color}${l && '@' + l}`
+}
+
 export function thumbnail(assetId: string, color = 0): string {
-  const key = `${assetId}#${color}`
+  const key = cacheKey(assetId, color)
   const hit = cache.get(key)
   if (hit) return hit
   const def = ASSET_MAP.get(assetId)
@@ -111,7 +119,7 @@ export function useThumbs() {
   const want = (id: string, color = 0) => {
     const key = `${id}#${color}`
     if (thumbs.value[key]) return key
-    const hit = cache.get(key)
+    const hit = cache.get(cacheKey(id, color))
     if (hit) {
       put(key, hit)
       return key
@@ -157,9 +165,19 @@ export function useThumbs() {
       io?.unobserve(el)
     },
   }
+  // 切换语言：带字素材的缩略图换成新语言那一版
+  const stopLang = watch(lang, () => {
+    const stale = Object.keys(thumbs.value).filter((k) => ASSET_MAP.get(k.slice(0, k.lastIndexOf('#')))?.lingual)
+    if (!stale.length) return
+    const next = { ...thumbs.value }
+    for (const k of stale) delete next[k]
+    thumbs.value = next
+    for (const k of stale) want(k.slice(0, k.lastIndexOf('#')), Number(k.slice(k.lastIndexOf('#') + 1)))
+  })
   onBeforeUnmount(() => {
     clearTimeout(timer)
     io?.disconnect()
+    stopLang()
   })
   return { thumbs, want, vThumb }
 }

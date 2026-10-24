@@ -8,6 +8,8 @@ import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray, type At 
 import { C, G, glow, paintPanel, rectPoly, rng, shell, type AssetCategory, type AssetDef, type Fx } from '../kit'
 import { P, PI, cappedTube, clearMat, cylX, cylZ, lit, noOutline, rod3, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, R, definer, type Build, type Dims, type Pal } from '../packkit'
+import { say, signLang, signSans } from '../signLang'
+import type { Lang } from '../../i18n'
 
 /** 除挂起形态、带特效 / 层板的以外，build 之后按（宽松）包围盒居中，落地件贴地 */
 const def = definer({}, (b, e) => (e.form !== 'hanging' && !e.fx && !e.surfaces ? normalizeLoose(b, !e.mount) : b))
@@ -91,13 +93,13 @@ function sHook(bz: number, color = STEEL) {
 
 // ---------- 标签画 ----------
 
-const FONT = '"Hiragino Sans","Noto Sans JP","Yu Gothic","Microsoft YaHei",sans-serif'
 type Line = [text: string, y: number, size: number, color: string]
 
 function text(g: CanvasRenderingContext2D, s: string, x: number, y: number, px: number, color: string, maxW: number) {
-  g.font = `bold ${px}px ${FONT}`
+  const font = signSans()
+  g.font = `bold ${px}px ${font}`
   const w = g.measureText(s).width
-  if (w > maxW && w > 0) g.font = `bold ${(px * maxW) / w}px ${FONT}`
+  if (w > maxW && w > 0) g.font = `bold ${(px * maxW) / w}px ${font}`
   g.fillStyle = color
   g.textAlign = 'center'
   g.textBaseline = 'middle'
@@ -510,16 +512,35 @@ function toolRack(p: string[]) {
 // 垃圾桶 / 资源回收
 // ======================================================================
 
-const SORT_KINDS = [
-  { t: '可燃ごみ', s: 'もえるごみ', c: '#e2574c' },
-  { t: 'プラ', s: 'プラスチック', c: '#e8a52c' },
-  { t: 'びん・かん', s: '資源ごみ', c: '#3fa267' },
-  { t: '不燃ごみ', s: 'もえないごみ', c: '#4a7fc1' },
-]
+type SortKind = { t: string; s: string; c: string }
+/**
+ * 分类标签，各国按自己的分法和颜色：日本 可燃 / プラ / びん・かん / 不燃；
+ * 中国 其他垃圾（灰）/ 可回收物（蓝）/ 厨余垃圾（绿）/ 有害垃圾（红），下面带英文；美国 Trash / Recycle / Compost / Cans
+ */
+const SORT_KINDS: Record<Lang, SortKind[]> = {
+  ja: [
+    { t: '可燃ごみ', s: 'もえるごみ', c: '#e2574c' },
+    { t: 'プラ', s: 'プラスチック', c: '#e8a52c' },
+    { t: 'びん・かん', s: '資源ごみ', c: '#3fa267' },
+    { t: '不燃ごみ', s: 'もえないごみ', c: '#4a7fc1' },
+  ],
+  zh: [
+    { t: '其他垃圾', s: 'Residual Waste', c: '#5b6670' },
+    { t: '可回收物', s: 'Recyclable', c: '#2f6fb5' },
+    { t: '厨余垃圾', s: 'Food Waste', c: '#3b8f4a' },
+    { t: '有害垃圾', s: 'Hazardous Waste', c: '#c8453b' },
+  ],
+  en: [
+    { t: 'TRASH', s: 'Landfill', c: '#4a4f55' },
+    { t: 'RECYCLE', s: 'Paper · Plastic', c: '#2f6fb5' },
+    { t: 'COMPOST', s: 'Food Scraps', c: '#4c9a4a' },
+    { t: 'CANS', s: 'Bottles · Cans', c: '#e8a52c' },
+  ],
+}
 const SORT_SETS: Record<number, number[]> = { 2: [0, 1], 3: [0, 1, 2], 4: [0, 3, 1, 2] }
 const SB = { uw: 22, d: 38, h: 56 }
 
-function drawSort(k: (typeof SORT_KINDS)[number]) {
+function drawSort(k: SortKind) {
   return (g: CanvasRenderingContext2D, W: number, H: number) => {
     g.fillStyle = k.c
     g.fillRect(0, 0, W, H)
@@ -541,7 +562,7 @@ function sortingBins(p: string[], n: number) {
     g.add(rbox(SB.uw + 0.4, 2.6, SB.d + 0.4, lid, { x, y: SB.h }, 1))
     g.add(rbox(10, 1.2, 1, shade(lid, -0.15), { x, y: SB.h + 0.7, z: SB.d / 2 - 0.1 }, 0.4))
     g.add(rbox(SB.uw - 4, 0.5, 0.8, acc, { x, y: SB.h - 4, z: SB.d / 2 + 0.2 }, 0.2))
-    g.add(paintPanel(16, 11, `chore-sort-${k}`, drawSort(SORT_KINDS[k]), { x, y: 34, z: SB.d / 2 + 0.35 }))
+    g.add(paintPanel(16, 11, `chore-sort-${k}-${signLang()}`, drawSort(SORT_KINDS[signLang()][k]), { x, y: 34, z: SB.d / 2 + 0.35 }))
   })
   return g
 }
@@ -568,7 +589,7 @@ function kitchenBin(p: string[]) {
   g.add(rbox(24, 0.5, 19, shade(lid, -0.08), { y: 64.2, z: 9 }, 0.3))
   g.add(rbox(6, 1.6, 1.4, acc, { y: 62.2, z: 22.4 }, 0.5))
   for (const s of [-1, 1]) g.add(rbox(0.8, 3, 12, shade(main, -0.12), { x: s * 15.2, y: 52 }, 0.3))
-  g.add(paintPanel(9, 4, `chore-45l-${acc}`, drawLabel('#ffffff', null, [['45L', 0.52, 0.7, acc]]), { y: 50, z: 22.35 }))
+  g.add(paintPanel(9, 4, `chore-45l-${acc}-${signLang()}`, drawLabel('#ffffff', null, [[say({ zh: '45L', ja: '45L', en: '12 GAL' }), 0.52, 0.7, acc]]), { y: 50, z: 22.35 }))
   return g
 }
 
@@ -591,7 +612,11 @@ function bagBox(p: string[]) {
   g.add(rbox(26, 10, 11, box, {}, 0.8))
   g.add(noOutline(rbox(16, 0.4, 2, shade(box, -0.35), { y: 9.9 }, 0.2)))
   g.add(clearMat(rbox(12, 5, 0.3, bag, { y: 9.4, z: 0.3, rx: -0.25 }, 0.1), bag, 0.75))
-  g.add(paintPanel(22, 7, `chore-bag-${box}-${acc}`, drawLabel(box, acc, [['ゴミ袋', 0.5, 0.38, '#3e3a39'], ['45L · 30枚', 0.82, 0.16, '#3e3a39']], 0.22), { y: 1.4, z: 5.85 }))
+  g.add(paintPanel(22, 7, `chore-bag-${box}-${acc}-${signLang()}`, drawLabel(box, acc, say<Line[]>({
+    zh: [['垃圾袋', 0.5, 0.38, '#3e3a39'], ['45L · 30只装', 0.82, 0.16, '#3e3a39']],
+    ja: [['ゴミ袋', 0.5, 0.38, '#3e3a39'], ['45L · 30枚', 0.82, 0.16, '#3e3a39']],
+    en: [['TRASH BAGS', 0.5, 0.3, '#3e3a39'], ['12 GAL · 30 BAGS', 0.82, 0.16, '#3e3a39']],
+  }), 0.22), { y: 1.4, z: 5.85 }))
   return g
 }
 
@@ -628,7 +653,7 @@ function bottleCrate(p: string[]) {
 function drawNews(g: CanvasRenderingContext2D, W: number, H: number) {
   g.fillStyle = '#f2efe6'
   g.fillRect(0, 0, W, H)
-  text(g, '新聞', W * 0.8, H * 0.13, H * 0.16, '#3e3a39', W * 0.3)
+  text(g, say({ zh: '日报', ja: '新聞', en: 'DAILY' }), W * 0.8, H * 0.13, H * 0.16, '#3e3a39', W * 0.3)
   g.fillStyle = '#3e3a39'
   g.fillRect(W * 0.06, H * 0.06, W * 0.56, H * 0.12)
   g.fillStyle = '#9a9690'
@@ -652,7 +677,7 @@ function drawCarton(g: CanvasRenderingContext2D, W: number, H: number) {
   g.fill()
   g.fillStyle = '#5f9e4a'
   g.fillRect(W * 0.28, H * 0.2, W * 0.04, H * 0.08)
-  text(g, 'みかん', W * 0.66, H * 0.45, H * 0.22, '#7a4e2a', W * 0.42)
+  text(g, say({ zh: '脐橙', ja: 'みかん', en: 'ORANGES' }), W * 0.66, H * 0.45, H * 0.22, '#7a4e2a', W * 0.42)
   g.fillStyle = '#9a7650'
   g.fillRect(0, H * 0.8, W, H * 0.04)
 }
@@ -670,7 +695,7 @@ function paperBundle(p: string[], kind: 'news' | 'carton') {
     g.add(rbox(w, t, d, c, { y: i * t, x: top ? 0 : (rand() - 0.5) * 1.6, z: top ? 0 : (rand() - 0.5) * 1.6, ry: top ? 0 : (rand() - 0.5) * 0.04 }, Math.min(0.5, t * 0.3)))
   }
   const H = n * t
-  g.add(paintPanel(w - 2, d - 2, news ? 'chore-news' : 'chore-carton', news ? drawNews : drawCarton, { y: H + 0.3, z: (d - 2) / 2, rx: -PI / 2 }))
+  g.add(paintPanel(w - 2, d - 2, `${news ? 'chore-news' : 'chore-carton'}-${signLang()}`, news ? drawNews : drawCarton, { y: H + 0.3, z: (d - 2) / 2, rx: -PI / 2 }))
   // 十字捆绳（绳子压在最上面）
   g.add(rbox(w + 1.4, 0.6, 1, string, { y: H }, 0.25))
   g.add(rbox(1, 0.6, d + 1.4, string, { y: H }, 0.25))
@@ -697,7 +722,11 @@ function sprayBottle(p: string[]) {
   g.add(rbox(3.2, 4, 7.5, head, { y: 18, z: 1.8 }, 1.2))
   g.add(rbox(1.4, 1.4, 1.2, M.char, { y: 19.8, z: 5.9 }, 0.4))
   g.add(rbox(1.8, 4.5, 1.2, head, { y: 13.8, z: 4.4, rx: 0.2 }, 0.5))
-  g.add(paintPanel(5.4, 7.6, `chore-spray-${lab}`, drawLabel('#ffffff', lab, [['マルチ', 0.42, 0.15, '#3e3a39'], ['クリーナー', 0.6, 0.12, '#3e3a39'], ['除菌', 0.8, 0.1, lab]], 0.2), { y: 3.4, z: 2.8 }))
+  g.add(paintPanel(5.4, 7.6, `chore-spray-${lab}-${signLang()}`, drawLabel('#ffffff', lab, say<Line[]>({
+    zh: [['多用途', 0.42, 0.14, '#3e3a39'], ['清洁喷雾', 0.6, 0.12, '#3e3a39'], ['除菌 99.9%', 0.8, 0.1, lab]],
+    ja: [['マルチ', 0.42, 0.15, '#3e3a39'], ['クリーナー', 0.6, 0.12, '#3e3a39'], ['除菌', 0.8, 0.1, lab]],
+    en: [['MULTI-SURFACE', 0.42, 0.12, '#3e3a39'], ['CLEANER', 0.6, 0.13, '#3e3a39'], ['Kills 99.9% of germs', 0.8, 0.08, lab]],
+  }), 0.2), { y: 3.4, z: 2.8 }))
   return g
 }
 
@@ -712,7 +741,11 @@ function foamBottle(p: string[]) {
   g.add(cylZ(1.3, 1.6, C.white, 0, 22.8, 5.6, 14))
   g.add(rbox(1.8, 4.5, 1.2, head, { y: 16.4, z: 4.8, rx: 0.2 }, 0.5))
   g.add(rbox(5.2, 8.4, 1.6, C.white, { y: 3.6, z: 3.1 }, 0.4))
-  g.add(paintPanel(4.6, 7.8, `chore-foam-${lab}`, drawLabel('#ffffff', lab, [['キッチン', 0.4, 0.12, '#3e3a39'], ['泡', 0.62, 0.24, lab], ['クリーナー', 0.84, 0.1, '#3e3a39']], 0.18), { y: 3.9, z: 4.2 }))
+  g.add(paintPanel(4.6, 7.8, `chore-foam-${lab}-${signLang()}`, drawLabel('#ffffff', lab, say<Line[]>({
+    zh: [['厨房', 0.4, 0.12, '#3e3a39'], ['泡沫', 0.62, 0.2, lab], ['重油污净', 0.84, 0.1, '#3e3a39']],
+    ja: [['キッチン', 0.4, 0.12, '#3e3a39'], ['泡', 0.62, 0.24, lab], ['クリーナー', 0.84, 0.1, '#3e3a39']],
+    en: [['KITCHEN', 0.4, 0.12, '#3e3a39'], ['FOAM', 0.62, 0.18, lab], ['DEGREASER', 0.84, 0.1, '#3e3a39']],
+  }), 0.18), { y: 3.9, z: 4.2 }))
   return g
 }
 
@@ -724,7 +757,7 @@ function dishSoap(p: string[]) {
   g.add(cyl(1.6, 2.2, 1.6, body, { y: 14.6 }, 16))
   g.add(cyl(1.7, 1.7, 2.4, cap, { y: 16 }, 16))
   g.add(cyl(0.5, 0.6, 1, cap, { y: 18.4, z: 0.6 }, 10))
-  g.add(paintPanel(4.2, 7.4, `chore-dish-${body}-${lab}`, drawBubbleLabel('#ffffff', body, '食器用', '洗剤', lab), { y: 3.2, z: 2.5 }))
+  g.add(paintPanel(4.2, 7.4, `chore-dish-${body}-${lab}-${signLang()}`, drawBubbleLabel('#ffffff', body, ...say<[string, string]>({ zh: ['洗洁精', '柠檬清香'], ja: ['食器用', '洗剤'], en: ['DISH', 'SOAP'] }), lab), { y: 3.2, z: 2.5 }))
   return g
 }
 
@@ -738,7 +771,7 @@ function soapPouch(p: string[]) {
   const cx = 5.25 + dir.x * 1.2
   const cy = 16 + dir.y * 1.2
   g.add(cyl(0.9, 0.9, 2, cap, { x: cx, y: cy - 1, rz: -Math.atan2(dir.x, dir.y) }, 12))
-  g.add(paintPanel(9, 9, `chore-pouch-${body}-${lab}`, drawBubbleLabel('#ffffff', body, 'つめかえ用', '食器用洗剤', lab), { x: -0.5, y: 6, z: 1.45 }))
+  g.add(paintPanel(9, 9, `chore-pouch-${body}-${lab}-${signLang()}`, drawBubbleLabel('#ffffff', body, ...say<[string, string]>({ zh: ['补充装', '洗洁精'], ja: ['つめかえ用', '食器用洗剤'], en: ['REFILL', 'Dish Soap'] }), lab), { x: -0.5, y: 6, z: 1.45 }))
   return g
 }
 
@@ -848,7 +881,11 @@ function cleanser(p: string[]) {
   }
   g.add(rbox(2, 0.5, 1.6, cap, { x: 2.2, y: 14.5, z: 0 }, 0.2))
   g.add(rbox(5.6, 8.4, 1.6, can, { y: 2.6, z: 3.3 }, 0.4))
-  g.add(paintPanel(5, 7.8, `chore-cleanser-${can}-${lab}`, drawLabel(can, lab, [['クレンザー', 0.42, 0.13, '#3e3a39'], ['みがき粉', 0.66, 0.16, lab]], 0.2), { y: 2.9, z: 4.4 }))
+  g.add(paintPanel(5, 7.8, `chore-cleanser-${can}-${lab}-${signLang()}`, drawLabel(can, lab, say<Line[]>({
+    zh: [['去污粉', 0.42, 0.16, '#3e3a39'], ['强力去渍', 0.66, 0.12, lab]],
+    ja: [['クレンザー', 0.42, 0.13, '#3e3a39'], ['みがき粉', 0.66, 0.16, lab]],
+    en: [['CLEANSER', 0.42, 0.13, '#3e3a39'], ['with Bleach', 0.66, 0.11, lab]],
+  }), 0.2), { y: 2.9, z: 4.4 }))
   return g
 }
 
@@ -860,7 +897,7 @@ function deodorizer(p: string[]) {
   g.add(clearMat(rbox(7.6, 7, 5.6, C.glass, {}, 1), C.glass))
   g.add(rbox(8, 3, 6, cap, { y: 6.6 }, 1))
   for (const x of [-2.2, 0, 2.2]) g.add(noOutline(rbox(1, 0.3, 4, shade(cap, -0.25), { x, y: 9.5 }, 0.15)))
-  g.add(paintPanel(6, 2.2, `chore-deo-${cap}-${lab}`, drawLabel(cap, null, [['消臭', 0.5, 0.62, lab]]), { y: 7, z: 3.35 }))
+  g.add(paintPanel(6, 2.2, `chore-deo-${cap}-${lab}-${signLang()}`, drawLabel(cap, null, [[say({ zh: '除臭', ja: '消臭', en: 'FRESH' }), 0.5, 0.62, lab]]), { y: 7, z: 3.35 }))
   return g
 }
 
@@ -873,7 +910,7 @@ function autoFreshener(p: string[]) {
   g.add(cylZ(0.9, 0.6, M.char, 0, 18.6, 3.65, 14))
   g.add(lit(ball(0.45, '#7fe0a8', { x: 3, y: 14.6, z: 3.5 }), '#7fe0a8', 0.7))
   g.add(rbox(3, 0.8, 1, shade(body, -0.12), { y: 1.2, z: 3.3 }, 0.3))
-  g.add(paintPanel(5.6, 6, `chore-fresh-${body}-${lab}`, drawBubbleLabel(body, lab, 'アロマ', 'AUTO SPRAY', '#3e3a39'), { y: 5, z: 3.85 }))
+  g.add(paintPanel(5.6, 6, `chore-fresh-${body}-${lab}-${signLang()}`, drawBubbleLabel(body, lab, ...say<[string, string]>({ zh: ['香薰', '自动喷香'], ja: ['アロマ', 'AUTO SPRAY'], en: ['AROMA', 'AUTO SPRAY'] }), '#3e3a39'), { y: 5, z: 3.85 }))
   return g
 }
 
@@ -1219,30 +1256,30 @@ export const CHORES: AssetDef[] = [
   }),
 
   // ---------- 垃圾桶 / 资源回收 ----------
-  def('chore-sort-bin-2', '分类垃圾桶', 'storage', [45, 39, 59], BIN_PALS, (p) => sortingBins(p, 2), { sizeLabel: '2 分类' }),
-  def('chore-sort-bin-3', '分类垃圾桶', 'storage', [68, 39, 59], BIN_PALS, (p) => sortingBins(p, 3), { sizeLabel: '3 分类' }),
-  def('chore-sort-bin-4', '分类垃圾桶', 'storage', [90, 39, 59], BIN_PALS, (p) => sortingBins(p, 4), { sizeLabel: '4 分类' }),
+  def('chore-sort-bin-2', '分类垃圾桶', 'storage', [45, 39, 59], BIN_PALS, (p) => sortingBins(p, 2), { sizeLabel: '2 分类', lingual: true }),
+  def('chore-sort-bin-3', '分类垃圾桶', 'storage', [68, 39, 59], BIN_PALS, (p) => sortingBins(p, 3), { sizeLabel: '3 分类', lingual: true }),
+  def('chore-sort-bin-4', '分类垃圾桶', 'storage', [90, 39, 59], BIN_PALS, (p) => sortingBins(p, 4), { sizeLabel: '4 分类', lingual: true }),
   def('chore-pedal-bin', '脚踏垃圾桶', 'storage', [27, 31, 42], PEDAL_PALS, pedalBin),
-  def('chore-kitchen-bin', '厨房大垃圾桶', 'storage', [31, 45, 65], KBIN_PALS, kitchenBin),
+  def('chore-kitchen-bin', '厨房大垃圾桶', 'storage', [31, 45, 65], KBIN_PALS, kitchenBin, { lingual: true }),
   def('chore-swing-bin', '带盖小垃圾桶', 'storage', [23, 23, 30], SWING_PALS, swingBin, { sizeLabel: '标准' }),
-  prop('chore-bag-box', '垃圾袋盒', 'storage', [26, 11, 14], BAG_PALS, bagBox),
+  prop('chore-bag-box', '垃圾袋盒', 'storage', [26, 11, 14], BAG_PALS, bagBox, { lingual: true }),
   def('chore-recycle-crate', '资源回收箱·瓶罐', 'storage', [44, 32, 26], CRATE_PALS, bottleCrate),
-  def('chore-paper-bundle', '资源回收·纸捆', 'storage', [42, 29, 17], PAPER_PALS, (p) => paperBundle(p, 'news'), { sizeLabel: '报纸' }),
-  def('chore-carton-bundle', '资源回收·纸捆', 'storage', [52, 38, 12], PAPER_PALS, (p) => paperBundle(p, 'carton'), { sizeLabel: '纸箱' }),
+  def('chore-paper-bundle', '资源回收·纸捆', 'storage', [42, 29, 17], PAPER_PALS, (p) => paperBundle(p, 'news'), { sizeLabel: '报纸', lingual: true }),
+  def('chore-carton-bundle', '资源回收·纸捆', 'storage', [52, 38, 12], PAPER_PALS, (p) => paperBundle(p, 'carton'), { sizeLabel: '纸箱', lingual: true }),
 
   // ---------- 清洁剂 / 小工具 ----------
-  prop('chore-spray-cleaner', '多用途清洁喷雾', 'toiletry', [8, 10, 22], SPRAY_PALS, sprayBottle),
-  prop('chore-foam-cleaner', '厨房泡沫清洁剂', 'tabletop', [7, 10, 25], FOAM_PALS, foamBottle),
-  prop('chore-dish-soap', '洗洁精', 'tabletop', [7, 5, 19], DISH_PALS, dishSoap, { sizeLabel: '瓶装' }),
-  prop('chore-dish-soap-refill', '洗洁精', 'tabletop', [14, 4, 18], DISH_PALS, soapPouch, { sizeLabel: '补充装' }),
+  prop('chore-spray-cleaner', '多用途清洁喷雾', 'toiletry', [8, 10, 22], SPRAY_PALS, sprayBottle, { lingual: true }),
+  prop('chore-foam-cleaner', '厨房泡沫清洁剂', 'tabletop', [7, 10, 25], FOAM_PALS, foamBottle, { lingual: true }),
+  prop('chore-dish-soap', '洗洁精', 'tabletop', [7, 5, 19], DISH_PALS, dishSoap, { sizeLabel: '瓶装', lingual: true }),
+  prop('chore-dish-soap-refill', '洗洁精', 'tabletop', [14, 4, 18], DISH_PALS, soapPouch, { sizeLabel: '补充装', lingual: true }),
   prop('chore-sponge-holder', '海绵 + 海绵架', 'tabletop', [12, 8, 5], SPONGE_PALS, spongeHolder),
   prop('chore-gloves', '橡胶手套', 'tabletop', [22, 26, 3], GLOVE_PALS, glovesLying, { form: 'lying' }),
   prop('chore-gloves-hanging', '橡胶手套', 'tabletop', [19, 7, 34], GLOVE_PALS, glovesHanging, { form: 'hanging' }),
   prop('chore-cloth-hanger', '抹布挂架', 'tabletop', [18, 18, 33], CLOTH_PALS, clothHanger),
   prop('chore-steel-wool', '钢丝球', 'tabletop', [11, 11, 5], WOOL_PALS, steelWool),
-  prop('chore-cleanser', '去污粉', 'toiletry', [8, 8, 15], CLEANSER_PALS, cleanser),
-  prop('chore-deodorizer', '凝胶消臭剂', 'toiletry', [8, 6, 10], DEO_PALS, deodorizer),
-  prop('chore-auto-freshener', '自动喷香机', 'toiletry', [9, 8, 21], AEROSOL_PALS, autoFreshener),
+  prop('chore-cleanser', '去污粉', 'toiletry', [8, 8, 15], CLEANSER_PALS, cleanser, { lingual: true }),
+  prop('chore-deodorizer', '凝胶消臭剂', 'toiletry', [8, 6, 10], DEO_PALS, deodorizer, { lingual: true }),
+  prop('chore-auto-freshener', '自动喷香机', 'toiletry', [9, 8, 21], AEROSOL_PALS, autoFreshener, { lingual: true }),
   prop('chore-lint-roller', '粘毛滚筒', 'tabletop', [13, 8, 22], LINTER_PALS, linterStanding, { form: 'standing' }),
   prop('chore-lint-roller-hanging', '粘毛滚筒', 'tabletop', [11, 8, 27], LINTER_PALS, linterHanging, { form: 'hanging' }),
   prop('chore-duster', '除尘掸子', 'tabletop', [8, 8, 40], DUSTER_PALS, dusterStanding, { form: 'standing' }),

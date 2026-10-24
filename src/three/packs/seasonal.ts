@@ -17,6 +17,7 @@ import { artFace } from '../artwork'
 import { C, G, glow, paintAbstract, paintFlower, paintLandscape, paintPanel, rectPoly, rng, shell, type AssetDef, type Fx } from '../kit'
 import { PI, clearDeep, lathe, noOutlineDeep, rod3, tube, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, R, definer, type Build, type Pal } from '../packkit'
+import { say, signLang, signSans } from '../signLang'
 
 /** build 之后按形态对齐（挂起 / 贴附 / 落地，见 settleByForm） */
 const A = definer({}, (b, e) => (p) => settleByForm(b(p), e))
@@ -1525,7 +1526,7 @@ function digitalClock(p: string[]) {
   const g = new THREE.Group()
   g.add(rbox(40, 18, 2.5, body, {}, 1.4))
   g.add(
-    paintPanel(35, 13, `digi|${body}|${digit}|${sub}`, (c, W, H) => {
+    paintPanel(35, 13, `digi|${body}|${digit}|${sub}|${signLang()}`, (c, W, H) => {
       c.fillStyle = shade(body, -0.06)
       c.fillRect(0, 0, W, H)
       c.fillStyle = digit
@@ -1534,8 +1535,9 @@ function digitalClock(p: string[]) {
       c.font = `bold ${Math.round(H * 0.62)}px monospace`
       c.fillText('10:24', W * 0.44, H * 0.44)
       c.fillStyle = sub
-      c.font = `${Math.round(H * 0.16)}px sans-serif`
-      c.fillText('2026 10.16 FRI   23°C 48%', W * 0.5, H * 0.86)
+      c.font = `${Math.round(H * 0.16)}px ${signSans()}`
+      // 日期按当地写法；美国用华氏度
+      c.fillText(say({ zh: '2026/10/16 周五   23°C 48%', ja: '2026.10.16 (金)   23°C 48%', en: 'FRI OCT 16   73°F 48%' }), W * 0.5, H * 0.86, W * 0.94)
     }, { y: 2.5, z: 1.27 }, 0.6),
   )
   return g
@@ -1795,7 +1797,7 @@ function corkboard(p: string[]) {
 /** 字母留言板：毛毡条纹面 + 白色字母 */
 function letterboard(p: string[]) {
   const [fr, felt, letter] = p
-  return frame(45, 32, 2, 2.4, fr, `letter|${p.join()}`, (c, W, H) => {
+  return frame(45, 32, 2, 2.4, fr, `letter|${p.join()}|${signLang()}`, (c, W, H) => {
     c.fillStyle = felt
     c.fillRect(0, 0, W, H)
     c.fillStyle = shade(felt, -0.08)
@@ -1803,10 +1805,11 @@ function letterboard(p: string[]) {
     c.fillStyle = letter
     c.textAlign = 'center'
     c.textBaseline = 'middle'
-    c.font = `bold ${Math.round(H * 0.18)}px sans-serif`
-    c.fillText('HELLO', W / 2, H * 0.32)
-    c.fillText('HOME SWEET', W / 2, H * 0.56)
-    c.font = `bold ${Math.round(H * 0.12)}px sans-serif`
+    const [l1, l2] = say({ zh: ['你好', '欢迎回家'], ja: ['おうち', 'じかん'], en: ['HELLO', 'HOME SWEET HOME'] })
+    c.font = `bold ${Math.round(H * 0.18)}px ${signSans()}`
+    c.fillText(l1, W / 2, H * 0.32, W * 0.9)
+    c.fillText(l2, W / 2, H * 0.56, W * 0.9)
+    c.font = `bold ${Math.round(H * 0.12)}px ${signSans()}`
     c.fillText('♥ 2026 ♥', W / 2, H * 0.78)
   })
 }
@@ -1883,7 +1886,7 @@ function tearCalendar(p: string[]) {
   g.add(rbox(14, 22, 0.6, board, {}, 0.3))
   g.add(rbox(12, 16, 2.2, PAPER, { y: 1.2, z: 0.6 }, 0.1))
   g.add(
-    paintPanel(11, 15, `tear|${p.join()}`, (c, W, H) => {
+    paintPanel(11, 15, `tear|${p.join()}|${signLang()}`, (c, W, H) => {
       c.fillStyle = PAPER
       c.fillRect(0, 0, W, H)
       c.fillStyle = num
@@ -1892,9 +1895,11 @@ function tearCalendar(p: string[]) {
       c.font = `bold ${Math.round(H * 0.5)}px serif`
       c.fillText('16', W / 2, H * 0.5)
       c.fillStyle = sub
-      c.font = `${Math.round(H * 0.08)}px sans-serif`
-      c.fillText('2026 · 10', W / 2, H * 0.12)
-      c.fillText('金曜日 大安', W / 2, H * 0.88)
+      c.font = `${Math.round(H * 0.08)}px ${signSans()}`
+      // 日本带六曜、中国带黄历宜忌、英文写星期
+      const [head, foot] = say({ zh: ['2026 · 10月', '星期五 · 宜出行'], ja: ['2026 · 10', '金曜日 大安'], en: ['OCTOBER 2026', 'FRIDAY'] })
+      c.fillText(head, W / 2, H * 0.12, W * 0.9)
+      c.fillText(foot, W / 2, H * 0.88, W * 0.9)
     }, { y: 1.7, z: 2.82 }),
   )
   g.add(torus(1, 0.3, shade(board, -0.3), { y: 19.8, z: 0.32 }))
@@ -2465,7 +2470,7 @@ const SEASON_APPLIANCE: AssetDef[] = [
 
 const WALL_DECO: AssetDef[] = [
   A('ss-clock-cuckoo', '鸽子钟', 'deco', [25.7, 16.7, 74.6], CUCKOO_PALS, cuckooClock, { mount: 125 }),
-  A('ss-clock-digital', '电子挂钟', 'deco', [40, 2.5, 18], DIGI_PALS, digitalClock, { mount: 175 }),
+  A('ss-clock-digital', '电子挂钟', 'deco', [40, 2.5, 18], DIGI_PALS, digitalClock, { mount: 175, lingual: true }),
   A('ss-clock-wa', '和风挂钟', 'deco', [30, 5, 30], WA_CLOCK_PALS, waClock, { mount: 170 }),
   A('ss-clock-school', '学校挂钟', 'deco', [43.4, 6.5, 43.4], SCHOOL_PALS, schoolClock, { mount: 170 }),
   A('ss-clock-pendulum', '柱时计', 'deco', [33, 14.1, 73.4], HASHIRA_PALS, pendulumClock, { mount: 110 }),
@@ -2481,10 +2486,10 @@ const WALL_DECO: AssetDef[] = [
   A('ss-shelf-cube', '壁挂格子架', 'storage', [90, 22, 30], SHELF_PALS, cubeShelf, { mount: CUBE.mount, ...CUBE_SURF }),
   A('ss-shelf-floating', '隐形层板', 'storage', [120, 22, 4.1], FLOAT_PALS, floatShelf, { mount: FLOAT.mount, surface: FLOAT.mount + FLOAT.t }),
   A('ss-corkboard', '软木留言板', 'study', [60, 3.1, 45], CORK_PALS, corkboard, { mount: 120 }),
-  A('ss-letterboard', '字母留言板', 'deco', [45, 2.4, 32], LETTER_PALS, letterboard, { mount: 130 }),
+  A('ss-letterboard', '字母留言板', 'deco', [45, 2.4, 32], LETTER_PALS, letterboard, { mount: 130, lingual: true }),
   A('ss-wire-grid', '网格照片墙', 'deco', [60.8, 2.2, 60.8], GRID_PALS, wireGrid, { mount: 110 }),
   A('ss-calendar', '挂历', 'study', [30, 0.7, 44.9], CAL_PALS, calendar, { stick: true, prop: true }),
-  A('ss-calendar-tear', '撕页日历', 'study', [14, 3.3, 22], TEAR_PALS, tearCalendar, { stick: true, prop: true }),
+  A('ss-calendar-tear', '撕页日历', 'study', [14, 3.3, 22], TEAR_PALS, tearCalendar, { stick: true, prop: true, lingual: true }),
   A('ss-kakejiku-sansui', '挂轴·山水', 'japanese', [59.2, 3.6, 171.2], KAKE_PALS, kakejiku('sansui'), { sizeLabel: '山水画', mount: 45 }),
   A('ss-kakejiku-sho', '挂轴·书法', 'japanese', [59.2, 3.6, 171.2], KAKE_PALS, kakejiku('sho'), { sizeLabel: '书法「和」', mount: 45 }),
   A('ss-sensu-deco', '扇面装饰', 'japanese', [55.8, 2.8, 30.3], SENSU_PALS, sensuDeco, { mount: 150 }),

@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowR
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { ASSET_MAP, STYLE_LABELS, type AssetDef, type StyleTag } from '../three/assets'
+import { lingualKey } from '../three/signLang'
 import { GROUP_NAMES, LIB_ROOMS, ROOM_NAMES_LIB } from '../three/groups'
 import { freezeMatrices, syncMatrix } from '../three/matrices'
 import { BASE, applyCutaway, bendToWalls, floorY, isPlant, openingInfos, stepCutaway, furnitureModel, placeFurniture, roomAt, type WallLook } from '../three/house'
@@ -983,7 +984,7 @@ function rebuildHouse() {
 }
 /** 家具模型的缓存键：素材 + 配色 + 单件改色 + 花纹 + 画面（开合不在内） */
 function furnitureKey(asset: string, color: number | undefined, colors: readonly string[] | undefined, patterns: unknown, art?: string, screen?: string) {
-  return `${asset}#${color ?? 0}#${colors?.join(',') ?? ''}#${patterns ? JSON.stringify(patterns) : ''}#${art ?? ''}#${screen ?? ''}`
+  return `${asset}#${color ?? 0}#${colors?.join(',') ?? ''}#${patterns ? JSON.stringify(patterns) : ''}#${art ?? ''}#${screen ?? ''}#${lingualKey(ASSET_MAP.get(asset))}`
 }
 /** 上次搭房子时的当前楼层（墙高滑杆调低时只压低当前层：换层要重搭） */
 let builtActive = ''
@@ -3795,6 +3796,8 @@ watch(
 watch(() => [sandbox.lightMode, sandbox.lightK, sandbox.lightPower, sandbox.lightRange, sandbox.lightOutdoor], applyLights)
 
 watch(() => plan.value.furniture, syncFurniture, { deep: true })
+// 带字的素材（奖状、标签…）按界面语言画：切换语言时重建
+watch(lang, syncFurniture)
 // 布置 / 预览切换：角色回家静止 / 开始活动（素材里的角色部分随之隐藏、复原，阴影贴图要重画）
 watch(
   () => [sandbox.mode, !!selection.value, !!placing.value] as const,

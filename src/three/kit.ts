@@ -266,6 +266,8 @@ export interface AssetDef {
   mats?: (Mat | null)[]
   /** 整件的默认材质（推断不出来的零件按它）；不填按类型（mats.ts defaultMat） */
   mat?: Mat
+  /** 模型上画着跟界面语言走的字（奖状、日用品标签…，见 signLang.ts）：切换语言时重建 */
+  lingual?: boolean
   /** 设备类：只在 3D 中代替平面图的设备显示，不能作为家具单独摆放 */
   fixture?: boolean
   /** 壁挂：离地安装高度（cm），build 里自己把模型放到这个高度。不占地面，不参与家具之间的碰撞 */

@@ -9,6 +9,8 @@ import { ball, cup, cyl, rbox, shade, toon, torus, tray } from '../toon'
 import { C, glow, paintPanel, pinwheelWalls, type AssetDef } from '../kit'
 import { G, P, PI, cylX, cylZ, fitGroup, noOutline } from '../geo'
 import { CL, CN, F, I, J, M, N, PROP, define, type PalFlat } from '../packkit'
+import { signLang } from '../signLang'
+import type { Lang } from '../../i18n'
 
 type Draw = (g: CanvasRenderingContext2D, W: number, H: number) => void
 const IVORY = '#f6f0e1'
@@ -196,36 +198,167 @@ const medals: AssetDef[] = [
 // ---------- 奖状 / 证书 / 毕业证书 ----------
 
 type CertKind = 'award' | 'cert' | 'diploma'
-/** 证书画面：奖状（红金花边 + 大字）、证书（细框 + 徽章）、毕业证书（校徽 + 缎带封蜡） */
-function certDraw(kind: CertKind, accent: string): Draw {
+
+const CERT_FONT: Record<Lang, string> = {
+  zh: '"STKaiti","KaiTi","Kaiti SC","Songti SC","SimSun",serif',
+  ja: '"Yu Mincho","Hiragino Mincho ProN","Noto Serif CJK JP",serif',
+  en: '"Palatino Linotype","Book Antiqua",Palatino,Georgia,serif',
+}
+const RED_SEAL = '#c8473a'
+const GOLD_SEAL = '#c8a03a'
+/** 正文：几行灰线（x0、x1、y 都是相对画面的比例） */
+function proseLines(c: CanvasRenderingContext2D, W: number, H: number, lines: [x0: number, x1: number, y: number][]) {
+  c.fillStyle = 'rgba(60,60,60,0.45)'
+  for (const [x0, x1, y] of lines) c.fillRect(W * x0, H * y, W * (x1 - x0), Math.max(1, H * 0.016))
+}
+/** 竖排正文：从右（x0）往左（x1）n 列灰线 */
+function proseColumns(c: CanvasRenderingContext2D, W: number, H: number, x0: number, x1: number, n: number, top: number, bottom: number) {
+  c.fillStyle = 'rgba(50,50,50,0.5)'
+  for (let i = 0; i < n; i++) {
+    const x = x0 - ((x0 - x1) * i) / Math.max(1, n - 1)
+    const len = i === n - 1 ? 0.55 : i % 3 === 2 ? 0.8 : 1
+    c.fillRect(W * x, H * top, Math.max(1, W * 0.012), H * (bottom - top) * len)
+  }
+}
+/** 竖排一行字：每个字一格，从 (x, y) 往下 */
+function vText(c: CanvasRenderingContext2D, s: string, x: number, y: number, size: number) {
+  c.font = `bold ${Math.floor(size)}px ${CERT_FONT.ja}`
+  ;[...s].forEach((ch, i) => c.fillText(ch, x, y + size * 1.1 * i + size / 2))
+}
+/** 圆形公章（中式红印：外圈 + 五角星） */
+function roundSeal(c: CanvasRenderingContext2D, x: number, y: number, r: number) {
+  c.strokeStyle = RED_SEAL
+  c.lineWidth = Math.max(1, r * 0.12)
+  c.beginPath()
+  c.arc(x, y, r, 0, PI * 2)
+  c.stroke()
+  c.fillStyle = RED_SEAL
+  c.beginPath()
+  for (let i = 0; i < 10; i++) {
+    const a = -PI / 2 + (i * PI) / 5
+    const k = i % 2 ? r * 0.18 : r * 0.42
+    c.lineTo(x + Math.cos(a) * k, y + Math.sin(a) * k)
+  }
+  c.fill()
+}
+/** 金色封蜡 + 两条缎带（欧美证书） */
+function ribbonSeal(c: CanvasRenderingContext2D, x: number, y: number, r: number, ribbon: string) {
+  c.fillStyle = ribbon
+  for (const s of [-1, 1]) {
+    c.beginPath()
+    c.moveTo(x + s * r * 0.2, y)
+    c.lineTo(x + s * r * 0.75, y + r * 1.9)
+    c.lineTo(x + s * r * 0.45, y + r * 1.6)
+    c.lineTo(x + s * r * 0.2, y + r * 1.95)
+    c.lineTo(x - s * r * 0.1, y)
+    c.fill()
+  }
+  c.fillStyle = GOLD_SEAL
+  c.beginPath()
+  for (let i = 0; i < 32; i++) {
+    const a = (i * PI) / 16
+    const k = i % 2 ? r : r * 0.88
+    c.lineTo(x + Math.cos(a) * k, y + Math.sin(a) * k)
+  }
+  c.fill()
+  c.strokeStyle = shade(GOLD_SEAL, -0.25)
+  c.lineWidth = Math.max(1, r * 0.06)
+  c.beginPath()
+  c.arc(x, y, r * 0.62, 0, PI * 2)
+  c.stroke()
+}
+
+/**
+ * 证书画面，每种语言一版（signLang.ts）：
+ * - 中文：横排，红金双框，楷体大字「奖状 / 荣誉证书 / 毕业证书」，右下圆形红公章（毕业证书左边贴照片）；
+ * - 日文：竖排从右往左，金色框，右边大字「賞状 / 認定証 / 卒業証書」，左下方形朱印（卒業証書上方有校章）；
+ * - 英文：花体标题 Certificate of Achievement / Certificate of Completion / Diploma，两条签名线，正中金色封蜡带缎带。
+ */
+function certDraw(kind: CertKind, accent: string, lang: Lang): Draw {
   return (c, W, H) => {
-    c.fillStyle = kind === 'award' ? '#fff8ec' : PAPER
-    c.fillRect(0, 0, W, H)
     const m = Math.min(W, H)
+    c.fillStyle = kind === 'award' && lang !== 'en' ? '#fff8ec' : PAPER
+    c.fillRect(0, 0, W, H)
+    c.textAlign = 'center'
+    c.textBaseline = 'middle'
+    if (lang === 'ja') {
+      // 金色框（認定証是细框）：粗边 + 上下一排小点
+      const gold = '#c9a443'
+      c.strokeStyle = kind === 'cert' ? accent : gold
+      c.lineWidth = m * (kind === 'cert' ? 0.02 : 0.06)
+      c.strokeRect(m * 0.06, m * 0.06, W - m * 0.12, H - m * 0.12)
+      if (kind !== 'cert') {
+        c.fillStyle = gold
+        for (let x = m * 0.14; x < W - m * 0.12; x += m * 0.06) for (const y of [m * 0.14, H - m * 0.14]) c.fillRect(x, y - m * 0.006, m * 0.012, m * 0.012)
+      }
+      c.fillStyle = '#1f1f1f'
+      const title = kind === 'award' ? '賞状' : kind === 'cert' ? '認定証' : '卒業証書'
+      vText(c, title, W * 0.83, H * 0.18, Math.min((H * 0.62) / (title.length * 1.1), W * 0.11))
+      proseColumns(c, W, H, 0.7, 0.3, 8, kind === 'diploma' ? 0.3 : 0.2, 0.8)
+      // 日期、落款两列
+      proseColumns(c, W, H, 0.22, 0.17, 2, 0.45, 0.82)
+      c.fillStyle = RED_SEAL
+      c.fillRect(W * 0.09, H * 0.7, m * 0.11, m * 0.11)
+      if (kind === 'diploma') {
+        c.strokeStyle = accent
+        c.lineWidth = Math.max(1, m * 0.012)
+        c.beginPath()
+        c.arc(W * 0.5, H * 0.22, m * 0.05, 0, PI * 2)
+        c.stroke()
+      }
+      return
+    }
+    // 中文 / 英文：双框
     c.strokeStyle = accent
     c.lineWidth = m * 0.035
     c.strokeRect(m * 0.05, m * 0.05, W - m * 0.1, H - m * 0.1)
     c.lineWidth = m * 0.01
     c.strokeRect(m * 0.1, m * 0.1, W - m * 0.2, H - m * 0.2)
     c.fillStyle = accent
-    c.textAlign = 'center'
-    c.textBaseline = 'middle'
-    const title = kind === 'award' ? '奖 状' : kind === 'cert' ? 'CERTIFICATE' : 'DIPLOMA'
-    c.font = `bold ${Math.floor(H * (kind === 'award' ? 0.2 : 0.11))}px serif`
-    c.fillText(title, W / 2, H * 0.27)
-    // 正文：几行灰线
-    c.fillStyle = 'rgba(60,60,60,0.45)'
-    for (let i = 0; i < 4; i++) c.fillRect(W * (i === 3 ? 0.42 : 0.22), H * (0.46 + i * 0.09), W * (i === 3 ? 0.36 : 0.56), Math.max(1, H * 0.018))
-    // 印章 / 封蜡
-    c.fillStyle = kind === 'diploma' ? '#c8a03a' : '#c8473a'
-    c.beginPath()
-    c.arc(W * 0.74, H * 0.8, m * 0.09, 0, PI * 2)
-    c.fill()
-    if (kind === 'diploma') {
-      c.fillStyle = '#b8352b'
-      c.fillRect(W * 0.71, H * 0.84, m * 0.03, m * 0.12)
-      c.fillRect(W * 0.75, H * 0.84, m * 0.03, m * 0.12)
+    if (lang === 'zh') {
+      const title = kind === 'award' ? '奖  状' : kind === 'cert' ? '荣誉证书' : '毕业证书'
+      c.font = `bold ${Math.floor(H * (kind === 'award' ? 0.2 : 0.14))}px ${CERT_FONT.zh}`
+      c.fillText(title, W / 2, H * 0.26)
+      if (kind === 'diploma') {
+        // 一寸照片
+        c.fillStyle = '#dfe6ef'
+        c.fillRect(W * 0.16, H * 0.42, W * 0.14, H * 0.26)
+        c.fillStyle = '#9aa7b8'
+        c.beginPath()
+        c.arc(W * 0.23, H * 0.52, W * 0.035, 0, PI * 2)
+        c.fill()
+        c.fillRect(W * 0.185, H * 0.6, W * 0.09, H * 0.08)
+        proseLines(c, W, H, [
+          [0.36, 0.84, 0.45],
+          [0.36, 0.84, 0.54],
+          [0.36, 0.7, 0.63],
+        ])
+      } else
+        proseLines(c, W, H, [
+          [0.22, 0.78, 0.45],
+          [0.18, 0.82, 0.54],
+          [0.18, 0.82, 0.63],
+        ])
+      // 落款 + 公章
+      proseLines(c, W, H, [[0.6, 0.84, 0.78]])
+      roundSeal(c, W * 0.72, H * 0.76, m * 0.11)
+      return
     }
+    const [title, sub] = kind === 'award' ? ['Certificate', 'OF ACHIEVEMENT'] : kind === 'cert' ? ['Certificate', 'OF COMPLETION'] : ['Diploma', 'BACHELOR OF ARTS']
+    c.font = `italic bold ${Math.floor(H * 0.15)}px ${CERT_FONT.en}`
+    c.fillText(title, W / 2, H * 0.24, W * 0.76)
+    c.font = `${Math.floor(H * 0.055)}px ${CERT_FONT.en}`
+    c.fillText(sub, W / 2, H * 0.35, W * 0.7)
+    c.fillStyle = '#555'
+    c.font = `italic ${Math.floor(H * 0.04)}px ${CERT_FONT.en}`
+    c.fillText(kind === 'diploma' ? 'has conferred upon' : 'is proudly presented to', W / 2, H * 0.44, W * 0.7)
+    // 名字那一行、正文、两条签名线
+    c.fillStyle = 'rgba(40,40,40,0.7)'
+    c.fillRect(W * 0.28, H * 0.56, W * 0.44, Math.max(1, H * 0.01))
+    proseLines(c, W, H, [[0.25, 0.75, 0.62]])
+    c.fillStyle = 'rgba(40,40,40,0.7)'
+    for (const x of [0.18, 0.64]) c.fillRect(W * x, H * 0.8, W * 0.18, Math.max(1, H * 0.008))
+    ribbonSeal(c, W / 2, H * 0.76, m * 0.08, accent)
   }
 }
 const CERT_MOUNT = 150
@@ -233,7 +366,8 @@ function certFrame(kind: CertKind, w: number, h: number) {
   return ([frame, accent]: string[]) => {
     const g = new THREE.Group()
     g.add(rbox(w, h, 1.6, frame, {}, 0.35))
-    g.add(paintPanel(w - 3, h - 3, `hg-cert-${kind}-${accent}`, certDraw(kind, accent), { y: 1.5, z: 0.82 }))
+    const lang = signLang()
+    g.add(paintPanel(w - 3, h - 3, `hg-cert-${kind}-${accent}-${lang}`, certDraw(kind, accent, lang), { y: 1.5, z: 0.82 }))
     return fitGroup(g, CERT_MOUNT)
   }
 }
@@ -283,10 +417,10 @@ function certBox([box, label]: string[]) {
 }
 
 const certs: AssetDef[] = [
-  define('hg-cert-award-s', '奖状', 'deco', [32, 2, 23], CERT_FRAMES, certFrame('award', 32, 23), { mount: CERT_MOUNT, sizeLabel: '奖状 · 小' }),
-  define('hg-cert-award-m', '奖状', 'deco', [44, 2, 32], CERT_FRAMES, certFrame('award', 44, 32), { mount: CERT_MOUNT, sizeLabel: '奖状 · 中' }),
-  define('hg-cert-cert-m', '奖状', 'deco', [44, 2, 33], CERT_FRAMES, certFrame('cert', 44, 33), { mount: CERT_MOUNT, sizeLabel: '证书 · 中' }),
-  define('hg-cert-diploma-l', '奖状', 'deco', [60, 2, 46], CERT_FRAMES, certFrame('diploma', 60, 46), { mount: CERT_MOUNT, sizeLabel: '毕业证书 · 大' }),
+  define('hg-cert-award-s', '奖状', 'deco', [32, 2, 23], CERT_FRAMES, certFrame('award', 32, 23), { mount: CERT_MOUNT, sizeLabel: '奖状 · 小', lingual: true }),
+  define('hg-cert-award-m', '奖状', 'deco', [44, 2, 32], CERT_FRAMES, certFrame('award', 44, 32), { mount: CERT_MOUNT, sizeLabel: '奖状 · 中', lingual: true }),
+  define('hg-cert-cert-m', '奖状', 'deco', [44, 2, 33], CERT_FRAMES, certFrame('cert', 44, 33), { mount: CERT_MOUNT, sizeLabel: '证书 · 中', lingual: true }),
+  define('hg-cert-diploma-l', '奖状', 'deco', [60, 2, 46], CERT_FRAMES, certFrame('diploma', 60, 46), { mount: CERT_MOUNT, sizeLabel: '毕业证书 · 大', lingual: true }),
   define('hg-cert-folder', '证书收纳', 'study', [24, 17, 1.6], [
     ['chinese', CN.lacquer, CN.brass],
     ['classic', CL.navy, CL.gold],

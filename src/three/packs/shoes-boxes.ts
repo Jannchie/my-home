@@ -12,6 +12,7 @@ import { ball, capsule, cyl, puck, rbox, shade, toon, torus } from '../toon'
 import { C, SWING_OPEN, holePanel, movable, paintPanel, rectPoly, rng, shell, slab, type AssetCategory, type AssetDef, type Poly } from '../kit'
 import { G, P, PI, cappedTube, clearDeep, cylX, rod3, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, R, define, type Build, type Dims, type Pal } from '../packkit'
+import { say, signLang, signSans } from '../signLang'
 
 /** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
 const TUBE: TubeOpts = { seg: { per: 4, min: 16 } }
@@ -1717,10 +1718,12 @@ function drawFragile(g: CanvasRenderingContext2D, W: number, H: number) {
   g.fillRect(cx - H * 0.11, H * 0.72, H * 0.22, H * 0.05)
   g.textAlign = 'center'
   g.textBaseline = 'middle'
-  g.font = `bold ${Math.round(H * 0.3)}px sans-serif`
-  g.fillText('こわれもの', W * 0.6, H * 0.4)
-  g.font = `bold ${Math.round(H * 0.16)}px sans-serif`
-  g.fillText('FRAGILE · 取扱注意', W * 0.6, H * 0.74)
+  // 易碎标签：日本「こわれもの」、中国「易碎物品 / 小心轻放」、美国 FRAGILE / HANDLE WITH CARE
+  const [big, small] = say({ zh: ['易碎物品', '小心轻放 FRAGILE'], ja: ['こわれもの', 'FRAGILE · 取扱注意'], en: ['FRAGILE', 'HANDLE WITH CARE'] })
+  g.font = `bold ${Math.round(H * 0.3)}px ${signSans()}`
+  g.fillText(big, W * 0.6, H * 0.4, W * 0.6)
+  g.font = `bold ${Math.round(H * 0.16)}px ${signSans()}`
+  g.fillText(small, W * 0.6, H * 0.74, W * 0.6)
 }
 function drawUp(g: CanvasRenderingContext2D, W: number, H: number) {
   g.fillStyle = '#ffffff'
@@ -1737,10 +1740,11 @@ function drawUp(g: CanvasRenderingContext2D, W: number, H: number) {
   g.fillRect(W * 0.15, H * 0.5, W * 0.7, Math.max(2, H * 0.03))
   g.textAlign = 'center'
   g.textBaseline = 'middle'
-  g.font = `bold ${Math.round(H * 0.13)}px sans-serif`
-  g.fillText('THIS SIDE UP', W / 2, H * 0.66)
-  g.font = `bold ${Math.round(H * 0.15)}px sans-serif`
-  g.fillText('天地無用', W / 2, H * 0.85)
+  const [top, bottom] = say({ zh: ['向上', '请勿倒置'], ja: ['THIS SIDE UP', '天地無用'], en: ['THIS SIDE UP', 'KEEP UPRIGHT'] })
+  g.font = `bold ${Math.round(H * 0.13)}px ${signSans()}`
+  g.fillText(top, W / 2, H * 0.66, W * 0.9)
+  g.font = `bold ${Math.round(H * 0.15)}px ${signSans()}`
+  g.fillText(bottom, W / 2, H * 0.85, W * 0.9)
 }
 function drawLabel(text: string) {
   return (g: CanvasRenderingContext2D, W: number, H: number) => {
@@ -1751,11 +1755,11 @@ function drawLabel(text: string) {
     g.fillStyle = '#7a6a58'
     g.textAlign = 'center'
     g.textBaseline = 'middle'
-    g.font = `${Math.round(H * 0.15)}px sans-serif`
-    g.fillText('MOVING · 引越し', W / 2, H * 0.12)
+    g.font = `${Math.round(H * 0.15)}px ${signSans()}`
+    g.fillText(say({ zh: '搬家 MOVING', ja: 'MOVING · 引越し', en: 'MOVING' }), W / 2, H * 0.12)
     g.fillStyle = '#26324a'
-    g.font = `bold ${Math.round(H * 0.38)}px sans-serif`
-    g.fillText(text, W / 2, H * 0.6)
+    g.font = `bold ${Math.round(H * 0.38)}px ${signSans()}`
+    g.fillText(text, W / 2, H * 0.6, W * 0.9)
   }
 }
 
@@ -1774,15 +1778,15 @@ function carton(w: number, d: number, h: number, p: string[], o: CartonOpt = {})
   for (const sx of [-1, 1]) g.add(rbox((w - tw) / 2 - 0.8, 0.31, 0.25, shade(p[0], -0.18), { x: sx * ((w - tw) / 4 + tw / 4), y: h - 0.01 }, 0.05))
   if (o.marks && !o.label) {
     const fw = Math.min(w * 0.55, 22)
-    g.add(paintPanel(fw, fw * 0.4, 'sb-fragile', drawFragile, { x: -w * 0.12, y: h * 0.18, z: d / 2 + 0.32 }))
+    g.add(paintPanel(fw, fw * 0.4, `sb-fragile-${signLang()}`, drawFragile, { x: -w * 0.12, y: h * 0.18, z: d / 2 + 0.32 }))
   }
   if (o.marks) {
     const sw = Math.min(d * 0.55, 16)
-    g.add(paintPanel(sw, sw * 0.8, 'sb-up', drawUp, { x: w / 2 + 0.32, y: h * 0.3, ry: PI / 2 }))
+    g.add(paintPanel(sw, sw * 0.8, `sb-up-${signLang()}`, drawUp, { x: w / 2 + 0.32, y: h * 0.3, ry: PI / 2 }))
   }
   if (o.label) {
     const lw = Math.min(w * 0.5, 20)
-    g.add(paintPanel(lw, lw * 0.55, `sb-label-${o.label}`, drawLabel(o.label), { x: w * 0.1, y: h * 0.35, z: d / 2 + 0.32 }))
+    g.add(paintPanel(lw, lw * 0.55, `sb-label-${o.label}-${signLang()}`, drawLabel(o.label), { x: w * 0.1, y: h * 0.35, z: d / 2 + 0.32 }))
   }
   return g
 }
@@ -1840,7 +1844,7 @@ function flatBundle(p: string[]) {
 }
 
 /** 搬家纸箱堆 */
-const STACK_LABELS = ['キッチン', '本・書類', '衣類']
+const STACK_LABELS = { zh: ['厨房', '书籍', '衣物'], ja: ['キッチン', '本・書類', '衣類'], en: ['KITCHEN', 'BOOKS', 'CLOTHES'] }
 function cartonStack(n: number): Build {
   return (p) => {
     const g = new THREE.Group()
@@ -1852,7 +1856,7 @@ function cartonStack(n: number): Build {
     let y = 0
     for (let i = 0; i < n; i++) {
       const [w, d, h] = sizes[i]
-      const b = carton(w, d, h, p, { label: STACK_LABELS[i], marks: i === 0 })
+      const b = carton(w, d, h, p, { label: say(STACK_LABELS)[i], marks: i === 0 })
       g.add(P(b, (i % 2 ? 1.5 : -1) * (i ? 1 : 0), y, i ? 1 : 0, 0, i ? (i % 2 ? 0.05 : -0.04) : 0))
       y += h + 0.3
     }
@@ -1954,6 +1958,7 @@ const BOXES: AssetDef[] = [
   ...CARTONS.map((c) =>
     define(`sb-carton-${c.key}`, '快递纸箱', 'storage', [c.w + 0.7, c.d + 0.7, c.h + 0.3], CARTON_PALS, (p) => carton(c.w, c.d, c.h, p, { marks: true }), {
       sizeLabel: c.key.toUpperCase(),
+      lingual: true,
       form: 'closed',
       prop: true,
     }),
@@ -1961,7 +1966,7 @@ const BOXES: AssetDef[] = [
   define('sb-carton-open', '快递纸箱', 'storage', openCartonDims(), CARTON_PALS, openCarton, { sizeLabel: 'M', form: 'open', prop: true }),
   define('sb-carton-flat', '压扁的纸箱捆', 'storage', [71, 50, 4.4], CARTON_PALS, flatBundle, { form: 'lying', prop: true }),
   ...[2, 3].map((n) =>
-    define(`sb-carton-stack-${n}`, '搬家纸箱堆', 'storage', [51.5, 39.5, n === 2 ? 64.6 : 90.9], CARTON_PALS, cartonStack(n), { sizeLabel: `${n} 箱`, form: 'stacked', prop: true }),
+    define(`sb-carton-stack-${n}`, '搬家纸箱堆', 'storage', [51.5, 39.5, n === 2 ? 64.6 : 90.9], CARTON_PALS, cartonStack(n), { sizeLabel: `${n} 箱`, form: 'stacked', prop: true, lingual: true }),
   ),
 ]
 

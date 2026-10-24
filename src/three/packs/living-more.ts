@@ -8,6 +8,7 @@ import { artOverride } from '../artwork'
 import { C, SWING_OPEN, ellipsePoly, glow, holePanel, movable, paintPanel, rectPoly, rng, shell, type AssetDef, type Poly, type SurfaceDef } from '../kit'
 import { G, P, batten, clearMat, cylX, cylZ, fitGroup, lit, noOutlineDeep, rod3, tube, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, PROP, R, define, type PalFlat } from '../packkit'
+import { say, signLang, signSans } from '../signLang'
 
 /** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
 const TUBE: TubeOpts = { seg: 48, receive: false }
@@ -1507,15 +1508,16 @@ function doormat(kind: 'rect' | 'half' | 'cat') {
         flatPaint(
           44,
           12,
-          `lm-mat-${ground}${b}`,
+          `lm-mat-${ground}${b}-${signLang()}`,
           (x, W, H) => {
             x.fillStyle = ground
             x.fillRect(0, 0, W, H)
             x.fillStyle = b
-            x.font = `bold ${Math.round(H * 0.7)}px sans-serif`
+            x.font = `bold ${Math.round(H * 0.7)}px ${signSans()}`
             x.textAlign = 'center'
             x.textBaseline = 'middle'
-            x.fillText('WELCOME', W / 2, H / 2)
+            // 中国「出入平安」、日本「おかえり」、英文 WELCOME
+            x.fillText(say({ zh: '出入平安', ja: 'おかえり', en: 'WELCOME' }), W / 2, H / 2, W * 0.92)
           },
           1.95,
         ),
@@ -1677,7 +1679,7 @@ export const LM_RUGS: AssetDef[] = [
       ['industrial', I.concrete, I.iron, I.rust],
     ],
     doormat('rect'),
-    { sizeLabel: '长方', ...RUG_SURF(1.9) },
+    { sizeLabel: '长方', ...RUG_SURF(1.9), lingual: true },
   ),
   define(
     'lm-doormat-half',

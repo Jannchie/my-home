@@ -31,6 +31,7 @@ import { drawPlanks, PLANK_TILE } from './woodGrain'
 import { isIndoor, sharedIntervals, voidRailSegments, wallSegments, wallThicknessAt, type WallSegment } from '../walls'
 import { tatamiLayout } from '../tatami'
 import { beamsOf, edgeNear, faceWallpaper } from '../wallFace'
+import { lingualKey } from './signLang'
 import { doorColor, doorHandleOf, doorStyled, handleColor, hasSidelight, hasTransom, LEGACY_DOOR, LEGACY_ENTRANCE, LEGACY_SLIDING, sidelightWidth, TRANSOM_TOP } from '../doorStyles'
 import { doorLeafModel, liteModel } from './doorModels'
 import { barnPose, defaultDoorOpen, foldCount, foldLeaves, foldPose, slidingPose, swingPose } from '../doorMotion'
@@ -2103,9 +2104,9 @@ export function setVertexColorMerge(v: boolean | ((def: AssetDef) => boolean)) {
 }
 export const vertexColorMergeFor = (def: AssetDef) => !hasTag(def, 'light') && (typeof vcMerge === 'function' ? vcMerge(def) : vcMerge)
 
-/** 模板的缓存键：素材 | 配色 | 单件改色 | 花纹 | 画面 | 屏幕画面（开合不在内） */
+/** 模板的缓存键：素材 | 配色 | 单件改色 | 花纹 | 画面 | 屏幕画面 | 字的语言（开合不在内） */
 export function furnitureTemplateKey(fu: Pick<Furniture, 'asset' | 'color' | 'colors' | 'patterns' | 'art' | 'screen'>) {
-  return `${fu.asset}|${fu.color ?? 0}|${fu.colors?.join(',') ?? ''}|${fu.patterns ? JSON.stringify(fu.patterns) : ''}|${fu.art ?? ''}|${fu.screen ?? ''}`
+  return `${fu.asset}|${fu.color ?? 0}|${fu.colors?.join(',') ?? ''}|${fu.patterns ? JSON.stringify(fu.patterns) : ''}|${fu.art ?? ''}|${fu.screen ?? ''}|${lingualKey(ASSET_MAP.get(fu.asset))}`
 }
 
 function buildTemplate(def: AssetDef, fu: Furniture, closeUp: boolean): FurnitureTemplate {
