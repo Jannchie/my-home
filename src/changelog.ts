@@ -12,6 +12,27 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '1.18.0',
+    date: '2026-10-24',
+    notes: {
+      zh: [
+        '空调等壁挂物摆在内收柱的位置时，会挂在内收柱正面，不再穿进梁里；改内收柱尺寸时挂着的东西会跟着挪',
+        '内收柱可以直接拖着改尺寸：3D 沙盘里拖两端改长度、拖正面改深度、拖底面改下垂高度，按住梁身沿墙挪；平面图里也能拖两端、内边和梁身。按住 Shift 每 5 cm 吸附',
+        '墙面卡片里的内收柱改成按真实比例画的立面图和剖面图，标出长度、到墙端的距离、下垂高度和梁下净高，图上也能直接拖',
+      ],
+      ja: [
+        'エアコンなどの壁掛け家具を梁の位置に置くと、梁に食い込まず梁の前面に掛かるように。梁のサイズを変えると掛けてある物も一緒に動きます',
+        '梁をドラッグしてサイズを変えられるように：3D ジオラマでは両端で長さ、前面で出幅、底面で下がり高さを変え、梁本体をつかんで壁に沿って移動できます。間取り図でも両端・内側の辺・本体をドラッグできます。Shift で 5 cm 単位',
+        '壁カードの梁を実寸比の立面図と断面図に。長さ、壁端からの距離、下がり高さ、梁下の有効高さを寸法表示し、図の上でもドラッグできます',
+      ],
+      en: [
+        'Wall-mounted items such as air conditioners placed where a beam is now hang on the beam face instead of cutting into it, and follow the beam when its size changes',
+        'Beams can be resized by dragging: in the 3D diorama drag the ends for length, the front for depth and the bottom for drop, or grab the beam to slide it along the wall; in the floor plan drag the ends, the inner edge or the beam itself. Hold Shift to snap to 5 cm',
+        "The wall card now draws the beam as a true-scale elevation and section, dimensioning its length, distance to the wall ends, drop and clear height below; you can drag on the drawing too",
+      ],
+    },
+  },
+  {
     version: '1.17.0',
     date: '2026-10-23',
     notes: {
