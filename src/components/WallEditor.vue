@@ -1,5 +1,6 @@
 <script setup lang="ts">
-// 选中一面墙时的编辑内容（平面图检查器、3D 沙盘的浮动卡片共用）：这面墙的墙纸（缺省跟随房间）、墙顶内收柱（梁）的长 / 深 / 高 / 位置。
+// 选中一面墙时的编辑内容（平面图检查器、3D 沙盘的浮动卡片共用）：这面墙的墙纸（缺省跟随房间）、墙顶内收柱（梁）的长 / 深 / 高 / 位置
+// （立面 / 剖面图上直接拖，也可以填数）。
 // 每次改动一步撤销（store.setWallFace）。
 import { computed } from 'vue'
 import { edgeInfo, roomWallpaper, type Room, type WallBeam, type Wallpaper } from '../model'
@@ -9,6 +10,7 @@ import { patternWallpaper, WP_COLORS, WP_PATTERNS } from '../wallpaper'
 import { patternPreview } from '../three/fabric'
 import { t } from '../i18n'
 import { JIcon } from '@jannchie/icons-vue'
+import BeamElevation from './BeamElevation.vue'
 import { ICONS } from '../ui/icons'
 
 const props = defineProps<{ room: Room; edge: number }>()
@@ -72,6 +74,7 @@ const num = (e: Event) => Number((e.target as HTMLInputElement).value)
       <button v-else class="mini" :title="t('沿墙顶部横着走的梁：从天花往下垂、往室内突出')" @click="addBeam"><JIcon :icon="ICONS.stepUp" :size="14" />{{ t('加内收柱') }}</button>
     </div>
     <template v-if="beam">
+      <BeamElevation :room="room" :edge="edge" :beam="beam" />
       <div class="grid">
         <label>{{ t('高 cm') }}<input type="number" :min="BEAM_MIN" :max="BEAM_MAX_H" step="5" :value="beam.h" :title="t('从天花往下垂的高度')" @change="patchBeam('h', num($event))" /></label>
         <label>{{ t('深 cm') }}<input type="number" :min="BEAM_MIN" step="5" :value="beam.d" :title="t('从墙面往室内突出的深度')" @change="patchBeam('d', num($event))" /></label>
