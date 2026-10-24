@@ -4,7 +4,8 @@ import { migrateAppliances } from './appliance'
 import { migrateCabinets, migrateOpenForms, setOpen } from './cabinet'
 import { applyFixesHouse, decorateHouse, roomStyles } from './decorate'
 import { autoWallpapers } from './wallpaper'
-import { mergeWallFaces, normalizeWallFaces, patchWallFace, splitWallFace } from './wallFace'
+import { mergeWallFaces, normalizeWallFaces, patchWallFace, splitWallFace, wallFace } from './wallFace'
+import { reseatOnBeam } from './beamMount'
 import type { CheckItem } from './checklist'
 import { generateHousehold } from './household'
 import { carriedBy } from './surface'
@@ -1017,12 +1018,23 @@ export function restyle(roomId: string | null, style: StyleTag | 'auto' | 'rando
   return n
 }
 
-/** 改一面墙的设置（墙纸覆盖 / 内收柱），一步撤销；字段给 undefined 就删掉 */
+/** 改一面墙的设置（墙纸覆盖 / 内收柱），一步撤销；字段给 undefined 就删掉。改了梁，挂在这面墙上的空调等跟着重新挂 */
 export function setWallFace(roomId: string, edge: number, patch: Partial<WallFace>) {
-  mutate((p) => {
-    const r = p.rooms.find((x) => x.id === roomId)
-    if (r && edge < r.points.length) patchWallFace(r, edge, patch)
-  })
+  mutate((p) => applyWallFace(p, roomId, edge, patch))
+}
+
+/** 拖梁的手柄时：第一次记撤销点，之后只改不记；松手调 settle() */
+export function previewWallFace(roomId: string, edge: number, patch: Partial<WallFace>, first: boolean) {
+  if (first) checkpoint()
+  applyWallFace(plan.value, roomId, edge, patch)
+}
+
+function applyWallFace(p: Plan, roomId: string, edge: number, patch: Partial<WallFace>) {
+  const r = p.rooms.find((x) => x.id === roomId)
+  if (!r || edge >= r.points.length) return
+  const before = wallFace(r, edge)?.beam
+  patchWallFace(r, edge, patch)
+  if ('beam' in patch) reseatOnBeam(p, r, edge, before, wallFace(r, edge)?.beam)
 }
 
 /** 全屋墙纸（没设自己墙纸的房间都用它）；undefined = 回到默认的米白墙 */

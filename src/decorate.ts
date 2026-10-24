@@ -57,6 +57,7 @@ import { stairFootprint, stairToWorld, stairUnderZone, stairWalk, withStairKeepo
 import { NavGrid } from './nav'
 import { arrange, bedSides, pickWidth, twinCenters, type Pick, type Slot } from './arrange'
 import { HARD_ZONES, OPENING_ZONES, Occupancy, STAIR_ZONES, SWING_ZONES, bodyCenter, boxesOverlap, footprint, type PlaceOpts, type ZoneKind } from './occupancy'
+import { seatOnBeams } from './beamMount'
 
 export type { RoomPurpose }
 
@@ -4691,6 +4692,7 @@ export function applyFixes(plan: Plan, items: CheckItem[], household?: Household
   const added = new Set(d.out.filter((f) => !before.has(f.id)).map((f) => f.id))
   d.assignArt(added)
   d.tiltStuck(added)
+  seatOnBeams(plan, d.out)
   return d.out
 }
 
@@ -4706,7 +4708,10 @@ export function decorate(plan: Plan, seed = Date.now(), style: StyleTag | 'rando
   const hh = household && style !== 'auto' ? { ...household, members: household.members.map((m) => ({ ...m, style: st })) } : household
   // 指定了统一风格时，全户分配里的成员也换成改过风格的那份（按 id 对上）
   const alloc = house?.alloc && hh && hh !== household ? remapAlloc(house.alloc, hh) : house?.alloc
-  return new Decorator({ ...plan, furniture: [] }, rand, st, hh, house && { ...house, alloc }).run()
+  const out = new Decorator({ ...plan, furniture: [] }, rand, st, hh, house && { ...house, alloc }).run()
+  // 碰到内收柱（梁）的空调等挂到梁正面
+  seatOnBeams(plan, out)
+  return out
 }
 
 /** 分配表里的成员换成另一份住户里同 id 的成员 */

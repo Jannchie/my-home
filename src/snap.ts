@@ -6,6 +6,7 @@ import { floorOf, riseOf } from './floors'
 import { overlapArea, stairUnderZone, underZonePoly } from './stairs'
 import { wallThicknessAt } from './walls'
 import { porchFootprint } from './exterior'
+import { mountStandoff } from './beamMount'
 import { roomAt } from './three/house'
 
 /** 吸附参考线：axis = 'x' 表示竖线 x = v（沿 y 从 a 到 b） */
@@ -131,7 +132,7 @@ export function snapToWall(plan: Plan, asset: string, x: number, y: number) {
   const room = roomAt(plan, { x, y })
   if (!def || !room) return null
   let best: { x: number; y: number; rot: number; d: number; guide: Guide } | null = null
-  for (const e of edgesOf(room.points)) {
+  for (const [i, e] of edgesOf(room.points).entries()) {
     if (!isAxisEdge(e)) continue
     const mid = mul(add(e.a, e.b), 0.5)
     const half = wallThicknessAt(plan, mid, e.out, room) / 2
@@ -142,7 +143,9 @@ export function snapToWall(plan: Plan, asset: string, x: number, y: number) {
     const onWall = add(e.a, mul(e.dir, t))
     const dist = Math.hypot(x - onWall.x, y - onWall.y)
     if (best && dist >= best.d) continue
-    const c = add(onWall, mul(e.out, -(half + def.d / 2)))
+    // 挂的位置碰到这面墙的内收柱（梁）就挂在梁正面
+    const face = half + mountStandoff(plan, room, i, asset, t)
+    const c = add(onWall, mul(e.out, -(face + def.d / 2)))
     const horiz = Math.abs(e.dir.x) > 0.5
     best = {
       x: Math.round(c.x),
@@ -150,8 +153,8 @@ export function snapToWall(plan: Plan, asset: string, x: number, y: number) {
       rot: rotFacingWall(e.out),
       d: dist,
       guide: horiz
-        ? { axis: 'y', v: onWall.y + e.out.y * -half, a: c.x - def.w / 2, b: c.x + def.w / 2, wall: true }
-        : { axis: 'x', v: onWall.x + e.out.x * -half, a: c.y - def.w / 2, b: c.y + def.w / 2, wall: true },
+        ? { axis: 'y', v: onWall.y + e.out.y * -face, a: c.x - def.w / 2, b: c.x + def.w / 2, wall: true }
+        : { axis: 'x', v: onWall.x + e.out.x * -face, a: c.y - def.w / 2, b: c.y + def.w / 2, wall: true },
     }
   }
   return best && { x: best.x, y: best.y, rot: best.rot, guides: [best.guide] }
