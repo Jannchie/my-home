@@ -2,7 +2,8 @@
 //   - 被子：顶面平铺在床垫上，微微蓬起、有一两道宽缓的斜褶；越过床垫边缘后圆滚滚地翻下去（半径 = 被子厚度），
 //     两侧和床尾垂下一截。垂下的部分有不规则的竖向波浪褶，越往下摆越大，下摆也高低起伏；
 //   - 枕头：鼓起来的超椭球，四边捏薄、中间鼓（像真枕头缝线那一圈是扁的）。
-// 都是确定性的（同样的参数同样的形状），几何体按参数缓存。单位厘米，y 向上。
+//   - 压痕：被子上摆着东西时，按东西的占地压出浅坑（dents），东西陷进被子里（沙盘 settleOnBeds 用）。
+// 都是确定性的（同样的参数同样的形状），没有压痕的几何体按参数缓存。单位厘米，y 向上。
 
 import * as THREE from 'three'
 import { toon } from './toon'
@@ -42,14 +43,46 @@ export interface DuvetOpts {
   /** 被子厚度（翻边的半径） */
   thick?: number
   seed?: number
+  /** 垂下部分的竖向褶有多深（默认 1）：底下紧贴着床垫、外面还罩着一层盖毯时调小，免得褶子往里收时床垫穿出来 */
+  sway?: number
+  /** 压在被子上的东西（被子网格的局部坐标）：每件压出一个浅坑 */
+  dents?: Dent[]
+}
+
+/** 被子上的一处压痕：中心 (x, z)、占地半宽 hx × hz（绕 y 转 rot 弧度）、最深 depth */
+export interface Dent {
+  x: number
+  z: number
+  hx: number
+  hz: number
+  rot: number
+  depth: number
+}
+
+const smooth = (t: number) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t))
+
+/** 某一点被压下去多少：占地范围内（往里收两成，东西底面多是圆角）压到底，往外按坑深放宽一圈缓缓回平；几处压痕取最深的 */
+function dentAt(dents: Dent[], x: number, z: number) {
+  let out = 0
+  for (const d of dents) {
+    const c = Math.cos(d.rot)
+    const s = Math.sin(d.rot)
+    const u = Math.abs((x - d.x) * c + (z - d.z) * s) - d.hx * 0.8
+    const v = Math.abs(-(x - d.x) * s + (z - d.z) * c) - d.hz * 0.8
+    const e = Math.hypot(Math.max(u, 0), Math.max(v, 0))
+    out = Math.max(out, d.depth * (1 - smooth(e / (4 + d.depth * 2.5))))
+  }
+  return out
 }
 
 /** 被子（床头那一端是平的直边，翻折的被头另外做） */
 export function duvetGeometry(o: DuvetOpts) {
   const r = o.thick ?? 4
   const seed = o.seed ?? 1
-  const key = `duvet|${[o.w, o.len, o.top, o.z1, o.drop, r, seed].map((v) => v.toFixed(1)).join(',')}`
-  let geo = geoCache.get(key)
+  const sway = o.sway ?? 1
+  const dents = o.dents?.length ? o.dents : null
+  const key = `duvet|${[o.w, o.len, o.top, o.z1, o.drop, r, seed, sway].map((v) => v.toFixed(2)).join(',')}`
+  let geo = dents ? undefined : geoCache.get(key)
   if (geo) return geo
   // 平铺部分：外轮廓减去翻边的半径
   const half = o.w / 2 - r
@@ -83,12 +116,12 @@ export function duvetGeometry(o: DuvetOpts) {
       const hz = uz.hang
       // 褶子又宽又缓（15～65cm 一个），不是一圈荷叶边；以往里收为主（往外最多鼓一厘米多，不比外轮廓宽出多少）
       if (hx > 0) {
-        const amp = Math.min(3, 0.3 + hx * 0.22)
+        const amp = Math.min(3, 0.3 + hx * 0.22) * sway
         x += Math.sign(a) * amp * (wave(z * 0.42, seed + Math.sign(a)) - 0.5) * 0.9
         y += hx * 0.05 * wave(z * 0.3, seed + 7)
       }
       if (hz > 0) {
-        const amp = Math.min(3, 0.3 + hz * 0.22)
+        const amp = Math.min(3, 0.3 + hz * 0.22) * sway
         z += amp * (wave(x * 0.42, seed + 3) - 0.5) * 0.9
         y += hz * 0.05 * wave(x * 0.3, seed + 9)
       }
@@ -108,6 +141,8 @@ export function duvetGeometry(o: DuvetOpts) {
         // 圆边上：顶面的蓬起接过来，免得接缝处有台阶
         y += 0.9 * (1 - Math.min(1, Math.abs(x) / half) ** 4)
       }
+      // 压痕：顶面整个压下去，翻边越往下压得越少（垂下去的部分不动）
+      if (dents && ux.hang === 0 && uz.hang === 0) y -= dentAt(dents, x, z) * (1 - Math.max(ux.down, uz.down) / r)
       const k = (j * (nx + 1) + i) * 3
       pos[k] = x
       pos[k + 1] = y
@@ -128,16 +163,54 @@ export function duvetGeometry(o: DuvetOpts) {
   geo.setIndex(index)
   geo.computeVertexNormals()
   geo.computeBoundingSphere()
-  geoCache.set(key, geo)
+  if (!dents) geoCache.set(key, geo)
   return geo
 }
 
-/** 被子网格 */
+/**
+ * 被子网格。userData.duvet 记下形状参数：沙盘按上面摆的东西重算带压痕的几何体（settleOnBeds）；
+ * 带着它的网格不和别的零件合并（mergeMeshes 留着有业务标记的）
+ */
 export function duvet(o: DuvetOpts & { color: string }) {
-  const m = new THREE.Mesh(duvetGeometry(o), toon(o.color))
+  const { color, dents: _, ...shape } = o
+  const m = new THREE.Mesh(duvetGeometry(o), toon(color))
   m.castShadow = true
   m.receiveShadow = true
+  m.userData.duvet = shape
   return m
+}
+
+/** 模型里的被子网格 */
+export function duvetsIn(root: THREE.Object3D) {
+  const out: THREE.Mesh[] = []
+  root.traverse((o) => {
+    if (o.userData.duvet && (o as THREE.Mesh).isMesh) out.push(o as THREE.Mesh)
+  })
+  return out
+}
+
+const _m = new THREE.Matrix4()
+const _p = new THREE.Vector3()
+/**
+ * 按压痕（root 的局部坐标，被子网格的局部坐标由各级 matrix 换算；被子不绕 y 转）重算 root 里每床被子的几何体，描边外壳跟着换。
+ * 没有压痕时换回不带压痕的共用几何体；换下来的带压痕几何体释放掉
+ */
+export function dentDuvets(root: THREE.Object3D, dents: Dent[]) {
+  for (const m of duvetsIn(root)) {
+    _m.identity()
+    for (let o: THREE.Object3D | null = m; o && o !== root; o = o.parent) _m.premultiply(o.matrix)
+    _m.invert()
+    const local = dents.map((d) => {
+      _p.set(d.x, 0, d.z).applyMatrix4(_m)
+      return { ...d, x: _p.x, z: _p.z }
+    })
+    const geo = duvetGeometry({ ...(m.userData.duvet as DuvetOpts), dents: local })
+    const old = m.geometry
+    m.geometry = geo
+    for (const c of m.children) if (c.userData.isOutline) (c as THREE.Mesh).geometry = geo
+    if (old !== geo && old.userData.dented) old.dispose()
+    if (local.length) geo.userData.dented = true
+  }
 }
 
 /** 枕头的几何体：w × h × d 的鼓包，中心在原点；pinch 越大四边越扁 */
@@ -173,4 +246,20 @@ export function pillowMesh(w: number, h: number, d: number, color: string, at: {
   m.castShadow = true
   m.receiveShadow = true
   return m
+}
+
+/** 东西压进被子多深：按体积估个分量，小摆件一厘米左右，大箱子压到三厘米 */
+export const dentDepth = (w: number, d: number, h: number) => Math.min(3, Math.max(0.8, 0.5 + Math.cbrt(Math.max(1, w * d * h)) * 0.05))
+
+const ray = new THREE.Raycaster()
+const DOWN = new THREE.Vector3(0, -1, 0)
+/** 从 fromY 往下打几条射线（世界坐标 xz），落在 root 里最高的那一点的 y；都没打中返回 null */
+export function restHeight(root: THREE.Object3D, pts: { x: number; z: number }[], fromY: number) {
+  let top: number | null = null
+  for (const q of pts) {
+    ray.set(_p.set(q.x, fromY, q.z), DOWN)
+    const hit = ray.intersectObject(root, true)[0]
+    if (hit && (top === null || hit.point.y > top)) top = hit.point.y
+  }
+  return top
 }

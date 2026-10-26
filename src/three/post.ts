@@ -1167,9 +1167,10 @@ export interface Post {
   setSky: (bg: [string, string, string], night: number) => void
   /**
    * 在后台编译某个效果要用的着色器（场景材质按这个效果换好之后的样子、后处理各遍），编好后 resolve。
-   * 第一次画某个效果时 three 要同步等着色器链接完（M1 上一个效果能卡几百毫秒）；先用它编好再画就不卡
+   * 第一次画某个效果时 three 要同步等着色器链接完（M1 上一个效果能卡几百毫秒）；先用它编好再画就不卡。
+   * 和 setLook 一样可以传预设 id 或 resolveLook 合好的完整参数
    */
-  prepareLook: (id: string) => Promise<void>
+  prepareLook: (look: string | LookDef) => Promise<void>
   /** 省电画质：无 MSAA + FXAA、不加入夜泛光 */
   setLow: (low: boolean) => void
   /** 室内灯光（three/lights.ts）：窗户夜光的颜色（跟色温）和亮灯程度 0–1 */
@@ -1723,9 +1724,9 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
       syncFogColor()
       update()
     },
-    prepareLook(id) {
+    prepareLook(look) {
       const keep = current
-      current = LOOK_MAP.get(id as LookId) ?? LOOK_MAP.get('none')!
+      current = typeof look === 'string' ? (LOOK_MAP.get(look as LookId) ?? LOOK_MAP.get('none')!) : look
       update(true)
       apply()
       const jobs: Promise<unknown>[] = []

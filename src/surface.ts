@@ -278,6 +278,15 @@ function stuckOn(sticks: Furniture[], f: Furniture): Furniture[] {
   })
 }
 
+/** 直接摆在一件家具顶面（AssetDef.surface）上的东西：不含柜内各层，也不递归 */
+export function propsOnTop(plan: Pick<Plan, 'furniture'>, f: Furniture): Furniture[] {
+  const top = levels(f.asset)[0]
+  const def = ASSET_MAP.get(f.asset)
+  if (!def?.surface || !top) return []
+  const y = (f.z ?? 0) + def.surface
+  return plan.furniture.filter((o) => o.id !== f.id && o.floor === f.floor && Math.abs((o.z ?? 0) - y) < 0.5 && inPolys(f, top.polys, o))
+}
+
 /** 一件家具上（含柜内各层）摆着的东西，递归：托盘上的杯子也算 */
 export function propsOn(plan: Pick<Plan, 'furniture'>, f: Furniture, depth = 0): Furniture[] {
   const lv = levels(f.asset, !!f.open)

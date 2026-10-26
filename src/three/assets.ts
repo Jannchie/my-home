@@ -239,22 +239,41 @@ function diningChair(p: string[]) {
 
 function bed(w: number, p: string[]) {
   const [duvet, sheet, frame] = p
-  const d = 205
-  // 床架标成木（第一组配色里床单和床架同色，按颜色认槽会认成床单；白、黑的床架按刷漆画，mats.ts）
-  const g = G(tagMat(legs(w, d, 10, shade(frame, -0.12), 2.6, 6, false), 'wood'))
-  g.add(tagMat(rbox(w + 6, 16, d + 4, frame, { y: 10 }, 3), 'wood'))
-  g.add(tagMat(rbox(w + 8, 70, 8, frame, { z: -d / 2 - 2 }, 3.5), 'wood'))
-  g.add(rbox(w - 2, 18, d - 4, sheet, { y: 24 }, 6))
+  // 床头背板到床尾盖毯的整体进深约 217（和旧版模型一样，占地、一键布置的结果不变）
+  const d = 212
+  const wood = (m: THREE.Object3D) => tagMat(m, 'wood')
+  // 床架：四根圆脚 + 一圈木围边（顶 26），床垫架在围边上、被子垂下来盖住床垫侧面。
+  // 标成木（第一组配色里床单和床架同色，按颜色认槽会认成床单；白、黑的床架按刷漆画，mats.ts）
+  const g = G(wood(legs(w + 2, d - 8, 9, shade(frame, -0.12), 2.6, 7)))
+  for (const s of [-1, 1]) g.add(wood(rbox(4, 17, d - 3, frame, { x: s * (w / 2 + 1.5), y: 9, z: -0.5 }, 1.6)))
+  g.add(wood(rbox(w + 7, 17, 4, frame, { y: 9, z: d / 2 - 2 }, 1.6)))
+  g.add(wood(rbox(w, 17, 4, frame, { y: 9, z: -d / 2 + 2 }, 1.2)))
+  // 床头：两根立柱 + 顶上一道横梁，中间是一排竖条软包（颜色取被子的浅色）
+  for (const s of [-1, 1]) g.add(wood(rbox(5, 80, 7, frame, { x: s * (w / 2 + 1.5), z: -d / 2 + 1.5 }, 1.6)))
+  g.add(wood(rbox(w + 8, 4, 7, frame, { y: 76, z: -d / 2 + 1.5 }, 1.8)))
+  g.add(wood(rbox(w - 2, 48, 3, shade(frame, -0.08), { y: 28, z: -d / 2 }, 1)))
+  const pad = shade(duvet, 0.16, -0.1)
+  const n = Math.max(3, Math.round(w / 24))
+  const cw = (w - 2) / n
+  for (let i = 0; i < n; i++) g.add(rbox(cw - 0.8, 45, 5, pad, { x: -w / 2 + 1 + cw * (i + 0.5), y: 30.5, z: -d / 2 + 5 }, 2.4))
+  // 床垫：顶 46，被子盖上去顶面正好是声明的 surface（50）。比围边窄一圈：被子垂下来的褶往里收时不碰到床垫
+  g.add(rbox(w - 6, 20, d - 12, sheet, { y: 26, z: 0.5 }, 5))
   const pillows = w > 120 ? 2 : 1
+  const pw = (w - 14) / pillows - 4
   for (let i = 0; i < pillows; i++) {
-    const pw = (w - 20) / pillows - 6
-    const x = pillows === 1 ? 0 : (i - 0.5) * (pw + 8)
-    g.add(pillowMesh(pw, 12, 38, C.white, { x, y: 40, z: -d / 2 + 30, rx: -0.12 }))
+    const x = pillows === 1 ? 0 : (i - 0.5) * (pw + 6)
+    g.add(pillowMesh(pw, 14, 40, C.white, { x, y: 45, z: -d / 2 + 31, rx: -0.3 }))
   }
-  // 被子：铺在床垫上（顶面 42），两侧、床尾翻下去垂到床架上方；床头那端翻折一道被头
-  const dz = d - 64
-  g.add(duvetMesh({ w: w + 2, len: dz, top: 46, z1: d / 2, drop: 13, color: duvet, seed: w }))
-  g.add(pillowMesh(w + 2, 5, 18, shade(duvet, 0.08), { y: 44.5, z: d / 2 - dz + 9 }, 0.5))
+  // 宽床在枕头前斜靠一只小靠垫
+  if (w >= 120) g.add(pillowMesh(36, 12, 30, shade(duvet, -0.12), { y: 45.5, z: -d / 2 + 48, rx: -0.5 }))
+  // 被子：铺在床垫上（顶面 50），两侧、床尾翻下去垂到围边上方（下摆约 27）；床头那端翻折一道被头
+  const dz = d - 63
+  g.add(duvetMesh({ w: w + 3, len: dz, top: 50, z1: d / 2, drop: 18.5, sway: 0.5, color: duvet, seed: w }))
+  g.add(pillowMesh(w + 3.4, 5, 18, shade(duvet, 0.08), { y: 48.5, z: d / 2 - dz + 9 }, 0.5))
+  // 床尾横搭一条深色盖毯，靠床头那道边卷一下。翻边半径比被子大、垂下来的褶更浅，整圈罩在被子外面不穿模
+  const throwC = shade(duvet, -0.18, 0.05)
+  g.add(duvetMesh({ w: w + 7, len: 46, top: 53.2, z1: d / 2 + 2, drop: 19, thick: 6.4, sway: 0.25, color: throwC, seed: w + 7 }))
+  g.add(pillowMesh(w + 7.4, 3.4, 8, throwC, { y: 51.6, z: d / 2 + 2 - 46 + 4 }, 0.5))
   return g
 }
 

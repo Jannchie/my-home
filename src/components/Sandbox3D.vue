@@ -21,7 +21,8 @@ import FloorBar from './FloorBar.vue'
 import FloorRail from './FloorRail.vue'
 import { withStairHoles } from '../stairs'
 import { overlapsOthers, snapFurniture, snapToWall, type Guide } from '../snap'
-import { fitOnSurface, pickSurface, carriedBy, propClash, propsOn, snapToClip, snapToHook, toWorld } from '../surface'
+import { fitOnSurface, pickSurface, carriedBy, propClash, propsOn, propsOnTop, snapToClip, snapToHook, toLocal, toWorld } from '../surface'
+import { dentDepth, dentDuvets, duvetsIn, restHeight } from '../three/bedding'
 import { RESIZE_SIDES, dragSize, handleLocal, type ResizeDrag, type ResizeSide } from '../furnitureResize'
 import { pickTub, tubGuides } from '../tubTop'
 import { SHADOW_RADIUS, createStage, fitSun, frameCamera, setStageQuality, setStageScale, type Stage } from '../three/stage'
@@ -609,14 +610,93 @@ function onDrawerPart(id: string, part: number, v: number, base: number) {
   dirty = true
 }
 
-/** 摆家具，再加上跟着抽屉挪的偏移 */
+/** 摆家具，再加上跟着抽屉挪的偏移、陷进被子的高度差 */
 function placeShifted(obj: THREE.Object3D, p: Plan, f: Furniture) {
   placeFurniture(obj, p, f)
   const sh = drawerShift.get(f.id)
-  if (!sh) return
-  obj.position.x += sh.x
-  obj.position.z += sh.y
+  const sink = bedSink.get(f.id) ?? 0
+  if (!sh && !sink) return
+  if (sh) {
+    obj.position.x += sh.x
+    obj.position.z += sh.y
+  }
+  obj.position.y += sink
   if (!obj.matrixAutoUpdate) syncMatrix(obj)
+}
+
+/** 床上的东西陷进被子的高度差（家具 id → cm，往下为负）：placeShifted 摆完再加上 */
+const bedSink = new Map<string, number>()
+const sinkPt = new THREE.Vector3()
+const SINK_PTS = [
+  [0, 0],
+  [-1, -1],
+  [1, -1],
+  [-1, 1],
+  [1, 1],
+]
+/**
+ * 床上的东西：给被子按上面摆的东西压出浅坑（bedding.ts dentDuvets），东西连同叠在它上面的落到被子的实际表面。
+ * 床声明的 surface 只是一个平均高度，被子中间蓬、边上低，照它摆会悬在被子上方或者陷进去。
+ * 只在床、床上的东西挪了时才重算（拖动时 syncFurniture 每帧都来）；存档里的高度不改
+ */
+function settleOnBeds(p: Plan) {
+  const keep = new Set<string>()
+  for (const f of p.furniture) {
+    const o = objs.get(f.id)
+    if (!o) continue
+    const ud = o.obj.userData
+    ud.hasDuvet ??= duvetsIn(o.obj).length > 0
+    if (!ud.hasDuvet) continue
+    const on = propsOnTop(p, f)
+    const all = on.flatMap((c) => [c, ...propsOn(p, c)])
+    const sig = `${f.x},${f.y},${f.rot},${f.z ?? 0}|${all.map((c) => `${c.id}:${c.asset}:${c.x},${c.y},${c.rot},${c.z ?? 0}`).join('|')}`
+    if (ud.settled === sig) {
+      for (const id of ud.sunk as string[]) keep.add(id)
+      continue
+    }
+    ud.settled = sig
+    dentDuvets(
+      o.obj,
+      on.flatMap((c) => {
+        const cd = ASSET_MAP.get(c.asset)
+        if (!cd) return []
+        const l = toLocal(f, c)
+        return [{ x: l.x, z: l.y, hx: cd.w / 2, hz: cd.d / 2, rot: ((c.rot - f.rot) * Math.PI) / 180, depth: dentDepth(cd.w, cd.d, cd.h) }]
+      }),
+    )
+    const sunk: string[] = []
+    for (const c of on) {
+      const co = objs.get(c.id)
+      const cd = ASSET_MAP.get(c.asset)
+      if (!co || !cd) continue
+      // 先按存档高度摆好，在占地中心和四角往里收的几个点往下打射线，取被子（或枕头）最高的那一点
+      bedSink.delete(c.id)
+      placeShifted(co.obj, p, c)
+      const ref = co.obj.matrixWorld.elements[13]
+      const pts = SINK_PTS.map(([a, b]) => {
+        sinkPt.set(a * cd.w * 0.22, 0, b * cd.d * 0.22).applyMatrix4(co.obj.matrixWorld)
+        return { x: sinkPt.x, z: sinkPt.z }
+      })
+      const top = restHeight(o.obj, pts, ref + 40)
+      const sink = top === null ? 0 : Math.max(-12, Math.min(6, top - ref))
+      for (const x of [c, ...propsOn(p, c)]) {
+        if (Math.abs(sink) > 0.05) bedSink.set(x.id, sink)
+        else bedSink.delete(x.id)
+        sunk.push(x.id)
+        keep.add(x.id)
+        const xo = objs.get(x.id)
+        if (xo) placeShifted(xo.obj, p, x)
+      }
+    }
+    ud.sunk = sunk
+  }
+  for (const id of [...bedSink.keys()])
+    if (!keep.has(id)) {
+      bedSink.delete(id)
+      const f = p.furniture.find((x) => x.id === id)
+      const o = objs.get(id)
+      if (f && o) placeShifted(o.obj, p, f)
+    }
 }
 
 /** 某件柜子的抽屉带着挪的东西，全部放回原处（存档里的位置） */
@@ -1045,6 +1125,7 @@ function syncFurniture() {
       clearShifts(id)
       drawerShift.delete(id)
     }
+  settleOnBeds(p)
   updateRing()
   applyXray()
   // 灯具家具：发光部件、光源位置；餐桌挪了吊灯跟着挪
@@ -3374,7 +3455,7 @@ onMounted(() => {
   syncGhost()
   resetView()
   updateCompass()
-  loop()
+  firstFrame()
   window.addEventListener('keydown', onKey)
   window.addEventListener('keyup', onKeyUp)
   window.addEventListener('blur', onKeyUp as unknown as () => void)
@@ -3398,6 +3479,21 @@ onMounted(() => {
     },
   }
 })
+
+/**
+ * 第一帧前先在后台把要用的着色器编好再开画：toon 材质带着整池室内灯，片元着色器七十多 KB，
+ * 第一帧同步链接要等十几个程序（实测主线程卡 1.5 秒以上，整个页面没反应）。compileAsync 让驱动在后台链接，
+ * 画面晚出来几百毫秒但页面不卡；编得太久（不支持并行编译的驱动）也最多等 3 秒就照常开画
+ */
+let unmounted = false
+function firstFrame() {
+  const ready = post.prepareLook(effectiveLook.value).catch(() => {})
+  Promise.race([ready, new Promise((r) => setTimeout(r, 3000))]).then(() => {
+    if (unmounted) return
+    dirty = true
+    loop()
+  })
+}
 
 /**
  * 「我的户型」保存时截当前视角做缩略图：临时藏掉选中圈、摆放预览、对齐辅助线，同步渲染一帧后立即还原。
@@ -3715,6 +3811,7 @@ if (import.meta.env.DEV) {
 }
 
 onBeforeUnmount(() => {
+  unmounted = true
   if (import.meta.env.DEV) delete (window as unknown as Record<string, unknown>).__myhomeLookThumbs
   bp?.dispose()
   bp = null
