@@ -136,6 +136,8 @@ import {
   floorShow,
   setFloor,
   replacePlan,
+  furnitureRev,
+  planRev,
   type FxMode,
 } from '../store'
 import type { Selection as PlanSelection } from '../store'
@@ -3195,9 +3197,8 @@ const toneSwatch = (tn: WoodTone) => `repeating-linear-gradient(0deg, ${WOOD_TON
 // ---------- 检查清单 ----------
 const clOpen = ref(false)
 // 在原始对象上算：经过响应式代理要 8ms、原始对象不到 1ms（拖动家具时每帧都会重算）。
-// 依赖改由一个深度 watch 的版本号提供，plan 里任何变化都会触发重算，行为不变。
-const planVer = ref(0)
-watch(plan, () => planVer.value++, { deep: true })
+// 依赖改由 store 里的户型版本号提供，plan 里任何变化都会触发重算，行为不变。
+const planVer = planRev
 const checkItems = computed(() => {
   void planVer.value
   const p = toRaw(plan.value)
@@ -3892,7 +3893,7 @@ watch(
 )
 watch(() => [sandbox.lightMode, sandbox.lightK, sandbox.lightPower, sandbox.lightRange, sandbox.lightOutdoor], applyLights)
 
-watch(() => plan.value.furniture, syncFurniture, { deep: true })
+watch(furnitureRev, syncFurniture)
 // 带字的素材（奖状、标签…）按界面语言画：切换语言时重建
 watch(lang, syncFurniture)
 // 布置 / 预览切换：角色回家静止 / 开始活动（素材里的角色部分随之隐藏、复原，阴影贴图要重画）

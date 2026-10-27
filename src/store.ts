@@ -557,6 +557,26 @@ watch(
   { deep: true },
 )
 
+// ---------- 户型版本号 ----------
+// 深度 watch 走响应式代理逐个属性收集依赖，很贵：两三百件家具的户型遍历一次要 2~3ms，
+// 拖家具时每帧都触发。各处都 watch(plan, { deep: true }) 就是每帧遍历好几遍。
+// 这里只遍历一遍（家具一份、其余一份），别处要「户型变了」就 watch 这两个版本号。
+/** 家具（plan.furniture 里任何变化）的版本号 */
+export const furnitureRev = ref(0)
+/** 家具以外部分（房间、门窗、设备、外观……）的版本号 */
+export const planRestRev = ref(0)
+/** 整份户型的版本号：任何变化都 +1 */
+export const planRev = computed(() => furnitureRev.value + planRestRev.value)
+watch(() => plan.value.furniture, () => furnitureRev.value++, { deep: true })
+watch(
+  () => {
+    const p = plan.value as unknown as Record<string, unknown>
+    return Object.keys(p).flatMap((k) => (k === 'furniture' ? [] : [p[k]]))
+  },
+  () => planRestRev.value++,
+  { deep: true },
+)
+
 /** 自动保存状态：写入失败时 error 非空（saved.ts 据此提示一次），恢复成功后清空 */
 export const autosave = reactive({ error: null as unknown })
 
@@ -570,14 +590,10 @@ function writePlan() {
     autosave.error = e
   }
 }
-watch(
-  plan,
-  () => {
-    clearTimeout(saveTimer)
-    saveTimer = window.setTimeout(writePlan, 300)
-  },
-  { deep: true },
-)
+watch(planRev, () => {
+  clearTimeout(saveTimer)
+  saveTimer = window.setTimeout(writePlan, 300)
+})
 // 改完马上关页 / 切走：防抖还没到点，立刻写掉
 // （测试里的 window 是 globalThis，没有 addEventListener）
 globalThis.window?.addEventListener?.('pagehide', () => {

@@ -13,7 +13,7 @@ import { reactive, toRaw, watch } from 'vue'
 import { planArea } from './generate'
 import { lang, t } from './i18n'
 import { uid, type Plan } from './model'
-import { autosave, bootFresh, historyState, normalizePlan, plan, replacePlan, sandbox } from './store'
+import { autosave, bootFresh, historyState, normalizePlan, plan, planRev, replacePlan, sandbox } from './store'
 import { planThumbnail } from './three/planThumb'
 
 // ---------- 数据结构 ----------
@@ -552,16 +552,12 @@ export function initSaved() {
 
   // 「已修改」标记：户型变化后稍等再算一次指纹（大户型序列化要几毫秒，别每次按键都算）
   let timer = 0
-  watch(
-    plan,
-    () => {
-      clearTimeout(timer)
-      timer = window.setTimeout(() => {
-        saved.dirty = !saved.currentId || linkHash !== hashStr(currentJson())
-      }, 400)
-    },
-    { deep: true },
-  )
+  watch(planRev, () => {
+    clearTimeout(timer)
+    timer = window.setTimeout(() => {
+      saved.dirty = !saved.currentId || linkHash !== hashStr(currentJson())
+    }, 400)
+  })
 
   // 当前户型自动保存（store.ts）写不进 localStorage：失败那一刻提示一次，恢复后再失败才再提示
   watch(
