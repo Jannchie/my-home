@@ -7,7 +7,7 @@
 // 一句话简介放在 i18n/ui.ts（界面也会用），这里引用过来，保证页面里和分享卡片里是同一句话；
 // meta description 要控制在搜索结果能显示完的长度，单独写在这里（长简介见 ui.ts 的 PRODUCT_INTRO）。
 
-import { PRODUCT_TAGLINE, UI } from './i18n/ui'
+import { PRODUCT_TAGLINE, UI } from './i18n/ui.ts'
 
 export type SeoLang = 'zh' | 'ja' | 'en'
 export const SEO_LANGS: SeoLang[] = ['zh', 'ja', 'en']

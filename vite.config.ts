@@ -1,9 +1,9 @@
 import { defineConfig, loadEnv, type Plugin } from 'vite'
-import { PUBLIC_PRECACHE, swSource, swVersion } from './src/pwa/sw'
+import { PUBLIC_PRECACHE, swSource, swVersion } from './src/pwa/sw.ts'
 import vue from '@vitejs/plugin-vue'
-import { DEFAULT_SITE_URL, jsonLd, SEO, SEO_LANGS, type SeoLang } from './src/seo'
-import { PRODUCT_INTRO, PRODUCT_TAGLINE, UI } from './src/i18n/ui'
-import { AGENT_FILES, agentFile, robotsTxt, type AgentFile } from './src/agentDocs'
+import { DEFAULT_SITE_URL, jsonLd, SEO, SEO_LANGS, type SeoLang } from './src/seo.ts'
+import { PRODUCT_INTRO, PRODUCT_TAGLINE, UI } from './src/i18n/ui.ts'
+import { AGENT_FILES, agentFile, robotsTxt, type AgentFile } from './src/agentDocs.ts'
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 const tr = (zh: string, l: SeoLang) => (l === 'zh' ? zh : UI[zh][l === 'ja' ? 0 : 1])

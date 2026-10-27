@@ -1,6 +1,6 @@
 // vitest 配置：复用 vite.config.ts（插件、define），import.meta.glob 等 vite 特性在测试里照常工作
 import { defineConfig, mergeConfig } from 'vitest/config'
-import viteConfig from './vite.config'
+import viteConfig from './vite.config.ts'
 
 export default defineConfig((env) =>
   mergeConfig(viteConfig(env), {

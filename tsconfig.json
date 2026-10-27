@@ -10,7 +10,8 @@
     "skipLibCheck": true,
     "types": ["vite/client"],
     "isolatedModules": true,
-    "noEmit": true
+    "noEmit": true,
+    "allowImportingTsExtensions": true
   },
   "include": ["src/**/*.ts", "src/**/*.vue", "vite.config.ts"]
 }

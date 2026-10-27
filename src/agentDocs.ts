@@ -5,7 +5,7 @@
 // vite.config.ts 的 seo 插件在构建时输出到站点根（llms.txt 另抄一份到 /.well-known/），开发时由中间件直接返回。
 // 功能有大的变化时顺手更新这里（test/agent-docs.spec.ts 检查链接和关键段落都在）。
 
-import { AUTHOR, REPO_URL, SEO, SEO_LANGS, SITE_NAME } from './seo'
+import { AUTHOR, REPO_URL, SEO, SEO_LANGS, SITE_NAME } from './seo.ts'
 
 /** 这些文件在站点里的路径 → 内容类型 */
 export const AGENT_FILES = {

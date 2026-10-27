@@ -1,7 +1,7 @@
 // 细分类型（功能标签）的显示名：[中文, 日本語, English]。素材库的「类型」筛选、详情里的类型标签用。
 // 中文直接显示，日 / 英由 i18n/ui.ts 合并进界面词典。新增功能标签时在这里补一行（缺了编译报错）。
 
-import type { ATTR_TAGS, FUNCTION_TAGS, PLACEMENT_TAGS } from './tags'
+import type { ATTR_TAGS, FUNCTION_TAGS, PLACEMENT_TAGS } from './tags.ts'
 
 type FunctionTag = (typeof FUNCTION_TAGS)[number]
 type TraitTag = (typeof ATTR_TAGS)[number] | (typeof PLACEMENT_TAGS)[number]

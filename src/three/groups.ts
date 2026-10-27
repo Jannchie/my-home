@@ -4,8 +4,8 @@
 // 新增功能标签时在 TYPE_GROUP 里补一行（缺了编译报错）。
 // 常用房间来自素材的 category（定义素材时给的「放在哪」），只有和房间对得上的分类才有；category 本身仍给一键布置用。
 
-import type { AssetCategory, AssetDef } from './kit'
-import type { FUNCTION_TAGS } from './tags'
+import type { AssetCategory, AssetDef } from './kit.ts'
+import type { FUNCTION_TAGS } from './tags.ts'
 
 type FunctionTag = (typeof FUNCTION_TAGS)[number]
 
