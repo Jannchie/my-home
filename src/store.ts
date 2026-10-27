@@ -557,21 +557,34 @@ watch(
   { deep: true },
 )
 
+/** 自动保存状态：写入失败时 error 非空（saved.ts 据此提示一次），恢复成功后清空 */
+export const autosave = reactive({ error: null as unknown })
+
 let saveTimer = 0
+function writePlan() {
+  saveTimer = 0
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(toRaw(plan.value)))
+    autosave.error = null
+  } catch (e) {
+    autosave.error = e
+  }
+}
 watch(
   plan,
-  (p) => {
+  () => {
     clearTimeout(saveTimer)
-    saveTimer = window.setTimeout(() => {
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(toRaw(p)))
-      } catch {
-        /* 存储不可用时忽略 */
-      }
-    }, 300)
+    saveTimer = window.setTimeout(writePlan, 300)
   },
   { deep: true },
 )
+// 改完马上关页 / 切走：防抖还没到点，立刻写掉
+// （测试里的 window 是 globalThis，没有 addEventListener）
+globalThis.window?.addEventListener?.('pagehide', () => {
+  if (!saveTimer) return
+  clearTimeout(saveTimer)
+  writePlan()
+})
 
 // ---------- 撤销 / 重做（整份快照） ----------
 

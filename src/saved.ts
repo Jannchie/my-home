@@ -13,7 +13,7 @@ import { reactive, toRaw, watch } from 'vue'
 import { planArea } from './generate'
 import { lang, t } from './i18n'
 import { uid, type Plan } from './model'
-import { bootFresh, historyState, normalizePlan, plan, replacePlan, sandbox } from './store'
+import { autosave, bootFresh, historyState, normalizePlan, plan, replacePlan, sandbox } from './store'
 import { planThumbnail } from './three/planThumb'
 
 // ---------- 数据结构 ----------
@@ -208,6 +208,14 @@ export function friendlyError(e: unknown): string {
   if (name === 'NoIndexedDB' || name === 'InvalidStateError' || name === 'SecurityError' || name === 'UnknownError')
     return t('浏览器不允许本地存储（可能是隐私 / 无痕模式），「我的户型」暂时用不了。可以用「导出 JSON」备份。')
   return t('存储出错：{msg}', { msg: (e as Error)?.message || name || String(e) })
+}
+
+/** 自动保存（localStorage）失败的提示：和存档的配额不是同一块，删旧存档没用，只能先备份 */
+function autosaveError(e: unknown): string {
+  const name = (e as { name?: string })?.name ?? ''
+  if (name === 'QuotaExceededError' || /quota/i.test(String((e as Error)?.message ?? '')))
+    return t('浏览器存储空间不足，当前户型没能自动保存。请先「导出 JSON」或存到「我的户型」。')
+  return t('当前户型没能自动保存：{msg}', { msg: (e as Error)?.message || name || String(e) })
 }
 
 // ---------- IndexedDB 薄封装 ----------
@@ -553,6 +561,14 @@ export function initSaved() {
       }, 400)
     },
     { deep: true },
+  )
+
+  // 当前户型自动保存（store.ts）写不进 localStorage：失败那一刻提示一次，恢复后再失败才再提示
+  watch(
+    () => autosave.error,
+    (e, prev) => {
+      if (e && !prev) toast(autosaveError(e), 'error')
+    },
   )
 
   // 自动快照：每 3 分钟看一眼，有变化才拍

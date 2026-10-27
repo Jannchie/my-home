@@ -2,8 +2,8 @@
 // 新增界面文字时：模板 / 代码里写 t('中文原文')，再在这里补一行；插值用 {name}。
 // 覆盖率检查：node <scratchpad>/check-i18n.mjs（会列出缺失项）。
 
-import { TRAIT_NAMES, TYPE_NAMES } from '../three/typeLabels'
-import { GROUP_NAMES, ROOM_NAMES_LIB } from '../three/groups'
+import { TRAIT_NAMES, TYPE_NAMES } from '../three/typeLabels.ts'
+import { GROUP_NAMES, ROOM_NAMES_LIB } from '../three/groups.ts'
 
 type Entry = [ja: string, en: string]
 
@@ -718,6 +718,8 @@ export const UI: Record<string, Entry> = {
   还没有自动快照: ['自動スナップショットはまだありません', 'No auto snapshots yet'],
   恢复: ['戻す', 'Restore'],
   取消: ['キャンセル', 'Cancel'],
+  '浏览器存储空间不足，当前户型没能自动保存。请先「导出 JSON」或存到「我的户型」。': ['ブラウザの保存容量が足りず、編集中の間取りを自動保存できませんでした。「JSON 保存」するか「マイ間取り」に保存してください。', 'Not enough browser storage to auto-save this plan. Use “Export JSON” or save it to “My plans”.'],
+  '当前户型没能自动保存：{msg}': ['編集中の間取りを自動保存できませんでした：{msg}', 'Couldn’t auto-save this plan: {msg}'],
   '浏览器存储空间不足，没能保存。可以删掉几份旧户型，或先「导出 JSON」备份。': ['ブラウザの保存容量が足りず、保存できませんでした。古い間取りを削除するか、「JSON 保存」でバックアップしてください。', 'Not enough browser storage to save. Delete some old plans, or back up with “Export JSON” first.'],
   '浏览器不允许本地存储（可能是隐私 / 无痕模式），「我的户型」暂时用不了。可以用「导出 JSON」备份。': ['ブラウザがローカル保存を許可していません（プライベートモードの可能性があります）。「マイ間取り」は使えませんが、「JSON 保存」でバックアップできます。', 'This browser doesn’t allow local storage (maybe private / incognito mode), so My plans is unavailable. You can still back up with “Export JSON”.'],
   '存储出错：{msg}': ['保存エラー：{msg}', 'Storage error: {msg}'],
