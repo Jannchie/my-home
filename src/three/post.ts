@@ -1605,11 +1605,13 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
   /** 动着的角色（setMovers）；投影成屏幕矩形交给累积那一遍 */
   let movers: THREE.Box3[] = []
   const moverPt = new THREE.Vector3()
-  /** 把 movers 投影成 uv 矩形（多留几个像素：描边、头发摆动），写进累积那一遍 */
+  const moverRects = Array.from({ length: ACCUM_MOVERS }, () => new THREE.Vector4())
+  /** 把 movers 投影成 uv 矩形（多留几个像素：描边、头发摆动），写进累积那一遍（矩形对象每帧复用） */
   function projectMovers(p: { accum: AccumPass }) {
-    const rects: THREE.Vector4[] = []
+    let n = 0
     for (const b of movers) {
-      if (rects.length >= ACCUM_MOVERS || b.isEmpty()) break
+      if (n >= ACCUM_MOVERS) break
+      if (b.isEmpty()) continue
       let x0 = Infinity
       let y0 = Infinity
       let x1 = -Infinity
@@ -1625,10 +1627,10 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
         x1 = Math.max(x1, moverPt.x)
         y1 = Math.max(y1, moverPt.y)
       }
-      if (behind) rects.push(new THREE.Vector4(0, 0, 1, 1))
-      else if (x1 >= -1 && y1 >= -1 && x0 <= 1 && y0 <= 1) rects.push(new THREE.Vector4(x0 * 0.5 + 0.5 - 0.01, y0 * 0.5 + 0.5 - 0.01, x1 * 0.5 + 0.5 + 0.01, y1 * 0.5 + 0.5 + 0.01))
+      if (behind) moverRects[n++].set(0, 0, 1, 1)
+      else if (x1 >= -1 && y1 >= -1 && x0 <= 1 && y0 <= 1) moverRects[n++].set(x0 * 0.5 + 0.5 - 0.01, y0 * 0.5 + 0.5 - 0.01, x1 * 0.5 + 0.5 + 0.01, y1 * 0.5 + 0.5 + 0.01)
     }
-    p.accum.setMovers(rects)
+    p.accum.setMovers(moverRects, n)
   }
 
   /** 多帧累积开不开：省电画质、黑白漫画（编码不能平均）、像素风（要硬边）不开 */
@@ -1927,13 +1929,18 @@ class AccumPass extends Pass {
   }
 
   /** 这一帧动着的角色的 uv 矩形；和上一帧的一起生效（上一帧的位置在历史里，也要裁剪） */
-  private moverPrev: THREE.Vector4[] = []
-  setMovers(rects: THREE.Vector4[]) {
-    const all = [...rects, ...this.moverPrev]
+  private moverPrev = Array.from({ length: ACCUM_MOVERS }, () => new THREE.Vector4())
+  private moverPrevN = 0
+  /** 前 n 个矩形生效（rects 会被调用方复用：这里抄下来） */
+  setMovers(rects: readonly THREE.Vector4[], n: number) {
     const u = this.mat.uniforms.uMovers.value as THREE.Vector4[]
-    for (let i = 0; i < u.length; i++) u[i].copy(all[i] ?? EMPTY_RECT)
-    this.mat.uniforms.uMoverN.value = Math.min(all.length, u.length)
-    this.moverPrev = rects
+    for (let i = 0; i < n; i++) u[i].copy(rects[i])
+    for (let i = 0; i < this.moverPrevN; i++) u[n + i].copy(this.moverPrev[i])
+    const all = n + this.moverPrevN
+    for (let i = all; i < u.length; i++) u[i].copy(EMPTY_RECT)
+    this.mat.uniforms.uMoverN.value = all
+    for (let i = 0; i < n; i++) this.moverPrev[i].copy(rects[i])
+    this.moverPrevN = n
   }
 
   render(renderer: THREE.WebGLRenderer, writeBuffer: THREE.WebGLRenderTarget, readBuffer: THREE.WebGLRenderTarget) {

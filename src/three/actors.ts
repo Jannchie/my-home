@@ -12,6 +12,8 @@
 //   home 素材（窝、基站）→ 没被认领的窝自己生成一只（花色按 id 随机），基站生成一台扫地机器人。
 
 import * as THREE from 'three'
+import type { BoxPool, CharacterLayer } from './characters'
+import { TAU, climbStairs, floorPlacement, fwd, rnd, routeLegs, stairAt, stepToward, turnToward, wrap, type Gait, type StairsTask } from './locomotion'
 import { dist, type Furniture, type Plan, type Vec } from '../model'
 import { ASSET_MAP, ASSETS } from './assets'
 import type { ActorSpec, AssetDef } from './kit'
@@ -20,7 +22,7 @@ import { syncMatrix } from './matrices'
 import { effectivePalette } from './colors'
 import { HouseNav, NavGrid, type NavClass } from '../nav'
 import { floorOf, floorView, isMultiFloor, planFloors } from '../floors'
-import { stairHoles, type StairWalk } from '../stairs'
+import { stairHoles } from '../stairs'
 import { placeFurniture } from './house'
 import { propsOn } from '../surface'
 import {
@@ -77,7 +79,7 @@ type Task =
   // fl：目标在哪层（不给 = 本层）；不在本层时 step() 先按 HouseNav.route 展开成「走到楼梯口 → 走楼梯 → 走到目标」
   | { t: 'go'; to: Vec; fl?: string; run?: boolean; sniff?: boolean; path?: Vec[] | null; i?: number; stuck?: number; tries?: number; rr?: number }
   // 走一趟楼梯：沿 stairWalk 的路线（up = 往上），s 已走的路程
-  | { t: 'stairs'; walk: StairWalk; up: boolean; pts?: { x: number; y: number; z: number }[]; cum?: number[]; s?: number }
+  | StairsTask
   | { t: 'enter'; spot: Spot }
   | { t: 'leave'; to: Vec }
   | { t: 'turn'; h: number }
@@ -89,12 +91,10 @@ type Task =
   | { t: 'hover'; dur: number; dir?: number }
   | { t: 'land'; spot: Spot }
 
-export const TAU = Math.PI * 2
-/** 角度收到 -π..π */
-export const wrap = (a: number) => ((((a + Math.PI) % TAU) + TAU) % TAU) - Math.PI
-export const rnd = (a: number, b: number) => a + Math.random() * (b - a)
-/** 朝向 h（弧度）在平面上的单位向量 */
-export const fwd = (h: number): Vec => ({ x: Math.sin(h), y: Math.cos(h) })
+/** 步态：四足机器人转得慢、轮式机器人更慢，宠物灵活 */
+const GAIT_PET: Gait = { turn: 5, align: 0.55, brake: 4 }
+const GAIT_ROBOT: Gait = { turn: 1.8, align: 0.55, brake: 4 }
+const GAIT_QUAD: Gait = { turn: 2.6, align: 0.55, brake: 4 }
 
 function hash(s: string) {
   let h = 2166136261
@@ -318,7 +318,7 @@ const AIR_MIN = 118
 /** 宠物会去吃饭的地方 */
 const isPetBowl = (def: AssetDef) => hasTag(def, 'pet-bowl')
 
-export class ActorLayer {
+export class ActorLayer implements CharacterLayer {
   group = new THREE.Group()
   private actors = new Map<string, Actor>()
   private plan: Plan | null = null
@@ -354,20 +354,10 @@ export class ActorLayer {
 
   /** 按所在楼层（走楼梯时在两层之间插值）摆好角色的高度和显示 */
   private place(a: Actor) {
-    const t = a.tasks[0]
-    if (this.preview && t?.t === 'stairs' && t.pts) {
-      const w = t.walk
-      const k = Math.max(0, Math.min(1, a.yW / w.rise))
-      const lo = this.lift(w.from)
-      a.baseY = lo + (this.lift(w.to) - lo - w.rise) * k
-      const fl = k > 0.5 ? w.to : w.from
-      a.root.visible = this.shown(fl)
-      this.fade(a.root, fl)
-    } else {
-      a.baseY = this.lift(a.fl)
-      a.root.visible = this.shown(a.fl) && (this.preview || !a.hasRep)
-      this.fade(a.root, a.fl)
-    }
+    const { baseY, fl } = floorPlacement(a, this.preview ? a.tasks[0] : undefined, this.lift)
+    a.baseY = baseY
+    a.root.visible = this.shown(fl) && (this.preview || !a.hasRep)
+    this.fade(a.root, fl)
     a.writeTransform()
   }
 
@@ -617,16 +607,13 @@ export class ActorLayer {
   }
 
   /** 预览中各角色的世界包围盒（后处理按它去掉拖影，见 post.ts setMovers） */
-  movers(out: THREE.Box3[] = []) {
-    if (!this.preview || !this.house) return out
+  movers(out: THREE.Box3[], pool: BoxPool) {
+    if (!this.preview || !this.house) return
     for (const a of this.actors.values()) {
       if (!a.root.visible) continue
       const y = a.baseY + a.yW
-      const r = a.r * 2.5 + 10
-      const top = a.dr ? 60 : a.robo ? 180 : 90
-      out.push(new THREE.Box3(new THREE.Vector3(a.pos.x - r, y - 10, a.pos.y - r), new THREE.Vector3(a.pos.x + r, y + top, a.pos.y + r)))
+      out.push(pool.around(a.pos.x, a.pos.y, a.r * 2.5 + 10, y - 10, y + (a.dr ? 60 : a.robo ? 180 : 90)))
     }
-    return out
   }
 
   /** 每帧调用；返回是否需要重绘 */
@@ -644,15 +631,11 @@ export class ActorLayer {
   private expand(a: Actor, t: Extract<Task, { t: 'go' }>): Task[] {
     if (!a.climbs || !this.house) return []
     const r = a.cls === 'pet' ? a.r + 2 : a.r
-    const legs = this.house.route(a.cls, { floor: a.fl, p: a.pos }, { floor: t.fl!, p: t.to }, r) ?? this.house.route(a.cls, { floor: a.fl, p: a.pos }, { floor: t.fl!, p: t.to }, a.r * 0.8)
+    const legs = routeLegs(this.house, a.cls, { floor: a.fl, p: a.pos }, { floor: t.fl!, p: t.to }, r, a.r * 0.8, a.r)
     if (!legs) return []
-    return legs.map((l, i): Task => {
-      if (l.t === 'stairs') return { t: 'stairs', walk: l.walk, up: l.up }
-      const last = i === legs.length - 1
-      const to = l.path[l.path.length - 1]
-      // 先走到折线起点（就近挪过的格子 / 楼梯口外侧），再沿折线走
-      return { t: 'go', to, path: l.path, i: 0, rr: Math.min(r, a.r), ...(last ? { run: t.run, sniff: t.sniff } : {}) }
-    })
+    // 最后一段带上原来的跑 / 嗅
+    const last = legs[legs.length - 1]
+    return legs.map((l): Task => (l === last && l.t === 'go' ? { ...l, run: t.run, sniff: t.sniff } : l))
   }
 
   /** 能去的楼层里随便挑一层（会走楼梯的角色偶尔换层活动） */
@@ -785,92 +768,25 @@ export class ActorLayer {
     }
   }
 
+  private gait(a: Actor) {
+    return a.robo?.breed.type === 'quad' ? GAIT_QUAD : a.cls === 'robot' ? GAIT_ROBOT : GAIT_PET
+  }
+
   private turnTo(a: Actor, h: number, dt: number) {
-    const rate = a.robo?.breed.type === 'quad' ? 2.6 : a.cls === 'robot' ? 1.8 : 5
-    const d = wrap(h - a.h)
-    a.h += Math.max(-rate * dt, Math.min(rate * dt, d))
-    return Math.abs(d) < 0.03
+    return turnToward(a, h, this.gait(a).turn, dt)
   }
 
   /** 朝 target 走一步；check = false 时不管障碍（进出窝、座子） */
   private moveTo(a: Actor, target: Vec, vmax: number, dt: number, check = true, r = a.r) {
-    const nav = this.navOf(a)
-    const dx = target.x - a.pos.x
-    const dy = target.y - a.pos.y
-    const d = Math.hypot(dx, dy)
-    if (d < 0.5) return 0
-    const diff = wrap(Math.atan2(dx, dy) - a.h)
-    this.turnTo(a, a.h + diff, dt)
-    const align = Math.cos(diff)
-    // 偏得多就先原地转身；快到了就减速
-    let v = vmax * Math.max(0, Math.min(1, (align - 0.55) / 0.4))
-    v = Math.min(v, d * 3 + 4)
-    a.speed += (v - a.speed) * Math.min(1, dt * 5)
-    const f = fwd(a.h)
-    const step = Math.min(a.speed * dt, d)
-    const next = { x: a.pos.x + f.x * step, y: a.pos.y + f.y * step }
-    // clearance 按 10cm 格子算，有半格左右的误差，这里放宽一点免得卡在格子边上
-    if (!check || nav.clearAt(a.cls, next) >= r - 4 || nav.clearAt(a.cls, next) >= nav.clearAt(a.cls, a.pos)) {
-      a.pos = next
-      return d - step
-    }
-    a.speed = 0
-    return -1
+    return stepToward(a, this.navOf(a), a.cls, target, vmax, dt, r, this.gait(a), check)
   }
 
-  /**
-   * 走楼梯：沿 stairWalk 的路线（下楼倒过来）按路程推进，朝向对准前方 15cm，脚下高度取那一级踏面
-   * （animate 里平滑过去，一级一级地起伏），身体按前后 20cm 的坡度俯仰。
-   * 下楼一开始就换到下层（高度 + 层间高），上楼走完才换到上层（高度 − 层间高），高度连续。
-   */
-  private climb(a: Actor, t: Extract<Task, { t: 'stairs' }>, dt: number): boolean {
-    const w = t.walk
-    if (!t.pts) {
-      const pts = t.up ? w.pts : [...w.pts].reverse()
-      // 从现在的位置先走到路线起点（楼梯口外侧）
-      t.pts = [{ x: a.pos.x, y: a.pos.y, z: t.up ? 0 : w.rise }, ...pts]
-      t.cum = [0]
-      for (let i = 1; i < t.pts.length; i++) t.cum.push(t.cum[i - 1] + Math.hypot(t.pts[i].x - t.pts[i - 1].x, t.pts[i].y - t.pts[i - 1].y))
-      t.s = 0
-      if (!t.up) {
-        a.fl = w.from
-        a.yW += w.rise
-      }
-    }
-    const pts = t.pts
-    const cum = t.cum!
-    const total = cum[cum.length - 1]
-    const at = (s: number) => {
-      s = Math.max(0, Math.min(total, s))
-      let i = 1
-      while (i < cum.length - 1 && cum[i] < s) i++
-      const seg = cum[i] - cum[i - 1] || 1
-      const k = (s - cum[i - 1]) / seg
-      return { x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * k, y: pts[i - 1].y + (pts[i].y - pts[i - 1].y) * k, z: k < 0.5 ? pts[i - 1].z : pts[i].z }
-    }
-    const b = a.breed
-    const vmax = (a.robo ? Math.max(18, a.robo.breed.speed) : (b?.walk ?? 30)) * 0.6
-    const ahead = at(t.s! + 15)
-    const dh = wrap(Math.atan2(ahead.x - a.pos.x, ahead.y - a.pos.y) - a.h)
-    if (Math.hypot(ahead.x - a.pos.x, ahead.y - a.pos.y) > 1) this.turnTo(a, a.h + dh, dt)
-    // 朝向偏得多先原地转过来
-    const v = vmax * Math.max(0, Math.min(1, (Math.cos(dh) - 0.3) / 0.5))
-    a.speed += (v - a.speed) * Math.min(1, dt * 5)
-    t.s = Math.min(total, t.s! + a.speed * dt)
-    const p = at(t.s)
-    a.pos = { x: p.x, y: p.y }
-    a.stairZ = p.z
-    const slope = (at(t.s + 20).z - at(t.s - 20).z) / 40
+  /** 走楼梯（locomotion.climbStairs），身体按前后 20cm 的坡度俯仰 */
+  private climb(a: Actor, t: StairsTask, dt: number): boolean {
+    const vmax = (a.robo ? Math.max(18, a.robo.breed.speed) : (a.breed?.walk ?? 30)) * 0.6
+    if (climbStairs(a, t, vmax, this.gait(a), 15, dt, a.tt)) return true
+    const slope = (stairAt(t, t.s! + 20).z - stairAt(t, t.s! - 20).z) / 40
     a.pitch += (-Math.atan(slope) * 0.75 - a.pitch) * Math.min(1, dt * 6)
-    if (t.s >= total - 0.5 || a.tt > 90) {
-      a.pos = { x: pts[pts.length - 1].x, y: pts[pts.length - 1].y }
-      if (t.up) {
-        a.fl = w.to
-        a.yW -= w.rise
-      } else a.yW = Math.min(a.yW, 1)
-      a.stairZ = 0
-      return true
-    }
     return false
   }
 

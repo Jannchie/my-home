@@ -10,27 +10,49 @@ import { baseFloorId, planFloors } from '/src/floors'
 import { HouseNav } from '/src/nav'
 import { ResidentLayer, lieSpec, type ResidentModel } from '/src/three/residents'
 import { ASSET_MAP } from '/src/three/assets'
+import { canSitOn, isSleepable } from '/src/three/tags'
 import { buildMotions, motionData } from '/src/three/motions'
 import { JP_OPTS } from './helpers'
 
-function stubModel(): ResidentModel {
+/** 替身骨架：标准化骨骼按 T 字站姿摆好（米），挂在场景下（动作片段按骨骼名绑定） */
+const RIG: [string, string | null, number, number, number][] = [
+  ['hips', null, 0, 0.88, 0],
+  ['spine', 'hips', 0, 0.1, 0],
+  ['chest', 'spine', 0, 0.12, 0],
+  ['neck', 'chest', 0, 0.2, 0],
+  ['head', 'neck', 0, 0.1, 0],
+  ['leftUpperArm', 'chest', 0.18, 0.15, 0],
+  ['rightUpperArm', 'chest', -0.18, 0.15, 0],
+  ['leftLowerArm', 'leftUpperArm', 0.25, 0, 0],
+  ['rightLowerArm', 'rightUpperArm', -0.25, 0, 0],
+  ['leftUpperLeg', 'hips', 0.09, -0.05, 0],
+  ['rightUpperLeg', 'hips', -0.09, -0.05, 0],
+  ['leftLowerLeg', 'leftUpperLeg', 0, -0.38, 0],
+  ['rightLowerLeg', 'rightUpperLeg', 0, -0.38, 0],
+  ['leftFoot', 'leftLowerLeg', 0, -0.37, 0],
+  ['rightFoot', 'rightLowerLeg', 0, -0.37, 0],
+]
+
+/** 不载入真的 VRM：只有骨骼节点、没有网格的替身，动作片段用真的数据换算 */
+async function stubModel(): Promise<ResidentModel> {
   const scene = new THREE.Group()
   const bones = new Map<string, THREE.Object3D>()
+  for (const [name, parent, x, y, z] of RIG) {
+    const n = new THREE.Object3D()
+    n.name = name
+    n.position.set(x, y, z)
+    ;(parent ? bones.get(parent)! : scene).add(n)
+    bones.set(name, n)
+  }
   const vrm = {
     scene,
-    humanoid: {
-      getNormalizedBoneNode: (b: string) => {
-        let n = bones.get(b)
-        if (!n) bones.set(b, (n = new THREE.Object3D()))
-        return n
-      },
-      update() {},
-    },
+    humanoid: { getNormalizedBoneNode: (b: string) => bones.get(b) ?? null, update() {} },
     update() {},
   } as unknown as VRM
   const root = new THREE.Group()
+  root.scale.setScalar(100)
   root.add(scene)
-  return { vrm, root, vrm0: false, height: 160, hipY: 88, ankleY: 8 }
+  return { vrm, root, vrm0: false, height: 160, hipY: 88, ankleY: 8, motions: buildMotions(vrm, false, 88, 100, await motionData()) }
 }
 
 function house(seed = 3) {
@@ -54,9 +76,9 @@ describe('VRM 住户', () => {
   const plan = house()
   const lift = (id: string) => planFloors(plan).find((f) => f.id === id)!.elevation
 
-  test('布置好的户建里找得到沙发 / 椅子和床', () => {
+  test('布置好的户建里找得到沙发 / 椅子和床', async () => {
     const layer = new ResidentLayer()
-    layer.add('a', stubModel())
+    layer.add('a', await stubModel())
     layer.sync(plan, false)
     const seats = layer.seatList
     expect(seats.some((s) => !s.lie)).toBe(true)
@@ -66,18 +88,19 @@ describe('VRM 住户', () => {
     for (const s of seats) expect(s.y).toBeLessThan(90)
   })
 
-  test('走过去坐下：髋部落到座面上，起身后放掉座位', () => {
+  test('走过去坐下：髋部落到座面上，起身后放掉座位', async () => {
     const layer = new ResidentLayer()
     layer.lift = lift
-    layer.add('a', stubModel())
+    layer.add('a', await stubModel())
     layer.sync(plan, true)
     const fl = layer.snapshot()[0].fl
     const seat = layer.seatList.find((s) => !s.lie && s.fl === fl) ?? layer.seatList.find((s) => !s.lie)!
     expect(layer.seatAt('a', seat.key)).toBe(true)
     const sat = run(layer, 'a', (s) => s.seat === seat.key && s.sit > 0.99)
     expect(sat.seat).toBe(seat.key)
-    // 脚底的高度 = 座面 + 7 − 髋高
-    expect(sat.z).toBeCloseTo(seat.y + 7 - 88, 3)
+    // 髋部落在座面上方一成髋高（大腿的厚度）：脚底的高度 = 座面 + 8.8 − 坐好时的髋高
+    const m = await stubModel()
+    expect(sat.z).toBeCloseTo(seat.y + 8.8 - m.motions.sitHip.y, 3)
     expect(layer.seatList.find((s) => s.key === seat.key)!.by).toBe('a')
     // 让他去别处：先起身，座位空出来
     expect(layer.sendTo('a', seat.fl, layer.seatList.find((s) => s.key === seat.key)!.front)).toBe(true)
@@ -86,10 +109,10 @@ describe('VRM 住户', () => {
     expect(layer.seatList.find((s) => s.key === seat.key)!.by).toBe(undefined)
   })
 
-  test('躺到床上：身体放平、脚跟抬到床面以上', () => {
+  test('躺到床上：身体放平、脚跟抬到床面以上', async () => {
     const layer = new ResidentLayer()
     layer.lift = lift
-    layer.add('a', stubModel())
+    layer.add('a', await stubModel())
     layer.sync(plan, true)
     const bed = layer.seatList.find((s) => s.lie)!
     expect(layer.seatAt('a', bed.key)).toBe(true)
@@ -97,12 +120,15 @@ describe('VRM 住户', () => {
     expect({ seat: me.seat, fl: me.fl }).toEqual({ seat: bed.key, fl: bed.fl })
     expect(me.pitch).toBeCloseTo(-Math.PI / 2, 3)
     expect(me.z).toBeGreaterThan(bed.y)
+    // 闭上眼睡着以后一动不动：不再要求重画
+    run(layer, 'a', () => false, 3)
+    expect(layer.update(1 / 30)).toBe(false)
   })
 
-  test('经楼梯走到另一层', () => {
+  test('经楼梯走到另一层', async () => {
     const layer = new ResidentLayer()
     layer.lift = lift
-    layer.add('a', stubModel())
+    layer.add('a', await stubModel())
     layer.sync(plan, true)
     const nav = new HouseNav(plan, { sash: true, stepOver: 30 })
     const lo = baseFloorId(plan)
@@ -130,8 +156,8 @@ describe('哪些床能躺', () => {
     expect(spec('fm-daybed')).toMatchObject({ along: false, n: 1 })
     expect(spec('bd-bunk')).toMatchObject({ along: false, n: 1 })
   })
-  test('收起的折叠床、婴儿床、午睡垫、高架床、合着的沙发床不躺', () => {
-    for (const id of ['fm-folding-bed-closed', 'kid-crib', 'sw-jp-okidoko', 'kb2-bed-loft', 'lv-sofa-bed', 'lm-futon-sofa']) expect(spec(id), id).toBe(null)
+  test('收起的折叠床、婴儿床、高架床、合着的沙发床不躺', () => {
+    for (const id of ['fm-folding-bed-closed', 'kid-crib', 'kb2-bed-loft', 'lv-sofa-bed', 'lm-futon-sofa']) expect(spec(id), id).toBe(null)
     // 展开的沙发床能躺
     expect(spec('lm-futon-sofa-open')).toMatchObject({ along: true })
   })
@@ -139,12 +165,7 @@ describe('哪些床能躺', () => {
 
 describe('动作片段', () => {
   test('按模型的骨骼换算成片段：每段都有髋部位移和身体骨骼的旋转，坐下时髋部比站着低、在脚后面', async () => {
-    const vrm = stubModel().vrm
-    const hips = vrm.humanoid.getNormalizedBoneNode('hips')!
-    hips.name = 'hips'
-    hips.position.set(0, 0.88, 0)
-    for (const b of ['spine', 'head', 'leftUpperLeg', 'leftLowerLeg', 'leftUpperArm']) vrm.humanoid.getNormalizedBoneNode(b as never)!.name = b
-    const m = buildMotions(vrm, false, 88, 100, await motionData())
+    const m = (await stubModel()).motions
     for (const c of Object.values(m.clips)) {
       expect(c.duration).toBeGreaterThan(0.5)
       expect(c.tracks.some((t) => t.name === 'hips.position')).toBe(true)
@@ -155,5 +176,20 @@ describe('动作片段', () => {
     // 走路片段的速度是普通步速（0.6 – 1.6 m/s）
     expect(m.walkSpeed).toBeGreaterThan(60)
     expect(m.walkSpeed).toBeLessThan(160)
+  })
+})
+
+describe('床和座位的用途判断', () => {
+  const def = (id: string) => ASSET_MAP.get(id)!
+  test('收起 / 合着的形态不算能睡的床，置き床不是床', () => {
+    expect(isSleepable(def('fm-folding-bed'))).toBe(true)
+    expect(isSleepable(def('fm-folding-bed-closed'))).toBe(false)
+    expect(isSleepable(def('lm-futon-sofa'))).toBe(false)
+    expect(isSleepable(def('lm-futon-sofa-open'))).toBe(true)
+    expect(isSleepable(def('sw-jp-okidoko'))).toBe(false)
+  })
+  test('吧台桌、吧台柜、毛巾杆不是座位，卡座是', () => {
+    for (const id of ['tbl-bar-table', 'fm-bar-counter', 'sf-towel-bar-1']) expect(canSitOn(def(id)), id).toBe(false)
+    for (const id of ['fm-booth', 'tbl-bar-stool', 'lv-sofa-bed']) expect(canSitOn(def(id)), id).toBe(true)
   })
 })

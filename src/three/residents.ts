@@ -12,23 +12,24 @@
 // 单位：厘米。VRM 是米，整个模型放大 100 倍。y 轴向上，平面图的 y 对应 3D 的 z。
 
 import * as THREE from 'three'
+import type { BoxPool, CharacterLayer } from './characters'
 import type { VRM, VRMHumanBoneName } from '@pixiv/three-vrm'
 import { dist, pointInPolygon, type Plan, type RoomKind, type Vec } from '../model'
 import { floorOf, floorView, isMultiFloor, planFloors } from '../floors'
 import { HouseNav } from '../nav'
-import type { StairWalk } from '../stairs'
 import { ASSET_MAP } from './assets'
 import type { AssetDef } from './kit'
-import { hasTag } from './tags'
+import { canSitOn, hasTag, isSleepable } from './tags'
 import { NO_LINE, addOutlines, gradientMap } from './toon'
-import { SHADOW_GEO, SHADOW_MAT, TAU, fwd, rnd, wrap } from './actors'
+import { SHADOW_GEO, SHADOW_MAT } from './actors'
+import { climbStairs, floorPlacement, fwd, rnd, routeLegs, stepToward, turnToward, wrap, TAU, type Gait, type StairsTask } from './locomotion'
 import { buildMotions, motionData, type ClipId, type Motions } from './motions'
 
 
 /** 身体半径（cm）：肩宽一半左右，找路时离墙、家具这么远 */
 const R = 16
-/** 步行速度（cm/s） */
-const WALK_V = 105
+/** 步态：人转身比宠物慢一点，朝向偏到 60° 以内就迈步 */
+const GAIT: Gait = { turn: 4, align: 0.5, brake: 10 }
 /** 这些房间里的坐具不去坐 */
 const NO_SIT: RoomKind[] = ['bath', 'wash', 'toilet', 'storage', 'void']
 /** 闲逛时不去的房间（随机落脚点） */
@@ -46,16 +47,15 @@ export interface ResidentModel {
   hipY: number
   /** 站立时脚踝（foot 骨骼）离地高度（cm）：坐着时把脚放到地上用 */
   ankleY: number
-  /** 动作片段（three/motions.ts）；数据没载入成功时没有，退回程序化的姿势 */
-  motions?: Motions
+  /** 动作片段（three/motions.ts） */
+  motions: Motions
 }
 
 const loaderMods = () => Promise.all([import('three/addons/loaders/GLTFLoader.js'), import('@pixiv/three-vrm')])
 
-/** 提前开始下载载入器和动作数据（和模型文件的读取并行）；动作数据失败不算失败，载入时退回程序化姿势 */
+/** 提前开始下载载入器和动作数据（和模型文件的读取并行） */
 export function warmResidentLoader() {
-  motionData().catch(() => {})
-  return loaderMods()
+  return Promise.all([loaderMods(), motionData()])
 }
 
 /** 读 VRM 文件（.vrm 就是带扩展的 glb），材质换成 toon、加描边、弹簧骨骼按放大后的尺寸调好 */
@@ -95,12 +95,8 @@ export async function loadResidentModel(blob: Blob): Promise<ResidentModel> {
     const ankleY = foot ? foot.getWorldPosition(new THREE.Vector3()).y : hipY * 0.09
     const box = new THREE.Box3().setFromObject(vrm.scene)
     const height = box.isEmpty() ? hipY * 1.9 : box.max.y - Math.min(0, box.min.y)
-    const motions = await motionData()
-      .then((d) => buildMotions(vrm, vrm0, hipY, 100, d))
-      .catch((e) => {
-        console.warn('[residents] 动作数据载入失败，改用程序化姿势', e)
-        return undefined
-      })
+    // 动作数据载入失败就整个算载入失败（界面显示出错），不另备一套程序化的姿势
+    const motions = buildMotions(vrm, vrm0, hipY, 100, await motionData())
     return { vrm, root, vrm0, height, hipY, ankleY, motions }
   } finally {
     URL.revokeObjectURL(url)
@@ -215,13 +211,14 @@ function seatHeight(def: AssetDef) {
 }
 
 /**
- * 能不能躺、怎么躺：along = 顺着素材的深度方向躺（普通的床，床头在背面）；不然顺着宽度方向（日间床、上下铺、罗汉床的长边是宽）。
- * len 躺的方向的长度，span 横向的宽度，n 躺几个人。躺不下的返回 null：婴儿床、高架床；收起来的折叠床、婴儿午睡垫这类太短 / 太窄的；
- * 沙发床合着的时候（深度不到 120cm）当沙发坐。height：最高的那个人的身高（cm）
+ * 能不能躺、怎么躺（在 isSleepable 之上再看尺寸）：along = 顺着素材的深度方向躺（普通的床，床头在背面）；不然顺着宽度方向（日间床、上下铺、罗汉床的长边是宽）。
+ * len 躺的方向的长度，span 横向的宽度，n 躺几个人。躺不下的返回 null：收起来的、婴儿床、高架床、太短 / 太窄的；
+ * 沙发床除非是展开的形态（form = open），都当沙发坐。height：最高的那个人的身高（cm）
  */
 export function lieSpec(def: AssetDef, height: number): { along: boolean; len: number; span: number; n: number } | null {
-  if (!hasTag(def, 'bed', 'bedding') || hasTag(def, 'crib', 'loft')) return null
-  if (hasTag(def, 'sofa') && def.d < 120) return null
+  if (!isSleepable(def) || hasTag(def, 'crib', 'loft')) return null
+  // 沙发床：只有展开的形态拿来躺，其余当沙发坐
+  if (hasTag(def, 'sofa') && def.form !== 'open') return null
   const along = def.d >= def.w
   const len = along ? def.d : def.w
   const span = along ? def.w : def.d
@@ -242,8 +239,8 @@ function findSeats(plan: Plan, house: HouseNav, height: number): Seat[] {
     const def = ASSET_MAP.get(f.asset)
     if (!def || def.mount || def.prop || (f.z ?? 0) > 0.5) continue
     const bed = lieSpec(def, height)
-    // 躺不下的床（收起的折叠床、合着的沙发床…）不坐也不躺，除非它本来就是沙发
-    const sit = !bed && hasTag(def, 'sofa', 'armchair', 'chair', 'seat', 'stool', 'dining-chair', 'dining-seat', 'bar-stool', 'office-chair', 'ergonomic-chair', 'gaming-chair') && !hasTag(def, 'floor-cushion', 'floor-chair')
+    // 躺不下的床（收起的折叠床、合着的沙发床…）不坐也不躺，除非它本来就是沙发；地上的坐垫、座椅子不坐（站起坐下的动作对不上）
+    const sit = !bed && canSitOn(def) && !hasTag(def, 'floor-cushion', 'floor-chair')
     const lie = !!bed
     if (!lie && !sit) continue
     const fl = floorOf(plan, f)
@@ -336,7 +333,7 @@ const LIE_POSE: [Bone, number, number, number][] = [
 type Task =
   | { t: 'idle'; dur: number; look?: number; sleep?: boolean }
   | { t: 'go'; to: Vec; fl?: string; path?: Vec[] | null; i?: number; stuck?: number; tries?: number; rr?: number }
-  | { t: 'stairs'; walk: StairWalk; up: boolean; pts?: { x: number; y: number; z: number }[]; cum?: number[]; s?: number }
+  | StairsTask
   | { t: 'turn'; h: number }
   // 坐下 / 躺下 / 起身：位置、朝向、高度、俯仰、坐姿和躺姿的权重一起缓动过去
   // clip：过程中播的那段动作（坐下 / 起身），按缓动的进度对齐
@@ -360,9 +357,10 @@ class Person {
   tasks: Task[] = []
   tt = 0
   walkW = 0
-  phase = 0
   sitW = 0
   lieW = 0
+  /** 睡着了一动不动（不推进动作、不算在动的角色） */
+  still = false
   /** 正坐着 / 躺着的地方 */
   seat: Seat | null = null
   lookT = 0
@@ -371,12 +369,10 @@ class Person {
   blinkT = rnd(2, 5)
   blink = 0
   eyes = 1
-  t = rnd(0, 10)
   shadow: THREE.Mesh
-  /** 动作片段的播放（有 motions 时） */
-  mixer?: THREE.AnimationMixer
+  /** 动作片段的播放 */
+  mixer: THREE.AnimationMixer
   acts = {} as Record<ClipId, THREE.AnimationAction>
-  weights = { idle: 1, walk: 0, sitEnter: 0, sitExit: 0, sitIdle: 0 } as Record<ClipId, number>
   /** 正在按进度播的一次性动作（坐下 / 起身）和进度 0..1 */
   clip: ClipId | null = null
   clipK = 0
@@ -384,8 +380,6 @@ class Person {
   turnW = 0
   /** 髋部骨骼站立时的位置（躺下时放回这里） */
   hipRest: THREE.Vector3
-  /** 脚下地面相对本层地面的高度（坐着时把脚放到这里） */
-  ground = 0
 
   constructor(
     public id: string,
@@ -398,20 +392,18 @@ class Person {
       if (n) this.bones.set(b, n)
     }
     this.hipRest = this.bones.get('hips')?.position.clone() ?? new THREE.Vector3()
-    if (m.motions) {
-      this.mixer = new THREE.AnimationMixer(m.vrm.scene)
-      for (const [id, c] of Object.entries(m.motions.clips) as [ClipId, THREE.AnimationClip][]) {
-        const a = this.mixer.clipAction(c)
-        a.setLoop(id === 'sitEnter' || id === 'sitExit' ? THREE.LoopOnce : THREE.LoopRepeat, Infinity)
-        a.clampWhenFinished = true
-        a.setEffectiveWeight(this.weights[id])
-        // 一次性动作的进度由缓动任务直接给（不自己走时间）
-        if (id === 'sitEnter' || id === 'sitExit') a.timeScale = 0
-        a.play()
-        // 循环动作错开起点，几个人不会同步晃
-        if (a.loop === THREE.LoopRepeat) a.time = Math.random() * c.duration
-        this.acts[id] = a
-      }
+    this.mixer = new THREE.AnimationMixer(m.vrm.scene)
+    for (const [id, c] of Object.entries(m.motions.clips) as [ClipId, THREE.AnimationClip][]) {
+      const a = this.mixer.clipAction(c)
+      const once = id === 'sitEnter' || id === 'sitExit'
+      a.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, Infinity)
+      a.clampWhenFinished = true
+      a.setEffectiveWeight(id === 'idle' ? 1 : 0)
+      // 一次性动作的进度由缓动任务直接给（不自己走时间）；循环动作错开起点，几个人不会同步晃
+      if (once) a.timeScale = 0
+      a.play()
+      if (!once) a.time = Math.random() * c.duration
+      this.acts[id] = a
     }
     const sh = new THREE.Mesh(SHADOW_GEO, SHADOW_MAT)
     sh.scale.set(22, 1, 18)
@@ -421,11 +413,6 @@ class Person {
     sh.raycast = () => {}
     this.root.add(sh)
     this.shadow = sh
-  }
-
-  /** 转一根标准化骨骼（按 VRM 1.0 面朝 +z 的约定写；0.x 的局部坐标是转了 180° 的，x / z 分量取反） */
-  setBone(b: Bone, x: number, y: number, z: number) {
-    this.bones.get(b)?.quaternion.copy(this.boneQ(x, y, z))
   }
 
   /** 按 VRM 1.0 约定的欧拉角 → 这个模型标准化骨骼的局部旋转（共用一个临时对象） */
@@ -443,24 +430,32 @@ class Person {
     this.root.rotation.set(this.pitch, this.h, 0)
   }
 
-  dispose() {
-    this.m.vrm.scene.traverse((o) => {
-      const mesh = o as THREE.Mesh
-      if (!mesh.isMesh || mesh.userData.isOutline) return
-      mesh.geometry.dispose()
-      for (const x of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
-        if (x === NO_LINE) continue
-        for (const v of Object.values(x)) if ((v as THREE.Texture | null)?.isTexture && v !== gradientMap()) (v as THREE.Texture).dispose()
-        x.dispose()
-      }
-    })
+  /** 搬出去：动作播放解绑（模型还能交给下一个 Person 用） */
+  detach() {
+    this.mixer.stopAllAction()
+    this.mixer.uncacheRoot(this.m.vrm.scene)
+    this.root.remove(this.m.root)
   }
+}
+
+/** 释放一个模型的几何、材质、贴图（共用的色阶图、隐藏材质不动）；之后不能再用 */
+export function disposeResidentModel(m: ResidentModel) {
+  m.vrm.scene.traverse((o) => {
+    const mesh = o as THREE.Mesh
+    if (!mesh.isMesh || mesh.userData.isOutline) return
+    mesh.geometry.dispose()
+    for (const x of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+      if (x === NO_LINE) continue
+      for (const v of Object.values(x)) if ((v as THREE.Texture | null)?.isTexture && v !== gradientMap()) (v as THREE.Texture).dispose()
+      x.dispose()
+    }
+  })
 }
 
 
 // ---------- 层 ----------
 
-export class ResidentLayer {
+export class ResidentLayer implements CharacterLayer {
   group = new THREE.Group()
   private people = new Map<string, Person>()
   private plan: Plan | null = null
@@ -482,7 +477,8 @@ export class ResidentLayer {
 
   /** 住户进门（模型由调用方载入）；同一 id 已在家就换模型 */
   add(id: string, m: ResidentModel) {
-    this.remove(id)
+    const old = this.remove(id)
+    if (old && old !== m) disposeResidentModel(old)
     const p = new Person(id, m)
     this.people.set(id, p)
     this.group.add(p.root)
@@ -490,16 +486,17 @@ export class ResidentLayer {
     this.dirty = true
   }
 
-  remove(id: string) {
+  /** 搬走；返回他的模型（不释放：调用方决定留着下次再用，还是 disposeResidentModel） */
+  remove(id: string): ResidentModel | undefined {
     const p = this.people.get(id)
     if (!p) return
-    if (p.seat) p.seat.by = undefined
+    for (const s of this.seats) if (s.by === id) s.by = undefined
     this.group.remove(p.root)
-    p.dispose()
+    p.detach()
     this.people.delete(id)
     this.dirty = true
+    return p.m
   }
-
 
   /** 场景（房间、家具）或模式变了之后调用；plan 传原始对象。changed = false：户型没变，只是 live 变了 */
   sync(plan: Plan, live: boolean, changed = true) {
@@ -586,20 +583,10 @@ export class ResidentLayer {
   }
 
   private place(p: Person) {
-    const t = p.tasks[0]
-    if (t?.t === 'stairs' && t.pts) {
-      const w = t.walk
-      const k = Math.max(0, Math.min(1, p.yW / w.rise))
-      const lo = this.lift(w.from)
-      p.baseY = lo + (this.lift(w.to) - lo - w.rise) * k
-      const fl = k > 0.5 ? w.to : w.from
-      p.root.visible = this.shown(fl)
-      this.fade(p.root, fl)
-    } else {
-      p.baseY = this.lift(p.fl)
-      p.root.visible = this.shown(p.fl)
-      this.fade(p.root, p.fl)
-    }
+    const { baseY, fl } = floorPlacement(p, p.tasks[0], this.lift)
+    p.baseY = baseY
+    p.root.visible = this.shown(fl)
+    this.fade(p.root, fl)
     p.writeTransform()
   }
 
@@ -629,16 +616,14 @@ export class ResidentLayer {
   }
 
   /** 正在活动的人的世界包围盒（后处理按它去掉拖影，见 post.ts setMovers）；定住不动时没有 */
-  movers(out: THREE.Box3[] = []) {
-    if (!this.live) return out
+  movers(out: THREE.Box3[], pool: BoxPool) {
+    if (!this.live) return
     for (const p of this.people.values()) {
-      if (!p.root.visible) continue
+      if (!p.root.visible || p.still) continue
       const y = p.baseY + p.yW
       // 躺着时身体沿床放平：按身高画一个方块
-      const r = p.lieW > 0.05 ? p.m.height : 45
-      out.push(new THREE.Box3(new THREE.Vector3(p.pos.x - r, y - 10, p.pos.y - r), new THREE.Vector3(p.pos.x + r, y + p.m.height + 15, p.pos.y + r)))
+      out.push(pool.around(p.pos.x, p.pos.y, p.lieW > 0.05 ? p.m.height : 45, y - 10, y + p.m.height + 15))
     }
-    return out
   }
 
   /** 测试用：每个人现在的状态 */
@@ -657,8 +642,9 @@ export class ResidentLayer {
     this.dirty = false
     if (!this.live || !this.house || !this.people.size) return was
     dt = Math.min(dt, 0.05)
-    for (const p of this.people.values()) this.step(p, dt)
-    return true
+    let busy = was
+    for (const p of this.people.values()) busy = this.step(p, dt) || busy
+    return busy
   }
 
   // ---------- 行为 ----------
@@ -669,10 +655,9 @@ export class ResidentLayer {
     // 坐着 / 躺着的先起身
     if (p.seat) {
       const s = p.seat
-      const mo = p.m.motions
-      // 有动作片段：在原地播起身的动作（坐下时就站在座位前的位置上）
-      if (mo && !s.lie) return [{ t: 'ease', dur: mo.clips.sitExit.duration, clip: 'sitExit', to: { p: { ...p.pos }, h: p.h, y: nav.floorAt(p.pos), pitch: 0, sit: 0, lie: 0 } }, { t: 'release' }]
-      return [{ t: 'ease', dur: s.lie ? 1.6 : 0.9, to: { p: s.front, h: s.lie ? p.h : s.h, y: nav.floorAt(s.front), pitch: 0, sit: 0, lie: 0 } }, { t: 'release' }]
+      // 坐着：原地播起身的动作（坐下时就站在座位前的位置上）；躺着：缓动回床边站起来
+      if (!s.lie) return [{ t: 'ease', dur: p.m.motions.clips.sitExit.duration, clip: 'sitExit', to: { p: { ...p.pos }, h: p.h, y: nav.floorAt(p.pos), pitch: 0, sit: 0, lie: 0 } }, { t: 'release' }]
+      return [{ t: 'ease', dur: 1.6, to: { p: s.front, h: p.h, y: nav.floorAt(s.front), pitch: 0, sit: 0, lie: 0 } }, { t: 'release' }]
     }
     const r = Math.random()
     const reach = (s: Seat) => !s.by && (s.fl === p.fl || house.connected(p.fl, s.fl))
@@ -705,24 +690,6 @@ export class ResidentLayer {
 
   /** 走到座位前 → 转身背对座位 → 坐下（躺下）→ 待一阵 */
   private seatTasks(p: Person, s: Seat, dur: number): Task[] {
-    const mo = p.m.motions
-    if (mo && !s.lie) {
-      // 坐下的动作里髋部往后、往下移到 sitHip：脚底原点站在「髋部落在座位上」对应的位置，转身背对座位，原地坐下。
-      // 髋关节比座面高大约一成髋高（大腿的厚度）
-      const off = mo.sitHip
-      const c = Math.cos(s.h)
-      const sn = Math.sin(s.h)
-      const root = { x: s.hip.x - (off.x * c + off.z * sn), y: s.hip.y - (-off.x * sn + off.z * c) }
-      const y = s.y + p.m.hipY * 0.1 - off.y
-      return [
-        { t: 'go', to: s.front, fl: s.fl },
-        { t: 'step', to: root },
-        { t: 'turn', h: s.h },
-        { t: 'ease', dur: mo.clips.sitEnter.duration, clip: 'sitEnter', to: { p: root, h: s.h, y, pitch: 0, sit: 1, lie: 0 } },
-        { t: 'idle', dur, look: 0.6 },
-      ]
-    }
-    const sitY = s.y + 7 - p.m.hipY
     if (s.lie)
       return [
         { t: 'go', to: s.front, fl: s.fl },
@@ -730,10 +697,19 @@ export class ResidentLayer {
         { t: 'ease', dur: 1.8, to: { p: s.hip, h: s.h, y: s.y + 11, pitch: -Math.PI / 2, sit: 0, lie: 1 } },
         { t: 'idle', dur, sleep: true },
       ]
+    const mo = p.m.motions
+    // 坐下的动作里髋部往后、往下移到 sitHip：脚底原点站在「髋部落在座位上」对应的位置，转身背对座位，原地坐下。
+    // 髋关节比座面高大约一成髋高（大腿的厚度）
+    const off = mo.sitHip
+    const c = Math.cos(s.h)
+    const sn = Math.sin(s.h)
+    const root = { x: s.hip.x - (off.x * c + off.z * sn), y: s.hip.y - (-off.x * sn + off.z * c) }
+    const y = s.y + p.m.hipY * 0.1 - off.y
     return [
       { t: 'go', to: s.front, fl: s.fl },
+      { t: 'step', to: root },
       { t: 'turn', h: s.h },
-      { t: 'ease', dur: 1, to: { p: s.hip, h: s.h, y: sitY, pitch: 0, sit: 1, lie: 0 } },
+      { t: 'ease', dur: mo.clips.sitEnter.duration, clip: 'sitEnter', to: { p: root, h: s.h, y, pitch: 0, sit: 1, lie: 0 } },
       { t: 'idle', dur, look: 0.6 },
     ]
   }
@@ -759,7 +735,11 @@ export class ResidentLayer {
       p.tasks.shift()
       p.tt = 0
     }
+    // 躺好、闭上眼睡着了：姿势不再变，不推进动作、不重画（醒来起身时接着动）
+    p.still = task.t === 'idle' && !!task.sleep && p.tasks[0] === task && p.lieW > 0.999 && p.eyes < 0.02
+    if (p.still) return false
     this.animate(p, task, dt)
+    return true
   }
 
   /** 去座位的路走不通：放掉座位，后面坐下的步骤一起作废 */
@@ -770,87 +750,25 @@ export class ResidentLayer {
 
   private expand(p: Person, t: Extract<Task, { t: 'go' }>): Task[] {
     const house = this.house!
-    const legs = house.route('walk', { floor: p.fl, p: p.pos }, { floor: t.fl!, p: t.to }, R) ?? house.route('walk', { floor: p.fl, p: p.pos }, { floor: t.fl!, p: t.to }, R * 0.7)
-    if (!legs) return []
-    return legs.map((l): Task => (l.t === 'stairs' ? { t: 'stairs', walk: l.walk, up: l.up } : { t: 'go', to: l.path[l.path.length - 1], path: l.path, i: 0, rr: R }))
+    return routeLegs(house, 'walk', { floor: p.fl, p: p.pos }, { floor: t.fl!, p: t.to }, R, R * 0.7, R) ?? []
   }
 
-  /** 步行速度：有走路片段时按片段的步幅（播放速度接近原速，最自然） */
+  /** 步行速度：按走路片段的步幅（播放速度接近原速，最自然） */
   private vmax(p: Person) {
-    return p.m.motions ? p.m.motions.walkSpeed * 1.1 : WALK_V
+    return p.m.motions.walkSpeed * 1.1
   }
 
   private turnTo(p: Person, h: number, dt: number) {
-    const d = wrap(h - p.h)
-    p.h += Math.max(-4 * dt, Math.min(4 * dt, d))
-    return Math.abs(d) < 0.03
+    return turnToward(p, h, GAIT.turn, dt)
   }
 
   private moveTo(p: Person, target: Vec, vmax: number, dt: number, r: number, check = true) {
-    const nav = this.house!.grid(p.fl)
-    const dx = target.x - p.pos.x
-    const dy = target.y - p.pos.y
-    const d = Math.hypot(dx, dy)
-    if (d < 0.5) return 0
-    const diff = wrap(Math.atan2(dx, dy) - p.h)
-    this.turnTo(p, p.h + diff, dt)
-    let v = vmax * Math.max(0, Math.min(1, (Math.cos(diff) - 0.5) / 0.4))
-    v = Math.min(v, d * 3 + 10)
-    p.speed += (v - p.speed) * Math.min(1, dt * 5)
-    const f = fwd(p.h)
-    const step = Math.min(p.speed * dt, d)
-    const next = { x: p.pos.x + f.x * step, y: p.pos.y + f.y * step }
-    if (!check || nav.clearAt('walk', next) >= r - 4 || nav.clearAt('walk', next) >= nav.clearAt('walk', p.pos)) {
-      p.pos = next
-      return d - step
-    }
-    p.speed = 0
-    return -1
+    return stepToward(p, this.house!.grid(p.fl), 'walk', target, vmax, dt, r, GAIT, check)
   }
 
-  /** 走楼梯：和 ActorLayer.climb 一样沿 stairWalk 的路线按路程推进，脚下高度取那一级踏面 */
-  private climb(p: Person, t: Extract<Task, { t: 'stairs' }>, dt: number): boolean {
-    const w = t.walk
-    if (!t.pts) {
-      t.pts = [{ x: p.pos.x, y: p.pos.y, z: t.up ? 0 : w.rise }, ...(t.up ? w.pts : [...w.pts].reverse())]
-      t.cum = [0]
-      for (let i = 1; i < t.pts.length; i++) t.cum.push(t.cum[i - 1] + Math.hypot(t.pts[i].x - t.pts[i - 1].x, t.pts[i].y - t.pts[i - 1].y))
-      t.s = 0
-      if (!t.up) {
-        p.fl = w.from
-        p.yW += w.rise
-      }
-    }
-    const pts = t.pts
-    const cum = t.cum!
-    const total = cum[cum.length - 1]
-    const at = (s: number) => {
-      s = Math.max(0, Math.min(total, s))
-      let i = 1
-      while (i < cum.length - 1 && cum[i] < s) i++
-      const seg = cum[i] - cum[i - 1] || 1
-      const k = (s - cum[i - 1]) / seg
-      return { x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * k, y: pts[i - 1].y + (pts[i].y - pts[i - 1].y) * k, z: k < 0.5 ? pts[i - 1].z : pts[i].z }
-    }
-    const ahead = at(t.s! + 20)
-    const dh = wrap(Math.atan2(ahead.x - p.pos.x, ahead.y - p.pos.y) - p.h)
-    if (Math.hypot(ahead.x - p.pos.x, ahead.y - p.pos.y) > 1) this.turnTo(p, p.h + dh, dt)
-    const v = this.vmax(p) * 0.6 * Math.max(0, Math.min(1, (Math.cos(dh) - 0.3) / 0.5))
-    p.speed += (v - p.speed) * Math.min(1, dt * 5)
-    t.s = Math.min(total, t.s! + p.speed * dt)
-    const q = at(t.s)
-    p.pos = { x: q.x, y: q.y }
-    p.stairZ = q.z
-    if (t.s >= total - 0.5 || p.tt > 90) {
-      p.pos = { x: pts[pts.length - 1].x, y: pts[pts.length - 1].y }
-      if (t.up) {
-        p.fl = w.to
-        p.yW -= w.rise
-      } else p.yW = Math.min(p.yW, 1)
-      p.stairZ = 0
-      return true
-    }
-    return false
+  /** 走楼梯：比平地慢一些，朝向对准前方 20cm */
+  private climb(p: Person, t: StairsTask, dt: number): boolean {
+    return climbStairs(p, t, this.vmax(p) * 0.6, GAIT, 20, dt, p.tt)
   }
 
   private run(p: Person, task: Task, dt: number): boolean {
@@ -941,7 +859,6 @@ export class ResidentLayer {
 
   private animate(p: Person, task: Task | undefined, dt: number) {
     const nav = this.house!.grid(p.fl)
-    p.ground = nav.floorAt(p.pos)
     const easing = task?.t === 'ease' || !!p.seat
     if (!easing) {
       const onStairs = task?.t === 'stairs' && !!task.pts
@@ -951,8 +868,6 @@ export class ResidentLayer {
     }
     const moving = Math.abs(p.speed) > 2
     p.walkW += ((moving ? Math.min(1, p.speed / (this.vmax(p) * 0.45)) : 0) - p.walkW) * Math.min(1, dt * 7)
-    // 一个步态周期（左右各一步）约是腿长的 1.6 倍
-    p.phase += (TAU * Math.abs(p.speed) * dt) / Math.max(60, p.m.hipY * 1.6)
     // 东张西望：隔几秒换一个看的方向
     const look = task?.t === 'idle' ? (task.look ?? 0) : moving ? 0.15 : 0
     p.lookT -= dt
@@ -970,7 +885,6 @@ export class ResidentLayer {
     }
     p.blink = Math.max(0, p.blink - dt * 7)
     p.eyes += ((sleep ? 0 : 1) - p.eyes) * Math.min(1, dt * 3)
-    p.t += dt
     this.place(p)
     this.pose(p, dt)
     p.root.updateMatrixWorld(true)
@@ -980,8 +894,7 @@ export class ResidentLayer {
 
   /** 按走路 / 坐 / 躺的权重摆骨骼（dt = 0：只摆姿势，不推进动作和弹簧骨骼） */
   private pose(p: Person, dt: number) {
-    if (p.mixer) this.poseClips(p, dt)
-    else this.poseProcedural(p)
+    this.poseClips(p, dt)
     // 只摆姿势时也要把标准化骨骼抄到真正的骨骼上、跑一遍约束（扭转骨骼不跟上的话短裤、袖口会穿模）；弹簧骨骼 delta = 0 时不动
     if (dt === 0) {
       p.root.updateMatrixWorld(true)
@@ -994,7 +907,7 @@ export class ResidentLayer {
    * 片段之上再叠两层：躺下（没有对应的片段，按躺的权重往「放平」的姿势插值）、东张西望（头和脖子多转一点）
    */
   private poseClips(p: Person, dt: number) {
-    const mo = p.m.motions!
+    const mo = p.m.motions
     const l = p.lieW
     const s = Math.min(1, p.sitW) * (1 - l)
     // 原地转身：用走路片段慢慢踏小碎步，不整个人平移着转
@@ -1012,12 +925,13 @@ export class ResidentLayer {
     }
     const k = dt === 0 ? 1 : Math.min(1, dt * 10)
     for (const id of Object.keys(target) as ClipId[]) {
-      p.weights[id] += (target[id] - p.weights[id]) * k
-      p.acts[id].setEffectiveWeight(p.weights[id])
+      const a = p.acts[id]
+      const w = a.getEffectiveWeight()
+      a.setEffectiveWeight(w + (target[id] - w) * k)
     }
     if (p.clip) p.acts[p.clip].time = p.clipK * p.acts[p.clip].getClip().duration
     p.acts.walk.timeScale = p.walkW < p.turnW ? 0.7 : Math.max(0.4, Math.min(2, Math.abs(p.speed) / mo.walkSpeed))
-    p.mixer!.update(dt)
+    p.mixer.update(dt)
     if (l > 0.001) {
       for (const [b, x, y, z] of LIE_POSE) {
         const n = p.bones.get(b)
@@ -1029,49 +943,15 @@ export class ResidentLayer {
     const sitting = p.clip === 'sitEnter' ? p.clipK : p.clip === 'sitExit' ? 1 - p.clipK : s
     if (sitting > 0.01) {
       p.root.updateMatrixWorld(true)
-      const y = p.baseY + p.ground + p.m.ankleY
+      const y = p.baseY + this.house!.grid(p.fl).floorAt(p.pos) + p.m.ankleY
       legIK(p, 'left', y, sitting)
       legIK(p, 'right', y, sitting)
     }
     const yaw = p.lookCur * (1 - l)
     p.bones.get('neck')?.quaternion.multiply(_q.setFromAxisAngle(_up, yaw * 0.4))
     p.bones.get('head')?.quaternion.multiply(_q.setFromAxisAngle(_up, yaw * 0.6))
-    p.m.root.position.y = 0
   }
 
-  /** 没有动作片段时：按公式直接摆骨骼 */
-  private poseProcedural(p: Person) {
-    const g = p.walkW * (1 - p.sitW) * (1 - p.lieW)
-    const s = Math.min(1, p.sitW) * (1 - p.lieW)
-    const l = p.lieW
-    const ph = p.phase
-    const sw = Math.sin(ph)
-    const breathe = Math.sin(p.t * (l > 0.5 ? 1.1 : 1.7)) * (l > 0.5 ? 0.025 : 0.015)
-    // 腿：前后摆，摆向前的那条腿屈膝；坐下时大腿抬平、小腿垂下
-    const thigh = 0.42 * g
-    p.setBone('leftUpperLeg', -sw * thigh - 1.5 * s, 0, 0)
-    p.setBone('rightUpperLeg', sw * thigh - 1.5 * s, 0, 0)
-    p.setBone('leftLowerLeg', g * (0.08 + 0.7 * Math.max(0, Math.cos(ph))) + 1.5 * s, 0, 0)
-    p.setBone('rightLowerLeg', g * (0.08 + 0.7 * Math.max(0, -Math.cos(ph))) + 1.5 * s, 0, 0)
-    p.setBone('leftFoot', -0.15 * g * Math.max(0, Math.cos(ph)), 0, 0)
-    p.setBone('rightFoot', -0.15 * g * Math.max(0, -Math.cos(ph)), 0, 0)
-    // 身体：走路微微前倾、胯随步子转一点；坐着稍微往后靠；躺着放平
-    p.setBone('hips', 0, sw * 0.07 * g, 0)
-    p.setBone('spine', 0.05 * g - 0.06 * s, -sw * 0.05 * g, 0)
-    p.setBone('chest', breathe, -sw * 0.04 * g, 0)
-    p.setBone('neck', 0, p.lookCur * 0.4 * (1 - l), 0)
-    p.setBone('head', -0.04 * g + 0.08 * s, p.lookCur * 0.6 * (1 - l), 0)
-    // 胳膊：放下来垂在身侧，和腿反向前后摆；坐着时手放在大腿上
-    const down = 1.22 + 0.12 * l
-    const arm = 0.32 * g
-    p.setBone('leftUpperArm', sw * arm - 0.4 * s, 0, -down + 0.1 * s)
-    p.setBone('rightUpperArm', -sw * arm - 0.4 * s, 0, down - 0.1 * s)
-    const elbow = 0.18 + 0.2 * g + 0.75 * s - 0.1 * l
-    p.setBone('leftLowerArm', 0, -elbow, 0)
-    p.setBone('rightLowerArm', 0, elbow, 0)
-    // 走路时身体随步子上下起伏（双脚着地时最低）
-    p.m.root.position.y = -Math.abs(sw) * 1.6 * g
-  }
 }
 
 // ---------- 腿部 IK ----------

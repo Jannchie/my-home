@@ -46,8 +46,10 @@ import { coverInto, liveCapture } from '../three/planThumb'
 import { FxLayer } from '../three/fx'
 import { SelectFrame, WallGuide } from '../three/selectFrame'
 import { ActorLayer } from '../three/actors'
-import { ResidentLayer, loadResidentModel, warmResidentLoader } from '../three/residents'
-import { addResident, isBuiltin, loadResidents, removeResident, residentFile, residentStatus, residents, updateResident } from '../residents'
+import { BoxPool, type CharacterLayer, type FloorHooks } from '../three/characters'
+import { ResidentLayer } from '../three/residents'
+import { ResidentRoster } from '../three/residentRoster'
+import { addResident, isBuiltin, loadResidents, removeResident, residentStatus, residents, updateResident } from '../residents'
 import { Walker, ceilings, drawMiniMap, miniMapData, type MiniMapData } from '../three/walk'
 import { FloorReflections, clearReflectionSkip, refreshReflectionSkip } from '../three/reflect'
 import { Mirrors } from '../three/mirrors'
@@ -371,8 +373,7 @@ function syncFloorFades() {
   for (const fg of floorGroups) fadeFloorCached(fg.group, fg.floor.id)
   for (const [id, g] of furnLayers) fadeFloorCached(g, id)
   // 角色按所在楼层（走楼梯时按走到的那一层）淡入淡出
-  actors.relayout()
-  people.relayout()
+  for (const l of characters) l.relayout()
 }
 
 /**
@@ -393,8 +394,7 @@ function prewarmFloorFade() {
     const roots: [THREE.Object3D, string][] = [
       ...floorGroups.map((fg) => [fg.group, fg.floor.id] as [THREE.Object3D, string]),
       ...[...furnLayers].map(([id, g]) => [g, id] as [THREE.Object3D, string]),
-      ...actors.roots(),
-      ...people.roots(),
+      ...characters.flatMap((l) => l.roots()),
     ].filter(([root, id]) => !root.userData.floorFaded || floorAlpha(id) <= 0)
     const renderer = stage.renderer
     const prev = renderer.getRenderTarget()
@@ -546,56 +546,28 @@ function houseChanged() {
  * 角色的高度 = 所在楼层的抬升（elevation + 分层拉开 / 隐藏的动画偏移）+ 离本层地面的高度。
  */
 const actors = new ActorLayer((fid) => objs.get(fid)?.obj)
-actors.lift = (id) => (isMultiFloor(plan.value) ? liftOf(id) : 0)
 actors.elevOf = (id) => (isMultiFloor(plan.value) ? (floorById(plan.value, id)?.elevation ?? 0) : 0)
-actors.shown = (id) => floorAnim.get(id)?.show ?? true
-actors.fade = (root, id) => fadeFloor(root, id, floorAlpha(id))
 /** VRM 住户（residents.ts）：和宠物一样按楼层摆高度、淡入淡出，但人不来自家具 */
 const people = new ResidentLayer()
-people.lift = actors.lift
-people.shown = actors.shown
-people.fade = actors.fade
+/** 所有角色层：同步、每帧更新、楼层动画、预编译、去拖影都对整组做（three/characters.ts） */
+const characters: CharacterLayer[] = [actors, people]
+const floorHooks: FloorHooks = {
+  lift: (id) => (isMultiFloor(plan.value) ? liftOf(id) : 0),
+  shown: (id) => floorAnim.get(id)?.show ?? true,
+  fade: (root, id) => fadeFloor(root, id, floorAlpha(id)),
+}
+for (const l of characters) Object.assign(l, floorHooks)
 function syncActors(changed = true) {
-  actors.sync(toRaw(plan.value), actorsLive())
-  people.sync(toRaw(plan.value), actorsLive(), changed)
+  for (const l of characters) l.sync(toRaw(plan.value), actorsLive(), changed)
 }
+const moverBoxes: THREE.Box3[] = []
+const moverPool = new BoxPool()
 // 名单里在家的人：载入模型住进来；不在家 / 移出名单的搬走。载入是异步的，期间名单又变了就以最新的为准
-const peopleWant = new Map<string, string>()
-/** 载入一个人的模型住进来；载入期间名单变了（出门、换了模型）或离开了沙盘就作废 */
-async function moveIn(id: string, file: string) {
-  residentStatus[id] = 'loading'
-  let st: 'ok' | 'missing' | 'error'
-  let m: Awaited<ReturnType<typeof loadResidentModel>> | null = null
-  try {
-    // 读模型文件和载入器、动作数据的下载一起开始
-    const [blob] = await Promise.all([residentFile(file), warmResidentLoader()])
-    if (blob) m = await loadResidentModel(blob)
-    st = m ? 'ok' : 'missing'
-  } catch (e) {
-    console.warn('[residents] VRM 载入失败', e)
-    st = 'error'
-  }
-  if (unmounted || peopleWant.get(id) !== file) return
-  if (m) people.add(id, m)
-  residentStatus[id] = st
-  dirty = true
-}
+// 名单里在家的人住进来、出门的搬走（three/residentRoster.ts）
+const roster = new ResidentRoster(people, () => (dirty = true))
 watch(
-  () => residents.list.filter((r) => r.home).map((r) => `${r.id}:${r.file}`).join('|'),
-  () => {
-    const want = new Map(residents.list.filter((r) => r.home).map((r) => [r.id, r.file]))
-    for (const id of [...peopleWant.keys()])
-      if (want.get(id) !== peopleWant.get(id)) {
-        peopleWant.delete(id)
-        people.remove(id)
-        delete residentStatus[id]
-      }
-    for (const [id, file] of want)
-      if (!peopleWant.has(id)) {
-        peopleWant.set(id, file)
-        void moveIn(id, file)
-      }
-  },
+  () => residents.list.map((r) => `${r.id}:${r.file}:${r.home}`).join('|'),
+  () => roster.update(residents.list),
   // 离开沙盘再回来时名单没变：也要把在家的人重新请进来
   { immediate: true },
 )
@@ -3350,10 +3322,14 @@ function loop() {
   }
   // 省电画质：只有动画（粒子、走动的角色）在变时，最多 30fps 重画
   const low = lowPower()
-  const peopleBusy = people.update(dt)
-  const actorsBusy = actors.update(dt) || peopleBusy
-  // 走动的角色：多帧累积在它们身上不留拖影
-  post.setMovers(actorsBusy ? people.movers(actors.movers()) : [])
+  // 每一层都要更新（不能短路）
+  let actorsBusy = false
+  for (const l of characters) actorsBusy = l.update(dt) || actorsBusy
+  // 走动的角色：多帧累积在它们身上不留拖影（盒子和数组每帧复用）
+  moverBoxes.length = 0
+  moverPool.reset()
+  if (actorsBusy) for (const l of characters) l.movers(moverBoxes, moverPool)
+  post.setMovers(moverBoxes)
   const anim = fx.update(dt, stage.renderer.domElement.height) || actorsBusy
   // 楼层切换 / 分层拉开的缓动：动画期间沿用旧阴影（每次重画阴影要提交上千次 draw call），停下的那一帧重画一次
   if (stepFloors(dt)) {
@@ -3479,7 +3455,7 @@ onMounted(() => {
   stage.scene.matrixAutoUpdate = false
   furnRoot.matrixAutoUpdate = false
   stage.scene.add(furnRoot, frameRoot, guideRoot, fx.group, hoverHi.root, siteHL.root)
-  stage.scene.add(actors.group, people.group)
+  stage.scene.add(...characters.map((l) => l.group))
   controls = new OrbitControls(stage.camera, canvas.value!)
   post.setFocus(controls.target)
   controls.enableDamping = true
@@ -3908,11 +3884,7 @@ onBeforeUnmount(() => {
   for (const f of [selFrame, hoverFrame, ghostFrame, wallFrame, beamSelFrame, wallGuide]) f.dispose()
   placing.value = null
   // VRM 住户搬走：模型的几何、贴图释放掉，载入状态清空（下次进沙盘重新载入）
-  for (const id of peopleWant.keys()) {
-    people.remove(id)
-    delete residentStatus[id]
-  }
-  peopleWant.clear()
+  roster.dispose()
 })
 
 // 房间的灯光开关 / 色温 / 主灯接管不影响房子本身：比较时剔掉，免得一开灯就整栋重建
