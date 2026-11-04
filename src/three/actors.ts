@@ -12,7 +12,7 @@
 //   home 素材（窝、基站）→ 没被认领的窝自己生成一只（花色按 id 随机），基站生成一台扫地机器人。
 
 import * as THREE from 'three'
-import type { Furniture, Plan, Vec } from '../model'
+import { dist, type Furniture, type Plan, type Vec } from '../model'
 import { ASSET_MAP, ASSETS } from './assets'
 import type { ActorSpec, AssetDef } from './kit'
 import { hasTag } from './tags'
@@ -89,11 +89,12 @@ type Task =
   | { t: 'hover'; dur: number; dir?: number }
   | { t: 'land'; spot: Spot }
 
-const TAU = Math.PI * 2
-const wrap = (a: number) => ((((a + Math.PI) % TAU) + TAU) % TAU) - Math.PI
-const rnd = (a: number, b: number) => a + Math.random() * (b - a)
-const dist = (a: Vec, b: Vec) => Math.hypot(a.x - b.x, a.y - b.y)
-const fwd = (h: number): Vec => ({ x: Math.sin(h), y: Math.cos(h) })
+export const TAU = Math.PI * 2
+/** 角度收到 -π..π */
+export const wrap = (a: number) => ((((a + Math.PI) % TAU) + TAU) % TAU) - Math.PI
+export const rnd = (a: number, b: number) => a + Math.random() * (b - a)
+/** 朝向 h（弧度）在平面上的单位向量 */
+export const fwd = (h: number): Vec => ({ x: Math.sin(h), y: Math.cos(h) })
 
 function hash(s: string) {
   let h = 2166136261
@@ -306,9 +307,9 @@ class Actor {
   }
 }
 
-const SHADOW_GEO = new THREE.CircleGeometry(1, 28).rotateX(-Math.PI / 2)
+export const SHADOW_GEO = new THREE.CircleGeometry(1, 28).rotateX(-Math.PI / 2)
 SHADOW_GEO.userData.shared = true
-const SHADOW_MAT = new THREE.MeshBasicMaterial({ color: '#2b2030', transparent: true, opacity: 0.16, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })
+export const SHADOW_MAT = new THREE.MeshBasicMaterial({ color: '#2b2030', transparent: true, opacity: 0.16, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })
 
 /** Kachaka 会去「送东西」的家具：沙发、床、书桌、餐桌、矮桌、茶几前 */
 const isDeliverTarget = (def: AssetDef) => hasTag(def, 'sofa', 'bed', 'bedding', 'desk', 'dining-table', 'low-table', 'coffee-table')

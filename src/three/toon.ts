@@ -260,24 +260,14 @@ function outlineMaterial(color: THREE.Color, skinned = false) {
   if (!m) {
     m = new THREE.ShaderMaterial({
       uniforms: { ...outlineUniforms, uColor: { value: color } },
-      vertexShader: skinned
-        ? /* glsl */ `
+      // 蒙皮的先按骨骼、表情变形出 transformed / objectNormal，其余照常
+      vertexShader: /* glsl */ `
         ${LINE_VERT_PARS}
-        ${SKIN_VERT_PARS}
+        ${skinned ? SKIN_VERT_PARS : ''}
         void main() {
-          ${SKIN_VERT}
+          ${skinned ? SKIN_VERT : 'vec3 transformed = position; vec3 objectNormal = normal;'}
           vec4 clip = projectionMatrix * modelViewMatrix * vec4(transformed, 1.0);
           vec3 n = normalize(normalMatrix * objectNormal);
-          vec2 dir = (projectionMatrix * vec4(n, 0.0)).xy;
-          float l = length(dir);
-          if (l > 1e-5) clip.xy += dir / l * ${LINE_WIDTH} * 2.0 / uViewport * clip.w;
-          gl_Position = clip;
-        }`
-        : /* glsl */ `
-        ${LINE_VERT_PARS}
-        void main() {
-          vec4 clip = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-          vec3 n = normalize(normalMatrix * normal);
           vec2 dir = (projectionMatrix * vec4(n, 0.0)).xy;
           float l = length(dir);
           if (l > 1e-5) clip.xy += dir / l * ${LINE_WIDTH} * 2.0 / uViewport * clip.w;
@@ -357,8 +347,8 @@ export function vertexColorOutline() {
   return vcOutline
 }
 
-/** 多材质网格里不描边的分组 */
-const NO_LINE = new THREE.MeshBasicMaterial({ visible: false })
+/** 不画的材质：多材质网格里不描边的分组，也给别处要藏起来的分组用 */
+export const NO_LINE = new THREE.MeshBasicMaterial({ visible: false })
 
 /**
  * 给 root 下所有网格加描边（userData.noOutline 的跳过）。

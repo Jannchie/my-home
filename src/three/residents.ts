@@ -13,22 +13,17 @@
 
 import * as THREE from 'three'
 import type { VRM, VRMHumanBoneName } from '@pixiv/three-vrm'
-import { pointInPolygon, type Plan, type RoomKind, type Vec } from '../model'
+import { dist, pointInPolygon, type Plan, type RoomKind, type Vec } from '../model'
 import { floorOf, floorView, isMultiFloor, planFloors } from '../floors'
 import { HouseNav } from '../nav'
 import type { StairWalk } from '../stairs'
 import { ASSET_MAP } from './assets'
 import type { AssetDef } from './kit'
 import { hasTag } from './tags'
-import { addOutlines, gradientMap } from './toon'
+import { NO_LINE, addOutlines, gradientMap } from './toon'
+import { SHADOW_GEO, SHADOW_MAT, TAU, fwd, rnd, wrap } from './actors'
 import { buildMotions, motionData, type ClipId, type Motions } from './motions'
 
-const TAU = Math.PI * 2
-const wrap = (a: number) => ((((a + Math.PI) % TAU) + TAU) % TAU) - Math.PI
-const rnd = (a: number, b: number) => a + Math.random() * (b - a)
-const dist = (a: Vec, b: Vec) => Math.hypot(a.x - b.x, a.y - b.y)
-const fwd = (h: number): Vec => ({ x: Math.sin(h), y: Math.cos(h) })
-const smooth = (k: number) => k * k * (3 - 2 * k)
 
 /** 身体半径（cm）：肩宽一半左右，找路时离墙、家具这么远 */
 const R = 16
@@ -55,9 +50,17 @@ export interface ResidentModel {
   motions?: Motions
 }
 
+const loaderMods = () => Promise.all([import('three/addons/loaders/GLTFLoader.js'), import('@pixiv/three-vrm')])
+
+/** 提前开始下载载入器和动作数据（和模型文件的读取并行）；动作数据失败不算失败，载入时退回程序化姿势 */
+export function warmResidentLoader() {
+  motionData().catch(() => {})
+  return loaderMods()
+}
+
 /** 读 VRM 文件（.vrm 就是带扩展的 glb），材质换成 toon、加描边、弹簧骨骼按放大后的尺寸调好 */
 export async function loadResidentModel(blob: Blob): Promise<ResidentModel> {
-  const [{ GLTFLoader }, { VRMLoaderPlugin, VRMUtils }] = await Promise.all([import('three/addons/loaders/GLTFLoader.js'), import('@pixiv/three-vrm')])
+  const [{ GLTFLoader }, { VRMLoaderPlugin, VRMUtils }] = await loaderMods()
   const url = URL.createObjectURL(blob)
   try {
     const loader = new GLTFLoader()
@@ -138,7 +141,6 @@ function mtoonRamp(shade: THREE.Color, lit: THREE.Color, shift: number, toony: n
  * MToon 自己的描边分组不画，描边用 addOutlines；模型里没开描边的材质（脸上的眼睛、眉毛、睫毛）也不加
  */
 function toToon(scene: THREE.Object3D) {
-  const hidden = new THREE.MeshBasicMaterial({ visible: false })
   const conv = (x: THREE.Material): THREE.Material => {
     const m = x as THREE.Material & {
       isMToonMaterial?: boolean
@@ -154,7 +156,7 @@ function toToon(scene: THREE.Object3D) {
       outlineWidthMode?: string
       outlineWidthFactor?: number
     }
-    if (m.isOutline) return hidden
+    if (m.isOutline) return NO_LINE
     if (!m.isMToonMaterial && !(m as THREE.MeshStandardMaterial).isMeshStandardMaterial && !(m as THREE.MeshBasicMaterial).isMeshBasicMaterial) return x
     const lit = m.color?.clone() ?? new THREE.Color(0xffffff)
     const out = new THREE.MeshToonMaterial({
@@ -229,6 +231,13 @@ export function lieSpec(def: AssetDef, height: number): { along: boolean; len: n
 
 function findSeats(plan: Plan, house: HouseNav, height: number): Seat[] {
   const out: Seat[] = []
+  // 每层的平面视图只切一次（floorView 每次都要过滤、复制整个户型）
+  const views = new Map<string, Plan>()
+  const viewOf = (fl: string) => {
+    let v = views.get(fl)
+    if (!v) views.set(fl, (v = isMultiFloor(plan) ? floorView(plan, fl) : plan))
+    return v
+  }
   for (const f of plan.furniture) {
     const def = ASSET_MAP.get(f.asset)
     if (!def || def.mount || def.prop || (f.z ?? 0) > 0.5) continue
@@ -239,8 +248,7 @@ function findSeats(plan: Plan, house: HouseNav, height: number): Seat[] {
     if (!lie && !sit) continue
     const fl = floorOf(plan, f)
     // 浴室凳、洗面台前的凳子不坐（人不在浴室里待着）
-    const view = isMultiFloor(plan) ? floorView(plan, fl) : plan
-    const room = view.rooms.find((r) => pointInPolygon(f, r.points))
+    const room = viewOf(fl).rooms.find((r) => pointInPolygon(f, r.points))
     if (room && NO_SIT.includes(room.kind)) continue
     const nav = house.grid(fl)
     const h = (-f.rot * Math.PI) / 180
@@ -351,7 +359,6 @@ class Person {
   speed = 0
   tasks: Task[] = []
   tt = 0
-  placed = false
   walkW = 0
   phase = 0
   sitW = 0
@@ -442,6 +449,7 @@ class Person {
       if (!mesh.isMesh || mesh.userData.isOutline) return
       mesh.geometry.dispose()
       for (const x of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+        if (x === NO_LINE) continue
         for (const v of Object.values(x)) if ((v as THREE.Texture | null)?.isTexture && v !== gradientMap()) (v as THREE.Texture).dispose()
         x.dispose()
       }
@@ -449,9 +457,6 @@ class Person {
   }
 }
 
-const SHADOW_GEO = new THREE.CircleGeometry(1, 28).rotateX(-Math.PI / 2)
-SHADOW_GEO.userData.shared = true
-const SHADOW_MAT = new THREE.MeshBasicMaterial({ color: '#2b2030', transparent: true, opacity: 0.16, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })
 
 // ---------- 层 ----------
 
@@ -470,10 +475,6 @@ export class ResidentLayer {
   fade: (root: THREE.Object3D, floor: string) => void = () => {}
   /** 新的人刚摆进场景（模型异步载入）：要重画一帧 */
   dirty = false
-
-  get count() {
-    return this.people.size
-  }
 
   roots(): [THREE.Object3D, string][] {
     return [...this.people.values()].map((p) => [p.root, p.fl] as [THREE.Object3D, string])
@@ -499,18 +500,15 @@ export class ResidentLayer {
     this.dirty = true
   }
 
-  has(id: string) {
-    return this.people.has(id)
-  }
 
   /** 场景（房间、家具）或模式变了之后调用；plan 传原始对象。changed = false：户型没变，只是 live 变了 */
   sync(plan: Plan, live: boolean, changed = true) {
     this.plan = plan
     this.live = live
-    // 只是切换了布置 / 预览、选中：原地接着做（或定住），不用重新找路
-    if (!changed && this.house) return
-    this.stale = true
-    if (!this.people.size) return
+    if (changed || !this.house) this.stale = true
+    // 定住不动（选中 / 拖着家具，每拖一帧都会来）时先不重建导航，等能动了再一次算好；还没站好的人照样要摆进去
+    const frozen = !live && !!this.house && [...this.people.values()].every((p) => p.fl)
+    if (!this.stale || frozen || !this.people.size) return
     this.rebuild()
     for (const p of this.people.values()) this.settle(p)
   }
@@ -545,7 +543,7 @@ export class ResidentLayer {
     // 走到一半的路、订好的座位都作废（路是按旧户型找的），站好以后重新决定做什么
     for (const s of this.seats) if (s.by === p.id) s.by = undefined
     p.tasks = []
-    const ok = p.placed && house.floors.includes(p.fl) ? house.grid(p.fl).nearest('walk', p.pos, R * 0.8, 60) : null
+    const ok = house.floors.includes(p.fl) ? house.grid(p.fl).nearest('walk', p.pos, R * 0.8, 60) : null
     if (ok) p.pos = ok
     else {
       const spot = this.loiterSpot(planFloors(this.plan!)[0].id)
@@ -557,7 +555,6 @@ export class ResidentLayer {
       p.m.vrm.springBoneManager?.reset()
     }
     // 中途在楼梯上、坐下 / 起身到一半：直接站好
-    p.placed = true
     p.pitch = 0
     p.sitW = 0
     p.lieW = 0
@@ -607,12 +604,7 @@ export class ResidentLayer {
   }
 
   relayout() {
-    for (const p of this.people.values()) {
-      p.baseY = this.lift(p.fl)
-      p.root.visible = this.shown(p.fl)
-      this.fade(p.root, p.fl)
-      p.writeTransform()
-    }
+    for (const p of this.people.values()) this.place(p)
   }
 
   /** 调试 / 测试：让某人站起来走到某层的某处（跨层会走楼梯），到了站一会儿 */
@@ -885,13 +877,13 @@ export class ResidentLayer {
         task.from ??= { p: { ...p.pos }, h: p.h, y: p.yW, pitch: p.pitch, sit: p.sitW, lie: p.lieW }
         const a = task.from
         const b = task.to
-        const k = smooth(Math.min(1, p.tt / task.dur))
+        const k = THREE.MathUtils.smoothstep(p.tt / task.dur, 0, 1)
         p.pos = { x: a.p.x + (b.p.x - a.p.x) * k, y: a.p.y + (b.p.y - a.p.y) * k }
         p.h = a.h + wrap(b.h - a.h) * k
         p.yW = a.y + (b.y - a.y) * k
         p.pitch = a.pitch + (b.pitch - a.pitch) * k
         // 躺下时先坐到床边再倒下去：坐姿在前半段起来、后半段让给躺姿；起身反过来
-        const bump = b.lie > a.lie ? Math.sin(k * Math.PI) : a.lie > b.lie ? Math.sin(k * Math.PI) : 0
+        const bump = b.lie !== a.lie ? Math.sin(k * Math.PI) : 0
         p.sitW = a.sit + (b.sit - a.sit) * k + bump * 0.6
         p.lieW = a.lie + (b.lie - a.lie) * k
         p.clip = task.clip ?? null
@@ -1095,11 +1087,13 @@ const _qp = new THREE.Quaternion()
 const _qr = new THREE.Quaternion()
 const _qf = new THREE.Quaternion()
 
-/** 把一根骨骼的世界旋转左乘 r（局部旋转按父骨骼的世界旋转换算），并更新它和子骨骼的世界矩阵 */
+const _ax = new THREE.Vector3()
+
+/** 把一根骨骼的世界旋转左乘 r（局部旋转按父骨骼的世界旋转换算），并更新它和子骨骼的世界矩阵。r 会被改掉（传临时对象） */
 function rotateWorld(n: THREE.Object3D, r: THREE.Quaternion) {
   n.getWorldQuaternion(_qw)
   n.parent!.getWorldQuaternion(_qp)
-  n.quaternion.copy(_qp.invert().multiply(r.clone().multiply(_qw)))
+  n.quaternion.copy(_qp.invert().multiply(r.multiply(_qw)))
   n.updateMatrixWorld(true)
 }
 
@@ -1108,10 +1102,9 @@ function rotateWorld(n: THREE.Object3D, r: THREE.Quaternion) {
  * 先按余弦定理改膝盖的角度（绕膝盖所在平面的法线转），再整条腿转过去对准目标；脚的世界朝向保持不变（脚掌仍平放）
  */
 function legIK(p: Person, side: 'left' | 'right', y: number, w: number) {
-  const h = p.m.vrm.humanoid
-  const up = h.getNormalizedBoneNode(`${side}UpperLeg`)
-  const low = h.getNormalizedBoneNode(`${side}LowerLeg`)
-  const foot = h.getNormalizedBoneNode(`${side}Foot`)
+  const up = p.bones.get(`${side}UpperLeg`)
+  const low = p.bones.get(`${side}LowerLeg`)
+  const foot = p.bones.get(`${side}Foot`)
   if (!up || !low || !foot) return
   up.getWorldPosition(_a)
   low.getWorldPosition(_b)
@@ -1128,7 +1121,7 @@ function legIK(p: Person, side: 'left' | 'right', y: number, w: number) {
   _v.subVectors(_c, _b).normalize()
   const cur = Math.acos(Math.max(-1, Math.min(1, _u.dot(_v))))
   const want = Math.acos(Math.max(-1, Math.min(1, (l1 * l1 + l2 * l2 - d * d) / (2 * l1 * l2))))
-  const axis = _u.clone().cross(_v)
+  const axis = _ax.crossVectors(_u, _v)
   if (axis.lengthSq() > 1e-8) {
     rotateWorld(low, _qr.setFromAxisAngle(axis.normalize(), want - cur))
     foot.getWorldPosition(_c)

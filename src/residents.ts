@@ -14,6 +14,7 @@
 
 import { reactive } from 'vue'
 import { uid } from './model'
+import { idbReq, openIdb } from './idb'
 
 export interface Resident {
   id: string
@@ -25,7 +26,7 @@ export interface Resident {
   createdAt: number
 }
 
-export const residents = reactive<{ list: Resident[]; ready: boolean; error: string | null }>({ list: [], ready: false, error: null })
+export const residents = reactive<{ list: Resident[]; ready: boolean }>({ list: [], ready: false })
 
 /** 3D 里的载入情况（Sandbox3D 写）：loading 载入中、ok 在家、missing 本机没有模型文件、error 不是能用的 VRM */
 export const residentStatus = reactive<Record<string, 'loading' | 'ok' | 'missing' | 'error'>>({})
@@ -33,56 +34,8 @@ export const residentStatus = reactive<Record<string, 'loading' | 'ok' | 'missin
 const DB_NAME = 'my-home-residents'
 const DB_VERSION = 1
 
-let dbp: Promise<IDBDatabase> | null = null
-function db(): Promise<IDBDatabase> {
-  if (dbp) return dbp
-  dbp = new Promise<IDBDatabase>((resolve, reject) => {
-    if (typeof indexedDB === 'undefined') return reject(Object.assign(new Error('IndexedDB unavailable'), { name: 'NoIndexedDB' }))
-    let req: IDBOpenDBRequest
-    try {
-      req = indexedDB.open(DB_NAME, DB_VERSION)
-    } catch (e) {
-      return reject(e)
-    }
-    req.onupgradeneeded = () => {
-      const d = req.result
-      if (!d.objectStoreNames.contains('people')) d.createObjectStore('people', { keyPath: 'id' })
-      if (!d.objectStoreNames.contains('files')) d.createObjectStore('files', { keyPath: 'id' })
-    }
-    req.onsuccess = () => {
-      const d = req.result
-      d.onversionchange = () => {
-        d.close()
-        dbp = null
-      }
-      resolve(d)
-    }
-    req.onerror = () => reject(req.error)
-    req.onblocked = () => reject(Object.assign(new Error('IndexedDB blocked'), { name: 'InvalidStateError' }))
-  })
-  dbp.catch(() => (dbp = null))
-  return dbp
-}
-
-const wrap = <T>(r: IDBRequest<T>) =>
-  new Promise<T>((resolve, reject) => {
-    r.onsuccess = () => resolve(r.result)
-    r.onerror = () => reject(r.error)
-  })
-
-async function tx<T>(stores: string[], mode: IDBTransactionMode, fn: (s: Record<string, IDBObjectStore>) => Promise<T> | T): Promise<T> {
-  const d = await db()
-  const x = d.transaction(stores, mode)
-  const map = Object.fromEntries(stores.map((n) => [n, x.objectStore(n)]))
-  const done = new Promise<void>((resolve, reject) => {
-    x.oncomplete = () => resolve()
-    x.onerror = () => reject(x.error)
-    x.onabort = () => reject(x.error ?? Object.assign(new Error('aborted'), { name: 'AbortError' }))
-  })
-  const out = await fn(map)
-  await done
-  return out
-}
+const tx = openIdb(DB_NAME, DB_VERSION, ['people', 'files'])
+const wrap = idbReq
 
 /** 内置的默认人物 */
 export const BUILTIN_ID = 'builtin-default'
@@ -94,9 +47,9 @@ export async function loadResidents() {
   let list: Resident[] = []
   try {
     list = await tx(['people'], 'readonly', (s) => wrap(s.people.getAll() as IDBRequest<Resident[]>))
-    residents.error = null
   } catch (e) {
-    residents.error = (e as Error).name || 'Error'
+    // 存储不可用（隐私模式等）：只有内置人物
+    console.warn('[residents] 名单读取失败', e)
   }
   // 默认人物：没存过就是在家；存过的行只取名字和在不在家（文件以代码里的为准）
   const own = list.find(isBuiltin)
@@ -122,11 +75,11 @@ async function digest(buf: ArrayBuffer) {
 
 /** 加一个住户（新加的直接在家） */
 export async function addResident(f: File): Promise<Resident> {
-  const buf = await f.arrayBuffer()
-  const file = await digest(buf)
+  const file = await digest(await f.arrayBuffer())
   const r: Resident = { id: uid('vrm'), name: f.name.replace(/\.vrm$/i, '') || 'VRM', file, home: true, createdAt: Date.now() }
   await tx(['people', 'files'], 'readwrite', (s) => {
-    s.files.put({ id: file, blob: new Blob([buf], { type: 'model/gltf-binary' }) })
+    // File 本身就是 Blob：直接存，不再复制一份几十 MB 的内容
+    s.files.put({ id: file, blob: f })
     s.people.put(r)
   })
   residents.list.push(r)

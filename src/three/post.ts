@@ -1861,7 +1861,8 @@ class AccumPass extends Pass {
         tHist: { value: null },
         uK: { value: 1 },
         uTexel: { value: new THREE.Vector2(1, 1) },
-        uMovers: { value: Array.from({ length: ACCUM_MOVERS * 2 }, () => new THREE.Vector4(2, 2, -2, -2)) },
+        uMovers: { value: Array.from({ length: ACCUM_MOVERS * 2 }, () => EMPTY_RECT.clone()) },
+        uMoverN: { value: 0 },
       },
       vertexShader: VERT,
       fragmentShader: /* glsl */ `
@@ -1870,9 +1871,12 @@ class AccumPass extends Pass {
         uniform float uK;
         uniform vec2 uTexel;
         uniform vec4 uMovers[ ${ACCUM_MOVERS * 2} ];
+        uniform int uMoverN;
         varying vec2 vUv;
+        // 只看用到的那几个矩形：没有角色在动时每个像素一次比较就出来
         bool moving() {
           for ( int i = 0; i < ${ACCUM_MOVERS * 2}; i ++ ) {
+            if ( i >= uMoverN ) break;
             vec4 r = uMovers[ i ];
             if ( vUv.x >= r.x && vUv.y >= r.y && vUv.x <= r.z && vUv.y <= r.w ) return true;
           }
@@ -1891,6 +1895,7 @@ class AccumPass extends Pass {
             vec4 hi = cur;
             for ( int y = -1; y <= 1; y ++ )
               for ( int x = -1; x <= 1; x ++ ) {
+                if ( x == 0 && y == 0 ) continue;
                 vec4 c = texture2D(tCur, vUv + vec2(float(x), float(y)) * uTexel);
                 lo = min(lo, c);
                 hi = max(hi, c);
@@ -1927,6 +1932,7 @@ class AccumPass extends Pass {
     const all = [...rects, ...this.moverPrev]
     const u = this.mat.uniforms.uMovers.value as THREE.Vector4[]
     for (let i = 0; i < u.length; i++) u[i].copy(all[i] ?? EMPTY_RECT)
+    this.mat.uniforms.uMoverN.value = Math.min(all.length, u.length)
     this.moverPrev = rects
   }
 

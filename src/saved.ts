@@ -10,6 +10,7 @@
 // localStorage（小数据）：my-home:saved-link = { id, hash }，记住当前户型关联的是哪份存档、保存时的内容指纹，刷新后仍能判断有没有改过。
 
 import { reactive, toRaw, watch } from 'vue'
+import { idbReq, openIdb } from './idb'
 import { planArea } from './generate'
 import { lang, t } from './i18n'
 import { uid, type Plan } from './model'
@@ -218,65 +219,10 @@ function autosaveError(e: unknown): string {
   return t('当前户型没能自动保存：{msg}', { msg: (e as Error)?.message || name || String(e) })
 }
 
-// ---------- IndexedDB 薄封装 ----------
+// ---------- IndexedDB ----------
 
-let dbp: Promise<IDBDatabase> | null = null
-function db(): Promise<IDBDatabase> {
-  if (dbp) return dbp
-  dbp = new Promise<IDBDatabase>((resolve, reject) => {
-    if (typeof indexedDB === 'undefined') {
-      const e = new Error('IndexedDB unavailable')
-      e.name = 'NoIndexedDB'
-      return reject(e)
-    }
-    let req: IDBOpenDBRequest
-    try {
-      req = indexedDB.open(DB_NAME, DB_VERSION)
-    } catch (e) {
-      return reject(e)
-    }
-    req.onupgradeneeded = () => {
-      const d = req.result
-      if (!d.objectStoreNames.contains('plans')) d.createObjectStore('plans', { keyPath: 'id' })
-      if (!d.objectStoreNames.contains('plan-data')) d.createObjectStore('plan-data', { keyPath: 'id' })
-      if (!d.objectStoreNames.contains('snapshots')) d.createObjectStore('snapshots', { keyPath: 'id' })
-    }
-    req.onsuccess = () => {
-      const d = req.result
-      // 别的标签页升级了库：先关掉，下次用时重开
-      d.onversionchange = () => {
-        d.close()
-        dbp = null
-      }
-      resolve(d)
-    }
-    req.onerror = () => reject(req.error)
-    req.onblocked = () => reject(Object.assign(new Error('IndexedDB blocked'), { name: 'InvalidStateError' }))
-  })
-  dbp.catch(() => (dbp = null))
-  return dbp
-}
-
-const wrap = <T>(r: IDBRequest<T>) =>
-  new Promise<T>((resolve, reject) => {
-    r.onsuccess = () => resolve(r.result)
-    r.onerror = () => reject(r.error)
-  })
-
-/** 在一个事务里跑 fn，事务提交后返回 fn 的结果 */
-async function tx<T>(stores: string[], mode: IDBTransactionMode, fn: (s: Record<string, IDBObjectStore>) => Promise<T> | T): Promise<T> {
-  const d = await db()
-  const x = d.transaction(stores, mode)
-  const map = Object.fromEntries(stores.map((n) => [n, x.objectStore(n)]))
-  const done = new Promise<void>((resolve, reject) => {
-    x.oncomplete = () => resolve()
-    x.onerror = () => reject(x.error)
-    x.onabort = () => reject(x.error ?? Object.assign(new Error('aborted'), { name: 'AbortError' }))
-  })
-  const out = await fn(map)
-  await done
-  return out
-}
+const tx = openIdb(DB_NAME, DB_VERSION, ['plans', 'plan-data', 'snapshots'])
+const wrap = idbReq
 
 // ---------- 读取 ----------
 

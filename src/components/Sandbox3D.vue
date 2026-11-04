@@ -46,7 +46,7 @@ import { coverInto, liveCapture } from '../three/planThumb'
 import { FxLayer } from '../three/fx'
 import { SelectFrame, WallGuide } from '../three/selectFrame'
 import { ActorLayer } from '../three/actors'
-import { ResidentLayer, loadResidentModel } from '../three/residents'
+import { ResidentLayer, loadResidentModel, warmResidentLoader } from '../three/residents'
 import { addResident, isBuiltin, loadResidents, removeResident, residentFile, residentStatus, residents, updateResident } from '../residents'
 import { Walker, ceilings, drawMiniMap, miniMapData, type MiniMapData } from '../three/walk'
 import { FloorReflections, clearReflectionSkip, refreshReflectionSkip } from '../three/reflect'
@@ -561,6 +561,25 @@ function syncActors(changed = true) {
 }
 // 名单里在家的人：载入模型住进来；不在家 / 移出名单的搬走。载入是异步的，期间名单又变了就以最新的为准
 const peopleWant = new Map<string, string>()
+/** 载入一个人的模型住进来；载入期间名单变了（出门、换了模型）或离开了沙盘就作废 */
+async function moveIn(id: string, file: string) {
+  residentStatus[id] = 'loading'
+  let st: 'ok' | 'missing' | 'error'
+  let m: Awaited<ReturnType<typeof loadResidentModel>> | null = null
+  try {
+    // 读模型文件和载入器、动作数据的下载一起开始
+    const [blob] = await Promise.all([residentFile(file), warmResidentLoader()])
+    if (blob) m = await loadResidentModel(blob)
+    st = m ? 'ok' : 'missing'
+  } catch (e) {
+    console.warn('[residents] VRM 载入失败', e)
+    st = 'error'
+  }
+  if (unmounted || peopleWant.get(id) !== file) return
+  if (m) people.add(id, m)
+  residentStatus[id] = st
+  dirty = true
+}
 watch(
   () => residents.list.filter((r) => r.home).map((r) => `${r.id}:${r.file}`).join('|'),
   () => {
@@ -571,29 +590,14 @@ watch(
         people.remove(id)
         delete residentStatus[id]
       }
-    for (const [id, file] of want) {
-      if (peopleWant.has(id)) continue
-      peopleWant.set(id, file)
-      residentStatus[id] = 'loading'
-      residentFile(file)
-        .then((blob) => {
-          if (!blob) return 'missing' as const
-          return loadResidentModel(blob).then((m) => {
-            if (peopleWant.get(id) !== file) return null
-            people.add(id, m)
-            return 'ok' as const
-          })
-        })
-        .catch((e) => {
-          console.warn('[residents] VRM 载入失败', e)
-          return 'error' as const
-        })
-        .then((st) => {
-          if (st && peopleWant.get(id) === file) residentStatus[id] = st
-          dirty = true
-        })
-    }
+    for (const [id, file] of want)
+      if (!peopleWant.has(id)) {
+        peopleWant.set(id, file)
+        void moveIn(id, file)
+      }
   },
+  // 离开沙盘再回来时名单没变：也要把在家的人重新请进来
+  { immediate: true },
 )
 if (!residents.ready) loadResidents()
 const vrmInput = ref<HTMLInputElement | null>(null)
@@ -3903,6 +3907,12 @@ onBeforeUnmount(() => {
   siteHL.dispose()
   for (const f of [selFrame, hoverFrame, ghostFrame, wallFrame, beamSelFrame, wallGuide]) f.dispose()
   placing.value = null
+  // VRM 住户搬走：模型的几何、贴图释放掉，载入状态清空（下次进沙盘重新载入）
+  for (const id of peopleWant.keys()) {
+    people.remove(id)
+    delete residentStatus[id]
+  }
+  peopleWant.clear()
 })
 
 // 房间的灯光开关 / 色温 / 主灯接管不影响房子本身：比较时剔掉，免得一开灯就整栋重建
