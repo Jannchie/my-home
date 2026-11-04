@@ -615,6 +615,19 @@ export class ActorLayer {
     return best?.id ?? null
   }
 
+  /** 预览中各角色的世界包围盒（后处理按它去掉拖影，见 post.ts setMovers） */
+  movers(out: THREE.Box3[] = []) {
+    if (!this.preview || !this.house) return out
+    for (const a of this.actors.values()) {
+      if (!a.root.visible) continue
+      const y = a.baseY + a.yW
+      const r = a.r * 2.5 + 10
+      const top = a.dr ? 60 : a.robo ? 180 : 90
+      out.push(new THREE.Box3(new THREE.Vector3(a.pos.x - r, y - 10, a.pos.y - r), new THREE.Vector3(a.pos.x + r, y + top, a.pos.y + r)))
+    }
+    return out
+  }
+
   /** 每帧调用；返回是否需要重绘 */
   update(dt: number) {
     if (!this.preview || !this.house || !this.actors.size) return false

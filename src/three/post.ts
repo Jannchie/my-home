@@ -571,6 +571,8 @@ const DUST_ORBIT = 0.3
 const ACCUM_FRAMES = 16
 /** 场景里有东西在动时累积帧数压到这里（这一帧的权重至少 1 / (ACCUM_SETTLE + 1)） */
 const ACCUM_SETTLE = 7
+/** 累积那一遍最多认几个动着的角色的屏幕矩形（这一帧的 + 上一帧的各一半） */
+const ACCUM_MOVERS = 8
 
 /** 白天雾色往这个淡天蓝偏 */
 const FOG_SKY = new THREE.Color('#bcd6f0')
@@ -1190,6 +1192,11 @@ export interface Post {
    * 只留很短的拖影、静止的部分还保留一点抗锯齿；hard = 从头来。镜头动了不用调，后处理自己比较镜头矩阵
    */
   restart: (hard?: boolean) => void
+  /**
+   * 正在动的角色（宠物、VRM 住户）的世界包围盒，每帧给。多帧累积在它们（和上一帧它们所在）的屏幕范围里
+   * 把历史夹到当前帧邻域的颜色范围内：走过去的人不留拖影，其余静止的部分照常累积抗锯齿、降噪
+   */
+  setMovers: (boxes: THREE.Box3[]) => void
   /** 后处理自己还要接着画：累积还没收敛、浮尘在飘 */
   wantsFrame: () => boolean
   dispose: () => void
@@ -1595,6 +1602,34 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
    * 转折线滑杆一过 0 外轮廓的画法就整个换掉、浓度被顶到 1，描边滑杆也不起作用，两档画质的线又不一样，调起来很怪
    */
   let walking = false
+  /** 动着的角色（setMovers）；投影成屏幕矩形交给累积那一遍 */
+  let movers: THREE.Box3[] = []
+  const moverPt = new THREE.Vector3()
+  /** 把 movers 投影成 uv 矩形（多留几个像素：描边、头发摆动），写进累积那一遍 */
+  function projectMovers(p: { accum: AccumPass }) {
+    const rects: THREE.Vector4[] = []
+    for (const b of movers) {
+      if (rects.length >= ACCUM_MOVERS || b.isEmpty()) break
+      let x0 = Infinity
+      let y0 = Infinity
+      let x1 = -Infinity
+      let y1 = -Infinity
+      let behind = false
+      for (let i = 0; i < 8; i++) {
+        moverPt.set(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z).applyMatrix4(camera.matrixWorldInverse)
+        // 有角点在镜头后面：投影不可靠，整屏都按动着处理
+        if (moverPt.z > -camera.near) behind = true
+        moverPt.applyMatrix4(camera.projectionMatrix)
+        x0 = Math.min(x0, moverPt.x)
+        y0 = Math.min(y0, moverPt.y)
+        x1 = Math.max(x1, moverPt.x)
+        y1 = Math.max(y1, moverPt.y)
+      }
+      if (behind) rects.push(new THREE.Vector4(0, 0, 1, 1))
+      else if (x1 >= -1 && y1 >= -1 && x0 <= 1 && y0 <= 1) rects.push(new THREE.Vector4(x0 * 0.5 + 0.5 - 0.01, y0 * 0.5 + 0.5 - 0.01, x1 * 0.5 + 0.5 + 0.01, y1 * 0.5 + 0.5 + 0.01))
+    }
+    p.accum.setMovers(rects)
+  }
 
   /** 多帧累积开不开：省电画质、黑白漫画（编码不能平均）、像素风（要硬边）不开 */
   const accumOn = () => !!passes && !low && current.stylize !== 'manga' && current.stylize !== 'pixel'
@@ -1646,6 +1681,7 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
       lastProj.copy(camera.projectionMatrix)
       p.accum.enabled = accumOn()
       if (!p.accum.enabled) p.accum.frame = 0
+      projectMovers(p)
       // 镜头、场景都没变，只是累积在收敛：倒影沿用上一帧的（reflect.ts）
       setReflectReuse(p.accum.frame > 0 && !sceneChanged)
       sceneChanged = false
@@ -1759,6 +1795,9 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
       if (!composer || !passes || stage.post !== hook) return false
       return (dustOn && dustAnim) || (accumOn() && passes.accum.frame < ACCUM_FRAMES) || (giOn() && !!gi?.busy())
     },
+    setMovers(boxes) {
+      movers = boxes
+    },
     setIndoor(color, level) {
       windowGlow.copy(WINDOW_GLOW).lerp(color, 0.6)
       indoor = level
@@ -1800,7 +1839,11 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
 /**
  * 多帧累积（渐进式超采样）：输入是这一帧（投影抖过亚像素），和历史按 1 / (帧数 + 1) 混合，帧数到 ACCUM_FRAMES 之后按固定权重滑动平均。
  * frame = 0 时直接输出这一帧、清掉历史。两张半浮点历史图来回倒。
+ * 动着的角色所在的矩形（这一帧和上一帧的）里，历史先夹到当前帧 3×3 邻域的颜色范围内（TAA 的邻域裁剪）：
+ * 没有运动矢量，但镜头不动时只有角色在动，裁剪就足以去掉拖影；矩形外不裁剪，静止画面的降噪不受影响。
  */
+const EMPTY_RECT = new THREE.Vector4(2, 2, -2, -2)
+
 class AccumPass extends Pass {
   frame = 0
   private hist: [THREE.WebGLRenderTarget, THREE.WebGLRenderTarget]
@@ -1813,17 +1856,48 @@ class AccumPass extends Pass {
     const mk = () => new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthBuffer: false })
     this.hist = [mk(), mk()]
     this.mat = new THREE.ShaderMaterial({
-      uniforms: { tCur: { value: null }, tHist: { value: null }, uK: { value: 1 } },
+      uniforms: {
+        tCur: { value: null },
+        tHist: { value: null },
+        uK: { value: 1 },
+        uTexel: { value: new THREE.Vector2(1, 1) },
+        uMovers: { value: Array.from({ length: ACCUM_MOVERS * 2 }, () => new THREE.Vector4(2, 2, -2, -2)) },
+      },
       vertexShader: VERT,
       fragmentShader: /* glsl */ `
         uniform sampler2D tCur;
         uniform sampler2D tHist;
         uniform float uK;
+        uniform vec2 uTexel;
+        uniform vec4 uMovers[ ${ACCUM_MOVERS * 2} ];
         varying vec2 vUv;
+        bool moving() {
+          for ( int i = 0; i < ${ACCUM_MOVERS * 2}; i ++ ) {
+            vec4 r = uMovers[ i ];
+            if ( vUv.x >= r.x && vUv.y >= r.y && vUv.x <= r.z && vUv.y <= r.w ) return true;
+          }
+          return false;
+        }
         // 从头来时不读历史：mix(历史, 当前, 1) 在历史里有 NaN 时仍是 NaN（0 × NaN），一个坏像素会永远留在画面上
         void main() {
           vec4 cur = texture2D(tCur, vUv);
-          gl_FragColor = uK >= 1.0 ? cur : mix(texture2D(tHist, vUv), cur, uK);
+          if ( uK >= 1.0 ) {
+            gl_FragColor = cur;
+            return;
+          }
+          vec4 hist = texture2D(tHist, vUv);
+          if ( moving() ) {
+            vec4 lo = cur;
+            vec4 hi = cur;
+            for ( int y = -1; y <= 1; y ++ )
+              for ( int x = -1; x <= 1; x ++ ) {
+                vec4 c = texture2D(tCur, vUv + vec2(float(x), float(y)) * uTexel);
+                lo = min(lo, c);
+                hi = max(hi, c);
+              }
+            hist = clamp(hist, lo, hi);
+          }
+          gl_FragColor = mix(hist, cur, uK);
         }`,
       depthTest: false,
       depthWrite: false,
@@ -1843,7 +1917,17 @@ class AccumPass extends Pass {
 
   setSize(w: number, h: number) {
     for (const t of this.hist) t.setSize(w, h)
+    this.mat.uniforms.uTexel.value.set(1 / Math.max(1, w), 1 / Math.max(1, h))
     this.frame = 0
+  }
+
+  /** 这一帧动着的角色的 uv 矩形；和上一帧的一起生效（上一帧的位置在历史里，也要裁剪） */
+  private moverPrev: THREE.Vector4[] = []
+  setMovers(rects: THREE.Vector4[]) {
+    const all = [...rects, ...this.moverPrev]
+    const u = this.mat.uniforms.uMovers.value as THREE.Vector4[]
+    for (let i = 0; i < u.length; i++) u[i].copy(all[i] ?? EMPTY_RECT)
+    this.moverPrev = rects
   }
 
   render(renderer: THREE.WebGLRenderer, writeBuffer: THREE.WebGLRenderTarget, readBuffer: THREE.WebGLRenderTarget) {

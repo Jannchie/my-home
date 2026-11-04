@@ -114,7 +114,7 @@ export function setMaxAnisotropy(n: number) {
 
 let gradient: THREE.DataTexture | null = null
 /** 色阶贴图：暗部 / 中间 / 亮部，硬切换出赛璐璐的感觉 */
-function gradientMap() {
+export function gradientMap() {
   if (gradient) return gradient
   // 六格：平时 暗暗中中亮亮（分界在 N·L = ±1/3，和以前的三格一样）；「动画感」换成 暗暗暗亮亮亮（分界在 0），见 setToonBands。
   // 格数建好后不能改（贴图存储是定长的），所以一开始就用六格
@@ -239,13 +239,41 @@ const LINE_FRAG_PARS = /* glsl */ `
           c = mix( c, min( max( mix( vec3( l ), c, 1.5 ), 0.0 ) * 2.2, 1.0 ), uLineLift );
           return mix( c, uInk.rgb, uInk.a );
         }`
-function outlineMaterial(color: THREE.Color) {
-  const key = color.getHexString()
+// 蒙皮网格（VRM 住户）的描边：外壳也要跟着骨骼、表情变形
+const SKIN_VERT_PARS = /* glsl */ `
+        #include <common>
+        #include <morphtarget_pars_vertex>
+        #include <skinning_pars_vertex>`
+const SKIN_VERT = /* glsl */ `
+          #include <beginnormal_vertex>
+          #include <morphinstance_vertex>
+          #include <morphnormal_vertex>
+          #include <skinbase_vertex>
+          #include <skinnormal_vertex>
+          #include <begin_vertex>
+          #include <morphtarget_vertex>
+          #include <skinning_vertex>`
+
+function outlineMaterial(color: THREE.Color, skinned = false) {
+  const key = `${color.getHexString()}${skinned ? '|skin' : ''}`
   let m = outlineCache.get(key)
   if (!m) {
     m = new THREE.ShaderMaterial({
       uniforms: { ...outlineUniforms, uColor: { value: color } },
-      vertexShader: /* glsl */ `
+      vertexShader: skinned
+        ? /* glsl */ `
+        ${LINE_VERT_PARS}
+        ${SKIN_VERT_PARS}
+        void main() {
+          ${SKIN_VERT}
+          vec4 clip = projectionMatrix * modelViewMatrix * vec4(transformed, 1.0);
+          vec3 n = normalize(normalMatrix * objectNormal);
+          vec2 dir = (projectionMatrix * vec4(n, 0.0)).xy;
+          float l = length(dir);
+          if (l > 1e-5) clip.xy += dir / l * ${LINE_WIDTH} * 2.0 / uViewport * clip.w;
+          gl_Position = clip;
+        }`
+        : /* glsl */ `
         ${LINE_VERT_PARS}
         void main() {
           vec4 clip = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
@@ -329,6 +357,9 @@ export function vertexColorOutline() {
   return vcOutline
 }
 
+/** 多材质网格里不描边的分组 */
+const NO_LINE = new THREE.MeshBasicMaterial({ visible: false })
+
 /**
  * 给 root 下所有网格加描边（userData.noOutline 的跳过）。
  * minSize：包围球直径小于它（cm）的网格不加（每个外壳都是一次 draw call；太小的零件描边只有几个像素）。
@@ -340,13 +371,29 @@ export function addOutlines(root: THREE.Object3D, opts: { minSize?: number } = {
   })
   if (opts.minSize) root.updateMatrixWorld(true)
   for (const m of meshes) {
-    const mat = m.material as THREE.MeshToonMaterial
-    if (mat.transparent) continue
+    const skinned = !!(m as THREE.SkinnedMesh).isSkinnedMesh
+    // 多材质网格（VRM 的脸：皮肤、眼白、睫毛…分组）：透明的分组不描边，其余按各自的颜色
+    const mats = m.material as THREE.MeshToonMaterial | THREE.MeshToonMaterial[]
+    // userData.noLine：这一组不描边（VRM 里没开描边的眼睛、眉毛）
+    const solid = (x: THREE.MeshToonMaterial) => !x.transparent && x.visible && !!x.color && !x.userData.noLine
+    if (Array.isArray(mats) ? !mats.some(solid) : mats.transparent || mats.userData.noLine) continue
+    const lineMat = Array.isArray(mats) ? mats.map((x) => (solid(x) ? outlineMaterial(outlineColor(x.color), skinned) : NO_LINE)) : outlineMaterial(outlineColor(mats.color), skinned)
     if (opts.minSize) {
       if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere()
       if (m.geometry.boundingSphere!.radius * 2 * m.matrixWorld.getMaxScaleOnAxis() < opts.minSize) continue
     }
-    const hull = new THREE.Mesh(m.geometry, outlineMaterial(outlineColor(mat.color)))
+    let hull: THREE.Mesh
+    if (skinned) {
+      // 蒙皮网格：外壳绑同一副骨架、共用表情权重（眨眼时眼皮的线跟着动）
+      const sm = m as THREE.SkinnedMesh
+      const sh = new THREE.SkinnedMesh(sm.geometry, lineMat)
+      sh.bind(sm.skeleton, sm.bindMatrix)
+      sh.bindMode = sm.bindMode
+      sh.morphTargetInfluences = sm.morphTargetInfluences
+      sh.morphTargetDictionary = sm.morphTargetDictionary
+      sh.frustumCulled = sm.frustumCulled
+      hull = sh
+    } else hull = new THREE.Mesh(m.geometry, lineMat)
     hull.userData.isOutline = true
     hull.raycast = () => {}
     m.add(hull)

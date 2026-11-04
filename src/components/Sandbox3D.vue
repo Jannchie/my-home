@@ -46,6 +46,8 @@ import { coverInto, liveCapture } from '../three/planThumb'
 import { FxLayer } from '../three/fx'
 import { SelectFrame, WallGuide } from '../three/selectFrame'
 import { ActorLayer } from '../three/actors'
+import { ResidentLayer, loadResidentModel } from '../three/residents'
+import { addResident, isBuiltin, loadResidents, removeResident, residentFile, residentStatus, residents, updateResident } from '../residents'
 import { Walker, ceilings, drawMiniMap, miniMapData, type MiniMapData } from '../three/walk'
 import { FloorReflections, clearReflectionSkip, refreshReflectionSkip } from '../three/reflect'
 import { Mirrors } from '../three/mirrors'
@@ -370,6 +372,7 @@ function syncFloorFades() {
   for (const [id, g] of furnLayers) fadeFloorCached(g, id)
   // 角色按所在楼层（走楼梯时按走到的那一层）淡入淡出
   actors.relayout()
+  people.relayout()
 }
 
 /**
@@ -391,6 +394,7 @@ function prewarmFloorFade() {
       ...floorGroups.map((fg) => [fg.group, fg.floor.id] as [THREE.Object3D, string]),
       ...[...furnLayers].map(([id, g]) => [g, id] as [THREE.Object3D, string]),
       ...actors.roots(),
+      ...people.roots(),
     ].filter(([root, id]) => !root.userData.floorFaded || floorAlpha(id) <= 0)
     const renderer = stage.renderer
     const prev = renderer.getRenderTarget()
@@ -546,13 +550,69 @@ actors.lift = (id) => (isMultiFloor(plan.value) ? liftOf(id) : 0)
 actors.elevOf = (id) => (isMultiFloor(plan.value) ? (floorById(plan.value, id)?.elevation ?? 0) : 0)
 actors.shown = (id) => floorAnim.get(id)?.show ?? true
 actors.fade = (root, id) => fadeFloor(root, id, floorAlpha(id))
-function syncActors() {
+/** VRM 住户（residents.ts）：和宠物一样按楼层摆高度、淡入淡出，但人不来自家具 */
+const people = new ResidentLayer()
+people.lift = actors.lift
+people.shown = actors.shown
+people.fade = actors.fade
+function syncActors(changed = true) {
   actors.sync(toRaw(plan.value), actorsLive())
+  people.sync(toRaw(plan.value), actorsLive(), changed)
 }
+// 名单里在家的人：载入模型住进来；不在家 / 移出名单的搬走。载入是异步的，期间名单又变了就以最新的为准
+const peopleWant = new Map<string, string>()
+watch(
+  () => residents.list.filter((r) => r.home).map((r) => `${r.id}:${r.file}`).join('|'),
+  () => {
+    const want = new Map(residents.list.filter((r) => r.home).map((r) => [r.id, r.file]))
+    for (const id of [...peopleWant.keys()])
+      if (want.get(id) !== peopleWant.get(id)) {
+        peopleWant.delete(id)
+        people.remove(id)
+        delete residentStatus[id]
+      }
+    for (const [id, file] of want) {
+      if (peopleWant.has(id)) continue
+      peopleWant.set(id, file)
+      residentStatus[id] = 'loading'
+      residentFile(file)
+        .then((blob) => {
+          if (!blob) return 'missing' as const
+          return loadResidentModel(blob).then((m) => {
+            if (peopleWant.get(id) !== file) return null
+            people.add(id, m)
+            return 'ok' as const
+          })
+        })
+        .catch((e) => {
+          console.warn('[residents] VRM 载入失败', e)
+          return 'error' as const
+        })
+        .then((st) => {
+          if (st && peopleWant.get(id) === file) residentStatus[id] = st
+          dirty = true
+        })
+    }
+  },
+)
+if (!residents.ready) loadResidents()
+const vrmInput = ref<HTMLInputElement | null>(null)
+async function onVrmPicked(e: Event) {
+  const input = e.target as HTMLInputElement
+  const files = [...(input.files ?? [])]
+  input.value = ''
+  for (const f of files)
+    await addResident(f).catch((err) => {
+      console.warn('[residents] 保存失败', err)
+      toast(t('保存失败：浏览器存储不可用或空间不足'), 'error')
+    })
+}
+const RESIDENT_STATUS = { loading: '载入中…', missing: '本机没有这个模型文件', error: '不是能用的 VRM 文件' } as const
 // 开发时的调试入口（截图脚本用）：看角色位置、让角色去某层某处
 if (import.meta.env.DEV) {
-  const w = window as unknown as { __myhomeActors?: ActorLayer; __myhomeCam?: (target: number[], pos: number[]) => void }
+  const w = window as unknown as { __myhomeActors?: ActorLayer; __myhomePeople?: ResidentLayer; __myhomeCam?: (target: number[], pos: number[]) => void }
   w.__myhomeActors = actors
+  w.__myhomePeople = people
   // 镜头：target / pos 是世界坐标 [x, 高度, 平面 y]
   w.__myhomeCam = (target, pos) => {
     controls.autoRotate = false
@@ -3286,7 +3346,10 @@ function loop() {
   }
   // 省电画质：只有动画（粒子、走动的角色）在变时，最多 30fps 重画
   const low = lowPower()
-  const actorsBusy = actors.update(dt)
+  const peopleBusy = people.update(dt)
+  const actorsBusy = actors.update(dt) || peopleBusy
+  // 走动的角色：多帧累积在它们身上不留拖影
+  post.setMovers(actorsBusy ? people.movers(actors.movers()) : [])
   const anim = fx.update(dt, stage.renderer.domElement.height) || actorsBusy
   // 楼层切换 / 分层拉开的缓动：动画期间沿用旧阴影（每次重画阴影要提交上千次 draw call），停下的那一帧重画一次
   if (stepFloors(dt)) {
@@ -3412,7 +3475,7 @@ onMounted(() => {
   stage.scene.matrixAutoUpdate = false
   furnRoot.matrixAutoUpdate = false
   stage.scene.add(furnRoot, frameRoot, guideRoot, fx.group, hoverHi.root, siteHL.root)
-  stage.scene.add(actors.group)
+  stage.scene.add(actors.group, people.group)
   controls = new OrbitControls(stage.camera, canvas.value!)
   post.setFocus(controls.target)
   controls.enableDamping = true
@@ -3900,7 +3963,7 @@ watch(lang, syncFurniture)
 watch(
   () => [sandbox.mode, !!selection.value, !!placing.value] as const,
   () => {
-    syncActors()
+    syncActors(false)
     stage.renderer.shadowMap.needsUpdate = true
     dirty = true
   },
@@ -4943,6 +5006,25 @@ defineExpose({ resetView })
             <span v-for="tr in m.traits" :key="tr" class="chip trait">{{ t(TRAITS[tr].label) }}</span>
             <span v-for="i in m.interests" :key="i" class="chip" :title="t(LV_LABELS[levelOf(m, i) || 1])">{{ t(INTERESTS[i].label) }} <span class="num">Lv.{{ levelOf(m, i) || 1 }}</span></span>
             <span class="chip style">{{ t(STYLE_LABELS[m.style]) }}</span>
+          </div>
+        </div>
+      </section>
+      <!-- VRM 住户：和上面的住户设定无关，人物自己在家里走动 -->
+      <section class="hh">
+        <div class="hh-head">
+          <h3 class="ico-label"><JIcon :icon="ICONS.residentAdd" class="ico-muted" />{{ t('VRM 人物') }}</h3>
+          <span class="spacer" />
+          <button class="mini" @click="vrmInput?.click()"><JIcon :icon="ICONS.residentAdd" :size="14" />{{ t('添加 VRM') }}</button>
+          <input ref="vrmInput" type="file" accept=".vrm" multiple hidden @change="onVrmPicked" />
+        </div>
+        <div class="meta">{{ t('添加 VRM 模型后，人物会在家里走动、坐沙发、躺床。模型只保存在这台设备的浏览器里，不随户型导出或分享。') }}</div>
+        <div v-for="r in residents.list" :key="r.id" class="member">
+          <div class="m-line">
+            <input class="vrm-name" :value="tSoft(r.name)" :aria-label="t('名字')" @change="updateResident(r.id, { name: ($event.target as HTMLInputElement).value.trim() || r.name })" />
+            <span v-if="r.home && residentStatus[r.id] && residentStatus[r.id] !== 'ok'" class="m-desc" :class="{ bad: residentStatus[r.id] !== 'loading' }">{{ t(RESIDENT_STATUS[residentStatus[r.id] as keyof typeof RESIDENT_STATUS]) }}</span>
+            <span class="spacer" />
+            <button class="mini icon-only" :class="{ primary: r.home }" :title="r.home ? t('在家（点一下出门）') : t('不在家（点一下回家）')" :aria-label="r.home ? t('在家') : t('不在家')" :aria-pressed="r.home" @click="updateResident(r.id, { home: !r.home })"><JIcon :icon="r.home ? ICONS.residentHome : ICONS.residentAway" :size="14" /></button>
+            <button v-if="!isBuiltin(r)" class="mini icon-only" :title="t('移除')" :aria-label="t('移除')" @click="removeResident(r.id)"><JIcon :icon="ICONS.delete" :size="14" /></button>
           </div>
         </div>
       </section>
@@ -6134,6 +6216,15 @@ h3 {
 .member {
   padding: 8px 0;
   border-top: 1px dashed var(--border);
+}
+.vrm-name {
+  min-width: 0;
+  flex: 0 1 12em;
+  height: var(--control-h-sm);
+  font-size: var(--fs-sm);
+}
+.m-desc.bad {
+  color: var(--danger);
 }
 .m-line {
   display: flex;

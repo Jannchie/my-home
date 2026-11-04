@@ -13,6 +13,7 @@
     "gen:dims": "vite-node scripts/gen-dims.mts",
     "gen:tags": "vite-node scripts/migrate-tags.mts",
     "gen:taxonomy": "vite-node scripts/gen-taxonomy.mts",
+    "gen:motions": "vite-node scripts/gen-motions.mts",
     "mat:report": "vite-node scripts/mat-report.mts",
     "promo": "vite --config vite.promo.config.ts",
     "promo:build": "vite build --config vite.promo.config.ts",
@@ -23,6 +24,7 @@
   "dependencies": {
     "@jannchie/icons": "0.13.0",
     "@jannchie/icons-vue": "0.13.0",
+    "@pixiv/three-vrm": "3.5.5",
     "three": "^0.186.1",
     "vue": "^3.5.44"
   },

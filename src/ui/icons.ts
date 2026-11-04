@@ -73,6 +73,8 @@ import {
   IconDashedCircle,
   IconLayoutRows,
   IconHome,
+  IconHomeOff,
+  IconUserPlus,
   IconBuilding,
   IconLayoutGrid,
   IconListCheck,
@@ -225,6 +227,10 @@ export const ICONS = {
   // 住户 / 家电 / 墙纸 / 边饰 / 窗帘
   household: IconUsers,
   rerollHousehold: IconShuffle,
+  // VRM 住户：上传、在家 / 不在家
+  residentAdd: IconUserPlus,
+  residentHome: IconHome,
+  residentAway: IconHomeOff,
   appliances: IconPlug,
   wallpaper: IconWallpaper, // 新增
   wallpaperRandom: IconShuffle,
