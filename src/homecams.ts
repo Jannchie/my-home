@@ -12,7 +12,7 @@ import { ASSET_MAP, type AssetDef, type StyleTag } from './three/assets'
 import { toWorld } from './surface'
 import { wallThicknessAt } from './walls'
 import type { Household, InterestId, Member } from './household'
-import { hasTag } from './three/tags'
+import { hasTag, isSleepable } from './three/tags'
 
 /** Decorator 里这里要用到的部分（都是公开成员） */
 export interface CamHost {
@@ -39,7 +39,7 @@ export interface CamCtx {
 }
 
 const def = (f: Furniture) => ASSET_MAP.get(f.asset)
-const isBed = (d?: AssetDef) => hasTag(d, 'bed', 'bedding')
+const isBed = (d?: AssetDef) => isSleepable(d)
 /** 宠物活动区：宠物分类的落地物（窝、爬架、猫砂盆、笼子、围栏、会走动的宠物），不含机器宠物和水族箱 */
 const isPetSpot = (d?: AssetDef) => !!d && d.category === 'pets' && !d.prop && !d.mount && !d.id.startsWith('rb-') && !hasTag(d, 'aquarium')
 /** 朝向：让素材正面（+z）朝向世界方向 v 的 rot（度） */

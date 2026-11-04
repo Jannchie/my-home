@@ -50,7 +50,7 @@ import { homeCams, strayPetCams } from './homecams'
 import { cabinetsOnSpots, stowAll } from './stow'
 import { spotInRoom } from './cabinet'
 import { fixtureSpans } from './curtains'
-import { hasTag, matchSel, selKey, type Sel, type Tag } from './three/tags'
+import { hasTag, isSleepable, matchSel, selKey, type Sel, type Tag } from './three/tags'
 import { allocateRooms, type Allocation, type RoomPurpose } from './household'
 import { baseFloorId, floorViews, isMultiFloor, riseOf, stampFloor } from './floors'
 import { stairFootprint, stairToWorld, stairUnderZone, stairWalk, withStairKeepout } from './stairs'
@@ -4676,7 +4676,7 @@ export function applyFixes(plan: Plan, items: CheckItem[], household?: Household
         break
       case 'bed':
         for (const r of plan.rooms.filter((r) => (r.kind === 'western' || r.kind === 'japanese') && (d.occupants.get(r.id)?.length ?? 0) > 0)) {
-          const hasBed = d.out.some((f) => pointInPolygon(f, r.points) && hasTag(ASSET_MAP.get(f.asset), 'bed', 'bedding'))
+          const hasBed = d.out.some((f) => pointInPolygon(f, r.points) && isSleepable(ASSET_MAP.get(f.asset)))
           if (!hasBed) d.bedIn(r)
         }
         break

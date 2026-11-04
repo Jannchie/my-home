@@ -320,6 +320,24 @@ export function hasAllTags(d: Pick<AssetDef, 'tags'> | undefined | null, ...ts: 
   return !!own && ts.every((t) => own.includes(t))
 }
 
+// ---------- 用途判断（各处共用，别在调用方另写一套标签清单） ----------
+
+/**
+ * 现在就能睡的床：床、地铺，收起来 / 合起来的形态（折叠床收起、沙发床合着）不算。
+ * 婴儿床、高架床也算床（检查清单按人头数床）；只给大人睡的地方另外排除 crib / loft
+ */
+export function isSleepable(d: Pick<AssetDef, 'tags' | 'form'> | undefined | null): boolean {
+  return !!d && hasTag(d, 'bed', 'bedding') && d.form !== 'closed' && d.form !== 'folded'
+}
+
+/**
+ * 人能坐上去的家具：椅子、凳子、沙发、卡座（挂墙件、小摆件不算）。
+ * 地上的坐垫 / 座椅子另有 floor-cushion / floor-chair，要不要算由调用方决定
+ */
+export function canSitOn(d: Pick<AssetDef, 'tags' | 'mount' | 'prop'> | undefined | null): boolean {
+  return !!d && !d.mount && !d.prop && hasTag(d, 'seat', 'sofa', 'armchair', 'dining-seat')
+}
+
 /**
  * 素材选择器：一个标签、一组标签（任一）、或锚定在 id 开头的正则（只匹配 id，用于成套摆放的专用系列 / 明确点名的几件），
  * 也可以混在一个数组里（并集）。名字不参与匹配。

@@ -5,7 +5,7 @@ import { edgesOf, pointInPolygon, type BuiltinType, type Furniture, type Plan, t
 import { cabinetsOn, spotInRoom } from './cabinet'
 import { ASSET_MAP, type AssetDef } from './three/assets'
 import { JOBS, type Household } from './household'
-import { hasTag, type Sel, type Tag } from './three/tags'
+import { hasTag, isSleepable, type Sel, type Tag } from './three/tags'
 import { baseFloorId, floorOf, floorViews, isMultiFloor } from './floors'
 
 /** 补救动作：交给 decorate.ts 的 applyFixes 执行；sel 是要补的素材（语义标签或点名的 id，见 three/tags.ts） */
@@ -72,7 +72,6 @@ const windowsOf = (plan: Plan, room: Room) => plan.openings.filter((o) => o.room
 /** 各项「有没有」按语义标签数 */
 const TAGS = {
   aircon: 'aircon',
-  bed: ['bed', 'bedding'],
   closet: ['wardrobe', 'dresser', 'clothes-rail'],
   lamp: 'lamp',
   sofa: 'sofa',
@@ -246,7 +245,7 @@ export function checklist(plan: Plan, hh?: Household): CheckItem[] {
     // ---------- 住户相关 ----------
     if (hh) {
       const sleepers = hh.members.filter((m) => m.role !== 'partner').length
-      item(null, `床（${hh.members.length} 人）`, count(all, TAGS.bed), sleepers, { how: 'bed' })
+      item(null, `床（${hh.members.length} 人）`, countIf(all, isSleepable), sleepers, { how: 'bed' })
       const chairs = floorViews(plan).reduce((n, { view }) => n + view.rooms.filter((r) => r.kind === 'ldk' || r.kind === 'kitchen' || r.kind === 'dining').reduce((s, r) => s + count(inRoom(view, r), TAGS.chair), 0), 0)
       if (count(all, TAGS.dining)) item(null, `餐椅（${hh.members.length} 人）`, chairs, hh.members.length, { how: 'chairs' })
       const deskUsers = hh.members.filter((m) => JOBS[m.job].wfh || m.job === 'student' || m.job === 'schoolkid').length
