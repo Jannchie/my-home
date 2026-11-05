@@ -4,8 +4,8 @@
 //   - 旧存档里带款式 / 颜色的冰箱、洗衣机设备，读档时换成同款同色的家具（migrateAppliances）。
 
 import { fixtureDepth, uid, type Fixture, type Furniture, type Plan } from './model'
-import { ASSET_MAP, type AssetDef } from './three/assets'
-import { APPLIANCE_PALETTES } from './three/packs/appliances-pack'
+import { ASSET_MAP, type AssetMeta } from './three/assetIndex'
+import { APPLIANCE_PALETTES } from './three/appliancePalettes'
 import type { Tag } from './three/tags'
 
 export type SpotKind = 'fridge' | 'washer'
@@ -20,7 +20,7 @@ export function isApplianceOf(f: Pick<Furniture, 'asset'>, kind: SpotKind) {
 }
 
 /** 冰箱 / 洗衣机本身（不含干衣机）：检查清单「全屋有一台」用 */
-export function isMainAppliance(def: AssetDef | undefined, kind: SpotKind) {
+export function isMainAppliance(def: AssetMeta | undefined, kind: SpotKind) {
   return def?.type === kind
 }
 

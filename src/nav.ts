@@ -8,9 +8,9 @@
 
 import { add, fixtureBox, fixtureDepth, mul, openingGeom, pointInPolygon, type Box, type Fixture, type Plan, type Room, type RoomKind, type Vec } from './model'
 import { wallSegments } from './walls'
-import { ASSET_MAP } from './three/assets'
+import { ASSET_MAP } from './three/assetIndex'
 import { furnitureBox } from './snap'
-import { floorY } from './three/house'
+import { floorY } from './roomAt'
 import { floorView, isMultiFloor, planFloors } from './floors'
 import { stairHoles, stairWalk, type StairWalk } from './stairs'
 import { sashAllowed } from './windows'

@@ -4,7 +4,7 @@
 // 新增功能标签时在 TYPE_GROUP 里补一行（缺了编译报错）。
 // 常用房间来自素材的 category（定义素材时给的「放在哪」），只有和房间对得上的分类才有；category 本身仍给一键布置用。
 
-import type { AssetCategory, AssetDef } from './kit.ts'
+import type { AssetCategory, AssetMeta } from './assetMeta.ts'
 import type { FUNCTION_TAGS } from './tags.ts'
 
 type FunctionTag = (typeof FUNCTION_TAGS)[number]
@@ -319,13 +319,13 @@ const TYPE_GROUP: Record<FunctionTag, AssetGroup> = {
 }
 
 /** 素材所属的大类：设备类单独一类；否则按细分类型，没有细分类型的按第一个功能标签，都没有算装饰。筛选时每件都要查，缓存起来 */
-const groupCache = new WeakMap<AssetDef, AssetGroup>()
-export function groupOf(def: AssetDef): AssetGroup {
+const groupCache = new WeakMap<AssetMeta, AssetGroup>()
+export function groupOf(def: AssetMeta): AssetGroup {
   let g = groupCache.get(def)
   if (!g) groupCache.set(def, (g = findGroup(def)))
   return g
 }
-function findGroup(def: AssetDef): AssetGroup {
+function findGroup(def: AssetMeta): AssetGroup {
   if (def.fixture) return 'fixture'
   if (def.type && def.type in TYPE_GROUP) return TYPE_GROUP[def.type as FunctionTag]
   for (const t of def.tags ?? []) if (t in TYPE_GROUP) return TYPE_GROUP[t as FunctionTag]
@@ -364,4 +364,4 @@ const CATEGORY_ROOM: Partial<Record<AssetCategory, AssetRoom>> = {
   outdoor: 'outdoor',
 }
 
-export const roomOf = (def: AssetDef): AssetRoom | undefined => CATEGORY_ROOM[def.category]
+export const roomOf = (def: AssetMeta): AssetRoom | undefined => CATEGORY_ROOM[def.category]

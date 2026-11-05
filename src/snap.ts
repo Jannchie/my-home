@@ -1,13 +1,13 @@
 // 家具吸附：拖动 / 放置时，边缘贴墙面，或和其他家具、设备的边线、中线对齐。
 
-import { ASSET_MAP } from './three/assets'
+import { ASSET_MAP } from './three/assetIndex'
 import { bbox, edgesOf, fixtureBox, isAxisEdge, mul, add, pointInPolygon, rectPoints, rotFacingWall, type Box, type Fixture, type Plan, type Vec } from './model'
 import { floorOf, riseOf } from './floors'
 import { overlapArea, stairUnderZone, underZonePoly } from './stairs'
 import { wallThicknessAt } from './walls'
 import { porchFootprint } from './exterior'
 import { fitOnWall } from './beamMount'
-import { roomAt } from './three/house'
+import { roomAt } from './roomAt'
 
 /** 吸附参考线：axis = 'x' 表示竖线 x = v（沿 y 从 a 到 b） */
 export interface Guide {

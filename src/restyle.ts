@@ -1,19 +1,19 @@
 // 只换风格、不动布局：把现有家具换成目标风格的同类款（或只换配色），位置、朝向、摆在上面的东西都不动。
 //
 // 每件家具：
-//   - 素材本身的造型就适合目标风格（AssetDef.styles 含它）：只换成这个风格的配色；
+//   - 素材本身的造型就适合目标风格（AssetMeta.styles 含它）：只换成这个风格的配色；
 //   - 否则找造型适合目标风格的替代款（换款规则和一键布置共用，decorate.ts sameShapeSlot），
 //     上面摆着东西的桌柜还要台面高度差不多、占地不能变小（东西不会悬空或掉出去）；从最接近的几款里随机挑一款；
 //   - 找不到就保留原款，只换配色（派生配色能覆盖大部分风格）；配色在这个风格的几套里随机挑一套。
 // 自定义配色、布艺花纹清掉（它们是按原来的款配的）。设备、楼梯这些不是家具的不动。
 
 import type { Furniture, Plan } from './model'
-import { ASSETS, ASSET_MAP, type AssetDef, type StyleTag } from './three/assets'
+import { ASSETS, ASSET_MAP, type AssetMeta, type StyleTag } from './three/assetIndex'
 import { paletteFor } from './three/catalog'
 import { pickStyleColor } from './three/stylePalettes'
-import { rng } from './three/kit'
+import { rng } from './three/assetMeta'
 import { isMultiFloor } from './floors'
-import { roomAt } from './three/house'
+import { roomAt } from './roomAt'
 import { propsOn } from './surface'
 import { sameShapeSlot } from './decorate'
 
@@ -26,7 +26,7 @@ const rel = (a: number, b: number) => Math.abs(a - b) / Math.max(1, b)
  * 造型适合 style 的替代款：换款规则和一键布置共用（decorate.ts sameShapeSlot：同类、尺寸相近、床分单双人、儿童款只换儿童款……）；
  * held = 上面摆着东西：还要台面高度差不多、占地不缩小（东西不会悬空或掉出去）
  */
-function alternatives(def: AssetDef, style: StyleTag, held: boolean) {
+function alternatives(def: AssetMeta, style: StyleTag, held: boolean) {
   return ASSETS.filter((b) => {
     if (!b.styles?.includes(style) || !sameShapeSlot(def, b)) return false
     if (held) {
@@ -54,7 +54,7 @@ export function restyleFurniture(plan: Plan, styleOf: (f: Furniture) => StyleTag
       const alts = alternatives(def, style, propsOn(plan, f).length > 0)
       if (alts.length) {
         // 尺寸最接近的前三款里随机挑一款
-        const score = (b: AssetDef) => rel(b.w, def.w) + rel(b.d, def.d) + 0.5 * rel(b.h, def.h)
+        const score = (b: AssetMeta) => rel(b.w, def.w) + rel(b.d, def.d) + 0.5 * rel(b.h, def.h)
         alts.sort((a, b) => score(a) - score(b))
         target = alts[Math.floor(rand() * Math.min(3, alts.length))]
       }

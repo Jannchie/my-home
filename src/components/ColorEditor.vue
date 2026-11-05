@@ -2,16 +2,16 @@
 // 配色编辑：上半是按风格分组的预设配色，下半是逐槽自定义（色板点选 / 取色器 / 随机 / 重置）。
 // colors 为自定义覆盖（undefined = 完全用预设）。拖动取色器时发 preview，松手发 commit，方便上层只记一次撤销。
 import { computed, ref } from 'vue'
-import { STYLE_LABELS, type AssetDef, type StyleTag } from '../three/assets'
+import { STYLE_LABELS, type AssetMeta, type StyleTag } from '../three/assetIndex'
 import { allPalettes, type PaletteEntry } from '../three/stylePalettes'
 import { SWATCHES, effectivePalette, randomColors, slotCount, slotLabel } from '../three/colors'
 import { PATTERN_KINDS, randomPattern, type PatternKind, type PatternSpec } from '../three/patterns'
-import { patternPreview } from '../three/fabric'
+import { patternPreview } from '../three/patterns'
 import { t } from '../i18n'
 import { JIcon } from '@jannchie/icons-vue'
 import { ICONS } from '../ui/icons'
 
-const props = defineProps<{ def: AssetDef; color: number; colors?: string[]; patterns?: (PatternSpec | null)[]; sameCount?: number }>()
+const props = defineProps<{ def: AssetMeta; color: number; colors?: string[]; patterns?: (PatternSpec | null)[]; sameCount?: number }>()
 const emit = defineEmits<{
   preset: [i: number]
   preview: [colors: string[] | undefined]

@@ -16,7 +16,7 @@ import { JO, add, area, bbox, dist, edgeInfo, edgesOf, fixtureDepth, mul, rotFac
 import { isIndoor, sharedIntervals } from './walls'
 import { altInt, carveCorner, defaultRule } from './footprint'
 import { jp } from './i18n'
-import { ASSET_MAP } from './three/assets'
+import { ASSET_MAP } from './three/assetIndex'
 
 export type LayoutType = '1K' | '1DK' | '1LDK' | '2LDK' | '3LDK'
 export type LayoutStyle = 'tanoji' | 'tatenaga' | 'wide' | 'single'

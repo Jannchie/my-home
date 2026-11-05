@@ -7,7 +7,7 @@ import { edgeInfo, roomWallpaper, type Room, type WallBeam, type Wallpaper } fro
 import { plan, setWallFace } from '../store'
 import { BEAM_MAX_H, BEAM_MIN, clampBeam, newBeam, wallFace } from '../wallFace'
 import { patternWallpaper, WP_COLORS, WP_PATTERNS } from '../wallpaper'
-import { patternPreview } from '../three/fabric'
+import { patternPreview } from '../three/patterns'
 import { t } from '../i18n'
 import { JIcon } from '@jannchie/icons-vue'
 import BeamElevation from './BeamElevation.vue'

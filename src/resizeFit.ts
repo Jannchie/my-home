@@ -8,8 +8,8 @@ import { furnitureBox } from './snap'
 import { boxInside, innerRoom } from './place'
 import { floorOf } from './floors'
 import { toWorld } from './surface'
-import { ASSET_MAP } from './three/assets'
-import { baseAssetId, resizedId } from './three/resize'
+import { ASSET_MAP } from './three/assetIndex'
+import { baseAssetId, resizedId } from './three/resizeMeta'
 
 const EDGE = 0.99
 

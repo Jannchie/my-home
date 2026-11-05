@@ -1,4 +1,4 @@
-import { defineConfig, loadEnv, type Plugin } from 'vite'
+import { defineConfig, loadEnv, runnerImport, type Plugin } from 'vite'
 import { PUBLIC_PRECACHE, swSource, swVersion } from './src/pwa/sw.ts'
 import vue from '@vitejs/plugin-vue'
 import { DEFAULT_SITE_URL, jsonLd, SEO, SEO_LANGS, type SeoLang } from './src/seo.ts'
@@ -162,6 +162,49 @@ export function i18nDicts(): Plugin {
   }
 }
 
+/**
+ * 素材元数据快照（src/three/assetIndex.ts、assetRegistry.ts）：平面图只需要素材的数据部分（占地、标签、配色…），
+ * 不需要建模代码和 three.js（两者 gzip 后约 1MB）。生产构建时在 Node 里把完整素材表跑一遍，去掉函数字段，
+ * 生成 virtual:asset-meta 登记进素材表；完整素材进 3D 时再加载、整表替换。
+ * 开发和测试环境不生成快照，virtual:asset-meta 直接加载完整素材（行为和以前一样）。
+ */
+export function assetMeta(): Plugin {
+  const ID = 'virtual:asset-meta'
+  let build = false
+  let snapshot: Promise<string> | null = null
+  return {
+    name: 'my-home-asset-meta',
+    configResolved: (c) => void (build = c.command === 'build'),
+    resolveId: (id) => (id === ID ? '\0' + ID : undefined),
+    async load(id) {
+      if (id !== '\0' + ID) return
+      if (!build) return `import '/src/three/assets.ts'`
+      snapshot ??= metaSnapshot()
+      return [
+        `import { registerAssets } from '/src/three/assetRegistry.ts'`,
+        `import { deriveResizedMeta } from '/src/three/resizeMeta.ts'`,
+        `registerAssets(JSON.parse(${JSON.stringify(await snapshot)}), deriveResizedMeta, false)`,
+      ].join('\n')
+    },
+  }
+}
+
+/** 在 Node 里加载完整素材表（素材 build 会碰 canvas，先装上测试用的极简 DOM 桩），生成快照（src/three/assetSnapshot.ts）的 JSON */
+async function metaSnapshot() {
+  const file = (p: string) => decodeURIComponent(new URL(p, import.meta.url).pathname).replace(/^\/([A-Za-z]:)/, '$1')
+  const config = { configFile: false as const, root: file('./'), mode: 'production', logLevel: 'error' as const, plugins: [i18nDicts()] }
+  await runnerImport(file('./test/setup/stubdom.ts'), config)
+  const { module } = await runnerImport<{ assetSnapshot: () => object[] }>(file('./src/three/assetSnapshot.ts'), config)
+  const bad: string[] = []
+  const json = JSON.stringify(module.assetSnapshot(), (k, v) => {
+    if (typeof v === 'number' && !Number.isFinite(v)) bad.push(k)
+    return v
+  })
+  // JSON 存不下 NaN / Infinity：真出现了说明素材数据有问题，别悄悄变成 null
+  if (bad.length) throw new Error(`[asset-meta] 素材数据里有非有限数：${[...new Set(bad)].join(', ')}`)
+  return json
+}
+
 /** 本仓库根目录下的 .claude/（小写、正斜杠；Windows 的 URL 路径去掉开头的 /） */
 const CLAUDE_DIR = decodeURIComponent(new URL('./.claude/', import.meta.url).pathname)
   .replace(/^\/([A-Za-z]:)/, '$1')
@@ -171,21 +214,21 @@ export default defineConfig(({ mode }) => {
   // 站点地址：项目根 .env* / 环境变量里的 VITE_SITE_URL，没有就用占位地址（上线前务必改掉）
   const site = (loadEnv(mode, '', 'VITE_').VITE_SITE_URL || DEFAULT_SITE_URL).replace(/\/+$/, '')
   return {
-    plugins: [vue(), i18nDicts(), seo(site), pwa()],
+    plugins: [vue(), i18nDicts(), assetMeta(), seo(site), pwa()],
     define: { 'import.meta.env.VITE_SITE_URL': JSON.stringify(site) },
     // 代理的 git worktree 在 .claude/worktrees 下：别让它们的改动触发本仓库 dev server 整页刷新。
     // 只忽略本仓库根目录下的 .claude（worktree 自己也在某个 .claude 里，不能按路径片段匹配）
     server: { port: 5199, watch: { ignored: (p: string) => p.replace(/\\/g, '/').toLowerCase().startsWith(CLAUDE_DIR) } },
     build: {
-      // 分包：three、素材包体积大且更新节奏不同（i18n 词典按语言动态导入，本来就各成一块），各自成独立 chunk，改业务代码时浏览器缓存仍可复用。
-      // Vite 8（rolldown）里 manualChunks 只是兼容写法：它被转成单个 group，而 group 默认会把命中模块的依赖一并收进来，
-      // 结果 three 被素材包的 chunk 吞掉。这里用 codeSplitting.groups 按优先级分组，three 先认领。
+      // 分包：three 体积大、更新少，单独成 chunk，改业务代码时浏览器缓存仍可复用。
+      // 素材包不再单独分组：它们只经由动态导入的 assets.ts 加载（平面图首屏用元数据快照，见 assetMeta 插件），自然落在懒加载的 chunk 里；
+      // 分组会把命中模块的依赖（平面图也用的公共模块）一并收进来，入口就又得静态引用它。
+      // Vite 8（rolldown）里 manualChunks 只是兼容写法，这里用 codeSplitting.groups。
       rolldownOptions: {
         output: {
           codeSplitting: {
             groups: [
               { name: 'three', test: /[\\/]node_modules[\\/](\.pnpm[\\/]three@[^\\/]+[\\/]node_modules[\\/])?three[\\/]/, priority: 30 },
-              { name: 'asset-packs', test: /[\\/]src[\\/]three[\\/]packs[\\/]/, priority: 10 },
             ],
           },
         },

@@ -1,6 +1,7 @@
 // 卡通渲染基础件：三阶色阶的 toon 材质 + 反向外壳描边 + 常用圆角体素。
 // 单位：厘米。y 轴向上，平面图的 y 对应 3D 的 z。
 
+import { hex6, shadeHex } from './shade'
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 // 室内灯的楼层 / 房间遮罩：给所有受光照材质挂上 onBeforeCompile（副作用导入，要在任何材质编译前生效）
@@ -617,12 +618,17 @@ export function group(...children: THREE.Object3D[]) {
 /** 颜色微调：同一色系的深 / 浅版本 */
 /** track = false：不登记来源（随机调出来的颜色，不是配色槽，如 woodGrain.ts 的每块地板） */
 export function shade(color: string, dl: number, ds = 0, track = true) {
-  const c = new THREE.Color(color)
-  const hsl = { h: 0, s: 0, l: 0 }
-  c.getHSL(hsl)
-  const out = new THREE.Color().setHSL(hsl.h, Math.max(0, Math.min(1, hsl.s + ds)), Math.max(0, Math.min(1, hsl.l + dl))).getHexString()
+  // 十六进制走纯计算版（shade.ts，和下面 three 的算法一致）；颜色名等其它写法交给 THREE.Color 解析
+  let out = shadeHex(color, dl, ds)
+  let src = hex6(color)
+  if (out === null || src === null) {
+    const c = new THREE.Color(color)
+    const hsl = { h: 0, s: 0, l: 0 }
+    c.getHSL(hsl)
+    out = new THREE.Color().setHSL(hsl.h, Math.max(0, Math.min(1, hsl.s + ds)), Math.max(0, Math.min(1, hsl.l + dl))).getHexString()
+    src = c.getHexString()
+  }
   // 记下深浅色是从哪个颜色调出来的：材质标注（mats.ts）按配色槽认零件，shade 出来的底座、阴影色也要认得出是哪一槽
-  const src = c.getHexString()
   if (track && out !== src && !shadeSrc.has(out)) shadeSrc.set(out, src)
   return '#' + out
 }

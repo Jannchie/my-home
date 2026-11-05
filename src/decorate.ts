@@ -24,7 +24,7 @@ import {
 } from './model'
 import { boxInsideWalls, firstDoorCenter, isSashWindow, placeCandidates, type PlaceSpec } from './place'
 import { fixFloor, type CheckItem } from './checklist'
-import { ASSETS, ASSET_MAP, STYLE_LABELS, type AssetDef, type StyleTag } from './three/assets'
+import { ASSETS, ASSET_MAP, STYLE_LABELS, type AssetMeta, type StyleTag } from './three/assetIndex'
 import { rng, type Poly } from './three/kit'
 import { artKindOf, parseArt, pickArt } from './three/artwork'
 import { paletteStyle } from './three/catalog'
@@ -44,7 +44,7 @@ import { isOpenBetween, sharedIntervals, wallThicknessAt } from './walls'
 import { edgesOf, projectToSegment } from './model'
 import type { Wardrobe } from './three/garments'
 import { PIPE, PIPE_WIDTHS, ROW_LENGTHS } from './three/packs/garments-pack'
-import { floorY, roomAt } from './three/house'
+import { floorY, roomAt } from './roomAt'
 import { openingGeom, regionOf, type Region } from './model'
 import { gameWeight } from './three/packs/games-more'
 import { homeCams, strayPetCams } from './homecams'
@@ -100,10 +100,10 @@ function asFixture(f: Furniture): Fixture {
  * 成套摆放专用的部件（双人桌 hg-duo-*、成对的棋罐 hg-go-bowl-*、相机展示柜 / 防潮柜，标签 set-piece）不进按标签的通用查询，
  * 只有用 id 正则点名时才返回。ASSETS 加载后不再增减；带 g / y 标志的正则有状态，不缓存。
  */
-const findCache = new Map<string, AssetDef[]>()
+const findCache = new Map<string, AssetMeta[]>()
 /** 装相机的柜子（成套部件，按 id 点名） */
 const CAMERA_CASE = /^of-(camera-showcase|dry-)/
-const selHit = (d: AssetDef, sel: Sel): boolean => (typeof sel === 'string' ? !hasTag(d, 'set-piece') && hasTag(d, sel) : sel instanceof RegExp ? matchSel(d, sel) : sel.some((x) => selHit(d, x)))
+const selHit = (d: AssetMeta, sel: Sel): boolean => (typeof sel === 'string' ? !hasTag(d, 'set-piece') && hasTag(d, sel) : sel instanceof RegExp ? matchSel(d, sel) : sel.some((x) => selHit(d, x)))
 function findBySel(sel: Sel) {
   const scan = () => ASSETS.filter((d) => !d.fixture && selHit(d, sel))
   const key = selKey(sel)
@@ -594,7 +594,7 @@ class Decorator {
   }
 
   /** 按选择器（语义标签 / 锚定 id 的正则）在素材里找 */
-  find(sel: Sel, filter: (d: AssetDef) => boolean = () => true) {
+  find(sel: Sel, filter: (d: AssetMeta) => boolean = () => true) {
     return findBySel(sel).filter(filter)
   }
 
@@ -602,14 +602,14 @@ class Decorator {
   parentOf = new Map<string, string>()
 
   /** limitOf 的结果缓存：allow 里会对已摆的每件家具反复查（每件都要跑一遍 LIMITS 正则） */
-  private limits = new Map<AssetDef, ReturnType<Decorator['computeLimit']>>()
+  private limits = new Map<AssetMeta, ReturnType<Decorator['computeLimit']>>()
   /** 这件素材的数量规则 */
-  limitOf(def: AssetDef) {
+  limitOf(def: AssetMeta) {
     let r = this.limits.get(def)
     if (r === undefined) this.limits.set(def, (r = this.computeLimit(def)))
     return r
   }
-  private computeLimit(def: AssetDef) {
+  private computeLimit(def: AssetMeta) {
     const group = def.limitGroup ?? def.series ?? def.id
     if (def.limit) return { group: def.limit.group ?? group, scope: def.limit.scope, max: def.limit.max }
     // 灯具按细分类型算：落地灯每间一盏、壁灯每间一对、台灯每个台面一盏
@@ -655,7 +655,7 @@ class Decorator {
    * 按风格挑一组配色：在这个风格的全部配色（原生 + 派生补齐的几套）里随机挑；这个风格一套都没有才随便挑。
    * 只按套数抽编号，不在这里算出派生配色的颜色（要先探测一遍模型，一键布置时每件都算会慢一倍）：颜色在显示时才生成
    */
-  colorFor(def: AssetDef) {
+  colorFor(def: AssetMeta) {
     const r = this.rand()
     return pickStyleColor(def, this.style, r) ?? Math.floor(r * def.palettes.length)
   }
@@ -921,7 +921,7 @@ class Decorator {
   }
 
   /** 把摆件随机放到房间里的某个台面 / 层板上，放不下就算了 */
-  scatter(room: Room, assets: AssetDef[], n: number) {
+  scatter(room: Room, assets: AssetMeta[], n: number) {
     const parents = this.surfacesIn(room)
     if (!parents.length || !assets.length) return
     const pool = [...assets]
@@ -944,7 +944,7 @@ class Decorator {
   }
 
   /** 同一细分类型里「同一尺寸、不同造型」的各款（宽深差在 10% 以内；尺寸规格不同的——床、书桌、餐桌的大小——不算） */
-  private siblings = new Map<string, AssetDef[]>()
+  private siblings = new Map<string, AssetMeta[]>()
   /**
    * 换款：经常出现的东西每次都挑同一细分类型（type）里的不同造型，优先当前房间的风格。
    * 只在尺寸几乎一样的款之间换，所以按尺寸挑好的规格（单人床 / 双人床、110 / 140 书桌）不会被换掉。
@@ -969,14 +969,14 @@ class Decorator {
     return this.pick(styled.length && this.rand() < 0.75 ? styled : sib).id
   }
 
-  private shapePools = new Map<string, AssetDef[]>()
+  private shapePools = new Map<string, AssetMeta[]>()
   /**
    * 风格专属造型（见 SHAPE_STYLES）：默认款（sofa2、bed-double、dining-table、tv-board、wardrobe、desk…）在当前风格下没有原生配色、
    * 只能套派生配色时，八成换成同一细分类型、尺寸相当、带这个风格原生配色的落地家具。
    * 床按宽度分档（单人 / 双人不混），其余宽、深各差 25% 以内；高度不超过默认款的 1.6 倍 + 10（架子床、华盖床这类不换进来）。
    * 只有换款候选不为空时才消耗随机数，别的风格的布置结果不受影响。
    */
-  private ownShape(def: AssetDef): string | null {
+  private ownShape(def: AssetMeta): string | null {
     const st = this.style
     // 牌桌 / 棋桌按用途点名摆（自动麻将桌的牌做在模型里，手积麻将桌、折叠麻将桌另摆牌）：不和别的桌子互换造型
     if (!SHAPE_STYLES.has(st) || def.prop || def.mount || def.stick || isNativeTo(def, st) || GAME_TABLE.test(def.id)) return null
@@ -1003,7 +1003,7 @@ class Decorator {
     return this.freePush(room, id, rot, at, 5)
   }
 
-  private lampPools = new Map<string, AssetDef[]>()
+  private lampPools = new Map<string, AssetMeta[]>()
   /**
    * 灯具换款：从同一细分类型（书桌灯还可以用台灯）里均匀地挑，85% 挑当前房间风格的款。
    * 不按尺寸限制换款（各风格的灯高矮胖瘦差别大），只去掉占地太大的（弧形钓鱼灯）；放不下由调用方换一款再试。
@@ -1126,10 +1126,10 @@ class Decorator {
     // 外面看得见的层（开放搁板、吊柜底下的开放格）：先放一卷 / 一叠备用卷纸，再放一两件芳香剂、小绿植、纸巾盒
     const levels = [...(d.surface ? [undefined] : []), ...(d.surfaces ?? []).flatMap((l, i) => (l.inside ? [] : [i]))]
     if (!levels.length) return
-    const visible = (a: AssetDef) => !!a.prop && !a.mount && a.form !== 'hanging'
+    const visible = (a: AssetMeta) => !!a.prop && !a.mount && a.form !== 'hanging'
     const rolls = this.find('toilet-paper', (a) => visible(a) && a.h < 36 && Math.max(a.w, a.d) < 25)
     const deco = this.find('toilet-shelf-ok', (a) => visible(a) && a.h < 20 && a.w < 22 && !hasTag(a, 'toilet-paper', 'humidifier', 'appliance'))
-    const put = (a: AssetDef) => {
+    const put = (a: AssetMeta) => {
       for (let t = 0; t < 6; t++) if (this.onLevel(shelf!, a.id, (this.rand() - 0.5) * 0.7, 0, 0, this.pick(levels))) return true
       return false
     }
@@ -1287,7 +1287,7 @@ class Decorator {
   }
 
   /** 在各款里均匀挑一款，七成偏向当前风格（款式本身的 styles 含当前风格的） */
-  private styledPick(cand: AssetDef[]) {
+  private styledPick(cand: AssetMeta[]) {
     const styled = cand.filter((a) => a.styles?.includes(this.style))
     return this.pick(styled.length && this.rand() < 0.7 ? styled : cand)
   }
@@ -1543,10 +1543,10 @@ class Decorator {
    * 马桶刷旁边实在放不下才退回到房间里别处贴墙（检查清单要求一定有）；其余放不下就不放。
    */
   toiletFloor(room: Room, fx: Fixture) {
-    const small = (a: AssetDef) => !a.mount && !a.stick && a.form !== 'hanging' && Math.max(a.w, a.d) < 40
+    const small = (a: AssetMeta) => !a.mount && !a.stick && a.form !== 'hanging' && Math.max(a.w, a.d) < 40
     // 重摆（validate / clearPassages 挪动时）照样摆回马桶边
     const place = (id: string, must: boolean): Furniture | null => this.remember(this.besideToilet(room, fx, id) ?? (must ? this.nearToilet(room, fx, id) : null), () => place(id, must))
-    const one = (sel: Sel, filter: (a: AssetDef) => boolean = () => true, must = false) => {
+    const one = (sel: Sel, filter: (a: AssetMeta) => boolean = () => true, must = false) => {
       const cand = this.find(sel, (a) => small(a) && filter(a))
       return cand.length ? place(this.pick(cand).id, must) : null
     }
@@ -1717,7 +1717,7 @@ class Decorator {
   tierItems(room: Room, tiers: Tier[], phase: Phase = 'all') {
     // 住人的卧室里只放小件落地设备（主机、小防潮柜）；绿幕、机柜、大展示柜、钢琴这类大件要有专门的兴趣房
     const bedroom = !!this.occupants.get(room.id)?.length
-    const small = (a: AssetDef) => Math.max(a.w, a.d) <= 70 && a.h <= 120
+    const small = (a: AssetMeta) => Math.max(a.w, a.d) <= 70 && a.h <= 120
     for (const t of tiers) {
       if (phase !== 'items')
         for (const sel of t.floor ?? []) {
@@ -1751,7 +1751,7 @@ class Decorator {
   fillCameras(cab: Furniture) {
     const pd = ASSET_MAP.get(cab.asset)
     if (!pd?.surfaces?.length) return
-    const ok = (a: AssetDef) => !!a.prop && !a.stick && a.form !== 'hanging'
+    const ok = (a: AssetMeta) => !!a.prop && !a.stick && a.form !== 'hanging'
     const bodies = this.find(/^of-camera-(mirrorless|dslr|film)$|^of-action-cam$/, ok)
     const extras = this.find(['lens', /^of-camera-instant$/], ok)
     this.reserved.add(cab.id)
@@ -1766,7 +1766,7 @@ class Decorator {
           const xs = cell.map((q) => q[0])
           const zs = cell.map((q) => q[1])
           const [x0, x1, z0, z1] = [Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)]
-          const fits = (a: AssetDef) => a.h <= (lv.h ?? 40) - 1 && a.d <= z1 - z0 - 1
+          const fits = (a: AssetMeta) => a.h <= (lv.h ?? 40) - 1 && a.d <= z1 - z0 - 1
           const n = Math.max(1, Math.floor((x1 - x0) / 15))
           for (let k = 0; k < n; k++) {
             const cx = x0 + ((x1 - x0) * (k + 0.5)) / n
@@ -2267,11 +2267,11 @@ class Decorator {
   // ---------- 冰箱、洗衣机（家具，摆在冰箱位 / 洗衣机位上） ----------
 
   /** 按地区加权挑一件棋牌（gameWeight；非棋牌权重 1） */
-  gamePick(c: AssetDef[]) {
-    return this.weighted(c.map((a) => [a, gameWeight(a.id, this.region)] as [AssetDef, number]))
+  gamePick(c: AssetMeta[]) {
+    return this.weighted(c.map((a) => [a, gameWeight(a.id, this.region)] as [AssetMeta, number]))
   }
   /** 随机池里去掉这个地区少见的棋牌（权重 < 1 的），只剩本地常见的和通用的 */
-  regionalGames(c: AssetDef[]) {
+  regionalGames(c: AssetMeta[]) {
     return c.filter((a) => gameWeight(a.id, this.region) >= 1)
   }
 
@@ -2423,7 +2423,7 @@ class Decorator {
     const washer = this.washersIn(room)[0]
     const wd = washer && ASSET_MAP.get(washer.asset)
     if (!washer || !wd) return null
-    const lowest = (a: AssetDef) => Math.min(a.surface ?? Infinity, ...(a.surfaces ?? []).map((l) => l.y))
+    const lowest = (a: AssetMeta) => Math.min(a.surface ?? Infinity, ...(a.surfaces ?? []).map((l) => l.y))
     const racks = this.find('washer-rack', (a) => !a.prop && !a.mount && a.w >= wd.w + 6 && lowest(a) > wd.h + 8)
     if (!racks.length) return null
     const rack = racks[0]
@@ -2560,7 +2560,7 @@ class Decorator {
   }
 
   /** 落地放一件：按选择器在素材里挑（不含摆件、壁挂） */
-  floorOf(room: Room, sel: Sel, opts: Partial<PlaceSpec> = {}, filter: (a: AssetDef) => boolean = () => true) {
+  floorOf(room: Room, sel: Sel, opts: Partial<PlaceSpec> = {}, filter: (a: AssetMeta) => boolean = () => true) {
     const cand = this.find(sel, (a) => !a.prop && !a.mount && !a.stick && !a.fixture && Math.max(a.w, a.d) <= 240 && filter(a))
     for (const a of this.shuffle(cand).slice(0, 4)) {
       const f = this.wall(room, a.id, opts)
@@ -2676,7 +2676,7 @@ class Decorator {
         // 成套的家庭健身房：一台有氧器械（跑步机 / 动感单车 / 划船机 / 椭圆机）+ 一件力量器械（卧推凳 / 深蹲架，房间小不放深蹲架）
         // + 哑铃架，墙边一面落地镜，地上铺瑜伽垫或拼接地垫；房间大再加瑜伽球 / 瑜伽垫架、拳击沙袋。哑铃、毛巾、水壶撒在架子上
         const m2 = area(room.points) / 10000
-        const fit = (a: AssetDef) => !a.mount && Math.max(a.w, a.d) <= 220
+        const fit = (a: AssetMeta) => !a.mount && Math.max(a.w, a.d) <= 220
         this.floorOf(room, 'cardio', { front: 50 }, fit)
         this.floorOf(room, 'strength', { front: 60 }, (a) => fit(a) && (m2 >= 12 || Math.max(a.w, a.d) <= 130))
         this.floorOf(room, 'weights', { front: 50 }, (a) => fit(a) && !!a.surface)
@@ -2734,7 +2734,7 @@ class Decorator {
       case 'closet': {
         // 衣帽间：一两个衣柜（大房间两个）+ 一排落地挂衣杆（wearDress 挂满衣服），斗柜、落地镜，偶尔一棵衣帽架；收纳箱、帽子、包撒在柜顶
         const m2 = area(room.points) / 10000
-        const notHall = (a: AssetDef) => a.category !== 'entrance'
+        const notHall = (a: AssetMeta) => a.category !== 'entrance'
         for (let i = 0; i < (m2 >= 9 ? 2 : 1); i++) this.floorOf(room, 'wardrobe', { front: 60 }, notHall)
         this.floorOf(room, 'garment-rail', { front: 50 })
         this.floorOf(room, 'dresser', { front: 50 })
@@ -3627,7 +3627,7 @@ class Decorator {
   }
 
   /** 毛巾杆 / 毛巾架的每根杆：长的搭浴巾、中等的搭面巾，短的（毛巾环、挂钩）吊擦手巾 */
-  towelsOn(f: Furniture, hooks: NonNullable<AssetDef['surfaces']>) {
+  towelsOn(f: Furniture, hooks: NonNullable<AssetMeta['surfaces']>) {
     const placed: Box[] = []
     for (const lv of hooks)
       for (const poly of lv.shape!) {
@@ -3848,7 +3848,7 @@ class Decorator {
   artWall(room: Room) {
     const all = this.find(/^mv-(art|photo|deco)-/, (a) => !!a.mount)
     if (!all.length) return
-    const styled = (xs: AssetDef[]) => {
+    const styled = (xs: AssetMeta[]) => {
       const f = xs.filter((a) => (a.styles ?? []).includes(this.style))
       return f.length ? f : xs
     }
@@ -3859,7 +3859,7 @@ class Decorator {
     if (!n && !have) n = 1
     if (!n) return
     // 1. 大画挂在沙发 / 床 / 书桌上方（婴儿床上方不挂）
-    const rank = (d: AssetDef) => (hasTag(d, 'sofa') && d.type !== 'floor-cushion' ? 0 : isBed(d) && d.type !== 'crib' ? 1 : isDeskish(d) && d.surface ? 2 : -1)
+    const rank = (d: AssetMeta) => (hasTag(d, 'sofa') && d.type !== 'floor-cushion' ? 0 : isBed(d) && d.type !== 'crib' ? 1 : isDeskish(d) && d.surface ? 2 : -1)
     const anchors = this.out
       .filter((o) => inRoom(o) && !this.flat.has(o.id) && !ASSET_MAP.get(o.asset)?.prop && rank(ASSET_MAP.get(o.asset)!) >= 0)
       .sort((a, b) => rank(ASSET_MAP.get(a.asset)!) - rank(ASSET_MAP.get(b.asset)!))
@@ -3874,7 +3874,7 @@ class Decorator {
   }
 
   /** 挂在 anchor 正上方的墙上居中：anchor 的背面要贴着墙，画的宽度不超过 anchor */
-  private artAbove(room: Room, anchor: Furniture, pool: AssetDef[]) {
+  private artAbove(room: Room, anchor: Furniture, pool: AssetMeta[]) {
     const ad = ASSET_MAP.get(anchor.asset)!
     const fd = frontDir(anchor.rot)
     const back = add({ x: anchor.x, y: anchor.y }, mul(fd, -ad.d / 2))
@@ -3891,7 +3891,7 @@ class Decorator {
   }
 
   /** 在空墙上找位置挂一件：前几个立面上不冲突的候选里随机挑 */
-  private artFree(room: Room, pool: AssetDef[]) {
+  private artFree(room: Room, pool: AssetMeta[]) {
     for (const a of this.shuffle(pool).slice(0, 8)) {
       const c = placeCandidates(room, { ...this.plan, fixtures: [] }, { kind: 'ps', lengths: [a.w], depth: a.d, front: 0, centered: this.rand() < 0.6 })
       const ok: Fixture[] = []
@@ -4219,7 +4219,7 @@ class Decorator {
    * 已经有东西的格子跳过；按家具挑合适的东西——多宝格放瓷器、茶具、盆景、奇石，书架放书和小摆件，其他放收纳盒、绿植、相框。
    */
   fillCompartments() {
-    const ok = (a: AssetDef) => !!a.prop && !a.mount && !a.stick && a.form !== 'hanging'
+    const ok = (a: AssetMeta) => !!a.prop && !a.mount && !a.stick && a.form !== 'hanging'
     const pools = {
       chinese: this.find('curio-ok', ok),
       books: this.find(['book', 'manga', 'magazine'], ok),
@@ -4256,7 +4256,7 @@ class Decorator {
           }
           if (kids.some(inCell) || this.out.some((o) => o.z !== undefined && this.parentOf.get(o.id) === parent.id && inCell(o))) continue
           const roomH = lv.h ?? 40
-          const fits = (a: AssetDef) => a.h <= roomH - 1.5 && a.w <= x1 - x0 - 1 && a.d <= z1 - z0 - 1
+          const fits = (a: AssetMeta) => a.h <= roomH - 1.5 && a.w <= x1 - x0 - 1 && a.d <= z1 - z0 - 1
           const pool = (
             chineseShelf && this.rand() < 0.8
               ? pools.chinese
@@ -4319,7 +4319,7 @@ class Decorator {
 }
 
 /** 开放格子的柜架（多宝格、书架、展示柜、开放搁架）：一键布置会保证每一格都放了东西。鞋柜、厨卫、衣物、宠物等有专门的摆法，不算 */
-export function isOpenShelf(d: AssetDef) {
+export function isOpenShelf(d: AssetMeta) {
   return !d.prop && !!d.surfaces?.length && hasTag(d, 'open-shelf')
 }
 
@@ -4400,7 +4400,7 @@ export const PURPOSE_LABELS: Record<RoomPurpose, string> = {
 }
 
 /** 床（含儿童床、婴儿床） */
-const isBed = (d: AssetDef) => hasTag(d, 'bed')
+const isBed = (d: AssetMeta) => hasTag(d, 'bed')
 
 /** 一张床的床垫上最多随手放几件（玩偶、在看的书、手机……） */
 export const BED_PROPS_MAX = 3
@@ -4409,7 +4409,7 @@ export const BED_PROPS_MAX = 3
  * 能随手放到床垫上的：标了 bed-ok 的摆件。成套部件、只放柜架的（漫画全套）、收藏摆件（毛绒玩偶除外）、
  * 挂着的形态、高过 50 的都不放。
  */
-export function bedOk(d: AssetDef) {
+export function bedOk(d: AssetMeta) {
   return !!d.prop && hasTag(d, 'bed-ok') && !hasTag(d, 'set-piece', 'shelf-only') && !(hasTag(d, 'collectible') && !hasTag(d, 'plush')) && !d.form?.includes('hanging') && d.h <= 50
 }
 
@@ -4417,7 +4417,7 @@ export function bedOk(d: AssetDef) {
  * 床的这一层是不是睡觉的那一面（床垫）：level 同 onLevel（undefined = 顶面 surface）。
  * 柜门里的层、占地不到四成的层（高架床下的书桌 / 层板、床头板上的搁板）不算。
  */
-export function isSleepLevel(d: AssetDef, level: number | undefined) {
+export function isSleepLevel(d: AssetMeta, level: number | undefined) {
   if (!isBed(d)) return false
   const lv = level === undefined ? (d.surface ? { shape: d.surfaceShape, inside: false } : d.surfaces?.[0]) : d.surfaces?.[level]
   if (!lv || lv.inside || ('kind' in lv && lv.kind && lv.kind !== 'shelf')) return false
@@ -4427,7 +4427,7 @@ export function isSleepLevel(d: AssetDef, level: number | undefined) {
 }
 
 /** 只放柜架的东西（shelf-only，漫画全套）能不能放在 parent 的这一层：书架 / 唱片架 / 展示柜类的任一层，或柜子里面的层板（柜顶、床、桌都不行） */
-export function shelfOnlyOk(pd: AssetDef, level: number | undefined) {
+export function shelfOnlyOk(pd: AssetMeta, level: number | undefined) {
   if (pd.prop || isBed(pd)) return false
   if (hasTag(pd, 'bookshelf', 'record-shelf', 'shelving', 'display-cabinet', 'curio-cabinet')) return true
   return hasTag(pd, 'cabinet', 'storage-cabinet') && level !== undefined
@@ -4470,7 +4470,7 @@ const GAME_TABLE = /^(int-mahjong-(table|shuffle|walls|win)$|hg-mj-|hg-jantaku$|
  * （不是摆件 / 壁挂 / 贴附物 / 设备），牌桌棋桌不参与，儿童款只和儿童款换；床按宽度分档（单人、双人不混），
  * 其余宽深差 25% 以内、不高出太多
  */
-export function sameShapeSlot(def: AssetDef, a: AssetDef) {
+export function sameShapeSlot(def: AssetMeta, a: AssetMeta) {
   if (a.id === def.id || a.type !== def.type || a.form !== def.form) return false
   if (a.prop || a.mount || a.stick || a.fixture || GAME_TABLE.test(a.id) || GAME_TABLE.test(def.id)) return false
   if (hasTag(a, 'for-kids') !== hasTag(def, 'for-kids')) return false
@@ -4480,7 +4480,7 @@ export function sameShapeSlot(def: AssetDef, a: AssetDef) {
 }
 
 /** 素材有没有这个风格的原生配色（不算派生配色） */
-const isNativeTo = (def: AssetDef, st: StyleTag) => def.palettes.some((_, i) => paletteStyle(def, i) === st)
+const isNativeTo = (def: AssetMeta, st: StyleTag) => def.palettes.some((_, i) => paletteStyle(def, i) === st)
 
 /**
  * 常换款的细分类型：摆到这一类的默认款（sizeLabel「标准」的那件，代码里点名的 'bookshelf'、'prop-mug' 这类）时，
@@ -4494,7 +4494,7 @@ const VARY_TYPES = new Set<Tag>([
 const ALWAYS_VARY = new Set<Tag>(['dining-chair', 'body-scale', 'bath-mat', 'kid-bed', 'crib', 'umbrella-stand', 'floor-cushion', 'nightstand', 'laundry-stand', 'plush'])
 
 /** 书桌 / 工作台 */
-const isDeskish = (d: AssetDef) => hasTag(d, 'desk', 'workbench')
+const isDeskish = (d: AssetMeta) => hasTag(d, 'desk', 'workbench')
 
 /** 家具顶面高度（相对地面）；没有顶面返回 -1 */
 function surfaceTopOf(f: Furniture) {
@@ -4524,13 +4524,13 @@ const CONSOLE: Dress = [
   ['prop-key-tray', -0.3, 0],
   ['prop-vase-flowers', 0.28, 0],
 ]
-function tvDress(def: AssetDef): Dress {
+function tvDress(def: AssetMeta): Dress {
   return [
     [def.w >= 160 ? 'prop-tv-55' : 'prop-tv-43', 0, -0.12],
     ['prop-game-console', -0.36, 0.15],
   ]
 }
-const DRESS: Record<string, Dress | ((def: AssetDef) => Dress)> = {
+const DRESS: Record<string, Dress | ((def: AssetMeta) => Dress)> = {
   desk: DESK,
   'coffee-table': COFFEE,
   'dining-table': DINING,
@@ -4552,7 +4552,7 @@ const DRESS: Record<string, Dress | ((def: AssetDef) => Dress)> = {
   'sw-cl-console': CONSOLE,
 }
 /** 素材包里新加的桌柜：按标签套用 */
-function dressFor(def: AssetDef): Dress | null {
+function dressFor(def: AssetMeta): Dress | null {
   if (hasTag(def, 'nightstand')) return NIGHTSTAND
   if (hasTag(def, 'tv-stand', 'tv')) return tvDress(def)
   if (def.category === 'study' && hasTag(def, 'table')) return DESK

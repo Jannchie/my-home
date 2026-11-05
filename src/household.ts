@@ -4,8 +4,8 @@
 import { area, edgesOf, regionOf, type Plan, type Room } from './model'
 import { floorOf, isMultiFloor, planFloors } from './floors'
 import { sharedIntervals } from './walls'
-import { ASSETS, type AssetCategory, type AssetDef, type StyleTag } from './three/assets'
-import { rng } from './three/kit'
+import { ASSETS, type AssetCategory, type AssetMeta, type StyleTag } from './three/assetIndex'
+import { rng } from './three/assetMeta'
 import { hasTag, type Sel, type Tag } from './three/tags'
 import { t } from './i18n'
 
@@ -411,7 +411,7 @@ export function describe(m: Member) {
 
 // ---------- 按兴趣找素材 ----------
 
-function matches(d: AssetDef, id: InterestId, m: Matcher | undefined) {
+function matches(d: AssetMeta, id: InterestId, m: Matcher | undefined) {
   if (!m) return false
   // 并集：分类符合、或有兴趣标签都算（music.props = music 分类的摆件 + 带 hobby:music 的外分类摆件）
   return (!!m.cats && m.cats.includes(d.category)) || (!!m.tagged && hasTag(d, `hobby:${id}`))

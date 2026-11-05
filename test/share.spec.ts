@@ -12,10 +12,10 @@ import type { Plan } from '/src/model'
 const REGIONS = ['jp', 'cn', 'west'] as const
 
 /** 和界面「随机生成」同一条路：生成户型 + 推算住户 + 一键布置 + 墙纸 */
-function furnished(region: (typeof REGIONS)[number], seed: number): Plan {
+async function furnished(region: (typeof REGIONS)[number], seed: number): Promise<Plan> {
   genOptions.region = region
   genOptions.seed = seed
-  generate(false)
+  await generate(false)
   return JSON.parse(JSON.stringify(toRaw(plan.value)))
 }
 
@@ -80,7 +80,7 @@ describe('户型链接：往返', () => {
   for (const region of REGIONS) {
     test(`${region}：只户型 / 含家具`, async () => {
       for (const seed of [11, 42, 2024]) {
-        const src = furnished(region, seed)
+        const src = await furnished(region, seed)
         const origin = 'https://home.jannchie.com/en/3d'
         const lens: number[] = []
         for (const mode of ['plan', 'full'] as const) {
@@ -99,8 +99,8 @@ describe('户型链接：往返', () => {
     })
   }
 
-  test('紧凑 JSON 不带 id / savedId', () => {
-    const src = furnished('jp', 7)
+  test('紧凑 JSON 不带 id / savedId', async () => {
+    const src = await furnished('jp', 7)
     src.savedId = 's123'
     const { h: _h, ...c } = toCompact(src, 'full')
     const s = JSON.stringify(c)
@@ -130,7 +130,7 @@ describe('户型链接：往返', () => {
 
 describe('户型链接：坏数据', () => {
   test('各种坏 payload 返回错误而不抛', async () => {
-    const good = await encodeShare(furnished('cn', 3), 'plan')
+    const good = await encodeShare(await furnished('cn', 3), 'plan')
     const cases: [string, string][] = [
       ['', 'empty'],
       ['   ', 'empty'],

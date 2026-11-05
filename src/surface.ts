@@ -1,11 +1,9 @@
 // 可摆放面：桌、柜的顶面，以及柜内层板（surfaces）。负责「点在不在某一层上」「射线落在哪一层」「一件家具上摆着哪些东西」。
 
-import * as THREE from 'three'
 import { fixtureDepth, kitchenSlots, pointInPolygon, type Fixture, type Furniture, type Plan, type Vec } from './model'
 import { floorOf } from './floors'
-import { ASSET_MAP } from './three/assets'
-import { floorY, roomAt } from './three/house'
-import { CLIP_DROP, isWallMounted, type Poly, type SurfaceKind } from './three/kit'
+import { ASSET_MAP } from './three/assetIndex'
+import { isWallMounted, type Poly, type SurfaceKind } from './three/assetMeta'
 
 /** 平面坐标 → 家具局部坐标（x, z）；rot 为顺时针角度 */
 export function toLocal(f: Pick<Furniture, 'x' | 'y' | 'rot'>, p: Vec) {
@@ -70,14 +68,14 @@ export function levels(asset: string, open = false): Level[] {
 
 
 /** 点在这几块多边形合起来的外框里 */
-function inBounds(polys: Poly[], p: Vec) {
+export function inBounds(polys: Poly[], p: Vec) {
   const xs = polys.flatMap((pl) => pl.map((q) => q[0]))
   const zs = polys.flatMap((pl) => pl.map((q) => q[1]))
   return p.x >= Math.min(...xs) && p.x <= Math.max(...xs) && p.y >= Math.min(...zs) && p.y <= Math.max(...zs)
 }
 
 /** 离点最近的多边形（按到各条边的距离） */
-function nearestPoly(polys: Poly[], p: Vec) {
+export function nearestPoly(polys: Poly[], p: Vec) {
   const segDist = (a: [number, number], b: [number, number]) => {
     const dx = b[0] - a[0]
     const dz = b[1] - a[1]
@@ -189,7 +187,7 @@ export const isWallOwner = (asset: string) => {
   const d = ASSET_MAP.get(asset)
   return !!d && isWallMounted(d)
 }
-function owners(plan: Plan): Owner[] {
+export function owners(plan: Plan): Owner[] {
   return [
     ...plan.furniture.map((f) => ({ id: f.id, x: f.x, y: f.y, rot: f.rot, z: f.z ?? 0, levels: levels(f.asset, !!f.open), closed: !f.open, wall: isWallOwner(f.asset) })),
     ...plan.fixtures.map((f) => ({ id: f.id, x: f.x, y: f.y, rot: f.rot, z: 0, levels: fixtureLevels(f) })),
@@ -278,7 +276,7 @@ function stuckOn(sticks: Furniture[], f: Furniture): Furniture[] {
   })
 }
 
-/** 直接摆在一件家具顶面（AssetDef.surface）上的东西：不含柜内各层，也不递归 */
+/** 直接摆在一件家具顶面（AssetMeta.surface）上的东西：不含柜内各层，也不递归 */
 export function propsOnTop(plan: Pick<Plan, 'furniture'>, f: Furniture): Furniture[] {
   const top = levels(f.asset)[0]
   const def = ASSET_MAP.get(f.asset)
@@ -322,78 +320,6 @@ export function propsOnFixture(plan: Pick<Plan, 'furniture' | 'floors'>, fx: Fix
     (o) => (o.z ?? 0) > 0 && floorOf(plan, o) === fl && lv.some((l) => Math.abs((o.z ?? 0) - l.y) < 0.5 && (inPolys(fx, l.polys, o) || onLevel(fx, l, o.asset, o.x, o.y, o.rot))),
   )
 }
-
-/**
- * 射线落到哪一层：返回最近的命中点（平面坐标）、层高（相对房间地面）和所属家具；都没打中返回 null。
- * 对着柜子正面点时，射线在顶面高度上的交点落在柜子前方（不算），往下才落进柜内层板。
- * exclude 里的家具（正在拖的自己和它上面的东西）不算。
- */
-/** 鼠标射线离挂钩多近（cm）就算挂上去 */
-const HOOK_REACH = 12
-
-export function pickSurface(plan: Plan, ray: THREE.Ray, exclude: Set<string>, accept: (kind: SurfaceKind, h: number) => boolean = () => true) {
-  let best: { x: number; y: number; z: number; owner: string; t: number; kind: SurfaceKind; pose: { x: number; y: number; rot: number; wall?: boolean }; poly: Poly } | null = null
-  const plane = new THREE.Plane()
-  const hit = new THREE.Vector3()
-  for (const f of owners(plan)) {
-    if (exclude.has(f.id)) continue
-    const floor = floorY(roomAt(plan, { x: f.x, y: f.y }))
-    for (const l of f.levels) {
-      if (!accept(l.kind, l.h)) continue
-      // 关着门的柜子：门里的层板放不进去（先打开柜门）
-      if (l.inside && f.closed) continue
-      const z = f.z + l.y
-      if (l.kind === 'clip') {
-        // 屏幕顶边：算射线到顶边中线（窄带两条短边中点的连线，抬到真正的顶边高度）的距离，够近就吸上去
-        for (const pl of l.polys) {
-          if (pl.length < 4) continue
-          const mid = (i: number, j: number) => toWorld(f, (pl[i][0] + pl[j][0]) / 2, (pl[i][1] + pl[j][1]) / 2)
-          const a = mid(0, 3)
-          const b = mid(1, 2)
-          const y = floor + z + CLIP_DROP
-          const onRay = new THREE.Vector3()
-          const onSeg = new THREE.Vector3()
-          const d2 = ray.distanceSqToSegment(new THREE.Vector3(a.x, y, a.y), new THREE.Vector3(b.x, y, b.y), onRay, onSeg)
-          if (d2 > HOOK_REACH * HOOK_REACH) continue
-          const t = onRay.distanceTo(ray.origin) - 40
-          if (!best || t < best.t) best = { x: onSeg.x, y: onSeg.z, z, owner: f.id, t, kind: l.kind, pose: { x: f.x, y: f.y, rot: f.rot, wall: f.wall }, poly: pl }
-        }
-        continue
-      }
-      if (l.kind === 'hook') {
-        // 挂钩是一条细线：算射线到这条线的 3D 最近距离，HOOK_REACH 以内就算点中（比求平面交点宽容得多）
-        for (const pl of l.polys) {
-          const xs = pl.map((q) => q[0])
-          const zs = pl.map((q) => q[1])
-          const [x0, x1, z0, z1] = [Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)]
-          const along = x1 - x0 >= z1 - z0
-          const a = along ? toWorld(f, x0, (z0 + z1) / 2) : toWorld(f, (x0 + x1) / 2, z0)
-          const b = along ? toWorld(f, x1, (z0 + z1) / 2) : toWorld(f, (x0 + x1) / 2, z1)
-          const y = floor + z
-          const onRay = new THREE.Vector3()
-          const onSeg = new THREE.Vector3()
-          const d2 = ray.distanceSqToSegment(new THREE.Vector3(a.x, y, a.y), new THREE.Vector3(b.x, y, b.y), onRay, onSeg)
-          if (d2 > HOOK_REACH * HOOK_REACH) continue
-          // 挂钩优先于它身后的层板 / 地面：距离打个折扣
-          const t = onRay.distanceTo(ray.origin) - 40
-          if (!best || t < best.t) best = { x: onSeg.x, y: onSeg.z, z, owner: f.id, t, kind: l.kind, pose: { x: f.x, y: f.y, rot: f.rot, wall: f.wall }, poly: pl }
-        }
-        continue
-      }
-      plane.set(new THREE.Vector3(0, 1, 0), -(floor + z))
-      if (!ray.intersectPlane(plane, hit)) continue
-      const p = { x: hit.x, y: hit.z }
-      const lp = toLocal(f, p)
-      // 点在层的外框里、却落在几块区域之间（麻将桌中间的牌、床头的枕头、台面上的水槽）：吸到最近的那块，fitOnSurface 再整件收进去
-      const poly = l.polys.find((pl) => pointInPolygon(lp, pl.map(([px, pz]) => ({ x: px, y: pz })))) ?? (l.polys.length && inBounds(l.polys, lp) ? nearestPoly(l.polys, lp) : undefined)
-      if (!poly) continue
-      const t = hit.distanceTo(ray.origin)
-      if (!best || t < best.t) best = { x: p.x, y: p.y, z, owner: f.id, t, kind: l.kind, pose: { x: f.x, y: f.y, rot: f.rot, wall: f.wall }, poly }
-    }
-  }
-  return best
-}
-
 
 /** 摆件占地的四个角（平面坐标） */
 function corners(asset: string, x: number, y: number, rot: number): Vec[] {

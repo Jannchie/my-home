@@ -1,22 +1,23 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, defineAsyncComponent } from 'vue'
 import { FIXTURES, OPENING_LABELS, ROOM_KINDS, area, bbox, edgeInfo, fmtArea, fmtJo, fmtRoomArea, isAxisRect, perimeter, rectPoints, type OpeningKind, type RoomKind } from '../model'
 import { planArea } from '../generate'
 import { RAILING_KINDS, type RailingKind } from '../model'
 import { isIndoor } from '../walls'
 import { deleteSelection, duplicateSelection, findFixture, findRoom, mutate, plan, floorPlan, selection, selectedWall, settings, tidyDoors, setRoomLight, setRoomLightK } from '../store'
 import { isMultiFloor, planFloors, floorView } from '../floors'
-import { LIGHT_MODES, type LightMode } from '../three/lights'
+import { LIGHT_MODES, type LightMode } from '../three/lightSettings'
 import { roomName, t } from '../i18n'
 import { JIcon } from '@jannchie/icons-vue'
-import WindowStylePicker from './WindowStylePicker.vue'
-import DoorStylePicker from './DoorStylePicker.vue'
 import FixtureEditor from './FixtureEditor.vue'
 import WallEditor from './WallEditor.vue'
 import { wallKey } from '../wallFace'
 import OpeningWidthPresets from './OpeningWidthPresets.vue'
 import { resizedOpening } from '../openingEdit'
 import { FIXTURE_ICONS, ICONS, ROOM_ICONS, TOOL_ICONS } from '../ui/icons'
+// 门窗款式选择器要渲染 3D 预览（three.js + 门窗模型）：选中门窗时才加载，平面图首屏不带
+const WindowStylePicker = defineAsyncComponent(() => import('./WindowStylePicker.vue'))
+const DoorStylePicker = defineAsyncComponent(() => import('./DoorStylePicker.vue'))
 
 /** 房间灯（3D 沙盘夜里的灯光，见 three/lights.ts） */
 const LIGHT_LABELS: Record<LightMode, string> = { auto: '自动', on: '开', off: '关' }

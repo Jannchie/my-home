@@ -13,7 +13,8 @@ import { poseDoors, type SurfaceDef } from './three/kit'
 import { isIndoor } from './walls'
 import { DOOR_ZONES, STAIR_ZONES, type Occupancy } from './occupancy'
 import { cabinetsOn, fitIn, poseOnStorageSpot, setOpen, SPOT_CABINET_TYPES } from './cabinet'
-import { ASSET_MAP, ASSETS, type AssetDef, type StyleTag } from './three/assets'
+import { ASSET_MAP, ASSETS, type StyleTag } from './three/assets'
+import type { AssetMeta } from './three/assetMeta'
 import type { Region } from './model'
 import type { Member } from './household'
 import type { Wardrobe } from './three/garments'
@@ -27,8 +28,8 @@ export interface StowHost {
   pick<T>(xs: T[]): T
   shuffle<T>(xs: T[]): T[]
   weighted<T>(items: [T, number][]): T | undefined
-  find(sel: Sel, filter?: (d: AssetDef) => boolean): AssetDef[]
-  colorFor(def: AssetDef): number
+  find(sel: Sel, filter?: (d: AssetMeta) => boolean): AssetMeta[]
+  colorFor(def: AssetMeta): number
   onLevel(parent: Furniture, asset: string, fx: number, fz: number, lrot?: number, level?: number): Furniture | null
   wardrobesFor(people?: Member[]): Wardrobe[]
   peopleIn(room: Room): Member[]
@@ -70,7 +71,7 @@ function seriesWeights(fx: Fixture, region: Region, room?: Room): [string, numbe
 }
 
 /** 收纳位上放哪件柜子：按权重挑款式（当前风格适合的加倍），定制成正好填满位的宽深（cabinet.ts fitIn）；挑中的款都放不进就在同类里找 */
-export function cabinetFor(c: StowCtx, fx: Fixture): AssetDef | undefined {
+export function cabinetFor(c: StowCtx, fx: Fixture): AssetMeta | undefined {
   const { d } = c
   const room = roomOf(c.plan, fx)
   const type = fx.builtinType ?? 'shoe'
@@ -106,7 +107,7 @@ export function cabinetsOnSpots(c: StowCtx, only?: Fixture['builtinType']) {
 // ---------- 往柜子里收东西 ----------
 
 /** 体现住户个性的东西：留在外面展示，不收进关着门的柜子 */
-export function isPersonal(def: AssetDef) {
+export function isPersonal(def: AssetMeta) {
   return (
     (def.tags ?? []).some((t) => t.startsWith('hobby:')) ||
     hasTag(def, 'collectible', 'curio-ok', 'decor', 'figure', 'plush', 'trophy', 'acrylic-stand', 'gacha', 'toy', 'plant', 'vase', 'wall-art', 'book', 'manga', 'magazine', 'instrument', 'camera', 'lens', 'model', 'puzzle', 'record', 'mineral', 'coin', 'stamp', 'clock', 'tabletop-game', 'video-game', 'game-console')
@@ -116,7 +117,7 @@ export function isPersonal(def: AssetDef) {
 type StowKind = 'clothes' | 'folded' | 'shoes' | 'food' | 'dishes' | 'cookware' | 'wet' | 'toilet' | 'sundries'
 
 /** 这件柜子里该收什么；kitchen：在厨房里，或在 LDK 的厨房一带（离整体厨房不远）；toilet：独立厕所里，或挂在马桶上方 */
-function stowKind(def: AssetDef, room?: Room, kitchen = false, toilet = false): StowKind {
+function stowKind(def: AssetMeta, room?: Room, kitchen = false, toilet = false): StowKind {
   if (hasTag(def, 'shoe-storage')) return 'shoes'
   if (toilet) return 'toilet'
   if (hasTag(def, 'pantry')) return 'food'
@@ -142,13 +143,13 @@ const POOL_TAGS: Record<Exclude<StowKind, 'clothes'>, Tag[]> = {
 }
 
 /** 可以收进柜子的东西：摆件、不挂起不壁挂不贴附、不是个性物品；衣服只要叠好的；不会发光的 */
-const stowable = (a: AssetDef) => !!a.prop && !a.mount && !a.stick && a.form !== 'hanging' && !a.screenClip && !isPersonal(a) && !hasTag(a, 'light') && (!hasTag(a, 'clothing') || a.form === 'folded')
+const stowable = (a: AssetMeta) => !!a.prop && !a.mount && !a.stick && a.form !== 'hanging' && !a.screenClip && !isPersonal(a) && !hasTag(a, 'light') && (!hasTag(a, 'clothing') || a.form === 'folded')
 
 /** 食品柜放能久放的东西（罐头、调味料、米、干货、瓶装饮料、零食），不放做好的饭菜、水果 */
 const PANTRY = /^(kf-(cans|seasonings|rice-sack-\d+|canisters|spice-(carousel|shelf)|cup-noodle|snacks|chips-(bag|tube)|candy-jar|pet-(bottles|500|2l)|bottle-[a-z]+|can|can-(short|slim|6|case)|tetra-(1l|200|125)|water-(500|2l|case-closed|case-24)|isshobin|beer-6|onion-bags|bread-bag)|prop-(spice-jars|condiments|oil-bottles|spice-rack)|int-coffee-canisters)$/
 /** 收纳箱 / 盒里适合放进衣柜、斗柜的（不要厨房、餐桌、洗护类的盒子） */
-const clothesBox = (a: AssetDef) => !hasTag(a, 'storage-box') || !['kitchenware', 'tabletop', 'toiletry', 'dining'].includes(a.category)
-const KIND_FILTER: Partial<Record<StowKind, (a: AssetDef) => boolean>> = {
+const clothesBox = (a: AssetMeta) => !hasTag(a, 'storage-box') || !['kitchenware', 'tabletop', 'toiletry', 'dining'].includes(a.category)
+const KIND_FILTER: Partial<Record<StowKind, (a: AssetMeta) => boolean>> = {
   clothes: clothesBox,
   folded: clothesBox,
   food: (a) => PANTRY.test(a.id),
@@ -164,8 +165,8 @@ const KIND_FILTER: Partial<Record<StowKind, (a: AssetDef) => boolean>> = {
     (hasTag(a, 'toilet-shelf-ok') && hasTag(a, 'wet-supply') && !hasTag(a, 'humidifier'))
 }
 
-const poolCache = new Map<string, AssetDef[]>()
-function poolFor(c: StowCtx, kind: StowKind): AssetDef[] {
+const poolCache = new Map<string, AssetMeta[]>()
+function poolFor(c: StowCtx, kind: StowKind): AssetMeta[] {
   if (kind === 'clothes') {
     const k = 'clothes'
     let p = poolCache.get(k)
@@ -179,10 +180,10 @@ function poolFor(c: StowCtx, kind: StowKind): AssetDef[] {
 }
 
 /** 盘子、碗、成套餐具（不是杯子、茶具、酒器）：碗柜里优先放这些 */
-export const isPlateLike = (a: AssetDef) => hasTag(a, 'tableware') && !hasTag(a, 'cup', 'mug', 'teacup', 'coffee-cup', 'tea-set', 'drink')
+export const isPlateLike = (a: AssetMeta) => hasTag(a, 'tableware') && !hasTag(a, 'cup', 'mug', 'teacup', 'coffee-cup', 'tea-set', 'drink')
 
 /** 一层的局部包围盒 */
-function bounds(def: AssetDef, i: number) {
+function bounds(def: AssetMeta, i: number) {
   const s = def.surfaces![i]
   const pl = s.shape?.[0] ?? [
     [-def.w / 2, -def.d / 2],
@@ -194,13 +195,13 @@ function bounds(def: AssetDef, i: number) {
 }
 
 /** 沿一层从左往右摆一排东西（不要求摆满，fill 为大约摆到几成）；prefer 命中的先摆，摆完了才轮到别的 */
-function fillLevel(c: StowCtx, cab: Furniture, def: AssetDef, i: number, pool: AssetDef[], fill: number, prefer?: (a: AssetDef) => boolean) {
+function fillLevel(c: StowCtx, cab: Furniture, def: AssetMeta, i: number, pool: AssetMeta[], fill: number, prefer?: (a: AssetMeta) => boolean) {
   const { d, rand } = c
   const lv = def.surfaces![i]
   const b = bounds(def, i)
   const depth = b.z1 - b.z0
   const width = b.x1 - b.x0
-  const fits = (a: AssetDef) => a.h <= (lv.h ?? 40) - 0.5 && Math.min(a.w, a.d) <= depth - 0.5 && Math.min(a.w, a.d) <= width - 0.5
+  const fits = (a: AssetMeta) => a.h <= (lv.h ?? 40) - 0.5 && Math.min(a.w, a.d) <= depth - 0.5 && Math.min(a.w, a.d) <= width - 0.5
   const fit = pool.filter(fits)
   const cands = prefer ? [...d.shuffle(fit.filter(prefer)), ...d.shuffle(fit.filter((a) => !prefer(a)))] : d.shuffle(fit)
   if (!cands.length) return 0
@@ -237,7 +238,7 @@ function fillLevel(c: StowCtx, cab: Furniture, def: AssetDef, i: number, pool: A
  * 某一层收什么：食品柜齐腰到齐眼高的层（75–165）和玻璃门里放碗盘，其余放食品；
  * 厨房一带落地柜的低层（< 45）先放锅具再放碗盘；碗柜的层先放盘子、碗，少数层先放杯子
  */
-function levelPlan(c: StowCtx, kind: StowKind, def: AssetDef, cab: Furniture, lv: SurfaceDef, kitchen: boolean): { pool: AssetDef[]; prefer?: (a: AssetDef) => boolean } | null {
+function levelPlan(c: StowCtx, kind: StowKind, def: AssetMeta, cab: Furniture, lv: SurfaceDef, kitchen: boolean): { pool: AssetMeta[]; prefer?: (a: AssetMeta) => boolean } | null {
   const y = (cab.z ?? 0) + lv.y
   const k: StowKind = kind === 'food' && (lv.glass || (y >= 75 && y <= 165)) ? 'dishes' : kind
   // 玻璃门里看得见：只放碗盘（其他种类的柜子玻璃格按展示格对待，不在这里收）
@@ -280,7 +281,7 @@ function stowInto(c: StowCtx, cab: Furniture, wds: Wardrobe[], room?: Room, kitc
     if (kind === 'toilet') {
       // 厕所吊柜几乎每层都有东西：第一层先放卷纸，往上的层多半先放卫生巾 / 护垫
       const first = n === 0
-      const prefer = first || rand() < 0.3 ? (a: AssetDef) => hasTag(a, 'toilet-paper') : (a: AssetDef) => hasTag(a, 'sanitary')
+      const prefer = first || rand() < 0.3 ? (a: AssetMeta) => hasTag(a, 'toilet-paper') : (a: AssetMeta) => hasTag(a, 'sanitary')
       if (first || rand() < 0.85) n += fillLevel(c, cab, def, i, p, 0.5 + rand() * 0.45, prefer)
       return
     }

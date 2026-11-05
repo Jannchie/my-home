@@ -11,7 +11,7 @@
 // 新素材直接在 def 里写 tags；test/tags.spec.ts 会检查每件素材都有功能标签、只用词表里的值，
 // 以及业务代码里没有按名字 / id 子串判断类别的正则（选择器只允许锚定在 id 开头的正则，用来点名具体素材或成套系列）。
 
-import type { AssetDef } from './kit'
+import type { AssetMeta } from './assetMeta'
 import type { InterestId } from '../household'
 
 /** 功能：家具 */
@@ -307,7 +307,7 @@ export type Tag = FixedTag | `hobby:${InterestId}`
 export const FIXED_TAGS: readonly string[] = [...FUNCTION_TAGS, ...ATTR_TAGS, ...PLACEMENT_TAGS]
 
 /** 有没有其中任一标签 */
-export function hasTag(d: Pick<AssetDef, 'tags'> | undefined | null, ...ts: Tag[]): boolean {
+export function hasTag(d: Pick<AssetMeta, 'tags'> | undefined | null, ...ts: Tag[]): boolean {
   const own = d?.tags
   if (!own) return false
   for (const t of ts) if (own.includes(t)) return true
@@ -315,7 +315,7 @@ export function hasTag(d: Pick<AssetDef, 'tags'> | undefined | null, ...ts: Tag[
 }
 
 /** 全部标签都有 */
-export function hasAllTags(d: Pick<AssetDef, 'tags'> | undefined | null, ...ts: Tag[]): boolean {
+export function hasAllTags(d: Pick<AssetMeta, 'tags'> | undefined | null, ...ts: Tag[]): boolean {
   const own = d?.tags
   return !!own && ts.every((t) => own.includes(t))
 }
@@ -326,7 +326,7 @@ export function hasAllTags(d: Pick<AssetDef, 'tags'> | undefined | null, ...ts: 
  * 现在就能睡的床：床、地铺，收起来 / 合起来的形态（折叠床收起、沙发床合着）不算。
  * 婴儿床、高架床也算床（检查清单按人头数床）；只给大人睡的地方另外排除 crib / loft
  */
-export function isSleepable(d: Pick<AssetDef, 'tags' | 'form'> | undefined | null): boolean {
+export function isSleepable(d: Pick<AssetMeta, 'tags' | 'form'> | undefined | null): boolean {
   return !!d && hasTag(d, 'bed', 'bedding') && d.form !== 'closed' && d.form !== 'folded'
 }
 
@@ -334,7 +334,7 @@ export function isSleepable(d: Pick<AssetDef, 'tags' | 'form'> | undefined | nul
  * 人能坐上去的家具：椅子、凳子、沙发、卡座（挂墙件、小摆件不算）。
  * 地上的坐垫 / 座椅子另有 floor-cushion / floor-chair，要不要算由调用方决定
  */
-export function canSitOn(d: Pick<AssetDef, 'tags' | 'mount' | 'prop'> | undefined | null): boolean {
+export function canSitOn(d: Pick<AssetMeta, 'tags' | 'mount' | 'prop'> | undefined | null): boolean {
   return !!d && !d.mount && !d.prop && hasTag(d, 'seat', 'sofa', 'armchair', 'dining-seat')
 }
 
@@ -344,7 +344,7 @@ export function canSitOn(d: Pick<AssetDef, 'tags' | 'mount' | 'prop'> | undefine
  */
 export type Sel = Tag | RegExp | readonly (Tag | RegExp)[]
 
-export function matchSel(d: AssetDef, sel: Sel): boolean {
+export function matchSel(d: AssetMeta, sel: Sel): boolean {
   if (typeof sel === 'string') return hasTag(d, sel)
   if (sel instanceof RegExp) return sel.test(d.id)
   for (const s of sel) if (typeof s === 'string' ? hasTag(d, s) : s.test(d.id)) return true

@@ -2,14 +2,15 @@
 // 一个花纹单元 = spec.scale 厘米，大沙发和小靠垫上的花纹尺寸一致。
 
 import * as THREE from 'three'
-import { drawPattern, type PatternSpec } from './patterns'
+import { drawPattern, patternKey as keyOf, type PatternSpec } from './patterns'
+
+export { patternPreview } from './patterns'
 import { toon, useAnisotropy } from './toon'
 import { injectLightMask } from './lightMask'
 
 const TEX = 256
 const texCache = new Map<string, THREE.CanvasTexture>()
 const matCache = new Map<string, THREE.MeshToonMaterial>()
-const keyOf = (s: PatternSpec) => JSON.stringify([s.kind, s.colors, s.angle ?? 0, s.density ?? 0.5, s.seed ?? 0, s.plainRatio ?? 0.3, s.pieces ?? 4])
 
 export function patternTexture(spec: PatternSpec) {
   const key = keyOf(spec)
@@ -25,21 +26,6 @@ export function patternTexture(spec: PatternSpec) {
     texCache.set(key, t)
   }
   return t
-}
-
-/** 花纹的小预览图（UI 用） */
-const previewCache = new Map<string, string>()
-export function patternPreview(spec: PatternSpec, size = 48) {
-  const key = keyOf(spec) + size
-  let url = previewCache.get(key)
-  if (!url) {
-    const cv = document.createElement('canvas')
-    cv.width = cv.height = size
-    drawPattern(cv.getContext('2d')!, spec, size)
-    url = cv.toDataURL()
-    previewCache.set(key, url)
-  }
-  return url
 }
 
 /** 带花纹的 toon 材质：片元里按物体坐标的主法线方向选投影平面取样 */

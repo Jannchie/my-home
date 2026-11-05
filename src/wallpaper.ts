@@ -1,9 +1,9 @@
 // 墙纸：按房间主人的风格自动挑（低对比度的纯色 / 细花纹），也可以手动换。
 
-import { shade } from './three/toon'
+import { shadeColor as shade } from './three/shade'
 import { takesHouseWallpaper, type Plan, type Room, type Wallpaper, type WallTrim, type WoodTone } from './model'
 import type { Household } from './household'
-import { rng, type StyleTag } from './three/kit'
+import { rng, type StyleTag } from './three/assetMeta'
 import type { PatternKind } from './three/patterns'
 import { stripWallPapers } from './wallFace'
 

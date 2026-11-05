@@ -6,8 +6,8 @@
 
 import { fnv1a } from './hash'
 import { boxOverlaps, dist, edgesOf, fixtureBox, openingsOn, pointInPolygon, uid, type Box, type Furniture, type Plan, type Room, type Vec } from './model'
-import { ASSET_MAP, type AssetDef } from './three/assets'
-import { screenPoint, type ScreenPanel } from './three/kit'
+import { ASSET_MAP, type AssetMeta } from './three/assetIndex'
+import { screenPoint, type ScreenPanel } from './three/assetMeta'
 import { fitsOnSurface, snapToClip, toLocal, toWorld } from './surface'
 import { furnitureBox } from './snap'
 import { boxInsideWalls } from './place'
@@ -25,10 +25,10 @@ export interface DeskHost {
   parentOf: Map<string, string>
   pick<T>(xs: T[]): T
   shuffle<T>(a: T[]): T[]
-  find(sel: Sel, filter?: (d: AssetDef) => boolean): AssetDef[]
+  find(sel: Sel, filter?: (d: AssetMeta) => boolean): AssetMeta[]
   peopleIn(room: Room): Member[]
   readonly clutter: number
-  colorFor(def: AssetDef): number
+  colorFor(def: AssetMeta): number
   /** 统一的占用表（禁放区、留空区） */
   readonly occ: Occupancy
   /** 立体上能不能放（统一的占用表，见 Occupancy.canPlace） */
@@ -49,13 +49,13 @@ const isSeat = (f: Furniture) => hasTag(def(f), 'seat')
 const isLaptop = (f: Furniture) => hasTag(def(f), 'laptop')
 const isKeyboard = (f: Furniture) => hasTag(def(f), 'keyboard')
 /** 台式主机：机箱、迷你主机 */
-export const isTower = (d?: AssetDef) => !!d && (d.type === 'pc' || d.id === 'of-mini-pc')
+export const isTower = (d?: AssetMeta) => !!d && (d.type === 'pc' || d.id === 'of-mini-pc')
 /** 显示器（有屏幕面板、不是电视 / 一体机） */
-export const isMonitor = (d?: AssetDef) => !!d?.screens?.length && d.type !== 'tv' && d.id !== 'of-aio'
+export const isMonitor = (d?: AssetMeta) => !!d?.screens?.length && d.type !== 'tv' && d.id !== 'of-aio'
 /** 能放电脑的书桌 / 工作台（desk 标签不含园艺台、焊接台） */
-const isDeskDef = (d?: AssetDef) => !!d && !!d.surface && !d.prop && !d.mount && hasTag(d, 'desk')
+const isDeskDef = (d?: AssetMeta) => !!d && !!d.surface && !d.prop && !d.mount && hasTag(d, 'desk')
 /** 屏幕顶边能夹东西的（显示器、电视、一体机） */
-const hasClip = (d?: AssetDef) => !!d?.surfaces?.some((l) => l.kind === 'clip' && l.shape?.length)
+const hasClip = (d?: AssetMeta) => !!d?.surfaces?.some((l) => l.kind === 'clip' && l.shape?.length)
 const round1 = (v: number) => Math.round(v * 10) / 10
 
 /**
@@ -336,7 +336,7 @@ const JOB_SCREENS: Partial<Record<Member['job'], W>> = {
  * 电脑屏幕（显示器、笔记本、一体机、平板）的画面权重：职业定主调，兴趣、性格再加减。
  * 电视看全家：孩子、宅、爱游戏的多放动画 / 游戏，其余追剧、新闻，也常关着
  */
-export function screenWeights(def: AssetDef, people: Member[]): W {
+export function screenWeights(def: AssetMeta, people: Member[]): W {
   const w: W = {}
   if (def.type === 'tv' || hasTag(def, 'tv')) {
     add(w, 'video', 3)

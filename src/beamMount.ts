@@ -2,7 +2,7 @@
 // 墙角处侧面会戳进相邻那面墙伸出来的梁的，沿墙让开。
 // 贴墙吸附（snap.ts snapToWall）、一键布置收尾、改梁（store.setWallFace）、读档（store.normalizePlan）都走这里。
 
-import { ASSET_MAP } from './three/assets'
+import { ASSET_MAP } from './three/assetIndex'
 import { add, edgeInfo, edgesOf, isAxisEdge, mul, pointInPolygon, type Furniture, type Plan, type Room, type WallBeam } from './model'
 import { floorHeight, floorOf } from './floors'
 import { wallThicknessAt } from './walls'

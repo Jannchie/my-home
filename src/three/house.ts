@@ -75,16 +75,9 @@ import { SLAB, floorElevation, floorHeight, floorOf, isMultiFloor } from '../flo
 import { CEILING } from './lightFixtures'
 import { centroid, onBoundary, signedArea } from '../model'
 
-/** 地面高度：玄関土间、阳台比室内低 */
-const FLOOR_Y: Partial<Record<RoomKind, number>> = { entrance: -12, balcony: -15 }
-export const floorY = (r: Room | undefined) => (r ? (r.flush ? 0 : (FLOOR_Y[r.kind] ?? 0)) : 0)
+export { floorY, roomAt } from '../roomAt'
+import { floorY, roomAt } from '../roomAt'
 export const BASE = -26
-
-export function roomAt(plan: Pick<Plan, 'rooms'>, p: Vec, floor?: string | null) {
-  // 阳台和户内重叠时户内优先；floor 给定（多层户型）时只看那一层的房间（undefined 字段 = 最底层，传 null 表示最底层）
-  const hits = plan.rooms.filter((r) => (floor === undefined || (r.floor ?? null) === floor) && pointInPolygon(p, r.points))
-  return hits.find(isIndoor) ?? hits[0]
-}
 
 // ---------- 地面贴图 ----------
 

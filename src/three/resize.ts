@@ -10,118 +10,27 @@
 //      （挂着的衣服）整块平移。会动的部件（柜门、抽屉）的转轴也跟着边缘走，推拉门的行程按拉伸比例缩放。
 
 import * as THREE from 'three'
-import type { AssetDef, Poly, SurfaceDef } from './kit'
-import { hasTag, type Tag } from './tags'
+import type { AssetDef } from './kit'
+import { deriveResizedWith, resizedMeta, type AxisMap } from './resizeMeta'
 
-const SEP = '@'
-/** 边缘不变形的宽度（cm） */
-const EDGE = 6
+export * from './resizeMeta'
+
 /** 某方向上比这窄的零件在这个方向上整块平移 */
 const RIGID = 12
 
-/** 能调宽深的：柜、架、衣架、桌 */
-const RESIZABLE: Tag[] = [
-  'bookshelf', 'record-shelf', 'shelving', 'display-cabinet', 'curio-cabinet', 'wardrobe', 'dresser', 'clothes-rail', 'coat-rack',
-  'storage-cabinet', 'cabinet', 'shoe-storage', 'pantry', 'washer-rack', 'open-rack', 'tv-stand', 'garment-rail', 'kimono-rack',
-  'nightstand', 'desk', 'workbench', 'table', 'dining-table', 'coffee-table', 'low-table', 'laundry-stand', 'towel-rail',
-]
-/** 带这些标签的即使也是柜 / 桌（上床下桌、猫爬架、鱼缸柜…）也不调 */
-const FIXED: Tag[] = ['bed', 'loft', 'kid-bed', 'crib', 'sofa', 'light', 'aquarium', 'piano', 'cat-tower', 'set-piece']
-
-export interface SizeRange {
-  w: [number, number]
-  d: [number, number]
-}
-
-/** 这件素材能调的宽深范围；不能调返回 null。传原素材（派生的会先找回原素材） */
-export function resizeRange(def: AssetDef | undefined): SizeRange | null {
-  if (!def || def.prop || def.stick || def.fixture || def.actor || def.ceiling) return null
-  if (!def.resize && (!hasTag(def, ...RESIZABLE) || hasTag(def, ...FIXED))) return null
-  // 范围总是包含原尺寸（7cm 深的钥匙架不能因为下限 10 被强行加深）
-  const r = (v: number, lo: number, hi: number, min: number, max: number): [number, number] => [
-    Math.min(Math.round(v), Math.max(min, Math.round(v * lo))),
-    Math.max(Math.round(v), Math.min(max, Math.round(v * hi))),
-  ]
-  return { w: r(def.w, 0.4, 2.5, 15, 400), d: r(def.d, 0.5, 2, 10, 200) }
-}
-
-/** 派生 id 拆成原素材 id 和尺寸；不是派生 id 返回 null */
-export function parseResized(id: string): { base: string; w: number; d: number } | null {
-  const i = id.lastIndexOf(SEP)
-  if (i <= 0) return null
-  const m = /^(\d+)x(\d+)$/.exec(id.slice(i + 1))
-  return m ? { base: id.slice(0, i), w: +m[1], d: +m[2] } : null
-}
-
-/** 原素材 id（不是派生的就是它自己） */
-export const baseAssetId = (id: string) => parseResized(id)?.base ?? id
-
-/** 原素材按 (w, d) 派生出的 id：取整、夹到可调范围里；和原尺寸一样就是原 id */
-export function resizedId(base: AssetDef, w: number, d: number) {
-  const r = resizeRange(base)
-  if (!r) return base.id
-  const cw = clamp(Math.round(w), r.w)
-  const cd = clamp(Math.round(d), r.d)
-  return cw === Math.round(base.w) && cd === Math.round(base.d) ? base.id : `${base.id}${SEP}${cw}x${cd}`
-}
-
-const clamp = (v: number, [lo, hi]: [number, number]) => Math.min(hi, Math.max(lo, v))
-
 const derived = new Map<string, AssetDef | null>()
 
-/**
- * 派生 id 对应的素材（缓存）；id 不合法、原素材不能调返回 undefined。
- * 读的时候不再按可调范围卡（素材尺寸校正后范围会变，存档里已经调好的家具不能因此丢掉），只拦明显不对的数
- */
+/** 派生 id 对应的完整素材（缓存）：数据按 resizeMeta 换算，模型按素材自己的 resize(w, d) 重搭，没有就分区拉伸 */
 export function deriveResized(id: string, lookup: (id: string) => AssetDef | undefined): AssetDef | undefined {
-  let d = derived.get(id)
-  if (d === undefined) {
-    d = null
-    const p = parseResized(id)
-    const base = p && lookup(p.base)
-    const r = base && resizeRange(base)
-    if (p && base && r && p.w >= 5 && p.d >= 5 && p.w <= 1000 && p.d <= 1000) d = makeResized(base, id, p.w, p.d)
-    derived.set(id, d)
-  }
-  return d ?? undefined
+  return deriveResizedWith(id, lookup, derived, makeResized)
 }
 
 function makeResized(base: AssetDef, id: string, w: number, d: number): AssetDef {
-  const out: AssetDef = { ...base, id, w, d, sizeLabel: `${w}×${d}` }
+  const { out, mx, mz } = resizedMeta(base, id, w, d)
   delete out.resize
-  if (base.resize) return { ...out, ...base.resize(w, d) }
-  const mx = axisMap(base.w, w)
-  const mz = axisMap(base.d, d)
-  const poly = (ps: Poly[]) => ps.map((p) => p.map(([x, z]) => [mx.at(x), mz.at(z)] as [number, number]))
-  if (base.surfaceShape) out.surfaceShape = poly(base.surfaceShape)
-  if (base.surfaces)
-    out.surfaces = base.surfaces.map((s): SurfaceDef => ({
-      ...s,
-      ...(s.shape ? { shape: poly(s.shape) } : {}),
-      ...(s.slide ? { slide: s.slide * mz.k } : {}),
-      ...(s.slideX ? { slideX: s.slideX * mx.k } : {}),
-    }))
+  if (base.resize) return { ...out, surfaceShape: base.surfaceShape, surfaces: base.surfaces, ...base.resize(w, d) }
   out.build = (p) => stretchModel(base.build(p), mx, mz)
   return out
-}
-
-/** 一个方向上的分区映射：边缘 m 以内平移，中间按 k 线性拉伸；der 是某点的局部缩放（边缘 1，中间 k） */
-interface AxisMap {
-  at(v: number): number
-  der(v: number): number
-  k: number
-}
-function axisMap(from: number, to: number): AxisMap {
-  const h0 = from / 2
-  const h1 = to / 2
-  const m = Math.min(EDGE, h0 * 0.4, h1 * 0.4)
-  const k = (h1 - m) / (h0 - m)
-  const inMid = (v: number) => v > -h0 + m && v < h0 - m
-  return {
-    k,
-    at: (v) => (inMid(v) ? v * k : v + Math.sign(v) * (h1 - h0)),
-    der: (v) => (inMid(v) ? k : 1),
-  }
 }
 
 const tmpV = new THREE.Vector3()

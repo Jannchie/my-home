@@ -10,7 +10,7 @@ import { mulberry32 } from './generate'
 import { bbox, boxOverlaps, uid, type Furniture, type Plan } from './model'
 import { floorOf, floorView, planFloors } from './floors'
 import { furnitureBox, yardBlocked } from './snap'
-import { ASSETS, ASSET_MAP } from './three/assets'
+import { ASSETS, ASSET_MAP } from './three/assetIndex'
 import { hasTag } from './three/tags'
 
 /** 院子里要摆的户外物件（不含已有家具；没有用地返回空） */

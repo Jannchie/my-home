@@ -29,7 +29,7 @@ import {
   type Room,
   type Vec,
 } from './model'
-import { ASSET_MAP, type AssetDef } from './three/assets'
+import { ASSET_MAP, type AssetMeta } from './three/assetIndex'
 import { hasTag } from './three/tags'
 import { boxInsideWalls, clearanceZones, innerRoom, isSashWindow } from './place'
 import { furnitureBox } from './snap'
@@ -74,7 +74,7 @@ export function bodyBox(asset: string, x: number, y: number, rot: number): Box {
  * 一件东西在高度上的范围 [底, 顶]（相对房间地面）。
  * 带挂钩的壁挂物（毛巾杆、挂钩）往下多算 45：会挂上毛巾；壁挂空调下方到 AC_CLEAR 都留空（出风口不能被高家具顶住）。
  */
-export function vrange(o: Pick<Furniture, 'z'>, d: AssetDef): [number, number] {
+export function vrange(o: Pick<Furniture, 'z'>, d: AssetMeta): [number, number] {
   if (d.mount !== undefined) {
     const hooks = (d.surfaces ?? []).filter((l) => l.kind === 'hook').map((l) => l.y)
     const lo = Math.min(d.mount, ...hooks.map((y) => y - 45))
@@ -108,7 +108,7 @@ const isKeepout = (f: Fixture) => f.id.startsWith('stair-clear-') || f.id.starts
  *   floor 落地家具。
  */
 export type Layer = 'floor' | 'flat' | 'prop' | 'wall' | 'hang'
-export function layerOf(d: AssetDef, z?: number): Layer {
+export function layerOf(d: AssetMeta, z?: number): Layer {
   if (d.mount !== undefined || d.stick) return 'wall'
   if (d.form === 'hanging') return 'hang'
   if ((z ?? 0) > 0.5) return 'prop'
@@ -119,7 +119,7 @@ const upper = (l: Layer) => l === 'wall' || l === 'hang'
 
 export interface Body {
   f: Furniture
-  def: AssetDef
+  def: AssetMeta
   layer: Layer
   /** 本体的平面包围盒（贴附物按本体中心） */
   box: Box
@@ -214,9 +214,9 @@ export interface Conflict {
   reason: string
 }
 
-const isSeat = (d: AssetDef) => hasTag(d, 'chair', 'seat', 'stool', 'floor-cushion')
-const isTable = (d: AssetDef) => !!d.surface && hasTag(d, 'table', 'desk', 'workbench', 'dining-table', 'low-table', 'coffee-table', 'vanity')
-const isTower = (d: AssetDef) => d.type === 'pc' || d.id === 'of-mini-pc'
+const isSeat = (d: AssetMeta) => hasTag(d, 'chair', 'seat', 'stool', 'floor-cushion')
+const isTable = (d: AssetMeta) => !!d.surface && hasTag(d, 'table', 'desk', 'workbench', 'dining-table', 'low-table', 'coffee-table', 'vanity')
+const isTower = (d: AssetMeta) => d.type === 'pc' || d.id === 'of-mini-pc'
 
 /** 一件东西本体的有向矩形（按实际朝向，不取整到 90°） */
 function obb(b: Body): Vec[] {

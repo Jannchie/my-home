@@ -26,19 +26,15 @@ import { LAMP_GLOW, ceilingAssetId, fixtureModel, isMainKind, styleSpec, type Fi
 
 export { CEILING, LAMP_GLOW, fixtureModel, styleSpec, type FixtureShape } from './lightFixtures'
 
-// ---------- 设置 ----------
+// ---------- 设置（取值范围见 lightSettings.ts） ----------
 
-export type LightMode = 'auto' | 'on' | 'off'
-export const LIGHT_MODES: LightMode[] = ['auto', 'on', 'off']
-export const KELVIN_MIN = 2700
-export const KELVIN_MAX = 6500
-export const DEFAULT_KELVIN = 4000
+export * from './lightSettings'
+import { DEFAULT_KELVIN, type LightMode } from './lightSettings'
+
 /** 真实点光源数量池（固定，避免重编译） */
 export const POOL_HIGH = 16
 export const POOL_LOW = 6
 
-export const isLightMode = (v: unknown): v is LightMode => v === 'auto' || v === 'on' || v === 'off'
-export const clampKelvin = (k: number) => Math.round(Math.min(KELVIN_MAX, Math.max(KELVIN_MIN, k)) / 100) * 100
 
 /**
  * 色温 → 颜色（Tanner Helland 的近似公式，1000K–40000K 内误差很小），返回线性空间的 THREE.Color。
@@ -68,20 +64,8 @@ export function lightColor(k: number, out = new THREE.Color()) {
   return out.multiplyScalar(LIGHT_LUMA / Math.max(1e-3, lum(out)))
 }
 const LIGHT_LUMA = 1.05
-/** 全局亮度（%）的范围 */
-export const POWER_MIN = 30
-export const POWER_MAX = 160
-export const DEFAULT_POWER = 100
 /** 点光源照明范围的基础放大倍数（灯具规格里的 distance × 它 × 全局「范围」滑杆） */
 const RANGE_SCALE = 1.5
-/** 全局照明范围（%）的范围 */
-export const RANGE_MIN = 50
-export const RANGE_MAX = 250
-export const DEFAULT_RANGE = 100
-/** 室外光（天光、阳光、月光）强度（%）的范围：调低后室内主要靠灯照明，灯的影子更清楚 */
-export const OUTDOOR_MIN = 0
-export const OUTDOOR_MAX = 150
-export const DEFAULT_OUTDOOR = 100
 
 const smooth = (a: number, b: number, x: number) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)))

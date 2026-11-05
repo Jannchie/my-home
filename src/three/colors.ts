@@ -1,7 +1,7 @@
 // 配色：预设配色 + 每个颜色槽的自定义覆盖。
 
-import type { AssetDef, StyleTag } from './kit'
-import { C, S } from './kit'
+import type { AssetMeta, StyleTag } from './assetMeta'
+import { C, S } from './assetMeta'
 import { basePalette } from './stylePalettes'
 import { t } from '../i18n'
 
@@ -12,12 +12,12 @@ export function slotLabel(i: number) {
 }
 
 /** 素材用到几个颜色槽（各组预设里最长的那组） */
-export function slotCount(def: AssetDef) {
+export function slotCount(def: AssetMeta) {
   return Math.max(1, ...def.palettes.map((p) => p.length))
 }
 
 /** 实际用的配色：预设第 color 组（≥ 1000 为风格派生配色，见 stylePalettes.ts），再用 colors 逐槽覆盖 */
-export function effectivePalette(def: AssetDef, color = 0, colors?: string[]) {
+export function effectivePalette(def: AssetMeta, color = 0, colors?: string[]) {
   const base = basePalette(def, color)
   if (!colors?.length) return base
   const n = Math.max(base.length, colors.length)
@@ -41,7 +41,7 @@ export const SWATCHES: { style: StyleTag | 'basic'; label: string; colors: strin
 ]
 
 /** 从同一风格的色板里随机挑一套（同一套颜色放在一起比较协调） */
-export function randomColors(def: AssetDef, rand = Math.random) {
+export function randomColors(def: AssetMeta, rand = Math.random) {
   const pool = SWATCHES.filter((s) => s.style !== 'basic')
   const set = pool[Math.floor(rand() * pool.length)].colors
   const picked: string[] = []

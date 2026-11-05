@@ -3,7 +3,7 @@
 // 给了预设就不画素材自带的那些发光小片，改用这里按屏幕比例现画一张（同一预设、同样尺寸的屏幕共用一张）。
 // 一键布置按屏幕主人的职业、兴趣、性格挑画面（workstation.ts screenContents）。
 
-import type { AssetDef } from './kit'
+import type { AssetMeta } from './assetMeta'
 import { hasTag } from './tags'
 
 export interface ScreenPreset {
@@ -13,7 +13,7 @@ export interface ScreenPreset {
 }
 
 /** 能换画面的素材：有屏幕面板的（显示器、电视、一体机），以及笔记本、平板 */
-export const hasScreen = (d: AssetDef | undefined) => !!d && (!!d.screens?.length || hasTag(d, 'laptop', 'tablet', 'tv', 'monitor', 'aio-pc'))
+export const hasScreen = (d: AssetMeta | undefined) => !!d && (!!d.screens?.length || hasTag(d, 'laptop', 'tablet', 'tv', 'monitor', 'aio-pc'))
 
 const rect = (ctx: CanvasRenderingContext2D, fill: string, x: number, y: number, w: number, h: number, r = 0) => {
   ctx.fillStyle = fill

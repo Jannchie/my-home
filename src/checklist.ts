@@ -3,7 +3,7 @@
 import { sharedIntervals } from './walls'
 import { edgesOf, pointInPolygon, type BuiltinType, type Furniture, type Plan, type Room } from './model'
 import { cabinetsOn, spotInRoom } from './cabinet'
-import { ASSET_MAP, type AssetDef } from './three/assets'
+import { ASSET_MAP, type AssetMeta } from './three/assetIndex'
 import { JOBS, type Household } from './household'
 import { hasTag, isSleepable, type Sel, type Tag } from './three/tags'
 import { baseFloorId, floorOf, floorViews, isMultiFloor } from './floors'
@@ -57,11 +57,11 @@ export function fixFloor(plan: Plan, it: CheckItem): string | '*' {
 
 const inRoom = (plan: Plan, room: Room) => plan.furniture.filter((f) => pointInPolygon(f, room.points))
 /** 有这些标签（任一）的家具件数 */
-function count(list: Furniture[], tags: Tag | readonly Tag[], filter: (d: AssetDef) => boolean = () => true) {
+function count(list: Furniture[], tags: Tag | readonly Tag[], filter: (d: AssetMeta) => boolean = () => true) {
   const ts = typeof tags === 'string' ? [tags] : tags
   return countIf(list, (d) => hasTag(d, ...ts) && filter(d))
 }
-function countIf(list: Furniture[], ok: (d: AssetDef) => boolean) {
+function countIf(list: Furniture[], ok: (d: AssetMeta) => boolean) {
   return list.filter((f) => {
     const d = ASSET_MAP.get(f.asset)
     return !!d && ok(d)

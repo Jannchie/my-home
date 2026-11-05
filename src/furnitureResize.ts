@@ -1,7 +1,7 @@
 // 拖手柄调家具宽深（3D 沙盘的选中框、平面图的选中家具共用）：左右两侧的手柄改宽（以中心为准，两边一起动），
 // 正面的手柄改深（背面不动）。拖动时只预览，松手才 resizeFurniture 记一次撤销。
 import type { Furniture, Vec } from './model'
-import type { SizeRange } from './three/resize'
+import type { SizeRange } from './three/resizeMeta'
 
 /** 手柄：左 / 右改宽，前改深（家具局部 -x / +x / +z，正面朝 +z） */
 export type ResizeSide = 'left' | 'right' | 'front'

@@ -2,7 +2,8 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, toRaw, watch } from 'vue'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
-import { ASSET_MAP, STYLE_LABELS, type AssetDef, type StyleTag } from '../three/assets'
+import { ASSET_MAP, STYLE_LABELS, type StyleTag } from '../three/assets'
+import type { AssetMeta } from '../three/assetMeta'
 import { lingualKey } from '../three/signLang'
 import { GROUP_NAMES, LIB_ROOMS, ROOM_NAMES_LIB } from '../three/groups'
 import { freezeMatrices, syncMatrix } from '../three/matrices'
@@ -22,10 +23,11 @@ import FloorBar from './FloorBar.vue'
 import FloorRail from './FloorRail.vue'
 import { withStairHoles } from '../stairs'
 import { overlapsOthers, snapFurniture, snapToWall, type Guide } from '../snap'
-import { fitOnSurface, pickSurface, carriedBy, propClash, propsOn, propsOnTop, snapToClip, snapToHook, toLocal, toWorld } from '../surface'
+import { fitOnSurface, carriedBy, propClash, propsOn, propsOnTop, snapToClip, snapToHook, toLocal, toWorld } from '../surface'
+import { pickSurface, pickTub } from '../three/surfacePick'
 import { dentDepth, dentDuvets, duvetsIn, restHeight } from '../three/bedding'
 import { RESIZE_SIDES, dragSize, handleLocal, type ResizeDrag, type ResizeSide } from '../furnitureResize'
-import { pickTub, tubGuides } from '../tubTop'
+import { tubGuides } from '../tubTop'
 import { SHADOW_RADIUS, createStage, fitSun, frameCamera, setStageQuality, setStageScale, type Stage } from '../three/stage'
 import { DynRes } from '../three/dynRes'
 import { attachPost, hueSwatch, LOOKS, LOOK_MAP, lookValue, REAL_LIGHTING, resolveLook, type LookAdjust, type LookAdjustKey, type LookId, type Post } from '../three/post'
@@ -2945,7 +2947,7 @@ function resetSelectedSize() {
 
 /** 选中家具的同类各款（原地换款）：缩略图按家具现在的配色序号画（超出新款的配色数就用第一组） */
 const selectedVariants = computed(() => (selectedDef.value ? sameTypeVariants(selectedDef.value) : []))
-const variantColor = (d: AssetDef) => ((selectedFurniture.value?.color ?? 0) < d.palettes.length ? (selectedFurniture.value?.color ?? 0) : 0)
+const variantColor = (d: AssetMeta) => ((selectedFurniture.value?.color ?? 0) < d.palettes.length ? (selectedFurniture.value?.color ?? 0) : 0)
 function swapVariant(asset: string) {
   const f = selectedFurniture.value
   if (f) swapFurnitureVariant(f.id, asset)
@@ -3015,8 +3017,8 @@ function randomFloor() {
 /** 家具换风格（保持布局）：范围和墙纸、地板共用；auto = 按房间（主人 / 全家的风格） */
 const restyleTo = ref<StyleTag | 'auto' | 'random'>('auto')
 const restyleMsg = ref('')
-function runRestyle() {
-  const n = restyle(wpRoom.value?.id ?? null, restyleTo.value)
+async function runRestyle() {
+  const n = await restyle(wpRoom.value?.id ?? null, restyleTo.value)
   restyleMsg.value = n ? t('换了 {n} 件家具', { n }) : t('没有可以换的家具')
 }
 watch([wpRoomId, restyleTo], () => (restyleMsg.value = ''))

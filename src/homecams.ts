@@ -8,7 +8,7 @@
 // 数量受素材的 limit 约束（宠物摄像头全屋 2 台、安防 2 台、婴儿监视器各 1…）。由 decorate.ts 的 Decorator 在 robots() 之后调用。
 
 import { add, dist, edgeInfo, mul, pointInPolygon, type Box, type Furniture, type Plan, type Region, type Room, type Vec } from './model'
-import { ASSET_MAP, type AssetDef, type StyleTag } from './three/assets'
+import { ASSET_MAP, type AssetMeta, type StyleTag } from './three/assetIndex'
 import { toWorld } from './surface'
 import { wallThicknessAt } from './walls'
 import type { Household, InterestId, Member } from './household'
@@ -40,7 +40,7 @@ export interface CamCtx {
 
 const def = (f: Furniture) => ASSET_MAP.get(f.asset)
 /** 宠物活动区：宠物分类的落地物（窝、爬架、猫砂盆、笼子、围栏、会走动的宠物），不含机器宠物和水族箱 */
-const isPetSpot = (d?: AssetDef) => !!d && d.category === 'pets' && !d.prop && !d.mount && !d.id.startsWith('rb-') && !hasTag(d, 'aquarium')
+const isPetSpot = (d?: AssetMeta) => !!d && d.category === 'pets' && !d.prop && !d.mount && !d.id.startsWith('rb-') && !hasTag(d, 'aquarium')
 /** 朝向：让素材正面（+z）朝向世界方向 v 的 rot（度） */
 const rotToward = (v: Vec) => ((Math.atan2(-v.x, v.y) * 180) / Math.PI + 360) % 360
 

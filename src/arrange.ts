@@ -12,7 +12,7 @@
 
 import { add, bbox, dist, mul, openingsOn, pointInPolygon, type Box, type Fixture, type Plan, type Room, type Vec } from './model'
 import { boxInsideWalls, isSashWindow, placeCandidates, type PlaceSpec } from './place'
-import { ASSET_MAP } from './three/assets'
+import { ASSET_MAP } from './three/assetIndex'
 import { hasTag } from './three/tags'
 import { HARD_ZONES, boxesOverlap, footprint, type Occupancy, type PassageGrid, type WallFace } from './occupancy'
 

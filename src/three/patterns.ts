@@ -1242,3 +1242,21 @@ export function randomPattern(colors: string[], rand: () => number = Math.random
   }
   return spec
 }
+
+/** 花纹的缓存键（同样参数画出来一样） */
+export const patternKey = (s: PatternSpec) => JSON.stringify([s.kind, s.colors, s.angle ?? 0, s.density ?? 0.5, s.seed ?? 0, s.plainRatio ?? 0.3, s.pieces ?? 4])
+
+/** 花纹的小预览图（UI 用） */
+const previewCache = new Map<string, string>()
+export function patternPreview(spec: PatternSpec, size = 48) {
+  const key = patternKey(spec) + size
+  let url = previewCache.get(key)
+  if (!url) {
+    const cv = document.createElement('canvas')
+    cv.width = cv.height = size
+    drawPattern(cv.getContext('2d')!, spec, size)
+    url = cv.toDataURL()
+    previewCache.set(key, url)
+  }
+  return url
+}

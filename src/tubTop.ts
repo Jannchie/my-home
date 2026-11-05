@@ -11,18 +11,16 @@
 // 放得下的就是「浴缸上的东西」：不按素材 id 列名单，任何能横跨压上边沿的摆件都适用（瓶子之类小东西中心落在水面上，放不上，还是走普通台面逻辑）。
 // 手动摆放（Sandbox3D locate）和自动布置（decorate.ts bathLid）共用 tubTopPose，两边算出来的位置一致。
 
-import * as THREE from 'three'
-import { fixtureDepth, type Fixture, type Plan, type Vec } from './model'
+import { fixtureDepth, type Fixture, type Vec } from './model'
 import type { Guide } from './snap'
 import { fitsOnFixture, fixtureTop, toLocal, toWorld } from './surface'
-import { ASSET_MAP } from './three/assets'
-import { lidSizeFor } from './three/packs/bath-extra'
-import { floorY, roomAt } from './three/house'
+import { ASSET_MAP } from './three/assetIndex'
+import { lidSizeFor } from './three/bathLids'
 
 /** 离浴缸一端多近（cm）就吸到那一端 */
 export const TUB_END_SNAP = 12
 /** 指针在浴缸外沿外多远以内还算指着浴缸 */
-const TUB_REACH = 8
+export const TUB_REACH = 8
 
 export interface TubPose {
   x: number
@@ -78,30 +76,6 @@ export function tubTopPose(tub: Fixture, asset: string, p: Vec, rot = tub.rot): 
     if (fitsOnFixture(tub, asset, pose.x, pose.y, pose.rot)) return pose
   }
   return null
-}
-
-/**
- * 射线指着哪个浴缸：和浴缸边沿高度的水平面求交，交点在浴缸外沿（放宽 TUB_REACH）里就算；
- * 返回吸附后的位置和射线距离 t（和 pickSurface 的 t 可比），都没指着、或摆件放不上去返回 null。
- */
-export function pickTub(plan: Plan, ray: THREE.Ray, asset: string, rot: number): (TubPose & { t: number }) | null {
-  let best: (TubPose & { t: number }) | null = null
-  const hit = new THREE.Vector3()
-  for (const tub of plan.fixtures) {
-    if (!isRimTub(tub)) continue
-    const top = fixtureTop(tub)
-    if (top === null) continue
-    const y = floorY(roomAt(plan, tub)) + top
-    if (!ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -y), hit)) continue
-    const p = { x: hit.x, y: hit.z }
-    const l = toLocal(tub, p)
-    if (Math.abs(l.x) > tub.w / 2 + TUB_REACH || Math.abs(l.y) > fixtureDepth(tub) / 2 + TUB_REACH) continue
-    const pose = tubTopPose(tub, asset, p, rot)
-    if (!pose) continue
-    const t = hit.distanceTo(ray.origin)
-    if (!best || t < best.t) best = { ...pose, t }
-  }
-  return best
 }
 
 /** 吸到浴缸上时的提示线：沿浴缸长边的中线（浴缸摆正时才画，参考线只有横竖两种） */

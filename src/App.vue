@@ -88,8 +88,8 @@ const touchHints: Partial<Record<Tool, string>> = {
 
 async function doGenerate(newSeed = true) {
   // 生成（含自动布置）要算一会儿：先画出「处理中」，生成完报一下户型名
-  await runBusy(t(sandbox.autoFurnish ? '正在生成户型并布置家具…' : '正在生成户型…'), () => {
-    generate(newSeed)
+  await runBusy(t(sandbox.autoFurnish ? '正在生成户型并布置家具…' : '正在生成户型…'), async () => {
+    await generate(newSeed)
     detachSaved()
   })
   canvas.value?.fit()

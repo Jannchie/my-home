@@ -18,9 +18,7 @@
 // 不生成派生配色的素材：绿植（叶子颜色本身就是固有色）、会动的角色（宠物、机器人：毛色 / 机身色）。
 
 import { fnv1a } from '../hash'
-import * as THREE from 'three'
-import type { AssetDef, StyleTag } from './kit'
-import { disposeUnshared } from './toon'
+import type { AssetMeta, SlotProbe, StyleTag } from './assetMeta'
 import { LEGACY_FAMILY } from './family.legacy'
 
 /** 风格序号：派生配色编号 = 1000 + 序号。只能往后追加，绝不调整顺序 */
@@ -38,7 +36,7 @@ export const derivedStyle = (color: number): StyleTag | undefined => STYLE_ORDER
 export const derivedVariant = (color: number) => Math.floor((color - DERIVED_BASE) / VARIANT_STRIDE)
 
 /** 原生第 i 组配色的风格 */
-export const nativeStyle = (def: AssetDef, i: number): StyleTag => def.paletteStyles?.[i] ?? def.styles?.[0] ?? 'cute'
+export const nativeStyle = (def: AssetMeta, i: number): StyleTag => def.paletteStyles?.[i] ?? def.styles?.[0] ?? 'cute'
 
 // ───────────────────────── 风格色板（数据） ─────────────────────────
 
@@ -161,7 +159,7 @@ function parseHex(c: string): [number, number, number] | null {
   return null
 }
 
-function toHsl(c: string): HSL | null {
+export function toHsl(c: string): HSL | null {
   const rgb = parseHex(c)
   if (!rgb) return null
   const [r, g, b] = rgb.map((v) => v / 255)
@@ -177,7 +175,7 @@ function toHsl(c: string): HSL | null {
   return { h, s, l }
 }
 
-function fromHsl({ h, s, l }: HSL): string {
+export function fromHsl({ h, s, l }: HSL): string {
   const c = (1 - Math.abs(2 * l - 1)) * s
   const x = c * (1 - Math.abs(((h / 60) % 2) - 1))
   const m = l - c / 2
@@ -187,7 +185,7 @@ function fromHsl({ h, s, l }: HSL): string {
 }
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v))
-const hueDist = (a: number, b: number) => {
+export const hueDist = (a: number, b: number) => {
   const d = Math.abs(a - b) % 360
   return d > 180 ? 360 - d : d
 }
@@ -195,90 +193,23 @@ const hueDist = (a: number, b: number) => {
 
 // ───────────────────────── 探针：每个槽实际用在哪 ─────────────────────────
 
-/** keep = 保持原色（发光 / 玻璃 / 只进贴图）；share = 该槽占模型的面积比例 */
-interface SlotProbe {
-  keep: boolean
-  share: number
+
+type LiveProbe = (def: AssetMeta, n: number) => SlotProbe[]
+let liveProbe: LiveProbe | null = null
+/** 完整素材加载时（assets.ts）装上真正去 build 模型的探针（paletteProbe.ts）；本模块因此不依赖 three.js */
+export const setLiveProbe = (f: LiveProbe) => void (liveProbe = f)
+
+/**
+ * 每个槽的探针结果：元数据快照里预先算好的（slotProbe）优先，否则现场 build 一次（结果由 paletteProbe 按素材缓存）；
+ * 两样都没有（只有快照、又没算探针的素材，正常不会出现）时按普通槽、平均占比处理
+ */
+function probe(def: AssetMeta, n: number): SlotProbe[] {
+  return def.slotProbe ?? liveProbe?.(def, n) ?? Array.from({ length: n }, () => ({ keep: false, share: 1 / n }))
 }
 
-const probeCache = new Map<string, SlotProbe[]>()
-
-/** 统计一个网格的面积（世界坐标），作为权重 */
-function meshArea(m: THREE.Mesh) {
-  const geo = m.geometry
-  const pos = geo.attributes.position as THREE.BufferAttribute | undefined
-  if (!pos) return 0
-  const idx = geo.index
-  const a = new THREE.Vector3()
-  const b = new THREE.Vector3()
-  const c = new THREE.Vector3()
-  const n = idx ? idx.count : pos.count
-  // 大网格抽样，够用了
-  const step = Math.max(1, Math.floor(n / 3 / 400)) * 3
-  let sum = 0
-  for (let i = 0; i + 2 < n; i += step) {
-    const i0 = idx ? idx.getX(i) : i
-    const i1 = idx ? idx.getX(i + 1) : i + 1
-    const i2 = idx ? idx.getX(i + 2) : i + 2
-    a.fromBufferAttribute(pos, i0).applyMatrix4(m.matrixWorld)
-    b.fromBufferAttribute(pos, i1).applyMatrix4(m.matrixWorld)
-    c.fromBufferAttribute(pos, i2).applyMatrix4(m.matrixWorld)
-    sum += b.sub(a).cross(c.sub(a)).length() / 2
-  }
-  return (sum * step) / 3
-}
-
-/** 用哨兵色 build 一次，看每个槽落在哪类材质上 */
-function probe(def: AssetDef, n: number): SlotProbe[] {
-  const hit = probeCache.get(def.id)
-  if (hit) return hit
-  const hues = Array.from({ length: n }, (_, i) => (17 + (i * 360) / n) % 360)
-  const sentinel = hues.map((h) => fromHsl({ h, s: 0.92, l: 0.5 }))
-  const tpl = def.palettes[0] ?? []
-  const pal = sentinel.map((c, i) => (tpl[i] === '' ? '' : c))
-  const area = new Array<number>(n).fill(0)
-  const keepArea = new Array<number>(n).fill(0)
-  let total = 0
-  let g: THREE.Object3D | null = null
-  try {
-    g = def.build(pal)
-    g.updateMatrixWorld(true)
-    g.traverse((o) => {
-      const m = o as THREE.Mesh
-      if (!m.isMesh) return
-      const mats = (Array.isArray(m.material) ? m.material : [m.material]) as (THREE.Material & { color?: THREE.Color; emissive?: THREE.Color; emissiveIntensity?: number })[]
-      const w = meshArea(m)
-      total += w
-      for (const mat of mats) {
-        if (!mat?.color) continue
-        // 用 sRGB 十六进制再换 HSL（getHSL 默认在线性工作空间里算，色相会偏）
-        const hsl = toHsl('#' + mat.color.getHexString())!
-        if (hsl.s < 0.45 || hsl.l < 0.12 || hsl.l > 0.9) continue
-        const h = hsl.h
-        let best = -1
-        let bd = Math.min(8, 360 / n / 3)
-        hues.forEach((hh, i) => {
-          const d = hueDist(h, hh)
-          if (d < bd) (bd = d), (best = i)
-        })
-        if (best < 0) continue
-        const ww = w / mats.length
-        area[best] += ww
-        const glowing = !!mat.emissive && (mat.emissiveIntensity ?? 0) > 0 && mat.emissive.getHex() !== 0
-        const basic = (mat as THREE.Material).type === 'MeshBasicMaterial'
-        const glass = mat.transparent && mat.opacity < 0.9
-        if (glowing || basic || glass) keepArea[best] += ww
-      }
-    })
-  } catch {
-    // build 不认哨兵色（极少数）：全部按普通槽处理
-  } finally {
-    if (g) disposeUnshared(g)
-  }
-  const used = area.reduce((s, v) => s + v, 0) || 1
-  const out = area.map((a, i) => ({ keep: a <= 0 ? !!g && total > 0 : keepArea[i] / a > 0.5, share: a / used }))
-  probeCache.set(def.id, out)
-  return out
+/** 素材派生配色要用的探针（不能派生的返回 undefined）：生成元数据快照时预先算好存进 slotProbe */
+export function slotProbeFor(def: AssetMeta): SlotProbe[] | undefined {
+  return canDerive(def) ? probe(def, Math.max(1, ...def.palettes.map((p) => p.length))) : undefined
 }
 
 // ───────────────────────── 角色映射 ─────────────────────────
@@ -306,19 +237,19 @@ const FOOD_RE = /popcorn|ginger|fruit|veget|爆米花|生姜|水果|蔬菜/
 const LEAFY_RE = /wreath|plant|leaf|tree|flower|bonsai|sprout|herb|garland|moss|cactus|succulent|bouquet|ikebana|花环|花|叶|树|草|盆栽|绿植/
 
 /** 绿植、角色（宠物 / 机器人）、设备、以食物为主体的素材不派生 */
-export function canDerive(def: AssetDef) {
+export function canDerive(def: AssetMeta) {
   return def.category !== 'plants' && !def.actor && !def.fixture && !FOOD_RE.test(def.id + def.name) && def.palettes.some((p) => p.some(Boolean))
 }
 
 /** 某风格的派生配色有几套：原生 + 派生凑够 MIN_PER_STYLE（不能派生的素材为 0） */
-export function derivedCount(def: AssetDef, style: StyleTag) {
+export function derivedCount(def: AssetMeta, style: StyleTag) {
   if (!canDerive(def)) return 0
   const native = def.palettes.filter((_, i) => nativeStyle(def, i) === style).length
   return Math.max(0, MIN_PER_STYLE - native)
 }
 
 /** 派生用的模板：最接近目标风格的一组原生配色 */
-function templateIndex(def: AssetDef, style: StyleTag) {
+function templateIndex(def: AssetMeta, style: StyleTag) {
   for (const s of TEMPLATE_PREF[style]) {
     const i = def.palettes.findIndex((_, k) => nativeStyle(def, k) === s)
     if (i >= 0) return i
@@ -331,7 +262,7 @@ const derivedCache = new Map<string, string[]>()
 /**
  * 某风格的派生配色（确定性，按素材缓存）。不能派生的素材（绿植、角色）返回该风格的原生配色或第 0 组。
  */
-export function derivedPalette(def: AssetDef, style: StyleTag, variant = 0): string[] {
+export function derivedPalette(def: AssetMeta, style: StyleTag, variant = 0): string[] {
   const key = `${def.id}|${style}|${variant}`
   const hit = derivedCache.get(key)
   if (hit) return hit
@@ -348,9 +279,9 @@ export function derivedPalette(def: AssetDef, style: StyleTag, variant = 0): str
  * 派生配色的分组键：同一组的素材抽到同一套风格色板。迁移前用的是旧系列字段 family（没有就用 id），
  * family 删除后冻结在 LEGACY_FAMILY 里，保证已有素材的派生配色逐个不变；新素材按 id。
  */
-export const paletteKey = (def: AssetDef) => LEGACY_FAMILY[def.id] ?? def.id
+export const paletteKey = (def: AssetMeta) => LEGACY_FAMILY[def.id] ?? def.id
 
-function recolor(def: AssetDef, style: StyleTag, variant = 0): string[] {
+function recolor(def: AssetMeta, style: StyleTag, variant = 0): string[] {
   const tpl = def.palettes[templateIndex(def, style)] ?? def.palettes[0] ?? []
   const n = Math.max(1, ...def.palettes.map((p) => p.length))
   const kits = STYLE_KITS[style]
@@ -428,7 +359,7 @@ export interface PaletteEntry {
 }
 
 /** 某个编号对应的基础配色（原生下标或派生编号；越界的原生下标取模，未知的派生编号回落到第 0 组） */
-export function basePalette(def: AssetDef, color = 0): string[] {
+export function basePalette(def: AssetMeta, color = 0): string[] {
   if (isDerived(color)) {
     const st = derivedStyle(color)
     return st ? derivedPalette(def, st, derivedVariant(color)) : (def.palettes[0] ?? [])
@@ -437,19 +368,19 @@ export function basePalette(def: AssetDef, color = 0): string[] {
 }
 
 /** 编号对应的风格 */
-export function paletteStyleOf(def: AssetDef, color = 0): StyleTag {
+export function paletteStyleOf(def: AssetMeta, color = 0): StyleTag {
   if (isDerived(color)) return derivedStyle(color) ?? nativeStyle(def, 0)
   return nativeStyle(def, color % Math.max(1, def.palettes.length))
 }
 
 /** 规范化编号：原生下标取模；派生编号原样（风格未知时回 0） */
-export function normalizeColor(def: AssetDef, color = 0): number {
+export function normalizeColor(def: AssetMeta, color = 0): number {
   if (isDerived(color)) return derivedStyle(color) ? color : 0
   return color % Math.max(1, def.palettes.length)
 }
 
 /** 全部可选配色：原生在前（按原顺序），每种风格用派生配色补够 MIN_PER_STYLE 套（和已有的重复的跳过） */
-export function allPalettes(def: AssetDef): PaletteEntry[] {
+export function allPalettes(def: AssetMeta): PaletteEntry[] {
   const out: PaletteEntry[] = def.palettes.map((colors, i) => ({ index: i, style: nativeStyle(def, i), colors, derived: false }))
   const seen = new Set(out.map((e) => e.colors.join()))
   for (const st of STYLE_ORDER)
@@ -467,7 +398,7 @@ export function allPalettes(def: AssetDef): PaletteEntry[] {
  * 在某风格的全部配色（原生 + 派生补齐的几套）里按 r（0..1）挑一个编号；这个风格一套都没有返回 null。
  * 只按套数抽编号、不算出派生配色的颜色（要先探测一遍模型）：一键布置、换风格时每件都调，颜色在显示时才生成
  */
-export function pickStyleColor(def: AssetDef, style: StyleTag, r: number): number | null {
+export function pickStyleColor(def: AssetMeta, style: StyleTag, r: number): number | null {
   const native = def.palettes.map((_, i) => i).filter((i) => nativeStyle(def, i) === style)
   const total = native.length + derivedCount(def, style)
   if (!total) return null
@@ -476,10 +407,10 @@ export function pickStyleColor(def: AssetDef, style: StyleTag, r: number): numbe
 }
 
 /** 可选配色的个数（原生 + 派生） */
-export const paletteCount = (def: AssetDef) => allPalettes(def).length
+export const paletteCount = (def: AssetMeta) => allPalettes(def).length
 
 /** 素材支持的风格（造型 + 原生配色 + 派生配色） */
-export function styleSet(def: AssetDef): Set<StyleTag> {
+export function styleSet(def: AssetMeta): Set<StyleTag> {
   const out = new Set<StyleTag>(def.styles ?? [])
   def.palettes.forEach((_, i) => out.add(nativeStyle(def, i)))
   if (canDerive(def)) for (const st of STYLE_ORDER) out.add(st)
@@ -487,7 +418,7 @@ export function styleSet(def: AssetDef): Set<StyleTag> {
 }
 
 /** 某风格优先用的编号：原生第一组 → 派生 → 0 */
-export function preferredColor(def: AssetDef, style: StyleTag): number {
+export function preferredColor(def: AssetMeta, style: StyleTag): number {
   const i = def.palettes.findIndex((_, k) => nativeStyle(def, k) === style)
   if (i >= 0) return i
   return canDerive(def) ? derivedIndex(style) : 0

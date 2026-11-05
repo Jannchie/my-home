@@ -12,6 +12,8 @@ import { C, G, rectPoly, type AssetCategory, type AssetDef } from '../kit'
 import { PI, cylXLegacy, cylZLegacy } from '../geo'
 import { I, J, M, N, R, define, type Build, type Dims, type Pal } from '../packkit'
 import { SHOWER_PALS, showerModel } from '../shower'
+import { LID_D, LID_W } from '../bathLids'
+export { lidSizeFor } from '../bathLids'
 
 const prop = (id: string, name: string, category: AssetCategory, dims: Dims, pals: Pal[], build: Build, extra: Partial<AssetDef> = {}) =>
   define(id, name, category, dims, pals, build, { prop: true, ...extra })
@@ -100,15 +102,6 @@ function lidRolledSmall(p: string[]) {
     g.add(torus(8.2, 0.42, strap, { x: s * 19, y: cy, ry: PI / 2 }))
   }
   return g
-}
-
-const LID_W = [110, 120, 130, 140, 150, 160, 170, 180]
-const LID_D = [60, 70]
-/** 浴缸外尺寸 w × d 能用的盖子规格（盖子不大于浴缸，至多小 12）；没有合适的返回 null */
-export function lidSizeFor(w: number, d: number) {
-  const lw = [...LID_W].reverse().find((x) => x <= w && x >= w - 12)
-  const ld = [...LID_D].reverse().find((x) => x <= d && x >= d - 12)
-  return lw && ld ? { w: lw, d: ld } : null
 }
 
 const LIDS: AssetDef[] = LID_W.flatMap((w) =>

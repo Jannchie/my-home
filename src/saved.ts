@@ -16,7 +16,6 @@ import { planArea } from './generate'
 import { lang, t } from './i18n'
 import { uid, type Plan } from './model'
 import { autosave, bootFresh, historyState, normalizePlan, plan, planRev, replacePlan, sandbox } from './store'
-import { planThumbnail } from './three/planThumb'
 
 // ---------- 数据结构 ----------
 
@@ -292,7 +291,8 @@ export async function saveCurrent(opts: { name?: string; asNew?: boolean } = {})
     const p = JSON.parse(json) as Plan
     const name = (opts.name ?? prev?.name ?? p.name).trim() || p.name || t('未命名户型')
     const now = Date.now()
-    const thumb = await planThumbnail(p, sandbox.wallHeight, true).catch(() => null)
+    // 缩略图要渲染 3D：按需加载（平面图首屏不带 three.js）
+    const thumb = await import('./three/planThumb').then((m) => m.planThumbnail(p, sandbox.wallHeight, true)).catch(() => null)
     const meta: SavedMeta = { ...summarize(p, name), id, createdAt: prev?.createdAt ?? now, updatedAt: now, ...(thumb ? { thumb } : {}) }
     await tx(['plans', 'plan-data'], 'readwrite', (s) => {
       s.plans.put(meta)

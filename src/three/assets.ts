@@ -13,6 +13,10 @@ import { soft, type SoftFn } from './geo'
 import { applyDims, warnIfDimsStale } from './dims'
 import { DIMS } from './dims.generated'
 import { deriveResized } from './resize'
+import { setLiveProbe } from './stylePalettes'
+import { probeLive } from './paletteProbe'
+import { ASSETS as REG_ASSETS, ASSET_MAP as REG_MAP, registerAssets } from './assetRegistry'
+import type { AssetMeta } from './assetMeta'
 import { GENERATED_TAGS } from './tags.generated'
 import { TAXONOMY } from './taxonomy.generated'
 
@@ -1360,7 +1364,7 @@ const bedColors = (i: number) =>
     retro: [[R.mustard, R.cream, R.caramel]],
   })
 
-export const ASSETS: AssetDef[] = [
+const DEFS: AssetDef[] = [
   { id: 'sofa2', name: '沙发', sizeLabel: '双人', category: 'living', w: 170, d: 86, h: 80, ...sofaColors, build: (p) => sofa(170, p) },
   { id: 'sofa3', name: '沙发', sizeLabel: '三人', category: 'living', w: 210, d: 86, h: 80, ...sofaColors, build: (p) => sofa(210, p) },
   { id: 'armchair', name: '单人沙发', category: 'living', w: 80, d: 80, h: 80, ...sofaColors, build: armchair },
@@ -1590,10 +1594,11 @@ export const ASSETS: AssetDef[] = [
   { id: 'fx-outdoor', name: '空调外机', category: 'appliance', w: 80, d: 30, h: 60, palettes: [[]], build: () => outdoorUnitModel(80, 30), fixture: true },
 ]
 
-ASSETS.push(...PACKS)
+DEFS.push(...PACKS)
 
 // 语义标签：def 里写的 + 迁移生成的初始表（tags.generated.ts），合并去重
-for (const a of ASSETS) {
+for (const a of DEFS) {
+  if (a.resize) a.ownResize = true
   const g = GENERATED_TAGS[a.id]
   if (g) a.tags = a.tags ? [...new Set([...a.tags, ...g])] : [...g]
   // 细分类型 / 同款系列：def 里写了的优先，否则用迁移生成的（taxonomy.generated.ts）；没有系列的自成一款
@@ -1616,21 +1621,19 @@ for (const a of ASSETS) {
 }
 
 // 尺寸校正：实测比声明大的放大、陷地的抬起（预计算结果见 dims.generated.ts，由 pnpm gen:dims 生成；规则见 dims.ts）
-applyDims(ASSETS, DIMS)
+applyDims(DEFS, DIMS)
 
+// 派生配色的探针改成现场 build（元数据快照里的素材带着预先算好的结果）
+setLiveProbe((d, n) => probeLive(d as AssetDef, n))
+// 登记进全局素材表（assetRegistry.ts）：平面图那边拿着的同一张表从此换成完整素材
+registerAssets(DEFS, deriveResized as (id: string, lookup: (id: string) => AssetMeta | undefined) => AssetMeta | undefined, true)
+/** 全部原素材（改过宽深的派生素材不在里面） */
+export const ASSETS = REG_ASSETS as AssetDef[]
 /** 素材表：改过宽深的家具（`原 id@宽x深`，resize.ts）查的时候现场派生，不放进表里（遍历只有原素材） */
-class AssetMap extends Map<string, AssetDef> {
-  override get(id: string) {
-    return super.get(id) ?? (id.includes('@') ? deriveResized(id, (b) => super.get(b)) : undefined)
-  }
-  override has(id: string) {
-    return !!this.get(id)
-  }
-}
-export const ASSET_MAP: Map<string, AssetDef> = new AssetMap(ASSETS.map((a) => [a.id, a]))
+export const ASSET_MAP = REG_MAP as Map<string, AssetDef>
 if (import.meta.env.DEV && ASSET_MAP.size !== ASSETS.length) {
   const seen = new Set<string>()
-  console.warn('素材 id 重复：', ASSETS.filter((a) => seen.has(a.id) || !seen.add(a.id)).map((a) => a.id))
+  console.warn('素材 id 重复：', DEFS.filter((a) => seen.has(a.id) || !seen.add(a.id)).map((a) => a.id))
 }
 
 /** 仅开发环境：检查 dims.generated.ts 是否过期（只告警，不改数据） */

@@ -7,8 +7,8 @@
 import { poseOnSpot } from './appliance'
 import { fixtureDepth, pointInPolygon, uid, type BuiltinType, type Fixture, type Furniture, type Plan } from './model'
 import { levels, propsOn, toLocal, toWorld } from './surface'
-import { ASSET_MAP, type AssetDef } from './three/assets'
-import { baseAssetId, resizedId } from './three/resize'
+import { ASSET_MAP, type AssetMeta } from './three/assetIndex'
+import { baseAssetId, resizedId } from './three/resizeMeta'
 import type { Tag } from './three/tags'
 
 /** 各种收纳位上算作「那件柜子」的细分类型 */
@@ -17,7 +17,7 @@ export const SPOT_CABINET_TYPES: Record<BuiltinType, Tag[]> = { shoe: ['shoe-sto
 const spotType = (fx: Fixture): BuiltinType => fx.builtinType ?? 'shoe'
 
 /** 这件素材能不能开合（有柜门 / 抽屉） */
-export const isOpenable = (def: AssetDef | undefined) => !!def?.openable
+export const isOpenable = (def: AssetMeta | undefined) => !!def?.openable
 
 /** 这件家具是不是能放在这种收纳位上的柜子 */
 export function isCabinetFor(f: Pick<Furniture, 'asset'>, type: BuiltinType) {
@@ -26,7 +26,7 @@ export function isCabinetFor(f: Pick<Furniture, 'asset'>, type: BuiltinType) {
 }
 
 /** 柜子放得进收纳位：宽不超过位宽；深可以比位深出 8cm 以内（嵌墙的壁龛前面略凸出来，和现实一样） */
-export function fitsSpot(def: AssetDef, fx: Fixture) {
+export function fitsSpot(def: AssetMeta, fx: Fixture) {
   return def.w <= fx.w + 1 && def.d <= fixtureDepth(fx) + 8
 }
 
@@ -129,7 +129,7 @@ const LEGACY_COLORS: Record<BuiltinType, string[]> = {
  * 把一款柜子定制成正好填满收纳位（resize.ts 的派生 id）：宽 = 位宽；比位浅的加深到位深，本来就只比位深出 8 以内的（fitsSpot 允许的）
  * 保持原来的深度，更深的减到位深。调不了、夹到可调范围后放不进返回 undefined
  */
-export function fitToSpot(def: AssetDef, fx: Fixture): AssetDef | undefined {
+export function fitToSpot(def: AssetMeta, fx: Fixture): AssetMeta | undefined {
   const base = ASSET_MAP.get(baseAssetId(def.id)) ?? def
   const sd = fixtureDepth(fx)
   const fit = ASSET_MAP.get(resizedId(base, fx.w, base.d > sd && base.d <= sd + 8 ? base.d : sd))
@@ -140,7 +140,7 @@ export function fitToSpot(def: AssetDef, fx: Fixture): AssetDef | undefined {
  * 收纳位上放这批候选（同一系列 / 同类）里的哪件：优先拿宽度最接近位宽的一档定制成正好填满位（任意宽度的位都不留缝）；
  * 都调不了就取放得进的最宽一档；都放不进返回 undefined
  */
-export function fitIn(fx: Fixture, cands: AssetDef[]): AssetDef | undefined {
+export function fitIn(fx: Fixture, cands: AssetMeta[]): AssetMeta | undefined {
   const near = [...cands].sort((a, b) => Math.abs(a.w - fx.w) - Math.abs(b.w - fx.w))
   for (const d of near) {
     const fit = fitToSpot(d, fx)

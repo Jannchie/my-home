@@ -7,26 +7,8 @@ import type * as THREE from 'three'
 import type { AssetDef, Poly, StyleTag } from '../kit'
 import { fridgeModel, washerModel, wineCoolerModel, type FridgeStyle, type WasherStyle } from '../appliances'
 
-/** 机身配色：[风格, 颜色, 名字]。以前设备的 10 种颜色（APPLIANCE_COLORS）原样在前面，旧存档迁移按颜色精确匹配 */
-export const APPLIANCE_PALETTES: [StyleTag, string, string][] = [
-  ['modern', '#f6f6f3', '白'],
-  ['modern', '#c9ccd1', '银'],
-  ['industrial', '#8a8d93', '深灰'],
-  ['industrial', '#2f3134', '黑'],
-  ['classic', '#e8d9bf', '香槟'],
-  ['nordic', '#efe4d0', '米'],
-  ['cute', '#bfe8d8', '薄荷'],
-  ['cute', '#f6c9d2', '粉'],
-  ['cute', '#cfe3f2', '天蓝'],
-  ['retro', '#f3e3a6', '柠檬'],
-  ['japanese', '#f4eee2', '奶油白'],
-  ['chinese', '#f2eadb', '象牙白'],
-  ['chinese', '#d9c39a', '香槟金'],
-  ['farmhouse', '#b9c9b0', '鼠尾草绿'],
-  ['farmhouse', '#f1ece2', '做旧白'],
-  ['retro', '#d9574b', '复古红'],
-  ['nordic', '#b9c8d6', '雾蓝'],
-]
+export { APPLIANCE_PALETTES } from '../appliancePalettes'
+import { APPLIANCE_PALETTES } from '../appliancePalettes'
 
 const PALETTES = APPLIANCE_PALETTES.map(([, c]) => [c])
 const PALETTE_STYLES = APPLIANCE_PALETTES.map(([s]) => s)

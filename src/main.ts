@@ -3,7 +3,6 @@ import { JIconPlugin } from '@jannchie/icons-vue'
 import App from './App.vue'
 import './style.css'
 import { lang, loadLang } from './i18n'
-import { checkDimsFresh } from './three/assets'
 import './ui/device'
 import { registerSW } from './ui/pwa'
 
@@ -15,7 +14,7 @@ loadLang(lang.value).then(() =>
     .mount('#app'),
 )
 
-// 开发环境：空闲时检查预计算的素材尺寸修正（dims.generated.ts）是否过期，过期只告警
-checkDimsFresh()
+// 开发环境：检查预计算的素材尺寸修正（dims.generated.ts）是否过期，过期只告警（生产构建里整段去掉，不拉完整素材）
+if (import.meta.env.DEV) import('./three/assets').then((m) => m.checkDimsFresh())
 // PWA：生产环境注册 service worker（离线可用、有新版本时提示刷新）
 registerSW()

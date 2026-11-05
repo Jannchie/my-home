@@ -2,22 +2,19 @@ import { computed, reactive, ref, toRaw, watch } from 'vue'
 import { orientDoors } from './doors'
 import { migrateAppliances } from './appliance'
 import { migrateCabinets, migrateOpenForms, setOpen } from './cabinet'
-import { applyFixesHouse, decorateHouse, roomStyles } from './decorate'
-import { autoWallpapers } from './wallpaper'
 import { mergeWallFaces, normalizeWallFaces, patchWallFace, splitWallFace, wallFace } from './wallFace'
 import { reseatOnBeam, seatOnBeams } from './beamMount'
 import type { CheckItem } from './checklist'
 import { generateHousehold } from './household'
 import { carriedBy } from './surface'
 import { applyFixtureCarry, captureFixtureProps, mirrorFixtureCarry } from './fixtureCarry'
-import { ASSET_MAP, STYLE_LABELS } from './three/assets'
+import { ASSET_MAP, STYLE_LABELS, loadAssets } from './three/assetIndex'
 import { fitResize } from './resizeFit'
-import { furnitureRoom, restyleFurniture } from './restyle'
-import type { StyleTag } from './three/kit'
+import type { StyleTag } from './three/assetMeta'
 import type { LookAdjust } from './three/post'
 import type { PatternSpec } from './three/patterns'
-import { CITIES, DEFAULT_GEO, type Geo } from './three/sky'
-import { DEFAULT_KELVIN, DEFAULT_OUTDOOR, DEFAULT_POWER, DEFAULT_RANGE, OUTDOOR_MAX, OUTDOOR_MIN, POWER_MAX, POWER_MIN, RANGE_MAX, RANGE_MIN, clampKelvin, isLightMode, type LightMode } from './three/lights'
+import { CITIES, DEFAULT_GEO, type Geo } from './three/cities'
+import { DEFAULT_KELVIN, DEFAULT_OUTDOOR, DEFAULT_POWER, DEFAULT_RANGE, OUTDOOR_MAX, OUTDOOR_MIN, POWER_MAX, POWER_MIN, RANGE_MAX, RANGE_MIN, clampKelvin, isLightMode, type LightMode } from './three/lightSettings'
 import { ensureOutdoorUnits as ensureOutdoorUnits1, indoorUnits, planArea, randomSeed, type GenOptions } from './generate'
 import { generatePlan } from './generate-region'
 import { lang, t } from './i18n'
@@ -673,7 +670,21 @@ export function replacePlan(p: Plan) {
   selection.value = null
 }
 
-export function generate(newSeed = true) {
+/**
+ * 一键布置等要用的重模块（furnish.ts：会 build 模型、依赖 three.js）连同完整素材按需加载；
+ * 用到它的操作都是 async，先 await 这里
+ */
+let heavyMod: typeof import('./furnish') | null = null
+async function heavy() {
+  if (!heavyMod) {
+    await loadAssets()
+    heavyMod = await import('./furnish')
+  }
+  return heavyMod
+}
+
+export async function generate(newSeed = true) {
+  const h = sandbox.autoFurnish ? await heavy() : null
   if (newSeed) genOptions.seed = randomSeed()
   const r = generatePlan(genOptions)
   genOptions.seed = r.seed
@@ -687,10 +698,10 @@ export function generate(newSeed = true) {
   r.plan.household = generateHousehold(r.plan, r.seed)
   // 户建的外观颜色跟着住户风格
   if (r.plan.exterior) styleExterior(r.plan.exterior, r.plan.household.style, r.seed)
-  if (sandbox.autoFurnish) {
-    r.plan.furniture = furnish(r.plan, r.seed)
+  if (h) {
+    r.plan.furniture = furnish(h, r.plan, r.seed)
     ensureOutdoorUnits(r.plan)
-    papers(r.plan, r.seed)
+    papers(h, r.plan, r.seed)
   }
   replacePlan(r.plan)
 }
@@ -963,26 +974,28 @@ export function commitFurnitureColors(id: string, colors: string[] | undefined) 
 }
 
 /** 换一户人家，并按新住户重新布置 */
-export function rerollHousehold() {
+export async function rerollHousehold() {
+  const h = await heavy()
   mutate((p) => {
     const seed = Math.floor(Math.random() * 1e9)
     p.household = generateHousehold(toRaw(p), seed)
     // 布置算法只读 plan，传原始对象：经过响应式代理要慢一个数量级（约 1s → 0.1s）
-    p.furniture = furnish(toRaw(p), seed)
+    p.furniture = furnish(h, toRaw(p), seed)
     ensureOutdoorUnits(p)
-    papers(p, seed)
+    papers(h, p, seed)
   })
   selection.value = null
 }
 
 /** 按当前住户重新布置（没有住户就先推算一户） */
-export function redecorate() {
+export async function redecorate() {
+  const h = await heavy()
   mutate((p) => {
     p.household ??= generateHousehold(toRaw(p))
     const seed = Date.now()
-    p.furniture = furnish(toRaw(p), seed)
+    p.furniture = furnish(h, toRaw(p), seed)
     ensureOutdoorUnits(p)
-    papers(p, seed)
+    papers(h, p, seed)
   })
   selection.value = null
 }
@@ -991,8 +1004,9 @@ export function redecorate() {
  * 一键布置：多层户型从下往上逐层布置（decorateHouse：房间分配全户统一，全户限量的东西不每层都放，
  * 楼梯口留空），家具打上所在楼层。单层户型和以前完全一样。
  */
-function furnish(p: Plan, seed: number) {
-  const inside = decorateHouse(p, seed, sandbox.style, p.household)
+type Heavy = typeof import('./furnish')
+function furnish(h: Heavy, p: Plan, seed: number) {
+  const inside = h.decorateHouse(p, seed, sandbox.style, p.household)
   // 户建：院子里再摆几件户外物件（yard.ts）
   return p.site ? [...inside, ...yardFurniture(p, seed)] : inside
 }
@@ -1013,11 +1027,11 @@ function ensureOutdoorUnits(p: Plan) {
 }
 
 /** 按住户自动贴墙纸（居室用主人的风格） */
-function papers(p: Plan, seed: number) {
+function papers(h: Heavy, p: Plan, seed: number) {
   const raw = toRaw(p)
   // 房间分配全户统一：整份户型一起算
-  const styles = roomStyles(raw, raw.household)
-  autoWallpapers(p, raw.household, (r) => styles.get(r.id), seed)
+  const styles = h.roomStyles(raw, raw.household)
+  h.autoWallpapers(p, raw.household, (r) => styles.get(r.id), seed)
 }
 
 /** 某个房间换墙纸；undefined = 恢复默认 */
@@ -1034,16 +1048,17 @@ export function setRoomWallpaper(roomId: string, wp: Wallpaper | undefined) {
  * 只换家具风格、不动布局（restyle.ts）。roomId 为 null 时全屋，否则只换这间里的家具。
  * style：具体风格；'auto' = 按房间（有主人的居室用主人的风格，其余用全家的风格）；'random' = 随机挑一种。返回改动的件数
  */
-export function restyle(roomId: string | null, style: StyleTag | 'auto' | 'random') {
+export async function restyle(roomId: string | null, style: StyleTag | 'auto' | 'random') {
+  const h = await heavy()
   const raw = toRaw(plan.value)
   const all = Object.keys(STYLE_LABELS) as StyleTag[]
   const fixed = style === 'random' ? all[Math.floor(Math.random() * all.length)] : style === 'auto' ? null : style
-  const byRoom = fixed ? null : roomStyles(raw, raw.household)
+  const byRoom = fixed ? null : h.roomStyles(raw, raw.household)
   const home = raw.household?.style ?? 'nordic'
   let n = 0
   mutate((p) => {
-    n = restyleFurniture(p, (f) => {
-      const room = furnitureRoom(p, f)?.id
+    n = h.restyleFurniture(p, (f) => {
+      const room = h.furnitureRoom(p, f)?.id
       if (roomId && room !== roomId) return undefined
       return fixed ?? byRoom!.get(room ?? '') ?? home
     })
@@ -1134,17 +1149,19 @@ export function setExterior(patch: Partial<Exterior>, history = true) {
 }
 
 /** 全屋重新随机墙纸 */
-export function rerollWallpapers() {
-  mutate((p) => papers(p, Math.floor(Math.random() * 1e9)))
+export async function rerollWallpapers() {
+  const h = await heavy()
+  mutate((p) => papers(h, p, Math.floor(Math.random() * 1e9)))
 }
 
 /** 检查清单：补上缺的东西（只补，不动已有的） */
-export function fixChecklist(items: CheckItem[]) {
+export async function fixChecklist(items: CheckItem[]) {
+  const h = await heavy()
   mutate((p) => {
     p.household ??= generateHousehold(toRaw(p))
     // 多层户型按层补：房间条目交给房间所在层，每层的条目交给那层，全户条目交给对应的层（checklist.ts fixFloor）
     const raw = toRaw(p)
-    p.furniture = applyFixesHouse(raw, items, raw.household)
+    p.furniture = h.applyFixesHouse(raw, items, raw.household)
     // 空调外机是设备，applyFixes 管不到：按室内机台数补够
     ensureOutdoorUnits(p)
   })
