@@ -12,6 +12,30 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '1.19.1',
+    date: '2026-11-06',
+    notes: {
+      zh: [
+        '首次打开更快：3D 沙盘、素材库和更新日志改成用到时再加载，首屏要下载的脚本少了约三分之一',
+        '3D 沙盘里开关房间灯、调色温时不再卡一下',
+        '摆了蜡烛、水壶、鱼缸这类会动的物件后，它们看不见时画面会停下来，不再一直耗电',
+        '3D 沙盘里鼠标悬停、拖动家具，以及平面图的悬停、缩放更流畅',
+      ],
+      ja: [
+        '初回表示が速くなりました：3D ジオラマ、素材ライブラリ、更新履歴を使うときに読み込むようにし、最初にダウンロードするスクリプトが約 3 分の 1 減りました',
+        '3D ジオラマで部屋の照明のオン・オフや色温度の調整をしても引っかからなくなりました',
+        'ろうそく・やかん・水槽のような動く物を置いていても、見えていないときは描画が止まり、電力を使い続けなくなりました',
+        '3D ジオラマでのマウスホバーと家具のドラッグ、間取り図のホバーとズームが軽くなりました',
+      ],
+      en: [
+        'Faster first load: the 3D diorama, asset library and changelog now load when first used, cutting the scripts downloaded up front by about a third',
+        'Toggling room lights or adjusting color temperature in the 3D diorama no longer stutters',
+        'Animated items like candles, kettles and fish tanks no longer keep the scene redrawing when they are out of view',
+        'Smoother hovering and furniture dragging in the 3D diorama, and smoother hovering and zooming on the floor plan',
+      ],
+    },
+  },
+  {
     version: '1.19.0',
     date: '2026-11-05',
     notes: {
