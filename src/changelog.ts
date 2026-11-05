@@ -12,6 +12,24 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '1.19.2',
+    date: '2026-11-06',
+    notes: {
+      zh: [
+        '平面图打开快了很多：首屏要下载的内容从约 1.4MB 减到约 0.5MB，3D 沙盘和全部素材模型改成在页面显示出来后再在后台加载',
+        '界面语言的词典按语言分开下载：中文界面不再下载日文、英文词典，日文、英文界面只下载自己那一份',
+      ],
+      ja: [
+        '間取り図の表示がかなり速くなりました：最初にダウンロードする量が約 1.4MB から約 0.5MB に減り、3D ジオラマと素材モデルはページが表示されてから裏で読み込むようになりました',
+        'UI の翻訳データを言語ごとに分けてダウンロードするように：日本語・英語の UI では自分の言語の分だけを読み込みます',
+      ],
+      en: [
+        'The floor plan opens much faster: the initial download shrank from about 1.4 MB to about 0.5 MB, with the 3D diorama and asset models loading in the background after the page appears',
+        'UI translations are now downloaded per language: Japanese and English load only their own dictionary, and Chinese needs none',
+      ],
+    },
+  },
+  {
     version: '1.19.1',
     date: '2026-11-06',
     notes: {
