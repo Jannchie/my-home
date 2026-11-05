@@ -11,6 +11,7 @@
 //   body 素材 → 一个角色，从素材所在位置出发；宠物会认领最近的同类窝（猫窝 / 狗窝），困了回窝睡；
 //   home 素材（窝、基站）→ 没被认领的窝自己生成一只（花色按 id 随机），基站生成一台扫地机器人。
 
+import { fnv1a } from '../hash'
 import * as THREE from 'three'
 import { FLAT_FLOORS, contactShadow, type BoxPool, type CharacterLayer, type FloorHooks } from './characters'
 import { TAU, climbStairs, expandCrossFloor, floorPlacement, followPath, fwd, randomOtherFloor, rnd, routeLegs, stairAt, stepToward, turnToward, wrap, type Gait, type StairsTask } from './locomotion'
@@ -98,11 +99,6 @@ const GAIT_PET: Gait = { turn: 5, align: 0.55, brake: 4 }
 const GAIT_ROBOT: Gait = { turn: 1.8, align: 0.55, brake: 4 }
 const GAIT_QUAD: Gait = { turn: 2.6, align: 0.55, brake: 4 }
 
-function hash(s: string) {
-  let h = 2166136261
-  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619)
-  return h >>> 0
-}
 
 /** 找模型里标成 actorPart 的子树 */
 function actorPart(obj: THREE.Object3D | undefined): THREE.Object3D | null {
@@ -424,7 +420,7 @@ export class ActorLayer implements CharacterLayer {
       const src = ASSETS.find((d) => d.actor?.role === 'body' && d.actor.breed === breed && d.id.startsWith('act-')) ?? ASSETS.find((d) => d.actor?.role === 'body' && d.actor.breed === breed)
       const pals = src?.palettes ?? [['#f4a259', '#fff4e6']]
       // 座子上自带角色模型的（陪伴机器人充电窝、人形机器人站立架）：用和静态模型一致的第一组配色
-      out.push({ src: h.f.id, kind: h.a.kind, breed, pal: pals[actorPartDef(h.def) ? 0 : hash(h.f.id) % pals.length], tiers: 0, role: 'home' })
+      out.push({ src: h.f.id, kind: h.a.kind, breed, pal: pals[actorPartDef(h.def) ? 0 : fnv1a(h.f.id) % pals.length], tiers: 0, role: 'home' })
     }
     return out
   }

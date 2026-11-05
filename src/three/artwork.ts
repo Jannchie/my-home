@@ -6,6 +6,7 @@
 //       一件素材有多块画面（三联画、照片墙）时 slot 依次编号：画同一画种的不同种子（照片墙则轮换照片画种）。
 // 布置：一键布置按房间风格用 pickArt 挑画种，全屋尽量不重复；沙盘里摆放 / 检查器里换画也走这里。
 
+import { fnv1a } from '../hash'
 import type { StyleTag } from './kit'
 import { MOTIFS, MOTIF_BY_ID, mulberry, type ArtKind, type Motif, type Rand } from './artMotifs'
 
@@ -93,11 +94,6 @@ export function parseArt(art: string | undefined): { motif: Motif; seed: number 
 const art = (m: Motif, seed: number) => `${m.id}.${seed}`
 const newSeed = (rand: Rand) => Math.floor(rand() * 10000)
 
-function hash(s: string) {
-  let h = 2166136261
-  for (const c of s) h = Math.imul(h ^ c.charCodeAt(0), 16777619)
-  return h >>> 0
-}
 
 /** 画面的绘制函数；slot > 0 是同一件素材上的其他画面 */
 export function artDraw(a: string | undefined, slot = 0): Draw | null {
@@ -116,7 +112,7 @@ export function artDraw(a: string | undefined, slot = 0): Draw | null {
   const s = seed
   return (g, W, H) => {
     g.save()
-    m.draw(g, W, H, mulberry(hash(m.id) ^ Math.imul(s + 1, 2654435761)))
+    m.draw(g, W, H, mulberry(fnv1a(m.id) ^ Math.imul(s + 1, 2654435761)))
     g.restore()
   }
 }

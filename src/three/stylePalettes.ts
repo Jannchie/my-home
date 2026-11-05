@@ -17,6 +17,7 @@
 //   色板有多套变体，按素材系列（family ?? id）哈希选，结果确定，同系列不同规格一致。
 // 不生成派生配色的素材：绿植（叶子颜色本身就是固有色）、会动的角色（宠物、机器人：毛色 / 机身色）。
 
+import { fnv1a } from '../hash'
 import * as THREE from 'three'
 import type { AssetDef, StyleTag } from './kit'
 import { disposeUnshared } from './toon'
@@ -191,11 +192,6 @@ const hueDist = (a: number, b: number) => {
   return d > 180 ? 360 - d : d
 }
 
-function hashStr(s: string) {
-  let h = 2166136261
-  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619)
-  return h >>> 0
-}
 
 // ───────────────────────── 探针：每个槽实际用在哪 ─────────────────────────
 
@@ -359,7 +355,7 @@ function recolor(def: AssetDef, style: StyleTag, variant = 0): string[] {
   const n = Math.max(1, ...def.palettes.map((p) => p.length))
   const kits = STYLE_KITS[style]
   // 变体 0 是以前唯一的那套（旧存档不变），之后依次换下一套色板
-  const kit = kits[(hashStr(`${paletteKey(def)}|${style}`) + variant) % kits.length]
+  const kit = kits[(fnv1a(`${paletteKey(def)}|${style}`) + variant) % kits.length]
   const spread = kit.spread ?? 0.55
   const pr = probe(def, n)
   const bodyShare = Math.max(...pr.map((p) => p.share))

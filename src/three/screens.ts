@@ -4,6 +4,7 @@
 // 按前后顺序画进一张 canvas，背景换成一块贴着这张图的平面（贴在原来背景的正面），那些小片删掉。画面看起来一样，只是没有厚度了。
 // 画面上圆的发光零件（电视里的云、太阳是压扁的小球）按它在屏幕上的投影画成椭圆。
 
+import { fnv1a } from '../hash'
 import * as THREE from 'three'
 import { toon, useAnisotropy } from './toon'
 import type { ScreenPreset } from './screenContent'
@@ -177,8 +178,7 @@ function presetMaterial(base: Slab, preset: ScreenPreset) {
 
 /** 按字符串定种子的随机数（同一预设、同样尺寸的画面每次都一样） */
 function seeded(s: string) {
-  let h = 2166136261
-  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619)
+  let h = fnv1a(s)
   return () => {
     h = (h + 0x6d2b79f5) | 0
     let t = Math.imul(h ^ (h >>> 15), 1 | h)

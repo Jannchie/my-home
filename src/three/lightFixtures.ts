@@ -1,6 +1,7 @@
 // 吸顶灯 / 吊灯 / 手元灯 / 阳台壁灯的模型和风格造型（lights.ts 的房间灯、packs/ceiling-lights.ts 的灯具素材共用）。
 // 不依赖素材库（素材包要在加载时用它建模），单位厘米。
 
+import { fnv1a } from '../hash'
 import * as THREE from 'three'
 import type { StyleTag } from './kit'
 import type { RoomLightSpec } from './lights'
@@ -81,11 +82,6 @@ export const STYLE_SHAPES: Record<StyleTag, { ceiling: FixtureShape[]; small: Fi
   farmhouse: { ceiling: ['wagon-wheel', 'hex-lantern'], small: 'cage', pendant: 'hex-lantern' },
 }
 
-export const hashStr = (s: string) => {
-  let h = 2166136261
-  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619)
-  return h >>> 0
-}
 
 /** 房间主灯的种类：吸顶灯、小房间的小吸顶灯、餐桌吊灯（能换成灯具家具的，见 packs/ceiling-lights.ts） */
 export const MAIN_KINDS = ['ceiling', 'small', 'pendant'] as const
@@ -105,7 +101,7 @@ export function applyShape(s: RoomLightSpec, shape: FixtureShape) {
 }
 
 /** 给房间灯套上风格造型（同一风格有几款时按 variant 固定挑一款） */
-export function styleSpec(s: RoomLightSpec, style: StyleTag | undefined, variant = hashStr(s.roomId)) {
+export function styleSpec(s: RoomLightSpec, style: StyleTag | undefined, variant = fnv1a(s.roomId)) {
   if (!style || !isMainKind(s.kind)) return
   const t = STYLE_SHAPES[style]
   s.style = style

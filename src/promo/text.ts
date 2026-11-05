@@ -1,6 +1,7 @@
 // 宣传片自己的文案（三语）。界面里已有的词（风格名、滤镜名、地区、兴趣、职业、房间名、标语）直接走应用的 t()，
 // 这里只放宣传片专用的句子。语言跟应用一致：地址里的 ?lang=zh|ja|en（录制脚本 --lang）。
 
+import { fnv1a } from '../hash'
 import { lang, t } from '../i18n'
 
 const TEXT: Record<string, [ja: string, en: string]> = {
@@ -36,9 +37,7 @@ const JA_NAMES = ['陽翔', '結衣', '蒼', '美桜', '蓮', '陽菜', '湊', '
 export function personName(name: string, taken: Set<string>) {
   if (lang.value === 'zh') return name
   const list = lang.value === 'ja' ? JA_NAMES : EN_NAMES
-  let h = 2166136261
-  for (let i = 0; i < name.length; i++) h = Math.imul(h ^ name.charCodeAt(i), 16777619)
-  let k = (h >>> 0) % list.length
+  let k = fnv1a(name) % list.length
   while (taken.has(list[k])) k = (k + 1) % list.length
   taken.add(list[k])
   return list[k]

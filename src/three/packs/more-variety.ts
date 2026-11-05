@@ -6,6 +6,7 @@
 //   - 伞架是空心的容器，伞尖落在内底上、伞身真的插在筒里。
 //   - 装饰画按画框分系列、按尺寸分规格；同一系列里每组配色对应一幅不同的画（配色名里的风格就是画的风格）。
 
+import { fnv1a } from '../../hash'
 import * as THREE from 'three'
 import { ball, cup, cyl, rbox, shade, torus, tray } from '../toon'
 import { artFace } from '../artwork'
@@ -92,12 +93,6 @@ function rAt(outer: [number, number][], y: number) {
     if (y <= y1) return r0 + ((r1 - r0) * (y - y0)) / Math.max(1e-6, y1 - y0)
   }
   return outer[outer.length - 1][0]
-}
-/** 简单字符串哈希（画面里的确定性随机） */
-function hash(s: string) {
-  let h = 2166136261
-  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619)
-  return h >>> 0
 }
 
 // ---------- 定义工具 ----------
@@ -741,7 +736,7 @@ function paintGeo(ground: string, a: string, b: string): Draw {
     const cw = W / cols
     const ch = H / rows
     const s = Math.min(cw, ch)
-    const r = rng(hash(ground + a + b))
+    const r = rng(fnv1a(ground + a + b))
     const cs = [a, b, shade(a, -0.22), shade(b, 0.12), shade(ground, -0.3)]
     for (let i = 0; i < cols; i++)
       for (let j = 0; j < rows; j++) {
@@ -860,7 +855,7 @@ function paintMap(sea: string, land: string, line: string): Draw {
       g.lineTo(W, (H * k) / 6)
       g.stroke()
     }
-    const r = rng(hash(sea + land + line))
+    const r = rng(fnv1a(sea + land + line))
     const spots: [number, number, number][] = [
       [0.28, 0.32, 0.2],
       [0.7, 0.28, 0.14],
@@ -992,7 +987,7 @@ function paintWater(ground: string, a: string, b: string): Draw {
   return (g, W, H) => {
     g.fillStyle = ground
     g.fillRect(0, 0, W, H)
-    const r = rng(hash(ground + a + b + 'w'))
+    const r = rng(fnv1a(ground + a + b + 'w'))
     const cs = [a, b, shade(a, 0.15), shade(b, -0.1)]
     g.globalAlpha = 0.35
     for (let k = 0; k < 16; k++) {

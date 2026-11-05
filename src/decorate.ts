@@ -1,6 +1,7 @@
 // 一键布置家具：按房间用途挑家具，靠墙的复用设备的贴墙摆放（place.ts），
 // 居中的（茶几、餐桌、被炉）在房间里找空地。
 
+import { fnv1a } from './hash'
 import {
   add,
   area,
@@ -4773,9 +4774,7 @@ export function applyFixesHouse(plan: Plan, items: CheckItem[], household?: Hous
 
 /** 字符串 → [0, 1) 的稳定小随机数（推测衣柜主题用） */
 function h01(s: string) {
-  let h = 2166136261
-  for (const c of s) h = Math.imul(h ^ c.charCodeAt(0), 16777619)
-  return (h >>> 0) / 4294967296
+  return fnv1a(s) / 4294967296
 }
 
 /** 平面坐标 → 某个位姿的局部坐标（x, 局部 z 记作 y） */

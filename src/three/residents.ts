@@ -472,8 +472,6 @@ export class ResidentLayer implements CharacterLayer {
   private stale = true
   /** 楼层钩子：同 ActorLayer（Sandbox3D 设置） */
   floors: FloorHooks = FLAT_FLOORS
-  /** 新的人刚摆进场景（模型异步载入）：要重画一帧 */
-  dirty = false
 
   roots(): [THREE.Object3D, string][] {
     return [...this.people.values()].map((p) => [p.root, p.fl] as [THREE.Object3D, string])
@@ -487,7 +485,6 @@ export class ResidentLayer implements CharacterLayer {
     this.people.set(id, p)
     this.group.add(p.root)
     if (this.plan) this.settle(p)
-    this.dirty = true
   }
 
   /** 搬走；返回他的模型（不释放：调用方决定留着下次再用，还是 disposeResidentModel） */
@@ -498,7 +495,6 @@ export class ResidentLayer implements CharacterLayer {
     this.group.remove(p.root)
     p.detach()
     this.people.delete(id)
-    this.dirty = true
     return p.m
   }
 
@@ -642,11 +638,9 @@ export class ResidentLayer implements CharacterLayer {
 
   /** 每帧调用；返回是否需要重绘 */
   update(dt: number) {
-    const was = this.dirty
-    this.dirty = false
-    if (!this.live || !this.house || !this.people.size) return was
+    if (!this.live || !this.house || !this.people.size) return false
     dt = Math.min(dt, 0.05)
-    let busy = was
+    let busy = false
     for (const p of this.people.values()) busy = this.step(p, dt) || busy
     return busy
   }

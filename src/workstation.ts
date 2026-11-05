@@ -4,6 +4,7 @@
 // 便签贴在显示器边框外沿、桌子背后的墙上、冰箱门上，书桌桌面散几张。
 // 由 decorate.ts 的 Decorator 调用（computersForChairs → workstations，最后 deskExtras）。
 
+import { fnv1a } from './hash'
 import { boxOverlaps, dist, edgesOf, fixtureBox, openingsOn, pointInPolygon, uid, type Box, type Furniture, type Plan, type Room, type Vec } from './model'
 import { ASSET_MAP, type AssetDef } from './three/assets'
 import { screenPoint, type ScreenPanel } from './three/kit'
@@ -378,9 +379,7 @@ export function screenWeights(def: AssetDef, people: Member[]): W {
 
 /** 按 id 定的 0..1（挑画面不动布置用的随机数流，别的东西的位置不受影响） */
 function hash01(s: string) {
-  let h = 2166136261
-  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619)
-  return ((h >>> 0) % 100000) / 100000
+  return (fnv1a(s) % 100000) / 100000
 }
 
 /**

@@ -1,5 +1,6 @@
 // 把平面图搭成 3D 沙盘：底座、各房间地面、墙（按门窗挖洞）、门扇 / 窗玻璃、设备。
 
+import { fnv1a } from '../hash'
 import * as THREE from 'three'
 import {
   add,
@@ -1595,12 +1596,6 @@ function buildTrims(plan: Plan, infos: OpeningInfo[], H: number) {
   return g
 }
 
-/** 字符串的小哈希（阳台扶手配色、物干し金物有无等按房间 id 固定下来） */
-function strHash(s: string) {
-  let h = 2166136261
-  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619)
-  return h >>> 0
-}
 
 /**
  * 阳台外缘的扶手墙，按 Room.railing 分几种（不填 = mixed）：
@@ -1617,7 +1612,7 @@ function balconyRails(plan: Plan, H = 240) {
   for (const r of plan.rooms.filter((x) => !isIndoor(x))) {
     const y = floorY(r)
     const kind = r.railing ?? 'mixed'
-    const hash = strHash(r.id)
+    const hash = fnv1a(r.id)
     // 金属件：银色铝 / 古铜色，按房间固定
     const metal = hash % 3 === 0 ? '#6b6258' : '#c9ccd0'
     for (const e of edgesOf(r.points)) {

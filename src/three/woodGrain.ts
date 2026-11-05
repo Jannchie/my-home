@@ -2,6 +2,7 @@
 // 每块板的底色深浅略有不同，板面有顺着长边流动的木纹（直纹 + 山形纹），板与板之间一条深色的缝、缝边一道浅色的倒角高光。
 // 参考手绘室内背景里的木地板：板缝清楚、每块板能分得出来，木纹淡淡的、不抢画面。
 
+import { fnv1a } from '../hash'
 import { shade as toonShade } from './toon'
 import { rng } from './kit'
 
@@ -12,15 +13,10 @@ const shade = (color: string, dl: number, ds = 0) => toonShade(color, dl, ds, fa
 export const PLANK_TILE = 240
 const ROWS = 12
 
-const hashStr = (str: string) => {
-  let h = 2166136261
-  for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 16777619)
-  return h >>> 0
-}
 
 /** 在 s×s 的画布上画满地板（横向铺，贴图横向重复也接得上：每行的板长加起来正好一圈） */
 export function drawPlanks(g: CanvasRenderingContext2D, s: number, base: string, line: string) {
-  const rand = rng(hashStr(base))
+  const rand = rng(fnv1a(base))
   // 色调表里的缝线色只比底色深一点：缝要再深一些才看得清
   line = shade(line, -0.16, 0.05)
   const h = s / ROWS

@@ -26,13 +26,16 @@ export class ResidentRoster {
   update(list: readonly Resident[]) {
     if (this.closed) return
     const want = new Map(list.filter((r) => r.home).map((r) => [r.id, r.file]))
+    let left = false
     for (const [id, file] of [...this.home]) {
       if (want.get(id) === file) continue
       this.home.delete(id)
       delete residentStatus[id]
       const m = this.layer.remove(id)
       if (m) this.park(id, file, m)
+      left = true
     }
+    if (left) this.onChange()
     // 移出名单、换了模型的：留着的旧模型也不要了
     const listed = new Map(list.map((r) => [r.id, r.file]))
     for (const [id, p] of [...this.parked]) if (listed.get(id) !== p.file) this.unpark(id)

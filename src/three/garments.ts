@@ -11,6 +11,7 @@
 //     整排烘成一个顶点色网格（花纹衣服除外），几十件衣服只有几个 draw call。
 //   - 面数：衣身是挤出的低面数剪影（一件约 100–400 个三角形），不用 RoundedBox。
 
+import { fnv1a } from '../hash'
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 import { patternMaterial } from './fabric'
@@ -1443,10 +1444,5 @@ export function bakeVertexColors(root: THREE.Group) {
 
 /** 字符串 → 种子 */
 export function hashSeed(...parts: string[]) {
-  let h = 2166136261
-  for (const ch of parts.join('|')) {
-    h ^= ch.charCodeAt(0)
-    h = Math.imul(h, 16777619)
-  }
-  return h >>> 0
+  return fnv1a(parts.join('|'))
 }

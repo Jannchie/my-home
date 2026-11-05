@@ -9,6 +9,7 @@
 //   snapshots  { id, createdAt, name, area, layout, rooms, furniture, savedId, hash, plan }   —— 自动快照，最多 5 个
 // localStorage（小数据）：my-home:saved-link = { id, hash }，记住当前户型关联的是哪份存档、保存时的内容指纹，刷新后仍能判断有没有改过。
 
+import { fnv1a } from './hash'
 import { reactive, toRaw, watch } from 'vue'
 import { idbReq, openIdb } from './idb'
 import { planArea } from './generate'
@@ -102,12 +103,7 @@ export function summarize(p: Plan, name = p.name): PlanSummary {
 
 /** 内容指纹（FNV-1a 32 位）：只用来判断「改没改过」 */
 function hashStr(s: string) {
-  let h = 0x811c9dc5
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i)
-    h = Math.imul(h, 0x01000193)
-  }
-  return `${s.length.toString(36)}-${(h >>> 0).toString(36)}`
+  return `${s.length.toString(36)}-${fnv1a(s).toString(36)}`
 }
 const currentJson = () => JSON.stringify(toRaw(plan.value))
 
