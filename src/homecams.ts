@@ -39,7 +39,6 @@ export interface CamCtx {
 }
 
 const def = (f: Furniture) => ASSET_MAP.get(f.asset)
-const isBed = (d?: AssetDef) => isSleepable(d)
 /** 宠物活动区：宠物分类的落地物（窝、爬架、猫砂盆、笼子、围栏、会走动的宠物），不含机器宠物和水族箱 */
 const isPetSpot = (d?: AssetDef) => !!d && d.category === 'pets' && !d.prop && !d.mount && !d.id.startsWith('rb-') && !hasTag(d, 'aquarium')
 /** 朝向：让素材正面（+z）朝向世界方向 v 的 rot（度） */
@@ -55,7 +54,7 @@ function camOnSurface(c: CamCtx, room: Room, asset: string, target: Vec, maxDist
     .surfacesIn(room)
     .filter((p) => {
       const pd = def(p)
-      if (!pd?.surface || p === exclude || isBed(pd) || pd.category === 'pets') return false
+      if (!pd?.surface || p === exclude || isSleepable(pd) || pd.category === 'pets') return false
       const top = (p.z ?? 0) + pd.surface
       return top >= 35 && top <= 190 && dist(p, target) <= maxDist
     })
@@ -147,7 +146,7 @@ function babyMonitor(c: CamCtx) {
   const target = parents && parents !== room ? parents : ldk
   if (!target) return
   d.style = d.styleFor(target)
-  const bed = d.out.find((f) => !f.z && pointInPolygon(f, target.points) && isBed(def(f)))
+  const bed = d.out.find((f) => !f.z && pointInPolygon(f, target.points) && isSleepable(def(f)))
   camOnSurface(c, target, 'hc-baby-recv', bed ?? centerOf(target), 600)
 }
 
@@ -243,7 +242,7 @@ function actionKit(c: CamCtx) {
   d.style = d.styleFor(room)
   const shelves = d.surfacesIn(room).filter((p) => {
     const pd = def(p)
-    return !!pd && !isBed(pd) && (!!pd.surfaces?.length || hasTag(pd, 'cabinet'))
+    return !!pd && !isSleepable(pd) && (!!pd.surfaces?.length || hasTag(pd, 'cabinet'))
   })
   for (const p of shelves) {
     const pd = def(p)!

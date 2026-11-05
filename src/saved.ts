@@ -222,14 +222,13 @@ function autosaveError(e: unknown): string {
 // ---------- IndexedDB ----------
 
 const tx = openIdb(DB_NAME, DB_VERSION, ['plans', 'plan-data', 'snapshots'])
-const wrap = idbReq
 
 // ---------- 读取 ----------
 
 export async function refreshSaved() {
   try {
     const [list, snaps] = await tx(['plans', 'snapshots'], 'readonly', async (s) => {
-      const metas = wrap(s.plans.getAll() as IDBRequest<SavedMeta[]>)
+      const metas = idbReq(s.plans.getAll() as IDBRequest<SavedMeta[]>)
       // 快照不读户型本体：用游标只取摘要
       const sm: SnapshotMeta[] = []
       await new Promise<void>((resolve, reject) => {
@@ -338,7 +337,7 @@ export function openPanel(focusSave = false) {
 }
 
 async function readPlan(id: string): Promise<Plan | null> {
-  const rec = await tx(['plan-data'], 'readonly', (s) => wrap(s['plan-data'].get(id) as IDBRequest<{ id: string; plan: Plan } | undefined>))
+  const rec = await tx(['plan-data'], 'readonly', (s) => idbReq(s['plan-data'].get(id) as IDBRequest<{ id: string; plan: Plan } | undefined>))
   return rec ? normalizePlan(rec.plan) : null
 }
 
@@ -421,7 +420,7 @@ export async function takeSnapshot(force = false) {
     const rec: SnapshotRec = { ...summarize(p, currentSaved()?.name ?? p.name), id: uid('v'), createdAt: Date.now(), savedId: saved.currentId, hash: h, plan: p }
     await tx(['snapshots'], 'readwrite', async (s) => {
       s.snapshots.put(rec)
-      const keys = (await wrap(s.snapshots.getAll() as IDBRequest<SnapshotRec[]>)).sort((a, b) => b.createdAt - a.createdAt).map((x) => x.id)
+      const keys = (await idbReq(s.snapshots.getAll() as IDBRequest<SnapshotRec[]>)).sort((a, b) => b.createdAt - a.createdAt).map((x) => x.id)
       for (const k of keys.slice(MAX_SNAPSHOTS)) s.snapshots.delete(k)
     })
     lastSnapHash = h
@@ -434,7 +433,7 @@ export async function takeSnapshot(force = false) {
 /** 恢复一张快照（进撤销历史）；仍关联拍快照时的那份存档，但标为未保存 */
 export async function restoreSnapshot(id: string): Promise<boolean> {
   try {
-    const rec = await tx(['snapshots'], 'readonly', (s) => wrap(s.snapshots.get(id) as IDBRequest<SnapshotRec | undefined>))
+    const rec = await tx(['snapshots'], 'readonly', (s) => idbReq(s.snapshots.get(id) as IDBRequest<SnapshotRec | undefined>))
     const p = rec && normalizePlan(rec.plan)
     if (!rec || !p) throw new Error(t('这份户型的数据丢失了'))
     if (saved.dirty) await takeSnapshot(true)

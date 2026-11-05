@@ -35,7 +35,7 @@ export class ResidentRoster {
     }
     // 移出名单、换了模型的：留着的旧模型也不要了
     const listed = new Map(list.map((r) => [r.id, r.file]))
-    for (const [id, p] of [...this.parked]) if (listed.get(id) !== p.file) this.unpark(id, true)
+    for (const [id, p] of [...this.parked]) if (listed.get(id) !== p.file) this.unpark(id)
     for (const [id, file] of want) if (!this.home.has(id)) this.moveIn(id, file)
   }
 
@@ -48,26 +48,26 @@ export class ResidentRoster {
       delete residentStatus[id]
     }
     this.home.clear()
-    for (const id of [...this.parked.keys()]) this.unpark(id, true)
+    for (const id of [...this.parked.keys()]) this.unpark(id)
   }
 
   private park(id: string, file: string, m: ResidentModel) {
     this.parked.set(id, { file, m })
-    while (this.parked.size > PARK_MAX) this.unpark(this.parked.keys().next().value!, true)
+    while (this.parked.size > PARK_MAX) this.unpark(this.parked.keys().next().value!)
   }
 
-  private unpark(id: string, dispose: boolean) {
+  /** 停着的模型不要了：释放 */
+  private unpark(id: string) {
     const p = this.parked.get(id)
     this.parked.delete(id)
-    if (p && dispose) disposeResidentModel(p.m)
-    return p
+    if (p) disposeResidentModel(p.m)
   }
 
   private async moveIn(id: string, file: string) {
     this.home.set(id, file)
     const kept = this.parked.get(id)
     if (kept?.file === file) {
-      this.unpark(id, false)
+      this.parked.delete(id)
       this.layer.add(id, kept.m)
       residentStatus[id] = 'ok'
       this.onChange()

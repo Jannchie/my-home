@@ -35,7 +35,6 @@ const DB_NAME = 'my-home-residents'
 const DB_VERSION = 1
 
 const tx = openIdb(DB_NAME, DB_VERSION, ['people', 'files'])
-const wrap = idbReq
 
 /** 内置的默认人物 */
 export const BUILTIN_ID = 'builtin-default'
@@ -46,7 +45,7 @@ export const isBuiltin = (r: Pick<Resident, 'id'>) => r.id === BUILTIN_ID
 export async function loadResidents() {
   let list: Resident[] = []
   try {
-    list = await tx(['people'], 'readonly', (s) => wrap(s.people.getAll() as IDBRequest<Resident[]>))
+    list = await tx(['people'], 'readonly', (s) => idbReq(s.people.getAll() as IDBRequest<Resident[]>))
   } catch (e) {
     // 存储不可用（隐私模式等）：只有内置人物
     console.warn('[residents] 名单读取失败', e)
@@ -64,7 +63,7 @@ export async function residentFile(file: string): Promise<Blob | null> {
     const res = await fetch(BUILTIN_URL)
     return res.ok ? res.blob() : null
   }
-  const row = await tx(['files'], 'readonly', (s) => wrap(s.files.get(file) as IDBRequest<{ id: string; blob: Blob } | undefined>))
+  const row = await tx(['files'], 'readonly', (s) => idbReq(s.files.get(file) as IDBRequest<{ id: string; blob: Blob } | undefined>))
   return row?.blob ?? null
 }
 

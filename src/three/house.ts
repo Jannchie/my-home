@@ -531,7 +531,7 @@ function fadeParts(o: THREE.Object3D) {
     // 镜子上挂的反射面（three/mirrors.ts）不淡出：材质带着倒影的渲染目标，克隆不了
     else if ((c as THREE.Mesh).isMesh && !c.userData.fadeTwin && !isReflector(c)) {
       const mesh = c as THREE.Mesh
-      // 楼层淡出期间第一次走到这里时，网格上挂的是楼层淡出的透明副本：按它记下的原材质算（Sandbox3D fadeFloor）
+      // 楼层淡出期间第一次走到这里时，网格上挂的是楼层淡出的透明副本：按它记下的原材质算（three/floorStack.ts fadeFloor）
       const src = (m: THREE.Material) => (m.userData.floorSource as THREE.Material | undefined) ?? m
       const solid = Array.isArray(mesh.material) ? mesh.material.map(src) : src(mesh.material)
       const mats = Array.isArray(solid) ? solid : [solid]

@@ -3,7 +3,7 @@
 // 各层只给自己的步态参数（转身多快、多偏才停下来转、快到了怎么减速），行为本身只有这一份。
 // 单位：厘米、秒、弧度。平面坐标 (x, y)，y 对应 3D 的 z；朝向 h = 0 面朝 +y。
 
-import type { Vec } from '../model'
+import { dist, type Vec } from '../model'
 import type { FloorPoint, HouseNav, NavClass, NavGrid } from '../nav'
 import type { StairWalk } from '../stairs'
 
@@ -81,6 +81,74 @@ export function routeLegs(house: HouseNav, cls: NavClass, from: FloorPoint, to: 
   const legs = house.route(cls, from, to, r) ?? house.route(cls, from, to, rTight)
   if (!legs) return null
   return legs.map((l): Leg => (l.t === 'stairs' ? { t: 'stairs', walk: l.walk, up: l.up } : { t: 'go', to: l.path[l.path.length - 1], path: l.path, i: 0, rr: Math.min(r, body) }))
+}
+
+/** 能从 fl 走过去的别的楼层里随便挑一层；没有返回 null */
+export function randomOtherFloor(house: HouseNav, fl: string): string | null {
+  const fs = house.floors.filter((f) => f !== fl && house.connected(fl, f))
+  return fs.length ? fs[Math.floor(Math.random() * fs.length)] : null
+}
+
+/**
+ * 队首的 go 目标在别的楼层：展开成经楼梯的几段（expand 给出，最多连着展开 3 次），展开了就把任务计时清零。
+ * 到不了（expand 返回空）返回 false，队首留着由调用方处理
+ */
+export function expandCrossFloor<T extends { t: string }>(m: { fl: string; tt: number; tasks: T[] }, expand: (go: T) => T[]): boolean {
+  for (let guard = 0; guard < 3; guard++) {
+    const t0 = m.tasks[0] as (T & { fl?: string }) | undefined
+    if (t0?.t !== 'go' || !t0.fl || t0.fl === m.fl) break
+    const legs = expand(t0)
+    if (!legs.length) return false
+    m.tasks.splice(0, 1, ...legs)
+    m.tt = 0
+  }
+  return true
+}
+
+/** 沿导航网格走去 to 的任务（路线、走到第几个拐点、卡住多久、找了几次路都存在任务上） */
+export interface GoTask {
+  to: Vec
+  path?: Vec[] | null
+  i?: number
+  stuck?: number
+  tries?: number
+  rr?: number
+}
+
+/**
+ * 沿规划好的路走一帧：还没有路就按 radii 由宽到窄找（rr 不超过 body），起点被挪到能站的格子上时先走到起点；
+ * 卡住 1.2 秒重新找路，找过 3 次还卡就算失败；离拐点不到 corner（终点 2）就转向下一个。走了 60 秒还没到也算到了。
+ * move 朝某点走一帧（按 rr 判断挡没挡住），返回剩下的距离、被挡住返回 -1
+ */
+export function followPath(m: Mover, nav: NavGrid, cls: NavClass, task: GoTask, radii: readonly number[], body: number, corner: number, dt: number, elapsed: number, move: (to: Vec, rr: number) => number): 'done' | 'walking' | 'failed' {
+  if (!task.path) {
+    for (const rr of radii) {
+      task.path = nav.path(cls, m.pos, task.to, rr)
+      task.rr = Math.min(rr, body)
+      if (task.path) break
+    }
+    task.i = task.path && dist(task.path[0], m.pos) > 3 ? 0 : 1
+    task.tries = (task.tries ?? 0) + 1
+    if (!task.path) return 'failed'
+  }
+  const path = task.path
+  let i = task.i ?? 1
+  if (i >= path.length) return 'done'
+  const last = i === path.length - 1
+  const left = move(path[i], task.rr ?? body)
+  if (left < 0) {
+    task.stuck = (task.stuck ?? 0) + dt
+    if (task.stuck > 1.2) {
+      task.stuck = 0
+      task.path = null
+      if ((task.tries ?? 0) > 2) return 'failed'
+    }
+    return 'walking'
+  }
+  task.stuck = 0
+  // 拐点要走到位再转弯（抄近路会偏离规划好的路线，蹭到墙角）
+  if (left < (last ? 2 : corner)) task.i = ++i
+  return i >= path.length || elapsed > 60 ? 'done' : 'walking'
 }
 
 /** 走楼梯的任务（进度存在任务上：路线点、累计路程、已走的路程） */

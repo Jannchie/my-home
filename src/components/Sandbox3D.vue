@@ -8,6 +8,7 @@ import { GROUP_NAMES, LIB_ROOMS, ROOM_NAMES_LIB } from '../three/groups'
 import { freezeMatrices, syncMatrix } from '../three/matrices'
 import { BASE, applyCutaway, bendToWalls, floorY, isPlant, openingInfos, stepCutaway, furnitureModel, placeFurniture, roomAt, type WallLook } from '../three/house'
 import { buildBuilding, type FloorGroup } from '../three/building'
+import { FloorStack } from '../three/floorStack'
 import { carSize } from '../three/exterior'
 import { carChoice, carLabel, parkingIndex, parkingTarget, siteTargets, targetTitle, targetValid, type SiteTarget } from '../siteEdit'
 import SiteEditor from './SiteEditor.vue'
@@ -33,7 +34,7 @@ import { setReflectInterval } from '../three/reflectFrame'
 import { CULL_MARGIN, CullCache, walkVisibility } from '../walkCull'
 import { furnitureRoom } from '../restyle'
 import { DEFAULT_KELVIN, DEFAULT_OUTDOOR, DEFAULT_POWER, DEFAULT_RANGE, IndoorLights, KELVIN_MAX, KELVIN_MIN, LIGHT_MODES, OUTDOOR_MAX, OUTDOOR_MIN, POOL_HIGH, POOL_LOW, POWER_MAX, POWER_MIN, RANGE_MAX, RANGE_MIN, autoLevel, diningKey, isLampAsset, lightColor, lum, ceilingHidden, ownedLightKey, takeOverRoomLights, type LightMode } from '../three/lights'
-import { disposeUnshared, isReflector } from '../three/toon'
+import { disposeUnshared } from '../three/toon'
 import { isWallMounted, poseDoors } from '../three/kit'
 import { drawerSlots } from '../three/drawers'
 import { Openers, doorIdOf, type OpenKey } from '../three/openers'
@@ -46,7 +47,7 @@ import { coverInto, liveCapture } from '../three/planThumb'
 import { FxLayer } from '../three/fx'
 import { SelectFrame, WallGuide } from '../three/selectFrame'
 import { ActorLayer } from '../three/actors'
-import { BoxPool, type CharacterLayer, type FloorHooks } from '../three/characters'
+import { BoxPool, type CharacterLayer } from '../three/characters'
 import { ResidentLayer } from '../three/residents'
 import { ResidentRoster } from '../three/residentRoster'
 import { addResident, isBuiltin, loadResidents, removeResident, residentStatus, residents, updateResident } from '../residents'
@@ -168,301 +169,45 @@ const fv = () => {
 }
 /** 新摆的东西的 floor 字段（最底层不写） */
 const activeFloorField = () => (activeFloor.value === baseFloorId(plan.value) ? undefined : activeFloor.value)
-/**
- * 每层的显示状态：extra = 叠在 elevation 上的偏移（分层拉开 / 隐藏时往上滑走），shown = 是否显示。
- * 目标由「楼层显示」和当前层决定，每帧缓动过去（floorTargets / stepFloors）。
- */
-const floorAnim = new Map<string, { extra: number; target: number; show: boolean; hideAt: boolean; alpha: number }>()
-/** 分层拉开时层与层之间多拉开的距离 */
-const EXPLODE_GAP = 230
-/** 楼层淡入淡出的时长（秒） */
-const FLOOR_FADE_S = 0.45
-/** 只显示到当前层时，上面的层往上滑走的距离（滑完再隐藏） */
-const HIDE_LIFT = 320
-let floorsMoving = false
-/** 家具按楼层分组：组的 y = 这一层的 extra（家具模型自己的 y 已经含楼层 elevation） */
-const furnLayers = new Map<string, THREE.Group>()
-function furnLayer(id: string) {
-  let g = furnLayers.get(id)
-  if (!g) {
-    g = new THREE.Group()
-    g.userData.floorId = id
-    // 静态矩阵：楼层动画挪它时在 applyFloorPose 里手动更新
-    g.matrixAutoUpdate = false
-    furnLayers.set(id, g)
-    furnRoot.add(g)
-  }
-  return g
-}
+/** 各层的显示 / 滑动 / 淡入淡出、家具按楼层分组（three/floorStack.ts） */
+const floors = new FloorStack(furnRoot)
 /** 某层当前的抬升（elevation + 动画偏移） */
-function liftOf(id: string) {
-  return (floorById(plan.value, id)?.elevation ?? 0) + (floorAnim.get(id)?.extra ?? 0)
-}
+const liftOf = (id: string) => floors.lift(id)
 /** 当前楼层地面的世界高度 */
 const activeY = () => liftOf(activeFloor.value)
-/** 这一层现在看得见吗（隐藏动画结束前仍算看得见） */
-const floorShown = (id: string) => floorAnim.get(id)?.show ?? true
-/** 按「楼层显示」和当前层算各层的目标 */
+/** 按「楼层显示」和当前层算各层的目标（外观视图：全部楼层叠好） */
 function floorTargets(snap = false) {
-  const fs = planFloors(plan.value)
-  const ai = Math.max(0, fs.findIndex((f) => f.id === activeFloor.value))
-  const multi = isMultiFloor(plan.value)
-  for (const id of floorAnim.keys()) if (!fs.some((f) => f.id === id)) floorAnim.delete(id)
-  fs.forEach((f, i) => {
-    let st = floorAnim.get(f.id)
-    if (!st) floorAnim.set(f.id, (st = { extra: 0, target: 0, show: true, hideAt: false, alpha: 1 }))
-    // 外观视图：全部楼层叠好
-    const show = fullView() ? 'all' : floorShow.value
-    const hide = multi && show === 'upto' && i > ai
-    st.target = !multi ? 0 : show === 'explode' ? i * EXPLODE_GAP : hide ? HIDE_LIFT : 0
-    st.hideAt = hide
-    // 要显示的层：先露出来再滑下去
-    if (!hide) st.show = true
-    if (snap) {
-      st.extra = st.target
-      st.show = !hide
-      st.alpha = hide ? 0 : 1
-    }
-  })
-  floorsMoving = true
+  floors.targets(planFloors(plan.value), activeFloor.value, fullView() ? 'all' : floorShow.value, snap)
   applyFloorPose()
 }
-/** 每帧推进楼层动画；返回是否还在动 */
-function stepFloors(dt: number) {
-  if (!floorsMoving) return false
-  let busy = false
-  const k = 1 - Math.exp(-dt * 6)
-  for (const st of floorAnim.values()) {
-    // 淡入淡出和滑动一起走：藏起来的层边往上滑边变透明，回来时边落下边显现。
-    // 透明度按固定时长匀速推进（显示时再套 smoothstep），不用指数缓动——那样头几帧就淡没了，看不清过程
-    const at = st.hideAt ? 0 : 1
-    if (st.alpha !== at) {
-      const step = dt / FLOOR_FADE_S
-      st.alpha = at > st.alpha ? Math.min(at, st.alpha + step) : Math.max(at, st.alpha - step)
-      busy = true
-    }
-    const d = st.target - st.extra
-    if (Math.abs(d) < 0.5 && st.alpha === at) {
-      st.extra = st.target
-      if (st.hideAt) st.show = false
-    } else {
-      if (Math.abs(d) >= 0.5) st.extra += d * k
-      else st.extra = st.target
-      busy = true
-    }
-  }
-  applyFloorPose()
-  floorsMoving = busy
-  return true
-}
-/**
- * 整层淡入淡出，效果要像「整层作为一张图层调透明度」：
- * 每个网格各自半透明的话，背面、内墙、家具会互相透出来，乱成一团。所以淡出期间每个网格挂一个只写深度的替身
- * （透明队列里先画，renderOrder 小），再画半透明的颜色（depthFunc ≤）：同一层里只有最前面的表面上色，
- * 后面的被自己层的深度挡掉，整层均匀地透出下层。后处理（夜晚、画面效果）照常作用在一起。
- * 各层共用同一批缓存材质，所以渐变期间换上这一层自己的透明副本，完全不透明后换回。
- * 墙体让开（stepCutaway）也会换材质：这里在每帧渲染前最后统一套用（syncFloorFades），以这里为准。
- * 描边外壳不透明，淡出时藏起来；淡到一半以下不再投影。
- */
-const FADE_ORDER = 20
-const depthOnlyMat = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true, transparent: true })
-const floorFadeMats = new Map<string, WeakMap<THREE.Material, THREE.Material>>()
-function fadeFloor(root: THREE.Object3D, floorId: string, alpha: number) {
-  const faded = alpha < 0.995
-  if (!faded && !root.userData.floorFaded) return
-  let cache = floorFadeMats.get(floorId)
-  if (!cache) floorFadeMats.set(floorId, (cache = new WeakMap()))
-  const ghost = (m: THREE.Material) => {
-    let g = cache!.get(m)
-    if (!g) {
-      g = m.clone()
-      g.onBeforeCompile = m.onBeforeCompile
-      g.customProgramCacheKey = m.customProgramCacheKey
-      g.transparent = true
-      g.depthWrite = false
-      g.depthFunc = THREE.LessEqualDepth
-      g.userData.baseOpacity = m.transparent ? m.opacity : 1
-      g.userData.floorGhost = true
-      // 记住原材质：别的地方（墙体让开）可能把副本当成实心材质记下来，靠它找回原件
-      g.userData.floorSource = m
-      cache!.set(m, g)
-    }
-    g.opacity = (g.userData.baseOpacity as number) * alpha
-    return g
-  }
-  const meshes: THREE.Mesh[] = []
-  root.traverse((n) => {
-    if (n.userData.isOutline) {
-      if (n.userData.fadeHidden === undefined) n.userData.fadeHidden = !n.visible
-      n.visible = !faded && !n.userData.fadeHidden
-      if (!faded) delete n.userData.fadeHidden
-      return
-    }
-    // 镜子上挂的反射面（three/mirrors.ts）不淡出：它的材质带着倒影的渲染目标，克隆不了
-    if ((n as THREE.Mesh).isMesh && !n.userData.fadeTwin && !isReflector(n)) meshes.push(n as THREE.Mesh)
-  })
-  for (const mesh of meshes) {
-    const ud = mesh.userData
-    if (faded) {
-      // 当前材质若不是我们的透明副本，就是「实心」材质（可能刚被墙体让开换过），记下来
-      ud.floorSolid = solidOf(mesh.material as THREE.Material | THREE.Material[])
-      const solid = ud.floorSolid as THREE.Material | THREE.Material[]
-      mesh.material = Array.isArray(solid) ? solid.map(ghost) : ghost(solid)
-      if (ud.floorOrder === undefined) {
-        ud.floorOrder = mesh.renderOrder
-        ud.floorShadow = mesh.castShadow
-      }
-      mesh.renderOrder = FADE_ORDER + 1
-      mesh.castShadow = !!ud.floorShadow && alpha > 0.5
-      // 深度替身：共用几何体，跟着网格走（作为子节点）；原本就透明的（玻璃）不写深度，免得挡住后面的东西
-      const glassy = (Array.isArray(solid) ? solid : [solid]).every((m) => m.transparent)
-      if (!ud.floorTwin && !glassy && !(mesh as THREE.InstancedMesh).isInstancedMesh && !(mesh as THREE.SkinnedMesh).isSkinnedMesh) {
-        const twin = new THREE.Mesh(mesh.geometry, depthOnlyMat)
-        twin.userData.fadeTwin = true
-        twin.renderOrder = FADE_ORDER
-        twin.raycast = () => {}
-        mesh.add(twin)
-        ud.floorTwin = twin
-      }
-    } else if (ud.floorSolid || isFloorGhost(mesh.material as THREE.Material | THREE.Material[])) {
-      mesh.material = ud.floorSolid ?? solidOf(mesh.material as THREE.Material | THREE.Material[])
-      mesh.renderOrder = ud.floorOrder ?? 0
-      mesh.castShadow = !!ud.floorShadow
-      ;(ud.floorTwin as THREE.Mesh | undefined)?.removeFromParent()
-      delete ud.floorSolid
-      delete ud.floorTwin
-      delete ud.floorOrder
-      delete ud.floorShadow
-    }
-  }
-  root.userData.floorFaded = faded
-}
-/**
- * 场景里可能换过材质的事（编辑、墙体让开、楼层动画、重建）发生时加一；syncFloorFades 每帧调用，
- * 这一层的不透明度和这个计数都没变时不再遍历整层（藏起来的上层每帧遍历要一毫秒多）
- */
-let fadeEpoch = 0
-function fadeFloorCached(root: THREE.Object3D, id: string) {
-  const alpha = floorAlpha(id)
-  const ud = root.userData
-  // 整层藏起来了（只到当前层时的上层）：画不到，不用管；显示出来时重新套一次
-  if (!root.visible) {
-    ud.fadeEpoch = -1
-    return
-  }
-  if (ud.fadeAlpha === alpha && ud.fadeEpoch === fadeEpoch) return
-  fadeFloor(root, id, alpha)
-  ud.fadeAlpha = alpha
-  ud.fadeEpoch = fadeEpoch
-}
-
-/** 材质（或材质数组）里的楼层淡出副本换回原材质 */
-const unghost = (m: THREE.Material) => ((m.userData.floorSource as THREE.Material | undefined) ?? m)
-function solidOf(m: THREE.Material | THREE.Material[]) {
-  return Array.isArray(m) ? m.map(unghost) : unghost(m)
-}
-const isFloorGhost = (m: THREE.Material | THREE.Material[]) => (Array.isArray(m) ? m : [m]).some((x) => !!x?.userData?.floorGhost)
-
-/** 渲染前统一套用各层的淡入淡出（在墙体让开之后，以楼层淡出为准） */
-/** 某层现在显示的不透明度（匀速推进的进度套 smoothstep） */
-function floorAlpha(id: string) {
-  const t = floorAnim.get(id)?.alpha ?? 1
-  return t * t * (3 - 2 * t)
-}
-function syncFloorFades() {
-  for (const fg of floorGroups) fadeFloorCached(fg.group, fg.floor.id)
-  for (const [id, g] of furnLayers) fadeFloorCached(g, id)
-  // 角色按所在楼层（走楼梯时按走到的那一层）淡入淡出
-  for (const l of characters) l.relayout()
-}
-
-/**
- * 预热楼层淡入淡出的着色器：透明副本（和深度替身的 depthOnlyMat）是新的着色器变体，被藏起来的楼层的原材质也从没画过，
- * 第一次切换楼层时要同步编译十来个程序（实测卡 2 秒多）。多层户型重搭后空闲时，各层原样编一遍，
- * 再用 fadeFloor 临时翻到另一种状态（显示的层淡出、藏起来的层显示）编一遍，立刻复原；compileAsync 在后台编译（KHR_parallel_shader_compile）。
- * 直接画到屏幕和经后处理画到渲染目标是两种变体，两种都编。主线程约 0.2 秒，所以只在重搭房子时做。
- */
-let warmTimer = 0
-let warmTarget: THREE.WebGLRenderTarget | null = null
+/** 多层户型重搭后空闲时预热楼层淡入淡出的着色器 */
 function prewarmFloorFade() {
-  clearTimeout(warmTimer)
   if (!isMultiFloor(plan.value)) return
-  warmTimer = window.setTimeout(() => {
-    if (!stage || !isMultiFloor(plan.value)) return
-    // 正在淡入淡出的层不碰（它的程序本来就在编了）。「只到当前层」藏起来的上层（完全淡出）也要编：
-    // 它现在挂的是透明副本，原材质（墙纸花纹、屏幕等）一次都没编过，第一次切上去会现编好几个程序
-    const roots: [THREE.Object3D, string][] = [
-      ...floorGroups.map((fg) => [fg.group, fg.floor.id] as [THREE.Object3D, string]),
-      ...[...furnLayers].map(([id, g]) => [g, id] as [THREE.Object3D, string]),
-      ...characters.flatMap((l) => l.roots()),
-    ].filter(([root, id]) => !root.userData.floorFaded || floorAlpha(id) <= 0)
-    const renderer = stage.renderer
-    const prev = renderer.getRenderTarget()
-    const target = (warmTarget ??= new THREE.WebGLRenderTarget(1, 1))
-    const compile = () => {
-      for (const t of [null, target]) {
-        renderer.setRenderTarget(t)
-        for (const [root] of roots) renderer.compileAsync(root, stage.camera, stage.scene).catch(() => {})
-      }
-    }
-    try {
-      // 先按现状编一遍，再把每层翻到另一种状态（显示的层套上淡出，藏起来的层换回原材质）再编一遍
-      compile()
-      const hidden = roots.filter(([root]) => root.userData.floorFaded).map(([root]) => root)
-      for (const [root, id] of roots) fadeFloor(root, id, root.userData.floorFaded ? 1 : 0.5)
-      compile()
-      // 藏起来的层的贴图（墙纸、屏幕、花纹）也从没上传过：顺手传上去，切过去的那一帧少卡几十毫秒
-      const seen = new Set<THREE.Texture>()
-      for (const root of hidden)
-        root.traverse((o) => {
-          const m = (o as THREE.Mesh).material
-          if (!m) return
-          for (const mat of Array.isArray(m) ? m : [m])
-            for (const v of Object.values(mat))
-              if ((v as THREE.Texture | null)?.isTexture && !seen.has(v as THREE.Texture)) {
-                seen.add(v as THREE.Texture)
-                renderer.initTexture(v as THREE.Texture)
-              }
-        })
-    } finally {
-      renderer.setRenderTarget(prev)
-      for (const [root, id] of roots) fadeFloor(root, id, floorAlpha(id))
-    }
-  }, 400)
+  floors.prewarm(() => (stage && isMultiFloor(plan.value) ? { renderer: stage.renderer, camera: stage.camera, scene: stage.scene, extra: characters.flatMap((l) => l.roots()) } : null))
 }
 
-/** 按动画状态摆好各层的房子、家具、宠物、灯 */
+/** 房间 → 楼层（灯跟着楼层抬升用）：户型变了才重建，楼层动画期间每帧复用 */
+let roomFloor = new Map<string, string>()
+let roomFloorRev = -1
+const roomLift = (rid: string | null) => {
+  const fid = rid ? roomFloor.get(rid) : undefined
+  if (!fid) return 0
+  return floors.shown(fid) && !floors.hiding(fid) ? liftOf(fid) : null
+}
+
+/** 按动画状态摆好各层的房子、家具、角色、灯 */
 function applyFloorPose() {
-  for (const fg of floorGroups) {
-    const st = floorAnim.get(fg.floor.id)
-    fg.group.visible = st?.show ?? true
-    // 房子、家具都是静态矩阵（matrices.ts）：只在这一层真的挪了时重算它这棵子树
-    const y = fg.floor.elevation + (st?.extra ?? 0)
-    if (fg.group.position.y !== y) {
-      fg.group.position.y = y
-      syncMatrix(fg.group)
-    }
-  }
-  for (const [id, g] of furnLayers) {
-    const st = floorAnim.get(id)
-    g.visible = st?.show ?? true
-    const y = st?.extra ?? 0
-    if (g.position.y !== y) {
-      g.position.y = y
-      syncMatrix(g)
-    }
-  }
-  // 宠物、机器人：按所在楼层（走楼梯时在两层之间）跟着楼层的动画走（位置、显示、淡入淡出）
-  actors?.relayout()
+  floors.pose()
+  // 角色按所在楼层（走楼梯时在两层之间）跟着楼层的动画走（位置、显示、淡入淡出）
+  for (const l of characters) l.relayout()
   if (lights) {
     if (isMultiFloor(plan.value)) {
-      const raw = toRaw(plan.value)
-      const roomFloor = new Map(raw.rooms.map((r) => [r.id, floorOf(raw, r)]))
-      lights.setLift((rid) => {
-        const fid = rid ? roomFloor.get(rid) : undefined
-        if (!fid) return 0
-        return floorShown(fid) && !floorAnim.get(fid)?.hideAt ? liftOf(fid) : null
-      })
+      if (roomFloorRev !== planRev.value) {
+        const raw = toRaw(plan.value)
+        roomFloor = new Map(raw.rooms.map((r) => [r.id, floorOf(raw, r)]))
+        roomFloorRev = planRev.value
+      }
+      lights.setLift(roomLift)
     } else lights.setLift(null)
   }
   dirty = true
@@ -492,7 +237,7 @@ function roofWanted() {
   if (fullView()) return true
   // 墙高滑杆压低时屋顶会悬空：不显示
   if (sandbox.mode !== 'preview' || wallLowered() || !floorGroups.some((f) => f.roof && !f.roof.userData.derived)) return (roofUp = false)
-  if ([...floorAnim.values()].some((s) => s.hideAt)) return (roofUp = false)
+  if (floors.anyHidden()) return (roofUp = false)
   // 带回差：俯视角在阈值附近来回时屋顶不闪
   const polar = controls ? controls.getPolarAngle() : 1
   roofUp = roofUp ? polar > 0.6 : polar > 0.72
@@ -540,29 +285,21 @@ function houseChanged() {
   return changed
 }
 
-/** 宠物、机器人按楼层分开（各在各的楼层走动） */
 /**
  * 宠物、机器人：整套房子一层 ActorLayer（多层户型每层一张导航网格，猫狗、机器狗、人形机器人经楼梯上下楼）。
  * 角色的高度 = 所在楼层的抬升（elevation + 分层拉开 / 隐藏的动画偏移）+ 离本层地面的高度。
  */
 const actors = new ActorLayer((fid) => objs.get(fid)?.obj)
-actors.elevOf = (id) => (isMultiFloor(plan.value) ? (floorById(plan.value, id)?.elevation ?? 0) : 0)
 /** VRM 住户（residents.ts）：和宠物一样按楼层摆高度、淡入淡出，但人不来自家具 */
 const people = new ResidentLayer()
 /** 所有角色层：同步、每帧更新、楼层动画、预编译、去拖影都对整组做（three/characters.ts） */
 const characters: CharacterLayer[] = [actors, people]
-const floorHooks: FloorHooks = {
-  lift: (id) => (isMultiFloor(plan.value) ? liftOf(id) : 0),
-  shown: (id) => floorAnim.get(id)?.show ?? true,
-  fade: (root, id) => fadeFloor(root, id, floorAlpha(id)),
-}
-for (const l of characters) Object.assign(l, floorHooks)
+for (const l of characters) l.floors = floors
 function syncActors(changed = true) {
   for (const l of characters) l.sync(toRaw(plan.value), actorsLive(), changed)
 }
 const moverBoxes: THREE.Box3[] = []
 const moverPool = new BoxPool()
-// 名单里在家的人：载入模型住进来；不在家 / 移出名单的搬走。载入是异步的，期间名单又变了就以最新的为准
 // 名单里在家的人住进来、出门的搬走（three/residentRoster.ts）
 const roster = new ResidentRoster(people, () => (dirty = true))
 watch(
@@ -1067,6 +804,7 @@ function rebuildHouse() {
     syncFx()
   }
   floorGroups = built.floors
+  floors.setGroups(floorGroups)
   builtActive = activeFloor.value
   stage.scene.add(house)
   lights.syncRooms(raw, ASSET_MAP, floorY, lightStyles(raw))
@@ -1141,7 +879,7 @@ function syncFurniture() {
       openers.bindFurniture(f.id, o.obj, o.open)
     }
     // 按楼层放进各层的组（换了楼层就挪过去）
-    const layer = furnLayer(floorOf(p, f))
+    const layer = floors.furnLayer(floorOf(p, f))
     if (o.obj.parent !== layer) layer.add(o.obj)
     placeShifted(o.obj, p, f)
     // 绿植贴墙时把越过墙面的枝叶弯回来（位置变了才重算）
@@ -1767,7 +1505,7 @@ function pickStairs(e: PointerEvent): string | null {
 function pickFurniture(e: PointerEvent, maxDist = Infinity): string | null {
   setRay(e)
   // 只点当前楼层的家具（上层隐藏 / 下层被挡住时都不会选到别的楼层）
-  const fhits = raycaster.intersectObject(furnLayer(activeFloor.value), true)
+  const fhits = raycaster.intersectObject(floors.furnLayer(activeFloor.value), true)
   // 墙、楼板挡住的不算：点在墙上不会选到墙后面房间里的家具
   const house = floorGroups.find((g) => g.floor.id === activeFloor.value)?.group
   const wall = house ? raycaster.intersectObject(house, true).find((h) => (h.object as THREE.Mesh).isMesh && shown(h.object) && opaqueHit(h)) : undefined
@@ -1937,7 +1675,7 @@ function locate(e: PointerEvent, asset: string, selfId: string | null, exclude: 
   if (def.stick) {
     setRay(e)
     const cur = floorGroups.find((g) => g.floor.id === activeFloor.value)?.group
-    const targets: THREE.Object3D[] = [furnLayer(activeFloor.value), ...(cur ? [cur] : [])]
+    const targets: THREE.Object3D[] = [floors.furnLayer(activeFloor.value), ...(cur ? [cur] : [])]
     const hits = raycaster.intersectObjects(targets, true).filter((h) => {
       let o: THREE.Object3D | null = h.object
       while (o && !o.userData.furnitureId) o = o.parent
@@ -2075,7 +1813,7 @@ function updateGhost(e: { clientX: number; clientY: number; altKey: boolean }) {
   if (q) {
     placeFurniture(ghost, plan.value, { x: q.x, y: q.y, rot: q.rot ?? ghostRot.value, z: q.z, floor: activeFloorField() })
     // 摆放预览在场景根上：加上当前楼层的动画偏移
-    ghost.position.y += floorAnim.get(activeFloor.value)?.extra ?? 0
+    ghost.position.y += floors.extra(activeFloor.value)
     frameAt(ghostFrame, ghost, q.asset)
     const bad = q.z ? propClash(fv(), { id: '', asset: q.asset, x: q.x, y: q.y, rot: q.rot ?? ghostRot.value, z: q.z, floor: activeFloorField() }) : overlapsOthers(fv(), null, q.asset, q.x, q.y, q.rot ?? ghostRot.value)
     ghostFrame.setColor(bad ? RING_BAD : RING_OK)
@@ -2384,7 +2122,7 @@ const REACH = 260
 function pickOpen(ray: THREE.Raycaster, maxDist = Infinity): { key: OpenKey; obj: THREE.Object3D; local: THREE.Vector3 } | null {
   const fl = activeFloor.value
   const g = floorGroups.find((x) => x.floor.id === fl)?.group
-  const hits = ray.intersectObject(furnLayer(fl), true)
+  const hits = ray.intersectObject(floors.furnLayer(fl), true)
   if (g) hits.push(...ray.intersectObject(g, true))
   hits.sort((a, b) => a.distance - b.distance)
   for (const h of hits) {
@@ -3234,9 +2972,8 @@ const toneSwatch = (tn: WoodTone) => `repeating-linear-gradient(0deg, ${WOOD_TON
 const clOpen = ref(false)
 // 在原始对象上算：经过响应式代理要 8ms、原始对象不到 1ms（拖动家具时每帧都会重算）。
 // 依赖改由 store 里的户型版本号提供，plan 里任何变化都会触发重算，行为不变。
-const planVer = planRev
 const checkItems = computed(() => {
-  void planVer.value
+  void planRev.value
   const p = toRaw(plan.value)
   return checklist(p, p.household)
 })
@@ -3261,7 +2998,7 @@ const checkGroups = computed(() => {
 })
 /** 住户面板：每个人住的房间（多层户型带楼层） */
 const memberRoomMap = computed(() => {
-  void planVer.value
+  void planRev.value
   const p = toRaw(plan.value)
   return p.household ? memberRooms(p, p.household) : new Map<string, Room>()
 })
@@ -3291,7 +3028,7 @@ function loop() {
   }
   // 事件、watch 在两帧之间标的脏（编辑、拖动、改设置）：多帧累积要从头来；下面动画标的脏只是让累积少记几帧（post.restart）
   const edited = dirty
-  if (edited || fading || floorsMoving) fadeEpoch++
+  if (edited || fading || floors.moving) floors.bump()
   const moved = walker ? walker.update(dt) : controls.update()
   let culledNow = false
   if (walker) {
@@ -3332,9 +3069,10 @@ function loop() {
   post.setMovers(moverBoxes)
   const anim = fx.update(dt, stage.renderer.domElement.height) || actorsBusy
   // 楼层切换 / 分层拉开的缓动：动画期间沿用旧阴影（每次重画阴影要提交上千次 draw call），停下的那一帧重画一次
-  if (stepFloors(dt)) {
+  if (floors.step(dt)) {
+    applyFloorPose()
     dirty = true
-    if (!floorsMoving) shadowDirty = true
+    if (!floors.moving) shadowDirty = true
   }
   if ((anim || waterWaves) && !(low && now - lastRender < 32)) dirty = true
   if (fading && house) {
@@ -3389,7 +3127,7 @@ function loop() {
     placeSiteCard()
     placeResizeHandles()
     placeBeamHandles()
-    syncFloorFades()
+    floors.syncFades()
     // 顶灯投影换了一盏灯（漫游换房间）：只有它的阴影贴图标了要重画（其余的灯 autoUpdate 关着、没标记，不会跟着重画）
     // 场景变了：太阳和顶灯的阴影一起重画（唯一的入口）；顶灯换了一盏（lights.ts）时它自己标了要重画
     if (shadowDirty) lights.refreshShadows()
@@ -3861,8 +3599,7 @@ onBeforeUnmount(() => {
   bp = null
   blueprint.on = false
   lights.dispose()
-  clearTimeout(warmTimer)
-  warmTarget?.dispose()
+  floors.dispose()
   if (liveCapture.fn === captureView) liveCapture.fn = null
   sandboxBridge.value = null
   cancelAnimationFrame(raf)
@@ -4498,7 +4235,7 @@ watch(
 )
 // 设计图开着时改了户型（撤销 / 重做）：稍等沙盘那边同步完再重算
 let bpTimer = 0
-watch(planVer, () => {
+watch(planRev, () => {
   if (!bp?.active) return
   clearTimeout(bpTimer)
   bpTimer = window.setTimeout(() => bp?.active && bp.update(bpInput()), 120)

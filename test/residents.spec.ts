@@ -7,6 +7,7 @@ import { generatePlan } from '/src/generate-region'
 import { generateHousehold } from '/src/household'
 import { decorateHouse } from '/src/decorate'
 import { baseFloorId, planFloors } from '/src/floors'
+import { FLAT_FLOORS } from '/src/three/characters'
 import { HouseNav } from '/src/nav'
 import { ResidentLayer, lieSpec, type ResidentModel } from '/src/three/residents'
 import { ASSET_MAP } from '/src/three/assets'
@@ -90,7 +91,7 @@ describe('VRM 住户', () => {
 
   test('走过去坐下：髋部落到座面上，起身后放掉座位', async () => {
     const layer = new ResidentLayer()
-    layer.lift = lift
+    layer.floors = { ...FLAT_FLOORS, lift }
     layer.add('a', await stubModel())
     layer.sync(plan, true)
     const fl = layer.snapshot()[0].fl
@@ -111,7 +112,7 @@ describe('VRM 住户', () => {
 
   test('躺到床上：身体放平、脚跟抬到床面以上', async () => {
     const layer = new ResidentLayer()
-    layer.lift = lift
+    layer.floors = { ...FLAT_FLOORS, lift }
     layer.add('a', await stubModel())
     layer.sync(plan, true)
     const bed = layer.seatList.find((s) => s.lie)!
@@ -127,7 +128,7 @@ describe('VRM 住户', () => {
 
   test('经楼梯走到另一层', async () => {
     const layer = new ResidentLayer()
-    layer.lift = lift
+    layer.floors = { ...FLAT_FLOORS, lift }
     layer.add('a', await stubModel())
     layer.sync(plan, true)
     const nav = new HouseNav(plan, { sash: true, stepOver: 30 })

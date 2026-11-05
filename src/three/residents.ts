@@ -5,24 +5,24 @@
 //     （布置时选中 / 拖着家具），不回到哪里去。户型变了以后站的地方不能站了，就近挪开（挪不开就重新找个地方）。
 //   - 找路用第一人称漫游的 walk 网格（除挑空外的房间都能进、落地窗通阳台、跨得过 30cm 以下的小东西），
 //     多层户型经楼梯走（nav.ts HouseNav.route）。门不管开关都能过（和宠物一样）。
-//   - 动作是程序化的：直接转 VRM 的标准化人形骨骼（three-vrm normalized humanoid，T 字站姿为零）——
-//     走路的摆腿摆臂、坐下、躺下、东张西望、呼吸、眨眼。头发、裙摆的摇动交给 VRM 自带的弹簧骨骼。
+//   - 动作用预先转好的动作片段（three/motions.ts：站、走、坐下、坐着、起身）按权重混合，躺下、东张西望、眨眼另外叠加；
+//     头发、裙摆的摇动交给 VRM 自带的弹簧骨骼。
 //   - 画法跟着沙盘：MToon 材质换成项目的 toon 材质（保留贴图），这样灯光遮罩、各种画风、写实 PBR 替换、
 //     楼层淡入淡出都照常生效；描边用蒙皮外壳（toon.ts addOutlines）。不投影，脚下垫一块接触阴影。
 // 单位：厘米。VRM 是米，整个模型放大 100 倍。y 轴向上，平面图的 y 对应 3D 的 z。
 
 import * as THREE from 'three'
-import type { BoxPool, CharacterLayer } from './characters'
+import { UP } from './geo'
+import { FLAT_FLOORS, contactShadow, type BoxPool, type CharacterLayer, type FloorHooks } from './characters'
 import type { VRM, VRMHumanBoneName } from '@pixiv/three-vrm'
-import { dist, pointInPolygon, type Plan, type RoomKind, type Vec } from '../model'
-import { floorOf, floorView, isMultiFloor, planFloors } from '../floors'
+import { dist, pointInPolygon, type Plan, type Room, type RoomKind, type Vec } from '../model'
+import { floorOf, isMultiFloor, planFloors } from '../floors'
 import { HouseNav } from '../nav'
 import { ASSET_MAP } from './assets'
 import type { AssetDef } from './kit'
 import { canSitOn, hasTag, isSleepable } from './tags'
 import { NO_LINE, addOutlines, gradientMap } from './toon'
-import { SHADOW_GEO, SHADOW_MAT } from './actors'
-import { climbStairs, floorPlacement, fwd, rnd, routeLegs, stepToward, turnToward, wrap, TAU, type Gait, type StairsTask } from './locomotion'
+import { climbStairs, expandCrossFloor, floorPlacement, followPath, fwd, randomOtherFloor, rnd, routeLegs, stepToward, turnToward, wrap, TAU, type Gait, type StairsTask } from './locomotion'
 import { buildMotions, motionData, type ClipId, type Motions } from './motions'
 
 
@@ -226,15 +226,21 @@ export function lieSpec(def: AssetDef, height: number): { along: boolean; len: n
   return { along, len, span, n: span >= 130 ? 2 : 1 }
 }
 
-function findSeats(plan: Plan, house: HouseNav, height: number): Seat[] {
-  const out: Seat[] = []
-  // 每层的平面视图只切一次（floorView 每次都要过滤、复制整个户型）
-  const views = new Map<string, Plan>()
-  const viewOf = (fl: string) => {
-    let v = views.get(fl)
-    if (!v) views.set(fl, (v = isMultiFloor(plan) ? floorView(plan, fl) : plan))
-    return v
+/** 每层的房间（多层户型按楼层分好，单层都在一起）：户型变了重建一次，找座位、找地方待着都查它 */
+function roomsByFloor(plan: Plan): (fl: string) => Room[] {
+  if (!isMultiFloor(plan)) return () => plan.rooms
+  const m = new Map<string, Room[]>()
+  for (const r of plan.rooms) {
+    const fl = floorOf(plan, r)
+    let a = m.get(fl)
+    if (!a) m.set(fl, (a = []))
+    a.push(r)
   }
+  return (fl) => m.get(fl) ?? []
+}
+
+function findSeats(plan: Plan, house: HouseNav, height: number, roomsOf: (fl: string) => Room[]): Seat[] {
+  const out: Seat[] = []
   for (const f of plan.furniture) {
     const def = ASSET_MAP.get(f.asset)
     if (!def || def.mount || def.prop || (f.z ?? 0) > 0.5) continue
@@ -245,7 +251,7 @@ function findSeats(plan: Plan, house: HouseNav, height: number): Seat[] {
     if (!lie && !sit) continue
     const fl = floorOf(plan, f)
     // 浴室凳、洗面台前的凳子不坐（人不在浴室里待着）
-    const room = viewOf(fl).rooms.find((r) => pointInPolygon(f, r.points))
+    const room = roomsOf(fl).find((r) => pointInPolygon(f, r.points))
     if (room && NO_SIT.includes(room.kind)) continue
     const nav = house.grid(fl)
     const h = (-f.rot * Math.PI) / 180
@@ -308,8 +314,10 @@ type Bone = (typeof BONES)[number]
 
 const _e = new THREE.Euler()
 const _bq = new THREE.Quaternion()
+/** 动作片段的目标权重（每帧复用） */
+const CLIP_IDS: readonly ClipId[] = ['idle', 'walk', 'sitEnter', 'sitExit', 'sitIdle']
+const _clipW = {} as Record<ClipId, number>
 const _q = new THREE.Quaternion()
-const _up = new THREE.Vector3(0, 1, 0)
 
 /** 躺平：腿伸直、手放在身侧（VRM 1.0 约定的欧拉角），叠在动作片段上 */
 const LIE_POSE: [Bone, number, number, number][] = [
@@ -405,11 +413,7 @@ class Person {
       if (!once) a.time = Math.random() * c.duration
       this.acts[id] = a
     }
-    const sh = new THREE.Mesh(SHADOW_GEO, SHADOW_MAT)
-    sh.scale.set(22, 1, 18)
-    sh.position.y = 0.35
-    sh.renderOrder = 1
-    sh.userData.noOutline = true
+    const sh = contactShadow(22, 18)
     sh.raycast = () => {}
     this.root.add(sh)
     this.shadow = sh
@@ -462,12 +466,12 @@ export class ResidentLayer implements CharacterLayer {
   private live = false
   private house: HouseNav | null = null
   private seats: Seat[] = []
+  /** 每层的房间（rebuild 时按户型建好） */
+  private roomsOf: (fl: string) => Room[] = () => []
   /** 户型（几何 + 家具）变了：导航、座位要重建 */
   private stale = true
-  /** 世界高度：同 ActorLayer（Sandbox3D 设置） */
-  lift: (floor: string) => number = () => 0
-  shown: (floor: string) => boolean = () => true
-  fade: (root: THREE.Object3D, floor: string) => void = () => {}
+  /** 楼层钩子：同 ActorLayer（Sandbox3D 设置） */
+  floors: FloorHooks = FLAT_FLOORS
   /** 新的人刚摆进场景（模型异步载入）：要重画一帧 */
   dirty = false
 
@@ -517,7 +521,8 @@ export class ResidentLayer implements CharacterLayer {
     this.house = new HouseNav(plan, { sash: true, stepOver: 30 })
     const tall = Math.max(150, ...[...this.people.values()].map((p) => p.m.height))
     const old = new Map(this.seats.map((s) => [s.key, s.by]))
-    this.seats = findSeats(plan, this.house, tall)
+    this.roomsOf = roomsByFloor(plan)
+    this.seats = findSeats(plan, this.house, tall, this.roomsOf)
     for (const s of this.seats) s.by = old.get(s.key)
   }
 
@@ -565,16 +570,15 @@ export class ResidentLayer implements CharacterLayer {
   /** 某层随便一个适合待着的地方（不在卫浴、收纳、玄関）；那层没有就任意一层 */
   private loiterSpot(prefer: string): { fl: string; p: Vec } | null {
     const house = this.house!
-    const plan = this.plan!
     for (const fl of [prefer, ...house.floors.filter((f) => f !== prefer)]) {
       const nav = house.grid(fl)
-      const view = isMultiFloor(plan) ? floorView(plan, fl) : plan
+      const rooms = this.roomsOf(fl)
       let any: Vec | null = null
       for (let k = 0; k < 30; k++) {
         const q = nav.randomSpot('walk', R, Math.random, undefined, Infinity, 12)
         if (!q) break
         any ??= q
-        const room = view.rooms.find((r) => pointInPolygon(q, r.points))
+        const room = rooms.find((r) => pointInPolygon(q, r.points))
         if (room && !NO_LOITER.includes(room.kind)) return { fl, p: q }
       }
       if (any) return { fl, p: any }
@@ -583,10 +587,10 @@ export class ResidentLayer implements CharacterLayer {
   }
 
   private place(p: Person) {
-    const { baseY, fl } = floorPlacement(p, p.tasks[0], this.lift)
+    const { baseY, fl } = floorPlacement(p, p.tasks[0], (id) => this.floors.lift(id))
     p.baseY = baseY
-    p.root.visible = this.shown(fl)
-    this.fade(p.root, fl)
+    p.root.visible = this.floors.shown(fl)
+    this.floors.fade(p.root, fl)
     p.writeTransform()
   }
 
@@ -677,8 +681,7 @@ export class ResidentLayer implements CharacterLayer {
     }
     // 换一层 / 去别的房间转转，停下来东张西望
     if (r < 0.62 && house.floors.length > 1) {
-      const fs = house.floors.filter((f) => f !== p.fl && house.connected(p.fl, f))
-      const fl = fs[Math.floor(Math.random() * fs.length)]
+      const fl = randomOtherFloor(house, p.fl)
       const q = fl ? this.loiterSpot(fl) : null
       if (q?.fl === fl) return [{ t: 'go', to: q.p, fl }, { t: 'idle', dur: rnd(3, 7), look: 1 }]
     }
@@ -717,17 +720,7 @@ export class ResidentLayer implements CharacterLayer {
   private step(p: Person, dt: number) {
     if (!p.tasks.length) p.tasks = this.brain(p)
     // 目标在别的楼层：展开成经楼梯的几段（到不了就作废，座位也放掉）
-    for (let guard = 0; guard < 3; guard++) {
-      const t0 = p.tasks[0]
-      if (t0?.t !== 'go' || !t0.fl || t0.fl === p.fl) break
-      const legs = this.expand(p, t0)
-      if (!legs.length) {
-        this.giveUp(p)
-        break
-      }
-      p.tasks.splice(0, 1, ...legs)
-      p.tt = 0
-    }
+    if (!expandCrossFloor(p, (t) => this.expand(p, t as Extract<Task, { t: 'go' }>))) this.giveUp(p)
     if (!p.tasks.length) p.tasks = [{ t: 'idle', dur: rnd(1, 2), look: 1 }]
     const task = p.tasks[0]
     p.tt += dt
@@ -815,42 +808,9 @@ export class ResidentLayer implements CharacterLayer {
         return false
       }
       case 'go': {
-        if (task.path === undefined || task.path === null) {
-          for (const rr of [R + 3, R, R * 0.7]) {
-            task.path = nav.path('walk', p.pos, task.to, rr)
-            task.rr = Math.min(rr, R)
-            if (task.path) break
-          }
-          task.i = task.path && dist(task.path[0], p.pos) > 3 ? 0 : 1
-          task.tries = (task.tries ?? 0) + 1
-          if (!task.path) {
-            this.giveUp(p)
-            return false
-          }
-        }
-        const path = task.path
-        let i = task.i ?? 1
-        if (i >= path.length) return true
-        const last = i === path.length - 1
-        const left = this.moveTo(p, path[i], this.vmax(p), dt, task.rr ?? R)
-        if (left < 0) {
-          task.stuck = (task.stuck ?? 0) + dt
-          if (task.stuck > 1.2) {
-            task.stuck = 0
-            task.path = null
-            if ((task.tries ?? 0) > 2) {
-              this.giveUp(p)
-              return false
-            }
-          }
-          return false
-        }
-        task.stuck = 0
-        if (left < (last ? 2 : 6)) {
-          i++
-          task.i = i
-        }
-        return i >= path.length || p.tt > 60
+        const res = followPath(p, nav, 'walk', task, [R + 3, R, R * 0.7], R, 6, dt, p.tt, (to, rr) => this.moveTo(p, to, this.vmax(p), dt, rr))
+        if (res === 'failed') this.giveUp(p)
+        return res === 'done'
       }
     }
   }
@@ -916,7 +876,8 @@ export class ResidentLayer implements CharacterLayer {
     const turning = turn > 0.8 && Math.abs(p.speed) < 5 && !p.clip && s < 0.1
     p.turnW += ((turning ? 0.7 : 0) - p.turnW) * Math.min(1, dt * 8)
     const g = Math.max(p.walkW, p.turnW) * (1 - s) * (1 - l)
-    const target: Record<ClipId, number> = { idle: 0, walk: 0, sitEnter: 0, sitExit: 0, sitIdle: 0 }
+    const target = _clipW
+    for (const id of CLIP_IDS) target[id] = 0
     if (p.clip) target[p.clip] = 1
     else {
       target.sitIdle = s
@@ -924,7 +885,7 @@ export class ResidentLayer implements CharacterLayer {
       target.idle = Math.max(0, 1 - s - g)
     }
     const k = dt === 0 ? 1 : Math.min(1, dt * 10)
-    for (const id of Object.keys(target) as ClipId[]) {
+    for (const id of CLIP_IDS) {
       const a = p.acts[id]
       const w = a.getEffectiveWeight()
       a.setEffectiveWeight(w + (target[id] - w) * k)
@@ -948,8 +909,8 @@ export class ResidentLayer implements CharacterLayer {
       legIK(p, 'right', y, sitting)
     }
     const yaw = p.lookCur * (1 - l)
-    p.bones.get('neck')?.quaternion.multiply(_q.setFromAxisAngle(_up, yaw * 0.4))
-    p.bones.get('head')?.quaternion.multiply(_q.setFromAxisAngle(_up, yaw * 0.6))
+    p.bones.get('neck')?.quaternion.multiply(_q.setFromAxisAngle(UP, yaw * 0.4))
+    p.bones.get('head')?.quaternion.multiply(_q.setFromAxisAngle(UP, yaw * 0.6))
   }
 
 }

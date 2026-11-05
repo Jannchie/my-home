@@ -20,6 +20,7 @@ import { hasTag } from '/src/three/tags'
 import { buildBuilding } from '/src/three/building'
 import { furnitureModel, placeFurniture } from '/src/three/house'
 import { ActorLayer } from '/src/three/actors'
+import { FLAT_FLOORS } from '/src/three/characters'
 import { buildLightMask } from '/src/three/lightMask'
 import { JP_OPTS, range } from './helpers'
 
@@ -300,8 +301,8 @@ describe('楼梯寻路', () => {
       return o
     }
     const layer = new ActorLayer(getObj)
-    layer.lift = (id) => planFloors(plan).find((f) => f.id === id)!.elevation
-    layer.elevOf = layer.lift
+    const elev = (id: string) => planFloors(plan).find((f) => f.id === id)!.elevation
+    layer.floors = { ...FLAT_FLOORS, lift: elev, elevOf: elev }
     layer.sync(plan, true)
     const goal = nav.grid(hi).nearest('pet', nav.links[0].exit, 14, 200)!
     expect(layer.sendTo('test-cat', hi, { x: goal.x + 0, y: goal.y })).toBe(true)
