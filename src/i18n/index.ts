@@ -2,12 +2,13 @@
 //
 // 做法：界面文案以中文原文作 key（原文就是 zh 的译文），ui.ts 里给出 [ja, en] 对照；
 // 素材名（name / sizeLabel / formLabel）走单独的大词典 assetNames.ts。
+// 运行时不直接导入这两份源文件：构建时按语言各生成一份只含该语言的词典（vite.config.ts 的 i18nDicts），
+// 用到哪种语言才动态加载哪份；中文界面不需要词典。启动时先加载好当前语言再挂载（main.ts），
+// 切换语言时先加载再切（setLang），所以 t() 可以保持同步。
 // 数据里的 key / id / 名字一律不动（存档兼容），只在显示处用 t() / assetText() 取译文。
 // lang 是响应式的：模板、computed 里调用 t() 会随切换即时刷新。
 
-import { ref, watch } from 'vue'
-import { ROOM_NAMES, UI } from './ui'
-import { ASSET_NAMES } from './assetNames'
+import { ref, shallowReactive, watch } from 'vue'
 import { SEO } from '../seo'
 
 export type Lang = 'zh' | 'ja' | 'en'
@@ -132,8 +133,41 @@ if (typeof document !== 'undefined') {
   )
 }
 
-/** 用户主动切换：记住选择 */
-export function setLang(v: Lang) {
+type Dict = { ui: Record<string, string>; rooms: Record<string, string>; assets: Record<string, string> }
+const EMPTY: Dict = { ui: {}, rooms: {}, assets: {} }
+const LOADERS: Record<Exclude<Lang, 'zh'>, () => Promise<{ default: Dict }>> = {
+  ja: () => import('virtual:i18n-dict/ja'),
+  en: () => import('virtual:i18n-dict/en'),
+}
+/** 已加载的词典；响应式：词典晚于语言到达时（例如直接改 lang.value），用到 t() 的界面会自动刷新 */
+const dicts = shallowReactive<Partial<Record<Lang, Dict>>>({ zh: EMPTY })
+const pending = new Map<Lang, Promise<void>>()
+
+/** 加载某种语言的词典（重复调用共用一次加载）。加载失败（离线且没缓存）时不抛错，界面回退中文原文 */
+export function loadLang(l: Lang): Promise<void> {
+  if (dicts[l]) return Promise.resolve()
+  let p = pending.get(l)
+  if (!p) {
+    p = LOADERS[l as Exclude<Lang, 'zh'>]()
+      .then((m) => void (dicts[l] = m.default))
+      .catch((e) => {
+        pending.delete(l)
+        console.warn(`[i18n] 词典 ${l} 加载失败`, e)
+      })
+    pending.set(l, p)
+  }
+  return p
+}
+
+// lang 也可能被直接赋值（测试、宣传片）：跟着补加载
+watch(lang, (l) => void loadLang(l), { immediate: true })
+
+/** 当前语言的词典；还没加载到时是空表（各函数回退原文） */
+const dict = (): Dict => dicts[lang.value] ?? EMPTY
+
+/** 用户主动切换：先加载词典再切，免得界面先闪一下中文；记住选择 */
+export async function setLang(v: Lang) {
+  await loadLang(v)
   lang.value = v
   // 地址里写着语言的，跟着改掉，免得刷新后又回到旧语言
   if (urlLang()) {
@@ -148,8 +182,6 @@ export function setLang(v: Lang) {
     // 存不了就只在本次会话生效
   }
 }
-
-const IDX: Record<Exclude<Lang, 'zh'>, 0 | 1> = { ja: 0, en: 1 }
 
 const fill = (s: string, params?: Record<string, string | number>) =>
   params ? s.replace(/\{(\w+)\}/g, (m, k: string) => (k in params ? String(params[k]) : m)) : s
@@ -168,21 +200,20 @@ function warnMissing(key: string) {
 export function t(zh: string, params?: Record<string, string | number>): string {
   const l = lang.value
   if (l === 'zh' || !zh) return fill(zh, params)
-  const e = UI[zh]
-  if (!e) warnMissing(zh)
-  return fill(e ? e[IDX[l]] : zh, params)
+  const e = dict().ui[zh]
+  if (e === undefined && dicts[l]) warnMissing(zh)
+  return fill(e ?? zh, params)
 }
 
 /** 查得到才翻译，查不到原样返回且不报警（用于可能是用户自定义文字的地方，例如房间名） */
 export function tSoft(s: string): string {
   const l = lang.value
   if (l === 'zh' || !s) return s
-  const e = UI[s]
-  return e ? e[IDX[l]] : s
+  return dict().ui[s] ?? s
 }
 
 /** 当前语言下 t 有没有现成译文（zh 恒为 true） */
-export const hasT = (s: string) => lang.value === 'zh' || s in UI
+export const hasT = (s: string) => lang.value === 'zh' || s in dict().ui
 
 const CJK = /[぀-ヿ㐀-鿿]/
 
@@ -194,8 +225,8 @@ export function assetText(zh: string | undefined): string {
   if (!zh) return ''
   const l = lang.value
   if (l === 'zh' || !CJK.test(zh)) return zh
-  const e = ASSET_NAMES[zh] ?? UI[zh]
-  return e ? e[IDX[l]] : zh
+  const d = dict()
+  return d.assets[zh] ?? d.ui[zh] ?? zh
 }
 
 /**
@@ -205,15 +236,16 @@ export function assetText(zh: string | undefined): string {
 export function tAuto(s: string): string {
   const l = lang.value
   if (l === 'zh' || !s) return s
-  if (UI[s]) return UI[s][IDX[l]]
+  const ui = dict().ui
+  if (ui[s] !== undefined) return ui[s]
   const nums: string[] = []
   const key = s.replace(/\d+(?:\.\d+)?/g, (m) => (nums.push(m), '{n}'))
-  const e = nums.length === 1 ? UI[key] : undefined
-  if (!e) {
-    warnMissing(s)
+  const e = nums.length === 1 ? ui[key] : undefined
+  if (e === undefined) {
+    if (dicts[l]) warnMissing(s)
     return s
   }
-  return fill(e[IDX[l]], { n: nums[0] })
+  return fill(e, { n: nums[0] })
 }
 
 /**
@@ -294,10 +326,10 @@ export function roomName(name: string): string {
     const m = /^(.*?)\s*(\d+)$/.exec(name)
     return m && ZH_TERMS[m[1]] ? `${ZH_TERMS[m[1]]}${m[2]}` : name
   }
-  const direct = ROOM_NAMES[name]
-  if (direct) return direct[IDX[l]]
+  const rooms = dict().rooms
+  if (rooms[name] !== undefined) return rooms[name]
   // 洋室1 / 洋室 2 / 和室3：默认名 + 序号
   const m = /^(.*?)\s*(\d+)$/.exec(name)
-  if (m && ROOM_NAMES[m[1]]) return `${ROOM_NAMES[m[1]][IDX[l]]}${l === 'en' ? ' ' : ''}${m[2]}`
+  if (m && rooms[m[1]] !== undefined) return `${rooms[m[1]]}${l === 'en' ? ' ' : ''}${m[2]}`
   return name
 }

@@ -106,3 +106,24 @@ describe('i18n', () => {
     expect(pct, miss.slice(0, 50).map(([s, id]) => `${s} (${id})`).join('\n')).toBeGreaterThanOrEqual(ASSET_COVERAGE_MIN)
   })
 })
+
+describe('按语言拆包的词典', () => {
+  test('加载后 t / assetText / roomName 取到对应语言那一列', async () => {
+    const { lang, loadLang, t, assetText, roomName } = await import('/src/i18n')
+    const keep = lang.value
+    await Promise.all([loadLang('ja'), loadLang('en')])
+    const asset = Object.keys(ASSET_NAMES)[0]
+    try {
+      for (const [l, i] of [['ja', 0], ['en', 1]] as const) {
+        lang.value = l
+        expect(t('撤销')).toBe(UI['撤销'][i])
+        expect(assetText(asset)).toBe(ASSET_NAMES[asset][i])
+        expect(roomName('洋室1')).toBe(`${ROOM_NAMES['洋室'][i]}${l === 'en' ? ' ' : ''}1`)
+      }
+      lang.value = 'zh'
+      expect(t('撤销')).toBe('撤销')
+    } finally {
+      lang.value = keep
+    }
+  })
+})

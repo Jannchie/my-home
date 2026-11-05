@@ -6,7 +6,7 @@ import { Director, DURATION, libCards, planUi, ui } from './timeline'
 import PlanLayer from './PlanLayer.vue'
 import { L } from './text'
 import { t } from '../i18n'
-import { PRODUCT_TAGLINE } from '../i18n/ui'
+import { PRODUCT_TAGLINE } from '../i18n/product'
 
 const canvas = ref<HTMLCanvasElement>()
 const ghost = ref<HTMLCanvasElement>()

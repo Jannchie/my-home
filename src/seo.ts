@@ -4,10 +4,10 @@
 // - vite.config.ts 的 seo 插件：构建时生成 /zh/ /ja/ /en/ 三个静态入口页的 <head>、JSON-LD、sitemap.xml、robots.txt
 //   （社交平台的爬虫不跑 JS，所以每种语言都要有一份写死了 meta 的 HTML）；
 // - src/i18n/index.ts：运行时切换语言时同步 document.title / description / og 标签。
-// 一句话简介放在 i18n/ui.ts（界面也会用），这里引用过来，保证页面里和分享卡片里是同一句话；
-// meta description 要控制在搜索结果能显示完的长度，单独写在这里（长简介见 ui.ts 的 PRODUCT_INTRO）。
+// 一句话简介放在 i18n/product.ts（界面也会用），这里引用过来，保证页面里和分享卡片里是同一句话；
+// meta description 要控制在搜索结果能显示完的长度，单独写在这里（长简介见 product.ts 的 PRODUCT_INTRO）。
 
-import { PRODUCT_TAGLINE, UI } from './i18n/ui.ts'
+import { PRODUCT_TAGLINE, PRODUCT_TEXT } from './i18n/product.ts'
 
 export type SeoLang = 'zh' | 'ja' | 'en'
 export const SEO_LANGS: SeoLang[] = ['zh', 'ja', 'en']
@@ -20,7 +20,7 @@ export const AUTHOR = { name: 'Jianqi Pan', url: 'https://github.com/Jannchie', 
 /** 项目源码仓库（顶栏 / 「更多」菜单的 GitHub 链接、JSON-LD 的 codeRepository） */
 export const REPO_URL = 'https://github.com/Jannchie/my-home'
 
-const pick = (zh: string, l: SeoLang) => (l === 'zh' ? zh : UI[zh][l === 'ja' ? 0 : 1])
+const pick = (zh: string, l: SeoLang) => (l === 'zh' ? zh : PRODUCT_TEXT[zh][l === 'ja' ? 0 : 1])
 
 export interface SeoText {
   /** <html lang> 与 hreflang */

@@ -2,7 +2,9 @@ import { defineConfig, loadEnv, type Plugin } from 'vite'
 import { PUBLIC_PRECACHE, swSource, swVersion } from './src/pwa/sw.ts'
 import vue from '@vitejs/plugin-vue'
 import { DEFAULT_SITE_URL, jsonLd, SEO, SEO_LANGS, type SeoLang } from './src/seo.ts'
-import { PRODUCT_INTRO, PRODUCT_TAGLINE, UI } from './src/i18n/ui.ts'
+import { ROOM_NAMES, UI } from './src/i18n/ui.ts'
+import { ASSET_NAMES } from './src/i18n/assetNames.ts'
+import { PRODUCT_INTRO, PRODUCT_TAGLINE } from './src/i18n/product.ts'
 import { AGENT_FILES, agentFile, robotsTxt, type AgentFile } from './src/agentDocs.ts'
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -136,6 +138,30 @@ function pwa(): Plugin {
   }
 }
 
+/**
+ * 界面词典按语言拆包：源文件（i18n/ui.ts、assetNames.ts）按「中文 → [日, 英]」成对维护，方便对照翻译；
+ * 运行时只需要当前语言那一列。这里把每种语言的那一列生成虚拟模块 virtual:i18n-dict/ja|en，
+ * i18n/index.ts 按需动态导入：中文界面一个词典都不下载，日 / 英各只下载自己的一半。
+ * 词典改了 vite 会因配置依赖变化自动重启，生成结果跟着更新。
+ */
+export function i18nDicts(): Plugin {
+  const PREFIX = 'virtual:i18n-dict/'
+  const col = (src: Record<string, [string, string]>, i: 0 | 1) => Object.fromEntries(Object.entries(src).map(([k, v]) => [k, v[i]]))
+  return {
+    name: 'my-home-i18n-dicts',
+    resolveId: (id) => (id.startsWith(PREFIX) ? '\0' + id : undefined),
+    load(id) {
+      if (!id.startsWith('\0' + PREFIX)) return
+      const l = id.slice(PREFIX.length + 1)
+      if (l !== 'ja' && l !== 'en') throw new Error(`[i18n] 未知词典 ${id}`)
+      const i = l === 'ja' ? 0 : 1
+      const dict = { ui: col(UI, i), rooms: col(ROOM_NAMES, i), assets: col(ASSET_NAMES, i) }
+      // JSON.parse 一个字符串字面量比等价的对象字面量解析得快
+      return `export default JSON.parse(${JSON.stringify(JSON.stringify(dict))})`
+    },
+  }
+}
+
 /** 本仓库根目录下的 .claude/（小写、正斜杠；Windows 的 URL 路径去掉开头的 /） */
 const CLAUDE_DIR = decodeURIComponent(new URL('./.claude/', import.meta.url).pathname)
   .replace(/^\/([A-Za-z]:)/, '$1')
@@ -145,13 +171,13 @@ export default defineConfig(({ mode }) => {
   // 站点地址：项目根 .env* / 环境变量里的 VITE_SITE_URL，没有就用占位地址（上线前务必改掉）
   const site = (loadEnv(mode, '', 'VITE_').VITE_SITE_URL || DEFAULT_SITE_URL).replace(/\/+$/, '')
   return {
-    plugins: [vue(), seo(site), pwa()],
+    plugins: [vue(), i18nDicts(), seo(site), pwa()],
     define: { 'import.meta.env.VITE_SITE_URL': JSON.stringify(site) },
     // 代理的 git worktree 在 .claude/worktrees 下：别让它们的改动触发本仓库 dev server 整页刷新。
     // 只忽略本仓库根目录下的 .claude（worktree 自己也在某个 .claude 里，不能按路径片段匹配）
     server: { port: 5199, watch: { ignored: (p: string) => p.replace(/\\/g, '/').toLowerCase().startsWith(CLAUDE_DIR) } },
     build: {
-      // 分包：three、素材包、i18n 词典体积大且更新节奏不同，各自成独立 chunk，改业务代码时浏览器缓存仍可复用。
+      // 分包：three、素材包体积大且更新节奏不同（i18n 词典按语言动态导入，本来就各成一块），各自成独立 chunk，改业务代码时浏览器缓存仍可复用。
       // Vite 8（rolldown）里 manualChunks 只是兼容写法：它被转成单个 group，而 group 默认会把命中模块的依赖一并收进来，
       // 结果 three 被素材包的 chunk 吞掉。这里用 codeSplitting.groups 按优先级分组，three 先认领。
       rolldownOptions: {
@@ -159,7 +185,6 @@ export default defineConfig(({ mode }) => {
           codeSplitting: {
             groups: [
               { name: 'three', test: /[\\/]node_modules[\\/](\.pnpm[\\/]three@[^\\/]+[\\/]node_modules[\\/])?three[\\/]/, priority: 30 },
-              { name: 'i18n', test: /[\\/]src[\\/]i18n[\\/](ui|assetNames)\.ts$/, priority: 20 },
               { name: 'asset-packs', test: /[\\/]src[\\/]three[\\/]packs[\\/]/, priority: 10 },
             ],
           },
