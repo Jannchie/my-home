@@ -8,7 +8,7 @@
 // 注入点：受光材质走 lightMask.ts 的 injectLightMask（它在里面调用 injectAnime）。
 
 import * as THREE from 'three'
-import { setToonBands } from './toon'
+import { cloneWithHooks, setToonBands } from './toon'
 import { MAT_ID } from './matIds'
 import { HASH_NOISE } from './glslNoise'
 
@@ -191,11 +191,9 @@ export function markMetalParts(root: THREE.Object3D) {
     if (!m.isMeshToonMaterial || m.vertexColors || m.defines?.ANIME_METAL !== undefined) return
     let v = metalMats.get(m)
     if (!v) {
-      v = m.clone()
-      v.defines = { ...m.defines, ANIME_METAL: '' }
       // clone 不带 onBeforeCompile / customProgramCacheKey（灯光遮罩、赛璐璐都注入在那里）
-      v.onBeforeCompile = m.onBeforeCompile
-      v.customProgramCacheKey = m.customProgramCacheKey
+      v = cloneWithHooks(m)
+      v.defines = { ...m.defines, ANIME_METAL: '' }
       metalMats.set(m, v)
     }
     mesh.material = v

@@ -1868,7 +1868,9 @@ export function landingNet(p: string[]) {
 
 /** 贴花：画面贴在表面上方 0.02，用 polygonOffset 防闪（卡牌、骰子这类很薄的东西） */
 export function decal<T extends THREE.Mesh>(m: T): T {
-  const mat = m.material as THREE.Material
+  // paintPanel 的材质是共用的，克隆一份再改
+  const mat = (m.material as THREE.Material).clone()
+  m.material = mat
   mat.polygonOffset = true
   mat.polygonOffsetFactor = -2
   mat.polygonOffsetUnits = -2

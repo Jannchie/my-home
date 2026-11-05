@@ -27,7 +27,7 @@ import { makeRoomForPorch, normalizeExterior, styleExterior } from './exterior'
 import { normalizeWindow } from './windows'
 import { normalizeDoor } from './doorStyles'
 import { yardFurniture } from './yard'
-import { STAIRS_SIZE } from './stairs'
+import { STAIRS_SIZE, stairHoleConflicts } from './stairs'
 import { BASE_FLOOR_ID, SLAB, baseFloorId, floorBelow, floorById, floorOf, floorOutline, floorView, isMultiFloor, nextFloorId, normalizeFloors, planFloors, stampFloor } from './floors'
 
 export type Tool = 'select' | 'rect' | 'poly' | 'door' | 'window' | 'fixture'
@@ -178,6 +178,8 @@ export const currentFloor = ref<string>(BASE_FLOOR_ID)
 export const activeFloor = computed(() => (floorById(plan.value, currentFloor.value) ? currentFloor.value : baseFloorId(plan.value)))
 /** 当前楼层的子户型（单层户型就是 plan 本身）：平面图的绘制、吸附、选中都只看它 */
 export const floorPlan = computed(() => floorView(plan.value, activeFloor.value))
+/** 当前楼层的楼梯洞口压到房间的冲突（楼层条的提示、平面图标红洞口共用一份） */
+export const activeStairConflicts = computed(() => stairHoleConflicts(plan.value).filter((c) => c.floor === activeFloor.value))
 /** 3D 沙盘的楼层显示：all 全部 / upto 只显示到当前层 / explode 分层拉开 */
 export type FloorShow = 'all' | 'upto' | 'explode'
 export const FLOOR_SHOWS: { id: FloorShow; label: string }[] = [

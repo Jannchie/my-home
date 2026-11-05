@@ -585,6 +585,3 @@ export const CHANGELOG: Release[] = [
     },
   },
 ]
-
-/** 当前版本（更新日志第一条） */
-export const APP_VERSION = CHANGELOG[0].version

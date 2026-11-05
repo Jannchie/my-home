@@ -16,7 +16,7 @@ import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 import { patternMaterial } from './fabric'
 import type { PatternKind, PatternSpec } from './patterns'
-import { shade, toon } from './toon'
+import { gradientMap, shade, toon } from './toon'
 import { C, S, rng, type StyleTag } from './kit'
 
 const PI = Math.PI
@@ -1356,7 +1356,7 @@ export function foldedRow(len: number, o: RowOpts & { h: number; d: number }): T
 let vcMat: THREE.MeshToonMaterial | null = null
 /** 顶点色 toon 材质（白色底，描边按白色算出的深灰） */
 function vertexColorMat() {
-  if (!vcMat) vcMat = new THREE.MeshToonMaterial({ color: '#ffffff', vertexColors: true, gradientMap: (toon('#fff') as THREE.MeshToonMaterial).gradientMap })
+  if (!vcMat) vcMat = new THREE.MeshToonMaterial({ color: '#ffffff', vertexColors: true, gradientMap: gradientMap() })
   return vcMat
 }
 

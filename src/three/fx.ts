@@ -2,7 +2,7 @@
 // 发射点每帧跟着宿主物体走（家具被拖动、旋转时特效跟着动）。
 
 import { useAnisotropy } from './toon'
-import { syncMatrix } from './matrices'
+import { syncMatrix, visibleChain } from './matrices'
 import * as THREE from 'three'
 import type { Fx } from './kit'
 import { ADDITIVE_KEEP_ALPHA } from './blend'
@@ -50,7 +50,13 @@ function softTexture() {
   return softTex
 }
 
-/** 粒子大小按世界单位（cm）透视缩放 */
+/** 粒子大小按世界单位（cm）透视缩放；材质没有逐发射点的参数（颜色走顶点属性），按加色与否全局共用两份 */
+const materials = new Map<boolean, THREE.ShaderMaterial>()
+function sharedMaterial(additive: boolean) {
+  let m = materials.get(additive)
+  if (!m) materials.set(additive, (m = makeMaterial(additive)))
+  return m
+}
 function makeMaterial(additive: boolean) {
   return new THREE.ShaderMaterial({
     uniforms: { uTex: { value: softTexture() }, uScale: { value: 600 } },
@@ -127,43 +133,48 @@ class Emitter {
     geo.setAttribute('aSize', new THREE.BufferAttribute(this.size, 1))
     geo.setAttribute('aAlpha', new THREE.BufferAttribute(this.alpha, 1))
     geo.setAttribute('aColor', new THREE.BufferAttribute(col, 3))
-    this.points = new THREE.Points(geo, makeMaterial(!!this.spec.additive))
+    this.points = new THREE.Points(geo, sharedMaterial(!!this.spec.additive))
     this.points.frustumCulled = false
     this.points.renderOrder = 5
     // 错开出生时间，一开始就是连续的一缕
-    for (let i = 0; i < n; i++) this.parts.push(this.spawn(-Math.random() * this.spec.life[1]))
+    for (let i = 0; i < n; i++) {
+      const p: Particle = { age: 0, life: 0, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, phase: 0 }
+      this.spawn(p, -Math.random() * this.spec.life[1])
+      this.parts.push(p)
+    }
   }
 
-  spawn(age = 0): Particle {
+  /** 原地重置成一颗新粒子（每帧都有粒子重生，不新建对象） */
+  spawn(p: Particle, age = 0) {
     const s = this.spec
     const k = this.scale
     const a = Math.random() * Math.PI * 2
     const r = Math.sqrt(Math.random()) * s.spread * k
-    return {
-      age,
-      life: s.life[0] + Math.random() * (s.life[1] - s.life[0]),
-      x: Math.cos(a) * r,
-      y: 0,
-      z: Math.sin(a) * r,
-      vx: (Math.random() - 0.5) * 2 * s.drift * k,
-      vy: (s.rise[0] + Math.random() * (s.rise[1] - s.rise[0])) * k,
-      vz: (Math.random() - 0.5) * 2 * s.drift * k,
-      phase: Math.random() * Math.PI * 2,
-    }
+    p.age = age
+    p.life = s.life[0] + Math.random() * (s.life[1] - s.life[0])
+    p.x = Math.cos(a) * r
+    p.y = 0
+    p.z = Math.sin(a) * r
+    p.vx = (Math.random() - 0.5) * 2 * s.drift * k
+    p.vy = (s.rise[0] + Math.random() * (s.rise[1] - s.rise[0])) * k
+    p.vz = (Math.random() - 0.5) * 2 * s.drift * k
+    p.phase = Math.random() * Math.PI * 2
   }
 
+  /** 返回是否在显示（隐藏的不更新，也不要求重绘） */
   update(dt: number, t: number) {
-    const visible = isShown(this.host)
+    // 宿主自己和所有祖先都可见才显示（壁挂物随墙隐藏时特效也隐藏）
+    const visible = visibleChain(this.host)
     this.points.visible = visible
-    if (!visible) return
+    if (!visible) return false
     this.host.updateWorldMatrix(true, false)
     this.origin.set(this.fx.x, this.fx.y, this.fx.z).applyMatrix4(this.host.matrixWorld)
     const s = this.spec
     const k = this.scale
     for (let i = 0; i < this.parts.length; i++) {
-      let p = this.parts[i]
+      const p = this.parts[i]
       p.age += dt
-      if (p.age >= p.life || p.y > this.height) p = this.parts[i] = this.spawn()
+      if (p.age >= p.life || p.y > this.height) this.spawn(p)
       if (p.age < 0) {
         this.alpha[i] = 0
         continue
@@ -185,18 +196,13 @@ class Emitter {
     g.attributes.position.needsUpdate = true
     g.attributes.aSize.needsUpdate = true
     g.attributes.aAlpha.needsUpdate = true
+    return true
   }
 
+  /** 材质是共用的，只释放几何 */
   dispose() {
     this.points.geometry.dispose()
-    ;(this.points.material as THREE.Material).dispose()
   }
-}
-
-/** 宿主自己和所有祖先都可见才显示（壁挂物随墙隐藏时特效也隐藏） */
-function isShown(o: THREE.Object3D | null): boolean {
-  for (; o; o = o.parent) if (!o.visible) return false
-  return true
 }
 
 /**
@@ -251,20 +257,16 @@ export class FxLayer {
     return [...this.emitters.keys()]
   }
 
-  get active() {
-    return this.emitters.size > 0 || this.swimmers.size > 0
-  }
-
-  /** 每帧调用；返回是否有特效（有就需要持续重绘） */
+  /** 每帧调用；返回是否有正在显示的特效（有就需要持续重绘；宿主隐藏、不在当前楼层的不算） */
   update(dt: number, viewportHeight: number) {
     this.t += dt
-    for (const list of this.emitters.values())
-      for (const e of list) {
-        ;(e.points.material as THREE.ShaderMaterial).uniforms.uScale.value = viewportHeight * 1.2
-        e.update(dt, this.t)
-      }
+    let shown = false
+    for (const m of materials.values()) m.uniforms.uScale.value = viewportHeight * 1.2
+    for (const list of this.emitters.values()) for (const e of list) shown = e.update(dt, this.t) || shown
     for (const list of this.swimmers.values())
       for (const { obj, s, phase } of list) {
+        if (!visibleChain(obj)) continue
+        shown = true
         const a = this.t * s.speed + phase
         obj.position.set((s.cx ?? 0) + Math.cos(a) * s.rx, s.y + Math.sin(this.t * 1.7 + phase) * (s.bob ?? 0.6), (s.cz ?? 0) + Math.sin(a) * s.rz)
         // 切线方向：头（+x）朝前进方向
@@ -274,6 +276,6 @@ export class FxLayer {
         // 家具模型是静态矩阵（matrices.ts）
         if (!obj.matrixAutoUpdate) syncMatrix(obj)
       }
-    return this.active
+    return shown
   }
 }

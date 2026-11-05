@@ -6,8 +6,7 @@ import { JIcon } from '@jannchie/icons-vue'
 import { ICONS } from '../ui/icons'
 import { t } from '../i18n'
 import { baseFloorId, floorBelow, isMultiFloor, planFloors } from '../floors'
-import { stairHoleConflicts } from '../stairs'
-import { activeFloor, addFloor, copyOutlineFromBelow, deleteFloor, floorView3d, floorViews, plan, renameFloor, setFloor, setFloorHeight, setFloorView, type FloorView } from '../store'
+import { activeFloor, activeStairConflicts, addFloor, copyOutlineFromBelow, deleteFloor, floorView3d, floorViews, plan, renameFloor, setFloor, setFloorHeight, setFloorView, type FloorView } from '../store'
 
 const props = withDefaults(defineProps<{ variant?: 'canvas' | 'panel' }>(), { variant: 'canvas' })
 
@@ -17,7 +16,7 @@ const active = computed(() => floors.value.find((f) => f.id === activeFloor.valu
 const canDelete = computed(() => multi.value && active.value.id !== baseFloorId(plan.value))
 const hasBelow = computed(() => !!floorBelow(plan.value, activeFloor.value))
 /** 楼梯洞口压到房间的提示（只看当前层） */
-const conflicts = computed(() => stairHoleConflicts(plan.value).filter((c) => c.floor === activeFloor.value).length)
+const conflicts = computed(() => activeStairConflicts.value.length)
 
 const open = ref(false)
 const root = ref<HTMLElement>()

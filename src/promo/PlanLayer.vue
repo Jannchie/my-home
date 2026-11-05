@@ -6,6 +6,7 @@ import { foldPlanPath } from '../doorMotion'
 import { ROOM_KINDS, add, area, bbox, edgeInfo, fixtureBox, fmtRoomArea, isAxisRect, labelPointAvoiding, mul, pointInPolygon, polyPath, type Plan, type Room, type RoomKind, type Vec } from '../model'
 import { isIndoor, wallSegments, wallThicknessAt } from '../walls'
 import { tatamiLayout } from '../tatami'
+import { clampOffset } from '../openingEdit'
 import { ASSET_MAP } from '../three/assets'
 import { effectivePalette } from '../three/colors'
 import { roomName } from '../i18n'
@@ -76,11 +77,6 @@ const walls = computed(() => {
 
 const balconies = computed(() => rooms.value.filter((v) => !isIndoor(v.room)))
 
-function clampOffset(o: { offset: number; width: number }, L: number) {
-  if (L <= o.width) return L / 2
-  return Math.max(o.width / 2, Math.min(L - o.width / 2, o.offset))
-}
-
 const openings = computed(() => {
   const out: { id: string; kind: string; gap: string; leaf: string; arc: string; glass: string[]; panels: string[]; sash: boolean; fold: string; hinge: Vec }[] = []
   const p = props.plan
@@ -88,7 +84,7 @@ const openings = computed(() => {
     const r = p.rooms.find((x) => x.id === o.roomId)
     if (!r || o.edge >= r.points.length) continue
     const e = edgeInfo(r.points, o.edge)
-    const c = clampOffset(o, e.length)
+    const c = clampOffset(o.offset, o.width, e.length)
     const w = Math.min(o.width, e.length)
     const p0 = add(e.a, mul(e.dir, c - w / 2))
     const p1 = add(e.a, mul(e.dir, c + w / 2))

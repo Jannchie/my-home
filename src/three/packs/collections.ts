@@ -41,9 +41,11 @@ function paintTop(w: number, d: number, key: string, draw: Draw, x: number, y: n
   return paintPanel(w, d, key, draw, { x, y, z: z + d / 2, rx: -PI / 2 })
 }
 
-/** 画面按透明度抠形（圆盘、异形切片、带齿孔的邮票） */
+/** 画面按透明度抠形（圆盘、异形切片、带齿孔的邮票）；paintPanel 的材质是共用的，克隆一份再改 */
 function cutout<T extends THREE.Mesh>(m: T): T {
-  ;(m.material as THREE.MeshToonMaterial).alphaTest = 0.5
+  const mat = (m.material as THREE.MeshToonMaterial).clone()
+  mat.alphaTest = 0.5
+  m.material = mat
   return m
 }
 

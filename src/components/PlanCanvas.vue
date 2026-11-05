@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { hasSidelight, sidelightWidth } from '../doorStyles'
 import { foldPlanPath } from '../doorMotion'
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, toRaw, watch } from 'vue'
 import ContextMenu, { type MenuEntry } from './ContextMenu.vue'
 import { ICONS } from '../ui/icons'
 import { overlays } from '../ui/feedback'
@@ -31,6 +31,7 @@ import {
   polyPath,
   sub,
   centroid,
+  type Box,
   type FenceKind,
   type Fixture,
   type Opening,
@@ -43,11 +44,11 @@ import { wallSegments, wallThicknessAt } from '../walls'
 import { BEAM_MAX_H, beamsOf, clampBeam, wallFace, wallInnerFace, wallKey } from '../wallFace'
 import { dragBeam, type BeamGrip } from '../beamDrag'
 import { baseFloorId, floorBelow, floorById, floorOf, floorView, isMultiFloor, riseOf } from '../floors'
-import { stairHoleConflicts, stairHoles, stairPlanLines, subtractSpan } from '../stairs'
+import { stairHoles, stairPlanLines, subtractSpan } from '../stairs'
 import { tatamiLayout } from '../tatami'
 import { sashAllowed } from '../windows'
 import { stallWalls } from '../bathroom'
-import { openingFromEnds } from '../openingEdit'
+import { clampOffset, openingFromEnds } from '../openingEdit'
 import { applyFixtureCarry, captureFixtureProps, type FixtureCarry } from '../fixtureCarry'
 import FixtureGlyph from './FixtureGlyph.vue'
 import { roomName, t } from '../i18n'
@@ -79,6 +80,7 @@ import {
   resizeFurniture,
   floorPlan as fp,
   activeFloor,
+  activeStairConflicts,
   selection,
   selectedWall,
   setWallFace,
@@ -94,6 +96,11 @@ const view = reactive({ x: 80, y: 80, s: 0.6 })
 
 const cursor = ref<Vec | null>(null)
 const guides = ref<{ x?: number; y?: number }>({})
+/** 清掉对齐参考线；本来就空时不换新对象（悬停时每次 pointermove 都会调，换对象会让整张图重渲染） */
+function clearGuides() {
+  const g = guides.value
+  if (g.x !== undefined || g.y !== undefined) guides.value = {}
+}
 const draft = ref<Vec[]>([])
 const spaceDown = ref(false)
 
@@ -160,7 +167,7 @@ function snapGrid(v: number) {
 
 /** 吸附：顶点 > 与其他顶点对齐 x/y > 网格 */
 function snapPoint(p: Vec, exclude?: { roomId: string; index?: number }): Vec {
-  guides.value = {}
+  clearGuides()
   if (!settings.snap) return { x: Math.round(p.x), y: Math.round(p.y) }
   const thr = px(10)
   const vs = snapVertices(exclude)
@@ -208,11 +215,6 @@ function nearestEdge(p: Vec, maxPx = 16) {
   return best
 }
 
-function clampOffset(o: { offset: number; width: number }, L: number) {
-  if (L <= o.width) return L / 2
-  return Math.max(o.width / 2, Math.min(L - o.width / 2, o.offset))
-}
-
 // ---------- 指针 ----------
 
 function hitOf(e: Event) {
@@ -249,7 +251,7 @@ function startPan(e: PointerEvent, tap?: () => void) {
 function abortDrag() {
   const d = drag.value
   drag.value = null
-  guides.value = {}
+  clearGuides()
   if (!d || d.kind === 'pan' || d.kind === 'rect' || d.kind === 'furnitureSize' || d.kind === 'beam') return
   if (d.kind === 'room' || d.kind === 'edge') {
     const r = findRoom(d.kind === 'room' ? d.id : d.roomId)
@@ -513,7 +515,7 @@ function placeAt(w: Vec) {
       kind: tool.value,
       roomId: ne.room.id,
       edge: ne.edge,
-      offset: clampOffset({ offset: snapGrid(ne.t), width: ow }, L),
+      offset: clampOffset(snapGrid(ne.t), ow, L),
       width: ow,
       hinge: 'start',
       swing: 'in',
@@ -563,7 +565,7 @@ function onPointerMove(e: PointerEvent) {
     return
   }
   if (!d) {
-    guides.value = {}
+    clearGuides()
     updateHover(e)
     if (tool.value === 'rect' || tool.value === 'poly') {
       let p = snapPoint(w)
@@ -613,7 +615,7 @@ function onPointerMove(e: PointerEvent) {
     // 轴对齐的边：沿法线方向的坐标单独吸附
     const mid = mul(add(e0.a, e0.b), 0.5)
     const moved = add(mid, mul(nrm, k))
-    guides.value = {}
+    clearGuides()
     if (Math.abs(nrm.x) > 0.999) {
       const sx = snapAxis(moved.x, 'x', r.id)
       k = (sx - mid.x) / nrm.x
@@ -658,7 +660,7 @@ function onPointerMove(e: PointerEvent) {
     if (ne) {
       o.roomId = ne.room.id
       o.edge = ne.edge
-      o.offset = clampOffset({ offset: snapGrid(ne.t), width: o.width }, edgeInfo(ne.room.points, ne.edge).length)
+      o.offset = clampOffset(snapGrid(ne.t), o.width, edgeInfo(ne.room.points, ne.edge).length)
     }
   }
 }
@@ -737,7 +739,7 @@ function releasePointer(e: PointerEvent) {
   downAt = null
   const d = drag.value
   drag.value = null
-  guides.value = {}
+  clearGuides()
   if (!d) return
   if (d.kind === 'pan') {
     if (tapped && d.menu) {
@@ -1030,8 +1032,36 @@ function closetLines(r: Room): string[] {
   return at.map((k) => (horiz ? `M${a0},${k}L${a1},${k}` : `M${k},${a0}L${k},${a1}`))
 }
 
-const roomViews = computed(() =>
-  fp.value.rooms.map((r) => {
+/**
+ * 房间名的位置（避开房里的设备）算起来重：按「房间顶点 + 房里设备外框」的签名逐房间缓存，
+ * 拖一个房间 / 设备时别的房间不重算。签名和计算都读 toRaw 的顶点（依赖由 roomViews 里的 polyPath 收集）。
+ */
+const labelCache = new Map<string, { sig: string; at: Vec }>()
+function roomLabel(r: Room, fixtures: { c: Vec; box: Box }[]): Vec {
+  const pts = toRaw(r.points)
+  const boxes = fixtures.filter((f) => pointInPolygon(f.c, pts)).map((f) => f.box)
+  let sig = ''
+  for (const p of pts) sig += `${p.x},${p.y};`
+  sig += '|'
+  for (const b of boxes) sig += `${b.x0},${b.y0},${b.x1},${b.y1};`
+  const hit = labelCache.get(r.id)
+  if (hit && hit.sig === sig) return hit.at
+  const l = labelPointAvoiding(pts, boxes)
+  const at = { x: l.x, y: l.y }
+  labelCache.set(r.id, { sig, at })
+  return at
+}
+
+const roomViews = computed(() => {
+  // 设备外框只算一遍（以前每个房间各算一遍）
+  const fixtures = fp.value.fixtures.map((f) => ({ c: { x: f.x, y: f.y }, box: fixtureBox(f) }))
+  // 删掉的房间：缓存攒多了按全户型（各楼层）的房间清一次
+  const all = plan.value.rooms
+  if (labelCache.size > all.length + 16) {
+    const live = new Set(all.map((r) => r.id))
+    for (const id of labelCache.keys()) if (!live.has(id)) labelCache.delete(id)
+  }
+  return fp.value.rooms.map((r) => {
     const a = area(r.points)
     let mats: ReturnType<typeof tatamiLayout> = []
     if (r.kind === 'japanese' && isAxisRect(r.points)) {
@@ -1046,14 +1076,11 @@ const roomViews = computed(() =>
       pattern: FLOOR_PATTERN[r.kind],
       mats,
       closet: closetLines(r),
-      label: labelPointAvoiding(
-        r.points,
-        fp.value.fixtures.filter((f) => pointInPolygon({ x: f.x, y: f.y }, r.points)).map(fixtureBox),
-      ),
+      label: roomLabel(r, fixtures),
       sub: r.kind === 'balcony' || r.kind === 'void' ? '' : fmtRoomArea(a, plan.value.region),
     }
-  }),
-)
+  })
+})
 
 /** 墙段：外墙 / 隔墙 / 玄関敞开处的上り框 */
 const wallViews = computed(() => {
@@ -1072,8 +1099,8 @@ interface OpeningView {
   gap: string
   /** 洞口两端（墙中线上），选中时画改宽度的手柄 */
   ends: [Vec, Vec]
-  /** 宽度标注的位置、角度 */
-  label: { at: Vec; ang: number }
+  /** 宽度标注的基点（墙外皮上）、朝外方向、角度；离墙的屏幕间距在 selOpeningView 里加（不让整份门窗视图依赖缩放） */
+  labelBase: { at: Vec; out: Vec; ang: number }
   /** 门扇 / 窗线 */
   leaf: string
   arc: string
@@ -1092,7 +1119,10 @@ interface OpeningView {
 /** 选中的门窗（画改宽度的手柄） */
 const selOpeningView = computed(() => {
   const s = selection.value
-  return s?.type === 'opening' ? openingViews.value.find((v) => v.o.id === s.id) ?? null : null
+  const v = s?.type === 'opening' ? openingViews.value.find((v) => v.o.id === s.id) : undefined
+  if (!v) return null
+  const b = v.labelBase
+  return { ...v, label: { at: add(b.at, mul(b.out, px(14))), ang: b.ang } }
 })
 
 const openingViews = computed<OpeningView[]>(() => {
@@ -1101,7 +1131,7 @@ const openingViews = computed<OpeningView[]>(() => {
     const r = findRoom(o.roomId)
     if (!r || o.edge >= r.points.length) continue
     const e = edgeInfo(r.points, o.edge)
-    const c = clampOffset(o, e.length)
+    const c = clampOffset(o.offset, o.width, e.length)
     const w = Math.min(o.width, e.length)
     const p0 = add(e.a, mul(e.dir, c - w / 2))
     const p1 = add(e.a, mul(e.dir, c + w / 2))
@@ -1116,8 +1146,8 @@ const openingViews = computed<OpeningView[]>(() => {
     let ang = (Math.atan2(e.dir.y, e.dir.x) * 180) / Math.PI
     if (ang > 90) ang -= 180
     if (ang <= -90) ang += 180
-    const label = { at: add(center, mul(e.out, wall / 2 + px(14))), ang }
-    const v: OpeningView = { o, gap, ends: [p0, p1], label, leaf: '', arc: '', glass: [], panels: [], sash, fold: '', arcs: [], marks: '' }
+    const labelBase = { at: add(center, mul(e.out, wall / 2)), out: e.out, ang }
+    const v: OpeningView = { o, gap, ends: [p0, p1], labelBase, leaf: '', arc: '', glass: [], panels: [], sash, fold: '', arcs: [], marks: '' }
     const style = o.kind === 'window' ? o.windowStyle : undefined
     if (o.kind === 'sliding' || (sash && (!style || style === 'sliding')) || style === 'sliding') {
       // 引き違い：两扇板分别靠墙两侧，在中间重叠一点
@@ -1223,12 +1253,16 @@ const fixtureViews = computed(() =>
     f,
     rise: f.kind === 'stairs' ? riseOf(plan.value, floorOf(plan.value, f)) : undefined,
     transform: `translate(${f.x},${f.y}) rotate(${f.rot})`,
-    selected: isSel('fixture', f.id),
     box: fixtureBox(f),
     front: frontBox(f),
     stall: f.kind === 'bathtub' && f.shower ? stallWalls(fp.value, f) : undefined,
   })),
 )
+/** 选中的设备（画外框、前方使用空间）；单独算，换选中时不重算全部设备视图 */
+const selFixtureView = computed(() => {
+  const s = selection.value
+  return s?.type === 'fixture' ? fixtureViews.value.find((v) => v.f.id === s.id) ?? null : null
+})
 
 /** 家具占地；颜色取当前配色的主色 */
 const furnitureViews = computed(() =>
@@ -1283,7 +1317,7 @@ const belowStairs = computed(() =>
 /** 通到当前楼层的楼梯洞口；压到卧室等房间的标红 */
 const holeViews = computed(() => {
   const p = plan.value
-  const bad = new Set(stairHoleConflicts(p).map((c) => c.stairId))
+  const bad = new Set(activeStairConflicts.value.map((c) => c.stairId))
   return stairHoles(p, activeFloor.value).map((h) => ({ id: h.stair.id, d: polyPath(h.poly), bad: bad.has(h.stair.id), arrival: h.arrival, c: centroid(h.poly) }))
 })
 
@@ -1740,33 +1774,32 @@ async function exportPng() {
         />
       </g>
       <!-- 选中设备：前方使用空间 -->
-      <template v-for="v in fixtureViews.filter((x) => x.selected && x.front)" :key="'ff' + v.f.id">
+      <template v-if="selFixtureView">
         <rect
+          v-if="selFixtureView.front"
           class="ui"
-          :x="v.front!.x0"
-          :y="v.front!.y0"
-          :width="v.front!.x1 - v.front!.x0"
-          :height="v.front!.y1 - v.front!.y0"
+          :x="selFixtureView.front.x0"
+          :y="selFixtureView.front.y0"
+          :width="selFixtureView.front.x1 - selFixtureView.front.x0"
+          :height="selFixtureView.front.y1 - selFixtureView.front.y0"
           fill="rgba(63,102,82,0.08)"
           stroke="#3f6652"
           :stroke-width="px(1)"
           stroke-dasharray="4 3"
           pointer-events="none"
         />
+        <rect
+          class="ui"
+          :x="selFixtureView.box.x0"
+          :y="selFixtureView.box.y0"
+          :width="selFixtureView.box.x1 - selFixtureView.box.x0"
+          :height="selFixtureView.box.y1 - selFixtureView.box.y0"
+          fill="none"
+          stroke="#3f6652"
+          :stroke-width="px(2)"
+          pointer-events="none"
+        />
       </template>
-      <rect
-        v-for="v in fixtureViews.filter((x) => x.selected)"
-        :key="'fs' + v.f.id"
-        class="ui"
-        :x="v.box.x0"
-        :y="v.box.y0"
-        :width="v.box.x1 - v.box.x0"
-        :height="v.box.y1 - v.box.y0"
-        fill="none"
-        stroke="#3f6652"
-        :stroke-width="px(2)"
-        pointer-events="none"
-      />
 
       <!-- 房间名 -->
       <g v-for="v in roomViews" :key="'l' + v.room.id" pointer-events="none" class="label">
@@ -1949,8 +1982,9 @@ async function exportPng() {
           <path :d="draftPath" fill="none" stroke="#3f6652" :stroke-width="px(1.5)" />
           <circle v-for="(p, i) in draft" :key="i" :cx="p.x" :cy="p.y" :r="px(i === 0 ? 6 : 3.5)" fill="#fff" stroke="#3f6652" :stroke-width="px(1.5)" />
         </template>
+        <!-- 先判工具再读 cursor：别的工具下悬停不让整张图跟着光标重渲染（状态栏坐标走 cursorInfo） -->
         <circle
-          v-if="cursor && (tool === 'rect' || tool === 'poly')"
+          v-if="(tool === 'rect' || tool === 'poly') && cursor"
           :cx="cursor.x"
           :cy="cursor.y"
           :r="px(3)"

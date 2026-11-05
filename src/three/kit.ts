@@ -11,7 +11,7 @@
 //     不规则顶面再给 surfaceShape；桌上的东西做成独立的 prop 素材。
 
 import * as THREE from 'three'
-import { cyl, rbox, shade, toon, useAnisotropy } from './toon'
+import { cached, cyl, gradientMap, rbox, shade, toon, useAnisotropy } from './toon'
 import { syncMatrix } from './matrices'
 import { G } from './geo'
 import type { Tag } from './tags'
@@ -574,11 +574,13 @@ export function shell(
 // ---------- 画面：相框里的照片、挂画、屏幕画面 ----------
 
 const paintCache = new Map<string, THREE.CanvasTexture>()
+const paintMats = new Map<string, THREE.MeshToonMaterial>()
 
 /**
  * 画布面板：在 w × h（cm）的竖直面板上用 Canvas 作画，正面朝 +z，at.y 为底边。
  * 画面天然被裁在面板范围内，不会像拼贴小网格那样溢出画框。key 相同的画面共用贴图。
  * emissive > 0 时自发光（屏幕）。不描边。
+ * 材质（按贴图 + 自发光）和几何（按尺寸）都是全局共用的：要改材质属性（抠形、polygonOffset…）先 clone 再改。
  */
 export function paintPanel(
   w: number,
@@ -603,12 +605,17 @@ export function paintPanel(
     useAnisotropy(tex)
     paintCache.set(k, tex)
   }
-  const geo = new THREE.PlaneGeometry(w, h).translate(0, h / 2, 0)
-  const mat = new THREE.MeshToonMaterial({ map: tex, color: '#ffffff', gradientMap: (toon('#fff') as THREE.MeshToonMaterial).gradientMap })
-  if (emissive > 0) {
-    mat.emissive = new THREE.Color('#ffffff')
-    mat.emissiveMap = tex
-    mat.emissiveIntensity = emissive
+  const geo = cached(`pp${w},${h}`, () => new THREE.PlaneGeometry(w, h).translate(0, h / 2, 0))
+  const mk = `${k}|${emissive}`
+  let mat = paintMats.get(mk)
+  if (!mat) {
+    mat = new THREE.MeshToonMaterial({ map: tex, color: '#ffffff', gradientMap: gradientMap() })
+    if (emissive > 0) {
+      mat.emissive = new THREE.Color('#ffffff')
+      mat.emissiveMap = tex
+      mat.emissiveIntensity = emissive
+    }
+    paintMats.set(mk, mat)
   }
   const m = new THREE.Mesh(geo, mat)
   m.position.set(at.x ?? 0, at.y ?? 0, at.z ?? 0)
@@ -918,7 +925,7 @@ export function drawerBox(o: { x0: number; x1: number; y0: number; y1: number; z
 }
 
 /** 抽屉默认拉出多少 */
-export const drawerPull = (depth: number) => Math.round(depth * 0.6)
+const drawerPull = (depth: number) => Math.round(depth * 0.6)
 
 /** 抽屉盒内底面离抽屉面板底边的高度（drawerBox 的底板顶面） */
 export const DRAWER_FLOOR = 2

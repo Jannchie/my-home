@@ -5,7 +5,7 @@ import { computed, watchEffect } from 'vue'
 import { t } from '../i18n'
 import { DOOR_COLORS, DOOR_GLASS, DOOR_HANDLES, DOOR_LITES, DOOR_STYLES, FOLD_LEAVES, HANDLE_FINISHES, type DoorGlass, type DoorHandle, type DoorLeafStyle, type DoorLites, type FoldLeaves, type HandleFinish, type Opening } from '../model'
 import { floorPlan, mutate } from '../store'
-import { openingInfos } from '../three/house'
+import { openingInfo } from '../three/house'
 import { useSitePreviews, type SitePreview } from '../three/siteThumbs'
 import { STYLES_FOR, doorColor, doorHandleOf, handleColor, hasDoorGlass, isDoorKind, type DoorKind } from '../doorStyles'
 import { JIcon } from '@jannchie/icons-vue'
@@ -22,7 +22,11 @@ const GLASSES = Object.keys(DOOR_GLASS) as DoorGlass[]
 const FOLDS = [2, 3, 4] as const
 
 const kind = computed<DoorKind>(() => (isDoorKind(props.opening.kind) ? props.opening.kind : 'door'))
-const info = computed(() => openingInfos(floorPlan.value).find((i) => i.o.id === props.opening.id) ?? null)
+const info = computed(() => {
+  const fp = floorPlan.value
+  const o = fp.openings.find((x) => x.id === props.opening.id)
+  return o ? openingInfo(fp, o) : null
+})
 /** 入户门（玄关外墙上的开门）：不填颜色时是浅蓝 */
 const entrance = computed(() => kind.value === 'door' && info.value?.owner.kind === 'entrance' && info.value.wall > 12)
 

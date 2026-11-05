@@ -6,6 +6,7 @@
 //     同一素材换配色就换一批随机款式（种子 = id + 配色）。
 //   - 衣柜挂杆（枕棚 + パイプ）：壁挂，收纳间里挂一排排衣服用。
 
+import { measured } from '../measured'
 import * as THREE from 'three'
 import { GARMENT_LABELS, buildGarment, buildHanger, foldedRow, garment, garmentRow, hashSeed, measureGarment, ROW_ENVELOPE, WARDROBE_LABELS, type GarmentKind, type GarmentSpec, type HangerMat, type HangerType, type Wardrobe } from '../garments'
 import { rectPoly, type AssetCategory, type AssetDef, type FormTag, type StyleTag } from '../kit'
@@ -194,8 +195,8 @@ const CLOTHES: AssetDef[] = LINES.flatMap((line) => {
     const ref = specOf(line.kind, st, pals[0][1])
     const common = { sizeLabel: st.label, prop: true, limit: { scope: 'surface' as const, max: 30 } }
     return [
-      define(`${base}-${line.rest ?? 'folded'}`, label, line.category ?? 'deco', measureGarment(ref, 'folded'), pals, (p) => ground(buildGarment(specOf(line.kind, st, p), 'folded')), { ...common, form: line.rest ?? 'folded' }),
-      define(`${base}-hanging`, label, line.category ?? 'deco', measureGarment(ref, 'hanging'), pals, (p) => buildGarment(specOf(line.kind, st, p), 'hanging'), { ...common, form: 'hanging' }),
+      define(`${base}-${line.rest ?? 'folded'}`, label, line.category ?? 'deco', measured(`garment:${base}-${line.rest ?? 'folded'}`, () => measureGarment(ref, 'folded')), pals, (p) => ground(buildGarment(specOf(line.kind, st, p), 'folded')), { ...common, form: line.rest ?? 'folded' }),
+      define(`${base}-hanging`, label, line.category ?? 'deco', measured(`garment:${base}-hanging`, () => measureGarment(ref, 'hanging')), pals, (p) => buildGarment(specOf(line.kind, st, p), 'hanging'), { ...common, form: 'hanging' }),
     ]
   })
 })
@@ -219,9 +220,9 @@ const TOWELS: AssetDef[] = TOWEL_STYLES.flatMap((t) => {
   const ref = towelSpec(t, TOWEL_PAL[0][1])
   const common = { sizeLabel: t.label, prop: true, limit: { scope: 'surface' as const, max: 30 } }
   return [
-    define(`gm-towel-${t.key}-folded`, '毛巾', 'toiletry', measureGarment(ref, 'folded'), TOWEL_PAL, (p) => ground(buildGarment(towelSpec(t, p), 'folded')), { ...common, form: 'folded' }),
-    define(`gm-towel-${t.key}-bar`, '毛巾', 'toiletry', measureGarment(ref, 'bar'), TOWEL_PAL, (p) => buildGarment(towelSpec(t, p), 'bar'), { ...common, form: 'hanging', formLabel: '搭在杆上' }),
-    define(`gm-towel-${t.key}-hook`, '毛巾', 'toiletry', measureGarment(ref, 'hook'), TOWEL_PAL, (p) => buildGarment(towelSpec(t, p), 'hook'), { ...common, form: 'hanging', formLabel: '挂钩吊起' }),
+    define(`gm-towel-${t.key}-folded`, '毛巾', 'toiletry', measured(`garment:gm-towel-${t.key}-folded`, () => measureGarment(ref, 'folded')), TOWEL_PAL, (p) => ground(buildGarment(towelSpec(t, p), 'folded')), { ...common, form: 'folded' }),
+    define(`gm-towel-${t.key}-bar`, '毛巾', 'toiletry', measured(`garment:gm-towel-${t.key}-bar`, () => measureGarment(ref, 'bar')), TOWEL_PAL, (p) => buildGarment(towelSpec(t, p), 'bar'), { ...common, form: 'hanging', formLabel: '搭在杆上' }),
+    define(`gm-towel-${t.key}-hook`, '毛巾', 'toiletry', measured(`garment:gm-towel-${t.key}-hook`, () => measureGarment(ref, 'hook')), TOWEL_PAL, (p) => buildGarment(towelSpec(t, p), 'hook'), { ...common, form: 'hanging', formLabel: '挂钩吊起' }),
   ]
 })
 
@@ -246,8 +247,11 @@ const STACKS: [string, string, string, number][] = [
   ['gm-towel-stack-hand', '擦手巾 ×5', 'hand', 5],
 ]
 const TOWEL_STACKS: AssetDef[] = STACKS.map(([id, label, v, n]) => {
-  const b = new THREE.Box3().setFromObject(towelStack(v, n)(TOWEL_PAL[0][1]), true).getSize(new THREE.Vector3())
-  return define(id, '一摞毛巾', 'toiletry', [Math.round(b.x * 10) / 10, Math.round(b.z * 10) / 10, Math.round(b.y * 10) / 10], TOWEL_PAL, towelStack(v, n), { sizeLabel: label, prop: true, form: 'stacked', limit: { scope: 'surface', max: 30 } })
+  const dims = measured(`garment:${id}`, (): [number, number, number] => {
+    const b = new THREE.Box3().setFromObject(towelStack(v, n)(TOWEL_PAL[0][1]), true).getSize(new THREE.Vector3())
+    return [Math.round(b.x * 10) / 10, Math.round(b.z * 10) / 10, Math.round(b.y * 10) / 10]
+  })
+  return define(id, '一摞毛巾', 'toiletry', dims, TOWEL_PAL, towelStack(v, n), { sizeLabel: label, prop: true, form: 'stacked', limit: { scope: 'surface', max: 30 } })
 })
 
 // ---------- 衣架 ----------

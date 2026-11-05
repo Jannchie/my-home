@@ -36,7 +36,7 @@ import { lingualKey } from './signLang'
 import { doorColor, doorHandleOf, doorStyled, handleColor, hasSidelight, hasTransom, LEGACY_DOOR, LEGACY_ENTRANCE, LEGACY_SLIDING, sidelightWidth, TRANSOM_TOP } from '../doorStyles'
 import { doorLeafModel, liteModel } from './doorModels'
 import { barnPose, defaultDoorOpen, foldCount, foldLeaves, foldPose, slidingPose, swingPose } from '../doorMotion'
-import { addOutlines, ball, capsule, cyl, disposeHooks, isReflector, mergeMeshes, mergeSolidColors, noTransparentShadows, pullDepth, rbox, shade, toon, useAnisotropy } from './toon'
+import { addOutlines, ball, capsule, cloneWithHooks, cyl, disposeHooks, gradientMap, isReflector, mergeMeshes, mergeSolidColors, noTransparentShadows, pullDepth, rbox, shade, toon, useAnisotropy } from './toon'
 import { movable, poseDoor, poseDoors, type AssetDef } from './kit'
 import { bathRemote, doorbell, intercomMonitor, switchPlate } from './wallDeviceModels'
 import { DEVICE_ASSET, wallDeviceSpots, type WallDeviceKind } from './wallDevices'
@@ -150,7 +150,7 @@ function floorMaterial(kind: RoomKind, tone: WoodTone = 'natural') {
     default:
       map = woodTex('#ecc79b', '#cfa676')
   }
-  m = new THREE.MeshToonMaterial({ map, color: '#ffffff', gradientMap: (toon('#fff') as THREE.MeshToonMaterial).gradientMap })
+  m = new THREE.MeshToonMaterial({ map, color: '#ffffff', gradientMap: gradientMap() })
   // 写实光照（realistic.ts）的材质和粗糙度：釉面砖最亮、木地板一层淡淡的清漆光泽、榻榻米和阳台、玄关地砖哑光
   const tile = tone === 'natural' && ['wash', 'toilet', 'bath', 'entrance', 'balcony'].includes(kind)
   m.userData.mat = tone === 'natural' && kind === 'japanese' ? 'fabric' : tile ? (kind === 'balcony' || kind === 'entrance' ? 'stone' : 'ceramic') : 'wood'
@@ -198,7 +198,7 @@ function floorSlab(r: Room, tone: WoodTone, bottom = BASE, holes: Vec[][] = []) 
 }
 
 /** 多边形 subject 被凸多边形 clip 裁剪（Sutherland–Hodgman）：两者的交 */
-export function clipConvex(subject: Vec[], clip: Vec[]): Vec[] {
+function clipConvex(subject: Vec[], clip: Vec[]): Vec[] {
   let out = subject
   const s = signedArea(clip) >= 0 ? 1 : -1
   for (let i = 0; i < clip.length && out.length; i++) {
@@ -235,7 +235,7 @@ function insetToward(pts: Vec[], d: number) {
 }
 
 /** 多边形各边沿外法线平移 d 后的新多边形（直角户型的外轮廓外扩半个墙厚） */
-export function offsetPolygon(pts: Vec[], d: number): Vec[] {
+function offsetPolygon(pts: Vec[], d: number): Vec[] {
   const es = roomEdges(pts)
   const n = es.length
   return es.map((q, i) => {
@@ -336,7 +336,7 @@ const solidShadow = <T extends THREE.Material>(m: T) => {
 }
 /** 墙纸 / 外墙面、边饰往镜头拉近的比例（pullDepth）：边饰比墙纸多一点，始终压在墙纸上 */
 export const WALL_PULL = 4e-4
-export const TRIM_PULL = 6e-4
+const TRIM_PULL = 6e-4
 const capMat = () => solidShadow(toon('#7a6258'))
 const wallMat = (outer: boolean) => solidShadow(toon(outer ? '#fbf3e6' : '#fff8ef'))
 
@@ -537,9 +537,7 @@ function fadeParts(o: THREE.Object3D) {
       const solid = Array.isArray(mesh.material) ? mesh.material.map(src) : src(mesh.material)
       const mats = Array.isArray(solid) ? solid : [solid]
       const ghost = mats.map((m) => {
-        const g = m.clone()
-        g.onBeforeCompile = m.onBeforeCompile
-        g.customProgramCacheKey = m.customProgramCacheKey
+        const g = cloneWithHooks(m)
         g.transparent = true
         g.depthWrite = false
         return g
@@ -687,9 +685,7 @@ function wallpaperMaterial(w: Wallpaper): THREE.Material {
   if (!m) {
     // 复制一份（toon / 花纹材质是共享缓存），加深度偏移（pullDepth）：墙纸面总是压过贴着它的相邻墙端面，交接处不闪
     const src = w.pattern ? patternMaterial(w.pattern, true) : toon(w.color)
-    m = src.clone()
-    m.onBeforeCompile = src.onBeforeCompile
-    m.customProgramCacheKey = src.customProgramCacheKey
+    m = cloneWithHooks(src)
     m.shadowSide = THREE.FrontSide
     pullDepth(m, WALL_PULL)
     wpCache.set(key, m)
@@ -703,7 +699,7 @@ function openingSpan(o: Plan['openings'][number], owner: Room, sash: boolean) {
 }
 
 /** 窗用哪种模型：没指定款式的按旧样子（朝阳台的落地推拉窗 / 腰窗单片玻璃） */
-export function windowModelStyle(info: Pick<OpeningInfo, 'o' | 'sash'>): WindowModelStyle {
+function windowModelStyle(info: Pick<OpeningInfo, 'o' | 'sash'>): WindowModelStyle {
   return info.o.windowStyle ?? (info.sash ? 'legacySash' : 'plain')
 }
 
@@ -721,19 +717,25 @@ export interface OpeningInfo {
   owner: Room
 }
 
+/** 一个门窗的位置、墙厚、高度范围；所在房间或边没了返回 null */
+export function openingInfo(plan: Plan, o: Plan['openings'][number]): OpeningInfo | null {
+  const owner = plan.rooms.find((r) => r.id === o.roomId)
+  if (!owner || o.edge >= owner.points.length) return null
+  const e = edgeInfo(owner.points, o.edge)
+  const w = Math.min(o.width, e.length)
+  const c = e.length <= w ? e.length / 2 : Math.max(w / 2, Math.min(e.length - w / 2, o.offset))
+  const center = add(e.a, mul(e.dir, c))
+  const wall = wallThicknessAt(plan, center, e.out, owner)
+  const probe = add(center, mul(e.out, wall / 2 + 15))
+  const sash = o.kind === 'window' && sashAllowed(o) && plan.rooms.some((x) => x.kind === 'balcony' && pointInPolygon(probe, x.points))
+  return { center, dir: e.dir, out: e.out, width: w, wall, sash, outer: wall >= plan.wallOuter, o, owner, ...openingSpan(o, owner, sash) }
+}
+
 export function openingInfos(plan: Plan): OpeningInfo[] {
   const out: OpeningInfo[] = []
   for (const o of plan.openings) {
-    const owner = plan.rooms.find((r) => r.id === o.roomId)
-    if (!owner || o.edge >= owner.points.length) continue
-    const e = edgeInfo(owner.points, o.edge)
-    const w = Math.min(o.width, e.length)
-    const c = e.length <= w ? e.length / 2 : Math.max(w / 2, Math.min(e.length - w / 2, o.offset))
-    const center = add(e.a, mul(e.dir, c))
-    const wall = wallThicknessAt(plan, center, e.out, owner)
-    const probe = add(center, mul(e.out, wall / 2 + 15))
-    const sash = o.kind === 'window' && sashAllowed(o) && plan.rooms.some((x) => x.kind === 'balcony' && pointInPolygon(probe, x.points))
-    out.push({ center, dir: e.dir, out: e.out, width: w, wall, sash, outer: wall >= plan.wallOuter, o, owner, ...openingSpan(o, owner, sash) })
+    const info = openingInfo(plan, o)
+    if (info) out.push(info)
   }
   return out
 }
@@ -1456,9 +1458,7 @@ function trimMat(color: string) {
   let m = trimCache.get(color)
   if (!m) {
     const src = toon(color)
-    m = src.clone()
-    m.onBeforeCompile = src.onBeforeCompile
-    m.customProgramCacheKey = src.customProgramCacheKey
+    m = cloneWithHooks(src)
     pullDepth(m, TRIM_PULL)
     trimCache.set(color, m)
   }
@@ -2097,7 +2097,7 @@ export function setVertexColorMerge(v: boolean | ((def: AssetDef) => boolean)) {
   vcMerge = v
   clearFurnitureTemplates()
 }
-export const vertexColorMergeFor = (def: AssetDef) => !hasTag(def, 'light') && (typeof vcMerge === 'function' ? vcMerge(def) : vcMerge)
+const vertexColorMergeFor = (def: AssetDef) => !hasTag(def, 'light') && (typeof vcMerge === 'function' ? vcMerge(def) : vcMerge)
 
 /** 模板的缓存键：素材 | 配色 | 单件改色 | 花纹 | 画面 | 屏幕画面 | 字的语言（开合不在内） */
 export function furnitureTemplateKey(fu: Pick<Furniture, 'asset' | 'color' | 'colors' | 'patterns' | 'art' | 'screen'>) {
@@ -2203,7 +2203,7 @@ function noTinyShadows(root: THREE.Object3D) {
 }
 
 /** 吸顶灯 / 吊灯素材的模型按 CEILING 做：摆进某层时整体抬高这么多，贴到这层的天花板下 */
-export const ceilingLift = (plan: Plan, floor: string) => floorHeight(plan, floor) - CEILING
+const ceilingLift = (plan: Plan, floor: string) => floorHeight(plan, floor) - CEILING
 
 /**
  * 摆家具（世界坐标）。多层户型按家具的 floor 找那一层的房间定地面高度，再加上楼层的 elevation；

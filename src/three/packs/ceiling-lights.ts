@@ -2,6 +2,7 @@
 // 每款一个系列：标准（居室主灯）、小（卫浴玄关的小吸顶灯，有这个尺寸的款才有）、餐桌吊灯（吊低到餐桌上方）。
 // 挂在天花板下（ceiling = 用途），mount 是灯具最低点离地多高；摆进房间后这个房间不再自动摆主灯（lights.ts）。
 
+import { measured } from '../measured'
 import * as THREE from 'three'
 import type { AssetDef, StyleTag } from '../kit'
 import type { RoomLightSpec } from '../lights'
@@ -82,8 +83,14 @@ function variants(shape: FixtureShape | undefined): AssetDef[] {
   const styles = stylesOf(shape)
   return kinds.map((kind) => {
     const spec = ceilingSpec(shape, kind)
-    const m = measure(spec)
-    return define(ceilingAssetId(shape, kind), NAMES[shape ?? 'basic'], 'lighting', m.dims, [[styles[0], '#fff6e6']], build(spec), {
+    const id = ceilingAssetId(shape, kind)
+    // 量模型要整个建一遍：离线量好查表（three/measured.ts）
+    const [w, d, h, mount] = measured(`ceiling:${id}`, () => {
+      const r = measure(spec)
+      return [...r.dims, r.mount]
+    })
+    const m = { dims: [w, d, h] as [number, number, number], mount }
+    return define(id, NAMES[shape ?? 'basic'], 'lighting', m.dims, [[styles[0], '#fff6e6']], build(spec), {
       mount: m.mount,
       ceiling: kind,
       styles,

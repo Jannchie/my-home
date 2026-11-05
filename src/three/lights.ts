@@ -169,7 +169,7 @@ export function roomLightSpecs(plan: Plan, defs: Map<string, AssetDef> = new Map
 }
 
 /** 主灯由灯具家具接管的房间：标了 ownLights，或者房间里摆着吸顶灯 / 吊灯（同一层） */
-export function ownedLightRooms(plan: Plan) {
+function ownedLightRooms(plan: Plan) {
   const out = new Set<string>()
   for (const r of plan.rooms) if (r.ownLights) out.add(r.id)
   for (const f of plan.furniture) {
@@ -182,7 +182,7 @@ export function ownedLightRooms(plan: Plan) {
 }
 
 /** 房间主灯的亮度、照射范围（自动摆的主灯和吸顶灯家具一样算） */
-export function mainLightPower(room: Room, kind: RoomLightKind) {
+function mainLightPower(room: Room, kind: RoomLightKind) {
   const A = area(room.points)
   const r = Math.sqrt(A / Math.PI)
   if (kind === 'small') return { intensity: room.kind === 'bath' ? 1.0 : 0.85, distance: Math.min(420, Math.max(220, r * 2.4)) }
@@ -356,7 +356,7 @@ export function glowIntensity(base: number, night: number, level: number, luma =
 /** 大面积浅色发光罩夜里的 emissiveIntensity 上限 */
 export const LARGE_GLOW_CAP = 0.45
 /** 发光面积（cm²）→ 0–1：小灯泡、小台灯罩为 0，落地灯的大纸罩为 1 */
-export const largeGlow = (area: number) => smooth(2000, 8000, area)
+const largeGlow = (area: number) => smooth(2000, 8000, area)
 
 /** 发光部件的颜色：原色往色温方向偏一点，亮度不超过原色 */
 function tintGlow(out: THREE.Color, orig: THREE.Color, kelvin: THREE.Color, level: number) {
@@ -701,6 +701,8 @@ export class IndoorLights {
       l.decal.geometry.dispose()
       ;(l.decal.material as THREE.Material).dispose()
     }
+    // 发光部件换上的克隆材质（prepareLamp）：disposeUnshared 不释放材质，这里自己释放
+    for (const g of l.glows) g.mat.dispose()
   }
 
   /** 全局开关、色温、太阳高度变了 */
@@ -1096,14 +1098,6 @@ export function prepareLamp(id: string, obj: THREE.Object3D, def: AssetDef): Lam
     decal: null,
   }
 }
-
-/** 测试与界面用：户型里每个房间的主灯数 */
-export function primaryCount(plan: Plan) {
-  const m = new Map<string, number>()
-  for (const s of roomLightSpecs(plan)) if (s.primary) m.set(s.roomId, (m.get(s.roomId) ?? 0) + 1)
-  return m
-}
-
 
 /** 餐桌位置的指纹：变了才需要重算吊灯位置（拖动别的家具时不用重建房间灯） */
 export function diningKey(plan: Plan) {

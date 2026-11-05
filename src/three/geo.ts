@@ -14,7 +14,7 @@ export type V2 = [number, number]
 /** 只读的 y 轴单位向量（不要修改它） */
 export const UP = new THREE.Vector3(0, 1, 0)
 /** 只读的 z 轴单位向量（不要修改它） */
-export const ZAX = new THREE.Vector3(0, 0, 1)
+const ZAX = new THREE.Vector3(0, 0, 1)
 
 /** 两点距离 */
 export const dist = (a: V3, b: V3) => Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2])
@@ -181,7 +181,7 @@ export function batten(a: V3, b: V3, w: number, t: number, color: string, radius
  * 把对象的局部 y 轴对准 a → b，并控制绕轴的扭转：局部 z 尽量朝世界 z（杆接近竖直 z 时改朝世界 y），位置放到中点。
  * 椅子框架的方料要求截面朝向稳定，用它而不是最短弧旋转。
  */
-export function orientBasis<T extends THREE.Object3D>(m: T, a: V3, b: V3): T {
+function orientBasis<T extends THREE.Object3D>(m: T, a: V3, b: V3): T {
   const va = new THREE.Vector3(...a)
   const vb = new THREE.Vector3(...b)
   const y = vb.clone().sub(va).normalize()
@@ -390,7 +390,7 @@ export function fitPoly(poly: [number, number][], w: number, d: number): [number
 // ---------- 布料软团 ----------
 
 /** 按位置把重合顶点（球面接缝）的法线取平均 */
-export function smoothNormals(geo: THREE.BufferGeometry) {
+function smoothNormals(geo: THREE.BufferGeometry) {
   geo.computeVertexNormals()
   const pos = geo.attributes.position
   const nor = geo.attributes.normal

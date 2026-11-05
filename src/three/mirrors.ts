@@ -13,6 +13,7 @@
 import * as THREE from 'three'
 import { Reflector } from 'three/addons/objects/Reflector.js'
 import { guardReflector, releaseReflector } from './reflect'
+import { visibleChain } from './matrices'
 
 /** 同时开着反射的镜子 / 水面数的上限：看得见的都开，这个只是保险（镜子特别多的户型不至于卡死） */
 const MAX_ACTIVE = 4
@@ -205,7 +206,8 @@ export class Mirrors {
     for (const it of this.items.values()) {
       const m = it.mesh
       if (it.kind === 'water' && !it.fake) fakeWater(it)
-      if (!visibleInScene(m)) continue
+      // 网格和所有祖先都可见（楼层淡出、柜门子树藏起来时不反射）
+      if (!visibleChain(m)) continue
       if (!it.frame) prepare(it)
       if (!it.frame || it.area < MIN_AREA) continue
       // 镜面中心、法线（世界）
@@ -310,12 +312,6 @@ function fakeWater(it: Item) {
   Object.assign(mat.uniforms, waterUniforms)
   it.fake = mat
   it.mesh.material = mat
-}
-
-/** 网格和所有祖先都可见（楼层淡出、柜门子树藏起来时不反射） */
-function visibleInScene(o: THREE.Object3D) {
-  for (let p: THREE.Object3D | null = o; p; p = p.parent) if (!p.visible) return false
-  return true
 }
 
 /** 同一个父节点下画出来的高光条 */

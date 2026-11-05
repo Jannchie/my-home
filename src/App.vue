@@ -1,12 +1,10 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import PlanCanvas from './components/PlanCanvas.vue'
 import FloorBar from './components/FloorBar.vue'
 import FloorRail from './components/FloorRail.vue'
 import FixturePlacer from './components/FixturePlacer.vue'
 import InspectorPanel from './components/InspectorPanel.vue'
-import Sandbox3D from './components/Sandbox3D.vue'
-import AssetLibrary from './components/AssetLibrary.vue'
 import SavedPlans from './components/SavedPlans.vue'
 import TooltipLayer from './components/TooltipLayer.vue'
 import ShortcutHelp from './components/ShortcutHelp.vue'
@@ -15,8 +13,7 @@ import GenOptions from './components/GenOptions.vue'
 import BottomSheet, { type SheetSnap } from './components/BottomSheet.vue'
 import ContextMenu, { type MenuEntry } from './components/ContextMenu.vue'
 import UpdatePrompt from './components/UpdatePrompt.vue'
-import ChangelogPanel from './components/ChangelogPanel.vue'
-import { APP_VERSION } from './changelog'
+import { APP_VERSION } from './version'
 import SharePanel from './components/SharePanel.vue'
 import { AUTHOR, REPO_URL } from './seo'
 import { currentSaved, detachSaved, initSaved, openPanel, openSharedPlan, quickSave, saved, toast } from './saved'
@@ -267,6 +264,17 @@ function nudge(e: KeyboardEvent) {
 }
 
 // ---------- 视图切换：3D 沙盘 / 素材库要建 WebGL 场景，先画出「处理中」再挂载 ----------
+// 3D 沙盘、素材库、更新日志按需加载（不进首屏的入口包）；首屏画好、空闲下来后先把 3D 沙盘的代码取回来，切过去不用等下载
+const loadSandbox = () => import('./components/Sandbox3D.vue')
+const loadLibrary = () => import('./components/AssetLibrary.vue')
+const Sandbox3D = defineAsyncComponent(loadSandbox)
+const AssetLibrary = defineAsyncComponent(loadLibrary)
+const ChangelogPanel = defineAsyncComponent(() => import('./components/ChangelogPanel.vue'))
+onMounted(() => {
+  const warm = () => void loadSandbox().catch(() => {})
+  if ('requestIdleCallback' in window) requestIdleCallback(warm, { timeout: 5000 })
+  else setTimeout(warm, 2000)
+})
 const shownView = ref<ViewMode>(viewMode.value)
 watch(viewMode, async (v) => {
   if (v === shownView.value) return
@@ -278,6 +286,15 @@ watch(viewMode, async (v) => {
   busy.text = t(v === '3d' ? '正在搭建 3D 沙盘…' : '正在准备素材库…')
   try {
     await nextPaint()
+    // 代码还没取回来时先等它（不然组件挂上去还是空的，「处理中」提前收起）
+    try {
+      await (v === '3d' ? loadSandbox() : loadLibrary())
+    } catch (e) {
+      // 取不回来（离线、刚发过版旧文件没了）：留在原来的视图
+      console.warn('[view] 载入失败', e)
+      if (viewMode.value === v) viewMode.value = shownView.value
+      return
+    }
     if (viewMode.value !== v) return
     shownView.value = v
     await nextTick()

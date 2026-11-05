@@ -194,7 +194,9 @@ function decal(shape: 'heart' | 'star') {
       },
       { y: -3, z: 0.08 },
     )
-    const mat = m.material as THREE.MeshToonMaterial
+    // paintPanel 的材质是共用的，克隆一份再改
+    const mat = (m.material as THREE.MeshToonMaterial).clone()
+    m.material = mat
     mat.transparent = true
     mat.alphaTest = 0.4
     g.add(m)

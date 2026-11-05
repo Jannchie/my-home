@@ -1,8 +1,9 @@
 // 倒影的「帧」：Reflector 在 onBeforeRender 里画倒影（reflect.ts guardReflector），同一帧里可能被画到好几次
-// （遮蔽那一遍、多帧累积……），按这里的帧号去重。单独一个不依赖别的模块的文件：stage.ts 每次 render 开头调 beginReflectFrame，
+// （遮蔽那一遍、多帧累积……），按这里的帧号去重。单独一个文件（只依赖 three 和同样轻量的 matrices.ts）：stage.ts 每次 render 开头调 beginReflectFrame，
 // 不必为此引入 reflect.ts（它依赖户型、楼层等一大串模块）。
 
 import * as THREE from 'three'
+import { visibleChain } from './matrices'
 
 let frame = 0
 let reuse = false
@@ -21,10 +22,6 @@ export const reflectors = new Set<THREE.Mesh>()
 const frustum = new THREE.Frustum()
 const projView = new THREE.Matrix4()
 const sphere = new THREE.Sphere()
-const shown = (o: THREE.Object3D) => {
-  for (let p: THREE.Object3D | null = o; p; p = p.parent) if (!p.visible) return false
-  return true
-}
 
 /** 在主画面之前把这一帧看得到的倒影画好（之后主画面里的 onBeforeRender 按帧号跳过） */
 export function prerenderReflections(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera) {
@@ -32,7 +29,7 @@ export function prerenderReflections(renderer: THREE.WebGLRenderer, scene: THREE
   projView.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)
   frustum.setFromProjectionMatrix(projView)
   for (const r of reflectors) {
-    if (!shown(r) || !r.layers.test(camera.layers)) continue
+    if (!visibleChain(r) || !r.layers.test(camera.layers)) continue
     if (!r.geometry.boundingSphere) r.geometry.computeBoundingSphere()
     if (!frustum.intersectsSphere(sphere.copy(r.geometry.boundingSphere!).applyMatrix4(r.matrixWorld))) continue
     r.onBeforeRender(renderer, scene, camera, r.geometry, r.material as THREE.Material, null as unknown as THREE.Group)

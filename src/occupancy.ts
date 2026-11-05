@@ -11,6 +11,7 @@
 // 查询接口 canPlace(asset, x, y, rot, z, opts) 返回能不能放和原因；各种摆法（贴墙、壁挂、台面、挂钩、找空地）都走它。
 
 import {
+  bbox,
   boxOverlaps,
   edgesOf,
   fixtureBox,
@@ -18,6 +19,7 @@ import {
   isAxisEdge,
   openingsOn,
   pointInPolygon,
+  projectToSegment,
   add,
   mul,
   type Box,
@@ -40,18 +42,6 @@ import { isOpenBetween, sharedIntervals, wallThicknessAt } from './walls'
 
 /** 平面包围盒重叠（各边留 0.5 的容差：贴着放不算） */
 export const boxesOverlap = (a: Box, b: Box) => a.x0 < b.x1 - 0.5 && b.x0 < a.x1 - 0.5 && a.y0 < b.y1 - 0.5 && b.y0 < a.y1 - 0.5
-
-/** 点集的包围盒 */
-const boxOf = (pts: Vec[]): Box => ({ x0: Math.min(...pts.map((p) => p.x)), y0: Math.min(...pts.map((p) => p.y)), x1: Math.max(...pts.map((p) => p.x)), y1: Math.max(...pts.map((p) => p.y)) })
-
-/** 点到线段的距离 */
-function distToSeg(p: Vec, a: Vec, b: Vec) {
-  const dx = b.x - a.x
-  const dy = b.y - a.y
-  const L2 = dx * dx + dy * dy
-  const t = L2 < 1e-9 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / L2))
-  return Math.hypot(p.x - a.x - dx * t, p.y - a.y - dy * t)
-}
 
 /** 平面包围盒按 k 往外扩（k < 0 往里收） */
 export const grow = (b: Box, k: number): Box => ({ x0: b.x0 - k, y0: b.y0 - k, x1: b.x1 + k, y1: b.y1 + k })
@@ -300,7 +290,7 @@ export class PassageGrid {
     private r: number,
     private entries: Vec[],
   ) {
-    const b = boxOf(inner.points)
+    const b = bbox(inner.points)
     this.x0 = b.x0
     this.y0 = b.y0
     this.nx = Math.max(1, Math.ceil((b.x1 - b.x0) / this.step))
@@ -312,7 +302,7 @@ export class PassageGrid {
       for (let i = 0; i < this.nx; i++) {
         const p = this.at(i, j)
         if (!pointInPolygon(p, inner.points)) continue
-        if (edges.some((e) => distToSeg(p, e.a, e.b) < r - 2)) continue
+        if (edges.some((e) => projectToSegment(p, e.a, e.b).d < r - 2)) continue
         this.base[j * this.nx + i] = 1
       }
     for (const k of blockers) this.stamp(this.base, k)
@@ -526,7 +516,7 @@ export class Occupancy {
       const b = fixtureBox(f)
       const kind: ZoneKind = f.id.startsWith('void-rail-') ? 'void-rail' : 'stair'
       for (const r of this.plan.rooms) {
-        const rb = boxOf(r.points)
+        const rb = bbox(r.points)
         const box = { x0: Math.max(b.x0, rb.x0), y0: Math.max(b.y0, rb.y0), x1: Math.min(b.x1, rb.x1), y1: Math.min(b.y1, rb.y1) }
         if (box.x1 - box.x0 < 1 || box.y1 - box.y0 < 1) continue
         if (!pointInPolygon({ x: (box.x0 + box.x1) / 2, y: (box.y0 + box.y1) / 2 }, r.points)) continue
@@ -821,7 +811,7 @@ export class Occupancy {
         }
       if (A.layer !== 'floor') continue
       for (const r of this.plan.rooms) {
-        if (!boxesOverlap(A.box, boxOf(r.points))) continue
+        if (!boxesOverlap(A.box, bbox(r.points))) continue
         const hit = this.zones(r).find((z) => (KEEP_ZONES.has(z.kind) || z.kind === 'door-swing' || z.kind === 'sash') && z.id !== A.f.id && penetration(pa, rectPoly(z.box)) > 2)
         if (hit) {
           out.push({ a: A.f.id, reason: hit.kind })

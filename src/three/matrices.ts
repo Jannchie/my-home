@@ -31,3 +31,9 @@ export function syncMatrix(o: THREE.Object3D) {
   }
   o.updateMatrixWorld(true)
 }
+
+/** 自己和所有祖先都可见（楼层隐藏、壁挂物随墙隐藏、柜门子树藏起来时都算看不见）；不检查是否还挂在场景里 */
+export function visibleChain(o: THREE.Object3D | null) {
+  for (; o; o = o.parent) if (!o.visible) return false
+  return true
+}

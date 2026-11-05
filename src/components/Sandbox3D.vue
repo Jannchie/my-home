@@ -163,9 +163,16 @@ const furnRoot = new THREE.Group()
 // ---------- 多楼层：当前层、各层的显示动画 ----------
 
 /** 当前楼层的子户型（原始对象）：拖动、吸附、摆放只看它；上层的楼梯洞口当作障碍（摆上去会标红） */
+// 拖动、悬停时一个事件里要调十几次（壁挂物沿墙试位置一次最多 18 次）：按户型版本 + 楼层记住，户型改了下一次重切。
+// 版本号由 watcher 加一、要等到刷新以后，所以再比一下各数组的长度和户型对象本身，刚增删完同一轮里调用也不会拿到旧的
+let fvMemo: { raw: Plan; key: string; view: Plan } | null = null
 const fv = () => {
   const raw = toRaw(plan.value)
-  return withStairHoles(raw, floorView(raw, activeFloor.value), activeFloor.value)
+  const key = `${planRev.value}|${activeFloor.value}|${raw.rooms.length}|${raw.openings.length}|${raw.fixtures.length}|${raw.furniture.length}`
+  if (fvMemo?.raw === raw && fvMemo.key === key) return fvMemo.view
+  const view = withStairHoles(raw, floorView(raw, activeFloor.value), activeFloor.value)
+  fvMemo = { raw, key, view }
+  return view
 }
 /** 新摆的东西的 floor 字段（最底层不写） */
 const activeFloorField = () => (activeFloor.value === baseFloorId(plan.value) ? undefined : activeFloor.value)
@@ -385,11 +392,17 @@ function onDrawerPart(id: string, part: number, v: number, base: number) {
   dirty = true
 }
 
-/** 摆家具，再加上跟着抽屉挪的偏移、陷进被子的高度差 */
-function placeShifted(obj: THREE.Object3D, p: Plan, f: Furniture) {
-  placeFurniture(obj, p, f)
+/**
+ * 摆好一件家具（加上抽屉带着走的偏移、陷进被子的高度）。onlyIfMoved：位置签名没变就不重摆
+ * （syncFurniture 拖动时每帧过一遍全部家具，每件都要 roomAt；房间、楼层、地形变了由 rebuildHouse 全部重摆）
+ */
+function placeShifted(obj: THREE.Object3D, p: Plan, f: Furniture, onlyIfMoved = false) {
   const sh = drawerShift.get(f.id)
   const sink = bedSink.get(f.id) ?? 0
+  const sig = `${f.x},${f.y},${f.rot},${f.z ?? 0},${f.floor ?? ''},${f.spin ?? 0},${f.asset},${sh?.x ?? 0},${sh?.y ?? 0},${sink}`
+  if (onlyIfMoved && obj.userData.placedAt === sig) return
+  obj.userData.placedAt = sig
+  placeFurniture(obj, p, f)
   if (!sh && !sink) return
   if (sh) {
     obj.position.x += sh.x
@@ -618,49 +631,69 @@ function updateCutaway() {
  * 「挂在哪面墙」用它的背面朝向近似：背面朝着镜头、又在房子靠镜头的一侧（或在鼠标所指房间之前）就藏；
  * 半墙模式下挂在内墙上的（背后隔着墙还是户内房间）都藏。
  */
-function updateMounted(dir: { x: number; y: number } | null, depth: number | null) {
-  // 只处理当前楼层（别的楼层墙不压低，壁挂物照常显示）
+/** 壁挂物里和镜头无关的部分（在哪、背朝哪、能不能藏）：户型、楼层、墙体模式、家具模型变了才重算，转镜头时每帧只做点积 */
+interface MountedItem {
+  obj: THREE.Object3D
+  x: number
+  y: number
+  ceiling: boolean
+  back: { x: number; y: number }
+  /** 能摆东西的（搁板、吊柜、挂杆）一直显示 */
+  platform: boolean
+  /** 按墙体模式本身就藏（压低，或半墙时挂在内墙上） */
+  hidden: boolean
+}
+let mountedMemo: { key: string; items: MountedItem[]; others: THREE.Object3D[] } | null = null
+/** syncFurniture 换过模型就加一（同一版本号下模型对象也可能换了） */
+let furnSyncVer = 0
+function mountedItems() {
+  const mode = walking.value ? 'up' : sandbox.wallMode
+  const key = `${planRev.value}|${activeFloor.value}|${mode}|${furnSyncVer}`
+  if (mountedMemo?.key === key) return mountedMemo
   const p = fv()
-  const list: THREE.Object3D[] = []
-  for (const o of objs.values()) if (o.obj.userData.target) o.obj.userData.target = 0
+  const others: THREE.Object3D[] = []
   for (const f of toRaw(plan.value).furniture) {
     const def = ASSET_MAP.get(f.asset)
     const o = objs.get(f.id)
-    if (def?.mount && o && floorOf(p, f) !== activeFloor.value) list.push(o.obj)
+    if (def?.mount && o && floorOf(p, f) !== activeFloor.value) others.push(o.obj)
   }
+  const items: MountedItem[] = []
   for (const f of p.furniture) {
     const def = ASSET_MAP.get(f.asset)
     const o = objs.get(f.id)
     if (!def?.mount || !o) continue
-    if (def.ceiling) {
-      // 吸顶灯 / 吊灯：同房间灯（lights.ts applyCutaway）——半墙 / 全部压低时淡出，前墙让开时所指房间之前的淡出
-      const mode = walking.value ? 'up' : sandbox.wallMode
-      const s = dir ? (f.x - houseCenter.x) * dir.x + (f.y - houseCenter.y) * dir.y : null
-      o.obj.userData.fade ??= { x: f.x, y: f.y, nx: 0, ny: 0, outer: false }
-      o.obj.userData.target = ceilingHidden(mode !== 'up', s, depth) ? 1 : 0
-      list.push(o.obj)
-      continue
-    }
     const a = (f.rot * Math.PI) / 180
     const back = { x: Math.sin(a), y: -Math.cos(a) }
-    // 能摆东西的壁挂物（搁板、吊柜、挂杆）一直显示：藏了它，摆在上面、挂在上面的东西就悬在半空了
-    const platform = !!def.surface || !!def.surfaces?.length
-    const mode = walking.value ? 'up' : sandbox.wallMode
-    let hide = !platform && mode === 'down'
-    if (!platform && !hide && mode === 'half') {
+    const platform = !def.ceiling && (!!def.surface || !!def.surfaces?.length)
+    let hidden = !def.ceiling && !platform && mode === 'down'
+    if (!def.ceiling && !platform && !hidden && mode === 'half') {
       const k = def.d / 2 + p.wall + 5
       const r = roomAt(p, { x: f.x + back.x * k, y: f.y + back.y * k })
-      hide = !!r && r.kind !== 'balcony'
-    }
-    if (!platform && !hide && dir) {
-      const s = (f.x - houseCenter.x) * dir.x + (f.y - houseCenter.y) * dir.y
-      hide = back.x * dir.x + back.y * dir.y > 0.3 && (s > 25 || (depth !== null && s > depth))
+      hidden = !!r && r.kind !== 'balcony'
     }
     o.obj.userData.fade ??= { x: f.x, y: f.y, nx: 0, ny: 0, outer: false }
-    o.obj.userData.target = hide ? 1 : 0
-    list.push(o.obj)
+    items.push({ obj: o.obj, x: f.x, y: f.y, ceiling: !!def.ceiling, back, platform, hidden })
   }
-  furnRoot.userData.fadeList = list
+  return (mountedMemo = { key, items, others })
+}
+
+function updateMounted(dir: { x: number; y: number } | null, depth: number | null) {
+  // 只处理当前楼层（别的楼层墙不压低，壁挂物照常显示）
+  const { items, others } = mountedItems()
+  for (const o of objs.values()) if (o.obj.userData.target) o.obj.userData.target = 0
+  const wallsDown = (walking.value ? 'up' : sandbox.wallMode) !== 'up'
+  for (const m of items) {
+    const s = dir ? (m.x - houseCenter.x) * dir.x + (m.y - houseCenter.y) * dir.y : null
+    let hide: boolean
+    // 吸顶灯 / 吊灯：同房间灯（lights.ts applyCutaway）——半墙 / 全部压低时淡出，前墙让开时所指房间之前的淡出
+    if (m.ceiling) hide = ceilingHidden(wallsDown, s, depth)
+    else {
+      hide = m.hidden
+      if (!m.platform && !hide && dir && s !== null) hide = m.back.x * dir.x + m.back.y * dir.y > 0.3 && (s > 25 || (depth !== null && s > depth))
+    }
+    m.obj.userData.target = hide ? 1 : 0
+  }
+  furnRoot.userData.fadeList = [...others, ...items.map((m) => m.obj)]
 }
 
 function updateHoverRoom(e: PointerEvent | null) {
@@ -881,7 +914,7 @@ function syncFurniture() {
     // 按楼层放进各层的组（换了楼层就挪过去）
     const layer = floors.furnLayer(floorOf(p, f))
     if (o.obj.parent !== layer) layer.add(o.obj)
-    placeShifted(o.obj, p, f)
+    placeShifted(o.obj, p, f, true)
     // 绿植贴墙时把越过墙面的枝叶弯回来（位置变了才重算）
     if (isPlant(f.asset)) {
       const pk = `${f.x},${f.y},${f.rot},${f.floor ?? ''}`
@@ -901,6 +934,7 @@ function syncFurniture() {
       clearShifts(id)
       drawerShift.delete(id)
     }
+  furnSyncVer++
   settleOnBeds(p)
   updateRing()
   applyXray()
@@ -1433,6 +1467,25 @@ function setRay(e: PointerEvent) {
   raycaster.setFromCamera(ndc, stage.camera)
 }
 
+/** 渲染循环的帧号（每帧加一）：射线检测结果的缓存只在同一帧里有效 */
+let frameNo = 0
+const castMemo = { obj: null as THREE.Object3D | null, o: new THREE.Vector3(), d: new THREE.Vector3(), frame: -1, hits: [] as THREE.Intersection[] }
+/**
+ * 当前射线对某个物体（当前层的房子）的检测结果。一次悬停里 pickHouse、pickFurniture、pickWallDevice 都要对同一层房子打一次
+ * （没有加速结构，每次都是整层网格）：射线、物体、帧号都没变就复用上一次的。返回的数组不要改
+ */
+function castOnce(obj: THREE.Object3D): readonly THREE.Intersection[] {
+  const r = raycaster.ray
+  const m = castMemo
+  if (m.obj === obj && m.frame === frameNo && m.o.equals(r.origin) && m.d.equals(r.direction)) return m.hits
+  m.obj = obj
+  m.frame = frameNo
+  m.o.copy(r.origin)
+  m.d.copy(r.direction)
+  m.hits = raycaster.intersectObject(obj, true)
+  return m.hits
+}
+
 function floorPoint(e: PointerEvent) {
   setRay(e)
   const p = new THREE.Vector3()
@@ -1478,7 +1531,8 @@ function wallItemNear(far: number) {
     const def = ASSET_MAP.get(f.asset)
     const o = objs.get(f.id)?.obj
     if (!def || !isWallMounted(def) || !o || !shown(o, true)) continue
-    padBox.setFromObject(o).expandByScalar(WALL_PICK_PAD)
+    // 缓存的局部包围盒换到世界里（不用每次遍历整个模型），描边外壳不算在里面：多扩 1cm 补上
+    padBox.copy(localBox(o)).applyMatrix4(o.matrixWorld).expandByScalar(WALL_PICK_PAD + 1)
     if (!raycaster.ray.intersectBox(padBox, padHit)) continue
     const d = padHit.distanceTo(raycaster.ray.origin)
     if (d <= bestD) {
@@ -1508,7 +1562,7 @@ function pickFurniture(e: PointerEvent, maxDist = Infinity): string | null {
   const fhits = raycaster.intersectObject(floors.furnLayer(activeFloor.value), true)
   // 墙、楼板挡住的不算：点在墙上不会选到墙后面房间里的家具
   const house = floorGroups.find((g) => g.floor.id === activeFloor.value)?.group
-  const wall = house ? raycaster.intersectObject(house, true).find((h) => (h.object as THREE.Mesh).isMesh && shown(h.object) && opaqueHit(h)) : undefined
+  const wall = house ? castOnce(house).find((h) => (h.object as THREE.Mesh).isMesh && shown(h.object) && opaqueHit(h)) : undefined
   const far = Math.min(wall ? wall.distance + 0.5 : Infinity, maxDist)
   // 射线经过的家具（去重、由近到远）
   const ids: string[] = []
@@ -1556,7 +1610,7 @@ function pickHouse(e: { clientX: number; clientY: number }): HouseHit | null {
   const house = floorGroups.find((g) => g.floor.id === activeFloor.value)?.group
   if (!house) return null
   setRay(e as PointerEvent)
-  const hits = raycaster.intersectObject(house, true)
+  const hits = [...castOnce(house)]
   const below = floorBelow(plan.value, activeFloor.value)
   if (below && plan.value.fixtures.some((f) => f.kind === 'stairs' && floorOf(plan.value, f) === below.id)) {
     const g = floorGroups.find((x) => x.floor.id === below.id)?.group
@@ -3017,6 +3071,7 @@ const placingName = computed(() => {
 
 function loop() {
   raf = requestAnimationFrame(loop)
+  frameNo++
   const now = performance.now()
   perfTick(now)
   const dt = Math.min(0.1, (now - lastFrame) / 1000)
@@ -3102,7 +3157,12 @@ function loop() {
     dirty = true
   }
   // 选中框：出现时缩入，之后角标呼吸（省电画质 / 减少动效时静止，画面不用每帧重画）
-  const framesMoving = [selFrame.update(now, low), hoverFrame.update(now, true), ghostFrame.update(now, true), siteFrame.update(now, low), beamSelFrame.update(now, low)].some(Boolean)
+  // 五个都要更新（不能短路）
+  let framesMoving = selFrame.update(now, low)
+  framesMoving = hoverFrame.update(now, true) || framesMoving
+  framesMoving = ghostFrame.update(now, true) || framesMoving
+  framesMoving = siteFrame.update(now, low) || framesMoving
+  framesMoving = beamSelFrame.update(now, low) || framesMoving
   if (framesMoving) dirty = true
   // 灯光渐亮 / 渐灭（开关、黄昏清晨）
   if (lights.step(dt)) dirty = true
@@ -3128,7 +3188,6 @@ function loop() {
     placeResizeHandles()
     placeBeamHandles()
     floors.syncFades()
-    // 顶灯投影换了一盏灯（漫游换房间）：只有它的阴影贴图标了要重画（其余的灯 autoUpdate 关着、没标记，不会跟着重画）
     // 场景变了：太阳和顶灯的阴影一起重画（唯一的入口）；顶灯换了一盏（lights.ts）时它自己标了要重画
     if (shadowDirty) lights.refreshShadows()
     if (shadowDirty || lights.shadowPending()) stage.renderer.shadowMap.needsUpdate = true
@@ -3625,9 +3684,12 @@ onBeforeUnmount(() => {
 })
 
 // 房间的灯光开关 / 色温 / 主灯接管不影响房子本身：比较时剔掉，免得一开灯就整栋重建
+// 单独一个 watch、不加 deep：getter 读到了灯光字段（依赖照样建立），但只有剔完后的字符串真变了才重建。
+// 和下面的 deep watch 放在一起的话，deep 时 Vue 不比较新旧值，开灯、拖色温滑杆都会整栋重建
 const roomsShape = () => JSON.stringify(plan.value.rooms, (k, v) => (k === 'light' || k === 'lightK' || k === 'ownLights' ? undefined : v))
+watch(roomsShape, rebuildHouse)
 watch(
-  () => [roomsShape(), plan.value.openings, plan.value.fixtures, plan.value.wall, plan.value.wallOuter, sandbox.wallHeight, plan.value.floors, plan.value.site, plan.value.exterior, plan.value.wallpaper, plan.value.flooring],
+  () => [plan.value.openings, plan.value.fixtures, plan.value.wall, plan.value.wallOuter, sandbox.wallHeight, plan.value.floors, plan.value.site, plan.value.exterior, plan.value.wallpaper, plan.value.flooring],
   rebuildHouse,
   { deep: true },
 )
@@ -4086,7 +4148,7 @@ function pickWallDevice(e: { clientX: number; clientY: number }): { kind: WallDe
   const house = floorGroups.find((g) => g.floor.id === activeFloor.value)?.group
   if (!house) return null
   setRay(e as PointerEvent)
-  for (const h of raycaster.intersectObject(house, true)) {
+  for (const h of castOnce(house)) {
     if (!(h.object as THREE.Mesh).isMesh || !shown(h.object, true)) continue
     let o: THREE.Object3D | null = h.object
     while (o && !o.userData.wallDevice) o = o.parent

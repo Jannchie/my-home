@@ -9,7 +9,7 @@ import type { FloorGroup } from './building'
 import type { FloorHooks } from './characters'
 import type { FloorShow } from '../store'
 import { syncMatrix } from './matrices'
-import { isReflector } from './toon'
+import { cloneWithHooks, isReflector } from './toon'
 
 /** 分层拉开时层与层之间多拉开的距离 */
 export const EXPLODE_GAP = 230
@@ -274,9 +274,7 @@ export function fadeFloor(root: THREE.Object3D, floorId: string, alpha: number) 
   const ghost = (m: THREE.Material) => {
     let g = cache!.get(m)
     if (!g) {
-      g = m.clone()
-      g.onBeforeCompile = m.onBeforeCompile
-      g.customProgramCacheKey = m.customProgramCacheKey
+      g = cloneWithHooks(m)
       g.transparent = true
       g.depthWrite = false
       g.depthFunc = THREE.LessEqualDepth

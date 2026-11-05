@@ -5,7 +5,7 @@ import { fnv1a } from '../hash'
 import * as THREE from 'three'
 import type { StyleTag } from './kit'
 import type { RoomLightSpec } from './lights'
-import { addOutlines, ball, cup, cyl, rbox, toon, torus } from './toon'
+import { addOutlines, ball, cloneWithHooks, cup, cyl, rbox, toon, torus } from './toon'
 
 /** 灯具素材（packs/ceiling-lights.ts）按这个天花板高度做模型；房间灯按所在楼层的层高放（RoomLightSpec.ceil），和沙盘「墙高」滑杆无关 */
 export const CEILING = 240
@@ -558,9 +558,7 @@ function fixtureMat(src: THREE.Material) {
   if (src.userData[LAMP_GLOW]) return src
   let m = fixtureMats.get(src)
   if (!m) {
-    m = src.clone()
-    m.onBeforeCompile = src.onBeforeCompile
-    m.customProgramCacheKey = src.customProgramCacheKey
+    m = cloneWithHooks(src)
     fixtureMats.set(src, m)
   }
   return m

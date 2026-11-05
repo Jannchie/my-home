@@ -193,6 +193,14 @@ export function pullDepth<T extends THREE.Material>(m: T, k: number): T {
   return m
 }
 
+/** 克隆材质并带上 onBeforeCompile / customProgramCacheKey（clone 不拷这两个；灯光遮罩、赛璐璐、深度偏移都注入在那里） */
+export function cloneWithHooks<T extends THREE.Material>(m: T): T {
+  const c = m.clone()
+  c.onBeforeCompile = m.onBeforeCompile
+  c.customProgramCacheKey = m.customProgramCacheKey
+  return c
+}
+
 let vcToon: THREE.MeshToonMaterial | null = null
 /**
  * 顶点色的 toon 材质（家具单材质合并用，所有家具共用一份）：底色白色 × 顶点色 = 原来各材质的颜色，着色结果和原来逐材质完全一样。
@@ -224,6 +232,13 @@ export const outlineUniforms = {
   uLineLift: { value: 0 },
   /** 统一墨色（线性 rgb）和换成它的程度（a）：「插画」所有描边都用同一种暖墨色，不随填充色变 */
   uInk: { value: new THREE.Vector4(0, 0, 0, 0) },
+  /**
+   * 描边色当作 sRGB 显示的值转回线性（uLinear = 1，进线性 composer 时）、入夜压暗（uDim）。
+   * 描边不走光照、不做色彩空间转换：直接上屏时颜色值被当成 sRGB 显示，进了 composer 后会被 Base 再转一次而变浅。
+   * post.ts renderPatched 在渲染前设、渲染后还原（别的渲染器画缩略图时还是原样）
+   */
+  uLinear: { value: 0 },
+  uDim: { value: 1 },
 }
 const LINE_VERT_PARS = /* glsl */ `
         uniform float uWidth;
@@ -234,6 +249,11 @@ const LINE_WIDTH = /* glsl */ `uWidth * ( uLineFade.z > 0.5 ? 1.0 - smoothstep( 
 const LINE_FRAG_PARS = /* glsl */ `
         uniform float uLineLift;
         uniform vec4 uInk;
+        uniform float uLinear;
+        uniform float uDim;
+        vec3 toLinear( vec3 c ) {
+          return mix( c * 0.0773993808, pow( c * 0.9478672986 + 0.0521327014, vec3( 2.4 ) ), vec3( greaterThanEqual( c, vec3( 0.04045 ) ) ) );
+        }
         vec3 lineLift( vec3 c ) {
           float l = dot( c, vec3( 0.2126, 0.7152, 0.0722 ) );
           c = mix( c, min( max( mix( vec3( l ), c, 1.5 ), 0.0 ) * 2.2, 1.0 ), uLineLift );
@@ -277,7 +297,7 @@ function outlineMaterial(color: THREE.Color, skinned = false) {
         uniform vec3 uColor;
         uniform float uManga;
         ${LINE_FRAG_PARS}
-        void main() { gl_FragColor = uManga > 0.5 ? vec4(1.0, 0.5, 0.5, 1.0) : vec4(lineLift(uColor), 1.0); }`,
+        void main() { gl_FragColor = uManga > 0.5 ? vec4(1.0, 0.5, 0.5, 1.0) : vec4(lineLift((uLinear > 0.5 ? toLinear(uColor) : uColor) * uDim), 1.0); }`,
       side: THREE.BackSide,
     })
     outlineCache.set(key, m)
@@ -292,7 +312,7 @@ function outlineMaterial(color: THREE.Color, skinned = false) {
 const OUTLINE_FLOOR = 0.12 // 描边明度下限（沿用原值）
 const OUTLINE_DARK_FROM = 0.3 // 填充线性明度低于它才开始提亮；提亮量线性衰减，到这里归零，函数连续
 const OUTLINE_DARK_L = 0.3 // 纯黑填充的描边明度上限（显示出来约 #3d4052–#4e463e 的中灰）：看得见轮廓，又不抢眼
-export function outlineColor(fill: THREE.Color) {
+function outlineColor(fill: THREE.Color) {
   const hsl = { h: 0, s: 0, l: 0 }
   fill.getHSL(hsl)
   const dark = Math.max(0, 1 - hsl.l / OUTLINE_DARK_FROM)
@@ -308,12 +328,12 @@ let vcOutline: THREE.ShaderMaterial | null = null
 /**
  * 顶点色描边：颜色逐顶点（属性 ocolor = 合并前各描边外壳的 uColor，已经按 outlineColor 算好），
  * ocolor.r < 0 的顶点所在零件原来没有描边（太小、noOutline），整片三角形移到裁剪空间外面丢掉。
- * uLinear / uDim 对应 post.ts 对普通描边 uColor 的临时调整（进线性 composer 时先转回线性、入夜压暗）。
+ * uLinear / uDim 和普通描边共用（outlineUniforms：进线性 composer 时先转回线性、入夜压暗）。
  */
 export function vertexColorOutline() {
   if (vcOutline) return vcOutline
   vcOutline = new THREE.ShaderMaterial({
-    uniforms: { ...outlineUniforms, uLinear: { value: 0 }, uDim: { value: 1 } },
+    uniforms: { ...outlineUniforms },
     vertexShader: /* glsl */ `
       ${LINE_VERT_PARS}
       attribute vec3 ocolor;
@@ -330,13 +350,8 @@ export function vertexColorOutline() {
       }`,
     fragmentShader: /* glsl */ `
       ${LINE_FRAG_PARS}
-      uniform float uLinear;
-      uniform float uDim;
       uniform float uManga;
       varying vec3 vOColor;
-      vec3 toLinear(vec3 c) {
-        return mix(c * 0.0773993808, pow(c * 0.9478672986 + 0.0521327014, vec3(2.4)), vec3(greaterThanEqual(c, vec3(0.04045))));
-      }
       void main() {
         vec3 c = uLinear > 0.5 ? toLinear(vOColor) : vOColor;
         gl_FragColor = uManga > 0.5 ? vec4(1.0, 0.5, 0.5, 1.0) : vec4(lineLift(c) * uDim, 1.0);
@@ -393,7 +408,8 @@ export function addOutlines(root: THREE.Object3D, opts: { minSize?: number } = {
 // ---------- 体素 ----------
 
 const geoCache = new Map<string, THREE.BufferGeometry>()
-function cached<T extends THREE.BufferGeometry>(key: string, make: () => T): T {
+/** 按 key 全局共用的几何（标成 shared，disposeUnshared 不释放）；调用方不能改它 */
+export function cached<T extends THREE.BufferGeometry>(key: string, make: () => T): T {
   let g = geoCache.get(key)
   if (!g) {
     g = make()
@@ -430,10 +446,10 @@ const q = (n: number) => (Math.abs(n) >= 0.1 ? Math.round(n * 10) / 10 : Math.ro
  * 体素细分按尺寸自适应：圆角 / 球 / 圆环越小，屏幕上越看不出棱角（卡通描边又会把轮廓压成一条线），
  * 小件用更少的段数。圆角盒 3 段时每个约 590 个三角面、1 段约 110 个；球 24×16 约 770、12×8 约 190。
  */
-export function rboxSegments(r: number) {
+function rboxSegments(r: number) {
   return r >= 4 ? 3 : r >= 1.5 ? 2 : 1
 }
-export function ballSegments(r: number): [number, number] {
+function ballSegments(r: number): [number, number] {
   return r >= 8 ? [24, 16] : r >= 3 ? [16, 12] : [12, 8]
 }
 /**
@@ -441,7 +457,7 @@ export function ballSegments(r: number): [number, number] {
  * 不能因为管细或环不大就减圈上的段数：贴着杯子、花瓶、桶身的箍（cup / cyl 都是 32 / 24 段）折线和器身对不上，
  * 会一截截陷进去（截图对比里 r≈6 的陶罐箍降到 24 段就成了虚线）。不满一圈的按弧长比例减段（至少 6 段）。
  */
-export function torusSegments(r: number, tube: number, arc: number): [number, number] {
+function torusSegments(r: number, tube: number, arc: number): [number, number] {
   const radial = tube < 1.5 ? 8 : 10
   const full = r < 4 ? 24 : 32
   return [radial, Math.max(6, Math.ceil((full * arc) / (Math.PI * 2)))]

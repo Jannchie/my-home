@@ -331,7 +331,7 @@ function lookKey(d: LookDef) {
 }
 
 /** 转折线浓度：预设没写时，动画感光照下默认 0.6（倒角、门缝、台面转角也有线），原来的光照（黑白漫画）下不画 */
-export const creaseOf = (d: LookDef) => d.crease ?? (d.material ? 0 : 0.6)
+const creaseOf = (d: LookDef) => d.crease ?? (d.material ? 0 : 0.6)
 
 /** 这套效果什么都不做（不用建后处理）；low：省电画质不开泛光、转折线，只带这两样的效果也算 */
 const plainLook = (d: LookDef, low = false) =>
@@ -1449,15 +1449,14 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
   }
 
   /**
-   * 渲染一帧前临时改材质，渲染完立即还原：
+   * 渲染一帧前临时改材质 / uniform，渲染完立即还原：
    * - 描边壳是不走光照、不做色彩空间转换的 ShaderMaterial：直接上屏时它的颜色值被当成 sRGB 显示，
-   *   进了线性的 composer 后会被 Base 再转一次 sRGB 而变浅。这里先把颜色转回线性，保证和「原样」一样深；
-   *   入夜再整体压暗（否则不受光照的描边在暗场景里会像霓虹灯）。
+   *   进了线性的 composer 后会被 Base 再转一次 sRGB 而变浅。这里让描边着色器先把颜色转回线性（共用的 uLinear），保证和「原样」一样深；
+   *   入夜再整体压暗（uDim，否则不受光照的描边在暗场景里会像霓虹灯）。两个都是 toon.ts outlineUniforms 里共用的，不遍历场景。
    * - 入夜：自发光材质（台灯、指示灯、屏幕）加亮，让泛光只落在灯上；窗玻璃透出暖光。
-   * （更干净的做法是给 toon.ts 的描边着色器加一个 uniform，但那个文件不在本次改动范围内。）
    * - 黑白漫画：材质切到编码输出（uManga），并按当前太阳与天光算「完全受光」的受光比；
    *   粒子、Sprite、加色贴片（灯光光斑）没法编码，这一帧先藏起来。
-   * 白天且不走 composer 时什么都不用改，不遍历场景。
+   * 白天、不是黑白漫画、不是写实时不遍历场景。
    */
   function renderPatched(draw: () => void) {
     // 线条随距离淡出、带颜色（LookDef.line）：漫游按镜头距离，鸟瞰从视角焦点往后
@@ -1472,9 +1471,27 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
     setInk(outlineUniforms.uInk.value, !!composer && !!current.illust, 1 - 0.7 * sky.night)
     const night = sky.night
     const linear = !!composer
-    if (!linear && night < 0.01) return draw()
     const manga = linear && current.stylize === 'manga' && !!passes
     const real = linear && current.material === 'real'
+    // 写实：材质换成 PBR 时用到的参数（只是几个 uniform，PBR 材质在 swapToPbr 时才从原材质同步加亮后的值）
+    setRealStyle({
+      figure: real && current.figure ? 1 : 0,
+      rim: real ? (current.rim ?? 0) : 0,
+      term: real ? (current.term ?? 0) : 0,
+      flatFur: real && current.flatFur ? 1 : 0,
+      cel: real ? (current.cel ?? 0) : 0,
+    })
+    // 描边色：进 composer 时转回线性、入夜压暗（着色器里做，渲染完还原成原样）
+    outlineUniforms.uLinear.value = linear ? 1 : 0
+    outlineUniforms.uDim.value = 1 - 0.7 * night
+    if (!manga && !real && night < 0.01) {
+      try {
+        return draw()
+      } finally {
+        outlineUniforms.uLinear.value = 0
+        outlineUniforms.uDim.value = 1
+      }
+    }
     const hidden: THREE.Object3D[] = []
     if (manga) {
       const lum = (c: THREE.Color) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
@@ -1484,8 +1501,6 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
       mangaUniforms.uMangaNight.value = night
       mangaUniforms.uManga.value = 1
     }
-    const outlines: [THREE.Color, THREE.Color][] = []
-    const vcOutlines: [Record<string, THREE.IUniform>, number, number][] = []
     const boosted: [THREE.MeshStandardMaterial, number][] = []
     const glass: [THREE.MeshStandardMaterial, THREE.Color, number][] = []
     const seen = new Set<THREE.Material>()
@@ -1507,24 +1522,8 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
       for (const mat of Array.isArray(m) ? m : [m]) {
         if (seen.has(mat)) continue
         seen.add(mat)
-        if (o.userData.isOutline) {
-          // 顶点色描边（家具单材质合并）：同样的换算交给着色器（uLinear：当作 sRGB 的值转回线性；uDim：入夜压暗）
-          if (mat.userData.vertexColorOutline) {
-            const u = (mat as THREE.ShaderMaterial).uniforms
-            vcOutlines.push([u, u.uLinear.value as number, u.uDim.value as number])
-            u.uLinear.value = linear ? 1 : 0
-            u.uDim.value = 1 - 0.7 * night
-            continue
-          }
-          const c = (mat as THREE.ShaderMaterial).uniforms?.uColor?.value as THREE.Color | undefined
-          if (!c) continue
-          outlines.push([c, c.clone()])
-          // 把「当作 sRGB 显示的值」换算成线性值
-          if (linear) c.setRGB(c.r, c.g, c.b, THREE.SRGBColorSpace)
-          c.multiplyScalar(1 - 0.7 * night)
-          continue
-        }
-        if (night < 0.01) continue
+        // 描边的颜色换算在着色器里（上面的 uLinear / uDim）
+        if (o.userData.isOutline || night < 0.01) continue
         const e = mat as THREE.MeshStandardMaterial
         if (!e.emissive) continue
         if (e.transparent && e.color?.getHexString() === GLASS_HEX) {
@@ -1550,13 +1549,6 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
     if (manga) scene.traverseVisible(visit)
     else for (const o of patchTargets()) if (o.visible) visit(o)
     // 写实：材质换成 PBR（在入夜加亮之后换，PBR 材质从原材质同步加亮后的值）
-    setRealStyle({
-      figure: real && current.figure ? 1 : 0,
-      rim: real ? (current.rim ?? 0) : 0,
-      term: real ? (current.term ?? 0) : 0,
-      flatFur: real && current.flatFur ? 1 : 0,
-      cel: real ? (current.cel ?? 0) : 0,
-    })
     const restore = real ? swapToPbr(renderer, scene, (o) => !!o.userData.isOutline) : null
     try {
       draw()
@@ -1564,11 +1556,8 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
       restore?.()
       mangaUniforms.uManga.value = 0
       for (const o of hidden) o.visible = true
-      for (const [c, orig] of outlines) c.copy(orig)
-      for (const [u, lin, dim] of vcOutlines) {
-        u.uLinear.value = lin
-        u.uDim.value = dim
-      }
+      outlineUniforms.uLinear.value = 0
+      outlineUniforms.uDim.value = 1
       for (const [e, v] of boosted) e.emissiveIntensity = v
       for (const [e, c, v] of glass) {
         e.emissive.copy(c)
@@ -1945,6 +1934,23 @@ class AccumPass extends Pass {
 
   render(renderer: THREE.WebGLRenderer, writeBuffer: THREE.WebGLRenderTarget, readBuffer: THREE.WebGLRenderTarget) {
     const [prev, next] = this.hist
+    if (this.frame === 0) {
+      // 从头来（镜头在动时每帧都是）：输出就是这一帧，只把它抄进历史；不在最后时不交换缓冲，下一个 pass 直接读 readBuffer，
+      // 省掉「混合进历史 + 再抄到 writeBuffer」两遍全屏
+      this.copy.uniforms.tDiffuse.value = readBuffer.texture
+      this.quad.material = this.copy
+      renderer.setRenderTarget(next)
+      this.quad.render(renderer)
+      if (this.renderToScreen) {
+        renderer.setRenderTarget(null)
+        this.quad.render(renderer)
+      }
+      this.needsSwap = this.renderToScreen
+      this.hist = [next, prev]
+      this.frame++
+      return
+    }
+    this.needsSwap = true
     this.mat.uniforms.tCur.value = readBuffer.texture
     this.mat.uniforms.tHist.value = prev.texture
     this.mat.uniforms.uK.value = this.frame === 0 ? 1 : Math.max(1 / (this.frame + 1), 1 / ACCUM_FRAMES)

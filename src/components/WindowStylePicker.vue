@@ -5,7 +5,7 @@ import { computed, watchEffect } from 'vue'
 import { t } from '../i18n'
 import { WINDOW_FRAMES, WINDOW_GRIDS, WINDOW_SILLS, WINDOW_STYLES, type Opening, type WindowFrame, type WindowGrid, type WindowSill, type WindowStyle } from '../model'
 import { floorPlan, mutate } from '../store'
-import { openingInfos } from '../three/house'
+import { openingInfo } from '../three/house'
 import { useSitePreviews, type SitePreview } from '../three/siteThumbs'
 import { frameColor, gridAllowed, shutterColor } from '../windows'
 
@@ -18,7 +18,11 @@ const FRAMES = Object.keys(WINDOW_FRAMES) as WindowFrame[]
 const GRIDS = Object.keys(WINDOW_GRIDS) as WindowGrid[]
 const SILLS = Object.keys(WINDOW_SILLS) as WindowSill[]
 
-const info = computed(() => openingInfos(floorPlan.value).find((i) => i.o.id === props.opening.id) ?? null)
+const info = computed(() => {
+  const fp = floorPlan.value
+  const o = fp.openings.find((x) => x.id === props.opening.id)
+  return o ? openingInfo(fp, o) : null
+})
 /** 朝阳台的落地推拉窗（「标准」= 两扇推拉的落地窗） */
 const sash = computed(() => !!info.value?.sash)
 const outer = computed(() => !!info.value?.outer)
