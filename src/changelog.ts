@@ -12,6 +12,36 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '1.19.0',
+    date: '2026-11-05',
+    notes: {
+      zh: [
+        '3D 沙盘里可以住人了：上传 VRM 人物，他们会在家里走动、经楼梯上下楼、坐沙发和椅子、躺到床上睡觉；默认自带一位示例住户。人物只存在这个浏览器里，不会进入户型、导出文件和分享链接',
+        '默认的床重新做了：拉扣床头、圆腿木床架、更厚的床垫、靠着的枕头和床尾的搭毯；摆在被子上的东西会按大小压出一个浅坑，陷进去而不是浮在上面',
+        '模型上画的文字跟着界面语言走：奖状证书、清洁用品标签、垃圾分类标识、搬家纸箱、地垫、字母留言板、电子钟和撕页日历都有中文、日文、英文各自的版本',
+        '自动保存在关掉标签页时会把最后一次修改存下来，浏览器存储满了存不进去时会提示',
+        '修正：挂墙家具不再穿进相邻墙的内收柱；毛巾杆、吧台桌不再被当成凳子；收起的折叠床、折叠状态的沙发床不再算作床',
+        '性能：大户型拖动家具更流畅，第一次进入 3D 沙盘的卡顿拆成了几次短的，多层户型切换楼层时更轻',
+      ],
+      ja: [
+        '3D ジオラマに人が住めるように：VRM キャラクターをアップロードすると、家の中を歩き回り、階段で上下階を移動し、ソファや椅子に座り、ベッドで眠ります。サンプルの住人が 1 人最初からいます。キャラクターはこのブラウザだけに保存され、間取り・書き出しファイル・共有リンクには含まれません',
+        '標準のベッドを作り直しました：ボタン留めのヘッドボード、丸脚の木製フレーム、厚めのマットレス、立てかけた枕、足元のスロー。掛け布団の上に置いた物は大きさに応じて少し沈み込み、浮いて見えなくなりました',
+        'モデルに描かれた文字が UI の言語に合わせて変わるように：賞状、掃除用品のラベル、ゴミの分別表示、引っ越しの段ボール、玄関マット、レターボード、デジタル時計、日めくりカレンダーに中国語・日本語・英語それぞれの版があります',
+        '自動保存がタブを閉じたときに最後の変更も保存するように。ブラウザのストレージがいっぱいで保存できないときは知らせます',
+        '修正：壁掛け家具が隣の壁の梁に食い込まないように。タオル掛けやバーテーブルがスツール扱いされないように。たたんだ折りたたみベッドやソファベッドはベッドとして数えないように',
+        'パフォーマンス：大きな間取りで家具をドラッグするときがなめらかに。3D ジオラマに初めて入るときの長い待ちを短く分割し、多層の間取りで階を切り替えるときも軽くなりました',
+      ],
+      en: [
+        "Residents can now live in the 3D diorama: upload a VRM character and they walk around the home, take the stairs, sit on sofas and chairs, and sleep in beds; a sample resident is home by default. Characters are stored only in this browser and never enter the plan, exported files or share links",
+        "The default bed has been redone with a tufted headboard, a wooden frame on round legs, a thicker mattress, leaning pillows and a throw across the foot; items placed on the duvet press a shallow dent sized to them and sink in instead of floating above it",
+        "Text painted on models follows the interface language: certificates, cleaning-product labels, sorting-bin signs, moving boxes, the doormat, the letter board, the digital clock and the tear-off calendar each have Chinese, Japanese and English versions",
+        "Autosave now keeps your last edit when the tab is closed, and tells you when browser storage is full and the plan could not be saved",
+        "Fixes: wall-mounted items no longer cut into a neighbouring wall's beam; towel bars and bar tables are no longer treated as stools; a folding bed that is put away or a folded sofa bed no longer counts as a bed",
+        "Performance: dragging furniture in large plans is smoother, the long stall on first entering the 3D diorama is split into shorter ones, and switching floors in multi-storey plans is lighter",
+      ],
+    },
+  },
+  {
     version: '1.18.0',
     date: '2026-10-24',
     notes: {
