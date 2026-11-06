@@ -402,24 +402,22 @@ const ldShelf = (y: number, below: number): { y: number; shape: Poly[]; h: numbe
   h: below - y - 2,
 })
 
-const CAT_TOWER: Partial<AssetDef> = { type: 'cat-tower', tags: ['cat-tower', 'cat', 'pet-supply', 'hobby:cats'], mats: ['pile', 'fabric', 'pile'] }
+const CAT_TOWER: Partial<AssetDef> = { type: 'cat-tower', tags: ['cat', 'pet-supply', 'hobby:cats'], mats: ['pile', 'fabric', 'pile'] }
 
 export const FURNITURE_PLUS: AssetDef[] = [
   define('fp-cat-tree-tall', '高猫爬架', 'pets', [TREE_W, TREE_D, TREE_H], TREE_PALS, catTreeTall, CAT_TOWER),
   define('fp-cat-post', '小猫爬柱', 'pets', [POST_W, POST_W, POST_H], TREE_PALS, catPost, CAT_TOWER),
   define('fp-magazine-basket', '铁线杂志篮', 'living', [BASKET_W, BASKET_D, BASKET_H], BASKET_PALS, magazineBasket, {
     type: 'magazine',
-    tags: ['magazine'],
     mats: ['metal', 'wood'],
   }),
   define('fp-magazine-rack', '阶梯杂志架', 'living', [RACK_W, RACK_D, RACK_H], RACK_PALS, magazineRack, {
     type: 'magazine',
-    tags: ['magazine'],
     mats: ['wood', 'wood'],
   }),
   define('fp-coat-bentwood', '弯木衣帽架', 'entrance', [38, 38, BENT_H], BENT_PALS, bentwoodStand, {
     type: 'coat-rack',
-    tags: ['coat-rack', 'multi-ok'],
+    tags: ['multi-ok'],
     mats: ['wood', 'wood', 'metal'],
     surfaces: [
       { y: BENT_UP.y + 1, kind: 'hook', h: 150, shape: hookRing(BENT_UP_A, BENT_UP.r) },
@@ -428,14 +426,14 @@ export const FURNITURE_PLUS: AssetDef[] = [
   }),
   define('fp-gateleg-table', '蝴蝶翻板餐桌', 'dining', [GATE_W, GATE_D, GATE_H], GATE_PALS, gatelegTable, {
     type: 'dining-table',
-    tags: ['dining-table', 'table'],
+    tags: ['table'],
     mats: ['wood', 'wood'],
     sizeLabel: '120×80',
     surface: GATE_H,
   }),
   define('fp-ladder-desk', '梯形书桌', 'study', [LD_W, LD_D, LD_H], LD_PALS, ladderDesk, {
     type: 'desk',
-    tags: ['desk', 'table'],
+    tags: ['table'],
     mats: ['wood', 'wood', 'metal'],
     sizeLabel: '80×48',
     // 桌面：前半截上方是空的（层板收在斜梁后面），后半截在第一层书架下面，限高
@@ -449,7 +447,7 @@ export const FURNITURE_PLUS: AssetDef[] = [
   }),
   define('fp-music-stand', '木谱架', 'music', [MS_W, MS_D, MS_H], MS_PALS, musicStandWood, {
     type: 'music-stand',
-    tags: ['music-stand', 'music-accessory', 'instrument'],
+    tags: ['music-accessory', 'instrument'],
     mats: ['wood', null, 'metal'],
   }),
 ]

@@ -84,6 +84,43 @@ export function applyDims(assets: AssetDef[], table: DimsTable) {
   return n
 }
 
+// ---------- 挂起形态的前后中心 ----------
+
+/** id → 挂起形态模型前后（z）方向的中心（cm，往前为正）：只记偏离原点 ≥ 0.3 的 */
+export type HangTable = Record<string, number>
+
+/** 挂起形态的前后中心（保留一位小数）；不是挂起形态或基本居中返回 null */
+export function measureHang(def: AssetDef, box = new THREE.Box3()): number | null {
+  if (def.form !== 'hanging') return null
+  let g: THREE.Group
+  try {
+    g = def.build(def.palettes[0] ?? [])
+  } catch {
+    return null
+  }
+  g.updateMatrixWorld(true)
+  box.setFromObject(g, true)
+  if (box.isEmpty()) return null
+  const cz = Math.round(((box.min.z + box.max.z) / 2) * 10) / 10
+  return Math.abs(cz) >= 0.3 ? cz : null
+}
+
+/** 对全部素材量一遍挂起形态的前后中心（键按 id 排序） */
+export function computeHang(assets: AssetDef[]): HangTable {
+  const box = new THREE.Box3()
+  const out: HangTable = {}
+  for (const d of [...assets].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))) {
+    const cz = measureHang(d, box)
+    if (cz !== null) out[d.id] = cz
+  }
+  return out
+}
+
+/** 把挂起形态的前后中心写到素材上（构造 ASSETS 时调用一次） */
+export function applyHang(assets: AssetDef[], table: HangTable) {
+  for (const d of assets) if (d.form === 'hanging' && table[d.id] !== undefined) d.hangZ = table[d.id]
+}
+
 /** 比较两张修正表，返回不一致的 id（多出、缺少、数值不同） */
 export function diffDims(a: DimsTable, b: DimsTable): string[] {
   const ids = new Set([...Object.keys(a), ...Object.keys(b)])

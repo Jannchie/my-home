@@ -57,11 +57,12 @@ export function footprint(asset: string, x: number, y: number, rot: number): Box
 
 /**
  * 一件东西本体的平面中心：贴附物（磁吸挂钩、冰箱贴…）的位置是贴附面上的点，模型从那里往前（局部 +z）伸出 d，
- * 本体中心在前面 d / 2；其他东西的位置就是中心。
+ * 本体中心在前面 d / 2；挂件的位置是挂钩，本体中心在前面 hangZ（实测，见 AssetMeta.hangZ）；其他东西的位置就是中心。
  */
 export function bodyCenter(asset: string, x: number, y: number, rot: number) {
   const def = ASSET_MAP.get(asset)
-  return def?.stick ? toWorld({ x, y, rot }, 0, def.d / 2) : { x, y }
+  // 贴附物从贴的面往外伸 d；挂件大多在钩子前面往前垂（hangZ）
+  return def?.stick ? toWorld({ x, y, rot }, 0, def.d / 2) : def?.hangZ ? toWorld({ x, y, rot }, 0, def.hangZ) : { x, y }
 }
 
 /** 一件东西本体的平面包围盒（贴附物按实际伸出的方向算，见 bodyCenter） */

@@ -10,8 +10,8 @@ import { tagMat } from './mats'
 import { duvet as duvetMesh, pillowMesh } from './bedding'
 import { MAT_TABLE } from './matTables'
 import { soft, type SoftFn } from './geo'
-import { applyDims, warnIfDimsStale } from './dims'
-import { DIMS } from './dims.generated'
+import { applyDims, applyHang, warnIfDimsStale } from './dims'
+import { DIMS, HANG_Z } from './dims.generated'
 import { deriveResized } from './resize'
 import { setLiveProbe } from './stylePalettes'
 import { probeLive } from './paletteProbe'
@@ -1609,6 +1609,8 @@ for (const a of DEFS) {
     a.limitGroup ??= x[2]
   }
   a.series ??= a.id
+  // 细分类型本身也是这件东西的功能标签：def 里不用在 tags 里再写一遍
+  if (a.type && !a.tags?.includes(a.type)) a.tags = [...(a.tags ?? []), a.type]
   // 材质标注（写实光照用，mats.ts）：def 里写了的优先，否则用标注表（matTables/）
   const mt = MAT_TABLE[a.id]
   if (mt) {
@@ -1622,6 +1624,8 @@ for (const a of DEFS) {
 
 // 尺寸校正：实测比声明大的放大、陷地的抬起（预计算结果见 dims.generated.ts，由 pnpm gen:dims 生成；规则见 dims.ts）
 applyDims(DEFS, DIMS)
+// 挂起形态的前后中心（占位按它算，见 AssetMeta.hangZ）
+applyHang(DEFS, HANG_Z)
 
 // 派生配色的探针改成现场 build（元数据快照里的素材带着预先算好的结果）
 setLiveProbe((d, n) => probeLive(d as AssetDef, n))

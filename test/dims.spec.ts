@@ -2,12 +2,17 @@
 // 过期时运行 pnpm gen:dims 重新生成。
 import { expect, test } from 'vitest'
 import { ASSETS } from '/src/three/assets'
-import { computeDims, diffDims } from '/src/three/dims'
-import { DIMS } from '/src/three/dims.generated'
+import { computeDims, computeHang, diffDims } from '/src/three/dims'
+import { DIMS, HANG_Z } from '/src/three/dims.generated'
 
 test('dims.generated.ts 未过期', () => {
   const bad = diffDims(computeDims(ASSETS), DIMS)
   expect(bad, '素材尺寸修正已过期，请运行 pnpm gen:dims').toEqual([])
+})
+
+test('挂件前后中心（HANG_Z）未过期、已写到素材上', () => {
+  expect(computeHang(ASSETS), '挂件前后中心已过期，请运行 pnpm gen:dims').toEqual({ ...HANG_Z })
+  expect(ASSETS.filter((a) => a.hangZ !== HANG_Z[a.id]).map((a) => a.id)).toEqual([])
 })
 
 test('修正已同步应用到 ASSETS（只放大不缩小）', () => {

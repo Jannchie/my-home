@@ -235,7 +235,7 @@ export interface AssetMeta {
   styles?: StyleTag[]
   /**
    * 细分类型（一个功能标签，词表见 tags.ts）：「这是什么」。行灯、石灯笼、PH 灯是三件独立的素材，type 都是 floor-lamp。
-   * 素材库按它细分筛选；一键布置的换款、灯具池等按它判断。已有素材的值在 typeTable.ts（直接改），新素材直接写。
+   * 素材库按它细分筛选；一键布置的换款、灯具池等按它判断。已有素材的值在 typeTable.ts（直接改），新素材直接写。加载时会自动并进 tags，不用在 tags 里重复写。
    */
   type?: Tag
   /**
@@ -302,6 +302,11 @@ export interface AssetMeta {
    * 会按表面朝向贴平。原点在背面中心，模型向 +z 伸出、在 y 方向上下居中。
    */
   stick?: boolean
+  /**
+   * 仅挂起形态（form 'hanging'）：模型前后（z）方向的中心离挂钩（原点）多远，往前为正（cm）。
+   * 挂件大多挂在钩子 / 横杆前面往前垂，不在原点居中；占位、避让按这个中心算。离线实测（dims.generated.ts 的 HANG_Z），加载时写入
+   */
+  hangZ?: number
   /** 动态特效发射点（蒸汽、烟、火苗、气泡…），由 fx.ts 实时渲染粒子；不要再用静态网格去画烟雾 */
   fx?: Fx[]
   /** 会在沙盘预览里活动的角色（宠物、扫地机器人、Kachaka），见 actors.ts */
