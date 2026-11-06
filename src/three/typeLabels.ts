@@ -257,6 +257,8 @@ export const TRAIT_NAMES: Record<TraitTag, [zh: string, ja: string, en: string]>
   'shelf-only': ['只放柜架', '棚専用', 'Shelf only'],
   'multi-ok': ['可摆多件', '複数置ける', 'Can repeat'],
   'kitchen-shelf-ok': ['适合厨房搁板', 'キッチン棚向き', 'Kitchen shelf'],
+  'pantry-ok': ['可收进食品柜', 'パントリー収納', 'Pantry'],
+  'potting-bench-ok': ['适合园艺工作台', 'ポッティングベンチ向き', 'Potting bench'],
   'toilet-shelf-ok': ['适合马桶上方搁板', 'トイレ棚向き', 'Toilet shelf'],
   'fridge-door': ['可贴冰箱门', '冷蔵庫に貼れる', 'Fridge door'],
   'curio-ok': ['适合多宝格', '飾り棚向き', 'Curio shelf'],

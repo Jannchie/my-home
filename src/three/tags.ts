@@ -280,6 +280,8 @@ export const PLACEMENT_TAGS = [
   'multi-ok', // 同款可以摆很多个（不受「同款每间一个」限制）
   'kitchen-shelf-ok', // 适合厨房墙上搁板
   'toilet-shelf-ok', // 适合马桶上方搁板
+  'pantry-ok', // 能久放、收进食品柜（罐头、调味料、米、干货、瓶装饮料、零食；做好的饭菜、水果不算）
+  'potting-bench-ok', // 摆在园艺工作台上（小花盆、育苗盘、香草苗、园艺手套、小铲子、培养土…）
   'fridge-door', // 可以贴冰箱门（冰箱贴、便签、照片）
   'curio-ok', // 适合多宝格（瓷器、茶具、盆景、奇石…）
   'collectible', // 收藏品（展示柜里摆的）

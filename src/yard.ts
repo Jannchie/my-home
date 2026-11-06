@@ -70,7 +70,7 @@ export function yardFurniture(plan: Plan, seed: number): Furniture[] {
     if (rand() < (green ? 0.8 : 0.4)) {
       const bench = add('gd-potting-bench', house.x0 + 80 + rand() * 40, wallY(50), 180)
       if (bench) {
-        const props = ASSETS.filter((a) => a.prop && !a.form?.includes('hanging') && /^gd-(terra|cement|glazed|seed-tray|herb|succulent|lavender|strawberry|can-small|soil-bag|gloves|trowel)/.test(a.id)).map((a) => a.id)
+        const props = ASSETS.filter((a) => a.prop && !a.form?.includes('hanging') && hasTag(a, 'potting-bench-ok')).map((a) => a.id)
         const k = 1 + Math.floor(rand() * 3)
         for (let i = 0; i < k && props.length; i++) onTop(bench, pick(props), -32 + i * 32 + (rand() - 0.5) * 6)
       }

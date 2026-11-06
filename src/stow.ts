@@ -145,14 +145,13 @@ const POOL_TAGS: Record<Exclude<StowKind, 'clothes'>, Tag[]> = {
 /** 可以收进柜子的东西：摆件、不挂起不壁挂不贴附、不是个性物品；衣服只要叠好的；不会发光的 */
 const stowable = (a: AssetMeta) => !!a.prop && !a.mount && !a.stick && a.form !== 'hanging' && !a.screenClip && !isPersonal(a) && !hasTag(a, 'light') && (!hasTag(a, 'clothing') || a.form === 'folded')
 
-/** 食品柜放能久放的东西（罐头、调味料、米、干货、瓶装饮料、零食），不放做好的饭菜、水果 */
-const PANTRY = /^(kf-(cans|seasonings|rice-sack-\d+|canisters|spice-(carousel|shelf)|cup-noodle|snacks|chips-(bag|tube)|candy-jar|pet-(bottles|500|2l)|bottle-[a-z]+|can|can-(short|slim|6|case)|tetra-(1l|200|125)|water-(500|2l|case-closed|case-24)|isshobin|beer-6|onion-bags|bread-bag)|prop-(spice-jars|condiments|oil-bottles|spice-rack)|int-coffee-canisters)$/
 /** 收纳箱 / 盒里适合放进衣柜、斗柜的（不要厨房、餐桌、洗护类的盒子） */
 const clothesBox = (a: AssetMeta) => !hasTag(a, 'storage-box') || !['kitchenware', 'tabletop', 'toiletry', 'dining'].includes(a.category)
 const KIND_FILTER: Partial<Record<StowKind, (a: AssetMeta) => boolean>> = {
   clothes: clothesBox,
   folded: clothesBox,
-  food: (a) => PANTRY.test(a.id),
+  // 食品柜放能久放的东西（pantry-ok），不放做好的饭菜、水果
+  food: (a) => hasTag(a, 'pantry-ok'),
   // 漱口杯（toothbrush）不是餐具；餐垫、杯垫（no-stow）平平一张，不往柜子里收
   dishes: (a) => !hasTag(a, 'food', 'cookware', 'appliance', 'toothbrush', 'no-stow'),
   // 锅、平底锅、蒸笼这类；台面上专门摆的家电（电饭煲、水壶、烤面包机、空气炸锅、压力锅、咖啡器具）不收进柜子
@@ -175,7 +174,7 @@ function poolFor(c: StowCtx, kind: StowKind): AssetMeta[] {
   }
   let p = poolCache.get(kind)
   const extra = KIND_FILTER[kind] ?? (() => true)
-  if (!p) poolCache.set(kind, (p = c.d.find(kind === 'food' ? [PANTRY, ...POOL_TAGS.food] : POOL_TAGS[kind], (a) => stowable(a) && a.form !== 'open' && extra(a))))
+  if (!p) poolCache.set(kind, (p = c.d.find(kind === 'food' ? ['pantry-ok', ...POOL_TAGS.food] : POOL_TAGS[kind], (a) => stowable(a) && a.form !== 'open' && extra(a))))
   return p
 }
 
