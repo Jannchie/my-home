@@ -11,7 +11,7 @@ import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, glow, rectPoly, rng, slab, type AssetCategory, type AssetDef, type FormTag, type Poly } from '../kit'
 import { G, P, PI, batten, box3, cappedTube, cylX, cylZ, ghost, rod3, type TubeOpts, type V3 } from '../geo'
-import { I, J, M, N, R, define, type Build, type Dims, type Pal } from '../packkit'
+import { I, J, M, N, R, define, hookRing, type Build, type Dims, type Pal } from '../packkit'
 
 /** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
 const TUBE: TubeOpts = { seg: { per: 6, min: 12 } }
@@ -1784,11 +1784,10 @@ function coatTree(p: string[]) {
   for (const a of CT_LOW) g.add(treeHook(a, CT.lowY, CT.lowR, metal))
   return g
 }
-const treeBand = (angles: number[], r: number): Poly[] => angles.map((a) => rectPoly(Math.cos(a) * r - 2, Math.sin(a) * r - 2, Math.cos(a) * r + 2, Math.sin(a) * r + 2))
 const COAT_TREE = define('sf-coat-tree', '树形衣帽架', 'entrance', [36, 36, 182.2], SHELF_PALS, coatTree, {
   surfaces: [
-    { y: CT.upY + 1, kind: 'hook', h: 150, shape: treeBand(CT_UP, CT.upR) },
-    { y: CT.lowY + 1, kind: 'hook', h: 130, shape: treeBand(CT_LOW, CT.lowR) },
+    { y: CT.upY + 1, kind: 'hook', h: 150, shape: hookRing(CT_UP, CT.upR) },
+    { y: CT.lowY + 1, kind: 'hook', h: 130, shape: hookRing(CT_LOW, CT.lowR) },
   ],
 })
 

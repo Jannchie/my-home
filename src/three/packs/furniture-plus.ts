@@ -2,10 +2,10 @@
 // 原点在占地中心底面，正面朝 +z；顶面、层板留空并声明 surface / surfaces。新素材直接在 def 里写 type / tags / mats。
 
 import * as THREE from 'three'
-import { ball, cup, cyl, puck, rbox, shade } from '../toon'
+import { ball, cup, cyl, puck, rbox, shade, torus } from '../toon'
 import { C, rectPoly, shell, type AssetDef, type Poly } from '../kit'
 import { P, cylZ, rod3, strutBox, tube } from '../geo'
-import { CL, CN, F, I, J, M, N, R, define, type Pal } from '../packkit'
+import { CL, CN, F, I, J, M, N, R, define, hookRing, type Pal } from '../packkit'
 
 const SISAL = '#dcc49a'
 const PAPER = '#f4f1ea'
@@ -104,45 +104,35 @@ function magazineBasket(p: string[]) {
   // 四只小脚 + 竖框
   for (const sx of [-1, 1])
     for (const sz of [-1, 1]) {
-      g.add(rod3([sx * hw, 0.5, sz * hd], [sx * hw, BASKET_RIM, sz * hd], r, wire))
-      g.add(ball(0.9, wire, { x: sx * hw, y: 0.9, z: sz * hd }))
+      g.add(rod3([sx * hw, 0.5, sz * hd], [sx * hw, BASKET_RIM, sz * hd], r, wire, 6))
+      g.add(cyl(0.9, 0.9, 1, wire, { x: sx * hw, z: sz * hd }, 6))
     }
   // 上下两圈框
   for (const y of [3, BASKET_RIM]) {
     for (const s of [-1, 1]) {
-      g.add(rod3([-hw, y, s * hd], [hw, y, s * hd], r, wire))
-      g.add(rod3([s * hw, y, -hd], [s * hw, y, hd], r, wire))
+      g.add(rod3([-hw, y, s * hd], [hw, y, s * hd], r, wire, 6))
+      g.add(rod3([s * hw, y, -hd], [s * hw, y, hd], r, wire, 6))
     }
   }
-  // 前后两面的竖铁线
-  for (let i = 1; i < 8; i++) {
-    const x = -hw + (2 * hw * i) / 8
-    for (const s of [-1, 1]) g.add(rod3([x, 3, s * hd], [x, BASKET_RIM, s * hd], r * 0.7, wire))
-  }
-  // 两侧的竖铁线
-  for (let i = 1; i < 5; i++) {
-    const z = -hd + (2 * hd * i) / 5
-    for (const s of [-1, 1]) g.add(rod3([s * hw, 3, z], [s * hw, BASKET_RIM, z], r * 0.7, wire))
-  }
+  // 竖铁线：前后两面各 7 根（正中那根粗一点，兼做隔板的两边），两侧各 4 根
+  const upright = (x: number, z: number, rr: number) => g.add(rod3([x, 3, z], [x, BASKET_RIM, z], rr, wire, 6))
+  for (let i = 1; i < 8; i++) for (const s of [-1, 1]) upright(-hw + (2 * hw * i) / 8, s * hd, i === 4 ? r : r * 0.7)
+  for (let i = 1; i < 5; i++) for (const s of [-1, 1]) upright(s * hw, -hd + (2 * hd * i) / 5, r * 0.7)
   // 底板
   g.add(rbox(2 * hw - 1, 0.8, 2 * hd - 1, floor, { y: 2.6 }, 0.3))
-  // 中间隔板（两根竖线 + 横线）和提手
-  for (const s of [-1, 1]) g.add(rod3([0, 3, s * hd], [0, BASKET_RIM, s * hd], r, wire))
-  g.add(rod3([0, 3, 0], [0, BASKET_RIM, 0], r * 0.7, wire))
-  g.add(rod3([0, BASKET_RIM * 0.55, -hd], [0, BASKET_RIM * 0.55, hd], r * 0.7, wire))
+  // 中间隔板（正中一根竖线 + 一根横线）和提手
+  upright(0, 0, r * 0.7)
+  g.add(rod3([0, BASKET_RIM * 0.55, -hd], [0, BASKET_RIM * 0.55, hd], r * 0.7, wire, 6))
   g.add(tube([[0, BASKET_RIM, -hd], [0, BASKET_H - 4, -hd * 0.55], [0, BASKET_H - 1, 0], [0, BASKET_H - 4, hd * 0.55], [0, BASKET_RIM, hd]], 0.7, wire, { seg: 20 }))
   // 两格里的杂志：左格三本、右格两本，略微歪着
-  const mags: [number, number, number][] = [
-    [-14.5, 0.1, 0],
-    [-10.5, 0.06, 1],
-    [-6, -0.05, 2],
-    [5, 0.08, 3],
-    [9.5, 0.02, 4],
+  const mags: [x: number, tilt: number][] = [
+    [-14.5, 0.1],
+    [-10.5, 0.06],
+    [-6, -0.05],
+    [5, 0.08],
+    [9.5, 0.02],
   ]
-  for (const [x, tilt, i] of mags) {
-    const [cover, band] = MAG_COLORS[i]
-    g.add(P(magazine(22, 32, cover, band), x, 3.4, 0, 0, 0, tilt))
-  }
+  mags.forEach(([x, tilt], i) => g.add(P(magazine(22, 32, ...MAG_COLORS[i]), x, 3.4, 0, 0, 0, tilt)))
   return g
 }
 
@@ -173,7 +163,7 @@ function magazineRack(p: string[]) {
   // 三层展示板：斜板 + 前沿挡条，板上两本杂志
   TIER_YS.forEach((y, i) => {
     const t = new THREE.Group()
-    t.add(rbox(RACK_W - 4.8, TIER_LEN, 1.2, wood, { z: 0 }, 0.4))
+    t.add(rbox(RACK_W - 4.8, TIER_LEN, 1.2, wood, {}, 0.4))
     t.add(rbox(RACK_W - 4.8, 4, 2, shade(wood, -0.08), { y: -0.5, z: 1.6 }, 0.4))
     for (const k of [0, 1]) {
       const [cover, band] = MAG_COLORS[(i * 2 + k) % MAG_COLORS.length]
@@ -192,7 +182,7 @@ const BENT_R = 24
 const BENT_H = 180
 const BENT_UP = { y: 168, r: 17 }
 const BENT_LOW = { y: 150, r: 13 }
-const BENT_UP_A = [0.25, 1.82, 3.39, 4.96].map((a) => a * 1)
+const BENT_UP_A = [0.25, 1.82, 3.39, 4.96]
 const BENT_LOW_A = BENT_UP_A.map((a) => a + Math.PI / 4)
 /** 往外弯、末端上翘的一只钩：从柱子上 y 处伸出，末端在半径 r */
 function bentHook(a: number, y: number, r: number, color: string) {
@@ -207,28 +197,23 @@ function bentHook(a: number, y: number, r: number, color: string) {
 function bentwoodStand(p: string[]) {
   const [wood, , knob] = p
   const g = new THREE.Group()
-  g.add(cyl(2, 2.4, BENT_H - 4, wood, { y: 0 }, 16))
+  g.add(cyl(2, 2.4, BENT_H - 4, wood, {}, 16))
   g.add(ball(3, knob, { y: BENT_H - 3 }))
-  // 四条落地腿：从中柱上 26cm 处往外弯到地面
+  // 伞圈：一圈弯木
+  g.add(torus(15, 1, wood, { y: 48, rx: Math.PI / 2 }))
+  // 四个斜角方向：落地腿（从中柱上 30cm 处往外弯到地面）+ 伞圈的辐条
   for (let i = 0; i < 4; i++) {
     const a = (i / 4) * Math.PI * 2 + Math.PI / 4
-    const c = Math.cos(a)
-    const s = Math.sin(a)
-    const pt = (r: number, y: number): [number, number, number] => [c * r, y, s * r]
+    const pt = (r: number, y: number): [number, number, number] => [Math.cos(a) * r, y, Math.sin(a) * r]
     g.add(tube([pt(1.5, 30), pt(8, 18), pt(17, 6), pt(BENT_R - 2, 1.4)], 1.4, wood, { seg: 18 }))
-    g.add(cyl(1.6, 1.8, 1.4, shade(wood, -0.2), { x: c * (BENT_R - 2), z: s * (BENT_R - 2) }, 10))
-  }
-  // 伞圈：一圈弯木 + 四根辐条
-  g.add(tube(Array.from({ length: 16 }, (_, i): [number, number, number] => [Math.cos((i / 16) * Math.PI * 2) * 15, 48, Math.sin((i / 16) * Math.PI * 2) * 15]), 1, wood, { closed: true, seg: 48 }))
-  for (let i = 0; i < 4; i++) {
-    const a = (i / 4) * Math.PI * 2 + Math.PI / 4
-    g.add(rod3([Math.cos(a) * 2, 48, Math.sin(a) * 2], [Math.cos(a) * 15, 48, Math.sin(a) * 15], 0.8, wood))
+    const [fx, , fz] = pt(BENT_R - 2, 0)
+    g.add(cyl(1.6, 1.8, 1.4, shade(wood, -0.2), { x: fx, z: fz }, 10))
+    g.add(rod3(pt(2, 48), pt(15, 48), 0.8, wood))
   }
   for (const a of BENT_UP_A) g.add(bentHook(a, BENT_UP.y, BENT_UP.r, wood))
   for (const a of BENT_LOW_A) g.add(bentHook(a, BENT_LOW.y, BENT_LOW.r, wood))
   return g
 }
-const hookBand = (angles: number[], r: number): Poly[] => angles.map((a) => rectPoly(Math.cos(a) * r - 2, Math.sin(a) * r - 2, Math.cos(a) * r + 2, Math.sin(a) * r + 2))
 
 // ---------- 蝴蝶翻板餐桌（两块翻板都支起来）：中段四条车旋腿，两侧各一条摆出来的门腿托着翻板 ----------
 
@@ -269,7 +254,7 @@ function gatelegTable(p: string[]) {
     const gx = s * (GATE_W / 2 - 16)
     g.add(turnedLeg(gx, 0, ly, leg))
     for (const y of [8, ly - 6]) g.add(rbox(Math.abs(gx) - fx - 2, 2.4, 2.4, leg, { x: (gx + s * fx) / 2, y }, 0.4))
-    g.add(rbox(2, 2, 6, shade(leg, -0.15), { x: s * (GATE_MID / 2 + 6), y: ly - 2, z: 0 }, 0.3))
+    g.add(rbox(2, 2, 6, shade(leg, -0.15), { x: s * (GATE_MID / 2 + 6), y: ly - 2 }, 0.3))
   }
   return g
 }
@@ -280,17 +265,23 @@ const LD_W = 80
 const LD_D = 48
 const LD_H = 180
 const LD_DESK = 75
-/** 斜梁（中线）：从前腿顶端（桌面高度、z = 22.5）往后收到顶上的后柱前面（z = -21） */
-const ldFront = (y: number) => 22.5 - (43.5 * (y - LD_DESK)) / (LD_H - LD_DESK)
-const LD_SHELVES = [118, 148]
 const LD_BACK = -LD_D / 2
+/** 前腿、后柱（3cm 厚）的中线 */
+const LD_LEG_Z = LD_D / 2 - 1.5
+const LD_POST_Z = LD_BACK + 1.5
+/** 斜梁（中线）：从前腿顶端（桌面高度）往后收到顶上、紧贴后柱前面 */
+const ldFront = (y: number) => LD_LEG_Z - ((LD_LEG_Z - LD_BACK - 3) * (y - LD_DESK)) / (LD_H - LD_DESK)
+const LD_SHELVES = [118, 148]
+/** 可摆放区的左右边界（两侧框里面再收 0.4） */
+const LD_IX = LD_W / 2 - 3
+const ldRect = (z0: number, z1: number) => rectPoly(-LD_IX, z0, LD_IX, z1)
 function ladderDesk(p: string[]) {
   const [board, frame, knob] = p
   const g = new THREE.Group()
   const sx = LD_W / 2 - 1.3
   for (const s of [-1, 1]) {
-    g.add(rbox(2.6, LD_H, 3, frame, { x: s * sx, z: LD_BACK + 1.5 }, 0.6))
-    g.add(rbox(2.6, LD_DESK, 3, frame, { x: s * sx, z: LD_D / 2 - 1.5 }, 0.6))
+    g.add(rbox(2.6, LD_H, 3, frame, { x: s * sx, z: LD_POST_Z }, 0.6))
+    g.add(rbox(2.6, LD_DESK, 3, frame, { x: s * sx, z: LD_LEG_Z }, 0.6))
     g.add(strutBox([s * sx, LD_DESK, ldFront(LD_DESK)], [s * sx, LD_H - 1.5, ldFront(LD_H - 1.5)], 2.6, 3, frame))
     // 侧面下方的横档
     g.add(rbox(2.6, 2.6, LD_D - 6, frame, { x: s * sx, y: 12 }, 0.5))
@@ -302,16 +293,17 @@ function ladderDesk(p: string[]) {
   g.add(rbox(44, 9, 1.2, shade(board, 0.04), { y: LD_DESK - 12, z: LD_D / 2 - 1.6 }, 0.4))
   g.add(rbox(10, 1.2, 1.4, knob, { y: LD_DESK - 8, z: LD_D / 2 - 1 }, 0.4))
   // 桌下后侧挡板
-  g.add(rbox(iw, 14, 1.4, frame, { y: LD_DESK - 17, z: LD_BACK + 1.5 }, 0.4))
+  g.add(rbox(iw, 14, 1.4, frame, { y: LD_DESK - 17, z: LD_POST_Z }, 0.4))
   // 上方书架：层板从后柱伸到斜梁，背后一条挡条
   for (const y of LD_SHELVES) {
     const fz = ldFront(y)
     const d = fz - LD_BACK
     g.add(rbox(iw, 2, d, board, { y, z: (LD_BACK + fz) / 2 }, 0.5))
-    g.add(rbox(iw, 5, 1.4, frame, { y: y + 2, z: LD_BACK + 1.5 }, 0.4))
+    g.add(rbox(iw, 5, 1.4, frame, { y: y + 2, z: LD_POST_Z }, 0.4))
   }
   // 顶上的小搁板
-  g.add(rbox(iw, 2, ldFront(LD_H - 2) - LD_BACK + 1, board, { y: LD_H - 2, z: (LD_BACK + ldFront(LD_H - 2) + 1) / 2 }, 0.5))
+  const topZ = ldFront(LD_H - 2) + 1
+  g.add(rbox(iw, 2, topZ - LD_BACK, board, { y: LD_H - 2, z: (LD_BACK + topZ) / 2 }, 0.5))
   return g
 }
 
@@ -406,21 +398,15 @@ const MS_PALS: Pal[] = [
 
 const ldShelf = (y: number, below: number): { y: number; shape: Poly[]; h: number } => ({
   y: y + 2,
-  shape: [rectPoly(-(LD_W / 2 - 3), LD_BACK + 2.4, LD_W / 2 - 3, ldFront(y) - 0.6)],
+  shape: [ldRect(LD_BACK + 2.4, ldFront(y) - 0.6)],
   h: below - y - 2,
 })
 
+const CAT_TOWER: Partial<AssetDef> = { type: 'cat-tower', tags: ['cat-tower', 'cat', 'pet-supply', 'hobby:cats'], mats: ['pile', 'fabric', 'pile'] }
+
 export const FURNITURE_PLUS: AssetDef[] = [
-  define('fp-cat-tree-tall', '高猫爬架', 'pets', [TREE_W, TREE_D, TREE_H], TREE_PALS, catTreeTall, {
-    type: 'cat-tower',
-    tags: ['cat-tower', 'cat', 'pet-supply', 'hobby:cats'],
-    mats: ['pile', 'fabric', 'pile'],
-  }),
-  define('fp-cat-post', '小猫爬柱', 'pets', [POST_W, POST_W, POST_H], TREE_PALS, catPost, {
-    type: 'cat-tower',
-    tags: ['cat-tower', 'cat', 'pet-supply', 'hobby:cats'],
-    mats: ['pile', 'fabric', 'pile'],
-  }),
+  define('fp-cat-tree-tall', '高猫爬架', 'pets', [TREE_W, TREE_D, TREE_H], TREE_PALS, catTreeTall, CAT_TOWER),
+  define('fp-cat-post', '小猫爬柱', 'pets', [POST_W, POST_W, POST_H], TREE_PALS, catPost, CAT_TOWER),
   define('fp-magazine-basket', '铁线杂志篮', 'living', [BASKET_W, BASKET_D, BASKET_H], BASKET_PALS, magazineBasket, {
     type: 'magazine',
     tags: ['magazine'],
@@ -436,8 +422,8 @@ export const FURNITURE_PLUS: AssetDef[] = [
     tags: ['coat-rack', 'multi-ok'],
     mats: ['wood', 'wood', 'metal'],
     surfaces: [
-      { y: BENT_UP.y + 1, kind: 'hook', h: 150, shape: hookBand(BENT_UP_A, BENT_UP.r) },
-      { y: BENT_LOW.y + 1, kind: 'hook', h: 130, shape: hookBand(BENT_LOW_A, BENT_LOW.r) },
+      { y: BENT_UP.y + 1, kind: 'hook', h: 150, shape: hookRing(BENT_UP_A, BENT_UP.r) },
+      { y: BENT_LOW.y + 1, kind: 'hook', h: 130, shape: hookRing(BENT_LOW_A, BENT_LOW.r) },
     ],
   }),
   define('fp-gateleg-table', '蝴蝶翻板餐桌', 'dining', [GATE_W, GATE_D, GATE_H], GATE_PALS, gatelegTable, {
@@ -454,9 +440,9 @@ export const FURNITURE_PLUS: AssetDef[] = [
     sizeLabel: '80×48',
     // 桌面：前半截上方是空的（层板收在斜梁后面），后半截在第一层书架下面，限高
     surface: LD_DESK,
-    surfaceShape: [rectPoly(-(LD_W / 2 - 3), ldFront(LD_SHELVES[0]) + 1, LD_W / 2 - 3, LD_D / 2 - 1)],
+    surfaceShape: [ldRect(ldFront(LD_SHELVES[0]) + 1, LD_D / 2 - 1)],
     surfaces: [
-      { y: LD_DESK, shape: [rectPoly(-(LD_W / 2 - 3), LD_BACK + 2.4, LD_W / 2 - 3, ldFront(LD_SHELVES[0]) + 1)], h: LD_SHELVES[0] - LD_DESK },
+      { y: LD_DESK, shape: [ldRect(LD_BACK + 2.4, ldFront(LD_SHELVES[0]) + 1)], h: LD_SHELVES[0] - LD_DESK },
       ldShelf(LD_SHELVES[0], LD_SHELVES[1]),
       ldShelf(LD_SHELVES[1], LD_H - 2),
     ],

@@ -75,26 +75,30 @@ describe('细分类型与同款系列', () => {
  *   - 素材的 name 不能参与匹配（.test / .match / .includes / 模板字符串拼接）
  *   - 不用已废弃的 family 字段（细分类型用 type，同款系列用 series）
  */
-const FILES = [
-  'src/decorate.ts',
-  'src/checklist.ts',
-  'src/household.ts',
-  'src/workstation.ts',
-  'src/homecams.ts',
-  'src/appliance.ts',
-  'src/surface.ts',
-  'src/snap.ts',
-  'src/three/lights.ts',
-  'src/three/house.ts',
-  'src/three/post.ts',
-  'src/three/actors.ts',
-  'src/three/catalog.ts',
-  'src/generate.ts',
-  'src/store.ts',
-  'src/stow.ts',
-  'src/yard.ts',
-  'src/three/stylePalettes.ts',
-]
+/** 不扫的目录：素材包（造型代码，id 前缀就是它自己的）、词典、宣传片、材质标注表 */
+const SKIP_DIRS = ['src/three/packs/', 'src/i18n/', 'src/promo/', 'src/three/matTables/']
+/** 不扫的文件：数据表，以及正则只用于字符串 / 着色器处理、和素材类别无关的文件 */
+const SKIP_FILES = new Set([
+  'src/three/tagTable.ts', // 数据表
+  'src/three/typeTable.ts',
+  'src/three/family.legacy.ts',
+  'src/agentDocs.ts', // 文档文本处理
+  'src/saved.ts', // 存档文件名 / JSON
+  'src/share.ts', // 分享链接编码
+  'src/dimensions.ts', // 数字千分位
+  'src/residents.ts', // .vrm 文件扩展名
+  'src/generate-cn.ts', // 房间名（主卧 / 卧室）
+  'src/three/toon.ts', // 着色器源码替换
+  'src/three/shade.ts',
+  'src/three/screens.ts', // three.js 几何体类型名
+  'src/three/patterns.ts', // 花纹参数解析
+  'src/three/openers.ts', // 门窗编号后缀
+])
+/** 业务代码：默认 src 下全部 .ts，新文件自动纳入 */
+const FILES = (fs.readdirSync(path.join(ROOT, 'src'), { recursive: true }) as string[])
+  .map((f) => `src/${f.split(path.sep).join('/')}`)
+  .filter((f) => f.endsWith('.ts') && !f.endsWith('.generated.ts') && !SKIP_DIRS.some((d) => f.startsWith(d)) && !SKIP_FILES.has(f))
+  .sort()
 /** 匹配房间名（不是素材）的正则：收纳间是鞋柜 / 食品库 / リネン庫 / WIC，按房间名判断 */
 const ROOM_NAME = /^\s*\.test\((room|r)\.name\)/
 
@@ -189,6 +193,7 @@ describe('业务代码不按名字 / id 子串判断素材类别', () => {
     expect(branches('^(a|b)$').every((b) => b.startsWith('^'))).toBe(true)
     const n = FILES.reduce((s, f) => s + [...strip(fs.readFileSync(path.join(ROOT, f), 'utf8')).matchAll(REGEX_LIT)].length, 0)
     expect(n).toBeGreaterThan(100)
+    expect([...SKIP_FILES].filter((f) => !fs.existsSync(path.join(ROOT, f)))).toEqual([])
   })
 
   test('业务文件里没有按名字 / id 子串的类别匹配', () => {

@@ -2,7 +2,7 @@
 // 以及开发期断言（声明的 surface / surfaceShape / mount / screens 要和模型对得上）。
 // 依赖方向：toon → geo → kit → packkit → packs。
 import * as THREE from 'three'
-import { S, type AssetCategory, type AssetDef, type Poly, type ScreenPanel, type StyleTag } from './kit'
+import { S, rectPoly, type AssetCategory, type AssetDef, type Poly, type ScreenPanel, type StyleTag } from './kit'
 
 // ---------- 色板简写 ----------
 
@@ -63,6 +63,11 @@ export function definer(defaults: Partial<AssetDef> = {}, wrap?: (build: Build, 
   return (id: string, name: string, category: AssetCategory, dims: Dims, pals: (Pal | PalFlat)[], build: Build, extra: Partial<AssetDef> = {}): AssetDef =>
     define(id, name, category, dims, pals, wrap ? wrap(build, extra) : build, { ...defaults, ...extra })
 }
+
+// ---------- 常用的可摆放区形状 ----------
+
+/** 衣帽架一圈挂钩的挂点（kind 'hook' 的层）：每只钩末端（角度 a、半径 r 处）一块 4×4 的小方块 */
+export const hookRing = (angles: number[], r: number): Poly[] => angles.map((a) => rectPoly(Math.cos(a) * r - 2, Math.sin(a) * r - 2, Math.cos(a) * r + 2, Math.sin(a) * r + 2))
 
 // ---------- 声明坐标跟着模型平移 ----------
 

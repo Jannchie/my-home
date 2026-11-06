@@ -251,6 +251,7 @@ export const TRAIT_NAMES: Record<TraitTag, [zh: string, ja: string, en: string]>
   fixture: ['设备', '設備', 'Fixture'],
   leafy: ['带枝叶', '枝葉つき', 'Leafy'],
   'own-colors': ['本色（不换风格配色）', '固有色（スタイル配色なし）', 'Own colors (no style recolor)'],
+  'no-stow': ['不收进柜子', '収納しない', 'Not stowed'],
   'high-ok': ['可放高处', '高所に置ける', 'Fine up high'],
   'bed-ok': ['可放床上', 'ベッドに置ける', 'Fine on a bed'],
   'shelf-only': ['只放柜架', '棚専用', 'Shelf only'],

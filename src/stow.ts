@@ -153,8 +153,8 @@ const KIND_FILTER: Partial<Record<StowKind, (a: AssetMeta) => boolean>> = {
   clothes: clothesBox,
   folded: clothesBox,
   food: (a) => PANTRY.test(a.id),
-  // 漱口杯（toothbrush）不是餐具；餐垫、杯垫平平一张，不往柜子里收
-  dishes: (a) => !hasTag(a, 'food', 'cookware', 'appliance', 'toothbrush') && !/^kf-(placemat|placemat-round|coasters)$/.test(a.id),
+  // 漱口杯（toothbrush）不是餐具；餐垫、杯垫（no-stow）平平一张，不往柜子里收
+  dishes: (a) => !hasTag(a, 'food', 'cookware', 'appliance', 'toothbrush', 'no-stow'),
   // 锅、平底锅、蒸笼这类；台面上专门摆的家电（电饭煲、水壶、烤面包机、空气炸锅、压力锅、咖啡器具）不收进柜子
   cookware: (a) => !hasTag(a, 'food', 'appliance', 'rice-cooker', 'kettle', 'electric-kettle', 'toaster', 'air-fryer', 'pressure-cooker', 'coffee-gear', 'outdoor-gear'),
   sundries: (a) => !hasTag(a, 'food', 'drink', 'tableware', 'cookware', 'wet-supply'),
