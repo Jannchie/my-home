@@ -1,4 +1,5 @@
-// 再补一批家具：高猫爬架、小猫爬柱、铁线杂志篮、阶梯杂志架、弯木衣帽架、蝴蝶翻板餐桌、梯形书桌、木谱架。约定见 kit.ts 开头。
+// 再补一批家具：高猫爬架、小猫爬柱、铁线杂志篮、阶梯杂志架、弯木衣帽架、蝴蝶翻板餐桌、梯形书桌、木谱架、
+// 独立吧台、藤编三折屏风、旋转书架、猫窝边几。约定见 kit.ts 开头。
 // 原点在占地中心底面，正面朝 +z；顶面、层板留空并声明 surface / surfaces。新素材直接在 def 里写 type / tags / mats。
 
 import * as THREE from 'three'
@@ -339,6 +340,130 @@ function musicStandWood(p: string[]) {
   return g
 }
 
+// ---------- 独立吧台：客人一侧是竖条格栅的挡板 + 搁脚杆，台面往前挑出；吧台里侧两层开放格 ----------
+
+const BAR_W = 140
+const BAR_D = 50
+const BAR_H = 105
+/** 台面往客人一侧（+z）挑出多少 */
+const BAR_OVER = 10
+const BAR_SHELVES = [6, 52]
+function barCounter(p: string[]) {
+  const [body, top, metal] = p
+  const g = new THREE.Group()
+  const bd = BAR_D - BAR_OVER
+  const bz = -BAR_D / 2 + bd / 2
+  const front = bz + bd / 2
+  // 两侧板 + 底板 + 中间层板 + 前挡板（里侧敞开）
+  for (const s of [-1, 1]) g.add(rbox(3, BAR_H - 4, bd, body, { x: s * (BAR_W / 2 - 1.5), z: bz }, 0.6))
+  for (const y of BAR_SHELVES) g.add(rbox(BAR_W - 6, 2.4, bd - 2, body, { y, z: bz - 1 }, 0.4))
+  g.add(rbox(BAR_W - 6, BAR_H - 4, 2, body, { z: front - 1 }, 0.4))
+  // 挡板外面的竖条格栅
+  const n = 23
+  for (let i = 0; i < n; i++) g.add(rbox(3.2, BAR_H - 14, 1.4, shade(body, i % 2 ? 0.04 : -0.04), { x: -BAR_W / 2 + 6 + ((BAR_W - 12) * (i + 0.5)) / n, y: 6, z: front + 0.7 }, 0.5))
+  // 踢脚
+  g.add(rbox(BAR_W - 2, 6, 1.6, shade(body, -0.25), { z: front + 0.9 }, 0.4))
+  // 台面
+  g.add(rbox(BAR_W, 4, BAR_D, top, { y: BAR_H - 4 }, 1))
+  // 搁脚杆：两只托架 + 一根横杆
+  const rz = BAR_D / 2 - 3
+  g.add(rod3([-BAR_W / 2 + 8, 22, rz], [BAR_W / 2 - 8, 22, rz], 1.4, metal))
+  for (const x of [-BAR_W / 2 + 14, 0, BAR_W / 2 - 14]) g.add(rod3([x, 22, front + 1.4], [x, 22, rz], 1, metal))
+  return g
+}
+
+// ---------- 藤编三折屏风：三扇木框藤编屏，两侧那扇往前折 ----------
+
+const SCR_PANEL = 50
+const SCR_H = 170
+const SCR_FOLD = 0.5
+/** 总宽：中间扇 + 两侧扇折过去的投影（再加立梃的厚度） */
+const SCR_W = 2 * (SCR_PANEL / 2 + SCR_PANEL * Math.cos(SCR_FOLD)) + 2
+/** 两侧扇往前折出去的深度 */
+const SCR_DEPTH = SCR_PANEL * Math.sin(SCR_FOLD) + 3
+/** 整体往后挪这么多，让占地在前后方向居中 */
+const SCR_SHIFT = -(SCR_PANEL * Math.sin(SCR_FOLD)) / 2
+/** 一扇屏：木框（两根立梃 + 上中下三根横档）+ 藤编面（浅色面板 + 两面各一层格纹） */
+function screenPanel(frame: string, cane: string) {
+  const g = new THREE.Group()
+  const w = SCR_PANEL - 1
+  for (const s of [-1, 1]) g.add(rbox(3, SCR_H - 4, 3, frame, { x: s * (w / 2 - 1.5), y: 4 }, 0.6))
+  for (const y of [8, 92, SCR_H - 6]) g.add(rbox(w - 6, 3, 2.6, frame, { y }, 0.4))
+  // 两只小脚
+  for (const s of [-1, 1]) g.add(rbox(4, 4, 4, shade(frame, -0.15), { x: s * (w / 2 - 1.5) }, 0.6))
+  // 藤编：上下两块
+  for (const [y0, y1] of [[11, 92], [95, SCR_H - 6]]) {
+    const h = y1 - y0
+    g.add(rbox(w - 6, h, 0.8, cane, { y: y0 }, 0.2))
+    // 格纹：两面各几根横竖细条
+    for (const z of [-0.6, 0.6]) {
+      for (let i = 1; i < 6; i++) g.add(rbox(0.6, h, 0.3, shade(cane, -0.12), { x: -(w - 6) / 2 + ((w - 6) * i) / 6, y: y0, z }, 0.1))
+      for (let k = 1; k < Math.round(h / 9); k++) g.add(rbox(w - 6, 0.6, 0.3, shade(cane, -0.12), { y: y0 + k * 9, z }, 0.1))
+    }
+  }
+  return g
+}
+function caneScreen(p: string[]) {
+  const [frame, cane] = p
+  const g = new THREE.Group()
+  const half = SCR_PANEL / 2
+  g.add(P(screenPanel(frame, cane), 0, 0, SCR_SHIFT))
+  // 两侧扇：从中间扇的边（合页）往外、往前折
+  for (const s of [-1, 1]) {
+    const cx = s * (half + half * Math.cos(SCR_FOLD))
+    const cz = half * Math.sin(SCR_FOLD) + SCR_SHIFT
+    g.add(P(screenPanel(frame, cane), cx, 0, cz, 0, -s * SCR_FOLD))
+    // 合页
+    for (const y of [30, SCR_H - 30]) g.add(rbox(1.2, 7, 1.6, shade(frame, -0.3), { x: s * half, y, z: SCR_SHIFT }, 0.3))
+  }
+  return g
+}
+
+// ---------- 旋转书架：圆底座上的方塔，四层，每层四面都能放书（中间一根方芯，四角立柱） ----------
+
+const REV_W = 46
+const REV_H = 128
+const REV_YS = [10, 39, 68, 97, REV_H - 2]
+const REV_CORE = 7
+function revolvingBookcase(p: string[]) {
+  const [wood, base] = p
+  const g = new THREE.Group()
+  // 底座：一圈小脚 + 圆盘转台
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + Math.PI / 4
+    g.add(cyl(2.4, 2, 3, shade(base, -0.2), { x: Math.cos(a) * 17, z: Math.sin(a) * 17 }, 12))
+  }
+  g.add(puck(22, 4, base, { y: 3 }))
+  g.add(cyl(6, 6, 3, shade(base, -0.15), { y: 7 }, 16))
+  // 层板、方芯、四角立柱
+  for (const y of REV_YS) g.add(rbox(REV_W, 2, REV_W, wood, { y }, 0.5))
+  g.add(rbox(REV_CORE * 2, REV_H - 12, REV_CORE * 2, shade(wood, -0.06), { y: 10 }, 0.4))
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(3, REV_H - 12, 3, wood, { x: sx * (REV_W / 2 - 1.5), y: 10, z: sz * (REV_W / 2 - 1.5) }, 0.5))
+  return g
+}
+/** 旋转书架一层的四块放书区：方芯的前后左右（避开四角立柱） */
+const revZones = (): Poly[] => {
+  const o = REV_W / 2 - 3
+  const c = REV_CORE + 0.5
+  return [rectPoly(-o, c, o, o), rectPoly(-o, -o, o, -c), rectPoly(-o, -c, -c, c), rectPoly(c, -c, o, c)]
+}
+
+// ---------- 猫窝边几：方盒边几，正面一个圆洞、里面一块软垫，顶面能放东西 ----------
+
+const CST_W = 48
+const CST_H = 52
+function catSideTable(p: string[]) {
+  const [body, cushion, top] = p
+  const g = new THREE.Group()
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(cyl(1.8, 1.4, 5, shade(top, -0.2), { x: sx * (CST_W / 2 - 5), z: sz * (CST_W / 2 - 5) }, 10))
+  const box = shell(CST_W - 2, CST_H - 8, CST_W - 2, 1.8, body, { front: [{ kind: 'circle', x: 0, y: 19, r: 11 }], right: [{ kind: 'circle', x: 0, y: 24, r: 4.5 }], top: false })
+  box.position.y = 5
+  g.add(box)
+  g.add(puck(17, 3.2, cushion, { y: 6.8 }))
+  g.add(rbox(CST_W, 3, CST_W, top, { y: CST_H - 3 }, 0.8))
+  return g
+}
+
 // ---------- 定义 ----------
 
 const TREE_PALS: Pal[] = [
@@ -402,7 +527,42 @@ const ldShelf = (y: number, below: number): { y: number; shape: Poly[]; h: numbe
   h: below - y - 2,
 })
 
+const BAR_PALS: Pal[] = [
+  ['modern', [M.char, '#e9e7e2', M.silver]],
+  ['modern', [M.white, M.walnut, M.black]],
+  ['industrial', [I.walnut, I.concrete, I.iron]],
+  ['nordic', [N.white, N.oak, '#c9a96e']],
+  ['retro', [R.teal, R.cream, '#c9a25a']],
+  ['farmhouse', [F.navy, F.oak, F.iron]],
+]
+const SCR_PALS: Pal[] = [
+  ['japanese', [J.wood, '#e6d3a8']],
+  ['nordic', [N.oak, '#ead7b8']],
+  ['retro', [R.caramel, '#e8cf9a']],
+  ['chinese', [CN.rosewood, '#e3cf9f']],
+  ['modern', [M.black, '#e2d2ae']],
+]
+const REV_PALS: Pal[] = [
+  ['classic', [CL.walnut, CL.walnut]],
+  ['nordic', [N.oak, N.oak]],
+  ['nordic', [N.white, N.oak]],
+  ['modern', [M.walnut, M.black]],
+  ['chinese', [CN.rosewood, CN.ink]],
+]
+const CST_PALS: Pal[] = [
+  ['nordic', [N.white, N.linen, N.oak]],
+  ['nordic', [N.sage, N.white, N.oakL]],
+  ['modern', [M.char, M.light, M.walnut]],
+  ['cute', [C.sakura, C.white, C.woodL]],
+  ['cute', [C.sky, C.cream, C.white]],
+]
+
 const CAT_TOWER: Partial<AssetDef> = { type: 'cat-tower', tags: ['cat', 'pet-supply', 'hobby:cats'], mats: ['pile', 'fabric', 'pile'] }
+const barShelf = (i: number) => ({
+  y: BAR_SHELVES[i] + 2.4,
+  shape: [rectPoly(-(BAR_W / 2 - 4), -BAR_D / 2 + 1, BAR_W / 2 - 4, BAR_D / 2 - BAR_OVER - 3)],
+  h: (BAR_SHELVES[i + 1] ?? BAR_H - 4) - BAR_SHELVES[i] - 2.4,
+})
 
 export const FURNITURE_PLUS: AssetDef[] = [
   define('fp-cat-tree-tall', '高猫爬架', 'pets', [TREE_W, TREE_D, TREE_H], TREE_PALS, catTreeTall, CAT_TOWER),
@@ -449,5 +609,31 @@ export const FURNITURE_PLUS: AssetDef[] = [
     type: 'music-stand',
     tags: ['music-accessory', 'instrument'],
     mats: ['wood', null, 'metal'],
+  }),
+  define('fp-bar-counter', '独立吧台', 'dining', [BAR_W, BAR_D, BAR_H], BAR_PALS, barCounter, {
+    type: 'counter',
+    tags: ['table'],
+    mats: ['wood', 'stone', 'metal'],
+    sizeLabel: '140×50',
+    surface: BAR_H,
+    surfaces: [barShelf(0), barShelf(1)],
+  }),
+  define('fp-cane-screen', '藤编三折屏风', 'living', [SCR_W, SCR_DEPTH, SCR_H], SCR_PALS, caneScreen, {
+    type: 'partition',
+    styles: ['japanese', 'nordic', 'retro', 'chinese'],
+    mats: ['wood', 'fabric'],
+  }),
+  define('fp-revolving-bookcase', '旋转书架', 'study', [REV_W, REV_W, REV_H], REV_PALS, revolvingBookcase, {
+    type: 'bookshelf',
+    tags: ['cabinet', 'hobby:reading'],
+    mats: ['wood', 'wood'],
+    surface: REV_H,
+    surfaces: REV_YS.slice(0, 4).map((y, i) => ({ y: y + 2, shape: revZones(), h: REV_YS[i + 1] - y - 2 })),
+  }),
+  define('fp-cat-side-table', '猫窝边几', 'pets', [CST_W, CST_W, CST_H], CST_PALS, catSideTable, {
+    type: 'coffee-table',
+    tags: ['cat', 'pet-supply', 'hobby:cats', 'table'],
+    mats: ['wood', 'fabric', 'wood'],
+    surface: CST_H,
   }),
 ]

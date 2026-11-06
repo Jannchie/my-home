@@ -75,6 +75,7 @@ export const DIMS: DimsTable = {
   "fm-sliding-wardrobe-120": [121, 64, 200, 0],
   "fm-sliding-wardrobe-180": [181, 64, 200, 0],
   "fm-wine-cabinet": [82, 45, 180, 0],
+  "fp-cane-screen": [140, 28, 170, 0],
   "hb-printer-box": [38, 41, 59, 0],
   "hb-printer-fdm": [45, 42, 71, 0],
   "hb-telescope": [59, 77, 130, 0],
