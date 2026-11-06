@@ -268,8 +268,8 @@ const HAM_PALS: Pal[] = [
 
 export const FURNITURE_EXTRA: AssetDef[] = [
   define('fx-kitchen-island', '厨房岛台', 'dining', [ISLAND_W + 7, ISLAND_D + 5, ISLAND_H], ISLAND_PALS, kitchenIsland, {
-    type: 'table',
-    tags: ['table', 'storage-cabinet'],
+    type: 'counter',
+    tags: ['counter', 'table', 'storage-cabinet'],
     mats: ['paint', 'stone', 'metal'],
     sizeLabel: '120×75',
     surface: ISLAND_H,

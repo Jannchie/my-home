@@ -2540,7 +2540,7 @@ const MIRRORS: AssetDef[] = [
   define('mir-table-trifold', '折叠三面镜', 'bedroom', [34, 11, 28], TABLE_MIR_PALS, tableTrifold, PROP),
   define('mir-hand-stand', '复古手持镜（带支架）', 'bedroom', [12, 10, 28.5], TABLE_MIR_PALS, handMirror, PROP),
   define('mir-wall-round', '圆形壁镜', 'deco', [60, 2.5, 60], WALL_MIR_PALS, wallRound, { mount: WALL_MIR_MOUNT }),
-  define('mir-wall-sun', '太阳镜', 'deco', [80, 3.5, 80], WALL_MIR_PALS, wallSun, { mount: WALL_MIR_MOUNT }),
+  define('mir-wall-sun', '太阳壁镜', 'deco', [80, 3.5, 80], WALL_MIR_PALS, wallSun, { mount: WALL_MIR_MOUNT }),
   define(
     'mir-wall-cabinet',
     '浴室镜柜',

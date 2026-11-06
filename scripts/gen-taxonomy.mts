@@ -129,6 +129,36 @@ const FAMILY_TYPE: Record<string, string> = {
   'hg-ban': 'tabletop-game',
 }
 
+/**
+ * 单件素材的细分类型（标签没错、只是按优先级取到了不够准的那个，例如帆布托特包带 kitchenware 是对的——会挂在厨房——但它是购物袋）。
+ * 标签本身错了的改 migrate-tags.mts 的 REVIEW，不在这里改
+ */
+const ID_TYPE: [RegExp, string][] = [
+  [/^bag-(eco|tote|paper|cooler|net)-/, 'shopping-bag'],
+  [/^(gm|sf)-kimono-/, 'clothing'],
+  [/^wet-clear-case-/, 'storage-box'],
+  [/^gm-hanger-/, 'laundry-supply'],
+  [/^chore-pinch-hanger/, 'laundry-supply'],
+  [/^chore-cloth-hanger$/, 'cleaning'],
+  [/^chore-steam-mop$/, 'cleaning'],
+  [/^wet-bath-sponge$/, 'wet-supply'],
+  [/^out-futon-rack$/, 'laundry-stand'],
+  [/^sw-fh-ladder$/, 'shelving'],
+  [/^lm-monitor-riser$/, 'shelving'],
+  [/^av-cd-rack-desk$/, 'record-shelf'],
+  [/^fm-record-cabinet$/, 'record-shelf'],
+  [/^int-digital-piano$/, 'piano'],
+  [/^fit-bench-/, 'strength'],
+  [/^ch-mazha/, 'stool'],
+  [/^gd-grow-light-/, 'lamp'],
+  [/^of-(softbox|green-screen|tripod)$/, 'stream-gear'],
+  [/^of-tv-camera$/, 'webcam'],
+  [/^sf-remote-/, 'electronics'],
+  [/^sb-cab-boot$/, 'shoe-storage'],
+  [/^ss-steamer-hand$/, 'laundry-supply'],
+  [/^prop-donut-plate$/, 'food'],
+]
+
 /** 没有指定时，按素材的功能标签取最具体的一个 */
 const TYPE_PRIORITY = [
   'crib', 'kid-bed', 'loft', 'bed', 'bedding',
@@ -160,6 +190,10 @@ const args = process.argv.slice(2)
 const FUNC = new Set<string>(FUNCTION_TAGS)
 for (const t of TYPE_PRIORITY) if (!FUNC.has(t)) throw new Error(`TYPE_PRIORITY: ${t} 不是功能标签`)
 for (const t of Object.values(FAMILY_TYPE)) if (!FUNC.has(t)) throw new Error(`FAMILY_TYPE: ${t} 不是功能标签`)
+for (const [re, t] of ID_TYPE) {
+  if (!FUNC.has(t)) throw new Error(`ID_TYPE: ${t} 不是功能标签`)
+  if (!ASSETS.some((a) => re.test(a.id))) throw new Error(`ID_TYPE: ${re} 没有命中任何素材`)
+}
 
 const fams = new Map<string, D[]>()
 for (const a of ASSETS) if (fam(a) && !a.fixture) (fams.get(fam(a)) ?? fams.set(fam(a), []).get(fam(a))!).push(a)
@@ -192,6 +226,8 @@ for (const [fam, xs] of fams) {
 }
 
 function typeOf(a: D) {
+  const fixed = ID_TYPE.find(([re]) => re.test(a.id))
+  if (fixed) return fixed[1]
   if (fam(a) && FAMILY_TYPE[fam(a)]) return FAMILY_TYPE[fam(a)]
   // more-variety 包的装饰画、照片墙、立体壁饰都是挂画
   if (/^mv-(art|photo|deco)-/.test(a.id)) return 'wall-art'

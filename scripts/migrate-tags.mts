@@ -172,7 +172,8 @@ const RULES: [string, (d: D) => boolean][] = [
   ['duo-desk', R(/duo|双人/)],
   ['dining-table', R(/dining-table|tbl-dining|餐桌/)],
   ['low-table', R(/kotatsu|被炉|chabudai|矮桌|ちゃぶ台/)],
-  ['coffee-table', (d) => /几/.test(d.name)],
+  // 「几何」不是几（几何基里姆地毯、几何挂画）
+  ['coffee-table', (d) => /几(?!何)/.test(d.name)],
   ['nightstand', (d) => fam(d) === 'nightstand' || /床头柜|nightstand/.test(`${d.id} ${fam(d) ?? ''} ${d.name}`)],
   // ----- 柜架 -----
   ['bookshelf', R(/bookshelf|bookcase|书架|书柜/)],
@@ -572,6 +573,13 @@ const REVIEW: Fix[] = [
   { ids: ['int-manga-stack-m', 'int-manga-stack-l', 'int-ref-books', 'prop-book-stack', 'vb-books-tall', 'vb-books-cross', 'vb-books-vintage', 'sf-book-stacked', 'sf-book-standing', 'prop-books-upright', 'lm-cat-bookends'], remove: ['bed-ok'], why: '床上只会有一两本正在看的书：一摞摞的书 / 漫画堆、立着的书、书立夹着的一排书属于书架、书桌' },
   { ids: ['prop-tablet-stand', 'prop-phone-stand', 'of-phone-live-stand', 'of-phone-stand', 'of-handheld-stand', 'of-tablet-kb', 'cl-switch-oled'], remove: ['bed-ok'], why: '支在支架上的手机 / 平板 / 掌机、带键盘支起来的平板是桌面摆法，床上的是平放的那款' },
   { ids: ['lp-ct-bunny', 'lp-ct-bear-floor', 'ph-rabbit-cage', 'ch-animal-bear', 'ch-animal-bunny', 'lm-rug-bear', 'lm-dollhouse', 'lm-rocker-unicorn', 'act-rabbit', 'act-rabbit-lop', 'rb-companion', 'rb-companion-nest'], remove: ['plush'], why: '兔子台灯、熊熊落地灯、兔笼、动物靠背椅、小熊地毯、玩偶屋、摇摇马、真兔子、陪伴机器人不是毛绒玩偶（床上摆玩偶时会把台灯摆上床）' },
+  { ids: ['pet-cat', 'pet-hamster-cage', 'ph-pet-fountain'], remove: ['drink'], why: '坐着的猫、仓鼠笼、宠物饮水机（id 里的 pet-）不是宝特瓶饮料：会被当饮料摆上餐桌、书桌' },
+  { ids: ['rb-catbot', 'rb-catbot-dock'], remove: ['headset'], why: '猫耳机器人（名字里的「耳机」）不是耳机：会被当外设摆上电竞桌' },
+  { ids: ['lm-desk-mat', 'lm-desk-drawers', 'av-cd-rack-desk'], remove: ['desk'], why: '桌垫、桌面收纳抽屉、桌面 CD 架是摆在书桌上的东西，不是书桌（会占书桌的名额、被当书桌摆椅子）' },
+  { ids: ['lm-desk-mat'], add: ['stationery'], why: '桌垫算文具' },
+  { ids: ['lm-desk-drawers'], add: ['storage-cabinet'], why: '桌面收纳抽屉是小抽屉柜' },
+  { ids: ['of-mousepad-rgb'], remove: ['gaming-desk'], why: 'RGB 电竞桌垫是鼠标垫，不是电竞桌' },
+  { ids: ['sb-cab-boot'], remove: ['shoe'], add: ['shoe-storage'], why: '靴柜是鞋柜，不是鞋' },
 ]
 
 // ---------- 生成 ----------
