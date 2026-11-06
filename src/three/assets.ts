@@ -17,8 +17,8 @@ import { setLiveProbe } from './stylePalettes'
 import { probeLive } from './paletteProbe'
 import { ASSETS as REG_ASSETS, ASSET_MAP as REG_MAP, registerAssets } from './assetRegistry'
 import type { AssetMeta } from './assetMeta'
-import { GENERATED_TAGS } from './tags.generated'
-import { TAXONOMY } from './taxonomy.generated'
+import { TAG_TABLE } from './tagTable'
+import { TYPE_TABLE } from './typeTable'
 
 export { C, CATEGORY_LABELS, STYLE_LABELS, type AssetCategory, type AssetDef, type StyleTag } from './kit'
 
@@ -1596,13 +1596,13 @@ const DEFS: AssetDef[] = [
 
 DEFS.push(...PACKS)
 
-// 语义标签：def 里写的 + 迁移生成的初始表（tags.generated.ts），合并去重
+// 语义标签：def 里写的 + 已有素材的标签表（tagTable.ts），合并去重
 for (const a of DEFS) {
   if (a.resize) a.ownResize = true
-  const g = GENERATED_TAGS[a.id]
+  const g = TAG_TABLE[a.id]
   if (g) a.tags = a.tags ? [...new Set([...a.tags, ...g])] : [...g]
-  // 细分类型 / 同款系列：def 里写了的优先，否则用迁移生成的（taxonomy.generated.ts）；没有系列的自成一款
-  const x = TAXONOMY[a.id]
+  // 细分类型 / 同款系列：def 里写了的优先，否则查已有素材的类型表（typeTable.ts）；没有系列的自成一款
+  const x = TYPE_TABLE[a.id]
   if (x) {
     a.type ??= x[0]
     a.series ??= x[1]

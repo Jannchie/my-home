@@ -1,8 +1,9 @@
-// 由 scripts/gen-taxonomy.mts 生成：id → [细分类型 type, 同款系列 series, 同类数量分组 limitGroup]（没有系列的素材自成一款）。规则见 src/three/kit.ts 的 type / series。
-// 新素材请在 def 里直接写 type / series；要改已有素材，改 gen-taxonomy.mts 里的审查表再 pnpm gen:taxonomy。
+// 已有素材的细分类型表：id → [细分类型 type, 同款系列 series, 同类数量分组 limitGroup]（没有系列的素材自成一款）。规则见 assetMeta.ts 的 type / series。
+// 这是手工维护的数据：要改某件素材的类型 / 系列直接改这里（def 里写了的优先）；新素材直接在 def 里写 type / series，不往这里加。
+// 最初由一次性的迁移脚本生成，迁移已完成，脚本已删除。
 import type { Tag } from './tags'
 
-export const TAXONOMY: Record<string, readonly [Tag, (string | undefined)?, string?]> = {
+export const TYPE_TABLE: Record<string, readonly [Tag, (string | undefined)?, string?]> = {
   "sofa2": ['sofa', "sofa"],
   "sofa3": ['sofa', "sofa"],
   "armchair": ['armchair'],

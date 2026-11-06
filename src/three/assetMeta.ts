@@ -235,7 +235,7 @@ export interface AssetMeta {
   styles?: StyleTag[]
   /**
    * 细分类型（一个功能标签，词表见 tags.ts）：「这是什么」。行灯、石灯笼、PH 灯是三件独立的素材，type 都是 floor-lamp。
-   * 素材库按它细分筛选；一键布置的换款、灯具池等按它判断。已有素材的值在 taxonomy.generated.ts，新素材直接写。
+   * 素材库按它细分筛选；一键布置的换款、灯具池等按它判断。已有素材的值在 typeTable.ts（直接改），新素材直接写。
    */
   type?: Tag
   /**
@@ -312,7 +312,7 @@ export interface AssetMeta {
   screenClip?: boolean
   /**
    * 语义标签（词表见 tags.ts）：一键布置、检查清单、兴趣、灯光等业务规则只按标签判断「这是什么、能放哪」，不看名字。
-   * 新素材直接在这里写；已有素材的初始标签在 tags.generated.ts，加载时合并。
+   * 新素材直接在这里写；已有素材的标签在 tagTable.ts（直接改），加载时合并。
    */
   tags?: Tag[]
   /** 素材自己声明了 resize(w, d)（加载时由 assets.ts 标上；元数据快照里没有函数，靠它记住可调宽深） */

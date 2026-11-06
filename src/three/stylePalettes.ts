@@ -20,6 +20,7 @@
 import { fnv1a } from '../hash'
 import type { AssetMeta, SlotProbe, StyleTag } from './assetMeta'
 import { LEGACY_FAMILY } from './family.legacy'
+import { hasTag } from './tags'
 
 /** 风格序号：派生配色编号 = 1000 + 序号。只能往后追加，绝不调整顺序 */
 export const STYLE_ORDER: readonly StyleTag[] = ['cute', 'nordic', 'modern', 'japanese', 'industrial', 'retro', 'chinese', 'classic', 'farmhouse']
@@ -231,14 +232,9 @@ const REF_L: Record<Role, number> = { light: 0.92, wood: 0.6, dark: 0.18, grey: 
 /** 撞色时的备选角色 */
 const ALT: Record<string, keyof Kit> = { light: 'fabric', fabric: 'light', accent: 'accent2', accent2: 'fabric', wood: 'dark', dark: 'metal', metal: 'dark' }
 
-/** 以食物本身为主体的素材：配色槽就是食物的颜色，换风格没有意义 */
-const FOOD_RE = /popcorn|ginger|fruit|veget|爆米花|生姜|水果|蔬菜/
-/** 带枝叶的素材（花环、插花、盆景…）：叶绿保持原样 */
-const LEAFY_RE = /wreath|plant|leaf|tree|flower|bonsai|sprout|herb|garland|moss|cactus|succulent|bouquet|ikebana|花环|花|叶|树|草|盆栽|绿植/
-
-/** 绿植、角色（宠物 / 机器人）、设备、以食物为主体的素材不派生 */
+/** 绿植、角色（宠物 / 机器人）、设备、配色就是东西本身颜色的素材（own-colors：以食物为主体的）不派生 */
 export function canDerive(def: AssetMeta) {
-  return def.category !== 'plants' && !def.actor && !def.fixture && !FOOD_RE.test(def.id + def.name) && def.palettes.some((p) => p.some(Boolean))
+  return def.category !== 'plants' && !def.actor && !def.fixture && !hasTag(def, 'own-colors') && def.palettes.some((p) => p.some(Boolean))
 }
 
 /** 某风格的派生配色有几套：原生 + 派生凑够 MIN_PER_STYLE（不能派生的素材为 0） */
@@ -290,7 +286,8 @@ function recolor(def: AssetMeta, style: StyleTag, variant = 0): string[] {
   const spread = kit.spread ?? 0.55
   const pr = probe(def, n)
   const bodyShare = Math.max(...pr.map((p) => p.share))
-  const leafy = def.category === 'outdoor' || LEAFY_RE.test(def.id + def.name)
+  // 带枝叶的（绿植、插花、盆景、花环…）：叶绿保持原样
+  const leafy = def.category === 'outdoor' || hasTag(def, 'plant', 'leafy')
   // 固有色：原生配色有 3 组以上、而这个槽在各组里都一样 → 是食物 / 屏幕 / 叶子之类的固有色，保持原样
   const fixed = (i: number) => def.palettes.length >= 3 && def.palettes.every((p) => (p[i] ?? '').toLowerCase() === (def.palettes[0][i] ?? '').toLowerCase())
 

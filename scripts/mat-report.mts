@@ -21,8 +21,8 @@ const walk = (d: string) => {
       // 标注表里也写着 id，不算定义处
       if (f !== 'matTables') walk(p)
     }
-    // 生成的表、旧 id 迁移表里也列着 id，不算定义处
-    else if (f.endsWith('.ts') && !f.endsWith('.generated.ts') && f !== 'family.legacy.ts') files.push([path.relative(root, p).split(path.sep).join('/'), fs.readFileSync(p, 'utf8')])
+    // 生成的表、标签 / 类型表、旧 id 迁移表里也列着 id，不算定义处
+    else if (f.endsWith('.ts') && !f.endsWith('.generated.ts') && !['family.legacy.ts', 'tagTable.ts', 'typeTable.ts'].includes(f)) files.push([path.relative(root, p).split(path.sep).join('/'), fs.readFileSync(p, 'utf8')])
   }
 }
 walk(root)

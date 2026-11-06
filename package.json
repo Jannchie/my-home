@@ -12,8 +12,6 @@
     "test": "vitest run",
     "gen:dims": "vite-node scripts/gen-dims.mts",
     "gen:measured": "vite-node scripts/gen-measured.mts",
-    "gen:tags": "vite-node scripts/migrate-tags.mts",
-    "gen:taxonomy": "vite-node scripts/gen-taxonomy.mts",
     "gen:motions": "vite-node scripts/gen-motions.mts",
     "mat:report": "vite-node scripts/mat-report.mts",
     "promo": "vite --config vite.promo.config.ts",

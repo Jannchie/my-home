@@ -7,7 +7,7 @@
 //   摆放       能放在哪 / 怎么摆（high-ok 可放 >140cm 高处、bed-ok 可放床上、shelf-only 只放柜架、fridge-door 可贴冰箱门、set-piece 成套专用…）
 //   兴趣       hobby:<InterestId>：和 household.ts 的兴趣对应（落地 / 摆件 / 壁挂按素材本身的形态区分）
 //
-// 标签来源：src/three/tags.generated.ts（迁移脚本 scripts/migrate-tags.mts 生成的初始表，pnpm gen:tags）与 def.tags 合并。
+// 标签来源：已有素材的标签表 src/three/tagTable.ts（手工维护的数据，直接改）与 def.tags 合并。
 // 新素材直接在 def 里写 tags；test/tags.spec.ts 会检查每件素材都有功能标签、只用词表里的值，
 // 以及业务代码里没有按名字 / id 子串判断类别的正则（选择器只允许锚定在 id 开头的正则，用来点名具体素材或成套系列）。
 
@@ -267,6 +267,8 @@ export const ATTR_TAGS = [
   'for-kids', // 儿童用
   'diatomite', // 硅藻土 / 石材（地垫）
   'fixture', // 设备（只在 3D 里代替平面图设备）
+  'leafy', // 带枝叶（插花、盆景、圣诞树、花环、发芽的菜苗…）：派生风格配色时叶绿保持原样（绿植 plant 本来就算）
+  'own-colors', // 配色就是东西本身的颜色（爆米花、果盘、蔬果篮…）：不派生风格配色
 ] as const
 
 /** 摆放能力 / 约束 */

@@ -1,7 +1,5 @@
 // 冻结的旧系列字段（AssetDef.family，已删除）：id → family，迁移那一刻的运行时值。不要手改，也不要再加新素材。
-// 用途只有两个：
-//   1. 派生配色的哈希分组键（stylePalettes.ts paletteKey）：同一旧系列的素材抽到同一套风格色板，迁移后结果逐个不变；
-//   2. 迁移脚本 gen-taxonomy / migrate-tags 的输入（它们按旧 family 推出 type / series / limitGroup 和初始标签），保证 --check 可复现。
+// 用途只有一个：派生配色的哈希分组键（stylePalettes.ts paletteKey）：同一旧系列的素材抽到同一套风格色板，迁移后结果逐个不变。
 // 业务代码不要用它，按 type / series 判断。
 export const LEGACY_FAMILY: Readonly<Record<string, string>> = {
   "sofa2": "sofa",

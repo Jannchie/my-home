@@ -4,9 +4,9 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { ASSETS, ASSET_MAP } from '/src/three/assets'
 import { FIXED_TAGS, FUNCTION_TAGS } from '/src/three/tags'
-import { GENERATED_TAGS } from '/src/three/tags.generated'
+import { TAG_TABLE } from '/src/three/tagTable'
 import { INTERESTS } from '/src/household'
-import { TAXONOMY } from '/src/three/taxonomy.generated'
+import { TYPE_TABLE } from '/src/three/typeTable'
 import { TYPE_NAMES } from '/src/three/typeLabels'
 
 const ROOT = path.resolve(__dirname, '..')
@@ -36,9 +36,9 @@ describe('素材标签', () => {
     expect(tagged.filter((t) => !used.has(t))).toEqual([])
   })
 
-  test('生成表里的 id 都是现有素材', () => {
-    expect(Object.keys(GENERATED_TAGS).filter((id) => !ASSET_MAP.has(id))).toEqual([])
-    expect(Object.keys(TAXONOMY).filter((id) => !ASSET_MAP.has(id))).toEqual([])
+  test('标签表、类型表里的 id 都是现有素材', () => {
+    expect(Object.keys(TAG_TABLE).filter((id) => !ASSET_MAP.has(id))).toEqual([])
+    expect(Object.keys(TYPE_TABLE).filter((id) => !ASSET_MAP.has(id))).toEqual([])
   })
 })
 
@@ -91,6 +91,9 @@ const FILES = [
   'src/three/catalog.ts',
   'src/generate.ts',
   'src/store.ts',
+  'src/stow.ts',
+  'src/yard.ts',
+  'src/three/stylePalettes.ts',
 ]
 /** 匹配房间名（不是素材）的正则：收纳间是鞋柜 / 食品库 / リネン庫 / WIC，按房间名判断 */
 const ROOM_NAME = /^\s*\.test\((room|r)\.name\)/

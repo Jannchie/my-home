@@ -2294,7 +2294,7 @@ const VASES: AssetDef[] = [
     type: 'vase',
     limitGroup: 'prop-vase-flowers',
     sizeLabel: '丝带',
-    tags: ['curio-ok', 'high-ok', 'hobby:plants', 'kitchen-shelf-ok', 'multi-ok', 'vase'],
+    tags: ['curio-ok', 'high-ok', 'hobby:plants', 'kitchen-shelf-ok', 'leafy', 'multi-ok', 'vase'],
   }),
 ]
 
