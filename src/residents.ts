@@ -5,7 +5,7 @@
 //     （VRM 动辄几十 MB，也常有不允许再分发的授权）。换户型打开时，在家的人照样住进新户型。
 //   - 同一个文件按内容指纹（SHA-256）只存一份。
 //   - 内置一个默认人物（public/residents/ 下的 VRM 官方样例，授权见同目录 README）：总在名单第一个、不能移除，
-//     只能设成不在家；它的模型按需从站点加载，不存进 IndexedDB。名单里存一行只是为了记住在不在家、改过的名字。
+//     默认不在家（要用时在名单里设成在家）；它的模型按需从站点加载，不存进 IndexedDB。名单里存一行只是为了记住在不在家、改过的名字。
 // 3D 里的行为和画法见 three/residents.ts。
 //
 // IndexedDB：库名 my-home-residents，版本 1
@@ -50,9 +50,9 @@ export async function loadResidents() {
     // 存储不可用（隐私模式等）：只有内置人物
     console.warn('[residents] 名单读取失败', e)
   }
-  // 默认人物：没存过就是在家；存过的行只取名字和在不在家（文件以代码里的为准）
+  // 默认人物：没存过就是不在家；存过的行只取名字和在不在家（文件以代码里的为准）
   const own = list.find(isBuiltin)
-  const builtin: Resident = { id: BUILTIN_ID, name: own?.name ?? 'VRM 示例', file: BUILTIN_FILE, home: own?.home ?? true, createdAt: 0 }
+  const builtin: Resident = { id: BUILTIN_ID, name: own?.name ?? 'VRM 示例', file: BUILTIN_FILE, home: own?.home ?? false, createdAt: 0 }
   residents.list = [builtin, ...list.filter((r) => !isBuiltin(r)).sort((a, b) => a.createdAt - b.createdAt)]
   residents.ready = true
 }
