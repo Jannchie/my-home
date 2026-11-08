@@ -12,6 +12,39 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '1.20.0',
+    date: '2026-11-08',
+    notes: {
+      zh: [
+        '3D 沙盘的「动画感」画风更像动画背景：漫游时室内的阳光只从窗户照进来，间接光按明暗分成几块；傍晚阳光偏橙、阴影偏紫；地板会映出附近的窗户，窗玻璃上有斜向的高光',
+        '夜里的室内灯光改成柔和的渐变，墙上不再出现硬边的光圈；有灯的房间里也不会再有月光投下的阴影',
+        '「动画感」的描边更清楚：亮面细、暗面粗，墙角和墙与天花板的交界在高分辨率屏幕上也能看清',
+        '修复播放时间或拖动时间滑杆时 3D 沙盘变卡的问题',
+        '内置的 VRM 示例人物默认不在家，打开 3D 沙盘时不再下载它的模型；需要时可以在住户名单里设成在家',
+        '新增家具：吧台、藤编屏风、旋转书架、猫窝边几、高猫爬架、猫抓柱、杂志篮、杂志架、衣帽架、折叠餐桌、梯形书桌、乐谱架',
+        '修正一批素材的分类和标签，一键布置时摆放更合理；挂在墙上的毛巾等物件不会再蹭到下方台面上的东西',
+      ],
+      ja: [
+        '3D ジオラマの「アニメ風」がアニメの背景画らしくなりました：ウォークモードでは室内の日差しが窓からだけ入り、間接光は明暗の数段に分かれます。夕方は日差しがオレンジ寄り、影が紫寄りになり、床には近くの窓が映り込み、窓ガラスには斜めのハイライトが入ります',
+        '夜の室内照明をやわらかなグラデーションにしました：壁に縁のくっきりした光の輪が出なくなり、照明のある部屋に月明かりの影も落ちなくなりました',
+        '「アニメ風」の線がはっきりしました：明るい面は細く、影の面は太く。部屋の角や壁と天井の境目も高解像度の画面で見えるようになりました',
+        '時間を再生したり時間スライダーを動かしたりすると 3D ジオラマが重くなる問題を修正しました',
+        '内蔵の VRM サンプルキャラクターは初期状態で不在になり、3D ジオラマを開いてもモデルをダウンロードしなくなりました。住人リストで在宅にすれば使えます',
+        '家具を追加：バーカウンター、籐のついたて、回転式本棚、猫ハウス付きサイドテーブル、背の高いキャットタワー、爪とぎポール、マガジンバスケット、マガジンラック、コートスタンド、バタフライテーブル、ラダーデスク、譜面台',
+        '一部の素材の分類とタグを修正し、おまかせ配置での置き方がより自然になりました。壁に掛けたタオルなどが下のカウンターの物に触れなくなりました',
+      ],
+      en: [
+        'The anime look in the 3D diorama now reads more like an anime background: in walk mode sunlight enters only through windows, indirect light settles into a few soft-edged tones, low sun turns orange with violet shade, floors reflect nearby windows, and window glass gets diagonal highlights',
+        'Indoor lamps at night now fade in a soft gradient instead of leaving hard-edged rings on walls, and lit rooms no longer show moonlight shadows',
+        'Anime-look outlines are clearer: thinner on lit faces, thicker in shade, with room corners and wall–ceiling edges visible on high-DPI screens',
+        'Fixed the 3D diorama slowing down while time plays or the time slider is dragged',
+        'The built-in VRM sample character is now away from home by default, so opening the 3D diorama no longer downloads its model; set it to home in the resident list to bring it back',
+        'New furniture: bar counter, cane folding screen, revolving bookcase, cat side table, tall cat tree, scratching post, magazine basket, magazine rack, coat stand, gateleg dining table, ladder desk and music stand',
+        'Fixed the categories and tags of a number of assets so auto-furnishing places them more sensibly, and hanging items such as towels no longer brush against things on the counter below',
+      ],
+    },
+  },
+  {
     version: '1.19.2',
     date: '2026-11-06',
     notes: {
