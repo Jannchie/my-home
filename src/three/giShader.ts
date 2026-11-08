@@ -27,11 +27,33 @@ export const giUniforms = {
   giBand: { value: 0 },
 }
 
+// 一个探针的辐照度累加进 acc（t0–t2、t6 已经取好）。
+// 二阶（写实）：九项全用，再取三个像素；一阶（卡通材质）：常数项 + 三个方向，少取三个像素、少一半运算——
+// 画面按半档光圈分档之后，二阶那点细微的方向变化看不出来，漫游时满屏的墙和地板每个像素都要算四个探针，省下的很可观
+const GI_SUM_L2 = /* glsl */ `
+		vec4 t3 = texelFetch( giAtlas, base + ivec2( 3, 0 ), 0 );
+		vec4 t4 = texelFetch( giAtlas, base + ivec2( 4, 0 ), 0 );
+		vec4 t5 = texelFetch( giAtlas, base + ivec2( 5, 0 ), 0 );
+		vec3 sh[ 9 ];
+		sh[ 0 ] = t0.rgb;
+		sh[ 1 ] = vec3( t0.a, t1.rg );
+		sh[ 2 ] = vec3( t1.ba, t2.r );
+		sh[ 3 ] = t2.gba;
+		sh[ 4 ] = t3.rgb;
+		sh[ 5 ] = vec3( t3.a, t4.rg );
+		sh[ 6 ] = vec3( t4.ba, t5.r );
+		sh[ 7 ] = t5.gba;
+		sh[ 8 ] = t6.rgb;
+		acc += bw * max( shGetIrradianceAt( wn, sh ), 0.0 );`
+// 系数同 three 的 shGetIrradianceAt（0.886227 = π·Y00，1.023328 = 2π/3·Y1m）
+const GI_SUM_L1 = /* glsl */ `
+		acc += bw * max( t0.rgb * 0.886227 + 1.023328 * ( vec3( t0.a, t1.rg ) * wn.y + vec3( t1.ba, t2.r ) * wn.z + t2.gba * wn.x ), 0.0 );`
+
 /**
  * 材质端：放在 lights_pars_begin 之后（要用它的 shGetIrradianceAt，和 lightMask.ts 的 lmFetch / lmFloorOf）。
- * outdoor：房间编号图里「户外」的编号（lightMask.ts LM_OUTDOOR，由调用方传入，免得导入成环）
+ * outdoor：房间编号图里「户外」的编号（lightMask.ts LM_OUTDOOR，由调用方传入，免得导入成环）；l1：只用一阶球谐（卡通材质）
  */
-export const giPars = (outdoor: number) => /* glsl */ `
+export const giPars = (outdoor: number, l1 = false) => /* glsl */ `
 uniform sampler2D giAtlas;
 uniform vec4 giGrid;
 uniform vec4 giInfo;
@@ -60,20 +82,7 @@ vec4 giIrradiance( vec3 wp, vec3 wn ) {
 		vec4 t0 = texelFetch( giAtlas, base, 0 );
 		vec4 t1 = texelFetch( giAtlas, base + ivec2( 1, 0 ), 0 );
 		vec4 t2 = texelFetch( giAtlas, base + ivec2( 2, 0 ), 0 );
-		vec4 t3 = texelFetch( giAtlas, base + ivec2( 3, 0 ), 0 );
-		vec4 t4 = texelFetch( giAtlas, base + ivec2( 4, 0 ), 0 );
-		vec4 t5 = texelFetch( giAtlas, base + ivec2( 5, 0 ), 0 );
-		vec3 sh[ 9 ];
-		sh[ 0 ] = t0.rgb;
-		sh[ 1 ] = vec3( t0.a, t1.rg );
-		sh[ 2 ] = vec3( t1.ba, t2.r );
-		sh[ 3 ] = t2.gba;
-		sh[ 4 ] = t3.rgb;
-		sh[ 5 ] = vec3( t3.a, t4.rg );
-		sh[ 6 ] = vec3( t4.ba, t5.r );
-		sh[ 7 ] = t5.gba;
-		sh[ 8 ] = t6.rgb;
-		acc += bw * max( shGetIrradianceAt( wn, sh ), 0.0 );
+${l1 ? GI_SUM_L1 : GI_SUM_L2}
 		wsum += bw;
 	}
 	if ( wsum <= 0.0 ) return vec4( 0.0 );
@@ -126,6 +135,6 @@ export function injectGICel(sh: THREE.WebGLProgramParametersWithUniforms, outdoo
   if (!f.includes('#include <lights_pars_begin>') || !f.includes('#include <lights_fragment_maps>')) return
   Object.assign(sh.uniforms, giUniforms)
   sh.fragmentShader = f
-    .replace('#include <lights_pars_begin>', `#include <lights_pars_begin>\nuniform float giBand;\n${giPars(outdoor)}`)
+    .replace('#include <lights_pars_begin>', `#include <lights_pars_begin>\nuniform float giBand;\n${giPars(outdoor, true)}`)
     .replace('#include <lights_fragment_maps>', `${GI_APPLY_CEL}\n#include <lights_fragment_maps>`)
 }

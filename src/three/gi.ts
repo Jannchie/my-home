@@ -35,6 +35,11 @@ const PER_FRAME = 1
 /** 户型变了（图集从空的开始）连烘几轮、场景 / 灯光变了连烘几轮（每轮多一次反弹；后者接着上次的结果烘，少一轮也够） */
 const ROUNDS_FRESH = 3
 const ROUNDS = 2
+/** 灯光状态停下多久（ms）才重烘；一直在变时最多隔多久烘一次 */
+const SETTLE_MS = 400
+const STALE_MS = 20000
+/** 慢烘时隔几帧采一个探针 */
+const LAZY_EVERY = 4
 
 // 材质端的 uniform、GLSL 在 giShader.ts（lightMask.ts 注入时要用，放这里会导入成环）
 export { GI_APPLY, giUniforms } from './giShader'
@@ -138,6 +143,12 @@ export function createGI(renderer: THREE.WebGLRenderer, scene: THREE.Scene, came
   let gain = 1
   let hideVersion = -1
   let hideList: THREE.Object3D[] = []
+  /** 最近看到的灯光状态、它从什么时候起没再变；上次开始重烘的时间 */
+  let seenKey = ''
+  let seenAt = 0
+  let bakedAt = 0
+  let lazy = false
+  let lazyTick = 0
 
   function layout(m: LightMaskMap) {
     const floorY = lightMaskUniforms.lmFloorY.value
@@ -240,14 +251,27 @@ export function createGI(renderer: THREE.WebGLRenderer, scene: THREE.Scene, came
         fresh = true
       }
       const k = `${version}|${lightsKey(version)}`
-      if (k !== lightKey) {
+      // 光照还在变（播放时间、拖时间滑杆、灯在渐亮）：每帧都重烘的话一轮永远烘不完，还一直每帧多画六遍场景。
+      // 等它停下 SETTLE_MS 再烘；一直在变（播放）时最多攒 STALE_MS 烘一次。刚换户型（图集是空的）立刻烘
+      const now = performance.now()
+      if (k !== seenKey) {
+        seenKey = k
+        seenAt = now
+      }
+      const stable = now - seenAt > SETTLE_MS
+      if (k !== lightKey && (stable || fresh || now - bakedAt > STALE_MS)) {
         lightKey = k
-        const rounds = fresh ? ROUNDS_FRESH : ROUNDS
+        bakedAt = now
+        // 还在变时只烘一轮（不连着多烘几轮反弹），正在烘的那一轮也不再往后加：停下以后再按停下的状态完整烘
+        const rounds = fresh ? ROUNDS_FRESH : stable ? ROUNDS : 1
+        // 还在变：慢烘（每 LAZY_EVERY 帧才采一个探针，一轮摊开，平时每帧只多一点点）
+        lazy = !stable && !fresh
         fresh = false
         if (cursor >= order.length) startRound(rounds - 1)
-        else pending = rounds
+        else pending = stable ? rounds : 0
       }
       if (cursor >= order.length) return false
+      if (lazy && ++lazyTick % LAZY_EVERY !== 0) return false
       // 采集时：间接光照开（用上一轮的探针，多次反弹）、强度按 1（强度只是最后画面的曝光，乘进反弹会越烘越亮）、
       // 阴影图不重画、描边壳 / 反射面 / 粒子 / 小物件藏起来
       if (hideVersion !== version) {
@@ -297,7 +321,8 @@ export function createGI(renderer: THREE.WebGLRenderer, scene: THREE.Scene, came
       }
       return true
     },
-    busy: () => cursor < order.length,
+    // 灯光变了、还在等它停下：也要继续要帧（按需渲染，没人要帧就不会再进 step）
+    busy: () => cursor < order.length || (seenKey !== '' && seenKey !== lightKey),
     setGain(v) {
       gain = (import.meta.env.DEV ? dbg().gain : undefined) ?? v
     },
