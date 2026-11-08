@@ -8,7 +8,7 @@ import * as THREE from 'three'
 import type { WindowGrid, WindowStyle } from '../model'
 import { archRise, roundDiameter } from '../windows'
 import { C } from './assets'
-import { rbox, toon } from './toon'
+import { cloneWithHooks, rbox, toon } from './toon'
 import { movable } from './kit'
 import { SWING_MAX, windowLeaves } from '../doorMotion'
 
@@ -40,7 +40,18 @@ export interface WindowSpec {
   movable?: boolean
 }
 
-const glassMat = () => toon(C.glass, { transparent: 0.45 })
+let windowGlass: THREE.Material | null = null
+/**
+ * 窗玻璃：一份专用的材质（带 ANIME_GLASS 宏：「动画感」下画两道斜向的高光，anime.ts），
+ * userData.windowGlass 标着（地板倒映窗户时按它找窗，post.ts）
+ */
+const glassMat = () => {
+  if (windowGlass) return windowGlass
+  const m = cloneWithHooks(toon(C.glass, { transparent: 0.45 }))
+  m.defines = { ...m.defines, ANIME_GLASS: '' }
+  m.userData.windowGlass = true
+  return (windowGlass = m)
+}
 /** 和风细格的「纸」：暖白、半透 */
 const paperMat = () => toon('#fbf5e6', { transparent: 0.82 })
 

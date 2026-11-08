@@ -240,13 +240,19 @@ export const outlineUniforms = {
    */
   uLinear: { value: 0 },
   uDim: { value: 1 },
+  /**
+   * 线的粗细跟着光走（xyz = 视空间里指向太阳的方向，w = 程度）：受光的一侧细、背光的一侧粗，手绘的线就是这样画出体积的。
+   * 「动画」用，post.ts renderPatched 每帧设（入夜退掉）
+   */
+  uLineSun: { value: new THREE.Vector4(0, 1, 0, 0) },
 }
 const LINE_VERT_PARS = /* glsl */ `
         uniform float uWidth;
         uniform vec2 uViewport;
-        uniform vec3 uLineFade;`
-// 视空间深度（clip.w）超过起点后线宽渐变到 0
-const LINE_WIDTH = /* glsl */ `uWidth * ( uLineFade.z > 0.5 ? 1.0 - smoothstep( uLineFade.x, uLineFade.y, clip.w ) : 1.0 )`
+        uniform vec3 uLineFade;
+        uniform vec4 uLineSun;`
+// 视空间深度（clip.w）超过起点后线宽渐变到 0；受光一侧约 0.75 倍、背光一侧约 1.35 倍（n：视空间法线，在用到它的地方已经算好）
+const LINE_WIDTH = /* glsl */ `uWidth * ( uLineFade.z > 0.5 ? 1.0 - smoothstep( uLineFade.x, uLineFade.y, clip.w ) : 1.0 ) * mix( 1.0, 1.35 - 0.6 * smoothstep( -0.2, 0.5, dot( n, uLineSun.xyz ) ), uLineSun.w )`
 const LINE_FRAG_PARS = /* glsl */ `
         uniform float uLineLift;
         uniform vec4 uInk;

@@ -38,7 +38,8 @@ import { createGI, giUniforms, type GI } from './gi'
 import { createFog, updateFog } from './fog'
 import { LUT_SIZE, lutTexture } from './lut'
 import { outlineUniforms } from './toon'
-import { animeUniforms } from './anime'
+import { animeUniforms, MAX_WIN } from './anime'
+import { currentLightMask, lightMaskUniforms, maskAt } from './lightMask'
 import { HASH_NOISE } from './glslNoise'
 import { isAdditive } from './blend'
 import type { Stage } from './stage'
@@ -573,6 +574,7 @@ const DUST_ORBIT = 0.3
 const ACCUM_FRAMES = 16
 /** 赛璐璐漫游时间接光的倍数（屋里高调：暗部是明亮的阴影色，不是昏暗） */
 const CEL_WALK_GI = 2.2
+const tmpSun = new THREE.Vector3()
 /** 场景里有东西在动时累积帧数压到这里（这一帧的权重至少 1 / (ACCUM_SETTLE + 1)） */
 const ACCUM_SETTLE = 7
 /** 累积那一遍最多认几个动着的角色的屏幕矩形（这一帧的 + 上一帧的各一半） */
@@ -1486,6 +1488,13 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
       flatFur: real && current.flatFur ? 1 : 0,
       cel: real ? (current.cel ?? 0) : 0,
     })
+    // 线的粗细跟着阳光（赛璐璐的「动画」类，不含插画）：受光侧细、背光侧粗；入夜退掉
+    const ls = outlineUniforms.uLineSun.value
+    ls.w = linear && !current.material && !current.illust && current.stylize === undefined ? 1 - night : 0
+    if (ls.w > 0) {
+      tmpSun.copy(stage.sun.position).sub(stage.sun.target.position).normalize().transformDirection(camera.matrixWorldInverse)
+      ls.set(tmpSun.x, tmpSun.y, tmpSun.z, ls.w)
+    }
     // 描边色：进 composer 时转回线性、入夜压暗（着色器里做，渲染完还原成原样）
     outlineUniforms.uLinear.value = linear ? 1 : 0
     outlineUniforms.uDim.value = 1 - 0.7 * night
@@ -1495,6 +1504,7 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
       } finally {
         outlineUniforms.uLinear.value = 0
         outlineUniforms.uDim.value = 1
+        outlineUniforms.uLineSun.value.w = 0
       }
     }
     const hidden: THREE.Object3D[] = []
@@ -1563,6 +1573,7 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
       for (const o of hidden) o.visible = true
       outlineUniforms.uLinear.value = 0
       outlineUniforms.uDim.value = 1
+      outlineUniforms.uLineSun.value.w = 0
       for (const [e, v] of boosted) e.emissiveIntensity = v
       for (const [e, c, v] of glass) {
         e.emissive.copy(c)
@@ -1576,6 +1587,50 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
    * renderPatched、遮蔽的法线那一遍按它缓存要处理的对象列表，不每帧遍历整个场景
    */
   let sceneVersion = 0
+  // 窗玻璃（windows.ts 标的 userData.windowGlass）：地板倒映窗户用。包围盒在世界坐标里，户型重建（场景版本变了）才重算
+  const glassList = versionedList(scene, () => sceneVersion, (o) => !!((o as THREE.Mesh).material as THREE.Material | undefined)?.userData?.windowGlass)
+  let winVersion = -1
+  let wins: { c: THREE.Vector3; alongX: boolean; hu: number; hv: number; a: number; b: number }[] = []
+  const winBox = new THREE.Box3()
+  const winC = new THREE.Vector3()
+  const winS = new THREE.Vector3()
+  function updateWindows() {
+    const list = glassList()
+    const m = currentLightMask()
+    if (winVersion !== sceneVersion || wins.length === 0) {
+      winVersion = sceneVersion
+      wins = []
+      const fy = lightMaskUniforms.lmFloorY.value
+      for (const o of list) {
+        if (!o.visible) continue
+        winBox.setFromObject(o)
+        if (winBox.isEmpty()) continue
+        winBox.getCenter(winC)
+        winBox.getSize(winS)
+        // 薄的那个方向是法线（窗都是横平竖直的）；太小的（气窗格条、百叶片）不要
+        const alongX = winS.x < winS.z
+        const hu = (alongX ? winS.z : winS.x) / 2
+        const hv = winS.y / 2
+        if (hu < 15 || hv < 15) continue
+        // 两侧各探出 30cm 看是哪个房间（lightMask 编号图），地板只倒映同一房间的窗
+        let f = 0
+        if (m) for (let k = 1; k < m.floors; k++) if (winC.y >= fy[k] - 2) f = k
+        const side = (d: number) => (m ? maskAt(m, f, { x: winC.x + (alongX ? d : 0), y: winC.z + (alongX ? 0 : d) }).id : -1)
+        wins.push({ c: winC.clone(), alongX, hu, hv, a: side(30), b: side(-30) })
+      }
+    }
+    const cam = camera.position
+    const near = wins.slice().sort((p, q) => p.c.distanceToSquared(cam) - q.c.distanceToSquared(cam)).slice(0, MAX_WIN)
+    const A = animeUniforms.uWinA.value
+    const B = animeUniforms.uWinB.value
+    near.forEach((w, i) => {
+      A[i].set(w.c.x, w.c.y, w.c.z, w.alongX ? 0 : 1)
+      B[i].set(w.hu, w.hv, w.a, w.b)
+    })
+    animeUniforms.uWinCount.value = near.length
+    // 倒影的颜色：天光色（线性）
+    animeUniforms.uWinColor.value.copy(stage.hemi.color).multiplyScalar(Math.min(1.2, stage.hemi.intensity))
+  }
   const patchTargets = versionedList(scene, () => sceneVersion, (o) => !!(o as THREE.Mesh).material)
 
   /** 镜头静止的判断：上一帧（不含抖动）的视图 / 投影矩阵 */
@@ -1716,6 +1771,8 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
             // 入夜：灯光的反弹收得更多（赛璐璐夜里要灯下一池光、周围暗下去），漫游的提亮只在白天
             gi?.setGain((current.gi ?? 1) * (1 - (cel ? 0.8 : 0.6) * sky.night) * (cel && walking ? 1 + (CEL_WALK_GI - 1) * (1 - sky.night) : 1))
             giUniforms.giBand.value = cel ? 1 : 0
+            // 地板倒映窗户：离镜头最近的几扇窗（anime.ts FLOOR_REFL）
+            if (animeUniforms.uFloorRefl.value > 0) updateWindows()
             if (gi?.step(giOn(), sceneVersion)) p.accum.frame = Math.min(p.accum.frame, ACCUM_SETTLE)
             // 倒影在最外层先画（reflectFrame.ts）；镜头已经抖过亚像素，和主画面一致
             prerenderReflections(renderer, scene, camera)

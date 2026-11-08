@@ -3413,7 +3413,9 @@ function applyLights() {
   const anime = !look.material
   const real = look.material === 'real'
   const day = 1 - s.night
-  setAnimeLook(anime, s.night, look.illust ?? 0, walking.value)
+  // 太阳低（清晨、傍晚）的程度：阳光偏橙、阴影色偏紫，冷暖对比拉开
+  const golden = 1 - THREE.MathUtils.smoothstep(s.altitude, 4, 28)
+  setAnimeLook(anime, s.night, look.illust ?? 0, walking.value, golden)
   // 漫游时屋里有天花板：背对太阳的室内墙面不再收阳光（两档色阶的暗面原本收四到七成），屋里的阳光只剩从窗户照进来的光斑
   lightMaskUniforms.lmSunBack.value = anime && walking.value ? 0 : 1
   // 室内灯分档成灯光圈：灯下一池光，往外一档一档暗下去（动画夜景的画法）
@@ -3440,6 +3442,7 @@ function applyLights() {
     if (tone.down) stage.hemi.groundColor.lerp(tmpColor.set(tone.down), (tone.tint ?? 0) * day)
     if (tone.sunColor) stage.sun.color.lerp(tmpColor.set(tone.sunColor), (tone.sunTint ?? 0) * day)
   }
+  if (anime) stage.sun.color.lerp(GOLDEN_SUN, 0.3 * golden * day)
   // applyLights 会反复调用：阳光强度每次从天色重算，不能原地乘
   stage.sun.intensity = s.lightIntensity * (tone?.sun ?? 1)
   // 漫游：画面几乎全是室内，开着灯时室内的补光是灯光在墙面间来回反射的暖白，不是窗外的蓝紫夜色（鸟瞰时要留着夜色给户外）；
@@ -3467,6 +3470,8 @@ const tmpColor2 = new THREE.Color()
 const WALK_SKY = new THREE.Color('#fff1dc')
 const WALK_GROUND = new THREE.Color('#a8cdd4')
 const WALK_SUN = new THREE.Color('#ffd49a')
+/** 太阳贴着地平线时（赛璐璐）阳光偏向的颜色 */
+const GOLDEN_SUN = new THREE.Color('#ff9a55')
 
 /** 视口背景：画布透明时露出来的天色（与后处理 Base 的渐变一致） */
 const viewportBg = computed(() => {

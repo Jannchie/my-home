@@ -144,6 +144,8 @@ function floorMaterial(kind: RoomKind, tone: WoodTone = 'natural') {
       map = woodTex('#ecc79b', '#cfa676')
   }
   m = new THREE.MeshToonMaterial({ map, color: '#ffffff', gradientMap: gradientMap() })
+  // 「动画感」下收木纹、砖缝的对比和饱和度（anime.ts FLOOR_BODY）
+  m.defines = { ANIME_FLOOR: '' }
   // 写实光照（realistic.ts）的材质和粗糙度：釉面砖最亮、木地板一层淡淡的清漆光泽、榻榻米和阳台、玄关地砖哑光
   const tile = tone === 'natural' && ['wash', 'toilet', 'bath', 'entrance', 'balcony'].includes(kind)
   m.userData.mat = tone === 'natural' && kind === 'japanese' ? 'fabric' : tile ? (kind === 'balcony' || kind === 'entrance' ? 'stone' : 'ceramic') : 'wood'

@@ -7,6 +7,8 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js'
 
 /** 转折线至少连续多长（屏幕像素，两头各这么远）才画 */
 const RUN = 2
+/** 转折线的取样间距（CSS 像素）：约等于线宽的一半 */
+const CREASE_W = 1.4
 
 const CreaseShader = {
   name: 'Crease',
@@ -22,6 +24,8 @@ const CreaseShader = {
     uNear: { value: 5 },
     uFar: { value: 20000 },
     uStrength: { value: 0 },
+    /** 转折线取样间距（设备像素）：像素比 × CREASE_W */
+    uCreaseW: { value: 1 },
     /** 统一墨色（线性 rgb）和换成它的程度（a）：「插画」的转折线也用描边的那一种暖墨色 */
     uInk: { value: new THREE.Vector4(0, 0, 0, 0) },
   },
@@ -44,6 +48,7 @@ const CreaseShader = {
     uniform float uNear;
     uniform float uFar;
     uniform float uStrength;
+    uniform float uCreaseW;
     uniform vec4 uInk;
     varying vec2 vUv;
 
@@ -85,8 +90,9 @@ const CreaseShader = {
         return;
       }
       float z0 = -perspectiveDepthToViewZ(d0, uNear, uFar);
-      vec2 tx = vec2(uTexel.x, 0.0);
-      vec2 ty = vec2(0.0, uTexel.y);
+      // 取样间距按 CSS 像素（高分屏上线不变细），再放宽一点：墙和天花板的交界、房间的阴角这些结构线是画面的骨架，要读得出来
+      vec2 tx = vec2(uTexel.x * uCreaseW, 0.0);
+      vec2 ty = vec2(0.0, uTexel.y * uCreaseW);
       float crease = creaseAt(vUv, tx, ty);
       if (uGap < 1.0 && crease > 0.05) crease *= min(contAcross(z0, tx), contAcross(z0, ty));
       // 只留连成线的：踢脚线顶面、窗台这类不到一个像素宽的细面，光栅化时一段有一段没有，转折线会断成一串珠子。
@@ -165,6 +171,7 @@ export function updateCrease(pass: ShaderPass, camera: THREE.PerspectiveCamera, 
   // 法线、深度图按 CSS 像素画（post.ts createAO：像素比最多除到 1/2）
   const k = Math.min(2, Math.max(1, pixelRatio))
   u.uDTexel.value.set(k / Math.max(1, res.x), k / Math.max(1, res.y))
+  u.uCreaseW.value = Math.max(1, pixelRatio) * CREASE_W
   u.uNear.value = camera.near
   u.uFar.value = camera.far
 }

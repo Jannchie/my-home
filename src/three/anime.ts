@@ -12,6 +12,9 @@ import { cloneWithHooks, setToonBands } from './toon'
 import { MAT_ID } from './matIds'
 import { HASH_NOISE } from './glslNoise'
 
+/** 地板倒映窗户时最多看几扇窗（离镜头最近的；post.ts 选） */
+export const MAX_WIN = 8
+
 export const animeUniforms = {
   /** 阴影色的强度（0 = 不换，1 = 暗面完全换成阴影色） */
   uAnimeShade: { value: 0 },
@@ -32,7 +35,84 @@ export const animeUniforms = {
    * 不发光 = 1，发光 = 2 + 发光量（线性亮度）。泛光只从这个标记里取，受光再亮（白墙、悬停高亮提亮的桌面）也不晕开
    */
   uGlowMark: { value: 0 },
+  /** 地板（材质带 ANIME_FLOOR 宏）木纹、砖缝的对比和饱和度收多少（0 = 不收，1 = 对比约减半、饱和度 ×0.8） */
+  uAnimeFloor: { value: 0 },
+  /** 地板倒映窗户的强度（0 = 不画；见 FLOOR_REFL），uWinColor = 倒影的颜色（线性，天光色，post.ts 每帧设） */
+  uFloorRefl: { value: 0 },
+  uWinColor: { value: new THREE.Color(0.9, 0.95, 1.0) },
+  /**
+   * 离镜头最近的几扇窗（post.ts 每帧设）：A = 窗玻璃中心（世界坐标）+ 朝向（0 = 法线沿 x，1 = 沿 z）；
+   * B = 半宽、半高、两侧的房间编号（lightMask 编号图；地板只倒映同一房间的窗）
+   */
+  uWinA: { value: Array.from({ length: MAX_WIN }, () => new THREE.Vector4()) },
+  uWinB: { value: Array.from({ length: MAX_WIN }, () => new THREE.Vector4()) },
+  uWinCount: { value: 0 },
+  /** 窗玻璃（ANIME_GLASS 宏）上两道斜向高光的强度 */
+  uAnimeGlass: { value: 0 },
 }
+
+/** 阴影色：平时偏冷的淡紫；太阳低（傍晚、清晨）时更紫、更浓，和金橙的阳光对比 */
+const SHADE_TINT = new THREE.Color().setRGB(0.84, 0.8, 1.0)
+const SHADE_TINT_GOLDEN = new THREE.Color().setRGB(0.8, 0.76, 1.0)
+
+// 地板（house.ts floorMaterial 带 ANIME_FLOOR 宏）：动画背景里大面积的地面是低对比、低饱和的，木纹只是一层淡淡的纹理，
+// 不抢家具和光斑。纹理的局部平均色取贴图很高一级的 mip，往它收一半，再降一点饱和度
+const FLOOR_BODY = /* glsl */ `
+	#ifdef USE_MAP
+	if ( uAnimeFloor > 0.0 ) {
+		vec3 afMean = diffuse * texture2D( map, vMapUv, 8.0 ).rgb;
+		vec3 afC = mix( afMean, diffuseColor.rgb, 1.0 - 0.45 * uAnimeFloor );
+		afC = mix( vec3( dot( afC, vec3( 0.2126, 0.7152, 0.0722 ) ) ), afC, 1.0 - 0.2 * uAnimeFloor );
+		diffuseColor.rgb = afC;
+	}
+	#endif
+`
+
+// 地板倒映窗户（京阿尼的室内背景里最有辨识度的一笔：打了蜡的木地板上一道竖着拉长、边缘模糊的窗户亮影）。
+// 不另画一遍场景：视线在地板上镜像以后朝上走，和附近几扇窗的玻璃面求交（窗都是横平竖直的，按 x / z 一个平面），
+// 落在窗里就加一片天光色；越远越糊（边缘放宽）、竖着比横着更糊（拉长），越掠射越亮（菲涅耳）。
+// 只算同一房间的窗（lightMask 的编号图），不会隔着墙倒映隔壁的窗；中间挡着的家具不管（画的倒影本来就是示意）
+const FLOOR_REFL = /* glsl */ `
+	if ( uFloorRefl > 0.0 && uWinCount > 0 ) {
+		vec3 frP = ( vec4( - vViewPosition, 0.0 ) * viewMatrix ).xyz + cameraPosition;
+		vec3 frV = normalize( frP - cameraPosition );
+		vec3 frR = vec3( frV.x, - frV.y, frV.z );
+		float frRoom = lmFetch( frP.xz, lmFloorOf( frP.y + 5.0 ) ).x;
+		float frAcc = 0.0;
+		for ( int i = 0; i < ${MAX_WIN}; i ++ ) {
+			if ( i >= uWinCount ) break;
+			vec4 wa = uWinA[ i ];
+			vec4 wb = uWinB[ i ];
+			if ( abs( frRoom - wb.z ) > 0.5 && abs( frRoom - wb.w ) > 0.5 ) continue;
+			bool alongX = wa.w < 0.5;
+			float rn = alongX ? frR.x : frR.z;
+			if ( abs( rn ) < 1e-4 ) continue;
+			float t = ( alongX ? wa.x - frP.x : wa.z - frP.z ) / rn;
+			if ( t <= 0.0 ) continue;
+			vec3 frH = frP + frR * t;
+			float tu = abs( alongX ? frH.z - wa.z : frH.x - wa.x ) - wb.x;
+			float tv = abs( frH.y - wa.y ) - wb.y;
+			float soft = 2.0 + 0.05 * t;
+			frAcc += ( 1.0 - smoothstep( - soft, soft, tu ) ) * ( 1.0 - smoothstep( - soft * 3.0, soft * 3.0, tv ) ) * ( 1.0 - smoothstep( 200.0, 800.0, t ) );
+		}
+		float frFres = 0.3 + 0.7 * pow( 1.0 - abs( frV.y ), 3.0 );
+		outgoingLight += min( frAcc, 1.0 ) * frFres * uFloorRefl * uWinColor;
+	}
+`
+
+// 窗玻璃（windows.ts，ANIME_GLASS 宏）：动画里的窗玻璃总有两道平行的斜向高光（一宽一窄），玻璃一下就读出来了。
+// 按世界坐标画（窗不论朝 x 还是 z，x + z 都沿着玻璃走），每 1.7m 重复一组；高光处玻璃也更不透明一点
+const GLASS_BODY = /* glsl */ `
+	#ifdef ANIME_GLASS
+	if ( uAnimeGlass > 0.0 ) {
+		vec3 agW = ( vec4( - vViewPosition, 0.0 ) * viewMatrix ).xyz + cameraPosition;
+		float agD = fract( ( agW.x + agW.z + agW.y * 0.9 ) / 170.0 );
+		float agS = smoothstep( 0.28, 0.3, agD ) - smoothstep( 0.37, 0.39, agD ) + 0.6 * ( smoothstep( 0.43, 0.445, agD ) - smoothstep( 0.47, 0.485, agD ) );
+		outgoingLight += agS * uAnimeGlass * 0.55;
+		diffuseColor.a = min( 1.0, diffuseColor.a + agS * uAnimeGlass * 0.35 );
+	}
+	#endif
+`
 
 const ANCHOR = '#include <opaque_fragment>'
 /** 顶灯落影处乘的颜色（线性）：浅的蓝紫 */
@@ -55,10 +135,17 @@ const BODY = /* glsl */ `
 		// 只给曲面、圆角（法线在屏幕上变化快的地方）：大片平面（墙、地板）斜着看时 N·V 也小，不能整面发亮
 		float anNV = 1.0 - clamp( dot( normal, geometryViewDir ), 0.0, 1.0 );
 		float anCurv = smoothstep( 0.004, 0.03, length( fwidth( normal ) ) );
-		float anRim = pow( anNV, 3.0 ) * anCurv * uAnimeRim;
+		// 深色的东西（黑沙发、黑家电）：轮廓光加重，朝上的面再加一层淡淡的天光反光——动画里黑色的物件靠亮边和反光把形体提出来，
+		// 不然只剩一团黑（固有色线性亮度 0.03 以下算全黑，0.15 以上不加）
+		float anDark = 1.0 - smoothstep( 0.03, 0.15, dot( diffuseColor.rgb, anLum ) );
+		float anRim = pow( anNV, 3.0 ) * anCurv * uAnimeRim * ( 1.0 + 1.5 * anDark );
 		outgoingLight += anRim * mix( vec3( 1.0, 0.95, 0.86 ), diffuseColor.rgb, 0.4 ) * ( 0.35 + 0.65 * sunLit );
+		float anUp = smoothstep( 0.4, 0.9, inverseTransformDirection( normal, viewMatrix ).y );
+		outgoingLight += anDark * anUp * uAnimeRim * 0.12 * vec3( 0.86, 0.9, 1.0 ) * ( 0.4 + 0.6 * sunLit );
 	}
 	METAL_BODY
+	FLOOR_REFL_BODY
+	${GLASS_BODY}
 	${ANCHOR}
 	#ifdef OPAQUE
 	anGlow += dot( totalEmissiveRadiance, anLum );
@@ -171,11 +258,16 @@ export function injectAnime(sh: THREE.WebGLProgramParametersWithUniforms) {
   const whole = !perVertex && sh.defines?.ANIME_METAL !== undefined
   const metal = perVertex || whole
   if (perVertex) sh.vertexShader = 'attribute float mat;\nvarying float vAnMat;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvAnMat = mat;')
+  // 地板：贴图取样之后收对比、降饱和
+  if (sh.defines?.ANIME_FLOOR !== undefined && sh.fragmentShader.includes('#include <map_fragment>'))
+    sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>\n${FLOOR_BODY}`)
+  const floor = sh.defines?.ANIME_FLOOR !== undefined
   sh.fragmentShader =
-    'uniform float uAnimeShade;\nuniform vec3 uAnimeShadeTint;\nuniform float uTermSat;\nuniform float uAnimeRim;\nuniform float uAnimeMetal;\nuniform float uIllust;\nuniform float uIllustNight;\nuniform float uGlowMark;\n' +
+    `uniform float uFloorRefl;\nuniform vec3 uWinColor;\nuniform vec4 uWinA[ ${MAX_WIN} ];\nuniform vec4 uWinB[ ${MAX_WIN} ];\nuniform int uWinCount;\nuniform float uAnimeGlass;\n` +
+    'uniform float uAnimeFloor;\nuniform float uAnimeShade;\nuniform vec3 uAnimeShadeTint;\nuniform float uTermSat;\nuniform float uAnimeRim;\nuniform float uAnimeMetal;\nuniform float uIllust;\nuniform float uIllustNight;\nuniform float uGlowMark;\n' +
     ILLUST_PARS +
     (perVertex ? 'varying float vAnMat;\n' : whole ? `#define vAnMat ${MAT_ID.metal}.0\n` : '') +
-    sh.fragmentShader.replace(ANCHOR, BODY.replace('ILLUST_BODY', ILLUST_BODY).replace('METAL_BODY', metal ? METAL_BODY : ''))
+    sh.fragmentShader.replace(ANCHOR, BODY.replace('ILLUST_BODY', ILLUST_BODY).replace('METAL_BODY', metal ? METAL_BODY : '').replace('FLOOR_REFL_BODY', floor ? FLOOR_REFL : ''))
 }
 
 const metalMats = new WeakMap<THREE.Material, THREE.Material>()
@@ -205,17 +297,20 @@ const TERM_SAT = 0.35
 const SHADE = 0.85
 const RIM = 0.35
 const METAL = 1
+/** 地板倒映窗户的强度 */
+const FLOOR_REFL_K = 0.5
 /** 漫游时阴影色的比例 */
 const INDOOR_SHADE = 0.45
 
 /**
  * 开关「动画感」的全部全局状态：两档色阶（toon.ts）、阴影色、交界饱和度、轮廓光、金属的画法。
  * night：入夜程度（夜里阴影色减弱、轮廓光关掉，主要是灯光）。indoor：漫游（阴影色减弱）。
+ * golden：太阳低的程度（0 = 白天高照，1 = 贴着地平线）：阴影色更紫，和偏橙的阳光（Sandbox3D）对比。
  * 描边和经典一样是深色线（以前是提亮的彩色线，细线上几乎看不出差别，反而不如深色线清楚）。
  * illust：「插画」平涂的强度（post.ts LookDef.illust），只在赛璐璐光照下起作用。
  * 离开沙盘时 setAnimeLook(false) 还原，别处（素材库缩略图）照常
  */
-export function setAnimeLook(on: boolean, night = 0, illust = 0, indoor = false) {
+export function setAnimeLook(on: boolean, night = 0, illust = 0, indoor = false, golden = 0) {
   setToonBands(on)
   // 插画白天、夜里都是平涂，赛璐璐的阴影色、交界、轮廓光让给它（夜里换成夜色底 + 灯光分档，见 ILLUST_BODY）
   const il = on ? illust : 0
@@ -226,4 +321,9 @@ export function setAnimeLook(on: boolean, night = 0, illust = 0, indoor = false)
   animeUniforms.uAnimeShade.value = on ? SHADE * (1 - 0.5 * night) * (1 - il) * (indoor ? INDOOR_SHADE : 1) : 0
   animeUniforms.uAnimeRim.value = on ? RIM * (1 - night) * (1 - il) : 0
   animeUniforms.uAnimeMetal.value = on ? METAL : 0
+  animeUniforms.uAnimeFloor.value = on ? 1 - il : 0
+  // 地板倒映窗户、窗玻璃的高光：白天的画法，入夜退掉（夜里窗外是暗的）
+  animeUniforms.uFloorRefl.value = on ? FLOOR_REFL_K * (1 - night) * (1 - il) : 0
+  animeUniforms.uAnimeGlass.value = on ? (1 - 0.8 * night) * (1 - il) : 0
+  animeUniforms.uAnimeShadeTint.value.copy(SHADE_TINT).lerp(SHADE_TINT_GOLDEN, on ? golden : 0)
 }
