@@ -34,7 +34,7 @@ import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js'
 import { mangaUniforms } from './manga'
 import { isReflector } from './toon'
 import { prerenderReflections } from './reflectFrame'
-import { createGI, type GI } from './gi'
+import { createGI, giUniforms, type GI } from './gi'
 import { createFog, updateFog } from './fog'
 import { LUT_SIZE, lutTexture } from './lut'
 import { outlineUniforms } from './toon'
@@ -359,6 +359,8 @@ export const LOOKS: LookDef[] = [
     // 冷暖：天光照朝上的面（地板、台面）偏暖、朝下的面（天花板）偏冷紫，阳光偏金橙；亮度不另加（赛璐璐光照自己会提亮天光）。
     // 灯按「室内灯光」的设置走：赛璐璐没有色调映射，白天灯全开会把整个室内冲白
     lighting: { hemi: 1, sun: 1, up: '#f0e2cf', down: '#cdc8dc', tint: 0.35, sunColor: '#ffcb94', sunTint: 0.35 },
+    // 间接光（gi.ts）：靠窗亮、深处暗，照到阳光的地板把暖色反到墙上；赛璐璐下按半档光圈分档（一块一块的明暗，不是连续渐变）
+    gi: 1,
     shafts: 0.9,
     // 泛光只取发光的东西（灯泡、屏幕、金属高光），阳光照亮的白墙不晕
     bloom: { strength: 0.16, radius: 0.5 },
@@ -569,6 +571,8 @@ const DUST_STRENGTH = 2.2
 const DUST_ORBIT = 0.3
 /** 多帧累积：收敛到第几帧就停（之后按这个权重滑动平均，浮尘这类一直在动的东西不会拖太长的影） */
 const ACCUM_FRAMES = 16
+/** 赛璐璐漫游时间接光的倍数（屋里高调：暗部是明亮的阴影色，不是昏暗） */
+const CEL_WALK_GI = 2.2
 /** 场景里有东西在动时累积帧数压到这里（这一帧的权重至少 1 / (ACCUM_SETTLE + 1)） */
 const ACCUM_SETTLE = 7
 /** 累积那一遍最多认几个动着的角色的屏幕矩形（这一帧的 + 上一帧的各一半） */
@@ -1245,7 +1249,8 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
   let dust: THREE.Points | null = null
   /** 间接光探针（gi.ts），效果要它时才建 */
   let gi: GI | null = null
-  const giOn = () => !low && !!current.gi && current.material === 'real' && current.stylize !== 'manga'
+  // 写实（PBR）和赛璐璐（「动画」：探针收成一档一档，gi.ts GI_APPLY_CEL）都能用；原来的三档色阶不用
+  const giOn = () => !low && !!current.gi && current.material !== 'none' && current.stylize !== 'manga'
   let current: LookDef = LOOK_MAP.get('none')!
   let sky: { bg: [string, string, string]; night: number } = { bg: DEFAULT_BG, night: 0 }
   /** 雾的颜色（线性）：天色往淡天蓝偏（白天的背景色接近白，直接用会像起了白雾），入夜就是夜色 */
@@ -1706,7 +1711,11 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
             // 间接光探针：用这一帧换好的材质采几个（gi.ts）；探针更新了，累积退回到少量帧，新的间接光很快显出来
             if (giOn()) gi ??= createGI(renderer, scene, camera, stage.sun, stage.hemi)
             // 夜里灯光的多次反弹在小房间里叠得很快（整屋发白）：入夜时间接光收弱
-            gi?.setGain((current.gi ?? 1) * (1 - 0.6 * sky.night))
+            // 赛璐璐漫游：屋里只从窗户进光，照实算偏暗；动画的室内是高调的（暗部明亮、干净），间接光提亮
+            const cel = current.material !== 'real'
+            // 入夜：灯光的反弹收得更多（赛璐璐夜里要灯下一池光、周围暗下去），漫游的提亮只在白天
+            gi?.setGain((current.gi ?? 1) * (1 - (cel ? 0.8 : 0.6) * sky.night) * (cel && walking ? 1 + (CEL_WALK_GI - 1) * (1 - sky.night) : 1))
+            giUniforms.giBand.value = cel ? 1 : 0
             if (gi?.step(giOn(), sceneVersion)) p.accum.frame = Math.min(p.accum.frame, ACCUM_SETTLE)
             // 倒影在最外层先画（reflectFrame.ts）；镜头已经抖过亚像素，和主画面一致
             prerenderReflections(renderer, scene, camera)

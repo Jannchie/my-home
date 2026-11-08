@@ -25,6 +25,7 @@ import { isOpenBetween, isVoid, sharedIntervals, voidRailSegments, wallSegments 
 import { stairHoles } from '../stairs'
 import { injectManga } from './manga'
 import { injectAnime } from './anime'
+import { injectGICel } from './giShader'
 
 /** uniform 数组长度：灯池上限（POOL_HIGH）、楼层上限 */
 export const LM_MAX_LIGHTS = 16
@@ -265,6 +266,15 @@ export const lightMaskUniforms = {
   lmFloorY: { value: new Float32Array(LM_MAX_FLOORS) },
   /** 每盏点光源：楼层序号, 编号, 不受遮罩(1), - */
   lmLight: { value: new Float32Array(LM_MAX_LIGHTS * 4) },
+  /**
+   * 室内背光面收多少阳光（0–1）。「动画感」两档色阶的暗面照样收四到七成阳光、也不做阴影采样（toon.ts），
+   * 鸟瞰时没有天花板，这份光是补光；漫游时屋里有天花板，背对太阳的墙不该被晒亮：Sandbox3D 设成 0，补光交给天光和间接光（gi.ts）
+   */
+  lmSunBack: { value: 1 },
+  /** 室内所有面收的阳光（月光）比例：夜里开着灯时淡掉，月光把家具、墙的影子零零碎碎地投在灯照着的地板上，像一片片水渍 */
+  lmSunIndoor: { value: 1 },
+  /** 室内灯分档的灯光圈（0–1，见 POINT_PASS）：「动画感」开着，夜里灯下一池光、往外一档一档暗下去 */
+  lmLampPool: { value: 0 },
 }
 
 /**
@@ -296,6 +306,24 @@ const PARS = /* glsl */ `
 ${LM_FETCH_GLSL}
 uniform vec4 lmLight[ ${LM_MAX_LIGHTS} ];
 uniform float lmPointScale;
+uniform float lmSunBack;
+uniform float lmSunIndoor;
+uniform float lmLampPool;
+// 落在室内的片元收的阳光（月光）比例；户外、墙体格子照旧。wp / wn：视空间的位置、法线。
+//   - 背光面乘 lmSunBack。掠射的面（N·L 在 0.04–0.28）也算进来：toon.ts 在这一段按 N·L 把阴影淡掉（避开走样），
+//     等于不受遮挡，而两档色阶在 N·L > 0 就是全亮，和阳光几乎平行的室内墙会整面被晒亮；
+//   - 所有面再乘 lmSunIndoor（夜里开着灯时月光在屋里淡掉）
+float lmSunBackK( float nl, vec3 wp, vec3 wn ) {
+	if ( lmSunIndoor > 0.999 && ( lmSunBack > 0.999 || nl >= 0.28 ) ) return 1.0;
+	vec3 w = ( vec4( wp - viewMatrix[ 3 ].xyz, 0.0 ) * viewMatrix ).xyz;
+	vec3 n = normalize( ( vec4( wn, 0.0 ) * viewMatrix ).xyz );
+	vec3 p = w + n * lmInfo.z;
+	float f = lmFloorOf( p.y );
+	float id = lmFetch( p.xz, f ).x;
+	// 墙体格子里不朝上的面（门洞、窗洞的顶面和侧壁，推出去 5cm 还在墙里）也算室内；墙顶照户外
+	bool indoor = id > ${LM_OUTDOOR}.5 || ( id < ${LM_WALL}.5 && n.y < 0.7 );
+	return indoor ? mix( lmSunBack, 1.0, smoothstep( 0.04, 0.28, nl ) ) * lmSunIndoor : 1.0;
+}
 // L：灯（楼层, 编号, 不受遮罩）；c：片元所在格子（楼层, 编号, 上层洞口编号, 下层洞口编号），c.x < 0 = 遮罩关闭
 float lmPass( vec4 L, vec4 c ) {
 	if ( c.x < -0.5 || L.z > 0.5 ) return 1.0;
@@ -351,6 +379,20 @@ const POINT_PASS = /* glsl */ `
 			}
 		}
 		directLight.color *= lmPass( lmLight[ i ], lmC ) * lmPointScale;
+		// 灯光圈（lmLampPool）：按到灯的距离 / 照明范围分三档——灯下全亮、往外一圈暗一档、再往外只剩一点
+		if ( lmLampPool > 0.0 && pointLight.distance > 0.0 ) {
+			float lmX = length( pointLight.position - geometryPosition ) / pointLight.distance;
+			float lmK = 1.0 - 0.45 * smoothstep( 0.36, 0.4, lmX ) - 0.35 * smoothstep( 0.62, 0.66, lmX );
+			// 灯在上方时朝下的面（门洞、窗洞的顶面、搁板底面）：暗档原本还收一半以上的灯光，
+			// 比专门压暗的天花板（lmPointScale 0.3）亮好几倍，门洞顶上亮出一条；压到和天花板一样
+			// （天花板自己已经乘过 lmPointScale，不再压）
+			if ( lmPointScale > 0.99 ) {
+				float lmNy = ( vec4( geometryNormal, 0.0 ) * viewMatrix ).y;
+				float lmLy = ( vec4( directLight.direction, 0.0 ) * viewMatrix ).y;
+				lmK *= mix( 1.0, 0.3, smoothstep( -0.5, -0.8, lmNy ) * step( 0.0, lmLy ) );
+			}
+			directLight.color *= mix( 1.0, lmK, lmLampPool );
+		}
 		}`
 const ANCHOR = 'IncidentLight directLight;'
 let patched: string | null = null
@@ -364,7 +406,12 @@ function maskedLightsChunk() {
     patched = ''
     return patched
   }
-  patched = src.replace(ANCHOR, `${LOOKUP}\n${ANCHOR}`).replace(POINT, `${POINT}\n${POINT_PASS}`)
+  // 阳光：toon.ts 的补丁里乘阴影那一句，再乘上室内背光面的比例
+  const SUN = 'directLight.color *= sunShade;'
+  patched = src
+    .replace(ANCHOR, `${LOOKUP}\n${ANCHOR}`)
+    .replace(POINT, `${POINT}\n${POINT_PASS}`)
+    .replace(SUN, 'directLight.color *= sunShade * lmSunBackK( sunNL, geometryPosition, geometryNormal );')
   return patched
 }
 
@@ -387,6 +434,8 @@ export function injectLightMask(sh: THREE.WebGLProgramParametersWithUniforms) {
   // 每个材质自己一份（不共享）：要改的材质在自己的 onBeforeCompile 里调完这里再改 value
   sh.uniforms.lmPointScale = { value: 1 }
   sh.fragmentShader = PARS + sh.fragmentShader.replace('#include <lights_fragment_begin>', chunk)
+  // 卡通材质接上间接光探针（gi.ts）：要用到上面拼进去的 lmFetch / lmFloorOf，遮罩接上了才注入
+  injectGICel(sh, LM_OUTDOOR)
 }
 
 // 内置的受光照材质默认都接上（自己设了 onBeforeCompile 的材质在里面调 injectLightMask）

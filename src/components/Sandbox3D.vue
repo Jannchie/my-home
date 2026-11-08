@@ -57,6 +57,7 @@ import { Walker, ceilings, drawMiniMap, miniMapData, type MiniMapData } from '..
 import { FloorReflections, clearReflectionSkip, refreshReflectionSkip } from '../three/reflect'
 import { Mirrors } from '../three/mirrors'
 import { setAnimeLook } from '../three/anime'
+import { lightMaskUniforms } from '../three/lightMask'
 import { AnimeSky } from '../three/animeSky'
 import { Highlight } from '../three/highlight'
 import ColorEditor from './ColorEditor.vue'
@@ -3398,7 +3399,8 @@ function applyLights() {
   // 夜里开着灯：整体补一点暖色的氛围光（天光加强、地面反光偏暖），让平均亮度上来，不靠灯池中心的高光
   const fill = avg * s.night * power
   // （天光本身保持蓝紫，只加强度、地面反光偏暖：底座、户外仍是夜色）
-  stage.hemi.intensity = s.hemiIntensity + 0.55 * fill
+  // 赛璐璐（「动画」）只补一点：夜里要灯下一池暖光、离灯远的地方暗下去，整屋提亮就和白天一样了
+  stage.hemi.intensity = s.hemiIntensity + (look.material ? 0.55 : 0.15) * fill
   stage.hemi.color.copy(s.hemiSky)
   stage.hemi.groundColor.copy(s.hemiGround).lerp(kel, Math.min(1, 0.6 * fill))
   stage.sun.color.copy(s.lightColor)
@@ -3411,7 +3413,13 @@ function applyLights() {
   const anime = !look.material
   const real = look.material === 'real'
   const day = 1 - s.night
-  setAnimeLook(anime, s.night, look.illust ?? 0)
+  setAnimeLook(anime, s.night, look.illust ?? 0, walking.value)
+  // 漫游时屋里有天花板：背对太阳的室内墙面不再收阳光（两档色阶的暗面原本收四到七成），屋里的阳光只剩从窗户照进来的光斑
+  lightMaskUniforms.lmSunBack.value = anime && walking.value ? 0 : 1
+  // 室内灯分档成灯光圈：灯下一池光，往外一档一档暗下去（动画夜景的画法）
+  lightMaskUniforms.lmLampPool.value = anime ? 1 : 0
+  // 夜里开着灯：屋里不再画月光和它的影子（灯是主光，月光的影子零零碎碎地落在灯照着的地板上像水渍）
+  lightMaskUniforms.lmSunIndoor.value = anime ? 1 - s.night * Math.min(1, avg * power) : 1
   // 影子边缘利落：阴影的过渡宽度跟着半径走（toon.ts）；写实要柔和的半影
   stage.sun.shadow.radius = anime ? 1.2 : real ? (look.softShadow ?? REAL_SHADOW_RADIUS) : SHADOW_RADIUS
   animeSky.mesh.visible = look.sky !== false
@@ -3620,6 +3628,11 @@ if (import.meta.env.DEV) {
   }
   ;(window as unknown as Record<string, unknown>).__myhomeLookThumbs = {
     ids: LOOKS.map((l) => l.id),
+    // 调光照用的截图脚本：改时刻、进漫游、取户型
+    sandbox,
+    enterWalk,
+    plan: () => toRaw(plan.value),
+    redraw: (ms = 1500) => ((dirty = true), settle(ms)),
     async setup() {
       const { basePlan, furnished } = await import('../promo/plans')
       replacePlan(furnished(basePlan('jp', 11, 60, 75, '2LDK'), 12))

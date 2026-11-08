@@ -564,7 +564,8 @@ export function ceilings(plan: Plan, heightOf: (floor: string) => number): THREE
     if (!geo) continue
     const m = new THREE.Mesh(geo, mat)
     m.position.y = heightOf(floor) - 0.5
-    m.castShadow = false
+    // 挡住阳光：漫游时屋里只有从窗户照进来的光（没有这层，阳光穿过没有屋顶的户型照亮每一面墙，窗口的光斑显不出来）
+    m.castShadow = true
     m.receiveShadow = false
     m.raycast = () => {}
     g.add(m)

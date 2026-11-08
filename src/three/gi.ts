@@ -18,16 +18,14 @@
 import * as THREE from 'three'
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js'
 import { currentLightMask, lightMaskUniforms, maskAt, LM_MAX_FLOORS, LM_OUTDOOR, type LightMaskMap } from './lightMask'
+import { GI_SPACING as SPACING, GI_TEXELS as TEXELS, giBlank as blank, giPars, giUniforms } from './giShader'
 import { reflectors } from './reflectFrame'
 
-/** 探针间距、离地高度（cm） */
-const SPACING = 120
+/** 探针离地高度（cm）；间距见 giShader.ts */
 const PROBE_H = 120
 /** 立方体图边长、投影时每个面取样的边长 */
 const CUBE = 24
 const SAMPLES = 16
-/** 每个探针占图集的像素数（9 × RGB = 27 个数 + 房间组） */
-const TEXELS = 7
 /** 采集相机的远平面（cm）：只要房间尺度（天球钉在远平面上，照样画得出来） */
 const FAR = 1500
 /** 采集时藏掉的小物件（包围球半径，cm）：它们对间接光几乎没贡献，却占了大半的 draw call */
@@ -37,87 +35,10 @@ const PER_FRAME = 1
 /** 户型变了（图集从空的开始）连烘几轮、场景 / 灯光变了连烘几轮（每轮多一次反弹；后者接着上次的结果烘，少一轮也够） */
 const ROUNDS_FRESH = 3
 const ROUNDS = 2
-/** 间接光里保底留多少半球光：探针是粗的，墙角、家具缝里不至于全黑 */
-const AMBIENT_FLOOR = 0.12
-/** 间接光的饱和度 */
-const GI_SAT = 0.75
 
-const blank = new THREE.DataTexture(new Uint16Array(4), 1, 1, THREE.RGBAFormat, THREE.HalfFloatType)
-blank.needsUpdate = true
-
-/** 所有材质共享（注入时按引用接上） */
-export const giUniforms = {
-  giAtlas: { value: blank as THREE.Texture },
-  /** x0, z0, 1 / 间距, 每层的行数 */
-  giGrid: { value: new THREE.Vector4(0, 0, 1 / SPACING, 1) },
-  /** 开关, 每行的探针数, 强度, 保底的半球光比例 */
-  giInfo: { value: new THREE.Vector4(0, 1, 1, AMBIENT_FLOOR) },
-}
-
-/** 材质端：放在 lights_pars_begin 之后（要用它的 shGetIrradianceAt，和 lightMask.ts 的 lmFetch / lmFloorOf） */
-export const GI_PARS = /* glsl */ `
-uniform sampler2D giAtlas;
-uniform vec4 giGrid;
-uniform vec4 giInfo;
-// 片元的间接光辐照度（a = 1 有效，0 = 周围没有能用的探针，照旧用半球光）
-vec4 giIrradiance( vec3 wp, vec3 wn ) {
-	vec3 gp = wp + wn * 8.0;
-	float gf = lmFloorOf( gp.y );
-	float grp = lmFetch( gp.xz, gf ).x;
-	if ( abs( grp - ${LM_OUTDOOR}.0 ) < 0.5 ) return vec4( 0.0 );
-	// 取探针的位置再往外推一点：墙面上的点取的是房间里的探针
-	vec2 g = ( wp.xz + wn.xz * 20.0 - giGrid.xy ) * giGrid.z - 0.5;
-	vec2 g0 = floor( g );
-	vec2 fr = g - g0;
-	int nx = int( giInfo.y + 0.5 );
-	int nz = int( giGrid.w + 0.5 );
-	vec3 acc = vec3( 0.0 );
-	float wsum = 0.0;
-	for ( int k = 0; k < 4; k ++ ) {
-		ivec2 c = ivec2( g0 ) + ivec2( k & 1, k >> 1 );
-		if ( c.x < 0 || c.y < 0 || c.x >= nx || c.y >= nz ) continue;
-		ivec2 base = ivec2( c.x * ${TEXELS}, int( gf + 0.5 ) * nz + c.y );
-		vec4 t6 = texelFetch( giAtlas, base + ivec2( 6, 0 ), 0 );
-		// 没有探针（房间外），或者是别的房间组的（隔着墙）。片元落在墙体格子里（墙顶、门洞）时哪组都收
-		if ( t6.a < 1.5 || ( grp > 0.5 && abs( t6.a - grp ) > 0.5 ) ) continue;
-		float bw = max( ( ( k & 1 ) == 1 ? fr.x : 1.0 - fr.x ) * ( ( k >> 1 ) == 1 ? fr.y : 1.0 - fr.y ), 1e-3 );
-		vec4 t0 = texelFetch( giAtlas, base, 0 );
-		vec4 t1 = texelFetch( giAtlas, base + ivec2( 1, 0 ), 0 );
-		vec4 t2 = texelFetch( giAtlas, base + ivec2( 2, 0 ), 0 );
-		vec4 t3 = texelFetch( giAtlas, base + ivec2( 3, 0 ), 0 );
-		vec4 t4 = texelFetch( giAtlas, base + ivec2( 4, 0 ), 0 );
-		vec4 t5 = texelFetch( giAtlas, base + ivec2( 5, 0 ), 0 );
-		vec3 sh[ 9 ];
-		sh[ 0 ] = t0.rgb;
-		sh[ 1 ] = vec3( t0.a, t1.rg );
-		sh[ 2 ] = vec3( t1.ba, t2.r );
-		sh[ 3 ] = t2.gba;
-		sh[ 4 ] = t3.rgb;
-		sh[ 5 ] = vec3( t3.a, t4.rg );
-		sh[ 6 ] = vec3( t4.ba, t5.r );
-		sh[ 7 ] = t5.gba;
-		sh[ 8 ] = t6.rgb;
-		acc += bw * max( shGetIrradianceAt( wn, sh ), 0.0 );
-		wsum += bw;
-	}
-	if ( wsum <= 0.0 ) return vec4( 0.0 );
-	// 稍微降饱和：多次反弹会把木地板的橙色一层层叠浓，整间屋子染成一片橙
-	acc /= wsum;
-	return vec4( mix( vec3( dot( acc, vec3( 0.2126, 0.7152, 0.0722 ) ) ), acc, ${GI_SAT.toFixed(2)} ), 1.0 );
-}
-`
-
-/** 材质端：放在 lights_fragment_maps 之前（这时 irradiance 已经加好了半球光） */
-export const GI_APPLY = /* glsl */ `
-	#if defined( RE_IndirectDiffuse )
-	if ( giInfo.x > 0.5 ) {
-		vec3 giW = ( vec4( geometryPosition - viewMatrix[ 3 ].xyz, 0.0 ) * viewMatrix ).xyz;
-		vec3 giN = normalize( ( vec4( normal, 0.0 ) * viewMatrix ).xyz );
-		vec4 gi = giIrradiance( giW, giN );
-		irradiance = mix( irradiance, gi.rgb * giInfo.z + irradiance * giInfo.w, gi.a );
-	}
-	#endif
-`
+// 材质端的 uniform、GLSL 在 giShader.ts（lightMask.ts 注入时要用，放这里会导入成环）
+export { GI_APPLY, giUniforms } from './giShader'
+export const GI_PARS = giPars(LM_OUTDOOR)
 
 /** 立方体图 → 9 个球谐系数（辐射度的投影，和 three 的 LightProbeGenerator 同一套基函数和归一化），写进图集里这个探针的 7 个像素 */
 const ProjectShader = {

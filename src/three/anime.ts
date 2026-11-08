@@ -205,22 +205,25 @@ const TERM_SAT = 0.35
 const SHADE = 0.85
 const RIM = 0.35
 const METAL = 1
+/** 漫游时阴影色的比例 */
+const INDOOR_SHADE = 0.45
 
 /**
  * 开关「动画感」的全部全局状态：两档色阶（toon.ts）、阴影色、交界饱和度、轮廓光、金属的画法。
- * night：入夜程度（夜里阴影色减弱、轮廓光关掉，主要是灯光）。
+ * night：入夜程度（夜里阴影色减弱、轮廓光关掉，主要是灯光）。indoor：漫游（阴影色减弱）。
  * 描边和经典一样是深色线（以前是提亮的彩色线，细线上几乎看不出差别，反而不如深色线清楚）。
  * illust：「插画」平涂的强度（post.ts LookDef.illust），只在赛璐璐光照下起作用。
  * 离开沙盘时 setAnimeLook(false) 还原，别处（素材库缩略图）照常
  */
-export function setAnimeLook(on: boolean, night = 0, illust = 0) {
+export function setAnimeLook(on: boolean, night = 0, illust = 0, indoor = false) {
   setToonBands(on)
   // 插画白天、夜里都是平涂，赛璐璐的阴影色、交界、轮廓光让给它（夜里换成夜色底 + 灯光分档，见 ILLUST_BODY）
   const il = on ? illust : 0
   animeUniforms.uIllust.value = il
   animeUniforms.uIllustNight.value = night
   animeUniforms.uTermSat.value = on ? TERM_SAT * (1 - il) : 0
-  animeUniforms.uAnimeShade.value = on ? SHADE * (1 - 0.5 * night) * (1 - il) : 0
+  // 漫游（indoor）：屋里只有窗口的光斑受阳光，其余都算暗面；阴影色照原样会把整间屋子染成浑浊的紫，减半，只留一层偏冷
+  animeUniforms.uAnimeShade.value = on ? SHADE * (1 - 0.5 * night) * (1 - il) * (indoor ? INDOOR_SHADE : 1) : 0
   animeUniforms.uAnimeRim.value = on ? RIM * (1 - night) * (1 - il) : 0
   animeUniforms.uAnimeMetal.value = on ? METAL : 0
 }
