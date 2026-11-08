@@ -379,10 +379,12 @@ const POINT_PASS = /* glsl */ `
 			}
 		}
 		directLight.color *= lmPass( lmLight[ i ], lmC ) * lmPointScale;
-		// 灯光圈（lmLampPool）：按到灯的距离 / 照明范围分三档——灯下全亮、往外一圈暗一档、再往外只剩一点
+		// 灯光圈（lmLampPool）：灯（decay = 0）本身几乎是平的，只在照明范围边上收掉；这里补上灯下亮、往外暗的衰减，
+		// 按「灯离面 0.55 倍照明范围」的 1 / ( 1 + ( r / h )² ) 连续地暗下去，不分档——
+		// 墙、地板这种大平面上的灯光，动画背景里是喷枪式的柔和渐变，分档会在墙上切出一个硬边的圆
 		if ( lmLampPool > 0.0 && pointLight.distance > 0.0 ) {
 			float lmX = length( pointLight.position - geometryPosition ) / pointLight.distance;
-			float lmK = 1.0 - 0.45 * smoothstep( 0.36, 0.4, lmX ) - 0.35 * smoothstep( 0.62, 0.66, lmX );
+			float lmK = 1.0 / ( 1.0 + lmX * lmX * 3.3 );
 			// 灯在上方时朝下的面（门洞、窗洞的顶面、搁板底面）：暗档原本还收一半以上的灯光，
 			// 比专门压暗的天花板（lmPointScale 0.3）亮好几倍，门洞顶上亮出一条；压到和天花板一样
 			// （天花板自己已经乘过 lmPointScale，不再压）
