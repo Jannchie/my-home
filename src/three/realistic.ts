@@ -1,4 +1,4 @@
-// 写实光照（画面效果的 material: 'real'，「写实」「动画感」预设用）：渲染一帧前把 toon / lambert / phong 材质临时换成 PBR，画完换回。
+// 写实光照（画面效果的 material: 'real'，「写实」「手办」预设用；「动画」现在是赛璐璐光照，anime.ts）：渲染一帧前把 toon / lambert / phong 材质临时换成 PBR，画完换回。
 //   - 只在画的那一刻换：选取、高亮、缩略图、导出这些地方看到的还是原来的材质，各模块不用知道有写实模式；
 //   - 每个（原材质, 材质类别）对应一份缓存的 PBR 材质，每帧同步会变的量（颜色、自发光、透明度、贴图），灯光模块、入夜加亮照常生效；
 //   - 材质自己的 onBeforeCompile（布艺花纹、外墙、毛色、深度偏移）一并带过去：它们改的都是各材质共有的块。
@@ -12,7 +12,10 @@
 //     底层压暗当作绒毛间的自遮蔽；绒毛层只在画的那一刻挂到网格下面，画完摘掉；
 //   - 磨砂玻璃：带透射（transmission）的材质，粗糙度让后面的东西糊成一片色块透出来。
 // 环境反射（RoomEnvironment 的 PMREM）按类别给强度（金属、陶瓷强，布、纸没有），只当高光的来源：
+// 贴图本身是固定的一间亮着灯板的屋子，强度和色调跟着当前的天光、室内灯走（setRealEnv）——夜里关着灯，瓷砖、金属上不该还映着亮堂堂的灯板；
 // 环境贴图的漫反射部分清零，暗部的补光还是半球光（不然所有东西都蒙一层白）。
+// 大块的不匀（PARAMS 的 macro）：涂装、塑料、釉面、金属这些没有纹理的表面，颜色和粗糙度按几十厘米的尺度有一点点起伏——
+// 完全均匀的一整片是最像电脑画出来的地方，高光扫过去时有深有浅才像真的东西。
 // 细节的高频部分按屏幕上的变化率淡出（远处不闪），镜头静止时的多帧累积（post.ts）再把剩下的锯齿抹平。
 // 手办 / 粘土质感（画面效果 LookDef.figure，setFigure）：同一套材质上叠一层画法，不重编译：
 //   - 包裹式漫反射：明暗交界往暗面推一截，推出去的那一截带暖色（光透进粘土 / PVC 表层的感觉），明暗过渡又软又宽；
@@ -39,21 +42,23 @@ type MatKey = Mat | 'attr'
 /**
  * 各类别的参数：粗糙度、金属度、环境反射强度、布面绒光；accent：叠不叠明暗交界的冷暖色带和白色边缘光
  * （灌木不叠：一圈白边会让整块叶丛像塑料）。
+ * macro：大块不匀的程度（0 = 没有，1 = 粗糙度 ±0.06、颜色 ±2%）：越光滑、越看得见高光的越多；
+ * 布、纸、叶子自己有纹理或本来就哑，玻璃要干净，都不加。
  * 环境反射整体压低（RoomEnvironment 里的灯板比我们的半球光亮得多）；金属也不太光滑，否则阳光的镜面高光会烧成一团白、再被泛光放大
  */
-const PARAMS: Record<Mat, { rough: number; metal: number; env: number; sheen: number; accent?: number }> = {
-  paint: { rough: 0.9, metal: 0, env: 0, sheen: 0 },
-  wood: { rough: 0.72, metal: 0, env: 0.05, sheen: 0 },
+const PARAMS: Record<Mat, { rough: number; metal: number; env: number; sheen: number; accent?: number; macro?: number }> = {
+  paint: { rough: 0.9, metal: 0, env: 0, sheen: 0, macro: 0.5 },
+  wood: { rough: 0.72, metal: 0, env: 0.05, sheen: 0, macro: 0.6 },
   fabric: { rough: 0.95, metal: 0, env: 0, sheen: 0.45 },
   pile: { rough: 1, metal: 0, env: 0, sheen: 0.6 },
   bedding: { rough: 0.92, metal: 0, env: 0, sheen: 0.6 },
-  leather: { rough: 0.55, metal: 0, env: 0.08, sheen: 0 },
-  metal: { rough: 0.5, metal: 0.7, env: 0.35, sheen: 0 },
-  plastic: { rough: 0.5, metal: 0, env: 0.1, sheen: 0 },
+  leather: { rough: 0.55, metal: 0, env: 0.08, sheen: 0, macro: 0.5 },
+  metal: { rough: 0.5, metal: 0.7, env: 0.35, sheen: 0, macro: 1 },
+  plastic: { rough: 0.5, metal: 0, env: 0.1, sheen: 0, macro: 0.7 },
   glass: { rough: 0.06, metal: 0, env: 0.15, sheen: 0 },
   frosted: { rough: 0.5, metal: 0, env: 0.1, sheen: 0 },
-  ceramic: { rough: 0.22, metal: 0, env: 0.18, sheen: 0 },
-  stone: { rough: 0.68, metal: 0, env: 0.03, sheen: 0 },
+  ceramic: { rough: 0.22, metal: 0, env: 0.18, sheen: 0, macro: 1 },
+  stone: { rough: 0.68, metal: 0, env: 0.03, sheen: 0, macro: 0.6 },
   paper: { rough: 0.96, metal: 0, env: 0, sheen: 0 },
   plant: { rough: 0.6, metal: 0, env: 0.03, sheen: 0 },
   foliage: { rough: 1, metal: 0, env: 0, sheen: 0, accent: 0 },
@@ -121,6 +126,8 @@ const realUniforms = {
   uTerm: { value: 0 },
   uFlatFur: { value: 0 },
   uCel: { value: 0 },
+  /** 环境反射的倍数和色调（线性）：跟着天光、室内灯走（setRealEnv），白天约等于 1 */
+  uEnvLight: { value: new THREE.Color(1, 1, 1) },
 }
 /** 写实光照上叠的画法（post.ts 每帧按画面效果设）：手办质感、边缘光、明暗交界、纯色毛绒、赛璐璐明暗 */
 export function setRealStyle(s: { figure: number; rim: number; term: number; flatFur: number; cel: number }) {
@@ -130,6 +137,13 @@ export function setRealStyle(s: { figure: number; rim: number; term: number; fla
   realUniforms.uFlatFur.value = s.flatFur
   realUniforms.uCel.value = s.cel
 }
+/**
+ * 环境反射跟着现在屋里的光走（post.ts 每帧按天光、室内灯算好给过来）：环境贴图是固定的一间亮着灯板的屋子，
+ * 不乘这个的话夜里关着灯，釉面砖、金属、玻璃上还映着白天一样亮的灯板
+ */
+export function setRealEnv(light: THREE.Color) {
+  realUniforms.uEnvLight.value.copy(light)
+}
 
 const PARS_FRAG = /* glsl */ `
 uniform float uFigure;
@@ -137,6 +151,7 @@ uniform float uRim;
 uniform float uTerm;
 uniform float uFlatFur;
 uniform float uCel;
+uniform vec3 uEnvLight;
 varying vec3 vRP;
 varying vec3 vRN;
 varying float vMat;
@@ -146,6 +161,7 @@ ${tableGlsl('rTabMetal', (p) => p.metal)}
 ${tableGlsl('rTabEnv', (p) => p.env)}
 ${tableGlsl('rTabSheen', (p) => p.sheen)}
 ${tableGlsl('rTabAccent', (p) => p.accent ?? 1)}
+${tableGlsl('rTabMacro', (p) => p.macro ?? 0)}
 // 手办质感下的粗糙度、环境反射：统一的半光泽漆面，布类、纸哑一点，金属亮一点
 ${tableGlsl('rFigRough', (p) => (p.sheen > 0 || p.rough > 0.95 ? 0.62 : p.metal > 0 ? 0.3 : 0.42))}
 ${tableGlsl('rFigEnv', (p) => (p.sheen > 0 || p.rough > 0.95 ? 0.12 : p.metal > 0 ? 0.6 : 0.3))}
@@ -203,6 +219,14 @@ function injectDetail(sh: THREE.WebGLProgramParametersWithUniforms, perVertex: b
       '#include <color_fragment>',
       `#include <color_fragment>
   float rBump = 0.0;
+  // 大块的不匀：约 80cm 和 20cm 两层低频噪声（物体自己的坐标，家具挪动时不跟着游动），-0.5..0.5；
+  // 颜色只动一点，主要给粗糙度用（见下面 roughnessFactor）。手办是整体涂装，不要
+  float rMac = 0.0;
+  float rMacK = rTabMacro(vMat) * (1.0 - uFigure);
+  if (rMacK > 0.0) {
+    rMac = (rNoise3(vRP * 0.012) * 0.65 + rNoise3(vRP * 0.045 + 11.3) * 0.35 - 0.5) * rMacK;
+    diffuseColor.rgb *= 1.0 + 0.04 * rMac;
+  }
   // 手办质感下细节减弱（整体涂装）
   if (rIs(${I.wood}.0) > 0.0) diffuseColor.rgb *= mix(rWoodGrain(), 1.0, 0.6 * uFigure);
   float rCloth = rIs(${I.fabric}.0) + rIs(${I.pile}.0) + rIs(${I.bedding}.0);
@@ -245,7 +269,8 @@ function injectDetail(sh: THREE.WebGLProgramParametersWithUniforms, perVertex: b
       ) + GI_PARS,
     )
     // 手办质感：统一的半光泽漆面
-    .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n  roughnessFactor = mix(roughnessFactor, rFigRough(vMat), uFigure);')
+    // 粗糙度的大块不匀（rMac，上面算好的）：高光、倒影扫过去时有的地方亮一点、利落一点，有的地方散一点
+    .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n  roughnessFactor = clamp(roughnessFactor + 0.12 * rMac, 0.04, 1.0);\n  roughnessFactor = mix(roughnessFactor, rFigRough(vMat), uFigure);')
     // 手办质感：包裹式漫反射（只改漫反射，高光照旧）
     .replace(
       '#include <lights_physical_pars_fragment>',
@@ -314,7 +339,7 @@ function injectDetail(sh: THREE.WebGLProgramParametersWithUniforms, perVertex: b
   #include <lights_fragment_maps>
   #if defined( RE_IndirectSpecular )
   iblIrradiance = vec3( 0.0 );
-  radiance *= mix(rTabEnv(vMat), rFigEnv(vMat), uFigure);
+  radiance *= mix(rTabEnv(vMat), rFigEnv(vMat), uFigure) * uEnvLight;
   #endif`,
   )
   sh.fragmentShader = f

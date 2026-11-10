@@ -119,7 +119,8 @@ export function updateVolumetric(pass: ShaderPass, camera: THREE.PerspectiveCame
   if (!shadow || !depth) return
   u.tDepth.value = depth
   u.uShadow.value = shadow
-  u.uShadowMatrix.value.copy(sun.shadow.matrix)
+  // 共用同一个矩阵对象（不拷贝）：阴影矩阵在这一帧画阴影贴图时才更新，拷贝的话换太阳方向的那一帧贴图是新的、矩阵还是旧的
+  u.uShadowMatrix.value = sun.shadow.matrix
   u.uProjInv.value.copy(camera.projectionMatrixInverse)
   u.uCamWorld.value.copy(camera.matrixWorld)
   u.uSunDir.value.copy(sunDir.subVectors(sun.position, sun.target.position).normalize())
@@ -254,7 +255,8 @@ export function updateDust(pts: THREE.Points, camera: THREE.PerspectiveCamera, s
   const shadow = sun.shadow.map?.depthTexture ?? null
   if (!shadow || strength <= 0) return false
   u.uShadow.value = shadow
-  u.uShadowMatrix.value.copy(sun.shadow.matrix)
+  // 共用同一个矩阵对象（不拷贝）：阴影矩阵在这一帧画阴影贴图时才更新，拷贝的话换太阳方向的那一帧贴图是新的、矩阵还是旧的
+  u.uShadowMatrix.value = sun.shadow.matrix
   u.uSunDir.value.copy(sunDir.subVectors(sun.position, sun.target.position).normalize())
   u.uSunColor.value.copy(sun.color).multiplyScalar(sun.intensity)
   u.uAmbColor.value.copy(hemi.color).multiplyScalar(hemi.intensity)

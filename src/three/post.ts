@@ -21,7 +21,7 @@
 import * as THREE from 'three'
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
-import { isFurShell, setRealStyle, swapToPbr } from './realistic'
+import { isFurShell, setRealEnv, setRealStyle, swapToPbr } from './realistic'
 import { setReflectReuse } from './reflectFrame'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js'
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
@@ -381,7 +381,7 @@ export const LOOKS: LookDef[] = [
     crease: 0.8,
     grade: { contrast: 1.02 },
   },
-  // 写实（realistic.ts）：PBR 材质 + 环境反射、AgX 色调映射、环境光遮蔽，不描边；目标是接近室内照片的光感
+  // 写实（realistic.ts）：PBR 材质 + 环境反射、Khronos PBR Neutral 色调映射（保色，见 BaseShader）、环境光遮蔽，不描边；目标是接近室内照片的光感
   {
     id: 'real',
     label: '写实',
@@ -593,6 +593,17 @@ const WALK_LINE_FOCUS = 300
 /** 漫游体积光的浓度（每厘米光路的散射量） */
 const VOL_STRENGTH = 0.0028
 
+/**
+ * 写实的环境反射按这个亮度算 1（天光强度 × 亮度）：白天的天光 1.5 × 写实的 1.05 × 天色的亮度约 0.92。
+ * 环境贴图是固定的（realistic.ts），反射的强弱、冷暖跟着这时候屋里实际有多少光
+ */
+const ENV_LIGHT_REF = 1.45
+/** 室内灯全开时算进环境反射的光（和天光同一个量纲）：夜里开着灯，反射大约是白天的一半 */
+const ENV_LAMP = 0.7
+/** 环境反射最多到白天的多少倍（白天又开着灯时不再往上加） */
+const ENV_LIGHT_MAX = 1.25
+const envLight = new THREE.Color()
+
 /** 写实遮蔽的默认画法：中性偏暖的灰、浓（LookDef.aoShade） */
 const REAL_AO_SHADE: [number, number, number, number] = [0.36, 0.34, 0.33, 2.2]
 /** 写实光照没写灯光基调时的默认（LookDef.lighting）：阳光加强、天光照常 */
@@ -631,12 +642,14 @@ const BaseShader = {
     uBg1: { value: new THREE.Color() },
     uBg2: { value: new THREE.Color() },
     uTone: { value: 0 },
+    /** 线性空间的曝光倍数：只有带色调映射的效果用（其余效果的曝光还在 Grade 里，这里是 1） */
+    uExposure: { value: 1 },
   },
   vertexShader: VERT,
   fragmentShader: /* glsl */ `
     uniform sampler2D tDiffuse;
     uniform vec3 uBg0, uBg1, uBg2;
-    uniform float uTone;
+    uniform float uTone, uExposure;
     // Khronos PBR Neutral：three 自带的实现（toneMappingExposure 由渲染器按 1 填）。比 AgX 保色：家具配色是按原色调好的
     #include <common>
     #include <tonemapping_pars_fragment>
@@ -651,9 +664,11 @@ const BaseShader = {
       vec3 bg = r < 0.55 ? mix(uBg0, uBg1, r / 0.55) : mix(uBg1, uBg2, clamp((r - 0.55) / 0.45, 0.0, 1.0));
       float a = clamp(t.a, 0.0, 1.0);
       // 画面内容是预乘的（清屏处为 0），泛光叠在背景上也保留
-      vec3 col = t.rgb;
+      // 曝光要在色调映射之前乘（线性空间）：放在后面的调色里乘，刚被色调映射柔和压下来的高光又会顶到 1 以上、剪成一片死白。
+      // 背景（透明处的渐变底）不过色调映射，照旧只乘曝光
+      vec3 col = t.rgb * uExposure;
       if (uTone > 0.5) col = NeutralToneMapping(col);
-      gl_FragColor = vec4(toSRGB(col + toLinear(bg) * (1.0 - a)), 1.0);
+      gl_FragColor = vec4(toSRGB(col + toLinear(bg) * uExposure * (1.0 - a)), 1.0);
     }`,
 }
 
@@ -1091,12 +1106,16 @@ const GradeShader = {
     uGrain: { value: 0 },
     uLut: { value: BLANK_LUT as THREE.Data3DTexture },
     uLutMix: { value: 0 },
+    /** 对比度用不剪切的 S 曲线（带色调映射的效果）；0 = 原来的直线 */
+    uSCurve: { value: 0 },
+    /** 过曝处保色相（黑白漫画读的是编码，不开） */
+    uShoulder: { value: 0 },
   },
   vertexShader: VERT,
   fragmentShader: /* glsl */ `
     uniform sampler2D tDiffuse;
     uniform highp sampler3D uLut;
-    uniform float uLutMix;
+    uniform float uLutMix, uSCurve, uShoulder;
     uniform vec2 uRes;
     uniform float uScale, uExposure, uContrast, uSaturation, uFade, uMono, uSepia, uHaze, uVignette, uCA, uPaper, uGrain;
     uniform vec3 uGain, uShadowTint, uHighTint, uFadeColor, uHazeColor, uVigColor;
@@ -1111,11 +1130,31 @@ const GradeShader = {
         c = vec3(texture2D(tDiffuse, uv + off).r, texture2D(tDiffuse, uv).g, texture2D(tDiffuse, uv - off).b);
       } else c = texture2D(tDiffuse, uv).rgb;
       c *= uExposure;
-      c = (c - 0.5) * uContrast + 0.5;
+      if (uSCurve > 0.5 && uContrast > 1.0) {
+        // 直线的对比（绕 0.5 拉开）两头都会剪切：亮部顶成死白、暗部压成死黑。换成 S 曲线（smoothstep，中点斜率 1.5）
+        // 按比例混进来，中点的斜率还是 uContrast，两头贴着 0 和 1 收住；超过 1.5 的那一点再按直线补
+        float k = min((uContrast - 1.0) * 2.0, 1.0);
+        vec3 x = clamp(c, 0.0, 1.0);
+        c = mix(c, x * x * (3.0 - 2.0 * x), k);
+        c = (c - 0.5) * (uContrast / (1.0 + 0.5 * k)) + 0.5;
+      } else c = (c - 0.5) * uContrast + 0.5;
       float l = luma(c);
       c = mix(vec3(l), c, uSaturation);
       c += mix(uShadowTint, uHighTint, smoothstep(0.15, 0.85, l));
       c *= uGain;
+      // 过曝处保色相：逐通道剪到 1 时，先顶到头的通道不再涨、别的还在涨，颜色就偏了（阳光下的奶油色墙偏成柠檬黄，
+      // 暖色灯下的木头偏黄绿）。最大的通道超过 1 时，色相按剪切之前的算，最亮、最暗的两个通道和直接剪切完全一样，
+      // 只把中间那个通道摆回原来的色相上；没过曝的像素（三个通道都不到 1）一点不变，三个通道都过曝的照旧是白
+      if (uShoulder > 0.5) {
+        c = max(c, 0.0);
+        float mx = max(c.r, max(c.g, c.b));
+        if (mx > 1.0) {
+          float mn = min(c.r, min(c.g, c.b));
+          vec3 h = c / mx;
+          float t = clamp((min(mn, 1.0) - mn / mx) / max(1.0 - mn / mx, 1e-4), 0.0, 1.0);
+          c = mix(h, vec3(1.0), t);
+        }
+      }
       c = clamp(c, 0.0, 1.0);
       // 3D LUT（lut.ts）：按格子中心取样
       if (uLutMix > 0.0) c = mix(c, texture(uLut, c * ${((LUT_SIZE - 1) / LUT_SIZE).toFixed(6)} + ${(0.5 / LUT_SIZE).toFixed(6)}).rgb, uLutMix);
@@ -1214,7 +1253,10 @@ export interface Post {
   dispose: () => void
 }
 
-/** 窗玻璃（kit.ts 的 C.glass，半透明）：入夜后透出暖光 */
+/**
+ * 玻璃（kit.ts 的 C.glass，半透明）：入夜后透出暖光。按颜色认，认到的不只是窗（windows.ts 的 userData.windowGlass）：
+ * 门上的玻璃、栏板的玻璃、玻璃桌面、鱼缸也是这个颜色、也跟着亮——所以不能直接换成只认窗的那个标记（门玻璃就不亮了）
+ */
 const GLASS_HEX = 'bfe6ff'
 const WINDOW_GLOW = new THREE.Color('#ffcf8a')
 /** 室内灯光模块自己控制的发光材质（userData 标记，见 three/lights.ts 的 LAMP_GLOW） */
@@ -1439,7 +1481,12 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
     }
     const g = { ...NEUTRAL, ...look.grade }
     const u = p.grade.uniforms
-    u.uExposure.value = g.exposure
+    // 带色调映射的效果（写实、手办）：曝光挪到 Base 里、色调映射之前乘。预设和滑杆上的数是按显示空间调的，
+    // 换到线性空间按 2.2 次方折算，中间调的亮度和原来一样，只是高光改成柔和地收住；对比度用不剪切的 S 曲线
+    ub.uExposure.value = look.tone ? Math.pow(Math.max(0, g.exposure), 2.2) : 1
+    u.uExposure.value = look.tone ? 1 : g.exposure
+    u.uSCurve.value = look.tone ? 1 : 0
+    u.uShoulder.value = manga ? 0 : 1
     u.uContrast.value = g.contrast
     u.uSaturation.value = g.saturation
     u.uGain.value.set(g.gain)
@@ -1494,6 +1541,17 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
       flatFur: real && current.flatFur ? 1 : 0,
       cel: real ? (current.cel ?? 0) : 0,
     })
+    // 环境反射（固定的一张贴图）跟着屋里现在的光：天光（已经带着时间、室外光滑杆、夜里开灯的补光）+ 室内灯（色温色）。
+    // 夜里关着灯时反射几乎没有；色调只带一半（全带的话黄昏、夜里所有高光都染成一个颜色）
+    if (real) {
+      const h = stage.hemi
+      const lamp = ENV_LAMP * Math.max(0, indoor)
+      envLight.setRGB(h.color.r * h.intensity + windowGlow.r * lamp, h.color.g * h.intensity + windowGlow.g * lamp, h.color.b * h.intensity + windowGlow.b * lamp)
+      const l = lumOf(envLight)
+      const k = Math.min(ENV_LIGHT_MAX, l / ENV_LIGHT_REF) / Math.max(1e-4, l)
+      envLight.setRGB((envLight.r + l) * 0.5 * k, (envLight.g + l) * 0.5 * k, (envLight.b + l) * 0.5 * k)
+      setRealEnv(envLight)
+    }
     // 线的粗细跟着阳光（赛璐璐的「动画」类，不含插画）：受光侧细、背光侧粗；入夜退掉
     const ls = outlineUniforms.uLineSun.value
     ls.w = linear && !current.material && !current.illust && current.stylize === undefined ? 1 - night : 0
@@ -1749,7 +1807,7 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
           updateCrease(p.crease, camera, p.ao?.normalTexture ?? null, p.ao?.depthTexture ?? null, renderer.getDrawingBufferSize(bufRes), creaseOf(current), renderer.getPixelRatio(), false, walking ? WALK_LINE_FOCUS : camera.position.distanceTo(focus), (current.outline ?? 1) > 0)
         }
         const shafts = VOL_STRENGTH * (current.shafts ?? 1) * (1 - sky.night)
-        if (p.ao?.enabled) updateAOSun(p.ao, camera, stage.sun, AO_SUN_FADE * (1 - sky.night))
+        if (p.ao?.enabled) updateAOSun(p.ao, camera, stage.sun, AO_SUN_FADE * (1 - sky.night) * sunShare(stage.sun, stage.hemi, indoor))
         if (p.vol?.enabled) updateVolumetric(p.vol, camera, stage.sun, p.ao?.depthTexture ?? null, shafts, tick)
         const fd = current.fog
         if (p.fog?.enabled && fd) {
@@ -2200,6 +2258,22 @@ function createAO(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THR
 
 /** 直射处遮蔽退掉多少（Saltline 的做法：留两成，直射的角落还是略有一点暗） */
 const AO_SUN_FADE = 0.8
+/**
+ * 阳光在总光照里占到这么多就按完全退掉算。平常的白天各画面效果都在 0.5–0.65（阳光 2 × 0.9，天光 1.5–1.9 × 0.9），
+ * 所以白天还是 AO_SUN_FADE；太阳贴着地平线（阳光强度掉到零点几）、或者室外光调得很低而屋里开着灯时，
+ * 「直射到」的地方其实主要还是环境光 / 灯光在照，遮蔽就不该退那么多
+ */
+const AO_SUN_SHARE_FULL = 0.5
+/** 室内灯全开时大约相当于多少天光（和半球光强度 × 亮度同一个量纲）：只用来估阳光占比，不参与光照 */
+const AO_LAMP_AMBIENT = 1
+const lumOf = (c: THREE.Color) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
+/** 阳光占总光照的比例换成 0–1 的系数（乘到遮蔽的退让量上）；indoor = 室内亮灯程度（setIndoor） */
+function sunShare(sun: THREE.DirectionalLight, hemi: THREE.HemisphereLight, indoor: number) {
+  const s = sun.visible ? sun.intensity * lumOf(sun.color) : 0
+  if (!(s > 0)) return 0
+  const amb = hemi.intensity * lumOf(hemi.color) + AO_LAMP_AMBIENT * Math.max(0, indoor)
+  return Math.min(1, s / (s + amb) / AO_SUN_SHARE_FULL)
+}
 
 /** 每帧画之前：给遮蔽合成那一遍太阳的阴影贴图、方向（视空间）和镜头矩阵；没有阴影贴图（第一帧）或入夜时不退 */
 function updateAOSun(pass: GTAOPass, camera: THREE.PerspectiveCamera, sun: THREE.DirectionalLight, fade: number) {
