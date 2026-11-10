@@ -1139,6 +1139,12 @@ const GradeShader = {
         float g = hash12(floor(uv * uRes / max(1.0, uScale * 0.8))) - 0.5;
         c += g * uGrain * (1.0 - abs(luma(c) - 0.5) * 1.2);
       }
+      // 抖动：屏幕是每通道 8 位，天空、墙面的大块缓变会量化成一圈圈色带；加约 ±0.5 级的噪声把台阶打散
+      // （两个 IGN 相关，合起来近似均匀分布、幅度小：平涂类效果导出的图不会因此多出大片低位噪声）。
+      // 噪声按像素固定（interleaved gradient noise，不随帧变），画面静止时不闪，多帧累积也不受影响
+      vec2 fc = gl_FragCoord.xy;
+      float dn = fract(52.9829189 * fract(dot(fc, vec2(0.06711056, 0.00583715)))) + fract(52.9829189 * fract(dot(fc + vec2(47.0, 17.0), vec2(0.06711056, 0.00583715)))) - 1.0;
+      c += dn / 255.0;
       gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
     }`,
 }
@@ -1743,6 +1749,7 @@ export function attachPost(stage: Stage, opts: { low?: boolean } = {}): Post {
           updateCrease(p.crease, camera, p.ao?.normalTexture ?? null, p.ao?.depthTexture ?? null, renderer.getDrawingBufferSize(bufRes), creaseOf(current), renderer.getPixelRatio(), false, walking ? WALK_LINE_FOCUS : camera.position.distanceTo(focus), (current.outline ?? 1) > 0)
         }
         const shafts = VOL_STRENGTH * (current.shafts ?? 1) * (1 - sky.night)
+        if (p.ao?.enabled) updateAOSun(p.ao, camera, stage.sun, AO_SUN_FADE * (1 - sky.night))
         if (p.vol?.enabled) updateVolumetric(p.vol, camera, stage.sun, p.ao?.depthTexture ?? null, shafts, tick)
         const fd = current.fog
         if (p.fog?.enabled && fd) {
@@ -2119,6 +2126,19 @@ function createAO(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THR
   // 写实：不分档，按遮蔽量连续压暗（中性偏暖的灰）
   blend.uniforms.uReal = { value: 0 }
   blend.uniforms.uRealShade = { value: new THREE.Vector4(...REAL_AO_SHADE) }
+  // 遮蔽只该压环境光：被太阳直射的地方（地上的光斑、窗台）直射光不受「角落」影响，照样压暗就成了光斑里的脏边。
+  // 这里按像素查太阳的阴影贴图（和地上的光斑同一张）再乘朝向，直射到的地方把遮蔽退掉（updateAOSun 每帧给）
+  Object.assign(blend.uniforms, {
+    tDepth: { value: null as THREE.Texture | null },
+    tNormal: { value: null as THREE.Texture | null },
+    uShadow: { value: null as THREE.Texture | null },
+    uShadowMatrix: { value: new THREE.Matrix4() },
+    uProjInv: { value: new THREE.Matrix4() },
+    uCamWorld: { value: new THREE.Matrix4() },
+    uShadowTexel: { value: 1 / 2048 },
+    uSunDirV: { value: new THREE.Vector3(0, 1, 0) },
+    uSunFade: { value: 0 },
+  })
   blend.fragmentShader = /* glsl */ `
     uniform float intensity;
     uniform float uReal;
@@ -2126,8 +2146,46 @@ function createAO(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THR
     uniform vec3 uShade;
     uniform sampler2D tDiffuse;
     varying vec2 vUv;
+    // 阴影贴图只在有太阳时才绑（AO_SUN 由 updateAOSun 开关）：sampler2DShadow 上不能挂空纹理，挂了整遍合成画不出来
+    #ifdef AO_SUN
+    uniform sampler2D tDepth;
+    uniform sampler2D tNormal;
+    uniform sampler2DShadow uShadow;
+    uniform mat4 uShadowMatrix;
+    uniform mat4 uProjInv;
+    uniform mat4 uCamWorld;
+    uniform float uShadowTexel;
+    uniform vec3 uSunDirV;
+    uniform float uSunFade;
+
+    // 这一点被太阳直射的程度（0..1）：朝向 × 阴影贴图（5 个取样的小 PCF，和光斑的软边差不多宽）
+    float sunDirect() {
+      vec3 n = normalize(texture2D(tNormal, vUv).xyz * 2.0 - 1.0);
+      float facing = smoothstep(0.02, 0.25, dot(n, uSunDirV));
+      if (facing <= 0.0) return 0.0;
+      float depth = texture2D(tDepth, vUv).x;
+      if (depth >= 1.0) return 0.0;
+      vec4 v = uProjInv * vec4(vUv * 2.0 - 1.0, depth * 2.0 - 1.0, 1.0);
+      v /= v.w;
+      // 沿法线抬一点（cm）再查，免得表面自己挡自己
+      vec3 p = (uCamWorld * vec4(v.xyz + n * 1.5, 1.0)).xyz;
+      vec4 sc = uShadowMatrix * vec4(p, 1.0);
+      sc.xyz /= sc.w;
+      if (sc.x < 0.0 || sc.y < 0.0 || sc.x > 1.0 || sc.y > 1.0 || sc.z > 1.0) return 0.0;
+      float z = sc.z - 0.0005;
+      float o = uShadowTexel * 1.5;
+      float lit = texture(uShadow, vec3(sc.xy, z)) * 0.4
+        + (texture(uShadow, vec3(sc.xy + vec2(o, 0.0), z)) + texture(uShadow, vec3(sc.xy - vec2(o, 0.0), z))
+         + texture(uShadow, vec3(sc.xy + vec2(0.0, o), z)) + texture(uShadow, vec3(sc.xy - vec2(0.0, o), z))) * 0.15;
+      return lit * facing;
+    }
+    #endif
+
     void main() {
       float occ = (1.0 - texture2D(tDiffuse, vUv).r) * intensity;
+      #ifdef AO_SUN
+      if (occ > 0.0) occ *= 1.0 - uSunFade * sunDirect();
+      #endif
       // 两档：浅的遮蔽不画，过了阈值就是一整块阴影
       if (uReal > 0.5) {
         gl_FragColor = vec4(mix(vec3(1.0), uRealShade.rgb, clamp(occ * uRealShade.a, 0.0, 1.0)), 1.0);
@@ -2138,4 +2196,33 @@ function createAO(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THR
     }`
   blend.needsUpdate = true
   return pass
+}
+
+/** 直射处遮蔽退掉多少（Saltline 的做法：留两成，直射的角落还是略有一点暗） */
+const AO_SUN_FADE = 0.8
+
+/** 每帧画之前：给遮蔽合成那一遍太阳的阴影贴图、方向（视空间）和镜头矩阵；没有阴影贴图（第一帧）或入夜时不退 */
+function updateAOSun(pass: GTAOPass, camera: THREE.PerspectiveCamera, sun: THREE.DirectionalLight, fade: number) {
+  const m = pass.blendMaterial
+  const u = m.uniforms
+  const shadow = sun.shadow.map?.depthTexture ?? null
+  const on = !!shadow && sun.castShadow && sun.visible && sun.intensity > 0 && fade > 0
+  // 开关只在入夜 / 天亮、第一帧时变，重编译一次
+  if (on !== ('AO_SUN' in m.defines)) {
+    if (on) m.defines.AO_SUN = ''
+    else delete m.defines.AO_SUN
+    m.needsUpdate = true
+  }
+  if (!on) return
+  u.uSunFade.value = fade
+  u.tDepth.value = pass.depthTexture
+  u.tNormal.value = pass.normalTexture
+  u.uShadow.value = shadow
+  // 共享引用：阴影矩阵在这一帧画阴影时才更新，uniform 绘制时才上传，这样拿到的是当帧的（拷贝会晚一帧）
+  u.uShadowMatrix.value = sun.shadow.matrix
+  u.uShadowTexel.value = 1 / sun.shadow.mapSize.x
+  u.uProjInv.value.copy(camera.projectionMatrixInverse)
+  u.uCamWorld.value.copy(camera.matrixWorld)
+  // 法线图是视空间的（MeshNormalMaterial）：太阳方向也转到视空间
+  u.uSunDirV.value.subVectors(sun.position, sun.target.position).normalize().transformDirection(camera.matrixWorldInverse)
 }

@@ -62,12 +62,18 @@ const ReflectShader = {
     varying vec2 vGloss;
     void main() {
       vec2 st = vUv.xy / vUv.w;
-      // 9 个采样的小模糊：粗糙的木地板倒影是糊的
-      vec2 r = uTexel * vGloss.y;
-      vec4 c = texture2D(tDiffuse, st) * 0.2;
-      c += (texture2D(tDiffuse, st + vec2(r.x, 0.0)) + texture2D(tDiffuse, st - vec2(r.x, 0.0)) + texture2D(tDiffuse, st + vec2(0.0, r.y)) + texture2D(tDiffuse, st - vec2(0.0, r.y))) * 0.12;
-      c += (texture2D(tDiffuse, st + r) + texture2D(tDiffuse, st - r) + texture2D(tDiffuse, st + vec2(r.x, -r.y)) + texture2D(tDiffuse, st + vec2(-r.x, r.y))) * 0.08;
       vec3 V = normalize(cameraPosition - vWorld);
+      // 亮面地板的倒影是「顺着视线拉长的一片光泽」，不是一面糊了的镜子（湿地面、打蜡地板都是这样）：
+      //   - 模糊按 mip 层取（倒影纹理带 mipmap），半径大时也平滑，不会像固定偏移的 9 点那样出重影；
+      //   - 采样沿画面竖直方向拉开（倒影纹理的 v 就是画面的竖直），横向只有一点；
+      //   - 越贴着地面看越清楚（掠射角下光泽收紧），俯视时最糊
+      float graz = pow(1.0 - clamp(V.y, 0.0, 1.0), 4.0);
+      float blur = vGloss.y * mix(1.0, 0.45, graz);
+      float lod = log2(max(blur * 0.75, 1.0));
+      vec2 r = uTexel * blur * vec2(0.6, 2.2);
+      vec4 c = textureLod(tDiffuse, st, lod) * 0.32;
+      c += (textureLod(tDiffuse, st + vec2(0.0, r.y * 0.5), lod) + textureLod(tDiffuse, st - vec2(0.0, r.y * 0.5), lod)) * 0.2;
+      c += (textureLod(tDiffuse, st + vec2(r.x, r.y), lod + 0.5) + textureLod(tDiffuse, st - vec2(r.x, r.y), lod + 0.5)) * 0.14;
       // 风格化的菲涅尔：真实的 Schlick（F0≈0.04）在平常俯视地面的角度只有百分之几，看不出是亮面；
       // 这里俯视也留五分之一，越贴着地面看越接近上限
       float f = mix(0.2, 1.0, pow(1.0 - clamp(V.y, 0.0, 1.0), 2.0));
@@ -199,6 +205,10 @@ export class FloorReflections {
       geo.setAttribute('aGloss', new THREE.Float32BufferAttribute(g.gloss, 2))
       geo.computeBoundingSphere()
       const mesh = new Reflector(geo, { textureWidth: 512, textureHeight: 512, clipBias: 0.002, multisample: 0, shader: ReflectShader })
+      // 倒影纹理带 mipmap：着色器按模糊半径取 mip 层（每次画完倒影，渲染器自动生成）
+      const tex = mesh.getRenderTarget().texture
+      tex.generateMipmaps = true
+      tex.minFilter = THREE.LinearMipmapLinearFilter
       const mat = mesh.material as THREE.ShaderMaterial
       mat.transparent = true
       mat.depthWrite = false
