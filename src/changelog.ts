@@ -12,6 +12,33 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '1.21.0',
+    date: '2026-11-11',
+    notes: {
+      zh: [
+        '3D 沙盘的「写实」「手办」画风：阳光直射的白墙和天空不再剪成一片死白，亮部保留层次',
+        '阳光照到的过亮区域保持原本的色相，奶油色墙不再在强光下发黄',
+        '「写实」画风的反光跟随天光和室内灯：夜里关灯后几乎不再反光，开灯后反光偏暖；金属、陶瓷等表面多了很淡的大块深浅变化',
+        '阳光直射处的环境光遮蔽变淡，不再在亮面上出现脏灰的阴影',
+        '地板上的反光改为随粗糙度柔和地模糊，暗部渐变不再出现色带',
+      ],
+      ja: [
+        '3D ジオラマの「リアル」「フィギュア」風：日差しの当たる白い壁や空が真っ白に飛ばなくなり、明るい部分の階調が残るようになりました',
+        '強い光が当たって明るくなりすぎた部分も元の色合いを保ち、クリーム色の壁が強い光で黄色っぽくならなくなりました',
+        '「リアル」風の映り込みが空の明るさと室内照明に連動します：夜に照明を消すとほぼ映り込まず、点けると暖かい色で映ります。金属や陶器などの表面にごく淡い大きなムラが加わりました',
+        '日差しの当たる面では環境遮蔽が弱まり、明るい面にくすんだ影が出なくなりました',
+        '床の映り込みが粗さに応じてやわらかくぼけるようになり、暗い部分のグラデーションに縞が出なくなりました',
+      ],
+      en: [
+        'Realistic and figure looks in the 3D diorama: sunlit white walls and the sky no longer clip to flat white, keeping detail in the highlights',
+        'Over-bright sunlit areas keep their hue, so cream walls no longer turn yellow under strong light',
+        'Realistic-look reflections now follow daylight and indoor lamps: almost none at night with the lights off, warm ones with them on; metal, ceramic and similar surfaces get a faint large-scale variation',
+        'Ambient occlusion fades where direct sun hits, so lit surfaces no longer show grimy shading',
+        'Floor reflections blur softly with surface roughness, and dark gradients no longer show banding',
+      ],
+    },
+  },
+  {
     version: '1.20.0',
     date: '2026-11-08',
     notes: {
