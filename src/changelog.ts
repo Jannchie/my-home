@@ -12,6 +12,39 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '1.22.0',
+    date: '2026-11-24',
+    notes: {
+      zh: [
+        '素材库新增 250 多件，总数超过 3200：乒乓球桌、桌上足球、街机、抓娃娃机、弹珠台、点唱机、按摩椅、赛车模拟器；围炉里、长火钵、茶道具、和伞等和风物件；春联、灯笼、年桔等年节摆设',
+        '更多新素材：轮椅、护理床、灭火器、保险箱；烧烤炉、遮阳伞、充气泳池、蹲踞；儿童自行车、电动滑板车、妈妈自行车；二胡、古琴、扬琴、手碟、铜管乐器；汉堡、小笼包等餐食；塔扇、绘图桌、裁缝人台；自动喂食器、婴儿摇椅；健身器材；立式空调、奖杯陈列柜、浴帘；袜子、睡衣、浴袍等衣物',
+        '吸顶灯新增吊扇灯、和纸球形吊灯、藤编钟形吊灯、轨道射灯、环形吊灯',
+        '逐件检查并修正了全库模型：悬空或没接上的零件、互相穿插的部件、会闪烁的重叠表面、沉到地下的脚、尺寸和实物不符的地方',
+        '深色配色的阴影部分不再变成死黑，看得出是同一种材料',
+        '很多零件繁多的素材面数大幅减少（藤编、格栅、棋子、硬币、笼子等），场景更流畅',
+        '婴儿用品只会摆在有婴儿的家里',
+      ],
+      ja: [
+        '素材を 250 点以上追加し、合計 3200 点を超えました：卓球台、テーブルサッカー、アーケード筐体、クレーンゲーム、ピンボール、ジュークボックス、マッサージチェア、レーシングシミュレーター。囲炉裏、長火鉢、茶道具、和傘などの和の道具。春聯、提灯、年桔などのお正月飾り',
+        'ほかにも追加：車椅子、介護ベッド、消火器、金庫。バーベキューグリル、パラソル、ビニールプール、蹲踞。子ども用自転車、電動キックボード、ママチャリ。二胡、古琴、揚琴、ハンドパン、金管楽器。ハンバーガー、小籠包などの料理。タワーファン、製図台、トルソー。自動給餌器、バウンサー。フィットネス器具。床置きエアコン、トロフィーケース、シャワーカーテン。靴下、パジャマ、バスローブなどの衣類',
+        'シーリングライトにシーリングファンライト、和紙ボールペンダント、ラタンペンダント、ダクトレールスポット、リングペンダントを追加しました',
+        '全素材のモデルを一点ずつ点検して修正しました：浮いている・つながっていない部品、めり込んだ部品、ちらつく重なった面、床に沈んだ脚、実物と合わない寸法など',
+        '濃い色の配色で影になる部分が真っ黒にならず、同じ素材に見えるようになりました',
+        '部品の多い素材（籐、格子、碁石、コイン、ケージなど）のポリゴン数を大きく減らし、動作が軽くなりました',
+        'ベビー用品は赤ちゃんのいる家にだけ置かれるようになりました',
+      ],
+      en: [
+        'Over 250 new assets, bringing the library past 3,200: ping-pong, foosball and air hockey tables, an arcade cabinet, claw machine, pinball machine, jukebox, massage chair and racing rig; Japanese pieces such as an irori hearth, long hibachi, tea ceremony set and paper umbrella; Lunar New Year couplets, lanterns and kumquat trees',
+        'More new assets: wheelchair, care bed, fire extinguisher and safe; grills, a patio umbrella, kiddie pool and tsukubai; kids bikes, an e-scooter and a mamachari; erhu, guqin, yangqin, handpan and brass; burgers, xiaolongbao and other dishes; a tower fan, drafting table and dress form; an auto feeder and baby bouncer; fitness gear; a tower air conditioner, trophy cabinet and shower curtain; socks, pajamas, bathrobes and other clothing',
+        'New ceiling lights: ceiling fan light, paper globe, rattan bell pendant, track spotlights and ring pendant',
+        'Every model in the library was checked and fixed: floating or unconnected parts, parts passing through each other, flickering overlapping surfaces, legs sinking into the floor and sizes that did not match the real thing',
+        'Shadowed parts of dark color schemes no longer turn pure black, so they still read as the same material',
+        'Much lower polygon counts on many detailed assets (rattan, lattices, game pieces, coins, cages), for smoother scenes',
+        'Baby items are only placed in homes that have a baby',
+      ],
+    },
+  },
+  {
     version: '1.21.0',
     date: '2026-11-11',
     notes: {
