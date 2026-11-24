@@ -51,7 +51,8 @@ function shark(L: number) {
     // 白肚皮：同一条轮廓稍微压扁、往下挪，从下半边透出来，分界线是顺滑的曲线
     const tummy = mesh(geo, belly)
     tummy.scale.set(0.985, 0.86, 1.03)
-    tummy.position.set(L * 0.008, H * 0.42, 0)
+    // 压扁到 0.86 的肚皮半高是 0.43H：中心放在 0.43H，最低点正好落地（放 0.42H 会陷进地面 0.2cm）
+    tummy.position.set(L * 0.008, H * 0.43, 0)
     g.add(body, tummy)
     const t = Math.max(0.6, L * 0.022)
     // 背鳍：前缘凸、后缘内凹，往后掠

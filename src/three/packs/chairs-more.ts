@@ -6,7 +6,7 @@
 
 import * as THREE from 'three'
 import { ball, cup, cyl, puck, rbox, shade, torus } from '../toon'
-import { C, G, holePanel, shell, type AssetDef } from '../kit'
+import { C, G, holePanel, type AssetDef } from '../kit'
 import { PI, cappedTube, fitChildren, mesh, strut, strutBox, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, R, pal } from '../packkit'
 
@@ -42,7 +42,8 @@ function starBase(r0: number, top: number, frame: string) {
     g.add(ball(2.5, INK, { x: sx * r0, y: 2.5, z: sz * r0 }, [0.7, 1, 1]))
   }
   g.add(cyl(3, 3.4, Math.min(16, top - 14), INK, { y: 10 }, 14))
-  g.add(cyl(2, 2, top - 11, CHROME, { y: 11 }, 12))
+  // 气压杆顶端停在 top 下面 0.6：座下的机构盒顶面正好在 top，同高时两个顶面重合
+  g.add(cyl(2, 2, top - 11.6, CHROME, { y: 11 }, 12))
   return g
 }
 
@@ -102,6 +103,8 @@ const xSlat = (open: boolean) => (p: string[]) => {
     g.add(strutBox([-20, 8, 20 - (41 * 8) / 86], [20, 8, 20 - (41 * 8) / 86], 2.4, 2.4, frame))
     g.add(strutBox([-17.4, 6, -15.5], [17.4, 6, -15.5], 2.4, 2.4, frame))
     for (let i = 0; i < 6; i++) g.add(rbox(38.6, 2, 4.6, slat, { y: 44, z: -14 + i * 5.6 }, 0.6))
+    // 座框侧梁：托住六根座条，前端接短腿顶、中段贴着长腿（以前只有最前一根座条搭在短腿上，其余悬空）
+    for (const s of [-1, 1]) g.add(strutBox([s * 18.4, 42.9, -16.4], [s * 18.4, 42.9, 16.6], 2.8, 2.6, frame))
     for (const y of [62, 71, 80]) g.add(rbox(40, 6, 1.8, slat, { y, z: zA(y + 3) - 2.2, rx: 0.45 }, 0.6))
   } else {
     for (const s of [-1, 1]) {
@@ -130,7 +133,8 @@ const directorTall = (open: boolean) => (p: string[]) => {
     g.add(strutBox([-hx + 1, 38, sz * 20], [hx - 1, 70, sz * 20], 2.2, 2.2, frame))
     g.add(strutBox([hx - 1, 38, sz * 20], [-hx + 1, 70, sz * 20], 2.2, 2.2, frame))
   }
-  g.add(strutBox([-hx - 1.5, 27, 21.2], [hx + 1.5, 27, 21.2], 3.4, 3.4, shade(frame, -0.1)))
+  // 脚踏两端比腿的外侧面多伸出 0.5（齐平时端面和腿的侧面重合）
+  g.add(strutBox([-hx - 2, 27, 21.2], [hx + 2, 27, 21.2], 3.4, 3.4, shade(frame, -0.1)))
   if (open) {
     g.add(rbox(46, 1, 38, canvas, { y: 74.5 }, 0.4))
     g.add(rbox(48, 20, 1, canvas, { y: 100, z: -21.2 }, 0.4))
@@ -365,19 +369,42 @@ function lowStool(p: string[]) {
   return g
 }
 
+/**
+ * 底边中间开拱形缺口的竖板（宽 w、高 h、厚 t，x / z 居中，底在 y = 0）：缺口直接画进外轮廓。
+ * 用 holePanel 开「贴着底边的洞」不行：洞和外轮廓共边，三角剖分会坏，洞开不出来（整面还是实心的）。
+ */
+function archPanel(w: number, h: number, t: number, color: string, aw: number, ah: number) {
+  const r = aw / 2
+  const s = new THREE.Shape()
+  s.moveTo(-w / 2, 0)
+  s.lineTo(-r, 0)
+  s.lineTo(-r, ah - r)
+  s.absarc(0, ah - r, r, PI, 0, true)
+  s.lineTo(r, 0)
+  s.lineTo(w / 2, 0)
+  s.lineTo(w / 2, h)
+  s.lineTo(-w / 2, h)
+  s.closePath()
+  const bevel = 0.3
+  const geo = new THREE.ExtrudeGeometry(s, { depth: t - bevel * 2, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelOffset: -bevel, bevelSegments: 1, curveSegments: 12 })
+  geo.translate(0, 0, -t / 2 + bevel)
+  return mesh(geo, color)
+}
+
 /** 儿童小凳（塑料，座高 24）：四面拱形开口 + 顶面提手孔 + 一对小耳朵 [主色, 耳朵 / 点缀] */
 function kidStool(p: string[]) {
   const [body, ear] = p
-  const g = G(
-    shell(32, 23, 24, 1.6, body, {
-      front: [{ kind: 'arch', x: 0, y: 0, w: 20, h: 13 }],
-      back: [{ kind: 'arch', x: 0, y: 0, w: 20, h: 13 }],
-      left: [{ kind: 'arch', x: 0, y: 0, w: 12, h: 11 }],
-      right: [{ kind: 'arch', x: 0, y: 0, w: 12, h: 11 }],
-      top: false,
-      bottom: false,
-    }),
-  )
+  const [w, d, h, t] = [32, 23, 24, 1.6]
+  const g = new THREE.Group()
+  // 前后板盖住全宽，左右板夹在中间；四面的拱形缺口一直开到地面，剩下四个角当腿
+  for (const s of [-1, 1]) {
+    const fb = archPanel(w, h, t, body, 20, 13)
+    fb.position.z = s * (d / 2 - t / 2)
+    const lr = archPanel(d - t * 2, h, t, body, 12, 11)
+    lr.position.x = s * (w / 2 - t / 2)
+    lr.rotation.y = PI / 2
+    g.add(fb, lr)
+  }
   g.add(holePanel(33, 25, 2, body, [{ kind: 'rect', x: 0, y: 16, w: 10, h: 3, r: 1.5 }], { y: 24, z: -12.5, rx: PI / 2 }, 4))
   for (const s of [-1, 1]) g.add(ball(3.2, ear, { x: s * 11, y: 24.8, z: -10 }, [1, 0.8, 0.5]))
   return g
@@ -538,8 +565,9 @@ function kneelRock(p: string[]) {
     m.position.x = s * 19 + (s < 0 ? 0 : 2.4)
     g.add(m)
   }
-  g.add(strutBox([-18, 6, 0], [18, 6, 0], 3.4, 3.4, wood))
-  g.add(strutBox([-18, 46, -27], [18, 46, -27], 3, 3, wood))
+  // 两根横档伸进侧板里（侧板内侧面在 x = ±18.6，以前横档只到 ±18，差 0.6 没接上）
+  g.add(strutBox([-19.6, 6, 0], [19.6, 6, 0], 3.4, 3.4, wood))
+  g.add(strutBox([-19.6, 46, -27], [19.6, 46, -27], 3, 3, wood))
   g.add(hinge([0, 50, -27], 0.32, rbox(42, 6, 30, pad, { y: 50, z: -15 }, 2.4)))
   g.add(hinge([0, 18, 20], 0.5, rbox(42, 5, 18, pad, { y: 15, z: 20 }, 2)))
   return g
@@ -597,7 +625,8 @@ function bentwood(p: string[]) {
   }
   g.add(cappedTube([[-12, 86, -21], [-6, 88.5, -22.5], [0, 89, -23], [6, 88.5, -22.5], [12, 86, -21]], 1.4, wood, TUBE))
   g.add(cappedTube([[-14, 58, -16.5], [-9, 64, -19], [0, 66, -20], [9, 64, -19], [14, 58, -16.5]], 1, wood, TUBE))
-  g.add(torus(15.4, 0.9, wood, { y: 20, rx: PI / 2 }))
+  // 腿间加固圈：四条腿在 y = 20 处离中心约 21.3（圆心 z ≈ -0.2），圈贴着腿的内侧；原来半径 15.4，离腿 5cm 悬空
+  g.add(torus(19.4, 0.9, wood, { y: 20, z: -0.2, rx: PI / 2 }))
   return g
 }
 

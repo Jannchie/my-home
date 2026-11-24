@@ -94,8 +94,8 @@ function pillow(w: number, d: number, color: string, x: number, y: number, z: nu
 
 /** 被子：沿 z 铺（儿童床），靠床头一侧有一道翻折的白被头 */
 function duvetZ(g: THREE.Group, w: number, l: number, y: number, z: number, color: string, x = 0) {
-  // 儿童床四周多有围栏：两侧、床尾只垂下一点点
-  const d = duvet({ w, len: l, top: y + 6, z1: z + l / 2, drop: 2, thick: 3, color, seed: l })
+  // 儿童床四周多有围栏：两侧、床尾只垂下一点点。垂 3（不是 2）：被子顶面比床垫高约 6，垂 2 时下摆停在床垫顶棱上方 0.7，低角度能从缝里看进被子底下
+  const d = duvet({ w, len: l, top: y + 6, z1: z + l / 2, drop: 3, thick: 3, color, seed: l })
   d.position.x = x
   g.add(d)
   g.add(pillowMesh(w + 0.6, 3.6, 12, MAT, { x, y: y + 4, z: z - l / 2 + 6 }, 0.5))
@@ -502,7 +502,8 @@ function carBed(p: string[]) {
     // 赛车条纹 + 号码牌
     g.add(rbox(0.8, 3, 110, acc, { x: sx * 48.4, y: 30, z: -6 }, 0.3))
     g.add(cylX(8, 0.8, C.white, sx * 48.4, 19, 18, 24))
-    g.add(cylX(4, 1, acc, sx * 48.5, 19, 18, 20))
+    // 号码牌的色芯比白底晚 0.1cm 起：贴着侧板的那一面不和白底共面
+    g.add(cylX(4, 0.9, acc, sx * 48.55, 19, 18, 20))
     for (const z of [-70, 70]) {
       g.add(cylX(16, 5, TIRE, sx * 50.5, 16, z, 28))
       g.add(cylX(8, 1.2, C.steel, sx * 53.3, 16, z, 20))
@@ -542,7 +543,8 @@ function castleBed(p: string[]) {
   // 床头两座塔楼
   for (const sx of [-1, 1]) {
     const x = sx * 41
-    g.add(cyl(9, 9, 126, wall, { x, z: -89 }, 24))
+    // 塔身比檐口矮 0.2cm：两者的顶面都压在塔顶下面，不共面
+    g.add(cyl(9, 9, 125.8, wall, { x, z: -89 }, 24))
     g.add(cyl(10, 10, 4, shade(wall, -0.06), { x, y: 122, z: -89 }, 24))
     g.add(cyl(0, 11, 34, roof, { x, y: 126, z: -89 }, 24))
     g.add(cyl(0.6, 0.6, 16, C.ink, { x, y: 158, z: -89 }, 6))
@@ -786,7 +788,8 @@ function rocketBed(p: string[]) {
     [-100, 96],
   ], 4, acc, 'zy', 0))
   for (const sx of [-1, 1]) {
-    g.add(cylZ(6, 8, shade(body, -0.25), sx * 20, 30, -95, 20))
+    // 喷口插进床头挡板 1cm（挡板背面在 z = -90；以前喷口只到 -91，连同火焰悬在挡板后面）
+    g.add(cylZ(6, 10, shade(body, -0.25), sx * 20, 30, -94, 20))
     const f = cylZ(4, 0.8, C.orange, sx * 20, 30, -99.2, 16)
     f.material = toon(C.orange, { emissive: 0.6 })
     g.add(f)

@@ -3,11 +3,11 @@
 // 只放建模函数和它们用到的常量，素材表在 ../styles-world.ts（PACKS 只收集 packs/ 下一层的文件）。
 
 import * as THREE from 'three'
-import { ball, cup, cyl, rbox, shade, torus } from '../../toon'
+import { ball, cup, cyl, rbox, torus } from '../../toon'
 import { C, hangingPipe, paintPanel, pipeHook, rectPoly, type SurfaceDef } from '../../kit'
 import { batten, cappedTube, cylZ, latheAt, lit, noOutlineDeep, rod3, taperRod3, type V3 } from '../../geo'
 import { drawerLv, drawerOf, hollow, slideDoor, swingDoor } from '../../cabinetKit'
-import { TUBE, paintPatchwork, turnedLeg } from './common'
+import { TUBE, paintPatchwork, tone, turnedLeg } from './common'
 
 const r = rectPoly
 
@@ -17,7 +17,7 @@ export function fhSlipcover(W: number) {
     const [fabric, pillow, throwC] = p
     const g = new THREE.Group()
     const D = 94
-    const seam = shade(fabric, -0.12)
+    const seam = tone(fabric, -0.12)
     g.add(rbox(W, 40.4, D, fabric, {}, 3))
     g.add(noOutlineDeep(rbox(W + 0.2, 0.6, D + 0.2, seam, { y: 12 }, 0.2)))
     for (const s of [-1, 1]) {
@@ -37,7 +37,7 @@ export function fhSlipcover(W: number) {
     // 毯子搭在左扶手上，一边垂下
     g.add(rbox(28, 1.6, 46, throwC, { x: -(W / 2 - 10), y: 75.6, z: 6 }, 0.6))
     g.add(rbox(1.6, 30, 46, throwC, { x: -(W / 2 + 0.8), y: 47, z: 6 }, 0.6))
-    for (let k = -5; k <= 5; k++) g.add(noOutlineDeep(rbox(1.8, 4, 0.5, shade(throwC, -0.15), { x: -(W / 2 + 0.8), y: 47, z: 6 + k * 4 }, 0.2)))
+    for (let k = -5; k <= 5; k++) g.add(noOutlineDeep(rbox(1.8, 4, 0.5, tone(throwC, -0.15), { x: -(W / 2 + 0.8), y: 47, z: 6 + k * 4 }, 0.2)))
     return g
   }
 }
@@ -53,8 +53,10 @@ export function fhCoffee(p: string[]) {
     g.add(rbox(85, 5, 2.4, base, { y: 36.4, z: s * 28 }, 0.6))
     g.add(rbox(85, 2.4, 2.4, base, { y: 7.6, z: s * 28 }, 0.5))
   }
-  for (let i = 0; i < 5; i++) g.add(rbox(85, 2, 9.4, shade(top, (i % 2) * -0.05), { y: 10, z: -22 + i * 11 }, 0.5))
-  for (let i = 0; i < 3; i++) g.add(rbox(100, 4.4, 21.8, shade(top, [0, -0.05, 0.03][i]), { y: 41.4, z: -22 + i * 22 }, 0.8))
+  // 下层板条两端的托档（接在腿之间）：原来中间三条板条两头什么都没搭着
+  for (const s of [-1, 1]) g.add(rbox(2.4, 2.4, 53.6, base, { x: s * 41.3, y: 7.6 }, 0.5))
+  for (let i = 0; i < 5; i++) g.add(rbox(85, 2, 9.4, tone(top, (i % 2) * -0.05), { y: 10, z: -22 + i * 11 }, 0.5))
+  for (let i = 0; i < 3; i++) g.add(rbox(100, 4.4, 21.8, tone(top, [0, -0.05, 0.03][i]), { y: 41.4, z: -22 + i * 22 }, 0.8))
   return g
 }
 export const FH_COFFEE_SURFACES: SurfaceDef[] = [{ y: 12, h: 24, shape: [r(-42, -26, 42, 26)] }]
@@ -63,22 +65,27 @@ export const FH_COFFEE_SURFACES: SurfaceDef[] = [{ y: 12, h: 24, shape: [r(-42, 
 export function fhTvStand(p: string[]) {
   const [body, wood, iron] = p
   const g = new THREE.Group()
-  const inner = shade(body, 0.05)
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(6, 8, 6, shade(body, -0.1), { x: sx * 74, z: sz * 17 }, 1))
-  g.add(hollow(156, 50, 42, body, { y: 8 }, 1.6, inner))
+  const inner = tone(body, 0.05)
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(6, 8, 6, tone(body, -0.1), { x: sx * 74, z: sz * 17 }, 1))
+  // 柜体高 51：顶到台面底（59），以前只到 58，台面整块悬空 1cm
+  g.add(hollow(156, 51, 42, body, { y: 8 }, 1.6, inner))
   g.add(rbox(152.8, 1.6, 39, inner, { y: 33, z: 0.4 }, 0.3))
   g.add(rbox(160, 4, 46, wood, { y: 59 }, 1))
   g.add(rbox(158, 2.4, 1, iron, { y: 56.6, z: 24.4 }, 0.3))
-  for (const s of [-1, 1]) g.add(cylZ(1, 2.6, iron, s * 78, 57.8, 23.2, 8))
+  // 滑轨的两只托架从侧板前沿伸出来（以前离柜体 0.9cm）
+  for (const s of [-1, 1]) g.add(cylZ(1, 4, iron, s * 78, 57.8, 23, 8))
   const door = (x: number, z: number) => {
     const parts: THREE.Object3D[] = [rbox(77, 46, 1.4, body, { x, y: 10, z }, 0.4)]
-    for (let k = -2; k <= 2; k++) parts.push(noOutlineDeep(rbox(0.4, 45, 0.3, shade(body, -0.12), { x: x + k * 13, y: 10.5, z: z + 0.75 }, 0.1)))
+    for (let k = -2; k <= 2; k++) parts.push(noOutlineDeep(rbox(0.4, 45, 0.3, tone(body, -0.12), { x: x + k * 13, y: 10.5, z: z + 0.75 }, 0.1)))
     for (const y of [10, 51]) parts.push(rbox(77, 5, 0.9, wood, { x, y, z: z + 1 }, 0.3))
     for (const t of [-1, 1]) parts.push(rbox(5, 36, 0.9, wood, { x: x + t * 36, y: 15, z: z + 1 }, 0.3))
     parts.push(batten([x - 33, 15, z + 1], [x + 33, 51, z + 1], 4.4, 0.9, wood))
     parts.push(batten([x + 33, 15, z + 1], [x - 33, 51, z + 1], 4.4, 0.9, wood))
     for (const t of [-1, 1]) parts.push(cylZ(2.2, 1.2, iron, x + t * 26, 56, z, 16))
-    parts.push(rod3([x + (x < 0 ? 33 : -33), 26, z + 2.6], [x + (x < 0 ? 33 : -33), 40, z + 2.6], 0.6, iron, 8))
+    // 拉手装在靠中缝那根竖框上，两只短脚接到框面（原来悬在竖框边缘外、离门面 0.5cm）
+    const hx = x + (x < 0 ? 36 : -36)
+    parts.push(rod3([hx, 26, z + 2.6], [hx, 40, z + 2.6], 0.6, iron, 8))
+    for (const hy of [28, 38]) parts.push(cylZ(0.5, 1.4, iron, hx, hy, z + 2, 8))
     return parts
   }
   g.add(slideDoor(door(-39, 23.6), 38))
@@ -104,10 +111,11 @@ export function fhTrestle(p: string[]) {
     g.add(batten([x, 5, -31], [x, 66, 31], 7, 5, base))
     g.add(batten([x, 5, 31], [x, 66, -31], 7, 5, base))
   }
-  g.add(rbox(118, 7, 5, base, { y: 32.5 }, 1))
-  for (const s of [-1, 1]) g.add(rbox(3, 9, 2, shade(base, -0.2), { x: s * 62, y: 31.5, z: 3.6 }, 0.4))
-  for (let i = 0; i < 4; i++) g.add(rbox(W - 10, 5, D / 4, shade(top, [0, -0.05, 0.03, -0.02][i]), { y: 71, z: -D / 2 + D / 8 + (i * D) / 4 }, 0.5))
-  for (const s of [-1, 1]) g.add(rbox(5, 5, D, shade(top, -0.07), { x: s * (W / 2 - 2.5), y: 71 }, 0.8))
+  // 拉档两头穿出腿架，各插一只木楔（原来拉档只到腿架外皮，木楔悬在外面 1.5cm）
+  g.add(rbox(130, 7, 5, base, { y: 32.5 }, 1))
+  for (const s of [-1, 1]) g.add(rbox(2.4, 11, 3, tone(base, -0.2), { x: s * 61.6, y: 30.5 }, 0.4))
+  for (let i = 0; i < 4; i++) g.add(rbox(W - 10, 5, D / 4, tone(top, [0, -0.05, 0.03, -0.02][i]), { y: 71, z: -D / 2 + D / 8 + (i * D) / 4 }, 0.5))
+  for (const s of [-1, 1]) g.add(rbox(5, 5, D, tone(top, -0.07), { x: s * (W / 2 - 2.5), y: 71 }, 0.8))
   return g
 }
 
@@ -151,15 +159,15 @@ export function fhPlankBed(m: number) {
     for (const sx of [-1, 1]) {
       g.add(rbox(7, 112, 7, wood, { x: sx * (W / 2 - 3.5), z: zh }, 1))
       g.add(rbox(7, 62, 7, wood, { x: sx * (W / 2 - 3.5), z: zf }, 1))
-      g.add(rbox(9, 2.6, 9, shade(wood, -0.08), { x: sx * (W / 2 - 3.5), y: 112, z: zh }, 0.8))
-      g.add(rbox(9, 2.6, 9, shade(wood, -0.08), { x: sx * (W / 2 - 3.5), y: 62, z: zf }, 0.8))
+      g.add(rbox(9, 2.6, 9, tone(wood, -0.08), { x: sx * (W / 2 - 3.5), y: 112, z: zh }, 0.8))
+      g.add(rbox(9, 2.6, 9, tone(wood, -0.08), { x: sx * (W / 2 - 3.5), y: 62, z: zf }, 0.8))
       g.add(rbox(4, 14, D - 14, wood, { x: sx * (W / 2 - 3.5), y: 20 }, 0.8))
     }
     const bw = W - 14
     const n = Math.round(bw / 12)
     for (let i = 0; i < n; i++) {
       const x = -bw / 2 + (bw / n) * (i + 0.5)
-      const c = shade(wood, (i % 3) * 0.035 - 0.03)
+      const c = tone(wood, (i % 3) * 0.035 - 0.03)
       g.add(rbox(bw / n - 0.5, 70, 2.6, c, { x, y: 34, z: zh }, 0.3))
       g.add(rbox(bw / n - 0.5, 22, 2.6, c, { x, y: 34, z: zf }, 0.3))
     }
@@ -167,7 +175,7 @@ export function fhPlankBed(m: number) {
     g.add(rbox(W - 4, 6, 5, wood, { y: 104, z: zh }, 0.8))
     g.add(rbox(bw, 4, 4, wood, { y: 30, z: zf }, 0.6))
     g.add(rbox(W - 4, 5, 5, wood, { y: 56, z: zf }, 0.8))
-    g.add(rbox(W - 12, 2, D - 14, shade(wood, -0.2), { y: 31 }, 0.5))
+    g.add(rbox(W - 12, 2, D - 14, tone(wood, -0.2), { y: 31 }, 0.5))
     g.add(rbox(W - 12, 22, D - 16, sheet, { y: 33 }, 5))
     const pn = m >= 120 ? 2 : 1
     for (let i = 0; i < pn; i++) g.add(rbox(pn > 1 ? m * 0.42 : m * 0.6, 12, 32, C.white, { x: pn > 1 ? (i ? 1 : -1) * m * 0.24 : 0, y: 54, z: zh + 28, rx: -0.12 }, 5))
@@ -187,12 +195,12 @@ export function fhWardrobe(p: string[]) {
   const g = new THREE.Group()
   const W = 106
   const D = 58
-  const inner = shade(body, 0.05)
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(8, 8, 8, shade(body, -0.08), { x: sx * 48, z: sz * 23 }, 1))
+  const inner = tone(body, 0.05)
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(8, 8, 8, tone(body, -0.08), { x: sx * 48, z: sz * 23 }, 1))
   g.add(rbox(W, 6, D, body, { y: 8 }, 1))
   g.add(hollow(100, 172, 54, body, { y: 14 }, 1.6, inner))
   g.add(rbox(96.8, 1.6, 51, inner, { y: 174, z: 0.5 }, 0.3))
-  g.add(hangingPipe(-46, 46, 166, 0))
+  g.add(hangingPipe(-48.4, 48.4, 166, 0)) // 两端杆座顶到侧板内壁（原来各短 2.4cm，整根杆悬空）
   g.add(rbox(W, 4, D + 2, body, { y: 186 }, 1))
   g.add(rbox(W + 4, 4, D + 4, wood, { y: 190 }, 1))
   for (const s of [-1, 1]) {
@@ -221,8 +229,8 @@ export const FH_WARDROBE_SURFACES: SurfaceDef[] = [
 export function fhDresser(p: string[]) {
   const [body, top, pull] = p
   const g = new THREE.Group()
-  const inner = shade(body, 0.05)
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(8, 8, 8, shade(body, -0.08), { x: sx * 40, z: sz * 18 }, 1))
+  const inner = tone(body, 0.05)
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(8, 8, 8, tone(body, -0.08), { x: sx * 40, z: sz * 18 }, 1))
   g.add(hollow(84, 76, 42, body, { y: 8 }, 1.6, inner))
   g.add(rbox(88, 4, 46, top, { y: 84 }, 1))
   for (const [x0, x1, y, h] of FH_DR) {
@@ -242,7 +250,7 @@ export function fhDesk(p: string[]) {
   const g = new THREE.Group()
   const W = 120
   const D = 60
-  const inner = shade(base, 0.05)
+  const inner = tone(base, 0.05)
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(turnedLeg(72, 3, base, { x: sx * 54, z: sz * 24 }, 'farm'))
   g.add(rbox(W - 16, 1.2, D - 12, inner, { y: 61.6 }, 0.4))
   for (const s of [-1, 1]) {
@@ -251,7 +259,7 @@ export function fhDesk(p: string[]) {
   }
   g.add(rbox(105, 9.4, 1.6, base, { y: 62.6, z: -24 }, 0.4))
   g.add(drawerOf([rbox(60, 8.6, 1.2, base, { y: 63, z: 24.4 }, 0.4), torus(2.4, 0.6, pull, { y: 66.6, z: 25.2 }, Math.PI)], -31, 31, 63, 8.6, 23.8, 40, inner))
-  for (let i = 0; i < 3; i++) g.add(rbox(W, 4, D / 3, shade(top, [0, -0.05, 0.03][i]), { y: 72, z: -D / 3 + (i * D) / 3 }, 0.6))
+  for (let i = 0; i < 3; i++) g.add(rbox(W, 4, D / 3, tone(top, [0, -0.05, 0.03][i]), { y: 72, z: -D / 3 + (i * D) / 3 }, 0.6))
   return g
 }
 export const FH_DESK_SURFACES: SurfaceDef[] = [drawerLv(-31, 31, 63, 8.6, 23.8, 40)]
@@ -279,7 +287,8 @@ export function fhTripodLamp(p: string[]) {
     g.add(rod3([Math.sin(a) * 23, 0.3, Math.cos(a) * 23], [Math.sin(a) * 2.6, 118, Math.cos(a) * 2.6], 1.5, wood, 10))
   }
   g.add(cyl(3.6, 3.6, 6, accent, { y: 113 }, 16))
-  g.add(cyl(1, 1, 14, accent, { y: 119 }, 10))
+  // 灯头杆伸进灯泡里（以前差 0.4，灯泡悬着）
+  g.add(cyl(1, 1, 15.4, accent, { y: 119 }, 10))
   g.add(lit(ball(2.6, C.lamp, { y: 136 }), C.lamp, 0.9))
   g.add(cup(20, 18, 26, 0.6, shadeC, { y: 156, rx: Math.PI }))
   for (const [rr, y] of [[19.9, 130.4], [18.1, 155.6]]) g.add(noOutlineDeep(torus(rr, 0.4, accent, { y, rx: Math.PI / 2 })))

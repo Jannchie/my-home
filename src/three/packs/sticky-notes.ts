@@ -162,9 +162,9 @@ function note(spec: NoteSpec, p: string[], z0 = 0) {
   const cut = spec.curl ? 2 : 0
   const shape = spec.shape === 'heart' ? heartShape(w, h) : spec.shape === 'cloud' ? cloudShape(w, h) : rectShape(w, h, cut)
   g.add(sheet(shape, paper, z0))
-  // 顶上一条胶带的背胶区（略深）
-  if (spec.shape === 'square' || spec.shape === 'strip') g.add(noOutline(rbox(w - 0.2, Math.min(1.4, h * 0.2), 0.03, shade(paper, -0.05), { y: h / 2 - Math.min(1.4, h * 0.2) - 0.1, z: z0 + T + 0.01 }, 0.01)))
-  g.add(doodle(spec.doodle, w * (spec.shape === 'heart' ? 0.7 : 0.9), h * (spec.shape === 'heart' ? 0.6 : 0.85), ink, acc, z0 + T + 0.03))
+  // 顶上一条胶带的背胶区（略深）。贴片的正面要比纸面高出 0.05 以上才不闪：背胶区正面在纸面上 0.055，笔迹正面再高 0.035
+  if (spec.shape === 'square' || spec.shape === 'strip') g.add(noOutline(rbox(w - 0.2, Math.min(1.4, h * 0.2), 0.03, shade(paper, -0.05), { y: h / 2 - Math.min(1.4, h * 0.2) - 0.1, z: z0 + T + 0.04 }, 0.01)))
+  g.add(doodle(spec.doodle, w * (spec.shape === 'heart' ? 0.7 : 0.9), h * (spec.shape === 'heart' ? 0.6 : 0.85), ink, acc, z0 + T + 0.07))
   if (spec.curl) g.add(curl(w, h, cut, paper, z0))
   return g
 }
@@ -204,9 +204,10 @@ function tabs(fan: boolean) {
       const m = new THREE.Group()
       m.add(sheet(rectShape(1.5, 5), cols[i], 0))
       // 下半截是透明胶片：画成浅色
-      m.add(noOutline(rbox(1.5, 2.2, 0.03, '#f4f6f8', { y: -2.5, z: T + 0.01 }, 0.01)))
+      m.add(noOutline(rbox(1.5, 2.2, 0.03, '#f4f6f8', { y: -2.5, z: T + 0.04 }, 0.01)))
       if (fan) {
-        m.position.set(-1 + i * 0.9, -0.5, i * 0.03)
+        // 一张压一张：每张往前错开一张纸的厚度（原来只错 0.03，几张纸互相穿插、正面几乎共面）
+        m.position.set(-1 + i * 0.9, -0.5, i * T)
         m.rotation.z = (-25 + i * 16) * (Math.PI / 180)
       } else m.position.set(-3.4 + i * 1.7, (i % 2) * 0.4, 0)
       g.add(m)

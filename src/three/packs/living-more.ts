@@ -3,10 +3,11 @@
 // 柜、桌、架的顶面和层板留空，声明 surface / surfaces；地毯声明一个很薄的 surface，玩具和小物可以摆在上面。
 
 import * as THREE from 'three'
-import { ball, capsule, cup, cyl, face, puck, rbox, shade, toon, torus, tray } from '../toon'
+import { ball, cached, capsule, cup, cyl, face, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { artOverride } from '../artwork'
 import { C, SWING_OPEN, ellipsePoly, glow, holePanel, movable, paintPanel, rectPoly, rng, shell, type AssetDef, type Poly, type SurfaceDef } from '../kit'
-import { G, P, batten, clearMat, cylX, cylZ, fitGroup, lit, noOutlineDeep, rod3, tube, type TubeOpts, type V3 } from '../geo'
+import { G, P, batten, clearMat, cylX, cylZ, fitGroup, lit, mesh, noOutlineDeep, rod3, tube, type TubeOpts, type V3 } from '../geo'
+import { tagMat } from '../mats'
 import { I, J, M, N, PROP, R, define, type PalFlat } from '../packkit'
 import { say, signLang, signSans } from '../signLang'
 
@@ -53,6 +54,15 @@ function flatPaint(w: number, d: number, key: string, draw: (g: CanvasRenderingC
   return paintPanel(w, d, key, draw, { y, z: d / 2, rx: -Math.PI / 2 })
 }
 
+/**
+ * 平织地毯（草席、基里姆）上的印花：这两件的毯面是布（matTables），不是长绒。
+ * 画面网格的颜色不属于任何配色槽，不标的话按地毯的默认材质算成长绒，会被 fringe.ts 压薄到 0.55 倍、
+ * 沉到没压薄的毯面下面，花纹整个看不见——这里显式标成和毯面一样的布。
+ */
+function wovenPaint(...a: Parameters<typeof flatPaint>) {
+  return tagMat(flatPaint(...a), 'fabric')
+}
+
 /** 平滑闭合曲线（云朵、动物轮廓）：控制点经 Catmull-Rom 插值 */
 function smoothPoly(pts: [number, number][], n = 80): Poly {
   const curve = new THREE.CatmullRomCurve3(
@@ -75,9 +85,17 @@ function cloudPoly(w: number, d: number, bumps = 7): Poly {
   return pts
 }
 
-/** 一本书（立着，书脊朝 +z）：底面在 y */
+/**
+ * 一本书（立着，书脊朝 +z）：底面在 y。
+ * 两片封面 + 书脊夹着书页：书页比封面矮一点、短一点，只在顶上和翻口（-z）露出来
+ * （以前书页比封面还宽 0.01cm，整片封面被书页盖住、和封面共面闪烁）。
+ */
 function book(w: number, h: number, d: number, color: string, x: number, y: number, z: number, ry = 0, rz = 0) {
-  const g = G(rbox(w, h, d, color, {}, 0.4), rbox(w + 0.02, h - 0.8, d - 0.8, PAPER, { y: 0.4, z: -0.6 }, 0.2))
+  const t = Math.min(0.3, w * 0.25)
+  const g = new THREE.Group()
+  for (const s of [-1, 1]) g.add(rbox(t, h, d, color, { x: s * (w / 2 - t / 2) }, t * 0.3))
+  g.add(rbox(w, h, 0.5, color, { z: d / 2 - 0.25 }, Math.min(0.2, w * 0.2)))
+  g.add(rbox(w - t * 2 + 0.1, h - 0.7, d - 0.9, PAPER, { y: 0.35, z: -0.25 }, 0.05))
   return P(g, x, y, z, 0, ry, rz)
 }
 
@@ -624,9 +642,9 @@ function tvWallUnit(p: string[]) {
   for (const y of [75, 110, 145]) g.add(rbox(36.4, 1.6, 30.5, wood, { x: 100, y, z: -4.25 }, 0.4))
   g.add(bookRow(30, 24, 20, 84, 42, -9, 11, BOOK_COLORS))
   g.add(bookRow(22, 22, 20, 84, 111.6, -9, 23, BOOK_COLORS))
-  // 浮空层板（挂墙）
-  g.add(rbox(150, 3, 24, wood, { x: -25, y: 140, z: -9 }, 0.8))
-  g.add(rbox(150, 6, 1.2, metal, { x: -25, y: 137.5, z: -20.4 }, 0.4))
+  // 壁挂层板：右端搭进书架的侧板（以前离书架 30cm，不靠墙摆时整块悬在半空）
+  g.add(rbox(181, 3, 24, wood, { x: -9.5, y: 140, z: -9 }, 0.8))
+  g.add(rbox(180, 6, 1.2, metal, { x: -10, y: 137.5, z: -20.1 }, 0.4))
   return shiftZ(g, -1.2)
 }
 
@@ -698,7 +716,7 @@ export const LM_TABLES: AssetDef[] = [
     surfaceShape: [rectPoly(80, -22.2, 120, 9.8)],
     surfaces: [
       { y: 40, shape: [rectPoly(-120, -22.2, 80, 20.8), rectPoly(80, 10.3, 120, 20.8)], h: 97 },
-      { y: 143, shape: [rectPoly(-100, -22.2, 50, 1.8)] },
+      { y: 143, shape: [rectPoly(-100, -22.2, 80, 1.8)] },
       { y: 42, shape: [rectPoly(82, -21.2, 118, 9.8)], h: 33 },
       { y: 76.6, shape: [rectPoly(82, -21.2, 118, 9.8)], h: 33.4 },
       { y: 111.6, shape: [rectPoly(82, -21.2, 118, 9.8)], h: 33.4 },
@@ -766,6 +784,8 @@ function arcLamp(p: string[]) {
   g.add(rbox(35, 7, 35, base, { z: -54.5 }, 2))
   g.add(tube([[0, 6, -54.5], [0, 90, -56], [0, 170, -40], [0, 194, 0], [0, 184, 38], [0, 170, 50]], 1.3, pole, { ...TUBE, seg: 64 }))
   g.add(cyl(1.2, 1.2, 4, pole, { y: 166, z: 50 }, 8))
+  // 灯头：泡壳顶接到罩顶（以前灯泡悬在罩里）
+  g.add(cyl(1.8, 1.8, 7, pole, { y: 159.4, z: 50 }, 10))
   g.add(dome(22, 18, shadeC, 0, 168, 50, 6))
   g.add(bulb(5, 0, 155, 50))
   return g
@@ -992,7 +1012,8 @@ function ledBar(p: string[]) {
   g.add(puck(5, 2, body))
   g.add(rbox(4, 36, 4, body, { y: 1.8 }, 1.2))
   g.add(glow(2.4, 33, glowC, { y: 3.3, z: 2.1 }, 0.95))
-  g.add(lit(rbox(2.4, 16, 0.6, acc, { y: 20, z: 2.15 }, 0.3), acc, 0.95))
+  // 点缀色的一段比发光条宽一圈、厚一点，把它整个包住（同宽同厚时正面和倒角只差 0.02–0.05cm，会闪）
+  g.add(lit(rbox(3, 16, 1.2, acc, { y: 20, z: 2.1 }, 0.4), acc, 0.95))
   return g
 }
 
@@ -1395,10 +1416,11 @@ function braidedRug(p: string[]) {
 function hanamushiro(p: string[]) {
   const [ground, a, b] = p
   const g = new THREE.Group()
-  g.add(rugBase(rbox(176, 1, 176, ground, {}, 0.3)))
+  // 草席本体比两端的包边窄一圈：包边把席子的端头整个包住，侧面、端面不共面
+  g.add(rugBase(rbox(175.2, 1, 175.2, ground, {}, 0.3)))
   for (const s of [-1, 1]) g.add(rugBase(rbox(176, 1.3, 5, a, { z: s * 85.5 }, 0.3), false))
   g.add(
-    flatPaint(
+    wovenPaint(
       174,
       164,
       `lm-hanamushiro-${ground}${a}${b}`,
@@ -1450,7 +1472,7 @@ function kilimRug(p: string[]) {
   const g = new THREE.Group()
   g.add(rugBase(rbox(200, 1.3, 140, ground, {}, 0.5)))
   g.add(
-    flatPaint(
+    wovenPaint(
       192,
       132,
       `lm-kilim-${ground}${a}${b}`,
@@ -1734,7 +1756,8 @@ function penOrganizer(p: string[]) {
   // 剪刀把手、橡皮
   g.add(P(torus(1.2, 0.35, b), 4.2, 10.4, -2.5, 0, 0.3, 0.25))
   g.add(P(torus(1.2, 0.35, b), 2.4, 10.1, -2.5, 0, 0.3, -0.25))
-  g.add(rbox(0.5, 4, 0.5, CHROME, { x: 3.2, y: 6.4, z: -2.5 }, 0.15))
+  // 剪刀刃插到格底（以前只有 4cm 长，挂在格子半空）
+  g.add(rbox(0.5, 9.8, 0.5, CHROME, { x: 3.2, y: 0.6, z: -2.5 }, 0.15))
   g.add(rbox(2.4, 1.4, 1.6, C.white, { x: 4.3, y: 0.6, z: 3 }, 0.4))
   return g
 }
@@ -2393,10 +2416,36 @@ function blocksScatter(p: string[]) {
   g.add(block(0, pal[1], -21, 1, -10, 0.2, 5))
   g.add(block(1, pal[2], -14, 1, -6, 0, 5))
   const r = rng(17)
+  // 随机撒在木箱旁边、前面的地上，但互不相压：按每块的占地矩形（长条、拱形 10 × 5，其余 5 × 5）逐块试位置，
+  // 和已经放好的有重叠就重抽（以前纯随机，有几块互相穿进去、顶面共面）
+  type Foot = { x: number; z: number; hw: number; hd: number; c: number; s: number }
+  const corners = (f: Foot) => [[1, 1], [1, -1], [-1, -1], [-1, 1]].map(([a, b]) => [f.x + a * f.hw * f.c + b * f.hd * f.s, f.z - a * f.hw * f.s + b * f.hd * f.c])
+  /** 分离轴：a 的两条边方向上，两个矩形的投影有没有隔开 */
+  const apart = (a: Foot, b: Foot) =>
+    [[a.c, -a.s], [a.s, a.c]].some(([ax, az]) => {
+      const pa = corners(a).map(([x, z]) => x * ax + z * az)
+      const pb = corners(b).map(([x, z]) => x * ax + z * az)
+      return Math.min(...pa) > Math.max(...pb) + 0.4 || Math.min(...pb) > Math.max(...pa) + 0.4
+    })
+  // 木箱本身也占着一块
+  const placed: Foot[] = [{ x: -17, z: -8, hw: 11, hd: 8, c: 1, s: 0 }]
   for (let i = 0; i < 12; i++) {
-    const x = -2 + r() * 30
-    const z = -16 + r() * 32
-    g.add(block(i % 5, pal[i % pal.length], x, 0, z, r() * Math.PI, 5))
+    const kind = i % 5
+    const long = kind === 2 || kind === 4
+    let f: Foot = { x: 0, z: 0, hw: long ? 5 : 2.5, hd: 2.5, c: 1, s: 0 }
+    let ry = 0
+    for (let k = 0; k < 200; k++) {
+      ry = r() * Math.PI
+      f = { ...f, c: Math.cos(ry), s: Math.sin(ry) }
+      // 占地的外包盒留在 x ∈ [-28, 23.5]、z ∈ [-16, 16] 里（整件的声明尺寸不变）
+      const ex = Math.abs(f.c) * f.hw + Math.abs(f.s) * f.hd
+      const ez = Math.abs(f.s) * f.hw + Math.abs(f.c) * f.hd
+      f.x = -28 + ex + r() * (51.5 - ex * 2)
+      f.z = -16 + ez + r() * (32 - ez * 2)
+      if (placed.every((o) => apart(f, o) || apart(o, f))) break
+    }
+    placed.push(f)
+    g.add(block(kind, pal[i % pal.length], f.x, 0, f.z, ry, 5))
   }
   return fitGroup(g)
 }
@@ -2419,34 +2468,34 @@ function puzzleMat(p: string[]) {
   return g
 }
 
+/** 操场形的环（两段直道 + 两个半圆），沿 y 挤出：中线直道长 L、弯道半径 R，环宽 w、厚 t，底面在 y */
+function ovalRing(L: number, R: number, w: number, t: number, color: string, y: number) {
+  const path = (r: number, to: THREE.Path) => {
+    to.moveTo(-L / 2, r)
+    to.lineTo(L / 2, r)
+    to.absarc(L / 2, 0, r, Math.PI / 2, -Math.PI / 2, true)
+    to.lineTo(-L / 2, -r)
+    to.absarc(-L / 2, 0, r, -Math.PI / 2, -Math.PI * 1.5, true)
+    return to
+  }
+  const shape = path(R + w / 2, new THREE.Shape()) as THREE.Shape
+  shape.holes.push(path(R - w / 2, new THREE.Path()))
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: t, bevelEnabled: false, curveSegments: 20 })
+  geo.rotateX(-Math.PI / 2)
+  const m = mesh(geo, color)
+  m.position.y = y
+  return m
+}
+
 /** 木制火车轨道：椭圆环轨 + 小火车 */
 function trainTrack(p: string[]) {
   const [wood, a, b] = p
   const g = new THREE.Group()
   const L = 40
   const Rr = 24
-  const pts: [number, number, number][] = []
-  const n = 56
-  const perim = 2 * L + 2 * Math.PI * Rr
-  for (let i = 0; i < n; i++) {
-    const s = (i / n) * perim
-    let x: number, z: number, ang: number
-    if (s < L) [x, z, ang] = [-L / 2 + s, Rr, 0]
-    else if (s < L + Math.PI * Rr) {
-      const t = (s - L) / Rr
-      ;[x, z, ang] = [L / 2 + Math.sin(t) * Rr, Math.cos(t) * Rr, t]
-    } else if (s < 2 * L + Math.PI * Rr) [x, z, ang] = [L / 2 - (s - L - Math.PI * Rr), -Rr, Math.PI]
-    else {
-      const t = (s - 2 * L - Math.PI * Rr) / Rr
-      ;[x, z, ang] = [-L / 2 - Math.sin(t) * Rr, -Math.cos(t) * Rr, Math.PI + t]
-    }
-    pts.push([x, z, ang])
-  }
-  const seg = perim / n + 0.15
-  for (const [x, z, ang] of pts) {
-    g.add(rbox(seg, 1.2, 4, wood, { x, z, ry: ang }, 0.2))
-    for (const s of [-1, 1]) g.add(noOutlineDeep(rbox(seg, 0.2, 0.5, shade(wood, -0.18), { x: x + s * 1.1 * Math.sin(ang), y: 1.1, z: z + s * 1.1 * Math.cos(ang), ry: ang }, 0.05)))
-  }
+  // 轨道整圈挤出成一个环、两道车辙各一个环（以前切成 56 小段、每段 3 个圆角盒，近 2 万个三角面，弯道上相邻小段还互相叠着）
+  g.add(ovalRing(L, Rr, 4, 1.2, wood, 0))
+  for (const s of [-1, 1]) g.add(noOutlineDeep(ovalRing(L, Rr + s * 1.1, 0.5, 0.3, shade(wood, -0.18), 1)))
   // 小火车：车头 + 两节车厢，停在前直道上
   const car = (x: number, col: string, head: boolean) => {
     const c = new THREE.Group()
@@ -2568,6 +2617,9 @@ function playTunnel(p: string[]) {
   return g
 }
 
+/** 球池里压在下层的球：12 × 8 段（共用几何） */
+const pitBall = () => cached('lm-pit-ball', () => new THREE.SphereGeometry(3.6, 12, 8))
+
 /** 球池：软圆围 + 一池彩色球（球面低于口沿） */
 function ballPit(p: string[]) {
   const [wall, a, b] = p
@@ -2580,7 +2632,10 @@ function ballPit(p: string[]) {
     for (let i = 0; i < 46; i++) {
       const rr = Math.sqrt(r()) * 35
       const t = r() * Math.PI * 2
-      g.add(ball(3.6, cols[Math.floor(r() * cols.length)], { x: Math.cos(t) * rr, y: 12.6 + layer * 6 + r() * 2, z: Math.sin(t) * rr }))
+      const col = cols[Math.floor(r() * cols.length)]
+      const at = { x: Math.cos(t) * rr, y: 12.6 + layer * 6 + r() * 2, z: Math.sin(t) * rr }
+      // 压在下面的两层只从球缝里露一点，用粗一档的球（138 个球全按 16×12 段要近 5 万个三角面）
+      g.add(layer === 2 ? ball(3.6, col, at) : P(mesh(pitBall(), col), at.x, at.y, at.z))
     }
   return g
 }
@@ -2606,11 +2661,15 @@ function bookSling(p: string[]) {
     sl.position.set(0, y + 7, (z + zb) / 2)
     g.add(sl)
     const r = rng(40 + i)
+    // 书平贴在布面上、下沿搁在前面那根横杆上（以前离布面 1–2cm，飘着）：沿布面往上 up、离开布面 off
     for (let k = 0; k < 3; k++) {
       const bw = 15 + r() * 3
-      const bk = rbox(bw, 17 + r() * 3, 0.9, [acc, ...BOOK_COLORS][(k + i * 2) % 8], {}, 0.2)
+      const bh = 16 + r() * 3
+      const bk = rbox(bw, bh, 0.9, [acc, ...BOOK_COLORS][(k + i * 2) % 8], {}, 0.2)
       bk.rotation.x = ang
-      bk.position.set(-17 + k * 17, y + 8.5, (z + zb) / 2 + 0.9 - Math.sin(ang) * 1.5)
+      const up = 0.85 + bh / 2
+      const off = 0.25 + 0.45 + 0.03
+      bk.position.set(-17 + k * 17, y + Math.cos(ang) * up - Math.sin(ang) * off, z + Math.sin(ang) * up + Math.cos(ang) * off)
       g.add(bk)
     }
   }
@@ -2688,7 +2747,8 @@ function growthChair(p: string[]) {
   g.add(rbox(40, 1.8, 28, wood, { y: 46, z: -1 }, 0.5))
   g.add(rbox(36, 2, 24, seat, { y: 47.8, z: -1 }, 0.9))
   for (const y of [62, 72]) g.add(rbox(40, 6, 1.8, wood, { y, z: 22 - (32 * (y + 3)) / 79 }, 0.6))
-  g.add(cylX(0.9, 46, acc, 0, 4, 0))
+  // 金属横撑穿在两条后腿上（后腿在 y = 5 处 z ≈ -18.5；以前放在两腿中间的半空，哪儿都不挨）
+  g.add(cylX(0.9, 46, acc, 0, 5, -18.5))
   return fitGroup(g)
 }
 
@@ -2711,15 +2771,29 @@ function stroller(open: boolean) {
       basket.rotation.x = 0.06
       g.add(basket)
       g.add(rbox(40, 2, 56, C.white, { y: 41, z: 2 }, 0.8))
-      // 遮阳篷：半个筒
-      const geo = new THREE.CylinderGeometry(22, 22, 44, 24, 1, true, -Math.PI / 2, Math.PI)
+      // 遮阳篷：罩在车篮后半（靠推把那头）上方的一段筒面，从车篮后沿拱到头顶再往前探一点，开口朝前，两侧用扇形片封上
+      // （以前取的是朝前鼓的那半个筒、两侧敞着，立在车篮中间像一张卷起来的纸）
+      const a0 = Math.PI / 2 - 0.5
+      const geo = new THREE.CylinderGeometry(22, 22, 44, 16, 1, true, a0, Math.PI - a0)
       const mat = toon(acc).clone()
       mat.side = THREE.DoubleSide
       const hood = new THREE.Mesh(geo, mat)
       hood.rotation.set(0, 0, Math.PI / 2)
-      hood.position.set(0, 62, -18)
+      hood.position.set(0, 62, -6)
       hood.castShadow = true
       g.add(hood)
+      const fan: [number, number][] = [[0, 0]]
+      for (let i = 0; i <= 10; i++) {
+        const a = a0 + ((Math.PI - a0) * i) / 10
+        fan.push([Math.cos(a) * 22, Math.sin(a) * 22])
+      }
+      for (const sx of [-1, 1]) {
+        const side = prism(fan, 0.6, acc, 0, 0.2)
+        side.rotation.y = -Math.PI / 2
+        // 比车篮外壁往里收 0.3：下沿和车篮后沿重叠的那一小条埋在篮壁里，不和篮壁外侧共面
+        side.position.set(sx * 21.4, 62, -6)
+        g.add(side)
+      }
       g.add(rbox(36, 8, 22, shade(cloth, 0.1), { y: 22, z: 4 }, 2))
       for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(1.2, 10.5, 1.2, frame, { x: sx * 16, y: 29, z: 4 + sz * 9 }, 0.3))
       return fitGroup(g)
@@ -2733,7 +2807,8 @@ function stroller(open: boolean) {
     }
     g.add(cylX(1.6, 44, acc, 0, 80, -2))
     g.add(rbox(38, 46, 9, cloth, { y: 22, z: 2 }, 3))
-    g.add(rbox(38, 10, 12, acc, { y: 58, z: 1 }, 3))
+    // 折起的遮阳篷套在车身上端：比车身宽、高出一点，顶面和两侧不和车身共面
+    g.add(rbox(39, 10.6, 12, acc, { y: 58, z: 1 }, 3))
     return fitGroup(g)
   }
 }
@@ -2767,9 +2842,12 @@ function playKitchen(p: string[]) {
   g.add(rbox(70, 35, 2, body, { y: 50, z: -14 }, 0.6))
   g.add(rbox(34, 2, 30, body, { y: 83, z: -2 }, 0.6))
   // 烤箱门（带玻璃窗）+ 柜门
-  g.add(holePanel(32, 38, 1.4, door, [{ kind: 'rect', x: 0, y: 12, w: 22, h: 16, r: 2 }], { x: -17, y: 4, z: 15.5 }))
+  // 烤箱门左沿压到侧板的前沿上（以前和侧板差 0.4，门板悬在开口里）
+  g.add(holePanel(33, 38, 1.4, door, [{ kind: 'rect', x: 0.5, y: 12, w: 22, h: 16, r: 2 }], { x: -17.5, y: 4, z: 15.5 }))
   g.add(clearMat(rbox(23, 17, 0.3, C.glass, { x: -17, y: 15.5, z: 15.3 }, 0.1), C.glass, 0.32))
   g.add(cylX(0.8, 18, acc, -17, 38, 17.4))
+  // 拉手两头的小立柱：横杆以前离门板 0.4 悬着
+  for (const x of [-24, -10]) g.add(cylZ(0.5, 1.6, acc, x, 38, 16.7, 8))
   g.add(front(32, 38, door, 17, 4, 15))
   g.add(cyl(0.9, 0.9, 1.2, acc, { x: 4, y: 26, z: 17 }, 10))
   g.children[g.children.length - 1].rotation.x = Math.PI / 2

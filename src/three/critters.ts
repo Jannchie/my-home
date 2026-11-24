@@ -1326,7 +1326,8 @@ export function kachakaModel(pal: string[], tiers: 0 | 2 | 3): KachakaParts {
       for (const sz of [-1, 1]) {
         const x = sx * (W / 2 - post / 2)
         const z = sz * (D / 2 - post / 2)
-        shelf.add(rbox(post, top - 4.5, post, frame, { x, y: 4.5 }, 0.6))
+        // 立柱在四个角上（以前漏了 z，四根柱子两两叠在侧面正中，角上的脚轮座和前后横梁都悬空）
+        shelf.add(rbox(post, top - 4.5, post, frame, { x, y: 4.5, z }, 0.6))
         const c = node(x, 2.2, z)
         c.add(ball(2, '#5b5853', {}, [0.7, 1, 1]))
         shelf.add(rbox(2.6, 1.2, 2.6, frame, { x, y: 4.2, z }, 0.4))
@@ -1338,7 +1339,8 @@ export function kachakaModel(pal: string[], tiers: 0 | 2 | 3): KachakaParts {
     for (const sz of [-1, 1]) shelf.add(rbox(W - post * 2, 2, 1.6, frame, { y: 6, z: sz * (D / 2 - 0.8) }, 0.4))
     // 侧板（两侧有色挡板）+ 顶层的小围边
     for (const sx of [-1, 1]) {
-      shelf.add(rbox(0.8, lv[1] - lv[0] - 6, D - post * 2 - 1, panel, { x: sx * (W / 2 + 0.2), y: lv[0] + 2 }, 0.3))
+      // 挡板两端各搭在立柱外侧 0.3（以前两头各留 0.5 的缝，立柱挪回四角后挡板就和谁都不挨着了）
+      shelf.add(rbox(0.8, lv[1] - lv[0] - 6, D - post * 2 + 0.6, panel, { x: sx * (W / 2 + 0.2), y: lv[0] + 2 }, 0.3))
       shelf.add(rbox(0.8, 3, D - post * 2, frame, { x: sx * (W / 2 - post / 2), y: top }, 0.3))
     }
     for (const sz of [-1, 1]) shelf.add(rbox(W - post * 2, 3, 0.8, frame, { y: top, z: sz * (D / 2 - post / 2) }, 0.3))

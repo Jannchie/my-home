@@ -416,7 +416,8 @@ function wallTier(n: number, mount: number): Build {
         g.add(rod3([x, y - TIER_BR + 0.8, zb + 0.9], [x, y - 0.5, zb + TIER_D - 6], 0.35, metal, 8))
       }
     }
-    for (const sx of [-1, 1]) g.add(rbox(2.4, TIER_BR + (n - 1) * TIER_GAP, 0.6, metal, { x: sx * (TIER_W / 2 - 8), y: mount, z: zb + 0.3 }, 0.2))
+    // 背轨比板的后沿缩进 0.3：轨穿过中间几层板时，背面不和板的背面共面
+    for (const sx of [-1, 1]) g.add(rbox(2.4, TIER_BR + (n - 1) * TIER_GAP, 0.6, metal, { x: sx * (TIER_W / 2 - 8), y: mount, z: zb + 0.6 }, 0.2))
     return g
   }
 }
@@ -653,7 +654,8 @@ function displayCube(p: string[]) {
   const [board, back] = p
   const g = new THREE.Group()
   const y0 = DC.mount
-  g.add(rbox(DC.w - 2, DC.h - 2, 0.6, back, { y: y0 + 1, z: -DC.d / 2 + 0.3 }, 0.2))
+  // 背板嵌在框里（比框的后沿缩进 0.3），背面不和横板的背面共面
+  g.add(rbox(DC.w - 2, DC.h - 2, 0.6, back, { y: y0 + 1, z: -DC.d / 2 + 0.6 }, 0.2))
   for (const y of [0, (DC.h - DC.t) / 2, DC.h - DC.t]) g.add(rbox(DC.w, DC.t, DC.d, board, { y: y0 + y }, 0.4))
   for (const x of [-1, -1 / 3, 1 / 3, 1]) g.add(rbox(DC.t, DC.h - DC.t * 2 + 0.2, DC.d - 0.2, board, { x: (x * (DC.w - DC.t)) / 2, y: y0 + DC.t - 0.1 }, 0.3))
   return g
@@ -1202,7 +1204,8 @@ function wrenchBody(p: string[]) {
   g.add(torus(1.4, 0.55, metal, { y: -2 }))
   g.add(slat([0, -3.6, 0], [0, -16, 0], 1.6, 0.6, metal))
   g.add(rbox(1.7, 6, 0.8, grip, { y: -12 }, 0.3))
-  g.add(torus(1.7, 0.75, metal, { y: -18.6, rz: PI * 0.75 }, PI * 1.5))
+  // 开口扳手头：缺口朝下（远离手柄），手柄接在环的实心顶上；原来缺口朝上，手柄正好戳进缺口里没接上
+  g.add(torus(1.7, 0.75, metal, { y: -18.6, rz: -PI * 0.25 }, PI * 1.5))
   return g
 }
 function tapeBody(p: string[]) {
@@ -1366,7 +1369,8 @@ function bookFlat(w: number, d: number, t: number, cover: string, page: string, 
   g.add(rbox(w, 0.3, d, cover, { y: t - 0.3 }, 0.1))
   g.add(rbox(0.5, t, d, cover, { x: -w / 2 + 0.25 }, 0.2))
   g.add(rbox(w - 0.6, t - 0.5, d - 0.6, page, { y: 0.25 }, 0.1))
-  g.add(rbox(w * 0.5, 0.4, d * 0.2, acc, { x: 0.5, y: t - 0.3, z: -d * 0.15 }, 0.1))
+  // 色块底面嵌进封面 0.2（不和封面的底面共面），顶面仍浮出 0.1
+  g.add(rbox(w * 0.5, 0.3, d * 0.2, acc, { x: 0.5, y: t - 0.2, z: -d * 0.15 }, 0.1))
   return g
 }
 const bookOne = (p: string[]) => bookFlat(15, 21, 2.4, p[0], p[1], p[2])
@@ -1454,7 +1458,8 @@ function boxOpen(p: string[]) {
   const [, lidC, acc] = p
   const g = boxShell(p)
   const lid = G(rbox(37, 2, 27, lidC, { z: 13.5 }, 0.7))
-  lid.position.set(0, 22, -13.5)
+  // 掀开的盖子后沿搭在盒子后壁的口沿上（原来整个悬在后壁外 0.5cm）
+  lid.position.set(0, 21.6, -12.9)
   lid.rotation.x = -1.75
   g.add(lid)
   // 里面的东西
@@ -2209,7 +2214,15 @@ function topHat(p: string[]) {
   const [main, sec] = p
   return G(puck(15, 1, main), cyl(9, 8.6, 15, main, { y: 0.8 }, 28), cyl(9.1, 9.1, 3, sec, { y: 1 }, 28))
 }
-const hatHang = (hat: THREE.Group) => G(hangAt(turned(hat, PI / 2), S_UNDER + 0.1), sHook())
+/**
+ * brim：平檐帽的檐厚。帽子竖过来后檐贴墙、帽身朝前，S 钩下环（z = S_Z）要穿过檐的上沿，
+ * 所以把檐的中面挪到 z = S_Z（不挪的话檐贴在 z = 0.3，钩子下环在它前面 1.5cm 悬着）
+ */
+const hatHang = (hat: THREE.Group, brim?: number) => {
+  const o = hangAt(turned(hat, PI / 2), S_UNDER + 0.1)
+  if (brim !== undefined) o.position.z += S_Z - 0.3 - brim / 2
+  return G(o, sHook())
+}
 
 // 包：斜挎包 / 手提包
 const BAG_PALS: Pal[] = [
@@ -2275,7 +2288,7 @@ const MORE_WEAR: AssetDef[] = [
   ]),
   ...forms('草帽', 'deco', STRAW_PALS, [
     { id: 'sf-straw-hat-lying', form: 'lying', dims: [34, 34, 9.4], build: (p) => ground(strawHat(p)) },
-    { id: 'sf-straw-hat-hanging', form: 'hanging', dims: [34, 10.9, 40.6], build: (p) => hatHang(strawHat(p)) },
+    { id: 'sf-straw-hat-hanging', form: 'hanging', dims: [34, 12.8, 40.6], build: (p) => hatHang(strawHat(p), 0.8) },
   ]),
   ...forms('渔夫帽', 'deco', HAT_PALS, [
     { id: 'sf-bucket-hat-lying', form: 'lying', dims: [23, 23, 9.7], build: (p) => ground(bucketHat(p)) },
@@ -2283,7 +2296,7 @@ const MORE_WEAR: AssetDef[] = [
   ]),
   ...forms('礼帽', 'deco', HAT_PALS, [
     { id: 'sf-top-hat-lying', form: 'lying', dims: [30, 30, 15.8], build: (p) => ground(topHat(p)) },
-    { id: 'sf-top-hat-hanging', form: 'hanging', dims: [30, 17.3, 36.6], build: (p) => hatHang(topHat(p)) },
+    { id: 'sf-top-hat-hanging', form: 'hanging', dims: [30, 19.1, 36.6], build: (p) => hatHang(topHat(p), 1) },
   ]),
   ...forms('斜挎包', 'deco', BAG_PALS, [
     { id: 'sf-crossbody-standing', form: 'standing', dims: [29.1, 25.4, 15.7], build: crossStanding },

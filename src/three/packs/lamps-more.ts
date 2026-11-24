@@ -103,6 +103,21 @@ function dome(r: number, h: number, color: string, yTop: number, rTop = r * 0.3,
   return m
 }
 
+/**
+ * 灯罩支架：灯杆顶（yFrom）接一根细芯到罩顶（yTop），罩顶一个小毂 + 三根辐条撑到口沿（半径 r）。
+ * 开口的布罩 / 纱罩原来凭空套在灯杆外面，从上面看进去里面是空的。
+ */
+function spider(r: number, yTop: number, yFrom: number, color: string, x = 0, z = 0) {
+  const g = new THREE.Group()
+  g.add(cyl(0.35, 0.35, yTop - yFrom, color, { x, y: yFrom, z }, 6))
+  g.add(cyl(1, 1, 0.8, color, { x, y: yTop - 0.7, z }, 10))
+  for (let k = 0; k < 3; k++) {
+    const a = (k / 3) * Math.PI * 2 + Math.PI / 6
+    g.add(rod3([x, yTop - 0.3, z], [x + Math.sin(a) * r, yTop - 0.3, z + Math.cos(a) * r], 0.3, color, 6))
+  }
+  return g
+}
+
 /** 壁挂件：xz 居中，最低点放到离地 y */
 function mountAt(g: THREE.Group, y: number) {
   const box = new THREE.Box3().setFromObject(g, true)
@@ -249,8 +264,9 @@ function kakuAndon(p: string[]) {
   g.add(rbox(25, 0.8, 25, dark, { y: 7.6 }, 0.3))
   g.add(paperBox(26, 44, 26, paper, wood, 9.2, 3, 4, 2))
   g.add(squareRim(28, 28, 2.2, wood, 53.4))
-  for (const s of [-1, 1]) g.add(rbox(1.8, 11, 1.8, wood, { x: s * 10, y: 55.4 }, 0.4))
-  g.add(rbox(23, 1.8, 2.6, wood, { y: 66.2 }, 0.6))
+  // 提梁的两根立柱立在上框左右两根横木上（原来立在框中间的空当里，整个提梁悬空）
+  for (const s of [-1, 1]) g.add(rbox(1.8, 11.2, 1.8, wood, { x: s * 12.9, y: 55.2 }, 0.4))
+  g.add(rbox(27.6, 1.8, 2.6, wood, { y: 66.2 }, 0.6))
   return g
 }
 
@@ -312,11 +328,13 @@ function ishidoro(p: string[]) {
 function zashikiAndon(p: string[]) {
   const [wood, paper, dark] = p
   const g = new THREE.Group()
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(ball(2, wood, { x: sx * 12, y: 2, z: sz * 12 }, [1, 0.8, 1]))
+  // 球脚压扁成 0.8，球心放在 1.6 才正好着地（原来放在 2，整盏灯离地 0.4）
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(ball(2, wood, { x: sx * 12, y: 1.6, z: sz * 12 }, [1, 0.8, 1]))
   g.add(rbox(30, 3, 30, wood, { y: 3 }, 0.8))
   g.add(paperBox(26, 27, 26, paper, wood, 6, 2, 2, 2.2))
   g.add(squareRim(29, 29, 2.4, wood, 33))
-  g.add(tube([[-11, 35, 0], [-8, 41, 0], [0, 43.5, 0], [8, 41, 0], [11, 35, 0]], 0.7, dark, { ...TUBE, seg: 24 }))
+  // 提手两端插进上框左右两根横木（原来落在框内侧，差 0.5cm 没接上）
+  g.add(tube([[-13.3, 34.4, 0], [-9.5, 41, 0], [0, 43.5, 0], [9.5, 41, 0], [13.3, 34.4, 0]], 0.7, dark, { ...TUBE, seg: 24 }))
   return g
 }
 
@@ -326,7 +344,7 @@ function akariTable(p: string[]) {
   const g = new THREE.Group()
   for (let k = 0; k < 3; k++) {
     const a = (k / 3) * Math.PI * 2
-    g.add(rod3([Math.cos(a) * 8, 0.4, Math.sin(a) * 8], [0, 9, 0], 0.4, wire, 6))
+    g.add(rod3([Math.cos(a) * 8, 0.2, Math.sin(a) * 8], [0, 9, 0], 0.4, wire, 6)) // 斜杆端面最低点正好着地
   }
   const cy = 21
   g.add(litOutlined(ball(11, paper, { y: cy }, [1, 1.08, 1]), paper, 0.42))
@@ -474,13 +492,14 @@ function tripodWood(p: string[]) {
   const g = new THREE.Group()
   for (let k = 0; k < 3; k++) {
     const a = (k / 3) * Math.PI * 2 + Math.PI / 6
-    g.add(rod3([Math.sin(a) * 18, 0, Math.cos(a) * 18], [Math.sin(a) * 2, 112, Math.cos(a) * 2], 1.4, wood, 10))
+    g.add(rod3([Math.sin(a) * 18, 0.2, Math.cos(a) * 18], [Math.sin(a) * 2, 112, Math.cos(a) * 2], 1.4, wood, 10)) // 斜腿端面最低点正好着地（原来陷进地面 0.2）
   }
   g.add(cyl(2.6, 2.6, 5, metal, { y: 108 }, 12))
   g.add(cyl(0.8, 0.8, 12, metal, { y: 113 }, 8))
   g.add(shadeOpen(16, 19, 24, shadeC, { y: 116 }))
   g.add(ring(19, 0.35, shadeC, 116))
   g.add(ring(16, 0.35, shadeC, 140))
+  g.add(spider(16, 140, 125, metal))
   g.add(bulb(3.4, 0, 127, 0))
   return g
 }
@@ -515,7 +534,8 @@ function phTable(p: string[]) {
   const [shadeC, metal, base] = p
   const g = new THREE.Group()
   g.add(puck(8, 2, base))
-  g.add(cyl(0.7, 0.7, 26, metal, { y: 2 }, 8))
+  // 灯杆一直穿到顶罩的顶盘里：三层罩都套在杆上（以前杆只到下罩，中罩悬空）
+  g.add(cyl(0.7, 0.7, 32.7, metal, { y: 2 }, 8))
   g.add(dome(12, 5, shadeC, 35, 3.5, 0.38))
   g.add(dome(9, 4, shadeC, 30.5, 5, 0.38))
   g.add(dome(6, 3, shadeC, 26.5, 4.2, 0.38))
@@ -531,7 +551,8 @@ function oakArm(p: string[]) {
   g.add(rod3([0, 3, -6], [0, 26, -3], 1.1, wood))
   g.add(ball(1.6, metal, { y: 26, z: -3 }))
   g.add(rod3([0, 26, -3], [0, 29, 10], 1, wood))
-  const head = G(cyl(1.4, 1.4, 3, metal, { y: 7 }, 10), shadeOpen(2.6, 6.5, 8, shadeC, {}, 0.4), ring(6.5, 0.3, shadeC, 0), bulb(2, 0, 3, 0))
+  // 罩顶一片金属盖把灯头和罩口接上（罩口半径 2.6，灯头只有 1.4）
+  const head = G(cyl(1.4, 1.4, 3, metal, { y: 7 }, 10), cyl(2.8, 2.8, 0.6, metal, { y: 7.7 }, 16), shadeOpen(2.6, 6.5, 8, shadeC, {}, 0.4), ring(6.5, 0.3, shadeC, 0), bulb(2, 0, 3, 0))
   head.rotation.x = -0.55
   head.position.set(0, 21, 12.5)
   g.add(head)
@@ -548,6 +569,7 @@ function swingWall(p: string[]) {
   g.add(cyl(0.2, 0.2, 4, metal, { y: 14, z: 24 }, 4))
   g.add(shadeOpen(4, 8, 10, shadeC, { y: 4, z: 24 }))
   g.add(cyl(1.2, 1.2, 1.6, metal, { y: 13.4, z: 24 }, 8))
+  g.add(cyl(4.2, 4.2, 0.6, metal, { y: 13.7, z: 24 }, 20)) // 罩顶盖：把布罩口沿接到灯头上
   g.add(bulb(2.2, 0, 7.5, 24))
   return mountAt(g, 145)
 }
@@ -674,6 +696,12 @@ function cage(r: number, h: number, metal: string, cy: number, x = 0, z = 0) {
     g.add(tube(pts, 0.28, metal, { ...TUBE, seg: 12 }))
   }
   for (const t of [-0.6, 0, 0.6]) g.add(ring(r * Math.sqrt(1 - 0.75 * t * t), 0.35, metal, cy + (t * h) / 2, x, z))
+  // 上下收口的圆盘：竖丝两端焊在盘上，下盘坐在灯头上（原来两端是敞着的一圈，笼子和灯泡都悬在灯头上方）
+  const re = r * 0.5 + 0.3
+  for (const s of [-1, 1]) g.add(cyl(re, re, 1, metal, { x, y: cy + (s * h) / 2 - 0.6, z }, 16))
+  // 灯泡的螺口：从下盘伸进灯泡
+  const neck = h / 2 - 3.6 * 1.35 + 1.5
+  g.add(cyl(1.5, 1.5, neck, BRASS, { x, y: cy - h / 2, z }, 10))
   g.add(bulb(3.6, x, cy, z, 1.35))
   return g
 }
@@ -701,7 +729,12 @@ function surveyor(p: string[]) {
     g.add(cyl(1.6, 1.6, 2, metal, { x: Math.sin(a) * 20, z: Math.cos(a) * 20 }, 10))
   }
   g.add(cyl(3, 3, 4, metal, { y: 114 }, 12))
-  for (const s of [-1, 1]) g.add(rbox(1.2, 14, 3, metal, { x: s * 12.2, y: 117 }, 0.4))
+  // U 形支架：横梁坐在云台上，两臂夹住灯头两侧的转轴（原来两臂既不接云台也不挨灯头）
+  g.add(rbox(25.4, 1.6, 3, metal, { y: 116.8 }, 0.4))
+  for (const s of [-1, 1]) {
+    g.add(rbox(1.2, 14, 3, metal, { x: s * 12.1, y: 117 }, 0.4))
+    g.add(P(cyl(1.6, 1.6, 2.4, metal, {}, 12), s * 11.9, 130, 0, 0, 0, Math.PI / 2))
+  }
   g.add(P(cyl(11, 11, 20, metal, {}, 28), 0, 130, -2, Math.PI / 2))
   g.add(P(cyl(11.6, 11.6, 2, metal, {}, 28), 0, 130, 8.6, Math.PI / 2))
   g.add(P(lit(cyl(10, 10, 0.6, light, {}, 28), light), 0, 130, 9.4, Math.PI / 2))
@@ -718,6 +751,9 @@ function pipeFloor(p: string[]) {
   g.add(cyl(2.3, 2.3, 3, pipe, { y: 62 }, 16))
   g.add(P(torus(4.5, 0.6, accent), 0, 63.5, 3.2))
   g.add(rod3([0, 63.5, 0], [0, 63.5, 3.2], 0.6, accent))
+  // 阀门手轮的十字辐条：轮圈接到中间的轴上（以前轮圈空套在轴头外面）
+  g.add(rod3([-4.5, 63.5, 3.2], [4.5, 63.5, 3.2], 0.4, accent))
+  g.add(rod3([0, 59, 3.2], [0, 68, 3.2], 0.4, accent))
   g.add(ball(2.6, pipe, { y: 129 }))
   g.add(P(cyl(1.7, 1.7, 24, pipe, {}, 14), 12, 129, 0, 0, 0, Math.PI / 2))
   g.add(ball(2.6, pipe, { x: 24, y: 129 }))
@@ -810,7 +846,8 @@ function fringeFloor(p: string[]) {
   g.add(ring(19, 0.5, tassel, 122))
   g.add(fringe(18.8, 122, 6, tassel, 34))
   g.add(bulb(3.2, 0, 132, 0))
-  g.add(ball(1.4, BRASS, { y: 147.5 }))
+  g.add(spider(8.9, 146, 136, BRASS))
+  g.add(ball(1.4, BRASS, { y: 147.3 }))
   return g
 }
 
@@ -843,7 +880,8 @@ function tiffanyFloor(p: string[]) {
   g.add(latheGlow([[0, 0], [14, 0], [14, 1.8], [10, 4], [5, 6], [2.6, 10], [2, 120], [3, 122], [0, 122]], bronze, {}, 20))
   for (let k = 0; k < 3; k++) {
     const a = (k / 3) * Math.PI * 2
-    g.add(rod3([0, 124, 0], [Math.sin(a) * 9, 130, Math.cos(a) * 9], 0.4, bronze, 6))
+    // 撑杆从灯柱顶面里伸出、撑到灯罩中腰的铅条圈（半径 14）：以前杆头离柱顶 2cm、杆尾只到半径 9，整只彩玻璃罩悬空
+    g.add(rod3([0, 121.6, 0], [Math.sin(a) * 13.8, 130, Math.cos(a) * 13.8], 0.4, bronze, 6))
   }
   g.add(stainedShade(6, 22, 16, [c1, c2, c1, c3], bronze, 122, 16))
   g.add(cyl(6.4, 6.4, 1.2, bronze, { y: 138 }, 16))
@@ -861,6 +899,7 @@ function fringeTable(p: string[]) {
   g.add(latheGlow([[12.5, 0], [12, 3], [9, 8], [6.5, 13], [6, 14.5]], shadeC, { y: 22 }, 28, 0.42))
   g.add(ring(12.5, 0.4, tassel, 22))
   g.add(fringe(12.3, 22, 3.6, tassel, 26))
+  g.add(spider(5.9, 36.5, 26, BRASS))
   g.add(bulb(2.4, 0, 28, 0))
   return g
 }
@@ -974,6 +1013,7 @@ function bearFloor(p: string[]) {
     const a = (k / 18) * Math.PI * 2
     g.add(lit(ball(1.6, shadeC, { x: Math.sin(a) * 17, y: 116, z: -4 + Math.cos(a) * 17 }), shadeC, 0.42))
   }
+  g.add(spider(14, 136, 123, pole, 0, -4))
   g.add(bulb(3, 0, 126, -4))
   return fitGroup(g)
 }
@@ -1121,6 +1161,9 @@ function moonWall(p: string[]) {
   g.add(ball(2.6, bear, { x: -4, y: 4.2, z: 1 }, [1.2, 0.9, 0.9]))
   g.add(ball(2, bear, { x: -6.6, y: 6.4, z: 1.2 }))
   for (const sx of [-1, 1]) g.add(ball(0.8, bear, { x: -6.6 + sx * 1.4, y: 8.2, z: 1 }))
+  // 小熊的脸：口鼻 + 眼睛（原来只有两团球加耳朵，认不出是熊）
+  g.add(ball(0.75, '#fff4e6', { x: -6.6, y: 5.9, z: 2.85 }, [1, 0.8, 0.6]))
+  g.add(face(3, { x: -6.6, y: 6.8, z: 2.95 }))
   return mountAt(g, 148)
 }
 
@@ -1158,6 +1201,7 @@ function bambooNodeFloor(p: string[]) {
   g.add(shadeOpen(15, 15, 26, silk, { y: 124 }))
   g.add(ring(15, 0.6, bamboo, 124))
   g.add(ring(15, 0.6, bamboo, 150))
+  g.add(spider(15, 150, 136, bamboo))
   g.add(bulb(3.2, 0, 136, 0))
   return g
 }
@@ -1225,6 +1269,7 @@ function bambooTable(p: string[]) {
   g.add(shadeOpen(10, 11, 13, silk, { y: 24 }))
   g.add(ring(11, 0.4, bamboo, 24))
   g.add(ring(10, 0.4, bamboo, 37))
+  g.add(spider(10, 37, 28.4, bamboo))
   g.add(bulb(2.4, 0, 30, 0))
   return g
 }
@@ -1240,6 +1285,7 @@ function vaseTable(p: string[]) {
   g.add(cyl(0.6, 0.6, 9, BRASS, { y: 26.6 }, 8))
   g.add(shadeOpen(9, 12, 14, silk, { y: 30 }))
   g.add(ring(12, 0.4, pattern, 30))
+  g.add(spider(9, 44, 35.6, BRASS))
   g.add(bulb(2.4, 0, 36, 0))
   return g
 }
@@ -1291,7 +1337,9 @@ function pleatBrassFloor(p: string[]) {
   g.add(pleated(13, 20, 26, shadeC, 120, 26))
   g.add(ring(20, 0.5, brass, 120))
   g.add(ring(13, 0.45, brass, 146))
-  g.add(ball(1.8, brass, { y: 149 }))
+  // 顶珠坐在支架的毂上（原来悬在敞开的罩口正中）
+  g.add(spider(12.6, 146, 124, brass))
+  g.add(ball(1.8, brass, { y: 147.7 }))
   g.add(bulb(3.4, 0, 132, 0))
   return g
 }
@@ -1309,7 +1357,8 @@ function candelabraFloor(p: string[]) {
   for (const [s, r] of arms) {
     const x = s * r
     if (s) g.add(tube([[0, 129, 0], [s * 6, 127, 0], [s * 13, 132, 0], [x, 139, 0]], 0.8, brass, { ...TUBE, seg: 24 }))
-    const y = s ? 139 : 132
+    // 中间那支的烛杯坐在灯柱顶面（131）上，以前离了 1cm
+    const y = s ? 139 : 131
     g.add(cyl(3, 2, 2.2, brass, { x, y }, 16))
     g.add(cyl(1.8, 1.8, s ? 12 : 18, candle, { x, y: y + 2 }, 14))
     g.add(cyl(1.9, 1.9, 1, drip, { x, y: y + 1.8 }, 14))
@@ -1359,6 +1408,7 @@ function crystalTable(p: string[]) {
   g.add(cyl(0.6, 0.6, 9, metal, { y }, 8))
   g.add(shadeOpen(9, 12.5, 14, shadeC, { y: y + 4 }))
   g.add(ring(12.5, 0.4, metal, y + 4))
+  g.add(spider(9, y + 18, y + 9, metal))
   for (let k = 0; k < 14; k++) {
     const a = (k / 14) * Math.PI * 2
     const d = ball(0.7, crystal, { x: Math.sin(a) * 12.5, y: y + 2.6, z: Math.cos(a) * 12.5 }, [1, 1.7, 1])
@@ -1379,6 +1429,7 @@ function pleatUrnTable(p: string[]) {
   g.add(cyl(0.6, 0.6, 9, brass, { y: 22.4 }, 8))
   g.add(pleated(9, 13, 16, shadeC, 27))
   g.add(ring(13, 0.4, brass, 27))
+  g.add(spider(8.3, 43, 31.4, brass))
   g.add(bulb(2.6, 0, 34, 0))
   return g
 }
@@ -1415,6 +1466,8 @@ function candleSconce(p: string[]) {
     g.add(cyl(1.4, 1.4, 7, candle, { x: s * 10, y: 11.6 }, 12))
     g.add(bulb(1, s * 10, 20, 0, 1.7))
   }
+  // 水晶坠用一根小挂钩从背板伸出来吊着（以前离背板 1.4cm 悬空）
+  g.add(rod3([0, 5.4, -7.6], [0, 4.2, -5], 0.15, metal))
   const drop = ball(0.9, CRYSTAL, { y: 3, z: -5 }, [1, 1.8, 1])
   drop.material = toon(CRYSTAL, { transparent: 0.6 })
   g.add(drop)
@@ -1430,6 +1483,7 @@ function shadeSconce(p: string[]) {
   g.add(cyl(1.4, 1.2, 2, metal, { y: 12.6 }, 10))
   g.add(pleated(5.5, 8, 9, shadeC, 15, 16))
   g.add(ring(8, 0.3, metal, 15))
+  g.add(spider(5.1, 24, 14.6, metal))
   g.add(bulb(1.8, 0, 18.5, 0))
   return mountAt(g, WALL_Y)
 }
@@ -1443,7 +1497,7 @@ function rattanFloor(p: string[]) {
   const [rattan, wood, base] = p
   const g = new THREE.Group()
   g.add(puck(15, 3.5, base))
-  g.add(cyl(1.6, 1.8, 118, wood, { y: 3 }, 12))
+  g.add(cyl(1.6, 1.8, 143.5, wood, { y: 3 }, 12)) // 灯杆一直顶到罩顶（原来停在罩口下面，藤罩悬空）
   const cy = 132
   g.add(latheGlow([[14, -10], [17, -4], [17.5, 2], [15, 9], [8, 14], [0.5, 15]], rattan, { y: cy }, 32, 0.38))
   for (let k = 0; k < 16; k++) {
@@ -1503,6 +1557,7 @@ function turnedWoodFloor(p: string[]) {
   g.add(shadeOpen(17, 20, 26, shadeC, { y: 122 }))
   g.add(ring(20, 0.4, wood, 122))
   g.add(ring(17, 0.4, wood, 148))
+  g.add(spider(17, 148, 137, BRASS))
   g.add(bulb(3.4, 0, 134, 0))
   return g
 }
@@ -1523,6 +1578,7 @@ function jugTable(p: string[]) {
   g.add(cyl(0.6, 0.6, 8, BRASS, { y: 22 }, 8))
   g.add(shadeOpen(10, 12.5, 15, shadeC, { y: 26 }))
   g.add(ring(12.5, 0.35, band, 26))
+  g.add(spider(10, 41, 30, BRASS))
   g.add(bulb(2.6, 0, 33, 0))
   return g
 }
@@ -1532,7 +1588,7 @@ function rattanTable(p: string[]) {
   const [rattan, wood] = p
   const g = new THREE.Group()
   g.add(cyl(7, 7.5, 2.4, wood, {}, 24))
-  g.add(cyl(1.2, 1.4, 16, wood, { y: 2.4 }, 12))
+  g.add(cyl(1.2, 1.4, 27, wood, { y: 2.4 }, 12)) // 灯杆一直顶到罩顶（原来停在罩口，藤罩悬空）
   const cy = 18
   g.add(latheGlow([[11, 0], [10.6, 4], [8.4, 8.6], [4, 11], [0.5, 11.6]], rattan, { y: cy }, 28, 0.38))
   for (let k = 0; k < 12; k++) {

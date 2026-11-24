@@ -209,6 +209,21 @@ function clearBox(w: number, h: number, d: number, t: number, y0 = 0, a = 0.22, 
   return clear(tray(w, h, d, t, color, { y: y0 }, 0.2), color, a)
 }
 
+/**
+ * 带一排直角方孔的通风条：xy 平面里宽 w（x 居中）、高 h（底边在 y = 0）、厚 t（z 居中）；xs 是各孔的中心 x，孔底在 y0，孔宽 hw、高 hh。
+ * 不用 holePanel：它的圆角孔每个要一千多个三角面，这么小的孔看不出圆角。
+ */
+function ventStrip(w: number, h: number, t: number, color: string, xs: number[], y0: number, hw: number, hh: number) {
+  const s = new THREE.Shape([new THREE.Vector2(-w / 2, 0), new THREE.Vector2(w / 2, 0), new THREE.Vector2(w / 2, h), new THREE.Vector2(-w / 2, h)])
+  for (const x of xs) s.holes.push(new THREE.Path([new THREE.Vector2(x - hw / 2, y0), new THREE.Vector2(x - hw / 2, y0 + hh), new THREE.Vector2(x + hw / 2, y0 + hh), new THREE.Vector2(x + hw / 2, y0)]))
+  const geo = new THREE.ExtrudeGeometry(s, { depth: t, bevelEnabled: false })
+  geo.translate(0, 0, -t / 2)
+  const m = new THREE.Mesh(geo, toon(color))
+  m.castShadow = true
+  m.receiveShadow = true
+  return m
+}
+
 /** 竖直三角板（xy 平面，底边 w、高 h，沿 z 厚 t） */
 function tri(w: number, h: number, t: number, color: string) {
   const s = new THREE.Shape([new THREE.Vector2(-w / 2, 0), new THREE.Vector2(w / 2, 0), new THREE.Vector2(0, h)])
@@ -550,7 +565,7 @@ function hamsterCastle(p: string[]) {
   g.add(cyl(7.6, 7.6, 1.6, acc, { x: tx, y: ty + 14.2 }, 28))
   const dome = ball(7, acc, { x: tx, y: ty + 15.8 }, [1, 0.55, 1])
   g.add(dome)
-  g.add(cyl(4.5, 4.5, 0.6, '#f3e3b8', { x: tx, y: ty + 2.2 }, 20))
+  g.add(cyl(4.5, 4.5, 0.6, '#f3e3b8', { x: tx, y: ty + 2 }, 20))
   // 地面瞭望舱
   const px = 25
   g.add(cup(8, 8, 6, 1, acc, { x: px }))
@@ -702,6 +717,8 @@ function guineaPen(p: string[]) {
     const t = (i / n) * PI
     tun.add(P(rbox(1.6, 1.6, 20, i % 2 ? HAY : shade(HAY, -0.08), {}, 0.6), Math.cos(t) * 9, Math.sin(t) * 9, 0, 0, 0, t))
   }
+  // 两道绑线把草条串成一座拱桥（没有绑线的话，中间八根草条各自悬在半空）
+  for (const z of [-7, 7]) tun.add(P(arcBar(9, 0.28, shade(HAY, -0.22), PI), 0, 0, z))
   tun.position.set(-W / 2 + 18, 2.6, -6)
   g.add(tun)
   // 干草堆 + 干草架
@@ -731,14 +748,14 @@ function chinchillaCage(p: string[]) {
   const HW = 104
   g.add(wireBox(W - 0.6, D - 0.6, y0, HW, wireC, { gap: 2, r: 0.15, frameR: 0.38, rings: [y0 + 52] }))
   g.add(P(frameXY(-10, y0 + 40, 30, 50, 0.38, wireC), 0, 0, D / 2 - 0.3 + 0.4))
-  // 层板（靠壁），带支撑
+  // 层板（靠壁），带支撑：板边顶到侧面和前后的笼丝上（以前四周各留着 0.5～1.5cm 的缝，整块板悬在笼子中间）
   const shelves: [number, number, number][] = [
-    [-W / 2 + 13, 44, 24],
-    [W / 2 - 13, 70, 24],
-    [-W / 2 + 13, 96, 24],
+    [-W / 2 + 12.4, 44, 24],
+    [W / 2 - 12.4, 70, 24],
+    [-W / 2 + 12.4, 96, 24],
   ]
   for (const [x, y, w] of shelves) {
-    g.add(rbox(w, 2, D - 4, shelf, { x, y }, 0.5))
+    g.add(rbox(w, 2, D - 0.9, shelf, { x, y }, 0.5))
     g.add(rbox(w * 0.8, 1.2, 1.4, shade(shelf, -0.15), { x, y: y - 1.2, z: -D / 2 + 2 }, 0.3))
   }
   // 地面木屋
@@ -778,11 +795,12 @@ function domeBirdcage(p: string[], kind: BirdKind = 'budgie') {
   const ry = yTop + 2.2 + ringR + ringT
   g.add(torus(ringR, ringT, wireC, { y: ry - 0.3 }))
   // 栖木、秋千、两个食杯
-  g.add(rod3([-rr + 0.6, y0 + 9, 0], [rr - 0.6, y0 + 9, 0], 0.55, WOOD, 8))
+  // 栖木两头插到笼丝上（笼丝在半径 rr 处）；吊秋千的丝挂到顶帽上（穹顶顶上收拢处），不然栖木、秋千连同鸟一起悬在笼子中间
+  g.add(rod3([-rr + 0.1, y0 + 9, 0], [rr - 0.1, y0 + 9, 0], 0.55, WOOD, 8))
   const sy = y0 + hw - 3
   g.add(torus(4.5, 0.18, wireC, { y: sy, z: 2 }))
   g.add(rod3([-4, sy - 2, 2], [4, sy - 2, 2], 0.45, WOOD, 8))
-  g.add(wire([0, sy + 4.5, 2], [0, yTop - 1.2, 0], 0.12, wireC))
+  g.add(wire([0, sy + 4.5, 2], [0, yTop - 0.4, 0], 0.12, wireC))
   for (const s of [-1, 1]) {
     g.add(cup(2.4, 1.9, 3, 0.35, acc, { x: s * (rr - 2.4), y: y0 + 4, z: -3 }))
     g.add(cyl(1.9, 1.9, 0.4, s > 0 ? SEED : WATER, { x: s * (rr - 2.4), y: y0 + 6.1, z: -3 }, 16))
@@ -848,13 +866,16 @@ function squareCage(p: string[], W: number, D: number, HW: number, birds: [BirdK
   const pb = y0 + HW * 0.58
   g.add(rod3([-W / 4, pa, -D / 2 + 0.6], [-W / 4, pa, D / 2 - 0.6], 0.7, WOOD, 8))
   g.add(rod3([W / 4, pb, -D / 2 + 0.6], [W / 4, pb, D / 2 - 0.6], 0.75, WOODD, 8))
-  // 秋千
+  // 秋千：挂在顶网的一根横丝上（z 取离 2cm 最近的那根；以前吊线顶端落在两根丝中间，悬空）
   const sy = top - 16
-  for (const s of [-1, 1]) g.add(wire([s * 4, top, 2], [s * 4, sy, 2], 0.12, wc))
-  g.add(rod3([-4.4, sy, 2], [4.4, sy, 2], 0.5, WOOD, 8))
-  for (let i = 0; i < 4; i++) g.add(ball(0.9, [acc, C.lemon, C.sky, C.pink][i], { x: -4, y: sy + 3 + i * 2.2, z: 2 }))
-  // 镜子 + 铃铛（左壁内侧）
-  const mx = -W / 2 + 1.6
+  const td = D - 0.6
+  const tn = Math.max(1, Math.round(td / 2.8))
+  const sz = -td / 2 + (td * Math.round(((2 + td / 2) * tn) / td)) / tn
+  for (const s of [-1, 1]) g.add(wire([s * 4, top, sz], [s * 4, sy, sz], 0.12, wc))
+  g.add(rod3([-4.4, sy, sz], [4.4, sy, sz], 0.5, WOOD, 8))
+  for (let i = 0; i < 4; i++) g.add(ball(0.9, [acc, C.lemon, C.sky, C.pink][i], { x: -4, y: sy + 3 + i * 2.2, z: sz }))
+  // 镜子 + 铃铛（左壁内侧）：镜框贴着笼丝
+  const mx = -W / 2 + 1
   const my = y0 + HW * 0.68
   g.add(P(torus(3.4, 0.5, acc, {}), mx, my, -D / 4, 0, PI / 2))
   const mirror = cyl(3.2, 3.2, 0.3, '#dfeaf2', {}, 24)
@@ -885,7 +906,7 @@ function squareStand(p: string[]) {
     g.add(rbox(2, 2, D - 8, wireC, { x: W / 2 - 3, y }, 0.4), rbox(2, 2, D - 8, wireC, { x: -W / 2 + 3, y }, 0.4))
   }
   for (let x = -W / 2 + 6; x <= W / 2 - 6; x += 3) g.add(wire([x, 23.6, -D / 2 + 3], [x, 23.6, D / 2 - 3], 0.2, wireC))
-  g.add(tray(30, 8, 20, 0.6, base, { x: -10, y: 24.2 }, 0.4))
+  g.add(tray(30, 8, 20, 0.6, base, { x: -10, y: 23.8 }, 0.4))
   const cage = squareCage(p, 60, 46, 58, ['cockatiel', 'budgie'], false)
   cage.position.y = SH
   g.add(cage)
@@ -959,7 +980,7 @@ function perchStand(p: string[]) {
   const g = new THREE.Group()
   g.add(tray(40, 3.5, 28, 1, base, {}, 0.6))
   g.add(rbox(38, 0.4, 26, '#efe4c8', { y: 1 }, 0.15))
-  g.add(cyl(1, 1.2, 34, perch, { x: -6, y: 1 }, 12))
+  g.add(cyl(1, 1.2, 34.3, perch, { x: -6, y: 0.7 }, 12))
   g.add(rod3([-18, 35, 0], [6, 35, 0], 0.9, perch, 8))
   g.add(rod3([-6, 22, 0], [6, 22, 0], 0.8, perch, 8))
   g.add(rod3([6, 22, 0], [6, 35, 0], 0.6, perch, 8))
@@ -970,8 +991,9 @@ function perchStand(p: string[]) {
     [-14, SEED],
     [-8, WATER],
   ] as const) {
-    g.add(cup(2.5, 2.1, 3.2, 0.4, acc, { x, y: 1, z: 8 }))
-    g.add(cyl(2.1, 2.1, 0.4, food, { x, y: 3.4, z: 8 }, 16))
+    // 杯子搁在垫纸上面（垫纸顶面 y = 1.4）
+    g.add(cup(2.5, 2.1, 3.2, 0.4, acc, { x, y: 1.4, z: 8 }))
+    g.add(cyl(2.1, 2.1, 0.4, food, { x, y: 3.8, z: 8 }, 16))
   }
   g.add(wire([-16, 35, 0], [-16, 30, 0], 0.08, '#9a8a7a'))
   g.add(ball(1.2, '#e3b549', { x: -16, y: 29, z: 0 }))
@@ -992,7 +1014,7 @@ function terrarium(p: string[]) {
   const H = 45
   g.add(rbox(W, 5, D, frame, {}, 0.6))
   // 正面下沿通风条
-  g.add(holePanel(W - 2, 4, 0.8, frame, Array.from({ length: 10 }, (_, i) => ({ kind: 'rect' as const, x: -22.5 + i * 5, y: 1.2, w: 3.2, h: 1.4, r: 0.4 })), { y: 5, z: D / 2 - 0.4 }, 0.4))
+  g.add(P(ventStrip(W - 2, 4, 0.8, frame, Array.from({ length: 10 }, (_, i) => -22.5 + i * 5), 1.2, 3.2, 1.4), 0, 5, D / 2 - 0.4))
   // 玻璃：后、左、右 + 两扇门
   const gl = new THREE.Group()
   gl.add(rbox(W - 1, H - 6, 0.5, C.glass, { y: 5, z: -D / 2 + 0.6 }, 0.1))
@@ -1012,13 +1034,16 @@ function terrarium(p: string[]) {
   g.add(holePanel(W, D, 1, frame, [{ kind: 'rect', x: 0, y: 2.4, w: W - 4.8, h: D - 4.8, r: 0.5 }], { y: H - 0.5, z: D / 2, rx: -PI / 2 }, 1))
   for (let x = -W / 2 + 3; x <= W / 2 - 3; x += 1.3) g.add(wire([x, H - 0.5, -D / 2 + 2.4], [x, H - 0.5, D / 2 - 2.4], 0.09, '#2a2a2e'))
   for (let z = -D / 2 + 3; z <= D / 2 - 3; z += 1.3) g.add(wire([-W / 2 + 2.4, H - 0.5, z], [W / 2 - 2.4, H - 0.5, z], 0.09, '#2a2a2e'))
-  // 加热灯：反光罩倒扣在网上，灯泡发光
+  // 加热灯：反光罩倒扣着搁在顶网上，灯泡发光。ly 是罩口高度 = 网面（以前罩口比网高 0.9cm，整盏灯连电线悬在箱顶上方）
   const lx = W / 5
-  g.add(P(cup(7.5, 4.5, 7.5, 0.4, lamp), lx, H + 8, -4, PI))
-  g.add(cyl(2, 2, 2.5, frame, { x: lx, y: H + 7.6, z: -4 }, 16))
-  g.add(litDeep(ball(2.6, BULB, { x: lx, y: H + 3.6, z: -4 }), BULB, 1))
-  g.add(litDeep(cyl(6.8, 6.8, 0.2, '#ffcf8a', { x: lx, y: H + 0.55, z: -4 }, 32), '#ffcf8a', 0.6))
-  g.add(cappedTube([[lx, H + 8.6, -4], [lx - 6, H + 9.5, -8], [-W / 2 + 4, H + 1.5, -D / 2 + 3]], 0.3, '#2a2a2e', { ...TUBE, seg: 24 }))
+  const ly = H - 0.3
+  g.add(P(cup(7.5, 4.5, 7.5, 0.4, lamp), lx, ly + 7.5, -4, PI))
+  // 灯头往罩里伸进 0.3cm，底面不和罩的内顶共面
+  g.add(cyl(2, 2, 2.5, frame, { x: lx, y: ly + 6.8, z: -4 }, 16))
+  g.add(litDeep(ball(2.6, BULB, { x: lx, y: ly + 3.1, z: -4 }), BULB, 1))
+  g.add(litDeep(cyl(6.8, 6.8, 0.2, '#ffcf8a', { x: lx, y: ly + 0.05, z: -4 }, 32), '#ffcf8a', 0.6))
+  // 电线顺着箱顶搭到后角的顶框上
+  g.add(cappedTube([[lx, ly + 8.1, -4], [lx - 6, ly + 9, -8], [-W / 2 + 1.6, H + 0.3, -D / 2 + 1.6]], 0.3, '#2a2a2e', { ...TUBE, seg: 24 }))
   // 底砂、软木背景、树枝、躲避石、水盆、多肉
   g.add(rbox(W - 2.4, 4, D - 2.4, '#e3c08a', { y: 5 }, 0.5))
   g.add(rbox(W - 3, H - 12, 1.2, cork, { y: 9, z: -D / 2 + 1.5 }, 0.5))
@@ -1046,11 +1071,13 @@ function turtleTank(p: string[]) {
   const H = 30
   g.add(clearBox(W, H, D, 0.5, 0, 0.18))
   g.add(tray(W + 0.4, 1.4, D + 0.4, 0.6, rim, {}, 0.3))
-  for (const s of [-1, 1]) g.add(rbox(W + 0.4, 1.2, 0.8, rim, { y: H - 1.2, z: s * (D / 2 - 0.2) }, 0.3))
-  for (const s of [-1, 1]) g.add(rbox(0.8, 1.2, D - 1.2, rim, { x: s * (W / 2 - 0.2), y: H - 1.2 }, 0.3))
+  // 缸沿包条比玻璃口高出 0.3cm，把玻璃的上口包住（顶面齐平的话两种颜色共面，会闪）
+  for (const s of [-1, 1]) g.add(rbox(W + 0.4, 1.2, 0.8, rim, { y: H - 0.9, z: s * (D / 2 - 0.2) }, 0.3))
+  for (const s of [-1, 1]) g.add(rbox(0.8, 1.2, D - 1.2, rim, { x: s * (W / 2 - 0.2), y: H - 0.9 }, 0.3))
   g.add(rbox(W - 1.4, 2.6, D - 1.4, '#c9b38f', { y: 0.6 }, 0.4))
   const wl = 14
-  g.add(clear(rbox(W - 1.4, wl - 0.8, D - 1.4, WATER, { y: 0.7 }, 0.2), WATER, 0.28))
+  // 水体压在底砂上面、四周比底砂缩进 0.1cm（以前和底砂同宽同底，四个侧面整片共面）
+  g.add(clear(rbox(W - 1.6, wl - 3, D - 1.6, WATER, { y: 2.9 }, 0.2), WATER, 0.28))
   // 晒台：石堆 + 平台 + 斜坡
   const rand = rng(9)
   for (let i = 0; i < 7; i++) g.add(ball(3 + rand() * 1.6, shade(stone, (rand() - 0.5) * 0.1), { x: 20 + (rand() - 0.5) * 12, y: 4 + i * 1.6, z: (rand() - 0.5) * 12 }, [1.2, 0.8, 1]))

@@ -6,8 +6,8 @@
 
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
-import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
-import { C, S, G, glow, holePanel, paintPanel, rng, slab, type AssetDef, type Hole, type Poly } from '../kit'
+import { ball, cached, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
+import { C, S, G, glow, paintPanel, rng, slab, type AssetDef, type Hole, type Poly } from '../kit'
 import { P, PI, batten, cylX, cylZ, fitBuild, ghost, lit, noOutline, taperRod3, type V3 } from '../geo'
 import { J, M, N, PROP, R, definer, type Pal } from '../packkit'
 
@@ -58,10 +58,15 @@ function path(pts: V3[], r0: number, r1: number, color: string): THREE.Mesh[] {
 }
 
 /** 从 base 伸出的一片叶子：yaw 绕 y 的朝向（0 = +z），pitch 上扬角 */
-function leafOut(base: V3, len: number, yaw: number, pitch: number, color: string, wide = 0.45, thick = 0.12) {
+/**
+ * seg 给了就用这么粗的球（[经, 纬]）：一盆几十上百片的小叶 / 针叶，每片 12×8 的球（176 面）太浪费。
+ * 压扁的叶片用 [12, 2]（上下两个扇面，24 面）：正面轮廓和原来一样是 12 边形，侧面薄得看不出弧度。
+ */
+function leafOut(base: V3, len: number, yaw: number, pitch: number, color: string, wide = 0.45, thick = 0.12, seg?: [number, number]) {
   const dir = new THREE.Vector3(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch))
   const c = new THREE.Vector3(...base).addScaledVector(dir, len * 0.45)
   const m = ball(len / 2, color, { x: c.x, y: c.y, z: c.z }, [wide, thick, 1])
+  if (seg) m.geometry = cached(`cl-leaf${len / 2},${seg[0]}x${seg[1]}`, () => new THREE.SphereGeometry(len / 2, seg[0], seg[1]))
   m.rotation.order = 'YXZ'
   m.rotation.set(-pitch, yaw, 0)
   return m
@@ -134,6 +139,45 @@ function holeGrid(cx: number, cy: number, R: number, pitch: number, r: number): 
   for (let x = -R; x <= R + 1e-6; x += pitch)
     for (let y = -R; y <= R + 1e-6; y += pitch) if (Math.hypot(x, y) <= R - r) out.push({ kind: 'circle', x: cx + x, y: cy + y, r })
   return out
+}
+
+/**
+ * 密孔散热板：和 kit 的 holePanel 同样的摆法（xy 平面、底边 y = 0、z 居中），但圆孔按 seg 边形开，倒角只有一段（bevel = 0 不倒角）。
+ * holePanel 的圆孔每个 32 段，约 260 面；七八十个 0.4cm 的小孔就是两万面，而孔小到看不出是不是正圆。
+ */
+function perfPanel(w: number, h: number, t: number, color: string, holes: Hole[], at: { x?: number; y?: number; z?: number; rx?: number; ry?: number }, corner: number, seg = 8, bevel = 0) {
+  const r = Math.min(corner, w / 2, h / 2)
+  const s = new THREE.Shape()
+  s.moveTo(-w / 2 + r, 0)
+  s.lineTo(w / 2 - r, 0)
+  s.absarc(w / 2 - r, r, r, -PI / 2, 0, false)
+  s.lineTo(w / 2, h - r)
+  s.absarc(w / 2 - r, h - r, r, 0, PI / 2, false)
+  s.lineTo(-w / 2 + r, h)
+  s.absarc(-w / 2 + r, h - r, r, PI / 2, PI, false)
+  s.lineTo(-w / 2, r)
+  s.absarc(-w / 2 + r, r, r, PI, PI * 1.5, false)
+  for (const hole of holes) {
+    if (hole.kind !== 'circle') continue
+    const path = new THREE.Path()
+    // 顺时针（和外轮廓反向）
+    for (let i = 0; i <= seg; i++) {
+      const a = -(i / seg) * PI * 2
+      const x = hole.x + Math.cos(a) * hole.r
+      const y = hole.y + Math.sin(a) * hole.r
+      if (i === 0) path.moveTo(x, y)
+      else path.lineTo(x, y)
+    }
+    s.holes.push(path)
+  }
+  const geo = new THREE.ExtrudeGeometry(s, { depth: t - bevel * 2, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel, bevelOffset: -bevel, bevelSegments: 1, curveSegments: 6 })
+  geo.translate(0, 0, -t / 2 + bevel)
+  const m = new THREE.Mesh(geo, toon(color))
+  m.position.set(at.x ?? 0, at.y ?? 0, at.z ?? 0)
+  m.rotation.set(at.rx ?? 0, at.ry ?? 0, 0)
+  m.castShadow = true
+  m.receiveShadow = true
+  return m
 }
 
 // ---- 平放设备上的按键（y 为机身顶面） ----
@@ -455,7 +499,7 @@ function xsxBody(p: string[], foot: boolean) {
   if (foot) g.add(puck(6.5, 0.7, BLACK, {}))
   g.add(rbox(15.1, 28.4, 15.1, body, { y: y0 }, 0.8))
   g.add(lit(cyl(6.6, 6.6, 0.3, vent, { y: y0 + 28.45 }, 32), vent, 0.55))
-  g.add(holePanel(15.1, 15.1, 1.6, body, holeGrid(0, 7.55, 6.3, 1.25, 0.42), { y: y0 + 29.2, z: 7.55, rx: -PI / 2 }, 0.8))
+  g.add(perfPanel(15.1, 15.1, 1.6, body, holeGrid(0, 7.55, 6.3, 1.25, 0.42), { y: y0 + 29.2, z: 7.55, rx: -PI / 2 }, 0.8, 8, 0.32))
   g.add(led(-5.6, y0 + 26.4, 7.65, acc, 0.35))
   g.add(rbox(10, 0.35, 0.4, BLACK, { y: y0 + 18, z: 7.55 }, 0.12))
   g.add(rbox(1.2, 0.5, 0.4, BLACK, { x: 5.4, y: y0 + 2.2, z: 7.55 }, 0.12))
@@ -471,7 +515,7 @@ function xssBody(p: string[]) {
   const g = new THREE.Group()
   g.add(rbox(6.5, 27.5, 15.1, body, {}, 0.8))
   g.add(cylX(5.6, 0.2, '#111114', 3.25, 18, 0, 32))
-  g.add(holePanel(11.2, 11.2, 0.4, vent, holeGrid(0, 5.6, 5.0, 0.95, 0.32), { x: 3.55, y: 18 - 5.6, ry: PI / 2 }, 5.6))
+  g.add(perfPanel(11.2, 11.2, 0.4, vent, holeGrid(0, 5.6, 5.0, 0.95, 0.32), { x: 3.55, y: 18 - 5.6, ry: PI / 2 }, 5.6, 6))
   g.add(led(-1.6, 25.6, 7.6, acc, 0.3))
   g.add(rbox(1.2, 0.5, 0.4, BLACK, { x: 1.2, y: 2.4, z: 7.55 }, 0.12))
   return g
@@ -568,7 +612,7 @@ function switchLite(p: string[]) {
   const g = new THREE.Group()
   g.add(slab(roundRect(20.8, 9.1, 3.2), 1.4, body))
   g.add(rbox(12.6, 0.45, 7.6, DARK, { y: 1.2 }, 0.15))
-  g.add(flatScreen(11.4, 6.6, 'race', raceScene, 0, 1.7, 0))
+  g.add(flatScreen(11.4, 6.6, 'race', raceScene, 0, 1.76, 0)) // 黑框厚 0.45 量化成 0.5、顶面在 1.7：画面浮出 0.06
   for (const s of [-1, 1]) {
     const x = s * 7.8
     stickY(g, x, 1.4, s < 0 ? -1.6 : 1.6, 0.85, shade(body, -0.3))
@@ -905,7 +949,7 @@ const CLAM_3DS: Clam = {
   upper: (g, p) => {
     g.add(rbox(12.6, 6.6, 0.2, p[1], { y: 0.4, z: 0.52 }, 0.1))
     g.add(rbox(8.4, 5.1, 0.2, BLACK, { y: 1.2, z: 0.62 }, 0.08))
-    g.add(vScreen(7.8, 4.6, 'plat-color', platScene(PLAT_COLOR), 0, 1.45, 0.75))
+    g.add(vScreen(7.8, 4.6, 'plat-color', platScene(PLAT_COLOR), 0, 1.45, 0.78))
     for (const s of [-1, 1]) for (let i = 0; i < 3; i++) g.add(ball(0.1, BLACK, { x: s * 5.4, y: 3.2 + i * 0.4, z: 0.65 }))
   },
   outer: (g, p) => {
@@ -932,7 +976,7 @@ const CLAM_SP: Clam = {
   upper: (g, p) => {
     g.add(rbox(7.2, 6.0, 0.2, p[1], { y: 1.6, z: 0.6 }, 0.3))
     g.add(rbox(6.2, 4.4, 0.2, BLACK, { y: 2.4, z: 0.7 }, 0.1))
-    g.add(vScreen(5.8, 3.9, 'puzzle', puzzleScene, 0, 2.65, 0.83))
+    g.add(vScreen(5.8, 3.9, 'puzzle', puzzleScene, 0, 2.65, 0.86))
   },
   outer: (g, p) => g.add(cylZ(1.0, 0.2, p[2], 0, 4.8, -0.65, 20)),
 }
@@ -954,7 +998,7 @@ const CLAM_DSL: Clam = {
   },
   upper: (g, p) => {
     g.add(rbox(7.0, 5.2, 0.2, BLACK, { y: 1.1, z: 0.6 }, 0.1))
-    g.add(vScreen(6.2, 4.6, 'plat-color', platScene(PLAT_COLOR), 0, 1.4, 0.73))
+    g.add(vScreen(6.2, 4.6, 'plat-color', platScene(PLAT_COLOR), 0, 1.4, 0.76))
     for (const s of [-1, 1]) for (let i = 0; i < 4; i++) g.add(ball(0.1, shade(p[1], -0.3), { x: s * 5.2, y: 3.0 + i * 0.4, z: 0.6 }))
   },
   outer: (g, p) => g.add(rbox(3, 0.3, 0.2, p[2], { y: 5.8, z: -0.6 }, 0.08)),
@@ -1168,8 +1212,8 @@ function sproutBox(p: string[]) {
       const tz = z + (r() - 0.5) * 0.8
       stems.push(taperRod3([x, 1.3, z], [tx, 1.5 + h, tz], 0.06, 0.05, '#f6f4e8', 4))
       const yaw = r() * PI
-      leaves.push(leafOut([tx, 1.5 + h, tz], 1.0, yaw, 0.25, leafC, 0.7, 0.14))
-      leaves.push(leafOut([tx, 1.5 + h, tz], 1.0, yaw + PI, 0.25, leafC, 0.7, 0.14))
+      leaves.push(leafOut([tx, 1.5 + h, tz], 1.0, yaw, 0.25, leafC, 0.7, 0.14, [12, 2]))
+      leaves.push(leafOut([tx, 1.5 + h, tz], 1.0, yaw + PI, 0.25, leafC, 0.7, 0.14, [12, 2]))
     }
   g.add(merged(stems, '#f6f4e8'))
   g.add(merged(leaves, leafC))
@@ -1261,8 +1305,8 @@ function mint(p: string[]) {
       const f = k / 4.2
       const base: V3 = [bx + (tx - bx) * f, y0 + h * f, bz + (tz - bz) * f]
       const yaw = a + (k % 2) * (PI / 2)
-      leaves.push(leafOut(base, 1.9, yaw, 0.2, leafC, 0.6, 0.14))
-      leaves.push(leafOut(base, 1.9, yaw + PI, 0.2, leafC, 0.6, 0.14))
+      leaves.push(leafOut(base, 1.9, yaw, 0.2, leafC, 0.6, 0.14, [12, 2]))
+      leaves.push(leafOut(base, 1.9, yaw + PI, 0.2, leafC, 0.6, 0.14, [12, 2]))
     }
   }
   g.add(merged(stems, '#6a8a4a'))
@@ -1291,8 +1335,8 @@ function rosemary(p: string[]) {
       const f = k / (n + 0.5)
       const base: V3 = [bx + (tx - bx) * f, y0 + h * f, bz + (tz - bz) * f]
       const yaw = k * 1.3
-      needles.push(leafOut(base, 1.3, yaw, 0.5, leafC, 0.2, 0.2))
-      needles.push(leafOut(base, 1.3, yaw + PI, 0.5, leafC, 0.2, 0.2))
+      needles.push(leafOut(base, 1.3, yaw, 0.5, leafC, 0.2, 0.2, [6, 4]))
+      needles.push(leafOut(base, 1.3, yaw + PI, 0.5, leafC, 0.2, 0.2, [6, 4]))
     }
   }
   g.add(merged(stems, '#7a6a4a'))
@@ -1326,12 +1370,12 @@ function miniTomato(p: string[]) {
     for (let j = 0; j < 3; j++) {
       const f = 0.45 + j * 0.27
       const at: V3 = [base[0] + (tip[0] - base[0]) * f, base[1] + (tip[1] - base[1]) * f, base[2] + (tip[2] - base[2]) * f]
-      leaves.push(leafOut(at, 2.0, yaw + PI / 2, -0.1, leafC, 0.55, 0.12))
-      leaves.push(leafOut(at, 2.0, yaw - PI / 2, -0.1, leafC, 0.55, 0.12))
+      leaves.push(leafOut(at, 2.0, yaw + PI / 2, -0.1, leafC, 0.55, 0.12, [12, 2]))
+      leaves.push(leafOut(at, 2.0, yaw - PI / 2, -0.1, leafC, 0.55, 0.12, [12, 2]))
     }
-    leaves.push(leafOut(tip, 2.2, yaw, -0.1, leafC, 0.55, 0.12))
+    leaves.push(leafOut(tip, 2.2, yaw, -0.1, leafC, 0.55, 0.12, [12, 2]))
   }
-  for (let k = 0; k < 4; k++) leaves.push(leafOut([0.7, 34, -1.1], 2, k * 1.6, 0.5, leafC, 0.55, 0.12))
+  for (let k = 0; k < 4; k++) leaves.push(leafOut([0.7, 34, -1.1], 2, k * 1.6, 0.5, leafC, 0.55, 0.12, [12, 2]))
   g.add(merged(stems, '#6a9a4a'))
   g.add(merged(leaves, leafC))
   // 两串果
@@ -1477,7 +1521,9 @@ function petBottle(g: THREE.Group, liquid: string, label: string, capC: string, 
   noOutline(m)
   g.add(m)
   g.add(ghost(cyl(3.15 * s, 2.9 * s, (level - 0.4) * s, liquid, { x, y: 0.4 * s, z }, 24), liquid, 0.7))
-  g.add(cyl(3.35 * s, 3.35 * s, 5.5 * s, label, { x, y: 4 * s, z }, 28))
+  // 标签套在瓶身（半径 3.3s）外面 0.1：半径量化到 0.1cm，按比例缩小时 3.35s 可能被取整到和瓶身几乎共面
+  const lr = Math.round(3.3 * s * 10) / 10 + 0.1
+  g.add(cyl(lr, lr, 5.5 * s, label, { x, y: 4 * s, z }, 28))
   g.add(cyl(1.5 * s, 1.5 * s, 1.6 * s, capC, { x, y: 19.6 * s, z }, 16))
 }
 
@@ -1564,7 +1610,9 @@ function coinJar(p: string[]) {
     const a = r() * PI * 2
     const y = 0.4 + (i / 46) * 5.6 + r() * 0.4
     const k = Math.floor(r() * 3)
-    const c = puck(1.0 + r() * 0.3, 0.2, cols[k], { x: Math.cos(a) * rr, y, z: Math.sin(a) * rr })
+    // 0.2cm 厚的硬币看不出圆边：16 边圆柱（64 面）代替 puck（约 830 面），46 枚省下三万多面
+    const cr = 1.0 + r() * 0.3
+    const c = cyl(cr, cr, 0.2, cols[k], { x: Math.cos(a) * rr, y, z: Math.sin(a) * rr }, 16)
     c.rotation.set((r() - 0.5) * 0.8, 0, (r() - 0.5) * 0.8)
     by[k].push(c)
   }
@@ -1649,7 +1697,7 @@ function parcel(p: string[]) {
   g.add(rbox(23.4, 0.5, 31, shade(env, 0.03), { y: 1.05 }, 0.25))
   g.add(rbox(25.2, 0.3, 2.6, tape, { y: 1.45, z: -14.5 }, 0.12)) // 顶面高出内衬 0.2，避免共面闪烁
   g.add(rbox(10.6, 0.25, 7.6, '#ffffff', { x: 3.2, y: 1.4, z: 3 }, 0.08))
-  g.add(flatScreen(10, 7, 'ship-label', shipLabel, 3.2, 1.68, 3, 0))
+  g.add(flatScreen(10, 7, 'ship-label', shipLabel, 3.2, 1.76, 3, 0)) // 白垫片厚度量化成 0.3、顶面在 1.7：面单浮出 0.06，否则被垫片盖住
   g.add(rbox(4.2, 0.25, 2.4, acc, { x: -7, y: 1.4, z: -8 }, 0.08))
   return g
 }

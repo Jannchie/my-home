@@ -145,7 +145,8 @@ function matChenille(p: string[]) {
   const g = G(rbox(60, 0.8, 42, edge, {}, 0.35))
   for (let i = 0; i < 9; i++)
     for (let j = 0; j < 6; j++) {
-      const b = ball(3.2, (i + j) % 3 ? main : shade(main, -0.05), { x: -25.6 + i * 6.4, y: 1.4, z: -16 + j * 6.4 }, [1, 0.42, 1])
+      // 半径 2.9 的球再放大 1.1 倍：外形还是 3.2 × 1.34 的扁绒粒，但落在小球的细分档（12×8），54 粒合计省一半三角面
+      const b = ball(2.9, (i + j) % 3 ? main : shade(main, -0.05), { x: -25.6 + i * 6.4, y: 1.4, z: -16 + j * 6.4 }, [1.1, 0.46, 1.1])
       g.add(b)
     }
   return g

@@ -114,7 +114,8 @@ function slim(s: ScreenPanel, d: number) {
     const [frame, st, acc] = p
     const g = new THREE.Group()
     g.add(ovalBase(s.w * 0.42, d - 1, 1, st, 0))
-    g.add(rbox(3.2, s.y + s.h * 0.45, 1.6, st, { y: 0.6, z: s.z - 4.2 }, 0.6))
+    // 立柱前面顶住面板背后的凸起（凸起背面在 s.z - 3.3；以前立柱前面在 s.z - 3.4，隔着 0.1cm 没挨上）
+  g.add(rbox(3.2, s.y + s.h * 0.45, 1.6, st, { y: 0.6, z: s.z - 4 }, 0.6))
     mount(g, s, frame, acc, 0, { b: 0.6, chin: 0.8 })
     return g
   }
@@ -134,8 +135,10 @@ function pivot(s: ScreenPanel) {
     const g = new THREE.Group()
     g.add(rbox(26, 1.8, 20, st, {}, 0.8))
     const col = s.y + s.h * (s.h > s.w ? 0.42 : 0.5) - 1.8
-    g.add(rbox(7, col, 4.5, st, { y: 1.8, z: -6.5 }, 1.2))
-    g.add(rbox(1.4, col - 8, 0.4, shade(st, -0.18), { y: 6, z: -4.2 }, 0.15))
+    // 立柱前面压进面板背后的凸起 0.2（凸起背面在 z = -4.2）
+    g.add(rbox(7, col, 4.5, st, { y: 1.8, z: -6.25 }, 1.2))
+    // 滑槽浮出立柱前面 0.3（立柱前面在 z = -4）
+    g.add(rbox(1.4, col - 8, 0.4, shade(st, -0.18), { y: 6, z: -3.9 }, 0.15))
     mount(g, s, frame, acc, s.h > s.w ? 0 : 1)
     return g
   }
@@ -148,7 +151,8 @@ function uhd32(p: string[]) {
   const [frame, st, acc] = p
   const g = new THREE.Group()
   vBase(g, -8, 13, 9, st)
-  g.add(rbox(5, UHD_32.y + 16, 3, st, { y: 1, z: -8 }, 1))
+  // 立柱前面压进面板背后的凸起（凸起背面在 z = -6.3）
+  g.add(rbox(5, UHD_32.y + 16, 3, st, { y: 1, z: -7.6 }, 1))
   mount(g, UHD_32, frame, acc, 2)
   return g
 }
@@ -235,7 +239,8 @@ function curved(w: number, h: number, r: number, y: number, z: number, d: number
     const g = new THREE.Group()
     if (wide) g.add(rbox(44, 1.6, d - 6, st, { z: -1 }, 0.8))
     else vBase(g, -d / 2 + 4, 20, d / 2 - 3, st)
-    g.add(rbox(6, y + h * 0.5, 3.5, st, { y: 1, z: z - 5.6 }, 1.2))
+    // 立柱前面压进背后凸起 0.1（凸起背面在 z - 3.6）
+    g.add(rbox(6, y + h * 0.5, 3.5, st, { y: 1, z: z - 5.25 }, 1.2))
     g.add(rbox(w * 0.3, h * 0.5, 2.6, shade(frame, -0.05), { y: y + h * 0.25, z: z - 2.3 }, 1.2))
     const sw = w / n
     const b = 0.7

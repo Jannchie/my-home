@@ -444,8 +444,11 @@ class Decorator {
         const room = this.plan.rooms.find((r) => pointInPolygon(group[0], r.points))
         const inRoom = (f: Furniture) => !!room && f !== group[0] && pointInPolygon(f, room.points)
         // 同屋能重摆的大件（衣柜）排在小件前面
-        const mates = [...majors.filter(inRoom), ...loose.filter(inRoom)]
-        if (mates.length) for (const g of this.relocateGroup([group[0], ...mates], ok, new Set([group[0].id]))) tried.add(g.id)
+        const majorMates = majors.filter(inRoom)
+        const mates = [...majorMates, ...loose.filter(inRoom)]
+        // 同屋的大件（衣柜）也可以回到原来的位置：它们只是给堵路的那件让地方，找不到新位置就整组回滚的话，堵路的那件也挪不成
+        const same = new Set([group[0].id, ...majorMates.map((f) => f.id)])
+        if (mates.length) for (const g of this.relocateGroup([group[0], ...mates], ok, same)) tried.add(g.id)
       }
     }
   }
@@ -2700,8 +2703,8 @@ class Decorator {
           const desk = this.floorOf(room, 'desk', { front: 50 }, (a) => hasTag(a, 'for-kids'))
           if (desk) this.seatAt(room, desk, this.find('chair', (a) => hasTag(a, 'for-kids') && !a.prop && a.h <= 70)[0]?.id ?? this.chairAsset(), ASSET_MAP.get(desk.asset)!.d / 2 + 12)
         }
-        const babyOnly = /^lm-(playpen|walker|stroller|pikler)/
-        const toys = ALL().filter((a) => a.category === 'kids' && hasTag(a, 'toy') && !a.prop && !a.mount && Math.max(a.w, a.d) <= 160 && (baby || !babyOnly.test(a.id)))
+        // 婴儿专用的（for-baby：围栏、学步车、推车、床铃、婴儿摇椅…）家里有婴儿才摆
+        const toys = ALL().filter((a) => a.category === 'kids' && hasTag(a, 'toy') && !a.prop && !a.mount && Math.max(a.w, a.d) <= 160 && (baby || !hasTag(a, 'for-baby')))
         let n = 2 + Math.floor(this.rand() * 2)
         for (const a of this.shuffle(toys)) {
           if (n <= 0) break

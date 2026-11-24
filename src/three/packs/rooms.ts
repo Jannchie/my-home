@@ -301,8 +301,9 @@ function tvRetro(p: string[]) {
   const d = 45
   const y0 = 14
   const g = carcass(w, 36, d, main, y0)
+  // 外撇的腿底面是斜的：y 取 0.1，最低的那条棱刚好落地（原来 -0.3 压到地下 0.45）
   for (const sx of [-1, 1])
-    for (const sz of [-1, 1]) g.add(cyl(2.4, 1.6, 15, shade(main, -0.15), { x: sx * 52, y: -0.3, z: sz * 16, rx: -sz * 0.12, rz: sx * 0.12 }, 12))
+    for (const sz of [-1, 1]) g.add(cyl(2.4, 1.6, 15, shade(main, -0.15), { x: sx * 52, y: 0.1, z: sz * 16, rx: -sz * 0.12, rz: sx * 0.12 }, 12))
   const fy = y0 + 2.9
   const top = y0 + 36 - 2.5
   g.add(divider(20, fy, top, d, main))
@@ -398,8 +399,9 @@ function sideboardNordic(p: string[]) {
   const { w, d, y0, h, shelf: sy } = SB_NORDIC
   const { fy, top, dh, rw, rx, h3, tray } = sbNordicLayout()
   const g = carcass(w, h, d, main, y0)
+  // 外撇的腿底面是斜的：y 取 0，最低的那条棱刚好落地（原来 -0.4 压到地下 0.45）
   for (const sx of [-1, 1])
-    for (const sz of [-1, 1]) g.add(cyl(2, 1.1, 20.6, legC, { x: sx * (w / 2 - 10), y: -0.4, z: sz * (d / 2 - 7), rx: -sz * 0.1, rz: sx * 0.1 }, 12))
+    for (const sz of [-1, 1]) g.add(cyl(2, 1.1, 20.6, legC, { x: sx * (w / 2 - 10), y: 0, z: sz * (d / 2 - 7), rx: -sz * 0.1, rz: sx * 0.1 }, 12))
   g.add(divider(28, fy, top, d, main))
   // 左边两扇竖条纹门的柜子里一块层板
   g.add(shelf(w / 2 - 2.5 + 28 - 1.1, sy, d, main, 2.5, (-w / 2 + 2.5 + 28 - 1.1) / 2))
@@ -666,7 +668,9 @@ function coatRack(p: string[]) {
 /** 衣架（杆沿 x，肩线沿 z）：钩子绕杆，衣服挂在肩架上 */
 function railHanger(barY: number, color: string, garment: THREE.Group) {
   const g = new THREE.Group()
-  g.add(torus(2.2, 0.45, C.steel, { y: barY, ry: Math.PI / 2 }, Math.PI * 1.3))
+  // 钩子压在杆顶上（钩内径 1.75 比杆粗 1.2 大，圆心放低 0.55 让钩内顶贴杆顶）；
+  // 弧从 36° 绕到正下方 270° 收尾，正好接上钩脖（原来弧从 0° 起、正下方是开口，钩脖戳在开口里没接上）
+  g.add(torus(2.2, 0.45, C.steel, { y: barY - 0.55, ry: Math.PI / 2, rz: Math.PI * 0.2 }, Math.PI * 1.3))
   g.add(cyl(0.45, 0.45, 7, C.steel, { y: barY - 9.2 }, 6))
   const sg = new THREE.Group()
   const top = barY - 9
@@ -697,7 +701,8 @@ function garment(kind: number, col: string) {
     const skirt = cyl(9, 20, 46, col, { y: -66 }, 20)
     skirt.scale.z = 0.16
     g.add(skirt)
-    g.add(rbox(28, 3, 3.2, C.white, { y: -23 }, 1.2))
+    // 腰带顶面比裙摆的上口高一点，盖住它（以前两者齐平，白腰带和裙子的顶面共面闪烁）
+    g.add(rbox(28, 3, 3.2, C.white, { y: -22.6 }, 1.2))
   } else if (kind === 2) {
     // 长袖衬衫
     g.add(rbox(32, 46, 2.4, col, { y: -46 }, 1.2))
@@ -768,7 +773,8 @@ function tallChest(p: string[]) {
   const g = G(legs(w, d, 8, shade(main, -0.12), 2, 5))
   // 空心柜体：两侧、背板、底板、顶板
   for (const s of [-1, 1]) g.add(rbox(2, 119.8, d, main, { x: s * (w / 2 - 1), y: 8 }, 0.6))
-  g.add(rbox(w - 4, 119.8, 1.5, shade(main, -0.05), { y: 8, z: -d / 2 + 0.75 }, 0.4))
+  // 背板夹在底板和顶板之间（以前和它们重叠到同一高度，背面、底面两种颜色共面闪烁）
+  g.add(rbox(w - 4, 116.8, 1.5, shade(main, -0.05), { y: 9.5, z: -d / 2 + 0.75 }, 0.4))
   g.add(rbox(w - 4, 1.5, d, main, { y: 8 }, 0.4))
   g.add(rbox(w - 4, 1.5, d, main, { y: 126.3 }, 0.4))
   g.add(rbox(w + 2, 2.5, d + 2, shade(main, -0.05), { y: 127.5 }, 1))
@@ -1130,6 +1136,8 @@ function toyBox(p: string[]) {
   lid.position.set(0, 40, -13)
   lid.rotation.x = -(Math.PI / 2 + 0.26)
   g.add(lid)
+  // 两只合页骑在后沿上，把掀开的盖子和箱体连住（原来盖子只靠一条棱碰着箱沿）
+  for (const x of [-22, 22]) g.add(rbox(6, 1.8, 1.8, C.steel, { x, y: 39.1, z: -13 }, 0.5))
   return g
 }
 
@@ -1190,7 +1198,8 @@ function teepee(p: string[]) {
   g.add(cone)
   g.add(torus(52, 1.4, acc, { y: 3, rx: Math.PI / 2, rz: 0.5 - 1.5 * Math.PI }, Math.PI * 2 - 1))
   for (const th of [0.62, -0.62, 1.9, -1.9, Math.PI]) {
-    const b: V3 = [56 * Math.sin(th), 0, 56 * Math.cos(th)]
+    // 斜杆底面是斜的：端点抬高 0.45，最低的那条棱刚好落地（原来压到地下 0.47）
+    const b: V3 = [56 * Math.sin(th), 0.45, 56 * Math.cos(th)]
     const k = 156 / 140
     g.add(rod3(b, [b[0] * (1 - k), 156, b[2] * (1 - k)], 1.3, pole))
   }

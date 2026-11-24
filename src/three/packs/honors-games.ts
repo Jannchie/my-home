@@ -5,9 +5,9 @@
 // 约定见 kit.ts 开头。全部 id 以 hg- 开头。
 
 import * as THREE from 'three'
-import { ball, cup, cyl, rbox, shade, toon, torus, tray } from '../toon'
+import { ball, cached, cup, cyl, rbox, shade, toon, torus, tray } from '../toon'
 import { C, glow, paintPanel, pinwheelWalls, type AssetDef } from '../kit'
-import { G, P, PI, cylX, cylZ, fitGroup, noOutline } from '../geo'
+import { G, P, PI, cylX, cylZ, fitGroup, latheAt, mesh, noOutline } from '../geo'
 import { CL, CN, F, I, J, M, N, PROP, define, type PalFlat } from '../packkit'
 import { signLang } from '../signLang'
 import type { Lang } from '../../i18n'
@@ -90,7 +90,8 @@ function trophyStar(mat: Mat) {
     geo.translate(0, 0, -0.6)
     const star = new THREE.Mesh(geo, toon('#fff'))
     star.castShadow = true
-    const top = G(cyl(0.9, 1.4, 9, '#fff', { y }, 12), P(star, 0, y + 9 + 5, 0))
+    // 星形最下面是两角之间的凹口（星心下 2.6），杆子要伸到凹口里，不然星星悬在杆顶上方
+    const top = G(cyl(0.9, 1.4, 11.6, '#fff', { y }, 12), P(star, 0, y + 9 + 5, 0))
     g.add(finish(top, mat))
     return fitGroup(g)
   }
@@ -100,7 +101,8 @@ function trophyLaurel(mat: Mat) {
   return ([base, plate]: string[]) => {
     const [g, y] = trophyBase(12, 7, base, plate)
     const cy = y + 12
-    const top = G(cyl(0.9, 1.3, 4, '#fff', { y }, 12), torus(6.5, 0.7, '#fff', { y: cy, rx: 0 }), cylZ(3.4, 0.8, '#fff', 0, cy, 0))
+    // 杆子穿过环底一直接到中心圆章（圆章半径 3.4、环内径 5.8，两者本来不挨着）
+    const top = G(cyl(0.9, 1.3, 12 - 3.4 + 0.3, '#fff', { y }, 12), torus(6.5, 0.7, '#fff', { y: cy, rx: 0 }), cylZ(3.4, 0.8, '#fff', 0, cy, 0))
     for (let k = 0; k < 9; k++) {
       const a = -PI / 2 + 0.5 + (k / 8) * (PI * 2 - 1)
       top.add(P(ball(1, '#fff', {}, [1, 1.9, 0.5]), Math.cos(a) * 7.6, cy + Math.sin(a) * 7.6, 0, 0, 0, a))
@@ -112,7 +114,8 @@ function trophyLaurel(mat: Mat) {
 /** 水晶方尖碑（只有水晶款） */
 function trophyObelisk([base, plate]: string[]) {
   const [g, y] = trophyBase(9, 9, base, plate)
-  const ob = P(cyl(1.2, 3.4, 18, '#fff', {}, 4), 0, y, 0, 0, PI / 4)
+  // P 设的是中心：加上半高 9，碑底才落在底座顶面（原来一半插进底座、从底下穿出来，整座奖杯被顶离地面）
+  const ob = P(cyl(1.2, 3.4, 18, '#fff', {}, 4), 0, y + 9, 0, 0, PI / 4)
   g.add(finish(G(ob), 'crystal'))
   return fitGroup(g)
 }
@@ -126,7 +129,7 @@ const TROPHY_BASES: PalFlat[] = [
 ]
 const SHAPES: { key: string; label: string; size: [number, number, number]; make: (m: Mat) => (p: string[]) => THREE.Group }[] = [
   { key: 'cup', label: '杯形', size: [19, 11, 26], make: trophyCup },
-  { key: 'tall', label: '三层大奖杯', size: [25, 15, 48], make: trophyTall },
+  { key: 'tall', label: '三层大奖杯', size: [25, 15, 42], make: trophyTall },
   { key: 'star', label: '星形', size: [12, 8, 26], make: trophyStar },
   { key: 'laurel', label: '月桂环', size: [18, 8, 29], make: trophyLaurel },
 ]
@@ -148,14 +151,15 @@ function medalStand(mat: Mat) {
     const back = rbox(7.5, 13, 0.4, '#e9f4fb', { y: 1 }, 0.1)
     back.material = toon('#e9f4fb', { transparent: 0.4 })
     back.userData.noOutline = true
-    g.add(P(G(back), 0, 0, -1.2, -0.12))
-    // 缎带搭在背板顶上，奖牌垂在前面
-    for (const s of [-1, 1]) g.add(P(rbox(1.6, 8, 0.15, s > 0 ? r1 : r2, {}, 0.05), s * 0.9, 6, 0.1, -0.1, 0, -s * 0.18))
-    const medal = G(cylZ(3, 0.5, '#fff', 0, 4.4, 0.6), noOutline(cylZ(2.1, 0.2, '#fff', 0, 4.4, 0.95, 20)))
+    const lean = P(G(back), 0, 0, -1.2, -0.12)
+    g.add(lean)
+    // 缎带和奖牌跟背板一起后仰、贴在板面上（板面在 z = 0.2）；两条缎带前后错开一层，交叠处不共面
+    for (const s of [-1, 1]) lean.add(P(rbox(1.6, 8, 0.15, s > 0 ? r1 : r2, {}, 0.05), s * 0.9, 6.6, s > 0 ? 0.3 : 0.5, 0, 0, -s * 0.18))
+    const medal = G(cylZ(3, 0.5, '#fff', 0, 4.6, 0.9), noOutline(cylZ(2.1, 0.2, '#fff', 0, 4.6, 1.25, 20)))
     finish(medal, mat)
     ;((medal.children[1] as THREE.Mesh).material as THREE.Material).dispose?.()
     ;(medal.children[1] as THREE.Mesh).material = toon(shade(METAL[mat], -0.15))
-    g.add(medal)
+    lean.add(medal)
     return fitGroup(g)
   }
 }
@@ -367,7 +371,8 @@ function certFrame(kind: CertKind, w: number, h: number) {
     const g = new THREE.Group()
     g.add(rbox(w, h, 1.6, frame, {}, 0.35))
     const lang = signLang()
-    g.add(paintPanel(w - 3, h - 3, `hg-cert-${kind}-${accent}-${lang}`, certDraw(kind, accent, lang), { y: 1.5, z: 0.82 }))
+    // 画面浮出框面（z = 0.8）0.06：0.02 太近，远看会和框面闪
+    g.add(paintPanel(w - 3, h - 3, `hg-cert-${kind}-${accent}-${lang}`, certDraw(kind, accent, lang), { y: 1.5, z: 0.86 }))
     return fitGroup(g, CERT_MOUNT)
   }
 }
@@ -409,10 +414,11 @@ function certBox([box, label]: string[]) {
   g.add(tray(34, 8, 26, 0.8, box, {}, 0.6))
   g.add(noOutline(rbox(10, 3, 0.2, label, { y: 2.5, z: 13.15 }, 0.1)))
   // 一叠证书竖着插在盒里，上沿露出盒口
-  for (let i = 0; i < 6; i++) g.add(P(rbox(30, 22, 0.35, i % 2 ? PAPER : '#fff4dc', {}, 0.1), 0, 0.8, -9 + i * 3.2, -0.12))
-  // 盖子：铰链在后沿上方，向后打开
+  // （P 设的是盒心：y 要加上半高 11，证书底边才落在盒底板 y = 0.8 上，不然一半插到盒底下面、整个盒子被顶到半空）
+  for (let i = 0; i < 6; i++) g.add(P(rbox(30, 22, 0.35, i % 2 ? PAPER : '#fff4dc', {}, 0.1), 0, 0.8 + 11, -8 + i * 3.2, -0.12))
+  // 盖子：铰链在后沿上方，向后打开（盖板建在铰链后方平躺，再绕铰链抬起 70°：立着、略往后仰）
   const lid = G(rbox(35, 1.2, 27, shade(box, 0.06), { z: -13.5 }, 0.5))
-  g.add(P(lid, 0, 8, -13, -1.9))
+  g.add(P(lid, 0, 8, -13, 1.22))
   return fitGroup(g)
 }
 
@@ -539,10 +545,10 @@ const mahjongs: AssetDef[] = [
     ['cute', C.woodL, C.mint, C.sakura],
   ], mjCovered, { surface: 75.4, sizeLabel: '盖着桌罩' }),
   define('hg-mj-fold', '折叠麻将桌', 'hobby', [80, 80, 72.4], FELTS, mjFold, { surface: 72.4, sizeLabel: '打开' }),
-  define('hg-mj-fold-closed', '折叠麻将桌', 'hobby', [80, 9, 81], FELTS, mjFoldClosed, { sizeLabel: '收起靠墙' }),
+  define('hg-mj-fold-closed', '折叠麻将桌', 'hobby', [80, 6, 80], FELTS, mjFoldClosed, { sizeLabel: '收起靠墙' }),
   define('hg-jantaku', '和室麻将桌', 'japanese', [76, 76, 35.6], FELTS, jantaku, { surface: 33.4, surfaceShape: [[[-33.5, -33.5], [33.5, -33.5], [33.5, 33.5], [-33.5, 33.5]]], sizeLabel: '手积 · 座卓', styles: ['japanese', 'chinese', 'modern', 'retro', 'cute'] }),
   define('hg-mj-walls', '麻将牌', 'hobby', [44, 44, 4.6], TILE_BACKS, mjWalls, { ...PROP, sizeLabel: '砌好牌墙（不带牌垫）' }),
-  define('hg-mj-hands', '麻将牌', 'hobby', [56, 56, 4.6], TILE_BACKS, mjHands, { ...PROP, sizeLabel: '对局中（不带牌垫）' }),
+  define('hg-mj-hands', '麻将牌', 'hobby', [51, 51, 4.6], TILE_BACKS, mjHands, { ...PROP, sizeLabel: '对局中（不带牌垫）' }),
 ]
 
 // ---------- 棋：桌子、棋盘、棋罐各自独立 ----------
@@ -586,13 +592,19 @@ function goStones(w: number, d: number, y: number, fill: number, seed: number) {
   const n = Math.round(361 * fill)
   const gx = (w * 0.88) / 18
   const gz = (d * 0.88) / 18
+  const r = Math.min(gx, gz) * 0.46
+  const stoneGeo = cached('hg-go-stone', () => new THREE.SphereGeometry(1, 12, 4))
   for (let k = 0; k < n; k++) {
     // 收官时棋子多、遍布全盘；对局中集中在角和边
     const i = Math.floor(rnd() * 19)
     const j = Math.floor(rnd() * 19)
     if (used.has(i * 19 + j)) continue
     used.add(i * 19 + j)
-    g.add(ball(Math.min(gx, gz) * 0.46, k % 2 ? '#f8f6f0' : '#26262a', { x: -w * 0.44 + i * gx, y: y + 0.3, z: -d * 0.44 + j * gz }, [1, 0.42, 1]))
+    // 棋子直径不到 2cm、压得很扁，用 12 × 4 段的球就够（收官一盘一百多颗，按通用球的 12 × 8 段要两万面）
+    const m = mesh(stoneGeo, k % 2 ? '#f8f6f0' : '#26262a')
+    m.position.set(-w * 0.44 + i * gx, y + 0.3, -d * 0.44 + j * gz)
+    m.scale.set(r, r * 0.42, r)
+    g.add(m)
   }
   return g
 }
@@ -611,12 +623,17 @@ function goBowl(stone: 'black' | 'white', woven: boolean) {
   return ([body, band]: string[]) => {
     const g = new THREE.Group()
     const col = stone === 'black' ? '#26262a' : '#f8f6f0'
-    g.add(ball(5.4, body, { y: 3.6 }, [1, 0.66, 1]))
-    if (woven) for (const y of [1.6, 3.4, 5.2]) g.add(torus(5.1 - Math.abs(y - 3.4) * 0.35, 0.28, band, { y, rx: PI / 2 }))
-    g.add(cyl(4.4, 4.6, 0.6, shade(body, -0.08), { y: 6.8 }, 20))
-    for (let k = 0; k < 6; k++) g.add(ball(0.95, col, { x: Math.cos(k) * 2, y: 6.6, z: Math.sin(k) * 2 }, [1, 0.42, 1]))
-    // 盖子靠在罐边
-    g.add(P(G(ball(4.6, body, {}, [1, 0.3, 1])), 1.8, 7.6, -1.2, 0.12, 0, -0.1))
+    // 罐身是真开口的扁圆罐（车削：外壁 → 口沿 → 内壁 → 内底）。原来是实心球 + 实心口圈，棋子埋在里面看不见，黑子 / 白子两款分不出来
+    const prof: [number, number][] = [[0, 0], [3.4, 0], [4.6, 0.9], [5.3, 2.6], [5.4, 3.6], [5.1, 5], [4.5, 6.2], [4.2, 6.9], [3.9, 7.1], [3.6, 6.9], [3.9, 6], [4.2, 5], [0, 5]]
+    g.add(latheAt(prof, body))
+    // 藤编箍贴着外壁（半径取自轮廓，浮出 0.3）
+    if (woven) for (const [r, y] of [[4.9, 1.6], [5.4, 3.4], [5, 5.2]]) g.add(torus(r + 0.05, 0.28, band, { y, rx: PI / 2 }))
+    // 一罐棋子：底下一摊（压扁的球），上面散着几颗，都在口沿（y = 7.1）以下
+    g.add(noOutline(ball(4, col, { y: 5 }, [1, 0.22, 1])))
+    g.add(ball(0.95, col, { y: 6.1 }, [1, 0.42, 1]))
+    for (let k = 0; k < 6; k++) g.add(ball(0.95, col, { x: Math.cos(k * 1.05 + 0.3) * 2.3, y: 5.9, z: Math.sin(k * 1.05 + 0.3) * 2.3 }, [1, 0.42, 1]))
+    // 盖子摘下来斜靠在罐身右侧：下沿着地，上沿搭在口沿外
+    g.add(P(ball(4.6, body, {}, [1, 0.3, 1]), 6.45, 4.21, 0, 0, 0, -1.134))
     return fitGroup(g)
   }
 }
@@ -652,7 +669,8 @@ function shogiBan([wood, leg]: string[]) {
   g.add(paintTop(32, 35, `hg-shogiban-${wood}`, gridDraw(10, wood, '#3a2a1e', false), 0, 21.05, 0))
   let s = 9
   const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296)
-  for (let i = 0; i < 16; i++) g.add(P(rbox(2.4, 0.8, 2.8, '#e9cf98', {}, 0.2), (Math.floor(rnd() * 9) - 4) * 3.3, 21, (Math.floor(rnd() * 9) - 4) * 3.6, 0, rnd() < 0.5 ? 0 : PI))
+  // P 设的是中心：棋子厚 0.8，中心放在盘面（21.05）上方 0.4，整枚立在盘面上（原来一半埋在盘里）
+  for (let i = 0; i < 16; i++) g.add(P(rbox(2.4, 0.8, 2.8, '#e9cf98', {}, 0.2), (Math.floor(rnd() * 9) - 4) * 3.3, 21.45, (Math.floor(rnd() * 9) - 4) * 3.6, 0, rnd() < 0.5 ? 0 : PI))
   return fitGroup(g)
 }
 const BOARD_WOOD: PalFlat[] = [
@@ -794,7 +812,7 @@ const westGames: AssetDef[] = [
     ['industrial', I.iron, I.rust, '#3a5a3c'],
     ['farmhouse', F.iron, F.barn, F.sage],
   ], dartboard, { mount: DART_MOUNT, sizeLabel: '单盘' }),
-  define('hg-dart-cabinet', '飞镖盘', 'hobby', [112, 30, 60], [
+  define('hg-dart-cabinet', '飞镖盘', 'hobby', [108, 17, 60], [
     ['classic', CL.walnut, '#c8473a', '#2f8a5a'],
     ['farmhouse', F.oak, F.barn, F.sage],
     ['industrial', I.walnut, I.rust, '#3a5a3c'],
@@ -808,7 +826,8 @@ function duoGamingDesk([top, leg, light]: string[]) {
   const g = new THREE.Group()
   for (const sx of [-1, 0, 1]) g.add(rbox(sx ? 8 : 6, 72, 60, leg, { x: sx * 112 }, 1))
   g.add(rbox(240, 3, 75, top, { y: 72 }, 1))
-  g.add(glow(236, 1, light, { y: 70.5, z: 37.6 }, 0.8))
+  // 灯带贴在台面底面的前沿内侧（台面底 y = 72，前沿 z = 37.5）：原来挂在台面下方 0.5cm、前沿之外，是悬空的
+  g.add(glow(236, 1, light, { y: 71.2, z: 36.9 }, 0.8))
   g.add(rbox(60, 4, 12, shade(leg, 0.1), { y: 66, z: -28 }, 0.6))
   return g
 }
@@ -828,10 +847,13 @@ function hexLights([a, b, c]: string[]) {
   cells.forEach(([i, j], k) => {
     const x = i * 15.5
     const y = j * 13.4
-    const m = P(cyl(8.6, 8.6, 1.4, [a, b, c][k % 3], {}, 6), x, y, 0.7, PI / 2, 0, PI / 6)
+    // 六棱柱的轴转到 z（贴墙）就够了：6 段圆柱的顶点本来就在 ±z，转过来正好是尖角朝上的蜂窝排法。
+    // 不能再加 rz——欧拉角先转 z 再转 x，会把轴掰歪 30°，灯板就斜插在墙上了。
+    // 发光面的背面比底板背面缩进 0.3、正面鼓出 0.5，两头都不和底板共面
+    const m = P(cyl(8.6, 8.6, 1.2, [a, b, c][k % 3], {}, 6), x, y, 0.9, PI / 2)
     m.material = toon([a, b, c][k % 3], { emissive: 0.75 })
     m.userData.noOutline = true
-    g.add(m, P(cyl(9, 9, 1, '#2a2a2e', {}, 6), x, y, 0.5, PI / 2, 0, PI / 6))
+    g.add(m, P(cyl(9, 9, 1, '#2a2a2e', {}, 6), x, y, 0.5, PI / 2))
   })
   return fitGroup(g, HEX_MOUNT)
 }
@@ -864,7 +886,7 @@ const duo: AssetDef[] = [
     ['japanese', J.hinoki, J.wood, J.washi],
     ['classic', CL.walnut, CL.walnut, CL.cream],
   ], duoDesk, { surface: 74, surfaceShape: [[[-100, -30], [-1, -30], [-1, 30], [-100, 30]], [[1, -30], [100, -30], [100, 30], [1, 30]]] }),
-  define('hg-hex-lights', '六边形灯板', 'lighting', [56, 10, 46], [
+  define('hg-hex-lights', '六边形灯板', 'lighting', [56, 2, 46], [
     ['modern', '#7a5cff', '#36d1c4', '#ff5ca8'],
     ['cute', '#ff9ec7', '#a8d4f4', '#ffe08f'],
     ['industrial', '#ff7a3a', '#ffd166', '#36d1c4'],

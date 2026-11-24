@@ -24,8 +24,8 @@ function items(pin: THREE.Group, fy: number, a: string, b: string, n: number) {
     const z = i % 2 ? -D / 2 : D / 2
     const c = i % 2 ? a : b
     const kind = i % 3
-    // 夹子
-    pin.add(rbox(2.2, 3.4, 2.2, i % 2 ? C.lemon : C.sky, { x, y: fy - 3.6, z }, 0.5))
+    // 夹子：上端咬进框条 0.2（原来和框条之间留着 0.2 的缝）
+    pin.add(rbox(2.2, 3.4, 2.2, i % 2 ? C.lemon : C.sky, { x, y: fy - 3.2, z }, 0.5))
     if (kind === 0) {
       pin.add(rbox(6, 13, 1.6, c, { x, y: fy - 16, z }, 0.7))
       pin.add(rbox(9, 4.6, 1.6, c, { x: x + 1.5, y: fy - 19.5, z }, 0.7))
@@ -43,7 +43,8 @@ function pinchHanging(n: number) {
     const g = new THREE.Group()
     // 钩子绕在杆上：钩环中心 y = -2.6，内顶约在 -0.5
     const hy = -2.6
-    g.add(torus(2.6, 0.45, C.steel, { y: hy, ry: Math.PI / 2 }, Math.PI * 1.25))
+    // 弧从 45° 绕过顶到正下方 270° 收尾，接上下面的吊杆（原来弧从 0° 起，正下方是开口，吊杆顶在开口里没接上）
+    g.add(torus(2.6, 0.45, C.steel, { y: hy, ry: Math.PI / 2, rz: Math.PI / 4 }, Math.PI * 1.25))
     const fy = hy - 22
     g.add(rod(0, fy + 1, 0, hy - 2.2, 0.45, C.steel))
     g.add(ball(2, frame, { y: fy + 1 }))
@@ -60,7 +61,12 @@ function pinchHanging(n: number) {
         g.add(arm)
       }
     }
-    if (n) items(g, fy, a, b, n)
+    if (n) {
+      items(g, fy, a, b, n)
+      return g
+    }
+    // 空架：两条长边下面各垂着一排夹子（没有夹子就只剩一个方框，认不出是晾衣夹架）
+    for (const s of [-1, 1]) for (let i = 0; i < 6; i++) g.add(rbox(2.2, 3.4, 2.2, (i + (s > 0 ? 1 : 0)) % 2 ? C.lemon : C.sky, { x: -W / 2 + 4 + i * 5.6, y: fy - 3.2, z: (s * D) / 2 }, 0.5))
     return g
   }
 }
@@ -73,7 +79,8 @@ function pinchFolded(p: string[]) {
     g.add(rbox(W, 1.4, 1.4, frame, { z: (s * D) / 2 - s * 0.7 }, 0.6))
     g.add(rbox(1.4, 1.4, D - 2.8, frame, { x: (s * W) / 2 - s * 0.7 }, 0.6))
   }
-  for (let i = 0; i < 6; i++) g.add(rbox(2, 3, 2, i % 2 ? C.lemon : C.sky, { x: -W / 2 + 4 + i * 5.6, y: 1.4, z: D / 2 - 1.5 }, 0.5))
+  // 两条长边各一排夹子（原来只有前边一排）
+  for (const s of [-1, 1]) for (let i = 0; i < 6; i++) g.add(rbox(2, 3, 2, (i + (s > 0 ? 0 : 1)) % 2 ? C.lemon : C.sky, { x: -W / 2 + 4 + i * 5.6, y: 1.2, z: s * (D / 2 - 1.5) }, 0.5))
   return g
 }
 

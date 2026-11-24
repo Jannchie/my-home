@@ -139,8 +139,8 @@ export function modelProblems(def: AssetDef, root: THREE.Object3D): string[] {
   root.traverse((o) => {
     const m = o as THREE.Mesh
     if (!m.isMesh || o.userData.isOutline) return
-    if (!m.geometry.boundingBox) m.geometry.computeBoundingBox()
-    boxes.push(m.geometry.boundingBox!.clone().applyMatrix4(m.matrixWorld))
+    // 逐顶点的精确包围盒：变换后的局部包围盒在零件旋转时会放大（斜挂的头盔会显得比安装高度低几厘米）
+    boxes.push(new THREE.Box3().expandByObject(m, true))
   })
   // 台面不能悬在模型上方（摆上去的东西会浮空）
   if (def.surface !== undefined && def.form !== 'hanging' && !def.stick && boxes.length) {

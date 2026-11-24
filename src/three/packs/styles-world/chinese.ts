@@ -3,11 +3,11 @@
 // 只放建模函数和它们用到的常量，素材表在 ../styles-world.ts（PACKS 只收集 packs/ 下一层的文件）。
 
 import * as THREE from 'three'
-import { ball, cyl, rbox, shade, torus } from '../../toon'
-import { C, hangingPipe, holePanel, pipeHook, rectPoly, type SurfaceDef } from '../../kit'
+import { ball, cyl, rbox, torus } from '../../toon'
+import { C, gridHoles, hangingPipe, holePanel, pipeHook, rectPoly, type SurfaceDef } from '../../kit'
 import { batten, cappedTube, cylZ, latheAt, lit, rod3 } from '../../geo'
 import { drawerLv, drawerOf, hollow, swingDoor } from '../../cabinetKit'
-import { TUBE, brassPlate, cabriole, lattice, lowerSeat, prism, sidePrism, strip, waistBase, type P2 } from './common'
+import { TUBE, brassPlate, cabriole, lowerSeat, prism, sidePrism, strip, tone, waistBase, type P2 } from './common'
 
 const r = rectPoly
 
@@ -20,7 +20,7 @@ export function cnSofa(W: number) {
     const top = waistBase(g, W, D, 10, wood, dark, 6)
     const bh = 50
     const zb = -D / 2 + 2.4
-    g.add(holePanel(W - 8, bh, 3.6, wood, lattice(W - 8, bh, Math.round(W / 26), 2, 2.6, 4), { y: top, z: zb }))
+    g.add(holePanel(W - 8, bh, 3.6, wood, gridHoles(W - 8, bh, Math.round(W / 26), 2, 2.6, 4), { y: top, z: zb }))
     g.add(prism([[-W / 2, top + bh], [W / 2, top + bh], [W / 2, top + bh + 3], [W * 0.18, top + bh + 4.2], [0, top + bh + 5.4], [-W * 0.18, top + bh + 4.2], [-W / 2, top + bh + 3]], 6, dark, zb + 0.2))
     const ah = 26
     for (const s of [-1, 1]) {
@@ -85,7 +85,7 @@ export const CN_COFFEE_SURFACES: SurfaceDef[] = [{ y: 12, h: 13.5, shape: [r(-43
 export function cnTvStand(p: string[]) {
   const [wood, brass, dark] = p
   const g = new THREE.Group()
-  const inner = shade(wood, 0.05)
+  const inner = tone(wood, 0.05)
   for (const sx of [-1, 1])
     for (const sz of [-1, 1]) {
       g.add(rbox(5, 9.4, 5, wood, { x: sx * 74, y: 1.6, z: sz * 16.5 }, 1))
@@ -165,7 +165,7 @@ export function cnDengguaChair(p: string[]) {
 export function cnBed(m: number) {
   return (p: string[]) => {
     const [duvet, sheet, wood] = p
-    const dark = shade(wood, -0.1)
+    const dark = tone(wood, -0.1)
     const g = new THREE.Group()
     const W = m + 8
     const D = 212
@@ -209,12 +209,12 @@ export function cnWardrobe(p: string[]) {
   const g = new THREE.Group()
   const W = 100
   const D = 56
-  const inner = shade(wood, 0.05)
+  const inner = tone(wood, 0.05)
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(5, 8, 5, wood, { x: sx * 47.5, z: sz * 25.5 }, 1))
   g.add(prism([[-45, 8], [45, 8], [45, 5], [36, 4], [-36, 4], [-45, 5]], 1.4, dark, D / 2 - 0.4))
   g.add(hollow(W, 186, D, wood, { y: 8 }, 2, inner))
   g.add(rbox(W - 4, 1.6, D - 3, inner, { y: 176, z: 0.5 }, 0.3))
-  g.add(hangingPipe(-46, 46, 168, 0))
+  g.add(hangingPipe(-48, 48, 168, 0)) // 两端杆座顶到侧板内壁（原来各短 2cm，整根杆悬空）
   g.add(rbox(W + 3, 4, D + 3, dark, { y: 194 }, 1))
   g.add(rbox(3.2, 182, 1.4, dark, { y: 10, z: D / 2 + 0.3 }, 0.5))
   for (const s of [-1, 1]) {
@@ -222,8 +222,8 @@ export function cnWardrobe(p: string[]) {
     const dw = W / 2 - 5.6
     const parts: THREE.Object3D[] = [
       rbox(dw, 182, 1.2, wood, { x: dx, y: 10, z: D / 2 + 0.2 }, 0.5),
-      holePanel(dw - 9, 70, 0.8, dark, lattice(dw - 9, 70, 3, 5, 1.6, 2.6), { x: dx, y: 108, z: D / 2 + 1.2 }),
-      rbox(dw - 9, 64, 0.6, shade(wood, -0.06), { x: dx, y: 30, z: D / 2 + 0.95 }, 0.3),
+      holePanel(dw - 9, 70, 0.8, dark, gridHoles(dw - 9, 70, 3, 5, 1.6, 2.6), { x: dx, y: 108, z: D / 2 + 1.2 }),
+      rbox(dw - 9, 64, 0.6, tone(wood, -0.06), { x: dx, y: 30, z: D / 2 + 0.95 }, 0.3),
     ]
     for (const hy of [24, 168]) parts.push(rbox(4, 4, 0.5, brass, { x: s * (W / 2 - 4), y: hy, z: D / 2 + 1 }, 0.2))
     g.add(swingDoor(parts, s * (W / 2 - 2.3), D / 2 - 0.4, s < 0 ? 'left' : 'right'))
@@ -246,7 +246,7 @@ export const CN_WARDROBE_SURFACES: SurfaceDef[] = [
 export function cnDresser(p: string[]) {
   const [wood, brass, dark] = p
   const g = new THREE.Group()
-  const inner = shade(wood, 0.05)
+  const inner = tone(wood, 0.05)
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(4.4, 12, 4.4, wood, { x: sx * 37.8, z: sz * 18.8 }, 0.8))
   g.add(prism([[-35.6, 12], [35.6, 12], [35.6, 9], [26, 7.8], [-26, 7.8], [-35.6, 9]], 1.2, dark, 20.4))
   g.add(hollow(80, 70, 42, wood, { y: 12 }, 1.6, inner))
@@ -267,7 +267,7 @@ export function cnDesk(p: string[]) {
   const g = new THREE.Group()
   const W = 120
   const D = 60
-  const inner = shade(wood, 0.05)
+  const inner = tone(wood, 0.05)
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(batten([sx * 54, 72, sz * 25], [sx * 55.5, 0.06, sz * 26.2], 4.4, 4.4, wood))
   g.add(rbox(W, 4, D, wood, { y: 72 }, 1.2))
   g.add(rbox(W - 14, 1.2, D - 12, dark, { y: 63.4 }, 0.4))
@@ -319,7 +319,7 @@ export function cnBookcase(p: string[]) {
   const [wood, brass, dark] = p
   const { w, d, cab, open, top } = LG
   const g = new THREE.Group()
-  const inner = shade(wood, 0.05)
+  const inner = tone(wood, 0.05)
   const iw = w - 5 + 0.4
   g.add(prism([[-w / 2, 6], [w / 2, 6], [w / 2, 0], [w / 2 - 5, 0], [w / 2 - 9, 3], [-(w / 2 - 9), 3], [-(w / 2 - 5), 0], [-w / 2, 0]], d - 1, dark))
   for (const s of [-1, 1]) g.add(rbox(2.5, top - 6, d, wood, { x: s * (w / 2 - 1.25), y: 6 }, 0.6))
@@ -329,11 +329,11 @@ export function cnBookcase(p: string[]) {
   for (const y of [cab, ...open]) g.add(rbox(iw, 2, d - 1.6, wood, { y, z: 0.8 }, 0.4))
   g.add(rbox(w + 2, 3, d + 2, wood, { y: top }, 1))
   // 亮格口的券口牙子
-  for (const y of [...open, top]) g.add(holePanel(w - 5, 5, 1.2, dark, lattice(w - 5, 5, 7, 1, 1.4, 1), { y: y - 5, z: d / 2 - 0.8 }))
+  for (const y of [...open, top]) g.add(holePanel(w - 5, 5, 1.2, dark, gridHoles(w - 5, 5, 7, 1, 1.4, 1), { y: y - 5, z: d / 2 - 0.8 }))
   for (const s of [-1, 1]) {
     const parts: THREE.Object3D[] = [
       rbox(w / 2 - 3.1, cab - 8.6, 1.6, wood, { x: s * (w / 4 - 0.65), y: 8.3, z: d / 2 + 0.4 }, 0.6),
-      rbox(w / 2 - 10, cab - 18, 0.6, shade(wood, -0.06), { x: s * (w / 4 - 0.65), y: 13, z: d / 2 + 1.4 }, 0.3),
+      rbox(w / 2 - 10, cab - 18, 0.6, tone(wood, -0.06), { x: s * (w / 4 - 0.65), y: 13, z: d / 2 + 1.4 }, 0.3),
     ]
     if (s > 0) parts.push(brassPlate(0, 50, d / 2 + 1.2, 4, brass))
     g.add(swingDoor(parts, s * (w / 2 - 2.6), d / 2 - 0.4, s < 0 ? 'left' : 'right'))
@@ -352,7 +352,7 @@ export function cnTableLamp(p: string[]) {
   const [wood, silk, accent] = p
   const g = new THREE.Group()
   g.add(rbox(16, 3, 16, wood, {}, 0.8))
-  g.add(rbox(11, 2, 11, shade(wood, -0.08), { y: 3 }, 0.5))
+  g.add(rbox(11, 2, 11, tone(wood, -0.08), { y: 3 }, 0.5))
   g.add(latheAt([[0, 5], [2.4, 5], [1.6, 8], [1.3, 29], [2.2, 30.6], [0, 30.6]], wood, {}, 12, 0.001))
   const y0 = 30
   const H = 22

@@ -697,7 +697,7 @@ function buildHumanoid(id: string, b: RoboBreed, pal: string[]): RoboRig {
     hip.add(knee)
     knee.add(cyl(4.2, 4.2, 8, joint, { y: 0, rz: PI / 2 }, 16))
     knee.add(rbox(6, 32, 7, main, { y: 3.5 - 34 }, 2.4))
-    knee.add(cyl(3, 3, 6, joint, { y: 2 - 34, rz: PI / 2 }, 12))
+    knee.add(cyl(3, 3, 6.6, joint, { y: 2 - 34, rz: PI / 2 }, 12))
     knee.add(rbox(8.4, 4, 20, joint, { y: -34, z: 2.5 }, 1.6))
     legs.push({ hip, knee, local: new THREE.Vector3(x, 67, 0) })
   }
@@ -707,7 +707,7 @@ function buildHumanoid(id: string, b: RoboBreed, pal: string[]): RoboRig {
   inner.add(body)
   body.add(rbox(28, 26, 15, main, {}, 5))
   body.add(rbox(21, 15, 1, chest, { y: 6, z: 7.45 }, 1.2))
-  body.add(lit(rbox(8, 0.8, 0.4, glowC, { y: 18, z: 7.75 }, 0.2), glowC, 0.8))
+  body.add(lit(rbox(8, 0.8, 0.4, glowC, { y: 18, z: 8 }, 0.2), glowC, 0.8))
   body.add(cyl(3.2, 3.6, 6, joint, { y: 25 }, 14))
   const head = node(0, 30, 0)
   body.add(head)
@@ -723,7 +723,7 @@ function buildHumanoid(id: string, b: RoboBreed, pal: string[]): RoboRig {
     sh.add(el)
     el.add(cyl(3.4, 3.4, 6, joint, { y: -3, rz: PI / 2 }, 14))
     el.add(rbox(5, 20, 5.6, main, { y: -22 }, 1.8))
-    el.add(rbox(4.4, 8, 5.4, joint, { y: -30.5 }, 1.6))
+    el.add(rbox(4.4, 8, 5.4, joint, { y: -30 }, 1.6))
     body.add(sh)
     return { sh, el, side }
   })

@@ -255,7 +255,8 @@ function robotStation(p: string[]) {
   g.add(rbox(26, 1, 14, sub, { z: -4 }, 0.4))
   for (const s of [-1, 1]) g.add(rbox(3, 1.4, 1, STEEL, { x: s * 5, y: 3, z: -9.7 }, 0.3))
   // 机器人本体标成 actorPart：预览时它离座去扫地（actors.ts）
-  g.add(P(robot(main, sub, acc), 0, 0.3, 9)).children.at(-1)!.userData.actorPart = true
+  // 机身底（robot 里 y = 1）正好压在 1cm 厚的上坡板上（原来再抬 0.3，悬在板上方）
+  g.add(P(robot(main, sub, acc), 0, 0, 9)).children.at(-1)!.userData.actorPart = true
   return g
 }
 
@@ -383,7 +384,8 @@ function flatMopModel(main: string, sub: string, lean = 4) {
   for (const s of [-1, 1]) g.add(rbox(3, 0.4, 3, shade(main, -0.15), { x: s * 10.5, y: 2.8 }, 0.3))
   g.add(ball(1.5, sub, { y: 3.8 }))
   const top: V3 = [0, 116, -lean]
-  g.add(rod3([0, 3.8, 0], top, 1.1, sub, 12))
+  // 杆芯停在握把里面（一直伸到握把顶的话，两个端面在同一个平面上重合）
+  g.add(rod3([0, 3.8, 0], [0, 3.8 + 112.2 * 0.95, -lean * 0.95], 1.1, sub, 12))
   for (const t of [0.35, 0.68]) g.add(rod3([0, 3.8 + 112.2 * t - 0.8, -lean * t], [0, 3.8 + 112.2 * t + 0.8, -lean * t], 1.4, shade(sub, -0.12), 12))
   g.add(rod3([0, 96, -lean * 0.82], top, 1.6, main, 12))
   g.add(ball(1.6, main, { y: 116, z: -lean }))
@@ -399,11 +401,13 @@ function spongeMop(p: string[]) {
   const g = new THREE.Group()
   g.add(rbox(27, 5, 6, sponge, {}, 1))
   g.add(rbox(28, 2, 7, main, { y: 4.6 }, 0.8))
-  g.add(rod3([0, 6.6, 0], [0, 118, -3], 1.2, STEEL, 12))
+  // 钢管停在握把里面（伸到握把顶的话两个端面重合）
+  g.add(rod3([0, 6.6, 0], [0, 112, -2.84], 1.2, STEEL, 12))
   g.add(rod3([0, 6.5, 1.9], [0, 56, 1.2], 0.5, STEEL, 8))
   g.add(rbox(3, 14, 2.4, acc, { y: 44, z: 1.4 }, 0.8))
   g.add(rod3([0, 100, -2.5], [0, 118, -3], 1.6, main, 12))
-  g.add(torus(1.2, 0.35, main, { y: 120.2, z: -3 }))
+  // 挂环下沿嵌进握把顶 0.3（以前环心在 120.2，环和握把之间空着 0.6）
+  g.add(torus(1.2, 0.35, main, { y: 119.25, z: -3 }))
   return g
 }
 
@@ -467,7 +471,8 @@ function jpBroom(p: string[]) {
     [31, 14.6],
     [35, 12.2],
   ]) br.add(rbox(w, 1.4, 3.4, thread, { y }, 0.4))
-  br.add(cyl(1.4, 1.4, 86, J.hinoki, { y: 39 }, 12))
+  // 竹柄停在顶端缠线箍里面（箍顶在 125，柄也到 125 的话两个顶面重合）
+  br.add(cyl(1.4, 1.4, 85, J.hinoki, { y: 39 }, 12))
   for (const y of [58, 80, 102]) br.add(torus(1.45, 0.25, shade(J.hinoki, -0.15), { y, rx: PI / 2 }))
   br.add(cyl(1.6, 1.6, 2, thread, { y: 123 }, 12))
   br.add(torus(1.3, 0.3, thread, { y: 126.2 }))
@@ -562,7 +567,8 @@ function sortingBins(p: string[], n: number) {
     g.add(rbox(SB.uw + 0.4, 2.6, SB.d + 0.4, lid, { x, y: SB.h }, 1))
     g.add(rbox(10, 1.2, 1, shade(lid, -0.15), { x, y: SB.h + 0.7, z: SB.d / 2 - 0.1 }, 0.4))
     g.add(rbox(SB.uw - 4, 0.5, 0.8, acc, { x, y: SB.h - 4, z: SB.d / 2 + 0.2 }, 0.2))
-    g.add(paintPanel(16, 11, `chore-sort-${k}-${signLang()}`, drawSort(SORT_KINDS[signLang()][k]), { x, y: 34, z: SB.d / 2 + 0.35 }))
+    // 贴纸贴着桶面（平面贴图浮出 0.12 就不闪；原来浮出 0.35，侧面看像悬着一张纸）
+    g.add(paintPanel(16, 11, `chore-sort-${k}-${signLang()}`, drawSort(SORT_KINDS[signLang()][k]), { x, y: 34, z: SB.d / 2 + 0.12 }))
   })
   return g
 }
@@ -589,7 +595,7 @@ function kitchenBin(p: string[]) {
   g.add(rbox(24, 0.5, 19, shade(lid, -0.08), { y: 64.2, z: 9 }, 0.3))
   g.add(rbox(6, 1.6, 1.4, acc, { y: 62.2, z: 22.4 }, 0.5))
   for (const s of [-1, 1]) g.add(rbox(0.8, 3, 12, shade(main, -0.12), { x: s * 15.2, y: 52 }, 0.3))
-  g.add(paintPanel(9, 4, `chore-45l-${acc}-${signLang()}`, drawLabel('#ffffff', null, [[say({ zh: '45L', ja: '45L', en: '12 GAL' }), 0.52, 0.7, acc]]), { y: 50, z: 22.35 }))
+  g.add(paintPanel(9, 4, `chore-45l-${acc}-${signLang()}`, drawLabel('#ffffff', null, [[say({ zh: '45L', ja: '45L', en: '12 GAL' }), 0.52, 0.7, acc]]), { y: 50, z: 22.12 }))
   return g
 }
 
@@ -768,10 +774,11 @@ function soapPouch(p: string[]) {
   g.add(rbox(12.4, 5, 4.4, body, {}, 1.6))
   g.add(vpoly([[-6, 1], [6, 1], [6, 14], [4.5, 18], [-6, 18]], 2.2, body))
   const dir = new THREE.Vector2(4, 1.5).normalize()
-  const cx = 5.25 + dir.x * 1.2
-  const cy = 16 + dir.y * 1.2
+  // 盖子根部插进斜口 0.2（原来盖子中心离斜口 1.2、比半长还多 0.2，盖子悬在袋口外）
+  const cx = 5.25 + dir.x * 0.8
+  const cy = 16 + dir.y * 0.8
   g.add(cyl(0.9, 0.9, 2, cap, { x: cx, y: cy - 1, rz: -Math.atan2(dir.x, dir.y) }, 12))
-  g.add(paintPanel(9, 9, `chore-pouch-${body}-${lab}-${signLang()}`, drawBubbleLabel('#ffffff', body, ...say<[string, string]>({ zh: ['补充装', '洗洁精'], ja: ['つめかえ用', '食器用洗剤'], en: ['REFILL', 'Dish Soap'] }), lab), { x: -0.5, y: 6, z: 1.45 }))
+  g.add(paintPanel(9, 9, `chore-pouch-${body}-${lab}-${signLang()}`, drawBubbleLabel('#ffffff', body, ...say<[string, string]>({ zh: ['补充装', '洗洁精'], ja: ['つめかえ用', '食器用洗剤'], en: ['REFILL', 'Dish Soap'] }), lab), { x: -0.5, y: 6, z: 1.2 }))
   return g
 }
 

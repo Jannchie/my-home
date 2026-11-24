@@ -85,7 +85,8 @@ function barCart(p: string[]) {
   }
   // 两层托盘：底板 + 围边
   for (const y of CART_YS) {
-    g.add(rbox(CART_W - 10, 1.2, CART_D - 2, tray, { y }, 0.5))
+    // 底板四边各收 0.3，嵌进围边里：和围边外侧面齐平的话两种颜色共面闪烁
+    g.add(rbox(CART_W - 10.6, 1.2, CART_D - 2.6, tray, { y }, 0.5))
     for (const s of [-1, 1]) {
       g.add(rbox(CART_W - 10, 4, 0.8, frame, { y, z: s * (CART_D / 2 - 1.4) }, 0.3))
       g.add(rbox(0.8, 4, CART_D - 2, frame, { x: s * (CART_W / 2 - 5.4), y }, 0.3))

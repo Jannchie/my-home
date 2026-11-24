@@ -214,7 +214,8 @@ function cabinet(s: WetCabSpec, y0 = 0): Build {
     const bd = dc - 0.6
     const bz = zc + 0.3
     for (const sx of [-1, 1]) g.add(rbox(T, L.h, dc, body, { x: sx * (s.w / 2 - T / 2), y: y0, z: zc }, 0.4))
-    g.add(rbox(s.w - T * 2, L.h - s.plinth - T, 0.6, back, { y: y0 + s.plinth + T / 2, z: -s.d / 2 + 0.3 }, 0.2))
+    // 背板只到顶板下沿（顶板通到背面，再往上就和顶板的背面共面了）
+    g.add(rbox(s.w - T * 2, L.h - s.plinth - T * 1.5 + 0.3, 0.6, back, { y: y0 + s.plinth + T / 2, z: -s.d / 2 + 0.3 }, 0.2))
     L.boards.forEach((by, i) => {
       const last = i === L.boards.length - 1
       if (last) g.add(rbox(s.w, T, dc, body, { y: y0 + by, z: zc }, 0.5))
@@ -392,8 +393,9 @@ function tpPack(nx: number, nz: number, ny: number, handle: boolean): Build {
     g.add(rbox(W * 0.5, H * 0.12, 0.4, accent, { y: H * 0.42, z: D / 2 + 0.5 }, 0.2))
     if (handle) {
       // 提手：顶上一条塑料带
-      g.add(rbox(4, 0.4, D * 0.7, print, { y: H + 0.8 }, 0.15))
-      g.add(torus(3, 0.5, print, { y: H + 1.2 }, PI))
+      // 带子比提手两脚宽、提手脚插进带子里：原来两脚落在带子外、离包装顶面还差 0.4cm
+      g.add(rbox(7.4, 0.4, D * 0.7, print, { y: H + 0.8 }, 0.15))
+      g.add(torus(3, 0.5, print, { y: H + 0.95 }, PI))
     }
     return g
   }
@@ -551,8 +553,8 @@ function padsPack(p: string[]) {
     rbox(16.3, 4.2, 8.7, print, { y: 3.6 }, 1.2),
     rbox(7, 2.6, 0.4, accent, { x: -3, y: 8.8, z: 4.3 }, 0.6),
     ball(1.1, accent, { x: 4.6, y: 9.9, z: 4.25 }, [1, 1, 0.3]),
-    // 顶上的提手：一条压边 + 椭圆开口
-    rbox(15, 1, 2.2, shade(pack, -0.05), { y: 13.2 }, 0.4),
+    // 顶上的提手：一条压边 + 椭圆开口（开口比压边高出 0.3，两个顶面不共面）
+    rbox(15, 1, 2.2, shade(pack, -0.05), { y: 12.9 }, 0.4),
     rbox(4.4, 0.6, 1.2, shade(print, -0.15), { y: 13.6 }, 0.3),
   )
 }
@@ -738,9 +740,11 @@ function toyBoat(p: string[]) {
     [3, 3.6],
     [-7, 3.6],
   ]
+  // 水线色带：和船身同形、略大一圈（以前是一块矩形，船头收尖的地方两个角戳在外面）
+  const belt: Poly = poly.map(([x, z]) => [x * 1.03, z * 1.04])
   return G(
     slab(poly, 3.4, hull),
-    rbox(13, 0.6, 7.6, shade(hull, -0.15), { x: -0.3, y: 1.2 }, 0.2),
+    slab(belt, 0.6, shade(hull, -0.15), 1.2),
     rbox(5, 3, 4.6, cabin, { x: -2, y: 3.4 }, 0.8),
     rbox(5.4, 0.6, 5, acc, { x: -2, y: 6.3 }, 0.25),
     cyl(0.9, 0.9, 2.6, acc, { x: -3, y: 6.8 }, 12),
@@ -1199,7 +1203,8 @@ function ironModel(p: string[]) {
   g.add(rod3([0, 6, 4.5], [0, 11.2, 4.6], 1.1, handle, 8))
   g.add(rod3([0, 6, -9], [0, 11.2, -8.8], 1.1, handle, 8))
   g.add(cyl(1.6, 1.6, 0.8, shade(main, -0.2), { y: 6.1, z: 2 }, 16))
-  g.add(cylZLegacy(0.6, 3, '#555555', 0, 3.5, -13.2))
+  // 电线根部插进机身尾部（原来离机身还差 0.3cm）
+  g.add(cylZLegacy(0.6, 3, '#555555', 0, 3.5, -12.7))
   return ground(g)
 }
 
@@ -1302,7 +1307,8 @@ function clearCase(c: CaseSpec, open: boolean): Build {
       g.add(rbox(c.w + 0.8, 1.6, c.d + 0.8, lid, { y: c.h - 0.2 }, 0.6))
       g.add(rbox(c.w * 0.4, 0.5, 1.2, shade(lid, -0.12), { y: c.h + 1.35, z: c.d / 2 - 2 }, 0.2))
     } else {
-      g.add(rbox(c.w + 0.8, c.d + 0.8, 1.6, lid, { y: c.h, z: -c.d / 2 - 0.9 }, 0.6))
+      // 盖子取下来立在箱子背后的地上（以前从口沿高度往上立着，底下悬空）
+      g.add(rbox(c.w + 0.8, c.d + 0.8, 1.6, lid, { z: -c.d / 2 - 0.9 }, 0.6))
     }
     return ground(g)
   }
@@ -1663,7 +1669,7 @@ const DRESSING: AssetDef[] = [
     const c = CASES[k]
     return [
       prop(`wet-clear-case-${k.toLowerCase()}-closed`, '半透明收纳箱', 'storage', [c.w + 0.8, c.d + 0.8, c.h + 1.85], CASE_PALS, clearCase(c, false), { sizeLabel: k, form: 'closed' }),
-      prop(`wet-clear-case-${k.toLowerCase()}-open`, '半透明收纳箱', 'storage', [c.w + 0.8, c.d + 1.7, c.h + c.d + 0.8], CASE_PALS, clearCase(c, true), { sizeLabel: k, form: 'open' }),
+      prop(`wet-clear-case-${k.toLowerCase()}-open`, '半透明收纳箱', 'storage', [c.w + 0.8, c.d + 1.7, c.d + 0.8], CASE_PALS, clearCase(c, true), { sizeLabel: k, form: 'open' }),
     ]
   }),
   define('wet-drawer-chest', '抽屉式收纳盒', 'storage', [DC.w, DC.d, DC.h], [
@@ -1769,7 +1775,8 @@ function dehumBagBody(p: string[]) {
   const g = new THREE.Group()
   g.add(rbox(12, 2, 1.8, bar, { y: 28 }, 0.6))
   g.add(rbox(11, 16, 1.6, bag, { y: 12.2 }, 0.6))
-  g.add(clearDeep(rbox(11, 12.4, 1.8, GLASS, {}, 0.6), GLASS))
+  // 集水袋比别的透明件实一点：只有 1.8cm 厚，太透的话下面那块积水像是悬空的
+  g.add(clearDeep(rbox(11, 12.4, 1.8, GLASS, {}, 0.6), GLASS, 0.6))
   g.add(rbox(10, 5, 1.2, water, { y: 0.4 }, 0.4))
   g.add(rbox(7, 3, 0.3, shade(bag, -0.15), { y: 19, z: 0.85 }, 0.1))
   return g

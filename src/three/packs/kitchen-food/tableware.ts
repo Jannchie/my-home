@@ -4,7 +4,7 @@
 import * as THREE from 'three'
 import { ball, cup, cyl, puck, rbox, shade, torus, tray } from '../../toon'
 import { PI, cappedTube, hcyl, latheAt, noOutlineDeep, rod3 } from '../../geo'
-import { BEER, COFFEE, DISH_IN, FOAM, GLASS, RICE, SOY, STEEL, TAMAGO, TEA, TOMATO, TUBE, bowl, chopsticks, dish, dome, glassGhost, hashioki, liquid } from './common'
+import { BEER, COFFEE, DISH_IN, FOAM, GLASS, RICE, SOY, STEEL, TAMAGO, TEA, TOMATO, TUBE, bowl, chopsticks, dish, dome, glassGhost, hashioki, liquid, wrapBand } from './common'
 
 // ======================================================================
 // 餐具
@@ -41,9 +41,11 @@ export function plateStack(p: string[], r: number, n: number) {
   const [a, b, rim] = p
   const g = new THREE.Group()
   const h = r > 11 ? 2.8 : 2.2
+  // 每只的圈足落在下面那只的盘心上（盘心内底高 DISH_IN = 0.7）：间距再大，上面的盘子就整只悬在半空
+  const step = DISH_IN + 0.1
   for (let i = 0; i < n; i++) {
-    g.add(dish(r, h, i % 3 === 1 ? b : a, { y: i * 1.25 }))
-    g.add(noOutlineDeep(torus(r - 0.25, 0.12, rim, { y: i * 1.25 + h + 0.05, rx: PI / 2 })))
+    g.add(dish(r, h, i % 3 === 1 ? b : a, { y: i * step }))
+    g.add(noOutlineDeep(torus(r - 0.25, 0.12, rim, { y: i * step + h + 0.05, rx: PI / 2 })))
   }
   return g
 }
@@ -209,7 +211,7 @@ export function tokkuriSet(p: string[]) {
   g.add(tray(24, 1.6, 14, 0.6, trayC, {}, 0.5))
   // 德利：中心在 (0, 0.6, 0)
   g.add(latheAt([[0, 0], [3.4, 0], [4, 2], [4, 7], [2, 11], [1.2, 13], [1.6, 14.2], [1.1, 14.4], [0.9, 13.6], [0, 13.6]], ware, { y: 0.6 }))
-  g.add(noOutlineDeep(cyl(4.02, 4.02, 1.2, acc, { y: 5.6 }, 24)))
+  g.add(wrapBand(4, 1.2, acc, { y: 5.6 }, 32))
   for (const x of [-7.5, 7.5]) {
     g.add(cup(2.4, 1.5, 3.2, 0.25, ware, { x, y: 0.6, z: 2 }))
     g.add(liquid(2, 3.4, '#fbf3d8', x, 2))

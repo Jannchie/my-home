@@ -39,11 +39,18 @@ const NAMES: Record<FixtureShape | 'basic', string> = {
   'wagon-wheel': '车轮吊灯',
   'hex-lantern': '六角灯笼吊灯',
   cylinder: '筒形吊灯',
+  fan: '吊扇灯',
+  'paper-globe': '和纸球形吊灯',
+  rattan: '藤编钟形吊灯',
+  track: '轨道射灯',
+  ring: '环形吊灯',
 }
 
 /** 各款适合的风格（STYLE_SHAPES 反查；通用款算现代） */
 function stylesOf(shape: FixtureShape | undefined): StyleTag[] {
   if (!shape) return ['modern']
+  const own = SHAPES[shape].styles
+  if (own) return own
   const out = (Object.keys(STYLE_SHAPES) as StyleTag[]).filter((s) => {
     const t = STYLE_SHAPES[s]
     return t.ceiling.includes(shape) || t.small === shape || t.pendant === shape
@@ -51,7 +58,7 @@ function stylesOf(shape: FixtureShape | undefined): StyleTag[] {
   return out.length ? out : ['modern']
 }
 /** 做餐桌吊灯尺寸的款：哪个风格拿它当吊灯，加上通用款 */
-const pendantShape = (shape: FixtureShape | undefined) => !shape || Object.values(STYLE_SHAPES).some((t) => t.pendant === shape)
+const pendantShape = (shape: FixtureShape | undefined) => !shape || !!SHAPES[shape].pendant || Object.values(STYLE_SHAPES).some((t) => t.pendant === shape)
 
 /** 建模：灯具底面在 y = fy（fixtureModel 原点在底面中心），水平居中；描边交给家具模板统一加 */
 function build(spec: RoomLightSpec) {

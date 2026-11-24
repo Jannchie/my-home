@@ -3,11 +3,11 @@
 // 只放建模函数和它们用到的常量，素材表在 ../styles-world.ts（PACKS 只收集 packs/ 下一层的文件）。
 
 import * as THREE from 'three'
-import { ball, cyl, markMirror, rbox, shade, toon, torus } from '../../toon'
+import { ball, cyl, markMirror, rbox, toon, torus } from '../../toon'
 import { C, paintPanel, rectPoly, type SurfaceDef } from '../../kit'
 import { batten, cappedTube, cylX, cylZ, glassPane, latheAt, lit, noOutlineDeep, rod3, type V3 } from '../../geo'
 import { drawerLv, drawerOf, hollow, swingDoor } from '../../cabinetKit'
-import { TUBE, cabriole, carving, prism, sidePrism, strip, type P2 } from './common'
+import { TUBE, cabriole, carving, prism, sidePrism, strip, tone, type P2 } from './common'
 
 const r = rectPoly
 
@@ -22,7 +22,7 @@ export function clChesterfield(W: number) {
     const [fabric, wood, gold] = p
     const g = new THREE.Group()
     const D = 90
-    const tuft = shade(fabric, -0.22)
+    const tuft = tone(fabric, -0.22)
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(bunFoot(sx * (W / 2 - 9), sz * (D / 2 - 8), 8, wood))
     g.add(rbox(W, 30, D, fabric, { y: 8 }, 4))
     // 靠背 + 顶卷
@@ -68,7 +68,7 @@ export function clWingback(p: string[]) {
   for (const s of [-1, 1]) {
     g.add(sidePrism(wing, 9, fabric, s * 32.5))
     g.add(cylZ(5.6, 22, fabric, s * 33, 55.6, 8, 16))
-    g.add(noOutlineDeep(cylZ(4.6, 0.5, shade(fabric, -0.2), s * 33, 55.6, 19.2, 16)))
+    g.add(noOutlineDeep(cylZ(4.6, 0.5, tone(fabric, -0.2), s * 33, 55.6, 19.2, 16)))
   }
   // 裙边铜钉
   for (let x = -34; x <= 34; x += 4) g.add(ball(0.6, gold, { x, y: 19, z: 35.1 }))
@@ -79,7 +79,7 @@ export function clWingback(p: string[]) {
 export function clTvStand(p: string[]) {
   const [body, top, gold] = p
   const g = new THREE.Group()
-  const inner = shade(body, 0.05)
+  const inner = tone(body, 0.05)
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(cabriole(sx * 74, sz * 18.5, 14, 2, body, sx * 0.5, sz * 0.5, 'scroll', gold))
   g.add(hollow(156, 44, 42, body, { y: 13 }, 1.6, inner))
   for (const s of [-1, 1]) {
@@ -92,7 +92,7 @@ export function clTvStand(p: string[]) {
     const s = Math.sign(x)
     const parts: THREE.Object3D[] = [
       rbox(46, 38, 1.2, body, { x, y: 16, z: 21.6 }, 0.6),
-      rbox(38, 30, 0.6, shade(body, -0.05), { x, y: 20, z: 22.3 }, 0.4),
+      rbox(38, 30, 0.6, tone(body, -0.05), { x, y: 20, z: 22.3 }, 0.4),
       noOutlineDeep(torus(8, 0.5, gold, { x, y: 35, z: 22.8 })),
       ball(1.3, gold, { x: x - s * 19, y: 35, z: 22.9 }),
     ]
@@ -122,7 +122,7 @@ export function clDining(W: number, D: number) {
       g.add(carving(0, 66, s * (lz + 1.2), 5, gold))
       g.add(noOutlineDeep(rbox(2 * lx, 0.8, 0.4, gold, { y: 70.4, z: s * (lz + 1.1) }, 0.1)))
     }
-    g.add(rbox(W - 4, 1.6, D - 4, shade(top, -0.06), { y: 72 }, 0.6))
+    g.add(rbox(W - 4, 1.6, D - 4, tone(top, -0.06), { y: 72 }, 0.6))
     g.add(rbox(W, 4, D, top, { y: 73.6 }, 1.4))
     return g
   }
@@ -142,7 +142,8 @@ export function clQueenAnne(p: string[]) {
   g.add(cappedTube([[-19.6, 99.4, -22.6], [-13, 102.6, -23.4], [0, 101, -24], [13, 102.6, -23.4], [19.6, 99.4, -22.6]], 1.8, wood, TUBE))
   const vase: P2[] = [[-6, 50.5], [6, 50.5], [9, 58], [7, 67], [4, 75], [5, 85], [9, 94], [10, 100.4], [-10, 100.4], [-9, 94], [-5, 85], [-4, 75], [-7, 67], [-9, 58]]
   const sp = prism(vase, 1.4, wood, 0)
-  sp.position.z = -21.6
+  // 后仰是绕原点（地面）转的：y≈50 处会往后挪 2.5cm。前移 2.5 让底端落在靠背底横档上、顶端接到顶横梁（以前整片靠背悬在两者后面）
+  sp.position.z = -19.1
   sp.rotation.x = -0.05
   g.add(sp)
   g.add(rbox(17, 3, 4, wood, { y: 48.5, z: -20 }, 0.8))
@@ -159,14 +160,15 @@ export function clSleighBed(m: number) {
     const D = 222
     const zh = -D / 2 + 9
     const zf = D / 2 - 9
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(bunFoot(sx * (W / 2 - 6), sz * (D / 2 - 10), 7, shade(wood, -0.08)))
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(bunFoot(sx * (W / 2 - 6), sz * (D / 2 - 10), 7, tone(wood, -0.08)))
     for (const s of [-1, 1]) g.add(rbox(5, 24, D - 18, wood, { x: s * (W / 2 - 2.5), y: 7 }, 1.4))
-    g.add(rbox(W - 10, 3, D - 20, shade(wood, -0.12), { y: 27 }, 0.8))
+    g.add(rbox(W - 10, 3, D - 20, tone(wood, -0.12), { y: 27 }, 0.8))
     // 床头：弧形板向后仰，顶上外卷
     const head: P2[] = [[zh, 7], [zh - 1, 40], [zh - 2.6, 72], [zh - 5, 96], [zh - 6.4, 108]]
     g.add(sidePrism(strip(head, 4.6), W, wood, 0))
     g.add(cylX(5.4, W + 3, wood, 0, 110.6, zh - 4.4, 20))
-    g.add(carving(0, 92, zh + 0.4, 8, gold))
+    // 床头板后仰，y=92 处的前表面在 zh-2.3 左右：雕花半嵌进去（以前放在 zh+0.4，离板面 1.4cm 悬空）
+    g.add(carving(0, 92, zh - 2.6, 8, gold))
     // 床尾：弧形板向前，顶上前卷
     const foot: P2[] = [[zf, 7], [zf + 0.6, 30], [zf + 2.2, 46], [zf + 4.6, 56]]
     g.add(sidePrism(strip(foot, 4.6), W, wood, 0))
@@ -188,12 +190,12 @@ export const CL_SLEIGH_TOP = 59
 export function clDresser(p: string[]) {
   const [body, top, gold] = p
   const g = new THREE.Group()
-  const inner = shade(body, 0.05)
+  const inner = tone(body, 0.05)
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(cabriole(sx * 41, sz * 19, 14, 2, body, sx * 0.5, sz * 0.5, 'scroll', gold))
   g.add(hollow(88, 70, 44, body, { y: 13 }, 1.6, inner))
   g.add(prism([[-43, 14], [43, 14], [43, 11], [30, 9], [12, 12], [0, 9.5], [-12, 12], [-30, 9], [-43, 11]], 1.4, body, 22))
   for (const y of CL_DR_ROWS) {
-    const parts: THREE.Object3D[] = [rbox(84, 20.4, 1.2, body, { y, z: 22.6 }, 0.6), rbox(76, 15.4, 0.5, shade(body, -0.05), { y: y + 2.5, z: 23.3 }, 0.3)]
+    const parts: THREE.Object3D[] = [rbox(84, 20.4, 1.2, body, { y, z: 22.6 }, 0.6), rbox(76, 15.4, 0.5, tone(body, -0.05), { y: y + 2.5, z: 23.3 }, 0.3)]
     for (const x of [-22, 22]) {
       parts.push(noOutlineDeep(rbox(5, 2.4, 0.6, gold, { x, y: y + 12.6, z: 23.6 }, 0.2)))
       parts.push(torus(2.2, 0.45, gold, { x, y: y + 12.6, z: 23.9, rz: Math.PI }, Math.PI))
@@ -213,9 +215,10 @@ export function clDesk(p: string[]) {
   const g = new THREE.Group()
   const W = 125
   const D = 65
-  const inner = shade(wood, 0.05)
+  const inner = tone(wood, 0.05)
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(cabriole(sx * 56, sz * 26, 64, 2.4, wood, sx * 0.5, sz * 0.5, 'scroll', gold))
-  g.add(rbox(W - 10, 1.2, D - 10, inner, { y: 62.8 }, 0.4))
+  // 抽屉底板缩在裙板里面（四边各收 0.6、底面抬 0.2）：原来和裙板的外侧面、底面齐平，一圈都在闪烁
+  g.add(rbox(W - 11.2, 1, D - 11.2, inner, { y: 63 }, 0.4))
   for (const s of [-1, 1]) {
     g.add(rbox(1.6, 10.2, D - 10, wood, { x: s * 56.6, y: 62.8 }, 0.4))
     g.add(rbox(W - 10, 10.2, 1.6, wood, { y: 62.8, z: -(D / 2 - 5.8) }, 0.4))
@@ -259,7 +262,7 @@ function paintClockFace(ground: string, ink: string) {
   return (g: CanvasRenderingContext2D, W: number, H: number) => {
     const c = W / 2
     const R = Math.min(W, H) / 2
-    g.fillStyle = shade(ink, 0.25)
+    g.fillStyle = tone(ink, 0.25)
     g.fillRect(0, 0, W, H)
     g.fillStyle = ground
     g.beginPath()
@@ -293,7 +296,7 @@ function paintClockFace(ground: string, ink: string) {
 export function clGrandfatherClock(p: string[]) {
   const [wood, face, gold] = p
   const g = new THREE.Group()
-  const dark = shade(wood, -0.08)
+  const dark = tone(wood, -0.08)
   g.add(rbox(50, 6, 30, dark, {}, 1))
   g.add(rbox(46, 36, 27, wood, { y: 6 }, 1))
   g.add(rbox(36, 26, 0.6, dark, { y: 11, z: 13.8 }, 0.3))
@@ -315,7 +318,8 @@ export function clGrandfatherClock(p: string[]) {
   // 断山花 + 尖顶
   g.add(rbox(50, 4, 30, dark, { y: 192 }, 1))
   for (const s of [-1, 1]) g.add(prism([[s * 4, 196], [s * 25, 196], [s * 25, 199], [s * 6, 208], [s * 4, 206]], 26, wood))
-  for (const x of [-21, 0, 21]) g.add(latheAt([[0, 0], [2.4, 0], [1.4, 2], [2, 4], [0.3, 8.4], [0, 8.4]], gold, { x, y: x ? 199 : 197, z: 8 }, 12, 0.001))
+  // 中间那颗立在檐口上（y = 196）；原来抬到 197，底下悬空 1cm
+  for (const x of [-21, 0, 21]) g.add(latheAt([[0, 0], [2.4, 0], [1.4, 2], [2, 4], [0.3, 8.4], [0, 8.4]], gold, { x, y: x ? 199 : 196, z: 8 }, 12, 0.001))
   return g
 }
 
@@ -370,6 +374,8 @@ export function clChandelierLamp(p: string[]) {
     g.add(lit(ball(1, C.lamp, { x: cx, y: y + 14, z: cz }, [1, 1.5, 1]), C.lamp, 0.9))
     g.add(cyl(2.4, 3.6, 4.4, shadeC, { x: cx, y: y + 11.6, z: cz }, 12))
     const [dx, , dz] = pt(6.5, 0)
+    // 水晶坠用一小段吊线挂在臂上（原来坠子顶离臂 0.5cm，悬着）
+    g.add(cyl(0.15, 0.15, 1.6, metal, { x: dx, y: y + 0.2, z: dz }, 4))
     const drop = ball(0.9, crystal, { x: dx, y: y - 0.6, z: dz }, [1, 1.6, 1])
     drop.material = toon(crystal, { transparent: 0.75 })
     g.add(drop)

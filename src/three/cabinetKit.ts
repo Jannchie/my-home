@@ -85,7 +85,8 @@ export function doorPanel(style: DoorStyle, c: string, k: string, th = DOOR_T): 
       return (w, h) => {
         const f = shade(c, -0.04)
         const b = Math.min(5, w * 0.12)
-        const out: THREE.Object3D[] = [rbox(w, h, th * 0.6, shade(c, -0.22), { z: -th * 0.2 }, 0.3)]
+        // 深色背板四周缩进框里、背面比框背缩进约 0.15：和框的背面、侧边不共面（开门时门背会闪）
+        const out: THREE.Object3D[] = [rbox(w - 0.6, h - 0.6, th * 0.5, shade(c, -0.22), { y: 0.3, z: -th * 0.15 }, 0.3)]
         out.push(rbox(b, h, th, c, { x: -w / 2 + b / 2 }, 0.4), rbox(b, h, th, c, { x: w / 2 - b / 2 }, 0.4), rbox(w - b * 2, b, th, c, {}, 0.4), rbox(w - b * 2, b, th, c, { y: h - b }, 0.4))
         const n = Math.max(2, Math.floor((h - b * 2) / 4))
         const step = (h - b * 2) / n

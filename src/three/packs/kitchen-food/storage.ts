@@ -6,7 +6,7 @@ import { ball, cup, cyl, puck, rbox, shade, torus, tray } from '../../toon'
 import { C, G, SWING_OPEN, movable, rng, type DoorMotion } from '../../kit'
 import { PI, cappedTube, hcyl, noOutlineDeep, rod3, type V3 } from '../../geo'
 import { M } from '../../packkit'
-import { GLASS, PG, RICE, SOY, STEEL, S_LOW, TUBE, arc, bottle, bowl, glassGhost, hangAt, sHook } from './common'
+import { GLASS, PG, RICE, SOY, STEEL, S_LOW, TUBE, arc, bottle, bowl, glassGhost, hangAt, sHook, wrapBand } from './common'
 
 // ======================================================================
 // 厨房收纳
@@ -22,8 +22,8 @@ export function dishRack2(p: string[], full: boolean) {
   g.add(tray(W, 2.2, D, 0.5, trayC, {}, 0.4))
   // 出水嘴
   g.add(rbox(4, 1, 3, trayC, { x: W / 2 - 6, y: 0.6, z: D / 2 - 0.2 }, 0.4))
-  // 四根立柱
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(cyl(0.45, 0.45, 36, frame, { x: sx * (W / 2 - 2), y: 1, z: sz * (D / 2 - 2) }, 8))
+  // 四根立柱：从接水盘底板（厚 0.5）上立起，原来从 y=1 起、整个架子悬在盘底上方
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(cyl(0.45, 0.45, 36.5, frame, { x: sx * (W / 2 - 2), y: 0.5, z: sz * (D / 2 - 2) }, 8))
   // 下层：竖条碗栏（沿 x 一排）
   const y1 = 4
   for (const sz of [-1, 1]) g.add(rod3([-W / 2 + 2, y1, sz * (D / 2 - 2)], [W / 2 - 2, y1, sz * (D / 2 - 2)], 0.4, frame, 8))
@@ -327,7 +327,7 @@ export function canisters(p: string[]) {
     if (fill === '#f1d58a') for (let i = 0; i < 12; i++) g.add(noOutlineDeep(rod3([x - 2.5 + (i % 4) * 1.6, 0.6, -1.5 + Math.floor(i / 4) * 1.5], [x - 2.4 + (i % 4) * 1.6, h - 3, -1.5 + Math.floor(i / 4) * 1.5], 0.28, fill, 8)))
     else g.add(noOutlineDeep(cyl(3.5, 3.5, h * 0.7, fill, { x, y: 0.5 }, 18)))
     g.add(puck(4.5, 2.2, lid, { x, y: h - 0.3 }))
-    g.add(noOutlineDeep(cyl(4.05, 4.05, 2.5, band, { x, y: h * 0.45 }, 24)))
+    g.add(wrapBand(4, 2.5, band, { x, y: h * 0.45 }, 32))
     g.add(ball(0.9, acc, { x, y: h + 2.3 }))
   }
   return g
@@ -426,6 +426,8 @@ export function tongsBody(p: string[]) {
     g.add(rbox(2, 2.2, 1.2, grip, { x: s * 2.2, y: 0, z: 0, rz: s * 0.08 }, 0.4))
     g.add(rod3([s * 0.8, 20, 0], [s * 1.5, 12, 0], 0.75, grip, 8))
   }
+  // 两臂顶端的铰接块：把两臂和挂环连起来（原来挂环悬在两臂上方 0.6cm）
+  g.add(rbox(2.4, 2, 1.2, arm, { y: 21.4 }, 0.4))
   g.add(torus(1, 0.32, arm, { y: 24 }))
   return g
 }
@@ -464,11 +466,11 @@ export function boardStand(p: string[]) {
   g.add(rbox(28, 1, 12, frame, {}, 0.4))
   for (const z of [-3.5, 0.5, 4.5]) for (const sx of [-1, 1]) g.add(rod3([sx * 12, 1, z], [sx * 12, 9, z], 0.35, frame, 8))
   // 两块板斜靠
-  const b1 = rbox(30, 22, 1.8, board1, {}, 0.6)
+  // 提手孔（深色贴片）和板子收在一个组里一起倾斜，贴在板面上（原来单独摆，悬在板前 1.5cm）
+  const b1 = G(rbox(30, 22, 1.8, board1, { y: -11 }, 0.6), noOutlineDeep(rbox(4, 1.2, 0.3, shade(board1, -0.2), { y: 8.4, z: 1 }, 0.4)))
   b1.position.set(0, 12, -2.6)
   b1.rotation.x = -0.12
   g.add(b1)
-  g.add(noOutlineDeep(rbox(4, 1.2, 0.3, shade(board1, -0.2), { y: 20, z: -1.2, rx: -0.12 }, 0.4)))
   const b2 = rbox(26, 19, 1, board2, {}, 0.5)
   b2.position.set(0, 10.8, 2.2)
   b2.rotation.x = -0.1
@@ -481,7 +483,8 @@ export function panRack(p: string[]) {
   const [frame, pan, acc] = p
   const g = new THREE.Group()
   const L = 36
-  for (const sx of [-1, 1]) g.add(rod3([sx * 10, 0.6, -L / 2], [sx * 10, 0.6, L / 2], 0.6, frame, 8))
+  // 中间那根托住竖立的锅底（锅最低点在 x=0，两侧的底杆碰不到锅，只有两根时锅悬在半空）
+  for (const sx of [-1, 0, 1]) g.add(rod3([sx * 10, 0.6, -L / 2], [sx * 10, 0.6, L / 2], 0.6, frame, 8))
   for (let i = 0; i < 4; i++) {
     const z = -L / 2 + 2 + i * 10.5
     g.add(cappedTube([[-10, 0.6, z], [-10, 14, z], [10, 14, z], [10, 0.6, z]], 0.45, frame, { ...TUBE, seg: 24 }))
@@ -494,7 +497,8 @@ export function panRack(p: string[]) {
   for (const [z, r, c] of pans) {
     const m = cup(r, r * 0.8, 4.5, 0.35, c)
     m.rotation.x = PI / 2
-    m.position.set(0, r + 1.2, z + 2.2)
+    // 锅身厚 4.5，前后居中放在两格之间（原来整体偏前 4.5cm：隔栏穿进锅里，锅柄悬在锅后面）
+    m.position.set(0, r + 1.2, z - 2.25)
     g.add(m)
     g.add(rod3([0, r * 2 + 0.5, z], [0, r * 2 + 13, z + 6], 0.9, M.black, 8))
   }
@@ -521,7 +525,7 @@ export function rangeRack(p: string[]) {
   for (const y of MW.shelves) g.add(rbox(MW.w - 1, 2, MW.d - 1, board, { y }, 0.5))
   g.add(rbox(MW.w, 2, MW.d, board, { y: MW.h - 2 }, 0.6))
   // 侧面挂钩杆
-  g.add(hcyl(0.5, 0.5, MW.d - 6, acc, MW.w / 2 - 1.2 + 0.0, 75, 0, 'z'))
+  g.add(hcyl(0.5, 0.5, MW.d - 2.4, acc, MW.w / 2 - 1.2, 75, 0, 'z')) // 两端插进前后立柱（原来短 0.6cm，悬空）
   // 背面加强斜撑
   g.add(rod3([-MW.w / 2 + 2, MW.shelves[1] + 2, -MW.d / 2 + 1], [MW.w / 2 - 2, MW.shelves[2], -MW.d / 2 + 1], 0.5, frame, 8))
   g.add(rod3([MW.w / 2 - 2, MW.shelves[1] + 2, -MW.d / 2 + 1], [-MW.w / 2 + 2, MW.shelves[2], -MW.d / 2 + 1], 0.5, frame, 8))
@@ -638,7 +642,8 @@ export function cupboard(p: string[], W: number) {
   const zc = (z0 + z1) / 2
   for (const sx of [-1, 1]) g.add(rbox(2, k.top - k.upBottom, k.upD, body, { x: sx * (W / 2 - 1), y: k.upBottom, z: zc }, 0.5))
   g.add(rbox(W, 2, k.upD, body, { y: k.top - 2, z: zc }, 0.5))
-  g.add(rbox(W - 4, 2, k.upD, body, { y: k.upBottom - 2, z: zc }, 0.3))
+  // 底板让开开放台面的背板（厚 1.5）：两块板的背面、顶面原来叠在同一平面上
+  g.add(rbox(W - 4, 2, k.upD - 1.5, body, { y: k.upBottom - 2, z: zc + 0.75 }, 0.3))
   g.add(rbox(W - 4, k.top - k.upBottom - 2, 1, shade(body, 0.08), { y: k.upBottom, z: z0 + 0.5 }, 0.3))
   g.add(rbox(W - 4, 1.5, k.upD - 3, body, { y: k.upMid - 1.5, z: zc - 0.5 }, 0.3))
   // 上柜玻璃门（框 + 玻璃），可以打开

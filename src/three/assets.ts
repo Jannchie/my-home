@@ -917,7 +917,8 @@ export function kitchenModel(w: number, facing: boolean, burners: 2 | 3 = w < 20
     const body = shell(w, 80, 62, 1.6, C.white, { top: false })
     body.position.y = 4
     c.add(body)
-    c.add(rbox(w - 4, 6, 58, shade(C.wood, -0.25), { y: 0, z: -2 }, 1))
+    // 踢脚前后都比柜体缩进 4cm：以前只往后偏，对面式厨房（sinkSide = -1）朝通道的那面踢脚和柜体外壳共面闪烁
+    c.add(rbox(w - 4, 6, 54, shade(C.wood, -0.25), { y: 0, z: 0 }, 1))
     const bx = w / 2 - 48
     const sx = -w / 2 + w * 0.3
     // 正面按列分：灶下一列（旋钮面板 + 锅抽屉）、洗碗机一列，其余的空当分成柜门。各列互不重叠，旋钮不会压在柜门 / 拉手上

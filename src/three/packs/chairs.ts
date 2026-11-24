@@ -5,7 +5,7 @@
 import * as THREE from 'three'
 import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js'
 import { ball, capsule, cyl, puck, rbox, shade, toon, torus, tray, useAnisotropy } from '../toon'
-import { C, G, ellipsePoly, holePanel, legs, slab, type AssetDef, type Hole } from '../kit'
+import { C, G, ellipsePoly, holePanel, legs, slab, type AssetDef } from '../kit'
 import { UP, cappedTube, fitChildren, mesh, strut, strutBox, tube, type TubeOpts, type V2, type V3 } from '../geo'
 import { I, J, M, N, R, pal } from '../packkit'
 
@@ -435,15 +435,47 @@ function cesca(p: string[]) {
     g.add(rbox(44, 3.5, 3.5, wood, { y: 43.7, z: s * 19.25 }, 1))
     g.add(rbox(3.5, 3.5, 35, wood, { x: s * 20.25, y: 43.7 }, 1))
   }
-  const seatHoles: Hole[] = []
-  for (let i = 0; i < 14; i++) for (let j = 0; j < 13; j++) seatHoles.push({ kind: 'circle', x: -16.9 + i * 2.6, y: 2.4 + j * 2.6, r: 0.85 })
-  g.add(holePanel(38, 36, 0.8, cane, seatHoles, { y: 45.6, z: 18, rx: -Math.PI / 2 }, 1))
+  const seatHoles: V2[] = []
+  for (let i = 0; i < 14; i++) for (let j = 0; j < 13; j++) seatHoles.push([-16.9 + i * 2.6, 2.4 + j * 2.6])
+  const seat = canePanel(38, 36, 0.8, cane, seatHoles, 0.85)
+  seat.position.set(0, 45.6, 18)
+  seat.rotation.x = -Math.PI / 2
+  g.add(seat)
   // 背：木框 + 藤面
   g.add(holePanel(42, 20, 2, wood, [{ kind: 'rect', x: 0, y: 2.5, w: 36, h: 15, r: 1.5 }], { y: 60, z: -20.2 }, 3))
-  const backHoles: Hole[] = []
-  for (let i = 0; i < 13; i++) for (let j = 0; j < 5; j++) backHoles.push({ kind: 'circle', x: -15.6 + i * 2.6, y: 2.6 + j * 2.6, r: 0.85 })
-  g.add(holePanel(37, 16, 0.6, cane, backHoles, { y: 62, z: -20.2 }, 1))
+  const backHoles: V2[] = []
+  for (let i = 0; i < 13; i++) for (let j = 0; j < 5; j++) backHoles.push([-15.6 + i * 2.6, 2.6 + j * 2.6])
+  const back = canePanel(37, 16, 0.6, cane, backHoles, 0.85)
+  back.position.set(0, 62, -20.2)
+  g.add(back)
   return g
+}
+
+/**
+ * 藤编面：打满小孔的薄板（xy 平面，x 居中，底边在 y = 0，厚 t 沿 z 居中），四边藏在木框里。
+ * 孔做成八边形、板不倒角：两百多个孔用 holePanel（每个孔 16 段再加倒角）整把椅子要七万个三角面，
+ * 这样不到一万，孔径不到 2cm，看上去还是一片圆孔，地上的影子也照样透光。
+ */
+function canePanel(w: number, h: number, t: number, color: string, holes: V2[], r: number) {
+  const s = new THREE.Shape()
+  s.moveTo(-w / 2, 0)
+  s.lineTo(w / 2, 0)
+  s.lineTo(w / 2, h)
+  s.lineTo(-w / 2, h)
+  s.closePath()
+  for (const [x, y] of holes) {
+    const p = new THREE.Path()
+    for (let k = 0; k < 8; k++) {
+      const a = Math.PI / 8 - (k / 8) * Math.PI * 2
+      if (k) p.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r)
+      else p.moveTo(x + Math.cos(a) * r, y + Math.sin(a) * r)
+    }
+    p.closePath()
+    s.holes.push(p)
+  }
+  const geo = new THREE.ExtrudeGeometry(s, { depth: t, bevelEnabled: false })
+  geo.translate(0, 0, -t / 2)
+  return mesh(geo, color)
 }
 
 /** 软包餐椅：整体包布的高背椅，背面一排包扣 */
@@ -1061,7 +1093,8 @@ function mushroomStool(p: string[]) {
 function swivelStool(sh: number, p: string[]) {
   const [seat, frame] = p
   const g = G(puck(22, 2.5, frame), cyl(3.4, 4.4, 6, frame, { y: 2 }, 16))
-  g.add(cyl(3.6, 3.6, 16, frame, { y: 4 }, 16), cyl(2.6, 2.6, sh - 12, CHROME, { y: 6 }, 14))
+  // 镀铬杆顶端停在座托里面（座托顶面在 sh - 6，杆也到那儿的话两个顶面重合）
+  g.add(cyl(3.6, 3.6, 16, frame, { y: 4 }, 16), cyl(2.6, 2.6, sh - 12.6, CHROME, { y: 6 }, 14))
   const fy = sh - 46
   g.add(torus(16, 1, CHROME, { y: fy, rx: Math.PI / 2 }))
   g.add(cyl(4.2, 4.2, 3, INK, { y: fy - 1.5 }, 14))

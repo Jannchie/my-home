@@ -2,9 +2,9 @@
 // 只放建模函数和它们用到的常量，素材表在 ../interests.ts（PACKS 只收集 packs/ 下一层的文件）。
 
 import * as THREE from 'three'
-import { ball, rbox, shade, toon } from '../../toon'
+import { ball, cached, rbox, shade, toon } from '../../toon'
 import { paintPanel, rng } from '../../kit'
-import { PI, taperRod3, type V2, type V3 } from '../../geo'
+import { P, PI, taperRod3, type V2, type V3 } from '../../geo'
 
 export type Draw = (g: CanvasRenderingContext2D, W: number, H: number) => void
 
@@ -66,6 +66,33 @@ export function paintTop(w: number, d: number, key: string, draw: Draw, x: numbe
 
 /** 平放的薄板（卡片、纸），给中心 */
 export const sheet = (w: number, d: number, color: string, x: number, y: number, z: number, t = 0.2) => rbox(w, t, d, color, { x, y, z }, t * 0.4)
+
+// ---------- 小零件用的省面体素 ----------
+// toon.ts 的 puck / ball 按家具尺寸定段数（puck 一个 832 面、小球 168 面）。一两厘米的棋子、筹码、铃片成十上百个地用，
+// 一件桌面摆件就是几万面。下面是外形相同的低段数版本，只给这类小零件用。
+
+function lowMesh(geo: THREE.BufferGeometry, color: string) {
+  const m = new THREE.Mesh(geo, toon(color))
+  m.castShadow = true
+  m.receiveShadow = true
+  return m
+}
+
+/** 小圆片（棋子、筹码、铃片、人偶底座）：带一圈倒角的车削体，(x, y, z) 是底面中心 */
+export function chip(r: number, h: number, color: string, x = 0, y = 0, z = 0, seg = 20) {
+  const geo = cached(`int-chip${r},${h},${seg}`, () => {
+    const b = Math.min(h * 0.3, r * 0.15)
+    return new THREE.LatheGeometry(([[0, 0], [r - b, 0], [r, b], [r, h - b], [r - b, h], [0, h]] as V2[]).map(([px, py]) => new THREE.Vector2(px, py)), seg)
+  })
+  return P(lowMesh(geo, color), x, y, z)
+}
+
+/** 小珠子（围棋子、眼珠、球头）：(x, y, z) 是球心，scale 用来压扁；ws × hs 是经纬段数 */
+export function bead(r: number, color: string, x = 0, y = 0, z = 0, scale?: [number, number, number], ws = 8, hs = 5) {
+  const m = P(lowMesh(cached(`int-bead${r},${ws}x${hs}`, () => new THREE.SphereGeometry(r, ws, hs)), color), x, y, z)
+  if (scale) m.scale.set(...scale)
+  return m
+}
 
 // ---------- 画面 ----------
 

@@ -5,7 +5,7 @@ import { fnv1a } from '../hash'
 import * as THREE from 'three'
 import type { StyleTag } from './kit'
 import type { RoomLightSpec } from './lights'
-import { addOutlines, ball, cloneWithHooks, cup, cyl, rbox, toon, torus } from './toon'
+import { addOutlines, ball, cached, cloneWithHooks, cup, cyl, rbox, shade, toon, torus } from './toon'
 
 /** 灯具素材（packs/ceiling-lights.ts）按这个天花板高度做模型；房间灯按所在楼层的层高放（RoomLightSpec.ceil），和沙盘「墙高」滑杆无关 */
 export const CEILING = 240
@@ -46,8 +46,17 @@ export type FixtureShape =
   | 'wagon-wheel'
   | 'hex-lantern'
   | 'cylinder'
+  | 'fan'
+  | 'paper-globe'
+  | 'rattan'
+  | 'track'
+  | 'ring'
 
-export const SHAPES: Record<FixtureShape, { hang: number; light: number; small?: number }> = {
+/**
+ * styles / pendant：不在 STYLE_SHAPES 里（不参与自动配灯、只作为灯具素材）的造型自己写适合的风格、有没有餐桌吊灯尺寸。
+ * 自动配灯的造型一改，已有存档的房间灯就跟着变，所以新造型先只进素材库（packs/ceiling-lights.ts）。
+ */
+export const SHAPES: Record<FixtureShape, { hang: number; light: number; small?: number; styles?: StyleTag[]; pendant?: boolean }> = {
   'washi-square': { hang: 9, light: 3.5, small: 7 },
   bamboo: { hang: 52, light: 9 },
   ph: { hang: 55, light: 6 },
@@ -67,6 +76,11 @@ export const SHAPES: Record<FixtureShape, { hang: number; light: number; small?:
   'wagon-wheel': { hang: 58, light: 6 },
   'hex-lantern': { hang: 56, light: 11 },
   cylinder: { hang: 55, light: 6 },
+  fan: { hang: 34, light: 3, styles: ['farmhouse', 'nordic', 'modern', 'retro'] },
+  'paper-globe': { hang: 52, light: 22, styles: ['japanese', 'nordic', 'modern'], pendant: true },
+  rattan: { hang: 50, light: 9, styles: ['nordic', 'farmhouse', 'japanese'], pendant: true },
+  track: { hang: 17, light: 8, styles: ['modern', 'industrial'] },
+  ring: { hang: 50, light: 2, styles: ['modern', 'nordic'], pendant: true },
 }
 
 /** 各风格的主灯 / 小房间灯 / 餐桌吊灯造型（同一风格有几款时按房间 id 固定挑一款） */
@@ -186,15 +200,17 @@ export function fixtureModel(s: RoomLightSpec, { outline = true } = {}): { obj: 
       const w = S * 1.9
       const h = top - 1.6
       const wood = '#b88a5a'
-      g.add(lit(rbox(w - 1.6, h, w - 1.6, PAPER, {}, 0.4), glow(PAPER)))
+      // 和纸面板的底面比木框底面高 0.3：两者在框的内沿重叠 1cm，同高时抬头看那一圈会闪
+      g.add(lit(rbox(w - 1.6, h - 0.3, w - 1.6, PAPER, { y: 0.3 }, 0.4), glow(PAPER)))
       for (const sz of [-1, 1]) {
         g.add(rbox(w, 1.8, 1.8, wood, { z: (sz * (w - 1.8)) / 2 }, 0.4))
         g.add(rbox(1.8, 1.8, w - 3.6, wood, { x: (sz * (w - 1.8)) / 2 }, 0.4))
       }
+      // 组子格条加高到 0.9，上半截嵌进抬高后的面板里（下沿仍在 -0.35，灯具最低点不变）
       for (let i = 1; i < 4; i++) {
         const p = -w / 2 + (w * i) / 4
-        g.add(rbox(w - 3, 0.6, 0.6, wood, { y: -0.35, z: p }, 0.2))
-        g.add(rbox(0.6, 0.6, w - 3, wood, { x: p, y: -0.35 }, 0.2))
+        g.add(rbox(w - 3, 0.9, 0.6, wood, { y: -0.35, z: p }, 0.2))
+        g.add(rbox(0.6, 0.9, w - 3, wood, { x: p, y: -0.35 }, 0.2))
       }
       g.add(rbox(w * 0.4, 1.6, w * 0.4, wood, { y: top - 1.6 }, 0.4))
       break
@@ -273,6 +289,8 @@ export function fixtureModel(s: RoomLightSpec, { outline = true } = {}): { obj: 
       g.add(domeAt(16, 7, 13.5, 9))
       g.add(domeAt(10.5, 5, 6.5, 7))
       g.add(lit(ball(3.4 * k, WARM_BULB, { y: 7 * k }), glow(WARM_BULB), false))
+      // 中心灯座杆：从顶罩穿过中罩的顶盘落到下罩顶盘上，三层罩和灯泡都挂在它上面（以前中下两层罩各自悬空）；顶端藏在顶罩的顶盘里，不和顶盘面共面
+      g.add(cyl(0.9 * k, 0.9 * k, 15.5 * k - 0.4, '#8a8d93', { y: 6.5 * k }, 10))
       cord(g, 22 * k, top, '#8a8d93', 4)
       break
     }
@@ -312,6 +330,9 @@ export function fixtureModel(s: RoomLightSpec, { outline = true } = {}): { obj: 
       g.add(shade)
       g.add(lit(cyl(R * 0.94, R * 0.94, 0.3, '#ffeccc', { y: 0.6 }, 28), glow('#ffeccc'), false))
       g.add(lit(ball(3.4, WARM_BULB, { y: R * 0.3 }, [1, 1.3, 1]), glow(WARM_BULB), false))
+      // 灯头：从泡壳顶接到罩顶（以前灯泡悬在罩子中间）
+      const domeBulbTop = R * 0.3 + 3.4 * 1.3 - 0.6
+      g.add(cyl(1.6, 1.6, R * 0.75 - domeBulbTop, '#c9a25a', { y: domeBulbTop }, 12))
       g.add(cyl(2.4, 2.4, 3, '#c46a3a', { y: R * 0.75 }, 12))
       cord(g, R * 0.75 + 3, top, IRON, 4)
       break
@@ -332,7 +353,11 @@ export function fixtureModel(s: RoomLightSpec, { outline = true } = {}): { obj: 
         g.add(tubeMesh(pts, 0.3, IRON))
       }
       g.add(hRing(R, 0.35, IRON, cy))
-      g.add(lit(ball(R * 0.42, WARM_BULB, { y: cy }, [1, 1.35, 1]), glow(WARM_BULB), false))
+      const bulb = glow(WARM_BULB)
+      const bulbTop = cy + R * 0.42 * 1.35
+      g.add(lit(ball(R * 0.42, WARM_BULB, { y: cy }, [1, 1.35, 1]), bulb, false))
+      // 灯泡的细颈：从泡壳顶接到灯头里（以前灯泡和灯头之间空着几厘米，灯泡悬在笼子中间）
+      g.add(lit(cyl(1.3, R * 0.2, H - bulbTop + 0.6, WARM_BULB, { y: bulbTop - 0.8 }, 12), bulb, false))
       g.add(cyl(1.8, 1.8, 3, '#c9a25a', { y: H - 0.5 }, 12))
       g.add(cyl(0.8, 0.8, Math.max(0.5, top - H - 2.5), IRON, { y: H + 2.5 }, 8))
       g.add(cyl(6, 6, 1.6, IRON, { y: top - 1.6 }, 20))
@@ -367,6 +392,8 @@ export function fixtureModel(s: RoomLightSpec, { outline = true } = {}): { obj: 
       g.add(hRing(R, 0.5, '#5a4a3a', 0))
       g.add(hRing(R * 0.65, 0.3, '#5a4a3a', H / 2))
       g.add(lit(ball(3, WARM_BULB, { y: H * 0.4 }), glow(WARM_BULB), false))
+      // 灯头：泡壳顶接到吊线（罩顶是开口的，以前灯泡悬在罩里）
+      g.add(cyl(1.2, 1.2, H - (H * 0.4 + 2.5), '#c9a25a', { y: H * 0.4 + 2.5 }, 10))
       cord(g, H, top, '#5a4a3a', 4)
       break
     }
@@ -439,14 +466,17 @@ export function fixtureModel(s: RoomLightSpec, { outline = true } = {}): { obj: 
         g.add(cyl(2, 1.4, 1.4, BRASS, { x: ax * R, y: 5, z: az * R }, 12))
         g.add(cyl(1, 1, 4.5, '#f4ede0', { x: ax * R, y: 6.4, z: az * R }, 10))
         g.add(lit(ball(0.9, '#ffe6b0', { x: ax * R, y: 11.8, z: az * R }, [1, 1.7, 1]), flame, false))
-        const d = ball(0.7, CRYSTAL, { x: Math.sin(a + 0.52) * R * 0.75, y: -1.8, z: Math.cos(a + 0.52) * R * 0.75 }, [1, 1.8, 1])
+        // 水晶坠挂在下面那道铜圈上、两根烛臂之间（以前悬在烛臂之间的半空，什么都不挨）
+        const d = ball(0.7, CRYSTAL, { x: Math.sin(a + 0.52) * R * 0.5, y: -1.9, z: Math.cos(a + 0.52) * R * 0.5 }, [1, 1.8, 1])
         d.material = crystal
         g.add(d)
       }
       const d0 = ball(1.4, CRYSTAL, { y: -3.6 }, [1, 1.6, 1])
       d0.material = crystal
       g.add(d0)
-      g.add(hRing(R * 0.45, 0.35, BRASS, 8))
+      // 铜圈穿过六根烛臂的最低点（烛臂曲线的控制点 R × 0.5、y = -0.5），把烛臂箍在一起；
+      // 以前在 y = 8 绕着中柱悬空，和中柱、烛臂都不相连
+      g.add(hRing(R * 0.5, 0.35, BRASS, -0.5))
       cord(g, 18, top, BRASS, 4)
       break
     }
@@ -465,6 +495,8 @@ export function fixtureModel(s: RoomLightSpec, { outline = true } = {}): { obj: 
         const d = ball(small ? 0.5 : 0.8, CRYSTAL, { x: Math.sin(a) * R * 0.92, y: -0.4, z: Math.cos(a) * R * 0.92 }, [1, 1.8, 1])
         d.material = crystal
         g.add(d)
+        // 小号的水晶坠比金边低 0.3：补一根挂丝接到金边上
+        if (small) g.add(cyl(0.1, 0.1, 0.9, BRASS, { x: Math.sin(a) * R * 0.92, y: 0.2, z: Math.cos(a) * R * 0.92 }, 4))
       }
       g.add(ball(1.2, BRASS, { y: 0.8 }))
       break
@@ -491,6 +523,9 @@ export function fixtureModel(s: RoomLightSpec, { outline = true } = {}): { obj: 
         g.add(rodMesh([Math.sin(a) * R * 0.97, 0.5, Math.cos(a) * R * 0.97], [0, 22, 0], 0.25, IRON))
       }
       g.add(ball(1.4, IRON, { y: 22 }))
+      // 中间的灯泡用一根吊杆从链结垂下来，带个小灯头（以前灯泡悬在轮毂中间，没有东西吊着）
+      g.add(cyl(0.3, 0.3, 22 - 7, IRON, { y: 7 }, 6))
+      g.add(cyl(1.3, 1.6, 1.6, IRON, { y: 5.8 }, 10))
       g.add(lit(ball(2.4, WARM_BULB, { y: 4 }), glow(WARM_BULB), false))
       cord(g, 22, top, IRON, 4)
       break
@@ -508,6 +543,119 @@ export function fixtureModel(s: RoomLightSpec, { outline = true } = {}): { obj: 
       g.add(cyl(R * 0.3, R * 1.2, R * 0.6, IRON, { y: H + 2 }, 6))
       g.add(torus(2, 0.4, IRON, { y: H + 2 + R * 0.6 + 2 }))
       cord(g, H + 2 + R * 0.6 + 4, top, IRON, 4)
+      break
+    }
+    case 'fan': {
+      // 吊扇灯：底下一只乳白灯碗，上面是电机壳和五片木扇叶，一根吊杆连到吸顶座
+      const wood = '#b88a5a'
+      const metal = '#3d3f44'
+      const br = S * 0.36
+      g.add(lit(ball(br, '#fff6e6', { y: br * 0.55 }, [1, 0.55, 1]), glow('#fff6e6')))
+      g.add(cyl(br * 1.02, br * 1.02, 1.2, metal, { y: br * 0.5 }, 24))
+      const my = br * 0.55 + 0.8
+      g.add(cyl(S * 0.42, S * 0.5, 7, metal, { y: my }, 28))
+      g.add(cyl(S * 0.36, S * 0.42, 2, shade(metal, 0.06), { y: my + 7 }, 28))
+      // 扇叶：每片一根扇叶臂（铁片）搭在电机壳侧面，臂上压一片略带攻角的木扇叶
+      const R = S * 2.25
+      const rIn = S * 0.46
+      for (let k = 0; k < 5; k++) {
+        const a = (k / 5) * Math.PI * 2
+        const arm = new THREE.Group()
+        arm.add(rbox(S * 0.42, 0.8, 3, metal, { x: rIn + S * 0.12, y: -0.4 }, 0.3))
+        const blade = rbox(R - rIn - S * 0.2, 0.7, S * 0.5, wood, { x: (R + rIn + S * 0.2) / 2, y: -0.35 }, 0.3)
+        blade.rotation.x = 0.12
+        arm.add(blade)
+        arm.position.y = my + 3.5
+        arm.rotation.y = a
+        g.add(arm)
+      }
+      // 吊杆和吸顶座
+      g.add(cyl(1.1, 1.1, Math.max(0.5, top - my - 9 - 2), metal, { y: my + 9 }, 10))
+      g.add(cyl(S * 0.22, S * 0.26, 2, metal, { y: top - 2 }, 20))
+      break
+    }
+    case 'paper-globe': {
+      // 和纸球形吊灯：整只发光的纸球，竖着一圈圈竹骨（细环），顶上一只小圆帽接吊线
+      const R = S * 0.95
+      g.add(lit(ball(R, PAPER, { y: R }), glow(PAPER)))
+      for (const k of [-0.62, -0.25, 0.12, 0.48, 0.78]) {
+        const rr = R * Math.sqrt(1 - k * k) + 0.15
+        g.add(lit(hRing(rr, 0.22, '#e6dcc6', R + k * R), glow('#e6dcc6'), false))
+      }
+      g.add(cyl(2.4, 3, 1.6, '#8a7a5a', { y: R * 2 - 0.6 }, 16))
+      cord(g, R * 2 + 1, top, '#e9e4da', 4)
+      break
+    }
+    case 'rattan': {
+      // 藤编吊灯：宽口的钟形藤罩（经条 + 几道纬箍），罩里一只暖光灯泡
+      const R = S * 1.05
+      const H = R * 0.7
+      const rattan = '#c49a62'
+      const prof: [number, number][] = [
+        [R, 0],
+        [R * 0.95, H * 0.28],
+        [R * 0.78, H * 0.6],
+        [R * 0.45, H * 0.88],
+        [R * 0.12, H],
+      ]
+      // 罩体：半透光的内衬，经纬条从外面编上去
+      // 双面要改材质的 side：toon() 的材质是按颜色共用的缓存，先复制一份再改，免得别的素材跟着变成双面
+      const liner = cloneWithHooks(toon(rattan, { transparent: 0.55 }))
+      liner.side = THREE.DoubleSide
+      const linerMesh = latheMesh(prof, liner)
+      linerMesh.userData.noOutline = true
+      g.add(linerMesh)
+      // 经条：28 根同一条轮廓，只建一根细管（截面 5 段、沿线 12 段就够圆了），其余转着摆
+      const rib = cached(`fx-rattan-rib${S}`, () => {
+        const curve = new THREE.CatmullRomCurve3(prof.map(([r, y]) => new THREE.Vector3(0, y, r + 0.35)))
+        return new THREE.TubeGeometry(curve, 12, 0.32, 5, false)
+      })
+      for (let i = 0; i < 28; i++) {
+        const m = new THREE.Mesh(rib, toon(i % 2 ? rattan : shade(rattan, -0.12)))
+        m.rotation.y = (i / 28) * Math.PI * 2
+        g.add(m)
+      }
+      g.add(hRing(R + 0.4, 0.7, shade(rattan, -0.12), 0.2))
+      g.add(hRing(R * 0.95 + 0.5, 0.45, rattan, H * 0.28))
+      g.add(hRing(R * 0.78 + 0.5, 0.45, rattan, H * 0.6))
+      g.add(lit(ball(3.4, WARM_BULB, { y: H * 0.42 }, [1, 1.25, 1]), glow(WARM_BULB), false))
+      g.add(cyl(1.6, 1.6, H * 0.4, '#3d3f44', { y: H * 0.55 }, 10))
+      cord(g, H, top, '#6e4f37', 3.5)
+      break
+    }
+    case 'track': {
+      // 轨道射灯：贴着天花板的一条黑色轨道，挂三只可转的筒形射灯，各自斜着照向不同方向
+      const L = S * 4
+      const rail = '#24252a'
+      g.add(rbox(L, 3, 3.6, rail, { y: top - 3 }, 0.5))
+      for (const [x, ry, tilt] of [
+        [-L * 0.36, 0.6, 0.55],
+        [0, -0.4, 0.4],
+        [L * 0.36, 2.6, 0.6],
+      ] as [number, number, number][]) {
+        // 适配器 + 吊臂 + 转节 + 灯筒（开口朝下偏斜）
+        g.add(rbox(4, 2.4, 3, rail, { x, y: top - 5.4 }, 0.4))
+        g.add(cyl(0.7, 0.7, top - 5.4 - 9.5, rail, { x, y: 9.5 }, 8))
+        g.add(ball(1.4, rail, { x, y: 9.5 }))
+        const head = new THREE.Group()
+        head.add(cyl(3.2, 3.2, 10, rail, { y: -10 }, 20))
+        head.add(lit(cyl(2.7, 2.7, 0.3, '#fff6dc', { y: -10.25 }, 20), glow('#fff6dc'), false))
+        head.position.set(x, 9.5, 0)
+        head.rotation.set(tilt * Math.cos(ry), 0, tilt * Math.sin(ry))
+        g.add(head)
+      }
+      break
+    }
+    case 'ring': {
+      // 环形吊灯：一只大的细铝环，内侧一圈发光，三根钢丝吊到吸顶座
+      const R = S * 1.3
+      g.add(lit(hRing(R, 1.3, '#fbfaf6', 1.3), glow('#fbfaf6')))
+      g.add(hRing(R, 1.5, '#c3c7cc', 2.1))
+      for (let k = 0; k < 3; k++) {
+        const a = (k / 3) * Math.PI * 2
+        g.add(rodMesh([Math.sin(a) * R, 3, Math.cos(a) * R], [Math.sin(a) * 3, top - 1.6, Math.cos(a) * 3], 0.12, '#8a8d93'))
+      }
+      g.add(cyl(5, 5, 1.6, '#c3c7cc', { y: top - 1.6 }, 20))
       break
     }
     default: {

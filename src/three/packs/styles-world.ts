@@ -4,13 +4,13 @@
 // 布艺部分（坐垫、床品、软包）直接用 palette 槽位颜色 p[0] / p[1]，不 shade，方便主程序识别布面加花纹。
 
 import * as THREE from 'three'
-import { ball, cup, cyl, markMirror, puck, rbox, shade, toon, torus, tray } from '../toon'
+import { ball, cup, cyl, markMirror, puck, rbox, toon, torus, tray } from '../toon'
 import { artFace } from '../artwork'
-import { C, hangingPipe, holePanel, paintPanel, pipeHook, rectPoly, ellipsePoly, type AssetDef, type Poly, type SurfaceDef } from '../kit'
+import { C, ellipsePoly, gridHoles, hangingPipe, holePanel, paintPanel, pipeHook, rectPoly, type AssetDef, type Poly, type SurfaceDef } from '../kit'
 import { batten, cappedTube, centerGroup, cylX, cylZ, glassPane, latheAt, lit, mesh, noOutlineDeep, rod3, type V3 } from '../geo'
 import { I, J, M, N, R, withPals, type Pal3 } from '../packkit'
 import { drawerLv, drawerOf, hollow, slideDoor, swingDoor } from '../cabinetKit'
-import { BRASS, CHN, CLS, EU, FA, FH, IRON, TUBE, ZH, brassPlate, cabriole, carving, lattice, lowerSeat, paintPatchwork, prism, sidePrism, slabY, strip, turnedLeg, waistBase, weizi, type P2 } from './styles-world/common'
+import { BRASS, CHN, CLS, EU, FA, FH, IRON, TUBE, ZH, brassPlate, cabriole, carving, lowerSeat, paintPatchwork, prism, sidePrism, slabY, strip, tone, turnedLeg, waistBase, weizi, type P2 } from './styles-world/common'
 import { CN_BED_TOP, CN_BOOKCASE_SURFACES, CN_COFFEE_SURFACES, CN_DESK_SURFACES, CN_DRESSER_SURFACES, CN_TV_SURFACES, CN_WARDROBE_SURFACES, cnBed, cnBookcase, cnCoffee, cnDengguaChair, cnDesk, cnDining, cnDresser, cnQuanyi, cnRound, cnSofa, cnStudyChair, cnTableLamp, cnTvStand, cnWardrobe } from './styles-world/chinese'
 import { CL_DESK_SURFACES, CL_DRESSER_SURFACES, CL_SLEIGH_TOP, CL_TV_SURFACES, CL_VITRINE_SURFACES, clChandelierLamp, clChesterfield, clConsoleMirror, clDesk, clDeskChair, clDining, clDresser, clGrandfatherClock, clQueenAnne, clSleighBed, clTvStand, clVitrine, clWingback } from './styles-world/classic'
 import { FH_BED_TOP, FH_COFFEE_SURFACES, FH_DESK_SURFACES, FH_DRESSER_SURFACES, FH_TV_SURFACES, FH_WARDROBE_SURFACES, fhCoffee, fhDesk, fhDresser, fhPlankBed, fhSlipcover, fhTableLamp, fhTrestle, fhTripodLamp, fhTvStand, fhWardrobe, fhWindsor } from './styles-world/farmhouse'
@@ -54,11 +54,11 @@ function paintShanshui(ground: string, ink: string, accent: string, part = 0, pa
       g.closePath()
       g.fill()
     }
-    layer(0.55, 0.28, [1.3, 3.1, 7.7], 0.4, shade(ink, 0.5))
+    layer(0.55, 0.28, [1.3, 3.1, 7.7], 0.4, tone(ink, 0.5))
     // 云雾带
     g.fillStyle = ground
     g.fillRect(0, H * 0.56, W, H * 0.04)
-    layer(0.78, 0.3, [2.1, 4.3, 9.1], 1.7, shade(ink, 0.25))
+    layer(0.78, 0.3, [2.1, 4.3, 9.1], 1.7, tone(ink, 0.25))
     g.fillStyle = ground
     g.fillRect(0, H * 0.79, W, H * 0.03)
     layer(0.98, 0.16, [3.3, 5.9, 11.3], 2.9, ink)
@@ -70,7 +70,7 @@ function paintShanshui(ground: string, ink: string, accent: string, part = 0, pa
       g.moveTo(cx, by)
       g.quadraticCurveTo(cx + s * 0.15, by - s * 0.5, cx - s * 0.05, by - s)
       g.stroke()
-      g.fillStyle = shade(ink, 0.08)
+      g.fillStyle = tone(ink, 0.08)
       for (let k = 0; k < 4; k++) {
         g.beginPath()
         g.ellipse(cx + (k % 2 ? s * 0.18 : -s * 0.16), by - s * (0.45 + k * 0.17), s * 0.28, s * 0.07, 0, 0, Math.PI * 2)
@@ -199,7 +199,7 @@ function guanmaoChair(p: string[]) {
   // S 形靠背板
   const splat: P2[] = [[-Z + 0.5, 49], [-Z + 1.6, 62], [-Z + 2.2, 74], [-Z + 0.8, 88], [-Z - 1.2, 100], [-Z - 2.6, 107]]
   g.add(sidePrism(strip(splat, 1.6), 17, wood, 0))
-  g.add(noOutlineDeep(cylX(3.2, 0.5, shade(wood, -0.12), 0, 93, -Z - 0.15 + 1.2 - 0.6)))
+  g.add(noOutlineDeep(cylX(3.2, 0.5, tone(wood, -0.12), 0, 93, -Z - 0.15 + 1.2 - 0.6)))
   // 座面：大边框 + 软屉
   g.add(rbox(52, 4, 43, wood, { y: 46 }, 1))
   g.add(rbox(45, 0.8, 36, mat, { y: 49.6 }, 0.3))
@@ -255,12 +255,12 @@ function meiguiChair(p: string[]) {
     g.add(ball(1.5, wood, { x: s * X, y: 66, z: Z }))
     g.add(ball(1.5, wood, { x: s * X, y: 84, z: -Z }))
     // 扶手下格心
-    g.add(holePanel(37.4, 9, 1.4, dark, lattice(37.4, 9, 4, 1, 2, 1.6), { x: s * X, y: 49.4, ry: Math.PI / 2 }))
+    g.add(holePanel(37.4, 9, 1.4, dark, gridHoles(37.4, 9, 4, 1, 2, 1.6), { x: s * X, y: 49.4, ry: Math.PI / 2 }))
     g.add(rod3([s * X, 14, -Z], [s * X, 14, Z], 0.9, dark))
   }
   g.add(rod3([-X, 83.8, -Z], [X, 83.8, -Z], 1.3, wood))
   // 背：上部空、下部券口格心
-  g.add(holePanel(41, 15, 1.4, dark, lattice(41, 15, 5, 2, 1.8, 1.6), { y: 50, z: -Z }))
+  g.add(holePanel(41, 15, 1.4, dark, gridHoles(41, 15, 5, 2, 1.8, 1.6), { y: 50, z: -Z }))
   g.add(rod3([-X, 66, -Z], [X, 66, -Z], 0.9, wood))
   g.add(holePanel(41, 6, 1.2, dark, [{ kind: 'rect', x: 0, y: 1, w: 26, h: 4, r: 1.6 }], { y: 77, z: -Z }))
   // 座面
@@ -375,7 +375,7 @@ function fangji(p: string[]) {
 /** 一套茶具：茶盘 + 紫砂壶 + 公道杯 + 四只品茗杯，at 为茶盘底面中心 */
 function teaSet(g: THREE.Group, x: number, y: number, z: number, trayC: string, pot: string) {
   g.add(tray(54, 3.4, 32, 1.4, trayC, { x, y, z }, 0.6))
-  for (let k = -3; k <= 3; k++) g.add(noOutlineDeep(rbox(1, 0.4, 28, shade(trayC, -0.12), { x: x + k * 6.6, y: y + 1.4, z }, 0.15)))
+  for (let k = -3; k <= 3; k++) g.add(noOutlineDeep(rbox(1, 0.4, 28, tone(trayC, -0.12), { x: x + k * 6.6, y: y + 1.4, z }, 0.15)))
   // 紫砂壶
   const px = x - 14
   g.add(ball(5.4, pot, { x: px, y: y + 5.5, z: z - 2 }, [1, 0.78, 1]))
@@ -444,7 +444,7 @@ function duobao(p: string[]) {
   // 侧板、顶板、背板、底座
   for (const s of [-1, 1]) g.add(rbox(t, h - 6, d, wood, { x: s * (w / 2 - t / 2), y: 6 }, 0.8))
   g.add(rbox(w + 1.2, t, d + 1.2, wood, { y: h - t }, 1))
-  g.add(rbox(w - 2 * t + 0.4, h - 6 - t, 1.2, shade(wood, -0.08), { y: 6, z: -d / 2 + 0.8 }, 0.4))
+  g.add(rbox(w - 2 * t + 0.4, h - 6 - t, 1.2, tone(wood, -0.08), { y: 6, z: -d / 2 + 0.8 }, 0.4))
   g.add(prism([[-w / 2, 6], [w / 2, 6], [w / 2, 0], [w / 2 - 5, 0], [w / 2 - 9, 3], [-(w / 2 - 9), 3], [-(w / 2 - 5), 0], [-w / 2, 0]], d - 1, dark))
   g.add(rbox(w - 2 * t + 0.4, 2, d - 1.6, wood, { y: 6, z: 0.8 }, 0.5))
   // 下柜：对开门 + 铜面叶
@@ -454,8 +454,8 @@ function duobao(p: string[]) {
       rbox(w / 2 - t - 0.6, cab - 8.6, 1.6, dark, { x: s * (w / 4 - t / 2 + 0.1), y: 8.3, z: d / 2 - 0.4 }, 0.6),
       rbox(w / 2 - t - 6, cab - 15, 0.6, wood, { x: s * (w / 4 - t / 2 + 0.1), y: 11.5, z: d / 2 + 0.6 }, 0.3),
     ]
-    // 铜面叶压在右门的边上
-    if (s > 0) parts.push(brassPlate(0, 30, d / 2 + 0.4, 4.2, brass))
+    // 铜面叶压在右门的边上；圆片正面比门上的镶板再浮出 0.3（原来和镶板正面齐平，交叠处闪烁）
+    if (s > 0) parts.push(brassPlate(0, 30, d / 2 + 0.7, 4.2, brass))
     g.add(swingDoor(parts, s * (w / 2 - t - 0.2), d / 2 - 1.2, s < 0 ? 'left' : 'right'))
   }
   // 竖隔板：主隔板开拱洞，副隔板开圆洞
@@ -466,7 +466,7 @@ function duobao(p: string[]) {
   for (const y of left) g.add(rbox(split - lx0 - 0.6, 2, d - 1.6, wood, { x: (lx0 + split) / 2, y, z: 0.8 }, 0.5))
   for (const y of right) g.add(rbox(w / 2 - t - split - 0.6, 2, d - 1.6, wood, { x: (w / 2 - t + split) / 2, y, z: 0.8 }, 0.5))
   // 顶部挂檐牙子
-  g.add(holePanel(w - 2 * t, 6, 1.2, dark, lattice(w - 2 * t, 6, 8, 1, 1.6, 1.2), { y: h - t - 6, z: d / 2 - 0.8 }))
+  g.add(holePanel(w - 2 * t, 6, 1.2, dark, gridHoles(w - 2 * t, 6, 8, 1, 1.6, 1.2), { y: h - t - 6, z: d / 2 - 0.8 }))
   return g
 }
 
@@ -486,11 +486,11 @@ function screen4(p: string[]) {
     const panel = new THREE.Group()
     for (const s of [-1, 1]) panel.add(rbox(3, PH, 2.6, frame, { x: s * (PW / 2 - 1.5), y: 4 }, 0.6))
     for (const y of [4, 40, 150, PH + 1]) panel.add(rbox(PW - 6 + 0.4, 3, 2.4, frame, { y }, 0.6))
-    panel.add(holePanel(PW - 5.8, 34, 1.2, frame, lattice(PW - 5.8, 34, 3, 3, 1.8, 1.8), { y: 6.6 }))
-    panel.add(rbox(PW - 5.8, 107, 0.8, shade(ground, -0.05), { y: 43 }, 0.2))
+    panel.add(holePanel(PW - 5.8, 34, 1.2, frame, gridHoles(PW - 5.8, 34, 3, 3, 1.8, 1.8), { y: 6.6 }))
+    panel.add(rbox(PW - 5.8, 107, 0.8, tone(ground, -0.05), { y: 43 }, 0.2))
     const key = `sw-screen-${darkGround ? 'plum' : 'ink'}-${ground}-${accent}-${i}`
     panel.add(paintPanel(PW - 6, 106.6, key, darkGround ? paintPlum(ground, accent, '#f3e2c8', i, 4) : paintShanshui(ground, frame, accent, i, 4), { y: 43.2, z: 0.45 }))
-    panel.add(holePanel(PW - 5.8, 20, 1.2, frame, lattice(PW - 5.8, 20, 4, 2, 1.6, 1.6), { y: 153 }))
+    panel.add(holePanel(PW - 5.8, 20, 1.2, frame, gridHoles(PW - 5.8, 20, 4, 2, 1.6, 1.6), { y: 153 }))
     // 站牙小脚
     for (const s of [-1, 1]) panel.add(rbox(5, 4, 9, frame, { x: s * (PW / 2 - 2.5) }, 0.8))
     const dx = Math.cos(ang)
@@ -560,7 +560,7 @@ function lanternStand(p: string[]) {
   g.add(cyl(0.3, 0.3, 10, IRON, { x: lx, y: 156 }, 6))
   g.add(cyl(5, 5, 2.4, cap, { x: lx, y: 153.6 }, 16))
   g.add(lit(ball(13, silk, { x: lx, y: 140 }, [1, 0.88, 1]), silk, 0.5))
-  for (let k = 0; k < 6; k++) g.add(noOutlineDeep(torus(13.05, 0.3, shade(silk, -0.25), { x: lx, y: 140, ry: (k / 6) * Math.PI }, Math.PI * 2)))
+  for (let k = 0; k < 6; k++) g.add(noOutlineDeep(torus(13.05, 0.3, tone(silk, -0.25), { x: lx, y: 140, ry: (k / 6) * Math.PI }, Math.PI * 2)))
   g.add(cyl(5, 5, 2.4, cap, { x: lx, y: 125 }, 16))
   g.add(cyl(0.6, 1.8, 12, cap, { x: lx, y: 113 }, 8))
   return centerGroup(g)
@@ -570,7 +570,7 @@ function lanternStand(p: string[]) {
 function moonGate(p: string[]) {
   const [wall, tile, trim] = p
   const g = new THREE.Group()
-  g.add(rbox(134, 6, 30, shade(tile, 0.2), {}, 1))
+  g.add(rbox(134, 6, 30, tone(tile, 0.2), {}, 1))
   g.add(holePanel(128, 190, 10, wall, [{ kind: 'circle', x: 0, y: 95, r: 52 }], { y: 6 }))
   for (const z of [-5.4, 5.4]) g.add(torus(53.4, 1.6, trim, { y: 101, z }))
   // 四角回纹贴花
@@ -583,8 +583,8 @@ function moonGate(p: string[]) {
     }
   // 檐口与瓦
   g.add(rbox(136, 6, 16, tile, { y: 196 }, 1))
-  g.add(rbox(144, 3, 22, shade(tile, -0.08), { y: 202 }, 1))
-  for (let k = -6; k <= 6; k++) g.add(cylZ(1.6, 22.4, shade(tile, 0.08), k * 11, 205.4, 0, 10))
+  g.add(rbox(144, 3, 22, tone(tile, -0.08), { y: 202 }, 1))
+  for (let k = -6; k <= 6; k++) g.add(cylZ(1.6, 22.4, tone(tile, 0.08), k * 11, 205.4, 0, 10))
   g.add(cylX(2.6, 146, tile, 0, 207.4, 0, 12))
   return g
 }
@@ -595,7 +595,7 @@ function dingxiang(p: string[]) {
   const g = new THREE.Group()
   const W = 100
   const D = 55
-  const inner = shade(wood, 0.05)
+  const inner = tone(wood, 0.05)
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(5, 6, 5, wood, { x: sx * 47.5, z: sz * 25 }, 1))
   g.add(prism([[-45, 6], [45, 6], [45, 3], [36, 2.2], [-36, 2.2], [-45, 3]], 1.4, dark, 25.8))
   const sec = (y: number, h: number, n: number, shelves: number[]) => {
@@ -605,7 +605,7 @@ function dingxiang(p: string[]) {
     g.add(rbox(3.2, h - 4, 1.4, dark, { y: y + 2, z: D / 2 + 0.3 }, 0.5))
     for (const s of [-1, 1]) {
       const dx = s * (W / 4 + 0.5)
-      const parts: THREE.Object3D[] = [rbox(W / 2 - 5.6, h - 4, 1.2, wood, { x: dx, y: y + 2, z: D / 2 + 0.2 }, 0.5), rbox(W / 2 - 12, h - 12, 0.6, shade(wood, -0.06), { x: dx, y: y + 6, z: D / 2 + 0.95 }, 0.3)]
+      const parts: THREE.Object3D[] = [rbox(W / 2 - 5.6, h - 4, 1.2, wood, { x: dx, y: y + 2, z: D / 2 + 0.2 }, 0.5), rbox(W / 2 - 12, h - 12, 0.6, tone(wood, -0.06), { x: dx, y: y + 6, z: D / 2 + 0.95 }, 0.3)]
       // 合页
       for (const hy of n > 1 ? [y + 18, y + h - 22] : [y + 10, y + h - 14]) parts.push(rbox(4, 4, 0.5, brass, { x: s * (W / 2 - 4), y: hy, z: D / 2 + 1 }, 0.2))
       g.add(swingDoor(parts, s * (W / 2 - 2.3), D / 2 - 0.4, s < 0 ? 'left' : 'right'))
@@ -678,7 +678,7 @@ function tallStand(p: string[]) {
 /** 架子床：六柱、挂檐格心、三面加门围子，内铺锦被 */
 function jiaziBed(p: string[]) {
   const [duvet, sheet, wood] = p
-  const dark = shade(wood, -0.08)
+  const dark = tone(wood, -0.08)
   const g = new THREE.Group()
   const W = 170
   const D = 220
@@ -696,14 +696,14 @@ function jiaziBed(p: string[]) {
     g.add(rbox(5, 4, D - 10 + 0.4, wood, { x: s * PX, y: 222 }, 1))
   }
   // 挂檐
-  g.add(holePanel(W - 10, 14, 1.6, dark, lattice(W - 10, 14, 12, 1, 2, 2.4), { y: 207.6, z: PZ }))
-  g.add(holePanel(W - 10, 14, 1.6, dark, lattice(W - 10, 14, 12, 1, 2, 2.4), { y: 207.6, z: -PZ }))
-  for (const s of [-1, 1]) g.add(holePanel(D - 10, 14, 1.6, dark, lattice(D - 10, 14, 16, 1, 2, 2.4), { x: s * PX, y: 207.6, ry: Math.PI / 2 }))
+  g.add(holePanel(W - 10, 14, 1.6, dark, gridHoles(W - 10, 14, 12, 1, 2, 2.4), { y: 207.6, z: PZ }))
+  g.add(holePanel(W - 10, 14, 1.6, dark, gridHoles(W - 10, 14, 12, 1, 2, 2.4), { y: 207.6, z: -PZ }))
+  for (const s of [-1, 1]) g.add(holePanel(D - 10, 14, 1.6, dark, gridHoles(D - 10, 14, 16, 1, 2, 2.4), { x: s * PX, y: 207.6, ry: Math.PI / 2 }))
   // 围子
-  g.add(holePanel(W - 10, 34, 1.8, wood, lattice(W - 10, 34, 8, 2, 2.4, 3), { y: top, z: -PZ }))
+  g.add(holePanel(W - 10, 34, 1.8, wood, gridHoles(W - 10, 34, 8, 2, 2.4, 3), { y: top, z: -PZ }))
   for (const s of [-1, 1]) {
-    g.add(holePanel(D - 10, 34, 1.8, wood, lattice(D - 10, 34, 10, 2, 2.4, 3), { x: s * PX, y: top, ry: Math.PI / 2 }))
-    g.add(holePanel(PX - 45 - 5, 34, 1.8, wood, lattice(PX - 50, 34, 2, 2, 2.4, 3), { x: s * (PX + 45) / 2, y: top, z: PZ }))
+    g.add(holePanel(D - 10, 34, 1.8, wood, gridHoles(D - 10, 34, 10, 2, 2.4, 3), { x: s * PX, y: top, ry: Math.PI / 2 }))
+    g.add(holePanel(PX - 45 - 5, 34, 1.8, wood, gridHoles(PX - 50, 34, 2, 2, 2.4, 3), { x: s * (PX + 45) / 2, y: top, z: PZ }))
   }
   // 床品
   const mh = 16
@@ -747,13 +747,13 @@ function penjing(p: string[]) {
     const pt = (rr: number, y: number): V3 => [Math.sin(a) * rr, y, Math.cos(a) * rr]
     g.add(cappedTube([pt(17, 3.4), pt(15, 20), pt(18.4, 46), pt(16, 66)], 1.6, wood, { ...TUBE, caps: false }))
   }
-  g.add(cyl(17, 16, 3, shade(wood, -0.08), { y: 64 }, 32))
+  g.add(cyl(17, 16, 3, tone(wood, -0.08), { y: 64 }, 32))
   g.add(cyl(20, 20, 3, wood, { y: 67 }, 32))
   // 石盆
   g.add(tray(38, 4, 24, 1.2, potC, { y: 70 }, 0.6))
   g.add(noOutlineDeep(rbox(35, 0.4, 21, '#9fc3cf', { y: 72.3 }, 0.1)))
   // 假山：几块叠石
-  const rockC = [rock, shade(rock, 0.1), shade(rock, -0.1)]
+  const rockC = [rock, tone(rock, 0.1), tone(rock, -0.1)]
   for (const [x, y, z, rr, sy, c] of [[-8, 77, -2, 5, 2.4, 0], [-5, 85, -3, 3.4, 2.2, 1], [-9, 91, -2, 2.2, 1.8, 2], [6, 76, 2, 3.6, 1.5, 1], [9, 80, 1, 2.2, 1.6, 2]] as number[][])
     g.add(ball(rr, rockC[c], { x, y, z }, [1, sy, 0.9]))
   // 小松
@@ -766,14 +766,14 @@ function penjing(p: string[]) {
 function cnNightstand(p: string[]) {
   const [wood, brass, dark] = p
   const g = new THREE.Group()
-  const inner = shade(wood, 0.05)
+  const inner = tone(wood, 0.05)
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(3.6, 10, 3.6, wood, { x: sx * 19.2, z: sz * 14.6 }, 0.8))
   g.add(prism([[-17.4, 10], [17.4, 10], [17.4, 7], [10, 6], [-10, 6], [-17.4, 7]], 1.2, dark, 15.4))
   g.add(hollow(42, 42, 32, wood, { y: 10 }, 1.6, inner))
   g.add(rbox(38.8, 1.6, 30, inner, { y: 37.4, z: 0.4 }, 0.3))
   g.add(rbox(46, 3, 36, wood, { y: 52 }, 1))
   g.add(drawerOf([rbox(38, 10, 1.2, dark, { y: 39.5, z: 16.2 }, 0.5), brassPlate(0, 45, 16.6, 2.6, brass)], -19, 19, 39.5, 10, 15.6, 28, inner))
-  g.add(swingDoor([rbox(38, 26, 1.2, dark, { y: 12, z: 16.2 }, 0.5), rbox(30, 18, 0.5, shade(dark, 0.08), { y: 16, z: 16.9 }, 0.2), brassPlate(0, 27, 17.1, 3.4, brass)], -19, 15.6, 'left'))
+  g.add(swingDoor([rbox(38, 26, 1.2, dark, { y: 12, z: 16.2 }, 0.5), rbox(30, 18, 0.5, tone(dark, 0.08), { y: 16, z: 16.9 }, 0.2), brassPlate(0, 27, 17.1, 3.4, brass)], -19, 15.6, 'left'))
   return g
 }
 const CN_NS_SURFACES: SurfaceDef[] = [{ y: 11.6, h: 25.3, inside: true, shape: [r(-18.8, -14.4, 18.8, 14.8)] }, drawerLv(-19, 19, 39.5, 10, 15.6, 28)]
@@ -856,7 +856,7 @@ function recamier(p: string[]) {
 function clSideboard(p: string[]) {
   const [body, top, gold] = p
   const g = new THREE.Group()
-  const inner = shade(body, 0.05)
+  const inner = tone(body, 0.05)
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(cabriole(sx * 74, sz * 20, 16, 2.2, body, sx * 0.5, sz * 0.5, 'scroll', gold))
   g.add(hollow(156, 76, 46, body, { y: 15 }, 1.6, inner))
   // 中间抽屉组两侧的隔板、门里的层板
@@ -880,7 +880,7 @@ function clSideboard(p: string[]) {
     const s = Math.sign(x)
     const parts: THREE.Object3D[] = [
       rbox(46, 58, 1.2, body, { x, y: 22, z: 23.2 }, 0.6),
-      rbox(36, 46, 0.6, shade(body, -0.05), { x, y: 28, z: 23.95 }, 0.4),
+      rbox(36, 46, 0.6, tone(body, -0.05), { x, y: 28, z: 23.95 }, 0.4),
       noOutlineDeep(torus(7, 0.5, gold, { x, y: 51, z: 24.5 })),
       ball(1.3, gold, { x: x + (x < 0 ? 19 : -19), y: 52, z: 24.6 }),
     ]
@@ -909,7 +909,7 @@ const CL_SB_SURFACES: SurfaceDef[] = [
 function clVanity(p: string[]) {
   const [body, mirrorC, gold] = p
   const g = new THREE.Group()
-  const inner = shade(body, 0.05)
+  const inner = tone(body, 0.05)
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(cabriole(sx * 48, sz * 18, 60, 2, body, sx * 0.5, sz * 0.5, 'scroll', gold))
   g.add(hollow(104, 14, 42, body, { y: 60 }, 1.6, inner))
   // 抽屉面框：上下横档 + 抽屉之间的立梃
@@ -919,7 +919,7 @@ function clVanity(p: string[]) {
     g.add(rbox(4, 10, 1.2, body, { x: s * 15, y: 62, z: 20.4 }, 0.3))
     g.add(rbox(9, 10, 1.2, body, { x: s * 47.5, y: 62, z: 20.4 }, 0.3))
   }
-  for (const x of [-30, 0, 30]) g.add(drawerOf([rbox(26, 10, 1, shade(body, -0.04), { x, y: 62, z: 21.2 }, 0.4), ball(1.2, gold, { x, y: 67, z: 22.1 })], x - 13, x + 13, 62, 10, 20.7, 36, inner))
+  for (const x of [-30, 0, 30]) g.add(drawerOf([rbox(26, 10, 1, tone(body, -0.04), { x, y: 62, z: 21.2 }, 0.4), ball(1.2, gold, { x, y: 67, z: 22.1 })], x - 13, x + 13, 62, 10, 20.7, 36, inner))
   g.add(prism([[-50, 60], [50, 60], [50, 57], [30, 55], [0, 57.5], [-30, 55], [-50, 57]], 1.4, body, 20.6))
   g.add(rbox(110, 3, 46, body, { y: 74 }, 1.2))
   // 镜子：底座 + 椭圆框
@@ -942,11 +942,11 @@ const CL_VANITY_SURFACES: SurfaceDef[] = [-30, 0, 30].map((x) => drawerLv(x - 13
 function clFireplace(p: string[]) {
   const [stone, mantel, gold] = p
   const g = new THREE.Group()
-  g.add(rbox(150, 4, 42, shade(stone, -0.06), {}, 1))
+  g.add(rbox(150, 4, 42, tone(stone, -0.06), {}, 1))
   // 炉身两侧壁柱
   for (const s of [-1, 1]) {
     g.add(rbox(26, 96, 34, stone, { x: s * 57, y: 4, z: -4 }, 1.2))
-    g.add(rbox(18, 80, 1, shade(stone, -0.05), { x: s * 57, y: 12, z: 13.4 }, 0.4))
+    g.add(rbox(18, 80, 1, tone(stone, -0.05), { x: s * 57, y: 12, z: 13.4 }, 0.4))
     g.add(rbox(28, 5, 36, stone, { x: s * 57, y: 4, z: -4 }, 1))
     g.add(carving(s * 57, 92, 13.6, 4, gold))
   }
@@ -962,7 +962,7 @@ function clFireplace(p: string[]) {
   g.add(cylX(3, 40, '#8a6040', 0, 15, 0))
   g.add(cylX(3, 40, '#6a4630', 0, 20.6, -4))
   // 炉架台面（出沿）
-  g.add(rbox(150, 3, 42, shade(mantel, -0.05), { y: 100 }, 1))
+  g.add(rbox(150, 3, 42, tone(mantel, -0.05), { y: 100 }, 1))
   g.add(rbox(156, 4, 46, mantel, { y: 103 }, 1.2))
   // 三叉烛台
   for (const s of [-1, 1]) {
@@ -1012,7 +1012,8 @@ function crystalFloorLamp(p: string[]) {
     drop.material = toon(crystal, { transparent: 0.75 })
     g.add(drop)
   }
-  g.add(latheAt([[0, 0], [1.4, 0], [3, 3], [2.4, 6], [0.4, 9], [0, 9]], metal, { y: y + 2 }, 12, 0.001))
+  // 顶上的尖饰直接坐在灯柱顶面上（以前离柱顶 2cm 悬空）
+  g.add(latheAt([[0, 0], [1.4, 0], [3, 3], [2.4, 6], [0.4, 9], [0, 9]], metal, { y }, 12, 0.001))
   return g
 }
 
@@ -1022,14 +1023,15 @@ function candleTableLamp(p: string[]) {
   const g = new THREE.Group()
   g.add(latheAt([[0, 0], [7, 0], [7, 1.6], [5, 3], [2.4, 5], [3.6, 9], [1.4, 14], [1.4, 26], [2.6, 28], [3.2, 30], [0, 30]], base, {}, 20, 0.001))
   g.add(torus(6.6, 0.6, gold, { y: 1.6, rx: Math.PI / 2 }))
-  g.add(cyl(0.5, 0.5, 6, gold, { y: 30 }, 8))
+  // 灯芯杆一直穿到罩口顶上托住尖饰（以前尖饰悬在开口的罩顶中间）
+  g.add(cyl(0.5, 0.5, 18.4, gold, { y: 30 }, 8))
   g.add(lit(ball(2.2, C.lamp, { y: 34 }), C.lamp, 0.9))
   // 褶皱灯罩：外圈竖棱
   const shadeG = new THREE.Group()
   shadeG.add(cup(8, 13, 17, 0.6, shadeC, { y: 0 }))
   for (let k = 0; k < 16; k++) {
     const a = (k / 16) * Math.PI * 2
-    shadeG.add(rod3([Math.sin(a) * 13, 0.4, Math.cos(a) * 13], [Math.sin(a) * 8, 16.6, Math.cos(a) * 8], 0.6, shade(shadeC, -0.04), 6))
+    shadeG.add(rod3([Math.sin(a) * 13, 0.4, Math.cos(a) * 13], [Math.sin(a) * 8, 16.6, Math.cos(a) * 8], 0.6, tone(shadeC, -0.04), 6))
   }
   shadeG.position.y = 31
   g.add(shadeG)
@@ -1055,13 +1057,13 @@ function clPosterBed(p: string[]) {
     // 侧梁
     g.add(rbox(4, 16, D - 18, wood, { x: sx * PX, y: 22 }, 1.2))
   }
-  g.add(rbox(W - 18, 4, D - 18, shade(wood, -0.1), { y: 30 }, 1))
+  g.add(rbox(W - 18, 4, D - 18, tone(wood, -0.1), { y: 30 }, 1))
   // 床头：拱形软包 + 木框 + 冠饰
   const arch: P2[] = [[-(PX - 4), 38], [PX - 4, 38], [PX - 4, 128], [50, 140], [20, 150], [0, 153], [-20, 150], [-50, 140], [-(PX - 4), 128]]
   g.add(prism(arch, 6, wood, -PZ))
   const inner = arch.map(([x, y]) => [x * 0.88, 44 + (y - 38) * 0.86] as P2)
   g.add(prism(inner, 2.4, sheet, -PZ + 3.8))
-  for (let k = -3; k <= 3; k++) for (const y of [70, 92, 114]) g.add(ball(1.2, shade(sheet, -0.15), { x: k * 18 + (y === 92 ? 9 : 0), y, z: -PZ + 5.2 }))
+  for (let k = -3; k <= 3; k++) for (const y of [70, 92, 114]) g.add(ball(1.2, tone(sheet, -0.15), { x: k * 18 + (y === 92 ? 9 : 0), y, z: -PZ + 5.2 }))
   g.add(carving(0, 150, -PZ + 3.4, 9, gold))
   // 床尾板
   g.add(prism([[-(PX - 4), 22], [PX - 4, 22], [PX - 4, 70], [40, 76], [0, 80], [-40, 76], [-(PX - 4), 70]], 5, wood, PZ))
@@ -1083,7 +1085,8 @@ function marbleCoffee(p: string[]) {
     const pt = (rr: number, y: number): V3 => [Math.sin(a) * rr, y, Math.cos(a) * rr]
     g.add(cappedTube([pt(12, 38), pt(22, 30), pt(20, 16), pt(27, 4), pt(31, 1.8)], 1.6, metal, TUBE))
   }
-  g.add(torus(14, 1.4, metal, { y: 22, rx: Math.PI / 2 }))
+  // 腿间的拉环：半径放到腿的位置（以前 14，离四条腿都有 6cm，悬在中间）
+  g.add(torus(20.6, 1.4, metal, { y: 22, rx: Math.PI / 2 }))
   g.add(latheAt([[0, 14], [4, 14], [6, 18], [3, 26], [5, 34], [12, 38.4], [0, 38.4]], metal, {}, 20, 0.001))
   g.add(cyl(42, 42, 4, stone, { y: 38.4 }, 48))
   // 大理石纹
@@ -1108,7 +1111,7 @@ function empireBookcase(p: string[]) {
     // 壁柱
     g.add(cyl(2.6, 2.6, 156, body, { x: s * (w / 2 - 3), y: 15, z: d / 2 - 3 }, 16))
     g.add(rbox(7, 5, 7, body, { x: s * (w / 2 - 3), y: 10, z: d / 2 - 3.5 }, 1))
-    g.add(rbox(7, 5, 7, gold, { x: s * (w / 2 - 3), y: 171, z: d / 2 - 3.5 }, 1))
+    g.add(rbox(7, 5.4, 7, gold, { x: s * (w / 2 - 3), y: 171, z: d / 2 - 3.5 }, 1)) // 柱头顶进檐口 0.4，不和侧板顶面共面
     g.add(rbox(4, 166, 4, body, { x: s * (w / 2 - 3), y: 10, z: -d / 2 + 2.6 }, 0.8))
   }
   g.add(rbox(w - 16, 166, 1.2, back, { y: 10, z: -d / 2 + 1.6 }, 0.4))
@@ -1133,7 +1136,7 @@ function tuftedBench(p: string[]) {
   g.add(rbox(110, 6, 40, frame, { y: 31 }, 2))
   g.add(carving(0, 34, 20.4, 4, gold))
   g.add(rbox(106, 10, 37, fabric, { y: 36.5 }, 4.5))
-  for (let i = -3; i <= 3; i++) for (const z of [-8, 8]) g.add(ball(1, shade(fabric, -0.2), { x: i * 14 + (z > 0 ? 7 : 0), y: 46.3, z }))
+  for (let i = -3; i <= 3; i++) for (const z of [-8, 8]) g.add(ball(1, tone(fabric, -0.2), { x: i * 14 + (z > 0 ? 7 : 0), y: 46.3, z }))
   return g
 }
 
@@ -1151,10 +1154,10 @@ function velvetOttoman(p: string[]) {
     const a = (k / 36) * Math.PI * 2
     g.add(cyl(0.45, 0.45, 5, gold, { x: Math.sin(a) * 28.6, y: 15, z: Math.cos(a) * 28.6 }, 4))
   }
-  g.add(ball(1.4, shade(fabric, -0.22), { y: 39.6 }))
+  g.add(ball(1.4, tone(fabric, -0.22), { y: 39.6 }))
   for (let k = 0; k < 6; k++) {
     const a = (k / 6) * Math.PI * 2
-    g.add(ball(1.1, shade(fabric, -0.22), { x: Math.sin(a) * 13, y: 38.9, z: Math.cos(a) * 13 }))
+    g.add(ball(1.1, tone(fabric, -0.22), { x: Math.sin(a) * 13, y: 38.9, z: Math.cos(a) * 13 }))
   }
   return g
 }
@@ -1163,11 +1166,11 @@ function velvetOttoman(p: string[]) {
 function clArmoire(p: string[]) {
   const [body, panel, gold] = p
   const g = new THREE.Group()
-  const inner = shade(body, 0.05)
+  const inner = tone(body, 0.05)
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(cabriole(sx * 56, sz * 25, 14, 2.4, body, sx * 0.5, sz * 0.5, 'scroll', gold))
   g.add(hollow(120, 170, 58, body, { y: 13 }, 1.8, inner))
   g.add(rbox(116.4, 1.6, 55, inner, { y: 168.4, z: 0.5 }, 0.3))
-  g.add(hangingPipe(-56, 56, 160, 0))
+  g.add(hangingPipe(-58.2, 58.2, 160, 0)) // 两端杆座顶到侧板内壁（原来各短 2.2cm，整根杆悬空）
   // 门上下的横档
   g.add(rbox(120, 5, 1.6, body, { y: 13, z: 28.2 }, 0.4))
   g.add(rbox(120, 5, 1.6, body, { y: 178, z: 28.2 }, 0.4))
@@ -1264,7 +1267,7 @@ function columnPedestal(p: string[]) {
   const [stone, accent, vein] = p
   const g = new THREE.Group()
   g.add(rbox(34, 6, 34, stone, {}, 1))
-  g.add(rbox(30, 4, 30, shade(stone, -0.04), { y: 6 }, 1))
+  g.add(rbox(30, 4, 30, tone(stone, -0.04), { y: 6 }, 1))
   g.add(latheAt([[0, 10], [12, 10], [12, 12], [10, 14], [10, 90], [12, 92], [12, 94], [0, 94]], stone, {}, 32, 0.001))
   for (let k = 0; k < 12; k++) {
     const a = (k / 12) * Math.PI * 2
@@ -1273,7 +1276,7 @@ function columnPedestal(p: string[]) {
     g.add(f)
   }
   g.add(torus(10.4, 0.8, accent, { y: 88, rx: Math.PI / 2 }))
-  g.add(rbox(30, 4, 30, shade(stone, -0.04), { y: 94 }, 1))
+  g.add(rbox(30, 4, 30, tone(stone, -0.04), { y: 94 }, 1))
   g.add(rbox(34, 4, 34, stone, { y: 98 }, 1))
   return g
 }
@@ -1282,12 +1285,12 @@ function columnPedestal(p: string[]) {
 function clNightstand(p: string[]) {
   const [body, top, gold] = p
   const g = new THREE.Group()
-  const inner = shade(body, 0.05)
+  const inner = tone(body, 0.05)
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(cabriole(sx * 18, sz * 13.5, 22, 1.6, body, sx * 0.5, sz * 0.5, 'scroll', gold))
   g.add(hollow(42, 34, 33, body, { y: 21 }, 1.6, inner))
   g.add(rbox(38.8, 1.6, 31, inner, { y: 36.6, z: 0.4 }, 0.3))
   g.add(prism([[-20, 22], [20, 22], [20, 19], [10, 17], [0, 19.5], [-10, 17], [-20, 19]], 1.2, body, 16))
-  for (const y of [23.5, 39]) g.add(drawerOf([rbox(36, 13, 1, shade(body, -0.04), { y, z: 16.8 }, 0.5), rbox(8, 1.6, 1.2, gold, { y: y + 6, z: 17.6 }, 0.5)], -18, 18, y, 13, 16.3, 30, inner))
+  for (const y of [23.5, 39]) g.add(drawerOf([rbox(36, 13, 1, tone(body, -0.04), { y, z: 16.8 }, 0.5), rbox(8, 1.6, 1.2, gold, { y: y + 6, z: 17.6 }, 0.5)], -18, 18, y, 13, 16.3, 30, inner))
   g.add(rbox(46, 3, 37, top, { y: 55 }, 1.2))
   return g
 }
@@ -1307,7 +1310,7 @@ function barnDoor(p: string[]) {
   const DW = 96
   const DH = 208
   const dx = -38
-  for (let i = 0; i < 6; i++) g.add(rbox(DW / 6 - 0.3, DH, 3, i % 2 ? shade(wood, -0.05) : wood, { x: dx - DW / 2 + DW / 12 + (i * DW) / 6, y: y0, z: 2 }, 0.4))
+  for (let i = 0; i < 6; i++) g.add(rbox(DW / 6 - 0.3, DH, 3, i % 2 ? tone(wood, -0.05) : wood, { x: dx - DW / 2 + DW / 12 + (i * DW) / 6, y: y0, z: 2 }, 0.4))
   for (const y of [y0, y0 + DH - 14]) g.add(rbox(DW, 14, 2, brace, { x: dx, y, z: 4.4 }, 0.5))
   for (const s of [-1, 1]) g.add(rbox(13, DH - 28 + 0.4, 2, brace, { x: dx + s * (DW / 2 - 6.5), y: y0 + 13.8, z: 4.4 }, 0.5))
   g.add(batten([dx - DW / 2 + 15, y0 + 16, 4.4], [dx + DW / 2 - 15, y0 + DH - 16, 4.4], 12, 2, brace))
@@ -1324,11 +1327,11 @@ function barnDoor(p: string[]) {
     const wx = dx + s * 30
     const wy = ry + 4 + 4.2
     g.add(cylZ(4.2, 1.6, metal, wx, wy, -1, 20))
-    g.add(cylZ(0.9, 2.6, shade(metal, 0.2), wx, wy, -0.6, 8))
+    g.add(cylZ(0.9, 2.6, tone(metal, 0.2), wx, wy, -0.6, 8))
     g.add(rbox(3.4, wy - (y0 + DH - 7), 0.8, metal, { x: wx, y: y0 + DH - 7, z: 0.2 }, 0.3))
     g.add(rbox(3.4, 1, 6.6, metal, { x: wx, y: y0 + DH, z: 3.1 }, 0.3))
     g.add(rbox(3.4, 16, 0.6, metal, { x: wx, y: y0 + DH - 15, z: 5.7 }, 0.2))
-    g.add(ball(0.7, shade(metal, 0.2), { x: wx, y: y0 + DH - 10, z: 6 }))
+    g.add(ball(0.7, tone(metal, 0.2), { x: wx, y: y0 + DH - 10, z: 6 }))
   }
   return centerGroup(g)
 }
@@ -1378,8 +1381,8 @@ function farmTable(p: string[]) {
     g.add(rbox(172, 9, 2.4, base, { y: 63, z: s * 38.5 }, 0.6))
     g.add(rbox(2.4, 9, 72, base, { x: s * 88, y: 63 }, 0.6))
   }
-  for (let i = 0; i < 4; i++) g.add(rbox(184, 5, 23.75, i % 2 ? shade(top, -0.04) : top, { y: 72, z: -35.625 + i * 23.75 }, 0.3))
-  for (const s of [-1, 1]) g.add(rbox(8, 5, 95, shade(top, -0.07), { x: s * 96, y: 72 }, 0.8))
+  for (let i = 0; i < 4; i++) g.add(rbox(184, 5, 23.75, i % 2 ? tone(top, -0.04) : top, { y: 72, z: -35.625 + i * 23.75 }, 0.3))
+  for (const s of [-1, 1]) g.add(rbox(8, 5, 95, tone(top, -0.07), { x: s * 96, y: 72 }, 0.8))
   return g
 }
 
@@ -1402,8 +1405,8 @@ function farmBench(p: string[]) {
 function hutch(p: string[]) {
   const [body, top, back] = p
   const g = new THREE.Group()
-  const inner = shade(body, 0.05)
-  g.add(rbox(136, 4, 44, shade(body, -0.2), {}, 0.5))
+  const inner = tone(body, 0.05)
+  g.add(rbox(136, 4, 44, tone(body, -0.2), {}, 0.5))
   g.add(hollow(140, 84, 48, body, { y: 4 }, 1.6, inner))
   g.add(rbox(136.8, 1.6, 46, inner, { y: 32.4, z: 0.8 }, 0.3))
   g.add(rbox(136.8, 1.6, 46, inner, { y: 61.4, z: 0.8 }, 0.3))
@@ -1414,7 +1417,7 @@ function hutch(p: string[]) {
   g.add(rbox(4, 79, 1.6, body, { y: 4, z: 23.2 }, 0.4))
   for (const s of [-1, 1]) {
     const x = s * 34.5
-    g.add(swingDoor([rbox(65, 54, 1.2, body, { x, y: 8, z: 24.2 }, 0.6), rbox(53, 42, 0.6, shade(body, -0.05), { x, y: 14, z: 25 }, 0.3), ball(1.4, FH.black, { x: x - s * 26, y: 36, z: 25.6 })], s * 67, 23.6, s < 0 ? 'left' : 'right'))
+    g.add(swingDoor([rbox(65, 54, 1.2, body, { x, y: 8, z: 24.2 }, 0.6), rbox(53, 42, 0.6, tone(body, -0.05), { x, y: 14, z: 25 }, 0.3), ball(1.4, FH.black, { x: x - s * 26, y: 36, z: 25.6 })], s * 67, 23.6, s < 0 ? 'left' : 'right'))
     g.add(drawerOf([rbox(65, 18, 1.2, body, { x, y: 65, z: 24.2 }, 0.6), torus(2.6, 0.6, FH.black, { x, y: 75.6, z: 25.2 }, Math.PI)], x - 32.5, x + 32.5, 65, 18, 23.6, 44, inner))
   }
   g.add(rbox(144, 3, 52, top, { y: 88 }, 1))
@@ -1423,7 +1426,7 @@ function hutch(p: string[]) {
   g.add(rbox(136, 3, 32, body, { y: 192, z: -10 }, 0.8))
   g.add(rbox(146, 5, 37, body, { y: 195, z: -8.5 }, 1))
   g.add(rbox(130.4, 101, 1.2, back, { y: 91, z: -25.2 }, 0.3))
-  for (let x = -60; x <= 60; x += 7.5) g.add(noOutlineDeep(rbox(0.6, 100, 0.3, shade(back, -0.1), { x, y: 91.5, z: -24.45 }, 0.1)))
+  for (let x = -60; x <= 60; x += 7.5) g.add(noOutlineDeep(rbox(0.6, 100, 0.3, tone(back, -0.1), { x, y: 91.5, z: -24.45 }, 0.1)))
   for (const y of [125, 158]) {
     g.add(rbox(130.4, 2, 30, body, { y, z: -10 }, 0.5))
     g.add(cylX(0.5, 130.4, FH.black, 0, y + 6, -18))
@@ -1489,7 +1492,7 @@ function fhIronBed(p: string[]) {
     g.add(rod3([x, 46, Z], [x, 84, Z], 0.8, iron))
   }
   for (const s of [-1, 1]) g.add(noOutlineDeep(torus(4, 0.6, BRASS, { x: s * 30, y: archY(30) - 8, z: -Z })))
-  g.add(rbox(W - 8, 3, D - 8, shade(iron, -0.3), { y: 33 }, 0.8))
+  g.add(rbox(W - 8, 3, D - 8, tone(iron, -0.3), { y: 33 }, 0.8))
   g.add(rbox(W - 10, 22, D - 10, sheet, { y: 36 }, 5))
   for (const s of [-1, 1]) g.add(rbox(58, 12, 34, C.white, { x: s * 34, y: 57, z: -Z + 28, rx: -0.12 }, 5))
   const qd = D - 72
@@ -1506,7 +1509,7 @@ function quiltBench(p: string[]) {
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(5, 44, 5, wood, { x: sx * 55, z: sz * 16.5 }, 1))
   for (const s of [-1, 1]) g.add(rbox(105.4, 6, 2, wood, { y: 37.5, z: s * 16.5 }, 0.5))
   g.add(rbox(120, 4, 42, wood, { y: 44 }, 1))
-  for (let k = 0; k < 5; k++) g.add(rbox(105.4, 2, 5.6, shade(wood, k % 2 ? -0.04 : 0), { y: 10, z: -13.2 + k * 6.6 }, 0.4))
+  for (let k = 0; k < 5; k++) g.add(rbox(105.4, 2, 5.6, tone(wood, k % 2 ? -0.04 : 0), { y: 10, z: -13.2 + k * 6.6 }, 0.4))
   for (const s of [-1, 1]) g.add(rbox(3, 3, 30, wood, { x: s * 52.5, y: 7 }, 0.5))
   // 叠好的被子
   g.add(rbox(56, 5, 36, quiltA, { x: -24, y: 48 }, 2))
@@ -1581,30 +1584,30 @@ function stoneFireplace(p: string[]) {
   for (let row = 0; row < 8; row++) {
     const y = 6 + row * 14
     let x = -75 + (row % 2 ? 9 : 0)
-    if (row % 2) g.add(rbox(7.8, 12.6, 1.4, shade(stone, -0.04), { x: -71, y: y + 0.4, z: 11.3 }, 1.2))
+    if (row % 2) g.add(rbox(7.8, 12.6, 1.4, tone(stone, -0.04), { x: -71, y: y + 0.4, z: 11.3 }, 1.2))
     while (x < 75) {
       const w = 14 + rnd(seed++) * 12
       const x1 = Math.min(75, x + w)
       const cx = (x + x1) / 2
       const ok = !([[x + 1, 0], [x1 - 1, 0], [cx, 0], [x + 1, 12.6], [x1 - 1, 12.6], [cx, 12.6]] as P2[]).some(([px, py]) => inArch(px, y - 5 + py))
-      if (ok && x1 - x > 5) g.add(rbox(x1 - x - 1.2, 12.6, 1.4, shade(stone, (rnd(seed++) - 0.5) * 0.16), { x: cx, y: y + 0.4, z: 11.3 }, 1.2))
+      if (ok && x1 - x > 5) g.add(rbox(x1 - x - 1.2, 12.6, 1.4, tone(stone, (rnd(seed++) - 0.5) * 0.16), { x: cx, y: y + 0.4, z: 11.3 }, 1.2))
       x = x1
     }
   }
   // 拱券石
   for (let k = 0; k <= 8; k++) {
     const a = (k / 8) * Math.PI
-    const v = rbox(9, 6, 1.6, shade(stone, -0.08 + (k % 2) * 0.05), { x: Math.cos(a) * 41, y: 0, z: 11.4 }, 1)
+    const v = rbox(9, 6, 1.6, tone(stone, -0.08 + (k % 2) * 0.05), { x: Math.cos(a) * 41, y: 0, z: 11.4 }, 1)
     v.position.y = 5 + 34 + Math.sin(a) * 41
     v.rotation.z = a - Math.PI / 2
     g.add(v)
   }
-  for (const s of [-1, 1]) g.add(rbox(8, 31, 2, shade(stone, -0.06), { x: s * 41, y: 5, z: 11.5 }, 1))
+  for (const s of [-1, 1]) g.add(rbox(8, 31, 2, tone(stone, -0.06), { x: s * 41, y: 5, z: 11.5 }, 1))
   // 柴火
   for (const s of [-1, 1]) g.add(rbox(2, 8, 18, IRON, { x: s * 20, y: 5, z: -8 }, 0.4))
   g.add(cylX(3.4, 46, '#7a5236', 0, 14, -12))
   g.add(cylX(3, 40, '#8a6040', 0, 14, -4))
-  g.add(cylX(3, 40, '#6a4630', 0, 16.8, -8))
+  g.add(cylX(3, 37, '#6a4630', 0, 16.8, -8)) // 上面这根短一点：三根一样长时端面在同一平面上交叠闪烁
   // 余烬：炉底一层炭床 + 几块自发光碎炭（只加材质，不引入 fx / 粒子）
   const coal = rbox(42, 1.2, 18, '#6e2a12', { y: 7.2, z: -9 }, 0.8)
   coal.material = toon('#6e2a12', { emissive: 0.45 })
@@ -1617,7 +1620,7 @@ function stoneFireplace(p: string[]) {
   }
   // 木梁炉架
   g.add(rbox(170, 12, 30, beamC, { y: 120 }, 1.4))
-  for (let k = -3; k <= 3; k++) g.add(noOutlineDeep(rbox(18, 0.4, 0.3, shade(beamC, -0.15), { x: k * 22, y: 126, z: 15.05 }, 0.1)))
+  for (let k = -3; k <= 3; k++) g.add(noOutlineDeep(rbox(18, 0.4, 0.3, tone(beamC, -0.15), { x: k * 22, y: 126, z: 15.05 }, 0.1)))
   return g
 }
 
@@ -1634,16 +1637,17 @@ function crateCoffee(p: string[]) {
       g.add(rbox(5, 4, 0.8, metal, { x, y: 4.4, z: z + 2.2 }, 0.2))
       g.add(cylZ(3.6, 3, dark, x, 3.6, z, 16))
     }
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(4, 32.6, 4, shade(wood, -0.08), { x: sx * 51, y: 9.4, z: sz * 26 }, 0.6))
-  g.add(rbox(106, 2, 56, wood, { y: 9.4 }, 0.5))
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(4, 32.6, 4, tone(wood, -0.08), { x: sx * 51, y: 9.4, z: sz * 26 }, 0.6))
+  // 箱底板四边比角柱外皮缩进 0.3、底面比角柱底高 0.2：原来和角柱的外侧面 / 底面齐平，四个角闪烁
+  g.add(rbox(105.4, 1.8, 55.4, wood, { y: 9.6 }, 0.5))
   for (let k = 0; k < 3; k++) {
     const y = 11.6 + k * 10.6
     for (const s of [-1, 1]) {
-      g.add(rbox(98, 7.6, 1.8, shade(wood, (k - 1) * 0.04), { y, z: s * 27 }, 0.4))
-      g.add(rbox(1.8, 7.6, 48, shade(wood, (1 - k) * 0.04), { x: s * 52, y }, 0.4))
+      g.add(rbox(98, 7.6, 1.8, tone(wood, (k - 1) * 0.04), { y, z: s * 27 }, 0.4))
+      g.add(rbox(1.8, 7.6, 48, tone(wood, (1 - k) * 0.04), { x: s * 52, y }, 0.4))
     }
   }
-  for (let i = 0; i < 5; i++) g.add(rbox(110, 3, 11.8, shade(wood, (i % 3) * 0.035 - 0.03), { y: 42, z: -24 + i * 12 }, 0.6))
+  for (let i = 0; i < 5; i++) g.add(rbox(110, 3, 11.8, tone(wood, (i % 3) * 0.035 - 0.03), { y: 42, z: -24 + i * 12 }, 0.6))
   return g
 }
 
@@ -1662,8 +1666,8 @@ function blanketLadder(p: string[]) {
     g.add(rbox(36, 1.4, 5.2, color, { y: y + 1.2, z }, 0.6))
     g.add(rbox(36, front, 1.2, color, { y: y + 1.6 - front, z: z + 2.4 }, 0.5))
     g.add(rbox(36, back, 1.2, color, { y: y + 1.6 - back, z: z - 2.4 }, 0.5))
-    g.add(noOutlineDeep(rbox(36.2, 3, 1.9, shade(color, -0.15), { y: y + 1.6 - front * 0.5, z: z + 2.4 }, 0.3)))
-    if (fringe) for (let k = -8; k <= 8; k++) g.add(cyl(0.3, 0.3, 2.4, shade(color, -0.1), { x: k * 2.1, y: y + 1.6 - front - 2.2, z: z + 2.4 }, 4))
+    g.add(noOutlineDeep(rbox(36.2, 3, 1.9, tone(color, -0.15), { y: y + 1.6 - front * 0.5, z: z + 2.4 }, 0.3)))
+    if (fringe) for (let k = -8; k <= 8; k++) g.add(cyl(0.3, 0.3, 2.4, tone(color, -0.1), { x: k * 2.1, y: y + 1.6 - front - 2.2, z: z + 2.4 }, 4))
   }
   drape(0.72, blanketA, 40, 24, true)
   drape(0.36, blanketB, 28, 18, false)
@@ -1682,8 +1686,8 @@ function basketShelf(p: string[]) {
     for (const s of [-1, 1]) {
       const x = s * 15.8
       g.add(tray(30, 22, 28, 1.2, basket, { x, y, z: 1 }, 0.8))
-      for (let k = 0; k < 4; k++) g.add(noOutlineDeep(rbox(30.4, 1, 0.4, shade(basket, -0.14), { x, y: y + 3.5 + k * 5, z: 15.2 }, 0.2)))
-      for (const t of [-1, 1]) g.add(noOutlineDeep(torus(3, 0.5, shade(basket, -0.1), { x: x + t * 15.2, y: y + 17, z: 1, ry: Math.PI / 2 }, Math.PI)))
+      for (let k = 0; k < 4; k++) g.add(noOutlineDeep(rbox(30.4, 1, 0.4, tone(basket, -0.14), { x, y: y + 3.5 + k * 5, z: 15.2 }, 0.2)))
+      for (const t of [-1, 1]) g.add(noOutlineDeep(torus(3, 0.5, tone(basket, -0.1), { x: x + t * 15.2, y: y + 17, z: 1, ry: Math.PI / 2 }, Math.PI)))
       g.add(rbox(24, 12, 22, cloth, { x, y: y + 1.2, z: 1 }, 2))
     }
   return g
@@ -1737,9 +1741,9 @@ function reclaimedShelf(p: string[]) {
     g.add(rod3([-(w / 2 - 3), ya, -(d / 2 - 1.5)], [w / 2 - 3, yb, -(d / 2 - 1.5)], 0.5, metal, 6))
     g.add(rod3([w / 2 - 3, ya, -(d / 2 - 1.5)], [-(w / 2 - 3), yb, -(d / 2 - 1.5)], 0.5, metal, 6))
   }
-  const tones = [wood, shade(wood, -0.08), shade(wood, 0.06), shade(wood, -0.03), shade(wood, 0.03)]
+  const tones = [wood, tone(wood, -0.08), tone(wood, 0.06), tone(wood, -0.03), tone(wood, 0.03)]
   levels.forEach((y, i) => {
-    for (let k = 0; k < 2; k++) g.add(rbox(w - 6, 4, d / 2, shade(tones[i], k ? -0.04 : 0), { y, z: (k ? 1 : -1) * (d / 4) }, 0.6))
+    for (let k = 0; k < 2; k++) g.add(rbox(w - 6, 4, d / 2, tone(tones[i], k ? -0.04 : 0), { y, z: (k ? 1 : -1) * (d / 4) }, 0.6))
   })
   for (const sx of [-1, 1]) g.add(noOutlineDeep(cylZ(1, 0.6, accent, sx * (w / 2 - 1.5), 120, d / 2 + 0.1, 8)))
   return g
@@ -1779,9 +1783,9 @@ function farmBookcase(p: string[]) {
   for (const y of levels) g.add(rbox(w - 5 + 0.4, 2, d - 2, body, { y, z: 0.6 }, 0.4))
   g.add(rbox(w - 5 + 0.4, 2, d - 2, body, { y: top - 2, z: 0.6 }, 0.4))
   g.add(rbox(w + 3, 4, d + 2.5, body, { y: top }, 0.8))
-  g.add(rbox(w + 5, 2, d + 4, shade(body, -0.05), { y: top + 4 }, 0.6))
+  g.add(rbox(w + 5, 2, d + 4, tone(body, -0.05), { y: top + 4 }, 0.6))
   g.add(rbox(w - 5 + 0.4, top - 10, 1.2, back, { y: 9, z: -d / 2 + 0.8 }, 0.3))
-  for (let x = -(w / 2 - 7); x <= w / 2 - 6; x += 6.5) g.add(noOutlineDeep(rbox(0.5, top - 12, 0.3, shade(back, -0.1), { x, y: 10, z: -d / 2 + 1.55 }, 0.1)))
+  for (let x = -(w / 2 - 7); x <= w / 2 - 6; x += 6.5) g.add(noOutlineDeep(rbox(0.5, top - 12, 0.3, tone(back, -0.1), { x, y: 10, z: -d / 2 + 1.55 }, 0.1)))
   // 做旧：边角磨出底色
   for (const s of [-1, 1]) g.add(noOutlineDeep(rbox(0.6, 10, 0.3, accent, { x: s * (w / 2 - 0.9), y: 60, z: d / 2 + 0.05 }, 0.1)))
   return g
@@ -1823,7 +1827,7 @@ function xbackChair(p: string[]) {
   g.add(batten([17, 53, zAt(53)], [-17, 80, zAt(80)], 2.6, 1.8, wood))
   g.add(rbox(44, 4, 42, wood, { y: 42 }, 1))
   g.add(rbox(38, 1.6, 35, seat, { y: 45.6 }, 0.6))
-  for (let k = -3; k <= 3; k++) g.add(noOutlineDeep(rbox(0.6, 0.3, 34, shade(seat, -0.15), { x: k * 5, y: 47.2 }, 0.1)))
+  for (let k = -3; k <= 3; k++) g.add(noOutlineDeep(rbox(0.6, 0.3, 34, tone(seat, -0.15), { x: k * 5, y: 47.2 }, 0.1)))
   g.add(rbox(36, 2.4, 2.4, dark, { y: 10, z: 19.5 }, 0.5))
   return g
 }
@@ -1834,7 +1838,7 @@ function fhNightstand(p: string[]) {
   const g = new THREE.Group()
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(3.4, 54, 3.4, body, { x: sx * 19.3, z: sz * 15.3 }, 0.6))
   g.add(hollow(41, 18, 33, body, { y: 36 }, 1.6))
-  g.add(drawerOf([rbox(36, 14, 1, shade(body, -0.04), { y: 38, z: 16.8 }, 0.5), torus(2.4, 0.6, pull, { y: 46.6, z: 17.6 }, Math.PI)], -18, 18, 38, 14, 16.3, 30, shade(body, 0.05)))
+  g.add(drawerOf([rbox(36, 14, 1, tone(body, -0.04), { y: 38, z: 16.8 }, 0.5), torus(2.4, 0.6, pull, { y: 46.6, z: 17.6 }, Math.PI)], -18, 18, 38, 14, 16.3, 30, tone(body, 0.05)))
   g.add(rbox(38.6, 2, 30.6, body, { y: 12 }, 0.5))
   for (const s of [-1, 1]) g.add(rbox(35.2, 3, 1.6, body, { y: 30, z: s * 15.3 }, 0.4))
   g.add(rbox(46, 3, 38, top, { y: 54 }, 1))
@@ -1884,7 +1888,7 @@ function ichimaiZataku(p: string[]) {
   const [wood, leg, edge] = p
   const g = new THREE.Group()
   g.add(slabY(zatakuPoly(), 6, wood, 28))
-  for (let k = -2; k <= 2; k++) g.add(noOutlineDeep(rbox(110 - Math.abs(k) * 14, 0.3, 0.6, shade(wood, -0.1), { x: k * 6, y: 34, z: k * 13, ry: 0.04 * k }, 0.1)))
+  for (let k = -2; k <= 2; k++) g.add(noOutlineDeep(rbox(110 - Math.abs(k) * 14, 0.3, 0.6, tone(wood, -0.1), { x: k * 6, y: 34, z: k * 13, ry: 0.04 * k }, 0.1)))
   const legOutline: P2[] = [[-31, 0], [-18, 0], ...Array.from({ length: 11 }, (_, i) => { const a = Math.PI - (i / 10) * Math.PI; return [Math.cos(a) * 18, Math.sin(a) * 17] as P2 }).slice(1, -1), [18, 0], [31, 0], [31, 28], [-31, 28]]
   for (const s of [-1, 1]) g.add(sidePrism(legOutline, 6, leg, s * 52))
   g.add(noOutlineDeep(rbox(140, 1.2, 0.6, edge, { y: 30.5, z: 39.2 }, 0.2)))
@@ -1895,13 +1899,13 @@ function ichimaiZataku(p: string[]) {
 function kurumaDansu(p: string[]) {
   const [wood, iron, wheel] = p
   const g = new THREE.Group()
-  const inner = shade(wood, 0.05)
+  const inner = tone(wood, 0.05)
   for (const sx of [-1, 1])
     for (const sz of [-1, 1]) {
       g.add(cylZ(7, 4, wheel, sx * 38, 7, sz * 20, 20))
       g.add(cylZ(2, 4.8, iron, sx * 38, 7, sz * 20, 10))
     }
-  g.add(rbox(100, 5, 46, shade(wood, -0.12), { y: 9 }, 0.8))
+  g.add(rbox(100, 5, 46, tone(wood, -0.12), { y: 9 }, 0.8))
   g.add(hollow(100, 78, 46, wood, { y: 14 }, 1.6, inner))
   g.add(rbox(1.6, 74.8, 44, wood, { x: -1.2, y: 15.6, z: 0.8 }, 0.3))
   g.add(rbox(48.4, 1.6, 44, inner, { x: 24, y: 50.4, z: 0.8 }, 0.3))
@@ -1909,13 +1913,13 @@ function kurumaDansu(p: string[]) {
   // 左：三层抽屉
   for (let k = 0; k < 3; k++) {
     const y = 16 + k * 25
-    const front: THREE.Object3D[] = [rbox(47, 23, 1.2, shade(wood, 0.04), { x: -25, y, z: 23.3 }, 0.5), rbox(10, 6, 0.4, iron, { x: -25, y: y + 13, z: 24.1 }, 0.3), torus(2.8, 0.5, iron, { x: -25, y: y + 11, z: 24.5 }, Math.PI * 2)]
+    const front: THREE.Object3D[] = [rbox(47, 23, 1.2, tone(wood, 0.04), { x: -25, y, z: 23.3 }, 0.5), rbox(10, 6, 0.4, iron, { x: -25, y: y + 13, z: 24.1 }, 0.3), torus(2.8, 0.5, iron, { x: -25, y: y + 11, z: 24.5 }, Math.PI * 2)]
     for (const s of [-1, 1]) front.push(noOutlineDeep(rbox(4, 4, 0.3, iron, { x: -25 + s * 21.4, y: y + 0.4, z: 24.05 }, 0.1)))
     g.add(drawerOf(front, -48.5, -1.5, y, 23, 22.7, 42, inner))
   }
   // 右：两扇拉门（后轨固定，前轨带锁板推到左边）
-  g.add(rbox(25, 73, 0.9, shade(wood, 0.04), { x: 11.5, y: 16.5, z: 23.3 }, 0.4))
-  g.add(slideDoor([rbox(25, 73, 0.9, shade(wood, 0.04), { x: 36, y: 16.5, z: 24.2 }, 0.4), rbox(8, 12, 0.4, iron, { x: 23, y: 48, z: 24.9 }, 0.3), ball(1.2, iron, { x: 23, y: 54, z: 25.2 })], -24.5))
+  g.add(rbox(25, 73, 0.9, tone(wood, 0.04), { x: 11.5, y: 16.5, z: 23.3 }, 0.4))
+  g.add(slideDoor([rbox(25, 73, 0.9, tone(wood, 0.04), { x: 36, y: 16.5, z: 24.2 }, 0.4), rbox(8, 12, 0.4, iron, { x: 23, y: 48, z: 24.9 }, 0.3), ball(1.2, iron, { x: 23, y: 54, z: 25.2 })], -24.5))
   for (const s of [-1, 1]) for (const y of [14.6, 89.6]) g.add(noOutlineDeep(rbox(6, 2.4, 0.4, iron, { x: s * 47, y, z: 23.2 }, 0.1)))
   return g
 }
@@ -1939,7 +1943,7 @@ function maruAndon(p: string[]) {
   for (const y of [15, 44, 73]) g.add(torus(13.6, 0.7, wood, { y, rx: Math.PI / 2 }))
   for (let k = 0; k < 12; k++) {
     const a = (k / 12) * Math.PI * 2
-    g.add(noOutlineDeep(cyl(0.2, 0.2, 57, shade(paper, -0.12), { x: Math.sin(a) * 13.05, y: 15.5, z: Math.cos(a) * 13.05 }, 4)))
+    g.add(noOutlineDeep(cyl(0.2, 0.2, 57, tone(paper, -0.12), { x: Math.sin(a) * 13.05, y: 15.5, z: Math.cos(a) * 13.05 }, 4)))
   }
   g.add(torus(14, 0.8, wood, { y: 76, rx: Math.PI / 2 }))
   g.add(cappedTube([[-14, 76, 0], [-12, 84, 0], [0, 88, 0], [12, 84, 0], [14, 76, 0]], 0.9, wood, { ...TUBE, caps: false }))
@@ -1961,7 +1965,9 @@ function shojiScreen(p: string[]) {
     for (const s of [-1, 1]) panel.add(rbox(3, PH, 2.6, frame, { x: s * (PW / 2 - 1.5), y: 2 }, 0.5))
     for (const y of [2, 20, PH - 1]) panel.add(rbox(PW - 6 + 0.4, 3, 2.4, frame, { y }, 0.5))
     panel.add(rbox(PW - 5.8, 15, 1.4, koshi, { y: 4.8 }, 0.3))
-    panel.add(holePanel(PW - 5.8, PH - 24 + 0.4, 1.2, frame, lattice(PW - 5.8, PH - 23.6, 3, 7, 1.2, 0.4), { y: 22.8 }))
+    // 组子格心四周留 1.2 的边（和格条同宽）：原来只留 0.4，比 holePanel 的倒角（内外各收 0.24）还窄，
+    // 洞的轮廓和板的外轮廓交叉，三角化把洞口全填死了，正面看不到和纸
+    panel.add(holePanel(PW - 5.8, PH - 24 + 0.4, 1.2, frame, gridHoles(PW - 5.8, PH - 23.6, 3, 7, 1.2, 1.2), { y: 22.8 }))
     const w = rbox(PW - 6, PH - 24, 0.4, paper, { y: 23, z: -0.9 }, 0.1)
     w.material = toon(paper, { emissive: 0.12 })
     panel.add(w)
@@ -1981,7 +1987,7 @@ function shojiScreen(p: string[]) {
 function okidoko(p: string[]) {
   const [board, frame, accent] = p
   const g = new THREE.Group()
-  g.add(rbox(116, 10, 41, shade(board, -0.1), { y: 0.4, z: -1 }, 0.8))
+  g.add(rbox(116, 10, 41, tone(board, -0.1), { y: 0.4, z: -1 }, 0.8))
   g.add(rbox(116, 2.6, 41, board, { y: 10, z: -1 }, 0.6))
   g.add(rbox(122, 13, 4, frame, { z: 20.5 }, 0.8))
   for (const s of [-1, 1]) g.add(rbox(3, 13, 41, frame, { x: s * 59.5, z: -2 }, 0.8))
@@ -1994,7 +2000,7 @@ function chigaidana(p: string[]) {
   const [wood, door, dark] = p
   const g = new THREE.Group()
   for (const s of [-1, 1]) g.add(rbox(2.4, 110, 36, wood, { x: s * 43.8 }, 0.6))
-  g.add(rbox(85.2, 109, 1.2, shade(wood, -0.06), { y: 0.5, z: -17.2 }, 0.3))
+  g.add(rbox(85.2, 109, 1.2, tone(wood, -0.06), { y: 0.5, z: -17.2 }, 0.3))
   g.add(rbox(85.2, 2, 34.4, wood, { y: 1.5, z: 0.4 }, 0.4))
   g.add(rbox(85.2, 2.4, 34.8, wood, { y: 30, z: 0.4 }, 0.5))
   // 地袋：两扇拉门，前轨那扇推到右边
@@ -2028,7 +2034,7 @@ function zafuSet(p: string[]) {
   g.add(puck(18, 14, zafu, { y: 6.6 }))
   for (let k = 0; k < 16; k++) {
     const a = (k / 16) * Math.PI * 2
-    g.add(noOutlineDeep(rbox(0.6, 9, 0.6, shade(zafu, -0.15), { x: Math.sin(a) * 17.9, y: 9, z: Math.cos(a) * 17.9, ry: a }, 0.2)))
+    g.add(noOutlineDeep(rbox(0.6, 9, 0.6, tone(zafu, -0.15), { x: Math.sin(a) * 17.9, y: 9, z: Math.cos(a) * 17.9, ry: a }, 0.2)))
   }
   g.add(ball(1.2, tassel, { y: 20.6 }))
   return g
@@ -2041,9 +2047,9 @@ function jpNightstand(p: string[]) {
   g.add(rbox(42, 4, 32, dark, {}, 0.6))
   for (const s of [-1, 1]) g.add(rbox(2, 40, 34, kiri, { x: s * 21, y: 4 }, 0.5))
   g.add(rbox(44, 2, 34, kiri, { y: 44 }, 0.6))
-  g.add(rbox(40.4, 39.6, 1, shade(kiri, -0.06), { y: 4.2, z: -16.4 }, 0.3))
+  g.add(rbox(40.4, 39.6, 1, tone(kiri, -0.06), { y: 4.2, z: -16.4 }, 0.3))
   g.add(rbox(40.4, 2, 33, kiri, { y: 28, z: 0.4 }, 0.4))
-  for (const y of [4.6, 16.4]) g.add(drawerOf([rbox(39, 11, 1, shade(kiri, 0.03), { y, z: 16.4 }, 0.4), rbox(6, 2.6, 0.4, kan, { y: y + 7.2, z: 17.1 }, 0.2), torus(2.2, 0.45, kan, { y: y + 5.2, z: 17.6 }, Math.PI * 2)], -19.5, 19.5, y, 11, 15.9, 30, shade(kiri, 0.05)))
+  for (const y of [4.6, 16.4]) g.add(drawerOf([rbox(39, 11, 1, tone(kiri, 0.03), { y, z: 16.4 }, 0.4), rbox(6, 2.6, 0.4, kan, { y: y + 7.2, z: 17.1 }, 0.2), torus(2.2, 0.45, kan, { y: y + 5.2, z: 17.6 }, Math.PI * 2)], -19.5, 19.5, y, 11, 15.9, 30, tone(kiri, 0.05)))
   return g
 }
 
@@ -2064,11 +2070,11 @@ function pipeBookshelf(p: string[]) {
       const x = sx * (w / 2 - 4)
       const z = sz * (d / 2 - 4)
       g.add(cyl(3, 3, 1, pipeC, { x, z }, 16))
-      g.add(cyl(1.6, 1.6, 176, pipeC, { x, z }, 12))
+      g.add(cyl(1.6, 1.6, 177, pipeC, { x, z }, 12)) // 管顶插进顶层板 1cm，不和顶层法兰的顶面共面
       for (const y of levels) g.add(cyl(2.4, 2.4, 2.6, fit, { x, y: y - 2.6, z }, 12))
       g.add(cyl(2.4, 2.4, 2, fit, { x, y: 179, z }, 12))
     }
-  levels.forEach((y, i) => g.add(rbox(w, 3, d, shade(wood, (i % 2) * -0.05), { y }, 0.6)))
+  levels.forEach((y, i) => g.add(rbox(w, 3, d, tone(wood, (i % 2) * -0.05), { y }, 0.6)))
   return g
 }
 function pipeSurfaces() {
@@ -2080,17 +2086,17 @@ function pipeSurfaces() {
 function locker3(p: string[]) {
   const [metal, plate, dark] = p
   const g = new THREE.Group()
-  const inner = shade(metal, 0.06)
+  const inner = tone(metal, 0.06)
   g.add(rbox(88, 6, 43, dark, {}, 0.6))
   g.add(hollow(90, 174, 45, metal, { y: 6 }, 1.2, inner))
   for (const s of [-1, 1]) g.add(rbox(1.2, 171.6, 43.8, metal, { x: s * 14.7, y: 7.2, z: 0.6 }, 0.2))
   for (let i = 0; i < 3; i++) g.add(rbox(28, 1.2, 43, inner, { x: (i - 1) * 29.4, y: 148.8, z: 0.6 }, 0.2))
   g.add(rbox(90, 3, 1, metal, { y: 6, z: 22 }, 0.3))
   g.add(rbox(90, 3, 1, metal, { y: 177, z: 22 }, 0.3))
-  g.add(rbox(91, 2, 46, shade(metal, -0.1), { y: 180 }, 0.6))
+  g.add(rbox(91, 2, 46, tone(metal, -0.1), { y: 180 }, 0.6))
   for (let i = 0; i < 3; i++) {
     const x = (i - 1) * 29.4
-    const parts: THREE.Object3D[] = [rbox(28.4, 168, 1, shade(metal, 0.04), { x, y: 9, z: 22.9 }, 0.4)]
+    const parts: THREE.Object3D[] = [rbox(28.4, 168, 1, tone(metal, 0.04), { x, y: 9, z: 22.9 }, 0.4)]
     for (const y0 of [150, 18]) for (let k = 0; k < 5; k++) parts.push(noOutlineDeep(rbox(16, 0.8, 0.4, dark, { x, y: y0 + k * 2.2, z: 23.55 }, 0.1)))
     parts.push(noOutlineDeep(rbox(6, 3.4, 0.4, plate, { x, y: 138, z: 23.55 }, 0.2)))
     parts.push(rbox(1.8, 12, 2, dark, { x: x + 10, y: 86, z: 24 }, 0.5))
@@ -2119,9 +2125,9 @@ function weldBench(p: string[]) {
     g.add(rbox(2, 4, 62, frame, { x: s * 72.5, y: 80 }, 0.4))
     g.add(rbox(144, 3, 2, frame, { y: 14, z: s * 32 }, 0.4))
   }
-  g.add(rbox(142, 1.4, 62, shade(frame, 0.15), { y: 16 }, 0.3))
+  g.add(rbox(142, 1.4, 62, tone(frame, 0.15), { y: 16 }, 0.3))
   g.add(rbox(150, 6, 70, top, { y: 84 }, 0.8))
-  for (let x = -60; x <= 60; x += 15) g.add(noOutlineDeep(rbox(0.4, 0.3, 69, shade(top, -0.1), { x, y: 90 }, 0.1)))
+  for (let x = -60; x <= 60; x += 15) g.add(noOutlineDeep(rbox(0.4, 0.3, 69, tone(top, -0.1), { x, y: 90 }, 0.1)))
   // 台钳
   g.add(rbox(16, 4, 12, vise, { x: 60, y: 90, z: -24 }, 0.8))
   g.add(rbox(16, 8, 3, vise, { x: 60, y: 94, z: -17 }, 0.6))
@@ -2194,8 +2200,8 @@ function toolCart(p: string[]) {
       g.add(cylX(3.6, 3, wheel, x, 3.6, z, 16))
     }
   g.add(hollow(64, 70, 42, body, { y: 9.4 }, 1.2))
-  for (const { h, y } of TOOLCART_DRAWERS) g.add(drawerOf([rbox(60, h, 1, shade(body, 0.05), { y, z: 21.3 }, 0.4), rbox(40, 1.4, 1.8, CHROME, { y: y + h - 3.4, z: 22.2 }, 0.5)], -30, 30, y, h, 20.8, 38, shade(body, 0.1)))
-  g.add(tray(66, 6, 44, 1.2, shade(body, -0.06), { y: 79.4 }, 0.6))
+  for (const { h, y } of TOOLCART_DRAWERS) g.add(drawerOf([rbox(60, h, 1, tone(body, 0.05), { y, z: 21.3 }, 0.4), rbox(40, 1.4, 1.8, CHROME, { y: y + h - 3.4, z: 22.2 }, 0.5)], -30, 30, y, h, 20.8, 38, tone(body, 0.1)))
+  g.add(tray(66, 6, 44, 1.2, tone(body, -0.06), { y: 79.4 }, 0.6))
   for (const s of [-1, 1]) {
     for (const z of [-14, 14]) g.add(cylX(0.9, 4, handle, s * 34, 72, z, 8))
     g.add(cylZ(1.2, 30, handle, s * 36, 72, 0, 12))
@@ -2216,7 +2222,7 @@ function concreteSide(p: string[]) {
   }
   g.add(rbox(38.2, 1.8, 38.2, wood, { y: 12.4 }, 0.4))
   g.add(rbox(45, 5, 45, concrete, { y: 50 }, 0.8))
-  for (const [x, z] of [[-12, -8], [6, 10], [14, -14], [-6, 15], [16, 4]] as P2[]) g.add(noOutlineDeep(cyl(0.5, 0.5, 0.2, shade(concrete, -0.2), { x, y: 55, z }, 8)))
+  for (const [x, z] of [[-12, -8], [6, 10], [14, -14], [-6, 15], [16, 4]] as P2[]) g.add(noOutlineDeep(cyl(0.5, 0.5, 0.2, tone(concrete, -0.2), { x, y: 55, z }, 8)))
   return g
 }
 
@@ -2239,7 +2245,7 @@ function factoryCart(p: string[]) {
     }
   }
   for (const s of [-1, 1]) g.add(rbox(120, 4, 1.2, iron, { y: 32, z: s * 29.6 }, 0.3))
-  for (let i = 0; i < 6; i++) g.add(rbox(118, 4.6, 10, shade(wood, ((i * 7) % 3) * 0.04 - 0.04), { y: 32.4, z: -25 + i * 10 }, 0.6))
+  for (let i = 0; i < 6; i++) g.add(rbox(118, 4.6, 10, tone(wood, ((i * 7) % 3) * 0.04 - 0.04), { y: 32.4, z: -25 + i * 10 }, 0.6))
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(8, 1, 8, iron, { x: sx * 55, y: 37, z: sz * 25.4 }, 0.3))
   return g
 }
@@ -2250,8 +2256,8 @@ function inNightstand(p: string[]) {
   const g = new THREE.Group()
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(2.4, 12.4, 2.4, IRON, { x: sx * 18.5, z: sz * 15.5 }, 0.3))
   g.add(hollow(40, 40, 34, metal, { y: 12 }, 1.2))
-  g.add(rbox(37.6, 1.2, 33, shade(metal, 0.06), { y: 30.6, z: 0.5 }, 0.2))
-  for (const y of [13.5, 32]) g.add(drawerOf([rbox(36, 17, 1, shade(metal, 0.05), { y, z: 17.3 }, 0.4), noOutlineDeep(rbox(8, 3, 0.4, label, { y: y + 12, z: 17.95 }, 0.2)), rbox(10, 1.6, 2, CHROME, { y: y + 7, z: 18.4 }, 0.5)], -18, 18, y, 17, 16.8, 30, shade(metal, 0.08)))
+  g.add(rbox(37.6, 1.2, 33, tone(metal, 0.06), { y: 30.6, z: 0.5 }, 0.2))
+  for (const y of [13.5, 32]) g.add(drawerOf([rbox(36, 17, 1, tone(metal, 0.05), { y, z: 17.3 }, 0.4), noOutlineDeep(rbox(8, 3, 0.4, label, { y: y + 12, z: 17.95 }, 0.2)), rbox(10, 1.6, 2, CHROME, { y: y + 7, z: 18.4 }, 0.5)], -18, 18, y, 17, 16.8, 30, tone(metal, 0.08)))
   g.add(rbox(42, 3, 36, wood, { y: 52 }, 0.8))
   return g
 }

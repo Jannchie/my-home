@@ -68,9 +68,11 @@ export function washerModel(style: WasherStyle, body: string, w: number, d: numb
       win.material = toon(C.glass, { transparent: 0.6 })
       win.userData.noOutline = true
       g.add(win)
-      g.add(rbox(w - 4, 8, 12, trim, { y: hb - 2, z: -d / 2 + 8 }, 2))
-      g.add(glow(8, 3, '#9fe3ff', { y: h - 1.9, z: -d / 2 + 9, rx: -Math.PI / 2 }, 0.8))
-      for (let i = 0; i < 3; i++) g.add(ball(1.2, dark, { x: 4 + i * 6, y: h - 2, z: -d / 2 + 10 }))
+      // 操作面板顶面在 h - 1.2，三颗按钮半埋在面板里、顶到 h。小屏平躺贴在面板上（浮出 0.4）：
+      // glow 的 at.y 是竖着时的底边，放平后绕中心转，中心在 at.y + 1.5——以前按「中心」填，屏悬在面板上方 1.3cm
+      g.add(rbox(w - 4, 8.8, 12, trim, { y: hb - 2, z: -d / 2 + 8 }, 2))
+      g.add(glow(8, 3, '#9fe3ff', { x: -6, y: h - 2.6, z: -d / 2 + 9, rx: -Math.PI / 2 }, 0.8))
+      for (let i = 0; i < 3; i++) g.add(ball(1.2, dark, { x: 4 + i * 6, y: h - 1.2, z: -d / 2 + 10 }))
       // 前面底部的通风格栅
       g.add(rbox(w - 16, 4, 0.8, trim, { y: 4, z: d / 2 }, 0.5))
       break
@@ -192,7 +194,8 @@ export function wineCoolerModel(body: string, w: number, d: number, h: number) {
   const bottles = ['#4a2a2e', '#2f4a32', '#5c1f2b', '#3a3a2a']
   for (let r = 0; r < rows; r++) {
     const y = 13 + r * ((h - 26) / rows)
-    g.add(rbox(w - 8, 0.6, d - 10, C.steel, { y: y - 0.8, z: -2 }, 0.2))
+    // 层架两端插进侧板、后端顶到背板（以前四周各空 1cm，一层层架子连同酒瓶悬在柜子中间）
+    g.add(rbox(w - 5, 0.6, d - 9, C.steel, { y: y - 0.8, z: -2.5 }, 0.2))
     for (let c = 0; c < cols; c++) {
       const x = -w / 2 + 6 + (c + 0.5) * ((w - 12) / cols)
       // 横放的圆柱：cyl 的 at.y 是「立着时的底面」，转 90° 后要减去半个长度才是瓶身中心高度
@@ -206,7 +209,8 @@ export function wineCoolerModel(body: string, w: number, d: number, h: number) {
   g.add(glass)
   // 竖把手 + 底部格栅 + 温度屏
   g.add(rbox(1.8, Math.min(40, h * 0.4), 2.4, C.steel, { x: w / 2 - 4, y: h * 0.35, z: front + 1.6 }, 0.8))
-  g.add(rbox(w - 10, 4, 0.8, frame, { y: 2, z: front + 0.4 }, 0.4))
+  // 底部格栅贴在底座正面（底座正面在 front - 1；以前格栅按门框的位置放，悬在底座前面 1cm）
+  g.add(rbox(w - 10, 4, 0.8, frame, { y: 2, z: front - 0.8 }, 0.4))
   g.add(glow(6, 2.4, '#9fe3ff', { x: -w / 2 + 8, y: h - 7, z: front + 0.9 }, 0.8))
   return g
 }

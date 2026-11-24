@@ -11,7 +11,7 @@ import { ball, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, rectPoly, rng, type AssetDef, type SurfaceDef } from '../kit'
 import { PI, cappedTube, hcyl, latheAt, lit, noOutlineDeep, rod3, type V3 } from '../geo'
 import { I, J, M, N, R, type Pal3 } from '../packkit'
-import { BRASS, BREAD, CARD, CHOCO, DISH_IN, EGG_Y, GLASS, KRAFT, NEGI, PG, RICE, STEEL, STEEL_D, TEA, TOFU, TUBE, WINE_R, arc, bottle, can, chopsticks, def, dish, dome, glassGhost } from './kitchen-food/common'
+import { BRASS, BREAD, CARD, CHOCO, DISH_IN, EGG_Y, GLASS, KRAFT, NEGI, PG, RICE, STEEL, STEEL_D, TEA, TOFU, TUBE, WINE_R, arc, bottle, can, chopsticks, def, dish, dome, glassGhost, wrapBand } from './kitchen-food/common'
 import { KNIFE_MOUNT, MW, RAIL_BAR_Y, RAIL_MOUNT, RAIL_R, RAIL_Z, WAGON_DX, bagStand, boardStand, canisters, counterRack, cupboard, cupboardCols, cupboardShelves, dishRack2, dishRackMini, gapWagon, glassContainers, hungTool, kitchenWagon, knifeMagnet, ladleBody, laidTool, panRack, railBase, railWithTools, rangeRack, riceCabinet, spiceCarousel, spiceShelf, tongsBody, turnerBody, utensilCrock, wagonTiers, whiskBody, wrapRack } from './kitchen-food/storage'
 import { beerMugs, bento2, chawanmushi, chopstickPair, coasterStack, cutleryTray, donburi, dripSet, glassTumblers, kyusuSet, mugTree, placemat, plateStack, soyDish, tokkuriSet, washokuSet, wineGlasses } from './kitchen-food/tableware'
 import { MISO_FX, NOODLE_FX, RICE_FX, UDON_FX, apples, baguettes, bananas, beerCrate, beerSixPack, breadBag, cannedFood, cupNoodle, curryRice, donutBox, eggCarton, grapes, isshobin, kitsuneUdon, mikanBox, milkCarton, misoSoup, onigiriTrio, onionPotatoBags, petBottles, riceBowl, riceSack, seasoningBottles, snackBags, sushiOke, toastPlate, vegBasket, waterCase, watermelonHalf, wineRack } from './kitchen-food/food'
@@ -553,9 +553,9 @@ export const KITCHEN_FOOD: AssetDef[] = [
   // ---------- 餐具 ----------
   def({ id: 'kf-washoku-set', name: '一人份和食器', category: 'tabletop', w: 25, d: 17.5, h: 9.2, pals: WASHOKU_PALS, build: washokuSet }),
   def({ id: 'kf-chopsticks', name: '筷子筷架', category: 'tabletop', w: 23, d: 5.6, h: 1.6, pals: CHOP_PALS, build: chopstickPair }),
-  def({ id: 'kf-plates-s', name: '盘子叠放', sizeLabel: '小 15cm', w: 15, d: 15, h: 7.4, pals: PLATE_PALS, build: (p) => plateStack(p, 7.5, 5) }),
-  def({ id: 'kf-plates-m', name: '盘子叠放', sizeLabel: '中 21cm', w: 21, d: 21, h: 6, pals: PLATE_PALS, build: (p) => plateStack(p, 10.5, 4) }),
-  def({ id: 'kf-plates-l', name: '盘子叠放', sizeLabel: '大 27cm', w: 27, d: 27, h: 5.5, pals: PLATE_PALS, build: (p) => plateStack(p, 13.5, 3) }),
+  def({ id: 'kf-plates-s', name: '盘子叠放', sizeLabel: '小 15cm', w: 15, d: 15, h: 5.6, pals: PLATE_PALS, build: (p) => plateStack(p, 7.5, 5) }),
+  def({ id: 'kf-plates-m', name: '盘子叠放', sizeLabel: '中 21cm', w: 21, d: 21, h: 4.8, pals: PLATE_PALS, build: (p) => plateStack(p, 10.5, 4) }),
+  def({ id: 'kf-plates-l', name: '盘子叠放', sizeLabel: '大 27cm', w: 27, d: 27, h: 4.6, pals: PLATE_PALS, build: (p) => plateStack(p, 13.5, 3) }),
   def({ id: 'kf-bento-closed', name: '两层便当盒', form: 'closed', category: 'tabletop', w: 18, d: 11.8, h: 11, pals: BENTO_PALS, build: (p) => bento2(p, false) }),
   def({ id: 'kf-bento-open', name: '两层便当盒', form: 'open', category: 'tabletop', w: 36, d: 13.8, h: 10.6, pals: BENTO_PALS, build: (p) => bento2(p, true) }),
   def({ id: 'kf-chawanmushi', name: '茶碗蒸杯', category: 'tabletop', w: 13, d: 13, h: 10, pals: CHAWAN_PALS, build: chawanmushi }),
@@ -595,7 +595,7 @@ export const KITCHEN_FOOD: AssetDef[] = [
   def({ id: 'kf-milk', name: '牛奶盒', sizeLabel: '1L', w: 7, d: 7, h: 23.4, pals: MILK_PALS, build: (p) => milkCarton(p, true) }),
   def({ id: 'kf-milk-s', name: '牛奶盒', sizeLabel: '500ml', w: 6, d: 6, h: 16.4, pals: MILK_PALS, build: (p) => milkCarton(p, false) }),
   def({ id: 'kf-cup-noodle', name: '杯面', form: 'closed', category: 'tabletop', w: 10, d: 11.4, h: 10.8, pals: NOODLE_PALS, build: (p) => cupNoodle(p, false) }),
-  def({ id: 'kf-cup-noodle-open', name: '杯面', form: 'open', formLabel: '泡着', category: 'tabletop', w: 21, d: 11.6, h: 18.8, off: [0, 0.97], fx: NOODLE_FX, pals: NOODLE_PALS, build: (p) => cupNoodle(p, true) }),
+  def({ id: 'kf-cup-noodle-open', name: '杯面', form: 'open', formLabel: '泡着', category: 'tabletop', w: 21, d: 11.6, h: 18.8, off: [0, 1.26], fx: NOODLE_FX, pals: NOODLE_PALS, build: (p) => cupNoodle(p, true) }),
   def({ id: 'kf-snacks', name: '零食袋', category: 'tabletop', w: 34.8, d: 11.8, h: 21.7, pals: SNACK_PALS, build: snackBags }),
   def({ id: 'kf-cans', name: '罐头叠放', w: 25.7, d: 8.4, h: 16.5, pals: CAN_PALS, build: cannedFood }),
   def({ id: 'kf-seasonings', name: '调味料瓶（酱油·味醂·油）', w: 24.4, d: 8.4, h: 28.2, pals: SEASON_PALS, build: seasoningBottles }),
@@ -630,7 +630,7 @@ const MILK = '#fbfaf4'
 /** 一罐饮料：罐身 + 标签色带 + 拉环；at.y 为底面 */
 function drinkCan(r: number, h: number, body: string, band: string, top = STEEL, at: { x?: number; y?: number; z?: number } = {}) {
   const g = can(r, h, body, top)
-  g.add(noOutlineDeep(cyl(r + 0.03, r + 0.03, h * 0.28, band, { y: h * 0.38 }, 20)))
+  g.add(wrapBand(r, h * 0.28, band, { y: h * 0.38 }))
   g.add(noOutlineDeep(rbox(1, 0.2, 1.6, STEEL_D, { y: h, z: r * 0.35 }, 0.1)))
   g.position.set(at.x ?? 0, at.y ?? 0, at.z ?? 0)
   return g
@@ -671,7 +671,7 @@ function glassBottle(p: string[], kind: 'soda' | 'milk' | 'juice' | 'beer' | 'sp
   if (kind === 'soda') {
     g.add(glassGhost(latheAt([[0, 0], [2.8, 0], [2.9, 0.4], [2.9, 9], [2.2, 12], [1.3, 16], [1.3, 18.6], [0, 18.6]], GLASS), '#cfe9d8', 0.45))
     g.add(noOutlineDeep(latheAt([[0, 0.4], [2.55, 0.4], [2.55, 9], [1.95, 12], [1.1, 15], [0, 15]], liq)))
-    g.add(noOutlineDeep(cyl(2.95, 2.95, 4, lab, { y: 3 }, 20)))
+    g.add(wrapBand(2.9, 4, lab, { y: 3 }, 32))
     g.add(cyl(1.5, 1.4, 0.9, cap, { y: 18.4 }, 16))
   } else if (kind === 'milk') {
     g.add(glassGhost(latheAt([[0, 0], [3.1, 0], [3.2, 0.4], [3.2, 7.5], [2.4, 10.5], [2.2, 12.6], [0, 12.6]], GLASS), GLASS, 0.4))
@@ -681,16 +681,16 @@ function glassBottle(p: string[], kind: 'soda' | 'milk' | 'juice' | 'beer' | 'sp
   } else if (kind === 'juice') {
     g.add(glassGhost(latheAt([[0, 0], [3.2, 0], [3.3, 0.4], [3.3, 11], [2.4, 13.5], [2, 15], [0, 15]], GLASS), GLASS, 0.4))
     g.add(noOutlineDeep(latheAt([[0, 0.4], [3, 0.4], [3, 10.8], [2.2, 13], [0, 13]], liq)))
-    g.add(noOutlineDeep(cyl(3.35, 3.35, 5, lab, { y: 3.5 }, 20)))
+    g.add(wrapBand(3.3, 5, lab, { y: 3.5 }, 32))
     g.add(cyl(2.2, 2.2, 1.4, cap, { y: 14.8 }, 20))
   } else if (kind === 'beer') {
     g.add(bottle(3.1, 21, 1.15, 12.5, '#6b3a16', {}))
-    g.add(noOutlineDeep(cyl(3.14, 3.14, 6.5, lab, { y: 3.5 }, 20)))
-    g.add(noOutlineDeep(rbox(2.4, 3, 0.3, cap, { y: 5.2, z: 3.12 }, 0.2)))
+    g.add(wrapBand(3.1, 6.5, lab, { y: 3.5 }))
+    g.add(noOutlineDeep(rbox(2.4, 3, 0.3, cap, { y: 5.2, z: 3.2 }, 0.2)))
     g.add(cyl(1.4, 1.3, 0.9, cap, { y: 20.6 }, 14))
   } else {
     g.add(bottle(3.9, 27, 1.3, 13, '#4f8a4a', {}))
-    g.add(noOutlineDeep(cyl(3.95, 3.95, 6, lab, { y: 5 }, 22)))
+    g.add(wrapBand(3.9, 6, lab, { y: 5 }))
     g.add(cyl(1.5, 1.5, 2, cap, { y: 26.6 }, 14))
   }
   return g
@@ -703,7 +703,7 @@ function petBottle(p: string[], big: boolean) {
   if (!big) {
     g.add(glassGhost(bottle(3.3, 19.6, 1.35, 13.5, PET, {}), PET, 0.4))
     g.add(noOutlineDeep(bottle(3.05, 16.5, 1.1, 13.3, liq, { y: 0.3 })))
-    g.add(noOutlineDeep(cyl(3.35, 3.35, 6, lab, { y: 5 }, 20)))
+    g.add(wrapBand(3.3, 6, lab, { y: 5 }))
     g.add(cyl(1.5, 1.5, 1.6, cap, { y: 19.4 }, 14))
     return g
   }
@@ -867,7 +867,7 @@ function pizzaBox(p: string[], open: boolean) {
   if (!open) {
     g.add(rbox(S, 4.4, S, box, {}, 0.4))
     g.add(noOutlineDeep(cyl(9, 9, 0.2, print, { y: 4.4 }, 28)))
-    g.add(noOutlineDeep(cyl(6, 6, 0.25, top, { y: 4.4 }, 28)))
+    g.add(noOutlineDeep(cyl(6, 6, 0.2, top, { y: 4.5 }, 28)))
     return g
   }
   g.add(tray(S, 4.2, S, 0.4, box, {}, 0.3))
@@ -1006,8 +1006,9 @@ function noodleCase(p: string[]) {
   for (let i = 0; i < 12; i++) {
     const x = -14.4 + (i % 4) * 9.6
     const z = -9.6 + Math.floor(i / 4) * 9.6
-    g.add(cup(4.6, 3.5, 10.5, 0.3, C.white, { x, y: 0.5, z }))
-    g.add(noOutlineDeep(cup(4.62, 4.1, 3.4, 0.05, band, { x, y: 5.6, z })))
+    // 杯口盖着盖子，杯里看不见：实心圆台 + 一圈开口色带就够了（原来每杯两个空心杯，整箱两万面）
+    g.add(cyl(4.6, 3.5, 10.5, C.white, { x, y: 0.5, z }, 32))
+    g.add(noOutlineDeep(latheAt([[4.13, 0], [4.49, 3.4]], band, { x, y: 5.6, z })))
     g.add(cyl(4.7, 4.7, 0.3, lidC, { x, y: 11, z }, 24))
   }
   return g
@@ -1038,21 +1039,23 @@ function cookieTin(p: string[], open: boolean) {
   const [tin, band, acc] = p
   const g = new THREE.Group()
   g.add(cup(10, 10, 6.5, 0.3, tin))
-  g.add(noOutlineDeep(cup(10.03, 10.03, 1.2, 0.05, band, { y: 2.6 })))
+  // 色带是一圈开口的薄环：原来用的薄壁杯带着一片底，打开时像假底一样把盒里的曲奇全盖住了
+  g.add(noOutlineDeep(latheAt([[10.1, 0], [10.1, 1.2]], band, { y: 2.6 })))
   if (!open) {
     g.add(puck(10.3, 2, tin, { y: 5.6 }))
     g.add(noOutlineDeep(cyl(6, 6, 0.2, band, { y: 7.6 }, 28)))
-    g.add(noOutlineDeep(cyl(3, 3, 0.25, acc, { y: 7.6 }, 20)))
+    g.add(noOutlineDeep(cyl(3, 3, 0.2, acc, { y: 7.7 }, 20)))
     return g
   }
   const pos: [number, number][] = [[0, 0], ...Array.from({ length: 6 }, (_, i): [number, number] => [Math.cos((i / 6) * PI * 2) * 5.6, Math.sin((i / 6) * PI * 2) * 5.6])]
   pos.forEach(([x, z], i) => {
-    g.add(cup(2.5, 2.1, 1.8, 0.1, '#f4ece0', { x, y: 0.3, z }))
+    g.add(latheAt([[0, 0], [2.1, 0], [2.5, 1.8], [2.35, 1.8], [2, 0.15], [0, 0.15]], '#f4ece0', { x, y: 0.3, z }, 16))
     g.add(puck(2.1, 1.2, i % 3 === 0 ? CHOCO : i % 3 === 1 ? '#e8b468' : '#d99a55', { x, y: 1.4, z }))
   })
   const l = G(puck(10.3, 2, tin), noOutlineDeep(cyl(6, 6, 0.2, band, { y: 2 }, 28)))
-  l.rotation.x = PI / 2 - 0.15
-  l.position.set(0, 10.3, -11.4)
+  // 盖子立在盒后：下沿着地、正面贴着盒子后壁（原来的位置盖子下半截插进了盒壁）
+  l.rotation.x = PI / 2 - 0.1
+  l.position.set(0, 10.25, -13.1)
   g.add(l)
   return g
 }
@@ -1081,8 +1084,8 @@ function chips(p: string[], kind: 'bag' | 'tube') {
   const g = new THREE.Group()
   if (kind === 'tube') {
     g.add(cyl(3.8, 3.8, 23, body, {}, 24))
-    g.add(noOutlineDeep(cyl(3.83, 3.83, 7, band, { y: 8 }, 24)))
-    g.add(noOutlineDeep(ball(1.8, acc, { y: 11.5, z: 3.7 }, [1, 1, 0.12])))
+    g.add(wrapBand(3.8, 7, band, { y: 8 }, 24))
+    g.add(noOutlineDeep(ball(1.8, acc, { y: 11.5, z: 3.9 }, [1, 1, 0.12])))
     g.add(puck(4, 1.4, '#f4f4f4', { y: 22.4 }))
     return g
   }
@@ -1113,8 +1116,9 @@ function pudding3(p: string[]) {
   for (let i = 0; i < 3; i++) {
     const x = (i - 1) * 7.4
     g.add(glassGhost(cup(3.6, 2.6, 6.4, 0.25, cupC, { x }), cupC, 0.45))
-    g.add(noOutlineDeep(cyl(3.3, 2.4, 5.4, '#f6d675', { x, y: 0.3 }, 20)))
-    g.add(noOutlineDeep(cyl(2.45, 2.4, 0.8, caramel, { x, y: 0.3 }, 20)))
+    // 焦糖垫在杯底、布丁叠在上面（原来两者同底同半径，焦糖被布丁吞掉看不见）
+    g.add(noOutlineDeep(cyl(2.5, 2.4, 0.8, caramel, { x, y: 0.3 }, 20)))
+    g.add(noOutlineDeep(cyl(3.3, 2.5, 4.6, '#f6d675', { x, y: 1.1 }, 20)))
   }
   g.add(rbox(22.4, 0.3, 7.6, lid, { y: 6.4 }, 0.1))
   return g
@@ -1203,7 +1207,7 @@ function vegBag(p: string[]) {
   g.add(ball(7, '#a6d47a', { x: 7, y: 24, z: 0 }, [1, 0.9, 0.85]))
   g.add(ball(6.5, '#cbe8a0', { x: 7, y: 24.8, z: 0.4 }, [1, 0.85, 0.8]))
   for (let i = 0; i < 3; i++) {
-    g.add(rod3([-9 + i * 1.8, 6, -2 + i], [-11 + i * 1.8, 34, -3 + i], 1, '#f4f4e6', 8))
+    g.add(rod3([-8.6 + i * 1.8, 0.4, -1.8 + i], [-11 + i * 1.8, 34, -3 + i], 1, '#f4f4e6', 8))
     g.add(rod3([-11 + i * 1.8, 34, -3 + i], [-12.5 + i * 2.2, 50, -3.5 + i], 0.85, NEGI, 8))
   }
   for (let i = 0; i < 2; i++) {

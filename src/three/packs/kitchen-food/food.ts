@@ -5,7 +5,7 @@ import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../../toon'
 import { G, rng, type Fx } from '../../kit'
 import { PI, cappedTube, hcyl, noOutlineDeep, rod3, type V3 } from '../../geo'
-import { BREAD, BROTH, CHOCO, CRUST, CUCUMBER, CURRY, DAIKON, DISH_IN, GLASS, HAKUSAI, LEAF, MISO, NEGI, NOODLE, NORI, ONION, PG, POTATO, RICE, SALMON, SOY, STEEL, TAMAGO, TEA, TOFU, TUBE, TUNA, arc, bottle, bowl, bowlIn, can, chopsticks, dish, glassGhost, hashioki, liquid, riceMound } from './common'
+import { BREAD, BROTH, CHOCO, CRUST, CUCUMBER, CURRY, DAIKON, DISH_IN, GLASS, HAKUSAI, LEAF, MISO, NEGI, NOODLE, NORI, ONION, PG, POTATO, RICE, SALMON, SOY, STEEL, TAMAGO, TEA, TOFU, TUBE, TUNA, arc, bottle, bowl, bowlIn, can, chopsticks, dish, glassGhost, hashioki, liquid, riceMound, wrapBand } from './common'
 
 // ======================================================================
 // 食物 / 饮料
@@ -59,10 +59,10 @@ export function kitsuneUdon(p: string[]) {
   for (let i = 0; i < 7; i++) g.add(noOutlineDeep(cappedTube(arc([0, top - 0.1, 0], 2 + i * 0.75, 0.3 * i, 0.3 * i + 2.2, 6, 'xz'), 0.4, '#fbf3df', { ...TUBE, seg: 16 })))
   // 油豆腐皮
   g.add(rbox(7, 1, 5, '#d99a45', { x: -1.5, y: top - 0.4, z: -1.5, ry: 0.3 }, 0.5))
-  g.add(rbox(6, 1, 4.5, '#cf8d3c', { x: 2.5, y: top - 0.3, z: 1.5, ry: -0.4 }, 0.5))
+  g.add(rbox(6, 1, 4.5, '#cf8d3c', { x: 2.5, y: top - 0.25, z: 1.5, ry: -0.4 }, 0.5))
   // 鱼板 + 葱
   g.add(cyl(1.8, 1.8, 0.6, '#ffffff', { x: 3.5, y: top - 0.2, z: -3.5 }, 16))
-  g.add(noOutlineDeep(cyl(1.2, 1.2, 0.62, '#ff9db0', { x: 3.5, y: top - 0.2, z: -3.5 }, 16)))
+  g.add(noOutlineDeep(cyl(1.2, 1.2, 0.6, '#ff9db0', { x: 3.5, y: top - 0.1, z: -3.5 }, 16))) // 粉色花纹比白底高 0.1，顶面不共面
   for (let i = 0; i < 6; i++) g.add(noOutlineDeep(cyl(0.35, 0.35, 0.3, NEGI, { x: -4 + i * 0.8, y: top + 0.5, z: 3.5 - (i % 2) }, 8)))
   return g
 }
@@ -207,7 +207,7 @@ export function baguettes(p: string[]) {
   const [bag, stripe] = p
   const g = new THREE.Group()
   g.add(tray(14, 30, 8, 0.25, bag, {}, 0.2))
-  for (const s of [-1, 1]) g.add(noOutlineDeep(rbox(14.1, 1.4, 8.1, stripe, { y: 8 + s * 3 }, 0.1)))
+  for (const s of [-1, 1]) g.add(noOutlineDeep(rbox(14.6, 1.4, 8.6, stripe, { y: 8 + s * 3 }, 0.1))) // 每边凸出纸袋 0.3
   for (const [x, ry, h] of [
     [-3, 0.05, 62],
     [3, -0.06, 56],
@@ -227,10 +227,10 @@ export function donutBox(p: string[]) {
   const [box, lid, acc] = p
   const g = new THREE.Group()
   g.add(tray(30, 6, 20, 0.4, box, {}, 0.3))
-  // 盒盖竖着打开在后面
+  // 盒盖竖着打开在后面：下沿接在后壁顶上，往后仰一点（原来离后壁 1cm 悬着、还往盒里倒）
   const l = rbox(30, 0.4, 20, lid, {}, 0.2)
-  l.position.set(0, 6 + 10 - 0.4, -10 - 0.2)
-  l.rotation.x = -PI / 2 + 0.08
+  l.position.set(0, 5.9 + Math.cos(0.1) * 10, -9.8 - Math.sin(0.1) * 10)
+  l.rotation.x = -PI / 2 - 0.1
   g.add(l)
   const glaze = ['#f7a8c4', CHOCO, '#fff3e0', '#f2c94c', acc, '#e3b87a']
   for (let i = 0; i < 6; i++) {
@@ -329,12 +329,12 @@ export function watermelonHalf(p: string[]) {
   }
   const top = DISH_IN + R0 * 0.82
   g.add(cyl(R0, R0, 0.4, '#f4f7dc', { y: top }, 32))
-  g.add(noOutlineDeep(cyl(R0 - 1, R0 - 1, 0.42, flesh, { y: top + 0.02 }, 32)))
+  g.add(noOutlineDeep(cyl(R0 - 1, R0 - 1, 0.4, flesh, { y: top + 0.1 }, 32))) // 果肉比白瓤高 0.1（原来只高 0.02，会闪）
   const r = rng(9)
   for (let i = 0; i < 22; i++) {
     const a = r() * PI * 2
     const dd = 2 + Math.sqrt(r()) * 7
-    g.add(noOutlineDeep(ball(0.35, '#2b2020', { x: Math.cos(a) * dd, y: top + 0.42, z: Math.sin(a) * dd }, [1, 0.3, 1.5])))
+    g.add(noOutlineDeep(ball(0.35, '#2b2020', { x: Math.cos(a) * dd, y: top + 0.5, z: Math.sin(a) * dd }, [1, 0.3, 1.5])))
   }
   return g
 }
@@ -407,7 +407,8 @@ export function onionPotatoBags(p: string[]) {
     const r = rng(n)
     for (let i = 0; i < n; i++) {
       const xx = x + ((i % 3) - 1) * 4.2 + (r() - 0.5)
-      const zz = (Math.floor(i / 3) % 2) * 4 - 2
+      // 顶上一排收在正中：袋口的结要压在它们上面
+      const zz = i < 6 ? (Math.floor(i / 3) % 2) * 4 - 2 : 0
       const yy = 3 + Math.floor(i / 6) * 5
       g.add(ball(3 * sc, item, { x: xx, y: yy, z: zz }, item === POTATO ? [1.25, 0.85, 0.95] : [1, 0.95, 1]))
       if (item === ONION) g.add(cyl(0.2, 0.6, 1.4, '#a8683a', { x: xx, y: yy + 2.6 * sc, z: zz }, 6))
@@ -418,8 +419,9 @@ export function onionPotatoBags(p: string[]) {
       t.scale.y = 0.65
       g.add(t)
     }
-    g.add(cyl(0.6, 1.2, 3, color, { x, y: 11.5 }, 8))
-    g.add(rbox(4, 2.4, 0.4, tag, { x, y: 10.5, z: 4.2 }, 0.2))
+    // 袋口的结压在顶上一排上，标签系在结上（原来结和标签都悬在半空）
+    g.add(cyl(0.6, 1.2, 3, color, { x, y: 10 }, 8))
+    g.add(rbox(4, 2.4, 0.4, tag, { x, y: 10.2, z: 1 }, 0.2))
   }
   bagAt(-8, net1, ONION, 1, 9)
   bagAt(8, net2, POTATO, 0.95, 9)
@@ -484,9 +486,10 @@ export function cupNoodle(p: string[], open: boolean) {
   g.add(noOutlineDeep(rbox(1.4, 0.3, 1.4, '#ffd75e', { x: 1.5, y: 8.9, z: -1 }, 0.1)))
   g.add(noOutlineDeep(rbox(1.2, 0.3, 1.2, '#e86a4a', { x: -1.8, y: 8.9, z: 0.8 }, 0.1)))
   // 掀开一半的盖子（翻起靠在后面）
+  // 下沿还粘在杯口后沿上，往后仰（原来整片悬在杯子后面）
   const l = cyl(5, 5, 0.3, lid, {}, 28)
-  l.position.set(0, 10.5 + 3.6, -4.8)
-  l.rotation.x = -1.2
+  l.position.set(0, 10.4 + Math.cos(0.25) * 5, -4.7 - Math.sin(0.25) * 5)
+  l.rotation.x = -PI / 2 - 0.25
   g.add(l)
   // 筷子横搭
   g.add(chopsticks(21, '#e7c08a', 0, 10.4, 1.2, 0.8))
@@ -532,7 +535,7 @@ export function cannedFood(p: string[]) {
     for (let i = 0; i < n; i++) {
       const x = (i - (n - 1) / 2) * (r * 2 + 0.2)
       g.add(can(r, h, cols[k++ % 3], STEEL, { x, y }))
-      g.add(noOutlineDeep(cyl(r + 0.03, r + 0.03, h * 0.5, '#ffffff', { x, y: y + h * 0.25 }, 20)))
+      g.add(wrapBand(r, h * 0.5, '#ffffff', { x, y: y + h * 0.25 }))
     }
   return g
 }
@@ -550,7 +553,7 @@ export function seasoningBottles(p: string[]) {
     g.add(glassGhost(bottle(r, h, 1.3, h * 0.6, GLASS, { x }), GLASS, 0.35))
     g.add(noOutlineDeep(cyl(r - 0.35, r - 0.35, h * 0.55, liq, { x, y: 0.4 }, 18)))
     g.add(cyl(1.5, 1.5, 2.2, cap, { x, y: h }, 14))
-    g.add(noOutlineDeep(cyl(r + 0.05, r + 0.05, h * 0.25, lab, { x, y: h * 0.18 }, 18)))
+    g.add(wrapBand(r, h * 0.25, lab, { x, y: h * 0.18 }))
   }
   return g
 }
@@ -613,7 +616,7 @@ export function beerSixPack(p: string[]) {
     const x = -6.8 + (i % 3) * 6.8
     const z = i < 3 ? -3.4 : 3.4
     g.add(can(3.3, 12.2, canC, top, { x, z }))
-    g.add(noOutlineDeep(cyl(3.33, 3.33, 3, band, { x, y: 4, z }, 20)))
+    g.add(wrapBand(3.3, 3, band, { x, y: 4, z }))
   }
   // 纸提手
   g.add(rbox(21, 0.4, 14, '#c99a52', { y: 12.3 }, 0.1))
@@ -645,8 +648,8 @@ export function isshobin(p: string[]) {
   const [glass, lab, cap] = p
   const g = new THREE.Group()
   g.add(bottle(5, 39, 1.5, 24, glass, {}))
-  g.add(noOutlineDeep(cyl(5.04, 5.04, 12, lab, { y: 8 }, 24)))
-  g.add(noOutlineDeep(rbox(3, 9, 0.3, '#d14b3c', { y: 9.5, z: 5.05 }, 0.2)))
+  g.add(wrapBand(5, 12, lab, { y: 8 }))
+  g.add(noOutlineDeep(rbox(3, 9, 0.3, '#d14b3c', { y: 9.5, z: 5.1 }, 0.2)))
   g.add(cyl(1.8, 1.8, 3, cap, { y: 38 }, 14))
   return g
 }
@@ -672,7 +675,7 @@ export function wineRack(p: string[]) {
     const b = new THREE.Group()
     b.add(bottle(3.7, 30, 1.25, 20, glassC, {}))
     b.add(cyl(1.32, 1.32, 4, foil, { y: 26.5 }, 12))
-    b.add(noOutlineDeep(cyl(3.74, 3.74, 6, '#f4ecd8', { y: 6 }, 18)))
+    b.add(wrapBand(3.7, 6, '#f4ecd8', { y: 6 }))
     b.rotation.x = PI / 2
     b.position.set(x, y + 3.6 + 3.7 + 0.3, -15)
     g.add(b)
@@ -686,7 +689,7 @@ export function petBottles(p: string[]) {
   const g = new THREE.Group()
   g.add(glassGhost(bottle(5.2, 31, 1.4, 24, '#e8f6ff', {}), '#e8f6ff', 0.4))
   g.add(noOutlineDeep(cyl(4.8, 4.8, 22, liq, { y: 0.4 }, 20)))
-  g.add(noOutlineDeep(cyl(5.24, 5.24, 7, lab, { y: 10 }, 20)))
+  g.add(wrapBand(5.2, 7, lab, { y: 10 }))
   g.add(cyl(1.6, 1.6, 2, cap, { y: 31 }, 12))
   for (const [x, z, c] of [
     [9.5, -2, TEA],
@@ -694,7 +697,7 @@ export function petBottles(p: string[]) {
   ] as const) {
     g.add(glassGhost(bottle(3.3, 20, 1.3, 14, '#e8f6ff', { x, z }), '#e8f6ff', 0.4))
     g.add(noOutlineDeep(cyl(3, 3, 14, c, { x, y: 0.4, z }, 16)))
-    g.add(noOutlineDeep(cyl(3.34, 3.34, 5, lab, { x, y: 7, z }, 16)))
+    g.add(wrapBand(3.3, 5, lab, { x, y: 7, z }))
     g.add(cyl(1.5, 1.5, 1.6, cap, { x, y: 20, z }, 12))
   }
   return g

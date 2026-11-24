@@ -205,6 +205,17 @@ export function can(r: number, h: number, color: string, top = STEEL, at: { x?: 
   return g
 }
 
+/**
+ * 绕在圆柱 / 瓶身外面的一圈标签纸：r 为瓶身半径，at.y 为标签下沿。
+ * toon 的体素尺寸会量化到 0.1cm，半径只加零点零几会被取整回瓶身半径，和瓶身共面闪烁；
+ * 这里按量化后的半径再外扩 0.1。seg 要和瓶身一致（can / bottle 是 20，cyl 默认 24，车削默认 32），
+ * 段数不同的话瓶身的棱会一条条从标签里戳出来。
+ */
+export function wrapBand(r: number, h: number, color: string, at: { x?: number; y?: number; z?: number } = {}, seg = 20) {
+  const rr = Math.round(r * 10) / 10 + 0.1
+  return noOutlineDeep(cyl(rr, rr, h, color, at, seg))
+}
+
 /** 挂起：把本体移到挂点下方（顶面 topY），本体背面不小于 z = 0.3 */
 export function hangAt<T extends THREE.Object3D>(o: T, topY: number, xOff = 0): T {
   const b = box3(o)

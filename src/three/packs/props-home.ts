@@ -218,13 +218,16 @@ function vaseFlowers(p: string[]) {
   const [vase, petal, center] = p
   const g = new THREE.Group()
   g.add(cup(2.6, 4.6, 16, 0.6, vase))
+  // 瓶里的水（到 y=10）：花茎插在水里
+  g.add(cyl(2.7, 3.9, 9.4, '#cfe8f0', { y: 0.6 }, 16))
   const flowers: [number, number, number][] = [
     [-3.5, 27, 0.5],
     [0.5, 30, -1],
     [3.8, 26, 1.2],
   ]
   for (const [x, y, z] of flowers) {
-    g.add(rod(0, 12, x, y, 0.25, C.leafD, z))
+    // 花茎下端插进瓶里的水（以前从瓶腔半空 y=12 起，整束花悬着；直接拉到瓶底会斜穿瓶颈）
+    g.add(rod(0, 9, x, y, 0.25, C.leafD, z))
     g.add(ball(1.1, center, { x, y, z }))
     for (let i = 0; i < 5; i++) {
       const a = (i / 5) * PI * 2 + x
@@ -668,7 +671,8 @@ function espresso(p: string[]) {
   g.add(rbox(18, 0.6, 12, dark, { y: 4.1, z: 6 }, 0.2))
   g.add(cyl(3.2, 3.2, 3, M.silver, { y: 25, z: 2 }))
   g.add(cyl(3.4, 3, 2.4, dark, { y: 22.6, z: 2 }))
-  g.add(rbox(2, 1.6, 10, accent, { y: 23, z: 11 }, 0.7))
+  // 手柄接到冲煮头的粉碗上（以前短 0.6cm，悬在粉碗前面）
+  g.add(rbox(2, 1.6, 11, accent, { y: 23, z: 10.5 }, 0.7))
   g.add(cup(2.6, 2.2, 5, 0.4, M.white, { y: 4.7, z: 2 }))
   g.add(liquid(2.1, 7.5, '#5a3624', 0, 2))
   g.add(cyl(0.4, 0.4, 14, M.silver, { x: 11, y: 9, z: 0 }, 8))

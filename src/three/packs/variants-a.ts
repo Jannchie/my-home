@@ -8,7 +8,7 @@
 //   - 晾衣架横杆上都有挂钩层（surfaces kind 'hook'）：y = 杆顶 + 0.5，shape 在杆的 z 往前 -0.5 ~ +2.5，h = 杆下净空。
 
 import * as THREE from 'three'
-import { ball, capsule, cup, cyl, face, leaf, puck, rbox, shade, toon, torus, tray } from '../toon'
+import { ball, cached, capsule, cup, cyl, face, leaf, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, SWING_OPEN, ellipsePoly, movable, paintPanel, rectPoly, rng, shell, type AssetCategory, type AssetDef, type DoorMotion, type SurfaceDef } from '../kit'
 import { PI, cylXLegacy, cylZLegacy, fitInPlace, latheAt, lit, noOutlineDeep, rod3, taperRod3, type V3 } from '../geo'
 import { I, J, M, N, R, define, type Build, type Dims, type Pal } from '../packkit'
@@ -195,7 +195,8 @@ function airBlack(p: string[]) {
   const g = new THREE.Group()
   g.add(rbox(w, 22, 21, main, { z: -1 }, 1.2))
   // 斜切的上沿：一块向后倾的板压在机身顶上
-  g.add(rbox(w, 8, 16, shade(main, 0.04), { y: 19, z: -3.2, rx: -0.28 }, 1))
+  // 比机身每边窄 0.4：两端的侧面不和机身侧面共面
+  g.add(rbox(w - 0.8, 8, 16, shade(main, 0.04), { y: 19, z: -3.2, rx: -0.28 }, 1))
   g.add(rbox(w - 4, 0.9, 1, trim, { y: 15.6, z: 9.7 }, 0.3))
   g.add(lit(rbox(30, 0.5, 0.6, light, { y: 12.2, z: 9.6 }, 0.2), light, 0.9))
   g.add(noOutlineDeep(rbox(w - 12, 3.6, 1, '#141518', { y: 2.4, z: 9.2 }, 0.4)))
@@ -242,7 +243,8 @@ function standTelescopic(p: string[]) {
     for (const sz of [-1, 1]) g.add(puck(2.6, 2.6, DARK, { x, z: sz * (d / 2 - 2.6) }))
     // 立柱：下粗上细（伸缩管），中间一个锁扣
     g.add(cyl(1.6, 1.6, 90, pole, { x, y: 4.2 }, 12))
-    g.add(cyl(1.25, 1.25, top - 92, pole, { x, y: 92 }, 12))
+    // 细管从粗管里面起（粗管到 94.2）：底面不和锁扣底面共面
+    g.add(cyl(1.25, 1.25, top - 93, pole, { x, y: 93 }, 12))
     g.add(cyl(2.2, 2.2, 4, joint, { x, y: 92 }, 12))
     g.add(ball(2, joint, { x, y: top + 1 }))
     // 下层横杆的伸出臂
@@ -546,7 +548,8 @@ function brushSlim(p: string[]) {
   const [main, handleC, acc] = p
   const g = new THREE.Group()
   g.add(tray(8.6, 14, 7.4, 0.5, main, {}, 0.4))
-  g.add(rbox(8.6, 0.8, 7.4, acc, { y: 0 }, 0.3))
+  // 底圈比刷架每边大 0.2：侧面不和刷架的壁共面
+  g.add(rbox(9, 0.8, 7.8, acc, { y: 0 }, 0.3))
   g.add(rbox(4.6, 6, 1.4, handleC, { y: 1.2 }, 0.6))
   g.add(rbox(1.2, 30, 0.9, handleC, { y: 6.8 }, 0.4))
   g.add(rbox(7.2, 3, 6, main, { y: 13.6 }, 0.8))
@@ -685,7 +688,8 @@ function nsTansu(p: string[]) {
   const bz = -0.7
   const bd = d - 1.4
   for (const s of [-1, 1]) g.add(rbox(1.4, h - 5, bd, main, { x: s * (w / 2 - 0.7), y: 5, z: bz }, 0.4))
-  g.add(rbox(w - 2.8, h - 5, 1.2, shade(main, -0.05), { y: 5, z: bz - bd / 2 + 0.6 }, 0.3))
+  // 背板夹在顶板和底板之间（两块板都通到背面，背板再盖过去就和它们的背面 / 顶底面共面）
+  g.add(rbox(w - 2.8, h - 7.2, 1.2, shade(main, -0.05), { y: 6, z: bz - bd / 2 + 0.6 }, 0.3))
   g.add(rbox(w - 2.8, 1.4, bd, main, { y: h - 1.4, z: bz }, 0.3))
   g.add(rbox(w - 2.8, 1.2, bd, main, { y: 5, z: bz }, 0.3))
   for (const [y, hh] of NS_TANSU_ROWS) {
@@ -1091,15 +1095,17 @@ function vasePampas(p: string[]) {
     [1, 42, -1.4],
     [5.4, 37, 1.6],
   ]
+  // 茎秆插到罐底（罐壁不透明看不见，但原来从 y = 4 起头，整束花悬在罐子里没着落）
+  const y0 = 0.5
   for (const t of tips) {
-    g.add(rod3([t[0] * 0.15, 4, t[2] * 0.15], [t[0] * 0.8, t[1] - 8, t[2] * 0.8], 0.25, stem, 5))
+    g.add(rod3([t[0] * 0.15, y0, t[2] * 0.15], [t[0] * 0.8, t[1] - 8, t[2] * 0.8], 0.25, stem, 5))
     const pl = ball(2, plume, { x: t[0] * 0.92, y: t[1] - 4, z: t[2] * 0.92 }, [0.85, 2.4, 0.85])
     pl.rotation.z = -t[0] * 0.04
     g.add(pl)
   }
   // 干枝：细枝 + 小圆果
-  g.add(rod3([0, 4, 0], [-2.6, 34, -2.4], 0.2, stem, 5))
-  for (const y of [24, 28, 31]) g.add(ball(0.6, shade(stem, -0.1), { x: -2.6 * ((y - 4) / 30) - 0.6, y, z: -2.4 * ((y - 4) / 30) }))
+  g.add(rod3([0, y0, 0], [-2.6, 34, -2.4], 0.2, stem, 5))
+  for (const y of [24, 28, 31]) g.add(ball(0.6, shade(stem, -0.1), { x: -2.6 * ((y - y0) / (34 - y0)) - 0.6, y, z: -2.4 * ((y - y0) / (34 - y0)) }))
   return g
 }
 
@@ -1201,7 +1207,13 @@ function petalRing(count: number, r0: number, len: number, wid: number, cup: num
     const tilt = new THREE.Group()
     tilt.position.x = r0
     tilt.rotation.y = -cup
-    const pet = ball(len / 2, color, { x: len / 2 }, [1, wid / len, 0.18])
+    // 花瓣很小又压得很扁，用 8×6 段的球（80 面）就够；通用 ball 是 12×8（168 面），两朵花 57 片花瓣要多出五千面
+    const r = Math.round(len * 5) / 10
+    const pet = new THREE.Mesh(cached(`va-petal${r}`, () => new THREE.SphereGeometry(r, 8, 6)), toon(color))
+    pet.position.x = len / 2
+    pet.scale.set(1, wid / len, 0.18)
+    pet.castShadow = true
+    pet.receiveShadow = true
     tilt.add(pet)
     arm.add(tilt)
     g.add(arm)
@@ -1295,6 +1307,8 @@ function vaseRibbon(p: string[]) {
   const yellowAt: V3 = [3.4, 29.2, 1.8]
   g.add(rod3(mouth, [pinkAt[0] * 0.9, pinkAt[1] - 1, pinkAt[2] - 0.8], 0.2, STEM, 6))
   g.add(rod3(mouth, [yellowAt[0] * 0.9, yellowAt[1] - 1, yellowAt[2] - 0.8], 0.2, STEM, 6))
+  // 瓶里那截花茎一直插到瓶底：原来花茎只从瓶口起头，整束花悬在瓶口中间没着落
+  g.add(rod3([0, 0.3, 0], mouth, 0.3, STEM, 6))
 
   const gerbera = new THREE.Group()
   gerbera.add(petalRing(16, 1.6, 4.4, 1.0, 0.18, pink))
@@ -1351,6 +1365,10 @@ function lbRattan(p: string[]) {
   g.add(rim)
   // 把手：两侧口沿下方的半圆环
   for (const s of [-1, 1]) g.add(torus(4, 0.9, band, { x: s * 21.6, y: 33, ry: PI / 2 }, PI))
+  // 篮里塞满的衣物：从篮底堆到口沿下（离内壁留 0.4 免得闪烁），顶上的几团才有处可靠，不会悬在篮子半空
+  const pile = cyl(19.4, 16.7, 28.6, shade(cloth, -0.08), { y: 1.4 }, 20)
+  pile.scale.set(1, 1, sz)
+  g.add(pile)
   clothes(g, 31, 14, [cloth, C.white, N.blue, C.sakura], 3)
   return g
 }
@@ -1464,7 +1482,8 @@ function hamperWickerClosed(p: string[]) {
   const edge = torus(HW.r + 0.5, 0.7, band, { y: HW.h + 0.4, rx: PI / 2 })
   edge.scale.set(1, HW.sz, 1)
   g.add(edge)
-  g.add(ball(1.8, band, { y: HW.h + 2.9 }, [1.6, 0.8, 1]))
+  // 盖钮坐进盖顶（puck 以中心定位：盖顶在 HW.h + 1.0）；原来离盖顶还差 0.46cm
+  g.add(ball(1.8, band, { y: HW.h + 2.1 }, [1.6, 0.8, 1]))
   return g
 }
 function hamperWickerOpen(p: string[]) {
@@ -1721,7 +1740,8 @@ function rackCabinet(p: string[]) {
   const x = w / 2 - 1.8
   const z = d / 2 - 1.8
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(3.6, 144, 3.6, leg, { x: sx * x, z: sz * z }, 0.6))
-  g.add(rbox(w, 1.8, d, body, { y: 122.2 }, 0.5))
+  // 层板每边比腿的外沿缩 0.4：板边不和腿的外侧面共面
+  g.add(rbox(w - 0.8, 1.8, d - 0.8, body, { y: 122.2 }, 0.5))
   for (const y of [20, 60]) for (const s of [-1, 1]) g.add(cylZLegacy(0.8, d - 3.6, leg, s * x, y, 0))
   // 柜体：底 144，顶 184
   g.add(shell(w, h - 144, d, 1.6, body, { front: [{ kind: 'rect', x: 0, y: 1.6, w: w - 3.2, h: h - 144 - 3.2, r: 0.3 }] }).translateY(144))
@@ -1983,7 +2003,8 @@ function coffeeYunomi(p: string[]) {
   g.add(puck(6, 1, wood))
   g.add(torus(5.2, 0.25, shade(wood, -0.12), { y: 1, rx: PI / 2 }))
   g.add(cup(3.9, 3, 6.4, 0.6, glaze, { y: 1 }))
-  g.add(cyl(3.42, 3.12, 2.2, clay, { y: 1 }, 24))
+  // 露胎的一圈往茶托里埋 0.1：底面不和杯底共面
+  g.add(cyl(3.42, 3.12, 2.3, clay, { y: 0.9 }, 24))
   g.add(liquid(3.2, 6.8, COFFEE))
   return g
 }

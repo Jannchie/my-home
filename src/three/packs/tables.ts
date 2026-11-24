@@ -215,7 +215,8 @@ function liftDesk(p: string[]) {
     const x = s * (w / 2 - 20)
     g.add(rbox(7, 4, d - 6, frame, { x }, 2))
     g.add(rbox(8, 36, 6, frame, { x, y: 4 }, 1.5))
-    g.add(rbox(6.5, H - 38, 4.6, shade(frame, 0.06), { x, y: 38 }, 1.2))
+    // 内管往桌面里插 1cm：顶面不和横梁顶面（同在 H）共面
+    g.add(rbox(6.5, H - 37, 4.6, shade(frame, 0.06), { x, y: 38 }, 1.2))
   }
   g.add(rbox(w - 34, 4, 5, frame, { y: H - 4 }, 1))
   const cx = w / 2 - 26

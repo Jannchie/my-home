@@ -136,6 +136,18 @@ export function holePanel(w: number, h: number, t: number, color: THREE.ColorRep
 }
 
 /**
+ * 格栅孔：在 w × h 的板上开 cols × rows 个直角方孔（板条宽 bar、四周留边 margin），配 holePanel 用。
+ * 方孔不带圆角：圆角每个角要细分，格子一多面数就上万（屏风、格子门都是几十个孔）。
+ */
+export function gridHoles(w: number, h: number, cols: number, rows: number, bar = 2.4, margin = 3): Hole[] {
+  const holes: Hole[] = []
+  const cw = (w - margin * 2 - bar * (cols - 1)) / cols
+  const ch = (h - margin * 2 - bar * (rows - 1)) / rows
+  for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) holes.push({ kind: 'rect', x: -w / 2 + margin + cw / 2 + i * (cw + bar), y: margin + j * (ch + bar), w: cw, h: ch, r: 0 })
+  return holes
+}
+
+/**
  * 空心外壳：外尺寸 w × h × d、壁厚 t，原点在底面中心。每个面可以开洞（洞坐标用该面自己的局部坐标，从外面看）。
  * top / bottom 为 false 时不封顶 / 不封底（盒子、花箱、猫砂盆盆体）。
  */

@@ -2,11 +2,11 @@
 // 只放建模函数和它们用到的常量，素材表在 ../interests.ts（PACKS 只收集 packs/ 下一层的文件）。
 
 import * as THREE from 'three'
-import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../../toon'
+import { ball, cached, capsule, cloneWithHooks, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../../toon'
 import { C, paintLandscape, paintPanel, pinwheelWalls, rng } from '../../kit'
 import { G, P, PI, cylX, cylZ, fitGroup, ghostOutlined, lathe, litOutlined, noOutline, rod3, taperRod3, type V2, type V3 } from '../../geo'
 import { J } from '../../packkit'
-import { DARK, GLASS, GOLD, IVORY, METAL, PAPER, RUBBER, flat, paintTop, sheet, sym, taperPath, type Draw } from './common'
+import { DARK, GLASS, GOLD, IVORY, METAL, PAPER, RUBBER, bead, chip, flat, paintTop, sheet, sym, taperPath, type Draw } from './common'
 
 // =====================================================================
 // 兴趣摆件
@@ -14,6 +14,19 @@ import { DARK, GLASS, GOLD, IVORY, METAL, PAPER, RUBBER, flat, paintTop, sheet, 
 
 const SKIN = '#ffe3d1'
 const SOIL = '#8b6a4f'
+
+/** 细胶囊（人偶的四肢、发束）：和 capsule 一样沿 y 立着、总长 len + 2r，(x, y, z) 是底端；段数少（80 面，capsule 是 416 面） */
+function limb(r: number, len: number, color: string, x = 0, y = 0, z = 0) {
+  const m = new THREE.Mesh(cached(`int-limb${r},${len}`, () => new THREE.CapsuleGeometry(r, len, 2, 8)), toon(color))
+  m.castShadow = true
+  m.receiveShadow = true
+  return P(m, x, y + len / 2 + r, z)
+}
+
+/** 毫米级的细圆环（鱼钩）：环面朝 +z，(x, y, z) 是圆心；80 面（torus 的小环是 384 面） */
+function ringLo(r: number, tube: number, color: string, x = 0, y = 0, z = 0) {
+  return P(new THREE.Mesh(cached(`int-ring${r},${tube}`, () => new THREE.TorusGeometry(r, tube, 4, 10)), toon(color)), x, y, z)
+}
 
 /** 叶片 / 花瓣：从 (x,y,z) 朝水平方向 a 伸出，仰角 p */
 function petal(len: number, color: string, x: number, y: number, z: number, a: number, p: number, sw = 0.45, st = 0.18) {
@@ -99,15 +112,16 @@ export function mangaRow(p: string[]) {
 /** 无脸小人偶（少女型），站在底座上，高约 11 */
 function figGirl(hair: string, dress: string, base: string) {
   const g = new THREE.Group()
-  g.add(puck(2.6, 0.6, base))
-  for (const s of [-1, 1]) g.add(capsule(0.35, 2.4, SKIN, { x: s * 0.55, y: 0.6 }))
+  // 十来厘米高的小人偶：底座、四肢、发束用低段数体素（一柜九个人偶，原来两万多面）
+  g.add(chip(2.6, 0.6, base, 0, 0, 0, 16))
+  for (const s of [-1, 1]) g.add(limb(0.35, 2.4, SKIN, s * 0.55, 0.6))
   g.add(cyl(0.9, 2.4, 3, dress, { y: 2.9 }, 16))
-  g.add(capsule(0.85, 1.2, dress, { y: 5.4 }))
-  for (const s of [-1, 1]) g.add(P(capsule(0.3, 2.2, SKIN), s * 1.25, 6.2, 0, 0, 0, s * 0.3))
+  g.add(limb(0.85, 1.2, dress, 0, 5.4))
+  for (const s of [-1, 1]) g.add(P(limb(0.3, 2.2, SKIN), s * 1.25, 6.2, 0, 0, 0, s * 0.3))
   g.add(ball(1.7, SKIN, { y: 9.2 }))
   g.add(ball(1.85, hair, { y: 9.5, z: -0.3 }))
-  for (const s of [-1, 1]) g.add(P(capsule(0.55, 2.4, hair), s * 1.9, 8, -0.5, 0, 0, s * 0.2))
-  g.add(ball(0.5, base, { x: 1, y: 11, z: 0.6 }))
+  for (const s of [-1, 1]) g.add(P(limb(0.55, 2.4, hair), s * 1.9, 8, -0.5, 0, 0, s * 0.2))
+  g.add(bead(0.5, base, 1, 11, 0.6))
   return g
 }
 
@@ -125,14 +139,14 @@ function figRobot(main: string, acc: string, base: string) {
   g.add(rbox(2.2, 1, 0.4, acc, { y: 6, z: 1.2 }, 0.15))
   g.add(rbox(2.4, 2.2, 2.2, main, { y: 7.7 }, 0.4))
   g.add(litOutlined(rbox(1.8, 0.5, 0.3, '#7fe3ff', { y: 8.6, z: 1.1 }, 0.1), '#7fe3ff', 0.7))
-  g.add(cyl(0.12, 0.12, 1.2, acc, { x: 0.6, y: 9.9 }, 6), ball(0.3, acc, { x: 0.6, y: 11.2 }))
+  g.add(cyl(0.12, 0.12, 1.2, acc, { x: 0.6, y: 9.9 }, 6), bead(0.3, acc, 0.6, 11.2))
   return g
 }
 
 /** Q 版大头人偶（猫耳），高约 9 */
 function figChibi(main: string, acc: string, base: string) {
   const g = new THREE.Group()
-  g.add(puck(2.4, 0.6, base))
+  g.add(chip(2.4, 0.6, base, 0, 0, 0, 16))
   g.add(cyl(1, 1.6, 2.6, main, { y: 0.6 }, 16))
   g.add(ball(2.5, SKIN, { y: 5.6 }))
   g.add(ball(2.65, acc, { y: 6, z: -0.35 }))
@@ -190,7 +204,7 @@ export function acrylicStand(p: string[]) {
   g.add(ghostOutlined(rbox(9, 0.5, 5.5, GLASS, {}, 0.2), GLASS, 0.5))
   g.add(rbox(8.6, 0.12, 5.1, shade(bg, 0.1), { y: 0.05 }, 0.04))
   g.add(ghostOutlined(rbox(8.6, 14.5, 0.3, GLASS, { y: 0.5 }, 0.3), GLASS, 0.4))
-  g.add(paintPanel(8, 13.8, `int-acsta-${bg}-${hair}-${dress}`, (c, W, H) => {
+  const print = paintPanel(8, 13.8, `int-acsta-${bg}-${hair}-${dress}`, (c, W, H) => {
     c.fillStyle = shade(bg, 0.12)
     c.fillRect(0, 0, W, H)
     c.fillStyle = '#ffffff'
@@ -227,7 +241,9 @@ export function acrylicStand(p: string[]) {
     c.beginPath()
     c.arc(cx, H * 0.33, W * 0.18, 0, PI)
     c.fill()
-  }, { y: 0.85, z: 0.2 }))
+  }, { y: 0.85, z: 0.2 })
+  // 背面也印一张（同一张贴图，转过去正好是镜像）：贴图是单面的，以前从背后看立牌是空的
+  g.add(print, P(print.clone(), 0, 0.85, -0.2, 0, PI))
   return g
 }
 
@@ -263,9 +279,11 @@ export function basketball(p: string[]) {
   const [main, seam] = p
   const r = 12.2
   const g = new THREE.Group()
-  g.add(ball(r, main, { y: r }))
-  g.add(noOutline(torus(r + 0.03, 0.2, seam, { y: r })), noOutline(torus(r + 0.03, 0.2, seam, { y: r, ry: PI / 2 })), noOutline(torus(r + 0.03, 0.2, seam, { y: r, rx: PI / 2 })))
-  for (const k of [-1, 1]) g.add(noOutline(torus(r * 0.75, 0.2, seam, { x: k * r * 0.66, y: r, ry: PI / 2 })))
+  // 球心抬高一个缝线粗：竖着的两道缝线比球面鼓出 0.2，球是压在缝线上的（以前球面贴地，缝线戳进地面 0.2）
+  const cy = r + 0.2
+  g.add(ball(r, main, { y: cy }))
+  g.add(noOutline(torus(r + 0.03, 0.2, seam, { y: cy })), noOutline(torus(r + 0.03, 0.2, seam, { y: cy, ry: PI / 2 })), noOutline(torus(r + 0.03, 0.2, seam, { y: cy, rx: PI / 2 })))
+  for (const k of [-1, 1]) g.add(noOutline(torus(r * 0.75, 0.2, seam, { x: k * r * 0.66, y: cy, ry: PI / 2 })))
   return g
 }
 
@@ -411,7 +429,8 @@ export function snowboard(p: string[]) {
     bd.add(rbox(10, 22, 1, binding, { y: -11, z: 0.5 }, 0.4))
     for (const s of [-1, 1]) bd.add(rbox(0.8, 22, 4.5, binding, { x: s * 4.6, y: -11, z: 1.2 }, 0.3))
     bd.add(rbox(10, 1, 12, binding, { y: -11, z: 6.5 }, 0.4))
-    bd.add(rbox(10.4, 3.4, 1, strap, { y: 1, z: 4.6 }, 0.5), rbox(10.4, 3, 1, strap, { y: 7, z: 4 }, 0.5))
+    // 两条绑带压在侧壁上（侧壁顶在 z = 3.45；以前脚踝那条悬在侧壁上方 0.65cm）
+    bd.add(rbox(10.4, 3.4, 1.8, strap, { y: 1, z: 4.2 }, 0.5), rbox(10.4, 3, 1.4, strap, { y: 7, z: 3.8 }, 0.5))
     b.add(P(bd, 0, cy, 0, 0, 0, ang))
   }
   return fitGroup(P(G(b), 0, 0, 0, -0.1))
@@ -571,36 +590,39 @@ export function goBoard(p: string[]) {
   for (let k = 0; k < 34; k++) {
     const i = Math.floor(r() * 13) + 3
     const j = Math.floor(r() * 13) + 3
-    g.add(ball(1.1, k % 2 ? '#f8f6f0' : '#26262a', { x: -41.4 * 0.45 + i * gx, y: 5.3 + 0.5, z: -44.5 * 0.45 + j * gz }, [1, 0.45, 1]))
+    g.add(bead(1.1, k % 2 ? '#f8f6f0' : '#26262a', -41.4 * 0.45 + i * gx, 5.3 + 0.5, -44.5 * 0.45 + j * gz, [1, 0.45, 1], 12, 5))
   }
   for (const [s, c] of [[-1, '#26262a'], [1, '#f8f6f0']] as [number, string][]) {
     const x = s * 30.5
     g.add(ball(6.5, bowl, { x, y: 4.4, z: 14 }, [1, 0.68, 1]))
     g.add(puck(5.4, 1.8, bowl, { x, y: 8 + (s > 0 ? 0 : 0), z: 14 }))
-    if (s < 0) for (let k = 0; k < 3; k++) g.add(ball(1.1, c, { x: x + 4 + k * 1.6, y: 0.5, z: 20 - k }, [1, 0.45, 1]))
+    if (s < 0) for (let k = 0; k < 3; k++) g.add(bead(1.1, c, x + 4 + k * 1.6, 0.5, 20 - k, [1, 0.45, 1], 12, 5))
   }
   return fitGroup(g)
 }
+
+/** 棋子车削体的段数：底座直径不到 3cm，14 段和 12 段的球头配得上（20 段时一盘 32 子超过 1.4 万面） */
+const CHESS_SEG = 14
 
 /** 国际象棋棋子 */
 export function chessPiece(kind: 'p' | 'r' | 'n' | 'b' | 'q' | 'k', color: string, facing = 0) {
   const g = new THREE.Group()
   const baseP: V2[] = [[0, 0], [1.4, 0], [1.4, 0.45], [1.0, 0.85]]
   if (kind === 'p') {
-    g.add(lathe([...baseP, [0.55, 2.3], [0.95, 2.5], [0.45, 2.7], [0, 2.7]], color, 20))
+    g.add(lathe([...baseP, [0.55, 2.3], [0.95, 2.5], [0.45, 2.7], [0, 2.7]], color, CHESS_SEG))
     g.add(ball(0.8, color, { y: 3.3 }))
   } else if (kind === 'r') {
-    g.add(lathe([...baseP, [0.85, 3.1], [1.15, 3.3], [1.15, 4.1], [0, 4.1]], color, 20))
+    g.add(lathe([...baseP, [0.85, 3.1], [1.15, 3.3], [1.15, 4.1], [0, 4.1]], color, CHESS_SEG))
   } else if (kind === 'b') {
-    g.add(lathe([...baseP, [0.55, 3.0], [1.0, 3.2], [0.5, 3.4], [0, 3.4]], color, 20))
+    g.add(lathe([...baseP, [0.55, 3.0], [1.0, 3.2], [0.5, 3.4], [0, 3.4]], color, CHESS_SEG))
     g.add(ball(0.75, color, { y: 4.2 }, [1, 1.35, 1]), ball(0.28, color, { y: 5.4 }))
   } else if (kind === 'n') {
-    g.add(lathe([...baseP, [0.9, 1.4], [0, 1.4]], color, 20))
+    g.add(lathe([...baseP, [0.9, 1.4], [0, 1.4]], color, CHESS_SEG))
     const head = G(rbox(1.3, 3.2, 1.6, color, { y: 0 }, 0.5), rbox(1.2, 1.2, 2.2, color, { y: 2, z: 0.8 }, 0.4))
     g.add(P(head, 0, 1.3, -0.2, 0.2))
   } else {
     const tall = kind === 'k' ? 4.6 : 4.2
-    g.add(lathe([...baseP, [0.6, tall - 0.8], [1.1, tall - 0.6], [0.7, tall - 0.4], [1.05, tall + 0.3], [0, tall + 0.3]], color, 20))
+    g.add(lathe([...baseP, [0.6, tall - 0.8], [1.1, tall - 0.6], [0.7, tall - 0.4], [1.05, tall + 0.3], [0, tall + 0.3]], color, CHESS_SEG))
     if (kind === 'q') g.add(ball(0.42, color, { y: tall + 0.6 }))
     else g.add(rbox(0.4, 1.5, 0.4, color, { y: tall + 0.3 }, 0.1), rbox(1.2, 0.4, 0.4, color, { y: tall + 1 }, 0.1))
   }
@@ -812,8 +834,9 @@ export function sewingMachine(p: string[]) {
   g.add(rbox(11, 20, 14, body, { x: 13.5, y: 5 }, 2.2))
   g.add(rbox(38, 8, 13, body, { y: 22 }, 2.5))
   g.add(rbox(9, 10, 12, body, { x: -14.5, y: 13 }, 2))
-  g.add(cyl(0.4, 0.4, 6, METAL, { x: -15, y: 7 }, 8))
-  g.add(rbox(2.4, 0.6, 3, METAL, { x: -15, y: 5.4, z: 0.6 }, 0.2))
+  // 压脚压在布上（布厚 0.3），针杆接到压脚（以前压脚和布同底、埋在布里，针杆悬着）
+  g.add(cyl(0.4, 0.4, 7, METAL, { x: -15, y: 6 }, 8))
+  g.add(rbox(2.4, 0.6, 3, METAL, { x: -15, y: 5.7, z: 0.6 }, 0.2))
   g.add(cylX(5, 2.4, acc, 20.4, 18, 0, 24))
   g.add(cylX(2, 2.6, shade(acc, -0.15), 20.6, 18, 0, 16))
   g.add(cyl(0.3, 0.3, 4, METAL, { x: 8, y: 30 }, 6))
@@ -965,9 +988,10 @@ export function microscope(p: string[]) {
   g.add(rbox(4, 9, 4, body, { y: 3, z: -4 }, 0.8))
   g.add(litOutlined(cyl(1.5, 1.5, 1, lamp, { y: 3, z: 2 }, 16), lamp))
   for (const s of [-1, 1]) g.add(cylX(2.2, 1.4, DARK, s * 2.6, 9, -6, 16))
-  g.add(rbox(5, 5, 7, body, { y: 23, z: -2 }, 1))
-  g.add(cyl(2.6, 2.2, 1.6, metal, { y: 20.6, z: 1.4 }, 16))
-  for (const [dx, dz, l] of [[0, 1.2, 3.5], [-1.1, -0.6, 3], [1.1, -0.6, 2.5]] as V3[]) g.add(cyl(0.7, 0.55, l, metal, { x: dx, y: 20.7 - l, z: 1.4 + dz }, 10))
+  // 镜筒座往下加长 1cm、物镜转盘往后收 1cm：转盘顶进镜筒座底面（以前转盘离镜筒座 0.8cm，连同三只物镜悬空）
+  g.add(rbox(5, 6, 7, body, { y: 22, z: -2 }, 1))
+  g.add(cyl(2.6, 2.2, 1.6, metal, { y: 20.6, z: 0.4 }, 16))
+  for (const [dx, dz, l] of [[0, 1.2, 3.5], [-1.1, -0.6, 3], [1.1, -0.6, 2.5]] as V3[]) g.add(cyl(0.7, 0.55, l, metal, { x: dx, y: 20.7 - l, z: 0.4 + dz }, 10))
   g.add(taperRod3([0, 27.6, -2], [0, 31.5, -5.5], 1.1, 1.1, metal, 12))
   g.add(taperRod3([0, 31.5, -5.5], [0, 33, -6.8], 1.35, 1.35, DARK, 12))
   g.add(noOutline(rbox(7, 0.15, 2.5, '#eaf4ff', { y: 13, z: 2 }, 0.05)))
@@ -1440,13 +1464,15 @@ export function mineralBox(p: string[]) {
         g.add(P(cyl(0.01, 0.7, h, c, {}, 6), cx + (k - 1.5) * 0.9, 1.2 + h / 2 - 0.3, cz + (k % 2) * 0.6, (r() - 0.5) * 0.5, 0, (k - 1.5) * 0.25))
       }
     } else if (kind === 1) {
-      g.add(ball(1.8, '#8a7a6a', { x: cx, y: 1.2, z: cz }, [1, 0.7, 1]))
+      // 半埋的晶洞石：压扁到 0.65，底端不戳穿盒底（0.7 时比地面低 0.06）
+      g.add(ball(1.8, '#8a7a6a', { x: cx, y: 1.2, z: cz }, [1, 0.65, 1]))
       g.add(noOutline(ball(1.3, c, { x: cx, y: 2.25, z: cz }, [1, 0.25, 1])))
     } else if (kind === 2) {
       g.add(ball(1.6, c, { x: cx, y: 2.2, z: cz }, [1.2, 0.65, 0.9]))
     } else {
-      g.add(P(rbox(2, 2, 2, c, {}, 0.15), cx, 1.2, cz, 0, 0.5))
-      g.add(P(rbox(1.2, 1.2, 1.2, c, {}, 0.1), cx + 1.4, 1.2, cz + 0.8, 0, 0.2))
+      // 方晶摆在衬垫上（包一层再摆：P 直接摆 rbox 是摆中心，以前下半块埋在衬垫和盒底里）
+      g.add(P(G(rbox(2, 2, 2, c, {}, 0.15)), cx, 1.2, cz, 0, 0.5))
+      g.add(P(G(rbox(1.2, 1.2, 1.2, c, {}, 0.1)), cx + 1.4, 1.2, cz + 0.8, 0, 0.2))
     }
   }
   return g
@@ -1495,9 +1521,12 @@ export function suitcaseStand(p: string[]) {
   g.add(rbox(20, 1, 4, DARK, { y: 64, z: -8 }, 0.4))
   for (const s of [-1, 1]) g.add(cyl(0.6, 0.6, 6, METAL, { x: s * 8, y: 64.5, z: -8 }, 8))
   g.add(rbox(19, 2, 3, DARK, { y: 70, z: -8 }, 0.8))
-  g.add(rbox(12, 1.5, 3, acc, { y: 64.4, z: 3 }, 0.6))
+  // 顶提手压进箱顶 0.4cm（以前整条浮在箱顶上方）
+  g.add(rbox(12, 1.9, 3, acc, { y: 63.6, z: 3 }, 0.6))
   g.add(rbox(1, 3, 10, acc, { x: 20.3, y: 40 }, 0.4))
-  g.add(P(rbox(0.3, 6, 4, sticker, {}, 0.1), 20.9, 32, 2, 0, 0, 0.08))
+  // 行李牌用一小段带子挂在侧提手下面（以前离箱体、提手都有空隙，悬着）
+  g.add(rbox(0.3, 6, 4, sticker, { x: 20.5, y: 33.4, z: 2 }, 0.1))
+  g.add(noOutline(rbox(0.25, 2.2, 0.7, DARK, { x: 20.5, y: 38.9, z: 2 }, 0.1)))
   for (const [x, y, r, c] of [[-10, 50, 3, sticker], [6, 22, 2.4, acc], [11, 54, 2, C.white]] as [number, number, number, string][]) g.add(noOutline(cylZ(r, 0.2, c, x, y, 12.55, 20)))
   return fitGroup(g)
 }
@@ -1514,7 +1543,8 @@ export function suitcaseOpen(p: string[]) {
   const folds: [number, number, string][] = [[-14, -15, cloth], [-14, 6, shade(cloth, 0.2)], [-28, -10, C.white], [-28, 12, shade(cloth, -0.15)]]
   for (const [x, z, c] of folds) for (let k = 0; k < 2; k++) g.add(rbox(14, 2.6, 18, k ? shade(c, 0.05) : c, { x, y: 2 + k * 2.6, z }, 1))
   g.add(P(capsule(3, 10, C.sky), -21, 5, 25, 0, 0, PI / 2))
-  g.add(ghostOutlined(rbox(36, 4, 28, '#9fb4c7', { x: 20.6, y: 2, z: -14 }, 0.8), '#9fb4c7', 0.45))
+  // 网袋底面陷进内衬 0.1cm：不和里面那件衣物的底面共面
+  g.add(ghostOutlined(rbox(36, 4.1, 28, '#9fb4c7', { x: 20.6, y: 1.9, z: -14 }, 0.8), '#9fb4c7', 0.45))
   g.add(rbox(14, 3, 10, C.pink, { x: 16, y: 2, z: -14 }, 1))
   for (const s of [-1, 1]) g.add(noOutline(P(rbox(1.6, 0.3, 36, DARK, {}, 0.1), 20.6, 2.2, 14, 0, s * 0.5)))
   for (const s of [-1, 1]) g.add(cylX(1.8, 1.4, RUBBER, -20.6 + s * 14, 3, -32.6, 14))
@@ -1598,7 +1628,8 @@ export function snackPile(p: string[]) {
   }, 0, 4.8, 0)), 0, 0, 0, 0, 0.15))
   // 袋子两端的封口压边（包一层 grp 再转，免得 P 把 z 覆盖成 0、两条叠在中间）
   for (const s of [-1, 1]) g.add(P(G(rbox(16.4, 1.4, 1.4, shade(bag, -0.15), { y: 1.6, z: s * 10.8 }, 0.4)), 0, 0, 0, 0, 0.15))
-  g.add(rbox(4, 2, 15, box, { x: 12, z: 0 }, 0.3), P(rbox(4, 2, 15, shade(box, 0.15), {}, 0.3), 12.5, 2, 0.5, 0, 0.2))
+  // 第二盒叠在第一盒上（P 摆的是中心：以前中心在 2，下半盒埋在第一盒里）
+  g.add(rbox(4, 2, 15, box, { x: 12, z: 0 }, 0.3), P(rbox(4, 2, 15, shade(box, 0.15), {}, 0.3), 12.5, 3, 0.5, 0, 0.2))
   const cc = [acc, C.pink, C.sky, C.lemon, C.mint]
   cc.forEach((c, i) => {
     const x = -4 + i * 3
@@ -1615,10 +1646,12 @@ export function energyCans(p: string[]) {
   const [body, band, top] = p
   const g = new THREE.Group()
   const can = (x: number, y: number, z: number) => {
-    g.add(cyl(2.65, 2.65, 13, body, { x, y, z }, 20))
+    // 罐身从底圈上面起（以前底圈整个埋在罐身里、底面和罐身共面）；底圈往下收口
+    g.add(cyl(2.65, 2.65, 12.6, body, { x, y: y + 0.4, z }, 20))
     g.add(cyl(2.3, 2.6, 0.5, top, { x, y: y + 13, z }, 20))
-    g.add(cyl(2.4, 2.6, 0.4, top, { x, y: y - 0.0, z }, 20).translateY(0))
-    g.add(cyl(2.68, 2.68, 3, band, { x, y: y + 5, z }, 20))
+    g.add(cyl(2.6, 2.3, 0.4, top, { x, y, z }, 20))
+    // 色带比罐身鼓出 0.1cm（以前只差 0.03，和罐身闪成一道道斜纹）
+    g.add(cyl(2.75, 2.75, 3, band, { x, y: y + 5, z }, 20))
     g.add(noOutline(rbox(1.6, 0.1, 0.8, top, { x, y: y + 13.5, z: z + 0.8 }, 0.05)))
   }
   const hh = 13.5
@@ -1742,7 +1775,8 @@ export function rodRack(p: string[]) {
 
 /** 拟饵：小鱼形 + 钩 */
 function lure(color: string, x: number, y: number, z: number, ry = 0) {
-  return P(G(ball(0.6, color, { y: 0.6 }, [2.4, 1, 0.9]), noOutline(ball(0.2, '#ffffff', { x: 1, y: 0.75, z: 0.45 })), P(torus(0.35, 0.06, METAL, {}), 0, 0.2, 0.6, 0)), x, y, z, 0, ry)
+  // 眼珠、鱼钩只有几毫米：用低段数体素（箱里 18 只拟饵，原来光钩和眼就一万面）
+  return P(G(ball(0.6, color, { y: 0.6 }, [2.4, 1, 0.9]), noOutline(bead(0.2, '#ffffff', 1, 0.75, 0.45)), ringLo(0.35, 0.06, METAL, 0, 0.2, 0.6)), x, y, z, 0, ry)
 }
 
 /** 渔具箱：open = 打开（盖子掀到后面，上层隔板里是拟饵）[箱色, 扣件, 拟饵主色] */
@@ -1769,9 +1803,12 @@ export const tackleBox = (open: boolean) => (p: string[]) => {
     const z = i < 6 ? -4.5 : 4.5
     g.add(lure(lc[i], x, 10, z, PI / 2 + (i % 3) * 0.3))
   }
-  const lid = G(tray(W, 6, D, 1, shade(box, -0.08), { y: 0, rx: PI }).translateY(6), rbox(W - 2, 0.6, D - 2, shade(box, 0.2), { y: 1 }, 0.3))
-  for (let i = 0; i < 6; i++) lid.add(lure(lc[11 - i], -W / 2 + 4 + i * 5.6, 1.6, 0, PI / 2))
-  g.add(P(lid, 0, 12, -D / 2, -(PI / 2 + 0.25)).translateZ(0))
+  // 盒盖：倒扣的浅盘，绕箱口后沿的铰链往后掀开，内侧朝前，一排拟饵别在盖里的衬板上。
+  // 局部坐标按「合上时」摆：铰链在原点，盖子往 +z 盖住箱口（y 0–6、z 0–D），盖顶在上、口朝下。
+  // 以前盖子绕自己的中心转，下半截穿过后壁插进箱里，衬板和拟饵留在盖子背面、朝后悬着。
+  const lid = G(tray(W, 6, D, 1, shade(box, -0.08), { y: 6, z: D / 2, rx: PI }), rbox(W - 2, 0.6, D - 2, shade(box, 0.2), { y: 4.4, z: D / 2 }, 0.3))
+  for (let i = 0; i < 6; i++) lid.add(P(G(lure(lc[11 - i], 0, 0, 0, PI / 2)), -W / 2 + 4 + i * 5.6, 4.4, D / 2, PI))
+  g.add(P(lid, 0, 12, -D / 2, -(PI / 2 + 0.25)))
   for (const s of [-1, 1]) g.add(rbox(3, 3, 1, latch, { x: s * 11, y: 8.5, z: D / 2 + 0.4 }, 0.4))
   return fitGroup(g)
 }
@@ -1844,7 +1881,8 @@ export function landingNet(p: string[]) {
   const lean = 0.1
   const L = 120
   const top: V3 = [0, L * Math.cos(lean), -L * Math.sin(lean)]
-  g.add(taperRod3([0, 0, 0], top, 1.2, 1, pole))
+  // 杆身从握把里面起（握把比杆粗，下面 28cm 本来就被包住）：两者的底面不再共面
+  g.add(taperRod3([0, 28 * Math.cos(lean), -28 * Math.sin(lean)], top, 1.2, 1, pole))
   g.add(taperRod3([0, 0, 0], [0, 30 * Math.cos(lean), -30 * Math.sin(lean)], 1.6, 1.5, DARK))
   const R = 20
   const hoopG = new THREE.Group()
@@ -1866,10 +1904,13 @@ export function landingNet(p: string[]) {
 
 // ---------- 桌游扩充：盒子、摆开的桌游、更多棋牌 ----------
 
-/** 贴花：画面贴在表面上方 0.02，用 polygonOffset 防闪（卡牌、骰子这类很薄的东西） */
+/** 贴花离表面的高度：再薄也要 0.05cm（以前 0.02，光靠 polygonOffset，远看仍可能和底面闪） */
+export const DECAL_LIFT = 0.05
+
+/** 贴花：画面贴在表面上方 DECAL_LIFT，再用 polygonOffset 防闪（卡牌、骰子这类很薄的东西） */
 export function decal<T extends THREE.Mesh>(m: T): T {
-  // paintPanel 的材质是共用的，克隆一份再改
-  const mat = (m.material as THREE.Material).clone()
+  // paintPanel 的材质是共用的，复制一份再改（cloneWithHooks：普通 clone 不带灯光遮罩 / 赛璐璐注入的着色器钩子）
+  const mat = cloneWithHooks(m.material as THREE.Material)
   m.material = mat
   mat.polygonOffset = true
   mat.polygonOffsetFactor = -2
@@ -1880,22 +1921,23 @@ export function decal<T extends THREE.Mesh>(m: T): T {
 /** 平放的薄卡片：底面中心在原点，正面画 draw（不给就是纯色背面） */
 export function card(w: number, d: number, edge: string, key: string, draw?: Draw, t = 0.1) {
   const g = G(rbox(w, t, d, edge, {}, Math.min(0.04, t * 0.4)))
-  if (draw) g.add(decal(paintTop(w - 0.1, d - 0.1, key, draw, 0, t + 0.02, 0)))
+  if (draw) g.add(decal(paintTop(w - 0.1, d - 0.1, key, draw, 0, t + DECAL_LIFT, 0)))
   return g
 }
 
 /** 一叠卡：n 张高 */
 export function cardStack(w: number, d: number, n: number, side: string, top: string, key: string, draw?: Draw) {
-  const h = n * 0.08
+  // 高度先取整到 0.1cm：rbox 会把尺寸取整，照没取整的高度摆贴花，贴花会陷进牌堆顶面（或者只浮出 0.01）
+  const h = Math.round(n * 0.8) / 10
   const g = G(rbox(w, h, d, side, {}, 0.05))
-  if (draw) g.add(decal(paintTop(w - 0.1, d - 0.1, key, draw, 0, h + 0.02, 0)))
+  if (draw) g.add(decal(paintTop(w - 0.1, d - 0.1, key, draw, 0, h + DECAL_LIFT, 0)))
   else g.add(decal(paintTop(w - 0.1, d - 0.1, `${key}-plain`, (c, W, H) => {
     c.fillStyle = top
     c.fillRect(0, 0, W, H)
     c.strokeStyle = '#ffffff'
     c.lineWidth = W * 0.06
     c.strokeRect(W * 0.08, H * 0.08, W * 0.84, H * 0.84)
-  }, 0, h + 0.02, 0)))
+  }, 0, h + DECAL_LIFT, 0)))
   return g
 }
 
@@ -1924,8 +1966,8 @@ function drawPips(n: number, face: string, pip: string): Draw {
 /** 骰子：顶面 top 点、正面 front 点，底面中心在原点 */
 export function die(s: number, face: string, pip: string, top: number, front: number, ry = 0) {
   const g = G(rbox(s, s, s, face, {}, s * 0.16))
-  g.add(decal(paintTop(s * 0.84, s * 0.84, `int-pip-${top}-${face}-${pip}`, drawPips(top, face, pip), 0, s + 0.02, 0)))
-  g.add(decal(paintPanel(s * 0.84, s * 0.84, `int-pip-${front}-${face}-${pip}`, drawPips(front, face, pip), { y: s * 0.08, z: s / 2 + 0.02 })))
+  g.add(decal(paintTop(s * 0.84, s * 0.84, `int-pip-${top}-${face}-${pip}`, drawPips(top, face, pip), 0, s + DECAL_LIFT, 0)))
+  g.add(decal(paintPanel(s * 0.84, s * 0.84, `int-pip-${front}-${face}-${pip}`, drawPips(front, face, pip), { y: s * 0.08, z: s / 2 + DECAL_LIFT })))
   g.rotation.y = ry
   return g
 }
@@ -2018,7 +2060,7 @@ export function bgHex(p: string[]) {
       const t = q === 0 && rr === 0 ? '#e8d8a0' : terrain[Math.floor(r() * terrain.length)]
       g.add(cyl(R, R, 0.6, t, { x, y: 0.5, z }, 6))
       if (q || rr) {
-        g.add(puck(1.1, 0.25, IVORY, { x, y: 1.1, z }))
+        g.add(chip(1.1, 0.25, IVORY, x, 1.1, z, 16))
         g.add(noOutline(cyl(0.35, 0.35, 0.05, k2(r()), { x, y: 1.36, z }, 10)))
       }
     }
@@ -2039,8 +2081,9 @@ export function bgHex(p: string[]) {
     const road = rbox(Math.hypot(ex - hx, ez - hz) - 1.4, 0.5, 0.6, cols[k % 3], {}, 0.1)
     g.add(P(G(road), (hx + ex) / 2, 1.1, (hz + ez) / 2, 0, -Math.atan2(ez - hz, ex - hx)))
   }
-  g.add(P(die(1.6, dieC, '#26262a', 5, 2, 0.3), 22, 0, 10), P(die(1.6, dieC, '#26262a', 3, 6, -0.4), 24.5, 0, 11.5))
-  for (let k = 0; k < 4; k++) g.add(P(cardStack(4.4, 6.6, 6 + k * 2, '#ffffff', terrain[k], `int-hexcard-${k}`), -26 + (k % 2) * 5.2, 0, -8 + Math.floor(k / 2) * 7.4))
+  g.add(P(die(1.6, dieC, '#26262a', 5, 2, 0.3), 18, 0, 10), P(die(1.6, dieC, '#26262a', 3, 6, -0.4), 20.5, 0, 11.5))
+  // 四叠资源卡整个摆在版图左角外面（以前靠里那两叠压进版图的角里，和海面板互相穿过）；骰子相应往里收，总宽不变
+  for (let k = 0; k < 4; k++) g.add(P(cardStack(4.4, 6.6, 6 + k * 2, '#ffffff', terrain[k], `int-hexcard-${k}`), -28.6 + (k % 2) * 5.2, 0, -8 + Math.floor(k / 2) * 7.4))
   return fitGroup(g)
 }
 
@@ -2090,7 +2133,7 @@ export function bgTrain(p: string[]) {
       c.arc(px, py, W * 0.012, 0, PI * 2)
       c.fill()
     }
-  }, 0, 0.42, 0)))
+  }, 0, 0.4 + DECAL_LIFT, 0)))
   // 已经占领的路线上摆小火车车厢
   const claimed: [number, number, string][] = [[0, 1, t1], [5, 6, t2], [9, 10, t1], [4, 8, t2]]
   for (const [a, b, col] of claimed) {
@@ -2100,12 +2143,13 @@ export function bgTrain(p: string[]) {
     const len = Math.hypot(x1 - x0, z1 - z0) / 4
     for (let k = 0; k < 4; k++) {
       const f = (k + 0.5) / 4
-      g.add(P(rbox(len * 0.75, 0.9, 0.9, col, {}, 0.15), x0 + (x1 - x0) * f, 0.44, z0 + (z1 - z0) * f, 0, ang))
+      g.add(P(G(rbox(len * 0.75, 0.9, 0.9, col, {}, 0.15)), x0 + (x1 - x0) * f, 0.4 + DECAL_LIFT, z0 + (z1 - z0) * f, 0, ang))
     }
   }
   // 牌堆 + 散落的车厢
   g.add(P(cardStack(5.6, 8.6, 14, '#ffffff', t2, 'int-traincards'), BW / 2 + 4, 0, -6))
-  for (let k = 0; k < 4; k++) g.add(P(rbox(2, 0.9, 0.9, k % 2 ? t1 : t2, {}, 0.15), BW / 2 + 2.5 + (k % 2) * 3, 0, 4 + k * 1.6, 0, k * 0.5))
+  // 包一层再摆：P 直接摆 rbox 会把它的中心放到 y = 0，车厢一半陷进地面，整盘被 fit 抬高 0.45cm 悬着
+  for (let k = 0; k < 4; k++) g.add(P(G(rbox(2, 0.9, 0.9, k % 2 ? t1 : t2, {}, 0.15)), BW / 2 + 2.5 + (k % 2) * 3, 0, 4 + k * 1.6, 0, k * 0.5))
   return fitGroup(g)
 }
 
@@ -2248,14 +2292,16 @@ export function bgLoop(p: string[]) {
     c.fillStyle = '#ffffff'
     c.fillRect(-W * 0.24, -H * 0.03, W * 0.48, H * 0.06)
     c.restore()
-  }, 0, 0.52, 0)))
+  }, 0, 0.5 + DECAL_LIFT, 0)))
   const cw = S0 / 11
   const edge = S0 / 2 - cw / 2
-  for (let k = 0; k < 5; k++) g.add(house('#3fa05a', -edge + cw * (2 + k * 0.6), 0.52, edge - cw * 0.15, 0.7))
-  g.add(P(rbox(1.6, 1, 1, '#c8473a', {}, 0.1), edge + cw * 0.15, 0.52, -edge + cw * 4))
+  const top = 0.5 + DECAL_LIFT
+  for (let k = 0; k < 5; k++) g.add(house('#3fa05a', -edge + cw * (2 + k * 0.6), top, edge - cw * 0.15, 0.7))
+  // 旅馆包一层再摆（P 直接摆 rbox 是摆中心，以前下半截陷在版图里）
+  g.add(P(G(rbox(1.6, 1, 1, '#c8473a', {}, 0.1)), edge + cw * 0.15, top, -edge + cw * 4))
   const pc = [acc, '#3d7fd0', '#ffffff', '#26262a']
-  pc.forEach((c, i) => g.add(pawn(c, -edge + (i % 2) * 1.6, 0.52, edge - (i > 1 ? 1.6 : 0), 0.8)))
-  g.add(P(die(1.5, '#ffffff', '#26262a', 4, 2, 0.4), 4, 0.52, 3), P(die(1.5, '#ffffff', '#26262a', 6, 3, -0.2), 6.5, 0.52, 4.5))
+  pc.forEach((c, i) => g.add(pawn(c, -edge + (i % 2) * 1.6, top, edge - (i > 1 ? 1.6 : 0), 0.8)))
+  g.add(P(die(1.5, '#ffffff', '#26262a', 4, 2, 0.4), 4, top, 3), P(die(1.5, '#ffffff', '#26262a', 6, 3, -0.2), 6.5, top, 4.5))
   const money = ['#f4f4f2', '#ffd6e0', '#ffe08f', '#a6e3cc', '#a8d4f4', '#e0c08a']
   money.forEach((c, i) => g.add(rbox(10, 0.3 + (i % 3) * 0.2, 5, c, { x: S0 / 2 + 7, z: -16 + i * 6 }, 0.05)))
   return fitGroup(g)
@@ -2293,11 +2339,11 @@ export function bgMystery(p: string[]) {
     c.fillRect((9 * W) / n, (9 * H) / n, (6 * W) / n, (6 * H) / n)
     c.fillStyle = acc
     c.fillRect((10 * W) / n, (11 * H) / n, (4 * W) / n, (2 * H) / n)
-  }, 0, 0.52, 0)))
+  }, 0, 0.5 + DECAL_LIFT, 0)))
   const chars = ['#c8473a', '#f0c030', '#ffffff', '#3fa05a', '#3d7fd0', '#8a4fb0']
   const spots: V2[] = [[-14, 6], [-4, -6], [6, 15], [15, -14], [-16, -16], [3, 4]]
-  chars.forEach((c, i) => g.add(pawn(c, spots[i][0], 0.52, spots[i][1], 1)))
-  g.add(rbox(8, 0.6, 5, acc, { y: 0.52 }, 0.1))
+  chars.forEach((c, i) => g.add(pawn(c, spots[i][0], 0.5 + DECAL_LIFT, spots[i][1], 1)))
+  g.add(rbox(8, 0.6, 5, acc, { y: 0.5 + DECAL_LIFT }, 0.1))
   g.add(P(cardStack(4.4, 6.6, 10, '#ffffff', wall, 'int-mystery-cards'), S0 / 2 + 4, 0, -10))
   g.add(P(card(9, 13, PAPER, 'int-mystery-note', (c, W, H) => {
     c.fillStyle = PAPER
@@ -2330,6 +2376,39 @@ export function chessOpening(p: string[]) {
     g.add(P(chessPiece(order[f], black, 0), x, 2.35, -14), P(chessPiece('p', black, 0), x, 2.35, -10))
   }
   return fitGroup(g)
+}
+
+const XQ_WOOD = '#f2dcb0'
+/** 棋子顶面贴图的材质：每个颜色一份（decal 会克隆材质，按颜色存下来，一盘棋的同色棋子共用） */
+const xqTops = new Map<string, THREE.Material>()
+
+/**
+ * 象棋子：木色圆片 + 顶面一张圆贴图（一圈线 + 十字刻痕，代替棋子上的字）。(x, y, z) 是底面中心，子高 1。
+ * 以前每子是一个 puck + 圆环 + 两根圆角条，一千四百多面，一盘 32 子四万多面；现在每子两百来面。
+ */
+export function xqPiece(x: number, y: number, z: number, side: string) {
+  let mat = xqTops.get(side)
+  if (!mat) {
+    // 只借 paintPanel 的贴图和材质（面片本身不用）；按 8cm 见方开贴图，线条才够清楚
+    mat = decal(paintPanel(8, 8, `int-xq-top-${side}`, (c, W, H) => {
+      c.fillStyle = XQ_WOOD
+      c.fillRect(0, 0, W, H)
+      c.strokeStyle = side
+      c.lineWidth = W * 0.065
+      c.beginPath()
+      c.arc(W / 2, H / 2, W * 0.45, 0, PI * 2)
+      c.stroke()
+      c.fillStyle = side
+      c.fillRect(W * 0.32, H * 0.46, W * 0.36, H * 0.08)
+      c.fillRect(W * 0.46, H * 0.32, W * 0.08, H * 0.36)
+    })).material as THREE.Material
+    xqTops.set(side, mat)
+  }
+  const top = new THREE.Mesh(cached('int-xq-top', () => new THREE.CircleGeometry(1.5, 20).rotateX(-PI / 2)), mat)
+  top.userData.noOutline = true
+  top.receiveShadow = true
+  top.position.y = 1 + DECAL_LIFT
+  return P(G(chip(1.8, 1, XQ_WOOD), top), x, y, z)
 }
 
 /** 中国象棋：[棋盘木, 红方, 黑方] */
@@ -2380,13 +2459,7 @@ export function xiangqi(p: string[]) {
     c.lineWidth = Math.max(1, W * 0.007)
     c.strokeRect(px(0) - W * 0.012, pz(0) - W * 0.012, px(8) - px(0) + W * 0.024, pz(9) - pz(0) + W * 0.024)
   }, 0, 1.9, 0))
-  const piece = (i: number, j: number, side: string) => {
-    const x = x0 + i * gx
-    const z = z0 + j * gz
-    g.add(puck(1.8, 1, '#f2dcb0', { x, y: 1.6, z }))
-    g.add(noOutline(torus(1.35, 0.1, side, { x, y: 2.62, z, rx: PI / 2 })))
-    g.add(noOutline(rbox(1.1, 0.06, 0.25, side, { x, y: 2.6, z }, 0.03)), noOutline(rbox(0.25, 0.06, 1.1, side, { x, y: 2.6, z }, 0.03)))
-  }
+  const piece = (i: number, j: number, side: string) => g.add(xqPiece(x0 + i * gx, 1.6, z0 + j * gz, side))
   for (const [side, back, cannon, pawnRow] of [[red, 9, 7, 6], [black, 0, 2, 3]] as [string, number, number, number][]) {
     for (let i = 0; i < 9; i++) piece(i, back, side)
     piece(1, cannon, side)
@@ -2418,7 +2491,8 @@ export function reversi(p: string[]) {
       const x = -14 + i * 4
       const z = -14 + j * 4
       const top = r() < 0.5 ? dark : light
-      g.add(cyl(1.6, 1.6, 0.2, top === dark ? light : dark, { x, y: 1.6, z }, 20), cyl(1.6, 1.6, 0.2, top, { x, y: 1.8, z }, 20))
+      // 棋子摆在盘面贴图（y = 1.9）上面：以前从 1.6 起，下半片埋在贴图底下，只露出 0.1cm
+      g.add(cyl(1.6, 1.6, 0.2, top === dark ? light : dark, { x, y: 1.9, z }, 20), cyl(1.6, 1.6, 0.2, top, { x, y: 2.1, z }, 20))
     }
   return fitGroup(g)
 }
@@ -2503,7 +2577,8 @@ export function backgammon(p: string[]) {
   const pw = 21.8 / 6
   const pt = (side: number, i: number, top: boolean, n: number, col: string) => {
     const x = side * 12.2 - 10.9 + pw * (i + 0.5)
-    for (let k = 0; k < n; k++) g.add(cyl(1.5, 1.5, 0.6, col, { x, y: 1, z: (top ? -1 : 1) * (17.9 - 1.5 - k * 3) }, 18))
+    // 棋子、骰子都摆在盘面贴图（y = 1.3）上面：以前从盒底 1 起，下半截埋在贴图底下
+    for (let k = 0; k < n; k++) g.add(cyl(1.5, 1.5, 0.6, col, { x, y: 1.3, z: (top ? -1 : 1) * (17.9 - 1.5 - k * 3) }, 18))
   }
   const other = '#f4f4f2'
   pt(-1, 0, true, 5, chk)
@@ -2512,8 +2587,8 @@ export function backgammon(p: string[]) {
   pt(1, 5, true, 2, chk)
   pt(-1, 0, false, 4, other)
   pt(1, 3, true, 3, chk)
-  g.add(P(die(1.4, '#ffffff', '#26262a', 6, 3, 0.4), 5, 1, 0), P(die(1.4, '#ffffff', '#26262a', 2, 1, -0.3), 8, 1, 1.5))
-  g.add(P(die(2, '#f4ead2', '#26262a', 2, 4, 0.2), -6, 1, 0))
+  g.add(P(die(1.4, '#ffffff', '#26262a', 6, 3, 0.4), 5, 1.3, 0), P(die(1.4, '#ffffff', '#26262a', 2, 1, -0.3), 8, 1.3, 1.5))
+  g.add(P(die(2, '#f4ead2', '#26262a', 2, 4, 0.2), -6, 1.3, 0))
   return fitGroup(g)
 }
 
@@ -2562,8 +2637,9 @@ export function hanafuda(p: string[]) {
 export function karuta(p: string[]) {
   const [tatami, edge, ink] = p
   const g = new THREE.Group()
-  g.add(rbox(88, 1, 60, tatami, {}, 0.3))
-  g.add(rbox(88, 1.02, 3, J.sumi, { z: -28.5 }, 0.3), rbox(88, 1.02, 3, J.sumi, { z: 28.5 }, 0.3))
+  // 席面只铺到两条縁之间，縁略高一点（以前席面满铺、縁只高出 0.02，顶面和两端的立面都叠在一起闪）
+  g.add(rbox(88, 1, 54, tatami, {}, 0.3))
+  g.add(rbox(88, 1.08, 3, J.sumi, { z: -28.5 }, 0.3), rbox(88, 1.08, 3, J.sumi, { z: 28.5 }, 0.3))
   const kana = 'あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをん'
   const r = rng(17)
   const cardDraw = (seed: number): Draw => (c, W, H) => {
@@ -2625,7 +2701,8 @@ export const jenga = (stacked: boolean) => (p: string[]) => {
         if (r() < 0.15) continue
         const a = (k / n) * PI * 2 + (r() - 0.5) * 0.15
         const rr = rad + (r() - 0.5) * 1.5
-        g.add(P(rbox(L, T, Wb - 0.05, col(), {}, 0.15), Math.cos(a) * rr, 0, Math.sin(a) * rr * 0.85, 0, -a + (r() - 0.5) * 0.3))
+        // 包一层再摆：P 直接摆 rbox 是摆中心，散落的木块一半陷进地面，中间那半截塔被 fit 抬高 0.75cm 悬着
+        g.add(P(G(rbox(L, T, Wb - 0.05, col(), {}, 0.15)), Math.cos(a) * rr, 0, Math.sin(a) * rr * 0.85, 0, -a + (r() - 0.5) * 0.3))
       }
   }
   return fitGroup(g)
@@ -2637,7 +2714,8 @@ export function jigsaw(p: string[]) {
   const g = new THREE.Group()
   g.add(rbox(54, 0.4, 40, base, {}, 0.15))
   const pic = paintLandscape(sky, hill, '#ffd27a')
-  g.add(rbox(50, 0.25, 36, '#d8d0c0', { y: 0.4 }, 0.05))
+  // 画芯、拼块都按 0.3 厚写（rbox 会把 0.25 取整成 0.3，照 0.25 摆的贴花正好和画芯顶面重合）
+  g.add(rbox(50, 0.3, 36, '#d8d0c0', { y: 0.4 }, 0.05))
   g.add(decal(paintTop(50, 36, `int-jigsaw-${sky}-${hill}`, (c, W, H) => {
     pic(c, W, H)
     // 还没拼的区域
@@ -2658,16 +2736,21 @@ export function jigsaw(p: string[]) {
       c.lineTo(W, (j * H) / 14)
       c.stroke()
     }
-  }, 0, 0.67, 0)))
+  }, 0, 0.7 + DECAL_LIFT, 0)))
+  // 散落的拼块：按抖动的格子摆在还没拼的那一角，互不重叠（以前随机撒，叠在一起的拼块顶面同高，闪）。
+  // 凸耳用低段数的小圆片（以前每个凸耳一个 puck，44 个就是三万六千面）。
   const r = rng(31)
   const cols = [sky, hill, shade(hill, 0.18), '#ffffff', shade(sky, -0.1)]
-  for (let k = 0; k < 22; k++) {
-    const x = 6 + r() * 18
-    const z = 2 + r() * 14
-    const c = cols[Math.floor(r() * cols.length)]
-    const pc = G(rbox(2.5, 0.25, 2.5, c, {}, 0.05), puck(0.55, 0.25, c, { x: 1.4 }), puck(0.55, 0.25, c, { z: 1.4 }))
-    g.add(P(pc, x, 0.65, z, 0, r() * PI * 2))
-  }
+  for (let i = 0; i < 5; i++)
+    for (let j = 0; j < 5; j++) {
+      const c = cols[Math.floor(r() * cols.length)]
+      const x = 5 + i * 4.4 + (r() - 0.5) * 0.5
+      const z = -1 + j * 4.4 + (r() - 0.5) * 0.5
+      const ry = r() * PI * 2
+      if ((i * 5 + j) % 8 === 3) continue
+      const pc = G(rbox(2.5, 0.3, 2.5, c, {}, 0.05), chip(0.55, 0.3, c, 1.4, 0, 0, 10), chip(0.55, 0.3, c, 0, 0, 1.4, 10))
+      g.add(P(pc, x, 0.7 + DECAL_LIFT, z, 0, ry))
+    }
   return fitGroup(g)
 }
 
@@ -2717,7 +2800,8 @@ export function burrPuzzle(p: string[]) {
     g.add(rbox(s, s, L, c(2), { x: 0, y: cy - o + k * o }, 0.12))
   }
   g.add(rbox(4, 0.6, 4, shade(wood, -0.2), { x: 9 }, 0.2))
-  g.add(P(rbox(L, s, s, c(1), {}, 0.12), 10, 0, 4, 0, 0.4))
+  // 包一层再摆：P 直接摆 rbox 是摆中心，拆下的这根一半陷进地面，锁体和垫片被 fit 抬高 0.8cm 悬着
+  g.add(P(G(rbox(L, s, s, c(1), {}, 0.12)), 10, 0, 4, 0, 0.4))
   return fitGroup(g)
 }
 

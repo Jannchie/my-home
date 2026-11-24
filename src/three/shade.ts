@@ -26,7 +26,21 @@ export function hex6(color: string): string | null {
 }
 
 /**
- * 十六进制颜色的明度加 dl、饱和度加 ds（都在 three.js 线性工作空间的 HSL 里算），返回六位十六进制（不带 #）。
+ * 调暗的软下限（线性空间的 HSL 明度）：新明度 / 原明度的比例 x = 1 + dl / l0 在 0.55 以上照常线性减；
+ * 再往下改成平滑地渐近到 0.25（在 0.55 处值和斜率都连上）。
+ * 以前直接减到 0：深木、藏青、炭黑这类线性明度不到 0.1 的颜色 shade(c, -0.1) 就成了纯黑 #000000，
+ * 全库 700 多件素材的深色配色里出现死黑的零件。现在再深的颜色调暗也只到原明度的四分之一（sRGB 里约六成亮），看得出是同一种颜色。
+ * 调亮不受影响。
+ */
+export function dimLightness(l0: number, dl: number) {
+  if (dl >= 0 || l0 <= 0) return l0 + dl
+  const x = 1 + dl / l0
+  if (x >= 0.55) return l0 + dl
+  return l0 * (0.25 + 0.3 * Math.exp((x - 0.55) / 0.3))
+}
+
+/**
+ * 十六进制颜色的明度加 dl、饱和度加 ds（都在 three.js 线性工作空间的 HSL 里算），返回六位十六进制（不带 #）。调暗有软下限（见 dimLightness）。
  * 输入不是十六进制返回 null（调用方另行处理）
  */
 export function shadeHex(color: string, dl: number, ds = 0): string | null {
@@ -49,8 +63,8 @@ export function shadeHex(color: string, dl: number, ds = 0): string | null {
     hue /= 6
   }
   // setHSL
-  const s = clamp(clamp(sat + ds, 0, 1), 0, 1)
-  const l = clamp(clamp(l0 + dl, 0, 1), 0, 1)
+  const s = clamp(sat + ds, 0, 1)
+  const l = clamp(dimLightness(l0, dl), 0, 1)
   hue = ((hue % 1) + 1) % 1
   let rr = l
   let gg = l

@@ -265,6 +265,7 @@ export const COARSE_TAGS = [
 /** 属性 */
 export const ATTR_TAGS = [
   'for-kids', // 儿童用
+  'for-baby', // 婴儿专用（围栏、学步车、推车、床铃…）：家里有婴儿才摆
   'diatomite', // 硅藻土 / 石材（地垫）
   'fixture', // 设备（只在 3D 里代替平面图设备）
   'leafy', // 带枝叶（插花、盆景、圣诞树、花环、发芽的菜苗…）：派生风格配色时叶绿保持原样（绿植 plant 本来就算）

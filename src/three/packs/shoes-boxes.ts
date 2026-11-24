@@ -8,7 +8,7 @@
 //   - 收纳箱、纸箱都是 prop，可以放进柜子 / 床底 / 层板上；大件收纳柜不是 prop。
 
 import * as THREE from 'three'
-import { ball, capsule, cyl, puck, rbox, shade, toon, torus } from '../toon'
+import { ball, cached, capsule, cyl, puck, rbox, shade, toon, torus } from '../toon'
 import { C, SWING_OPEN, holePanel, movable, paintPanel, rectPoly, rng, shell, slab, type AssetCategory, type AssetDef, type Poly } from '../kit'
 import { G, P, PI, cappedTube, clearDeep, cylX, rod3, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, R, define, type Build, type Dims, type Pal } from '../packkit'
@@ -63,6 +63,18 @@ function meshOf(pos: number[], idx: number[], color: string) {
   geo.setIndex(idx)
   geo.computeVertexNormals()
   const m = new THREE.Mesh(geo, toon(color))
+  m.castShadow = true
+  m.receiveShadow = true
+  return m
+}
+
+/** 不到 1cm 的小圆环（鞋带蝴蝶结的两只耳朵）：6 × 14 段。torus() 的小环固定 8 × 24 段，面数是这里的两倍多 */
+function loopLow(r: number, tube: number, color: string) {
+  const rr = Math.round(r * 100) / 100
+  const m = new THREE.Mesh(
+    cached(`sb-loop${rr},${tube}`, () => new THREE.TorusGeometry(rr, tube, 6, 14)),
+    toon(color),
+  )
   m.castShadow = true
   m.receiveShadow = true
   return m
@@ -190,8 +202,8 @@ function shoeLast(s: LastSpec) {
   const insole = (color = INSOLE) => loftSlab(color, { bot: (u) => top0(u) - 0.1, top: (u) => top0(u) + 0.3, scale: 0.86 })
 
   /** 鞋面切片 */
-  function slices(from: number, to: number): Slice[] {
-    const list = spaced(from, to, 30)
+  function slices(from: number, to: number, n = 30): Slice[] {
+    const list = spaced(from, to, n)
     if (uOpen > from + 0.01 && uOpen < to - 0.01) {
       list.push(uOpen)
       list.sort((x, y) => x - y)
@@ -200,8 +212,9 @@ function shoeLast(s: LastSpec) {
   }
 
   /** 空心鞋面：外壁 + 内壁（往里偏 t）+ 所有开口边的封边 */
-  function upper(color: string, o: { from?: number; to?: number; off?: number; t?: number } = {}) {
-    const sl = slices(o.from ?? u0, o.to ?? u1)
+  /** n：沿鞋长的切片数（默认 30）。只盖鞋头那一小段的包片用 12 就够：切片两端加密，靠鞋尖那几片正好和整只鞋面的切片对上 */
+  function upper(color: string, o: { from?: number; to?: number; off?: number; t?: number; n?: number } = {}) {
+    const sl = slices(o.from ?? u0, o.to ?? u1, o.n)
     const off = o.off ?? 0
     const th = o.t ?? t
     const Mh = 8
@@ -278,7 +291,7 @@ function shoeLast(s: LastSpec) {
     for (let i = open.length - 1; i >= 0; i--) pts.push(at(open[i].u, open[i].phiMax))
     for (let i = 0; i < open.length; i++) pts.push(at(open[i].u, PI - open[i].phiMax))
     pts.push(at(uOpen, PI / 2))
-    return cappedTube(pts, r, color, { ...TUBE, closed: true, seg: 80 })
+    return cappedTube(pts, r, color, { ...TUBE, closed: true, seg: 56 })
   }
 
   /** 横跨鞋面的拱形（包边、鞋头接缝） */
@@ -326,12 +339,13 @@ function shoeLast(s: LastSpec) {
       const B = at(u, PI - pr, 0.25)
       A[1] = B[1] = Math.max(A[1], B[1])
       g.add(rod3(A, B, r, color, 8))
-      for (const p of [A, B]) g.add(ball(r * 1.6, shade(color, -0.25), { x: p[0], y: p[1] - r, z: p[2] }))
+      for (const p of [A, B]) // 孔眼：8×6 段的小球（默认 12×8，一双系带鞋二十来个孔眼会多出近两千面）
+      g.add(ball(r * 1.6, shade(color, -0.25), { x: p[0], y: p[1] - r, z: p[2] }, undefined, [8, 6]))
     }
     if (bow) {
       const [bx, by, bz] = at(ua, PI / 2, 0.4)
       for (const sx of [-1, 1]) {
-        g.add(P(torus(0.9 * (r / 0.22), r, color), bx + sx * 0.9, by + 0.2, bz - 0.2, -1.1, 0, sx * 0.4))
+        g.add(P(loopLow(0.9 * (r / 0.22), r, color), bx + sx * 0.9, by + 0.2, bz - 0.2, -1.1, 0, sx * 0.4))
         g.add(rod3([bx, by, bz], [bx + sx * 1.1, by - 0.4, bz + 1.6], r, color, 8))
       }
     }
@@ -434,12 +448,14 @@ function sneaker(z: ShoeSize, p: string[]) {
   // 中底色带
   g.add(L.loftSlab(p[2], { bot: (u) => L.base(u) + 1.2 * k, top: (u) => L.base(u) + 1.7 * k, inflate: 0.42, u0: 0.02, u1: 0.98 }))
   // 鞋头包片
-  g.add(L.upper(p[1], { from: 0.84, off: 0.12, t: 0.2 }))
+  g.add(L.upper(p[1], { from: 0.84, off: 0.12, t: 0.2, n: 12 }))
   g.add(L.laces(0.43, 0.7, 5, p[2] === p[1] ? WHITE : p[2], 1.25 * k + 0.2))
   g.add(L.tongue(p[0], 4.4 * k))
-  // 后跟提环
-  const [hx, hy, hz] = L.at(0.004, PI / 2 - 0.3)
-  g.add(P(torus(0.9 * k, 0.22, p[2], {}, PI), hx, hy - 0.2, hz - 0.3, 0, PI / 2, 0))
+  // 后跟提环：一圈扁织带，两脚跨在鞋口包边的里外两侧（包边中心 = 后跟处鞋帮顶 7k）。
+  // 原来按 L.at(…, 接近 π/2) 取点，取到的是鞋口上方假想的拱顶，提环悬在后跟上方 1cm 多
+  const tab = torus(0.9 * k, 0.22, p[2], {}, PI)
+  tab.scale.set(0.7, 1, 2)
+  g.add(P(tab, 0, L.top0(0) - 0.15 + 7.2 * k, L.z(0.004), 0, PI / 2, 0))
   return g
 }
 
@@ -458,7 +474,7 @@ function canvas(high: boolean) {
     })
     const g = G(L.sole(RUBBER, 0.35), L.insole(), L.upper(p[0]))
     g.add(L.loftSlab(p[1], { bot: (u) => 0.9 * k, top: (u) => 1.3 * k, inflate: 0.45, u0: 0.01, u1: 0.99 }))
-    g.add(L.upper(RUBBER, { from: 0.86, off: 0.12, t: 0.2 }))
+    g.add(L.upper(RUBBER, { from: 0.86, off: 0.12, t: 0.2, n: 12 }))
     g.add(L.collarRim(shade(p[0], -0.08), 0.32))
     g.add(L.laces(high ? 0.41 : 0.48, high ? 0.72 : 0.72, high ? 6 : 5, p[2], 1.1 * k + 0.2, 0.2))
     g.add(L.tongue(p[0], high ? 2.2 * k : 3 * k, high ? 0.2 : 0.45))
@@ -617,8 +633,11 @@ function shortBoot(z: ShoeSize, p: string[]) {
     const [x, y, zz] = L.wall(0.3, 7 * k, side, 0.12)
     g.add(P(rbox(0.25, 7 * k, 3.2 * k, p[2], {}, 0.1), x, y - 3.5 * k, zz, 0, 0, side * -0.18))
   }
-  const [hx, hy, hz] = L.at(0.004, PI / 2 - 0.4)
-  g.add(P(torus(1.1 * k, 0.3, p[2], {}, PI), hx, hy + 0.2, hz - 0.2, 0, PI / 2, 0))
+  // 后拉环：一条窄长的扁织带，两脚贴在靴筒后沿的里外两面（靴筒顶 12.5k、壁厚 0.4）。
+  // 原来按 L.at(…, 接近 π/2) 取点，取到的是筒口上方假想的拱顶，拉环悬在靴筒上方
+  const tab = torus(1.1 * k, 0.3, p[2], {}, PI)
+  tab.scale.set(0.35, 1, 2.5)
+  g.add(P(tab, 0, L.top0(0) - 0.15 + 12.3 * k, L.z(0.004) + 0.2, 0, PI / 2, 0))
   return g
 }
 
@@ -793,7 +812,7 @@ function velcro(z: ShoeSize, p: string[]) {
     t: 0.5,
   })
   const g = G(L.sole(RUBBER), L.insole(), L.upper(p[0]), L.collarRim(p[2], 0.55 * k))
-  g.add(L.upper(p[1], { from: 0.84, off: 0.12, t: 0.2 }))
+  g.add(L.upper(p[1], { from: 0.84, off: 0.12, t: 0.2, n: 12 }))
   for (const [u, w] of [
     [0.5, 2.4],
     [0.66, 2.2],
@@ -846,14 +865,17 @@ function zori(z: ShoeSize, p: string[]) {
 /** 登山鞋：粗齿厚底、高帮、粗包边、上段挂钩 */
 function hiking(z: ShoeSize, p: string[]) {
   const k = z.k
+  // 鞋底齿高 lug：鞋底整体抬高这么多、厚度相应减薄（鞋底顶面仍在 3.2k），齿从地面长到鞋底里。
+  // 原来齿的中心就在 y = 0，一半埋在地面以下、一半藏在鞋底里，等于看不见
+  const lug = 0.4 * k
   const L = shoeLast({
     L: z.L,
     W: z.W,
-    soleT: 3.2 * k,
+    soleT: 3.2 * k - lug,
     base: [
-      [0, 0],
-      [0.85, 0],
-      [1, 1 * k],
+      [0, lug],
+      [0.85, lug],
+      [1, lug + 1 * k],
     ],
     toeP: 3.4,
     dome: scaleTab([[0.38, 9], [0.52, 6.8], [0.8, 4.8], [1, 3.2]], k),
@@ -863,13 +885,13 @@ function hiking(z: ShoeSize, p: string[]) {
     t: 0.55,
   })
   const g = G(L.sole(M.char, 0.45), L.insole(), L.upper(p[0]), L.collarRim(p[2], 0.85 * k))
-  g.add(L.loftSlab(p[1], { bot: (u) => L.base(u) + 1.6 * k, top: (u) => L.base(u) + 3.2 * k - 0.1, inflate: 0.38, u0: 0.01, u1: 0.99 }))
+  g.add(L.loftSlab(p[1], { bot: (u) => L.base(u) + 1.6 * k - lug, top: (u) => L.base(u) + 3.2 * k - lug - 0.1, inflate: 0.38, u0: 0.01, u1: 0.99 }))
   // 鞋底齿
   for (let i = 0; i < 7; i++) {
     const u = 0.1 + i * 0.13
-    g.add(rbox(L.a(u) * 2 + 0.6, 0.5, 0.9, M.black, { x: L.cx(u), y: L.base(u) - 0.25, z: L.z(u) }, 0.2))
+    g.add(rbox(L.a(u) * 2 + 0.6, lug + 0.2, 0.9, M.black, { x: L.cx(u), y: L.base(u) - lug, z: L.z(u) }, 0.2))
   }
-  g.add(L.upper(p[1], { from: 0.86, off: 0.14, t: 0.25 }))
+  g.add(L.upper(p[1], { from: 0.86, off: 0.14, t: 0.25, n: 12 }))
   g.add(L.laces(0.41, 0.66, 5, p[2], 1.3 * k + 0.2, 0.22))
   g.add(L.tongue(shade(p[0], -0.1), 2.6 * k, 0.15))
   return g
@@ -967,7 +989,7 @@ const HIKE_PALS: Pal[] = [
 ]
 
 const SHOES: AssetDef[] = [
-  ...shoeFamily({ key: 'sneaker', name: '运动鞋', sizes: ['M', 'F', 'K'], hs: [12.1, 10.6, 8.4], pals: SNEAKER_PALS, one: sneaker, extraW: 0 }),
+  ...shoeFamily({ key: 'sneaker', name: '运动鞋', sizes: ['M', 'F', 'K'], hs: [12.1, 10.5, 8], pals: SNEAKER_PALS, one: sneaker, extraW: 0 }),
   ...shoeFamily({ key: 'canvas-low', name: '低帮帆布鞋', sizes: ['M', 'F', 'K'], hs: [8.8, 7.7, 6.4], pals: CANVAS_PALS, one: canvas(false) }),
   ...shoeFamily({ key: 'canvas-high', name: '高帮帆布鞋', sizes: ['M', 'F', 'K'], hs: [14.3, 12.4, 9.8], pals: CANVAS_PALS, one: canvas(true) }),
   ...shoeFamily({ key: 'oxford', name: '牛津皮鞋', sizes: ['M', 'F'], hs: [8.9, 8.0], pals: LEATHER_PALS, one: oxford }),
@@ -975,7 +997,7 @@ const SHOES: AssetDef[] = [
   ...shoeFamily({ key: 'pump', name: '高跟鞋', sizes: ['F'], hs: [13.7], pals: HEEL_PALS, one: heels(false), extraW: -0.4 }).map((d) => ({ ...d, sizeLabel: '成人女款 · 细跟 8cm' })),
   ...shoeFamily({ key: 'pump-block', name: '高跟鞋', sizes: ['F'], hs: [10.7], pals: HEEL_PALS, one: heels(true), extraW: -0.4 }).map((d) => ({ ...d, sizeLabel: '成人女款 · 粗跟 5cm' })),
   ...shoeFamily({ key: 'ballet', name: '芭蕾平底鞋', sizes: ['F', 'K'], hs: [4.4, 3.7], pals: FLAT_PALS, one: ballet, extraW: -0.4 }),
-  ...shoeFamily({ key: 'chelsea', name: '短靴', sizes: ['M', 'F'], hs: [18.6, 16.6], pals: BOOT_PALS, one: shortBoot }),
+  ...shoeFamily({ key: 'chelsea', name: '短靴', sizes: ['M', 'F'], hs: [17.6, 15.7], pals: BOOT_PALS, one: shortBoot }),
   ...shoeFamily({ key: 'long-boot', name: '长筒靴', sizes: ['F'], hs: [42.1], pals: BOOT_PALS, one: longBoot, }),
   ...shoeFamily({ key: 'rain-boot', name: '雨靴', sizes: ['M', 'F', 'K'], hs: [38.1, 34.1, 19.3], pals: RAIN_PALS, one: (z, p) => rainBoot(z.k === 1 ? 38 : z.k > 0.8 ? 34 : 18)(z, p), }),
   ...shoeFamily({ key: 'sandal', name: '凉鞋', sizes: ['M', 'F', 'K'], hs: [6.5, 5.7, 4.6], pals: SANDAL_PALS, one: sandal }),
@@ -985,7 +1007,7 @@ const SHOES: AssetDef[] = [
   ...shoeFamily({ key: 'velcro', name: '魔术贴童鞋', sizes: ['K', 'T'], hs: [8.8, 7.0], pals: KID_PALS, one: velcro }),
   ...shoeFamily({ key: 'geta', name: '木屐（下駄）', sizes: ['M', 'F', 'K'], hs: [9.3, 8.2, 6.6], pals: GETA_PALS, one: geta, extraD: -1 }),
   ...shoeFamily({ key: 'zori', name: '草履', sizes: ['M', 'F'], hs: [5.6, 4.9], pals: ZORI_PALS, one: zori }),
-  ...shoeFamily({ key: 'hiking', name: '登山鞋', sizes: ['M', 'F'], hs: [15.3, 13.3], pals: HIKE_PALS, one: hiking }),
+  ...shoeFamily({ key: 'hiking', name: '登山鞋', sizes: ['M', 'F'], hs: [15, 13], pals: HIKE_PALS, one: hiking }),
 ]
 
 // ======================================================================
@@ -1302,13 +1324,14 @@ function cubby(p: string[]) {
   const g = new THREE.Group()
   for (let i = 0; i <= CUB.cols; i++) g.add(rbox(t, CUB_H, d, p[0], { x: -w / 2 + t / 2 + i * (cubColW + t) }, 0.5))
   for (const y of [...cubTops(), CUB_H]) g.add(rbox(w - 2 * t + 0.2, t, d, p[0], { y: y - t }, 0.5))
-  g.add(rbox(w - 2 * t + 0.2, CUB_H - 2 * t, 0.6, p[1], { y: t, z: -d / 2 + 0.3 }, 0.2))
+  // 背板往里收 0.3：背面不和层板、隔板的后端面共面
+  g.add(rbox(w - 2 * t + 0.2, CUB_H - 2 * t, 0.6, p[1], { y: t, z: -d / 2 + 0.6 }, 0.2))
   return g
 }
 function cubSurfaces(): Surf[] {
   const shape = Array.from({ length: CUB.cols }, (_, i) => {
     const x0 = -CUB.w / 2 + CUB.t + i * (cubColW + CUB.t)
-    return rectPoly(x0, -CUB.d / 2 + 0.6, x0 + cubColW, CUB.d / 2)
+    return rectPoly(x0, -CUB.d / 2 + 0.9, x0 + cubColW, CUB.d / 2)
   })
   return cubTops().map((y) => ({ y, shape, h: CUB.gap }))
 }
@@ -1596,7 +1619,9 @@ function vacBag(puffy: boolean): Build {
     const d = 45
     const h = puffy ? 18 : 6
     const g = new THREE.Group()
-    g.add(clothes(w - 6, d - 6, h - 2.5, 0.8, puffy ? 31 : 32))
+    // 抽完气的：两摞衣服各压成一块扁板、铺满整只袋子（原来沿用随机码衣服，3.5cm 的净高只码得下一件，袋子大半是空的）
+    if (puffy) g.add(clothes(w - 6, d - 6, h - 2.5, 0.8, 31))
+    else for (const [x, c] of [[-13.6, CLOTH[2]], [13.6, CLOTH[0]]] as [number, string][]) g.add(rbox(25.6, 3.4, d - 7, c, { x, y: 0.8 }, 1.2))
     g.add(clearDeep(rbox(w, h, d, p[0], {}, puffy ? 7 : 2.5), p[0], 0.32))
     g.add(rbox(w - 4, 0.6, 1.2, p[1], { y: h - (puffy ? 2.4 : 0.9), z: d / 2 - 4 }, 0.25))
     g.add(cyl(3, 3, 0.8, p[2], { y: h - 0.3, x: 12 }, 20), cyl(1.6, 1.6, 1, p[1], { y: h + 0.3, x: 12 }, 16))
@@ -1786,7 +1811,9 @@ function carton(w: number, d: number, h: number, p: string[], o: CartonOpt = {})
   }
   if (o.label) {
     const lw = Math.min(w * 0.5, 20)
-    g.add(paintPanel(lw, lw * 0.55, `sb-label-${o.label}-${signLang()}`, drawLabel(o.label), { x: w * 0.1, y: h * 0.35, z: d / 2 + 0.32 }))
+    // 标签顶边留在胶带下端以下 1.5cm：矮箱子上原来会压到胶带头上（两者只差 0.02cm，会闪）
+    const ly = Math.min(h * 0.35, h - Math.min(7, h * 0.3) - lw * 0.55 - 1.5)
+    g.add(paintPanel(lw, lw * 0.55, `sb-label-${o.label}-${signLang()}`, drawLabel(o.label), { x: w * 0.1, y: ly, z: d / 2 + 0.32 }))
   }
   return g
 }
@@ -1813,13 +1840,15 @@ function openCarton(p: string[]) {
   for (const sz of [-1, 1]) g.add(rbox(5, 5, 0.3, p[1], { y: h - 5.2, z: sz * (d / 2 + 0.15) }, 0.1))
   const bk = [N.blue, C.red, R.mustard, N.sage, M.char]
   for (let i = 0; i < 5; i++) g.add(rbox(3, 20 - (i % 3) * 2, 15, bk[i], { x: -15 + i * 3.4, y: 0.5, z: -4 }, 0.4))
+  // 报纸团：y 是球心。底下四团压在箱底上（箱底顶面 0.5，纸团竖向半径 0.85r，略陷进去一点），第三团叠在前两团上面
+  // （原来整体高了 0.6，几团纸悬在箱底上方）
   for (const [x, y, z, r] of [
-    [6, 4, 2, 4],
-    [12, 4, -5, 3.8],
-    [9, 10, -2, 3.6],
-    [14, 3.5, 7, 3.4],
-    [3, 3.5, 9, 3.2],
-  ]) g.add(ball(r, '#ece7dc', { x, y: y + 0.5, z }, [1, 0.85, 1]))
+    [6, 3.8, 2, 4],
+    [12, 3.6, -5, 3.8],
+    [9, 9.6, -2, 3.6],
+    [14, 3.3, 7, 3.4],
+    [3, 3.1, 9, 3.2],
+  ]) g.add(ball(r, '#ece7dc', { x, y, z }, [1, 0.85, 1]))
   return g
 }
 const openCartonDims = (): Dims => {

@@ -1,18 +1,23 @@
 // 机械手工 / 电子单片机素材包：开发板、面包板、元件耗材、焊接与测量仪器、电动工具、木工机械、工作台与收纳、半成品氛围物。
 // 约定见 kit.ts 开头。id 一律 mk- 前缀。
 //   - PCB 走线 / 丝印、面包板孔阵、示波器波形、数码管、刻度盘等画面都用 paintPanel（平放的用 paintTop），不拼小网格。
-//   - PCB 板厚 0.16，画面浮在板面上 0.05（板体比画面四周大 0.03，描边能框住画面）；元件放在画面高度上。
+//   - PCB 板厚 0.2，画面浮在板面上 0.05（板体比画面四周大 0.03，描边能框住画面）；元件放在画面高度上。
+//   - 体素的尺寸会量化到 0.1cm（toon.ts 的 q）：0.16 厚的板实际是 0.2，0.85 高的盒实际是 0.9。贴在面上的画面按量化后的尺寸算高度，
+//     不然不是和板面共面闪烁、就是沉到板面下面看不见。
 //   - 线材（跳线、表笔线、电源线、软管）用 tube：两端都接在设备 / 插头 / 夹子上，不悬空断头。
 //   - 挂起形态（剥线钳、杜邦线）原点 = 洞洞板挂点，自带 J 形钩（横臂 y = -2，钩尾往 -z 插进板 1cm），本体 z ≥ 0.3。
 
 import * as THREE from 'three'
-import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
+import { ball, cached, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, movable, paintPanel, rectPoly, rng, shell, type AssetDef, type Poly, type SurfaceDef } from '../kit'
-import { P, PI, batten, cappedTube, cylX, cylZ, fitGroup, ghostDeep, lit, noOutlineDeep, rod3, type TubeOpts, type V3 } from '../geo'
+import { P, PI, batten, cappedTube, cylX, cylZ, fitGroup, ghostDeep, lit, mesh, noOutlineDeep, rod3, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, PROP, R, define, type PalFlat } from '../packkit'
 
 /** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
 const TUBE: TubeOpts = { seg: { per: 8, min: 16 } }
+/** 细导线（半径 ≤ 0.1cm 的跳线、杜邦线、信号线）：截面 5 边就看不出棱；WIRE_IN 两端都插在孔 / 座子里，不要球帽 */
+const WIRE: TubeOpts = { ...TUBE, radial: 5 }
+const WIRE_IN: TubeOpts = { ...WIRE, caps: false }
 
 type Draw = (g: CanvasRenderingContext2D, W: number, H: number) => void
 
@@ -54,6 +59,23 @@ function helix(R: number, pitch: number, turns: number, perTurn = 12): V3[] {
 /** 平放的画面：w × d，画布顶边朝后（-z），(x, z) 为中心，y 为高度 */
 function paintTop(w: number, d: number, key: string, draw: Draw, x: number, y: number, z: number, emissive = 0) {
   return paintPanel(w, d, key, draw, { x, y, z: z + d / 2, rx: -PI / 2 }, emissive)
+}
+
+/** 直角小方块（12 个三角面，不描边、不投影）：排针针脚、盒里的散件、抽屉内胆这类很小或藏在里面的零件，用圆角盒每个要 108 个面 */
+function pbox(w: number, h: number, d: number, color: string, at: { x?: number; y?: number; z?: number; ry?: number } = {}) {
+  const m = new THREE.Mesh(cached(`mk-pbox${w},${h},${d}`, () => new THREE.BoxGeometry(w, h, d)), toon(color))
+  m.position.set(at.x ?? 0, (at.y ?? 0) + h / 2, at.z ?? 0)
+  m.rotation.y = at.ry ?? 0
+  m.receiveShadow = true
+  m.userData.noOutline = true
+  return m
+}
+
+/** 很小的圆环（垫圈）：4 × 10 段，不描边 */
+function tinyRing(r: number, tube: number, color: string) {
+  const m = new THREE.Mesh(cached(`mk-ring${r},${tube}`, () => new THREE.TorusGeometry(r, tube, 4, 10)), toon(color))
+  m.userData.noOutline = true
+  return m
 }
 
 /** 平放的发光小块（指示灯、背光屏） */
@@ -568,7 +590,8 @@ const drawRuler =
 // 电子零件
 // ======================================================================
 
-const PCB_T = 0.16
+/** PCB 板厚（rbox 的尺寸量化到 0.1cm，写 0.16 实际也是 0.2，画面就只比板面高 0.01 了） */
+const PCB_T = 0.2
 
 /** 一块 PCB：板体 + 画面；返回组和元件安装面高度 */
 function board(w: number, d: number, base: string, seed: number, y = 0.15, feet = true, dense = 1) {
@@ -589,11 +612,11 @@ function chip(w: number, d: number, x: number, y: number, z: number, nx = 0, nz 
   g.add(noOutlineDeep(cyl(k * 0.08, k * 0.08, 0.04, '#5a5b60', { x: x - w / 2 + k * 0.2, y: y + 0.03 + h, z: z - d / 2 + k * 0.2 }, 10)))
   for (let i = 0; i < nx; i++) {
     const px = x - w / 2 + (w * (i + 0.5)) / nx
-    for (const s of [-1, 1]) g.add(noOutlineDeep(rbox(Math.min(0.12, (w / nx) * 0.55), 0.05, 0.14, PIN, { x: px, y, z: z + s * (d / 2 + 0.05) }, 0.01)))
+    for (const s of [-1, 1]) g.add(pbox(Math.min(0.12, (w / nx) * 0.55), 0.05, 0.14, PIN, { x: px, y, z: z + s * (d / 2 + 0.05) }))
   }
   for (let i = 0; i < nz; i++) {
     const pz = z - d / 2 + (d * (i + 0.5)) / nz
-    for (const s of [-1, 1]) g.add(noOutlineDeep(rbox(0.14, 0.05, Math.min(0.12, (d / nz) * 0.55), PIN, { x: x + s * (w / 2 + 0.05), y, z: pz }, 0.01)))
+    for (const s of [-1, 1]) g.add(pbox(0.14, 0.05, Math.min(0.12, (d / nz) * 0.55), PIN, { x: x + s * (w / 2 + 0.05), y, z: pz }))
   }
   return g
 }
@@ -607,8 +630,8 @@ function dip(n: number, x: number, y: number, z: number, body = CHIP) {
   for (let i = 0; i < n; i++)
     for (const s of [-1, 1]) {
       const px = x - w / 2 + BB_P * (i + 0.5)
-      g.add(noOutlineDeep(rbox(0.07, 0.4, 0.05, PIN, { x: px, y: y - 0.2, z: z + s * 0.381 }, 0.01)))
-      g.add(noOutlineDeep(rbox(0.07, 0.05, 0.1, PIN, { x: px, y: y + 0.2, z: z + s * 0.34 }, 0.01)))
+      g.add(pbox(0.07, 0.4, 0.05, PIN, { x: px, y: y - 0.2, z: z + s * 0.381 }))
+      g.add(pbox(0.07, 0.05, 0.1, PIN, { x: px, y: y + 0.2, z: z + s * 0.34 }))
     }
   return g
 }
@@ -620,8 +643,9 @@ function header(n: number, rows: number, x: number, y: number, z: number, along:
   const Wd = rows * BB_P
   const [bw, bd] = along === 'x' ? [L, Wd] : [Wd, L]
   if (female) {
-    g.add(rbox(bw, 0.85, bd, body, { x, y, z }, 0.04))
-    g.add(paintTop(bw - 0.04, bd - 0.04, `mk-sock-${n}x${rows}-${along}`, along === 'x' ? drawSockets(n, rows) : drawSockets(rows, n), x, y + 0.88, z))
+    // 座子实际高 0.9（尺寸量化到 0.1），孔的画面浮在顶面上 0.05；以前画在 0.88，沉在顶面下面看不见
+    g.add(rbox(bw, 0.9, bd, body, { x, y, z }, 0.04))
+    g.add(paintTop(bw - 0.04, bd - 0.04, `mk-sock-${n}x${rows}-${along}`, along === 'x' ? drawSockets(n, rows) : drawSockets(rows, n), x, y + 0.95, z))
     return g
   }
   g.add(rbox(bw, 0.25, bd, body, { x, y, z }, 0.04))
@@ -629,7 +653,7 @@ function header(n: number, rows: number, x: number, y: number, z: number, along:
     for (let j = 0; j < rows; j++) {
       const a = (i - (n - 1) / 2) * BB_P
       const b = (j - (rows - 1) / 2) * BB_P
-      g.add(noOutlineDeep(rbox(0.07, 0.85, 0.07, pinColor, { x: x + (along === 'x' ? a : b), y, z: z + (along === 'x' ? b : a) }, 0.01)))
+      g.add(pbox(0.07, 0.85, 0.07, pinColor, { x: x + (along === 'x' ? a : b), y, z: z + (along === 'x' ? b : a) }))
     }
   return g
 }
@@ -641,7 +665,7 @@ function headerDown(n: number, x: number, z: number, along: 'x' | 'z' = 'x') {
   g.add(rbox(along === 'x' ? L : BB_P, 0.25, along === 'x' ? BB_P : L, HDR, { x, y: 0.6, z }, 0.04))
   for (let i = 0; i < n; i++) {
     const a = (i - (n - 1) / 2) * BB_P
-    g.add(noOutlineDeep(rbox(0.07, 0.62, 0.07, PIN, { x: x + (along === 'x' ? a : 0), y: 0, z: z + (along === 'x' ? 0 : a) }, 0.01)))
+    g.add(pbox(0.07, 0.62, 0.07, PIN, { x: x + (along === 'x' ? a : 0), y: 0, z: z + (along === 'x' ? 0 : a) }))
   }
   return g
 }
@@ -657,7 +681,7 @@ const microUsb = (x: number, y: number, z: number) => rbox(0.6, 0.28, 0.75, META
 /** 直插 LED：两条腿插进孔（孔面高 top），灯珠发光 */
 function ledThrough(x1: number, x2: number, z: number, top: number, color: string, legH = 0.9) {
   const g = new THREE.Group()
-  for (const x of [x1, x2]) g.add(noOutlineDeep(rbox(0.05, legH + 0.25, 0.05, PIN, { x, y: top - 0.25, z }, 0.01)))
+  for (const x of [x1, x2]) g.add(pbox(0.05, legH + 0.25, 0.05, PIN, { x, y: top - 0.25, z }))
   const cx = (x1 + x2) / 2
   g.add(lit(cyl(0.29, 0.29, 0.08, color, { x: cx, y: top + legH, z }, 14), color, 0.5))
   g.add(lit(cyl(0.25, 0.25, 0.42, color, { x: cx, y: top + legH + 0.08, z }, 14), color, 0.8))
@@ -674,7 +698,7 @@ function resistor(x1: number, x2: number, z: number, top: number, body = '#e6c9a
   for (const s of [-1, 1]) g.add(cylX(0.135, 0.12, body, cx + s * 0.27, y, z, 12))
   bands.forEach((b, i) => g.add(noOutlineDeep(cylX(0.128, 0.05, b, cx - 0.2 + i * 0.12 + (i === 3 ? 0.06 : 0), y, z, 12))))
   for (const x of [x1, x2]) {
-    g.add(noOutlineDeep(rbox(0.05, 0.57, 0.05, PIN, { x, y: top - 0.25, z }, 0.01)))
+    g.add(pbox(0.05, 0.57, 0.05, PIN, { x, y: top - 0.25, z }))
     g.add(noOutlineDeep(rod3([x, y, z], [cx + Math.sign(cx - x) * -0.3, y, z], 0.025, PIN, 6)))
   }
   return g
@@ -684,8 +708,8 @@ function resistor(x1: number, x2: number, z: number, top: number, body = '#e6c9a
 function eCap(x1: number, x2: number, z: number, top: number, body = '#2b4fa0', h = 0.9, r = 0.3) {
   const cx = (x1 + x2) / 2
   const g = G(cyl(r, r, h, body, { x: cx, y: top + 0.2, z }, 16), noOutlineDeep(cyl(r * 0.85, r * 0.85, 0.03, METAL, { x: cx, y: top + 0.2 + h, z }, 16)))
-  g.add(noOutlineDeep(rbox(0.06, h * 0.9, 0.04, '#e8e8e8', { x: cx - r * 0.6, y: top + 0.25, z: z + r * 0.78 }, 0.01)))
-  for (const x of [x1, x2]) g.add(noOutlineDeep(rbox(0.05, 0.47, 0.05, PIN, { x, y: top - 0.25, z }, 0.01)))
+  g.add(pbox(0.06, h * 0.9, 0.04, '#e8e8e8', { x: cx - r * 0.6, y: top + 0.25, z: z + r * 0.78 }))
+  for (const x of [x1, x2]) g.add(pbox(0.05, 0.47, 0.05, PIN, { x, y: top - 0.25, z }))
   return g
 }
 
@@ -712,7 +736,7 @@ function jumper(a: [number, number], b: [number, number], top: number, h: number
         [bx - dx * k, top + 0.1, bz - dz * k],
         [bx, top + 0.06, bz],
         [bx, top - 0.2, bz],
-      ], r, color, TUBE)
+      ], r, color, { ...WIRE_IN, seg: 16 })
   }
   return cappedTube([
       [ax, top - 0.2, az],
@@ -722,7 +746,7 @@ function jumper(a: [number, number], b: [number, number], top: number, h: number
       [ax + dx * 0.75, top + h * 0.92, az + dz * 0.75],
       [bx, top + h * 0.45, bz],
       [bx, top - 0.2, bz],
-    ], r, color, TUBE)
+    ], r, color, WIRE_IN)
 }
 
 /** 杜邦头：黑色方塑料壳，公头带针；沿 dir（单位向量 xz）朝外 */
@@ -730,7 +754,7 @@ function dupontHead(x: number, y: number, z: number, ang: number, male: boolean,
   const g = new THREE.Group()
   g.add(rbox(0.25, 0.25, 1.4, color, { y: -0.125 }, 0.03))
   g.children[0].position.z = 0.7
-  if (male) g.add(noOutlineDeep(P(rbox(0.07, 0.07, 0.6, PIN, {}, 0.01), 0, 0, 1.6)))
+  if (male) g.add(pbox(0.07, 0.07, 0.6, PIN, { y: -0.035, z: 1.6 }))
   g.position.set(x, y, z)
   g.rotation.y = ang
   return g
@@ -870,9 +894,9 @@ function bluePill(p: string[]) {
 /** 面包板本体 + 孔阵画面；返回孔面高度 */
 function bbBody(g: THREE.Group, n: number, w: number, color: string, rails = true) {
   const d = rails ? BB_D : 3.5
-  g.add(rbox(w, 0.85, d, color, {}, 0.12))
-  g.add(paintTop(w - 0.1, d - 0.1, `mk-bb-${color}-${n}-${rails}`, drawBreadboard(color, n, w - 0.1, rails), 0, 0.9, 0))
-  return 0.9
+  g.add(rbox(w, 0.9, d, color, {}, 0.12))
+  g.add(paintTop(w - 0.1, d - 0.1, `mk-bb-${color}-${n}-${rails}`, drawBreadboard(color, n, w - 0.1, rails), 0, 0.95, 0))
+  return 0.95
 }
 
 function breadboardFull(p: string[]) {
@@ -914,7 +938,7 @@ function breadboardHalf(p: string[]) {
   const bx = bbX(n, 7)
   g.add(rbox(0.6, 0.35, 0.6, '#2b2b2b', { x: bx, y: T + 0.1, z: 0 }, 0.05))
   g.add(cyl(0.18, 0.18, 0.2, wires[5], { x: bx, y: T + 0.45, z: 0 }, 12))
-  for (const c of [6, 8]) for (const s of [-1, 1]) g.add(noOutlineDeep(rbox(0.06, 0.4, 0.05, PIN, { x: bbX(n, c), y: T - 0.25, z: s * 0.381 }, 0.01)))
+  for (const c of [6, 8]) for (const s of [-1, 1]) g.add(pbox(0.06, 0.4, 0.05, PIN, { x: bbX(n, c), y: T - 0.25, z: s * 0.381 }))
   g.add(jumper(h(3, 10), h(3, 0), T, 0.6, wires[1]))
   g.add(jumper(h(25, 13), h(25, 9), T, 0.6, wires[9]))
   g.add(jumper(h(10, 2), h(10, 7), T, 0.9, wires[3]))
@@ -957,7 +981,8 @@ function smdReels(p: string[]) {
   ;[-2.25, -0.75, 0.75, 2.25].forEach((x, i) => {
     for (const s of [-1, 1]) g.add(cylX(8.9, 0.12, cols[i], x + s * 0.58, yc, 0, 40))
     g.add(cylX(6.2 - i * 0.6, 1.0, tape, x, yc, 0, 32))
-    g.add(cylX(1.4, 1.3, shade(cols[i], -0.15), x, yc, 0))
+    // 轴套比两片挡板的外侧各凸出 0.07（挡板实际厚 0.1，外侧在 ±0.63；以前只凸 0.02，和挡板共面闪烁）
+    g.add(cylX(1.4, 1.4, shade(cols[i], -0.15), x, yc, 0))
   })
   for (const [i, x] of [[0, -2.25], [2, 0.75]] as const) {
     const rr = 6.2 - i * 0.6
@@ -973,6 +998,9 @@ const REEL_PALS: PalFlat[] = [
   ['cute', '#ffb6c8', '#f4f4f2', C.white],
   ['modern', '#f4f4f2', '#2e2f33', M.silver],
 ]
+
+/** 元件盒里 LED 的圆头：8 × 5 段（共用几何） */
+const ledDome = () => cached('mk-led-dome', () => new THREE.SphereGeometry(0.25, 8, 5))
 
 function partsBox(p: string[]) {
   const [latch, tint] = p
@@ -998,9 +1026,9 @@ function partsBox(p: string[]) {
         const z = cz + (r() - 0.5) * (cd - 1.0)
         const y = 0.25
         if (kind === 0) g.add(noOutlineDeep(P(cyl(0.11, 0.11, 0.6, '#e6c9a0', {}, 8), x, y + 0.11, z, 0, r() * PI, PI / 2)))
-        else if (kind === 1) g.add(noOutlineDeep(G(lit(cyl(0.25, 0.25, 0.45, col, { x, y, z }, 10), col, 0.25), lit(ball(0.25, col, { x, y: y + 0.45, z }), col, 0.25))))
+        else if (kind === 1) g.add(noOutlineDeep(G(lit(cyl(0.25, 0.25, 0.45, col, { x, y, z }, 10), col, 0.25), lit(P(new THREE.Mesh(ledDome(), toon(col)), x, y + 0.45, z), col, 0.25))))
         else if (kind === 2) g.add(noOutlineDeep(cyl(0.3, 0.3, 0.8, k % 2 ? '#2b4fa0' : '#2b2b2b', { x, y, z }, 12)))
-        else g.add(noOutlineDeep(rbox(0.45, 0.35, 0.18, k % 2 ? CHIP : '#f2963a', { x, y, z, ry: r() * PI }, 0.05)))
+        else g.add(pbox(0.45, 0.35, 0.18, k % 2 ? CHIP : '#f2963a', { x, y, z, ry: r() * PI }))
       }
     }
   g.add(ghostDeep(rbox(W, 0.25, D, tint, { y: H }, 0.2), tint, 0.3))
@@ -1017,16 +1045,22 @@ const CASE_PALS: PalFlat[] = [
 ]
 
 /** 一排（10 根）杜邦线，沿给定的中心线平躺，两端杜邦头 */
-function dupontRibbon(path: (o: number) => V3[], y: number, wires: string[], housing: string, male: boolean) {
+/**
+ * 一排杜邦线，平躺着对折成 U 形：两段直线（去程长 L + 6，回程短 1.5）+ 绕 x = 6 的半圈弯头，两端杜邦头。
+ * 直线段各是一根 5 边细圆柱、弯头是半个圆环（以前整根用 80 段的弯管，两排 20 根线近 4 万个三角面，
+ * 段数又是沿全长平均分的，内圈半径 1cm 的弯头只摊到三四段，还是折线）。
+ */
+function dupontRibbon(L: number, y: number, wires: string[], housing: string, male: boolean) {
   const g = new THREE.Group()
   wires.forEach((c, i) => {
-    const o = (i - (wires.length - 1) / 2) * 0.27
-    const pts = path(o).map(([x, , z]): V3 => [x, y, z])
-    g.add(cappedTube(pts, 0.08, c, { ...TUBE, seg: 80 }))
-    const [a, a2] = [pts[0], pts[1]]
-    const [b, b2] = [pts[pts.length - 1], pts[pts.length - 2]]
-    g.add(dupontHead(a[0], y + 0.125, a[2], Math.atan2(a[0] - a2[0], a[2] - a2[2]), male, housing))
-    g.add(dupontHead(b[0], y + 0.125, b[2], Math.atan2(b[0] - b2[0], b[2] - b2[2]), true, housing))
+    const Rr = 2.2 + (i - (wires.length - 1) / 2) * 0.27
+    g.add(cylX(0.08, L + 6, c, (6 - L) / 2, y, -Rr, 5))
+    g.add(cylX(0.08, L + 4.5, c, (7.5 - L) / 2, y, Rr, 5))
+    const bend = mesh(cached(`mk-ubend${Rr.toFixed(2)}`, () => new THREE.TorusGeometry(Rr, 0.08, 5, 14, PI).rotateX(PI / 2).rotateY(PI / 2)), c)
+    bend.position.set(6, y, 0)
+    g.add(bend)
+    g.add(dupontHead(-L, y + 0.125, -Rr, -PI / 2, male, housing))
+    g.add(dupontHead(-L + 1.5, y + 0.125, Rr, -PI / 2, true, housing))
   })
   return g
 }
@@ -1034,18 +1068,8 @@ function dupontLying(p: string[]) {
   const [housing, tie, set] = p
   const wires = isLight(set) ? PASTEL : WIRES
   const g = new THREE.Group()
-  const uPath =
-    (L: number) =>
-    (o: number): V3[] => {
-      const Rr = 2.2 + o
-      const arc = Array.from({ length: 7 }, (_, k): V3 => {
-        const a = -PI / 2 + (k / 6) * PI
-        return [6 + Math.cos(a) * Rr, 0, Math.sin(a) * Rr]
-      })
-      return [[-L, 0, -Rr], [-2, 0, -Rr], [3, 0, -Rr], ...arc, [3, 0, Rr], [-2, 0, Rr], [-L + 1.5, 0, Rr]]
-    }
-  g.add(dupontRibbon(uPath(8), 0.08, wires, housing, true))
-  const top = dupontRibbon(uPath(6), 0.25, [...wires].reverse(), housing, false)
+  g.add(dupontRibbon(8, 0.08, wires, housing, true))
+  const top = dupontRibbon(6, 0.25, [...wires].reverse(), housing, false)
   top.rotation.y = 0.35
   top.position.set(0.5, 0, 0.3)
   g.add(top)
@@ -1067,21 +1091,16 @@ function dupontHanging(p: string[]) {
     const z = 1.0 + i * 0.27
     const lenL = 11 + (i % 3) * 0.6
     const lenR = 9 + (i % 4) * 0.5
-    const pts: V3[] = [
-      [-0.55, top - lenL, z],
-      [-0.5, top - 3, z],
-      [-0.4, top - 0.4, z],
-      [0, top, z],
-      [0.4, top - 0.4, z],
-      [0.5, top - 3, z],
-      [0.6, top - lenR, z],
-    ]
-    g.add(cappedTube(pts, 0.08, c, { ...TUBE, seg: 60 }))
-    for (const [x, y, male] of [[-0.55, top - lenL, true], [0.6, top - lenR, i % 2 === 0]] as const) {
+    // 搭在钩上的半圈（半径 0.5 的半个圆环）+ 两段垂下来的直线（以前整根是 60 段的弯管，顶上的弯只摊到四段）
+    const bend = mesh(cached('mk-hang-bend', () => new THREE.TorusGeometry(0.5, 0.08, 5, 10, PI)), c)
+    bend.position.set(0, top - 0.5, z)
+    g.add(bend)
+    for (const [x, len, male] of [[-0.5, lenL, true], [0.5, lenR, i % 2 === 0]] as const) {
+      g.add(cyl(0.08, 0.08, len - 0.5, c, { x, y: top - len, z }, 5))
       const hd = new THREE.Group()
       hd.add(rbox(0.25, 1.4, 0.25, housing, { y: -1.4 }, 0.03))
-      if (male) hd.add(noOutlineDeep(rbox(0.07, 0.6, 0.07, PIN, { y: -2.0 }, 0.01)))
-      hd.position.set(x, y, z)
+      if (male) hd.add(pbox(0.07, 0.6, 0.07, PIN, { y: -2.0 }))
+      hd.position.set(x, top - len, z)
       g.add(hd)
     }
   })
@@ -1176,14 +1195,14 @@ function robotCar(p: string[]) {
     g.add(cylZ(0.8, 1.2, METAL, s * 1.3, 6.0, 9.88, 18))
     g.add(noOutlineDeep(cylZ(0.62, 0.06, '#3a3a3c', s * 1.3, 6.0, 10.5, 18)))
   }
-  // 导线：驱动板 → Arduino 排母
+  // 导线：驱动板 → Arduino 排母（两头都插在端子 / 排母里，不要球帽：14 个 1mm 小球就占两千多面）
   const wc = ['#e8453c', '#2b2b2b', '#f2d23a', '#4caf50', '#3a8ee8']
   wc.forEach((c, i) => {
     const x = -1.4 + i * 0.5
-    g.add(cappedTube([[x, 4.95, 6.6], [x, 6.6, 7.3], [x * 0.8, 9.8, 4.0], [x - 0.6, 10.2, 2.2], [x - 0.6, 9.15, 1.5]], 0.06, c, TUBE))
+    g.add(cappedTube([[x, 4.95, 6.6], [x, 6.6, 7.3], [x * 0.8, 9.8, 4.0], [x - 0.6, 10.2, 2.2], [x - 0.6, 9.15, 1.5]], 0.06, c, WIRE_IN))
   })
-  g.add(cappedTube([[-2.2, 6.2, -4], [-3.0, 7.0, 0], [-1.8, 5.2, 3.6], [-0.6, 4.95, 4.2]], 0.06, '#e8453c', TUBE))
-  g.add(cappedTube([[-1.8, 6.2, -4], [-2.5, 6.8, 0], [-1.4, 5.2, 3.6], [-0.2, 4.95, 4.2]], 0.06, '#2b2b2b', TUBE))
+  g.add(cappedTube([[-2.2, 6.2, -4], [-3.0, 7.0, 0], [-1.8, 5.2, 3.6], [-0.6, 4.95, 4.2]], 0.06, '#e8453c', WIRE_IN))
+  g.add(cappedTube([[-1.8, 6.2, -4], [-2.5, 6.8, 0], [-1.4, 5.2, 3.6], [-0.2, 4.95, 4.2]], 0.06, '#2b2b2b', WIRE_IN))
   return fitGroup(g)
 }
 const CAR_PALS: PalFlat[] = [
@@ -1248,7 +1267,7 @@ function batteryBox(p: string[]) {
     if (i % 2) bat.position.x = 2 * x
     g.add(bat)
   }
-  for (const s of [-1, 1]) g.add(noOutlineDeep(rbox(5.8, 1.1, 0.06, METAL, { y: 0.3, z: s * 2.83 }, 0.02)))
+  for (const s of [-1, 1]) g.add(noOutlineDeep(rbox(5.8, 1.1, 0.06, METAL, { y: 0.3, z: s * 2.77 }, 0.02)))
   g.add(cappedTube([[-2.6, 0.9, -3.0], [-3.2, 0.35, -4.4], [-1.5, 0.08, -6.5], [1.8, 0.08, -7.2], [4.2, 0.08, -6.0]], 0.07, '#e8453c', TUBE))
   g.add(cappedTube([[-2.2, 0.9, -3.0], [-2.7, 0.35, -4.1], [-1.2, 0.08, -5.8], [1.8, 0.08, -6.3], [4.4, 0.08, -5.2]], 0.07, '#2b2b2b', TUBE))
   for (const [x, z] of [[4.2, -6.0], [4.4, -5.2]]) g.add(noOutlineDeep(cylX(0.04, 0.6, SOLDER, x + 0.3, 0.08, z, 6)))
@@ -1299,7 +1318,7 @@ function oledModule(p: string[]) {
   const n = 17
   const T = bbBody(g, n, 4.6, bbColor, false)
   const z = bbZ(2)
-  for (let c = 7; c <= 10; c++) g.add(noOutlineDeep(rbox(0.07, 0.95, 0.07, GOLD, { x: bbX(n, c), y: T - 0.25, z }, 0.01)))
+  for (let c = 7; c <= 10; c++) g.add(pbox(0.07, 0.95, 0.07, GOLD, { x: bbX(n, c), y: T - 0.25, z }))
   g.add(rbox(4 * BB_P, 0.25, BB_P, HDR, { x: (bbX(n, 7) + bbX(n, 10)) / 2, y: T + 0.45, z }, 0.04))
   const by = T + 0.7
   g.add(rbox(2.7, 2.8, PCB_T, pcbColor, { y: by, z: z - 0.05 }, 0.05))
@@ -1409,7 +1428,7 @@ function solderSpool(p: string[]) {
   g.add(cylX(0.25, 7.6, CHROME, 0, yc, 0, 10))
   for (const s of [-1, 1]) g.add(cylX(3.0, 0.15, flange, s * 1.6, yc, 0, 36))
   g.add(cylX(2.4, 3.05, SOLDER, 0, yc, 0, 32))
-  g.add(paintPanel(3.6, 3.6, `mk-spool-${flange}-${label}`, drawRoundTag(flange, label, 'Sn63', 'Ø0.8mm 250g'), { x: 1.69, y: yc - 1.8, ry: PI / 2 }))
+  g.add(paintPanel(3.6, 3.6, `mk-spool-${flange}-${label}`, drawRoundTag(flange, label, 'Sn63', 'Ø0.8mm 250g'), { x: 1.75, y: yc - 1.8, ry: PI / 2 }))
   g.add(rbox(1.2, 0.9, 0.9, stand, { x: 0.5, y: 0.9, z: 2.55 }, 0.2))
   g.add(cylZ(0.25, 1.0, METAL, 0.5, 2.0, 2.6, 10))
   g.add(cappedTube([[0.5, yc, 2.4], [0.5, 4.2, 2.7], [0.5, 2.6, 2.4], [0.5, 2.0, 2.0], [0.5, 2.0, 3.2], [0.6, 1.4, 4.6], [1.0, 0.06, 6.0], [2.6, 0.06, 6.8]], 0.05, SOLDER, { ...TUBE, seg: 60 }))
@@ -1460,8 +1479,8 @@ function helpingHands(p: string[]) {
     g.add(cylZ(0.25, 0.7, METAL, s * 3.85, 10.88, 0.8, 10))
   }
   g.add(rbox(4.4, PCB_T, 3.2, '#2f7d4a', { y: 10.8, z: 0.8 }, 0.04))
-  g.add(paintTop(4.3, 3.1, 'mk-pcb-hh', drawPcb('#2f7d4a', 71, '#ffffff', 0.5), 0, 10.81 + PCB_T, 0.8))
-  g.add(chip(1.0, 1.0, 0.5, 11.01, 0.8, 6, 6))
+  g.add(paintTop(4.3, 3.1, 'mk-pcb-hh', drawPcb('#2f7d4a', 71, '#ffffff', 0.5), 0, 10.8 + PCB_T + 0.05, 0.8))
+  g.add(chip(1.0, 1.0, 0.5, 10.8 + PCB_T + 0.05, 0.8, 6, 6))
   g.add(cyl(0.35, 0.35, 15.5, rodC, { y: 1.8, z: -3 }, 10))
   g.add(ball(0.6, rodC, { y: 17.3, z: -3 }))
   const lens = G(torus(4.5, 0.35, rodC), ghostDeep(P(cyl(4.3, 4.3, 0.25, GLASS, {}, 32), 0, 0, 0, PI / 2), GLASS, 0.35))
@@ -1485,7 +1504,7 @@ function multimeter(p: string[]) {
   g.add(rbox(8.2, 3.4, 17.4, face, {}, 0.3))
   g.add(paintTop(8.0, 17.2, `mk-meter-${face}-${acc}`, drawMeterFace(face, acc, 0.55), 0, 3.45, 0))
   g.add(rbox(6.8, 0.15, 3.4, '#1e1e20', { y: 3.4, z: -5.6 }, 0.08))
-  g.add(paintTop(6.2, 2.8, 'mk-meter-lcd', drawMeterLcd, 0, 3.6, -5.6, 0.45))
+  g.add(paintTop(6.2, 2.8, 'mk-meter-lcd', drawMeterLcd, 0, 3.65, -5.6, 0.45))
   for (let i = 0; i < 4; i++) g.add(rbox(1.3, 0.3, 0.7, i === 0 ? acc : '#5a5d63', { x: -2.4 + i * 1.6, y: 3.4, z: -2.9 }, 0.12))
   g.add(cyl(2.2, 2.2, 0.6, '#2b2b2b', { y: 3.4, z: 0.9 }, 28))
   g.add(rbox(0.6, 0.5, 3.6, '#3a3a3c', { y: 4.0, z: 0.9, ry: 0.5 }, 0.15))
@@ -1616,7 +1635,7 @@ function logicAnalyzer(p: string[]) {
     const xs = -1.2 + i * 0.27
     const xe = -6 + i * 1.35
     const ze = 9.5 + (i % 3) * 1.4
-    g.add(cappedTube([[xs, 0.8, 3.25], [xs, 0.6, 4.6], [xs + (xe - xs) * 0.5, 0.1, 6.8], [xe, 0.1, ze - 1.6], [xe, 0.3, ze - 0.5]], 0.07, c, TUBE))
+    g.add(cappedTube([[xs, 0.8, 3.25], [xs, 0.6, 4.6], [xs + (xe - xs) * 0.5, 0.1, 6.8], [xe, 0.1, ze - 1.6], [xe, 0.3, ze - 0.3]], 0.07, c, WIRE_IN))
     g.add(P(capsule(0.3, 1.4, c), xe, 0.3, ze + 0.5, PI / 2))
     g.add(P(cyl(0.05, 0.12, 0.8, CHROME, {}, 6), xe, 0.3, ze + 1.9, PI / 2))
   })
@@ -1646,8 +1665,8 @@ function usbMicroscope(p: string[]) {
   g.add(lit(P(torus(1.15, 0.18, glowC), 0, 5.92, 0, PI / 2), glowC, 0.9))
   g.add(noOutlineDeep(cyl(0.6, 0.6, 0.05, '#4a6a8a', { y: 5.88, z: 0 }, 16)))
   g.add(rbox(4.4, PCB_T, 3.2, '#2f7d4a', { y: 1.2, z: 0 }, 0.04))
-  g.add(paintTop(4.3, 3.1, 'mk-pcb-micro', drawPcb('#2f7d4a', 73, '#ffffff', 0.5), 0, 1.21 + PCB_T, 0))
-  g.add(chip(0.8, 0.8, 0.3, 1.41, 0.2, 5, 5))
+  g.add(paintTop(4.3, 3.1, 'mk-pcb-micro', drawPcb('#2f7d4a', 73, '#ffffff', 0.5), 0, 1.2 + PCB_T + 0.05, 0))
+  g.add(chip(0.8, 0.8, 0.3, 1.2 + PCB_T + 0.05, 0.2, 5, 5))
   g.add(cappedTube([[0, 16.5, 0], [0, 17.8, 0.5], [2.2, 17.2, 3.0], [5.0, 8.0, 5.2], [6.6, 0.15, 6.4], [8.4, 0.15, 8.6]], 0.15, '#2b2b2b', TUBE))
   g.add(P(rbox(1.2, 0.5, 1.8, '#2b2b2b', {}, 0.15), 9.0, 0, 9.5, 0, 0.7))
   return fitGroup(g)
@@ -1665,20 +1684,27 @@ function glueGun(p: string[]) {
   const [body, acc] = p
   const gun = new THREE.Group()
   gun.add(P(capsule(1.7, 9, body), 0, 0, 0, PI / 2))
-  gun.add(P(cyl(0.35, 1.0, 2.4, METAL, {}, 14), 0, 0, 7.8, PI / 2))
-  gun.add(P(cyl(0.12, 0.3, 0.9, '#b8862a', {}, 10), 0, 0, 9.4, PI / 2))
+  // 喷嘴根部插进枪身前端的圆头里（枪身前端在 z = 6.2；以前喷嘴从 6.6 才开始，中间空着 0.4cm）
+  gun.add(P(cyl(0.35, 1.0, 2.4, METAL, {}, 14), 0, 0, 7.2, PI / 2))
+  gun.add(P(cyl(0.12, 0.3, 0.9, '#b8862a', {}, 10), 0, 0, 8.8, PI / 2))
   gun.add(P(rbox(2.6, 8.5, 3.2, body, {}, 0.9), 0, -4.6, -2.6, -0.28))
   gun.add(P(rbox(1.2, 2.6, 1.3, acc, {}, 0.4), 0, -2.6, 0.6, -0.2))
   gun.add(P(rbox(2.8, 1.2, 3.4, acc, {}, 0.5), 0, -8.7, -3.8, -0.28))
   gun.add(cylZ(0.55, 4.0, '#f4f2e8', 0, 0.2, -7.6, 14))
-  // 支架（钢丝）
-  gun.add(rod3([-0.9, -1.4, 4.5], [-0.9, -5.6, 5.4], 0.12, METAL))
-  gun.add(rod3([0.9, -1.4, 4.5], [0.9, -5.6, 5.4], 0.12, METAL))
-  gun.add(rod3([-0.9, -5.6, 5.4], [0.9, -5.6, 5.4], 0.12, METAL))
   gun.add(cappedTube([[0, -9.3, -4.6], [0, -9.6, -6.5], [1.2, -9.5, -10], [3.5, -9.5, -12]], 0.22, '#2b2b2b', TUBE))
   gun.add(P(rbox(1.6, 1.2, 2.2, '#2b2b2b', {}, 0.2), 4.2, -9.6, -12.8, 0, 0.6))
   gun.rotation.x = 0.12
   const g = fitGroup(gun)
+  // 钢丝支架：枪身摆好、落到桌面之后再接，从枪管下面撑到 y = 0（以前按枪身自己的坐标写死长度，脚悬在离桌面 3cm 的半空）
+  gun.updateMatrix()
+  const feet = [-1, 1].map((s): V3 => {
+    const a = new THREE.Vector3(s * 0.9, -1.4, 4.5).applyMatrix4(gun.matrix)
+    const f: V3 = [a.x + s * 0.6, 0.12, a.z + 1.2]
+    g.add(rod3([a.x, a.y, a.z], f, 0.12, METAL))
+    g.add(ball(0.12, METAL, { x: f[0], y: f[1], z: f[2] }))
+    return f
+  })
+  g.add(rod3(feet[0], feet[1], 0.12, METAL))
   for (let i = 0; i < 3; i++) g.add(cylZ(0.55, 10, '#f4f2e8', 3.2 + i * 1.15, 0.55, 2, 14))
   return fitGroup(g)
 }
@@ -1781,7 +1807,8 @@ function esdStrap(p: string[]) {
   g.add(rbox(1.6, 0.95, 1.3, '#3a3a3c', { x: 2.4, y: 0, z: 0 }, 0.3))
   g.add(cyl(0.4, 0.4, 0.25, METAL, { x: 2.4, y: 0.95, z: 0 }, 12))
   const coil = helix(0.35, 0.24, 36, 10).map(([x, y, z]): V3 => [y + 3.4, x + 0.45, z])
-  g.add(cappedTube(coil, 0.07, cord, { ...TUBE, seg: 700 }))
+  // 36 圈弹簧线：每圈 10 段、截面 5 边（以前 700 × 8，光这一根就 1.1 万个三角面）
+  g.add(cappedTube(coil, 0.07, cord, { ...WIRE, seg: 360 }))
   g.add(cappedTube([[12.04, 0.45, 0.35], [13.2, 0.12, 0.8], [14.2, 0.12, 0.2]], 0.07, cord, TUBE))
   g.add(gator(14.6, 0, 0, clip, PI / 2))
   return fitGroup(g)
@@ -2019,7 +2046,8 @@ function drillPress(p: string[]) {
   g.add(puck(8, 2, cast, { y: 20, z: 4 }))
   g.add(rbox(13, 13, 22, cast, { y: 40, z: -1 }, 1.0))
   g.add(rbox(13.2, 4, 22.2, acc, { y: 53, z: -1 }, 1.5))
-  g.add(cyl(5, 5, 12, shade(cast, -0.1), { y: 41, z: -15 }, 22))
+  // 电机顶面伸进机头顶盖里（以前正好和机头顶面同高 53，在顶盖底下共面）
+  g.add(cyl(5, 5, 12.5, shade(cast, -0.1), { y: 41, z: -15 }, 22))
   g.add(cyl(1.6, 1.6, 4, CHROME, { y: 36, z: 4 }, 16))
   g.add(cyl(1.8, 1.2, 3.5, '#2b2b2b', { y: 32.5, z: 4 }, 16))
   g.add(cyl(0.3, 0.3, 7, CHROME, { y: 25.5, z: 4 }, 8))
@@ -2105,36 +2133,60 @@ const CNC_PALS: PalFlat[] = [
   ['modern', M.char, '#3a7fd0', M.silver],
 ]
 
-/** 零件抽屉柜：rows 自下而上，每行 {h, n} */
+/**
+ * 零件抽屉柜：rows 自下而上，每行 {h, n}。
+ * 柜体是空壳（两侧、顶、底、背板）+ 正面的格栅，小抽屉插在里面（以前柜体是一整块实心盒，抽屉内胆埋在里面、
+ * 前壁和柜体正面共面闪烁，拉开抽屉后面也没有洞）。抽屉内胆藏在柜里，用直角小方块：几十个抽屉全用圆角盒要 4–6 万个三角面。
+ */
 function drawerCab(W: number, D: number, rows: { h: number; n: number }[], plinth: number) {
   return (p: string[]) => {
     const [frame, tint, handle] = p
     const g = new THREE.Group()
     const H = plinth + rows.reduce((s, r) => s + r.h, 0) + 1.2
     if (plinth > 0) g.add(rbox(W - 2, plinth, D - 3, shade(frame, -0.12), { z: -0.5 }, 0.4))
-    g.add(rbox(W, H - plinth, D - 1.2, frame, { y: plinth, z: -0.6 }, 0.5))
+    const T = 0.6
+    for (const s of [-1, 1]) g.add(rbox(T, H - plinth, D - 1.2, frame, { x: s * (W / 2 - T / 2), y: plinth, z: -0.6 }, 0.2))
+    for (const y of [plinth, H - T]) g.add(rbox(W, T, D - 1.2, frame, { y, z: -0.6 }, 0.2))
+    g.add(rbox(W, H - plinth, T, frame, { y: plinth, z: -D / 2 + T / 2 }, 0.2))
     const zf = D / 2 - 1.2
     const r = rng(W * 7 + D)
-    let y = plinth + 0.6
-    for (const row of rows) {
+    /** 每行的底边高度，最后一个是最上面一行的顶 */
+    const ys = [plinth + 0.6]
+    for (const row of rows) ys.push(ys[ys.length - 1] + row.h)
+    rows.forEach((row, k) => {
+      const y = ys[k]
       const cw = (W - 1.2) / row.n
       g.add(rbox(W, 0.5, 1.0, frame, { y: y - 0.25, z: zf + 0.5 }, 0.15))
+      // 竖档：往上格数相同的几行连成一根通长的
+      if (k === 0 || rows[k - 1].n !== row.n) {
+        let end = k
+        while (end + 1 < rows.length && rows[end + 1].n === row.n) end++
+        const hh = ys[end + 1] - y
+        for (let i = 0; i < row.n; i++) g.add(rbox(0.5, hh, 1.0, frame, { x: -W / 2 + 0.6 + cw * i, y, z: zf + 0.5 }, 0.15))
+        g.add(rbox(0.5, hh, 1.0, frame, { x: W / 2 - 0.35, y, z: zf + 0.5 }, 0.15))
+      }
       for (let i = 0; i < row.n; i++) {
         const x = -W / 2 + 0.6 + cw * (i + 0.5)
-        g.add(rbox(0.5, row.h, 1.0, frame, { x: x - cw / 2, y, z: zf + 0.5 }, 0.15))
         const c = PART_COLORS[Math.floor(r() * PART_COLORS.length)]
         // 每个透明小抽屉（连同里面的零件）都能拉出一半
         const bin = new THREE.Group()
-        bin.add(noOutlineDeep(rbox(cw - 1.0, row.h * (0.25 + r() * 0.25), 0.6, c, { x, y: y + 0.3, z: zf + 0.35 }, 0.1)))
-        bin.add(ghostDeep(rbox(cw - 0.45, row.h - 0.45, 0.2, tint, { x, y: y + 0.22, z: zf + 0.85 }, 0.08), tint, 0.4))
+        // 内胆：底、两侧、后壁，前面接到透明面板背面；零件堆在内胆里靠前的地方
+        const inner = shade(tint, -0.08)
+        const tw = cw - 1.2
+        const th = row.h - 1.2
+        const z0 = zf - (D - 3)
+        const z1 = zf + 0.75
+        bin.add(pbox(tw, 0.4, z1 - z0, inner, { x, y: y + 0.3, z: (z0 + z1) / 2 }))
+        for (const s of [-1, 1]) bin.add(pbox(0.4, th, z1 - z0, inner, { x: x + s * (tw / 2 - 0.2), y: y + 0.3, z: (z0 + z1) / 2 }))
+        bin.add(pbox(tw, th, 0.4, inner, { x, y: y + 0.3, z: z0 + 0.2 }))
+        bin.add(pbox(tw - 0.9, row.h * (0.25 + r() * 0.25), 0.6, c, { x, y: y + 0.7, z: zf + 0.4 }))
+        // 半透明的抽屉面：0.08 的圆角看不出来、半透明也不描边，用直角盒（39 格的圆角盒光这一项就三千多面）
+        bin.add(ghostDeep(pbox(cw - 0.45, row.h - 0.45, 0.2, tint, { x, y: y + 0.22, z: zf + 0.85 }), tint, 0.4))
         bin.add(rbox(Math.min(cw * 0.4, 4), 0.5, 0.5, handle, { x, y: y + row.h * 0.55, z: zf + 1.15 }, 0.15))
-        bin.add(tray(cw - 1.2, row.h - 1.2, D - 3, 0.4, shade(tint, -0.08), { x, y: y + 0.3, z: zf - (D - 3) / 2 }, 0.15))
         g.add(movable(bin, { kind: 'drawer', dz: Math.round(D * 0.5) }))
       }
-      g.add(rbox(0.5, row.h, 1.0, frame, { x: W / 2 - 0.35, y, z: zf + 0.5 }, 0.15))
-      y += row.h
-    }
-    g.add(rbox(W, 0.6, 1.0, frame, { y: y - 0.3, z: zf + 0.5 }, 0.15))
+    })
+    g.add(rbox(W, 0.6, 1.0, frame, { y: ys[rows.length] - 0.3, z: zf + 0.5 }, 0.15))
     return g
   }
 }
@@ -2329,7 +2381,7 @@ function screwSorter(p: string[]) {
         if (kind === 0)
           g.add(noOutlineDeep(P(G(cyl(0.12 * sc, 0.12 * sc, 1.4 * sc, col, { y: -0.7 * sc }, 6), cyl(0.28 * sc, 0.28 * sc, 0.15, col, { y: 0.7 * sc }, 10)), x, y + 0.3 * sc, z, PI / 2, r() * PI, 0)))
         else if (kind === 1) g.add(noOutlineDeep(cyl(0.32 * sc, 0.32 * sc, 0.22 * sc, col, { x, y, z }, 6)))
-        else if (kind === 2) g.add(noOutlineDeep(P(torus(0.28 * sc, 0.08 * sc, col), x, y + 0.08, z, PI / 2)))
+        else if (kind === 2) g.add(P(tinyRing(0.28 * sc, 0.08 * sc, col), x, y + 0.08, z, PI / 2))
         else g.add(noOutlineDeep(cyl(0.22 * sc, 0.22 * sc, 0.5 * sc, col, { x, y, z }, 8)))
       }
     }
@@ -2387,9 +2439,10 @@ function teardown(p: string[]) {
   g.add(rbox(1.5, 0.6, 1.0, METAL, { x: -12.5, y: t, z: 2.5 }, 0.1))
   g.add(rbox(3.2, 0.4, 0.8, '#f4f4f2', { x: -2, y: t, z: -3.6 }, 0.06))
   for (let i = 0; i < 4; i++) g.add(G(cyl(0.35, 0.35, 0.8, '#2b2b2b', { x: -10 + i * 1.0, y: t, z: 3.2 }, 12)))
-  g.add(rbox(6, 1.0, 4, '#3a7fd0', { x: -3.5, y: 0.35, z: 4.9 }, 0.3))
-  g.add(cappedTube([[-1.5, 1.2, 4.5], [-0.6, 1.8, 3.5], [-1.2, t + 0.2, 1.0]], 0.06, '#e8453c', TUBE))
-  g.add(cappedTube([[-1.5, 1.2, 5.2], [-0.2, 1.9, 4.0], [-0.8, t + 0.2, 1.3]], 0.06, '#2b2b2b', TUBE))
+  // 电池垫在主板下面、从板子前沿露出一截（以前和主板一样高、叠在同一块地方，互相穿过去）；引线从露出的一端绕上板面
+  g.add(rbox(6, 0.7, 3.6, '#3a7fd0', { x: -3.5, y: 0.35, z: 4.6 }, 0.25))
+  g.add(cappedTube([[-0.6, 0.8, 5.7], [0.3, 1.6, 5.4], [-0.4, t + 0.5, 3.6], [-1.2, t + 0.1, 1.0]], 0.06, '#e8453c', WIRE))
+  g.add(cappedTube([[-0.6, 0.8, 6.0], [0.6, 1.7, 5.8], [0, t + 0.5, 3.9], [-0.8, t + 0.1, 1.3]], 0.06, '#2b2b2b', WIRE))
   // 翻开的上壳（内面朝上）+ 排线
   g.add(tray(22, 2.0, 14, 0.35, shellC, { x: 17 }, 0.6))
   for (let i = 0; i < 4; i++) g.add(cyl(0.6, 0.6, 0.6, acc, { x: 12 + i * 1.6, y: 0.35, z: 3 }, 14))
@@ -2403,8 +2456,8 @@ function teardown(p: string[]) {
   g.add(cylX(0.4, 8, acc, -6, 0.4, 10, 6))
   g.add(cylX(0.1, 3, CHROME, -0.5, 0.4, 10, 6))
   g.add(rbox(9, 0.3, 0.8, '#3a7fd0', { x: -14, z: 10.5, ry: 0.3 }, 0.1))
-  g.add(cappedTube([[-17, 0.08, 8.5], [-19, 0.08, 6], [-21, 0.08, 2], [-19.6, 0.08, -2], [-17.5, 0.08, -3.5]], 0.07, '#4caf50', TUBE))
-  g.add(cappedTube([[-16, 0.08, 9.5], [-18, 0.08, 9.0], [-20.5, 0.08, 6.5], [-21.5, 0.08, 4.5]], 0.07, '#f2d23a', TUBE))
+  g.add(cappedTube([[-17, 0.08, 8.5], [-19, 0.08, 6], [-21, 0.08, 2], [-19.6, 0.08, -2], [-17.5, 0.08, -3.5]], 0.07, '#4caf50', WIRE))
+  g.add(cappedTube([[-16, 0.08, 9.5], [-18, 0.08, 9.0], [-20.5, 0.08, 6.5], [-21.5, 0.08, 4.5]], 0.07, '#f2d23a', WIRE))
   return fitGroup(g)
 }
 const TEAR_PALS: PalFlat[] = [

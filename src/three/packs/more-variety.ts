@@ -470,7 +470,8 @@ function beanCat(p: string[]) {
   for (const s of [-1, 1]) {
     const ear = new THREE.Group()
     ear.add(cyl(0.5, 9.5, 17, cloth, { ry: PI }, 3))
-    ear.add(cyl(0.4, 6, 12, inner, { z: 2.2, ry: PI }, 3))
+    // 耳内比耳朵底面高 0.5cm，两个底面不共面
+    ear.add(cyl(0.4, 6, 12, inner, { y: 0.5, z: 2.2, ry: PI }, 3))
     ear.position.set(s * 17, 51.5, -15)
     ear.rotation.set(-0.25, 0, -s * 0.28)
     g.add(ear)
@@ -569,7 +570,8 @@ const duoF: SoftFn = (x, y, z) => {
 function beanDuo(p: string[]) {
   const [cloth, acc] = p
   const g = G(soft(cloth, duoF, { wrinkle: 1.4, freq: 1.4, seed: 19, seg: [64, 36] }))
-  for (const s of [-1, 1]) g.add(torus(3.6, 0.8, acc, { x: s * 75.6, y: 22, rz: (-s * PI) / 2 }, PI))
+  // 侧提手两脚缝进袋身：褶皱让右侧袋面只到 x ≈ 75，原来放在 ±75.6，右边那只悬在袋面外 0.4
+  for (const s of [-1, 1]) g.add(torus(3.6, 0.8, acc, { x: s * 74.6, y: 22, rz: (-s * PI) / 2 }, PI))
   return g
 }
 
@@ -1937,7 +1939,7 @@ const LEDGE_PALS: Pal[] = [
 
 export const MV_DECO: AssetDef[] = [
   A('mv-deco-plates', '挂盘组', 'deco', [73, 1.8, 47], PLATE_PALS, decoPlates, { mount: 120 }),
-  A('mv-deco-wood-geo', '木质几何壁挂', 'deco', [89.7, 5, 46.4], WOODGEO_PALS, decoWoodGeo, { mount: 125 }),
+  A('mv-deco-wood-geo', '木质几何壁挂', 'deco', [73, 5, 46.4], WOODGEO_PALS, decoWoodGeo, { mount: 125 }),
   A('mv-deco-weave-round', '圆环编织挂毯', 'deco', [46.4, 3.2, 78.7], WEAVE_PALS, decoWeaveRound, { mount: 110 }),
   A('mv-deco-hoop', '干花挂环', 'deco', [51.3, 5.2, 50.1], HOOP_PALS, decoHoop, { mount: 128 }),
   A('mv-deco-deer', '几何鹿头壁饰', 'deco', [26.2, 26.1, 40.3], DEER_PALS, decoDeer, { mount: 138 }),

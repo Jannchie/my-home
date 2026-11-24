@@ -6,7 +6,7 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
-import { C, G, ellipsePoly, holePanel, rectPoly, slab, type AssetCategory, type AssetDef, type Poly } from '../kit'
+import { C, G, ellipsePoly, holePanel, paintPanel, rectPoly, slab, type AssetCategory, type AssetDef, type Poly } from '../kit'
 import { P, PI, cylX, cylZ, fitBuild, ghost, lit, noOutline, rod3, taperRod3, type V3 } from '../geo'
 import { I, M, N, R, definer, type Build, type PalFlat } from '../packkit'
 
@@ -42,14 +42,14 @@ function dbl<T extends THREE.Mesh>(m: T): T {
 /** 平放的圆环（在 xz 平面），给中心 */
 const ringFlat = (r: number, t: number, color: string, x: number, y: number, z: number, arc = PI * 2) => torus(r, t, color, { x, y, z, rx: PI / 2 }, arc)
 
-/** 沿平滑曲线的管子（绳、带子、把手、钩子） */
-function tubeLine(pts: V3[], r: number, color: string, closed = false, seg?: number) {
+/** 沿平滑曲线的管子（绳、带子、把手、钩子）；radial 是截面段数，不描边的细线（接缝、网绳、通风槽）用 4–6 段就够 */
+function tubeLine(pts: V3[], r: number, color: string, closed = false, seg?: number, radial = 8) {
   const curve = new THREE.CatmullRomCurve3(
     pts.map((p) => new THREE.Vector3(...p)),
     closed,
     'centripetal',
   )
-  const geo = new THREE.TubeGeometry(curve, seg ?? pts.length * 10, r, 8, closed)
+  const geo = new THREE.TubeGeometry(curve, seg ?? pts.length * 10, r, radial, closed)
   const m = new THREE.Mesh(geo, toon(color))
   m.castShadow = true
   m.receiveShadow = true
@@ -99,7 +99,8 @@ function seam(R: number, color: string, tube = 0.3, a = 0.7) {
     const t = (i / 64) * PI * 2
     pts.push([(a * Math.cos(t) + b * Math.cos(3 * t)) * R, (a * Math.sin(t) - b * Math.sin(3 * t)) * R, c * Math.sin(2 * t) * R])
   }
-  return noOutline(tubeLine(pts, tube, color, true, 160))
+  // 接缝只有 0.2–0.3cm 粗、不描边：96 × 5 段（原来 160 × 8，一颗球的接缝就 2500 多面）
+  return noOutline(tubeLine(pts, tube, color, true, 96, 5))
 }
 
 /** 带接缝的小球（棒球、垒球、网球），球心在 (x, r, z) */
@@ -344,7 +345,8 @@ function bowlingBall(p: string[]) {
 function bowlingBag(p: string[]) {
   const [a, b, c] = p
   const g = G(rbox(30, 26, 22, a, {}, 9))
-  for (const s of [-1, 1]) g.add(P(rbox(1, 20, 16, b, {}, 5), s * 15.2, 13, 0))
+  // 侧片嵌进包身、只鼓出 0.3：包身圆角 9，侧面平的部分只有 8 × 4，原来 20 × 16 的薄片四周都悬在圆角外面
+  for (const s of [-1, 1]) g.add(P(rbox(2.4, 14, 10, b, {}, 1.1), s * 14.1, 13, 0))
   g.add(tubeLine([[-12, 26.2, 0], [0, 26.35, 0], [12, 26.2, 0]], 0.35, c))
   g.add(rbox(1.2, 2.4, 0.8, c, { x: 8, y: 25.2, z: 0.7 }, 0.3))
   for (const z of [-4.5, 4.5]) g.add(tubeLine([[-6, 25.4, z], [-4.5, 33, z * 0.8], [4.5, 33, z * 0.8], [6, 25.4, z]], 0.8, b))
@@ -395,7 +397,8 @@ function netColumn(a: string, b: string, net: string) {
   ]
   for (let k = 0; k < 8; k++) {
     const t = (k / 8) * PI * 2
-    g.add(noOutline(tubeLine(prof.map(([rr, y]): V3 => [Math.cos(t) * rr, y, Math.sin(t) * rr]), 0.18, net)))
+    // 网绳很细、不描边：36 × 4 段（原来 90 × 8，八根就一万多面）
+    g.add(noOutline(tubeLine(prof.map(([rr, y]): V3 => [Math.cos(t) * rr, y, Math.sin(t) * rr]), 0.18, net, false, 36, 4)))
   }
   for (const y of ys) g.add(noOutline(torus(11, 0.18, net, { y, rx: PI / 2 })))
   for (const y of [-23.75, -45.25]) g.add(noOutline(torus(9.6, 0.18, net, { y, rx: PI / 2 })))
@@ -412,7 +415,8 @@ function ballNetHanging(p: string[]) {
 }
 function ballNetLying(p: string[]) {
   const [a, b, c] = p
-  return G(P(netColumn(a, b, c), 0, 0, 0, 0, 0, PI / 2), tubeLine([[-1, 0.2, 0], [-6, -5, 4], [-12, -10.5, 2]], 0.22, c))
+  // 拉绳从袋口绳环的下沿垂下来（绳环转过来后在 x = -0.2 的竖直面上，半径 1.2）；原来起点离绳环 0.9，绳子悬空
+  return G(P(netColumn(a, b, c), 0, 0, 0, 0, 0, PI / 2), tubeLine([[-0.2, -1.1, 0], [-6, -5, 4], [-12, -10.5, 2]], 0.22, c))
 }
 
 const RACK_TIERS = [8, 43, 78]
@@ -799,8 +803,9 @@ function tentBag(p: string[]) {
   const [a, b, c] = p
   const g = G(P(puck(9, 44, a), 0, 9, 0, 0, 0, PI / 2))
   for (const x of [-12, 12]) g.add(torus(9.25, 0.45, b, { x, y: 9, ry: PI / 2 }))
-  g.add(P(puck(3, 42, c), 0, 3, 12.4, 0, 0, PI / 2))
-  g.add(P(puck(3.2, 14, b), -10, 3.2, 19.2, 0, 0.1, PI / 2))
+  // 杆袋、地钉袋并排躺在地上：绑带比袋身低 0.7（落地后整体抬 0.7），这两只也压低 0.7 才着地，原来悬在地面上 0.8
+  g.add(P(puck(3, 42, c), 0, 2.3, 12.4, 0, 0, PI / 2))
+  g.add(P(puck(3.2, 14, b), -10, 2.5, 19.2, 0, 0.1, PI / 2))
   return g
 }
 
@@ -874,7 +879,8 @@ function lantern(p: string[]) {
   }
   g.add(cyl(5.6, 6, 2.5, a, { y: 15 }, 24))
   g.add(puck(3, 1.2, b, { y: 17.2 }))
-  g.add(torus(5, 0.35, c, { y: 17.8 }, PI))
+  // 提梁两脚插进顶盖（顶盖面在 17.5；原来提梁从 17.8 起，两脚悬在盖上）
+  g.add(torus(5, 0.35, c, { y: 17.3 }, PI))
   return g
 }
 
@@ -1023,10 +1029,11 @@ function binding(a: string, b: string, c: string) {
   const ankle = torus(5.8, 0.55, c, { y: 4.6, z: -2 }, PI)
   ankle.scale.set(1, 1, 3.5)
   g.add(ankle)
-  const toe = torus(5.2, 0.5, c, { y: 2.8, z: 8 }, PI)
+  // 趾带两端落到底板上（底板顶 y = 1.6；这一段没有侧墙，原来整条带子悬在底板上方）
+  const toe = torus(5.2, 0.5, c, { y: 1.8, z: 8 }, PI)
   toe.scale.set(1, 1, 2.6)
   g.add(toe)
-  for (const z of [-2, 8]) g.add(rbox(1.6, 1.4, 2.6, STEEL, { x: z < 0 ? 6.2 : 5.6, y: z < 0 ? 4.6 : 2.8, z }, 0.3))
+  for (const z of [-2, 8]) g.add(rbox(1.6, 1.4, 2.6, STEEL, { x: z < 0 ? 6.2 : 5.6, y: z < 0 ? 4.6 : 1.8, z }, 0.3))
   return g
 }
 function bindings(p: string[]) {
@@ -1073,12 +1080,13 @@ function roadHelmet(p: string[]) {
     ]) {
       const pts: V3[] = []
       for (let i = 0; i <= 6; i++) pts.push(surf(x, z0 + ((z1 - z0) * i) / 6))
-      g.add(noOutline(tubeLine(pts, 0.6, DARK)))
+      // 通风槽、饰条、下巴带都是细管：段数按长度给够就行（原来每根 70–110 × 8 段，整顶头盔一万两千多面）
+      g.add(noOutline(tubeLine(pts, 0.6, DARK, false, 14, 6)))
     }
   }
   const mid: V3[] = []
   for (let i = 0; i <= 10; i++) mid.push(surf(0, -12 + i * 2.4, 0.2))
-  g.add(tubeLine(mid, 0.65, b))
+  g.add(tubeLine(mid, 0.65, b, false, 33))
   g.add(
     tubeLine(
       [
@@ -1092,6 +1100,9 @@ function roadHelmet(p: string[]) {
       ],
       0.35,
       c,
+      false,
+      30,
+      6,
     ),
   )
   return g
@@ -1107,7 +1118,8 @@ function bikeBottles(p: string[]) {
 function duffel(p: string[]) {
   const [a, b, c] = p
   const g = G(rbox(54, 28, 28, a, {}, 9))
-  for (const s of [-1, 1]) g.add(P(rbox(1.2, 22, 22, b, {}, 6), s * 27.1, 14, 0))
+  // 侧片嵌进包身、只鼓出 0.3（包身圆角 9，侧面平的部分只有 10 × 10，原来 22 × 22 的薄片悬在圆角外面）
+  for (const s of [-1, 1]) g.add(P(rbox(2.4, 16, 16, b, {}, 1.1), s * 26.1, 14, 0))
   g.add(tubeLine([[-22, 28.25, 0], [0, 28.4, 0], [22, 28.25, 0]], 0.35, c))
   g.add(rbox(1.2, 0.8, 3, c, { x: 10, y: 28.2, z: 1.6 }, 0.3))
   for (const z of [-5, 5]) g.add(tubeLine([[-8, 27.6, z], [-6, 35, z * 0.9], [6, 35, z * 0.9], [8, 27.6, z]], 0.9, c))
@@ -1243,10 +1255,29 @@ function gearRack(p: string[]) {
   const [a, b, c] = p
   const g = G()
   for (const x of [-48, 48]) for (const z of [-17, 17]) g.add(rbox(4, 180, 4, a, { x, z }, 0.8))
-  for (const y of [8, 44, 80, 172]) g.add(rbox(100, 3, 38, b, { y }, 0.8))
-  const holes = []
-  for (let i = 0; i < 15; i++) for (let j = 0; j < 12; j++) holes.push({ kind: 'circle' as const, x: -42 + i * 6, y: 5 + j * 6, r: 0.6 })
-  g.add(holePanel(92, 74, 1.5, c, holes, { y: 90, z: -17.5 }))
+  // 层板四边比立柱外皮缩 0.4：原来层板端面 / 前后面和立柱外侧面共面
+  for (const y of [8, 44, 80, 172]) g.add(rbox(99.2, 3, 37.2, b, { y }, 0.8))
+  // 洞洞板：180 个直径 1.2cm 的孔画在贴图上（真挖洞要四万多个三角面，这么小的孔远看和画的没区别）
+  g.add(rbox(92, 74, 1.5, c, { y: 90, z: -17.5 }, 0.6))
+  g.add(
+    paintPanel(
+      91,
+      73,
+      `gr-pegboard-${c}`,
+      (cv, W, H) => {
+        cv.fillStyle = c
+        cv.fillRect(0, 0, W, H)
+        cv.fillStyle = shade(c, -0.32)
+        for (let i = 0; i < 15; i++)
+          for (let j = 0; j < 12; j++) {
+            cv.beginPath()
+            cv.arc(((3.5 + i * 6) / 91) * W, H - ((4.5 + j * 6) / 73) * H, (0.6 / 91) * W, 0, PI * 2)
+            cv.fill()
+          }
+      },
+      { y: 90.5, z: -16.69 },
+    ),
+  )
   g.add(rbox(92, 5, 2, a, { y: GEAR_RACK_HOOK_Y - 2.5, z: -15.8 }, 0.6))
   for (let i = 0; i < 6; i++) {
     const x = -37.5 + i * 15

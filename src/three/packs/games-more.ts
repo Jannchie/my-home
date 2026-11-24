@@ -8,7 +8,7 @@
 // 约定见 kit.ts 开头。
 
 import * as THREE from 'three'
-import { ball, cup, cyl, rbox, shade, toon, tray } from '../toon'
+import { ball, cached, cup, cyl, rbox, shade, toon, tray } from '../toon'
 import { C, paintPanel, rng, type AssetDef } from '../kit'
 import { G, P, PI, fitGroup, noOutline } from '../geo'
 import { CL, CN, F, I, J, M, N, PROP, R, definer, type PalFlat } from '../packkit'
@@ -34,6 +34,27 @@ function board(w: number, d: number, t: number, wood: string, key: string, draw:
   g.add(paintTop(w - 1, d - 1, key, draw, 0, t + 0.04, 0))
   return [g, t + 0.05]
 }
+/**
+ * 贴花（牌背色块、点数、棋子上的色条）：不描边的直角薄盒，at.y 为底面。
+ * 约定：厚 0.1，底面沉进本体 0.04、顶面浮出 0.06——浮出不到 0.05 的会和本体顶面闪烁；
+ * 底面不和本体顶面齐平，叠放时就不会和上面那件的底面共面。用直角盒是因为圆角盒每个 108 面，一局牌上百个贴花。
+ */
+function decal(w: number, h: number, d: number, color: string, at: { x?: number; y?: number; z?: number } = {}) {
+  const m = new THREE.Mesh(cached(`bg-decal${w},${h},${d}`, () => new THREE.BoxGeometry(w, h, d)), toon(color))
+  m.position.set(at.x ?? 0, (at.y ?? 0) + h / 2, at.z ?? 0)
+  m.receiveShadow = true
+  return noOutline(m)
+}
+/** 贴花沉进本体的量 / 贴花厚度（见 decal） */
+const SINK = 0.04
+const DECAL_T = 0.1
+/** 骰子 / 骨牌上的圆点：压扁的低面数球（默认 8 × 6，80 面；ball 最少 12 × 8，一局骨牌一百多个点） */
+function dot(r: number, color: string, at: { x: number; y: number; z: number }, scale: [number, number, number], seg: [number, number] = [8, 6]) {
+  const m = new THREE.Mesh(cached(`bg-pip${r},${seg[0]}x${seg[1]}`, () => new THREE.SphereGeometry(r, seg[0], seg[1])), toon(color))
+  m.position.set(at.x, at.y, at.z)
+  m.scale.set(...scale)
+  return noOutline(m)
+}
 const lineGrid = (c: CanvasRenderingContext2D, x0: number, y0: number, x1: number, y1: number, nx: number, ny: number) => {
   c.beginPath()
   for (let i = 0; i < nx; i++) {
@@ -53,20 +74,28 @@ const lineGrid = (c: CanvasRenderingContext2D, x0: number, y0: number, x1: numbe
 
 const CARD_W = 6.3
 const CARD_D = 8.8
+/** 牌厚（模型里夸张到 0.2，薄了描边会糊成一条线） */
+const CARD_T = 0.2
+/**
+ * 扇形手牌每张抬高的量。牌身互相穿插着叠（比牌厚小），所以要挑一个不会让「下面那张的牌背色块顶面」
+ * 和「上面某张的牌身顶面」落在同一高度的步长：色块顶面比牌身顶面高 0.06，0.11 的整数倍离 0.06 至少 0.05。
+ */
+const FAN_STEP = 0.11
 /** 一张平放的扑克牌：背朝上（背色 + 白边）或面朝上（白底 + 角上花色）；(x, y, z) 为底面中心，ry 转角 */
 function card(back: string, faceUp: boolean, x: number, y: number, z: number, ry = 0, suit = 0, w = CARD_W, d = CARD_D) {
   const g = new THREE.Group()
-  g.add(rbox(w, 0.22, d, faceUp ? PAPER : '#ffffff', {}, 0.08))
+  g.add(rbox(w, CARD_T, d, faceUp ? PAPER : '#ffffff', {}, 0.08))
+  const dy = CARD_T - SINK
   if (faceUp) {
     const col = suit % 2 ? RED : DARK
-    g.add(noOutline(rbox(w * 0.22, 0.05, w * 0.22, col, { x: -w * 0.3, y: 0.22, z: -d * 0.34 }, 0.02)))
-    g.add(noOutline(rbox(w * 0.36, 0.05, w * 0.36, col, { y: 0.22 }, 0.02)))
-  } else g.add(noOutline(rbox(w - 0.8, 0.05, d - 0.8, back, { y: 0.22 }, 0.05)))
+    g.add(decal(w * 0.22, DECAL_T, w * 0.22, col, { x: -w * 0.3, y: dy, z: -d * 0.34 }))
+    g.add(decal(w * 0.36, DECAL_T, w * 0.36, col, { y: dy }))
+  } else g.add(decal(w - 0.8, DECAL_T, d - 0.8, back, { y: dy }))
   return P(g, x, y, z, 0, ry)
 }
 /** 一副叠好的牌：n 张高 */
 function deck(back: string, x: number, y: number, z: number, ry = 0, h = 1.6, w = CARD_W, d = CARD_D) {
-  const g = G(rbox(w, h, d, '#f4f1ea', {}, 0.15), noOutline(rbox(w - 0.8, 0.05, d - 0.8, back, { y: h }, 0.05)))
+  const g = G(rbox(w, h, d, '#f4f1ea', {}, 0.15), decal(w - 0.8, DECAL_T, d - 0.8, back, { y: h - SINK }))
   return P(g, x, y, z, 0, ry)
 }
 /** 扇形摊开的一手牌（背朝上，平放在桌上）：围绕 (x, z) 处、朝 dir 方向（ry）展开 n 张 */
@@ -74,9 +103,9 @@ function fan(back: string, n: number, x: number, y: number, z: number, ry: numbe
   const g = new THREE.Group()
   for (let i = 0; i < n; i++) {
     const a = (i - (n - 1) / 2) * spread
-    const c = card(back, faceUp, 0, i * 0.07, 0, a, i)
+    const c = card(back, faceUp, 0, i * FAN_STEP, 0, a, i)
     // 绕牌底端转：底端在原点下方 CARD_D / 2
-    c.position.set(Math.sin(a) * CARD_D * 0.5, i * 0.07, -Math.cos(a) * CARD_D * 0.5 + CARD_D * 0.5)
+    c.position.set(Math.sin(a) * CARD_D * 0.5, i * FAN_STEP, -Math.cos(a) * CARD_D * 0.5 + CARD_D * 0.5)
     g.add(c)
   }
   return P(g, x, y, z, 0, ry)
@@ -96,17 +125,17 @@ function die(s: number, body: string, pip: string, x: number, y: number, z: numb
     6: [[-1, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [1, 1]],
   }
   const pc = (n: number) => (n === 1 && pip === DARK ? RED : pip)
-  for (const [u, v] of LAY[top]) g.add(noOutline(ball(r, pc(top), { x: u * q, y: s + 0.02, z: v * q }, [1, 0.3, 1])))
+  for (const [u, v] of LAY[top]) g.add(dot(r, pc(top), { x: u * q, y: s + 0.02, z: v * q }, [1, 0.3, 1]))
   const front = top === 1 ? 2 : 1
-  for (const [u, v] of LAY[front]) g.add(noOutline(ball(r, pc(front), { x: u * q, y: s / 2 + v * q, z: s / 2 + 0.02 }, [1, 1, 0.3])))
+  for (const [u, v] of LAY[front]) g.add(dot(r, pc(front), { x: u * q, y: s / 2 + v * q, z: s / 2 + 0.02 }, [1, 1, 0.3]))
   const side = top === 3 || top === 4 ? 2 : 3
-  for (const [u, v] of LAY[side]) g.add(noOutline(ball(r, pc(side), { x: s / 2 + 0.02, y: s / 2 + v * q, z: u * q }, [0.3, 1, 1])))
+  for (const [u, v] of LAY[side]) g.add(dot(r, pc(side), { x: s / 2 + 0.02, y: s / 2 + v * q, z: u * q }, [0.3, 1, 1]))
   return P(g, x, y, z, 0, ry)
 }
 /** 圆片棋子（跳棋 / 斗兽棋 / 筹码）：顶面一圈浅色 */
 function disc(r: number, h: number, color: string, x: number, y: number, z: number, ring = true) {
   const g = G(cyl(r, r, h, color, {}, 20))
-  if (ring) g.add(noOutline(cyl(r * 0.62, r * 0.62, 0.06, shade(color, 0.14), { y: h }, 20)))
+  if (ring) g.add(noOutline(cyl(r * 0.62, r * 0.62, DECAL_T, shade(color, 0.14), { y: h - SINK }, 20)))
   return P(g, x, y, z)
 }
 
@@ -175,7 +204,7 @@ const jqDraw = (wood: string, line: string): Draw => (c, W, H) => {
 }
 /** 一枚军旗棋子：平放的长方块，顶面一道军衔色条 */
 const jqPiece = (color: string, x: number, y: number, z: number, ry = 0, flipped = false) =>
-  P(G(rbox(3.4, 0.9, 2.3, flipped ? '#e9e2cf' : color, {}, 0.3), noOutline(rbox(2.2, 0.05, 1, flipped ? shade(color, -0.1) : '#fff6e0', { y: 0.9 }, 0.1))), x, y, z, 0, ry)
+  P(G(rbox(3.4, 0.9, 2.3, flipped ? '#e9e2cf' : color, {}, 0.3), decal(2.2, DECAL_T, 1, flipped ? shade(color, -0.1) : '#fff6e0', { y: 0.9 - SINK })), x, y, z, 0, ry)
 function junqi(state: 'setup' | 'mid' | 'flip') {
   return ([wood, a, b]: string[]) => {
     const [g, y] = board(34, 56, 0.6, wood, `bg-jq-${wood}`, jqDraw(shade(wood, 0.08), '#3a2a1e'))
@@ -212,8 +241,9 @@ function junqiBoxed([wood, a, b]: string[]) {
   g.add(rbox(0.4, 3.4, 13.8, '#e2d6bc', { y: 0.6 }, 0.1))
   for (const [s, col] of [[-1, a], [1, b]] as const)
     for (let i = 0; i < 12; i++) g.add(jqPiece(col, s * 5.8 + ((i % 3) - 1) * 3.4, 0.6 + Math.floor(i / 9) * 0.9, -4.6 + (Math.floor(i / 3) % 3) * 4.3, (i % 2) * 0.1))
-  // 盖子立在后面
-  g.add(P(G(rbox(25, 0.6, 16, RED, {}, 0.3), noOutline(rbox(12, 0.05, 6, '#f6d36a', { y: 0.6 }, 0.1))), 0, 8.6, -9.4, -PI / 2 + 0.15))
+  // 盖子立在盒子后面：下沿落在桌上，往前斜靠在盒子后沿上，印花的一面朝前
+  // （以前整块盖子离桌 0.7、离盒子 0.7 悬着，印花还朝着背面）
+  g.add(P(G(rbox(25, 0.6, 16, RED, {}, 0.3), decal(12, DECAL_T, 6, '#f6d36a', { y: 0.6 - SINK })), 0, 8, -7.55, PI / 2 + 0.15))
   // 折好的棋盘
   g.add(rbox(17.6, 1.4, 28.6, wood, { x: 22, z: 0 }, 0.4))
   return fitGroup(g)
@@ -408,6 +438,8 @@ function gomoku(state: 'mid' | 'win') {
     // 两只棋盒放在棋盘两边
     for (const [s, black] of [[1, true], [-1, false]] as const) {
       g.add(cup(3.8, 3.6, 3.6, 0.4, box, { x: s * 20.5, z: s * 8 }))
+      // 盒里装着大半盒棋子：垫一层同色的「棋子堆」到 2.9，面上那几颗才有处可放（原来浮在盒口半空）
+      g.add(cyl(3.1, 3.0, 2.5, shade(black ? DARK : '#f8f6f0', black ? 0.06 : -0.06), { x: s * 20.5, y: 0.4, z: s * 8 }, 16))
       for (let k = 0; k < 5; k++) g.add(ball(0.75, black ? DARK : '#f8f6f0', { x: s * 20.5 + Math.cos(k * 1.3) * 1.6, y: 3.2, z: s * 8 + Math.sin(k * 1.3) * 1.6 }, [1, 0.4, 1]))
     }
     return fitGroup(g)
@@ -466,7 +498,7 @@ const PJ_H = 1
 function pjTile(body: string, pipA: string, pipB: string, faceUp: boolean, a: number, b: number, x: number, y: number, z: number, ry = 0, w = PJ_W, d = PJ_D) {
   const g = G(rbox(w, PJ_H, d, body, {}, 0.3))
   if (faceUp) {
-    g.add(noOutline(rbox(w * 0.8, 0.04, 0.12, pipA === '#ffffff' ? shade(body, 0.3) : shade(body, -0.25), { y: PJ_H }, 0.02)))
+    g.add(decal(w * 0.8, DECAL_T, 0.12, pipA === '#ffffff' ? shade(body, 0.3) : shade(body, -0.25), { y: PJ_H - SINK }))
     const LAY: Record<number, [number, number][]> = {
       0: [],
       1: [[0, 0]],
@@ -477,7 +509,7 @@ function pjTile(body: string, pipA: string, pipB: string, faceUp: boolean, a: nu
       6: [[-1, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [1, 1]],
     }
     for (const [half, n] of [[-1, a], [1, b]] as const)
-      for (const [u, v] of LAY[n]) g.add(noOutline(ball(w * 0.08, n === 1 || n === 4 ? pipB : pipA, { x: u * w * 0.24, y: PJ_H + 0.02, z: half * d * 0.25 + v * d * 0.12 }, [1, 0.3, 1])))
+      for (const [u, v] of LAY[n]) g.add(dot(w * 0.08, n === 1 || n === 4 ? pipB : pipA, { x: u * w * 0.24, y: PJ_H + 0.02, z: half * d * 0.25 + v * d * 0.12 }, [1, 0.3, 1], [6, 4]))
   }
   return P(g, x, y, z, 0, ry)
 }
@@ -550,7 +582,7 @@ const HANA_FACES = ['#d65a3c', '#e98fb0', '#f2c14e', '#8a4fb0', '#3f7a4a', '#c83
 const hanaCard = (back: string, faceUp: boolean, k: number, x: number, y: number, z: number, ry = 0) => {
   const g = G(rbox(HANA_W, 0.3, HANA_D, faceUp ? '#f2e6cc' : back, {}, 0.1))
   if (faceUp) {
-    g.add(noOutline(rbox(HANA_W - 0.6, 0.05, HANA_D - 0.6, HANA_FACES[k % 12], { y: 0.3 }, 0.05)))
+    g.add(decal(HANA_W - 0.6, DECAL_T, HANA_D - 0.6, HANA_FACES[k % 12], { y: 0.3 - SINK }))
     g.add(noOutline(ball(0.6, k % 3 ? '#fbf8f0' : '#26262a', { y: 0.36, z: -0.8 }, [1, 0.2, 1])))
   }
   return P(g, x, y, z, 0, ry)
@@ -564,7 +596,7 @@ function hanafudaMat([mat, back, box]: string[]) {
   const y = 4
   for (let i = 0; i < 8; i++) g.add(hanaCard(back, true, i * 3, ((i % 4) - 1.5) * 4.4, y, (Math.floor(i / 4) - 0.5) * 6.4, (i % 3) * 0.05))
   // 山札（背面朝上一叠）
-  g.add(P(G(rbox(HANA_W, 2, HANA_D, '#e8dcc0', {}, 0.1), noOutline(rbox(HANA_W - 0.4, 0.05, HANA_D - 0.4, back, { y: 2 }, 0.05))), 11.6, y, 0, 0, 0.1))
+  g.add(P(G(rbox(HANA_W, 2, HANA_D, '#e8dcc0', {}, 0.1), decal(HANA_W - 0.4, DECAL_T, HANA_D - 0.4, back, { y: 2 - SINK })), 11.6, y, 0, 0, 0.1))
   // 两家：手牌扇形 + 得札（面朝上错开摆）
   for (const s of [-1, 1]) {
     for (let i = 0; i < 7; i++) {
@@ -575,7 +607,7 @@ function hanafudaMat([mat, back, box]: string[]) {
   }
   // 牌盒（垫子外、桌面上）
   g.add(rbox(6.6, 2.6, 9.6, box, { x: 28.6, z: 14 }, 0.4))
-  g.add(noOutline(rbox(3, 0.05, 5, '#f2e6cc', { x: 28.6, y: 2.6, z: 14 }, 0.1)))
+  g.add(decal(3, DECAL_T, 5, '#f2e6cc', { x: 28.6, y: 2.6 - SINK, z: 14 }))
   return fitGroup(g)
 }
 const HANA_MAT_P: PalFlat[] = [
@@ -665,6 +697,8 @@ function checkers(state: 'start' | 'mid') {
     const r = rng(state === 'mid' ? 9 : 2)
     let off1 = 0
     let off2 = 0
+    // 已经有子的格：往前走的子落到别人占着的格上就留在原位（以前两枚不同色的子会叠在同一格里互相穿插）
+    const taken = new Set<string>()
     for (const [rows, col, side] of [[[0, 1, 2], p2, -1], [[5, 6, 7], p1, 1]] as const)
       for (const j of rows)
         for (let i = 0; i < 8; i++) {
@@ -682,8 +716,11 @@ function checkers(state: 'start' | 'mid') {
               jj = Math.max(0, Math.min(7, j - side * (1 + Math.floor(r() * 3))))
               ii = Math.max(0, Math.min(7, ((jj + i) % 2 ? i : i + 1)))
               if ((ii + jj) % 2 === 0) ii = Math.max(0, ii - 1)
+              if (taken.has(`${ii},${jj}`)) [ii, jj] = [i, j]
             }
           }
+          if (taken.has(`${ii},${jj}`)) continue
+          taken.add(`${ii},${jj}`)
           const [x, z] = at(ii, jj)
           g.add(disc(1.7, 0.7, col, x, y, z))
           // 升王：叠两枚
@@ -732,13 +769,13 @@ const propDraw = (base: string, band: string): Draw => (c, W, H) => {
   c.strokeRect(W * 0.62, H * 0.66, u * 1.6, u * 1.1)
 }
 /** 小房子 / 旅馆 */
-const house = (col: string, x: number, y: number, z: number, big = false) => {
+const house = (col: string, x: number, y: number, z: number, big = false, ry = 0) => {
   const w = big ? 1.6 : 0.9
   const g = G(rbox(w, 0.7, 0.9, col, {}, 0.1))
   const roof = P(cyl(0, 0.75, 0.55, col, {}, 4), 0, 0.7, 0, 0, PI / 4)
   roof.scale.set(w / 1.06, 1, 0.9 / 1.06)
   g.add(roof)
-  return P(g, x, y, z)
+  return P(g, x, y, z, 0, ry)
 }
 function propertyGame([base, band, money]: string[]) {
   const g = new THREE.Group()
@@ -749,10 +786,14 @@ function propertyGame([base, band, money]: string[]) {
   const r = rng(77)
   // 房子、旅馆落在格子上
   for (let k = 0; k < 9; k++) {
-    const t = 1 + Math.floor(r() * 9)
+    const t0 = 1 + Math.floor(r() * 9)
+    // 第 2、6 格没有色带（机会 / 税），房子挪到旁边那格
+    const t = t0 % 4 === 2 ? t0 + 1 : t0
     const side = Math.floor(r() * 4)
-    const [i, j] = [[t, 0.25], [10.75, t], [10 - t, 10.75], [0.25, 10 - t]][side]
-    g.add(house(k % 4 === 3 ? '#d84a3a' : '#3aa860', (i + 0.5) * u - 24.8, y, (j + 0.25) * u - 24.8, k % 4 === 3))
+    // 房子压在那一格靠棋盘中心一侧的色带上（色带宽 0.25 格）：[i, j] 是房子中心所在的格坐标。
+    // 以前右边、下边两条边算到了棋盘外面，房子悬在桌子上空
+    const [i, j] = [[t + 0.5, 0.875], [10.125, t + 0.5], [10.5 - t, 10.125], [0.875, 10.5 - t]][side]
+    g.add(house(k % 4 === 3 ? '#d84a3a' : '#3aa860', i * u - 24.8, y, j * u - 24.8, k % 4 === 3, side % 2 ? PI / 2 : 0))
   }
   // 四枚棋子（自创：小帽子、小车、小船、小狗形状换成简单几何）
   g.add(P(G(cyl(0.9, 0.9, 0.3, '#c9ced6', {}, 16), cyl(0.55, 0.55, 1.2, '#c9ced6', { y: 0.3 }, 16)), -22, y, 8))
@@ -815,8 +856,8 @@ const wordsDraw = (base: string, dl: string, tw: string): Draw => (c, W, H) => {
 /** 字母方块：象牙色小方块，顶面一道深色笔画（示意字母） */
 const tile = (x: number, y: number, z: number, k: number, ry = 0) => {
   const g = G(rbox(1.9, 0.5, 2.1, '#f3e6c8', {}, 0.2))
-  g.add(noOutline(rbox(k % 3 ? 0.9 : 0.25, 0.04, k % 3 ? 0.22 : 1.1, '#3a2a22', { y: 0.5, x: k % 2 ? -0.1 : 0.1 }, 0.05)))
-  if (k % 4 === 1) g.add(noOutline(rbox(0.22, 0.04, 1.1, '#3a2a22', { y: 0.5, x: -0.35 }, 0.05)))
+  g.add(decal(k % 3 ? 0.9 : 0.25, DECAL_T, k % 3 ? 0.22 : 1.1, '#3a2a22', { y: 0.5 - SINK, x: k % 2 ? -0.1 : 0.1 }))
+  if (k % 4 === 1) g.add(decal(0.22, DECAL_T, 1.1, '#3a2a22', { y: 0.5 - SINK, x: -0.35 }))
   return P(g, x, y, z, 0, ry)
 }
 /** 字母架（斜面小木架 + 7 枚方块） */
@@ -867,12 +908,14 @@ const WORDS_P: PalFlat[] = [
 
 const CHIP_COLS = ['#f4f1ea', '#c8302a', '#2f5fa8', '#3aa860', '#26262a']
 /** 一摞筹码 */
+const CHIP_R = 2
+const CHIP_T = 0.34
+/** 筹码腰线比筹码大出的半径（腰线和筹码同半径的话侧面共面闪烁） */
+const CHIP_BAND = 0.1
 const chips = (col: string, n: number, x: number, y: number, z: number) => {
-  const g = new THREE.Group()
-  for (let i = 0; i < n; i++) {
-    g.add(cyl(1.95, 1.95, 0.33, col, { y: i * 0.34 }, 20))
-    if (i % 2 === 0) g.add(noOutline(cyl(1.97, 1.97, 0.12, i % 4 ? '#ffffff' : shade(col, 0.3), { y: i * 0.34 + 0.1 }, 20)))
-  }
+  // 一摞是一根圆柱（筹码之间本来就没有缝），隔一枚一道腰线
+  const g = G(cyl(CHIP_R, CHIP_R, n * CHIP_T, col, {}, 20))
+  for (let i = 0; i < n; i += 2) g.add(noOutline(cyl(CHIP_R + CHIP_BAND, CHIP_R + CHIP_BAND, 0.1, i % 4 ? '#ffffff' : shade(col, 0.3), { y: i * CHIP_T + 0.1 }, 20)))
   return P(g, x, y, z)
 }
 /** 筹码箱：铝箱打开（盖子立在后面），五排筹码躺在槽里，中间一副牌、两颗骰子 */
@@ -903,7 +946,7 @@ function holdem([felt, rim, back]: string[]) {
   top.scale.set(1, 1, 0.68)
   g.add(mat, top)
   const y = 0.7
-  for (let k = 0; k < 5; k++) g.add(card(back, k < 4, (k - 2) * 6.9, y, -2, 0, k))
+  for (let k = 0; k < 5; k++) g.add(card(back, k < 4, (k - 2) * 6.6, y, -1, 0, k))
   const seats = 6
   const r = rng(5)
   for (let s = 0; s < seats; s++) {
@@ -911,13 +954,14 @@ function holdem([felt, rim, back]: string[]) {
     const sx = Math.sin(a) * 22
     const sz = Math.cos(a) * 14
     g.add(card(back, false, sx - 1.5, y, sz, a + PI + 0.15), card(back, false, sx + 1.5, y + 0.25, sz, a + PI - 0.1))
-    const cx = Math.sin(a) * 14
-    const cz = Math.cos(a) * 8.5
-    for (let c = 0; c < 2; c++) g.add(chips(CHIP_COLS[(s + c) % 5], 2 + Math.floor(r() * 6), cx + (c - 0.5) * 4, y, cz))
+    // 各家的两摞筹码放在手牌左手边、靠垫子边沿：公共牌和手牌之间放不下
+    // （以前放在手牌和公共牌之间，筹码整摞压进公共牌、底池和庄家按钮里）
+    for (const [c, da] of [0.4, 0.66].entries()) g.add(chips(CHIP_COLS[(s + c) % 5], 2 + Math.floor(r() * 6), Math.sin(a + da) * 24, y, Math.cos(a + da) * 16))
   }
-  // 底池
-  for (let c = 0; c < 3; c++) g.add(chips(CHIP_COLS[c + 1], 3 + c * 2, -3 + c * 3.4, y, 5.4))
-  g.add(noOutline(cyl(1.6, 1.6, 0.5, '#ffffff', { x: 12, y, z: 4 }, 20)))
+  // 底池：三摞并排（间距大于筹码直径）
+  for (let c = 0; c < 3; c++) g.add(chips(CHIP_COLS[c + 1], 3 + c * 2, (c - 1) * 4.8, y, 6.2))
+  // 庄家按钮
+  g.add(noOutline(cyl(1.6, 1.6, 0.5, '#ffffff', { x: 0, y, z: -9.5 }, 20)))
   return fitGroup(g)
 }
 const CHIP_CASE_P: PalFlat[] = [
@@ -970,10 +1014,11 @@ function boxStack(sizes: [number, number, number][], seed: number) {
       const col = pal[k % pal.length]
       const b = new THREE.Group()
       b.add(rbox(w, h, d, col, {}, 0.4))
-      b.add(noOutline(rbox(w * 0.7, 0.06, d * 0.45, shade(col, k % 2 ? 0.25 : -0.2), { y: h, z: -d * 0.08 }, 0.1)))
-      b.add(noOutline(rbox(w * 0.3, 0.06, d * 0.14, '#fbf8f0', { y: h, x: -w * 0.18, z: d * 0.3 }, 0.05)))
-      // 盒身侧面一条（书脊似的标题带）
-      b.add(noOutline(rbox(w * 0.6, h * 0.35, 0.06, shade(col, 0.3), { y: h * 0.32, z: d / 2 }, 0.05)))
+      // 盒盖上的色块：深色盒子 shade -0.2 会成纯黑，往暗里调的用 dim
+      b.add(decal(w * 0.7, DECAL_T, d * 0.45, k % 2 ? shade(col, 0.25) : shade(col, -0.2), { y: h - SINK, z: -d * 0.08 }))
+      b.add(decal(w * 0.3, DECAL_T, d * 0.14, '#fbf8f0', { y: h - SINK, x: -w * 0.18, z: d * 0.3 }))
+      // 盒身侧面一条（书脊似的标题带）：一半嵌在盒身里，浮出 0.1
+      b.add(decal(w * 0.6, h * 0.35, 0.2, shade(col, 0.3), { y: h * 0.32, z: d / 2 }))
       g.add(P(b, (r() - 0.5) * 1.6, y, (r() - 0.5) * 1.2, 0, (r() - 0.5) * 0.12))
       y += h
     })
@@ -1027,8 +1072,8 @@ function scorePad([cover, paper, pencil]: string[]) {
   const g = new THREE.Group()
   g.add(rbox(10.4, 0.6, 15, cover, {}, 0.2))
   g.add(rbox(9.8, 0.3, 14, paper, { y: 0.6, z: 0.3 }, 0.1))
-  for (let i = 0; i < 6; i++) g.add(noOutline(rbox(9, 0.03, 0.08, '#9fb4c7', { y: 0.9, z: -5 + i * 2.2 }, 0.01)))
-  for (let i = 0; i < 3; i++) g.add(noOutline(rbox(0.08, 0.03, 12, '#9fb4c7', { y: 0.9, x: -2 + i * 3, z: 0.3 }, 0.01)))
+  for (let i = 0; i < 6; i++) g.add(decal(9, DECAL_T, 0.08, '#9fb4c7', { y: 0.9 - SINK, z: -5 + i * 2.2 }))
+  for (let i = 0; i < 3; i++) g.add(decal(0.08, DECAL_T, 12, '#9fb4c7', { y: 0.9 - SINK, x: -2 + i * 3, z: 0.3 }))
   g.add(P(cyl(0.38, 0.38, 13, pencil, {}, 6), 7.2, 0.4, 1, PI / 2, 0.3))
   return fitGroup(g)
 }

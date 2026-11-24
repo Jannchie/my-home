@@ -170,7 +170,7 @@ function magazineRack(p: string[]) {
       const [cover, band] = MAG_COLORS[(i * 2 + k) % MAG_COLORS.length]
       const mx = (k ? 1 : -1) * 10.6
       t.add(rbox(19, 22, 0.5, cover, { x: mx, y: 1, z: 0.9 }, 0.15))
-      t.add(rbox(19.4, 4, 0.7, band, { x: mx, y: 17.5, z: 0.95 }, 0.15))
+      t.add(rbox(19.4, 4, 0.6, band, { x: mx, y: 17.5, z: 1.0 }, 0.15)) // 色带背面收在封面厚度里面（以前和封面背面几乎共面）
     }
     g.add(P(t, 0, y, frontZ(y) - 2.1, TIER_TILT))
   })
@@ -333,7 +333,7 @@ function musicStandWood(p: string[]) {
   // 谱板：后仰的一块板，下沿托条，中间一份乐谱
   const desk = new THREE.Group()
   desk.add(rbox(MS_W, 34, 1.4, wood, {}, 0.6))
-  desk.add(rbox(MS_W, 2.4, 4.4, shade(wood, -0.08), { y: -1, z: 1.5 }, 0.5))
+  desk.add(rbox(MS_W, 2.4, 4.4, shade(wood, -0.08), { y: -1, z: 1.8 }, 0.5)) // 托条后沿缩在谱板背面以内 0.3（以前和谱板背面共面）
   desk.add(rbox(42, 30, 0.4, PAPER, { y: 2.2, z: 0.95 }, 0.1))
   for (let i = 0; i < 6; i++) desk.add(rbox(36, 0.4, 0.2, M.char, { y: 7 + i * 4, z: 1.25 }, 0.05))
   g.add(P(desk, 0, top - 2, 2, MS_TILT))
@@ -437,7 +437,7 @@ function revolvingBookcase(p: string[]) {
   g.add(cyl(6, 6, 3, shade(base, -0.15), { y: 7 }, 16))
   // 层板、方芯、四角立柱
   for (const y of REV_YS) g.add(rbox(REV_W, 2, REV_W, wood, { y }, 0.5))
-  g.add(rbox(REV_CORE * 2, REV_H - 12, REV_CORE * 2, shade(wood, -0.06), { y: 10 }, 0.4))
+  g.add(rbox(REV_CORE * 2, REV_H - 12.5, REV_CORE * 2, shade(wood, -0.06), { y: 10.5 }, 0.4)) // 方芯从最下层层板里面起（以前底面和层板底面共面）
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(3, REV_H - 12, 3, wood, { x: sx * (REV_W / 2 - 1.5), y: 10, z: sz * (REV_W / 2 - 1.5) }, 0.5))
   return g
 }

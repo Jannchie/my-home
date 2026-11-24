@@ -104,6 +104,37 @@ function gridHoles(w: number, h: number, r: number, hole: number, pitch: number,
   return out
 }
 
+/**
+ * 细网面：和 holePanel 一样的圆角板（xy 平面，x 居中、底边在 y = 0、厚 t 沿 z 居中），但孔是直角方孔、板不倒角。
+ * holePanel 给每个孔都做 16 段圆角 + 倒角，电蚊拍 / 苍蝇拍上百个 1cm 的小孔要六万到十一万个三角面；这里每个孔只有 4 个顶点。
+ */
+function gridPanel(w: number, h: number, t: number, color: string, holes: Hole[], y = 0, corner = 1.5) {
+  const r = Math.min(corner, w / 2, h / 2)
+  const s = new THREE.Shape()
+  s.moveTo(-w / 2 + r, 0)
+  s.lineTo(w / 2 - r, 0)
+  s.absarc(w / 2 - r, r, r, -PI / 2, 0, false)
+  s.lineTo(w / 2, h - r)
+  s.absarc(w / 2 - r, h - r, r, 0, PI / 2, false)
+  s.lineTo(-w / 2 + r, h)
+  s.absarc(-w / 2 + r, h - r, r, PI / 2, PI, false)
+  s.lineTo(-w / 2, r)
+  s.absarc(-w / 2 + r, r, r, PI, PI * 1.5, false)
+  for (const o of holes) {
+    if (o.kind !== 'rect') continue
+    const x0 = o.x - o.w / 2
+    const x1 = o.x + o.w / 2
+    s.holes.push(new THREE.Path([new THREE.Vector2(x0, o.y), new THREE.Vector2(x0, o.y + o.h), new THREE.Vector2(x1, o.y + o.h), new THREE.Vector2(x1, o.y)]))
+  }
+  const geo = new THREE.ExtrudeGeometry(s, { depth: t, bevelEnabled: false, curveSegments: 8 })
+  geo.translate(0, 0, -t / 2)
+  const m = new THREE.Mesh(geo, toon(color))
+  m.position.y = y
+  m.castShadow = true
+  m.receiveShadow = true
+  return m
+}
+
 // ---------- 定义 ----------
 
 type Def = Omit<AssetDef, 'palettes' | 'paletteStyles' | 'prop' | 'category'> & { pals: Pal3[]; category?: AssetDef['category']; raw?: boolean }
@@ -532,10 +563,11 @@ function juicer(p: string[]) {
   g.add(rbox(17, 13, 20, body, { z: -1 }, 4))
   g.add(rbox(3, 2, 4, body, { y: 9, z: 10 }, 0.8))
   g.add(clearDeep(cup(7, 6.5, 12, 0.4, GLASS, { y: 13 }), GLASS, 0.35))
-  g.add(cyl(3.8, 4.5, 11, '#f4f4f2', { y: 13.4 }, 16))
+  g.add(cyl(3.8, 4.5, 10.8, '#f4f4f2', { y: 13.6 }, 16))
   g.add(cyl(5.5, 5.5, 4, '#ff9a3c', { y: 13.4 }, 20))
   g.add(cup(8, 7, 3, 0.5, acc, { y: 24.8 }))
-  g.add(cyl(3, 3, 8, acc, { x: 3, y: 27 }, 20))
+  // 投料管插到料斗底上（以前下端离斗底 1.7cm，悬在料斗里）
+  g.add(cyl(3, 3, 9.7, acc, { x: 3, y: 25.3 }, 20))
   g.add(cyl(2.6, 2.6, 3, cupC, { x: 3, y: 33 }, 20))
   g.add(clearDeep(cup(3.5, 3, 8, 0.3, GLASS, { z: 15 }), GLASS, 0.35))
   g.add(cyl(3, 2.7, 5, '#ff9a3c', { y: 0.3, z: 15 }, 20))
@@ -588,12 +620,15 @@ function iceMaker(p: string[]) {
   g.add(sh)
   const fy = F + H - 10
   g.add(rbox(W - 2.8, 0.8, D - 2.8, '#dfe8ee', { y: fy }, 0.3))
+  // 冰块：先铺 17 块，剩下 9 块各摞在一块底层冰块上（以前上层是随机摆的，好几块底下没东西、悬着）
   const r = rng(21)
+  const low: [number, number][] = []
   for (let i = 0; i < 26; i++) {
-    const x = (r() - 0.5) * 16
-    const z = (r() - 0.5) * 22
-    const y = fy + 0.8 + (r() < 0.4 ? 2.1 : 0)
-    g.add(rbox(2.2, 2.2, 2.2, '#e6f6ff', { x, y, z, ry: r() * PI }, 0.5))
+    const under = i >= 17 ? low[(i * 5) % low.length] : null
+    const x = under ? under[0] + (r() - 0.5) : (r() - 0.5) * 16
+    const z = under ? under[1] + (r() - 0.5) : (r() - 0.5) * 22
+    if (!under) low.push([x, z])
+    g.add(rbox(2.2, 2.2, 2.2, '#e6f6ff', { x, y: fy + 0.8 + (under ? 2.1 : 0), z, ry: r() * PI }, 0.5))
   }
   // 翻盖：框 + 玻璃
   const ly = F + H + 0.55
@@ -791,15 +826,23 @@ function bakingSet(p: string[]) {
   const g = new THREE.Group()
   // 烤盘 + 曲奇
   g.add(tray(22, 1.6, 16, 0.5, '#b9bfc4', { x: -8, z: -4 }, 0.3))
-  for (let i = 0; i < 4; i++) for (let j = 0; j < 3; j++) g.add(puck(1.8, 0.8, (i + j) % 3 ? '#d9a35f' : '#8a5a3a', { x: -15.5 + i * 5, y: 0.55, z: -8.5 + j * 4.5 }))
+  // 曲奇是压扁的小球（下半截埋在烤盘底里）：12 块圆角饼每块 832 个三角面，占了整件的大半
+  for (let i = 0; i < 4; i++) for (let j = 0; j < 3; j++) g.add(ball(1.8, (i + j) % 3 ? '#d9a35f' : '#8a5a3a', { x: -15.5 + i * 5, y: 0.75, z: -8.5 + j * 4.5 }, [1, 0.32, 1]))
   // 打蛋盆 + 打蛋器
   g.add(cup(8, 4.8, 7, 0.4, bowl, { x: 11, z: -4 }))
-  g.add(liquid(6.8, 4.5, '#fff1c8', 11, -4))
+  // 面糊只到盆的小半高：打蛋器的钢丝头要有一半露在面糊上面才认得出来
+  g.add(liquid(5.7, 3.2, '#fff1c8', 11, -4))
+  // 打蛋器：钢丝头戳在盆底的面糊里，手柄往前倒、搭在盆沿上（以前悬在面糊上方，钢丝又只有半圈，圈口离手柄 2cm）
   const wh = new THREE.Group()
-  wh.add(cyl(0.7, 0.7, 7, acc, { y: 4.5 }, 12))
-  for (let k = 0; k < 3; k++) wh.add(torus(1.8, 0.1, M.silver, { y: 2.4, ry: (k * PI) / 3 }, PI).rotateZ(PI))
-  wh.position.set(10, 4.2, -4)
-  wh.rotation.z = -0.6
+  wh.add(cyl(0.7, 0.7, 7.3, acc, { y: 7.8 }, 12))
+  for (let k = 0; k < 3; k++) {
+    // 钢丝圈：拉长的整圈，上端收进手柄
+    const loop = torus(1.6, 0.1, M.silver, { y: 4.15, ry: (k * PI) / 3 })
+    loop.scale.y = 2.6
+    wh.add(loop)
+  }
+  wh.position.set(11, 1, -7.5)
+  wh.rotation.x = 1.02
   g.add(wh)
   // 擀面杖 + 饼干模
   g.add(hcyl(1.8, 1.8, 18, wood, -2, 1.8, 8))
@@ -850,6 +893,8 @@ function dishRack(p: string[]) {
     }
   }
   for (let i = 0; i < 9; i++) g.add(hcyl(0.25, 0.25, 28, wire, -20 + i * 5, 2.4, 0, 'z', 6))
+  // 三根纵向的丝：盘子下沿搁在中间那根上，两边的是隔棍的根（以前盘子和隔棍都落在横丝之间的空当里，悬着）
+  for (const z of [-11, -4, 3]) g.add(hcyl(0.25, 0.25, 42, wire, 0, 2.4, z, 'x', 6))
   // 盘子
   const cols = [C.white, acc, C.white, C.sky, C.white]
   for (let i = 0; i < 5; i++) {
@@ -972,7 +1017,7 @@ function racket(body: string, mesh: string, acc: string) {
   g.add(rbox(4, 3, 2.2, body, { y: 16.5 }, 0.9))
   const hy = 19
   g.add(holePanel(18, 22, 1.6, body, [{ kind: 'rect', x: 0, y: 1.4, w: 15, h: 19.2, r: 4 }], { y: hy }, 5.5))
-  g.add(holePanel(15.8, 20, 0.3, mesh, gridHoles(15.8, 20, 4.3, 1, 1.45, 0.9), { y: hy + 1 }, 4.3))
+  g.add(gridPanel(15.8, 20, 0.3, mesh, gridHoles(15.8, 20, 4.3, 1, 1.45, 0.9), hy + 1, 4.3))
   return g
 }
 
@@ -1054,7 +1099,7 @@ function flySwatter(p: string[]) {
   const s = new THREE.Group()
   s.add(cyl(0.5, 0.5, 32, handleC, {}, 10))
   s.add(cyl(0.8, 0.8, 8, handleC, {}, 12))
-  s.add(holePanel(11, 13, 0.4, head, gridHoles(11, 13, 2, 0.8, 1.3, 0.7), { y: 31.5 }, 2))
+  s.add(gridPanel(11, 13, 0.4, head, gridHoles(11, 13, 2, 0.8, 1.3, 0.7), 31.5, 2))
   s.rotation.set(-PI / 2, 0, -PI / 2)
   s.position.y = 0.8
   g.add(s)
@@ -1497,7 +1542,7 @@ export const PROPS_MORE: AssetDef[] = [
     name: '烘焙用具',
     w: 38,
     d: 23,
-    h: 14,
+    h: 9.5,
     pals: [
       ['cute', C.pink, C.woodL, C.mint],
       ['nordic', N.white, N.oak, N.sage],

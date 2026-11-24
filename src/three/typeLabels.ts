@@ -247,6 +247,7 @@ export const typeLabel = (t: string) => TYPE_NAMES[t as FunctionTag]?.[0] ?? t
 /** 属性 / 摆放标签的显示名：素材库详情里的「特点」用。新增属性、摆放标签时在这里补一行（缺了编译报错） */
 export const TRAIT_NAMES: Record<TraitTag, [zh: string, ja: string, en: string]> = {
   'for-kids': ['儿童用', '子ども用', 'For kids'],
+  'for-baby': ['婴儿用', '赤ちゃん用', 'For babies'],
   diatomite: ['硅藻土 / 石材', '珪藻土・石材', 'Diatomite / stone'],
   fixture: ['设备', '設備', 'Fixture'],
   leafy: ['带枝叶', '枝葉つき', 'Leafy'],

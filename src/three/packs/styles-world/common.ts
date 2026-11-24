@@ -3,7 +3,7 @@
 
 import * as THREE from 'three'
 import { ball, puck, rbox, shade, torus } from '../../toon'
-import { holePanel, type Hole, type Poly, type StyleTag } from '../../kit'
+import { gridHoles, holePanel, type Poly, type StyleTag } from '../../kit'
 import { cappedTube, cylZ, latheAt, mesh, noOutlineDeep, type TubeOpts, type V3 } from '../../geo'
 
 /** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
@@ -25,6 +25,20 @@ export const FA: Tag = 'farmhouse'
 
 export const BRASS = '#d4b25a'
 export const IRON = '#2f2f31'
+
+/**
+ * 同色系的深 / 浅版本：本包里代替 toon.shade 用。
+ * shade 的明度是在线性空间里直接加减的，红木、紫檀、鸡翅木、胡桃、酒红丝绒这类深色的线性明度只有 0.02 ~ 0.1，
+ * 减 0.08 就成了纯黑（背板、牙板、挂檐整块发黑，和浅色配色下「同色略深」的效果对不上）。
+ * 这里把调深的降幅限制在自身明度的一定比例内：浅色和调浅照旧，深色只按比例压暗。
+ */
+export function tone(color: string, dl: number) {
+  if (dl >= 0) return shade(color, dl)
+  const l = new THREE.Color(color).getHSL({ h: 0, s: 0, l: 0 }).l
+  // 至少保留的明度比例：降幅越大留得越少，最少三成
+  const keep = Math.max(0.3, 1 + 8 * dl)
+  return shade(color, Math.max(dl, l * (keep - 1)))
+}
 
 // =====================================================================
 // 小工具
@@ -69,16 +83,6 @@ export function strip(pts: P2[], t: number): P2[] {
   }
   return [...L, ...Rr.reverse()]
 }
-
-/** 方格栅洞阵：cols × rows */
-export function lattice(w: number, h: number, cols: number, rows: number, bar = 2.4, margin = 3): Hole[] {
-  const holes: Hole[] = []
-  const cw = (w - margin * 2 - bar * (cols - 1)) / cols
-  const ch = (h - margin * 2 - bar * (rows - 1)) / rows
-  for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) holes.push({ kind: 'rect', x: -w / 2 + margin + cw / 2 + i * (cw + bar), y: margin + j * (ch + bar), w: cw, h: ch, r: 0.4 })
-  return holes
-}
-
 /**
  * 把座面压低：y0 以下按比例压缩到 y0 - dy，y0 以上整体下移 dy（靠背、扶手比例不变）。
  * 明式椅子原比例座高约 50（配 85 高的桌子 + 踏脚），和现代 72–75 的桌子搭配会太高。
@@ -184,10 +188,10 @@ export function brassPlate(x: number, y: number, z: number, r: number, color = B
 
 /** 三面围子：背板 + 两侧板，格心开孔 */
 export function weizi(g: THREE.Group, w: number, d: number, y0: number, hb: number, hs: number, t: number, color: string, frame: string) {
-  g.add(holePanel(w, hb, t, color, lattice(w, hb, Math.round(w / 22), 2, 2.6, 4), { y: y0, z: -d / 2 + t / 2 }))
+  g.add(holePanel(w, hb, t, color, gridHoles(w, hb, Math.round(w / 22), 2, 2.6, 4), { y: y0, z: -d / 2 + t / 2 }))
   g.add(rbox(w + 1, 2.4, t + 1.2, frame, { y: y0 + hb, z: -d / 2 + t / 2 }, 0.8))
   for (const s of [-1, 1]) {
-    g.add(holePanel(d - t, hs, t, color, lattice(d - t, hs, Math.round(d / 22), 2, 2.6, 4), { x: s * (w / 2 - t / 2), y: y0, z: t / 2, ry: Math.PI / 2 }))
+    g.add(holePanel(d - t, hs, t, color, gridHoles(d - t, hs, Math.round(d / 22), 2, 2.6, 4), { x: s * (w / 2 - t / 2), y: y0, z: t / 2, ry: Math.PI / 2 }))
     g.add(rbox(t + 1.2, 2.4, d - t + 0.6, frame, { x: s * (w / 2 - t / 2), y: y0 + hs, z: t / 2 }, 0.8))
   }
 }

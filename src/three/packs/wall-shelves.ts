@@ -78,7 +78,8 @@ function wallCabinet(w: number, d: number, h: number, mount: number, niche: numb
       // 底下的开放格：两侧板 + 底板
       g.add(rbox(w, 2, d - 2, body, { y: mount, z: -1 }, 0.6))
       for (const s of [-1, 1]) g.add(rbox(1.8, niche, d - 2, body, { x: s * (w / 2 - 0.9), y: mount, z: -1 }, 0.4))
-      g.add(rbox(w - 3.6, niche, 0.8, shade(body, -0.06), { y: mount, z: -d / 2 + 0.4 }, 0.2))
+      // 背板从底板上沿起（不和底板的背面共面）
+      g.add(rbox(w - 3.6, niche - 1.7, 0.8, shade(body, -0.06), { y: mount + 1.7, z: -d / 2 + 0.4 }, 0.2))
     }
     return g
   }
@@ -107,8 +108,8 @@ function shelfWithRail(w: number, d: number, mount: number) {
     const rail = cyl(0.8, 0.8, w - 8, p[1], { z: -d / 2 + 8, rz: Math.PI / 2 }, 10)
     rail.position.y = mount + 2
     g.add(rail)
-    // 挂杆吊在两根竖杆上，竖杆上接搁板托架
-    for (const s of [-1, 1]) g.add(rbox(1.2, 14, 1.2, p[1], { x: s * (w / 2 - 4), y: mount, z: -d / 2 + 8 }, 0.2))
+    // 挂杆吊在两根竖杆上，竖杆一直顶进搁板底面（板底在 mount + 20；以前只到 mount + 14，杆和板之间空着 6cm）
+    for (const s of [-1, 1]) g.add(rbox(1.2, 20.4, 1.2, p[1], { x: s * (w / 2 - 4), y: mount, z: -d / 2 + 8 }, 0.2))
     return g
   }
 }

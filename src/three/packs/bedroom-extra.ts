@@ -145,6 +145,18 @@ function chest(spec: ChestSpec, open: boolean) {
         dr.position.y = y + 0.25
         dr.position.z += 0.5
         g.add(dr)
+        // 拉出来的抽屉下面垫两条滑轨（从侧板伸到抽屉盒侧板底下）：格与格之间没有隔板，不垫的话抽屉盒悬在半空
+        if (pull) {
+          const sideX = (cw - 0.5) / 2 - 1.9
+          for (const sx of [-1, 1]) {
+            const edge = sx < 0 ? c === 0 : c === n - 1
+            if (!edge) continue
+            const wall = w / 2 - t + 0.1
+            const x0 = dr.position.x + sx * (sideX - 0.4)
+            const x1 = sx * wall
+            g.add(rbox(Math.abs(x1 - x0), 0.6, d - 2, shade(body, -0.06), { x: (x0 + x1) / 2, y: y + 0.25, z: 0.5 }, 0.15))
+          }
+        }
         k++
       }
       y += rh
@@ -357,13 +369,15 @@ function vanityFold(open: boolean) {
     mir.position.set(0, -0.25, 12)
     mir.rotation.x = -Math.PI / 2
     lid.add(mir)
-    lid.position.set(0, top, -d / 2 + 1)
+    // 铰链线在台面（top - 2）后沿：合上时盖子平躺在台面上，掀起时绕这条线立起来。
+    // （以前掀起时铰链抬到 top，盖子和下面的收纳格都悬在台面上方 0.5～2cm）
+    lid.position.set(0, top - 2, -d / 2 + 1)
     if (open) {
       lid.rotation.x = -Math.PI / 2 + 0.22
-      // 盖下的收纳格
-      g.add(rbox(w - 8, 0.6, 22, shade(sub, 0.08), { y: top - 1.5, z: -d / 2 + 13 }, 0.2))
-      for (const x of [-20, 0, 20]) g.add(rbox(0.6, 1.4, 20, sub, { x, y: top - 1.4, z: -d / 2 + 13 }, 0.2))
-    } else lid.position.y = top - 2
+      // 盖下的收纳格：直接落在台面上
+      g.add(rbox(w - 8, 0.6, 22, shade(sub, 0.08), { y: top - 2, z: -d / 2 + 13 }, 0.2))
+      for (const x of [-20, 0, 20]) g.add(rbox(0.6, 1.6, 20, sub, { x, y: top - 1.8, z: -d / 2 + 13 }, 0.2))
+    }
     g.add(lid)
     return g
   }
@@ -432,7 +446,8 @@ function kyodai(p: string[]) {
   g.add(fr)
   // 鏡掛け：从镜顶垂下的一块布，盖住上半面
   g.add(rbox(26, 24, 0.8, cloth, { y: base + 54 - 22, z: zc + 2.6 }, 0.3))
-  g.add(rbox(26.4, 2, 1.2, shade(cloth, -0.15), { y: base + 54 - 22, z: zc + 2.6 }, 0.3))
+  // 下摆的滚边比布面低 0.3，两块的底面不共面
+  g.add(rbox(26.4, 2, 1.2, shade(cloth, -0.15), { y: base + 54 - 22.3, z: zc + 2.6 }, 0.3))
   g.add(rbox(28, 1.6, 3.6, main, { y: base + 54, z: zc }, 0.5))
   return g
 }
@@ -512,7 +527,7 @@ function stool(p: string[]) {
 const VANITY_SURF = (w: number, d: number, z0: number) => [rectPoly(-w / 2 + 2, z0, w / 2 - 2, d / 2 - 1.5)]
 // 化妆台：桌下抽屉可开合（折叠镜化妆桌的镜子立起 / 放平仍是两件素材）
 const VANITIES: AssetDef[] = [
-  define('be-vanity-fold-open', '折叠镜化妆桌', 'bedroom', [80, 45, 97.5], VANITY_PALS, vanityFold(true), { form: 'open', formLabel: '镜子立起', surface: 73, surfaceShape: VANITY_SURF(80, 45, 2), surfaces: deskSurfaces(80, 45, 73), openable: true }),
+  define('be-vanity-fold-open', '折叠镜化妆桌', 'bedroom', [80, 45, 97], VANITY_PALS, vanityFold(true), { form: 'open', formLabel: '镜子立起', surface: 73, surfaceShape: VANITY_SURF(80, 45, 2), surfaces: deskSurfaces(80, 45, 73), openable: true }),
   define('be-vanity-fold-closed', '折叠镜化妆桌', 'bedroom', [80, 45, 75], VANITY_PALS, vanityFold(false), { form: 'closed', surface: 73, surfaceShape: VANITY_SURF(80, 45, 2), surfaces: deskSurfaces(80, 45, 73), openable: true }),
   define('be-vanity-tri', '三面镜梳妆台', 'bedroom', [90, 45, 143], VANITY_PALS, vanityTri, { surface: 74, surfaceShape: VANITY_SURF(90, 45, -8), surfaces: deskSurfaces(90, 45, 74), openable: true }),
   define('be-kyodai', '和风鏡台', 'bedroom', [46, 33, 107], KYODAI_PALS, centerZBuild(kyodai), { category: 'japanese', surface: 30, surfaceShape: [rectPoly(-21, -4, 21, 15)], surfaces: KYODAI_SURF, openable: true }),

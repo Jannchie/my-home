@@ -108,7 +108,9 @@ function petTablet([shell, base, screen]: string[]) {
   panel.add(P(paw, 0, 7, 1.15))
   panel.add(lens(0.55, 0, 13, 0.7))
   g.add(P(panel, 0, 2.6, -1.2, -0.28))
-  g.add(P(rbox(3, 7, 1.4, base, {}, 0.6), 0, 1.6, -3.6, 0.5))
+  // 背后的支撑片：下端插在底座顶面、上端顶进屏幕背面。P 摆的是盒子中心——以前中心放得太低，
+  // 支撑片从底座底下戳出去 1.6cm，对齐地面后整个底座悬在半空
+  g.add(P(rbox(3, 6, 1.4, base, {}, 0.6), 0, 3.6, -4.2, 0.5))
   return fitGroup(g)
 }
 
@@ -140,7 +142,7 @@ const pets: AssetDef[] = [
   define('hc-pet-ears', '宠物摄像头', 'pets', [10.9, 10.7, 14.5], PET_EARS_P, petEars, { prop: true, sizeLabel: '猫耳萌系', limit: PET_LIMIT }),
   define('hc-pet-treat', '宠物摄像头', 'pets', [15, 18.8, 29.2], PET_TREAT_P, petTreat, { prop: true, sizeLabel: '零食投喂', limit: PET_LIMIT }),
   define('hc-pet-laser', '宠物摄像头', 'pets', [10.9, 10.9, 13], PET_P, petLaser, { prop: true, sizeLabel: '激光逗猫', limit: PET_LIMIT }),
-  define('hc-pet-screen', '宠物摄像头', 'pets', [20, 14, 17.7], PET_TABLET_P, petTablet, { prop: true, sizeLabel: '平板底座', limit: PET_LIMIT }),
+  define('hc-pet-screen', '宠物摄像头', 'pets', [20, 14, 16.1], PET_TABLET_P, petTablet, { prop: true, sizeLabel: '平板底座', limit: PET_LIMIT }),
 ]
 
 // ---------- 室内安防摄像头 ----------
@@ -161,9 +163,11 @@ function secCube([body, base]: string[]) {
   const g = new THREE.Group()
   g.add(cyl(2.8, 3, 1, base, {}, 24))
   g.add(ball(1.2, base, { y: 1.6 }))
-  g.add(P(rbox(5.4, 5.4, 4.4, body, {}, 1.4), 0, 2.4, 0, -0.12))
-  g.add(lens(1, 0, 5.3, 2.2))
-  g.add(led(1.6, 6.6, 2.15))
+  // 机身坐在磁吸球头上（底 2.4、顶 7.8），微微后仰。P 摆的是盒子中心：以前把 2.4 当成底面，
+  // 机身整个沉进底座里，镜头和指示灯反而飘在机身上沿外面
+  g.add(P(rbox(5.4, 5.4, 4.4, body, {}, 1.4), 0, 5.1, 0, -0.12))
+  g.add(lens(1, 0, 5.3, 2.05))
+  g.add(led(1.6, 6.6, 2.1))
   return fitGroup(g)
 }
 const SEC_MOUNT = 212
@@ -172,19 +176,22 @@ function secWallDome([body, arm]: string[]) {
   const g = new THREE.Group()
   g.add(rbox(8, 10, 1.6, arm, { y: 4 }, 0.8))
   g.add(rbox(3.2, 3.2, 9, arm, { y: 9, z: 4.5 }, 1))
-  g.add(cyl(6, 6, 2.2, body, { y: 9.2, z: 10 }, 32))
+  // 吸顶盘够厚，把球罩的上半截包在里面：露在外面的只有朝下的半球（以前盘只有 2.2 厚，球罩从盘顶上冒出来一截）
+  g.add(cyl(6, 6, 4.6, body, { y: 9.2, z: 10 }, 32))
   const dome = ball(5.2, '#4a4f5a', { y: 9.2, z: 10 }, [1, 0.85, 1])
   dome.material = toon('#4a4f5a', { transparent: 0.7 })
   g.add(dome)
   g.add(P(ball(1.6, LENS), 0, 6.3, 11.6))
-  g.add(led(4.6, 10.3, 15.6))
+  // 指示灯贴在吸顶盘的侧面（盘半径 6：x = 3 处前沿在 z = 15.2）
+  g.add(led(3, 10.6, 15.25))
   return fitWall(g, SEC_MOUNT, 16.4)
 }
 /** 壁挂枪机：墙座 + 万向节 + 斜朝下的长筒（带遮阳罩）：[机身, 支架] */
 function secWallBullet([body, arm]: string[]) {
   const g = new THREE.Group()
   g.add(cylZ(4, 1.4, arm, 0, 6, 0.7, 24))
-  g.add(cyl(1.1, 1.1, 5, arm, { y: 4.5, z: 3, rx: PI / 2 }, 12))
+  // 短臂和墙座、万向球同心（y = 6）
+  g.add(cylZ(1.1, 5, arm, 0, 6, 3, 12))
   g.add(ball(1.6, arm, { y: 6, z: 6 }))
   const cam = new THREE.Group()
   cam.add(cylZ(3.2, 15, body, 0, 0, 7.5, 24))
@@ -203,7 +210,7 @@ const SEC_P: PalFlat[] = [
 const SEC_LIMIT = { scope: 'house' as const, max: 2, group: 'hc-sec-cam' }
 const security: AssetDef[] = [
   define('hc-sec-pt', '安防摄像头', 'appliance', [7.9, 8.6, 13.4], SEC_P, secPanTilt, { prop: true, sizeLabel: '桌面云台', limit: SEC_LIMIT }),
-  define('hc-sec-cube', '安防摄像头', 'appliance', [6, 6.2, 7.3], SEC_P, secCube, { prop: true, sizeLabel: '磁吸小方块', limit: SEC_LIMIT }),
+  define('hc-sec-cube', '安防摄像头', 'appliance', [6, 6, 7.9], SEC_P, secCube, { prop: true, sizeLabel: '磁吸小方块', limit: SEC_LIMIT }),
   define('hc-sec-wall-dome', '安防摄像头', 'appliance', [12, 17.2, 10], SEC_P, secWallDome, { mount: SEC_MOUNT, sizeLabel: '壁挂半球', limit: SEC_LIMIT }),
   define('hc-sec-wall-bullet', '安防摄像头', 'appliance', [8, 22, 11.1], SEC_P, secWallBullet, { mount: SEC_MOUNT, sizeLabel: '壁挂枪机', limit: SEC_LIMIT }),
 ]
@@ -236,8 +243,10 @@ function babyRecv([shell, screen, key]: string[]) {
   for (let i = 0; i < 3; i++) body.add(cylZ(0.5, 0.4, key, 4.4, 2.2 + i * 1.9, 1.1, 12))
   body.add(cyl(0.35, 0.45, 3.4, shell, { x: 4.5, y: 9 }, 10))
   body.add(ball(0.55, shell, { x: 4.5, y: 12.5 }))
-  g.add(P(body, 0, 0.6, 0, -0.22))
-  g.add(P(rbox(6, 6.5, 0.6, shade(shell, -0.1), {}, 0.3), 0, 0, -2.4, -0.55))
+  // 机身下沿着地、往后仰；背后的支脚上端插在机身背面、下端往后撑在桌面上（倒 V 形）。
+  // 以前支脚朝反方向斜（上端悬在机身后面的空中），又比机身低 3cm，机身整个被架在半空
+  g.add(P(body, 0, 0.25, 0, -0.22))
+  g.add(P(rbox(6, 6.5, 0.6, shade(shell, -0.1), {}, 0.3), 0, 3, -3.5, 0.5))
   return fitGroup(g)
 }
 const BABY_P: PalFlat[] = [
@@ -253,7 +262,7 @@ const BABY_RECV_P: PalFlat[] = [
 ]
 const baby: AssetDef[] = [
   define('hc-baby-cam', '婴儿监视器', 'kids', [11.7, 11.7, 17.4], BABY_P, babyCam, { prop: true, sizeLabel: '摄像头（带夜灯）', limit: { scope: 'house', max: 1, group: 'hc-baby-cam' } }),
-  define('hc-baby-recv', '婴儿监视器', 'kids', [12, 5.2, 16.3], BABY_RECV_P, babyRecv, { prop: true, sizeLabel: '接收器（带屏幕）', limit: { scope: 'house', max: 1, group: 'hc-baby-recv' } }),
+  define('hc-baby-recv', '婴儿监视器', 'kids', [12, 6.1, 12.9], BABY_RECV_P, babyRecv, { prop: true, sizeLabel: '接收器（带屏幕）', limit: { scope: 'house', max: 1, group: 'hc-baby-recv' } }),
 ]
 
 // ---------- 门口：可视门铃、猫眼摄像头 ----------
@@ -316,11 +325,12 @@ function actionKit([body, mount, bag]: string[]) {
   // 收纳包 + 电池
   g.add(rbox(9, 4, 6.4, bag, { x: 10, z: -0.6 }, 1.8))
   g.add(rbox(8.6, 0.4, 0.4, shade(bag, -0.2), { x: 10, y: 3.6, z: 2.6 }, 0.15))
-  for (const k of [0, 1]) g.add(P(rbox(3.4, 1, 4, BLACK, {}, 0.3), 3.6 + k * 0.4, k, 4.6, 0, 0.3 + k * 0.2))
+  // 两块电池叠放在桌面上（P 摆的是盒子中心：最下面那块中心在 0.5，不沉到桌面以下）
+  for (const k of [0, 1]) g.add(P(rbox(3.4, 1, 4, BLACK, {}, 0.3), 3.6 + k * 0.4, 0.5 + k, 4.6, 0, 0.3 + k * 0.2))
   return fitGroup(g)
 }
 const action: AssetDef[] = [
-  define('hc-action-kit', '运动相机套装', 'hobby', [18.2, 10.9, 9.5], [
+  define('hc-action-kit', '运动相机套装', 'hobby', [18.2, 10.9, 9], [
     ['modern', M.black, M.char, '#3d3f44'],
     ['industrial', I.iron, I.steel, '#4a5a3a'],
     ['cute', M.black, C.sky, C.pink],

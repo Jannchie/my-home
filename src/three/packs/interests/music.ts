@@ -6,7 +6,7 @@ import { ball, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../../toon
 import { paintPanel } from '../../kit'
 import { G, P, PI, cylX, cylZ, fitGroup, litOutlined, noOutline, rod3, taperRod3, type V2, type V3 } from '../../geo'
 import { N } from '../../packkit'
-import { DARK, GOLD, IVORY, METAL, PAPER, RUBBER, drawFretboard, drawKeys, drawScore, flat, paintTop, sym, taperPath } from './common'
+import { DARK, GOLD, IVORY, METAL, PAPER, RUBBER, chip, drawFretboard, drawKeys, drawScore, flat, paintTop, sym, taperPath } from './common'
 
 // =====================================================================
 // 乐器
@@ -19,8 +19,8 @@ export function uprightPiano(p: string[]) {
   g.add(rbox(146, 122.5, 34, body, { z: -14 }, 1.2))
   g.add(rbox(150, 2.5, 35.5, body, { y: 122.5, z: -13.25 }, 0.8))
   g.add(rbox(120, 45, 0.6, shade(body, 0.05), { y: 12, z: 3.2 }, 0.3))
-  // 键盘
-  g.add(rbox(134, 8, 22, shade(body, -0.04), { y: 62, z: 13 }, 0.8))
+  // 键盘（键盘托比两侧的琴颊小一圈：底面、前后面都缩进去，不和琴颊共面）
+  g.add(rbox(134, 7.7, 21.4, shade(body, -0.04), { y: 62.3, z: 13 }, 0.8))
   g.add(rbox(128, 1.6, 15, white, { y: 70, z: 16 }, 0.3))
   g.add(paintTop(127.4, 14.4, `int-keys52-${white}`, drawKeys(52, white, '#26262a', 5, 0.62), 0, 71.9, 16))
   g.add(rbox(128, 5, 2, body, { y: 71.6, z: 7.5 }, 0.4))
@@ -64,8 +64,8 @@ export function grandPiano(p: string[]) {
   const sx = 40
   const lx = (sx + 75) / Math.cos(lidAng)
   g.add(rod3([sx, 91, -6], [sx, 92 + lx * Math.sin(lidAng) - 0.5, -6], 0.8, body))
-  // 键盘
-  g.add(rbox(134, 6, 22, shade(body, -0.04), { y: 62, z: 71 }, 0.8))
+  // 键盘（键盘托比两侧的琴颊小一圈：底面、前后面都缩进去，不和琴颊共面）
+  g.add(rbox(134, 5.7, 21.4, shade(body, -0.04), { y: 62.3, z: 71 }, 0.8))
   g.add(rbox(128, 1.6, 15, white, { y: 68, z: 73.5 }, 0.3))
   g.add(paintTop(127.4, 14.4, `int-keys52-${white}`, drawKeys(52, white, '#26262a', 5, 0.62), 0, 69.9, 73.5))
   g.add(rbox(128, 6, 2, body, { y: 69.6, z: 65 }, 0.4))
@@ -246,7 +246,8 @@ export function violinCase(p: string[]) {
   g.add(rbox(75.4, 1.5, 21.4, lining, { y: 1.2, z: 2 }, 0.5))
   const v = P(G(violin(wood, DARK)), 0, 4.3, 0, -PI / 2)
   g.add(P(G(v), 29.3, 0, 2, 0, PI / 2))
-  g.add(rbox(12, 3, 8, shade(lining, -0.1), { x: -33, y: 2.7, z: 2 }, 1))
+  // 配件格收在盒壁以内、琴头之外（以前宽 12，左边顶穿盒壁、右边埋住琴头）
+  g.add(rbox(8, 3, 8, shade(lining, -0.1), { x: -33.6, y: 2.7, z: 2 }, 1))
   // 立起的盒盖
   const lid = G(rbox(78, 24, 4, shellC, { z: -2 }, 1.2), rbox(75, 21.6, 0.6, lining, { y: 1.2, z: 0.3 }, 0.3), bowStick(70, 0, 12, 1.2, '#7a4a2a'))
   g.add(P(lid, 0, 8, -10, -0.18))
@@ -312,9 +313,11 @@ function eGuitar(bodyC: string, guard: string, neckC: string, metal: string, bas
   }
   // 拾音器、琴桥、旋钮
   const pick = bass ? [18, 26] : [12, 19, 26]
-  for (const y of pick) g.add(rbox(8, 2, 0.6, DARK, { y: y * k, z: 2.5 }, 0.3))
+  // 拾音器比护板晚 0.1cm 起（背面埋在护板厚度里，不和护板背面共面）
+  for (const y of pick) g.add(rbox(8, 2, 0.5, DARK, { y: y * k, z: 2.55 }, 0.25))
   g.add(rbox(8, 3, 0.7, metal, { y: 7 * k, z: 2.5 }, 0.3))
-  for (const [x, y] of [[8, 8], [10, 12], [11.5, 16]] as V2[]) g.add(cylZ(0.9, 1, DARK, x * k, y * k, 2.9, 12))
+  // 最外侧的旋钮在护板外面，直接装在琴身上（琴身前面 z=2.2）：往后加长到 z=2.0，不然悬在琴身前 0.2
+  for (const [x, y] of [[8, 8], [10, 12], [11.5, 16]] as V2[]) g.add(cylZ(0.9, 1.4, DARK, x * k, y * k, 2.7, 12))
   for (let i = 0; i < nTun; i++) {
     const x = (i - (nTun - 1) / 2) * (bass ? 1.1 : 0.8)
     g.add(noOutline(taperRod3([x * 1.1, 8 * k, 3.1], [x * 0.7, top, 1.9], 0.05, 0.05, '#e8e8e8', 4)))
@@ -438,10 +441,12 @@ export function fluteCase(p: string[]) {
 export function clarinetStand(p: string[]) {
   const [body, key, stand] = p
   const g = new THREE.Group()
-  for (const a of [0, 2.1, 4.2]) g.add(rod3([0, 4, 0], [Math.cos(a) * 6.5, 0.5, Math.sin(a) * 6.5], 0.5, stand))
+  for (const a of [0, 2.1, 4.2]) g.add(rod3([0, 3, 0], [Math.cos(a) * 6.5, 0.5, Math.sin(a) * 6.5], 0.5, stand))
   g.add(cyl(0.6, 0.6, 9, stand, { y: 3 }, 8))
-  g.add(cup(3.4, 1.5, 7, 0.3, body, { y: 3 }))
-  g.add(cyl(1.5, 1.5, 48, body, { y: 10 }, 16))
+  // 喇叭口朝下、套在支架的桩上（以前口朝上，像个漏斗）
+  g.add(cup(3.4, 1.5, 6.6, 0.3, body, { y: 10, rx: PI }))
+  // 管身往喇叭口里插 0.2：底面不和最下面那道箍的底面共面
+  g.add(cyl(1.5, 1.5, 48.2, body, { y: 9.8 }, 16))
   for (const y of [10, 26, 42, 58]) g.add(cyl(1.62, 1.62, 1, key, { y }, 16))
   g.add(cyl(1.4, 1.1, 6, body, { y: 58 }, 16))
   g.add(cyl(1.1, 0.7, 3, DARK, { y: 64 }, 12))
@@ -629,7 +634,8 @@ export function smallInstruments(p: string[]) {
   g.add(cyl(8.6, 8.6, 0.3, IVORY, { x: -8, y: 3.6 }, 28))
   for (let k = 0; k < 5; k++) {
     const t = (k / 5) * PI * 2
-    for (const y of [1.4, 2.2]) g.add(puck(1.4, 0.5, METAL, { x: -8 + Math.cos(t) * 9, y, z: Math.sin(t) * 9 }))
+    // 铃片只有指甲盖大，用低段数的小圆片（10 个 puck 就占了整件八成的面）
+    for (const y of [1.4, 2.2]) g.add(chip(1.4, 0.5, METAL, -8 + Math.cos(t) * 9, y, Math.sin(t) * 9, 14))
   }
   // 沙锤
   for (const [z, c] of [[-3, b], [3, acc]] as [number, string][]) {

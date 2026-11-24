@@ -131,10 +131,12 @@ function reelDisc(r: number, t: number, color: string) {
 /** 一张平放的光盘：银色盘面 + 印刷面 + 中孔，y 为底 */
 function disc(r: number, label: string, x: number, y: number, z: number) {
   const g = new THREE.Group()
-  g.add(cyl(r, r, 0.14, '#dfe3ea', { x, y, z }, 32))
-  g.add(cyl(r * 0.96, r * 0.96, 0.2, label, { x, y: y + 0.02, z }, 32))
-  g.add(cyl(r * 0.36, r * 0.36, 0.24, '#eef1f5', { x, y: y + 0.02, z }, 24))
-  g.add(cyl(r * 0.12, r * 0.12, 0.28, '#6a6e78', { x, y: y + 0.01, z }, 16))
+  // 四层同心圆片顶面逐层高出 0.06 以上、底面也各自错开：cyl 的高度会量化到 0.1cm，
+  // 以前 0.2 / 0.24 两层量化后一样高，印刷面和内圈透明环的顶面共面闪烁
+  g.add(cyl(r, r, 0.1, '#dfe3ea', { x, y, z }, 32))
+  g.add(cyl(r * 0.96, r * 0.96, 0.2, label, { x, y: y + 0.04, z }, 32))
+  g.add(cyl(r * 0.36, r * 0.36, 0.2, '#eef1f5', { x, y: y + 0.1, z }, 24))
+  g.add(cyl(r * 0.12, r * 0.12, 0.2, '#6a6e78', { x, y: y + 0.2, z }, 16))
   return g
 }
 
@@ -455,7 +457,8 @@ function tripodScreen(open: boolean) {
     }
     // 卷轴盒
     g.add(cylX(4, 170, metal, 0, 95, 3, 20))
-    for (const s of [-1, 1]) g.add(P(rbox(3, 9, 9, acc, {}, 1.5), s * 86, 90.5, 3))
+    // 卷轴盒两端的端盖和卷轴同心（P 摆的是盒子中心；以前中心在 90.5，端盖比卷轴低半个身位）
+    for (const s of [-1, 1]) g.add(P(rbox(3, 9, 9, acc, {}, 1.5), s * 86, 95, 3))
     g.add(rbox(6, 6, 5, acc, { y: 92, z: -1 }, 1))
     if (open) {
       g.add(rbox(160, 120, 0.4, border, { y: 99, z: 3 }, 0.2))
@@ -579,7 +582,8 @@ function armStand(p: string[]) {
   g.add(cyl(1.8, 1.8, 141, metal, { y: 6, z: -38 }, 16))
   g.add(cylX(1.2, 3.5, base, 2.8, 120, -38, 20))
   g.add(rbox(5, 5, 5, base, { y: 143, z: -38 }, 1))
-  g.add(P(cyl(1.5, 1.5, 78, metal, {}, 16), 0, 145.5, 4, Math.PI / 2))
+  // 横臂根部插进立柱顶的接头里（z 从 -36.5 起；原来从 -35 起，离接头还差 0.5）
+  g.add(P(cyl(1.5, 1.5, 79.5, metal, {}, 16), 0, 145.5, 3.25, Math.PI / 2))
   g.add(rbox(6, 2, 6, base, { y: 146, z: 33 }, 0.8))
   g.add(rbox(30, 1.5, 24, plate, { y: ARM_TOP - 1.5, z: 33 }, 0.5))
   for (const s of [-1, 1]) g.add(rbox(0.8, 1.5, 24, plate, { x: s * 14.6, y: ARM_TOP, z: 33 }, 0.3))
@@ -868,7 +872,8 @@ function btRetro(p: string[]) {
   const g = new THREE.Group()
   g.add(rbox(18, 11, 8, leather, {}, 1.5))
   const holes: { kind: 'circle'; x: number; y: number; r: number }[] = []
-  for (let r = 0; r < 5; r++) for (let c = 0; c < 9; c++) holes.push({ kind: 'circle', x: -5.6 + c * 1.4, y: 1.2 + r * 1.3, r: 0.38 })
+  // 网孔 4 × 7、孔略大：每个真开孔约 270 个三角面，以前 5 × 9 个孔让这只小音箱有 1.3 万面
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 7; c++) holes.push({ kind: 'circle', x: -5.4 + c * 1.8, y: 1.3 + r * 1.6, r: 0.5 })
   g.add(holePanel(14.4, 7.4, 0.6, metal, holes, { y: 1.8, z: 4.05 }, 0.6))
   g.add(rbox(13, 6, 0.4, DARK, { y: 2.5, z: 3.7 }, 0.3))
   g.add(cyl(1.3, 1.3, 0.9, metal, { x: 5.5, y: 10.9 }, 16))
@@ -1095,7 +1100,7 @@ function filmReels(p: string[]) {
   g.add(cyl(13.3, 13.3, 1, shade(can, -0.1), { y: 1.6 }, 40))
   g.add(cyl(13, 13, 2.4, shade(can, 0.04), { x: 1.5, y: 2.6, z: -1 }, 40))
   g.add(cyl(13.3, 13.3, 1, shade(can, -0.06), { x: 1.5, y: 4.2, z: -1 }, 40))
-  g.add(cyl(4, 4, 0.3, '#f4f4f2', { x: 1.5, y: 5.2, z: 7 }, 20))
+  g.add(cyl(4, 4, 0.3, '#f4f4f2', { x: 1.5, y: 5.25, z: 7 }, 20))
   const rx = -0.5
   const rz = 0.5
   g.add(cyl(1.5, 1.5, 2.8, reel, { x: rx, y: 5.2, z: rz }, 16))
@@ -1202,14 +1207,18 @@ function popcornCart(p: string[]) {
   g.add(cyl(8.4, 8.4, 0.8, '#a9adb3', { y: 95.6 }, 24))
   // 屋顶
   g.add(rbox(64, 3, 44, red, { y: 108 }, 1))
-  const roof = new THREE.Group()
-  roof.add(P(cyl(3, 45.3, 12, red, {}, 4), 0, 6, 0, 0, Math.PI / 4))
+  // 四棱台屋顶：棱台本身用 thetaStart = π/4 摆正，再只压扁 z（原来先绕 y 转 45° 再在外层组上压扁，
+  // 世界矩阵带剪切，体检按包围盒判断接触时会算偏）
+  const roof = new THREE.Mesh(new THREE.CylinderGeometry(3, 45.3, 12, 4, 1, false, Math.PI / 4), toon(red))
+  roof.position.y = 117
   roof.scale.z = 44 / 64
-  roof.position.y = 111
+  roof.castShadow = true
+  roof.receiveShadow = true
   g.add(roof)
   g.add(ball(2.4, gold, { y: 125.2 }))
-  g.add(rbox(30, 7, 1, cream, { y: 111.5, z: 21.5 }, 0.4))
-  g.add(rbox(32, 1, 1.2, gold, { y: 118.5, z: 21.5 }, 0.3))
+  // 招牌立在屋檐板上（原来底边离檐板顶面 0.5）
+  g.add(rbox(30, 7, 1, cream, { y: 111, z: 21.5 }, 0.4))
+  g.add(rbox(32, 1, 1.2, gold, { y: 118, z: 21.5 }, 0.3))
   // 推把
   for (const s of [-1, 1]) g.add(stick3([s * 22, 52, -20], [s * 22, 72, -34], 1, gold))
   g.add(cylX(1.4, 48, DARK, 0, 72, -34, 20))

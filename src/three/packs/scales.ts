@@ -29,7 +29,8 @@ function glassScale(p: string[]) {
   glass.userData.noOutline = true
   g.add(glass)
   g.add(rbox(30.4, 0.3, 30.4, frame, { y: 1.35 }, 1.6))
-  g.add(glow(7, 2.4, digit, { y: 2.25, z: -9, rx: -Math.PI / 2 }, 0.9))
+  // 数字屏平躺着嵌在玻璃面上，只露出 0.3（glow 的 y 是竖放时的底边：转平以后中心在 y + 高 / 2，以前因此飘在玻璃上方 1cm）
+  g.add(glow(7, 2.4, digit, { y: 1, z: -9, rx: -Math.PI / 2 }, 0.9))
   return g
 }
 
@@ -77,7 +78,8 @@ function roundScale(p: string[]) {
     const a = (i / 4) * Math.PI * 2 + Math.PI / 4
     g.add(cyl(3, 3, 0.3, electrode, { x: Math.sin(a) * 8.5, y: 2.1, z: Math.cos(a) * 8.5 + 1.5 }, 20))
   }
-  g.add(glow(5, 1.8, screen, { y: 2.3, z: -10, rx: -Math.PI / 2 }, 0.9))
+  // 小屏平躺着嵌在秤面上，只露出 0.3（同玻璃款：以前飘在秤面上方 0.7cm）
+  g.add(glow(5, 1.8, screen, { y: 1.3, z: -10, rx: -Math.PI / 2 }, 0.9))
   return g
 }
 

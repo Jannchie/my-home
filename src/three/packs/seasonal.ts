@@ -12,7 +12,7 @@
 //   - 壁挂层板的 surface / surfaces 写离地高度（= mount + 层板顶面在模型里的高度）。
 
 import * as THREE from 'three'
-import { ball, capsule, cup, cyl, face, puck, rbox, shade, toon, torus, tray } from '../toon'
+import { ball, cached, capsule, cup, cyl, face, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { artFace } from '../artwork'
 import { C, G, glow, paintAbstract, paintFlower, paintLandscape, paintPanel, rectPoly, rng, shell, type AssetDef, type Fx } from '../kit'
 import { PI, clearDeep, lathe, noOutlineDeep, rod3, tube, type TubeOpts, type V3 } from '../geo'
@@ -50,6 +50,21 @@ function litAll<T extends THREE.Object3D>(o: T, color: string, k = 0.8): T {
   })
   return o
 }
+/**
+ * 贴着圆柱的细箍（竹节）：圈上的段数 seg 和圆柱的段数一致（要能被 4 整除，顶点才对得上），折线贴着柱面走。
+ * torus() 一整圈固定 24 / 32 段，和 20 / 12 段的竹竿对不上，面数也是这里的两倍多。
+ */
+function hoop(r: number, tube: number, color: string, y: number, seg: number) {
+  const m = new THREE.Mesh(
+    cached(`ss-hoop${r},${tube},${seg}`, () => new THREE.TorusGeometry(r, tube, 6, seg)),
+    toon(color),
+  )
+  m.rotation.x = PI / 2
+  m.position.y = y
+  m.castShadow = true
+  m.receiveShadow = true
+  return m
+}
 /** 平面轮廓挤出的薄片：轮廓在 xy 平面（y 朝上），厚度沿 +z 从 z0 开始 */
 function flat(pts: [number, number][], t: number, color: string, z0 = 0) {
   const s = new THREE.Shape(pts.map(([x, y]) => new THREE.Vector2(x, y)))
@@ -83,7 +98,11 @@ function starPts(R0: number, r0: number): [number, number][] {
 }
 /** 叶片：叶柄端在 base，沿水平角 yaw、俯仰 pitch（负值朝上）伸出 */
 function sprig(len: number, color: string, base: V3, yaw: number, pitch: number, wide = 0.4) {
-  const m = ball(len / 2, color, {}, [wide, 0.14, 1])
+  // 叶片是压得很扁的椭球，12×8 段足够：ball 按半径取段数，半径 ≥ 3 的会用 16×12 / 24×16，
+  // 门松、七夕竹上几十片叶子白白多出几千面，所以半径封顶在 2.9、再用缩放补回长度
+  const r = Math.min(len / 2, 2.9)
+  const k = len / 2 / r
+  const m = ball(r, color, {}, [wide * k, 0.14 * k, k])
   m.rotation.set(pitch, yaw, 0, 'YXZ')
   const d: V3 = [Math.sin(yaw) * Math.cos(pitch), -Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch)]
   m.position.set(base[0] + (d[0] * len) / 2, base[1] + (d[1] * len) / 2, base[2] + (d[2] * len) / 2)
@@ -112,7 +131,7 @@ function bamboo(r: number, h: number, color: string, at: V3 = [0, 0, 0], slope =
   }
   g.add(cap(r * 0.92, '#f1e4b8', 0.15), cap(r * 0.62, '#6f6a3a', 0.3))
   // 竹节
-  for (let y = h * 0.28; y < h - slope * r * 2 - 2; y += h * 0.3) g.add(torus(r + 0.05, Math.max(0.2, r * 0.07), shade(color, -0.12), { y, rx: PI / 2 }))
+  for (let y = h * 0.28; y < h - slope * r * 2 - 2; y += h * 0.3) g.add(hoop(r + 0.05, Math.max(0.2, r * 0.07), shade(color, -0.12), y, 20))
   g.position.set(...at)
   return g
 }
@@ -230,15 +249,17 @@ function shimekazari(p: string[]) {
   for (const s of [-1, 1]) g.add(sprig(11, PINE, [s * 2, 31, 2.6], s * (PI / 2) - s * 0.2, 0.15, 0.4))
   g.add(ball(4, '#f29a2e', { y: 32, z: 4 }))
   g.add(sprig(3.5, LEAF, [0, 35.5, 4.5], 0.4, -0.3, 0.5))
+  // 纸垂从稻草环上垂下来：最上面一片搭在环的正面（原来整串悬在环下方 5cm、流苏两侧的半空中）
   for (const s of [-1, 1])
-    for (let k = 0; k < 4; k++) g.add(noOutlineDeep(rbox(2.6, 4, 0.25, paper, { x: s * 8 + (k % 2 ? 0.9 : -0.9) * s, y: 19 - k * 4, z: 2.4 }, 0.05)))
+    for (let k = 0; k < 4; k++) g.add(noOutlineDeep(rbox(2.6, 4, 0.25, paper, { x: s * 8 + (k % 2 ? 0.9 : -0.9) * s, y: 25.5 - k * 4, z: 1.75 }, 0.05)))
   // 扇子
   const fan: [number, number][] = [[0, 0]]
   for (let k = 0; k <= 8; k++) {
     const a = PI * 0.2 + (k / 8) * PI * 0.6
     fan.push([Math.cos(a) * 7, Math.sin(a) * 7])
   }
-  const f = flat(fan, 0.3, GOLD, 5.2)
+  // 扇面贴着环的正面、扇柄插在橙子后面（原来悬在环前面 3cm 多，只有扇柄尖碰着橙子）
+  const f = flat(fan, 0.3, GOLD, 2.05)
   f.position.y = 36
   g.add(f)
   return g
@@ -484,7 +505,7 @@ function koinobori(p: string[]) {
   const [papa, mama, kid] = p
   const g = new THREE.Group()
   g.add(rbox(32, 12, 32, '#e9e6df', {}, 2))
-  g.add(cyl(5, 5, 1, '#c3c7cc', { y: 12 }))
+  g.add(cyl(5, 5, 1.3, '#c3c7cc', { y: 11.7 }))
   g.add(cyl(1.4, 1.6, 168, '#e9e6df', { y: 12 }, 10))
   g.add(ball(2.6, GOLD, { y: 183 }))
   const wheel = G(torus(5, 0.35, J.shu))
@@ -534,8 +555,10 @@ function kabuto(p: string[]) {
     g.add(rbox(5.5, 6.5, 1, lac, { x: s * 12.5, y: hy - 4, z: 7, ry: s * 0.7 }, 0.4))
     g.add(noOutlineDeep(rbox(4.5, 5.5, 0.3, gold, { x: s * 12.85, y: hy - 3.5, z: 7.4, ry: s * 0.7 }, 0.1)))
     // 锹形
-    g.add(rbox(1.6, 20, 0.7, gold, { x: s * 5.2, y: hy + 9, z: 9.6, rz: -s * 0.35 }, 0.3))
+    g.add(rbox(1.6, 20, 0.7, gold, { x: s * 5.2, y: hy + 8, z: 9.6, rz: -s * 0.35 }, 0.3))
   }
+  // 鍬形台：盔前的小台板，锹形和前立都插在上面（以前锹形、前立浮在盔钵前面）
+  g.add(rbox(9, 7.4, 1.4, lac, { y: hy + 1.6, z: 10.2 }, 0.5))
   g.add(rbox(15, 1.2, 4.5, lac, { y: hy + 1.2, z: 9.6, rx: 0.3 }, 0.4))
   g.add(disc(2.4, gold, 0, hy + 6, 11.2, 0.6))
   g.add(torus(1.4, 0.45, cord, { y: hy - 9.6, z: 7 }))
@@ -549,7 +572,7 @@ function tanabata(p: string[]) {
   g.add(cup(14, 12, 24, 1, '#8a6a4a'))
   g.add(cyl(12.4, 12.4, 1, '#9a9890', { y: 20 }))
   g.add(cyl(2, 2.2, 140, bam, { y: 2 }, 12))
-  for (let y = 30; y < 140; y += 22) g.add(torus(2.1, 0.3, shade(bam, -0.12), { y, rx: PI / 2 }))
+  for (let y = 30; y < 140; y += 22) g.add(hoop(2.1, 0.3, shade(bam, -0.12), y, 12))
   const rand = rng(7)
   const papers = [paperA, paperB, C.lemon, C.pink, C.sky, C.mint]
   for (let i = 0; i < 9; i++) {
@@ -561,7 +584,7 @@ function tanabata(p: string[]) {
     for (let k = 0; k < 5; k++) g.add(sprig(9 + rand() * 3, k % 2 ? '#5f9e4f' : '#78b45a', end, PI / 2 - a + (rand() - 0.5) * 1.6, 0.35 + rand() * 0.4, 0.28))
     const mid: V3 = [end[0] * 0.6, y + 6, end[2] * 0.6]
     for (const [pt, k] of [[end, 0], [mid, 1]] as [V3, number][]) {
-      g.add(rod3([pt[0], pt[1] - 1, pt[2]], [pt[0], pt[1] - 4, pt[2]], 0.08, '#ffffff', 8))
+      g.add(rod3([pt[0], pt[1] - 1, pt[2]], [pt[0], pt[1] - 4, pt[2]], 0.08, '#ffffff', 4))
       g.add(rbox(3.2, 10, 0.25, papers[(i * 2 + k) % papers.length], { x: pt[0], y: pt[1] - 14, z: pt[2], ry: -a }, 0.1))
     }
   }
@@ -795,6 +818,7 @@ function butsudan(p: string[]) {
   const [wood, inner, metal] = p
   const g = new THREE.Group()
   g.add(shell(40, 52, 30, 1.5, wood, { front: [{ kind: 'rect', x: 0, y: 3, w: 35, h: 46, r: 0.6 }] }))
+  // 顶板和供台用 dim：默认的深褐色用 shade 直接减明度会变成纯黑（顶上像盖了块黑板、供台糊成一团）
   g.add(rbox(42, 3, 32, shade(wood, -0.1), { y: 52 }, 0.6))
   g.add(noOutlineDeep(rbox(36, 45, 0.4, inner, { y: 4, z: -13.1 }, 0.1)))
   g.add(rbox(36, 10, 4, shade(wood, -0.08), { y: 1.5, z: -6.5 }, 0.4))
@@ -838,7 +862,7 @@ function ema(p: string[]) {
         c.lineTo(W * (0.58 + k * 0.1), H * (0.6 + (k % 2) * 0.2))
         c.stroke()
       }
-    }, { y: 0.6, z: 0.82 }),
+    }, { y: 0.6, z: 0.86 }),
   )
   for (const s of [-1, 1]) g.add(rbox(5.6, 0.8, 1.1, shade(wood, -0.18), { x: s * 5.8, y: 8.2, z: 0.05, rz: -s * 0.72 }, 0.2))
   g.add(torus(1.8, 0.16, cord, { y: 10.4, z: 0.4 }, PI))
@@ -880,7 +904,7 @@ function xmasTree(p: string[]) {
   g.add(tray(40, 26, 40, 1.6, wood, {}, 0.5))
   for (let k = 0; k < 3; k++) g.add(noOutlineDeep(rbox(40.4, 1.2, 40.4, shade(wood, -0.15), { y: 4 + k * 8 }, 0.3)))
   g.add(cyl(19, 19, 0.8, '#8b6a4f', { y: 21 }))
-  g.add(cyl(3.5, 4, 14, '#7a5a43', { y: 20 }, 10))
+  g.add(cyl(3.5, 4, 13.5, '#7a5a43', { y: 20.5 }, 10))
   const tiers: [number, number, number][] = [
     [30, 62, 50],
     [62, 50, 40],
@@ -911,7 +935,10 @@ function xmasTree(p: string[]) {
     const y = 36 + t * 110
     const a = t * PI * 2 * 5
     const r = radiusAt(y) + 0.6
-    g.add(litAll(ball(1.1, bulbs[i % 4], { x: Math.cos(a) * r, y, z: Math.sin(a) * r }), bulbs[i % 4], 0.9))
+    // 彩灯只有 1cm 大、不描边：8×6 段的小球就够（ball 的 12×8 段要多一倍面，56 颗占了整棵树一多半）
+    const bulb = litAll(new THREE.Mesh(cached('ss-bulb', () => new THREE.SphereGeometry(1.1, 8, 6))), bulbs[i % 4], 0.9)
+    bulb.position.set(Math.cos(a) * r, y, Math.sin(a) * r)
+    g.add(bulb)
   }
   const star = litAll(flat(starPts(8, 3.4), 1.6, GOLD, -0.8), GOLD, 0.7)
   star.position.y = 162
@@ -924,6 +951,7 @@ function wreath(p: string[]) {
   const [green, bow, berry] = p
   const g = new THREE.Group()
   const cy = 20
+  // 底环用 dim：默认的墨绿用 shade 减明度会变成纯黑，叶子缝里露出来的全是黑的
   g.add(torus(15, 3.4, shade(green, -0.12), { y: cy }))
   const rand = rng(21)
   for (let i = 0; i < 40; i++) {
@@ -1111,8 +1139,9 @@ function bunting(p: string[]) {
   for (const s of [-1, 1]) g.add(cyl(0.7, 0.7, 2, '#c3c7cc', { x: s * 75, y: 30, z: 0, rx: PI / 2 }, 8))
   for (let i = 0; i < 12; i++) {
     const x = -66 + i * 12
-    const f = flat([[-5, 0], [5, 0], [0, -13]], 0.3, p[i % 3], 0.6)
-    f.position.set(x, yAt(x) + 0.3, 0)
+    const f = flat([[-5, 0], [5, 0], [0, -13]], 0.3, p[i % 3])
+    // z 要和绳子（z = 1）对上：旗子顶边穿过绳子（原来 position.set 把 z 归零了，旗子悬在绳子后面半厘米）
+    f.position.set(x, yAt(x) + 0.3, 0.85)
     f.rotation.z = Math.atan((16 * x) / 75 ** 2)
     g.add(f)
   }
@@ -1132,7 +1161,8 @@ function fanHead(r: number, cage: string, blade: string, motor: string, nBlade =
       const a = (k / spokes) * PI * 2
       g.add(rod3([Math.cos(a) * r * 0.16, Math.sin(a) * r * 0.16, z], [Math.cos(a) * r, Math.sin(a) * r, 0], 0.12, cage, 4))
     }
-    g.add(noOutlineDeep(torus(r * 0.6, 0.12, cage, { z: z * 0.66 })))
+    // 中圈贴在辐条锥面上（半径 0.6r 处辐条的 z）：以前取 z×0.66，离辐条 0.6cm 悬着
+    g.add(noOutlineDeep(torus(r * 0.6, 0.12, cage, { z: (z * (1 - 0.6)) / (1 - 0.16) })))
   }
   g.add(cyl(r * 0.17, r * 0.17, 0.8, shade(cage, -0.1), { z: 3.4, rx: PI / 2 }, 20))
   g.add(cyl(r * 0.12, r * 0.12, 2.6, motor, { z: -1.2, rx: PI / 2 }, 16))
@@ -1186,6 +1216,13 @@ function fanCirc(p: string[]) {
   housing.position.set(0, hy, -1)
   g.add(housing)
   for (let k = 1; k <= 5; k++) g.add(noOutlineDeep(torus(k * 2, 0.22, shade(body, -0.12), { y: hy, z: 2.6 - (5 - k) * 0.25 })))
+  // 网罩的放射辐条：把一圈圈同心环串起来，外端折回接到外壳口沿（以前同心环各自悬空）
+  for (let k = 0; k < 8; k++) {
+    const a = (k / 8) * PI * 2 + PI / 8
+    const at = (rr: number, z: number): V3 => [Math.cos(a) * rr, hy + Math.sin(a) * rr, z]
+    g.add(noOutlineDeep(rod3(at(1.8, 1.55), at(10.2, 2.6), 0.15, shade(body, -0.12), 4)))
+    g.add(noOutlineDeep(rod3(at(10.2, 2.6), at(10.9, 1.9), 0.15, shade(body, -0.12), 4)))
+  }
   g.add(cyl(2.2, 2.2, 0.8, accent, { y: hy, z: 2.2, rx: PI / 2 }, 16))
   for (let k = 0; k < 5; k++) {
     const a = (k / 5) * PI * 2
@@ -1206,7 +1243,8 @@ function fanTower(p: string[]) {
   g.add(noOutlineDeep(rbox(12, 62, 0.4, shade(grille, -0.2), { y: 12, z: 10.05 }, 0.2)))
   for (let k = 0; k < 9; k++) g.add(rbox(0.6, 62, 0.6, grille, { x: -5 + k * 1.25, y: 12, z: 10.4 }, 0.2))
   g.add(noOutlineDeep(rbox(14, 0.4, 10, M.black, { y: 85 }, 0.2)))
-  g.add(glow(4, 1.4, accent, { y: 85.4, z: 1, rx: -PI / 2 }, 0.8))
+  // glow 的 at.y 是竖着时的底边，放平以后厚度中心在 y + h/2：这里让它半嵌在面板里、只露出 0.3（原来悬在面板上方）
+  g.add(glow(4, 1.4, accent, { y: 84.7, z: 1, rx: -PI / 2 }, 0.8))
   for (let k = 0; k < 3; k++) g.add(cyl(0.8, 0.8, 0.4, shade(body, -0.2), { x: -4 + k * 4, y: 85.3, z: -2.5 }, 10))
   return g
 }
@@ -1268,6 +1306,8 @@ function keroseneConv(p: string[]) {
   spout.rotation.z = -0.9
   g.add(spout)
   g.add(torus(7, 0.55, shade(kettle, -0.25), { y: ky + 9.6 }, PI))
+  // 提梁两头的耳座：从壶肩立起来接住提梁（以前提梁两端离壶肩 1.7cm）
+  for (const s of [-1, 1]) g.add(rod3([s * 7, ky + 7.4, 0], [s * 7, ky + 9.8, 0], 0.6, shade(kettle, -0.25), 8))
   return g
 }
 const KERO_FX: Fx[] = [{ kind: 'steam', x: KETTLE_SPOUT[0], y: KETTLE_SPOUT[1], z: 0, scale: 0.7, height: 25 }]
@@ -1281,7 +1321,8 @@ function keroseneFan(p: string[]) {
   g.add(glow(30, 9, EMBER, { y: 5.5, z: 15.1 }, 0.6))
   for (let k = 0; k < 4; k++) g.add(rbox(34, 0.8, 1.2, shade(body, -0.18), { y: 5 + k * 2.6, z: 15.6, rx: 0.4 }, 0.3))
   g.add(rbox(32, 1, 12, panel, { y: 42, z: 5 }, 0.4))
-  g.add(glow(8, 2.6, '#9fe3b0', { x: -6, y: 43.1, z: 6, rx: -PI / 2 }, 0.7))
+  // 液晶屏放平后厚度中心在 y + h/2（见 fanTower）：半嵌在面板里（原来悬在面板上方 1cm）
+  g.add(glow(8, 2.6, '#9fe3b0', { x: -6, y: 41.8, z: 6, rx: -PI / 2 }, 0.7))
   for (let k = 0; k < 3; k++) g.add(cyl(1.1, 1.1, 0.6, k ? M.silver : accent, { x: 4 + k * 4.2, y: 43, z: 6 }, 12))
   g.add(noOutlineDeep(rbox(16, 0.4, 4, shade(body, -0.3), { y: 41.82, z: -9 }, 0.2)))
   return g
@@ -1299,7 +1340,7 @@ function hotCarpet(W: number, D: number): Build {
       g.add(noOutlineDeep(rbox(2.4, t, D - 16, line, { x: s * (W / 2 - 9), y: 1.2 }, 0.1)))
     }
     for (let i = -1; i <= 1; i++) for (let k = -1; k <= 1; k++) g.add(noOutlineDeep(rbox(16, t, 16, shade(main, -0.08), { x: i * (W / 4), y: 1.2, z: k * (D / 4), ry: PI / 4 }, 0.1)))
-    g.add(rbox(12, 3, 7, ctrl, { x: W / 2 - 12, y: 1.2, z: D / 2 - 8 }, 1))
+    g.add(rbox(12, 3.3, 7, ctrl, { x: W / 2 - 12, y: 0.9, z: D / 2 - 8 }, 1))
     g.add(litAll(ball(0.5, '#ff6a4a', { x: W / 2 - 15, y: 4.2, z: D / 2 - 6 }), '#ff6a4a', 1))
     g.add(cyl(1.2, 1.2, 0.5, shade(ctrl, -0.2), { x: W / 2 - 10, y: 4.2, z: D / 2 - 8 }, 12))
     return g
@@ -1313,7 +1354,7 @@ function kotatsuRect(p: string[]) {
   const g = new THREE.Group()
   g.add(rbox(KR.mat[0], 2, KR.mat[1], mat, {}, 0.9))
   g.add(rbox(KR.quilt[0] + 26, 5, KR.quilt[1] + 26, shade(quilt, -0.06), { y: 2 }, 2.4))
-  g.add(rbox(KR.quilt[0], KR.topY - 2, KR.quilt[1], quilt, { y: 2 }, 14))
+  g.add(rbox(KR.quilt[0], KR.topY - 3, KR.quilt[1], quilt, { y: 3 }, 14))
   for (const s of [-1, 1]) {
     g.add(noOutlineDeep(rbox(KR.quilt[0] - 30, 0.4, 0.3, shade(quilt, -0.15), { y: 22, z: s * (KR.quilt[1] / 2 + 0.1) }, 0.1)))
     g.add(noOutlineDeep(rbox(0.3, 0.4, KR.quilt[1] - 30, shade(quilt, -0.15), { x: s * (KR.quilt[0] / 2 + 0.1), y: 22 }, 0.1)))
@@ -1393,8 +1434,9 @@ function sudare(w: number, h: number, reed: boolean): Build {
         for (let k = 1; k < 6; k++) c.fillRect((W * k) / 6 - 1, 0, Math.max(2, W * 0.006), H)
       }, { z: 0.06 }),
     )
-    for (const s of [-1, 1]) g.add(rbox(2.4, h, 1, tape, { x: s * (w / 2 - 1.2), z: -0.2 }, 0.3))
-    g.add(rbox(w + 1, 3.6, 1.6, tape, { y: h - 3.6, z: -0.3 }, 0.4))
+    // 布边比帘子宽出 0.2、压条比帘子高出 0.3：侧面、顶面都不和帘子的底板共面（原来三处齐平，会闪）
+    for (const s of [-1, 1]) g.add(rbox(2.4, h - 0.6, 1, tape, { x: s * (w / 2 - 1), y: 0.2, z: -0.2 }, 0.3))
+    g.add(rbox(w + 1, 3.6, 1.6, tape, { y: h - 3.3, z: -0.3 }, 0.4))
     const bot = cyl(0.8, 0.8, w - 1, shade(bam, -0.1), {}, 10)
     bot.rotation.z = PI / 2
     bot.position.set(0, 0.8, 0.2)
@@ -1506,7 +1548,9 @@ function cuckooClock(p: string[]) {
   g.add(clockHands(0, by + 10, 6.2, 5.6, SUMI))
   for (let k = 0; k < 6; k++) {
     const a = PI * 0.15 + (k / 5) * PI * 0.7
-    g.add(sprig(6, roof, [Math.cos(a) * 7.5 * (k % 2 ? 1 : -1) * 0 + Math.cos(a) * 7.5, by + 26 + 6 + Math.sin(a) * 1.5, 6.2], a > PI / 2 ? -PI / 2 : PI / 2, -0.5, 0.45))
+    // 叶根贴着屋面（屋面顶 ≈ by+34.8-0.614|x|）：以前统一放在 by+32 附近，两侧的叶子离坡面 2cm 悬空
+    const lx = Math.cos(a) * 7.5
+    g.add(sprig(6, roof, [lx, by + 34.5 - 0.614 * Math.abs(lx), 6.2], a > PI / 2 ? -PI / 2 : PI / 2, -0.5, 0.45))
   }
   g.add(ball(2, shade(roof, -0.1), { y: by + 33.5, z: 2 }, [1.4, 0.9, 0.9]))
   g.add(rod3([0, by, 4.5], [0, 15, 4.5], 0.25, BRASS, 8))
@@ -1538,7 +1582,7 @@ function digitalClock(p: string[]) {
       c.font = `${Math.round(H * 0.16)}px ${signSans()}`
       // 日期按当地写法；美国用华氏度
       c.fillText(say({ zh: '2026/10/16 周五   23°C 48%', ja: '2026.10.16 (金)   23°C 48%', en: 'FRI OCT 16   73°F 48%' }), W * 0.5, H * 0.86, W * 0.94)
-    }, { y: 2.5, z: 1.27 }, 0.6),
+    }, { y: 2.5, z: 1.31 }, 0.6),
   )
   return g
 }
@@ -1571,6 +1615,7 @@ function pendulumClock(p: string[]) {
   const [wood, dial, metal] = p
   const g = new THREE.Group()
   g.add(shell(30, 62, 12, 1.2, wood, { front: [{ kind: 'rect', x: 0, y: 4, w: 22, h: 30, r: 1 }] }))
+  // 背板、顶檐、底座用 dim：深色木壳用 shade 减明度会变成纯黑
   g.add(noOutlineDeep(rbox(27.4, 59, 0.3, shade(wood, -0.3), { y: 1.5, z: -4.6 }, 0.1)))
   g.add(rbox(33, 3, 14, shade(wood, -0.12), { y: 62 }, 0.6))
   g.add(flat([[-13, 0], [13, 0], [0, 6]], 1.4, wood, -0.7).translateY(65))
@@ -1589,7 +1634,7 @@ function pendulumClock(p: string[]) {
 /** 无框画布（大幅风景） */
 function canvasXL(p: string[]) {
   const [sky, hill, sun] = p
-  return G(rbox(120, 80, 3.5, '#f4f1ea', {}, 0.3), paintPanel(119.6, 79.6, ...artFace(0, `canvasxl|${sky}|${hill}|${sun}`, paintLandscape(sky, hill, sun)), { y: 0.2, z: 1.78 }))
+  return G(rbox(120, 80, 3.5, '#f4f1ea', {}, 0.3), paintPanel(119.6, 79.6, ...artFace(0, `canvasxl|${sky}|${hill}|${sun}`, paintLandscape(sky, hill, sun)), { y: 0.2, z: 1.81 }))
 }
 /** 三联画：一幅抽象画分在三块画布上 */
 function triptych(p: string[]) {
@@ -1605,7 +1650,7 @@ function triptych(p: string[]) {
     }
     const x = (i - 1) * 44
     g.add(rbox(40, 60, 3, shade(ground, -0.08), { x }, 0.3))
-    g.add(paintPanel(39.6, 59.6, ...artFace(i, `trip|${ground}|${a}|${line}|${i}`, part, [i, 3]), { x, y: 0.2, z: 1.53 }))
+    g.add(paintPanel(39.6, 59.6, ...artFace(i, `trip|${ground}|${a}|${line}|${i}`, part, [i, 3]), { x, y: 0.2, z: 1.56 }))
   }
   return g
 }
@@ -1631,9 +1676,10 @@ function photoWall(p: string[]) {
     [40, 30, -3, 44],
     [24, 30, 32, 44],
     [24, 24, 54, 14],
-    [40, 30, 5, 5],
+    // 下排中间这幅和右下的小框原来在 x 方向叠了 5cm（两只相框互相穿过去），这里收窄并挪开，各留 2.5cm 的缝
+    [34, 30, 0, 5],
     [24, 30, -42, -5],
-    [20, 20, 30, 0],
+    [20, 20, 29.5, -5],
   ]
   const skies = ['#bfe3ff', '#ffd9b8', '#d7ecd0', '#f4d6e6', '#c9d4f0', '#fff1c4', '#d8f0ec']
   L.forEach(([w, h, x, y], i) => {
@@ -1747,7 +1793,8 @@ function cubeShelf(p: string[]) {
   g.add(rbox(w, t, d, main, {}, 0.4))
   g.add(rbox(w, t, d, main, { y: h - t }, 0.4))
   for (const x of [-w / 2 + t / 2, -w / 6, w / 6, w / 2 - t / 2]) g.add(rbox(t, h - t * 2, d, main, { x, y: t }, 0.3))
-  g.add(rbox(w - t * 2, h - t * 2, 1, back, { y: t, z: -d / 2 + 0.5 }, 0.2))
+  // 背板往里收 0.3：背面不和隔板的后端面共面
+  g.add(rbox(w - t * 2, h - t * 2, 1, back, { y: t, z: -d / 2 + 0.8 }, 0.2))
   return g
 }
 const cubeCells = () => {
@@ -1755,7 +1802,7 @@ const cubeCells = () => {
   const cw = (w - t * 4) / 3
   return [0, 1, 2].map((i) => {
     const x0 = -w / 2 + t + i * (cw + t)
-    return [rectPoly(x0 + 0.5, -d / 2 + 1.5, x0 + cw - 0.5, d / 2 - 0.5)]
+    return [rectPoly(x0 + 0.5, -d / 2 + 1.8, x0 + cw - 0.5, d / 2 - 0.5)]
   })
 }
 /** 隐形层板：一整块厚板 */
@@ -1779,7 +1826,8 @@ function corkboard(p: string[]) {
       c.fillRect(rand() * W, rand() * H, 2, 2)
     }
   })
-  const z = -t + 0.7 + t / 2
+  // 软木面在 frame 组里的 z（frame 自己已经整体前移了 t/2，这里不能再加一次——原来便签和图钉悬在软木面前 1cm 多）
+  const z = -t + 0.7
   const notes: [number, number, number, number, number, string][] = [
     [-17, 22, 10, 10, 0.1, noteA],
     [-3, 25, 12, 9, -0.08, '#ffffff'],
@@ -1833,7 +1881,7 @@ function wireGrid(p: string[]) {
   shots.forEach(([x, y, w, h, rz], i) => {
     const pg = G(rbox(w, h, 0.25, '#ffffff', {}, 0.05))
     const d = i % 2 ? paintFlower(shade(photo, 0.3), photo, GOLD) : paintLandscape(shade(photo, 0.35), photo, '#ffffff')
-    pg.add(paintPanel(w - 1.2, h - 2.4, ...artFace(i, `wg|${photo}|${i}`, d), { y: 1.6, z: 0.14 }))
+    pg.add(paintPanel(w - 1.2, h - 2.4, ...artFace(i, `wg|${photo}|${i}`, d), { y: 1.6, z: 0.21 }))
     pg.add(rbox(1.4, 3, 1, clip, { y: h - 1.5, z: 0.4 }, 0.3))
     pg.position.set(x, y - h + 1.5, 1.4)
     pg.rotation.z = rz
@@ -1870,13 +1918,14 @@ function calendar(p: string[]) {
           c.fillStyle = k === 0 ? accent : '#5a5050'
           c.fillRect(W * (0.08 + k * 0.125), H * (0.64 + r * 0.068), W * 0.06, H * 0.025)
         }
-    }, { y: 1, z: 0.16 }),
+    }, { y: 1, z: 0.21 }),
   )
   const wire = cyl(0.3, 0.3, 26, '#9aa0a6', {}, 6)
   wire.rotation.z = PI / 2
   wire.position.set(0, 41.6, 0.25)
   g.add(wire)
-  g.add(torus(1.4, 0.15, '#9aa0a6', { y: 43.4, z: 0.2 }, PI))
+  // 挂环做成整圈，下沿搭在装订线圈上（原来只有上半圈，悬在线圈上方 1.4cm）
+  g.add(torus(1.4, 0.15, '#9aa0a6', { y: 43.4, z: 0.2 }))
   return g
 }
 /** 日历本（撕页日历，贴附） */
@@ -1884,7 +1933,8 @@ function tearCalendar(p: string[]) {
   const [board, num, sub] = p
   const g = new THREE.Group()
   g.add(rbox(14, 22, 0.6, board, {}, 0.3))
-  g.add(rbox(12, 16, 2.2, PAPER, { y: 1.2, z: 0.6 }, 0.1))
+  // rbox 的 at.z 是中心：纸本从底板正面（z = 0.3）起、厚 2.2（原来按「背面」写成 0.6，纸本从底板背后穿出去，印着日期的那面又悬在纸本前 1cm）
+  g.add(rbox(12, 16, 2.2, PAPER, { y: 1.2, z: 1.4 }, 0.1))
   g.add(
     paintPanel(11, 15, `tear|${p.join()}|${signLang()}`, (c, W, H) => {
       c.fillStyle = PAPER
@@ -1900,7 +1950,7 @@ function tearCalendar(p: string[]) {
       const [head, foot] = say({ zh: ['2026 · 10月', '星期五 · 宜出行'], ja: ['2026 · 10', '金曜日 大安'], en: ['OCTOBER 2026', 'FRIDAY'] })
       c.fillText(head, W / 2, H * 0.12, W * 0.9)
       c.fillText(foot, W / 2, H * 0.88, W * 0.9)
-    }, { y: 1.7, z: 2.82 }),
+    }, { y: 1.7, z: 2.56 }),
   )
   g.add(torus(1, 0.3, shade(board, -0.3), { y: 19.8, z: 0.32 }))
   return g
@@ -2451,11 +2501,11 @@ const SEASON_APPLIANCE: AssetDef[] = [
   A('ss-fan-floor', '电风扇', 'appliance', [37.1, 32, 106.5], FAN_PALS, fanFloor, { sizeLabel: '落地扇' }),
   A('ss-fan-desk', '电风扇', 'appliance', [27.1, 21.9, 39.1], FAN_PALS, fanDesk, { sizeLabel: '台扇', prop: true }),
   A('ss-fan-circ', '电风扇', 'appliance', [27.2, 22, 28.2], FAN_PALS, fanCirc, { sizeLabel: '循环扇', prop: true }),
-  A('ss-fan-tower', '电风扇', 'appliance', [28, 28, 86.4], TOWER_PALS, fanTower, { sizeLabel: '塔扇' }),
+  A('ss-fan-tower', '电风扇', 'appliance', [28, 28, 85.7], TOWER_PALS, fanTower, { sizeLabel: '塔扇' }),
   A('ss-fan-retro', '复古台扇', 'appliance', [29.1, 24.7, 43.6], FAN_RETRO_PALS, fanRetro, { prop: true }),
   A('ss-ceramic-heater', '陶瓷暖风机', 'appliance', [20, 16.8, 32], HEATER_PALS, ceramicHeater, { prop: true }),
   A('ss-kerosene-conv', '石油暖炉', 'appliance', [46, 46, 65.8], KERO_PALS, keroseneConv, { sizeLabel: '对流式（带水壶）', fx: KERO_FX }),
-  A('ss-kerosene-fan', '石油暖炉', 'appliance', [44, 31.2, 44.7], KERO_FAN_PALS, keroseneFan, { sizeLabel: '风扇式' }),
+  A('ss-kerosene-fan', '石油暖炉', 'appliance', [44, 31.2, 43.6], KERO_FAN_PALS, keroseneFan, { sizeLabel: '风扇式' }),
   A('ss-hot-carpet-2', '电热地毯', 'living', [176, 176, 4.7], CARPET_PALS, hotCarpet(176, 176), { sizeLabel: '2 畳' }),
   A('ss-hot-carpet-3', '电热地毯', 'living', [235, 195, 4.7], CARPET_PALS, hotCarpet(235, 195), { sizeLabel: '3 畳' }),
   A('ss-kotatsu-rect', '长方形被炉', 'japanese', [200, 170, 41], KOTATSU_PALS, kotatsuRect, { surface: KR.topY + KR.topT, surfaceShape: [rectPoly(-KR.topW / 2, -KR.topD / 2, KR.topW / 2, KR.topD / 2)] }),
@@ -2485,11 +2535,11 @@ const WALL_DECO: AssetDef[] = [
   A('ss-shelf-2tier', '双层壁挂层板', 'storage', [84, 20, 32.5], SHELF_PALS, shelf2, { mount: SHELF2.mount, ...SHELF2_SURF }),
   A('ss-shelf-cube', '壁挂格子架', 'storage', [90, 22, 30], SHELF_PALS, cubeShelf, { mount: CUBE.mount, ...CUBE_SURF }),
   A('ss-shelf-floating', '隐形层板', 'storage', [120, 22, 4.1], FLOAT_PALS, floatShelf, { mount: FLOAT.mount, surface: FLOAT.mount + FLOAT.t }),
-  A('ss-corkboard', '软木留言板', 'study', [60, 3.1, 45], CORK_PALS, corkboard, { mount: 120 }),
+  A('ss-corkboard', '软木留言板', 'study', [60, 2.2, 45], CORK_PALS, corkboard, { mount: 120 }),
   A('ss-letterboard', '字母留言板', 'deco', [45, 2.4, 32], LETTER_PALS, letterboard, { mount: 130, lingual: true }),
   A('ss-wire-grid', '网格照片墙', 'deco', [60.8, 2.2, 60.8], GRID_PALS, wireGrid, { mount: 110 }),
   A('ss-calendar', '挂历', 'study', [30, 0.7, 44.9], CAL_PALS, calendar, { stick: true, prop: true }),
-  A('ss-calendar-tear', '撕页日历', 'study', [14, 3.3, 22], TEAR_PALS, tearCalendar, { stick: true, prop: true, lingual: true }),
+  A('ss-calendar-tear', '撕页日历', 'study', [14, 2.9, 22], TEAR_PALS, tearCalendar, { stick: true, prop: true, lingual: true }),
   A('ss-kakejiku-sansui', '挂轴·山水', 'japanese', [59.2, 3.6, 171.2], KAKE_PALS, kakejiku('sansui'), { sizeLabel: '山水画', mount: 45 }),
   A('ss-kakejiku-sho', '挂轴·书法', 'japanese', [59.2, 3.6, 171.2], KAKE_PALS, kakejiku('sho'), { sizeLabel: '书法「和」', mount: 45 }),
   A('ss-sensu-deco', '扇面装饰', 'japanese', [55.8, 2.8, 30.3], SENSU_PALS, sensuDeco, { mount: 150 }),

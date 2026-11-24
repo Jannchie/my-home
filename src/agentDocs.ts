@@ -103,7 +103,7 @@ ${SITE_NAME} is a single-page web app with three views that share one plan:
 
 1. **Floor plan (2D)** — draw rooms, walls, doors, windows and fixtures, or generate a whole plan.
 2. **3D diorama** — a cel-shaded ("toon") model of the plan with furniture, lighting, sun and sky.
-3. **Asset library** — about 2,900 procedurally built furniture and prop models in 9 styles.
+3. **Asset library** — about 3,200 procedurally built furniture and prop models in 9 styles.
 
 Everything runs locally in the browser (Vue + three.js). There is no backend: plans, preferences and saved snapshots stay in the browser's storage. It works offline as a PWA after the first visit and supports touch devices.
 
@@ -132,7 +132,7 @@ Everything runs locally in the browser (Vue + three.js). There is no backend: pl
 
 ## Asset library
 
-- About 2,900 models, built procedurally in code (no downloaded meshes).
+- About 3,200 models, built procedurally in code (no downloaded meshes).
 - Browse by function group (seating, tables, beds, storage, lighting, rugs and curtains, decor, plants, kitchen, appliances, electronics, bath and laundry, clothing, books, games, instruments, sports, crafts and collections, kids, pets, household), filter by room, style and size, search by name or type.
 - Styles: cute pastel, Nordic wood, modern, Japanese, industrial, Showa retro, Chinese, classic European, American farmhouse.
 - Each item shows all of its semantic tags; clicking a tag lists similar items. Double-click an item to place it in the 3D diorama.

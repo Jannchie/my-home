@@ -1150,7 +1150,8 @@ function retroPushPhone(p: string[]) {
   for (const s of [-1, 1]) g.add(rbox(2, 2.2, 3, shade(body, -0.1), { x: s * 5, y: 9.8, z: -5 }, 0.6))
   g.add(P(capsule(1.6, 11, body), 0, 12, -5, 0, 0, PI / 2))
   for (const s of [-1, 1]) g.add(ball(2.6, body, { x: s * 7.6, y: 11.4, z: -5 }, [1, 0.75, 1.2]))
-  for (let i = 0; i < 5; i++) g.add(torus(0.8, 0.25, shade(body, -0.1), { x: -9.6 - i * 0.7, y: 2.5, z: -7, ry: PI / 2 }))
+  // 螺旋线头一圈嵌进机身侧面（以前离侧面 0.3cm 悬着）
+  for (let i = 0; i < 5; i++) g.add(torus(0.8, 0.25, shade(body, -0.1), { x: -9.1 - i * 0.7, y: 2.5, z: -7, ry: PI / 2 }))
   return g
 }
 
@@ -1194,7 +1195,9 @@ function wallPhone(p: string[]) {
   for (const s of [-1, 1]) g.add(rbox(4.2, 3.6, 2.6, hs, { x: -2.5, y: 11 + s * 8 - 1.8, z: 2.6 }, 1.1))
   g.add(glow(3.4, 1.8, LCD, { x: 3.8, y: 17.4, z: 1.6 }, 0.4))
   keyGridZ(g, 2, 6, 1.6, 1.2, key, 3.0, 15, 1.7)
-  coil(g, [-2.5, 2.4, 3.2], [2.5, 1.6, 3.2], hs, 0.5, 6)
+  // 电话线：从话筒下端贴着机身正面绕到右下角的插口（以前线圈悬在机身前 1cm，右端没接到任何东西）
+  coil(g, [-2.5, 3, 2.3], [2.6, 2.4, 2.3], hs, 0.5, 7)
+  g.add(rbox(1.6, 1.6, 1, shade(body, -0.12), { x: 3.2, y: 1.6, z: 1.6 }, 0.3))
   return g
 }
 
@@ -1247,9 +1250,22 @@ function shredder(w: number, d: number, h: number) {
     // 纸篓：正面开窗，看得见碎纸
     g.add(shell(w, bh, d, t, body, { top: false, front: [{ kind: 'rect', x: 0, y: bh * 0.18, w: w * 0.55, h: bh * 0.6, r: 1.5 }] }))
     g.add(ghostOutlined(rbox(w * 0.55 + 1.6, bh * 0.6 + 1.6, 0.3, C.glass, { y: bh * 0.18 - 0.8, z: d / 2 - t - 0.2 }, 0.3), C.glass, 0.3))
+    // 碎纸：桶底一堆（方垫 + 中间鼓起的小丘），纸条都搭在堆面上（以前纸条随机散在半空，一条条悬着）
     const r = rng(w * 7 + h)
-    for (let i = 0; i < Math.round(w * 1.4); i++)
-      g.add(rbox(0.5, 0.15, 4 + r() * 3, i % 5 === 0 ? '#dfe8f0' : PAPER, { x: (r() - 0.5) * (w - 4), y: t + r() * bh * 0.4, z: (r() - 0.5) * (d - 6), rx: r() * 0.8, ry: r() * PI }, 0.05))
+    const pw = w - 2 * t - 1.6
+    const pd = d - 2 * t - 1.6
+    const ph = bh * 0.26
+    const mound = bh * 0.14
+    g.add(rbox(pw, ph, pd, PAPER, { y: t }, 1.2))
+    g.add(ball(pw * 0.4, PAPER, { y: t + ph - 0.4 }, [1, mound / (pw * 0.4), (pd * 0.42) / (pw * 0.4)]))
+    for (let i = 0; i < Math.round(w * 1.4); i++) {
+      const x = (r() - 0.5) * (pw - 3)
+      const z = (r() - 0.5) * (pd - 4)
+      // 小丘（椭球）在 (x, z) 处的高度，丘外为 0
+      const k = 1 - (x / (pw * 0.4)) ** 2 - (z / (pd * 0.42)) ** 2
+      const top = t + ph + (k > 0 ? mound * Math.sqrt(k) - 0.4 : 0)
+      g.add(rbox(0.5, 0.15, 4 + r() * 3, i % 5 === 0 ? '#dfe8f0' : PAPER, { x, y: top - 0.2 + r() * 0.3, z, rx: (r() - 0.5) * 0.9, ry: r() * PI }, 0.05))
+    }
     // 机头：中间留一道投纸口
     const hw = w + 0.6
     const hd = d + 0.6
@@ -1437,14 +1453,16 @@ function pcTower(w: number, d: number, h: number, rgb: boolean, fans: number) {
         c.add(noOutline(litOutlined(rbox(0.6, 0.8, 0.6, lights[1 + i], { x: ix + 1.2, y: h * 0.58 + 4, z }, 0.1), lights[1 + i], 0.9)))
       }
       // 前置风扇：每个一种颜色
+      // 风扇贴在前 / 后面板的内壁上（以前离面板 1.1cm，灯圈和轴心悬在机箱里）
       const fr = Math.min(4.4, w * 0.22)
+      const fanZ = d / 2 - t - 0.5
       for (let i = 0; i < fans; i++) {
         const fy = h * 0.32 + i * ((h * 0.6) / Math.max(1, fans))
-        c.add(noOutline(litOutlined(torus(fr, 0.45, lights[i % 3], { y: fy + 5, z: d / 2 - t - 1.6 }), lights[i % 3], 0.9)))
-        c.add(cylZ(1.2, 0.8, DARK, 0, fy + 5, d / 2 - t - 1.6, 14))
+        c.add(noOutline(litOutlined(torus(fr, 0.45, lights[i % 3], { y: fy + 5, z: fanZ }), lights[i % 3], 0.9)))
+        c.add(cylZ(1.2, 0.8, DARK, 0, fy + 5, fanZ, 14))
       }
-      c.add(noOutline(litOutlined(torus(fr, 0.45, lights[2], { y: h * 0.72, z: -d / 2 + t + 1.6 }), lights[2], 0.9)))
-      c.add(cylZ(1.2, 0.8, DARK, 0, h * 0.72, -d / 2 + t + 1.6, 14))
+      c.add(noOutline(litOutlined(torus(fr, 0.45, lights[2], { y: h * 0.72, z: -fanZ }), lights[2], 0.9)))
+      c.add(cylZ(1.2, 0.8, DARK, 0, h * 0.72, -fanZ, 14))
       // 网孔前面板 + 两侧灯带
       c.add(rbox(w - 1, h - 4, 0.6, shade(body, -0.1), { y: 2, z: d / 2 + 0.35 }, 0.3))
       for (let i = 0; i < 7; i++) c.add(noOutline(rbox(w - 5, 0.4, 0.3, shade(body, -0.22), { y: h * 0.2 + i * h * 0.09, z: d / 2 + 0.75 }, 0.1)))
@@ -1493,8 +1511,9 @@ function officeMouse(p: string[]) {
   const [body, keys, wheel] = p
   const g = new THREE.Group()
   g.add(ball(3, body, { y: 1.7 }, [1, 0.55, 1.8]))
-  g.add(rbox(0.25, 0.4, 3.6, keys, { y: 3.05, z: 2.4 }, 0.1))
-  g.add(cylX(0.5, 0.7, wheel, 0, 3.15, 2.6, 12))
+  // 按键和滚轮在远离使用者的一头（-z），和键盘、电竞鼠标的朝向一致（以前装反了，滚轮朝着人）
+  g.add(rbox(0.25, 0.4, 3.6, keys, { y: 3.05, z: -2.4 }, 0.1))
+  g.add(cylX(0.5, 0.7, wheel, 0, 3.15, -2.6, 12))
   return g
 }
 
@@ -1637,6 +1656,8 @@ function serverRack(p: string[]) {
   const c = new THREE.Group()
   c.add(shell(W, H, D, t, body, { front: [{ kind: 'rect', x: 0, y: 4, w: W - 8, h: H - 8, r: 1 }] }))
   for (let i = 0; i < 6; i++) c.add(noOutline(rbox(W - 14, 0.3, 1.2, shade(body, -0.2), { y: H, z: -D / 2 + 8 + i * 8 }, 0.1)))
+  // 四根安装立柱：服务器两侧的挂耳都固定在上面（以前每台服务器之间留着缝、四周也不挨柜壁，整摞悬在柜里）
+  for (const sx of [-1, 1]) for (const z of [D / 2 - 7, -D / 2 + 5]) c.add(rbox(4, H - 2 * t, 1.6, shade(body, 0.14), { x: sx * (W / 2 - t - 1.9), y: t, z }, 0.3))
   const units = [8, 4, 4, 10, 4, 8, 4, 8]
   let y = 6
   units.forEach((uh, i) => {
@@ -1853,7 +1874,8 @@ function displayCabinet(w: number, d: number, h: number, n: number) {
     }
     for (const y of ys) {
       g.add(ghostOutlined(rbox(w - 2 * t - 0.2, 0.8, d - 2 * t - 1.2, glassC, { y: y - 0.8, z: -0.6 }, 0.2), glassC, 0.45))
-      g.add(rbox(w - 2 * t - 0.2, 0.3, 0.3, frame, { y: y - 0.8, z: d / 2 - t - 1.4 }, 0.1))
+      // 层板前沿的包边条：比玻璃层板厚、包住前缘（以前嵌在玻璃前下角里，底面和前倒角跟玻璃共面，会闪）
+      g.add(rbox(w - 2 * t - 0.2, 1.2, 0.5, frame, { y: y - 1, z: d / 2 - t - 1.05 }, 0.15))
     }
     g.add(noOutline(litOutlined(rbox(w - 2 * t - 2, 0.4, 1.2, light, { y: h - t - 0.4, z: d / 2 - t - 3 }, 0.1), light, 0.9)))
     return g

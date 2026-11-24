@@ -2,11 +2,11 @@
 // 镜面统一用浅蓝灰 + 少量自发光，加一两道斜向高光条表现反光，不做真实反射。
 
 import * as THREE from 'three'
-import { ball, capsule, cup, cyl, markMirror, puck, rbox, shade, toon, torus, tray } from '../toon'
+import { ball, cached, capsule, cup, cyl, markMirror, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, ellipsePoly, glow, paintPanel, rectPoly, rng, shell, slab, type AssetDef, type Poly } from '../kit'
 import { artOverride } from '../artwork'
 import { hollow, swingDoor } from '../cabinetKit'
-import { P, PI, batten, centerGroup, cylX, cylZ, ghostOutlined, litOutlined, noOutline, rod3, type V3 } from '../geo'
+import { P, PI, batten, centerGroup, cylX, cylZ, ghostOutlined, litOutlined, mesh, noOutline, rod3, type V3 } from '../geo'
 import { I, J, M, N, PROP, R, define, type PalFlat } from '../packkit'
 
 const MIR = '#cfdfe9'
@@ -73,15 +73,16 @@ function ellOutline<T extends THREE.Path>(p: T, rx: number, ry: number, cy = 0):
 function shine(cx: number, cy: number, m: number, z: number) {
   const g = new THREE.Group()
   const a = -0.62
+  // 条子往后加厚 0.45 插进镜面里（前表面仍浮出 0.3）：只贴着浮在前面的话，从侧面看是一片离镜面一道缝的薄片
   const strip = (len: number, wd: number) => {
-    const s = rbox(wd, len, 0.3, '#ffffff', {}, Math.min(0.12, wd * 0.3))
+    const s = rbox(wd, len, 0.75, '#ffffff', {}, Math.min(0.12, wd * 0.3))
     s.material = toon('#ffffff', { emissive: 0.4 })
     return noOutline(s)
   }
   const ux = Math.cos(a)
   const uy = Math.sin(a)
-  g.add(P(strip(m * 0.55, Math.max(0.5, m * 0.07)), cx, cy, z, 0, 0, a))
-  g.add(P(strip(m * 0.3, Math.max(0.35, m * 0.035)), cx + ux * m * 0.13, cy + uy * m * 0.13 - m * 0.04, z, 0, 0, a))
+  g.add(P(strip(m * 0.55, Math.max(0.5, m * 0.07)), cx, cy, z - 0.225, 0, 0, a))
+  g.add(P(strip(m * 0.3, Math.max(0.35, m * 0.035)), cx + ux * m * 0.13, cy + uy * m * 0.13 - m * 0.04, z - 0.225, 0, 0, a))
   // 画出来的高光：镜子换成真实反射时藏起来（three/mirrors.ts）
   g.userData.mirrorShine = true
   return g
@@ -206,7 +207,8 @@ function kettlebell(r: number) {
 /** 杠铃组：轴沿 x，中心在原点 */
 function barbellG(len: number, plate: string, barC: string, small: string) {
   const g = new THREE.Group()
-  g.add(cylX(1.4, len - 30, barC, 0, 0, 0, 12))
+  // 细杆两端缩进套筒里 1cm：原来端面正好和卡箍外端面共面
+  g.add(cylX(1.4, len - 32, barC, 0, 0, 0, 12))
   for (const s of [-1, 1]) {
     g.add(cylX(3.6, 2, barC, s * (len / 2 - 26), 0, 0))
     g.add(cylX(2.5, 24, barC, s * (len / 2 - 13), 0, 0))
@@ -399,7 +401,8 @@ function abWheel(p: string[]) {
   g.add(cylX(4, 6.6, hub, 0, cy, 0, 20))
   g.add(cylX(1.2, 22, CHROME, 0, cy, 0, 12))
   for (const s of [-1, 1]) {
-    g.add(cylX(2, 10, grip, s * 12, cy, 0))
+    // 握把套止于端盖内（端盖 16.2–17），不和端盖外端面共面
+    g.add(cylX(2, 9.6, grip, s * 11.8, cy, 0))
     g.add(cylX(2.3, 0.8, hub, s * 16.6, cy, 0))
   }
   return g
@@ -469,7 +472,8 @@ function treadmill(W: number, D: number, H: number, gym: boolean) {
     const hl = gym ? 60 : 36
     for (const s of [-1, 1]) {
       const x = s * (W / 2 - railW / 2)
-      g.add(rod3([x, hy, tz], [x, hy, tz + hl], 2, body))
+      // 扶手芯比胶套短 0.5，端面藏在胶套里（原来两个端面共面）
+      g.add(rod3([x, hy, tz], [x, hy, tz + hl - 0.5], 2, body))
       g.add(rod3([x, hy, tz + hl * 0.35], [x, hy, tz + hl], 2.5, RUBBER))
       if (gym) g.add(rod3([x, hy, tz + hl], [x, deckH, tz + hl + 22], 2, body))
     }
@@ -506,7 +510,8 @@ function spinBike(p: string[]) {
   // 车把
   g.add(cylX(1.6, 48, frame, 0, 101, -46, 12))
   for (const s of [-1, 1]) {
-    g.add(cylZ(1.6, 22, frame, s * 23.2, 101, -36, 12))
+    // 把芯前端缩进胶套 0.6（原来和胶套端面共面）
+    g.add(cylZ(1.6, 21.4, frame, s * 23.2, 101, -36.3, 12))
     g.add(cylZ(2.1, 12, RUBBER, s * 23.2, 101, -31, 12))
   }
   // 表头坐在立管顶上（以前离立管 6cm 悬空）
@@ -550,7 +555,8 @@ function rower(p: string[]) {
   // 脚踏
   for (const s of [-1, 1]) {
     g.add(P(rbox(11, 3, 26, frame, {}, 1), s * 9, 32, -46, -1.0, 0, 0))
-    g.add(P(rbox(9, 1.4, 6, seat, {}, 0.5), s * 9, 34, -49, -1.0, 0, 0))
+    // 绑带贴在踏板面上：沿踏板法线（0, cos1, -sin1）离踏板中心 2cm（板厚一半 1.5 + 带厚一半 0.7，嵌 0.2）。原来浮在板面上方 1.4cm
+    g.add(P(rbox(9, 1.4, 6, seat, {}, 0.5), s * 9, 33.08, -47.68, -1.0, 0, 0))
   }
   // 拉手
   g.add(cylX(1.4, 44, frame, 0, 42, -60, 12))
@@ -1210,7 +1216,8 @@ function spool(x: number, y: number, z: number, fil: string, flange = '#3d3f44',
   const g = new THREE.Group()
   for (const s of [-1, 1]) g.add(cylX(r, 0.8, flange, x + s * 3.2, y, z, 32))
   g.add(cylX(r - 1.5, 5.6, fil, x, y, z, 32))
-  g.add(cylX(r * 0.28, 7.2, shade(flange, 0.2), x, y, z))
+  // 轴芯两头各凸出挡板 0.3（原来和挡板外端面共面）
+  g.add(cylX(r * 0.28, 7.8, shade(flange, 0.2), x, y, z))
   return g
 }
 
@@ -1275,6 +1282,8 @@ function printerBox(p: string[]) {
   // 内部
   for (const s of [-1, 1]) g.add(cyl(0.6, 0.6, 42.5, CHROME, { x: s * 15, y: 1.5, z: -15 }, 8))
   g.add(rbox(26, 1, 26, '#3a3d44', { y: 12 }, 0.3))
+  // 热床托臂：架在后面两根丝杆上、托住热床（原来热床和上面的模型整组悬空）
+  g.add(rbox(31.4, 1.4, 3, '#3a3d44', { y: 10.8, z: -14 }, 0.4))
   // 小船模型
   g.add(rbox(7, 2.5, 3.6, acc, { y: 13, z: 2 }, 0.8))
   g.add(rbox(3, 2.2, 2.6, acc, { x: -0.8, y: 15.5, z: 2 }, 0.5))
@@ -1349,7 +1358,8 @@ function fighter(p: string[]) {
   for (const s of [-1, 1]) {
     pl.add(P(finXY([[-5.5, 0.8], [-9.5, 0.8], [-10.5, 6], [-8.6, 6]], 0.35, acc), 0, 0, s * 1.6, s * 0.3, 0, 0))
     pl.add(rbox(4, 1.6, 1.2, shade(body, -0.1), { x: 3, y: -1, z: s * 1.6 }, 0.4))
-    pl.add(noOutline(rbox(2.2, 0.3, 1, acc, { x: -5, y: -0.25, z: s * 6 }, 0.1)))
+    // 翼面标记浮出翼面（y = 0.05）0.15，原来顶面共面
+    pl.add(noOutline(rbox(2.2, 0.3, 1, acc, { x: -5, y: -0.1, z: s * 6 }, 0.1)))
   }
   pl.add(cylX(1.1, 1.2, '#3a3a3c', -10.4, 0, 0, 14))
   pl.rotation.set(0.12, 0, 0.14)
@@ -1366,8 +1376,8 @@ function propPlane(p: string[]) {
   pl.add(P(rbox(0.4, 9, 1, '#3a3a3c', {}, 0.2), 12.6, 0, 0, 0.4, 0, 0))
   pl.add(noOutline(rbox(6, 1.3, 3.9, '#3a4658', { x: 5, y: 0.4 }, 0.3)))
   pl.add(rbox(4.6, 0.6, 30, body, { x: 4.5, y: 2 }, 0.3))
-  pl.add(noOutline(rbox(4.7, 0.4, 3, acc, { x: 4.5, y: 2.2, z: 13.2 }, 0.1)))
-  pl.add(noOutline(rbox(4.7, 0.4, 3, acc, { x: 4.5, y: 2.2, z: -13.2 }, 0.1)))
+  // 翼尖色带整圈包住机翼（上下、前后各鼓出 0.15）：原来顶面和机翼顶面共面
+  for (const s of [-1, 1]) pl.add(noOutline(rbox(4.9, 0.9, 3, acc, { x: 4.5, y: 1.85, z: s * 13.2 }, 0.1)))
   for (const s of [-1, 1]) {
     pl.add(rod3([4, -1.5, s * 1.8], [4.5, 2, s * 8], 0.2, body, 6))
     pl.add(rod3([5, -2, s * 1.4], [5, -4, s * 3], 0.25, '#3a3a3c', 6))
@@ -1499,9 +1509,11 @@ function trainLayout(p: string[]) {
   g.add(rbox(117.6, 2.6, 77.6, grass, { y: 1.4 }, 0.3))
   // 轨道
   g.add(stadiumRing(L, r, 3, 0.8, '#a39d94', BT - 0.1, cz))
+  const sleeper = cached('hb-sleeper', () => new THREE.BoxGeometry(1.1, 0.4, 5.2))
   for (let i = 0; i < 64; i++) {
     const q = stadiumPt(L, r, i / 64)
-    g.add(noOutline(P(rbox(1.1, 0.4, 5.2, '#6e4f37', {}, 0.15), q.x, BT + 0.5, q.z + cz, 0, q.yaw, 0)))
+    // 枕木高出道砟面（y = BT + 0.7）0.15，钢轨压在枕木上；64 根都用直角方块（圆角盒每根一百多面，这么小看不出圆角）
+    g.add(noOutline(P(mesh(sleeper, '#6e4f37'), q.x, BT + 0.65, q.z + cz, 0, q.yaw, 0)))
   }
   for (const s of [-1, 1]) g.add(stadiumRing(L, r + s * 1.6, 0.22, 0.55, CHROME, BT + 0.85, cz))
   // 后直道上的隧道山
@@ -1524,7 +1536,8 @@ function trainLayout(p: string[]) {
   g.add(rbox(28, 2.6, 6, '#c9c4bb', { y: BT - 0.1, z: pz }, 0.4))
   for (const x of [-11, 11]) g.add(cyl(0.4, 0.4, 7, CHROME, { x, y: BT + 2.5, z: pz + 1 }, 8))
   g.add(P(rbox(28, 0.8, 7.5, trainC, {}, 0.3), 0, BT + 9.8, pz, -0.08, 0, 0))
-  g.add(rbox(11, 7, 6, '#f6f0e1', { x: 18, y: BT - 0.1, z: pz + 1.5 }, 0.6))
+  // 站房比站台多埋 0.2：两者有一截重叠，底面原来共面
+  g.add(rbox(11, 7.2, 6, '#f6f0e1', { x: 18, y: BT - 0.3, z: pz + 1.5 }, 0.6))
   g.add(P(rbox(12.5, 1, 7.5, trainC, {}, 0.3), 18, BT + 7.3, pz + 1.5))
   // 池塘 + 小房子 + 树
   const pond = cyl(9, 9, 0.5, '#7ec8e8', { x: -14, y: BT - 0.2, z: cz }, 28)
@@ -1917,7 +1930,8 @@ function paintedCanvas(cv: THREE.Group, a: string, b: string) {
   cv.add(rbox(56, 10, 0.6, b, { y: 4, z: 1.25 }, 0.2))
   cv.add(cylZ(4.5, 0.6, '#ffd27a', 14, 36, 1.6, 24))
   cv.add(P(finXY([[-26, 13], [-2, 32], [22, 13]], 0.6, shade(b, -0.12)), 0, 0, 1.55))
-  cv.add(cylZ(5, 0.6, shade(b, 0.1), -14, 18, 1.55, 24))
+  // 树冠比远山靠前一层（远山 z 1.25–1.85）：原来和远山前后面都共面
+  cv.add(cylZ(5, 0.6, shade(b, 0.1), -14, 18, 1.9, 24))
   cv.add(rbox(1.2, 8, 0.6, '#8b6a4f', { x: -14, y: 10, z: 1.75 }, 0.2))
 }
 const EASEL_PALS: PalFlat[] = [
@@ -2515,7 +2529,8 @@ function wallCabinet(p: string[]) {
     const parts = [rbox(29.6, 56, 1.5, door, { x: s * 14.9, y: y + 13, z: 5.65 }, 0.5), P(mirrorGlass(rrOutline(new THREE.Shape(), 26.6, 52, 1, 0), -4, 34, 24), s * 14.9, y + 15, 6.65)]
     g.add(swingDoor(parts, s * 29.7, 6.4, s < 0 ? 'left' : 'right'))
   }
-  g.add(noOutline(litOutlined(rbox(40, 0.6, 1, acc, { y: y + 69.4, z: 3 }, 0.2), acc)))
+  // 顶灯条高出柜顶（y + 70）0.3：原来整条埋在顶板里、顶面共面
+  g.add(noOutline(litOutlined(rbox(40, 0.6, 1, acc, { y: y + 69.7, z: 3 }, 0.2), acc)))
   return g
 }
 

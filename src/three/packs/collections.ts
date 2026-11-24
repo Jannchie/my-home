@@ -6,7 +6,7 @@
 import * as THREE from 'three'
 import { ParametricGeometry } from 'three/addons/geometries/ParametricGeometry.js'
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js'
-import { ball, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
+import { ball, cached, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, legs, paintPanel, rectPoly, rng, rod, type AssetDef, type Poly } from '../kit'
 import { swingDoor } from '../cabinetKit'
 import { G, P, PI, UP, fitBuild, fitGroup, ghost, lit, mesh, noOutline, type V3 } from '../geo'
@@ -63,8 +63,11 @@ function strutZ(az: number, ay: number, bz: number, by: number, w: number, t: nu
   return m
 }
 
-/** 平放的硬币，at.y 为底 */
-const coin = (r: number, color: string, x: number, y: number, z: number, t = 0.22) => puck(r, t, color, { x, y, z })
+/**
+ * 平放的硬币，at.y 为底。直径两三厘米、厚两毫米，薄圆柱就够了：
+ * puck 的圆角轮廓每枚 800 多个三角面，一盒十来枚硬币就上万（圆角在这个厚度上根本看不出来）
+ */
+const coin = (r: number, color: string, x: number, y: number, z: number, t = 0.22) => cyl(r, r, t, color, { x, y, z }, 24)
 /** 竖着朝前的硬币，给中心 */
 const coinZ = (r: number, color: string, x: number, y: number, z: number, t = 0.25) => cylZg(r, t, color, x, y, z, 28)
 
@@ -99,8 +102,9 @@ interface Vessel {
  * 空心器皿：ctrl 是外轮廓控制点 [半径, 高]（从底到口，第一个点 y = 0），壁厚 t。
  * 内壁沿法线向里偏移 t，口沿是半圆，内底高 t × 1.3。
  */
-function vessel(ctrl: RY[], t: number, color: string, seg = 40): Vessel {
-  const out = spline(ctrl)
+function vessel(ctrl: RY[], t: number, color: string, seg = 40, opts: { n?: number; lidded?: boolean } = {}): Vessel {
+  // n：轮廓样条取多少段（矮小的碗、罐不用 36 段）；lidded：口上扣着盖子，里面看不见，不做内壁，只在口沿下封一片平底
+  const out = spline(ctrl, opts.n ?? 36)
   const n = out.length
   const nrm = (i: number) => {
     const a = out[Math.max(0, i - 1)]
@@ -125,19 +129,24 @@ function vessel(ctrl: RY[], t: number, color: string, seg = 40): Vessel {
         .addScaledVector(T, (Math.sin(a) * t) / 2),
     )
   }
-  for (let i = n - 1; i >= 0; i--) {
-    const q = out[i].clone().addScaledVector(nrm(i), t)
-    if (q.y <= floor + 0.05) break
-    q.x = Math.max(q.x, 0.12)
-    pts.push(q)
+  if (opts.lidded) {
+    const q = O.clone().addScaledVector(No, t)
+    pts.push(q, vec2(0, q.y))
+  } else {
+    for (let i = n - 1; i >= 0; i--) {
+      const q = out[i].clone().addScaledVector(nrm(i), t)
+      if (q.y <= floor + 0.05) break
+      q.x = Math.max(q.x, 0.12)
+      pts.push(q)
+    }
+    pts.push(vec2(Math.max(0.12, pts[pts.length - 1].x * 0.6), floor), vec2(0, floor))
   }
-  pts.push(vec2(Math.max(0.12, pts[pts.length - 1].x * 0.6), floor), vec2(0, floor))
   return { m: mesh(new THREE.LatheGeometry(pts, seg), color), r: (y) => radiusAt(out, y), top: O.y + t / 2 }
 }
 
 /** 实心车削体（盖子、钮）：ctrl 从底到顶，第一点 y = 0 */
-function solid(ctrl: RY[], color: string, seg = 32) {
-  const out = spline(ctrl, 24)
+function solid(ctrl: RY[], color: string, seg = 32, n = 24) {
+  const out = spline(ctrl, n)
   return mesh(new THREE.LatheGeometry([vec2(0, 0), ...out, vec2(0, out[out.length - 1].y)], seg), color)
 }
 
@@ -151,11 +160,19 @@ function band(v: Vessel, y: number, color: string, tube = 0.2) {
   return noOutline(torus(v.r(y) + tube * 0.15, tube, color, { y, rx: PI / 2 }))
 }
 
+/**
+ * 纹样贴片用的扁球：两极朝 z（压扁的方向），轮廓 12 边、厚度方向只留 4 段。
+ * 压到 0.16 厚以后厚度方向的细分看不出来；一只青花罐有四五十片，用 ball 的 12 × 8 段光贴片就八千多个三角面
+ */
+const patchGeo = () => cached('col-patch', () => new THREE.SphereGeometry(1, 12, 4).rotateX(PI / 2))
+
 /** 瓶身上浮出的小纹样贴片：高度 y、方位角 a，宽 sw 高 sh */
 function patch(v: Vessel, y: number, a: number, sw: number, sh: number, color: string) {
   const r = v.r(y)
   const s = v.r(y + 0.4) - v.r(y - 0.4)
-  const m = noOutline(ball(1, color, { z: r }, [sw, sh, 0.16]))
+  const m = noOutline(mesh(patchGeo(), color))
+  m.position.z = r
+  m.scale.set(sw, sh, 0.16)
   m.rotation.x = Math.atan2(s, 0.8)
   return P(G(m), 0, y, 0, 0, a)
 }
@@ -332,7 +349,7 @@ function kinuta(p: string[]) {
 /** 青花将军罐（带盔顶盖，放在木座上） */
 function bwJar(p: string[]) {
   const [body, blue, wood] = p
-  const g = G(puck(7.6, 1.6, wood), puck(6.8, 0.6, shade(wood, -0.08), { y: 1.4 }))
+  const g = G(puck(7.6, 1.6, wood), cyl(6.8, 6.8, 0.6, shade(wood, -0.08), { y: 1.4 }, 32))
   const y0 = 1.9
   const v = vessel(
     [
@@ -347,6 +364,9 @@ function bwJar(p: string[]) {
     ],
     0.5,
     body,
+    32,
+    // 盖子扣着，罐里看不见：不做内壁；32 段和环带（torus 也是 32 段）的折线对得上
+    { n: 24, lidded: true },
   )
   const jar = G(v.m)
   for (const y of [1.5, 4.8, 16.6, 19.8]) jar.add(band(v, y, blue, 0.2))
@@ -369,6 +389,8 @@ function bwJar(p: string[]) {
       [1.2, 4.3],
     ],
     body,
+    32,
+    14,
   )
   jar.add(P(lid, 0, v.top + 0.05, 0))
   jar.add(noOutline(torus(6.95, 0.18, blue, { y: v.top + 0.45, rx: PI / 2 })))
@@ -396,6 +418,7 @@ function bwVase(p: string[]) {
     ],
     0.45,
     body,
+    32,
   )
   const g = G(v.m)
   for (const y of [1.4, 4, 17.6, 22, 33.6]) g.add(band(v, y, blue, 0.18))
@@ -541,6 +564,9 @@ function chawan(color: string) {
     ],
     0.45,
     color,
+    32,
+    // 8cm 高的碗，轮廓 14 段足够（默认 36 段，三只碗光碗身就两万个三角面）
+    { n: 14 },
   )
 }
 
@@ -720,6 +746,8 @@ function potteryJars(p: string[]) {
     ],
     0.45,
     a,
+    32,
+    { n: 18 },
   )
   const j1 = G(v1.m, band(v1, 5, shade(a, -0.15), 0.2))
   for (let k = 0; k < 5; k++) j1.add(patch(v1, 8.1, (k * 2 * PI) / 5, 0.6, 1, shade(a, 0.15)))
@@ -734,9 +762,12 @@ function potteryJars(p: string[]) {
     ],
     0.45,
     b,
+    32,
+    // 带盖的两只里面看不见，不做内壁
+    { n: 12, lidded: true },
   )
   const j2 = G(v2.m)
-  j2.add(P(solid([[4.9, 0], [4.7, 0.6], [3, 1.3], [1.2, 1.5]], b), 0, v2.top + 0.02))
+  j2.add(P(solid([[4.9, 0], [4.7, 0.6], [3, 1.3], [1.2, 1.5]], b, 32, 10), 0, v2.top + 0.02))
   j2.add(ball(0.8, shade(b, -0.15), { y: v2.top + 1.9 }, [1, 0.8, 1]))
   j2.add(band(v2, 3.8, shade(b, -0.15), 0.18))
   g.add(P(j2, 1.5, 0, -0.5))
@@ -750,9 +781,11 @@ function potteryJars(p: string[]) {
     ],
     0.35,
     c,
+    32,
+    { n: 14, lidded: true },
   )
   const j3 = G(v3.m, band(v3, 3, shade(c, -0.12), 0.16), band(v3, 8, shade(c, -0.12), 0.16))
-  j3.add(P(solid([[2.2, 0], [2.2, 1.2], [1.4, 1.6]], shade(c, -0.2)), 0, v3.top - 0.1))
+  j3.add(P(solid([[2.2, 0], [2.2, 1.2], [1.4, 1.6]], shade(c, -0.2), 32, 8), 0, v3.top - 0.1))
   g.add(P(j3, 10.5, 0, 0.5))
   return g
 }
@@ -1054,12 +1087,15 @@ function ammonite(p: string[]) {
         const rr = AM.kr * Rc
         target.set((Rc + rr * Math.cos(a)) * Math.cos(t), (Rc + rr * Math.cos(a)) * Math.sin(t), AM.kz * Rc * Math.sin(a))
       },
-      220,
+      // 3.2 圈 160 段（每圈 50 段），最外圈每段不到 1cm
+      160,
       16,
     )
     // 模块级缓存、多件家具共用：标记共享，disposeUnshared 不释放
     ammoGeo.userData.shared = true
   }
+  // 横肋：一圈 16 段（和螺管截面的 16 段对齐）、截面 4 段的细环。四十多道肋用 torus 的 24 × 8 段要一万六千个三角面
+  const ribGeo = cached('col-ammo-rib', () => new THREE.TorusGeometry(1, 0.07, 4, 16))
   const am = G(mesh(ammoGeo, shell))
   const basis = (t: number) => {
     const X = new THREE.Vector3(Math.cos(t), Math.sin(t), 0)
@@ -1069,7 +1105,7 @@ function ammonite(p: string[]) {
   }
   for (let t = amTh - PI * 2.3; t < amTh - 0.15; t += 0.17) {
     const Rc = amRc(t)
-    const m = noOutline(torus(1, 0.07, rib))
+    const m = noOutline(mesh(ribGeo, rib))
     m.quaternion.copy(basis(t))
     m.scale.set(AM.kr * Rc * 1.01, AM.kz * Rc * 1.01, AM.kr * Rc)
     m.position.set(Rc * Math.cos(t), Rc * Math.sin(t), 0)
@@ -1128,7 +1164,8 @@ function meteorite(p: string[]) {
   for (const [x, y, z, s] of [
     [-5.2, 4.6, 2.2, 0.7],
     [-1.6, 5.2, 1.8, 0.55],
-    [-4, 6.4, 0.6, 0.6],
+    // 顶上那个熔坑压进石面（原来 y = 6.4，比石顶还高、悬在上面）
+    [-4, 5.5, 0.6, 0.6],
   ])
     g.add(noOutline(ball(s, shade(lump, -0.1), { x, y, z }, [1, 0.5, 1])))
   const sl = slice(3.2, 2.6, 2.1, 0.9, shade(lump, -0.05), `col-widman-${metal}`, (c, W, H, path) => {
@@ -1591,7 +1628,8 @@ function coinRolls(p: string[]) {
   const g = G(tray(18, 2.2, 11, 0.8, wood))
   const roll = (col: string, end: string, x: number, y: number, z: number) => {
     const r = G(cyl(1.3, 1.3, 9, col, { y: -4.5 }, 20))
-    r.add(puck(1.15, 0.3, end, { y: 4.4 }), puck(1.15, 0.3, end, { y: -4.7 }))
+    // 卷口露出来的硬币：薄圆柱（见 coin 的说明）
+    r.add(cyl(1.15, 1.15, 0.3, end, { y: 4.4 }, 20), cyl(1.15, 1.15, 0.3, end, { y: -4.7 }, 20))
     r.add(noOutline(torus(1.32, 0.08, shade(col, -0.2), { y: 2.6, rx: PI / 2 })), noOutline(torus(1.32, 0.08, shade(col, -0.2), { y: -2.6, rx: PI / 2 })))
     return P(r, x, y, z, 0, 0, PI / 2)
   }
@@ -1603,7 +1641,7 @@ function coinRolls(p: string[]) {
     [11.6, -2.6, 0],
     [12.2, 0.4, 2],
   ]) {
-    const r = G(cyl(1.3, 1.3, 9, cols[i], { y: 0.3 }, 20), puck(1.15, 0.3, ends[i], { y: 9.2 }), puck(1.15, 0.32, ends[i]))
+    const r = G(cyl(1.3, 1.3, 9, cols[i], { y: 0.3 }, 20), cyl(1.15, 1.15, 0.3, ends[i], { y: 9.2 }, 20), cyl(1.15, 1.15, 0.3, ends[i], {}, 20))
     g.add(P(r, x, 0, z))
   }
   for (let k = 0; k < 4; k++) g.add(coin(1.15, k % 2 ? COPPER : SILVER, 12 + (k % 2) * 0.15, k * 0.22, 3.6, 0.22))
@@ -1623,8 +1661,9 @@ function cashCoin(color: string) {
     h.lineTo(0.28, -0.28)
     h.lineTo(-0.28, -0.28)
     s.holes.push(h)
-    cashGeo = new THREE.ExtrudeGeometry(s, { depth: 0.1, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.03, bevelSegments: 1, curveSegments: 24 })
-    cashGeo.translate(0, 0, -0.05)
+    // 直径 2.5cm、厚 1.4mm 的小钱：外圈 24 边、不倒角（原来 48 边 + 倒角，二十多枚一万多个三角面）
+    cashGeo = new THREE.ExtrudeGeometry(s, { depth: 0.14, bevelEnabled: false, curveSegments: 12 })
+    cashGeo.translate(0, 0, -0.07)
     // 模块级缓存、多件家具共用：标记共享，disposeUnshared 不释放
     cashGeo.userData.shared = true
   }
@@ -1968,7 +2007,8 @@ function domePedestal(p: string[]) {
     g.add(ghost(rbox(32, gh, 0.5, GLASS, { y: gy, z: s * 15.75 }, 0.1), GLASS, GLASS_A))
     g.add(ghost(rbox(0.5, gh, 31, GLASS, { x: s * 15.75, y: gy }, 0.1), GLASS, GLASS_A))
   }
-  g.add(ghost(rbox(32, 0.5, 32, GLASS, { y: gy + gh }, 0.1), GLASS, GLASS_A))
+  // 顶玻璃收在四根金属压条里面（压条内沿 ±15.4）：以前盖到 ±16，顶面和压条顶面同高重合
+  g.add(ghost(rbox(30.8, 0.5, 30.8, GLASS, { y: gy + gh }, 0.1), GLASS, GLASS_A))
   for (const sx of [-1, 1])
     for (const sz of [-1, 1]) g.add(rbox(0.8, gh + 0.5, 0.8, metal, { x: sx * 15.8, y: gy, z: sz * 15.8 }, 0.2))
   for (const s of [-1, 1]) {
@@ -2426,7 +2466,8 @@ export const COLLECTIONS: AssetDef[] = [
   ),
   define('col-dome-pedestal', '玻璃罩展示台座', 'deco', [34, 34, 130.5], PEDESTAL_PALS, domePedestal, {
     surface: 130.5,
-    surfaces: [{ y: 98, h: 31.5, shape: [rectPoly(-15.5, -15.5, 15.5, 15.5)] }],
+    // 摆在绒布垫上：垫面浮出台面 0.3
+    surfaces: [{ y: 98.3, h: 31.5, shape: [rectPoly(-15, -15, 15, 15)] }],
   }),
   define('col-lit-showcase', '带灯展示柜', 'storage', [LS.w, LS.d, LS.h], LS_PALS, litShowcase, {
     surface: LS.h,

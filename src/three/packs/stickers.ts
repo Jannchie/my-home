@@ -2,7 +2,7 @@
 // 原点在背面中心，模型向 +z 伸出，y 方向上下居中（约定见 kit.ts 的 stick）。
 
 import * as THREE from 'three'
-import { ball, rbox } from '../toon'
+import { ball, rbox, torus } from '../toon'
 import { artFace } from '../artwork'
 import { C, S, paintPanel, paintLandscape, type AssetDef, type StyleTag } from '../kit'
 import { noOutline } from '../geo'
@@ -26,9 +26,18 @@ function magnet(shape: 'strawberry' | 'lemon' | 'donut' | 'letter' | 'star') {
       g.add(ball(2.8, main, { z: 1.12 }, [1.2, 0.85, 0.4]))
       g.add(noOutline(ball(0.6, C.leaf, { x: 3, y: 1, z: 1.2 }, [1.4, 0.7, 0.5])))
     } else if (shape === 'donut') {
-      g.add(ball(2.8, C.peach, { z: 0.98 }, [1, 1, 0.35]))
-      g.add(ball(2.4, main, { z: 1.25 }, [1, 1, 0.3]))
-      g.add(noOutline(ball(0.8, '#ffffff', { z: 1.95 }, [1, 1, 0.3])))
+      // 面包圈是个真的环（中间有洞），上面一圈糖霜和几粒彩针。原来是两只压扁的球互相穿插，糖霜的边缘是一圈不规则的交线，认不出是甜甜圈
+      const ring = (tube: number, color: string, z: number) => {
+        const m = torus(1.8, tube, color, { z })
+        m.scale.z = 0.9
+        return m
+      }
+      g.add(ring(1, C.peach, 0.9))
+      g.add(ring(0.82, main, 1.3))
+      for (let i = 0; i < 6; i++) {
+        const a = i * 1.05 + 0.3
+        g.add(noOutline(rbox(0.7, 0.22, 0.2, sub, { x: Math.cos(a) * 1.8, y: Math.sin(a) * 1.8 - 0.11, z: 2.02, rz: a * 2.3 }, 0.08)))
+      }
     } else if (shape === 'letter') {
       g.add(rbox(4, 5, 1, main, { y: -2.5, z: 0.5 }, 0.4))
       g.add(noOutline(rbox(1.2, 3, 0.4, sub, { x: -0.6, y: -1.5, z: 1.15 }, 0.15)))
@@ -77,7 +86,7 @@ function polaroid(p: string[]) {
   const [sky, hill, sun] = p
   const g = new THREE.Group()
   g.add(rbox(8.8, 10.7, 0.3, '#fbfbf8', { y: -5.35, z: 0.15 }, 0.1))
-  g.add(paintPanel(7.6, 7.6, ...artFace(0, `pola-${sky}-${hill}-${sun}`, paintLandscape(sky, hill, sun)), { y: -3.85, z: 0.32 }))
+  g.add(paintPanel(7.6, 7.6, ...artFace(0, `pola-${sky}-${hill}-${sun}`, paintLandscape(sky, hill, sun)), { y: -3.85, z: 0.36 }))
   g.add(ball(1, C.red, { y: 4.4, z: 0.75 }, [1, 1, 0.45]))
   return g
 }
@@ -194,10 +203,11 @@ function decal(shape: 'heart' | 'star') {
       },
       { y: -3, z: 0.08 },
     )
-    // paintPanel 的材质是共用的，克隆一份再改
+    // paintPanel 的材质是共用的，克隆一份再改。
+    // 只用 alphaTest 镂空、不开 transparent：开了就进透明队列，会被先画的透明面挡掉
+    // （预览 / 缩略图里贴纸的下半张被地面的阴影面吃掉，贴在玻璃门后面也会出错）
     const mat = (m.material as THREE.MeshToonMaterial).clone()
     m.material = mat
-    mat.transparent = true
     mat.alphaTest = 0.4
     g.add(m)
     return g

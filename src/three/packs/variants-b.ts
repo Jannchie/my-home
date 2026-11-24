@@ -3,7 +3,7 @@
 // 约定见 kit.ts 开头；id 前缀 vb-。
 
 import * as THREE from 'three'
-import { ball, cup, cyl, puck, rbox, shade, toon, torus, tray, useAnisotropy } from '../toon'
+import { ball, cached, cup, cyl, puck, rbox, shade, toon, torus, tray, useAnisotropy } from '../toon'
 import { C, G, SWING_OPEN, ellipsePoly, movable, rectPoly, rng, slab, type AssetCategory, type AssetDef, type DoorMotion, type Poly, type SurfaceDef } from '../kit'
 import { PI, clearDeep, fitChildrenBuild, lathe, lit, mesh, noOutlineDeep, rod3, tube, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, R, type Build, type Pal3 } from '../packkit'
@@ -34,10 +34,15 @@ function prism(poly: Poly, h: number, color: string, y0 = 0) {
   m.position.y = y0
   return m
 }
-/** 叶片 / 细长片：压扁的球，叶柄端在 base，沿 dir 伸出 */
-function blade(len: number, wide: number, thick: number, color: string, base: V3, dir: THREE.Vector3) {
+/**
+ * 叶片 / 细长片：压扁的球，叶柄端在 base，沿 dir 伸出。
+ * seg 给 [一圈段数, 厚度方向段数] 时用低面数的球：一棵树上几百片又细又薄的小叶（散尾葵）用通用 ball 的 16×12 段要七万面
+ */
+function blade(len: number, wide: number, thick: number, color: string, base: V3, dir: THREE.Vector3, seg?: [number, number]) {
   const d = dir.clone().normalize()
-  const m = ball(len / 2, color, {}, [wide, thick, 1])
+  const r = Math.round(len * 5) / 10
+  const m = seg ? mesh(cached(`vb-blade${r},${seg[0]}x${seg[1]}`, () => new THREE.SphereGeometry(r, seg[0], seg[1])), color) : ball(len / 2, color, {})
+  m.scale.set(wide, thick, 1)
   m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), d)
   m.position.set(base[0] + (d.x * len) / 2, base[1] + (d.y * len) / 2, base[2] + (d.z * len) / 2)
   return m
@@ -141,7 +146,8 @@ function hollowBox(w: number, y0: number, y1: number, z0: number, z1: number, co
   const zc = (z0 + z1) / 2
   return [
     ...[-1, 1].map((s) => rbox(t, y1 - y0, d, color, { x: s * (w / 2 - t / 2), y: y0, z: zc }, r)),
-    rbox(w - t * 2, y1 - y0, 1.2, shade(color, -0.05), { y: y0, z: z0 + 0.6 }, 0.3),
+    // 背板夹在顶板和底板之间（两块板都通到背面，背板再盖过去就和它们的背面 / 顶底面共面）
+    rbox(w - t * 2, y1 - y0 - t * 2 + 0.4, 1.2, shade(color, -0.05), { y: y0 + t - 0.2, z: z0 + 0.6 }, 0.3),
     rbox(w - t * 2, t, d, color, { y: y0, z: zc }, 0.3),
     rbox(w - t * 2, t, d, color, { y: y1 - t, z: zc }, 0.3),
   ]
@@ -236,7 +242,7 @@ function areca(p: string[]) {
       const len = 16 * (1 - 0.45 * t)
       for (const sd of [-1, 1]) {
         const dir = side.clone().multiplyScalar(sd * 0.85).add(tan.clone().multiplyScalar(0.45)).add(new THREE.Vector3(0, -0.3, 0))
-        g.add(blade(len, 0.17, 0.06, (k + sd) % 3 ? C.leaf : C.leafD, pos, dir))
+        g.add(blade(len, 0.17, 0.06, (k + sd) % 3 ? C.leaf : C.leafD, pos, dir, [12, 4]))
       }
     }
   }
@@ -700,7 +706,8 @@ function bsCube(p: string[]) {
   const h = ch * 5 + t * 6
   for (let i = 0; i <= 3; i++) g.add(rbox(t, h, d, frame, { x: -w / 2 + t / 2 + i * (cw + t) }, 0.5))
   for (let j = 0; j <= 5; j++) g.add(rbox(w - t * 2, t, d - 0.2, frame, { y: j * (ch + t), z: -0.1 }, 0.4))
-  g.add(rbox(w - 2, h - 2, 0.8, shade(frame, -0.08), { y: 1, z: -d / 2 + 0.4 }, 0.3))
+  // 背板比框的背面缩进 0.5（立板、层板都通到背面，齐平的话整面共面）
+  g.add(rbox(w - 2, h - 2, 0.8, shade(frame, -0.08), { y: 1, z: -d / 2 + 0.9 }, 0.3))
   const fill = ['books', 'bin1', 'books', 'empty', 'books', 'bin2', 'bin2', 'books', 'bin1', 'books', 'deco', 'books', 'bin1', 'books', 'bin2']
   fill.forEach((f, k) => {
     const col = k % 3
@@ -742,7 +749,8 @@ function bsPipe(p: string[]) {
       books(g, -34, i === 2 ? 4 : 34, y + 3, -1, 20, 30, 120 + i)
       if (i === 2) {
         flatBooks(g, 18, y + 3, 0, 2, 6)
-        g.add(rbox(10, 14, 10, '#c46a3a', { x: 30, y: y + 3, z: 0 }, 1))
+        // 平躺的那叠书（宽 18、带一点转角）右缘到 x ≈ 28.5，盒子放在它右边、不再插进书里
+        g.add(rbox(10, 14, 10, '#c46a3a', { x: 34.5, y: y + 3, z: 0 }, 1))
       }
     }
     if (i === 0) {
@@ -895,7 +903,8 @@ function flReading(p: string[]) {
 function flTiered(p: string[]) {
   const [shadeC, metal, acc] = p
   const g = G(cyl(13, 17, 4, metal, {}, 32))
-  g.add(cyl(1.1, 1.1, 136, metal, { y: 4 }, 10))
+  // 灯杆穿过三层罩一直到顶罩的顶盘：三层罩都串在杆上（以前杆只到下罩，顶罩悬空）
+  g.add(cyl(1.1, 1.1, 147.6, metal, { y: 4 }, 10))
   const s1 = cup(18, 7, 7, 0.6, shadeC, { y: 152, rx: PI })
   const s2 = cup(13.5, 5, 6, 0.6, shadeC, { y: 145, rx: PI })
   const s3 = cup(9, 3.5, 5, 0.6, acc, { y: 139, rx: PI })
@@ -966,7 +975,8 @@ function scOpen(p: string[]) {
   g.add(rbox(w - t * 2, t, d - 1, main, { y: 6, z: -0.5 }, 0.4))
   g.add(rbox(w - t * 2, t, d - 1, main, { y: 22, z: -0.5 }, 0.4))
   g.add(rbox(w - t * 2, 2.2, d - 1, main, { y: 42, z: -0.5 }, 0.4))
-  g.add(rbox(w - t * 2, 96, 1, shade(main, -0.1), { y: 6, z: -d / 2 + 0.5 }, 0.3))
+  // 背板从底板上沿起、比背面缩进 0.3（三块横板都通到背面，齐平的话和它们共面）
+  g.add(rbox(w - t * 2, 96 - t + 0.2, 1, shade(main, -0.1), { y: 6 + t - 0.2, z: -d / 2 + 0.8 }, 0.3))
   // 上柜门里一块层板
   g.add(rbox(w - t * 2, t, d - 3, main, { y: 72, z: -1 }, 0.4))
   for (const sx of [-1, 1]) {
@@ -1155,9 +1165,10 @@ function drTansu(p: string[]) {
     const y = 8 + k * 19
     g.add(drawer([rbox(w - 4, 17.6, 1.4, shade(wood, 0.04), { y, z: fz }, 0.6), ...ring(-20, y + 11), ...ring(20, y + 11)], trays[k], shade(wood, 0.08)))
   }
-  ;[-24, 2].forEach((x, k) => g.add(drawer([rbox(24, 25, 1.4, shade(wood, 0.04), { x, y: 65, z: fz }, 0.6), ...ring(x, 81)], trays[3 + k], shade(wood, 0.08))))
+  // 上排面板比柜顶矮 0.4（面板盖着顶板前沿，齐平的话顶面和顶板共面）
+  ;[-24, 2].forEach((x, k) => g.add(drawer([rbox(24, 24.6, 1.4, shade(wood, 0.04), { x, y: 65, z: fz }, 0.6), ...ring(x, 81)], trays[3 + k], shade(wood, 0.08))))
   // 右上小门：铰链在右
-  g.add(moving([rbox(22, 25, 1.4, shade(wood, -0.06), { x: 27, y: 65, z: fz }, 0.6), noOutlineDeep(rbox(1.2, 7, 0.4, iron, { x: 19, y: 74, z: fz + 0.9 }, 0.2))], [38, 65, fz - 0.7], swing(false)))
+  g.add(moving([rbox(22, 24.6, 1.4, shade(wood, -0.06), { x: 27, y: 65, z: fz }, 0.6), noOutlineDeep(rbox(1.2, 7, 0.4, iron, { x: 19, y: 74, z: fz + 0.9 }, 0.2))], [38, 65, fz - 0.7], swing(false)))
   // 包角铁件
   for (const sx of [-1, 1]) for (const y of [6.4, 86.6]) g.add(rbox(5, 3, 0.5, iron, { x: sx * (w / 2 - 2.8), y: y - 1.5, z: fz + 1 }, 0.2))
   return g

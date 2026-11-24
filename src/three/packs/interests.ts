@@ -7,9 +7,9 @@ import { ball, cup, cyl, puck, rbox, shade, torus, tray } from '../toon'
 import { C, paintPanel, rng, type AssetDef } from '../kit'
 import { G, P, PI, cylX, cylZ, fitBuild, fitGroup, noOutline, type V2 } from '../geo'
 import { I, J, M, N, PROP, R, define, type PalFlat } from '../packkit'
-import { BRASS, CARD, DARK, GOLD, IVORY, METAL, PAPER, paintTop, type Draw } from './interests/common'
+import { BRASS, CARD, DARK, GOLD, IVORY, METAL, PAPER, bead, paintTop, type Draw } from './interests/common'
 import { E_GUITAR_MOUNT, accordion, celloStand, clarinetStand, digitalPiano, djDeck, drumKit, eDrum, eGuitarStand, eGuitarWall, fluteCase, grandPiano, guitarAmp, harmonica, harp, koto, metronome, musicStand, saxStand, shakuhachi, shamisen, smallInstruments, synth, taiko, trumpet, uprightPiano, violinCase, violinStand } from './interests/music'
-import { MEDAL_MOUNT, MJ_TH, MJ_TW, POSTCARD_MOUNT, RAINCOAT_MOUNT, ROD_RACK_MOUNT, STAR_MOUNT, UNO_COLS, acrylicStand, backgammon, badminton, baseball, basketball, bgBoxSingle, bgHex, bgLoop, bgMystery, bgShelfRow, bgTrain, bikeHelmet, boardGames, boxingGloves, burrPuzzle, calligraphy, card, cardGame, cardStack, cartons, catToys, chemSet, chess, chessOpening, chessPiece, chineseCheckers, coffeeCanisters, decal, diceGame, die, drawGrid, drawPlayCard, drawTiles, embroidery, energyCans, figureCase, fishCooler, fishCreel, fishingStool, goBoard, golfBag, hanafuda, itaBag, jenga, jigsaw, karuta, knittingBasket, landingNet, mahjong, mangaRow, mangaStack, mapScroll, medalRack, microscope, mineralBox, mjRing, mjWall, penlights, poker, postcardWall, posterTubes, potteryWheel, raincoat, recordRow, refBooks, reversi, rodBag, rodRack, rodStanding, sewingMachine, shogi, skateboardFlat, skateboardStand, snackPile, snowboard, soccerBall, starChart, succulentSet, suitcaseOpen, suitcaseStand, surfboard, tackleBox, tangram, tennis, trophyColumn, trophyCup, trophyStar, unoCards, vinylRack, watercolor, xiangqi } from './interests/props'
+import { DECAL_LIFT, MEDAL_MOUNT, MJ_TH, MJ_TW, POSTCARD_MOUNT, RAINCOAT_MOUNT, ROD_RACK_MOUNT, STAR_MOUNT, UNO_COLS, acrylicStand, backgammon, badminton, baseball, basketball, bgBoxSingle, bgHex, bgLoop, bgMystery, bgShelfRow, bgTrain, bikeHelmet, boardGames, boxingGloves, burrPuzzle, calligraphy, card, cardGame, cardStack, cartons, catToys, chemSet, chess, chessOpening, chessPiece, chineseCheckers, coffeeCanisters, decal, diceGame, die, drawGrid, drawPlayCard, drawTiles, embroidery, energyCans, figureCase, fishCooler, fishCreel, fishingStool, goBoard, golfBag, hanafuda, itaBag, jenga, jigsaw, karuta, knittingBasket, landingNet, mahjong, mangaRow, mangaStack, mapScroll, medalRack, microscope, mineralBox, mjRing, mjWall, penlights, poker, postcardWall, posterTubes, potteryWheel, raincoat, recordRow, refBooks, reversi, rodBag, rodRack, rodStanding, sewingMachine, shogi, skateboardFlat, skateboardStand, snackPile, snowboard, soccerBall, starChart, succulentSet, suitcaseOpen, suitcaseStand, surfboard, tackleBox, tangram, tennis, trophyColumn, trophyCup, trophyStar, unoCards, vinylRack, watercolor, xiangqi, xqPiece } from './interests/props'
 
 /**
  * 自动麻将桌（牌是桌子模型的一部分）：桌面中间的牌山、手牌、舍牌占着，能放东西的只有四个桌角（放茶杯的地方）。
@@ -536,7 +536,7 @@ const FISHING: AssetDef[] = [
     ['modern', '#26262a', '#3d3f44', '#c3c7cc'],
     ['retro', R.caramel, '#7a2a22', BRASS],
   ], rodRack, { mount: ROD_RACK_MOUNT }),
-  define('int-tackle-box-open', '渔具箱', 'hobby', [36, 24.5, 24.5], [
+  define('int-tackle-box-open', '渔具箱', 'hobby', [36, 32, 31.5], [
     ['industrial', '#5a6a4a', '#c3c7cc', '#e2702f'],
     ['modern', '#3d3f44', '#c3c7cc', '#5ad1ff'],
     ['retro', R.red, METAL, R.mustard],
@@ -591,7 +591,7 @@ const BOARDGAMES: AssetDef[] = [
     ['retro', '#5aa0b8', R.red, R.cream],
     ['nordic', N.blue, N.mustard, N.white],
   ], bgHex, PROP),
-  define('int-bg-train', '铁路地图版图（对局中）', 'hobby', [57, 34, 1.6], [
+  define('int-bg-train', '铁路地图版图（对局中）', 'hobby', [57, 34, 1.4], [
     ['retro', '#e8dcb0', R.red, R.teal],
     ['nordic', '#dfe5c8', N.blue, N.mustard],
     ['cute', '#f6ecd0', C.pink, C.sky],
@@ -628,7 +628,7 @@ const BOARDGAMES: AssetDef[] = [
     ['nordic', N.oakL, '#c8302a', '#26262a'],
     ['japanese', J.hinoki, '#c8302a', J.sumi],
   ], xiangqi, { ...PROP, sizeLabel: '开局' }),
-  define('int-reversi', '黑白棋', 'hobby', [34, 34, 2], [
+  define('int-reversi', '黑白棋', 'hobby', [34, 34, 2.3], [
     ['modern', '#3f8a4a', '#26262a', '#f4f4f2'],
     ['retro', '#2f7a4a', '#26262a', R.cream],
     ['cute', '#8fcf9a', '#5a4646', '#ffffff'],
@@ -638,7 +638,7 @@ const BOARDGAMES: AssetDef[] = [
     ['nordic', N.oak, N.white, '#c8473a'],
     ['cute', C.woodL, C.sakura, C.pink],
   ], chineseCheckers, { ...PROP, sizeLabel: '开局' }),
-  define('int-backgammon', '双陆棋', 'hobby', [48.5, 38, 3], [
+  define('int-backgammon', '双陆棋', 'hobby', [48.5, 38, 3.3], [
     ['retro', '#7a4a2a', R.red, R.red],
     ['industrial', I.walnut, '#3a3a3c', '#26262a'],
     ['nordic', N.oak, N.blue, N.blue],
@@ -654,7 +654,7 @@ const BOARDGAMES: AssetDef[] = [
     ['retro', '#c9c48a', R.teal, '#3a2a22'],
   ], karuta, { ...PROP, sizeLabel: '摆开对局' }),
   define('int-jenga', '叠叠乐', 'hobby', [13.5, 11, 27], [['nordic', '#e8cfa0'], ['japanese', J.hinoki], ['cute', '#f0d6b0']], jenga(true), { ...PROP, form: 'stacked' }),
-  define('int-jenga-fallen', '叠叠乐', 'hobby', [45.5, 40, 8.3], [['nordic', '#e8cfa0'], ['japanese', J.hinoki], ['cute', '#f0d6b0']], jenga(false), { ...PROP, form: 'lying' }),
+  define('int-jenga-fallen', '叠叠乐', 'hobby', [45.5, 40, 7.5], [['nordic', '#e8cfa0'], ['japanese', J.hinoki], ['cute', '#f0d6b0']], jenga(false), { ...PROP, form: 'lying' }),
   define('int-uno-cards', '彩色数字卡牌', 'hobby', [37, 11.3, 3.2], [
     ['retro', '#c8473a', '#2f6a4a'],
     ['modern', '#26262a', '#3d3f44'],
@@ -670,7 +670,7 @@ const BOARDGAMES: AssetDef[] = [
     ['cute', C.woodL, C.sky, C.lilac],
     ['retro', R.caramel, R.red, R.teal],
   ], tangram, PROP),
-  define('int-burr-puzzle', '鲁班锁', 'hobby', [18, 10.3, 8.8], [['nordic', '#e2c486'], ['japanese', J.wood], ['retro', R.caramel]], burrPuzzle, PROP),
+  define('int-burr-puzzle', '鲁班锁', 'hobby', [18, 10.3, 8], [['nordic', '#e2c486'], ['japanese', J.wood], ['retro', R.caramel]], burrPuzzle, PROP),
 ]
 
 export const INTERESTS: AssetDef[] = [...MUSIC, ...OTAKU, ...SPORTS, ...GAMES, ...CRAFT, ...STUDY, ...COLLECT, ...LIFE, ...FISHING, ...BOARDGAMES]
@@ -759,7 +759,8 @@ function openBook(cover: string, key: string, x: number, z: number, ry = 0, ink 
   const b = G(rbox(25, 0.4, 17.6, cover, {}, 0.15))
   for (const s of [-1, 1]) {
     b.add(rbox(12, 0.9, 16.6, PAPER, { x: s * 6.1, y: 0.4 }, 0.2))
-    b.add(paintTop(11, 15.6, `${key}-${s}`, (c, W, H) => {
+    // 书页上的画面是贴花（以前只浮 0.02、又没开 polygonOffset，和纸面闪）
+    b.add(decal(paintTop(11, 15.6, `${key}-${s}`, (c, W, H) => {
       c.fillStyle = PAPER
       c.fillRect(0, 0, W, H)
       const n = 8
@@ -782,7 +783,7 @@ function openBook(cover: string, key: string, x: number, z: number, ry = 0, ink 
         c.fill()
       }
       for (let k = 0; k < 6; k++) c.fillRect(W * 0.12, y0 + bw + H * (0.06 + k * 0.045), W * (0.5 + r() * 0.26), Math.max(1, H * 0.012))
-    }, s * 6.1, 1.32, 0))
+    }, s * 6.1, 1.3 + DECAL_LIFT, 0)))
   }
   b.add(rbox(0.6, 1.1, 16.8, shade(cover, -0.2), { y: 0.35 }, 0.2))
   return P(b, x, 0, z, 0, ry)
@@ -837,17 +838,19 @@ function goState(p: string[], stones: [number, number, boolean][], bowls: 'close
   g.add(rbox(42.4, 5, 45.5, board, {}, 0.6))
   const st: V2[] = [[3, 3], [9, 3], [15, 3], [3, 9], [9, 9], [15, 9], [3, 15], [9, 15], [15, 15]]
   g.add(paintTop(41.4, 44.5, `int-go-${board}-${line}`, drawGrid(board, line, 19, st, 0.05), 0, 5.3, 0))
-  for (const [i, j, b] of stones) g.add(ball(1.1, b ? GO_B : GO_W, { x: GO_X(i), y: 5.8, z: GO_Z(j) }, [1, 0.45, 1]))
+  // 棋子用低段数的小珠子（终局数子一百来颗，用 ball 要一万六千面）
+  const stone = (c: string, x: number, y: number, z: number) => bead(1.1, c, x, y, z, [1, 0.45, 1], 12, 5)
+  for (const [i, j, b] of stones) g.add(stone(b ? GO_B : GO_W, GO_X(i), 5.8, GO_Z(j)))
   for (const [s, c] of [[-1, GO_B], [1, GO_W]] as [number, string][]) {
     const x = s * 30.5
     g.add(ball(6.5, bowl, { x, y: 4.4, z: 14 }, [1, 0.68, 1]))
     if (bowls === 'closed') g.add(puck(5.4, 1.8, bowl, { x, y: 8, z: 14 }))
     else {
       // 罐口露出一堆棋子，盖子翻过来放在罐子后面，里面装着提子
-      for (let k = 0; k < 7; k++) g.add(ball(1.1, c, { x: x + Math.cos(k) * (k ? 2.2 : 0), y: 8.6 + (k ? 0 : 0.5), z: 14 + Math.sin(k) * (k ? 2.2 : 0) }, [1, 0.45, 1]))
+      for (let k = 0; k < 7; k++) g.add(stone(c, x + Math.cos(k) * (k ? 2.2 : 0), 8.6 + (k ? 0 : 0.5), 14 + Math.sin(k) * (k ? 2.2 : 0)))
       g.add(cup(5.4, 4.6, 1.8, 0.4, bowl, { x, z: 0 }))
       const other = c === GO_B ? GO_W : GO_B
-      for (let k = 0; k < prisoners; k++) g.add(ball(1.1, other, { x: x + Math.cos(k * 2.4) * Math.min(3.2, 0.9 * Math.sqrt(k)), y: 0.9 + (k > 10 ? 0.45 : 0), z: Math.sin(k * 2.4) * Math.min(3.2, 0.9 * Math.sqrt(k)) }, [1, 0.45, 1]))
+      for (let k = 0; k < prisoners; k++) g.add(stone(other, x + Math.cos(k * 2.4) * Math.min(3.2, 0.9 * Math.sqrt(k)), 0.9 + (k > 10 ? 0.45 : 0), Math.sin(k * 2.4) * Math.min(3.2, 0.9 * Math.sqrt(k))))
     }
   }
   return fitGroup(g)
@@ -989,11 +992,7 @@ function xqState(p: string[], pieces: [number, number, boolean][], taken: [numbe
     c.lineWidth = Math.max(1, W * 0.007)
     c.strokeRect(px(0) - W * 0.012, pz(0) - W * 0.012, px(8) - px(0) + W * 0.024, pz(9) - pz(0) + W * 0.024)
   }, 0, 1.9, 0))
-  const piece = (x: number, y: number, z: number, side: string) => {
-    g.add(puck(1.8, 1, '#f2dcb0', { x, y, z }))
-    g.add(noOutline(torus(1.35, 0.1, side, { x, y: y + 1.02, z, rx: PI / 2 })))
-    g.add(noOutline(rbox(1.1, 0.06, 0.25, side, { x, y: y + 1, z }, 0.03)), noOutline(rbox(0.25, 0.06, 1.1, side, { x, y: y + 1, z }, 0.03)))
-  }
+  const piece = (x: number, y: number, z: number, side: string) => g.add(xqPiece(x, y, z, side))
   for (const [i, j, r] of pieces) piece(x0 + i * gx, 1.6, z0 + j * gz, r ? red : black)
   // 被吃掉的子：在棋盘两侧叠成小摞（红方吃的黑子放红方右手边）
   for (const [s, n, col] of [[1, taken[0], black], [-1, taken[1], red]] as [number, number, string][])
@@ -1185,9 +1184,10 @@ function bgmState(p: string[], points: [number, number, boolean][], dice = true)
     const top = pt >= 13
     const i = pt <= 6 ? 6 - pt : pt <= 12 ? 12 - pt : pt <= 18 ? pt - 13 : pt - 19
     const x = side * 12.2 - 10.9 + pw * (i + 0.5)
-    for (let k = 0; k < n; k++) g.add(cyl(1.5, 1.5, 0.6, mine ? chk : other, { x, y: 1 + Math.floor(k / 5) * 0.6, z: (top ? -1 : 1) * (17.9 - 1.5 - (k % 5) * 3) }, 18))
+    // 棋子、骰子摆在盘面贴图（y = 1.3）上面，不是盒底（1）：否则下半截埋在贴图底下
+    for (let k = 0; k < n; k++) g.add(cyl(1.5, 1.5, 0.6, mine ? chk : other, { x, y: 1.3 + Math.floor(k / 5) * 0.6, z: (top ? -1 : 1) * (17.9 - 1.5 - (k % 5) * 3) }, 18))
   }
-  if (dice) g.add(P(die(1.4, '#ffffff', '#26262a', 5, 3, 0.4), 5, 1, 0), P(die(1.4, '#ffffff', '#26262a', 1, 2, -0.3), 8, 1, 1.5))
+  if (dice) g.add(P(die(1.4, '#ffffff', '#26262a', 5, 3, 0.4), 5, 1.3, 0), P(die(1.4, '#ffffff', '#26262a', 1, 2, -0.3), 8, 1.3, 1.5))
   return fitGroup(g)
 }
 const bgmOpening = (p: string[]) =>
@@ -1251,7 +1251,7 @@ function pokerBox(back: string, open = false) {
     c.textBaseline = 'middle'
     c.font = `${Math.floor(H * 0.4)}px serif`
     c.fillText('♠', W / 2, H * 0.52)
-  }, 0, 2.02, 0)))
+  }, 0, 2 + DECAL_LIFT, 0)))
   if (open) g.add(rbox(6.8, 0.2, 3, back, { y: 0.9, z: 6, rx: 0.5 }, 0.08))
   return g
 }
@@ -1320,7 +1320,7 @@ function hanaBox(back: string, x: number, z: number, ry = 0) {
     c.fill()
     c.fillStyle = '#26262a'
     c.fillRect(W * 0.3, H * 0.62, W * 0.4, H * 0.05)
-  }, 0, 2.62, 0)))
+  }, 0, 2.6 + DECAL_LIFT, 0)))
   return P(g, x, 0, z, 0, ry)
 }
 /** 收在盒里：红黑两盒并排 [牌背, 主色, 点缀] */
@@ -1376,7 +1376,7 @@ function unoBoxed(p: string[]) {
     c.beginPath()
     c.ellipse(W / 2, H * 0.5, W * 0.22, H * 0.12, -0.4, 0, PI * 2)
     c.fill()
-  }, 0, 3.42, 0)))
+  }, 0, 3.4 + DECAL_LIFT, 0)))
   return fitGroup(g)
 }
 /** 发牌中：牌堆 + 翻开的第一张，三家面前各一叠 7 张背面朝上 [牌背, 桌垫] */
@@ -1398,12 +1398,13 @@ function unoDealing(p: string[]) {
 function karutaBoxed(p: string[]) {
   const [, edge, ink] = p
   const g = G(rbox(20, 6.4, 13.6, ink, {}, 0.6), rbox(20.3, 1.6, 13.9, edge, { y: 5.2 }, 0.4), rbox(20.1, 0.4, 13.7, ink, { y: 6.6 }, 0.2))
-  g.add(paintTop(10, 5, `int-karuta-lid-${edge}`, (c, W, H) => {
+  // 盖面的题签是贴花（以前只浮 0.02、又没开 polygonOffset，和盖面闪）
+  g.add(decal(paintTop(10, 5, `int-karuta-lid-${edge}`, (c, W, H) => {
     c.fillStyle = '#e3c06a'
     c.fillRect(0, 0, W, H)
     c.fillStyle = ink
     c.fillRect(W * 0.1, H * 0.4, W * 0.8, H * 0.2)
-  }, 0, 7.02, 0))
+  }, 0, 7 + DECAL_LIFT, 0)))
   return fitGroup(g)
 }
 /** 整叠：读札（带画的那叠）和取札两叠理好，盒子开着放在旁边 [榻榻米, 牌边, 字色] */
@@ -1495,7 +1496,8 @@ function mjWin(p: string[]) {
     if (k === 0) {
       // 推倒的手牌：平躺，牌面朝上
       side.add(rbox(HL, 0.7, MJ_TH, back, { z: 32.6 }, 0.25), rbox(HL, 1.2, MJ_TH, IVORY, { y: 0.7, z: 32.6 }, 0.25))
-      side.add(paintTop(HL - 0.2, MJ_TH - 0.2, 'int-mj-win-hand', drawTiles(14, 1, 99, IVORY), 0, 1.92, 32.6))
+      // 牌面和舍牌一样浮出 0.3（以前只浮 0.02，和牌的顶面闪）
+      side.add(paintTop(HL - 0.2, MJ_TH - 0.2, 'int-mj-win-hand', drawTiles(14, 1, 99, IVORY), 0, 2.2, 32.6))
     } else {
       side.add(rbox(HL, MJ_TH, 1.2, IVORY, { z: 33.4 }, 0.25))
       side.add(rbox(HL, MJ_TH, 0.7, back, { z: 32.45 }, 0.25))

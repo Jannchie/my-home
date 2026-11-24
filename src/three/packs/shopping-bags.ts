@@ -421,6 +421,8 @@ function paperGrocery(p: string[]) {
     g.add(rbox(W + 0.6, 3, 0.5, rim, { y: H - 3, z: s * (D / 2 + 0.3) }, 0.2))
     g.add(rbox(0.5, 3, D, rim, { x: s * (W / 2 + 0.3), y: H - 3 }, 0.2))
   }
+  // 袋子下半截垫着的其它东西（一个纸包）：法棍、葱、生菜都压在它上面，不是悬在空袋子里
+  g.add(rbox(W - 2, H - 10.5, D - 2, shade(kraft, 0.1), { y: t }, 1.5))
   g.add(baguette(44, 0.12, [-6, 6, -2]))
   g.add(negi(42, -0.16, [7, 4, 2.5]))
   g.add(cabbage(7, [3, H - 4, -1.5]))
@@ -539,7 +541,8 @@ function regiFolded(p: string[]) {
   g.add(tri(main, -3.5, 0, 0, 0))
   g.add(tri(shade(main, -0.04), -2.5, 1.45, 0.5, 0.6))
   g.add(tri(main, 6.5, 0, 1, PI / 3))
-  g.add(rbox(1.4, 0.3, 4, acc, { x: -3.5, y: 2.85, z: 0.5, ry: 0.6 }, 0.1))
+  // 封口胶带贴在上面那只的顶面（tri 用 P 摆，y 是中心：顶面在 1.45 + 0.7；原来写成 2.85 悬在上方 0.7cm）
+  g.add(rbox(1.4, 0.3, 4, acc, { x: -2.6, y: 2.1, z: 0.5, ry: 0.6 }, 0.1))
   return grounded(g)
 }
 
@@ -572,6 +575,7 @@ function coolerClosed(p: string[]) {
   g.add(rbox(W + 0.6, 1.6, D + 0.6, acc, { y: H - 3.6 }, 0.8))
   g.add(rbox(24, 0.5, 1.2, trim, { y: H - 0.2 }, 0.2))
   g.add(rbox(1.2, 0.5, 3, M.silver, { x: 12, y: H + 0.1, z: 1 }, 0.2))
+  // 前袋用 dim：默认的藏青色用 shade 减明度会变成纯黑（袋子正面像开了个黑洞）
   g.add(rbox(20, 10, 1.2, shade(main, -0.08), { y: 4, z: D / 2 - 0.2 }, 0.5))
   for (const s of [-1, 1]) g.add(loop(7, H - 1, 10, s * (D / 2 - 3), 0.8, trim))
   return grounded(g)
@@ -626,7 +630,8 @@ function netOver(rx: number, ry: number, rz: number, cy: number, cz: number, col
       const th = th0 + ((th1 - th0) * k) / 8
       pts.push([rx * Math.cos(th) * Math.cos(ph), cy + ry * Math.sin(th), cz + rz * Math.cos(th) * Math.sin(ph)])
     }
-    g.add(cappedTube(pts, 0.22, color, { ...TUBE, seg: 32 }))
+    // 网线只有 0.22 粗：截面 5 段、沿线 24 段足够；两头收在网兜的上下口，不要球帽（16 个球帽就是 2800 面）
+    g.add(cappedTube(pts, 0.22, color, { ...TUBE, seg: 24, radial: 5, caps: false }))
   }
   for (const th of [-0.35, 0.35]) {
     const t = torus(1, 0.2 / Math.max(rx, rz), color, { y: cy + ry * Math.sin(th), z: cz, rx: PI / 2 })
@@ -708,7 +713,8 @@ function bigOpen(p: string[]) {
   const D = 34
   const g = new THREE.Group()
   g.add(tray(W, H, D, 0.8, main))
-  g.add(rbox(46, 8, 26, R.cream, { y: H - 6 }, 2.5))
+  // 毛毯叠成一大摞、从袋底一直码到袋口（原来只有袋口那 8cm 厚的一片，悬在空袋子里）
+  g.add(rbox(W - 4, H + 1.2, D - 4, R.cream, { y: 0.8 }, 2.5))
   g.add(rbox(44, 3, 24, '#e8d2a6', { y: H + 1.6 }, 1.2))
   for (const s of [-1, 1]) {
     for (const x of [-12, 12]) g.add(rbox(4, H, 0.4, strap, { x, z: s * (D / 2 + 0.35) }, 0.15))
@@ -924,8 +930,9 @@ function comboMagnetRegi(p: string[]) {
 function comboDoorNet(p: string[]) {
   const { g, hooks } = doorNatural(DOOR2_XS)(p.slice(0, 2))
   g.add(hangOnHook(ecoHangingBody('flower', COMBO_W)(p.slice(2, 5)), hooks[0]))
-  // 网兜挂在右钩，往前错开一点，压在环保袋前面
-  g.add(hangOnHook(netHanging(p.slice(5, 7)), hooks[1], 3.5))
+  // 网兜挂在右钩，提手滑到钩尖上翘处（往前错开 1.2）：网兜就落在环保袋前面不穿进去；
+  // 原来错开 3.5，提手整个在钩尖前面、悬空没挂住
+  g.add(hangOnHook(netHanging(p.slice(5, 7)), hooks[1], 1.2))
   return stuck(g)
 }
 

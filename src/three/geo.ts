@@ -298,6 +298,36 @@ export function latheAt(pts: V2[], color: string, at: { x?: number; y?: number; 
   return m
 }
 
+// ---------- 侧面轮廓板 / 斜面坐标系 ----------
+
+/**
+ * 侧面轮廓挤出的实心板：轮廓点是侧视图里的 [z, y]（z 朝前、y 朝上），沿 x 挤出厚 t，x 为中心。
+ * 倒角往里收（轮廓不变大），倒角宽不超过 bevel（默认 0.5）、也不超过厚度的两成。街机侧板、弹珠台箱体、斜背的器材底座用。
+ */
+export function sideSlab(pts: V2[], t: number, color: string, x = 0, o: { bevel?: number; bevelSeg?: number } = {}) {
+  const s = new THREE.Shape(pts.map(([z, y]) => new THREE.Vector2(z, y)))
+  const bevel = Math.min(o.bevel ?? 0.5, t * 0.2)
+  const geo = new THREE.ExtrudeGeometry(s, { depth: t - bevel * 2, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelOffset: -bevel, bevelSegments: o.bevelSeg ?? 1 })
+  geo.translate(0, 0, -t / 2 + bevel)
+  // 轮廓的横轴转到世界 z，厚度转到世界 x
+  geo.rotateY(-PI / 2)
+  return P(mesh(geo, color), x, 0, 0)
+}
+
+/**
+ * 侧视图（[z, y]）里从 a 到 b 的斜面上建一个局部坐标系：原点在 a，绕 x 轴转。
+ * axis 'y'（默认）：局部 +y 沿 a → b，局部 +z 是斜面朝外的法线——斜着的屏幕、操作台按「竖直面板」来摆；
+ * axis 'z'：局部 +z 沿 a → b，局部 +y 是法线——斜躺的板（仰卧板、斜坡）按「水平的板」来摆。
+ */
+export function tiltFrame(a: V2, b: V2, axis: 'y' | 'z' = 'y') {
+  const dz = b[0] - a[0]
+  const dy = b[1] - a[1]
+  const g = new THREE.Group()
+  g.position.set(0, a[1], a[0])
+  g.rotation.x = axis === 'y' ? Math.atan2(dz, dy) : -Math.atan2(dy, dz)
+  return { g, len: Math.hypot(dz, dy) }
+}
+
 // ---------- 按包围盒对齐（几种语义不同，名字区分） ----------
 
 /**

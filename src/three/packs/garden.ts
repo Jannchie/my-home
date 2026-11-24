@@ -7,7 +7,7 @@
 //   - 挂起形态（form: 'hanging'）原点 = 挂点：自带 J 钩，横臂在 y = -2 往 -z 插进 1cm，模型都在原点下方、本体在 z ≥ 0.3。
 
 import * as THREE from 'three'
-import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
+import { ball, cached, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, holePanel, rectPoly, rng, type AssetCategory, type AssetDef, type StyleTag } from '../kit'
 import { PI, clearMat, lathe, lit, noOutline, rod3, taperRod3, tube, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, R, type Build } from '../packkit'
@@ -44,7 +44,13 @@ function sty(groups: Partial<Record<StyleTag, string[][]>>) {
   return { palettes, paletteStyles, styles: Object.keys(groups) as StyleTag[] }
 }
 type Pals = ReturnType<typeof sty>
-
+/** 低面数的胶囊（花穗、仙人柱的棱）：中心在原点、轴沿 y；capsule() 每个四百多面 */
+function loCapsule(r: number, len: number, color: string) {
+  const m = new THREE.Mesh(cached(`gd-locap${r},${len}`, () => new THREE.CapsuleGeometry(r, len, 3, 8)), toon(color))
+  m.castShadow = true
+  m.receiveShadow = true
+  return m
+}
 /** 两点之间的胶囊（握把、手指） */
 function capsAlong(a: V3, b: V3, r: number, color: string) {
   const va = new THREE.Vector3(...a)
@@ -69,9 +75,18 @@ const dirOf = (yaw: number, pitch: number): V3 => [Math.sin(yaw) * Math.cos(pitc
 /** 水平角 a（x = cos a, z = sin a）换算成 yaw */
 const yawTo = (a: number) => PI / 2 - a
 const along = (b: V3, d: V3, l: number): V3 => [b[0] + d[0] * l, b[1] + d[1] * l, b[2] + d[2] * l]
-/** 叶片：叶柄端在 base，沿 yaw / pitch 方向伸出 */
-function sprig(len: number, color: string, base: V3, yaw: number, pitch: number, wide = 0.45, thick = 0.12) {
-  const m = ball(len / 2, color, {}, [wide, thick, 1])
+/**
+ * 扁叶片 / 厚叶（多肉）/ 针叶的低面数段数。
+ * 扁叶片压到 0.12 厚，纬线只要 2 段（上下两个扇面，24 面）：正面轮廓还是和 ball() 一样的 12 边形，侧面本来就薄得看不出弧度。
+ */
+const LEAF_LO: [number, number] = [12, 2]
+/** 稍厚的扁片（绣球的小花）：留一圈中间纬线，侧面不至于成菱形 */
+const PETAL_LO: [number, number] = [10, 4]
+const FAT_LO: [number, number] = [10, 6]
+const NEEDLE_LO: [number, number] = [6, 4]
+/** 叶片：叶柄端在 base，沿 yaw / pitch 方向伸出；seg 给了就用低面数的球（成片的小叶用） */
+function sprig(len: number, color: string, base: V3, yaw: number, pitch: number, wide = 0.45, thick = 0.12, seg?: [number, number]) {
+  const m = seg ? ball(len / 2, color, {}, [wide, thick, 1], seg) : ball(len / 2, color, {}, [wide, thick, 1])
   m.rotation.set(pitch, yaw, 0, 'YXZ')
   m.position.set(...along(base, dirOf(yaw, pitch), len / 2))
   return m
@@ -117,7 +132,7 @@ function scatter(g: THREE.Group, r: number, y: number, n: number, color: string,
   for (let i = 0; i < n; i++) {
     const a = rand() * PI * 2
     const d = Math.sqrt(rand()) * (r - size - 0.2)
-    g.add(noOutline(ball(size * (0.7 + rand() * 0.5), color, { x: Math.cos(a) * d, y: y + 0.05, z: Math.sin(a) * d }, [1, 0.5, 0.9])))
+    g.add(noOutline(ball(size * (0.7 + rand() * 0.5), color, { x: Math.cos(a) * d, y: y + 0.05, z: Math.sin(a) * d }, [1, 0.5, 0.9], NEEDLE_LO)))
   }
 }
 
@@ -187,7 +202,9 @@ function glazedPot(R: number, h: number, color: string, accent: string, seed = 1
     const len = 1.4 + rand() * 1.6
     const y = yr - len / 2
     const r = rAt(prof, y) - 0.08
-    g.add(noOutline(ball(0.6, accent, { x: Math.cos(a) * r, y, z: Math.sin(a) * r, ry: yawTo(a) }, [1, len / 1.2, 0.45])))
+    const drip = ball(0.6, accent, { x: Math.cos(a) * r, y, z: Math.sin(a) * r }, [1, len / 1.2, 0.45], [8, 6])
+    drip.rotation.y = yawTo(a)
+    g.add(noOutline(drip))
   }
   const soil = h - 1.6
   const sr = rAt(prof, soil) - t - 0.3
@@ -463,7 +480,8 @@ function seedTray(cols: number, rows: number, pitch: number): Build {
         const cx = (i - (cols - 1) / 2) * pitch
         const cz = (j - (rows - 1) / 2) * pitch
         cells.push([cx, cz])
-        holes.push({ kind: 'rect', x: cx, y: pd / 2 - cz - hs / 2, w: hs, h: hs, r: 0.6 })
+        // 直角格（r = 0）：holePanel 的圆角每个孔上千面，24 格就是两万多面
+        holes.push({ kind: 'rect', x: cx, y: pd / 2 - cz - hs / 2, w: hs, h: hs, r: 0 })
       }
     const pt = 0.5
     g.add(holePanel(pw, pd, pt, shade(c, 0.05), holes, { y: H - 0.3 - pt / 2, z: pd / 2, rx: -PI / 2 }, 0.5))
@@ -477,8 +495,8 @@ function seedTray(cols: number, rows: number, pitch: number): Build {
         const top: V3 = [cx + (rand() - 0.5) * 0.6, soilTop + sh, cz + (rand() - 0.5) * 0.6]
         g.add(noOutline(rod3([cx, soilTop - 0.2, cz], top, 0.12, '#9ccf6a', 4)))
         const yaw = rand() * PI
-        for (const s of [0, PI]) g.add(sprig(1.4 + sh * 0.15, '#8fd16a', top, yaw + s, -0.15, 0.6))
-        if (sh > 3) g.add(sprig(1.5, LEAF, top, yaw + PI / 2, -0.8, 0.55))
+        for (const s of [0, PI]) g.add(sprig(1.4 + sh * 0.15, '#8fd16a', top, yaw + s, -0.15, 0.6, 0.12, LEAF_LO))
+        if (sh > 3) g.add(sprig(1.5, LEAF, top, yaw + PI / 2, -0.8, 0.55, 0.12, LEAF_LO))
       }
     }
     // 一根标签插在角上的格子里
@@ -554,7 +572,7 @@ function trail(g: THREE.Group, cx: number, cz: number, a: number, rIn: number, r
   for (let k = 1; k <= n; k++) {
     const p = curve.getPoint(k / (n + 0.4))
     const side = k % 2 ? 1 : -1
-    g.add(sprig(leafLen * (0.85 + rand() * 0.3), POTHOS[(k + Math.floor(rand() * 3)) % 3], [p.x, p.y, p.z], yawTo(a + side * 0.75), 0.35, 0.72))
+    g.add(sprig(leafLen * (0.85 + rand() * 0.3), POTHOS[(k + Math.floor(rand() * 3)) % 3], [p.x, p.y, p.z], yawTo(a + side * 0.75), 0.35, 0.72, 0.12, LEAF_LO))
   }
 }
 
@@ -568,7 +586,7 @@ function heartTuft(g: THREE.Group, soilY: number, r: number, n: number, seed: nu
     const pitch = -1.0 + rand() * 0.5
     const tip = along(base, dirOf(yawTo(a), pitch), 3 + rand() * 2.5)
     g.add(noOutline(rod3(base, tip, 0.18, STEM, 5)))
-    g.add(sprig(5.2 + rand() * 1.5, POTHOS[i % 3], tip, yawTo(a), pitch + 0.75, 0.72))
+    g.add(sprig(5.2 + rand() * 1.5, POTHOS[i % 3], tip, yawTo(a), pitch + 0.75, 0.72, 0.12, [16, 2]))
   }
 }
 
@@ -599,8 +617,8 @@ function pothosHang(p: string[]) {
 /** 常春藤：盆里插一个铁丝圆环，藤蔓沿环缠绕 */
 function ivyLeaf(g: THREE.Group, at: V3, s: number, color: string, side: number, rz: number) {
   const lg = new THREE.Group()
-  lg.add(ball(1.3 * s, color, {}, [1, 1.05, 0.22]))
-  for (const k of [-1, 1]) lg.add(ball(0.95 * s, color, { x: k * 1.05 * s, y: -0.35 * s }, [1, 0.95, 0.22]))
+  lg.add(ball(1.3 * s, color, {}, [1, 1.05, 0.22], [8, 6]))
+  for (const k of [-1, 1]) lg.add(ball(0.95 * s, color, { x: k * 1.05 * s, y: -0.35 * s }, [1, 0.95, 0.22], [8, 6]))
   lg.position.set(at[0], at[1], at[2] + side * 0.75)
   lg.rotation.set(side * 0.25, 0, rz)
   g.add(lg)
@@ -761,7 +779,7 @@ function rosette(g: THREE.Group, x: number, z: number, y: number, s: number, a: 
   rings.forEach(([n, pitch, sc], j) => {
     for (let k = 0; k < n; k++) {
       const ang = (k / n) * PI * 2 + j * 0.45
-      g.add(sprig(3.2 * s * sc, j % 2 ? a : b, [x, y + j * 0.35 * s, z], yawTo(ang), pitch, 0.55, 0.32))
+      g.add(sprig(3.2 * s * sc, j % 2 ? a : b, [x, y + j * 0.35 * s, z], yawTo(ang), pitch, 0.55, 0.32, FAT_LO))
     }
   })
   g.add(ball(0.5 * s, b, { x, y: y + 1.1 * s, z }))
@@ -778,14 +796,17 @@ function succulentBowl(p: string[]) {
   rosette(g, 4.6, -2.6, y, 1.0, '#d9b8c8', '#c7a3bb')
   rosette(g, 1.0, 5.6, y, 0.75, '#8fc27a', '#e6a5b8')
   // 十二卷：尖叶直立
-  for (let k = 0; k < 10; k++) g.add(sprig(3.6, k % 2 ? '#3f7f55' : '#4f8f62', [4.8, y, 4.2], yawTo((k / 10) * PI * 2), -1.15 + (k % 3) * 0.12, 0.3, 0.3))
+  for (let k = 0; k < 10; k++) g.add(sprig(3.6, k % 2 ? '#3f7f55' : '#4f8f62', [4.8, y, 4.2], yawTo((k / 10) * PI * 2), -1.15 + (k % 3) * 0.12, 0.3, 0.3, [8, 6]))
   // 虹之玉：一簇豆豆
   const rand = rng(53)
   for (let k = 0; k < 14; k++) {
     const a = rand() * PI * 2
     const d = rand() * 2
     const ht = rand() * 1.6
-    g.add(capsule(0.45, 0.6, k % 3 ? '#8fcf6a' : '#d96f6a', { x: -4.8 + Math.cos(a) * d, y: y + ht * 0.6, z: -3.6 + Math.sin(a) * d, rz: (rand() - 0.5) * 0.6 }))
+    // 豆豆：拉长的低面数球（原来每颗一个四百多面的胶囊）
+    const bean = ball(0.45, k % 3 ? '#8fcf6a' : '#d96f6a', { x: -4.8 + Math.cos(a) * d, y: y + ht * 0.6 + 0.75, z: -3.6 + Math.sin(a) * d }, [1, 1.65, 1], [8, 6])
+    bean.rotation.z = (rand() - 0.5) * 0.6
+    g.add(bean)
   }
   // 玉树小苗
   g.add(rod3([0.2, y - 0.2, -6], [0.6, y + 4, -6.2], 0.35, '#8a7a4a', 6))
@@ -797,14 +818,16 @@ function succulentBowl(p: string[]) {
 function cactusBall(g: THREE.Group, x: number, z: number, y: number, r: number, color: string, ribs = 10) {
   g.add(ball(r * 0.86, color, { x, y: y + r * 0.72, z }, [1, 0.95, 1]))
   for (let i = 0; i < ribs; i++) {
-    const m = ball(r, shade(color, i % 2 ? 0.03 : -0.02), { x, y: y + r * 0.72, z, ry: (i * PI) / ribs }, [0.2, 0.93, 1])
+    // 棱和刺用低面数的球：两颗仙人球原来光棱和刺就一万五千面
+    const m = ball(r, shade(color, i % 2 ? 0.03 : -0.02), { x, y: y + r * 0.72, z }, [0.2, 0.93, 1], [12, 8])
+    m.rotation.y = (i * PI) / ribs
     g.add(m)
   }
   for (let i = 0; i < ribs * 2; i++) {
     const a = (i * PI) / ribs
     const yy = y + r * 0.72 + (i % 2 ? 0.25 : -0.3) * r
     const rr = r * Math.sqrt(1 - ((yy - (y + r * 0.72)) / (r * 0.93)) ** 2) + 0.05
-    g.add(noOutline(ball(0.22, '#fffbe8', { x: x + Math.sin(a) * rr, y: yy, z: z + Math.cos(a) * rr })))
+    g.add(noOutline(ball(0.22, '#fffbe8', { x: x + Math.sin(a) * rr, y: yy, z: z + Math.cos(a) * rr }, undefined, NEEDLE_LO)))
   }
 }
 function cactusGroup(p: string[]) {
@@ -822,7 +845,9 @@ function cactusGroup(p: string[]) {
   g.add(capsule(2.1, 5.5, '#4f9e5b', { x: 8.6, y: y - 1 }))
   for (let k = 0; k < 8; k++) {
     const a = (k / 8) * PI * 2
-    g.add(capsule(0.5, 5.4, shade('#4f9e5b', 0.04), { x: 8.6 + Math.cos(a) * 1.75, y: y - 0.9, z: Math.sin(a) * 1.75 }))
+    const rib = loCapsule(0.5, 5.4, shade('#4f9e5b', 0.04))
+    rib.position.set(8.6 + Math.cos(a) * 1.75, y - 0.9 + 5.4 / 2 + 0.5, Math.sin(a) * 1.75)
+    g.add(rib)
   }
   // 花
   const fy = y - 0.5 + 3.5 * 0.72 + 3.5 * 0.93
@@ -851,7 +876,7 @@ function herb(kind: 'mint' | 'basil' | 'rosemary'): Build {
         for (const f of [0.45, 0.72, 1]) {
           const q = along(base, dir, L * f)
           const yaw = yawTo(a) + (f === 0.72 ? 0 : PI / 2)
-          for (const s of [0, PI]) g.add(sprig(f === 1 ? 2.2 : 3, i % 2 ? '#6cc06a' : '#58ab5a', q, yaw + s, f === 1 ? -0.7 : -0.1, 0.65))
+          for (const s of [0, PI]) g.add(sprig(f === 1 ? 2.2 : 3, i % 2 ? '#6cc06a' : '#58ab5a', q, yaw + s, f === 1 ? -0.7 : -0.1, 0.65, 0.12, LEAF_LO))
         }
       }
     } else if (kind === 'basil') {
@@ -879,7 +904,7 @@ function herb(kind: 'mint' | 'basil' | 'rosemary'): Build {
         g.add(noOutline(rod3(base, along(base, dir, L), 0.22, '#7a7a50', 5)))
         for (let f = 0.25; f < 1.01; f += 0.11) {
           const q = along(base, dir, L * f)
-          for (let k = 0; k < 3; k++) g.add(noOutline(sprig(2, k % 2 ? '#5d7d5a' : '#6f8f68', q, (k * PI * 2) / 3 + f * 5, -0.75, 0.2, 0.2)))
+          for (let k = 0; k < 3; k++) g.add(noOutline(sprig(2, k % 2 ? '#5d7d5a' : '#6f8f68', q, (k * PI * 2) / 3 + f * 5, -0.75, 0.2, 0.2, NEEDLE_LO)))
         }
         if (i % 3 === 0) g.add(noOutline(ball(0.4, '#a9b8f0', { x: along(base, dir, L)[0], y: along(base, dir, L)[1] + 0.2, z: along(base, dir, L)[2] })))
       }
@@ -927,7 +952,8 @@ function tomato(p: string[]) {
     g.add(sprig(3.4, '#4f9e5b', along(b, dir, L), yawTo(a), 0.1, 0.55))
     if (k === 2 || k === 4 || k === 5 || k === 7) {
       const ta = a + PI * 0.8
-      const t0: V3 = [b[0] + Math.cos(ta) * 1.2, b[1] - 0.5, b[2] + Math.sin(ta) * 1.2]
+      // 果穗梗从主茎里长出来（原来起点离主茎中心 1.2，主茎才粗 0.5，整串果悬在茎旁边）
+      const t0: V3 = [b[0] + Math.cos(ta) * 0.3, b[1] - 0.5, b[2] + Math.sin(ta) * 0.3]
       const t1: V3 = [b[0] + Math.cos(ta) * 4.2, b[1] - 2.5, b[2] + Math.sin(ta) * 4.2]
       g.add(noOutline(rod3(t0, t1, 0.15, '#6f9a4a', 4)))
       for (let j = 0; j < 5; j++) {
@@ -946,7 +972,7 @@ function tomato(p: string[]) {
 function strawLeaf(g: THREE.Group, base: V3, yaw: number, pitch: number, len: number, color: string) {
   const tip = along(base, dirOf(yaw, pitch), len)
   g.add(noOutline(rod3(base, tip, 0.14, '#6f9a4a', 4)))
-  for (const d of [-0.6, 0, 0.6]) g.add(sprig(2.4, color, tip, yaw + d, pitch + 0.45, 0.75))
+  for (const d of [-0.6, 0, 0.6]) g.add(sprig(2.4, color, tip, yaw + d, pitch + 0.45, 0.75, 0.12, LEAF_LO))
 }
 function berry(g: THREE.Group, top: V3, red = '#e8403a') {
   g.add(cyl(1.0, 0.25, 2.0, red, { x: top[0], y: top[1] - 2, z: top[2] }, 10))
@@ -983,6 +1009,8 @@ function strawberryJar(p: string[]) {
     g.add(noOutline(tube([[Math.cos(a) * 3, y + 3, Math.sin(a) * 3], [Math.cos(a) * (r0 - 0.5), 27, Math.sin(a) * (r0 - 0.5)], top], 0.1, '#6f9a4a', { ...TUBE, seg: 8, radial: 4 })))
     berry(g, top)
   }
+  // 一朵花：花梗从土里伸上来（以前花悬在叶丛上方 5cm，没有梗）
+  g.add(noOutline(rod3([0.4, y - 0.2, -0.3], [1.5, y + 5, -1], 0.1, '#6f9a4a', 4)))
   for (let j = 0; j < 5; j++) g.add(noOutline(sprig(1.0, C.white, [1.5, y + 5, -1], (j * PI * 2) / 5, -0.3, 0.7)))
   g.add(noOutline(ball(0.35, C.lemon, { x: 1.5, y: y + 5.3, z: -1 })))
   return g
@@ -994,7 +1022,8 @@ function sunflower(p: string[]) {
   const g = P.g
   const y = P.soil
   const top: V3 = [0, y + 40, 1.5]
-  g.add(noOutline(tube([[0, y - 0.5, 0], [0.5, y + 15, 0.2], [-0.3, y + 30, 0.6], top], 0.6, '#6a9a3a', { ...TUBE, seg: 20, radial: 8 })))
+  // 茎的末端弯进花盘背面的中心（花盘中心在 top 上方 4.2、前方 1.2；以前茎停在 top，离花盘背面还有 1cm 多）
+  g.add(noOutline(tube([[0, y - 0.5, 0], [0.5, y + 15, 0.2], [-0.3, y + 30, 0.6], top, [top[0], top[1] + 3.4, top[2] + 0.9]], 0.6, '#6a9a3a', { ...TUBE, seg: 24, radial: 8 })))
   const rand = rng(91)
   for (let k = 0; k < 6; k++) {
     const yy = y + 6 + k * 5.6
@@ -1027,7 +1056,7 @@ function lavender(p: string[]) {
   for (let i = 0; i < 30; i++) {
     const a = rand() * PI * 2
     const d = rand() * 4
-    g.add(noOutline(sprig(5 + rand() * 2, i % 2 ? '#8fa88a' : '#7f9a7a', [Math.cos(a) * d, y - 0.2, Math.sin(a) * d], yawTo(a), -1.15 + rand() * 0.5, 0.18, 0.2)))
+    g.add(noOutline(sprig(5 + rand() * 2, i % 2 ? '#8fa88a' : '#7f9a7a', [Math.cos(a) * d, y - 0.2, Math.sin(a) * d], yawTo(a), -1.15 + rand() * 0.5, 0.18, 0.2, NEEDLE_LO)))
   }
   for (let i = 0; i < 18; i++) {
     const a = rand() * PI * 2
@@ -1037,7 +1066,7 @@ function lavender(p: string[]) {
     const L = 18 + rand() * 7
     const tip = along(base, dir, L)
     g.add(noOutline(rod3(base, tip, 0.13, '#8fa88a', 4)))
-    g.add(aim(capsAlong([0, 0, 0], [0, 3.6, 0], 0.55, i % 3 ? '#8e6bbf' : '#a585d3'), tip, dir))
+    g.add(aim(loCapsule(0.55, 2.5, i % 3 ? '#8e6bbf' : '#a585d3'), tip, dir))
   }
   return g
 }
@@ -1049,14 +1078,14 @@ function bloom(g: THREE.Group, at: V3, s: number, color: string) {
   g.add(ball(0.95 * s, shade(color, -0.08), { x, y: y + 0.9 * s, z }))
   for (let k = 0; k < 5; k++) {
     const f = (k / 5) * PI * 2
-    const m = ball(1.25 * s, color, {}, [1, 0.85, 0.32])
+    const m = ball(1.25 * s, color, {}, [1, 0.85, 0.32], [8, 6])
     m.rotation.set(-0.2, yawTo(f), 0, 'YXZ')
     m.position.set(x + Math.cos(f) * 0.85 * s, y + 0.8 * s, z + Math.sin(f) * 0.85 * s)
     g.add(m)
   }
   for (let k = 0; k < 6; k++) {
     const f = (k / 6) * PI * 2 + 0.4
-    const m = ball(1.55 * s, shade(color, 0.05), {}, [1, 0.8, 0.3])
+    const m = ball(1.55 * s, shade(color, 0.05), {}, [1, 0.8, 0.3], [8, 6])
     m.rotation.set(-0.6, yawTo(f), 0, 'YXZ')
     m.position.set(x + Math.cos(f) * 1.5 * s, y + 0.45 * s, z + Math.sin(f) * 1.5 * s)
     g.add(m)
@@ -1081,7 +1110,7 @@ function rose(p: string[]) {
       const la = a + f * 7
       const lt = along(q, dirOf(yawTo(la), -0.1), 2.6)
       g.add(noOutline(rod3(q, lt, 0.12, '#4f7a3a', 4)))
-      for (const d of [-0.7, 0, 0.7]) g.add(sprig(2.6, '#3f7a3f', lt, yawTo(la) + d, 0.1, 0.62, 0.14))
+      for (const d of [-0.7, 0, 0.7]) g.add(sprig(2.6, '#3f7a3f', lt, yawTo(la) + d, 0.1, 0.62, 0.14, LEAF_LO))
     }
     bloom(g, [tip[0], tip[1] + 0.3, tip[2]], i === 4 ? 0.75 : 1.15, flower)
   }
@@ -1097,7 +1126,7 @@ function hydraHead(g: THREE.Group, c: V3, r: number, color: string) {
     const rr = Math.sqrt(Math.max(0, 1 - yy * yy))
     const th = i * 2.39996
     const nrm: V3 = [Math.cos(th) * rr, yy, Math.sin(th) * rr]
-    const m = ball(r * 0.26, i % 3 ? color : shade(color, 0.07), {}, [1, 0.35, 1])
+    const m = ball(r * 0.26, i % 3 ? color : shade(color, 0.07), {}, [1, 0.35, 1], PETAL_LO)
     aim(m, [c[0] + nrm[0] * r * 0.86, c[1] + nrm[1] * r * 0.86, c[2] + nrm[2] * r * 0.86], nrm)
     g.add(m)
   }
@@ -1367,7 +1396,7 @@ function fertilizer(p: string[]) {
   g.add(rbox(7, 8.5, 0.4, label, { y: 3.5, z: 2.75 }, 0.3))
   g.add(noOutline(ball(1.4, LEAF, { x: -1.2, y: 8.6, z: 3.0, rz: 0.5 }, [0.55, 1, 0.25])))
   g.add(noOutline(ball(1.2, LEAF_D, { x: 0.8, y: 8.2, z: 3.0, rz: -0.5 }, [0.55, 1, 0.25])))
-  g.add(rbox(5, 0.8, 0.5, shade(label, -0.3), { y: 5.2, z: 2.8 }, 0.2))
+  g.add(rbox(5, 0.8, 0.5, shade(label, -0.3), { y: 5.2, z: 2.85 }, 0.2)) // 背面收在标签厚度里（以前和标签背面共面）
   return g
 }
 
@@ -1600,7 +1629,8 @@ function gardenCart(p: string[]) {
       g.add(cyl(4.5, 4.5, 4.4, wheel, { x, y: 9 - 2.2, z: s * 21.5, rx: PI / 2 }, 16))
     }
   }
-  g.add(rbox(4, 4, 6, '#55585e', { x: 33, y: 13.5 }, 0.6))
+  // 拉杆座顶到车斗底板里（车斗底面 y = 18）；以前座子离车斗 0.5、离纵梁 1cm，整根拉杆悬空
+  g.add(rbox(4, 5, 6, '#55585e', { x: 33, y: 13.5 }, 0.6))
   g.add(rod3([34, 15.5, 0], [44, 70, 0], 1.0, STEEL))
   g.add(rod3([44, 70, -7], [44, 70, 7], 1.4, wheel, 12))
   return g

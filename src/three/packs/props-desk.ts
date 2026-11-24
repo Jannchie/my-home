@@ -6,7 +6,7 @@ import * as THREE from 'three'
 import { ball, capsule, cup, cyl, face, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { artFace } from '../artwork'
 import { C, clipLevels, glow, rng, rod, shell, type AssetDef, type Fx, type ScreenPanel, paintPanel, paintLandscape } from '../kit'
-import { P, cylX, cylZ, ghostOutlined, litOutlined, noOutline } from '../geo'
+import { P, centerBuild, cylX, cylZ, ghostOutlined, litOutlined, noOutline } from '../geo'
 import { I, J, M, N, PROP, R, definer, type Pal } from '../packkit'
 
 /** 本包默认是桌面摆件（prop: true） */
@@ -442,7 +442,8 @@ function rotaryPhone(p: string[]) {
   for (const s of [-1, 1]) g.add(rbox(2, 2.2, 3, shade(body, -0.1), { x: s * 5, y: 9.8, z: -5 }, 0.6))
   g.add(P(capsule(1.6, 11, body), 0, 12, -5, 0, 0, Math.PI / 2))
   for (const s of [-1, 1]) g.add(ball(2.6, body, { x: s * 7.6, y: 11.4, z: -5 }, [1, 0.75, 1.2]))
-  for (let i = 0; i < 5; i++) g.add(torus(0.8, 0.25, shade(body, -0.1), { x: -9.6 - i * 0.7, y: 2.5, z: -7, ry: Math.PI / 2 }))
+  // 螺旋线头一圈嵌进机身侧面（以前离侧面 0.3cm 悬着）
+  for (let i = 0; i < 5; i++) g.add(torus(0.8, 0.25, shade(body, -0.1), { x: -9.1 - i * 0.7, y: 2.5, z: -7, ry: Math.PI / 2 }))
   return g
 }
 
@@ -462,6 +463,8 @@ function typewriter(p: string[]) {
     }
   }
   g.add(rbox(12, 0.6, 1.5, keys, { y: 5.6, z: 11.2 }, 0.3))
+  // 空格键也要有键杆（以前只有它悬在机身上方 0.6cm）
+  for (const s of [-1, 1]) g.add(cyl(0.25, 0.25, 0.9, M.char, { x: s * 4, y: 4.8, z: 11.2 }, 6))
   g.add(rbox(14, 2.4, 3, M.char, { y: 4.8, z: -1.2 }, 0.6))
   g.add(cylX(1.8, 32, M.char, 0, 14.6, -7))
   for (const s of [-1, 1]) g.add(cylX(2, 1.6, acc, s * 16.8, 14.6, -7))
@@ -995,6 +998,8 @@ function deskFan(p: string[]) {
   g.add(P(rotor, 0, cy, fz))
   for (const dz of [-1.2, 1.2]) g.add(P(torus(6.3, 0.35, body), 0, cy, fz + dz))
   for (let i = 0; i < 6; i++) g.add(P(rbox(0.3, 12.6, 0.3, body, {}, 0.1), 0, cy, fz + 1.3, 0, 0, (i / 6) * Math.PI))
+  // 后网罩也有辐条：后圈接到电机壳上（以前后圈孤零零悬在扇叶后面）
+  for (let i = 0; i < 6; i++) g.add(P(rbox(0.3, 12.6, 0.3, body, {}, 0.1), 0, cy, fz - 1.3, 0, 0, (i / 6) * Math.PI + Math.PI / 12))
   g.add(cylZ(1, 0.4, acc, 0, cy, fz + 1.5))
   return g
 }
@@ -1197,7 +1202,8 @@ export const PROPS_DESK: AssetDef[] = [
     ['cute', [C.sakura, C.mint, C.lemon]],
     ['modern', [M.char, M.gray, M.silver]],
     ['retro', [R.cream, R.red, R.teal]],
-  ], gameConsole),
+    // 底座靠后、手柄靠前，整体偏前 2cm：按包围盒居中，占地才对得上声明的进深
+  ], centerBuild(gameConsole)),
   def('prop-tablet-stand', '平板支架', 'tabletop', [25, 11, 18], GADGET.map(([s, [a, b, c]]): Pal => [s, [b, a, c]]), deviceStand(24.5, 17.5, 0.7, 0.35, 14, 11)),
   def('prop-phone-stand', '手机支架', 'tabletop', [8, 8, 15], GADGET.map(([s, [a, b, c]]): Pal => [s, [b, a, c]]), deviceStand(7.2, 15, 0.8, 0.3, 8, 8)),
   def('prop-desk-speakers', '桌面音箱', 'tabletop', [44, 12, 16], [
@@ -1253,7 +1259,8 @@ export const PROPS_DESK: AssetDef[] = [
     ['retro', [R.mustard, R.cream, M.char]],
     ['modern', [M.char, M.white, M.silver]],
     ['cute', [C.mint, C.white, C.pink]],
-  ], typewriter),
+    // 换行拨杆只在左边伸出去：按包围盒居中
+  ], centerBuild(typewriter)),
 
   // 书
   def('prop-book-stack', '一叠书', 'tabletop', [24, 18, 13], BOOKS, bookStack, { sizeLabel: '标准' }),
@@ -1273,7 +1280,8 @@ export const PROPS_DESK: AssetDef[] = [
     ['cute', [C.mint, C.lilac, C.peach]],
     ['nordic', [N.linen, N.sage, N.mustard]],
     ['retro', [R.mustard, R.orange, R.cream]],
-  ], stickyNotes),
+    // 便签块在原点、撕下的那张摆在右前方，整体偏出 3.5cm：按包围盒居中
+  ], centerBuild(stickyNotes)),
   def('prop-file-sorter', '文件架', 'tabletop', [26, 20, 21], [
     ['cute', [C.white, C.pink, C.sky]],
     ['nordic', [N.oak, N.blue, N.sage]],
@@ -1412,7 +1420,8 @@ export const PROPS_DESK: AssetDef[] = [
     ['nordic', [N.oak, N.blue, N.sage]],
     ['modern', [M.black, M.light, M.gray]],
     ['retro', [R.caramel, R.cream, R.teal]],
-  ], photoFrame(13, 18), { sizeLabel: '竖版' }),
+    // 背撑往后伸得多，整体偏后：按包围盒居中
+  ], centerBuild(photoFrame(13, 18)), { sizeLabel: '竖版' }),
   def('prop-photo-frame-wide', '相框', 'tabletop', [18, 8, 13], [
     ['cute', [C.sakura, C.sky, C.mint]],
     ['cute', [C.woodL, C.lemon, C.pink]],

@@ -44,6 +44,8 @@ try {
   }
   const capture = async (sheet, n) => {
     await b.send('Emulation.setDeviceMetricsOverride', { width: sheet.width, height: sheet.height, deviceScaleFactor: 1, mobile: false })
+    // 改了视口尺寸后等两帧，让整张拼图重新合成上屏（否则偶尔截到空白）
+    await b.evaluate('new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(1))))')
     const png = await b.send('Page.captureScreenshot', { format: 'png', clip: { x: 0, y: 0, width: sheet.width, height: sheet.height, scale: 1 } })
     const file = `${name}-${String(n).padStart(4, '0')}.png`
     fs.writeFileSync(path.join(out, file), Buffer.from(png.result.data, 'base64'))

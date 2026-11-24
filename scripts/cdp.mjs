@@ -79,13 +79,13 @@ function releaseLock() {
   }
 }
 
-// 调试端口默认在 9350–9389 里随机取：上一次没退干净的实例占着端口时不撞
-export async function launch({ width, height, port = 9350 + Math.floor(Math.random() * 40), gpu = true } = {}) {
+// 调试端口默认在 9350–9949 里随机取：上一次没退干净的实例占着端口时不撞
+export async function launch({ width, height, port, gpu = true } = {}) {
   await acquireLock()
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'promo-chrome-'))
-  const args = [
+  const argsFor = (p) => [
     '--headless=new',
-    `--remote-debugging-port=${port}`,
+    `--remote-debugging-port=${p}`,
     `--user-data-dir=${profile}`,
     `--window-size=${width},${height}`,
     '--hide-scrollbars',
@@ -97,36 +97,55 @@ export async function launch({ width, height, port = 9350 + Math.floor(Math.rand
     ...(gpu ? ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] : ['--use-angle=swiftshader', '--enable-unsafe-swiftshader']),
     'about:blank',
   ]
-  const proc = spawn(findChrome(), args, { stdio: 'ignore', detached: process.platform !== 'win32' })
   // Windows 上 proc.kill() 只结束启动进程，渲染 / GPU 子进程会留下来：按进程树强杀。
   // 脚本正常退出、报错、Ctrl+C 时也要杀，否则每次失败重试都会留下一整套 Chrome。
-  let dead = false
-  const killTree = () => {
-    if (dead) return
-    dead = true
-    releaseLock()
+  let proc = null
+  const killProc = () => {
+    if (!proc) return
     try {
       if (process.platform === 'win32') execSync(`taskkill /PID ${proc.pid} /T /F`, { stdio: 'ignore' })
       else process.kill(-proc.pid, 'SIGKILL')
     } catch {
       proc.kill('SIGKILL')
     }
+    proc = null
+  }
+  // 两样都能重复调用（killProc 清空 proc，releaseLock 只删自己持有的锁）
+  const killTree = () => {
+    releaseLock()
+    killProc()
   }
   process.once('exit', killTree)
   for (const sig of ['SIGINT', 'SIGTERM']) process.once(sig, () => (killTree(), process.exit(1)))
-  let list
-  for (let i = 0; i < 100; i++) {
-    try {
-      list = await (await fetch(`http://127.0.0.1:${port}/json/list`, { signal: AbortSignal.timeout(1000) })).json()
-      break
-    } catch {
-      await sleep(200)
+
+  // 调试端口被别的程序占着时，Chrome 可能只在 IPv6 回环上监听、甚至根本没监听：两个回环地址都试，
+  // 15 秒连不上就杀掉换一个端口重起（以前只连 127.0.0.1 且无限等，持着浏览器锁空转，后面排队的脚本全卡住）。
+  let page = null
+  for (let attempt = 0; attempt < 4 && !page; attempt++) {
+    const p = port && attempt === 0 ? port : 9350 + Math.floor(Math.random() * 600)
+    proc = spawn(findChrome(), argsFor(p), { stdio: 'ignore', detached: process.platform !== 'win32' })
+    // 按真实时间算 15 秒（请求本身的超时也算在内），两个回环地址同时问
+    const probe = (host) =>
+      fetch(`http://${host}:${p}/json/list`, { signal: AbortSignal.timeout(800) })
+        .then((r) => r.json())
+        .then((list) => list.find((x) => x.type === 'page') ?? Promise.reject(new Error('还没有页面')))
+    for (const deadline = Date.now() + 15000; !page && Date.now() < deadline; ) {
+      page = await Promise.any([probe('127.0.0.1'), probe('[::1]')]).catch(() => null)
+      if (!page) await sleep(250)
     }
+    if (!page) killProc()
   }
-  const page = list.find((t) => t.type === 'page')
+  if (!page) {
+    killTree()
+    throw new Error('无头 Chrome 起不来（换了 4 个调试端口都连不上）')
+  }
   const ws = new WebSocket(page.webSocketDebuggerUrl)
   ws.binaryType = 'arraybuffer'
-  await new Promise((r) => (ws.onopen = r))
+  await new Promise((r, reject) => {
+    const timer = setTimeout(() => (killTree(), reject(new Error('CDP WebSocket 连接超时'))), 15000)
+    ws.onopen = () => (clearTimeout(timer), r())
+    ws.onerror = () => (clearTimeout(timer), killTree(), reject(new Error('CDP WebSocket 连接失败')))
+  })
   let id = 0
   const pending = new Map()
   const listeners = []

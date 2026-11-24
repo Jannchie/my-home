@@ -3,9 +3,9 @@
 // 顶面、层板一律留空并声明 surface / surfaces。
 
 import * as THREE from 'three'
-import { ball, cup, cyl, markMirror, puck, rbox, shade, toon, torus, tray } from '../toon'
+import { ball, cached, cup, cyl, markMirror, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { duvet as duvetMesh, pillowMesh } from '../bedding'
-import { C, SWING_OPEN, hangingPipe, holePanel, legs, movable, paintPanel, pipeHook, rectPoly, shell, slab, type AssetDef, type DoorMotion, type Hole, type Poly, type SurfaceDef } from '../kit'
+import { C, SWING_OPEN, gridHoles, hangingPipe, holePanel, legs, movable, paintPanel, pipeHook, rectPoly, shell, slab, type AssetDef, type DoorMotion, type Hole, type Poly, type SurfaceDef } from '../kit'
 import { batten, cylX, cylZ, glassPane, lit, meshWith, rod3, type V3 } from '../geo'
 import { I, J, M, N, R, withPals, type Pal3 } from '../packkit'
 
@@ -37,27 +37,46 @@ function sidePrism(pts: [number, number][], t: number, color: string, x: number)
   return m
 }
 
-/** 编织藤面：方孔阵列 */
-function weave(w: number, h: number, cell = 7, hole = 4.5): Hole[] {
-  const holes: Hole[] = []
+/**
+ * 编织藤面：削角方孔阵列的薄板，摆法同 holePanel（xy 平面、底边 y = 0、z 居中）。
+ * 不用 holePanel：它的圆角方孔每个角 32 段，一个孔上千面，一张沙发一百多个孔就是 15 万面；这里每孔 8 个顶点、不倒角。
+ */
+function canePanel(w: number, h: number, t: number, color: string, at: { x?: number; y?: number; z?: number; ry?: number }, cell = 7, hole = 4.5, cut = 0.8) {
+  const s = new THREE.Shape()
+  s.moveTo(-w / 2, 0)
+  s.lineTo(w / 2, 0)
+  s.lineTo(w / 2, h)
+  s.lineTo(-w / 2, h)
+  s.closePath()
   const nx = Math.floor((w - 4) / cell)
   const ny = Math.floor((h - 4) / cell)
   const x0 = (-(nx - 1) * cell) / 2
-  const y0 = (h - (ny - 1) * cell) / 2 - hole / 2
-  for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) holes.push({ kind: 'rect', x: x0 + i * cell, y: y0 + j * cell, w: hole, h: hole, r: 0.8 })
-  return holes
+  const y0 = (h - (ny - 1) * cell) / 2
+  const k = hole / 2
+  for (let i = 0; i < nx; i++)
+    for (let j = 0; j < ny; j++) {
+      const cx = x0 + i * cell
+      const cy = y0 + j * cell
+      // 顺时针（和外轮廓反向）
+      const pts: [number, number][] = [
+        [-k + cut, -k],
+        [-k, -k + cut],
+        [-k, k - cut],
+        [-k + cut, k],
+        [k - cut, k],
+        [k, k - cut],
+        [k, -k + cut],
+        [k - cut, -k],
+      ]
+      s.holes.push(new THREE.Path(pts.map(([x, y]) => new THREE.Vector2(cx + x, cy + y))))
+    }
+  const geo = new THREE.ExtrudeGeometry(s, { depth: t, bevelEnabled: false })
+  geo.translate(0, 0, -t / 2)
+  const m = meshWith(geo, toon(color))
+  m.position.set(at.x ?? 0, at.y ?? 0, at.z ?? 0)
+  m.rotation.y = at.ry ?? 0
+  return m
 }
-
-/** 方格栅（组子）：cols × rows 个方孔 */
-function lattice(w: number, h: number, cols: number, rows: number, bar = 2.4, margin = 3): Hole[] {
-  const holes: Hole[] = []
-  const cw = (w - margin * 2 - bar * (cols - 1)) / cols
-  const ch = (h - margin * 2 - bar * (rows - 1)) / rows
-  for (let i = 0; i < cols; i++)
-    for (let j = 0; j < rows; j++) holes.push({ kind: 'rect', x: -w / 2 + margin + cw / 2 + i * (cw + bar), y: margin + j * (ch + bar), w: cw, h: ch, r: 0.4 })
-  return holes
-}
-
 /**
  * 开口柜体：两块侧板、出沿 0.6 的顶板、底板、背板。
  * 内部：x ∈ ±(w/2 - t)，地板顶面 y0 + 0.4 + t，天花 y0 + h - t。
@@ -121,6 +140,26 @@ const flapAt = (parts: THREE.Object3D[], hy: number, hz: number, angle: number) 
 /** 抽屉盒（敞口托盘）：面板背面在 zf，往后深 depth；x / y 为盒子底面中心 */
 function drawerTray(w: number, h: number, depth: number, color: string, x: number, y: number, zf: number) {
   return tray(w, h, depth, 0.8, color, { x, y, z: zf - depth / 2 })
+}
+/**
+ * 小抽屉盒：同 drawerTray，但五块板是不带圆角的方盒（每块 12 面，rbox 每块 108 面）。
+ * 药柜 48 个抽屉盒平时都关在柜里，用 rbox 光抽屉盒就两万六千面。
+ */
+function plainDrawerTray(w: number, h: number, depth: number, color: string, x: number, y: number, zf: number) {
+  const t = 0.8
+  const g = new THREE.Group()
+  const box = (bw: number, bh: number, bd: number, bx: number, bz: number) => {
+    const m = meshWith(cached(`fm-box${bw},${bh},${bd}`, () => new THREE.BoxGeometry(bw, bh, bd)), toon(color))
+    m.position.set(bx, bh / 2, bz)
+    g.add(m)
+  }
+  box(w, t, depth, 0, 0)
+  for (const s of [-1, 1]) {
+    box(w, h, t, 0, (s * (depth - t)) / 2)
+    box(t, h, depth - t * 2, (s * (w - t)) / 2, 0)
+  }
+  g.position.set(x, y, zf - depth / 2)
+  return g
 }
 /** 药柜 6 × 8 小抽屉：格宽、行高、每格面板的 [x, 底边 y] */
 const APO_CW = 96 / 6
@@ -238,14 +277,14 @@ function rattanSofa(p: string[]) {
     g.add(cylZ(2.2, 70.4, frame, sx * X, 60, 0, 16))
     g.add(cylZ(1.8, 66, frame, sx * X, 33, 0, 16))
     g.add(cylZ(1.4, 66, frame, sx * X, 8, 0, 16))
-    g.add(holePanel(64, 25, 1.2, cane, weave(64, 25), { x: sx * X, y: 34.5, ry: Math.PI / 2 }))
+    g.add(canePanel(64, 25, 1.2, cane, { x: sx * X, y: 34.5, ry: Math.PI / 2 }))
   }
   for (const z of [-Z, Z]) {
     g.add(cylX(1.8, 140, frame, 0, 33, z))
     g.add(cylX(1.4, 140, frame, 0, 8, z))
   }
   g.add(cylX(2.2, 140, frame, 0, 78, -Z))
-  g.add(holePanel(134, 41, 1.2, cane, weave(134, 41), { y: 35, z: -Z }))
+  g.add(canePanel(134, 41, 1.2, cane, { y: 35, z: -Z }))
   g.add(rbox(138, 3, 64, shade(frame, -0.05), { y: 33 }, 1))
   g.add(rbox(134, 12, 62, main, { y: 36, z: 1 }, 5))
   for (const s of [-1, 1]) g.add(rbox(65, 30, 12, main, { x: s * 33, y: 46, z: -24, rx: -0.15 }, 5))
@@ -423,8 +462,8 @@ function fourPoster(p: string[]) {
   }
   g.add(rbox(150, 4, 205, shade(wood, -0.1), { y: 36 }, 1))
   // 床头 / 床尾格栅两端插进柱子里（以前和柱子之间留着 1cm 缝）
-  g.add(holePanel(153, 76, 3, wood, lattice(153, 76, 6, 3), { y: 40, z: -Z }))
-  g.add(holePanel(153, 28, 3, wood, lattice(153, 28, 6, 1), { y: 30, z: Z }))
+  g.add(holePanel(153, 76, 3, wood, gridHoles(153, 76, 6, 3), { y: 40, z: -Z }))
+  g.add(holePanel(153, 28, 3, wood, gridHoles(153, 28, 6, 1), { y: 30, z: Z }))
   bedding(g, 146, 200, 40, -100, p, 20, 1.5)
   return g
 }
@@ -445,8 +484,8 @@ function tatamiBed(w: number, p: string[]) {
   for (let i = 0; i < mats; i++) {
     const x = -w / 2 + 4 + mw * (i + 0.5)
     g.add(rbox(mw - 0.4, 3.4, d - 8, J.tatami, { x, y: 27 }, 0.6))
-    // 畳縁比榻榻米外侧多出 0.15，避免两者侧面共面闪烁
-    for (const s of [-1, 1]) g.add(rbox(2.6, 3.7, d - 8, J.sumi, { x: x + s * (mw / 2 - 1.35), y: 27 }, 0.4))
+    // 畳縁比榻榻米外侧多出 0.15，避免两者侧面共面闪烁；底面沉进床框 0.1、两头插进边框 0.3，同样是为了不和榻榻米共面
+    for (const s of [-1, 1]) g.add(rbox(2.6, 3.8, d - 7.4, J.sumi, { x: x + s * (mw / 2 - 1.35), y: 26.9 }, 0.4))
   }
   const n = w >= 140 ? 2 : 1
   const fw = (w - 16) / n - 2
@@ -861,7 +900,7 @@ function mizuya(p: string[]) {
   for (const s of [-1, 1]) {
     const x = s * 29
     const z = s < 0 ? 14.7 : 16.5
-    const parts = [rbox(55, 69, 0.4, paper, { x, y: 100, z: z - 1.15 }, 0.1), holePanel(58, 72, 1.6, main, lattice(58, 72, 3, 4, 1.6, 2.6), { x, y: 98.5, z })]
+    const parts = [rbox(55, 69, 0.4, paper, { x, y: 100, z: z - 1.15 }, 0.1), holePanel(58, 72, 1.6, main, gridHoles(58, 72, 3, 4, 1.6, 2.6), { x, y: 98.5, z })]
     if (s > 0) g.add(slideBy(parts, -58))
     else for (const o of parts) g.add(o)
   }
@@ -874,7 +913,7 @@ const RECORD_COLORS = [R.teal, R.red, R.mustard, R.cream, R.orange, M.black, '#5
 function recordCabinet(p: string[]) {
   const [main, sub, acc] = p
   const g = carcass(120, 46, 42, main, 16)
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(cyl(2.4, 1.4, 16.3, shade(main, -0.15), { x: sx * 54, z: sz * 15, rx: -sz * 0.1, rz: sx * 0.1 }, 12))
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(cyl(2.4, 1.4, 16.3, shade(main, -0.15), { x: sx * 54, y: 0.12, z: sz * 15, rx: -sz * 0.1, rz: sx * 0.1 }, 12)) // 外八的腿底沿会比地面低 0.12，整根抬高补回来
   const fy = 18.9
   const top = 59.5
   for (const x of [-30, 0, 30]) g.add(divider(x, fy, top, 42, main))
@@ -919,10 +958,11 @@ function locker(tall: boolean, p: string[]) {
   const D = 45
   const H = tall ? 180 : 90
   g.add(rbox(W - 4, 5, D - 4, shade(body, -0.3), { z: -1 }, 1))
-  g.add(rbox(W - 4, H - 7, 1.2, shade(body, -0.2), { y: 5, z: -22.9 }, 0.3))
+  // 背板比侧板 / 顶板的后沿缩进 0.3、比底板底面高 0.3（不和它们共面）；颜色用 dim：深色机身 shade -0.2 会变成纯黑
+  g.add(rbox(W - 4, H - 7.3, 1.2, shade(body, -0.2), { y: 5.3, z: -22.6 }, 0.3))
   for (const s of [-1, 1]) g.add(rbox(2, H - 5, D, body, { x: s * (W / 2 - 1), y: 5, z: -1 }, 0.6))
   g.add(rbox(W, 2, D, body, { y: H - 2, z: -1 }, 0.6))
-  g.add(rbox(W - 4, 2, D - 1, body, { y: 5, z: -1.5 }, 0.4))
+  g.add(rbox(W - 4, 2, D - 1.6, body, { y: 5, z: -1.2 }, 0.4))
   for (const s of [-1, 1]) g.add(rbox(1.4, H - 9, D - 2, body, { x: s * ((W - 4) / 6), y: 7, z: -1.5 }, 0.3))
   const rows = tall ? 1 : 3
   for (const y of lockerBoards(tall)) g.add(rbox(W - 4, 1.4, D - 2, body, { y: y - 1.4, z: -1.5 }, 0.3))
@@ -935,8 +975,9 @@ function locker(tall: boolean, p: string[]) {
       const y = 7 + 0.4 + ((H - 9) / rows) * r
       const holes: Hole[] = []
       const nSlot = tall ? 5 : 3
-      for (let i = 0; i < nSlot; i++) holes.push({ kind: 'rect', x: 0, y: dh - 8 - i * 2.6, w: dw * 0.6, h: 1.2, r: 0.5 })
-      if (tall) for (let i = 0; i < nSlot; i++) holes.push({ kind: 'rect', x: 0, y: 6 + i * 2.6, w: dw * 0.6, h: 1.2, r: 0.5 })
+      // 百叶是直角长孔（r = 0）：holePanel 的圆角每个孔上千面，一扇门十条百叶、三扇门就是三万面
+      for (let i = 0; i < nSlot; i++) holes.push({ kind: 'rect', x: 0, y: dh - 8 - i * 2.6, w: dw * 0.6, h: 1.2, r: 0 })
+      if (tall) for (let i = 0; i < nSlot; i++) holes.push({ kind: 'rect', x: 0, y: 6 + i * 2.6, w: dw * 0.6, h: 1.2, r: 0 })
       g.add(
         swingAt(
           [
@@ -969,7 +1010,7 @@ function apothecary(p: string[]) {
           rbox(6.4, 2.6, 0.5, pull, { x, y: y + APO_RH - 5, z: 18.1 }, 0.15),
           rbox(5.2, 1.6, 0.5, R.cream, { x, y: y + APO_RH - 4.5, z: 18.3 }, 0.1),
           knob(x, y + 3.5, 18.4, pull, 1.1),
-          drawerTray(APO_CW - 2.4, APO_RH - 4, 30, shade(main, 0.1), x, y + 0.5, 16.6),
+          plainDrawerTray(APO_CW - 2.4, APO_RH - 4, 30, shade(main, 0.1), x, y + 0.5, 16.6),
         ],
         18,
       ),
@@ -1008,11 +1049,12 @@ function tiltShoe(tiers: number, p: string[]) {
   const legH = 10
   const H = tiers * dh + 2
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(cyl(1.8, 1.2, legH + 0.3, shade(main, -0.15), { x: sx * 35, z: -1 + sz * 8 }, 12))
-  g.add(rbox(77, H, 1.2, shade(main, -0.06), { y: legH, z: -12.4 }, 0.3))
+  // 背板四周都缩在侧板 / 顶板 / 层板的边线以内 0.3（以前背面、顶面、底面都和它们齐平，共面闪烁）
+  g.add(rbox(77, H - 0.6, 1.2, shade(main, -0.06), { y: legH + 0.3, z: -12.1 }, 0.3))
   for (const s of [-1, 1]) g.add(rbox(1.5, H, 24, main, { x: s * 39.25, y: legH, z: -1 }, 0.5))
   g.add(rbox(80, 1.6, 24, main, { y: legH + H - 1.6, z: -1 }, 0.5))
   for (let i = 0; i < tiers; i++) {
-    g.add(rbox(77, 1.6, 23, shade(main, 0.04), { y: legH + i * dh, z: -1.5 }, 0.3))
+    g.add(rbox(77, 1.6, 22.4, shade(main, 0.04), { y: legH + i * dh, z: -1.2 }, 0.3))
     const y = legH + 1 + i * dh + 0.6
     g.add(flapAt([rbox(77, dh - 1.2, 1.6, sub, { y, z: 11.4 }, 0.6), rbox(24, 1.5, 1.6, acc, { y: y + dh - 7, z: 12.8 }, 0.6)], y, 10.6, (32 * Math.PI) / 180))
   }
@@ -1142,7 +1184,8 @@ function archCabinet(p: string[]) {
   roof.lineTo(40, yA)
   g.add(meshWith(extrude(roof, 34.5), toon(main)))
   for (const y of [60, 100, 132]) glassShelf(g, 75.6, 33, y)
-  g.add(lit(rbox(44, 0.6, 3, C.lamp, { y: 160, z: 6 }, 0.2), C.lamp, 0.9))
+  // 灯条装在拱顶下面：拱内壁 x = ±8 处高 172.15，灯条两头嵌进拱里（原来 44 长、在 y = 160，离拱顶 5cm 以上悬着）
+  g.add(lit(rbox(16, 0.6, 3, C.lamp, { y: 171.8, z: 6 }, 0.2), C.lamp, 0.9))
   return g
 }
 
@@ -1402,10 +1445,11 @@ function koagari(nMats: number, p: string[]) {
   for (let i = 0; i < nMats; i++) {
     const x = -w / 2 + 44 + 88 * i
     g.add(rbox(87.4, 3, 173.4, tatami, { x, y: 37, z: -1 }, 0.6))
-    // 畳縁比榻榻米外侧多出 0.15，避免两者侧面共面闪烁
-    for (const s of [-1, 1]) g.add(rbox(2.6, 3.15, 173.4, heri, { x: x + s * 42.55, y: 37, z: -1 }, 0.4))
-    g.add(rbox(82, 26, 1.6, shade(frame, 0.05), { x, y: 7, z: 87.4 }, 0.6))
-    g.add(rbox(22, 2.2, 1, shade(frame, -0.35), { x, y: 28, z: 88.4 }, 0.4))
+    // 畳縁比榻榻米外侧、两头各多出 0.15，底面沉进台体 0.1，避免和榻榻米共面闪烁
+    for (const s of [-1, 1]) g.add(rbox(2.6, 3.3, 173.7, heri, { x: x + s * 42.55, y: 36.9, z: -1 }, 0.4))
+    // 抽屉面背面嵌进台体正面（z = 86）0.4；以前整块面板浮在台体前面 0.6cm
+    g.add(rbox(82, 26, 1.6, shade(frame, 0.05), { x, y: 7, z: 86.4 }, 0.6))
+    g.add(rbox(22, 2.2, 1, shade(frame, -0.35), { x, y: 28, z: 87.4 }, 0.4))
   }
   return g
 }
@@ -1504,7 +1548,7 @@ function trunk(p: string[]) {
   g.add(rbox(W, H - 1, D, body, { y: 1 }, 2))
   for (const y of [10, 24]) g.add(rbox(W + 0.4, 3, D + 0.4, shade(body, -0.15), { y }, 1))
   g.add(rbox(W + 0.6, 1.6, D + 0.6, metal, { y: 36 }, 0.6))
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) for (const y of [1.2, H - 5]) g.add(rbox(5, 5, 5, metal, { x: sx * (W / 2 - 2), y, z: sz * (D / 2 - 2) }, 1))
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) for (const y of [1.2, H - 4.6]) g.add(rbox(5, 5, 5, metal, { x: sx * (W / 2 - 2), y, z: sz * (D / 2 - 2) }, 1)) // 上包角高出箱顶 0.4（和侧面一样包在外面），不和箱顶共面
   for (const x of [-24, 24]) {
     for (const s of [-1, 1]) g.add(rbox(6, H - 2.5, 0.8, strap, { x, y: 1.5, z: s * (D / 2 + 0.2) }, 0.3))
     g.add(rbox(6, 0.8, D + 0.8, strap, { x, y: H - 0.4 }, 0.3))
@@ -1526,7 +1570,7 @@ function ladderShelf(p: string[]) {
   const [shelfC, frame] = p
   const g = new THREE.Group()
   for (const s of [-1, 1]) {
-    g.add(batten([s * 33, 0, 18], [s * 33, 180, -16], 3.5, 4, frame))
+    g.add(batten([s * 33, 0.4, 18], [s * 33, 180, -16], 3.5, 4, frame)) // 斜梁端面是垂直于梁切的，下端前角会低下去 0.4，起点抬高补回来
     g.add(rbox(3.5, 180, 3.5, frame, { x: s * 33, z: -18.25 }, 0.8))
   }
   g.add(rbox(70, 3, 5, frame, { y: 176.5, z: -17.5 }, 0.8))

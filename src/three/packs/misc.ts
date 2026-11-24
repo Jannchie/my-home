@@ -2,11 +2,11 @@
 // 约定见 kit.ts 开头。
 
 import * as THREE from 'three'
-import { ball, capsule, cup, cyl, face, markWater, puck, rbox, shade, toon, torus, tray } from '../toon'
+import { ball, cached, capsule, cup, cyl, face, markWater, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { artFace, artOverride } from '../artwork'
 import { C, G, S, ellipsePoly, glow, holePanel, legs, rectPoly, rng, shell, type AssetDef, type Fx, type StyleTag, paintPanel, paintLandscape, paintFlower, paintAbstract } from '../kit'
 import { drawerLv, drawerOf, hollow, slideDoor, swingDoor } from '../cabinetKit'
-import { PI, clearMat, lit, noOutline, rod3, type V3 } from '../geo'
+import { PI, clearMat, lit, mesh, noOutline, rod3, type V3 } from '../geo'
 
 const { nordic: N, modern: M, japanese: J, industrial: I, retro: R } = S
 
@@ -90,7 +90,7 @@ function kiriTansu(p: string[]) {
 /** 茶箪笥：下段引戸里、右上天袋里各一层 */
 const CHA_SURFACES = [
   { y: 5.6, h: 36.6, inside: true, shape: [rectPoly(-43.2, -18.4, 43.2, 18.6)] },
-  { y: 74.2, h: 11.4, inside: true, shape: [rectPoly(3.4, -18.6, 41.6, 15.4)] },
+  { y: 74.2, h: 11.4, inside: true, shape: [rectPoly(3.9, -17.6, 41.5, 15.4)] },
 ]
 
 function chaTansu(p: string[]) {
@@ -111,7 +111,8 @@ function chaTansu(p: string[]) {
   g.add(rbox(42, 2, 34, main, { x: 21, y: 56, z: -2 }, 0.5))
   g.add(rbox(2, 8, 2, main, { x: 0, y: 58 }, 0.4))
   // 右上的小天袋：左边那扇在前轨，推到右边
-  g.add(hollow(40, 14, 36, main, { x: 22.5, y: 73, z: -2 }, 1.2))
+  // 天袋的右侧、背面、顶面各嵌进侧板 / 背板 / 顶板 0.4–1cm（以前正好齐平，背面和背板共面闪烁）
+  g.add(hollow(40.4, 14.4, 35, main, { x: 22.7, y: 73, z: -1.5 }, 1.2))
   g.add(slideDoor([rbox(18.6, 12, 1, sub, { x: 13, y: 74, z: 17.1 }, 0.4), disc(0.9, C.ink, 20, 80, 17.75, 0.4, 12)], 19))
   g.add(rbox(18.6, 12, 1, sub, { x: 32, y: 74, z: 16.1 }, 0.4))
   g.add(disc(0.9, C.ink, 25, 80, 16.75, 0.4, 12))
@@ -190,6 +191,8 @@ function butsudan(p: string[]) {
   }
   // 前面的香炉、蜡烛、花、おりん
   g.add(cup(3.4, 2.8, 3.5, 0.5, J.sumi, { y: 6, z: 0 }))
+  // 香炉里的香灰：线香插在灰里（以前香的下端悬在空炉里）
+  g.add(cyl(2.7, 2.3, 2, '#cfc8bc', { y: 6.5, z: 0 }, 16))
   g.add(rod3([0, 8, 0], [0.6, 15, 0], 0.18, '#8a5a3c', 4))
   g.add(lit(ball(0.35, C.orange, { x: 0.6, y: 15.1, z: 0 }), C.orange, 0.9))
   g.add(cyl(0.9, 0.9, 6, C.white, { x: -11, y: 6, z: 0 }, 10))
@@ -532,7 +535,8 @@ function flowerRack(p: string[]) {
   const g = new THREE.Group()
   for (const s of [-1, 1]) {
     const x = s * 38
-    g.add(rod3([x, 0, 17], [x, 92, -12], 1.4, main, 8))
+    // 斜腿底端的端面是斜的：起点抬 0.45，最低点刚好落地（以前沉地 0.44）
+    g.add(rod3([x, 0.45, 17], [x, 92, -12], 1.4, main, 8))
     g.add(rod3([x, 0, -18], [x, 92, -18], 1.4, main, 8))
     g.add(rod3([x, 92, -12], [x, 92, -18], 1.4, main, 8))
   }
@@ -600,7 +604,8 @@ function dogHouse(p: string[]) {
   walls.position.y = 4
   g.add(walls)
   // 前后山墙（斜边藏进屋顶板里）
-  for (const s of [-1, 1]) g.add(gable(59, 29.5, t, main, 39.6, s * (35 - t / 2)))
+  // 山墙斜边 y=70.6-|x|，比屋顶板底面（70-|x|）高 0.6，真正藏进屋顶板里（以前低 0.9，屋顶整块悬空）
+  for (const s of [-1, 1]) g.add(gable(62, 31, t, main, 39.6, s * (35 - t / 2)))
   for (const s of [-1, 1]) g.add(rbox(48, 3, 80, roof, { x: s * 18.03, y: 54.1 - 1.5, rz: -s * (PI / 4) }, 1.2))
   g.add(rod3([0, 71.5, -40], [0, 71.5, 40], 2, shade(roof, -0.08), 12))
   // 里面的垫子（高过门槛，从门口看得到）
@@ -649,7 +654,8 @@ function petBowl(p: string[]) {
   for (let k = 0; k < 14; k++) {
     const a = rand() * PI * 2
     const r = rand() * 4
-    g.add(ball(1.1, '#c98b52', { x: -9.5 + Math.cos(a) * r, y: 5 + rand() * 1.5, z: Math.sin(a) * r }, [1, 0.7, 1]))
+    // 碗底内面在 y=4：粮粒下沉 0.5 压在碗底上（以前整堆离碗底 0.6 悬空）
+    g.add(ball(1.1, '#c98b52', { x: -9.5 + Math.cos(a) * r, y: 4.5 + rand() * 1.5, z: Math.sin(a) * r }, [1, 0.7, 1]))
   }
   g.add(noOutline(clearMat(cyl(5.8, 5.8, 0.3, C.sky, { x: 9.5, y: 7 }), C.sky, 0.6)))
   // 爪印
@@ -686,7 +692,8 @@ function dog(p: string[]) {
 function cat(p: string[]) {
   const [main, sub] = p
   const g = new THREE.Group()
-  g.add(ball(9, main, { y: 10, z: -2 }, [1, 1.15, 1.15]))
+  // 身体纵向拉长 1.15 倍，球心放在 10.4 底面才不沉地
+  g.add(ball(9, main, { y: 10.4, z: -2 }, [1, 1.15, 1.15]))
   g.add(ball(5.5, sub, { y: 12, z: 5 }, [1, 1.2, 0.6]))
   for (const s of [-1, 1]) {
     g.add(capsule(1.8, 6, main, { x: s * 3.2, z: 5 }))
@@ -793,6 +800,18 @@ function see<T extends THREE.Mesh>(m: T, color: string, a: number): T {
   return m
 }
 
+/**
+ * 低模椭球（水草叶、鱼眼）：单位球 8 × rows 段，按半径 r 和 scale 缩放。
+ * 缸里几十片水草叶、十几只鱼眼都又小又泡在水里，用 ball() 的话长叶子按半径算是 24 × 16 段、每片 700 多个三角面，
+ * 一个 120 缸光水草就 4 万多面。
+ */
+function blob(r: number, color: string, at: { x?: number; y?: number; z?: number } = {}, scale: [number, number, number] = [1, 1, 1], rows = 5) {
+  const m = mesh(cached(`misc-blob${rows}`, () => new THREE.SphereGeometry(1, 8, rows)), color)
+  m.position.set(at.x ?? 0, at.y ?? 0, at.z ?? 0)
+  m.scale.set(r * scale[0], r * scale[1], r * scale[2])
+  return m
+}
+
 /** 鱼的种类：身体色、鳍色、身体长高厚比例、尾巴比例 */
 const FISH_KINDS: { body: string; fin: string; shape: [number, number, number]; tail: [number, number, number]; size: number; stripe?: string }[] = [
   { body: '#ff8a3d', fin: '#ffb478', shape: [1.5, 1, 0.65], tail: [0.75, 1.5, 0.18], size: 1.3 }, // 金鱼
@@ -817,8 +836,8 @@ function fishModel(kind: number, k = 1) {
   for (const side of [-1, 1]) {
     const ex = lx * s * 0.58
     const ez = side * lz * s * 0.62
-    g.add(noOutline(ball(s * 0.26, C.white, { x: ex, y: ly * s * 0.22, z: ez })))
-    g.add(noOutline(ball(s * 0.15, '#2a2226', { x: ex + s * 0.08, y: ly * s * 0.24, z: ez + side * s * 0.14 })))
+    g.add(noOutline(blob(s * 0.26, C.white, { x: ex, y: ly * s * 0.22, z: ez })))
+    g.add(noOutline(blob(s * 0.15, '#2a2226', { x: ex + s * 0.08, y: ly * s * 0.24, z: ez + side * s * 0.14 })))
   }
   return { g, half: lx * s + s * 0.35 + s * 0.7 * f.tail[0] }
 }
@@ -869,7 +888,7 @@ function addFish(g: THREE.Group, n: number, seed: number, ax: number, az: number
 function weed(g: THREE.Group, x: number, z: number, y0: number, top: number, color: string, rand: () => number, n = 4) {
   for (let i = 0; i < n; i++) {
     const h = (top - y0) * (0.55 + rand() * 0.4)
-    const m = ball(h / 2, i % 2 ? color : shade(color, -0.08), {}, [0.16, 1, 0.07])
+    const m = blob(h / 2, i % 2 ? color : shade(color, -0.08), {}, [0.16, 1, 0.07], 8)
     m.position.set(x + (rand() - 0.5) * 2, y0 + h / 2 - 0.3, z + (rand() - 0.5) * 2)
     m.rotation.set((rand() - 0.5) * 0.25, rand() * PI, (rand() - 0.5) * 0.25)
     g.add(m)
@@ -883,7 +902,7 @@ function roundWeed(g: THREE.Group, x: number, z: number, y0: number, top: number
   for (let y = y0 + 2; y < y0 + h - 0.5; y += 2.2)
     for (const s of [-1, 1]) {
       const a = y * 1.3 + (s > 0 ? 0 : PI)
-      g.add(ball(1, color, { x: x + Math.cos(a) * 1, y, z: z + Math.sin(a) * 1 }, [1, 0.25, 0.7]))
+      g.add(blob(1, color, { x: x + Math.cos(a) * 1, y, z: z + Math.sin(a) * 1 }, [1, 0.25, 0.7]))
     }
 }
 
@@ -1164,8 +1183,9 @@ function futonRack(p: string[]) {
   const [main, frame, acc] = p
   const g = new THREE.Group()
   for (const x of [-68, 68]) {
-    g.add(rod3([x, 0, -32], [x, 110, 0], 1.5, frame, 8))
-    g.add(rod3([x, 0, 32], [x, 110, 0], 1.5, frame, 8))
+    // 斜腿起点抬 0.45：斜端面的最低点刚好落地（以前沉地 0.44）
+    g.add(rod3([x, 0.45, -32], [x, 110, 0], 1.5, frame, 8))
+    g.add(rod3([x, 0.45, 32], [x, 110, 0], 1.5, frame, 8))
     g.add(rod3([x, 1.5, -34], [x, 1.5, 34], 1.5, frame, 8))
   }
   g.add(rod3([-69, 110, 0], [69, 110, 0], 1.5, frame, 8))
@@ -1222,7 +1242,8 @@ function gardenBox(p: string[]) {
   for (let i = 0; i < 4; i++) {
     const x = 20 + (i % 2) * 10
     const z = i < 2 ? -8 : 8
-    g.add(cyl(2, 0.8, 3, C.orange, { x, y: 69 }, 10))
+    // 萝卜头和它的缨子在同一个位置（以前漏了 z，四个萝卜头都挤在中线上，缨子悬在两边）
+    g.add(cyl(2, 0.8, 3, C.orange, { x, y: 69, z }, 10))
     for (let k = 0; k < 3; k++) g.add(sprig(10, C.leaf, [x, 71.5, z], yawTo(k * 2.1), -1.1, 0.2))
   }
   return g
@@ -1257,6 +1278,8 @@ function floorFan(p: string[]) {
     g.add(b)
   }
   g.add(cyl(4, 4, 1, main, { y: cy - 0.5, z: 4.2, rx: PI / 2 }))
+  // 电机轴：从电机壳前端穿过扇叶根部接到前网罩中心（以前网罩、扇叶整组悬在电机前面）
+  g.add(cyl(1.6, 1.6, 6, sub, { y: cy - 3, z: 1, rx: PI / 2 }, 12))
   return g
 }
 
@@ -1369,7 +1392,8 @@ function oilHeater(p: string[]) {
   const [main, sub, acc] = p
   const g = new THREE.Group()
   for (let i = 0; i < 9; i++) g.add(rbox(4, 56, 20, main, { x: -26 + i * 5.5, y: 6 }, 2))
-  for (const y of [10, 58]) g.add(rod3([-26, y, 0], [20, y, 0], 2.4, shade(main, -0.08), 8))
+  // 连管的右端收在最后一片散热片里（以前端面正好和散热片外侧齐平，共面闪烁）
+  for (const y of [10, 58]) g.add(rod3([-26, y, 0], [19, y, 0], 2.4, shade(main, -0.08), 8))
   // 控制盒贴在最后一片散热片上（以前隔着 0.5cm 悬空）
   g.add(rbox(8, 18, 16, sub, { x: 23.8, y: 40 }, 2))
   g.add(ball(2, acc, { x: 28.2, y: 51 }, [0.5, 1, 1]))

@@ -144,5 +144,6 @@ export function runSheet(q: URLSearchParams) {
 
   ;(window as unknown as Record<string, unknown>).__sheet = { total, ids: list.map((a) => a.id), info, width: W, height: H }
   document.title = `sheet · ${list.length}/${total}`
+  // 合成上屏由截图脚本负责：它改完视口尺寸后会等两帧再截（scripts/shot-sheet.mjs）
   document.body.dataset.ready = '1'
 }

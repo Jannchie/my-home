@@ -255,7 +255,13 @@ function unit(u: Unit): Build {
       } else if (u.deck === 'slat') {
         const sw = 2.4
         const [z0, z1] = range(poly0, 1)
-        for (let z = z0 + sw / 2 + 0.1; z <= z1 - sw / 2; z += sw + 0.8) {
+        // 板条从贴墙一侧到前沿均匀铺满（两头各留 0.1）：以前按固定间距 3.2 往前排，排不下的最后一根直接没有，
+        // 前沿空出 1.4～3cm——前排立柱够不着板条，板下的挂钩悬在空中
+        const span = z1 - z0 - 0.2
+        const rows = Math.max(1, Math.round((span + 0.8) / (sw + 0.8)))
+        const pitch = rows > 1 ? (span - sw) / (rows - 1) : 0
+        for (let i = 0; i < rows; i++) {
+          const z = z0 + 0.1 + sw / 2 + i * pitch
           for (const [a, b] of intersect(spansAt(poly0, z - sw / 2, 'z'), spansAt(poly0, z + sw / 2, 'z'))) if (b - a > 1.5) g.add(rbox(b - a, t, sw, main, { x: (a + b) / 2, y, z }, 0.3))
         }
         // 底下两根托条（沿 z）
@@ -358,9 +364,11 @@ function unit(u: Unit): Build {
     } else if (u.hold === 'plates') {
       const y0 = u.ys[0] - 4
       const hh = yTop - y0 + 8
-      g.add(rbox(2.4, hh, 0.6, acc, { x: cx + backLen * 0.55, y: y0, z: cz + 0.3 }, 0.25))
-      if (!u.backOnly) g.add(rbox(0.6, hh, 2.4, acc, { x: cx + 0.3, y: y0, z: cz + leftLen * 0.55 }, 0.25))
-      else g.add(rbox(2.4, hh, 0.6, acc, { x: cx + backLen * 0.12, y: y0, z: cz + 0.3 }, 0.25))
+      // 深篮（实心挡板贴着墙）的固定条做薄一点，埋进挡板里：0.6 厚时正面正好和挡板内壁共面，篮子里闪烁
+      const pt = u.rim?.kind === 'panel' ? 0.4 : 0.6
+      g.add(rbox(2.4, hh, pt, acc, { x: cx + backLen * 0.55, y: y0, z: cz + pt / 2 }, 0.25))
+      if (!u.backOnly) g.add(rbox(pt, hh, 2.4, acc, { x: cx + pt / 2, y: y0, z: cz + leftLen * 0.55 }, 0.25))
+      else g.add(rbox(2.4, hh, pt, acc, { x: cx + backLen * 0.12, y: y0, z: cz + pt / 2 }, 0.25))
     } else if (u.hold === 'tile') {
       // 嵌墙感：背后（和左侧）贴一块瓷砖面板，层板像是从墙里伸出来
       const y0 = u.backOnly ? u.ys[0] : u.ys[0] - 6
@@ -378,10 +386,11 @@ function unit(u: Unit): Build {
       // 木框：每个顶点一根立柱
       const y0 = u.ys[0] - 4
       const y1 = yTop + top + 3
-      for (const q of poly0) {
-        const [x, z] = toward(poly0, q, 0.9)
-        g.add(rbox(1.5, y1 - y0, 1.5, main, { x, y: y0, z }, 0.3))
-      }
+      const posts = poly0.map((q) => toward(poly0, q, 0.9))
+      for (const [x, z] of posts) g.add(rbox(1.5, y1 - y0, 1.5, main, { x, y: y0, z }, 0.3))
+      // 每层贴墙的两条边各一根横撑，把墙角的立柱和两端的立柱连起来（板条托在上面）：
+      // 三角款斜边那头的板条越来越短，够不到远端的立柱，没有横撑那根柱子就是孤零零立着的
+      for (const y of u.ys) for (const end of [posts[1], posts[posts.length - 1]]) panel(g, posts[0], end, y - 1, 1, 1.2, main)
     } else if (u.hold === 'pole' && u.pole) {
       // 顶天立地伸缩杆：地面脚垫 + 杆 + 伸缩接头 + 顶盖
       const x = cx + 2.6
@@ -389,7 +398,8 @@ function unit(u: Unit): Build {
       const H = u.pole
       g.add(puck(2.6, 2.2, STONE_D, { x, y: 0, z }))
       g.add(cyl(1.3, 1.3, H * 0.62, acc, { x, y: 1.6, z }, 14))
-      g.add(cyl(1.05, 1.05, H * 0.4, acc, { x, y: H * 0.6, z }, 14))
+      // 上节杆顶埋在顶盖里（比顶盖顶面低 1cm，两个顶面不共面）
+      g.add(cyl(1.05, 1.05, H * 0.4 - 1, acc, { x, y: H * 0.6, z }, 14))
       g.add(cyl(1.7, 1.7, 3.2, STONE_D, { x, y: H * 0.6 - 1, z }, 14))
       g.add(puck(2.6, 2.2, STONE_D, { x, y: H - 2.2, z }))
     }
