@@ -3,7 +3,7 @@
 // 原点在占地中心底面，正面朝 +z；壁挂件用 fitWall（最低点 = mount、背面贴 z = -d/2）。type / tags / mats 直接写在 def 里。
 
 import * as THREE from 'three'
-import { ball, cup, cyl, plate, puck, rbox, shade, torus, tray } from '../toon'
+import { ball, cup, cyl, puck, rbox, shade, torus, tray } from '../toon'
 import { C, gridHoles, holePanel, moveHole, rectPoly, shell, slab, type AssetDef, type Hole, type Poly } from '../kit'
 import { cylX, cylZ, fitGroup, fitWall, G, ghost, latheAt, lit, mesh, noOutline, P, PI, rod3, sideSlab, tube, type V2, type V3 } from '../geo'
 import { CL, F, I, J, M, N, PROP, R, define, type Pal } from '../packkit'
@@ -632,17 +632,50 @@ function shoppingBasket(p: string[]) {
 
 // ---------- 门后挂式鞋袋：布背板上 4×3 只透明口袋（彩色包边），几双鞋鞋尖朝下插在袋里，顶上两只钩子翻过门顶 ----------
 
-/** 竖着插进口袋的鞋：鞋底贴背板、鞋尖朝下，鞋口朝上；原点在鞋尖底部 */
+/** 鞋的俯视轮廓（半宽）：[y, 半宽]，y 从鞋尖 0 到后跟 25.6；前掌最宽、腰窝收一点、后跟圆头 */
+const SHOE_HALF: V2[] = [
+  [0, 0],
+  [0.3, 1.3],
+  [1, 2.3],
+  [2, 2.9],
+  [3.5, 3.3],
+  [5.5, 3.55],
+  [8, 3.6],
+  [11, 3.35],
+  [14, 3],
+  [17, 2.9],
+  [20, 3],
+  [23, 2.95],
+  [24.6, 2.5],
+  [25.3, 1.6],
+  [25.6, 0],
+]
+function shoeOutline(k = 1): V2[] {
+  const right = SHOE_HALF.map(([y, w]): V2 => [w * k, y])
+  const left = SHOE_HALF.slice(1, -1)
+    .reverse()
+    .map(([y, w]): V2 => [-w * k, y])
+  return [...right, ...left]
+}
+/**
+ * 竖着插进口袋的鞋：鞋底贴背板、鞋尖朝下，鞋面朝外（+z）；原点在鞋尖底部。
+ * 用真实的鞋形轮廓（圆鞋头、前掌宽、后跟收圆）挤出，鞋面上一段鞋带、舌头和后跟处的鞋口，
+ * 否则圆角长方块从正面看像一节电池。
+ */
 function pocketShoe(color: string, acc: string) {
   const g = new THREE.Group()
-  g.add(rbox(7.6, 27, 1, WHITE, { z: 0.5 }, 0.4))
-  g.add(rbox(7, 25.5, 3.6, color, { y: 0.6, z: 2.6 }, 1.6))
-  // 鞋口：一圈加厚的包边 + 深色的鞋膛，后跟提耳翘出来
-  g.add(rbox(7.4, 1.6, 3.9, shade(color, -0.15), { y: 24.6, z: 2.6 }, 0.7))
-  g.add(plate(4.6, 2, DARK, { y: 26.3, z: 2.6 }))
-  g.add(rbox(2.4, 2.6, 0.9, acc, { y: 24.6, z: 1.3 }, 0.3))
-  for (let k = 0; k < 4; k++) g.add(noOutline(rbox(4, 0.5, 0.4, WHITE, { y: 11 + k * 2.6, z: 4.6 }, 0.15)))
-  for (const s of [-1, 1]) g.add(noOutline(rbox(0.3, 10, 1.6, acc, { x: s * 3.65, y: 8, z: 2.6 }, 0.1)))
+  // 鞋底：轮廓放大一圈，贴着背板
+  g.add(P(cutout(shoeOutline(1.08), 1, WHITE, 0.3), 0, -0.2, 0.4))
+  // 鞋面：圆鼓的倒角让鞋头和后跟有体积
+  g.add(P(cutout(shoeOutline(), 3.6, color, 1.2, 2), 0, 0, 2.8))
+  const fz = 2.8 + 1.8
+  // 鞋带：几道横向的带子，下面压着一条舌头
+  g.add(rbox(3.2, 7.6, 0.4, shade(color, -0.12), { y: 9, z: fz + 0.1 }, 0.15))
+  for (let k = 0; k < 4; k++) g.add(noOutline(rbox(3.8, 0.55, 0.4, acc, { y: 10 + k * 1.8, z: fz + 0.4 }, 0.15)))
+  // 鞋口：后跟一段，加厚的包边圈 + 深色的鞋膛，后跟提耳从顶上翘出来
+  g.add(P(cutout(shoeOutline(0.78).map(([x, y]): V2 => [x, 17.3 + (y / 25.6) * 7.4]), 0.6, shade(color, -0.15), 0.2), 0, 0, fz + 0.1))
+  g.add(P(cutout(shoeOutline(0.55).map(([x, y]): V2 => [x, 18.2 + (y / 25.6) * 5.6]), 0.4, DARK, 0.1), 0, 0, fz + 0.45))
+  g.add(rbox(2.4, 2.6, 0.9, acc, { y: 24.2, z: 1.6 }, 0.3))
   return g
 }
 const DO = { d: 11.6, mount: 60, cols: [-17.4, -5.8, 5.8, 17.4], rows: [6, 46, 86], ph: 22, pd: 6.5 }
@@ -778,8 +811,11 @@ function milkCan(p: string[]) {
         { seg: 24, radial: 8 },
       ),
     )
-  // 正面的椭圆标牌
-  g.add(ball(4, label, { y: 17, z: 10.8 }, [1, 1.3, 0.3]))
+  // 正面的椭圆标牌：平板竖贴在罐身上（后半截埋进去），扁球贴在弧面上只露出一小块，看着像一块污渍
+  const tag = G(cylZ(4, 1.6, label, 0, 0, 0, 28))
+  tag.position.set(0, 17, 11.4)
+  tag.scale.set(1, 1.3, 1)
+  g.add(tag)
   return g
 }
 

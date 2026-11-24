@@ -632,9 +632,11 @@ function earmuffs(p: string[]) {
     g.add(ball(4, knit, { x: s * R0, y: yc }, [0.6, 1, 1]))
     // 绒毛边：绕耳罩最宽处一圈
     g.add(torus(3.7, 0.75, fur, { x: s * R0, y: yc, ry: PI / 2 }))
-    // 外侧一颗小绒球
-    g.add(ball(1.1, acc, { x: s * (R0 + 2.3), y: yc }))
   }
+  // 头箍顶上系一只小蝴蝶结（原先耳罩外侧正中各一颗小绒球，配上粉 / 肤色耳罩一看就像乳头，改放到头顶）
+  const top = yc + R0 + 0.8
+  for (const s of [-1, 1]) g.add(P(ball(1.5, acc, {}, [1, 0.6, 0.45], [12, 8]), s * 1.5, top + 0.1, 0, 0, 0, s * -0.35))
+  g.add(ball(0.75, shade(acc, -0.1), { y: top + 0.1 }, [1, 1, 0.8], [10, 8]))
   return fitGroup(g)
 }
 
@@ -661,5 +663,5 @@ export const GARMENTS_MORE: AssetDef[] = [
   define('gx-briefs-hanging', '内裤', 'deco', [29, 3, 33], BRIEF_PAL, briefsHanging, { ...CLOTH, series: 'gx-briefs', form: 'hanging', tags: DRY, mats: ['fabric', 'fabric', 'fabric', 'fabric'] }),
   define('gx-leggings-folded', '打底裤', 'deco', [25, 20, 4.5], LEG_PAL, leggingsFolded, { ...CLOTH, series: 'gx-leggings', form: 'folded', tags: DRY, mats: ['fabric', 'fabric', 'plastic'] }),
   define('gx-leggings-hanging', '打底裤', 'deco', [30, 4, 57], LEG_PAL, leggingsHanging, { ...CLOTH, series: 'gx-leggings', form: 'hanging', formLabel: '搭在衣架横杆上', tags: DRY, mats: ['fabric', 'fabric', 'plastic'] }),
-  define('gx-earmuffs', '针织耳罩', 'deco', [20, 9, 12.5], MUFF_PAL, earmuffs, { ...CLOTH, form: 'lying', tags: ['clothing', 'decor'], mats: ['fabric', 'pile', 'fabric'] }),
+  define('gx-earmuffs', '针织耳罩', 'deco', [18, 9, 12.5], MUFF_PAL, earmuffs, { ...CLOTH, form: 'lying', tags: ['clothing', 'decor'], mats: ['fabric', 'pile', 'fabric'] }),
 ]

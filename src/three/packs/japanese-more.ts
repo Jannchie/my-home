@@ -177,10 +177,14 @@ function usuKine(p: string[]) {
   g.add(P(noOutline(torus(r * 0.82, 0.7, shade(wood, -0.2), {}, PI * 2)), 0, 16, 0, PI / 2))
   // 年糕：一团压扁的白球
   g.add(ball(13, mochi, { y: USU.h - 14 }, [1, 0.45, 1]))
-  // 杵：长柄 + 横木槌头，槌头搁在臼口、柄斜向后下方
-  const head: [number, number, number] = [6, USU.h + 7, 4]
-  g.add(P(cyl(5.2, 5.6, 26, shade(wood, 0.08), {}, 16), head[0], head[1], head[2], 0, 0, PI / 2 - 0.25))
-  g.add(rod3([head[0], head[1] - 1, head[2]], [head[0] - 4, 9, head[2] + 46], 1.7, shade(wood, 0.14), 10))
+  // 杵：横木槌头横躺在臼里、压在年糕上，长柄从槌头中间伸出来、架在臼口前沿上往前探。
+  // 原先槌头架在口上、柄往下斜，直柄会从臼的侧壁穿出去，柄尾还离地好几厘米
+  const head: [number, number, number] = [0, USU.h - 2.5, -3]
+  g.add(P(cyl(5.2, 5.6, 26, shade(wood, 0.08), {}, 16), head[0], head[1], head[2], 0, 0, PI / 2))
+  // 柄的下沿正好搭在口沿平面（y = USU.h，半径 19.5～22.5 一圈）上
+  const lean = Math.atan2(USU.h + 1.7 - head[1], 21 - head[2])
+  const len = 52
+  g.add(rod3(head, [0, head[1] + Math.sin(lean) * len, head[2] + Math.cos(lean) * len], 1.7, shade(wood, 0.14), 10))
   return fitGroup(g)
 }
 
@@ -409,9 +413,10 @@ function wagasa(p: string[]) {
   u.add(cyl(2, 1.6, 2.4, frame, { y: depth - 0.6 }, 12))
   u.add(ball(1.2, CHARCOAL, { y: depth + 2.4 }))
   u.add(cyl(1.3, 1.1, 5, shade(BAMBOO, -0.25), { y: -50.8 }, 8))
-  // 侧放：伞面朝前上方，伞沿和伞柄尾端着地
+  // 侧放：伞面朝前上方，伞沿和伞柄尾端着地。
+  // 倾角按两个着地点算：伞沿最低点 (z = r, y = -0.5) 和柄尾 (z = 1.3, y = -50.8) 转完要一样高（原来 1.02 时柄尾悬空十几厘米）
   const g = new THREE.Group()
-  g.add(P(u, 0, 0, 0, 1.02, 0, 0))
+  g.add(P(u, 0, 0, 0, Math.atan2(50.8 - 0.5, r - 1.3), 0, 0))
   return fitGroup(g)
 }
 
@@ -681,7 +686,7 @@ export const JAPANESE_MORE: AssetDef[] = [
     mats: ['ceramic', 'metal', null],
     fx: SHICHIRIN_FX,
   }),
-  define('jm-usu-kine', '臼和杵', 'japanese', [50, 76, 62], USU_PALS, usuKine, {
+  define('jm-usu-kine', '臼和杵', 'japanese', [50, 74, 55], USU_PALS, usuKine, {
     type: 'decor',
     styles: ['japanese'],
     mats: ['wood', null],
@@ -716,7 +721,7 @@ export const JAPANESE_MORE: AssetDef[] = [
     type: 'seat',
     mats: ['wood'],
   }),
-  define('jm-wagasa', '和伞', 'japanese', [92, 68, 79], WG_PALS, wagasa, {
+  define('jm-wagasa', '和伞', 'japanese', [92, 70, 70], WG_PALS, wagasa, {
     type: 'decor',
     mats: ['paper', 'paper', 'wood'],
   }),
