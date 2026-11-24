@@ -144,6 +144,7 @@ export function runSheet(q: URLSearchParams) {
 
   ;(window as unknown as Record<string, unknown>).__sheet = { total, ids: list.map((a) => a.id), info, width: W, height: H }
   document.title = `sheet · ${list.length}/${total}`
-  // 合成上屏由截图脚本负责：它改完视口尺寸后会等两帧再截（scripts/shot-sheet.mjs）
-  document.body.dataset.ready = '1'
+  // 等两帧再报告就绪：画布上的文字（标签）要到下一次提交才画上去，马上截图会只截到空白的标签栏。
+  // 截图脚本改完视口尺寸后还会再等两帧，那是为了重新合成上屏，两边各管一件事
+  requestAnimationFrame(() => requestAnimationFrame(() => (document.body.dataset.ready = '1')))
 }

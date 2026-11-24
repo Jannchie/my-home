@@ -333,6 +333,8 @@ class Decorator {
       for (const id of victims) this.relocate(id, (g) => !this.occ.audit(g, this.fixed).length)
     }
     this.clearPassages()
+    // 玄关再查一遍：摆玄关时大门到内门可能还能绕经隔壁房间走通，等别的房间摆满了，只剩玄关里那条被小件挤窄的路
+    for (const room of this.plan.rooms) if (room.kind === 'entrance') this.entryClear(room, 0, null)
     // 重摆过的书架、展示柜里的东西跟着拿掉了：开放格子再补一遍
     if (this.relocated > before) this.fillCompartments()
   }
@@ -384,7 +386,8 @@ class Decorator {
     const pts = keys.map((k) => ({ k, r: Math.min(r, k.r ?? r), at: g.nearest('pet', k, Math.min(r, k.r ?? r), 40) }))
     // 从按正常宽度能站的端点出发（窄缝那种端点当不了起点）
     const hub = pts.find((p) => p.at && p.r === r)
-    if (!hub) return []
+    // 没有一个端点按正常宽度站得进去（门口全被挤住了）：站不进去的都算走不到。以前这里返回空，最堵的情况反而被当成了通畅
+    if (!hub) return pts.filter((p) => !p.at).map((p) => p.k)
     return pts.filter((p) => p !== hub && (!p.at || !g.path('pet', hub.at!, p.at, p.r))).map((p) => p.k)
   }
 
@@ -3172,16 +3175,21 @@ class Decorator {
         }
       }
     if (keys.length < 2) return
+    // 只撤玄关里的落地小件：鞋柜 / 主家具（keep、固定的、鞋柜类）不撤
     const loose = this.out.slice(from).filter((f) => {
       const d = ASSET_MAP.get(f.asset)
-      return f !== keep && !!d && !f.z && !d.mount && !d.stick && d.h >= 3
+      return f !== keep && !!d && !f.z && !d.mount && !d.stick && d.h >= 3 && !this.fixed.has(f.id) && !hasTag(d, 'shoe-storage') && pointInPolygon(f, room.points)
     })
-    // 宽 60 留不出来（玄关本身窄）就至少留宽 40
-    const r = [ENTRY_R, PASSAGE_R].find((x) => !this.unreachable(keys, loose, x).length)
-    if (r === undefined || !this.unreachable(keys, [], r).length) return
+    // 每个出口各自定宽：小件全撤了也留不出宽 60 的出口（敞开边对面摆着餐桌、门挤在窄角落）只要求宽 40，其余照样要宽 60。
+    // 以前只要有一个出口留不出 60，所有出口就一起降成 40，穿鞋凳会把本来留得出 60 的大门 → 内门那条路挤窄
+    const narrow = new Set(this.unreachable(keys, loose, ENTRY_R))
+    const wide = narrow.size < keys.length - 1
+    const ks: PassageKey[] = wide ? keys.map((k) => (narrow.has(k) ? { ...k, r: PASSAGE_R } : k)) : keys
+    const r = wide ? ENTRY_R : PASSAGE_R
+    if (this.unreachable(ks, loose, r).length || !this.unreachable(ks, [], r).length) return
     for (const f of loose.reverse()) {
       this.removeTree(f)
-      if (!this.unreachable(keys, [], r).length) return
+      if (!this.unreachable(ks, [], r).length) return
     }
   }
 

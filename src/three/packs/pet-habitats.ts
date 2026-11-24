@@ -209,21 +209,6 @@ function clearBox(w: number, h: number, d: number, t: number, y0 = 0, a = 0.22, 
   return clear(tray(w, h, d, t, color, { y: y0 }, 0.2), color, a)
 }
 
-/**
- * 带一排直角方孔的通风条：xy 平面里宽 w（x 居中）、高 h（底边在 y = 0）、厚 t（z 居中）；xs 是各孔的中心 x，孔底在 y0，孔宽 hw、高 hh。
- * 不用 holePanel：它的圆角孔每个要一千多个三角面，这么小的孔看不出圆角。
- */
-function ventStrip(w: number, h: number, t: number, color: string, xs: number[], y0: number, hw: number, hh: number) {
-  const s = new THREE.Shape([new THREE.Vector2(-w / 2, 0), new THREE.Vector2(w / 2, 0), new THREE.Vector2(w / 2, h), new THREE.Vector2(-w / 2, h)])
-  for (const x of xs) s.holes.push(new THREE.Path([new THREE.Vector2(x - hw / 2, y0), new THREE.Vector2(x - hw / 2, y0 + hh), new THREE.Vector2(x + hw / 2, y0 + hh), new THREE.Vector2(x + hw / 2, y0)]))
-  const geo = new THREE.ExtrudeGeometry(s, { depth: t, bevelEnabled: false })
-  geo.translate(0, 0, -t / 2)
-  const m = new THREE.Mesh(geo, toon(color))
-  m.castShadow = true
-  m.receiveShadow = true
-  return m
-}
-
 /** 竖直三角板（xy 平面，底边 w、高 h，沿 z 厚 t） */
 function tri(w: number, h: number, t: number, color: string) {
   const s = new THREE.Shape([new THREE.Vector2(-w / 2, 0), new THREE.Vector2(w / 2, 0), new THREE.Vector2(0, h)])
@@ -1014,7 +999,7 @@ function terrarium(p: string[]) {
   const H = 45
   g.add(rbox(W, 5, D, frame, {}, 0.6))
   // 正面下沿通风条
-  g.add(P(ventStrip(W - 2, 4, 0.8, frame, Array.from({ length: 10 }, (_, i) => -22.5 + i * 5), 1.2, 3.2, 1.4), 0, 5, D / 2 - 0.4))
+  g.add(holePanel(W - 2, 4, 0.8, frame, Array.from({ length: 10 }, (_, i) => ({ kind: 'rect' as const, x: -22.5 + i * 5, y: 1.2, w: 3.2, h: 1.4, r: 0 })), { y: 5, z: D / 2 - 0.4 }, 0, { bevel: 0 }))
   // 玻璃：后、左、右 + 两扇门
   const gl = new THREE.Group()
   gl.add(rbox(W - 1, H - 6, 0.5, C.glass, { y: 5, z: -D / 2 + 0.6 }, 0.1))

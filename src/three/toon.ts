@@ -470,6 +470,17 @@ function torusSegments(r: number, tube: number, arc: number): [number, number] {
   return [radial, Math.max(6, Math.ceil((full * arc) / (Math.PI * 2)))]
 }
 
+/**
+ * 圆饼（puck）的细分：[一圈的段数, 每段圆角的步数]。坐垫这类大件保持 32 段 × 5 步；硬币、按钮、纽扣这种小件
+ * 一圈 16 段就看不出棱角（以前一律 832 个三角面，几十枚硬币就上万）。一圈的段数取 4 的倍数：车削起点在 +x，
+ * ±x / ±z 四个方向上都有顶点，包围盒和以前一样。
+ */
+function puckSegments(r: number, k: number): [number, number] {
+  const seg = r >= 8 ? 32 : r >= 3 ? 24 : 16
+  const steps = k >= 1.5 ? 5 : k >= 0.4 ? 3 : 2
+  return [seg, steps]
+}
+
 /** 圆角盒，at.y 是底面高度（不是中心），摆东西更顺手 */
 export function rbox(w: number, h: number, d: number, color: THREE.ColorRepresentation, at: At = {}, radius?: number) {
   w = q(w)
@@ -494,19 +505,20 @@ export function cyl(rTop: number, rBottom: number, h: number, color: THREE.Color
 export function puck(r: number, h: number, color: THREE.ColorRepresentation, at: At = {}) {
   r = q(r)
   h = q(h)
-  const g = cached(`pk${r},${h}`, () => {
-    const k = Math.min(h / 2, r) * 0.9
+  const k = Math.min(h / 2, r) * 0.9
+  const [seg, steps] = puckSegments(r, k)
+  const g = cached(`pk${r},${h},${seg}x${steps}`, () => {
     const pts: THREE.Vector2[] = [new THREE.Vector2(0, -h / 2)]
     const arc = (cx: number, cy: number, a0: number, a1: number) => {
-      for (let i = 0; i <= 5; i++) {
-        const a = a0 + ((a1 - a0) * i) / 5
+      for (let i = 0; i <= steps; i++) {
+        const a = a0 + ((a1 - a0) * i) / steps
         pts.push(new THREE.Vector2(cx + Math.cos(a) * k, cy + Math.sin(a) * k))
       }
     }
     arc(r - k, -h / 2 + k, -Math.PI / 2, 0)
     arc(r - k, h / 2 - k, 0, Math.PI / 2)
     pts.push(new THREE.Vector2(0, h / 2))
-    return new THREE.LatheGeometry(pts, 32)
+    return new THREE.LatheGeometry(pts, seg)
   })
   return place(new THREE.Mesh(g, toon(color)), { ...at, y: (at.y ?? 0) + h / 2 })
 }

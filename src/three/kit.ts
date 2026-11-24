@@ -68,18 +68,30 @@ export function slab(poly: Poly, t: number, color: THREE.ColorRepresentation, y 
 
 /**
  * 洞的形状（板的局部坐标：x 以板中心为 0，y 以板底为 0）
- *   circle：圆心 (x, y)，半径 r
+ *   circle：圆心 (x, y)，半径 r；给 n 就开成正 n 边形（成片的小孔：孔小到看不出是不是正圆，8 边就够）
  *   rect  ：底边中点 (x, y)，宽 w 高 h，圆角 r
  *   arch  ：底边中点 (x, y)，宽 w 高 h，顶部是半圆（狗窝门、猫窝入口）
+ *   poly  ：任意多边形（削角方孔这类），顶点顺序不限
  */
 export type Hole =
-  | { kind: 'circle'; x: number; y: number; r: number }
+  | { kind: 'circle'; x: number; y: number; r: number; n?: number }
   | { kind: 'rect'; x: number; y: number; w: number; h: number; r?: number }
   | { kind: 'arch'; x: number; y: number; w: number; h: number }
+  | { kind: 'poly'; pts: [number, number][] }
 
 function holePath(h: Hole) {
   const p = new THREE.Path()
-  if (h.kind === 'circle') {
+  if (h.kind === 'poly') {
+    p.setFromPoints(h.pts.map(([x, y]) => new THREE.Vector2(x, y)))
+    p.closePath()
+  } else if (h.kind === 'circle' && h.n) {
+    for (let i = 0; i < h.n; i++) {
+      const a = -(i / h.n) * Math.PI * 2
+      if (i) p.lineTo(h.x + Math.cos(a) * h.r, h.y + Math.sin(a) * h.r)
+      else p.moveTo(h.x + Math.cos(a) * h.r, h.y + Math.sin(a) * h.r)
+    }
+    p.closePath()
+  } else if (h.kind === 'circle') {
     p.absarc(h.x, h.y, h.r, 0, Math.PI * 2, true)
   } else if (h.kind === 'arch') {
     const r = h.w / 2
@@ -89,6 +101,12 @@ function holePath(h: Hole) {
     p.absarc(h.x, top, r, Math.PI, 0, true)
     p.lineTo(h.x + r, h.y)
     p.lineTo(h.x - r, h.y)
+  } else if ((h.r ?? 2) <= 0) {
+    // 直角方孔：四个点（走下面的圆弧写法会生成一堆零半径的重复点，格子一多面数翻几倍）
+    const x0 = h.x - h.w / 2
+    const x1 = h.x + h.w / 2
+    p.setFromPoints([new THREE.Vector2(x0, h.y), new THREE.Vector2(x0, h.y + h.h), new THREE.Vector2(x1, h.y + h.h), new THREE.Vector2(x1, h.y)])
+    p.closePath()
   } else {
     const r = Math.min(h.r ?? 2, h.w / 2, h.h / 2)
     const x0 = h.x - h.w / 2
@@ -110,22 +128,36 @@ function holePath(h: Hole) {
 /**
  * 带洞的板：在 xy 平面里，宽 w（x 居中）、高 h（底边在 y = 0）、厚 t（z 居中），可以开多个真正透光的洞。
  * at 和 rbox 一样：at.y 是底面；ry 转 90° 就能当侧板用。
+ * o.seg：圆弧的细分（默认 16；圆孔一圈是它的两倍）；o.bevel：倒角宽（默认 min(0.4, t × 0.2)，0 = 不倒角）。
+ * 孔多的板（散热孔、网面、藤编）用直角孔 / n 边形孔、不倒角：每个圆角孔加倒角要上千个三角面。
  */
-export function holePanel(w: number, h: number, t: number, color: THREE.ColorRepresentation, holes: Hole[] = [], at: { x?: number; y?: number; z?: number; rx?: number; ry?: number; rz?: number } = {}, corner = 1.5) {
+export function holePanel(
+  w: number,
+  h: number,
+  t: number,
+  color: THREE.ColorRepresentation,
+  holes: Hole[] = [],
+  at: { x?: number; y?: number; z?: number; rx?: number; ry?: number; rz?: number } = {},
+  corner = 1.5,
+  o: { seg?: number; bevel?: number } = {},
+) {
   const r = Math.min(corner, w / 2, h / 2)
   const s = new THREE.Shape()
-  s.moveTo(-w / 2 + r, 0)
-  s.lineTo(w / 2 - r, 0)
-  s.quadraticCurveTo(w / 2, 0, w / 2, r)
-  s.lineTo(w / 2, h - r)
-  s.quadraticCurveTo(w / 2, h, w / 2 - r, h)
-  s.lineTo(-w / 2 + r, h)
-  s.quadraticCurveTo(-w / 2, h, -w / 2, h - r)
-  s.lineTo(-w / 2, r)
-  s.quadraticCurveTo(-w / 2, 0, -w / 2 + r, 0)
+  if (r <= 0) s.setFromPoints([new THREE.Vector2(-w / 2, 0), new THREE.Vector2(w / 2, 0), new THREE.Vector2(w / 2, h), new THREE.Vector2(-w / 2, h)])
+  else {
+    s.moveTo(-w / 2 + r, 0)
+    s.lineTo(w / 2 - r, 0)
+    s.quadraticCurveTo(w / 2, 0, w / 2, r)
+    s.lineTo(w / 2, h - r)
+    s.quadraticCurveTo(w / 2, h, w / 2 - r, h)
+    s.lineTo(-w / 2 + r, h)
+    s.quadraticCurveTo(-w / 2, h, -w / 2, h - r)
+    s.lineTo(-w / 2, r)
+    s.quadraticCurveTo(-w / 2, 0, -w / 2 + r, 0)
+  }
   for (const hole of holes) s.holes.push(holePath(hole))
-  const bevel = Math.min(0.4, t * 0.2)
-  const geo = new THREE.ExtrudeGeometry(s, { depth: Math.max(0.01, t - bevel * 2), bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelOffset: -bevel, bevelSegments: 1, curveSegments: 16 })
+  const bevel = o.bevel ?? Math.min(0.4, t * 0.2)
+  const geo = new THREE.ExtrudeGeometry(s, { depth: Math.max(0.01, t - bevel * 2), bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel, bevelOffset: -bevel, bevelSegments: 1, curveSegments: o.seg ?? 16 })
   geo.translate(0, 0, -t / 2 + bevel)
   const m = new THREE.Mesh(geo, toon(color))
   m.position.set(at.x ?? 0, at.y ?? 0, at.z ?? 0)
@@ -147,6 +179,12 @@ export function gridHoles(w: number, h: number, cols: number, rows: number, bar 
   return holes
 }
 
+/** 洞的坐标换算：x 乘 sx（背板从外面看是左右镜像的）、y 平移 dy */
+export function moveHole(o: Hole, sx: number, dy: number): Hole {
+  if (o.kind === 'poly') return { kind: 'poly', pts: o.pts.map(([x, y]) => [x * sx, y + dy]) }
+  return { ...o, x: o.x * sx, y: o.y + dy }
+}
+
 /**
  * 空心外壳：外尺寸 w × h × d、壁厚 t，原点在底面中心。每个面可以开洞（洞坐标用该面自己的局部坐标，从外面看）。
  * top / bottom 为 false 时不封顶 / 不封底（盒子、花箱、猫砂盆盆体）。
@@ -163,10 +201,10 @@ export function shell(
   const y0 = opts.bottom === false ? 0 : t
   const ih = h - y0 - (opts.top === false ? 0 : t)
   // 前后板盖住全宽，左右板夹在中间
-  g.add(holePanel(w, ih, t, color, (opts.front ?? []).map((o) => ({ ...o, y: o.y - y0 })), { y: y0, z: d / 2 - t / 2 }))
-  g.add(holePanel(w, ih, t, color, (opts.back ?? []).map((o) => ({ ...o, x: -o.x, y: o.y - y0 })), { y: y0, z: -d / 2 + t / 2, ry: Math.PI }))
-  g.add(holePanel(d - t * 2, ih, t, color, (opts.right ?? []).map((o) => ({ ...o, y: o.y - y0 })), { x: w / 2 - t / 2, y: y0, ry: Math.PI / 2 }))
-  g.add(holePanel(d - t * 2, ih, t, color, (opts.left ?? []).map((o) => ({ ...o, y: o.y - y0 })), { x: -w / 2 + t / 2, y: y0, ry: -Math.PI / 2 }))
+  g.add(holePanel(w, ih, t, color, (opts.front ?? []).map((o) => moveHole(o, 1, -y0)), { y: y0, z: d / 2 - t / 2 }))
+  g.add(holePanel(w, ih, t, color, (opts.back ?? []).map((o) => moveHole(o, -1, -y0)), { y: y0, z: -d / 2 + t / 2, ry: Math.PI }))
+  g.add(holePanel(d - t * 2, ih, t, color, (opts.right ?? []).map((o) => moveHole(o, 1, -y0)), { x: w / 2 - t / 2, y: y0, ry: Math.PI / 2 }))
+  g.add(holePanel(d - t * 2, ih, t, color, (opts.left ?? []).map((o) => moveHole(o, 1, -y0)), { x: -w / 2 + t / 2, y: y0, ry: -Math.PI / 2 }))
   if (opts.bottom !== false) g.add(rbox(w, t, d, color, {}, Math.min(t * 0.4, 1)))
   if (opts.top !== false) g.add(rbox(w, t, d, color, { y: h - t }, Math.min(t * 0.4, 1)))
   return g

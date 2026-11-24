@@ -76,7 +76,7 @@ function feet(w: number, d: number, h: number, color: string, r = 1) {
 }
 
 /** 在圆角矩形（宽 w、高 h、底边在 0、x 居中、圆角 r）里按网格开小方孔 */
-function gridHoles(w: number, h: number, r: number, hole: number, pitch: number, margin: number): Hole[] {
+function meshHoles(w: number, h: number, r: number, hole: number, pitch: number, margin: number): Hole[] {
   const out: Hole[] = []
   const inside = (x: number, y: number) => {
     const ax = Math.abs(x)
@@ -99,40 +99,9 @@ function gridHoles(w: number, h: number, r: number, hole: number, pitch: number,
       const x = x0 + i * pitch
       const y = y0 + j * pitch
       const s = hole / 2
-      if (inside(x - s, y - s) && inside(x + s, y - s) && inside(x - s, y + s) && inside(x + s, y + s)) out.push({ kind: 'rect', x, y: y - s, w: hole, h: hole, r: 0.15 })
+      if (inside(x - s, y - s) && inside(x + s, y - s) && inside(x - s, y + s) && inside(x + s, y + s)) out.push({ kind: 'rect', x, y: y - s, w: hole, h: hole, r: 0 })
     }
   return out
-}
-
-/**
- * 细网面：和 holePanel 一样的圆角板（xy 平面，x 居中、底边在 y = 0、厚 t 沿 z 居中），但孔是直角方孔、板不倒角。
- * holePanel 给每个孔都做 16 段圆角 + 倒角，电蚊拍 / 苍蝇拍上百个 1cm 的小孔要六万到十一万个三角面；这里每个孔只有 4 个顶点。
- */
-function gridPanel(w: number, h: number, t: number, color: string, holes: Hole[], y = 0, corner = 1.5) {
-  const r = Math.min(corner, w / 2, h / 2)
-  const s = new THREE.Shape()
-  s.moveTo(-w / 2 + r, 0)
-  s.lineTo(w / 2 - r, 0)
-  s.absarc(w / 2 - r, r, r, -PI / 2, 0, false)
-  s.lineTo(w / 2, h - r)
-  s.absarc(w / 2 - r, h - r, r, 0, PI / 2, false)
-  s.lineTo(-w / 2 + r, h)
-  s.absarc(-w / 2 + r, h - r, r, PI / 2, PI, false)
-  s.lineTo(-w / 2, r)
-  s.absarc(-w / 2 + r, r, r, PI, PI * 1.5, false)
-  for (const o of holes) {
-    if (o.kind !== 'rect') continue
-    const x0 = o.x - o.w / 2
-    const x1 = o.x + o.w / 2
-    s.holes.push(new THREE.Path([new THREE.Vector2(x0, o.y), new THREE.Vector2(x0, o.y + o.h), new THREE.Vector2(x1, o.y + o.h), new THREE.Vector2(x1, o.y)]))
-  }
-  const geo = new THREE.ExtrudeGeometry(s, { depth: t, bevelEnabled: false, curveSegments: 8 })
-  geo.translate(0, 0, -t / 2)
-  const m = new THREE.Mesh(geo, toon(color))
-  m.position.y = y
-  m.castShadow = true
-  m.receiveShadow = true
-  return m
 }
 
 // ---------- 定义 ----------
@@ -1017,7 +986,7 @@ function racket(body: string, mesh: string, acc: string) {
   g.add(rbox(4, 3, 2.2, body, { y: 16.5 }, 0.9))
   const hy = 19
   g.add(holePanel(18, 22, 1.6, body, [{ kind: 'rect', x: 0, y: 1.4, w: 15, h: 19.2, r: 4 }], { y: hy }, 5.5))
-  g.add(gridPanel(15.8, 20, 0.3, mesh, gridHoles(15.8, 20, 4.3, 1, 1.45, 0.9), hy + 1, 4.3))
+  g.add(holePanel(15.8, 20, 0.3, mesh, meshHoles(15.8, 20, 4.3, 1, 1.45, 0.9), { y: hy + 1 }, 4.3, { seg: 8, bevel: 0 }))
   return g
 }
 
@@ -1099,7 +1068,7 @@ function flySwatter(p: string[]) {
   const s = new THREE.Group()
   s.add(cyl(0.5, 0.5, 32, handleC, {}, 10))
   s.add(cyl(0.8, 0.8, 8, handleC, {}, 12))
-  s.add(gridPanel(11, 13, 0.4, head, gridHoles(11, 13, 2, 0.8, 1.3, 0.7), 31.5, 2))
+  s.add(holePanel(11, 13, 0.4, head, meshHoles(11, 13, 2, 0.8, 1.3, 0.7), { y: 31.5 }, 2, { seg: 8, bevel: 0 }))
   s.rotation.set(-PI / 2, 0, -PI / 2)
   s.position.y = 0.8
   g.add(s)

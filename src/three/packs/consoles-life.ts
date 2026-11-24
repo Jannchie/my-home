@@ -7,7 +7,7 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { ball, cached, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
-import { C, S, G, glow, paintPanel, rng, slab, type AssetDef, type Hole, type Poly } from '../kit'
+import { C, S, G, glow, holePanel, paintPanel, rng, slab, type AssetDef, type Hole, type Poly } from '../kit'
 import { P, PI, batten, cylX, cylZ, fitBuild, ghost, lit, noOutline, taperRod3, type V3 } from '../geo'
 import { J, M, N, PROP, R, definer, type Pal } from '../packkit'
 
@@ -134,50 +134,12 @@ function roundRect(w: number, d: number, r: number | [number, number, number, nu
 }
 
 /** 竖直面上的圆环（洞洞板圆孔阵列） */
-function holeGrid(cx: number, cy: number, R: number, pitch: number, r: number): Hole[] {
+/** 圆形范围里的密孔阵列：孔开成 n 边形（孔小到看不出是不是正圆，和 holePanel 的 seg / bevel 选项一起压面数） */
+function holeGrid(cx: number, cy: number, R: number, pitch: number, r: number, n: number): Hole[] {
   const out: Hole[] = []
   for (let x = -R; x <= R + 1e-6; x += pitch)
-    for (let y = -R; y <= R + 1e-6; y += pitch) if (Math.hypot(x, y) <= R - r) out.push({ kind: 'circle', x: cx + x, y: cy + y, r })
+    for (let y = -R; y <= R + 1e-6; y += pitch) if (Math.hypot(x, y) <= R - r) out.push({ kind: 'circle', x: cx + x, y: cy + y, r, n })
   return out
-}
-
-/**
- * 密孔散热板：和 kit 的 holePanel 同样的摆法（xy 平面、底边 y = 0、z 居中），但圆孔按 seg 边形开，倒角只有一段（bevel = 0 不倒角）。
- * holePanel 的圆孔每个 32 段，约 260 面；七八十个 0.4cm 的小孔就是两万面，而孔小到看不出是不是正圆。
- */
-function perfPanel(w: number, h: number, t: number, color: string, holes: Hole[], at: { x?: number; y?: number; z?: number; rx?: number; ry?: number }, corner: number, seg = 8, bevel = 0) {
-  const r = Math.min(corner, w / 2, h / 2)
-  const s = new THREE.Shape()
-  s.moveTo(-w / 2 + r, 0)
-  s.lineTo(w / 2 - r, 0)
-  s.absarc(w / 2 - r, r, r, -PI / 2, 0, false)
-  s.lineTo(w / 2, h - r)
-  s.absarc(w / 2 - r, h - r, r, 0, PI / 2, false)
-  s.lineTo(-w / 2 + r, h)
-  s.absarc(-w / 2 + r, h - r, r, PI / 2, PI, false)
-  s.lineTo(-w / 2, r)
-  s.absarc(-w / 2 + r, r, r, PI, PI * 1.5, false)
-  for (const hole of holes) {
-    if (hole.kind !== 'circle') continue
-    const path = new THREE.Path()
-    // 顺时针（和外轮廓反向）
-    for (let i = 0; i <= seg; i++) {
-      const a = -(i / seg) * PI * 2
-      const x = hole.x + Math.cos(a) * hole.r
-      const y = hole.y + Math.sin(a) * hole.r
-      if (i === 0) path.moveTo(x, y)
-      else path.lineTo(x, y)
-    }
-    s.holes.push(path)
-  }
-  const geo = new THREE.ExtrudeGeometry(s, { depth: t - bevel * 2, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel, bevelOffset: -bevel, bevelSegments: 1, curveSegments: 6 })
-  geo.translate(0, 0, -t / 2 + bevel)
-  const m = new THREE.Mesh(geo, toon(color))
-  m.position.set(at.x ?? 0, at.y ?? 0, at.z ?? 0)
-  m.rotation.set(at.rx ?? 0, at.ry ?? 0, 0)
-  m.castShadow = true
-  m.receiveShadow = true
-  return m
 }
 
 // ---- 平放设备上的按键（y 为机身顶面） ----
@@ -499,7 +461,7 @@ function xsxBody(p: string[], foot: boolean) {
   if (foot) g.add(puck(6.5, 0.7, BLACK, {}))
   g.add(rbox(15.1, 28.4, 15.1, body, { y: y0 }, 0.8))
   g.add(lit(cyl(6.6, 6.6, 0.3, vent, { y: y0 + 28.45 }, 32), vent, 0.55))
-  g.add(perfPanel(15.1, 15.1, 1.6, body, holeGrid(0, 7.55, 6.3, 1.25, 0.42), { y: y0 + 29.2, z: 7.55, rx: -PI / 2 }, 0.8, 8, 0.32))
+  g.add(holePanel(15.1, 15.1, 1.6, body, holeGrid(0, 7.55, 6.3, 1.25, 0.42, 8), { y: y0 + 29.2, z: 7.55, rx: -PI / 2 }, 0.8, { seg: 6, bevel: 0.32 }))
   g.add(led(-5.6, y0 + 26.4, 7.65, acc, 0.35))
   g.add(rbox(10, 0.35, 0.4, BLACK, { y: y0 + 18, z: 7.55 }, 0.12))
   g.add(rbox(1.2, 0.5, 0.4, BLACK, { x: 5.4, y: y0 + 2.2, z: 7.55 }, 0.12))
@@ -515,7 +477,7 @@ function xssBody(p: string[]) {
   const g = new THREE.Group()
   g.add(rbox(6.5, 27.5, 15.1, body, {}, 0.8))
   g.add(cylX(5.6, 0.2, '#111114', 3.25, 18, 0, 32))
-  g.add(perfPanel(11.2, 11.2, 0.4, vent, holeGrid(0, 5.6, 5.0, 0.95, 0.32), { x: 3.55, y: 18 - 5.6, ry: PI / 2 }, 5.6, 6))
+  g.add(holePanel(11.2, 11.2, 0.4, vent, holeGrid(0, 5.6, 5.0, 0.95, 0.32, 6), { x: 3.55, y: 18 - 5.6, ry: PI / 2 }, 5.6, { seg: 6, bevel: 0 }))
   g.add(led(-1.6, 25.6, 7.6, acc, 0.3))
   g.add(rbox(1.2, 0.5, 0.4, BLACK, { x: 1.2, y: 2.4, z: 7.55 }, 0.12))
   return g
