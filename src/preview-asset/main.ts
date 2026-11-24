@@ -1,67 +1,66 @@
-// 素材预览页（素材外观检查用，scripts/shot-asset.mjs 批量截图）：?id=素材id&c=配色序号&dir=front|three|left|back|side|top&bg=色&nohl
+// 素材预览页（素材外观检查用）：
+//   单件（scripts/shot-asset.mjs）：?id=素材id&c=配色序号&dir=front|three|left|back|side|top|low&bg=色&nohl&open
+//   拼图（scripts/shot-sheet.mjs）：?ids= / ?match= / ?from=&n= ，参数见 sheet.ts
 import * as THREE from 'three'
 import { ASSET_MAP } from '../three/assets'
 import { furnitureModel } from '../three/house'
 import { createStage, fitSun, frameCamera } from '../three/stage'
 import { toon } from '../three/toon'
+import { DIRS, runSheet } from './sheet'
 
 const q = new URLSearchParams(location.search)
-const id = q.get('id') ?? 'va-vase-ribbon'
-const color = Number(q.get('c') ?? 0)
-const dirName = q.get('dir') ?? 'three'
-const bg = q.get('bg')
-if (bg) document.body.style.background = bg
+if (q.has('ids') || q.has('match') || q.has('from') || q.has('cat')) runSheet(q)
+else single()
 
-const canvas = document.getElementById('c') as HTMLCanvasElement
-const stage = createStage(canvas, { preserve: true })
-stage.renderer.shadowMap.autoUpdate = false
+function single() {
+  const id = q.get('id') ?? 'va-vase-ribbon'
+  const color = Number(q.get('c') ?? 0)
+  const dirName = q.get('dir') ?? 'three'
+  const bg = q.get('bg')
+  if (bg) document.body.style.background = bg
 
-const ground = new THREE.Mesh(new THREE.CircleGeometry(600, 64).rotateX(-Math.PI / 2), new THREE.ShadowMaterial({ opacity: 0.16 }))
-ground.receiveShadow = true
-stage.scene.add(ground)
+  const canvas = document.getElementById('c') as HTMLCanvasElement
+  const stage = createStage(canvas, { preserve: true })
+  stage.renderer.shadowMap.autoUpdate = false
 
-const fill = new THREE.DirectionalLight('#ffffff', 0.35)
-fill.position.set(-1, 1.2, 2)
-stage.scene.add(fill)
+  const ground = new THREE.Mesh(new THREE.CircleGeometry(600, 64).rotateX(-Math.PI / 2), new THREE.ShadowMaterial({ opacity: 0.16 }))
+  ground.receiveShadow = true
+  stage.scene.add(ground)
 
-const def = ASSET_MAP.get(id)
-if (!def) throw new Error(`no asset ${id}`)
-const m = furnitureModel({ id: 'preview', asset: id, x: 0, y: 0, rot: 0, color }, { closeUp: true })
-stage.scene.add(m)
+  const fill = new THREE.DirectionalLight('#ffffff', 0.35)
+  fill.position.set(-1, 1.2, 2)
+  stage.scene.add(fill)
 
-const box = new THREE.Box3().setFromObject(m)
-fitSun(stage.sun, box)
-// 阴影贴图不自动更新（静态画面）：放好模型、对好太阳后要求重画一次，否则阴影贴图是空的，整件东西都算在阴影里、发暗
-stage.renderer.shadowMap.needsUpdate = true
-/** 取景方向：front 正面、three 右前 3/4、left 左前 3/4、back 右后 3/4（看背面）、side 正右侧、top 俯视 */
-const DIRS: Record<string, [number, number, number]> = {
-  front: [0, 0.2, 1],
-  three: [0.85, 0.5, 1],
-  left: [-0.85, 0.45, 1],
-  back: [0.85, 0.5, -1],
-  side: [1, 0.2, 0],
-  top: [0.15, 1, 0.35],
-}
-const dir = new THREE.Vector3(...(DIRS[dirName] ?? DIRS.three)).normalize()
-const c = frameCamera(stage.camera, box, dir, 1.12)
-stage.camera.near = Math.max(1, c.length() * 0.01)
-stage.camera.updateProjectionMatrix()
+  const def = ASSET_MAP.get(id)
+  if (!def) throw new Error(`no asset ${id}`)
+  const m = furnitureModel({ id: 'preview', asset: id, x: 0, y: 0, rot: 0, color, ...(q.has('open') ? { open: true } : {}) }, { closeUp: true })
+  stage.scene.add(m)
 
-function resize() {
-  stage.resize(window.innerWidth, window.innerHeight)
-}
-resize()
-window.addEventListener('resize', resize)
+  const box = new THREE.Box3().setFromObject(m)
+  fitSun(stage.sun, box)
+  // 阴影贴图不自动更新（静态画面）：放好模型、对好太阳后要求重画一次，否则阴影贴图是空的，整件东西都算在阴影里、发暗
+  stage.renderer.shadowMap.needsUpdate = true
+  const dir = new THREE.Vector3(...(DIRS[dirName] ?? DIRS.three)).normalize()
+  const c = frameCamera(stage.camera, box, dir, 1.12)
+  stage.camera.near = Math.max(1, c.length() * 0.01)
+  stage.camera.updateProjectionMatrix()
 
-const white = new THREE.Mesh(new THREE.BoxGeometry(6, 6, 6), toon('#ffffff'))
-white.position.set(box.min.x - 10, 14, 0)
-stage.scene.add(white)
-if (q.has('nohl')) stage.scene.traverse((o) => { if (o.userData.isOutline) o.visible = false })
-;(window as unknown as Record<string, unknown>).__dbg = { palette: def.palettes[color], count: def.palettes.length, mats: [] }
+  function resize() {
+    stage.resize(window.innerWidth, window.innerHeight)
+  }
+  resize()
+  window.addEventListener('resize', resize)
 
-stage.render()
-requestAnimationFrame(() => {
+  const white = new THREE.Mesh(new THREE.BoxGeometry(6, 6, 6), toon('#ffffff'))
+  white.position.set(box.min.x - 10, 14, 0)
+  stage.scene.add(white)
+  if (q.has('nohl')) stage.scene.traverse((o) => { if (o.userData.isOutline) o.visible = false })
+  ;(window as unknown as Record<string, unknown>).__dbg = { palette: def.palettes[color], count: def.palettes.length, mats: [] }
+
   stage.render()
-  document.body.dataset.ready = '1'
-  document.title = `${id} · ${def.w}×${def.d}×${def.h} · ${JSON.stringify(def.palettes[color])}`
-})
+  requestAnimationFrame(() => {
+    stage.render()
+    document.body.dataset.ready = '1'
+    document.title = `${id} · ${def.w}×${def.d}×${def.h} · ${JSON.stringify(def.palettes[color])}`
+  })
+}

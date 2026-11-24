@@ -40,8 +40,48 @@ export async function waitFor(b, expr, ms = 60000) {
   return false
 }
 
+// 浏览器互斥锁：同一时间只让一个脚本开无头 Chrome（并行跑的截图脚本排队，免得同时起好几套浏览器把内存吃满）。
+// 锁是临时目录下的一个文件夹，里面记着持有者的 pid；持有者已经不在了（崩溃、被杀）就当作过期锁清掉。
+const LOCK = path.join(os.tmpdir(), 'my-home-chrome.lock')
+const alive = (pid) => {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (e) {
+    return e.code === 'EPERM'
+  }
+}
+async function acquireLock(maxWait = 30 * 60 * 1000) {
+  for (let t = 0; ; t += 400) {
+    try {
+      fs.mkdirSync(LOCK)
+      fs.writeFileSync(path.join(LOCK, 'pid'), String(process.pid))
+      return
+    } catch {
+      let pid = NaN
+      try {
+        pid = Number(fs.readFileSync(path.join(LOCK, 'pid'), 'utf8'))
+      } catch {
+        /* 对方刚建好目录还没写 pid：下一轮再看 */
+      }
+      if (pid === process.pid) return
+      if (Number.isFinite(pid) && !alive(pid)) fs.rmSync(LOCK, { recursive: true, force: true })
+      else if (t > maxWait) throw new Error(`等浏览器锁超时（持有者 pid ${pid}）：${LOCK}`)
+      else await sleep(400)
+    }
+  }
+}
+function releaseLock() {
+  try {
+    if (Number(fs.readFileSync(path.join(LOCK, 'pid'), 'utf8')) === process.pid) fs.rmSync(LOCK, { recursive: true, force: true })
+  } catch {
+    /* 没有锁 */
+  }
+}
+
 // 调试端口默认在 9350–9389 里随机取：上一次没退干净的实例占着端口时不撞
 export async function launch({ width, height, port = 9350 + Math.floor(Math.random() * 40), gpu = true } = {}) {
+  await acquireLock()
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'promo-chrome-'))
   const args = [
     '--headless=new',
@@ -64,6 +104,7 @@ export async function launch({ width, height, port = 9350 + Math.floor(Math.rand
   const killTree = () => {
     if (dead) return
     dead = true
+    releaseLock()
     try {
       if (process.platform === 'win32') execSync(`taskkill /PID ${proc.pid} /T /F`, { stdio: 'ignore' })
       else process.kill(-proc.pid, 'SIGKILL')
