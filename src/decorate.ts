@@ -29,7 +29,7 @@ import { rng, type Poly } from './three/kit'
 import { artKindOf, parseArt, pickArt } from './three/artwork'
 import { paletteStyle } from './three/catalog'
 import { pickStyleColor } from './three/stylePalettes'
-import { fitsOnFixture, fitsOnSurface, fixtureTop, toLocal, toWorld } from './surface'
+import { fitsOnFixture, fitsOnSurface, fixtureTop, levels as levelsOf, toLocal, toWorld } from './surface'
 import { tubTopPose } from './tubTop'
 import { COMPETITIVE, INTEREST_TIERS, JOBS, interestFloor, interestProps, interestStickers, interestWall, jobDeskProps, levelOf, topLevel, type Household, type InterestId, type Member, type Tier } from './household'
 import { furnitureBox } from './snap'
@@ -4216,6 +4216,8 @@ class Decorator {
     const f: Furniture = { id: uid('u'), asset, x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10, rot: (parent.rot + lrot + 360) % 360, color: this.colorFor(def), z: (parent.z ?? 0) + lv.y }
     // 整个占地在台面内
     if (!fitsOnSurface(parent, f.z!, asset, f.x, f.y, f.rot)) return null
+    // 落点要在门外的层上：电视柜这类开放格和门里的格常常同高，位置是按整件的宽深随机取的，会落进旁边门里的那格
+    if (!this.isStowing && !onOpenLevel(parent, lv.y, f)) return null
     // 立体上不冲突（Occupancy.canPlace）：不顶到天花板、不和同一台面上已摆的东西重叠、不顶到上方墙上挂的东西、
     // 不顶进设备本体（抽油烟机、吊柜…；支撑链上的设备除外）、不插进窗帘
     if (!this.canPlace(asset, f.x, f.y, f.rot, f.z, { parent: parent.id })) return null
@@ -4387,6 +4389,12 @@ const SASH_R = 12
 /** 玄关里的端点的通道半宽：窄玄关摆了鞋柜只剩五十来公分，侧身过 */
 const ENTRY_KEY_R = 15
 /** 主要通道的端点；r：这一处的通道半宽（不给 = PASSAGE_R） */
+/** 摆件中心落在 parent 高度 y 的某个门外（不在柜门 / 抽屉里）的层上 */
+function onOpenLevel(parent: Furniture, y: number, f: Furniture) {
+  const p = toLocal(parent, f)
+  return levelsOf(parent.asset).some((l) => Math.abs(l.y - y) < 0.5 && !l.inside && l.polys.some((pl) => pointInPolygon(p, pl.map(([x, z]) => ({ x, y: z })))))
+}
+
 type PassageKey = Vec & { r?: number }
 /** 玄关 / 入口的通道半宽（宽 60：正面走过去，不用侧身） */
 const ENTRY_R = 30

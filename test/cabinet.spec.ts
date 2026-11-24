@@ -340,11 +340,17 @@ describe('一键布置', () => {
     const bad: string[] = []
     for (const { region, seed, plan } of plans)
       for (const cab of plan.furniture.filter((f) => ASSET_MAP.get(f.asset)?.openable && !f.open)) {
-        const def = ASSET_MAP.get(cab.asset)!
-        const hidden = (def.surfaces ?? []).filter((s) => s.inside && !s.glass).map((s) => (cab.z ?? 0) + s.y)
+        // 按高度和位置一起判断落在哪一层：电视柜这类开放格和门里的格常常同高，只看高度会把开放格上的东西当成收进了门里
+        const lvs = levels(cab.asset)
+        const hiddenAt = (o: Furniture) => {
+          const p = toLocal(cab, o)
+          const at = lvs.filter((l) => Math.abs((cab.z ?? 0) + l.y - (o.z ?? 0)) < 0.5)
+          const on = (l: (typeof lvs)[number]) => l.polys.some((pl) => pointInPolygon(p, pl.map(([x, y]) => ({ x, y }))))
+          return at.some((l) => l.inside && on(l)) && !at.some((l) => !l.inside && on(l))
+        }
         for (const o of propsOn(plan, cab)) {
           const od = ASSET_MAP.get(o.asset)!
-          if (supportOf(plan, o)?.ownerId !== cab.id || !hidden.some((z) => Math.abs((o.z ?? 0) - z) < 0.5)) continue
+          if (supportOf(plan, o)?.ownerId !== cab.id || !hiddenAt(o)) continue
           if ((od.tags ?? []).some((t) => t.startsWith('hobby:')) || od.tags?.includes('collectible') || isPersonal(od)) bad.push(`${region} ${seed}: ${cab.asset} 里有 ${o.asset}`)
         }
       }
