@@ -90,7 +90,8 @@ export function duvetGeometry(o: DuvetOpts) {
   const arc = (Math.PI / 2) * r
   const spanX = half + arc + o.drop
   const spanZ = flat + arc + o.drop
-  const STEP = 2.5
+  // 网格间距：被子是一户里出现最多的大曲面（每张床一床），2.5 时一床就上万个三角面；3.4 时斜褶、翻边照样圆滑
+  const STEP = 3.4
   const nx = Math.max(8, Math.ceil((spanX * 2) / STEP))
   const nz = Math.max(8, Math.ceil(spanZ / STEP))
   const pos = new Float32Array((nx + 1) * (nz + 1) * 3)
@@ -218,7 +219,8 @@ export function pillowGeometry(w: number, h: number, d: number, pinch = 0.7) {
   const key = `pillow|${w.toFixed(1)},${h.toFixed(1)},${d.toFixed(1)},${pinch}`
   let geo = geoCache.get(key)
   if (geo) return geo
-  geo = new THREE.SphereGeometry(1, 40, 24)
+  // 一圈 32 段（8 的倍数：四个圆角正好各落一个顶点），上下 16 段：超椭球方方的轮廓照样圆润，面数是 40×24 的一半多
+  geo = new THREE.SphereGeometry(1, 32, 16)
   const p = geo.attributes.position as THREE.BufferAttribute
   for (let i = 0; i < p.count; i++) {
     const x = p.getX(i)

@@ -137,6 +137,10 @@ export class Openers {
   has(key: OpenKey) {
     return this.live.has(key)
   }
+  /** 这件家具有没有哪个部件现在没关严（开着或正在动） */
+  anyOpen(id: string) {
+    return (this.furn.get(id) ?? []).some((k) => (this.live.get(k)?.cur ?? 0) > 0)
+  }
   /** 现在摆在多少 */
   value(key: OpenKey) {
     return this.live.get(key)?.cur ?? 0

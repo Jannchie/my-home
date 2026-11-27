@@ -12,7 +12,7 @@
 
 import * as THREE from 'three'
 import { cyl, markMirror, rbox, shade, toon } from './toon'
-import { SWING_OPEN, carcass, doorRow, drawerBox, drawerLevel, flapDoor, hangingPipe, movable, pipeHook, rectPoly, shelvesIn, slidingDoors, type SurfaceDef } from './kit'
+import { SWING_OPEN, carcass, doorRow, drawerBox, drawerLevel, flapDoor, hangingPipe, innards, movable, pipeHook, rectPoly, shelvesIn, slidingDoors, type SurfaceDef } from './kit'
 
 export type DoorStyle = 'flat' | 'frame' | 'louver' | 'glass' | 'fusuma' | 'mirror' | 'slat' | 'cane'
 
@@ -273,7 +273,11 @@ function drawerTray(x0: number, x1: number, y0: number, h: number, zf: number, d
 /** 抽屉：面板零件 + 抽屉盒，打开时往前拉 pull（默认盒深的 0.6） */
 export function drawerOf(front: THREE.Object3D[], x0: number, x1: number, y0: number, h: number, zf: number, depth: number, color: string, pull = Math.round(depth * 0.6)) {
   const g = new THREE.Group()
-  for (const o of [...front, ...drawerTray(x0, x1, y0, h, zf, depth, color)]) g.add(o)
+  for (const o of front) g.add(o)
+  // 抽屉盒关严时整个在柜体里，不画（kit.ts innards）
+  const tray = innards(new THREE.Group())
+  for (const o of drawerTray(x0, x1, y0, h, zf, depth, color)) tray.add(o)
+  g.add(tray)
   return movable(g, { kind: 'drawer', dz: pull })
 }
 

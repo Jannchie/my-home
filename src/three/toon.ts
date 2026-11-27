@@ -3,6 +3,7 @@
 
 import { dimLightness, hex6, shadeHex } from './shade'
 import * as THREE from 'three'
+import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 // 室内灯的楼层 / 房间遮罩：给所有受光照材质挂上 onBeforeCompile（副作用导入，要在任何材质编译前生效）
 import { injectLightMask } from './lightMask'
@@ -457,7 +458,8 @@ function rboxSegments(r: number) {
   return r >= 4 ? 3 : r >= 1.5 ? 2 : 1
 }
 function ballSegments(r: number): [number, number] {
-  return r >= 8 ? [24, 16] : r >= 3 ? [16, 12] : [12, 8]
+  // 不到 1cm 的小球（眼睛的高光、珠子、按钮）屏幕上只有几个像素：8 × 6 段
+  return r >= 8 ? [24, 16] : r >= 3 ? [16, 12] : r >= 1 ? [12, 8] : [8, 6]
 }
 /**
  * 圆环：[管截面段数, 一整圈的段数]。管截面只看管粗（细管 8 段）；一整圈的段数只看环的半径（r < 4 的小环 24 段）。
@@ -489,6 +491,37 @@ export function rbox(w: number, h: number, d: number, color: THREE.ColorRepresen
   const r = q(Math.max(0.01, Math.min(radius ?? Math.min(w, h, d) * 0.18, Math.min(w, h, d) / 2 - 0.01)))
   const seg = rboxSegments(r)
   const g = cached(`rb${w},${h},${d},${r},${seg}`, () => new RoundedBoxGeometry(w, h, d, seg, r))
+  return place(new THREE.Mesh(g, toon(color)), { ...at, y: (at.y ?? 0) + h / 2 })
+}
+
+/**
+ * 不带圆角的方块，at.y 是底面：不到 1～2cm 的条子、刻度、键帽、流苏这类圆角看不出来的小零件
+ * （圆角盒最少也是 108 个三角面，方块 12 个）。描边按面法线外扩，大块的面别用它（角上的描边会断开）
+ */
+export function box(w: number, h: number, d: number, color: THREE.ColorRepresentation, at: At = {}) {
+  w = q(w)
+  h = q(h)
+  d = q(d)
+  const g = cached(`bx${w},${h},${d}`, () => new THREE.BoxGeometry(w, h, d))
+  return place(new THREE.Mesh(g, toon(color)), { ...at, y: (at.y ?? 0) + h / 2 })
+}
+
+/**
+ * 直角盒，8 个顶点共用、法线取平均（描边外壳连成一圈，不像 box 那样在角上断开），12 个面，at.y 是底面。
+ * 护墙板竖条、合页、绑带、滑轨这类截面很窄的零件用；大平面别用：平均法线会让整面明暗不匀
+ */
+export function nub(w: number, h: number, d: number, color: THREE.ColorRepresentation, at: At = {}) {
+  w = q(w)
+  h = q(h)
+  d = q(d)
+  const g = cached(`nb${w},${h},${d}`, () => {
+    const b = new THREE.BoxGeometry(w, h, d)
+    b.deleteAttribute('normal')
+    b.deleteAttribute('uv')
+    const m = mergeVertices(b)
+    m.computeVertexNormals()
+    return m
+  })
   return place(new THREE.Mesh(g, toon(color)), { ...at, y: (at.y ?? 0) + h / 2 })
 }
 
@@ -524,12 +557,12 @@ export function puck(r: number, h: number, color: THREE.ColorRepresentation, at:
 }
 
 /** 空心的杯 / 桶 / 花盆：带壁厚和圆润的口沿，at.y 为底面 */
-export function cup(rTop: number, rBottom: number, h: number, t: number, color: THREE.ColorRepresentation, at: At = {}) {
+export function cup(rTop: number, rBottom: number, h: number, t: number, color: THREE.ColorRepresentation, at: At = {}, seg = 32) {
   rTop = q(rTop)
   rBottom = q(rBottom)
   h = q(h)
   t = q(t)
-  const g = cached(`cu${rTop},${rBottom},${h},${t}`, () => {
+  const g = cached(seg === 32 ? `cu${rTop},${rBottom},${h},${t}` : `cu${rTop},${rBottom},${h},${t},${seg}`, () => {
     const k = Math.min(t * 0.6, rBottom * 0.2)
     const innerBottom = rBottom - t + ((rTop - rBottom) * t) / h
     const pts: THREE.Vector2[] = [new THREE.Vector2(0, 0)]
@@ -544,7 +577,7 @@ export function cup(rTop: number, rBottom: number, h: number, t: number, color: 
     pts.push(new THREE.Vector2(rTop - t, h - t / 2))
     pts.push(new THREE.Vector2(innerBottom, t + k), new THREE.Vector2(innerBottom - k, t))
     pts.push(new THREE.Vector2(0, t))
-    return new THREE.LatheGeometry(pts, 32)
+    return new THREE.LatheGeometry(pts, seg)
   })
   return place(new THREE.Mesh(g, toon(color)), at)
 }
@@ -569,7 +602,8 @@ export function tray(w: number, h: number, d: number, t: number, color: THREE.Co
  */
 export function ball(r: number, color: THREE.ColorRepresentation, at: At = {}, scale?: [number, number, number], seg?: [number, number]) {
   r = q(r)
-  const [ws, hs] = seg ?? ballSegments(r)
+  // 压扁 / 拉长的球按缩放后的大小细分：一圈的段数看水平截面（剑形叶、草叶这类又窄又薄的，水平截面只有几厘米），上下的段数看最长的轴
+  const [ws, hs] = seg ?? (scale ? [ballSegments(r * Math.max(scale[0], scale[2]))[0], ballSegments(r * Math.max(...scale))[1]] : ballSegments(r))
   const g = cached(`sp${r},${ws}x${hs}`, () => new THREE.SphereGeometry(r, ws, hs))
   const m = place(new THREE.Mesh(g, toon(color)), at)
   if (scale) m.scale.set(...scale)
@@ -584,12 +618,13 @@ export function capsule(r: number, len: number, color: THREE.ColorRepresentation
   return place(new THREE.Mesh(g, toon(color)), { ...at, y: (at.y ?? 0) + len / 2 + r })
 }
 
-export function torus(r: number, tube: number, color: THREE.ColorRepresentation, at: At = {}, arc = Math.PI * 2) {
+export function torus(r: number, tube: number, color: THREE.ColorRepresentation, at: At = {}, arc = Math.PI * 2, seg?: [number, number]) {
   r = q(r)
   tube = q(tube)
   // 弧度取整到 0.001（按 0.1 取整的话，半径大的圆环弧长误差会超过 0.05cm）
   arc = Math.abs(arc - Math.PI * 2) < 1e-4 ? Math.PI * 2 : Math.round(arc * 1000) / 1000
-  const [radial, tubular] = torusSegments(r, tube, arc)
+  // seg：[管截面, 圆周] 段数。成串的小环、细钢丝圈按尺寸自适应压不下来时指定；贴着器身的箍要和器身同样的段数
+  const [radial, tubular] = seg ?? torusSegments(r, tube, arc)
   const g = cached(`to${r},${tube},${arc},${radial}x${tubular}`, () => new THREE.TorusGeometry(r, tube, radial, tubular, arc))
   return place(new THREE.Mesh(g, toon(color)), at)
 }
@@ -711,7 +746,7 @@ export function mergeMeshes(root: THREE.Object3D) {
   const walk = (o: THREE.Object3D) => {
     if (o !== root && Object.keys(o.userData).some((k) => !PLAIN_KEYS.has(k))) {
       // 柜门 / 抽屉（kit.ts movable）：子树作为整体开合，内部零件在子树自己的局部坐标里照样按材质合并
-      if (o.userData.door) mergeMeshes(o)
+      if (o.userData.door || o.userData.innards) mergeMeshes(o)
       return // 有业务标记的子树整体保留
     }
     for (const c of o.children) walk(c)
@@ -850,7 +885,7 @@ export function mergeSolidColors(root: THREE.Object3D): number {
   let merged = 0
   const walk = (o: THREE.Object3D) => {
     if (o !== root && Object.keys(o.userData).some((k) => !PLAIN_KEYS.has(k))) {
-      if (o.userData.door) merged += mergeSolidColors(o)
+      if (o.userData.door || o.userData.innards) merged += mergeSolidColors(o)
       return
     }
     for (const c of [...o.children]) if (!c.userData.isOutline) walk(c)

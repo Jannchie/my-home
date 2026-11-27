@@ -131,6 +131,9 @@ function holePath(h: Hole) {
  * o.seg：圆弧的细分（默认 16；圆孔一圈是它的两倍）；o.bevel：倒角宽（默认 min(0.4, t × 0.2)，0 = 不倒角）。
  * 孔多的板（散热孔、网面、藤编）用直角孔 / n 边形孔、不倒角：每个圆角孔加倒角要上千个三角面。
  */
+/** 板角圆角的细分段数：1.5cm 的小圆角 4 段，越大越细，最多 12 段 */
+const cornerSegments = (r: number) => Math.max(2, Math.min(12, Math.ceil(r * 2.5)))
+
 export function holePanel(
   w: number,
   h: number,
@@ -145,15 +148,26 @@ export function holePanel(
   const s = new THREE.Shape()
   if (r <= 0) s.setFromPoints([new THREE.Vector2(-w / 2, 0), new THREE.Vector2(w / 2, 0), new THREE.Vector2(w / 2, h), new THREE.Vector2(-w / 2, h)])
   else {
+    // 板角按圆角半径细分（不走 curveSegments：那是给洞的圆弧用的，一律 16 段的话一块板光四个角就上百个点）
+    const n = cornerSegments(r)
+    const corner = (x0: number, y0: number, cx: number, cy: number, x1: number, y1: number) => {
+      for (let i = 1; i <= n; i++) {
+        const k = i / n
+        const a = (1 - k) * (1 - k)
+        const b = 2 * (1 - k) * k
+        const c = k * k
+        s.lineTo(a * x0 + b * cx + c * x1, a * y0 + b * cy + c * y1)
+      }
+    }
     s.moveTo(-w / 2 + r, 0)
     s.lineTo(w / 2 - r, 0)
-    s.quadraticCurveTo(w / 2, 0, w / 2, r)
+    corner(w / 2 - r, 0, w / 2, 0, w / 2, r)
     s.lineTo(w / 2, h - r)
-    s.quadraticCurveTo(w / 2, h, w / 2 - r, h)
+    corner(w / 2, h - r, w / 2, h, w / 2 - r, h)
     s.lineTo(-w / 2 + r, h)
-    s.quadraticCurveTo(-w / 2, h, -w / 2, h - r)
+    corner(-w / 2 + r, h, -w / 2, h, -w / 2, h - r)
     s.lineTo(-w / 2, r)
-    s.quadraticCurveTo(-w / 2, 0, -w / 2 + r, 0)
+    corner(-w / 2, r, -w / 2, 0, -w / 2 + r, 0)
   }
   for (const hole of holes) s.holes.push(holePath(hole))
   const bevel = o.bevel ?? Math.min(0.4, t * 0.2)
@@ -378,6 +392,25 @@ export function movable<T extends THREE.Object3D>(o: T, m: DoorMotion): T {
   return o
 }
 
+/**
+ * 标成「部件里面的东西」（抽屉里码着的衣物这类）：放在会动的部件（movable）里，部件关严时不画（poseDoor 管可见性），
+ * 一格格抽屉里几百个小零件不再每帧白画、白投影。合并网格时它自成一组（toon.ts mergeMeshes），不和抽屉面板并在一起。
+ */
+export function innards<T extends THREE.Object3D>(o: T): T {
+  o.userData.innards = true
+  return o
+}
+
+/** 部件自己的「里面的东西」（不含套在里面的别的会动部件的） */
+function innardsOf(part: THREE.Object3D, out: THREE.Object3D[] = []) {
+  for (const c of part.children) {
+    if (c.userData.door) continue
+    if (c.userData.innards) out.push(c)
+    else innardsOf(c, out)
+  }
+  return out
+}
+
 
 /** 按开 / 关摆好模型里所有会动的部件（可以反复调用，不会累积） */
 export function poseDoors(root: THREE.Object3D, open: boolean) {
@@ -403,6 +436,7 @@ export function poseDoor(o: THREE.Object3D, open: number) {
   else if (m.kind === 'flap') o.rotation.x += m.angle * open
   else if (m.kind === 'slide') o.position.x += m.dx * open
   else o.position.z += m.dz * open
+  for (const c of innardsOf(o)) c.visible = open > 0
   // 静态矩阵（freezeMatrices）的模型也要跟着变
   if (!o.matrixAutoUpdate) syncMatrix(o)
 }
@@ -549,13 +583,15 @@ export function drawerBox(o: { x0: number; x1: number; y0: number; y1: number; z
   const g = new THREE.Group()
   const inner = o.inner ?? shade(o.color, 0.06)
   for (const m of o.front ? o.front(w, h) : [rbox(w, h, th, o.color, { z: -th / 2 }, 0.5)]) g.add(m)
-  // 抽屉盒：底板、两侧、后板（比面板矮一点）
+  // 抽屉盒：底板、两侧、后板（比面板矮一点）；关严时整个在柜体里，不画（innards）
   const bh = Math.max(2, h - 3)
   const bw = w - 2
   const bd = o.depth - th - 1
-  g.add(rbox(bw, 1, bd, inner, { y: DRAWER_FLOOR - 1, z: -th - bd / 2 }, 0.2))
-  for (const s of [-1, 1]) g.add(rbox(1, bh, bd, inner, { x: (s * (bw - 1)) / 2, y: DRAWER_FLOOR - 1, z: -th - bd / 2 }, 0.2))
-  g.add(rbox(bw - 2, bh, 1, inner, { y: DRAWER_FLOOR - 1, z: -th - bd + 0.5 }, 0.2))
+  const box = innards(new THREE.Group())
+  box.add(rbox(bw, 1, bd, inner, { y: DRAWER_FLOOR - 1, z: -th - bd / 2 }, 0.2))
+  for (const s of [-1, 1]) box.add(rbox(1, bh, bd, inner, { x: (s * (bw - 1)) / 2, y: DRAWER_FLOOR - 1, z: -th - bd / 2 }, 0.2))
+  box.add(rbox(bw - 2, bh, 1, inner, { y: DRAWER_FLOOR - 1, z: -th - bd + 0.5 }, 0.2))
+  g.add(box)
   if (o.knob !== false) g.add(rbox(Math.min(10, w * 0.3), 1.2, 1.4, o.knob ?? '#c9ced6', { y: Math.max(1, h / 2 - 0.6), z: 0.7 }, 0.4))
   g.position.set((o.x0 + o.x1) / 2, o.y0 + gap, o.z)
   return movable(g, { kind: 'drawer', dz: o.pull ?? drawerPull(o.depth) })

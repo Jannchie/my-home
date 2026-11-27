@@ -5,7 +5,7 @@
 //   - 化妆台都有台面（surface / surfaceShape 避开镜子），化妆品是独立的摆件（toiletry 类）。
 
 import * as THREE from 'three'
-import { C, movable, rectPoly, type AssetDef, type SurfaceDef } from '../kit'
+import { C, innards, movable, rectPoly, type AssetDef, type SurfaceDef } from '../kit'
 import { ball, cyl, markMirror, rbox, shade, toon, torus } from '../toon'
 import { I, J, M, N, R, define, type Pal } from '../packkit'
 
@@ -92,7 +92,8 @@ function drawer(w: number, h: number, d: number, front: string, body: string, kn
     if (fill !== null) {
       const f = drawerFill(w - 5, d - 4, fill, fillH ?? bh - 2)
       f.position.set(0, 0.6 + t, -0.4)
-      g.add(f)
+      // 关着的抽屉里看不见：可开合的抽屉关严时不画（kit.ts innards）
+      g.add(innards(f))
     }
   }
   g.position.z = pull

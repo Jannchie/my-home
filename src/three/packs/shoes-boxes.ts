@@ -291,7 +291,7 @@ function shoeLast(s: LastSpec) {
     for (let i = open.length - 1; i >= 0; i--) pts.push(at(open[i].u, open[i].phiMax))
     for (let i = 0; i < open.length; i++) pts.push(at(open[i].u, PI - open[i].phiMax))
     pts.push(at(uOpen, PI / 2))
-    return cappedTube(pts, r, color, { ...TUBE, closed: true, seg: 56 })
+    return cappedTube(pts, r, color, { ...TUBE, closed: true, seg: 40 })
   }
 
   /** 横跨鞋面的拱形（包边、鞋头接缝） */
@@ -339,8 +339,8 @@ function shoeLast(s: LastSpec) {
       const B = at(u, PI - pr, 0.25)
       A[1] = B[1] = Math.max(A[1], B[1])
       g.add(rod3(A, B, r, color, 8))
-      for (const p of [A, B]) // 孔眼：8×6 段的小球（默认 12×8，一双系带鞋二十来个孔眼会多出近两千面）
-      g.add(ball(r * 1.6, shade(color, -0.25), { x: p[0], y: p[1] - r, z: p[2] }, undefined, [8, 6]))
+      for (const p of [A, B]) // 孔眼：直径不到 1cm、半埋在鞋面里，6×4 段就够（一双系带鞋二三十个孔眼）
+      g.add(ball(r * 1.6, shade(color, -0.25), { x: p[0], y: p[1] - r, z: p[2] }, undefined, [6, 4]))
     }
     if (bow) {
       const [bx, by, bz] = at(ua, PI / 2, 0.4)

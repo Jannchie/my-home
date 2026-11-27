@@ -23,7 +23,7 @@ import FloorBar from './FloorBar.vue'
 import FloorRail from './FloorRail.vue'
 import { withStairHoles } from '../stairs'
 import { overlapsOthers, snapFurniture, snapToWall, type Guide } from '../snap'
-import { fitOnSurface, carriedBy, propClash, propsOn, propsOnTop, snapToClip, snapToHook, toLocal, toWorld } from '../surface'
+import { fitOnSurface, carriedBy, propClash, propsOn, propsOnTop, shutAll, snapToClip, snapToHook, toLocal, toWorld } from '../surface'
 import { pickSurface, pickTub } from '../three/surfacePick'
 import { dentDepth, dentDuvets, duvetsIn, restHeight } from '../three/bedding'
 import { RESIZE_SIDES, dragSize, handleLocal, type ResizeDrag, type ResizeSide } from '../furnitureResize'
@@ -336,6 +336,20 @@ if (import.meta.env.DEV) {
   const w = window as unknown as { __myhomeActors?: ActorLayer; __myhomePeople?: ResidentLayer; __myhomeCam?: (target: number[], pos: number[]) => void }
   w.__myhomeActors = actors
   w.__myhomePeople = people
+  // 家具层现在画多少：网格数、三角面（含描边外壳）、收在关着的柜子里没画的件数
+  Object.assign(w, {
+    __myhomeFurnStats: () => {
+      let meshes = 0
+      let tris = 0
+      furnRoot.traverseVisible((o) => {
+        const m = o as THREE.Mesh
+        if (!m.isMesh) return
+        meshes++
+        tris += (m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count) / 3
+      })
+      return { meshes, tris, shut: shutAway.size, items: objs.size }
+    },
+  })
   // 镜头：target / pos 是世界坐标 [x, 高度, 平面 y]
   w.__myhomeCam = (target, pos) => {
     controls.autoRotate = false
@@ -372,9 +386,15 @@ const openers = new Openers(onDrawerPart)
 const drawerShift = new Map<string, { x: number; y: number; owner: string }>()
 /** 某个抽屉里的东西（家具 id:部件下标 → 那一格里的东西）：拉开 / 推回的动画每帧都要，户型变了（syncFurniture）就清掉 */
 const drawerItems = new Map<string, Furniture[]>()
+/** 收在柜子里的东西：柜子 id → 关着时藏起来的东西（家具 id），户型 / 家具变了（syncFurniture）重算；见 applyShut */
+const shutBy = new Map<string, string[]>()
+/** 现在藏着的东西 */
+const shutAway = new Set<string>()
 
 /** 抽屉拉开 / 推回：抽屉格里的东西（连同摆在它们上面的）跟着挪 */
 function onDrawerPart(id: string, part: number, v: number, base: number) {
+  // 门、抽屉开了一条缝就要看得到里面的东西；关严了再藏起来
+  if (shutBy.has(id)) applyShut()
   const raw = toRaw(plan.value)
   const f = raw.furniture.find((x) => x.id === id)
   const o = objs.get(id)
@@ -941,6 +961,7 @@ function syncFurniture() {
   settleOnBeds(p)
   updateRing()
   applyXray()
+  syncShut()
   // 灯具家具：发光部件、光源位置；餐桌挪了吊灯跟着挪
   lights.syncLamps(p, objs, ASSET_MAP, (f) => roomAt(p, f, isMultiFloor(p) ? (f.floor ?? null) : undefined), floorY)
   const dk = roomLightKey(p)
@@ -1686,6 +1707,46 @@ function applyXray() {
     m.material = Array.isArray(m.material) ? m.material.map(ghostOf) : ghostOf(m.material)
   })
   dirty = true
+}
+
+// ---------- 柜子里收着的东西：关着门时不画（surface.ts shutInside） ----------
+// 一键布置往衣柜挂衣服、往鞋柜放鞋、往斗柜放收纳盒，柜门关着时一个像素都看不到，却照样画主画面、描边和阴影
+// （约占一户三角面的两成）。柜子存档里开着、沙盘里有哪扇门 / 哪个抽屉没关严、或者正被选中透视时照常画。
+
+function syncShut() {
+  shutBy.clear()
+  for (const [id, inside] of shutAll(toRaw(plan.value))) shutBy.set(id, inside)
+  applyShut()
+}
+/** 按柜子现在开没开摆好可见性；选中的东西总是画（拖进柜子里时不会突然没了） */
+function applyShut() {
+  const raw = toRaw(plan.value)
+  const xray = xrayTarget()
+  const keep = selection.value?.type === 'furniture' ? selection.value.id : ''
+  const hide = new Set<string>()
+  for (const [id, inside] of shutBy) {
+    const f = raw.furniture.find((x) => x.id === id)
+    const o = objs.get(id)?.obj
+    if (!f || f.open || (o && o === xray) || openers.anyOpen(id)) continue
+    for (const c of inside) if (c !== keep) hide.add(c)
+  }
+  let changed = false
+  for (const id of shutAway)
+    if (!hide.has(id)) {
+      const o = objs.get(id)?.obj
+      if (o) o.visible = true
+      changed = true
+    }
+  for (const id of hide) {
+    const o = objs.get(id)?.obj
+    if (o && o.visible) {
+      o.visible = false
+      changed = true
+    }
+  }
+  shutAway.clear()
+  for (const id of hide) shutAway.add(id)
+  if (changed) dirty = true
 }
 
 /**
@@ -3772,6 +3833,7 @@ watch(
 watch(selection, () => {
   updateRing()
   applyXray()
+  applyShut()
 })
 // 门窗的选中框只在布置模式里显示（进漫游、预览时藏起来，回来再显示）
 watch([editing, walking], () => updateRing())

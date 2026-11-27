@@ -254,6 +254,8 @@ export interface TubeOpts {
   caps?: boolean
   /** cappedTube：没有球帽时也包一层 Group，默认 false */
   group?: boolean
+  /** cappedTube：球帽的 [一圈, 上下] 段数，默认按半径（toon.ts ball）；细管配低段数的截面时跟着压低 */
+  capSeg?: [number, number]
 }
 
 /** 过控制点的弯管（centripetal Catmull-Rom 曲线），两端开口 */
@@ -281,7 +283,7 @@ export function cappedTube(pts: V3[], r: number, color: string, o: TubeOpts = {}
   if (o.closed || o.caps === false) return o.group ? G(m) : m
   const a = pts[0]
   const b = pts[pts.length - 1]
-  return G(m, ball(r, color, { x: a[0], y: a[1], z: a[2] }), ball(r, color, { x: b[0], y: b[1], z: b[2] }))
+  return G(m, ball(r, color, { x: a[0], y: a[1], z: a[2] }, undefined, o.capSeg), ball(r, color, { x: b[0], y: b[1], z: b[2] }, undefined, o.capSeg))
 }
 
 // ---------- 车削体 ----------

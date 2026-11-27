@@ -296,6 +296,59 @@ export function propsOn(plan: Pick<Plan, 'furniture'>, f: Furniture, depth = 0):
 }
 
 /**
+ * 收在柜门里面的东西：摆在柜内层（不是玻璃门的，Level.inside）上的，连同叠在它们上面的。
+ * 柜子关着时它们一点都看不见，沙盘就不画（省下的面数、draw call 和阴影约占一户的两成）；开没开由调用方判断
+ */
+export function shutInside(plan: Pick<Plan, 'furniture'>, f: Furniture): Furniture[] {
+  const lv = levels(f.asset).filter((l) => l.inside)
+  if (!lv.length) return []
+  const base = f.z ?? 0
+  const direct = plan.furniture.filter((o) => o.id !== f.id && o.floor === f.floor && lv.some((l) => Math.abs((o.z ?? 0) - (base + l.y)) < 0.5 && inPolys(f, l.polys, o)))
+  return direct.flatMap((o) => [o, ...propsOn(plan, o, 1)])
+}
+
+/**
+ * 整个户型的 shutInside：柜子 id → 收在里面的东西（id，含叠在上面的）。结果和逐件调 shutInside 一样，
+ * 但先按楼层 + 高度分桶，沙盘拖动时每帧都要算（三百件家具的户型逐件算要一两毫秒）
+ */
+export function shutAll(plan: Pick<Plan, 'furniture'>): Map<string, string[]> {
+  const buckets = new Map<string, Furniture[]>()
+  const key = (floor: string | undefined, z: number) => `${floor ?? ''}|${Math.round(z)}`
+  for (const o of plan.furniture) {
+    const k = key(o.floor, o.z ?? 0)
+    let b = buckets.get(k)
+    if (!b) buckets.set(k, (b = []))
+    b.push(o)
+  }
+  /** 摆在 f 的这几层上的东西（高度差 < 0.5：相邻的桶也要看） */
+  const on = (f: Furniture, lv: Level[]) => {
+    const out: Furniture[] = []
+    const base = f.z ?? 0
+    for (const l of lv) {
+      const y = base + l.y
+      for (const k of new Set([key(f.floor, y - 0.5), key(f.floor, y + 0.5)]))
+        for (const o of buckets.get(k) ?? []) if (o.id !== f.id && !out.includes(o) && Math.abs((o.z ?? 0) - y) < 0.5 && inPolys(f, l.polys, o)) out.push(o)
+    }
+    return out
+  }
+  const stack = (o: Furniture, depth: number, out: string[]) => {
+    out.push(o.id)
+    if (depth > 3) return
+    const lv = levels(o.asset, !!o.open)
+    if (lv.length) for (const c of on(o, lv)) stack(c, depth + 1, out)
+  }
+  const res = new Map<string, string[]>()
+  for (const f of plan.furniture) {
+    const lv = levels(f.asset).filter((l) => l.inside)
+    if (!lv.length) continue
+    const ids: string[] = []
+    for (const o of on(f, lv)) stack(o, 1, ids)
+    if (ids.length) res.set(f.id, ids)
+  }
+  return res
+}
+
+/**
  * 搬动一件家具时要跟着走的东西：摆在上面、柜子里的（propsOn），加上贴在它和这些东西侧面上的贴附物（冰箱门上的冰箱贴）。
  * 移动、旋转、微调、删除、复制都用它
  */
