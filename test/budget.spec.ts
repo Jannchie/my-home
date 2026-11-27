@@ -21,7 +21,6 @@ const TIERS = [
 
 /** 已知超限的素材：登记的是允许的上限（只许调低或删除，不许调高、不许新增） */
 const ALLOW: Record<string, { tris: number; meshes: number; why: string }> = {
-  'be-chest-low-closed': { tris: 33000, meshes: 80, why: '几十个独立抽屉（可开合子树各自合并），每个抽屉由圆角盒、把手拼成' },
   'lm-ball-pit': { tris: 50000, meshes: 80, why: '海洋球池：上百个球' },
   'mk-drawers-floor': { tris: 62000, meshes: 242, why: '几十个独立抽屉（可开合子树各自合并），每个抽屉由圆角盒、把手拼成' },
   'rb-drone-fpv': { tris: 15000, meshes: 46, why: '电子模型：大量引脚、元件、按键等小零件' },

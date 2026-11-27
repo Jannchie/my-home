@@ -10,7 +10,7 @@
 //           没够到框的合页、浮在碗上方的碗盖）都算「挨着」放过了。这里逐三角面量真实距离：和别的零件都不接触（> 0.05cm）、
 //           离最近的零件又不到 3cm 的一组零件。贴片（平面，按约定浮出一点防共面）、柜门抽屉、各自落地 / 贴墙的不算。
 //           同一项里顺带查落地件离地（lift）：最低点比地面高出 0.15cm 以上——多半是往下鼓的弯管、圆角把整件垫了起来。
-//           要逐对零件量距离，比别的检查慢一个数量级，默认不做（脚本里 --checks near）
+//           比别的检查慢（全库约一分钟），脚本里默认不做（--checks near）；测试里照做
 import * as THREE from 'three'
 import { OBB } from 'three/addons/math/OBB.js'
 import type { AssetDef } from './kit'
@@ -342,7 +342,7 @@ function samplesOf(p: Part) {
 }
 
 /** p 的采样点到 q 表面的最近距离，不超过 cap（点在 q 里面算 0） */
-function distOneWay(p: Part, q: Part, cap: number) {
+function distOneWay(p: Part, q: Part, cap: number, eps = NEAR_EPS) {
   let best = cap
   const qb = q.box.clone().expandByScalar(cap)
   const tris = trisOf(q)
@@ -357,7 +357,7 @@ function distOneWay(p: Part, q: Part, cap: number) {
       tris[k].closestPointToPoint(v, _c)
       const d = _c.distanceTo(v)
       if (d < best) best = d
-      if (best <= NEAR_EPS) return best
+      if (best <= eps) return best
     }
   }
   return best
@@ -369,19 +369,22 @@ const partName = (p: Part) => {
   return `${p.mesh.geometry.type.replace('Geometry', '')} ${p.color} @${[c.x, c.y, c.z].map(r1).join(',')} ${[s.x, s.y, s.z].map(r1).join('×')}`
 }
 
-function nears(def: AssetDef, parts: Part[]): Near[] {
+/** 两个零件的真实距离，不超过 cap（一边的采样点到另一边的表面，两个方向取小的） */
+function partDist(a: Part, b: Part, cap: number, eps: number) {
+  const d = distOneWay(a, b, cap, eps)
+  return d > eps ? Math.min(d, distOneWay(b, a, d, eps)) : d
+}
+
+function nears(def: AssetDef, parts: Part[], eps = NEAR_EPS): Near[] {
   const n = parts.length
   if (n < 2) return []
-  const D: number[][] = parts.map(() => new Array<number>(n).fill(Infinity))
   const parent = parts.map((_, i) => i)
   const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i])))
+  // 第一遍只管连通：已经连在一起的两个零件不用量（绝大多数零件都在主体那一组里，逐对量要慢几十倍）
   for (let i = 0; i < n; i++)
     for (let j = i + 1; j < n; j++) {
-      if (boxGap(parts[i].box, parts[j].box) > NEAR_CAP) continue
-      let d = distOneWay(parts[i], parts[j], NEAR_CAP)
-      if (d > NEAR_EPS) d = Math.min(d, distOneWay(parts[j], parts[i], d))
-      D[i][j] = D[j][i] = d
-      if (d <= NEAR_EPS) parent[find(i)] = find(j)
+      if (find(i) === find(j) || boxGap(parts[i].box, parts[j].box) > eps) continue
+      if (partDist(parts[i], parts[j], eps * 2, eps) <= eps) parent[find(i)] = find(j)
     }
   const groups = new Map<number, number[]>()
   for (let i = 0; i < n; i++) {
@@ -403,22 +406,27 @@ function nears(def: AssetDef, parts: Part[]): Near[] {
   for (const g of list.slice(1)) {
     // 和 island 一样的豁免：各自落地的、各自贴墙 / 贴顶的、柜门抽屉；再加平面贴片
     if (floorStanding && g.box.min.y <= GROUND) continue
-    if (def.mount !== undefined && !def.ceiling && g.box.min.z <= whole.min.z + 1) continue
+    // 贴附物（便签、贴纸）同理：各自贴在表面上的几片不算
+    if ((def.mount !== undefined || def.stick) && !def.ceiling && g.box.min.z <= whole.min.z + 1) continue
     if (def.ceiling && g.box.max.y >= whole.max.y - 1) continue
     if (g.idx.every((i) => parts[i].door)) continue
     if (g.idx.every((i) => FLAT.has(parts[i].mesh.geometry.type))) continue
+    // 第二遍：只给没连上的这几组量到别的零件的最近距离
     const inG = new Set(g.idx)
-    let gap = Infinity
+    let gap = NEAR_CAP
     let bi = -1
     let bj = -1
     for (const i of g.idx)
-      for (let j = 0; j < n; j++)
+      for (let j = 0; j < n; j++) {
         // 柜门抽屉和柜体之间本来留着缝：不拿它们当「最近的零件」
-        if (!inG.has(j) && !parts[j].door && D[i][j] < gap) {
-          gap = D[i][j]
+        if (inG.has(j) || parts[j].door || boxGap(parts[i].box, parts[j].box) >= gap) continue
+        const d = partDist(parts[i], parts[j], gap, eps)
+        if (d < gap) {
+          gap = d
           bi = i
           bj = j
         }
+      }
     if (bi < 0) continue
     const s = g.box.getSize(new THREE.Vector3())
     const c = g.box.getCenter(new THREE.Vector3())
