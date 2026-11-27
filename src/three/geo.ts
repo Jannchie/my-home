@@ -4,7 +4,8 @@
 // 改一个包里 bar 的参数顺序，另一个包的调用就悄悄变成另一种几何。语义不同的函数在这里用不同的名字区分，
 // test/packs-hygiene.spec.ts 会检查各包没有再定义与这里同名的顶层函数。
 import * as THREE from 'three'
-import { ball, cyl, rbox, toon } from './toon'
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
+import { ball, box, cyl, rbox, toon } from './toon'
 
 export const PI = Math.PI
 /** 三维点 [x, y, z]，cm */
@@ -171,7 +172,8 @@ export function taperRod3(a: V3, b: V3, ra: number, rb: number, color: string, s
 export function batten(a: V3, b: V3, w: number, t: number, color: string, radius = Math.min(w, t) * 0.25) {
   const va = new THREE.Vector3(...a)
   const vb = new THREE.Vector3(...b)
-  const m = rbox(w, va.distanceTo(vb), t, color, {}, radius)
+  // radius 0：直角薄条（缎带、吊布这类几毫米厚的，圆角看不出来）
+  const m = radius > 0 ? rbox(w, va.distanceTo(vb), t, color, {}, radius) : box(w, va.distanceTo(vb), t, color)
   m.position.copy(va).add(vb).multiplyScalar(0.5)
   m.quaternion.setFromUnitVectors(UP, vb.clone().sub(va).normalize())
   return m
@@ -469,3 +471,23 @@ export function soft(color: string, f: SoftFn, opts: { wrinkle?: number; freq?: 
   smoothNormals(geo)
   return mesh(geo, color)
 }
+
+// ---------- 合并 ----------
+
+/**
+ * 把一堆同色网格（按各自的局部变换）烘成一个：半透明件不参与按材质合并（toon.ts mergeMeshes），几十片就是几十次绘制；
+ * 豆芽、松针这类成堆的小件也合成一个。只留位置和法线；有带索引的也有不带的才统一转成不带索引
+ */
+export function bakeMeshes(parts: THREE.Mesh[], color: string) {
+  const mixed = parts.some((m) => m.geometry.index) && parts.some((m) => !m.geometry.index)
+  const geos = parts.map((m) => {
+    m.updateMatrix()
+    const g = m.geometry.clone().applyMatrix4(m.matrix)
+    for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal') g.deleteAttribute(k)
+    return mixed && g.index ? g.toNonIndexed() : g
+  })
+  return mesh(mergeGeometries(geos, false) ?? geos[0], color)
+}
+
+/** 几何体的三角面数 */
+export const triCount = (g: THREE.BufferGeometry) => (g.index ? g.index.count : g.attributes.position.count) / 3

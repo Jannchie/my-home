@@ -38,6 +38,7 @@ import { furnitureRoom } from '../restyle'
 import { DEFAULT_KELVIN, DEFAULT_OUTDOOR, DEFAULT_POWER, DEFAULT_RANGE, IndoorLights, KELVIN_MAX, KELVIN_MIN, LIGHT_MODES, OUTDOOR_MAX, OUTDOOR_MIN, POOL_HIGH, POOL_LOW, POWER_MAX, POWER_MIN, RANGE_MAX, RANGE_MIN, autoLevel, diningKey, isLampAsset, lightColor, lum, ceilingHidden, ownedLightKey, takeOverRoomLights, type LightMode } from '../three/lights'
 import { disposeUnshared } from '../three/toon'
 import { isWallMounted, poseDoors } from '../three/kit'
+import { triCount } from '../three/geo'
 import { drawerSlots } from '../three/drawers'
 import { Openers, doorIdOf, type OpenKey } from '../three/openers'
 import { takeOverDevices, wallDeviceKey, type WallDeviceKind } from '../three/wallDevices'
@@ -345,7 +346,7 @@ if (import.meta.env.DEV) {
         const m = o as THREE.Mesh
         if (!m.isMesh) return
         meshes++
-        tris += (m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count) / 3
+        tris += triCount(m.geometry)
       })
       return { meshes, tris, shut: shutAway.size, items: objs.size }
     },
@@ -386,10 +387,10 @@ const openers = new Openers(onDrawerPart)
 const drawerShift = new Map<string, { x: number; y: number; owner: string }>()
 /** 某个抽屉里的东西（家具 id:部件下标 → 那一格里的东西）：拉开 / 推回的动画每帧都要，户型变了（syncFurniture）就清掉 */
 const drawerItems = new Map<string, Furniture[]>()
-/** 收在柜子里的东西：柜子 id → 关着时藏起来的东西（家具 id），户型 / 家具变了（syncFurniture）重算；见 applyShut */
-const shutBy = new Map<string, string[]>()
+/** 收在柜子里的东西：柜子 id → 柜子本身、关着时藏起来的东西（家具 id），户型 / 家具变了（syncFurniture）重算；见 applyShut */
+let shutBy = new Map<string, { f: Furniture; inside: string[] }>()
 /** 现在藏着的东西 */
-const shutAway = new Set<string>()
+let shutAway = new Set<string>()
 
 /** 抽屉拉开 / 推回：抽屉格里的东西（连同摆在它们上面的）跟着挪 */
 function onDrawerPart(id: string, part: number, v: number, base: number) {
@@ -1709,43 +1710,35 @@ function applyXray() {
   dirty = true
 }
 
-// ---------- 柜子里收着的东西：关着门时不画（surface.ts shutInside） ----------
+// ---------- 柜子里收着的东西：关着门时不画（surface.ts shutAll） ----------
 // 一键布置往衣柜挂衣服、往鞋柜放鞋、往斗柜放收纳盒，柜门关着时一个像素都看不到，却照样画主画面、描边和阴影
 // （约占一户三角面的两成）。柜子存档里开着、沙盘里有哪扇门 / 哪个抽屉没关严、或者正被选中透视时照常画。
 
 function syncShut() {
-  shutBy.clear()
-  for (const [id, inside] of shutAll(toRaw(plan.value))) shutBy.set(id, inside)
+  const raw = toRaw(plan.value)
+  const byId = new Map(raw.furniture.map((f) => [f.id, f]))
+  shutBy = new Map([...shutAll(raw)].map(([id, inside]) => [id, { f: byId.get(id)!, inside }]))
   applyShut()
 }
 /** 按柜子现在开没开摆好可见性；选中的东西总是画（拖进柜子里时不会突然没了） */
 function applyShut() {
-  const raw = toRaw(plan.value)
   const xray = xrayTarget()
   const keep = selection.value?.type === 'furniture' ? selection.value.id : ''
   const hide = new Set<string>()
-  for (const [id, inside] of shutBy) {
-    const f = raw.furniture.find((x) => x.id === id)
-    const o = objs.get(id)?.obj
-    if (!f || f.open || (o && o === xray) || openers.anyOpen(id)) continue
+  for (const [id, { f, inside }] of shutBy) {
+    if (f.open || (xray && objs.get(id)?.obj === xray) || openers.anyOpen(id)) continue
     for (const c of inside) if (c !== keep) hide.add(c)
   }
   let changed = false
-  for (const id of shutAway)
-    if (!hide.has(id)) {
-      const o = objs.get(id)?.obj
-      if (o) o.visible = true
-      changed = true
-    }
-  for (const id of hide) {
+  for (const id of new Set([...shutAway, ...hide])) {
     const o = objs.get(id)?.obj
-    if (o && o.visible) {
-      o.visible = false
+    const show = !hide.has(id)
+    if (o && o.visible !== show) {
+      o.visible = show
       changed = true
     }
   }
-  shutAway.clear()
-  for (const id of hide) shutAway.add(id)
+  shutAway = hide
   if (changed) dirty = true
 }
 

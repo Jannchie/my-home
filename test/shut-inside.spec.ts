@@ -1,15 +1,30 @@
-// 关着的柜子里看不见的东西不画：收在柜内层上的家具（surface.ts shutInside，沙盘 applyShut 按它藏），
+// 关着的柜子里看不见的东西不画：收在柜内层上的家具（surface.ts shutAll，沙盘 applyShut 按它藏），
 // 和模型自己抽屉里码着的东西（kit.ts innards，poseDoor 按开合管可见性）
 import { describe, expect, test } from 'vitest'
 import * as THREE from 'three'
 import { decorate } from '/src/decorate'
 import { generatePlan } from '/src/generate-region'
 import { generateHousehold } from '/src/household'
-import { levels, propsOnTop, shutAll, shutInside } from '/src/surface'
+import { levels, propsOn, propsOnTop, shutAll, toLocal } from '/src/surface'
 import { ASSET_MAP } from '/src/three/assets'
 import { doorParts, poseDoor } from '/src/three/kit'
 import { furnitureModel } from '/src/three/house'
+import { triCount } from '/src/three/geo'
 import { JP_OPTS } from './helpers'
+import { pointInPolygon, type Furniture, type Plan } from '/src/model'
+import type { Poly } from '/src/three/assetMeta'
+
+/** o 的中心落在 f 的某块区域里（f 的局部坐标） */
+const toLocalIn = (f: Furniture, polys: Poly[], o: Furniture) => polys.some((pl) => pointInPolygon(toLocal(f, o), pl.map(([x, z]) => ({ x, y: z }))))
+
+/** 对照实现：不分桶，逐件扫整个户型（shutAll 必须和它一致） */
+function shutInside(plan: Pick<Plan, 'furniture'>, f: Furniture): Furniture[] {
+  const lv = levels(f.asset).filter((l) => l.inside)
+  if (!lv.length) return []
+  const base = f.z ?? 0
+  const direct = plan.furniture.filter((o) => o.id !== f.id && o.floor === f.floor && lv.some((l) => Math.abs((o.z ?? 0) - (base + l.y)) < 0.5 && toLocalIn(f, l.polys, o)))
+  return direct.flatMap((o) => [o, ...propsOn(plan, o, 1)])
+}
 
 /** 画得出来的三角面（祖先里有一个不可见就不算） */
 function visibleTris(root: THREE.Object3D) {
@@ -18,7 +33,7 @@ function visibleTris(root: THREE.Object3D) {
     const m = o as THREE.Mesh
     if (!m.isMesh) return
     for (let p: THREE.Object3D | null = o; p; p = p.parent) if (!p.visible) return
-    n += (m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count) / 3
+    n += triCount(m.geometry)
   })
   return n
 }

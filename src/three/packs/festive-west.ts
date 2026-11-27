@@ -7,7 +7,7 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { measured } from '../measured'
-import { ball, cached, cup, cyl, face, puck, rbox, shade, torus } from '../toon'
+import { ball, box, cached, cup, cyl, face, puck, rbox, shade, torus } from '../toon'
 import { C, holePanel, rng, type AssetDef, type Fx } from '../kit'
 import { G, P, PI, UP, box3, cylX, cylZ, fitGroup, fitOffset, fitWall, ghost, lathe, lit, mesh, noOutline, rod3, taperRod3, tube, type V2, type V3 } from '../geo'
 import { CL, F, M, N, R, PROP, define, type Build, type Pal } from '../packkit'
@@ -72,14 +72,6 @@ function pip(r: number, color: string, x: number, y: number, z: number, s: V3 = 
   )
   m.position.set(x, y, z)
   m.scale.set(r * s[0], r * s[1], r * s[2])
-  return m
-}
-
-/** 直角小方块（不到 2cm 的条、框、辐条用不着圆角）：at.y 是底面，和 rbox 一样 */
-function box(w: number, h: number, d: number, color: string, at: { x?: number; y?: number; z?: number; rx?: number; ry?: number; rz?: number } = {}) {
-  const m = mesh(cached(`fw-box${w},${h},${d}`, () => new THREE.BoxGeometry(w, h, d)), color)
-  m.position.set(at.x ?? 0, (at.y ?? 0) + h / 2, at.z ?? 0)
-  m.rotation.set(at.rx ?? 0, at.ry ?? 0, at.rz ?? 0)
   return m
 }
 

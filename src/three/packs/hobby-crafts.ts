@@ -4,7 +4,7 @@
 // 斜靠 / 倾斜的零件按两个接触点算方向（弓靠在靶架腿上、花剑靠在剑袋上、压脚踏板搭在支点上），不手填角度。
 
 import * as THREE from 'three'
-import { ball, box, cup, cyl, face, plate, rbox, shade, torus, tray, type At } from '../toon'
+import { ball, box, cup, cyl, face, plate, puck, rbox, shade, torus, tray } from '../toon'
 import { C, gridHoles, holePanel, paintPanel, rng, slab, type AssetDef, type Hole } from '../kit'
 import { batten, cappedTube, cylX, cylZ, fitGroup, G, ghost, lathe, lit, mesh, noOutline, P, PI, rod3, sideSlab, strutBox, taperRod3, tiltFrame, tube, UP, type V2, type V3 } from '../geo'
 import { CL, CN, F, I, J, M, N, PROP, R, define, type Pal } from '../packkit'
@@ -17,22 +17,6 @@ const GLASS = '#cfe8f5'
 const AMBER = '#8a4a1e'
 
 // ---------- 小工具 ----------
-
-/** 圆饼，轮廓同 toon.ts 的 puck（上下两道圆角），一圈段数和圆角步数可调（puck 半径 ≥ 8 固定 32 × 5） */
-function puckN(r: number, h: number, color: string, at: At, seg: number, steps: number) {
-  const k = Math.min(h / 2, r) * 0.9
-  const pts: THREE.Vector2[] = [new THREE.Vector2(0, -h / 2)]
-  const arc = (cx: number, cy: number, a0: number, a1: number) => {
-    for (let i = 0; i <= steps; i++) {
-      const a = a0 + ((a1 - a0) * i) / steps
-      pts.push(new THREE.Vector2(cx + Math.cos(a) * k, cy + Math.sin(a) * k))
-    }
-  }
-  arc(r - k, -h / 2 + k, -PI / 2, 0)
-  arc(r - k, h / 2 - k, 0, PI / 2)
-  pts.push(new THREE.Vector2(0, h / 2))
-  return P(mesh(new THREE.LatheGeometry(pts, seg), color), at.x ?? 0, (at.y ?? 0) + h / 2, at.z ?? 0, at.rx ?? 0, at.ry ?? 0, at.rz ?? 0)
-}
 
 /** 把对象的局部 y 轴对准 dir、局部 z 尽量朝 zHint，原点放到 at（弓、花剑这种「按两个接触点定方向」的长件用） */
 function aimAt<T extends THREE.Object3D>(o: T, at: V3, dir: THREE.Vector3, zHint: THREE.Vector3): T {
@@ -959,7 +943,7 @@ function pottersWheel(p: string[]) {
   const cz = 24
   const ch = 38
   const sh = 4
-  g.add(puckN(13, sh, '#c9a06a', { x: cx, y: ch - sh, z: cz }, 24, 3))
+  g.add(puck(13, sh, '#c9a06a', { x: cx, y: ch - sh, z: cz }, [24, 3]))
   const rr = (y: number) => 12 + ((8 - 12) * y) / (ch - sh)
   for (let k = 0; k < 3; k++) {
     const a = (k / 3) * PI * 2 + 0.4

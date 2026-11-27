@@ -276,40 +276,34 @@ function stuckOn(sticks: Furniture[], f: Furniture): Furniture[] {
   })
 }
 
+/** o 直接摆在 f 的 l 这一层上：同一层楼（多层户型里上层同一位置的东西不算）、高度对得上（差 < 0.5）、中心落在这一层的区域里 */
+function restsOn(f: Furniture, l: Level, o: Furniture) {
+  return o.id !== f.id && o.floor === f.floor && Math.abs((o.z ?? 0) - ((f.z ?? 0) + l.y)) < 0.5 && inPolys(f, l.polys, o)
+}
+
+/** 可能摆在 f 的这几层上的候选：默认整个户型；shutAll 传按楼层 + 高度分好的桶 */
+type Near = (f: Furniture, lv: Level[]) => Furniture[]
+
 /** 直接摆在一件家具顶面（AssetMeta.surface）上的东西：不含柜内各层，也不递归 */
 export function propsOnTop(plan: Pick<Plan, 'furniture'>, f: Furniture): Furniture[] {
   const top = levels(f.asset)[0]
-  const def = ASSET_MAP.get(f.asset)
-  if (!def?.surface || !top) return []
-  const y = (f.z ?? 0) + def.surface
-  return plan.furniture.filter((o) => o.id !== f.id && o.floor === f.floor && Math.abs((o.z ?? 0) - y) < 0.5 && inPolys(f, top.polys, o))
+  if (!ASSET_MAP.get(f.asset)?.surface || !top) return []
+  return plan.furniture.filter((o) => restsOn(f, top, o))
 }
 
 /** 一件家具上（含柜内各层）摆着的东西，递归：托盘上的杯子也算 */
-export function propsOn(plan: Pick<Plan, 'furniture'>, f: Furniture, depth = 0): Furniture[] {
+export function propsOn(plan: Pick<Plan, 'furniture'>, f: Furniture, depth = 0, near: Near = () => plan.furniture): Furniture[] {
   const lv = levels(f.asset, !!f.open)
   if (depth > 3 || !lv.length) return []
-  const base = f.z ?? 0
-  // 多层户型：只看同一层的东西（上层同一位置桌上的摆件不算在下层的桌子上）
-  const direct = plan.furniture.filter((o) => o.id !== f.id && o.floor === f.floor && lv.some((l) => Math.abs((o.z ?? 0) - (base + l.y)) < 0.5 && inPolys(f, l.polys, o)))
-  return direct.flatMap((o) => [o, ...propsOn(plan, o, depth + 1)])
+  return near(f, lv)
+    .filter((o) => lv.some((l) => restsOn(f, l, o)))
+    .flatMap((o) => [o, ...propsOn(plan, o, depth + 1, near)])
 }
 
 /**
- * 收在柜门里面的东西：摆在柜内层（不是玻璃门的，Level.inside）上的，连同叠在它们上面的。
- * 柜子关着时它们一点都看不见，沙盘就不画（省下的面数、draw call 和阴影约占一户的两成）；开没开由调用方判断
- */
-export function shutInside(plan: Pick<Plan, 'furniture'>, f: Furniture): Furniture[] {
-  const lv = levels(f.asset).filter((l) => l.inside)
-  if (!lv.length) return []
-  const base = f.z ?? 0
-  const direct = plan.furniture.filter((o) => o.id !== f.id && o.floor === f.floor && lv.some((l) => Math.abs((o.z ?? 0) - (base + l.y)) < 0.5 && inPolys(f, l.polys, o)))
-  return direct.flatMap((o) => [o, ...propsOn(plan, o, 1)])
-}
-
-/**
- * 整个户型的 shutInside：柜子 id → 收在里面的东西（id，含叠在上面的）。结果和逐件调 shutInside 一样，
- * 但先按楼层 + 高度分桶，沙盘拖动时每帧都要算（三百件家具的户型逐件算要一两毫秒）
+ * 收在柜门里面的东西：柜子 id → 摆在它柜内层（不是玻璃门的，Level.inside）上的东西的 id，连同叠在它们上面的。
+ * 柜子关着时它们一点都看不见，沙盘就不画（省下的面数、draw call 和阴影约占一户的两成）；开没开由调用方判断。
+ * 沙盘拖动时每帧都要算：候选先按楼层 + 高度分桶，不是每件柜子都扫一遍整个户型
  */
 export function shutAll(plan: Pick<Plan, 'furniture'>): Map<string, string[]> {
   const buckets = new Map<string, Furniture[]>()
@@ -320,29 +314,26 @@ export function shutAll(plan: Pick<Plan, 'furniture'>): Map<string, string[]> {
     if (!b) buckets.set(k, (b = []))
     b.push(o)
   }
-  /** 摆在 f 的这几层上的东西（高度差 < 0.5：相邻的桶也要看） */
-  const on = (f: Furniture, lv: Level[]) => {
-    const out: Furniture[] = []
-    const base = f.z ?? 0
+  // 高度差 < 0.5 的可能落在相邻的桶里：两边都看
+  const near: Near = (f, lv) => {
+    const out = new Set<Furniture>()
     for (const l of lv) {
-      const y = base + l.y
-      for (const k of new Set([key(f.floor, y - 0.5), key(f.floor, y + 0.5)]))
-        for (const o of buckets.get(k) ?? []) if (o.id !== f.id && !out.includes(o) && Math.abs((o.z ?? 0) - y) < 0.5 && inPolys(f, l.polys, o)) out.push(o)
+      const y = (f.z ?? 0) + l.y
+      for (const o of buckets.get(key(f.floor, y - 0.5)) ?? []) out.add(o)
+      for (const o of buckets.get(key(f.floor, y + 0.5)) ?? []) out.add(o)
     }
-    return out
+    return [...out]
   }
-  const stack = (o: Furniture, depth: number, out: string[]) => {
-    out.push(o.id)
-    if (depth > 3) return
-    const lv = levels(o.asset, !!o.open)
-    if (lv.length) for (const c of on(o, lv)) stack(c, depth + 1, out)
-  }
+  const insideOf = new Map<string, Level[]>()
   const res = new Map<string, string[]>()
   for (const f of plan.furniture) {
-    const lv = levels(f.asset).filter((l) => l.inside)
+    let lv = insideOf.get(f.asset)
+    if (!lv) insideOf.set(f.asset, (lv = levels(f.asset).filter((l) => l.inside)))
     if (!lv.length) continue
-    const ids: string[] = []
-    for (const o of on(f, lv)) stack(o, 1, ids)
+    const ids = near(f, lv)
+      .filter((o) => lv.some((l) => restsOn(f, l, o)))
+      .flatMap((o) => [o, ...propsOn(plan, o, 1, near)])
+      .map((o) => o.id)
     if (ids.length) res.set(f.id, ids)
   }
   return res

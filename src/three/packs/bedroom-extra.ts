@@ -83,18 +83,19 @@ function drawer(w: number, h: number, d: number, front: string, body: string, kn
   else if (knobKind === 'ring') g.add(torus(1.6, 0.3, knob, { y: h / 2 - 0.6, z: d / 2 + 0.4 }, Math.PI))
   else g.add(rbox(Math.min(10, w * 0.35), 1, 1.2, knob, { y: h / 2 - 0.5, z: d / 2 + 0.5 }, 0.4))
   if (withBox) {
-    // 抽屉盒：底 + 两侧 + 后板
+    // 抽屉盒：底 + 两侧 + 后板，连同码在里面的衣物；关严时整个在柜体里，不画（kit.ts innards）
     const t = 0.8
     const bh = h - 2
-    g.add(rbox(w - 3, t, d - 2, body, { y: 0.6, z: -0.2 }, 0.2))
-    for (const s of [-1, 1]) g.add(rbox(t, bh, d - 2, body, { x: s * (w / 2 - 1.9), y: 0.6, z: -0.2 }, 0.2))
-    g.add(rbox(w - 3, bh, t, body, { y: 0.6, z: -d / 2 + 0.9 }, 0.2))
+    const box = innards(new THREE.Group())
+    box.add(rbox(w - 3, t, d - 2, body, { y: 0.6, z: -0.2 }, 0.2))
+    for (const s of [-1, 1]) box.add(rbox(t, bh, d - 2, body, { x: s * (w / 2 - 1.9), y: 0.6, z: -0.2 }, 0.2))
+    box.add(rbox(w - 3, bh, t, body, { y: 0.6, z: -d / 2 + 0.9 }, 0.2))
     if (fill !== null) {
       const f = drawerFill(w - 5, d - 4, fill, fillH ?? bh - 2)
       f.position.set(0, 0.6 + t, -0.4)
-      // 关着的抽屉里看不见：可开合的抽屉关严时不画（kit.ts innards）
-      g.add(innards(f))
+      box.add(f)
     }
+    g.add(box)
   }
   g.position.z = pull
   return g

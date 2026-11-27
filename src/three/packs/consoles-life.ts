@@ -5,10 +5,9 @@
 // 屏幕画面用 paintPanel 画像素小画面；玻璃、水、透明外壳是半透明材质（不描边）。
 
 import * as THREE from 'three'
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { ball, cached, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, S, G, glow, holePanel, paintPanel, rng, slab, type AssetDef, type Hole, type Poly } from '../kit'
-import { P, PI, batten, cylX, cylZ, fitBuild, ghost, lit, noOutline, taperRod3, type V3 } from '../geo'
+import { P, PI, bakeMeshes, batten, cylX, cylZ, fitBuild, ghost, lit, noOutline, taperRod3, type V3 } from '../geo'
 import { J, M, N, PROP, R, definer, type Pal } from '../packkit'
 
 /** 两点之间的扁板（截面 w × t，小圆角） */
@@ -72,20 +71,6 @@ function leafOut(base: V3, len: number, yaw: number, pitch: number, color: strin
   return m
 }
 
-/** 把一堆同色小网格合成一个（豆芽、松针、硬币），省 draw call */
-function merged(parts: THREE.Mesh[], color: string) {
-  const geos = parts.map((m) => {
-    m.updateMatrix()
-    const g = m.geometry.clone().applyMatrix4(m.matrix)
-    return g.index ? g.toNonIndexed() : g
-  })
-  for (const g of geos) for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal') g.deleteAttribute(k)
-  const geo = mergeGeometries(geos, false)
-  const m = new THREE.Mesh(geo ?? geos[0], toon(color))
-  m.castShadow = true
-  m.receiveShadow = true
-  return m
-}
 
 /** 侧面轮廓（点为 [z, y]）沿 x 挤出，厚 t，x 居中 */
 function sideExtrude(pts: [number, number][], t: number, color: string, x = 0, bevel = 0.3) {
@@ -1115,7 +1100,7 @@ function garlicSprout(p: string[]) {
     const a = (i / 7) * PI * 2
     g.add(ball(1.3, shade(bulb, -0.03), { x: Math.cos(a) * 1.75, y: cy + 0.35, z: Math.sin(a) * 1.75 }, [0.75, 1.25, 0.75]))
   }
-  g.add(merged(roots(9, 0, cy - 2.2, 0, 3.6, 1.4, 4), ROOT))
+  g.add(bakeMeshes(roots(9, 0, cy - 2.2, 0, 3.6, 1.4, 4), ROOT))
   const blades: THREE.Mesh[] = []
   for (let i = 0; i < 9; i++) {
     const a = (i / 9) * PI * 2 + r() * 0.3
@@ -1125,7 +1110,7 @@ function garlicSprout(p: string[]) {
     const lean = 0.08 + r() * 0.16
     blades.push(taperRod3([bx, cy + 1.6, bz], [bx + Math.cos(a) * len * lean, cy + 1.6 + len, bz + Math.sin(a) * len * lean], 0.2, 0.06, sprout, 6))
   }
-  g.add(merged(blades, sprout))
+  g.add(bakeMeshes(blades, sprout))
   return g
 }
 
@@ -1146,13 +1131,13 @@ function negiRegrow(p: string[]) {
   for (const [x, z] of pos) {
     const h = 6.5 + r() * 1.2
     g.add(cyl(0.55, 0.6, h, white, { x, y: 0.6, z }, 12))
-    g.add(merged(roots(5, x, 0.9, z, 0.6, 0.5, Math.round((x + 3) * 10 + z * 3)), ROOT))
+    g.add(bakeMeshes(roots(5, x, 0.9, z, 0.6, 0.5, Math.round((x + 3) * 10 + z * 3)), ROOT))
     const len = 7 + r() * 8
     const lean = 0.05 + r() * 0.08
     const k = Math.atan2(z, x || 0.01)
     shoots.push(taperRod3([x, 0.6 + h - 0.3, z], [x + Math.cos(k) * len * lean, 0.6 + h + len, z + Math.sin(k) * len * lean], 0.38, 0.14, green))
   }
-  g.add(merged(shoots, green))
+  g.add(bakeMeshes(shoots, green))
   return g
 }
 
@@ -1177,8 +1162,8 @@ function sproutBox(p: string[]) {
       leaves.push(leafOut([tx, 1.5 + h, tz], 1.0, yaw, 0.25, leafC, 0.7, 0.14, [12, 2]))
       leaves.push(leafOut([tx, 1.5 + h, tz], 1.0, yaw + PI, 0.25, leafC, 0.7, 0.14, [12, 2]))
     }
-  g.add(merged(stems, '#f6f4e8'))
-  g.add(merged(leaves, leafC))
+  g.add(bakeMeshes(stems, '#f6f4e8'))
+  g.add(bakeMeshes(leaves, leafC))
   return g
 }
 
@@ -1200,9 +1185,9 @@ function avocadoPit(p: string[]) {
   glassWater(g, 3.6, 3.0, H, 7.9, 0.3, glassC)
   const cy = 9.2
   g.add(ball(2.0, pit, { y: cy }, [1, 1.2, 1]))
-  g.add(merged(toothpicks(H + 0.12, 4.6, 0.4), '#e9d2a6'))
+  g.add(bakeMeshes(toothpicks(H + 0.12, 4.6, 0.4), '#e9d2a6'))
   g.add(taperRod3([0, cy - 2.2, 0], [0.3, 2.0, 0.2], 0.28, 0.08, ROOT, 8))
-  g.add(merged(roots(5, 0.15, 4.5, 0.1, 1.6, 1.2, 21), ROOT))
+  g.add(bakeMeshes(roots(5, 0.15, 4.5, 0.1, 1.6, 1.2, 21), ROOT))
   g.add(taperRod3([0, cy + 2.0, 0], [0.3, cy + 9.5, -0.2], 0.22, 0.14, '#7a8a4a', 8))
   const top: V3 = [0.3, cy + 9.4, -0.2]
   for (let i = 0; i < 4; i++) g.add(leafOut(top, 4.2 - i * 0.4, (i / 4) * PI * 2 + 0.3, 0.35 + i * 0.1, leafC, 0.42, 0.1))
@@ -1242,8 +1227,8 @@ function basil(p: string[]) {
     }
     for (let k = 0; k < 4; k++) leaves.push(leafOut([tx, y0 + h, tz], 1.6, (k / 4) * PI * 2, 0.7, leafC, 0.65, 0.16))
   }
-  g.add(merged(stems, shade(leafC, -0.1)))
-  g.add(merged(leaves, leafC))
+  g.add(bakeMeshes(stems, shade(leafC, -0.1)))
+  g.add(bakeMeshes(leaves, leafC))
   return g
 }
 
@@ -1271,8 +1256,8 @@ function mint(p: string[]) {
       leaves.push(leafOut(base, 1.9, yaw + PI, 0.2, leafC, 0.6, 0.14, [12, 2]))
     }
   }
-  g.add(merged(stems, '#6a8a4a'))
-  g.add(merged(leaves, leafC))
+  g.add(bakeMeshes(stems, '#6a8a4a'))
+  g.add(bakeMeshes(leaves, leafC))
   return g
 }
 
@@ -1301,8 +1286,8 @@ function rosemary(p: string[]) {
       needles.push(leafOut(base, 1.3, yaw + PI, 0.5, leafC, 0.2, 0.2, [6, 4]))
     }
   }
-  g.add(merged(stems, '#7a6a4a'))
-  g.add(merged(needles, leafC))
+  g.add(bakeMeshes(stems, '#7a6a4a'))
+  g.add(bakeMeshes(needles, leafC))
   return g
 }
 
@@ -1338,8 +1323,8 @@ function miniTomato(p: string[]) {
     leaves.push(leafOut(tip, 2.2, yaw, -0.1, leafC, 0.55, 0.12, [12, 2]))
   }
   for (let k = 0; k < 4; k++) leaves.push(leafOut([0.7, 34, -1.1], 2, k * 1.6, 0.5, leafC, 0.55, 0.12, [12, 2]))
-  g.add(merged(stems, '#6a9a4a'))
-  g.add(merged(leaves, leafC))
+  g.add(bakeMeshes(stems, '#6a9a4a'))
+  g.add(bakeMeshes(leaves, leafC))
   // 两串果
   const trusses: [V3, number][] = [
     [[0.6, 19, -0.5], 0.8],
@@ -1368,8 +1353,8 @@ function sweetPotato(p: string[]) {
   glassWater(g, 4.5, 4.0, H, 9.2, 0.35, glassC)
   const cy = 11
   g.add(ball(2.6, potato, { y: cy }, [1, 1.7, 1]))
-  g.add(merged(toothpicks(H + 0.14, 5.4, 0.9), '#e9d2a6'))
-  g.add(merged(roots(10, 0, cy - 4.2, 0, 4.4, 2.4, 71), ROOT))
+  g.add(bakeMeshes(toothpicks(H + 0.14, 5.4, 0.9), '#e9d2a6'))
+  g.add(bakeMeshes(roots(10, 0, cy - 4.2, 0, 4.4, 2.4, 71), ROOT))
   const vine = '#7a5a6a'
   const stems: THREE.Mesh[] = []
   const leaves: THREE.Mesh[] = []
@@ -1393,8 +1378,8 @@ function sweetPotato(p: string[]) {
     }
   })
   for (let k = 0; k < 3; k++) leaves.push(leafOut([0, 15.3, 0], 2.4, k * 2.1 + 1.2, 0.8, leafC, 0.85, 0.12))
-  g.add(merged(stems, vine))
-  g.add(merged(leaves, leafC))
+  g.add(bakeMeshes(stems, vine))
+  g.add(bakeMeshes(leaves, leafC))
   return g
 }
 
@@ -1426,8 +1411,8 @@ function gingerSprout(p: string[]) {
       leaves.push(leafOut(at, 4, (k % 2 ? 1 : -1) * PI / 2 + lean * 0.3, 0.45, leafC, 0.22, 0.1))
     }
   }
-  g.add(merged(stems, '#7aaa5a'))
-  g.add(merged(leaves, leafC))
+  g.add(bakeMeshes(stems, '#7aaa5a'))
+  g.add(bakeMeshes(leaves, leafC))
   return g
 }
 
@@ -1578,7 +1563,7 @@ function coinJar(p: string[]) {
     c.rotation.set((r() - 0.5) * 0.8, 0, (r() - 0.5) * 0.8)
     by[k].push(c)
   }
-  by.forEach((ms, k) => ms.length && g.add(merged(ms, cols[k])))
+  by.forEach((ms, k) => ms.length && g.add(bakeMeshes(ms, cols[k])))
   return g
 }
 

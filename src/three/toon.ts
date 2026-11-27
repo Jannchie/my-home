@@ -535,11 +535,12 @@ export function cyl(rTop: number, rBottom: number, h: number, color: THREE.Color
 }
 
 /** 圆角圆柱（坐垫、饼状物）：胶囊压扁 */
-export function puck(r: number, h: number, color: THREE.ColorRepresentation, at: At = {}) {
+export function puck(r: number, h: number, color: THREE.ColorRepresentation, at: At = {}, segs?: [number, number]) {
   r = q(r)
   h = q(h)
   const k = Math.min(h / 2, r) * 0.9
-  const [seg, steps] = puckSegments(r, k)
+  // segs：[一圈的段数, 每段圆角的步数]，不给就按大小（puckSegments）
+  const [seg, steps] = segs ?? puckSegments(r, k)
   const g = cached(`pk${r},${h},${seg}x${steps}`, () => {
     const pts: THREE.Vector2[] = [new THREE.Vector2(0, -h / 2)]
     const arc = (cx: number, cy: number, a0: number, a1: number) => {
@@ -562,7 +563,7 @@ export function cup(rTop: number, rBottom: number, h: number, t: number, color: 
   rBottom = q(rBottom)
   h = q(h)
   t = q(t)
-  const g = cached(seg === 32 ? `cu${rTop},${rBottom},${h},${t}` : `cu${rTop},${rBottom},${h},${t},${seg}`, () => {
+  const g = cached(`cu${rTop},${rBottom},${h},${t},${seg}`, () => {
     const k = Math.min(t * 0.6, rBottom * 0.2)
     const innerBottom = rBottom - t + ((rTop - rBottom) * t) / h
     const pts: THREE.Vector2[] = [new THREE.Vector2(0, 0)]

@@ -3,10 +3,9 @@
 // 原点在占地中心底面，正面朝 +z；壁挂件用 fitWall（最低点 = mount、背面贴 z = -d/2）。type / tags / mats 直接写在 def 里。
 
 import * as THREE from 'three'
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { ball, box, cup, cyl, puck, rbox, shade, torus, tray } from '../toon'
 import { C, gridHoles, holePanel, moveHole, rectPoly, slab, type AssetDef, type Hole, type Poly } from '../kit'
-import { cylX, cylZ, fitGroup, fitWall, G, ghost, latheAt, lit, mesh, noOutline, P, PI, rod3, sideSlab, tube, type V2, type V3 } from '../geo'
+import { bakeMeshes, cylX, cylZ, fitGroup, fitWall, G, ghost, latheAt, lit, mesh, noOutline, P, PI, rod3, sideSlab, tube, type V2, type V3 } from '../geo'
 import { CL, F, I, J, M, N, PROP, R, define, type Pal } from '../packkit'
 
 const STEEL = '#c3c7cc'
@@ -30,15 +29,6 @@ function cutout(src: V2[] | THREE.Shape, t: number, color: string, bevel = 0.3, 
   return mesh(geo, color)
 }
 
-/** 把一组网格（同一种材质）烘成一个几何：半透明件不参与按材质合并，几十片就是几十次绘制，合成一片只画一次 */
-function bake(parts: THREE.Mesh[], color: string) {
-  const geos = parts.map((m) => {
-    m.updateMatrix()
-    const g = m.geometry.clone().applyMatrix4(m.matrix)
-    return g.index ? g.toNonIndexed() : g
-  })
-  return mesh(mergeGeometries(geos)!, color)
-}
 
 // ---------- 洗衣液组：带提手和量杯盖的大桶洗衣液、一瓶圆肩柔顺剂、一盒洗衣凝珠（门口散着两颗） ----------
 
@@ -728,7 +718,7 @@ function doorShoeOrganizer(p: string[]) {
       if (sh) g.add(P(pocketShoe(sh[2], sh[3]), x, yb + 0.6, 0.35))
     }),
   )
-  g.add(ghost(bake(clear, CLEAR), CLEAR, 0.3))
+  g.add(ghost(bakeMeshes(clear, CLEAR), CLEAR, 0.3))
   // 顶上两只翻过门顶的钩子 + 背板上的金属气眼
   for (const s of [-1, 1]) {
     g.add(

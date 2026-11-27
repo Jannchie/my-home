@@ -125,15 +125,15 @@ function holePath(h: Hole) {
   return p
 }
 
+/** 板角圆角的细分段数：1.5cm 的小圆角 4 段，越大越细，最多 12 段 */
+const cornerSegments = (r: number) => Math.max(2, Math.min(12, Math.ceil(r * 2.5)))
+
 /**
  * 带洞的板：在 xy 平面里，宽 w（x 居中）、高 h（底边在 y = 0）、厚 t（z 居中），可以开多个真正透光的洞。
  * at 和 rbox 一样：at.y 是底面；ry 转 90° 就能当侧板用。
  * o.seg：圆弧的细分（默认 16；圆孔一圈是它的两倍）；o.bevel：倒角宽（默认 min(0.4, t × 0.2)，0 = 不倒角）。
  * 孔多的板（散热孔、网面、藤编）用直角孔 / n 边形孔、不倒角：每个圆角孔加倒角要上千个三角面。
  */
-/** 板角圆角的细分段数：1.5cm 的小圆角 4 段，越大越细，最多 12 段 */
-const cornerSegments = (r: number) => Math.max(2, Math.min(12, Math.ceil(r * 2.5)))
-
 export function holePanel(
   w: number,
   h: number,
@@ -151,13 +151,7 @@ export function holePanel(
     // 板角按圆角半径细分（不走 curveSegments：那是给洞的圆弧用的，一律 16 段的话一块板光四个角就上百个点）
     const n = cornerSegments(r)
     const corner = (x0: number, y0: number, cx: number, cy: number, x1: number, y1: number) => {
-      for (let i = 1; i <= n; i++) {
-        const k = i / n
-        const a = (1 - k) * (1 - k)
-        const b = 2 * (1 - k) * k
-        const c = k * k
-        s.lineTo(a * x0 + b * cx + c * x1, a * y0 + b * cy + c * y1)
-      }
+      for (const p of new THREE.QuadraticBezierCurve(new THREE.Vector2(x0, y0), new THREE.Vector2(cx, cy), new THREE.Vector2(x1, y1)).getPoints(n).slice(1)) s.lineTo(p.x, p.y)
     }
     s.moveTo(-w / 2 + r, 0)
     s.lineTo(w / 2 - r, 0)

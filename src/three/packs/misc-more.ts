@@ -9,7 +9,7 @@
 import * as THREE from 'three'
 import { ball, box, cup, cyl, face, markWater, puck, rbox, shade, torus, tray } from '../toon'
 import { C, holePanel, moveHole, slab, type AssetDef, type Hole, type Poly } from '../kit'
-import { cappedTube, cylX, cylZ, fitGroup, fitWall, G, ghost, lathe, lit, mesh, noOutline, P, PI, rod3, sideSlab, strutBox, tube, UP, type V2, type V3 } from '../geo'
+import { batten, cappedTube, cylX, cylZ, fitGroup, fitWall, G, ghost, lathe, lit, mesh, noOutline, P, PI, rod3, sideSlab, strutBox, tube, type V2, type V3 } from '../geo'
 import { CL, F, I, J, M, N, R, define, type Pal } from '../packkit'
 
 const STEEL = '#c3c7cc'
@@ -26,15 +26,6 @@ const SEED = '#d9b46a'
 const FOOT_WOOD = '#a27a52'
 const HOLD_COLORS = ['#ff6b5e', '#ffc23d', '#4fc27a', '#3f8fe8', '#b46ee0', '#ff8fc0']
 
-/** 两点之间的直角薄条（截面 w × t，最短弧旋转）：缎带、吊布这类几毫米厚的条带，代替圆角的 strutBox。a、b 在同一个 x = 常数或 z = 常数的平面里时，宽度方向不扭 */
-function stick(a: V3, b: V3, w: number, t: number, color: string) {
-  const va = new THREE.Vector3(...a)
-  const vb = new THREE.Vector3(...b)
-  const m = box(w, va.distanceTo(vb), t, color)
-  m.position.copy(va).add(vb).multiplyScalar(0.5)
-  m.quaternion.setFromUnitVectors(UP, vb.clone().sub(va).normalize())
-  return m
-}
 
 /**
  * 空心外壳（同 kit 的 shell，只是各面不倒角）：板边被护角、顶底板盖住看不到时用，
@@ -641,8 +632,8 @@ function trophyWall(p: string[]) {
       const a: V3 = [x + s * 1.2, hy + 0.6, 1.8 + (s > 0 ? 0.3 : 0)]
       const b: V3 = [x + s * 0.4, my + 3, 1.8 + (s > 0 ? 0.3 : 0)]
       // 缎带两毫米厚：直角薄条（圆角 0.05 的圆角盒每条 108 个面）
-      g.add(stick(a, b, 2.2, 0.2, s > 0 ? rc : shade(rc, -0.12)))
-      g.add(noOutline(stick([a[0], a[1], a[2] + 0.12], [b[0], b[1], b[2] + 0.12], 0.6, 0.12, '#ffffff')))
+      g.add(batten(a, b, 2.2, 0.2, s > 0 ? rc : shade(rc, -0.12), 0))
+      g.add(noOutline(batten([a[0], a[1], a[2] + 0.12], [b[0], b[1], b[2] + 0.12], 0.6, 0.12, '#ffffff', 0)))
     }
     g.add(box(1.4, 1.2, 0.8, STEEL, { x, y: my + 2.6, z: 2 }))
     g.add(cylZ(3.4, 0.6, metals[i], x, my, 2.2, 24))
@@ -761,8 +752,8 @@ function beachChair(fab: string, wood: string) {
     const x = -hw + 4.4 * (2 * i + 1)
     const col = i % 2 ? '#fbf7f1' : fab
     const t = i % 2 ? 0.6 : 0.9
-    g.add(stick([x, 20.6, 17], [x, 15.6, -16], 8.9, t, col))
-    g.add(stick([x, 18.6, -18.6], [x, 62, -31.2], 8.9, t, col))
+    g.add(batten([x, 20.6, 17], [x, 15.6, -16], 8.9, t, col, 0))
+    g.add(batten([x, 18.6, -18.6], [x, 62, -31.2], 8.9, t, col, 0))
   }
   return g
 }
