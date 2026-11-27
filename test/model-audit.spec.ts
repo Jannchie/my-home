@@ -5,7 +5,7 @@ import { beforeAll, describe, expect, test } from 'vitest'
 import { ASSETS } from '/src/three/assets'
 import { PROBLEM, auditAsset, type AuditCheck, type AuditReport } from '/src/three/modelAudit'
 
-type Checked = Exclude<AuditCheck, 'heavy'>
+type Checked = Exclude<AuditCheck, 'heavy' | 'near'>
 const LABEL: Record<Checked, string> = { island: '没有悬空的零件', zfight: '没有看得见的共面闪烁', sink: '落地素材不沉到地下', black: '默认配色没有纯黑零件' }
 
 /** 已核实的个例：检查项 → id → 为什么不算缺陷 */

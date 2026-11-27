@@ -5,7 +5,7 @@
 //   node scripts/shot-sheet.mjs --match "^gd-"               按 id 正则
 //   node scripts/shot-sheet.mjs --ids a,b,c                  点名
 //   node scripts/shot-sheet.mjs --cat pets                   按分类
-//   选项：--per 20（每张几件）  --cols 5  --cell 300  --color 0  --dir three  --inset back|none  --open（可开合的打开）
+//   选项：--per 20（每张几件）  --cols 5  --cell 300  --color 0  --dir three  --inset back|none  --open（可开合的打开）  --innards（关着也画抽屉内部，对比用）
 //         --from 0 --to 100（只截素材库下标区间）  --port 5199  --out <目录>（默认系统临时目录下 asset-sheets）  --name sheet
 // 输出：<out>/<name>-0000.png … 和 <out>/<name>.json（每张图里依次是哪些 id、三角面数、实测包围盒）
 import fs from 'node:fs'
@@ -24,6 +24,7 @@ fs.mkdirSync(out, { recursive: true })
 
 const base = new URLSearchParams({ cols: String(cols), cell: String(cell), c: String(args.color ?? 0), dir: String(args.dir ?? 'three'), inset: String(args.inset ?? 'back') })
 if (args.open) base.set('open', '1')
+if (args.innards) base.set('innards', '1')
 if (typeof args.cat === 'string') base.set('cat', args.cat)
 if (typeof args.match === 'string') base.set('match', args.match)
 

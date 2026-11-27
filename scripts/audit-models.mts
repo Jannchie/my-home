@@ -1,6 +1,6 @@
 // 素材模型体检命令行：检查逻辑在 src/three/modelAudit.ts（测试也用它）。
 // 用法：vite-node scripts/audit-models.mts [--only <id 正则>] [--out <json>] [--gap 0.03] [--min-area 1.5]
-//       [--checks island,zfight,sink,black,heavy] [--palette <序号> | all]（all：每组配色各查一遍，找纯黑零件这类和配色有关的问题）
+//       [--checks island,zfight,sink,black,heavy,near]（near：差一点没贴上的零件，逐三角面量距离，慢，默认不做）  [--near-max 3] [--palette <序号> | all]（all：每组配色各查一遍，找纯黑零件这类和配色有关的问题）
 //       [--down]（也打印朝下的共面）
 // 只报告，不改任何东西；--out 另存完整 JSON。
 import '../test/setup/stubdom'
@@ -13,6 +13,8 @@ const arg = (k: string) => (argv.includes(k) ? argv[argv.indexOf(k) + 1] : undef
 const only = arg('--only') ? new RegExp(arg('--only')!) : null
 const outFile = arg('--out')
 const showDown = argv.includes('--down')
+/** 每件素材最多列几组「没贴上」（--near-max，默认 3） */
+const nearMax = Number(arg('--near-max') ?? 3)
 const checks = arg('--checks') ? new Set(arg('--checks')!.split(',') as AuditCheck[]) : undefined
 /** 没给的参数留空，用 auditAsset 自己的默认值 */
 const num = (k: string) => (arg(k) === undefined ? undefined : Number(arg(k)))
@@ -33,8 +35,8 @@ for (const def of ASSETS as AssetDef[]) {
   }
 }
 
-const LABEL: Record<AuditCheck, string> = { island: '悬空', zfight: '共面', sink: '沉地', black: '纯黑', heavy: '面数偏多' }
-const counts = AUDIT_CHECKS.map((k) => `${LABEL[k]} ${reports.filter(PROBLEM[k]).length} 件`)
+const LABEL: Record<AuditCheck, string> = { island: '悬空', zfight: '共面', sink: '沉地', black: '纯黑', heavy: '面数偏多', near: '没贴上' }
+const counts = AUDIT_CHECKS.filter((k) => k !== 'near' || checks?.has('near')).map((k) => `${LABEL[k]} ${reports.filter(PROBLEM[k]).length} 件`)
 console.log(`体检完成 ${((Date.now() - t0) / 1000).toFixed(1)}s：${counts.join('，')}，出错 ${reports.filter((r) => r.error).length} 件`)
 type ZF = NonNullable<AuditReport['zfight']>
 const zf = (label: string, zs: ZF) => `${label}×${zs.length} ` + zs.slice(0, 3).map((z) => `[${z.a}/${z.b} n=${z.normal.join(',')} @${z.at.join(',')} ${z.area}cm² Δ${z.gap}]`).join(' ')
@@ -47,6 +49,8 @@ for (const r of reports) {
   if (r.islands) bits.push(`悬空×${r.islands.length} ` + r.islands.slice(0, 3).map((i) => `[${i.n}件 ${i.size.join('×')} @${i.center.join(',')} 距${i.gap} ${i.colors[0]}]`).join(' '))
   if (r.zfight) bits.push(zf('共面', r.zfight))
   if (showDown && r.zfightDown) bits.push(zf('朝下共面', r.zfightDown))
+  if (r.lift !== undefined) bits.push(`离地 ${r.lift}`)
+  if (r.near) bits.push(`没贴上×${r.near.length} ` + r.near.slice(0, nearMax).map((x) => `[${x.n}件 差${x.gap}：${x.a} ←→ ${x.b}]`).join(' '))
   if (bits.length) console.log(`${r.id}\t${r.name}\t${bits.join(' | ')}`)
 }
 if (outFile) fs.writeFileSync(outFile, JSON.stringify(reports, null, 1))

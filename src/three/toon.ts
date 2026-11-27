@@ -484,12 +484,13 @@ function puckSegments(r: number, k: number): [number, number] {
 }
 
 /** 圆角盒，at.y 是底面高度（不是中心），摆东西更顺手 */
-export function rbox(w: number, h: number, d: number, color: THREE.ColorRepresentation, at: At = {}, radius?: number) {
+export function rbox(w: number, h: number, d: number, color: THREE.ColorRepresentation, at: At = {}, radius?: number, segs?: number) {
   w = q(w)
   h = q(h)
   d = q(d)
   const r = q(Math.max(0.01, Math.min(radius ?? Math.min(w, h, d) * 0.18, Math.min(w, h, d) / 2 - 0.01)))
-  const seg = rboxSegments(r)
+  // segs：圆角的细分（1 = 108 面、2 = 300 面、3 = 588 面），不给就按圆角半径。十几块大圆角盒拼的坐垫靠背，离远了 2 就够
+  const seg = segs ?? rboxSegments(r)
   const g = cached(`rb${w},${h},${d},${r},${seg}`, () => new RoundedBoxGeometry(w, h, d, seg, r))
   return place(new THREE.Mesh(g, toon(color)), { ...at, y: (at.y ?? 0) + h / 2 })
 }
@@ -612,10 +613,11 @@ export function ball(r: number, color: THREE.ColorRepresentation, at: At = {}, s
 }
 
 /** 胶囊，竖直；at.y 为底 */
-export function capsule(r: number, len: number, color: THREE.ColorRepresentation, at: At = {}) {
+export function capsule(r: number, len: number, color: THREE.ColorRepresentation, at: At = {}, seg: [cap: number, radial: number] = [6, 16]) {
   r = q(r)
   len = q(len)
-  const g = cached(`cp${r},${len}`, () => new THREE.CapsuleGeometry(r, len, 6, 16))
+  // seg：[半球帽的段数, 一圈的段数]。手指、香肠、药丸这种细小的胶囊用 [3, 8]（默认一个 416 面）
+  const g = cached(`cp${r},${len},${seg[0]}x${seg[1]}`, () => new THREE.CapsuleGeometry(r, len, seg[0], seg[1]))
   return place(new THREE.Mesh(g, toon(color)), { ...at, y: (at.y ?? 0) + len / 2 + r })
 }
 
@@ -642,8 +644,8 @@ export function plate(w: number, d: number, color: THREE.ColorRepresentation, at
 }
 
 /** 叶子：压扁的球 */
-export function leaf(len: number, color: THREE.ColorRepresentation, at: At = {}) {
-  return ball(len / 2, color, at, [0.45, 0.12, 1])
+export function leaf(len: number, color: THREE.ColorRepresentation, at: At = {}, seg?: [number, number]) {
+  return ball(len / 2, color, at, [0.45, 0.12, 1], seg)
 }
 
 /** 一张可爱的脸：两只眼睛 + 腮红，贴在 z 正方向的面上 */

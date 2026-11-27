@@ -6,11 +6,16 @@
 //   sink  ：落地件沉到地面以下
 //   black ：纯黑（#000000）的零件，多半是 shade() 把深色调暗过头（shade 现在有软下限，这里兜底）
 //   heavy ：三角面数偏多（小摆件 > 12k、其余 > 45k）
+//   near  ：差一点没贴上——island 的容差是 0.4cm、方正零件按包围盒算，离主体零点几厘米悬着的零件（没压到笼沿的盖子、
+//           没够到框的合页、浮在碗上方的碗盖）都算「挨着」放过了。这里逐三角面量真实距离：和别的零件都不接触（> 0.05cm）、
+//           离最近的零件又不到 3cm 的一组零件。贴片（平面，按约定浮出一点防共面）、柜门抽屉、各自落地 / 贴墙的不算。
+//           同一项里顺带查落地件离地（lift）：最低点比地面高出 0.15cm 以上——多半是往下鼓的弯管、圆角把整件垫了起来。
+//           要逐对零件量距离，比别的检查慢一个数量级，默认不做（脚本里 --checks near）
 import * as THREE from 'three'
 import { OBB } from 'three/addons/math/OBB.js'
 import type { AssetDef } from './kit'
 
-export const AUDIT_CHECKS = ['island', 'zfight', 'sink', 'black', 'heavy'] as const
+export const AUDIT_CHECKS = ['island', 'zfight', 'sink', 'black', 'heavy', 'near'] as const
 export type AuditCheck = (typeof AUDIT_CHECKS)[number]
 
 export interface AuditOptions {
@@ -39,6 +44,8 @@ interface Part {
   /** 世界坐标的三角面（curved 才算），和每个三角面的包围盒（预筛用） */
   tris3?: THREE.Triangle[]
   triBoxes?: THREE.Box3[]
+  /** 量真实距离用的采样点（near） */
+  samples?: THREE.Vector3[]
   /** 有向包围盒的体积（不含容差）：挑主体用 */
   vol: number
   /** 在会动的部件（柜门、抽屉）里：和柜体之间本来就留缝 */
@@ -286,6 +293,140 @@ function islands(def: AssetDef, parts: Part[]): Island[] {
 const r1 = (v: number) => Math.round(v * 10) / 10
 const r2 = (v: number) => Math.round(v * 100) / 100
 
+// ---------- near ----------
+
+export interface Near {
+  /** 这一组有几个零件 */
+  n: number
+  size: number[]
+  center: number[]
+  /** 到最近的别的零件的真实距离（cm） */
+  gap: number
+  /** 这一组里离得最近的零件、对面的零件（几何类型 + 颜色 + 位置） */
+  a: string
+  b: string
+}
+
+/** 真实接触的容差：尺寸量化到 0.1cm，差 0.05 以内算贴着 */
+const NEAR_EPS = 0.05
+/** 只量这么近以内的零件对；更远的悬空归 island 管 */
+const NEAR_CAP = 3
+/** 平面贴片（标签、屏幕画面、地板花纹）：按约定浮出表面一点，不算没贴上 */
+const FLAT = new Set(['PlaneGeometry', 'CircleGeometry', 'ShapeGeometry'])
+
+/** 量距离用的采样点：顶点 + 棱上每隔一小段 + 每个三角面的重心 */
+function samplesOf(p: Part) {
+  if (p.samples) return p.samples
+  const s = p.box.getSize(new THREE.Vector3())
+  const step = Math.max(0.3, Math.max(s.x, s.y, s.z) / 40)
+  const out: THREE.Vector3[] = []
+  const seen = new Set<string>()
+  const push = (v: THREE.Vector3) => {
+    const k = `${Math.round(v.x * 20)},${Math.round(v.y * 20)},${Math.round(v.z * 20)}`
+    if (seen.has(k)) return
+    seen.add(k)
+    out.push(v)
+  }
+  for (const t of trisOf(p)) {
+    for (const [a, b] of [
+      [t.a, t.b],
+      [t.b, t.c],
+      [t.c, t.a],
+    ]) {
+      const k = Math.max(1, Math.ceil(a.distanceTo(b) / step))
+      for (let j = 0; j < k; j++) push(new THREE.Vector3().lerpVectors(a, b, j / k))
+    }
+    push(t.getMidpoint(new THREE.Vector3()))
+  }
+  return (p.samples = out)
+}
+
+/** p 的采样点到 q 表面的最近距离，不超过 cap（点在 q 里面算 0） */
+function distOneWay(p: Part, q: Part, cap: number) {
+  let best = cap
+  const qb = q.box.clone().expandByScalar(cap)
+  const tris = trisOf(q)
+  const boxes = q.triBoxes!
+  const closed = !FLAT.has(q.mesh.geometry.type)
+  for (const v of samplesOf(p)) {
+    if (!qb.containsPoint(v)) continue
+    if (closed && q.box.containsPoint(v) && inside(v, q)) return 0
+    for (let k = 0; k < tris.length; k++) {
+      const b = boxes[k]
+      if (v.x < b.min.x - best || v.x > b.max.x + best || v.y < b.min.y - best || v.y > b.max.y + best || v.z < b.min.z - best || v.z > b.max.z + best) continue
+      tris[k].closestPointToPoint(v, _c)
+      const d = _c.distanceTo(v)
+      if (d < best) best = d
+      if (best <= NEAR_EPS) return best
+    }
+  }
+  return best
+}
+
+const partName = (p: Part) => {
+  const c = p.box.getCenter(new THREE.Vector3())
+  const s = p.box.getSize(new THREE.Vector3())
+  return `${p.mesh.geometry.type.replace('Geometry', '')} ${p.color} @${[c.x, c.y, c.z].map(r1).join(',')} ${[s.x, s.y, s.z].map(r1).join('×')}`
+}
+
+function nears(def: AssetDef, parts: Part[]): Near[] {
+  const n = parts.length
+  if (n < 2) return []
+  const D: number[][] = parts.map(() => new Array<number>(n).fill(Infinity))
+  const parent = parts.map((_, i) => i)
+  const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i])))
+  for (let i = 0; i < n; i++)
+    for (let j = i + 1; j < n; j++) {
+      if (boxGap(parts[i].box, parts[j].box) > NEAR_CAP) continue
+      let d = distOneWay(parts[i], parts[j], NEAR_CAP)
+      if (d > NEAR_EPS) d = Math.min(d, distOneWay(parts[j], parts[i], d))
+      D[i][j] = D[j][i] = d
+      if (d <= NEAR_EPS) parent[find(i)] = find(j)
+    }
+  const groups = new Map<number, number[]>()
+  for (let i = 0; i < n; i++) {
+    const r = find(i)
+    if (!groups.has(r)) groups.set(r, [])
+    groups.get(r)!.push(i)
+  }
+  if (groups.size < 2) return []
+  const list = [...groups.values()].map((idx) => {
+    const box = new THREE.Box3()
+    for (const i of idx) box.union(parts[i].box)
+    return { idx, box, vol: idx.reduce((s, i) => s + parts[i].vol, 0) }
+  })
+  list.sort((a, b) => b.vol - a.vol)
+  const floorStanding = isFloorStanding(def)
+  const whole = new THREE.Box3()
+  for (const p of parts) whole.union(p.box)
+  const out: Near[] = []
+  for (const g of list.slice(1)) {
+    // 和 island 一样的豁免：各自落地的、各自贴墙 / 贴顶的、柜门抽屉；再加平面贴片
+    if (floorStanding && g.box.min.y <= GROUND) continue
+    if (def.mount !== undefined && !def.ceiling && g.box.min.z <= whole.min.z + 1) continue
+    if (def.ceiling && g.box.max.y >= whole.max.y - 1) continue
+    if (g.idx.every((i) => parts[i].door)) continue
+    if (g.idx.every((i) => FLAT.has(parts[i].mesh.geometry.type))) continue
+    const inG = new Set(g.idx)
+    let gap = Infinity
+    let bi = -1
+    let bj = -1
+    for (const i of g.idx)
+      for (let j = 0; j < n; j++)
+        // 柜门抽屉和柜体之间本来留着缝：不拿它们当「最近的零件」
+        if (!inG.has(j) && !parts[j].door && D[i][j] < gap) {
+          gap = D[i][j]
+          bi = i
+          bj = j
+        }
+    if (bi < 0) continue
+    const s = g.box.getSize(new THREE.Vector3())
+    const c = g.box.getCenter(new THREE.Vector3())
+    out.push({ n: g.idx.length, size: [s.x, s.y, s.z].map(r1), center: [c.x, c.y, c.z].map(r1), gap: r2(gap), a: partName(parts[bi]), b: partName(parts[bj]) })
+  }
+  return out
+}
+
 // ---------- zfight ----------
 
 interface Tri {
@@ -461,6 +602,10 @@ export interface AuditReport {
   /** 纯黑零件的个数 */
   black?: number
   heavy?: boolean
+  /** 差一点没贴上的零件组 */
+  near?: Near[]
+  /** 落地件最低点离地多高（高于 0.15 才记） */
+  lift?: number
   error?: string
 }
 
@@ -471,12 +616,14 @@ export const PROBLEM: Record<AuditCheck, (r: AuditReport) => boolean> = {
   sink: (r) => r.sink !== undefined,
   black: (r) => !!r.black,
   heavy: (r) => !!r.heavy,
+  near: (r) => !!r.near || r.lift !== undefined,
 }
 
 /** 有没有要修的问题 */
 export const hasProblem = (r: AuditReport) => !!r.error || AUDIT_CHECKS.some((k) => PROBLEM[k](r))
 
-const ALL_CHECKS = new Set<AuditCheck>(AUDIT_CHECKS)
+/** 默认做的检查：near 慢，要点名才做 */
+const ALL_CHECKS = new Set<AuditCheck>(AUDIT_CHECKS.filter((k) => k !== 'near'))
 
 export function auditAsset(def: AssetDef, opts: AuditOptions = {}): AuditReport {
   const checks = opts.checks ?? ALL_CHECKS
@@ -495,7 +642,7 @@ export function auditAsset(def: AssetDef, opts: AuditOptions = {}): AuditReport 
       if (z.up.length) rep.zfight = z.up
       if (z.down.length) rep.zfightDown = z.down
     }
-    if (checks.has('sink') && isFloorStanding(def) && parts.length) {
+    if ((checks.has('sink') || checks.has('near')) && isFloorStanding(def) && parts.length) {
       // 逐顶点取最低点：变换后的局部包围盒在零件旋转时会放大（摇椅的弧脚、斜放的球），不能用
       let minY = Infinity
       for (const p of parts) {
@@ -503,13 +650,18 @@ export function auditAsset(def: AssetDef, opts: AuditOptions = {}): AuditReport 
         const pos = p.mesh.geometry.attributes.position
         for (let i = 0; i < pos.count; i++) minY = Math.min(minY, _c.fromBufferAttribute(pos, i).applyMatrix4(p.mesh.matrixWorld).y)
       }
-      if (minY < -0.3) rep.sink = r2(minY)
+      if (checks.has('sink') && minY < -0.3) rep.sink = r2(minY)
+      if (checks.has('near') && minY > 0.15) rep.lift = r2(minY)
     }
     if (checks.has('black')) {
       const n = parts.filter((p) => p.color === '#000000').length
       if (n) rep.black = n
     }
     if (checks.has('heavy') && rep.tris > (def.prop ? 12000 : 45000)) rep.heavy = true
+    if (checks.has('near') && !def.fixture) {
+      const ns = nears(def, parts)
+      if (ns.length) rep.near = ns
+    }
   } catch (e) {
     rep.error = (e as Error).message
   }

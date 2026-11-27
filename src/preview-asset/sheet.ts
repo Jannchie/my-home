@@ -6,6 +6,7 @@
 //   match=<id 正则>       按 id 过滤
 //   from=<下标>&n=<个数>  按素材库顺序分页（不给 n 就是到末尾）
 // 其他：c=配色序号（超出该素材配色数的取 0）  cols=5  cell=300  dir=three  inset=back|none  open=1（可开合的打开）
+//       innards=1（关着也画抽屉盒、抽屉里的东西：和不带它的图逐像素比，查关严时本该看得见的零件有没有被 kit.ts innards 藏掉）
 import * as THREE from 'three'
 import { ASSETS, type AssetDef } from '../three/assets'
 import { furnitureModel } from '../three/house'
@@ -101,6 +102,7 @@ export function runSheet(q: URLSearchParams) {
     try {
       const c = Math.min(color, def.palettes.length - 1)
       const m = furnitureModel({ id: 'preview', asset: def.id, x: 0, y: 0, rot: 0, color: c, ...(open && def.openable ? { open: true } : {}) }, { closeUp: true })
+      if (q.has('innards')) m.traverse((o) => void (o.userData.innards && (o.visible = true)))
       stage.scene.add(m)
       m.updateMatrixWorld(true)
       const box = new THREE.Box3().setFromObject(m)
