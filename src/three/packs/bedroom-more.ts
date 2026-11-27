@@ -5,9 +5,9 @@
 //   - 柜子、抽屉、翻盖都是会动的部件（openable），里面的层声明 inside。壁挂件按离地高度建（最低点 = mount、背面贴 z = -d/2）。
 
 import * as THREE from 'three'
-import { ball, cup, cyl, markMirror, puck, rbox, shade, torus } from '../toon'
+import { ball, box, cup, cyl, markMirror, puck, rbox, shade, torus } from '../toon'
 import { C, carcass, drawerBox, drawerLevel, ellipsePoly, hangingPipe, hingedDoor, holePanel, movable, pipeHook, rectPoly, type AssetDef, type SurfaceDef } from '../kit'
-import { cappedTube, cylX, cylZ, lit, noOutline, strutBox } from '../geo'
+import { cappedTube, cylX, cylZ, lit, noOutline, PI, strutBox } from '../geo'
 import { duvet, pillowMesh } from '../bedding'
 import { CL, F, I, J, M, N, R, define, PROP, type Pal } from '../packkit'
 
@@ -269,7 +269,7 @@ function benchTrunk(p: string[]) {
   const lid = new THREE.Group()
   lid.add(rbox(118, 2.5, BT.d, frame, { y: -8, z: hd }, 0.6))
   lid.add(rbox(114, 5.5, BT.d - 3, cushion, { y: -5.5, z: hd }, 2.5))
-  for (const x of [-38, -19, 0, 19, 38]) for (const z of [hd - 9, hd + 9]) lid.add(ball(0.9, shade(cushion, -0.2), { x: x + (z > hd ? 9.5 : 0), y: -0.3, z }))
+  for (const x of [-38, -19, 0, 19, 38]) for (const z of [hd - 9, hd + 9]) lid.add(ball(0.9, shade(cushion, -0.2), { x: x + (z > hd ? 9.5 : 0), y: -0.3, z }, undefined, [6, 4]))
   lid.position.set(0, BT.h, -hd)
   g.add(movable(lid, { kind: 'flap', angle: -(75 * Math.PI) / 180 }))
   return g
@@ -432,7 +432,7 @@ function jewelryArmoire(p: string[]) {
   g.add(rbox(JA.cw - 3.6, JA.top - 14 - 1.8 - JA.mid - 1.5 + 0.2, 0.6, velvet, { y: JA.mid + 1.5, z: JA.z0 + 2 }, 0.2))
   for (const y of JA_SHELVES) g.add(rbox(JA.cw - 3.6, 1.2, cd - 4, body, { y: y - 1.2, z: cz - 0.6 }, 0.3))
   for (let i = 0; i < 7; i++) g.add(cylX(1.1, JA.cw - 3.8, velvet, 0, JA.mid + 1.5 + 1.0, JA.z0 + 5 + i * 2.3, 12))
-  for (const [y0, y1] of JA_ROWS) g.add(drawerBox({ ...jaDrawer(y0, y1), color: body, knob: false, front: (w, h) => [rbox(w, h, 1.4, body, { z: -0.7 }, 0.4), ball(0.9, acc, { y: h / 2, z: 0.6 })] }))
+  for (const [y0, y1] of JA_ROWS) g.add(drawerBox({ ...jaDrawer(y0, y1), color: body, knob: false, front: (w, h) => [rbox(w, h, 1.4, body, { z: -0.7 }, 0.4), ball(0.9, acc, { y: h / 2, z: 0.6 }, undefined, [8, 6])] }))
   // 正面镜门（铰链在左）
   const mirror = (w: number, h: number) => [rbox(w, h, 1.5, body, {}, 0.5), markMirror(noOutline(rbox(w - 4, h - 4, 0.3, C.glass, { y: 2, z: 0.85 }, 0.1)))]
   g.add(hingedDoor({ x0: -JA.cw / 2, x1: JA.cw / 2, y0: JA.mid + 1.5, y1: JA.top, z: JA.z1 + 1.5, hinge: 'left', color: body, th: 1.5, knob: acc, panel: mirror }))
@@ -443,8 +443,9 @@ function jewelryArmoire(p: string[]) {
       const x = -w / 2 + 6 + i * ((w - 12) / (NECK.length - 1))
       const r = 4 + (i % 3) * 2.5
       parts.push(cylZ(0.35, 1.2, BRASS, x, h - 6, -1.1, 8))
-      parts.push(noOutline(torus(r, 0.18, c, { x, y: h - 6.2 - r, z: -1.6 })))
-      parts.push(ball(0.7, c, { x, y: h - 6.2 - r * 2, z: -1.6 }))
+      // 细项链：截面 4 段就够
+      parts.push(noOutline(torus(r, 0.18, c, { x, y: h - 6.2 - r, z: -1.6 }, PI * 2, [4, r > 5 ? 24 : 18])))
+      parts.push(ball(0.7, c, { x, y: h - 6.2 - r * 2, z: -1.6 }, undefined, [6, 4]))
     })
     return parts
   }
@@ -522,7 +523,7 @@ function blanketLadder(p: string[]) {
     ]) {
       g.add(rbox(40, len, thick, color, { y: y - len, z: z + dz }, Math.min(0.5, thick / 2 - 0.05)))
       // 下摆一排流苏
-      for (let i = 0; i < 14; i++) g.add(rbox(0.8, 2.8, 0.8, shade(color, -0.08), { x: -18.2 + i * 2.8, y: y - len - 2.5, z: z + dz }, 0.2))
+      for (let i = 0; i < 14; i++) g.add(box(0.8, 2.8, 0.8, shade(color, -0.08), { x: -18.2 + i * 2.8, y: y - len - 2.5, z: z + dz }))
       if (bands) for (const k of [0.25, 0.55]) g.add(rbox(40.6, 2.4, thick + 0.6, stripe, { y: y - len * k, z: z + dz }, 0.4))
     }
   }
@@ -552,9 +553,9 @@ function bedTray(p: string[]) {
   const mx = -13
   const mz = 4
   g.add(puck(6, 0.7, C.white, { x: mx, y: top, z: mz }))
-  g.add(cup(3.8, 3.3, 8, 0.4, mug, { x: mx, y: top + 0.7, z: mz }))
+  g.add(cup(3.8, 3.3, 8, 0.4, mug, { x: mx, y: top + 0.7, z: mz }, 24))
   g.add(noOutline(cyl(3.45, 3.45, 0.3, COFFEE, { x: mx, y: top + 0.7 + 6.6, z: mz }, 24)))
-  g.add(torus(2, 0.5, mug, { x: mx + 4.6, y: top + 4.8, z: mz }))
+  g.add(torus(2, 0.5, mug, { x: mx + 4.6, y: top + 4.8, z: mz }, PI * 2, [6, 16]))
   // 书：上下封面 + 书页（三边缩进）+ 书脊，斜放
   const book = new THREE.Group()
   book.add(rbox(15, 0.35, 21, cover, {}, 0.12))

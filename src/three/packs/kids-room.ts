@@ -5,9 +5,9 @@
 // 都是儿童用品（for-kids）；家里有婴儿才用得上的（健身架、哺乳椅、看护三件套）再加 for-baby。
 
 import * as THREE from 'three'
-import { ball, cyl, puck, rbox, shade, torus, tray } from '../toon'
+import { ball, box, cyl, puck, rbox, shade, torus, tray } from '../toon'
 import { duvet, pillowMesh } from '../bedding'
-import { C, glow, holePanel, paintPanel, rectPoly, shell, type AssetDef } from '../kit'
+import { C, glow, holePanel, paintPanel, rectPoly, type AssetDef, type Hole } from '../kit'
 import { P, PI, batten, box3, cappedTube, cylX, cylZ, fitGroup, fitWall, lit, litOutlined, mesh, noOutline, rod3, sideSlab, tiltFrame, tube, type V2, type V3 } from '../geo'
 import { CL, J, M, N, R, define, PROP, type Pal } from '../packkit'
 
@@ -133,14 +133,14 @@ function castleTent(p: string[]) {
       const x = sx * half
       const z = sz * half
       g.add(cyl(r, r, CT.tower, wall, { x, z }, 24))
-      for (const y of [76, CT.tower - 2]) g.add(P(torus(r + 0.2, 0.9, acc), x, y, z, PI / 2))
+      for (const y of [76, CT.tower - 2]) g.add(torus(r + 0.2, 0.9, acc, { x, y, z, rx: PI / 2 }, PI * 2, [6, 24]))
       const dx = sx / Math.SQRT2
       const dz = sz / Math.SQRT2
       g.add(P(rbox(2.6, 8, 1.2, shade(wall, -0.35), {}, 0.4), x + dx * (r - 0.2), 88, z + dz * (r - 0.2), 0, Math.atan2(dx, dz)))
       g.add(cyl(0.4, r + 2.5, 32, roof, { x, y: CT.tower, z }, 24))
       g.add(cyl(0.45, 0.45, 8, C.woodD, { x, y: CT.tower + 31, z }, 8))
-      g.add(ball(0.9, acc, { x, y: CT.tower + 39.4, z }))
-      g.add(rbox(7, 4.5, 0.3, acc, { x: x + sx * 3.7, y: CT.tower + 33.5, z }, 0.1))
+      g.add(ball(0.9, acc, { x, y: CT.tower + 39.4, z }, undefined, [8, 6]))
+      g.add(box(7, 4.5, 0.3, acc, { x: x + sx * 3.7, y: CT.tower + 33.5, z }))
     }
   // 门帘：两片挽在门两侧，各系一道带子；门头一条门楣
   const zc = half + t / 2 + 0.45
@@ -221,8 +221,8 @@ function heightChart(p: string[]) {
   g.add(flatPlate(polyShape(GIRAFFE), T, body, 0.4))
   // 刻度：每 10cm 一块色块（块之间留缝就是整十刻度），中间一道短横线是半刻度
   for (let i = 0; i < 11; i++) {
-    g.add(noOutline(rbox(4.4, 9.2, 0.6, RAINBOW[i % RAINBOW.length], { x: -3.4, y: i * 10 + 0.4, z: zf + 0.1 }, 0.2)))
-    g.add(noOutline(rbox(2.4, 0.8, 0.6, shade(body, -0.35), { x: 0.6, y: i * 10 + 4.6, z: zf + 0.1 }, 0.2)))
+    g.add(noOutline(box(4.4, 9.2, 0.6, RAINBOW[i % RAINBOW.length], { x: -3.4, y: i * 10 + 0.4, z: zf + 0.1 })))
+    g.add(noOutline(box(2.4, 0.8, 0.6, shade(body, -0.35), { x: 0.6, y: i * 10 + 4.6, z: zf + 0.1 })))
   }
   // 脖子上的斑点
   for (const [x, y, r] of [
@@ -234,7 +234,7 @@ function heightChart(p: string[]) {
     [2.9, 107, 1.9],
     [3, 126, 1.6],
   ])
-    g.add(ball(r, spot, { x, y, z: zf }, [1, 1.15, 0.22]))
+    g.add(ball(r, spot, { x, y, z: zf }, [1, 1.15, 0.22], [10, 6]))
   // 脑袋：浅色鼻头 + 鼻孔、眼睛、耳朵里、两只角
   g.add(ball(3.4, shade(body, 0.12), { x: 15, y: 125, z: zf }, [1, 0.85, 0.28]))
   g.add(noOutline(ball(0.5, DARK, { x: 16.6, y: 126.2, z: zf + 0.85 })))
@@ -255,8 +255,14 @@ function heightChart(p: string[]) {
 function checkoutToy(p: string[]) {
   const [body, top, reg] = p
   const g = new THREE.Group()
-  // 柜台：空心箱，正面一个大开口，里面一层隔板；顶上一块台面
-  g.add(shell(50, 28, 28, 1.4, body, { front: [{ kind: 'rect', x: 0, y: 4, w: 40, h: 19, r: 2 }], top: false }))
+  // 柜台：空心箱，正面一个大开口，里面一层隔板；顶上一块台面。
+  // 箱体和 kit 的 shell(50, 28, 28, 1.4, { top: false }) 同样的拼法，只是板的圆角细分压到 4 段（shell 用默认 16 段，一块板五百多个三角面）
+  const ct = 1.4
+  const pane = (w: number, holes: Hole[], at: { x?: number; y?: number; z?: number; ry?: number }) => holePanel(w, 28 - ct, ct, body, holes, at, 1.5, { seg: 4 })
+  g.add(pane(50, [{ kind: 'rect', x: 0, y: 4 - ct, w: 40, h: 19, r: 2 }], { y: ct, z: 14 - ct / 2 }))
+  g.add(pane(50, [], { y: ct, z: -14 + ct / 2, ry: PI }))
+  for (const s of [-1, 1]) g.add(pane(28 - ct * 2, [], { x: s * (25 - ct / 2), y: ct, ry: (s * PI) / 2 }))
+  g.add(rbox(50, ct, 28, body, {}, Math.min(ct * 0.4, 1)))
   g.add(rbox(47.4, 1.2, 25, shade(body, -0.06), { y: 13 }, 0.3))
   g.add(rbox(50, 2, 30, top, { y: 28 }, 0.8))
   // 传送带 + 两头的滚筒
@@ -326,7 +332,7 @@ function checkoutToy(p: string[]) {
   const { g: kf } = tiltFrame([-10, 43], [7, 38], 'z')
   kf.position.x = rx
   for (const x of [-6.5, -3, 0.5])
-    for (const zl of [4, 7.5, 11, 14.5]) kf.add(noOutline(rbox(2.8, 0.9, 2.6, '#fffdf5', { x, y: -0.4, z: zl }, 0.3)))
+    for (const zl of [4, 7.5, 11, 14.5]) kf.add(noOutline(box(2.8, 0.9, 2.6, '#fffdf5', { x, y: -0.4, z: zl })))
   kf.add(noOutline(rbox(4.5, 0.9, 6.2, '#ff8f86', { x: 5.2, y: -0.4, z: 12.2 }, 0.3)))
   kf.add(noOutline(rbox(4.5, 0.9, 2.6, '#8fd49a', { x: 5.2, y: -0.4, z: 4.8 }, 0.3)))
   g.add(kf)
@@ -343,9 +349,9 @@ function checkoutToy(p: string[]) {
 /** 玩具大螺丝：插在木块里的螺杆（两道螺纹）+ 十字头 */
 function toyScrew(g: THREE.Group, x: number, y: number, z: number, color: string) {
   g.add(cyl(1, 1, 4.6, color, { x, y: y - 0.8, z }, 12))
-  for (const dy of [1.2, 2.5]) g.add(P(torus(1, 0.35, color), x, y + dy, z, PI / 2))
+  for (const dy of [1.2, 2.5]) g.add(torus(1, 0.35, color, { x, y: y + dy, z, rx: PI / 2 }, PI * 2, [4, 12]))
   g.add(puck(2.1, 1.4, color, { x, y: y + 3.6, z }))
-  g.add(noOutline(rbox(2.6, 0.5, 0.5, DARK, { x, y: y + 4.8, z }, 0.15)))
+  g.add(noOutline(box(2.6, 0.5, 0.5, DARK, { x, y: y + 4.8, z })))
 }
 function kidWorkbench(p: string[]) {
   const [wood, board, tool] = p
@@ -369,7 +375,7 @@ function kidWorkbench(p: string[]) {
   g.add(P(flatPlate(polyShape([[-7, 4.6], [6.5, 6], ...teeth, [-7, 1.2]]), 0.5, STEEL, 0.1), 2, 54, -12.9))
   g.add(rbox(4.5, 6.5, 1.6, tool, { x: 10.5, y: 54.2, z: -12.6 }, 0.8))
   g.add(rbox(1.8, 9, 0.8, STEEL, { x: 20, y: 55, z: -12.75 }, 0.3))
-  g.add(P(torus(1.7, 0.6, STEEL), 20, 65.2, -12.75))
+  g.add(torus(1.7, 0.6, STEEL, { x: 20, y: 65.2, z: -12.75 }, PI * 2, [6, 16]))
   // 台面：插着三颗大螺丝的木块
   g.add(rbox(16, 4, 9, shade(wood, 0.08), { x: -10, y: top, z: 4 }, 0.6))
   ;[-15, -10, -5].forEach((x, i) => toyScrew(g, x, top + 4, 4, [tool, board, C.lemon][i]))
@@ -386,7 +392,7 @@ function kidWorkbench(p: string[]) {
   for (const z of [7.2, 12.6]) g.add(rbox(10, 4.5, 1.6, board, { x: 21, y: top + 2.6, z }, 0.4))
   g.add(cylZ(0.6, 8, STEEL, 21, top + 4.5, 15, 8))
   g.add(cylX(0.4, 7, STEEL, 21, top + 4.5, 19, 8))
-  for (const s of [-1, 1]) g.add(ball(0.8, tool, { x: 21 + s * 3.6, y: top + 4.5, z: 19 }))
+  for (const s of [-1, 1]) g.add(ball(0.8, tool, { x: 21 + s * 3.6, y: top + 4.5, z: 19 }, undefined, [6, 4]))
   // 下层：零件盒里几颗螺母
   g.add(tray(18, 6, 11, 0.8, board, { x: -12, y: 13.8 }))
   for (const x of [-16, -12.5, -9]) g.add(cyl(1.4, 1.4, 1, C.lemon, { x, y: 14.6, z: (x % 2) * 1.5 }, 6))
@@ -466,7 +472,7 @@ function montessoriShelf(p: string[]) {
   const g = new THREE.Group()
   const { w, d, h, t, base } = MS
   const iw = w - t * 2
-  for (const s of [-1, 1]) g.add(holePanel(d, h, t, wood, [{ kind: 'rect', x: 0, y: h - 9, w: 10, h: 3.6, r: 1.8 }], { x: s * (w / 2 - t / 2), ry: PI / 2 }, 4))
+  for (const s of [-1, 1]) g.add(holePanel(d, h, t, wood, [{ kind: 'rect', x: 0, y: h - 9, w: 10, h: 3.6, r: 1.8 }], { x: s * (w / 2 - t / 2), ry: PI / 2 }, 4, { seg: 5 }))
   g.add(rbox(iw + 0.02, t, d, wood, { y: h - t }, 0.3))
   g.add(rbox(iw + 0.2, t, d - 1.4, wood, { y: base, z: 0.7 }, 0.3))
   g.add(rbox(iw, base, d - 6, shade(wood, -0.12), { z: -1 }, 0.3))
@@ -518,7 +524,7 @@ function floorBed(p: string[]) {
   const sag = (x: number) => 101 + 12.3 * (x / 40) ** 2
   const rope: V3[] = []
   for (let i = 0; i <= 8; i++) rope.push([-40 + i * 10, sag(-40 + i * 10), Z])
-  g.add(tube(rope, 0.25, '#8a7a6a', { seg: 32, radial: 6 }))
+  g.add(tube(rope, 0.25, '#8a7a6a', { seg: 16, radial: 5 }))
   const flagColors = [acc, fab, shade(acc, 0.25)]
   const tri = polyShape([
     [-3, 0],
@@ -550,7 +556,7 @@ function babyGymWood(p: string[]) {
   const hang = (x: number, y1: number) => g.add(cyl(0.22, 0.22, H - 1.2 - y1, CORD, { x, y: y1 }, 6))
   // 木环
   hang(-13, 36.8)
-  g.add(torus(3.6, 0.9, toyA, { x: -13, y: 33 }))
+  g.add(torus(3.6, 0.9, toyA, { x: -13, y: 33 }, PI * 2, [8, 20]))
   // 星星
   hang(0, 36)
   g.add(P(flatPlate(polyShape(starPts(0, 0, 4.6, 2.1)), 1.6, toyB, 0.3), 0, 32, 0))
@@ -609,8 +615,8 @@ function babyMonitorSet(p: string[]) {
   const nx = -9
   g.add(puck(4.6, 2, sub, { x: nx }))
   g.add(litOutlined(ball(4.2, NIGHT, { x: nx, y: 6.2 }, [1, 1.08, 1]), NIGHT, 0.5))
-  for (const s of [-1, 1]) g.add(litOutlined(ball(1.6, NIGHT, { x: nx + s * 1.9, y: 11.6, rz: -s * 0.25 }, [0.6, 1.6, 0.5]), NIGHT, 0.5))
-  g.add(noOutline(ball(0.5, acc, { x: nx, y: 1, z: 4.3 })))
+  for (const s of [-1, 1]) g.add(litOutlined(ball(1.6, NIGHT, { x: nx + s * 1.9, y: 11.6, rz: -s * 0.25 }, [0.6, 1.6, 0.5], [10, 8]), NIGHT, 0.5))
+  g.add(noOutline(ball(0.5, acc, { x: nx, y: 1, z: 4.3 }, undefined, [6, 4])))
   // 白噪音机
   const wx = 1
   g.add(cyl(4.8, 5, 5, main, { x: wx }, 32))
@@ -621,7 +627,7 @@ function babyMonitorSet(p: string[]) {
   ])
     for (let i = 0; i < n; i++) {
       const a = (i / n) * PI * 2
-      g.add(noOutline(ball(0.3, DARK, { x: wx + Math.cos(a) * r, y: 5.3, z: Math.sin(a) * r }, [1, 0.5, 1])))
+      g.add(noOutline(ball(0.3, DARK, { x: wx + Math.cos(a) * r, y: 5.3, z: Math.sin(a) * r }, [1, 0.5, 1], [6, 4])))
     }
   g.add(lit(ball(0.45, '#9fe8ff', { x: wx, y: 2.6, z: 4.85 }), '#9fe8ff', 0.6))
   // 看护器显示屏：底座 + 往后仰的机身，屏上是夜视画面，右上一根天线

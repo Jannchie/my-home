@@ -22,8 +22,14 @@ const MOSS = '#7fae4e'
 const LEAF_LO: [number, number] = [12, 2]
 /** 成片的细小羽片 / 花瓣 */
 const PIN: [number, number] = [6, 2]
-/** 小颗粒（叶齿、石子、花芯） */
+/** 小颗粒（石子、花芯） */
 const TINY: [number, number] = [6, 4]
+/** 成堆的 1～2cm 小叶片（茉莉、柠檬、香草）：正面 8 边形就看不出棱角 */
+const LEAF_S: [number, number] = [8, 2]
+/** 不到 2cm 的小花瓣 / 枫叶裂片 */
+const PETAL: [number, number] = [5, 2]
+/** 不到 0.5cm、不描边的小点（叶齿、花芯、叶柄顶的小凸起）：菱形的双锥体就够 */
+const DOT: [number, number] = [4, 2]
 
 // ---------- 向量小工具 ----------
 
@@ -128,12 +134,14 @@ const q5 = (v: number) => Math.max(0.5, Math.round(v * 2) / 2)
  * 薄叶片：叶基在原点、沿 +z 伸出 len、宽 wid，叶面（y = 0）朝 +y、厚度往下。
  * rib：叶面上浅色的主脉；decal / under：叶面 / 叶背的贴花材质（只给叶基在 y = 0 的叶形用：oval）。
  */
-function flatLeaf(kind: LeafKind, len: number, wid: number, color: string, o: { t?: number; rib?: string; decal?: THREE.Material; under?: THREE.Material } = {}) {
+function flatLeaf(kind: LeafKind, len: number, wid: number, color: string, o: { t?: number; rib?: string; decal?: THREE.Material; under?: THREE.Material; cs?: number } = {}) {
   const L = q5(len)
   const W = q5(wid)
   const t = o.t ?? 0.25
-  const geo = cached(`pm-lf-${kind}-${L}-${W}-${t}`, () => {
-    const gg = new THREE.ExtrudeGeometry(leafShape(kind, W, L), { depth: t, bevelEnabled: false, curveSegments: 2 })
+  // cs：轮廓每个控制点之间的细分。小叶片（< 6cm）和几乎是直边的带状叶 1 段就够，大叶片 2 段
+  const cs = o.cs ?? 2
+  const geo = cached(`pm-lf-${kind}-${L}-${W}-${t}-${cs}`, () => {
+    const gg = new THREE.ExtrudeGeometry(leafShape(kind, W, L), { depth: t, bevelEnabled: false, curveSegments: cs })
     // 形状的 y（叶长）转到 +z，挤出的厚度转到 -y：叶面正好在 y = 0
     gg.rotateX(PI / 2)
     return gg
@@ -294,7 +302,7 @@ function stalkLeaf(
   kind: LeafKind,
   lx: number,
   lz: number,
-  o: { rib?: string; decal?: THREE.Material; under?: THREE.Material; stemR?: number; stemC?: string; up?: V3 } = {},
+  o: { rib?: string; decal?: THREE.Material; under?: THREE.Material; stemR?: number; stemC?: string; up?: V3; cs?: number } = {},
 ) {
   const ds = dirAE(a, eStem)
   const dl = dirAE(a, eLeaf)
@@ -311,9 +319,9 @@ function star5(g: THREE.Group, at: V3, n: V3, s: number, petal: string, center: 
   for (let k = 0; k < 5; k++) {
     const a = (k / 5) * PI * 2
     const d = add(add([0, 0, 0], u, Math.cos(a)), v, Math.sin(a))
-    g.add(oval(s, petal, add(at, n, 0.1), add(d, n, 0.25), n, 0.62, 0.16, PIN))
+    g.add(oval(s, petal, add(at, n, 0.1), add(d, n, 0.25), n, 0.62, 0.16, PETAL))
   }
-  g.add(noOutline(ball(s * 0.24, center, { x: at[0] + n[0] * 0.2, y: at[1] + n[1] * 0.2, z: at[2] + n[2] * 0.2 }, undefined, TINY)))
+  g.add(noOutline(ball(s * 0.24, center, { x: at[0] + n[0] * 0.2, y: at[1] + n[1] * 0.2, z: at[2] + n[2] * 0.2 }, undefined, DOT)))
 }
 
 // ---------- 花盆 ----------
@@ -329,11 +337,17 @@ interface Pot {
 }
 
 /** 圆形土面：顶面在 top */
-const soilDisc = (r: number, top: number, color = SOIL) => cyl(r, r - 0.05, 0.8, color, { y: top - 0.8 }, 20)
+const soilDisc = (r: number, top: number, color = SOIL, seg = 20) => cyl(r, r - 0.05, 0.8, color, { y: top - 0.8 }, seg)
+
+/**
+ * 盆身的一圈段数：cup 默认 32 段，桌面 / 落地的小盆 24 段就看不出棱角（盆里的土面留了 ≥ 0.25cm 的余量，不会从折线中间穿出盆壁）。
+ * 贴着盆身的箍 / 腰线（torus，管截面 6 段）一圈也用这个段数：折线和盆身对得上，不会一截截陷进盆里
+ */
+const POT_SEG = 24
 
 /** 实心环带（素烧盆加厚的口沿） */
-function band(rOB: number, rOT: number, rIB: number, rIT: number, h: number, color: string, y = 0) {
-  const m = lathe([[rIB, 0], [rOB, 0], [rOT, h], [rIT, h], [rIB, 0]], color)
+function band(rOB: number, rOT: number, rIB: number, rIT: number, h: number, color: string, y = 0, seg = POT_SEG) {
+  const m = lathe([[rIB, 0], [rOB, 0], [rOT, h], [rIT, h], [rIB, 0]], color, seg)
   m.position.y = y
   return m
 }
@@ -370,8 +384,8 @@ function ceramicPot(R: number, h: number, body: string, saucer: string): Pot {
   const t = 0.8
   const rB = R * 0.92
   const y0 = 1.2
-  g.add(cyl(rB + 1.4, rB + 0.8, y0, saucer, {}, 24))
-  g.add(cup(R, rB, h, t, body, { y: y0 }))
+  g.add(cyl(rB + 1.4, rB + 0.8, y0, saucer, {}, POT_SEG))
+  g.add(cup(R, rB, h, t, body, { y: y0 }, R < 8 ? 20 : POT_SEG))
   const soil = y0 + h - 1.6
   const sr = rB + ((R - rB) * (h - 1.6)) / h - t - 0.25
   g.add(soilDisc(sr, soil))
@@ -384,11 +398,11 @@ function terraPot(rTop: number, h: number, color: string, saucer: string): Pot {
   const rBot = rTop * 0.72
   const t = Math.max(0.7, rTop * 0.085)
   const rs = rBot + 2.2
-  g.add(cup(rs, rs - 0.9, 2.2, 0.7, saucer))
+  g.add(cup(rs, rs - 0.9, 2.2, 0.7, saucer, {}, POT_SEG))
   const y0 = 0.7
   const hb = Math.max(2, h * 0.2)
   const r1 = rTop - 0.7
-  g.add(cup(r1, rBot, h - hb + 0.6, t, color, { y: y0 }))
+  g.add(cup(r1, rBot, h - hb + 0.6, t, color, { y: y0 }, POT_SEG))
   const rIn = r1 - t
   g.add(band(rTop - 0.1, rTop, rIn - 0.05, rIn + 0.1, hb, color, y0 + h - hb))
   const soil = y0 + h - 1.6
@@ -400,9 +414,9 @@ function terraPot(rTop: number, h: number, color: string, saucer: string): Pot {
 function glazedPot(R: number, h: number, color: string, accent: string): Pot {
   const t = 0.8
   const prof: V2[] = [[R * 0.62, 0], [R * 0.82, h * 0.16], [R * 0.97, h * 0.42], [R, h * 0.62], [R * 0.94, h * 0.86], [R * 0.91, h - t / 2]]
-  const g = G(hollowLathe(prof, t, color))
+  const g = G(hollowLathe(prof, t, color, POT_SEG))
   const yr = h - 1.6
-  g.add(torus(rAt(prof, yr) + 0.05, 0.42, accent, { y: yr, rx: PI / 2 }))
+  g.add(torus(rAt(prof, yr) + 0.05, 0.42, accent, { y: yr, rx: PI / 2 }, PI * 2, [6, POT_SEG]))
   const soil = h - 1.6
   const sr = rAt(prof, soil) - t - 0.3
   g.add(soilDisc(sr, soil))
@@ -413,9 +427,9 @@ function glazedPot(R: number, h: number, color: string, accent: string): Pot {
 function tallPot(R: number, h: number, color: string, accent: string): Pot {
   const t = 1.4
   const rB = R * 0.9
-  const g = G(cup(R, rB, h, t, color))
+  const g = G(cup(R, rB, h, t, color, {}, 28))
   const yb = h * 0.18
-  g.add(torus(rB + ((R - rB) * yb) / h + 0.05, 0.6, accent, { y: yb, rx: PI / 2 }))
+  g.add(torus(rB + ((R - rB) * yb) / h + 0.05, 0.6, accent, { y: yb, rx: PI / 2 }, PI * 2, [6, 28]))
   const soil = h - 1.8
   const sr = rB + ((R - rB) * soil) / h - t - 0.25
   g.add(soilDisc(sr, soil))
@@ -502,6 +516,8 @@ function anthurium(p: string[]) {
 // ======================================================================
 
 // ---------- 金钱树：高筒盆里几根直立微弯的羽状叶柄，基部膨大，两侧对生厚实的深绿椭圆小叶，顶端一片 ----------
+/** 金钱树的小叶：正面 10 边形，纬线 2 段（一百多片，厚度方向不用再分） */
+const ZZ_LEAF: [number, number] = [10, 2]
 function zzPlant(p: string[]) {
   const [potC, band] = p
   const P = tallPot(13, 26, potC, band)
@@ -517,9 +533,9 @@ function zzPlant(p: string[]) {
     const out: V3 = [Math.cos(a), 0, Math.sin(a)]
     const base: V3 = [Math.cos(a) * 2, y - 0.4, Math.sin(a) * 2]
     const ctrl: V3[] = [base, add(add(base, UPV, L * 0.6), out, L * Math.sin(lean) * 0.15), add(add(base, UPV, L * Math.cos(lean)), out, L * Math.sin(lean))]
-    g.add(tube(Array.from({ length: 7 }, (_, k) => bez(ctrl, k / 6)), 0.55, '#5a8a3e', { seg: 14, radial: 6 }))
+    g.add(tube(Array.from({ length: 7 }, (_, k) => bez(ctrl, k / 6)), 0.55, '#5a8a3e', { seg: 8, radial: 5 }))
     // 膨大的叶柄基部（半埋在土里）
-    g.add(ball(1.5, '#7f9a4a', { x: base[0], y: y - 0.1, z: base[2] }, [1, 1.5, 1], [10, 6]))
+    g.add(ball(1.5, '#7f9a4a', { x: base[0], y: y - 0.1, z: base[2] }, [1, 1.5, 1], [8, 4]))
     const side = unit(cross(out, UPV))
     for (let k = 0; k < 7; k++) {
       const t = 0.34 + k * 0.1
@@ -527,11 +543,11 @@ function zzPlant(p: string[]) {
       const T = bezTan(ctrl, t)
       for (const sd of [-1, 1]) {
         const dir = unit(add(add([0, 0, 0], side, sd * 0.85), T, 0.5))
-        g.add(oval(6.4 - k * 0.25, (k + sd) % 3 ? '#2e6b35' : '#3b7f40', pos, dir, add(out, UPV, 0.3), 0.48, 0.16, [12, 3]))
+        g.add(oval(6.4 - k * 0.25, (k + sd) % 3 ? '#2e6b35' : '#3b7f40', pos, dir, add(out, UPV, 0.3), 0.48, 0.16, ZZ_LEAF))
       }
     }
     const tip = bez(ctrl, 1)
-    g.add(oval(5.4, '#3b7f40', add(tip, bezTan(ctrl, 1), -0.6), bezTan(ctrl, 1), out, 0.48, 0.16, [12, 3]))
+    g.add(oval(5.4, '#3b7f40', add(tip, bezTan(ctrl, 1), -0.6), bezTan(ctrl, 1), out, 0.48, 0.16, ZZ_LEAF))
   }
   return fitGroup(g)
 }
@@ -557,10 +573,10 @@ function bostonFern(p: string[]) {
     const a = PI / 4 + (k * PI) / 2
     g.add(rod3([Math.cos(a) * ringR, ringY, Math.sin(a) * ringR], [Math.cos(a) * footR, 0, Math.sin(a) * footR], 1.1, wood, 8))
   }
-  g.add(torus(ringR, 0.8, wood, { y: ringY, rx: PI / 2 }))
-  g.add(torus(legR(22), 0.7, wood, { y: 22, rx: PI / 2 }))
+  g.add(torus(ringR, 0.8, wood, { y: ringY, rx: PI / 2 }, PI * 2, [6, POT_SEG]))
+  g.add(torus(legR(22), 0.7, wood, { y: 22, rx: PI / 2 }, PI * 2, [6, POT_SEG]))
   g.add(cyl(legR(top) - 0.2, legR(top) - 0.2, 1.6, shade(wood, -0.06), { y: top - 1.6 }, 24))
-  g.add(cup(R, rB, H, 0.8, potC, { y: top }))
+  g.add(cup(R, rB, H, 0.8, potC, { y: top }, POT_SEG))
   const soil = top + H - 1.6
   g.add(soilDisc(rB + ((R - rB) * (H - 1.6)) / H - 1.05, soil))
   // 蕨叶：三次贝塞尔的叶轴，两侧对生细小羽片（越靠叶尖越短）
@@ -576,9 +592,10 @@ function bostonFern(p: string[]) {
     const reach = inner ? 14 + rand() * 3 : 21 + rand() * 4
     const drop = inner ? -6 : 3 + rand() * 13
     const ctrl: V3[] = [at(1.4, soil - 0.3), at(reach * 0.3, soil + rise), at(reach * 0.95, soil + rise * 0.7), at(reach, soil - drop)]
-    g.add(noOutline(tube(Array.from({ length: 9 }, (_, k) => bez(ctrl, k / 8)), 0.18, '#5f8f4a', { seg: 14, radial: 4 })))
+    g.add(noOutline(tube(Array.from({ length: 9 }, (_, k) => bez(ctrl, k / 8)), 0.18, '#5f8f4a', { seg: 10, radial: 3 })))
     const green = i % 3 ? '#5fae4f' : '#6fbd58'
-    const m = 20
+    // 每侧 16 片羽片（略宽一点补上间距）：七百来片的小扁片是这盆的主要面数
+    const m = 16
     for (let k = 0; k < m; k++) {
       const t = 0.08 + (k * 0.9) / (m - 1)
       const pos = bez(ctrl, t)
@@ -589,7 +606,7 @@ function bostonFern(p: string[]) {
       const nrm = cross(S, T)
       // 羽片中段最长，叶基和叶尖收短：整片蕨叶是细长的剑形
       const len = 1.4 + 3 * Math.sin(PI * Math.min(1, t * 1.15))
-      for (const sd of [-1, 1]) g.add(oval(len, k % 2 ? green : shade(green, -0.05), pos, add(add([0, 0, 0], S, sd), T, 0.35), nrm, 0.36, 0.14, PIN))
+      for (const sd of [-1, 1]) g.add(oval(len, k % 2 ? green : shade(green, -0.05), pos, add(add([0, 0, 0], S, sd), T, 0.35), nrm, 0.42, 0.14, PETAL))
     }
   }
   return fitGroup(g)
@@ -602,7 +619,7 @@ function bostonFern(p: string[]) {
 /** 鹿角蕨的一片孢子叶：从 base 沿 dir 伸出，末端二叉分开（depth 层），每层变短变窄 */
 function antler(g: THREE.Group, base: V3, dir: V3, nrm: V3, len: number, wid: number, depth: number, colors: string[]) {
   const n = unit(sub(nrm, add([0, 0, 0], unit(dir), dot(nrm, unit(dir)))))
-  g.add(orient(flatLeaf('lobe', len, wid, colors[colors.length - 1 - depth], { t: 0.3 }), base, dir, n))
+  g.add(orient(flatLeaf('lobe', len, wid, colors[colors.length - 1 - depth], { t: 0.3, cs: len < 8 ? 1 : 2 }), base, dir, n))
   if (!depth) return
   const tip = add(base, unit(dir), len * 0.86)
   const side = cross(n, unit(dir))
@@ -617,6 +634,8 @@ function antler(g: THREE.Group, base: V3, dir: V3, nrm: V3, len: number, wid: nu
 }
 
 // ---------- 鹿角蕨：竖挂的木板上一团苔藓，上面两片圆盾形的包叶贴着木板，五片银绿色的鹿角状孢子叶向两侧和下方伸出、末端两次分叉 ----------
+/** 压成薄片的包叶：轮廓 20 边，厚度方向 6 段就够（24 × 16 的球压扁后大半的纬线都挤在边上） */
+const SHIELD: [number, number] = [20, 6]
 function staghorn(p: string[]) {
   const [wood, wire] = p
   const g = new THREE.Group()
@@ -625,7 +644,7 @@ function staghorn(p: string[]) {
   g.add(noOutline(tube([[-8, 49.6, -8.9], [-4, 54, -8.9], [0, 55.4, -8.9], [4, 54, -8.9], [8, 49.6, -8.9]], 0.25, wire, { seg: 12, radial: 5 })))
   for (const s of [-1, 1]) g.add(cyl(0.7, 0.7, 0.5, '#c9a25a', { x: s * 8, y: 49.3, z: -7.95, rx: PI / 2 }, 10))
   // 苔藓团
-  g.add(ball(7.5, '#8f9a5a', { y: 27, z: -6.6 }, [1, 0.85, 0.45]))
+  g.add(ball(7.5, '#8f9a5a', { y: 27, z: -6.6 }, [1, 0.85, 0.45], [14, 8]))
   const rand = rng(341)
   for (let i = 0; i < 9; i++) {
     const a = rand() * PI * 2
@@ -633,8 +652,8 @@ function staghorn(p: string[]) {
   }
   // 盾状包叶：老的一片褐色、新的一片绿色，从苔藓上方贴着木板往上包
   // 老包叶的上缘是起伏的几瓣（三片错开的扁圆叠成），不是一整个圆盘
-  for (const [x, yy, r, z] of [[-5, 34, 8, -7.2], [5, 35, 8.4, -7.4], [0, 38.5, 7, -7.6]] as [number, number, number, number][]) g.add(ball(r, '#a8875a', { x, y: yy, z }, [1, 1, 0.14]))
-  const shield = ball(8, '#9fb274', { x: 1.5, y: 31, z: -5.4 }, [1.15, 0.85, 0.16])
+  for (const [x, yy, r, z] of [[-5, 34, 8, -7.2], [5, 35, 8.4, -7.4], [0, 38.5, 7, -7.6]] as [number, number, number, number][]) g.add(ball(r, '#a8875a', { x, y: yy, z }, [1, 1, 0.14], SHIELD))
+  const shield = ball(8, '#9fb274', { x: 1.5, y: 31, z: -5.4 }, [1.15, 0.85, 0.16], SHIELD)
   shield.rotation.x = -0.2
   g.add(shield)
   // 孢子叶：细长的叶身，末端两次二叉分开
@@ -669,7 +688,7 @@ function aloeLeaf(len: number, color: string) {
   lg.add(m)
   for (const t of [0.22, 0.4, 0.58, 0.74]) {
     const r = rAt(ALOE_PROF, t)
-    for (const s of [-1, 1]) lg.add(noOutline(ball(0.22, '#e6efcf', { x: s * (hw * r + 0.05), z: t * len }, undefined, [5, 3])))
+    for (const s of [-1, 1]) lg.add(noOutline(ball(0.22, '#e6efcf', { x: s * (hw * r + 0.05), z: t * len }, undefined, DOT)))
   }
   for (const [x, t] of [[0.35, 0.3], [-0.3, 0.5]] as [number, number][]) {
     const r = rAt(ALOE_PROF, t)
@@ -732,9 +751,9 @@ function clivia(p: string[]) {
     const d2 = dirAE(a, e - 0.25)
     const k = fitLen(base, [[d1, len * 0.42], [d2, len * 0.6]], 2.2, LX, LZ)
     const color = j % 2 ? '#2f6e3a' : '#3a7d42'
-    g.add(orient(flatLeaf('strap', len * 0.45 * k, 4.4, color, { t: 0.3 }), base, d1, FRONT))
+    g.add(orient(flatLeaf('strap', len * 0.45 * k, 4.4, color, { t: 0.3, cs: 1 }), base, d1, FRONT))
     const mid = add(base, d1, len * 0.42 * k)
-    g.add(orient(flatLeaf('strap', len * 0.6 * k, 4.2, color, { t: 0.3, rib: '#5e9a5a' }), add(mid, d2, -0.4), d2, FRONT))
+    g.add(orient(flatLeaf('strap', len * 0.6 * k, 4.2, color, { t: 0.3, rib: '#5e9a5a', cs: 1 }), add(mid, d2, -0.4), d2, FRONT))
   }
   // 花葶 + 伞形花序
   const top: V3 = [0.4, y + 30, 0.8]
@@ -746,7 +765,7 @@ function clivia(p: string[]) {
     const d: V3 = [Math.cos(k * 2.4) * rr, yv, Math.sin(k * 2.4) * rr]
     g.add(noOutline(rod3(top, add(top, d, 2.4), 0.12, '#7aa04a', 4)))
     g.add(taperRod3(add(top, d, 2.2), add(top, d, 4.8), 0.35, 1.35, k % 3 ? '#f07a2a' : '#f5933a', 7))
-    g.add(noOutline(ball(0.6, '#ffd257', { x: top[0] + d[0] * 4.7, y: top[1] + d[1] * 4.7, z: top[2] + d[2] * 4.7 }, undefined, TINY)))
+    g.add(noOutline(ball(0.6, '#ffd257', { x: top[0] + d[0] * 4.7, y: top[1] + d[1] * 4.7, z: top[2] + d[2] * 4.7 }, undefined, PETAL)))
   }
   return fitGroup(g)
 }
@@ -757,11 +776,11 @@ function clivia(p: string[]) {
 
 // ---------- 柠檬树：鼓肚木桶花盆（两道铁箍、桶板缝），一根主干撑起球形树冠，冠上挂着黄柠檬，点缀几朵白花 ----------
 function lemonTree(p: string[]) {
-  const [woodC, hoop] = p
+  const [woodC, hoopC] = p
   const g = new THREE.Group()
   const prof: V2[] = [[17.5, 0], [19.4, 8], [20, 16], [19.4, 24], [18.4, 31.4]]
   g.add(hollowLathe(prof, 1.6, woodC))
-  for (const yy of [5.5, 26]) g.add(torus(rAt(prof, yy) + 0.15, 0.6, hoop, { y: yy, rx: PI / 2 }))
+  for (const yy of [5.5, 26]) g.add(torus(rAt(prof, yy) + 0.15, 0.6, hoopC, { y: yy, rx: PI / 2 }, PI * 2, [6, 32]))
   // 桶板缝：沿桶身轮廓的深色细线
   const seam = shade(woodC, -0.2)
   for (let k = 0; k < 16; k++) {
@@ -812,15 +831,15 @@ function lemonTree(p: string[]) {
     if (d[1] < -0.75) continue
     const at = add(c0, d, reach(d) - 0.6)
     const ld = unit(add(d, [rand() - 0.5, rand() - 0.3, rand() - 0.5], 0.9))
-    g.add(oval(5.2, i % 2 ? '#3a8436' : '#57a24a', at, ld, d, 0.5, 0.12))
+    g.add(oval(5.2, i % 2 ? '#3a8436' : '#57a24a', at, ld, d, 0.5, 0.12, LEAF_S))
   }
   // 柠檬：大半个露在冠外，底端一个小尖
   for (let i = 0; i < 13; i++) {
     const d = fib(i, 13, 2.1)
     if (d[1] > 0.6) continue
     const at = add(c0, d, reach(d) - 0.4)
-    g.add(ball(2.7, i % 4 ? '#f5d63a' : '#eccb2a', { x: at[0], y: at[1], z: at[2] }, [0.85, 1.12, 0.85], [12, 8]))
-    g.add(noOutline(ball(0.55, '#e3c22a', { x: at[0], y: at[1] - 2.9, z: at[2] }, undefined, TINY)))
+    g.add(ball(2.7, i % 4 ? '#f5d63a' : '#eccb2a', { x: at[0], y: at[1], z: at[2] }, [0.85, 1.12, 0.85], [10, 7]))
+    g.add(noOutline(ball(0.55, '#e3c22a', { x: at[0], y: at[1] - 2.9, z: at[2] }, undefined, DOT)))
   }
   // 白花
   for (let i = 0; i < 8; i++) {
@@ -838,10 +857,14 @@ function lemonTree(p: string[]) {
 function cloudPad(g: THREE.Group, c: V3, rp: number, rand: () => number) {
   // 薄薄的一层底（细枝分出的小枝在下面连成一片），碎叶都长在它上面
   g.add(ball(rp * 0.82, '#7ab85a', { x: c[0], y: c[1], z: c[2] }, [1, 0.09, 0.85], [10, 3]))
-  for (let k = 0; k < 16; k++) {
+  // 11 片、每片略大一点（一盆两百来片，正面 5 边形就够碎）；叶尖不出占地（|x| ≤ 11、|z| ≤ 10.75）
+  for (let k = 0; k < 11; k++) {
     const a = rand() * PI * 2
-    const d = Math.sqrt(rand()) * rp * 0.88
-    const m = ball(0.9 + rand() * 0.5, k % 3 ? '#8cc868' : '#a3d67a', { x: c[0] + Math.cos(a) * d, y: c[1] + (rand() - 0.5) * 0.9 * (1 - d / rp), z: c[2] + Math.sin(a) * d }, [1, 0.2, 0.32], [8, 2])
+    const d = Math.sqrt(rand()) * rp * 0.84
+    const r = 1 + rand() * 0.45
+    const x = Math.max(-11 + r, Math.min(11 - r, c[0] + Math.cos(a) * d))
+    const z = Math.max(-10.75 + r, Math.min(10.75 - r, c[2] + Math.sin(a) * d))
+    const m = ball(r, k % 3 ? '#8cc868' : '#a3d67a', { x, y: c[1] + (rand() - 0.5) * 0.9 * (1 - d / rp), z }, [1, 0.2, 0.34], PETAL)
     m.rotation.y = rand() * PI
     g.add(m)
   }
@@ -865,7 +888,7 @@ function asparagusFern(p: string[]) {
       const zig = k % 2 ? 0.8 : -0.8
       pts.push([Math.cos(a) * (0.8 + lean * f) + Math.cos(a + PI / 2) * zig * (k ? 1 : 0), y - 0.3 + H * f, Math.sin(a) * (0.8 + lean * f) + Math.sin(a + PI / 2) * zig * (k ? 1 : 0)])
     }
-    g.add(noOutline(tube(pts, 0.16, '#6a8f45', { seg: 16, radial: 4 })))
+    g.add(noOutline(tube(pts, 0.16, '#6a8f45', { seg: 10, radial: 3 })))
     const curve = new THREE.CatmullRomCurve3(pts.map((q) => new THREE.Vector3(...q)), false, 'centripetal')
     for (const [f, side] of [[0.45, 1], [0.66, -1], [0.86, 1]] as [number, number][]) {
       const q = curve.getPoint(f)
@@ -910,7 +933,7 @@ function fittonia(p: string[]) {
       g.add(noOutline(rod3(root, base, 0.12, '#6f8f4a', 4)))
       const d = dirAE(a, e)
       const L = len * fitLen(base, [[d, len]], len * 0.4, LIM, LIM)
-      g.add(orient(flatLeaf('oval', L, L * 0.78, (k + j) % 2 ? '#2f6a3a' : '#3a7642', { t: 0.2, decal: mat }), base, d))
+      g.add(orient(flatLeaf('oval', L, L * 0.78, (k + j) % 2 ? '#2f6a3a' : '#3a7642', { t: 0.2, decal: mat, cs: 1 }), base, d))
     }
   })
   return fitGroup(g)
@@ -927,7 +950,7 @@ function pennywort(p: string[]) {
   const R = 9
   const H = 15
   const t = 0.5
-  g.add(ghost(cup(R, R - 0.5, H, t, glass), glass, 0.3))
+  g.add(ghost(cup(R, R - 0.5, H, t, glass, {}, POT_SEG), glass, 0.3))
   // 水：缸里的水体 + 水面（开着反射时换成会动的水）
   const wy = 10.4
   g.add(ghost(cyl(R - 1.1, R - 1.5, wy - 0.8, '#9fd4ef', { y: 0.6 }, 24), '#9fd4ef', 0.22))
@@ -936,7 +959,7 @@ function pennywort(p: string[]) {
   for (let i = 0; i < 22; i++) {
     const a = rand() * PI * 2
     const d = Math.sqrt(rand()) * 6.6
-    g.add(ball(0.8 + rand() * 0.35, i % 3 ? pebble : shade(pebble, -0.08), { x: Math.cos(a) * d, y: 1.25, z: Math.sin(a) * d }, [1, 0.7, 0.9], [8, 6]))
+    g.add(ball(0.8 + rand() * 0.35, i % 3 ? pebble : shade(pebble, -0.08), { x: Math.cos(a) * d, y: 1.25, z: Math.sin(a) * d }, [1, 0.7, 0.9], TINY))
   }
   // 叶：叶柄从石子里伸出（在缸口以下不碰缸壁），叶片是平展的圆盾形，叶柄接在叶背中心
   const n = 28
@@ -954,7 +977,7 @@ function pennywort(p: string[]) {
     lf.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(Math.cos(a) * 0.35 + (rand() - 0.5) * 0.3, 1, Math.sin(a) * 0.35 + (rand() - 0.5) * 0.3).normalize())
     lf.position.set(tip[0], tip[1] + 0.1, tip[2])
     g.add(lf)
-    g.add(noOutline(ball(0.28, '#a6d67a', { x: tip[0], y: tip[1] + 0.22, z: tip[2] }, [1, 0.4, 1], TINY)))
+    g.add(noOutline(ball(0.28, '#a6d67a', { x: tip[0], y: tip[1] + 0.22, z: tip[2] }, [1, 0.4, 1], DOT)))
   }
   return fitGroup(g)
 }
@@ -1004,13 +1027,16 @@ function hyacinth(p: string[]) {
   const [glass, flower] = p
   const g = new THREE.Group()
   const t = 0.35
-  g.add(ghost(hollowLathe(HY_PROF, t, glass), glass, 0.42))
+  g.add(ghost(hollowLathe(HY_PROF, t, glass, 24), glass, 0.42))
   // 水：瓶肚到细颈里的水 + 颈口的水面
   const water: V2[] = [[0.1, t + 0.1]]
   for (const [r, yy] of HY_PROF) if (yy > t + 0.2 && yy <= 12.6) water.push([r - t - 0.2, yy])
   water.push([rAt(HY_PROF, 12.6) - t - 0.2, 12.6], [0.1, 12.6])
   g.add(ghost(lathe(water, '#a8d8f0', 24), '#a8d8f0', 0.22))
   g.add(markWater(ghost(cyl(1.6, 1.6, 0.1, '#a8d8f0', { y: 12.75 }, 16), '#a8d8f0', 0.3)))
+  // 球茎坐在杯口的锥面上（球心 yb：球茎和玻璃内壁只差约 0.05cm，底部离颈口水面 0.5cm），以上的叶、花葶都相对它摆
+  const yb = 15.85
+  const dy = yb - 17.6
   // 根：从球茎底收进细颈，在瓶肚里散开
   const rand = rng(431)
   for (let k = 0; k < 9; k++) {
@@ -1018,32 +1044,32 @@ function hyacinth(p: string[]) {
     const c = Math.cos(a)
     const s = Math.sin(a)
     const end = 2.4 + rand() * 3.4
-    g.add(noOutline(tube([[c * 0.8, 15.6, s * 0.8], [c * 0.9, 13.2, s * 0.9], [c * 1.6, 10.2, s * 1.6], [c * 2.6 + (rand() - 0.5), 6.5, s * 2.6], [c * 2.4, end, s * 2.4]], 0.11, '#f3efe2', { seg: 14, radial: 4 })))
+    g.add(noOutline(tube([[c * 0.8, 13.9, s * 0.8], [c * 0.9, 12.3, s * 0.9], [c * 1.6, 10.2, s * 1.6], [c * 2.6 + (rand() - 0.5), 6.5, s * 2.6], [c * 2.4, end, s * 2.4]], 0.11, '#f3efe2', { seg: 8, radial: 3 })))
   }
   // 球茎：外皮紫褐，顶端收尖
-  g.add(ball(2.9, '#a07a8a', { y: 17.6 }, [1, 0.9, 1], [14, 10]))
-  g.add(taperRod3([0, 19.4, 0], [0, 21.4, 0], 1.6, 0.9, '#b59a80', 10))
+  g.add(ball(2.9, '#a07a8a', { y: yb }, [1, 0.9, 1], [14, 10]))
+  g.add(taperRod3([0, 19.4 + dy, 0], [0, 21.4 + dy, 0], 1.6, 0.9, '#b59a80', 10))
   // 叶：带状，从球茎顶斜伸
   for (let k = 0; k < 5; k++) {
     const a = (k / 5) * PI * 2 + 0.3
-    g.add(oval(9 + rand() * 2.5, k % 2 ? '#4f9a4a' : '#5aa850', [Math.cos(a) * 0.6, 20.6, Math.sin(a) * 0.6], dirAE(a, 0.98 + rand() * 0.16), [Math.cos(a), 0, Math.sin(a)], 0.22, 0.07))
+    g.add(oval(9 + rand() * 2.5, k % 2 ? '#4f9a4a' : '#5aa850', [Math.cos(a) * 0.6, 20.6 + dy, Math.sin(a) * 0.6], dirAE(a, 0.98 + rand() * 0.16), [Math.cos(a), 0, Math.sin(a)], 0.22, 0.07))
   }
   // 花葶 + 花穗：一圈圈螺旋排开的小花，越往上越细
-  g.add(cyl(0.5, 0.55, 10.5, '#6fa04a', { y: 20.8 }, 8))
+  g.add(cyl(0.5, 0.55, 10.5, '#6fa04a', { y: 20.8 + dy }, 8))
   // 小花：一只只朝外、略朝下开口的小钟（开口一圈浅色），螺旋排开，越往上越小；顶上几颗没开的花苞
   const n = 34
   for (let k = 0; k < n; k++) {
     const f = k / (n - 1)
     const a = k * 2.4
     const s = 1 - f * 0.4
-    const yy = 23.2 + f * 7.2
+    const yy = 23.2 + dy + f * 7.2
     const d = dirAE(a, -0.35 + f * 0.5)
     const b0: V3 = [0, yy, 0]
     const col = k % 3 ? flower : shade(flower, 0.05)
     g.add(taperRod3(add(b0, d, 0.3), add(b0, d, 2.1 * s), 0.3 * s, 0.85 * s, col, 6))
     g.add(noOutline(ball(0.5 * s, shade(flower, 0.14), { x: d[0] * 2.05 * s, y: yy + d[1] * 2.05 * s, z: d[2] * 2.05 * s }, [1, 1, 1], PIN)))
   }
-  for (let k = 0; k < 5; k++) g.add(ball(0.42, shade(flower, 0.08), { x: Math.cos(k * 1.3) * 0.5, y: 30.8 + k * 0.25, z: Math.sin(k * 1.3) * 0.5 }, undefined, TINY))
+  for (let k = 0; k < 5; k++) g.add(ball(0.42, shade(flower, 0.08), { x: Math.cos(k * 1.3) * 0.5, y: 30.8 + dy + k * 0.25, z: Math.sin(k * 1.3) * 0.5 }, undefined, TINY))
   return fitGroup(g)
 }
 
@@ -1086,7 +1112,7 @@ function jasmine(p: string[]) {
       const off = add(add([0, 0, 0], radial, Math.cos(ps) * 0.9), [0, 0, 1], Math.sin(ps) * 0.9)
       pts.push(add([RR * Math.cos(th), yc + RR * Math.sin(th), 0], off))
     }
-    g.add(noOutline(tube(pts, 0.25, VINE, { seg: 90, radial: 4 })))
+    g.add(noOutline(tube(pts, 0.25, VINE, { seg: 64, radial: 3 })))
     for (let k = 3; k < pts.length - 1; k++) {
       const q = pts[k]
       const out: V3 = k > 16 ? unit([q[0], q[1] - yc, 0]) : [s, 0, 0]
@@ -1098,7 +1124,7 @@ function jasmine(p: string[]) {
   nodes.forEach(([q, out], i) => {
     for (const sd of [-1, 1]) {
       const d = unit(add(add([0, 0, 0], out, 0.5 + rand() * 0.4), [0, 0, 1], sd * (0.7 + rand() * 0.4)))
-      g.add(oval(3 + rand() * 0.8, leafC[(i + sd + 3) % 3], q, add(d, [0, 0.2, 0]), out, 0.5, 0.12))
+      g.add(oval(3 + rand() * 0.8, leafC[(i + sd + 3) % 3], q, add(d, [0, 0.2, 0]), out, 0.5, 0.12, LEAF_S))
     }
     if (i % 2 === 0) {
       const fz = i % 4 ? 1 : -1
@@ -1106,7 +1132,7 @@ function jasmine(p: string[]) {
       g.add(noOutline(rod3(q, fc, 0.08, VINE, 4)))
       star5(g, fc, unit(add(out, [0, 0, fz], 1.2)), 1.7, '#fbf8f1', '#f2e3a0')
     } else if (i % 4 === 1) {
-      g.add(ball(0.5, '#f4f0e4', { x: q[0] + out[0] * 0.9, y: q[1] + out[1] * 0.9 + 0.4, z: q[2] + 0.5 }, [1, 1.4, 1], TINY))
+      g.add(ball(0.5, '#f4f0e4', { x: q[0] + out[0] * 0.9, y: q[1] + out[1] * 0.9 + 0.4, z: q[2] + 0.5 }, [1, 1.4, 1], PETAL))
     }
   })
   // 盆里的一丛矮枝
@@ -1117,7 +1143,7 @@ function jasmine(p: string[]) {
     g.add(noOutline(rod3(base, tip, 0.18, VINE, 4)))
     for (const f of [0.5, 0.8, 1]) {
       const q = lerp3(base, tip, f)
-      for (const sd of [-1, 1]) g.add(oval(2.8, leafC[Math.floor(k + f * 3) % 3], q,dirAE(a + sd * 1.2, 0.2), UPV, 0.5, 0.12))
+      for (const sd of [-1, 1]) g.add(oval(2.8, leafC[Math.floor(k + f * 3) % 3], q, dirAE(a + sd * 1.2, 0.2), UPV, 0.5, 0.12, LEAF_S))
     }
     if (k % 2) star5(g, add(tip, [0, 0.4, 0]), [Math.cos(a) * 0.5, 1, Math.sin(a) * 0.5], 1.2, '#fbf8f1', '#f2e3a0')
   }
@@ -1134,7 +1160,8 @@ function mapleLeaf(g: THREE.Group, at: V3, n: V3, s: number, color: string) {
   for (let k = 0; k < 5; k++) {
     const a = -PI / 2 + ((k - 2) * PI) / 3.4
     const d = add(add([0, 0, 0], u, Math.cos(a)), v, Math.sin(a))
-    g.add(oval(s * (k === 2 ? 1.15 : k % 4 ? 1 : 0.7), color, at, d, n, 0.42, 0.14, PIN))
+    // 裂片是 4 边的菱形：尖头正好像枫叶的尖裂片
+    g.add(oval(s * (k === 2 ? 1.15 : k % 4 ? 1 : 0.7), color, at, d, n, 0.42, 0.14, DOT))
   }
 }
 
@@ -1150,10 +1177,10 @@ function bonsaiMaple(p: string[]) {
   const y = H - 1.4
   g.add(rbox(W - 2.1, 0.8, D - 2.1, SOIL, { y: y - 0.8 }, 0.2))
   for (const [x, z, r] of [[-11, 5, 2.6], [-3, 6, 2], [6, -5.5, 2.8], [-12, -5, 1.9], [11, 5, 2.2], [2, 3, 1.6]]) g.add(ball(r, MOSS, { x, y, z }, [1, 0.32, 0.9], [10, 5]))
-  g.add(ball(2.2, '#9a958c', { x: 12, y: y + 0.4, z: -3 }, [1.2, 0.65, 0.9]))
+  g.add(ball(2.2, '#9a958c', { x: 12, y: y + 0.4, z: -3 }, [1.2, 0.65, 0.9], [10, 6]))
   // 根盘 + 斜干
   const bark = '#6e5a4a'
-  g.add(ball(3, bark, { x: -7, y, z: 0.5 }, [1.4, 0.45, 1.2]))
+  g.add(ball(3, bark, { x: -7, y, z: 0.5 }, [1.4, 0.45, 1.2], [12, 6]))
   for (const a of [0.4, 2.2, 3.6, 5.2]) g.add(taperRod3([-7, y + 0.3, 0.5], [-7 + Math.cos(a) * 5, y - 0.2, 0.5 + Math.sin(a) * 4], 1.1, 0.35, bark, 6))
   const trunk: [V3, number][] = [
     [[-7, y - 0.3, 0.5], 2.2],
@@ -1164,8 +1191,8 @@ function bonsaiMaple(p: string[]) {
     [[10, y + 25, 0.5], 0.7],
   ]
   for (let i = 0; i < trunk.length - 1; i++) {
-    g.add(taperRod3(trunk[i][0], trunk[i + 1][0], trunk[i][1], trunk[i + 1][1], bark, 10))
-    g.add(ball(trunk[i + 1][1], bark, { x: trunk[i + 1][0][0], y: trunk[i + 1][0][1], z: trunk[i + 1][0][2] }, undefined, [10, 8]))
+    g.add(taperRod3(trunk[i][0], trunk[i + 1][0], trunk[i][1], trunk[i + 1][1], bark, 8))
+    g.add(ball(trunk[i + 1][1], bark, { x: trunk[i + 1][0][0], y: trunk[i + 1][0][1], z: trunk[i + 1][0][2] }, undefined, [8, 6]))
   }
   // 叶团：先一团压扁的红色底，再在顶面、侧面撒掌状小叶
   const REDS = ['#d8452f', '#e8613a', '#c23a2a', '#ef8a3a']
@@ -1181,7 +1208,7 @@ function bonsaiMaple(p: string[]) {
     g.add(rod3(trunk[ti][0], [c[0], c[1] - 0.6, c[2]], 0.4, bark, 6))
     // 底：三小团深红叠成起伏的云片（单独一个扁球像蘑菇伞）
     for (const [dx, dy, dz, r] of [[0, 0, 0, 3.4], [-2.4, -0.3, 1, 2.6], [2.3, 0.2, -0.8, 2.7]] as [number, number, number, number][])
-      g.add(ball(r * s, shade(REDS[2], -0.05), { x: c[0] + dx * s, y: c[1] + dy * s, z: c[2] + dz * s }, [1.1, 0.55, 0.9], [8, 5]))
+      g.add(ball(r * s, shade(REDS[2], -0.05), { x: c[0] + dx * s, y: c[1] + dy * s, z: c[2] + dz * s }, [1.1, 0.55, 0.9], [8, 4]))
     // 掌状小叶：顶面一圈、外缘一圈（叶面朝外上方），盖住大半个底团
     for (let k = 0; k < 10; k++) {
       const a = k * 2.39996 + rand() * 0.4
@@ -1199,14 +1226,17 @@ function bonsaiMaple(p: string[]) {
 // 16. 香草立体墙
 // ======================================================================
 
-/** 小陶盆（16 段的空心车削，口沿加厚一圈）：返回土面顶 y */
+/** 香草小陶盆（直径 11cm）一圈的段数 */
+const HERB_SEG = 12
+/** 小陶盆（12 段的空心车削，口沿加厚一圈）：返回土面顶 y */
 function herbPot(g: THREE.Group, x: number, y0: number, z: number, color: string) {
   const prof: V2[] = [[3.8, 0], [4.9, 7], [5.5, 7.2], [5.5, 8.7]]
-  const m = hollowLathe(prof, 0.6, color, 16)
+  const m = hollowLathe(prof, 0.6, color, HERB_SEG)
   m.position.set(x, y0, z)
   g.add(m)
   const soil = y0 + 7.6
-  const sd = cyl(4.3, 4.25, 0.8, SOIL, { x, y: soil - 0.8, z }, 16)
+  // 土面和盆用同样的段数、同样的起始角：折线一一对齐，土面贴着内壁也不会从折线中间穿出去
+  const sd = cyl(4.3, 4.25, 0.8, SOIL, { x, y: soil - 0.8, z }, HERB_SEG)
   g.add(sd)
   return soil
 }
@@ -1222,9 +1252,9 @@ function miniHerb(g: THREE.Group, kind: 'basil' | 'mint' | 'rosemary', x: number
       for (const f of [0.38, 0.7]) {
         const q = lerp3(base, tip, f)
         const yaw = a + (f > 0.5 ? 0 : PI / 2)
-        for (const s of [0, PI]) g.add(oval(3.4 - f, f > 0.5 ? '#5cb84f' : '#4aa346', q, dirAE(yaw + s, -0.05), UPV, 0.62, 0.18))
+        for (const s of [0, PI]) g.add(oval(3.4 - f, f > 0.5 ? '#5cb84f' : '#4aa346', q, dirAE(yaw + s, -0.05), UPV, 0.62, 0.18, [6, 2]))
       }
-      for (let k = 0; k < 3; k++) g.add(oval(1.9, '#7cc85e', tip, dirAE(a + (k * PI * 2) / 3, 0.9), UPV, 0.6, 0.2))
+      for (let k = 0; k < 3; k++) g.add(oval(1.9, '#7cc85e', tip, dirAE(a + (k * PI * 2) / 3, 0.9), UPV, 0.6, 0.2, PETAL))
     }
   } else if (kind === 'mint') {
     for (let i = 0; i < 8; i++) {
@@ -1240,7 +1270,7 @@ function miniHerb(g: THREE.Group, kind: 'basil' | 'mint' | 'rosemary', x: number
       g.add(noOutline(rod3(mid, tip, 0.15, '#6b8f4a', 4)))
       for (const f of [0.45, 0.75, 1]) {
         const q = lerp3(mid, tip, f)
-        for (const s of [-1, 1]) g.add(oval(f === 1 ? 1.8 : 2.3, i % 2 ? '#6cc06a' : '#58ab5a', q, dirAE(a + s * 1.3, 0.25), UPV, 0.66, 0.14))
+        for (const s of [-1, 1]) g.add(oval(f === 1 ? 1.8 : 2.3, i % 2 ? '#6cc06a' : '#58ab5a', q, dirAE(a + s * 1.3, 0.25), UPV, 0.66, 0.14, PETAL))
       }
     }
   } else {
@@ -1250,9 +1280,11 @@ function miniHerb(g: THREE.Group, kind: 'basil' | 'mint' | 'rosemary', x: number
       const dir = dirAE(a, 1.35 + rand() * 0.12)
       const L = 8.5 + rand() * 2
       g.add(noOutline(rod3(base, add(base, dir, L), 0.18, '#7a7a50', 4)))
-      for (let f = 0.3; f < 1.01; f += 0.12) {
+      // 针叶：五轮、每轮两根对生（相邻两轮错开 90°，看上去还是一圈圈），细针 4 边就够
+      for (let w = 0; w < 5; w++) {
+        const f = 0.3 + w * 0.175
         const q = add(base, dir, L * f)
-        for (let k = 0; k < 3; k++) g.add(noOutline(oval(1.7, k % 2 ? '#5d7d5a' : '#6f8f68', q, dirAE((k * PI * 2) / 3 + f * 5, 0.75), UPV, 0.2, 0.2, [5, 2])))
+        for (let k = 0; k < 2; k++) g.add(noOutline(oval(1.9, k % 2 ? '#5d7d5a' : '#6f8f68', q, dirAE(k * PI + w * (PI / 2) + a, 0.75), UPV, 0.2, 0.2, DOT)))
       }
     }
   }

@@ -4,7 +4,7 @@
 // 有抽屉 / 柜门的用 kit 的 drawerBox / hingedDoor（或自己的 movable 翻门）+ drawerLevel，openable: true，门里的层标 inside。
 
 import * as THREE from 'three'
-import { ball, cup, cyl, puck, rbox, shade, torus, tray } from '../toon'
+import { ball, cup, cyl, nub, puck, rbox, shade, torus, tray } from '../toon'
 import { C, carcass, drawerBox, drawerLevel, hingedDoor, holePanel, lPoly, movable, rectPoly, shelvesIn, slab, type AssetDef, type Hole, type Poly, type SurfaceDef } from '../kit'
 import { P, PI, cylX, cylZ, fitGroup, fitWall, glassPane, lit, rod3, strutBox, tube, type V3 } from '../geo'
 import { CL, CN, F, I, J, M, N, R, define, type Pal } from '../packkit'
@@ -15,6 +15,9 @@ const PAPER = '#f4f1ea'
 const CTRL = '#2b2c30'
 const DISPLAY = '#7fe0ff'
 const BULB = '#fff2b8'
+
+/** 小球段数：r < 1.5 的拉手、脚垫（ball 默认最少 12 × 8 = 168 面） */
+const LOW: [number, number] = [8, 6]
 
 /** 抽屉口参数（drawerBox / drawerLevel 共用） */
 type DrawerSpec = { x0: number; x1: number; y0: number; y1: number; z: number; depth: number }
@@ -33,7 +36,7 @@ function roundRect(w: number, d: number, r: number, n = 4): Poly {
 }
 
 /** 抽屉面板 + 两只圆钮（古典家具的抽屉）：drawerBox 的 front 用，knob 要设 false */
-const twoKnobFront = (color: string, knob: string, kx: number, kr = 1) => (w: number, h: number) => [rbox(w, h, 1.6, color, { z: -0.8 }, 0.5), ball(kr, knob, { x: -kx, y: h / 2, z: kr * 0.6 }), ball(kr, knob, { x: kx, y: h / 2, z: kr * 0.6 })]
+const twoKnobFront = (color: string, knob: string, kx: number, kr = 1) => (w: number, h: number) => [rbox(w, h, 1.6, color, { z: -0.8 }, 0.5), ball(kr, knob, { x: -kx, y: h / 2, z: kr * 0.6 }, undefined, LOW), ball(kr, knob, { x: kx, y: h / 2, z: kr * 0.6 }, undefined, LOW)]
 
 // ---------- 复古写字台：四条鹅颈（卡布里）腿、桌面嵌一块皮面，围板正中一只抽屉，桌面后方一排小抽屉 + 信插格 ----------
 
@@ -74,10 +77,10 @@ function cabrioleLeg(sx: number, sz: number, wood: string) {
   // 往对角线外侧鼓出的量
   const o = (k: number, y: number): V3 => [x + sx * k * 0.71, y, z + sz * k * 0.71]
   g.add(rbox(4.6, 12, 4.6, wood, { x, y: 61, z }, 0.8))
-  g.add(tube([o(0, 62), o(1.2, 54), o(0.2, 44), o(-1, 30), o(-1.4, 14), o(-0.6, 6), o(0.8, 2.6)], 1.9, wood, { seg: 28 }))
+  g.add(tube([o(0, 62), o(1.2, 54), o(0.2, 44), o(-1, 30), o(-1.4, 14), o(-0.6, 6), o(0.8, 2.6)], 1.9, wood, { seg: 20 }))
   // 膝部和脚尖
   const [kx, ky, kz] = o(1.1, 54)
-  g.add(ball(2.5, wood, { x: kx, y: ky, z: kz }, [1, 1.6, 1]))
+  g.add(ball(2.5, wood, { x: kx, y: ky, z: kz }, [1, 1.6, 1], [10, 6]))
   const [fx, , fz] = o(0.8, 0)
   g.add(puck(2.6, 1.6, shade(wood, -0.1), { x: fx, z: fz }))
   return g
@@ -105,14 +108,14 @@ function writingDesk(p: string[]) {
   g.add(rbox(WD_GX * 2, WD_GTOP - WD.top, 1, shade(wood, -0.08), { y: WD.top, z: WD_GZ0 + 0.5 }, 0.3))
   g.add(rbox(WD_GX * 2 + 4, 1.5, gd + 1, wood, { y: WD_GTOP, z: gz + 0.5 }, 0.5))
   g.add(rbox(64, 1.4, 1, wood, { y: WD_GTOP + 1.5, z: WD_GZ0 + 0.6 }, 0.4))
-  for (const s of [-1, 1]) g.add(ball(0.9, brass, { x: s * (WD_GX + 0.8), y: WD_GTOP + 2.3, z: WD_GZ0 + 1 }))
+  for (const s of [-1, 1]) g.add(ball(0.9, brass, { x: s * (WD_GX + 0.8), y: WD_GTOP + 2.3, z: WD_GZ0 + 1 }, undefined, LOW))
   g.add(rbox(WD_GX * 2, WD_HOLE - WD_MID, gd - 1, wood, { y: WD_MID, z: gz + 0.5 }, 0.3))
   for (const [, x1] of WD_SMALL_X.slice(0, -1)) g.add(rbox(1, WD_MID - WD.top, gd - 1, wood, { x: x1 + 0.5, y: WD.top, z: gz + 0.5 }, 0.2))
   for (const x of WD_CUBBY_DIV) g.add(rbox(1, WD_GTOP - WD_HOLE, gd - 1, wood, { x, y: WD_HOLE, z: gz + 0.5 }, 0.2))
   // 抽屉：围板正中一只大的（两只钮），格架下排四只小的（一只钮）
   const [big, ...small] = wdDrawers()
   g.add(drawerBox({ ...big, color: shade(wood, 0.04), knob: false, front: twoKnobFront(shade(wood, 0.04), brass, 12, 1.1) }))
-  for (const o of small) g.add(drawerBox({ ...o, color: shade(wood, 0.04), knob: false, front: (w, h) => [rbox(w, h, 1.6, shade(wood, 0.04), { z: -0.8 }, 0.4), ball(0.7, brass, { y: h / 2, z: 0.4 })] }))
+  for (const o of small) g.add(drawerBox({ ...o, color: shade(wood, 0.04), knob: false, front: (w, h) => [rbox(w, h, 1.6, shade(wood, 0.04), { z: -0.8 }, 0.4), ball(0.7, brass, { y: h / 2, z: 0.4 }, undefined, LOW)] }))
   return g
 }
 
@@ -143,10 +146,10 @@ const secDrawers = (): DrawerSpec[] =>
 
 /** 玻璃门板：木框 + 玻璃 + 一竖两横的窗棂（hingedDoor 的 panel） */
 const glazedPanel = (color: string) => (w: number, h: number) => [
-  holePanel(w, h, 1.8, color, [{ kind: 'rect', x: 0, y: 4, w: w - 8, h: h - 8, r: 0.4 }], {}, 0.5),
+  holePanel(w, h, 1.8, color, [{ kind: 'rect', x: 0, y: 4, w: w - 8, h: h - 8, r: 0.4 }], {}, 0.5, { seg: 3 }),
   glassPane(w - 7, h - 7, 0.4, { y: 3.5, z: 0 }),
-  rbox(1, h - 8, 1.2, color, { y: 4 }, 0.3),
-  ...[1, 2].map((k) => rbox(w - 8, 1, 1.2, color, { y: 4 + ((h - 8) * k) / 3 - 0.5 }, 0.3)),
+  nub(1, h - 8, 1.2, color, { y: 4 }),
+  ...[1, 2].map((k) => nub(w - 8, 1, 1.2, color, { y: 4 + ((h - 8) * k) / 3 - 0.5 })),
 ]
 
 function secretaryBookcase(p: string[]) {
@@ -163,7 +166,7 @@ function secretaryBookcase(p: string[]) {
   g.add(rbox(SEC_IX * 2, 7, phd, shade(wood, -0.06), { y: SEC_BED, z: phz }, 0.3))
   for (const x of [-32.4, -10.8, 10.8, 32.4]) {
     g.add(rbox(19, 5.6, 0.6, front, { x, y: SEC_BED + 0.7, z: SEC_PH_Z1 + 0.3 }, 0.2))
-    g.add(ball(0.6, brass, { x, y: SEC_BED + 3.5, z: SEC_PH_Z1 + 0.9 }))
+    g.add(ball(0.6, brass, { x, y: SEC_BED + 3.5, z: SEC_PH_Z1 + 0.9 }, undefined, LOW))
   }
   g.add(rbox(SEC_IX * 2, 1, phd, wood, { y: SEC_PH_MID, z: phz }, 0.2))
   for (const x of SEC_PH_DIV) g.add(rbox(1, SEC_FLAP_TOP - SEC_BED - 7, phd, wood, { x, y: SEC_BED + 7, z: phz }, 0.2))
@@ -174,8 +177,8 @@ function secretaryBookcase(p: string[]) {
   flap.add(rbox(fw, fh, 1.6, front, {}, 0.5))
   flap.add(rbox(fw - 8, fh - 8, 0.4, inlay, { y: 4, z: -1 }, 0.15))
   flap.add(rbox(fw - 10, fh - 10, 0.5, shade(wood, -0.05), { y: 5, z: 0.95 }, 0.2))
-  flap.add(rbox(3, 4, 0.4, brass, { y: fh - 8, z: 1.35 }, 0.15))
-  flap.add(ball(1, brass, { y: fh - 3.5, z: 1.4 }))
+  flap.add(nub(3, 4, 0.4, brass, { y: fh - 8, z: 1.35 }))
+  flap.add(ball(1, brass, { y: fh - 3.5, z: 1.4 }, undefined, LOW))
   flap.position.set(0, SEC_BED + 0.8, SEC.d / 2 - 0.8)
   g.add(movable(flap, { kind: 'flap', angle: PI / 2 }))
   // 上柜：玻璃对开门、两层层板，顶上一道檐
@@ -208,7 +211,7 @@ function standingDesk(p: string[]) {
     const x = s * SD_LX
     // 脚 + 两只调平垫
     g.add(rbox(7, 3.2, 68, frame, { x, y: 1 }, 1.4))
-    for (const z of [-31, 31]) g.add(cyl(1.8, 1.8, 1.1, RUBBER, { x, z }, 12))
+    for (const z of [-31, 31]) g.add(cyl(1.8, 1.8, 1.1, RUBBER, { x, z }, 10))
     // 三节立柱：下粗上细，每节插进下一节 1cm
     g.add(rbox(9, 26, 6.6, frame, { x, y: 4.2, z: SD_LZ }, 1))
     g.add(rbox(8, 20, 5.6, shade(frame, 0.06), { x, y: 29.2, z: SD_LZ }, 0.8))
@@ -223,13 +226,14 @@ function standingDesk(p: string[]) {
   g.add(tray(110, 9, 12, 0.8, acc, { y: SD_UNDER - 9, z: -28 }, 0.3))
   const n = 24
   const sh = (SD_UNDER - 9) / n
-  for (let i = 0; i < n; i++) g.add(rbox(3, sh, 2.4, i % 2 ? acc : shade(acc, -0.1), { x: 40 + 2.5 * Math.sin((i / (n - 1)) * PI), y: i * sh, z: -28 }, 0.4))
+  for (let i = 0; i < n; i++) g.add(nub(3, sh, 2.4, i % 2 ? acc : shade(acc, -0.1), { x: 40 + 2.5 * Math.sin((i / (n - 1)) * PI), y: i * sh, z: -28 }))
   // 手控器：小屏 + 上下键 + 两个记忆键
   const cx = 50
-  const cz = SD.d / 2 - 2.5
+  // 按键最前沿正好在桌面前沿（不超出声明的进深）
+  const cz = SD.d / 2 - 3.4
   g.add(rbox(14, 2.6, 6, CTRL, { x: cx, y: SD_UNDER - 2.6, z: cz }, 0.8))
   g.add(lit(rbox(4, 1.3, 0.3, DISPLAY, { x: cx - 3.5, y: SD_UNDER - 2, z: cz + 3.15 }, 0.1), DISPLAY, 0.7))
-  for (const [i, dx] of [0.5, 3, 5.5].entries()) g.add(rbox(1.8, 1.2, 0.4, i ? '#8a8d93' : '#dfe2e6', { x: cx + dx, y: SD_UNDER - 1.95, z: cz + 3.2 }, 0.15))
+  for (const [i, dx] of [0.5, 3, 5.5].entries()) g.add(nub(1.8, 1.2, 0.4, i ? '#8a8d93' : '#dfe2e6', { x: cx + dx, y: SD_UNDER - 1.95, z: cz + 3.2 }))
   return g
 }
 
@@ -303,7 +307,7 @@ function wallDesk(p: string[]) {
   // 放下的桌板 + 铰链
   const ld = WL.d / 2 - WL_FRONT
   g.add(rbox(WL.w, WL_LEAF - WL_BOX0, ld, leaf, { y: WL_BOX0, z: WL_FRONT + ld / 2 }, 0.6))
-  for (const s of [-1, 1]) g.add(cylX(0.6, 6, STEEL, s * 24, WL_BOX0, WL_FRONT, 10))
+  for (const s of [-1, 1]) g.add(cylX(0.6, 6, STEEL, s * 24, WL_BOX0, WL_FRONT, 8))
   return fitWall(g, WL.mount, WL.d)
 }
 
@@ -340,19 +344,19 @@ function libraryWall(p: string[]) {
   g.add(rbox(LB.w, 6, LB.cd + 1, shade(wood, -0.06), { y: LB_CASE_H, z: LB_CZ + 0.5 }, 0.5))
   g.add(rbox(LB.w + 1, LB.h - LB_CASE_H - 6, LB.cd + 2, wood, { y: LB.h - 2, z: LB_CZ + 1 }, 0.5))
   // 滑轨 + 每根竖板上一只托架
-  g.add(cylX(LB_RAIL.r, LB.w - 4, metal, 0, LB_RAIL.y, LB_RAIL.z, 14))
-  for (const x of [-LB.w / 2 + 1, ...LB_VX, LB.w / 2 - 1]) g.add(rbox(1.6, 2.4, LB_RAIL.z - LB_FRONT, metal, { x, y: LB_RAIL.y - 1.2, z: (LB_FRONT + LB_RAIL.z) / 2 }, 0.3))
+  g.add(cylX(LB_RAIL.r, LB.w - 4, metal, 0, LB_RAIL.y, LB_RAIL.z, 10))
+  for (const x of [-LB.w / 2 + 1, ...LB_VX, LB.w / 2 - 1]) g.add(nub(1.6, 2.4, LB_RAIL.z - LB_FRONT, metal, { x, y: LB_RAIL.y - 1.2, z: (LB_FRONT + LB_RAIL.z) / 2 }))
   // 梯子：梯帮、横档、挂钩环、脚轮
   for (const s of [-1, 1]) {
     const x = LB_LADDER_X + s * 21
     g.add(strutBox([x, LB_FOOT.y, LB_FOOT.z], [x, LB_RAIL.y + 0.5, LB_TOPZ], 4, 3, ladder, 0.6))
-    g.add(torus(1.9, 0.5, metal, { x, y: LB_RAIL.y, z: LB_RAIL.z, ry: PI / 2 }))
-    g.add(rbox(2.6, 3.2, 4.4, metal, { x, y: 0.4, z: LB_FOOT.z }, 0.4))
-    g.add(cylX(1.5, 1.4, RUBBER, x, 1.5, LB_FOOT.z, 14))
+    g.add(torus(1.9, 0.5, metal, { x, y: LB_RAIL.y, z: LB_RAIL.z, ry: PI / 2 }, PI * 2, [6, 16]))
+    g.add(nub(2.6, 3.2, 4.4, metal, { x, y: 0.4, z: LB_FOOT.z }))
+    g.add(cylX(1.5, 1.4, RUBBER, x, 1.5, LB_FOOT.z, 10))
   }
   for (let i = 0; i < 8; i++) {
     const y = 25 + i * 25
-    g.add(cylX(1.3, 40, ladder, LB_LADDER_X, y, lbZ(y), 12))
+    g.add(cylX(1.3, 40, ladder, LB_LADDER_X, y, lbZ(y), 10))
   }
   return g
 }
@@ -380,9 +384,9 @@ function barristerCase(p: string[]) {
     const h = BR.mod - 3.6 - 0.6
     const w = BR_IX * 2 - 0.8
     const door = new THREE.Group()
-    door.add(holePanel(w, h, 1.8, wood, [{ kind: 'rect', x: 0, y: 3.2, w: w - 7, h: h - 6.4, r: 0.4 }], { y: -h }, 0.4))
+    door.add(holePanel(w, h, 1.8, wood, [{ kind: 'rect', x: 0, y: 3.2, w: w - 7, h: h - 6.4, r: 0.4 }], { y: -h }, 0.4, { seg: 3 }))
     door.add(glassPane(w - 6, h - 5.4, 0.4, { y: -h + 2.7, z: 0 }))
-    for (const s of [-1, 1]) door.add(ball(0.9, knob, { x: s * 22, y: -h + 1.6, z: 1.3 }))
+    for (const s of [-1, 1]) door.add(ball(0.9, knob, { x: s * 22, y: -h + 1.6, z: 1.3 }, undefined, LOW))
     door.position.set(0, y0 + BR.mod - 1.6 - 0.3, BR.d / 2 - 0.9)
     g.add(movable(door, { kind: 'flap', angle: -(80 * PI) / 180 }))
   }
@@ -483,7 +487,7 @@ function draftingStool(p: string[]) {
     const sz = Math.cos(a)
     g.add(strutBox([0, 7.5, 0], [sx * 21, 5.6, sz * 21], 3, 3, frame))
     g.add(cyl(0.8, 0.8, 1.8, RUBBER, { x: sx * 21, y: 3.8, z: sz * 21 }, 8))
-    g.add(ball(2.3, RUBBER, { x: sx * 21, y: 2.3, z: sz * 21 }, [0.7, 1, 1]))
+    g.add(ball(2.3, RUBBER, { x: sx * 21, y: 2.3, z: sz * 21 }, [0.7, 1, 1], [10, 6]))
   }
   // 气压杆：黑色护套 + 镀铬内杆
   g.add(cyl(2.6, 3, 18, RUBBER, { y: 9 }, 14))
@@ -491,7 +495,7 @@ function draftingStool(p: string[]) {
   // 脚踏圈：卡在内杆上的套环 + 三根辐条
   const ry = 40
   g.add(cyl(3.4, 3.4, 3, STEEL, { y: ry - 1.5 }, 14))
-  g.add(torus(18, 1.1, STEEL, { y: ry, rx: PI / 2 }))
+  g.add(torus(18, 1.1, STEEL, { y: ry, rx: PI / 2 }, PI * 2, [6, 32]))
   for (let i = 0; i < 3; i++) {
     const a = (i / 3) * PI * 2 + PI / 6
     g.add(rod3([Math.cos(a) * 3.2, ry, Math.sin(a) * 3.2], [Math.cos(a) * 17.4, ry, Math.sin(a) * 17.4], 0.6, STEEL, 8))
@@ -501,7 +505,7 @@ function draftingStool(p: string[]) {
   g.add(puck(20, 3, frame, { y: 66 }))
   g.add(puck(19.5, DST.seat - 68, fabric, { y: 68 }))
   g.add(rod3([8, 64.5, 4], [17, 63.5, 7], 0.5, RUBBER, 8))
-  g.add(ball(1, RUBBER, { x: 17, y: 63.5, z: 7 }))
+  g.add(ball(1, RUBBER, { x: 17, y: 63.5, z: 7 }, undefined, LOW))
   // 靠背：从机构板往后伸的横臂 + 立杆 + 靠背垫（背后一块壳）
   g.add(rbox(4, 2.5, 14.5, frame, { y: 64, z: -15 }, 0.6))
   g.add(rbox(4, 24, 2.5, frame, { y: 64, z: -21.5 }, 0.6))
@@ -525,7 +529,7 @@ function kneelingDesk(p: string[]) {
   const g = new THREE.Group()
   g.add(rbox(KD.w, KD.t, KD.d, top, { y: KD_UNDER }, 1))
   // 左板腿：中间一个圆角方孔
-  g.add(holePanel(KD_SD, KD_UNDER, 2.4, wood, [{ kind: 'rect', x: 0, y: 6, w: KD_SD - 14, h: KD_UNDER - 14, r: 4 }], { x: -KD.w / 2 + 3.6, ry: PI / 2 }, 1))
+  g.add(holePanel(KD_SD, KD_UNDER, 2.4, wood, [{ kind: 'rect', x: 0, y: 6, w: KD_SD - 14, h: KD_UNDER - 14, r: 4 }], { x: -KD.w / 2 + 3.6, ry: PI / 2 }, 1, { seg: 6 }))
   // 右书格：两侧板、底板、中层板、背板
   g.add(rbox(2.4, KD_UNDER, KD_SD, wood, { x: KD_OUT + 1.2 }, 0.6))
   g.add(rbox(2, KD_UNDER, KD_SD, wood, { x: KD_IN - 1 }, 0.6))
@@ -559,8 +563,8 @@ function mobilePedestal(p: string[]) {
     for (const sz of [-1, 1]) {
       const x = sx * (MP.w / 2 - 5)
       const z = sz * (MP.d / 2 - 6)
-      g.add(cylX(1.8, 1.6, RUBBER, x, 1.8, z, 14))
-      g.add(rbox(2.6, MP.wheel - 2, 4.2, shade(body, -0.15), { x, y: 2, z }, 0.5))
+      g.add(cylX(1.8, 1.6, RUBBER, x, 1.8, z, 10))
+      g.add(nub(2.6, MP.wheel - 2, 4.2, shade(body, -0.15), { x, y: 2, z }))
     }
   g.add(P(carcass(MP.w, MP.h - MP.wheel, MP.d, body), 0, MP.wheel, 0))
   mpDrawers().forEach((o, i) => {
@@ -570,7 +574,7 @@ function mobilePedestal(p: string[]) {
       g.add(
         drawerBox({
           ...d,
-          front: (w, h) => [rbox(w, h, 1.6, front, { z: -0.8 }, 0.4), cylZ(1, 1.2, STEEL, w / 2 - 3.5, h / 2, 0.1, 14), rbox(0.3, 1.1, 0.2, RUBBER, { x: w / 2 - 3.5, y: h / 2 - 0.55, z: 0.8 }, 0.05)],
+          front: (w, h) => [rbox(w, h, 1.6, front, { z: -0.8 }, 0.4), cylZ(1, 1.2, STEEL, w / 2 - 3.5, h / 2, 0.1, 10), nub(0.3, 1.1, 0.2, RUBBER, { x: w / 2 - 3.5, y: h / 2 - 0.55, z: 0.8 })],
         }),
       )
     else g.add(drawerBox(d))
@@ -602,9 +606,9 @@ function mapCabinet(p: string[]) {
         knob: false,
         front: (w, h) => [
           rbox(w, h, 1.6, front, { z: -0.8 }, 0.4),
-          rbox(9, 3.6, 0.5, metal, { y: h - 5.2, z: 0.15 }, 0.15),
-          rbox(7.6, 2.4, 0.4, PAPER, { y: h - 4.6, z: 0.3 }, 0.1),
-          rbox(30, 1.4, 1.6, metal, { y: 2, z: 0.8 }, 0.5),
+          nub(9, 3.6, 0.5, metal, { y: h - 5.2, z: 0.15 }),
+          nub(7.6, 2.4, 0.4, PAPER, { y: h - 4.6, z: 0.3 }),
+          nub(30, 1.4, 1.6, metal, { y: 2, z: 0.8 }),
         ],
       }),
     )
@@ -660,8 +664,8 @@ function pegboardDesk(p: string[]) {
   const zf = PD_BOARD.z + 0.6
   for (const [i, j] of PD_HOOKS) {
     const [x, y] = pdHole(i, j)
-    g.add(rod3([x, y, zf - 0.6], [x, y, zf + 7], 0.35, STEEL, 8))
-    g.add(rod3([x, y, zf + 7], [x, y + 2.5, zf + 8], 0.35, STEEL, 8))
+    g.add(rod3([x, y, zf - 0.6], [x, y, zf + 7], 0.35, STEEL, 6))
+    g.add(rod3([x, y, zf + 7], [x, y + 2.5, zf + 8], 0.35, STEEL, 6))
   }
   // 小搁板：两只斜撑托架 + 带前挡边的金属板
   const [sxa, sya] = pdHole(PD_SHELF.cols[0], PD_SHELF.row)
@@ -670,8 +674,8 @@ function pegboardDesk(p: string[]) {
   const scx = (sxa + sxb) / 2
   const sw = sxb - sxa + 10
   for (const x of [sxa, sxb]) {
-    g.add(rod3([x, sya, zf - 0.6], [x, shelfY, zf + PD_SHELF_D - 1], 0.35, STEEL, 8))
-    g.add(rod3([x, shelfY, zf - 0.6], [x, shelfY, zf + PD_SHELF_D - 1], 0.35, STEEL, 8))
+    g.add(rod3([x, sya, zf - 0.6], [x, shelfY, zf + PD_SHELF_D - 1], 0.35, STEEL, 6))
+    g.add(rod3([x, shelfY, zf - 0.6], [x, shelfY, zf + PD_SHELF_D - 1], 0.35, STEEL, 6))
   }
   g.add(rbox(sw, 0.8, PD_SHELF_D, frame, { x: scx, y: shelfY + 0.35, z: zf + PD_SHELF_D / 2 }, 0.3))
   g.add(rbox(sw, 3, 0.6, frame, { x: scx, y: shelfY + 0.35, z: zf + PD_SHELF_D - 0.3 }, 0.2))

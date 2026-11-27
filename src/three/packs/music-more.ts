@@ -3,7 +3,7 @@
 // 原点在占地中心底面，正面朝 +z（演奏的人在 +z 一侧）。落地的大乐器带支架立着；小乐器是桌面摆件（PROP）。type / tags / mats 直接写在 def 里。
 
 import * as THREE from 'three'
-import { ball, cup, cyl, puck, rbox, shade, torus, tray } from '../toon'
+import { ball, cup, cyl, nub, puck, rbox, shade, torus, tray } from '../toon'
 import { C, holePanel, paintPanel, rectPoly, rng, type AssetDef, type Hole } from '../kit'
 import { G, P, PI, batten, cylX, cylZ, fitGroup, fitWall, lathe, lit, mesh, noOutline, rod3, sideSlab, taperRod3, tiltFrame, tube, type V2, type V3 } from '../geo'
 import { CL, CN, F, I, J, M, N, PROP, R, define, type Pal } from '../packkit'
@@ -30,10 +30,14 @@ type Draw = (g: CanvasRenderingContext2D, W: number, H: number) => void
 /** 琴弦 / 细线：两点之间很细的杆，不描边 */
 const thread = (a: V3, b: V3, r = 0.07, color = STRING) => noOutline(taperRod3(a, b, r, r, color, 4))
 
+/** 小球段数：r < 1.5 的脚垫、弦钮、音孔 [8, 6]，更小的 [6, 4]（ball 默认最少 12 × 8 = 168 面） */
+const LOW: [number, number] = [8, 6]
+const TINY: [number, number] = [6, 4]
+
 /** 右半边轮廓（从底部中线到顶部中线）镜像成完整的闭合轮廓 */
 const mirrorHalf = (right: V2[]): V2[] => [...right, ...right.slice(1, -1).reverse().map(([x, y]): V2 => [-x, y])]
 
-/** 平面轮廓挤出成板（琴身、琴头）：轮廓在 xy 平面（smooth 时用闭合样条磨圆），厚度沿 z 居中 */
+/** 平面轮廓挤出成板（琴身、琴头）：轮廓在 xy 平面（smooth 时用闭合样条磨圆，每个控制点之间取 3 段），厚度沿 z 居中 */
 function contour(pts: V2[], depth: number, color: string, smooth = true, bevel = 0.5) {
   let v: THREE.Vector2[]
   if (smooth) {
@@ -42,7 +46,7 @@ function contour(pts: V2[], depth: number, color: string, smooth = true, bevel =
       true,
       'centripetal',
     )
-    v = curve.getPoints(pts.length * 5).map((q) => new THREE.Vector2(q.x, q.y))
+    v = curve.getPoints(pts.length * 3).map((q) => new THREE.Vector2(q.x, q.y))
     v.pop()
   } else v = pts.map(([x, y]) => new THREE.Vector2(x, y))
   const b = Math.min(bevel, depth * 0.3)
@@ -150,7 +154,7 @@ function cradleStand(inst: THREE.Object3D, stand: string, o: { t: number; back: 
   const rf = r * 1.3
   const yb = rf - yu * Math.cos(t) - o.back * Math.sin(t)
   const W = (x: number, y: number, z: number): V3 => [x, yb + y * Math.cos(t) + z * Math.sin(t), -y * Math.sin(t) + z * Math.cos(t)]
-  const foot = (p: V3) => ball(rf, RUBBER, { x: p[0], y: p[1], z: p[2] })
+  const foot = (p: V3) => ball(rf, RUBBER, { x: p[0], y: p[1], z: p[2] }, undefined, LOW)
   g.add(P(G(inst), 0, yb, 0, -t))
   const px = o.nh + pr - 0.1
   for (const s of [-1, 1]) {
@@ -184,12 +188,12 @@ function banjoBody(wood: string, head: string) {
   const pc = 14.6
   const dk = shade(wood, -0.08)
   // 共鸣筒（背面，前大后小）、法兰、木圈、鼓皮、压圈
-  g.add(P(cyl(13.6, 12, 4.8, wood, {}, 32), 0, pc, -3.6, PI / 2))
-  g.add(P(torus(8.5, 0.3, shade(wood, -0.18)), 0, pc, -6.02))
-  g.add(P(cyl(14.6, 14.6, 1.4, STEEL, {}, 32), 0, pc, -0.5, PI / 2))
-  g.add(P(cyl(13.4, 13.4, 1.6, shade(wood, 0.1), {}, 32), 0, pc, 0.4, PI / 2))
-  g.add(P(cyl(13, 13, 0.4, head, {}, 32), 0, pc, 1.3, PI / 2))
-  g.add(P(torus(13.2, 0.45, STEEL), 0, pc, 1.45))
+  g.add(P(cyl(13.6, 12, 4.8, wood, {}, 24), 0, pc, -3.6, PI / 2))
+  g.add(torus(8.5, 0.3, shade(wood, -0.18), { y: pc, z: -6.02 }, PI * 2, [5, 24]))
+  g.add(P(cyl(14.6, 14.6, 1.4, STEEL, {}, 24), 0, pc, -0.5, PI / 2))
+  g.add(P(cyl(13.4, 13.4, 1.6, shade(wood, 0.1), {}, 24), 0, pc, 0.4, PI / 2))
+  g.add(P(cyl(13, 13, 0.4, head, {}, 24), 0, pc, 1.3, PI / 2))
+  g.add(torus(13.2, 0.45, STEEL, { y: pc, z: 1.45 }, PI * 2, [6, 24]))
   // 一圈挂钩：从压圈斜拉到法兰
   for (let i = 0; i < 16; i++) {
     const a = (i / 16) * PI * 2 + PI / 16
@@ -200,7 +204,7 @@ function banjoBody(wood: string, head: string) {
   // 琴颈 + 指板 + 琴枕 + 琴头
   g.add(rbox(4.4, 56, 2.6, dk, { y: 26, z: 0.3 }, 0.7))
   g.add(paintPanel(4, 52, `mu-bj-fret-${EBONY}`, fretsArt(EBONY, 17), { y: 29, z: 1.7 }))
-  g.add(rbox(4.4, 0.6, 0.6, IVORY, { y: 81.4, z: 1.6 }, 0.2))
+  g.add(nub(4.4, 0.6, 0.6, IVORY, { y: 81.4, z: 1.6 }))
   g.add(
     P(
       contour(
@@ -224,7 +228,7 @@ function banjoBody(wood: string, head: string) {
       0.2,
     ),
   )
-  g.add(noOutline(rbox(1.4, 2.4, 0.3, IVORY, { y: 87, z: 1.15 }, 0.1)))
+  g.add(noOutline(nub(1.4, 2.4, 0.3, IVORY, { y: 87, z: 1.15 })))
   // 四只朝后的行星弦轴 + 琴颈侧面的第五弦轴
   for (const [x, y] of [
     [-2.6, 85.5],
@@ -232,14 +236,14 @@ function banjoBody(wood: string, head: string) {
     [-2.3, 90.5],
     [2.3, 90.5],
   ] as V2[]) {
-    g.add(cylZ(0.5, 2.4, STEEL, x, y, -1.5, 10))
-    g.add(ball(0.9, IVORY, { x, y, z: -3 }, [1, 1, 0.6]))
+    g.add(cylZ(0.5, 2.4, STEEL, x, y, -1.5, 8))
+    g.add(ball(0.9, IVORY, { x, y, z: -3 }, [1, 1, 0.6], LOW))
   }
   g.add(cylX(0.4, 2.2, STEEL, 3.1, 58, 0.6, 8))
-  g.add(ball(0.8, IVORY, { x: 4.6, y: 58, z: 0.6 }, [0.6, 1, 1]))
+  g.add(ball(0.8, IVORY, { x: 4.6, y: 58, z: 0.6 }, [0.6, 1, 1], LOW))
   // 琴码、拉弦板、五根弦
-  g.add(rbox(5.2, 1, 0.7, shade(wood, 0.25), { y: 8.6, z: 1.75 }, 0.2))
-  g.add(rbox(3.4, 5.2, 0.6, STEEL, { y: 1, z: 1.85 }, 0.25))
+  g.add(nub(5.2, 1, 0.7, shade(wood, 0.25), { y: 8.6, z: 1.75 }))
+  g.add(nub(3.4, 5.2, 0.6, STEEL, { y: 1, z: 1.85 }))
   for (let i = 0; i < 4; i++) {
     const k = i - 1.5
     g.add(thread([k * 0.6, 5.8, 2.1], [k * 0.9, 82, 1.85]))
@@ -272,8 +276,8 @@ function mandolinBody(wood: string, top: string) {
   g.add(P(contour(ol, 4.6, wood, true, 0.8), 0, 0, -0.3))
   g.add(P(contour(ol.map(([x, y]): V2 => [x * 0.95, y * 0.95 + 0.8]), 0.6, top, true, 0.2), 0, 0, 2.1))
   // 音孔 + 音孔花、护板
-  g.add(noOutline(cylZ(2.3, 0.2, HOLE, 0, 20.5, 2.45, 24)))
-  g.add(P(torus(2.75, 0.22, IVORY), 0, 20.5, 2.45))
+  g.add(noOutline(cylZ(2.3, 0.2, HOLE, 0, 20.5, 2.45, 16)))
+  g.add(torus(2.75, 0.22, IVORY, { y: 20.5, z: 2.45 }, PI * 2, [5, 16]))
   g.add(
     noOutline(
       P(
@@ -299,13 +303,13 @@ function mandolinBody(wood: string, top: string) {
   )
   // 琴码、拉弦板
   const dk = shade(wood, -0.2)
-  g.add(rbox(5, 0.9, 1, dk, { y: 9.5, z: 2.7 }, 0.3))
-  g.add(rbox(4.6, 4, 0.6, STEEL, { y: 0.4, z: 2.5 }, 0.25))
+  g.add(nub(5, 0.9, 1, dk, { y: 9.5, z: 2.7 }))
+  g.add(nub(4.6, 4, 0.6, STEEL, { y: 0.4, z: 2.5 }))
   // 琴颈、指板、琴枕、琴头和八只弦钮
   const nk = shade(wood, -0.05)
   g.add(rbox(3, 25.5, 2, nk, { y: 30.5, z: 0.9 }, 0.6))
   g.add(paintPanel(2.8, 22.6, `mu-md-fret-${EBONY}`, fretsArt(EBONY, 15), { y: 33, z: 2 }))
-  g.add(rbox(3, 0.5, 0.5, IVORY, { y: 55.6, z: 1.9 }, 0.15))
+  g.add(nub(3, 0.5, 0.5, IVORY, { y: 55.6, z: 1.9 }))
   g.add(
     P(
       contour(
@@ -333,8 +337,8 @@ function mandolinBody(wood: string, top: string) {
   for (let i = 0; i < 4; i++) {
     const y = 58 + i * 1.7
     for (const s of [-1, 1]) {
-      g.add(cylX(0.3, 2.2, STEEL, s * 4, y, 0.2, 8))
-      g.add(rbox(0.9, 1.3, 0.5, IVORY, { x: s * 5.4, y: y - 0.65, z: 0.2 }, 0.2))
+      g.add(cylX(0.3, 2.2, STEEL, s * 4, y, 0.2, 6))
+      g.add(nub(0.9, 1.3, 0.5, IVORY, { x: s * 5.4, y: y - 0.65, z: 0.2 }))
     }
   }
   // 八根弦：四组，每组两根挨着；拉弦板 → 琴码顶 → 琴枕
@@ -402,8 +406,8 @@ function morinKhuur(p: string[]) {
       3.6,
     ),
   )
-  g.add(P(torus(3.2, 0.3, scarf), 0, y0 + 22, 3.95))
-  g.add(P(rbox(2.4, 2.4, 0.3, scarf, {}, 0.1), 0, y0 + 22, 3.95, 0, 0, PI / 4))
+  g.add(torus(3.2, 0.3, scarf, { y: y0 + 22, z: 3.95 }, PI * 2, [5, 20]))
+  g.add(nub(2.4, 2.4, 0.3, scarf, { y: y0 + 22 - 1.2, z: 3.95, rz: PI / 4 }))
   // 琴杆 + 马头（侧面轮廓挤出：马头朝前）+ 两只眼睛
   g.add(rbox(3.2, 68, 2.4, dk, { y: y0 + 28, z: 0.4 }, 0.6))
   g.add(
@@ -427,21 +431,21 @@ function morinKhuur(p: string[]) {
       wood,
     ),
   )
-  for (const s of [-1, 1]) g.add(noOutline(ball(0.45, DARK, { x: s * 1.6, y: 109.4, z: 3.2 }, [0.5, 1, 1])))
+  for (const s of [-1, 1]) g.add(noOutline(ball(0.45, DARK, { x: s * 1.6, y: 109.4, z: 3.2 }, [0.5, 1, 1], TINY)))
   // 系在马头下面的哈达：一圈 + 两条垂下来的飘带
-  g.add(rbox(3.8, 1.6, 3, scarf, { y: 95.5, z: 0.4 }, 0.4))
-  for (const s of [-1, 1]) g.add(P(rbox(1.2, 12, 0.3, scarf, {}, 0.1), s * 1.3, 90, 1.9, 0, 0, s * 0.1))
+  g.add(nub(3.8, 1.6, 3, scarf, { y: 95.5, z: 0.4 }))
+  for (const s of [-1, 1]) g.add(nub(1.2, 12, 0.3, scarf, { x: s * 1.3, y: 84, z: 1.9, rz: s * 0.1 }))
   // 两只大弦轴：一左一右横穿琴杆
   for (const [y, s] of [
     [89, -1],
     [93.5, 1],
   ] as V2[]) {
     g.add(taperRod3([-s * 1.8, y, 0.4], [s * 6.5, y, -0.6], 0.5, 0.75, dk, 8))
-    g.add(P(rbox(1.2, 3.6, 2.4, dk, {}, 0.5), s * 7.1, y, -0.7))
+    g.add(nub(1.2, 3.6, 2.4, dk, { x: s * 7.1, y: y - 1.8, z: -0.7 }))
   }
   // 琴码、拉弦板、两根弦
-  g.add(rbox(5.6, 1.6, 1, CANE, { y: y0 + 11, z: 4.3 }, 0.3))
-  g.add(rbox(3.4, 2.2, 1, dk, { y: y0 + 0.4, z: 4.1 }, 0.3))
+  g.add(nub(5.6, 1.6, 1, CANE, { y: y0 + 11, z: 4.3 }))
+  g.add(nub(3.4, 2.2, 1, dk, { y: y0 + 0.4, z: 4.1 }))
   for (const s of [-1, 1]) {
     g.add(thread([s * 0.6, y0 + 2.4, 4.55], [s * 0.7, y0 + 12.6, 4.85], 0.12, '#efe8d8'))
     g.add(thread([s * 0.7, y0 + 12.6, 4.85], [s * 0.4, 91.5, 1.6], 0.12, '#efe8d8'))
@@ -452,14 +456,14 @@ function morinKhuur(p: string[]) {
   const at = (k: number): V3 => [b0[0] + (b1[0] - b0[0]) * k, b0[1] + (b1[1] - b0[1]) * k, b0[2] + (b1[2] - b0[2]) * k]
   g.add(rod3(b0, b1, 0.35, '#6e4a2a', 8))
   const fr = at(0.07)
-  g.add(P(rbox(1.6, 3, 1.6, DARK, {}, 0.4), fr[0] + 0.6, fr[1], fr[2] + 0.4))
+  g.add(nub(1.6, 3, 1.6, DARK, { x: fr[0] + 0.6, y: fr[1] - 1.5, z: fr[2] + 0.4 }))
   const tip = at(0.97)
   const mid = at(0.5)
   g.add(noOutline(tube([[fr[0] + 1.1, fr[1] + 1.2, fr[2] + 0.9], [mid[0] + 1.1, mid[1], mid[2] + 1.2], tip], 0.18, '#f2ece0', { seg: 12, radial: 5 })))
   // 底座后面的立柱 + 横臂 + 叉住琴杆的两只叉齿
   g.add(rbox(2.4, 66, 2.4, stand, { y: 2.4, z: -8.2 }, 0.6))
   g.add(rbox(2.4, 2.2, 8, stand, { y: 66.2, z: -4.6 }, 0.6))
-  for (const s of [-1, 1]) g.add(rbox(1.2, 2.2, 3.4, stand, { x: s * 2.15, y: 66.2, z: 0.2 }, 0.4))
+  for (const s of [-1, 1]) g.add(nub(1.2, 2.2, 3.4, stand, { x: s * 2.15, y: 66.2, z: 0.2 }))
   return fitGroup(g)
 }
 
@@ -480,7 +484,7 @@ function suonaSheng(p: string[]) {
     const a = PI / 2 + 0.42 + (i / (lens.length - 1)) * (PI * 2 - 0.84)
     g.add(cyl(0.55, 0.55, L, bamboo, { x: sx + Math.cos(a) * 4.6, y: yb + 5.4, z: Math.sin(a) * 4.6 }, 8))
   })
-  for (const y of [14, 24]) g.add(torus(5.2, 0.28, brass, { x: sx, y, rx: PI / 2 }))
+  for (const y of [14, 24]) g.add(torus(5.2, 0.28, brass, { x: sx, y, rx: PI / 2 }, PI * 2, [5, 24]))
   // 吹嘴
   g.add(taperRod3([sx, yb + 3.2, 5.6], [sx, yb + 4.6, 9.2], 0.9, 0.7, brass, 12))
   g.add(cylZ(0.75, 0.6, shade(brass, -0.2), sx, yb + 4.6, 9.3, 12))
@@ -501,7 +505,7 @@ function suonaSheng(p: string[]) {
         ],
         0.3,
         brass,
-        32,
+        24,
       ),
       ux,
       yb,
@@ -512,18 +516,18 @@ function suonaSheng(p: string[]) {
   const y2 = yb + 32
   const rAt = (y: number) => 1.55 + ((0.8 - 1.55) * (y - y1)) / (y2 - y1)
   g.add(taperRod3([ux, y1, 0], [ux, y2, 0], 1.55, 0.8, body, 12))
-  g.add(torus(rAt(y1 + 0.6), 0.22, brass, { x: ux, y: y1 + 0.6, rx: PI / 2 }))
-  g.add(torus(rAt(y2 - 0.6), 0.2, brass, { x: ux, y: y2 - 0.6, rx: PI / 2 }))
+  g.add(torus(rAt(y1 + 0.6), 0.22, brass, { x: ux, y: y1 + 0.6, rx: PI / 2 }, PI * 2, [5, 12]))
+  g.add(torus(rAt(y2 - 0.6), 0.2, brass, { x: ux, y: y2 - 0.6, rx: PI / 2 }, PI * 2, [5, 12]))
   // 正面八个音孔、背后一个
   for (let i = 0; i < 8; i++) {
     const y = y1 + 4 + i * 2.3
-    g.add(noOutline(ball(0.32, HOLE, { x: ux, y, z: rAt(y) - 0.06 }, [1, 1, 0.4])))
+    g.add(noOutline(ball(0.32, HOLE, { x: ux, y, z: rAt(y) - 0.06 }, [1, 1, 0.4], TINY)))
   }
-  g.add(noOutline(ball(0.32, HOLE, { x: ux, y: y1 + 20.5, z: -(rAt(y1 + 20.5) - 0.06) }, [1, 1, 0.4])))
+  g.add(noOutline(ball(0.32, HOLE, { x: ux, y: y1 + 20.5, z: -(rAt(y1 + 20.5) - 0.06) }, [1, 1, 0.4], TINY)))
   // 芯子、气牌、哨片
   g.add(cyl(0.28, 0.35, 3, brass, { x: ux, y: y2 - 0.3 }, 8))
-  g.add(cyl(1.5, 1.5, 0.25, brass, { x: ux, y: y2 + 1.6 }, 20))
-  g.add(P(rbox(0.9, 1.8, 0.35, CANE, {}, 0.15), ux, y2 + 3.5, 0))
+  g.add(cyl(1.5, 1.5, 0.25, brass, { x: ux, y: y2 + 1.6 }, 14))
+  g.add(nub(0.9, 1.8, 0.35, CANE, { x: ux, y: y2 + 3.5 - 0.9 }))
   return g
 }
 
@@ -551,15 +555,15 @@ function zhong(h: number, color: string, studs: boolean) {
       [rm, 0],
     ],
     color,
-    16,
+    12,
   )
   body.scale.set(1, 1, 0.72)
   g.add(body)
   const sh = h * 0.3
-  g.add(cyl(rc * 0.35, rc * 0.5, sh, shade(color, -0.1), { y: h - 0.1 }, 10))
+  g.add(cyl(rc * 0.35, rc * 0.5, sh, shade(color, -0.1), { y: h - 0.1 }, 8))
   // 甬柱顶上的挂钮（一小块扁环座，挂钩从它顶上穿过）
   const ry = h + sh + 0.3
-  g.add(rbox(1.1, 1.1, 0.4, shade(color, -0.1), { y: h + sh - 0.2 }, 0.15))
+  g.add(nub(1.1, 1.1, 0.4, shade(color, -0.1), { y: h + sh - 0.2 }))
   if (studs)
     for (const f of [0.62, 0.8])
       for (const sx of [-1, 1])
@@ -567,7 +571,7 @@ function zhong(h: number, color: string, studs: boolean) {
           const y = h * f
           const r = rm + (rc - rm) * f
           const x = sx * r * 0.42
-          g.add(ball(0.26, color, { x, y, z: sz * (0.72 * Math.sqrt(r * r - x * x) - 0.05) }, undefined, [5, 3]))
+          g.add(ball(0.26, color, { x, y, z: sz * (0.72 * Math.sqrt(r * r - x * x) - 0.05) }, undefined, [4, 3]))
         }
   return { g, top: ry + 0.6 }
 }
@@ -583,9 +587,9 @@ function bianzhong(p: string[]) {
     g.add(P(rbox(5, 2.6, 3.6, frame, {}, 0.8), s * 22.4, 39.2, 0, 0, 0, s * 0.45))
   }
   g.add(rbox(44, 3, 3.6, frame, { y: 36 }, 0.8))
-  g.add(noOutline(rbox(38, 0.8, 0.3, acc, { y: 37.1, z: 1.9 }, 0.1)))
+  g.add(noOutline(nub(38, 0.8, 0.3, acc, { y: 37.1, z: 1.9 })))
   g.add(rbox(39.4, 2.6, 3, frame, { y: 20 }, 0.6))
-  g.add(noOutline(rbox(34, 0.7, 0.3, acc, { y: 21, z: 1.6 }, 0.1)))
+  g.add(noOutline(nub(34, 0.7, 0.3, acc, { y: 21, z: 1.6 })))
   // 挂钟：每排按大小依次排开，挂环用一根短钩挂在梁底下
   const row = (hs: number[], beamY: number, gap: number, studs: boolean) => {
     const ws = hs.map((h) => h * 0.8)
@@ -597,13 +601,13 @@ function bianzhong(p: string[]) {
       const { g: b, top } = zhong(h, bronze, studs)
       const y = beamY - 1.2 - top
       g.add(P(b, cx, y, 0))
-      g.add(rod3([cx, beamY + 0.3, 0], [cx, beamY - 1.35, 0], 0.15, DARK, 6))
+      g.add(rod3([cx, beamY + 0.3, 0], [cx, beamY - 1.35, 0], 0.15, DARK, 4))
     })
   }
   row([6.2, 5.8, 5.4, 5, 4.6, 4.2], 36, 1.8, false)
   row([9.6, 9, 8.4, 7.8, 7.2], 20, 0.9, true)
   // 小槌：长柄 + 横着的槌头，搁在底座前沿
-  const mallet = G(rod3([-6.5, 0.9, 0], [6, 0.9, 0], 0.35, shade(frame, 0.15), 8), cylZ(0.9, 3.2, acc, 7, 0.9, 0, 14))
+  const mallet = G(rod3([-6.5, 0.9, 0], [6, 0.9, 0], 0.35, shade(frame, 0.15), 6), cylZ(0.9, 3.2, acc, 7, 0.9, 0, 10))
   g.add(P(mallet, -4, 2.4, 6.5, 0, 0.25, 0))
   return g
 }
@@ -615,11 +619,11 @@ function muyuSet(p: string[]) {
   const g = new THREE.Group()
   // 长方软垫 + 四角流苏
   g.add(rbox(30, 3, 20, cloth, {}, 1.2))
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(ball(0.7, shade(cloth, -0.2), { x: sx * 14.6, y: 1.5, z: sz * 9.6 }))
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(ball(0.7, shade(cloth, -0.2), { x: sx * 14.6, y: 1.5, z: sz * 9.6 }, undefined, LOW))
   // 木鱼：圈垫 + 略扁的圆身
   const mx = -5.5
   const cy = 9.3
-  g.add(torus(3.8, 1, shade(cloth, 0.15), { x: mx, y: 3.95, rx: PI / 2 }))
+  g.add(torus(3.8, 1, shade(cloth, 0.15), { x: mx, y: 3.95, rx: PI / 2 }, PI * 2, [8, 20]))
   g.add(ball(6.4, wood, { x: mx, y: cy, z: 0 }, [1.06, 0.86, 1]))
   // 鱼口：贴着鱼身正面绕一道深色弧槽（弧的中点转到 +z）
   const mouth = G(torus(6.25, 0.4, HOLE, { rx: PI / 2 }, 2.3))
@@ -629,17 +633,17 @@ function muyuSet(p: string[]) {
   mouth.traverse((o) => (o.userData.noOutline = true))
   g.add(mo)
   // 背上的提环
-  g.add(torus(1.3, 0.45, shade(wood, -0.08), { x: mx, y: cy + 4.9, z: -2.6, ry: PI / 2 }))
+  g.add(torus(1.3, 0.45, shade(wood, -0.08), { x: mx, y: cy + 4.9, z: -2.6, ry: PI / 2 }, PI * 2, [6, 14]))
   // 木鱼槌：柄斜搁在垫子上，槌头包布
-  const ml = G(rod3([-6, 0.4, 0], [6.5, 1.3, 0], 0.4, shade(wood, 0.12), 8), ball(1.3, shade(cloth, -0.18), { x: 7.3, y: 1.3 }))
+  const ml = G(rod3([-6, 0.4, 0], [6.5, 1.3, 0], 0.4, shade(wood, 0.12), 6), ball(1.3, shade(cloth, -0.18), { x: 7.3, y: 1.3 }, undefined, [10, 6]))
   g.add(P(ml, mx - 1, 3, 7.2, 0, -0.2, 0))
   // 磬：小圆垫 + 铜钵 + 一道暗色弦纹，前面一根磬槌
   const qx = 8.5
   g.add(puck(5.2, 2.4, shade(cloth, 0.1), { x: qx, y: 3, z: -1.5 }))
   g.add(cup(5, 3.6, 4.6, 0.35, bronze, { x: qx, y: 5.2, z: -1.5 }))
-  g.add(torus(4.64, 0.15, shade(bronze, -0.2), { x: qx, y: 8.6, z: -1.5, rx: PI / 2 }))
-  g.add(rod3([qx - 4, 3.35, 7.6], [qx + 5.5, 3.35, 5], 0.35, shade(wood, 0.12), 8))
-  g.add(ball(0.75, shade(cloth, -0.18), { x: qx + 5.6, y: 3.75, z: 5 }))
+  g.add(torus(4.64, 0.15, shade(bronze, -0.2), { x: qx, y: 8.6, z: -1.5, rx: PI / 2 }, PI * 2, [4, 32]))
+  g.add(rod3([qx - 4, 3.35, 7.6], [qx + 5.5, 3.35, 5], 0.35, shade(wood, 0.12), 6))
+  g.add(ball(0.75, shade(cloth, -0.18), { x: qx + 5.6, y: 3.75, z: 5 }, undefined, LOW))
   return g
 }
 
@@ -653,13 +657,14 @@ function congaDrum(h: number, rt: number, rb: number, bulge: number, shellC: str
     [0.01, 0.8],
     [rb - 0.8, 0.8],
   ]
-  for (let i = 0; i <= 16; i++) pts.push([rAt((h * i) / 16), (h * i) / 16])
+  // 鼓身轮廓 10 段、一圈 24 段（色带、脚圈、压圈也是 24 段，折线对得上）
+  for (let i = 0; i <= 10; i++) pts.push([rAt((h * i) / 10), (h * i) / 10])
   pts.push([rt - 1, h])
-  g.add(lathe(pts, shellC, 32))
-  for (const f of [0.22, 0.78]) g.add(torus(rAt(h * f), 0.4, shade(shellC, -0.22), { y: h * f, rx: PI / 2 }))
-  g.add(torus(rb - 0.4, 0.6, RUBBER, { y: 0.6, rx: PI / 2 }))
-  g.add(cyl(rt - 0.1, rt - 0.1, 0.5, head, { y: h - 0.25 }, 32))
-  g.add(torus(rt + 0.2, 0.7, metal, { y: h + 0.1, rx: PI / 2 }))
+  g.add(lathe(pts, shellC, 24))
+  for (const f of [0.22, 0.78]) g.add(torus(rAt(h * f), 0.4, shade(shellC, -0.22), { y: h * f, rx: PI / 2 }, PI * 2, [5, 24]))
+  g.add(torus(rb - 0.4, 0.6, RUBBER, { y: 0.6, rx: PI / 2 }, PI * 2, [6, 24]))
+  g.add(cyl(rt - 0.1, rt - 0.1, 0.5, head, { y: h - 0.25 }, 24))
+  g.add(torus(rt + 0.2, 0.7, metal, { y: h + 0.1, rx: PI / 2 }, PI * 2, [6, 24]))
   const yl = h - 13
   for (let i = 0; i < n; i++) {
     const a = (i / n) * PI * 2 + 0.3
@@ -667,9 +672,9 @@ function congaDrum(h: number, rt: number, rb: number, bulge: number, shellC: str
     const s = Math.sin(a)
     const r0 = rt + 0.6
     const r1 = rAt(yl) + 0.9
-    g.add(rod3([c * r0, h + 0.4, s * r0], [c * r1, yl + 1.6, s * r1], 0.3, metal, 6))
-    g.add(rod3([c * r0, h + 0.4, s * r0], [c * (rt + 0.1), h + 0.9, s * (rt + 0.1)], 0.3, metal, 6))
-    g.add(P(rbox(1.8, 2.6, 1.6, metal, {}, 0.4), c * (rAt(yl) + 0.5), yl + 0.6, s * (rAt(yl) + 0.5), 0, PI / 2 - a, 0))
+    g.add(rod3([c * r0, h + 0.4, s * r0], [c * r1, yl + 1.6, s * r1], 0.3, metal, 5))
+    g.add(rod3([c * r0, h + 0.4, s * r0], [c * (rt + 0.1), h + 0.9, s * (rt + 0.1)], 0.3, metal, 5))
+    g.add(nub(1.8, 2.6, 1.6, metal, { x: c * (rAt(yl) + 0.5), y: yl + 0.6 - 1.3, z: s * (rAt(yl) + 0.5), ry: PI / 2 - a }))
   }
   return g
 }
@@ -679,17 +684,17 @@ function bongoDrum(r: number, h: number, shellC: string, head: string, metal: st
   const g = new THREE.Group()
   const rb = r * 0.84
   const rAt = (y: number) => rb + ((r - rb) * y) / h
-  g.add(cyl(r, rb, h, shellC, {}, 28))
-  g.add(torus(rAt(h * 0.4), 0.3, shade(shellC, -0.22), { y: h * 0.4, rx: PI / 2 }))
-  g.add(cyl(r - 0.1, r - 0.1, 0.4, head, { y: h - 0.2 }, 28))
-  g.add(torus(r + 0.2, 0.5, metal, { y: h + 0.05, rx: PI / 2 }))
+  g.add(cyl(r, rb, h, shellC, {}, 20))
+  g.add(torus(rAt(h * 0.4), 0.3, shade(shellC, -0.22), { y: h * 0.4, rx: PI / 2 }, PI * 2, [5, 20]))
+  g.add(cyl(r - 0.1, r - 0.1, 0.4, head, { y: h - 0.2 }, 20))
+  g.add(torus(r + 0.2, 0.5, metal, { y: h + 0.05, rx: PI / 2 }, PI * 2, [6, 20]))
   for (let i = 0; i < 4; i++) {
     const a = (i / 4) * PI * 2 + PI / 4
     const c = Math.cos(a)
     const s = Math.sin(a)
     const yl = h - 6
-    g.add(rod3([c * (r + 0.4), h + 0.2, s * (r + 0.4)], [c * (rAt(yl) + 0.7), yl + 1.2, s * (rAt(yl) + 0.7)], 0.25, metal, 6))
-    g.add(P(rbox(1.4, 2, 1.2, metal, {}, 0.3), c * (rAt(yl) + 0.4), yl + 0.6, s * (rAt(yl) + 0.4), 0, PI / 2 - a, 0))
+    g.add(rod3([c * (r + 0.4), h + 0.2, s * (r + 0.4)], [c * (rAt(yl) + 0.7), yl + 1.2, s * (rAt(yl) + 0.7)], 0.25, metal, 5))
+    g.add(nub(1.4, 2, 1.2, metal, { x: c * (rAt(yl) + 0.4), y: yl + 0.6 - 1, z: s * (rAt(yl) + 0.4), ry: PI / 2 - a }))
   }
   return g
 }
@@ -705,10 +710,10 @@ function congas(p: string[]) {
   const y0 = 55
   for (const a of [0, 2.1, 4.2]) {
     const f: V3 = [bx + Math.cos(a) * 11, 1.1, bz + Math.sin(a) * 11]
-    g.add(rod3([bx, 20, bz], f, 0.8, metal, 8), ball(1.1, RUBBER, { x: f[0], y: f[1], z: f[2] }))
+    g.add(rod3([bx, 20, bz], f, 0.8, metal, 6), ball(1.1, RUBBER, { x: f[0], y: f[1], z: f[2] }, undefined, LOW))
   }
-  g.add(cyl(1.6, 1.6, 4, metal, { x: bx, y: 18, z: bz }, 12))
-  g.add(cyl(1.1, 1.1, y0 + 4.3 - 20, metal, { x: bx, y: 20, z: bz }, 12))
+  g.add(cyl(1.6, 1.6, 4, metal, { x: bx, y: 18, z: bz }, 10))
+  g.add(cyl(1.1, 1.1, y0 + 4.3 - 20, metal, { x: bx, y: 20, z: bz }, 8))
   g.add(P(bongoDrum(9, 15, shellC, head, metal), bx, y0, bz - 10))
   g.add(P(bongoDrum(7.6, 15, shellC, head, metal), bx, y0, bz + 8.6))
   g.add(rbox(4, 7, 4.4, shade(shellC, -0.12), { x: bx, y: y0 + 4, z: bz }, 0.8))
@@ -732,21 +737,21 @@ function timpani(p: string[]) {
         [32.8, 65],
         [33.4, 75],
         [33.2, 81],
-      ]),
+      ], 16),
       bowl,
       32,
     ),
   )
   g.add(cyl(33.6, 33.6, 0.4, head, { y: 81 }, 32))
-  g.add(torus(33.8, 0.9, STEEL, { y: 81.3, rx: PI / 2 }))
+  g.add(torus(33.8, 0.9, STEEL, { y: 81.3, rx: PI / 2 }, PI * 2, [6, 32]))
   for (let i = 0; i < 8; i++) {
     const a = (i / 8) * PI * 2 + PI / 8
     const c = Math.cos(a)
     const s = Math.sin(a)
     const rr = 34.9
     g.add(rod3([c * rr, 70, s * rr], [c * rr, 84.8, s * rr], 0.4, STEEL, 6))
-    g.add(P(rbox(4.2, 0.9, 0.9, frame, {}, 0.3), c * rr, 85, s * rr, 0, PI / 2 - a, 0))
-    g.add(P(rbox(1.6, 3, 3, STEEL, {}, 0.4), c * 33.9, 70.5, s * 33.9, 0, PI / 2 - a, 0))
+    g.add(nub(4.2, 0.9, 0.9, frame, { x: c * rr, y: 85 - 0.45, z: s * rr, ry: PI / 2 - a }))
+    g.add(nub(1.6, 3, 3, STEEL, { x: c * 33.9, y: 70.5 - 1.5, z: s * 33.9, ry: PI / 2 - a }))
   }
   // 底座：中间的轴座 + 中柱，三条底臂（一条朝前，上面装踏板），臂端脚轮，斜撑顶住鼓身
   g.add(cyl(4, 4.5, 4, frame, { y: 4 }, 16))
@@ -758,10 +763,10 @@ function timpani(p: string[]) {
     g.add(P(rbox(4, 3, R, frame, {}, 0.8), (c * R) / 2, 7, (s * R) / 2, 0, Math.atan2(c, s), 0))
     const cx = c * R
     const cz = s * R
-    g.add(cyl(1.4, 1.4, 2.6, frame, { x: cx, y: 4.6, z: cz }, 10))
-    g.add(rbox(3.6, 2.2, 3.6, frame, { x: cx, y: 3.4, z: cz }, 0.4))
-    g.add(P(cyl(2.6, 2.6, 2, RUBBER, {}, 16), cx, 2.6, cz, 0, 0, PI / 2))
-    g.add(rod3([c * (R - 2), 8, s * (R - 2)], [c * 31.6, 54, s * 31.6], 1.1, frame, 10))
+    g.add(cyl(1.4, 1.4, 2.6, frame, { x: cx, y: 4.6, z: cz }, 8))
+    g.add(nub(3.6, 2.2, 3.6, frame, { x: cx, y: 3.4, z: cz }))
+    g.add(P(cyl(2.6, 2.6, 2, RUBBER, {}, 12), cx, 2.6, cz, 0, 0, PI / 2))
+    g.add(rod3([c * (R - 2), 8, s * (R - 2)], [c * 31.6, 54, s * 31.6], 1.1, frame, 8))
   }
   const pedal = G(rbox(12, 1.4, 12, frame, { y: -0.7 }, 0.4), rbox(10, 0.4, 9.5, RUBBER, { y: 0.6 }, 0.15))
   g.add(P(pedal, 0, 10, 25, 0.36))
@@ -778,7 +783,7 @@ function glockenspiel(p: string[]) {
   g.add(tray(60, 5.4, 28, 0.9, caseC, { y: y0 }))
   g.add(rbox(58, 0.8, 26, lining, { y: y0 + 0.9 }, 0.3))
   // 琴盒前面的两只搭扣和提手
-  for (const s of [-1, 1]) g.add(rbox(2.4, 1.6, 0.6, STEEL, { x: s * 18, y: y0 + 3.2, z: 14.25 }, 0.2))
+  for (const s of [-1, 1]) g.add(nub(2.4, 1.6, 0.6, STEEL, { x: s * 18, y: y0 + 3.2, z: 14.25 }))
   g.add(rbox(10, 1.2, 1.2, DARK, { y: y0 + 2.4, z: 14.5 }, 0.4))
   const ly = y0 + 1.7
   const rh = 0.9
@@ -788,11 +793,12 @@ function glockenspiel(p: string[]) {
   const Ln = (i: number) => 13.4 - i * 0.32
   const zf = 5.6
   const zs = -7.2
-  for (let i = 0; i < nat; i++) g.add(rbox(2.6, 0.8, Ln(i), bar, { x: xs(i), y: by, z: zf }, 0.25))
+  // 琴片一共 25 片，用 12 面的直角小方块（圆角盒每片 108 面）
+  for (let i = 0; i < nat; i++) g.add(nub(2.6, 0.8, Ln(i), bar, { x: xs(i), y: by, z: zf }))
   // 后排半音：落在全音片之间（每八度 C# D# F# G# A# 五片）
   const sharps: V2[] = []
   for (let i = 0; i < nat - 1; i++) if ([0, 1, 3, 4, 5].includes(i % 7)) sharps.push([xs(i) + 1.75, (Ln(i) + Ln(i + 1)) / 2 - 3.2])
-  for (const [x, L] of sharps) g.add(rbox(2.4, 0.8, L, shade(bar, -0.06), { x, y: by, z: zs }, 0.25))
+  for (const [x, L] of sharps) g.add(nub(2.4, 0.8, L, shade(bar, -0.06), { x, y: by, z: zs }))
   // 毡条：每排两条，跟着琴片长短斜着走
   const felt = shade(lining, -0.15)
   const ry = ly + rh / 2
@@ -807,7 +813,7 @@ function glockenspiel(p: string[]) {
     [-19, 9.8, 0.12],
     [3, 8.2, -0.1],
   ] as V3[]) {
-    const m = G(cylX(0.3, 17, N.oak, 8.5, 0.3, 0, 8), ball(1, malletC, { x: 17.8, y: 1 }))
+    const m = G(cylX(0.3, 17, N.oak, 8.5, 0.3, 0, 6), ball(1, malletC, { x: 17.8, y: 1 }, undefined, LOW))
     g.add(P(m, x0, by + 0.8, z0, 0, a, 0))
   }
   return g
@@ -818,18 +824,18 @@ function glockenspiel(p: string[]) {
 /** 一支竖笛：沿 y 立着，笛尾在 y = 0、吹口顶在 y ≈ 32.2，正面朝 +z。[笛身, 接口环] */
 function recorderPiece(body: string, ring: string) {
   const g = new THREE.Group()
-  g.add(cyl(1, 1.2, 4.4, body, {}, 16))
-  g.add(cyl(1.12, 1.12, 0.8, ring, { y: 4 }, 16))
-  g.add(cyl(1.05, 0.95, 17.6, body, { y: 4.4 }, 16))
-  g.add(cyl(1.35, 1.25, 2.2, ring, { y: 21.6 }, 16))
-  g.add(cyl(1.3, 1.3, 6, body, { y: 23.8 }, 16))
-  const beak = cyl(0.75, 1.3, 2.4, body, { y: 29.8 }, 16)
+  g.add(cyl(1, 1.2, 4.4, body, {}, 12))
+  g.add(cyl(1.12, 1.12, 0.8, ring, { y: 4 }, 12))
+  g.add(cyl(1.05, 0.95, 17.6, body, { y: 4.4 }, 12))
+  g.add(cyl(1.35, 1.25, 2.2, ring, { y: 21.6 }, 12))
+  g.add(cyl(1.3, 1.3, 6, body, { y: 23.8 }, 12))
+  const beak = cyl(0.75, 1.3, 2.4, body, { y: 29.8 }, 12)
   beak.scale.z = 0.7
   g.add(beak)
-  g.add(noOutline(rbox(1.1, 0.9, 0.4, DARK, { y: 26.8, z: 1.2 }, 0.1)))
+  g.add(noOutline(nub(1.1, 0.9, 0.4, DARK, { y: 26.8, z: 1.2 })))
   const rAt = (y: number) => 0.95 + (0.1 * (y - 4.4)) / 17.6
-  for (const y of [19.8, 18, 16.2, 13.6, 11.8, 10, 7.4]) g.add(noOutline(ball(0.28, HOLE, { y, z: rAt(y) - 0.05 }, [1, 1, 0.35])))
-  g.add(noOutline(ball(0.28, HOLE, { y: 21, z: -(rAt(21) - 0.05) }, [1, 1, 0.35])))
+  for (const y of [19.8, 18, 16.2, 13.6, 11.8, 10, 7.4]) g.add(noOutline(ball(0.28, HOLE, { y, z: rAt(y) - 0.05 }, [1, 1, 0.35], TINY)))
+  g.add(noOutline(ball(0.28, HOLE, { y: 21, z: -(rAt(21) - 0.05) }, [1, 1, 0.35], TINY)))
   return g
 }
 
@@ -840,7 +846,7 @@ function recorderSet(p: string[]) {
   const sx = -10
   const sz = -4.5
   g.add(puck(4, 1.2, base, { x: sx, z: sz }))
-  g.add(cyl(1.3, 1.6, 1, shade(base, -0.1), { x: sx, y: 1, z: sz }, 16))
+  g.add(cyl(1.3, 1.6, 1, shade(base, -0.1), { x: sx, y: 1, z: sz }, 12))
   g.add(P(recorderPiece(body, ring), sx, 1.95, sz))
   // 乐谱本 + 躺在上面的小号竖笛（音孔朝上）
   const book = G(rbox(20, 0.5, 14, base, {}, 0.2), paintPanel(18.6, 12.6, `mu-rec-score-${PAPER}`, scoreArt(PAPER, '#3a3a3a', 4), { y: 0.56, z: 6.3, rx: -PI / 2 }))
@@ -864,7 +870,7 @@ function bassoonOboe(p: string[]) {
   g.add(cyl(1.8, 2.2, 4.4, stand, { x: bx, y: 1.2 }, 12))
   for (const a of [PI / 2, PI / 2 + (2 * PI) / 3, PI / 2 + (4 * PI) / 3]) {
     const f: V3 = [bx + Math.cos(a) * 15, 1, Math.sin(a) * 15]
-    g.add(rod3([bx, 2.6, 0], f, 0.75, stand, 8), ball(1, RUBBER, { x: f[0], y: f[1], z: f[2] }))
+    g.add(rod3([bx, 2.6, 0], f, 0.75, stand, 6), ball(1, RUBBER, { x: f[0], y: f[1], z: f[2] }, undefined, LOW))
   }
   g.add(tray(12, 4, 8, 0.8, stand, { x: bx, y: 5.4 }))
   const by = 6.2
@@ -876,16 +882,16 @@ function bassoonOboe(p: string[]) {
   const wx = bx - 2.3
   const lx = bx + 2.3
   g.add(rbox(4.6, 14, 4.8, bwood, { x: wx, y: top - 0.6, z: 0.4 }, 1.8))
-  g.add(cyl(1.85, 2, 30, bwood, { x: wx, y: top + 12.8 }, 14))
-  g.add(cyl(2.25, 2.35, 74, bwood, { x: lx, y: top - 0.4 }, 16))
-  g.add(cyl(2.5, 2.35, 26, bwood, { x: lx, y: top + 73.4 }, 16))
-  g.add(cyl(2.9, 2.75, 2.4, IVORY, { x: lx, y: top + 99.2 }, 18))
-  g.add(noOutline(cyl(2.3, 2.3, 0.2, HOLE, { x: lx, y: top + 101.55 }, 16)))
+  g.add(cyl(1.85, 2, 30, bwood, { x: wx, y: top + 12.8 }, 12))
+  g.add(cyl(2.25, 2.35, 74, bwood, { x: lx, y: top - 0.4 }, 14))
+  g.add(cyl(2.5, 2.35, 26, bwood, { x: lx, y: top + 73.4 }, 14))
+  g.add(cyl(2.9, 2.75, 2.4, IVORY, { x: lx, y: top + 99.2 }, 14))
+  g.add(noOutline(cyl(2.3, 2.3, 0.2, HOLE, { x: lx, y: top + 101.55 }, 14)))
   // 接口的金属箍
-  g.add(cyl(2.55, 2.55, 0.8, keys, { x: lx, y: top }, 16))
-  g.add(cyl(2.6, 2.6, 0.8, keys, { x: lx, y: top + 73 }, 16))
+  g.add(cyl(2.55, 2.55, 0.8, keys, { x: lx, y: top }, 14))
+  g.add(cyl(2.6, 2.6, 0.8, keys, { x: lx, y: top + 73 }, 14))
   const wTop = top + 42.8
-  g.add(cyl(2.1, 2.1, 0.8, keys, { x: wx, y: wTop - 0.4 }, 14))
+  g.add(cyl(2.1, 2.1, 0.8, keys, { x: wx, y: wTop - 0.4 }, 12))
   // S 形吹管 + 哨片
   g.add(
     tube(
@@ -899,7 +905,7 @@ function bassoonOboe(p: string[]) {
       ],
       0.32,
       keys,
-      { seg: 20, radial: 6 },
+      { seg: 14, radial: 5 },
     ),
   )
   g.add(taperRod3([wx - 2.7, wTop + 5.4, 12.5], [wx - 3.2, wTop + 4.2, 15], 0.3, 0.55, CANE, 6))
@@ -912,21 +918,21 @@ function bassoonOboe(p: string[]) {
     [lx, top + 30],
     [lx, top + 48],
   ] as V2[])
-    g.add(P(cyl(0.8, 0.8, 0.4, keys, {}, 12), x, y, x === lx ? 2.45 : 2.8, PI / 2))
-  for (const y of [top + 4, top + 7, top + 10]) g.add(noOutline(ball(0.35, HOLE, { x: wx, y, z: 2.75 }, [1, 1, 0.3])))
+    g.add(P(cyl(0.8, 0.8, 0.4, keys, {}, 8), x, y, x === lx ? 2.45 : 2.8, PI / 2))
+  for (const y of [top + 4, top + 7, top + 10]) g.add(noOutline(ball(0.35, HOLE, { x: wx, y, z: 2.75 }, [1, 1, 0.3], TINY)))
   // 后立杆（贴着托槽后壁）+ 顶上叉住长管的叉托
   const pz = -4.2
   g.add(rod3([lx, 5.4, pz], [lx, 96, pz], 0.8, stand, 8))
-  g.add(rod3([lx - 2.7, 96, pz], [lx + 2.7, 96, pz], 0.6, stand, 8))
-  g.add(rod3([lx, 96, pz], [lx, 96, -2.1], 0.7, RUBBER, 8))
-  for (const s of [-1, 1]) g.add(rod3([lx + s * 2.7, 96, pz], [lx + s * 2.7, 96, 0.8], 0.55, RUBBER, 8))
+  g.add(rod3([lx - 2.7, 96, pz], [lx + 2.7, 96, pz], 0.6, stand, 6))
+  g.add(rod3([lx, 96, pz], [lx, 96, -2.1], 0.7, RUBBER, 6))
+  for (const s of [-1, 1]) g.add(rod3([lx + s * 2.7, 96, pz], [lx + s * 2.7, 96, 0.8], 0.55, RUBBER, 6))
   // 双簧管：小三脚架 + 托杯，喇叭口坐在杯里，上下两节黑管、银色按键、顶上软木芯和哨片
   const ox = 16
   const oz = 3
   g.add(cyl(1, 1.3, 3, stand, { x: ox, y: 1.4, z: oz }, 10))
   for (const a of [PI / 2, PI / 2 + (2 * PI) / 3, PI / 2 + (4 * PI) / 3]) {
     const f: V3 = [ox + Math.cos(a) * 8, 0.9, oz + Math.sin(a) * 8]
-    g.add(rod3([ox, 2.4, oz], f, 0.5, stand, 8), ball(0.9, RUBBER, { x: f[0], y: f[1], z: f[2] }))
+    g.add(rod3([ox, 2.4, oz], f, 0.5, stand, 6), ball(0.9, RUBBER, { x: f[0], y: f[1], z: f[2] }, undefined, LOW))
   }
   g.add(cup(3.2, 2, 1.6, 0.3, stand, { x: ox, y: 4.4, z: oz }))
   const bo = 5.6
@@ -942,23 +948,23 @@ function bassoonOboe(p: string[]) {
         ],
         0.25,
         oboeC,
-        24,
+        16,
       ),
       ox,
       bo,
       oz,
     ),
   )
-  g.add(cyl(1.5, 1.5, 0.6, keys, { x: ox, y: bo + 6.4, z: oz }, 14))
-  g.add(cyl(1.15, 1.35, 22, oboeC, { x: ox, y: bo + 6.6, z: oz }, 14))
-  g.add(cyl(1.3, 1.3, 0.6, keys, { x: ox, y: bo + 28.3, z: oz }, 14))
-  g.add(cyl(0.95, 1.15, 24, oboeC, { x: ox, y: bo + 28.4, z: oz }, 14))
-  g.add(cyl(1.05, 1.05, 0.6, keys, { x: ox, y: bo + 52, z: oz }, 12))
+  g.add(cyl(1.5, 1.5, 0.6, keys, { x: ox, y: bo + 6.4, z: oz }, 12))
+  g.add(cyl(1.15, 1.35, 22, oboeC, { x: ox, y: bo + 6.6, z: oz }, 12))
+  g.add(cyl(1.3, 1.3, 0.6, keys, { x: ox, y: bo + 28.3, z: oz }, 12))
+  g.add(cyl(0.95, 1.15, 24, oboeC, { x: ox, y: bo + 28.4, z: oz }, 12))
+  g.add(cyl(1.05, 1.05, 0.6, keys, { x: ox, y: bo + 52, z: oz }, 10))
   g.add(cyl(0.35, 0.45, 2.4, '#c9905e', { x: ox, y: bo + 52.4, z: oz }, 8))
-  g.add(P(rbox(0.8, 2.6, 0.25, CANE, {}, 0.1), ox, bo + 55.9, oz))
+  g.add(nub(0.8, 2.6, 0.25, CANE, { x: ox, y: bo + 55.9 - 1.3, z: oz }))
   const orAt = (y: number) => (y < bo + 28.4 ? 1.35 - (0.2 * (y - bo - 6.6)) / 22 : 1.15 - (0.2 * (y - bo - 28.4)) / 24)
   g.add(rod3([ox + 0.5, bo + 9, oz + 1.3], [ox + 0.5, bo + 50, oz + 1], 0.15, keys, 6))
-  for (const y of [bo + 12, bo + 17, bo + 22, bo + 33, bo + 39, bo + 45]) g.add(P(cyl(0.45, 0.45, 0.3, keys, {}, 10), ox - 0.3, y, oz + orAt(y) + 0.05, PI / 2))
+  for (const y of [bo + 12, bo + 17, bo + 22, bo + 33, bo + 39, bo + 45]) g.add(P(cyl(0.45, 0.45, 0.3, keys, {}, 8), ox - 0.3, y, oz + orAt(y) + 0.05, PI / 2))
   return fitGroup(g)
 }
 
@@ -1006,15 +1012,15 @@ function pumpOrgan(p: string[]) {
   g.add(rbox(98, 6, 3.2, dk, { y: 72, z: 8.8 }, 0.5))
   for (let i = 0; i < 11; i++) {
     const x = -40 + i * 8
-    g.add(cylZ(0.8, 2, shade(wood, -0.25), x, 75.4, 11.2, 12))
-    g.add(cylZ(1, 0.4, IVORY, x, 75.4, 12.3, 14))
+    g.add(cylZ(0.8, 2, shade(wood, -0.25), x, 75.4, 11.2, 8))
+    g.add(cylZ(1, 0.4, IVORY, x, 75.4, 12.3, 10))
   }
   // 上半截：盖板、底横档、镂空弧窗（后面衬布）、顶横档、谱架和乐谱、两侧小灯台
   g.add(rbox(iw, 2, 8, dk, { y: 78, z: 6.4 }, 0.4))
   g.add(rbox(iw + 0.4, 4, 3, wood, { y: 80, z: 4.3 }, 0.5))
   const holes: Hole[] = []
   for (let i = 0; i < 7; i++) holes.push({ kind: 'arch', x: -42 + i * 14, y: 4, w: 9, h: 21 })
-  g.add(holePanel(iw + 0.4, 30, 1.6, wood, holes, { y: 84, z: 3.6 }, 0.5))
+  g.add(holePanel(iw + 0.4, 30, 1.6, wood, holes, { y: 84, z: 3.6 }, 0.5, { seg: 8 }))
   g.add(rbox(iw, 28, 0.6, cloth, { y: 85, z: 1.8 }, 0.2))
   g.add(rbox(iw + 0.4, 3, 3, wood, { y: 114, z: 3 }, 0.5))
   g.add(rbox(64, 1.6, 4.4, wood, { y: 86, z: 6.4 }, 0.5))
@@ -1022,7 +1028,7 @@ function pumpOrgan(p: string[]) {
   g.add(paintPanel(27, 19, `mu-organ-score-${PAPER}`, scoreArt(PAPER, '#3a3a3a', 7), { y: 88.6, z: 5 }))
   for (const s of [-1, 1]) {
     g.add(rbox(9, 1.2, 9, wood, { x: s * 44, y: 95, z: 8.2 }, 0.4))
-    g.add(rbox(1.6, 4, 4, dk, { x: s * 44, y: 91, z: 6.4 }, 0.3))
+    g.add(nub(1.6, 4, 4, dk, { x: s * 44, y: 91, z: 6.4 }))
   }
   // 平顶板
   g.add(rbox(PO.w, 3, 31, wood, { y: 117, z: -9.5 }, 0.6))
@@ -1037,15 +1043,15 @@ function stompbox(w: number, d: number, color: string, knobs: number, x: number,
   const g = new THREE.Group()
   const h = 3.4
   g.add(rbox(w, h, d, color, { x, y, z }, 0.6))
-  g.add(cyl(0.7, 0.8, 1, STEEL, { x, y: y + h - 0.1, z: z + d * 0.25 }, 12))
-  g.add(cyl(0.95, 0.95, 0.5, STEEL, { x, y: y + h + 0.8, z: z + d * 0.25 }, 14))
+  g.add(cyl(0.7, 0.8, 1, STEEL, { x, y: y + h - 0.1, z: z + d * 0.25 }, 8))
+  g.add(cyl(0.95, 0.95, 0.5, STEEL, { x, y: y + h + 0.8, z: z + d * 0.25 }, 10))
   for (let i = 0; i < knobs; i++) {
     const kx = x + (i - (knobs - 1) / 2) * (w / (knobs + 0.6))
-    g.add(cyl(0.75, 0.8, 1.1, KNOB, { x: kx, y: y + h - 0.1, z: z - d * 0.25 }, 12))
-    g.add(noOutline(rbox(0.2, 0.15, 0.6, '#f2f2f0', { x: kx, y: y + h + 0.95, z: z - d * 0.25 + 0.3 }, 0.05)))
+    g.add(cyl(0.75, 0.8, 1.1, KNOB, { x: kx, y: y + h - 0.1, z: z - d * 0.25 }, 8))
+    g.add(noOutline(nub(0.2, 0.15, 0.6, '#f2f2f0', { x: kx, y: y + h + 0.95, z: z - d * 0.25 + 0.3 })))
   }
-  g.add(lit(ball(0.32, '#ff4a3a', { x: x + w * 0.3, y: y + h, z }), '#ff4a3a', 0.8))
-  for (const s of [-1, 1]) g.add(cylX(0.55, 1, STEEL, x + s * (w / 2 + 0.3), y + h * 0.55, z - d * 0.15, 10))
+  g.add(lit(ball(0.32, '#ff4a3a', { x: x + w * 0.3, y: y + h, z }, undefined, TINY), '#ff4a3a', 0.8))
+  for (const s of [-1, 1]) g.add(cylX(0.55, 1, STEEL, x + s * (w / 2 + 0.3), y + h * 0.55, z - d * 0.15, 8))
   return g
 }
 
@@ -1082,7 +1088,7 @@ function pedalboard(p: string[]) {
   top.add(lit(rbox(4, 0.3, 2.2, '#7fe0a0', { x: -18, y: y + 3.35, z: 21.5 }, 0.1), '#7fe0a0', 0.7))
   // 电源盒
   top.add(rbox(10, 2.6, 6, '#3a3b40', { x: 22.5, y, z: 24 }, 0.5))
-  top.add(lit(ball(0.3, '#5ad0ff', { x: 19, y: y + 2.6, z: 22 }), '#5ad0ff', 0.8))
+  top.add(lit(ball(0.3, '#5ad0ff', { x: 19, y: y + 2.6, z: 22 }, undefined, TINY), '#5ad0ff', 0.8))
   // 跳线：从一块的右插孔弯上来接到相邻那块的左插孔
   const jack = (i: number, s: number): V3 => {
     const [w, d, , , x, z] = peds[i]
@@ -1091,11 +1097,11 @@ function pedalboard(p: string[]) {
   const patch = (a: V3, sa: number, b: V3, sb: number) => {
     const pa: V3 = [a[0] + sa * 0.9, a[1], a[2]]
     const pb: V3 = [b[0] + sb * 0.9, b[1], b[2]]
-    top.add(cylX(0.6, 1.4, DARK, pa[0], pa[1], pa[2], 10), cylX(0.6, 1.4, DARK, pb[0], pb[1], pb[2], 10))
+    top.add(cylX(0.6, 1.4, DARK, pa[0], pa[1], pa[2], 8), cylX(0.6, 1.4, DARK, pb[0], pb[1], pb[2], 8))
     const s0: V3 = [a[0] + sa * 1.6, a[1], a[2]]
     const s1: V3 = [b[0] + sb * 1.6, b[1], b[2]]
     const mid: V3 = [(s0[0] + s1[0]) / 2, Math.max(s0[1], s1[1]) + 2.4, (s0[2] + s1[2]) / 2]
-    top.add(tube([s0, [s0[0] + sa * 1.2, s0[1] + 0.9, s0[2]], mid, [s1[0] + sb * 1.2, s1[1] + 0.9, s1[2]], s1], 0.3, cable, { seg: 18, radial: 6 }))
+    top.add(tube([s0, [s0[0] + sa * 1.2, s0[1] + 0.9, s0[2]], mid, [s1[0] + sb * 1.2, s1[1] + 0.9, s1[2]], s1], 0.3, cable, { seg: 12, radial: 5 }))
   }
   patch(jack(2, -1), -1, jack(1, 1), 1)
   patch(jack(1, -1), -1, jack(0, 1), 1)
@@ -1128,8 +1134,8 @@ function acousticGuitar(top: string, back: string) {
   g.add(P(contour(ol, 10, back, true, 1), 0, 0, 5))
   g.add(P(contour(ol.map(([x, y]): V2 => [x * 0.965, y * 0.97 + 0.75]), 0.6, top, true, 0.2), 0, 0, 10))
   // 音孔 + 音孔花、护板
-  g.add(noOutline(cylZ(4.2, 0.2, HOLE, 0, 34, 10.35, 32)))
-  g.add(P(torus(4.9, 0.32, shade(top, -0.35)), 0, 34, 10.35))
+  g.add(noOutline(cylZ(4.2, 0.2, HOLE, 0, 34, 10.35, 20)))
+  g.add(torus(4.9, 0.32, shade(top, -0.35), { y: 34, z: 10.35 }, PI * 2, [5, 20]))
   g.add(
     noOutline(
       P(
@@ -1154,13 +1160,13 @@ function acousticGuitar(top: string, back: string) {
     ),
   )
   // 琴码 + 弦枕
-  g.add(rbox(12, 1.8, 0.9, EBONY, { y: 12.8, z: 10.6 }, 0.4))
-  g.add(rbox(7, 0.35, 0.4, IVORY, { y: 14, z: 11.1 }, 0.1))
+  g.add(nub(12, 1.8, 0.9, EBONY, { y: 12.8, z: 10.6 }))
+  g.add(nub(7, 0.35, 0.4, IVORY, { y: 14, z: 11.1 }))
   // 琴颈、指板、琴枕、琴头
   g.add(rbox(5, 32, 2.6, NECK, { y: 49.5, z: 8.5 }, 0.7))
   g.add(rbox(5, 30.6, 0.6, EBONY, { y: 50.6, z: 10.1 }, 0.2))
   g.add(paintPanel(4.8, 30, `mu-gw-fret-${EBONY}`, fretsArt(EBONY, 14), { y: 51, z: 10.5 }))
-  g.add(rbox(5, 0.6, 0.7, IVORY, { y: 81.2, z: 10.05 }, 0.2))
+  g.add(nub(5, 0.6, 0.7, IVORY, { y: 81.2, z: 10.05 }))
   g.add(
     P(
       contour(
@@ -1188,8 +1194,8 @@ function acousticGuitar(top: string, back: string) {
   for (let i = 0; i < 3; i++) {
     const y = 85.5 + i * 4.8
     for (const s of [-1, 1]) {
-      g.add(cylX(0.35, 2.6, STEEL, s * 5.2, y, 8.9, 8))
-      g.add(rbox(1.6, 1.4, 0.7, STEEL, { x: s * 7, y: y - 0.7, z: 8.9 }, 0.3))
+      g.add(cylX(0.35, 2.6, STEEL, s * 5.2, y, 8.9, 6))
+      g.add(nub(1.6, 1.4, 0.7, STEEL, { x: s * 7, y: y - 0.7, z: 8.9 }))
       g.add(cylZ(0.25, 0.8, STEEL, s * 2.8, y, 10, 6))
     }
   }
@@ -1227,18 +1233,18 @@ function electricGuitar(body: string, guard: string) {
   g.add(P(contour(pts, 4.4, body, true, 0.8), 0, 0, 2.7))
   g.add(P(contour(pts.map(([x, y]): V2 => [x * 0.72 - 1, y * 0.8 + 4]), 0.3, guard, true, 0.1), 0, 0, 5))
   // 三只拾音器、琴桥、三颗旋钮
-  for (const y of [12, 19, 26]) g.add(rbox(7.4, 1.8, 0.5, '#f2efe6', { y, z: 5.2 }, 0.25))
-  g.add(rbox(7.6, 3.4, 0.6, STEEL, { y: 6.4, z: 5.2 }, 0.3))
+  for (const y of [12, 19, 26]) g.add(nub(7.4, 1.8, 0.5, '#f2efe6', { y, z: 5.2 }))
+  g.add(nub(7.6, 3.4, 0.6, STEEL, { y: 6.4, z: 5.2 }))
   for (const [x, y] of [
     [7.5, 8.5],
     [9.2, 12],
     [10.4, 15.6],
   ] as V2[])
-    g.add(cylZ(0.9, 1.2, DARK, x, y, 5.4, 12))
+    g.add(cylZ(0.9, 1.2, DARK, x, y, 5.4, 10))
   // 枫木琴颈 + 指板品丝、琴枕、单排弦钮的琴头
   g.add(rbox(4.6, 46, 2.2, MAPLE, { y: 34, z: 4.1 }, 0.6))
   g.add(paintPanel(4.4, 44, `mu-gw-efret-${MAPLE}`, fretsArt(shade(MAPLE, -0.06), 21), { y: 35.5, z: 5.3 }))
-  g.add(rbox(4.6, 0.5, 0.6, IVORY, { y: 79.8, z: 5.1 }, 0.2))
+  g.add(nub(4.6, 0.5, 0.6, IVORY, { y: 79.8, z: 5.1 }))
   g.add(
     P(
       contour(
@@ -1267,7 +1273,7 @@ function electricGuitar(body: string, guard: string) {
     const xe = 3.6 + (0.8 * (ly - 4)) / 11.5
     g.add(cylZ(0.3, 0.9, STEEL, xe - 1.6, y, 5.3, 6))
     g.add(cylX(0.3, 1.6, STEEL, xe + 0.5, y, 4, 6))
-    g.add(rbox(0.6, 1.2, 0.9, STEEL, { x: xe + 1.5, y: y - 0.6, z: 4 }, 0.2))
+    g.add(nub(0.6, 1.2, 0.9, STEEL, { x: xe + 1.5, y: y - 0.6, z: 4 }))
   }
   for (let i = 0; i < 6; i++) g.add(thread([-1.8 + 0.72 * i, 7.6, 5.55], [-1.7 + 0.68 * i, 80.2, 5.4], 0.06))
   return { g, hook: 79.6 }
@@ -1290,12 +1296,12 @@ function ukulele(body: string, top: string) {
   ])
   g.add(P(contour(ol, 6, body, true, 0.8), 0, 0, 3.5))
   g.add(P(contour(ol.map(([x, y]): V2 => [x * 0.96, y * 0.96 + 0.5]), 0.4, top, true, 0.15), 0, 0, 6.5))
-  g.add(noOutline(cylZ(2.4, 0.2, HOLE, 0, 18, 6.75, 24)))
-  g.add(P(torus(2.8, 0.22, shade(top, -0.3)), 0, 18, 6.75))
-  g.add(rbox(5.6, 1.1, 0.7, EBONY, { y: 6, z: 6.9 }, 0.3))
+  g.add(noOutline(cylZ(2.4, 0.2, HOLE, 0, 18, 6.75, 16)))
+  g.add(torus(2.8, 0.22, shade(top, -0.3), { y: 18, z: 6.75 }, PI * 2, [5, 16]))
+  g.add(nub(5.6, 1.1, 0.7, EBONY, { y: 6, z: 6.9 }))
   g.add(rbox(3.6, 16, 2, NECK, { y: 25, z: 5.6 }, 0.6))
   g.add(paintPanel(3.4, 14.4, `mu-gw-ufret-${EBONY}`, fretsArt(EBONY, 12), { y: 26.4, z: 6.7 }))
-  g.add(rbox(3.6, 0.45, 0.6, IVORY, { y: 40.6, z: 6.5 }, 0.15))
+  g.add(nub(3.6, 0.45, 0.6, IVORY, { y: 40.6, z: 6.5 }))
   g.add(
     P(
       contour(
@@ -1321,8 +1327,8 @@ function ukulele(body: string, top: string) {
   )
   for (const y of [43.4, 46.4])
     for (const s of [-1, 1]) {
-      g.add(cylX(0.3, 1.8, STEEL, s * 3.3, y, 5.4, 8))
-      g.add(rbox(1.2, 1.1, 0.6, IVORY, { x: s * 4.6, y: y - 0.55, z: 5.4 }, 0.25))
+      g.add(cylX(0.3, 1.8, STEEL, s * 3.3, y, 5.4, 6))
+      g.add(nub(1.2, 1.1, 0.6, IVORY, { x: s * 4.6, y: y - 0.55, z: 5.4 }))
     }
   for (let i = 0; i < 4; i++) g.add(thread([-1.2 + i * 0.8, 6.9, 7.3], [-0.9 + i * 0.6, 41, 6.8], 0.06))
   return { g, hook: 40.8 }
@@ -1340,8 +1346,8 @@ function guitarWall(p: string[]) {
     const px = nh + 0.45
     g.add(rbox(px * 2 + 3, 5, 1, DARK, { x, y: -2.5, z: 2.4 }, 0.4))
     for (const s of [-1, 1]) {
-      g.add(rod3([x + s * px, 0, 2], [x + s * px, 0.5, zf], 0.55, DARK, 8))
-      g.add(ball(0.75, RUBBER, { x: x + s * px, y: 0.5, z: zf }))
+      g.add(rod3([x + s * px, 0, 2], [x + s * px, 0.5, zf], 0.55, DARK, 6))
+      g.add(ball(0.75, RUBBER, { x: x + s * px, y: 0.5, z: zf }, undefined, LOW))
     }
   }
   hang(acousticGuitar(top, shade(top, -0.45)), -37, 2.5, 11.2)
@@ -1402,21 +1408,23 @@ function practiceCorner(p: string[]) {
   const H = 177
   // 后墙一组（两扇，中间两只合页）
   for (const x of [-22.75, 32.75]) g.add(P(foamPanel(54.5, H, foam, frame), x, 0, -29))
-  for (const y of [40, 130]) g.add(rbox(2.4, 6, 1.6, STEEL, { x: 5, y, z: -32.2 }, 0.3))
+  // 合页贴在两扇框的背面（框背面 z = -31.3，合页咬进 0.1）
+  for (const y of [40, 130]) g.add(nub(2.4, 6, 1.6, STEEL, { x: 5, y, z: -32 }))
   // 左墙一组（转 90°，吸音棉朝 +x）
   for (const z of [-7.25, 23.75]) g.add(P(foamPanel(30.5, H, foam, frame), -49, 0, z, 0, PI / 2, 0))
-  for (const y of [40, 130]) g.add(rbox(1.6, 6, 2.4, STEEL, { x: -52.2, y, z: 8.25 }, 0.3))
+  for (const y of [40, 130]) g.add(nub(1.6, 6, 2.4, STEEL, { x: -52, y, z: 8.25 }))
   // 谱架：三脚 + 立杆 + 后仰的谱板（底沿托着一张乐谱）
   const sx = 10
   const sz = 14
   for (let i = 0; i < 3; i++) {
     const a = PI / 2 + (i * 2 * PI) / 3
     const f: V3 = [sx + Math.cos(a) * 24, 1, sz + Math.sin(a) * 24]
-    g.add(rod3([sx, 22, sz], f, 0.6, stand, 8), ball(1, RUBBER, { x: f[0], y: f[1], z: f[2] }))
+    g.add(rod3([sx, 22, sz], f, 0.6, stand, 6), ball(1, RUBBER, { x: f[0], y: f[1], z: f[2] }, undefined, LOW))
   }
   g.add(cyl(1.4, 1.4, 4, stand, { x: sx, y: 19, z: sz }, 12))
-  g.add(cyl(0.9, 0.9, 80, stand, { x: sx, y: 18, z: sz }, 12))
-  g.add(cyl(0.65, 0.65, 14.5, stand, { x: sx, y: 97, z: sz }, 10))
+  g.add(cyl(0.9, 0.9, 80, stand, { x: sx, y: 18, z: sz }, 10))
+  // 内杆顶端插进谱板背后的夹座（再长就从后仰的谱板正面戳出来）
+  g.add(cyl(0.65, 0.65, 12.5, stand, { x: sx, y: 97, z: sz }, 8))
   const desk = G(rbox(48, 32, 0.6, stand, { z: 0 }, 0.3), rbox(48, 1.4, 4, stand, { y: -0.4, z: 2 }, 0.4), rbox(3, 5, 1.6, stand, { y: 7, z: -1 }, 0.4), paintPanel(40, 27, `mu-pc-score-${PAPER}`, scoreArt(PAPER, '#3a3a3a', 11), { y: 2.5, z: 0.4 }))
   g.add(P(desk, sx, 102, sz + 3.71, -0.35))
   return g

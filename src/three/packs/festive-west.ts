@@ -5,6 +5,7 @@
 // 字和数字一律不写：倒数日历用色块和点数示意，生日蜡烛的「8」用两个圆环叠成。
 
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { measured } from '../measured'
 import { ball, cached, cup, cyl, face, puck, rbox, shade, torus } from '../toon'
 import { C, holePanel, rng, type AssetDef, type Fx } from '../kit'
@@ -63,14 +64,22 @@ function plateZ(w: number, h: number, color: string) {
   return m
 }
 
-/** 低面数小圆粒（浆果、糖粒、针叶束）：s 是三个方向的缩放 */
-function pip(r: number, color: string, x: number, y: number, z: number, s: V3 = [1, 1, 1]) {
+/** 低面数小圆粒（浆果、糖粒、针叶束）：s 是三个方向的缩放；lo = true 用 6 × 4 段（直径 < 2cm 的成堆小粒） */
+function pip(r: number, color: string, x: number, y: number, z: number, s: V3 = [1, 1, 1], lo = false) {
   const m = mesh(
-    cached('fw-pip', () => new THREE.SphereGeometry(1, 8, 6)),
+    lo ? cached('fw-pip6', () => new THREE.SphereGeometry(1, 6, 4)) : cached('fw-pip', () => new THREE.SphereGeometry(1, 8, 6)),
     color,
   )
   m.position.set(x, y, z)
   m.scale.set(r * s[0], r * s[1], r * s[2])
+  return m
+}
+
+/** 直角小方块（不到 2cm 的条、框、辐条用不着圆角）：at.y 是底面，和 rbox 一样 */
+function box(w: number, h: number, d: number, color: string, at: { x?: number; y?: number; z?: number; rx?: number; ry?: number; rz?: number } = {}) {
+  const m = mesh(cached(`fw-box${w},${h},${d}`, () => new THREE.BoxGeometry(w, h, d)), color)
+  m.position.set(at.x ?? 0, (at.y ?? 0) + h / 2, at.z ?? 0)
+  m.rotation.set(at.rx ?? 0, at.ry ?? 0, at.rz ?? 0)
   return m
 }
 
@@ -93,7 +102,7 @@ function slabXY(shape: THREE.Shape | V2[], t: number, color: string, bevel = 0, 
     geo.translate(0, 0, -t / 2 + b)
     return geo
   }
-  return mesh(key ? cached(`fw-${key}|${t}|${bevel}`, make) : make(), color)
+  return mesh(key ? cached(`fw-${key}|${t}|${bevel}|${seg}`, make) : make(), color)
 }
 
 /** 心形轮廓：宽 s、高约 0.9s，包围盒中心在原点，尖朝 -y */
@@ -135,9 +144,10 @@ function maplePts(r: number): V2[] {
  * 最高 / 最低点在 ±GOURD_HALF × r × hs（凹窝外一圈），叠南瓜塔按它算。接缝转到背面。
  */
 const GOURD_HALF = 0.833
-function gourd(r: number, hs: number, color: string, ribs = 8, deep = 0.1) {
-  const geo = cached(`fw-gourd${ribs},${deep}`, () => {
-    const g = new THREE.SphereGeometry(1, ribs * 3, 12)
+function gourd(r: number, hs: number, color: string, ribs = 8, deep = 0.1, lo = false) {
+  const geo = cached(`fw-gourd${ribs},${deep},${lo}`, () => {
+    // lo：桌面上的小南瓜，每道棱只留棱顶和棱沟两列顶点（纬向段数不变，GOURD_HALF 照旧）
+    const g = lo ? new THREE.SphereGeometry(1, ribs * 2, 12) : new THREE.SphereGeometry(1, ribs * 3, 12)
     const pos = g.attributes.position
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i)
@@ -163,7 +173,7 @@ function pumpkinStem(x: number, y: number, z: number, len: number, r: number, co
 /** 小南瓜（桌面点缀）：带梗，底面在 y */
 function miniPumpkin(r: number, color: string, x: number, y: number, z: number, hs = 0.75) {
   const half = GOURD_HALF * r * hs
-  return G(P(gourd(r, hs, color), x, y + half, z, 0, -PI / 2, 0), pumpkinStem(x, y + half * 2 - 0.2, z, r * 0.45, r * 0.16, STEM))
+  return G(P(gourd(r, hs, color, 8, 0.1, true), x, y + half, z, 0, -PI / 2, 0), pumpkinStem(x, y + half * 2 - 0.2, z, r * 0.45, r * 0.16, STEM))
 }
 
 /** 蜡烛：蜡柱 + 烛芯 + 一滴发光的火苗，底面在 (x, y, z)。火苗粒子的位置是 [x, y + h + 0.9k, z] */
@@ -217,11 +227,11 @@ function carveOn(target: THREE.Mesh, pts: V2[], x: number, y: number, color: str
 function bow(color: string, x: number, y: number, z: number, s = 1) {
   const g = new THREE.Group()
   for (const k of [-1, 1]) {
-    g.add(P(ball(2.2 * s, color, {}, [1.25, 0.78, 0.5], [10, 6]), k * 2.4 * s, 0.4 * s, 0, 0, 0, k * 0.3))
+    g.add(P(ball(2.2 * s, color, {}, [1.25, 0.78, 0.5], [8, 5]), k * 2.4 * s, 0.4 * s, 0, 0, 0, k * 0.3))
     g.add(noOutline(P(ball(0.9 * s, shade(color, -0.2), {}, [1.1, 0.5, 0.3], [8, 4]), k * 2.6 * s, 0.4 * s, 0.95 * s, 0, 0, k * 0.3)))
-    g.add(P(rbox(1.6 * s, 5 * s, 0.5 * s, color, {}, 0.2 * s), k * 1.3 * s, -3 * s, 0.1 * s, 0, 0, k * 0.32))
+    g.add(P(box(1.6 * s, 5 * s, 0.5 * s, color), k * 1.3 * s, -3 * s, 0.1 * s, 0, 0, k * 0.32))
   }
-  g.add(ball(1.1 * s, shade(color, -0.06), {}, [1.1, 1, 0.8]))
+  g.add(ball(1.1 * s, shade(color, -0.06), {}, [1.1, 1, 0.8], [8, 6]))
   return P(g, x, y, z)
 }
 
@@ -352,7 +362,7 @@ function skeletonWreath(p: string[]) {
       const rr = RR + Math.sin(a * 3 + ph) * 1.6
       pts.push([Math.cos(a) * rr, Math.sin(a) * rr, Math.cos(a * 2 + ph) * 1.4])
     }
-    g.add(tube(pts, 0.35, shade(twig, k % 2 ? 0.1 : -0.04), { closed: true, seg: 54, radial: 4 }))
+    g.add(tube(pts, 0.35, shade(twig, k % 2 ? 0.1 : -0.04), { closed: true, seg: 36, radial: 4 }))
   }
   const rand = rng(5)
   for (let i = 0; i < 20; i++) {
@@ -374,10 +384,10 @@ function skeletonWreath(p: string[]) {
   k.add(ball(4.2, BONE, {}, [1.05, 0.95, 0.85]))
   k.add(rbox(5.6, 2.8, 5, BONE, { y: -4 }, 1.2))
   for (const s of [-1, 1]) {
-    k.add(noOutline(ball(1.25, INK, { x: s * 1.6, y: 0.2, z: 3.22 }, [0.9, 1.1, 0.35])))
-    k.add(noOutline(ball(0.32, '#ffffff', { x: s * 1.6 + 0.4, y: 0.7, z: 3.62 })))
+    k.add(noOutline(ball(1.25, INK, { x: s * 1.6, y: 0.2, z: 3.22 }, [0.9, 1.1, 0.35], [8, 6])))
+    k.add(noOutline(ball(0.32, '#ffffff', { x: s * 1.6 + 0.4, y: 0.7, z: 3.62 }, undefined, [6, 4])))
   }
-  k.add(noOutline(ball(0.55, INK, { y: -1.4, z: 3.28 }, [1, 0.75, 0.4])))
+  k.add(noOutline(ball(0.55, INK, { y: -1.4, z: 3.28 }, [1, 0.75, 0.4], [8, 6])))
   for (const x of [-1, 0, 1]) k.add(decalZ(0.25, 1.3, INK, x, -2.6, 2.56))
   g.add(P(k, Math.cos(-2.2) * RR, Math.sin(-2.2) * RR + 1, 3, 0, 0, 0.15))
   // 顶上的蝴蝶结
@@ -396,18 +406,18 @@ const TG_CANDLES: [number, number, number][] = [
 function roastTurkey(y: number) {
   const g = new THREE.Group()
   const by = y + 5.6
-  g.add(ball(8, ROAST, { y: by }, [1.15, 0.72, 0.95]))
+  g.add(ball(8, ROAST, { y: by }, [1.15, 0.72, 0.95], [16, 12]))
   // 胸脯两块鼓起
-  for (const s of [-1, 1]) g.add(ball(4.6, ROAST_L, { x: -0.8, y: by + 2.6, z: s * 2.5 }, [1.45, 0.72, 0.9]))
+  for (const s of [-1, 1]) g.add(ball(4.6, ROAST_L, { x: -0.8, y: by + 2.6, z: s * 2.5 }, [1.45, 0.72, 0.9], [12, 8]))
   // 翅膀贴在两侧
-  for (const s of [-1, 1]) g.add(ball(3.4, ROAST_D, { x: -2.8, y: by - 0.2, z: s * 7 }, [1.3, 0.62, 0.5]))
+  for (const s of [-1, 1]) g.add(ball(3.4, ROAST_D, { x: -2.8, y: by - 0.2, z: s * 7 }, [1.3, 0.62, 0.5], [12, 8]))
   // 大腿 + 鸡腿 + 骨头 + 纸花袖口
   for (const s of [-1, 1]) {
-    g.add(ball(3.6, ROAST, { x: 4.6, y: by + 0.6, z: s * 5.2 }, [1.3, 0.9, 0.9]))
+    g.add(ball(3.6, ROAST, { x: 4.6, y: by + 0.6, z: s * 5.2 }, [1.3, 0.9, 0.9], [12, 8]))
     const a: V3 = [6.4, by + 1, s * 4.8]
     const b: V3 = [11.6, by + 4, s * 3.4]
     const c: V3 = [13.4, by + 5, s * 3]
-    g.add(ball(2.3, ROAST_D, { x: a[0], y: a[1], z: a[2] }))
+    g.add(ball(2.3, ROAST_D, { x: a[0], y: a[1], z: a[2] }, undefined, [10, 6]))
     g.add(taperRod3(a, b, 2.3, 1.1, ROAST_D, 12))
     g.add(rod3(b, c, 0.5, BONE, 8))
     const dir = new THREE.Vector3(c[0] - b[0], c[1] - b[1], c[2] - b[2])
@@ -415,7 +425,7 @@ function roastTurkey(y: number) {
     const cuff = aim(cyl(1.45, 0.9, 1.7, ICING, {}, 10), dir)
     cuff.position.copy(cuffAt)
     g.add(cuff)
-    g.add(ball(0.75, BONE, { x: c[0], y: c[1], z: c[2] }))
+    g.add(ball(0.75, BONE, { x: c[0], y: c[1], z: c[2] }, undefined, [8, 6]))
   }
   return g
 }
@@ -426,7 +436,7 @@ function thanksgivingTable(p: string[]) {
   // 托盘：底板、两条长边、两头带把手孔的端板
   g.add(rbox(w - 2.4, t, d, wood, {}, 0.4))
   for (const s of [-1, 1]) g.add(rbox(w - 2.4, 3.5, t, wood, { z: s * (d / 2 - t / 2) }, 0.4))
-  for (const s of [-1, 1]) g.add(holePanel(d, 6.5, t, shade(wood, -0.05), [{ kind: 'rect', x: 0, y: 3.6, w: 9, h: 1.8, r: 0.9 }], { x: s * (w / 2 - t / 2), ry: PI / 2 }, 1.2))
+  for (const s of [-1, 1]) g.add(holePanel(d, 6.5, t, shade(wood, -0.05), [{ kind: 'rect', x: 0, y: 3.6, w: 9, h: 1.8, r: 0.9 }], { x: s * (w / 2 - t / 2), ry: PI / 2 }, 1.2, { seg: 4 }))
   // 椭圆瓷盘 + 烤火鸡 + 盘边的香芹和蔓越莓
   const plat = lathe([[0, 0], [9, 0], [11.4, 0.9], [12, 1.5], [11.5, 1.6], [9.4, 0.7], [0, 0.7]], platter, 32)
   plat.position.y = t
@@ -439,7 +449,7 @@ function thanksgivingTable(p: string[]) {
     const x = Math.cos(a) * 10.2
     const z = Math.sin(a) * 7.1
     if (x > 9) continue
-    g.add(pip(i % 3 ? 0.9 : 0.6, i % 3 ? PARSLEY : CRANBERRY, x, t + 1.5 + rand() * 0.3, z, [1, 0.8, 1]))
+    g.add(pip(i % 3 ? 0.9 : 0.6, i % 3 ? PARSLEY : CRANBERRY, x, t + 1.5 + rand() * 0.3, z, [1, 0.8, 1], true))
   }
   // 两支蜡烛（铜烛托）
   for (const [x, z, h] of TG_CANDLES) {
@@ -463,10 +473,10 @@ function thanksgivingTable(p: string[]) {
 function rose(color: string, x: number, y: number, z: number) {
   const g = new THREE.Group()
   g.add(ball(1.7, shade(color, -0.08), { y: 1.5 }, [1, 0.9, 1], [8, 6]))
-  g.add(noOutline(band(0.9, 0.3, shade(color, -0.2), { y: 2.85, rx: PI / 2 }, PI * 1.6)))
+  g.add(noOutline(band(0.9, 0.3, shade(color, -0.2), { y: 2.85, rx: PI / 2 }, PI * 1.6, 12)))
   for (let i = 0; i < 5; i++) {
     const a = (i / 5) * PI * 2
-    const m = ball(1.5, color, {}, [1, 0.82, 0.42], [8, 6])
+    const m = ball(1.5, color, {}, [1, 0.82, 0.42], [6, 5])
     m.position.set(Math.cos(a) * 1.25, 1.2, Math.sin(a) * 1.25)
     m.rotation.set(0, -a + PI / 2, 0)
     m.rotateX(0.5)
@@ -502,36 +512,36 @@ function valentineSet(p: string[]) {
   ;([[0, 0], [4.7, 0.4], [-4.5, 1.3], [1.6, 4.6], [-2.2, -4.4], [2.9, -3.7], [-3.4, 4]] as V2[]).forEach(([x, z], i) => bq.add(rose(roseC, x, wrapY + 13.2 + (i ? 0 : 1), z)))
   for (let i = 0; i < 7; i++) {
     const a = (i / 7) * PI * 2 + 0.2
-    bq.add(P(ball(2.4, PINE_L, {}, [0.45, 0.14, 1], [8, 6]), Math.cos(a) * 7.2, wrapY + 14, Math.sin(a) * 7.2, 0, -a + PI / 2, 0).rotateX(-0.5))
+    bq.add(P(ball(2.4, PINE_L, {}, [0.45, 0.14, 1], [6, 4]), Math.cos(a) * 7.2, wrapY + 14, Math.sin(a) * 7.2, 0, -a + PI / 2, 0).rotateX(-0.5))
   }
   for (let i = 0; i < 9; i++) {
     const a = (i / 9) * PI * 2 + 0.6
-    bq.add(pip(0.5, '#ffffff', Math.cos(a) * 6.6, wrapY + 14.6 + (i % 2) * 0.4, Math.sin(a) * 6.6))
+    bq.add(pip(0.5, '#ffffff', Math.cos(a) * 6.6, wrapY + 14.6 + (i % 2) * 0.4, Math.sin(a) * 6.6, [1, 1, 1], true))
   }
   g.add(P(bq, -9, 0, -3))
   // 心形巧克力盒：盒盖垫在下面、斜着露出一角；盒身是一圈心形围边 + 金色衬纸底 + 七颗巧克力
   const lid = P(slabXY(heartPts(15.2), 1.2, shade(boxC, -0.06), 0.3, 'heart-lid'), 8.6, 0.6, 4.2, -PI / 2, 0, 0.4)
   g.add(lid)
-  const box = new THREE.Group()
+  const choc = new THREE.Group()
   const ring = new THREE.Shape(heartPts(14).map(([x, y]) => new THREE.Vector2(x, y)))
   ring.holes.push(new THREE.Path(heartPts(12.4).map(([x, y]) => new THREE.Vector2(x, y))))
-  box.add(P(slabXY(ring, 3.4, boxC, 0.2), 0, 1.7, 0, -PI / 2, 0, 0))
-  box.add(P(slabXY(heartPts(13.2), 0.8, GOLD, 0, 'heart-floor'), 0, 0.4, 0, -PI / 2, 0, 0))
+  choc.add(P(slabXY(ring, 3.4, boxC, 0.2), 0, 1.7, 0, -PI / 2, 0, 0))
+  choc.add(P(slabXY(heartPts(13.2), 0.8, GOLD, 0, 'heart-floor'), 0, 0.4, 0, -PI / 2, 0, 0))
   ;([[-3.1, 2.6], [3.1, 2.6], [0, 0.9], [-1.6, -1.6], [1.6, -1.6], [0, -3.7], [-4.2, 0.4]] as V2[]).forEach(([x, yh], i) => {
-    box.add(cyl(1.3, 1.0, 1.0, '#8a5a3a', { x, y: 0.8, z: -yh }, 12))
-    if (i % 3 === 0) box.add(P(slabXY(heartPts(2), 0.9, i ? CHOC : roseC, 0.2, 'choc-heart'), x, 1.5, -yh, -PI / 2, 0, 0))
-    else box.add(ball(0.95, i % 2 ? CHOC : '#7a4a30', { x, y: 1.55, z: -yh }, [1, 0.72, 1]))
+    choc.add(cyl(1.3, 1.0, 1.0, '#8a5a3a', { x, y: 0.8, z: -yh }, 12))
+    if (i % 3 === 0) choc.add(P(slabXY(heartPts(2), 0.9, i ? CHOC : roseC, 0.2, 'choc-heart'), x, 1.5, -yh, -PI / 2, 0, 0))
+    else choc.add(ball(0.95, i % 2 ? CHOC : '#7a4a30', { x, y: 1.55, z: -yh }, [1, 0.72, 1], [8, 6]))
   })
-  g.add(P(box, 6.5, 1.2, 4.5, 0, 0.12, 0))
+  g.add(P(choc, 6.5, 1.2, 4.5, 0, 0.12, 0))
   // 立着的折卡：两片对靠成帐篷形，正面一颗红心
   const card = new THREE.Group()
   const ch = 12
   const spread = 2.3
-  const front = G(rbox(9, ch, 0.25, '#fffaf4', { y: 0, z: -0.125 }, 0.1))
+  const front = G(box(9, ch, 0.25, '#fffaf4', { y: 0, z: -0.125 }))
   front.add(P(slabXY(heartPts(5.4), 0.3, roseC, 0, 'card-heart'), 0, ch * 0.55, 0.1))
   const fr = Math.atan2(-spread, ch)
   card.add(P(front, 0, 0, spread, fr, 0, 0))
-  card.add(P(G(rbox(9, ch, 0.25, tissue, { z: 0.125 }, 0.1)), 0, 0, -spread, -fr, 0, 0))
+  card.add(P(G(box(9, ch, 0.25, tissue, { z: 0.125 })), 0, 0, -spread, -fr, 0, 0))
   g.add(P(card, 11.5, 0, -6.5, 0, -0.35, 0))
   return fitGroup(g)
 }
@@ -542,12 +552,12 @@ function valentineSet(p: string[]) {
 const CH = { rim: 9, step: 9.4 }
 const COUPE: V2[] = [[0, 0], [3.3, 0], [3.3, 0.25], [1.2, 0.5], [0.38, 1.2], [0.38, 5.6], [1, 6], [3.2, 6.8], [4.3, 8], [4.6, 9], [4.4, 9], [4.1, 8.2], [3, 7.2], [1, 6.4], [0, 6.35]]
 const BUBBLY: V2[] = [[0, 6.5], [0.95, 6.55], [2.9, 7.3], [3.85, 8], [0, 8]]
+/** 一只杯里的酒和杯口亮边；玻璃杯身在 champagneTower 里统一合成一个网格 */
 function coupe(x: number, y: number, z: number) {
   return G(
-    P(ghost(lathe(COUPE, '#e4f5ff', 12), '#e4f5ff', 0.45), x, y, z),
-    P(lathe(BUBBLY, '#f3d36b', 12), x, y, z),
+    P(lathe(BUBBLY, '#f3d36b', 10), x, y, z),
     // 杯口一圈亮边，让透明的杯子看得出轮廓
-    noOutline(band(4.5, 0.1, '#ffffff', { x, y: y + CH.rim - 0.05, z, rx: PI / 2 }, PI * 2, 12)),
+    noOutline(band(4.5, 0.1, '#ffffff', { x, y: y + CH.rim - 0.05, z, rx: PI / 2 }, PI * 2, 10)),
   )
 }
 function champagneTower(p: string[]) {
@@ -557,9 +567,17 @@ function champagneTower(p: string[]) {
   g.add(torus(18.6, 0.5, shade(trayC, -0.08), { y: 1, rx: PI / 2 }))
   const s = CH.step
   const y0 = 1
-  for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) g.add(coupe(i * s, y0, j * s))
-  for (const i of [-0.5, 0.5]) for (const j of [-0.5, 0.5]) g.add(coupe(i * s, y0 + CH.rim, j * s))
-  g.add(coupe(0, y0 + CH.rim * 2, 0))
+  const at: V3[] = []
+  for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) at.push([i * s, y0, j * s])
+  for (const i of [-0.5, 0.5]) for (const j of [-0.5, 0.5]) at.push([i * s, y0 + CH.rim, j * s])
+  at.push([0, y0 + CH.rim * 2, 0])
+  for (const [x, y, z] of at) g.add(coupe(x, y, z))
+  // 玻璃杯身：半透明件不参与按材质合并，14 只杯合成一个网格，省成一个 draw call
+  const glass = cached('fw-coupes', () => {
+    const one = new THREE.LatheGeometry(COUPE.map(([r, y]) => new THREE.Vector2(r, y)), 10)
+    return mergeGeometries(at.map(([x, y, z]) => one.clone().translate(x, y, z)))
+  })
+  g.add(ghost(mesh(glass, '#e4f5ff'), '#e4f5ff', 0.45))
   // 香槟瓶：深绿玻璃、酒标、颈上的锡箔（软木塞已经拔掉）
   const bx = 23
   const bz = -6
@@ -602,8 +620,8 @@ function birthdayTable(p: string[]) {
   for (let i = 0; i < 16; i++) {
     const a = (i / 16) * PI * 2 + 0.1
     const len = 1.2 + rand() * 2.6
-    g.add(cyl(0.55, 0.55, len, CHOC, { x: cx + Math.cos(a) * 9.1, y: 9.8 - len, z: Math.sin(a) * 9.1 }, 8))
-    g.add(ball(0.55, CHOC, { x: cx + Math.cos(a) * 9.1, y: 9.8 - len, z: Math.sin(a) * 9.1 }, undefined, [8, 6]))
+    g.add(cyl(0.55, 0.55, len, CHOC, { x: cx + Math.cos(a) * 9.1, y: 9.8 - len, z: Math.sin(a) * 9.1 }, 6))
+    g.add(ball(0.55, CHOC, { x: cx + Math.cos(a) * 9.1, y: 9.8 - len, z: Math.sin(a) * 9.1 }, undefined, [6, 4]))
   }
   for (let i = 0; i < 12; i++) {
     const a = (i / 12) * PI * 2
@@ -682,7 +700,7 @@ function balloonArch(p: string[]) {
     const v = at((i / 24) * PI)
     frame.push([v.x, v.y, 0])
   }
-  g.add(tube(frame, 1.2, '#f4f4f2', { seg: 48, radial: 6 }))
+  g.add(tube(frame, 1.2, '#f4f4f2', { seg: 24, radial: 5 }))
   const n = 21
   const rand = rng(21)
   const seg: [number, number] = [9, 6]
@@ -732,7 +750,7 @@ function adventCalendar(p: string[]) {
       const x = -w / 2 + mx + cw / 2 + i * (cw + gap)
       const y = my + j * (rh + gap)
       const k = j * AC.cols + i
-      g.add(rbox(cw, rh, 1, drawColors[(i + j) % 3], { x, y, z: fz }, 0.35))
+      g.add(box(cw, rh, 1, drawColors[(i + j) % 3], { x, y, z: fz }))
       g.add(ball(0.42, BRASS, { x, y: y + rh * 0.3, z: fz + 0.62 }, undefined, [6, 4]))
       const tagC = (i + j) % 3 === 2 ? '#f6efe0' : '#fbf6ea'
       g.add(decalZ(2.6, 1.3, tagC, x, y + rh * 0.7, fz + 0.56))
@@ -778,7 +796,7 @@ function nutcracker(p: string[]) {
   const g = new THREE.Group()
   // 圆台
   g.add(cyl(8.5, 9, 3, shade(hat, 0.05), {}, 32))
-  g.add(noOutline(torus(8.65, 0.35, trim, { y: 2.6, rx: PI / 2 })))
+  g.add(noOutline(band(8.7, 0.4, trim, { y: 2.6, rx: PI / 2 }, PI * 2, 32)))
   // 靴子、裤腿
   for (const s of [-1, 1]) {
     g.add(rbox(3.6, 5, 5, INK, { x: s * 2.1, y: 3, z: 0.4 }, 1.2))
@@ -791,7 +809,7 @@ function nutcracker(p: string[]) {
   // 前襟顺着外套的收腰往后仰一点
   const lean = 0.8 / 13.5
   g.add(P(rbox(3.2, 9.2, 0.6, '#fbf7f1', {}, 0.3), 0, 22.8, 5.33, -lean))
-  for (const y of [20, 22.4, 24.8]) g.add(ball(0.42, trim, { y, z: 5.68 - (y - 22.8) * lean }, undefined, [8, 6]))
+  for (const y of [20, 22.4, 24.8]) g.add(ball(0.42, trim, { y, z: 5.68 - (y - 22.8) * lean }, undefined, [6, 4]))
   // 肩章、手臂、白手套；右手握一根金权杖
   for (const s of [-1, 1]) {
     g.add(puck(1.9, 1, trim, { x: s * 4.6, y: 26.6 }))
@@ -857,12 +875,12 @@ function gingerbreadHouse(p: string[]) {
     const eave = ic.clone().addScaledVector(along(s), (len - 0.4) / 2 - 0.3).addScaledVector(nrm(s), -0.2)
     for (let q = 0; q < 7; q++) {
       const z = -1 - (d + 1.6) / 2 + q * ((d + 1.6) / 6)
-      g.add(pip(q % 2 ? 0.55 : 0.75, ICING, eave.x, eave.y - (q % 2 ? 0.5 : 0.8), z, [1, 1.4, 1]))
+      g.add(pip(q % 2 ? 0.55 : 0.75, ICING, eave.x, eave.y - (q % 2 ? 0.5 : 0.8), z, [1, 1.4, 1], true))
     }
     // 屋顶上点几颗彩色糖豆
     for (let q = 0; q < 3; q++) {
       const pos = ic.clone().addScaledVector(along(s), -2.6 + q * 2.6).addScaledVector(nrm(s), 0.35)
-      g.add(pip(0.55, q % 2 ? candyB : candyA, pos.x, pos.y, -1 + (q - 1) * 3.5))
+      g.add(pip(0.55, q % 2 ? candyB : candyA, pos.x, pos.y, -1 + (q - 1) * 3.5, [1, 1, 1], true))
     }
   }
   // 屋脊一排软糖（圆台 + 圆顶）
@@ -878,17 +896,17 @@ function gingerbreadHouse(p: string[]) {
   // 门：深色饼干门板 + 一圈糖霜 + 糖豆门把
   g.add(rbox(3.6, 5.4, 0.6, COOKIE_D, { y: base + 0.2, z: fz + 0.1 }, 1.2))
   g.add(noOutline(torus(1.8, 0.18, ICING, { y: base + 3.8, z: fz + 0.42 }, PI)))
-  g.add(pip(0.3, candyA, 1, base + 2.6, fz + 0.5))
+  g.add(pip(0.3, candyA, 1, base + 2.6, fz + 0.5, [1, 1, 1], true))
   // 窗：透暖光的糖窗 + 白色糖霜窗框和十字
   const win = (x: number, y: number, z: number, ry: number) => {
     const wg = new THREE.Group()
     wg.add(lit(rbox(2.6, 2.6, 0.4, '#ffd86b', { y: -1.3 }, 0.2), '#ffd86b', 0.55))
     for (const s of [-1, 1]) {
-      wg.add(rbox(3.2, 0.4, 0.5, ICING, { y: s * 1.4 - 0.2, z: 0.1 }, 0.15))
-      wg.add(rbox(0.4, 3.2, 0.5, ICING, { x: s * 1.4, y: -1.6, z: 0.1 }, 0.15))
+      wg.add(box(3.2, 0.4, 0.5, ICING, { y: s * 1.4 - 0.2, z: 0.1 }))
+      wg.add(box(0.4, 3.2, 0.5, ICING, { x: s * 1.4, y: -1.6, z: 0.1 }))
     }
-    wg.add(rbox(0.3, 2.6, 0.5, ICING, { y: -1.3, z: 0.15 }, 0.1))
-    wg.add(rbox(2.6, 0.3, 0.5, ICING, { y: -0.15, z: 0.15 }, 0.1))
+    wg.add(box(0.3, 2.6, 0.5, ICING, { y: -1.3, z: 0.15 }))
+    wg.add(box(2.6, 0.3, 0.5, ICING, { y: -0.15, z: 0.15 }))
     return P(wg, x, y, z, 0, ry, 0)
   }
   for (const s of [-1, 1]) g.add(win(s * 5.2, base + 5.2, fz + 0.1, 0))
@@ -917,7 +935,7 @@ function gingerbreadHouse(p: string[]) {
     [0, 2.2],
   ]) {
     const v = new THREE.Vector3(x * 0.7, y * 0.7, 0.32).applyEuler(man.rotation).add(man.position)
-    g.add(pip(0.22, ICING, v.x, v.y, v.z, [1, 0.6, 1]))
+    g.add(pip(0.22, ICING, v.x, v.y, v.z, [1, 0.6, 1], true))
   }
   return g
 }
@@ -963,8 +981,8 @@ function menorahSet(p: string[]) {
   dw.rotation.y = 0.5
   g.add(restAt(dw, 11, 3.6))
   // 几枚金币
-  ;([[6.6, 4.4, 0], [8.3, 5.8, 0], [15.8, 2.6, 0]] as V3[]).forEach(([x, z]) => g.add(puck(1.2, 0.32, GOLD, { x, z })))
-  g.add(puck(1.2, 0.32, shade(GOLD, -0.06), { x: 6.9, y: 0.32, z: 4.6 }))
+  ;([[6.6, 4.4, 0], [8.3, 5.8, 0], [15.8, 2.6, 0]] as V3[]).forEach(([x, z]) => g.add(cyl(1.2, 1.2, 0.32, GOLD, { x, z }, 12)))
+  g.add(cyl(1.2, 1.2, 0.32, shade(GOLD, -0.06), { x: 6.9, y: 0.32, z: 4.6 }, 12))
   return g
 }
 
@@ -979,7 +997,7 @@ function stripedEgg(r: number, body: string, stripe: string, x: number, y: numbe
   ts.forEach((t, i) => {
     const yy = t * ly
     const rr = r * Math.sqrt(1 - t * t) + 0.02
-    g.add(noOutline(band(rr, 0.24, i % 2 && n === 3 ? '#ffffff' : stripe, { y: yy, rx: PI / 2 })))
+    g.add(noOutline(band(rr, 0.24, i % 2 && n === 3 ? '#ffffff' : stripe, { y: yy, rx: PI / 2 }, PI * 2, 12)))
   })
   return P(g, x, y, z)
 }
@@ -1000,8 +1018,8 @@ function easterBunny(p: string[]) {
   }
   for (const y of [1.6, 3.6, 5.6]) {
     for (const s of [-1, 1]) {
-      bk.add(rbox(bw - 0.6, 0.9, 0.3, shade(basket, -0.14), { y, z: s * (bd / 2 + 0.15) }, 0.12))
-      bk.add(rbox(0.3, 0.9, bd - 0.6, shade(basket, -0.14), { x: s * (bw / 2 + 0.15), y }, 0.12))
+      bk.add(box(bw - 0.6, 0.9, 0.3, shade(basket, -0.14), { y, z: s * (bd / 2 + 0.15) }))
+      bk.add(box(0.3, 0.9, bd - 0.6, shade(basket, -0.14), { x: s * (bw / 2 + 0.15), y }))
     }
   }
   for (const s of [-1, 1]) {
@@ -1024,7 +1042,7 @@ function easterBunny(p: string[]) {
   const bn = new THREE.Group()
   bn.add(ball(5, ceramic, { y: 4.8 }, [1, 0.95, 1.1]))
   for (const s of [-1, 1]) {
-    bn.add(ball(2.2, ceramic, { x: s * 3.4, y: 1.6, z: 2 }, [0.75, 0.62, 1.45]))
+    bn.add(ball(2.2, ceramic, { x: s * 3.4, y: 1.6, z: 2 }, [0.75, 0.62, 1.45], [12, 8]))
     bn.add(ball(1.1, ceramic, { x: s * 1.4, y: 1.1, z: 4.6 }, [1, 0.9, 1.3]))
   }
   bn.add(ball(3.6, ceramic, { y: 11.5, z: 1.5 }))
@@ -1037,7 +1055,7 @@ function easterBunny(p: string[]) {
   bn.add(noOutline(ball(0.38, '#ff9db0', { y: 11, z: 5.08 }, [1.2, 0.8, 0.6], [8, 6])))
   g.add(P(bn, 8.5, 0, 1.5, 0, -0.35, 0))
   // 地上散落的彩蛋（侧躺）
-  ;([[-1, 8.5, 0.4, eggA, eggB, 2], [3, 9.2, -0.5, eggB, C.lemon, 3], [12.6, 6.8, 1.1, C.lilac, eggA, 2], [-12.5, 7, 2.2, C.mint, eggB, 3]] as [number, number, number, string, string, number][]).forEach(([x, z, ry, a, b, n]) => {
+  ;([[-1, 8.5, 0.4, eggA, eggB, 2], [3, 9.2, -0.5, eggB, C.lemon, 3], [12.2, 8.9, 0.6, C.lilac, eggA, 2], [-12.5, 7, 2.2, C.mint, eggB, 3]] as [number, number, number, string, string, number][]).forEach(([x, z, ry, a, b, n]) => {
     const e = stripedEgg(2, a, b, 0, 0, 0, n)
     e.rotation.z = PI / 2
     const w2 = G(e)
@@ -1054,8 +1072,8 @@ const PD = { w: 78, d: 44, h: 74 }
 function lemonSlice(x: number, y: number, z: number, rx: number, rz: number) {
   const g = new THREE.Group()
   g.add(cyl(2.4, 2.4, 0.45, LEMON_IN, { y: -0.22 }, 16))
-  g.add(noOutline(torus(2.45, 0.28, LEMON, { rx: PI / 2 })))
-  for (let k = 0; k < 4; k++) g.add(noOutline(rbox(4.2, 0.1, 0.18, '#ffffff', { y: 0.2, ry: (k / 4) * PI }, 0.05)))
+  g.add(noOutline(band(2.45, 0.28, LEMON, { rx: PI / 2 }, PI * 2, 16)))
+  for (let k = 0; k < 4; k++) g.add(noOutline(box(4.2, 0.1, 0.18, '#ffffff', { y: 0.2, ry: (k / 4) * PI })))
   return P(g, x, y, z, rx, 0, rz)
 }
 function partyDrinks(p: string[]) {
@@ -1081,8 +1099,8 @@ function partyDrinks(p: string[]) {
   const dx = -15
   const dz = 3
   const jy = top + 8
-  g.add(torus(10, 0.45, metal, { x: dx, y: top + 0.45, z: dz, rx: PI / 2 }))
-  g.add(torus(10, 0.45, metal, { x: dx, y: jy - 0.45, z: dz, rx: PI / 2 }))
+  g.add(band(10, 0.5, metal, { x: dx, y: top + 0.45, z: dz, rx: PI / 2 }, PI * 2, 32))
+  g.add(band(10, 0.5, metal, { x: dx, y: jy - 0.45, z: dz, rx: PI / 2 }, PI * 2, 32))
   for (let k = 0; k < 4; k++) {
     const a = PI / 4 + (k * PI) / 2
     g.add(rod3([dx + Math.cos(a) * 10, top + 0.45, dz + Math.sin(a) * 10], [dx + Math.cos(a) * 10, jy - 0.45, dz + Math.sin(a) * 10], 0.4, metal, 6))
@@ -1108,7 +1126,7 @@ function partyDrinks(p: string[]) {
   const cz = -6
   g.add(cyl(4, 2.8, 7, cupC, { x: cx, y: top, z: cz }, 20))
   for (let k = 1; k <= 7; k++) g.add(cyl(4, 3.83, 1.2, cupC, { x: cx, y: top + 7 + (k - 1) * 1.2 - 0.2, z: cz }, 20))
-  for (let k = 0; k <= 7; k++) g.add(noOutline(band(4.02, 0.16, '#ffffff', { x: cx, y: top + 7 + k * 1.2 - 0.1, z: cz, rx: PI / 2 })))
+  for (let k = 0; k <= 7; k++) g.add(noOutline(band(4.02, 0.16, '#ffffff', { x: cx, y: top + 7 + k * 1.2 - 0.1, z: cz, rx: PI / 2 }, PI * 2, 20)))
   g.add(cup(4, 2.8, 1.4, 0.2, cupC, { x: cx, y: top + 7 + 6 * 1.2 - 0.3, z: cz }))
   // 吸管罐：玻璃罐 + 一把散开的彩色吸管
   const sx = 23
@@ -1134,9 +1152,10 @@ function confettiCannon(p: string[]) {
   const ax = -6
   const az = -2
   g.add(cyl(1.9, 1.9, 2.6, shade(canA, -0.18), { x: ax, z: az }, 16))
-  for (const y of [0.7, 1.4, 2.1]) g.add(noOutline(band(1.92, 0.18, shade(canA, -0.3), { x: ax, y, z: az, rx: PI / 2 })))
-  g.add(cup(2.4, 2.4, 8.5, 0.25, canA, { x: ax, y: 2.4, z: az }))
-  for (const y of [4.6, 7.6]) g.add(noOutline(band(2.42, 0.26, acc, { x: ax, y, z: az, rx: PI / 2 })))
+  for (const y of [0.7, 1.4, 2.1]) g.add(noOutline(band(1.92, 0.18, shade(canA, -0.3), { x: ax, y, z: az, rx: PI / 2 }, PI * 2, 16)))
+  // 空心筒身：薄壁直筒，16 段车削就够（cup 固定 32 段、口沿半圆 6 步，这么细的筒看不出来）
+  g.add(P(lathe([[0, 0], [2.4, 0], [2.4, 8.5], [2.15, 8.5], [2.15, 0.25], [0, 0.25]], canA, 16), ax, 2.4, az))
+  for (const y of [4.6, 7.6]) g.add(noOutline(band(2.42, 0.26, acc, { x: ax, y, z: az, rx: PI / 2 }, PI * 2, 16)))
   // 彩带：从筒里窜出来、在空中拱一下再落到桌上打卷
   const cols = [horn, acc, canB, '#ffffff', horn, acc]
   for (let i = 0; i < 6; i++) {
@@ -1154,7 +1173,7 @@ function confettiCannon(p: string[]) {
       [ax + ca * (L + 1.6), 1.2, az + sa * (L + 1.6) + 1],
       [ax + ca * (L + 2.2), 0.25, az + sa * (L + 2.2) - 0.4],
     ]
-    g.add(tube(pts, 0.22, cols[i], { seg: 48, radial: 4 }))
+    g.add(tube(pts, 0.22, cols[i], { seg: 32, radial: 4 }))
   }
   // 没放的礼花筒：躺着，筒口有一张纸封
   const bx = 7
@@ -1162,16 +1181,16 @@ function confettiCannon(p: string[]) {
   const can2 = new THREE.Group()
   can2.add(cylX(2.3, 10, canB, 0, 2.3, 0, 20))
   can2.add(cylX(1.8, 2.6, shade(canB, -0.18), -6.3, 2.3, 0, 16))
-  for (const x of [-6.9, -6.2, -5.5]) can2.add(noOutline(band(1.82, 0.18, shade(canB, -0.3), { x, y: 2.3, ry: PI / 2 })))
+  for (const x of [-6.9, -6.2, -5.5]) can2.add(noOutline(band(1.82, 0.18, shade(canB, -0.3), { x, y: 2.3, ry: PI / 2 }, PI * 2, 16)))
   can2.add(cylX(2.35, 0.3, '#fbf7f1', 5.1, 2.3, 0, 20))
-  for (const x of [-2.5, 1.5]) can2.add(noOutline(band(2.32, 0.26, acc, { x, y: 2.3, ry: PI / 2 })))
+  for (const x of [-2.5, 1.5]) can2.add(noOutline(band(2.32, 0.26, acc, { x, y: 2.3, ry: PI / 2 }, PI * 2, 20)))
   g.add(P(can2, bx, 0, bz, 0, -0.35, 0))
   // 派对喇叭：吹嘴 + 渐粗的喇叭身 + 喇叭口，侧躺在桌上（母线贴桌面）
   const hn = new THREE.Group()
   hn.add(cyl(2.3, 0.45, 12, horn, { y: 0 }, 16))
   hn.add(cyl(0.5, 0.5, 2, '#fbf7f1', { y: -2 }, 8))
-  hn.add(torus(2.3, 0.3, acc, { y: 12, rx: PI / 2 }))
-  for (const y of [3.5, 7.5]) hn.add(noOutline(band(0.45 + (1.85 * y) / 12 + 0.05, 0.2, acc, { y, rx: PI / 2 })))
+  hn.add(band(2.3, 0.3, acc, { y: 12, rx: PI / 2 }, PI * 2, 16))
+  for (const y of [3.5, 7.5]) hn.add(noOutline(band(0.45 + (1.85 * y) / 12 + 0.05, 0.2, acc, { y, rx: PI / 2 }, PI * 2, 16)))
   const al = Math.atan((2.3 - 0.45) / 12)
   hn.rotation.z = -(PI / 2 - al)
   const hw = G(hn)
@@ -1223,11 +1242,11 @@ const SOCK_T = 4
 /** 一只圣诞袜：鼓鼓的袜身、袜尖 / 袜跟补色、腿上的花样（0 横条、1 星星、2 圆点）、白绒袜口、挂绳圈；原点在袜口中心 */
 function stocking(body: string, patch: string, pattern: number) {
   const g = new THREE.Group()
-  g.add(slabXY(SOCK, SOCK_T, body, 0.9, 'sock'))
+  g.add(slabXY(SOCK, SOCK_T, body, 0.9, 'sock', 6))
   const fz = SOCK_T / 2 + 0.1
-  g.add(P(slabXY(SOCK_TOE, 0.4, patch, 0, 'sock-toe'), 0, 0, fz))
-  g.add(P(slabXY(SOCK_HEEL, 0.4, patch, 0, 'sock-heel'), 0, 0, fz))
-  if (pattern === 0) for (const y of [-11, -15, -19]) g.add(rbox(9, 1.5, 0.4, patch, { y, z: fz }, 0.15))
+  g.add(P(slabXY(SOCK_TOE, 0.4, patch, 0, 'sock-toe', 6), 0, 0, fz))
+  g.add(P(slabXY(SOCK_HEEL, 0.4, patch, 0, 'sock-heel', 6), 0, 0, fz))
+  if (pattern === 0) for (const y of [-11, -15, -19]) g.add(box(9, 1.5, 0.4, patch, { y, z: fz }))
   else if (pattern === 1) g.add(P(slabXY(starPts(3.4), 0.4, patch, 0, 'sock-star'), 0.2, -15, fz))
   else
     for (const [x, y] of [
@@ -1238,11 +1257,11 @@ function stocking(body: string, patch: string, pattern: number) {
       [-2.6, -21.5],
       [0.6, -22.8],
     ])
-      g.add(ball(0.8, patch, { x, y, z: fz - 0.25 }, [1, 1, 0.45], [8, 6]))
+      g.add(ball(0.8, patch, { x, y, z: fz - 0.25 }, [1, 1, 0.45], [6, 4]))
   // 白绒袜口：一条胖胖的圆角块，上沿一排绒球让它看起来毛茸茸
   g.add(rbox(13.4, 6.8, 5.2, SNOW, { y: -6 }, 2.2))
-  for (let k = 0; k < 6; k++) g.add(pip(1.15, SNOW, -5.6 + k * 2.24, 0.75, (k % 2) * 0.6 - 0.3))
-  g.add(torus(1.25, 0.26, SNOW, { y: 1.6 }))
+  for (let k = 0; k < 6; k++) g.add(pip(1.15, SNOW, -5.6 + k * 2.24, 0.75, (k % 2) * 0.6 - 0.3, [1, 1, 1], true))
+  g.add(band(1.25, 0.26, SNOW, { y: 1.6 }, PI * 2, 12))
   return g
 }
 function fireplaceStockings(p: string[]) {
@@ -1259,7 +1278,7 @@ function fireplaceStockings(p: string[]) {
       const x = xs[i] + ((xs[i + 1] - xs[i]) * k) / 12
       path.push([x, yTop - sag * Math.sin((PI * k) / 12), gz])
     }
-  g.add(tube(path, 2.2, PINE, { seg: 72, radial: 7 }))
+  g.add(tube(path, 2.2, PINE, { seg: 48, radial: 6 }))
   for (const x of xs) g.add(cylZ(0.45, gz, metal, x, yTop, gz / 2, 8))
   // 针叶束：沿花环每隔一段往四周支出几簇（朝前、上下，不往墙里扎）
   const rand = rng(31)
@@ -1268,14 +1287,14 @@ function fireplaceStockings(p: string[]) {
     for (let k = 0; k < 3; k++) {
       const a = (k / 3) * PI * 2 + i * 0.7 + rand() * 0.5
       const dir = new THREE.Vector3((rand() - 0.5) * 0.8, Math.cos(a), Math.max(-0.15, Math.sin(a))).normalize()
-      const m = aim(ball(1, k % 2 ? PINE : PINE_L, {}, [0.38, 2.6, 0.38], [6, 4]), dir)
+      const m = aim(ball(1, k % 2 ? PINE : PINE_L, {}, [0.38, 2.6, 0.38], [4, 3]), dir)
       m.position.set(x + dir.x * 2.4, y + dir.y * 2.4, z + dir.z * 2.4)
       g.add(m)
     }
   }
   // 小灯串：一根细线沿花环前面绕，挂一串暖色发光小灯
   const wire: V3[] = path.map(([x, y], i) => [x, y + Math.sin(i * 1.3) * 1.2, gz + 2.3])
-  g.add(tube(wire, 0.12, '#2d4a33', { seg: 80, radial: 3 }))
+  g.add(tube(wire, 0.12, '#2d4a33', { seg: 60, radial: 3 }))
   const bulbs = ['#fff2b8', '#ffc46b', '#ff8f86', '#fff2b8']
   for (let i = 1; i < wire.length - 1; i += 2) {
     const [x, y, z] = wire[i]
@@ -1284,7 +1303,7 @@ function fireplaceStockings(p: string[]) {
   // 红果（三颗一簇）和松果
   for (let i = 2; i < path.length - 1; i += 3) {
     const [x, y] = path[i]
-    for (let k = 0; k < 3; k++) g.add(pip(0.75, BERRY, x + (k - 1) * 1.1, y + 1.6 + (k % 2) * 0.9, gz + 2.6))
+    for (let k = 0; k < 3; k++) g.add(pip(0.75, BERRY, x + (k - 1) * 1.1, y + 1.6 + (k % 2) * 0.9, gz + 2.6, [1, 1, 1], true))
   }
   for (let i = 0; i < 3; i++) {
     const x = (xs[i] + xs[i + 1]) / 2
@@ -1298,7 +1317,7 @@ function fireplaceStockings(p: string[]) {
     g.add(cyl(0.3, 0.3, 1.4, metal, { x, y: hookY, z: 5.1 }, 8))
     g.add(cyl(0.9, 0.9, 0.4, metal, { x, y: hookY, z: 0.2, rx: PI / 2 }, 12))
     const s = stocking(body, patch, pat)
-    s.position.set(x, hookY - 3.05, 2.7)
+    s.position.set(x, hookY - 2.88, 2.7)
     g.add(s)
   })
   return fitWall(g, 100, 9.4)

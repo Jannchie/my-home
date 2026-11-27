@@ -4,7 +4,7 @@
 // 壁挂件（花槽、折叠小桌）按离地高度建，用 fitWall 把最低点放到 mount、背面贴 z = -d/2。type / tags / mats 直接写在 def 里。
 
 import * as THREE from 'three'
-import { ball, cup, cyl, puck, rbox, shade, torus, tray } from '../toon'
+import { ball, box, cup, cyl, puck, rbox, shade, torus, tray } from '../toon'
 import { C, ellipsePoly, rectPoly, type AssetDef } from '../kit'
 import { cappedTube, cylX, cylZ, fitGroup, fitWall, ghost, lit, noOutline, P, PI, rod3, sideSlab, strutBox, taperRod3, tiltFrame, tube, type V3 } from '../geo'
 import { CL, CN, F, I, J, M, N, R, define, type Pal } from '../packkit'
@@ -22,6 +22,9 @@ const TERRA = '#c8794e'
 
 // ---------- 小工具 ----------
 
+/** 成堆的小颗粒（花瓣、小叶、桩头）用的低段数 */
+const SEG_S: [number, number] = [8, 6]
+
 /** cup(rTop, rBottom, h, t) 在 frac 高度处的土面半径：比内壁大一点、嵌进盆壁里（土和盆壁不留缝） */
 function soilR(rTop: number, rBottom: number, frac: number, t: number) {
   return rBottom + (rTop - rBottom) * frac - t * 0.4
@@ -30,10 +33,10 @@ function soilR(rTop: number, rBottom: number, frac: number, t: number) {
 /** 一丛开花的小苗：压扁的叶团 + 一圈半露出来的小花，叶团底在 y（略微埋进土里） */
 function bloom(x: number, y: number, z: number, r: number, petal: string, n = 3, seed = 0) {
   const g = new THREE.Group()
-  g.add(ball(r, LEAF, { x, y: y + r * 0.5, z }, [1.15, 0.75, 1.15]))
+  g.add(ball(r, LEAF, { x, y: y + r * 0.5, z }, [1.15, 0.75, 1.15], [12, 8]))
   for (let i = 0; i < n; i++) {
     const a = seed + (i / n) * PI * 2
-    g.add(ball(r * 0.42, i % 2 ? shade(petal, 0.12) : petal, { x: x + Math.cos(a) * r * 0.55, y: y + r * 0.95, z: z + Math.sin(a) * r * 0.55 }))
+    g.add(ball(r * 0.42, i % 2 ? shade(petal, 0.12) : petal, { x: x + Math.cos(a) * r * 0.55, y: y + r * 0.95, z: z + Math.sin(a) * r * 0.55 }, undefined, SEG_S))
   }
   return g
 }
@@ -41,7 +44,7 @@ function bloom(x: number, y: number, z: number, r: number, petal: string, n = 3,
 /** 一盆小花：口径 12 的小盆 + 一层土 + 一丛花，盆底在 y */
 function potFlower(x: number, y: number, z: number, pot: string, petal: string, seed = 0) {
   const g = new THREE.Group()
-  g.add(cup(6, 4.6, 10, 0.8, pot, { x, y, z }))
+  g.add(cup(6, 4.6, 10, 0.8, pot, { x, y, z }, 16))
   g.add(cyl(soilR(6, 4.6, 0.86, 0.8), soilR(6, 4.6, 0.8, 0.8), 0.6, SOIL, { x, y: y + 8, z }, 16))
   g.add(bloom(x, y + 8.6, z, 4.2, petal, 4, seed))
   return g
@@ -51,8 +54,8 @@ function potFlower(x: number, y: number, z: number, pot: string, petal: string, 
 function sprout(x: number, y: number, z: number, a = 0) {
   const g = new THREE.Group()
   g.add(cyl(0.35, 0.4, 6.5, LEAF_D, { x, y, z }, 6))
-  for (const s of [-1, 1]) g.add(ball(2.4, LEAF, { x: x + Math.cos(a) * s * 2.1, y: y + 6.4, z: z + Math.sin(a) * s * 2.1, ry: -a, rz: s * 0.35 }, [1, 0.25, 0.6]))
-  g.add(ball(1.2, C.leaf, { x, y: y + 6.8, z }, [0.7, 1.2, 0.7]))
+  for (const s of [-1, 1]) g.add(ball(2.4, LEAF, { x: x + Math.cos(a) * s * 2.1, y: y + 6.4, z: z + Math.sin(a) * s * 2.1, ry: -a, rz: s * 0.35 }, [1, 0.25, 0.6], SEG_S))
+  g.add(ball(1.2, C.leaf, { x, y: y + 6.8, z }, [0.7, 1.2, 0.7], SEG_S))
   return g
 }
 
@@ -68,7 +71,7 @@ function bistroChair(frame: string, slat: string) {
   for (const s of [-1, 1]) {
     const x = s * hw
     g.add(rod3([x, 0.9, -15], [x, 79, -19], 1, frame, 8))
-    g.add(ball(1, frame, { x, y: 79, z: -19 }))
+    g.add(ball(1, frame, { x, y: 79, z: -19 }, undefined, SEG_S))
     g.add(rod3([x, 0.9, 17], [x, sy, 15], 1, frame, 8))
     // 座面侧梁、折叠斜撑
     g.add(rod3([x, sy, -17.1], [x, sy, 15], 0.9, frame, 8))
@@ -91,8 +94,9 @@ function bistroSet(p: string[]) {
   const g = new THREE.Group()
   // 桌面：圆板 + 一圈包边 + 台面下的托圈和三根辐条
   g.add(cyl(BS.r, BS.r, 2, top, { y: BS.top - 2 }, 32))
-  g.add(torus(BS.r, 0.9, frame, { y: BS.top - 1, rx: PI / 2 }))
-  g.add(torus(20, 0.8, frame, { y: BS.top - 2.6, rx: PI / 2 }))
+  g.add(torus(BS.r, 0.9, frame, { y: BS.top - 1, rx: PI / 2 }, PI * 2, [6, 40]))
+  // 台面下的托圈从外面几乎看不到
+  g.add(torus(20, 0.8, frame, { y: BS.top - 2.6, rx: PI / 2 }, PI * 2, [5, 24]))
   for (const a of [PI / 2, PI / 2 + (2 * PI) / 3, PI / 2 + (4 * PI) / 3]) g.add(rod3([0, BS.top - 2.4, 0], [Math.cos(a) * 20, BS.top - 2.4, Math.sin(a) * 20], 0.7, frame, 8))
   // 独柱：中段一道装饰箍，底下一只球形底座伸出三只弯脚
   g.add(cyl(1.8, 1.8, BS.top - 8, frame, { y: 6 }, 12))
@@ -102,7 +106,9 @@ function bistroSet(p: string[]) {
   for (const a of [PI / 6, (5 * PI) / 6, (3 * PI) / 2]) {
     const c = Math.cos(a)
     const s = Math.sin(a)
-    g.add(cappedTube([[c * 2, 7, s * 2], [c * 10, 4.4, s * 10], [c * 20, 1.2, s * 20]], 1.2, frame, { seg: 12, radial: 8 }))
+    // 根部埋在球形底座里，只给脚尖加球帽
+    g.add(tube([[c * 2, 7, s * 2], [c * 10, 4.4, s * 10], [c * 20, 1.2, s * 20]], 1.2, frame, { seg: 10, radial: 8 }))
+    g.add(ball(1.2, frame, { x: c * 20, y: 1.2, z: s * 20 }, undefined, SEG_S))
   }
   // 两把椅子面朝桌子
   for (const s of [-1, 1]) g.add(P(bistroChair(frame, slat), s * BS.chairX, 0, 0, 0, (s * -PI) / 2, 0))
@@ -128,7 +134,7 @@ function railPlanter(p: string[]) {
   // 垂过前沿的藤蔓：从土里翻过卷边垂下来，挂着几片小叶
   for (const x of [-16, 5, 19]) {
     g.add(tube([[x, 13.8, 5.5], [x, 16.6, 8.2], [x + 1, 12, 9], [x + 2, 6, 8.9]], 0.35, LEAF_D, { seg: 16, radial: 5 }))
-    for (const [dx, y, a] of [[0.6, 13.2, 0.5], [1.4, 10, -0.5], [2, 6.6, 0.4]]) g.add(ball(1.6, LEAF, { x: x + dx, y, z: 9.2, rz: a }, [0.55, 1, 0.16]))
+    for (const [dx, y, a] of [[0.6, 13.2, 0.5], [1.4, 10, -0.5], [2, 6.6, 0.4]]) g.add(ball(1.6, LEAF, { x: x + dx, y, z: 9.2, rz: a }, [0.55, 1, 0.16], SEG_S))
   }
   // 挂钩：槽底兜带 → 前沿一截卡舌 → 背面竖带 → 翻过栏杆顶 → 垂下的钩尾
   for (const s of [-1, 1]) {
@@ -220,19 +226,19 @@ function hangingEgg(p: string[]) {
     const t1 = inOpen(phi) ? EG_OPEN.t0 : 1
     const pts: V3[] = []
     for (let i = 0; i <= 8; i++) pts.push(eggPt(phi, 0.02 + ((t1 - 0.02) * i) / 8))
-    g.add(tube(pts, 0.8, rattan, { seg: 20, radial: 6 }))
+    g.add(tube(pts, 0.8, rattan, { seg: t1 < 1 ? 6 : 14, radial: 5 }))
   }
   // 纬圈：开口以下整圈，开口以上只绕后面
   for (const t of [0.08, 0.17, 0.42, 0.54, 0.66, 0.78, 0.88]) {
     const pts: V3[] = []
     if (t < EG_OPEN.t0) {
       for (let i = 0; i < 24; i++) pts.push(eggPt((i / 24) * PI * 2, t))
-      g.add(tube(pts, 0.7, rattan, { seg: 48, radial: 6, closed: true }))
+      g.add(tube(pts, 0.7, rattan, { seg: 32, radial: 5, closed: true }))
     } else {
       const a0 = PI / 2 + EG_OPEN.half
       const span = PI * 2 - EG_OPEN.half * 2
       for (let i = 0; i <= 16; i++) pts.push(eggPt(a0 + (span * i) / 16, t))
-      g.add(tube(pts, 0.7, rattan, { seg: 40, radial: 6 }))
+      g.add(tube(pts, 0.7, rattan, { seg: 24, radial: 5 }))
     }
   }
   // 开口的粗边框（U 形）+ 篮底的粗圈
@@ -242,7 +248,7 @@ function hangingEgg(p: string[]) {
   for (let i = 0; i <= 6; i++) rim.push(eggPt(aL, EG_OPEN.t1 - ((EG_OPEN.t1 - EG_OPEN.t0) * i) / 6))
   for (let i = 1; i < 6; i++) rim.push(eggPt(aL - ((aL - aR) * i) / 6, EG_OPEN.t0))
   for (let i = 0; i <= 6; i++) rim.push(eggPt(aR, EG_OPEN.t0 + ((EG_OPEN.t1 - EG_OPEN.t0) * i) / 6))
-  g.add(cappedTube(rim, 1.6, shade(rattan, -0.08), { seg: 60, radial: 8 }))
+  g.add(cappedTube(rim, 1.6, shade(rattan, -0.08), { seg: 36, radial: 8 }))
   g.add(torus(eggR(0.3), 1.4, shade(rattan, -0.08), { y: EG.y0 + EG.h * 0.3, z: EG.z, rx: PI / 2 }, PI * 2))
   g.add(torus(eggR(0.08) + 0.4, 1.2, shade(rattan, -0.08), { y: EG.y0 + EG.h * 0.08, z: EG.z, rx: PI / 2 }, PI * 2))
   // 顶上的吊环
@@ -250,20 +256,20 @@ function hangingEgg(p: string[]) {
   g.add(cyl(2.4, 3, 3, shade(rattan, -0.08), { y: topY - 1.5, z: EG.z }, 12))
   // 坐垫、靠垫、一只小抱枕
   g.add(puck(24, 12, cushion, { y: 52, z: EG.z }))
-  g.add(ball(24, shade(cushion, -0.04), { y: 95, z: EG.z - 22 }, [1.1, 1.3, 0.45]))
-  g.add(ball(8, shade(cushion, 0.08), { x: 11, y: 70, z: EG.z + 2 }, [1.1, 1, 0.6]))
+  g.add(ball(24, shade(cushion, -0.04), { y: 95, z: EG.z - 22 }, [1.1, 1.3, 0.45], [20, 14]))
+  g.add(ball(8, shade(cushion, 0.08), { x: 11, y: 70, z: EG.z + 2 }, [1.1, 1, 0.6], [16, 12]))
   // 底座、立杆、吊钩、吊链
   g.add(puck(48, 4, frame, { z: -4 }))
   g.add(cyl(6, 7, 3, frame, { y: 3.4, z: -46 }, 16))
   const hookZ = EG.z
-  g.add(cappedTube([[0, 5, -46], [0, 100, -47], [0, 160, -42], [0, 182, -28], [0, 190, -10], [0, 189.5, hookZ]], 2.6, frame, { seg: 48, radial: 10 }))
+  g.add(cappedTube([[0, 5, -46], [0, 100, -47], [0, 160, -42], [0, 182, -28], [0, 190, -10], [0, 189.5, hookZ]], 2.6, frame, { seg: 32, radial: 10 }))
   g.add(cyl(0.9, 0.9, 5, STEEL, { y: 184.6, z: hookZ }, 8))
   const links = 8
   const y1 = 185
   const y0 = topY + 1.5
   for (let i = 0; i < links; i++) {
     const y = y1 - ((y1 - y0) * (i + 0.5)) / links
-    g.add(torus(2, 0.45, STEEL, { y, z: hookZ, ry: i % 2 ? PI / 2 : 0 }, PI * 2))
+    g.add(torus(2, 0.45, STEEL, { y, z: hookZ, ry: i % 2 ? PI / 2 : 0 }, PI * 2, [4, 12]))
   }
   return fitGroup(g)
 }
@@ -284,8 +290,8 @@ function cushionBox(p: string[]) {
     const y = 4 + i * 6.2
     const c = i % 2 ? shade(rattan, 0.06) : shade(rattan, -0.06)
     for (const s of [-1, 1]) {
-      g.add(rbox(111, 5.4, 0.8, c, { y, z: s * 25.7 }, 0.3))
-      g.add(rbox(0.8, 5.4, 46, c, { x: s * 58.2, y }, 0.3))
+      g.add(box(111, 5.4, 0.8, c, { y, z: s * 25.7 }))
+      g.add(box(0.8, 5.4, 46, c, { x: s * 58.2, y }))
     }
   }
   // 翻盖、坐垫、拉手
@@ -309,7 +315,7 @@ function stringLights(p: string[]) {
     g.add(ball(2, pole, { x, y: SL.top + 0.2 }))
     // 挂臂 + 挂环
     g.add(rod3([x, SL.wire + 1.4, 0], [x - s * 5, SL.wire + 1.4, 0], 0.6, pole, 8))
-    g.add(torus(1.2, 0.35, pole, { x: x - s * 5.6, y: SL.wire + 0.6, rx: 0 }, PI * 2))
+    g.add(torus(1.2, 0.35, pole, { x: x - s * 5.6, y: SL.wire + 0.6 }, PI * 2, [5, 12]))
   }
   // 电线：悬链近似成抛物线
   const x0 = SL.x - 5.6
@@ -319,14 +325,14 @@ function stringLights(p: string[]) {
     const x = -x0 + (2 * x0 * i) / 16
     pts.push([x, yAt(x), 0])
   }
-  g.add(tube(pts, 0.3, wire, { seg: 64, radial: 5 }))
+  g.add(tube(pts, 0.3, wire, { seg: 32, radial: 5 }))
   // 灯泡：一小段吊线、灯座、发光的圆泡
   for (let i = 0; i < 12; i++) {
     const x = -110 + i * 20
     const yw = yAt(x)
     g.add(rod3([x, yw, 0], [x, yw - 3, 0], 0.2, wire, 5))
     g.add(cyl(1.2, 1.3, 2.6, wire, { x, y: yw - 5.4 }, 10))
-    g.add(lit(ball(3, bulb, { x, y: yw - 8.2 }, [1, 1.15, 1]), i % 2 ? bulb2 : bulb, 0.9))
+    g.add(lit(ball(3, bulb, { x, y: yw - 8.2 }, [1, 1.15, 1], [10, 8]), i % 2 ? bulb2 : bulb, 0.9))
   }
   return g
 }
@@ -434,7 +440,7 @@ function hoseCart(p: string[]) {
   g.add(cylX(1, 37, STEEL, 0, ry, rz, 8))
   g.add(cylX(12.6, 23, shade(hose, -0.12), 0, ry, rz, 20))
   for (const s of [-1, 1]) g.add(cylX(17, 1.2, frame, s * 12.4, ry, rz, 28))
-  for (let x = -10.8; x <= 10.81; x += 1.8) g.add(torus(13, 0.9, hose, { x, y: ry, z: rz, ry: PI / 2 }, PI * 2))
+  for (let x = -10.8; x <= 10.81; x += 1.8) g.add(torus(13, 0.9, hose, { x, y: ry, z: rz, ry: PI / 2 }, PI * 2, [5, 24]))
   // 摇柄（右边）
   g.add(rod3([18.6, ry, rz], [21.6, ry, rz], 0.8, STEEL, 8))
   g.add(rod3([21.6, ry, rz], [21.6, ry + 8, rz], 0.8, STEEL, 8))
@@ -483,7 +489,7 @@ function coldFrame(p: string[]) {
   ;[-28, 0, 28].forEach((x, i) =>
     [-11, 11].forEach((z, j) => {
       const c = (i + j) % 2 ? shade(pot, -0.08) : pot
-      g.add(cup(4.5, 3.6, 7, 0.6, c, { x, y: 6.2, z }))
+      g.add(cup(4.5, 3.6, 7, 0.6, c, { x, y: 6.2, z }, 14))
       g.add(cyl(soilR(4.5, 3.6, 0.86, 0.6), soilR(4.5, 3.6, 0.78, 0.6), 0.6, SOIL, { x, y: 6.2 + 5.5, z }, 14))
       g.add(sprout(x, 6.2 + 5.9, z, i + j * 1.3))
     }),
@@ -528,8 +534,8 @@ function balconyScreen(p: string[]) {
     for (let i = 0; i < n; i++) {
       const x = xa + step * (i + 0.5)
       const c = i % 3 === 0 ? shade(bamboo, -0.05) : i % 3 === 1 ? bamboo : shade(bamboo, 0.04)
-      g.add(cyl(1.4, 1.4, y1 - y0, c, { x, y: y0 }, 10))
-      for (const y of i % 2 ? [48, 92] : [62, 108]) g.add(cyl(1.6, 1.6, 0.8, shade(c, -0.06), { x, y }, 10))
+      g.add(cyl(1.4, 1.4, y1 - y0, c, { x, y: y0 }, 8))
+      for (const y of i % 2 ? [48, 92] : [62, 108]) g.add(cyl(1.6, 1.6, 0.8, shade(c, -0.06), { x, y }, 8))
     }
     // 横压条（前后各两道）
     for (const y of [40, 118]) for (const s of [-1, 1]) g.add(rbox(xb - xa, 2.2, 1.2, tie, { x: (xa + xb) / 2, y, z: s * 1.9 }, 0.4))
@@ -553,9 +559,9 @@ function poolFloats(p: string[]) {
   const bx = 22
   const wing = shade(bird, -0.08)
   g.add(ball(16, bird, { x: bx, y: 11.6, z: 2 }, [0.95, 0.72, 1.45]))
-  for (const s of [-1, 1]) g.add(ball(9, wing, { x: bx + s * 13.6, y: 14, z: -2, rx: -0.15 }, [0.35, 0.6, 1.2]))
+  for (const s of [-1, 1]) g.add(ball(9, wing, { x: bx + s * 13.6, y: 14, z: -2, rx: -0.15 }, [0.35, 0.6, 1.2], [16, 12]))
   g.add(taperRod3([bx, 15, -18], [bx, 24, -26], 5, 1.4, bird, 14))
-  g.add(cappedTube([[bx, 17, 16], [bx, 32, 22], [bx, 46, 18], [bx, 56, 12], [bx, 62, 14]], 3.8, bird, { seg: 32, radial: 12 }))
+  g.add(cappedTube([[bx, 17, 16], [bx, 32, 22], [bx, 46, 18], [bx, 56, 12], [bx, 62, 14]], 3.8, bird, { seg: 24, radial: 10 }))
   g.add(ball(6, bird, { x: bx, y: 64, z: 16 }, [0.9, 0.95, 1.1]))
   g.add(taperRod3([bx, 63.6, 20.5], [bx, 60.6, 25.4], 2.1, 1.1, WHITE, 12))
   g.add(ball(1.2, DARK, { x: bx, y: 60.2, z: 25.8 }))
@@ -589,12 +595,12 @@ function invertedShoe(color: string) {
   // 鞋底：一条白色厚底，鞋跟处略高
   g.add(rbox(2.4, 25.2, 8.8, WHITE, { x: 1.0, y: 0.1 }, 1))
   // 鞋口、鞋带、后跟拉环
-  g.add(noOutline(ball(2.4, DARK, { x: 7.0, y: 6.4 }, [0.3, 1.3, 0.8])))
-  for (const [y, u] of [[11, 6.3], [14, 5.75], [17, 5.15]]) g.add(rbox(0.6, 0.8, 5.2, WHITE, { x: u - 0.15, y }, 0.2))
-  g.add(rbox(3, 1.4, 2.2, shade(color, -0.2), { x: 6.2, y: -0.5 }, 0.4))
+  g.add(noOutline(ball(2.4, DARK, { x: 7.0, y: 6.4 }, [0.3, 1.3, 0.8], SEG_S)))
+  for (const [y, u] of [[11, 6.3], [14, 5.75], [17, 5.15]]) g.add(box(0.6, 0.8, 5.2, WHITE, { x: u - 0.15, y }))
+  g.add(box(3, 1.4, 2.2, shade(color, -0.2), { x: 6.2, y: -0.5 }))
   // 白色包头、两侧一道斜饰条
-  g.add(ball(3, WHITE, { x: 2.4, y: 23.2 }, [0.9, 0.62, 1.38]))
-  for (const s of [-1, 1]) g.add(rbox(1.4, 10, 0.5, WHITE, { x: 4.4, y: 4.5, z: s * 4.05, rz: -0.38 }, 0.2))
+  g.add(ball(3, WHITE, { x: 2.4, y: 23.2 }, [0.9, 0.62, 1.38], [10, 8]))
+  for (const s of [-1, 1]) g.add(box(1.4, 10, 0.5, WHITE, { x: 4.4, y: 4.5, z: s * 4.05, rz: -0.38 }))
   return g
 }
 
@@ -606,7 +612,7 @@ function shoeDryer(p: string[]) {
     const x = s * 23
     g.add(rbox(3, 2, 30, frame, { x }, 0.6))
     g.add(rod3([x, 1.6, zb], [x, 66, zb], 1, frame, 10))
-    g.add(ball(1.3, frame, { x, y: 66, z: zb }))
+    g.add(ball(1.3, frame, { x, y: 66, z: zb }, undefined, SEG_S))
   }
   g.add(rod3([-23, 66, zb], [23, 66, zb], 0.9, frame, 10))
   // 两层横杆和鞋桩
@@ -619,7 +625,7 @@ function shoeDryer(p: string[]) {
     g.add(rod3([-23, yb, zb], [23, yb, zb], 0.9, frame, 10))
     ;[-16.5, -6.5, 6.5, 16.5].forEach((x, i) => {
       g.add(rod3([x, yb, zb], [x, yb + 16, zb + 6], 0.55, frame, 8))
-      g.add(ball(0.8, frame, { x, y: yb + 16, z: zb + 6 }))
+      g.add(ball(0.8, frame, { x, y: yb + 16, z: zb + 6 }, undefined, [6, 4]))
       const c = shoes[i]
       if (!c) return
       // 鞋套在桩上：鞋跟离横杆 3cm，桩走在鞋身里（局部 x = 4.5）；一双鞋鞋底朝外，右脚那只绕竖轴转半圈

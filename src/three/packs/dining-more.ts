@@ -4,9 +4,9 @@
 // 餐桌高 75、桌下 63cm 以下不放横撑（一键布置会配椅子，腿要伸得进去）；餐椅座高 45–47。
 
 import * as THREE from 'three'
-import { ball, cyl, plate, puck, rbox, shade, torus, tray } from '../toon'
+import { ball, cyl, nub, plate, puck, rbox, shade, torus, tray } from '../toon'
 import { C, carcass, drawerBox, drawerLevel, ellipsePoly, flapDoor, hingedDoor, paintPanel, rectPoly, slab, slidingDoors, type AssetDef, type Poly, type SurfaceDef } from '../kit'
-import { P, PI, batten, cappedTube, cylX, cylZ, fitGroup, ghost, latheAt, rod3, sideSlab, strut, strutBox, taperRod3, tube, type V2, type V3 } from '../geo'
+import { batten, cappedTube, cylX, cylZ, fitGroup, ghost, latheAt, P, PI, rod3, sideSlab, strut, strutBox, taperRod3, tube, type V2, type V3 } from '../geo'
 import { doorPanel } from '../cabinetKit'
 import { CL, F, I, J, M, N, R, define, type Pal } from '../packkit'
 
@@ -59,7 +59,7 @@ function pedestalRound(p: string[]) {
     [15.5, ty + 0.4],
     [0, ty + 0.4],
   ]
-  g.add(latheAt(prof, base, {}, 40))
+  g.add(latheAt(prof, base, {}, 32))
   g.add(slab(ellipsePoly(PED.r, PED.r, 0, 0, 48), PED.t, marble, ty))
   // 石纹：几道斜着的细纹（贴片浮出台面 0.06）
   const veins: [x: number, z: number, len: number, ry: number, w: number][] = [
@@ -93,7 +93,7 @@ function trestleGlass(p: string[]) {
   // 两根长梁（顶横档之间，梁底 70 往上，不挡腿）
   for (const s of [-1, 1]) g.add(rbox(TG.fx * 2, 3, 3, frame, { y: topY - 3, z: s * 30 }, 0.6))
   // 胶垫
-  for (const x of [-TG.fx, 0, TG.fx]) for (const s of [-1, 1]) g.add(cyl(2, 2, 0.8, pad, { x, y: topY, z: s * 30 }, 12))
+  for (const x of [-TG.fx, 0, TG.fx]) for (const s of [-1, 1]) g.add(cyl(2, 2, 0.8, pad, { x, y: topY, z: s * 30 }, 10))
   // 玻璃面
   g.add(ghost(rbox(TG.w, TG.glass, TG.d, glass, { y: TG.h - TG.glass }, 0.5), glass, 0.38))
   return g
@@ -148,7 +148,7 @@ function liveEdge(p: string[]) {
     g.add(rbox(7, 4, 78, iron, { x, y: y0 - 4 }, 0.6))
     for (const k of [-1, 1]) {
       g.add(rbox(7, y0 - 4 - 0.8, 3, iron, { x, y: 1, z: k * 37.5 }, 0.6))
-      g.add(rbox(7.6, 1.2, 3.6, shade(iron, -0.05), { x, z: k * 37.5 }, 0.3))
+      g.add(nub(7.6, 1.2, 3.6, shade(iron, -0.05), { x, z: k * 37.5 }))
     }
   }
   return g
@@ -167,8 +167,8 @@ function dropLeafWall(p: string[]) {
   // 翻板：中间一道细缝，缝里一条深色的合页线
   const leafD = DL.d - DL.fixed - 0.4
   g.add(rbox(DL.w, 3, leafD, top, { y: ty, z: DL.d / 2 - leafD / 2 }, 0.8))
-  g.add(rbox(DL.w - 2, 2.4, 0.6, shade(top, -0.35), { y: ty + 0.2, z: hingeZ + 0.2 }, 0.1))
-  for (const x of [-30, 30]) g.add(cylX(0.8, 8, metal, x, ty - 0.5, hingeZ + 0.2, 10))
+  g.add(nub(DL.w - 2, 2.4, 0.6, shade(top, -0.35), { y: ty + 0.2, z: hingeZ + 0.2 }))
+  for (const x of [-30, 30]) g.add(cylX(0.8, 8, metal, x, ty - 0.5, hingeZ + 0.2, 8))
   // 框：四条腿 + 一圈裙板（裙板底 64，不挡腿）
   const lx = DL.w / 2 - 4
   const zb = back + 3
@@ -180,9 +180,9 @@ function dropLeafWall(p: string[]) {
   // 折叠撑：竖片钉在前裙板上，斜撑和横臂托住翻板底
   for (const x of [-30, 30]) {
     const zf0 = zf + 1
-    g.add(rbox(1.2, 16, 3, metal, { x, y: ty - 16, z: zf0 + 1.5 }, 0.3))
+    g.add(nub(1.2, 16, 3, metal, { x, y: ty - 16, z: zf0 + 1.5 }))
     g.add(strutBox([x, ty - 15, zf0 + 2.6], [x, ty - 0.6, zf0 + 26], 1, 2.4, metal, 0.3))
-    g.add(rbox(1, 1.2, 28, metal, { x, y: ty - 1.2, z: zf0 + 14 }, 0.3))
+    g.add(nub(1, 1.2, 28, metal, { x, y: ty - 1.2, z: zf0 + 14 }))
   }
   return g
 }
@@ -219,7 +219,7 @@ function counterIsland(p: string[]) {
   g.add(hingedDoor({ x0: 30, x1: 87, y0: 11, y1: 66, z: CI.d / 2, hinge: 'right', color: body, knob: metal }))
   // 餐位一侧：背板外的竖条护墙板
   const n = 22
-  for (let i = 0; i < n; i++) g.add(rbox(7.4, CI.h - 4 - 0.8, 1.2, shade(body, i % 2 ? 0.03 : -0.03), { x: -CI.body / 2 + 2 + ((CI.body - 4) * (i + 0.5)) / n, y: 0.4, z: CI_BACK - 0.5 }, 0.4))
+  for (let i = 0; i < n; i++) g.add(nub(7.4, CI.h - 4 - 0.8, 1.2, shade(body, i % 2 ? 0.03 : -0.03), { x: -CI.body / 2 + 2 + ((CI.body - 4) * (i + 0.5)) / n, y: 0.4, z: CI_BACK - 0.5 }))
   // 三角钢托
   const bz = CI_BACK - 1
   for (const x of [-58, 0, 58])
@@ -237,8 +237,8 @@ function counterIsland(p: string[]) {
     )
   // 搁脚杆（离地 22）+ 三根支杆
   const fz = CI_BACK - 11
-  g.add(cylX(1.3, CI.body - 6, metal, 0, 22, fz, 14))
-  for (const x of [-70, 0, 70]) g.add(rod3([x, 22, fz], [x, 22, CI_BACK - 1], 0.9, metal))
+  g.add(cylX(1.3, CI.body - 6, metal, 0, 22, fz, 10))
+  for (const x of [-70, 0, 70]) g.add(rod3([x, 22, fz], [x, 22, CI_BACK - 1], 0.9, metal, 8))
   return g
 }
 const ciRect = (x0: number, x1: number) => [rectPoly(x0 + 0.4, CI_IZ[0], x1 - 0.4, CI_IZ[1])]
@@ -314,7 +314,7 @@ function wishboneCord(p: string[]) {
     g.add(strut([x, WB.seat + 0.2, -19], [x, WB.seat + 0.2, 17], 0.9, cord, 0.9, 6))
   }
   // 弯木拱背
-  g.add(tube(Array.from({ length: 17 }, (_, i) => wbArch(-PI / 2 + (i / 16) * PI)), 1.5, wood, { seg: 40 }))
+  g.add(tube(Array.from({ length: 17 }, (_, i) => wbArch(-PI / 2 + (i / 16) * PI)), 1.5, wood, { seg: 28 }))
   // 叉骨撑：从座框后档立起，分叉顶到拱背上
   const fork: V3 = [0, 55, wbZ(55)]
   g.add(strutBox([0, WB.seat - 1, wbZ(WB.seat - 1)], fork, 4.2, 1.6, wood, 0.6))
@@ -339,20 +339,20 @@ function cafeChair(p: string[]) {
     [13.2, 80, -22.9],
   ]
   const back = [...half.map(([x, y, z]): V3 => [-x, y, z]), [0, 80.9, -24.3] as V3, ...[...half].reverse()]
-  g.add(cappedTube(back, r, frame, { seg: 72 }))
+  g.add(cappedTube(back, r, frame, { seg: 48, radial: 6, capSeg: [8, 6] }))
   // 靠背中间两道横弧（两端插进立管）
   for (const [y, x, z] of [
     [58, 14.6, -17],
     [66.5, 15.6, -19],
   ] as const)
-    g.add(tube([[-x, y, z], [-x * 0.5, y + 1, z - 2.2], [0, y + 1.3, z - 2.8], [x * 0.5, y + 1, z - 2.2], [x, y, z]], 0.8, frame, { seg: 20 }))
+    g.add(tube([[-x, y, z], [-x * 0.5, y + 1, z - 2.2], [0, y + 1.3, z - 2.8], [x * 0.5, y + 1, z - 2.2], [x, y, z]], 0.8, frame, { seg: 12, radial: 6 }))
   // 前腿：从座圈下外撇到地
-  for (const s of [-1, 1]) g.add(cappedTube([[s * 13, 43.8, 12], [s * 15.8, 22, 15.6], [s * 19.6, 1.6, 19.5]], r, frame, { seg: 16 }))
+  for (const s of [-1, 1]) g.add(cappedTube([[s * 13, 43.8, 12], [s * 15.8, 22, 15.6], [s * 19.6, 1.6, 19.5]], r, frame, { seg: 8, radial: 6, capSeg: [8, 6] }))
   // 座下箍
-  g.add(torus(18.4, 0.8, frame, { y: 43.8, z: -1, rx: PI / 2 }))
+  g.add(torus(18.4, 0.8, frame, { y: 43.8, z: -1, rx: PI / 2 }, PI * 2, [6, 32]))
   // 圆座面 + 一圈包边
   g.add(puck(20, 2.4, seat, { y: CF.seat - 2.4, z: -1 }))
-  g.add(torus(19.6, 0.7, shade(seat, -0.12), { y: CF.seat - 1.2, z: -1, rx: PI / 2 }))
+  g.add(torus(19.6, 0.7, shade(seat, -0.12), { y: CF.seat - 1.2, z: -1, rx: PI / 2 }, PI * 2, [6, 32]))
   // 脚垫
   for (const [x, z] of [
     [19.6, -19.5],
@@ -421,19 +421,19 @@ function kidsBooster(p: string[]) {
   for (const s of [-1, 1]) g.add(rbox(4, 8, 24, shell, { x: s * 15, y: by + 7, z: 1 }, 1.6))
   // 绑带一：绕椅背立柱一圈（后面一段贴着立柱背面，两侧斜接到增高座靠背）
   const sy = 62
-  g.add(rbox(lx * 2 + 4.2, 2.6, 0.5, strap, { y: sy, z: -lz - 1.75 }, 0.2))
+  g.add(nub(lx * 2 + 4.2, 2.6, 0.5, strap, { y: sy, z: -lz - 1.75 }))
   for (const s of [-1, 1]) {
-    g.add(rbox(0.5, 2.6, 4, strap, { x: s * (lx + 1.8), y: sy, z: -lz + 0.1 }, 0.2))
+    g.add(nub(0.5, 2.6, 4, strap, { x: s * (lx + 1.8), y: sy, z: -lz + 0.1 }))
     g.add(batten([s * 16.8, sy + 1.3, -13.2], [s * (lx + 1.8), sy + 1.3, -lz + 2], 2.6, 0.5, strap, 0.2))
   }
-  g.add(rbox(4, 3.6, 0.8, STEEL, { y: sy - 0.5, z: -lz - 2.1 }, 0.3))
+  g.add(nub(4, 3.6, 0.8, STEEL, { y: sy - 0.5, z: -lz - 2.1 }))
   // 绑带二：从增高座两侧下来，包住座板和裙板，从座下穿过
   const sz = 2
   for (const s of [-1, 1]) {
     g.add(batten([s * 17, by + 4, sz], [s * 21.2, by + 0.2, sz], 2.6, 0.5, strap, 0.2))
-    g.add(rbox(0.5, 9.8, 2.6, strap, { x: s * 21.15, y: by - 9.4, z: sz }, 0.2))
+    g.add(nub(0.5, 9.8, 2.6, strap, { x: s * 21.15, y: by - 9.4, z: sz }))
   }
-  g.add(rbox(42.8, 0.5, 2.6, strap, { y: by - 9.4, z: sz }, 0.2))
+  g.add(nub(42.8, 0.5, 2.6, strap, { y: by - 9.4, z: sz }))
   return fitGroup(g)
 }
 
@@ -455,8 +455,8 @@ function sideboardMid(p: string[]) {
   // 细锥腿
   for (const sx of [-1, 1])
     for (const sz of [-1, 1]) {
-      g.add(taperRod3([sx * 74, 1.4, sz * 18.5], [sx * 68, SB.leg + 0.8, sz * 15], 1.0, 1.8, leg, 10))
-      g.add(cyl(1.2, 1.1, 2.2, shade(leg, -0.18), { x: sx * 74, z: sz * 18.5 }, 10))
+      g.add(taperRod3([sx * 74, 1.4, sz * 18.5], [sx * 68, SB.leg + 0.8, sz * 15], 1.0, 1.8, leg, 8))
+      g.add(cyl(1.2, 1.1, 2.2, shade(leg, -0.18), { x: sx * 74, z: sz * 18.5 }, 8))
     }
   return g
 }
@@ -497,7 +497,7 @@ function glassHutch(p: string[]) {
   g.add(rbox(GH.w, 4, GH.upD + 2, top, { y: GH.h - 4, z: -GH.d / 2 + (GH.upD + 2) / 2 }, 0.6))
   // 玻璃门：框 + 玻璃 + 对着层板的两道横格条
   const glass = doorPanel('glass', body, knob)
-  const lites = (w: number, h: number) => [...glass(w, h), ...GH_UP_SHELVES.map((y) => rbox(w - 9, 1.6, 1.2, body, { y: y - GH.base - 1.1 }, 0.3))]
+  const lites = (w: number, h: number) => [...glass(w, h), ...GH_UP_SHELVES.map((y) => nub(w - 9, 1.6, 1.2, body, { y: y - GH.base - 1.1 }))]
   const doorZ = -GH.d / 2 + GH.upD
   g.add(hingedDoor({ x0: -49, x1: 0, y0: GH.base, y1: GH.h - 4, z: doorZ, hinge: 'left', color: body, knob, knobY: 22, panel: lites }))
   g.add(hingedDoor({ x0: 0, x1: 49, y0: GH.base, y1: GH.h - 4, z: doorZ, hinge: 'right', color: body, knob, knobY: 22, panel: lites }))
@@ -529,7 +529,7 @@ function barCabinet(p: string[]) {
   const g = new THREE.Group()
   const cd = BC.d - 1.6
   const cz = BC.d / 2 - 1.6 - cd / 2
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(cyl(2, 1.4, BC.leg, shade(body, -0.1), { x: sx * 35, z: sz * 15 }, 12))
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(cyl(2, 1.4, BC.leg, shade(body, -0.1), { x: sx * 35, z: sz * 15 }, 10))
   g.add(P(carcass(BC.w, BC.h - 4 - BC.leg, cd, body), 0, BC.leg, cz))
   g.add(rbox(BC.w, 4, BC.d, shade(body, -0.06), { y: BC.h - 4 }, 0.8))
   // 柜内横板：下格层板、抽屉上下两块
@@ -546,8 +546,8 @@ function barCabinet(p: string[]) {
   for (let j = 1; j < c.rows; j++) g.add(rbox(c.x1 - c.x0, 1, cd - 2.4, inner, { x: (c.x0 + c.x1) / 2, y: c.y0 + ch * j - 0.5, z: iz }, 0.2))
   // 酒杯滑轨：倒 T 形，贴在顶板下面
   for (const x of BC_RAILS) {
-    g.add(rbox(1, 2.5, cd - 4, inner, { x, y: c.y1 - 2.5, z: iz }, 0.2))
-    g.add(rbox(3.4, 0.8, cd - 4, metal, { x, y: c.y1 - 3.3, z: iz }, 0.2))
+    g.add(nub(1, 2.5, cd - 4, inner, { x, y: c.y1 - 2.5, z: iz }))
+    g.add(nub(3.4, 0.8, cd - 4, metal, { x, y: c.y1 - 3.3, z: iz }))
   }
   // 门：下面两扇平开门、中间抽屉、上面往前放平的翻门
   const framed = doorPanel('frame', body, metal)
@@ -595,7 +595,7 @@ function servingCart(p: string[]) {
   // 立柱：推手端落地（脚下胶垫），轮子端立在轮轴上
   for (const s of [-1, 1]) {
     g.add(rbox(2.6, SC.h - 2.2, 2.6, frame, { x: hx, y: 1, z: s * pz }, 0.8))
-    g.add(cyl(1.5, 1.6, 1.2, RUBBER, { x: hx, z: s * pz }, 10))
+    g.add(cyl(1.5, 1.6, 1.2, RUBBER, { x: hx, z: s * pz }, 8))
     g.add(rbox(2.6, 66 - wy + 1.5, 2.6, frame, { x: wx, y: wy - 1.5, z: s * pz }, 0.8))
   }
   // 推手
@@ -610,10 +610,10 @@ function servingCart(p: string[]) {
   g.add(cylZ(0.9, 44, STEEL, wx, wy, 0, 10))
   for (const s of [-1, 1]) {
     const z = s * 21
-    g.add(torus(wy - 1.4, 1.4, tire, { x: wx, y: wy, z }))
-    g.add(torus(wy - 2.7, 0.8, wood, { x: wx, y: wy, z }))
-    for (let i = 0; i < 3; i++) g.add(P(rbox(1.2, (wy - 2.7) * 2, 1, wood, {}, 0.3), wx, wy, z, 0, 0, (i * PI) / 3))
-    g.add(cylZ(2.4, 3.2, shade(wood, -0.12), wx, wy, z, 16))
+    g.add(torus(wy - 1.4, 1.4, tire, { x: wx, y: wy, z }, PI * 2, [6, 32]))
+    g.add(torus(wy - 2.7, 0.8, wood, { x: wx, y: wy, z }, PI * 2, [5, 32]))
+    for (let i = 0; i < 3; i++) g.add(nub(1.2, (wy - 2.7) * 2, 1, wood, { x: wx, y: wy - (wy - 2.7), z, rz: (i * PI) / 3 }))
+    g.add(cylZ(2.4, 3.2, shade(wood, -0.12), wx, wy, z, 12))
   }
   return g
 }

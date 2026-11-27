@@ -3,7 +3,7 @@
 // 原点在占地中心底面，正面朝 +z。桌面增高书架声明 surface / surfaces；带屏的显示器支臂声明 screens 和顶边夹挂层。
 
 import * as THREE from 'three'
-import { ball, cup, cyl, plate, puck, rbox, shade, torus, tray } from '../toon'
+import { ball, box, cup, cyl, plate, puck, rbox, shade, torus, tray } from '../toon'
 import { C, clipLevels, drawerBox, drawerLevel, glow, paintPanel, rectPoly, rng, slab, type AssetDef, type ScreenPanel } from '../kit'
 import { batten, cylX, cylZ, fitGroup, G, ghost, lit, noOutline, P, PI, rod3, sideSlab, tiltFrame, tube, UP, type V2, type V3 } from '../geo'
 import { I, J, M, N, R, define, PROP, type Pal } from '../packkit'
@@ -139,8 +139,8 @@ function laptopStand(p: string[]) {
     [0.6, 0.8],
     [1.7, 0.8],
   ] as [number, number][])
-    g.add(noOutline(rbox(w, 0.5, 0.3, DARK, { x: dx + x, y: 0.8, z: 6.55 }, 0.1)))
-  g.add(lit(rbox(0.5, 0.2, 0.5, '#7dffb0', { x: dx + 1.6, y: 1.95, z: 5.8 }, 0.1), '#7dffb0', 0.8))
+    g.add(noOutline(box(w, 0.5, 0.3, DARK, { x: dx + x, y: 0.8, z: 6.55 })))
+  g.add(lit(box(0.5, 0.2, 0.5, '#7dffb0', { x: dx + 1.6, y: 1.95, z: 5.8 }), '#7dffb0', 0.8))
   // 线：从笔记本右侧的口绕出来，插进扩展坞顶上
   const [py, pz] = tiltPt(LS_A, LS_B, 1.35, 12)
   g.add(
@@ -166,10 +166,11 @@ function wirelessCharger(p: string[]) {
   const g = new THREE.Group()
   // 充电板 + 前沿指示灯 + 躺着的手机（锁屏微亮）
   g.add(puck(4.5, 0.8, padC, { x: -4 }))
-  g.add(lit(rbox(0.8, 0.2, 0.4, '#8fe3ff', { x: -4, y: 0.35, z: 4.35 }, 0.1), '#8fe3ff', 0.8))
+  // 指示灯和耳机盒上的灯同色同亮度（发光件按颜色各占一次绘制，能合就合）
+  g.add(lit(box(0.8, 0.2, 0.4, '#7dffb0', { x: -4, y: 0.35, z: 4.35 }), '#7dffb0', 0.8))
   g.add(rbox(14, 0.8, 7, phone, { x: -4, y: 0.8 }, 0.6))
-  g.add(lit(rbox(13, 0.2, 6.2, PHONE_GLASS, { x: -4, y: 1.5 }, 0.1), PHONE_GLASS, 0.35))
-  g.add(noOutline(lit(rbox(2.4, 0.1, 0.6, '#cfe3ff', { x: -5, y: 1.7, z: -1.2 }, 0.05), '#cfe3ff', 0.6)))
+  g.add(lit(box(13, 0.2, 6.2, PHONE_GLASS, { x: -4, y: 1.5 }), PHONE_GLASS, 0.35))
+  g.add(noOutline(lit(box(2.4, 0.1, 0.6, '#cfe3ff', { x: -5, y: 1.7, z: -1.2 }), '#cfe3ff', 0.6)))
   // 充电板的线沿桌面接到支架底座后面
   g.add(
     tube(
@@ -194,14 +195,14 @@ function wirelessCharger(p: string[]) {
   g.add(P(back, sx, 1.2, -3.2, -0.25))
   // 耳机盒：竖着放在前面左边，盖缝 + 小灯
   g.add(rbox(4.2, 5, 2.2, '#f4f4f2', { x: sx - 1.6, y: 1.2, z: 2.4 }, 1))
-  g.add(noOutline(rbox(4.4, 0.2, 2.4, '#dcdcd8', { x: sx - 1.6, y: 4.6, z: 2.4 }, 0.1)))
-  g.add(lit(rbox(0.3, 0.3, 0.2, '#7dffb0', { x: sx - 1.6, y: 3.4, z: 3.55 }, 0.1), '#7dffb0', 0.8))
+  g.add(noOutline(box(4.4, 0.2, 2.4, '#dcdcd8', { x: sx - 1.6, y: 4.6, z: 2.4 })))
+  g.add(lit(box(0.3, 0.3, 0.2, '#7dffb0', { x: sx - 1.6, y: 3.4, z: 3.55 }), '#7dffb0', 0.8))
   // 手表：一根短柱顶着圆形充电头，表身挂在前面，表带绕到后面
   const wx = sx + 2.6
   g.add(cyl(0.5, 0.5, 2.4, acc, { x: wx, y: 1.2, z: 2 }, 10))
   g.add(cylZ(1.3, 0.6, acc, wx, 4.6, 2.4, 14))
   g.add(rbox(2.6, 3.2, 1, phone, { x: wx, y: 3, z: 3.2 }, 0.5))
-  g.add(lit(rbox(2.1, 2.6, 0.2, PHONE_GLASS, { x: wx, y: 3.3, z: 3.75 }, 0.1), PHONE_GLASS, 0.4))
+  g.add(lit(box(2.1, 2.6, 0.2, PHONE_GLASS, { x: wx, y: 3.3, z: 3.75 }), PHONE_GLASS, 0.35))
   const band = torus(1.9, 0.4, shade(acc, -0.15), { x: wx, y: 4.6, z: 2.2, ry: PI / 2 })
   band.scale.set(0.45, 1, 2.2)
   g.add(band)
@@ -214,13 +215,13 @@ function wirelessCharger(p: string[]) {
 function usbStick(x: number, z: number, ry: number, color: string) {
   const s = new THREE.Group()
   s.add(rbox(1.8, 0.8, 4.6, color, { z: -0.6 }, 0.35))
-  s.add(rbox(1.2, 0.45, 1.3, STEEL, { y: 0.17, z: 2.15 }, 0.08))
-  s.add(noOutline(torus(0.35, 0.12, shade(color, -0.25), { y: 0.82, z: -2.3, rx: PI / 2 })))
+  s.add(box(1.2, 0.45, 1.3, STEEL, { y: 0.17, z: 2.15 }))
+  s.add(noOutline(torus(0.35, 0.12, shade(color, -0.25), { y: 0.82, z: -2.3, rx: PI / 2 }, PI * 2, [4, 8])))
   return P(s, x, 0, z, 0, ry)
 }
 
 function usbBits(p: string[]) {
-  const [a, b, box] = p
+  const [a, b, boxC] = p
   const g = new THREE.Group()
   // 三只 U 盘斜躺成一排
   g.add(usbStick(-5.6, 2.3, 0.15, a))
@@ -228,19 +229,19 @@ function usbBits(p: string[]) {
   g.add(usbStick(-0.4, 2.4, 0.25, shade(a, 0.25)))
   // 读卡器：扁盒子，后面一张插了一半的 SD 卡，前面是 USB 插头
   g.add(rbox(3.4, 1, 4.6, DARK, { x: 4.6, z: 2.3 }, 0.4))
-  g.add(rbox(2.4, 0.2, 2.2, '#3f74c8', { x: 4.6, y: 0.4, z: -0.6 }, 0.08))
-  g.add(noOutline(rbox(1.6, 0.1, 0.9, '#f4f4f2', { x: 4.6, y: 0.6, z: -0.9 }, 0.04)))
-  g.add(rbox(1.2, 0.45, 1.3, STEEL, { x: 4.6, y: 0.27, z: 5.2 }, 0.08))
-  g.add(lit(rbox(0.3, 0.1, 0.3, '#7dffb0', { x: 5.6, y: 0.95, z: 3.6 }, 0.05), '#7dffb0', 0.8))
+  g.add(box(2.4, 0.2, 2.2, '#3f74c8', { x: 4.6, y: 0.4, z: -0.6 }))
+  g.add(noOutline(box(1.6, 0.1, 0.9, '#f4f4f2', { x: 4.6, y: 0.6, z: -0.9 })))
+  g.add(box(1.2, 0.45, 1.3, STEEL, { x: 4.6, y: 0.27, z: 5.2 }))
+  g.add(lit(box(0.3, 0.1, 0.3, '#7dffb0', { x: 5.6, y: 0.95, z: 3.6 }), '#7dffb0', 0.8))
   // 小收纳盒：敞口小盒里立着几张 SD 卡
-  g.add(tray(6.4, 2.2, 3.6, 0.3, box, { x: -2.6, z: -2.6 }, 0.12))
+  g.add(tray(6.4, 2.2, 3.6, 0.3, boxC, { x: -2.6, z: -2.6 }, 0.12))
   ;['#d8483f', '#3f74c8', '#2b2b30', '#f2c230'].forEach((c, i) => {
-    const sd = rbox(2.4, 3, 0.25, c, { x: -4.6 + i * 1.4, y: 0.3, z: -2.6 + (i % 2 ? 0.5 : -0.5) }, 0.08)
+    const sd = box(2.4, 3, 0.25, c, { x: -4.6 + i * 1.4, y: 0.3, z: -2.6 + (i % 2 ? 0.5 : -0.5) })
     sd.rotation.z = (i - 1.5) * 0.08
     g.add(sd)
   })
   // 一张散放的 micro SD
-  g.add(rbox(1.1, 0.15, 1.5, DARK, { x: 4.2, y: 0, z: -2.6 }, 0.05))
+  g.add(box(1.1, 0.15, 1.5, DARK, { x: 4.2, y: 0, z: -2.6 }))
   return fitGroup(g)
 }
 
@@ -251,16 +252,16 @@ function radio(color: string, acc: string) {
   const r = new THREE.Group()
   r.add(rbox(5.4, 10.4, 3.2, color, {}, 1))
   r.add(cyl(0.45, 0.6, 6.5, RUBBER, { x: -1.4, y: 10.2 }, 10))
-  r.add(ball(0.55, RUBBER, { x: -1.4, y: 16.7 }))
+  r.add(ball(0.55, RUBBER, { x: -1.4, y: 16.7 }, undefined, [8, 6]))
   r.add(cyl(0.6, 0.6, 1.1, DARK, { x: 0.6, y: 10.2 }, 12))
   r.add(cyl(0.45, 0.45, 0.9, acc, { x: 1.8, y: 10.2 }, 10))
   // 正面：喇叭格栅（几道横槽）、小屏、按键
-  for (let i = 0; i < 4; i++) r.add(noOutline(rbox(3.6, 0.25, 0.2, shade(color, -0.25), { y: 6.6 + i * 0.6, z: 1.62 }, 0.05)))
-  r.add(lit(rbox(3, 1.4, 0.2, '#b8e2c8', { y: 4.2, z: 1.62 }, 0.1), '#b8e2c8', 0.35))
-  for (let i = 0; i < 3; i++) r.add(rbox(0.8, 0.5, 0.3, shade(color, 0.2), { x: -1.1 + i * 1.1, y: 2.8, z: 1.6 }, 0.1))
+  for (let i = 0; i < 4; i++) r.add(noOutline(box(3.6, 0.25, 0.2, shade(color, -0.25), { y: 6.6 + i * 0.6, z: 1.62 })))
+  r.add(lit(box(3, 1.4, 0.2, '#b8e2c8', { y: 4.2, z: 1.62 }), '#b8e2c8', 0.35))
+  for (let i = 0; i < 3; i++) r.add(box(0.8, 0.5, 0.3, shade(color, 0.2), { x: -1.1 + i * 1.1, y: 2.8, z: 1.6 }))
   // 侧面 PTT 键、背夹
-  r.add(rbox(0.4, 2.4, 1.4, acc, { x: -2.8, y: 5.6 }, 0.15))
-  r.add(rbox(2.2, 4.2, 0.4, DARK, { y: 4.6, z: -1.75 }, 0.15))
+  r.add(box(0.4, 2.4, 1.4, acc, { x: -2.8, y: 5.6 }))
+  r.add(box(2.2, 4.2, 0.4, DARK, { y: 4.6, z: -1.75 }))
   return r
 }
 
@@ -276,7 +277,7 @@ function walkieTalkie(p: string[]) {
     [-3.4, '#7dffb0'],
     [3.4, '#ffb347'],
   ] as [number, string][])
-    g.add(lit(rbox(0.8, 0.3, 0.4, c, { x, y: 4.95, z: 3.6 }, 0.1), c, 0.8))
+    g.add(lit(box(0.8, 0.3, 0.4, c, { x, y: 4.95, z: 3.6 }), c, 0.8))
   // 两台对讲机插在座里（略往后靠）
   for (const [x, ry] of [
     [-3.4, 0.05],
@@ -299,22 +300,22 @@ function mecha(main: string, frame: string, acc: string) {
     m.add(rbox(s > 0 ? 1.5 : 1.1, 3.4, s > 0 ? 1.7 : 1.2, s > 0 ? main : frame, { x: s * 1.1, y: y0 + 0.9 }, 0.3))
     m.add(rbox(1.2, 2.6, 1.3, frame, { x: s * 1.1, y: y0 + 4.2 }, 0.3))
   }
-  m.add(rbox(1.1, 0.9, 0.5, acc, { x: 1.1, y: y0 + 3.4, z: 0.95 }, 0.15))
+  m.add(box(1.1, 0.9, 0.5, acc, { x: 1.1, y: y0 + 3.4, z: 0.95 }))
   // 腰、裙甲、胸部（胸口两道进气口）
   m.add(rbox(3.6, 1.3, 2.3, main, { y: y0 + 6.6 }, 0.35))
   m.add(rbox(4.4, 3.4, 2.8, main, { y: y0 + 7.8 }, 0.5))
-  for (const s of [-1, 1]) m.add(rbox(1.2, 0.9, 0.3, acc, { x: s * 1.1, y: y0 + 9.6, z: 1.45 }, 0.1))
+  for (const s of [-1, 1]) m.add(box(1.2, 0.9, 0.3, acc, { x: s * 1.1, y: y0 + 9.6, z: 1.45 }))
   // 脖子、方头、单眼导轨和粉色单眼
   m.add(cyl(0.5, 0.6, 0.6, frame, { y: y0 + 11.2 }, 10))
   m.add(rbox(2, 1.8, 2.1, main, { y: y0 + 11.7 }, 0.35))
-  m.add(noOutline(rbox(1.7, 0.5, 0.2, DARK, { y: y0 + 12.4, z: 1.1 }, 0.08)))
-  m.add(lit(ball(0.22, '#ff4f8a', { x: 0.3, y: y0 + 12.65, z: 1.22 }), '#ff4f8a', 0.9))
-  m.add(rbox(0.3, 1, 0.3, acc, { y: y0 + 13.4, z: -0.3 }, 0.1))
+  m.add(noOutline(box(1.7, 0.5, 0.2, DARK, { y: y0 + 12.4, z: 1.1 })))
+  m.add(lit(ball(0.22, '#ff4f8a', { x: 0.3, y: y0 + 12.65, z: 1.22 }, undefined, [8, 6]), '#ff4f8a', 0.9))
+  m.add(box(0.3, 1, 0.3, acc, { y: y0 + 13.4, z: -0.3 }))
   // 左肩：大肩甲 + 垂下来的左臂和拳头；右肩只有关节
   m.add(rbox(2.4, 2.4, 3, acc, { x: -3, y: y0 + 9.4 }, 0.6))
   m.add(rbox(1.2, 3.6, 1.3, main, { x: -3, y: y0 + 5.9 }, 0.3))
-  m.add(ball(0.7, frame, { x: -3, y: y0 + 5.6 }))
-  m.add(ball(0.75, frame, { x: 2.5, y: y0 + 10.2 }))
+  m.add(ball(0.7, frame, { x: -3, y: y0 + 5.6 }, undefined, [8, 6]))
+  m.add(ball(0.75, frame, { x: 2.5, y: y0 + 10.2 }, undefined, [8, 6]))
   return m
 }
 
@@ -324,16 +325,16 @@ function runner(color: string, seed: number) {
   const w = 10
   const d = 7
   for (const s of [-1, 1]) {
-    r.add(rbox(w, 0.4, 0.4, color, { z: s * (d / 2 - 0.2) }, 0.15))
-    r.add(rbox(0.4, 0.3, d - 0.8, color, { x: s * (w / 2 - 0.2) }, 0.12))
+    r.add(box(w, 0.4, 0.4, color, { z: s * (d / 2 - 0.2) }))
+    r.add(box(0.4, 0.3, d - 0.8, color, { x: s * (w / 2 - 0.2) }))
   }
-  r.add(rbox(w - 0.8, 0.3, 0.3, color, {}, 0.1))
+  r.add(box(w - 0.8, 0.3, 0.3, color))
   const rnd = rng(seed)
   for (let i = 0; i < 4; i++) {
     const pw = 1.2 + rnd() * 0.8
     const pd = 1.2 + rnd() * 0.9
     const side = i % 2 ? 1 : -1
-    r.add(rbox(pw, 0.5, pd, color, { x: -3.3 + i * 2.2, z: side * (pd / 2 + 0.05) }, 0.15))
+    r.add(box(pw, 0.5, pd, color, { x: -3.3 + i * 2.2, z: side * (pd / 2 + 0.05) }))
   }
   return r
 }
@@ -348,7 +349,7 @@ function gunplaBench(p: string[]) {
   for (let i = -2; i <= 2; i++) g.add(plate(36, 0.15, '#e8f2e4', { y: top + 0.05, z: i * 5 }))
   // 机器人立在垫子右后方；没装上的右臂躺在旁边
   g.add(P(mecha(main, frame, acc), 9, top, -5))
-  g.add(P(G(rbox(1.2, 1.3, 3.6, main, {}, 0.3), ball(0.75, frame, { y: 0.65, z: 2.2 })), 14, top, 1.5, 0, 0.5))
+  g.add(P(G(rbox(1.2, 1.3, 3.6, main, {}, 0.3), ball(0.75, frame, { y: 0.65, z: 2.2 }, undefined, [8, 6])), 14, top, 1.5, 0, 0.5))
   // 两块板件（一块主色、一块骨架灰）
   g.add(P(runner(main, 3), -10, top, -6, 0, 0.12))
   g.add(P(runner(frame, 7), -9, top, 5.5, 0, -0.18))
@@ -356,20 +357,20 @@ function gunplaBench(p: string[]) {
   const nip = new THREE.Group()
   for (const s of [-1, 1]) {
     nip.add(P(rbox(0.8, s > 0 ? 0.5 : 0.6, 6.4, acc, {}, 0.25), s * 0.9, 0.3, 3.2, 0, s * 0.16))
-    nip.add(P(rbox(0.5, 0.4, 2.2, STEEL, {}, 0.12), s * 0.2, 0.2, -1, 0, -s * 0.08))
+    nip.add(P(box(0.5, 0.4, 2.2, STEEL), s * 0.2, 0.2, -1, 0, -s * 0.08))
   }
   nip.add(cyl(0.6, 0.6, 0.9, STEEL, { y: 0 }, 12))
   g.add(P(nip, 1.5, top, 6, 0, -0.6))
   // 笔刀：彩色笔杆 + 银色夹头 + 小刀片
   g.add(cylX(0.38, 8, frame, 0, top + 0.38, 11, 12))
   g.add(cylX(0.42, 1.6, STEEL, 4.6, top + 0.42, 11, 12))
-  g.add(P(rbox(1, 0.1, 0.4, STEEL, {}, 0.03), 5.9, top + 0.42, 11, 0, 0, -0.1))
+  g.add(P(box(1, 0.1, 0.4, STEEL), 5.9, top + 0.42, 11, 0, 0, -0.1))
   // 两根打磨棒
   for (const [x, c] of [
     [13, '#f2f2ee'],
     [15, '#e8a23a'],
   ] as [number, string][])
-    g.add(P(rbox(1, 0.5, 9, c, {}, 0.15), x, top + 0.25, 8, 0, 0.08))
+    g.add(P(box(1, 0.5, 9, c), x, top + 0.25, 8, 0, 0.08))
   return fitGroup(g)
 }
 
@@ -390,16 +391,17 @@ function perlerBeads(p: string[]) {
       const x = bx + (i - 4.5) * step
       const z = (j - 4.5) * step
       const c = row[i]
-      if (c === ' ') g.add(cyl(0.18, 0.2, 0.5, shade(boardC, -0.08), { x, y: 0.5, z }, 6))
-      else g.add(cyl(0.6, 0.6, 0.6, c === '#' ? heart : c === 'o' ? '#ffffff' : '#fbf3e4', { x, y: 0.5, z }, 8))
+      // 一百来颗的小件：钉子 4 段、珠子 6 段（直径一厘米上下，看不出棱角）
+      if (c === ' ') g.add(cyl(0.18, 0.2, 0.5, shade(boardC, -0.08), { x, y: 0.5, z }, 4))
+      else g.add(cyl(0.6, 0.6, 0.6, c === '#' ? heart : c === 'o' ? '#ffffff' : '#fbf3e4', { x, y: 0.5, z }, 6))
     }
   })
   // 珠盒：3 × 2 小格，每格一堆不同颜色的珠子
   const ox = 6
   const oz = -3
   g.add(tray(11, 2.4, 8, 0.5, boxC, { x: ox, z: oz }, 0.2))
-  for (const x of [-1.8, 1.8]) g.add(rbox(0.4, 1.8, 7, boxC, { x: ox + x, y: 0.5, z: oz }, 0.12))
-  g.add(rbox(10, 1.8, 0.4, boxC, { x: ox, y: 0.5, z: oz }, 0.12))
+  for (const x of [-1.8, 1.8]) g.add(box(0.4, 1.8, 7, boxC, { x: ox + x, y: 0.5, z: oz }))
+  g.add(box(10, 1.8, 0.4, boxC, { x: ox, y: 0.5, z: oz }))
   ;[heart, '#fbf3e4', '#5ab4e8', '#f2c230', '#6fc27a', DARK].forEach((c, k) => {
     const x = ox + (k % 3 - 1) * 3.4
     const z = oz + (k < 3 ? -1.9 : 1.9)
@@ -408,7 +410,7 @@ function perlerBeads(p: string[]) {
       [-0.5, 0.3],
       [0.5, -0.4],
     ])
-      g.add(ball(0.45, c, { x: x + dx, y: 1.45, z: z + dz }, undefined, [8, 6]))
+      g.add(ball(0.45, c, { x: x + dx, y: 1.45, z: z + dz }, undefined, [6, 4]))
   })
   // 小熨斗：尖头金属底板 + 机身 + 拱形把手 + 温控旋钮 + 电线
   const iron = new THREE.Group()
@@ -460,8 +462,8 @@ function magicSnake(p: string[]) {
   const top = 1
   g.add(rbox(13, top, 13, wood, { x: ox }, 0.4))
   for (const s of [-1, 1]) {
-    g.add(rbox(11.7, 0.2, 0.25, line, { x: ox, y: top - 0.05, z: s * cell * 1.5 }, 0.08))
-    g.add(rbox(0.25, 0.3, 11.7, line, { x: ox + s * cell * 1.5, y: top - 0.05 }, 0.08))
+    g.add(box(11.7, 0.2, 0.25, line, { x: ox, y: top - 0.05, z: s * cell * 1.5 }))
+    g.add(box(0.25, 0.3, 11.7, line, { x: ox + s * cell * 1.5, y: top - 0.05 }))
   }
   for (const i of [-3.5, -2.5, -0.5, 0.5, 2.5, 3.5]) {
     g.add(plate(11.7, 0.08, shade(wood, -0.25), { x: ox, y: top + 0.05, z: i * cell }))
@@ -475,8 +477,8 @@ function magicSnake(p: string[]) {
       if (rnd() > 0.36) continue
       const x = ox + (i - 4) * cell
       const z = (j - 4) * cell
-      g.add(cyl(0.5, 0.52, 0.4, shade(wood, 0.12), { x, y: top, z }, 10))
-      g.add(noOutline(cyl(0.22, 0.22, 0.1, digits[(i * 3 + j * 5) % 9], { x, y: top + 0.4, z }, 8)))
+      g.add(cyl(0.5, 0.52, 0.4, shade(wood, 0.12), { x, y: top, z }, 8))
+      g.add(noOutline(cyl(0.22, 0.22, 0.1, digits[(i * 3 + j * 5) % 9], { x, y: top + 0.4, z }, 6)))
     }
   return fitGroup(g)
 }
@@ -523,14 +525,14 @@ function deskShelf(p: string[]) {
 // ---------- 桌面分格收纳盒：后排高格插笔、剪刀、荧光笔和尺，前排矮格放便签本和一卷充电线 ----------
 
 function deskOrganizer(p: string[]) {
-  const [box, sub, acc] = p
+  const [boxC, sub, acc] = p
   const g = new THREE.Group()
   const t = 0.8
   // 后排高格（高 11）、前排矮格（高 5.5）
-  g.add(tray(30, 11, 8, t, box, { z: -4 }, 0.3))
-  g.add(tray(30, 5.5, 8, t, box, { z: 4 }, 0.3))
-  for (const x of [-5, 5]) g.add(rbox(t, 10.2, 6.4, box, { x, y: t, z: -4 }, 0.2))
-  g.add(rbox(t, 4.7, 6.4, box, { x: -3, y: t, z: 4 }, 0.2))
+  g.add(tray(30, 11, 8, t, boxC, { z: -4 }, 0.3))
+  g.add(tray(30, 5.5, 8, t, boxC, { z: 4 }, 0.3))
+  for (const x of [-5, 5]) g.add(rbox(t, 10.2, 6.4, boxC, { x, y: t, z: -4 }, 0.2))
+  g.add(rbox(t, 4.7, 6.4, boxC, { x: -3, y: t, z: 4 }, 0.2))
   // 笔：几支斜插的笔
   const pens: [number, number, number, number, string][] = [
     [-12.5, -5.6, 0.12, 13, acc],
@@ -542,14 +544,16 @@ function deskOrganizer(p: string[]) {
     const pen = new THREE.Group()
     pen.add(cyl(0.45, 0.45, len - 1.6, c, {}, 10))
     pen.add(cyl(0.48, 0.48, 1.6, shade(c, -0.15), { y: len - 1.6 }, 10))
-    pen.add(rbox(0.2, 3, 0.4, STEEL, { x: 0.5, y: len - 3.4 }, 0.08))
+    pen.add(box(0.2, 3, 0.4, STEEL, { x: 0.5, y: len - 3.4 }))
     g.add(P(pen, x, t, z, 0, 0, rz))
   }
   // 剪刀：刀刃朝下插着，两只手柄环露在外面
   const sc = new THREE.Group()
   for (const s of [-1, 1]) {
-    sc.add(P(rbox(0.5, 8.6, 0.2, STEEL, {}, 0.08), s * 0.25, 4.32, s * 0.1, 0, 0, s * 0.05))
-    sc.add(P(torus(1.2, 0.35, acc), s * 1.3, 10.6, s * 0.1))
+    sc.add(P(box(0.5, 8.6, 0.2, STEEL), s * 0.25, 4.32, s * 0.1, 0, 0, s * 0.05))
+    sc.add(torus(1.2, 0.35, acc, { x: s * 1.3, y: 10.6, z: s * 0.1 }, PI * 2, [6, 12]))
+    // 手柄：从转轴斜着接进指环的下沿（以前指环只是悬在刀刃上方，和刀身没连上）
+    sc.add(rod3([0, 8.6, s * 0.1], [s * 0.65, 9.65, s * 0.1], 0.3, acc, 6))
   }
   sc.add(cylZ(0.4, 0.8, STEEL, 0, 8.6, 0, 10))
   g.add(P(sc, -1.5, t, -4.4, 0, 0.2))
@@ -559,12 +563,13 @@ function deskOrganizer(p: string[]) {
     [3.4, '#ff8fb4'],
   ] as [number, string][])
     g.add(P(rbox(1.4, 12, 0.9, c, {}, 0.3), x, t + 6, -5.6, -0.08))
-  g.add(P(rbox(3.2, 15, 0.3, '#eef4f6', {}, 0.1), 10, t + 7.5, -6.6, -0.05))
-  for (let i = 0; i < 5; i++) g.add(noOutline(rbox(1, 0.1, 0.1, DARK, { x: 9, y: t + 9 + i * 1.2, z: -6.5 }, 0.03)))
+  g.add(P(box(3.2, 15, 0.3, '#eef4f6'), 10, t + 7.5, -6.6, -0.05))
+  for (let i = 0; i < 5; i++) g.add(noOutline(box(1, 0.1, 0.1, DARK, { x: 9, y: t + 9 + i * 1.2, z: -6.5 })))
   // 前排：便签本、一卷充电线 + 插头
   g.add(rbox(7.6, 3.6, 6.2, '#ffe27a', { x: -9.4, y: t, z: 4 }, 0.15))
-  g.add(rbox(7.6, 0.2, 6.2, '#ffd23f', { x: -9.4, y: t + 3.6, z: 4 }, 0.05))
-  for (let i = 0; i < 5; i++) g.add(torus(2.6, 0.35, i % 2 ? '#f4f4f2' : '#e6e6e2', { x: 6, y: t + 0.35 + i * 0.7, z: 4, rx: PI / 2 }))
+  g.add(box(7.6, 0.2, 6.2, '#ffd23f', { x: -9.4, y: t + 3.6, z: 4 }))
+  // 一卷线：五圈细环叠起来，一圈 16 段、截面 6 段
+  for (let i = 0; i < 5; i++) g.add(torus(2.6, 0.35, i % 2 ? '#f4f4f2' : '#e6e6e2', { x: 6, y: t + 0.35 + i * 0.7, z: 4, rx: PI / 2 }, PI * 2, [6, 16]))
   g.add(tube([[8.4, t + 3.15, 4.6], [10.6, t + 2.6, 5.4], [12.2, t + 1.2, 5]], 0.35, '#f4f4f2', { seg: 10, radial: 6 }))
   g.add(rbox(1.2, 0.7, 2, '#f4f4f2', { x: 12.4, y: t + 0.5, z: 4.4 }, 0.2))
   return fitGroup(g)
@@ -637,9 +642,10 @@ function streamDeck(p: string[]) {
     for (let c = 0; c < 5; c++) {
       const x = kx + (c - 2) * 2.4
       const z = 1.8 + r * 2.6
-      f.g.add(rbox(2, 0.6, 2, DARK, { x, y: -0.1, z }, 0.2))
+      // 十五颗键、十五个图标：直角小盒（圆角盒每个 108 个面，几毫米的圆角看不出）
+      f.g.add(box(2, 0.6, 2, DARK, { x, y: -0.1, z }))
       const col = r === 1 && c === 2 ? acc : KEY_COLORS[(r * 2 + c) % 5]
-      f.g.add(lit(rbox(1.4, 0.2, 1.4, col, { x, y: 0.45, z }, 0.1), col, 0.7))
+      f.g.add(lit(box(1.4, 0.2, 1.4, col, { x, y: 0.45, z }), col, 0.7))
     }
   g.add(f.g)
   // 调音台：扁盒子，四条推子槽 + 推子帽，后排四只旋钮，右侧电平灯
@@ -648,14 +654,15 @@ function streamDeck(p: string[]) {
   const caps = [0.4, -1.6, 1.2, -0.4]
   caps.forEach((dz, i) => {
     const x = mx - 4.5 + i * 2.6
-    g.add(noOutline(rbox(0.4, 0.1, 6, DARK, { x, y: 2.4, z: 1.2 }, 0.04)))
-    g.add(rbox(1.4, 1, 0.8, i === 3 ? acc : '#e8e8e4', { x, y: 2.4, z: 1.2 + dz }, 0.2))
-    g.add(cyl(0.6, 0.65, 0.9, DARK, { x, y: 2.4, z: -3.4 }, 12))
-    g.add(noOutline(rbox(0.15, 0.1, 0.5, '#f4f4f2', { x, y: 3.3, z: -3.6 }, 0.03)))
+    g.add(noOutline(box(0.4, 0.1, 6, DARK, { x, y: 2.4, z: 1.2 })))
+    g.add(box(1.4, 1, 0.8, i === 3 ? acc : '#e8e8e4', { x, y: 2.4, z: 1.2 + dz }))
+    g.add(cyl(0.6, 0.65, 0.9, DARK, { x, y: 2.4, z: -3.4 }, 10))
+    g.add(noOutline(box(0.15, 0.1, 0.5, '#f4f4f2', { x, y: 3.3, z: -3.6 })))
   })
+  // 电平灯：绿、黄借按键图标的颜色和亮度（发光件按颜色各占一次绘制，同色同亮度的才能合并）；最顶上一格是削波的红灯，单独一色
   for (let i = 0; i < 4; i++) {
-    const c = i === 3 ? '#ff5a4a' : i === 2 ? '#ffd24a' : '#7dff9a'
-    g.add(lit(rbox(0.6, 0.2, 0.6, c, { x: mx + 5.8, y: 2.35, z: 3.6 - i * 1.1 }, 0.1), c, 0.8))
+    const c = i === 3 ? '#ff5a4a' : i === 2 ? KEY_COLORS[2] : KEY_COLORS[3]
+    g.add(lit(box(0.6, 0.2, 0.6, c, { x: mx + 5.8, y: 2.35, z: 3.6 - i * 1.1 }), c, 0.7))
   }
   // 两台之间的连线
   g.add(tube([[kx + 6.4, 0.6, -3], [-0.5, 0.3, -4.5], [mx - 6.9, 0.6, -4]], 0.25, DARK, { seg: 10, radial: 6 }))
@@ -736,12 +743,13 @@ function labelMaker(p: string[]) {
   // 标签机：机身 + 小液晶 + 4 × 5 键 + 后端吐出的一截标签
   const mx = -9
   g.add(rbox(6.5, 3.2, 14, body, { x: mx, z: 1 }, 1.2))
-  g.add(lit(rbox(4.6, 0.2, 2.6, '#c3d1b0', { x: mx, y: 3.1, z: -3.2 }, 0.1), '#c3d1b0', 0.2))
-  g.add(noOutline(rbox(3, 0.1, 0.5, '#3a4038', { x: mx - 0.3, y: 3.3, z: -3.2 }, 0.03)))
+  g.add(lit(box(4.6, 0.2, 2.6, '#c3d1b0', { x: mx, y: 3.1, z: -3.2 }), '#c3d1b0', 0.2))
+  g.add(noOutline(box(3, 0.1, 0.5, '#3a4038', { x: mx - 0.3, y: 3.3, z: -3.2 })))
+  // 二十颗小键：直角小盒
   for (let r = 0; r < 5; r++)
-    for (let c = 0; c < 4; c++) g.add(rbox(1, 0.35, 0.9, r === 4 && c === 3 ? tape : shade(body, 0.25), { x: mx - 1.95 + c * 1.3, y: 3.05, z: -0.4 + r * 1.35 }, 0.15))
-  g.add(rbox(1.2, 0.2, 3, '#fbfaf4', { x: mx, y: 1.6, z: -7.4 }, 0.05))
-  g.add(noOutline(rbox(0.6, 0.1, 1.6, DARK, { x: mx, y: 1.8, z: -7.6 }, 0.03)))
+    for (let c = 0; c < 4; c++) g.add(box(1, 0.35, 0.9, r === 4 && c === 3 ? tape : shade(body, 0.25), { x: mx - 1.95 + c * 1.3, y: 3.05, z: -0.4 + r * 1.35 }))
+  g.add(box(1.2, 0.2, 3, '#fbfaf4', { x: mx, y: 1.6, z: -7.4 }))
+  g.add(noOutline(box(0.6, 0.1, 1.6, DARK, { x: mx, y: 1.8, z: -7.6 })))
   // 标签带盒：方盒 + 中间的卷轴孔 + 窗里露出的白带
   const tx = -1.8
   g.add(rbox(5.5, 1.6, 5.5, tape, { x: tx, z: 3.2 }, 0.4))
@@ -755,11 +763,11 @@ function labelMaker(p: string[]) {
   ]
   for (const [x, h, inner] of jars) {
     const z = -3
-    g.add(ghost(cup(2.3, 2.2, h, 0.25, '#dfeff5', { x, z }), '#dfeff5', 0.5))
+    g.add(ghost(cup(2.3, 2.2, h, 0.25, '#dfeff5', { x, z }, 16), '#dfeff5', 0.5))
     g.add(puck(2.45, 1, lid, { x, y: h - 0.2, z }))
-    g.add(rbox(3, 1.6, 0.2, '#fbfaf4', { x, y: h * 0.45, z: z + 2.3 }, 0.05))
-    g.add(noOutline(rbox(2, 0.25, 0.1, DARK, { x, y: h * 0.45 + 0.65, z: z + 2.42 }, 0.03)))
-    for (let i = 0; i < 4; i++) g.add(ball(0.6, i % 2 ? inner : shade(inner, 0.2), { x: x + Math.cos(i * 2.1) * 1.1, y: 0.8 + (i > 2 ? 0.7 : 0), z: z + Math.sin(i * 2.1) * 1.1 }, undefined, [8, 6]))
+    g.add(box(3, 1.6, 0.2, '#fbfaf4', { x, y: h * 0.45, z: z + 2.3 }))
+    g.add(noOutline(box(2, 0.25, 0.1, DARK, { x, y: h * 0.45 + 0.65, z: z + 2.42 })))
+    for (let i = 0; i < 4; i++) g.add(ball(0.6, i % 2 ? inner : shade(inner, 0.2), { x: x + Math.cos(i * 2.1) * 1.1, y: 0.8 + (i > 2 ? 0.7 : 0), z: z + Math.sin(i * 2.1) * 1.1 }, undefined, [6, 4]))
   }
   return fitGroup(g)
 }
