@@ -10,7 +10,7 @@
 import * as THREE from 'three'
 import { ball, cached, capsule, cup, cyl, face, leaf, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, SWING_OPEN, ellipsePoly, movable, paintPanel, rectPoly, rng, shell, type AssetCategory, type AssetDef, type DoorMotion, type SurfaceDef } from '../kit'
-import { trayBox, trayBoxLevel } from '../cabinetKit'
+import { trayBoxLevel, trayDrawer, type Tray } from '../cabinetKit'
 import { PI, cylXLegacy, cylZLegacy, fitInPlace, latheAt, lit, noOutlineDeep, rod3, taperRod3, type V3 } from '../geo'
 import { I, J, M, N, R, define, type Build, type Dims, type Pal } from '../packkit'
 
@@ -49,13 +49,8 @@ function moving(parts: THREE.Object3D[], pivot: V3, m: DoorMotion) {
   }
   return movable(g, m)
 }
-/** 抽屉盒（cabinetKit trayBox）的参数：[口 x0, 口 x1, 盒底 y, 盒高, 面板背面 z, 盒深] */
-type Tray = readonly [number, number, number, number, number, number]
 const trayLevel = (t: Tray) => trayBoxLevel(...t)
-/** 一个抽屉：面板等部件 + 盒子，标好拉出动作 */
-function drawer(face: THREE.Object3D[], [x0, x1, y, h, z1, depth]: Tray, color: string) {
-  return moving([...face, trayBox(x0, x1, y, h, z1, depth, color)], [0, 0, 0], { kind: 'drawer', dz: Math.round(depth * 0.6) })
-}
+const drawer = trayDrawer
 
 /** 半透明材质（透明的不描边） */
 function glassFlat<T extends THREE.Object3D>(o: T, color = GLASS, k = 0.4): T {
@@ -412,7 +407,7 @@ function planterWood(p: string[]) {
     for (let k = 0; k < 6; k++) {
       const a = (k / 6) * PI * 2 + r()
       // 香草叶 6cm 长、不到 1cm 厚，一箱 30 片：同 leaf() 的比例，轮廓 12 段、厚度 4 段
-      g2.add(ball(3, k % 2 ? herb : shade(herb, -0.1), { x: x + Math.cos(a) * 1.4, y: 26 + r() * 10, z: Math.sin(a) * 1.4, ry: -a, rz: 0.5 }, [0.45, 0.12, 1], [12, 4]))
+      g2.add(leaf(6, k % 2 ? herb : shade(herb, -0.1), { x: x + Math.cos(a) * 1.4, y: 26 + r() * 10, z: Math.sin(a) * 1.4, ry: -a, rz: 0.5 }, [12, 4]))
     }
     g2.add(noOutlineDeep(cyl(0.4, 0.4, 14, C.leafD, { x, y: 23 }, 4)))
     g.add(g2)
@@ -439,7 +434,7 @@ function planterTerracotta(p: string[]) {
     const z = (i % 2 ? 2.5 : -2.5) * 0.9
     const h = 18 + (i % 3) * 4
     g.add(noOutlineDeep(cyl(0.45, 0.45, h, C.leafD, { x, y: 15.5, z }, 4)))
-    g.add(ball(5, C.leaf, { x: x + 1.2, y: 22, z, rz: -0.3, ry: 0.3 }, [0.45, 0.12, 1], [12, 6]))
+    g.add(leaf(10, C.leaf, { x: x + 1.2, y: 22, z, rz: -0.3, ry: 0.3 }, [12, 6]))
     // 郁金香：杯形花头 + 三片花瓣（花头直径不到 4cm：一圈 12 段，花瓣 8 段）
     g.add(cup(1.9, 1.3, 4.2, 0.3, petal, { x, y: 15.5 + h - 0.5, z }, 12))
     for (let k = 0; k < 3; k++) {

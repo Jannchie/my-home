@@ -7,7 +7,7 @@
 //   - 除了声明 surface 的美容桌和壁挂的牵引绳挂架，build 末尾都 fitGroup 居中落地。
 
 import * as THREE from 'three'
-import { ball, box, cup, cyl, face, markWater, nub, puck, rbox, shade, torus, tray } from '../toon'
+import { ball, box, cup, cyl, face, leaf, markWater, nub, puck, rbox, shade, torus, tray } from '../toon'
 import { C, glow, holePanel, rectPoly, type AssetDef } from '../kit'
 import { G, P, PI, bakeMeshes, batten, cappedTube, cylX, cylZ, fitGroup, fitWall, ghost, lathe, lit, mesh, noOutline, rod3, taperRod3, tube, type V2, type V3 } from '../geo'
 import { M, N, R, define, PROP, type Pal } from '../packkit'
@@ -551,7 +551,7 @@ function betta(color: string) {
 }
 
 /** 水草叶：压扁的长椭球（同 toon.ts 的 leaf，段数压到 8 × 4） */
-const weed = (len: number, color: string) => ball(len / 2, color, {}, [0.45, 0.12, 1], [8, 4])
+const weed = (len: number, color: string) => leaf(len, color, {}, [8, 4])
 
 function bettaTanks(p: string[]) {
   const [main, sub, acc] = p

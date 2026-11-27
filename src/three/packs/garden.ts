@@ -7,7 +7,7 @@
 //   - 挂起形态（form: 'hanging'）原点 = 挂点：自带 J 钩，横臂在 y = -2 往 -z 插进 1cm，模型都在原点下方、本体在 z ≥ 0.3。
 
 import * as THREE from 'three'
-import { ball, cached, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
+import { ball, cached, capsule, cup, cupInner, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, holePanel, rectPoly, rng, type AssetCategory, type AssetDef, type StyleTag } from '../kit'
 import { PI, clearMat, lathe, lit, noOutline, rod3, taperRod3, tube, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, R, type Build } from '../packkit'
@@ -143,12 +143,6 @@ function hollowLathe(prof: [number, number][], t: number, color: string, seg = 3
   }
   pts.push([Math.max(0.1, rAt(prof, t) - t), t], [0, t])
   return lathe(pts, color, seg, phi)
-}
-/** cup() 的内壁在高度 y（从杯底算）处的半径：和 toon.ts cup 的轮廓一致，内壁是 (内底, t + k) 到 (rTop - t, h - t / 2) 的一条直线 */
-function cupInner(rTop: number, rBottom: number, h: number, t: number, y: number) {
-  const k = Math.min(t * 0.6, rBottom * 0.2)
-  const ib = rBottom - t + ((rTop - rBottom) * t) / h
-  return ib + ((rTop - t - ib) * (y - t - k)) / (h - t / 2 - t - k)
 }
 /**
  * 圆形土面：顶面在 top，rWall 是这个高度上盆内壁的半径。和盆壁切成同样的多边形（cup / lathe 都是 32 段、从 +z 起），再往壁里嵌 0.2：

@@ -256,39 +256,23 @@ export function slideDoor(parts: THREE.Object3D[], dx: number) {
   return movable(g, { kind: 'slide', dx })
 }
 
-/** 抽屉盒的底、侧、后板：抽屉口 x0..x1、底边 y0、高 h，面板背面在 zf，盒深 depth（往 -z） */
-function drawerTray(x0: number, x1: number, y0: number, h: number, zf: number, depth: number, color: string) {
-  const w = x1 - x0 - 2
-  const cx = (x0 + x1) / 2
-  const bh = Math.max(2, h - 3)
-  const zc = zf - depth / 2
-  return [
-    rbox(w, 1, depth, color, { x: cx, y: y0 + 0.6, z: zc }, 0.2),
-    rbox(1, bh, depth, color, { x: cx - w / 2 + 0.5, y: y0 + 0.6, z: zc }, 0.2),
-    rbox(1, bh, depth, color, { x: cx + w / 2 - 0.5, y: y0 + 0.6, z: zc }, 0.2),
-    rbox(w - 2, bh, 1, color, { x: cx, y: y0 + 0.6, z: zf - depth + 0.5 }, 0.2),
-  ]
-}
-
 /** 抽屉：面板零件 + 抽屉盒，打开时往前拉 pull（默认盒深的 0.6） */
-export function drawerOf(front: THREE.Object3D[], x0: number, x1: number, y0: number, h: number, zf: number, depth: number, color: string, pull = Math.round(depth * 0.6)) {
+export function drawerOf(front: THREE.Object3D[], x0: number, x1: number, y0: number, h: number, zf: number, depth: number, color: string, pull = trayPull(depth)) {
   const g = new THREE.Group()
   for (const o of front) g.add(o)
-  // 抽屉盒关严时整个在柜体里，不画（kit.ts innards）
-  const tray = innards(new THREE.Group())
-  for (const o of drawerTray(x0, x1, y0, h, zf, depth, color)) tray.add(o)
-  g.add(tray)
+  // 抽屉盒比抽屉口两边各收 1、底抬 0.6、比面板矮 3
+  g.add(trayBox(x0 + 1, x1 - 1, y0 + 0.6, Math.max(2, h - 3), zf, depth, color))
   return movable(g, { kind: 'drawer', dz: pull })
 }
 
 /** 和 drawerOf 对应的抽屉格（关着时的位置；打开时按 slide 往前移） */
-export function drawerLv(x0: number, x1: number, y0: number, h: number, zf: number, depth: number, pull = Math.round(depth * 0.6)): SurfaceDef {
+export function drawerLv(x0: number, x1: number, y0: number, h: number, zf: number, depth: number, pull = trayPull(depth)): SurfaceDef {
   return { y: y0 + 1.6, h: Math.max(2, h - 3.6), inside: true, slide: pull, shape: [rectPoly(x0 + 2.2, zf - depth + 1.2, x1 - 2.2, zf - 0.4)] }
 }
 
 /**
  * 贴着抽屉口做满的抽屉盒（底、两侧、后板）：口宽 x0..x1，底 y，盒高 h，从 z1（面板背面）往后 depth。
- * 关严时整个在柜体里，不画（kit.ts innards）。和 drawerOf 的盒子比：不往里收、盒高直接给
+ * 关严时整个在柜体里，不画（kit.ts innards）。drawerOf 也用它（往里收一圈）
  */
 export function trayBox(x0: number, x1: number, y: number, h: number, z1: number, depth: number, color: string) {
   const w = x1 - x0
@@ -299,8 +283,22 @@ export function trayBox(x0: number, x1: number, y: number, h: number, z1: number
   return g
 }
 
+/** 抽屉默认拉出盒深的六成（拉出动作和抽屉格的 slide 必须一致） */
+const trayPull = (depth: number) => Math.round(depth * 0.6)
+
+/** trayBox 的参数：[口 x0, 口 x1, 盒底 y, 盒高, 面板背面 z, 盒深] */
+export type Tray = readonly [number, number, number, number, number, number]
+
+/** 一个抽屉：面板等零件 + trayBox 抽屉盒，拉出盒深的六成 */
+export function trayDrawer(face: THREE.Object3D[], t: Tray, color: string) {
+  const g = new THREE.Group()
+  for (const o of face) g.add(o)
+  g.add(trayBox(...t, color))
+  return movable(g, { kind: 'drawer', dz: trayPull(t[5]) })
+}
+
 /** trayBox 对应的抽屉格（同样的参数），打开时随抽屉拉出 slide */
-export function trayBoxLevel(x0: number, x1: number, y: number, h: number, z1: number, depth: number, slide = Math.round(depth * 0.6)): SurfaceDef {
+export function trayBoxLevel(x0: number, x1: number, y: number, h: number, z1: number, depth: number, slide = trayPull(depth)): SurfaceDef {
   return { y: y + 1, h: Math.round((h - 1.5) * 10) / 10, inside: true, slide, shape: [rectPoly(x0 + 1.2, z1 - depth + 1.2, x1 - 1.2, z1 - 0.4)] }
 }
 

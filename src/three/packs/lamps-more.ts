@@ -7,7 +7,7 @@
 // 素材库里各合成一张卡片，一键布置按房间风格从系列里挑款（decorate.ts 的 lampPick）。
 
 import * as THREE from 'three'
-import { ball, cup, cyl, face, puck, rbox, toon, torus } from '../toon'
+import { ball, cup, cyl, faceOn, puck, rbox, toon, torus } from '../toon'
 import { C, type AssetDef } from '../kit'
 import { G, P, fitGroup, lit, litOutlined, rod3, tube, type TubeOpts, type V3 } from '../geo'
 import { CL, CN, F, I, J, M, N, R, pal, type PalFlat } from '../packkit'
@@ -116,24 +116,6 @@ function spider(r: number, yTop: number, yFrom: number, color: string, x = 0, z 
     g.add(rod3([x, yTop - 0.3, z], [x + Math.sin(a) * r, yTop - 0.3, z + Math.cos(a) * r], 0.3, color, 6))
   }
   return g
-}
-
-/**
- * 把 face() 的五官贴到球形的头上：face() 是按平面摆的，头小的时候外侧的腮红离脸颊越来越远（熊熊落地灯的腮红外缘离头 2cm 多，
- * 从侧面看是悬着的一片）。每个零件保持正面看的 (x, y)，落到球面上（原来的前后偏移改成沿法线），并转到朝外。
- * c：头的球心，r：半径，dy：脸比球心高多少
- */
-function faceOn(size: number, c: V3, r: number, dy = 0) {
-  const f = face(size, { x: c[0], y: c[1] + dy, z: c[2] })
-  for (const m of f.children) {
-    const x = m.position.x
-    const y = m.position.y + dy
-    const n = new THREE.Vector3(x, y, Math.sqrt(Math.max(0.01, r * r - x * x - y * y))).normalize()
-    const out = r + m.position.z
-    m.position.set(n.x * out, n.y * out - dy, n.z * out)
-    m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), n)
-  }
-  return f
 }
 
 /** 壁挂件：xz 居中，最低点放到离地 y */

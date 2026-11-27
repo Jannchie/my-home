@@ -457,7 +457,8 @@ const q = (n: number) => (Math.abs(n) >= 0.1 ? Math.round(n * 10) / 10 : Math.ro
 function rboxSegments(r: number) {
   return r >= 4 ? 3 : r >= 1.5 ? 2 : 1
 }
-function ballSegments(r: number): [number, number] {
+/** 球按半径细分：[一圈, 上下] 段数（外层 Group 整体缩放的模型可以拿缩放后的半径来查） */
+export function ballSegments(r: number): [number, number] {
   // 不到 1cm 的小球（眼睛的高光、珠子、按钮）屏幕上只有几个像素：8 × 6 段
   return r >= 8 ? [24, 16] : r >= 3 ? [16, 12] : r >= 1 ? [12, 8] : [8, 6]
 }
@@ -484,13 +485,12 @@ function puckSegments(r: number, k: number): [number, number] {
 }
 
 /** 圆角盒，at.y 是底面高度（不是中心），摆东西更顺手 */
-export function rbox(w: number, h: number, d: number, color: THREE.ColorRepresentation, at: At = {}, radius?: number, segs?: number) {
+export function rbox(w: number, h: number, d: number, color: THREE.ColorRepresentation, at: At = {}, radius?: number) {
   w = q(w)
   h = q(h)
   d = q(d)
   const r = q(Math.max(0.01, Math.min(radius ?? Math.min(w, h, d) * 0.18, Math.min(w, h, d) / 2 - 0.01)))
-  // segs：圆角的细分（1 = 108 面、2 = 300 面、3 = 588 面），不给就按圆角半径。十几块大圆角盒拼的坐垫靠背，离远了 2 就够
-  const seg = segs ?? rboxSegments(r)
+  const seg = rboxSegments(r)
   const g = cached(`rb${w},${h},${d},${r},${seg}`, () => new RoundedBoxGeometry(w, h, d, seg, r))
   return place(new THREE.Mesh(g, toon(color)), { ...at, y: (at.y ?? 0) + h / 2 })
 }
@@ -584,6 +584,13 @@ export function cup(rTop: number, rBottom: number, h: number, t: number, color: 
   return place(new THREE.Mesh(g, toon(color)), at)
 }
 
+/** cup() 的内壁在高度 y（从杯底算）处的半径：和上面 cup 的轮廓一致（改 cup 的轮廓要一起改），内壁是 (内底, t + k) 到 (rTop - t, h - t / 2) 的一条直线 */
+export function cupInner(rTop: number, rBottom: number, h: number, t: number, y: number) {
+  const k = Math.min(t * 0.6, rBottom * 0.2)
+  const ib = rBottom - t + ((rTop - rBottom) * t) / h
+  return ib + ((rTop - t - ib) * (y - t - k)) / (h - t / 2 - t - k)
+}
+
 /** 空心的方箱（花箱、浴缸）：底板 + 四面壁，at.y 为底面 */
 export function tray(w: number, h: number, d: number, t: number, color: THREE.ColorRepresentation, at: At = {}, radius?: number) {
   const r = radius ?? Math.min(t * 0.45, 3)
@@ -666,6 +673,24 @@ export function face(size: number, at: { x?: number; y: number; z: number }, blu
   }
   g.position.set(at.x ?? 0, at.y, at.z)
   return g
+}
+
+/**
+ * 把 face() 的五官贴到球形的头上：face() 是按平面摆的，头小的时候外侧的腮红离脸颊越来越远（熊熊落地灯的腮红外缘离头 2cm 多，
+ * 从侧面看是悬着的一片）。每个零件保持正面看的 (x, y)，落到球面上（原来的前后偏移改成沿法线），并转到朝外。
+ * c：头的球心，r：半径，dy：脸比球心高多少
+ */
+export function faceOn(size: number, c: [number, number, number], r: number, dy = 0) {
+  const f = face(size, { x: c[0], y: c[1] + dy, z: c[2] })
+  for (const m of f.children) {
+    const x = m.position.x
+    const y = m.position.y + dy
+    const n = new THREE.Vector3(x, y, Math.sqrt(Math.max(0.01, r * r - x * x - y * y))).normalize()
+    const out = r + m.position.z
+    m.position.set(n.x * out, n.y * out - dy, n.z * out)
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), n)
+  }
+  return f
 }
 
 export function group(...children: THREE.Object3D[]) {

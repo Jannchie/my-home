@@ -142,8 +142,10 @@ function cg<T extends THREE.BufferGeometry>(key: string, make: () => T): T {
   return g as T
 }
 const r1 = (n: number) => Math.round(n * 10) / 10
-/** 几何缓存键里的尺寸：取到 0.001。取到 0.1 的话，四舍五入后相同的两件会共用先建的那份几何（最多差 0.05），
- * 同一件衣服连建两次结果不一样——成排的衣服按实测尺寸迭代调宽，这点差别会被放大 */
+/**
+ * 体素尺寸先取到 0.001 再建几何、再拼缓存键：键和几何是同一组数，同一个键永远对应同一份几何
+ * （以前键取整、几何用原值，取整后相同的两件会共用先建的那份，同一件衣服连建两次结果不一样）
+ */
 const rk = (n: number) => Math.round(n * 1000) / 1000
 
 function mesh(geo: THREE.BufferGeometry, mat: THREE.Material, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0) {
@@ -157,7 +159,10 @@ function mesh(geo: THREE.BufferGeometry, mat: THREE.Material, x = 0, y = 0, z = 
 
 /** 挤出的剪影板：xy 平面内的多边形，厚 T，z 居中 */
 function panel(pts: V2[], T: number, mat: THREE.Material, z = 0, bevel = 0.35) {
-  const key = 'pn' + pts.map((p) => `${rk(p[0])},${rk(p[1])}`).join(';') + `|${rk(T)}|${rk(bevel)}`
+  pts = pts.map(([x, y]) => [rk(x), rk(y)])
+  T = rk(T)
+  bevel = rk(bevel)
+  const key = 'pn' + pts.map((p) => `${p[0]},${p[1]}`).join(';') + `|${T}|${bevel}`
   const geo = cg(key, () => {
     const s = new THREE.Shape(pts.map(([x, y]) => new THREE.Vector2(x, y)))
     const b = Math.min(bevel, T * 0.3)
@@ -170,14 +175,17 @@ function panel(pts: V2[], T: number, mat: THREE.Material, z = 0, bevel = 0.35) {
 
 /** 盒子（中心定位） */
 function bx(w: number, h: number, d: number, mat: THREE.Material, x = 0, y = 0, z = 0, rz = 0, ry = 0, rx = 0) {
-  const geo = cg(`bx${rk(w)},${rk(h)},${rk(d)}`, () => new THREE.BoxGeometry(w, h, d))
+  ;[w, h, d] = [rk(w), rk(h), rk(d)]
+  const geo = cg(`bx${w},${h},${d}`, () => new THREE.BoxGeometry(w, h, d))
   return mesh(geo, mat, x, y, z, rx, ry, rz)
 }
 
 /** 倒角盒（一段圆角，中心定位）：叠好的衣服、毛巾 */
 function rb(w: number, h: number, d: number, mat: THREE.Material, x = 0, y = 0, z = 0, r = 0.8) {
   const rr = Math.min(r, Math.min(w, h, d) / 2 - 0.01)
-  const geo = cg(`rb${rk(w)},${rk(h)},${rk(d)},${rk(rr)}`, () => new RoundedBoxGeometry(w, h, d, 1, Math.max(0.01, rr)))
+  ;[w, h, d] = [rk(w), rk(h), rk(d)]
+  const rq = rk(rr)
+  const geo = cg(`rb${w},${h},${d},${rq}`, () => new RoundedBoxGeometry(w, h, d, 1, Math.max(0.01, rq)))
   return mesh(geo, mat, x, y, z)
 }
 
@@ -188,7 +196,9 @@ function stk(a: V3, b: V3, r: number, mat: THREE.Material, seg = 6) {
   const vb = new THREE.Vector3(...b)
   const dir = vb.clone().sub(va)
   const len = dir.length()
-  const geo = cg(`st${rk(r)},${rk(len)},${seg}`, () => new THREE.CylinderGeometry(r, r, len, seg, 1))
+  const rq = rk(r)
+  const lq = rk(len)
+  const geo = cg(`st${rq},${lq},${seg}`, () => new THREE.CylinderGeometry(rq, rq, lq, seg, 1))
   const m = mesh(geo, mat)
   m.position.copy(va).add(vb).multiplyScalar(0.5)
   if (len > 1e-6) m.quaternion.setFromUnitVectors(UP, dir.normalize())
@@ -197,13 +207,15 @@ function stk(a: V3, b: V3, r: number, mat: THREE.Material, seg = 6) {
 
 /** 圆柱（中心定位，轴沿 y） */
 function cy(rt: number, rbm: number, h: number, mat: THREE.Material, x = 0, y = 0, z = 0, rx = 0, rz = 0, seg = 10) {
-  const geo = cg(`cy${rk(rt)},${rk(rbm)},${rk(h)},${seg}`, () => new THREE.CylinderGeometry(rt, rbm, h, seg, 1))
+  ;[rt, rbm, h] = [rk(rt), rk(rbm), rk(h)]
+  const geo = cg(`cy${rt},${rbm},${h},${seg}`, () => new THREE.CylinderGeometry(rt, rbm, h, seg, 1))
   return mesh(geo, mat, x, y, z, rx, 0, rz)
 }
 
 /** 低面数椭球 */
 function bl(r: number, mat: THREE.Material, x = 0, y = 0, z = 0, sx = 1, sy = 1, sz = 1) {
-  const geo = cg(`bl${rk(r)}`, () => new THREE.SphereGeometry(r, 10, 6))
+  r = rk(r)
+  const geo = cg(`bl${r}`, () => new THREE.SphereGeometry(r, 10, 6))
   const m = mesh(geo, mat, x, y, z)
   m.scale.set(sx, sy, sz)
   return m
@@ -211,7 +223,8 @@ function bl(r: number, mat: THREE.Material, x = 0, y = 0, z = 0, sx = 1, sy = 1,
 
 /** 半球（开口朝下，底面在 y） */
 function dome(r: number, mat: THREE.Material, y = 0, sy = 1) {
-  const geo = cg(`dm${rk(r)}`, () => new THREE.SphereGeometry(r, 12, 5, 0, PI * 2, 0, PI / 2))
+  r = rk(r)
+  const geo = cg(`dm${r}`, () => new THREE.SphereGeometry(r, 12, 5, 0, PI * 2, 0, PI / 2))
   const m = mesh(geo, mat, 0, y, 0)
   m.scale.y = sy
   return m
@@ -219,7 +232,9 @@ function dome(r: number, mat: THREE.Material, y = 0, sy = 1) {
 
 /** 平滑管子（衣架钩、带子） */
 function tube(pts: V3[], r: number, mat: THREE.Material, seg = 16) {
-  const key = 'tb' + pts.map((p) => p.map(rk).join(',')).join(';') + `|${rk(r)}|${seg}`
+  pts = pts.map((p) => p.map(rk) as V3)
+  r = rk(r)
+  const key = 'tb' + pts.map((p) => p.join(',')).join(';') + `|${r}|${seg}`
   const geo = cg(key, () => new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(...p)), false, 'centripetal'), seg, r, 5, false))
   return mesh(geo, mat)
 }
@@ -775,7 +790,8 @@ function buildPantsOnBar(s: GarmentSpec, m: Mats, barY: number) {
   g.add(panel([[-pw / 2, barY], [pw / 2, barY], [pw / 2 + 1, barY - h1], [-pw / 2 + 1, barY - h1]], T, m.main, r))
   g.add(panel([[-pw / 2, barY], [pw / 2, barY], [pw / 2 + 0.5, barY - h2], [-pw / 2 + 0.5, barY - h2]], T, m.main, -r))
   // 搭在杆上的弧顶：半圆柱绕 z 转 90° 后轴沿 x、鼓面朝上（再绕 x 转就成了朝前鼓，前后两片在顶上接不起来）
-  const cap = cg(`pcap2${rk(pw)},${rk(r + T / 2)}`, () => new THREE.CylinderGeometry(r + T / 2, r + T / 2, pw, 6, 1, false, 0, PI).rotateZ(PI / 2))
+  const [cw, cr] = [rk(pw), rk(r + T / 2)]
+  const cap = cg(`pcap2${cw},${cr}`, () => new THREE.CylinderGeometry(cr, cr, cw, 6, 1, false, 0, PI).rotateZ(PI / 2))
   g.add(mesh(cap, m.main, 0, barY, 0))
   g.add(stk([0, barY - 3, r + T / 2 + 0.1], [0.6, barY - h1 + 2, r + T / 2 + 0.1], 0.15, m.dark, 3))
   return g
@@ -918,7 +934,8 @@ function towelOverBar(s: GarmentSpec, m: Mats) {
   const h1 = L / 2
   const h2 = L / 2 - Math.min(8, L * 0.12)
   // 搭在杆上的弧顶：轴沿 x、鼓面朝上，前后两片从它的两条边垂下来（两端封口，侧面看不是空壳）
-  const cap = cg(`tcap2${rk(w)},${rk(R)}`, () => new THREE.CylinderGeometry(R, R, w, 7, 1, false, 0, PI).rotateZ(PI / 2))
+  const [cw, cr] = [rk(w), rk(R)]
+  const cap = cg(`tcap2${cw},${cr}`, () => new THREE.CylinderGeometry(cr, cr, cw, 7, 1, false, 0, PI).rotateZ(PI / 2))
   g.add(mesh(cap, m.main, 0, yC, zc))
   g.add(panel([[-w / 2, yC], [w / 2, yC], [w / 2, yC - h1], [-w / 2, yC - h1]], T, m.main, zc + R - T / 2))
   g.add(panel([[-w / 2, yC], [w / 2, yC], [w / 2, yC - h2], [-w / 2, yC - h2]], T, m.main, zc - R + T / 2))

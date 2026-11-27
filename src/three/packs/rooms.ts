@@ -4,7 +4,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cyl, markMirror, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, SWING_OPEN, holePanel, legs, lPoly, movable, rectPoly, rng, rod, shell, slab, type AssetDef, type DoorMotion, type SurfaceDef } from '../kit'
-import { trayBox, trayBoxLevel } from '../cabinetKit'
+import { trayBoxLevel, trayDrawer } from '../cabinetKit'
 import { soft, type SoftFn } from '../geo'
 import { glassPane, rod3, type V3 } from '../geo'
 import { I, J, M, N, R, withPals, type Pal3 } from '../packkit'
@@ -83,9 +83,7 @@ const swing = (left: boolean): DoorMotion => ({ kind: 'swing', angle: (left ? -1
 const FLAP: DoorMotion = { kind: 'flap', angle: (85 * Math.PI) / 180 }
 
 /** 一个抽屉：面板等部件 + 盒子，标好拉出动作 */
-function drawer(face: THREE.Object3D[], x0: number, x1: number, y: number, h: number, z1: number, depth: number, color: string) {
-  return moving([...face, trayBox(x0, x1, y, h, z1, depth, color)], [0, 0, 0], { kind: 'drawer', dz: Math.round(depth * 0.6) })
-}
+const drawer = (face: THREE.Object3D[], x0: number, x1: number, y: number, h: number, z1: number, depth: number, color: string) => trayDrawer(face, [x0, x1, y, h, z1, depth], color)
 /** rooms.ts 的 carcass 里面一层（门里）：x0..x1、z 在柜体内侧 */
 const cell = (x0: number, x1: number, d: number) => [rectPoly(x0 + 0.4, -d / 2 + 1.8, x1 - 0.4, d / 2 - 1)]
 

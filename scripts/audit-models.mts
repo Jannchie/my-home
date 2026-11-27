@@ -6,7 +6,7 @@
 import '../test/setup/stubdom'
 import fs from 'node:fs'
 import { ASSETS, type AssetDef } from '/src/three/assets'
-import { AUDIT_CHECKS, PROBLEM, auditAsset, hasProblem, type AuditCheck, type AuditReport } from '/src/three/modelAudit'
+import { AUDIT_CHECKS, DEFAULT_CHECKS, PROBLEM, auditAsset, hasProblem, type AuditCheck, type AuditReport } from '/src/three/modelAudit'
 
 const argv = process.argv.slice(2)
 const arg = (k: string) => (argv.includes(k) ? argv[argv.indexOf(k) + 1] : undefined)
@@ -36,7 +36,7 @@ for (const def of ASSETS as AssetDef[]) {
 }
 
 const LABEL: Record<AuditCheck, string> = { island: '悬空', zfight: '共面', sink: '沉地', black: '纯黑', heavy: '面数偏多', near: '没贴上' }
-const counts = AUDIT_CHECKS.filter((k) => k !== 'near' || checks?.has('near')).map((k) => `${LABEL[k]} ${reports.filter(PROBLEM[k]).length} 件`)
+const counts = AUDIT_CHECKS.filter((k) => (checks ?? DEFAULT_CHECKS).has(k)).map((k) => `${LABEL[k]} ${reports.filter(PROBLEM[k]).length} 件`)
 console.log(`体检完成 ${((Date.now() - t0) / 1000).toFixed(1)}s：${counts.join('，')}，出错 ${reports.filter((r) => r.error).length} 件`)
 type ZF = NonNullable<AuditReport['zfight']>
 const zf = (label: string, zs: ZF) => `${label}×${zs.length} ` + zs.slice(0, 3).map((z) => `[${z.a}/${z.b} n=${z.normal.join(',')} @${z.at.join(',')} ${z.area}cm² Δ${z.gap}]`).join(' ')

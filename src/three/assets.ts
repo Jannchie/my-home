@@ -2,7 +2,7 @@
 // 约定见 kit.ts 开头。
 
 import * as THREE from 'three'
-import { ball, capsule, cup, cyl, face, markMirror, markWater, plate, puck, rbox, shade, toon, torus, tray } from './toon'
+import { ball, ballSegments, capsule, cup, cyl, face, leaf, markMirror, markWater, plate, puck, rbox, shade, toon, torus, tray } from './toon'
 import { fridgeSpotModel, washerSpotModel } from './appliances'
 import { holePanel, C, G, S, carcass, drawerBox, drawerLevel, ellipsePoly, flapDoor, glow, hangingPipe, hingedDoor, legs, pipeHook, rectPoly, rng, shell, shelvesIn, type AssetDef, type StyleTag } from './kit'
 import { PACKS } from './packs'
@@ -616,7 +616,7 @@ function bearBody(s: number, color: string, at: { x?: number; y?: number; z?: nu
   const g = new THREE.Group()
   const muzzle = shade(color, 0.12)
   // 整体缩小的（书架顶上那只半大的）按缩小后的半径细分：ball 的自适应只看建模时的半径，不知道外层 Group 还要缩
-  const sg = (r: number): [number, number] | undefined => (s >= 1 ? undefined : r * s >= 3 ? [16, 12] : r * s >= 1 ? [12, 8] : [8, 6])
+  const sg = (r: number) => (s >= 1 ? undefined : ballSegments(r * s))
   g.add(ball(12, color, { y: 12 }, [1, 0.95, 0.9], sg(12)))
   for (const sx of [-1, 1]) {
     g.add(ball(4.5, color, { x: sx * 9, y: 4.5, z: 6 }, undefined, sg(4.5)))
@@ -788,7 +788,7 @@ function planter(p: string[]) {
     g.add(stem)
     // 叶子长轴转到 x 方向，叶柄搭在茎上（以前长轴朝前后、离茎 0.5cm 悬空）
     // 小叶、花瓣、花心都只有几厘米：低段数的球（叶子同 leaf() 的比例，轮廓 12 段、厚度 6 段）
-    g.add(ball(4, C.leaf, { x: x + 3.6, y: 23, ry: Math.PI / 2 }, [0.45, 0.12, 1], [12, 6]))
+    g.add(leaf(8, C.leaf, { x: x + 3.6, y: 23, ry: Math.PI / 2 }, [12, 6]))
     for (let k = 0; k < 5; k++) {
       const a = (k / 5) * Math.PI * 2
       g.add(ball(2.2, cols[i % cols.length], { x: x + Math.cos(a) * 2.4, y: 17 + h, z: Math.sin(a) * 2.4 }, [1, 0.5, 1], [8, 6]))

@@ -5,7 +5,7 @@
 import * as THREE from 'three'
 import { ball, cached, cup, cyl, puck, rbox, shade, toon, torus, tray, useAnisotropy } from '../toon'
 import { C, G, SWING_OPEN, ellipsePoly, movable, rectPoly, rng, slab, type AssetCategory, type AssetDef, type DoorMotion, type Poly, type SurfaceDef } from '../kit'
-import { trayBox, trayBoxLevel } from '../cabinetKit'
+import { trayBoxLevel, trayDrawer, type Tray } from '../cabinetKit'
 import { PI, clearDeep, fitChildrenBuild, lathe, lit, mesh, noOutlineDeep, rod3, tube, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, R, type Build, type Pal3 } from '../packkit'
 
@@ -133,12 +133,8 @@ function moving(parts: THREE.Object3D[], pivot: V3, m: DoorMotion) {
   return movable(g, m)
 }
 const swing = (left: boolean): DoorMotion => ({ kind: 'swing', angle: (left ? -1 : 1) * SWING_OPEN })
-/** 抽屉盒（cabinetKit trayBox）的参数：[口 x0, 口 x1, 盒底 y, 盒高, 面板背面 z, 盒深] */
-type Tray = readonly [number, number, number, number, number, number]
 const trayLevel = (t: Tray) => trayBoxLevel(...t)
-function drawer(face: THREE.Object3D[], t: Tray, color: string) {
-  return moving([...face, trayBox(...t, color)], [0, 0, 0], { kind: 'drawer', dz: Math.round(t[5] * 0.6) })
-}
+const drawer = trayDrawer
 /** 空心柜体：外框 x ±w/2、y0..y1、z0（背）..z1（前），板厚 t（正面敞开） */
 function hollowBox(w: number, y0: number, y1: number, z0: number, z1: number, color: string, t = 1.6, r = 0.4) {
   const d = z1 - z0

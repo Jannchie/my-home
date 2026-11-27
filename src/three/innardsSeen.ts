@@ -7,7 +7,7 @@ import type { AssetDef } from './kit'
 import { measured } from './measured'
 
 /** 模型里的 innards 组，按遍历顺序（同一件素材顺序固定，下标当编号） */
-export function innardsGroups(root: THREE.Object3D) {
+function innardsGroups(root: THREE.Object3D) {
   const out: THREE.Object3D[] = []
   root.traverse((o) => {
     if (o.userData.innards) out.push(o)
@@ -41,7 +41,7 @@ const AXES = [new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0), new THREE.
 const SEEN_SHARE = 0.1
 
 /** 模型（关着的）里每组 innards 从外面看得到多少：没被挡住的视线数 / 打中它的视线数（innardsGroups 的顺序） */
-export function innardsExposure(root: THREE.Object3D): [seen: number, hit: number][] {
+function innardsExposure(root: THREE.Object3D): [seen: number, hit: number][] {
   const groups = innardsGroups(root)
   if (!groups.length) return []
   root.updateMatrixWorld(true)
@@ -95,14 +95,12 @@ export function innardsExposure(root: THREE.Object3D): [seen: number, hit: numbe
   })
 }
 
-/** 模型（关着的）里哪几组 innards 从外面看得到：返回 innardsGroups 的下标 */
-export function seenInnards(root: THREE.Object3D): number[] {
-  return innardsExposure(root).flatMap(([seen, hit], i) => (seen > hit * SEEN_SHARE ? [i] : []))
-}
-
-/** 这件素材关严时从外面看得到的 innards 组（查表，表里没有就现量；和配色无关，用第一组配色量） */
-export function innardsSeen(def: AssetDef): number[] {
-  return measured(`innards:${def.id}`, () => seenInnards(def.build(def.palettes[0] ?? [])))
+/**
+ * 这件素材关严时从外面看得到的 innards 组（innardsGroups 的下标）。查表，表里没有就现量：和配色无关，用第一组配色量；
+ * 已经建好的模型（关着的）可以传进来，免得再建一遍
+ */
+export function innardsSeen(def: AssetDef, built?: THREE.Object3D): number[] {
+  return measured(`innards:${def.id}`, () => innardsExposure(built ?? def.build(def.palettes[0] ?? [])).flatMap(([seen, hit], i) => (seen > hit * SEEN_SHARE ? [i] : [])))
 }
 
 /** 看得到的 innards 去掉标记：照常画、照常和部件的其它零件合并（要在合并网格之前调用） */
@@ -116,5 +114,9 @@ export function showSeenInnards(root: THREE.Object3D, def: AssetDef) {
 
 /** 把所有带 innards 的可开合素材量一遍（生成 / 检查 measured.generated.ts 时用） */
 export function measureAllInnards(defs: readonly AssetDef[]) {
-  for (const def of defs) if (def.openable && innardsGroups(def.build(def.palettes[0] ?? [])).length) innardsSeen(def)
+  for (const def of defs) {
+    if (!def.openable) continue
+    const g = def.build(def.palettes[0] ?? [])
+    if (innardsGroups(g).length) innardsSeen(def, g)
+  }
 }
