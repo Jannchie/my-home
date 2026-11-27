@@ -87,9 +87,24 @@ export function chip(r: number, h: number, color: string, x = 0, y = 0, z = 0, s
   return P(lowMesh(geo, color), x, y, z)
 }
 
-/** 小珠子（围棋子、眼珠、球头）：(x, y, z) 是球心，scale 用来压扁；ws × hs 是经纬段数 */
-export function bead(r: number, color: string, x = 0, y = 0, z = 0, scale?: [number, number, number], ws = 8, hs = 5) {
-  const m = P(lowMesh(cached(`int-bead${r},${ws}x${hs}`, () => new THREE.SphereGeometry(r, ws, hs)), color), x, y, z)
+/**
+ * 小珠子（围棋子、眼珠、球头）：(x, y, z) 是球心，scale 用来压扁；ws × hs 是经纬段数。
+ * foot（cm，按压扁后的尺寸）：把最底下那个顶点再往下拉这么多。摆在盘面贴图上的棋子用：贴图按约定浮在棋盘上 0.3cm，
+ * 棋子底只挨着贴图、够不到棋盘；底尖拉下去就穿过贴图落进棋盘，贴图以上的外形不变（变的只是底下那一圈看不见的倒扣面），不多一个面
+ */
+export function bead(r: number, color: string, x = 0, y = 0, z = 0, scale?: [number, number, number], ws = 8, hs = 5, foot = 0) {
+  const drop = foot / (scale?.[1] ?? 1)
+  const geo = cached(`int-bead${r},${ws}x${hs},${drop}`, () => {
+    const g = new THREE.SphereGeometry(r, ws, hs)
+    if (drop > 0) {
+      const p = g.getAttribute('position')
+      for (let i = 0; i < p.count; i++) if (p.getY(i) < -r + 1e-6) p.setY(i, -r - drop)
+      g.computeBoundingBox()
+      g.computeBoundingSphere()
+    }
+    return g
+  })
+  const m = P(lowMesh(geo, color), x, y, z)
   if (scale) m.scale.set(...scale)
   return m
 }

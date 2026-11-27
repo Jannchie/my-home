@@ -4,7 +4,7 @@
 // 模型在 ../appliances.ts；配色每组只有一个颜色（机身色），把手、面板的深浅由模型按机身色推出来。
 
 import type * as THREE from 'three'
-import type { AssetDef, Poly, StyleTag } from '../kit'
+import { rectPoly, type AssetDef, type Poly, type StyleTag } from '../kit'
 import { fridgeModel, washerModel, wineCoolerModel, type FridgeStyle, type WasherStyle } from '../appliances'
 
 export { APPLIANCE_PALETTES } from '../appliancePalettes'
@@ -14,17 +14,13 @@ const PALETTES = APPLIANCE_PALETTES.map(([, c]) => [c])
 const PALETTE_STYLES = APPLIANCE_PALETTES.map(([s]) => s)
 const ALL_STYLES: StyleTag[] = [...new Set(PALETTE_STYLES)]
 
-/** 顶面可摆区域：四周各收 2cm */
-const top = (w: number, d: number): Poly[] => [
-  [
-    [-w / 2 + 2, -d / 2 + 2],
-    [w / 2 - 2, -d / 2 + 2],
-    [w / 2 - 2, d / 2 - 2],
-    [-w / 2 + 2, d / 2 - 2],
-  ],
-]
+/** 顶面可摆区域：四周各收 inset（默认 2cm） */
+const top = (w: number, d: number, inset = 2): Poly[] => [rectPoly(-w / 2 + inset, -d / 2 + inset, w / 2 - inset, d / 2 - inset)]
 
-function appliance(id: string, name: string, family: string, sizeLabel: string, [w, d, h]: [number, number, number], build: (body: string) => THREE.Group, styles = ALL_STYLES): AssetDef {
+/** 能摆东西的顶面：默认是机身顶（高 h，四周收 2cm）；顶上有操作面板、圆肩的款式另给（见 washerTop / fridgeTop） */
+type Top = { y: number; shape: Poly[] }
+
+function appliance(id: string, name: string, family: string, sizeLabel: string, [w, d, h]: [number, number, number], build: (body: string) => THREE.Group, styles = ALL_STYLES, surf: Top = { y: h, shape: top(w, d) }): AssetDef {
   return {
     id,
     name,
@@ -36,8 +32,8 @@ function appliance(id: string, name: string, family: string, sizeLabel: string, 
     palettes: PALETTES,
     paletteStyles: PALETTE_STYLES,
     styles,
-    surface: h,
-    surfaceShape: top(w, d),
+    surface: surf.y,
+    surfaceShape: surf.shape,
     // 全屋只摆一台（一键布置时）；手动摆放不受限制
     limit: { scope: 'house', max: 1, group: family },
     build: (p) => build(p[0] ?? '#f6f6f3'),
@@ -69,9 +65,23 @@ export const WASHER_SPECS: (Spec<WasherStyle> & { family: 'washer' | 'dryer' })[
   { id: 'ap2-dryer-us', family: 'dryer', style: 'us-dryer', label: '欧美大容量烘干机', size: [68, 70, 98], styles: ['modern', 'industrial', 'classic', 'farmhouse', 'nordic'] },
 ]
 
+/**
+ * 波轮 / 双槽洗衣机能摆东西的是顶盖，不是机身最高点（后部的操作面板、旋钮比顶盖高 2～6cm）：
+ * 以前一律按 h 声明，摆上去的东西悬在顶盖上方。尺寸对应 ../appliances.ts washerModel 里的顶盖
+ */
+function washerTop(style: WasherStyle, [w, d, h]: [number, number, number]): Top | undefined {
+  // 立式波轮：顶盖顶面 h - 6，上面嵌着一块高出 0.3 的透明窗
+  if (style === 'top' || style === 'compact' || style === 'mini') return { y: h - 5.7, shape: [rectPoly(-w / 2 + 3, -d / 2 + 16, w / 2 - 3, d / 2 - 4)] }
+  // 双槽：左右两块盖子，顶面 h - 2；后面 10cm 是操作面板和旋钮
+  if (style === 'twin') return { y: h - 2, shape: [rectPoly(-w * 0.48 + 1, -d / 2 + 10, w * 0.08 - 1, d / 2 - 3), rectPoly(w * 0.13 + 1, -d / 2 + 10, w * 0.47 - 1, d / 2 - 3)] }
+  return undefined
+}
+/** 复古冰箱的圆肩半径 12：可摆区域四周收 9cm（收 2cm 的话边上的东西悬在圆肩外） */
+const fridgeTop = (style: FridgeStyle, [w, d, h]: [number, number, number]): Top | undefined => (style === 'retro' ? { y: h, shape: top(w, d - 3, 9).map((p) => p.map(([x, z]) => [x, z - 1.5] as [number, number])) } : undefined)
+
 export const APPLIANCES_PACK: AssetDef[] = [
-  ...FRIDGE_SPECS.map((s) => appliance(s.id, '冰箱', 'fridge', s.label, s.size, (c) => fridgeModel(s.style, c, ...s.size), s.styles)),
-  ...WASHER_SPECS.map((s) => appliance(s.id, s.family === 'washer' ? '洗衣机' : '干衣机', s.family, s.label, s.size, (c) => washerModel(s.style, c, ...s.size), s.styles)),
+  ...FRIDGE_SPECS.map((s) => appliance(s.id, '冰箱', 'fridge', s.label, s.size, (c) => fridgeModel(s.style, c, ...s.size), s.styles, fridgeTop(s.style, s.size))),
+  ...WASHER_SPECS.map((s) => appliance(s.id, s.family === 'washer' ? '洗衣机' : '干衣机', s.family, s.label, s.size, (c) => washerModel(s.style, c, ...s.size), s.styles, washerTop(s.style, s.size))),
   appliance('ap2-wine-cooler', '酒柜', 'wine-cooler', '台下式', [40, 56, 85], (c) => wineCoolerModel(c, 40, 56, 85), ['modern', 'industrial', 'classic', 'chinese']),
   appliance('ap2-wine-cooler-tall', '酒柜', 'wine-cooler', '立式', [60, 62, 150], (c) => wineCoolerModel(c, 60, 62, 150), ['modern', 'industrial', 'classic', 'chinese']),
 ]

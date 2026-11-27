@@ -441,7 +441,8 @@ function thanksgivingTable(p: string[]) {
     const x = Math.cos(a) * 10.2
     const z = Math.sin(a) * 7.1
     if (x > 9) continue
-    g.add(pip(i % 3 ? 0.9 : 0.6, i % 3 ? PARSLEY : CRANBERRY, x, t + 1.5 + rand() * 0.3, z, [1, 0.8, 1], true))
+    // 蔓越莓比香芹小一圈：放低一点，底压进盘沿（以前和香芹一样高，悬在盘沿上面）
+    g.add(pip(i % 3 ? 0.9 : 0.6, i % 3 ? PARSLEY : CRANBERRY, x, t + (i % 3 ? 1.5 : 1.2) + rand() * (i % 3 ? 0.3 : 0.15), z, [1, 0.8, 1], true))
   }
   // 两支蜡烛（铜烛托）
   for (const [x, z, h] of TG_CANDLES) {
@@ -495,20 +496,22 @@ function valentineSet(p: string[]) {
   for (let i = 0; i < 6; i++) {
     const a = (i / 6) * PI * 2 + 0.3
     const y0 = wrapY + 2
-    const r0 = 2.2 + 7.8 * (2 / 15) + 0.55
+    // 纸片的中线压进包装纸 0.1（纸片是平的、包装纸是锥面，两边自然翘开）
+    const r0 = 2.2 + 7.8 * (2 / 15) + 0.05
     const leaf = P(slabXY(flap, 0.3, tissue, 0, 'flap'), 0, 0, 0, tilt, 0, 0)
     bq.add(P(G(P(G(leaf), 0, y0, r0)), 0, 0, 0, 0, PI / 2 - a, 0))
   }
-  // 花头埋在包装口里的一层绿叶上
-  bq.add(cyl(8.4, 7.9, 1.5, PINE, { y: wrapY + 12.4 }, 24))
-  ;([[0, 0], [4.7, 0.4], [-4.5, 1.3], [1.6, 4.6], [-2.2, -4.4], [2.9, -3.7], [-3.4, 4]] as V2[]).forEach(([x, z], i) => bq.add(rose(roseC, x, wrapY + 13.2 + (i ? 0 : 1), z)))
+  // 花头埋在包装口里的一层绿叶上：绿叶层和包装纸同样 32 段、边缘嵌在纸壁里（纸壁内外半径之间）
+  bq.add(cyl(9.25, 8.5, 1.5, PINE, { y: wrapY + 12.4 }, 32))
+  ;([[0, 0], [4.7, 0.4], [-4.5, 1.3], [1.6, 4.6], [-2.2, -4.4], [2.9, -3.7], [-3.4, 4]] as V2[]).forEach(([x, z], i) => bq.add(rose(roseC, x, wrapY + 13.2 + (i ? 0 : 0.6), z)))
   for (let i = 0; i < 7; i++) {
     const a = (i / 7) * PI * 2 + 0.2
     bq.add(P(ball(2.4, PINE_L, {}, [0.45, 0.14, 1], [6, 4]), Math.cos(a) * 7.2, wrapY + 14, Math.sin(a) * 7.2, 0, -a + PI / 2, 0).rotateX(-0.5))
   }
   for (let i = 0; i < 9; i++) {
     const a = (i / 9) * PI * 2 + 0.6
-    bq.add(pip(0.5, '#ffffff', Math.cos(a) * 6.6, wrapY + 14.6 + (i % 2) * 0.4, Math.sin(a) * 6.6, [1, 1, 1], true))
+    // 满天星：一大一小交错，底都压进绿叶层
+    bq.add(pip(i % 2 ? 0.65 : 0.5, '#ffffff', Math.cos(a) * 6.6, wrapY + (i % 2 ? 14.4 : 14.25), Math.sin(a) * 6.6, [1, 1, 1], true))
   }
   g.add(P(bq, -9, 0, -3))
   // 心形巧克力盒：盒盖垫在下面、斜着露出一角；盒身是一圈心形围边 + 金色衬纸底 + 七颗巧克力
@@ -623,7 +626,8 @@ function birthdayTable(p: string[]) {
   for (let i = 0; i < 30; i++) {
     const a = rand() * PI * 2
     const rr = 2.4 + rand() * 3.8
-    g.add(cyl(0.16, 0.16, 0.8, sprinkle[i % 4], { x: cx + Math.cos(a) * rr, y: top - 0.05, z: Math.sin(a) * rr, rx: PI / 2, rz: rand() * PI }, 4))
+    // 彩糖平躺、下棱压进淋面：cyl 的 y 是竖着时的底，躺倒以后中心在 y + 0.4，半径量化成 0.2
+    g.add(cyl(0.16, 0.16, 0.8, sprinkle[i % 4], { x: cx + Math.cos(a) * rr, y: top - 0.32, z: Math.sin(a) * rr, rx: PI / 2, rz: rand() * PI }, 4))
   }
   // 「8」字蜡烛：一根插进蛋糕的小签 + 上下两个竖着的圆环
   g.add(cyl(0.35, 0.35, 1.6, accA, { x: cx, y: top - 0.6 }, 8))
@@ -879,7 +883,8 @@ function gingerbreadHouse(p: string[]) {
   for (let q = 0; q < 5; q++) {
     const z = -1 - 5 + q * 2.5
     const c = [candyA, candyB, '#ffe08f', candyB, candyA][q]
-    g.add(cyl(0.7, 1, 1.1, c, { y: base + ridge + 1.6, z }, 10))
+    // 软糖的底坐进两片屋顶糖霜在屋脊留下的 V 形槽里
+    g.add(cyl(0.7, 1, 1.8, c, { y: base + ridge + 0.9, z }, 10))
     g.add(ball(0.7, c, { y: base + ridge + 2.7, z }, [1, 0.7, 1], [8, 6]))
   }
   // 烟囱 + 糖霜顶
@@ -1295,7 +1300,7 @@ function fireplaceStockings(p: string[]) {
   // 红果（三颗一簇）和松果
   for (let i = 2; i < path.length - 1; i += 3) {
     const [x, y] = path[i]
-    for (let k = 0; k < 3; k++) g.add(pip(0.75, BERRY, x + (k - 1) * 1.1, y + 1.6 + (k % 2) * 0.9, gz + 2.6, [1, 1, 1], true))
+    for (let k = 0; k < 3; k++) g.add(pip(0.75, BERRY, x + (k - 1) * 1.1, y + 1.4 + (k % 2) * 0.9, gz + 2, [1, 1, 1], true))
   }
   for (let i = 0; i < 3; i++) {
     const x = (xs[i] + xs[i + 1]) / 2
@@ -1426,7 +1431,7 @@ export const FESTIVE_WEST: AssetDef[] = [
   define('fw-halloween-porch', '万圣节玄关组', 'deco', [64.3, 40.2, 70.5], PORCH_PALS, halloweenPorch, { type: 'decor', tags: ['own-colors'], mats: ['plant', 'plant', 'fabric'] }),
   define('fw-skeleton-wreath', '万圣节骷髅花环', 'deco', [41, 9, 40], SKULL_PALS, skeletonWreath, { type: 'decor', mount: 150, mats: ['wood', 'fabric', 'paper'] }),
   define('fw-thanksgiving-table', '感恩节餐桌中心', 'tabletop', [58, 26, 19], TG_PALS, TG_BUILD.build, { ...PROP, type: 'food', tags: ['own-colors'], mats: ['wood', 'ceramic', 'paint'], fx: TG_BUILD.fx }),
-  define('fw-valentine-set', '情人节玫瑰礼盒组', 'tabletop', [36.7, 25.2, 26.4], VAL_PALS, valentineSet, { ...PROP, type: 'decor', mats: ['plant', 'paper', 'paper', 'paper'] }),
+  define('fw-valentine-set', '情人节玫瑰礼盒组', 'tabletop', [36.3, 24.7, 26.2], VAL_PALS, valentineSet, { ...PROP, type: 'decor', mats: ['plant', 'paper', 'paper', 'paper'] }),
   define('fw-champagne-tower', '香槟塔', 'tabletop', [46, 38.2, 29.5], CHAMP_PALS, champagneTower, { ...PROP, type: 'drink', mats: ['metal', 'metal', 'paper'] }),
   define('fw-birthday-table', '生日派对桌面组', 'tabletop', [44.6, 35.9, 20], BD_PALS, BD_BUILD.build, { ...PROP, type: 'food', tags: ['own-colors'], mats: ['paint', 'paper', 'paper', 'paper'], fx: BD_BUILD.fx }),
   define('fw-balloon-arch', '气球拱门', 'deco', [201.4, 44.2, 195.3], ARCH_PALS, balloonArch, { type: 'decor', mats: ['plastic', 'plastic', 'plastic', 'plastic', 'plastic'] }),

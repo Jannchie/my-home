@@ -255,8 +255,9 @@ function hangingEgg(p: string[]) {
   const topY = EG.y0 + EG.h
   g.add(cyl(2.4, 3, 3, shade(rattan, -0.08), { y: topY - 1.5, z: EG.z }, 12))
   // 坐垫、靠垫、一只小抱枕
-  g.add(puck(24, 12, cushion, { y: 52, z: EG.z }))
-  g.add(ball(24, shade(cushion, -0.04), { y: 95, z: EG.z - 22 }, [1.1, 1.3, 0.45], [20, 14]))
+  // 坐垫鼓鼓地塞在篮底：底沿压着篮底的粗圈、腰上顶着经线；靠垫的下沿压进坐垫
+  g.add(puck(26, 16, cushion, { y: 47.6, z: EG.z }))
+  g.add(ball(24, shade(cushion, -0.04), { y: 93.6, z: EG.z - 22 }, [1.1, 1.3, 0.45], [20, 14]))
   g.add(ball(8, shade(cushion, 0.08), { x: 11, y: 70, z: EG.z + 2 }, [1.1, 1, 0.6], [16, 12]))
   // 底座、立杆、吊钩、吊链
   g.add(puck(48, 4, frame, { z: -4 }))
@@ -442,7 +443,7 @@ function hoseCart(p: string[]) {
   for (const s of [-1, 1]) g.add(cylX(17, 1.2, frame, s * 12.4, ry, rz, 28))
   for (let x = -10.8; x <= 10.81; x += 1.8) g.add(torus(13, 0.9, hose, { x, y: ry, z: rz, ry: PI / 2 }, PI * 2, [5, 24]))
   // 摇柄（右边）
-  g.add(rod3([18.6, ry, rz], [21.6, ry, rz], 0.8, STEEL, 8))
+  g.add(rod3([18.2, ry, rz], [21.6, ry, rz], 0.8, STEEL, 8))
   g.add(rod3([21.6, ry, rz], [21.6, ry + 8, rz], 0.8, STEEL, 8))
   g.add(cylX(1.1, 4, acc, 23.4, ry + 8, rz, 10))
   // 枪架和喷枪（左立柱，枪嘴朝下）

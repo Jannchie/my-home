@@ -4,7 +4,7 @@
 // 柜子类（防潮柜、展示柜）不 fit，按 surfaces 精确建模。
 
 import * as THREE from 'three'
-import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus } from '../toon'
+import { ball, box, capsule, cup, cyl, puck, rbox, shade, toon, torus } from '../toon'
 import { C, CLIP_DROP, SWING_OPEN, clipLevels, glow, movable, rng, shell, rectPoly, type AssetCategory, type AssetDef, type SurfaceDef } from '../kit'
 import { I, J, M, N, PROP, R, define, hasDeclaredCoords, shiftDeclared, type Build, type Dims, type Pal } from '../packkit'
 import { P, PI, cylX, cylZ, fitBuild, fitOffset, ghostOutlined, litOutlined, noOutline, rod3 } from '../geo'
@@ -35,9 +35,9 @@ function def(id: string, name: string, category: AssetCategory, dims: Dims, pals
 /** 指示灯小球 */
 const led = (x: number, y: number, z: number, color: string, r = 0.3) => noOutline(litOutlined(ball(r, color, { x, y, z }), color, 0.9))
 
-/** 水平的发光面（平放的屏幕），y 是底面 */
-function flat(w: number, d: number, color: string, x: number, y: number, z: number, k = 0.55, t = 0.3) {
-  const m = rbox(w, t, d, color, { x, y, z }, Math.min(0.12, t * 0.4))
+/** 水平的发光面（平放的屏幕），y 是底面。sharp：直角盒（12 面）——屏幕上成排的图标小方片圆角看不出来，圆角盒一片要 108 面 */
+function flat(w: number, d: number, color: string, x: number, y: number, z: number, k = 0.55, t = 0.3, sharp = false) {
+  const m = sharp ? box(w, t, d, color, { x, y, z }) : rbox(w, t, d, color, { x, y, z }, Math.min(0.12, t * 0.4))
   m.material = toon(color, { emissive: k })
   m.userData.noOutline = true
   return m
@@ -83,7 +83,7 @@ function flatIcons(g: THREE.Group, gw: number, gd: number, y: number, n: number,
   const cs = Math.min(gw / (n * 1.8), gd / (m * 2))
   for (let i = 0; i < n; i++)
     for (let j = 0; j < m; j++)
-      g.add(flat(cs, cs, cols[(i + j * n) % cols.length], cx + (i - (n - 1) / 2) * cs * 1.6, y, cz - gd * 0.4 + j * cs * 1.6 + cs / 2, 0.6, 0.2))
+      g.add(flat(cs, cs, cols[(i + j * n) % cols.length], cx + (i - (n - 1) / 2) * cs * 1.6, y, cz - gd * 0.4 + j * cs * 1.6 + cs / 2, 0.6, 0.2, true))
 }
 
 /** 按键网格（平放），keys 落在 y 上 */
@@ -108,7 +108,8 @@ function coil(g: THREE.Group, a: [number, number, number], b: [number, number, n
     const x = a[0] + (b[0] - a[0]) * t
     const y = a[1] + (b[1] - a[1]) * t - Math.sin(t * PI) * 1.5
     const z = a[2] + (b[2] - a[2]) * t
-    g.add(torus(r, 0.16, color, { x, y, z, ry: Math.atan2(b[0] - a[0], b[2] - a[2]) }))
+    // 线圈很小（半径 0.5），成串十来个：[6, 12] 段就够（默认 [8, 24]，一根线 4000 多个面）
+    g.add(torus(r, 0.16, color, { x, y, z, ry: Math.atan2(b[0] - a[0], b[2] - a[2]) }, PI * 2, [6, 12]))
   }
 }
 
@@ -164,7 +165,8 @@ function earbuds(p: string[]) {
   const [body, bud, l] = p
   const g = new THREE.Group()
   g.add(rbox(6.4, 2.3, 3, body, {}, 1.1))
-  g.add(rbox(6.4, 1.5, 3, body, { y: 2.35 }, 0.7))
+  // 盒盖压进盒身 0.1（以前悬在盒身上方 0.05）
+  g.add(rbox(6.4, 1.6, 3, body, { y: 2.2 }, 0.7))
   g.add(led(0, 1.4, 1.55, l, 0.2))
   for (let i = 0; i < 2; i++) {
     const x = 5.4 + i * 2.8
@@ -267,7 +269,8 @@ function padPSDef(p: string[]) {
 function padDock(p: string[]) {
   const [base, body, acc] = p
   const g = new THREE.Group()
-  g.add(rbox(34, 3, 8, base, {}, 1.2))
+  // 底座顶面抬高 0.3：握把真的插进底座（以前握把底离顶面 0.1 悬着）
+  g.add(rbox(34, 3.3, 8, base, {}, 1.2))
   g.add(noOutline(litOutlined(rbox(30, 0.4, 0.3, BLUE, { y: 1.2, z: 4.05 }, 0.1), BLUE, 0.8)))
   const th = PI / 2 - 0.25
   for (const s of [-1, 1]) {
@@ -314,7 +317,8 @@ function handheldStand(p: string[]) {
   // 设备底边：局部 (z = 4.6, y = 0) → 世界 y' = -4.6 sinθ
   const gy = 1 + 4.6 * Math.sin(th)
   g.add(P(dev, 0, gy, 0, th))
-  g.add(rbox(12, 1.4, 0.8, stand, { y: 1, z: 4.6 * Math.cos(th) + 1.4 * Math.sin(th) + 0.45 }, 0.3))
+  // 前挡条：往下、往后各嵌进底板一点（以前立在底板圆角上方，差 0.2 没挨着）
+  g.add(rbox(12, 1.8, 1, stand, { y: 0.6, z: 4.6 * Math.cos(th) + 1.4 * Math.sin(th) + 0.35 }, 0.3))
   const [by, bz] = rotX(th, -0.35, -1.5)
   g.add(strut3([0, 1, -3.4], [0, gy + by, bz], 6, 0.6, stand))
   return g
@@ -388,7 +392,8 @@ function mouseMat(p: string[]) {
   const mz = 3
   g.add(ball(3.2, body, { x: mx, y: 2.3, z: mz }, [1, 0.6, 1.95]))
   g.add(cylX(0.65, 0.8, rgb, mx, 3.95, mz - 2.6, 16))
-  g.add(noOutline(litOutlined(ball(0.7, rgb, { x: mx, y: 3.6, z: mz + 2.8 }, [1, 0.35, 1]), rgb, 0.9)))
+  // 掌托上的灯标露出壳面（以前整颗埋在壳里，看不见）
+  g.add(noOutline(litOutlined(ball(0.7, rgb, { x: mx, y: 3.9, z: mz + 2.8 }, [1, 0.35, 1]), rgb, 0.9)))
   for (let i = 0; i < 2; i++) g.add(rbox(0.5, 0.6, 1.3, BLACK, { x: mx - 3.05, y: 2.1, z: mz - 1.6 + i * 1.6 }, 0.2))
   return g
 }
@@ -424,13 +429,13 @@ function mechKeyboard(kind: '60' | 'tkl' | 'full', rgb = false) {
     const rowZ = (ri: number) => -D / 2 + B + (ri + 0.5) * U + (fr && ri > 0 ? 0.25 * U : 0)
     const nRows = fr ? 6 : 5
     if (rgb) {
-      // 键帽下面一层发光板（每行一种颜色，渐变感），从键帽缝里透出来
+      // 键帽下面一层发光板（每行一种颜色，渐变感），从键帽缝里透出来。灯板、灯带都不描边，用直角盒（全尺寸 RGB 款原来 12528 面，过了小件 12k 的线）
       for (let ri = 0; ri < nRows; ri++) {
         const col = lights[Math.min(2, Math.floor((ri / nRows) * 3))]
-        g.add(noOutline(litOutlined(rbox(W - 2 * B + 0.2, 0.4, U, col, { y: 2.3, z: rowZ(ri) }, 0.1), col, 0.85)))
+        g.add(noOutline(litOutlined(box(W - 2 * B + 0.2, 0.4, U, col, { y: 2.3, z: rowZ(ri) }), col, 0.85)))
       }
-      g.add(noOutline(litOutlined(rbox(W - 2, 0.5, 0.4, lights[0], { y: 0.6, z: D / 2 + 0.1 }, 0.1), lights[0], 0.85)))
-      for (const s of [-1, 1]) g.add(noOutline(litOutlined(rbox(0.4, 0.5, D - 2, lights[s < 0 ? 1 : 2], { x: s * (W / 2 + 0.1), y: 0.6 }, 0.1), lights[s < 0 ? 1 : 2], 0.85)))
+      g.add(noOutline(litOutlined(box(W - 2, 0.5, 0.4, lights[0], { y: 0.6, z: D / 2 + 0.1 }), lights[0], 0.85)))
+      for (const s of [-1, 1]) g.add(noOutline(litOutlined(box(0.4, 0.5, D - 2, lights[s < 0 ? 1 : 2], { x: s * (W / 2 + 0.1), y: 0.6 }), lights[s < 0 ? 1 : 2], 0.85)))
     } else if (kind === 'full') {
       for (let k = 0; k < 3; k++) g.add(led(W / 2 - B - 5.6 + k * 1.9, 2.55, rowZ(0), GREEN, 0.18))
     }
@@ -471,7 +476,8 @@ function micCondenser(p: string[]) {
   // 防震架：两个圆环 + 竖向连杆
   const cy = 17
   g.add(rbox(1.4, 1.2, 1.4, stand, { y: 9.4 }, 0.3))
-  g.add(rod3([0, 10.4, 0], [0, cy - 4.2, -3.3], 0.4, stand))
+  // 支臂接到防震架下环的后侧（以前停在环下 1cm，防震架整个悬着）
+  g.add(rod3([0, 10.4, 0], [0, cy - 3, -3.3], 0.4, stand))
   for (const yy of [cy - 3, cy + 3]) g.add(torus(3.3, 0.3, stand, { y: yy, rx: PI / 2 }))
   for (const s of [-1, 1]) g.add(rod3([s * 3.3, cy - 3, 0], [s * 3.3, cy + 3, 0], 0.25, stand))
   g.add(rod3([0, cy - 3, -3.3], [0, cy + 3, -3.3], 0.25, stand))
@@ -511,11 +517,14 @@ function micBoom(p: string[]) {
     g.add(rod3([dx, 10, z0], [dx, e[1], e[2]], 0.5, arm))
     g.add(rod3([dx, e[1], e[2]], [dx, t[1], t[2]], 0.45, arm))
   }
-  g.add(rod3([0, 14, z0 + 1.5], [0, 28, z0 + 10], 0.25, M.silver))
+  // 弹簧：粗到两根臂杆之间，贴上臂杆（以前夹在中间两边都差 0.15）
+  g.add(rod3([0, 14, z0 + 1.5], [0, 28, z0 + 10], 0.55, M.silver))
   g.add(cylX(1.4, 3, shade(arm, -0.1), 0, e[1], e[2]))
   g.add(cylX(1.1, 3, shade(arm, -0.1), 0, t[1], t[2]))
   // 防震架 + 倒挂的麦
-  g.add(rod3([0, t[1], t[2]], [0, t[1] - 3.5, t[2]], 0.4, arm))
+  // 吊杆插进麦身顶；上环加一根横梁挂在吊杆上（以前麦、防震架都悬在吊杆下面）
+  g.add(rod3([0, t[1], t[2]], [0, t[1] - 5, t[2]], 0.4, arm))
+  g.add(rod3([-3.4, t[1] - 5, t[2]], [3.4, t[1] - 5, t[2]], 0.25, arm))
   g.add(torus(3.4, 0.3, arm, { y: t[1] - 5, z: t[2], rx: PI / 2 }))
   g.add(torus(3.4, 0.3, arm, { y: t[1] - 12, z: t[2], rx: PI / 2 }))
   for (const s of [-1, 1]) g.add(rod3([s * 3.4, t[1] - 12, t[2]], [s * 3.4, t[1] - 5, t[2]], 0.25, arm))
@@ -665,10 +674,12 @@ function mixer(p: string[]) {
   g.add(rbox(26.4, 0.3, 20, panel, { y: 2.9, z: 0.4 }, 0.1))
   for (let i = 0; i < 6; i++) {
     const x = -11 + i * 3.6
-    for (let k = 0; k < 3; k++) g.add(cyl(0.6, 0.6, 0.9, k === 0 ? C.red : M.light, { x, y: 3.1, z: -5.5 + k * 2.6 }, 14))
+    // 第一排增益旋钮在后面抬高的那一条上（以前和另外两排一个高度，整颗埋在抬高的机身里）
+    for (let k = 0; k < 3; k++) g.add(cyl(0.6, 0.6, 0.9, k === 0 ? C.red : M.light, { x, y: k === 0 ? 4.9 : 3.1, z: -5.5 + k * 2.6 }, 14))
     g.add(noOutline(rbox(0.3, 0.3, 7, BLACK, { x, y: 3.15, z: 5.5 }, 0.1)))
     g.add(rbox(1.4, 0.9, 1, cap, { x, y: 3.2, z: 4 + (i % 3) * 1.4 }, 0.25))
-    g.add(cylZ(0.8, 0.6, BLACK, x, 3.5, -10.2))
+    // 背面的插孔露出背板 0.2（以前整个埋在机身里）
+    g.add(cylZ(0.8, 0.6, BLACK, x, 3.5, -10.9))
   }
   for (let k = 0; k < 6; k++) g.add(led(11.6, 3.35, 4 - k * 1.1, k < 2 ? RED : k < 3 ? AMBER : GREEN, 0.25))
   return g
@@ -807,12 +818,16 @@ function lensBody(o: LensOpt, body: string, ring: string, acc: string, withCap =
   g.add(cyl(o.rf, o.rm, L * 0.12, body, { y: y0 + L * 0.35 }, 32))
   g.add(cyl(o.rf, o.rf, L * 0.53, body, { y: y0 + L * 0.47 }, 32))
   const nr = o.rings ?? 1
+  // 红圈：压在对焦环 / 变焦环的范围里时比环再粗一圈（以前一律比镜身粗 0.05、环比镜身粗 0.15，单反和 24-70 的红圈整圈埋在环里）
+  const ys = y0 + L - 1.6
+  let stripeR = o.rf + 0.05
   for (let i = 0; i < nr; i++) {
     const yy = y0 + L * (nr === 1 ? 0.6 : 0.5 + i * 0.25)
     const rr = yy > y0 + L * 0.47 ? o.rf : o.rm
     g.add(cyl(rr + 0.15, rr + 0.15, L * 0.16, ring, { y: yy }, 32))
+    if (yy < ys + 0.4 && yy + L * 0.16 > ys) stripeR = rr + 0.25
   }
-  if (o.stripe) g.add(cyl(o.rf + 0.05, o.rf + 0.05, 0.4, acc, { y: y0 + L - 1.6 }, 32))
+  if (o.stripe) g.add(cyl(stripeR, stripeR, 0.4, acc, { y: ys }, 32))
   const top = y0 + L
   if (o.bulb) g.add(ball(o.rf * 0.9, '#9fc6e8', { y: top - o.rf * 0.5 }, [1, 0.7, 1]))
   if (!withCap && !o.bulb) g.add(cyl(o.rf * 0.78, o.rf * 0.78, 0.3, '#28466b', { y: top - 0.1 }, 28))
@@ -908,7 +923,8 @@ function actionCamera(p: string[]) {
   g.add(cylZ(1.0, 0.6, ring, -1.6, 7.9, 2.5))
   g.add(cylZ(0.6, 0.3, '#28466b', -1.6, 7.9, 2.9))
   g.add(glow(2.0, 1.6, SCREEN, { x: 1.6, y: 7.0, z: 1.95 }, 0.5))
-  g.add(led(2.5, 9.6, 1.0, RED, 0.2))
+  // 录制灯在正面右上角（以前 z = 1.0，整颗埋在机身里）
+  g.add(led(2.5, 9.6, 1.75, RED, 0.2))
   return g
 }
 
@@ -1055,7 +1071,7 @@ function eReader(p: string[]) {
   g.add(rbox(11.8, 0.5, 16.2, cover, { x: 6.1 }, 0.2))
   g.add(rbox(11.5, 0.8, 16, body, { x: 6.1, y: 0.5 }, 0.36))
   g.add(flat(9.6, 12.8, '#ece9df', 6.1, 1.12, -0.6, 0.15))
-  for (let i = 0; i < 9; i++) g.add(noOutline(rbox(i % 4 === 3 ? 5 : 8, 0.15, 0.35, '#77736a', { x: 6.1 - (i % 4 === 3 ? 1.5 : 0), y: 1.42, z: -5.6 + i * 1.2 }, 0.05)))
+  for (let i = 0; i < 9; i++) g.add(noOutline(box(i % 4 === 3 ? 5 : 8, 0.15, 0.35, '#77736a', { x: 6.1 - (i % 4 === 3 ? 1.5 : 0), y: 1.42, z: -5.6 + i * 1.2 })))
   g.add(rbox(0.8, 0.3, 4, acc, { x: -1.2, y: 0.5, z: 0 }, 0.12))
   return g
 }
@@ -1151,7 +1167,8 @@ function retroPushPhone(p: string[]) {
   g.add(P(capsule(1.6, 11, body), 0, 12, -5, 0, 0, PI / 2))
   for (const s of [-1, 1]) g.add(ball(2.6, body, { x: s * 7.6, y: 11.4, z: -5 }, [1, 0.75, 1.2]))
   // 螺旋线头一圈嵌进机身侧面（以前离侧面 0.3cm 悬着）
-  for (let i = 0; i < 5; i++) g.add(torus(0.8, 0.25, shade(body, -0.1), { x: -9.1 - i * 0.7, y: 2.5, z: -7, ry: PI / 2 }))
+  // 相邻两圈互相压住（以前间距 0.7、圈粗 0.6，一圈圈各自悬着）
+  for (let i = 0; i < 7; i++) g.add(torus(0.8, 0.25, shade(body, -0.1), { x: -9.1 - i * 0.47, y: 2.5, z: -7, ry: PI / 2 }, PI * 2, [8, 12]))
   return g
 }
 
@@ -1196,7 +1213,8 @@ function wallPhone(p: string[]) {
   g.add(glow(3.4, 1.8, LCD, { x: 3.8, y: 17.4, z: 1.6 }, 0.4))
   keyGridZ(g, 2, 6, 1.6, 1.2, key, 3.0, 15, 1.7)
   // 电话线：从话筒下端贴着机身正面绕到右下角的插口（以前线圈悬在机身前 1cm，右端没接到任何东西）
-  coil(g, [-2.5, 3, 2.3], [2.6, 2.4, 2.3], hs, 0.5, 7)
+  // 从话筒下端的右侧面起（以前从话筒中心起，头三圈埋在话筒里）
+  coil(g, [-0.3, 3, 2.1], [2.6, 2.4, 2.1], hs, 0.5, 4)
   g.add(rbox(1.6, 1.6, 1, shade(body, -0.12), { x: 3.2, y: 1.6, z: 1.6 }, 0.3))
   return g
 }
@@ -1231,7 +1249,8 @@ function faxMachine(p: string[]) {
   keyGrid(g, 3, 4, 1.8, 1.3, key, 1.0, 9.9, -2.4)
   for (let j = 0; j < 4; j++) g.add(rbox(2.2, 0.5, 1.1, shade(key, -0.12), { x: 11, y: 9.9, z: -2.4 + j * 1.8 }, 0.2))
   // 进纸托 + 纸
-  g.add(strut3([4, 9.5, -11.5], [4, 19, -19], 18, 0.5, body))
+  // 托板下端插进机身后上角（以前搭在圆角外面，差 0.1）
+  g.add(strut3([4, 9, -11.1], [4, 19, -19], 18, 0.5, body))
   g.add(strut3([4, 10.2, -11.8], [4, 19.4, -18.8], 15, 0.15, PAPER))
   // 出纸
   g.add(noOutline(rbox(16, 0.6, 0.4, BLACK, { x: 4, y: 4.5, z: 12.05 }, 0.1)))
@@ -1273,8 +1292,9 @@ function shredder(w: number, d: number, h: number) {
     const half = hd / 2 - 0.6
     g.add(rbox(hw, 2, half, head, { y: h - 2, z: -hd / 2 + half / 2 }, 0.8))
     g.add(rbox(hw, 2, half, head, { y: h - 2, z: hd / 2 - half / 2 }, 0.8))
-    g.add(noOutline(rbox(w * 0.75, 0.3, 1.2, BLACK, { y: h - 1.9 }, 0.1)))
-    g.add(rbox(w * 0.55, 6, 0.15, PAPER, { y: h - 1.6 }, 0.05))
+    // 投纸口的黑底压进机头，纸插进黑底（以前黑底浮在槽里 0.1）
+    g.add(noOutline(rbox(w * 0.75, 0.5, 1.2, BLACK, { y: h - 2.1 }, 0.1)))
+    g.add(rbox(w * 0.55, 6.2, 0.15, PAPER, { y: h - 1.8 }, 0.05))
     g.add(rbox(3, 0.6, 1.6, acc, { x: hw / 2 - 3, y: h, z: -hd / 2 + 2 }, 0.25))
     g.add(led(hw / 2 - 6, h + 0.2, -hd / 2 + 2, GREEN, 0.22))
     return g
@@ -1333,8 +1353,9 @@ function mfp(p: string[]) {
   // 出纸仓：后侧立柱撑起扫描单元，中间是空的
   g.add(rbox(W, 12, 14, body, { y: 82, z: -D / 2 + 7 }, 1))
   g.add(rbox(14, 12, D - 14, body, { x: W / 2 - 7, y: 82, z: 7 }, 1))
-  g.add(rbox(24, 0.3, 32, PAPER, { x: -6, y: 82.1, z: 6 }, 0.05))
-  g.add(rbox(24, 0.3, 32, PAPER, { x: -6, y: 82.5, z: 6.4, ry: 0.04 }, 0.05))
+  // 出纸仓里的两张纸：下面一张压在仓底，上面一张压着它（以前各悬 0.1）
+  g.add(rbox(24, 0.4, 32, PAPER, { x: -6, y: 81.9, z: 6 }, 0.05))
+  g.add(rbox(24, 0.3, 32, PAPER, { x: -6, y: 82.2, z: 6.4, ry: 0.04 }, 0.05))
   g.add(rbox(W, 10, D, body, { y: 94 }, 1.5))
   // 自动送稿器
   g.add(rbox(W - 2, 5, D - 6, shade(body, 0.05), { y: 104, z: -2 }, 1.5))
@@ -1358,7 +1379,8 @@ function scanner(p: string[]) {
   g.add(rbox(27, 4, 38, body, {}, 1.2))
   g.add(flat(23, 31, '#d4ecff', 0, 3.85, 1, 0.3))
   const lg = new THREE.Group()
-  lg.add(rbox(27, 1.6, 38, lid, { z: 19 }, 0.7))
+  // 盖子下缘越过转轴 1.6、插进机身后上角（以前只有一条棱对着机身的圆角，差 0.8）
+  lg.add(rbox(27, 1.6, 39.6, lid, { z: 18.2 }, 0.7))
   g.add(P(lg, 0, 4, -19, -1.75))
   for (let i = 0; i < 3; i++) g.add(cyl(0.5, 0.5, 0.4, i === 0 ? acc : M.light, { x: -9 + i * 2, y: 3.9, z: 18 }, 12))
   g.add(led(10, 4.1, 18, GREEN, 0.2))
@@ -1389,7 +1411,7 @@ function calculator(p: string[]) {
   g.add(rbox(10, 1.4, 15.5, body, {}, 0.6))
   g.add(rbox(7, 0.3, 1.6, '#4a3c34', { x: 0.8, y: 1.3, z: -6.2 }, 0.1))
   g.add(flat(8.4, 2.8, LCD, 0, 1.3, -3.9, 0.15))
-  for (let i = 0; i < 8; i++) g.add(noOutline(rbox(0.6, 0.12, 1.4, '#3a4a34', { x: 3.4 - i * 0.85, y: 1.62, z: -3.9 }, 0.04)))
+  for (let i = 0; i < 8; i++) g.add(noOutline(box(0.6, 0.12, 1.4, '#3a4a34', { x: 3.4 - i * 0.85, y: 1.62, z: -3.9 })))
   for (let i = 0; i < 4; i++)
     for (let j = 0; j < 5; j++) {
       const col = i === 3 && j === 4 ? acc : j === 0 ? shade(key, -0.15) : key
@@ -1434,28 +1456,30 @@ function pcTower(w: number, d: number, h: number, rgb: boolean, fans: number) {
     const c = new THREE.Group()
     if (rgb) {
       c.add(shell(w, h, d, t, body, { right: [{ kind: 'rect', x: 0, y: 2.5, w: d - 2 * t - 3, h: h - 5, r: 1 }] }))
-      c.add(ghostOutlined(rbox(0.4, h - 2, d - 2, C.glass, { x: w / 2 + 0.25, y: 1 }, 0.2), C.glass, 0.22))
+      // 侧透玻璃压进侧板 0.15（以前离侧板 0.05）
+      c.add(ghostOutlined(rbox(0.6, h - 2, d - 2, C.glass, { x: w / 2 + 0.15, y: 1 }, 0.2), C.glass, 0.22))
       const ix = -w / 2 + t
       c.add(rbox(0.5, h * 0.62, d * 0.62, inner, { x: ix + 0.3, y: h * 0.3, z: -d * 0.12 }, 0.2))
       c.add(rbox(w - 2 * t, h * 0.2, d - 2 * t, shade(body, -0.06), { y: t }, 0.4))
-      c.add(noOutline(litOutlined(rbox(0.3, 0.6, d - 2 * t - 2, lights[1], { x: w / 2 - t - 0.6, y: t + h * 0.2 }, 0.1), lights[1], 0.85)))
+      c.add(noOutline(litOutlined(rbox(0.3, 0.7, d - 2 * t - 2, lights[1], { x: w / 2 - t - 0.6, y: t + h * 0.2 - 0.1 }, 0.1), lights[1], 0.85)))
       // 显卡 + 侧边灯条
-      c.add(rbox(w * 0.5, 4, d * 0.55, DARK, { x: ix + 0.6 + w * 0.25, y: h * 0.42, z: -d * 0.05 }, 0.5))
-      c.add(noOutline(litOutlined(rbox(0.3, 0.8, d * 0.45, lights[2], { x: ix + 0.75 + w * 0.5, y: h * 0.42 + 2.6, z: -d * 0.05 }, 0.1), lights[2], 0.9)))
+      // 显卡、散热器、内存都插进主板 0.1～0.15（以前和主板之间留着 0.05～0.4 的缝）
+      c.add(rbox(w * 0.5, 4, d * 0.55, DARK, { x: ix + 0.45 + w * 0.25, y: h * 0.42, z: -d * 0.05 }, 0.5))
+      c.add(noOutline(litOutlined(rbox(0.3, 0.8, d * 0.45, lights[2], { x: ix + 0.5 + w * 0.5, y: h * 0.42 + 2.6, z: -d * 0.05 }, 0.1), lights[2], 0.9)))
       // CPU 散热 + 风扇环
-      const cx = ix + 0.6 + w * 0.18
+      const cx = ix + 0.4 + w * 0.18
       c.add(rbox(w * 0.36, 9, 4, M.silver, { x: cx, y: h * 0.62, z: -d * 0.12 }, 0.4))
       c.add(noOutline(litOutlined(torus(3.4, 0.35, lights[0], { x: cx, y: h * 0.62 + 4.5, z: -d * 0.12 + 2.3 }), lights[0], 0.9)))
       // 内存条：顶上一条灯
       for (let i = 0; i < 2; i++) {
         const z = -d * 0.12 + 4 + i * 1.2
-        c.add(rbox(0.5, 4, 0.5, DARK, { x: ix + 1.2, y: h * 0.58, z }, 0.1))
-        c.add(noOutline(litOutlined(rbox(0.6, 0.8, 0.6, lights[1 + i], { x: ix + 1.2, y: h * 0.58 + 4, z }, 0.1), lights[1 + i], 0.9)))
+        c.add(rbox(1, 4, 0.5, DARK, { x: ix + 0.95, y: h * 0.58, z }, 0.1))
+        c.add(noOutline(litOutlined(rbox(0.6, 0.9, 0.6, lights[1 + i], { x: ix + 1.2, y: h * 0.58 + 3.9, z }, 0.1), lights[1 + i], 0.9)))
       }
       // 前置风扇：每个一种颜色
-      // 风扇贴在前 / 后面板的内壁上（以前离面板 1.1cm，灯圈和轴心悬在机箱里）
+      // 风扇贴在前 / 后面板的内壁上（以前离面板 1.1cm，灯圈和轴心悬在机箱里）；轴心、灯圈都压进内壁一点（轴心原来还差 0.1）
       const fr = Math.min(4.4, w * 0.22)
-      const fanZ = d / 2 - t - 0.5
+      const fanZ = d / 2 - t - 0.3
       for (let i = 0; i < fans; i++) {
         const fy = h * 0.32 + i * ((h * 0.6) / Math.max(1, fans))
         c.add(noOutline(litOutlined(torus(fr, 0.45, lights[i % 3], { y: fy + 5, z: fanZ }), lights[i % 3], 0.9)))
@@ -1464,7 +1488,7 @@ function pcTower(w: number, d: number, h: number, rgb: boolean, fans: number) {
       c.add(noOutline(litOutlined(torus(fr, 0.45, lights[2], { y: h * 0.72, z: -fanZ }), lights[2], 0.9)))
       c.add(cylZ(1.2, 0.8, DARK, 0, h * 0.72, -fanZ, 14))
       // 网孔前面板 + 两侧灯带
-      c.add(rbox(w - 1, h - 4, 0.6, shade(body, -0.1), { y: 2, z: d / 2 + 0.35 }, 0.3))
+      c.add(rbox(w - 1, h - 4, 0.8, shade(body, -0.1), { y: 2, z: d / 2 + 0.25 }, 0.3))
       for (let i = 0; i < 7; i++) c.add(noOutline(rbox(w - 5, 0.4, 0.3, shade(body, -0.22), { y: h * 0.2 + i * h * 0.09, z: d / 2 + 0.75 }, 0.1)))
       for (const s of [-1, 1]) c.add(noOutline(litOutlined(rbox(0.5, h - 7, 0.4, lights[s < 0 ? 0 : 1], { x: s * (w / 2 - 1.3), y: 3.5, z: d / 2 + 0.8 }, 0.1), lights[s < 0 ? 0 : 1], 0.9)))
       c.add(cyl(0.9, 0.9, 0.4, M.light, { y: h, z: d / 2 - 3 }, 16))
@@ -1474,7 +1498,7 @@ function pcTower(w: number, d: number, h: number, rgb: boolean, fans: number) {
       // 朴素版：实心机箱，侧面一排散热孔，平整前面板
       c.add(rbox(w, h, d, body, {}, 1.2))
       for (let i = 0; i < 6; i++) c.add(noOutline(rbox(0.4, h * 0.3, 1.2, shade(body, -0.12), { x: w / 2 + 0.1, y: h * 0.45, z: -d * 0.3 + i * d * 0.08 }, 0.1)))
-      c.add(rbox(w - 1, h - 3, 0.6, inner, { y: 1.5, z: d / 2 + 0.35 }, 0.3))
+      c.add(rbox(w - 1, h - 3, 0.8, inner, { y: 1.5, z: d / 2 + 0.25 }, 0.3))
       for (const yy of [h * 0.7, h * 0.66]) c.add(noOutline(rbox(w - 4, 0.25, 0.3, shade(inner, -0.15), { y: yy, z: d / 2 + 0.7 }, 0.08)))
       if (h > 40) {
         c.add(rbox(w - 5, 3, 0.4, shade(inner, -0.08), { y: h - 8, z: d / 2 + 0.8 }, 0.3))
@@ -1482,7 +1506,8 @@ function pcTower(w: number, d: number, h: number, rgb: boolean, fans: number) {
       }
       c.add(cylZ(0.9, 0.5, shade(inner, -0.1), 0, h - 3.2, d / 2 + 0.85, 18))
       c.add(led(2, h - 3.2, d / 2 + 0.8, l1, 0.2))
-      for (const s of [-1, 1]) c.add(noOutline(rbox(1.4, 0.5, 0.3, BLACK, { x: s * 2.6, y: h - 5.6, z: d / 2 + 0.75 }, 0.1)))
+      // 中塔 / 全塔的 USB 口开在那条光驱挡板上：比挡板再靠前一点（以前整个埋在挡板里）
+      for (const s of [-1, 1]) c.add(noOutline(rbox(1.4, 0.5, 0.3, BLACK, { x: s * 2.6, y: h - 5.6, z: d / 2 + (h > 40 ? 0.95 : 0.75) }, 0.1)))
     }
     g.add(P(c, 0, foot, 0))
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(3, foot, 3, BLACK, { x: sx * (w / 2 - 2.5), z: sz * (d / 2 - 3) }, 0.5))
@@ -1501,7 +1526,8 @@ function gamingMouse(p: string[]) {
   ring.scale.set(1, 1.95, 1)
   g.add(ring)
   g.add(cylX(0.65, 0.8, l1, 0, 3.55, -2.6, 16))
-  g.add(noOutline(litOutlined(ball(0.7, l1, { y: 3.25, z: 2.8 }, [1, 0.35, 1]), l1, 0.9)))
+  // 掌托上的灯标露出壳面（以前整颗埋在壳里，看不见）
+  g.add(noOutline(litOutlined(ball(0.7, l1, { y: 3.55, z: 2.8 }, [1, 0.35, 1]), l1, 0.9)))
   for (let i = 0; i < 2; i++) g.add(rbox(0.5, 0.6, 1.3, BLACK, { x: -3.05, y: 1.75, z: -1.6 + i * 1.6 }, 0.2))
   return g
 }
@@ -1512,7 +1538,8 @@ function officeMouse(p: string[]) {
   const g = new THREE.Group()
   g.add(ball(3, body, { y: 1.7 }, [1, 0.55, 1.8]))
   // 按键和滚轮在远离使用者的一头（-z），和键盘、电竞鼠标的朝向一致（以前装反了，滚轮朝着人）
-  g.add(rbox(0.25, 0.4, 3.6, keys, { y: 3.05, z: -2.4 }, 0.1))
+  // 左右键之间的分缝条顺着壳面往前低头（以前是水平的，前端翘在壳面上方 0.3，像一根伸出去的小棍）
+  g.add(rbox(0.25, 0.4, 3.6, keys, { y: 2.89, z: -2.4, rx: -0.167 }, 0.1))
   g.add(cylX(0.5, 0.7, wheel, 0, 3.15, -2.6, 12))
   return g
 }
@@ -1611,7 +1638,7 @@ function allInOne(p: string[]) {
   pn.add(rbox(54.7, 32, 0.3, bezel, { y: 6.5, z: 0.75 }, 0.15))
   pn.add(glow(51.5, 29.5, SCREEN, { y: 7.8, z: 1.2 }, 0.5))
   pn.add(glow(21, 15, '#ffffff', { x: -9, y: 15, z: 1.7 }, 0.6))
-  pn.add(glow(21, 2.4, acc, { x: -9, y: 30, z: 2.1 }, 0.6))
+  pn.add(glow(21, 2.4, acc, { x: -9, y: 30, z: 1.7 }, 0.6))
   pn.add(glow(15, 11, '#fff3b0', { x: 12, y: 12, z: 1.7 }, 0.6))
   pn.add(glow(48, 2, '#eef7ff', { y: 8.3, z: 1.7 }, 0.5))
   g.add(P(pn, 0, 8, -0.6))
@@ -1667,8 +1694,9 @@ function serverRack(p: string[]) {
     y += uh + 1.4
   })
   // 玻璃门
-  c.add(ghostOutlined(rbox(W - 2, H - 4, 0.5, C.glass, { y: 2, z: D / 2 + 0.4 }, 0.3), C.glass, 0.25))
-  c.add(rbox(1.2, 14, 1.4, M.silver, { x: W / 2 - 4, y: H / 2 - 7, z: D / 2 + 1.3 }, 0.5))
+  // 玻璃门压在柜口上，把手插进玻璃（以前门离柜口 0.15）
+  c.add(ghostOutlined(rbox(W - 2, H - 4, 0.6, C.glass, { y: 2, z: D / 2 + 0.2 }, 0.3), C.glass, 0.25))
+  c.add(rbox(1.2, 14, 1.6, M.silver, { x: W / 2 - 4, y: H / 2 - 7, z: D / 2 + 1.2 }, 0.5))
   g.add(P(c, 0, 4, 0))
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
     g.add(rbox(4, 1.5, 4, BLACK, { x: sx * (W / 2 - 4), y: 2.5, z: sz * (D / 2 - 4) }, 0.4))
@@ -1873,7 +1901,8 @@ function displayCabinet(w: number, d: number, h: number, n: number) {
       g.add(hinged(leaf, s * (w / 2 - t), d / 2 - t / 2 - 0.2, s < 0))
     }
     for (const y of ys) {
-      g.add(ghostOutlined(rbox(w - 2 * t - 0.2, 0.8, d - 2 * t - 1.2, glassC, { y: y - 0.8, z: -0.6 }, 0.2), glassC, 0.45))
+      // 玻璃层板：后缘插进背板、两角搭进后立柱（以前四周都不挨，离后立柱 0.3 悬着）；前缘位置不变
+      g.add(ghostOutlined(rbox(w - 2 * t + 0.3, 0.8, d - t - 1.7, glassC, { y: y - 0.8, z: -(t + 0.7) / 2 }, 0.2), glassC, 0.45))
       // 层板前沿的包边条：比玻璃层板厚、包住前缘（以前嵌在玻璃前下角里，底面和前倒角跟玻璃共面，会闪）
       g.add(rbox(w - 2 * t - 0.2, 1.2, 0.5, frame, { y: y - 1, z: d / 2 - t - 1.05 }, 0.15))
     }

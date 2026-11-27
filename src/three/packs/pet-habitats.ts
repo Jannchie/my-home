@@ -312,7 +312,10 @@ function hamster(fur: string, sleep = false, belly = '#fffaf2') {
   eyes(g, 0.45, 1.35, 3.9, 3.78, sleep)
   g.add(noOutlineDeep(ball(0.35, '#f49aa6', { y: 3.25, z: 4.4 })))
   if (!sleep) for (const s of [-1, 1]) g.add(noOutlineDeep(ball(0.45, '#f6c6c0', { x: s * 1.1, y: 0.5, z: 3.3 }, [1, 0.6, 1.2])))
-  return g
+  if (!sleep) return g
+  // 睡姿身体压扁了，肚子底离脚下 0.25：整只下沉 0.35，趴在垫料上（外面套一层，调用方的 P() 只改外层的位置）
+  g.position.y = -0.35
+  return G(g)
 }
 
 /** 兔子（揣手趴姿）：原点在脚下，头朝 +z，约 14 × 26 × 22 cm */
@@ -336,7 +339,7 @@ function bunny(fur: string, sub = '#fffaf2') {
 /** 豚鼠：原点在脚下，头朝 +z，约 11 × 19 × 10 cm */
 function guineaPig(fur: string, patch: string) {
   const g = new THREE.Group()
-  g.add(ball(5.5, fur, { y: 4.6 }, [1, 0.82, 1.6]))
+  g.add(ball(5.5, fur, { y: 4.4 }, [1, 0.82, 1.6]))
   g.add(ball(3.3, patch, { y: 5.3, z: -4.6 }, [1.1, 0.85, 1.05]))
   g.add(ball(2.6, patch, { y: 6.2, z: 5.4 }, [1.2, 0.95, 1]))
   for (const s of [-1, 1]) g.add(ball(1.2, '#d9a28a', { x: s * 2.8, y: 8, z: 4.6 }, [0.8, 1, 0.35]))
@@ -368,7 +371,13 @@ function gecko(body: string) {
   g.add(ball(1.8, body, { y: 1.9, z: 6.3 }, [1.15, 0.8, 1.3]))
   g.add(ball(1.4, body, { y: 1.1, z: -7.2 }, [1, 0.7, 2.4]))
   const rand = rng(11)
-  for (let i = 0; i < 9; i++) g.add(noOutlineDeep(ball(0.38, '#5a4030', { x: (rand() - 0.5) * 2.6, y: 2.75, z: -3.5 + i * 0.95 }, [1, 0.4, 1])))
+  // 斑点贴在背上：高度按身体椭球（半轴 2.4 × 1.44 × 5.76，中心 y 1.5）的表面算（以前一律 2.75，靠边的悬着、正中的埋在身体里）
+  for (let i = 0; i < 9; i++) {
+    const sx = (rand() - 0.5) * 2.6
+    const sz = -3.5 + i * 0.95
+    const sy = 1.5 + 1.44 * Math.sqrt(Math.max(0.05, 1 - (sx / 2.4) ** 2 - (sz / 5.76) ** 2))
+    g.add(noOutlineDeep(ball(0.38, '#5a4030', { x: sx, y: sy, z: sz }, [1, 0.4, 1])))
+  }
   for (const [x, z] of [
     [2.2, 3.4],
     [-2.2, 3.4],
@@ -454,7 +463,8 @@ function bird(kind: BirdKind) {
   g.add(P(cyl(0, 0.45, 1.1, c.beak, {}, 10), 0, 5.65, 2.05, PI / 2 + 0.35))
   eyes(g, 0.3, 1.2, 6.4, 1.15)
   g.add(rbox(1.4, 0.4, 5, c.tail, { y: 1.8, z: -2.7, rx: -0.6 }, 0.18))
-  for (const s of [-1, 1]) g.add(noOutlineDeep(ball(0.45, '#e9a0a0', { x: s * 0.6, y: 0.25, z: 0.35 }, [1, 0.6, 1.6])))
+  // 脚：上端接到肚子底、下端抓进栖木一点（以前是两片扁垫，上下都隔着缝）
+  for (const s of [-1, 1]) g.add(noOutlineDeep(ball(0.45, '#e9a0a0', { x: s * 0.6, y: 0.5, z: 0.35 }, [1, 1.6, 1.6])))
   if (kind === 'cockatiel') for (const [dx, rx] of [[0, -0.5], [0.4, -0.3], [-0.4, -0.3]]) g.add(P(ball(1, c.head, {}, [0.22, 1.1, 0.4]), dx, 8.1, 0.2, rx))
   g.scale.setScalar(c.k)
   return g
@@ -485,7 +495,8 @@ function hamsterWire(p: string[], W: number, D: number, HW: number) {
   g.add(P(wheel(wr, 6, acc, shade(acc, -0.15), 1.2), -W / 2 + wr + 3, 5.4, -D / 2 + 6.5))
   const hw = W >= 55 ? 13 : 10.5
   g.add(P(hut(hw, hw * 0.65, hw * 0.75, WOOD, shade(acc, -0.05)), W / 2 - hw / 2 - 3.5, 5.4, -D / 2 + hw * 0.4 + 2.5))
-  g.add(P(bottle(1.8, 10, acc), W / 2 - 2.6, 13 + (W >= 55 ? 3 : 0), 3, 0, 0, 0))
+  // 水瓶靠在右壁的笼丝上（瓶盖半径 1.95，笼丝在 W/2 - 0.3）
+  g.add(P(bottle(1.8, 10, acc), W / 2 - 2.2, 13 + (W >= 55 ? 3 : 0), 3, 0, 0, 0))
   g.add(P(bowl(3, CERAMIC), -W / 4 + 2, 5.4, D / 4))
   // 仓鼠睡在小屋门口旁边
   g.add(P(hamster('#f0c08a', true), W / 2 - hw - 6, 5.4, D / 2 - 9.5, 0, -0.5))
@@ -499,7 +510,8 @@ function hamsterAcrylic(p: string[]) {
   const W = 60
   const D = 35
   const H = 30
-  g.add(clearBox(W, H - 1, D, 0.5, 0, 0.2))
+  // 箱壁上口伸进网盖 0.15（网盖底面在 H - 0.85；以前箱壁低 0.15，网盖悬在上面）
+  g.add(clearBox(W, H - 0.7, D, 0.5, 0, 0.2))
   // 四条竖边：亚克力的切边稍深一点（透明）
   // 网盖：外框（开两个大洞）+ 细丝网
   const lid = holePanel(W + 0.6, D + 0.6, 0.9, frame, [
@@ -541,7 +553,7 @@ function hamsterCastle(p: string[]) {
   main.add(P(frameXY(-8, 18, 11, 9, 0.3, wireC), 0, 0, D / 2 - 0.3 + 0.35))
   main.add(P(wheel(7, 5.5, acc, shade(acc, -0.15), 1), -W / 2 + 10, 4.8, -D / 2 + 6))
   main.add(P(bowl(2.6, CERAMIC), 6, 4.8, 6))
-  main.add(P(bottle(1.6, 8, acc), -W / 2 + 2.4, 15, 4))
+  main.add(P(bottle(1.6, 8, acc), -W / 2 + 2, 15, 4))
   main.add(P(hamster('#f4f0ea', false), 10, 4.8, -2, 0, -0.6))
   main.position.x = cx
   g.add(main)
@@ -680,7 +692,7 @@ function rabbitCage(p: string[]) {
   g.add(rod3([hx - 7.5, 44, -D / 2 + 6], [hx + 7.5, 44, -D / 2 + 6], 0.3, wireC, 8))
   g.add(ball(6, HAY, { x: hx, y: 39, z: -D / 2 + 3.2 }, [1.1, 0.75, 0.45]))
   // 水瓶（右壁内侧）、食盆、便盆（平台下）
-  g.add(P(bottle(2.6, 16, deck, -1), W / 2 - 3.4, 26, 6))
+  g.add(P(bottle(2.6, 16, deck, -1), W / 2 - 2.9, 26, 6))
   g.add(P(bowl(4.5, CERAMIC, '#9fc56a'), -10, 10, 14))
   g.add(tray(24, 5, 18, 0.8, shade(base, -0.08), { x: W / 2 - 15, y: 10, z: -D / 2 + 11 }, 0.4))
   g.add(rbox(22.4, 2.4, 16.4, '#efe4c8', { x: W / 2 - 15, y: 10.8, z: -D / 2 + 11 }, 0.4))
@@ -711,10 +723,11 @@ function guineaPen(p: string[]) {
   g.add(tun)
   // 干草堆 + 干草架
   g.add(ball(8, HAY, { x: 14, y: 4.6, z: -D / 2 + 9 }, [1.4, 0.55, 0.9]))
-  chips(g, W - 12, D - 12, 3, HAY, 14, 33)
+  // 草屑落在抓绒垫上（垫面 y = 2.6）
+  chips(g, W - 12, D - 12, 2.6, HAY, 14, 33)
   g.add(tray(16, 9, 6, 0.6, WOOD, { x: 34, y: 2.6, z: -D / 2 + 4.5 }, 0.3))
   g.add(ball(5.5, HAY, { x: 34, y: 11, z: -D / 2 + 4.5 }, [1.3, 0.5, 0.45]))
-  g.add(P(bottle(2.4, 14, fleece, -1), W / 2 - 3.2, 20, -10))
+  g.add(P(bottle(2.4, 14, fleece, -1), W / 2 - 2.7, 20, -10))
   g.add(P(bowl(4.2, CERAMIC, '#9fc56a'), 30, 2.6, 12))
   g.add(P(guineaPig('#c9874e', '#fbf6ee'), 4, 2.6, 10, 0, 0.9))
   g.add(P(guineaPig('#f6f1e8', '#4a3a30'), -24, 2.6, 14, 0, -0.4))
@@ -753,11 +766,16 @@ function chinchillaCage(p: string[]) {
   const hy = 92
   const ham = ball(9, '#c78ab0', { x: hx, y: hy, z: 2 }, [1, 0.22, 0.85])
   g.add(ham)
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(wire([hx + sx * 7, hy + 1, 2 + sz * 6], [hx + sx * 7.5, y0 + HW, 2 + sz * 6.5], 0.15, '#9a8a7a'))
+  // 绳子下端系在吊床布的四角以内（以前落在布的外面），上端系在顶网的横丝上（z 取最近的那根）
+  const td = D - 0.6
+  const tn = Math.max(1, Math.round(td / 2))
+  const onTop = (z: number) => -td / 2 + (td * Math.round(((z + td / 2) * tn) / td)) / tn
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(wire([hx + sx * 6, hy + 0.3, 2 + sz * 5], [hx + sx * 7.5, y0 + HW, onTop(2 + sz * 6.5)], 0.15, '#9a8a7a'))
   // 瓷浴沙罐 + 水瓶
   g.add(P(cup(6, 6.5, 9, 0.6, CERAMIC), -12, 10.9, 8))
-  g.add(cyl(5.3, 5.3, 0.4, '#efe6d2', { x: -12, y: 14, z: 8 }, 20))
-  g.add(P(bottle(2.4, 14, shelf, -1), W / 2 - 3.2, 46, 8))
+  // 浴沙面和罐子同样 32 段，边缘嵌进罐壁
+  g.add(cyl(5.9, 5.9, 0.4, '#efe6d2', { x: -12, y: 14, z: 8 }, 32))
+  g.add(P(bottle(2.4, 14, shelf, -1), W / 2 - 2.7, 46, 8))
   g.add(P(chinchilla('#9b9ba3'), W / 2 - 13, 72, 2, 0, -0.3))
   return g
 }
@@ -772,8 +790,9 @@ function domeBirdcage(p: string[], kind: BirdKind = 'budgie') {
   const [base, wireC, acc] = p
   const { R: rr, base: bh, hw, ringR, ringT } = DOME
   const g = new THREE.Group()
-  g.add(cup(rr + 1.2, rr + 0.4, bh, 0.8, base))
-  g.add(cyl(rr + 0.2, rr + 0.2, 0.4, '#efe4c8', { y: 0.8 }, 32))
+  // 底盘壁厚 1.1：口沿内径 13.6，笼身底圈（外径 13.8）嵌进去 0.2（以前壁厚 0.8、内径 13.9，整个笼身悬在盘口里）
+  g.add(cup(rr + 1.2, rr + 0.4, bh, 1.1, base))
+  g.add(cyl(rr + 0.2, rr + 0.2, 0.4, '#efe4c8', { y: 1 }, 32))
   const y0 = bh - 0.3
   g.add(domeCage(rr, y0, hw, wireC))
   g.add(domeDoor(rr, PI / 2, 0.3, y0 + 1, y0 + 12, wireC))
@@ -852,8 +871,9 @@ function squareCage(p: string[], W: number, D: number, HW: number, birds: [BirdK
   // 栖木（前后方向）
   const pa = y0 + HW * 0.32
   const pb = y0 + HW * 0.58
-  g.add(rod3([-W / 4, pa, -D / 2 + 0.6], [-W / 4, pa, D / 2 - 0.6], 0.7, WOOD, 8))
-  g.add(rod3([W / 4, pb, -D / 2 + 0.6], [W / 4, pb, D / 2 - 0.6], 0.75, WOODD, 8))
+  // 栖木两头穿过前后的笼丝（笼丝在 ±(D/2 - 0.3)，以前差 0.3 没够到）
+  g.add(rod3([-W / 4, pa, -D / 2 + 0.2], [-W / 4, pa, D / 2 - 0.2], 0.7, WOOD, 8))
+  g.add(rod3([W / 4, pb, -D / 2 + 0.2], [W / 4, pb, D / 2 - 0.2], 0.75, WOODD, 8))
   // 秋千：挂在顶网的一根横丝上（z 取离 2cm 最近的那根；以前吊线顶端落在两根丝中间，悬空）
   const sy = top - 16
   const td = D - 0.6
@@ -869,12 +889,14 @@ function squareCage(p: string[], W: number, D: number, HW: number, birds: [BirdK
   const mirror = cyl(3.2, 3.2, 0.3, '#dfeaf2', {}, 24)
   mirror.material = toon('#dfeaf2', { emissive: 0.15 })
   g.add(P(mirror, mx, my, -D / 4, 0, 0, PI / 2))
-  g.add(ball(1.1, '#e3b549', { x: mx + 0.8, y: my - 5.2, z: -D / 4 }))
+  // 铃铛挂在镜框下沿
+  g.add(ball(1.1, '#e3b549', { x: mx + 0.3, y: my - 4.6, z: -D / 4 }))
   // 食槽（前壁内侧，两格）+ 水杯
-  g.add(tray(12, 4, 4.5, 0.5, acc, { x: W / 4, y: y0 + 2.5, z: D / 2 - 3 }, 0.3))
-  g.add(rbox(11, 0.5, 3.5, SEED, { x: W / 4, y: y0 + 5.3, z: D / 2 - 3 }, 0.2))
-  g.add(cup(2.6, 2.2, 4, 0.4, acc, { x: -W / 4, y: y0 + 2.5, z: D / 2 - 3.2 }))
-  g.add(cyl(2.2, 2.2, 0.4, WATER, { x: -W / 4, y: y0 + 5.6, z: D / 2 - 3.2 }, 16))
+  // 食槽、水杯挂在前壁的笼丝上：往前挪到压住笼丝（以前离笼丝 0.2～0.3）
+  g.add(tray(12, 4, 4.5, 0.5, acc, { x: W / 4, y: y0 + 2.5, z: D / 2 - 2.6 }, 0.3))
+  g.add(rbox(11, 0.5, 3.5, SEED, { x: W / 4, y: y0 + 5.3, z: D / 2 - 2.6 }, 0.2))
+  g.add(cup(2.6, 2.2, 4, 0.4, acc, { x: -W / 4, y: y0 + 2.5, z: D / 2 - 2.7 }))
+  g.add(cyl(2.2, 2.2, 0.4, WATER, { x: -W / 4, y: y0 + 5.6, z: D / 2 - 2.7 }, 16))
   g.add(P(bird(birds[0]), W / 4, pb + 0.75, 1, 0, -0.3))
   g.add(P(bird(birds[1]), -W / 4, pa + 0.7, -2, 0, 0.4))
   return g
@@ -941,8 +963,9 @@ function bambooCage(p: string[]) {
   g.add(cyl(0.6, 0.6, 1, acc, { x: 0, y: y0 + 9.4, z: D / 2 + 0.3, rx: PI / 2 }, 10))
   // 栖木（前后方向）、陶瓷食杯
   const pa = y0 + 10
-  g.add(rod3([-W / 4, pa, -D / 2 + 1], [-W / 4, pa, D / 2 - 1], 0.6, WOOD, 8))
-  g.add(rod3([W / 4, pa + 6, -D / 2 + 1], [W / 4, pa + 6, D / 2 - 1], 0.6, WOOD, 8))
+  // 栖木两头穿过前后的竹丝（竹丝在 ±(D/2 - 0.5)，以前差 0.5 没够到）
+  g.add(rod3([-W / 4, pa, -D / 2 + 0.3], [-W / 4, pa, D / 2 - 0.3], 0.6, WOOD, 8))
+  g.add(rod3([W / 4, pa + 6, -D / 2 + 0.3], [W / 4, pa + 6, D / 2 - 0.3], 0.6, WOOD, 8))
   for (const s of [-1, 1]) {
     // 5cm 的小食罐一圈 16 段，罐口的蓝圈跟着 16 段
     g.add(cup(2.3, 2, 3, 0.35, CERAMIC, { x: s * 5, y: y0 + 1, z: D / 2 - 3 }, 16))
@@ -1028,9 +1051,11 @@ function terrarium(p: string[]) {
   const ly = H - 0.3
   g.add(P(cup(7.5, 4.5, 7.5, 0.4, lamp), lx, ly + 7.5, -4, PI))
   // 灯头往罩里伸进 0.3cm，底面不和罩的内顶共面
-  g.add(cyl(2, 2, 2.5, frame, { x: lx, y: ly + 6.8, z: -4 }, 16))
+  // 灯头往下加长，接住灯泡（以前灯泡顶离灯头 1.1cm，悬在罩里）；顶端位置不变
+  g.add(cyl(2, 2, 3.8, frame, { x: lx, y: ly + 5.5, z: -4 }, 16))
   g.add(litDeep(ball(2.6, BULB, { x: lx, y: ly + 3.1, z: -4 }), BULB, 1))
-  g.add(litDeep(cyl(6.8, 6.8, 0.2, '#ffcf8a', { x: lx, y: ly + 0.05, z: -4 }, 32), '#ffcf8a', 0.6))
+  // 罩口的光斑：边缘嵌进罩口的圆边里
+  g.add(litDeep(cyl(7.3, 7.3, 0.2, '#ffcf8a', { x: lx, y: ly + 0.05, z: -4 }, 32), '#ffcf8a', 0.6))
   // 电线顺着箱顶搭到后角的顶框上
   g.add(cappedTube([[lx, ly + 8.1, -4], [lx - 6, ly + 9, -8], [-W / 2 + 1.6, H + 0.3, -D / 2 + 1.6]], 0.3, '#2a2a2e', { ...TUBE, seg: 24 }))
   // 底砂、软木背景、树枝、躲避石、水盆、多肉
@@ -1084,6 +1109,8 @@ function turtleTank(p: string[]) {
   g.add(cappedTube([[lx, H + 2, -D / 2], [lx, H + 11, -D / 2 + 1], [lx, H + 14, -D / 2 + 6], [lx, H + 13, -2]], 0.5, lamp, { ...TUBE, seg: 30 }))
   g.add(P(cup(6, 3.5, 6.5, 0.4, lamp), lx, H + 14.5, 0, PI))
   g.add(litDeep(ball(2.3, BULB, { x: lx, y: H + 10.2, z: 0 }), BULB, 1))
+  // 灯头：从罩顶伸下来接住灯泡（以前灯泡悬在罩里）
+  g.add(cyl(1.6, 1.6, 2.2, '#3d3f44', { x: lx, y: H + 12.2, z: 0 }, 12))
   return g
 }
 
@@ -1184,9 +1211,10 @@ function medakaBowl(p: string[]) {
   // 一朵睡莲
   for (let i = 0; i < 8; i++) {
     const a = (i / 8) * PI * 2
-    g.add(P(ball(1.3, flower, {}, [0.45, 0.25, 1]), Math.cos(a) * 1.1 - 3, wy + 0.9, Math.sin(a) * 1.1 + 2, 0.5 * Math.sin(a), -a, 0.5 * Math.cos(a)))
+    // 整朵花下沉 0.4，花瓣尖点在水面上（以前悬在水面上方 0.3）
+    g.add(P(ball(1.3, flower, {}, [0.45, 0.25, 1]), Math.cos(a) * 1.1 - 3, wy + 0.5, Math.sin(a) * 1.1 + 2, 0.5 * Math.sin(a), -a, 0.5 * Math.cos(a)))
   }
-  g.add(ball(0.7, '#f4d24a', { x: -3, y: wy + 1.1, z: 2 }))
+  g.add(ball(0.7, '#f4d24a', { x: -3, y: wy + 0.7, z: 2 }))
   // 一丛水草茎
   for (let i = 0; i < 6; i++) g.add(P(cyl(0.18, 0.25, 12 + i, C.leafD, {}, 6), 8 + (i % 3) * 0.8, 3.8 + (12 + i) / 2, -6 + Math.floor(i / 3) * 0.8, (i - 3) * 0.05, 0, (i % 3 - 1) * 0.1))
   for (let i = 0; i < 4; i++) g.add(swimmer(medaka(i % 2 ? '#f0b562' : '#f7d27a'), { rx: 4 + i * 1.6, rz: 3 + i, cx: (i - 1.5) * 0.8, y: 10 + i * 2, speed: (i % 2 ? -1 : 1) * (0.35 + i * 0.08), bob: 0.5 }))
@@ -1235,7 +1263,7 @@ function dogPen(p: string[]) {
   g.add(rbox(42, 0.6, 30, '#f7f4ee', { x: W / 4 + 2, y: 1.8, z: -D / 4 + 4 }, 0.2))
   g.add(puck(19, 9, bed, { x: -W / 4 + 2, y: 1, z: -6 }))
   g.add(puck(13, 3, shade(bed, 0.12), { x: -W / 4 + 2, y: 6.5, z: -6 }))
-  g.add(P(bottle(2.8, 18, frame, -1), W / 2 - 4.4, 24, 18))
+  g.add(P(bottle(2.8, 18, frame, -1), W / 2 - 3.6, 24, 18))
   g.add(ball(3.2, '#f2c84a', { x: 6, y: 4.2, z: 22 }))
   return g
 }

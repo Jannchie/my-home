@@ -56,6 +56,8 @@ export function fhCoffee(p: string[]) {
   // 下层板条两端的托档（接在腿之间）：原来中间三条板条两头什么都没搭着
   for (const s of [-1, 1]) g.add(rbox(2.4, 2.4, 53.6, base, { x: s * 41.3, y: 7.6 }, 0.5))
   for (let i = 0; i < 5; i++) g.add(rbox(85, 2, 9.4, tone(top, (i % 2) * -0.05), { y: 10, z: -22 + i * 11 }, 0.5))
+  // 两端的牙板：接在腿之间、托住三条桌面板（原来中间那条下面什么都没有，只和两边的板隔 0.2 悬着）
+  for (const s of [-1, 1]) g.add(rbox(2.4, 5.1, 52, base, { x: s * 45, y: 36.5 }, 0.6))
   for (let i = 0; i < 3; i++) g.add(rbox(100, 4.4, 21.8, tone(top, [0, -0.05, 0.03][i]), { y: 41.4, z: -22 + i * 22 }, 0.8))
   return g
 }
@@ -270,8 +272,9 @@ export function fhTableLamp(p: string[]) {
   const g = new THREE.Group()
   g.add(latheAt([[0, 0], [6, 0], [7, 2], [7.4, 9], [6, 15], [3, 18], [2.6, 21], [3.2, 22], [0, 22]], crock, {}, 20, 0.001))
   g.add(noOutlineDeep(torus(7.42, 0.4, accent, { y: 8, rx: Math.PI / 2 })))
-  g.add(torus(2.4, 0.6, crock, { x: 6.6, y: 14, ry: Math.PI / 2 }, Math.PI))
-  g.add(cyl(0.9, 0.9, 6, '#b8bcc0', { y: 22 }, 10))
+  // 罐耳两脚按进罐身（原来贴着罐身最鼓处的切面放，两脚离罐身 0.25）；灯头杆伸进灯泡 0.3
+  g.add(torus(2.4, 0.6, crock, { x: 6, y: 14, ry: Math.PI / 2 }, Math.PI))
+  g.add(cyl(0.9, 0.9, 6.6, '#b8bcc0', { y: 22 }, 10))
   g.add(lit(ball(2.2, C.lamp, { y: 30.5 }), C.lamp, 0.9))
   g.add(cup(13.5, 11.5, 15, 0.5, shadeC, { y: 41, rx: Math.PI }))
   for (const [rr, y] of [[13.4, 26.4], [11.6, 40.6]]) g.add(noOutlineDeep(torus(rr, 0.35, accent, { y, rx: Math.PI / 2 })))

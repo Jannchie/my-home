@@ -675,7 +675,8 @@ function climbingWall(p: string[]) {
   // 防摔垫：两块拼接、中间一道拉链缝，四周包边
   const mz = bz + 1 + 38
   for (const sz of [-1, 1]) g.add(rbox(W - 1, 18, 38, sz > 0 ? mat : shade(mat, -0.05), { y: 0, z: mz + sz * 18.8 }, 3))
-  g.add(noOutline(box(W - 6, 0.6, 0.6, shade(mat, -0.3), { y: 17.7, z: mz })))
+  // 拉链缝嵌在两块垫子圆角之间的 V 形槽里（槽底在 y ≈ 16.1）
+  g.add(noOutline(box(W - 6, 1.2, 0.6, shade(mat, -0.3), { y: 16.5, z: mz })))
   for (const s of [-1, 1]) g.add(rbox(6, 2.6, 1.2, shade(mat, -0.25), { x: s * 30, y: 9, z: mz + 37.8 }, 0.4))
   return fitGroup(g)
 }

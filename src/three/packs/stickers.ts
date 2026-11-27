@@ -76,7 +76,7 @@ function stickyNote(w: number, h: number, withMagnet: boolean) {
         { y: -h / 2, z: 0.15 },
       ),
     )
-    if (withMagnet) g.add(ball(1.4, mag, { y: h / 2 - 1.5, z: 0.8 }, [1, 1, 0.45]))
+    if (withMagnet) g.add(ball(1.4, mag, { y: h / 2 - 1.5, z: 0.75 }, [1, 1, 0.45]))
     return g
   }
 }
@@ -135,7 +135,8 @@ function kidsDrawing(p: string[]) {
       { y: -7.5, z: 0.12 },
     ),
   )
-  for (const x of [-9, 9]) g.add(ball(0.9, C.lemon, { x, y: 6.4, z: 0.6 }, [1, 1, 0.45]))
+  // 磁铁压住画纸（以前背面离纸 0.08）
+  for (const x of [-9, 9]) g.add(ball(0.9, C.lemon, { x, y: 6.4, z: 0.5 }, [1, 1, 0.45]))
   return g
 }
 

@@ -64,7 +64,8 @@ export function washerModel(style: WasherStyle, body: string, w: number, d: numb
       const hb = h - 8
       g.add(rbox(w, hb, d, body, {}, style === 'mini' ? 7 : 5))
       g.add(rbox(w - 4, 2, d - 18, shade(body, 0.04), { y: hb, z: 6 }, 2))
-      const win = rbox(w - 20, 0.6, d - 34, C.glass, { y: hb + 2, z: 6 })
+      // 透明窗嵌在顶盖里，只高出 0.3（以前整块 0.6 厚摆在顶盖上面）：顶盖是能摆东西的面（素材声明的 surface = h - 5.7）
+      const win = rbox(w - 20, 0.6, d - 34, C.glass, { y: hb + 1.7, z: 6 })
       win.material = toon(C.glass, { transparent: 0.6 })
       win.userData.noOutline = true
       g.add(win)
@@ -109,13 +110,21 @@ export function fridgeModel(style: FridgeStyle, body: string, w: number, d: numb
   const fd = d - 3
   const H = h - 2
   const front = fd / 2 - 1.5
-  const line = (y: number, x0 = -fw / 2 + 1, x1 = fw / 2 - 1) => g.add(rbox(x1 - x0, 0.8, 1, seam, { x: (x0 + x1) / 2, y, z: front + 0.1 }, 0.3))
-  const vline = (x: number, y0: number, y1: number) => g.add(rbox(0.8, y1 - y0, 1, seam, { x, y: y0, z: front + 0.1 }, 0.3))
+  // 机身的圆角半径。门缝只画在正面的平面部分：圆角从 R 处开始往后收，缝线画到离边 0.75R（那里只收进 0.03R），
+  // 以前画到离边 1cm，线头悬在圆角前面、从侧面看戳出机身
+  const R = style === 'retro' ? 12 : style === 'mini' ? 4 : 6
+  const edge = R * 0.75
+  const line = (y: number, x0 = -fw / 2 + edge, x1 = fw / 2 - edge) => g.add(rbox(x1 - x0, 0.8, 1, seam, { x: (x0 + x1) / 2, y, z: front + 0.1 }, 0.3))
+  const vline = (x: number, y0: number, y1: number) => {
+    y0 = Math.max(y0, 2 + edge)
+    y1 = Math.min(y1, H + 2 - edge)
+    g.add(rbox(0.8, y1 - y0, 1, seam, { x, y: y0, z: front + 0.1 }, 0.3))
+  }
   const grip = (x: number, y: number, hh: number) => g.add(rbox(2.4, hh, 3, handle, { x, y, z: front + 1 }, 1))
   const bar = (y: number, x0: number, x1: number) => g.add(rbox(x1 - x0, 2, 2.6, handle, { x: (x0 + x1) / 2, y, z: front + 1.2 }, 1))
   // 机身底下的踢脚板 / 调平脚
   g.add(rbox(fw - 10, 2.4, fd - 10, shade(body, -0.5), { z: -2.5 }, 0.6))
-  g.add(rbox(fw, H, fd, body, { y: 2, z: -1.5 }, style === 'retro' ? 12 : style === 'mini' ? 4 : 6))
+  g.add(rbox(fw, H, fd, body, { y: 2, z: -1.5 }, R))
   switch (style) {
     case 'mini':
       // 单门：一扇门到底，侧边竖把手，门里上方是小冷冻格（看不到）
@@ -146,7 +155,7 @@ export function fridgeModel(style: FridgeStyle, body: string, w: number, d: numb
       grip(3, H * 0.645, 40)
       for (const y of [H * 0.545, H * 0.36, H * 0.185]) bar(y, -fw / 2 + 10, fw / 2 - 10)
       // 门上的小屏
-      g.add(glow(8, 3, '#9fe3ff', { x: -fw / 4, y: H - 18, z: front + 0.4 }, 0.7))
+      g.add(glow(8, 3, '#9fe3ff', { x: -fw / 4, y: H - 18, z: front + 0.2 }, 0.7))
       break
     case 'side': {
       // 左右对开到底；左门上有取水口
@@ -159,12 +168,14 @@ export function fridgeModel(style: FridgeStyle, body: string, w: number, d: numb
     }
     case 'retro': {
       // 大圆角、镀铬拉杆把手，上小冷冻门
-      line(H * 0.72, -fw / 2 + 6, fw / 2 - 6)
+      line(H * 0.72)
+      // 把手整个落在正面的平面上（以前靠外 2cm，外侧一半悬在圆角前面）
       for (const y of [H * 0.8, H * 0.45]) {
-        g.add(rbox(3, 12, 3, C.steel, { x: fw / 2 - 8, y, z: front + 1 }, 1.2))
-        g.add(rbox(10, 2.4, 3.4, C.steel, { x: fw / 2 - 12, y: y + 10, z: front + 1.2 }, 1.2))
+        g.add(rbox(3, 12, 3, C.steel, { x: fw / 2 - 10, y, z: front + 1 }, 1.2))
+        g.add(rbox(10, 2.4, 3.4, C.steel, { x: fw / 2 - 14, y: y + 10, z: front + 1.2 }, 1.2))
       }
-      g.add(rbox(fw * 0.4, 3, 0.8, C.steel, { y: 10, z: front + 0.3 }, 1))
+      // 底部铭牌在机身下缘的圆角上，往里压一点才贴得住
+      g.add(rbox(fw * 0.4, 3, 0.8, C.steel, { y: 10, z: front - 0.1 }, 1))
       break
     }
   }
@@ -185,9 +196,10 @@ export function wineCoolerModel(body: string, w: number, d: number, h: number) {
   const front = d / 2 - 3
   // 门框（四条边框，中间是玻璃，看得到里面的酒瓶）
   const fh = h - 10
-  for (const s of [-1, 1]) g.add(rbox(4, fh, 1.6, frame, { x: s * (w / 2 - 3), y: 8, z: front }, 0.8))
-  g.add(rbox(w - 2, 4, 1.6, frame, { y: 8, z: front }, 0.8))
-  g.add(rbox(w - 2, 5, 1.6, frame, { y: 8 + fh - 5, z: front }, 0.8))
+  // 门框背面压进机身前沿 0.4（机身前沿在 front - 1；以前门框背面在 front - 0.8，整扇门悬在柜体前面 0.2cm）
+  for (const s of [-1, 1]) g.add(rbox(4, fh, 2.2, frame, { x: s * (w / 2 - 3), y: 8, z: front - 0.3 }, 0.8))
+  g.add(rbox(w - 2, 4, 2.2, frame, { y: 8, z: front - 0.3 }, 0.8))
+  g.add(rbox(w - 2, 5, 2.2, frame, { y: 8 + fh - 5, z: front - 0.3 }, 0.8))
   // 酒瓶：瓶底朝外横放
   const rows = Math.max(3, Math.floor((h - 22) / 11))
   const cols = Math.max(2, Math.floor((w - 10) / 8))
@@ -195,7 +207,8 @@ export function wineCoolerModel(body: string, w: number, d: number, h: number) {
   for (let r = 0; r < rows; r++) {
     const y = 13 + r * ((h - 26) / rows)
     // 层架两端插进侧板、后端顶到背板（以前四周各空 1cm，一层层架子连同酒瓶悬在柜子中间）
-    g.add(rbox(w - 5, 0.6, d - 9, C.steel, { y: y - 0.8, z: -2.5 }, 0.2))
+    // 层架顶面在 y + 0.4，酒瓶（半径 3.2，中心 y + 3.4）压进去 0.2
+    g.add(rbox(w - 5, 0.6, d - 9, C.steel, { y: y - 0.2, z: -2.5 }, 0.2))
     for (let c = 0; c < cols; c++) {
       const x = -w / 2 + 6 + (c + 0.5) * ((w - 12) / cols)
       // 横放的圆柱：cyl 的 at.y 是「立着时的底面」，转 90° 后要减去半个长度才是瓶身中心高度

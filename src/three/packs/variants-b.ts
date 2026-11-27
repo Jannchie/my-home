@@ -48,11 +48,16 @@ function blade(len: number, wide: number, thick: number, color: string, base: V3
   m.position.set(base[0] + (d.x * len) / 2, base[1] + (d.y * len) / 2, base[2] + (d.z * len) / 2)
   return m
 }
-/** 花盆：空心盆 + 口沿下 2.2cm 的土面 */
+/**
+ * 花盆：空心盆 + 口沿下 2.2cm 的土面。土面是和盆内壁同斜度的圆台，四周嵌进盆壁 0.2
+ * （内壁就是 cup 车削轮廓里的那条斜线；原先按外壁半径减壁厚再留 0.3，离内壁有 0.4 ～ 0.5 的缝，土和整棵植物都悬在盆里）
+ */
 function bigPot(rTop: number, rBot: number, h: number, t: number, color: string, y0 = 0) {
   const g = G(cup(rTop, rBot, h, t, color, { y: y0 }))
-  const r = rBot + ((rTop - rBot) * (h - 3)) / h - t - 0.3
-  g.add(cyl(r, r, 0.8, SOIL, { y: y0 + h - 3 }, 32))
+  const k = Math.min(t * 0.6, rBot * 0.2)
+  const r0 = rBot - t + ((rTop - rBot) * t) / h
+  const inner = (y: number) => r0 + ((rTop - t - r0) * (y - t - k)) / (h - t / 2 - t - k)
+  g.add(cyl(inner(h - 2.2) + 0.2, inner(h - 3) + 0.2, 0.8, SOIL, { y: y0 + h - 3 }, 32))
   return g
 }
 /** 贴着盆身的细箍：圆周和盆身（cup 32 段）同段数，管截面 6 段（管粗 1cm 出头，一半埋在盆壁里） */
@@ -236,8 +241,9 @@ function areca(p: string[]) {
       const side = new THREE.Vector3().crossVectors(tan, up).normalize()
       const len = 16 * (1 - 0.45 * t)
       for (const sd of [-1, 1]) {
-        const dir = side.clone().multiplyScalar(sd * 0.85).add(tan.clone().multiplyScalar(0.45)).add(new THREE.Vector3(0, -0.3, 0))
-        g.add(blade(len, 0.17, 0.06, (k + sd) % 3 ? C.leaf : C.leafD, pos, dir, [8, 4]))
+        const dir = side.clone().multiplyScalar(sd * 0.85).add(tan.clone().multiplyScalar(0.45)).add(new THREE.Vector3(0, -0.3, 0)).normalize()
+        // 叶根往叶轴里多扎 0.3（叶长跟着加 0.3，叶尖位置不变）：球的半径取整到 0.1 后叶根的尖会短一点，个别正好够不到五边形的叶轴
+        g.add(blade(len + 0.3, 0.17, 0.06, (k + sd) % 3 ? C.leaf : C.leafD, [pos[0] - dir.x * 0.3, pos[1] - dir.y * 0.3, pos[2] - dir.z * 0.3], dir, [8, 4]))
       }
     }
   }
@@ -370,7 +376,7 @@ function cactusGarden(p: string[]) {
   // 金琥
   g.add(ball(7, '#8fbf6a', { x: -1, y: soil + 5, z: 14 }, [1, 0.8, 1]))
   for (const [x, y, z] of [
-    [14, soil + 35, 10],
+    [14, soil + 34.5, 10],
     [-1, soil + 10.6, 14],
     [2, soil + 96, -5],
   ] as V3[]) {
@@ -682,7 +688,8 @@ function bsLadder(p: string[]) {
     if (i === 1) flatBooks(g, 22, y + 2.2, zc, 3, 9)
     if (i === 3) {
       g.add(cup(5, 4, 9, 0.6, acc, { x: -18, y: y + 2.2, z: zc }))
-      g.add(ball(5.5, C.leaf, { x: -18, y: y + 14, z: zc }, [1, 0.8, 1]))
+      // 叶球坐进盆口（盆口内半径 4.4；原先球底只比盆口低 1.6，那一截比盆口细，四周悬空）
+      g.add(ball(5.5, C.leaf, { x: -18, y: y + 13.4, z: zc }, [1, 0.8, 1]))
       books(g, 0, 24, y + 2.2, zc - 0.5, Math.min(dep - 3, 14), 20, 81)
     }
     if (i === 4) g.add(rbox(14, 9, 8, acc, { x: 12, y: y + 2.2, z: zc }, 1.2))
@@ -717,7 +724,8 @@ function bsCube(p: string[]) {
       g.add(noOutlineDeep(rbox(7, 2, 0.4, shade(c, -0.4), { x: x0 + cw / 2, y: y + ch - 11, z: 13.1 }, 0.3)))
     } else if (f === 'deco') {
       g.add(cup(4.5, 3.8, 8, 0.6, C.white, { x: x0 + cw / 2, y, z: 1 }))
-      g.add(ball(5, C.leaf, { x: x0 + cw / 2, y: y + 12, z: 1 }, [1, 0.85, 1]))
+      // 叶球坐进盆口（原先球底正好在盆口那么高，整个球悬在盆上）
+      g.add(ball(5, C.leaf, { x: x0 + cw / 2, y: y + 10.2, z: 1 }, [1, 0.85, 1]))
     }
   })
   return g
@@ -783,7 +791,8 @@ function bsGlass(p: string[]) {
   books(g, -37, 37, 70.4, -4, 20, 31, 131)
   books(g, -37, 16, 105.8, -4, 20, 30, 132)
   books(g, -37, 37, 139.8, -4, 20, 30, 133)
-  g.add(ball(4, C.peach, { x: 26, y: 110, z: -2 }))
+  // 摆件落在层板上（板面 y = 105.8）
+  g.add(ball(4, C.peach, { x: 26, y: 109.7, z: -2 }))
   // 下柜门里的一层（中间一块层板）
   g.add(rbox(w - t * 2, t, dep - 3, main, { y: 36, z: zc - 0.5 }, 0.4))
   for (const sx of [-1, 1]) {
@@ -853,7 +862,8 @@ function bsArch(p: string[]) {
     } else if (i < 4) books(g, -33, i === 2 ? 8 : 33, top, 1, 20, 28, 140 + i)
     if (i === 2) {
       g.add(cup(4.5, 3.6, 8, 0.6, acc, { x: 22, y: top, z: 2 }))
-      g.add(ball(5, C.leaf, { x: 22, y: top + 12, z: 2 }, [1, 0.8, 1]))
+      // 叶球坐进盆口（原先球底正好在盆口那么高，整个球悬在盆上）
+      g.add(ball(5, C.leaf, { x: 22, y: top + 10.1, z: 2 }, [1, 0.8, 1]))
     }
     if (i === 4) {
       g.add(ball(6, acc, { y: top + 6, z: 1 }, [1, 1, 1]))
@@ -881,16 +891,19 @@ function flGlobe(p: string[]) {
 function flReading(p: string[]) {
   const [shadeC, metal, joint] = p
   const g = G(puck(17, 3, metal))
-  g.add(cyl(1.2, 1.2, 118, metal, { y: 2.5 }, 10))
-  g.add(ball(2, joint, { y: 120 }))
-  g.add(rod3([0, 120, 0], [14, 138, 0], 0.9, metal, 8))
-  g.add(ball(1.8, joint, { x: 14, y: 138 }))
+  g.add(cyl(1.2, 1.2, 130, metal, { y: 2.5 }, 10))
+  g.add(ball(2, joint, { y: 132 }))
+  g.add(rod3([0, 132, 0], [9, 144, 0], 0.9, metal, 8))
+  g.add(ball(1.8, joint, { x: 9, y: 144 }))
+  // 灯头挂在斜臂末端：灯座（关节色的短柱）顶端接着臂端的球节，灯罩口朝前下方、背对立杆；灯座往罩里伸到灯泡。
+  // 原先灯罩口朝着立杆，斜臂是从罩口伸进罩子里的，罩子和灯座哪儿都没挨着；立杆加高 12、斜臂收短，总高和占地基本不变
+  const tilt = 0.5
   const head = new THREE.Group()
   head.add(cup(8.5, 3.2, 13, 0.6, shadeC, { rx: PI }))
   head.add(lit(ball(3, C.lamp, { y: -6 }), C.lamp, 0.8))
-  head.add(cyl(2, 2, 3, joint, { y: 0 }, 12))
-  head.position.set(17, 142, 0)
-  head.rotation.z = -0.55
+  head.add(cyl(2, 2, 6.4, joint, { y: -3.4 }, 12))
+  head.position.set(9 + Math.sin(tilt) * 3, 144 - Math.cos(tilt) * 3, 0)
+  head.rotation.z = tilt
   g.add(head)
   return g
 }
@@ -925,17 +938,19 @@ function scRetro(p: string[]) {
   const w = 84
   const d = 36
   const g = new THREE.Group()
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rod3([sx * 38, 0.5, sz * 14.5], [sx * 35, 18.5, sz * 12], 1.4, leg))
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rod3([sx * 38, 0.3, sz * 14.5], [sx * 35, 18.5, sz * 12], 1.4, leg))
   // 空心柜体 + 中间一块层板
   for (const o of hollowBox(w, 18, 92, -18, 15, main, 1.6, 0.8)) g.add(o)
   g.add(rbox(w - 3.2, 1.6, 31, main, { y: 54, z: -2 }, 0.3))
   // 两扇拉门：一前一后，夹在上下两道轨道里；前面那扇推到后面那扇前头
-  for (const y of [21.8, 87]) g.add(rbox(w - 4, 1.2, 3, shade(main, -0.1), { y, z: 16.4 }, 0.4))
+  // 上下轨道两头嵌进侧板的前沿（原先比柜内还窄，两头离侧板 0.4，轨道和右边那扇门一起悬在柜口前）
+  for (const y of [21.8, 87]) g.add(rbox(w - 1.6, 1.2, 3.4, shade(main, -0.1), { y, z: 16.2 }, 0.4))
   const fz = d / 2 - 3 + 0.8
   for (const sx of [-1, 1]) {
     const z = fz + (sx < 0 ? 1.4 : 0)
     const x = (sx * w) / 4 - sx * 0.5
-    const parts: THREE.Object3D[] = [rbox(w / 2 - 2, 64, 1.2, shade(main, 0.05), { x, y: 23, z }, 0.8), rbox(w / 2 - 9, 54, 0.4, cane, { x, y: 28, z: z + 0.8 }, 0.2)]
+    // 门板上下各插进轨道 0.3
+    const parts: THREE.Object3D[] = [rbox(w / 2 - 2, 64.6, 1.2, shade(main, 0.05), { x, y: 22.7, z }, 0.8), rbox(w / 2 - 9, 54, 0.4, cane, { x, y: 28, z: z + 0.8 }, 0.2)]
     for (let k = 0; k < 6; k++) parts.push(noOutlineDeep(rbox(w / 2 - 9.4, 0.3, 0.3, shade(cane, -0.2), { x, y: 31 + k * 9, z: z + 1.1 }, 0.1)))
     parts.push(noOutlineDeep(cyl(1.6, 1.6, 0.4, shade(main, -0.35), { x: sx * 34, y: 55, z: z + 0.6, rx: PI / 2 }, 16)))
     if (sx < 0) g.add(moving(parts, [0, 0, 0], { kind: 'slide', dx: w / 2 - 1 }))
@@ -1009,12 +1024,14 @@ function scShoji(p: string[]) {
   g.add(rbox(w - 3.2, 1.6, 31.5, wood, { y: 50, z: -1.5 }, 0.3))
   g.add(rbox(w + 0, 2, d, shade(wood, -0.05), { y: 94 }, 0.8))
   const fz = d / 2 - 2
-  for (const y of [9.6, 91]) g.add(rbox(w - 2, 1.4, 3, shade(wood, -0.1), { y, z: 17 }, 0.4))
+  // 上下轨道往后压进柜体前沿 0.5（原先背面正好贴着柜口，圆角之间留着缝）
+  for (const y of [9.6, 91]) g.add(rbox(w - 2, 1.4, 3, shade(wood, -0.1), { y, z: 16.5 }, 0.4))
   for (const sx of [-1, 1]) {
     const x = (sx * w) / 4 - sx * 0.6
     const z = fz + (sx < 0 ? 1.2 : 0)
     const dw = w / 2 - 2.4
-    const parts: THREE.Object3D[] = [rbox(dw, 80, 1, shade(wood, 0.04), { x, y: 11, z }, 0.5), rbox(dw - 4, 72, 0.4, washi, { x, y: 15, z: z + 0.7 }, 0.15)]
+    // 门板上下各插进轨道 0.3
+    const parts: THREE.Object3D[] = [rbox(dw, 80.6, 1, shade(wood, 0.04), { x, y: 10.7, z }, 0.5), rbox(dw - 4, 72, 0.4, washi, { x, y: 15, z: z + 0.7 }, 0.15)]
     // 木格栅
     for (let k = 1; k < 4; k++) parts.push(rbox(0.8, 72, 0.6, shade(wood, 0.04), { x: x - (dw - 4) / 2 + (k * (dw - 4)) / 4, y: 15, z: z + 1.1 }, 0.2))
     for (let k = 1; k < 7; k++) parts.push(rbox(dw - 4, 0.8, 0.6, shade(wood, 0.04), { x, y: 15 + (k * 72) / 7 - 0.4, z: z + 1.1 }, 0.2))
@@ -1121,7 +1138,7 @@ function drMcm(p: string[]) {
   const w = 86
   const d = 44
   const g = new THREE.Group()
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rod3([sx * 40, 0.6, sz * 18], [sx * 36, 20.5, sz * 15], 1.5, leg))
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rod3([sx * 40, 0.37, sz * 18], [sx * 36, 20.5, sz * 15], 1.5, leg))
   for (const o of hollowBox(w, 20, 78, -22, 20, main, 1.6, 1)) g.add(o)
   g.add(rbox(1.6, 58 - 3.2, d - 4, main, { y: 21.6, z: -1 }, 0.3))
   const fz = d / 2 - 2 + 0.7
@@ -1165,8 +1182,9 @@ function drTansu(p: string[]) {
   ;[-24, 2].forEach((x, k) => g.add(drawer([rbox(24, 24.6, 1.4, shade(wood, 0.04), { x, y: 65, z: fz }, 0.6), ...ring(x, 81)], trays[3 + k], shade(wood, 0.08))))
   // 右上小门：铰链在右
   g.add(moving([rbox(22, 24.6, 1.4, shade(wood, -0.06), { x: 27, y: 65, z: fz }, 0.6), noOutlineDeep(rbox(1.2, 7, 0.4, iron, { x: 19, y: 74, z: fz + 0.9 }, 0.2))], [38, 65, fz - 0.7], swing(false)))
-  // 包角铁件
-  for (const sx of [-1, 1]) for (const y of [6.4, 86.6]) g.add(rbox(5, 3, 0.5, iron, { x: sx * (w / 2 - 2.8), y: y - 1.5, z: fz + 1 }, 0.2))
+  // 包角铁件：钉在侧板的前沿上（侧板 1.6 厚，铁件压进去 0.2）。
+  // 原先是 5cm 宽的片，浮在抽屉面板前 0.05、离柜体 0.45，还盖着抽屉面板和小门的角——抽屉一拉就从铁件里穿过去
+  for (const sx of [-1, 1]) for (const y of [6.4, 86.6]) g.add(rbox(1.8, 3, 0.6, iron, { x: sx * (w / 2 - 1), y: y - 1.5, z: 20.1 }, 0.2))
   return g
 }
 
@@ -1182,7 +1200,8 @@ function drCandy(p: string[]) {
   for (const s of [-1, 1]) g.add(rbox(4, 80, d - 4, main, { x: s * (w / 2 - 2), y: 5.5, z: -2 }, 2))
   g.add(rbox(w, 4, d - 4, main, { y: 81.5, z: -2 }, 2))
   g.add(rbox(w - 8, 3, d - 4, main, { y: 5.5, z: -2 }, 1))
-  g.add(rbox(w - 8, 73, 1.2, shade(main, -0.05), { y: 8.5, z: -2 - (d - 4) / 2 + 0.6 }, 0.4))
+  // 背板四边各嵌进侧板 / 顶板 / 底板 0.3（原先正好相切，圆角之间留着缝）
+  g.add(rbox(w - 7.4, 73.6, 1.2, shade(main, -0.05), { y: 8.2, z: -2 - (d - 4) / 2 + 0.6 }, 0.4))
   const fz = d / 2 - 4 + 0.6
   const cols = [a, b, a, b]
   for (let k = 0; k < 4; k++) {
@@ -1461,14 +1480,14 @@ function fruitFooted(p: string[]) {
     const t = i / 14
     const rr = 2.6 * (1 - t * 0.7)
     const a = i * 2.4
-    g.add(ball(1.2, i % 3 ? grape : shade(grape, -0.12), { x: -4 + Math.cos(a) * rr, y: 8.8 + t * 5 + r() * 0.5, z: 2 + Math.sin(a) * rr }))
+    g.add(ball(1.2, i % 3 ? grape : shade(grape, -0.12), { x: -4 + Math.cos(a) * rr, y: 8.2 + t * 5 + r() * 0.5, z: 2 + Math.sin(a) * rr }))
   }
-  g.add(cyl(0.2, 0.2, 2, C.woodD, { x: -4, y: 13.8, z: 2 }, 6))
-  // 梨
-  g.add(ball(3.2, '#d8e27a', { x: 4, y: 10.6, z: 1 }, [1, 0.95, 1]))
-  g.add(ball(2.2, '#d8e27a', { x: 4, y: 13.8, z: 1 }))
-  g.add(cyl(0.2, 0.25, 1.4, C.woodD, { x: 4, y: 15.6, z: 1 }, 6))
-  g.add(ball(3, peach, { x: 0.6, y: 10.6, z: -4.6 }))
+  g.add(cyl(0.2, 0.2, 2, C.woodD, { x: -4, y: 13.2, z: 2 }, 6))
+  // 梨、桃和葡萄都落在盘底上（盘内底 y = 7.2；原先整体高 0.5，三样水果都悬在盘面上方 0.3）
+  g.add(ball(3.2, '#d8e27a', { x: 4, y: 10.1, z: 1 }, [1, 0.95, 1]))
+  g.add(ball(2.2, '#d8e27a', { x: 4, y: 13.3, z: 1 }))
+  g.add(cyl(0.2, 0.25, 1.4, C.woodD, { x: 4, y: 15.1, z: 1 }, 6))
+  g.add(ball(3, peach, { x: 0.6, y: 10.1, z: -4.6 }))
   return g
 }
 
@@ -1506,7 +1525,8 @@ function fruitRattan(p: string[]) {
     g.add(t)
   }
   const lem = (x: number, z: number, c: string, ry: number) => {
-    const m = ball(3, c, { x, y: 3.6, z }, [1.3, 0.9, 0.95])
+    // 落在篮底上（内底 y = 0.8，球底 0.7）
+    const m = ball(3, c, { x, y: 3.4, z }, [1.3, 0.9, 0.95])
     m.rotation.y = ry
     g.add(m)
   }
@@ -1640,7 +1660,8 @@ function booksVintage(p: string[]) {
     const bd = 16 - i * 0.6
     const k = place(slabBook(bw, t, bd, cols[i], '#efe2c4'), (r() - 0.5) * 1, y, (r() - 0.5) * 0.8, (r() - 0.5) * 0.2)
     // 书脊在 -x：竹节 + 烫金线
-    for (const z of [-bd / 3, 0, bd / 3]) k.add(rbox(0.6, t + 0.2, 0.8, cols[i], { x: -bw / 2 - 0.1, y: -0.1, z }, 0.25))
+    // 竹节上下各比书厚出 0.1；最底下那本的竹节不往下出头（不然整叠书被三个竹节垫离桌面 0.1）
+    for (const z of [-bd / 3, 0, bd / 3]) k.add(rbox(0.6, t + (i ? 0.2 : 0.1), 0.8, cols[i], { x: -bw / 2 - 0.1, y: i ? -0.1 : 0, z }, 0.25))
     for (const z of [-bd / 6, bd / 6]) k.add(noOutlineDeep(rbox(0.3, t * 0.5, 2.4, p[2], { x: -bw / 2 - 0.15, y: t * 0.25, z }, 0.1)))
     g.add(k)
     y += t
@@ -1819,7 +1840,7 @@ export const VARIANTS_B: AssetDef[] = [
 
   // —— 落地灯 ——
   vb('vb-fl-globe', '落地灯', '球形', 'lighting', [36, 36, 168], [['modern', '#fffaf0', M.light, M.black], ['nordic', N.white, N.oak, N.oak], ['cute', C.lamp, C.sakura, C.white], ['retro', '#ffe7b0', R.caramel, BRASS]], flGlobe),
-  vb('vb-fl-reading', '落地灯', '阅读', 'lighting', [37.3, 34, 145.6], [['industrial', I.iron, I.iron, BRASS], ['retro', R.teal, R.cream, R.mustard], ['modern', M.white, M.char, M.silver], ['cute', C.pink, C.white, C.lemon]], flReading),
+  vb('vb-fl-reading', '落地灯', '阅读', 'lighting', [41, 34, 145.8], [['industrial', I.iron, I.iron, BRASS], ['retro', R.teal, R.cream, R.mustard], ['modern', M.white, M.char, M.silver], ['cute', C.pink, C.white, C.lemon]], flReading),
   vb('vb-fl-tiered', '落地灯', '层叠灯罩', 'lighting', [36, 36, 154.2], [['retro', R.orange, R.cream, R.mustard], ['modern', M.white, M.black, M.white], ['nordic', N.white, N.oak, N.sage], ['cute', C.mint, C.white, C.pink]], flTiered),
 
   // —— 鞋柜 ——

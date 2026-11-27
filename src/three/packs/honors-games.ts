@@ -59,7 +59,9 @@ function trophyCup(mat: Mat) {
   return ([base, plate]: string[]) => {
     const [g, y] = trophyBase(14, 10, base, plate)
     const top = G(cyl(1, 2.6, 3, '#fff', { y }, 16), ball(1.7, '#fff', { y: y + 4.2 }), cyl(0.8, 1.3, 3, '#fff', { y: y + 5 }, 12), cup(6.4, 2.6, 10, 0.4, '#fff', { y: y + 8 }))
-    for (const s of [-1, 1]) top.add(torus(3, 0.5, '#fff', { x: s * 6.1, y: y + 13.6, rz: -s * PI / 2 }, PI))
+    // 两只耳朵把手：上端接杯口、下端接杯身下部，顺着杯壁的斜度往里收（杯壁半径从 y + 8 的 2.6 到 y + 18 的 6.4）。
+    // 以前半环竖直放，下端离杯身 2cm 悬着，敞着的管口露在外面
+    for (const s of [-1, 1]) top.add(torus(3.9, 0.5, '#fff', { x: s * 4.85, y: y + 13.9, rz: -s * (PI / 2 + 0.36) }, PI))
     g.add(finish(top, mat))
     return fitGroup(g)
   }
@@ -71,7 +73,8 @@ function trophyTall(mat: Mat) {
     g.add(rbox(10, 9, 8, shade(base, 0.1), { y: y0 }, 0.6))
     const y = y0 + 9
     const top = G(cyl(1.4, 3.2, 4, '#fff', { y }, 16), ball(2.2, '#fff', { y: y + 5.6 }), cup(8.2, 3.2, 13, 0.5, '#fff', { y: y + 7 }), cyl(8.4, 8.4, 1, '#fff', { y: y + 20 }, 24), ball(1.8, '#fff', { y: y + 22.6 }))
-    for (const s of [-1, 1]) top.add(torus(4.2, 0.6, '#fff', { x: s * 8, y: y + 15, rz: -s * PI / 2 }, PI))
+    // 把手两端都接在杯壁上（同小奖杯：以前下端悬着）
+    for (const s of [-1, 1]) top.add(torus(5.2, 0.6, '#fff', { x: s * 6.2, y: y + 14.75, rz: -s * (PI / 2 + 0.367) }, PI))
     g.add(finish(top, mat))
     return fitGroup(g)
   }
@@ -414,10 +417,12 @@ function certBox([box, label]: string[]) {
   g.add(tray(34, 8, 26, 0.8, box, {}, 0.6))
   g.add(noOutline(rbox(10, 3, 0.2, label, { y: 2.5, z: 13.15 }, 0.1)))
   // 一叠证书竖着插在盒里，上沿露出盒口
-  // （P 设的是盒心：y 要加上半高 11，证书底边才落在盒底板 y = 0.8 上，不然一半插到盒底下面、整个盒子被顶到半空）
-  for (let i = 0; i < 6; i++) g.add(P(rbox(30, 22, 0.35, i % 2 ? PAPER : '#fff4dc', {}, 0.1), 0, 0.8 + 11, -8 + i * 3.2, -0.12))
+  // （P 设的是盒心：y 要加上半高，证书底边才落在盒底板 y = 0.8 上，不然一半插到盒底下面、整个盒子被顶到半空。
+  //   证书后仰 0.12，竖直方向的半高只有 10.94：按 10.8 放，底边压进盒底 0.1；按 11 放的话离盒底 0.06）
+  for (let i = 0; i < 6; i++) g.add(P(rbox(30, 22, 0.35, i % 2 ? PAPER : '#fff4dc', {}, 0.1), 0, 0.8 + 10.8, -8 + i * 3.2, -0.12))
   // 盖子：铰链在后沿上方，向后打开（盖板建在铰链后方平躺，再绕铰链抬起 70°：立着、略往后仰）
-  const lid = G(rbox(35, 1.2, 27, shade(box, 0.06), { z: -13.5 }, 0.5))
+  // 盖板往铰链这头多伸 0.5，下沿压进盒子后壁的上口（以前正好停在后壁顶面上，两边都是圆角，差 0.17cm）
+  const lid = G(rbox(35, 1.2, 27.5, shade(box, 0.06), { z: -13.25 }, 0.5))
   g.add(P(lid, 0, 8, -13, 1.22))
   return fitGroup(g)
 }
@@ -490,7 +495,8 @@ function mjFold([top, felt]: string[]) {
 function mjFoldClosed([top]: string[]) {
   const g = new THREE.Group()
   g.add(rbox(80, 80, 2.4, top, { y: 1 }, 0.6))
-  for (const s of [-1, 1]) g.add(rbox(3, 78, 3, DARK, { x: s * 30, y: 2, z: 2.8 }, 1))
+  // 折起的桌腿压进桌面背面 0.2（桌面背面在 z = 1.2；以前腿从 1.3 开始，隔着 0.1cm）
+  for (const s of [-1, 1]) g.add(rbox(3, 78, 3.3, DARK, { x: s * 30, y: 2, z: 2.65 }, 1))
   return fitGroup(g)
 }
 /** 和室手积麻将桌（座卓式，四边有挡牌的边框，四角有点棒抽屉）：[桌框, 桌布] */
@@ -780,7 +786,8 @@ function dartboard([rim, c1, c2]: string[]) {
     [-6, 20],
     [8, 16],
   ] as [number, number][])
-    g.add(P(G(cyl(0.25, 0.25, 7, '#c9ced6', {}, 6), rbox(1.6, 2.4, 0.1, '#c8473a', { y: 5.6 }, 0.05)), x, y, 1.8, PI / 2 - 0.15))
+    // 镖针往前多伸 0.6，扎进盘面（盘面贴图在 z = 1.6；以前镖尖停在 1.8，三支镖悬在盘面前）
+    g.add(P(G(cyl(0.25, 0.25, 7.6, '#c9ced6', { y: -0.6 }, 6), rbox(1.6, 2.4, 0.1, '#c8473a', { y: 5.6 }, 0.05)), x, y, 1.8, PI / 2 - 0.15))
   return fitGroup(g, DART_MOUNT)
 }
 /** 飞镖柜（门打开，两侧小黑板记分）：[柜木, 色环 1, 色环 2] */

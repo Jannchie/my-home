@@ -587,7 +587,8 @@ function buildServer(id: string, b: RoboBreed, pal: string[]): RoboRig {
   inner.add(body)
   body.add(rbox(46, 17, 46, main, { y: 2.4 }, 8))
   body.add(rbox(47, 3, 47, shade(main, -0.35), { y: 3.2 }, 1.4))
-  body.add(lit(rbox(20, 1, 0.6, eye, { y: 14, z: 23.1 }, 0.3), eye, 0.7))
+  // 灯条在机身上沿的大圆角上：做厚一点往里嵌，背面埋进圆角里（正面位置不变）
+  body.add(lit(rbox(20, 1, 1.6, eye, { y: 14, z: 22.6 }, 0.3), eye, 0.7))
   body.add(rbox(10, 90, 8, sub, { y: 19, z: -16 }, 2))
   for (const y of SERVER_TRAYS) {
     body.add(tray(40, 2.5, 36, 0.8, shade(sub, 0.06), { y, z: 2 }))
@@ -717,7 +718,8 @@ function buildHumanoid(id: string, b: RoboBreed, pal: string[]): RoboRig {
   for (const e of eyes) head.add(e)
   const arms: Arm[] = ([-1, 1] as const).map((side) => {
     const sh = node(side * 17.4, 22, 0)
-    sh.add(cyl(4.5, 4.5, 6, joint, { y: -3, rz: PI / 2 }, 16))
+    // 肩电机往躯干里伸 1.2：躯干半宽 14，原来内端停在 14.4，胳膊整条悬着
+    sh.add(cyl(4.5, 4.5, 7.2, joint, { x: -side * 0.6, y: -3.6, rz: PI / 2 }, 16))
     sh.add(rbox(5.6, 24, 6.6, main, { y: -26 }, 2))
     const el = node(0, -27, 0)
     sh.add(el)

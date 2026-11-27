@@ -210,7 +210,7 @@ function counterIsland(p: string[]) {
   const iy = CI.base + 1.8
   const idz = (CI_IZ[0] + CI_IZ[1]) / 2
   for (const x of [-30, 30]) g.add(rbox(1.8, CI.h - 4 - 1.8 - iy, 56, body, { x, y: iy, z: idz }, 0.3))
-  g.add(rbox(58, 1.6, 54, body, { y: 46.4, z: idz }, 0.3))
+  g.add(rbox(58.6, 1.6, 54, body, { y: 46.4, z: idz }, 0.3))
   g.add(rbox(55, 1.8, 56, body, { x: 58.5, y: 64.2, z: idz }, 0.3))
   // 门、抽屉
   for (const o of CI_DRAWERS) g.add(drawerBox({ ...o, color: body, knob: metal }))
@@ -449,6 +449,8 @@ function sideboardMid(p: string[]) {
   const iy0 = SB.leg + 1.8
   const iy1 = SB.h - 1.8
   g.add(rbox(SB.w - 3.8, 1.6, 38, body, { y: SB_SHELF - 1.6, z: -1.7 }, 0.3))
+  // 后轨的下滑轨：后排两扇门（不动的那两扇）落在上面
+  g.add(rbox(SB.w - 3.4, 0.7, 1, body, { y: iy0 - 0.2, z: SB.d / 2 - 0.5 - 0.8 - 2 }, 0.2))
   // 推拉门：门板 + 木纹画面（浮出门面 0.06）
   const panel = (w: number, h: number) => [rbox(w, h, 1.6, door, {}, 0.5), paintPanel(w - 1.2, h - 1.2, `dg-grain-${door}`, grainDraw(door), { y: 0.6, z: 0.86 })]
   g.add(slidingDoors({ x0: -SB.w / 2 + 1.8, x1: SB.w / 2 - 1.8, y0: iy0, y1: iy1, z: SB.d / 2 - 0.5, color: door, n: 4, th: 1.6, panel, pull: leg }))
@@ -482,8 +484,9 @@ function glassHutch(p: string[]) {
   const lowZ = GH.d / 2 - 1.6 - lowD / 2
   g.add(P(carcass(98, GH.base - 3, lowD, body, { base: 8 }), 0, 0, lowZ))
   g.add(rbox(GH.w, 3, GH.d, top, { y: GH.base - 3 }, 0.6))
-  g.add(rbox(94.2, 1.6, 41.2, body, { y: 60.4, z: 0.1 }, 0.3))
-  g.add(rbox(94.2, 1.6, 41.2, body, { y: 32.4, z: 0.1 }, 0.3))
+  // 层板两头嵌进侧板 0.2（柜内净宽 94.4）
+  g.add(rbox(94.8, 1.6, 41.2, body, { y: 60.4, z: 0.1 }, 0.3))
+  g.add(rbox(94.8, 1.6, 41.2, body, { y: 32.4, z: 0.1 }, 0.3))
   for (const o of GH_DRAWERS) g.add(drawerBox({ ...o, color: body, knob }))
   const frame = doorPanel('frame', body, knob)
   g.add(hingedDoor({ x0: -48.4, x1: 0, y0: 8.2, y1: 62, z: GH.d / 2, hinge: 'left', color: body, knob, panel: frame }))
@@ -493,7 +496,7 @@ function glassHutch(p: string[]) {
   const upZ = -GH.d / 2 + upCD / 2
   const upH = GH.h - 4 - GH.base
   g.add(P(carcass(98, upH, upCD, body), 0, GH.base, upZ))
-  for (const y of GH_UP_SHELVES) g.add(rbox(94.2, 1.6, upCD - 2, body, { y: y - 1.6, z: upZ + 0.9 }, 0.3))
+  for (const y of GH_UP_SHELVES) g.add(rbox(94.8, 1.6, upCD - 2, body, { y: y - 1.6, z: upZ + 0.9 }, 0.3))
   g.add(rbox(GH.w, 4, GH.upD + 2, top, { y: GH.h - 4, z: -GH.d / 2 + (GH.upD + 2) / 2 }, 0.6))
   // 玻璃门：框 + 玻璃 + 对着层板的两道横格条
   const glass = doorPanel('glass', body, knob)
@@ -534,7 +537,7 @@ function barCabinet(p: string[]) {
   g.add(rbox(BC.w, 4, BC.d, shade(body, -0.06), { y: BC.h - 4 }, 0.8))
   // 柜内横板：下格层板、抽屉上下两块
   const iz = cz + 0.9
-  for (const y of [43.4, 76.4, BC_FLAP - 1.6]) g.add(rbox(76.2, 1.6, cd - 2, body, { y, z: iz }, 0.3))
+  for (const y of [43.4, 76.4, BC_FLAP - 1.6]) g.add(rbox(76.8, 1.6, cd - 2, body, { y, z: iz }, 0.3))
   // 上格内衬（浅色，贴在背板前面；背板外面仍是柜体色）
   const c = BC_CUB
   g.add(rbox(76.4, c.y1 - c.y0, 0.4, inner, { y: c.y0, z: cz - cd / 2 + 1.8 + 0.1 }, 0.1))

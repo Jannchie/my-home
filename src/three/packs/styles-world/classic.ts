@@ -71,7 +71,8 @@ export function clWingback(p: string[]) {
     g.add(noOutlineDeep(cylZ(4.6, 0.5, tone(fabric, -0.2), s * 33, 55.6, 19.2, 16)))
   }
   // 裙边铜钉
-  for (let x = -34; x <= 34; x += 4) g.add(ball(0.6, gold, { x, y: 19, z: 35.1 }))
+  // 铜钉钉进裙边 0.4（座身下棱是圆角，原来的 z 在两端的圆角处够不着）
+  for (let x = -34; x <= 34; x += 4) g.add(ball(0.6, gold, { x, y: 19, z: 34.7 }))
   return g
 }
 

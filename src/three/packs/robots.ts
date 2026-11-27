@@ -12,7 +12,7 @@ import { G, rectPoly, type ActorSpec, type AssetDef } from '../kit'
 import { markActorPart } from '../critters'
 import { SERVER_TRAYS, beam, buildRobo, droneModel, lit, roboStatic, screenEye } from '../robots-actors'
 import { ball, capsule, cyl, puck, rbox, shade, torus, tray } from '../toon'
-import { PI, centerBuild } from '../geo'
+import { PI, centerBuild, cylX } from '../geo'
 import { PROP, define, type Pal } from '../packkit'
 
 const SCREEN = '#1c1f2a'
@@ -96,7 +96,8 @@ function remote(p: string[]) {
   for (const sx of [-1, 1]) {
     g.add(cyl(0.45, 0.45, 1.4, sub, { x: sx * 6.2, y: 2.2, z: 1.4 }, 8))
     g.add(cyl(1.1, 1.1, 0.5, sub, { x: sx * 6.2, y: 3.4, z: 1.4 }, 14))
-    g.add(rbox(1.4, 0.7, 4.6, sub, { x: sx * 3.4, y: 2.2, z: -3.2 }, 0.3))
+    // 收起的天线放在屏幕两侧靠外（屏幕到 x = ±4.7）；以前在 x = ±3.4，前半截插在屏幕里、顶面和屏幕共面
+    g.add(rbox(1.4, 0.7, 4.6, sub, { x: sx * 5.5, y: 2.2, z: -3.2 }, 0.3))
   }
   return g
 }
@@ -147,6 +148,8 @@ function droneCase(open: boolean) {
     hinge.add(rbox(38, 3, 28, shellC, { z: 14 }, 1.4))
     hinge.add(rbox(35, 0.8, 25, FOAM, { y: -0.4, z: 14 }, 0.3))
     g.add(hinge)
+    // 合页：箱体后沿和盖子都是圆角，转轴处两边隔着空隙，用两段合页筒把它们接起来
+    for (const sx of [-1, 1]) g.add(cylX(1, 5, sub, sx * 11, 12, -14.2, 8))
     return g
   }
 }

@@ -16,12 +16,12 @@ export function washokuSet(p: string[]) {
   const g = new THREE.Group()
   g.add(bowl(5.8, 6, rice, { x: -6, z: 2 }))
   g.add(bowl(6, 6.5, soup, { x: 7, z: 2 }))
-  // 漆碗盖（倒扣的浅碗，盖在口沿上）
-  const lid = bowl(6.2, 2.4, soup, {}, 0.3, 0.38)
+  // 漆碗盖（倒扣的浅碗，盖沿扣住碗口；原来盖高 2.4，盖沿比碗口高 0.2 悬着）
+  const lid = bowl(6.2, 2.8, soup, {}, 0.3, 0.38)
   lid.rotation.x = PI
   lid.position.set(7, 9.2, 2)
   g.add(lid)
-  g.add(chopsticks(23, chop, 0, 0.9, -7.2))
+  g.add(chopsticks(23, chop, 0, 0, -7.2, 0.9, 0, 10))
   g.add(hashioki(shade(rice, -0.1), 10, 0, -7.2))
   return g
 }
@@ -30,9 +30,10 @@ export function washokuSet(p: string[]) {
 export function chopstickPair(p: string[]) {
   const [a, b, rest] = p
   const g = new THREE.Group()
-  g.add(chopsticks(23, a, 0, 0.9, -1.5))
-  g.add(chopsticks(21, b, -1, 0.9, 2.5))
-  g.add(hashioki(rest, 8.5, 0, 0.5))
+  g.add(chopsticks(23, a, 0, 0, -1.5, 0.9, 0, 8.5))
+  g.add(chopsticks(21, b, -1, 0, 2.5, 0.9, 0, 9.5))
+  // 筷架够长，两双的四根都搭得上（原来 4.2 长，外侧两根在筷架外面）
+  g.add(hashioki(rest, 8.5, 0, 0.5, 0, 6.2))
   return g
 }
 
@@ -41,8 +42,8 @@ export function plateStack(p: string[], r: number, n: number) {
   const [a, b, rim] = p
   const g = new THREE.Group()
   const h = r > 11 ? 2.8 : 2.2
-  // 每只的圈足落在下面那只的盘心上（盘心内底高 DISH_IN = 0.7）：间距再大，上面的盘子就整只悬在半空
-  const step = DISH_IN + 0.1
+  // 每只的圈足落在下面那只的盘心上（盘心内底高 DISH_IN = 0.7），压进去 0.1：间距再大，上面的盘子就整只悬在半空
+  const step = DISH_IN - 0.1
   for (let i = 0; i < n; i++) {
     g.add(dish(r, h, i % 3 === 1 ? b : a, { y: i * step }))
     g.add(noOutlineDeep(torus(r - 0.25, 0.12, rim, { y: i * step + h + 0.05, rx: PI / 2 })))
@@ -280,7 +281,7 @@ export function coasterStack(p: string[]) {
   const [a, b, holder] = p
   const g = new THREE.Group()
   g.add(tray(11.6, 3, 11.6, 0.6, holder, {}, 1))
-  for (let i = 0; i < 5; i++) g.add(cyl(5, 5, 0.5, i % 2 ? b : a, { y: 0.6 + i * 0.55 }, 28))
+  for (let i = 0; i < 5; i++) g.add(cyl(5, 5, 0.5, i % 2 ? b : a, { y: 0.6 + i * 0.5 }, 28)) // 一片压一片（原来每片之间留 0.05 的缝）
   g.add(cyl(5, 5, 0.5, b, { x: 12, y: 0 }, 28))
   return g
 }
@@ -298,15 +299,16 @@ export function cutleryTray(p: string[]) {
     [4.5, 'spoon'],
     [11.5, 'chop'],
   ]
+  // 每格两件并排平放在盒底（原来第二件抬高 0.4 悬着；叉头、勺头和柄之间还断开 0.5～0.9cm）
+  const y = 0.75
   for (const [x, k] of items)
     for (let i = 0; i < 2; i++) {
       const xx = x + (i - 0.5) * 2.4
-      const y = 0.8 + i * 0.4
       if (k === 'chop') {
-        g.add(hcyl(0.18, 0.32, 20, acc, xx, y + 0.35, 0, 'z'))
+        g.add(hcyl(0.18, 0.32, 20, acc, xx, y + 0.3, 0, 'z'))
         continue
       }
-      g.add(rbox(1.1, 0.35, 11, STEEL, { x: xx, y, z: 3 }, 0.15))
+      g.add(rbox(1.1, 0.35, 12.2, STEEL, { x: xx, y, z: 2.4 }, 0.15))
       if (k === 'fork') g.add(rbox(1.8, 0.35, 5, STEEL, { x: xx, y, z: -5.5 }, 0.15))
       if (k === 'knife') g.add(rbox(1.6, 0.3, 8, STEEL, { x: xx, y, z: -6 }, 0.15))
       if (k === 'spoon') g.add(ball(1.5, STEEL, { x: xx, y: y + 0.35, z: -5.5 }, [1, 0.25, 1.4]))
@@ -316,11 +318,11 @@ export function cutleryTray(p: string[]) {
 
 /** 丼碗（带盖） */
 export function donburi(p: string[]) {
-  const [b, lid, acc] = p
+  const [b, lid] = p
   const g = new THREE.Group()
   g.add(bowl(8, 7.5, b))
-  g.add(noOutlineDeep(torus(7.3, 0.25, acc, { y: 6.4, rx: PI / 2 })))
-  const l = bowl(7.6, 2.8, lid, {}, 0.35, 0.36)
+  // 盖沿压在碗口上（原来盖子比碗口内径还小 0.05、浮在碗口上方 0.1；碗里那圈色线盖上后看不见，删了）
+  const l = bowl(7.9, 3, lid, {}, 0.35, 0.36)
   l.rotation.x = PI
   l.position.y = 10.4
   g.add(l)

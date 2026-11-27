@@ -297,7 +297,11 @@ function triple(p: string[]) {
   g.add(rbox(28, 1.6, 18, st, { z: TRI_Z - 7 }, 0.7))
   g.add(cyl(1.7, 1.7, 30, st, { y: 1, z: TRI_Z - 7 }, 14))
   g.add(rbox(70, 2.6, 2.6, st, { y: 26, z: TRI_Z - 7 }, 1))
-  for (const s of [-1, 1]) g.add(P(rbox(2.6, 2.6, 24, st, {}, 1), s * 36, 26, TRI_Z - 1, 0, -s * 0.9))
+  // 两根支臂：从横杆两端斜着往前，伸进两侧屏幕背后的凸起里（凸起中心约在 x = ±46.3、z = 5.3）。
+  // 以前转反了方向（往后外侧撇），前端从中屏和侧屏的接缝里戳到屏幕前面，侧屏也没被托住
+  for (const s of [-1, 1]) g.add(P(rbox(2.6, 2.6, 20.4, st, {}, 1), s * 40.15, 27.3, TRI_Z + 1.1, 0, s * 0.648))
+  // 中屏的安装块：横杆到中屏背后凸起之间（以前中屏和横杆隔着 2.4cm，只靠戳穿过来的支臂连着）
+  g.add(rbox(5, 5, 4.4, st, { y: 24.8, z: TRI_Z - 4.3 }, 1))
   TRIPLE.forEach((s, i) => mount(g, s, frame, i === 1 ? '#ffb86b' : acc, i))
   return g
 }

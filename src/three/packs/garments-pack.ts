@@ -317,7 +317,7 @@ const STYLE_OF = new Map(ROW_PAL.map(([s, p]) => [p.join(), s]))
 const hangerMatFor = (style: StyleTag, color: string): HangerMat => (style === 'industrial' ? 'wire' : style === 'cute' ? 'plastic' : style === 'modern' ? (color === '#3a3a40' ? 'velvet' : 'wire') : 'wood')
 
 export const ROW_LENGTHS = [30, 45, 60, 90, 120]
-/** 叠好的一排：高 28（约 3–6 件一摞）、深 40 */
+/** 叠好的一排：高 28（约 3–6 件一摞；衣服顶面到 27.4，上面 0.6 留给领子、纽扣）、深 40 */
 const FOLD_ROW = { h: 28, d: 40 }
 const WARDROBES: Wardrobe[] = ['women', 'men', 'kids', 'casual', 'outer']
 const ROWS: AssetDef[] = WARDROBES.flatMap((wd) =>
@@ -331,7 +331,7 @@ const ROWS: AssetDef[] = WARDROBES.flatMap((wd) =>
       return garmentRow(len, { seed: hashSeed(`gm-row-${wd}-${len}`, ...p), wardrobe: wd, style, tones: [p[0], p[1]], hanger: hangerMatFor(style, p[2]), hangerColor: p[2] })
     }, { ...fam, form: 'hanging', prop: true })
     const folded = define(`gm-row-${wd}-${len}-folded`, name, 'storage', [len, FOLD_ROW.d, FOLD_ROW.h], ROW_PAL, (p) => {
-      return foldedRow(len, { seed: hashSeed(`gm-rowf-${wd}-${len}`, ...p), wardrobe: wd, style: rowStyle(p), tones: [p[0], p[1]], h: FOLD_ROW.h - 0.6, d: FOLD_ROW.d })
+      return foldedRow(len, { seed: hashSeed(`gm-rowf-${wd}-${len}`, ...p), wardrobe: wd, style: rowStyle(p), tones: [p[0], p[1]], h: FOLD_ROW.h - 0.6, d: FOLD_ROW.d, top: FOLD_ROW.h })
     }, { ...fam, form: 'folded', prop: true })
     return [hanging, folded]
   }),
@@ -353,8 +353,9 @@ function closetPipe(w: number) {
     // 两端：贴侧墙的通长棚受け桟（托住枕棚、装挂杆座）
     for (const sx of [-1, 1]) {
       g.add(rbox(1.6, PIPE.shelfY - PIPE.mount, PIPE.d, board, { x: sx * (w / 2 - 0.8), y: PIPE.mount }, 0.4))
+      // 挂杆座贴在受け桟的内侧面上、埋进去 0.2（原来离内侧面 0.2，短的挂杆没有吊撑，杆和两只座整个悬着）
       const seat = cyl(2.4, 2.4, 1.4, metal, {}, 12)
-      seat.position.set(sx * (w / 2 - 2.5), PIPE.pipeY, 0)
+      seat.position.set(sx * (w / 2 - 2.1), PIPE.pipeY, 0)
       seat.rotation.z = Math.PI / 2
       g.add(seat)
     }

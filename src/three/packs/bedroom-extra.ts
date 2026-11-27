@@ -6,7 +6,7 @@
 
 import * as THREE from 'three'
 import { C, innards, movable, rectPoly, type AssetDef, type SurfaceDef } from '../kit'
-import { ball, cyl, markMirror, rbox, shade, toon, torus } from '../toon'
+import { ball, box, cyl, markMirror, rbox, shade, toon, torus } from '../toon'
 import { I, J, M, N, R, define, type Pal } from '../packkit'
 
 /** 镜面：浅蓝玻璃色、不描边，竖直朝 +z；(x, y, z) 是镜面中心；round = 圆镜（w 为直径） */
@@ -44,12 +44,12 @@ function drawerFill(w: number, d: number, seed: number, hMax = 6) {
   const divH = hh + 0.6
   const nx = Math.max(1, Math.round(w / (seed % 2 === 0 ? 8 : 11)))
   const cw = w / nx
-  // 竖隔板（两种排法都有）
-  for (let i = 1; i < nx; i++) g.add(rbox(wall, divH, d, DIVIDER, { x: -w / 2 + i * cw }, 0.1))
+  // 竖隔板（两种排法都有）。隔板只有 0.4 厚，用直角盒（一格抽屉十来块，圆角盒每块 108 面）
+  for (let i = 1; i < nx; i++) g.add(box(wall, divH, d, DIVIDER, { x: -w / 2 + i * cw }))
   if (seed % 2 === 0) {
     const nz = Math.max(1, Math.round(d / 8))
     const cd = d / nz
-    for (let i = 1; i < nz; i++) g.add(rbox(w, divH, wall, DIVIDER, { z: -d / 2 + i * cd }, 0.1))
+    for (let i = 1; i < nz; i++) g.add(box(w, divH, wall, DIVIDER, { z: -d / 2 + i * cd }))
     for (let ix = 0; ix < nx; ix++)
       for (let iz = 0; iz < nz; iz++) {
         const col = cols[ix % cols.length]
@@ -57,7 +57,7 @@ function drawerFill(w: number, d: number, seed: number, hMax = 6) {
         const z = -d / 2 + (iz + 0.5) * cd
         g.add(rbox(cw - wall - 0.5, hh, cd - wall - 0.5, col, { x, z }, 0.9))
         // 折痕：顶面中间一道浅一点的线
-        const crease = rbox(cw - wall - 2.2, 0.15, 0.35, shade(col, -0.1), { x, y: hh, z }, 0.05)
+        const crease = box(cw - wall - 2.2, 0.15, 0.35, shade(col, -0.1), { x, y: hh, z })
         crease.userData.noOutline = true
         g.add(crease)
       }
@@ -147,6 +147,8 @@ function chest(spec: ChestSpec, open: boolean) {
         dr.position.y = y + 0.25
         dr.position.z += 0.5
         g.add(dr)
+        // 关着的格：面板后面一只素盒子当抽屉盒，两边顶到侧板（面板四周留着缝，没有它面板连拉手悬在柜口）
+        if (!pull) g.add(box(cw + 0.2, rh - 1.5, d - 3, shade(body, 0.04), { x: dr.position.x, y: y + 0.75, z: -0.4 }))
         // 拉出来的抽屉下面垫两条滑轨（从侧板伸到抽屉盒侧板底下）：格与格之间没有隔板，不垫的话抽屉盒悬在半空
         if (pull) {
           const sideX = (cw - 0.5) / 2 - 1.9
@@ -376,6 +378,8 @@ function vanityFold(open: boolean) {
     lid.position.set(0, top - 2, -d / 2 + 1)
     if (open) {
       lid.rotation.x = -Math.PI / 2 + 0.22
+      // 立起来时只有一条圆角棱挨着台面：铰链线沉进台面 0.5，让盖子下沿真的压在台面上
+      lid.position.y -= 0.5
       // 盖下的收纳格：直接落在台面上
       g.add(rbox(w - 8, 0.6, 22, shade(sub, 0.08), { y: top - 2, z: -d / 2 + 13 }, 0.2))
       for (const x of [-20, 0, 20]) g.add(rbox(0.6, 1.6, 20, sub, { x, y: top - 1.8, z: -d / 2 + 13 }, 0.2))
@@ -404,11 +408,12 @@ function vanityTri(p: string[]) {
     const wing = new THREE.Group()
     wing.add(rbox(19, 54, 2, main, { x: s * 9.5, y: 0 }, 0.8))
     wing.add(mirrorPlate(15.5, 49, s * 9.5, 27, 1.1))
-    wing.position.set(s * 19.2, my + 4, zc)
+    // 铰链线收进中镜框边 0.5（原来在框外 0.2，两翼和中镜之间留着缝）
+    wing.position.set(s * 18.5, my + 4, zc)
     wing.rotation.y = -s * 0.6
     g.add(wing)
   }
-  g.add(ball(1.8, acc, { y: my + 64, z: zc }))
+  g.add(ball(1.8, acc, { y: my + 63.5, z: zc }))
   return g
 }
 
@@ -440,13 +445,16 @@ function kyodai(p: string[]) {
   const zc = -d / 2 + 6
   // 两根立柱 + 镜框
   for (const s of [-1, 1]) g.add(rbox(2.6, 56, 2.6, main, { x: s * 14, y: base, z: zc }, 0.6))
+  // 镜框夹在两根立柱之间（两侧嵌进立柱 0.3），绕框心微微后仰，顶边到横梁下沿；镜面在框里居中。
+  // （以前 fr 的原点放在横梁高度、镜框以它为中心：镜框上半截戳出横梁 21cm，镜面却挂在框下面、四周没有框）
   const fr = new THREE.Group()
-  fr.add(rbox(24, 46, 2, main, { y: -23 }, 0.8))
-  fr.add(mirrorPlate(20, 42, 0, -23, 1.1))
-  fr.position.set(0, base + 54, zc)
+  fr.add(rbox(26, 46, 2, main, { y: -23 }, 0.8))
+  fr.add(mirrorPlate(22, 42, 0, 0, 1.1))
+  fr.position.set(0, base + 31, zc)
   fr.rotation.x = -0.08
   g.add(fr)
-  // 鏡掛け：从镜顶垂下的一块布，盖住上半面
+  // 鏡掛け：搭在横梁上、从镜顶垂下的一块布，盖住上半面
+  g.add(rbox(26, 0.8, 5.4, cloth, { y: base + 55.4, z: zc + 0.5 }, 0.3))
   g.add(rbox(26, 24, 0.8, cloth, { y: base + 54 - 22, z: zc + 2.6 }, 0.3))
   // 下摆的滚边比布面低 0.3，两块的底面不共面
   g.add(rbox(26.4, 2, 1.2, shade(cloth, -0.15), { y: base + 54 - 22.3, z: zc + 2.6 }, 0.3))
@@ -532,7 +540,7 @@ const VANITIES: AssetDef[] = [
   define('be-vanity-fold-open', '折叠镜化妆桌', 'bedroom', [80, 45, 97], VANITY_PALS, vanityFold(true), { form: 'open', formLabel: '镜子立起', surface: 73, surfaceShape: VANITY_SURF(80, 45, 2), surfaces: deskSurfaces(80, 45, 73), openable: true }),
   define('be-vanity-fold-closed', '折叠镜化妆桌', 'bedroom', [80, 45, 75], VANITY_PALS, vanityFold(false), { form: 'closed', surface: 73, surfaceShape: VANITY_SURF(80, 45, 2), surfaces: deskSurfaces(80, 45, 73), openable: true }),
   define('be-vanity-tri', '三面镜梳妆台', 'bedroom', [90, 45, 143], VANITY_PALS, vanityTri, { surface: 74, surfaceShape: VANITY_SURF(90, 45, -8), surfaces: deskSurfaces(90, 45, 74), openable: true }),
-  define('be-kyodai', '和风鏡台', 'bedroom', [46, 33, 107], KYODAI_PALS, centerZBuild(kyodai), { category: 'japanese', surface: 30, surfaceShape: [rectPoly(-21, -4, 21, 15)], surfaces: KYODAI_SURF, openable: true }),
+  define('be-kyodai', '和风鏡台', 'bedroom', [46, 33, 86.2], KYODAI_PALS, centerZBuild(kyodai), { category: 'japanese', surface: 30, surfaceShape: [rectPoly(-21, -4, 21, 15)], surfaces: KYODAI_SURF, openable: true }),
   define('be-vanity-hollywood', '好莱坞灯泡化妆台', 'bedroom', [100, 45, 135], VANITY_PALS, vanityHollywood, { surface: 75, surfaceShape: VANITY_SURF(100, 45, -15), surfaces: deskSurfaces(100, 45, 75), openable: true }),
   define('be-vanity-wall', '北欧圆镜化妆桌', 'bedroom', [70, 38, 168], VANITY_PALS, vanityWall, { surface: 74, surfaceShape: VANITY_SURF(70, 38, -15), surfaces: deskSurfaces(70, 38, 74), openable: true }),
   define('be-vanity-stool', '化妆凳', 'bedroom', [29, 29, 46.8], [...VANITY_PALS.map(([s, c]): Pal => [s, [c[0], c[1]]])], stool),

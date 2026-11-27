@@ -206,6 +206,16 @@ function wavyStrip(len: number, w: number, t: number, amp: number, waves: number
   return mesh(geo, color)
 }
 
+/**
+ * 贴在车削器身外壁上的一片弧形贴片（竖条纹、小屏）的轮廓：面比器身鼓出 0.12，上下两条边折回去、压进器身 dip。
+ * 只有鼓出的那一面的话，整片离器身 0.12 浮着，哪儿都不挨。折角处的点写两遍：车削的法线不跨折角平均，面上的明暗还是平的
+ */
+function patchProfile(r0: number, y0: number, r1: number, y1: number, dip = 0.15): V2[] {
+  const a: V2 = [r0 + 0.12, y0]
+  const b: V2 = [r1 + 0.12, y1]
+  return [[r0 - dip, y0], a, a, b, b, [r1 - dip, y1]]
+}
+
 /** 圆台容器外壁上的一圈色带：器身外半径从 y0 处的 r0 到 y1 处的 r1，比器身鼓出 0.12（段数要和器身一致） */
 function wallBand(r0: number, y0: number, r1: number, y1: number, color: string, at: Spot = {}, seg = 32) {
   return noOutline(latheAt([[r0 + 0.12, y0], [r1 + 0.12, y1]], color, at, seg))
@@ -241,6 +251,10 @@ function burgerSet(p: string[]) {
   carton.rotation.y = PI / 4
   const shellG = G(carton)
   shellG.scale.z = 0.62
+  // 盒里的薯条堆：填到盒口下面一点，上面那些单根的薯条都从它里面伸出来（原来盒里是空的，露出来的那几截悬在盒口）
+  const heap = noOutline(latheAt([[0, 0.3], [3.5, 0.3], [4.8, 7], [0, 7]], FRY, {}, 4))
+  heap.rotation.y = PI / 4
+  shellG.add(heap)
   f.add(shellG)
   f.add(rbox(6.8, 2.6, 0.3, boxC, { y: 7.3, z: -2.3 }, 0.14))
   f.add(noOutline(bead(1.3, acc, { y: 4.2, z: 2.02 }, [1, 1, 0.14])))
@@ -283,7 +297,7 @@ function friedChicken(p: string[]) {
   const bk = new THREE.Group()
   bk.add(cup(RT, RB, H, 0.35, bucket))
   // 八道竖条纹：贴着桶壁的扇形圆台面，角度和桶身的 32 段对齐
-  for (let i = 0; i < 8; i++) bk.add(noOutline(lathe([[rAt(0.8) + 0.12, 0.8], [rAt(13.2) + 0.12, 13.2]], stripe, 2, [(i * PI) / 4 + PI / 16, PI / 8])))
+  for (let i = 0; i < 8; i++) bk.add(noOutline(lathe(patchProfile(rAt(0.8), 0.8, rAt(13.2), 13.2), stripe, 2, [(i * PI) / 4 + PI / 16, PI / 8])))
   bk.add(torus(RT, 0.4, stripe, { y: H - 0.1, rx: PI / 2 }, PI * 2, [6, 32]))
   // 炸鸡：桶口垫一层，上面堆几块
   bk.add(cyl(RT - 0.9, RT - 1.1, 1, FRIED, { y: 11.4 }, 16))
@@ -463,15 +477,15 @@ function saladBowl(p: string[]) {
     [5.2, -2],
     [-1.6, -4.8],
   ])
-    g.add(ball(1.3, TOMATO, { x, y: 9.6, z }, undefined, [8, 6]))
-  // 鸡蛋片
-  for (const [x, z, rz] of [
-    [0.6, 0.8, 0.1],
-    [-3.6, -1.4, -0.2],
-    [2.4, -3.6, 0.2],
+    g.add(ball(1.3, TOMATO, { x, y: x > 5 ? 9.35 : 9.6, z }, undefined, [8, 6])) // 右后那颗下面没有翘起的叶子，落到垫底的生菜上
+  // 鸡蛋片（正中那片压在中间的叶子上）
+  for (const [x, z, rz, y] of [
+    [0.6, 0.8, 0.1, 8.8],
+    [-3.6, -1.4, -0.2, 9.15],
+    [2.4, -3.6, 0.2, 9.15],
   ]) {
     const e = G(pad(1.7, 0.6, EGG_W, {}, 12), noOutline(cyl(0.95, 0.95, 0.3, EGG_Y, { y: 0.42 }, 12)))
-    g.add(P(e, x, 9.15, z, 0.15, 0, rz))
+    g.add(P(e, x, y, z, 0.15, 0, rz))
   }
   // 黄瓜片
   for (const [x, z, rz] of [
@@ -486,7 +500,8 @@ function saladBowl(p: string[]) {
   for (let i = 0; i < 10; i++) {
     const a = r() * PI * 2
     const d = 1.5 + r() * 5
-    g.add(noOutline(bead(0.4, CORN, { x: Math.cos(a) * d, y: 9.25 - d * 0.08, z: Math.sin(a) * d }, undefined, GRAIN)))
+    // 压进菜叶里一点：落在叶缝里的那两粒也够得着垫底的生菜（原来整体高 0.3，那两粒悬着）
+    g.add(noOutline(bead(0.4, CORN, { x: Math.cos(a) * d, y: 8.95 - d * 0.08, z: Math.sin(a) * d }, undefined, GRAIN)))
   }
   // 木叉勺：柄从菜里斜伸出碗沿
   for (const s of [-1, 1]) {
@@ -605,7 +620,7 @@ function breakfastPlate(p: string[]) {
   t2.position.set(7.2, 0, 7.2)
   const pair = G(toast(), t2)
   pair.rotation.x = 0.115
-  pl.add(P(G(pair), -3.6, Y + 0.85, -9.2))
+  pl.add(P(G(pair), -3.6, Y + 0.7, -9.2))
   g.add(P(pl, -4.5, 0, 0))
   // 橙汁：杯垫 + 玻璃杯 + 橙汁
   const gx = 12.4
@@ -1028,7 +1043,7 @@ function ramuneSet(p: string[]) {
   for (let i = 0; i < 3; i++) {
     const s = watermelonSlice(seeds[i])
     s.rotation.x = -1.05 + i * 0.05
-    pl.add(P(G(s), (i - 1) * 0.5, PLATE_IN + 0.75 + i * 0.1, 2.9 - i * 1.9, 0, (i - 1) * 0.16, 0))
+    pl.add(P(G(s), (i - 1) * 0.5, PLATE_IN + 0.6 + i * 0.1, 2.9 - i * 1.9, 0, (i - 1) * 0.16, 0))
   }
   g.add(P(pl, 5.5, 0, -1))
   return fitGroup(g)
@@ -1072,7 +1087,8 @@ function waffleMaker(p: string[]) {
   ] as const)
     g.add(lit(bead(0.4, c, { x: Math.sin(a) * (R0 - 0.05), y: 2.7, z: Math.cos(a) * (R0 - 0.05) }), c, 0.8))
   // 后面的合页
-  for (const s of [-1, 1]) g.add(rbox(1.8, 1.8, 1.6, body, { x: s * 2.9, y: 3.3, z: -R0 - 0.1 }, 0.4))
+  // 合页座往前伸进底座里（原来和底座差 0.07 没挨上）
+  for (const s of [-1, 1]) g.add(rbox(1.8, 1.8, 2.2, body, { x: s * 2.9, y: 3.3, z: -R0 - 0.1 }, 0.4))
   g.add(cylX(0.85, 8.2, DARK, 0, 4.75, -R0 - 0.5, 12))
   // 上盖（以合页为原点建成合上的样子，再向后掀开 100°）：盖体 + 内侧烤盘和格子 + 顶上的装饰圆片 + 上把手
   const lid = new THREE.Group()
@@ -1082,6 +1098,8 @@ function waffleMaker(p: string[]) {
   lid.add(noOutline(cyl(R0 - 3, R0 - 3, 0.3, shade(body, -0.07), { y: 3.85, z: R0 + 0.5 }, 24)))
   lid.add(noOutline(cyl(1.6, 1.6, 0.3, acc, { y: 4, z: R0 + 0.5 }, 16)))
   lid.add(rbox(5, 1.3, 2.6, trim, { y: 1.2, z: 2 * R0 + 1.3 }, 0.5))
+  // 盖子后沿的合页筒：套在转轴上、夹在两个合页座之间，把盖子接到转轴上（原来盖子离转轴 0.4，整只盖悬在机身后面）
+  lid.add(rbox(3.6, 1.8, 2.6, body, { y: -0.9, z: 0.4 }, 0.4))
   lid.rotation.x = -1.75
   lid.position.set(0, 4.75, -R0 - 0.5)
   g.add(lid)
@@ -1145,7 +1163,8 @@ function healthKettle(p: string[]) {
   const step = (PI * 2) / SEG
   // 底座：正面偏左一块弧形小屏（亮着读数），偏右一只旋钮
   g.add(pad(7.6, 4.2, base, {}, SEG))
-  g.add(noOutline(lathe([[7.72, 1.3], [7.72, 3.1]], DARK, 3, [-4 * step, 3 * step])))
+  // 小屏的上下两条边折回去压进底座（底座是鼓形的，原来整片离底座 0.12～0.4 浮着）
+  g.add(noOutline(lathe(patchProfile(7.6, 1.3, 7.6, 3.1, 0.6), DARK, 3, [-4 * step, 3 * step])))
   g.add(lit(lathe([[7.8, 1.8], [7.8, 2.6]], '#7fe0a8', 1, [-3 * step, step]), '#7fe0a8', 0.8))
   const knob = G(cyl(1.5, 1.5, 1.2, acc, { y: 1.5, z: 7.5, rx: PI / 2 }, 16), noOutline(rbox(0.3, 1.1, 0.3, DARK, { y: 2.1, z: 8 }, 0.1)))
   knob.rotation.y = 0.6
@@ -1215,7 +1234,7 @@ function soymilkMaker(p: string[]) {
   // 一小碟黄豆
   g.add(miniCup(2.6, 1.8, 1.3, cupC, { x: 6.4, z: -5.4 }))
   g.add(noOutline(cyl(2.05, 2.05, 0.3, shade(SOYBEAN, -0.08), { x: 6.4, y: 0.55, z: -5.4 }, 12)))
-  for (let i = 0; i < 7; i++) g.add(bead(0.5, SOYBEAN, { x: 6.4 + Math.cos(i * 1.05) * (i ? 1.25 : 0), y: 1.15 + (i ? 0 : 0.3), z: -5.4 + Math.sin(i * 1.05) * (i ? 1.25 : 0) }, [1, 0.85, 1.15]))
+  for (let i = 0; i < 7; i++) g.add(bead(0.5, SOYBEAN, { x: 6.4 + Math.cos(i * 1.05) * (i ? 1.25 : 0), y: 1.15 + (i ? 0 : 0.1), z: -5.4 + Math.sin(i * 1.05) * (i ? 1.25 : 0) }, [1, 0.85, 1.15]))
   return fitGroup(g)
 }
 

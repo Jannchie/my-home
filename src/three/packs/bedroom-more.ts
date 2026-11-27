@@ -169,7 +169,7 @@ function murphyBed(p: string[]) {
   g.add(rbox(134, 195, 1.6, inner, { z: zb + 0.8 }, 0.3))
   g.add(rbox(134, 1.6, 12, main, { y: 148.4, z: zb + 7.6 }, 0.4))
   g.add(rbox(134, 18, 1.6, main, { y: 177, z: zb + MB.cd - 0.8 }, 0.4))
-  g.add(lit(noOutline(rbox(120, 0.6, 2, LAMP, { y: 176.6, z: zb + MB.cd - 3 }, 0.2)), LAMP, 0.7))
+  g.add(lit(noOutline(rbox(120, 0.6, 2, LAMP, { y: 176.8, z: zb + MB.cd - 2.3 }, 0.2)), LAMP, 0.7))
   // 柜里的底座：床架的床头那端搭在上面
   g.add(rbox(134, MB.frameY, 36, shade(main, -0.2), { z: zb + 20 }, 0.5))
   // 床架：底板 + 两侧、床尾一圈围框（收起时就是柜门那一面），床尾一条拉手

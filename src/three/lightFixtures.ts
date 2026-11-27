@@ -227,11 +227,12 @@ export function fixtureModel(s: RoomLightSpec, { outline = true } = {}): { obj: 
           g.add(rbox(2.2, 2.2, w - 3.2, wood, { x: (sz * (w - 1.2)) / 2, y }, 0.5))
         }
       }
+      // 回纹格条加高到 1.1，上面 0.2 嵌进绢纱面板（面板底面在 0.4；以前格条顶在 0.3，整圈回纹悬在面板下面 0.1cm）。下沿仍在 -0.5
       for (const k of [0.62, 0.32]) {
         const ww = w * k
         for (const sz of [-1, 1]) {
-          g.add(rbox(ww, 0.8, 0.8, wood, { y: -0.5, z: (sz * ww) / 2 }, 0.2))
-          g.add(rbox(0.8, 0.8, ww, wood, { x: (sz * ww) / 2, y: -0.5 }, 0.2))
+          g.add(rbox(ww, 1.1, 0.8, wood, { y: -0.5, z: (sz * ww) / 2 }, 0.2))
+          g.add(rbox(0.8, 1.1, ww, wood, { x: (sz * ww) / 2, y: -0.5 }, 0.2))
         }
       }
       if (!small)
@@ -271,7 +272,8 @@ export function fixtureModel(s: RoomLightSpec, { outline = true } = {}): { obj: 
     case 'cylinder': {
       // 现代筒形吊灯：哑光金属筒，下口里面发光
       g.add(cup(S * 0.5, S * 0.5, S * 0.9, 0.6, '#3d3f44', { rx: Math.PI, y: S * 0.9 }))
-      g.add(lit(cyl(S * 0.46, S * 0.46, 0.4, '#fff3dc', { y: S * 0.3 }, 28), glow('#fff3dc'), false))
+      // 发光片嵌进筒壁 0.2，段数和筒身一样（32）：以前半径 0.46S、28 段，四周离筒壁 0.2～0.4cm，连同灯泡悬在筒里
+      g.add(lit(cyl(S * 0.5 - 0.4, S * 0.5 - 0.4, 0.4, '#fff3dc', { y: S * 0.3 }, 32), glow('#fff3dc'), false))
       g.add(lit(ball(3, WARM_BULB, { y: S * 0.42 }), glow(WARM_BULB), false))
       cord(g, S * 0.9, top, '#3d3f44', 4)
       break

@@ -67,7 +67,11 @@ function glassFlat<T extends THREE.Object3D>(o: T, color = GLASS, k = 0.4): T {
   })
   return o
 }
-/** 有口的瓶 / 罐：外轮廓 out（[r, y]，最后一点是口沿外缘），壁厚 t，内壁往下 depth */
+/**
+ * 有口的瓶 / 罐：外轮廓 out（[r, y]，最后一点是口沿外缘），壁厚 t，内壁往下 depth。
+ * 内膛按这段高度里最细的地方（瓶颈）留出壁厚，口沿到内膛之间是一圈斜面：口沿外翻的瓶子（牛奶罐、丝带瓶），
+ * 内膛照口沿的半径一直往下的话会比瓶颈还粗，内壁翻到瓶颈外面，从外面看是一块黑洞。
+ */
 function vessel(out: [number, number][], t: number, depth: number, color: string, at: { x?: number; y?: number; z?: number } = {}) {
   const [rt, ht] = out[out.length - 1]
   const pts: [number, number][] = [[0, 0], ...out]
@@ -75,7 +79,10 @@ function vessel(out: [number, number][], t: number, depth: number, color: string
     const a = (i / 5) * PI
     pts.push([rt - t / 2 + (Math.cos(a) * t) / 2, ht + (Math.sin(a) * t) / 2])
   }
-  pts.push([rt - t, ht], [rt - t, ht - depth], [0, ht - depth])
+  const ri = Math.min(...out.filter(([, y]) => y >= ht - depth).map(([r]) => r)) - t
+  pts.push([rt - t, ht])
+  if (ri < rt - t - 0.01) pts.push([ri, ht - (rt - t - ri)])
+  pts.push([ri, ht - depth], [0, ht - depth])
   return latheAt(pts, color, at, 28)
 }
 /** 木纹：竖条纹 */
@@ -204,7 +211,8 @@ function airRound(p: string[]) {
   g.add(rbox(w, 29, 22, main, { z: -1.5 }, 11))
   g.add(rbox(w - 12, 18, 3, shade(main, 0.04), { y: 7.5, z: 8.4 }, 1.5))
   // 半圆形出风口和圆弧导风板
-  g.add(noOutlineDeep(rbox(w - 30, 3.6, 1, DARK, { y: 2.6, z: 9.2 }, 1.6)))
+  // 出风口上沿插进前脸底下（前脸底边 y = 7.5）：原先只到 6.2，又在弧形机身前面 1cm 多，和导风板一起悬着
+  g.add(noOutlineDeep(rbox(w - 30, 5.4, 1, DARK, { y: 2.6, z: 8.8 }, 1.6)))
   g.add(rbox(w - 32, 1, 4, sub, { y: 1.4, z: 10.4, rx: 0.35 }, 0.45))
   // 两侧的圆鼓包（左右侧板）
   for (const s of [-1, 1]) g.add(ball(6, sub, { x: s * (w / 2 - 4.5), y: 14, z: 2 }, [0.6, 1.4, 1.2]))
@@ -460,7 +468,8 @@ function planterTiered(p: string[]) {
   g.add(rbox(w - 4, 4, 1.6, shade(wood, -0.1), { y: 3, z: -d / 2 + 1.2 }, 0.4))
   const potAt = (x: number, y: number, z: number, kind: number) => {
     g.add(cup(5, 3.8, 8, 0.6, pot, { x, y, z }))
-    g.add(noOutlineDeep(cyl(4.3, 4.3, 0.4, SOIL, { x, y: y + 6.6, z }, 18)))
+    // 土面抬到 y + 7.3：多肉的叶片（底在 y + 7.2）压在土上，草和花的茎也扎在土里；半径放到 4.5，18 边形的边嵌进盆壁
+    g.add(noOutlineDeep(cyl(4.5, 4.5, 0.4, SOIL, { x, y: y + 6.9, z }, 18)))
     if (kind === 0) {
       // 多肉：一圈肥厚的叶
       for (let k = 0; k < 7; k++) {
@@ -494,7 +503,8 @@ function planterGalv(p: string[]) {
   }
   // 两端把手
   for (const s of [-1, 1]) g.add(torus(3, 0.5, handleC, { x: s * (w / 2 + 0.6), y: 16, ry: PI / 2 }, PI))
-  g.add(rbox(w - 2, 1, d - 2, SOIL, { y: 17 }, 0.4))
+  // 土面四边嵌进槽壁 0.2（槽内宽 w - 1.6，原先土面 w - 2，四周各留 0.2 的缝，土和花整个悬着）
+  g.add(rbox(w - 1.2, 1, d - 1.2, SOIL, { y: 17 }, 0.4))
   const r = rng(21)
   for (let i = 0; i < 7; i++) {
     const x = -26 + i * 8.6
@@ -518,15 +528,24 @@ function planterCubes(p: string[]) {
   for (let i = 0; i < 3; i++) {
     const x = (i - 1) * 20.5
     g.add(tray(18, 17, 18, 1.2, pot, { x, y: 2 }, 0.6))
-    g.add(rbox(15.4, 0.6, 15.4, SOIL, { x, y: 15.5 }, 0.2))
+    // 土面四边嵌进盆壁 0.2（盆内宽 15.6）
+    g.add(rbox(16, 0.6, 16, SOIL, { x, y: 15.5 }, 0.2))
   }
   // 黄杨球
   g.add(noOutlineDeep(cyl(0.7, 0.7, 4, '#7a5a43', { x: -20.5, y: 16 }, 6)))
   g.add(ball(8.5, green, { x: -20.5, y: 27.5 }))
-  // 虎尾兰：竖直的长叶
+  // 虎尾兰：一丛直立的剑形长叶，叶面朝外、叶尖往外倒一点，叶根扎进土里。
+  // 先绕 x 把叶子立起来、再绕 y 转到各自的方向（YXZ）；原先按默认的 XYZ 写，六片叶摊成了一朵平躺在 xy 平面里的「花」，叶尖戳进两边的盆
   for (let k = 0; k < 6; k++) {
-    const a = (k / 6) * PI * 2
-    g.add(leaf(26, k % 2 ? '#5f8f4e' : '#7fae5a', { x: Math.cos(a) * 2.4, y: 29, z: Math.sin(a) * 2.4, rx: PI / 2 - 0.12 * Math.sin(a), ry: a, rz: 0.12 * Math.cos(a) }))
+    const a = (k / 6) * PI * 2 + 0.3
+    const L = 26 - (k % 3) * 2.5
+    const tilt = 0.12 + (k % 2) * 0.12
+    // 叶根在土面下 0.4、离盆心 1.4，叶心沿倾斜方向往上 L / 2
+    const out = 1.4 + (Math.sin(tilt) * L) / 2
+    const lf = ball(L / 2, k % 2 ? '#5f8f4e' : '#7fae5a', { x: Math.cos(a) * out, y: 15.7 + (Math.cos(tilt) * L) / 2, z: Math.sin(a) * out }, [0.24, 0.09, 1])
+    lf.rotation.order = 'YXZ'
+    lf.rotation.set(-PI / 2 + tilt, PI / 2 - a, 0)
+    g.add(lf)
   }
   tuft(g, 20.5, 16, 0, 18, shade(green, 0.08), 10, 9)
   return g
@@ -543,8 +562,9 @@ function brushSlim(p: string[]) {
   g.add(tray(8.6, 14, 7.4, 0.5, main, {}, 0.4))
   // 底圈比刷架每边大 0.2：侧面不和刷架的壁共面
   g.add(rbox(9, 0.8, 7.8, acc, { y: 0 }, 0.3))
-  g.add(rbox(4.6, 6, 1.4, handleC, { y: 1.2 }, 0.6))
-  g.add(rbox(1.2, 30, 0.9, handleC, { y: 6.8 }, 0.4))
+  // 刷头立在刷架内底上（底圈顶面 y = 0.8）；原先从 1.2 起，整支刷子悬在架子里（盖块比架口小一圈，也碰不到架壁）
+  g.add(rbox(4.6, 6, 1.4, handleC, { y: 0.7 }, 0.6))
+  g.add(rbox(1.2, 30.5, 0.9, handleC, { y: 6.3 }, 0.4))
   g.add(rbox(7.2, 3, 6, main, { y: 13.6 }, 0.8))
   g.add(rbox(2.6, 4.2, 1.6, acc, { y: 36.2 }, 0.6))
   return g
@@ -558,7 +578,8 @@ function brushDome(p: string[]) {
   const dome = ball(5.1, lid, { y: 13 }, [1, 0.7, 1])
   g.add(dome)
   g.add(torus(4.9, 0.45, shade(lid, -0.08), { y: 13, rx: PI / 2 }))
-  g.add(ball(3, C.white, { y: 3.6 }, [1, 0.9, 1]))
+  // 刷头落在罐底（内底 y = 0.5）
+  g.add(ball(3, C.white, { y: 3.1 }, [1, 0.9, 1]))
   g.add(cyl(0.55, 0.55, 26, knob, { y: 5 }, 10))
   g.add(ball(2.2, knob, { y: 32.2 }))
   return g
@@ -570,7 +591,8 @@ function brushWood(p: string[]) {
   const g = new THREE.Group()
   g.add(cup(4.3, 4.3, 15, 0.6, main))
   g.add(torus(4.35, 0.35, band, { y: 2, rx: PI / 2 }))
-  g.add(ball(2.8, '#e8e2d6', { y: 3.6 }, [1, 1, 1]))
+  // 刷头落在罐底（内底 y = 0.6）
+  g.add(ball(2.8, '#e8e2d6', { y: 3.3 }, [1, 1, 1]))
   g.add(cyl(0.65, 0.75, 33, wood, { y: 5 }, 10))
   g.add(capsule(1.05, 4, wood, { y: 37 }))
   g.add(torus(1, 0.25, band, { y: 43.3, rx: 0 }))
@@ -589,7 +611,8 @@ function brushStand(p: string[]) {
   g.add(cup(4.2, 3.2, 3.2, 0.4, dish, { y: 1 }))
   g.add(torus(3.5, 0.35, frame, { y: 18, rx: PI / 2 }))
   g.add(torus(3.6, 0.35, frame, { y: 9, rx: PI / 2 }))
-  g.add(ball(2.6, '#f2f2f2', { y: 4.4 }, [1, 1.1, 1]))
+  // 刷头落在接水盘里（盘内底 y = 1.4）
+  g.add(ball(2.6, '#f2f2f2', { y: 4.15 }, [1, 1.1, 1]))
   g.add(cyl(0.5, 0.5, 30, handleC, { y: 6.6 }, 10))
   g.add(rbox(2.2, 5, 2.2, handleC, { y: 36.4 }, 0.9))
   return g
@@ -635,7 +658,8 @@ function nsRound(p: string[]) {
   g.add(cyl(r, r, 2.4, top, { y: h - 2.4 }, 40))
   // 正面的弧形门：门缝两条竖线 + 圆拉手
   for (const a of [-0.42, 0.42]) g.add(rbox(0.5, 30, 0.6, shade(main, -0.2), { x: Math.sin(a) * (r - 1.35), y: 8, z: Math.cos(a) * (r - 1.35), ry: a }, 0.2))
-  g.add(ball(1.3, top, { x: 4.6, y: 30, z: r - 1.1 }, [1, 1, 0.7]))
+  // 拉手压进柜身 0.3（x = 4.6 处柜面在 z ≈ r - 2.1）
+  g.add(ball(1.3, top, { x: 4.6, y: 30, z: r - 1.5 }, [1, 1, 0.7]))
   // 中间一圈装饰线
   g.add(torus(r - 1.3, 0.4, top, { y: 22, rx: PI / 2 }))
   return g
@@ -718,7 +742,8 @@ function nsCandy(p: string[]) {
   for (const s of [-1, 1]) g.add(rbox(4, h - 9, d - 1, main, { x: s * (w / 2 - 2), y: 9, z: -0.5 }, 1.8))
   g.add(rbox(w, 4, d - 1, main, { y: h - 4, z: -0.5 }, 2))
   g.add(rbox(w - 8, 3, d - 1, main, { y: 9, z: -0.5 }, 1))
-  g.add(rbox(w - 8, h - 16, 1.2, shade(main, -0.05), { y: 12, z: -d / 2 + 0.6 }, 0.4))
+  // 背板四边各嵌进侧板 / 顶板 / 底板 0.3（原先正好相切，圆角之间留着缝）
+  g.add(rbox(w - 7.4, h - 15.4, 1.2, shade(main, -0.05), { y: 11.7, z: -d / 2 + 0.6 }, 0.4))
   for (const o of g.children) o.position.z += NS_CANDY_DZ
   for (const y of NS_CANDY_YS) g.add(drawer([rbox(w - 8, 11.6, 1.2, shade(main, 0.06), { y, z: d / 2 - 0.9 + NS_CANDY_DZ }, 3), ball(1.8, knob, { y: y + 5.8, z: d / 2 + 0.8 + NS_CANDY_DZ }, [1, 1, 0.8])], nsCandyTray(y), shade(main, 0.1)))
   return g
@@ -830,7 +855,7 @@ function knifeAcrylic(p: string[]) {
   const [glassC, handleC, base] = p
   const g = new THREE.Group()
   g.add(rbox(11, 1.6, 20, base, {}, 0.6))
-  const block = rbox(10, 22, 18, glassC, { y: 1.6 }, 1.4)
+  const block = rbox(10, 20.6, 18, glassC, { y: 1.6 }, 1.4)
   g.add(glassFlat(block, glassC, 0.35))
   const spots: [number, number][] = [
     [-2.6, -4],
@@ -842,7 +867,8 @@ function knifeAcrylic(p: string[]) {
   spots.forEach(([x, z], i) => {
     const bl = 19 - (i % 3) * 2
     const k = knife(handleC, bl, 9, 3.2)
-    k.position.set(x, 3 + bl, z)
+    // 刀柄坐在块顶（y = 22.2），只有刀身插在块里、长短不一；原先按刀尖对齐，短刀的刀柄有五六厘米陷在透明块里
+    k.position.set(x, 22.2, z)
     k.rotation.y = PI / 2
     g.add(k)
   })
@@ -901,7 +927,8 @@ function plushCat(p: string[]) {
     g.add(cyl(0.2, 2.2, 4.2, acc, { x: s * 6.6, y: 35.8, z: 1.4, rz: -s * 0.35 }, 3))
   }
   // 额头的条纹
-  for (const x of [-2, 0, 2]) g.add(rbox(0.9, 3, 0.5, shade(main, -0.18), { x, y: 34.4, z: 8.3, rx: -0.5 }, 0.2))
+  // 贴在额头上：头是 11.8 × 9.2 × 9.5 的椭球，y = 35.9 处球面在 z ≈ 6.8、朝上 45°（原先放在 z = 8.3，离额头 1cm 悬着）
+  for (const x of [-2, 0, 2]) g.add(rbox(0.9, 3, 0.5, shade(main, -0.18), { x, y: 34.4, z: x ? 6.6 : 6.8, rx: -0.75 }, 0.2))
   const tail = torus(9, 2.2, main, { x: 6, y: 2.4, z: 1, rx: PI / 2 }, PI * 1.1)
   tail.rotation.z = -PI * 0.55
   g.add(tail)
@@ -1009,8 +1036,9 @@ function vaseBud(p: string[]) {
     ),
   )
   g.add(torus(1.25, 0.25, accent, { y: 12.4, rx: PI / 2 }))
-  g.add(rod3([0, 11, 0], [1.2, 26, 0.4], 0.28, C.leafD, 6))
-  g.add(leaf(9, C.leaf, { x: -1.4, y: 18, z: 0.3, rx: PI / 2 - 0.3, rz: 0.4 }))
+  // 花茎插到瓶的内底（y = 10），叶子贴着花茎
+  g.add(rod3([-0.09, 9.9, -0.03], [1.2, 26, 0.4], 0.28, C.leafD, 6))
+  g.add(leaf(9, C.leaf, { x: -1.15, y: 18, z: 0.3, rx: PI / 2 - 0.3, rz: 0.4 }))
   g.add(cup(1.8, 1.2, 3.6, 0.3, petal, { x: 1.2, y: 25.8, z: 0.4 }))
   for (let k = 0; k < 3; k++) {
     const a = (k / 3) * PI * 2
@@ -1041,7 +1069,7 @@ function vaseIkebana(p: string[]) {
   for (let i = 0; i < pts.length - 1; i++) g.add(rod3(pts[i], pts[i + 1], 0.35 - i * 0.04, branch, 6))
   // 山茶花：两朵
   for (const [x, y, z, s] of [
-    [-2.8, 13, 1.6, 1],
+    [-2.8, 13, 1.2, 1],
     [1.6, 4.2, 1.8, 0.8],
   ]) {
     for (let k = 0; k < 6; k++) {
@@ -1052,7 +1080,7 @@ function vaseIkebana(p: string[]) {
   }
   for (const [x, y, z, ry] of [
     [-4.6, 9.5, 0.8, 0.8],
-    [0.4, 17, 0.6, -0.6],
+    [-0.5, 17, 0.6, -0.6],
     [3.8, 3.4, 0.6, -0.4],
   ])
     g.add(leaf(4.4, C.leafD, { x, y, z, ry, rx: 0.3 }))
@@ -1073,8 +1101,12 @@ function vaseJar(p: string[]) {
     const a = (i / 9) * PI * 2
     const top: V3 = [Math.cos(a) * 4.5, 22 + r() * 5, Math.sin(a) * 3.2]
     g.add(rod3([Math.cos(a) * 1.2, 1, Math.sin(a) * 1.2], top, 0.18, C.leafD, 4))
-    // 满天星：1.5cm 的小花球 54 颗，8 × 4 段
-    for (let k = 0; k < 6; k++) g.add(ball(0.75, k % 3 ? bloom : C.white, { x: top[0] + (r() - 0.5) * 3.4, y: top[1] + (r() - 0.3) * 2.6, z: top[2] + (r() - 0.5) * 2.6 }, undefined, [8, 4]))
+    // 满天星：1.5cm 的小花球 54 颗，8 × 4 段；每颗由一根细梗连到茎顶（原先只是撒在茎顶周围，有十来颗哪儿都不挨着）
+    for (let k = 0; k < 6; k++) {
+      const at: V3 = [top[0] + (r() - 0.5) * 3.4, top[1] + (r() - 0.3) * 2.6, top[2] + (r() - 0.5) * 2.6]
+      g.add(noOutlineDeep(rod3(top, at, 0.1, C.leafD, 3)))
+      g.add(ball(0.75, k % 3 ? bloom : C.white, { x: at[0], y: at[1], z: at[2] }, undefined, [8, 4]))
+    }
   }
   return g
 }
@@ -1131,7 +1163,9 @@ function vaseMilk(p: string[]) {
     [-2.4, 31, 1.2, -0.35, 0.2],
     [3, 27, 2, -0.2, -0.4],
   ]) {
-    g.add(rod3([x * 0.2, 12, z * 0.2], [x, y, z], 0.3, C.leafD, 6))
+    // 花茎顺着原来的斜度插到罐的内底（y = 11）
+    const k0 = 0.2 - 0.88 / (y - 12)
+    g.add(rod3([x * k0, 10.9, z * k0], [x, y, z], 0.3, C.leafD, 6))
     const head = new THREE.Group()
     for (let k = 0; k < 10; k++) {
       const a = (k / 10) * PI * 2
@@ -1300,10 +1334,17 @@ function vaseRibbon(p: string[]) {
   const mouth: V3 = [0, 22.8, 0]
   const pinkAt: V3 = [-2.4, 33.5, 1.6]
   const yellowAt: V3 = [3.4, 29.2, 1.8]
-  g.add(rod3(mouth, [pinkAt[0] * 0.9, pinkAt[1] - 1, pinkAt[2] - 0.8], 0.2, STEM, 6))
-  g.add(rod3(mouth, [yellowAt[0] * 0.9, yellowAt[1] - 1, yellowAt[2] - 0.8], 0.2, STEM, 6))
   // 瓶里那截花茎一直插到瓶底：原来花茎只从瓶口起头，整束花悬在瓶口中间没着落
   g.add(rod3([0, 0.3, 0], mouth, 0.3, STEM, 6))
+  /**
+   * 花托：花心背后一块压扁的圆垫，各圈花瓣的根都扎在里面，花茎从瓶口接到它上面。
+   * 原先花瓣一圈圈各自悬着（花瓣根是个尖，圈与圈之间碰不上），花茎停在花心后下方 1cm 多的地方。
+   */
+  const hub = (fl: THREE.Group, r: number, color: string) => {
+    fl.add(ball(r, color, { z: -0.2 }, [1, 1, 0.5 / r]))
+    const c = new THREE.Vector3(0, 0, -0.3).applyEuler(fl.rotation).add(fl.position)
+    g.add(rod3(mouth, [c.x, c.y, c.z], 0.2, STEM, 6))
+  }
 
   const gerbera = new THREE.Group()
   gerbera.add(petalRing(16, 1.6, 4.4, 1.0, 0.18, pink))
@@ -1312,6 +1353,7 @@ function vaseRibbon(p: string[]) {
   gerbera.add(ball(1.05, '#4f6b3a', { z: 0.6 }, [1, 1, 0.5]))
   gerbera.position.set(...pinkAt)
   gerbera.rotation.set(-0.25, -0.12, 0.15)
+  hub(gerbera, 2.1, shade(pink, -0.06))
   g.add(gerbera)
 
   const dahlia = new THREE.Group()
@@ -1321,11 +1363,12 @@ function vaseRibbon(p: string[]) {
   dahlia.add(ball(0.9, shade(yellow, -0.08), { z: 0.5 }, [1, 1, 0.7]))
   dahlia.position.set(...yellowAt)
   dahlia.rotation.set(-0.2, 0.55, -0.2)
+  hub(dahlia, 1.7, yellow)
   g.add(dahlia)
 
-  // 叶子：粉花后面一片深绿、黄花下面一片
-  g.add(leaf(6.2, C.leafD, { x: -5.2, y: 29.5, z: -0.6, rx: -0.5, ry: 0.6, rz: 0.5 }))
-  g.add(leaf(4.6, C.leaf, { x: 4.4, y: 25.8, z: -0.4, rx: -0.6, ry: -0.5, rz: -0.6 }))
+  // 叶子：粉花后面一片深绿、黄花下面一片，叶尖那头长在各自的花茎上（原先离花茎 1cm 多，悬在花后面）
+  g.add(leaf(6.2, C.leafD, { x: -3.2, y: 29.7, z: -0.9, rx: -0.5, ry: 0.6, rz: 0.5 }))
+  g.add(leaf(4.6, C.leaf, { x: 3, y: 26, z: -0.3, rx: -0.6, ry: -0.5, rz: -0.6 }))
   return g
 }
 // =====================================================================
@@ -1385,7 +1428,7 @@ function lbFold(p: string[]) {
     g.add(torus(4, 0.6, rim, { x: s * (w / 2 + 0.6), y: h - 6, ry: PI / 2 }, PI))
   }
   // 斜纹装饰（两条斜带）
-  g.add(rbox(w - 6, 1.6, 0.4, shade(fabric, -0.1), { y: 16, z: d / 2 + 0.3, rz: 0.08 }, 0.2))
+  g.add(rbox(w - 6, 1.6, 0.4, shade(fabric, -0.1), { y: 16, z: d / 2 + 0.1, rz: 0.08 }, 0.2))
   g.add(rbox(w - 2, h - 15, d - 2, shade(cloth, -0.05), { y: 0.7 }, 3))
   clothes(g, h - 12, 16, [cloth, N.white, C.sky, M.light], 5)
   return g
@@ -1614,6 +1657,8 @@ function hamperPop(p: string[]) {
   g.add(torus(r - 0.2, 0.7, shade(fabric, -0.15), { y: h - 0.4, rx: PI / 2 }))
   g.add(torus(r - 0.2, 0.6, shade(fabric, -0.15), { y: 0.6, rx: PI / 2 }))
   for (const s of [-1, 1]) g.add(torus(3.6, 0.7, stripe, { x: s * (r + 0.3), y: h - 4.5, ry: PI / 2 }, PI))
+  // 篓里塞满的衣物：从篓底堆到口沿下（离内壁留 0.4），顶上那几团才有处可靠（原先四团衣物悬在篓子半空）
+  g.add(cyl(r - 1, r - 1, h - 11, shade(acc, -0.08), { y: 0.6 }, 20))
   clothes(g, h - 9, 15, HAMPER_CLOTH(acc), 21)
   return g
 }
@@ -1775,8 +1820,10 @@ function rackMesh(p: string[]) {
       g.add(puck(1.8, 1.2, foot, { x: sx * x, z: sz * z }))
       g.add(ball(1.4, foot, { x: sx * x, y: h - 1.2, z: sz * z }))
     }
-  const bx = x - 1.6
-  const bz = z - 1.6
+  // 网篮的边框丝直接焊在四根立柱上（篮框中心线 = 立柱中心线），底框压在前后横梁上：
+  // 原先篮子比立柱框小一圈，四边离立柱和横梁都差 0.6，三只篮子整个悬着
+  const bx = x
+  const bz = z
   for (const y of [120, 148, 176]) {
     // 篮底：前后向的细丝 + 一圈底框，篮壁 5cm 高
     g.add(noOutlineDeep(rbox(2 * bx, 0.3, 2 * bz, shade(basket, -0.2), { y: y + 0.2 }, 0.1)))
@@ -1788,7 +1835,7 @@ function rackMesh(p: string[]) {
       }
     }
     for (let i = 0; i <= 10; i++) for (const s of [-1, 1]) g.add(cyl(0.25, 0.25, 4.4, basket, { x: -bx + (i * 2 * bx) / 10, y: y + 0.6, z: s * bz }, 5))
-    for (const s of [-1, 1]) g.add(cylXLegacy(0.6, 2 * x, frame, 0, y - 0.6, s * z))
+    for (const s of [-1, 1]) g.add(cylXLegacy(0.6, 2 * x, frame, 0, y - 0.3, s * z))
   }
   g.add(cylXLegacy(1, 2 * x, frame, 0, LR_MESH.bar!.y, LR_MESH.bar!.z))
   for (const s of [-1, 1]) g.add(cylZLegacy(0.7, 2 * z, frame, s * x, 20, 0))
@@ -1820,8 +1867,9 @@ function rackCute(p: string[]) {
     g.add(ball(1.6, knob, { x: s * x, y: h - 2.2, z: d / 2 - 0.2 }, [1, 1, 0.5]))
   }
   for (const y of [118, 146, 172]) {
-    g.add(rbox(w - 8.8, 2, d - 2, board, { y, z: 0 }, 0.8))
-    g.add(rbox(w - 8.8, 3, 2, board, { y: y + 1, z: d / 2 - 1.6 }, 1))
+    // 层板两头各嵌进侧框 0.3（原先正好相切，顶层那块对着顶拱的圆角，差 0.1 没挨上）
+    g.add(rbox(w - 8.2, 2, d - 2, board, { y, z: 0 }, 0.8))
+    g.add(rbox(w - 8.2, 3, 2, board, { y: y + 1, z: d / 2 - 1.6 }, 1))
   }
   return g
 }
@@ -1889,8 +1937,9 @@ function tbGlass(p: string[]) {
   t.add(cyl(0.7, 0.7, 1.2, C.white, {}, 10))
   t.add(cyl(1.3, 0.9, 9, tube, { y: 1.2 }, 12))
   t.add(rbox(2.6, 1, 0.6, tube, { y: 10.2 }, 0.2))
-  t.position.set(1.1, 0.4, -0.3)
-  t.rotation.z = -0.14
+  // 倾角收小：杯口处牙膏管外沿离杯轴 ≤ 2.9，不穿出杯壁（内壁半径 3.0；原先歪到 3.7，管身从玻璃里戳出来）
+  t.position.set(0.9, 0.4, -0.3)
+  t.rotation.z = -0.07
   g.add(t)
   return g
 }
@@ -1899,7 +1948,8 @@ function tbGlass(p: string[]) {
 function tbCeramic(p: string[]) {
   const [glaze, clay, b1] = p
   const g = new THREE.Group()
-  g.add(cup(3.3, 3.5, 9.5, 0.6, glaze))
+  // 杯身从 0.2 起（杯口高度不变）：杯底不和露胎那一圈的底面共面
+  g.add(cup(3.3, 3.5, 9.3, 0.6, glaze, { y: 0.2 }))
   g.add(cyl(3.6, 3.66, 3.4, clay, { y: 0 }, 24))
   g.add(torus(3.5, 0.2, shade(glaze, -0.15), { y: 3.5, rx: PI / 2 }))
   const put = (c: string, x: number, z: number, rz: number) => {

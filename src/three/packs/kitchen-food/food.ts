@@ -5,7 +5,7 @@ import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../../toon'
 import { G, rng, type Fx } from '../../kit'
 import { PI, cappedTube, hcyl, noOutlineDeep, rod3, type V3 } from '../../geo'
-import { BREAD, BROTH, CHOCO, CRUST, CUCUMBER, CURRY, DAIKON, DISH_IN, GLASS, HAKUSAI, LEAF, MISO, NEGI, NOODLE, NORI, ONION, PG, POTATO, RICE, SALMON, SOY, STEEL, TAMAGO, TEA, TOFU, TUBE, TUNA, arc, bottle, bowl, bowlIn, can, chopsticks, dish, glassGhost, hashioki, liquid, riceMound, wrapBand } from './common'
+import { BREAD, BROTH, CHOCO, CRUST, CUCUMBER, CURRY, DAIKON, DISH_IN, GLASS, HAKUSAI, LEAF, MISO, NEGI, NOODLE, NORI, ONION, POTATO, RICE, SALMON, SOY, STEEL, TAMAGO, TEA, TOFU, TUBE, TUNA, arc, bottle, bowl, bowlIn, can, chopsticks, dish, glassGhost, hashioki, liquid, riceMound, wrapBand } from './common'
 
 // ======================================================================
 // 食物 / 饮料
@@ -16,9 +16,11 @@ export function riceBowl(p: string[]) {
   const [b, , chop] = p
   const g = new THREE.Group()
   g.add(bowl(5.8, 6, b))
-  g.add(riceMound(bowlIn(5.8, 6, 5.2), 2.4, 5.2))
-  g.add(hashioki(shade(b, -0.12), 0, 0, 7.4, PI / 2))
-  g.add(PG(chopsticks(22, chop, 0, 0, 0), 0, 0.9, 7.4))
+  // 饭堆的边压进碗壁 0.1（bowlIn 比内壁小 0.1，饭堆 24 段、碗 32 段，原来四周留一圈缝）
+  g.add(riceMound(bowlIn(5.8, 6, 5.2) + 0.2, 2.4, 5.2))
+  // 筷架横在筷尖下面，筷子粗头落桌（原来筷架顺着筷子摆在正中，整双筷子平着浮在上面）
+  g.add(hashioki(shade(b, -0.12), 7, 0, 7.4))
+  g.add(chopsticks(22, chop, 0, 0, 7.4, 0.9, 0, 7))
   return g
 }
 export const RICE_FX: Fx[] = [{ kind: 'steam', x: 0, y: 8, z: 0, scale: 0.7, height: 18 }]
@@ -63,7 +65,12 @@ export function kitsuneUdon(p: string[]) {
   // 鱼板 + 葱
   g.add(cyl(1.8, 1.8, 0.6, '#ffffff', { x: 3.5, y: top - 0.2, z: -3.5 }, 16))
   g.add(noOutlineDeep(cyl(1.2, 1.2, 0.6, '#ff9db0', { x: 3.5, y: top - 0.1, z: -3.5 }, 16))) // 粉色花纹比白底高 0.1，顶面不共面
-  for (let i = 0; i < 6; i++) g.add(noOutlineDeep(cyl(0.35, 0.35, 0.3, NEGI, { x: -4 + i * 0.8, y: top + 0.5, z: 3.5 - (i % 2) }, 8)))
+  // 葱花撒在面条上：沿第 4、5 圈面条（半径 4.25 / 5）摆，压进面条顶 0.1（原来排成一行，浮在面条上方 0.2）
+  for (let i = 0; i < 6; i++) {
+    const a = 1.75 + i * 0.22
+    const rr = i % 2 ? 4.25 : 5
+    g.add(noOutlineDeep(cyl(0.35, 0.35, 0.3, NEGI, { x: Math.cos(a) * rr, y: top + 0.2, z: Math.sin(a) * rr }, 8)))
+  }
   return g
 }
 export const UDON_FX: Fx[] = [{ kind: 'steam', x: 0, y: 8, z: 0, scale: 1, height: 20 }]
@@ -105,7 +112,7 @@ export function sushiOke(p: string[]) {
   g.add(cup(15, 14, 7, 0.9, wood))
   for (const y of [1.6, 5]) g.add(noOutlineDeep(torus(14.4 + (y > 3 ? 0.4 : 0), 0.35, band, { y, rx: PI / 2 })))
   const top = 5.6
-  g.add(noOutlineDeep(cyl(13.8, 13.8, 0.4, RICE, { y: top - 0.4 }, 32)))
+  g.add(noOutlineDeep(cyl(14.1, 14.1, 0.4, RICE, { y: top - 0.4 }, 32))) // 饭面压进桶壁（内壁在这个高度约 13.9）
   // 散寿司：蛋丝、三文鱼、鲔鱼、黄瓜、虾、紫苏
   const r = rng(3)
   const tops = [SALMON, TUNA, TAMAGO, CUCUMBER, '#ff8a5c', '#f5c542']
@@ -118,7 +125,7 @@ export function sushiOke(p: string[]) {
   for (let i = 0; i < 18; i++) {
     const a = r() * PI * 2
     const d = Math.sqrt(r()) * 12
-    g.add(noOutlineDeep(ball(0.4, '#ff6a3c', { x: Math.cos(a) * d, y: top + 0.5, z: Math.sin(a) * d })))
+    g.add(noOutlineDeep(ball(0.4, '#ff6a3c', { x: Math.cos(a) * d, y: top + 0.3, z: Math.sin(a) * d })))
   }
   g.add(noOutlineDeep(ball(2.2, acc, { x: -3, y: top + 0.1, z: 4 }, [1, 0.12, 1.4])))
   return g
@@ -197,7 +204,7 @@ export function toastPlate(p: string[]) {
     s.rotation.y = ry
     g.add(s)
   }
-  g.add(rbox(2.6, 1.2, 2, '#fff1b0', { x: 4, y: 3.1, z: 0.5, ry: 0.3 }, 0.4))
+  g.add(rbox(2.6, 1.2, 2, '#fff1b0', { x: 4, y: 2.9, z: 0.5, ry: 0.3 }, 0.4))
   g.add(rbox(1.2, 0.3, 9, acc, { x: 10, y: 1.4, z: 1, ry: 0.15 }, 0.15))
   return g
 }
@@ -296,17 +303,21 @@ export function mikanBox(p: string[]) {
   // 箱盖四片打开外翻
   for (const s of [-1, 1]) {
     const f = rbox(36, 0.4, 12, card, {}, 0.1)
-    f.position.set(0, 15 + Math.sin(0.9) * 6, s * (13 + Math.cos(0.9) * 6))
+    // 折线压进箱壁顶角（原来正好搭在棱上，差一条缝）
+    f.position.set(0, 14.9 + Math.sin(0.9) * 6, s * (12.8 + Math.cos(0.9) * 6))
     f.rotation.x = -s * 0.9
     g.add(f)
   }
   g.add(noOutlineDeep(rbox(16, 6, 0.3, print, { y: 4, z: 13.05 }, 0.3)))
   const r = rng(5)
   for (let i = 0; i < 24; i++) {
-    const x = -14 + (i % 6) * 5.6 + (r() - 0.5)
+    // 一排六个挤满箱宽：个个相碰，两头的压进箱壁 0.1（原来随机错开 ±0.5，有几个和谁都不挨着）
+    const x = ((i % 6) - 2.5) * 5.84 + (r() - 0.5) * 0.1
     const z = -9 + Math.floor(i / 6) * 6 + (r() - 0.5)
-    g.add(ball(3, acc, { x, y: 12.4 + (r() - 0.5) * 0.6, z }, [1, 0.85, 1]))
-    if (i % 3 === 0) g.add(noOutlineDeep(cyl(0.5, 0.5, 0.3, LEAF, { x, y: 14.9, z }, 8)))
+    const y = 12.4 + (r() - 0.5) * 0.6
+    g.add(ball(3, acc, { x, y, z }, [1, 0.85, 1]))
+    // 蒂贴在各自的橘子顶上
+    if (i % 3 === 0) g.add(noOutlineDeep(cyl(0.5, 0.5, 0.3, LEAF, { x, y: y + 2.4, z }, 8)))
   }
   return g
 }
@@ -361,7 +372,8 @@ export function grapes(p: string[]) {
     }
   })
   g.add(ball(1.3, berry, { x: -2.9, y: cy + 1.4, z: 0 }, [1, 1.1, 1]))
-  g.add(rod3([-5.5, cy + 0.8, 0], [-7.2, cy + 1.8, 0.5], 0.35, '#6e5a3a', 8))
+  // 梗从第一圈果粒中间伸出来（原来起点在果粒外面 0.25cm）
+  g.add(rod3([-4.2, cy + 0.3, 0], [-7.2, cy + 1.8, 0.5], 0.35, '#6e5a3a', 8))
   return g
 }
 
@@ -405,11 +417,13 @@ export function onionPotatoBags(p: string[]) {
   const g = new THREE.Group()
   const bagAt = (x: number, color: string, item: string, sc: number, n: number) => {
     const r = rng(n)
+    const rise = item === POTATO ? 4.2 : 5
     for (let i = 0; i < n; i++) {
       const xx = x + ((i % 3) - 1) * 4.2 + (r() - 0.5)
       // 顶上一排收在正中：袋口的结要压在它们上面
       const zz = i < 6 ? (Math.floor(i / 3) % 2) * 4 - 2 : 0
-      const yy = 3 + Math.floor(i / 6) * 5
+      // 上面一排落进下面两排之间的凹里：土豆扁，要比洋葱低（原来一律抬 5，土豆那排悬着 0.3）
+      const yy = 3 + Math.floor(i / 6) * rise
       g.add(ball(3 * sc, item, { x: xx, y: yy, z: zz }, item === POTATO ? [1.25, 0.85, 0.95] : [1, 0.95, 1]))
       if (item === ONION) g.add(cyl(0.2, 0.6, 1.4, '#a8683a', { x: xx, y: yy + 2.6 * sc, z: zz }, 6))
     }
@@ -420,8 +434,8 @@ export function onionPotatoBags(p: string[]) {
       g.add(t)
     }
     // 袋口的结压在顶上一排上，标签系在结上（原来结和标签都悬在半空）
-    g.add(cyl(0.6, 1.2, 3, color, { x, y: 10 }, 8))
-    g.add(rbox(4, 2.4, 0.4, tag, { x, y: 10.2, z: 1 }, 0.2))
+    g.add(cyl(0.6, 1.2, 3, color, { x, y: 5 + rise }, 8))
+    g.add(rbox(4, 2.4, 0.4, tag, { x, y: 5.2 + rise, z: 1 }, 0.2))
   }
   bagAt(-8, net1, ONION, 1, 9)
   bagAt(8, net2, POTATO, 0.95, 9)
@@ -601,7 +615,7 @@ export function waterCase(p: string[], open = true) {
   // 两片外翻盖
   for (const s of [-1, 1]) {
     const f = rbox(W, 0.4, 10, card, {}, 0.1)
-    f.position.set(0, H + Math.sin(0.9) * 5, s * (D / 2 + Math.cos(0.9) * 5))
+    f.position.set(0, H - 0.1 + Math.sin(0.9) * 5, s * (D / 2 - 0.2 + Math.cos(0.9) * 5)) // 折线压进箱壁顶角
     f.rotation.x = -s * 0.9
     g.add(f)
   }
@@ -619,8 +633,9 @@ export function beerSixPack(p: string[]) {
     g.add(wrapBand(3.3, 3, band, { x, y: 4, z }))
   }
   // 纸提手
-  g.add(rbox(21, 0.4, 14, '#c99a52', { y: 12.3 }, 0.1))
-  g.add(rbox(8, 0.5, 2, '#c99a52', { y: 12.7 }, 0.2))
+  // 纸板压在罐顶上（罐高 12.2；原来浮在罐顶上方 0.1）
+  g.add(rbox(21, 0.4, 14, '#c99a52', { y: 12.1 }, 0.1))
+  g.add(rbox(8, 0.5, 2, '#c99a52', { y: 12.4 }, 0.2))
   return g
 }
 

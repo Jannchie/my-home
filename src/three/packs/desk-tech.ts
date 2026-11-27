@@ -563,8 +563,10 @@ function deskOrganizer(p: string[]) {
     [3.4, '#ff8fb4'],
   ] as [number, string][])
     g.add(P(rbox(1.4, 12, 0.9, c, {}, 0.3), x, t + 6, -5.6, -0.08))
-  g.add(P(box(3.2, 15, 0.3, '#eef4f6'), 10, t + 7.5, -6.6, -0.05))
-  for (let i = 0; i < 5; i++) g.add(noOutline(box(1, 0.1, 0.1, DARK, { x: 9, y: t + 9 + i * 1.2, z: -6.5 })))
+  // 直尺和刻度一起斜靠：刻度条半嵌在尺面里（以前刻度竖直排、尺子往后仰，上面几道离了尺面）
+  const ruler = G(P(box(3.2, 15, 0.3, '#eef4f6'), 0, 0, 0))
+  for (let i = 0; i < 5; i++) ruler.add(noOutline(box(1, 0.1, 0.1, DARK, { x: -1, y: 1.5 + i * 1.2, z: 0.17 })))
+  g.add(P(ruler, 10, t + 7.5, -6.6, -0.05))
   // 前排：便签本、一卷充电线 + 插头
   g.add(rbox(7.6, 3.6, 6.2, '#ffe27a', { x: -9.4, y: t, z: 4 }, 0.15))
   g.add(box(7.6, 0.2, 6.2, '#ffd23f', { x: -9.4, y: t + 3.6, z: 4 }))

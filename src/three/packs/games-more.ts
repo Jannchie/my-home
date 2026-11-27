@@ -110,6 +110,17 @@ function fan(back: string, n: number, x: number, y: number, z: number, ry: numbe
   }
   return P(g, x, y, z, 0, ry)
 }
+/** 两张平放的牌（中心 x / z、转角 ry）在俯视图里有没有叠着：分离轴判断，各自先收进 m（只蹭到一条边的不算） */
+function cardsOverlap(a: { x: number; z: number; ry: number }, b: { x: number; z: number; ry: number }, m = 0.3) {
+  const hw = CARD_W / 2 - m
+  const hd = CARD_D / 2 - m
+  for (const t of [a.ry, a.ry + PI / 2, b.ry, b.ry + PI / 2]) {
+    // 轴 u = 绕 y 转 t 以后的局部 x 轴；每张牌在 u 上的半宽 = hw·|cos| + hd·|sin|
+    const half = (c: { ry: number }) => hw * Math.abs(Math.cos(t - c.ry)) + hd * Math.abs(Math.sin(t - c.ry))
+    if (Math.abs((b.x - a.x) * Math.cos(t) - (b.z - a.z) * Math.sin(t)) > half(a) + half(b)) return false
+  }
+  return true
+}
 /** 骰子：边长 s，顶面 / 正面 / 右面的点数；(x, y, z) 为底面中心 */
 function die(s: number, body: string, pip: string, x: number, y: number, z: number, ry = 0, top = 5) {
   const g = new THREE.Group()
@@ -470,8 +481,14 @@ function pokerGame(seats: 3 | 4) {
       const n = seats === 3 ? 12 + i * 2 : 14 + (i % 2) * 6
       g.add(fan(back, n, Math.sin(a) * R0, y, Math.cos(a) * R0, a + PI, 0.08))
     })
-    // 中间出牌：一叠面朝上（散乱）
-    for (let k = 0; k < (seats === 3 ? 9 : 14); k++) g.add(card(back, true, (r() - 0.5) * 9, y + k * 0.24, (r() - 0.5) * 7, (r() - 0.5) * 1.6, k))
+    // 中间出牌：一叠面朝上（散乱）。每张落在它压着的牌里最高的那张上面（以前按张数一路垫高，没压到前一张的那几张就悬着）
+    const pile: { x: number; z: number; ry: number; lv: number }[] = []
+    for (let k = 0; k < (seats === 3 ? 9 : 14); k++) {
+      const c = { x: (r() - 0.5) * 9, z: (r() - 0.5) * 7, ry: (r() - 0.5) * 1.6, lv: 0 }
+      for (const o of pile) if (o.lv >= c.lv && cardsOverlap(c, o)) c.lv = o.lv + 1
+      pile.push(c)
+      g.add(card(back, true, c.x, y + c.lv * 0.24, c.z, c.ry, k))
+    }
     if (seats === 3) {
       // 底牌三张翻开，放在一边
       for (let k = 0; k < 3; k++) g.add(card(back, true, -13 + k * 6.8, y, -13, 0, k + 1))
@@ -1045,8 +1062,21 @@ function diceRpg([tray0, d1, d2]: string[]) {
     const m = new THREE.Mesh(geo, toon(col))
     m.castShadow = true
     m.scale.setScalar(s)
-    m.position.set(x, 1 + s * 0.85, z)
     m.rotation.set(0.4, x, 0.2)
+    // 转到最朝下的那个面正好朝下，再让这个面落在毡面上（毡面顶在 y = 1，压进去 0.08）；以前随手转个角度、按外接球估高度，有的悬着有的陷进去
+    const pos = geo.getAttribute('position')
+    const tri = new THREE.Triangle()
+    const n = new THREE.Vector3()
+    const down = new THREE.Vector3(0, 1, 0)
+    for (let i = 0; i < pos.count; i += 3) {
+      tri.set(new THREE.Vector3().fromBufferAttribute(pos, i), new THREE.Vector3().fromBufferAttribute(pos, i + 1), new THREE.Vector3().fromBufferAttribute(pos, i + 2))
+      tri.getNormal(n).applyQuaternion(m.quaternion)
+      if (n.y < down.y) down.copy(n)
+    }
+    m.quaternion.premultiply(new THREE.Quaternion().setFromUnitVectors(down, new THREE.Vector3(0, -1, 0)))
+    let lo = Infinity
+    for (let i = 0; i < pos.count; i++) lo = Math.min(lo, n.fromBufferAttribute(pos, i).applyQuaternion(m.quaternion).y * s)
+    m.position.set(x, 1 - 0.08 - lo, z)
     return m
   }
   g.add(poly(new THREE.IcosahedronGeometry(1), d1, -4.5, -2, 1.3))
@@ -1098,7 +1128,7 @@ export const GAMES_MORE: AssetDef[] = [
   def('bg-gomoku-mid', '五子棋', 'hobby', [48.6, 32, 3.6], GOMOKU_P, gomoku('mid'), st('对局中')),
   def('bg-gomoku-win', '五子棋', 'hobby', [48.6, 32, 3.6], GOMOKU_P, gomoku('win'), st('五子连珠')),
   def('bg-poker-ddz', '扑克牌局', 'hobby', [48, 48, 2.7], POKER_GAME_P, pokerGame(3), st('斗地主（三人）')),
-  def('bg-poker-guandan', '扑克牌局', 'hobby', [56, 56, 3.9], POKER_GAME_P, pokerGame(4), st('掼蛋（四人）')),
+  def('bg-poker-guandan', '扑克牌局', 'hobby', [56, 56, 3.6], POKER_GAME_P, pokerGame(4), st('掼蛋（四人）')),
   def('bg-paijiu-wall', '牌九（骨牌）', 'hobby', [27.2, 11.4, 2], PJ_P, paijiu('wall'), st('码好牌墩')),
   def('bg-paijiu-reveal', '牌九（骨牌）', 'hobby', [35.6, 35.6, 2], PJ_P, paijiu('open'), st('开牌')),
   // 日式
@@ -1122,7 +1152,7 @@ export const GAMES_MORE: AssetDef[] = [
   def('bg-box-stack-m', '桌游盒子摞', 'hobby', [31.7, 30.9, 26.6], BOX_P, boxStack([[30, 8, 30], [30, 7, 30], [27, 5, 27], [24, 4, 18], [20, 2.5, 14]], 5), st('中摞 5 盒')),
   def('bg-box-stack-l', '桌游盒子摞', 'hobby', [32.3, 32, 44.6], BOX_P, boxStack([[30, 8, 30], [30, 8, 30], [30, 7, 30], [28, 6, 28], [27, 5, 27], [24, 4, 18], [22, 3.5, 16], [18, 3, 12]], 7), st('高摞 8 盒')),
   def('bg-dice-pair', '骰子', 'hobby', [4.5, 3.1, 1.7], DICE_P, dicePair, st('两颗六面骰')),
-  def('bg-dice-rpg', '骰子', 'hobby', [18, 14, 3.4], RPG_P, diceRpg, st('多面骰 + 骰盘')),
+  def('bg-dice-rpg', '骰子', 'hobby', [18, 14, 3], RPG_P, diceRpg, st('多面骰 + 骰盘')),
   def('bg-score-pad', '计分本', 'hobby', [12.8, 15, 1], PAD_P, scorePad),
 ]
 

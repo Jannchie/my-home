@@ -8,7 +8,7 @@
 //   - 挂起形态（剥线钳、杜邦线）原点 = 洞洞板挂点，自带 J 形钩（横臂 y = -2，钩尾往 -z 插进板 1cm），本体 z ≥ 0.3。
 
 import * as THREE from 'three'
-import { ball, cached, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
+import { ball, box, cached, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, movable, paintPanel, rectPoly, rng, shell, type AssetDef, type Poly, type SurfaceDef } from '../kit'
 import { P, PI, batten, cappedTube, cylX, cylZ, fitGroup, ghostDeep, lit, mesh, noOutlineDeep, rod3, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, PROP, R, define, type PalFlat } from '../packkit'
@@ -938,7 +938,8 @@ function breadboardHalf(p: string[]) {
   const bx = bbX(n, 7)
   g.add(rbox(0.6, 0.35, 0.6, '#2b2b2b', { x: bx, y: T + 0.1, z: 0 }, 0.05))
   g.add(cyl(0.18, 0.18, 0.2, wires[5], { x: bx, y: T + 0.45, z: 0 }, 12))
-  for (const c of [6, 8]) for (const s of [-1, 1]) g.add(pbox(0.06, 0.4, 0.05, PIN, { x: bbX(n, c), y: T - 0.25, z: s * 0.381 }))
+  // 引脚从开关体侧面出来再插进孔里：做成够得着开关体的扁片（原来是孔位上的细针，和开关体隔着 0.06）
+  for (const c of [6, 8]) for (const s of [-1, 1]) g.add(pbox(0.06, 0.55, 0.2, PIN, { x: bbX(n, c), y: T - 0.25, z: s * 0.36 }))
   g.add(jumper(h(3, 10), h(3, 0), T, 0.6, wires[1]))
   g.add(jumper(h(25, 13), h(25, 9), T, 0.6, wires[9]))
   g.add(jumper(h(10, 2), h(10, 7), T, 0.9, wires[3]))
@@ -1905,7 +1906,8 @@ function drillSet(p: string[]) {
   g.add(P(rbox(3.4, 11.5, 4.2, body, {}, 1.0), 0, 9.2, 0, -0.12))
   g.add(P(rbox(3.6, 6, 4.4, acc, {}, 1.0), 0, 8.4, -0.5, -0.12))
   g.add(P(capsule(2.6, 12, body), 0, 17, 1.5, PI / 2))
-  g.add(rbox(1.2, 2.2, 1.4, acc, { y: 11.8, z: 2.6 }, 0.3))
+  // 扳机：握把是斜的，上半截往后退，扳机加深伸进握把里（前端位置不变）
+  g.add(rbox(1.2, 2.2, 2.2, acc, { y: 11.8, z: 2.2 }, 0.3))
   g.add(cylZ(2.1, 1.0, acc, 0, 17, 9.4, 22))
   g.add(P(cyl(1.6, 1.9, 3.5, '#2b2b2b', {}, 20), 0, 17, 11.5, PI / 2))
   g.add(cylZ(0.25, 6, CHROME, 0, 17, 16.2, 8))
@@ -1923,7 +1925,8 @@ function angleGrinder(p: string[]) {
   const [body, acc, disc] = p
   const g = new THREE.Group()
   g.add(puck(6.25, 0.3, disc))
-  g.add(noOutlineDeep(cyl(1.2, 1.2, 0.08, METAL, { y: 0.3 }, 14)))
+  // 压板 + 主轴：从砂轮片穿过护罩底伸进齿轮箱（原来只是片上的一个薄垫，砂轮片悬在齿轮箱下面）
+  g.add(noOutlineDeep(cyl(1.2, 1.2, 0.6, METAL, { y: 0.2 }, 14)))
   const gm = toon(METAL).clone()
   gm.side = THREE.DoubleSide
   const guard = new THREE.Mesh(new THREE.CylinderGeometry(6.6, 6.6, 1.4, 28, 1, false, 0, PI), gm)
@@ -2071,13 +2074,15 @@ function laserCutter(p: string[]) {
   g.add(rbox(66, 1.5, 46, shade(body, -0.25), { y: 1.5 }, 0.2))
   g.add(rbox(62, 6, 42, '#3a3d44', { y: 3 }, 0.3))
   g.add(paintTop(61.6, 41.6, 'mk-honeycomb', drawHoneycomb, 0, 9.05, 0))
-  g.add(rbox(40, 0.4, 28, '#d9b98c', { x: -3, y: 9.1, z: 2 }, 0.1))
+  g.add(rbox(40, 0.6, 28, '#d9b98c', { x: -3, y: 8.9, z: 2 }, 0.1))
   g.add(paintTop(39.6, 27.6, 'mk-lasercut', drawCutWood('#d9b98c', 'laser'), -3, 9.55, 2))
-  for (const s of [-1, 1]) g.add(rbox(2, 1.6, 44, '#5a5d63', { x: s * 31.5, y: 13 }, 0.3))
+  // 两侧导轨固定在箱壁上（内壁在 x = ±33.5），原来离壁 1cm，整个龙门架悬着
+  for (const s of [-1, 1]) g.add(rbox(3.4, 1.6, 44, '#5a5d63', { x: s * 32.3, y: 13 }, 0.3))
   g.add(rbox(64, 2, 3, '#5a5d63', { y: 14.6, z: -2 }, 0.3))
   g.add(rbox(4, 4, 3.6, head, { x: 6, y: 12, z: 0.8 }, 0.5))
   g.add(cyl(0.7, 0.5, 1.2, METAL, { x: 6, y: 10.8, z: 0.8 }, 12))
-  g.add(lit(ball(0.25, '#ff4a3a', { x: 6, y: 10.2, z: 0.8 }), '#ff4a3a', 1))
+  // 激光点落在木板上
+  g.add(lit(ball(0.25, '#ff4a3a', { x: 6, y: 9.65, z: 0.8 }), '#ff4a3a', 1))
   g.add(rbox(70, 1.4, 3, body, { y: 18, z: -23.5 }, 0.4))
   g.add(rbox(70, 1.4, 2, body, { y: 18, z: 24 }, 0.4))
   for (const s of [-1, 1]) g.add(rbox(2, 1.4, 45, body, { x: s * 34, y: 18 }, 0.4))
@@ -2104,6 +2109,8 @@ function cnc3018(p: string[]) {
   }
   g.add(cylZ(0.4, 30, '#9a9da3', 0, 2.8, 0, 10))
   g.add(rbox(30, 1.4, 18, alu, { y: 4.5, z: 0 }, 0.2))
+  // 台面底下的直线轴承座，骑在两根导轨上（原来台面悬在导轨上方 0.6）
+  for (const s of [-1, 1]) for (const z of [-5, 5]) g.add(box(2.4, 1.6, 4, '#2b2b2b', { x: s * 7, y: 3.1, z }))
   g.add(paintTop(29.6, 17.6, 'mk-cnc-bed', drawSlots, 0, 5.95, 0))
   g.add(rbox(14, 1.2, 10, '#d9b98c', { y: 5.9 }, 0.1))
   g.add(paintTop(13.6, 9.6, 'mk-cnc-wood', drawCutWood('#d9b98c', 'cnc'), 0, 7.15, 0))
@@ -2118,7 +2125,8 @@ function cnc3018(p: string[]) {
   g.add(cyl(2.6, 2.6, 9, spindle, { y: 11, z: -3.5 }, 22))
   g.add(cyl(2.2, 2.2, 1, '#2b2b2b', { y: 20, z: -3.5 }, 22))
   g.add(cyl(0.8, 0.8, 1.5, METAL, { y: 9.5, z: -3.5 }, 12))
-  g.add(cyl(0.12, 0.12, 2.0, CHROME, { y: 7.5, z: -3.5 }, 6))
+  // 刀尖扎进木料
+  g.add(cyl(0.12, 0.12, 2.6, CHROME, { y: 6.9, z: -3.5 }, 6))
   g.add(rbox(4.2, 4.2, 4.2, '#2b2b2b', { x: 22.3, y: 15, z: -8 }, 0.3))
   g.add(rbox(4.2, 4.2, 4.2, '#2b2b2b', { y: 23.5, z: -6.5 }, 0.3))
   g.add(rbox(0.3, 6, 8, '#2f7d4a', { x: -20.5, y: 5, z: -8 }, 0.05))
@@ -2391,6 +2399,8 @@ function screwSorter(p: string[]) {
   lid.rotation.x = -1.8
   g.add(lid)
   for (const x of [-7, 7]) g.add(rbox(2, 1.4, 0.5, shade(caseC, -0.15), { x, y: H - 1.0, z: D / 2 + 0.15 }, 0.15))
+  // 合页：盒体后沿和盖子都是圆角，转轴处隔着一条缝
+  for (const x of [-7, 7]) g.add(cylX(0.35, 2.4, shade(caseC, -0.15), x, H, -D / 2 - 0.1, 8))
   return fitGroup(g)
 }
 const SORTER_PALS: PalFlat[] = [

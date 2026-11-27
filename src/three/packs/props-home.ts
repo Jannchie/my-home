@@ -24,9 +24,9 @@ const BRASS = '#e9c46a'
 
 // ---------- 小工具 ----------
 
-/** 容器里的液面：薄圆片，top 是液面高度 */
+/** 容器里的液面：薄圆片，top 是液面高度。32 段、起始角和 cup 一样：边缘的折线和杯壁对齐；r 要比液面处的内壁大一点（嵌进杯壁） */
 function liquid(r: number, top: number, color: string, x = 0, z = 0) {
-  return noOutlineDeep(cyl(r, r, 0.3, color, { x, y: top - 0.3, z }, 28))
+  return noOutlineDeep(cyl(r, r, 0.3, color, { x, y: top - 0.3, z }, 32))
 }
 
 /** 杯把手：竖直的半圆环，side=1 在 +x 侧 */
@@ -99,7 +99,8 @@ function mug(s: number) {
     const x0 = -1.5 * s
     const g = new THREE.Group()
     g.add(cup(r, r - 0.2 * s, h, 0.6, main, { x: x0 }))
-    g.add(liquid(r - 0.8, h - 1.4, COFFEE, x0))
+    // 液面嵌进杯壁（以前比内壁小一圈，四周留着 0.15 的缝）
+    g.add(liquid(r - 0.5, h - 1.4, COFFEE, x0))
     g.add(torus(r - 0.05, 0.3, acc, { x: x0, y: h * 0.72, rx: PI / 2 }))
     g.add(handle(2.6 * s, 0.7 * s, main, x0 + r - 0.1, h * 0.52))
     return g
@@ -145,7 +146,7 @@ function coffeeCup(p: string[]) {
   const g = new THREE.Group()
   g.add(cup(6.5, 4, 1, 0.4, sub))
   g.add(cup(3.8, 2.8, 5.5, 0.45, main, { y: 0.4 }))
-  g.add(liquid(3.1, 5.3, COFFEE))
+  g.add(liquid(3.4, 5.3, COFFEE))
   g.add(noOutlineDeep(ball(0.9, CREAM, { y: 5.32, z: 0.3 }, [1, 0.12, 0.9])))
   g.add(handle(1.4, 0.4, main, 3.4, 3.4))
   g.add(rbox(4.6, 0.25, 0.7, C.steel, { x: 0.6, y: 0.75, z: 4.4, ry: 0.35 }, 0.1))
@@ -263,16 +264,31 @@ function fruitBowl(p: string[]) {
   const g = new THREE.Group()
   g.add(cyl(4, 5, 1.5, foot))
   g.add(cup(12, 6, 6.5, 0.8, bowl, { y: 1.5 }))
+  // 水果都落在碗的内壁上（以前全悬在碗里：苹果、橙子离碗壁 0.1～0.8，葡萄悬在 1.2cm 高的空中）。
+  // seat：半径 R 的球放在 (x, z) 时球心的高度——碗的内壁是一段圆锥，母线从 (半径 5.94, 高 2.78) 到 (11.2, 7.6)，
+  // 碗底内面高 2.3（Rv 是球的竖向半径）；再往下压 0.2 嵌进去
+  const seat = (x: number, z: number, R: number, Rv = R) => Math.max(2.3 + Rv, 2.78 + (R + (Math.hypot(x, z) - 5.94) * 0.676) / 0.737) - 0.2
   const apple = (x: number, z: number, c: string) => {
-    g.add(ball(3.4, c, { x, y: 6.6, z }, [1, 0.92, 1]))
-    g.add(cyl(0.22, 0.25, 1.4, C.woodD, { x, y: 9.4, z, rz: 0.2 }, 6))
+    const y = seat(x, z, 3.25, 3.13)
+    g.add(ball(3.4, c, { x, y, z }, [1, 0.92, 1]))
+    g.add(cyl(0.22, 0.25, 1.4, C.woodD, { x, y: y + 2.8, z, rz: 0.2 }, 6))
   }
   apple(-4, 1, '#ff6b6b')
   apple(3.6, -3, C.red)
-  g.add(ball(3.2, C.orange, { x: 2.8, y: 6.4, z: 4.2 }))
-  g.add(torus(5, 1.2, C.lemon, { x: -1, y: 9.6, z: -1.2, rx: PI / 2 - 0.3, rz: 0.6 }, 2))
+  g.add(ball(3.2, C.orange, { x: 2.8, y: seat(2.8, 4.2, 3.2), z: 4.2 }))
+  // 香蕉搭在苹果和橙子上
+  g.add(torus(5, 1.2, C.lemon, { x: -1, y: 8.6, z: -1.2, rx: PI / 2 - 0.3, rz: 0.6 }, 2))
+  // 葡萄：4 颗贴着碗壁，3 颗各摞在一颗上
   const r = rng(11)
-  for (let i = 0; i < 7; i++) g.add(ball(1.1, '#9b6fd0', { x: -3 + (r() - 0.5) * 2.6, y: 8.6 + r() * 1.6, z: -4.5 + (r() - 0.5) * 2.4 }))
+  const low: [number, number, number][] = []
+  for (let i = 0; i < 7; i++) {
+    const under = i >= 4 ? low[i - 4] : null
+    const x = under ? under[0] + (r() - 0.5) * 0.8 : -3 + (r() - 0.5) * 2.6
+    const z = under ? under[2] + (r() - 0.5) * 0.8 : -4.5 + (r() - 0.5) * 2.4
+    const y = under ? under[1] + 1.9 : seat(x, z, 1.1)
+    if (!under) low.push([x, y, z])
+    g.add(ball(1.1, '#9b6fd0', { x, y, z }))
+  }
   return g
 }
 
@@ -306,7 +322,8 @@ function tissueBox(p: string[]) {
   g.add(holePanel(24, 12, 0.6, main, [{ kind: 'rect', x: 0, y: 4.6, w: 14, h: 2.8, r: 1.4 }], { y: 8.7, z: 6, rx: -Math.PI / 2 }, 1))
   g.add(rbox(24.4, 1.6, 12.4, band, { y: 1.2 }, 0.6))
   g.add(rbox(18, 6.5, 10.4, C.white, { y: 0.6 }, 1))
-  g.add(ball(3.5, C.white, { y: 10.4, rz: 0.15 }, [1.4, 0.75, 0.3]))
+  // 抽出来的那张纸往下伸到盒里的纸垛（以前下端停在抽纸口里，离纸垛 0.5 悬着）；顶端高度不变
+  g.add(ball(3.5, C.white, { y: 9.9, rz: 0.15 }, [1.4, 0.9, 0.3]))
   return g
 }
 
@@ -487,7 +504,8 @@ function ramen(p: string[]) {
   g.add(cyl(4.5, 4.8, 1, bowl))
   g.add(cup(10.5, 5.5, 8, 0.7, bowl, { y: 1 }))
   g.add(torus(9.62, 0.35, band, { y: 7.5, rx: PI / 2 }))
-  g.add(liquid(8.6, 7.6, '#f0c27a'))
+  // 汤面嵌进碗壁（以前四周离碗壁 0.2，汤面连配菜一起悬着）
+  g.add(liquid(9.2, 7.6, '#f0c27a'))
   g.add(puck(5, 0.5, '#f3d36b', { y: 7.25 }))
   for (let i = 0; i < 5; i++) g.add(noOutlineDeep(torus(1.1, 0.25, '#f6dc7f', { x: -1 + i * 0.6, y: 7.75, z: -1 + (i % 2), rx: PI / 2 })))
   g.add(puck(2.6, 0.7, '#d9946b', { x: -3, y: 7.4, z: 2 }))
@@ -607,10 +625,11 @@ function pourOver(p: string[]) {
   g.add(rbox(2, 1.6, 9, wood, { y: 17, z: -1 }, 0.6))
   g.add(torus(4.5, 0.5, shade(wood, -0.15), { y: 17.8, z: 1.5, rx: PI / 2 }))
   g.add(cup(5.4, 2.4, 6, 0.4, dripper, { y: 17.2, z: 1.5 }))
-  g.add(liquid(4.2, 22.6, '#6b4a35', 0, 1.5))
+  g.add(liquid(4.8, 22.6, '#6b4a35', 0, 1.5))
   g.add(clearDeep(cup(4.2, 4.6, 12, 0.4, C.glass, { y: 1.6, z: 1.5 }), C.glass))
   g.add(cyl(4, 4.2, 5, COFFEE, { y: 2, z: 1.5 }))
-  g.add(clearDeep(handle(2.6, 0.6, C.glass, 4.6, 7.5, 1, 1.5), C.glass, 0.5))
+  // 把手两头插进壶壁（以前管口正对着壶壁，差 0.1～0.3）
+  g.add(clearDeep(handle(2.6, 0.6, C.glass, 4.1, 7.5, 1, 1.5), C.glass, 0.5))
   return g
 }
 
@@ -668,7 +687,8 @@ function espresso(p: string[]) {
   g.add(rbox(28, 4, 30, body, { z: -1 }, 1.5))
   g.add(rbox(28, 30, 14, body, { y: 4, z: -9 }, 2))
   g.add(rbox(28, 6, 8, body, { y: 28, z: 2 }, 1.5))
-  g.add(rbox(18, 0.6, 12, dark, { y: 4.1, z: 6 }, 0.2))
+  // 滴水盘压进底座（以前浮在底座上方 0.1）
+  g.add(rbox(18, 0.8, 12, dark, { y: 3.9, z: 6 }, 0.2))
   g.add(cyl(3.2, 3.2, 3, M.silver, { y: 25, z: 2 }))
   g.add(cyl(3.4, 3, 2.4, dark, { y: 22.6, z: 2 }))
   // 手柄接到冲煮头的粉碗上（以前短 0.6cm，悬在粉碗前面）
@@ -744,7 +764,8 @@ function fryingPan(r: number) {
     const h = 4.5 * (r / 13)
     const g = new THREE.Group()
     g.add(cup(r, r - 2, h, 0.6, pan, { x: px }))
-    g.add(rbox(L, 1.6, 2.8, grip, { x: px + r - 0.5 + L / 2, y: h - 1.6, rz: 0.12 }, 0.7))
+    // 手柄往锅身方向加长 0.6、插进锅壁（以前圆头只是对着锅壁，差 0.2）
+    g.add(rbox(L + 0.6, 1.6, 2.8, grip, { x: px + r - 0.8 + L / 2, y: h - 1.6, rz: 0.12 }, 0.7))
     g.add(puck(r * 0.38, 0.6, C.white, { x: px - 1, y: 0.6 }))
     g.add(ball(1.6, '#ffb300', { x: px - 1, y: 1.3 }, [1, 0.6, 1]))
     return g
@@ -924,9 +945,10 @@ function lotionSet(p: string[]) {
   g.add(cyl(1.2, 1.2, 3.2, cap, { x: -3.8, y: 11.6 }, 16))
   g.add(cyl(3, 3, 3, jar, { x: 2.6, z: 1 }, 24))
   g.add(puck(3.15, 1.4, cap, { x: 2.6, y: 2.8, z: 1 }))
-  g.add(cyl(1.3, 1.3, 4.2, '#d79a4f', { x: 3.4, z: -2.6 }, 16))
-  g.add(cyl(0.7, 0.7, 0.8, cap, { x: 3.4, y: 4.2, z: -2.6 }, 12))
-  g.add(capsule(0.7, 1.2, cap, { x: 3.4, y: 4.6, z: -2.6 }))
+  // 精华小瓶挪到大瓶和面霜罐之间靠后（以前在面霜罐正后方，瓶身插进罐子 0.8cm）
+  g.add(cyl(1.3, 1.3, 4.2, '#d79a4f', { x: -0.6, z: -2.6 }, 16))
+  g.add(cyl(0.7, 0.7, 0.8, cap, { x: -0.6, y: 4.2, z: -2.6 }, 12))
+  g.add(capsule(0.7, 1.2, cap, { x: -0.6, y: 4.6, z: -2.6 }))
   return g
 }
 

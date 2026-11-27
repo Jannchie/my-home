@@ -2,7 +2,7 @@
 // 只放建模函数和它们用到的常量，素材表在 ../kitchen-food.ts（PACKS 只收集 packs/ 下一层的文件）。
 
 import * as THREE from 'three'
-import { ball, cup, cyl, puck, rbox, shade, torus, tray } from '../../toon'
+import { ball, box, cup, cyl, puck, rbox, shade, torus, tray } from '../../toon'
 import { C, G, SWING_OPEN, movable, rng, type DoorMotion } from '../../kit'
 import { PI, cappedTube, hcyl, noOutlineDeep, rod3, type V3 } from '../../geo'
 import { M } from '../../packkit'
@@ -30,12 +30,13 @@ export function dishRack2(p: string[], full: boolean) {
   for (const sx of [-1, 1]) g.add(rod3([sx * (W / 2 - 2), y1, -D / 2 + 2], [sx * (W / 2 - 2), y1, D / 2 - 2], 0.4, frame, 8))
   for (let i = 0; i < 9; i++) {
     const x = -W / 2 + 6 + i * 3.2
-    g.add(rod3([x, y1, -3], [x, y1 + 9, -3], 0.25, frame, 8))
+    // 后排立在 z = -3.8 那根横丝上（原来在 z = -3：两边的横丝都够不着，一排竖条悬在网上）
+    g.add(rod3([x, y1, -3.8], [x, y1 + 9, -3.8], 0.25, frame, 8))
     g.add(rod3([x, y1, 3], [x, y1 + 6, 3], 0.25, frame, 8))
   }
   for (let i = 0; i < 7; i++) g.add(rod3([-W / 2 + 2, y1, -D / 2 + 3 + i * 3.6], [W / 2 - 2, y1, -D / 2 + 3 + i * 3.6], 0.22, frame, 8))
   // 右侧筷子筒
-  g.add(tray(6, 12, 6, 0.4, acc, { x: W / 2 - 5.5, y: y1 + 0.3, z: D / 2 - 5.5 }, 0.5))
+  g.add(tray(6, 12, 6, 0.4, acc, { x: W / 2 - 5.5, y: y1 + 0.1, z: D / 2 - 5.5 }, 0.5)) // 筒底压在横丝上（丝顶 y1 + 0.2）
   // 上层：浅网篮
   const y2 = 22
   for (const sz of [-1, 1]) g.add(rod3([-W / 2 + 2, y2, sz * (D / 2 - 2)], [W / 2 - 2, y2, sz * (D / 2 - 2)], 0.4, frame, 8))
@@ -46,11 +47,12 @@ export function dishRack2(p: string[], full: boolean) {
   for (const sx of [-1, 1]) g.add(rod3([sx * (W / 2 - 2), 37, -D / 2 + 2], [sx * (W / 2 - 2), 37, D / 2 - 2], 0.45, frame, 8))
   if (full) {
     const r = rng(7)
-    // 下层竖插的盘子
+    // 下层竖插的盘子：盘沿落在横丝上，盘顶留在上层网篮下面（原来半径 9.5、离网 1cm 悬着，盘顶还从上层的网里穿出去）
     for (let i = 0; i < 5; i++) {
       const pc = [C.white, acc, '#f3efe6', C.white, shade(acc, 0.15)][i]
-      const m = cyl(9.5 - (i % 2) * 1.5, 9 - (i % 2) * 1.5, 0.7, pc, {}, 28)
-      m.position.set(-W / 2 + 7 + i * 3.2, y1 + 10.5 - (i % 2) * 1.5, -2.5)
+      const pr = 8.6 - (i % 2) * 1.3
+      const m = cyl(pr, pr - 0.5, 0.7, pc, {}, 28)
+      m.position.set(-W / 2 + 7 + i * 3.2, y1 + pr, -2.5)
       m.rotation.z = PI / 2 + (r() - 0.5) * 0.15
       g.add(m)
     }
@@ -68,11 +70,11 @@ export function dishRack2(p: string[], full: boolean) {
     for (let i = 0; i < 3; i++) {
       const m = cup(3.8, 3.2, 9, 0.35, i === 1 ? acc : C.white)
       m.rotation.x = PI
-      m.position.set(-14 + i * 9, y2 + 9.4, 0)
+      m.position.set(-14 + i * 9, y2 + 9.1, 0) // 杯口压在横丝上
       g.add(m)
     }
     // 筷子
-    for (let i = 0; i < 4; i++) g.add(rod3([W / 2 - 6.5 + (i % 2) * 2, y1 + 1, D / 2 - 6.5 + Math.floor(i / 2) * 2], [W / 2 - 6 + (i % 2) * 2.4, y1 + 21, D / 2 - 6 + Math.floor(i / 2) * 2.4], 0.3, i % 2 ? C.woodD : '#a3442f', 8))
+    for (let i = 0; i < 4; i++) g.add(rod3([W / 2 - 6.5 + (i % 2) * 2, y1 + 0.45, D / 2 - 6.5 + Math.floor(i / 2) * 2], [W / 2 - 6 + (i % 2) * 2.4, y1 + 21, D / 2 - 6 + Math.floor(i / 2) * 2.4], 0.3, i % 2 ? C.woodD : '#a3442f', 8))
   }
   return g
 }
@@ -85,7 +87,7 @@ export function dishRackMini(p: string[]) {
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(cyl(0.5, 0.5, 2.5, frame, { x: sx * 14, y: 1.5, z: sz * 9.5 }, 8))
   g.add(tray(32, 10, 22, 0.6, frame, { y: 3.5 }, 0.3))
   // 栅格：网篮侧面的竖条用浅色贴片表示
-  for (let i = 0; i < 9; i++) g.add(noOutlineDeep(rbox(0.5, 7, 0.3, shade(frame, -0.12), { x: -12 + i * 3, y: 5.5, z: 11.2 }, 0.1)))
+  for (let i = 0; i < 9; i++) g.add(noOutlineDeep(box(0.5, 7, 0.3, shade(frame, -0.12), { x: -12 + i * 3, y: 5.5, z: 11.1 })))
   return g
 }
 
@@ -230,8 +232,8 @@ export function kitchenWagon(p: string[], tiers: number) {
     }
   for (const y of ys) {
     g.add(tray(W - 1, 5, D - 1, 0.6, basket, { y }, 0.3))
-    // 网格感：前后侧面的细竖条
-    for (let i = 0; i < 12; i++) for (const s of [-1, 1]) g.add(noOutlineDeep(rbox(0.4, 3.6, 0.3, shade(basket, -0.15), { x: -W / 2 + 4 + i * 3.4, y: y + 0.8, z: s * (D / 2 - 0.25) }, 0.1)))
+    // 网格感：前后侧面的细竖条（嵌进篮壁 0.05；原来离壁 0.1 浮着）
+    for (let i = 0; i < 12; i++) for (const s of [-1, 1]) g.add(noOutlineDeep(box(0.4, 3.6, 0.3, shade(basket, -0.15), { x: -W / 2 + 4 + i * 3.4, y: y + 0.8, z: s * (D / 2 - 0.4) })))
   }
   // 侧面推手
   g.add(rod3([W / 2 - 1.2, top - 2, -D / 2 + 4], [W / 2 + 2.5, top - 2, -D / 2 + 4], 0.6, acc, 8))
@@ -283,7 +285,8 @@ export function bagStand(p: string[]) {
     for (const sx of [-1, 1]) g.add(rod3([x + sx * 10, H - 6, -D / 2 + 1], [x + sx * 10, H - 6, D / 2 - 1.5], 0.45, frame, 8))
     g.add(rod3([x - 10, H - 6, D / 2 - 1.5], [x + 10, H - 6, D / 2 - 1.5], 0.45, frame, 8))
     // 半透明垃圾袋：口沿翻在框上
-    g.add(glassGhost(tray(20.5, H - 9, D - 3, 0.3, bag, { x, y: 1.7, z: 0.5 }, 0.2), bag, 0.55))
+    // 袋身顶到翻边里（原来矮 0.5cm，袋子悬在翻边下面）
+    g.add(glassGhost(tray(20.5, H - 8.3, D - 3, 0.3, bag, { x, y: 1.7, z: 0.5 }, 0.2), bag, 0.55))
     g.add(noOutlineDeep(rbox(21.4, 1.2, D - 2, bag, { x, y: H - 6.8, z: 0.5 }, 0.3)))
     // 颜色标签牌
     g.add(rbox(10, 4, 0.5, tints[i], { x, y: H - 12, z: D / 2 - 0.8 }, 0.3))
@@ -309,7 +312,7 @@ export function glassContainers(p: string[]) {
     y += h + 1.2
   }
   // 最下层里装了点东西
-  g.add(noOutlineDeep(rbox(18, 3, 12, acc, { y: 0.6 }, 1)))
+  g.add(noOutlineDeep(rbox(18, 3, 12, acc, { y: 0.4 }, 1)))
   return g
 }
 
@@ -434,7 +437,8 @@ export function tongsBody(p: string[]) {
 
 /** 挂起形态：S 钩 + 本体（挂孔套在 S 钩下环上） */
 export function hungTool(body: THREE.Object3D) {
-  return G(sHook(), hangAt(G(body), S_LOW + 0.9))
+  // 挂环的内顶压在 S 钩下环上（环管粗 0.3：环顶比钩丝顶高 0.6，再压进 0.05）
+  return G(sHook(), hangAt(G(body), S_LOW + 0.8))
 }
 /** 平放形态：本体放倒，顺着 x 方向 */
 export function laidTool(body: THREE.Object3D) {
@@ -472,7 +476,8 @@ export function boardStand(p: string[]) {
   b1.rotation.x = -0.12
   g.add(b1)
   const b2 = rbox(26, 19, 1, board2, {}, 0.5)
-  b2.position.set(0, 10.8, 2.2)
+  // 板底压进底座，背面靠在中间那排立柱上（原来离底座 0.3cm 悬着，前后也不挨立柱）
+  b2.position.set(0, 10.3, 1.2)
   b2.rotation.x = -0.1
   g.add(b2)
   return g
@@ -507,7 +512,7 @@ export function panRack(p: string[]) {
   lid.rotation.x = PI / 2
   lid.position.set(0, 12, 10.5)
   g.add(lid)
-  g.add(hcyl(1.6, 1.6, 2.2, acc, 0, 12, 12, 'z', 14))
+  g.add(hcyl(1.6, 1.6, 2.2, acc, 0, 12, 11.8, 'z', 14))
   g.add(noOutlineDeep(torus(11, 0.4, STEEL, { y: 12, z: 10.5 })))
   return g
 }

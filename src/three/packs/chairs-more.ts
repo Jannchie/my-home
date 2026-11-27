@@ -74,7 +74,8 @@ const foldPad = (open: boolean) => (p: string[]) => {
     g.add(strut([-18, 9, 19], [18, 9, 19], r, frame), strut([-20, 9, -17], [20, 9, -17], r, frame))
     g.add(rbox(37, 1.2, 33, shade(frame, -0.2), { y: 41.6, z: -1.5 }, 0.4))
     g.add(rbox(39, 4.6, 35, pad, { y: 42.8, z: -1.5 }, 2))
-    g.add(hinge([0, 68, -20.5], -0.06, rbox(37, 19, 4, pad, { y: 59, z: -20.5 }, 1.8)))
+    // 靠垫两头嵌进后腿管 0.4（管内侧在 x = ±18.8；以前靠垫宽 37，两边各差 0.3cm 没碰到管子）
+    g.add(hinge([0, 68, -20.5], -0.06, rbox(38.4, 19, 4, pad, { y: 59, z: -20.5 }, 1.8)))
   } else {
     for (const s of [-1, 1]) {
       g.add(strut([s * 20, 0, -1.5], [s * 20, 84, -1.5], r, frame))
@@ -83,7 +84,7 @@ const foldPad = (open: boolean) => (p: string[]) => {
     }
     g.add(strut([-20, 9, -1.5], [20, 9, -1.5], r, frame))
     g.add(rbox(39, 35, 4.6, pad, { y: 22, z: 2.6 }, 2))
-    g.add(rbox(37, 19, 4, pad, { y: 59, z: -2.4 }, 1.8))
+    g.add(rbox(38.4, 19, 4, pad, { y: 59, z: -2.4 }, 1.8))
   }
   return g
 }
@@ -113,7 +114,8 @@ const xSlat = (open: boolean) => (p: string[]) => {
     }
     g.add(strutBox([-20, 8, 0], [20, 8, 0], 2.4, 2.4, frame))
     for (let i = 0; i < 6; i++) g.add(rbox(38.6, 4.6, 2, slat, { y: 17 + i * 5.6, z: 5.4 }, 0.6))
-    for (const y of [64, 73, 82]) g.add(rbox(40, 6, 1.8, slat, { y, z: -2.8 }, 0.6))
+    // 靠背条钉在长腿背面：两头搭到腿的中线，往腿里压 0.2（以前只有 0.2cm 搭在腿的圆角上，没碰到）
+    for (const y of [64, 73, 82]) g.add(rbox(42, 6, 1.8, slat, { y, z: -2.5 }, 0.6))
   }
   return g
 }
@@ -179,11 +181,13 @@ const campArm = (open: boolean) => (p: string[]) => {
     }
     for (const sz of [-1, 1]) g.add(strut([-26, 6, sz * 21], [26, 36, sz * 21], r, frame), strut([26, 6, sz * 21], [-26, 36, sz * 21], r, frame))
     // 吊床式坐面：中间低
-    g.add(rbox(48, 1.2, 40, cloth, { y: 36 }, 0.5))
+    // 坐面两侧搭到侧面的 X 撑和腿上（腿内侧在 x = ±25；以前坐面宽 48，四周离框 1cm，整块悬在架子中间）
+    g.add(rbox(50.6, 1.2, 40, cloth, { y: 36 }, 0.5))
     g.add(rbox(48, 3, 30, cloth, { y: 34 }, 1.2))
     g.add(hinge([0, 38, -21], -0.17, rbox(48, 52, 1.2, cloth, { y: 38, z: -21 }, 0.5)))
     g.add(cup(4.2, 3.6, 7, 0.5, holder, { x: 33, y: 53, z: 13 }))
-    g.add(rbox(4, 1, 4, holder, { x: 29.5, y: 58.5, z: 13 }, 0.3))
+    // 杯托的挂片顶进扶手底面（60）
+    g.add(rbox(4, 1, 4, holder, { x: 29.5, y: 59.2, z: 13 }, 0.3))
   } else {
     for (let i = 0; i < 8; i++) {
       const a = (i / 8) * PI * 2
@@ -351,8 +355,10 @@ const stepFold = (open: boolean) => (p: string[]) => {
       g.add(strut([s * 20, 0, 1.2], [s * 20, 60, 1.2], r, frame))
       g.add(strut([s * 21.5, 0, -1.2], [s * 21.5, 58, -1.2], r, frame))
     }
-    g.add(rbox(38, 15, 2.4, tread, { y: 24, z: 3.6 }, 0.6))
-    g.add(rbox(44, 22, 2.4, tread, { y: 38, z: -3.6 }, 0.6))
+    // 下踏板翻起来夹在两根前腿之间（两头嵌进腿管 0.2），上踏板贴在后腿背面、压进 0.2。
+    // 以前两块踏板各在腿的前 / 后面相切着放，下踏板比腿距窄，只挨着腿管的弧面外缘，差 0.6cm 没碰到
+    g.add(rbox(38, 15, 2.4, tread, { y: 24, z: 1.6 }, 0.6))
+    g.add(rbox(44, 22, 2.4, tread, { y: 38, z: -3.4 }, 0.6))
   }
   return g
 }
@@ -437,7 +443,8 @@ function pianoBench(p: string[]) {
     for (const sz of [-1, 1]) g.add(strutBox([sx * 33, 0, sz * 14], [sx * 33.5, 36, sz * 14.5], 3.6, 3.6, wood))
   g.add(rbox(66, 1.4, 1, shade(wood, -0.2), { x: 0, y: 40, z: 16.6 }, 0.3))
   g.add(strutBox([-32.5, 10, 0], [32.5, 10, 0], 3, 2.4, wood))
-  for (const s of [-1, 1]) g.add(strutBox([s * 33.2, 10, -12], [s * 33.2, 10, 12], 2.4, 3, wood))
+  // 侧撑两头插进腿里（腿内侧面在 z = ±12.3；以前只伸到 ±12，H 形脚撑整个悬在四条腿中间）
+  for (const s of [-1, 1]) g.add(strutBox([s * 33.2, 10, -12.8], [s * 33.2, 10, 12.8], 2.4, 3, wood))
   return g
 }
 
@@ -720,7 +727,7 @@ export const CHAIRS_MORE: AssetDef[] = [
   A({ id: 'c2-fold-pad', name: '软垫折叠椅', form: 'open', category: 'dining', w: 42.6, d: 43.7, h: 84.2, ...FOLD_PAD_PAL, build: foldPad(true) }),
   A({ id: 'c2-fold-pad-closed', name: '软垫折叠椅', form: 'closed', formLabel: '折起靠墙', category: 'dining', w: 42.6, d: 9.3, h: 84, ...FOLD_PAD_PAL, build: foldPad(false) }),
   A({ id: 'c2-xslat', name: 'X 腿木条折叠椅', form: 'open', category: 'dining', w: 46, d: 45.1, h: 87.4, ...XSLAT_PAL, build: xSlat(true) }),
-  A({ id: 'c2-xslat-closed', name: 'X 腿木条折叠椅', form: 'closed', formLabel: '折起靠墙', category: 'dining', w: 44.4, d: 10.1, h: 94, ...XSLAT_PAL, build: xSlat(false) }),
+  A({ id: 'c2-xslat-closed', name: 'X 腿木条折叠椅', form: 'closed', formLabel: '折起靠墙', category: 'dining', w: 44.4, d: 9.8, h: 94, ...XSLAT_PAL, build: xSlat(false) }),
   A({ id: 'c2-director-tall', name: '高脚导演椅', form: 'open', category: 'living', w: 54, d: 45.5, h: 122, ...CANVAS_PAL, build: directorTall(true) }),
   A({ id: 'c2-director-tall-closed', name: '高脚导演椅', form: 'closed', formLabel: '收拢', category: 'living', w: 15, d: 45.7, h: 122, ...CANVAS_PAL, build: directorTall(false) }),
   A({ id: 'c2-moon', name: '月亮椅', category: 'outdoor', w: 62.8, d: 67.1, h: 55.7, ...CAMP_PAL, build: moonChair }),
@@ -741,7 +748,7 @@ export const CHAIRS_MORE: AssetDef[] = [
   A({ id: 'c2-wood-bar-65', name: '矮背木吧凳', sizeLabel: '座高 65', category: 'dining', w: 41, d: 37.9, h: 80.4, ...WOOD_BAR_PAL, build: woodBar(65) }),
   A({ id: 'c2-wood-bar-75', name: '矮背木吧凳', sizeLabel: '座高 75', category: 'dining', w: 41, d: 37.9, h: 90.4, ...WOOD_BAR_PAL, build: woodBar(75) }),
   A({ id: 'c2-step-fold', name: '折叠两级踏脚凳', form: 'open', category: 'living', w: 46, d: 48, h: 55.2, ...STEP_PAL, build: stepFold(true) }),
-  A({ id: 'c2-step-fold-closed', name: '折叠两级踏脚凳', form: 'closed', formLabel: '折起靠墙', category: 'living', w: 45.3, d: 9.6, h: 60, ...STEP_PAL, build: stepFold(false) }),
+  A({ id: 'c2-step-fold-closed', name: '折叠两级踏脚凳', form: 'closed', formLabel: '折起靠墙', category: 'living', w: 45.3, d: 7.4, h: 60, ...STEP_PAL, build: stepFold(false) }),
   A({ id: 'c2-low-stool', name: '小圆矮凳', category: 'living', w: 30, d: 30, h: 23.6, ...WOOD_PAL, build: lowStool }),
   A({ id: 'c2-kid-stool', name: '儿童小凳', category: 'kids', w: 33, d: 25, h: 27.7, ...KID_PAL, build: kidStool }),
   A({ id: 'c2-stack-stool', name: '叠放塑料凳', sizeLabel: '单个', category: 'living', w: 31.2, d: 31.2, h: 46.2, ...PLASTIC_PAL, build: stackStool(1) }),

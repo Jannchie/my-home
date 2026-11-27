@@ -205,18 +205,20 @@ function umbSlat(p: string[]) {
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(3, 53, 3, wood, { x: sx * s, z: sz * s }, 0.6))
   for (let k = -2; k <= 2; k++) {
     const v = k * 4.2
-    for (const sz of [-1, 1]) g.add(rbox(2.2, 44, 1.2, wood, { x: v, y: 6, z: sz * (s + 0.4) }, 0.3))
-    for (const sx of [-1, 1]) g.add(rbox(1.2, 44, 2.2, wood, { x: sx * (s + 0.4), y: 6, z: v }, 0.3))
+    // 竖条下端钉在下框外侧（往下搭 1.2cm；原先从 y = 6 起，离下框顶面 0.2 悬着）
+    for (const sz of [-1, 1]) g.add(rbox(2.2, 45.4, 1.2, wood, { x: v, y: 4.6, z: sz * (s + 0.4) }, 0.3))
+    for (const sx of [-1, 1]) g.add(rbox(1.2, 45.4, 2.2, wood, { x: sx * (s + 0.4), y: 4.6, z: v }, 0.3))
   }
   // 下框（托接水盘）
   for (const sz of [-1, 1]) g.add(rbox(20, 2.4, 1.6, shade(wood, -0.06), { y: 3.4, z: sz * (s - 0.6) }, 0.3))
   for (const sx of [-1, 1]) g.add(rbox(1.6, 2.4, 20, shade(wood, -0.06), { x: sx * (s - 0.6), y: 3.4 }, 0.3))
-  g.add(tray(20.4, 2.4, 20.4, 0.6, pan, { y: 5.8 }, 0.25))
+  // 接水盘四边搭在下框上（下框内沿在 ±10.1，原先盘子 20.4 宽只搭上 0.1 的圆角）
+  g.add(tray(21.2, 2.4, 21.2, 0.6, pan, { y: 5.7 }, 0.25))
   // 顶板：2 × 2 圆孔
   const holes = [-6, 6].flatMap((x) => [7, 19].map((y) => ({ kind: 'circle' as const, x, y, r: 4.2 })))
   g.add(holePanel(26, 26, 2, wood, holes, { y: 54, z: 13, rx: -PI / 2 }, 1.5))
-  g.add(plant(longUmb(u1, C.woodD), -6, 6.4, 6, 0.03, 0.8))
-  g.add(plant(longUmb(u2, '#3a3436', 80), 6, 6.4, -6, 0.03, 3.9, PI * 0.8))
+  g.add(plant(longUmb(u1, C.woodD), -6, 6.2, 6, 0.03, 0.8))
+  g.add(plant(longUmb(u2, '#3a3436', 80), 6, 6.2, -6, 0.03, 3.9, PI * 0.8))
   return g
 }
 
@@ -225,14 +227,17 @@ function umbMagnet(p: string[]) {
   const [body, box, u1] = p
   const g = new THREE.Group()
   const zb = -4.4
-  g.add(rbox(4.6, 50, 1.2, body, { y: 3, z: zb + 0.6 }, 0.4))
+  // 背板一直插到接水盒的内底（和盒子是一体的；原先停在 y = 3，悬在盒子上方）
+  g.add(rbox(4.6, 52.6, 1.2, body, { y: 0.4, z: zb + 0.6 }, 0.4))
   // 背面的磁铁块
   for (const y of [10, 44]) g.add(rbox(3.6, 3.6, 0.6, '#3a3a3c', { y, z: zb - 0.2 }, 0.2))
   for (const y of [30, 50]) {
+    // D 形伞圈：半圆两头由一根横杆连到背板上（背板只有 4.6 宽，半圆的两头在 x = ±6，原先悬在背板两侧）
     g.add(torus(6, 0.45, body, { y, z: zb + 1.2, rx: PI / 2 }, PI))
+    g.add(bar([-6, y, zb + 1], [6, y, zb + 1], 0.45, body, 8))
   }
   g.add(tray(16, 3.2, 9.6, 0.6, box, { z: -0.4 }, 0.3))
-  g.add(plant(longUmb(u1, C.woodD), 0, 0.6, -0.4, 0, 0))
+  g.add(plant(longUmb(u1, C.woodD), 0, 0.6, -0.3, 0, 0))
   return g
 }
 
@@ -304,8 +309,9 @@ function umbCastIron(p: string[]) {
     g.add(torus(8.5, 0.55, shade(iron, 0.1), { y: y + 3.2, rx: PI / 2 }))
     g.add(torus(8.5, 0.35, shade(iron, 0.1), { y: y + 4.8, rx: PI / 2 }))
   }
-  g.add(plant(longUmb(u1, C.woodD), -2, 4.3, 1.5, 0.04, PI))
-  g.add(plant(longUmb(u2, '#3a3436', 80), 2.5, 4.3, -1.5, 0.04, 0, PI))
+  // 伞尖落在筒的内底上（内底在 3.2 + 1 = 4.2，压进去 0.1）
+  g.add(plant(longUmb(u1, C.woodD), -2, 4.1, 1.5, 0.04, PI))
+  g.add(plant(longUmb(u2, '#3a3436', 80), 2.5, 4.1, -1.5, 0.04, 0, PI))
   return g
 }
 
@@ -314,7 +320,8 @@ function umbWith(p: string[]) {
   const [body, pocket, u1, u2, u3] = p
   const g = new THREE.Group()
   g.add(cup(12, 11, 42, 1.2, body))
-  g.add(torus(11.75, 0.5, shade(body, -0.12), { y: 6, rx: PI / 2 }))
+  // 筒身在 y = 6 处半径 11.13：箍压进去 0.13
+  g.add(torus(11.5, 0.5, shade(body, -0.12), { y: 6, rx: PI / 2 }))
   // 侧挂小筒：挂钩搭在口沿上
   g.add(cup(4.6, 4.2, 14, 0.6, pocket, { x: 16.4, y: 26 }))
   g.add(bar([12.6, 39.6, 0], [12.6, 43.2, 0], 0.4, pocket), bar([12.6, 43.2, 0], [10.1, 43.2, 0], 0.4, pocket), bar([10.1, 43.2, 0], [10.1, 39, 0], 0.4, pocket))
@@ -439,7 +446,8 @@ const dropF: SoftFn = (x, y, z) => {
 }
 function beanDrop(p: string[]) {
   const [cloth, acc] = p
-  return G(soft(cloth, dropF, { wrinkle: 0.9, seed: 2 }), torus(4, 0.9, acc, { y: 90.5, z: -15.6, ry: PI / 2 }, PI))
+  // 提手两头各多弯 0.5 弧度扎进袋尖（半圆的两头在 y = 90.5，那里袋尖只有 2.5 粗，够不着）
+  return G(soft(cloth, dropF, { wrinkle: 0.9, seed: 2 }), torus(4, 0.9, acc, { y: 90.5, z: -16, ry: PI / 2, rz: -0.5 }, PI + 1))
 }
 
 /** 可变形大豆袋（坐下凹陷形态）：中间被坐出深窝，后背鼓起，四周的布往外溢 */
@@ -533,7 +541,7 @@ function beanOutdoor(p: string[]) {
   const g = G(soft(cloth, outF, { wrinkle: 0.5, seed: 13 }))
   g.add(soft(shade(cloth, -0.18), cushionFn(80.6, 6, 100.6, 0.3, 0), { wrinkle: 0 }))
   g.add(torus(6, 1.1, strap, { y: 57.5, z: -44 }, PI))
-  for (const s of [-1, 1]) g.add(torus(3, 0.7, strap, { x: s * 39.8, y: 18, z: 10, rz: (-s * PI) / 2 }, PI))
+  for (const s of [-1, 1]) g.add(torus(3, 0.7, strap, { x: s * 39.2, y: 18, z: 10, rz: (-s * PI) / 2 }, PI))
   return g
 }
 
@@ -604,7 +612,8 @@ const padF = (x: number, y: number, z: number): V3 => {
 function beanPad(p: string[]) {
   const [cloth, tag] = p
   const g = G(soft(cloth, padF, { wrinkle: 0.9, seed: 31, seg: [56, 36] }))
-  g.add(rbox(6, 4, 1.2, tag, { x: -40, y: 6, z: 85.2 }, 0.4))
+  // 织标缝在前侧面上：超椭球在这个高度的侧面只到 z ≈ 83.1，原先放在 85.2 离面 1.2 悬着
+  g.add(rbox(6, 4, 1.2, tag, { x: -40, y: 6, z: 83.4 }, 0.4))
   return g
 }
 
@@ -1274,7 +1283,8 @@ function acrylicFrame(w: number, h: number, metal: string, key: string, draw: Dr
   g.add(clearDeep(rbox(w, h, 0.4, '#eef6fa', { z: 2.8 }, 0.2), '#eef6fa', 0.25))
   for (const sx of [-1, 1])
     for (const y of [2.2, h - 2.2]) {
-      g.add(cylZFrom(0.8, 1.6, metal, sx * (w / 2 - 2.2), y, 0, 12))
+      // 支撑钉从墙面穿过两层板，前面拧上钉帽（原先只到 1.6，没碰到后板）
+      g.add(cylZFrom(0.8, 3.1, metal, sx * (w / 2 - 2.2), y, 0, 12))
       g.add(cylZFrom(1.15, 0.7, metal, sx * (w / 2 - 2.2), y, 3, 16))
     }
   return g
@@ -1487,15 +1497,16 @@ function photoGridTall(p: string[]) {
   }
   const shots: [number, number, number, number, number][] = [
     [-14, 84, 15, 11, 0.05],
-    [10, 86, 11, 14, -0.07],
+    [10, 83, 11, 14, -0.07],
     [-12, 64, 11, 14, -0.04],
-    [12, 62, 16, 11, 0.06],
+    [12, 65, 16, 11, 0.06],
     [-10, 42, 18, 12, 0.03],
     [14, 40, 10, 13, -0.05],
   ]
   shots.forEach(([x, y, w, h, rz], i) => {
     const ph = G(print(w, h, i + 2, tone))
-    ph.add(rbox(1.4, 3, 1, clip, { y: h - 1.5, z: 0.5 }, 0.3))
+    // 夹子把照片夹在横丝上：y 取在夹子（y ～ y + 3）罩住一根横丝（6 的倍数）的位置，夹子往后伸过横丝（z = 0.95）
+    ph.add(rbox(1.4, 3, 1.6, clip, { y: h - 1.5, z: -0.05 }, 0.3))
     ph.position.set(x, y - h + 1.5, 1.45)
     ph.rotation.z = rz
     g.add(ph)
@@ -1528,7 +1539,8 @@ function photoCork(p: string[]) {
     const it = kind === 'photo' ? G(print(w, h, i + 1, shade(acc, -0.1))) : G(rbox(w, h, 0.2, i % 2 ? '#fff4a8' : shade(acc, 0.35), { z: 0.1 }, 0.05))
     if (kind === 'note') for (let k = 0; k < 3; k++) it.add(noOutlineDeep(rbox(w * 0.7, 0.25, 0.1, '#8a7a6a', { y: h * (0.25 + k * 0.2), z: 0.25 }, 0.03)))
     it.add(ball(0.75, acc, { x: 0, y: h - 1.4, z: 1.0 }))
-    it.add(cyl(0.3, 0.3, 0.8, acc, { y: h - 1.4 - 0.4, z: 0.4, rx: PI / 2 }, 8))
+    // 图钉的针扎进软木 0.2（板面在 z = 2，照片浮在 2.3）
+    it.add(cyl(0.3, 0.3, 1.3, acc, { y: h - 1.4 - 0.65, z: 0.15, rx: PI / 2 }, 8))
     it.position.set(x, y - h / 2, 2.3)
     it.rotation.z = rz
     g.add(it)
@@ -1819,8 +1831,9 @@ function decoHoop(p: string[]) {
   // 小花
   for (let k = 0; k < 6; k++) {
     const a0 = PI * 1.15 + k * 0.11
-    const [x0, y0] = at(a0, R0 - 3 + (k % 2) * 5)
-    g.add(ball(1.4 + (k % 2) * 0.4, k % 3 ? fa : fb, { x: x0, y: y0, z: 3.4 }))
+    // 一里一外交错压在环上（环管 z = 1.55 ～ 2.45）：原先在 R0 - 3 / R0 + 2，球够不到环，最左边那朵四下不靠
+    const [x0, y0] = at(a0, R0 - 1.4 + (k % 2) * 2.8)
+    g.add(ball(1.4 + (k % 2) * 0.4, k % 3 ? fa : fb, { x: x0, y: y0, z: 3 + (k % 2) * 0.2 }))
   }
   // 缎带蝴蝶结
   const [bx, by] = at(PI * 1.3)
@@ -1891,7 +1904,8 @@ function decoLedge(p: string[]) {
     [0.5, 11],
     [2, 7],
   ])
-    g.add(bar([24 + dx * 0.3, y0 + 4, 5.5], [24 + dx * 1.5, y0 + 4 + h, 5.5], 0.15, '#7d9a72', 4))
+    // 花茎顺着原来的斜度一直插到瓶底（瓶内底在 y0 + 2.4）
+    g.add(bar([24 + dx * (0.3 - 2.04 / h), y0 + 2.3, 5.5], [24 + dx * 1.5, y0 + 4 + h, 5.5], 0.15, '#7d9a72', 4))
   g.add(ball(1, C.pink, { x: 24 + 0.75, y: y0 + 15, z: 5.5 }))
   g.add(ball(0.9, C.lemon, { x: 24 - 2.25, y: y0 + 12, z: 5.5 }))
   return g

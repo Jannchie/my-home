@@ -77,8 +77,9 @@ export function cnCoffee(p: string[]) {
   const W = 100
   const D = 64
   waistBase(g, W, D, 31.6, wood, dark, 5)
-  g.add(rbox(W - 12, 2, D - 12, dark, { y: 10 }, 0.5))
-  for (const s of [-1, 1]) g.add(rbox(W - 12, 2.4, 2.4, wood, { y: 6, z: s * (D / 2 - 5) }, 0.5))
+  // 搁板四角插进腿里 1cm、前后两边搭在横枨上（原来只和四条腿的内角相切，离横枨 1.6，整块悬着）
+  g.add(rbox(W - 10, 2, D - 10, dark, { y: 10 }, 0.5))
+  for (const s of [-1, 1]) g.add(rbox(W - 12, 2.4, 2.4, wood, { y: 7.8, z: s * (D / 2 - 5) }, 0.5))
   return g
 }
 export const CN_COFFEE_SURFACES: SurfaceDef[] = [{ y: 12, h: 13.5, shape: [r(-43, -25, 43, 25)] }]
@@ -218,7 +219,8 @@ export function cnWardrobe(p: string[]) {
   g.add(rbox(W - 4, 1.6, D - 3, inner, { y: 176, z: 0.5 }, 0.3))
   g.add(hangingPipe(-48, 48, 168, 0)) // 两端杆座顶到侧板内壁（原来各短 2cm，整根杆悬空）
   g.add(rbox(W + 3, 4, D + 3, dark, { y: 194 }, 1))
-  g.add(rbox(3.2, 182, 1.4, dark, { y: 10, z: D / 2 + 0.3 }, 0.5))
+  // 闩杆上下各伸出 1cm 压在柜口的顶 / 底板上（原来正好和门洞等高，两头都只是相切）
+  g.add(rbox(3.2, 184, 1.4, dark, { y: 9, z: D / 2 + 0.3 }, 0.5))
   for (const s of [-1, 1]) {
     const dx = s * (W / 4 + 0.5)
     const dw = W / 2 - 5.6
@@ -359,14 +361,16 @@ export function cnTableLamp(p: string[]) {
   const y0 = 30
   const H = 22
   const S = 12.5
-  g.add(lit(rbox(2 * S - 1.4, H, 2 * S - 1.4, silk, { y: y0 }, 0.4), silk, 0.55))
+  // 绢罩四面压进木框 0.4（原来正好和框的内侧面齐平，四柱八档整圈悬在罩外）
+  g.add(lit(rbox(2 * S - 0.6, H, 2 * S - 0.6, silk, { y: y0 }, 0.4), silk, 0.55))
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(1.4, H + 2.4, 1.4, wood, { x: sx * S, y: y0 - 1.2, z: sz * S }, 0.3))
   for (const y of [y0 - 1, y0 + H - 0.4])
     for (const s of [-1, 1]) {
       g.add(rbox(2 * S + 1.4, 1.4, 1.4, wood, { y, z: s * S }, 0.3))
       g.add(rbox(1.4, 1.4, 2 * S - 1.4, wood, { x: s * S, y }, 0.3))
     }
-  g.add(cyl(4, 11, 3.4, wood, { y: y0 + H + 1, ry: Math.PI / 4 }, 4))
+  // 宝顶的斜坡落到罩顶（原来悬在罩顶上方 1cm）
+  g.add(cyl(4, 11, 4.6, wood, { y: y0 + H - 0.2, ry: Math.PI / 4 }, 4))
   g.add(ball(1.8, accent, { y: y0 + H + 5.6 }))
   return g
 }

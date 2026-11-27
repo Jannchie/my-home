@@ -534,9 +534,10 @@ export function buildCreature(breedId: string, pal: string[]): Rig {
     open.add(noOL(solid(dot(eRx * 0.36), '#ffffff', new THREE.Vector3(-eRx * 0.32, eRy * 0.38, h * 0.06))))
     open.add(noOL(solid(dot(eRx * 0.17), '#ffffff', new THREE.Vector3(eRx * 0.34, -eRy * 0.4, h * 0.055))))
     eyes.push(open)
-    // 闭眼：一道向下弯的弧（睡着的「︶」）
+    // 闭眼：一道向下弯的弧（睡着的「︶」）。两端压进头的表面一点：头是弧面，线的两端离眼窝中心远，
+    // 抬得高了整条线会悬在脸前面（体检量出来离脸 0.15～0.2cm）
     const lid = line(
-      [new THREE.Vector3(-eRx * 1.05, eRy * 0.05, h * 0.03), new THREE.Vector3(0, -eRy * 0.42, h * 0.05), new THREE.Vector3(eRx * 1.05, eRy * 0.05, h * 0.03)],
+      [new THREE.Vector3(-eRx * 1.05, eRy * 0.05, -h * 0.005), new THREE.Vector3(0, -eRy * 0.42, h * 0.025), new THREE.Vector3(eRx * 1.05, eRy * 0.05, -h * 0.005)],
       h * 0.032,
       '#2b2026',
       10,

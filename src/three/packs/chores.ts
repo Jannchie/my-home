@@ -6,7 +6,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray, type At } from '../toon'
 import { C, G, glow, paintPanel, rectPoly, rng, shell, type AssetCategory, type AssetDef, type Fx } from '../kit'
-import { P, PI, cappedTube, clearMat, cylX, cylZ, lit, noOutline, rod3, type TubeOpts, type V3 } from '../geo'
+import { P, PI, bakeMeshes, cappedTube, clearMat, cylX, cylZ, lit, noOutline, rod3, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, R, definer, type Build, type Dims, type Pal } from '../packkit'
 import { say, signLang, signSans } from '../signLang'
 import type { Lang } from '../../i18n'
@@ -176,7 +176,8 @@ function handyVac(p: string[]) {
   const [main, sub, acc] = p
   const g = new THREE.Group()
   g.add(rbox(12, 3, 12, sub, { z: 0.9 }, 2.5))
-  g.add(cyl(2.2, 1.6, 10, M.char, { y: 2, z: 0.9 }, 16))
+  // 吸嘴顶端停在装饰环里面（环 11～12）：以前两个顶面都在 y = 12，颜色不同的配色下共面闪烁
+  g.add(cyl(2.2, 1.6, 9.5, M.char, { y: 2, z: 0.9 }, 16))
   g.add(cyl(3.5, 3.5, 1, acc, { y: 11, z: 0.9 }))
   g.add(clearMat(cyl(3.3, 3.3, 9, C.glass, { y: 11.5, z: 0.9 }, 20), C.glass, 0.5))
   g.add(cyl(3.5, 3.5, 8.5, main, { y: 20.5, z: 0.9 }))
@@ -265,7 +266,8 @@ function robotStationMop(p: string[]) {
   const [main, sub, acc] = p
   const g = new THREE.Group()
   g.add(rbox(42, 44, 22, main, { z: -17 }, 4))
-  g.add(rbox(42, 6, 18, main, { y: 38, z: 3 }, 3))
+  // 托台后端插进机身 2cm（以前和机身正面相切，两边都是圆角，差 0.16cm 没碰到）
+  g.add(rbox(42, 6, 20, main, { y: 38, z: 2 }, 3))
   g.add(rbox(40, 1.6, 30, sub, { z: 9 }, 0.6))
   g.add(glow(8, 1.2, acc, { y: 40.4, z: 12.1 }))
   for (const [x, c] of [
@@ -292,7 +294,8 @@ function windowRobot(p: string[]) {
   g.add(lit(ball(0.6, acc, { x: 9, y: 7.1, z: 9 }, [1, 0.5, 1]), acc, 0.7))
   g.add(cappedTube([[0, 4.5, -12.8], [0, 3.5, -15.5], [2, 0.5, -18], [4, 0.45, -18.8]], 0.4, '#e05a3a', TUBE))
   g.add(torus(3.6, 0.45, '#e05a3a', { x: 7.4, y: 0.45, z: -18.6, rx: PI / 2 }))
-  g.add(torus(2.6, 0.45, '#e05a3a', { x: 7.4, y: 1.3, z: -18.6, rx: PI / 2 }))
+  // 上面那圈绳压在下面那圈上（以前半径小 1cm、高 0.85，两圈之间空着 0.4cm）
+  g.add(torus(3.2, 0.45, '#e05a3a', { x: 7.4, y: 1.15, z: -18.6, rx: PI / 2 }))
   return g
 }
 
@@ -745,7 +748,8 @@ function foamBottle(p: string[]) {
   g.add(cyl(1.8, 1.8, 1.4, head, { y: 19.3 }, 16))
   g.add(rbox(3.6, 4.4, 7, head, { y: 20.6, z: 1.6 }, 1.4))
   g.add(cylZ(1.3, 1.6, C.white, 0, 22.8, 5.6, 14))
-  g.add(rbox(1.8, 4.5, 1.2, head, { y: 16.4, z: 4.8, rx: 0.2 }, 0.5))
+  // 扳机上端插进喷头底面的前圆角里（以前停在圆角外 0.2cm）
+  g.add(rbox(1.8, 4.5, 1.2, head, { y: 16.8, z: 4.5, rx: 0.2 }, 0.5))
   g.add(rbox(5.2, 8.4, 1.6, C.white, { y: 3.6, z: 3.1 }, 0.4))
   g.add(paintPanel(4.6, 7.8, `chore-foam-${lab}-${signLang()}`, drawLabel('#ffffff', lab, say<Line[]>({
     zh: [['厨房', 0.4, 0.12, '#3e3a39'], ['泡沫', 0.62, 0.2, lab], ['重油污净', 0.84, 0.1, '#3e3a39']],
@@ -868,10 +872,13 @@ function steelWool(p: string[]) {
     [-1.7, 2.1, 0.5],
     [1.9, 2.2, -0.7],
   ]
+  // 钢丝圈烘成一个网格：斜放的圆环按宽松包围盒算会比实际低 0.18，整件落地时被多抬了这么多（离地）
+  const rings: THREE.Mesh[] = []
   balls.forEach(([x, y, z], i) => {
     g.add(ball(2, wool, { x, y, z }, [1, 0.8, 1]))
-    for (let k = 0; k < 2; k++) g.add(noOutline(torus(1.75, 0.12, shade(wool, -0.22), { x, y, z, rx: 0.6 + k * 1.1 + i, ry: k * 0.9 })))
+    for (let k = 0; k < 2; k++) rings.push(torus(1.75, 0.12, shade(wool, -0.22), { x, y, z, rx: 0.6 + k * 1.1 + i, ry: k * 0.9 }))
   })
+  g.add(noOutline(bakeMeshes(rings, shade(wool, -0.22))))
   g.add(rbox(4, 1.2, 2.8, pad, { x: 0.6, y: 2.9, z: 2.1, ry: 0.4, rx: -0.2 }, 0.4))
   return g
 }

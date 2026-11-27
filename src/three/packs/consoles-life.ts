@@ -310,7 +310,7 @@ const menuScene: Draw = pixGrid(32, 20, (px) => {
 function ps5Body(p: string[]) {
   const [wing, core, light] = p
   const g = new THREE.Group()
-  g.add(rbox(6.2, 37.6, 23.4, core, { y: 0.4 }, 1.0))
+  g.add(rbox(6.5, 37.6, 23.4, core, { y: 0.4 }, 1.0)) // 中芯两侧压进外翼 0.05（原来宽 6.2，和两片外翼各差 0.1：横放时上面那片悬着）
   g.add(rbox(5.6, 0.4, 20, shade(core, -0.08), { y: 37.8 }, 0.15))
   const prof: [number, number][] = [
     [-11.4, 0],
@@ -580,7 +580,8 @@ function wiiRemote(col: string) {
   for (const x of [-1.0, 0, 1.0]) g.add(ball(0.28, shade(col, -0.25), { x, y: 3.0, z: 1.2 }, [1, 0.6, 1]))
   g.add(puck(0.45, 0.4, shade(col, -0.18), { y: 2.85, z: 4.0 }))
   g.add(puck(0.45, 0.4, shade(col, -0.18), { y: 2.85, z: 5.4 }))
-  for (let i = 0; i < 4; i++) g.add(led(-0.9 + i * 0.6, 3.0, 6.7, BLUE, 0.12))
+  // 指示灯嵌在顶面平的那一段的末尾（原来在 z = 6.7，已经到了端头的圆角上，四颗都悬着）
+  for (let i = 0; i < 4; i++) g.add(led(-0.9 + i * 0.6, 2.95, 6.3, BLUE, 0.12))
   return g
 }
 function wii(p: string[]) {
@@ -678,7 +679,7 @@ function sfc(p: string[]) {
   for (const s of [-1, 1]) g.add(rbox(2.2, 0.7, 2.6, purple, { x: s * 6.2, y: 6.1, z: 4.0 }, 0.3))
   g.add(rbox(3.2, 0.8, 2.0, purple, { y: 5.9, z: 6.4 }, 0.3))
   const dots = ['#e85d5d', '#f2c94c', '#6cc070', '#4a90e2']
-  dots.forEach((c, i) => g.add(ball(0.3, c, { x: -9 + i * 0.8, y: 3.2, z: 12.0 })))
+  dots.forEach((c, i) => g.add(ball(0.3, c, { x: -8.5 + i * 0.8, y: 3.2, z: 12.0 }))) // 最左一颗原来落在机身的圆角外面
   for (const x of [-3, 3]) g.add(rbox(2.6, 1.6, 0.4, DARK, { x, y: 1.4, z: 12.05 }, 0.3))
   return g
 }
@@ -794,7 +795,16 @@ function padN64(p: string[]) {
   dpadY(g, -5.6, 3.95, -1.5, 2.0, shade(body, -0.25))
   g.add(ball(0.55, '#4a90e2', { x: 4.4, y: 3.85, z: -0.2 }, [1, 0.6, 1]))
   g.add(ball(0.55, '#6cc070', { x: 3.4, y: 3.85, z: -1.4 }, [1, 0.6, 1]))
-  btn4Y(g, 6.2, 3.8, -2.0, 0.75, 0.32, [cbtn])
+  // 四个 C 键在机身右缘的斜坡上：各自按椭球面的高度摆（原来都在 3.8 高，靠外的三个悬着）
+  for (const [dx, dz] of [
+    [0, -0.75],
+    [0.75, 0],
+    [0, 0.75],
+    [-0.75, 0],
+  ]) {
+    const [x, z] = [6.2 + dx, -2.0 + dz]
+    g.add(ball(0.32, cbtn, { x, y: 2.2 + 2.1 * Math.sqrt(1 - (x / 8) ** 2 - ((z + 1.2) / 4.25) ** 2) + 0.05, z }, [1, 0.7, 1]))
+  }
   g.add(ball(0.45, '#e85d5d', { y: 3.9, z: -2.4 }, [1, 0.6, 1]))
   return g
 }
@@ -809,13 +819,15 @@ function padGC(p: string[]) {
     grip.rotation.y = s * 0.35
     g.add(grip)
   }
-  stickY(g, -4.0, 4.1, -1.2, 1.0, stick)
-  stickY(g, 2.2, 4.1, 2.0, 0.75, cst)
-  dpadY(g, -2.2, 4.15, 2.2, 1.5, shade(body, -0.25))
+  // 机身是个椭球，越往边上越低：按键各自按所在位置的面高摆（原来都按中间的高度，C 摇杆、十字键、两颗腰形键悬着 0.2～0.8）
+  const top = (x: number, z: number) => 2.1 + 2.3 * Math.sqrt(1 - (x / 6.67) ** 2 - ((z + 0.6) / 4.37) ** 2)
+  stickY(g, -4.0, top(-4.0, -1.2) + 0.05, -1.2, 1.0, stick)
+  stickY(g, 2.2, top(2.2, 2.0), 2.0, 0.75, cst)
+  dpadY(g, -2.2, top(-2.2, 2.2), 2.2, 1.5, shade(body, -0.25))
   g.add(puck(1.0, 0.6, '#5fc46a', { x: 4.4, y: 3.85, z: -1.0 }))
   g.add(puck(0.55, 0.5, '#e85d5d', { x: 2.9, y: 3.9, z: 0.0 }))
-  g.add(P(capsule(0.35, 1.4, '#d7d8db'), 6.0, 4.3, -1.0, PI / 2, -0.4))
-  g.add(P(capsule(0.35, 1.4, '#d7d8db'), 4.4, 4.3, -2.6, PI / 2, PI / 2 - 0.3))
+  g.add(P(capsule(0.35, 1.4, '#d7d8db'), 5.9, top(5.9, -1.0) + 0.25, -1.0, PI / 2, -0.4))
+  g.add(P(capsule(0.35, 1.4, '#d7d8db'), 4.4, top(4.4, -2.6) + 0.25, -2.6, PI / 2, PI / 2 - 0.3))
   pillY(g, 0, 4.4, -1.2, 0.8, shade(body, -0.25))
   return g
 }
@@ -826,7 +838,7 @@ function padMD(p: string[]) {
   const g = new THREE.Group()
   g.add(ball(5.6, body, { y: 1.9, z: 0 }, [1.5, 0.34, 0.78]))
   g.add(puck(2.2, 0.5, disc, { x: -4.6, y: 3.25, z: 0 }))
-  dpadY(g, -4.6, 3.95, 0, 2.6, shade(disc, -0.15))
+  dpadY(g, -4.6, 3.8, 0, 2.6, shade(disc, -0.15))
   for (let i = 0; i < 3; i++) g.add(puck(0.8, 0.55, btn, { x: 2.6 + i * 2.0, y: 3.15 - i * 0.12, z: 0.6 - i * 0.55 }))
   g.add(rbox(1.2, 0.35, 0.6, shade(body, -0.2), { x: 1.0, y: 3.4, z: -1.8 }, 0.12))
   return g
@@ -1613,7 +1625,7 @@ function journalTape(p: string[]) {
   g.add(torus(1.6, 0.6, tb, { x: 18.6, y: 0.6, z: 1.0, rx: PI / 2 }))
   g.add(torus(1.6, 0.6, shade(ta, 0.1, -0.1), { x: 19.6, y: 1.8, z: -5, rx: PI / 2 }))
   // 一支笔
-  g.add(P(cyl(0.4, 0.4, 13, S.modern.char, {}, 10), 9, 1.65, 7.5, 0, 0.15, PI / 2))
+  g.add(P(cyl(0.4, 0.4, 13, S.modern.char, {}, 10), 9, 1.5, 7.5, 0, 0.15, PI / 2)) // 压在纸页上（纸面在 1.15）
   return g
 }
 

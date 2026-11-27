@@ -142,6 +142,9 @@ function cg<T extends THREE.BufferGeometry>(key: string, make: () => T): T {
   return g as T
 }
 const r1 = (n: number) => Math.round(n * 10) / 10
+/** 几何缓存键里的尺寸：取到 0.001。取到 0.1 的话，四舍五入后相同的两件会共用先建的那份几何（最多差 0.05），
+ * 同一件衣服连建两次结果不一样——成排的衣服按实测尺寸迭代调宽，这点差别会被放大 */
+const rk = (n: number) => Math.round(n * 1000) / 1000
 
 function mesh(geo: THREE.BufferGeometry, mat: THREE.Material, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0) {
   const m = new THREE.Mesh(geo, mat)
@@ -154,7 +157,7 @@ function mesh(geo: THREE.BufferGeometry, mat: THREE.Material, x = 0, y = 0, z = 
 
 /** 挤出的剪影板：xy 平面内的多边形，厚 T，z 居中 */
 function panel(pts: V2[], T: number, mat: THREE.Material, z = 0, bevel = 0.35) {
-  const key = 'pn' + pts.map((p) => `${r1(p[0])},${r1(p[1])}`).join(';') + `|${r1(T)}|${r1(bevel)}`
+  const key = 'pn' + pts.map((p) => `${rk(p[0])},${rk(p[1])}`).join(';') + `|${rk(T)}|${rk(bevel)}`
   const geo = cg(key, () => {
     const s = new THREE.Shape(pts.map(([x, y]) => new THREE.Vector2(x, y)))
     const b = Math.min(bevel, T * 0.3)
@@ -167,14 +170,14 @@ function panel(pts: V2[], T: number, mat: THREE.Material, z = 0, bevel = 0.35) {
 
 /** 盒子（中心定位） */
 function bx(w: number, h: number, d: number, mat: THREE.Material, x = 0, y = 0, z = 0, rz = 0, ry = 0, rx = 0) {
-  const geo = cg(`bx${r1(w)},${r1(h)},${r1(d)}`, () => new THREE.BoxGeometry(w, h, d))
+  const geo = cg(`bx${rk(w)},${rk(h)},${rk(d)}`, () => new THREE.BoxGeometry(w, h, d))
   return mesh(geo, mat, x, y, z, rx, ry, rz)
 }
 
 /** 倒角盒（一段圆角，中心定位）：叠好的衣服、毛巾 */
 function rb(w: number, h: number, d: number, mat: THREE.Material, x = 0, y = 0, z = 0, r = 0.8) {
   const rr = Math.min(r, Math.min(w, h, d) / 2 - 0.01)
-  const geo = cg(`rb${r1(w)},${r1(h)},${r1(d)},${r1(rr)}`, () => new RoundedBoxGeometry(w, h, d, 1, Math.max(0.01, rr)))
+  const geo = cg(`rb${rk(w)},${rk(h)},${rk(d)},${rk(rr)}`, () => new RoundedBoxGeometry(w, h, d, 1, Math.max(0.01, rr)))
   return mesh(geo, mat, x, y, z)
 }
 
@@ -185,7 +188,7 @@ function stk(a: V3, b: V3, r: number, mat: THREE.Material, seg = 6) {
   const vb = new THREE.Vector3(...b)
   const dir = vb.clone().sub(va)
   const len = dir.length()
-  const geo = cg(`st${r1(r)},${r1(len)},${seg}`, () => new THREE.CylinderGeometry(r, r, len, seg, 1))
+  const geo = cg(`st${rk(r)},${rk(len)},${seg}`, () => new THREE.CylinderGeometry(r, r, len, seg, 1))
   const m = mesh(geo, mat)
   m.position.copy(va).add(vb).multiplyScalar(0.5)
   if (len > 1e-6) m.quaternion.setFromUnitVectors(UP, dir.normalize())
@@ -194,13 +197,13 @@ function stk(a: V3, b: V3, r: number, mat: THREE.Material, seg = 6) {
 
 /** 圆柱（中心定位，轴沿 y） */
 function cy(rt: number, rbm: number, h: number, mat: THREE.Material, x = 0, y = 0, z = 0, rx = 0, rz = 0, seg = 10) {
-  const geo = cg(`cy${r1(rt)},${r1(rbm)},${r1(h)},${seg}`, () => new THREE.CylinderGeometry(rt, rbm, h, seg, 1))
+  const geo = cg(`cy${rk(rt)},${rk(rbm)},${rk(h)},${seg}`, () => new THREE.CylinderGeometry(rt, rbm, h, seg, 1))
   return mesh(geo, mat, x, y, z, rx, 0, rz)
 }
 
 /** 低面数椭球 */
 function bl(r: number, mat: THREE.Material, x = 0, y = 0, z = 0, sx = 1, sy = 1, sz = 1) {
-  const geo = cg(`bl${r1(r)}`, () => new THREE.SphereGeometry(r, 10, 6))
+  const geo = cg(`bl${rk(r)}`, () => new THREE.SphereGeometry(r, 10, 6))
   const m = mesh(geo, mat, x, y, z)
   m.scale.set(sx, sy, sz)
   return m
@@ -208,7 +211,7 @@ function bl(r: number, mat: THREE.Material, x = 0, y = 0, z = 0, sx = 1, sy = 1,
 
 /** 半球（开口朝下，底面在 y） */
 function dome(r: number, mat: THREE.Material, y = 0, sy = 1) {
-  const geo = cg(`dm${r1(r)}`, () => new THREE.SphereGeometry(r, 12, 5, 0, PI * 2, 0, PI / 2))
+  const geo = cg(`dm${rk(r)}`, () => new THREE.SphereGeometry(r, 12, 5, 0, PI * 2, 0, PI / 2))
   const m = mesh(geo, mat, 0, y, 0)
   m.scale.y = sy
   return m
@@ -216,7 +219,7 @@ function dome(r: number, mat: THREE.Material, y = 0, sy = 1) {
 
 /** 平滑管子（衣架钩、带子） */
 function tube(pts: V3[], r: number, mat: THREE.Material, seg = 16) {
-  const key = 'tb' + pts.map((p) => p.map(r1).join(',')).join(';') + `|${r1(r)}|${seg}`
+  const key = 'tb' + pts.map((p) => p.map(rk).join(',')).join(';') + `|${rk(r)}|${seg}`
   const geo = cg(key, () => new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(...p)), false, 'centripetal'), seg, r, 5, false))
   return mesh(geo, mat)
 }
@@ -311,9 +314,13 @@ function shoulderArms(m: Mats, hw: number, style: HangerMat, heavy: boolean, bar
   }
   const t = style === 'velvet' ? 0.8 : heavy ? 1.8 : 1.3
   const d = Math.min(style === 'velvet' ? 0.7 : heavy ? 3 : 1, maxD)
-  for (const s of [-1, 1]) g.add(bx(len, t, d, m.hanger, (s * hw) / 2, (y0 + yE) / 2 - t * 0.2, 0, -s * ang))
+  const withBar = bar || style === 'plastic'
+  // 肩条比肩线低 0.2 个厚度；带裤杆的薄肩条（植绒，厚 0.8）再放低一点，下角才够得到杆
+  const drop = withBar && t < 1.2 ? 0.45 : t * 0.2
+  for (const s of [-1, 1]) g.add(bx(len, t, d, m.hanger, (s * hw) / 2, (y0 + yE) / 2 - drop, 0, -s * ang))
   g.add(bx(3, 1.8, d + 0.2, m.hanger, 0, y0 - 0.6, 0))
-  if (bar || style === 'plastic') g.add(stk([-hw + 1, yE - 1, 0], [hw - 1, yE - 1, 0], style === 'plastic' ? 0.35 : 0.45, m.hanger, 6))
+  // 裤杆两头伸到肩条末端的下角里（原来两头各短 1cm，停在肩条底面下方零点几毫米到 1 毫米的地方，和肩条不挨着）
+  if (withBar) g.add(stk([-hw + 0.3, yE - 1, 0], [hw - 0.3, yE - 1, 0], style === 'plastic' ? 0.35 : 0.45, m.hanger, 6))
   return g
 }
 
@@ -329,10 +336,12 @@ function clipBar(m: Mats, hw: number, style: HangerMat, grip = 0.4, cx = hw - 2.
   g.add(bx(2, 1.4, 1.2, m.hanger, 0, y + 0.6, 0))
   // 夹板往里收 0.05 咬住腰头；夹头把两片夹板和横杆连起来（腰头比横杆厚时夹板在横杆之外，没有夹头就悬着）
   const pz = grip / 2 + 0.2
+  // 金属丝横杆只有 0.25 粗，夹头要再往上长 0.5 才够得到它（板条横杆厚 1.4，夹头顶本来就埋在里面）
+  const up = style === 'wire' ? 0.5 : 0
   for (const s of [-1, 1]) {
     g.add(bx(2.2, 3.6, 0.5, m.metal, s * cx, y - 2.4, pz))
     g.add(bx(2.2, 3.6, 0.5, m.metal, s * cx, y - 2.4, -pz))
-    g.add(bx(1.6, 1.3, pz * 2, m.metal, s * cx, y - 1.15, 0))
+    g.add(bx(1.6, 1.3 + up, pz * 2, m.metal, s * cx, y - 1.15 + up / 2, 0))
   }
   return g
 }
@@ -352,6 +361,26 @@ function sHook(mat: THREE.Material, zc = 2.6) {
   const top = arcPts(0.2, -1.45, 1.2, PI * 1.15, 0, 7, 'yz')
   const bottom = arcPts(zc, -5.2, 1.2, PI, PI * 2.2, 7, 'yz')
   return tube([...top, ...bottom], 0.25, mat, 30)
+}
+
+/**
+ * 挂在 S 钩下环上的东西（帽子）还要往上提多少，钩才真的钩住它：沿下环底部取几个点，从正上方往下找物体的表面，
+ * 提到其中一处的表面比钩的中心线高 0.4（那一段钩埋在物体里）为止，取提得最少的那一处。
+ * 帽檐薄的埋在钩的后半段，帽口厚的（毛线帽）整个下环都在里面，贝雷帽的最高点在钩前面，钩从它的后半边穿进去。
+ */
+function hookLift(o: THREE.Object3D, zc: number) {
+  o.updateMatrixWorld(true)
+  const ray = new THREE.Raycaster()
+  const down = new THREE.Vector3(0, -1, 0)
+  let lift = Infinity
+  for (let i = 1; i <= 9; i++) {
+    const a = PI * (1 + i * 0.1)
+    const y = -5.2 + Math.sin(a) * 1.2
+    ray.set(new THREE.Vector3(0, 50, zc + Math.cos(a) * 1.2), down)
+    const hit = ray.intersectObject(o, true)[0]
+    if (hit) lift = Math.min(lift, y + 0.4 - hit.point.y)
+  }
+  return Number.isFinite(lift) ? Math.max(0, lift) : 0
 }
 
 /**
@@ -530,7 +559,8 @@ function buildTop(s: GarmentSpec, m: Mats) {
     const ha = hangerHalf(s) - 4
     const wide = s.kind === 'tank' && s.fit > 0.4
     for (const sx of [-1, 1]) {
-      if (wide) g.add(panel([[sx * (bw * 0.38 - 4), yS - 6 * k], [sx * bw * 0.38, yS - 6 * k], [sx * (ha + 1.5), shoulderY(ha + 1.5) + 0.3], [sx * (ha - 2.5), shoulderY(ha - 2.5) + 0.3]].map(([x, y]): V2 => [x, y]) as V2[], T, m.main))
+      // 肩带下端伸进衣身 0.6：衣身顶边往中间是斜下去的，下端和顶边齐平的话只有外角那一点挨着
+      if (wide) g.add(panel([[sx * (bw * 0.38 - 4), yS - 6 * k - 0.6], [sx * bw * 0.38, yS - 6 * k - 0.6], [sx * (ha + 1.5), shoulderY(ha + 1.5) + 0.3], [sx * (ha - 2.5), shoulderY(ha - 2.5) + 0.3]].map(([x, y]): V2 => [x, y]) as V2[], T, m.main))
       else g.add(stk([sx * (ha - 0.5), shoulderY(ha) + 0.2, 0], [sx * (bw * 0.38 - 1.2), yS - 6 * k - 0.5, 0], 0.35, m.sub, 5))
     }
   }
@@ -564,7 +594,9 @@ function buildTop(s: GarmentSpec, m: Mats) {
         // 绗缝线的外端比袖子外沿多出 0.3：端面正好落在袖子侧面上会共面
         const P: V2 = [A[0] + d[0] * s.sleeve * t + n[0] * 0.3, A[1] + d[1] * s.sleeve * t + n[1] * 0.3]
         const Q: V2 = [P[0] - n[0] * (cuff + 4.3), P[1] - n[1] * (cuff + 4.3)]
-        g.add(stk([sx * P[0], P[1], 0], [sx * Q[0], Q[1], 0], ST / 2 + 0.15, m.dark, 5))
+        // 截面是菱形（4 段）：前后各一道棱凸出袖面 0.15。原来是 5 段，背后正好是一个朝 -z 的平面，
+        // 衣身厚 3.6（童装羽绒服）时它和衣身背面只差 0.02，伸进衣身的那一截和衣身背面共面闪烁
+        g.add(stk([sx * P[0], P[1], 0], [sx * Q[0], Q[1], 0], ST / 2 + 0.15, m.dark, 4))
       }
     }
   }
@@ -589,7 +621,8 @@ function buildTop(s: GarmentSpec, m: Mats) {
       const cw = s.collar === 'polo' ? 4.5 : 5.5
       for (const sx of [-1, 1]) {
         const tri: V2[] = [[sx * 0.3, neckY - 0.4], [sx * (nw + 1.2), yN + 0.6], [sx * (nw + 0.6), yN - cw]]
-        g.add(panel(sx > 0 ? tri : tri.reverse(), 0.6, m.sub, front + 0.35))
+        // 领片背面埋进衣身 0.1（原来浮在衣身前面 0.05），正面位置不变
+        g.add(panel(sx > 0 ? tri : tri.reverse(), 0.75, m.sub, front + 0.275, 0.18))
       }
       g.add(stk([-nw, yN + 0.4, -T / 2 + 0.2], [nw, yN + 0.4, -T / 2 + 0.2], 0.5, m.sub, 5))
       break
@@ -603,7 +636,8 @@ function buildTop(s: GarmentSpec, m: Mats) {
     case 'hood': {
       const hw = nw + 5
       const hood: V2[] = [[-hw, yN + 2], [hw, yN + 2], [hw * 0.9, yN - 12], [hw * 0.5, yN - 21], [0, yN - 23], [-hw * 0.5, yN - 21], [-hw * 0.9, yN - 12]]
-      g.add(panel(hood, 1.6, m.main, -T / 2 - 0.9))
+      // 兜帽垂在背后：正面埋进衣身背面 0.1（原来和衣身背面之间留着 0.1 的缝），背面位置不变
+      g.add(panel(hood, 1.8, m.main, -T / 2 - 0.8))
       for (const sx of [-1, 1]) g.add(stk([sx * 2.2, neckY - 0.5, z], [sx * 2.6, neckY - 15, z], 0.25, m.acc, 4))
       break
     }
@@ -612,7 +646,9 @@ function buildTop(s: GarmentSpec, m: Mats) {
       g.add(panel([[-nw + 0.5, yN], [nw - 0.5, yN], [0, yN - L]], 0.4, m.acc, front + 0.2))
       for (const sx of [-1, 1]) {
         const q: V2[] = [[sx * (nw + 0.5), yN + 0.4], [sx * (nw + 4.5), yN - 7], [sx * 3.5, yN - L - 1], [sx * 0.5, yN - L]]
-        g.add(panel(sx > 0 ? q.reverse() : q, 0.5, m.dark, front + 0.55))
+        // 驳领片从衣身里面长出来（背面埋进衣身 0.1）、正面凸出 0.8。原来只有 0.5 厚、整片浮在衣身前面 0.3 处，
+        // 和衣身、内搭都不挨着
+        g.add(panel(sx > 0 ? q.reverse() : q, 0.9, m.dark, front + 0.35, 0.15))
       }
       g.add(stk([-nw, yN + 0.4, -T / 2 + 0.3], [nw, yN + 0.4, -T / 2 + 0.3], 0.6, m.dark, 5))
       break
@@ -631,7 +667,8 @@ function buildTop(s: GarmentSpec, m: Mats) {
     const step = n > 1 ? (yTop - yLow) / (n - 1) : 0
     const cols = s.double ? [-3.5 * k, 3.5 * k] : [0]
     if (s.kind === 'shirt' || s.kind === 'polo' || s.kind === 'blouse') g.add(bx(2.4, yTop - (s.kind === 'polo' ? yLow - 1.5 : yB), 0.3, m.plain, 0, (yTop + (s.kind === 'polo' ? yLow - 1.5 : yB)) / 2, front + 0.12))
-    for (let i = 0; i < n; i++) for (const cx of cols) g.add(cy(0.6, 0.6, 0.4, m.acc, cx, yTop - i * step, front + 0.35, PI / 2, 0, 6))
+    // 纽扣背面埋进衣身 0.1：没有门襟的品类（开衫、西装、大衣、风衣、夹克、衬衫裙）里，原来纽扣浮在衣身前面 0.15 处
+    for (let i = 0; i < n; i++) for (const cx of cols) g.add(cy(0.6, 0.6, 0.65, m.acc, cx, yTop - i * step, front + 0.225, PI / 2, 0, 6))
   }
   // 口袋
   if (s.pockets) {
@@ -656,7 +693,7 @@ function buildTop(s: GarmentSpec, m: Mats) {
   // 罗纹下摆
   if (s.rib) g.add(bx((bw * s.hem) + 0.4, 4, T + 0.6, m.sub, 0, yB + 1.8, 0))
   // 牛仔夹克：明线
-  if (s.kind === 'jacket' && !s.zip) g.add(bx(bw - 4, 0.3, 0.2, m.acc, 0, yS - 8, front + 0.1))
+  if (s.kind === 'jacket' && !s.zip) g.add(bx(bw - 4, 0.3, 0.3, m.acc, 0, yS - 8, front + 0.05))
   return g
 }
 
@@ -685,7 +722,7 @@ function buildBottom(s: GarmentSpec, m: Mats, yT: number) {
     g.add(panel(pts, T, m.main))
     // 腰头比裙片顶边高出 0.3（两个顶面齐平会闪）
     g.add(bx(ww + 0.4, 3.5, T + 0.5, m.sub, 0, yT - 1.45, 0))
-    if (s.buttons) g.add(cy(0.7, 0.7, 0.4, m.acc, ww * 0.3, yT - 1.6, T / 2 + 0.45, PI / 2, 0, 6))
+    if (s.buttons) g.add(cy(0.7, 0.7, 0.5, m.acc, ww * 0.3, yT - 1.6, T / 2 + 0.4, PI / 2, 0, 6))
     return g
   }
   // 裤子：两条腿
@@ -695,7 +732,8 @@ function buildBottom(s: GarmentSpec, m: Mats, yT: number) {
   const pts: V2[] = [[-ww / 2, yT], [ww / 2, yT], [ww / 2 + flare, yB], [ww / 2 + flare - lw, yB], [0, yT - rise], [-(ww / 2 + flare - lw), yB], [-(ww / 2 + flare), yB]]
   g.add(panel(pts, T, m.main))
   g.add(bx(ww + 0.4, 3.9, T + 0.5, s.kind === 'jeans' ? m.main : m.sub, 0, yT - 1.65, 0))
-  g.add(cy(0.7, 0.7, 0.4, m.metal, 0, yT - 1.8, T / 2 + 0.45, PI / 2, 0, 6))
+  // 扣子背面埋进腰头 0.1（腰头正面在 T / 2 + 0.25）
+  g.add(cy(0.7, 0.7, 0.5, m.metal, 0, yT - 1.8, T / 2 + 0.4, PI / 2, 0, 6))
   g.add(bx(0.3, rise - 8, 0.2, m.acc, 2, yT - 4 - (rise - 8) / 2, T / 2 + 0.12))
   if (s.pockets || s.kind === 'jeans') for (const sx of [-1, 1]) g.add(stk([sx * (ww / 2 - 7), yT - 3.6, T / 2 + 0.12], [sx * (ww / 2 - 0.5), yT - 11, T / 2 + 0.12], 0.25, m.acc, 3))
   if (s.kind === 'jeans' && s.len > 60) for (const sx of [-1, 1]) {
@@ -717,7 +755,7 @@ function buildOveralls(s: GarmentSpec, m: Mats) {
   const yWaist = yBib - 20 * k
   for (const sx of [-1, 1]) {
     g.add(panel(sx > 0 ? [[ha - 2, shoulderY(ha - 2) + 0.4], [ha + 1.5, shoulderY(ha + 1.5) + 0.4], [bibW / 2, yBib], [bibW / 2 - 3.5, yBib]] : [[-(bibW / 2 - 3.5), yBib], [-bibW / 2, yBib], [-(ha + 1.5), shoulderY(ha + 1.5) + 0.4], [-(ha - 2), shoulderY(ha - 2) + 0.4]], T * 0.7, m.main))
-    g.add(cy(0.9, 0.9, 0.5, m.metal, sx * (bibW / 2 - 1.8), yBib - 1.5, T / 2 + 0.3, PI / 2, 0, 6))
+    g.add(cy(0.9, 0.9, 0.65, m.metal, sx * (bibW / 2 - 1.8), yBib - 1.5, T / 2 + 0.225, PI / 2, 0, 6))
   }
   g.add(panel([[-bibW / 2, yBib], [bibW / 2, yBib], [s.width / 2, yWaist], [-s.width / 2, yWaist]], T, m.main))
   g.add(bx(10 * k, 8 * k, 0.4, m.dark, 0, yBib - 8 * k, T / 2 + 0.2))
@@ -737,7 +775,7 @@ function buildPantsOnBar(s: GarmentSpec, m: Mats, barY: number) {
   g.add(panel([[-pw / 2, barY], [pw / 2, barY], [pw / 2 + 1, barY - h1], [-pw / 2 + 1, barY - h1]], T, m.main, r))
   g.add(panel([[-pw / 2, barY], [pw / 2, barY], [pw / 2 + 0.5, barY - h2], [-pw / 2 + 0.5, barY - h2]], T, m.main, -r))
   // 搭在杆上的弧顶：半圆柱绕 z 转 90° 后轴沿 x、鼓面朝上（再绕 x 转就成了朝前鼓，前后两片在顶上接不起来）
-  const cap = cg(`pcap2${r1(pw)},${r1(r + T / 2)}`, () => new THREE.CylinderGeometry(r + T / 2, r + T / 2, pw, 6, 1, false, 0, PI).rotateZ(PI / 2))
+  const cap = cg(`pcap2${rk(pw)},${rk(r + T / 2)}`, () => new THREE.CylinderGeometry(r + T / 2, r + T / 2, pw, 6, 1, false, 0, PI).rotateZ(PI / 2))
   g.add(mesh(cap, m.main, 0, barY, 0))
   g.add(stk([0, barY - 3, r + T / 2 + 0.1], [0.6, barY - h1 + 2, r + T / 2 + 0.1], 0.15, m.dark, 3))
   return g
@@ -773,7 +811,8 @@ function buildKimono(s: GarmentSpec, m: Mats) {
 function buildScarf(s: GarmentSpec, m: Mats, inPlane: boolean) {
   const zc = inPlane ? 0 : 2.6
   const g = G(inPlane ? hookCurve(m.metal, true, 0) : sHook(m.metal, zc))
-  const top = S_LOW - 0.2
+  // 侧挂用的是衣架钩，钩脚只到 NECK_Y：围巾卷往上挪，把钩脚包进去（按 S 钩的高度放的话，卷顶离钩脚还差 1cm 多）
+  const top = inPlane ? NECK_Y + 0.2 : S_LOW - 0.2
   const w = s.width
   const hang = Math.min(s.len / 2, 80)
   const T = s.thick
@@ -808,7 +847,8 @@ function buildTies(s: GarmentSpec, m: Mats, inPlane: boolean) {
     const zl = 0.65 + (i % 3) * (T + 0.15)
     const front = panel(tieShape(s.width, len).map(([px, py]): V2 => [px + x, py + yTop]), T, cols[i % 4], zl)
     const back = panel(tieShape(s.width * 0.55, len - 14).map(([px, py]): V2 => [px + x, py + yTop]), T, cols[i % 4], -zl)
-    body.add(front, back, bx(3.6, T, 2 * zl - T, cols[i % 4], x, yTop - T / 2, 0))
+    // 顶上这一段往下加厚 0.15、压进横杆顶（横杆是 6 段的细圆柱，顶面比名义半径低，原来和它差着 0.05–0.09）
+    body.add(front, back, bx(3.6, T + 0.15, 2 * zl - T, cols[i % 4], x, yTop - T / 2 - 0.075, 0))
   }
   return attachHook(body, m, inPlane)
 }
@@ -878,7 +918,7 @@ function towelOverBar(s: GarmentSpec, m: Mats) {
   const h1 = L / 2
   const h2 = L / 2 - Math.min(8, L * 0.12)
   // 搭在杆上的弧顶：轴沿 x、鼓面朝上，前后两片从它的两条边垂下来（两端封口，侧面看不是空壳）
-  const cap = cg(`tcap2${r1(w)},${r1(R)}`, () => new THREE.CylinderGeometry(R, R, w, 7, 1, false, 0, PI).rotateZ(PI / 2))
+  const cap = cg(`tcap2${rk(w)},${rk(R)}`, () => new THREE.CylinderGeometry(R, R, w, 7, 1, false, 0, PI).rotateZ(PI / 2))
   g.add(mesh(cap, m.main, 0, yC, zc))
   g.add(panel([[-w / 2, yC], [w / 2, yC], [w / 2, yC - h1], [-w / 2, yC - h1]], T, m.main, zc + R - T / 2))
   g.add(panel([[-w / 2, yC], [w / 2, yC], [w / 2, yC - h2], [-w / 2, yC - h2]], T, m.main, zc - R + T / 2))
@@ -894,10 +934,13 @@ function towelOnHook(s: GarmentSpec, m: Mats) {
   const T = s.thick
   const zc = 2.6
   const g = G(sHook(m.metal, zc))
-  const loopY = S_LOW - 0.9
-  g.add(cy(0.9, 0.9, 0.5, m.sub, 0, loopY, zc, PI / 2, 0, 8))
+  // 挂环：上沿套在钩底上，下沿压住毛巾的角 0.3，往前一直伸进毛巾里
+  // （原来半径 0.9、厚 0.5：毛巾的面带倒角，角尖在挂环前面 0.3 处，两者差 0.1–0.2 没挨上）
+  const loopY = S_LOW - 1
+  const loopD = 0.75 + T * 0.2
+  g.add(cy(1, 1, loopD, m.sub, 0, loopY, zc - 0.25 + loopD / 2, PI / 2, 0, 8))
   // 一角吊起：菱形偏下，自然下垂成倒三角 + 长方形
-  const top = loopY - 0.8
+  const top = loopY - 0.7
   const half = w * 0.55
   const pts: V2[] = [[0, top], [half, top - half * 0.8], [half * 0.85, top - L * 0.85], [0, top - L], [-half * 0.85, top - L * 0.85], [-half, top - half * 0.8]]
   g.add(panel(pts, T * 1.6, m.main, zc + T))
@@ -1014,6 +1057,8 @@ export function buildGarment(s: GarmentSpec, form: GarmentForm, opts: { inPlane?
     const holder = G(hat)
     const b = box3(holder)
     hat.position.set(-(b.min.x + b.max.x) / 2, S_LOW - 0.35 - b.max.y, 2.6 - b.min.z - 1.2)
+    // 上面只是把帽子顶在钩底下方，哪种帽子都没挨到钩（差 0.2–0.9）：再往上提，让钩的下环从帽子后沿里面穿过去
+    hat.position.y += hookLift(holder, 2.6)
     return G(holder, sHook(m.metal))
   }
   if (s.kind === 'scarf') return buildScarf(s, m, inPlane)
@@ -1268,7 +1313,11 @@ export function garmentRow(len: number, o: RowOpts): THREE.Group {
   // 调参数让最低点 / 半宽正好到目标；没有目标的只要不超过上限
   const tune = (s: GarmentSpec, wantH: number | null, wantD: number | null) => {
     let g = fitted.get(s) ?? build(s)
-    for (let it = 0; it < 5; it++) {
+    // 半宽随肩宽变化的斜率：第一轮按经验值（有袖上衣 1 / 1.6，其余 1 / 1.8），之后用上一轮实测出来的。
+    // 一直按经验值修正的话，下摆很宽的裙子（半宽 ≈ 肩宽）会来回过冲，5 轮下来还差零点几厘米，整排的进深就超出了声明尺寸
+    let slope = K[s.kind].top && s.sleeve > 0 && !s.straps ? 1 / 1.6 : 1 / 1.8
+    let last: [number, number] | null = null
+    for (let it = 0; it < 8; it++) {
       const e = sideExtent(g)
       const half = Math.max(-e.z0, e.z1)
       let changed = false
@@ -1278,7 +1327,9 @@ export function garmentRow(len: number, o: RowOpts): THREE.Group {
       }
       if (wantD !== null ? Math.abs(half - wantD / 2) > 0.05 : half > Dcap / 2) {
         const dw = (wantD ?? Dcap - 1) / 2 - half
-        s.width += K[s.kind].top && s.sleeve > 0 && !s.straps ? dw * 1.6 : dw * 1.8
+        if (last && Math.abs(s.width - last[0]) > 1e-3) slope = clamp((half - last[1]) / (s.width - last[0]), 0.25, 2)
+        last = [s.width, half]
+        s.width += dw / slope
         changed = true
       }
       if (!changed) break
@@ -1328,8 +1379,11 @@ export function garmentRow(len: number, o: RowOpts): THREE.Group {
   return out
 }
 
-/** 一排叠好的衣服：沿 x 若干摞，每摞 2–6 件，整排正好占满 [-len/2, len/2]，最高一摞正好到 h、最深一件正好到 d */
-export function foldedRow(len: number, o: RowOpts & { h: number; d: number }): THREE.Group {
+/**
+ * 一排叠好的衣服：沿 x 若干摞，每摞 2–6 件，整排正好占满 [-len/2, len/2]，最高一摞正好到 h、最深一件正好到 d。
+ * h 量的是衣服本身的顶面；top = 连顶上的领子、兜帽一起算的总高上限（不给就不管）。
+ */
+export function foldedRow(len: number, o: RowOpts & { h: number; d: number; top?: number }): THREE.Group {
   const rand = rng(o.seed)
   const ro: RandomOpts = { wardrobe: o.wardrobe, style: o.style, tones: o.tones, patternChance: 0.25 }
   const piles: { s: GarmentSpec; dims: [number, number, number]; ox: number; oz: number }[][] = []
@@ -1350,8 +1404,15 @@ export function foldedRow(len: number, o: RowOpts & { h: number; d: number }): T
       h += dims[2]
     }
     if (!pile.length) break
-    const pw = Math.max(...pile.map((p) => p.dims[0] + Math.abs(p.ox) * 2))
-    if (used + pw > len && piles.length) break
+    let pw = Math.max(...pile.map((p) => p.dims[0] + Math.abs(p.ox) * 2))
+    if (used + pw > len && piles.length) {
+      // 第二摞放不下、旁边却还空着 20cm 以上（60 长的一排）：把它叠窄一点塞进去。
+      // 不然只剩一摞，下面会把这一摞里最宽的那件撑满整排——一块 60 宽的板垫在一小摞衣服下面
+      const room = len - used
+      if (piles.length > 1 || room < 20) break
+      for (const q of pile) q.dims[0] = Math.min(q.dims[0], room - Math.abs(q.ox) * 2)
+      pw = room
+    }
     piles.push(pile)
     used += pw + 2
     if (used > len) break
@@ -1365,7 +1426,7 @@ export function foldedRow(len: number, o: RowOpts & { h: number; d: number }): T
     q.dims[0] = len
     for (const r of p) r.ox = r === q ? 0 : clamp(r.ox, -(len - r.dims[0]) / 2, (len - r.dims[0]) / 2)
   }
-  // 最高一摞补到 h：最上面那件加厚
+  // 最高一摞补到 h：差的高度按比例摊到这一摞的每一件上（全加在最上面那件上的话，它会比下面的厚出一两倍，像块砖）
   let tallest = 0
   let tallH = -1
   piles.forEach((p, i) => {
@@ -1376,12 +1437,20 @@ export function foldedRow(len: number, o: RowOpts & { h: number; d: number }): T
     }
   })
   const tp = piles[tallest]
-  tp[tp.length - 1].dims[2] += o.h - tallH
+  for (const q of tp) q.dims[2] *= o.h / tallH
   // 最深一件补到 d、偏移归零
   const deep = tp[0]
   deep.dims[1] = o.d
   deep.oz = 0
   for (const p of piles) for (const q of p) q.oz = clamp(q.oz, -(o.d - q.dims[1]) / 2, (o.d - q.dims[1]) / 2)
+  // 最上面那件的领子、兜帽高出它自己的顶面（兜帽鼓出 1.3cm）：连它一起超过总高上限的那一摞，整摞压扁一点
+  if (o.top !== undefined)
+    for (const p of piles) {
+      const q = p[p.length - 1]
+      const sum = p.reduce((a, r) => a + r.dims[2], 0)
+      const over = sum - q.dims[2] + box3(buildFolded(q.s, mats(q.s, false), q.dims)).max.y - (o.top - 0.03)
+      if (over > 0) for (const r of p) r.dims[2] *= (sum - over) / sum
+    }
   // 摆开
   const widths = piles.map((p) => p.map((q) => [q.ox - q.dims[0] / 2, q.ox + q.dims[0] / 2]).reduce((a, b) => [Math.min(a[0], b[0]), Math.max(a[1], b[1])], [Infinity, -Infinity]))
   const total = widths.reduce((a, w) => a + w[1] - w[0], 0)

@@ -79,7 +79,41 @@ function orient<T extends THREE.Object3D>(o: T, at: V3, dir: V3, up: V3 = UPV): 
 
 /** 扁椭球叶：叶基在 base，沿 dir 伸出 len；叶面法线大致朝 up；wide / thick 是宽、厚占长度的比例 */
 function oval(len: number, color: string, base: V3, dir: V3, up: V3 = UPV, wide = 0.45, thick = 0.12, seg: [number, number] = LEAF_LO) {
-  return orient(ball(len / 2, color, {}, [wide, thick, 1], seg), add(base, unit(dir), len / 2), dir, up)
+  return orient(ball(len / 2, color, {}, [wide, thick, 1], seg), add(base, unit(dir), (len / 2) * tipReach(seg[0])), dir, up)
+}
+/**
+ * 一圈 n 段的球在长轴（局部 z）上实际够到半径的几成：段数不是 4 的倍数时长轴上没有顶点（5 段 0.95、6 段 0.87）。
+ * 叶片按这个比例摆，叶基的顶点才真的落在 base 上（以前小羽片、小花瓣的根都悬在枝外零点几毫米到一毫米）。
+ */
+function tipReach(n: number) {
+  let m = 0
+  for (let i = 0; i < n; i++) m = Math.max(m, Math.sin((i / n) * PI * 2))
+  return m
+}
+
+/**
+ * 弯管（tube，沿路径 seg 段）实际走的折线（每一圈的圆心）。管子是折线，弯处离样条能差出一个管径：
+ * 长在藤蔓 / 叶轴上的叶子、花按这条折线摆（snap），才真的接在管子上。
+ */
+function tubePath(pts: V3[], seg: number): V3[] {
+  const c = new THREE.CatmullRomCurve3(pts.map((q) => new THREE.Vector3(...q)), false, 'centripetal')
+  return Array.from({ length: seg + 1 }, (_, i) => c.getPointAt(i / seg).toArray() as V3)
+}
+/** 折线 path 上离 p 最近的点 */
+function snap(path: V3[], p: V3): V3 {
+  let best = path[0]
+  let bd = Infinity
+  for (let i = 1; i < path.length; i++) {
+    const a = path[i - 1]
+    const ab = sub(path[i], a)
+    const q = add(a, ab, Math.max(0, Math.min(1, dot(sub(p, a), ab) / (dot(ab, ab) || 1))))
+    const d = dot(sub(p, q), sub(p, q))
+    if (d < bd) {
+      bd = d
+      best = q
+    }
+  }
+  return best
 }
 
 /**
@@ -315,7 +349,10 @@ function stalkLeaf(
 
 /** 五瓣小白花（茉莉、柠檬花）：花心在 at，花面朝 n */
 function star5(g: THREE.Group, at: V3, n: V3, s: number, petal: string, center: string) {
-  const [u, v] = perp(unit(n))
+  n = unit(n)
+  const [u, v] = perp(n)
+  // 花托：一小截梗，从花心下面 0.5（枝头 / 冠面里）顶到花瓣的根，花瓣和花芯都接在它上面
+  g.add(noOutline(rod3(add(at, n, -0.5), add(at, n, 0.15), 0.12, '#8fb86a', 4)))
   for (let k = 0; k < 5; k++) {
     const a = (k / 5) * PI * 2
     const d = add(add([0, 0, 0], u, Math.cos(a)), v, Math.sin(a))
@@ -336,11 +373,14 @@ interface Pot {
   top: number
 }
 
-/** 圆形土面：顶面在 top */
-const soilDisc = (r: number, top: number, color = SOIL, seg = 20) => cyl(r, r - 0.05, 0.8, color, { y: top - 0.8 }, seg)
+/**
+ * 圆形土面：顶面在 top，rWall 是这个高度上盆内壁的半径，seg 是盆身一圈的段数。和盆壁切成同样的多边形、再往壁里嵌 0.25：
+ * 以前土面比内壁小一圈、段数也和盆不一样，土面连同上面种的东西整组悬在盆里。
+ */
+const soilDisc = (rWall: number, top: number, seg: number, color = SOIL) => cyl(rWall + 0.25, rWall + 0.15, 0.8, color, { y: top - 0.8 }, seg)
 
 /**
- * 盆身的一圈段数：cup 默认 32 段，桌面 / 落地的小盆 24 段就看不出棱角（盆里的土面留了 ≥ 0.25cm 的余量，不会从折线中间穿出盆壁）。
+ * 盆身的一圈段数：cup 默认 32 段，桌面 / 落地的小盆 24 段就看不出棱角。
  * 贴着盆身的箍 / 腰线（torus，管截面 6 段）一圈也用这个段数：折线和盆身对得上，不会一截截陷进盆里
  */
 const POT_SEG = 24
@@ -385,10 +425,11 @@ function ceramicPot(R: number, h: number, body: string, saucer: string): Pot {
   const rB = R * 0.92
   const y0 = 1.2
   g.add(cyl(rB + 1.4, rB + 0.8, y0, saucer, {}, POT_SEG))
-  g.add(cup(R, rB, h, t, body, { y: y0 }, R < 8 ? 20 : POT_SEG))
+  const seg = R < 8 ? 20 : POT_SEG
+  g.add(cup(R, rB, h, t, body, { y: y0 }, seg))
   const soil = y0 + h - 1.6
   const sr = rB + ((R - rB) * (h - 1.6)) / h - t - 0.25
-  g.add(soilDisc(sr, soil))
+  g.add(soilDisc(sr + 0.25, soil, seg))
   return { g, soil, r: sr, top: y0 + h }
 }
 
@@ -406,7 +447,7 @@ function terraPot(rTop: number, h: number, color: string, saucer: string): Pot {
   const rIn = r1 - t
   g.add(band(rTop - 0.1, rTop, rIn - 0.05, rIn + 0.1, hb, color, y0 + h - hb))
   const soil = y0 + h - 1.6
-  g.add(soilDisc(rIn - 0.25, soil))
+  g.add(soilDisc(rIn + 0.05, soil, POT_SEG))
   return { g, soil, r: rIn - 0.25, top: y0 + h }
 }
 
@@ -419,7 +460,7 @@ function glazedPot(R: number, h: number, color: string, accent: string): Pot {
   g.add(torus(rAt(prof, yr) + 0.05, 0.42, accent, { y: yr, rx: PI / 2 }, PI * 2, [6, POT_SEG]))
   const soil = h - 1.6
   const sr = rAt(prof, soil) - t - 0.3
-  g.add(soilDisc(sr, soil))
+  g.add(soilDisc(sr + 0.3, soil, POT_SEG))
   return { g, soil, r: sr, top: h }
 }
 
@@ -432,7 +473,7 @@ function tallPot(R: number, h: number, color: string, accent: string): Pot {
   g.add(torus(rB + ((R - rB) * yb) / h + 0.05, 0.6, accent, { y: yb, rx: PI / 2 }, PI * 2, [6, 28]))
   const soil = h - 1.8
   const sr = rB + ((R - rB) * soil) / h - t - 0.25
-  g.add(soilDisc(sr, soil))
+  g.add(soilDisc(sr + 0.25, soil, 28))
   return { g, soil, r: sr, top: h }
 }
 
@@ -578,7 +619,7 @@ function bostonFern(p: string[]) {
   g.add(cyl(legR(top) - 0.2, legR(top) - 0.2, 1.6, shade(wood, -0.06), { y: top - 1.6 }, 24))
   g.add(cup(R, rB, H, 0.8, potC, { y: top }, POT_SEG))
   const soil = top + H - 1.6
-  g.add(soilDisc(rB + ((R - rB) * (H - 1.6)) / H - 1.05, soil))
+  g.add(soilDisc(rB + ((R - rB) * (H - 1.6)) / H - 0.8, soil, POT_SEG))
   // 蕨叶：三次贝塞尔的叶轴，两侧对生细小羽片（越靠叶尖越短）
   const rand = rng(331)
   const n = 22
@@ -592,13 +633,16 @@ function bostonFern(p: string[]) {
     const reach = inner ? 14 + rand() * 3 : 21 + rand() * 4
     const drop = inner ? -6 : 3 + rand() * 13
     const ctrl: V3[] = [at(1.4, soil - 0.3), at(reach * 0.3, soil + rise), at(reach * 0.95, soil + rise * 0.7), at(reach, soil - drop)]
-    g.add(noOutline(tube(Array.from({ length: 9 }, (_, k) => bez(ctrl, k / 8)), 0.18, '#5f8f4a', { seg: 10, radial: 3 })))
+    const rach = Array.from({ length: 9 }, (_, k) => bez(ctrl, k / 8))
+    g.add(noOutline(tube(rach, 0.18, '#5f8f4a', { seg: 10, radial: 3 })))
+    // 羽片长在叶轴实际走的折线上（贝塞尔上的点在拱起处离折线一两毫米，羽片的根够不着叶轴）
+    const path = tubePath(rach, 10)
     const green = i % 3 ? '#5fae4f' : '#6fbd58'
     // 每侧 16 片羽片（略宽一点补上间距）：七百来片的小扁片是这盆的主要面数
     const m = 16
     for (let k = 0; k < m; k++) {
       const t = 0.08 + (k * 0.9) / (m - 1)
-      const pos = bez(ctrl, t)
+      const pos = snap(path, bez(ctrl, t))
       const T = bezTan(ctrl, t)
       let S = cross(T, UPV)
       if (Math.hypot(...S) < 0.05) S = cross([c, 0, s], UPV)
@@ -789,7 +833,7 @@ function lemonTree(p: string[]) {
     g.add(noOutline(tube([pt(1.2), pt(8), pt(16), pt(24), pt(30.6)], 0.12, seam, { seg: 8, radial: 3 })))
   }
   const soil = 30
-  g.add(soilDisc(rAt(prof, soil) - 1.9, soil))
+  g.add(soilDisc(rAt(prof, soil) - 1.6, soil, 32))
   // 主干 + 分枝
   const bark = '#8a6f52'
   const fork: V3 = [0.8, 84, -0.4]
@@ -807,7 +851,18 @@ function lemonTree(p: string[]) {
   }
   const LEAF_A = '#3f8a3a'
   const LEAF_B = '#4a9440'
-  blobs.forEach(([c, r], i) => g.add(ball(r, i % 2 ? LEAF_B : LEAF_A, { x: c[0], y: c[1], z: c[2] }, undefined, [16, 12])))
+  const crown = blobs.map(([c, r], i) => ball(r, i % 2 ? LEAF_B : LEAF_A, { x: c[0], y: c[1], z: c[2] }, undefined, [16, 12]))
+  for (const m of crown) {
+    m.updateMatrixWorld()
+    g.add(m)
+  }
+  // 冠面实际的位置（16 × 12 段的球，面的中间比球面陷进去将近半厘米）：小花贴着冠面开，要按真实的面摆
+  const ray = new THREE.Raycaster()
+  const surface = (d: V3) => {
+    ray.set(new THREE.Vector3(...add(c0, d, 60)), new THREE.Vector3(...d).negate())
+    const hit = ray.intersectObjects(crown, false)[0]
+    return hit ? 60 - hit.distance : reach(d)
+  }
   const reach = (d: V3) => {
     let best = 0
     for (const [c, r] of blobs) {
@@ -844,7 +899,7 @@ function lemonTree(p: string[]) {
   // 白花
   for (let i = 0; i < 8; i++) {
     const d = fib(i, 8, 4.4)
-    star5(g, add(c0, d, reach(d) - 0.1), d, 1.5, '#fbf8f1', '#f2d45a')
+    star5(g, add(c0, d, surface(d) - 0.1), d, 1.5, '#fbf8f1', '#f2d45a')
   }
   return fitGroup(g)
 }
@@ -855,8 +910,16 @@ function lemonTree(p: string[]) {
 
 /** 文竹的一片云：一层水平铺开的细碎羽叶（很多细长的小扁片，朝各个方向），中间略厚、边上薄 */
 function cloudPad(g: THREE.Group, c: V3, rp: number, rand: () => number) {
-  // 薄薄的一层底（细枝分出的小枝在下面连成一片），碎叶都长在它上面
-  g.add(ball(rp * 0.82, '#7ab85a', { x: c[0], y: c[1], z: c[2] }, [1, 0.09, 0.85], [10, 3]))
+  // 薄薄的一层底（细枝分出的小枝在下面连成一片），碎叶都长在它上面。纬线 2 段（上下两个扇面）：轮廓上有顶点，半径是足的；
+  // 以前 3 段的球赤道上没有顶点，实际只有 0.87 倍大，外圈的碎叶够不着它
+  // 靠近占地边缘的云片，底片和碎叶一样收在占地里（|x| ≤ 11、|z| ≤ 10.75）：出界的一侧削掉，变成偏心的椭圆
+  const rb = rp * 0.86
+  const x0 = Math.max(-10.9, c[0] - rb)
+  const x1 = Math.min(10.9, c[0] + rb)
+  const z0 = Math.max(-10.65, c[2] - rb)
+  const z1 = Math.min(10.65, c[2] + rb)
+  const [bx, bz, sx, sz] = [(x0 + x1) / 2, (z0 + z1) / 2, (x1 - x0) / 2, (z1 - z0) / 2]
+  g.add(ball(rb, '#7ab85a', { x: bx, y: c[1], z: bz }, [sx / rb, 0.09, sz / rb], [10, 2]))
   // 11 片、每片略大一点（一盆两百来片，正面 5 边形就够碎）；叶尖不出占地（|x| ≤ 11、|z| ≤ 10.75）
   for (let k = 0; k < 11; k++) {
     const a = rand() * PI * 2
@@ -864,7 +927,10 @@ function cloudPad(g: THREE.Group, c: V3, rp: number, rand: () => number) {
     const r = 1 + rand() * 0.45
     const x = Math.max(-11 + r, Math.min(11 - r, c[0] + Math.cos(a) * d))
     const z = Math.max(-10.75 + r, Math.min(10.75 - r, c[2] + Math.sin(a) * d))
-    const m = ball(r, k % 3 ? '#8cc868' : '#a3d67a', { x, y: c[1] + (rand() - 0.5) * 0.9 * (1 - d / rp), z }, [1, 0.2, 0.34], PETAL)
+    // 碎叶上下错开的幅度不超过底片在这里的厚度（中间厚、边上薄），每一片都压在底片上
+    const dy = (rand() - 0.5) * 0.9 * (1 - d / rp)
+    const lim = 0.09 * rb * Math.max(0, 1 - Math.hypot((x - bx) / sx, (z - bz) / sz)) + 0.1
+    const m = ball(r, k % 3 ? '#8cc868' : '#a3d67a', { x, y: c[1] + Math.max(-lim, Math.min(lim, dy)), z }, [1, 0.2, 0.34], PETAL)
     m.rotation.y = rand() * PI
     g.add(m)
   }
@@ -890,9 +956,10 @@ function asparagusFern(p: string[]) {
     }
     g.add(noOutline(tube(pts, 0.16, '#6a8f45', { seg: 10, radial: 3 })))
     const curve = new THREE.CatmullRomCurve3(pts.map((q) => new THREE.Vector3(...q)), false, 'centripetal')
+    const path = tubePath(pts, 10)
     for (const [f, side] of [[0.45, 1], [0.66, -1], [0.86, 1]] as [number, number][]) {
-      const q = curve.getPoint(f)
-      const node: V3 = [q.x, q.y, q.z]
+      // 细枝从茎实际走的折线上分出去
+      const node = snap(path, curve.getPoint(f).toArray() as V3)
       const ba = a + side * (0.9 + rand() * 0.4)
       const rp = 4.6 - f * 1.6
       const bl = Math.max(1.5, Math.min(5.5, LIM - rp - Math.hypot(node[0], node[2]) - 0.5))
@@ -901,7 +968,7 @@ function asparagusFern(p: string[]) {
       cloudPad(g, c, rp, rand)
     }
     const tip = pts[pts.length - 1]
-    cloudPad(g, add(tip, [0, 0.2, 0]), 2.6, rand)
+    cloudPad(g, add(tip, [0, 0.1, 0]), 2.6, rand)
   }
   return fitGroup(g)
 }
@@ -1113,8 +1180,10 @@ function jasmine(p: string[]) {
       pts.push(add([RR * Math.cos(th), yc + RR * Math.sin(th), 0], off))
     }
     g.add(noOutline(tube(pts, 0.25, VINE, { seg: 64, radial: 3 })))
+    // 节（长叶、开花的地方）取在藤实际走的折线上
+    const path = tubePath(pts, 64)
     for (let k = 3; k < pts.length - 1; k++) {
-      const q = pts[k]
+      const q = snap(path, pts[k])
       const out: V3 = k > 16 ? unit([q[0], q[1] - yc, 0]) : [s, 0, 0]
       nodes.push([q, out])
     }
@@ -1132,7 +1201,10 @@ function jasmine(p: string[]) {
       g.add(noOutline(rod3(q, fc, 0.08, VINE, 4)))
       star5(g, fc, unit(add(out, [0, 0, fz], 1.2)), 1.7, '#fbf8f1', '#f2e3a0')
     } else if (i % 4 === 1) {
-      g.add(ball(0.5, '#f4f0e4', { x: q[0] + out[0] * 0.9, y: q[1] + out[1] * 0.9 + 0.4, z: q[2] + 0.5 }, [1, 1.4, 1], PETAL))
+      // 花苞：一根小梗从节上伸出去（以前花苞悬在节旁边 1cm）
+      const bud: V3 = [q[0] + out[0] * 0.9, q[1] + out[1] * 0.9 + 0.4, q[2] + 0.5]
+      g.add(noOutline(rod3(q, bud, 0.08, VINE, 4)))
+      g.add(ball(0.5, '#f4f0e4', { x: bud[0], y: bud[1], z: bud[2] }, [1, 1.4, 1], PETAL))
     }
   })
   // 盆里的一丛矮枝
@@ -1145,7 +1217,8 @@ function jasmine(p: string[]) {
       const q = lerp3(base, tip, f)
       for (const sd of [-1, 1]) g.add(oval(2.8, leafC[Math.floor(k + f * 3) % 3], q, dirAE(a + sd * 1.2, 0.2), UPV, 0.5, 0.12, LEAF_S))
     }
-    if (k % 2) star5(g, add(tip, [0, 0.4, 0]), [Math.cos(a) * 0.5, 1, Math.sin(a) * 0.5], 1.2, '#fbf8f1', '#f2e3a0')
+    // 花开在枝头上（以前悬在枝头上方 0.4）
+    if (k % 2) star5(g, tip, [Math.cos(a) * 0.5, 1, Math.sin(a) * 0.5], 1.2, '#fbf8f1', '#f2e3a0')
   }
   return fitGroup(g)
 }
@@ -1175,7 +1248,8 @@ function bonsaiMaple(p: string[]) {
   g.add(tray(W, H - 0.8, D, 0.9, potC, { y: 0.8 }, 0.4))
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(2.8, 0.8, 2, shade(potC, -0.05), { x: sx * (W / 2 - 3), z: sz * (D / 2 - 2.5) }, 0.3))
   const y = H - 1.4
-  g.add(rbox(W - 2.1, 0.8, D - 2.1, SOIL, { y: y - 0.8 }, 0.2))
+  // 土面四边各嵌进盆壁 0.2（以前比内壁小一圈）
+  g.add(rbox(W - 1.4, 0.8, D - 1.4, SOIL, { y: y - 0.8 }, 0.2))
   for (const [x, z, r] of [[-11, 5, 2.6], [-3, 6, 2], [6, -5.5, 2.8], [-12, -5, 1.9], [11, 5, 2.2], [2, 3, 1.6]]) g.add(ball(r, MOSS, { x, y, z }, [1, 0.32, 0.9], [10, 5]))
   g.add(ball(2.2, '#9a958c', { x: 12, y: y + 0.4, z: -3 }, [1.2, 0.65, 0.9], [10, 6]))
   // 根盘 + 斜干
@@ -1217,6 +1291,8 @@ function bonsaiMaple(p: string[]) {
       const at: V3 = [c[0] + Math.cos(a) * rr * 1.1, c[1] + (top ? 1.7 : 0.2) * s, c[2] + Math.sin(a) * rr * 0.85]
       const n = unit(top ? [(rand() - 0.5) * 0.8, 2, (rand() - 0.5) * 0.8] : [Math.cos(a), 0.7, Math.sin(a)])
       mapleLeaf(g, at, n, 2 * s, REDS[(k + ti) % 4])
+      // 叶柄：从叶团里伸出来接住叶子（外缘、顶面边上的小叶离底团有半厘米到一厘米，以前是悬着的）
+      g.add(noOutline(rod3(lerp3(at, c, 0.6), at, 0.1, bark, 4)))
     }
   }
   return fitGroup(g)
@@ -1235,8 +1311,9 @@ function herbPot(g: THREE.Group, x: number, y0: number, z: number, color: string
   m.position.set(x, y0, z)
   g.add(m)
   const soil = y0 + 7.6
-  // 土面和盆用同样的段数、同样的起始角：折线一一对齐，土面贴着内壁也不会从折线中间穿出去
-  const sd = cyl(4.3, 4.25, 0.8, SOIL, { x, y: soil - 0.8, z }, HERB_SEG)
+  // 土面和盆用同样的段数、同样的起始角：折线一一对齐。内壁在加厚的口沿下面往外扩了一级（4.3 → 4.9），
+  // 土面做成上大下小，顶面嵌进口沿内壁 0.2（以前顶面只有 4.3，四周留着一圈 0.6 宽的沟）
+  const sd = cyl(5.1, 4.4, 0.8, SOIL, { x, y: soil - 0.8, z }, HERB_SEG)
   g.add(sd)
   return soil
 }
@@ -1310,7 +1387,8 @@ function herbWall(p: string[]) {
   }
   for (const s of [-1, 1]) g.add(rbox(2, H - 13, 1.6, wood, { x: s * 12.5, y: 8.4, z: zb + 2 }, 0.4))
   // 接水槽：两只角码托着一条浅金属槽
-  for (const s of [-1, 1]) g.add(rbox(1.2, 3, 9, shade(trough, -0.1), { x: s * (W / 2 - 3.6), y: 0.6, z: zb + 1.2 + 4.5 }, 0.3))
+  // 角码：外侧嵌进立柱 0.2，里侧伸到槽底下 0.6、顶面嵌进槽底 0.2（以前角码整个在槽的外侧，和立柱、槽都只是相切）
+  for (const s of [-1, 1]) g.add(rbox(2, 3.2, 9, shade(trough, -0.1), { x: s * (W / 2 - 3.8), y: 0.6, z: zb + 1.2 + 4.5 }, 0.3))
   g.add(tray(W - 8.4, 4.5, 9.5, 0.5, trough, { y: 3.6, z: zb + 1.2 + 4.75 }, 0.2))
   // 盆和香草
   const rand = rng(461)

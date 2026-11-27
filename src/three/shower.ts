@@ -82,7 +82,9 @@ function mixer(metal: string, body: string, x: number, y: number, z0: number, sp
     g.add(cylXLegacy(3.6, 0.8, metal, x + s * (L / 2 + 0.2), y, z0, 20))
     g.add(rbox(0.8, 4.6, 0.8, metal, { x: kx + s * 1.9, y: y - 2.3, z: z0 + 3.2 }, 0.3))
   }
-  const red = rbox(0.6, 1.4, 0.4, '#ff8f86', { x: x - L / 2 - 2.2, y: y + 2.2, z: z0 + 3.4 }, 0.15)
+  // 温度旋钮上的红色标记：贴在旋钮圆柱面的前上方（离正前 40°），顺着圆弧斜放、压进去 0.1。
+  // 以前竖着放在 z0 + 3.4，那个高度旋钮表面已经收到 z0 + 1.8，标记悬在旋钮前面 1cm 多
+  const red = rbox(0.6, 1.4, 0.4, '#ff8f86', { x: x - L / 2 - 2.2, y: y + 2.25 - 0.7, z: z0 + 2.68, rx: -0.7 }, 0.15)
   red.userData.noOutline = true
   g.add(red)
   // 吐水口（往前伸再朝下）

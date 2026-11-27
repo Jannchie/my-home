@@ -9,7 +9,7 @@ import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js'
 import { ball, cached, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, legs, paintPanel, rectPoly, rng, rod, type AssetDef, type Poly } from '../kit'
 import { swingDoor } from '../cabinetKit'
-import { G, P, PI, UP, fitBuild, fitGroup, ghost, lit, mesh, noOutline, type V3 } from '../geo'
+import { G, P, PI, UP, bakeMeshes, fitBuild, fitGroup, ghost, lit, mesh, noOutline, type V3 } from '../geo'
 import { I, J, M, N, PROP, R, define, type PalFlat } from '../packkit'
 
 type RY = [number, number]
@@ -715,7 +715,8 @@ function glassVase(ctrl: RY[], water: number) {
   return (p: string[]) => {
     const [col] = p
     const t = 0.35
-    const v = vessel(ctrl, t, col)
+    // 玻璃瓶轮廓平缓：一圈 32 段、轮廓 24 段就够（默认 40 × 36，一只十来厘米的瓶子七千面）
+    const v = vessel(ctrl, t, col, 32, { n: 24 })
     ghost(v.m, col, 0.38)
     const g = G(v.m)
     const wp: RY[] = []
@@ -767,8 +768,10 @@ function potteryJars(p: string[]) {
     { n: 12, lidded: true },
   )
   const j2 = G(v2.m)
-  j2.add(P(solid([[4.9, 0], [4.7, 0.6], [3, 1.3], [1.2, 1.5]], b, 32, 10), 0, v2.top + 0.02))
-  j2.add(ball(0.8, shade(b, -0.15), { y: v2.top + 1.9 }, [1, 0.8, 1]))
+  // 盖子压在口沿上：这两只罐的口是往里收的，口沿的最高点比 vessel 给的 top（按直口算）低 0.15 左右，
+  // 照 top 摆盖子会悬在口沿上方 0.2；盖和钮一起往下放 0.26
+  j2.add(P(solid([[4.9, 0], [4.7, 0.6], [3, 1.3], [1.2, 1.5]], b, 32, 10), 0, v2.top - 0.24))
+  j2.add(ball(0.8, shade(b, -0.15), { y: v2.top + 1.64 }, [1, 0.8, 1]))
   j2.add(band(v2, 3.8, shade(b, -0.15), 0.18))
   g.add(P(j2, 1.5, 0, -0.5))
   const v3 = vessel(
@@ -785,7 +788,7 @@ function potteryJars(p: string[]) {
     { n: 14, lidded: true },
   )
   const j3 = G(v3.m, band(v3, 3, shade(c, -0.12), 0.16), band(v3, 8, shade(c, -0.12), 0.16))
-  j3.add(P(solid([[2.2, 0], [2.2, 1.2], [1.4, 1.6]], shade(c, -0.2), 32, 8), 0, v3.top - 0.1))
+  j3.add(P(solid([[2.2, 0], [2.2, 1.2], [1.4, 1.6]], shade(c, -0.2), 32, 8), 0, v3.top - 0.2))
   g.add(P(j3, 10.5, 0, 0.5))
   return g
 }
@@ -964,7 +967,8 @@ function pyrite(p: string[]) {
     [3.4, -0.6, 1.2, 0, 0.1, 0.4, 0.05],
     [2.4, 2.6, 1.4, 0.9, 0.25, 0.9, 0.2],
     [1.8, -3.2, 1.6, -0.6, -0.2, 0.2, 0.3],
-    [1.4, 0.8, 3.9, 0.6, 0.3, 0.7, -0.2],
+    // 顶上这颗小晶体落在大晶体上（以前中心高 3.9，下角离大晶体顶面 0.2）
+    [1.4, 0.8, 3.6, 0.6, 0.3, 0.7, -0.2],
     [1.1, -1.8, 1.8, 2.4, 0.4, 0.1, 0.1],
     [1, 3.2, 1.6, -1.8, 0.1, 0.5, 0.4],
   ]
@@ -1162,9 +1166,10 @@ function meteorite(p: string[]) {
   const g = G(rbox(19, 1.5, 9, base, {}, 0.4))
   g.add(rock([4.4, 2.8, 3.6], lump, 11, -3.6, 1.1, -0.3, 0.6, 2, 0.16))
   for (const [x, y, z, s] of [
-    [-5.2, 4.6, 2.2, 0.7],
-    [-1.6, 5.2, 1.8, 0.55],
-    // 顶上那个熔坑压进石面（原来 y = 6.4，比石顶还高、悬在上面）
+    // 三个熔坑都压进石面一半（实测石面高度：(-5.2, 2.2) 处 4.3，(-2.3, 1.1) 处 4.95，(-4, 0.6) 处 5.45）。
+    // 以前第一个只是搁在石面上，第二个在石头的陡坡外面、悬在坡面上方 1.3cm
+    [-5.2, 4.4, 2.2, 0.7],
+    [-2.3, 4.9, 1.1, 0.55],
     [-4, 5.5, 0.6, 0.6],
   ])
     g.add(noOutline(ball(s, shade(lump, -0.1), { x, y, z }, [1, 0.5, 1])))
@@ -1284,6 +1289,8 @@ function mineralBox(p: string[]) {
   for (const s of [-1, 1]) lid.add(rbox(1.6, D - 3.2, 1.2, frame, { x: s * (W / 2 - 0.8), y: 1.6, z: -0.6 }, 0.4))
   lid.add(ghost(rbox(W - 3.2, D - 3.2, 0.3, GLASS, { y: 1.6, z: -0.6 }, 0.1), GLASS, 0.25))
   g.add(P(lid, 0, 4, -D / 2, -0.2))
+  // 合页：盖框绕盒子后沿翻开，只有一条棱对着盒壁（两边都是圆角，实际隔着 0.4cm），两节合页把盖子和盒体接起来
+  for (const s of [-1, 1]) g.add(cylXg(0.7, 4, BRASS, s * 10, 4, -D / 2, 10))
   return g
 }
 
@@ -1568,8 +1575,9 @@ function coinFrame(W: number, H: number, cols: number, rows: number, desk: boole
         const x = -W / 2 + fb + sx * (i + 0.5)
         const y = fb + sy * (j + 0.58)
         const rr = Math.min(sx, sy) * (0.24 + r() * 0.08)
-        fr.add(coinZ(rr, COIN_COLS[(i + j * 2) % COIN_COLS.length], x, y, 0.6 + 0.3))
-        fr.add(rbox(sx * 0.5, sy * 0.1, 0.2, plate, { x, y: y - rr - sy * 0.2, z: 0.7 }, 0.05))
+        // 硬币和铭牌的背面都压进绒面背板（背板前面 z = 0.6）：以前硬币在 0.78～1.03，悬在背板前 0.17
+        fr.add(coinZ(rr, COIN_COLS[(i + j * 2) % COIN_COLS.length], x, y, 0.675, 0.35))
+        fr.add(rbox(sx * 0.5, sy * 0.1, 0.2, plate, { x, y: y - rr - sy * 0.2, z: 0.68 }, 0.05))
       }
     if (!desk) return G(P(fr, 0, 140, -D / 2))
     return fitGroup(standUp(fr, H, frame))
@@ -1599,6 +1607,8 @@ function coinCase(p: string[]) {
   lid.add(rbox(22, 16, 1.2, wood, { z: -0.6 }, 0.4))
   lid.add(rbox(20, 14, 0.3, velvet, { y: 1, z: 0.15 }, 0.1))
   g.add(P(lid, 0, 3.2, -8, -0.2))
+  // 合页：盖子绕盒子后沿翻开，只有一条棱对着盒壁（两边都是圆角，实际隔着 0.3cm）
+  for (const s of [-1, 1]) g.add(cylXg(0.6, 3, brass, s * 7, 3.2, -8, 10))
   g.add(rbox(2, 1.2, 0.4, brass, { y: 1.7, z: 8.2 }, 0.1))
   return g
 }
@@ -1811,10 +1821,12 @@ function stampTools(p: string[]) {
   for (let k = 0; k < 3; k++) {
     const e = new THREE.Group()
     const st = cutout(paintTop(3.4, 4, `col-stamp-${k * 5 + 2}`, (c, W, H) => drawStamp(c, 0, 0, W, H, null, k * 5 + 2), 0, 0.12, 0))
-    e.add(st, ghost(rbox(6, 0.08, 7.6, '#f4f6f8', { y: 0.2 }, 0.03), '#f4f6f8', 0.45))
-    g.add(P(e, -1 + k * 2.4, y0 + k * 0.32, 1 + k * 1.1, 0, 0.25 - k * 0.2))
+    // 护邮袋厚 0.2，邮票夹在里面；三只一只压一只摞在垫子上（每只压进下面那只 0.05）。
+    // 以前袋子只有 0.08 厚、每只抬高 0.32：最下面那只离垫子 0.2，上面两只也各自悬着
+    e.add(st, ghost(rbox(6, 0.2, 7.6, '#f4f6f8', {}, 0.03), '#f4f6f8', 0.45))
+    g.add(P(e, -2.3 + k * 2.4, y0 - 0.05 + k * 0.15, 1 + k * 1.1, 0, 0.25 - k * 0.2))
   }
-  // 齿孔尺
+  // 齿孔尺（收在垫子以内：以前前端伸出垫子边 1cm）
   g.add(
     paintTop(
       3.6,
@@ -1833,13 +1845,13 @@ function stampTools(p: string[]) {
       },
       11.5,
       y0 + 0.3,
-      4,
+      2.9,
     ),
   )
-  // 散票
+  // 散票：摆在护邮袋和齿孔尺之间的垫子上（护邮袋摞低以后，原来的位置会被袋子切过）
   for (const [k, x, z] of [
-    [9, 5.2, 3.4],
-    [14, 6.6, 6.2],
+    [9, 7.6, 2.2],
+    [14, 7.8, 6.6],
   ])
     g.add(cutout(paintTop(3, 3.6, `col-stamp-${k}`, (c, W, H) => drawStamp(c, 0, 0, W, H, null, k), x, y0 + 0.3, z)))
   return g
@@ -2047,10 +2059,14 @@ function litShowcase(p: string[]) {
   g.add(ghost(rbox(w - 4, gh, 0.5, GLASS, { y: floor, z: -(d / 2 - 1) }, 0.1), GLASS, GLASS_A))
   const front = [ghost(rbox(w - 4, gh, 0.5, GLASS, { y: floor, z: d / 2 - 1 }, 0.1), GLASS, GLASS_A), rbox(0.6, 14, 0.6, frame, { x: w / 2 - 5, y: 74, z: d / 2 - 0.4 }, 0.2)]
   g.add(swingDoor(front, -(w / 2 - 2), d / 2 - 0.75, 'left'))
+  // 玻璃层板的四角搭在四根立柱上：层板后角、前沿包边的两头各伸进立柱 0.3（以前层板四周离立柱和玻璃都有缝，三块都悬在柜子里）。
+  // 三块层板同色同透明度，烘成一个网格（半透明件不参与合并，一块一次绘制）
+  const shelves: THREE.Mesh[] = []
   for (let k = 1; k < LS.n; k++) {
-    g.add(ghost(rbox(w - 4, T, d - 4.6, GLASS, { y: ys[k] - T, z: -0.3 }, 0.1), GLASS, 0.3))
-    g.add(rbox(w - 4, T, 0.6, frame, { y: ys[k] - T, z: d / 2 - 2.3 }, 0.1))
+    shelves.push(rbox(w - 3.4, T, d - 4.3, GLASS, { y: ys[k] - T, z: -0.45 }, 0.1))
+    g.add(rbox(w - 3.4, T, 0.9, frame, { y: ys[k] - T, z: d / 2 - 2.15 }, 0.1))
   }
+  g.add(ghost(bakeMeshes(shelves, GLASS), GLASS, 0.3))
   // 顶部的两颗射灯
   for (const s of [-1, 1]) g.add(lit(cyl(1.2, 1.4, 0.8, light, { x: s * 10, y: inTop - 0.7 }, 16), light, 1))
   return g

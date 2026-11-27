@@ -326,12 +326,15 @@ function alarmClock(p: string[]) {
     const a = (i / 4) * Math.PI * 2
     g.add(noOutline(ball(0.35, hand, { x: Math.cos(a) * 4.1, y: 8 + Math.sin(a) * 4.1, z: 2.55 })))
   }
-  g.add(rbox(0.5, 3.2, 0.3, hand, { y: 7.8, z: 2.65, rz: 0.5 }, 0.2))
-  g.add(rbox(0.5, 2.2, 0.3, hand, { y: 7.9, z: 2.95, rz: -1.9 }, 0.2))
+  // 两根指针从表盘中心的轴伸出去（以前各绕自己的中点转，根部离轴心 0.8～1cm，轴帽悬在两根针之间）
+  g.add(rbox(0.5, 3.2, 0.3, hand, { x: -1.3 * Math.sin(0.5), y: 8 + 1.3 * Math.cos(0.5) - 1.6, z: 2.6, rz: 0.5 }, 0.2))
+  g.add(rbox(0.5, 2.2, 0.3, hand, { x: 0.8 * Math.sin(1.9), y: 8 + 0.8 * Math.cos(1.9) - 1.1, z: 2.85, rz: -1.9 }, 0.2))
   g.add(ball(0.5, hand, { y: 8, z: 3.1 }))
   for (const s of [-1, 1]) {
     g.add(P(dome(2.6, bell, 0, 0, 0), s * 4, 13.2, 0, 0, 0, -s * 0.6))
     g.add(ball(0.6, bell, { x: s * 5.4, y: 15.3 }))
+    // 铃座：从钟身沿铃的轴线伸到铃顶的短柱（以前两只铃悬在钟身上方 0.6）
+    g.add(rod(s * 3.44, 12.38, s * 5.41, 15.26, 0.4, shade(bell, -0.15)))
   }
   g.add(rod(0, 13.6, 0, 15.8, 0.35, shade(bell, -0.15)))
   g.add(ball(0.7, shade(bell, -0.15), { y: 15.9 }))
@@ -415,9 +418,10 @@ function turntable(p: string[]) {
   g.add(puck(13.6, 0.5, '#2f2c33', { x: -4, y: 9.2 }))
   g.add(puck(4, 0.4, label, { x: -4, y: 9.5 }))
   g.add(cyl(0.3, 0.3, 1, M.silver, { x: -4, y: 9.5 }, 8))
-  g.add(cyl(1.8, 1.8, 3, M.silver, { x: 14, y: 8, z: -10 }, 16))
+  // 唱臂座加高 0.3 托住唱臂，唱臂后端伸进配重（以前唱臂悬在臂座上方 0.2，和配重之间也断开 0.6）
+  g.add(cyl(1.8, 1.8, 3.3, M.silver, { x: 14, y: 8, z: -10 }, 16))
   const arm = new THREE.Group()
-  arm.add(rbox(0.8, 0.8, 16, M.silver, { y: -0.4, z: 8 }, 0.3))
+  arm.add(rbox(0.8, 0.8, 16.8, M.silver, { y: -0.4, z: 7.6 }, 0.3))
   arm.add(rbox(1.6, 0.8, 2.6, M.black, { y: -0.6, z: 16.6 }, 0.3))
   arm.add(rbox(2, 2, 2.4, M.char, { y: -1, z: -1.8 }, 0.5))
   g.add(P(arm, 14, 11.6, -10, 0, -0.5))
@@ -443,7 +447,8 @@ function rotaryPhone(p: string[]) {
   g.add(P(capsule(1.6, 11, body), 0, 12, -5, 0, 0, Math.PI / 2))
   for (const s of [-1, 1]) g.add(ball(2.6, body, { x: s * 7.6, y: 11.4, z: -5 }, [1, 0.75, 1.2]))
   // 螺旋线头一圈嵌进机身侧面（以前离侧面 0.3cm 悬着）
-  for (let i = 0; i < 5; i++) g.add(torus(0.8, 0.25, shade(body, -0.1), { x: -9.1 - i * 0.7, y: 2.5, z: -7, ry: Math.PI / 2 }))
+  // 相邻两圈互相压住（以前间距 0.7、圈粗 0.6，一圈圈各自悬着）
+  for (let i = 0; i < 7; i++) g.add(torus(0.8, 0.25, shade(body, -0.1), { x: -9.1 - i * 0.47, y: 2.5, z: -7, ry: Math.PI / 2 }, Math.PI * 2, [8, 12]))
   return g
 }
 
@@ -469,7 +474,11 @@ function typewriter(p: string[]) {
   g.add(cylX(1.8, 32, M.char, 0, 14.6, -7))
   for (const s of [-1, 1]) g.add(cylX(2, 1.6, acc, s * 16.8, 14.6, -7))
   g.add(rbox(21, 16, 0.3, C.white, { y: 13.5, z: -8.4, rx: -0.15 }, 0.1))
-  for (let i = 0; i < 3; i++) g.add(noOutline(rbox(14 - i * 3, 0.3, 0.3, M.gray, { x: -2, y: 25 - i * 1.5, z: -9.6 + i * 0.22, rx: -0.15 }, 0.1)))
+  // 打出来的字在纸的正面（朝打字的人），嵌进纸面 0.1（以前悬在纸背后 0.35）
+  for (let i = 0; i < 3; i++) {
+    const y = 25 - i * 1.5
+    g.add(noOutline(rbox(14 - i * 3, 0.3, 0.3, M.gray, { x: -2, y, z: -8.2 - (y + 0.15 - 21.5) * Math.tan(0.15), rx: -0.15 }, 0.1)))
+  }
   g.add(rod(-17.5, 15.5, -21, 18, 0.35, M.silver, -7))
   g.add(ball(0.7, acc, { x: -21, y: 18, z: -7 }))
   return g
@@ -625,8 +634,9 @@ function tapeDispenser(p: string[]) {
   g.add(rbox(6.4, 5.6, 12, body, {}, 2))
   g.add(P(torus(2.3, 0.9, tape), 0, 6, -1, 0, Math.PI / 2))
   g.add(cylX(1.2, 2.2, shade(body, -0.12), 0, 6, -1))
-  g.add(rbox(4.4, 0.8, 1, M.silver, { y: 5.4, z: 5.4 }, 0.2))
-  g.add(strutZ(2.2, 6.9, 5.2, 6, 1.8, 0.15, tape))
+  // 切刀插进座身的圆角（以前浮在圆角上 0.1）；胶带头从胶带卷的切点拉到切刀（以前起点悬在胶带卷前面）
+  g.add(rbox(4.4, 1.1, 1, M.silver, { y: 5.1, z: 5.4 }, 0.2))
+  g.add(strutZ(0.7, 8.5, 5.2, 6, 1.8, 0.15, tape))
   return g
 }
 
@@ -791,6 +801,8 @@ function airPlant(p: string[]) {
   const g = new THREE.Group()
   g.add(cup(4.6, 3, 2.6, 0.5, holder))
   for (let i = 0; i < 6; i++) g.add(ball(0.7, C.white, { x: Math.cos(i) * 2, y: 1.2, z: Math.sin(i) * 2 }))
+  // 植株基部：叶子都从这里长出来，坐在石子中间（以前叶尖聚在石子上方一点，整株悬着）
+  g.add(ball(1.5, shade(leafC, -0.06), { y: 1.6 }))
   for (let i = 0; i < 14; i++) {
     const a = (i / 14) * Math.PI * 2
     g.add(petal(6 + (i % 3) * 1.4, i % 2 ? leafC : shade(leafC, 0.08), 0, 1.8, 0, a, 0.5 + (i % 4) * 0.22, 0.18, 0.12))
@@ -812,7 +824,12 @@ function miniCactus(p: string[]) {
     g.add(petal(1.6, flower, 0, 12.1, 0, a, 0.5, 0.6, 0.3))
   }
   g.add(ball(0.5, C.lemon, { y: 12.4 }))
-  for (let i = 0; i < 6; i++) g.add(noOutline(ball(0.18, C.white, { x: Math.cos(i * 1.3) * 2.42, y: 5 + (i % 3) * 1.6, z: Math.sin(i * 1.3) * 2.42 })))
+  for (let i = 0; i < 6; i++) {
+    const y = 5 + (i % 3) * 1.6
+    // 刺贴着球身：下半球上的那一圈按球面半径收进来（以前按圆柱段的半径摆，离球面 0.05）
+    const rr = (y < 6 ? Math.sqrt(2.4 ** 2 - (6 - y) ** 2) : 2.4) + 0.02
+    g.add(noOutline(ball(0.18, C.white, { x: Math.cos(i * 1.3) * rr, y, z: Math.sin(i * 1.3) * rr })))
+  }
   return g
 }
 

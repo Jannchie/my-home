@@ -1037,7 +1037,7 @@ function needleFelting(p: string[]) {
   const ph = 4
   const px = -3
   g.add(rbox(14, ph, 11, pad, { x: px, z: -1 }, 0.8))
-  for (const [x, z] of [[-4, 2], [2, -3], [-7, -4], [3, 3]]) g.add(noOutline(ball(0.35, shade(pad, -0.15), { x: px + x, y: ph - 0.05, z }, [1, 0.3, 1], [8, 4])))
+  for (const [x, z] of [[-4, 2], [2, -3], [-5.6, -4], [3, 3]]) g.add(noOutline(ball(0.35, shade(pad, -0.15), { x: px + x, y: ph - 0.05, z }, [1, 0.3, 1], [8, 4])))
   // 小熊：坐姿，身子 + 两条腿 + 左臂，头上两只耳朵、口鼻、脸
   const bx = px
   const bz = -1
@@ -1169,7 +1169,8 @@ function coffeeRoaster(p: string[]) {
   scatterBeans(g, 34, BEAN_DARK, 13, (r) => {
     const a = r() * PI * 2
     const rr = Math.sqrt(r()) * 5.2
-    return [cx + Math.cos(a) * rr, 4.75 + r() * 0.3, cz + Math.sin(a) * rr]
+    // 豆子高 0.78，底压进盘底（盘底顶面 4.4）
+    return [cx + Math.cos(a) * rr, 4.55 + r() * 0.2, cz + Math.sin(a) * rr]
   })
   // 生豆罐：玻璃罐里装着七分满的生豆，木盖
   const jx = 15

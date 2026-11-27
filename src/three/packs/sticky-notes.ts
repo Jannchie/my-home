@@ -3,7 +3,7 @@
 // 桌面款（sn-desk-*）是平放的 prop，原点在底面中心。颜色：黄 / 粉 / 蓝 / 绿 / 橙 / 紫六组配色，[纸, 墨水, 副色, 第三色]。
 
 import * as THREE from 'three'
-import { rbox, shade, toon } from '../toon'
+import { box, rbox, shade, toon } from '../toon'
 import { type AssetDef, type StyleTag } from '../kit'
 import { noOutline } from '../geo'
 
@@ -60,11 +60,20 @@ function cloudShape(w: number, h: number) {
   return s
 }
 
+/**
+ * 笔迹的厚度：正面还在原来的高度（z + 0.02，比纸面高 0.09，不闪），背面往下加厚到埋进纸里 0.03。
+ * 以前是 0.04 厚的薄片整个浮在纸面上 0.05，每一笔都和纸不挨着。
+ */
+const INK_T = 0.12
+/** 笔迹中心的 z：z 是原来薄片的中心 */
+const inkZ = (z: number) => z + 0.02 - INK_T / 2
+
 /** 一笔手写线条（细长扁条），从 (x0, y0) 到 (x1, y1) */
 function stroke(x0: number, y0: number, x1: number, y1: number, ink: string, z: number, w = 0.22) {
   const len = Math.hypot(x1 - x0, y1 - y0)
-  const m = noOutline(rbox(len, w, 0.04, ink, {}, 0.02))
-  m.position.set((x0 + x1) / 2, (y0 + y1) / 2 - w / 2, z)
+  // 直角盒：笔迹又细又不描边，圆角看不出来（圆角盒一笔 108 面，一张清单便签两千多面）
+  const m = noOutline(box(len, w, INK_T, ink))
+  m.position.set((x0 + x1) / 2, (y0 + y1) / 2 - w / 2, inkZ(z))
   m.rotation.z = Math.atan2(y1 - y0, x1 - x0)
   return m
 }
@@ -112,7 +121,7 @@ function doodle(kind: Doodle, w: number, h: number, ink: string, acc: string, z:
       const a1 = ((i + 1) / 12) * Math.PI * 2
       g.add(stroke(Math.cos(a0) * r, Math.sin(a0) * r, Math.cos(a1) * r, Math.sin(a1) * r, ink, z, 0.2))
     }
-    for (const s of [-1, 1]) g.add(noOutline(rbox(0.35, 0.5, 0.04, ink, { x: s * r * 0.35, y: r * 0.1, z }, 0.1)))
+    for (const s of [-1, 1]) g.add(noOutline(box(0.35, 0.5, INK_T, ink, { x: s * r * 0.35, y: r * 0.1, z: inkZ(z) })))
     g.add(poly([[-r * 0.5, -r * 0.25], [-r * 0.2, -r * 0.5], [r * 0.2, -r * 0.5], [r * 0.5, -r * 0.25]], ink, z, 0.2))
   } else if (kind === 'star') {
     const r = Math.min(w, h) * 0.3
@@ -163,7 +172,7 @@ function note(spec: NoteSpec, p: string[], z0 = 0) {
   const shape = spec.shape === 'heart' ? heartShape(w, h) : spec.shape === 'cloud' ? cloudShape(w, h) : rectShape(w, h, cut)
   g.add(sheet(shape, paper, z0))
   // 顶上一条胶带的背胶区（略深）。贴片的正面要比纸面高出 0.05 以上才不闪：背胶区正面在纸面上 0.055，笔迹正面再高 0.035
-  if (spec.shape === 'square' || spec.shape === 'strip') g.add(noOutline(rbox(w - 0.2, Math.min(1.4, h * 0.2), 0.03, shade(paper, -0.05), { y: h / 2 - Math.min(1.4, h * 0.2) - 0.1, z: z0 + T + 0.04 }, 0.01)))
+  if (spec.shape === 'square' || spec.shape === 'strip') g.add(noOutline(box(w - 0.2, Math.min(1.4, h * 0.2), 0.03, shade(paper, -0.05), { y: h / 2 - Math.min(1.4, h * 0.2) - 0.1, z: z0 + T + 0.04 })))
   g.add(doodle(spec.doodle, w * (spec.shape === 'heart' ? 0.7 : 0.9), h * (spec.shape === 'heart' ? 0.6 : 0.85), ink, acc, z0 + T + 0.07))
   if (spec.curl) g.add(curl(w, h, cut, paper, z0))
   return g
@@ -204,7 +213,7 @@ function tabs(fan: boolean) {
       const m = new THREE.Group()
       m.add(sheet(rectShape(1.5, 5), cols[i], 0))
       // 下半截是透明胶片：画成浅色
-      m.add(noOutline(rbox(1.5, 2.2, 0.03, '#f4f6f8', { y: -2.5, z: T + 0.04 }, 0.01)))
+      m.add(noOutline(box(1.5, 2.2, 0.03, '#f4f6f8', { y: -2.5, z: T + 0.04 })))
       if (fan) {
         // 一张压一张：每张往前错开一张纸的厚度（原来只错 0.03，几张纸互相穿插、正面几乎共面）
         m.position.set(-1 + i * 0.9, -0.5, i * T)
@@ -224,7 +233,8 @@ function trio(p: string[]) {
   const b = note({ shape: 'heart', doodle: 'none', slot: 2 }, p, T + 0.02)
   b.position.set(3.4, 1.8, 0)
   b.rotation.z = 0.15
-  const c = note({ shape: 'strip', doodle: 'lines', slot: 3 }, p, 2 * (T + 0.02))
+  // 长条只压着方形那张（和心形不重叠）：和心形同一层。以前放在第三层，离它压着的方形 0.16 悬着
+  const c = note({ shape: 'strip', doodle: 'lines', slot: 3 }, p, T + 0.02)
   c.position.set(1, -3.6, 0)
   c.rotation.z = 0.05
   g.add(a, b, c)
@@ -280,7 +290,9 @@ function tabPack(p: string[]) {
 /** 贴附物尺寸：转 tilt 后的外接矩形 */
 function bound(w: number, h: number, tilt: number): [number, number] {
   const a = Math.abs((tilt * Math.PI) / 180)
-  return [Math.round((w * Math.cos(a) + h * Math.sin(a)) * 10) / 10 + 0.4, Math.round((w * Math.sin(a) + h * Math.cos(a)) * 10) / 10 + 0.4]
+  // 加完余量再取整（先取整再加 0.4 会留下 6.6000000000000005 这样的浮点尾巴）
+  const r1 = (x: number) => Math.round((x + 0.4) * 10) / 10
+  return [r1(w * Math.cos(a) + h * Math.sin(a)), r1(w * Math.sin(a) + h * Math.cos(a))]
 }
 
 function base(id: string, name: string, sizeLabel: string | undefined, dims: [number, number, number], build: (p: string[]) => THREE.Group, extra: Partial<AssetDef> = {}): AssetDef {

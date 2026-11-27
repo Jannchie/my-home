@@ -123,7 +123,8 @@ function bear(color: string, x: number, y: number, z: number, s = 1, ry = 0) {
   const nose = ball(0.6 * s, C.ink, { y: 11.7 * s, z: 4.7 * s })
   nose.userData.noOutline = true
   g.add(nose)
-  g.add(face(7 * s, { y: 12.9 * s, z: 3.8 * s }))
+  // 脸往头里收 0.4：腮红在脸的两侧，头是球面，原来的深度下腮红够不着头（悬在外面 0.1）
+  g.add(face(7 * s, { y: 12.9 * s, z: 3.4 * s }))
   g.position.set(x, y, z)
   g.rotation.y = ry
   return g
@@ -139,7 +140,7 @@ function bunny(color: string, x: number, y: number, z: number, s = 1, ry = 0) {
   }
   g.add(ball(4 * s, color, { y: 11 * s }))
   g.add(ball(1.3 * s, C.sakura, { y: 3.4 * s, z: -4.4 * s }))
-  g.add(face(6.6 * s, { y: 11.4 * s, z: 3.7 * s }))
+  g.add(face(6.6 * s, { y: 11.4 * s, z: 3.3 * s }))
   g.position.set(x, y, z)
   g.rotation.y = ry
   return g
@@ -175,7 +176,8 @@ function mobile(g: THREE.Group, x: number, z: number, y0: number, top: number, c
     const ez = cz + Math.sin(a) * 10
     g.add(rod3([cx, hy - 0.4, cz], [ex, hy - 0.4, ez], 0.35, arm, 6))
     const L = 7 + (i % 2) * 4
-    g.add(cyl(0.15, 0.15, L, C.ink, { x: ex, y: hy - 0.4 - L, z: ez }, 4))
+    // 吊线多垂 0.4，线头埋进玩具里（三颗小球那串的顶离线头差 0.1）
+    g.add(cyl(0.15, 0.15, L + 0.4, C.ink, { x: ex, y: hy - 0.8 - L, z: ez }, 4))
     const ty = hy - 0.4 - L - 2.4
     const col = cols[i % cols.length]
     if (i === 0) g.add(ball(2.4, col, { x: ex, y: ty, z: ez }))
@@ -310,7 +312,7 @@ function cribDrawer(p: string[]) {
     g.add(holePanel(60.4, 72, 3, frame, holes, { x: sx * 62.5, y: 25, ry: Math.PI / 2 }, 3))
   }
   // 高档床板：四角托在插进调节孔的金属托架上（以前床板四周都离框 0.5~2cm，悬空）
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(4, 1.5, 4, C.steel, { x: sx * 60, y: 53.6, z: sz * 29.5 }, 0.4))
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(4, 1.5, 4, C.steel, { x: sx * 60, y: 53.9, z: sz * 29.5 }, 0.4))
   g.add(rbox(118, 3, 62, frame, { y: 55 }, 1))
   g.add(rbox(116, 10, 60, MAT, { y: 58 }, 4))
   g.add(pillow(22, 34, fab, -44, 67.5, 0))
@@ -517,7 +519,8 @@ function carBed(p: string[]) {
   g.add(rbox(88.4, 12, 3, body, { y: 36, z: 67.5 }, 1))
   for (const sx of [-1, 1]) g.add(glow(14, 7, C.lamp, { x: sx * 28, y: 30, z: 101.9 }, 0.6))
   g.add(rbox(30, 8, 0.8, C.ink, { y: 18, z: 101.8 }, 0.3))
-  g.add(rbox(84, 16, 1.6, '#4a5a6a', { y: 48, z: 66, rx: -0.5 }, 0.6))
+  // 挡风玻璃下沿压进引擎盖后缘（原来下沿悬在引擎盖圆角上方）
+  g.add(rbox(84, 16, 1.6, '#4a5a6a', { y: 47.7, z: 66.6, rx: -0.5 }, 0.6))
   // 方向盘
   g.add(cylZ(1, 8, C.ink, -20, 44, 62, 16))
   g.add(torus(6.5, 1.3, C.ink, { x: -20, y: 44, z: 58 }))
@@ -643,7 +646,8 @@ function bunkBed(p: string[]) {
   const deck = (y: number, duvet: string) => {
     for (const sx of [-1, 1]) g.add(rbox(4, 14, 188, frame, { x: sx * 49, y }, 1.2))
     for (const sz of [-1, 1]) g.add(rbox(92, 14, 4, frame, { y, z: sz * 97 }, 1.2))
-    g.add(rbox(92, 2, 188, shade(frame, -0.08), { y: y + 4 }, 0.8))
+    // 床板四边搭进床帮（原来比床帮内侧小一圈，床板连同床垫被褥整层悬着）
+    g.add(rbox(95, 2, 191, shade(frame, -0.08), { y: y + 4 }, 0.8))
     g.add(rbox(90, 12, 186, MAT, { y: y + 6 }, 4))
     g.add(pillow(44, 26, MAT, 0, y + 17.6, -78))
     duvetZ(g, 90.6, 96, y + 17.8, 40, duvet)

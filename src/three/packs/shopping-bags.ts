@@ -223,7 +223,7 @@ function loop(a: number, y0: number, h: number, z: number, r: number, color: str
 const HANG_TOP = -0.5
 const HANG_Z = 1.85
 
-/** 挂起的一只提手：两端在袋口 (±a, yTop, z)，中间搭在挂点上 */
+/** 挂起的一只提手：两端在袋口 (±a, yTop, z)，中间搭在挂点上。yTop 给到袋顶以下 1cm：提手两端缝进袋身里（袋顶是圆角，停在袋顶上方的话两头都悬着） */
 function hangLoop(a: number, yTop: number, z: number, r: number, color: string, dz: number) {
   const apex = HANG_TOP + r
   const zc = HANG_Z + dz
@@ -283,7 +283,7 @@ function ecoHangingBody(print: Print, W = 32): Build {
     const top = -20
     const g = new THREE.Group()
     g.add(rbox(W, H, D, main, { y: top - H, z: 0.3 + D / 2 }, 1.4))
-    g.add(hangHandles(W * 0.25, top + 0.6, 0.3 + D - 0.5, 0.8, 0.45, acc))
+    g.add(hangHandles(W * 0.25, top - 1, 0.3 + D - 0.5, 0.8, 0.45, acc))
     if (print === 'plain') g.add(rbox(4, 2.4, 0.6, acc, { x: -W / 2 + 6, y: top - 6, z: 0.3 + D + 0.1 }, 0.2))
     else g.add(printPanel(print, p, W - 4, H - 4, top - H + 2, 0.3 + D))
     return g
@@ -358,7 +358,7 @@ function toteHanging(p: string[]) {
   const top = -24
   const g = new THREE.Group()
   g.add(rbox(W, H, D, main, { y: top - H, z: 0.3 + D / 2 }, 1.2))
-  g.add(hangHandles(8, top + 0.6, 0.3 + D - 0.4, 0.9, 0.5, handle))
+  g.add(hangHandles(8, top - 1, 0.3 + D - 0.4, 0.9, 0.5, handle))
   g.add(totePrint(p, 22, 18, { y: top - H + 8, z: 0.3 + D + 0.3 }))
   return g
 }
@@ -418,8 +418,9 @@ function paperGrocery(p: string[]) {
   // 袋口往外翻的一圈
   const rim = shade(kraft, -0.08)
   for (const s of [-1, 1]) {
-    g.add(rbox(W + 0.6, 3, 0.5, rim, { y: H - 3, z: s * (D / 2 + 0.3) }, 0.2))
-    g.add(rbox(0.5, 3, D, rim, { x: s * (W / 2 + 0.3), y: H - 3 }, 0.2))
+    // 翻边贴着袋壁（嵌进 0.1；以前离袋壁 0.05）
+    g.add(rbox(W + 0.8, 3, 0.5, rim, { y: H - 3, z: s * (D / 2 + 0.15) }, 0.2))
+    g.add(rbox(0.5, 3, D, rim, { x: s * (W / 2 + 0.15), y: H - 3 }, 0.2))
   }
   // 袋子下半截垫着的其它东西（一个纸包）：法棍、葱、生菜都压在它上面，不是悬在空袋子里
   g.add(rbox(W - 2, H - 10.5, D - 2, shade(kraft, 0.1), { y: t }, 1.5))
@@ -450,7 +451,8 @@ function paperShop(p: string[]) {
   const D = 10
   const g = new THREE.Group()
   g.add(tray(W, H, D, 0.4, main))
-  for (const x of [-6, 0, 6]) g.add(ball(3.6, '#ffffff', { x, y: H - 0.5, z: (x / 6) * 0.8 }, [1.1, 0.75, 0.8]))
+  // 薄纸塞满袋口：前后撑到袋壁（两边的两团各嵌进一侧袋壁 0.2；以前三团纸悬在袋口中间，离前后袋壁各 1cm）
+  for (const x of [-6, 0, 6]) g.add(ball(3.6, '#ffffff', { x, y: H - 0.5, z: (x / 6) * 0.8 }, [1.1, 0.75, (D / 2 - 0.4 - 0.8 + 0.2) / 3.6]))
   for (const s of [-1, 1]) g.add(loop(5, H - 2.5, 12, s * (D / 2 - 0.8), 0.35, rope))
   g.add(paintPanel(18, 14, `bag-shop-${main}-${ink}`, drawBadge(main, ink), { y: 8, z: D / 2 + 0.3 }))
   return grounded(g)
@@ -598,7 +600,7 @@ function coolerHanging(p: string[]) {
   const g = new THREE.Group()
   g.add(rbox(28, 22, D, main, { y: top - 22, z: 0.6 + D / 2 }, 2.5))
   g.add(rbox(28.6, 1.6, D + 0.6, acc, { y: top - 3.6, z: 0.6 + D / 2 }, 0.6))
-  g.add(hangHandles(7, top + 0.4, 0.6 + D - 1, 1.4, 0.5, trim))
+  g.add(hangHandles(7, top - 1.2, 0.6 + D - 1, 1.4, 0.5, trim))
   return g
 }
 
@@ -646,15 +648,16 @@ function netOpen(p: string[]) {
   const g = new THREE.Group()
   const cy = 10
   const pos: V3[] = [
-    [-4.5, 3.6, -3.5],
-    [4.5, 3.6, -3.5],
-    [-4.5, 3.6, 3.5],
-    [4.5, 3.6, 3.5],
-    [-5.5, 10, 0],
-    [5.5, 10, 0],
-    [0, 10, 4.8],
-    [0, 10, -4.8],
-    [0, 15.5, 0],
+    // 橘子一颗压一颗（相邻两颗的球心距 ≤ 6.9，球径 7.2）：以前上面五颗和下面的差一两毫米，都是悬着的
+    [-4.5, 3.6, -3.4],
+    [4.5, 3.6, -3.4],
+    [-4.5, 3.6, 3.4],
+    [4.5, 3.6, 3.4],
+    [-5.5, 9.5, 0],
+    [5.5, 9.5, 0],
+    [0, 9.5, 4.2],
+    [0, 9.5, -4.2],
+    [0, 14.9, 0],
   ]
   for (const q of pos) g.add(orange(q))
   g.add(netOver(10.6, 10, 9.2, cy, 0, cord, -1.25, 1.35))
@@ -717,7 +720,8 @@ function bigOpen(p: string[]) {
   g.add(rbox(W - 4, H + 1.2, D - 4, R.cream, { y: 0.8 }, 2.5))
   g.add(rbox(44, 3, 24, '#e8d2a6', { y: H + 1.6 }, 1.2))
   for (const s of [-1, 1]) {
-    for (const x of [-12, 12]) g.add(rbox(4, H, 0.4, strap, { x, z: s * (D / 2 + 0.35) }, 0.15))
+    // 织带缝在袋面上（0.4 厚，嵌进袋壁 0.1；以前浮在袋面前 0.15）
+    for (const x of [-12, 12]) g.add(rbox(4, H, 0.4, strap, { x, z: s * (D / 2 + 0.1) }, 0.15))
     g.add(loop(12, H - 0.5, 12, s * (D / 2 + 0.6), 0.9, strap))
   }
   return grounded(g)
@@ -737,8 +741,8 @@ function bigHanging(p: string[]) {
   const top = -14
   const g = new THREE.Group()
   g.add(rbox(55, 34, D, main, { y: top - 34, z: 0.3 + D / 2 }, 1.2))
-  for (const x of [-12, 12]) g.add(rbox(4, 34, 0.4, strap, { x, y: top - 34, z: 0.3 + D + 0.35 }, 0.15))
-  g.add(hangHandles(12, top + 0.6, 0.3 + D - 0.4, 0.9, 0.5, strap))
+  for (const x of [-12, 12]) g.add(rbox(4, 34, 0.4, strap, { x, y: top - 34, z: 0.3 + D + 0.1 }, 0.15))
+  g.add(hangHandles(12, top - 1, 0.3 + D - 0.4, 0.9, 0.5, strap))
   return g
 }
 

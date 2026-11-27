@@ -253,7 +253,8 @@ function futonSofa(open: boolean) {
       back.rotation.x = -0.22
       back.position.set(0, 12 + 31, -27.5)
       g.add(back)
-      g.add(rbox(44, 30, 12, acc, { x: -28, y: 26, z: -10, rx: -0.25 }, 5))
+      // 靠垫压进座垫 0.4（斜放的圆角盒最低点比底面中心高，按 y = 26 放离座垫 0.06）
+      g.add(rbox(44, 30, 12, acc, { x: -28, y: 25.6, z: -10, rx: -0.25 }, 5))
       return fitGroup(g)
     }
     // 展开：床垫全平
@@ -358,7 +359,8 @@ function knitPouf(p: string[]) {
   const [fab, , acc] = p
   const g = new THREE.Group()
   g.add(puck(24, 35, fab))
-  for (const y of [9, 17.5, 26]) g.add(P(torus(23.6, 1, shade(fab, -0.08)), 0, y, 0, Math.PI / 2))
+  // 上下两道箍在墩子收圆的地方（那里半径只有 22.5）：环半径跟着收到 23，才压得进墩身；以前三道都是 23.6，上下两道悬在外面 0.2cm
+  for (const [y, r] of [[9, 23], [17.5, 23.6], [26, 23]]) g.add(P(torus(r, 1, shade(fab, -0.08)), 0, y, 0, Math.PI / 2))
   g.add(puck(6, 1.2, acc, { y: 34.3 }))
   return g
 }
@@ -574,11 +576,12 @@ function tvBoard(W: number) {
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(cyl(2, 1.5, 8.2, metal, { x: sx * (W / 2 - 8), z: sz * 14 }, 10))
     g.add(openBox(W, 34, 40, 2, wood, 8))
     for (const s of [-1, 1]) g.add(rbox(2, 30.4, 38.5, wood, { x: s * 31, y: 9.8, z: 0.75 }))
-    g.add(rbox(60, 1.6, 37.5, wood, { y: 24, z: 0.5 }, 0.4))
+    g.add(rbox(60.4, 1.6, 37.5, wood, { y: 24, z: 0.5 }, 0.4))
     const sw = W / 2 - 2 - 32
     const cx = W / 2 - 2 - sw / 2
     // 左：翻门（木条装饰），底边铰链往前放倒；门里一块层板
-    g.add(rbox(sw - 0.2, 1.6, 37.5, wood, { x: -cx, y: 24, z: 0.5 }, 0.4))
+    // 层板两头各插进侧板 / 隔板 0.2（以前比格子窄 0.2，两头各留 0.1 的缝，整块层板悬着）
+    g.add(rbox(sw + 0.4, 1.6, 37.5, wood, { x: -cx, y: 24, z: 0.5 }, 0.4))
     const flap = new THREE.Group()
     flap.add(front(sw - 0.6, 29.6, fr, 0, 0, 0))
     for (let k = 1; k < 6; k++) flap.add(rbox(0.8, 26, 0.8, shade(fr, -0.1), { x: -sw / 2 + (sw * k) / 6, y: 1.8, z: 1.5 }, 0.2))
@@ -870,7 +873,8 @@ function bankerLamp(p: string[]) {
   g.add(sh)
   for (const s of [-1, 1]) g.add(P(new THREE.Mesh(new THREE.CircleGeometry(7, 24, 0, Math.PI), mat), s * 13, 27, 0, 0, s * Math.PI / 2, 0))
   g.add(bulb(2.5, 0, 25, 0))
-  g.add(cyl(0.2, 0.2, 8, brass, { x: 8, y: 19.4, z: 6.4 }, 6))
+  // 拉链上端穿进灯罩（罩面在 z = 6.4 处高 29.8；以前链子只到 27.4，悬在罩口里）
+  g.add(cyl(0.2, 0.2, 10.7, brass, { x: 8, y: 19.4, z: 6.4 }, 6))
   g.add(ball(0.8, brass, { x: 8, y: 19, z: 6.4 }))
   return g
 }
@@ -1937,6 +1941,8 @@ function deskDrawers(p: string[]) {
   const [body, fr, knob] = p
   const g = new THREE.Group()
   g.add(openBox(30, 20, 22, 1, body))
+  // 抽屉的身子：一整块填在柜体里，三块抽屉面嵌在它前面（以前只有三块面板，四周留着缝悬在柜口）
+  g.add(rbox(28.4, 18.4, 20.4, shade(body, -0.06), { y: 0.8, z: 0.7 }, 0.2))
   for (let i = 0; i < 3; i++) {
     g.add(front(27.6, 5.6, fr, 0, 1.2 + i * 6, 11))
     g.add(rbox(6, 0.8, 0.8, knob, { y: 3.4 + i * 6, z: 12.6 }, 0.3))
@@ -2076,7 +2082,13 @@ function pencilCase(p: string[]) {
   for (const s of [-1, 1]) g.add(rbox(20, 0.6, 0.8, zip, { y: 5, z: s * 3.8 }, 0.2))
   g.add(cylX(1, 1.5, zip, 10.6, 3.8, 3.8))
   const cols = [acc, '#5a6b8c', C.red, C.leaf]
-  cols.forEach((c, i) => g.add(P(pen(13, c, shade(c, -0.2), 0, 0, 0), -5 + i * 2.4, 1.6 + i * 0.25, -1.4 + (i % 2) * 2.4, 0, 0, -Math.PI / 2 + 0.35)))
+  // 四支笔并排斜靠在右端的袋壁上：笔尖顶着袋底（0.6），笔帽搭在袋口（壁顶 5，x ≈ 9.7）。
+  // 以前四支都按同一个角度悬在袋底上方 1cm，靠右的两支从袋壁里穿出去
+  cols.forEach((c, i) => {
+    const x = -2.6 + i * 1.1
+    const a = Math.atan2(5.39 - 0.9, 9.7 - x)
+    g.add(P(pen(13, c, shade(c, -0.2), 0, 0, 0), x, 0.9, -2.4 + i * 1.6, 0, 0, -Math.PI / 2 + a))
+  })
   g.add(rbox(3, 1.4, 2, C.white, { x: 6.5, y: 0.6, z: 1.6 }, 0.4))
   return fitGroup(g)
 }
@@ -2327,7 +2339,7 @@ export const LM_DESK: AssetDef[] = [
     'lm-pencil-case',
     '笔袋',
     'study',
-    [24.6, 9, 7.3],
+    [22.6, 9, 7.2],
     [
       ['cute', C.lilac, C.white, C.pink],
       ['nordic', N.linen, N.oak, N.blue],
@@ -2500,7 +2512,8 @@ function trainTrack(p: string[]) {
   const car = (x: number, col: string, head: boolean) => {
     const c = new THREE.Group()
     c.add(rbox(7, 3, 3.6, col, { y: 2.4 }, 0.6))
-    for (const sx of [-2.2, 2.2]) for (const sz of [-1.9, 1.9]) c.add(cylZ(1.1, 0.6, TIRE, sx, 2.4, sz, 12))
+    // 车轮压在轨道面上（轨道顶面 1.2；以前轮心 2.4，轮底离轨道 0.1）
+    for (const sx of [-2.2, 2.2]) for (const sz of [-1.9, 1.9]) c.add(cylZ(1.1, 0.6, TIRE, sx, 2.2, sz, 12))
     if (head) {
       c.add(rbox(3, 3.6, 3.4, col, { x: -1.8, y: 5.2 }, 0.5))
       c.add(cyl(0.8, 1, 2.6, TIRE, { x: 2, y: 5.2 }, 10))
@@ -2628,15 +2641,31 @@ function ballPit(p: string[]) {
   g.add(P(torus(45.5, 4.5, wall), 0, 30, 0, Math.PI / 2))
   const r = rng(21)
   const cols = [a, b, C.lemon, C.sky, C.white, C.mint]
-  for (let layer = 0; layer < 3; layer++)
-    for (let i = 0; i < 46; i++) {
+  // 一个个往池里落：每个球落到池底（9）或者已经在那儿的球上，和托着它的球压进 0.5（球心距 6.7，12 × 8 段的球面最凹处也碰得到）。
+  // 每个球试 4 个落点、取最低的那个（球会往低处滚），堆出来的球面大致平、低于口沿。
+  // 以前是三层各自随机高度，球和球、球和池底之间到处差零点几厘米悬着
+  const D = 6.7
+  const floor = 9 + 3.6 - 0.3
+  const balls: { x: number; y: number; z: number; col: string }[] = []
+  for (let i = 0; i < 138; i++) {
+    let at = { x: 0, y: Infinity, z: 0 }
+    for (let k = 0; k < 4; k++) {
       const rr = Math.sqrt(r()) * 35
       const t = r() * Math.PI * 2
-      const col = cols[Math.floor(r() * cols.length)]
-      const at = { x: Math.cos(t) * rr, y: 12.6 + layer * 6 + r() * 2, z: Math.sin(t) * rr }
-      // 压在下面的两层只从球缝里露一点，用粗一档的球（138 个球全按 16×12 段要近 5 万个三角面）
-      g.add(layer === 2 ? ball(3.6, col, at) : P(mesh(pitBall(), col), at.x, at.y, at.z))
+      const x = Math.cos(t) * rr
+      const z = Math.sin(t) * rr
+      let y = floor
+      for (const q of balls) {
+        const d2 = (q.x - x) ** 2 + (q.z - z) ** 2
+        if (d2 < D * D) y = Math.max(y, q.y + Math.sqrt(D * D - d2))
+      }
+      if (y < at.y) at = { x, y, z }
     }
+    balls.push({ ...at, col: cols[Math.floor(r() * cols.length)] })
+  }
+  // 最上面的 46 个用细一档的球，压在下面的只从球缝里露一点，用粗一档（138 个球全按 16×12 段要近 5 万个三角面）
+  const fine = new Set([...balls].sort((p, q) => q.y - p.y).slice(0, 46))
+  for (const q of balls) g.add(fine.has(q) ? ball(3.6, q.col, q) : P(mesh(pitBall(), q.col), q.x, q.y, q.z))
   return g
 }
 
@@ -2695,7 +2724,8 @@ function toyShelf(p: string[]) {
       bin.position.set(x, y + 1.4, 1.5)
       bin.rotation.x = 0.08
       g.add(bin)
-      if ((row + i) % 2 === 0) g.add(block(i % 5, TOY[(row + i) % TOY.length], x - 3, y + 2.6, 2, 0.4, 5))
+      // 筐里的积木跟着筐一起斜，压在筐底上（筐底顶面在筐的局部 y = 0.8；以前按水平放在 y + 2.6，离筐底 0.2～0.4）
+      if ((row + i) % 2 === 0) bin.add(block(i % 5, TOY[(row + i) % TOY.length], -3, 0.7, 0.5, 0.4, 5))
     }
   }
   return g
@@ -2848,8 +2878,9 @@ function playKitchen(p: string[]) {
   g.add(cylX(0.8, 18, acc, -17, 38, 17.4))
   // 拉手两头的小立柱：横杆以前离门板 0.4 悬着
   for (const x of [-24, -10]) g.add(cylZ(0.5, 1.6, acc, x, 38, 16.7, 8))
-  g.add(front(32, 38, door, 17, 4, 15))
-  g.add(cyl(0.9, 0.9, 1.2, acc, { x: 4, y: 26, z: 17 }, 10))
+  // 柜门右沿压到侧板的前沿上（和左边的烤箱门一样；以前差 0.4，门板悬在开口里），门钮压进门板 0.1
+  g.add(front(33.4, 38, door, 17.7, 4, 15))
+  g.add(cyl(0.9, 0.9, 1.2, acc, { x: 4, y: 26, z: 16.8 }, 10))
   g.children[g.children.length - 1].rotation.x = Math.PI / 2
   // 炉头（偏左）、水槽（偏右）
   for (const [x, z] of [[-24, -4], [-12, 6]] as [number, number][]) {
@@ -2900,10 +2931,12 @@ function stackRings(p: string[]) {
   g.add(puck(6, 2.4, base))
   g.add(cyl(0.9, 0.9, 13, base, { y: 2.2 }, 10))
   const cols = [a, b, C.lemon, C.mint, C.sky]
+  // 五个圈一个压一个：外径逐个小 0.75、间距 2.5，管径统一 1.4 才互相压得住（压进约 0.2），最下面那个压进底座 0.1。
+  // 以前管径 1.25～0.97，圈和圈之间空着 0.1～0.4cm
   cols.forEach((c, i) => {
     const r = 5.2 - i * 0.75
-    const tt = 1.25 - i * 0.07
-    g.add(P(torus(r - tt, tt, c), 0, 2.4 + tt + i * 2.5, 0, Math.PI / 2))
+    const tt = 1.4
+    g.add(P(torus(r - tt, tt, c), 0, 2.3 + tt + i * 2.5, 0, Math.PI / 2))
   })
   g.add(ball(2, a, { y: 16 }))
   return g
@@ -2928,8 +2961,9 @@ function kidsEasel(p: string[]) {
   // 托盘
   g.add(tray(47.6, 4, 9, 0.8, tray0, { y: 50, z: 13 }, 0.3))
   g.add(tray(47.6, 4, 9, 0.8, tray0, { y: 50, z: -13 }, 0.3))
-  for (let i = 0; i < 4; i++) g.add(P(cyl(0.6, 0.6, 6, TOY[i], {}, 8), -9 + i * 5, 51.8, 13, 0, 0, Math.PI / 2))
-  g.add(P(cyl(0.6, 0.6, 6, a, {}, 8), 0, 51.8, -13, 0, 0, Math.PI / 2))
+  // 粉笔躺在托盘底上（托盘内底 50.8；以前笔心在 51.8，离盘底 0.4）
+  for (let i = 0; i < 4; i++) g.add(P(cyl(0.6, 0.6, 6, TOY[i], {}, 8), -9 + i * 5, 51.3, 13, 0, 0, Math.PI / 2))
+  g.add(P(cyl(0.6, 0.6, 6, a, {}, 8), 0, 51.3, -13, 0, 0, Math.PI / 2))
   return fitGroup(g)
 }
 

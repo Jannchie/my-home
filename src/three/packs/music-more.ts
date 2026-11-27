@@ -607,8 +607,8 @@ function bianzhong(p: string[]) {
   row([6.2, 5.8, 5.4, 5, 4.6, 4.2], 36, 1.8, false)
   row([9.6, 9, 8.4, 7.8, 7.2], 20, 0.9, true)
   // 小槌：长柄 + 横着的槌头，搁在底座前沿
-  const mallet = G(rod3([-6.5, 0.9, 0], [6, 0.9, 0], 0.35, shade(frame, 0.15), 6), cylZ(0.9, 3.2, acc, 7, 0.9, 0, 10))
-  g.add(P(mallet, -4, 2.4, 6.5, 0, 0.25, 0))
+  const mallet = G(rod3([-6.5, 0.9, 0], [6.6, 0.9, 0], 0.35, shade(frame, 0.15), 6), cylZ(0.9, 3.2, acc, 7, 0.9, 0, 10))
+  g.add(P(mallet, -4, 2.3, 6.5, 0, 0.25, 0))
   return g
 }
 
@@ -1095,9 +1095,10 @@ function pedalboard(p: string[]) {
     return [x + s * (w / 2 + 0.8), y + 3.4 * 0.55, z - d * 0.15]
   }
   const patch = (a: V3, sa: number, b: V3, sb: number) => {
-    const pa: V3 = [a[0] + sa * 0.9, a[1], a[2]]
-    const pb: V3 = [b[0] + sb * 0.9, b[1], b[2]]
-    top.add(cylX(0.6, 1.4, DARK, pa[0], pa[1], pa[2], 8), cylX(0.6, 1.4, DARK, pb[0], pb[1], pb[2], 8))
+    // 插头（长 1.8）：里头压进插孔 0.1，外头包住线头 0.1
+    const pa: V3 = [a[0] + sa * 0.8, a[1], a[2]]
+    const pb: V3 = [b[0] + sb * 0.8, b[1], b[2]]
+    top.add(cylX(0.6, 1.8, DARK, pa[0], pa[1], pa[2], 8), cylX(0.6, 1.8, DARK, pb[0], pb[1], pb[2], 8))
     const s0: V3 = [a[0] + sa * 1.6, a[1], a[2]]
     const s1: V3 = [b[0] + sb * 1.6, b[1], b[2]]
     const mid: V3 = [(s0[0] + s1[0]) / 2, Math.max(s0[1], s1[1]) + 2.4, (s0[2] + s1[2]) / 2]
@@ -1155,7 +1156,7 @@ function acousticGuitar(top: string, back: string) {
         ),
         5.5,
         25.5,
-        10.45,
+        10.36,
       ),
     ),
   )
@@ -1194,7 +1195,7 @@ function acousticGuitar(top: string, back: string) {
   for (let i = 0; i < 3; i++) {
     const y = 85.5 + i * 4.8
     for (const s of [-1, 1]) {
-      g.add(cylX(0.35, 2.6, STEEL, s * 5.2, y, 8.9, 6))
+      g.add(cylX(0.35, 3.4, STEEL, s * 4.8, y, 8.9, 6))
       g.add(nub(1.6, 1.4, 0.7, STEEL, { x: s * 7, y: y - 0.7, z: 8.9 }))
       g.add(cylZ(0.25, 0.8, STEEL, s * 2.8, y, 10, 6))
     }

@@ -2,9 +2,9 @@
 // 只放建模函数和它们用到的常量，素材表在 ../interests.ts（PACKS 只收集 packs/ 下一层的文件）。
 
 import * as THREE from 'three'
-import { ball, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../../toon'
+import { ball, box, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../../toon'
 import { paintPanel } from '../../kit'
-import { G, P, PI, cylX, cylZ, fitGroup, litOutlined, noOutline, rod3, taperRod3, type V2, type V3 } from '../../geo'
+import { G, P, PI, bentPipe, cylX, cylZ, fitGroup, litOutlined, noOutline, rod3, taperRod3, type V2, type V3 } from '../../geo'
 import { N } from '../../packkit'
 import { DARK, GOLD, IVORY, METAL, PAPER, RUBBER, chip, drawFretboard, drawKeys, drawScore, flat, paintTop, sym, taperPath } from './common'
 
@@ -139,9 +139,11 @@ export function drumKit(p: string[]) {
   // 嗵鼓
   for (const s of [-1, 1]) g.add(P(drum(10, 16, shellC, head, metal), s * 13, 62, 26, -0.45, 0, -s * 0.15))
   g.add(rod3([0, 57, 28], [0, 65, 24], 1, metal))
-  // 落地嗵
+  // 嗵鼓架的两根横臂：从立杆顶伸进两只嗵鼓的鼓身（以前嗵鼓离立杆 1.7cm，悬在底鼓上方）
+  for (const s of [-1, 1]) g.add(rod3([0, 65, 24], [s * 6, 66.5, 23.6], 0.8, metal))
+  // 落地嗵：三条腿的上端埋进鼓身（鼓身半径 16，以前从 17 起，离鼓身 0.4）
   g.add(drum(16, 40, shellC, head, metal).translateX(46).translateY(16).translateZ(-16))
-  for (const a of [0.3, 2.4, 4.4]) g.add(rod3([46 + Math.cos(a) * 17, 30, -16 + Math.sin(a) * 17], [46 + Math.cos(a) * 21, 0.6, -16 + Math.sin(a) * 21], 0.6, metal))
+  for (const a of [0.3, 2.4, 4.4]) g.add(rod3([46 + Math.cos(a) * 16.2, 30, -16 + Math.sin(a) * 16.2], [46 + Math.cos(a) * 21, 0.6, -16 + Math.sin(a) * 21], 0.6, metal))
   // 军鼓 + 架
   g.add(drum(17, 13, shellC, head, metal).translateX(-28).translateY(52).translateZ(-22))
   for (const a of [0.6, 2.7, 4.8]) g.add(rod3([-28, 52, -22], [-28 + Math.cos(a) * 18, 0.6, -22 + Math.sin(a) * 18], 0.6, metal))
@@ -186,8 +188,8 @@ export function eDrum(p: string[]) {
   // 底鼓塔
   g.add(rbox(18, 34, 14, rack, { y: 0, z: 18 }, 1.5))
   g.add(cylZ(7, 1.6, pad, 0, 20, 25.4, 20))
-  // 镲垫
-  const cym = (r: number, x: number, y: number, z: number) => P(G(cyl(1.5, r, 1.2, RUBBER, {}, 24), torus(r - 1, 0.3, acc, { y: 0.9, rx: PI / 2 })), x, y, z, 0.2)
+  // 镲垫：边上的色圈压在垫面上（垫面是锥面，离边 1cm 处高约 0.1；以前色圈在 0.9，悬在垫面上方 0.5）
+  const cym = (r: number, x: number, y: number, z: number) => P(G(cyl(1.5, r, 1.2, RUBBER, {}, 24), torus(r - 1, 0.3, acc, { y: 0.25, rx: PI / 2 })), x, y, z, 0.2)
   g.add(rod3([-50, 96, -5], [-42, 108, 4], 0.8, rack), cym(16, -42, 108, 4))
   g.add(rod3([50, 96, -5], [44, 112, 2], 0.8, rack), cym(16, 44, 112, 2))
   g.add(rod3([-50, 80, -5], [-38, 88, 20], 0.8, rack), cym(12, -38, 88, 20))
@@ -210,8 +212,8 @@ function bowedOutline(L: number, lower: number, upper: number, waist: number): V
   return sym([[0, 0], [a * 0.72, L * 0.02], [a * 0.98, L * 0.15], [a, L * 0.27], [a * 0.84, L * 0.41], [c, L * 0.5], [c * 1.04, L * 0.57], [b * 0.9, L * 0.68], [b, L * 0.78], [b * 0.8, L * 0.93], [0, L]])
 }
 
-/** 小提琴：沿 y 立着（底部 y = 0），正面 +z，背面 z = -1.6。[木色, 黑件] */
-function violin(wood: string, dark: string) {
+/** 小提琴：沿 y 立着（底部 y = 0），正面 +z，背面 z = -1.6。[木色, 黑件]；chinrest：带腮托（放大当大提琴用时不带） */
+function violin(wood: string, dark: string, chinrest = true) {
   const g = new THREE.Group()
   const ol = bowedOutline(35.5, 20.5, 16.5, 11)
   g.add(flat(ol, 3.2, shade(wood, -0.08), true, 0.6))
@@ -220,12 +222,16 @@ function violin(wood: string, dark: string) {
   g.add(rbox(2.2, 8, 2.4, shade(wood, -0.05), { y: 48, z: 0.4 }, 0.6))
   g.add(ball(1.6, shade(wood, -0.05), { y: 57, z: 0.4 }, [0.8, 1, 1.1]))
   for (const y of [50, 53]) g.add(cylX(0.35, 6, dark, 0, y, 0.4, 8))
-  g.add(rbox(2.6, 27, 0.7, dark, { y: 22, z: 2.6 }, 0.3))
-  g.add(rbox(3.2, 10, 0.7, dark, { y: 2.5, z: 2.7 }, 0.3))
+  // 指板背面压进琴颈（琴颈前面 z = 2.2）；拉弦板加厚到落在面板上（面板 z = 2.2）、弦尾埋在里面；指板上端加弦枕接住弦头。
+  // 以前指板离琴颈 0.05、拉弦板悬在面板上 0.15，四根弦两头都够不着东西
+  g.add(rbox(2.6, 27, 0.8, dark, { y: 22, z: 2.55 }, 0.3))
+  g.add(rbox(3.2, 10, 1.2, dark, { y: 2.5, z: 2.7 }, 0.3))
+  g.add(box(2.4, 0.8, 0.4, dark, { y: 48.1, z: 3 }))
   g.add(rbox(4.2, 0.5, 2, '#f0d9b0', { y: 13.2, z: 3.2 }, 0.2))
   for (const x of [-1.2, -0.4, 0.4, 1.2]) g.add(noOutline(taperRod3([x * 1.2, 12, 3.2], [x * 0.6, 48.5, 3.05], 0.05, 0.05, '#e8e8e8', 4)))
   for (const s of [-1, 1]) g.add(noOutline(P(rbox(0.5, 5, 0.3, '#3a2a20', {}, 0.15), s * 4.2, 11.5, 2.2, 0, 0, s * 0.15)))
-  g.add(puck(2.6, 1, dark, { x: -5, y: 1.2, z: 2.2 }))
+  // 腮托：平贴在面板左下角（盘面和面板平行，背面压进面板 0.1）。以前圆盘的轴顺着琴身，整个竖在面板上，像琴底伸出来的一块搁板
+  if (chinrest) g.add(P(puck(2.6, 1, dark), -4.6, 4.4, 2.6, PI / 2))
   return g
 }
 
@@ -251,6 +257,8 @@ export function violinCase(p: string[]) {
   // 立起的盒盖
   const lid = G(rbox(78, 24, 4, shellC, { z: -2 }, 1.2), rbox(75, 21.6, 0.6, lining, { y: 1.2, z: 0.3 }, 0.3), bowStick(70, 0, 12, 1.2, '#7a4a2a'))
   g.add(P(lid, 0, 8, -10, -0.18))
+  // 合页：盒盖绕后沿掀开，只有一条棱对着盒壁（两边都是圆角，实际隔着 0.7cm），合页把两边接起来
+  for (const s of [-1, 1]) g.add(cylX(0.9, 6, METAL, s * 22, 8, -10, 10))
   g.add(rbox(10, 1.4, 1.6, DARK, { y: 4, z: 14.6 }, 0.5))
   for (const s of [-1, 1]) g.add(rbox(2.4, 2, 0.8, METAL, { x: s * 20, y: 5.5, z: 14.3 }, 0.3))
   return g
@@ -277,7 +285,7 @@ export function celloStand(p: string[]) {
   const g = new THREE.Group()
   const t = 0.18
   const k = 2.1
-  const vc = violin(wood, dark)
+  const vc = violin(wood, dark, false)
   vc.scale.setScalar(k)
   const body = G(vc, cyl(0.5, 0.5, 12, METAL, { y: -12 }, 8))
   g.add(P(body, 0, 12, 8, -t))
@@ -341,7 +349,8 @@ function guitarOnStand(inst: THREE.Group, top: number, stand: string) {
   for (const s of [-1, 1]) {
     g.add(rod3([s * 12, yb - 1.4, zb + 2], [s * 16, 0.8, zb + 8], 0.9, stand))
     g.add(rod3([s * 12, yb - 1.4, zb + 2], [s * 4, ny - 2, nz - 1.2], 0.9, stand))
-    g.add(rod3([s * 12, yb - 1.4, zb + 4.2], [s * 12, yb + 1.5, zb + 4.2], 0.8, RUBBER))
+    // 前挡：从托杆往前伸出一小段再折上去（以前只有竖着的一截，离托杆 0.3cm 悬着）
+    g.add(bentPipe([[s * 12, yb - 1.4, zb + 2], [s * 12, yb - 1.4, zb + 4.2], [s * 12, yb + 1.5, zb + 4.2]], 0.8, RUBBER, 0))
   }
   g.add(rod3([0, ny - 2, nz - 1.2], [0, 0.8, nz - 16], 0.9, stand))
   // 颈托
@@ -392,7 +401,8 @@ export function saxStand(p: string[]) {
   sax.add(cyl(0.7, 0.9, 4, DARK, {}, 10).translateX(-10.5).translateY(71).rotateZ(1.2))
   sax.add(taperPath([[0, 66, 0], [0.3, 46, 0], [1, 24, 0], [3, 14, 0], [8, 11, 0], [12, 15, 0], [13, 24, 0], [13.6, 31, 0]], 1.4, 4.2, brass, 16))
   sax.add(cup(8, 4.3, 7, 0.4, brass, { x: 13.7, y: 30.5 }))
-  for (let i = 0; i < 6; i++) sax.add(ball(0.8, key, { x: 0.6 - i * 0.05, y: 56 - i * 4.5, z: 1.8 + i * 0.25 }, [1, 1, 0.5]))
+  // 按键贴着管身：管身越往下越粗，按键跟着往前挪，背面留在管壁里（以前每只多挪 0.05，最下面那只离管身 0.16）
+  for (let i = 0; i < 6; i++) sax.add(ball(0.8, key, { x: 0.6 - i * 0.05, y: 56 - i * 4.5, z: 1.8 + i * 0.2 }, [1, 1, 0.5]))
   for (let i = 0; i < 4; i++) sax.add(ball(1.2, brass, { x: 9 + i * 1.2, y: 15 + i * 3, z: 2.6 }, [1, 1, 0.5]))
   g.add(P(sax, -2, 4, 0))
   // 支架：三脚 + 底托 + 立杆

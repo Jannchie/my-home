@@ -463,10 +463,10 @@ export function carcass(w: number, h: number, d: number, color: string, opts: { 
   return g
 }
 
-/** 柜内层板：每个 y 是层板顶面高度（= surfaces 的 y），柜体外宽 w、外深 d，侧板厚 t */
+/** 柜内层板：每个 y 是层板顶面高度（= surfaces 的 y），柜体外宽 w、外深 d，侧板厚 t。两头和后沿各嵌进侧板 / 背板 0.2（不留缝，层板不悬着） */
 export function shelvesIn(w: number, d: number, ys: number[], color: string, t = 1.8, th = 1.6) {
   const g = new THREE.Group()
-  for (const y of ys) g.add(rbox(w - t * 2 - 0.2, th, d - t - 0.6, color, { y: y - th, z: t / 2 - 0.3 }, 0.3))
+  for (const y of ys) g.add(rbox(w - t * 2 + 0.4, th, d - t - 0.4, color, { y: y - th, z: t / 2 - 0.4 }, 0.3))
   return g
 }
 
@@ -620,9 +620,10 @@ export function slidingDoors(o: { x0: number; x1: number; y0: number; y1: number
   const th = o.th ?? 1.8
   const g = new THREE.Group()
   const dw = (o.x1 - o.x0) / n
-  const h = o.y1 - o.y0 - 0.6
   for (let i = 0; i < n; i++) {
     const front = i % 2 === 0
+    // 前轨的门会动，上下各留 0.3 的缝；后轨的门不动，上下各嵌进门洞 0.2（卡在轨道槽里，不然哪儿都不挨着）
+    const h = o.y1 - o.y0 + (front ? -0.6 : 0.4)
     // 相邻两扇在中间重叠 1.5cm
     const w = dw + 1.5
     const leaf = new THREE.Group()
@@ -630,7 +631,7 @@ export function slidingDoors(o: { x0: number; x1: number; y0: number; y1: number
     // 凹槽拉手（靠近和相邻门交错的一侧）
     if (o.pull !== false) leaf.add(rbox(1.6, Math.min(16, h * 0.4), 0.6, o.pull ?? shade(o.color, -0.25), { x: (front ? 1 : -1) * (w / 2 - 4), y: Math.max(1, Math.min(h / 2, 100 - o.y0) - 8), z: th / 2 + 0.1 }, 0.3))
     const cx = o.x0 + dw * (i + 0.5)
-    leaf.position.set(Math.min(Math.max(cx, o.x0 + w / 2), o.x1 - w / 2), o.y0 + 0.3, o.z - th / 2 - (front ? 0 : th + 0.4))
+    leaf.position.set(Math.min(Math.max(cx, o.x0 + w / 2), o.x1 - w / 2), o.y0 + (front ? 0.3 : -0.2), o.z - th / 2 - (front ? 0 : th + 0.4))
     // 前轨的门往右边那扇推（最后一扇往左）
     const dir = i < n - 1 ? 1 : -1
     g.add(front ? movable(leaf, { kind: 'slide', dx: dir * dw }) : leaf)

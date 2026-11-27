@@ -425,7 +425,8 @@ function footSpa(p: string[]) {
   for (const sx of [-1, 1]) for (const z of [-6, 0, 6]) g.add(cylX(1, 6, accent, sx * 6, 2.6, z, 10))
   for (const z of [-9, -4.5, 0, 4.5, 9]) g.add(ball(0.7, accent, { y: 2, z }, undefined, [6, 4]))
   // 水面
-  const water = markWater(ghost(cyl(15.2, 15.2, 0.3, WATER, { y: 15.6 }, 32), WATER, 0.55))
+  // 水面比内壁（这个高度半径约 15.25）大一圈，边缘嵌进盆壁
+  const water = markWater(ghost(cyl(15.5, 15.5, 0.3, WATER, { y: 15.6 }, 32), WATER, 0.55))
   water.scale.x = FS_SX
   g.add(water)
   // 两端提手

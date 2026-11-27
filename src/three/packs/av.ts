@@ -425,8 +425,9 @@ function filmProjector(on: boolean) {
       g.add(cylX(1.3, 2.8, metal, rx, 33, z, 20))
     }
     // 胶片
-    g.add(stick3([rx, 26, 8], [rx, 15, 9.2], 0.25, '#3a2f2a'))
-    g.add(stick3([rx, 26, -16], [rx, 15, -9.2], 0.25, '#3a2f2a'))
+    // 胶片：上端从片盘上缠着的胶片卷（半径 6.5）里出来，下端进机身前 / 后面（以前两头都差一点：上端离胶片卷 1.5cm，下端停在机身外 0.2cm）
+    g.add(stick3([rx, 27.5, 9], [rx, 14, 8.9], 0.25, '#3a2f2a'))
+    g.add(stick3([rx, 27.5, -14.8], [rx, 14, -8.9], 0.25, '#3a2f2a'))
     // 侧面摇柄
     g.add(cylX(2.2, 1, metal, -13.4, 10, 2, 20))
     g.add(cylX(0.6, 2, DARK, -14.6, 11.5, 2, 20))
@@ -730,7 +731,7 @@ function cassetteDeck(p: string[]) {
     [8, 0.3],
   ] as const) {
     g.add(glow(5.6, 3.2, meter, { x, y: 7.8, z: 14.8 }, 0.6))
-    g.add(noOutline(rbox(0.25, 2.6, 0.2, DARK, { x, y: 7.9, z: 15.3, rz: a }, 0.05)))
+    g.add(noOutline(rbox(0.25, 2.6, 0.2, DARK, { x, y: 7.9, z: 15.1, rz: a }, 0.05)))
   }
   for (let i = 0; i < 6; i++) g.add(rbox(2.6, 1.6, 2, '#d9dce1', { x: -0.5 + i * 3, y: 3, z: 14.9 }, 0.3))
   g.add(knob(1.5, 1.2, shade(face, -0.2), 17.5, 9, 14.6))
@@ -849,7 +850,7 @@ function tubeAmp(p: string[]) {
   }
   for (const s of [-1, 1]) g.add(knob(1.8, 1.4, plate, s * 12, 4.5, 13))
   g.add(glow(8, 4, AMBER, { y: 2.6, z: 13.1 }, 0.6))
-  g.add(noOutline(rbox(0.25, 3.2, 0.2, DARK, { x: 0.5, y: 2.9, z: 13.6, rz: -0.35 }, 0.05)))
+  g.add(noOutline(rbox(0.25, 3.2, 0.2, DARK, { x: 0.5, y: 2.9, z: 13.4, rz: -0.35 }, 0.05)))
   g.add(led(-16, 2, 13.1, C.red, 0.35))
   return ctr(g)
 }
@@ -1034,7 +1035,8 @@ function poster(w: number, h: number, kind: PosterKind, framed: boolean) {
       g.add(rbox(w, h, 0.2, '#f4f4f2', { y: -h / 2, z: 0.1 }, 0.05))
       g.add(paintPanel(w - 1.6, h - 1.6, ...artFace(0, key, paintPoster(kind, p)), { y: -h / 2 + 0.8, z: 0.5 }))
       for (const sx of [-1, 1])
-        for (const sy of [-1, 1]) g.add(ghost(rbox(5, 1.8, 0.1, '#fff6c8', { x: sx * (w / 2 - 2.6), y: sy * (h / 2 - 2.6) - 0.9, z: 0.8, rz: sx * sy * 0.78 }, 0.05), '#fff6c8', 0.6))
+        // 胶带厚 0.8，背面压进纸里（纸面 0.2、画面 0.5）：以前是 0.1 厚的薄片，悬在画面前 0.25cm
+        for (const sy of [-1, 1]) g.add(ghost(rbox(5, 1.8, 0.8, '#fff6c8', { x: sx * (w / 2 - 2.6), y: sy * (h / 2 - 2.6) - 0.9, z: 0.5, rz: sx * sy * 0.78 }, 0.05), '#fff6c8', 0.6))
     }
     return g
   }
@@ -1087,7 +1089,12 @@ function ticketStubs(p: string[]) {
     t.position.set(x, y, z)
     t.rotation.z = rz
     g.add(t)
-    g.add(ball(0.6, [C.red, '#5aa9ff', C.lemon][i], { x: x - 4.5 * Math.cos(rz), y: y - 4.5 * Math.sin(rz), z: z + 0.6 }, [1, 1, 0.8]))
+    // 图钉：钉帽压在票面上，钉针往下扎到压在下面的那张票（最底下那张扎到墙）。票面是各自错开 0.3 的平面，
+    // 靠钉针连成一体。第三张的钉子挪到它和第二张叠着的地方（上沿中间）；以前三颗钉帽都悬在票面前 0.12cm
+    const [px, py] = i === 2 ? [x, y + 2.1] : [x - 4.5 * Math.cos(rz), y - 4.5 * Math.sin(rz)]
+    g.add(ball(0.6, [C.red, '#5aa9ff', C.lemon][i], { x: px, y: py, z: z + 0.4 }, [1, 1, 0.8]))
+    const z0 = Math.max(0, z - 0.3)
+    g.add(noOutline(cylZ(0.12, z + 0.4 - z0, '#8a8d93', px, py, (z + 0.4 + z0) / 2, 6)))
   })
   return ctrStick(g)
 }
@@ -1309,7 +1316,8 @@ function theaterSofa(seats: number) {
       const x = -W / 2 + 9 + i * 78
       g.add(rbox(18, 52, 88, shade(main, -0.04), { x, z: -2 }, 3))
       g.add(holePanel(18, 88, 8, acc, [{ kind: 'circle', x: 0, y: 16, r: 3.9 }], { x, y: 56, z: 42, rx: -Math.PI / 2 }, 3))
-      g.add(cup(3.7, 3.2, 7.6, 0.3, cupC, { x, y: 52.2, z: 26 }))
+      // 杯托底压进扶手本体顶面（52）0.1
+      g.add(cup(3.7, 3.2, 7.9, 0.3, cupC, { x, y: 51.9, z: 26 }))
     }
     for (let j = 0; j < seats; j++) {
       const cx = -W / 2 + 48 + j * 78

@@ -346,7 +346,8 @@ function desk(p: string[]) {
   g.add(rbox(4, 70, 4, legColor, { x: -w / 2 + 5, z: d / 2 - 5 }, 1))
   for (const y of [14, 34, 52]) {
     g.add(rbox(32, 15, 1.5, shade(legColor, 0.06), { x: w / 2 - 22, y, z: d / 2 - 3 + 0.7 }, 1))
-    g.add(ball(1.4, C.woodD, { x: w / 2 - 22, y: y + 7.5, z: d / 2 - 1 }))
+    // 拉手半埋在抽屉面里，不超出桌面前沿（以前球心在 d/2 - 1，伸出声明的进深 0.4cm）
+    g.add(ball(1.4, C.woodD, { x: w / 2 - 22, y: y + 7.5, z: d / 2 - 1.5 }))
   }
   return g
 }
@@ -755,9 +756,10 @@ function umbrellaStand(p: string[]) {
     const a = (i / 3) * Math.PI * 2
     // 合拢的伞：伞尖在桶底，伞面最宽处靠上，顶上是弯柄（柄朝外）
     const u = new THREE.Group()
-    u.add(cyl(0.5, 0.5, 6, C.ink, { y: 2 }, 6))
+    // 伞尖一直伸到桶底（slot 在桶底面 1.4，往下压进 0.2）；伞柄杆顶插进弯柄的管口里
+    u.add(cyl(0.5, 0.5, 8.2, C.ink, { y: -0.2 }, 6))
     u.add(cyl(3, 0.6, 46, c, { y: 8 }, 10))
-    u.add(cyl(0.6, 0.6, 14, C.ink, { y: 54 }, 6))
+    u.add(cyl(0.6, 0.6, 14.5, C.ink, { y: 54 }, 6))
     u.add(torus(2.6, 0.8, C.woodD, { x: 2.6, y: 68 }, Math.PI))
     // 局部 +x 朝外：先绕 z 倒向 +x，再整体转到第 i 个方向
     u.rotation.z = -lean

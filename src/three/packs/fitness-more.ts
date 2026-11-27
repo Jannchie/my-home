@@ -732,7 +732,8 @@ function dancePad(p: string[]) {
   const rz = 19
   g.add(P(torus(17.5, 1.6, ringC), rx, 1.5 + 1.6, rz, PI / 2))
   for (const s of [-1, 1]) {
-    g.add(rbox(9, 3.6, 4.6, RUBBER, { x: rx, y: 1.5, z: rz + s * 17.5 }, 1.2))
+    // 握把的底压进毯面（毯子顶面 1.4，画面浮在 1.5）
+    g.add(rbox(9, 3.8, 4.6, RUBBER, { x: rx, y: 1.3, z: rz + s * 17.5 }, 1.2))
     g.add(rbox(10, 1.2, 5, ringC, { x: rx, y: 4.6, z: rz + s * 17.5 }, 0.5))
   }
   g.add(rbox(3.4, 1.4, 9, '#ff5a4a', { x: rx, y: 5.6, z: rz + 17.5 }, 0.6))

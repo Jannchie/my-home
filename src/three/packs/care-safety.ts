@@ -6,7 +6,7 @@
 import * as THREE from 'three'
 import { ball, box, cup, cyl, nub, rbox, shade, torus, tray } from '../toon'
 import { C, carcass, holePanel, rectPoly, type AssetDef } from '../kit'
-import { bakeMeshes, batten, cappedTube, cylX, cylZ, fitGroup, fitWall, G, ghost, hcyl, lathe, latheAt, lit, noOutline, P, PI, rod3, sideSlab, strutBox, taperRod3, tiltFrame, type V3 } from '../geo'
+import { bakeMeshes, batten, bentPipe, cappedTube, cylX, cylZ, fitGroup, fitWall, G, ghost, hcyl, lathe, latheAt, lit, noOutline, P, PI, rod3, sideSlab, strutBox, taperRod3, tiltFrame, type V3 } from '../geo'
 import { CL, I, J, M, N, PROP, R, define, type Pal } from '../packkit'
 
 const STEEL = '#c3c7cc'
@@ -18,69 +18,6 @@ const BRASS = '#c9a25a'
 /** 医疗 / 安防标志的红 */
 const SIGN_RED = '#d8362f'
 const PAPER = '#fbf7f1'
-
-/**
- * 折线弯管：pts 是折线顶点，直段是圆柱，每个内角用一段圆弧（圆环的一截）过渡；圆弧的切点离顶点 bend × 0.85（不超过相邻直段的四成）。
- * 整根管子均匀细分的话，面全花在直段上（一根助行器侧架要 1500 个三角面）；这样拼只有拐弯处有细分。
- * 直段和圆弧的截面都是正 radial 边形：折线走在竖直面里、或者每一段都和坐标轴平行时，两边的棱正好对上（radial 取 4 的倍数）。
- * bend 为 0：不倒圆角，拐点垫一颗同样粗的球（拐得很缓、又不在一个竖直面里的折线用）。caps 为 true 时两端加球帽（管口露在外面时用）。
- */
-function bentPipe(pts: V3[], r: number, color: string, bend = 3, caps = false, radial = 8) {
-  const g = new THREE.Group()
-  const v = pts.map((q) => new THREE.Vector3(...q))
-  const arr = (q: THREE.Vector3): V3 => [q.x, q.y, q.z]
-  const knob = (q: THREE.Vector3) => g.add(ball(r, color, { x: q.x, y: q.y, z: q.z }, undefined, [radial, 6]))
-  // 直段：圆柱的长度会量化到 0.1。接着圆弧的那一头往圆弧里多伸一点（至少 0.06），把总长凑成 0.1 的整数倍：
-  // 接头处不留缝，不接圆弧的那一头（管口）也正好落在给的点上
-  const leg = (a: THREE.Vector3, b: THREE.Vector3, intoA: boolean, intoB: boolean) => {
-    const d = b.clone().sub(a)
-    const len = d.length()
-    const n = (intoA ? 1 : 0) + (intoB ? 1 : 0)
-    d.normalize().multiplyScalar(n ? (Math.ceil((len + 0.06 * n) * 10) / 10 - len) / n : 0)
-    g.add(rod3(arr(intoA ? a.clone().sub(d) : a), arr(intoB ? b.clone().add(d) : b), r, color, radial))
-  }
-  let from = v[0]
-  let afterArc = false
-  for (let i = 1; i < v.length - 1; i++) {
-    const b = v[i]
-    const toA = v[i - 1].clone().sub(b)
-    const toC = v[i + 1].clone().sub(b)
-    const k = Math.min(bend, toA.length() * 0.4, toC.length() * 0.4) * 0.85
-    toA.normalize()
-    toC.normalize()
-    const turn = PI - toA.angleTo(toC)
-    // 圆弧半径取整到 0.1（torus 会量化），切点跟着半径走，圆弧两头才正好接在直段上
-    const R = Math.round((k / Math.tan(turn / 2)) * 10) / 10
-    if (R <= r) {
-      leg(from, b, afterArc, false)
-      knob(b)
-      from = b
-      afterArc = false
-      continue
-    }
-    const t = R * Math.tan(turn / 2)
-    const p0 = b.clone().addScaledVector(toA, t)
-    const p1 = b.clone().addScaledVector(toC, t)
-    const c = b.clone().addScaledVector(toA.clone().add(toC).normalize(), R / Math.cos(turn / 2))
-    // 圆环的局部 x 指向起点、y 在弯管所在的平面里朝终点一侧：弧从 p0 扫到 p1
-    const u = p0.clone().sub(c).normalize()
-    const w = p1.clone().sub(c)
-    w.addScaledVector(u, -w.dot(u)).normalize()
-    const arc = torus(R, r, color, {}, turn, [radial, Math.max(2, Math.ceil(turn / 0.3))])
-    arc.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(u, w, u.clone().cross(w)))
-    arc.position.copy(c)
-    leg(from, p0, afterArc, true)
-    g.add(arc)
-    from = p1
-    afterArc = true
-  }
-  leg(from, v[v.length - 1], afterArc, false)
-  if (caps) {
-    knob(v[0])
-    knob(v[v.length - 1])
-  }
-  return g
-}
 
 /** 辐条轮（轮轴沿 x，圆心在 Group 原点）：胎圈 + 轮辋 + n 根辐条 + 轮毂 */
 function chairWheel(R0: number, tire: number, n: number) {
@@ -411,7 +348,7 @@ function medCabinet(p: string[]) {
   const zf = MED.body / 2
   g.add(carcass(MED.w, MED.h, MED.body, body, { t: 1.2 }))
   // 隔板：下面一格开放
-  g.add(rbox(MED.w - 2.6, 1.2, MED.body - 1.8, body, { y: MED.niche - 1.2, z: 0.5 }, 0.3))
+  g.add(rbox(MED.w - 2, 1.2, MED.body - 1.8, body, { y: MED.niche - 1.2, z: 0.5 }, 0.3))
   // 门（盖住隔板以上）、十字标、拉钮、两只合页
   const y0 = MED.niche - 1
   const dh = MED.h - 0.3 - y0

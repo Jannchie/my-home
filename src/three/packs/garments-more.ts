@@ -468,7 +468,7 @@ function robeHanging(p: string[]) {
   const belt = shade(main, -0.09)
   // 青果领的滚边：沿驳领外沿
   for (const sx of [-1, 1]) {
-    // 驳领片（garments.ts）本身离衣身前面还有 0.3 的缝：滚边做粗一点、中心往里收，把领片外沿和衣身连起来
+    // 滚边压在驳领片（garments.ts，正面凸出衣身 0.8）的外沿上，半埋在领片和衣身里
     const pts: V3[] = [[sx * (nw + 0.5), yN + 0.4, front + 0.4], [sx * (nw + 4.5), yN - 7, front + 0.4], [sx * 3.5, yN - L - 1, front + 0.4]]
     // 两头带圆帽：上端在肩颈处朝上，不封口的话从上面能看进管子里
     body.add(cappedTube(pts, 0.48, pipe, { seg: 12, radial: 6, capSeg: [6, 4] }))

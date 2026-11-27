@@ -12,7 +12,7 @@
 //   - 壁挂层板的 surface / surfaces 写离地高度（= mount + 层板顶面在模型里的高度）。
 
 import * as THREE from 'three'
-import { ball, cached, capsule, cup, cyl, face, puck, rbox, shade, toon, torus, tray } from '../toon'
+import { ball, box, cached, capsule, cup, cyl, face, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { artFace } from '../artwork'
 import { C, G, glow, paintAbstract, paintFlower, paintLandscape, paintPanel, rectPoly, rng, shell, type AssetDef, type Fx } from '../kit'
 import { PI, clearDeep, lathe, noOutlineDeep, rod3, tube, type TubeOpts, type V3 } from '../geo'
@@ -310,7 +310,8 @@ function fukubukuro(s: number): Build {
       }, { y: h * 0.22, z: d / 2 + 0.31 }),
     )
     for (const sz of [-1, 1]) g.add(torus(w * 0.16, 0.45 * s + 0.15, print, { y: h, z: sz * (d / 2 - 0.4) }, PI))
-    for (const [x, r] of [[-0.18, 0.2], [0.12, 0.22], [0.3, 0.14]]) g.add(ball(w * r, tissue, { x: w * x, y: h - w * r * 0.4, z: 0 }, [0.8, 0.55, (d * 0.42) / (w * r)]))
+    // 包装纸塞满袋口：前后各嵌进袋壁 0.2（以前只到袋深的 0.42，小号的三团纸在袋口里悬着）
+    for (const [x, r] of [[-0.18, 0.2], [0.12, 0.22], [0.3, 0.14]]) g.add(ball(w * r, tissue, { x: w * x, y: h - w * r * 0.4, z: 0 }, [0.8, 0.55, (d / 2 - 0.3) / (w * r)]))
     return g
   }
 }
@@ -331,7 +332,8 @@ function setsubun(p: string[]) {
   const [mask, wood, hair] = p
   const g = new THREE.Group()
   g.add(tray(10, 6, 10, 0.7, wood, { x: 5, z: 4 }, 0.2))
-  g.add(cyl(4.2, 4.2, 0.4, '#d9b77a', { x: 5, y: 3.8, z: 4 }))
+  // 豆子堆的底：方枡里是方的，四边嵌进枡壁（以前是一张圆片，四角露着空，和枡壁也没挨上）
+  g.add(box(9, 0.4, 9, '#d9b77a', { x: 5, y: 3.8, z: 4 }))
   const rand = rng(5)
   for (let i = 0; i < 16; i++) {
     const a = rand() * PI * 2
@@ -457,7 +459,8 @@ function hinaTiers(p: string[]) {
   g.add(rbox(8, 9, 6, SUMI, { x: -30, y: 14, z: zc(0) }, 0.5))
   for (let k = 0; k < 3; k++) g.add(noOutlineDeep(rbox(7, 0.4, 0.3, GOLD, { x: -30, y: 16 + k * 2.6, z: zc(0) + 3.05 }, 0.1)))
   g.add(rbox(10, 6, 7, SUMI, { x: 0, y: 16, z: zc(0) }, 0.6))
-  for (const s of [-1, 1]) g.add(torus(3.2, 0.45, '#6e4f37', { x: s * 5.6, y: 17.2, z: zc(0), ry: PI / 2 }))
+  // 车轮贴着车厢两侧（轮圈嵌进厢壁 0.25）：以前离厢壁 0.15，车厢悬在两只轮子中间
+  for (const s of [-1, 1]) g.add(torus(3.2, 0.45, '#6e4f37', { x: s * 5.2, y: 17.2, z: zc(0), ry: PI / 2 }))
   g.add(rbox(8, 6, 6, SUMI, { x: 30, y: 14, z: zc(0) }, 1.2))
   g.add(rod3([25, 19.8, zc(0)], [35, 19.8, zc(0)], 0.4, GOLD, 8))
   return g
@@ -486,15 +489,18 @@ function hinaPair(p: string[]) {
   return g
 }
 
-/** 鲤鱼（鲤鱼旗的一条）：头在 -x，嘴是空心的环 */
+/** 鲤鱼（鲤鱼旗的一条）：头在 -x，嘴是张开的喇叭口，口沿套着口轮 */
 function carp(len: number, body: string) {
   const g = new THREE.Group()
   g.add(ball(len / 2, body, {}, [1, 0.24, 0.24]))
+  // 喇叭口：从鱼头张开到口轮（空心，开口朝 -x）。以前鱼头是收尖的，口轮比鱼头大一圈、悬空套在鼻尖外面
+  g.add(cup(len * 0.1, len * 0.06, len * 0.1, len * 0.012, body, { x: -len * 0.4, rz: PI / 2 }, 12))
   g.add(torus(len * 0.1, len * 0.018, '#f6f0e1', { x: -len * 0.47, ry: PI / 2 }))
   for (const s of [-1, 1]) {
     g.add(ball(len * 0.055, '#ffffff', { x: -len * 0.36, y: len * 0.04, z: s * len * 0.085 }, [1, 1, 0.45]))
     g.add(noOutlineDeep(ball(len * 0.028, SUMI, { x: -len * 0.36, y: len * 0.04, z: s * len * 0.1 }, [1, 1, 0.4])))
-    for (let k = 0; k < 3; k++) g.add(noOutlineDeep(torus(len * 0.05, len * 0.006, shade(body, 0.3), { x: -len * 0.12 + k * len * 0.14, y: -len * 0.01, z: s * len * 0.112 }, PI)))
+    // 鳞纹是两三毫米粗的细弧线、不描边：截面 5 段、半圈 8 段（torus 默认 8 × 12，三条鱼 18 道鳞纹占了三千多面）
+    for (let k = 0; k < 3; k++) g.add(noOutlineDeep(torus(len * 0.05, len * 0.006, shade(body, 0.3), { x: -len * 0.12 + k * len * 0.14, y: -len * 0.01, z: s * len * 0.112 }, PI, [5, 8])))
   }
   const fin = flat([[0, 0], [len * 0.22, len * 0.13], [len * 0.15, 0], [len * 0.22, -len * 0.13]], 0.4, body, -0.2)
   fin.position.x = len * 0.42
@@ -513,16 +519,21 @@ function koinobori(p: string[]) {
   for (let k = 0; k < 8; k++) wheel.add(rod3([0, 0, 0], [Math.cos((k * PI) / 4) * 5, Math.sin((k * PI) / 4) * 5, 0], 0.25, k % 2 ? '#3d6fb5' : GOLD, 8))
   wheel.position.set(0, 177, 2)
   g.add(wheel)
+  // 矢车的轴：从竿里伸出来穿过轮心（以前矢车悬在竿前面）
+  g.add(rod3([0, 177, 0], [0, 177, 2.5], 0.5, GOLD, 8))
   // 吹流：五色
   const cols = ['#3d6fb5', '#fbf8f0', '#d6453a', '#e3b549', '#5f9e4f']
   cols.forEach((c, i) => {
     const m = cyl(4 - i * 0.25, 4 - (i + 1) * 0.25, 8, c, {}, 16)
     m.rotation.z = -PI / 2
-    m.position.set(2 + i * 8 + 4, 168, 0)
+    // 吹流的口贴着竿（嵌进 0.2）
+    m.position.set(1.2 + i * 8 + 4, 168, 0)
     g.add(m)
   })
   ;([[papa, 46, 154], [mama, 37, 141], [kid, 29, 130]] as [string, number, number][]).forEach(([c, len, y]) => {
     const f = carp(len, c)
+    // 口轮上下各一根系绳拴在竿上（以前鲤鱼的口轮离竿 1cm，三条鱼都是悬着的）
+    for (const sy of [-1, 1]) f.add(rod3([-len / 2 - 2, sy * len * 0.1, 0], [-len * 0.47, sy * len * 0.1, 0], 0.2, '#f6f0e1', 5))
     f.position.set(2 + len / 2, y, 0)
     f.rotation.z = -0.04
     g.add(f)
@@ -571,7 +582,8 @@ function tanabata(p: string[]) {
   const [bam, paperA, paperB] = p
   const g = new THREE.Group()
   g.add(cup(14, 12, 24, 1, '#8a6a4a'))
-  g.add(cyl(12.4, 12.4, 1, '#9a9890', { y: 20 }))
+  // 桶里的石子面：和桶壁同样 32 段，嵌进桶壁 0.2（以前比内壁小一圈，竹子连同石子面悬在桶里）
+  g.add(cyl(13, 12.9, 1, '#9a9890', { y: 20 }, 32))
   g.add(cyl(2, 2.2, 140, bam, { y: 2 }, 12))
   for (let y = 30; y < 140; y += 22) g.add(hoop(2.1, 0.3, shade(bam, -0.12), y, 12))
   const rand = rng(7)
@@ -585,7 +597,8 @@ function tanabata(p: string[]) {
     for (let k = 0; k < 5; k++) g.add(sprig(9 + rand() * 3, k % 2 ? '#5f9e4f' : '#78b45a', end, PI / 2 - a + (rand() - 0.5) * 1.6, 0.35 + rand() * 0.4, 0.28))
     const mid: V3 = [end[0] * 0.6, y + 6, end[2] * 0.6]
     for (const [pt, k] of [[end, 0], [mid, 1]] as [V3, number][]) {
-      g.add(rod3([pt[0], pt[1] - 1, pt[2]], [pt[0], pt[1] - 4, pt[2]], 0.08, '#ffffff', 4))
+      // 系线：上端系在枝上，下端穿进短册（以前上下两头都差一截）
+      g.add(rod3([pt[0], pt[1] - 0.2, pt[2]], [pt[0], pt[1] - 4.4, pt[2]], 0.08, '#ffffff', 4))
       g.add(rbox(3.2, 10, 0.25, papers[(i * 2 + k) % papers.length], { x: pt[0], y: pt[1] - 14, z: pt[2], ry: -a }, 0.1))
     }
   }
@@ -632,7 +645,8 @@ function uchiwaBody(p: string[]) {
   g.add(torus(12, 0.28, shade(faceC, -0.25), { y: 24 }))
   for (const [x, y, r, a] of [[-3.5, 27, 2.4, 0.4], [3.6, 21, 2, -0.3], [0.5, 30.5, 1.4, 0.8]]) {
     g.add(noOutlineDeep(ball(r, pattern, { x, y, z: 0.36, rz: a }, [1.6, 0.9, 0.12])))
-    const tail = noOutlineDeep(flat([[0, 0], [r * 1.2, r * 0.7], [r * 1.2, -r * 0.7]], 0.15, pattern, 0.33))
+    // 鱼尾贴在扇面上（背面嵌进扇面 0.05；以前浮在扇面前 0.08）
+    const tail = noOutlineDeep(flat([[0, 0], [r * 1.2, r * 0.7], [r * 1.2, -r * 0.7]], 0.28, pattern, 0.2))
     tail.position.x = x + r * 1.3
     tail.position.y = y
     g.add(tail)
@@ -669,7 +683,7 @@ function katoriButa(p: string[]) {
     g.add(cyl(0, 2.3, 3.6, body, { x: s * 4.6, y: PIG_Y + 7.4, z: 5, rz: -s * 0.4, rx: 0.3 }, 10))
     g.add(noOutlineDeep(ball(0.55, SUMI, { x: s * 3.8, y: PIG_Y + 7.9, z: 5.5 })))
   }
-  g.add(torus(1.2, 0.35, body, { y: PIG_Y + 2, z: -8.6 }))
+  g.add(torus(1.2, 0.35, body, { y: PIG_Y + 2, z: -8.2 }))
   g.add(noOutlineDeep(torus(8.65, 0.25, accent, { y: PIG_Y, z: 2 })))
   // 蚊香（竖直螺旋）+ 挂丝
   const pts: V3[] = []
@@ -697,8 +711,9 @@ function tsukimiDango(p: string[]) {
     for (let i = 0; i < n; i++) for (let k = 0; k < n; k++) g.add(ball(r, dango, { x: (i - (n - 1) / 2) * r * 2, y, z: (k - (n - 1) / 2) * r * 2 }))
   }
   lay(3, fy + 0.25 + r)
-  lay(2, fy + 0.25 + r + r * 1.41)
-  lay(1, fy + 0.25 + r + r * 2.82)
+  // 上层的团子嵌在下层四颗之间：层距取 1.25r（正好相切是 1.41r，低面数的球面比球小一圈，相切的地方差出缝）
+  lay(2, fy + 0.25 + r + r * 1.25)
+  lay(1, fy + 0.25 + r + r * 2.5)
   return g
 }
 
@@ -707,7 +722,7 @@ function susuki(p: string[]) {
   const [vase, plume, stem] = p
   const g = new THREE.Group()
   g.add(cup(5.5, 6.5, 24, 0.8, vase))
-  g.add(cyl(4.6, 4.6, 0.5, '#8b6a4f', { y: 21 }))
+  g.add(cyl(5, 5, 0.5, '#8b6a4f', { y: 21 }, 32))
   const rand = rng(9)
   for (let i = 0; i < 7; i++) {
     const a = (i / 7) * PI * 2
@@ -759,7 +774,14 @@ function maneki(p: string[]) {
     g.add(noOutlineDeep(cyl(0, 1.6, 2.8, '#ffb6c8', { x: s * 4.9, y: 30.8, z: 0.9, rz: -s * 0.35 }, 10)))
     g.add(ball(2.2, body, { x: s * 3.5, y: 4.6, z: 6.5 }, [1, 0.8, 1.2]))
   }
-  g.add(face(9, { y: 24.8, z: 7.4 }))
+  // 脸：face() 的腮红是按平面摆的，猫头是球面，脸颊处比眼睛处往后收了近 1cm。把两团腮红往后挪、顺着脸颊转过去贴在脸上
+  // （face() 每侧依次是 眼、高光、腮红）
+  const fc = face(9, { y: 24.8, z: 7.4 })
+  for (const [i, sd] of [[2, -1], [5, 1]]) {
+    fc.children[i].position.z -= 0.7
+    fc.children[i].rotation.y = sd * 0.45
+  }
+  g.add(fc)
   g.add(noOutlineDeep(ball(0.6, '#ff8f9a', { y: 23.4, z: 7.6 })))
   g.add(torus(6.4, 0.9, collar, { y: 18.6, rx: PI / 2 }))
   g.add(ball(1.4, GOLD, { y: 16.8, z: 6.4 }))
@@ -800,7 +822,8 @@ function kamidana(p: string[]) {
   for (const s of [-1, 1]) g.add(rbox(1.6, 24, 1.6, wood, { x: s * 29, y: 10.5, z: 13 }, 0.3))
   g.add(tube([[-30, 34, 13], [-14, 30.5, 14], [0, 29.8, 14.2], [14, 30.5, 14], [30, 34, 13]], 0.9, rope, { ...TUBE, seg: 32, radial: 8 }))
   for (const x of [-15, 0, 15])
-    for (let k = 0; k < 3; k++) g.add(noOutlineDeep(rbox(2, 2.8, 0.2, PAPER, { x: x + (k % 2 ? 0.7 : -0.7), y: 27 - k * 2.8, z: 14.4 }, 0.05)))
+    // 纸垂的上端夹在绳里：绳两边比中间高（以前两边的纸垂离绳 0.06）
+    for (let k = 0; k < 3; k++) g.add(noOutlineDeep(rbox(2, 2.8, 0.2, PAPER, { x: x + (k % 2 ? 0.7 : -0.7), y: (x ? 27.6 : 27.2) - k * 2.8, z: 14.4 }, 0.05)))
   // 榊
   for (const s of [-1, 1]) {
     g.add(cup(1.6, 1.3, 5, 0.3, '#fbf8f0', { x: s * 25, y: y0, z: 4 }))
@@ -866,7 +889,8 @@ function ema(p: string[]) {
     }, { y: 0.6, z: 0.86 }),
   )
   for (const s of [-1, 1]) g.add(rbox(5.6, 0.8, 1.1, shade(wood, -0.18), { x: s * 5.8, y: 8.2, z: 0.05, rz: -s * 0.72 }, 0.2))
-  g.add(torus(1.8, 0.16, cord, { y: 10.4, z: 0.4 }, PI))
+  // 红绳两头穿进木牌顶边（弧多绕一点，两端落在顶边以下；以前两端停在顶边上方 0.4）
+  g.add(torus(1.8, 0.16, cord, { y: 10.4, z: 0.4, rz: -0.25 }, PI + 0.5))
   g.add(ball(0.5, cord, { y: 10.2, z: 0.4 }))
   return g
 }
@@ -944,6 +968,8 @@ function xmasTree(p: string[]) {
   const star = litAll(flat(starPts(8, 3.4), 1.6, GOLD, -0.8), GOLD, 0.7)
   star.position.y = 162
   g.add(star)
+  // 星星的插座：套在树尖上、顶进星星下面的凹口（以前星星悬在树尖上方 2cm）
+  g.add(litAll(cyl(1.2, 1.7, 6.2, GOLD, { y: 153.5 }, 8), GOLD, 0.7))
   return g
 }
 
@@ -990,11 +1016,16 @@ function stocking(main: string, stripe: string) {
 function stockingsWall(p: string[]) {
   const [a, b, rope] = p
   const g = new THREE.Group()
-  g.add(tube([[-36, 46, 2], [-18, 42.5, 2.6], [0, 41.8, 2.8], [18, 42.5, 2.6], [36, 46, 2]], 0.6, rope, { ...TUBE, seg: 32, radial: 6 }))
+  const line: V3[] = [[-36, 46, 2], [-18, 42.5, 2.6], [0, 41.8, 2.8], [18, 42.5, 2.6], [36, 46, 2]]
+  g.add(tube(line, 0.6, rope, { ...TUBE, seg: 32, radial: 6 }))
   for (const s of [-1, 1]) g.add(cyl(0.9, 0.9, 2.6, '#c3c7cc', { x: s * 36, y: 46, z: 0, rx: PI / 2 }, 8))
+  // 挂环套在绳上：按绳在这个 x 处实际的高度挂（以前两边的袜子按直线估，挂环离绳 0.2）
+  const curve = new THREE.CatmullRomCurve3(line.map((q) => new THREE.Vector3(...q)), false, 'centripetal')
+  const samples = curve.getSpacedPoints(144)
   ;([[-22, a, b], [0, b, a], [22, a, '#fbf8f0']] as [number, string, string][]).forEach(([x, m, st]) => {
     const s = stocking(m, st)
-    s.position.set(x, 42.6 + Math.abs(x) * 0.03, 2.8)
+    const at = samples.reduce((u, v) => (Math.abs(v.x - x) < Math.abs(u.x - x) ? v : u))
+    s.position.set(x, at.y + 0.8, at.z)
     g.add(s)
   })
   return g
@@ -1165,8 +1196,15 @@ function fanHead(r: number, cage: string, blade: string, motor: string, nBlade =
     // 中圈贴在辐条锥面上（半径 0.6r 处辐条的 z）：以前取 z×0.66，离辐条 0.6cm 悬着
     g.add(noOutlineDeep(torus(r * 0.6, 0.12, cage, { z: (z * (1 - 0.6)) / (1 - 0.16) })))
   }
-  g.add(cyl(r * 0.17, r * 0.17, 0.8, shade(cage, -0.1), { z: 3.4, rx: PI / 2 }, 20))
-  g.add(cyl(r * 0.12, r * 0.12, 2.6, motor, { z: -1.2, rx: PI / 2 }, 16))
+  // 轮毂盖、转轴、电机都在风扇的轴线上。cyl / capsule 的 at.y 是「底面」，横过来以后会把零件往上抬半个长度，
+  // 以前电机因此歪到网罩后面的上半边（离轴线半个半径），下面的叶片够不着转轴
+  const onAxis = <T extends THREE.Object3D>(o: T) => {
+    o.position.y = 0
+    return o
+  }
+  g.add(onAxis(cyl(r * 0.17, r * 0.17, 0.8, shade(cage, -0.1), { z: 3.4, rx: PI / 2 }, 20)))
+  // 转轴往前穿过叶片的根部（叶片中心在 z = 0.4）
+  g.add(onAxis(cyl(r * 0.12, r * 0.12, 3.5, motor, { z: -0.75, rx: PI / 2 }, 16)))
   for (let k = 0; k < nBlade; k++) {
     const a = (k / nBlade) * PI * 2
     const m = ball(r * 0.42, blade, {}, [0.62, 1, 0.12])
@@ -1174,7 +1212,7 @@ function fanHead(r: number, cage: string, blade: string, motor: string, nBlade =
     m.rotation.set(0, 0.25, a - PI / 2)
     g.add(m)
   }
-  g.add(capsule(r * 0.3, r * 0.35, motor, { y: 0, z: -3.6 - r * 0.32, rx: PI / 2 }))
+  g.add(onAxis(capsule(r * 0.3, r * 0.35, motor, { y: 0, z: -3.6 - r * 0.32, rx: PI / 2 })))
   return g
 }
 /** 落地扇 */
@@ -1197,7 +1235,8 @@ function fanDesk(p: string[]) {
   const g = new THREE.Group()
   g.add(rbox(22, 5, 18, body, {}, 2.4))
   for (let k = 0; k < 3; k++) g.add(rbox(2.6, 0.8, 1.6, k ? shade(body, -0.15) : accent, { x: -3 + k * 3, y: 5, z: 5 }, 0.3))
-  g.add(cyl(1.6, 2, 11, body, { y: 5, z: -2 }, 12))
+  // 立柱在网罩后面，顶到电机底下（以前立在网罩正下方、只到网罩下沿，机头没有东西撑着）
+  g.add(cyl(1.6, 2, 17.4, body, { y: 5, z: -5 }, 12))
   const h = fanHead(13, body, blade, body)
   h.position.set(0, 25.5, 1)
   g.add(h)
@@ -1255,7 +1294,8 @@ function fanRetro(p: string[]) {
   const g = new THREE.Group()
   g.add(lathe([[0, 0], [11, 0], [11, 1.5], [9, 4], [5, 6.2], [0, 6.4]], body, 28))
   for (let k = 0; k < 3; k++) g.add(rbox(2, 1.2, 1.6, '#f4efe4', { x: -3 + k * 3, y: 4.2, z: 6.6, rx: -0.5 }, 0.3))
-  g.add(cyl(1.4, 2, 13, body, { y: 6 }, 12))
+  // 立柱在网罩后面，顶到电机底下
+  g.add(cyl(1.4, 2, 19.8, body, { y: 6, z: -5 }, 12))
   const h = fanHead(14, cage, blade, body, 4, 12)
   h.position.set(0, 29, 1)
   g.add(h)
@@ -1294,8 +1334,11 @@ function keroseneConv(p: string[]) {
   }
   g.add(torus(21.3, 0.5, M.silver, { y: 33.3, rx: PI / 2 }))
   g.add(torus(21.3, 0.5, M.silver, { y: 19.7, rx: PI / 2 }))
-  g.add(cyl(1.8, 1.8, 1.6, M.char, { x: 9, y: 10, z: 21.1, rx: PI / 2 }, 14))
-  g.add(noOutlineDeep(rbox(4, 2, 0.5, '#f4f4f2', { x: -8, y: 9.5, z: 20.7 }, 0.2)))
+  // 旋钮、铭牌顺着圆筒的弧面装（以前都朝正前方摆在 z = 21 的平面上，离筒身 0.5～1cm 悬着）
+  const ka = Math.asin(9 / 21)
+  g.add(rod3([Math.sin(ka) * 20.6, 10.8, Math.cos(ka) * 20.6], [Math.sin(ka) * 23.2, 10.8, Math.cos(ka) * 23.2], 1.8, M.char, 14))
+  const la = -Math.asin(8 / 21)
+  g.add(noOutlineDeep(rbox(4, 2, 0.5, '#f4f4f2', { x: Math.sin(la) * 20.95, y: 9.5, z: Math.cos(la) * 20.95, ry: la }, 0.2)))
   g.add(cyl(23, 23, 1.6, top, { y: 47 }, 32))
   for (let k = 0; k < 3; k++) g.add(rod3([Math.cos(k * 2.1) * 22, 47, Math.sin(k * 2.1) * 22], [Math.cos(k * 2.1) * 22.4, 42, Math.sin(k * 2.1) * 22.4], 0.4, top, 8))
   // 水壶
@@ -1875,16 +1918,17 @@ function wireGrid(p: string[]) {
   }
   const shots: [number, number, number, number, number][] = [
     [-15, 40, 14, 10, 0.05],
-    [8, 42, 10, 13, -0.08],
-    [-14, 20, 10, 13, -0.06],
-    [10, 18, 15, 11, 0.07],
+    [8, 41, 10, 13, -0.08],
+    [-14, 22, 10, 13, -0.06],
+    [10, 17, 15, 11, 0.07],
   ]
   shots.forEach(([x, y, w, h, rz], i) => {
     const pg = G(rbox(w, h, 0.25, '#ffffff', {}, 0.05))
     const d = i % 2 ? paintFlower(shade(photo, 0.3), photo, GOLD) : paintLandscape(shade(photo, 0.35), photo, '#ffffff')
     pg.add(paintPanel(w - 1.2, h - 2.4, ...artFace(i, `wg|${photo}|${i}`, d), { y: 1.6, z: 0.21 }))
-    pg.add(rbox(1.4, 3, 1, clip, { y: h - 1.5, z: 0.4 }, 0.3))
-    pg.position.set(x, y - h + 1.5, 1.4)
+    // 照片靠在横丝上，夹子往后咬住一根横丝（每张照片的 y 都让夹子跨着一根横丝；以前照片和夹子都悬在网前 0.15）
+    pg.add(rbox(1.4, 3, 1.8, clip, { y: h - 1.5, z: 0.25 }, 0.3))
+    pg.position.set(x, y - h + 1.5, 1.15)
     pg.rotation.z = rz
     g.add(pg)
   })
@@ -2021,7 +2065,8 @@ function sensuDeco(p: string[]) {
     g.add(rod3([0, 0, -0.2], [Math.cos(a) * (r0 + 1), Math.sin(a) * (r0 + 1), -0.2], 0.35, rib, 5))
   }
   g.add(cyl(1, 1, 1.4, GOLD, { y: 0, z: -0.9, rx: PI / 2 }, 12))
-  g.add(disc(4.5, accent, 6, 19, 1.2, 0.3, 20))
+  // 日之丸：加厚到嵌进扇面（以前是 0.3 厚的薄片，浮在扇面前 0.3）
+  g.add(disc(4.5, accent, 6, 18.65, 1.2, 1, 20))
   return g
 }
 

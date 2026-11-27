@@ -5,6 +5,7 @@
 //   - 球的接缝用浮出表面的细管 / 贴片（sphPatch，离表面 ≥ 0.3）。
 
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { ball, capsule, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, ellipsePoly, holePanel, paintPanel, rectPoly, slab, type AssetCategory, type AssetDef, type Poly } from '../kit'
 import { P, PI, cylX, cylZ, fitBuild, ghost, lit, noOutline, rod3, taperRod3, type V3 } from '../geo'
@@ -73,9 +74,46 @@ function sHook(color = STEEL) {
   return tubeLine([...top, ...bottom], 0.25, color, false, 60)
 }
 
-/** 球面贴片（SphereGeometry 的一部分），phi 绕 y 轴（phi = π/2 朝 +z），theta 从 +y 极往下 */
-function sphPatch(r: number, color: string, phi0: number, dphi: number, th0: number, dth: number, seg = 32) {
-  const geo = new THREE.SphereGeometry(r, seg, Math.max(6, Math.round(seg / 2)), phi0, dphi, th0, dth)
+/**
+ * 球面贴片（SphereGeometry 的一部分），phi 绕 y 轴（phi = π/2 朝 +z），theta 从 +y 极往下。
+ * skirt > 0：四边加一圈朝球心收的裙边（深 skirt）。浮在球面外的色块（排球的皮块、保龄球的花纹）四周封到球面以下，
+ * 成了压在球上的一块皮；不加的话是悬在球外 0.3cm 的一片壳，侧着看边上露缝。只用于四边都不退化的贴片（不到极点、不绕满一圈）。
+ */
+function sphPatch(r: number, color: string, phi0: number, dphi: number, th0: number, dth: number, seg = 32, skirt = 0) {
+  const hs = Math.max(6, Math.round(seg / 2))
+  let geo: THREE.BufferGeometry = new THREE.SphereGeometry(r, seg, hs, phi0, dphi, th0, dth)
+  if (skirt > 0) {
+    const pos = geo.getAttribute('position')
+    const at = (ix: number, iy: number) => new THREE.Vector3().fromBufferAttribute(pos, iy * (seg + 1) + ix)
+    // 网格的四条边首尾相接成一圈
+    const loop: THREE.Vector3[] = []
+    for (let ix = 0; ix < seg; ix++) loop.push(at(ix, 0))
+    for (let iy = 0; iy < hs; iy++) loop.push(at(seg, iy))
+    for (let ix = seg; ix > 0; ix--) loop.push(at(ix, hs))
+    for (let iy = hs; iy > 0; iy--) loop.push(at(0, iy))
+    const k = (r - skirt) / r
+    const mid = at(seg >> 1, hs >> 1)
+    const ps: number[] = []
+    const ns: number[] = []
+    loop.forEach((a, i) => {
+      const b = loop[(i + 1) % loop.length]
+      const a2 = a.clone().multiplyScalar(k)
+      const b2 = b.clone().multiplyScalar(k)
+      // 裙边的面朝贴片外侧；法线用球面法线（裙边只有几毫米高，和贴片边缘一个明暗）
+      const out = a.clone().add(b).multiplyScalar(0.5).sub(mid)
+      const quad = b.clone().sub(a).cross(a2.clone().sub(a)).dot(out) >= 0 ? [a, b, a2, b, b2, a2] : [a, a2, b, b, a2, b2]
+      for (const v of quad) {
+        ps.push(v.x, v.y, v.z)
+        const u = v.clone().normalize()
+        ns.push(u.x, u.y, u.z)
+      }
+    })
+    const sk = new THREE.BufferGeometry()
+    sk.setAttribute('position', new THREE.Float32BufferAttribute(ps, 3))
+    sk.setAttribute('normal', new THREE.Float32BufferAttribute(ns, 3))
+    sk.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array((ps.length / 3) * 2), 2))
+    geo = mergeGeometries([geo.toNonIndexed(), sk])
+  }
   const m = new THREE.Mesh(geo, toon(color))
   m.castShadow = true
   m.receiveShadow = true
@@ -197,7 +235,8 @@ function tennisRacket(frame: string, grip: string, str: string) {
     const hh = 12 * Math.sqrt(Math.max(0, 1 - (x / 10.1) ** 2))
     g.add(noOutline(cyl(0.12, 0.12, hh * 2, str, { x, y: 52 - hh }, 6)))
   }
-  for (const s of [-1, 1]) g.add(rod3([s * 1.4, 30, 0], [s * 7, 41.5, 0], 0.7, frame))
+  // 喉部两根杆的下端顺着原来的方向插进拍柄 1.5（以前端点正对着拍柄顶面的圆角，离拍柄 0.3）
+  for (const s of [-1, 1]) g.add(rod3([s * 0.74, 28.65, 0], [s * 7, 41.5, 0], 0.7, frame))
   g.add(rod3([-5.8, 40.2, 0], [5.8, 40.2, 0], 0.6, frame))
   g.add(rbox(2.8, 30, 2.4, grip, {}, 0.8))
   g.add(rbox(3.2, 1.4, 2.8, frame, {}, 0.5))
@@ -236,7 +275,7 @@ function volleyball(p: string[]) {
     [[0, -1, 0], [0, 0, 1], c],
   ]
   for (const [f, s, col] of faces) {
-    const m = noOutline(orientFS(sphPatch(r + 0.3, col, PI / 2 - 0.66, 1.32, PI / 2 - 0.27, 0.54), f, s))
+    const m = noOutline(orientFS(sphPatch(r + 0.3, col, PI / 2 - 0.66, 1.32, PI / 2 - 0.27, 0.54, 12, 0.6), f, s))
     m.position.y = r
     g.add(m)
   }
@@ -271,7 +310,8 @@ function tennisCan(p: string[]) {
   g.add(cyl(r + 0.3, r + 0.3, 0.9, lid, {}, 28))
   g.add(puck(r + 0.35, 1.4, lid, { y: h - 0.3 }))
   g.add(cyl(r + 0.3, r + 0.3, 3, can, { y: 1.2 }, 28))
-  for (let i = 0; i < 3; i++) g.add(P(G(ball(3.2, bc), seam(3.2, WHITE, 0.2)), 0, 0.9 + 3.25 + i * 6.5, 0, 0.3 * i, i))
+  // 三只球一只压一只摞在罐底（罐底的盖顶 y = 0.9；球径 6.4、间距 6.2，球面是 16 × 12 段的多面体，压进去一点才真的挨着）
+  for (let i = 0; i < 3; i++) g.add(P(G(ball(3.2, bc), seam(3.2, WHITE, 0.2)), 0, 0.85 + 3.2 + i * 6.2, 0, 0.3 * i, i))
   g.add(seamBall(3.35, bc, WHITE, 8, 2))
   return g
 }
@@ -329,7 +369,7 @@ function bowlingBall(p: string[]) {
     [5.4, 0.6, 0.9, 0.3],
   ]
   for (const [ph, dph, th, dth] of rnd) {
-    const m = noOutline(sphPatch(r + 0.3, b, ph, dph, th, dth, 24))
+    const m = noOutline(sphPatch(r + 0.3, b, ph, dph, th, dth, 10, 0.6))
     m.position.y = r
     g.add(m)
   }
@@ -435,7 +475,8 @@ function ballRack(p: string[]) {
     ][i]
     ;[-24, 0].forEach((x, j) => {
       const col = cols[j]
-      const cy = y + 9.21
+      // 球卡在两根横杆之间（杆距 16、杆径 2.4、球径 22：正好相切时球心高 9.21；多面体的球和杆要压进去一点才挨着）
+      const cy = y + 8.9
       g.add(ball(11, col, { x, y: cy }))
       g.add(torus(11.05, 0.32, col === WHITE ? c : shade(col, -0.25), { x, y: cy, rx: PI / 2 + 0.4 * j, ry: 0.5 * i }))
       g.add(torus(11.05, 0.32, col === WHITE ? c : shade(col, -0.25), { x, y: cy, ry: PI / 2 + 0.3 * i }))
@@ -479,7 +520,9 @@ function batRack(p: string[]) {
   g.add(cup(7.5, 6.5, 15, 0.5, c, { x: 18, y: 3, z: 3 }))
   g.add(seamBall(3.65, WHITE, STITCH, 15.2, 3))
   g.add(seamBall(3.65, WHITE, STITCH, 20.6, 2.2))
-  g.add(P(G(ball(3.65, WHITE), seam(3.65, STITCH, 0.2)), 18, 3 + 0.5 + 3.65 + 5.8, 4, 1, 0.5))
+  // 桶里两只球：一只落在桶底，露出来的那只压在它上面（以前桶里只有上面这一只，悬在半空）
+  g.add(ball(3.65, WHITE, { x: 18, y: 3 + 0.45 + 3.65, z: 1.6 }))
+  g.add(P(G(ball(3.65, WHITE), seam(3.65, STITCH, 0.2)), 18, 3 + 0.45 + 3.65 + 6.63, 4.4, 1, 0.5))
   return g
 }
 
@@ -515,12 +558,14 @@ function bigPack(open: boolean) {
     g.add(tubeLine([[-4, bodyH - 1, -11.8], [0, bodyH + 2.5, -12.6], [4, bodyH - 1, -11.8]], 0.7, c))
     if (!open) {
       g.add(rbox(31, 9, 25, b, { y: 58, z: 0.5 }, 4))
-      for (const s of [-1, 1]) g.add(rbox(2, 16, 1, c, { x: s * 8, y: 44, z: 12.9 }, 0.4))
+      // 顶盖的两条扣带贴在包身前面（包身前面 z = 12，带子背面压进去 0.1；以前在 12.4，悬在包前）
+      for (const s of [-1, 1]) g.add(rbox(2, 16, 1, c, { x: s * 8, y: 44, z: 12.4 }, 0.4))
     } else {
       g.add(tray(30, 12, 22, 0.8, c, { y: bodyH - 2 }, 0.35))
       g.add(ball(8, shade(b, 0.12), { y: bodyH + 1.5 }))
       g.add(ball(5, STITCH, { x: 6, y: bodyH + 2, z: 3 }))
-      const lid = G(rbox(31, 4, 24, b, { y: -2, z: 12 }, 2))
+      // 掀开的顶盖：铰链那头多伸出 0.6，压进领口后壁的上沿（以前盖子的圆头正对着领口的棱，差 0.2）
+      const lid = G(rbox(31, 4, 24.6, b, { y: -2, z: 11.7 }, 2))
       lid.position.set(0, bodyH + 10, -11)
       lid.rotation.x = -PI * 0.85
       g.add(lid)
@@ -633,13 +678,15 @@ function chalkBag(p: string[]) {
   const [a, b, c] = p
   const g = G(cup(6.4, 6.8, 15, 0.5, a))
   g.add(torus(6.4, 1.1, b, { y: 15, rx: PI / 2 }))
-  g.add(ball(4.4, WHITE, { y: 5.2 }))
+  // 粉球落在袋底（袋底内面 y = 0.5；以前球底在 0.8）
+  g.add(ball(4.4, WHITE, { y: 4.85 }))
   g.add(rbox(1.4, 2.4, 1.2, c, { x: 3.5, y: 15.4, z: 6.6 }, 0.4))
   g.add(tubeLine([[2.6, 16, 6.2], [3.5, 15, 7.4], [4, 12, 7.6]], 0.2, c))
   g.add(cyl(1.1, 1.1, 10, c, { x: -7.6, y: 3 }, 12))
   g.add(cyl(0.6, 0.6, 5, WOOD, { x: -7.6, y: 12.5 }, 10))
   g.add(cyl(0.9, 0.6, 1.6, WHITE, { x: -7.6, y: 17.5 }, 10))
-  g.add(rbox(10, 2.6, 1, c, { y: 6, z: -7.2 }, 0.4))
+  // 腰带环往袋身里加厚 0.4（袋身后面 z ≈ -6.6）
+  g.add(rbox(10, 2.6, 1.4, c, { y: 6, z: -7 }, 0.4))
   return g
 }
 
@@ -864,7 +911,9 @@ function campStove(p: string[]) {
   g.add(torus(4, 0.3, c, { x: 6.8, y: 20, ry: PI / 2 }, PI))
   g.add(cup(7, 6.5, 8, 0.3, c, { x: 15 }))
   g.add(cup(5, 5, 7, 0.3, b, { x: 15, y: 0.35 }))
-  g.add(P(torus(3.5, 0.3, STEEL, {}, PI), 22.2, 5, 0, 0, PI / 2, -PI / 2))
+  // 套锅的折叠把手：贴着锅壁收起来的半环。锅壁是上大下小的锥面，把手跟着往外斜 0.0625，两头各压进锅壁 0.1；
+  // 以前竖直摆在 x = 22.2、半径 3.5：下端离锅壁 0.3，上端高出锅口 0.5
+  g.add(P(G(P(torus(3.2, 0.3, STEEL, {}, PI), 0, 0, 0, 0, PI / 2, -PI / 2)), 21.97, 4.3, 0, 0, 0, -0.0625))
   return g
 }
 
@@ -888,7 +937,8 @@ function thermos(p: string[]) {
   const [a, b, c] = p
   const g = G(cyl(4.3, 4.3, 24, a, {}, 28), cyl(4.6, 4.6, 2.5, c, {}, 28), cyl(3.6, 4.3, 1.5, a, { y: 24 }, 28), cyl(4.65, 4.45, 7, b, { y: 24.4 }, 28))
   g.add(rbox(1.4, 12, 1.2, c, { y: 7, z: 4.6 }, 0.5))
-  g.add(torus(1.6, 0.35, c, { y: 21, z: 5.2 }))
+  // 挂环套在提带上端（提带顶 y = 19，是圆角；以前环底在 19.05，悬着）
+  g.add(torus(1.6, 0.35, c, { y: 20.6, z: 5.2 }))
   return g
 }
 
@@ -928,7 +978,8 @@ function yogaBlocks(p: string[]) {
 function yogaStrap(p: string[]) {
   const [a, b] = p
   const g = G(puck(4.6, 3.8, a))
-  for (const r of [1.4, 2.5, 3.6]) g.add(noOutline(torus(r, 0.15, shade(a, -0.18), { y: 3.95, rx: PI / 2 })))
+  // 带卷顶面的三圈纹：里面两圈压在平顶上，最外一圈落在圆肩上（那里的表面比顶面低 0.15）
+  for (const r of [1.4, 2.5, 3.6]) g.add(noOutline(torus(r, 0.15, shade(a, -0.18), { y: r > 3 ? 3.7 : 3.9, rx: PI / 2 })))
   g.add(rbox(3.8, 0.3, 22, a, { z: 15 }, 0.12))
   for (const z of [26.6, 28]) g.add(ringFlat(2.1, 0.3, b, 0, 0.3 + (z - 26.6) * 0.3, z))
   return g
@@ -939,7 +990,8 @@ function bolster(p: string[]) {
   const g = G(cylX(11.5, 62, a, 0, 11.5, 0, 28))
   for (const s of [-1, 1]) g.add(P(puck(11.6, 2.4, b), s * 31, 11.6, 0, 0, 0, PI / 2))
   for (const x of [-12, 12]) g.add(cylX(11.8, 3, c, x, 11.5, 0, 28))
-  g.add(P(torus(3, 0.6, c, {}, PI), 32.3, 11.6, 0, 0, 0, -PI / 2))
+  // 提手两头各多绕 0.1 弧度（约 0.3cm）伸进端面（端面在 x = 32.2；以前两头正好停在 32.3）
+  g.add(P(torus(3, 0.6, c, {}, PI + 0.2), 32.3, 11.6, 0, 0, 0, -PI / 2 - 0.1))
   return g
 }
 
@@ -1029,8 +1081,8 @@ function binding(a: string, b: string, c: string) {
   const ankle = torus(5.8, 0.55, c, { y: 4.6, z: -2 }, PI)
   ankle.scale.set(1, 1, 3.5)
   g.add(ankle)
-  // 趾带两端落到底板上（底板顶 y = 1.6；这一段没有侧墙，原来整条带子悬在底板上方）
-  const toe = torus(5.2, 0.5, c, { y: 1.8, z: 8 }, PI)
+  // 趾带两端落到底板上（底板顶 y = 1.6；这一段没有侧墙）：半环两头各多绕 0.06 弧度，端面压到 y ≈ 1.5（只绕半圈的话端面停在 1.8，离底板 0.2）
+  const toe = torus(5.2, 0.5, c, { y: 1.8, z: 8, rz: -0.06 }, PI + 0.12)
   toe.scale.set(1, 1, 2.6)
   g.add(toe)
   for (const z of [-2, 8]) g.add(rbox(1.6, 1.4, 2.6, STEEL, { x: z < 0 ? 6.2 : 5.6, y: z < 0 ? 4.6 : 1.8, z }, 0.3))
@@ -1319,7 +1371,7 @@ function racketWall(p: string[]) {
   const zb = -d / 2 + 1
   const zr = -d / 2 + 2 + 2.2
   const g = G(rbox(60, 42, 2, a, { y: y0 + 20, z: zb }, 0.8))
-  for (const x of [-14 - 3.4, -14 + 3.4, 14 - 3, 14 + 3]) g.add(cylZ(0.7, 5.6, b, x, y0 + (x < 0 ? 32.5 : 43.9), -d / 2 + 2 + 2.8, 10))
+  for (const x of [-14 - 3.4, -14 + 3.4, 14 - 3, 14 + 3]) g.add(cylZ(0.7, 5.6, b, x, y0 + (x < 0 ? 32.5 : 44.1), -d / 2 + 2 + 2.8, 10))
   g.add(P(tennisRacket(c, DARK, WHITE), -14, y0, zr))
   g.add(P(badmintonRacket(b, WHITE, WHITE), 14, y0 + 0.1, zr))
   return g

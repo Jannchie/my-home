@@ -432,11 +432,12 @@ function canopyBed(p: string[]) {
     g.add(sheer(rbox(152, 22, 0.6, sheet, { y: 182, z: s * 106.3 }, 0.2)))
     g.add(sheer(rbox(0.6, 22, 213.2, sheet, { x: s * 75.3, y: 182 }, 0.2)))
     for (const sz of [-1, 1]) {
-      g.add(sheer(rbox(1.2, 160, 26, sheet, { x: s * 76.4, y: 22, z: sz * 88 }, 0.4)))
-      g.add(rbox(1.6, 3, 27, duvet, { x: s * 77.2, y: 95, z: sz * 88 }, 0.6))
+      // 纱帘上端接进顶上的帷幔（原来在帷幔外侧 0.2、顶边刚好齐平，四条纱帘都悬着）
+      g.add(sheer(rbox(1.2, 161, 26, sheet, { x: s * 75.9, y: 22, z: sz * 88 }, 0.4)))
+      g.add(rbox(1.6, 3, 27, duvet, { x: s * 76.7, y: 95, z: sz * 88 }, 0.6))
     }
   }
-  g.add(sheer(rbox(150, 0.6, 210, sheet, { y: 205.2 }, 0.2)))
+  g.add(sheer(rbox(150, 0.6, 210, sheet, { y: 204.8 }, 0.2)))
   return g
 }
 
@@ -547,7 +548,8 @@ function roundBed(p: string[]) {
   }
   for (let i = 24; i >= 0; i--) {
     const t = t0 + ((t1 - t0) * i) / 24
-    ring.push([106.2 * Math.sin(t), -106.2 * Math.cos(t)])
+    // 内弧压进床座一点（床座是 48 边形，原来 106.2 的内弧和它之间留着缝）
+    ring.push([105.4 * Math.sin(t), -105.4 * Math.cos(t)])
   }
   g.add(slab(ring, 75, frame, 5))
   const btn = shade(frame, -0.2)
@@ -555,7 +557,7 @@ function roundBed(p: string[]) {
     for (let i = 0; i < 9; i++) {
       const t = -0.95 + (1.9 * (i + (r % 2) * 0.5)) / 9
       if (t > 0.95) continue
-      g.add(ball(1.2, btn, { x: 106 * Math.sin(t), y: 58 + r * 7, z: -106 * Math.cos(t) }))
+      g.add(ball(1.2, btn, { x: 105.2 * Math.sin(t), y: 58 + r * 7, z: -105.2 * Math.cos(t) }))
     }
   g.add(puck(86, 6, duvet, { y: 53, z: 14 }))
   for (const s of [-1, 1]) g.add(rbox(48, 12, 30, C.white, { x: s * 27, y: 54, z: -70, rx: -0.15 }, 5))
@@ -583,7 +585,8 @@ function ironBed(p: string[]) {
     g.add(cylX(1.6, 2 * X, iron, 0, y0, z))
     g.add(cylX(1.6, 2 * X, iron, 0, y1, z))
     for (let x = -60; x <= 60; x += 12) g.add(cyl(0.9, 0.9, y1 - y0, iron, { x, y: y0, z }, 8))
-    for (let x = -54; x <= 54; x += 12) g.add(torus(4.2, 0.7, iron, { x, y: (y0 + y1) / 2, z }))
+    // 圆圈两侧焊在竖杆上（原来外径 9.8，离两边的竖杆各差 0.2）。二十个细圈：管截面 6 段、一圈 20 段就够
+    for (let x = -54; x <= 54; x += 12) g.add(torus(4.6, 0.7, iron, { x, y: (y0 + y1) / 2, z }, Math.PI * 2, [6, 20]))
   }
   // 横撑和床板两端搭到侧梁上（以前比侧梁内侧窄 1.5cm，整块床板悬空）
   for (const s of [-1, 1]) g.add(rbox(139, 3, 4, iron, { y: 32.4, z: s * 60 }, 0.8))
@@ -620,8 +623,8 @@ function foldingBedOpen(p: string[]) {
   }
   for (const s of [-1, 1]) g.add(rbox(4, 4, 6, shade(frame, -0.2), { x: s * 44, y: 29, z: 0 }, 1))
   g.add(rbox(86, 0.8, 194, shade(frame, -0.25), { y: 31 }, 0.3))
-  for (const s of [-1, 1]) g.add(rbox(86, 10, 96.5, mat, { y: 32.4, z: s * 48.75 }, 4))
-  g.add(rbox(50, 9, 30, pillow, { y: 41.5, z: -78 }, 4))
+  for (const s of [-1, 1]) g.add(rbox(86, 10, 96.5, mat, { y: 31.6, z: s * 48.75 }, 4))
+  g.add(rbox(50, 9, 30, pillow, { y: 41.2, z: -78 }, 4))
   return g
 }
 
@@ -638,17 +641,20 @@ function foldingBedClosed(p: string[]) {
     const z = sz * 13
     for (const sx of [-1, 1]) {
       g.add(cyl(1.5, 1.5, 100, frame, { x: sx * 44, y: 8, z }, 10))
-      g.add(cyl(1.2, 1.2, 62, frame, { x: sx * 41, y: 20, z: sz * 15.8 }, 8))
+      // 折起的床腿贴在床框的立管上（原来离立管 1.4cm 悬着）
+      g.add(cyl(1.2, 1.2, 62, frame, { x: sx * 42.8, y: 20, z: sz * 15 }, 8))
     }
     g.add(cylX(1.5, 88, frame, 0, 8.5, z))
     g.add(cylX(1.5, 88, frame, 0, 107, z))
-    g.add(rbox(86, 96, 0.8, shade(frame, -0.25), { y: 10, z: sz * 11.2 }, 0.3))
+    // 床网：里面压着床垫、两边搭到立管上（原来 0.8 厚，两头都够不着）
+    g.add(rbox(87, 96, 1.8, shade(frame, -0.25), { y: 10, z: sz * 11.1 }, 0.3))
     g.add(rbox(86, 96.5, 10, mat, { y: 10, z: sz * 5.5 }, 4))
   }
   g.add(cylX(10.5, 86, mat, 0, 106, 0, 24))
   for (const s of [-1, 1]) {
-    g.add(rbox(90, 4, 0.8, pillow, { y: 60, z: s * 17.6 }, 0.3))
-    g.add(rbox(0.8, 4, 35.2, pillow, { x: s * 45.6, y: 60 }, 0.3))
+    // 绑带勒在折起的床腿和立管外面，四条首尾相接
+    g.add(rbox(92, 4, 0.8, pillow, { y: 60, z: s * 16.4 }, 0.3))
+    g.add(rbox(0.8, 4, 33.6, pillow, { x: s * 45.6, y: 60 }, 0.3))
   }
   return g
 }
@@ -708,7 +714,7 @@ function carBed(p: string[]) {
   g.add(rbox(90, 14, 190, sheet, { y: 18, z: -6 }, 4))
   g.add(rbox(50, 9, 30, C.white, { y: 31, z: -84 }, 4))
   for (const s of [-1, 1]) {
-    g.add(rbox(4, 8.5, 4, acc, { x: s * 32, y: 60, z: -106 }, 1))
+    g.add(rbox(4, 10.5, 4, acc, { x: s * 32, y: 58, z: -106 }, 1))
     g.add(lit(ball(4.5, C.lemon, { x: s * 32, y: 20, z: 110 }, [1, 1, 0.5]), C.lemon))
   }
   g.add(rbox(104, 3, 16, acc, { y: 68, z: -104 }, 1.2))
@@ -759,7 +765,8 @@ function slidingWardrobe(w: number, p: string[]) {
   g.add(rbox(w + 1, 4, 61, shade(main, -0.08), { y: 196 }, 1.2))
   g.add(rbox(w - 4, 1.8, 54, shade(main, 0.04), { y: 172.2, z: -1.5 }, 0.3))
   g.add(hangingPipe(-w / 2 + 2, w / 2 - 2, 166, -2, CHROME, 1.2))
-  g.add(rbox(w - 4, 3, 5, shade(main, -0.15), { y: 6, z: 28.5 }, 0.8))
+  // 下轨：门扇落在轨道里 0.2（原来门底离轨道 0.5，固定的那扇四边都不挨着柜体）
+  g.add(rbox(w - 4, 3.7, 5, shade(main, -0.15), { y: 6, z: 28.5 }, 0.8))
   const span = (w - 4) / n
   const dw = span + 3
   for (let i = 0; i < n; i++) {
@@ -848,8 +855,9 @@ function shokkidana(p: string[]) {
   for (const s of [-1, 1]) g.add(swingAt([glassDoor(47.4, 52.6, sub, s * 24, 124.7, 10.2), knob(s * 4, 150, 11.6, acc, 1.2)], s * 47.7, 9.5, s < 0))
   // 固定的碗盘：都在上柜底层（y 124.5），上层留空
   const yb = 124.5
-  for (let i = 0; i < 6; i++) g.add(cyl(8.5, 7, 0.9, C.white, { x: -34, y: yb + i * 1.1, z: -6 }, 24))
-  for (let i = 0; i < 3; i++) g.add(cup(6.5, 4, 5, 0.6, J.ai, { x: -14, y: yb + i * 1.6, z: -6 }))
+  // 一摞盘子 / 碗：每只都落在下面那只上（原来盘子之间隔 0.2、碗壁之间隔 0.2）
+  for (let i = 0; i < 6; i++) g.add(cyl(8.5, 7, 1.2, C.white, { x: -34, y: yb + i * 1.1, z: -6 }, 24))
+  for (let i = 0; i < 3; i++) g.add(cup(6.5, 4, 5, 0.6, J.ai, { x: -14, y: yb + i * 1, z: -6 }))
   for (let i = 0; i < 3; i++) g.add(cup(3.8, 3, 7, 0.5, i === 1 ? J.shu : C.cream, { x: 4 + i * 8.5, y: yb, z: -4 }))
   for (let i = 0; i < 2; i++) {
     const pl = cyl(10, 10, 1, i ? R.cream : C.white, {}, 24)
@@ -893,6 +901,8 @@ function mizuya(p: string[]) {
   g.add(rbox(112, 1.4, 35, main, { y: 97.2, z: -5 }, 0.4))
   g.add(rbox(112, 1.6, 35, inner, { y: 133, z: -5 }, 0.4))
   g.add(rbox(120, 3, 41, shade(main, -0.08), { y: 172, z: -2.5 }, 1))
+  // 上段拉门的下轨（敷居）：接在小抽屉上面那块板的前沿，两扇门落在上面（原来固定的那扇四边都不挨着柜体）
+  g.add(rbox(116, 1.4, 5.2, fr, { y: 97.3, z: 14.9 }, 0.3))
   for (let i = 0; i < 4; i++) {
     const x = -43.5 + i * 29
     g.add(pullOut([rbox(27.4, 9, 1.4, fr, { x, y: 88, z: 13.4 }, 0.5), ...ring(x, 94.5, 14.2), drawerTray(25, 7, 30, inner, x, 88.3, 12.7)], 18))
@@ -900,7 +910,8 @@ function mizuya(p: string[]) {
   for (const s of [-1, 1]) {
     const x = s * 29
     const z = s < 0 ? 14.7 : 16.5
-    const parts = [rbox(55, 69, 0.4, paper, { x, y: 100, z: z - 1.15 }, 0.1), holePanel(58, 72, 1.6, main, gridHoles(58, 72, 3, 4, 1.6, 2.6), { x, y: 98.5, z })]
+    // 障子纸贴在格子背面，压进去 0.1（原来离格子 0.15）
+    const parts = [rbox(55, 69, 0.4, paper, { x, y: 100, z: z - 0.9 }, 0.1), holePanel(58, 72, 1.6, main, gridHoles(58, 72, 3, 4, 1.6, 2.6), { x, y: 98.5, z })]
     if (s > 0) g.add(slideBy(parts, -58))
     else for (const o of parts) g.add(o)
   }
@@ -1075,7 +1086,7 @@ function island(p: string[]) {
     g.add(pullOut([front(53.6, 14, 54, shade(body, 0.05), x, 67.6), pullBar(20, x, 75.5, 28.9, acc), drawerTray(50, 10, 48, shade(body, 0.1), x, 68, 26.6)], 29))
     g.add(swingAt([front(53.6, 54, 54, shade(body, 0.05), x, 12), rbox(1.5, 18, 1.5, acc, { x: s * 4, y: 44, z: 28.9 }, 0.6)], s * 54.1, 26.6, s < 0))
   }
-  for (const z of [-19, 19]) g.add(cylX(0.8, 3.4, acc, 57, 70, z, 8))
+  for (const z of [-19, 19]) g.add(cylX(0.8, 4, acc, 56.7, 70, z, 8))
   g.add(cylZ(0.9, 40, acc, 58.4, 70, 0, 10))
   return g
 }
@@ -1126,7 +1137,8 @@ function wineCabinet(p: string[]) {
   g.add(rbox(75.6, 2.5, 36, main, { y: 112, z: 0.5 }, 0.6))
   g.add(rbox(75.6, 2, 34, main, { y: 142, z: 0 }, 0.6))
   for (const x of [-24, -8, 8, 24]) {
-    g.add(rbox(1.5, 1, 30, acc, { x, y: 176.5, z: 0 }, 0.3))
+    // 挂杯轨：下沿压住杯底（原来离杯底 0.2，八只杯子都悬着）
+    g.add(rbox(1.5, 1.4, 30, acc, { x, y: 176.1, z: 0 }, 0.3))
     for (const z of [-8, 6]) {
       g.add(puck(2.8, 0.5, C.glass, { x, y: 175.8, z }))
       g.add(cyl(0.3, 0.3, 6.5, C.glass, { x, y: 169.5, z }, 6))
@@ -1183,7 +1195,8 @@ function archCabinet(p: string[]) {
   roof.absarc(0, yA, 38, Math.PI, 0, true)
   roof.lineTo(40, yA)
   g.add(meshWith(extrude(roof, 34.5), toon(main)))
-  for (const y of [60, 100, 132]) glassShelf(g, 75.6, 33, y)
+  // 玻璃层板两头嵌进侧板 0.2（原来各短 0.2，三块都悬着）
+  for (const y of [60, 100, 132]) glassShelf(g, 76.4, 33, y)
   // 灯条装在拱顶下面：拱内壁 x = ±8 处高 172.15，灯条两头嵌进拱里（原来 44 长、在 y = 160，离拱顶 5cm 以上悬着）
   g.add(lit(rbox(16, 0.6, 3, C.lamp, { y: 171.8, z: 6 }, 0.2), C.lamp, 0.9))
   return g
@@ -1356,7 +1369,7 @@ function gakushu(p: string[]) {
   g.add(rbox(95, 22, 1, accent, { x: -2.5, y: 100, z: -29.5 }, 0.3))
   g.add(paintPanel(16, 11, 'fm-gaku-timetable', drawTimetable, { x: -28, y: 82, z: -28.9 }))
   g.add(rbox(60, 2, 5, shade(body, -0.1), { x: -2.5, y: 96, z: -14 }, 0.5))
-  g.add(lit(cylX(0.9, 56, C.lamp, -2.5, 95, -14, 10), C.lamp, 0.9))
+  g.add(lit(cylX(0.9, 56, C.lamp, -2.5, 95.3, -14, 10), C.lamp, 0.9))
   return g
 }
 
@@ -1387,7 +1400,8 @@ function barCounter(p: string[]) {
     for (let r = 0; r < 2; r++) {
       if (r === 1 && i === 4) continue
       const x = -64 + i * 8 + r * 4
-      const y = 4.5 + 3.6 + r * 7.2
+      // 上排卧在下排两只瓶子之间的凹里（原来抬高 7.2，和下排隔着 1cm 悬着）
+      const y = 4.5 + 3.6 + r * 5.7
       const col = bottles[(i + r * 2) % bottles.length]
       g.add(cylZ(3.6, 22, col, x, y, -4, 16))
       g.add(cylZ(1.3, 8, col, x, y, -19, 10))
@@ -1428,7 +1442,8 @@ function genkanBench(p: string[]) {
     // 牙板顶到面板底（以前中间几根面板条离牙板 1.5cm 悬空）
     g.add(rbox(88.2, 7.6, 2, wood, { y: 35, z: s * 14.5 }, 0.5))
     g.add(rbox(2, 7.6, 25.2, wood, { x: s * 46, y: 35 }, 0.5))
-    g.add(rbox(3, 2, 25.2, legc, { x: s * 42.5, y: 8 }, 0.5))
+    // 鞋架托档：两头接进腿里，顶面托住板条（原来和腿、和板条都只是相切）
+    g.add(rbox(3.5, 2, 28, legc, { x: s * 42.75, y: 8.2 }, 0.5))
   }
   for (let i = 0; i < 6; i++) g.add(rbox(100, 2.5, 5, wood, { y: 42.5, z: -14.5 + i * 5.8 }, 0.6))
   for (let i = 0; i < 5; i++) g.add(rbox(88, 1.8, 4.4, wood, { y: 10, z: -11 + i * 5.5 }, 0.5))
@@ -1797,7 +1812,7 @@ export const FURNITURE_MORE: AssetDef[] = [
     ['cute', C.mint, C.white, C.woodL],
   ]),
   ...([true, false] as const).map((open) =>
-    withPals({ id: open ? 'fm-folding-bed' : 'fm-folding-bed-closed', name: '折叠床', sizeLabel: open ? '打开' : '收起', form: open ? 'open' : 'closed', category: 'bedroom', w: open ? 91 : 92, d: open ? 199 : 36, h: open ? 51 : 117, styles: ['modern', 'industrial', 'cute'], build: (p) => (open ? foldingBedOpen(p) : foldingBedClosed(p)) }, [
+    withPals({ id: open ? 'fm-folding-bed' : 'fm-folding-bed-closed', name: '折叠床', sizeLabel: open ? '打开' : '收起', form: open ? 'open' : 'closed', category: 'bedroom', w: open ? 91 : 92, d: open ? 199 : 34, h: open ? 51 : 117, styles: ['modern', 'industrial', 'cute'], build: (p) => (open ? foldingBedOpen(p) : foldingBedClosed(p)) }, [
       ['cute', C.sky, C.white, C.white],
       ['nordic', N.gray, N.white, N.white],
       ['modern', M.char, M.light, M.black],

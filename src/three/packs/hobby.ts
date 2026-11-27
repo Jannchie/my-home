@@ -164,7 +164,8 @@ function adjustableDumbbell(p: string[]) {
     g.add(cylX(4.2, 1.6, acc, s * 20.1, cy, 0, 20))
     g.add(cylX(1.6, 1.0, handle, s * 21.2, cy, 0, 12))
   }
-  g.add(cylX(1.7, 15, handle, 0, cy, 0))
+  // 握杆两头插进最里面那片配重（片的内侧面在 ±7.75；以前握杆只到 ±7.5，悬在两摞片之间）
+  g.add(cylX(1.7, 16, handle, 0, cy, 0))
   g.add(cylX(2.1, 9, RUBBER, 0, cy, 0))
   return g
 }
@@ -357,7 +358,8 @@ function resistanceBands(p: string[]) {
   p.forEach((c, i) => {
     const m = torus(9, 0.8, c)
     m.scale.set(1.3, 0.7, 0.5)
-    g.add(P(m, -2.8 + i * 3, 0.4 + i * 0.85, -1.8 + i * 1.5, PI / 2, 0, 0.15 * i))
+    // 压扁后每根高 0.8，一根压着一根（间距 0.75，互相压进 0.05；以前间距 0.85，上面的悬着）
+    g.add(P(m, -2.8 + i * 3, 0.4 + i * 0.75, -1.8 + i * 1.5, PI / 2, 0, 0.15 * i))
   })
   return g
 }
@@ -615,7 +617,8 @@ function punchingBagStand(p: string[]) {
   g.add(puck(28, 24, base))
   g.add(torus(25.5, 1.2, band, { y: 20, rx: PI / 2 }))
   g.add(cyl(7, 7, 4, CHROME, { y: 23.5 }, 20))
-  for (let i = 0; i < 6; i++) g.add(P(torus(5.2, 1, CHROME), 0, 28.5 + i * 2.3, 0, PI / 2, 0, 0))
+  // 弹簧：六圈，圈距 2.3、簧丝直径 2.4，相邻两圈互相咬住（以前簧丝直径 2，圈和圈之间空 0.3，中间四圈悬着）
+  for (let i = 0; i < 6; i++) g.add(P(torus(5.2, 1.2, CHROME), 0, 28.5 + i * 2.3, 0, PI / 2, 0, 0))
   g.add(cyl(8, 8, 4, CHROME, { y: 40 }, 20))
   g.add(capsule(17, 88, bag, { y: 43 }))
   g.add(cyl(17.3, 17.3, 7, band, { y: 104 }, 28))
@@ -1276,7 +1279,8 @@ function printerBox(p: string[]) {
   const [body, acc, glass] = p
   const g = new THREE.Group()
   g.add(shell(38, 46, 38, 1.5, body, { top: false, front: [{ kind: 'rect', x: 0, y: 7, w: 32, h: 35, r: 1.5 }] }))
-  g.add(ghostOutlined(rbox(33, 36, 0.6, glass, { y: 6.5, z: 19.4 }, 0.3), glass, 0.3))
+  // 玻璃门背面压进门框 0.1（门框前面 z = 19；以前门从 19.1 起，连着把手悬在门框前）
+  g.add(ghostOutlined(rbox(33, 36, 0.8, glass, { y: 6.5, z: 19.3 }, 0.3), glass, 0.3))
   g.add(rbox(1, 8, 0.6, acc, { x: 14, y: 20, z: 19.9 }, 0.3))
   g.add(glow(7, 3, SCREEN, { x: -12, y: 2, z: 19.2 }, 0.5))
   // 内部
@@ -1356,7 +1360,8 @@ function fighter(p: string[]) {
   pl.add(ghostOutlined(ball(1.3, '#9fd3ff', { x: 6.5, y: 1.2 }, [2.4, 0.9, 0.9]), '#9fd3ff', 0.7))
   pl.add(wings([[4, 1], [-8.5, 1], [-8.5, 9], [-6.5, 9]], 0.45, body, -0.4))
   for (const s of [-1, 1]) {
-    pl.add(P(finXY([[-5.5, 0.8], [-9.5, 0.8], [-10.5, 6], [-8.6, 6]], 0.35, acc), 0, 0, s * 1.6, s * 0.3, 0, 0))
+    // 双垂尾立在机翼上（翼面 y = 0.05）：前后缘顺着原来的斜度往下延到翼面里。以前垂尾从 y = 0.8 起，在机身外侧 0.4cm 处悬着
+    pl.add(P(finXY([[-4.96, -0.1], [-9.33, -0.1], [-10.5, 6], [-8.6, 6]], 0.35, acc), 0, 0, s * 1.6, s * 0.3, 0, 0))
     pl.add(rbox(4, 1.6, 1.2, shade(body, -0.1), { x: 3, y: -1, z: s * 1.6 }, 0.4))
     // 翼面标记浮出翼面（y = 0.05）0.15，原来顶面共面
     pl.add(noOutline(rbox(2.2, 0.3, 1, acc, { x: -5, y: -0.1, z: s * 6 }, 0.1)))
@@ -1379,8 +1384,9 @@ function propPlane(p: string[]) {
   // 翼尖色带整圈包住机翼（上下、前后各鼓出 0.15）：原来顶面和机翼顶面共面
   for (const s of [-1, 1]) pl.add(noOutline(rbox(4.9, 0.9, 3, acc, { x: 4.5, y: 1.85, z: s * 13.2 }, 0.1)))
   for (const s of [-1, 1]) {
-    pl.add(rod3([4, -1.5, s * 1.8], [4.5, 2, s * 8], 0.2, body, 6))
-    pl.add(rod3([5, -2, s * 1.4], [5, -4, s * 3], 0.25, '#3a3a3c', 6))
+    // 撑杆、起落架的上端都伸进机身（机身是 1.2 的大圆角，下棱附近的表面比包围盒缩进去 0.2～0.3）
+    pl.add(rod3([4, -1.5, s * 1.5], [4.5, 2, s * 8], 0.2, body, 6))
+    pl.add(rod3([5, -1.5, s * 1], [5, -4, s * 3], 0.25, '#3a3a3c', 6))
     pl.add(cylZ(0.9, 0.6, '#3a3a3c', 5, -4.2, s * 3.3, 14))
   }
   pl.add(finXY([[-11, 0.8], [-14, 0.8], [-14.5, 5], [-12.5, 5]], 0.4, acc))
@@ -1397,6 +1403,8 @@ function helicopter(p: string[]) {
   pl.add(P(cyl(0.6, 1.4, 12, body, {}, 14), -11, 0.6, 0, 0, 0, PI / 2))
   pl.add(finXY([[-15.5, 0.5], [-17.4, 0.5], [-18.4, 5], [-16.9, 5]], 0.4, acc))
   pl.add(P(rbox(0.3, 4.4, 0.7, '#3a3a3c', {}, 0.1), -17.4, 3.6, 0.7, 0, 0, 0.5))
+  // 尾桨轴：从垂尾里伸出来接住尾桨（以前尾桨离垂尾 0.15 悬着）
+  pl.add(cylZ(0.3, 0.7, '#3a3a3c', -17.4, 3.6, 0.4, 8))
   pl.add(noOutline(rbox(5, 0.5, 8.5, acc, { x: -1, y: -1.2 }, 0.2)))
   pl.add(cyl(0.5, 0.5, 2.2, '#3a3a3c', { y: 3.8 }, 10))
   pl.add(cyl(1, 1, 0.8, acc, { y: 5.8 }, 14))
@@ -1544,7 +1552,8 @@ function trainLayout(p: string[]) {
   pond.scale.z = 0.6
   g.add(pond)
   g.add(rbox(8, 6, 7, '#fff1dc', { x: 16, y: BT - 0.1, z: cz - 3 }, 0.6))
-  g.add(P(rbox(9.5, 1.2, 8, C.red, {}, 0.3), 16, BT + 6.6, cz - 3))
+  // 屋顶压在墙顶上（墙顶 BT + 5.9；以前屋顶底在 BT + 6，差 0.1）
+  g.add(P(rbox(9.5, 1.2, 8, C.red, {}, 0.3), 16, BT + 6.45, cz - 3))
   for (const [x, z, s] of [[-52, 32, 1.6], [-46, 34, 1.2], [52, 30, 1.4], [50, -34, 1.7], [-52, -34, 1.5], [30, -6, 1.1], [-2, 6, 1.2]] as const) g.add(tree(x, BT, z, s))
   // 小火车：机车 + 两节车厢（在前直道）
   for (let i = 0; i < 3; i++) {
@@ -1554,7 +1563,8 @@ function trainLayout(p: string[]) {
     car.add(rbox(8.6, 3.6, 3.4, i === 0 ? trainC : shade(trainC, 0.12), { y: 0.9 }, 0.8))
     car.add(noOutline(rbox(7, 1, 3.8, '#3a4658', { y: 2.6 }, 0.2)))
     if (i === 0) car.add(ball(1.6, trainC, { x: 4.3, y: 2.3 }, [1, 1, 1.05]))
-    P(car, q.x, BT + 1.4, q.z + cz, 0, q.yaw, 0)
+    // 车底压在钢轨上（轨顶 BT + 1.4）：底盘的圆角正好对着钢轨，再往下压 0.15
+    P(car, q.x, BT + 1.25, q.z + cz, 0, q.yaw, 0)
     g.add(car)
   }
   return g
@@ -1574,7 +1584,8 @@ function shinkansenDisplay(p: string[]) {
     g.add(noOutline(ball(1, '#2a3444', { x: cx + s * 10.6, y: 6.25 }, [1.8, 0.45, 1.05])))
     g.add(noOutline(rbox(16.6, 0.45, 3.6, stripe, { x: cx, y: 4.8 }, 0.15)))
     g.add(noOutline(rbox(14, 0.8, 3.6, '#3a4658', { x: cx - s * 0.6, y: 6.0 }, 0.2)))
-    for (const dx of [-5.5, 5.5]) g.add(rbox(3, 0.7, 2.2, '#3a3a3c', { x: cx + dx, y: 3.3 }, 0.2))
+    // 转向架加宽到压住两根钢轨（钢轨在 z = ±1.2～1.6；以前只有 2.2 宽，夹在两根钢轨中间，整列车悬着）
+    for (const dx of [-5.5, 5.5]) g.add(rbox(3, 0.7, 3, '#3a3a3c', { x: cx + dx, y: 3.3 }, 0.2))
   }
   g.add(rbox(1.6, 2.6, 2.4, '#3a3a3c', { y: 4.2 }, 0.4))
   return g
@@ -1612,6 +1623,8 @@ function steamLoco(k: number) {
     L.add(rbox(7, 0.6, 6, acc, { x: -3, y: 12.8 }, 0.25))
     L.add(noOutline(rbox(2.2, 2.2, 5.8, '#2a2f38', { x: -2.6, y: 9 }, 0.2)))
     L.add(P(rbox(1.6, 2, 3.4, acc, {}, 0.3), 17.4, 3.4, 0, 0, 0, -0.5))
+    // 前端梁：接在车架前头，排障器挂在它下面（以前排障器离车架 0.7，悬在钢轨上方）
+    L.add(rbox(2.1, 1.6, 3.4, body, { x: 16.35, y: 4.2 }, 0.3))
     L.add(rbox(12, 5.4, 4.8, body, { x: -13.5, y: 4.6 }, 0.6))
     L.add(rbox(10, 1, 4, '#222326', { x: -13.5, y: 9.6 }, 0.3))
     L.add(rbox(2, 0.8, 1.2, '#3a3a3c', { x: -7, y: 5 }, 0.2))
@@ -1636,7 +1649,8 @@ function gunpla(p: string[], k = 1) {
     g.add(rbox(1.6, 1.4, 0.6, acc, { x, y: 5.6, z: 1.4 }, 0.2))
     g.add(rbox(2.0, 3.6, 2.2, main, { x: s * 1.6, y: 6.9 }, 0.5))
     g.add(rbox(1.4, 1.8, 0.6, main, { x: s * 1.2, y: 9.4, z: 1.45 }, 0.2))
-    g.add(rbox(2.4, 2.2, 2.6, main, { x: s * 4.0, y: 13.6 }, 0.5))
+    // 肩甲压进躯干侧面 0.1（躯干到 ±2.7；以前肩甲从 2.8 起，两条胳膊都悬着）
+    g.add(rbox(2.4, 2.2, 2.6, main, { x: s * 3.8, y: 13.6 }, 0.5))
     g.add(rbox(1.5, 2.8, 1.6, joint, { x: s * 4.0, y: 10.9 }, 0.4))
     g.add(rbox(1.9, 2.8, 2.0, main, { x: s * 4.1, y: 8.2 }, 0.5))
     g.add(rbox(1.2, 1.2, 1.3, joint, { x: s * 4.1, y: 7.0 }, 0.3))
@@ -1653,7 +1667,8 @@ function gunpla(p: string[], k = 1) {
   for (const s of [-1, 1]) g.add(P(rbox(0.25, 2.2, 0.3, acc, {}, 0.1), s * 0.75, 17.9, 0.8, 0, 0, -s * 0.9))
   g.add(rbox(3.4, 3, 1.6, sec, { y: 12.2, z: -2.3 }, 0.4))
   // 盾 + 步枪
-  g.add(P(rbox(0.5, 6, 3.4, acc, {}, 0.25), -5.35, 9.2, 0.4))
+  // 盾往里加厚 0.2，压进小臂外侧（以前差 0.05）
+  g.add(P(rbox(0.7, 6, 3.4, acc, {}, 0.25), -5.25, 9.2, 0.4))
   g.add(rbox(0.8, 1.2, 6, joint, { x: 4.1, y: 6.2, z: 2.3 }, 0.3))
   g.add(cylZ(0.25, 1.4, joint, 4.1, 6.9, 5.9, 8))
   g.scale.setScalar(k)
@@ -1683,7 +1698,7 @@ function workMat(p: string[]) {
   g.add(cylX(0.5, 1.5, CHROME, -6.4, 1.05, 10, 12))
   g.add(rbox(1.8, 0.6, 0.15, CHROME, { x: -4.8, y: 0.75, z: 10 }, 0.05))
   // 镊子
-  for (const dz of [-0.6, 0.6]) g.add(rod3([4, 0.85, 10.5], [13, 0.85, 10.5 + dz], 0.2, CHROME, 6))
+  for (const dz of [-0.6, 0.6]) g.add(rod3([4, 0.75, 10.5], [13, 0.75, 10.5 + dz], 0.2, CHROME, 6))
   // 水口钳
   for (const dz of [-1.6, 1.6]) {
     g.add(rod3([11, 0.95, -1], [18, 0.95, -1 + dz], 0.35, acc, 8))

@@ -32,7 +32,8 @@ function items(pin: THREE.Group, fy: number, a: string, b: string, n: number) {
     } else if (kind === 1) {
       pin.add(rbox(14, 20, 0.8, c, { x, y: fy - 23, z }, 0.4))
     } else {
-      pin.add(rbox(12, 9, 1.2, c, { x, y: fy - 12.5, z }, 1.2))
+      // 上沿在 fy - 3，被夹子咬住 0.2（以前上沿 fy - 3.5，挂在夹子下面 0.3cm 处）
+      pin.add(rbox(12, 9, 1.2, c, { x, y: fy - 12, z }, 1.2))
     }
   }
 }

@@ -118,6 +118,24 @@ function spider(r: number, yTop: number, yFrom: number, color: string, x = 0, z 
   return g
 }
 
+/**
+ * 把 face() 的五官贴到球形的头上：face() 是按平面摆的，头小的时候外侧的腮红离脸颊越来越远（熊熊落地灯的腮红外缘离头 2cm 多，
+ * 从侧面看是悬着的一片）。每个零件保持正面看的 (x, y)，落到球面上（原来的前后偏移改成沿法线），并转到朝外。
+ * c：头的球心，r：半径，dy：脸比球心高多少
+ */
+function faceOn(size: number, c: V3, r: number, dy = 0) {
+  const f = face(size, { x: c[0], y: c[1] + dy, z: c[2] })
+  for (const m of f.children) {
+    const x = m.position.x
+    const y = m.position.y + dy
+    const n = new THREE.Vector3(x, y, Math.sqrt(Math.max(0.01, r * r - x * x - y * y))).normalize()
+    const out = r + m.position.z
+    m.position.set(n.x * out, n.y * out - dy, n.z * out)
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), n)
+  }
+  return f
+}
+
 /** 壁挂件：xz 居中，最低点放到离地 y */
 function mountAt(g: THREE.Group, y: number) {
   const box = new THREE.Box3().setFromObject(g, true)
@@ -371,8 +389,10 @@ function chochinTable(p: string[]) {
   g.add(litOutlined(ball(6.6, paper, { x, y: cy }, [1, 1.32, 1]), paper, 0.45))
   for (let i = -3; i <= 3; i++) {
     const dy = i * 2.4
-    const r = 6.6 * Math.sqrt(Math.max(0, 1 - (dy / 8.7) ** 2)) + 0.12
-    if (r > 2) g.add(ring(r, 0.13, ink, cy + dy, x))
+    // 竹骨的圈心落在纸面上、半埋进去，一圈 16 段、顶点和纸球的 16 条经线对齐（以前圈比纸球大 0.12、圈粗只有 0.1、
+    // 段数又和纸球不一样，半径一取整有两道就箍不到纸上）
+    const r = 6.6 * Math.sqrt(Math.max(0, 1 - (dy / 8.7) ** 2))
+    if (r > 2) g.add(P(torus(r, 0.13, ink, {}, Math.PI * 2, [8, 16]), x, cy + dy, 0, Math.PI / 2))
   }
   g.add(cyl(3.2, 3.2, 1.4, ink, { x, y: 10.2 }, 16))
   return g
@@ -426,8 +446,9 @@ function chochinWall(p: string[]) {
   g.add(litOutlined(ball(6.4, paper, { y: cy }, [1, 1.3, 1]), paper, 0.45))
   for (let i = -3; i <= 3; i++) {
     const dy = i * 2.3
-    const r = 6.4 * Math.sqrt(Math.max(0, 1 - (dy / 8.3) ** 2)) + 0.12
-    if (r > 2) g.add(ring(r, 0.13, ink, cy + dy))
+    // 竹骨的圈心落在纸面上、半埋进去，段数和纸球对齐（同提灯台灯）
+    const r = 6.4 * Math.sqrt(Math.max(0, 1 - (dy / 8.3) ** 2))
+    if (r > 2) g.add(P(torus(r, 0.13, ink, {}, Math.PI * 2, [8, 16]), 0, cy + dy, 0, Math.PI / 2))
   }
   g.add(cyl(3, 3, 1.3, ink, { y: 8.4 }, 16))
   return mountAt(g, 140)
@@ -758,7 +779,8 @@ function pipeFloor(p: string[]) {
   g.add(P(cyl(1.7, 1.7, 24, pipe, {}, 14), 12, 129, 0, 0, 0, Math.PI / 2))
   g.add(ball(2.6, pipe, { x: 24, y: 129 }))
   g.add(cyl(1.7, 1.7, 6, pipe, { x: 24, y: 121 }, 14))
-  g.add(cyl(2.2, 2.2, 4, socket, { x: 24, y: 117 }, 14))
+  // 灯头往下加长、套住灯泡顶（以前灯泡顶离灯头 0.06；灯泡位置不动）
+  g.add(cyl(2.2, 2.2, 4.5, socket, { x: 24, y: 116.5 }, 14))
   g.add(bulb(3.8, 24, 112, 0, 1.3))
   return fitGroup(g)
 }
@@ -783,7 +805,8 @@ function pipeTable(p: string[]) {
   g.add(ball(1.8, pipe, { y: 22 }))
   g.add(P(cyl(1.3, 1.3, 11, pipe, {}, 12), 5.5, 22, 0, 0, 0, Math.PI / 2))
   g.add(ball(1.8, pipe, { x: 11, y: 22 }))
-  g.add(cyl(1.7, 1.7, 3.2, socket, { x: 11, y: 18 }, 12))
+  // 灯头往下加长、套住灯泡顶（以前差 0.16；灯泡位置不动）
+  g.add(cyl(1.7, 1.7, 3.7, socket, { x: 11, y: 17.5 }, 12))
   g.add(bulb(2.8, 11, 14.2, 0, 1.3))
   return fitGroup(g)
 }
@@ -827,7 +850,8 @@ function pipeWall(p: string[]) {
   g.add(P(cyl(1.3, 1.3, 12, pipe, {}, 12), 0, 20, -3.4, Math.PI / 2))
   g.add(ball(1.8, pipe, { y: 20, z: 3 }))
   g.add(cyl(1.3, 1.3, 4, pipe, { y: 16, z: 3 }, 12))
-  g.add(cyl(1.7, 1.7, 3, socket, { y: 13, z: 3 }, 12))
+  // 灯头往下加长、套住灯泡顶（以前差 0.16；灯泡位置不动）
+  g.add(cyl(1.7, 1.7, 3.5, socket, { y: 12.5, z: 3 }, 12))
   g.add(bulb(2.8, 0, 9.2, 3, 1.3))
   return mountAt(g, 145)
 }
@@ -886,6 +910,8 @@ function tiffanyFloor(p: string[]) {
   g.add(stainedShade(6, 22, 16, [c1, c2, c1, c3], bronze, 122, 16))
   g.add(cyl(6.4, 6.4, 1.2, bronze, { y: 138 }, 16))
   g.add(ball(1.8, bronze, { y: 140.5 }))
+  // 灯头：柱顶伸上来托住灯泡（以前灯泡悬在柱顶上方 2cm）
+  g.add(cyl(1.2, 1.4, 3.2, bronze, { y: 121.6 }, 12))
   g.add(bulb(3, 0, 127, 0))
   return g
 }
@@ -1006,7 +1032,7 @@ function bearFloor(p: string[]) {
     g.add(ball(2.4, bear, { x: s * 4.2, y: 16, z: -1.5 }, [1, 1.4, 1]))
   }
   g.add(ball(2.6, '#fff4e6', { y: 24.5, z: 9 }, [1, 0.8, 0.6]))
-  g.add(face(10, { y: 27, z: 9.6 }))
+  g.add(faceOn(10, [0, 26, 3], 7, 1))
   // 灯罩
   g.add(shadeOpen(14, 17, 20, shadeC, { y: 116, z: -4 }))
   for (let k = 0; k < 18; k++) {
@@ -1100,7 +1126,7 @@ function bunnyTable(p: string[]) {
     inner.userData.noOutline = true
     g.add(inner)
   }
-  g.add(face(7, { y: 18.4, z: 5 }))
+  g.add(faceOn(7, [0, 18, 0], 5.2, 0.4))
   return g
 }
 
@@ -1163,7 +1189,7 @@ function moonWall(p: string[]) {
   for (const sx of [-1, 1]) g.add(ball(0.8, bear, { x: -6.6 + sx * 1.4, y: 8.2, z: 1 }))
   // 小熊的脸：口鼻 + 眼睛（原来只有两团球加耳朵，认不出是熊）
   g.add(ball(0.75, '#fff4e6', { x: -6.6, y: 5.9, z: 2.85 }, [1, 0.8, 0.6]))
-  g.add(face(3, { x: -6.6, y: 6.8, z: 2.95 }))
+  g.add(faceOn(3, [-6.6, 6.4, 1.2], 2, 0.4))
   return mountAt(g, 148)
 }
 
@@ -1526,6 +1552,8 @@ function hookLantern(p: string[]) {
   g.add(cyl(13, 14, 2.4, base, {}, 28))
   g.add(cyl(1, 1, 140, iron, { y: 2.4 }, 10))
   g.add(tube([[0, 142, 0], [0, 150, 0], [6, 156, 0], [13, 152, 0], [14, 146, 0]], 1, iron, { ...TUBE, seg: 24 }))
+  // 钩头收一颗球，吊丝挂进去（以前弯管是开口的，吊丝顶在管口中间，四周不挨）
+  g.add(ball(1, iron, { x: 14, y: 146 }))
   g.add(cyl(0.25, 0.25, 4, iron, { x: 14, y: 142 }, 4))
   g.add(lantern(iron, glass, 14, 117))
   return fitGroup(g)
@@ -1542,6 +1570,8 @@ function lantern(metal: string, glass: string, x: number, y0: number, s = 1) {
   }
   g.add(cyl(2 * s, 4.4 * s, 2.6 * s, metal, { y: 17.6 * s }, 20))
   g.add(tube([[-4 * s, 19.5 * s, 0], [-3.4 * s, 24 * s, 0], [0, 25 * s, 0], [3.4 * s, 24 * s, 0], [4 * s, 19.5 * s, 0]], 0.3 * s, metal, { ...TUBE, seg: 16 }))
+  // 提手两头的耳轴：从顶盖伸出来接住提手（以前提手两头离顶盖 0.8，整根悬着）
+  for (const sx of [-1, 1]) g.add(rod3([sx * 2.4 * s, 19.2 * s, 0], [sx * 4.2 * s, 19.5 * s, 0], 0.3 * s, metal, 6))
   g.add(bulb(1.6 * s, 0, 9 * s, 0, 1.4))
   g.position.set(x, y0, 0)
   return g

@@ -8,9 +8,9 @@
 //   - 收纳箱、纸箱都是 prop，可以放进柜子 / 床底 / 层板上；大件收纳柜不是 prop。
 
 import * as THREE from 'three'
-import { ball, cached, capsule, cyl, puck, rbox, shade, toon, torus } from '../toon'
+import { ball, cached, capsule, cyl, nub, puck, rbox, shade, toon, torus } from '../toon'
 import { C, SWING_OPEN, holePanel, movable, paintPanel, rectPoly, rng, shell, slab, type AssetCategory, type AssetDef, type Poly } from '../kit'
-import { G, P, PI, cappedTube, clearDeep, cylX, rod3, type TubeOpts, type V3 } from '../geo'
+import { G, P, PI, batten, cappedTube, clearDeep, cylX, rod3, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, R, define, type Build, type Dims, type Pal } from '../packkit'
 import { say, signLang, signSans } from '../signLang'
 
@@ -199,7 +199,8 @@ function shoeLast(s: LastSpec) {
   }
 
   const sole = (color: string, inflate = 0.3) => loftSlab(color, { bot: base, top: top0, inflate })
-  const insole = (color = INSOLE) => loftSlab(color, { bot: (u) => top0(u) - 0.1, top: (u) => top0(u) + 0.3, scale: 0.86 })
+  // 鞋垫从 u = 0.006 起：鞋面在 u0 = 0.004 封口，鞋垫要是从后跟尖 0 起，会有一小截露在封口外面
+  const insole = (color = INSOLE) => loftSlab(color, { u0: 0.006, bot: (u) => top0(u) - 0.1, top: (u) => top0(u) + 0.3, scale: 0.86 })
 
   /** 鞋面切片 */
   function slices(from: number, to: number, n = 30): Slice[] {
@@ -266,9 +267,12 @@ function shoeLast(s: LastSpec) {
       const [ea, eb] = e
       idx.push(ea, ea + nv, eb + nv, ea, eb + nv, eb)
     }
-    // 封住闭合的端面（鞋尖、封闭的后跟）：端面截面是一道窄而高的拱，不封的话鞋头正中会露出一条竖缝、看见里面的鞋垫
+    // 封住鞋尖 / 后跟尖上的端面：那里的截面是一道窄而高的拱，不封的话鞋头正中会露出一条竖缝、看见里面的鞋垫。
+    // 后跟那头截面多半是鞋口（两片鞋帮中间敞着），一样要封：扇面连两片鞋帮的顶，把后跟正中那条 1cm 宽的竖缝补上（原来只封闭合的截面，
+    // 系带鞋、皮鞋、高跟鞋从背后都能透过这条缝看到鞋垫）。
+    // 鞋面中途截断的端面不封：那是拖鞋的后口、一字拖的前后口（原来被封成一堵墙，脚伸不进去）和鞋头包片的后沿
     for (const i of [0, S0 - 1]) {
-      if (sl[i].open) continue
+      if (sl[i].u > 0.02 && sl[i].u < 0.98) continue
       const p0 = at(sl[i].u, 0, off)
       const p1 = at(sl[i].u, PI, off)
       // 端面单独一套顶点（法线不和鞋面混），鞋尖朝 +z、后跟朝 -z。
@@ -355,13 +359,19 @@ function shoeLast(s: LastSpec) {
     return g
   }
 
-  /** 鞋舌：从鞋口前沿往后上方斜出 */
+  /**
+   * 鞋舌：从鞋口前沿的鞋面底下长出来，往后上方斜出。
+   * 根部在鞋口前沿下方 drop 处；z 按倾角算：鞋舌前面在鞋面壁厚的中间那一层正好越过鞋口前沿 0.08（嵌进鞋面）。
+   * 原来固定放在前沿后面 0.3，靠鞋舌两角蹭到鞋口两侧连着，小码鞋的鞋口窄，鞋舌就悬在鞋口里了
+   */
   function tongue(color: string, len: number, lean = 0.45) {
     const u = uOpen
     const w = a(u) * 1.0
-    const y = topY(u) - 1.6
+    const drop = 1.6
+    const y = topY(u) - drop
+    const zc = z(u) + 0.08 - 0.25 * Math.cos(lean) + (drop - t / 2 - 0.25 * Math.sin(lean)) * Math.tan(lean)
     const g = G(rbox(w, len, 0.5, color, {}, 0.24))
-    return P(g, cx(u), y, z(u) - 0.3, -lean)
+    return P(g, cx(u), y, zc, -lean)
   }
 
   return { s, a, cx, z, base, top0, topY, at, wall, loftSlab, sole, insole, upper, collarRim, archTube, strap, laces, tongue }
@@ -632,9 +642,10 @@ function shortBoot(z: ShoeSize, p: string[]) {
     t: 0.4,
   })
   const g = G(L.sole(p[1]), heelBlock(L, p[1], hh), L.insole(INSOLE_LEATHER), L.upper(p[0]), L.collarRim(shade(p[0], -0.1), 0.25))
+  // 松紧侧片：沿靴筒外壁分上下两段贴着放（筒壁是往里收的弧面）。原来整片绕下端往外倾，上半截像鳍一样翘出靴筒 1cm 多
   for (const side of [-1, 1]) {
-    const [x, y, zz] = L.wall(0.3, 7 * k, side, 0.12)
-    g.add(P(rbox(0.25, 7 * k, 3.2 * k, p[2], {}, 0.1), x, y - 3.5 * k, zz, 0, 0, side * -0.18))
+    const pts = [3.5, 7, 10.5].map((h) => L.wall(0.3, h * k, side, 0.08))
+    for (let i = 0; i < 2; i++) g.add(batten(pts[i], pts[i + 1], 0.25, 3.2 * k, p[2], 0.1))
   }
   // 后拉环：一条窄长的扁织带，两脚贴在靴筒后沿的里外两面（靴筒顶 12.5k、壁厚 0.4）。
   // 原来按 L.at(…, 接近 π/2) 取点，取到的是筒口上方假想的拱顶，拉环悬在靴筒上方
@@ -1001,13 +1012,13 @@ const SHOES: AssetDef[] = [
   ...shoeFamily({ key: 'pump-block', name: '高跟鞋', sizes: ['F'], hs: [10.7], pals: HEEL_PALS, one: heels(true), extraW: -0.4 }).map((d) => ({ ...d, sizeLabel: '成人女款 · 粗跟 5cm' })),
   ...shoeFamily({ key: 'ballet', name: '芭蕾平底鞋', sizes: ['F', 'K'], hs: [4.4, 3.7], pals: FLAT_PALS, one: ballet, extraW: -0.4 }),
   ...shoeFamily({ key: 'chelsea', name: '短靴', sizes: ['M', 'F'], hs: [17.6, 15.7], pals: BOOT_PALS, one: shortBoot }),
-  ...shoeFamily({ key: 'long-boot', name: '长筒靴', sizes: ['F'], hs: [42.1], pals: BOOT_PALS, one: longBoot, }),
-  ...shoeFamily({ key: 'rain-boot', name: '雨靴', sizes: ['M', 'F', 'K'], hs: [38.1, 34.1, 19.3], pals: RAIN_PALS, one: (z, p) => rainBoot(z.k === 1 ? 38 : z.k > 0.8 ? 34 : 18)(z, p), }),
-  ...shoeFamily({ key: 'sandal', name: '凉鞋', sizes: ['M', 'F', 'K'], hs: [6.5, 5.7, 4.6], pals: SANDAL_PALS, one: sandal }),
+  ...shoeFamily({ key: 'long-boot', name: '长筒靴', sizes: ['F'], hs: [42.1], pals: BOOT_PALS, one: longBoot, extraD: 1.5 }), // 靴筒后沿比鞋跟再靠后 0.5
+  ...shoeFamily({ key: 'rain-boot', name: '雨靴', sizes: ['M', 'F', 'K'], hs: [38.1, 34.1, 19.3], pals: RAIN_PALS, one: (z, p) => rainBoot(z.k === 1 ? 38 : z.k > 0.8 ? 34 : 18)(z, p), extraD: 1.6 }), // 靴筒后沿比鞋跟再靠后 0.6
+  ...shoeFamily({ key: 'sandal', name: '凉鞋', sizes: ['M', 'F', 'K'], hs: [6.5, 5.7, 4.6], pals: SANDAL_PALS, one: sandal, extraD: 1.2 }), // 后跟带绕到鞋底后端外面 0.9
   ...shoeFamily({ key: 'flipflop', name: '人字拖', sizes: ['M', 'F', 'K'], hs: [4.4, 3.8, 3.1], pals: FLIP_PALS, one: flipflop }),
   ...shoeFamily({ key: 'slides', name: '一字拖', sizes: ['M', 'F'], hs: [6.4, 5.6], pals: FLIP_PALS, one: slides }),
   ...shoeFamily({ key: 'slipper', name: '室内拖鞋', sizes: ['M', 'F', 'K'], hs: [6.1, 5.4, 4.3], pals: SLIPPER_PALS, one: slipper }),
-  ...shoeFamily({ key: 'velcro', name: '魔术贴童鞋', sizes: ['K', 'T'], hs: [8.8, 7.0], pals: KID_PALS, one: velcro }),
+  ...shoeFamily({ key: 'velcro', name: '魔术贴童鞋', sizes: ['K', 'T'], hs: [8.8, 7.0], pals: KID_PALS, one: velcro, extraW: 0.2 }), // 外侧的魔术贴搭扣
   ...shoeFamily({ key: 'geta', name: '木屐（下駄）', sizes: ['M', 'F', 'K'], hs: [9.3, 8.2, 6.6], pals: GETA_PALS, one: geta, extraD: -1 }),
   ...shoeFamily({ key: 'zori', name: '草履', sizes: ['M', 'F'], hs: [5.6, 4.9], pals: ZORI_PALS, one: zori }),
   ...shoeFamily({ key: 'hiking', name: '登山鞋', sizes: ['M', 'F'], hs: [15, 13], pals: HIKE_PALS, one: hiking }),
@@ -1063,7 +1074,8 @@ function door(w: number, h: number, kind: DoorKind, color: string, handle: strin
     if (kind === 'glass') g.add(clearDeep(rbox(w - 2 * f + 0.4, h - 2 * f + 0.4, 0.5, C.glass, { x: cx, y: f - 0.2, z: 0.9 }, 0.1), C.glass, 0.3))
     else {
       const n = Math.floor((h - 2 * f - 1) / 3.4)
-      for (let i = 0; i < n; i++) g.add(rbox(w - 2 * f + 0.4, 0.5, 2.6, color, { x: cx, y: f + 1 + i * 3.4, z: 0.9, rx: -0.6 }, 0.2))
+      // 百叶片：0.5 厚的窄条，直角盒就够（两扇门 40 多片，圆角盒每片 108 面）
+      for (let i = 0; i < n; i++) g.add(nub(w - 2 * f + 0.4, 0.5, 2.6, color, { x: cx, y: f + 1 + i * 3.4, z: 0.9, rx: -0.6 }))
     }
   }
   // 内凹拉手（只凸出 0.4）
@@ -1147,7 +1159,7 @@ function metalRack(n: number): Build {
       for (const sz of [-1, 1]) {
         g.add(cyl(1, 1, ht, p[0], { x: sx * tx, z: sz * tz }, 12))
         g.add(ball(1.2, p[2], { x: sx * tx, y: ht, z: sz * tz }))
-        g.add(puck(1.5, 0.6, p[2], { x: sx * tx, z: sz * tz }))
+        g.add(puck(1.2, 0.6, p[2], { x: sx * tx, z: sz * tz })) // 脚垫不超出层板的外沿（原来半径 1.5，四周各超出声明占地 0.3）
       }
     for (const y of tops) {
       g.add(slab(plate, pt, p[1], y - pt))
@@ -1263,7 +1275,8 @@ function benchSurfaces(): Surf[] {
 
 const FLIP = { w: 80, d: 30, t: 1.8, tier: 42, a: PI / 6, panelH: 39 }
 function flipDims(n: number): Dims {
-  return [FLIP.w, r1(FLIP.d + 1.8), n * FLIP.tier + 6 + FLIP.t]
+  // 进深 = 柜体 + 斗前板 1.8 + 拉手再凸出 0.7（原来没算拉手，模型比声明深 0.7 且偏前）
+  return [FLIP.w, r1(FLIP.d + 2.5), n * FLIP.tier + 6 + FLIP.t]
 }
 const flipFloors = (n: number) => Array.from({ length: n }, (_, i) => 6 + i * FLIP.tier + 1.5)
 function flipCab(n: number): Build {
@@ -1368,7 +1381,10 @@ const SHOE_FURNITURE: AssetDef[] = [
 
 const CLOTH = [C.sky, C.pink, C.lemon, C.mint, N.linen, N.blue, M.light, R.mustard, C.lilac, C.peach, N.sage, M.char]
 
-/** 叠好的衣物：在 w × d 区域里码一两摞，从 y 开始，不高于 maxH */
+/**
+ * 叠好的衣物：在 w × d 区域里码一两摞，从 y 开始，不高于 maxH。
+ * 每件往下多压 0.3（压进下面那件 / 箱底里）：原来一件摞一件正好相切，厚度量化到 0.1 以后件与件之间、最底下那件和箱底之间都差着缝
+ */
 function clothes(w: number, d: number, maxH: number, y: number, seed: number, z = 0) {
   const r = rng(seed)
   const g = new THREE.Group()
@@ -1381,7 +1397,7 @@ function clothes(w: number, d: number, maxH: number, y: number, seed: number, z 
       const th = 2.5 + r() * 2.5
       if (yy + th > y + maxH) break
       const col = CLOTH[Math.floor(r() * CLOTH.length)]
-      g.add(rbox(cw - 2 - r() * 2, th - 0.1, d - 2 - r() * 2, col, { x: x + (r() - 0.5), y: yy, z: z + (r() - 0.5) }, Math.min(1.2, th * 0.4)))
+      g.add(rbox(cw - 2 - r() * 2, th + 0.2, d - 2 - r() * 2, col, { x: x + (r() - 0.5), y: yy - 0.3, z: z + (r() - 0.5) }, Math.min(1.2, th * 0.4)))
       yy += th
     }
   }
@@ -1410,9 +1426,12 @@ function boxTray(w: number, h: number, d: number, t: number, color: string, alph
   return alpha < 1 ? clearDeep(g, color, alpha) : g
 }
 
-/** 绕后上沿开合的盖子：lid 在本地 z ∈ [0, d]、y ∈ [0, th] 内；open 时转到 -100°（立在后面） */
-function hinged(lid: THREE.Object3D, y: number, zBack: number, open: boolean) {
-  return P(G(lid), 0, y, zBack, open ? -PI * 0.555 : 0)
+/**
+ * 绕后上沿开合的盖子：lid 在本地 z ∈ [0, d]、y ∈ [0, th] 内；open 时转到 -100°（立在后面）。
+ * sit = [dy, dz]：开盖后盖子再挪这么多，让盖子的下沿压进箱体后沿（只绕后上沿那条线转的话，两边的圆角正好错开，盖子悬在箱子后面半厘米）
+ */
+function hinged(lid: THREE.Object3D, y: number, zBack: number, open: boolean, sit: [number, number] = [0, 0]) {
+  return open ? P(G(lid), 0, y + sit[0], zBack + sit[1], -PI * 0.555) : P(G(lid), 0, y, zBack)
 }
 /** 开盖后盖子往后伸出的距离 */
 const lidBack = (d: number, th: number) => Math.abs(d * Math.cos(PI * 0.555)) + th
@@ -1435,9 +1454,11 @@ function plasticBox(s: BoxSpec, open: boolean) {
   const lidT = 2.2
   const hb = s.h - lidT
   const bw = s.w - 2.4
-  const lb = lidBack(s.d, 1.6)
+  /** 开盖后盖子下沿压进后口沿的位移（见 hinged）；占地和高度跟着收 */
+  const SIT: [number, number] = [-0.45, 0.9]
+  const lb = lidBack(s.d, 1.6) - SIT[1]
   const D = open ? s.d + lb : s.d
-  const H = open ? hb + s.d * Math.sin(PI * 0.555) + 0.5 : s.h
+  const H = open ? hb + s.d * Math.sin(PI * 0.555) + 0.5 + SIT[0] : s.h
   const dz = open ? (D - s.d) / 2 : 0
   const build: Build = (p) => {
     const g = new THREE.Group()
@@ -1446,7 +1467,7 @@ function plasticBox(s: BoxSpec, open: boolean) {
     for (const sz of [-1, 1]) g.add(rbox(bw - 4, 0.6, 2, p[0], { y: -0.0, z: dz + sz * (s.d / 2 - 3) }, 0.25))
     g.add(P(clothes(bw - 2, s.d - 3, hb * 0.72, 0.6, s.w + (open ? 1 : 0)), 0, 0, dz))
     const lid = G(rbox(bw + 1.2, 1.6, s.d + 0.2, p[0], { z: (s.d + 0.2) / 2 }, 0.6), rbox(bw - 6, 0.6, s.d - 6, shade(p[0], 0.06), { y: 1.6, z: s.d / 2 }, 0.3))
-    g.add(hinged(lid, hb, dz - s.d / 2 - 0.1, open))
+    g.add(hinged(lid, hb, dz - s.d / 2 - 0.1, open, SIT))
     // 侧边卡扣
     for (const sx of [-1, 1]) g.add(rbox(0.8, 3.4, 5, p[1], { x: sx * (bw / 2 + 0.6), y: hb - 3, z: dz }, 0.3))
     return g
@@ -1484,10 +1505,11 @@ function underBed(s: UnderSpec): Build {
     g.add(P(boxTray(s.w - 1.2, hb - 1.2, s.d - 1.2, 0.5, CLEAR, 0.38), 0, y0, 0))
     g.add(rimRing(s.w, s.d, y0 + hb - 1.2, 1.2, p[0]))
     g.add(clothes(s.w - 4, s.d - 4, hb - 2.4, y0 + 0.5, s.w))
-    g.add(rbox(s.w + 0.2, lidT, s.d + 0.2, p[0], { y: y0 + hb }, 0.5))
-    g.add(rbox(s.w - 10, 0.4, s.d - 10, shade(p[0], 0.06), { y: y0 + hb + lidT - 0.1 }, 0.2))
-    // 正面拉手
-    g.add(holePanel(14, 3.4, 1, p[1], [{ kind: 'rect', x: 0, y: 0.8, w: 10, h: 1.6, r: 0.8 }], { y: y0 + hb - 4.8, z: s.d / 2 + 0.5 }, 1))
+    // 盖板比 lidT 薄 0.3：盖面中间凸起的那块顶面正好是声明高度 s.h（原来整体高出 0.3，床底净高是按声明高度算的）
+    g.add(rbox(s.w + 0.2, lidT - 0.3, s.d + 0.2, p[0], { y: y0 + hb }, 0.5))
+    g.add(rbox(s.w - 10, 0.4, s.d - 10, shade(p[0], 0.06), { y: y0 + hb + lidT - 0.4 }, 0.2))
+    // 正面拉手：背面嵌进箱壁 0.1（箱壁外面在 d / 2 - 0.6；原来拉手整块悬在箱壁前面 0.6）
+    g.add(holePanel(14, 3.4, 1, p[1], [{ kind: 'rect', x: 0, y: 0.8, w: 10, h: 1.6, r: 0.8 }], { y: y0 + hb - 4.8, z: s.d / 2 - 0.2 }, 1))
     if (s.wheels) for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
       g.add(cylX(1.6, 1.2, M.char, sx * (s.w / 2 - 6), 1.6, sz * (s.d / 2 - 5)))
       g.add(rbox(2.4, 1.2, 3, p[1], { x: sx * (s.w / 2 - 6), y: 1.4, z: sz * (s.d / 2 - 5) }, 0.3))
@@ -1513,10 +1535,10 @@ function fabricBox(w: number, d: number, h: number): Build {
     g.add(holePanel(d - t * 2, h - t, t, p[0], [hole], { x: -w / 2 + t / 2, y: t, ry: -PI / 2 }, 1.5, ARC))
     g.add(rbox(w, t, d, p[0], {}, t * 0.4))
     g.add(rimRing(w + 0.4, d + 0.4, h - 1, 1.3, p[1])) // 包边比箱壁高出 0.3，避免顶面共面闪烁
-    // 把手洞包边
-    for (const sx of [-1, 1]) g.add(rbox(0.4, 3.6, 10, p[1], { x: sx * (w / 2 + 0.25), y: h - 6.5 }, 0.2))
-    g.add(holePanel(10, 3.6, 0.4, p[1], [{ kind: 'rect', x: 0, y: 0.5, w: 9, h: 2.6, r: 1.3 }], { x: w / 2 + 0.45, y: h - 6.5, ry: PI / 2 }, 1, ARC))
-    g.add(holePanel(10, 3.6, 0.4, p[1], [{ kind: 'rect', x: 0, y: 0.5, w: 9, h: 2.6, r: 1.3 }], { x: -w / 2 - 0.45, y: h - 6.5, ry: -PI / 2 }, 1, ARC))
+    // 把手洞包边：底片嵌进箱壁 0.1（原来浮在箱壁外 0.05），外圈再叠在底片上，最外面到 w / 2 + 0.5
+    for (const sx of [-1, 1]) g.add(rbox(0.4, 3.6, 10, p[1], { x: sx * (w / 2 + 0.1), y: h - 6.5 }, 0.2))
+    g.add(holePanel(10, 3.6, 0.4, p[1], [{ kind: 'rect', x: 0, y: 0.5, w: 9, h: 2.6, r: 1.3 }], { x: w / 2 + 0.3, y: h - 6.5, ry: PI / 2 }, 1, ARC))
+    g.add(holePanel(10, 3.6, 0.4, p[1], [{ kind: 'rect', x: 0, y: 0.5, w: 9, h: 2.6, r: 1.3 }], { x: -w / 2 - 0.3, y: h - 6.5, ry: -PI / 2 }, 1, ARC))
     // 里面：卷起的毛巾
     const r = rng(Math.round(w + h))
     for (let i = 0; i < 4; i++) {
@@ -1555,10 +1577,11 @@ function rattanBox(open: boolean) {
   const w = 40
   const d = 30
   const hb = 22
-  const lb = lidBack(d, 3)
+  const SIT: [number, number] = [-0.5, 0.9]
+  const lb = lidBack(d, 3) - SIT[1]
   const D = open ? d + lb : d
   const dz = open ? (D - d) / 2 : 0
-  const H = open ? hb + d * Math.sin(PI * 0.555) + 1 : hb + 5.5
+  const H = open ? hb + d * Math.sin(PI * 0.555) + 1.4 + SIT[0] : hb + 5.5
   const build: Build = (p) => {
     const g = new THREE.Group()
     const body = new THREE.Group()
@@ -1576,7 +1599,7 @@ function rattanBox(open: boolean) {
     g.add(P(body, 0, 0, dz))
     const lid = G(rbox(w + 1.2, 2, d + 1.2, p[0], { z: (d + 1.4) / 2 }, 0.8), rimRing(w + 1.8, d + 1.8, -0.15, 2.45, p[1]).translateZ((d + 1.4) / 2))
     lid.add(P(torus(3, 0.5, p[2], {}, PI), 0, 2, (d + 1.4) / 2, 0, 0, 0))
-    g.add(hinged(lid, hb, dz - d / 2 - 0.7, open))
+    g.add(hinged(lid, hb, dz - d / 2 - 0.7, open, SIT))
     return g
   }
   return { build, dims: [w + 1.8, r1(D + (open ? 0.9 : 1.8)), r1(H)] as Dims }
@@ -1589,23 +1612,26 @@ function toolbox(open: boolean) {
   const d = 20
   const hb = 14
   const lidT = 5
-  const lb = lidBack(d, lidT)
-  const D = open ? d + lb + 0.5 : d + 1
-  const dz = open ? (D - d) / 2 : 0
-  const H = open ? hb + d * Math.sin(PI * 0.555) + 1 : hb + lidT + 4.2
+  const SIT: [number, number] = [-0.6, 0.4]
+  const lb = lidBack(d, lidT) + 0.2 - SIT[1]
+  // 打开时：前面搭扣凸出 0.8，后面盖子伸出 lb，占地按这两头居中（原来没算搭扣，模型整体偏前 0.6、声明进深又短 0.5）
+  const D = open ? d + lb + 0.8 : d + 1.6
+  const dz = open ? D / 2 - d / 2 - 0.8 : 0
+  const H = open ? hb + (d + 0.4) * Math.sin(PI * 0.555) + SIT[0] : hb + lidT + 4.2
   const build: Build = (p) => {
     const g = new THREE.Group()
     const body = G(boxTray(w, hb, d, 0.6, p[0]))
     for (const sx of [-1, 1]) body.add(rbox(3, 2, 1, M.silver, { x: sx * 14, y: hb - 3, z: d / 2 + 0.3 }, 0.3))
+    // 上层托盘：两端嵌进箱体侧壁 0.1（箱内净宽 w - 1.2；原来托盘窄 0.8，四周都不挨箱壁，整个悬在箱子里）
+    body.add(boxTray(w - 1, 4, d - 2, 0.4, p[1]).translateY(hb - 4.5))
     if (open) {
-      // 上层托盘 + 工具
-      body.add(boxTray(w - 2, 4, d - 2, 0.4, p[1]).translateY(hb - 4.5))
-      body.add(P(cyl(0.5, 0.5, 14, M.silver, {}, 8), -8, hb - 3, -3, 0, 0, PI / 2))
-      body.add(P(capsule(1.1, 6, p[2]), -18, hb - 3, -3, 0, 0, PI / 2))
-      body.add(rbox(16, 0.8, 2, M.silver, { x: 6, y: hb - 4, z: 3 }, 0.3))
-      body.add(cyl(2.2, 2.2, 1, M.char, { x: 14, y: hb - 4, z: -3 }, 16))
-      for (let i = 0; i < 5; i++) body.add(cyl(0.6, 0.6, 1.4, M.silver, { x: -16 + i * 2, y: hb - 4, z: 4 }, 6))
-    } else body.add(boxTray(w - 2, 4, d - 2, 0.4, p[1]).translateY(hb - 4.5))
+      // 工具：压在托盘底上（托盘底顶面 hb - 4.1）
+      body.add(P(cyl(0.5, 0.5, 14, M.silver, {}, 8), -7.6, hb - 3.1, -3, 0, 0, PI / 2))
+      body.add(P(capsule(1.1, 6, p[2]), -17.6, hb - 3.1, -3, 0, 0, PI / 2))
+      body.add(rbox(16, 0.8, 2, M.silver, { x: 6, y: hb - 4.2, z: 3 }, 0.3))
+      body.add(cyl(2.2, 2.2, 1, M.char, { x: 14, y: hb - 4.2, z: -3 }, 16))
+      for (let i = 0; i < 5; i++) body.add(cyl(0.6, 0.6, 1.4, M.silver, { x: -16 + i * 2, y: hb - 4.2, z: 4 }, 6))
+    }
     g.add(P(body, 0, 0, dz))
     // 盖子：外壳朝下扣（开盖后翻到后面立着）
     const lid = new THREE.Group()
@@ -1616,7 +1642,7 @@ function toolbox(open: boolean) {
     if (!open) {
       lid.add(P(G(cylX(0.7, 16, p[2], 0, 3.4, 0), cyl(0.6, 0.6, 3.4, M.silver, { x: -8 }, 8), cyl(0.6, 0.6, 3.4, M.silver, { x: 8 }, 8)), 0, lidT, (d + 0.4) / 2))
     }
-    g.add(hinged(lid, hb, dz - d / 2 - 0.2, open))
+    g.add(hinged(lid, hb, dz - d / 2 - 0.2, open, SIT))
     return g
   }
   return { build, dims: [w + 0.4, r1(D), r1(H)] as Dims }
@@ -1635,7 +1661,7 @@ function vacBag(puffy: boolean): Build {
     else for (const [x, c] of [[-13.6, CLOTH[2]], [13.6, CLOTH[0]]] as [number, string][]) g.add(rbox(25.6, 3.4, d - 7, c, { x, y: 0.8 }, 1.2))
     g.add(clearDeep(rbox(w, h, d, p[0], {}, puffy ? 7 : 2.5), p[0], 0.32))
     g.add(rbox(w - 4, 0.6, 1.2, p[1], { y: h - (puffy ? 2.4 : 0.9), z: d / 2 - 4 }, 0.25))
-    g.add(cyl(3, 3, 0.8, p[2], { y: h - 0.3, x: 12 }, 20), cyl(1.6, 1.6, 1, p[1], { y: h + 0.3, x: 12 }, 16))
+    g.add(cyl(3, 3, 0.8, p[2], { y: h - 0.3, x: 12 }, 20), cyl(1.6, 1.6, 1, p[1], { y: h + 0.1, x: 12 }, 16))
     return g
   }
 }
@@ -1713,7 +1739,8 @@ function closetGrid(p: string[]) {
   for (let ix = 0; ix < 4; ix++)
     for (let iz = 0; iz < 4; iz++) {
       const col = CLOTH[(ix * 2 + (iz % 2)) % CLOTH.length]
-      g.add(P(capsule(2.4, 1.6, col), -w / 2 + (ix + 0.5) * (w / 4), 0.8 + 2.4, -d / 2 + (iz + 0.5) * (d / 4), PI / 2))
+      // 16 卷，每卷 [4, 12] 段（默认 [6, 16] 一卷 416 面）
+      g.add(P(capsule(2.4, 1.6, col, {}, [4, 12]), -w / 2 + (ix + 0.5) * (w / 4), 0.8 + 2.4, -d / 2 + (iz + 0.5) * (d / 4), PI / 2))
     }
   return g
 }
@@ -1843,7 +1870,8 @@ function openCarton(p: string[]) {
   const g = new THREE.Group()
   g.add(shell(w, h, d, 0.5, p[0], { top: false }))
   const flapAt = (len: number, x: number, z: number, ry: number) => {
-    const f = P(G(rbox(len - 0.4, 0.4, flap, p[0], { z: flap / 2 }, 0.15)), 0, 0, 0, droop)
+    // 盖片根部往箱壁里多伸 0.3（原来正好从箱壁外面起，两侧的盖片和箱壁差一条缝）
+    const f = P(G(rbox(len - 0.4, 0.4, flap + 0.3, p[0], { z: flap / 2 - 0.15 }, 0.15)), 0, 0, 0, droop)
     return P(G(f), x, h - 0.3, z, 0, ry)
   }
   g.add(flapAt(w, 0, d / 2, 0), flapAt(w, 0, -d / 2, PI), flapAt(d, w / 2, 0, PI / 2), flapAt(d, -w / 2, 0, -PI / 2))
@@ -1856,7 +1884,7 @@ function openCarton(p: string[]) {
   for (const [x, y, z, r] of [
     [6, 3.8, 2, 4],
     [12, 3.6, -5, 3.8],
-    [9, 9.6, -2, 3.6],
+    [9, 8.5, -2, 3.6],
     [14, 3.3, 7, 3.4],
     [3, 3.1, 9, 3.2],
   ]) g.add(ball(r, '#ece7dc', { x, y, z }, [1, 0.85, 1]))
@@ -1961,7 +1989,7 @@ const BOXES: AssetDef[] = [
     }),
   ),
   ...UNDER.map((s) =>
-    define(`sb-underbed-${s.key}`, '床底收纳箱', 'storage', [s.w + 0.2, s.d + 1.2, s.h], UNDER_PALS, underBed(s), { sizeLabel: s.label, prop: true }),
+    define(`sb-underbed-${s.key}`, '床底收纳箱', 'storage', [s.w + 0.2, s.d + 0.6, s.h], UNDER_PALS, underBed(s), { sizeLabel: s.label, prop: true }),
   ),
   ...(
     [
@@ -1994,7 +2022,7 @@ const BOXES: AssetDef[] = [
   ),
   doorCabDef('sb-door-cab-closed', '双门收纳柜', DOOR_CAB, 'solid', CAB_PALS, 'storage', { }),
   define('sb-closet-box-grid', '衣柜内收纳盒', 'storage', [32.3, 32.3, 11], CLOSET_PALS, closetGrid, { sizeLabel: '16 格', prop: true }),
-  define('sb-closet-box-long', '衣柜内收纳盒', 'storage', [15.3, 32.8, 12], CLOSET_PALS, closetLong, { sizeLabel: '长条', prop: true }),
+  define('sb-closet-box-long', '衣柜内收纳盒', 'storage', [15.3, 33.1, 12], CLOSET_PALS, closetLong, { sizeLabel: '长条', prop: true }),
   ...CARTONS.map((c) =>
     define(`sb-carton-${c.key}`, '快递纸箱', 'storage', [c.w + 0.7, c.d + 0.7, c.h + 0.3], CARTON_PALS, (p) => carton(c.w, c.d, c.h, p, { marks: true }), {
       sizeLabel: c.key.toUpperCase(),
@@ -2004,9 +2032,9 @@ const BOXES: AssetDef[] = [
     }),
   ),
   define('sb-carton-open', '快递纸箱', 'storage', openCartonDims(), CARTON_PALS, openCarton, { sizeLabel: 'M', form: 'open', prop: true }),
-  define('sb-carton-flat', '压扁的纸箱捆', 'storage', [71, 50, 4.4], CARTON_PALS, flatBundle, { form: 'lying', prop: true }),
+  define('sb-carton-flat', '压扁的纸箱捆', 'storage', [71, 50, 5], CARTON_PALS, flatBundle, { form: 'lying', prop: true }),
   ...[2, 3].map((n) =>
-    define(`sb-carton-stack-${n}`, '搬家纸箱堆', 'storage', [51.5, 39.5, n === 2 ? 64.6 : 90.9], CARTON_PALS, cartonStack(n), { sizeLabel: `${n} 箱`, form: 'stacked', prop: true, lingual: true }),
+    define(`sb-carton-stack-${n}`, '搬家纸箱堆', 'storage', [52.7, 40.3, n === 2 ? 64.6 : 90.9], CARTON_PALS, cartonStack(n), { sizeLabel: `${n} 箱`, form: 'stacked', prop: true, lingual: true }),
   ),
 ]
 

@@ -88,10 +88,30 @@ const NEEDLE_LO: [number, number] = [6, 4]
 function sprig(len: number, color: string, base: V3, yaw: number, pitch: number, wide = 0.45, thick = 0.12, seg?: [number, number]) {
   const m = seg ? ball(len / 2, color, {}, [wide, thick, 1], seg) : ball(len / 2, color, {}, [wide, thick, 1])
   m.rotation.set(pitch, yaw, 0, 'YXZ')
-  m.position.set(...along(base, dirOf(yaw, pitch), len / 2))
+  // 一圈 6 / 10 段的球在长轴上没有顶点，叶尖只到半径的 0.87 / 0.95：按实际的叶尖摆，叶柄端才真的落在 base 上（以前针叶的根悬在土面上方）
+  const reach = seg && seg[0] % 4 === 2 ? Math.cos(PI / seg[0]) : 1
+  m.position.set(...along(base, dirOf(yaw, pitch), (len / 2) * reach))
   return m
 }
 const curveOf = (pts: V3[]) => new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(...p)))
+/**
+ * 弯管（tube，沿路径 seg 段）上离曲线参数 t 最近的那一圈的圆心：叶子、花要长在管子实际经过的地方。
+ * 管子是折线，急弯处（翻过盆沿的地方）离样条能差出一个管径，按样条上的点摆的叶子会悬在藤蔓旁边。
+ */
+function onTube(curve: THREE.Curve<THREE.Vector3>, seg: number, t: number) {
+  const p = curve.getPoint(t)
+  let best = p
+  let bd = Infinity
+  for (let i = 0; i <= seg; i++) {
+    const q = curve.getPointAt(i / seg)
+    const d = q.distanceToSquared(p)
+    if (d < bd) {
+      bd = d
+      best = q
+    }
+  }
+  return best
+}
 /** 实心环带（盆口加厚的口沿、底圈） */
 function band(rOB: number, rOT: number, rIB: number, rIT: number, h: number, color: string, y = 0) {
   const m = lathe([[rIB, 0], [rOB, 0], [rOT, h], [rIT, h], [rIB, 0]], color)
@@ -124,8 +144,17 @@ function hollowLathe(prof: [number, number][], t: number, color: string, seg = 3
   pts.push([Math.max(0.1, rAt(prof, t) - t), t], [0, t])
   return lathe(pts, color, seg, phi)
 }
-/** 圆形土面：顶面在 top */
-const soilDisc = (r: number, top: number, color = SOIL) => cyl(r, r - 0.05, 0.8, color, { y: top - 0.8 })
+/** cup() 的内壁在高度 y（从杯底算）处的半径：和 toon.ts cup 的轮廓一致，内壁是 (内底, t + k) 到 (rTop - t, h - t / 2) 的一条直线 */
+function cupInner(rTop: number, rBottom: number, h: number, t: number, y: number) {
+  const k = Math.min(t * 0.6, rBottom * 0.2)
+  const ib = rBottom - t + ((rTop - rBottom) * t) / h
+  return ib + ((rTop - t - ib) * (y - t - k)) / (h - t / 2 - t - k)
+}
+/**
+ * 圆形土面：顶面在 top，rWall 是这个高度上盆内壁的半径。和盆壁切成同样的多边形（cup / lathe 都是 32 段、从 +z 起），再往壁里嵌 0.2：
+ * 以前 24 段的圆盘比内壁小一圈，两个多边形又对不上，土面连同上面种的东西整组悬在盆里。
+ */
+const soilDisc = (rWall: number, top: number, color = SOIL, seg = 32) => cyl(rWall + 0.2, rWall + 0.1, 0.8, color, { y: top - 0.8 }, seg)
 /** 土面上撒的小石子 / 树皮屑 */
 function scatter(g: THREE.Group, r: number, y: number, n: number, color: string, seed: number, size = 0.55) {
   const rand = rng(seed)
@@ -184,7 +213,7 @@ function terraPot(rTop: number, h: number, color: string, saucer = true): Pot {
   const rIn = r1 - t
   g.add(band(rTop - 0.1, rTop, rIn - 0.05, rIn + 0.1, hb, color, y0 + h - hb))
   const soil = y0 + h - 1.6
-  g.add(soilDisc(rIn - 0.25, soil))
+  g.add(soilDisc(rIn + 0.05, soil))
   return { g, soil, r: rIn - 0.25, top: y0 + h }
 }
 
@@ -208,7 +237,7 @@ function glazedPot(R: number, h: number, color: string, accent: string, seed = 1
   }
   const soil = h - 1.6
   const sr = rAt(prof, soil) - t - 0.3
-  g.add(soilDisc(sr, soil))
+  g.add(soilDisc(sr + 0.3, soil))
   return { g, soil, r: sr, top: h }
 }
 
@@ -219,7 +248,7 @@ function cementRound(R: number, h: number, color: string): Pot {
   const g = G(cup(R, rB, h, t, color))
   const soil = h - 1.8
   const sr = rB + ((R - rB) * soil) / h - t - 0.25
-  g.add(soilDisc(sr, soil))
+  g.add(soilDisc(cupInner(R, rB, h, t, soil), soil))
   const rand = rng(Math.round(R * 7))
   for (let i = 0; i < 7; i++) {
     const a = rand() * PI * 2
@@ -235,7 +264,8 @@ function cementSquare(W: number, h: number, color: string): Pot {
   const t = 1.8
   const g = G(tray(W, h, W, t, color, {}, 0.6))
   const soil = h - 1.8
-  g.add(rbox(W - t * 2 - 0.3, 0.8, W - t * 2 - 0.3, SOIL, { y: soil - 0.8 }, 0.2))
+  // 土面四边各嵌进盆壁 0.2（以前比内壁小一圈，四周留着缝）
+  g.add(rbox(W - t * 2 + 0.4, 0.8, W - t * 2 + 0.4, SOIL, { y: soil - 0.8 }, 0.2))
   return { g, soil, r: W / 2 - t - 0.2, top: h }
 }
 
@@ -251,10 +281,11 @@ function ceramicPot(R: number, h: number, color: string, wood: string, stand = f
     y0 = 14
     const yr = y0 + 9
     g.add(torus(R + 1.4, 0.8, wood, { y: yr, rx: PI / 2 }))
+    // 腿是斜的，脚底的圆面跟着斜：杆端放在 0.15，最低的那一侧正好落地（以前杆端在 0.35，整件离地 0.17）
     const legR = (y: number) => R + 6 + ((R + 1.9 - (R + 6)) * y) / (yr + 2)
     for (let k = 0; k < 4; k++) {
       const a = PI / 4 + (k * PI) / 2
-      g.add(rod3([Math.cos(a) * legR(yr + 2), yr + 2, Math.sin(a) * legR(yr + 2)], [Math.cos(a) * legR(0), 0.35, Math.sin(a) * legR(0)], 1.1, wood))
+      g.add(rod3([Math.cos(a) * legR(yr + 2), yr + 2, Math.sin(a) * legR(yr + 2)], [Math.cos(a) * legR(0), 0.15, Math.sin(a) * legR(0)], 1.1, wood))
     }
     const half = legR(y0 - 0.7) - 0.4
     for (let k = 0; k < 2; k++) g.add(rbox(half * 2, 1.4, 2.4, shade(wood, -0.06), { y: y0 - 1.4, ry: PI / 4 + (k * PI) / 2 }, 0.4))
@@ -262,7 +293,7 @@ function ceramicPot(R: number, h: number, color: string, wood: string, stand = f
   g.add(cup(R, rB, h, t, color, { y: y0 }))
   const soil = y0 + h - 1.6
   const sr = rB + ((R - rB) * (h - 1.6)) / h - t - 0.25
-  g.add(soilDisc(sr, soil))
+  g.add(soilDisc(cupInner(R, rB, h, t, h - 1.6), soil))
   return { g, soil, r: sr, top: y0 + h }
 }
 
@@ -278,7 +309,7 @@ function rattanPot(R: number, h: number, color: string): Pot {
   g.add(cup(ri, ri * 0.8, ih, 0.5, PLASTIC_BLACK, { y: 0.7 }))
   const soil = 0.7 + ih - 1.5
   const sr = ri * 0.8 + (ri * 0.2 * (ih - 1.5)) / ih - 0.5 - 0.25
-  g.add(soilDisc(sr, soil))
+  g.add(soilDisc(cupInner(ri, ri * 0.8, ih, 0.5, ih - 1.5), soil))
   return { g, soil, r: sr, top: h + 0.55 }
 }
 
@@ -300,7 +331,7 @@ function woodBox(W: number, D: number, H: number, color: string): Pot {
   }
   g.add(tray(W - st * 2 - 0.3, H - 2.2, D - st * 2 - 0.3, 0.4, '#3a332c', { y: 1.2 }, 0.15))
   const soil = H - 1.6
-  g.add(rbox(W - st * 2 - 1.3, 0.8, D - st * 2 - 1.3, SOIL, { y: soil - 0.8 }, 0.2))
+  g.add(rbox(W - st * 2 - 0.7, 0.8, D - st * 2 - 0.7, SOIL, { y: soil - 0.8 }, 0.2))
   return { g, soil, r: Math.min(W, D) / 2 - st - 0.7, top: H }
 }
 
@@ -315,7 +346,7 @@ function enamelPot(R: number, h: number, body: string, rim: string): Pot {
   for (const s of [-1, 1]) g.add(torus(1.5, 0.3, rim, { x: s * rh, y: yh, rz: s > 0 ? -PI / 2 : PI / 2 }, PI))
   const soil = h - 1.6
   const sr = rB + ((R - rB) * soil) / h - 0.6 - 0.25
-  g.add(soilDisc(sr, soil))
+  g.add(soilDisc(cupInner(R, rB, h, 0.6, soil), soil))
   return { g, soil, r: sr, top: h + 0.25 }
 }
 
@@ -325,7 +356,7 @@ function bonsaiTray(W: number, D: number, H: number, color: string): Pot {
   g.add(tray(W, H - 0.8, D, 0.9, color, { y: 0.8 }, 0.4))
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(2.8, 0.8, 2, shade(color, -0.05), { x: sx * (W / 2 - 3), z: sz * (D / 2 - 2.5) }, 0.3))
   const soil = H - 1.4
-  g.add(rbox(W - 2.1, 0.8, D - 2.1, SOIL, { y: soil - 0.8 }, 0.2))
+  g.add(rbox(W - 1.4, 0.8, D - 1.4, SOIL, { y: soil - 0.8 }, 0.2))
   return { g, soil, r: Math.min(W, D) / 2 - 1.2, top: H }
 }
 
@@ -337,7 +368,7 @@ function bowlPot(R: number, H: number, color: string): Pot {
   const g = G(hollowLathe(prof, t, color))
   const soil = H - 1.5
   const sr = rAt(prof, soil) - t - 0.25
-  g.add(soilDisc(sr, soil))
+  g.add(soilDisc(sr + 0.25, soil))
   return { g, soil, r: sr, top: H }
 }
 
@@ -432,8 +463,9 @@ function wallPot(p: string[]) {
   half.position.set(0, 0.5, zc - 0.4)
   g.add(half)
   const soil = 0.5 + H - 1.6
-  const sr = rAt(prof, H - 1.6) - t - 0.25
-  const sg = new THREE.Mesh(new THREE.CylinderGeometry(sr, sr - 0.05, 0.8, 16, 1, false, -PI / 2, PI), toon(SOIL))
+  // 半圆土面：和盆壁同样 24 段、同样的起止角，圆弧一侧嵌进盆壁 0.2
+  const sr = rAt(prof, H - 1.6) - t + 0.2
+  const sg = new THREE.Mesh(new THREE.CylinderGeometry(sr, sr - 0.1, 0.8, 24, 1, false, -PI / 2, PI), toon(SOIL))
   sg.position.set(0, soil - 0.4, zc - 0.4)
   g.add(sg)
   return g
@@ -456,8 +488,7 @@ function selfWater(p: string[]) {
   g.add(rod3([0, 5.2, 8.4], [0, 6.8, 10.9], 1.0, pot, 12))
   g.add(taperRod3([0, 6.8, 10.9], [0, 7.3, 11.6], 1.25, 1.25, ind, 12))
   const soil = 8 + 13 - 1.6
-  const sr = 9.4 + (1.0 * (13 - 1.6)) / 13 - 0.8 - 0.25
-  g.add(soilDisc(sr, soil))
+  g.add(soilDisc(cupInner(10.4, 9.4, 13, 0.8, 13 - 1.6), soil))
   return g
 }
 
@@ -565,12 +596,13 @@ function trail(g: THREE.Group, cx: number, cz: number, a: number, rIn: number, r
   const c = Math.cos(a)
   const s = Math.sin(a)
   const P = (r: number, y: number): V3 => [cx + c * r, y, cz + s * r]
-  const pts = [P(rIn - 1.5, soilY + 0.2), P(rimR + 0.1, rimY + 1.2), P(rimR + 1.3, rimY - 1), P(rimR + 1.9, (rimY + endY) / 2), P(rimR + 1.7 + rand(), endY)]
+  // 藤蔓的根插进土里（以前起点在土面上方 0.2，管口悬着）
+  const pts = [P(rIn - 1.5, soilY - 0.3), P(rimR + 0.1, rimY + 1.2), P(rimR + 1.3, rimY - 1), P(rimR + 1.9, (rimY + endY) / 2), P(rimR + 1.7 + rand(), endY)]
   g.add(noOutline(tube(pts, 0.22, STEM, { ...TUBE, seg: 28, radial: 5 })))
   const curve = curveOf(pts)
   const n = Math.max(3, Math.floor((rimY - endY + 6) / 3.2))
   for (let k = 1; k <= n; k++) {
-    const p = curve.getPoint(k / (n + 0.4))
+    const p = onTube(curve, 28, k / (n + 0.4))
     const side = k % 2 ? 1 : -1
     g.add(sprig(leafLen * (0.85 + rand() * 0.3), POTHOS[(k + Math.floor(rand() * 3)) % 3], [p.x, p.y, p.z], yawTo(a + side * 0.75), 0.35, 0.72, 0.12, LEAF_LO))
   }
@@ -619,7 +651,8 @@ function ivyLeaf(g: THREE.Group, at: V3, s: number, color: string, side: number,
   const lg = new THREE.Group()
   lg.add(ball(1.3 * s, color, {}, [1, 1.05, 0.22], [8, 6]))
   for (const k of [-1, 1]) lg.add(ball(0.95 * s, color, { x: k * 1.05 * s, y: -0.35 * s }, [1, 0.95, 0.22], [8, 6]))
-  lg.position.set(at[0], at[1], at[2] + side * 0.75)
+  // 叶片贴着藤蔓（藤蔓粗 0.2、叶片半厚约 0.3）：以前偏出 0.75，每片叶子都悬在藤蔓旁边
+  lg.position.set(at[0], at[1], at[2] + side * 0.35)
   lg.rotation.set(side * 0.25, 0, rz)
   g.add(lg)
 }
@@ -648,7 +681,7 @@ function ivyHoop(p: string[]) {
     g.add(noOutline(tube(pts, 0.2, '#6f8a4a', { ...TUBE, seg: 40, radial: 5 })))
     const curve = curveOf(pts)
     for (let k = 1; k <= 11; k++) {
-      const q = curve.getPoint(k / 11.5)
+      const q = onTube(curve, 40, k / 11.5)
       ivyLeaf(g, [q.x, q.y, q.z], 0.9 + rand() * 0.35, cols[k % 3], k % 2 ? 1 : -1, rand() * 1.2 - 0.6 + (q.x > 0 ? -0.4 : 0.4))
     }
   }
@@ -790,7 +823,7 @@ function succulentBowl(p: string[]) {
   g.add(cup(12.5, 8, 7, 0.9, bowl))
   const y = 5.4
   const sr = 8 + (4.5 * y) / 7 - 0.9 - 0.3
-  g.add(soilDisc(sr, y))
+  g.add(soilDisc(cupInner(12.5, 8, 7, 0.9, y), y))
   scatter(g, sr, y, 22, '#f2eee6', 51, 0.6)
   rosette(g, -4, 2.5, y, 1.25, '#9cc5b0', '#b9d9c5')
   rosette(g, 4.6, -2.6, y, 1.0, '#d9b8c8', '#c7a3bb')
@@ -807,6 +840,8 @@ function succulentBowl(p: string[]) {
     const bean = ball(0.45, k % 3 ? '#8fcf6a' : '#d96f6a', { x: -4.8 + Math.cos(a) * d, y: y + ht * 0.6 + 0.75, z: -3.6 + Math.sin(a) * d }, [1, 1.65, 1], [8, 6])
     bean.rotation.z = (rand() - 0.5) * 0.6
     g.add(bean)
+    // 堆在上面的豆豆各有一根小梗接到土里（以前靠碰巧挨着别的豆豆，有的悬着）
+    if (ht > 0.05) g.add(noOutline(rod3([bean.position.x, y - 0.2, bean.position.z], [bean.position.x, bean.position.y, bean.position.z], 0.12, '#7fb866', 4)))
   }
   // 玉树小苗
   g.add(rod3([0.2, y - 0.2, -6], [0.6, y + 4, -6.2], 0.35, '#8a7a4a', 6))
@@ -838,7 +873,7 @@ function cactusGroup(p: string[]) {
   const H = 8
   g.add(tray(W, H, D, 1, potC, {}, 0.4))
   const y = H - 1.4
-  g.add(rbox(W - 2.2, 0.8, D - 2.2, SOIL, { y: y - 0.8 }, 0.2))
+  g.add(rbox(W - 1.6, 0.8, D - 1.6, SOIL, { y: y - 0.8 }, 0.2))
   cactusBall(g, -7, 0, y - 0.6, 4.4, '#5aa86a')
   cactusBall(g, 1.8, -0.5, y - 0.5, 3.5, '#6bb86a', 12)
   // 小柱状
@@ -925,7 +960,7 @@ function tomato(p: string[]) {
   g.add(cup(15, 12, 28, 1, potC))
   g.add(torus(14.9, 0.7, shade(potC, -0.06), { y: 27.6, rx: PI / 2 }))
   const y = 26.2
-  g.add(soilDisc(15 - 1 - 0.5, y))
+  g.add(soilDisc(cupInner(15, 12, 28, 1, y), y))
   const apex: V3 = [0, y + 86, 0]
   for (let k = 0; k < 3; k++) {
     const a = (k / 3) * PI * 2 + PI / 2
@@ -986,7 +1021,7 @@ function strawberryJar(p: string[]) {
   const prof: [number, number][] = [[6.5, 0], [9, 3], [11, 10], [10.6, 17], [8, 22.5], [7.2, 24.6], [7.6, 26 - t / 2]]
   g.add(hollowLathe(prof, t, potC))
   const y = 24.3
-  g.add(soilDisc(rAt(prof, y) - t - 0.3, y))
+  g.add(soilDisc(rAt(prof, y) - t, y))
   const rand = rng(81)
   const greens = ['#4f9e5b', '#5fae5a']
   const pockets: [number, number][] = [[0.4, 11.5], [2.0, 17], [3.6, 11.5], [5.2, 17]]
@@ -1141,11 +1176,22 @@ function hydrangea(p: string[]) {
     [[4.6, y + 17, -1.2], 5.6],
     [[0.4, y + 21, -4.8], 4.8],
   ]
-  for (const [c] of heads) g.add(noOutline(rod3([c[0] * 0.3, y - 0.3, c[2] * 0.3], [c[0], c[1] - 3, c[2]], 0.4, '#5f8f4a', 6)))
+  const stems = heads.map(([c]): [V3, V3] => [[c[0] * 0.3, y - 0.3, c[2] * 0.3], [c[0], c[1] - 3, c[2]]])
+  for (const [a, b] of stems) g.add(noOutline(rod3(a, b, 0.4, '#5f8f4a', 6)))
   const rand = rng(121)
   for (let k = 0; k < 9; k++) {
     const a = (k / 9) * PI * 2 + rand() * 0.3
-    g.add(sprig(8.5 + rand() * 1.5, k % 2 ? '#4f9e5b' : '#5aa865', [Math.cos(a) * 1.5, y + 2 + rand() * 7, Math.sin(a) * 1.5], yawTo(a), -0.3 + rand() * 0.3, 0.6, 0.14))
+    const len = 8.5 + rand() * 1.5
+    const base: V3 = [Math.cos(a) * 1.5, y + 2 + rand() * 7, Math.sin(a) * 1.5]
+    g.add(sprig(len, k % 2 ? '#4f9e5b' : '#5aa865', base, yawTo(a), -0.3 + rand() * 0.3, 0.6, 0.14))
+    // 叶柄：接到最近的那根花茎上（以前叶子的根都在盆中心半径 1.5 的一圈上，离哪根茎都有距离）
+    const on = stems
+      .map(([p, q]): V3 => {
+        const f = (base[1] - 0.6 - p[1]) / (q[1] - p[1])
+        return [p[0] + (q[0] - p[0]) * f, base[1] - 0.6, p[2] + (q[2] - p[2]) * f]
+      })
+      .sort((u, v) => Math.hypot(u[0] - base[0], u[2] - base[2]) - Math.hypot(v[0] - base[0], v[2] - base[2]))[0]
+    g.add(noOutline(rod3(on, along(base, dirOf(yawTo(a), 0), 0.5), 0.18, '#5f8f4a', 5)))
   }
   for (const [c, r] of heads) hydraHead(g, c, r, flower)
   return g
@@ -1227,8 +1273,9 @@ function canBig(p: string[]) {
   g.add(torus(R + 0.35, 0.45, dk, { y: 0.6, rx: PI / 2 }))
   g.add(torus(R + 0.02, 0.45, dk, { y: H - 0.3, rx: PI / 2 }))
   for (const y of [7.5, 14.5]) g.add(torus(R + 0.4 - (0.4 * y) / H + 0.02, 0.28, dk, { y, rx: PI / 2 }))
-  g.add(torus(3.6, 0.55, dk, { x: -3.5, y: H + 0.1, rx: PI / 2 }))
-  g.add(noOutline(cyl(3.3, 3.3, 0.35, '#3b4248', { x: -3.5, y: H - 0.05 }, 20)))
+  // 注水口往前挪 1cm，让开提梁的后脚（以前后脚正好踩在注水口的卷边上，穿过去半根）
+  g.add(torus(3.6, 0.55, dk, { x: -2.4, y: H + 0.1, rx: PI / 2 }))
+  g.add(noOutline(cyl(3.3, 3.3, 0.35, '#3b4248', { x: -2.4, y: H - 0.05 }, 20)))
   const s0: V3 = [6, 5, 0]
   const s1: V3 = [26, 26, 0]
   g.add(taperRod3(s0, s1, 1.5, 0.8, body, 12))
@@ -1247,14 +1294,18 @@ function canSmall(p: string[]) {
   const g = new THREE.Group()
   g.add(puck(5.4, 1.2, shade(body, -0.08)))
   g.add(ball(7, body, { y: 7.2 }, [1.05, 0.9, 0.85]))
-  g.add(cup(2.4, 2.6, 2.6, 0.4, acc, { x: -2.4, y: 12.6 }))
+  // 注水口的领圈：往下加长到整圈都嵌进壶身（壶身是球面，以前领圈底是平的，靠后把手的一侧悬在壶身上方 0.8cm、露着底）；
+  // 圈里盖一片深色的「壶口」，挡住从圈底鼓上来的壶身
+  g.add(cup(2.4, 2.6, 3.3, 0.4, acc, { x: -2, y: 11.9 }))
+  g.add(noOutline(cyl(2.2, 2.2, 0.3, shade(body, -0.3), { x: -2, y: 13.6 }, 32)))
   const s0: V3 = [4.5, 5, 0]
   const s1: V3 = [19, 16.5, 0]
   g.add(taperRod3(s0, s1, 0.95, 0.5, body, 12))
   const d = new THREE.Vector3(s1[0] - s0[0], s1[1] - s0[1], 0).normalize()
   const P = (k: number): V3 => [s1[0] + d.x * k, s1[1] + d.y * k, 0]
   g.add(taperRod3(P(-0.4), P(1.6), 0.6, 1.6, acc, 12))
-  g.add(tube([[3.2, 12.3, 0], [1.5, 18, 0], [-4, 17.5, 0], [-5.8, 11, 0]], 0.75, body, { ...TUBE, seg: 16, radial: 8 }))
+  // 提手的后脚落在领圈后面的壶身上（以前贴着领圈下来，从领圈的后壁里穿过去）
+  g.add(tube([[3.2, 12.3, 0], [1.5, 18, 0], [-4.8, 17.3, 0], [-6.2, 10.2, 0]], 0.75, body, { ...TUBE, seg: 16, radial: 8 }))
   return g
 }
 
@@ -1457,19 +1508,20 @@ function toolRack(p: string[]) {
   x = 0
   peg(x)
   g.add(torus(1.0, 0.18, '#55585e', { x, y: yp - 0.6, z: zc }))
-  g.add(capsAlong([x - 1.0, yp - 1.8, zc], [x - 2.2, yp - 10, zc], 0.85, C.red))
-  g.add(capsAlong([x + 1.0, yp - 1.8, zc], [x + 2.2, yp - 10, zc], 0.85, shade(C.red, -0.1)))
+  // 两只握把的顶端套在挂环里（以前握把顶端离环 0.2，整把剪刀悬在环下面）
+  g.add(capsAlong([x - 0.85, yp - 1.25, zc], [x - 2.2, yp - 10, zc], 0.85, C.red))
+  g.add(capsAlong([x + 0.85, yp - 1.25, zc], [x + 2.2, yp - 10, zc], 0.85, shade(C.red, -0.1)))
   g.add(rod3([x - 2, yp - 10, zc], [x, yp - 12.5, zc], 0.5, STEEL, 8))
   g.add(rod3([x + 2, yp - 10, zc], [x, yp - 12.5, zc], 0.5, STEEL, 8))
   g.add(ball(3.4, STEEL, { x: x - 0.3, y: yp - 15.5, z: zc }, [0.32, 1, 0.12]))
   g.add(ball(2.9, '#8a8f96', { x: x + 0.4, y: yp - 15.2, z: zc + 0.35 }, [0.36, 1, 0.18]))
-  // 手套搭在木钉上
+  // 手套搭在木钉上（手指的根部伸进手掌里：以前指尖正好顶在手掌下沿的圆角上，四根手指都悬着）
   x = 11.5
   peg(x)
   for (const [dx, dz, c] of [[-1.2, 0, '#e9b44c'], [1.2, 1.4, shade('#e9b44c', -0.06)]] as [number, number, string][]) {
     g.add(rbox(6.4, 4, 1.2, '#6a8f5a', { x: x + dx, y: yp - 3, z: zc + dz - 1 }, 0.5))
     g.add(rbox(6.2, 7.5, 1.2, c, { x: x + dx, y: yp - 10.5, z: zc + dz - 1 }, 0.55))
-    ;[-2.2, -0.75, 0.75, 2.2].forEach((fx, i) => g.add(capsAlong([x + dx + fx, yp - 10.5, zc + dz - 1 + 0.6], [x + dx + fx * 1.05, yp - 14 - [0.5, 1.4, 1.6, 0.9][i], zc + dz - 1 + 0.6], 0.7, c)))
+    ;[-2.2, -0.75, 0.75, 2.2].forEach((fx, i) => g.add(capsAlong([x + dx + fx, yp - 9.6, zc + dz - 1 + 0.6], [x + dx + fx * 1.05, yp - 14 - [0.5, 1.4, 1.6, 0.9][i], zc + dz - 1 + 0.6], 0.7, c)))
   }
   // 麻绳卷
   x = 23
@@ -1486,7 +1538,8 @@ function pottingBench(p: string[]) {
   const dk = shade(wood, -0.08)
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(4, 86, 4, dk, { x: sx * 48, z: sz * 23 }, 0.6))
   g.add(rbox(100, 4, 50, top, { y: 86 }, 1))
-  g.add(rbox(92, 2, 42, wood, { y: 18 }, 0.6))
+  // 下层层板四角各伸进腿里 1cm（以前只和腿的内角相切，圆角之间隔着 0.5）
+  g.add(rbox(94, 2, 44, wood, { y: 18 }, 0.6))
   for (const sz of [-1, 1]) g.add(rbox(92, 5, 2, dk, { y: 80, z: sz * 23 }, 0.5))
   g.add(rbox(100, 50, 2, wood, { y: 90, z: -24 }, 0.6))
   g.add(rbox(96, 2, 14, wood, { y: 128, z: -16 }, 0.6))
@@ -1564,7 +1617,8 @@ function floorLight(p: string[]) {
   const tilt = 0.35
   const nrm = new THREE.Vector3(0, Math.cos(tilt), Math.sin(tilt))
   for (const s of [-1, 1]) {
-    g.add(tube([[s * 17, 148, 0], [s * 19.5, 146, 2], [s * 19.5, 142.5, 4.2]], 0.5, body, { ...TUBE, seg: 12, radial: 6 }))
+    // 弯臂的末端插进灯板背面（以前管口停在灯板上方 0.4）
+    g.add(tube([[s * 17, 148, 0], [s * 19.5, 146, 2], [s * 19.5, 141.3, 5]], 0.5, body, { ...TUBE, seg: 12, radial: 6 }))
     const c = new THREE.Vector3(s * 19.5, 140.8, 5)
     g.add(rbox(15, 1.8, 11, body, { x: c.x, y: c.y - 0.9, z: c.z, rx: tilt }, 0.6))
     const pc = c.clone().addScaledVector(nrm, -1.0)
@@ -1603,10 +1657,12 @@ function hoseReel(p: string[]) {
   g.add(rod3([-17, 44, 0], [17, 44, 0], 1.2, frame))
   g.add(rod3([-8, 44, 0], [8, 44, 0], 1.6, RUBBER, 12))
   g.add(rod3([-18, ax, 0], [18.6, ax, 0], 0.9, STEEL))
-  g.add(cyl(8, 8, 28, shade(frame, 0.1), { y: ax - 14, rz: PI / 2 }, 20))
+  g.add(cyl(8.6, 8.6, 28, shade(frame, 0.1), { y: ax - 14, rz: PI / 2 }, 20))
   for (const x of [-14.5, 14.5]) g.add(cyl(15, 15, 1, frame, { x, y: ax - 0.5, rz: PI / 2 }, 28))
-  for (const [r, x0, x1] of [[9.2, -12.6, 12.6], [10.8, -12.6, 12.6], [12.4, -12.6, 3]] as [number, number, number][])
-    for (let x = x0; x <= x1 + 0.01; x += 1.68) g.add(torus(r, 0.8, hose, { x, y: ax, ry: PI / 2 }))
+  // 软管一圈压一圈：圈距 1.5、层距 1.5（管粗 1.6），最里层压在绕线鼓上。以前圈距 1.68、最里层离鼓 0.4，每一圈都是悬着的。
+  // 四十多圈挤在一起，一圈 24 段就够（默认 32 段，这一卷软管原来两万四千面）
+  for (const [r, x0, x1] of [[9.2, -12.75, 12.75], [10.7, -12.75, 12.75], [12.2, -12.75, 3]] as [number, number, number][])
+    for (let x = x0; x <= x1 + 0.01; x += 1.5) g.add(torus(r, 0.8, hose, { x, y: ax, ry: PI / 2 }, PI * 2, [8, 24]))
   g.add(rod3([18.6, ax, 0], [18.6, ax + 8, 3], 0.7, STEEL, 8))
   g.add(rod3([18.6, ax + 8, 3], [22.6, ax + 8, 3], 0.9, acc))
   g.add(tube([[3, ax - 12.4, 4], [3, 6, 16], [6, 1.1, 22], [11, 1.0, 25.5]], 0.8, hose, { ...TUBE, seg: 20, radial: 8 }))

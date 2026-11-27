@@ -653,11 +653,13 @@ function pegboardDesk(p: string[]) {
   g.add(rbox(PD_LX * 2 - 3.5, 3, 3, frame, { y: ut - 3, z: PD_POST_Z }, 0.5))
   g.add(rbox(PD_LX * 2 + 3.5, 2.5, 3.5, frame, { y: PD.h - 2.5, z: PD_POST_Z }, 0.6))
   // 洞洞板：n 边形小孔、不倒角（孔多，圆孔加倒角面数会翻好几倍）
+  // 插着挂钩的洞开小一圈：钩杆（半径 0.4）把洞塞满，杆身咬在板里（原来 0.55 的洞比杆粗，杆悬在洞中间）
+  const hooked = new Set(PD_HOOKS.map(([i, j]) => `${i},${j}`))
   const holes: Hole[] = []
   for (let i = 0; i < PD_COLS; i++)
     for (let j = 0; j < PD_ROWS; j++) {
       const [x, y] = pdHole(i, j)
-      holes.push({ kind: 'circle', x, y: y - PD_BOARD.y0, r: 0.55, n: 6 })
+      holes.push({ kind: 'circle', x, y: y - PD_BOARD.y0, r: hooked.has(`${i},${j}`) ? 0.35 : 0.55, n: 6 })
     }
   g.add(holePanel(PD_BOARD.w, PD_BOARD.h, 1.2, board, holes, { y: PD_BOARD.y0, z: PD_BOARD.z }, 1, { bevel: 0 }))
   // 挂钩：从洞里伸出来，末端上翘

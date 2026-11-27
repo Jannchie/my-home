@@ -425,7 +425,8 @@ function tpHolder(p: string[]) {
   const cy = m + 6.2
   g.add(rbox(14, 13.4, 1, main, { y: m, z: back + 0.5 }, 0.4))
   g.add(rbox(1.2, 2, cz - back - 1 + 1, main, { x: 6.3, y: cy - 1, z: (back + 1 + cz + 1) / 2 }, 0.3))
-  g.add(cylXLegacy(1.1, 12.6, STEEL, 0, cy, cz))
+  // 横轴比纸卷中心高 0.8：纸卷挂在轴上，纸芯内壁的顶压着轴（以前轴在纸芯正中，四周空着 0.7cm，纸卷悬在架子里）
+  g.add(cylXLegacy(1.1, 12.6, STEEL, 0, cy + 0.8, cz))
   g.add(rollX(paper, 0, cy, cz))
   // 垂下来的纸尾
   g.add(rbox(10.2, 6, 0.2, paper, { y: cy - 6, z: cz + ROLL_R + 0.1 }, 0.05))
@@ -445,7 +446,8 @@ function tpHolderDouble(p: string[]) {
   g.add(rbox(32, 12.4, 1, main, { y: m, z: back + 0.5 }, 0.4))
   for (const x of [-15.4, 0, 15.4]) g.add(rbox(1.2, 12.4, cz - back + 1, main, { x, y: m, z: (back + 1 + cz + 2) / 2 - 0.5 }, 0.3))
   for (const sx of [-1, 1]) {
-    g.add(cylXLegacy(1.1, 15.4, STEEL, sx * 7.7, cy, cz))
+    // 横轴比纸卷中心高 0.8：纸卷挂在轴上（同单卷款）
+    g.add(cylXLegacy(1.1, 15.4, STEEL, sx * 7.7, cy + 0.8, cz))
     g.add(rollX(paper, sx * 7.7, cy, cz))
   }
   g.add(rbox(10.2, 6, 0.2, paper, { x: 7.7, y: cy - 6, z: cz + ROLL_R + 0.1 }, 0.05))
@@ -458,12 +460,14 @@ function toiletBrush(p: string[]) {
   const [main, handle, head] = p
   const g = new THREE.Group()
   g.add(cup(4.5, 4, 13, 0.4, main))
-  g.add(ball(3, head, { y: 3.6 }, [1, 0.9, 1]))
+  // 刷头落在刷架底上（架底内面 0.4；以前刷头最低点 0.9，悬着）
+  g.add(ball(3, head, { y: 3 }, [1, 0.9, 1]))
   g.add(cyl(0.55, 0.55, 30, handle, { y: 4 }, 10))
   g.add(capsule(0.9, 5, handle, { y: 32 }))
   // 刷架口沿的圆环盖
   g.add(torus(2.6, 0.5, main, { y: 12.7, rx: PI / 2 }))
-  for (const a of [0, PI / 2, PI, PI * 1.5]) g.add(rbox(1.2, 0.5, 2.2, main, { x: Math.cos(a) * 3.2, y: 12.45, z: Math.sin(a) * 3.2, ry: -a }, 0.2))
+  // 四根辐条沿半径方向，把圆环盖连到刷架口沿内壁（半径 4.1）。以前长边转成了切向，外端离内壁 0.3cm，整个盖悬在口里
+  for (const a of [0, PI / 2, PI, PI * 1.5]) g.add(rbox(2.2, 0.5, 1.2, main, { x: Math.cos(a) * 3.2, y: 12.45, z: Math.sin(a) * 3.2, ry: -a }, 0.2))
   return g
 }
 
@@ -730,7 +734,8 @@ function bathLidRolled(p: string[]) {
 function bathLidFolded(p: string[]) {
   const [main, strap] = p
   const g = new THREE.Group()
-  for (let i = 0; i < 3; i++) g.add(rbox(72, 1.6, 46, i === 1 ? shade(main, -0.05) : main, { y: i * 1.7 }, 0.6))
+  // 三块板摞着，每块厚 1.8、间距 1.7，互相压进 0.1（以前厚 1.6，板和板之间留着 0.1 的缝）
+  for (let i = 0; i < 3; i++) g.add(rbox(72, 1.8, 46, i === 1 ? shade(main, -0.05) : main, { y: i * 1.7 }, 0.6))
   for (const sx of [-1, 1]) g.add(rbox(10, 0.4, 2.4, strap, { x: sx * 22, y: 4.95, z: 18 }, 0.15))
   return g
 }
@@ -762,7 +767,8 @@ function toyWhale(p: string[]) {
   g.add(ball(4.4, belly, { x: 0.8, y: 3.4 }, [1.25, 0.62, 0.86]))
   g.add(ball(2, body, { x: -6.6, y: 5.6 }, [1.2, 0.6, 0.8]))
   for (const sz of [-1, 1]) {
-    const t = ball(2.2, body, { x: -8.4, y: 7.2, z: sz * 1.6, rx: sz * 0.5 }, [0.9, 0.35, 1.2])
+    // 尾鳍压在尾柄上（以前高 0.4，两片尾鳍和尾柄之间空着 0.3cm）
+    const t = ball(2.2, body, { x: -8.4, y: 6.8, z: sz * 1.6, rx: sz * 0.5 }, [0.9, 0.35, 1.2])
     g.add(t)
     const fin = ball(1.8, body, { x: 1.6, y: 2.4, z: sz * 3.8, ry: sz * 0.4 }, [1.2, 0.3, 0.8])
     g.add(fin)
@@ -1109,7 +1115,8 @@ function podJar(p: string[]) {
       const rr = i === 0 ? 0 : 3.6
       const x = i === 0 ? 0 : Math.cos(a) * rr
       const z = i === 0 ? 0 : Math.sin(a) * rr
-      g.add(ball(1.4, rand() > 0.5 ? podA : podB, { x, y: 1.4 + layer * 2.6, z, ry: rand() * PI }, [1.25, 0.8, 1.1]))
+      // 层距 1.95：上一层压在下一层的凝珠之间（凝珠高 2.24；以前层距 2.6，上面两层悬着）
+      g.add(ball(1.4, rand() > 0.5 ? podA : podB, { x, y: 1.4 + layer * 1.95, z, ry: rand() * PI }, [1.25, 0.8, 1.1]))
     }
   g.add(puck(6.9, 2.2, lid, { y: 13.6 }))
   g.add(rbox(4, 0.8, 1.4, shade(lid, -0.15), { y: 14.6, z: 5.6 }, 0.3))
@@ -1185,6 +1192,8 @@ function hamperOpen(p: string[]) {
     [8, 47.5, -6],
   ]
   spots.forEach(([x, y, z], i) => g.add(ball(8, cloth[i], { x, y, z, ry: i }, [1.0, 0.45, 0.85])))
+  // 垫在下面的一层衣物：四边压进篓壁 0.1，上面几团衣服陷在它里面（以前只有四团衣服悬在篓口下面，离篓壁 1cm）
+  g.add(rbox(HP.w - 2.2, 6, HP.d - 2.2, cloth[3], { y: 39 }, 2))
   return g
 }
 
@@ -1303,7 +1312,8 @@ function clearCase(c: CaseSpec, open: boolean): Build {
     g.add(clearDeep(tray(c.w, c.h, c.d, 0.6, '#eef6fa', {}, 0.3), '#eef6fa'))
     c.rolls.forEach(([x, layer, z], i) => {
       const len = c.d - 6
-      const cy = 0.6 + c.r + 0.05 + layer * Math.sqrt(4 * c.r * c.r - 4.5 * 4.5)
+      // 底层压进箱底 0.1，上层压进下层两卷之间 0.3（卷是 18 段的棱柱，按正圆相切算会差 0.05～0.13 碰不到）
+      const cy = 0.6 + c.r - 0.1 + layer * Math.sqrt((2 * c.r - 0.3) ** 2 - 4.5 * 4.5)
       const col = i % 2 ? towelB : towelA
       g.add(cylZLegacy(c.r, len, col, x, cy, z, 18))
       g.add(cylZLegacy(c.r * 0.35, len + 0.4, shade(col, -0.12), x, cy, z, 10))

@@ -283,7 +283,8 @@ function luohanBed(p: string[]) {
   weizi(g, 200, 95, top, 32, 24, 4, wood, dark)
   g.add(rbox(186, 9, 82, cushion, { y: top, z: 4.5 }, 3))
   for (const s of [-1, 1]) g.add(cylX(9, 26, cushion, s * 79, top + 17.5, 0))
-  g.add(rbox(36, 14, 10, cushion, { x: -40, y: top + 9, z: -36, rx: -0.12 }, 4))
+  // 靠枕底落在坐褥上（原来斜着压在坐褥后沿的圆角外，底边悬空 0.3）
+  g.add(rbox(36, 14, 10, cushion, { x: -40, y: top + 8.4, z: -34, rx: -0.12 }, 4))
   return g
 }
 
@@ -400,7 +401,8 @@ function teaTable(p: string[]) {
     g.add(prism([[-58.5, 59], [58.5, 59], [58.5, 53], [50, 51], [-50, 51], [-58.5, 53]], 1.8, dark, s * 27.5))
     g.add(sidePrism([[-22.5, 59], [22.5, 59], [22.5, 53], [-22.5, 53]], 1.8, dark, s * 63))
   }
-  g.add(rbox(117, 2, 45, dark, { y: 10 }, 0.6))
+  // 搁板四角插进腿里 1.5（原来只和四条腿的内角相切，整块悬着）
+  g.add(rbox(120, 2, 48, dark, { y: 10 }, 0.6))
   g.add(rbox(140, 6, 70, wood, { y: 59 }, 1.6))
   teaSet(g, -32, 65, 4, trayC, CHN.zitan)
   return g
@@ -604,7 +606,8 @@ function dingxiang(p: string[]) {
     g.add(hollow(W, h, D, wood, { y }, 2, inner))
     for (const sy of shelves) g.add(rbox(W - 4, 1.6, D - 3, inner, { y: sy - 1.6, z: 0.5 }, 0.3))
     // 闩杆（固定在柜体上）+ 两扇门
-    g.add(rbox(3.2, h - 4, 1.4, dark, { y: y + 2, z: D / 2 + 0.3 }, 0.5))
+    // 闩杆上下各伸出 1cm 压在柜口的顶 / 底板上（原来正好和门洞等高，两头都只是相切）
+    g.add(rbox(3.2, h - 2, 1.4, dark, { y: y + 1, z: D / 2 + 0.3 }, 0.5))
     for (const s of [-1, 1]) {
       const dx = s * (W / 4 + 0.5)
       const parts: THREE.Object3D[] = [rbox(W / 2 - 5.6, h - 4, 1.2, wood, { x: dx, y: y + 2, z: D / 2 + 0.2 }, 0.5), rbox(W / 2 - 12, h - 12, 0.6, tone(wood, -0.06), { x: dx, y: y + 6, z: D / 2 + 0.95 }, 0.3)]
@@ -962,7 +965,8 @@ function clFireplace(p: string[]) {
   for (const s of [-1, 1]) g.add(rbox(2, 8, 18, IRON, { x: s * 20, y: 6, z: -4 }, 0.4))
   g.add(cylX(3.4, 46, '#7a5236', 0, 15, -8))
   g.add(cylX(3, 40, '#8a6040', 0, 15, 0))
-  g.add(cylX(3, 40, '#6a4630', 0, 20.6, -4))
+  // 上面那根卧在下面两根之间（原来抬高到 20.6，和下面两根都隔着 0.5～0.9）
+  g.add(cylX(3, 40, '#6a4630', 0, 19.2, -3.8))
   // 炉架台面（出沿）
   g.add(rbox(150, 3, 42, tone(mantel, -0.05), { y: 100 }, 1))
   g.add(rbox(156, 4, 46, mantel, { y: 103 }, 1.2))
@@ -1085,7 +1089,7 @@ function marbleCoffee(p: string[]) {
   for (let k = 0; k < 4; k++) {
     const a = (k / 4) * Math.PI * 2 + Math.PI / 4
     const pt = (rr: number, y: number): V3 => [Math.sin(a) * rr, y, Math.cos(a) * rr]
-    g.add(cappedTube([pt(12, 38), pt(22, 30), pt(20, 16), pt(27, 4), pt(31, 1.8)], 1.6, metal, TUBE))
+    g.add(cappedTube([pt(12, 38), pt(22, 30), pt(20, 16), pt(27, 4), pt(31, 1.6)], 1.6, metal, TUBE))
   }
   // 腿间的拉环：半径放到腿的位置（以前 14，离四条腿都有 6cm，悬在中间）
   g.add(torus(20.6, 1.4, metal, { y: 22, rx: Math.PI / 2 }))
@@ -1122,7 +1126,7 @@ function empireBookcase(p: string[]) {
   g.add(rbox(w, 4, d, body, { y: 176 }, 1))
   g.add(rbox(w + 2, 2.4, d + 2, gold, { y: 180 }, 0.8))
   g.add(prism([[-(w / 2 + 1), 182.4], [w / 2 + 1, 182.4], [0, h]], d - 4, body, -1))
-  g.add(noOutlineDeep(cylZ(3.2, 0.6, gold, 0, 187.4, d / 2 - 2.6, 16)))
+  g.add(noOutlineDeep(cylZ(3.2, 0.6, gold, 0, 187.4, d / 2 - 2.9, 16)))
   return g
 }
 function empireSurfaces() {
@@ -1154,7 +1158,8 @@ function velvetOttoman(p: string[]) {
   g.add(puck(29, 24, fabric, { y: 16 }))
   for (let k = 0; k < 36; k++) {
     const a = (k / 36) * Math.PI * 2
-    g.add(cyl(0.45, 0.45, 5, gold, { x: Math.sin(a) * 28.6, y: 15, z: Math.cos(a) * 28.6 }, 4))
+    // 流苏贴着凳圈（凳圈半径 28；原来放在 28.6，四棱的流苏离凳圈 0.1～0.3）
+    g.add(cyl(0.45, 0.45, 5, gold, { x: Math.sin(a) * 28, y: 15, z: Math.cos(a) * 28 }, 4))
   }
   g.add(ball(1.4, tone(fabric, -0.22), { y: 39.6 }))
   for (let k = 0; k < 6; k++) {
@@ -1649,6 +1654,8 @@ function crateCoffee(p: string[]) {
       g.add(rbox(1.8, 7.6, 48, tone(wood, (1 - k) * 0.04), { x: s * 52, y }, 0.4))
     }
   }
+  // 桌面板条下面两根穿带，两头接在角柱上（原来中间三条板条下面什么都没有，只和旁边的板条隔 0.2 悬着）
+  for (const s of [-1, 1]) g.add(rbox(3, 2.6, 50, tone(wood, -0.08), { x: s * 49.5, y: 39.6 }, 0.5))
   for (let i = 0; i < 5; i++) g.add(rbox(110, 3, 11.8, tone(wood, (i % 3) * 0.035 - 0.03), { y: 42, z: -24 + i * 12 }, 0.6))
   return g
 }
@@ -1920,7 +1927,8 @@ function kurumaDansu(p: string[]) {
     g.add(drawerOf(front, -48.5, -1.5, y, 23, 22.7, 42, inner))
   }
   // 右：两扇拉门（后轨固定，前轨带锁板推到左边）
-  g.add(rbox(25, 73, 0.9, tone(wood, 0.04), { x: 11.5, y: 16.5, z: 23.3 }, 0.4))
+  // 后轨那扇加厚到 1.3，背面压进中隔板和层板的前沿（原来只进柜口 0.15，和里面的板差 0.05）
+  g.add(rbox(25, 73, 1.3, tone(wood, 0.04), { x: 11.5, y: 16.5, z: 23.1 }, 0.4))
   g.add(slideDoor([rbox(25, 73, 0.9, tone(wood, 0.04), { x: 36, y: 16.5, z: 24.2 }, 0.4), rbox(8, 12, 0.4, iron, { x: 23, y: 48, z: 24.9 }, 0.3), ball(1.2, iron, { x: 23, y: 54, z: 25.2 })], -24.5))
   for (const s of [-1, 1]) for (const y of [14.6, 89.6]) g.add(noOutlineDeep(rbox(6, 2.4, 0.4, iron, { x: s * 47, y, z: 23.2 }, 0.1)))
   return g
@@ -2007,7 +2015,8 @@ function chigaidana(p: string[]) {
   g.add(rbox(85.2, 2.4, 34.8, wood, { y: 30, z: 0.4 }, 0.5))
   // 地袋：两扇拉门，前轨那扇推到右边
   for (const [x, z] of [[-21.2, 17.2], [21.2, 16.2]] as P2[]) {
-    const parts = [rbox(42.2, 26, 0.9, door, { x, y: 3.8, z }, 0.3), noOutlineDeep(cylZ(1.6, 0.4, dark, x + (x < 0 ? 16 : -16), 16.8, z + 0.6, 12))]
+    // 拉门上下各进槽 0.3（原来上下各留 0.2～0.3 的缝，固定的那扇悬着）
+    const parts = [rbox(42.2, 27.1, 0.9, door, { x, y: 3.2, z }, 0.3), noOutlineDeep(cylZ(1.6, 0.4, dark, x + (x < 0 ? 16 : -16), 16.8, z + 0.6, 12))]
     if (x < 0) g.add(slideDoor(parts, 42.4))
     else for (const o of parts) g.add(o)
   }
@@ -2019,7 +2028,7 @@ function chigaidana(p: string[]) {
   g.add(rbox(85.2, 2, 34.4, wood, { y: 88, z: 0.4 }, 0.4))
   // 天袋：同样两扇拉门
   for (const [x, z] of [[-21.2, 17.2], [21.2, 16.2]] as P2[]) {
-    const parts = [rbox(42.2, 19.6, 0.9, door, { x, y: 90.2, z }, 0.3), noOutlineDeep(cylZ(1.4, 0.4, dark, x + (x < 0 ? 16 : -16), 100, z + 0.6, 12))]
+    const parts = [rbox(42.2, 20.6, 0.9, door, { x, y: 89.7, z }, 0.3), noOutlineDeep(cylZ(1.4, 0.4, dark, x + (x < 0 ? 16 : -16), 100, z + 0.6, 12))]
     if (x < 0) g.add(slideDoor(parts, 42.4))
     else for (const o of parts) g.add(o)
   }
@@ -2092,7 +2101,8 @@ function locker3(p: string[]) {
   g.add(rbox(88, 6, 43, dark, {}, 0.6))
   g.add(hollow(90, 174, 45, metal, { y: 6 }, 1.2, inner))
   for (const s of [-1, 1]) g.add(rbox(1.2, 171.6, 43.8, metal, { x: s * 14.7, y: 7.2, z: 0.6 }, 0.2))
-  for (let i = 0; i < 3; i++) g.add(rbox(28, 1.2, 43, inner, { x: (i - 1) * 29.4, y: 148.8, z: 0.6 }, 0.2))
+  // 顶层板两头嵌进隔板 / 侧板（原来各短 0.1～0.4，三块都悬着）
+  for (let i = 0; i < 3; i++) g.add(rbox(29, 1.2, 43, inner, { x: (i - 1) * 29.4, y: 148.8, z: 0.6 }, 0.2))
   g.add(rbox(90, 3, 1, metal, { y: 6, z: 22 }, 0.3))
   g.add(rbox(90, 3, 1, metal, { y: 177, z: 22 }, 0.3))
   g.add(rbox(91, 2, 46, tone(metal, -0.1), { y: 180 }, 0.6))
@@ -2131,8 +2141,9 @@ function weldBench(p: string[]) {
   g.add(rbox(150, 6, 70, top, { y: 84 }, 0.8))
   for (let x = -60; x <= 60; x += 15) g.add(noOutlineDeep(rbox(0.4, 0.3, 69, tone(top, -0.1), { x, y: 90 }, 0.1)))
   // 台钳
-  g.add(rbox(16, 4, 12, vise, { x: 60, y: 90, z: -24 }, 0.8))
-  g.add(rbox(16, 8, 3, vise, { x: 60, y: 94, z: -17 }, 0.6))
+  // 钳座往前加长 2cm，固定钳口坐在上面并压进 0.2（原来固定钳口只有后棱搭着钳座的圆角，钳口、丝杠、手柄整组悬着）
+  g.add(rbox(16, 4, 14, vise, { x: 60, y: 90, z: -23 }, 0.8))
+  g.add(rbox(16, 8.2, 3, vise, { x: 60, y: 93.8, z: -17 }, 0.6))
   g.add(rbox(16, 8, 3, vise, { x: 60, y: 94, z: -6 }, 0.6))
   g.add(cylZ(1, 14, IRON, 60, 97, -9, 10))
   g.add(cylX(0.6, 12, IRON, 60, 97, -2, 8))
@@ -2154,7 +2165,8 @@ function rivetChair(p: string[]) {
   const bk = rbox(58, 44, 12, leather, { y: 30, z: -25 }, 5)
   bk.rotation.x = -0.12
   g.add(bk)
-  for (let k = -5; k <= 5; k++) g.add(ball(0.6, rivet, { x: k * 5, y: 39.6, z: 32 }))
+  // 铆钉钉在坐垫前上棱的圆角上（原来在圆角外 0.8 悬着）
+  for (let k = -5; k <= 5; k++) g.add(ball(0.6, rivet, { x: k * 5, y: 38.8, z: 30.8 }))
   return g
 }
 
@@ -2170,7 +2182,7 @@ function edisonLamp(p: string[]) {
   g.add(cyl(2.4, 2.4, 6, pipeC, { y: 56 }, 12))
   g.add(cyl(1.5, 1.5, 92, pipeC, { y: 60 }, 12))
   g.add(cyl(2.2, 2.2, 3, pipeC, { y: 100 }, 12))
-  g.add(cylX(2.2, 4, pipeC, 2.6, 101.5, 0, 12))
+  g.add(cylX(2.2, 4.6, pipeC, 2.9, 101.5, 0, 12))
   g.add(torus(4.4, 0.6, valve, { x: 5, y: 101.5, ry: Math.PI / 2 }))
   for (let k = 0; k < 3; k++) g.add(rod3([5, 101.5, 0], [5, 101.5 + Math.cos((k / 3) * Math.PI * 2) * 4.2, Math.sin((k / 3) * Math.PI * 2) * 4.2], 0.4, valve, 6))
   g.add(ball(2.4, pipeC, { y: 152 }))
@@ -2178,7 +2190,8 @@ function edisonLamp(p: string[]) {
   g.add(ball(2.4, pipeC, { x: 16, y: 152 }))
   g.add(cyl(1.5, 1.5, 8, pipeC, { x: 16, y: 144 }, 12))
   g.add(cyl(2.2, 2.4, 5, '#8a6a3a', { x: 16, y: 139 }, 12))
-  g.add(lit(ball(3.8, bulbC, { x: 16, y: 133.4 }, [1, 1.3, 1]), bulbC, 0.9))
+  // 灯泡顶进灯头（原来灯泡顶离灯头 0.7）
+  g.add(lit(ball(3.8, bulbC, { x: 16, y: 134.3 }, [1, 1.3, 1]), bulbC, 0.9))
   for (let k = 0; k < 6; k++) {
     const a = (k / 6) * Math.PI * 2
     g.add(cappedTube([[16 + Math.sin(a) * 2.4, 139, Math.cos(a) * 2.4], [16 + Math.sin(a) * 5.6, 134, Math.cos(a) * 5.6], [16 + Math.sin(a) * 2, 127.6, Math.cos(a) * 2]], 0.3, pipeC, { ...TUBE, caps: false }))
@@ -2222,7 +2235,8 @@ function concreteSide(p: string[]) {
       g.add(rbox(2.4, 2.4, 38.2, steel, { x: s * 20.3, y }, 0.3))
     }
   }
-  g.add(rbox(38.2, 1.8, 38.2, wood, { y: 12.4 }, 0.4))
+  // 下层木板搭在四根横档上、压进 0.2（原来和横档的内侧面、顶面都只是相切）
+  g.add(rbox(40.6, 2, 40.6, wood, { y: 12.2 }, 0.4))
   g.add(rbox(45, 5, 45, concrete, { y: 50 }, 0.8))
   for (const [x, z] of [[-12, -8], [6, 10], [14, -14], [-6, 15], [16, 4]] as P2[]) g.add(noOutlineDeep(cyl(0.5, 0.5, 0.2, tone(concrete, -0.2), { x, y: 55, z }, 8)))
   return g

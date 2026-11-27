@@ -9,7 +9,7 @@ import { G, P, PI, cylX, cylZ, fitBuild, fitGroup, noOutline, type V2 } from '..
 import { I, J, M, N, PROP, R, define, type PalFlat } from '../packkit'
 import { BRASS, CARD, DARK, GOLD, IVORY, METAL, PAPER, bead, paintTop, type Draw } from './interests/common'
 import { E_GUITAR_MOUNT, accordion, celloStand, clarinetStand, digitalPiano, djDeck, drumKit, eDrum, eGuitarStand, eGuitarWall, fluteCase, grandPiano, guitarAmp, harmonica, harp, koto, metronome, musicStand, saxStand, shakuhachi, shamisen, smallInstruments, synth, taiko, trumpet, uprightPiano, violinCase, violinStand } from './interests/music'
-import { DECAL_LIFT, MEDAL_MOUNT, MJ_TH, MJ_TW, POSTCARD_MOUNT, RAINCOAT_MOUNT, ROD_RACK_MOUNT, STAR_MOUNT, UNO_COLS, acrylicStand, backgammon, badminton, baseball, basketball, bgBoxSingle, bgHex, bgLoop, bgMystery, bgShelfRow, bgTrain, bikeHelmet, boardGames, boxingGloves, burrPuzzle, calligraphy, card, cardGame, cardStack, cartons, catToys, chemSet, chess, chessOpening, chessPiece, chineseCheckers, coffeeCanisters, decal, diceGame, die, drawGrid, drawPlayCard, drawTiles, embroidery, energyCans, figureCase, fishCooler, fishCreel, fishingStool, goBoard, golfBag, hanafuda, itaBag, jenga, jigsaw, karuta, knittingBasket, landingNet, mahjong, mangaRow, mangaStack, mapScroll, medalRack, microscope, mineralBox, mjRing, mjWall, penlights, poker, postcardWall, posterTubes, potteryWheel, raincoat, recordRow, refBooks, reversi, rodBag, rodRack, rodStanding, sewingMachine, shogi, skateboardFlat, skateboardStand, snackPile, snowboard, soccerBall, starChart, succulentSet, suitcaseOpen, suitcaseStand, surfboard, tackleBox, tangram, tennis, trophyColumn, trophyCup, trophyStar, unoCards, vinylRack, watercolor, xiangqi, xqPiece } from './interests/props'
+import { CHESS_FOOT, DECAL_LIFT, MEDAL_MOUNT, MJ_TH, MJ_TW, POSTCARD_MOUNT, RAINCOAT_MOUNT, ROD_RACK_MOUNT, STAR_MOUNT, UNO_COLS, acrylicStand, backgammon, badminton, baseball, basketball, bgBoxSingle, bgHex, bgLoop, bgMystery, bgShelfRow, bgTrain, bikeHelmet, boardGames, boxingGloves, burrPuzzle, calligraphy, card, cardGame, cardStack, cartons, catToys, chemSet, chess, chessOpening, chessPiece, chineseCheckers, coffeeCanisters, decal, diceGame, die, drawGrid, drawPlayCard, drawTiles, embroidery, energyCans, figureCase, fishCooler, fishCreel, fishingStool, goBoard, golfBag, hanafuda, itaBag, jenga, jigsaw, karuta, knittingBasket, landingNet, mahjong, mangaRow, mangaStack, mapScroll, medalRack, microscope, mineralBox, mjRing, mjWall, penlights, pieceFoot, poker, postcardWall, posterTubes, potteryWheel, raincoat, recordRow, refBooks, reversi, rodBag, rodRack, rodStanding, sewingMachine, shogi, skateboardFlat, skateboardStand, snackPile, snowboard, soccerBall, starChart, succulentSet, suitcaseOpen, suitcaseStand, surfboard, tackleBox, tangram, tennis, trophyColumn, trophyCup, trophyStar, unoCards, vinylRack, watercolor, xiangqi, xqPiece } from './interests/props'
 
 /**
  * 自动麻将桌（牌是桌子模型的一部分）：桌面中间的牌山、手牌、舍牌占着，能放东西的只有四个桌角（放茶杯的地方）。
@@ -683,7 +683,7 @@ export const INTERESTS: AssetDef[] = [...MUSIC, ...OTAKU, ...SPORTS, ...GAMES, .
 
 type ChessKind = 'p' | 'r' | 'n' | 'b' | 'q' | 'k'
 
-/** 国际象棋盘（和旧素材同一张贴图）：36 × 36，盘面高 2.3 */
+/** 国际象棋盘（和旧素材同一张贴图）：36 × 36，盘面（贴图）高 2.3，棋盘本身高 2 */
 function chessBoard(g: THREE.Group, frame: string, white: string, black: string) {
   g.add(rbox(36, 2, 36, frame, {}, 0.5))
   g.add(paintTop(32, 32, `int-chess-${white}-${black}`, (c, W, H) => {
@@ -696,7 +696,7 @@ function chessBoard(g: THREE.Group, frame: string, white: string, black: string)
 }
 /** 按「f 列 r 行 白?」摆子：r = 0 是白方底线（+z 一侧） */
 function chessPut(g: THREE.Group, list: [ChessKind, number, number, boolean][], white: string, black: string) {
-  for (const [k, f, r, w] of list) g.add(P(chessPiece(k, w ? white : black, w ? PI : 0), -14 + f * 4, 2.35, 14 - r * 4))
+  for (const [k, f, r, w] of list) g.add(P(chessPiece(k, w ? white : black, w ? PI : 0, CHESS_FOOT), -14 + f * 4, 2.35, 14 - r * 4))
 }
 /** 被吃掉的子：横躺在棋盘外侧排成列（side = 1 右侧，-1 左侧） */
 function chessTaken(g: THREE.Group, kinds: ChessKind[], color: string, side: number) {
@@ -839,8 +839,9 @@ function goState(p: string[], stones: [number, number, boolean][], bowls: 'close
   const st: V2[] = [[3, 3], [9, 3], [15, 3], [3, 9], [9, 9], [15, 9], [3, 15], [9, 15], [15, 15]]
   g.add(paintTop(41.4, 44.5, `int-go-${board}-${line}`, drawGrid(board, line, 19, st, 0.05), 0, 5.3, 0))
   // 棋子用低段数的小珠子（终局数子一百来颗，用 ball 要一万六千面）
-  const stone = (c: string, x: number, y: number, z: number) => bead(1.1, c, x, y, z, [1, 0.45, 1], 12, 5)
-  for (const [i, j, b] of stones) g.add(stone(b ? GO_B : GO_W, GO_X(i), 5.8, GO_Z(j)))
+  const stone = (c: string, x: number, y: number, z: number, foot = 0) => bead(1.1, c, x, y, z, [1, 0.45, 1], 12, 5, foot)
+  // 盘上的子摆在盘面贴图（y = 5.3）上；贴图浮在棋盘（顶 5）上 0.3，棋子的底尖往下拉 0.4 落进棋盘
+  for (const [i, j, b] of stones) g.add(stone(b ? GO_B : GO_W, GO_X(i), 5.8, GO_Z(j), 0.4))
   for (const [s, c] of [[-1, GO_B], [1, GO_W]] as [number, string][]) {
     const x = s * 30.5
     g.add(ball(6.5, bowl, { x, y: 4.4, z: 14 }, [1, 0.68, 1]))
@@ -901,6 +902,8 @@ function shogiState(p: string[], rows: string[], held: [number, number] = [0, 0]
     const m = cyl(r * 0.8, r, 0.8, piece, { x, y, z, ry: mine ? PI : 0 }, 5)
     m.scale.set(0.85, 1, 1)
     g.add(m, noOutline(rbox(0.8, 0.1, 1.1, ink, { x, y: y + 0.82, z }, 0.05)))
+    // 盘上的子（y = 3.3，摆在盘面贴图上）加一截脚落到棋盘；驹台上的子直接摆在台面上，不用
+    if (y === 3.3) g.add(pieceFoot(piece, x, y, z))
   }
   const cw = 31 / 9
   const ch = 34 / 9
@@ -1045,7 +1048,8 @@ function reversiState(p: string[], cells: [number, number, boolean][]) {
   for (const [i, j, d] of cells) {
     const x = -14 + i * 4
     const z = -14 + j * 4
-    g.add(cyl(1.6, 1.6, 0.2, d ? light : dark, { x, y: 1.9, z }, 20), cyl(1.6, 1.6, 0.2, d ? dark : light, { x, y: 2.1, z }, 20))
+    // 下面那片在盘面贴图（y = 1.9）底下一直做到棋盘里（棋盘顶 1.6）：贴图浮在棋盘上 0.3，只摆在贴图上的话棋子和棋盘之间是空的
+    g.add(cyl(1.6, 1.6, 0.6, d ? light : dark, { x, y: 1.5, z }, 20), cyl(1.6, 1.6, 0.2, d ? dark : light, { x, y: 2.1, z }, 20))
   }
   return fitGroup(g)
 }
@@ -1138,10 +1142,13 @@ function ccTidy(p: string[]) {
   ccBoard(g, plate, star)
   g.add(cup(5.5, 4, 4, 0.5, shade(plate, -0.1), { x: 27, z: 10 }))
   const cols = [acc, '#3d7fd0', '#f0c030', '#3fa05a', '#ffffff', '#26262a']
+  // 碗里装满弹珠：只做最上面看得见的一层 22 颗，底下垫一个暗色的锥台代替被压在下面的珠子（坐在碗底，比碗的内壁小一圈）。
+  // 22 颗按向日葵螺旋铺开，每颗压进垫台顶面 0.05～0.15。以前珠子按螺旋线悬空摆着，珠子之间、珠子和碗之间都隔着零点几厘米
+  g.add(cyl(4.4, 3.6, 2.6, shade(plate, -0.35), { x: 27, y: 0.4, z: 10 }, 24))
   for (let k = 0; k < 22; k++) {
     const a = k * 2.4
     const rr = Math.min(4, 0.9 * Math.sqrt(k))
-    g.add(ball(0.75, cols[k % 6], { x: 27 + Math.cos(a) * rr, y: 1.3 + (k > 12 ? 1.2 : 0.2) + rr * 0.3, z: 10 + Math.sin(a) * rr }))
+    g.add(ball(0.75, cols[k % 6], { x: 27 + Math.cos(a) * rr, y: 3.6 + (k % 3) * 0.05, z: 10 + Math.sin(a) * rr }))
   }
   return fitGroup(g)
 }
@@ -1184,10 +1191,13 @@ function bgmState(p: string[], points: [number, number, boolean][], dice = true)
     const top = pt >= 13
     const i = pt <= 6 ? 6 - pt : pt <= 12 ? 12 - pt : pt <= 18 ? pt - 13 : pt - 19
     const x = side * 12.2 - 10.9 + pw * (i + 0.5)
-    // 棋子、骰子摆在盘面贴图（y = 1.3）上面，不是盒底（1）：否则下半截埋在贴图底下
-    for (let k = 0; k < n; k++) g.add(cyl(1.5, 1.5, 0.6, mine ? chk : other, { x, y: 1.3 + Math.floor(k / 5) * 0.6, z: (top ? -1 : 1) * (17.9 - 1.5 - (k % 5) * 3) }, 18))
+    // 棋子、骰子摆在盘面贴图（y = 1.3）上面，每枚露出 0.6 高；贴图浮在盒底（y = 1）上 0.3，最下面一层的棋子在贴图底下再往下做 0.4 落进盒底
+    for (let k = 0; k < n; k++) {
+      const up = Math.floor(k / 5)
+      g.add(cyl(1.5, 1.5, up ? 0.6 : 1, mine ? chk : other, { x, y: up ? 1.3 + up * 0.6 : 0.9, z: (top ? -1 : 1) * (17.9 - 1.5 - (k % 5) * 3) }, 18))
+    }
   }
-  if (dice) g.add(P(die(1.4, '#ffffff', '#26262a', 5, 3, 0.4), 5, 1.3, 0), P(die(1.4, '#ffffff', '#26262a', 1, 2, -0.3), 8, 1.3, 1.5))
+  if (dice) g.add(P(die(1.4, '#ffffff', '#26262a', 5, 3, 0.4), 5, 1.3, 0), P(die(1.4, '#ffffff', '#26262a', 1, 2, -0.3), 8, 1.3, 1.5), pieceFoot('#ffffff', 5, 1.3, 0), pieceFoot('#ffffff', 8, 1.3, 1.5))
   return fitGroup(g)
 }
 const bgmOpening = (p: string[]) =>

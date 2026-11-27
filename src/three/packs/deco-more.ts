@@ -1244,9 +1244,14 @@ function hemisphere(ocean: string, land: string, lining: string, lands: number[]
       32,
     ),
   )
-  // 陆地：贴着球面浮出 0.3 的球冠
+  // 陆地：比球面高出 0.3 的球冠，边上一圈往里折、底面封口（实心的一片，压进球壳里，不是浮在球面外的薄片）
   for (const [lat, lon, ang] of lands) {
-    const geo = cached(`dm-cap${R},${ang}`, () => new THREE.SphereGeometry(R + 0.3, 10, 3, 0, PI * 2, 0, ang))
+    const geo = cached(`dm-cap${R},${ang}`, () => {
+      // 轮廓从底面中心往外、再沿球面收到极点（车削轮廓要由下往上走，面才朝外）
+      const pts = [new THREE.Vector2(0, (R - 0.4) * Math.cos(ang)), new THREE.Vector2((R - 0.4) * Math.sin(ang), (R - 0.4) * Math.cos(ang))]
+      for (let i = 3; i >= 0; i--) pts.push(new THREE.Vector2((R + 0.3) * Math.sin((ang * i) / 3), (R + 0.3) * Math.cos((ang * i) / 3)))
+      return new THREE.LatheGeometry(pts, 10)
+    })
     const m = noOutline(mesh(geo, land))
     m.quaternion.setFromUnitVectors(UP, new THREE.Vector3(Math.cos(lat) * Math.sin(lon), Math.sin(lat), Math.cos(lat) * Math.cos(lon)))
     g.add(m)

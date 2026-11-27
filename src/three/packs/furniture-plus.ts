@@ -334,7 +334,8 @@ function musicStandWood(p: string[]) {
   const desk = new THREE.Group()
   desk.add(rbox(MS_W, 34, 1.4, wood, {}, 0.6))
   desk.add(rbox(MS_W, 2.4, 4.4, shade(wood, -0.08), { y: -1, z: 1.8 }, 0.5)) // 托条后沿缩在谱板背面以内 0.3（以前和谱板背面共面）
-  desk.add(rbox(42, 30, 0.4, PAPER, { y: 2.2, z: 0.95 }, 0.1))
+  // 乐谱背面压进谱板 0.1（谱板正面在 z = 0.7；以前乐谱背面 0.75，隔着 0.05 没贴上）
+  desk.add(rbox(42, 30, 0.6, PAPER, { y: 2.2, z: 0.9 }, 0.1))
   for (let i = 0; i < 6; i++) desk.add(rbox(36, 0.4, 0.2, M.char, { y: 7 + i * 4, z: 1.25 }, 0.05))
   g.add(P(desk, 0, top - 2, 2, MS_TILT))
   return g

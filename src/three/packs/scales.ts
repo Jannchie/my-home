@@ -65,7 +65,8 @@ function dialScale(p: string[]) {
     const a = (i / 12) * Math.PI * 2
     g.add(rbox(0.3, 0.2, 1.2, '#4a4a4a', { x: Math.sin(a) * 4.2, y: 5.9, z: -9 + Math.cos(a) * 4.2, ry: a }, 0.05))
   }
-  g.add(rbox(0.5, 0.25, 4, needle, { x: 1, y: 6.05, z: -10.2, ry: 0.5 }, 0.1))
+  // 指针底面压进表盘 0.1（表盘顶面 5.9；以前指针从 6.05 起，悬在表盘上方），顶面高度不变
+  g.add(rbox(0.5, 0.5, 4, needle, { x: 1, y: 5.8, z: -10.2, ry: 0.5 }, 0.1))
   return g
 }
 

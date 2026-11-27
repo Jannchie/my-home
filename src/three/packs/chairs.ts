@@ -529,7 +529,8 @@ function foldingChair(wood: boolean, open: boolean, p: string[]) {
       for (let i = 0; i < 5; i++) g.add(rbox(38, 2, 5.6, seatC, { y: 45, z: -14 + i * 7 }, 0.8))
       for (const y of [60, 70]) g.add(rbox(35, 6, 1.8, seatC, { y, z: up(y + 3) }, 0.8))
     } else {
-      g.add(rbox(36, 2.5, 34, seatC, { y: 44.6, z: 0.5 }, 1.2))
+      // 座板加厚到 3、底面降到 44.1，压在两根座梁（顶 44.7）上；顶面高度不变。以前底面 44.6，座板两边的圆角正好让开座梁，差 0.3cm 没碰到
+      g.add(rbox(36, 3, 34, seatC, { y: 44.1, z: 0.5 }, 1.2))
       g.add(rbox(36, 14, 2, seatC, { y: 64, z: up(71) }, 1))
     }
   } else {
@@ -650,8 +651,10 @@ function meshChair(p: string[]) {
   const sheet = meshSheet(41, 47, meshC)
   sheet.position.set(0, 2.5 + 47 / 2, 0)
   back.add(sheet)
-  back.add(rbox(30, 6, 2.4, frame, { y: 12, z: 1.6 }, 1.2))
-  back.add(strutBox([0, -8, -2.6], [0, 24, -2.6], 5, 2.4, frame))
+  // 腰托贴着网面（网面在 z = 0，腰托背面压过去 0.2）；背后的脊梁压进靠背框 0.2（框背面在 z = -1.2）。
+  // 以前腰托悬在网面前 0.4cm、脊梁离框 0.2cm，靠背整个没和椅子连上
+  back.add(rbox(30, 6, 2.4, frame, { y: 12, z: 1 }, 1.2))
+  back.add(strutBox([0, -8, -2.2], [0, 24, -2.2], 5, 2.4, frame))
   for (const s of [-1, 1]) back.add(strut([s * 6, 50, -0.6], [s * 6, 58, -0.6], 0.8, frame))
   back.add(rbox(28, 11, 5, fab, { y: 56, z: 0.6 }, 2.4))
   back.position.set(0, 47, -24)
@@ -827,7 +830,8 @@ function eggChair(p: string[]) {
   const [shellC, cushion, base] = p
   const g = G(revolve(EGG_BOWL, shellC), revolve(EGG_BACK, shellC, Math.PI - 1.9, 3.8, 48))
   g.add(puck(26, 7, cushion, { y: 41, z: 2 }))
-  g.add(ball(22, cushion, { y: 72, z: -29 }, [1.1, 1.2, 0.35]))
+  // 靠垫靠在蛋壳内壁上（内壁在 y = 72 处半径约 41.8，靠垫背面压进壳壁不到 1cm）；以前在 z = -29，离壳壁 5cm 悬着
+  g.add(ball(22, cushion, { y: 72, z: -34.4 }, [1.1, 1.2, 0.35]))
   g.add(cyl(5, 6, 4, base, { y: 1.5 }, 16), cyl(3, 3, 34, base, { y: 4 }, 14))
   for (let i = 0; i < 4; i++) {
     const a = Math.PI / 4 + (i * Math.PI) / 2
@@ -839,7 +843,8 @@ function eggChair(p: string[]) {
 
 /** 球椅：球壳挖去前脸，内衬软垫，喇叭底座 */
 const BALL_SHELL = strip(arcLine(50, 0, 2.2), 3)
-const BALL_LINER = strip(arcLine(47.6, 0, 2.15), 1.6)
+// 内衬外表面（48.6）压进球壳内壁（48.5）0.1，朝里的那面仍在 46.8；以前外表面 48.4，内衬连同坐垫和球壳之间隔着 0.1cm
+const BALL_LINER = strip(arcLine(47.7, 0, 2.15), 1.8)
 function ballChair(p: string[]) {
   const [shellC, liner, base] = p
   const yc = 59.5

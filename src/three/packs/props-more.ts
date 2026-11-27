@@ -154,7 +154,8 @@ function airFryerSquare(p: string[]) {
   g.add(glow(6, 2.4, AMBER, { y: 25, z: 13.8 }))
   for (const x of [-5.5, -2.8, 2.8, 5.5]) g.add(lit(cyl(0.7, 0.7, 0.5, '#e8e8e8', {}, 12), '#e8e8e8', 0.3).translateX(x).translateY(22.7).translateZ(13.75).rotateX(PI / 2))
   // 背后散热格栅
-  for (let i = 0; i < 4; i++) g.add(rbox(16, 0.7, 0.6, shade(body, -0.15), { y: 23 + i * 1.6, z: -16.2 }, 0.2))
+  // 格栅整体下移 0.8：最上面一条原来落在机身顶部的大圆角上，离背面 0.1
+  for (let i = 0; i < 4; i++) g.add(rbox(16, 0.7, 0.6, shade(body, -0.15), { y: 22.2 + i * 1.6, z: -16.2 }, 0.2))
   return g
 }
 
@@ -174,7 +175,8 @@ function airFryerRound(p: string[]) {
   g.add(rbox(4, 2, 3.4, acc, { y: 11.2, z: 12.9 }, 0.7))
   g.add(rbox(4, 2, 3, acc, { y: 4, z: 12.7 }, 0.7))
   g.add(rbox(4, 9.2, 2, acc, { y: 4, z: 15 }, 0.8))
-  g.add(lamp('#7fe08a', 6, 16, 9.9))
+  // 指示灯嵌进圆筒机身（以前离筒壁 0.2）
+  g.add(lamp('#7fe08a', 6, 16, 9.45))
   return g
 }
 
@@ -301,9 +303,10 @@ function slowCooker(p: string[]) {
   const inner = new THREE.Group()
   inner.add(cyl(13, 12, 13, body, {}, 36))
   inner.add(cup(12.2, 11.4, 14.2, 0.9, pot, { y: 1 }))
-  inner.add(liquid(11.3, 12.5, '#c9733e'))
-  inner.add(ball(1.6, '#ff9a4d', { x: 4, y: 12.4, z: 2 }, [1, 0.5, 1]))
-  inner.add(ball(1.4, '#f3e6c8', { x: -3, y: 12.4, z: -3 }, [1, 0.5, 1]))
+  // 汤面在机身（实心圆柱，顶在 13）之上：以前汤面在 12.5，整片埋在机身里，从玻璃盖看进去是机身的颜色
+  inner.add(liquid(11.3, 13.4, '#c9733e'))
+  inner.add(ball(1.6, '#ff9a4d', { x: 4, y: 13.3, z: 2 }, [1, 0.5, 1]))
+  inner.add(ball(1.4, '#f3e6c8', { x: -3, y: 13.3, z: -3 }, [1, 0.5, 1]))
   inner.add(clearDeep(dome(12, 3.6, GLASS, { y: 15.25 }), GLASS, 0.35))
   inner.add(torus(12, 0.35, M.silver, { y: 15.3, rx: PI / 2 }))
   inner.add(puck(2, 1.6, M.black, { y: 18.6 }))
@@ -321,14 +324,16 @@ function electricSteamer(p: string[]) {
   const g = new THREE.Group()
   g.add(cyl(12.5, 13.5, 8, base, {}, 36))
   g.add(clearDeep(rbox(6, 3, 1, WATER, { y: 2, z: 12.9 }, 0.4), WATER, 0.6))
-  g.add(knob(1.4, 1.2, acc, 6, 4.5, 12.6))
+  // 旋钮根部插进圆筒（以前整个悬在筒壁前 0.45）
+  g.add(knob(1.4, 2.4, acc, 6, 4.5, 11.4))
   g.add(puck(12.8, 1, acc, { y: 7.8 }))
   // 两层透明蒸格
   const r = rng(11)
   for (let i = 0; i < 2; i++) {
     const y0 = 8.8 + i * 8.7
-    g.add(clearDeep(cup(12.5, 12.2, 8.6, 0.4, GLASS, { y: y0 }), GLASS, 0.35))
-    g.add(torus(12.5, 0.45, rim, { y: y0 + 8.3, rx: PI / 2 }))
+    // 蒸格高 8.9（层距 8.7）：上层的底、锅盖都压进下面那层的口沿（以前各差 0.1，上层连锅盖整个悬着）
+    g.add(clearDeep(cup(12.5, 12.2, 8.9, 0.4, GLASS, { y: y0 }), GLASS, 0.35))
+    g.add(torus(12.5, 0.45, rim, { y: y0 + 8.6, rx: PI / 2 }))
     for (let k = 0; k < 6; k++) {
       const a = (k / 6) * PI * 2 + r()
       const rr = k === 0 ? 0 : 6.5
@@ -363,9 +368,10 @@ function toasterOven(p: string[]) {
   sh.position.y = F
   g.add(sh)
   // 炉腔：后壁衬板、隔板、碎屑盘
-  g.add(rbox(26, H - 2 * T - 0.4, 0.4, CAVITY, { x: cx, y: F + T + 0.2, z: -D / 2 + T + 0.5 }, 0.1))
+  g.add(rbox(26, H - 2 * T - 0.4, 0.4, CAVITY, { x: cx, y: F + T + 0.2, z: -D / 2 + T + 0.1 }, 0.1))
   g.add(rbox(0.8, H - 2 * T + 0.4, D - 2 * T + 0.4, shade(body, -0.1), { x: cx + 12.9, y: F + T - 0.2 }, 0.2))
-  g.add(rbox(23, 0.5, 25, M.gray, { x: cx, y: F + T + 0.3 }, 0.2))
+  // 碎屑盘落在炉底上（以前悬 0.3）
+  g.add(rbox(23, 0.9, 25, M.gray, { x: cx, y: F + T - 0.1 }, 0.2))
   // 加热管（上下各两根）
   for (const y of [F + 3.6, F + H - 4])
     for (const z of [-6, 5]) g.add(lit(hcyl(0.45, 0.45, 26, HEAT, cx, y, z), HEAT, 0.45))
@@ -378,12 +384,13 @@ function toasterOven(p: string[]) {
   g.add(noOutlineDeep(rbox(9, 0.4, 8.6, BREAD, { x: cx - 4, y: ry + 1.35 }, 0.2)))
   // 门：框 + 玻璃 + 横把手
   const dz = D / 2 + 0.6
-  g.add(holePanel(27, 18, 0.8, panel, [{ kind: 'rect', x: 0, y: 1.6, w: 23, h: 13.6, r: 1 }], { x: cx, y: F + 1.5, z: dz }, 1.2))
+  // 门框加厚到压上箱体正面（以前离正面 0.2）
+  g.add(holePanel(27, 18, 1.1, panel, [{ kind: 'rect', x: 0, y: 1.6, w: 23, h: 13.6, r: 1 }], { x: cx, y: F + 1.5, z: dz - 0.15 }, 1.2))
   g.add(clearDeep(rbox(24, 14.6, 0.3, '#9fb7c6', { x: cx, y: F + 2.6, z: dz }, 0.1), '#9fb7c6', 0.3))
   for (const s of [-1, 1]) g.add(rbox(1, 1, 2, acc, { x: cx + s * 8, y: F + 17.5, z: dz + 1.3 }, 0.3))
   g.add(hcyl(0.6, 0.6, 20, acc, cx, F + 18, dz + 2.8))
   // 右侧操作区
-  g.add(glow(5, 1.6, AMBER, { x: 13.5, y: F + 19.5, z: D / 2 + 0.4 }))
+  g.add(glow(5, 1.6, AMBER, { x: 13.5, y: F + 19.5, z: D / 2 + 0.2 }))
   for (const y of [F + 13, F + 6.5]) g.add(knob(2, 1.6, acc, 13.5, y, D / 2))
   g.add(lamp('#ff6b4a', 13.5, F + 3, D / 2 + 0.2, 0.4))
   return g
@@ -402,20 +409,24 @@ function steamOven(p: string[]) {
   const sh = shell(W, H, D, T, body, { front: [{ kind: 'rect', x: 0, y: 3, w: 41, h: 23, r: 1.5 }] })
   sh.position.y = F
   g.add(sh)
-  g.add(lit(rbox(42, H - 2 * T - 0.4, 0.4, '#e9d8bd', { y: F + T + 0.2, z: -D / 2 + T + 0.5 }, 0.1), '#e9d8bd', 0.25))
-  g.add(rbox(W - 2 * T - 0.4, 0.5, D - 2 * T - 1, '#b9bdc2', { y: F + T + 0.2 }, 0.2))
+  // 后壁衬板贴上后壁，炉底衬板落在炉底上（以前各悬 0.2～0.3）
+  g.add(lit(rbox(42, H - 2 * T - 0.4, 0.4, '#e9d8bd', { y: F + T + 0.2, z: -D / 2 + T + 0.1 }, 0.1), '#e9d8bd', 0.25))
+  g.add(rbox(W - 2 * T - 0.4, 0.8, D - 2 * T - 1, '#b9bdc2', { y: F + T - 0.1 }, 0.2))
   // 侧壁导轨
-  for (const s of [-1, 1]) for (const y of [F + 9, F + 17]) g.add(rbox(0.8, 0.6, D - 6, M.silver, { x: s * (W / 2 - T - 0.5), y, z: -1 }, 0.2))
+  // 导轨加宽 0.2、外侧插进侧壁（以前离侧壁 0.1，烤网烤盘连导轨一起悬着）
+  for (const s of [-1, 1]) for (const y of [F + 9, F + 17]) g.add(rbox(1, 0.6, D - 6, M.silver, { x: s * (W / 2 - T - 0.4), y, z: -1 }, 0.2))
   // 烤网 + 烤盘
   // 烤网、烤盘加宽到搭上两侧导轨（以前比导轨窄 1cm 悬空）
   for (const z of [-15, 13]) g.add(hcyl(0.25, 0.25, 45.2, M.silver, 0, F + 17.6, z))
   for (let i = 0; i < 10; i++) g.add(hcyl(0.2, 0.2, 28, M.silver, -18 + i * 4, F + 17.6, -1, 'z', 8))
-  g.add(tray(44.8, 1.6, 30, 0.4, M.char, { y: F + 9.6, z: -1 }))
+  // 烤盘压在导轨上，面包落在盘底（以前盘和导轨只有圆角相对、面包离盘底 0.3）
+  g.add(tray(44.8, 1.6, 30, 0.4, M.char, { y: F + 9.5, z: -1 }))
   const r = rng(5)
-  for (let i = 0; i < 6; i++) g.add(ball(2.4, i % 2 ? '#c96f3b' : '#e0a050', { x: -15 + i * 6, y: F + 11.6, z: -1 + (r() - 0.5) * 10 }, [1, 0.55, 1]))
+  for (let i = 0; i < 6; i++) g.add(ball(2.4, i % 2 ? '#c96f3b' : '#e0a050', { x: -15 + i * 6, y: F + 11.05, z: -1 + (r() - 0.5) * 10 }, [1, 0.55, 1]))
   // 门
   const dz = D / 2 + 0.7
-  g.add(holePanel(47, 27, 1, panel, [{ kind: 'rect', x: 0, y: 2.4, w: 42, h: 20.6, r: 1.2 }], { y: F + 1, z: dz }, 1.5))
+  // 门框加厚到压上箱体正面（以前离正面 0.2）
+  g.add(holePanel(47, 27, 1.3, panel, [{ kind: 'rect', x: 0, y: 2.4, w: 42, h: 20.6, r: 1.2 }], { y: F + 1, z: dz - 0.15 }, 1.5))
   g.add(clearDeep(rbox(43, 21.6, 0.3, '#5d6b78', { y: F + 2.9, z: dz }, 0.1), '#5d6b78', 0.35))
   for (const s of [-1, 1]) g.add(rbox(1.2, 1.2, 2.4, acc, { x: s * 17, y: F + 25.6, z: dz + 1.6 }, 0.3))
   g.add(hcyl(0.7, 0.7, 38, acc, 0, F + 26.2, dz + 3.4))
@@ -520,8 +531,10 @@ function standMixer(p: string[]) {
   g.add(rbox(1, 1, 4, acc, { x: 6.3, y: 27, z: -9 }, 0.3))
   g.add(cyl(7, 7, 0.6, M.silver, { y: 4.4, z: 6 }, 24))
   g.add(cup(9.5, 6, 12, 0.5, bowlC, { y: 5, z: 6 }))
-  g.add(ball(5, '#f3dcb0', { y: 8.3, z: 6 }, [1, 0.5, 1]))
+  // 面团落在碗底（以前离碗底 0.3）；打蛋笼的钢丝收在轴下端的锥座上（以前四根钢丝都没接到轴）
+  g.add(ball(5, '#f3dcb0', { y: 7.9, z: 6 }, [1, 0.5, 1]))
   g.add(cyl(0.6, 0.6, 9.5, M.silver, { y: 13, z: 6 }, 10))
+  g.add(cyl(0.8, 3.3, 1, M.silver, { y: 12.5, z: 6 }, 16))
   for (let k = 0; k < 4; k++) g.add(torus(3, 0.14, M.silver, { y: 13, z: 6, ry: (k * PI) / 4 }, PI).rotateZ(PI))
   return g
 }
@@ -572,7 +585,8 @@ function electricPot(p: string[]) {
   g.add(torus(7.5, 0.6, top, { y: 29.3, z: -3, rx: -PI / 2 }, PI))
   g.add(rbox(3, 14, 1, shade(body, -0.15), { y: 5, z: 11.9 }, 0.4))
   g.add(noOutlineDeep(rbox(1.8, 9, 0.6, '#a8d4f4', { y: 5.7, z: 12.4 }, 0.2)))
-  g.add(lamp('#ff6b4a', 5, 3, 12, 0.4))
+  // 指示灯贴在机身下部的圆角上（以前在圆角前面 1cm 悬着）
+  g.add(lamp('#ff6b4a', 5, 3, 10.4, 0.4))
   return g
 }
 
@@ -588,7 +602,8 @@ function iceMaker(p: string[]) {
   sh.position.y = F
   g.add(sh)
   const fy = F + H - 10
-  g.add(rbox(W - 2.8, 0.8, D - 2.8, '#dfe8ee', { y: fy }, 0.3))
+  // 冰格四边插进机壁（以前四周各留 0.2，冰格连冰块一起悬着）
+  g.add(rbox(W - 2.2, 0.8, D - 2.2, '#dfe8ee', { y: fy }, 0.3))
   // 冰块：先铺 17 块，剩下 9 块各摞在一块底层冰块上（以前上层是随机摆的，好几块底下没东西、悬着）
   const r = rng(21)
   const low: [number, number][] = []
@@ -601,10 +616,11 @@ function iceMaker(p: string[]) {
   }
   // 翻盖：框 + 玻璃
   const ly = F + H + 0.55
-  const lp = holePanel(W, D, 1, lid, [{ kind: 'rect', x: 0, y: 4, w: W - 6, h: D - 12, r: 1.5 }], { y: ly, z: D / 2, rx: -PI / 2 }, 2)
+  // 翻盖加厚到压上机口（以前离机口 0.05）
+  const lp = holePanel(W, D, 1.2, lid, [{ kind: 'rect', x: 0, y: 4, w: W - 6, h: D - 12, r: 1.5 }], { y: ly - 0.1, z: D / 2, rx: -PI / 2 }, 2)
   g.add(lp)
   g.add(clearDeep(rbox(W - 5, 0.3, D - 11, '#d6f0ff', { y: ly - 0.15, z: 2 }, 0.1), '#d6f0ff', 0.35))
-  g.add(glow(6, 2, '#9fe0ff', { x: -4, y: F + H - 5, z: D / 2 + 0.4 }))
+  g.add(glow(6, 2, '#9fe0ff', { x: -4, y: F + H - 5, z: D / 2 + 0.2 }))
   for (const x of [3, 6]) g.add(ball(0.8, acc, { x, y: F + H - 4, z: D / 2 + 0.2 }))
   g.add(lamp('#7fe08a', 8.5, F + H - 4, D / 2 + 0.2, 0.4))
   return g
@@ -647,7 +663,7 @@ function handGrinder(p: string[]) {
   g.add(rbox(7, 3.5, 0.6, shade(wood, -0.08), { y: 1.5, z: 5.2 }, 0.2))
   g.add(ball(0.6, metal, { y: 3.25, z: 5.8 }))
   g.add(cup(4.8, 3.5, 3, 0.4, metal, { y: 10 }))
-  for (let i = 0; i < 6; i++) g.add(ball(0.6, '#6e4128', { x: Math.cos(i) * 2, y: 10.9, z: Math.sin(i) * 2 }, [1, 0.7, 0.8]))
+  for (let i = 0; i < 6; i++) g.add(ball(0.6, '#6e4128', { x: Math.cos(i) * 2, y: 10.7, z: Math.sin(i) * 2 }, [1, 0.7, 0.8]))
   g.add(cyl(0.4, 0.4, 4.6, metal, { y: 10.4 }, 10))
   g.add(rbox(8.4, 0.6, 1.2, metal, { x: 3.8, y: 14.6 }, 0.25))
   g.add(cyl(0.9, 0.9, 3, knobC, { x: 7.4, y: 15.2 }, 14))
@@ -666,19 +682,23 @@ function dishwasher(p: string[]) {
   const sh = shell(W, H, D, 1.4, body, { front: [{ kind: 'rect', x: 0, y: 13, w: 25, h: 15, r: 2 }] })
   sh.position.y = F
   g.add(sh)
-  g.add(rbox(W - 3.6, H - 3.6, 0.4, '#c9ced4', { y: F + 1.6, z: -D / 2 + 2 }, 0.1))
+  // 内胆后壁贴上后壁、落到底（以前离后壁 0.4、离底 0.2）
+  g.add(rbox(W - 3.6, H - 3.3, 0.4, '#c9ced4', { y: F + 1.3, z: -D / 2 + 1.5 }, 0.1))
   // 碗篮和盘子
   const by = F + 10
   // 碗篮架在两侧导轨上（以前碗篮悬在半空）
-  for (const s of [-1, 1]) g.add(rbox(0.8, 0.6, D - 6, M.silver, { x: s * (W / 2 - 1.9), y: by - 0.5, z: -0.5 }, 0.2))
+  // 导轨外侧插进侧壁（以前离侧壁 0.1）
+  for (const s of [-1, 1]) g.add(rbox(1, 0.6, D - 6, M.silver, { x: s * (W / 2 - 1.8), y: by - 0.5, z: -0.5 }, 0.2))
   g.add(tray(38.2, 3, 30, 0.5, M.silver, { y: by }))
   const cols = ['#fbf7f1', '#ffd6e0', '#a8d4f4', '#fbf7f1', '#a6e3cc', '#fbf7f1']
-  for (let i = 0; i < 6; i++) g.add(standDisc(8, 0.6, cols[i], -9 + i * 2.6, by + 8.6, -2, -0.15))
-  g.add(cup(4.5, 2.8, 4.5, 0.4, '#fbf7f1', { x: 11, y: by + 5.2, z: 4, rx: PI }))
-  g.add(cup(3, 2.6, 6, 0.3, '#ffe08f', { x: 11, y: by + 6.6, z: -6, rx: PI }))
+  // 盘子、倒扣的碗和杯都落到篮底（以前离篮底 0.1～0.2）
+  for (let i = 0; i < 6; i++) g.add(standDisc(8, 0.6, cols[i], -9 + i * 2.6, by + 8.3, -2, -0.15))
+  g.add(cup(4.5, 2.8, 4.5, 0.4, '#fbf7f1', { x: 11, y: by + 4.9, z: 4, rx: PI }))
+  g.add(cup(3, 2.6, 6, 0.3, '#ffe08f', { x: 11, y: by + 6.4, z: -6, rx: PI }))
   // 门
   const dz = D / 2 + 0.6
-  g.add(holePanel(40, 34, 1, door, [{ kind: 'rect', x: 0, y: 11.2, w: 23, h: 13.6, r: 2 }], { y: F + 1.8, z: dz }, 2))
+  // 门加厚到压上箱体正面（以前离正面 0.1）
+  g.add(holePanel(40, 34, 1.2, door, [{ kind: 'rect', x: 0, y: 11.2, w: 23, h: 13.6, r: 2 }], { y: F + 1.8, z: dz - 0.1 }, 2))
   g.add(clearDeep(rbox(24, 14.6, 0.3, '#7d93a6', { y: F + 12.5, z: dz }, 0.1), '#7d93a6', 0.35))
   g.add(rbox(14, 1.6, 1.4, acc, { y: F + 33, z: dz + 0.9 }, 0.5))
   // 控制条
@@ -780,7 +800,8 @@ function seiro(p: string[]) {
   const g = new THREE.Group()
   for (let i = 0; i < 2; i++) {
     const y0 = i * 7.1
-    g.add(cup(r, r, 7, 0.9, bamboo, { y: y0 }))
+    // 笼屉高 7.3（层距 7.1）：上层的底、笼盖都压进下面那层的口沿（以前各差 0.1）
+    g.add(cup(r, r, 7.3, 0.9, bamboo, { y: y0 }))
     for (const dy of [1.4, 5.4]) g.add(torus(r + 0.05, 0.32, band, { y: y0 + dy, rx: PI / 2 }))
   }
   g.add(cyl(r + 0.3, r + 0.3, 2, bamboo, { y: 14.2 }, 36))
@@ -868,17 +889,17 @@ function dishRack(p: string[]) {
   const cols = [C.white, acc, C.white, C.sky, C.white]
   for (let i = 0; i < 5; i++) {
     const x = -17 + i * 3.2
-    g.add(standDisc(9, 0.8, cols[i], x, 11.7, -4, -0.12))
-    for (const z of [-11, 3]) g.add(cyl(0.22, 0.22, 7, wire, { x: x + 1.6, y: 2.6, z }, 6))
+    g.add(standDisc(9, 0.8, cols[i], x, 11.5, -4, -0.12))
+    for (const z of [-11, 3]) g.add(cyl(0.22, 0.22, 7.1, wire, { x: x + 1.6, y: 2.5, z }, 6))
   }
-  // 倒扣的碗、杯
-  const b1 = cup(6, 3.4, 5.5, 0.4, C.white, { x: 7, y: 2.75 + 5.5, z: 5, rx: PI })
+  // 倒扣的碗、杯：口沿压在底丝上（底丝顶 2.7；以前都在 2.75，盘子、碗、筷子各差 0.05～0.15）
+  const b1 = cup(6, 3.4, 5.5, 0.4, C.white, { x: 7, y: 2.6 + 5.5, z: 5, rx: PI })
   g.add(b1)
-  g.add(cup(5, 3, 4.5, 0.4, acc, { x: 7, y: 2.75 + 4.5, z: -7, rx: PI }))
-  // 筷筒
-  g.add(cup(3.2, 3, 11, 0.3, wire, { x: 17, y: 2.75, z: 8 }))
-  for (let i = 0; i < 4; i++) g.add(cyl(0.25, 0.2, 16, i % 2 ? '#bf8b5e' : '#6e4f37', { x: 16 + (i % 2) * 1.6, y: 3.2, z: 7 + Math.floor(i / 2) * 1.6 }, 6))
-  g.add(cyl(0.4, 0.4, 13, acc, { x: 18.3, y: 3.2, z: 9 }, 8))
+  g.add(cup(5, 3, 4.5, 0.4, acc, { x: 7, y: 2.6 + 4.5, z: -7, rx: PI }))
+  // 筷筒：筷子、铲子戳到筒底
+  g.add(cup(3.2, 3, 11, 0.3, wire, { x: 17, y: 2.6, z: 8 }))
+  for (let i = 0; i < 4; i++) g.add(cyl(0.25, 0.2, 16.4, i % 2 ? '#bf8b5e' : '#6e4f37', { x: 16 + (i % 2) * 1.6, y: 2.8, z: 7 + Math.floor(i / 2) * 1.6 }, 6))
+  g.add(cyl(0.4, 0.4, 13.4, acc, { x: 18.3, y: 2.8, z: 9 }, 8))
   g.add(rbox(3, 0.6, 4, acc, { x: 18.3, y: 16, z: 9 }, 0.25))
   return g
 }
@@ -900,14 +921,15 @@ function foodContainers(p: string[]) {
   const [a, b, c] = p
   const g = new THREE.Group()
   g.add(clearDeep(tray(22, 7, 16, 0.4, GLASS), GLASS, 0.35))
-  g.add(rbox(10, 3.5, 14.8, RICE, { x: -5.3, y: 0.45 }, 0.8))
-  for (let i = 0; i < 6; i++) g.add(ball(1.6, i % 2 ? '#78c47a' : '#4f9e5b', { x: 3 + (i % 3) * 2.8, y: 2.2, z: -3 + Math.floor(i / 3) * 5 }, [1, 0.6, 1]))
-  g.add(rbox(22.4, 1.2, 16.4, a, { y: 7 }, 0.5))
+  // 盒里的东西都落到盒底、每个盒子都压进下面那只的盖子（以前菜离盒底 0.8，其余各处靠 0～0.05 的相切连着）；各层的顶面高度不变
+  g.add(rbox(10, 3.6, 14.8, RICE, { x: -5.3, y: 0.3 }, 0.8))
+  for (let i = 0; i < 6; i++) g.add(ball(1.6, i % 2 ? '#78c47a' : '#4f9e5b', { x: 3 + (i % 3) * 2.8, y: 1.25, z: -3 + Math.floor(i / 3) * 5 }, [1, 0.6, 1]))
+  g.add(rbox(22.4, 1.4, 16.4, a, { y: 7 }, 0.5))
   g.add(clearDeep(tray(18, 5.5, 13, 0.4, GLASS, { y: 8.25 }), GLASS, 0.35))
-  for (let i = 0; i < 5; i++) g.add(cyl(0.8, 0.8, 4, '#ff9a4d', { x: -6 + i * 3, y: 8.7, z: -2 + (i % 2) * 3 }, 10))
-  g.add(rbox(18.4, 1.1, 13.4, b, { y: 13.75 }, 0.5))
+  for (let i = 0; i < 5; i++) g.add(cyl(0.8, 0.8, 4.2, '#ff9a4d', { x: -6 + i * 3, y: 8.5, z: -2 + (i % 2) * 3 }, 10))
+  g.add(rbox(18.4, 1.4, 13.4, b, { y: 13.6 }, 0.5))
   g.add(clearDeep(tray(12, 4.5, 9, 0.4, GLASS, { y: 14.9 }), GLASS, 0.35))
-  g.add(rbox(10.8, 2, 7.8, '#ffe08f', { y: 15.35 }, 0.5))
+  g.add(rbox(10.8, 2.2, 7.8, '#ffe08f', { y: 15.15 }, 0.5))
   g.add(rbox(12.4, 1, 9.4, c, { y: 19.3 }, 0.4))
   for (const s of [-1, 1]) g.add(rbox(1.2, 1.6, 4, a, { x: s * 11.4, y: 6.2 }, 0.3))
   return g

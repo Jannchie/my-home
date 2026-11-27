@@ -287,7 +287,7 @@ function clawMachine(p: string[]) {
   g.add(rbox(CM.w - 6, 5, bd - 6, shade(body, -0.3), { z: bz }, 1))
   // 取物口：深色口 + 半开的翻板（顶边铰在口的上沿，下沿往外掀）
   g.add(rbox(26, 20, 1, DARK, { x: -18, y: 14, z: bz + bd / 2 + 0.2 }, 0.6))
-  g.add(P(G(ghost(rbox(24, 16, 0.6, '#cfe8f5', { y: -16 }, 0.3), '#cfe8f5', 0.5)), -18, 34, bz + bd / 2 + 1, -0.25))
+  g.add(P(G(ghost(rbox(24, 16, 0.6, '#cfe8f5', { y: -16 }, 0.3), '#cfe8f5', 0.5)), -18, 34, bz + bd / 2 + 0.8, -0.25))
   // 投币口面板
   g.add(rbox(16, 22, 1, shade(body, -0.18), { x: 20, y: 34, z: bz + bd / 2 + 0.2 }, 0.6))
   g.add(lit(box(5, 1.2, 0.6, '#ffd24a', { x: 20, y: 48, z: bz + bd / 2 + 0.7 }), '#ffd24a', 0.7))
@@ -309,7 +309,8 @@ function clawMachine(p: string[]) {
   g.add(clearMat(bakeMeshes(panes, C.glass), C.glass, 0.32))
   // 出货筒：左前角一只透明圆筒
   g.add(ghost(cyl(10, 10, 24, '#cfe8f5', { x: -24, y: CM.base + 1, z: bz + bd / 2 - 16 }, 20), '#cfe8f5', 0.3))
-  // 玩偶堆：两种颜色交替的圆球，各带一对小耳朵（不加脸：玻璃后面太小看不清）
+  // 玩偶堆：两种颜色交替的圆球，各带一对小耳朵（不加脸：玻璃后面太小看不清）。
+  // 上面一层的三只各自落在下层的玩偶上（抬高量按球心距算过：压进下面那几只 0.3 左右），不悬在半空
   const toys: [number, number, number, number][] = [
     [8, 8, -22, 0],
     [24, 7.5, -12, 0],
@@ -319,8 +320,8 @@ function clawMachine(p: string[]) {
     [26, 7, 20, 0],
     [0, 7.5, 16, 0],
     [-24, 7, -6, 0],
-    [10, 7, -8, 12],
-    [-6, 6.5, 6, 12.5],
+    [11.5, 7, -8.5, 6.1],
+    [-6, 6.5, 6, 7.7],
     [20, 6.5, 2, 11],
   ]
   toys.forEach(([x, r, z, lift], i) => {
@@ -420,7 +421,7 @@ function pinball(p: string[]) {
   g.add(top.g)
   // 前脸：投币门、开始按钮、弹簧拉杆；两侧的挡板按钮
   g.add(rbox(22, 16, 1, shade(body, -0.3), { y: 73, z: 66.2 }, 0.5))
-  g.add(lit(cyl(1.8, 1.8, 1, '#ffd24a', { x: -22, y: 86, z: 66.6, rx: PI / 2 }, 12), '#ffd24a', 0.7))
+  g.add(lit(cyl(1.8, 1.8, 1, '#ffd24a', { x: -22, y: 86, z: 66.3, rx: PI / 2 }, 12), '#ffd24a', 0.7))
   g.add(cylZ(0.9, 7, STEEL, 24, 86, 69.5, 8))
   g.add(cylZ(2, 3, DARK, 24, 86, 73.5, 12))
   for (const s of [-1, 1]) g.add(lit(P(cyl(1.8, 1.8, 1, '#ff5a4a', {}, 12), s * (bw / 2 + 0.4), 88, 56, 0, 0, PI / 2), '#ff5a4a', 0.6))
@@ -558,9 +559,10 @@ function simRig(p: string[]) {
     g.add(rbox(4, 4, 150, frame, { x: s * 24, y: 2, z: 0 }, 0.6))
     for (const z of [-70, 0, 70]) g.add(cyl(2.4, 2.8, 2, RUBBER, { x: s * 24, z }, 10))
   }
-  for (const z of [-66, -8, 38]) g.add(rbox(52, 4, 4, frame, { y: 2, z }, 0.6))
-  // 显示器（靠 -z 一端，屏幕朝 +z 对着座椅）：立柱 + 屏幕 + 发光画面
-  g.add(rbox(5, 78, 5, frame, { y: 6, z: -70 }, 0.8))
+  // 最后面那根横档正对显示器立柱（以前在立柱前面 4cm，立柱大半悬在横档后面）
+  for (const z of [-70, -8, 38]) g.add(rbox(52, 4, 4, frame, { y: 2, z }, 0.6))
+  // 显示器（靠 -z 一端，屏幕朝 +z 对着座椅）：立柱（插进横档一点）+ 屏幕 + 发光画面
+  g.add(rbox(5, 78.2, 5, frame, { y: 5.8, z: -70 }, 0.8))
   g.add(rbox(72, 42, 3.5, DARK, { y: 82, z: -68 }, 1.2))
   g.add(
     paintPanel(

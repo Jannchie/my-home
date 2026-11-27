@@ -424,7 +424,8 @@ function squishy(kind: 'bun' | 'cat') {
 function tetris([a, b, c, d]: string[]) {
   const g = new THREE.Group()
   const u = 2
-  const cellAt = (x: number, y: number, col: string) => g.add(rbox(u - 0.15, u - 0.15, u - 0.15, col, { x: x * u, y: y * u, z: 0 }, 0.25))
+  // 每格左右留 0.15 的缝，上下互相压进 0.1：积木是一块压一块摞起来的（以前上下也留缝，上面三排各自悬着）
+  const cellAt = (x: number, y: number, col: string) => g.add(rbox(u - 0.15, u + 0.1, u - 0.15, col, { x: x * u, y: y * u - 0.05, z: 0 }, 0.25))
   for (const [x, y] of [[0, 0], [1, 0], [2, 0], [3, 0]]) cellAt(x, y, a)
   for (const [x, y] of [[0, 1], [1, 1], [1, 2], [2, 2]]) cellAt(x, y, b)
   for (const [x, y] of [[2, 1], [3, 1], [3, 2], [3, 3]]) cellAt(x, y, c)

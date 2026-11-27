@@ -111,9 +111,8 @@ function turned(o: THREE.Object3D, rx: number, ry = 0, rz = 0) {
 
 // ---------- 钩子零件 ----------
 
-/** J 钩横臂的高度；挂在横臂上的东西顶面在 J_UNDER，套在横臂上的环顶面约在 -0.6 */
+/** J 钩横臂的高度；套在横臂上的环怎么放见 toolHang */
 const J_ARM = -2
-const J_UNDER = -2.35
 /** 洞洞板 J 形钩：钩尾往 -z 插进板 1cm，横臂沿 +z 伸出 L，末端上翘 */
 function jHook(L = 6, color = STEEL) {
   const r = 0.32
@@ -325,6 +324,8 @@ function pegShelfBody(p: string[]) {
     for (const y of [-3.2, -9.8]) g.add(rod3([x, y, -1], [x, y, 0.6], 0.3, metal, 8))
   }
   g.add(rod3([-14.2, -0.55, 12], [14.2, -0.55, 12], 0.25, metal, 8))
+  // 挡杆两端的小立柱，插进层板（同套装里的那块层板；原来挡杆悬在层板上方 0.15）
+  for (const sx of [-1, 1]) g.add(rod3([sx * 13.9, -1.3, 12], [sx * 13.9, -0.55, 12], 0.25, metal, 6))
   return g
 }
 
@@ -815,7 +816,8 @@ function doorHooks(p: string[]) {
   for (let i = 0; i < 5; i++) {
     const y = y0 + 4 + i * 9
     for (const sx of [-1, 1]) {
-      g.add(cappedTube([[sx * 1.6, y + 3, 0.6], [sx * 3, y + 1, 1.5], [sx * 3.6, y, 3], [sx * 3.8, y + 1.5, 3.8]], 0.3, main, { ...TUBE, seg: 12 }))
+      // 钩根埋进竖条里（竖条 x ±1.2、z 0..0.6；原来从竖条边上 0.1 开外起，10 个钩都没接上）
+      g.add(cappedTube([[sx * 0.9, y + 3, 0.4], [sx * 3, y + 1, 1.5], [sx * 3.6, y, 3], [sx * 3.8, y + 1.5, 3.8]], 0.3, main, { ...TUBE, seg: 12 }))
     }
   }
   return g
@@ -1202,10 +1204,12 @@ function wrenchBody(p: string[]) {
   const [grip, metal] = p
   const g = new THREE.Group()
   g.add(torus(1.4, 0.55, metal, { y: -2 }))
-  g.add(slat([0, -3.6, 0], [0, -16, 0], 1.6, 0.6, metal))
+  g.add(slat([0, -3.6, 0], [0, -16.6, 0], 1.6, 0.6, metal)) // 下端伸进开口头的环里（环顶 -16.2）
   g.add(rbox(1.7, 6, 0.8, grip, { y: -12 }, 0.3))
   // 开口扳手头：缺口朝下（远离手柄），手柄接在环的实心顶上；原来缺口朝上，手柄正好戳进缺口里没接上
   g.add(torus(1.7, 0.75, metal, { y: -18.6, rz: -PI * 0.25 }, PI * 1.5))
+  // 开口两端的圆头：不满一圈的圆环两头是敞口的，平放时能从钳口看进管子里（一个黑洞）
+  for (const s of [-1, 1]) g.add(ball(0.75, metal, { x: s * 1.2, y: -19.8 }))
   return g
 }
 function tapeBody(p: string[]) {
@@ -1250,7 +1254,11 @@ function driversHanging(p: string[]) {
   })
   return g
 }
-const toolHang = (body: THREE.Group, ring: boolean, xOff = 0, zc = 2.8) => G(hangAt(body, ring ? J_ARM + 0.32 + 1.0 + 0.1 : J_UNDER, zc, xOff), jHook(6))
+/**
+ * 工具挂在 J 钩上：顶上的挂环套在横臂上。tube = 挂环的管半径（按 0.1 取整后的），环的内顶压进横臂顶面 0.1；
+ * 原来不管环粗细都按 0.6 的管算，细环（钳子、卷尺、钥匙圈）的内顶比横臂高出半厘米多，横臂从环中间穿过去、两边都不挨
+ */
+const toolHang = (body: THREE.Group, tube: number, xOff = 0, zc = 2.8) => G(hangAt(body, J_ARM + 0.32 + 2 * tube - 0.1, zc, xOff), jHook(6))
 
 // 数据线
 const CABLE_PALS: Pal[] = [
@@ -1307,11 +1315,13 @@ const UMB_PALS: Pal[] = [
   ['retro', [R.mustard, R.caramel, R.cream]],
   ['japanese', [J.ai, J.dark, J.washi]],
 ]
+/** 挂起时挂绳环的顶：环（管半径 0.3，z 被 hangAt 推到 3.1）落在 S 钩下环的槽底，压进 0.1。原来高了半厘米，环悬在钩子的圈中间 */
+const UMB_TOP = -5.45
 function umbrellaBody(p: string[]) {
   const [main, handle, acc] = p
   const g = new THREE.Group()
   g.add(torus(2, 0.25, acc, { y: -2.2 }))
-  g.add(capsule(1.5, 4.5, handle, { y: -11 }))
+  g.add(capsule(1.5, 5.1, handle, { y: -11.6 })) // 下端插进伞身 0.2（伞身顶 -11.4；原来差 0.4）
   g.add(capsule(2.6, 17, main, { y: -33.6 }))
   g.add(rbox(5.6, 2.2, 5.6, acc, { y: -22 }, 1))
   g.add(cyl(0.3, 0.6, 1.6, handle, { y: -35 }, 8))
@@ -1341,7 +1351,11 @@ function basketBody(p: string[]) {
 function basketStanding(p: string[]) {
   const [, sec] = p
   const g = basketBody(p)
-  for (const s of [-1, 1]) g.add(torus(2.2, 0.4, sec, { x: s * 13.6, y: 13, ry: PI / 2 }, PI))
+  for (const s of [-1, 1]) {
+    g.add(torus(2.2, 0.4, sec, { x: s * 13.6, y: 13, ry: PI / 2 }, PI))
+    // 提手两脚的圆头：半圆环的两头是敞口的，贴在箍的外面，从下往上看是两个黑洞
+    for (const z of [-2.2, 2.2]) g.add(ball(0.4, sec, { x: s * 13.6, y: 13, z }))
+  }
   return ground(g)
 }
 function basketHanging(p: string[]) {
@@ -1350,7 +1364,8 @@ function basketHanging(p: string[]) {
   const top = -16
   body.position.set(0, top - 14, 0.3 + 9.3)
   const g = G(body, sHook())
-  g.add(cappedTube([[-8, top - 0.6, 0.9], [-4, -10, 1.8], [0, -5.55, S_Z], [4, -10, 1.8], [8, top - 0.6, 0.9]], 0.4, sec, { ...TUBE, seg: 24 }))
+  // 提带顶点落在 S 钩下环的槽底（槽底管顶 -6.15，提带半径 0.4，压进 0.1；原来按粗提带的数放在 -5.55，差 0.16 没挂上）
+  g.add(cappedTube([[-8, top - 0.6, 0.9], [-4, -10, 1.8], [0, -5.85, S_Z], [4, -10, 1.8], [8, top - 0.6, 0.9]], 0.4, sec, { ...TUBE, seg: 24 }))
   return g
 }
 
@@ -1413,7 +1428,7 @@ function laptopClosed(p: string[]) {
   const [main, sec] = p
   const g = new THREE.Group()
   g.add(rbox(32, 1, 22, main, { y: 0.2 }, 0.4))
-  g.add(rbox(32, 0.7, 22, main, { y: 1.25 }, 0.3))
+  g.add(rbox(32, 0.8, 22, main, { y: 1.15 }, 0.3)) // 屏幕盖压在机身上（两块的圆角之间仍是一道合缝；原来悬空 0.05）
   g.add(cyl(1.4, 1.4, 0.3, sec, { y: 1.8 }, 20))
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(cyl(0.6, 0.6, 0.3, M.black, { x: sx * 13, z: sz * 8.5 }, 10))
   return ground(g)
@@ -1458,8 +1473,8 @@ function boxOpen(p: string[]) {
   const [, lidC, acc] = p
   const g = boxShell(p)
   const lid = G(rbox(37, 2, 27, lidC, { z: 13.5 }, 0.7))
-  // 掀开的盖子后沿搭在盒子后壁的口沿上（原来整个悬在后壁外 0.5cm）
-  lid.position.set(0, 21.6, -12.9)
+  // 掀开的盖子下沿压在盒子后壁的口沿上（后壁顶是一道 z = -12.6、y = 22 的棱；原来盖子整个在后壁外面，差 0.2）
+  lid.position.set(0, 22, -11.6)
   lid.rotation.x = -1.75
   g.add(lid)
   // 里面的东西
@@ -1467,7 +1482,7 @@ function boxOpen(p: string[]) {
   g.add(rbox(14, 4, 21, shade(acc, 0.1), { x: -8.5, y: 6.8 }, 1))
   g.add(cylZ(3.2, 21, shade(lidC, 0.15), 4.6, 0.8 + 3.2, 0, 20))
   g.add(cylZ(3.2, 21, shade(acc, 0.35), 11.6, 0.8 + 3.2, 0, 20))
-  g.add(cylZ(3, 20, shade(lidC, -0.05), 8.1, 0.8 + 6.4 + 2.8, 0, 20))
+  g.add(cylZ(3, 20, shade(lidC, -0.05), 8.1, 9, 0, 20)) // 卡在下面两卷之间（原来悬在上方 0.8）
   return ground(g)
 }
 
@@ -1513,16 +1528,16 @@ const FORM_ITEMS: AssetDef[] = [
     { id: 'sf-pants-hanging', form: 'hanging', dims: [40, 5.2, 61.8], build: pantsHanging },
   ]),
   ...forms('马克杯', 'tabletop', MUG_PALS, [
-    { id: 'sf-mug-standing', form: 'standing', dims: [10.9, 8.6, 9.5], build: (p) => ground(mugBody(p)) },
-    { id: 'sf-mug-hanging', form: 'hanging', dims: [9.5, 9.6, 11.3], build: mugHanging },
+    { id: 'sf-mug-standing', form: 'standing', dims: [11.2, 8.6, 9.5], build: (p) => ground(mugBody(p)) },
+    { id: 'sf-mug-hanging', form: 'hanging', dims: [9.5, 9.9, 11.6], build: mugHanging },
   ]),
   ...forms('剪刀', 'tabletop', TOOL_PALS, [
     { id: 'sf-scissors-lying', form: 'lying', dims: [9.7, 19.7, 1.6], build: (p) => laid(scissorsBody(p), -PI / 2) },
-    { id: 'sf-scissors-hanging', form: 'hanging', dims: [9.9, 7.3, 20.1], build: (p) => toolHang(scissorsBody(p), true, 2.4) },
+    { id: 'sf-scissors-hanging', form: 'hanging', dims: [9.9, 7.3, 20.3], build: (p) => toolHang(scissorsBody(p), 0.6, 2.4) },
   ]),
   ...forms('钳子', 'tabletop', TOOL_PALS, [
     { id: 'sf-pliers-lying', form: 'lying', dims: [4.6, 20.1, 1.5], build: (p) => laid(pliersBody(p), -PI / 2) },
-    { id: 'sf-pliers-hanging', form: 'hanging', dims: [4.5, 7.3, 20.5], build: (p) => toolHang(pliersBody(p), true, 1.0) },
+    { id: 'sf-pliers-hanging', form: 'hanging', dims: [4.6, 7.3, 21.2], build: (p) => toolHang(pliersBody(p), 0.3, 0.5) },
   ]),
   ...forms('螺丝刀组', 'tabletop', TOOL_PALS, [
     { id: 'sf-drivers-lying', form: 'lying', dims: [12.3, 17, 1.9], build: driversLying },
@@ -1530,23 +1545,23 @@ const FORM_ITEMS: AssetDef[] = [
   ]),
   ...forms('卷尺', 'tabletop', TOOL_PALS, [
     { id: 'sf-tape-lying', form: 'lying', dims: [8.1, 10.6, 3.9], build: (p) => laid(tapeBody(p), -PI / 2) },
-    { id: 'sf-tape-hanging', form: 'hanging', dims: [8.1, 7.3, 11.2], build: (p) => toolHang(tapeBody(p), true) },
+    { id: 'sf-tape-hanging', form: 'hanging', dims: [8.1, 7.3, 11.9], build: (p) => toolHang(tapeBody(p), 0.3) },
   ]),
   ...forms('扳手', 'tabletop', TOOL_PALS, [
-    { id: 'sf-wrench-lying', form: 'lying', dims: [4.9, 21.3, 1.5], build: (p) => laid(wrenchBody(p), -PI / 2) },
-    { id: 'sf-wrench-hanging', form: 'hanging', dims: [4.9, 7.3, 21.3], build: (p) => toolHang(wrenchBody(p), true) },
+    { id: 'sf-wrench-lying', form: 'lying', dims: [5, 20.6, 1.6], build: (p) => laid(wrenchBody(p), -PI / 2) },
+    { id: 'sf-wrench-hanging', form: 'hanging', dims: [5, 7.3, 21.2], build: (p) => toolHang(wrenchBody(p), 0.6) },
   ]),
   ...forms('数据线', 'tabletop', CABLE_PALS, [
     { id: 'sf-cable-lying', form: 'lying', dims: [10.1, 16.2, 2.4], build: (p) => laid(cableBody(p), -PI / 2) },
-    { id: 'sf-cable-hanging', form: 'hanging', dims: [10.1, 7.3, 16.7], build: (p) => toolHang(cableBody(p), true) },
+    { id: 'sf-cable-hanging', form: 'hanging', dims: [10.1, 7.3, 16.7], build: (p) => toolHang(cableBody(p), 0.6) },
   ]),
   ...forms('钥匙串', 'tabletop', KEY_PALS, [
     { id: 'sf-keys-lying', form: 'lying', dims: [3.6, 8.2, 1.7], build: (p) => laid(keysBody(p), -PI / 2) },
-    { id: 'sf-keys-hanging', form: 'hanging', dims: [3.6, 7.3, 8.7], build: (p) => toolHang(keysBody(p), true) },
+    { id: 'sf-keys-hanging', form: 'hanging', dims: [3.6, 7.3, 9.6], build: (p) => toolHang(keysBody(p), 0.2) },
   ]),
   ...forms('折叠伞', 'deco', UMB_PALS, [
     { id: 'sf-umbrella-lying', form: 'lying', dims: [35.4, 5.6, 5.6], build: (p) => laid(umbrellaBody(p), PI / 2, 0, PI / 2) },
-    { id: 'sf-umbrella-hanging', form: 'hanging', dims: [5.6, 7.1, 39.9], build: (p) => G(hangAt(umbrellaBody(p), -5.6 + 0.7, S_Z), sHook()) },
+    { id: 'sf-umbrella-hanging', form: 'hanging', dims: [5.6, 7.1, 40.5], build: (p) => G(hangAt(umbrellaBody(p), UMB_TOP, S_Z), sHook()) },
   ]),
   ...forms('收纳篮', 'storage', BASKET_PALS, [
     { id: 'sf-basket-standing', form: 'standing', dims: [28, 18.4, 15.6], build: basketStanding },
@@ -1563,7 +1578,7 @@ const FORM_ITEMS: AssetDef[] = [
   ]),
   ...forms('收纳盒', 'storage', BOX_PALS, [
     { id: 'sf-storage-box-closed', form: 'boxed', dims: [37, 27, 24], build: boxClosed },
-    { id: 'sf-storage-box-open', form: 'open', dims: [37, 33.5, 48.4], build: boxOpen },
+    { id: 'sf-storage-box-open', form: 'open', dims: [37, 31.6, 48.4], build: boxOpen },
   ]),
 ]
 
@@ -1671,7 +1686,8 @@ const CARE_PALS: Pal[] = [
 function handCream(p: string[]) {
   const [main, sec] = p
   const g = G(rbox(4.6, 1.8, 11, main, {}, 0.8), rbox(5, 0.4, 1.2, main, { y: 0.7, z: -5.6 }, 0.15), rbox(2.4, 0.3, 4, sec, { y: 1.65 }, 0.1), cylZ(1.3, 2.2, sec, 0, 0.9, 6.5, 20))
-  return ground(g)
+  // 盖子比管身粗：整支略微前高后低，盖子和管尾都着地（原来管身水平，只有盖子着地，管身悬空 0.4）
+  return laid(g, -0.04)
 }
 function eyeDrops(p: string[]) {
   const [main, sec] = p
@@ -1750,7 +1766,7 @@ const DAILY: AssetDef[] = [
   prop('sf-wipes-pouch', '湿巾袋装', 'tabletop', [20, 12, 4.3], WIPE_PALS, wipesPouch),
   prop('sf-mask-box', '口罩盒', 'tabletop', [19.4, 9.9, 11.1], WIPE_PALS, maskBox),
   prop('sf-swab-case', '棉签盒', 'tabletop', [8, 8, 9.4], CARE_PALS, swabCase),
-  prop('sf-hand-cream', '护手霜', 'tabletop', [5, 13.8, 2.6], CARE_PALS, handCream),
+  prop('sf-hand-cream', '护手霜', 'tabletop', [5, 13.8, 2.7], CARE_PALS, handCream),
   prop('sf-eye-drops', '眼药水', 'tabletop', [2.5, 2.5, 6.7], CARE_PALS, eyeDrops),
   prop('sf-pill-box', '小药盒', 'tabletop', [18, 4.6, 2.55], CARE_PALS, pillBox),
   prop('sf-sanitizer', '按压洗手液', 'tabletop', [6, 6.4, 16.2], CARE_PALS, sanitizer),
@@ -1758,7 +1774,7 @@ const DAILY: AssetDef[] = [
   prop('sf-remote-ac', '遥控器', 'tabletop', [5.5, 13, 2.2], REMOTE_PALS, remoteAC, REMOTE_EXTRA('空调')),
   prop('sf-remote-light', '遥控器', 'tabletop', [7, 7, 1.6], REMOTE_PALS, remoteLight, REMOTE_EXTRA('灯')),
   prop('sf-charger', '充电器和线', 'tabletop', [12.1, 9.2, 3], REMOTE_PALS, charger),
-  prop('sf-nail-clipper', '指甲剪', 'tabletop', [1.5, 7.1, 2.3], TOOL_PALS, nailClipper),
+  prop('sf-nail-clipper', '指甲剪', 'tabletop', [1.6, 7.4, 2.4], TOOL_PALS, nailClipper),
 ]
 
 // ---------- 衣帽架 ----------
@@ -1916,8 +1932,9 @@ function ikou(p: string[]) {
     g.add(cylZ(0.9, 2.4, metal, x, IK.rodY, 2.4, 20))
   }
   g.add(rbox(160, 4, 4.4, wood, { y: IK.top }, 0.8))
-  g.add(rbox(132, 3, 3, sub, { y: 120, z: -3 }, 0.5))
-  g.add(rbox(132, 3, 3, sub, { y: 25, z: -3 }, 0.5))
+  // 横档两端搭到立柱背面（立柱 x 66..70、z -2..2）：原来正好到立柱内侧面、又整体靠后，圆角一错开两头都没接上
+  g.add(rbox(137, 3, 3, sub, { y: 120, z: -3 }, 0.5))
+  g.add(rbox(137, 3, 3, sub, { y: 25, z: -3 }, 0.5))
   g.add(cylX(0.8, IK.post * 2 + 2, metal, 0, IK.rodY, IK.rodZ))
   return g
 }
@@ -2217,9 +2234,10 @@ function topHat(p: string[]) {
 /**
  * brim：平檐帽的檐厚。帽子竖过来后檐贴墙、帽身朝前，S 钩下环（z = S_Z）要穿过檐的上沿，
  * 所以把檐的中面挪到 z = S_Z（不挪的话檐贴在 z = 0.3，钩子下环在它前面 1.5cm 悬着）
+ * lift：斜檐的帽子（渔夫帽）檐越往前越收，钩子下环所在的 z = S_Z 处檐面比后沿低，整顶帽子抬高这么多让檐面够到钩子
  */
-const hatHang = (hat: THREE.Group, brim?: number) => {
-  const o = hangAt(turned(hat, PI / 2), S_UNDER + 0.1)
+const hatHang = (hat: THREE.Group, brim?: number, lift = 0) => {
+  const o = hangAt(turned(hat, PI / 2), S_UNDER + 0.1 + lift)
   if (brim !== undefined) o.position.z += S_Z - 0.3 - brim / 2
   return G(o, sHook())
 }
@@ -2292,7 +2310,7 @@ const MORE_WEAR: AssetDef[] = [
   ]),
   ...forms('渔夫帽', 'deco', HAT_PALS, [
     { id: 'sf-bucket-hat-lying', form: 'lying', dims: [23, 23, 9.7], build: (p) => ground(bucketHat(p)) },
-    { id: 'sf-bucket-hat-hanging', form: 'hanging', dims: [23, 11.2, 29.6], build: (p) => hatHang(bucketHat(p)) },
+    { id: 'sf-bucket-hat-hanging', form: 'hanging', dims: [23, 11.2, 27], build: (p) => hatHang(bucketHat(p), undefined, 2.6) },
   ]),
   ...forms('礼帽', 'deco', HAT_PALS, [
     { id: 'sf-top-hat-lying', form: 'lying', dims: [30, 30, 15.8], build: (p) => ground(topHat(p)) },

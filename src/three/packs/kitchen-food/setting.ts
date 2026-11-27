@@ -2,7 +2,7 @@
 // 只放建模函数和它们用到的常量，素材表在 ../kitchen-food.ts（PACKS 只收集 packs/ 下一层的文件）。
 
 import * as THREE from 'three'
-import { ball, capsule, cup, cyl, rbox, shade, torus, tray } from '../../toon'
+import { ball, box, capsule, cup, cyl, rbox, shade, torus, tray } from '../../toon'
 import { C, rng, type Fx } from '../../kit'
 import { PI, hcyl, lit, noOutlineDeep, rod3 } from '../../geo'
 import { J, M } from '../../packkit'
@@ -21,7 +21,7 @@ export function teishoku(p: string[]) {
   const y0 = 0.6
   // 前左：饭
   g.add(bowl(5.6, 5.8, C.white, { x: -11, y: y0, z: 6 }))
-  g.add(riceMound(bowlIn(5.6, 5.8, 5), 2.2, y0 + 5))
+  g.add(riceMound(bowlIn(5.6, 5.8, 5) + 0.2, 2.2, y0 + 5)) // 饭堆的边压进碗壁
   ;(g.children[g.children.length - 1] as THREE.Object3D).position.set(-11, y0 + 5, 6)
   // 前右：味噌汤
   g.add(bowl(5.8, 6.2, bowlC, { x: 3, y: y0, z: 6 }))
@@ -38,15 +38,16 @@ export function teishoku(p: string[]) {
   g.add(ball(1.6, DAIKON, { x: -2.5, y: y0 + 1.6, z: -7 }, [1, 0.7, 1]))
   // 后右：小钵（菠菜）
   g.add(bowl(4.2, 4, bowlC, { x: 10, y: y0, z: -7 }))
-  g.add(noOutlineDeep(ball(2.6, '#3f8a3a', { x: 10, y: y0 + 3.4, z: -7 }, [1, 0.45, 1])))
+  // 菠菜铺满小钵（原来半径 2.6，离碗壁一圈 1.2cm，整团悬在碗里）
+  g.add(noOutlineDeep(ball(3.9, '#3f8a3a', { x: 10, y: y0 + 3.4, z: -7 }, [1, 0.3, 1])))
   g.add(noOutlineDeep(ball(0.8, '#e8d8a8', { x: 10.3, y: y0 + 4.5, z: -7.2 }, [1, 0.4, 1])))
   // 右前：渍物小碟
   g.add(dish(3.4, 1, dishC, { x: 14.5, y: y0, z: 5 }))
   g.add(noOutlineDeep(rbox(2, 0.6, 1.2, '#f5d547', { x: 14.5, y: y0 + DISH_IN, z: 4.4 }, 0.2)))
   g.add(noOutlineDeep(rbox(1.8, 0.6, 1.1, '#a8467a', { x: 14.5, y: y0 + DISH_IN, z: 5.8 }, 0.2)))
   // 筷子（最前）
-  g.add(chopsticks(22, J.dark, -3, y0 + 0.9, 13))
-  g.add(hashioki(shade(dishC, -0.1), 8.5, y0, 13))
+  g.add(chopsticks(22, J.dark, -3, y0, 13, 0.9, 0, 9.5))
+  g.add(hashioki(shade(dishC, -0.1), 6.5, y0, 13))
   return g
 }
 export const TEISHOKU_FX: Fx[] = [
@@ -66,23 +67,31 @@ export function dinnerForTwo(p: string[]) {
     set.add(noOutlineDeep(ball(3.6, '#5a2416', { x: -1.5, y: 0.3 + DISH_IN + 1.8, z: 1 }, [1.15, 0.25, 0.85])))
     set.add(ball(1.4, '#f08a3c', { x: 5, y: 0.3 + DISH_IN + 0.8, z: 2.5 }, [1.3, 0.6, 0.8]))
     set.add(ball(1.6, '#4f9e3b', { x: 5, y: 0.3 + DISH_IN + 1.3, z: -2.5 }))
-    // 刀叉
-    set.add(rbox(1, 0.3, 18, STEEL, { x: -15.5, y: 0.3, z: 0 }, 0.12))
-    set.add(rbox(2, 0.3, 4, STEEL, { x: -15.5, y: 0.3, z: -9 }, 0.12))
-    set.add(rbox(1.2, 0.3, 19, STEEL, { x: 15.5, y: 0.3, z: 0 }, 0.12))
-    // 沙拉小碗 + 玻璃杯
-    set.add(bowl(4.5, 4, acc, { x: 12, y: 0.3, z: -9 }))
-    set.add(noOutlineDeep(ball(3.4, '#8fcf6a', { x: 12, y: 3.7, z: -9 }, [1, 0.4, 1])))
-    set.add(noOutlineDeep(ball(0.9, TOMATO, { x: 13, y: 4.6, z: -8.5 })))
-    set.add(glassGhost(cup(3.4, 3, 11, 0.25, GLASS, { x: -12, y: 0.3, z: -9 })))
-    set.add(noOutlineDeep(cyl(3, 2.7, 6, '#fff3d0', { x: -12, y: 0.6, z: -9 }, 18)))
+    // 刀叉：紧挨主盘两侧，让开角上的碗和杯（原来叉头压在玻璃杯底下）
+    set.add(rbox(1, 0.3, 18, STEEL, { x: -14, y: 0.3, z: 4.5 }, 0.12))
+    set.add(rbox(2, 0.3, 4, STEEL, { x: -14, y: 0.3, z: -4.5 }, 0.12))
+    set.add(rbox(1.2, 0.3, 19, STEEL, { x: 14, y: 0.3, z: 2.5 }, 0.12))
+    // 沙拉小碗 + 玻璃杯：放在餐垫远端的两个角上（原来碗在 (12, -9)，碗壁切进主盘的盘沿和中间的面包篮）
+    const [bx, bz] = [15.5, -9.5]
+    set.add(bowl(4.5, 4, acc, { x: bx, y: 0.3, z: bz }))
+    // 沙拉铺满碗口（原来半径 3.4，离碗壁一圈 0.7cm，整团悬在碗里）
+    set.add(noOutlineDeep(ball(4.2, '#8fcf6a', { x: bx, y: 3.7, z: bz }, [1, 0.33, 1])))
+    set.add(noOutlineDeep(ball(0.9, TOMATO, { x: bx + 1, y: 4.6, z: bz + 0.5 })))
+    set.add(glassGhost(cup(3.4, 3, 11, 0.25, GLASS, { x: -16, y: 0.3, z: -10 })))
+    set.add(noOutlineDeep(cyl(3, 2.7, 6, '#fff3d0', { x: -16, y: 0.6, z: -10 }, 18)))
     set.position.z = s * 17
     set.rotation.y = s > 0 ? 0 : PI
     g.add(set)
   }
-  // 中间：面包篮 + 烛台
-  g.add(tray(14, 4, 9, 0.5, KRAFT, { x: -9, y: 0, z: 0 }, 0.8))
-  for (const dx of [-3, 0, 3]) g.add(capsule(1.8, 3, CRUST, { x: -9 + dx, y: 2.5, z: 0 }).rotateZ(PI / 2))
+  // 中间：面包篮 + 烛台。篮子两边搭在两张餐垫的边上（餐垫厚 0.3）
+  g.add(tray(14, 4, 9, 0.5, KRAFT, { x: 0, y: 0.3, z: 0 }, 0.8))
+  // 三个小面包：两个并排躺在篮底，一个摞在中间（原来三个排成一行悬在篮口的高度，篮里是空的）。[轴心高度, z]
+  for (const [cy, z] of [
+    [2.5, -1.9],
+    [2.5, 1.9],
+    [5.4, 0],
+  ])
+    g.add(capsule(1.8, 3, CRUST, { x: 0, y: cy - 3.3, z }).rotateZ(PI / 2))
   g.add(cyl(2.2, 2.6, 1.2, acc, { x: 10, y: 0 }, 16))
   g.add(cyl(1.1, 1.1, 10, C.cream, { x: 10, y: 1.2 }, 12))
   return g
@@ -101,7 +110,8 @@ export function nabeSet(p: string[]) {
   // 炉架 + 蓝火
   for (let i = 0; i < 4; i++) {
     const a = (i / 4) * PI * 2 + PI / 4
-    g.add(rod3([Math.cos(a) * 6, 10, Math.sin(a) * 6], [Math.cos(a) * 11, 11.4, Math.sin(a) * 11], 0.5, M.black, 8))
+    // 炉架爪托住锅底（锅底在 y = 11.4、半径 8.4 以内是平的）：外端抬到 12，爪顶压进锅底 0.1（原来锅悬在爪上方 0.2）
+    g.add(rod3([Math.cos(a) * 6, 10, Math.sin(a) * 6], [Math.cos(a) * 11, 12, Math.sin(a) * 11], 0.5, M.black, 8))
   }
   g.add(lit(torus(3.5, 0.6, '#5fa8ff', { y: 10.4, rx: PI / 2 }), '#5fa8ff', 0.8))
   // 土锅
@@ -184,8 +194,9 @@ export function okonomiyakiGrill(p: string[]) {
   ] as const) {
     g.add(cyl(r, r, 2, '#d9a050', { x, y: 5.6, z }, 28))
     g.add(noOutlineDeep(cyl(r - 0.6, r - 0.6, 0.3, '#5a2e1c', { x, y: 7.6, z }, 28)))
-    for (let i = 0; i < 4; i++) g.add(noOutlineDeep(rbox(r * 1.5, 0.12, 0.5, '#fff5c8', { x, y: 7.95, z: z - r * 0.5 + i * r * 0.33 }, 0.05)))
-    for (let i = 0; i < 8; i++) g.add(noOutlineDeep(rbox(0.9, 0.15, 0.6, '#f4b8c0', { x: x + Math.cos(i * 2.3) * r * 0.5, y: 8.05, z: z + Math.sin(i * 2.3) * r * 0.5, ry: i }, 0.05)))
+    // 蛋黄酱、红姜压进酱面（酱面顶在 7.9；原来浮在上面 0.05 / 0.15）。零点几厘米的小条用直角盒
+    for (let i = 0; i < 4; i++) g.add(noOutlineDeep(box(r * 1.5, 0.2, 0.5, '#fff5c8', { x, y: 7.8, z: z - r * 0.5 + i * r * 0.33 })))
+    for (let i = 0; i < 8; i++) g.add(noOutlineDeep(box(0.9, 0.2, 0.6, '#f4b8c0', { x: x + Math.cos(i * 2.3) * r * 0.5, y: 7.85, z: z + Math.sin(i * 2.3) * r * 0.5, ry: i })))
   }
   // 小铲
   for (const s of [-1, 1]) {
@@ -214,7 +225,7 @@ export function temakiParty(p: string[]) {
     [CUCUMBER, 7],
   ]
   for (const [c, dx] of items)
-    for (let i = 0; i < 4; i++) g.add(rbox(4, 1, 1.4, c, { x: 13 + dx, y: 0.5 + i * 0.05, z: -8 + i * 1.8, ry: 0.2 }, 0.3))
+    for (let i = 0; i < 4; i++) g.add(rbox(4, 1, 1.4, c, { x: 13 + dx, y: 0.45, z: -8 + i * 1.8, ry: 0.2 }, 0.3)) // 都落在盘底（原来一条比一条高 0.05，后几条悬着）
   g.add(noOutlineDeep(ball(2.4, '#ff6a3c', { x: 13 - 6, y: 1.1, z: 3.5 }, [1, 0.35, 1])))
   g.add(noOutlineDeep(ball(2.2, '#4f9e5b', { x: 13 + 1, y: 1, z: 3.5 }, [1, 0.12, 1.4])))
   g.add(noOutlineDeep(ball(2, '#f6e9c8', { x: 13 + 7, y: 1, z: 3.5 }, [1, 0.4, 1])))

@@ -7,7 +7,7 @@
 //   - 食物类的配色主要换盛器（碗、盘、托盘、包装）的颜色，食物本身保持固有色。
 
 import * as THREE from 'three'
-import { ball, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
+import { ball, box, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, rectPoly, rng, type AssetDef, type SurfaceDef } from '../kit'
 import { PI, cappedTube, hcyl, latheAt, lit, noOutlineDeep, rod3, type V3 } from '../geo'
 import { I, J, M, N, R, type Pal3 } from '../packkit'
@@ -498,10 +498,10 @@ type ToolKind = 'ladle' | 'turner' | 'whisk' | 'tongs'
 const TOOL_BODY: Record<ToolKind, (p: string[]) => THREE.Group> = { ladle: ladleBody, turner: turnerBody, whisk: whiskBody, tongs: tongsBody }
 const TOOL_NAME: Record<ToolKind, string> = { ladle: '汤勺', turner: '锅铲', whisk: '打蛋器', tongs: '食物夹' }
 const TOOL_DIMS: Record<ToolKind, { lying: [number, number, number]; hanging: [number, number, number] }> = {
-  ladle: { lying: [30.3, 8.4, 3.6], hanging: [8.4, 5.3, 35.8] },
-  turner: { lying: [30.9, 8, 1.2], hanging: [8, 5.3, 36.4] },
-  whisk: { lying: [27, 6.7, 6.7], hanging: [6.7, 8.2, 32.5] },
-  tongs: { lying: [25.4, 6.5, 1.5], hanging: [6.5, 5.3, 30.9] },
+  ladle: { lying: [30.3, 8.4, 3.6], hanging: [8.4, 5.3, 35.9] },
+  turner: { lying: [30.9, 8, 1.2], hanging: [8, 5.3, 36.5] },
+  whisk: { lying: [27, 6.7, 6.7], hanging: [6.7, 8.2, 32.6] },
+  tongs: { lying: [25.4, 6.5, 1.5], hanging: [6.5, 5.3, 31] },
 }
 const toolDefs = (k: ToolKind): AssetDef[] => [
   def({ id: `kf-${k}`, name: TOOL_NAME[k], form: 'lying', w: TOOL_DIMS[k].lying[0], d: TOOL_DIMS[k].lying[1], h: TOOL_DIMS[k].lying[2], pals: TOOL_PALS, build: (p) => laidTool(TOOL_BODY[k](p)) }),
@@ -537,7 +537,7 @@ export const KITCHEN_FOOD: AssetDef[] = [
     pals: RAIL_PALS,
     build: (p) => railBase(p, 60),
   }),
-  def({ id: 'kf-rail-tools', name: '厨房挂杆', sizeLabel: '挂满厨具', w: 62.6, d: 10, h: 38.1, mount: 107.9, prop: false, pals: RAIL_PALS, build: railWithTools }),
+  def({ id: 'kf-rail-tools', name: '厨房挂杆', sizeLabel: '挂满厨具', w: 62.6, d: 10, h: 38.2, mount: 107.8, prop: false, pals: RAIL_PALS, build: railWithTools }),
   ...toolDefs('ladle'),
   ...toolDefs('turner'),
   ...toolDefs('whisk'),
@@ -552,10 +552,10 @@ export const KITCHEN_FOOD: AssetDef[] = [
 
   // ---------- 餐具 ----------
   def({ id: 'kf-washoku-set', name: '一人份和食器', category: 'tabletop', w: 25, d: 17.5, h: 9.2, pals: WASHOKU_PALS, build: washokuSet }),
-  def({ id: 'kf-chopsticks', name: '筷子筷架', category: 'tabletop', w: 23, d: 5.6, h: 1.6, pals: CHOP_PALS, build: chopstickPair }),
-  def({ id: 'kf-plates-s', name: '盘子叠放', sizeLabel: '小 15cm', w: 15, d: 15, h: 5.6, pals: PLATE_PALS, build: (p) => plateStack(p, 7.5, 5) }),
-  def({ id: 'kf-plates-m', name: '盘子叠放', sizeLabel: '中 21cm', w: 21, d: 21, h: 4.8, pals: PLATE_PALS, build: (p) => plateStack(p, 10.5, 4) }),
-  def({ id: 'kf-plates-l', name: '盘子叠放', sizeLabel: '大 27cm', w: 27, d: 27, h: 4.6, pals: PLATE_PALS, build: (p) => plateStack(p, 13.5, 3) }),
+  def({ id: 'kf-chopsticks', name: '筷子筷架', category: 'tabletop', w: 23, d: 6.2, h: 1.5, pals: CHOP_PALS, build: chopstickPair }),
+  def({ id: 'kf-plates-s', name: '盘子叠放', sizeLabel: '小 15cm', w: 15, d: 15, h: 4.8, pals: PLATE_PALS, build: (p) => plateStack(p, 7.5, 5) }),
+  def({ id: 'kf-plates-m', name: '盘子叠放', sizeLabel: '中 21cm', w: 21, d: 21, h: 4.2, pals: PLATE_PALS, build: (p) => plateStack(p, 10.5, 4) }),
+  def({ id: 'kf-plates-l', name: '盘子叠放', sizeLabel: '大 27cm', w: 27, d: 27, h: 4.2, pals: PLATE_PALS, build: (p) => plateStack(p, 13.5, 3) }),
   def({ id: 'kf-bento-closed', name: '两层便当盒', form: 'closed', category: 'tabletop', w: 18, d: 11.8, h: 11, pals: BENTO_PALS, build: (p) => bento2(p, false) }),
   def({ id: 'kf-bento-open', name: '两层便当盒', form: 'open', category: 'tabletop', w: 36, d: 13.8, h: 10.6, pals: BENTO_PALS, build: (p) => bento2(p, true) }),
   def({ id: 'kf-chawanmushi', name: '茶碗蒸杯', category: 'tabletop', w: 13, d: 13, h: 10, pals: CHAWAN_PALS, build: chawanmushi }),
@@ -569,28 +569,28 @@ export const KITCHEN_FOOD: AssetDef[] = [
   def({ id: 'kf-kyusu-set', name: '急须茶壶 + 汤吞', category: 'tabletop', w: 30, d: 17.5, h: 11, pals: KYUSU_PALS, build: kyusuSet }),
   def({ id: 'kf-placemat', name: '餐垫', sizeLabel: '长方', category: 'tabletop', w: 45, d: 32, h: 1.3, pals: MAT_PALS, build: (p) => placemat(p, 'rect') }),
   def({ id: 'kf-placemat-round', name: '餐垫', sizeLabel: '圆形', category: 'tabletop', w: 38, d: 38, h: 1.3, pals: MAT_PALS, build: (p) => placemat(p, 'round') }),
-  def({ id: 'kf-coasters', name: '杯垫一叠', category: 'tabletop', w: 22.8, d: 12.4, h: 3.4, pals: COASTER_PALS, build: coasterStack }),
+  def({ id: 'kf-coasters', name: '杯垫一叠', category: 'tabletop', w: 22.8, d: 12.4, h: 3.1, pals: COASTER_PALS, build: coasterStack }),
   def({ id: 'kf-cutlery-tray', name: '餐具收纳盒', w: 30, d: 22, h: 5, pals: CUTLERY_PALS, build: cutleryTray }),
-  def({ id: 'kf-donburi', name: '丼碗（带盖）', category: 'tabletop', w: 16, d: 16, h: 10.6, pals: DON_PALS, build: donburi }),
+  def({ id: 'kf-donburi', name: '丼碗（带盖）', category: 'tabletop', w: 16, d: 16, h: 10.4, pals: DON_PALS, build: donburi }),
 
   // ---------- 食物 / 饮料 ----------
-  def({ id: 'kf-rice-bowl', name: '一碗白饭', category: 'tabletop', w: 22, d: 14, h: 7.5, off: [0, -1.2], fx: RICE_FX, pals: RICEBOWL_PALS, build: riceBowl }),
+  def({ id: 'kf-rice-bowl', name: '一碗白饭', category: 'tabletop', w: 22, d: 15.3, h: 7.6, off: [0, -1.85], fx: RICE_FX, pals: RICEBOWL_PALS, build: riceBowl }),
   def({ id: 'kf-miso-soup', name: '味噌汤', category: 'tabletop', w: 12, d: 12, h: 6.6, fx: MISO_FX, pals: MISO_PALS, build: misoSoup }),
   def({ id: 'kf-udon', name: '狐狸乌冬', category: 'tabletop', w: 19, d: 19, h: 8.1, fx: UDON_FX, pals: UDON_PALS, build: kitsuneUdon }),
   def({ id: 'kf-curry', name: '咖喱饭', category: 'tabletop', w: 26, d: 19, h: 3.6, pals: CURRY_PALS, build: curryRice }),
-  def({ id: 'kf-sushi-oke', name: '寿司桶（散寿司）', category: 'tabletop', w: 30, d: 30, h: 7, pals: OKE_PALS, build: sushiOke }),
+  def({ id: 'kf-sushi-oke', name: '寿司桶（散寿司）', category: 'tabletop', w: 30.4, d: 30.4, h: 7, pals: OKE_PALS, build: sushiOke }),
   def({ id: 'kf-onigiri-trio', name: '饭团三个', category: 'tabletop', w: 25, d: 13, h: 7, pals: ONIGIRI_PALS, build: onigiriTrio }),
   def({ id: 'kf-bread-bag', name: '袋装吐司', category: 'tabletop', w: 12.4, d: 27.1, h: 15.6, pals: BREADBAG_PALS, build: breadBag }),
-  def({ id: 'kf-toast-plate', name: '吐司切片配黄油', category: 'tabletop', w: 24, d: 16, h: 4.3, pals: TOAST_PALS, build: toastPlate }),
+  def({ id: 'kf-toast-plate', name: '吐司切片配黄油', category: 'tabletop', w: 24, d: 16, h: 4.1, pals: TOAST_PALS, build: toastPlate }),
   def({ id: 'kf-baguettes', name: '纸袋法棍', category: 'tabletop', w: 17.7, d: 8, h: 62, pals: BAGUETTE_PALS, build: baguettes }),
   def({ id: 'kf-donut-box', name: '甜甜圈盒', category: 'tabletop', w: 30, d: 21, h: 25.6, pals: DONUT_PALS, build: donutBox }),
   def({ id: 'kf-apples', name: '苹果', category: 'tabletop', w: 20, d: 20, h: 9.3, pals: APPLE_PALS, build: apples }),
   def({ id: 'kf-bananas', name: '香蕉架', category: 'tabletop', w: 23.6, d: 18.1, h: 36.6, pals: BANANA_PALS, build: bananas }),
-  def({ id: 'kf-mikan-box', name: '一箱橘子', w: 36, d: 41.2, h: 24.5, pals: MIKAN_PALS, build: mikanBox }),
+  def({ id: 'kf-mikan-box', name: '一箱橘子', w: 36, d: 40.8, h: 24.4, pals: MIKAN_PALS, build: mikanBox }),
   def({ id: 'kf-watermelon', name: '半个西瓜', category: 'tabletop', w: 28, d: 28, h: 10, pals: MELON_PALS, build: watermelonHalf }),
   def({ id: 'kf-grapes', name: '一串葡萄', category: 'tabletop', w: 18, d: 18, h: 6, pals: GRAPE_PALS, build: grapes }),
   def({ id: 'kf-veg-basket', name: '蔬菜篮（萝卜·葱·白菜）', w: 44.2, d: 28.8, h: 16.2, pals: VEG_PALS, build: vegBasket }),
-  def({ id: 'kf-onion-bags', name: '洋葱土豆网袋', w: 31.9, d: 10, h: 14.3, pals: NETBAG_PALS, build: onionPotatoBags }),
+  def({ id: 'kf-onion-bags', name: '洋葱土豆网袋', w: 31.9, d: 10, h: 12.9, pals: NETBAG_PALS, build: onionPotatoBags }),
   def({ id: 'kf-eggs', name: '鸡蛋盒', w: 26, d: 23, h: 5.6, pals: EGG_PALS, build: eggCarton }),
   def({ id: 'kf-milk', name: '牛奶盒', sizeLabel: '1L', w: 7, d: 7, h: 23.4, pals: MILK_PALS, build: (p) => milkCarton(p, true) }),
   def({ id: 'kf-milk-s', name: '牛奶盒', sizeLabel: '500ml', w: 6, d: 6, h: 16.4, pals: MILK_PALS, build: (p) => milkCarton(p, false) }),
@@ -601,9 +601,9 @@ export const KITCHEN_FOOD: AssetDef[] = [
   def({ id: 'kf-seasonings', name: '调味料瓶（酱油·味醂·油）', w: 24.4, d: 8.4, h: 28.2, pals: SEASON_PALS, build: seasoningBottles }),
   def({ id: 'kf-rice-sack-5', name: '米袋', sizeLabel: '5kg', w: 28, d: 42, h: 9.4, pals: SACK_PALS, build: (p) => riceSack(p, 5) }),
   def({ id: 'kf-rice-sack-10', name: '米袋', sizeLabel: '10kg', w: 36, d: 54, h: 11.4, pals: SACK_PALS, build: (p) => riceSack(p, 10) }),
-  def({ id: 'kf-water-case', name: '矿泉水整箱', sizeLabel: '2L×6', form: 'open', w: 32.6, d: 34.7, h: 38.9, pals: WATER_PALS, build: (p) => waterCase(p, true) }),
+  def({ id: 'kf-water-case', name: '矿泉水整箱', sizeLabel: '2L×6', form: 'open', w: 32.6, d: 34.4, h: 38.9, pals: WATER_PALS, build: (p) => waterCase(p, true) }),
   def({ id: 'kf-water-case-closed', name: '矿泉水整箱', sizeLabel: '2L×6', form: 'closed', w: 32.6, d: 22.6, h: 31, pals: WATER_PALS, build: (p) => waterCase(p, false) }),
-  def({ id: 'kf-beer-6', name: '啤酒罐六连包', category: 'tabletop', w: 21, d: 14, h: 13.2, pals: SIXPACK_PALS, build: beerSixPack }),
+  def({ id: 'kf-beer-6', name: '啤酒罐六连包', category: 'tabletop', w: 21, d: 14, h: 12.9, pals: SIXPACK_PALS, build: beerSixPack }),
   def({ id: 'kf-beer-crate', name: '啤酒箱（20 瓶）', w: 48.4, d: 33, h: 30.8, pals: CRATE_PALS, build: beerCrate }),
   def({ id: 'kf-isshobin', name: '清酒一升瓶', category: 'tabletop', w: 10, d: 10, h: 41, pals: SAKE_PALS, build: isshobin }),
   def({ id: 'kf-wine-rack', name: '葡萄酒 + 酒架', w: 34, d: 30.5, h: 26, pals: WINERACK_PALS, build: wineRack }),
@@ -611,7 +611,7 @@ export const KITCHEN_FOOD: AssetDef[] = [
 
   // ---------- 餐桌摆设 ----------
   def({ id: 'kf-teishoku', name: '一人份定食', category: 'tabletop', w: TEISHOKU.w, d: TEISHOKU.d, h: 7.8, fx: TEISHOKU_FX, pals: TEISHOKU_PALS, build: teishoku }),
-  def({ id: 'kf-dinner-two', name: '两人晚餐套组', category: 'tabletop', w: 40, d: 62, h: 11.6, pals: DINNER_PALS, build: dinnerForTwo }),
+  def({ id: 'kf-dinner-two', name: '两人晚餐套组', category: 'tabletop', w: 40, d: 62, h: 11.3, pals: DINNER_PALS, build: dinnerForTwo }),
   def({ id: 'kf-nabe', name: '火锅（卡式炉 + 土锅）', category: 'tabletop', w: 36, d: 31.1, h: 22.4, off: [0, -0.55], fx: NABE_FX, pals: NABE_PALS, build: nabeSet }),
   def({ id: 'kf-takoyaki-party', name: '章鱼烧派对', category: 'tabletop', w: 43, d: 29.7, h: 15.4, pals: TAKO_PALS, build: takoParty }),
   def({ id: 'kf-okonomiyaki', name: '铁板烧（大阪烧）', category: 'tabletop', w: 60.4, d: 35.4, h: 8.1, off: [0, -1.72], fx: OKONOMI_FX, pals: GRILL_PALS, build: okonomiyakiGrill }),
@@ -801,7 +801,8 @@ function taps(trayC: string, y: number, zf: number, trayY: number, w = 16) {
     g.add(cyl(0.6, 0.6, 1.2, STEEL, { x, y: y - 1.2, z: zf + 3 }, 10))
   }
   g.add(tray(w - 1, 1.4, 6.5, 0.4, trayC, { y: trayY, z: zf + 3.5 }, 0.4))
-  g.add(noOutlineDeep(rbox(w - 2.4, 0.2, 5.2, STEEL_D, { y: trayY + 1.1, z: zf + 3.5 }, 0.05)))
+  // 沥水格栅搭在托盘四壁上（压进壁 0.1；原来四周离壁 0.25，整片悬在盘里）
+  g.add(noOutlineDeep(box(w - 1.6, 0.2, 5.9, STEEL_D, { y: trayY + 1.1, z: zf + 3.5 })))
   return g
 }
 
@@ -904,10 +905,11 @@ function chineseTakeout(p: string[]) {
   m.rotation.y = PI / 4
   g.add(m)
   g.add(noOutlineDeep(rbox(4, 4, 0.2, print, { y: 3, z: 4, rx: -0.22 }, 1)))
-  g.add(cappedTube([[-6.6, 9, 0], [-5, 15, 0], [5, 15, 0], [6.6, 9, 0]], 0.12, handle, { ...TUBE, seg: 24 }))
+  // 铁丝提手两头插进盒壁（盒壁在 y = 8.6 处离中心 5.16；原来两头在盒外 1cm 悬着）
+  g.add(cappedTube([[-5.25, 8.6, 0], [-5, 15, 0], [5, 15, 0], [5.25, 8.6, 0]], 0.12, handle, { ...TUBE, seg: 24 }))
   for (let i = 0; i < 8; i++) g.add(noOutlineDeep(cappedTube(arc([0, 8.6, 0], 1 + i * 0.6, i * 0.9, i * 0.9 + 2.6, 6, 'xz'), 0.3, '#d9a050', { ...TUBE, seg: 12 })))
   g.add(noOutlineDeep(ball(1, '#3f8a3a', { x: 2, y: 9, z: -1 }, [1.3, 0.3, 1])))
-  g.add(noOutlineDeep(rbox(1.4, 0.4, 1, '#f08a3c', { x: -2, y: 9, z: 1.5 }, 0.2)))
+  g.add(noOutlineDeep(rbox(1.4, 0.4, 1, '#f08a3c', { x: -2, y: 8.8, z: 1.5 }, 0.2)))
   g.add(chopsticks(20, '#ead7b8', 0, 0, 9.5))
   return g
 }
@@ -926,7 +928,7 @@ function takeoutBento(p: string[]) {
     [5.8, 2],
     [8.4, 4.5],
   ])
-    g.add(ball(1.8, '#b86a2a', { x, y: 2.6, z }, [1.1, 0.8, 1]))
+    g.add(ball(1.8, '#b86a2a', { x, y: 1.75, z }, [1.1, 0.8, 1])) // 落在盒底（原来悬在盒里 0.8cm 高）
   g.add(noOutlineDeep(ball(1.4, acc, { x: -6, y: 3, z: 4.5 }, [1.4, 0.3, 1])))
   // 透明盖（倒扣的浅盒）+ 价签
   g.add(glassGhost(tray(22.4, 3.2, 16.4, 0.3, GLASS, { y: 6.8, rx: PI }, 0.8), GLASS, 0.3))
@@ -999,7 +1001,7 @@ function noodleCase(p: string[]) {
   g.add(noOutlineDeep(rbox(16, 5, 0.3, lidC, { y: 3, z: 15.05 }, 0.5)))
   for (const s of [-1, 1]) {
     const f = rbox(40, 0.4, 9, card, {}, 0.1)
-    f.position.set(0, 11 + Math.sin(0.9) * 4.5, s * (15 + Math.cos(0.9) * 4.5))
+    f.position.set(0, 10.9 + Math.sin(0.9) * 4.5, s * (14.8 + Math.cos(0.9) * 4.5)) // 折线压进箱壁顶角
     f.rotation.x = -s * 0.9
     g.add(f)
   }
@@ -1138,7 +1140,7 @@ function dango(p: string[]) {
     g.add(hcyl(0.2, 0.2, 17, C.woodL, 0, 2.4, z, 'x', 6))
     cs.forEach((c, i) => g.add(ball(1.4, c, { x: -3.2 + i * 2.8, y: 2.4, z })))
   }
-  g.add(noOutlineDeep(ball(0.6, acc, { x: 7, y: 1.3, z: 3.5 }, [1, 0.3, 1])))
+  g.add(noOutlineDeep(ball(0.6, acc, { x: 7, y: 1.1, z: 3.5 }, [1, 0.3, 1])))
   return g
 }
 
@@ -1188,7 +1190,12 @@ function fruitBasket(p: string[]) {
   const t = torus(13.8, 0.6, rim, { y: 9, rx: PI / 2 })
   t.scale.y = 0.7
   g.add(t)
-  g.add(cappedTube(arc([0, 9, 0], 12.5, 0, PI, 16, 'xy'), 0.6, rim, { ...TUBE, seg: 32 }))
+  // 提手两头插进篮沿（篮沿内径 13.2；原来提手半径 12.5，两头在篮口里面悬着）：左右撑到 13.2，高度不变
+  g.add(cappedTube(arc([0, 9, 0], 12.5, 0, PI, 16, 'xy').map(([x, y]): V3 => [(x * 13.2) / 12.5, y, 0]), 0.6, rim, { ...TUBE, seg: 32 }))
+  // 垫底的一层水果，落在篮底：上面那堆压在它们上面（原来只有上面一堆，整堆悬在篮子中间）
+  g.add(ball(2.6, '#e0453a', { x: -6, y: 3.04, z: -1 }, [1, 0.9, 1], [12, 8]))
+  g.add(ball(3, '#ff9a2a', { x: 0, y: 3.4, z: 0 }, [1, 0.9, 1], [12, 8]))
+  g.add(ball(3, '#ff9a2a', { x: 6.5, y: 3.4, z: 2.5 }, [1, 0.9, 1], [12, 8]))
   g.add(ball(3.6, '#e0453a', { x: -6, y: 8, z: -1.5 }, [1, 0.92, 1]))
   g.add(ball(3.2, '#ff9a2a', { x: 0, y: 8.5, z: 2.5 }, [1, 0.9, 1]))
   g.add(ball(3.2, '#ff9a2a', { x: -1.5, y: 8.6, z: -3.5 }, [1, 0.9, 1]))
@@ -1416,7 +1423,7 @@ export const KITCHEN_DRINKS_SNACKS: AssetDef[] = [
   def({ id: 'kf-sandwich', name: '便利店三明治', category: 'tabletop', w: 14.4, d: 8.4, h: 12, pals: SANDWICH_PALS, build: sandwichPack }),
   def({ id: 'kf-natto', name: '纳豆三连盒', category: 'tabletop', w: 9.7, d: 7.8, h: 10.8, pals: NATTO_PALS, build: natto }),
   def({ id: 'kf-tofu', name: '盒装豆腐', category: 'tabletop', w: 11.8, d: 8.8, h: 4.6, pals: TOFU_PALS, build: tofuPack }),
-  def({ id: 'kf-noodle-case', name: '杯面整箱', w: 40, d: 41.4, h: 18.1, pals: NOODLE_CASE_PALS, build: noodleCase }),
+  def({ id: 'kf-noodle-case', name: '杯面整箱', w: 40, d: 41.1, h: 18.1, pals: NOODLE_CASE_PALS, build: noodleCase }),
   // ---------- 零食 / 甜点 ----------
   def({ id: 'kf-candy-jar', name: '糖果罐', category: 'tabletop', w: 12.8, d: 12.8, h: 17.4, pals: CANDY_PALS, build: candyJar }),
   def({ id: 'kf-cookie-tin', name: '曲奇铁盒', form: 'closed', category: 'tabletop', w: 20.6, d: 20.6, h: 7.8, pals: TIN_PALS, build: (p) => cookieTin(p, false) }),

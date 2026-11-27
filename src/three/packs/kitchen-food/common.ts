@@ -4,7 +4,7 @@
 import * as THREE from 'three'
 import { cyl, rbox, toon } from '../../toon'
 import { G, type AssetCategory, type AssetDef, type StyleTag } from '../../kit'
-import { PI, box3, cappedTube, hcyl, latheAt, noOutlineDeep, type TubeOpts, type V3 } from '../../geo'
+import { PI, box3, cappedTube, hcyl, latheAt, noOutlineDeep, taperRod3, type TubeOpts, type V3 } from '../../geo'
 import { type Build, type Pal3 } from '../../packkit'
 
 /** 本包弯管的默认参数（段数、截面段数、球帽 / 外包 Group 的约定） */
@@ -158,18 +158,36 @@ export function riceMound(r: number, h: number, y: number, color = RICE, x = 0, 
   return dome(r, h, color, { x, y, z })
 }
 
-/** 一双筷子，沿 x 平放（尖朝 +x），y 为底面 */
-export function chopsticks(len: number, color: string, x: number, y: number, z: number, gap = 0.9, ry = 0) {
+/** 筷架的高度 */
+const REST_H = 0.9
+/**
+ * 一双筷子，沿 x 摆（尖朝 +x），y 为底面（桌面）。
+ * rest：筷架离筷子中心的距离（局部 x）。给了就是搭在筷架上——粗的那头落在桌面，细的那头压在筷架顶上，整双微微翘起
+ * （原来整双水平浮在筷架的高度，粗头离桌面 0.9cm）；不给就平放。
+ */
+export function chopsticks(len: number, color: string, x: number, y: number, z: number, gap = 0.9, ry = 0, rest?: number) {
   const g = new THREE.Group()
-  for (const s of [-1, 1]) g.add(hcyl(0.16, 0.36, len, color, 0, 0.36, (s * gap) / 2))
+  // 半径会量化到 0.1：粗头 0.4、细头 0.2
+  const R0 = 0.4
+  const R1 = 0.2
+  if (rest === undefined) for (const s of [-1, 1]) g.add(hcyl(0.16, 0.36, len, color, 0, 0.36, (s * gap) / 2))
+  else {
+    const run = rest + len / 2
+    // 筷架处的轴心高度：筷架顶 + 那里的半径，再压进去 0.1
+    const yr = REST_H + R0 - ((R0 - R1) * run) / len - 0.1
+    const a = Math.atan2(yr - R0, run)
+    // 粗头端面跟着倾斜，最低点正好落在 y 上
+    const y0 = R0 * Math.cos(a)
+    for (const s of [-1, 1]) g.add(taperRod3([-len / 2, y0, (s * gap) / 2], [-len / 2 + len * Math.cos(a), y0 + len * Math.sin(a), (s * gap) / 2], R0, R1, color, 16))
+  }
   g.position.set(x, y, z)
   g.rotation.y = ry
   return g
 }
 
-/** 筷架 */
-export function hashioki(color: string, x: number, y: number, z: number, ry = 0) {
-  const g = G(rbox(1.3, 0.9, 4.2, color, { y: 0 }, 0.4))
+/** 筷架：len 为长度（两双筷子并排搭时给长一点） */
+export function hashioki(color: string, x: number, y: number, z: number, ry = 0, len = 4.2) {
+  const g = G(rbox(1.3, REST_H, len, color, { y: 0 }, 0.4))
   g.position.set(x, y, z)
   g.rotation.y = ry
   return g
@@ -216,18 +234,23 @@ export function wrapBand(r: number, h: number, color: string, at: { x?: number; 
   return noOutlineDeep(cyl(rr, rr, h, color, at, seg))
 }
 
-/** 挂起：把本体移到挂点下方（顶面 topY），本体背面不小于 z = 0.3 */
+/** S 形钩：上环开口朝后（内顶 y ≈ -0.5），下环最低点 (0, S_LOW, S_Z) */
+export const S_LOW = -6.4
+const S_Z = 2.6
+/** S 钩的前沿（下环最前面） */
+const S_FRONT = S_Z + 1.2 + 0.25
+
+/**
+ * 挂起：把本体移到挂点下方（顶面 topY）。本体原点（挂环所在的 z）尽量对到 S 钩下环的最低点 S_Z，
+ * 前面不超出钩子前沿，背面不小于 z = 0.3（原来一律让背面贴 z = 0.3：薄的锅铲、夹子的挂环落在钩子后面，没套上）
+ */
 export function hangAt<T extends THREE.Object3D>(o: T, topY: number, xOff = 0): T {
   const b = box3(o)
   o.position.x += xOff - (b.min.x + b.max.x) / 2
   o.position.y += topY - b.max.y
-  o.position.z += 0.3 - b.min.z
+  o.position.z += Math.max(0.3 - b.min.z, Math.min(S_Z, S_FRONT - b.max.z))
   return o
 }
-
-/** S 形钩：上环开口朝后（内顶 y ≈ -0.5），下环最低点 (0, S_LOW, S_Z) */
-export const S_LOW = -6.4
-const S_Z = 2.6
 export function sHook(color = STEEL) {
   const top = arc([0, -1.45, 0.2], 1.2, PI * 1.15, 0, 8, 'yz')
   const bottom = arc([0, -5.2, S_Z], 1.2, PI, PI * 2.2, 8, 'yz')

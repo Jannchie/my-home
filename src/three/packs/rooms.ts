@@ -235,7 +235,8 @@ function beanPear(p: string[]) {
   const t = 0.33
   const r = 35 * Math.pow(Math.sin(Math.PI * Math.pow(t, 0.72)), 0.7)
   const a = 0.6
-  g.add(rbox(6, 3, 1, sub, { x: Math.sin(a) * (r + 0.2), y: 98 * t - 13 - 1.5, z: Math.cos(a) * (r + 0.2) - 18 * t ** 3 + 3, ry: a }, 0.4))
+  // 布标压进布面一点：豆袋表面有褶皱起伏，贴着理论半径放会浮在外面 0.7cm
+  g.add(rbox(6, 3, 1, sub, { x: Math.sin(a) * (r - 0.7), y: 98 * t - 13 - 1.5, z: Math.cos(a) * (r - 0.7) - 18 * t ** 3 + 3, ry: a }, 0.4))
   return g
 }
 
@@ -302,13 +303,15 @@ function tvRetro(p: string[]) {
   const dh = top - fy - 1
   for (let i = 0; i < 2; i++) {
     const x = -38 + i * 37
-    const z = d / 2 + 0.6 + i * 1.8
+    // 后面那扇的门框嵌进柜口 0.6（原来只有 0.1，圆角一让就和柜体脱开了）
+    const z = d / 2 + 0.1 + i * 1.8
     const fr = new THREE.Group()
     fr.add(rbox(40, 2.5, 1.4, sub, { y: 0 }, 0.5))
     fr.add(rbox(40, 2.5, 1.4, sub, { y: dh - 2.5 }, 0.5))
     for (const s of [-1, 1]) fr.add(rbox(2.5, dh, 1.4, sub, { x: s * 18.75 }, 0.5))
     fr.add(glassPane(35, dh - 4, 0.5, { y: 2, z: 0 }))
-    fr.add(rbox(1.2, 8, 1, acc, { x: i ? -15.5 : 15.5, y: dh / 2 - 4, z: 1 }, 0.4))
+    // 拉手贴在玻璃上：背面压进玻璃（原来浮在玻璃前 0.25）
+    fr.add(rbox(1.2, 8, 1.4, acc, { x: i ? -15.5 : 15.5, y: dh / 2 - 4, z: 0.85 }, 0.4))
     fr.position.set(x, fy + 0.5, z)
     // 前面那扇推到后面那扇的前头
     g.add(i ? movable(fr, { kind: 'slide', dx: -37 }) : fr)
@@ -469,7 +472,7 @@ function cubeShelf(p: string[], cols: number, rows: number) {
       const k = (i * 7 + j * 3 + n++) % 5
       if (k === 0 || k === 3) g.add(bin(cell - 2, cell - 3, d - 6, k === 0 ? a : b, cx, cy, 1.5))
       else if (k === 1) g.add(books(cx - cell / 2, cx + cell / 2, cy, cell - 2, 24, 0, Math.floor(rand() * 1000)))
-      else if (k === 2 && j < rows - 1) for (let s = 0; s < 3; s++) g.add(rbox(24 - s * 2, 3, 20, BOOK_COLORS[(i + j + s) % 8], { x: cx, y: cy + s * 3.1, z: 2, ry: s * 0.1 }, 0.6))
+      else if (k === 2 && j < rows - 1) for (let s = 0; s < 3; s++) g.add(rbox(24 - s * 2, 3, 20, BOOK_COLORS[(i + j + s) % 8], { x: cx, y: cy + s * 2.9, z: 2, ry: s * 0.1 }, 0.6))
     }
   return { g, w, h }
 }
@@ -487,7 +490,7 @@ function windowBench(p: string[]) {
     g.add(tray(38, 26, 36, 1.4, C.woodL, { x, y: fy, z: 2 }, 0.6))
     g.add(torus(4, 0.7, shade(C.woodL, -0.18), { x, y: fy + 19, z: 20.5 }, Math.PI))
   }
-  g.add(rbox(136, 8, 43, sub, { y: 38.4 }, 4))
+  g.add(rbox(136, 8.6, 43, sub, { y: 37.8 }, 4))
   g.add(rbox(38, 32, 11, acc, { x: -40, y: 44, z: -14, rx: -0.2, rz: 0.08 }, 5))
   g.add(rbox(34, 30, 10, shade(sub, -0.08), { x: 44, y: 44, z: -14, rx: -0.2, rz: -0.1 }, 5))
   return g
@@ -556,7 +559,7 @@ function loftBed(p: string[]) {
   g.add(rbox(148, 3, 54, top, { x: -24, y: 70, z: -19 }, 1))
   g.add(rbox(3, 70, 50, frame, { x: 48, z: -20 }, 1))
   g.add(rbox(3, 70, 50, frame, { x: -96 }, 1))
-  g.add(rbox(40, 12, 48, top, { x: 22, y: 57.8, z: -21 }, 1.2))
+  g.add(rbox(40, 12.4, 48, top, { x: 22, y: 57.8, z: -21 }, 1.2))
   g.add(rbox(36, 9, 1.4, acc, { x: 22, y: 59.3, z: 3.3 }, 0.6))
   g.add(ball(1.4, frame, { x: 22, y: 63.8, z: 4.4 }))
   // 桌上方的书架板：两块侧板从桌面一直立到床板护栏下（以前侧板下端悬在桌面上方 35cm，整组书架悬空）
@@ -574,9 +577,9 @@ function footBench(p: string[]) {
   g.add(rbox(120, 6, 40, wood, { y: 30 }, 1.5))
   g.add(rbox(116, 9, 37, cushion, { y: 35.6 }, 4))
   for (const x of [-40, -20, 0, 20, 40]) for (const z of [-8, 8]) g.add(ball(1, acc, { x: x + (z > 0 ? 10 : 0), y: 44.5, z }))
-  for (let i = 0; i < 6; i++) g.add(rbox(104, 1.6, 4, wood, { y: 10, z: -12.5 + i * 5 }, 0.6))
+  for (let i = 0; i < 6; i++) g.add(rbox(106, 1.6, 4, wood, { y: 9.7, z: -12.5 + i * 5 }, 0.6))
   for (const s of [-1, 1]) g.add(rbox(110, 2, 2, wood, { y: 8, z: s * 14 }, 0.6))
-  // 两端的横撑：下层木条两头搭在上面（以前中间几根木条只靠前后两根纵撑，悬空 6cm）
+  // 两端的横撑：下层木条两头搭在上面、压进去 0.3（以前中间几根木条只靠前后两根纵撑，悬空 6cm）
   for (const s of [-1, 1]) g.add(rbox(2, 2, 30, wood, { x: s * 52.5, y: 8 }, 0.6))
   return g
 }
@@ -730,8 +733,8 @@ function clothesRail(p: string[]) {
   // 下层两双鞋
   for (const [x, c] of [[-30, a], [24, b]] as [number, string][])
     for (const s of [-1, 1]) {
-      g.add(rbox(9, 6, 22, c, { x: x + s * 5.5, y: 24.3, z: 2 }, 3))
-      g.add(rbox(8, 1.2, 8, C.white, { x: x + s * 5.5, y: 30.2, z: 8 }, 0.5))
+      g.add(rbox(9, 6, 22, c, { x: x + s * 5.5, y: 23.8, z: 2 }, 3))
+      g.add(rbox(8, 1.2, 8, C.white, { x: x + s * 5.5, y: 29.7, z: 8 }, 0.5))
     }
   const kinds = [3, 0, 1, 2, 0, 2, 1]
   const cols = [b, a, shade(a, 0.08), C.white, shade(b, 0.1), a, b]
@@ -838,9 +841,10 @@ function drawerTower(p: string[], n: number) {
   for (let i = 0; i < n; i++) {
     const y = 8 + i * 19.2
     // 每层一个空心的框（两侧、背、底），抽屉从前面拉出来
-    for (const s of [-1, 1]) g.add(rbox(1.6, 19, 45, main, { x: s * 19.2, y }, 0.6))
-    g.add(rbox(36.8, 19, 1.4, main, { y, z: -21.8 }, 0.4))
-    g.add(rbox(36.8, 1.2, 45, main, { y }, 0.4))
+    // 侧板、背板比层距高 0.2，顶进上一层；底板、背板两头嵌进侧板 0.2（原来各层之间、板和板之间都只是相切）
+    for (const s of [-1, 1]) g.add(rbox(1.6, 19.4, 45, main, { x: s * 19.2, y }, 0.6))
+    g.add(rbox(37.2, 19.4, 1.4, main, { y, z: -21.8 }, 0.4))
+    g.add(rbox(37.2, 1.2, 45, main, { y }, 0.4))
     const c = i % 2 ? b : a
     // 抽屉面板：把手槽真开孔，透过去是抽屉盒
     g.add(drawer([holePanel(36, 16, 1.4, c, [{ kind: 'rect', x: 0, y: 10.5, w: 10, h: 2.2, r: 1.1 }], { y: y + 1.5, z: 23.1 }, 0.7)], ...towerTray(i), shade(c, 0.08)))
@@ -959,7 +963,7 @@ function magazineRack(p: string[]) {
     const y = 8 + 18 * k
     g.add(rbox(40.6, 2, 10, wood, { y, z }, 0.6))
     g.add(rbox(40.6, 9, 1.6, wood, { y, z: z + 4.5 }, 0.6))
-    for (let m = 0; m < 2; m++) g.add(rbox(26 - m * 2, 24 - m * 3, 1, cols[k * 2 + m], { x: (m ? 4 : -3), y: y + 2.2, z: z + 1.5 - m * 1.6, rx: -0.15 }, 0.3))
+    for (let m = 0; m < 2; m++) g.add(rbox(26 - m * 2, 24 - m * 3, 1, cols[k * 2 + m], { x: (m ? 4 : -3), y: y + 1.7, z: z + 1.5 - m * 1.6, rx: -0.15 }, 0.3))
   }
   return g
 }
@@ -996,10 +1000,10 @@ function basketSet(p: string[]) {
     g.add(m)
   }
   // 中篮：叠好的布
-  for (let i = 0; i < 3; i++) g.add(rbox(22, 4, 20, [b, C.white, a][i], { x: 9, y: 1.7 + i * 4.1 }, 1.5))
+  for (let i = 0; i < 3; i++) g.add(rbox(22, 4, 20, [b, C.white, a][i], { x: 9, y: 1.5 + i * 3.9 }, 1.5))
   // 小篮：毛线球
-  g.add(ball(5, a, { x: 32, y: 6.8, z: -3 }))
-  g.add(ball(4.5, b, { x: 38, y: 6.3, z: 4 }))
+  g.add(ball(5, a, { x: 32, y: 6.4, z: -3 }))
+  g.add(ball(4.5, b, { x: 38, y: 5.9, z: 4 }))
   return g
 }
 
@@ -1061,11 +1065,12 @@ function crib(p: string[]) {
   for (const sx of [-1, 1]) {
     g.add(rbox(3, 66, 59, sub, { x: sx * 61.5, y: 20 }, 1))
     const disc = cyl(9, 9, 0.8, acc, {}, 24)
-    disc.position.set(sx * 63.5, 62, 0)
+    disc.position.set(sx * 63.2, 62, 0)
     disc.rotation.z = Math.PI / 2
     g.add(disc)
   }
-  g.add(rbox(118, 3, 58, frame, { y: 24 }, 1))
+  // 床板四边搭进横档和床头板，顶面托住床垫（原来比框小一圈，和床垫之间也隔着 0.2，整块悬空）
+  g.add(rbox(121, 3, 60, frame, { y: 24.4 }, 1))
   g.add(rbox(116, 10, 56, C.white, { y: 27.2 }, 4))
   g.add(rbox(56, 3, 58, acc, { x: 24, y: 36.6 }, 1.4))
   g.add(rbox(24, 6, 34, sub, { x: -40, y: 37 }, 3))
@@ -1082,7 +1087,7 @@ function kidDesk(p: string[]) {
   }
   g.add(rbox(78, 6, 2.5, sub, { y: 20, z: -18 }, 1))
   g.add(rbox(90, 3, 50, main, { y: 55 }, 2))
-  g.add(rbox(50, 8, 40, main, { y: 46.6, z: 2 }, 1.2))
+  g.add(rbox(50, 8.6, 40, main, { y: 46.6, z: 2 }, 1.2))
   g.add(rbox(46, 6, 1.4, acc, { y: 47.6, z: 22.4 }, 0.6))
   g.add(ball(1.4, sub, { y: 50.6, z: 23.4 }))
   return g
@@ -1114,7 +1119,7 @@ function toyBox(p: string[]) {
   ;[C.pink, C.lemon, C.sky].forEach((c, i) => g.add(torus(5.1, 0.6, c, { x: -18 + i * 18, y: 22, z: 27.3 })))
   // 玩具
   g.add(rbox(12, 12, 12, C.sky, { x: -18, y: 2.5, z: 7, ry: 0.3 }, 2))
-  g.add(rbox(10, 10, 10, C.lemon, { x: -16, y: 14.6, z: 4, ry: 0.8 }, 2))
+  g.add(rbox(10, 10, 10, C.lemon, { x: -16, y: 14.3, z: 4, ry: 0.8 }, 2))
   g.add(ball(10, C.pink, { x: 6, y: 12.5, z: 9 }))
   g.add(ball(7, C.mint, { x: 20, y: 9.5, z: 0 }))
   g.add(rbox(14, 8, 8, C.red, { x: 18, y: 2.5, z: 17 }, 2.5))
@@ -1160,7 +1165,8 @@ function rockingHorse(p: string[]) {
   head.rotation.z = -1.2
   g.add(head)
   g.add(ball(6.4, shade(main, 0.08), { x: 41, y: 62.5 }))
-  for (const s of [-1, 1]) g.add(cyl(0.3, 2.6, 6, main, { x: 28, y: 73, z: s * 4, rx: s * 0.2 }, 8))
+  // 耳朵根埋进头顶（原来在 y = 73，离头顶还有近 2cm，两只耳朵悬着）
+  for (const s of [-1, 1]) g.add(cyl(0.3, 2.6, 7.5, main, { x: 28, y: 70.2, z: s * 4, rx: s * 0.2 }, 8))
   // 鬃毛 + 尾巴
   for (let i = 0; i < 5; i++) g.add(ball(3.4, acc, { x: 14 + i * 3.2, y: 50 + i * 5, z: 0 }))
   const tail = capsule(3, 12, acc)
@@ -1209,7 +1215,7 @@ function slide(p: string[]) {
   for (const s of [-1, 1]) {
     g.add(rbox(4, 71, 50, main, { x: s * 22, z: -50 }, 2))
     const disc = cyl(8, 8, 0.8, acc, {}, 20)
-    disc.position.set(s * 24.5, 36, -50)
+    disc.position.set(s * 24.2, 36, -50)
     disc.rotation.z = Math.PI / 2
     g.add(disc)
     g.add(rbox(4, 30, 4, main, { x: s * 22, y: 70, z: -27 }, 1.5))
@@ -1249,8 +1255,9 @@ function kidBed(p: string[]) {
   g.add(rbox(40, 9, 30, acc, { y: 30, z: -76, rx: 0.08 }, 4))
   g.add(rbox(94, 8, 120, duvet, { y: 28, z: 32 }, 4))
   g.add(rbox(94, 3, 14, shade(duvet, 0.08), { y: 35.5, z: -21 }, 1.4))
-  g.add(rbox(90, 30, 3, frame, { y: 16, z: -96.5 }, 1))
-  g.add(rbox(90, 18, 3, frame, { y: 16, z: 96.5 }, 1))
+  // 床头 / 床尾板两头插进角柱（原来比两柱内侧窄 1cm、底边和床座相切，两块板都悬着）
+  g.add(rbox(94, 30, 3, frame, { y: 16, z: -96.5 }, 1))
+  g.add(rbox(94, 18, 3, frame, { y: 16, z: 96.5 }, 1))
   // 护栏：-x 整条，+x 床尾留口
   const rail = (x: number, z0: number, z1: number) => {
     g.add(rbox(3, 3, z1 - z0, frame, { x, y: 44, z: (z0 + z1) / 2 }, 1))
@@ -1524,7 +1531,7 @@ export const ROOMS: AssetDef[] = [
   withPals({ id: 'kid-desk', name: '儿童书桌', category: 'kids', w: 90, d: 50, h: 58, surface: 58, build: kidDesk }, CUTE_KIDS),
   withPals({ id: 'kid-chair', name: '儿童椅', category: 'kids', w: 36, d: 34, h: 64, build: kidChair }, CUTE_KIDS),
   withPals({ id: 'kid-toybox', name: '玩具箱', category: 'kids', w: 72, d: 56, h: 79, build: toyBox }, CUTE_KIDS),
-  withPals({ id: 'kid-horse', name: '木马', category: 'kids', w: 84, d: 32, h: 80, build: rockingHorse }, [
+  withPals({ id: 'kid-horse', name: '木马', category: 'kids', w: 84, d: 32, h: 78, build: rockingHorse }, [
     ['cute', C.white, C.pink, C.lemon],
     ['cute', C.lemon, C.sky, C.pink],
     ['nordic', N.oak, N.sage, N.linen],

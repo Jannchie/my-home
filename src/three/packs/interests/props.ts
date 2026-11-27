@@ -2,7 +2,7 @@
 // 只放建模函数和它们用到的常量，素材表在 ../interests.ts（PACKS 只收集 packs/ 下一层的文件）。
 
 import * as THREE from 'three'
-import { ball, cached, capsule, cloneWithHooks, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../../toon'
+import { ball, box, cached, capsule, cloneWithHooks, cup, cyl, puck, rbox, shade, toon, torus, tray } from '../../toon'
 import { C, paintLandscape, paintPanel, pinwheelWalls, rng } from '../../kit'
 import { G, P, PI, cylX, cylZ, fitGroup, ghostOutlined, lathe, litOutlined, noOutline, rod3, taperRod3, type V2, type V3 } from '../../geo'
 import { J } from '../../packkit'
@@ -62,7 +62,8 @@ export const mangaStack = (n: number) => (p: string[]) => {
     const z = (r() - 0.5) * 0.6
     const ry = (r() - 0.5) * 0.08
     const book = bookFlat(17.6, 1.5, 11.3, c, 0, 0, 0)
-    book.add(noOutline(rbox(3.2, 0.9, 0.2, '#ffffff', { x: -5, y: 0.3, z: 5.75 }, 0.05)))
+    // 书脊上的标签：2mm 厚的小贴片，直角盒就够（圆角盒一片 108 面，16 本一摞光标签就 1700 面）
+    book.add(noOutline(box(3.2, 0.9, 0.2, '#ffffff', { x: -5, y: 0.3, z: 5.75 })))
     g.add(P(book, x, i * 1.5, z, 0, ry))
   }
   return fitGroup(g)
@@ -137,7 +138,8 @@ function figRobot(main: string, acc: string, base: string) {
   }
   g.add(rbox(3.6, 3.4, 2.4, main, { y: 4.2 }, 0.4))
   g.add(rbox(2.2, 1, 0.4, acc, { y: 6, z: 1.2 }, 0.15))
-  g.add(rbox(2.4, 2.2, 2.2, main, { y: 7.7 }, 0.4))
+  // 头往下加长 0.2 压进躯干（躯干顶 7.6，以前头从 7.7 起，连着护目镜和天线悬着）
+  g.add(rbox(2.4, 2.4, 2.2, main, { y: 7.5 }, 0.4))
   g.add(litOutlined(rbox(1.8, 0.5, 0.3, '#7fe3ff', { y: 8.6, z: 1.1 }, 0.1), '#7fe3ff', 0.7))
   g.add(cyl(0.12, 0.12, 1.2, acc, { x: 0.6, y: 9.9 }, 6), bead(0.3, acc, 0.6, 11.2))
   return g
@@ -558,7 +560,7 @@ export function shogi(p: string[]) {
     const r = big ? 1.65 : 1.45
     const m = cyl(r * 0.8, r, 0.8, piece, { x, y: 3.3, z, ry: mine ? PI : 0 }, 5)
     m.scale.set(0.85, 1, 1)
-    g.add(m)
+    g.add(m, pieceFoot(piece, x, 3.3, z))
     g.add(noOutline(rbox(0.8, 0.1, 1.1, ink, { x, y: 4.12, z }, 0.05)))
   }
   const back = [0, 1, 2, 3, 4, 5, 6, 7, 8]
@@ -590,7 +592,8 @@ export function goBoard(p: string[]) {
   for (let k = 0; k < 34; k++) {
     const i = Math.floor(r() * 13) + 3
     const j = Math.floor(r() * 13) + 3
-    g.add(bead(1.1, k % 2 ? '#f8f6f0' : '#26262a', -41.4 * 0.45 + i * gx, 5.3 + 0.5, -44.5 * 0.45 + j * gz, [1, 0.45, 1], 12, 5))
+    // 棋子摆在盘面贴图（y = 5.3）上；贴图浮在棋盘（顶 5）上 0.3，棋子的底尖往下拉 0.4 落进棋盘
+    g.add(bead(1.1, k % 2 ? '#f8f6f0' : '#26262a', -41.4 * 0.45 + i * gx, 5.3 + 0.5, -44.5 * 0.45 + j * gz, [1, 0.45, 1], 12, 5, 0.4))
   }
   for (const [s, c] of [[-1, '#26262a'], [1, '#f8f6f0']] as [number, string][]) {
     const x = s * 30.5
@@ -604,10 +607,16 @@ export function goBoard(p: string[]) {
 /** 棋子车削体的段数：底座直径不到 3cm，14 段和 12 段的球头配得上（20 段时一盘 32 子超过 1.4 万面） */
 const CHESS_SEG = 14
 
-/** 国际象棋棋子 */
-export function chessPiece(kind: 'p' | 'r' | 'n' | 'b' | 'q' | 'k', color: string, facing = 0) {
+/**
+ * 盘上的棋子底座往下多做的一截：棋子摆在盘面贴图上方 0.05（y = 2.35），贴图又浮在棋盘上 0.3，底座多出这 0.4 才落进棋盘（盘面以下 0.05）；
+ * 多出来的这截在贴图底下，看不见
+ */
+export const CHESS_FOOT = 0.4
+
+/** 国际象棋棋子；foot：底座往下多做多长（摆在棋盘上的传 CHESS_FOOT，躺在桌上、收在盒里的不传） */
+export function chessPiece(kind: 'p' | 'r' | 'n' | 'b' | 'q' | 'k', color: string, facing = 0, foot = 0) {
   const g = new THREE.Group()
-  const baseP: V2[] = [[0, 0], [1.4, 0], [1.4, 0.45], [1.0, 0.85]]
+  const baseP: V2[] = [[0, -foot], [1.4, -foot], [1.4, 0.45], [1.0, 0.85]]
   if (kind === 'p') {
     g.add(lathe([...baseP, [0.55, 2.3], [0.95, 2.5], [0.45, 2.7], [0, 2.7]], color, CHESS_SEG))
     g.add(ball(0.8, color, { y: 3.3 }))
@@ -649,7 +658,7 @@ export function chess(p: string[]) {
   ]
   for (const [k, f, r, w] of pieces) {
     const [x, z] = sq(f, r)
-    g.add(P(chessPiece(k as 'p', w ? white : black, w ? PI : 0), x, 2.35, z))
+    g.add(P(chessPiece(k as 'p', w ? white : black, w ? PI : 0, CHESS_FOOT), x, 2.35, z))
   }
   // 被吃掉的黑象躺在棋盘边（沿 +z 平放，底座半径 1.4 → 抬 1.4 正好贴地；以前 translateY 在旋转后的局部系里，象一半陷进地面，整盘被 fit 抬高）
   g.add(P(chessPiece('b', black), 21, 1.4, 1.8, PI / 2))
@@ -807,7 +816,8 @@ export function knittingBasket(p: string[]) {
   const g = new THREE.Group()
   g.add(cup(15, 12, 16, 1.2, basket))
   for (const y of [4, 8, 12]) g.add(torus(12 + (3 * y) / 16 + 0.15, 0.35, shade(basket, -0.12), { y, rx: PI / 2 }))
-  g.add(ball(8, y2, { y: 9.5 }))
+  // 最大的线团落在篮底（篮底内面 y = 1.2）：以前球底在 1.5，一篮线团和棒针都悬着
+  g.add(ball(8, y2, { y: 9.1 }))
   const yarn = (r: number, c: string, x: number, y: number, z: number, seed: number) => {
     g.add(ball(r, c, { x, y, z }))
     const rr = rng(seed)
@@ -837,7 +847,8 @@ export function sewingMachine(p: string[]) {
   // 压脚压在布上（布厚 0.3），针杆接到压脚（以前压脚和布同底、埋在布里，针杆悬着）
   g.add(cyl(0.4, 0.4, 7, METAL, { x: -15, y: 6 }, 8))
   g.add(rbox(2.4, 0.6, 3, METAL, { x: -15, y: 5.7, z: 0.6 }, 0.2))
-  g.add(cylX(5, 2.4, acc, 20.4, 18, 0, 24))
+  // 手轮往机身里加长 0.4（机身侧面 x = 19，以前手轮从 19.2 起）
+  g.add(cylX(5, 2.8, acc, 20.2, 18, 0, 24))
   g.add(cylX(2, 2.6, shade(acc, -0.15), 20.6, 18, 0, 16))
   g.add(cyl(0.3, 0.3, 4, METAL, { x: 8, y: 30 }, 6))
   g.add(puck(1.6, 0.4, thread, { x: 8, y: 30.2 }), cyl(1.2, 1.2, 2.4, thread, { x: 8, y: 30.6 }, 14), puck(1.6, 0.4, thread, { x: 8, y: 33 }))
@@ -968,9 +979,10 @@ export function potteryWheel(p: string[]) {
   g.add(rbox(8, 1, 10, RUBBER, { x: 16, y: 3, z: 30 }, 0.4))
   g.add(noOutline(taperRod3([16, 1, 23], [12, 1, 25], 0.4, 0.4, DARK, 6)))
   g.add(cylZ(2, 1.5, DARK, -14, 18, 25.6, 16))
-  g.add(rbox(12, 1.5, 14, pan, { x: -29, y: 22 }, 0.5))
+  // 侧搁板往机身里加长 1.5：机身顶部是 6cm 的大圆角，这个高度的侧面已经往里收了 0.3～1.1；修坯刀放在搁板上（以前悬在上方 0.4）
+  g.add(rbox(13.5, 1.5, 14, pan, { x: -28.25, y: 22 }, 0.5))
   g.add(rbox(5, 2.5, 4, C.lemon, { x: -30, y: 23.5, z: -2 }, 1))
-  g.add(taperRod3([-27, 24.2, 4], [-33, 24.2, 3], 0.3, 0.3, METAL, 6))
+  g.add(taperRod3([-27, 23.7, 4], [-33, 23.7, 3], 0.3, 0.3, METAL, 6))
   return fitGroup(g)
 }
 
@@ -985,7 +997,8 @@ export function microscope(p: string[]) {
   g.add(ball(1.8, body, { y: 20, z: -7.5 }))
   g.add(taperRod3([0, 20, -7.5], [0, 26, -3], 1.8, 1.6, body))
   g.add(rbox(11, 1, 10, DARK, { y: 12, z: 2 }, 0.4))
-  g.add(rbox(4, 9, 4, body, { y: 3, z: -4 }, 0.8))
+  // 立柱顶进载物台底面 0.6（以前两个圆角对着，差 0.08）
+  g.add(rbox(4, 9.6, 4, body, { y: 3, z: -4 }, 0.8))
   g.add(litOutlined(cyl(1.5, 1.5, 1, lamp, { y: 3, z: 2 }, 16), lamp))
   for (const s of [-1, 1]) g.add(cylX(2.2, 1.4, DARK, s * 2.6, 9, -6, 16))
   // 镜筒座往下加长 1cm、物镜转盘往后收 1cm：转盘顶进镜筒座底面（以前转盘离镜筒座 0.8cm，连同三只物镜悬空）
@@ -1178,7 +1191,8 @@ export function refBooks(p: string[]) {
     y += t
   })
   g.add(rbox(7.5, 1, 7.5, note, { x: 4, y, z: 2 }, 0.2))
-  g.add(taperRod3([-8, y + 0.5, 4], [4, y + 0.5, -4], 0.5, 0.5, DARK, 8))
+  // 笔往后挪 1cm：以前笔杆从便签本的一个角里穿过去
+  g.add(taperRod3([-8, y + 0.5, 3], [4, y + 0.5, -5], 0.5, 0.5, DARK, 8))
   return fitGroup(g)
 }
 
@@ -1270,7 +1284,8 @@ export function trophyStar(p: string[]) {
   const g = new THREE.Group()
   g.add(rbox(10, 3, 7, base, {}, 0.6))
   g.add(noOutline(rbox(5, 1.4, 0.2, plate, { y: 0.8, z: 3.55 }, 0.05)))
-  g.add(cyl(1, 1.4, 11, metal, { y: 3 }, 12))
+  // 立杆伸进星星下面两只角之间的凹口（凹口顶点在 y ≈ 15.1；以前杆顶在 14，星星架在杆子上方、两只角从两边跨过去，哪儿都没碰到）
+  g.add(cyl(0.8, 1.4, 12.5, metal, { y: 3 }, 12))
   const R0 = 6
   const pts: V2[] = []
   for (let k = 0; k < 10; k++) {
@@ -1379,21 +1394,24 @@ export function postcardWall(p: string[]) {
   const H = 60
   for (let i = 0; i <= 6; i++) g.add(taperRod3([-W / 2, i * 10, 0], [W / 2, i * 10, 0], 0.25, 0.25, grid, 6))
   for (let i = 0; i <= 9; i++) g.add(taperRod3([-W / 2 + i * 10, 0, 0.5], [-W / 2 + i * 10, H, 0.5], 0.25, 0.25, grid, 6))
+  // [x, 夹在第几根横丝上, 横版?, 画面, 两个颜色]：明信片的上边在横丝下面 1cm，夹子咬住横丝。
+  // 以前按中心高度随手摆，夹子多半落在两根横丝之间，而且只有 0.8 厚、够不到后面的铁丝，明信片是悬着的
   const cards: [number, number, boolean, number, string, string][] = [
-    [-30, 44, true, 0, '#a8d4f4', '#78c47a'],
-    [-8, 47, false, 1, '#ffc6a0', '#3d5a80'],
-    [16, 44, true, 2, '#3d4a6a', '#26262a'],
-    [34, 40, false, 3, '#cfe8f5', '#9fb4c7'],
-    [-33, 18, false, 1, '#ffe08f', '#2f8f8a'],
-    [-10, 20, true, 3, '#ffd6e0', '#a9bfa3'],
-    [14, 16, true, 0, '#fff1dc', '#e2702f'],
+    [-30, 5, true, 0, '#a8d4f4', '#78c47a'],
+    [-8, 5, false, 1, '#ffc6a0', '#3d5a80'],
+    [16, 5, true, 2, '#3d4a6a', '#26262a'],
+    [34, 5, false, 3, '#cfe8f5', '#9fb4c7'],
+    [-33, 3, false, 1, '#ffe08f', '#2f8f8a'],
+    [-10, 3, true, 3, '#ffd6e0', '#a9bfa3'],
+    [14, 2, true, 0, '#fff1dc', '#e2702f'],
   ]
-  cards.forEach(([x, y, land, kind, a, b], i) => {
+  cards.forEach(([x, wire, land, kind, a, b], i) => {
     const w = land ? 14.8 : 10
     const h = land ? 10 : 14.8
     const card = G(rbox(w, h, 0.2, '#ffffff', { y: -h / 2 }, 0.05), paintPanel(w - 1, h - 1, `int-postcard-${i}-${a}`, drawPostcard(kind, a, b), { y: -h / 2 + 0.5, z: 0.4 }))
-    card.add(rbox(1.2, 3, 0.8, clip, { y: h / 2 - 2 }, 0.2))
-    g.add(P(card, x, y, 1.1, 0, 0, ((i % 3) - 1) * 0.06))
+    // 夹子：前面夹着明信片，往后包住横丝（横丝在 z = ±0.25）
+    card.add(rbox(1.2, 3, 1.7, clip, { y: h / 2 - 1.6, z: -0.45 }, 0.2))
+    g.add(P(card, x, wire * 10 - 1 - h / 2, 1.1, 0, 0, ((i % 3) - 1) * 0.06))
   })
   const n = 12
   for (let i = 0; i < n; i++) {
@@ -1496,9 +1514,10 @@ export function catToys(p: string[]) {
     const x = -20 + i * 5
     g.add(noOutline(rbox(0.3, 0.1, 21, shade(card, -0.15), { x, y: top(x) + 0.05 }, 0.04)))
   }
-  g.add(ball(1.5, '#9aa0a8', { x: 0, y: 6.3, z: 2 }, [1, 0.8, 1.5]))
-  for (const s of [-1, 1]) g.add(noOutline(ball(0.6, C.pink, { x: s * 0.8, y: 7.5, z: 3.4 }, [1, 1, 0.3])))
-  g.add(noOutline(taperRod3([0, 5.6, -0.2], [2, 5.4, -3.5], 0.12, 0.08, C.pink, 4)))
+  // 玩具老鼠趴在抓板上（板面中间高 5）：身子压进板面 0.05，尾巴从身子里伸出来、尾梢搭在板面上（以前老鼠悬着 0.1，尾巴离身子 0.2）
+  g.add(ball(1.5, '#9aa0a8', { x: 0, y: 6.15, z: 2 }, [1, 0.8, 1.5]))
+  for (const s of [-1, 1]) g.add(noOutline(ball(0.6, C.pink, { x: s * 0.8, y: 7.35, z: 3.4 }, [1, 1, 0.3])))
+  g.add(noOutline(taperRod3([0, 5.65, 0.4], [2, 5.1, -3.5], 0.12, 0.08, C.pink, 4)))
   g.add(taperRod3([-24, 0.5, 15], [14, 0.5, 13], 0.5, 0.4, wand, 8))
   g.add(noOutline(taperRod3([14, 0.4, 13], [20, 0.3, 17], 0.08, 0.08, '#ffffff', 4)))
   g.add(ball(1.6, feather, { x: 21, y: 1.6, z: 17.5 }))
@@ -1573,7 +1592,9 @@ export function raincoat(p: string[]) {
     const rr = 13 + ((top - 16 - y) / 68) * 7
     g.add(ball(0.9, btn, { x: 1.2, y, z: 9 + rr * 0.45 + 0.2 }, [1, 1, 0.5]))
   }
-  for (const s of [-1, 1]) g.add(noOutline(rbox(7, 1.2, 0.4, shade(coat, -0.12), { x: s * 8, y: top - 62, z: 9 + 18 * 0.45 + 0.4 }, 0.2)))
+  // 袋盖顺着衣身的弧面斜贴上去（这个高度衣身半径约 17.7、前后压扁到 0.45：x = ±8 处前面在 z ≈ 16.1，往两边每厘米退 0.23）。
+  // 以前平着摆在 z = 17.5，离衣身 0.6～2cm
+  for (const s of [-1, 1]) g.add(noOutline(rbox(7, 1.2, 0.4, shade(coat, -0.12), { x: s * 8, y: top - 62, z: 16.05, ry: s * 0.22 }, 0.2)))
   return fitGroup(g, RAINCOAT_MOUNT)
 }
 
@@ -1685,6 +1706,8 @@ export function coffeeCanisters(p: string[]) {
 
 // ---------- 钓鱼 ----------
 
+const Z_AXIS = new THREE.Vector3(0, 0, 1)
+
 /** 钓竿沿线的点：底端在原点，往 -z 后仰 lean，竿梢最后 30% 往前垂 bend */
 function rodPath(L: number, lean: number, bend: number, n = 16): V3[] {
   const pts: V3[] = []
@@ -1696,8 +1719,8 @@ function rodPath(L: number, lean: number, bend: number, n = 16): V3[] {
   return pts
 }
 
-/** 一根钓竿（沿给定路径）：握把、卷线器、导环 [竿色, 握把, 卷线器] */
-function rodAlong(pts: V3[], blank: string, grip: string, reel: string, sea: boolean) {
+/** 一根钓竿（沿给定路径）：握把、卷线器、导环 [竿色, 握把, 卷线器]。standing：竿尾立在地上（尾塞不低于地面）；横放的传 false，尾塞对准竿轴 */
+function rodAlong(pts: V3[], blank: string, grip: string, reel: string, sea: boolean, standing = true) {
   const g = new THREE.Group()
   g.add(taperPath(pts, sea ? 1.1 : 0.8, 0.12, blank, 8))
   const at = (s: number): THREE.Vector3 => {
@@ -1709,7 +1732,7 @@ function rodAlong(pts: V3[], blank: string, grip: string, reel: string, sea: boo
   const a = at(0.01)
   const b = at(gripLen)
   g.add(taperRod3([a.x, a.y, a.z], [b.x, b.y, b.z], sea ? 1.6 : 1.3, sea ? 1.4 : 1.1, grip, 12))
-  g.add(ball(sea ? 1.7 : 1.4, DARK, { x: a.x, y: Math.max(a.y, sea ? 1.7 : 1.4), z: a.z }))
+  g.add(ball(sea ? 1.7 : 1.4, DARK, { x: a.x, y: standing ? Math.max(a.y, sea ? 1.7 : 1.4) : a.y, z: a.z }))
   // 卷线器：挂在竿的前面（+z 侧，即离墙一侧）
   const rp = at(gripLen + 0.02)
   const rr = sea ? 4.2 : 3
@@ -1717,11 +1740,17 @@ function rodAlong(pts: V3[], blank: string, grip: string, reel: string, sea: boo
   g.add(P(cyl(rr, rr, sea ? 4 : 3, reel, {}, 20), rp.x, rp.y - 0.8, rp.z + 3.5 + rr * 0.6, 0, 0, PI / 2))
   g.add(cylX(rr * 0.6, sea ? 4.6 : 3.4, shade(reel, -0.2), rp.x, rp.y - 0.8, rp.z + 3.5 + rr * 0.6, 14))
   g.add(cylX(0.3, 3, METAL, rp.x + (sea ? 3.5 : 2.6), rp.y - 0.8, rp.z + 3.5 + rr * 0.6, 6))
-  // 导环
+  // 导环：立在竿身前侧（+z），环面垂直于竿（以前一律平放，横挂的竿上环面顺着竿躺着）。
+  // 环贴着竿身：竿梢细到 0.1 多，照固定的 0.3 偏移摆，最上面几个环够不着竿，所以偏移不超过那一处的竿半径
+  const r0 = sea ? 1.1 : 0.8
   for (const s of [0.36, 0.5, 0.62, 0.72, 0.8, 0.87, 0.93, 0.98]) {
     const c = at(s)
+    const dir = at(Math.min(1, s + 0.01)).sub(at(s - 0.01)).normalize()
     const r = 0.5 + (1 - s) * (sea ? 2.4 : 1.6)
-    g.add(noOutline(P(torus(r, 0.12, METAL, {}), c.x, c.y, c.z + r + 0.3, PI / 2)))
+    const ring = torus(r, 0.12, METAL, {})
+    ring.quaternion.setFromUnitVectors(Z_AXIS, dir)
+    ring.position.set(c.x, c.y, c.z + r + Math.min(0.3, (r0 + (0.12 - r0) * s) * 0.9 + 0.05))
+    g.add(noOutline(ring))
   }
   return g
 }
@@ -1765,10 +1794,14 @@ export function rodRack(p: string[]) {
   const cols = [blank, shade(blank, 0.15), shade(blank, -0.15)]
   for (let k = 0; k < 3; k++) {
     const L = lens[k]
-    const y = 5.6 + 1 + k * 11
-    const pts: V3[] = [[-L / 2, 0, 0], [L / 2, 0, 0]]
-    const rod = rodAlong(pts, cols[k], k === 1 ? '#3a3b40' : '#c8a070', reel, k === 1)
-    g.add(P(rod, 0, y, 5.5))
+    // 竿搁在两边的托上（托面 y = 5.6 + k × 11）：竿身一头粗一头细，在两个托的位置各抬起那一处的半径（略压进托面），整根微微斜着。
+    // 以前竿轴一律在托面上方 1cm，竿身离托面 0.3～0.7 悬着
+    const r0 = k === 1 ? 1.1 : 0.8
+    const rest = (x: number) => (r0 + (0.12 - r0) * (x / L + 0.5)) * 0.92 - 0.05
+    const yAt = (x: number) => rest(-55) + ((rest(55) - rest(-55)) * (x + 55)) / 110
+    const pts: V3[] = [[-L / 2, yAt(-L / 2), 0], [L / 2, yAt(L / 2), 0]]
+    const rod = rodAlong(pts, cols[k], k === 1 ? '#3a3b40' : '#c8a070', reel, k === 1, false)
+    g.add(P(rod, 0, 5.6 + k * 11, 5.5))
   }
   return fitGroup(g, ROD_RACK_MOUNT)
 }
@@ -1809,6 +1842,8 @@ export const tackleBox = (open: boolean) => (p: string[]) => {
   const lid = G(tray(W, 6, D, 1, shade(box, -0.08), { y: 6, z: D / 2, rx: PI }), rbox(W - 2, 0.6, D - 2, shade(box, 0.2), { y: 4.4, z: D / 2 }, 0.3))
   for (let i = 0; i < 6; i++) lid.add(P(G(lure(lc[11 - i], 0, 0, 0, PI / 2)), -W / 2 + 4 + i * 5.6, 4.4, D / 2, PI))
   g.add(P(lid, 0, 12, -D / 2, -(PI / 2 + 0.25)))
+  // 铰链：盖子绕后沿掀开后只有一条棱对着箱口（两边都是圆角，实际隔着 0.4cm），两节铰链把盖子和箱体接起来
+  for (const s of [-1, 1]) g.add(cylX(0.8, 5, latch, s * 10, 12, -D / 2, 10))
   for (const s of [-1, 1]) g.add(rbox(3, 3, 1, latch, { x: s * 11, y: 8.5, z: D / 2 + 0.4 }, 0.4))
   return fitGroup(g)
 }
@@ -1903,6 +1938,13 @@ export function landingNet(p: string[]) {
 }
 
 // ---------- 桌游扩充：盒子、摆开的桌游、更多棋牌 ----------
+
+/**
+ * 棋子的「脚」：盘面贴图按约定浮在棋盘上 0.3cm（不然和盘面闪），棋子摆在贴图上，和棋盘之间其实隔着这 0.3。
+ * 在每个棋子正下方加一小截方柱，从棋子底里穿过贴图落进棋盘（盘面以下 0.05）；它整个埋在棋子和贴图底下，看不见。
+ * top 是贴图的高度（= 棋子底）。薄棋子（黑白棋、双陆棋）直接把最下面那片加厚到棋盘，不用它
+ */
+export const pieceFoot = (color: string, x: number, top: number, z: number) => box(0.4, 0.4, 0.4, color, { x, y: top - 0.35, z })
 
 /** 贴花离表面的高度：再薄也要 0.05cm（以前 0.02，光靠 polygonOffset，远看仍可能和底面闪） */
 export const DECAL_LIFT = 0.05
@@ -2372,8 +2414,8 @@ export function chessOpening(p: string[]) {
   const order: ('r' | 'n' | 'b' | 'q' | 'k')[] = ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r']
   for (let f = 0; f < 8; f++) {
     const x = -14 + f * 4
-    g.add(P(chessPiece(order[f], white, PI), x, 2.35, 14), P(chessPiece('p', white, PI), x, 2.35, 10))
-    g.add(P(chessPiece(order[f], black, 0), x, 2.35, -14), P(chessPiece('p', black, 0), x, 2.35, -10))
+    g.add(P(chessPiece(order[f], white, PI, CHESS_FOOT), x, 2.35, 14), P(chessPiece('p', white, PI, CHESS_FOOT), x, 2.35, 10))
+    g.add(P(chessPiece(order[f], black, 0, CHESS_FOOT), x, 2.35, -14), P(chessPiece('p', black, 0, CHESS_FOOT), x, 2.35, -10))
   }
   return fitGroup(g)
 }
@@ -2491,8 +2533,9 @@ export function reversi(p: string[]) {
       const x = -14 + i * 4
       const z = -14 + j * 4
       const top = r() < 0.5 ? dark : light
-      // 棋子摆在盘面贴图（y = 1.9）上面：以前从 1.6 起，下半片埋在贴图底下，只露出 0.1cm
-      g.add(cyl(1.6, 1.6, 0.2, top === dark ? light : dark, { x, y: 1.9, z }, 20), cyl(1.6, 1.6, 0.2, top, { x, y: 2.1, z }, 20))
+      // 棋子摆在盘面贴图（y = 1.9）上面，露出上下两片各 0.2；下面那片在贴图底下一直做到棋盘里（棋盘顶 1.6），
+      // 不然棋子只挨着浮在棋盘上 0.3 的贴图，和棋盘之间是空的
+      g.add(cyl(1.6, 1.6, 0.6, top === dark ? light : dark, { x, y: 1.5, z }, 20), cyl(1.6, 1.6, 0.2, top, { x, y: 2.1, z }, 20))
     }
   return fitGroup(g)
 }
@@ -2577,8 +2620,8 @@ export function backgammon(p: string[]) {
   const pw = 21.8 / 6
   const pt = (side: number, i: number, top: boolean, n: number, col: string) => {
     const x = side * 12.2 - 10.9 + pw * (i + 0.5)
-    // 棋子、骰子都摆在盘面贴图（y = 1.3）上面：以前从盒底 1 起，下半截埋在贴图底下
-    for (let k = 0; k < n; k++) g.add(cyl(1.5, 1.5, 0.6, col, { x, y: 1.3, z: (top ? -1 : 1) * (17.9 - 1.5 - k * 3) }, 18))
+    // 棋子、骰子都摆在盘面贴图（y = 1.3）上面，露出 0.6 高；贴图浮在盒底（y = 1）上 0.3，棋子在贴图底下再往下做 0.4 落进盒底
+    for (let k = 0; k < n; k++) g.add(cyl(1.5, 1.5, 1, col, { x, y: 0.9, z: (top ? -1 : 1) * (17.9 - 1.5 - k * 3) }, 18))
   }
   const other = '#f4f4f2'
   pt(-1, 0, true, 5, chk)
@@ -2589,6 +2632,7 @@ export function backgammon(p: string[]) {
   pt(1, 3, true, 3, chk)
   g.add(P(die(1.4, '#ffffff', '#26262a', 6, 3, 0.4), 5, 1.3, 0), P(die(1.4, '#ffffff', '#26262a', 2, 1, -0.3), 8, 1.3, 1.5))
   g.add(P(die(2, '#f4ead2', '#26262a', 2, 4, 0.2), -6, 1.3, 0))
+  g.add(pieceFoot('#ffffff', 5, 1.3, 0), pieceFoot('#ffffff', 8, 1.3, 1.5), pieceFoot('#f4ead2', -6, 1.3, 0))
   return fitGroup(g)
 }
 

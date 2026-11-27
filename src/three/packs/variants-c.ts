@@ -291,10 +291,11 @@ function cleanCaddy(p: string[]) {
   g.add(cyl(1.2, 1.2, 2.4, acc, { x: -10, y: 14, z: 5 }, 12))
   // 叠好的抹布
   const cloths = [C.sky, C.lemon, C.pink, PAD]
-  cloths.forEach((c, i) => g.add(rbox(10, 1.8, 14, c, { x: 10.4, y: 1 + i * 1.85, z: 1 }, 0.7)))
+  // 每块压进下面那块 0.1（原先一块比一块高 0.05，四块抹布和海绵一层层悬着）
+  cloths.forEach((c, i) => g.add(rbox(10, 1.8, 14, c, { x: 10.4, y: 1 + i * 1.7, z: 1 }, 0.7)))
   // 海绵
-  g.add(rbox(8, 1.8, 5, '#ffd86b', { x: 10.4, y: 8.4, z: -1 }, 0.5))
-  g.add(rbox(8, 1, 5, '#6fbf73', { x: 10.4, y: 10.2, z: -1 }, 0.4))
+  g.add(rbox(8, 1.8, 5, '#ffd86b', { x: 10.4, y: 7.8, z: -1 }, 0.5))
+  g.add(rbox(8, 1, 5, '#6fbf73', { x: 10.4, y: 9.5, z: -1 }, 0.4))
   return g
 }
 
