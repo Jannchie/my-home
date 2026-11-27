@@ -5,7 +5,8 @@ import { expect, test } from 'vitest'
 test('measured.generated.ts 未过期', async () => {
   ;(globalThis as { __MEASURE_LIVE__?: boolean }).__MEASURE_LIVE__ = true
   const { measuredNow } = await import('/src/three/measured')
-  await import('/src/three/assets')
+  const { ASSETS } = await import('/src/three/assets')
+  ;(await import('/src/three/innardsSeen')).measureAllInnards(ASSETS)
   const { MEASURED } = await import('/src/three/measured.generated')
   const now = Object.fromEntries(Object.entries(measuredNow).map(([k, v]) => [k, [...v]]))
   const table = Object.fromEntries(Object.entries(MEASURED).map(([k, v]) => [k, [...v]]))

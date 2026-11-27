@@ -38,6 +38,7 @@ import { doorLeafModel, liteModel } from './doorModels'
 import { barnPose, defaultDoorOpen, foldCount, foldLeaves, foldPose, slidingPose, swingPose } from '../doorMotion'
 import { addOutlines, ball, capsule, cloneWithHooks, cyl, disposeHooks, gradientMap, isReflector, mergeMeshes, mergeSolidColors, noTransparentShadows, pullDepth, rbox, shade, toon, useAnisotropy } from './toon'
 import { movable, poseDoor, poseDoors, type AssetDef } from './kit'
+import { showSeenInnards } from './innardsSeen'
 import { bathRemote, doorbell, intercomMonitor, switchPlate } from './wallDeviceModels'
 import { DEVICE_ASSET, wallDeviceSpots, type WallDeviceKind } from './wallDevices'
 import { freezeMatrices, syncMatrix } from './matrices'
@@ -2109,6 +2110,8 @@ function buildTemplate(def: AssetDef, fu: Furniture, closeUp: boolean): Furnitur
   resolveMats(m, def, pal)
   // 地毯、地垫：色块交界和外框长一圈软毛刺（fringe.ts），要在合并之前
   addPileFringe(m, def)
+  // 关严时从外面看得到的抽屉盒（桌面下没有柜体包着的抽屉）照常画，其余的关着不画（innardsSeen.ts）
+  showSeenInnards(m, def)
   // 半透明零件（玻璃、水面）不投影
   noTransparentShadows(m)
   // 零件按材质合并，draw call 少一个数量级（描边、花纹、弯曲都在合并后的网格上照常工作）

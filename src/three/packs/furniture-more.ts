@@ -5,7 +5,7 @@
 import * as THREE from 'three'
 import { ball, cached, cup, cyl, markMirror, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { duvet as duvetMesh, pillowMesh } from '../bedding'
-import { C, SWING_OPEN, gridHoles, hangingPipe, holePanel, legs, movable, paintPanel, pipeHook, rectPoly, shell, slab, type AssetDef, type DoorMotion, type Hole, type Poly, type SurfaceDef } from '../kit'
+import { C, SWING_OPEN, gridHoles, hangingPipe, holePanel, innards, legs, movable, paintPanel, pipeHook, rectPoly, shell, slab, type AssetDef, type DoorMotion, type Hole, type Poly, type SurfaceDef } from '../kit'
 import { batten, cylX, cylZ, glassPane, lit, meshWith, rod3, type V3 } from '../geo'
 import { I, J, M, N, R, withPals, type Pal3 } from '../packkit'
 
@@ -137,9 +137,9 @@ const slideBy = (parts: THREE.Object3D[], dx: number) => pivot(parts, [0, 0, 0],
 /** 翻门：铰链横线在 (hy, hz)，angle 为 rotation.x 的增量（底边铰链往外放倒为正） */
 const flapAt = (parts: THREE.Object3D[], hy: number, hz: number, angle: number) => pivot(parts, [0, hy, hz], { kind: 'flap', angle })
 
-/** 抽屉盒（敞口托盘）：面板背面在 zf，往后深 depth；x / y 为盒子底面中心 */
+/** 抽屉盒（敞口托盘）：面板背面在 zf，往后深 depth；x / y 为盒子底面中心。关严时整个在柜体里，不画（kit.ts innards） */
 function drawerTray(w: number, h: number, depth: number, color: string, x: number, y: number, zf: number) {
-  return tray(w, h, depth, 0.8, color, { x, y, z: zf - depth / 2 })
+  return innards(tray(w, h, depth, 0.8, color, { x, y, z: zf - depth / 2 }))
 }
 /**
  * 小抽屉盒：同 drawerTray，但五块板是不带圆角的方盒（每块 12 面，rbox 每块 108 面）。
@@ -159,7 +159,7 @@ function plainDrawerTray(w: number, h: number, depth: number, color: string, x: 
     box(t, h, depth - t * 2, (s * (w - t)) / 2, 0)
   }
   g.position.set(x, y, zf - depth / 2)
-  return g
+  return innards(g)
 }
 /** 药柜 6 × 8 小抽屉：格宽、行高、每格面板的 [x, 底边 y] */
 const APO_CW = 96 / 6

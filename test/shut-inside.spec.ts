@@ -1,5 +1,5 @@
 // 关着的柜子里看不见的东西不画：收在柜内层上的家具（surface.ts shutAll，沙盘 applyShut 按它藏），
-// 和模型自己抽屉里码着的东西（kit.ts innards，poseDoor 按开合管可见性）
+// 和模型自己抽屉里码着的东西（kit.ts innards，poseDoor 按开合管可见性；关严时看得到的例外，见 innardsSeen.ts）
 import { describe, expect, test } from 'vitest'
 import * as THREE from 'three'
 import { decorate } from '/src/decorate'
@@ -9,6 +9,7 @@ import { levels, propsOn, propsOnTop, shutAll, toLocal } from '/src/surface'
 import { ASSET_MAP } from '/src/three/assets'
 import { doorParts, poseDoor } from '/src/three/kit'
 import { furnitureModel } from '/src/three/house'
+import { innardsSeen } from '/src/three/innardsSeen'
 import { triCount } from '/src/three/geo'
 import { JP_OPTS } from './helpers'
 import { pointInPolygon, type Furniture, type Plan } from '/src/model'
@@ -92,6 +93,20 @@ describe('抽屉里码着的东西（innards）', () => {
     expect(one).toBeLessThan(to)
     poseDoor(parts[0], 0)
     expect(visibleTris(closed)).toBe(tc)
+  })
+
+  test('桌面下没有柜体包着的抽屉：抽屉盒从背后看得到，关着也画；柜体里的照样不画', () => {
+    // 学习桌：右边三只抽屉在实心柜座里，中间那只挂在桌面下
+    const desk = ASSET_MAP.get('fm-gakushu-desk')!
+    expect(innardsSeen(desk)).toEqual([3])
+    const hidden = (id: string) => {
+      let n = 0
+      furnitureModel({ id: 'a', asset: id, x: 0, y: 0, rot: 0 }).traverse((o) => void (o.userData.innards && !o.visible && n++))
+      return n
+    }
+    expect(hidden('fm-gakushu-desk')).toBe(3)
+    // 抽屉缝里漏出的一线不算看得到
+    expect(innardsSeen(ASSET_MAP.get('be-lingerie-48-closed')!)).toEqual([])
   })
 
   test('模板（素材直接 build）里的东西都在：体检、尺寸测量照样看得到', () => {

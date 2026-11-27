@@ -4,6 +4,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cyl, markMirror, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, G, SWING_OPEN, holePanel, legs, lPoly, movable, rectPoly, rng, rod, shell, slab, type AssetDef, type DoorMotion, type SurfaceDef } from '../kit'
+import { trayBox, trayBoxLevel } from '../cabinetKit'
 import { soft, type SoftFn } from '../geo'
 import { glassPane, rod3, type V3 } from '../geo'
 import { I, J, M, N, R, withPals, type Pal3 } from '../packkit'
@@ -81,20 +82,9 @@ function moving(parts: THREE.Object3D[], pivot: V3, m: DoorMotion) {
 const swing = (left: boolean): DoorMotion => ({ kind: 'swing', angle: (left ? -1 : 1) * SWING_OPEN })
 const FLAP: DoorMotion = { kind: 'flap', angle: (85 * Math.PI) / 180 }
 
-/** 抽屉盒（面板后面的箱子）：口宽 x0..x1，底 y，盒高 h，从 z1（面板背面）往后 depth */
-function trayParts(x0: number, x1: number, y: number, h: number, z1: number, depth: number, color: string): THREE.Object3D[] {
-  const w = x1 - x0
-  const cx = (x0 + x1) / 2
-  const zc = z1 - depth / 2
-  return [rbox(w, 1, depth, color, { x: cx, y, z: zc }, 0.2), rbox(1, h, depth, color, { x: x0 + 0.5, y, z: zc }, 0.2), rbox(1, h, depth, color, { x: x1 - 0.5, y, z: zc }, 0.2), rbox(w - 2, h, 1, color, { x: cx, y, z: z1 - depth + 0.5 }, 0.2)]
-}
-/** 抽屉格（和 trayParts 同样的参数），打开时随抽屉拉出 slide */
-function trayLevel(x0: number, x1: number, y: number, h: number, z1: number, depth: number, slide = Math.round(depth * 0.6)): SurfaceDef {
-  return { y: y + 1, h: Math.round((h - 1.5) * 10) / 10, inside: true, slide, shape: [rectPoly(x0 + 1.2, z1 - depth + 1.2, x1 - 1.2, z1 - 0.4)] }
-}
 /** 一个抽屉：面板等部件 + 盒子，标好拉出动作 */
 function drawer(face: THREE.Object3D[], x0: number, x1: number, y: number, h: number, z1: number, depth: number, color: string) {
-  return moving([...face, ...trayParts(x0, x1, y, h, z1, depth, color)], [0, 0, 0], { kind: 'drawer', dz: Math.round(depth * 0.6) })
+  return moving([...face, trayBox(x0, x1, y, h, z1, depth, color)], [0, 0, 0], { kind: 'drawer', dz: Math.round(depth * 0.6) })
 }
 /** rooms.ts 的 carcass 里面一层（门里）：x0..x1、z 在柜体内侧 */
 const cell = (x0: number, x1: number, d: number) => [rectPoly(x0 + 0.4, -d / 2 + 1.8, x1 - 0.4, d / 2 - 1)]
@@ -274,7 +264,7 @@ function tvLowLayout(w: number) {
 }
 function tvLowSurf(w: number): SurfaceDef[] {
   const L = tvLowLayout(w)
-  return [{ y: L.fy, h: L.top - L.fy - 0.5, inside: true, shape: cell(-L.inner, -(L.mid + 1.1), L.d) }, ...[0, 1].map((i) => trayLevel(...L.tray(i)))]
+  return [{ y: L.fy, h: L.top - L.fy - 0.5, inside: true, shape: cell(-L.inner, -(L.mid + 1.1), L.d) }, ...[0, 1].map((i) => trayBoxLevel(...L.tray(i)))]
 }
 function tvLow(p: string[], w: number) {
   const [main, sub, acc] = p
@@ -341,7 +331,7 @@ function retroTray(i: number) {
 }
 const TV_RETRO_SURF: SurfaceDef[] = [0, 1].map((i) => {
   const [x0, x1, y, h, z1, dep] = retroTray(i)
-  return trayLevel(x0, x1, y, h, z1, dep)
+  return trayBoxLevel(x0, x1, y, h, z1, dep)
 })
 
 /** 边柜：细圆腿 + 三扇门 */
@@ -392,7 +382,7 @@ const SB_NORDIC_SURF: SurfaceDef[] = (() => {
   const { w, d, shelf } = SB_NORDIC
   const { fy, top, tray } = sbNordicLayout()
   const sh = cell(-w / 2 + 2.5, 28 - 1.1, d)
-  return [{ y: fy, h: shelf - fy - 0.5, inside: true, shape: sh }, { y: shelf + 2.5, h: top - shelf - 3, inside: true, shape: sh }, ...[0, 1, 2].map((i) => trayLevel(...tray(i)))]
+  return [{ y: fy, h: shelf - fy - 0.5, inside: true, shape: sh }, { y: shelf + 2.5, h: top - shelf - 3, inside: true, shape: sh }, ...[0, 1, 2].map((i) => trayBoxLevel(...tray(i)))]
 })()
 function sideboardNordic(p: string[]) {
   const [main, sub, legC] = p
@@ -766,7 +756,7 @@ function tallChestTrays() {
   }
   return out
 }
-const TALL_CHEST_SURF = tallChestTrays().map((t) => trayLevel(...t))
+const TALL_CHEST_SURF = tallChestTrays().map((t) => trayBoxLevel(...t))
 function tallChest(p: string[]) {
   const [main, sub, acc] = p
   const { w, d, rh } = TALL_CHEST
@@ -835,7 +825,7 @@ function screen(p: string[]) {
 /** 抽屉式收纳箱塔：n 层 */
 /** 抽屉收纳箱塔第 i 层的抽屉：[x0, x1, 盒底, 盒高, 面板背面 z, 盒深] */
 const towerTray = (i: number) => [-17.5, 17.5, 8 + i * 19.2 + 1.6, 15, 22.4, 43] as const
-const towerSurf = (n: number) => Array.from({ length: n }, (_, i) => trayLevel(...towerTray(i)))
+const towerSurf = (n: number) => Array.from({ length: n }, (_, i) => trayBoxLevel(...towerTray(i)))
 function drawerTower(p: string[], n: number) {
   const [main, a, b] = p
   const g = new THREE.Group()
@@ -1025,7 +1015,7 @@ function kaidanTrays() {
   })
   return out
 }
-const KAIDAN_SURF = kaidanTrays().map((t) => trayLevel(...t))
+const KAIDAN_SURF = kaidanTrays().map((t) => trayBoxLevel(...t))
 function kaidan(p: string[]) {
   const [main, fronts, iron] = p
   const g = new THREE.Group()
@@ -1434,7 +1424,7 @@ export const ROOMS: AssetDef[] = [
     ['retro', R.caramel, R.teal, R.cream],
     ['industrial', I.iron, I.leather, I.walnut],
   ]),
-  withPals({ id: 'bd-vanity', name: '梳妆台', category: 'bedroom', w: 90, d: 45, h: 147, surface: 75, surfaceShape: [rectPoly(-44, -12, 44, 21.5)], surfaces: [trayLevel(...VANITY_TRAY)], openable: true, build: vanity }, [
+  withPals({ id: 'bd-vanity', name: '梳妆台', category: 'bedroom', w: 90, d: 45, h: 147, surface: 75, surfaceShape: [rectPoly(-44, -12, 44, 21.5)], surfaces: [trayBoxLevel(...VANITY_TRAY)], openable: true, build: vanity }, [
     ['cute', C.white, C.pink, C.lemon],
     ['cute', C.sakura, C.white, C.lilac],
     ['nordic', N.oak, N.white, N.oak],

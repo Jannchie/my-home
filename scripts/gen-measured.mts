@@ -1,13 +1,15 @@
 // 预先量好素材定义时要量的模型（three/measured.ts），生成 src/three/measured.generated.ts。
 // 用法：pnpm gen:measured（= vite-node scripts/gen-measured.mts）
-// 改了吸顶灯、衣物、毛巾的模型后重跑；test/measured.spec.ts 会检查生成文件是否过期。
+// 改了吸顶灯、衣物、毛巾、带抽屉的柜子的模型后重跑；test/measured.spec.ts 会检查生成文件是否过期。
 import '../test/setup/stubdom'
 import fs from 'node:fs'
 import path from 'node:path'
 
 ;(globalThis as { __MEASURE_LIVE__?: boolean }).__MEASURE_LIVE__ = true
 const { measuredNow } = await import('/src/three/measured')
-await import('/src/three/assets')
+const { ASSETS } = await import('/src/three/assets')
+// 可开合素材的抽屉盒关严时看不看得到（three/innardsSeen.ts）：建模板时才查，这里先都量一遍
+;(await import('/src/three/innardsSeen')).measureAllInnards(ASSETS)
 
 const keys = Object.keys(measuredNow).sort()
 const body = keys.map((k) => `  ${JSON.stringify(k)}: [${measuredNow[k].join(', ')}],`).join('\n')

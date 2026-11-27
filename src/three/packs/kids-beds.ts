@@ -7,7 +7,7 @@
 import * as THREE from 'three'
 import { ball, capsule, cyl, face, puck, rbox, shade, toon, torus } from '../toon'
 import { duvet, pillowMesh } from '../bedding'
-import { C, ellipsePoly, glow, holePanel, movable, rectPoly, slab, type AssetDef, type SurfaceDef } from '../kit'
+import { C, ellipsePoly, glow, holePanel, innards, movable, rectPoly, slab, type AssetDef, type SurfaceDef } from '../kit'
 import { cylX, cylZ, meshWith, rod3, type V3 } from '../geo'
 import { I, J, M, N, R, withPals } from '../packkit'
 
@@ -268,7 +268,8 @@ function drawerTray(w: number, h: number, depth: number, color: string, x: numbe
     g.add(rbox(t, h, depth - t * 2 + 0.6, color, { x: (s * (w - t)) / 2 }, 0.3))
   }
   g.position.set(x, y, zf - depth / 2)
-  return g
+  // 关严时整个在床座 / 柜体里，不画
+  return innards(g)
 }
 /** 高架床书桌抽屉柜三只抽屉的底边高度 */
 const LOFT_DRAWERS = [3, 25, 47]

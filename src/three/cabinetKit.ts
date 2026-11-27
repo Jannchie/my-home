@@ -286,6 +286,24 @@ export function drawerLv(x0: number, x1: number, y0: number, h: number, zf: numb
   return { y: y0 + 1.6, h: Math.max(2, h - 3.6), inside: true, slide: pull, shape: [rectPoly(x0 + 2.2, zf - depth + 1.2, x1 - 2.2, zf - 0.4)] }
 }
 
+/**
+ * 贴着抽屉口做满的抽屉盒（底、两侧、后板）：口宽 x0..x1，底 y，盒高 h，从 z1（面板背面）往后 depth。
+ * 关严时整个在柜体里，不画（kit.ts innards）。和 drawerOf 的盒子比：不往里收、盒高直接给
+ */
+export function trayBox(x0: number, x1: number, y: number, h: number, z1: number, depth: number, color: string) {
+  const w = x1 - x0
+  const cx = (x0 + x1) / 2
+  const zc = z1 - depth / 2
+  const g = innards(new THREE.Group())
+  g.add(rbox(w, 1, depth, color, { x: cx, y, z: zc }, 0.2), rbox(1, h, depth, color, { x: x0 + 0.5, y, z: zc }, 0.2), rbox(1, h, depth, color, { x: x1 - 0.5, y, z: zc }, 0.2), rbox(w - 2, h, 1, color, { x: cx, y, z: z1 - depth + 0.5 }, 0.2))
+  return g
+}
+
+/** trayBox 对应的抽屉格（同样的参数），打开时随抽屉拉出 slide */
+export function trayBoxLevel(x0: number, x1: number, y: number, h: number, z1: number, depth: number, slide = Math.round(depth * 0.6)): SurfaceDef {
+  return { y: y + 1, h: Math.round((h - 1.5) * 10) / 10, inside: true, slide, shape: [rectPoly(x0 + 1.2, z1 - depth + 1.2, x1 - 1.2, z1 - 0.4)] }
+}
+
 /** 空心柜体：外形 w × h × d（at.y 为底面，x / z 为中心），背板、两侧、顶、底，板厚 t */
 export function hollow(w: number, h: number, d: number, color: string, at: { x?: number; y?: number; z?: number } = {}, t = 1.6, inner = shade(color, 0.05)) {
   const g = new THREE.Group()
