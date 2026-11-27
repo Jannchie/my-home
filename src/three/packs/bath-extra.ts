@@ -132,7 +132,8 @@ function matDiatomDots(p: string[]) {
   const g = G(rbox(45, 0.9, 35, main, {}, 0.4))
   for (let i = 0; i < 7; i++)
     for (let j = 0; j < 5; j++) {
-      const b = ball(1.4, dot, { x: -18 + i * 6, y: 0.9, z: -12 + j * 6 }, [1, 0.25, 1])
+      // 压扁的小圆点只露出上半个 0.35cm 高的鼓包：一圈 12 段、上下 4 段
+      const b = ball(1.4, dot, { x: -18 + i * 6, y: 0.9, z: -12 + j * 6 }, [1, 0.25, 1], [12, 4])
       b.userData.noOutline = true
       g.add(b)
     }
@@ -145,8 +146,10 @@ function matChenille(p: string[]) {
   const g = G(rbox(60, 0.8, 42, edge, {}, 0.35))
   for (let i = 0; i < 9; i++)
     for (let j = 0; j < 6; j++) {
-      // 半径 2.9 的球再放大 1.1 倍：外形还是 3.2 × 1.34 的扁绒粒，但落在小球的细分档（12×8），54 粒合计省一半三角面
-      const b = ball(2.9, (i + j) % 3 ? main : shade(main, -0.05), { x: -25.6 + i * 6.4, y: 1.4, z: -16 + j * 6.4 }, [1.1, 0.46, 1.1])
+      // 3.2 × 1.34 的扁绒粒 54 粒：段数写死 12 × 10（ball 的自适应按缩放后的大小算，会落到 16 × 12 一档，一张垫子近两万面）。
+      // 上下不能少于 10 段：毛刺边（fringe.ts）只认离顶面 0.05cm 以内的朝上三角面，段数再少顶上那一圈就不算顶面，
+      // 绒粒不长毛、反而描上深色轮廓线，整张垫子变样
+      const b = ball(2.9, (i + j) % 3 ? main : shade(main, -0.05), { x: -25.6 + i * 6.4, y: 1.4, z: -16 + j * 6.4 }, [1.1, 0.46, 1.1], [12, 10])
       g.add(b)
     }
   return g

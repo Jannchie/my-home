@@ -10,6 +10,7 @@
 import * as THREE from 'three'
 import { ball, cached, capsule, cup, cyl, face, leaf, puck, rbox, shade, toon, torus, tray } from '../toon'
 import { C, SWING_OPEN, ellipsePoly, movable, paintPanel, rectPoly, rng, shell, type AssetCategory, type AssetDef, type DoorMotion, type SurfaceDef } from '../kit'
+import { trayBox, trayBoxLevel } from '../cabinetKit'
 import { PI, cylXLegacy, cylZLegacy, fitInPlace, latheAt, lit, noOutlineDeep, rod3, taperRod3, type V3 } from '../geo'
 import { I, J, M, N, R, define, type Build, type Dims, type Pal } from '../packkit'
 
@@ -48,21 +49,12 @@ function moving(parts: THREE.Object3D[], pivot: V3, m: DoorMotion) {
   }
   return movable(g, m)
 }
-/** 抽屉盒（面板后面的箱子）：口宽 x0..x1，底 y，盒高 h，从 z1（面板背面）往后 depth */
-function trayParts(x0: number, x1: number, y: number, h: number, z1: number, depth: number, color: string): THREE.Object3D[] {
-  const w = x1 - x0
-  const cx = (x0 + x1) / 2
-  const zc = z1 - depth / 2
-  return [rbox(w, 1, depth, color, { x: cx, y, z: zc }, 0.2), rbox(1, h, depth, color, { x: x0 + 0.5, y, z: zc }, 0.2), rbox(1, h, depth, color, { x: x1 - 0.5, y, z: zc }, 0.2), rbox(w - 2, h, 1, color, { x: cx, y, z: z1 - depth + 0.5 }, 0.2)]
-}
+/** 抽屉盒（cabinetKit trayBox）的参数：[口 x0, 口 x1, 盒底 y, 盒高, 面板背面 z, 盒深] */
 type Tray = readonly [number, number, number, number, number, number]
-/** 抽屉格（和 trayParts 同样的参数），打开时随抽屉拉出 */
-function trayLevel([x0, x1, y, h, z1, depth]: Tray): SurfaceDef {
-  return { y: y + 1, h: Math.round((h - 1.5) * 10) / 10, inside: true, slide: Math.round(depth * 0.6), shape: [rectPoly(x0 + 1.2, z1 - depth + 1.2, x1 - 1.2, z1 - 0.4)] }
-}
+const trayLevel = (t: Tray) => trayBoxLevel(...t)
 /** 一个抽屉：面板等部件 + 盒子，标好拉出动作 */
 function drawer(face: THREE.Object3D[], [x0, x1, y, h, z1, depth]: Tray, color: string) {
-  return moving([...face, ...trayParts(x0, x1, y, h, z1, depth, color)], [0, 0, 0], { kind: 'drawer', dz: Math.round(depth * 0.6) })
+  return moving([...face, trayBox(x0, x1, y, h, z1, depth, color)], [0, 0, 0], { kind: 'drawer', dz: Math.round(depth * 0.6) })
 }
 
 /** 半透明材质（透明的不描边） */
@@ -411,7 +403,8 @@ function planterWood(p: string[]) {
     const g2 = new THREE.Group()
     for (let k = 0; k < 6; k++) {
       const a = (k / 6) * PI * 2 + r()
-      g2.add(leaf(6, k % 2 ? herb : shade(herb, -0.1), { x: x + Math.cos(a) * 1.4, y: 26 + r() * 10, z: Math.sin(a) * 1.4, ry: -a, rz: 0.5 }))
+      // 香草叶 6cm 长、不到 1cm 厚，一箱 30 片：同 leaf() 的比例，轮廓 12 段、厚度 4 段
+      g2.add(ball(3, k % 2 ? herb : shade(herb, -0.1), { x: x + Math.cos(a) * 1.4, y: 26 + r() * 10, z: Math.sin(a) * 1.4, ry: -a, rz: 0.5 }, [0.45, 0.12, 1], [12, 4]))
     }
     g2.add(noOutlineDeep(cyl(0.4, 0.4, 14, C.leafD, { x, y: 23 }, 4)))
     g.add(g2)
@@ -438,12 +431,12 @@ function planterTerracotta(p: string[]) {
     const z = (i % 2 ? 2.5 : -2.5) * 0.9
     const h = 18 + (i % 3) * 4
     g.add(noOutlineDeep(cyl(0.45, 0.45, h, C.leafD, { x, y: 15.5, z }, 4)))
-    g.add(leaf(10, C.leaf, { x: x + 1.2, y: 22, z, rz: -0.3, ry: 0.3 }))
-    // 郁金香：杯形花头 + 三片花瓣
-    g.add(cup(1.9, 1.3, 4.2, 0.3, petal, { x, y: 15.5 + h - 0.5, z }))
+    g.add(ball(5, C.leaf, { x: x + 1.2, y: 22, z, rz: -0.3, ry: 0.3 }, [0.45, 0.12, 1], [12, 6]))
+    // 郁金香：杯形花头 + 三片花瓣（花头直径不到 4cm：一圈 12 段，花瓣 8 段）
+    g.add(cup(1.9, 1.3, 4.2, 0.3, petal, { x, y: 15.5 + h - 0.5, z }, 12))
     for (let k = 0; k < 3; k++) {
       const a = (k / 3) * PI * 2 + i
-      g.add(ball(1.4, shade(petal, 0.05), { x: x + Math.cos(a) * 1.3, y: 15.5 + h + 2.4, z: z + Math.sin(a) * 1.3 }, [0.8, 1.5, 0.8]))
+      g.add(ball(1.4, shade(petal, 0.05), { x: x + Math.cos(a) * 1.3, y: 15.5 + h + 2.4, z: z + Math.sin(a) * 1.3 }, [0.8, 1.5, 0.8], [8, 6]))
     }
   }
   return g
@@ -1072,14 +1065,16 @@ function vaseJar(p: string[]) {
   const g = new THREE.Group()
   g.add(glassFlat(cup(5.2, 5.6, 12, 0.4, glassC), glassC, 0.38))
   g.add(noOutlineDeep(cyl(4.7, 5.1, 6, WATER, { y: 0.4 }, 24)))
-  g.add(torus(5.25, 0.45, ribbon, { y: 9.5, rx: PI / 2 }))
+  // 丝带贴着瓶身：圆周和瓶身同为 32 段，管截面 6 段
+  g.add(torus(5.25, 0.45, ribbon, { y: 9.5, rx: PI / 2 }, PI * 2, [6, 32]))
   g.add(rbox(2, 2.4, 0.6, ribbon, { x: 2, y: 7.6, z: 5.2, rz: 0.3 }, 0.2))
   const r = rng(5)
   for (let i = 0; i < 9; i++) {
     const a = (i / 9) * PI * 2
     const top: V3 = [Math.cos(a) * 4.5, 22 + r() * 5, Math.sin(a) * 3.2]
     g.add(rod3([Math.cos(a) * 1.2, 1, Math.sin(a) * 1.2], top, 0.18, C.leafD, 4))
-    for (let k = 0; k < 6; k++) g.add(ball(0.75, k % 3 ? bloom : C.white, { x: top[0] + (r() - 0.5) * 3.4, y: top[1] + (r() - 0.3) * 2.6, z: top[2] + (r() - 0.5) * 2.6 }))
+    // 满天星：1.5cm 的小花球 54 颗，8 × 4 段
+    for (let k = 0; k < 6; k++) g.add(ball(0.75, k % 3 ? bloom : C.white, { x: top[0] + (r() - 0.5) * 3.4, y: top[1] + (r() - 0.3) * 2.6, z: top[2] + (r() - 0.5) * 2.6 }, undefined, [8, 4]))
   }
   return g
 }

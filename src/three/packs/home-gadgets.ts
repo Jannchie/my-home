@@ -4,7 +4,7 @@
 // 原点在占地中心底面，正面朝 +z。都不声明 surface（绘图桌的斜面放不了东西），build 末尾 fitGroup 居中落地。
 
 import * as THREE from 'three'
-import { ball, cup, cyl, markWater, puck, rbox, shade, torus, tray } from '../toon'
+import { ball, box, cup, cyl, markWater, nub, puck, rbox, shade, torus, tray } from '../toon'
 import { C, paintPanel, shell, type AssetDef } from '../kit'
 import { batten, cylX, cylZ, dist, fitGroup, G, ghost, latheAt, lit, noOutline, P, PI, rod3, sideSlab, strutBox, tiltFrame, tube, UP, type V2, type V3 } from '../geo'
 import { CL, F, I, J, M, N, PROP, R, define, type Pal } from '../packkit'
@@ -33,7 +33,8 @@ function coil(a: V3, b: V3, r: number, turns: number, wire: number, color: strin
     pts.push([Math.cos(ang) * r, t * len, Math.sin(ang) * r])
   }
   const holder = new THREE.Group()
-  holder.add(tube(pts, wire, color, { seg: n * 2, radial: 4 }))
+  // 弹簧只有一两厘米粗：每个控制点一段、钢丝三棱截面就够
+  holder.add(tube(pts, wire, color, { seg: n, radial: 3 }))
   const va = new THREE.Vector3(...a)
   holder.position.copy(va)
   holder.quaternion.setFromUnitVectors(UP, new THREE.Vector3(...b).sub(va).normalize())
@@ -57,13 +58,13 @@ function towerFan(p: string[]) {
     const a = PI * 0.62 + (k / 4) * PI * 0.76
     g.add(cyl(0.65, 0.65, 0.5, accent, { x: Math.sin(a) * 4, y: 104, z: Math.cos(a) * 4 }, 10))
   }
-  g.add(lit(rbox(3.6, 0.5, 1.8, LED_BLUE, { y: 103.9, z: 2.6 }, 0.2), LED_BLUE, 0.7))
-  // 正面出风口：深色格栅底 + 一排竖条
+  g.add(lit(box(3.6, 0.5, 1.8, LED_BLUE, { y: 103.9, z: 2.6 }), LED_BLUE, 0.7))
+  // 正面出风口：深色格栅底 + 一排竖条（竖条嵌进格栅底 0.15）
   g.add(rbox(7.2, 72, 1.8, GRILLE, { y: 24, z: 5.85 }, 0.5))
-  for (let i = 0; i < 7; i++) g.add(rbox(0.5, 70, 0.4, body, { x: -2.7 + i * 0.9, y: 25, z: 7 }, 0.15))
+  for (let i = 0; i < 7; i++) g.add(nub(0.5, 70, 0.4, body, { x: -2.7 + i * 0.9, y: 25, z: 6.9 }))
   // 背面进风口：横条格栅
   g.add(rbox(6, 26, 1.8, GRILLE, { y: 14, z: -5.85 }, 0.5))
-  for (let i = 0; i < 5; i++) g.add(rbox(5.4, 0.5, 0.4, body, { y: 16 + i * 5, z: -7 }, 0.15))
+  for (let i = 0; i < 5; i++) g.add(nub(5.4, 0.5, 0.4, body, { y: 16 + i * 5, z: -6.9 }))
   return fitGroup(g)
 }
 
@@ -78,7 +79,7 @@ function bladelessFan(p: string[]) {
   // 进风孔：一圈竖向的深色长孔
   for (let k = 0; k < 18; k++) {
     const a = (k / 18) * PI * 2
-    g.add(P(rbox(1, 16, 0.7, GRILLE, {}, 0.25), Math.sin(a) * 6.35, 19, Math.cos(a) * 6.35, 0, a, 0))
+    g.add(P(nub(1, 16, 0.7, GRILLE), Math.sin(a) * 6.35, 19, Math.cos(a) * 6.35, 0, a, 0))
   }
   // 顶上的接口环
   g.add(cyl(5.6, 6.3, 1.4, accent, { y: 40.6 }, 28))
@@ -88,11 +89,11 @@ function bladelessFan(p: string[]) {
     const t = (i / 36) * PI * 2
     pts.push([Math.cos(t) * 7.2, 73.3 + Math.sin(t) * 29.5, 0])
   }
-  const ring = tube(pts, 2.1, body, { closed: true, seg: 96, radial: 10 })
+  const ring = tube(pts, 2.1, body, { closed: true, seg: 64, radial: 10 })
   ring.scale.z = 1.7
   g.add(ring)
   // 底座正面：小屏 + 电源键
-  g.add(lit(rbox(2.8, 1.4, 0.5, LED_BLUE, { y: 33, z: 6.45 }, 0.2), LED_BLUE, 0.7))
+  g.add(lit(box(2.8, 1.4, 0.5, LED_BLUE, { y: 33, z: 6.45 }), LED_BLUE, 0.7))
   g.add(cylZ(0.6, 0.5, accent, 0, 30.4, 6.5, 12))
   return fitGroup(g)
 }
@@ -109,7 +110,7 @@ function circulator(p: string[]) {
   g.add(rbox(26.8, 1.8, 3.2, sub, { y: 5.8 }, 0.6))
   for (const s of [-1, 1]) {
     g.add(rbox(1.6, 20, 3.2, sub, { x: s * 12.6, y: 5.8 }, 0.6))
-    g.add(cylX(1.8, 0.8, accent, s * 13.8, 24, 0, 14))
+    g.add(cylX(1.8, 0.8, accent, s * 13.6, 24, 0, 14))
   }
   // 底座正面：旋钮 + 指示灯
   g.add(cylZ(1.3, 1, sub, 5, 1.8, 11.1, 14))
@@ -119,16 +120,18 @@ function circulator(p: string[]) {
   h.add(cup(10.5, 10, 12, 1, body, { rx: PI / 2, z: -6 }))
   h.add(cylZ(3, 0.8, sub, 0, 0, -6.2, 18))
   for (const s of [-1, 1]) h.add(cylX(1.2, 3, sub, s * 11.5, 0, 0, 12))
+  // 电机：从筒底伸出来接住扇叶的毂
+  h.add(cylZ(1.6, 7, sub, 0, 0, -2, 12))
   // 扇叶：五片压扁的椭球 + 中心毂
   h.add(ball(2, accent, { z: 2 }))
   for (let k = 0; k < 5; k++) {
     const a = (k / 5) * PI * 2
-    h.add(P(ball(4, accent, {}, [1, 0.45, 0.12]), Math.cos(a) * 5, Math.sin(a) * 5, 1.6, 0, 0.25, a))
+    h.add(P(ball(4, accent, {}, [1, 0.45, 0.12], [12, 6]), Math.cos(a) * 5, Math.sin(a) * 5, 1.6, 0, 0.25, a))
   }
   // 格栅：外圈 + 两道同心圈 + 12 根螺旋辐条（中间往前鼓）+ 中心标牌
   h.add(torus(10.2, 0.55, sub, { z: 6.2 }))
   const domeZ = (r: number) => 6.4 + 0.8 * (1 - (r - 2.2) / 7.8)
-  for (const r of [5, 7.8]) h.add(torus(r, 0.22, sub, { z: domeZ(r) }))
+  for (const r of [5, 7.8]) h.add(torus(r, 0.22, sub, { z: domeZ(r) }, PI * 2, [4, 24]))
   for (let k = 0; k < 12; k++) {
     const a0 = (k / 12) * PI * 2
     const pts: V3[] = []
@@ -137,7 +140,7 @@ function circulator(p: string[]) {
       const a = a0 + (0.9 * i) / 6
       pts.push([Math.cos(a) * r, Math.sin(a) * r, domeZ(r)])
     }
-    h.add(tube(pts, 0.22, sub, { seg: 10, radial: 4 }))
+    h.add(tube(pts, 0.22, sub, { seg: 8, radial: 4 }))
   }
   h.add(cylZ(2.4, 1, accent, 0, 0, 7, 18))
   h.position.set(0, 24, 0)
@@ -152,22 +155,23 @@ const FD = { w: 34, d: 16, h: 34 }
 function futonDryer(p: string[]) {
   const [body, sub, accent] = p
   const g = new THREE.Group()
-  g.add(rbox(26, 27, 15, body, { x: 0 }, 3.5))
+  // 机身进深 14.4：前面的旋钮、后面的格栅凸出来以后整体不超过声明的 16
+  g.add(rbox(26, 27, 14.4, body, { x: 0 }, 3.5))
   // 顶部提手（半圆环，两端插进机身）
   g.add(torus(6, 1.1, sub, { y: 26.5 }, PI))
   // 正面操作区：面板、旋钮、两颗指示灯；下面一排出风百叶
-  g.add(rbox(16, 7, 0.8, sub, { y: 17, z: 7.45 }, 0.4))
-  g.add(cylZ(2, 1, accent, -4, 20.5, 8.2, 18))
+  g.add(rbox(16, 7, 0.8, sub, { y: 17, z: 7.15 }, 0.4))
+  g.add(cylZ(2, 0.8, accent, -4, 20.5, 7.6, 18))
   for (const [x, c] of [
     [2.5, LED_GREEN],
     [5, '#ffb347'],
   ] as [number, string][])
-    g.add(lit(rbox(1.4, 1.4, 0.4, c, { x, y: 19.8, z: 8 }, 0.2), c, 0.8))
-  for (let i = 0; i < 5; i++) g.add(rbox(14, 0.6, 0.6, GRILLE, { y: 4 + i * 1.6, z: 7.5 }, 0.2))
+    g.add(lit(box(1.4, 1.4, 0.4, c, { x, y: 19.8, z: 7.7 }), c, 0.8))
+  for (let i = 0; i < 5; i++) g.add(nub(14, 0.6, 0.6, GRILLE, { y: 4 + i * 1.6, z: 7.2 }))
   // 背面进风口：方形格栅
-  g.add(rbox(14, 12, 0.8, GRILLE, { y: 8, z: -7.45 }, 0.4))
-  for (let i = 0; i < 5; i++) g.add(rbox(12.6, 0.5, 0.4, body, { y: 9.2 + i * 2.2, z: -7.95 }, 0.15))
-  // 软管：侧面接口 → 往外弯下来 → 插进地上的出风嘴
+  g.add(rbox(14, 12, 0.8, GRILLE, { y: 8, z: -7.15 }, 0.4))
+  for (let i = 0; i < 5; i++) g.add(nub(12.6, 0.5, 0.4, body, { y: 9.2 + i * 2.2, z: -7.65 }))
+  // 软管：侧面接口 → 往外弯下来 → 插进地上的出风嘴（末端埋进出风嘴里，不露管口）
   g.add(cylX(2.4, 1.6, sub, 13.4, 13, 0, 18))
   g.add(
     tube(
@@ -175,17 +179,18 @@ function futonDryer(p: string[]) {
         [12.5, 13, 0],
         [15.5, 13, 0],
         [18, 11, -1],
-        [18.6, 6, -3],
-        [18.6, 2.4, -4.8],
+        [18.5, 6, -3],
+        [18.5, 2.6, -4.2],
+        [18.5, 0.8, -4.4],
       ],
       1.6,
       sub,
-      { seg: 30, radial: 10 },
+      { seg: 22, radial: 8 },
     ),
   )
   // 扁平出风嘴 + 顶面出风缝
-  g.add(rbox(5, 2.2, 13, sub, { x: 18.6 }, 0.8))
-  for (let i = 0; i < 4; i++) g.add(rbox(3.6, 0.6, 0.7, GRILLE, { x: 18.6, y: 1.9, z: -0.6 + i * 1.8 }, 0.2))
+  g.add(rbox(5, 2.2, 13, sub, { x: 18.5 }, 0.8))
+  for (let i = 0; i < 4; i++) g.add(nub(3.6, 0.6, 0.7, GRILLE, { x: 18.5, y: 1.9, z: -0.6 + i * 1.8 }))
   return fitGroup(g)
 }
 
@@ -202,10 +207,10 @@ function foodComposter(p: string[]) {
   g.add(cylX(1, 20, GRILLE, 0, 32.5, -18, 12))
   // 正面面板：指示灯条 + 三颗按键
   g.add(rbox(16, 6, 0.8, GRILLE, { y: 22.5, z: 18.15 }, 0.4))
-  g.add(lit(rbox(12, 0.8, 0.5, accent, { y: 26.6, z: 18.7 }, 0.2), accent, 0.8))
+  g.add(lit(box(12, 0.8, 0.5, accent, { y: 26.6, z: 18.7 }), accent, 0.8))
   for (const x of [-4, 0, 4]) g.add(cylZ(0.9, 0.6, WHITE, x, 24.3, 18.7, 12))
   // 背面：散热格栅 + 电源线接口
-  for (let i = 0; i < 4; i++) g.add(rbox(16, 0.6, 0.6, GRILLE, { y: 8 + i * 1.8, z: -18 }, 0.2))
+  for (let i = 0; i < 4; i++) g.add(nub(16, 0.6, 0.6, GRILLE, { y: 8 + i * 1.8, z: -18 }))
   g.add(cylZ(1.2, 1.2, GRILLE, 9, 5, -18.2, 12))
   return fitGroup(g)
 }
@@ -216,11 +221,12 @@ const WP = { w: 18, d: 38, h: 40 }
 function waterPurifier(p: string[]) {
   const [body, sub] = p
   const g = new THREE.Group()
-  g.add(rbox(18, 40, 30, body, { z: -4 }, 3))
+  // 机身比占地窄 0.4、矮 0.4：给侧面的水位窗和顶上的加水盖留出位置，整体不超出声明尺寸
+  g.add(rbox(17.6, 39.6, 30, body, { z: -4 }, 3))
   // 顶上的加水盖
-  g.add(rbox(14.5, 0.8, 24, sub, { y: 39.6, z: -4 }, 0.4))
+  g.add(rbox(14.5, 0.8, 24, sub, { y: 39.2, z: -4 }, 0.4))
   // 侧面水位窗
-  g.add(noOutline(rbox(0.6, 14, 4, WATER, { x: 9.1, y: 10, z: -10 }, 0.2)))
+  g.add(noOutline(box(0.6, 14, 4, WATER, { x: 8.9, y: 10, z: -10 })))
   // 触控面板：深色玻璃 + 发光的圆形图标和三条温度指示
   g.add(rbox(13, 9, 0.8, SCREEN, { y: 27, z: 11.15 }, 0.4))
   g.add(lit(cylZ(1.1, 0.3, LED_BLUE, 0, 32.4, 11.65, 16), LED_BLUE, 0.8))
@@ -229,16 +235,16 @@ function waterPurifier(p: string[]) {
     [0, WHITE],
     [4, '#ff8a6a'],
   ] as [number, string][])
-    g.add(lit(rbox(2.4, 0.7, 0.3, c, { x, y: 28.6, z: 11.6 }, 0.1), c, 0.8))
+    g.add(lit(box(2.4, 0.7, 0.3, c, { x, y: 28.6, z: 11.6 }), c, 0.8))
   // 出水嘴
   g.add(rbox(4, 3, 7, sub, { y: 21, z: 13.5 }, 1))
   g.add(cyl(0.8, 0.9, 1.6, STEEL, { y: 19.6, z: 15.5 }, 12))
   // 接水托盘：浅盘 + 格栅
-  g.add(tray(16, 1.4, 9, 0.6, sub, { z: 15 }))
-  for (let i = 0; i < 4; i++) g.add(rbox(14.6, 0.4, 0.5, GRILLE, { y: 0.6, z: 12 + i * 2 }, 0.15))
-  // 玻璃杯和里面的水
-  g.add(ghost(cup(2.9, 2.5, 9, 0.25, GLASS, { y: 1, z: 15 }), GLASS, 0.35))
-  g.add(ghost(cyl(2.55, 2.35, 6, WATER, { y: 1.3, z: 15 }, 20), WATER, 0.5))
+  g.add(tray(16, 1.4, 8.4, 0.6, sub, { z: 14.8 }))
+  for (let i = 0; i < 4; i++) g.add(nub(14.6, 0.4, 0.5, GRILLE, { y: 0.6, z: 12 + i * 2 }))
+  // 玻璃杯和里面的水（水比杯子内壁小一圈，段数和杯子一样）
+  g.add(ghost(cup(2.9, 2.5, 9, 0.25, GLASS, { y: 1, z: 15 }, 16), GLASS, 0.35))
+  g.add(ghost(cyl(2.45, 2.2, 6, WATER, { y: 1.3, z: 15 }, 16), WATER, 0.5))
   return fitGroup(g)
 }
 
@@ -254,10 +260,10 @@ function toothbrushSet(p: string[]) {
   g.add(cyl(2.3, 2.5, 2.4, dev, { x: bx, y: 1.4 }, 18))
   g.add(cyl(1.35, 1.45, 14.5, dev, { x: bx, y: 3.6 }, 16))
   g.add(cyl(1.5, 1.5, 0.6, accent, { x: bx, y: 15.4 }, 16))
-  g.add(noOutline(rbox(0.9, 1.6, 0.4, accent, { x: bx, y: 10, z: 1.4 }, 0.15)))
+  g.add(noOutline(box(0.9, 1.6, 0.4, accent, { x: bx, y: 10, z: 1.4 })))
   g.add(cyl(0.45, 0.75, 4.2, WHITE, { x: bx, y: 18 }, 10))
-  g.add(rbox(1, 2.4, 1.2, WHITE, { x: bx, y: 21.4 }, 0.4))
-  g.add(rbox(0.8, 1.8, 0.9, '#9fd8f0', { x: bx, y: 21.7, z: 0.9 }, 0.2))
+  g.add(nub(1, 2.4, 1.2, WHITE, { x: bx, y: 21.4 }))
+  g.add(nub(0.8, 1.8, 0.9, '#9fd8f0', { x: bx, y: 21.7, z: 0.9 }))
   // 两只替换刷头（立在小插座上，刷毛颜色不同）
   for (const [x, c] of [
     [-3.5, accent],
@@ -265,8 +271,8 @@ function toothbrushSet(p: string[]) {
   ] as [number, string][]) {
     g.add(cyl(1, 1.1, 1.2, dev, { x, y: 1.4 }, 12))
     g.add(cyl(0.45, 0.7, 3.5, WHITE, { x, y: 2.6 }, 10))
-    g.add(rbox(0.9, 2.2, 1.1, WHITE, { x, y: 5.6 }, 0.35))
-    g.add(rbox(0.7, 1.6, 0.8, c, { x, y: 5.9, z: 0.8 }, 0.2))
+    g.add(nub(0.9, 2.2, 1.1, WHITE, { x, y: 5.6 }))
+    g.add(nub(0.7, 1.6, 0.8, c, { x, y: 5.9, z: 0.8 }))
   }
   // 冲牙器：主机、半透明水箱（里面有水）、箱盖、立在前面卡座里的手柄和喷嘴
   const fx = 5.5
@@ -280,14 +286,14 @@ function toothbrushSet(p: string[]) {
   // 主机正面的按键和灯
   g.add(cylZ(0.6, 0.5, accent, fx - 1.6, 3.4, 4.35, 12))
   g.add(lit(ball(0.35, LED_GREEN, { x: fx + 1.6, y: 3.4, z: 4.3 }), LED_GREEN, 0.8))
-  // 软管：主机侧面 → 绕到手柄底部
+  // 软管：主机侧面 → 绕到手柄底部（两头都埋进零件里；最外一点留在托盘范围内）
   g.add(
     tube(
       [
         [9.6, 3, 2],
-        [10.8, 3.6, 4.2],
-        [9, 6, 4.6],
-        [6.6, 7.6, 3.6],
+        [10.4, 3.6, 4.1],
+        [9, 6, 4.5],
+        [6.3, 7.6, 3.3],
       ],
       0.35,
       WHITE,
@@ -312,52 +318,53 @@ function hairTools(p: string[]) {
   g.add(cylX(1.8, 1, accent, -3, cy, cz, 16))
   g.add(cylX(1.1, 13, STEEL, 4, cy, cz, 16))
   g.add(cylX(0.9, 1.6, DARK, 11.3, cy, cz, 12))
-  g.add(rbox(11, 0.6, 2.4, dev, { x: 4.2, y: cy + 1.1, z: cz }, 0.25))
+  g.add(rbox(11, 0.6, 2.4, dev, { x: 4.2, y: cy + 0.95, z: cz }, 0.25))
   g.add(cylZ(0.5, 2.6, accent, -2.2, cy + 1.3, cz, 10))
   g.add(P(rbox(3.2, 0.5, 1.4, dev, {}, 0.2), -4, cy + 1.9, cz, 0, 0, -0.3))
   // 直发夹（叠着横放）：下臂贴垫，上臂从铰链处微微张开，内侧是陶瓷夹板
   const fz = 3.8
   g.add(rbox(22, 1.4, 2.8, dev, { x: -1, y: 0.5, z: fz }, 0.6))
-  g.add(rbox(9, 0.3, 2.2, '#d9d4cc', { x: 5, y: 1.9, z: fz }, 0.1))
-  const top = G(rbox(22, 1.4, 2.8, dev, { x: 11 }, 0.6), rbox(9, 0.3, 2.2, '#d9d4cc', { x: 17, y: -0.3 }, 0.1))
-  top.add(lit(rbox(1.6, 0.3, 0.8, accent, { x: 4, y: 1.4 }, 0.1), accent, 0.7))
-  g.add(P(top, -12, 2.3, fz, 0, 0, 0.07))
+  g.add(box(9, 0.3, 2.2, '#d9d4cc', { x: 5, y: 1.9, z: fz }))
+  const top = G(rbox(22, 1.4, 2.8, dev, { x: 11 }, 0.6), box(9, 0.3, 2.2, '#d9d4cc', { x: 17, y: -0.3 }))
+  top.add(lit(box(1.6, 0.3, 0.8, accent, { x: 4, y: 1.4 }), accent, 0.7))
+  // 张开的角度不能再大：上臂末端要留在声明的 5cm 高度以内
+  g.add(P(top, -12, 2.2, fz, 0, 0, 0.06))
   g.add(cylZ(1.1, 3, accent, -11.2, 2.1, fz, 14))
-  // 电线：两根都从左端出来，沿着垫子前后沿绕到右后角，盘成一卷
+  // 电线：两根都从左端出来，沿着垫子前后沿绕到右后角，盘成一卷（线比垫面低 0.05：细管的截面是多边形，正好贴着会露缝）
   const cord = '#3a3b40'
   g.add(
     tube(
       [
         [-16.4, cy, cz],
         [-17.2, 0.9, -4.5],
-        [-14, 0.85, -6.2],
-        [0, 0.85, -6.3],
-        [11, 0.85, -6.1],
+        [-14, 0.8, -6.2],
+        [0, 0.8, -6.3],
+        [11, 0.8, -6.1],
         [12.4, 1.1, -5.6],
       ],
       0.35,
       cord,
-      { seg: 36, radial: 6 },
+      { seg: 28, radial: 5 },
     ),
   )
   g.add(
     tube(
       [
         [-12.4, 2.1, fz],
-        [-14.6, 0.85, 5.6],
-        [-8, 0.85, 6.6],
-        [6, 0.85, 6.6],
-        [12.4, 0.85, 6.2],
-        [14.6, 0.85, 3.6],
-        [14.6, 0.85, -1],
+        [-14.6, 0.8, 5.6],
+        [-8, 0.8, 6.6],
+        [6, 0.8, 6.6],
+        [12.4, 0.8, 6.2],
+        [14.6, 0.8, 3.6],
+        [14.6, 0.8, -1],
         [14, 1.1, -4.4],
       ],
       0.35,
       cord,
-      { seg: 44, radial: 6 },
+      { seg: 34, radial: 5 },
     ),
   )
-  for (const y of [0.85, 1.5]) g.add(torus(1.4, 0.35, cord, { x: 13.5, y, z: -5.3, rx: PI / 2 }))
+  for (const y of [0.8, 1.42]) g.add(torus(1.4, 0.35, cord, { x: 13.5, y, z: -5.3, rx: PI / 2 }, PI * 2, [5, 16]))
   return fitGroup(g)
 }
 
@@ -410,23 +417,23 @@ function footSpa(p: string[]) {
   const bowl = cup(18, 15, 23, 1.8, basin)
   bowl.scale.x = FS_SX
   g.add(bowl)
-  // 盆沿翻边
-  const rim = torus(18.3, 1, sub, { y: 22.6, rx: PI / 2 })
+  // 盆沿翻边（段数、起始角和盆身一样；外径 19，前后不超出占地）
+  const rim = torus(18.2, 0.8, sub, { y: 22.7, rx: PI / 2 }, PI * 2, [8, 32])
   rim.scale.x = FS_SX
   g.add(rim)
   // 盆底的按摩滚轮（左右两只脚各三根）和一排按摩凸点
-  for (const sx of [-1, 1]) for (const z of [-6, 0, 6]) g.add(cylX(1, 6, accent, sx * 6, 2.8, z, 12))
-  for (const z of [-9, -4.5, 0, 4.5, 9]) g.add(ball(0.7, accent, { y: 2, z }))
+  for (const sx of [-1, 1]) for (const z of [-6, 0, 6]) g.add(cylX(1, 6, accent, sx * 6, 2.6, z, 10))
+  for (const z of [-9, -4.5, 0, 4.5, 9]) g.add(ball(0.7, accent, { y: 2, z }, undefined, [6, 4]))
   // 水面
   const water = markWater(ghost(cyl(15.2, 15.2, 0.3, WATER, { y: 15.6 }, 32), WATER, 0.55))
   water.scale.x = FS_SX
   g.add(water)
   // 两端提手
-  for (const sx of [-1, 1]) g.add(torus(3.5, 0.8, sub, { x: sx * 19.6, y: 23.2, ry: PI / 2 }, PI))
+  for (const sx of [-1, 1]) g.add(torus(3.2, 0.8, sub, { x: sx * 19.6, y: 23, ry: PI / 2 }, PI, [6, 10]))
   // 前沿控制面板：发光小屏 + 两颗按键
-  g.add(rbox(12, 3.5, 5.5, sub, { y: 22.8, z: 16.6 }, 1.2))
-  g.add(lit(rbox(4, 0.4, 2, LED_BLUE, { x: -3, y: 26.1, z: 16.8 }, 0.1), LED_BLUE, 0.8))
-  for (const x of [2, 4.5]) g.add(cyl(0.8, 0.8, 0.5, accent, { x, y: 26.1, z: 16.8 }, 12))
+  g.add(rbox(12, 3.5, 5.2, sub, { y: 22.8, z: 16.4 }, 1.2))
+  g.add(lit(box(4, 0.4, 2, LED_BLUE, { x: -3, y: 26.1, z: 16.5 }), LED_BLUE, 0.8))
+  for (const x of [2, 4.5]) g.add(cyl(0.8, 0.8, 0.5, accent, { x, y: 26.1, z: 16.5 }, 12))
   return fitGroup(g)
 }
 
@@ -441,11 +448,12 @@ function powerStrip(p: string[]) {
   const xs = [-8, -4.6, -1.2, 2.2, 5.6, 9]
   for (const x of xs) {
     g.add(cyl(1.5, 1.5, 0.3, face, { x, y: 3.25 }, 16))
-    for (const s of [-1, 1]) g.add(noOutline(rbox(0.35, 0.3, 0.9, DARK, { x: x + s * 0.45, y: 3.4 }, 0.1)))
+    // 插着充电头的那一位整个被盖住，不画插槽
+    if (x !== 2.2) for (const s of [-1, 1]) g.add(noOutline(box(0.35, 0.3, 0.9, DARK, { x: x + s * 0.45, y: 3.4 })))
   }
   // 开关（红色发光）
   g.add(lit(rbox(2.4, 0.9, 3, '#ff4a3d', { x: 12.9, y: 3 }, 0.3), '#ff4a3d', 0.6))
-  // 插着的充电头 + 一根垂到桌上的数据线
+  // 插着的充电头 + 一根垂到桌上的数据线（落到桌面的那一段多给一个控制点：只给两点的话样条会往下鼓，把排插垫离桌面）
   g.add(rbox(3.2, 3, 3.2, charger, { x: 2.2, y: 3.4 }, 0.6))
   g.add(
     tube(
@@ -453,7 +461,8 @@ function powerStrip(p: string[]) {
         [2.2, 5, 1.4],
         [2.2, 4.9, 3.2],
         [2.6, 2.4, 3.9],
-        [4, 0.3, 3.9],
+        [4, 0.55, 3.9],
+        [6, 0.32, 3.7],
         [8, 0.3, 3.4],
       ],
       0.25,
@@ -461,15 +470,17 @@ function powerStrip(p: string[]) {
       { seg: 18, radial: 6 },
     ),
   )
+  // 数据线末端的接头（封住管口）
+  g.add(nub(1.4, 0.6, 0.8, charger, { x: 8.4, z: 3.35 }))
   // 电线和插头
   g.add(
     tube(
       [
         [-10.6, 1.7, 0],
         [-13, 1.5, -0.5],
-        [-15.5, 0.5, -1.8],
-        [-17.5, 0.45, -0.6],
-        [-17.8, 0.6, 0.6],
+        [-15.5, 0.6, -1.8],
+        [-17.5, 0.6, -0.6],
+        [-17.8, 0.7, 0.6],
       ],
       0.45,
       body,
@@ -477,7 +488,7 @@ function powerStrip(p: string[]) {
     ),
   )
   g.add(rbox(2.6, 1.6, 3, body, { x: -17.8, z: 1.8 }, 0.5))
-  for (const z of [1.2, 2.4]) g.add(rbox(1.4, 0.2, 0.5, STEEL, { x: -19.6, y: 0.6, z }, 0.05))
+  for (const z of [1.2, 2.4]) g.add(box(1.4, 0.2, 0.5, STEEL, { x: -19.6, y: 0.6, z }))
   return fitGroup(g)
 }
 
@@ -485,14 +496,15 @@ function powerStrip(p: string[]) {
 
 const CB = { w: 40, d: 14, h: 13 }
 function cableBox(p: string[]) {
-  const [box, lid] = p
+  const [boxC, lid] = p
   const g = new THREE.Group()
   const hole = [{ kind: 'arch' as const, x: 0, y: 2.5, w: 4.5, h: 5 }]
-  g.add(shell(34, 12, 14, 0.8, box, { top: false, left: hole, right: hole }))
-  g.add(rbox(35, 1.6, 15, lid, { y: 11.6 }, 0.5))
+  // 盒身比占地窄一圈：木盖四边各挑出 0.4～0.5，连盖子一起正好是声明的 14 × 13
+  g.add(shell(34, 11.8, 13.2, 0.8, boxC, { top: false, left: hole, right: hole }))
+  g.add(rbox(35, 1.6, 14, lid, { y: 11.4 }, 0.5))
   // 盒里藏着的排插（从出线口能看见一截）
   g.add(rbox(24, 3, 5, DARK, { y: 0.8 }, 0.6))
-  // 线：右边两根、左边一根，从排插出来穿过出线口垂到桌上
+  // 线：右边两根、左边一根，从排插出来穿过出线口垂到桌上（管口朝下贴着桌面）
   for (const z of [-0.8, 0.8])
     g.add(
       tube(
@@ -501,7 +513,7 @@ function cableBox(p: string[]) {
           [14, 3.6, z],
           [17.4, 3.6, z],
           [19, 2.4, z * 1.5],
-          [19.4, 0.45, z * 2 + 1],
+          [19.4, 0.26, z * 2 + 1],
         ],
         0.45,
         z < 0 ? '#3a3b40' : WHITE,
@@ -515,7 +527,7 @@ function cableBox(p: string[]) {
         [-14, 4, 0],
         [-17.4, 4, 0],
         [-19, 2.5, 0.4],
-        [-19.4, 0.45, 2],
+        [-19.4, 0.26, 2],
       ],
       0.45,
       '#3a3b40',
@@ -530,13 +542,13 @@ function cableBox(p: string[]) {
 const SD = { w: 24, d: 12, h: 15 }
 /** 侧面轮廓：前面一条斜面装屏，背面圆圆地收下来 */
 const SD_SIDE: [number, number][] = [
-  [-5.5, 0],
-  [6, 0],
-  [6, 1.6],
+  [-5.35, 0],
+  [5.55, 0],
+  [5.55, 1.6],
   [-0.2, 14.6],
   [-3, 14.2],
-  [-5.6, 11],
-  [-6, 4],
+  [-5.45, 11],
+  [-5.85, 4],
 ]
 function paintSmartScreen(c: CanvasRenderingContext2D, W: number, H: number) {
   const grd = c.createLinearGradient(0, 0, W, H)
@@ -604,15 +616,15 @@ function smartDisplay(p: string[]) {
   const g = new THREE.Group()
   g.add(sideSlab(SD_SIDE, 22, fabric, 0, { bevel: 0.6, bevelSeg: 2 }))
   // 斜面上的屏：深色边框 + 发光画面 + 顶边摄像头
-  const s = tiltFrame([6, 1.6], [-0.2, 14.6])
+  const s = tiltFrame([5.55, 1.6], [-0.2, 14.6])
   s.g.add(rbox(21, s.len - 0.4, 0.8, SCREEN, { y: 0.2, z: 0.15 }, 0.4))
   s.g.add(paintPanel(19, 11.8, 'gz-smart-display', paintSmartScreen, { y: 1.2, z: 0.6 }, 0.8))
   s.g.add(noOutline(cylZ(0.35, 0.3, '#4a4d55', 0, s.len - 0.9, 0.65, 10)))
   g.add(s.g)
   // 顶上两颗音量键、背面的电源口和一枚小标牌
   for (const x of [-2, 2]) g.add(P(rbox(2, 0.5, 1.2, shade(fabric, 0.06), {}, 0.2), x, 14.45, -1.6, -0.14))
-  g.add(cylZ(0.6, 0.6, GRILLE, 7, 2.5, -5.8, 12))
-  g.add(noOutline(cylZ(0.9, 0.4, '#9a9da6', 0, 8, -5.9, 16)))
+  g.add(cylZ(0.6, 0.6, GRILLE, 7, 2.5, -5.65, 12))
+  g.add(noOutline(cylZ(0.9, 0.4, '#9a9da6', 0, 8, -5.7, 16)))
   return fitGroup(g)
 }
 
@@ -643,24 +655,26 @@ function whiteboard(p: string[]) {
   b.add(rbox(117, 89, 3.2, WHITE, { y: -44.5 }, 0.4))
   // 笔迹（只在正面）：标题、三行字、一个圆圈图、箭头、柱状图
   const fz = 1.85
+  /** 直线笔迹（0.4 厚的薄片）的 z：背面埋进板面 0.05 */
+  const lz = fz - 0.1
   const wave = (x0: number, x1: number, y: number, amp: number, n: number, color: string) => {
     const pts: V3[] = []
     for (let i = 0; i <= n; i++) pts.push([x0 + ((x1 - x0) * i) / n, y + (i % 2 ? amp : -amp), fz])
-    return noOutline(tube(pts, 0.45, color, { seg: n * 3, radial: 4 }))
+    return noOutline(tube(pts, 0.45, color, { seg: n * 2, radial: 4 }))
   }
   b.add(wave(-48, -8, 32, 1.4, 12, '#3f6fd8'))
-  b.add(noOutline(rbox(40, 0.6, 0.4, '#3f6fd8', { x: -28, y: 27.5, z: fz }, 0.15)))
+  b.add(noOutline(box(40, 0.6, 0.4, '#3f6fd8', { x: -28, y: 27.5, z: lz })))
   for (const [i, y] of [16, 8, 0].entries()) b.add(wave(-48, -14 - i * 5, y, 0.8, 14, '#2b2d33'))
-  b.add(P(noOutline(torus(9, 0.35, '#e8483f')), 26, 16, fz))
+  b.add(P(noOutline(torus(9, 0.35, '#e8483f', {}, PI * 2, [4, 24])), 26, 16, fz))
   b.add(wave(20, 32, 16, 0.7, 5, '#e8483f'))
-  b.add(P(noOutline(rbox(14, 0.6, 0.4, '#2b2d33', {}, 0.15)), 6, 14, fz, 0, 0, 0.2))
-  for (const s of [-1, 1]) b.add(P(noOutline(rbox(3.4, 0.6, 0.4, '#2b2d33', {}, 0.15)), 12.2, 15.3 + s * 0.9, fz, 0, 0, 0.2 + s * 0.7))
+  b.add(P(noOutline(box(14, 0.6, 0.4, '#2b2d33')), 6, 14, lz, 0, 0, 0.2))
+  for (const s of [-1, 1]) b.add(P(noOutline(box(3.4, 0.6, 0.4, '#2b2d33')), 12.2, 15.3 + s * 0.9, lz, 0, 0, 0.2 + s * 0.7))
   // 柱状图：底线 + 三根绿柱
-  b.add(noOutline(rbox(30, 0.6, 0.4, '#2b2d33', { x: -30, y: -36, z: fz }, 0.15)))
-  for (const [i, hh] of [10, 16, 7].entries()) b.add(noOutline(rbox(5, hh, 0.4, '#3f9e5b', { x: -40 + i * 9, y: -35.4, z: fz }, 0.15)))
+  b.add(noOutline(box(30, 0.6, 0.4, '#2b2d33', { x: -30, y: -36, z: lz })))
+  for (const [i, hh] of [10, 16, 7].entries()) b.add(noOutline(box(5, hh, 0.4, '#3f9e5b', { x: -40 + i * 9, y: -35.4, z: lz })))
   // 贴纸 + 压着它的磁贴，另外几颗散落的磁贴
-  b.add(rbox(18, 24, 0.2, '#fff3a8', { x: 36, y: -38, z: 1.75 }, 0.05))
-  b.add(cylZ(1.4, 0.8, accA, 36, -15.5, 2.25, 14))
+  b.add(box(18, 24, 0.3, '#fff3a8', { x: 36, y: -38, z: 1.7 }))
+  b.add(cylZ(1.4, 0.8, accA, 36, -15.5, 2.2, 14))
   for (const [x, y, c] of [
     [-54, 40, accB],
     [54, 40, accA],
@@ -668,18 +682,18 @@ function whiteboard(p: string[]) {
     [-4, 40, accA],
   ] as [number, number, string][])
     b.add(cylZ(1.4, 0.8, c, x, y, 2, 14))
-  // 下沿笔槽：托板 + 前挡边，两支笔和一块板擦
-  b.add(rbox(70, 1, 5, STEEL, { y: -47, z: 3.8 }, 0.3))
-  b.add(rbox(70, 1.6, 0.6, STEEL, { y: -47, z: 6 }, 0.2))
+  // 下沿笔槽：托板（后沿咬进边框下沿 0.6）+ 前挡边，两支笔和一块板擦
+  b.add(rbox(70, 1, 5.6, STEEL, { y: -46.6, z: 3.5 }, 0.3))
+  b.add(rbox(70, 1.6, 0.6, STEEL, { y: -46.6, z: 6 }, 0.2))
   for (const [x, z, c] of [
     [-20, 3, accA],
     [-6, 4.6, accB],
   ] as [number, number, string][]) {
-    b.add(cylX(0.7, 12, c, x, -45.3, z, 10))
-    b.add(cylX(0.75, 3, c, x - 6.5, -45.3, z, 10))
+    b.add(cylX(0.7, 12, c, x, -44.9, z, 10))
+    b.add(cylX(0.75, 3, c, x - 6.5, -44.9, z, 10))
   }
-  b.add(rbox(10, 2.2, 3.6, '#5a4a3a', { x: 22, y: -46, z: 3.8 }, 0.6))
-  b.add(rbox(10, 1, 3.6, frame, { x: 22, y: -43.8, z: 3.8 }, 0.3))
+  b.add(rbox(10, 2.2, 3.6, '#5a4a3a', { x: 22, y: -45.6, z: 3.8 }, 0.6))
+  b.add(rbox(10, 1, 3.6, frame, { x: 22, y: -43.4, z: 3.8 }, 0.3))
   b.position.set(0, 122, 0)
   g.add(b)
   return fitGroup(g)
@@ -759,22 +773,22 @@ function penDisplay(p: string[]) {
   const s = tiltFrame(a, b)
   s.g.add(rbox(42, 26, 1.6, SCREEN, { z: -0.8 }, 0.6))
   s.g.add(paintPanel(36, 21, 'gz-pen-display', paintSketch, { x: 0.5, y: 2.5, z: 0.06 }, 0.8))
-  for (let k = 0; k < 4; k++) s.g.add(rbox(1.6, 1.6, 0.4, '#3a3d44', { x: -19.6, y: 7 + k * 3, z: 0.2 }, 0.2))
+  for (let k = 0; k < 4; k++) s.g.add(box(1.6, 1.6, 0.4, '#3a3d44', { x: -19.6, y: 7 + k * 3, z: 0.2 }))
   g.add(s.g)
-  // 背后的撑脚：从屏背面斜撑到底板，顶上一根铰链
+  // 背后的撑脚：从屏背面斜撑到底板，顶上一根铰链（比撑脚宽，两头露出来）
   g.add(batten([0, 12.8, -3.8], [0, 1.2, -11.5], 30, 1.2, stand, 0.4))
-  g.add(cylX(0.8, 28, GRILLE, 0, 12.6, -4.1, 10))
-  // 压感笔（横躺在前面）+ 圆形笔座（插着几只替换笔尖）
+  g.add(cylX(0.8, 32, GRILLE, 0, 12.6, -4.1, 10))
+  // 压感笔（横躺在前面）+ 圆形笔座（插着几只替换笔尖；放在挡边前面，不和挡边、屏的下沿穿插）
   const pen = '#3d3f44'
   g.add(cylX(0.55, 15, pen, -4, 1.75, 13.2, 12))
   g.add(cylX(0.6, 1.2, accent, -1, 1.75, 13.2, 12))
   g.add(P(cyl(0.12, 0.55, 2, pen, {}, 10), 4.5, 1.75, 13.2, 0, 0, -PI / 2))
-  g.add(cup(1.8, 2.1, 3, 0.4, accent, { x: 15, y: 1.2, z: 11.6 }))
+  g.add(cup(1.5, 1.7, 3, 0.35, accent, { x: 15, y: 1.2, z: 13.2 }, 16))
   for (const [dx, dz] of [
-    [-0.5, 0.3],
-    [0.6, -0.2],
+    [-0.4, 0.3],
+    [0.5, -0.2],
   ])
-    g.add(cyl(0.15, 0.15, 2.8, '#e8e8e4', { x: 15 + dx, y: 1.8, z: 11.6 + dz }, 6))
+    g.add(cyl(0.15, 0.15, 2.8, '#e8e8e4', { x: 15 + dx, y: 1.5, z: 13.2 + dz }, 6))
   return fitGroup(g)
 }
 
@@ -788,8 +802,8 @@ function draftingTable(p: string[]) {
   const s = tiltFrame([34.64, 58], [-34.64, 98])
   s.g.add(rbox(104, 80, 2.4, wood, { z: -1.2 }, 0.6))
   s.g.add(rbox(104, 1.6, 4.4, metal, { y: -1.6, z: -0.2 }, 0.5))
-  s.g.add(rbox(64, 46, 0.2, '#f6f3ea', { x: 6, y: 18, z: 0.15 }, 0.05))
-  s.g.add(rbox(86, 4.5, 0.4, accent, { x: -9, y: 40, z: 0.5 }, 0.15))
+  s.g.add(box(64, 46, 0.2, '#f6f3ea', { x: 6, y: 18, z: 0.08 }))
+  s.g.add(box(87, 4.5, 0.4, accent, { x: -9.5, y: 40, z: 0.36 }))
   s.g.add(rbox(2.2, 16, 3.2, accent, { x: -53.1, y: 33.25, z: -0.9 }, 0.5))
   s.g.add(cylX(2.4, 56, '#f2ede0', 10, 2.4, 2.4, 16))
   s.g.add(cylX(2, 56.3, '#d9d0bc', 10, 2.4, 2.4, 16))
@@ -827,14 +841,14 @@ function binoculars(p: string[]) {
     g.add(cylZ(2.7, 9, body, x, cy, 0.5, 20))
     g.add(cylZ(2.8, 3.2, armor, x, cy, 1.4, 20))
     // 物镜：外圈 + 镜片
-    g.add(cylZ(3, 1.6, armor, x, cy, 5.6, 20))
-    g.add(noOutline(cylZ(2.4, 0.3, '#3a5a8a', x, cy, 6.4, 20)))
+    g.add(cylZ(3, 1.4, armor, x, cy, 5.5, 20))
+    g.add(noOutline(cylZ(2.4, 0.3, '#3a5a8a', x, cy, 6.2, 20)))
     // 目镜 + 橡胶眼罩 + 目镜片
     g.add(cylZ(1.7, 2, body, x, cy, -5, 16))
-    g.add(cylZ(2.1, 1.8, RUBBER, x, cy, -6.9, 16))
-    g.add(noOutline(cylZ(1.2, 0.2, '#2a3a55', x, cy, -7.85, 14)))
-    // 挂绳扣
-    g.add(torus(0.5, 0.15, accent, { x: sx * 6.45, y: cy + 0.4, z: -3, ry: PI / 2 }))
+    g.add(cylZ(2.1, 1.5, RUBBER, x, cy, -6.75, 16))
+    g.add(noOutline(cylZ(1.2, 0.2, '#2a3a55', x, cy, -7.55, 14)))
+    // 挂绳扣：立在镜筒外侧的小环，里半圈埋进镜筒
+    g.add(torus(0.5, 0.15, accent, { x: sx * 6.45, y: cy + 0.4, z: -3 }, PI * 2, [5, 10]))
   }
   // 两道连接桥 + 中轴 + 调焦轮
   for (const z of [3, -2.5]) g.add(rbox(3.6, 1.6, 2.4, armor, { y: cy + 0.2, z }, 0.5))
@@ -844,9 +858,9 @@ function binoculars(p: string[]) {
   g.add(
     tube(
       [
-        [6.5, cy + 0.2, -3],
-        [7.6, 1.4, -3.6],
-        [7.6, 0.3, -2.4],
+        [6.95, cy + 0.4, -3],
+        [7.4, 1.4, -3.6],
+        [7.1, 0.3, -2.4],
       ],
       0.25,
       accent,
@@ -855,9 +869,9 @@ function binoculars(p: string[]) {
   )
   for (const [y, r] of [
     [0.3, 2.2],
-    [0.75, 1.9],
+    [0.78, 1.9],
   ]) {
-    const loop = torus(r, 0.25, accent, { x: 8.8, y, z: 0.2, rx: PI / 2 })
+    const loop = torus(r, 0.25, accent, { x: 8.3, y, z: 0.2, rx: PI / 2 }, PI * 2, [5, 16])
     loop.scale.y = 1.6
     g.add(loop)
   }
@@ -893,10 +907,10 @@ function rcCar(p: string[]) {
   car.add(rbox(24, 4, 12.5, shellC, { y: 8.5 }, 1.5))
   car.add(rbox(10, 4, 11, shellC, { x: -1, y: 12.3 }, 1.6))
   car.add(noOutline(rbox(7, 2.2, 11.2, '#2a3340', { x: -1.5, y: 13.2 }, 0.3)))
-  car.add(noOutline(rbox(0.3, 2.4, 9, '#2a3340', { x: 4.05, y: 13.1 }, 0.1)))
-  for (const sz of [-1, 1]) car.add(noOutline(rbox(14, 1, 0.3, accent, { x: 2, y: 10, z: sz * 6.35 }, 0.1)))
+  car.add(noOutline(box(0.3, 2.4, 9, '#2a3340', { x: 4.05, y: 13.1 })))
+  for (const sz of [-1, 1]) car.add(noOutline(box(14, 1, 0.3, accent, { x: 2, y: 10, z: sz * 6.35 })))
   car.add(rbox(1, 1, 10, DARK, { x: -2, y: 16.2 }, 0.3))
-  for (const sz of [-1, 1]) car.add(lit(rbox(0.6, 0.8, 1.6, '#fff2b8', { x: -1.2, y: 16.3, z: sz * 2.5 }, 0.2), '#fff2b8', 0.7))
+  for (const sz of [-1, 1]) car.add(lit(box(0.6, 0.8, 1.6, '#fff2b8', { x: -1.2, y: 16.3, z: sz * 2.5 }), '#fff2b8', 0.7))
   // 天线
   car.add(cyl(0.15, 0.2, 5, DARK, { x: -10, y: 12.4, z: -4 }, 6))
   car.add(ball(0.35, accent, { x: -10, y: 17.5, z: -4 }))
@@ -912,7 +926,7 @@ function rcCar(p: string[]) {
   r.add(cylX(2, 1.3, accent, 3.6, 10, 2.5, 16))
   r.add(cyl(0.25, 0.35, 5, DARK, { y: 12.4, z: -5 }, 6))
   r.add(lit(ball(0.35, LED_GREEN, { y: 12.4, z: 4 }), LED_GREEN, 0.8))
-  r.position.x = 15.5
+  r.position.set(15.5, -0.3, 0)
   g.add(r)
   return fitGroup(g)
 }
@@ -960,10 +974,10 @@ function dressForm(p: string[]) {
   // 三脚支架：中心毂 + 三条斜腿 + 脚头圆珠
   g.add(cyl(2.4, 2.8, 6, wood, { y: 14 }, 16))
   for (const a of [-PI / 2, PI / 6, (PI * 5) / 6]) {
-    const fx = Math.cos(a) * 19
-    const fz = Math.sin(a) * 19
+    const fx = Math.cos(a) * 18.5
+    const fz = Math.sin(a) * 18.5
     g.add(strutBox([Math.cos(a) * 1.5, 16, Math.sin(a) * 1.5], [fx, 1.2, fz], 2.4, 1.8, wood, 0.6))
-    g.add(ball(1.2, wood, { x: fx, y: 1.2, z: fz }))
+    g.add(ball(1.2, wood, { x: fx, y: 1.2, z: fz }, undefined, [8, 6]))
   }
   // 立杆 + 调高卡箍
   g.add(cyl(1.2, 1.2, 83, wood, { y: 18 }, 12))
@@ -973,7 +987,8 @@ function dressForm(p: string[]) {
   const torso = latheAt(DF_PROFILE, fabric, {}, 32)
   torso.scale.z = DF_Z
   g.add(torso)
-  const waist = noOutline(torus(formR(122) + 0.05, 0.22, shade(fabric, -0.18), { y: 122, rx: PI / 2 }))
+  // 腰线贴着躯干：一圈的段数和躯干一样（32），细线的截面 4 段
+  const waist = noOutline(torus(formR(122) + 0.05, 0.22, shade(fabric, -0.18), { y: 122, rx: PI / 2 }, PI * 2, [4, 32]))
   waist.scale.y = DF_Z
   g.add(waist)
   g.add(puck(5.6, 2.6, wood, { y: 154.6 }))
@@ -993,12 +1008,12 @@ function dressForm(p: string[]) {
     [tx, 140, formZ(tx, 140, -1)],
     [tx + 0.2, 128, formZ(tx, 140, -1) - 0.3],
   ]
-  g.add(tube([...front, [tx, 150.4, 0], ...back], 0.35, tape, { seg: 48, radial: 6 }))
+  g.add(tube([...front, [tx, 150.4, 0], ...back], 0.35, tape, { seg: 40, radial: 5 }))
   for (const [y, z] of [
     [120, front[0][2]],
     [128, back[3][2]],
   ])
-    g.add(rbox(1, 0.8, 1, STEEL, { x: tx + 0.25, y: y - 0.8, z }, 0.1))
+    g.add(box(1, 0.8, 1, STEEL, { x: tx + 0.25, y: y - 0.8, z }))
   // 珠针：针身斜插进胸前，彩色圆头
   for (const [x, y, c] of [
     [-6, 136, '#e8483f'],
@@ -1009,7 +1024,7 @@ function dressForm(p: string[]) {
     const z0 = formZ(x, y, 1, -0.6)
     const z1 = formZ(x, y, 1, 0.9)
     g.add(rod3([x, y, z0], [x, y + 0.4, z1], 0.08, STEEL, 4))
-    g.add(ball(0.45, c, { x, y: y + 0.45, z: z1 + 0.3 }))
+    g.add(ball(0.45, c, { x, y: y + 0.45, z: z1 + 0.3 }, undefined, [6, 4]))
   }
   return fitGroup(g)
 }
@@ -1025,18 +1040,18 @@ function threadRack(p: string[]) {
   // 架子：底座、背板、背后两块撑脚、顶上一条横梁
   g.add(rbox(26, 1.8, 11.5, wood, { x: rx, z: -0.75 }, 0.5))
   g.add(rbox(24, 31.4, 1.4, wood, { x: rx, y: 1.8, z: -3 }, 0.4))
-  for (const s of [-1, 1]) g.add(rbox(1.4, 10, 2.5, wood, { x: rx + s * 11.3, y: 1.8, z: -4.95 }, 0.3))
+  for (const s of [-1, 1]) g.add(rbox(1.4, 10, 2.5, wood, { x: rx + s * 11.3, y: 1.7, z: -4.85 }, 0.3))
   g.add(rbox(25, 1.6, 2.2, wood, { x: rx, y: 33, z: -3 }, 0.4))
   // 四排木钉，每根插一只线轴（木钉微微上翘）
   let k = 0
   for (const y of [6.5, 13.5, 20.5, 27.5])
     for (let i = 0; i < 6; i++) {
       const spool = new THREE.Group()
-      spool.add(cylZ(0.22, 3.6, shade(wood, -0.1), 0, 0, 1.5, 6))
+      spool.add(cylZ(0.22, 3.6, shade(wood, -0.1), 0, 0, 1.5, 5))
       // 线团几乎和后挡片一样粗，前端只留一圈小木挡：正面看得见线的颜色
-      spool.add(cylZ(1.4, 2.3, THREADS[(k++ * 5) % THREADS.length], 0, 0, 1.65, 14))
-      spool.add(cylZ(1.55, 0.35, shade(wood, 0.08), 0, 0, 0.4, 14))
-      spool.add(cylZ(0.95, 0.35, shade(wood, 0.08), 0, 0, 2.85, 12))
+      spool.add(cylZ(1.4, 2.3, THREADS[(k++ * 5) % THREADS.length], 0, 0, 1.65, 10))
+      spool.add(cylZ(1.55, 0.35, shade(wood, 0.08), 0, 0, 0.4, 8))
+      spool.add(cylZ(0.95, 0.35, shade(wood, 0.08), 0, 0, 2.85, 8))
       spool.position.set(rx - 9 + i * 3.6, y, -2.3)
       spool.rotation.x = -0.25
       g.add(spool)
@@ -1048,7 +1063,7 @@ function threadRack(p: string[]) {
   ] as [number, number, number, number, string][]) {
     g.add(cylZ(r, len, c, 12.5, y, z, 20))
     g.add(cylZ(r - 0.5, len + 0.3, shade(c, 0.12), 12.5, y, z, 20))
-    g.add(cylZ(0.8, len + 0.6, '#c9a878', 12.5, y, z, 12))
+    g.add(cylZ(0.8, len + 0.6, '#c9a878', 12.5, y, z, 8))
     g.add(noOutline(cylZ(0.5, len + 0.8, '#5a4a3a', 12.5, y, z, 10)))
   }
   return fitGroup(g)

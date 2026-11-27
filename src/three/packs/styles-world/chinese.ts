@@ -5,7 +5,7 @@
 import * as THREE from 'three'
 import { ball, cyl, rbox, torus } from '../../toon'
 import { C, gridHoles, hangingPipe, holePanel, pipeHook, rectPoly, type SurfaceDef } from '../../kit'
-import { batten, cappedTube, cylZ, latheAt, lit, rod3 } from '../../geo'
+import { batten, cappedTube, cylZ, latheAt, lit, rod3, type TubeOpts } from '../../geo'
 import { drawerLv, drawerOf, hollow, swingDoor } from '../../cabinetKit'
 import { TUBE, brassPlate, cabriole, lowerSeat, prism, sidePrism, strip, tone, waistBase, type P2 } from './common'
 
@@ -48,16 +48,18 @@ export function cnQuanyi(p: string[]) {
   const g = new THREE.Group()
   const X = 23
   const Z = 20
+  // 圆材直径 3～4cm：截面 8 段。腿下半截是直的、上半截微弯，沿长 12 段；椅圈每个控制点 6 段（前端出头的小弯要留够）
+  const LEG: TubeOpts = { ...TUBE, caps: false, seg: 12, radial: 8 }
   for (const s of [-1, 1]) {
-    g.add(cappedTube([[s * X, 0, -Z], [s * X, 46, -Z], [s * (X - 1), 85, -Z - 1.5]], 1.7, wood, { ...TUBE, caps: false }))
-    g.add(cappedTube([[s * X, 0, Z], [s * X, 46, Z], [s * (X + 1.5), 64, Z + 1]], 1.7, wood, { ...TUBE, caps: false }))
+    g.add(cappedTube([[s * X, 0, -Z], [s * X, 46, -Z], [s * (X - 1), 85, -Z - 1.5]], 1.7, wood, LEG))
+    g.add(cappedTube([[s * X, 0, Z], [s * X, 46, Z], [s * (X + 1.5), 64, Z + 1]], 1.7, wood, LEG))
     g.add(rod3([s * X, 16, -Z], [s * X, 16, Z], 1, dark))
     g.add(rod3([s * (X + 0.4), 48, 4], [s * (X + 2.4), 66.5, 4], 0.8, wood))
   }
   // 椅圈：后高前低，前端越过鹅脖向外出头
   const half: [number, number, number][] = [[28, 66.5, 26], [25.5, 64.5, 20], [25.6, 67, 6], [24.4, 75, -9], [21.8, 84.5, -19.5], [13, 90.5, -25], [0, 92.5, -26.5]]
   const ring = [...half.map(([x, y, z]) => [-x, y, z] as [number, number, number]), ...half.slice(0, -1).reverse()]
-  g.add(cappedTube(ring, 1.9, wood, TUBE))
+  g.add(cappedTube(ring, 1.9, wood, { ...TUBE, seg: { per: 6, min: 12 }, radial: 8, capSeg: [8, 6] }))
   const splat: P2[] = [[-Z + 0.5, 48], [-Z + 1.6, 60], [-Z + 2, 72], [-Z + 0.4, 83], [-Z - 2.6, 90], [-Z - 5.8, 92.6]]
   g.add(sidePrism(strip(splat, 1.6), 16, wood, 0))
   g.add(rbox(52, 4, 45, wood, { y: 44 }, 1))

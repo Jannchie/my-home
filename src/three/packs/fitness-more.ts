@@ -4,7 +4,7 @@
 // 壁挂件（指力板、吊环）按离地高度建，背面贴 z = -d/2。type / tags / mats 直接写在 def 里。
 
 import * as THREE from 'three'
-import { ball, cup, cyl, rbox, shade, torus } from '../toon'
+import { ball, box, cup, cyl, nub, rbox, shade, torus } from '../toon'
 import { C, paintPanel, type AssetDef } from '../kit'
 import { cylX, cylZ, fitGroup, fitWall, G, latheAt, lit, noOutline, P, PI, rod3, sideSlab, strutBox, taperRod3, tiltFrame, tube, type V3 } from '../geo'
 import { I, J, M, N, PROP, R, define, type Pal } from '../packkit'
@@ -60,10 +60,10 @@ function miniTrampoline(p: string[]) {
   const g = new THREE.Group()
   const y = TR.y
   // 钢圈和跳面
-  g.add(P(torus(TR.r, 1.6, frame), 0, y - 1, 0, PI / 2))
+  g.add(P(torus(TR.r, 1.6, frame, {}, PI * 2, [6, 32]), 0, y - 1, 0, PI / 2))
   g.add(cyl(41, 41, 0.6, MAT, { y: y - 0.6 }, 40))
   // 跳面上一圈缝线
-  g.add(P(noOutline(torus(36, 0.3, '#4a4b52')), 0, y + 0.05, 0, PI / 2))
+  g.add(P(noOutline(torus(36, 0.3, '#4a4b52', {}, PI * 2, [4, 32])), 0, y + 0.05, 0, PI / 2))
   // 弹簧护套：压扁的粗圆环，盖住钢圈和弹簧
   const pad = P(torus(46, 5.6, cover), 0, y + 0.6, 0, PI / 2)
   pad.scale.set(1, 1, 0.42)
@@ -74,7 +74,7 @@ function miniTrampoline(p: string[]) {
     const c = Math.sin(a)
     const s = Math.cos(a)
     g.add(rod3([c * TR.r, y - 1, s * TR.r], [c * 52, 1.6, s * 52], 1.3, frame, 8))
-    g.add(cyl(2.4, 2.8, 1.8, RUBBER, { x: c * 52, z: s * 52 }, 12))
+    g.add(cyl(2.4, 2.8, 1.8, RUBBER, { x: c * 52, z: s * 52 }, 10))
   }
   // T 形扶手：卡扣夹在钢圈后沿，立杆往上，顶端一根横把 + 两只泡棉握把
   const pz = TR.post
@@ -110,7 +110,7 @@ function stepper(p: string[]) {
     const pd = new THREE.Group()
     pd.add(rbox(13, 3, 30, pedal, { z: -15 }, 1))
     // 防滑橡胶条
-    for (let k = 0; k < 4; k++) pd.add(noOutline(rbox(10.5, 0.5, 1.4, RUBBER, { y: 2.8, z: -26 + k * 6.5 }, 0.2)))
+    for (let k = 0; k < 4; k++) pd.add(noOutline(box(10.5, 0.5, 1.4, RUBBER, { y: 2.8, z: -26 + k * 6.5 })))
     P(pd, x, py - 1.5, pz, a)
     g.add(pd)
     // 液压缸：粗缸筒坐在底座上，细活塞杆顶到踏板底
@@ -124,9 +124,10 @@ function stepper(p: string[]) {
   g.add(strutBox([0, top - 0.5, -15], [0, 104, -12], 4.2, 4.2, frame))
   g.add(cylX(1.5, 34, frame, 0, 103, -12, 12))
   for (const s of [-1, 1]) g.add(cylX(2.2, 11, RUBBER, s * 13, 103, -12, 12))
-  const con = G(rbox(14, 9, 5, frame, { y: -4.5 }, 1.6), lit(rbox(10, 5, 0.6, SCREEN, { y: -2.5, z: 2.5 }, 0.2), SCREEN, 0.5))
-  for (const s of [-1, 1]) con.add(noOutline(rbox(2, 1.2, 0.6, acc, { x: s * 5, y: 3, z: 2.5 }, 0.2)))
-  g.add(P(con, 0, 109, -12, -0.35))
+  const con = G(rbox(14, 9, 5, frame, { y: -4.5 }, 1.6), lit(box(10, 5, 0.6, SCREEN, { y: -2.5, z: 2.5 }), SCREEN, 0.5))
+  for (const s of [-1, 1]) con.add(noOutline(box(2, 1.2, 0.6, acc, { x: s * 5, y: 3, z: 2.5 })))
+  // 显示屏坐在横把和立柱顶上（后仰着，底面中间压进横把一点）
+  g.add(P(con, 0, 108, -12, -0.35))
   return fitGroup(g)
 }
 
@@ -155,7 +156,7 @@ function powerTower(p: string[]) {
     g.add(cylZ(1.8, 16, frame, ax, 124.2, 15, 12))
     g.add(cylZ(2.6, 13, FOAM, ax, 124.2, 17.5, 14))
     g.add(rbox(10, 5, 26, pad, { x: ax, y: 126, z: -6 }, 2))
-    g.add(noOutline(rbox(10.4, 1, 26.4, acc, { x: ax, y: 127.6, z: -6 }, 0.4)))
+    g.add(noOutline(box(10.4, 1, 26.4, acc, { x: ax, y: 127.6, z: -6 })))
   }
   // 底脚之间的横梁、顶上的横梁、靠背后的两根横档
   g.add(rbox(X * 2, 4, 6, frame, { y: 0.8, z: uz }, 0.8))
@@ -188,7 +189,7 @@ function situpBoard(p: string[]) {
   sl.g.add(rbox(5, 5, sl.len, frame, { y: -2.5, z: sl.len / 2 }, 1))
   sl.g.add(rbox(28, 1.4, sl.len - 12, DARK, { y: 2.2, z: (sl.len - 12) / 2 + 1 }, 0.5))
   sl.g.add(rbox(30, 5.5, sl.len - 12, pad, { y: 3.4, z: (sl.len - 12) / 2 + 1 }, 2.2))
-  sl.g.add(noOutline(rbox(30.4, 1, sl.len - 11.6, acc, { y: 5.4, z: (sl.len - 12) / 2 + 1 }, 0.4)))
+  sl.g.add(noOutline(box(30.4, 1, sl.len - 11.6, acc, { y: 5.4, z: (sl.len - 12) / 2 + 1 })))
   g.add(sl.g)
   const [az, ay] = SB.a
   const [bz, by] = SB.b
@@ -242,8 +243,8 @@ function recumbentBike(p: string[]) {
   }
   // 仪表立杆 + 往后仰对着座椅的仪表屏
   g.add(strutBox([0, 48, -30], [0, 90, -12], 5, 4, frame))
-  const con = G(rbox(22, 12, 4, body, { y: -6 }, 1.6), lit(rbox(16, 7, 0.6, SCREEN, { y: -3.5, z: 2 }, 0.2), SCREEN, 0.5))
-  for (const s of [-1, 1]) con.add(noOutline(rbox(2.4, 1.6, 0.6, acc, { x: s * 8.6, y: -5, z: 2 }, 0.3)))
+  const con = G(rbox(22, 12, 4, body, { y: -6 }, 1.6), lit(box(16, 7, 0.6, SCREEN, { y: -3.5, z: 2 }), SCREEN, 0.5))
+  for (const s of [-1, 1]) con.add(noOutline(box(2.4, 1.6, 0.6, acc, { x: s * 8.6, y: -5, z: 2 })))
   g.add(P(con, 0, 92, -10, -0.55))
   // 座椅：座管、坐垫、后仰的靠背和后面的支撑
   g.add(strutBox([0, 9, 26], [0, 41, 24], 6, 6, frame))
@@ -253,7 +254,7 @@ function recumbentBike(p: string[]) {
   g.add(strutBox([0, 9, 54], [0, 61.5, 51], 5, 5, frame))
   // 两侧握把：从座底伸出，弯向前方，前段泡棉
   for (const s of [-1, 1]) {
-    g.add(tube([[s * 17, 43, 30], [s * 26, 43, 28], [s * 28, 42, 16], [s * 28, 38, 8]], 1.5, frame, { seg: 16 }))
+    g.add(tube([[s * 17, 43, 30], [s * 26, 43, 28], [s * 28, 42, 16], [s * 28, 38, 8]], 1.5, frame, { seg: 12, radial: 6 }))
     g.add(grip([s * 28, 41.2, 14], [s * 28, 38.2, 8.4], 2.3))
   }
   return fitGroup(g)
@@ -273,11 +274,12 @@ function wallBars(p: string[]) {
     for (const y of [20, 196]) g.add(rbox(9, 6, 1.8, steel, { x, y, z: -WB.d / 2 + 0.9 }, 0.4))
   }
   // 横杆两头插进立柱里
-  for (let k = 0; k < 14; k++) g.add(cylX(1.7, WB.w - 12, wood, 0, 14 + k * 14, zc, 14))
-  // 顶上的引体杆
+  for (let k = 0; k < 14; k++) g.add(cylX(1.7, WB.w - 12, wood, 0, 14 + k * 14, zc, 10))
+  // 顶上的引体杆（泡棉握把的前沿不超出声明的进深）
+  const bz = WB.d / 2 - 2.3
   for (const s of [-1, 1]) g.add(rbox(4, 4, 24, steel, { x: s * (WB.w / 2 - 9), y: 212, z: zc + 12 }, 0.8))
-  g.add(cylX(1.6, WB.w - 14, steel, 0, 214, WB.d / 2 - 2, 12))
-  for (const s of [-1, 1]) g.add(cylX(2.2, 12, FOAM, s * 26, 214, WB.d / 2 - 2, 14))
+  g.add(cylX(1.6, WB.w - 14, steel, 0, 214, bz, 12))
+  for (const s of [-1, 1]) g.add(cylX(2.2, 12, FOAM, s * 26, 214, bz, 14))
   return g
 }
 
@@ -320,7 +322,7 @@ function balletBarre(p: string[]) {
     g.add(rbox(6, 4, BB.d - 2, metal, { x, y: 0.6 }, 1))
     for (const sz of [-1, 1]) g.add(rbox(6.6, 1.2, 4, RUBBER, { x, z: sz * (BB.d / 2 - 3) }, 0.4))
     g.add(cyl(2.2, 2.2, BB.h - 6.5, metal, { x, y: 4.4 }, 14))
-    g.add(ball(2.6, metal, { x, y: BB.h - 2.1 }))
+    g.add(ball(2.6, metal, { x, y: BB.h - 2.6 }))
     // 两只托臂伸向前面的把杆
     for (const y of [BB.low, BB.high]) g.add(rbox(4, 4, 11, metal, { x, y: y - 2, z: 4.5 }, 0.8))
   }
@@ -338,17 +340,17 @@ function puttingMat(p: string[]) {
   // 毯面
   g.add(rbox(PM.w, 1.2, len, green, { x: PM.x, z: (PM.z0 + PM.z1) / 2 }, 0.4))
   // 中间一条白色瞄准虚线
-  for (let k = 0; k < 9; k++) g.add(noOutline(rbox(0.8, 0.3, 7, '#f4f4f2', { x: PM.x, y: 1.05, z: 100 - k * 20 }, 0.1)))
+  for (let k = 0; k < 9; k++) g.add(noOutline(box(0.8, 0.3, 7, '#f4f4f2', { x: PM.x, y: 1.05, z: 100 - k * 20 })))
   // 后端坡起的平台（坡面压住毯子末端）
   g.add(sideSlab([[-125, 0], [-90, 0], [-90, 0.8], [-104, 6], [-125, 6]], PM.w + 0.8, green, PM.x, { bevel: 0.4 }))
   // 球洞：黑色洞口 + 白圈 + 小旗
   const hz = -114
   g.add(cyl(5.4, 5.4, 0.4, DARK, { x: PM.x, y: 5.85, z: hz }, 24))
-  g.add(P(noOutline(torus(5.6, 0.35, '#f4f4f2')), PM.x, 6.05, hz, PI / 2))
+  g.add(P(noOutline(torus(5.6, 0.35, '#f4f4f2', {}, PI * 2, [4, 24])), PM.x, 6.05, hz, PI / 2))
   g.add(cyl(0.3, 0.3, 26, '#f4f4f2', { x: PM.x, y: 5.9, z: hz }, 6))
-  g.add(rbox(0.3, 5, 8, trim, { x: PM.x, y: 26.5, z: hz + 4 }, 0.1))
-  // 回球槽：坡道右侧的斜滑道 + 一路回到前端的浅槽
-  const rx = 17.7
+  g.add(box(0.3, 5, 8, trim, { x: PM.x, y: 26.5, z: hz + 4 }))
+  // 回球槽：坡道右侧的斜滑道 + 一路回到前端的浅槽；贴着毯子和平台的右沿（内侧的槽边压住毯边一点，不留缝）
+  const rx = PM.x + PM.w / 2 + 3.35
   g.add(sideSlab([[-118, 0], [-86, 0], [-86, 0.6], [-118, 5]], 7, trim, rx, { bevel: 0.4 }))
   g.add(rbox(7, 0.6, 208, trim, { x: rx, z: 18 }, 0.2))
   for (const s of [-1, 1]) g.add(rbox(1, 1.6, 206, trim, { x: rx + s * 2.9, y: 0.4, z: 18 }, 0.3))
@@ -367,7 +369,7 @@ function puttingMat(p: string[]) {
   const at = (y: number): V3 => [sx, y, h0[2] + ((y - h0[1]) / (h1[1] - h0[1])) * (h1[2] - h0[2])]
   g.add(grip(at(66), at(90.4), 1.2, club))
   g.add(rbox(10, 2.4, 3, STEEL, { x: sx + 4, y: 1.2, z: 119 }, 0.6))
-  g.add(noOutline(rbox(0.6, 1.2, 0.4, club, { x: sx + 4, y: 2, z: 120.6 }, 0.1)))
+  g.add(noOutline(box(0.6, 1.2, 0.4, club, { x: sx + 4, y: 2, z: 120.6 })))
   return fitGroup(g)
 }
 
@@ -403,11 +405,12 @@ function hangboard(p: string[]) {
   g.add(rod3([0, 21.2, 3.4], [0, 11.8, 1.2], 0.25, RUBBER, 6))
   // 粉袋：下宽上窄的软袋 + 一圈白色抓绒口沿 + 前面垂下的抽绳和绳扣
   const bz = 5.8
-  g.add(cup(4.6, 5.3, 10.6, 0.5, bag, { z: bz }))
-  g.add(cyl(4.3, 4.3, 0.6, '#f6f6f2', { y: 8.2, z: bz }, 16))
-  g.add(P(torus(4.6, 1, '#ece8df'), 0, 10.8, bz, PI / 2))
-  g.add(rod3([1.8, 10.4, bz + 4.9], [2.4, 6.4, bz + 5.6], 0.2, RUBBER, 5))
-  g.add(cyl(0.7, 0.7, 1.6, shade(bag, -0.25), { x: 2.4, y: 5, z: bz + 5.6 }, 8))
+  // 袋身、镁粉面、口沿同样的段数；抽绳贴着袋壁垂下来，绳扣不比口沿更往前探
+  g.add(cup(4.6, 5.3, 10.6, 0.5, bag, { z: bz }, 20))
+  g.add(cyl(4.3, 4.3, 0.6, '#f6f6f2', { y: 8.2, z: bz }, 20))
+  g.add(P(torus(4.6, 1, '#ece8df', {}, PI * 2, [8, 20]), 0, 10.8, bz, PI / 2))
+  g.add(rod3([1.8, 10.4, bz + 4.9], [2.4, 6.4, bz + 4.9], 0.2, RUBBER, 5))
+  g.add(cyl(0.7, 0.7, 1.6, shade(bag, -0.25), { x: 2.4, y: 5, z: bz + 4.9 }, 8))
   return fitWall(g, HB_MOUNT, 11.4)
 }
 
@@ -425,12 +428,12 @@ function battleRope(p: string[]) {
   g.add(cyl(7, 7.6, 1.4, anchor, { z: az }, 20))
   for (let k = 0; k < 4; k++) g.add(cyl(0.7, 0.7, 0.5, STEEL, { x: Math.cos(k * PI / 2 + PI / 4) * 5, y: 1.3, z: az + Math.sin(k * PI / 2 + PI / 4) * 5 }, 8))
   g.add(rbox(4, 2, 3, anchor, { y: 1.2, z: az }, 0.6))
-  g.add(P(torus(3.4, 0.9, STEEL), 0, 6.7, az, 0, PI / 2))
+  g.add(P(torus(3.4, 0.9, STEEL, {}, PI * 2, [8, 16]), 0, 6.7, az, 0, PI / 2))
   // 两股绳：A 在下层起步、B 叠在它上面，一起盘 1.5 圈；两股在地锚处连成一根穿过钢环
   const turns = 1.5
   const pitch = r * 4
-  const A = helix(0, cz, R0, a0, turns, r, r + pitch * turns)
-  const B = helix(0, cz, R0, a0, turns, r * 3, r * 3 + pitch * turns)
+  const A = helix(0, cz, R0, a0, turns, r, r + pitch * turns, 16)
+  const B = helix(0, cz, R0, a0, turns, r * 3, r * 3 + pitch * turns, 16)
   const endA = A[A.length - 1]
   const endB = B[B.length - 1]
   // 绳头：从顶层往圈中央拐下去，平躺在地上
@@ -456,7 +459,8 @@ function battleRope(p: string[]) {
     ...B,
     ...tailB,
   ]
-  g.add(tube(path, r, rope, { seg: path.length * 4, radial: 8 }))
+  // 盘着的两圈每圈约 36 段，穿环那个急弯也还有七八段
+  g.add(tube(path, r, rope, { seg: path.length * 3, radial: 8 }))
   // 两个绳头的胶套
   for (const t of [tailA, tailB]) {
     const a = t[2]
@@ -482,7 +486,7 @@ function medicineBalls(p: string[]) {
     for (const sz of [-1, 1]) g.add(rbox(3, MB.h - 2.2, 3, frame, { x, y: 2.2, z: sz * MB.z }, 0.6))
   }
   // 顶上两根横杆当提手
-  for (const sz of [-1, 1]) g.add(cylX(1.3, MB.w, frame, 0, MB.h - 3, sz * MB.z, 10))
+  for (const sz of [-1, 1]) g.add(cylX(1.3, MB.w, frame, 0, MB.h - 3, sz * MB.z, 8))
   const rr = 1.1
   const balls: [number, number, string][][] = [
     [
@@ -502,16 +506,16 @@ function medicineBalls(p: string[]) {
     const k = (front[1] - back[1]) / (front[0] - back[0])
     const yAt = (z: number) => back[1] + (z - back[0]) * k
     for (const s of [-1, 1]) g.add(strutBox([s * hx, yAt(-MB.z), -MB.z], [s * hx, yAt(MB.z), MB.z], 2.6, 2.6, frame))
-    for (const [z, yy] of [back, front]) g.add(cylX(rr, MB.w, frame, 0, yy, z, 10))
-    // 前面一根挡杆，免得球滚下来
+    for (const [z, yy] of [back, front]) g.add(cylX(rr, MB.w, frame, 0, yy, z, 8))
+    // 前面一根挡杆，免得球滚下来（两头直接接在前立柱上）
     g.add(cylX(0.8, MB.w, frame, 0, yAt(MB.z) + 4, MB.z, 8))
-    for (const s of [-1, 1]) g.add(rod3([s * hx, yAt(MB.z), MB.z], [s * hx, yAt(MB.z) + 4.6, MB.z], 0.9, frame, 8))
     for (const [x, R, c] of balls[i]) {
       const [cz2, cy] = restOn(back, front, R + rr)
       const seam = shade(c, c === '#45474d' ? 0.25 : -0.25)
-      g.add(ball(R, c, { x, y: cy, z: cz2 }))
-      g.add(P(noOutline(torus(R, 0.32, seam)), x, cy, cz2))
-      g.add(P(noOutline(torus(R, 0.32, seam)), x, cy, cz2, 0, PI / 2))
+      // 两道缝线正好压在球的经线上：球 24 × 12 段，缝线一圈 24 段，折点一一对上；缝线只露一道棱，截面三边就够
+      g.add(ball(R, c, { x, y: cy, z: cz2 }, undefined, [24, 12]))
+      g.add(P(noOutline(torus(R, 0.4, seam, {}, PI * 2, [3, 24])), x, cy, cz2))
+      g.add(P(noOutline(torus(R, 0.4, seam, {}, PI * 2, [3, 24])), x, cy, cz2, 0, PI / 2))
     }
   })
   return fitGroup(g)
@@ -531,18 +535,17 @@ function speedBag(p: string[]) {
   g.add(cyl(3, 3, 1.2, DARK, { x: 10, y: 10.2, z: bz + 4 }, 14))
   // 弹簧 + 立杆
   g.add(cyl(1.6, 1.6, 20, STEEL, { y: 9, z: pz }, 10))
-  const coil = helix(0, pz, 3, 0, 6, 11, 26, 16)
-  g.add(tube(coil, 0.65, STEEL, { seg: 96, radial: 6 }))
+  const coil = helix(0, pz, 3, 0, 6, 11, 26, 10)
+  g.add(tube(coil, 0.65, STEEL, { seg: 60, radial: 5 }))
   g.add(cyl(3.6, 3.6, 2, base, { y: 9.6, z: pz }, 16))
   g.add(cyl(3.6, 3.6, 2.4, base, { y: 25.6, z: pz }, 16))
   g.add(cyl(2.2, 2.2, top - 27, POLE, { y: 27.5, z: pz }, 14))
   // 杆顶横臂和反弹板
   g.add(rbox(4, 4, 25, POLE, { y: top - 2, z: (pz + 8) / 2 }, 0.8))
-  g.add(cyl(20, 20, 3, board, { y: top + 1.6, z: 6 }, 36))
-  g.add(cyl(18, 18.5, 0.8, shade(board, -0.12), { y: top + 1, z: 6 }, 36))
-  // 转环 + 梨形速度球
-  g.add(cyl(1.4, 1.4, 3, STEEL, { y: top - 1.4, z: 6 }, 10))
-  g.add(P(torus(1.2, 0.4, STEEL), 0, top - 1.8, 6, 0, PI / 2))
+  g.add(cyl(20, 20, 3, board, { y: top + 1.6, z: 6 }, 32))
+  g.add(cyl(18, 18.5, 0.8, shade(board, -0.12), { y: top + 1, z: 6 }, 32))
+  // 转环（上半截嵌在横臂底面里）+ 梨形速度球
+  g.add(P(torus(1.2, 0.4, STEEL, {}, PI * 2, [6, 12]), 0, top - 1.8, 6, 0, PI / 2))
   const prof: [number, number][] = [
     [0, 0],
     [3.4, 0.5],
@@ -558,8 +561,8 @@ function speedBag(p: string[]) {
   ]
   const bagY = top - 3 - 25.4
   g.add(latheAt(prof, bag, { y: bagY, z: 6 }, 24))
-  // 最粗处一圈缝线 + 顶上的系绳
-  g.add(P(noOutline(torus(9.2, 0.3, shade(bag, -0.25))), 0, bagY + 11.5, 6, PI / 2))
+  // 最粗处一圈缝线（和球身同样 24 段）+ 顶上的系绳
+  g.add(P(noOutline(torus(9.2, 0.3, shade(bag, -0.25), {}, PI * 2, [4, 24])), 0, bagY + 11.5, 6, PI / 2))
   g.add(cyl(1.8, 1.8, 1.6, shade(bag, -0.15), { y: bagY + 24.2, z: 6 }, 12))
   return fitGroup(g)
 }
@@ -577,13 +580,13 @@ function gymRings(p: string[]) {
     const x = s * 22
     // 吊钩
     g.add(rbox(3, 1, 3, STEEL, { x, y: bt - 0.6, z: 5 }, 0.3))
-    g.add(P(torus(1.4, 0.45, STEEL), x, bt - 2.4, 5))
+    g.add(P(torus(1.4, 0.45, STEEL, {}, PI * 2, [6, 12]), x, bt - 2.4, 5))
     // 织带：主带 + 折回来的一段 + 中间的扣
-    g.add(rbox(3.8, bt - 2.4 - 21.5, 0.4, strap, { x, y: 21.5, z: 5 }, 0.15))
-    g.add(rbox(3.8, 14, 0.4, strap, { x, y: 48, z: 5.6 }, 0.15))
+    g.add(nub(3.8, bt - 2.4 - 21.5, 0.4, strap, { x, y: 21.5, z: 5 }))
+    g.add(nub(3.8, 14, 0.4, strap, { x, y: 48, z: 5.6 }))
     g.add(rbox(5, 3.4, 1.6, buckle, { x, y: 60, z: 5.2 }, 0.5))
     // 木环 + 环顶包住它的一截织带
-    g.add(P(torus(9, 1.5, wood), x, 10.5, 5))
+    g.add(P(torus(9, 1.5, wood, {}, PI * 2, [8, 32]), x, 10.5, 5))
     g.add(rbox(4.2, 4.2, 3.4, strap, { x, y: 18, z: 5 }, 0.8))
   }
   return fitWall(g, GR_MOUNT, 10)
@@ -607,7 +610,7 @@ function abCoaster(p: string[]) {
   }
   for (const s of [-1, 1]) {
     const x = s * 8
-    g.add(tube(pts.map(([, y, z]) => [x, y, z] as V3), 1.6, STEEL, { seg: 40, radial: 10 }))
+    g.add(tube(pts.map(([, y, z]) => [x, y, z] as V3), 1.6, STEEL, { seg: 24, radial: 8 }))
     g.add(ball(1.8, RUBBER, { x, y: abRail(50), z: 50 }))
     for (const z of [40, 0]) g.add(rbox(3, abRail(z) - 3.5, 3, frame, { x, y: 3.5, z }, 0.6))
   }
@@ -615,19 +618,23 @@ function abCoaster(p: string[]) {
   for (const s of [-1, 1]) {
     g.add(strutBox([s * 24, 3, -52], [s * 21, 118, -44], 4.4, 4.4, frame))
     g.add(rbox(9, 4, 24, pad, { x: s * 21, y: 117, z: -36 }, 1.6))
-    g.add(noOutline(rbox(9.4, 1, 24.4, acc, { x: s * 21, y: 118.6, z: -36 }, 0.4)))
+    g.add(noOutline(box(9.4, 1, 24.4, acc, { x: s * 21, y: 118.6, z: -36 })))
     g.add(cyl(1.6, 1.6, 6, frame, { x: s * 21, y: 115, z: -24 }, 10))
     g.add(grip([s * 21, 121, -24], [s * 21, 130, -23], 2.2))
   }
   g.add(cylX(1.8, 47, frame, 0, abRail(-49), -49.3, 12))
   g.add(cylX(1.8, 42, frame, 0, 118, -44, 12))
-  // 跪垫小车：底盘、侧滚轮、跪垫
+  // 跪垫小车：底盘、侧滚轮、跪垫。整车顺着轨道在这一段的坡度前倾，四只滚轮的轴心落在轨道中线的高度上，底盘压着轨顶
   const cz = 26
-  const cy = abRail(cz) + 1.4
-  g.add(rbox(22, 4, 20, DARK, { y: cy, z: cz }, 1))
-  for (const s of [-1, 1]) for (const dz of [-7, 7]) g.add(cylX(2, 2, RUBBER, s * 11, abRail(cz + dz), cz + dz, 12))
-  g.add(rbox(34, 7, 28, pad, { y: cy + 3.6, z: cz }, 3))
-  g.add(noOutline(rbox(34.4, 1.2, 28.4, acc, { y: cy + 6.4, z: cz }, 0.5)))
+  const wz = 7
+  const y0 = abRail(cz + wz)
+  const y1 = abRail(cz - wz)
+  const car = new THREE.Group()
+  car.add(rbox(22, 4, 20, DARK, { y: 1.4 }, 1))
+  for (const s of [-1, 1]) for (const dz of [-wz, wz]) car.add(cylX(2, 2, RUBBER, s * 11, 0, dz, 12))
+  car.add(rbox(34, 7, 28, pad, { y: 5 }, 3))
+  car.add(noOutline(box(34.4, 1.2, 28.4, acc, { y: 7.8 })))
+  g.add(P(car, 0, (y0 + y1) / 2, cz, Math.atan2(y1 - y0, wz * 2)))
   return fitGroup(g)
 }
 
@@ -640,15 +647,15 @@ function vibrationPlate(p: string[]) {
   g.add(rbox(70, 10, 40, body, { y: 1 }, 4.5))
   // 踏台 + 防滑横纹 + 脚印色块
   g.add(rbox(58, 3.2, 32, deck, { y: 10.8 }, 1.4))
-  for (let k = 0; k < 9; k++) g.add(noOutline(rbox(54, 0.6, 1.2, '#4a4c52', { y: 13.8, z: -12.8 + k * 3.2 }, 0.2)))
-  for (const s of [-1, 1]) g.add(noOutline(rbox(13, 0.4, 19, acc, { x: s * 15, y: 14.2, z: -2 }, 0.2)))
-  // 前面的小屏和两颗按键
-  g.add(rbox(22, 4.4, 0.8, DARK, { y: 4.6, z: 19.95 }, 0.3))
-  g.add(lit(rbox(13, 2, 0.4, SCREEN, { x: -3, y: 5.8, z: 20.5 }, 0.1), SCREEN, 0.6))
-  for (const x of [6, 9]) g.add(noOutline(cylZ(0.9, 0.5, acc, x, 6.8, 20.5, 10)))
+  for (let k = 0; k < 9; k++) g.add(noOutline(box(54, 0.6, 1.2, '#4a4c52', { y: 13.8, z: -12.8 + k * 3.2 })))
+  for (const s of [-1, 1]) g.add(noOutline(box(13, 0.4, 19, acc, { x: s * 15, y: 14.2, z: -2 })))
+  // 前面的小屏和两颗按键（按键的前沿正好到声明的进深）
+  g.add(rbox(22, 4.4, 0.8, DARK, { y: 4.6, z: 19.7 }, 0.3))
+  g.add(lit(box(13, 2, 0.4, SCREEN, { x: -3, y: 5.8, z: 20.25 }), SCREEN, 0.6))
+  for (const x of [6, 9]) g.add(noOutline(cylZ(0.9, 0.5, acc, x, 6.8, 20.25, 10)))
   // 两侧的弹力绳：从机身侧面的挂扣拉出来，越过机身边缘，握把搁在踏台前沿
   for (const s of [-1, 1]) {
-    g.add(P(torus(1.2, 0.4, STEEL), s * 35.2, 6, 6, 0, PI / 2))
+    g.add(P(torus(1.2, 0.4, STEEL, {}, PI * 2, [6, 12]), s * 35.2, 6, 6, 0, PI / 2))
     g.add(tube([[s * 35.4, 6, 7.2], [s * 36.4, 9.5, 9], [s * 32, 11.6, 11], [s * 28, 15, 12.5], [s * 16, 15.9, 13]], 0.6, acc, { seg: 20, radial: 6 }))
     g.add(cylX(1.5, 11, FOAM, s * 16, 15.9, 13, 12))
   }
@@ -753,8 +760,8 @@ function jumpBoxes(p: string[]) {
     g.add(rbox(w + 0.8, 6, d + 0.8, band, { x: cx, z: cz }, 2.4))
     g.add(rbox(w + 0.8, 6, d + 0.8, band, { x: cx, y: h - 5.6, z: cz }, 2.4))
     // 侧面提手槽、正面色标
-    for (const s of [-1, 1]) g.add(noOutline(rbox(0.6, 4, 14, DARK, { x: cx + s * (w / 2 + 0.05), y: h * 0.62, z: cz }, 0.2)))
-    g.add(noOutline(rbox(w * 0.36, 7, 0.6, acc, { x: cx, y: h * 0.38, z: cz + d / 2 + 0.1 }, 0.3)))
+    for (const s of [-1, 1]) g.add(noOutline(box(0.6, 4, 14, DARK, { x: cx + s * (w / 2 + 0.05), y: h * 0.62, z: cz })))
+    g.add(noOutline(box(w * 0.36, 7, 0.6, acc, { x: cx, y: h * 0.38, z: cz + d / 2 + 0.1 })))
     x += w + 1
   }
   return fitGroup(g)
@@ -766,23 +773,23 @@ function sportBottles(p: string[]) {
   const [tub, towel, shaker] = p
   const g = new THREE.Group()
   // 蛋白粉罐：罐身 + 标签带 + 粗纹罐盖
-  g.add(cyl(7.5, 7.5, 15, tub, { x: -7.5, z: -4 }, 28))
-  g.add(cyl(7.8, 7.8, 6.5, '#f4f4f2', { x: -7.5, y: 4, z: -4 }, 28))
-  g.add(cyl(7.9, 7.9, 2.2, shade(tub, 0.15), { x: -7.5, y: 6.2, z: -4 }, 28))
-  g.add(cyl(7.8, 7.8, 3.2, shade(tub, -0.12), { x: -7.5, y: 14.6, z: -4 }, 28))
+  g.add(cyl(7.5, 7.5, 15, tub, { x: -7.5, z: -4 }, 24))
+  g.add(cyl(7.8, 7.8, 6.5, '#f4f4f2', { x: -7.5, y: 4, z: -4 }, 24))
+  g.add(cyl(7.9, 7.9, 2.2, shade(tub, 0.15), { x: -7.5, y: 6.2, z: -4 }, 24))
+  g.add(cyl(7.8, 7.8, 3.2, shade(tub, -0.12), { x: -7.5, y: 14.6, z: -4 }, 24))
   // 摇摇杯：杯身、刻度线、杯盖、翻盖嘴和提环
   const sx = 7
   const sz = -5.2
   g.add(cyl(4.3, 3.9, 16, shaker, { x: sx, z: sz }, 20))
-  for (let k = 0; k < 4; k++) g.add(noOutline(rbox(1.6, 0.3, 0.4, '#f4f4f2', { x: sx, y: 4 + k * 2.6, z: sz + 4.1 + k * 0.04 }, 0.1)))
+  for (let k = 0; k < 4; k++) g.add(noOutline(box(1.6, 0.3, 0.4, '#f4f4f2', { x: sx, y: 4 + k * 2.6, z: sz + 4.1 + k * 0.04 })))
   g.add(cyl(4.6, 4.5, 4, DARK, { x: sx, y: 15.6, z: sz }, 20))
   g.add(rbox(2.6, 1.4, 3, DARK, { x: sx, y: 19.4, z: sz + 1 }, 0.5))
-  g.add(P(torus(1.8, 0.45, DARK), sx, 20.2, sz - 3.2))
+  g.add(P(torus(1.8, 0.45, DARK, {}, PI * 2, [6, 12]), sx, 20.2, sz - 3.2))
   // 卷好的毛巾：横躺，两端一圈圈的卷边
   const ty = 3.6
   g.add(cylX(ty, 18, towel, -6, ty, 7.5, 20))
   for (const ex of [-15.05, 3.05])
-    for (const rr of [2.4, 1.2]) g.add(P(noOutline(torus(rr, 0.22, shade(towel, -0.15))), ex, ty, 7.5, 0, PI / 2))
+    for (const rr of [2.4, 1.2]) g.add(P(noOutline(torus(rr, 0.22, shade(towel, -0.15), {}, PI * 2, [4, rr > 2 ? 16 : 12])), ex, ty, 7.5, 0, PI / 2))
   // 健身手套：掌心 + 四根短指 + 腕带，两只叠着
   const glove = (rot: number) => {
     const o = new THREE.Group()
@@ -887,11 +894,12 @@ function smartMirror(p: string[]) {
   const pz = -10
   g.add(rbox(60, 168.4, 4, frame, { y: 5.6, z: pz }, 1.6))
   g.add(paintPanel(54, 154, `ft-mirror|${acc}`, mirrorArt(acc), { y: 15, z: pz + 2.1 }, 0.8))
-  g.add(noOutline(rbox(30, 1.4, 0.4, DARK, { y: 10, z: pz + 2.1 }, 0.1)))
-  g.add(noOutline(rbox(1.6, 1.6, 0.4, acc, { x: 24, y: 9.9, z: pz + 2.1 }, 0.1)))
+  g.add(noOutline(box(30, 1.4, 0.4, DARK, { y: 10, z: pz + 2.1 })))
+  g.add(noOutline(box(1.6, 1.6, 0.4, acc, { x: 24, y: 9.9, z: pz + 2.1 })))
   // 背面的主机盒
   g.add(rbox(30, 40, 2, shade(frame, 0.08), { y: 24, z: pz - 2.8 }, 0.8))
-  return g
+  // 竖屏偏在底座后沿上：按包围盒前后居中，底座不超出声明的占地
+  return fitGroup(g)
 }
 
 // ---------- 配色 ----------
@@ -905,7 +913,7 @@ const TR_PALS: Pal[] = [
 const ST_PALS: Pal[] = [
   ['modern', [M.char, '#3d3f44', '#e8483f']],
   ['modern', [M.white, '#5b5d66', '#3f7fd8']],
-  ['industrial', [I.iron, RUBBER, I.rust]],
+  ['industrial', [I.iron, '#46474d', I.rust]],
   ['cute', [C.white, C.sky, C.pink]],
 ]
 const PT_PALS: Pal[] = [

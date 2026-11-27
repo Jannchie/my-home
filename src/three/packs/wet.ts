@@ -10,7 +10,7 @@
 
 import * as THREE from 'three'
 import { ball, capsule, cup, cyl, markMirror, puck, rbox, shade, toon, torus, tray } from '../toon'
-import { C, G, SWING_OPEN, ellipsePoly, holePanel, movable, rectPoly, rng, rod, shell, slab, type AssetCategory, type AssetDef, type Hole, type Poly, type StyleTag, type SurfaceDef } from '../kit'
+import { C, G, SWING_OPEN, ellipsePoly, holePanel, innards, movable, rectPoly, rng, rod, shell, slab, type AssetCategory, type AssetDef, type Hole, type Poly, type StyleTag, type SurfaceDef } from '../kit'
 import { PI, box3, clearDeep, cylXLegacy, cylZLegacy, latheAt, rod3 } from '../geo'
 import { I, J, M, N, R, define, type Build, type Dims, type Pal } from '../packkit'
 
@@ -36,8 +36,8 @@ function ground<T extends THREE.Object3D>(o: T): T {
   return o
 }
 
-/** 空心圆管（卷纸、纸芯）：带小倒角，at.y 为底 */
-function tubeLathe(rIn: number, rOut: number, h: number, color: string, at: { x?: number; y?: number; z?: number; rx?: number; rz?: number } = {}) {
+/** 空心圆管（卷纸、纸芯）：带小倒角，at.y 为底；seg 是一圈的段数 */
+function tubeLathe(rIn: number, rOut: number, h: number, color: string, at: { x?: number; y?: number; z?: number; rx?: number; rz?: number } = {}, seg = 28) {
   const k = Math.min(0.25, (rOut - rIn) / 3, h / 4)
   const pts = [
     [rIn + k, 0],
@@ -50,7 +50,7 @@ function tubeLathe(rIn: number, rOut: number, h: number, color: string, at: { x?
     [rIn, k],
     [rIn + k, 0],
   ].map(([x, y]) => new THREE.Vector2(x, y - h / 2))
-  const m = new THREE.Mesh(new THREE.LatheGeometry(pts, 28), toon(color))
+  const m = new THREE.Mesh(new THREE.LatheGeometry(pts, seg), toon(color))
   m.position.set(at.x ?? 0, (at.y ?? 0) + h / 2, at.z ?? 0)
   m.rotation.set(at.rx ?? 0, 0, at.rz ?? 0)
   m.castShadow = true
@@ -61,12 +61,13 @@ function tubeLathe(rIn: number, rOut: number, h: number, color: string, at: { x?
 /** 一卷卷纸（立着）：纸卷 + 纸芯 */
 const ROLL_R = 5.5
 const ROLL_H = 11
-function roll(color: string, at: { x?: number; y?: number; z?: number } = {}) {
-  return G(tubeLathe(2.1, ROLL_R, ROLL_H, color, at), tubeLathe(1.8, 2.15, ROLL_H - 0.4, CORE, { ...at, y: (at.y ?? 0) + 0.2 }))
+function roll(color: string, at: { x?: number; y?: number; z?: number } = {}, seg = 28) {
+  // 纸芯直径 4cm、外壁埋在纸卷里，只露出两头的窄环和内壁：段数取纸卷的一半（顶点和纸卷的孔对齐，不漏缝）
+  return G(tubeLathe(2.1, ROLL_R, ROLL_H, color, at, seg), tubeLathe(1.8, 2.15, ROLL_H - 0.4, CORE, { ...at, y: (at.y ?? 0) + 0.2 }, seg / 2))
 }
 /** 横着的卷纸（卷纸架上），轴沿 x，(y, z) 为轴心 */
 function rollX(color: string, x: number, y: number, z: number) {
-  return G(tubeLathe(2.1, ROLL_R, 10.5, color, { x, y: y - 5.25, z, rz: PI / 2 }), tubeLathe(1.8, 2.15, 10.1, CORE, { x, y: y - 5.05, z, rz: PI / 2 }))
+  return G(tubeLathe(2.1, ROLL_R, 10.5, color, { x, y: y - 5.25, z, rz: PI / 2 }), tubeLathe(1.8, 2.15, 10.1, CORE, { x, y: y - 5.05, z, rz: PI / 2 }, 14))
 }
 
 /** 箱体外的一圈装饰带（不填里面）：外尺寸 w × d 的箱子，带厚 t、高 h、底在 y */
@@ -240,9 +241,12 @@ function cabinet(s: WetCabSpec, y0 = 0): Build {
         const { bw, bd2 } = drawerDims(s)
         const fy = a + 0.2 - (a - T / 2 + 0.2)
         const sh = sec.h - 1.2
-        dg.add(rbox(bw, 0.8, bd2, inner, { y: fy, z: -bd2 / 2 }, 0.2))
-        for (const sx of [-1, 1]) dg.add(rbox(0.6, sh, bd2, inner, { x: sx * (bw / 2 - 0.3), y: fy, z: -bd2 / 2 }, 0.2))
-        dg.add(rbox(bw - 1.2, sh, 0.6, inner, { y: fy, z: -bd2 + 0.3 }, 0.2))
+        // 抽屉盒关严时整个在柜体里，不画（kit.ts innards）
+        const box = innards(new THREE.Group())
+        box.add(rbox(bw, 0.8, bd2, inner, { y: fy, z: -bd2 / 2 }, 0.2))
+        for (const sx of [-1, 1]) box.add(rbox(0.6, sh, bd2, inner, { x: sx * (bw / 2 - 0.3), y: fy, z: -bd2 / 2 }, 0.2))
+        box.add(rbox(bw - 1.2, sh, 0.6, inner, { y: fy, z: -bd2 + 0.3 }, 0.2))
+        dg.add(box)
         dg.position.set(0, yb, front)
         g.add(movable(dg, { kind: 'drawer', dz: drawerDims(s).pull }))
         return
@@ -386,7 +390,8 @@ function tpPack(nx: number, nz: number, ny: number, handle: boolean): Build {
     const H = ny * ROLL_H
     for (let ix = 0; ix < nx; ix++)
       for (let iz = 0; iz < nz; iz++)
-        for (let iy = 0; iy < ny; iy++) g.add(roll(paper, { x: -W / 2 + ROLL_R + ix * ROLL_R * 2, y: 0.3 + iy * ROLL_H, z: -D / 2 + ROLL_R + iz * ROLL_R * 2 }))
+        // 整包的卷纸隔着半透明包装膜和印刷带，一圈 20 段（单放的卷纸 28 段；16 段时卷纸顶面的折角隔着膜也看得出）
+        for (let iy = 0; iy < ny; iy++) g.add(roll(paper, { x: -W / 2 + ROLL_R + ix * ROLL_R * 2, y: 0.3 + iy * ROLL_H, z: -D / 2 + ROLL_R + iz * ROLL_R * 2 }, 20))
     // 包装膜：半透明外壳 + 印刷带
     g.add(clearDeep(rbox(W + 0.6, H + 0.8, D + 0.6, PAPER, {}, 1.5), '#f4fbff', 0.3))
     g.add(rbox(W + 0.9, H * 0.36, D + 0.9, print, { y: H * 0.3 }, 0.6))
@@ -1346,9 +1351,11 @@ function drawerChest(p: string[]) {
     const dg = new THREE.Group()
     dg.add(rbox(DC.w - 2, 9.4, 1, drawer, {}, 0.5))
     dg.add(rbox(8, 1.2, 0.4, handle, { y: 6.8, z: 0.9 }, 0.15))
-    dg.add(rbox(DC_BOX.w, 0.8, DC_BOX.d, inner, { y: 0.2, z: -0.5 - DC_BOX.d / 2 }, 0.2))
-    for (const sx of [-1, 1]) dg.add(rbox(0.6, 8, DC_BOX.d, inner, { x: sx * (DC_BOX.w / 2 - 0.3), y: 0.2, z: -0.5 - DC_BOX.d / 2 }, 0.2))
-    dg.add(rbox(DC_BOX.w - 1.2, 8, 0.6, inner, { y: 0.2, z: -0.5 - DC_BOX.d + 0.3 }, 0.2))
+    const box = innards(new THREE.Group())
+    box.add(rbox(DC_BOX.w, 0.8, DC_BOX.d, inner, { y: 0.2, z: -0.5 - DC_BOX.d / 2 }, 0.2))
+    for (const sx of [-1, 1]) box.add(rbox(0.6, 8, DC_BOX.d, inner, { x: sx * (DC_BOX.w / 2 - 0.3), y: 0.2, z: -0.5 - DC_BOX.d / 2 }, 0.2))
+    box.add(rbox(DC_BOX.w - 1.2, 8, 0.6, inner, { y: 0.2, z: -0.5 - DC_BOX.d + 0.3 }, 0.2))
+    dg.add(box)
     dg.position.set(0, y, DC.d / 2 - 1.3)
     g.add(movable(dg, { kind: 'drawer', dz: DC_BOX.pull }))
   }

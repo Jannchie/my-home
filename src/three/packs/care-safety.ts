@@ -4,9 +4,9 @@
 // 带台面的（床边移动桌、保险箱）声明 surface，本体不平移。type / tags / mats 直接写在 def 里。
 
 import * as THREE from 'three'
-import { ball, cup, cyl, rbox, shade, torus, tray } from '../toon'
+import { ball, box, cup, cyl, nub, rbox, shade, torus, tray } from '../toon'
 import { C, carcass, holePanel, rectPoly, type AssetDef } from '../kit'
-import { batten, cappedTube, cylX, cylZ, fitGroup, fitWall, G, ghost, hcyl, lathe, latheAt, lit, noOutline, P, PI, rod3, sideSlab, strutBox, taperRod3, tiltFrame, type V3 } from '../geo'
+import { bakeMeshes, batten, cappedTube, cylX, cylZ, fitGroup, fitWall, G, ghost, hcyl, lathe, latheAt, lit, noOutline, P, PI, rod3, sideSlab, strutBox, taperRod3, tiltFrame, type V3 } from '../geo'
 import { CL, I, J, M, N, PROP, R, define, type Pal } from '../packkit'
 
 const STEEL = '#c3c7cc'
@@ -20,55 +20,77 @@ const SIGN_RED = '#d8362f'
 const PAPER = '#fbf7f1'
 
 /**
- * 折线弯管：pts 是折线顶点，每个内角用半径约 bend 的圆弧过渡。
- * 圆弧两侧各补一个直段上的点，曲线在直段上不会鼓出去。caps 为 true 时两端加球帽（管口露在外面时用）。
+ * 折线弯管：pts 是折线顶点，直段是圆柱，每个内角用一段圆弧（圆环的一截）过渡；圆弧的切点离顶点 bend × 0.85（不超过相邻直段的四成）。
+ * 整根管子均匀细分的话，面全花在直段上（一根助行器侧架要 1500 个三角面）；这样拼只有拐弯处有细分。
+ * 直段和圆弧的截面都是正 radial 边形：折线走在竖直面里、或者每一段都和坐标轴平行时，两边的棱正好对上（radial 取 4 的倍数）。
+ * bend 为 0：不倒圆角，拐点垫一颗同样粗的球（拐得很缓、又不在一个竖直面里的折线用）。caps 为 true 时两端加球帽（管口露在外面时用）。
  */
 function bentPipe(pts: V3[], r: number, color: string, bend = 3, caps = false, radial = 8) {
+  const g = new THREE.Group()
   const v = pts.map((q) => new THREE.Vector3(...q))
-  const out: THREE.Vector3[] = [v[0]]
+  const arr = (q: THREE.Vector3): V3 => [q.x, q.y, q.z]
+  const knob = (q: THREE.Vector3) => g.add(ball(r, color, { x: q.x, y: q.y, z: q.z }, undefined, [radial, 6]))
+  // 直段：圆柱的长度会量化到 0.1。接着圆弧的那一头往圆弧里多伸一点（至少 0.06），把总长凑成 0.1 的整数倍：
+  // 接头处不留缝，不接圆弧的那一头（管口）也正好落在给的点上
+  const leg = (a: THREE.Vector3, b: THREE.Vector3, intoA: boolean, intoB: boolean) => {
+    const d = b.clone().sub(a)
+    const len = d.length()
+    const n = (intoA ? 1 : 0) + (intoB ? 1 : 0)
+    d.normalize().multiplyScalar(n ? (Math.ceil((len + 0.06 * n) * 10) / 10 - len) / n : 0)
+    g.add(rod3(arr(intoA ? a.clone().sub(d) : a), arr(intoB ? b.clone().add(d) : b), r, color, radial))
+  }
+  let from = v[0]
+  let afterArc = false
   for (let i = 1; i < v.length - 1; i++) {
     const b = v[i]
     const toA = v[i - 1].clone().sub(b)
     const toC = v[i + 1].clone().sub(b)
-    const k = Math.min(bend, toA.length() * 0.4, toC.length() * 0.4)
+    const k = Math.min(bend, toA.length() * 0.4, toC.length() * 0.4) * 0.85
     toA.normalize()
     toC.normalize()
-    const p0 = b.clone().addScaledVector(toA, k)
-    const p1 = b.clone().addScaledVector(toC, k)
-    out.push(b.clone().addScaledVector(toA, k * 1.2))
-    for (let s = 0; s <= 4; s++) {
-      const t = s / 4
-      out.push(
-        p0
-          .clone()
-          .multiplyScalar((1 - t) ** 2)
-          .addScaledVector(b, 2 * t * (1 - t))
-          .addScaledVector(p1, t * t),
-      )
+    const turn = PI - toA.angleTo(toC)
+    // 圆弧半径取整到 0.1（torus 会量化），切点跟着半径走，圆弧两头才正好接在直段上
+    const R = Math.round((k / Math.tan(turn / 2)) * 10) / 10
+    if (R <= r) {
+      leg(from, b, afterArc, false)
+      knob(b)
+      from = b
+      afterArc = false
+      continue
     }
-    out.push(b.clone().addScaledVector(toC, k * 1.2))
+    const t = R * Math.tan(turn / 2)
+    const p0 = b.clone().addScaledVector(toA, t)
+    const p1 = b.clone().addScaledVector(toC, t)
+    const c = b.clone().addScaledVector(toA.clone().add(toC).normalize(), R / Math.cos(turn / 2))
+    // 圆环的局部 x 指向起点、y 在弯管所在的平面里朝终点一侧：弧从 p0 扫到 p1
+    const u = p0.clone().sub(c).normalize()
+    const w = p1.clone().sub(c)
+    w.addScaledVector(u, -w.dot(u)).normalize()
+    const arc = torus(R, r, color, {}, turn, [radial, Math.max(2, Math.ceil(turn / 0.3))])
+    arc.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(u, w, u.clone().cross(w)))
+    arc.position.copy(c)
+    leg(from, p0, afterArc, true)
+    g.add(arc)
+    from = p1
+    afterArc = true
   }
-  out.push(v[v.length - 1])
-  let len = 0
-  for (let i = 1; i < out.length; i++) len += out[i].distanceTo(out[i - 1])
-  const seg = Math.min(96, Math.max(8, Math.round(len / Math.max(0.8, bend * 0.35))))
-  return cappedTube(
-    out.map((q): V3 => [q.x, q.y, q.z]),
-    r,
-    color,
-    { seg, radial, caps },
-  )
+  leg(from, v[v.length - 1], afterArc, false)
+  if (caps) {
+    knob(v[0])
+    knob(v[v.length - 1])
+  }
+  return g
 }
 
 /** 辐条轮（轮轴沿 x，圆心在 Group 原点）：胎圈 + 轮辋 + n 根辐条 + 轮毂 */
 function chairWheel(R0: number, tire: number, n: number) {
   const g = new THREE.Group()
-  g.add(P(torus(R0 - tire, tire, TIRE), 0, 0, 0, 0, PI / 2))
+  g.add(P(torus(R0 - tire, tire, TIRE, {}, PI * 2, [8, 32]), 0, 0, 0, 0, PI / 2))
   const rim = R0 - tire * 2 - 0.4
-  g.add(noOutline(P(torus(rim, 0.55, STEEL), 0, 0, 0, 0, PI / 2)))
+  g.add(noOutline(P(torus(rim, 0.55, STEEL, {}, PI * 2, [4, 32]), 0, 0, 0, 0, PI / 2)))
   for (let k = 0; k < n; k++) {
     const a = (k / n) * PI * 2
-    g.add(noOutline(rod3([0, 0, 0], [0, Math.sin(a) * rim, Math.cos(a) * rim], 0.3, STEEL, 6)))
+    g.add(noOutline(rod3([0, 0, 0], [0, Math.sin(a) * rim, Math.cos(a) * rim], 0.3, STEEL, 4)))
   }
   g.add(cylX(2, 5, STEEL, 0, 0, 0, 12))
   return g
@@ -77,17 +99,20 @@ function chairWheel(R0: number, tire: number, n: number) {
 /** 万向脚轮（轮轴沿 x）：顶板 + 两片叉板 + 轮子，顶板顶面在 y = top，轮子落地 */
 function caster(x: number, z: number, r: number, top: number, wide = 2.8) {
   const g = new THREE.Group()
-  g.add(rbox(wide + 2.6, 1.2, r * 0.8 + 1.4, STEEL, { y: top - 1.2 }, 0.4))
-  for (const s of [-1, 1]) g.add(rbox(0.8, top - r * 0.7 - 0.6, r * 0.7, STEEL, { x: s * (wide / 2 + 0.7), y: r * 0.7 }, 0.3))
-  g.add(cylX(r, wide, TIRE, 0, r, 0, 18))
-  g.add(noOutline(cylX(r * 0.42, wide + 0.3, '#d9dde2', 0, r, 0, 12)))
+  // 顶板和叉板都是不到 1.5cm 厚的薄片：直角盒
+  g.add(nub(wide + 2.6, 1.2, r * 0.8 + 1.4, STEEL, { y: top - 1.2 }))
+  for (const s of [-1, 1]) g.add(nub(0.8, top - r * 0.7 - 0.6, r * 0.7, STEEL, { x: s * (wide / 2 + 0.7), y: r * 0.7 }))
+  // 16 段：正下方有顶点，轮子正好落地
+  g.add(cylX(r, wide, TIRE, 0, r, 0, 16))
+  // 轮毂两头顶进叉板里（原来比叉板的间距短 0.3，轮子悬在两片叉板中间）
+  g.add(noOutline(cylX(r * 0.42, wide + 0.8, '#d9dde2', 0, r, 0, 12)))
   return P(g, x, 0, z)
 }
 
 /** 竖直面上的十字标：两条嵌进表面一点的短条，中心 (x, y)，正面在 z */
 function crossMark(size: number, color: string, x: number, y: number, z: number) {
   const bar = size * 0.32
-  return G(noOutline(rbox(size, bar, 0.6, color, { x, y: y - bar / 2, z }, 0.2)), noOutline(rbox(bar, size, 0.6, color, { x, y: y - size / 2, z }, 0.2)))
+  return G(noOutline(box(size, bar, 0.6, color, { x, y: y - bar / 2, z })), noOutline(box(bar, size, 0.6, color, { x, y: y - size / 2, z })))
 }
 
 // ---------- 轮椅：两只带手推圈的大后轮、两只小前脚轮、布座和靠背、扶手和护板、脚踏板、往后伸的推把 ----------
@@ -99,10 +124,10 @@ function wheelchair(p: string[]) {
   const { fx, R, az } = WC
   for (const s of [-1, 1]) {
     const x = s * fx
-    // 靠背立管一路往上，顶端往后弯成推把
-    g.add(bentPipe([[x, R, -20], [x, 86, -27], [x, 87.5, -41]], 1.2, frame, 4, true))
+    // 靠背立管从下横管的后端一路往上（经过轮轴），顶端往后弯成推把
+    g.add(bentPipe([[x, 26, -19.57], [x, 86, -27], [x, 87.5, -41]], 1.2, frame, 4, true))
     g.add(rod3([x, 86.7, -33.3], [x, 87.5, -41], 1.75, RUBBER, 12))
-    g.add(ball(1.75, RUBBER, { x, y: 87.5, z: -41 }))
+    g.add(ball(1.75, RUBBER, { x, y: 87.5, z: -41 }, undefined, [12, 6]))
     // 座管 + 前立管（下端接脚轮）、下横管
     g.add(bentPipe([[x, 48, -22.3], [x, 48, 22], [x, 15, 26]], 1.2, frame, 4))
     g.add(rod3([x, 26, -19.6], [x, 26, 24.7], 1.1, frame, 8))
@@ -113,7 +138,7 @@ function wheelchair(p: string[]) {
     // 后轮（辐条轮）+ 外侧的手推圈
     g.add(P(chairWheel(R, 1.5, 10), s * 26.5, R, az))
     g.add(cylX(1.4, 5, STEEL, s * 23.5, R, az, 10))
-    g.add(P(torus(24.5, 0.6, STEEL), s * 29.6, R, az, 0, PI / 2))
+    g.add(P(torus(24.5, 0.6, STEEL, {}, PI * 2, [6, 32]), s * 29.6, R, az, 0, PI / 2))
     for (let k = 0; k < 4; k++) {
       const a = PI / 4 + (k * PI) / 2
       g.add(noOutline(rod3([s * 26.5, R + Math.sin(a) * 26, az + Math.cos(a) * 26], [s * 29.6, R + Math.sin(a) * 24.5, az + Math.cos(a) * 24.5], 0.4, STEEL, 6)))
@@ -121,13 +146,13 @@ function wheelchair(p: string[]) {
     // 前脚轮
     g.add(caster(x, 25.4, 6.2, 13.8))
     g.add(cyl(1.5, 1.5, 2.6, STEEL, { x, y: 13.6, z: 26 }, 10))
-    // 脚踏：从座管前端斜着伸下去的吊管 + 一块踏板
-    g.add(bentPipe([[s * (fx - 0.4), 47, 22.5], [s * (fx - 1.5), 30, 35], [s * (fx - 6.5), 9.2, 44]], 1, frame, 4, true))
+    // 脚踏：从座管前端斜着伸下去的吊管（中间略折一下，不在一个竖直面里：不倒圆角）+ 一块踏板
+    g.add(bentPipe([[s * (fx - 0.4), 47, 22.5], [s * (fx - 1.5), 30, 35], [s * (fx - 6.5), 9.2, 44]], 1, frame, 0, true))
     g.add(P(rbox(15, 1.4, 11, pad, {}, 0.6), s * 12.5, 8.6, 45, -0.12))
     // 手刹：座管上的卡座 + 一根带球头的扳杆
     g.add(rbox(3.4, 2.6, 4.6, DARK, { x: s * (fx + 1.6), y: 46.6, z: 9 }, 0.5))
     g.add(rod3([s * (fx + 2.4), 48, 9], [s * (fx + 2.8), 59, 5], 0.6, STEEL, 6))
-    g.add(ball(1.3, DARK, { x: s * (fx + 2.8), y: 59, z: 5 }))
+    g.add(ball(1.3, DARK, { x: s * (fx + 2.8), y: 59, z: 5 }, undefined, [10, 6]))
   }
   // 座下的交叉撑（折叠轮椅的 X 架）
   g.add(rod3([-fx, 26, 2], [fx, 47, 2], 0.9, frame, 8))
@@ -152,7 +177,7 @@ function walker(p: string[]) {
   for (const s of [-1, 1]) {
     const x = s * 25
     // 侧架：后腿 → 扶手 → 前腿，一根弯管
-    g.add(bentPipe([[x, 2, 24], [x, 86, 15], [x, 86, -15], [x, 7, -22]], 1.25, frame, 5, true))
+    g.add(bentPipe([[x, 2, 24], [x, 86, 15], [x, 86, -15], [x, 7, -22]], 1.3, frame, 5, true))
     g.add(cylZ(1.9, 20, grip, x, 86, 0, 14))
     // 后腿的橡胶脚垫
     g.add(cyl(1.9, 2.2, 4.5, RUBBER, { x, z: 24.2 }, 12))
@@ -179,8 +204,8 @@ function caneStand(p: string[]) {
   const [stand, wood, metal] = p
   const g = new THREE.Group()
   // 架子：浅盘、两道圈、四根立杆
-  g.add(cup(CS.r, CS.r - 0.6, 4, 1.2, stand))
-  for (const y of [25, CS.ring]) g.add(P(torus(CS.r - 0.6, 0.6, stand), 0, y, 0, PI / 2))
+  g.add(cup(CS.r, CS.r - 0.6, 4, 1.2, stand, {}, 24))
+  for (const y of [25, CS.ring]) g.add(P(torus(CS.r - 0.6, 0.6, stand, {}, PI * 2, [6, 24]), 0, y, 0, PI / 2))
   for (let k = 0; k < 4; k++) {
     const a = PI / 4 + (k * PI) / 2
     g.add(cyl(0.6, 0.6, CS.ring - 2, stand, { x: Math.cos(a) * (CS.r - 0.6), y: 2.5, z: Math.sin(a) * (CS.r - 0.6) }, 8))
@@ -200,7 +225,7 @@ function caneStand(p: string[]) {
     hook.push([top[0] - out[0] * c, top[1] + Math.sin(a) * hookR, top[2] - out[1] * c])
   }
   hook.push([top[0] - out[0] * hookR * 2, top[1] - 3.5, top[2] - out[1] * hookR * 2])
-  g.add(cappedTube(hook, 1.1, wood, { seg: 28, radial: 8 }))
+  g.add(cappedTube(hook, 1.1, wood, { seg: 16, radial: 8, capSeg: [8, 6] }))
   // 四脚拐杖：四只小脚 + 底座 + 直杆 + 横握把
   const [qx, qz] = [2.8, 1.2]
   for (const sx of [-1, 1])
@@ -212,7 +237,7 @@ function caneStand(p: string[]) {
   g.add(cyl(0.95, 0.95, 78, metal, { x: qx, y: 10, z: qz }, 10))
   g.add(cyl(1.3, 1.3, 3, DARK, { x: qx, y: 46, z: qz }, 10))
   g.add(cylZ(1.5, 11, DARK, qx, 89.3, qz + 1.5, 12))
-  for (const s of [-1, 1]) g.add(ball(1.5, DARK, { x: qx, y: 89.3, z: qz + 1.5 + s * 5.5 }))
+  for (const s of [-1, 1]) g.add(ball(1.5, DARK, { x: qx, y: 89.3, z: qz + 1.5 + s * 5.5 }, undefined, [12, 6]))
   return fitGroup(g)
 }
 
@@ -252,8 +277,9 @@ function careBed(p: string[]) {
   g.add(rod3([0, 30, -44], [0, 47, -51.3], 2.5, DARK, 12))
   // 床头板 / 床尾板（各开一个提手口），用托架接在底架两端
   const grip = (y: number) => [{ kind: 'rect' as const, x: 0, y, w: 34, h: 6, r: 3 }]
-  g.add(holePanel(98, 60, 3.5, board, grip(48), { y: 35, z: -102.2 }, 4))
-  g.add(holePanel(98, 42, 3.5, board, grip(30), { y: 35, z: 102.2 }, 4))
+  // 提手口两头的半圆各 12 段（默认每个四分之一圆 32 段，一块板上千个三角面）
+  g.add(holePanel(98, 60, 3.5, board, grip(48), { y: 35, z: -102.2 }, 4, { seg: 3 }))
+  g.add(holePanel(98, 42, 3.5, board, grip(30), { y: 35, z: 102.2 }, 4, { seg: 3 }))
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(6, 8, 3.4, frame, { x: sx * 36, y: 31, z: sz * 99.6 }, 0.6))
   // 两侧护栏：立在纵梁外沿，上下两根横杆 + 三根短立杆
   for (const s of [-1, 1]) {
@@ -262,7 +288,7 @@ function careBed(p: string[]) {
     g.add(cylZ(1, 78, STEEL, x, 56, 8, 8))
     for (const z of [-31, 47]) {
       g.add(cyl(1.3, 1.3, 37, STEEL, { x, y: 35, z }, 10))
-      g.add(ball(1.3, STEEL, { x, y: 72, z }))
+      g.add(ball(1.3, STEEL, { x, y: 72, z }, undefined, [10, 6]))
     }
     for (const z of [-11.5, 8, 27.5]) g.add(cyl(0.8, 0.8, 16, STEEL, { x, y: 56, z }, 8))
   }
@@ -274,10 +300,11 @@ function careBed(p: string[]) {
   g.add(rbox(5.5, 14, 1.8, DARK, { x: 30, y: 64, z: 104.75 }, 0.8))
   for (let k = 0; k < 6; k++) {
     const c = k < 2 ? '#8fd8ff' : '#e9eaec'
-    const b = noOutline(rbox(1.5, 1.5, 0.5, c, { x: 28.9 + (k % 2) * 2.2, y: 73.2 - Math.floor(k / 2) * 2.6, z: 105.7 }, 0.2))
+    const b = noOutline(box(1.5, 1.5, 0.5, c, { x: 28.9 + (k % 2) * 2.2, y: 73.2 - Math.floor(k / 2) * 2.6, z: 105.7 }))
     g.add(k < 2 ? lit(b, c, 0.5) : b)
   }
-  g.add(noOutline(cappedTube([[30, 64.5, 104.8], [30.5, 54, 106], [30, 44, 105], [30, 37, 101.5], [30, 34.5, 98.5]], 0.4, DARK, { seg: 20, radial: 6 })))
+  // 线贴着床尾板外侧垂下去，不比遥控器的按键更靠外（整张床的进深不超过声明的 210）
+  g.add(noOutline(cappedTube([[30, 64.5, 104.8], [30.4, 54, 105.1], [30, 44, 104.6], [30, 37, 101.5], [30, 34.5, 98.5]], 0.4, DARK, { seg: 12, radial: 5, capSeg: [6, 4] })))
   return fitGroup(g)
 }
 
@@ -319,9 +346,9 @@ function bpMonitor(p: string[]) {
   face.g.add(lit(rbox(8.2, 5, 0.3, LCD, { y: 3.9, z: 0.35 }, 0.2), LCD, 0.35))
   // 液晶上：上行三位大字（高压）、下行两位小字（低压），左下一颗心跳标
   const SEG = '#2b3a36'
-  for (let k = 0; k < 3; k++) face.g.add(noOutline(rbox(1, 2, 0.2, SEG, { x: 0.2 + k * 1.4, y: 6.3, z: 0.55 }, 0.1)))
-  for (let k = 0; k < 2; k++) face.g.add(noOutline(rbox(0.8, 1.4, 0.2, SEG, { x: 1.6 + k * 1.2, y: 4.4, z: 0.55 }, 0.1)))
-  face.g.add(noOutline(rbox(0.9, 0.8, 0.2, SIGN_RED, { x: -2.6, y: 4.6, z: 0.55 }, 0.3)))
+  for (let k = 0; k < 3; k++) face.g.add(noOutline(box(1, 2, 0.2, SEG, { x: 0.2 + k * 1.4, y: 6.3, z: 0.55 })))
+  for (let k = 0; k < 2; k++) face.g.add(noOutline(box(0.8, 1.4, 0.2, SEG, { x: 1.6 + k * 1.2, y: 4.4, z: 0.55 })))
+  face.g.add(noOutline(box(0.9, 0.8, 0.2, SIGN_RED, { x: -2.6, y: 4.6, z: 0.55 })))
   face.g.add(P(cyl(1.2, 1.2, 0.7, accent, {}, 14), 2.6, 1.6, 0.2, PI / 2))
   face.g.add(P(cyl(0.8, 0.8, 0.7, '#9aa0a8', {}, 12), -2.6, 1.6, 0.2, PI / 2))
   g.add(face.g)
@@ -329,11 +356,11 @@ function bpMonitor(p: string[]) {
   const cx = -6.4
   g.add(cylZ(4, 11.5, cuff, cx, 4, 0, 20))
   g.add(noOutline(cylZ(2.4, 11.9, shade(cuff, -0.14), cx, 4, 0, 16)))
-  g.add(rbox(4.6, 0.7, 11.5, cuff, { x: cx - 3, z: 0 }, 0.3))
-  g.add(noOutline(rbox(2, 0.5, 9, '#8a8d93', { x: cx - 4, y: 0.5 }, 0.2)))
+  g.add(rbox(4.2, 0.7, 11.5, cuff, { x: cx - 2.8, z: 0 }, 0.3))
+  g.add(noOutline(box(2, 0.5, 9, '#8a8d93', { x: cx - 3.7, y: 0.5 })))
   // 软管：从臂带顶上绕到主机左侧的接口
   g.add(ball(0.8, DARK, { x: -5, y: 7.75, z: 3.2 }))
-  g.add(cappedTube([[-5, 7.7, 3.2], [-2.8, 7.7, 5], [-2, 4.6, 5.6], [-1.8, 2.3, 4.6], [-0.6, 2.2, 3.4]], 0.45, '#4b4e55', { seg: 20, radial: 6 }))
+  g.add(cappedTube([[-5, 7.7, 3.2], [-2.8, 7.7, 5], [-2, 4.6, 5.6], [-1.8, 2.3, 4.6], [-0.6, 2.2, 3.4]], 0.45, '#4b4e55', { seg: 14, radial: 5, capSeg: [6, 4] }))
   return fitGroup(g)
 }
 
@@ -341,19 +368,19 @@ function bpMonitor(p: string[]) {
 
 const FA = { w: 30, d: 19, base: 9, lid: 3, t: 0.8, open: 0.7 }
 function firstAid(p: string[]) {
-  const [box, mark, item] = p
+  const [shellC, mark, item] = p
   const g = new THREE.Group()
   const { w, d, t } = FA
   // 箱底：空心盒
-  g.add(tray(w, FA.base, d, t, box, {}, 0.4))
+  g.add(tray(w, FA.base, d, t, shellC, {}, 0.4))
   // 箱盖：绕后上沿的合页掀开约 40°，也是空心的
   const lid = new THREE.Group()
-  lid.add(rbox(w, t, d, box, { y: FA.lid - t, z: d / 2 }, 0.4))
-  lid.add(rbox(w, FA.lid, t, box, { z: d - t / 2 }, 0.3))
-  lid.add(rbox(w, FA.lid, t, box, { z: t / 2 }, 0.3))
-  for (const s of [-1, 1]) lid.add(rbox(t, FA.lid, d, box, { x: (s * (w - t)) / 2, z: d / 2 }, 0.3))
-  lid.add(noOutline(rbox(9.5, 0.6, 3, mark, { y: FA.lid - 0.25, z: d / 2 }, 0.2)))
-  lid.add(noOutline(rbox(3, 0.6, 9.5, mark, { y: FA.lid - 0.25, z: d / 2 }, 0.2)))
+  lid.add(rbox(w, t, d, shellC, { y: FA.lid - t, z: d / 2 }, 0.4))
+  lid.add(rbox(w, FA.lid, t, shellC, { z: d - t / 2 }, 0.3))
+  lid.add(rbox(w, FA.lid, t, shellC, { z: t / 2 }, 0.3))
+  for (const s of [-1, 1]) lid.add(rbox(t, FA.lid, d, shellC, { x: (s * (w - t)) / 2, z: d / 2 }, 0.3))
+  lid.add(noOutline(box(9.5, 0.6, 3, mark, { y: FA.lid - 0.25, z: d / 2 })))
+  lid.add(noOutline(box(3, 0.6, 9.5, mark, { y: FA.lid - 0.25, z: d / 2 })))
   g.add(P(lid, 0, FA.base, -d / 2, -FA.open))
   for (const s of [-1, 1]) g.add(cylX(0.6, 3.4, STEEL, s * 9, FA.base, -d / 2 - 0.2, 8))
   // 前面的两只搭扣和提手
@@ -391,7 +418,8 @@ function medCabinet(p: string[]) {
   g.add(rbox(MED.w - 0.6, dh, 1.4, door, { y: y0, z: zf + 0.7 }, 0.5))
   g.add(crossMark(10, mark, 0, y0 + dh / 2, zf + 1.5))
   g.add(cylZ(0.9, 1.2, STEEL, 14.4, y0 + 6, zf + 2, 12))
-  for (const y of [y0 + 3, y0 + dh - 7]) g.add(cyl(0.6, 0.6, 4, STEEL, { x: -MED.w / 2 + 0.5, y, z: zf + 0.8 }, 8))
+  // 合页的轴露在门的左前棱上（不超出柜体的宽度）
+  for (const y of [y0 + 3, y0 + dh - 7]) g.add(cyl(0.6, 0.6, 4, STEEL, { x: -MED.w / 2 + 0.7, y, z: zf + 1.1 }, 8))
   // 搁格里的常备药：药瓶、药盒、一卷纱布
   g.add(cyl(1.7, 1.7, 5, '#b9783a', { x: -10, y: 1.2, z: 1 }, 14))
   g.add(cyl(1.8, 1.8, 1.4, PAPER, { x: -10, y: 6.2, z: 1 }, 14))
@@ -410,7 +438,7 @@ function extinguisher(p: string[]) {
   const { r, y0 } = EX
   // 底座：方盘 + 一圈卡住瓶底的套环
   g.add(rbox(17, 1.4, 17, stand, {}, 1.5))
-  g.add(cup(r + 1.3, r + 1.3, 5.4, 0.9, stand, { y: 1.3 }))
+  g.add(cup(r + 1.3, r + 1.3, 5.4, 0.9, stand, { y: 1.3 }, 24))
   // 瓶身：圆柱 + 圆肩收到瓶颈
   g.add(
     latheAt(
@@ -428,7 +456,7 @@ function extinguisher(p: string[]) {
       ],
       body,
       { y: y0 },
-      32,
+      24,
       0.01,
     ),
   )
@@ -443,15 +471,17 @@ function extinguisher(p: string[]) {
   g.add(batten([1.5, vy + 3.3, 0], [-8.2, vy + 7, 0], 0.9, 2.4, body, 0.3))
   g.add(cylZ(1.9, 1, STEEL, 0, vy + 1.6, 2.9, 16))
   g.add(noOutline(cylZ(1.5, 0.4, '#f6f7f8', 0, vy + 1.6, 3.4, 16)))
-  g.add(noOutline(lit(rbox(1.2, 0.5, 0.2, '#4fbf6a', { x: 0, y: vy + 2, z: 3.6 }, 0.1), '#4fbf6a', 0.4)))
-  g.add(P(torus(1.2, 0.25, '#f2c230'), 0, vy + 4.4, -3.2, 0, PI / 2))
+  g.add(noOutline(lit(box(1.2, 0.5, 0.2, '#4fbf6a', { x: 0, y: vy + 2, z: 3.6 }), '#4fbf6a', 0.4)))
+  g.add(P(torus(1.2, 0.25, '#f2c230', {}, PI * 2, [6, 12]), 0, vy + 4.4, -3.2, 0, PI / 2))
   g.add(rod3([0, vy + 3.6, -3.2], [0, vy + 3.2, 0], 0.3, '#f2c230', 6))
   // 喷管：从阀体侧面出来，顺着瓶身垂下去，末端一只喇叭口；瓶身上一道卡箍
   const hx = r + 0.85
   g.add(bentPipe([[2, vy + 1.4, 0], [hx, vy + 1.4, 0], [hx, y0 + 20, 0]], 0.8, DARK, 3.2))
   g.add(taperRod3([hx, y0 + 20.5, 0], [hx, y0 + 13, 0], 0.9, 1.5, DARK, 12))
-  g.add(noOutline(P(torus(r + 0.2, 0.4, DARK), 0, y0 + 24, 0, PI / 2)))
-  return g
+  // 卡箍和瓶身一样 24 段
+  g.add(noOutline(P(torus(r + 0.2, 0.4, DARK, {}, PI * 2, [6, 24]), 0, y0 + 24, 0, PI / 2)))
+  // 喷管挂在右侧：整体居中，左右都不超出占地
+  return fitGroup(g)
 }
 
 // ---------- 家用保险箱：厚重的钢箱，门上一只密码转盘和三叉轮式把手，左边两只合页，底下四只小脚 ----------
@@ -474,7 +504,7 @@ function safeBox(p: string[]) {
   g.add(cylZ(3.5, 1, DARK, dx, dy, zd + 1.5, 24))
   for (let k = 0; k < 12; k++) {
     const a = (k / 12) * PI * 2
-    g.add(noOutline(P(rbox(0.3, 0.9, 0.2, '#f4f4f2', {}, 0.05), dx + Math.cos(a) * 2.8, dy + Math.sin(a) * 2.8, zd + 2.05, 0, 0, a - PI / 2)))
+    g.add(noOutline(P(box(0.3, 0.9, 0.2, '#f4f4f2'), dx + Math.cos(a) * 2.8, dy + Math.sin(a) * 2.8, zd + 2.05, 0, 0, a - PI / 2)))
   }
   g.add(cylZ(1.5, 1.6, STEEL, dx, dy, zd + 2.7, 14))
   g.add(noOutline(rbox(1.1, 1.1, 0.5, accent, { x: dx, y: dy + 5, z: zd + 0.1 }, 0.2)))
@@ -485,7 +515,7 @@ function safeBox(p: string[]) {
     const a = PI / 2 + (k * PI * 2) / 3
     const tip: V3 = [hx + Math.cos(a) * 6, hy + Math.sin(a) * 6, zd + 2]
     g.add(rod3([hx, hy, zd + 2], tip, 0.7, STEEL, 8))
-    g.add(ball(1.2, accent, { x: tip[0], y: tip[1], z: tip[2] }))
+    g.add(ball(1.2, accent, { x: tip[0], y: tip[1], z: tip[2] }, undefined, [10, 6]))
   }
   // 铭牌
   g.add(noOutline(rbox(9, 2.6, 0.5, accent, { y: 9, z: zd + 0.1 }, 0.2)))
@@ -520,7 +550,7 @@ function stepLadder(p: string[]) {
     const y = i * 29.2
     const [x, z] = slFront(y)
     g.add(rbox(x * 2 + 1, 2.6, 9.5, alu, { y: y - 2.6, z: z - 0.5 }, 0.5))
-    g.add(noOutline(rbox(x * 2 - 4, 0.5, 6, tread, { y: y - 0.2, z: z - 0.5 }, 0.2)))
+    g.add(noOutline(box(x * 2 - 4, 0.5, 6, tread, { y: y - 0.2, z: z - 0.5 })))
   }
   // 后撑腿之间的两根横档
   for (const y of [40, 98]) {
@@ -529,7 +559,7 @@ function stepLadder(p: string[]) {
   }
   // 顶部平台（塑料顶盖，上面一块浅槽）
   g.add(rbox(38, 4.6, 17, cap, { y: SL.h - 4.8, z: -1 }, 1.6))
-  g.add(noOutline(rbox(27, 0.5, 9, shade(cap, -0.12), { y: SL.h - 0.5, z: -1 }, 0.2)))
+  g.add(noOutline(box(27, 0.5, 9, shade(cap, -0.12), { y: SL.h - 0.5, z: -1 })))
   return fitGroup(g)
 }
 
@@ -548,9 +578,9 @@ function flashlight(p: string[]) {
   for (const x of [1.5, 3, 4.5]) f.add(noOutline(cylX(2, 0.6, shade(torch, -0.1), x, 0, 0, 16)))
   f.add(rbox(1.8, 0.7, 1.2, accent, { x: -1.6, y: 1.55 }, 0.3))
   f.add(cylX(2.1, 1.3, shade(torch, -0.12), 7.7, 0, 0, 16))
-  g.add(P(f, -3.2, 2.5, 3.7, 0, 0, -0.038))
+  g.add(P(f, -3.2, 2.5, 3.6, 0, 0, -0.038))
   // 应急灯：底座 + 发光的灯筒（外面四根护条）+ 顶盖 + 提梁
-  const [lx, lz] = [7.2, -2.7]
+  const [lx, lz] = [7.2, -2.6]
   g.add(cyl(3.6, 4, 3.2, lamp, { x: lx, z: lz }, 20))
   g.add(cylZ(0.8, 0.8, accent, lx, 1.6, lz + 3.8, 10))
   g.add(lit(cyl(2.9, 2.9, 6.2, GLOW, { x: lx, y: 3.1, z: lz }, 16), GLOW, 0.7))
@@ -561,7 +591,7 @@ function flashlight(p: string[]) {
   g.add(cyl(2.6, 3.7, 2, lamp, { x: lx, y: 9.2, z: lz }, 20))
   g.add(cyl(1, 1.2, 0.9, shade(lamp, -0.12), { x: lx, y: 11.2, z: lz }, 12))
   for (const s of [-1, 1]) g.add(ball(0.6, STEEL, { x: lx + s * 3.6, y: 10, z: lz }))
-  g.add(noOutline(P(torus(3.75, 0.28, STEEL, {}, PI), lx, 10, lz)))
+  g.add(noOutline(P(torus(3.75, 0.28, STEEL, {}, PI, [6, 10]), lx, 10, lz)))
   return fitGroup(g)
 }
 
@@ -577,11 +607,11 @@ function emergencyBag(p: string[]) {
   g.add(rbox(23, 16, 3.4, shade(bag, -0.06), { y: 3, z: -0.2 }, 1.5))
   for (const s of [-1, 1]) g.add(rbox(3.4, 13, 9, shade(bag, -0.1), { x: s * 15.3, y: 2, z: -7 }, 1.4))
   // 反光条：包身一道、前袋一道
-  g.add(noOutline(rbox(20, 2.2, 0.6, tape, { y: 27, z: 0.05 }, 0.2)))
-  g.add(noOutline(rbox(21, 2, 0.6, tape, { y: 15, z: 1.55 }, 0.2)))
+  g.add(noOutline(box(20, 2.2, 0.6, tape, { y: 27, z: 0.05 })))
+  g.add(noOutline(box(21, 2, 0.6, tape, { y: 15, z: 1.55 })))
   // 两条插扣带：从翻盖扣到前袋上沿
   for (const s of [-1, 1]) {
-    g.add(noOutline(rbox(2.4, 14.5, 0.6, trim, { x: s * 6.5, y: 18.5, z: 0.15 }, 0.2)))
+    g.add(noOutline(box(2.4, 14.5, 0.6, trim, { x: s * 6.5, y: 18.5, z: 0.15 })))
     g.add(rbox(3.2, 2.6, 1.2, DARK, { x: s * 6.5, y: 21, z: 0.5 }, 0.4))
   }
   // 前袋上的十字牌
@@ -609,17 +639,17 @@ function emergencyBag(p: string[]) {
       0.01,
     ),
   )
-  h.add(cyl(10.6, 10.6, 0.9, hat, { y: -0.1 }, 24))
+  h.add(cyl(10.6, 10.6, 0.9, hat, { y: -0.1 }, 20))
   h.add(rbox(12, 0.9, 5, hat, { y: -0.1, z: 10.2 }, 0.4))
   h.add(noOutline(cyl(9.2, 9.2, 0.5, shade(hat, -0.25), { y: -0.3 }, 20)))
-  h.add(P(torus(9.3, 0.8, hat, {}, PI), 0, 0.6, 0, 0, PI / 2))
+  h.add(P(torus(9.3, 0.8, hat, {}, PI, [6, 12]), 0, 0.6, 0, 0, PI / 2))
   // 防灾头盔比工地安全帽略小一号；正着放在包的左前方地上，帽檐朝前偏左
   h.scale.set(0.9, 0.9, 1.0)
   g.add(P(h, -15, 0.3, 9, 0, 0.3))
   // 一瓶水：半透明瓶身 + 标签 + 瓶盖
   const [bx, bz] = [12.6, 7.5]
-  g.add(ghost(cyl(3.2, 3.2, 15, WATER, { x: bx, z: bz }, 16), WATER, 0.55))
-  g.add(ghost(cyl(1.4, 3.2, 3, WATER, { x: bx, y: 15, z: bz }, 16), WATER, 0.55))
+  // 瓶身和瓶肩烘成一个网格：半透明件不参与按材质合并，分开就是两次绘制
+  g.add(ghost(bakeMeshes([cyl(3.2, 3.2, 15, WATER, { x: bx, z: bz }, 16), cyl(1.4, 3.2, 3, WATER, { x: bx, y: 15, z: bz }, 16)], WATER), WATER, 0.55))
   g.add(noOutline(cyl(3.28, 3.28, 5, '#3f7fd8', { x: bx, y: 6.5, z: bz }, 16)))
   g.add(cyl(1.5, 1.5, 1.7, '#f4f4f2', { x: bx, y: 17.9, z: bz }, 12))
   return fitGroup(g)
@@ -637,8 +667,8 @@ function breakerPanel(p: string[]) {
   for (const y of [1.8, 23]) g.add(rbox(34, 1.2, 3.4, body, { y, z: 7.7 }, 0.4))
   for (const s of [-1, 1]) g.add(rbox(1.2, 22.4, 3.4, body, { x: s * 16.4, y: 1.8, z: 7.7 }, 0.4))
   // 面框里的安装板、标签条、漏电指示灯
-  g.add(noOutline(rbox(31.6, 20, 0.6, shade(body, -0.08), { y: 3, z: 6.3 }, 0.3)))
-  g.add(noOutline(rbox(21, 1.6, 0.3, '#ffffff', { x: 4, y: 19, z: 6.7 }, 0.1)))
+  g.add(noOutline(box(31.6, 20, 0.6, shade(body, -0.08), { y: 3, z: 6.3 })))
+  g.add(noOutline(box(21, 1.6, 0.3, '#ffffff', { x: 4, y: 19, z: 6.7 })))
   g.add(lit(rbox(1.4, 1.4, 0.5, '#59d98a', { x: -11.5, y: 19.1, z: 6.8 }, 0.3), '#59d98a', 0.6))
   // 主开关（左边，两位宽）+ 一排小断路器（有一路拉闸了）
   g.add(rbox(5.2, 9.5, 1.6, sw, { x: -11.5, y: 7, z: 7.3 }, 0.3))
@@ -646,12 +676,12 @@ function breakerPanel(p: string[]) {
   for (let i = 0; i < 8; i++) {
     const x = -5.6 + i * 2.75
     g.add(rbox(2.4, 8.5, 1.6, sw, { x, y: 7.5, z: 7.3 }, 0.3))
-    g.add(noOutline(rbox(1.1, 2.2, 1.1, DARK, { x, y: i === 5 ? 8.6 : 11.6, z: 8.55 }, 0.2)))
+    g.add(noOutline(box(1.1, 2.2, 1.1, DARK, { x, y: i === 5 ? 8.6 : 11.6, z: 8.55 })))
   }
   // 半透明翻盖：搭在面框上，顶边两只合页，底边一个扣手
   g.add(ghost(rbox(33, 21.4, 0.6, COVER, { y: 2.3, z: 9.6 }, 0.5), COVER, 0.32))
   for (const s of [-1, 1]) g.add(cylX(0.6, 5, shade(body, -0.12), s * 9, 24.1, 9.3, 8))
-  g.add(rbox(5, 1.1, 0.9, shade(body, -0.12), { y: 1.9, z: 9.6 }, 0.3))
+  g.add(rbox(5, 1.1, 0.8, shade(body, -0.12), { y: 1.9, z: 9.55 }, 0.3))
   return fitWall(g, BK.mount, BK.d)
 }
 
@@ -668,14 +698,14 @@ function waterHeater(p: string[]) {
   g.add(rbox(9.4, 4.8, 0.5, DARK, { y: y0 + 7.6, z: 7.5 }, 0.5))
   g.add(lit(rbox(5.4, 2.4, 0.3, '#7fe8d0', { y: y0 + 8.8, z: 7.8 }, 0.2), '#7fe8d0', 0.7))
   for (const s of [-1, 1]) {
-    g.add(cylZ(2, 1.6, STEEL, s * 10, y0 + 10, 8.2, 20))
-    g.add(noOutline(rbox(0.5, 1.5, 0.3, accent, { x: s * 10, y: y0 + 10.2, z: 9 }, 0.1)))
+    g.add(cylZ(2, 1.4, STEEL, s * 10, y0 + 10, 8.1, 16))
+    g.add(noOutline(box(0.5, 1.5, 0.3, accent, { x: s * 10, y: y0 + 10.2, z: 8.85 })))
   }
   // 腰线、观火窗、上部的散热缝
-  g.add(noOutline(rbox(30, 0.8, 0.4, accent, { y: y0 + 20, z: 7.05 }, 0.2)))
+  g.add(noOutline(box(30, 0.8, 0.4, accent, { y: y0 + 20, z: 7.05 })))
   g.add(rbox(6, 2.8, 0.5, DARK, { y: y0 + 25, z: 7.1 }, 0.6))
   g.add(lit(rbox(3.6, 1.2, 0.3, '#ff9a3d', { y: y0 + 25.6, z: 7.35 }, 0.2), '#ff9a3d', 0.8))
-  for (let k = 0; k < 4; k++) g.add(noOutline(rbox(16, 0.7, 0.4, shade(body, -0.2), { y: y0 + 38 + k * 1.9, z: 7 }, 0.2)))
+  for (let k = 0; k < 4; k++) g.add(noOutline(box(16, 0.7, 0.4, shade(body, -0.2), { y: y0 + 38 + k * 1.9, z: 7 })))
   // 顶上的排烟口
   g.add(cyl(4.6, 4.6, 1, STEEL, { y: y0 + 48.6, z: -1 }, 20))
   g.add(cyl(4.1, 4.1, 4.2, STEEL, { y: y0 + 48.8, z: -1 }, 20))
@@ -689,7 +719,7 @@ function waterHeater(p: string[]) {
     g.add(cyl(1.7, 1.7, 1.6, BRASS, { x, y: y0 - 1.4, z: 1 }, 10))
     g.add(bentPipe([[x, y0 + 0.5, 1], [x, 1.4, 1], [x, 1.4, -7]], 1.1, STEEL, 2.6))
     g.add(cyl(1.6, 1.6, 2, BRASS, { x, y: 4.4, z: 1 }, 10))
-    g.add(rbox(1, 1, 3.6, c, { x, y: 4.9, z: 3.4 }, 0.3))
+    g.add(nub(1, 1, 3.6, c, { x, y: 4.9, z: 3.4 }))
   }
   return fitWall(g, WH.mount, WH.d)
 }
@@ -731,7 +761,8 @@ function grabBar(p: string[]) {
   const g = new THREE.Group()
   const { z, r } = GB
   // 一根弯管：左端从墙里出来 → 横段 → 拐角 → 竖段 → 回到墙里；拐角再加一根支撑短管
-  g.add(bentPipe([[-26, 4, 0], [-26, 4, z], [26, 4, z], [26, 56, z], [26, 56, 0]], r, bar, 3.2, false, 10))
+  // 两头的管口埋在法兰盘里（不和法兰盘贴墙的那一面齐平）
+  g.add(bentPipe([[-26, 4, 0.5], [-26, 4, z], [26, 4, z], [26, 56, z], [26, 56, 0.5]], r, bar, 3.2))
   g.add(cylZ(r, z - 0.5, bar, 26, 4, z / 2 + 0.25, 12))
   // 三只法兰盘（各三颗螺丝）
   for (const [x, y] of [
@@ -743,7 +774,7 @@ function grabBar(p: string[]) {
     g.add(cylZ(2.3, 1.6, flange, x, y, 0.8, 16))
     for (let k = 0; k < 3; k++) {
       const a = PI / 2 + (k * PI * 2) / 3
-      g.add(noOutline(cylZ(0.45, 0.3, shade(flange, -0.3), x + Math.cos(a) * 3, y + Math.sin(a) * 3, 0.95, 8)))
+      g.add(noOutline(cylZ(0.45, 0.3, shade(flange, -0.3), x + Math.cos(a) * 3, y + Math.sin(a) * 3, 0.95, 6)))
     }
   }
   // 防滑握套

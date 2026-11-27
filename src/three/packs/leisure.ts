@@ -2,9 +2,9 @@
 // 原点在占地中心底面，正面朝 +z。带台面的（乒乓球桌、空气曲棍球桌）声明 surface；type / tags / mats 直接写在 def 里。
 
 import * as THREE from 'three'
-import { ball, cyl, plate, rbox, shade, torus } from '../toon'
+import { ball, box, cyl, nub, plate, rbox, shade, torus } from '../toon'
 import { C, paintPanel, rectPoly, shell, type AssetDef } from '../kit'
-import { cylX, cylZ, fitGroup, G, ghost, glassPane, lit, mesh, noOutline, P, PI, rod3, sideSlab, tiltFrame, tube } from '../geo'
+import { bakeMeshes, clearMat, cylX, cylZ, fitGroup, G, ghost, glassPane, lit, mesh, noOutline, P, PI, rod3, sideSlab, tiltFrame, tube } from '../geo'
 import { I, M, N, R, define, type Pal } from '../packkit'
 
 const STEEL = '#c3c7cc'
@@ -49,19 +49,19 @@ function pingpong(p: string[]) {
     for (const sz of [-1, 1]) {
       g.add(rbox(4, PP.h - t - 8, 4, frame, { x: sx * 16, y: 8, z: sz * 52 }, 0.8))
       g.add(cylX(4, 2.6, RUBBER, sx * 16, 4, sz * 52, 14))
-      g.add(rbox(1.2, 5, 5, frame, { x: sx * 16 + 2, y: 4, z: sz * 52 }, 0.3))
-      g.add(rbox(1.2, 5, 5, frame, { x: sx * 16 - 2, y: 4, z: sz * 52 }, 0.3))
+      g.add(nub(1.2, 5, 5, frame, { x: sx * 16 + 2, y: 4, z: sz * 52 }))
+      g.add(nub(1.2, 5, 5, frame, { x: sx * 16 - 2, y: 4, z: sz * 52 }))
     }
   for (const sz of [-1, 1]) g.add(rbox(36, 3, 3, frame, { y: 12, z: sz * 52 }, 0.6))
   for (const sx of [-1, 1]) g.add(rbox(3, 3, 104, frame, { x: sx * 16, y: 40 }, 0.6))
-  // 网：两端的夹柱 + 半透明网面 + 顶上一条白边
+  // 网：两端的夹柱 + 半透明网面 + 顶上一条白边。夹柱和网一样高（15.25），夹臂从台面底下一直伸到夹柱脚下，网两头插进夹柱
   const nz = PP.d / 2 + PP.over
   for (const sz of [-1, 1]) {
-    g.add(rbox(2.4, PP.net + 5, 2.4, post, { y: PP.h - 4, z: sz * (nz - 1.2) }, 0.5))
-    g.add(rbox(4, 3.5, PP.over, post, { y: PP.h - t - 3.5, z: sz * (PP.d / 2 + PP.over / 2 - 2.5) }, 0.6))
+    g.add(rbox(2.4, PP.net + 4, 2.4, post, { y: PP.h - 4, z: sz * (nz - 1.2) }, 0.5))
+    g.add(rbox(4, 3.5, PP.over + 2.5, post, { y: PP.h - t - 3.5, z: sz * (PP.d / 2 + PP.over / 2 - 1.25) }, 0.6))
   }
-  g.add(ghost(rbox(0.5, PP.net - 1.4, nz * 2 - 5, '#3a4a5c', { y: PP.h + 0.2 }, 0.2), '#3a4a5c', 0.45))
-  g.add(noOutline(rbox(0.9, 1.4, nz * 2 - 5, '#ffffff', { y: PP.h + PP.net - 1.2 }, 0.3)))
+  g.add(ghost(rbox(0.5, PP.net - 1.4, nz * 2 - 4.6, '#3a4a5c', { y: PP.h + 0.2 }, 0.2), '#3a4a5c', 0.45))
+  g.add(noOutline(rbox(0.9, 1.4, nz * 2 - 4.6, '#ffffff', { y: PP.h + PP.net - 1.4 }, 0.3)))
   return g
 }
 
@@ -93,11 +93,13 @@ function foosball(p: string[]) {
   g.add(rbox(FB.w - 22, 4, 4, shade(body, -0.08), { y: 20.5 }, 0.8))
   // 球场箱：敞口空心箱 + 绿色场地 + 白线
   g.add(P(shell(FB.w, FB.box, FB.body, 3.5, body, { top: false }), 0, y0, 0))
-  const fy = y0 + 5
+  // 场地垫高到小人脚下约 1cm（箱底到场地之间是空的，看不见）
+  const fy = y0 + 10.5
   g.add(rbox(FB.w - 6.6, 1.5, FB.body - 6.6, field, { y: fy - 1.5 }, 0.3))
   g.add(plate(0.8, FB.body - 8, '#ffffff', { y: fy + 0.06 }))
-  g.add(P(noOutline(torus(9, 0.4, '#ffffff', {}, PI * 2)), 0, fy + 0.2, 0, PI / 2))
-  for (const sx of [-1, 1]) g.add(noOutline(rbox(0.5, 9, 22, DARK, { x: sx * (FB.w / 2 - 3.2), y: fy }, 0.2)))
+  g.add(P(noOutline(torus(9, 0.4, '#ffffff', {}, PI * 2, [4, 24])), 0, fy + 0.2, 0, PI / 2))
+  // 两端的球门口：贴在端板内侧（箱壁厚 3.5），露出 0.3
+  for (const sx of [-1, 1]) g.add(noOutline(box(0.5, 9, 22, DARK, { x: sx * (FB.w / 2 - 3.55), y: fy })))
   // 横杆、手柄、挡圈、小人
   const ry = FB.h - 9
   const zr = FB.body / 2
@@ -112,8 +114,8 @@ function foosball(p: string[]) {
     const span = FB.body - 26
     for (let k = 0; k < n; k++) {
       const z = n === 1 ? 0 : -span / 2 + (span * k) / (n - 1)
-      g.add(rbox(2.6, 9.5, 2.2, color, { x, y: ry - 8, z: z * (n === 5 ? 1 : 0.6) }, 0.7))
-      g.add(ball(1.7, color, { x, y: ry + 2.6, z: z * (n === 5 ? 1 : 0.6) }))
+      g.add(rbox(2.6, 11, 2.2, color, { x, y: ry - 9.5, z: z * (n === 5 ? 1 : 0.6) }, 0.7))
+      g.add(ball(1.7, color, { x, y: ry + 2.6, z: z * (n === 5 ? 1 : 0.6) }, undefined, [8, 6]))
     }
   })
   g.add(ball(1.7, '#ffffff', { x: 6, y: fy + 1.7, z: 9 }))
@@ -121,7 +123,7 @@ function foosball(p: string[]) {
   for (const sx of [-1, 1]) {
     g.add(rod3([sx * (FB.w / 2 - 1.8), FB.h + 2.5, -12], [sx * (FB.w / 2 - 1.8), FB.h + 2.5, 12], 0.4, STEEL, 6))
     for (const z of [-12, 12]) g.add(cyl(0.6, 0.6, 2.6, STEEL, { x: sx * (FB.w / 2 - 1.8), y: FB.h - 0.2, z }, 6))
-    for (let k = 0; k < 5; k++) g.add(noOutline(cylZ(1.1, 1.6, sx < 0 ? teamA : teamB, sx * (FB.w / 2 - 1.8), FB.h + 2.5, -9 + k * 1.9, 10)))
+    for (let k = 0; k < 5; k++) g.add(noOutline(cylZ(1.1, 1.6, sx < 0 ? teamA : teamB, sx * (FB.w / 2 - 1.8), FB.h + 2.5, -9 + k * 1.9, 8)))
   }
   return g
 }
@@ -146,12 +148,12 @@ function airHockey(p: string[]) {
   for (const sz of [-1, 1]) g.add(rbox(AH.w, AH.h - AH.top + 1, 8, rail, { y: AH.top - 1, z: sz * (AH.d / 2 - 4) }, 1.6))
   for (const sx of [-1, 1]) g.add(rbox(8, AH.h - AH.top + 1, AH.d - 16, rail, { x: sx * (AH.w / 2 - 4), y: AH.top - 1 }, 1.6))
   // 球门槽（两端挡边内侧的黑口）
-  for (const sx of [-1, 1]) g.add(noOutline(rbox(0.6, 2.6, 30, DARK, { x: sx * (AH.w / 2 - 8.2), y: AH.top + 0.3 }, 0.2)))
+  for (const sx of [-1, 1]) g.add(noOutline(box(0.6, 2.6, 30, DARK, { x: sx * (AH.w / 2 - 8.2), y: AH.top + 0.3 })))
   // 中线、中圈、两个发球点
   const ly = AH.top + 0.36
   g.add(plate(1.2, AH.d - 16, accent, { y: ly }))
-  g.add(P(noOutline(torus(15, 0.5, accent, {}, PI * 2)), 0, ly + 0.1, 0, PI / 2))
-  for (const sx of [-1, 1]) g.add(P(noOutline(torus(9, 0.4, '#7fa8d8', {}, PI * 2)), sx * 52, ly + 0.1, 0, PI / 2))
+  g.add(P(noOutline(torus(15, 0.5, accent, {}, PI * 2, [4, 32])), 0, ly + 0.1, 0, PI / 2))
+  for (const sx of [-1, 1]) g.add(P(noOutline(torus(9, 0.4, '#7fa8d8', {}, PI * 2, [4, 24])), sx * 52, ly + 0.1, 0, PI / 2))
   // 推板和球饼
   for (const [x, z, c] of [
     [-66, -10, '#d8483f'],
@@ -192,13 +194,13 @@ function arcade(p: string[]) {
       [58, accent],
       [70, shade(accent, 0.18)],
     ] as [number, string][])
-      g.add(noOutline(P(rbox(0.5, 7, 60, c, {}, 0.2), s * (AR.w / 2 + 0.05), y, -6, -0.5)))
+      g.add(noOutline(P(box(0.5, 7, 60, c), s * (AR.w / 2 + 0.05), y, -6, -0.5)))
   }
   // 踢脚板、投币门、底板、背板、顶板
   g.add(rbox(inner, 80, 2, panel, { z: 24 }, 0.4))
   g.add(rbox(24, 30, 1, shade(panel, -0.25), { y: 24, z: 25.3 }, 0.5))
   // 投币门上：一只发光的投币口、一把锁、底下的退币口
-  g.add(lit(rbox(2.4, 6, 0.6, '#ff8a3d', { y: 42, z: 25.9 }, 0.3), '#ff8a3d', 0.7))
+  g.add(lit(box(2.4, 6, 0.6, '#ff8a3d', { y: 42, z: 25.9 }), '#ff8a3d', 0.7))
   g.add(cyl(1.3, 1.3, 0.8, STEEL, { x: 7, y: 37, z: 26.2, rx: PI / 2 }, 10))
   g.add(rbox(12, 5, 0.8, DARK, { y: 27, z: 25.9 }, 0.4))
   g.add(rbox(inner, 2, 66, panel, { y: 2, z: -8 }, 0.4))
@@ -211,9 +213,13 @@ function arcade(p: string[]) {
   for (let i = 0; i < 6; i++) {
     const bx = 4 + (i % 3) * 7.5
     const by = deck.len * (i < 3 ? 0.66 : 0.34) + (i % 3) * 0.8
-    deck.g.add(P(cyl(2.2, 2.4, 1.2, i % 2 ? accent : '#f2f2ee', {}, 14), bx, by, 0, PI / 2))
+    deck.g.add(P(cyl(2.2, 2.4, 1.2, i % 2 ? accent : '#f2f2ee', {}, 12), bx, by, 0, PI / 2))
   }
   g.add(deck.g)
+  // 操作台底下的斜封板：从踢脚板顶接到前沿立面底（不封的话从低处能看进柜子里）
+  const under = tiltFrame([26, 80], [40, 86])
+  under.g.add(rbox(inner, under.len + 2, 2, shade(panel, -0.12), { y: -2, z: -1 }, 0.4))
+  g.add(under.g)
   // 屏幕：后仰的深色面板 + 发光画面
   const scr = tiltFrame([17, 100], [5, 150])
   scr.g.add(rbox(inner, scr.len, 2, DARK, { z: -1 }, 0.4))
@@ -260,7 +266,7 @@ function arcade(p: string[]) {
   g.add(spk.g)
   g.add(rbox(inner, 21, 2, DARK, { y: 153, z: 22 }, 0.4))
   g.add(lit(rbox(inner - 6, 15, 0.8, accent, { y: 156, z: 23.4 }, 0.4), accent, 0.75))
-  for (const sx of [-1, 1]) g.add(lit(rbox(10, 3, 0.5, '#ffffff', { x: sx * 12, y: 162, z: 24 }, 0.3), '#ffffff', 0.9))
+  for (const sx of [-1, 1]) g.add(lit(box(10, 3, 0.5, '#ffffff', { x: sx * 12, y: 162, z: 24 }), '#ffffff', 0.9))
   // 顶板（沿侧板顶边略微前低后高）
   const roof = tiltFrame([24, 174], [-42, 178])
   roof.g.add(rbox(inner, roof.len, 2, panel, { z: -1 }, 0.4))
@@ -279,24 +285,28 @@ function clawMachine(p: string[]) {
   // 下柜 + 踢脚
   g.add(rbox(CM.w, CM.base - 4, bd, body, { y: 4, z: bz }, 2.5))
   g.add(rbox(CM.w - 6, 5, bd - 6, shade(body, -0.3), { z: bz }, 1))
-  // 取物口：深色口 + 半开的翻板
+  // 取物口：深色口 + 半开的翻板（顶边铰在口的上沿，下沿往外掀）
   g.add(rbox(26, 20, 1, DARK, { x: -18, y: 14, z: bz + bd / 2 + 0.2 }, 0.6))
-  g.add(P(ghost(rbox(24, 16, 0.6, '#cfe8f5', {}, 0.3), '#cfe8f5', 0.5), -18, 34, bz + bd / 2 + 1.2, -0.25))
+  g.add(P(G(ghost(rbox(24, 16, 0.6, '#cfe8f5', { y: -16 }, 0.3), '#cfe8f5', 0.5)), -18, 34, bz + bd / 2 + 1, -0.25))
   // 投币口面板
   g.add(rbox(16, 22, 1, shade(body, -0.18), { x: 20, y: 34, z: bz + bd / 2 + 0.2 }, 0.6))
-  g.add(lit(rbox(5, 1.2, 0.6, '#ffd24a', { x: 20, y: 48, z: bz + bd / 2 + 0.7 }, 0.2), '#ffd24a', 0.7))
+  g.add(lit(box(5, 1.2, 0.6, '#ffd24a', { x: 20, y: 48, z: bz + bd / 2 + 0.7 }), '#ffd24a', 0.7))
   g.add(rbox(7, 7, 0.8, STEEL, { x: 20, y: 37, z: bz + bd / 2 + 0.6 }, 0.6))
-  // 操作台：从柜面探出来的一条台子，上面一根摇杆、一颗大按钮
+  // 操作台：从柜面探出来的一条台子，上面一根摇杆、一颗大按钮（都摆在柜面前头露出来的那 6cm 上，不埋进柜体、摇杆球头不碰玻璃）
   g.add(rbox(CM.w - 4, 5, 12, accent, { y: CM.base - 7, z: CM.d / 2 - 6 }, 1.6))
-  g.add(joystick(-12, CM.base - 2, CM.d / 2 - 6, '#e8483f'))
-  g.add(cyl(3.4, 3.8, 1.4, '#f2f2ee', { x: 12, y: CM.base - 2, z: CM.d / 2 - 6 }, 16))
-  g.add(lit(cyl(2.8, 2.8, 1.2, '#ffd24a', { x: 12, y: CM.base - 1.2, z: CM.d / 2 - 6 }, 16), '#ffd24a', 0.6))
+  const oz = CM.d / 2 - 3.4
+  g.add(joystick(-12, CM.base - 2, oz, '#e8483f'))
+  g.add(cyl(2.6, 2.9, 1.4, '#f2f2ee', { x: 12, y: CM.base - 2, z: oz }, 16))
+  g.add(lit(cyl(2.1, 2.1, 1.2, '#ffd24a', { x: 12, y: CM.base - 1.2, z: oz }, 16), '#ffd24a', 0.7))
   // 展示箱：底板、四根角柱、四面玻璃
   const gh = CM.glassTop - CM.base
   g.add(rbox(CM.w - 4, 2, bd - 4, '#f6f2ea', { y: CM.base - 1, z: bz }, 0.5))
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(4, gh, 4, accent, { x: sx * (CM.w / 2 - 2), y: CM.base, z: bz + sz * (bd / 2 - 2) }, 0.8))
-  for (const sz of [-1, 1]) g.add(glassPane(CM.w - 8, gh, 0.8, { y: CM.base, z: bz + sz * (bd / 2 - 2) }))
-  for (const sx of [-1, 1]) g.add(P(glassPane(bd - 8, gh, 0.8, { y: CM.base, z: 0 }), sx * (CM.w / 2 - 2), CM.base + gh / 2, bz, 0, PI / 2))
+  // 四面玻璃同色同透明度，烘成一个网格（半透明件不参与按材质合并，四片就是四次绘制）
+  const panes: THREE.Mesh[] = []
+  for (const sz of [-1, 1]) panes.push(glassPane(CM.w - 8, gh, 0.8, { y: CM.base, z: bz + sz * (bd / 2 - 2) }))
+  for (const sx of [-1, 1]) panes.push(P(glassPane(bd - 8, gh, 0.8, { y: CM.base, z: 0 }), sx * (CM.w / 2 - 2), CM.base + gh / 2, bz, 0, PI / 2))
+  g.add(clearMat(bakeMeshes(panes, C.glass), C.glass, 0.32))
   // 出货筒：左前角一只透明圆筒
   g.add(ghost(cyl(10, 10, 24, '#cfe8f5', { x: -24, y: CM.base + 1, z: bz + bd / 2 - 16 }, 20), '#cfe8f5', 0.3))
   // 玩偶堆：两种颜色交替的圆球，各带一对小耳朵（不加脸：玻璃后面太小看不清）
@@ -316,8 +326,8 @@ function clawMachine(p: string[]) {
   toys.forEach(([x, r, z, lift], i) => {
     const c = [toyA, toyB, '#fbf7f1'][i % 3]
     const y = CM.base + 1 + r * 0.9 + lift
-    g.add(ball(r, c, { x, y, z: bz + z }, [1, 0.92, 1]))
-    for (const s of [-1, 1]) g.add(ball(r * 0.3, shade(c, -0.06), { x: x + s * r * 0.55, y: y + r * 0.78, z: bz + z }))
+    g.add(ball(r, c, { x, y, z: bz + z }, [1, 0.92, 1], [16, 12]))
+    for (const s of [-1, 1]) g.add(ball(r * 0.3, shade(c, -0.06), { x: x + s * r * 0.55, y: y + r * 0.78, z: bz + z }, undefined, [8, 6]))
   })
   // 抓手：顶上的横梁和小车、垂下来的钢索、三只弯爪
   const cy = CM.glassTop - 1.2
@@ -347,7 +357,7 @@ function clawMachine(p: string[]) {
   // 顶部灯箱
   g.add(rbox(CM.w, CM.h - CM.glassTop, bd, body, { y: CM.glassTop, z: bz }, 2.5))
   g.add(lit(rbox(CM.w - 12, CM.h - CM.glassTop - 10, 0.8, accent, { y: CM.glassTop + 5, z: bz + bd / 2 + 0.1 }, 0.4), accent, 0.7))
-  for (let k = 0; k < 5; k++) g.add(lit(ball(1.6, '#fff6d8', { x: -24 + k * 12, y: CM.glassTop + (CM.h - CM.glassTop) / 2, z: bz + bd / 2 + 0.9 }), '#fff6d8', 0.9))
+  for (let k = 0; k < 5; k++) g.add(lit(ball(1.6, '#fff6d8', { x: -24 + k * 12, y: CM.glassTop + (CM.h - CM.glassTop) / 2, z: bz + bd / 2 + 0.9 }, undefined, [8, 6]), '#fff6d8', 0.9))
   return g
 }
 
@@ -373,14 +383,15 @@ function pinball(p: string[]) {
   const g = new THREE.Group()
   const bw = PB.w - 6
   g.add(sideSlab(PB_SIDE, bw, body))
-  // 四条镀铬腿（略微外撇）
+  // 四条镀铬腿（略微外撇，脚垫不超出声明的宽度；腿的下端收在脚垫里，斜切的端面不戳到地面以下）
   for (const sx of [-1, 1]) {
-    g.add(rod3([sx * (bw / 2 + 1), 0, 64], [sx * (bw / 2 - 1), 80, 62], 1.6, STEEL, 8))
-    g.add(rod3([sx * (bw / 2 + 1), 0, -42], [sx * (bw / 2 - 1), 92, -36], 1.6, STEEL, 8))
-    for (const z of [64, -42]) g.add(cyl(2.4, 2.8, 1.2, RUBBER, { x: sx * (bw / 2 + 1), z }, 10))
+    const fx = sx * (bw / 2 + 0.2)
+    g.add(rod3([fx, 0.6, 64], [sx * (bw / 2 - 1), 80, 62], 1.6, STEEL, 8))
+    g.add(rod3([fx, 0.6, -42], [sx * (bw / 2 - 1), 92, -36], 1.6, STEEL, 8))
+    for (const z of [64, -42]) g.add(cyl(2.4, 2.8, 1.2, RUBBER, { x: fx, z }, 10))
   }
   // 侧面的色带
-  for (const s of [-1, 1]) g.add(noOutline(P(rbox(0.5, 9, 96, accent, {}, 0.2), s * (bw / 2 + 0.05), 92, 14, 0.245)))
+  for (const s of [-1, 1]) g.add(noOutline(P(box(0.5, 9, 96, accent), s * (bw / 2 + 0.05), 92, 14, 0.245)))
   // 球道面（在斜面坐标系里摆）：台面、四周的木框、玻璃
   const top = tiltFrame(...PB_GLASS)
   // 球道板和四周的框都往下伸进箱体顶面（玻璃面以下约 5cm 处），不留缝
@@ -403,7 +414,7 @@ function pinball(p: string[]) {
   top.g.add(rbox(1.2, top.len - 30, 1.8, STEEL, { x: bw / 2 - 8, y: 6, z: -2.9 }, 0.4))
   top.g.add(P(ball(1.35, STEEL, {}), bw / 2 - 5.2, 9, -1.4))
   // 上半场的弧形导轨和一条斜坡
-  top.g.add(P(noOutline(torus(22, 0.7, STEEL, {}, PI)), 0, top.len - 30, -1.8))
+  top.g.add(P(noOutline(torus(22, 0.7, STEEL, {}, PI, [6, 16])), 0, top.len - 30, -1.8))
   top.g.add(P(rbox(7, 30, 0.8, shade(accent, 0.2), {}, 0.3), -22, 62, -1.6, 0, 0, 0.25))
   top.g.add(ghost(rbox(bw - 5, top.len - 5, 0.5, '#cfe8f5', { y: 2.5, z: -0.5 }, 0.2), '#cfe8f5', 0.18))
   g.add(top.g)
@@ -487,17 +498,17 @@ function jukebox(p: string[]) {
     g.add(lit(cyl(2.2, 2.2, sh - 56, tubeB, { x: sx * (r - 11.5), y: 56, z: fz + 1.2 }, 12), tubeB, 0.75))
     g.add(cyl(3.4, 3.8, 10, metal, { x: sx * (r - 5), z: fz + 1.4 }, 12))
   }
-  // 唱片窗：深色窗 + 一张斜放的唱片和唱臂
+  // 唱片窗：深色窗 + 一张略微后仰的唱片（整张都在窗板前面，上沿不埋进机身）和唱臂（根部落在窗板上，针尖搭在唱片上）
   g.add(rbox(46, 34, 1, DARK, { y: sh - 14, z: fz + 0.3 }, 3))
-  g.add(P(G(cyl(13, 13, 0.6, '#1b1b1f', {}, 24), noOutline(cyl(4.4, 4.4, 0.5, tubeA, { y: 0.4 }, 16)), noOutline(cyl(0.8, 0.8, 0.6, metal, { y: 0.7 }, 8))), 0, sh + 2, fz + 2.2, PI / 2 - 0.25))
-  g.add(rod3([15, sh + 14, fz + 2.6], [6, sh + 5, fz + 3.2], 0.6, metal, 6))
+  g.add(P(G(cyl(13, 13, 0.6, '#1b1b1f', {}, 24), noOutline(cyl(4.4, 4.4, 0.5, tubeA, { y: 0.4 }, 16)), noOutline(cyl(0.8, 0.8, 0.6, metal, { y: 0.7 }, 8))), 0, sh + 2, fz + 2.8, PI / 2 - 0.12))
+  g.add(rod3([15, sh + 14, fz + 1.2], [6, sh + 5, fz + 3.5], 0.6, metal, 6))
   // 选曲按钮条
   g.add(rbox(50, 6, 2, metal, { y: sh - 24, z: fz + 0.4 }, 0.8))
-  for (let k = 0; k < 8; k++) g.add(noOutline(rbox(3.6, 2.6, 0.6, k % 2 ? '#f6efd9' : '#e8483f', { x: -17.5 + k * 5, y: sh - 22.3, z: fz + 1.6 }, 0.4)))
+  for (let k = 0; k < 8; k++) g.add(noOutline(box(3.6, 2.6, 0.6, k % 2 ? '#f6efd9' : '#e8483f', { x: -17.5 + k * 5, y: sh - 22.3, z: fz + 1.6 })))
   // 喇叭格栅：布面 + 菱形金属条
   g.add(rbox(48, 46, 1, '#3a2a22', { y: 12, z: fz + 0.3 }, 3))
-  for (const sgn of [-1, 1]) for (let k = -2; k <= 2; k++) g.add(noOutline(P(rbox(1.2, 54, 0.6, metal, {}, 0.3), k * 11, 35, fz + 1.1, 0, 0, sgn * 0.55)))
-  g.add(P(noOutline(torus(8, 1.2, metal, {}, PI * 2)), 0, 35, fz + 1.6))
+  for (const sgn of [-1, 1]) for (let k = -2; k <= 2; k++) g.add(noOutline(P(box(1.2, 54, 0.6, metal), k * 11, 35, fz + 1.1, 0, 0, sgn * 0.55)))
+  g.add(P(noOutline(torus(8, 1.2, metal, {}, PI * 2, [8, 24])), 0, 35, fz + 1.6))
   // 顶上的金属拱饰
   g.add(P(rbox(12, 5, 3, metal, {}, 1.2), 0, JB.h - 4, fz + 0.9))
   return g
@@ -530,9 +541,9 @@ function massageChair(p: string[]) {
   for (const s of [-1, 1]) g.add(P(rbox(15, 36, 4, pad, {}, 2), s * 10.5, 31, 47.5, 0.5))
   g.add(rbox(48, 18, 30, shellC, { z: 52 }, 6))
   for (const s of [-1, 1]) g.add(rbox(15, 4, 22, pad, { x: s * 10.5, y: 15.5, z: 52 }, 1.8))
-  // 右扶手上的遥控器
-  g.add(P(rbox(6, 1.6, 13, DARK, {}, 0.6), 32.5, 56.4, -6, -0.15))
-  g.add(noOutline(lit(P(rbox(4.4, 0.4, 5, '#8fd8ff', {}, 0.2), 32.5, 57.5, -9, -0.15), '#8fd8ff', 0.6)))
+  // 右扶手上的遥控器：平放在扶手垫上（垫面在 57.5），屏幕贴在遥控器面上
+  g.add(rbox(6, 1.6, 13, DARK, { x: 32.5, y: 57.4, z: -6 }, 0.6))
+  g.add(noOutline(lit(box(4.4, 0.4, 5, '#8fd8ff', { x: 32.5, y: 58.85, z: -9 }), '#8fd8ff', 0.6)))
   return g
 }
 
@@ -599,7 +610,7 @@ function simRig(p: string[]) {
   g.add(rbox(52, 3, 20, frame, { y: 64, z: -36 }, 0.8))
   g.add(rbox(24, 13, 18, DARK, { y: 67, z: -37 }, 2))
   g.add(cylZ(2.2, 9, DARK, 0, 74, -24, 12))
-  g.add(P(torus(15, 1.8, RUBBER, {}, PI * 2), 0, 74, -19))
+  g.add(P(torus(15, 1.8, RUBBER, {}, PI * 2, [8, 32]), 0, 74, -19))
   for (const a of [PI * 0.5, PI * 1.17, PI * 1.83]) g.add(rod3([0, 74, -19.6], [Math.cos(a) * 14, 74 + Math.sin(a) * 14, -19.6], 1.3, STEEL, 8))
   g.add(noOutline(P(rbox(3, 1.4, 4.2, accent, {}, 0.5), 0, 89, -19, PI / 2)))
   // 踏板：斜板 + 三只踏板
@@ -623,9 +634,10 @@ function simRig(p: string[]) {
   for (const s of [-1, 1]) g.add(P(rbox(8, 44, 15, seat, {}, 3.5), s * 20, 56, 62, 0.2))
   g.add(P(rbox(26, 20, 9, seat, {}, 4), 0, 100, 73.6, 0.2))
   // 椅面和靠背中间的装饰色条
-  g.add(noOutline(rbox(8, 0.6, 40, accent, { y: 29.8, z: 38 }, 0.3)))
-  g.add(noOutline(P(rbox(8, 52, 0.6, accent, {}, 0.3), 0, 61, 60.4, 0.2)))
-  return g
+  g.add(noOutline(box(8, 0.6, 40, accent, { y: 29.8, z: 38 })))
+  g.add(noOutline(P(box(8, 52, 0.6, accent), 0, 61, 60.4, 0.2)))
+  // 后仰的头枕比底架多探出一截：按包围盒前后居中，不超出声明的进深
+  return fitGroup(g)
 }
 
 // ---------- 配色 ----------

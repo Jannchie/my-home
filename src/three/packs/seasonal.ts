@@ -98,11 +98,12 @@ function starPts(R0: number, r0: number): [number, number][] {
 }
 /** 叶片：叶柄端在 base，沿水平角 yaw、俯仰 pitch（负值朝上）伸出 */
 function sprig(len: number, color: string, base: V3, yaw: number, pitch: number, wide = 0.4) {
-  // 叶片是压得很扁的椭球，12×8 段足够：ball 按半径取段数，半径 ≥ 3 的会用 16×12 / 24×16，
-  // 门松、七夕竹上几十片叶子白白多出几千面，所以半径封顶在 2.9、再用缩放补回长度
+  // 叶片是压得很扁的椭球：轮廓一圈 12 段、厚度方向 6 段，段数直接写死。
+  // （以前靠「半径封顶 2.9、再用缩放补回长度」骗过 ball 按半径取的段数；ball 现在按缩放后的大小算，这招早就不灵了，
+  //   门松、七夕竹上几十片叶子每片 352 面。半径封顶和缩放保留：几何缓存的键不变）
   const r = Math.min(len / 2, 2.9)
   const k = len / 2 / r
-  const m = ball(r, color, {}, [wide * k, 0.14 * k, k])
+  const m = ball(r, color, {}, [wide * k, 0.14 * k, k], [12, 6])
   m.rotation.set(pitch, yaw, 0, 'YXZ')
   const d: V3 = [Math.sin(yaw) * Math.cos(pitch), -Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch)]
   m.position.set(base[0] + (d[0] * len) / 2, base[1] + (d[1] * len) / 2, base[2] + (d[2] * len) / 2)

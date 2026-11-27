@@ -246,21 +246,23 @@ function taishiChair(p: string[]) {
 function meiguiChair(p: string[]) {
   const [wood, mat, dark] = p
   const g = new THREE.Group()
+  const FLAT = { bevel: 0 }
   const X = 21.5
   const Z = 19.5
   for (const s of [-1, 1]) {
     g.add(cyl(1.4, 1.4, 84, wood, { x: s * X, z: -Z }, 12))
     g.add(cyl(1.4, 1.4, 66, wood, { x: s * X, z: Z }, 12))
     g.add(rod3([s * X, 65.2, -Z], [s * X, 65.2, Z], 1.2, wood))
-    g.add(ball(1.5, wood, { x: s * X, y: 66, z: Z }))
-    g.add(ball(1.5, wood, { x: s * X, y: 84, z: -Z }))
-    // 扶手下格心
-    g.add(holePanel(37.4, 9, 1.4, dark, gridHoles(37.4, 9, 4, 1, 2, 1.6), { x: s * X, y: 49.4, ry: Math.PI / 2 }))
+    // 柱头：直径 3cm 的小圆球，8 × 6 段
+    g.add(ball(1.5, wood, { x: s * X, y: 66, z: Z }, undefined, [8, 6]))
+    g.add(ball(1.5, wood, { x: s * X, y: 84, z: -Z }, undefined, [8, 6]))
+    // 扶手下格心（格心的棂条不到 2cm 宽，不倒角：每个孔一圈倒角要上百个面）
+    g.add(holePanel(37.4, 9, 1.4, dark, gridHoles(37.4, 9, 4, 1, 2, 1.6), { x: s * X, y: 49.4, ry: Math.PI / 2 }, 1.5, FLAT))
     g.add(rod3([s * X, 14, -Z], [s * X, 14, Z], 0.9, dark))
   }
   g.add(rod3([-X, 83.8, -Z], [X, 83.8, -Z], 1.3, wood))
   // 背：上部空、下部券口格心
-  g.add(holePanel(41, 15, 1.4, dark, gridHoles(41, 15, 5, 2, 1.8, 1.6), { y: 50, z: -Z }))
+  g.add(holePanel(41, 15, 1.4, dark, gridHoles(41, 15, 5, 2, 1.8, 1.6), { y: 50, z: -Z }, 1.5, FLAT))
   g.add(rod3([-X, 66, -Z], [X, 66, -Z], 0.9, wood))
   g.add(holePanel(41, 6, 1.2, dark, [{ kind: 'rect', x: 0, y: 1, w: 26, h: 4, r: 1.6 }], { y: 77, z: -Z }))
   // 座面

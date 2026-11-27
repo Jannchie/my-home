@@ -3,7 +3,7 @@
 // 食物是固有色（文件顶部常量），配色槽换的是盘子 / 托盘 / 包装 / 杯子 / 机身的颜色；type / tags / mats 直接写在 def 里。
 
 import * as THREE from 'three'
-import { ball, cached, cup, cyl, rbox, shade, torus, tray, type At } from '../toon'
+import { ball, box, cached, cup, cyl, rbox, shade, torus, tray, type At } from '../toon'
 import { C, holePanel, rng, slab, type AssetDef, type Fx } from '../kit'
 import { G, P, PI, cylX, fitGroup, ghost, lathe, latheAt, lit, mesh, noOutline, rod3, taperRod3, tube, type V2, type V3 } from '../geo'
 import { CL, CN, F, I, J, M, N, PROP, R, define, type Pal } from '../packkit'
@@ -74,18 +74,14 @@ const RIND = '#3f8f3a'
 
 type Spot = { x?: number; y?: number; z?: number }
 
-/** 低面数小球（珍珠、玉米粒、蓝莓这类成堆的小颗粒）：8×6 段，约 80 个三角面；at.y 为球心 */
-function bead(r: number, color: string, at: At = {}, scale?: [number, number, number]) {
-  const rr = Math.round(r * 100) / 100
-  const m = mesh(
-    cached(`fd-bead${rr}`, () => new THREE.SphereGeometry(rr, 8, 6)),
-    color,
-  )
-  m.position.set(at.x ?? 0, at.y ?? 0, at.z ?? 0)
-  m.rotation.set(at.rx ?? 0, at.ry ?? 0, at.rz ?? 0)
-  if (scale) m.scale.set(...scale)
-  return m
+/**
+ * 低面数小球（珍珠、玉米粒、蓝莓这类成堆的小颗粒）：共享的 ball，默认 8×6 段（80 个三角面）；at.y 为球心。
+ * 不到 1cm、一撒一大把的（芝麻、玉米粒、珍珠、褶子）用 GRAIN（6×4 段，36 个面）
+ */
+function bead(r: number, color: string, at: At = {}, scale?: [number, number, number], seg: [number, number] = [8, 6]) {
+  return ball(r, color, at, scale, seg)
 }
+const GRAIN: [number, number] = [6, 4]
 
 /** 圆角圆饼（面包胚、肉饼、松饼、机身）：比 puck 省面，at.y 为底面 */
 function pad(r: number, h: number, color: string, at: Spot = {}, seg = 24) {
@@ -114,11 +110,28 @@ function plateOf(r: number, h: number, color: string, at: Spot = {}) {
   return latheAt(pts, color, at, 28)
 }
 
+/** 盘子内表面在离盘心 d 处的高度：平底那一圈（r × 0.6）以外是往上翘的斜坡，摆在斜坡上的东西按它抬高 */
+function plateInY(r: number, h: number, d: number) {
+  const a: V2 = [r * 0.6, PLATE_IN]
+  const b: V2 = [r * 0.84, h * 0.6 + 0.3]
+  const c: V2 = [r - 0.35, h + 0.05]
+  if (d <= a[0]) return PLATE_IN
+  const [p, q] = d <= b[0] ? [a, b] : [b, c]
+  return p[1] + ((q[1] - p[1]) * (d - p[0])) / (q[0] - p[0])
+}
+
+/** 让摆在盘子斜坡上的东西顺着斜坡躺：绕它所在位置的切线倾 tilt 弧度，朝盘外的一侧翘起（盘心在 o 的父节点原点），水平朝向不变 */
+function leanOut<T extends THREE.Object3D>(o: T, tilt: number): T {
+  const d = Math.hypot(o.position.x, o.position.z) || 1
+  o.quaternion.setFromAxisAngle(new THREE.Vector3(-o.position.z / d, 0, o.position.x / d), tilt)
+  return o
+}
+
 /** 碗（真空心）：口半径 r、高 h、壁厚 t，带矮圈足；at.y 为底面 */
 function bowlOf(r: number, h: number, color: string, at: Spot = {}, t = 0.4, seg = 28) {
   const foot = r * 0.45
   const pts: V2[] = [[0, 0.3], [foot - 0.4, 0.3], [foot - 0.4, 0], [foot, 0], [foot, 0.5]]
-  const n = 6
+  const n = 5
   for (let i = 1; i <= n; i++) {
     const a = (i / n) * (PI / 2)
     pts.push([foot + (r - foot) * Math.sin(a), 0.5 + (h - 0.5) * (1 - Math.cos(a))])
@@ -157,9 +170,9 @@ function arcPts(c: V3, r: number, a0: number, a1: number, n: number, plane: 'xy'
 function forkOf(len: number, handle: string) {
   const o = new THREE.Group()
   o.add(rbox(1.1, 0.5, len * 0.46, handle, { z: len * 0.27 }, 0.24))
-  o.add(rbox(0.6, 0.3, len * 0.26, STEEL, { y: 0.1, z: -len * 0.06 }, 0.14))
-  o.add(rbox(2, 0.3, len * 0.13, STEEL, { y: 0.1, z: -len * 0.225 }, 0.14))
-  for (const x of [-0.78, 0, 0.78]) o.add(rbox(0.42, 0.26, len * 0.23, STEEL, { x, y: 0.12, z: -len * 0.385 }, 0.12))
+  o.add(box(0.6, 0.3, len * 0.26, STEEL, { y: 0.1, z: -len * 0.06 }))
+  o.add(box(2, 0.3, len * 0.13, STEEL, { y: 0.1, z: -len * 0.225 }))
+  for (const x of [-0.78, 0, 0.78]) o.add(box(0.42, 0.26, len * 0.23, STEEL, { x, y: 0.12, z: -len * 0.385 }))
   return o
 }
 
@@ -167,7 +180,7 @@ function forkOf(len: number, handle: string) {
 function knifeOf(len: number, handle: string, bladeW = 1.5) {
   const o = new THREE.Group()
   o.add(rbox(1.2, 0.55, len * 0.44, handle, { z: len * 0.28 }, 0.26))
-  o.add(rbox(bladeW, 0.22, len * 0.58, STEEL, { y: 0.14, z: -len * 0.21 }, 0.1))
+  o.add(box(bladeW, 0.22, len * 0.58, STEEL, { y: 0.14, z: -len * 0.21 }))
   return o
 }
 
@@ -201,16 +214,16 @@ function wallBand(r0: number, y0: number, r1: number, y1: number, color: string,
 // ---------- 汉堡薯条套餐：托盘上一只分层的汉堡、一盒薯条、一杯插吸管的饮料和一小杯番茄酱 ----------
 
 function burgerSet(p: string[]) {
-  const [trayC, box, cupC, acc] = p
+  const [trayC, boxC, cupC, acc] = p
   const g = new THREE.Group()
   g.add(tray(34, 1.8, 26, 0.5, trayC, {}, 0.5))
   // 垫纸（嵌进托盘底，只露 0.2）
-  g.add(noOutline(rbox(29.5, 0.3, 21.5, PAPER, { y: 0.4, ry: 0.03 }, 0.05)))
+  g.add(noOutline(box(29.5, 0.3, 21.5, PAPER, { y: 0.4, ry: 0.03 })))
   const Y = 0.7
   // 汉堡：下胚、生菜、肉饼、芝士、番茄、上胚
   const b = new THREE.Group()
   b.add(pad(5.3, 1.8, BUN))
-  b.add(ball(5.9, LETTUCE, { y: 2 }, [1, 0.11, 1]))
+  b.add(ball(5.9, LETTUCE, { y: 2 }, [1, 0.11, 1], [16, 6]))
   b.add(pad(5.5, 1.6, PATTY, { y: 2.1 }))
   b.add(rbox(9.4, 0.4, 9.4, CHEESE, { y: 3.55, ry: 0.5 }, 0.15))
   b.add(cyl(5, 5, 0.5, TOMATO, { y: 3.9 }, 20))
@@ -218,30 +231,37 @@ function burgerSet(p: string[]) {
   for (let k = 0; k < 7; k++) {
     const az = k * 2.4
     const el = 0.62 + (k % 3) * 0.28
-    b.add(noOutline(bead(0.32, '#f6e6b8', { x: 5.4 * Math.cos(el) * Math.cos(az), y: 4.3 + 0.28 + 3.22 * Math.sin(el) + 0.05, z: 5.4 * Math.cos(el) * Math.sin(az), ry: -az }, [1.5, 0.45, 0.8])))
+    b.add(noOutline(bead(0.3, '#f6e6b8', { x: 5.4 * Math.cos(el) * Math.cos(az), y: 4.3 + 0.28 + 3.22 * Math.sin(el) + 0.05, z: 5.4 * Math.cos(el) * Math.sin(az), ry: -az }, [1.5, 0.45, 0.8], GRAIN)))
   }
   g.add(P(b, -8, Y, 1.5))
-  // 薯条盒：上大下小的方纸盒，后壁高一截，里面插着长短不一的薯条
+  // 薯条盒：上大下小的方纸盒，后壁高一截，里面插着长短不一的薯条。
+  // 薯条只画盒口附近往上的那段：盒子越往下越窄，整根从盒底插上来的话外侧几根会从侧壁穿出去
   const f = new THREE.Group()
-  const carton = latheAt([[0, 0], [3.9, 0], [5.5, 8], [5.2, 8], [3.7, 0.3], [0, 0.3]], box, {}, 4)
+  const carton = latheAt([[0, 0], [3.9, 0], [5.5, 8], [5.2, 8], [3.7, 0.3], [0, 0.3]], boxC, {}, 4)
   carton.rotation.y = PI / 4
   const shellG = G(carton)
   shellG.scale.z = 0.62
   f.add(shellG)
-  f.add(rbox(6.8, 2.6, 0.3, box, { y: 7.3, z: -2.3 }, 0.14))
+  f.add(rbox(6.8, 2.6, 0.3, boxC, { y: 7.3, z: -2.3 }, 0.14))
   f.add(noOutline(bead(1.3, acc, { y: 4.2, z: 2.02 }, [1, 1, 0.14])))
   const r = rng(7)
+  const cut = 3.5
   for (let i = 0; i < 11; i++) {
     const back = i < 6
-    const x = (back ? -3 + i * 1.2 : -2.4 + (i - 6) * 1.2) + (r() - 0.5) * 0.4
+    const x = (back ? -2.75 + i * 1.1 : -2.4 + (i - 6) * 1.2) + (r() - 0.5) * 0.4
     const h = (back ? 9 : 7) + r() * 2.6
-    f.add(P(rbox(0.9, h, 0.9, FRY, {}, 0.2), x, 3 + h / 2, (back ? -1 : 0.6) + (r() - 0.5) * 0.3, (r() - 0.5) * 0.2, 0, (r() - 0.5) * 0.3))
+    const z = (back ? -1 : 0.6) + (r() - 0.5) * 0.3
+    const rx = (r() - 0.5) * 0.2
+    const rz = (r() - 0.5) * 0.3
+    // 还是原来那根（中心在 y = 3 + h / 2）的轴线，去掉下面 cut 长的一截：中心沿轴线上移 cut / 2
+    const k = cut / 2
+    f.add(P(box(0.9, h - cut, 0.9, FRY), x - Math.sin(rz) * k, 3 + h / 2 + Math.cos(rz) * Math.cos(rx) * k, z + Math.cos(rz) * Math.sin(rx) * k, rx, 0, rz))
   }
   g.add(P(f, 5, Y - 0.1, -6))
   // 饮料：纸杯 + 塑料盖 + 吸管，杯身一圈色带
   const d = new THREE.Group()
-  d.add(cup(3.9, 3, 11.5, 0.3, cupC))
-  d.add(wallBand(3 + (0.9 * 4) / 11.5, 4, 3 + (0.9 * 7.5) / 11.5, 7.5, acc))
+  d.add(cup(3.9, 3, 11.5, 0.3, cupC, {}, 20))
+  d.add(wallBand(3 + (0.9 * 4) / 11.5, 4, 3 + (0.9 * 7.5) / 11.5, 7.5, acc, {}, 20))
   d.add(pad(4.15, 0.9, '#f4f4f2', { y: 11.2 }))
   d.add(rod3([0.8, 11.6, 0], [1.9, 16.3, -0.6], 0.32, acc, 8))
   g.add(P(d, 10.5, Y, 5.5))
@@ -264,7 +284,7 @@ function friedChicken(p: string[]) {
   bk.add(cup(RT, RB, H, 0.35, bucket))
   // 八道竖条纹：贴着桶壁的扇形圆台面，角度和桶身的 32 段对齐
   for (let i = 0; i < 8; i++) bk.add(noOutline(lathe([[rAt(0.8) + 0.12, 0.8], [rAt(13.2) + 0.12, 13.2]], stripe, 2, [(i * PI) / 4 + PI / 16, PI / 8])))
-  bk.add(torus(RT, 0.4, stripe, { y: H - 0.1, rx: PI / 2 }))
+  bk.add(torus(RT, 0.4, stripe, { y: H - 0.1, rx: PI / 2 }, PI * 2, [6, 32]))
   // 炸鸡：桶口垫一层，上面堆几块
   bk.add(cyl(RT - 0.9, RT - 1.1, 1, FRIED, { y: 11.4 }, 16))
   const pcs: [number, number, number, number, number, number, number][] = [
@@ -274,10 +294,10 @@ function friedChicken(p: string[]) {
     [-2.6, 13.4, 3.4, 3.1, 1.1, 0.9, 1.1],
     [0.3, 15.6, 0.4, 3.1, 1.2, 0.85, 1.05],
   ]
-  pcs.forEach(([x, y, z, rr, sx, sy, sz], i) => bk.add(ball(rr, i % 2 ? shade(FRIED, -0.04) : FRIED, { x, y, z, ry: i }, [sx, sy, sz])))
+  pcs.forEach(([x, y, z, rr, sx, sy, sz], i) => bk.add(ball(rr, i % 2 ? shade(FRIED, -0.04) : FRIED, { x, y, z, ry: i }, [sx, sy, sz], [12, 8])))
   // 鸡腿：肉 + 露出来的骨头
   const leg = new THREE.Group()
-  leg.add(ball(2.4, FRIED, {}, [1, 1.3, 1]))
+  leg.add(ball(2.4, FRIED, {}, [1, 1.3, 1], [12, 8]))
   leg.add(cyl(0.5, 0.6, 3, '#f4ead8', { y: 2.6 }, 8))
   for (const s of [-1, 1]) leg.add(bead(0.6, '#f4ead8', { x: s * 0.45, y: 5.7 }))
   bk.add(P(leg, -1.2, 14.6, -3.6, -0.3, 0, 0.35))
@@ -299,6 +319,8 @@ function bubbleTea(p: string[]) {
   const [film, straw, sticker] = p
   const g = new THREE.Group()
   const rOut = (y: number) => 2.9 + (0.9 * y) / 13
+  /** 杯子内壁在高度 y 处的半径 */
+  const rIn = (y: number) => 2.68 + (0.87 * (y - 0.3)) / 12.7
   const one = (x: number, tea: string, seed: number) => {
     const o = new THREE.Group()
     // 杯底的珍珠：两圈小球围着一根茶色芯
@@ -306,25 +328,26 @@ function bubbleTea(p: string[]) {
     for (let i = 0; i < 16; i++) {
       const up = i >= 8
       const a = (i / 8) * PI * 2 + (up ? 0.39 : 0)
-      o.add(noOutline(bead(0.58, PEARL, { x: Math.cos(a) * (up ? 2.12 : 2.02), y: up ? 1.9 : 0.92, z: Math.sin(a) * (up ? 2.12 : 2.02) })))
+      o.add(noOutline(bead(0.6, PEARL, { x: Math.cos(a) * (up ? 2.12 : 2.02), y: up ? 1.9 : 0.92, z: Math.sin(a) * (up ? 2.12 : 2.02) }, undefined, GRAIN)))
     }
-    // 奶茶（珍珠层以上）+ 几颗浮起来贴着杯壁的珍珠
+    // 奶茶（珍珠层以上）+ 几颗浮起来贴着杯壁的珍珠（球心跟着内壁走：杯子上宽下窄，按固定半径放的话高处的几颗整颗埋在奶茶里）
     o.add(noOutline(cyl(3.38, 2.74, 9.4, tea, { y: 2.5 }, 20)))
     const r = rng(seed)
     for (let i = 0; i < 4; i++) {
       const a = r() * PI * 2
       const y = 3.2 + r() * 2.6
-      o.add(noOutline(bead(0.52, PEARL, { x: Math.cos(a) * 2.42, y, z: Math.sin(a) * 2.42 })))
+      const d = rIn(y) - 0.42
+      o.add(noOutline(bead(0.5, PEARL, { x: Math.cos(a) * d, y, z: Math.sin(a) * d }, undefined, GRAIN)))
     }
-    o.add(ghost(latheAt([[0, 0], [2.9, 0], [3.8, 13], [3.55, 13], [2.68, 0.3], [0, 0.3]], GLASS), GLASS, 0.3))
+    o.add(ghost(latheAt([[0, 0], [2.9, 0], [3.8, 13], [3.55, 13], [2.68, 0.3], [0, 0.3]], GLASS, {}, 24), GLASS, 0.3))
     // 封膜 + 贴纸 + 粗吸管（斜插）
     o.add(pad(3.85, 0.35, film, { y: 12.85 }))
     o.add(noOutline(bead(1.5, sticker, { y: 7.4, z: rOut(7.4) }, [1, 1, 0.1])))
     o.add(rod3([0.4, 2.8, 0.2], [1.7, 17.8, -0.7], 0.55, straw, 10))
     return P(o, x, 0, 0)
   }
-  g.add(one(-4.7, MILK_TEA, 3))
-  g.add(one(4.7, MATCHA, 8))
+  g.add(one(-4.65, MILK_TEA, 3))
+  g.add(one(4.65, MATCHA, 8))
   return fitGroup(g)
 }
 
@@ -334,7 +357,7 @@ function pastaPlate(p: string[]) {
   const [plateC, rim, handle] = p
   const g = new THREE.Group()
   g.add(plateOf(12, 3.2, plateC))
-  g.add(noOutline(torus(11.75, 0.17, rim, { y: 3.27, rx: PI / 2 })))
+  g.add(noOutline(torus(11.75, 0.17, rim, { y: 3.27, rx: PI / 2 }, PI * 2, [4, 28])))
   // 面：一座小丘 + 一圈圈叠上去的面条
   g.add(domeOf(5.6, 2.6, NOODLE, { y: PLATE_IN }))
   const rings: [number, number, number, number, number, number][] = [
@@ -343,12 +366,12 @@ function pastaPlate(p: string[]) {
     [3.2, 3.1, 0.14, -0.1, -0.2, 0.2],
     [2.4, 3.7, -0.1, 0.12, 0.2, 0.1],
   ]
-  rings.forEach(([rr, y, rx, rz, x, z], i) => g.add(torus(rr, 0.42, i % 2 ? shade(NOODLE, -0.05) : NOODLE, { x, y, z, rx: PI / 2 + rx, rz })))
+  rings.forEach(([rr, y, rx, rz, x, z], i) => g.add(torus(rr, 0.42, i % 2 ? shade(NOODLE, -0.05) : NOODLE, { x, y, z, rx: PI / 2 + rx, rz }, PI * 2, [6, rr > 3.5 ? 20 : 16])))
   // 散在盘里的两根
-  g.add(tube([[5.2, 0.9, 2.6], [7, 0.95, 0.4], [6.2, 0.9, -2.8]], 0.36, NOODLE, { seg: 10, radial: 6 }))
-  g.add(tube([[-5.6, 0.9, -2], [-6.9, 0.95, 0.6], [-5, 0.9, 3.4]], 0.36, NOODLE, { seg: 10, radial: 6 }))
+  g.add(tube([[5.2, 0.9, 2.6], [7, 0.95, 0.4], [6.2, 0.9, -2.8]], 0.36, NOODLE, { seg: 8, radial: 5 }))
+  g.add(tube([[-5.6, 0.9, -2], [-6.9, 0.95, 0.6], [-5, 0.9, 3.4]], 0.36, NOODLE, { seg: 8, radial: 5 }))
   // 肉酱 + 肉粒 + 罗勒叶
-  g.add(ball(3.1, MEAT_SAUCE, { y: 4.2 }, [1, 0.42, 1]))
+  g.add(ball(3.1, MEAT_SAUCE, { y: 4.2 }, [1, 0.42, 1], [16, 8]))
   g.add(ball(1.7, MEAT_SAUCE, { x: 2.3, y: 3.5, z: 1.6 }, [1.2, 0.4, 0.9]))
   for (const [x, z] of [
     [-1.4, 0.9],
@@ -357,7 +380,7 @@ function pastaPlate(p: string[]) {
     [-0.6, -1.5],
     [1.9, 0.5],
   ])
-    g.add(noOutline(bead(0.5, PATTY, { x, y: 5.15 - Math.hypot(x, z) * 0.22, z })))
+    g.add(noOutline(bead(0.5, PATTY, { x, y: 5.15 - Math.hypot(x, z) * 0.22, z }, undefined, GRAIN)))
   g.add(bead(1.4, LEAF, { x: -0.5, y: 5.6, z: 0.2, ry: 0.6, rz: 0.2 }, [0.62, 0.16, 1]))
   g.add(bead(1.2, LEAF, { x: 0.8, y: 5.55, z: -0.5, ry: -0.9, rz: -0.25 }, [0.62, 0.16, 1]))
   // 叉子横搭在右边盘沿上
@@ -381,7 +404,7 @@ function steakPlate(p: string[]) {
   // 牛排 + 烤纹 + 黄油
   const st = G(pad(4.3, 2.1, STEAK, {}, 20))
   st.scale.set(1.45, 1, 0.95)
-  for (let i = 0; i < 4; i++) st.add(noOutline(rbox(4.6, 0.3, 0.42, shade(STEAK, -0.12), { x: (-2.3 + i * 1.5) / 1.45, y: 1.92, ry: 0.7 }, 0.1)))
+  for (let i = 0; i < 4; i++) st.add(noOutline(box(4.6, 0.3, 0.42, shade(STEAK, -0.12), { x: (-2.3 + i * 1.5) / 1.45, y: 1.92, ry: 0.7 })))
   g.add(P(st, -3.4, Y, 0.8, 0, 0.15, 0))
   g.add(rbox(2, 0.9, 2, BUTTER, { x: -3.6, y: Y + 2.05, z: 0.9, ry: 0.5 }, 0.3))
   // 玉米粒
@@ -390,7 +413,7 @@ function steakPlate(p: string[]) {
   for (let i = 0; i < 9; i++) {
     const a = (i / 9) * PI * 2
     const d = i % 3 === 0 ? 0.5 : 1.7
-    g.add(noOutline(bead(0.42, i % 2 ? CORN : shade(CORN, -0.06), { x: 6 + Math.cos(a) * d, y: Y + 1.35 - d * 0.32 + r() * 0.1, z: -3.6 + Math.sin(a) * d })))
+    g.add(noOutline(bead(0.4, i % 2 ? CORN : shade(CORN, -0.06), { x: 6 + Math.cos(a) * d, y: Y + 1.35 - d * 0.32 + r() * 0.1, z: -3.6 + Math.sin(a) * d }, undefined, GRAIN)))
   }
   // 西兰花两朵
   for (const [x, z, ry] of [
@@ -423,15 +446,15 @@ function saladBowl(p: string[]) {
   const g = new THREE.Group()
   const R0 = 11
   const H = 8
-  g.add(bowlOf(R0, H, bowlC))
-  g.add(noOutline(torus(R0 - 0.2, 0.2, rim, { y: H + 0.05, rx: PI / 2 })))
+  g.add(bowlOf(R0, H, bowlC, {}, 0.4, 24))
+  g.add(noOutline(torus(R0 - 0.2, 0.2, rim, { y: H + 0.05, rx: PI / 2 }, PI * 2, [4, 24])))
   // 生菜：一层垫底 + 几片翘起来的叶子
   g.add(domeOf(bowlInR(R0, H, 6.2) - 0.15, 2.3, LETTUCE, { y: 6.2 }))
   const r = rng(11)
   for (let i = 0; i < 7; i++) {
     const a = (i / 7) * PI * 2 + 0.3
     const d = i === 6 ? 0 : 5.6
-    g.add(ball(2.9, i % 2 ? shade(LETTUCE, -0.07) : shade(LETTUCE, 0.04), { x: Math.cos(a) * d, y: 8.1 + r() * 0.5, z: Math.sin(a) * d, ry: -a, rz: 0.25 }, [1.25, 0.26, 0.9]))
+    g.add(ball(2.9, i % 2 ? shade(LETTUCE, -0.07) : shade(LETTUCE, 0.04), { x: Math.cos(a) * d, y: 8.1 + r() * 0.5, z: Math.sin(a) * d, ry: -a, rz: 0.25 }, [1.25, 0.26, 0.9], [12, 6]))
   }
   // 小番茄
   for (const [x, z] of [
@@ -440,14 +463,14 @@ function saladBowl(p: string[]) {
     [5.2, -2],
     [-1.6, -4.8],
   ])
-    g.add(ball(1.3, TOMATO, { x, y: 9.6, z }))
+    g.add(ball(1.3, TOMATO, { x, y: 9.6, z }, undefined, [8, 6]))
   // 鸡蛋片
   for (const [x, z, rz] of [
     [0.6, 0.8, 0.1],
     [-3.6, -1.4, -0.2],
     [2.4, -3.6, 0.2],
   ]) {
-    const e = G(pad(1.7, 0.6, EGG_W, {}, 14), noOutline(cyl(0.95, 0.95, 0.3, EGG_Y, { y: 0.42 }, 12)))
+    const e = G(pad(1.7, 0.6, EGG_W, {}, 12), noOutline(cyl(0.95, 0.95, 0.3, EGG_Y, { y: 0.42 }, 12)))
     g.add(P(e, x, 9.15, z, 0.15, 0, rz))
   }
   // 黄瓜片
@@ -463,7 +486,7 @@ function saladBowl(p: string[]) {
   for (let i = 0; i < 10; i++) {
     const a = r() * PI * 2
     const d = 1.5 + r() * 5
-    g.add(noOutline(bead(0.42, CORN, { x: Math.cos(a) * d, y: 9.25 - d * 0.08, z: Math.sin(a) * d })))
+    g.add(noOutline(bead(0.4, CORN, { x: Math.cos(a) * d, y: 9.25 - d * 0.08, z: Math.sin(a) * d }, undefined, GRAIN)))
   }
   // 木叉勺：柄从菜里斜伸出碗沿
   for (const s of [-1, 1]) {
@@ -484,7 +507,7 @@ function pancakeStack(p: string[]) {
   const [plateC, rim, handle] = p
   const g = new THREE.Group()
   g.add(plateOf(10, 1.6, plateC))
-  g.add(noOutline(torus(9.75, 0.16, rim, { y: 1.66, rx: PI / 2 })))
+  g.add(noOutline(torus(9.75, 0.16, rim, { y: 1.66, rx: PI / 2 }, PI * 2, [4, 28])))
   // 三层松饼：侧面浅、顶面煎成焦黄
   const offs: V2[] = [
     [0, 0],
@@ -498,7 +521,7 @@ function pancakeStack(p: string[]) {
   })
   const T = PLATE_IN + 6.3
   // 枫糖浆：顶上一滩 + 四道顺着侧面淌下来的 + 盘里一滩
-  g.add(ball(4, MAPLE, { x: -0.3, y: T + 0.14, z: 0.2 }, [1, 0.09, 0.92]))
+  g.add(ball(4, MAPLE, { x: -0.3, y: T + 0.14, z: 0.2 }, [1, 0.09, 0.92], [16, 4]))
   for (const [a, yEnd] of [
     [0.5, 3.4],
     [2.2, 1.4],
@@ -507,24 +530,26 @@ function pancakeStack(p: string[]) {
   ]) {
     const c = Math.cos(a)
     const s = Math.sin(a)
-    g.add(noOutline(tube([[3.4 * c - 0.3, T + 0.12, 3.4 * s + 0.2], [5.7 * c - 0.3, T + 0.1, 5.7 * s + 0.2], [6.25 * c - 0.3, T - 0.7, 6.25 * s + 0.2], [6.3 * c - 0.3, yEnd, 6.3 * s + 0.2]], 0.45, MAPLE, { seg: 10, radial: 6 })))
-    g.add(noOutline(bead(0.55, MAPLE, { x: 6.3 * c - 0.3, y: yEnd, z: 6.3 * s + 0.2 })))
+    g.add(noOutline(tube([[3.4 * c - 0.3, T + 0.12, 3.4 * s + 0.2], [5.7 * c - 0.3, T + 0.1, 5.7 * s + 0.2], [6.25 * c - 0.3, T - 0.7, 6.25 * s + 0.2], [6.3 * c - 0.3, yEnd, 6.3 * s + 0.2]], 0.45, MAPLE, { seg: 8, radial: 5 })))
+    g.add(noOutline(bead(0.55, MAPLE, { x: 6.3 * c - 0.3, y: yEnd, z: 6.3 * s + 0.2 }, undefined, GRAIN)))
   }
-  g.add(noOutline(ball(2.4, MAPLE, { x: -4.6, y: PLATE_IN + 0.1, z: 5.6 }, [1.2, 0.07, 0.75])))
+  // 盘里那一滩在松饼外面的斜坡上：顺着斜坡躺（平放的话外沿会从盘底穿出去）
+  const onPlate = (x: number, z: number) => plateInY(10, 1.6, Math.hypot(x, z))
+  g.add(noOutline(leanOut(ball(2.4, MAPLE, { x: -4.6, y: onPlate(-4.6, 5.6) + 0.03, z: 5.6 }, [1.2, 0.07, 0.75], [12, 4]), 0.27)))
   // 黄油块
   g.add(rbox(2.2, 1, 2.2, BUTTER, { x: -0.3, y: T + 0.3, z: 0.2, ry: 0.4 }, 0.3))
-  // 蓝莓和草莓
+  // 蓝莓和草莓：松饼顶上几颗，盘子的斜坡上几颗（按斜坡的高度摆，压进盘面一点）
   for (const [x, y, z] of [
     [2.2, T + 0.95, 1.6],
     [2.9, T + 0.9, 0.3],
     [-2.6, T + 0.95, -1.7],
-    [6.2, 1.45, 4.6],
-    [5, 1.3, 5.9],
-    [7.1, 1.7, 3.2],
+    [6.2, onPlate(6.2, 4.6) + 0.7, 4.6],
+    [5, onPlate(5, 5.9) + 0.7, 5.9],
+    [7.1, onPlate(7.1, 3.2) + 0.7, 3.2],
   ])
-    g.add(ball(0.75, BLUEBERRY, { x, y, z }))
+    g.add(ball(0.8, BLUEBERRY, { x, y, z }, undefined, [8, 6]))
   g.add(strawberryOf(0.6, T + 1.3, -2.4, 0.2))
-  g.add(strawberryOf(-7, 1.9, -1.6, -0.5))
+  g.add(strawberryOf(-7, onPlate(-7, -1.6) + 1.25, -1.6, -0.5))
   // 叉子搭在右边盘沿上
   g.add(laid(forkOf(15, handle), 8.5, 1.6, 0.6, 0.12))
   return fitGroup(g)
@@ -537,13 +562,16 @@ function breakfastPlate(p: string[]) {
   const g = new THREE.Group()
   const pl = new THREE.Group()
   pl.add(plateOf(11.5, 1.8, plateC))
-  pl.add(noOutline(torus(11.25, 0.16, rim, { y: 1.86, rx: PI / 2 })))
+  pl.add(noOutline(torus(11.25, 0.16, rim, { y: 1.86, rx: PI / 2 }, PI * 2, [4, 28])))
   const Y = PLATE_IN
-  // 煎蛋：不规则的蛋白 + 鼓起的蛋黄
-  pl.add(ball(3.6, EGG_W, { x: -3.6, y: Y + 0.14, z: 4.7 }, [1.1, 0.1, 0.95]))
-  pl.add(bead(1.6, EGG_W, { x: -6.3, y: Y + 0.16, z: 3 }, [1.2, 0.2, 1]))
-  pl.add(bead(1.5, EGG_W, { x: -1.2, y: Y + 0.16, z: 7 }, [1.2, 0.2, 1]))
-  pl.add(domeOf(1.4, 1, EGG_Y, { x: -3.4, y: Y + 0.36, z: 4.5 }, 14))
+  // 煎蛋：不规则的蛋白 + 鼓起的蛋黄。蛋白有一半摊在盘子的斜坡上：整只蛋朝盘外翘起一点顺着斜坡躺（平放的话外沿会从盘底穿出去）
+  const egg = G(
+    ball(3.6, EGG_W, {}, [1.1, 0.1, 0.95], [16, 4]),
+    bead(1.6, EGG_W, { x: -2.7, y: 0.02, z: -1.7 }, [1.2, 0.2, 1]),
+    bead(1.5, EGG_W, { x: 2.4, y: 0.02, z: 2.3 }, [1.2, 0.2, 1]),
+    domeOf(1.4, 1, EGG_Y, { x: 0.2, y: 0.22, z: -0.2 }, 14),
+  )
+  pl.add(leanOut(P(egg, -3.6, Y + 0.24, 4.7), 0.126))
   // 培根：两条波浪形的肉条，中间一道肥肉
   for (const [x, z, ry] of [
     [0.5, -1, 0.1],
@@ -584,7 +612,7 @@ function breakfastPlate(p: string[]) {
   const gz = -1.5
   g.add(pad(4.1, 0.5, coaster, { x: gx, z: gz }))
   g.add(noOutline(cyl(2.92, 2.48, 7.4, JUICE, { x: gx, y: 0.95, z: gz }, 20)))
-  g.add(ghost(latheAt([[0, 0], [2.7, 0], [3.3, 10.5], [3.1, 10.5], [2.55, 0.4], [0, 0.4]], GLASS, { x: gx, y: 0.5, z: gz }), GLASS, 0.3))
+  g.add(ghost(latheAt([[0, 0], [2.7, 0], [3.3, 10.5], [3.1, 10.5], [2.55, 0.4], [0, 0.4]], GLASS, { x: gx, y: 0.5, z: gz }, 24), GLASS, 0.3))
   return fitGroup(g)
 }
 
@@ -594,7 +622,7 @@ function dumpling() {
   const o = new THREE.Group()
   o.add(ball(1.7, DOUGH, { y: 1.2 }, [1.6, 0.72, 0.8]))
   // 顶上的褶：一排歪着的小扁球
-  for (let i = -2; i <= 2; i++) o.add(bead(0.52, DOUGH, { x: i * 0.95, y: 2.3 - Math.abs(i) * 0.25, z: -0.25, ry: i % 2 ? 0.6 : -0.6 }, [0.9, 1, 0.55]))
+  for (let i = -2; i <= 2; i++) o.add(bead(0.5, DOUGH, { x: i * 0.95, y: 2.3 - Math.abs(i) * 0.25, z: -0.25, ry: i % 2 ? 0.6 : -0.6 }, [0.9, 1, 0.55], GRAIN))
   // 煎面
   o.add(noOutline(bead(1.5, SEAR, { y: 1.15, z: 1 }, [1.3, 0.55, 0.32])))
   return o
@@ -615,9 +643,10 @@ function dumplingPlate(p: string[]) {
   // 醋碟
   g.add(miniCup(3.1, 2, 1.5, dishC, { x: 9.5, z: 3.5 }, 20))
   g.add(noOutline(cyl(2.55, 2.55, 0.3, VINEGAR, { x: 9.5, y: 0.85, z: 3.5 }, 16)))
-  // 筷架 + 筷子（粗头架在筷架上，尖头落在桌面）
-  g.add(rbox(1.3, 0.85, 3.6, dishC, { x: -7.5, z: 11 }, 0.4))
-  for (const s of [-1, 1]) g.add(taperRod3([-10.5, 1.33, 11 + s * 0.5], [10.5, 0.22, 11 + s * 0.4], 0.36, 0.18, chop, 8))
+  // 筷架 + 筷子（粗头架在筷架上，尖头落在桌面），贴着盘子前沿摆
+  const cz = 10.7
+  g.add(rbox(1.3, 0.85, 3.6, dishC, { x: -7.5, z: cz }, 0.4))
+  for (const s of [-1, 1]) g.add(taperRod3([-10.5, 1.33, cz + s * 0.5], [10.5, 0.22, cz + s * 0.4], 0.36, 0.18, chop, 8))
   return fitGroup(g)
 }
 
@@ -625,25 +654,25 @@ function dumplingPlate(p: string[]) {
 
 function xiaolongbaoOf(x: number, y: number, z: number, turn: number) {
   const o = new THREE.Group()
-  o.add(ball(2, DOUGH, { y: 1.5 }, [1, 0.78, 1]))
-  // 褶：从顶心旋着散开的八道细棱
+  o.add(ball(2, DOUGH, { y: 1.5 }, [1, 0.78, 1], [10, 6]))
+  // 褶：从顶心旋着散开的八道细棱（一两毫米粗，三棱就够）
   for (let i = 0; i < 8; i++) {
     const a = (i / 8) * PI * 2
-    o.add(noOutline(taperRod3([Math.cos(a + 0.6) * 0.25, 3.02, Math.sin(a + 0.6) * 0.25], [Math.cos(a) * 1.45, 2.5, Math.sin(a) * 1.45], 0.17, 0.1, shade(DOUGH, -0.09), 5)))
+    o.add(noOutline(taperRod3([Math.cos(a + 0.6) * 0.25, 3.02, Math.sin(a + 0.6) * 0.25], [Math.cos(a) * 1.45, 2.5, Math.sin(a) * 1.45], 0.17, 0.1, shade(DOUGH, -0.09), 3)))
   }
-  o.add(bead(0.36, DOUGH, { y: 3.12 }))
+  o.add(bead(0.4, DOUGH, { y: 3.12 }, undefined, GRAIN))
   return P(o, x, y, z, 0, turn, 0)
 }
 
 /** 小笼包手工量好的平移量（带蒸汽，不走 fitGroup）：模型整体挪这么多后包围盒在 xz 上居中 */
-const XLB_OFF: V2 = [-5.3, 1.9]
+const XLB_OFF: V2 = [-5.33, 2.38]
 const XLB_R = 9.2
 function xiaolongbao(p: string[]) {
   const [bamboo, band, dishC] = p
   const g = new THREE.Group()
-  // 蒸笼：空心笼圈 + 两道箍 + 笼底竹篾 + 垫纸
-  g.add(cup(XLB_R, XLB_R, 5.5, 0.9, bamboo))
-  for (const y of [0.9, 3.7]) g.add(wallBand(XLB_R, y, XLB_R, y + 1, band))
+  // 蒸笼：空心笼圈 + 两道箍 + 笼底竹篾 + 垫纸（笼圈、箍、笼盖都是 24 段）
+  g.add(cup(XLB_R, XLB_R, 5.5, 0.9, bamboo, {}, 24))
+  for (const y of [0.9, 3.7]) g.add(wallBand(XLB_R, y, XLB_R, y + 1, band, {}, 24))
   g.add(cyl(8.4, 8.4, 0.4, shade(bamboo, -0.08), { y: 1.5 }, 24))
   g.add(noOutline(cyl(8, 8, 0.3, PAPER, { y: 1.75 }, 24)))
   const Y = 2.05
@@ -652,13 +681,13 @@ function xiaolongbao(p: string[]) {
     const a = ((i + 0.5) / 7) * PI * 2
     g.add(xiaolongbaoOf(Math.cos(a) * 5.5, Y, Math.sin(a) * 5.5, i * 0.7))
   }
-  // 笼盖：一边落在桌面、底面搭在笼沿上（朝右后方）
+  // 笼盖：一边落在桌面、底面搭在笼沿上（朝右后方）。倾角按「底面正好压住笼沿的圆口」算：再大一点盖子就悬在笼沿上方了
   const lid = new THREE.Group()
-  lid.add(cyl(9.4, 9.4, 2, bamboo, {}, 32))
-  lid.add(wallBand(9.4, 0.5, 9.4, 1.5, band))
+  lid.add(cyl(9.4, 9.4, 2, bamboo, {}, 24))
+  lid.add(wallBand(9.4, 0.5, 9.4, 1.5, band, {}, 24))
   lid.add(domeOf(8.7, 1.3, shade(bamboo, 0.05), { y: 1.9 }, 24))
   lid.add(noOutline(rbox(15, 0.3, 1.2, band, { y: 3 }, 0.1)))
-  const th = 0.452
+  const th = 0.438
   lid.rotation.z = -th
   lid.position.set(20.5 - 9.4 * Math.cos(th), 9.4 * Math.sin(th), 0)
   const lidG = G(lid)
@@ -666,7 +695,7 @@ function xiaolongbao(p: string[]) {
   g.add(lidG)
   // 姜丝醋碟
   const dx = 11
-  const dz = 8.5
+  const dz = 7.6
   g.add(miniCup(3, 2, 1.4, dishC, { x: dx, z: dz }, 20))
   g.add(noOutline(cyl(2.45, 2.45, 0.3, VINEGAR, { x: dx, y: 0.8, z: dz }, 16)))
   for (let i = 0; i < 5; i++) g.add(noOutline(rod3([dx - 1.2 + i * 0.3, 1.2, dz - 0.8 + i * 0.35], [dx + 0.6 + i * 0.15, 1.25, dz - 0.2 + (i % 2) * 0.7], 0.12, '#f2d98a', 5)))
@@ -719,7 +748,7 @@ function shavedIce(p: string[]) {
   ends.forEach((yEnd, i) => {
     c.add(iceDrip(13.3, yEnd, i * 3, 2, 0.15, SYRUP_RED))
     const a = (i * 3 + 1) * ICE_STEP
-    c.add(noOutline(bead(0.5, SYRUP_RED, { x: Math.sin(a) * (iceR(yEnd) - 0.1), y: yEnd, z: Math.cos(a) * (iceR(yEnd) - 0.1) }, [1.2, 1, 1.2])))
+    c.add(noOutline(bead(0.5, SYRUP_RED, { x: Math.sin(a) * (iceR(yEnd) - 0.1), y: yEnd, z: Math.cos(a) * (iceR(yEnd) - 0.1) }, [1.2, 1, 1.2], GRAIN)))
   })
   // 炼乳：山尖一小片 + 三道细流
   c.add(iceDrip(15.5, 14.5, 0, ICE_SEG, 0.3, CONDENSED))
@@ -769,7 +798,8 @@ function fishGeo(part: FishPart) {
         for (const [x, y] of [[0.3, 1.3], [1.1, 0], [0.4, -1.4]]) s.lineTo(x, y)
       } else s.splineThru([v(1.6, 2.3), v(-1.2, 3.1), v(-4.4, 1.9), v(-5.5, 0)])
     }
-    const geo = new THREE.ExtrudeGeometry(s, { depth: 1, bevelEnabled: true, bevelThickness: 0.6, bevelSize: 0.5, bevelOffset: -0.25, bevelSegments: 2, curveSegments: 6 })
+    // 样条按「点数 × curveSegments」细分：十来厘米长的饼，3 就够圆了（6 的话一条鱼近九百个面）
+    const geo = new THREE.ExtrudeGeometry(s, { depth: 1, bevelEnabled: true, bevelThickness: 0.6, bevelSize: 0.5, bevelOffset: -0.25, bevelSegments: 2, curveSegments: 3 })
     geo.rotateX(-PI / 2)
     geo.translate(0, 0.6, 0)
     return geo
@@ -781,7 +811,7 @@ function taiyakiFish(part: FishPart) {
   o.add(mesh(fishGeo(part), TAIYAKI))
   const dk = shade(TAIYAKI, -0.17)
   const T = 2.2
-  const line = (pts: V3[]) => o.add(noOutline(tube(pts, 0.13, dk, { seg: 6, radial: 4 })))
+  const line = (pts: V3[]) => o.add(noOutline(tube(pts, 0.13, dk, { seg: 4, radial: 3 })))
   if (part !== 'tail') {
     // 眼睛、鳃
     o.add(noOutline(bead(0.42, dk, { x: -3.7, y: T - 0.02, z: -0.8 }, [1, 0.5, 1])))
@@ -806,7 +836,7 @@ function taiyakiTray(p: string[]) {
   g.add(tray(26, 1.5, 18, 0.6, trayC, {}, 0.5))
   // 两条短边的包边
   for (const s of [-1, 1]) g.add(noOutline(rbox(1.4, 1.8, 18.3, edge, { x: s * 11.5, y: -0.15 }, 0.3)))
-  g.add(noOutline(rbox(21, 0.3, 15, paper, { y: 0.45, ry: 0.03 }, 0.05)))
+  g.add(noOutline(box(21, 0.3, 15, paper, { y: 0.45, ry: 0.03 })))
   const Y = 0.75
   g.add(P(taiyakiFish('whole'), -5.2, Y, -4.1, 0, 0.1, 0))
   g.add(P(taiyakiFish('whole'), 5, Y, -3.9, 0, PI - 0.12, 0))
@@ -823,7 +853,7 @@ function croissantOf() {
   for (let i = -2; i <= 2; i++) {
     const a = i * 0.42
     const rr = [2.3, 2, 1.35][Math.abs(i)]
-    o.add(ball(rr, i % 2 ? shade(BUN, -0.06) : BUN, { x: Math.sin(a) * 5, y: rr * 0.82, z: (1 - Math.cos(a)) * 5, ry: -a }, [1.05, 0.85, 1.12]))
+    o.add(ball(rr, i % 2 ? shade(BUN, -0.06) : BUN, { x: Math.sin(a) * 5, y: rr * 0.82, z: (1 - Math.cos(a)) * 5, ry: -a }, [1.05, 0.85, 1.12], [10, 6]))
   }
   return o
 }
@@ -836,7 +866,7 @@ function breadBasket(p: string[]) {
   bk.add(cup(15, 12.5, 8, 0.8, wicker))
   const rAt = (y: number) => 12.5 + (2.5 * y) / 8
   for (const y of [1.5, 3.5, 5.5]) bk.add(wallBand(rAt(y), y, rAt(y + 0.9), y + 0.9, shade(wicker, -0.1)))
-  bk.add(torus(15, 0.55, rim, { y: 7.9, rx: PI / 2 }))
+  bk.add(torus(15, 0.55, rim, { y: 7.9, rx: PI / 2 }, PI * 2, [6, 32]))
   // 垫布：里面一圈贴着篮壁，翻出口沿垂下来一截；篮里再鼓起一团托着面包
   bk.add(latheAt([[16.5, 5.8], [16.3, 7.6], [15.3, 8.7], [14.2, 8.2], [13, 4]], cloth, {}, 32))
   bk.add(domeOf(13.4, 2.4, cloth, { y: 5 }, 24))
@@ -850,8 +880,8 @@ function breadBasket(p: string[]) {
     [-3.2, -4.6],
     [8.2, -2.6],
   ]) {
-    g.add(ball(3.2, BUN_L, { x, y: 8.4, z }, [1, 0.74, 1]))
-    for (const ry of [0.3, 0.3 + PI / 2]) g.add(noOutline(rbox(4.2, 0.4, 0.4, shade(BUN_L, -0.12), { x, y: 10.45, z, ry }, 0.1)))
+    g.add(ball(3.2, BUN_L, { x, y: 8.4, z }, [1, 0.74, 1], [12, 8]))
+    for (const ry of [0.3, 0.3 + PI / 2]) g.add(noOutline(box(4.2, 0.4, 0.4, shade(BUN_L, -0.12), { x, y: 10.45, z, ry })))
   }
   // 法棍片三片，立着斜靠成一排
   for (let i = 0; i < 3; i++) {
@@ -879,14 +909,14 @@ function charcuterie(p: string[]) {
     [3.4, 0.8, 0.4],
     [6.6, 2.6, 0.35],
   ])
-    em.add(noOutline(bead(rr, '#dba93a', { x, y: 2.75, z }, [1, 0.3, 1])))
-  em.add(noOutline(bead(0.5, '#dba93a', { x: 5, y: 1.4, z: 0.02 }, [1, 1, 0.3])))
+    em.add(noOutline(bead(rr, '#dba93a', { x, y: 2.75, z }, [1, 0.3, 1], GRAIN)))
+  em.add(noOutline(bead(0.5, '#dba93a', { x: 5, y: 1.4, z: 0.02 }, [1, 1, 0.3], GRAIN)))
   g.add(P(em, -16.6, Y, -8.6, 0, -0.08, 0))
   // 布里芝士角：白霉皮，两个切面是奶黄色
   const brie = new THREE.Group()
   const sector: V2[] = [[0, 0], ...arcPts([0, 0, 0], 6.5, -0.4, 0.4, 5, 'xz').map(([x, , z]): V2 => [x, z])]
   brie.add(slab(sector, 2.3, '#f8f1e0'))
-  for (const s of [-1, 1]) brie.add(noOutline(rbox(4.6, 1.1, 0.3, '#f4dc98', { x: 3 * Math.cos(0.4) - s * Math.sin(0.4) * 0.03, y: 0.6, z: s * (3 * Math.sin(0.4) + Math.cos(0.4) * 0.03), ry: -s * 0.4 }, 0.1)))
+  for (const s of [-1, 1]) brie.add(noOutline(box(4.6, 1.1, 0.3, '#f4dc98', { x: 3 * Math.cos(0.4) - s * Math.sin(0.4) * 0.03, y: 0.6, z: s * (3 * Math.sin(0.4) + Math.cos(0.4) * 0.03), ry: -s * 0.4 })))
   g.add(P(brie, -16.8, Y, 4.2, 0, 0.15, 0))
   // 切达小方块
   const cubes: [number, number, number, number][] = [
@@ -896,7 +926,7 @@ function charcuterie(p: string[]) {
     [-4.2, 0, -4.7, 0.1],
     [-5.6, 1.7, -6, 0.5],
   ]
-  for (const [x, y, z, ry] of cubes) g.add(rbox(1.7, 1.7, 1.7, '#f0a030', { x, y: Y + y, z, ry }, 0.25))
+  for (const [x, y, z, ry] of cubes) g.add(box(1.7, 1.7, 1.7, '#f0a030', { x, y: Y + y, z, ry }))
   // 火腿卷：两根并排、一根叠在上面
   for (const [x, y] of [
     [4, 1.2],
@@ -906,15 +936,15 @@ function charcuterie(p: string[]) {
     g.add(P(cyl(1.2, 1.2, 5.6, HAM, {}, 12), x, Y + y, -5.2, PI / 2))
     g.add(noOutline(P(cyl(0.7, 0.7, 5.84, shade(HAM, -0.12), {}, 10), x, Y + y, -5.2, PI / 2)))
   }
-  // 萨拉米片：一片压一片
+  // 萨拉米片：一片压一片。脂肪粒只画露在外面的：平躺的第一片和最上面那片三粒都在，中间几片靠右的被后一片压住
+  const fat: V2[] = [
+    [-0.8, -0.4],
+    [0.1, -1.1],
+    [0.7, 0.5],
+  ]
   for (let i = 0; i < 6; i++) {
     const s = G(cyl(2.1, 2.1, 0.35, SALAMI, {}, 14))
-    for (const [x, z] of [
-      [0.7, 0.5],
-      [-0.8, -0.4],
-      [0.1, -1.1],
-    ])
-      s.add(noOutline(bead(0.3, '#e6b8a8', { x, y: 0.35, z }, [1, 0.3, 1])))
+    for (const [x, z] of fat.slice(0, i === 0 || i === 5 ? 3 : i % 2 ? 1 : 2)) s.add(noOutline(bead(0.3, '#e6b8a8', { x, y: 0.35, z }, [1, 0.3, 1], GRAIN)))
     g.add(P(s, -7.2 + i * 1.6, Y + (i ? 0.52 : 0), 2.6 + (i % 2) * 0.3, 0, 0, i ? -0.25 : 0))
   }
   // 饼干：同样叠成一排
@@ -931,7 +961,7 @@ function charcuterie(p: string[]) {
     [0.9, 2.3, -0.8],
     [0, 2.3, 0.7],
   ]
-  for (const [x, y, z] of gr) g.add(ball(1, GRAPE, { x: 7.6 + x, y: Y + y, z: 3 + z }))
+  for (const [x, y, z] of gr) g.add(ball(1, GRAPE, { x: 7.6 + x, y: Y + y, z: 3 + z }, undefined, [8, 6]))
   g.add(rod3([7.6, Y + 2.6, 1.6], [8, Y + 3.3, -0.2], 0.18, '#6e5a3a', 6))
   // 一小碗橄榄
   g.add(miniCup(2.6, 2, 2.3, bowlC, { x: -0.3, y: Y, z: -4.6 }, 20))
@@ -946,17 +976,19 @@ function charcuterie(p: string[]) {
 
 function ramuneBottle(label: string, cap: string) {
   const o = new THREE.Group()
-  o.add(ghost(latheAt([[0, 0.4], [2.6, 0.4], [2.6, 9.4], [2.2, 10.9], [1.2, 12], [0, 12]], '#c8f0ec'), '#c8f0ec', 0.55))
+  // 瓶身、汽水、标签都是 20 段
+  o.add(ghost(latheAt([[0, 0.4], [2.6, 0.4], [2.6, 9.4], [2.2, 10.9], [1.2, 12], [0, 12]], '#c8f0ec', {}, 20), '#c8f0ec', 0.55))
   // 玻璃弹珠：没开封时被气压顶在瓶口，贴着瓶盖下沿
-  o.add(bead(0.78, '#f2ffff', { y: 17.8 }))
-  o.add(ghost(latheAt([[0, 0], [2.6, 0], [2.9, 0.4], [2.9, 9.5], [2.5, 11], [1.5, 12.2], [1.25, 12.9], [1.9, 13.8], [1.9, 15.2], [1.35, 16.2], [1.35, 18.6], [1.7, 18.8], [1.7, 19.5], [0, 19.5]], '#8fd8d0'), '#8fd8d0', 0.38))
-  o.add(wallBand(2.9, 3, 2.9, 8, label))
+  o.add(bead(0.8, '#f2ffff', { y: 17.8 }))
+  o.add(ghost(latheAt([[0, 0], [2.6, 0], [2.9, 0.4], [2.9, 9.5], [2.5, 11], [1.5, 12.2], [1.25, 12.9], [1.9, 13.8], [1.9, 15.2], [1.35, 16.2], [1.35, 18.6], [1.7, 18.8], [1.7, 19.5], [0, 19.5]], '#8fd8d0', {}, 20), '#8fd8d0', 0.38))
+  o.add(wallBand(2.9, 3, 2.9, 8, label, {}, 20))
   o.add(noOutline(bead(1.1, cap, { y: 5.5, z: 3 }, [1, 1, 0.12])))
   o.add(cyl(1.85, 1.85, 1.2, cap, { y: 18.5 }, 16))
   return o
 }
 
-function watermelonSlice() {
+/** 一片西瓜；seeds 是朝前那面上的瓜子位置（叠在后面的几片，被前一片挡住的瓜子不画） */
+function watermelonSlice(seeds: V2[]) {
   const mk = (s: THREE.Shape, depth: number, color: string) => {
     const geo = new THREE.ExtrudeGeometry(s, { depth, bevelEnabled: false, curveSegments: 8 })
     geo.translate(0, 0, -depth / 2)
@@ -975,13 +1007,8 @@ function watermelonSlice() {
   rind.lineTo(3.1, 1)
   rind.quadraticCurveTo(0, 0.1, -3.1, 1)
   const o = G(mk(flesh, 1.3, MELON), mk(rind, 1.5, RIND))
-  for (const [x, y] of [
-    [0, 3.6],
-    [-0.9, 2.3],
-    [0.9, 2.2],
-    [0, 1.5],
-  ])
-    o.add(noOutline(bead(0.2, '#2b2020', { x, y, z: 0.62 }, [1, 1.5, 0.5])))
+  // 瓜子只有四毫米长：八面体就够
+  for (const [x, y] of seeds) o.add(noOutline(bead(0.2, '#2b2020', { x, y, z: 0.62 }, [1, 1.5, 0.5], [4, 2])))
   return o
 }
 
@@ -993,8 +1020,13 @@ function ramuneSet(p: string[]) {
   const pl = new THREE.Group()
   pl.add(plateOf(6, 1.2, dish))
   // 三片西瓜斜靠着叠在盘里
+  const seeds: V2[][] = [
+    [[0, 3.6], [-0.9, 2.3], [0.9, 2.2], [0, 1.5]],
+    [[0, 3.6], [-0.9, 2.3], [0.9, 2.2]],
+    [[0, 3.6], [0.9, 2.2]],
+  ]
   for (let i = 0; i < 3; i++) {
-    const s = watermelonSlice()
+    const s = watermelonSlice(seeds[i])
     s.rotation.x = -1.05 + i * 0.05
     pl.add(P(G(s), (i - 1) * 0.5, PLATE_IN + 0.75 + i * 0.1, 2.9 - i * 1.9, 0, (i - 1) * 0.16, 0))
   }
@@ -1012,8 +1044,8 @@ function gridRibs(r: number, gap: number, w: number, h: number, y: number, color
     const off = (i + 0.5) * gap
     if (Math.abs(off) > r - 0.8) continue
     const len = 2 * Math.sqrt(r * r - off * off) - 0.4
-    o.add(noOutline(rbox(len, h, w, color, { y, z: z0 + off }, 0.1)))
-    o.add(noOutline(rbox(w, h, len, color, { x: off, y: y + 0.02, z: z0 }, 0.1)))
+    o.add(noOutline(box(len, h, w, color, { y, z: z0 + off })))
+    o.add(noOutline(box(w, h, len, color, { x: off, y: y + 0.02, z: z0 })))
   }
   return o
 }
@@ -1031,7 +1063,7 @@ function waffleMaker(p: string[]) {
   g.add(gridRibs(R0 - 2.3, 2.2, 0.55, 0.4, 5.95, WAFFLE_L))
   // 正面：下把手，右前方的温控旋钮，左前方两颗指示灯
   g.add(rbox(5, 1.3, 2.6, trim, { y: 3.1, z: R0 + 0.8 }, 0.5))
-  const dial = G(cyl(1.3, 1.3, 1, acc, { y: 2, z: R0 + 0.1, rx: PI / 2 }, 16), noOutline(rbox(0.3, 1, 0.3, DARK, { y: 2.3, z: R0 + 0.5 }, 0.1)))
+  const dial = G(cyl(1.3, 1.3, 1, acc, { y: 2, z: R0 + 0.1, rx: PI / 2 }, 16), noOutline(box(0.3, 1, 0.3, DARK, { y: 2.3, z: R0 + 0.5 })))
   dial.rotation.y = 0.75
   g.add(dial)
   for (const [a, c] of [
@@ -1063,11 +1095,11 @@ function pressedHalf(a: number, t: number) {
   const o = new THREE.Group()
   o.add(slab([[0, 0], [a, 0], [0, a]], t, TOAST))
   // 烤纹：顶面两道和斜边平行的焦痕
-  for (const k of [0.45, 0.75]) o.add(noOutline(rbox(a * k * 1.414 - 1.2, 0.3, 0.5, shade(TOAST, -0.14), { x: a * k * 0.5, y: t - 0.18, z: a * k * 0.5, ry: PI / 4 }, 0.1)))
+  for (const k of [0.45, 0.75]) o.add(noOutline(box(a * k * 1.414 - 1.2, 0.3, 0.5, shade(TOAST, -0.14), { x: a * k * 0.5, y: t - 0.18, z: a * k * 0.5, ry: PI / 4 })))
   // 切面上的夹心：火腿、芝士各一条，芝士淌下来一滴
   const len = a * 1.414 - 1.8
-  o.add(noOutline(rbox(len, 0.5, 0.5, HAM, { x: a / 2 + 0.03, y: t / 2 - 0.45, z: a / 2 + 0.03, ry: PI / 4 }, 0.12)))
-  o.add(noOutline(rbox(len + 0.4, 0.4, 0.6, CHEESE, { x: a / 2 + 0.06, y: t / 2 + 0.05, z: a / 2 + 0.06, ry: PI / 4 }, 0.12)))
+  o.add(noOutline(box(len, 0.5, 0.5, HAM, { x: a / 2 + 0.03, y: t / 2 - 0.45, z: a / 2 + 0.03, ry: PI / 4 })))
+  o.add(noOutline(box(len + 0.4, 0.4, 0.6, CHEESE, { x: a / 2 + 0.06, y: t / 2 + 0.05, z: a / 2 + 0.06, ry: PI / 4 })))
   o.add(noOutline(bead(0.5, CHEESE, { x: a / 2 + 0.9, y: t / 2 - 0.35, z: a / 2 - 0.5 }, [0.7, 1.2, 0.7])))
   return o
 }
@@ -1082,8 +1114,8 @@ function sandwichPress(p: string[]) {
   m.add(noOutline(rbox(14, 0.9, 14, IRON, { y: 3.9 }, 0.3)))
   m.add(rbox(15, 4.4, 15, body, { y: 4.4 }, 2))
   // 顶面：凹下去的装饰板 + 对角压纹 + 两颗指示灯
-  m.add(noOutline(rbox(10.4, 0.4, 10.4, shade(body, -0.07), { y: 8.55 }, 0.2)))
-  m.add(noOutline(rbox(13.6, 0.3, 0.6, shade(body, -0.2), { y: 8.82, ry: PI / 4 }, 0.1)))
+  m.add(noOutline(box(10.4, 0.4, 10.4, shade(body, -0.07), { y: 8.55 })))
+  m.add(noOutline(box(13.6, 0.3, 0.6, shade(body, -0.2), { y: 8.82, ry: PI / 4 })))
   m.add(lit(bead(0.4, '#7fe0a8', { x: 3.3, y: 8.82, z: 6.2 }), '#7fe0a8', 0.8))
   m.add(lit(bead(0.4, '#ff7a5c', { x: 4.7, y: 8.8, z: 6.2 }), '#ff7a5c', 0.8))
   // 前面的上下把手 + 卡扣
@@ -1093,13 +1125,13 @@ function sandwichPress(p: string[]) {
   // 后面的合页
   m.add(cylX(0.8, 9, DARK, 0, 4.35, -7.7, 10))
   g.add(P(m, -7, 0, -1))
-  // 盘子 + 对切的三明治：一半平放，另一半斜搭在上面
+  // 盘子 + 对切的三明治：一半平放（比盘底大，三个角搁在盘沿的斜坡上），另一半斜搭在上面
   const pl = new THREE.Group()
   pl.add(plateOf(6.6, 1.2, plateC))
-  pl.add(P(pressedHalf(8, 2.2), -4, PLATE_IN, -3.6))
+  pl.add(P(pressedHalf(8, 2.2), -4, PLATE_IN + 0.05, -3.6))
   const top = pressedHalf(8, 2.2)
   top.rotation.set(0.18, 0, -0.16)
-  pl.add(P(G(top), -1.6, PLATE_IN + 1.5, -0.4, 0, 0.5, 0))
+  pl.add(P(G(top), -1.6, PLATE_IN + 1.75, -0.4, 0, 0.5, 0))
   g.add(P(pl, 8.6, 0, 0.6))
   return fitGroup(g)
 }
@@ -1121,27 +1153,30 @@ function healthKettle(p: string[]) {
   // 壶：钢底圈 + 茶汤 + 玻璃壶身 + 壶口钢圈
   g.add(cyl(6.2, 6.6, 1.2, STEEL, { y: 4.2 }, SEG))
   const Y = 5.4
-  g.add(noOutline(latheAt([[0, 0.35], [5.7, 0.35], [6.1, 2], [6.1, 8.2], [0, 8.2]], TEA_AMBER, { y: Y })))
+  g.add(noOutline(latheAt([[0, 0.35], [5.7, 0.35], [6.1, 2], [6.1, 8.2], [0, 8.2]], TEA_AMBER, { y: Y }, SEG)))
   // 浮在汤面上的枸杞红枣，和几颗贴着壶壁的
   const r = rng(6)
   for (let i = 0; i < 9; i++) {
     const a = r() * PI * 2
     const d = 1 + r() * 4
     const big = i % 3 === 0
-    g.add(noOutline(bead(big ? 0.75 : 0.42, big ? JUJUBE : GOJI, { x: Math.cos(a) * d, y: Y + 8.25, z: Math.sin(a) * d, ry: a }, big ? [1.4, 0.7, 1] : [1.5, 0.7, 0.9])))
+    g.add(noOutline(bead(big ? 0.8 : 0.4, big ? JUJUBE : GOJI, { x: Math.cos(a) * d, y: Y + 8.25, z: Math.sin(a) * d, ry: a }, big ? [1.4, 0.7, 1] : [1.5, 0.7, 0.9], big ? undefined : GRAIN)))
   }
+  // 贴着壶壁的几颗：朝外的那一头正好顶到玻璃内壁（半径 6.2），比茶汤（6.1）多探出一点才看得见
   for (let i = 0; i < 7; i++) {
     const a = (i / 7) * PI * 2 + 0.4
     const big = i % 3 === 1
-    g.add(noOutline(bead(big ? 0.6 : 0.42, big ? JUJUBE : GOJI, { x: Math.cos(a) * 5.75, y: Y + 3 + r() * 4.6, z: Math.sin(a) * 5.75, ry: -a }, [0.8, 1.3, 1])))
+    const rr = big ? 0.6 : 0.4
+    const d = 6.22 - rr * 0.8
+    g.add(noOutline(bead(rr, big ? JUJUBE : GOJI, { x: Math.cos(a) * d, y: Y + 3 + r() * 4.6, z: Math.sin(a) * d, ry: -a }, [0.8, 1.3, 1], big ? undefined : GRAIN)))
   }
-  g.add(ghost(latheAt([[0, 0], [6, 0], [6.5, 2], [6.5, 9], [6, 12.5], [5.6, 13.6], [5.3, 13.6], [5.7, 12.4], [6.2, 9], [6.2, 2], [5.75, 0.3], [0, 0.3]], GLASS, { y: Y }), GLASS, 0.3))
-  g.add(noOutline(latheAt([[6.12, 12.5], [5.72, 13.65]], STEEL, { y: Y })))
-  // 壶嘴（左）和把手（右）
+  g.add(ghost(latheAt([[0, 0], [6, 0], [6.5, 2], [6.5, 9], [6, 12.5], [5.6, 13.6], [5.3, 13.6], [5.7, 12.4], [6.2, 9], [6.2, 2], [5.75, 0.3], [0, 0.3]], GLASS, { y: Y }, SEG), GLASS, 0.3))
+  g.add(noOutline(latheAt([[6.12, 12.5], [5.72, 13.65]], STEEL, { y: Y }, SEG)))
+  // 壶嘴（左）和把手（右）：上下两条横臂的里端收在玻璃壁里，不伸进壶内
   g.add(rbox(1.9, 1, 2.2, STEEL, { x: -6.2, y: Y + 12.9, rz: 0.5 }, 0.4))
   g.add(rbox(1.9, 9.6, 2.6, trim, { x: 9.6, y: Y + 2.6 }, 0.9))
-  g.add(rbox(4.4, 1.7, 2.4, trim, { x: 8, y: Y + 10.9 }, 0.7))
-  g.add(rbox(4.2, 1.6, 2.4, trim, { x: 8.1, y: Y + 2.2 }, 0.7))
+  g.add(rbox(4.2, 1.7, 2.4, trim, { x: 8.1, y: Y + 10.9 }, 0.7))
+  g.add(rbox(4, 1.6, 2.4, trim, { x: 8.2, y: Y + 2.2 }, 0.7))
   // 壶盖 + 盖钮
   g.add(pad(5.9, 1.3, trim, { y: Y + 13.5 }))
   g.add(cyl(0.7, 0.9, 0.9, trim, { y: Y + 14.7 }, 10))
@@ -1167,7 +1202,7 @@ function soymilkMaker(p: string[]) {
   m.add(noOutline(lathe([[7.27, 22.9], [7.27, 25.9]], DARK, 4, [-2 * step, 4 * step])))
   m.add(lit(lathe([[7.35, 24.2], [7.35, 25.2]], '#ffb347', 2, [-step, 2 * step]), '#ffb347', 0.8))
   for (const i of [-1, 0, 1]) m.add(noOutline(bead(0.32, '#d7d8db', { x: Math.sin(i * step * 0.8) * 7.3, y: 23.5, z: Math.cos(i * step * 0.8) * 7.3 })))
-  m.add(tube(arcPts([0, 27, 0], 4, 0, PI, 8), 0.75, head, { seg: 16, radial: 8 }))
+  m.add(tube(arcPts([0, 27, 0], 4, 0, PI, 8), 0.75, head, { seg: 12, radial: 6 }))
   // 侧把手（左）和壶嘴（右）
   m.add(rbox(1.9, 12.4, 2.6, head, { x: -10.2, y: 6 }, 0.9))
   m.add(rbox(4.4, 1.7, 2.4, head, { x: -8.6, y: 16.9 }, 0.7))
@@ -1175,8 +1210,8 @@ function soymilkMaker(p: string[]) {
   m.add(rbox(2.2, 1.6, 2.8, body, { x: 7.1, y: 19.3, rz: -0.45 }, 0.5))
   g.add(P(m, -3.5, 0, 0))
   // 一杯豆浆
-  g.add(cup(3.4, 2.8, 9, 0.3, cupC, { x: 8.3, z: 2.6 }))
-  g.add(noOutline(cyl(2.95, 2.95, 0.3, SOYMILK, { x: 8.3, y: 7.5, z: 2.6 }, 24)))
+  g.add(cup(3.4, 2.8, 9, 0.3, cupC, { x: 7.95, z: 2.6 }, 20))
+  g.add(noOutline(cyl(2.95, 2.95, 0.3, SOYMILK, { x: 7.95, y: 7.5, z: 2.6 }, 20)))
   // 一小碟黄豆
   g.add(miniCup(2.6, 1.8, 1.3, cupC, { x: 6.4, z: -5.4 }))
   g.add(noOutline(cyl(2.05, 2.05, 0.3, shade(SOYBEAN, -0.08), { x: 6.4, y: 0.55, z: -5.4 }, 12)))
@@ -1208,9 +1243,9 @@ function kakigoriMachine(p: string[]) {
   g.add(rbox(9, 1.2, 2.2, STEEL, { x: 3.4, y: 32.6, z: 1 }, 0.5))
   g.add(cyl(1.05, 1.25, 3.8, trim, { x: 6.9, y: 33.8, z: 1 }, 12))
   g.add(ball(1.3, trim, { x: 6.9, y: 37.6, z: 1 }))
-  // 接冰的碗和冰山
+  // 接冰的碗和冰山：冰山的底边贴着碗的内壁（和碗同样 20 段），不是悬在碗里的一坨
   g.add(bowlOf(5.4, 5, bowlC, { y: 2, z: 1.5 }, 0.4, 20))
-  g.add(latheAt([[0, 0], [4.5, 0], [4.6, 1], [4.2, 2.4], [3.3, 3.9], [2, 5], [0.8, 5.6], [0, 5.75]], ICE, { y: 5.6, z: 1.5 }, 16))
+  g.add(latheAt([[0, 0], [4.85, 0], [4.95, 0.9], [4.2, 2.4], [3.3, 3.9], [2, 5], [0.8, 5.6], [0, 5.75]], ICE, { y: 5.6, z: 1.5 }, 20))
   return fitGroup(g)
 }
 

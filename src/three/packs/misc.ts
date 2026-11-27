@@ -32,8 +32,9 @@ const dirOf = (yaw: number, pitch: number): V3 => [Math.sin(yaw) * Math.cos(pitc
 const yawTo = (a: number) => PI / 2 - a
 const along = (b: V3, d: V3, l: number): V3 => [b[0] + d[0] * l, b[1] + d[1] * l, b[2] + d[2] * l]
 /** 叶片：叶柄端在 base，沿 yaw / pitch 方向伸出 */
-function sprig(len: number, color: string, base: V3, yaw: number, pitch: number, wide = 0.45) {
-  const m = ball(len / 2, color, {}, [wide, 0.12, 1])
+function sprig(len: number, color: string, base: V3, yaw: number, pitch: number, wide = 0.45, seg?: [number, number]) {
+  // seg：[叶片轮廓一圈, 厚度方向] 段数；成堆的细小叶子（竹叶）压低，不给就按大小自适应
+  const m = ball(len / 2, color, {}, [wide, 0.12, 1], seg)
   m.rotation.set(pitch, yaw, 0, 'YXZ')
   m.position.set(...along(base, dirOf(yaw, pitch), len / 2))
   return m
@@ -508,7 +509,7 @@ function bambooPot(p: string[]) {
   const [box] = p
   const g = G(tray(34, 30, 34, 2, box))
   g.add(rbox(29.4, 1, 29.4, SOIL, { y: 26 }, 0.3))
-  for (const [x, z] of [[-9, 8], [10, -9], [9, 10]]) g.add(ball(1.6, C.white, { x, y: 27.2, z }, [1, 0.6, 1]))
+  for (const [x, z] of [[-9, 8], [10, -9], [9, 10]]) g.add(ball(1.6, C.white, { x, y: 27.2, z }, [1, 0.6, 1], [8, 6]))
   const rand = rng(9)
   const stalks: [number, number, number][] = [
     [-6, -5, 118],
@@ -517,15 +518,18 @@ function bambooPot(p: string[]) {
     [7, 4, 112],
     [0, -1, 86],
   ]
+  // 竹叶 3cm 宽、1.5cm 厚：轮廓 8 段、厚度 6 段
+  const LEAF_SEG: [number, number] = [8, 6]
   for (const [x, z, h] of stalks) {
     g.add(cyl(1.4, 1.4, h, '#a5d273', { x, y: 27, z }, 10))
     for (let k = 1; k * 16 < h; k++) {
       const y = 27 + k * 16
-      g.add(torus(1.45, 0.4, '#7fb257', { x, y, z, rx: PI / 2 }))
+      // 竹节：一圈细环套在 10 段的竹竿外面（环比竿粗，段数不用对齐），管截面 6 段
+      g.add(torus(1.45, 0.4, '#7fb257', { x, y, z, rx: PI / 2 }, PI * 2, [6, 12]))
       if (k * 16 > h * 0.55)
-        for (let j = 0; j < 2; j++) g.add(sprig(13, j ? C.leafD : C.leaf, [x, y, z], rand() * PI * 2, 0.25 + rand() * 0.35, 0.22))
+        for (let j = 0; j < 2; j++) g.add(sprig(13, j ? C.leafD : C.leaf, [x, y, z], rand() * PI * 2, 0.25 + rand() * 0.35, 0.22, LEAF_SEG))
     }
-    for (let j = 0; j < 3; j++) g.add(sprig(11, C.leaf, [x, 27 + h, z], rand() * PI * 2, -0.4 - rand() * 0.4, 0.22))
+    for (let j = 0; j < 3; j++) g.add(sprig(11, C.leaf, [x, 27 + h, z], rand() * PI * 2, -0.4 - rand() * 0.4, 0.22, LEAF_SEG))
   }
   return g
 }

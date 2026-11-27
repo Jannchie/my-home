@@ -2,9 +2,9 @@
 // 原点在占地中心底面，正面朝 +z；能摆东西的声明 surface / surfaceShape；type / tags / mats 直接写在 def 里。
 
 import * as THREE from 'three'
-import { ball, cup, cyl, markWater, rbox, shade, torus } from '../toon'
+import { ball, box, cup, cyl, markWater, rbox, shade, torus } from '../toon'
 import { rectPoly, shell, type AssetDef, type Fx } from '../kit'
-import { G, P, PI, cylZ, fitGroup, fitWall, ghost, latheAt, lit, litOutlined, noOutline, rod3, tube, type V2 } from '../geo'
+import { G, P, PI, bakeMeshes, cylZ, fitGroup, fitWall, ghost, latheAt, lit, litOutlined, noOutline, rod3, tube, type V2, type V3 } from '../geo'
 import { CN, J, N, PROP, define, type Pal } from '../packkit'
 
 const ASH = '#d9d5cc'
@@ -25,7 +25,8 @@ function embers(x: number, y: number, z: number, s = 1) {
     [0.4, 2.8, 0.2, 2.2],
   ]
   for (const [dx, dz, ry, lift] of bits) g.add(P(rbox(6 * s, 2.4 * s, 2.6 * s, CHARCOAL, {}, 0.8 * s), dx * s, 1.2 * s + lift * 0.4 * s, dz * s, 0, ry))
-  g.add(lit(ball(2.4 * s, EMBER, { y: 1.6 * s }, [1.2, 0.6, 1.2]), EMBER, 0.9))
+  // 炭芯大半埋在炭块中间，只露出缝里的一点光：12 × 6 段
+  g.add(lit(ball(2.4 * s, EMBER, { y: 1.6 * s }, [1.2, 0.6, 1.2], [12, 6]), EMBER, 0.9))
   g.position.set(x, y, z)
   return g
 }
@@ -33,7 +34,9 @@ function embers(x: number, y: number, z: number, s = 1) {
 /** 铁壶：扁圆壶身 + 盖和盖钮 + 壶嘴 + 提梁；壶底在 (x, y, z)，r 是壶身最大半径，壶嘴朝 +x */
 function tetsubin(x: number, y: number, z: number, r: number, color = IRON) {
   const g = new THREE.Group()
+  // 轮廓从轴心起：壶底封口（壶架在五德上，从低处能看到壶底）
   const body: V2[] = [
+    [0, 0],
     [r * 0.55, 0],
     [r * 0.9, r * 0.18],
     [r, r * 0.55],
@@ -42,7 +45,7 @@ function tetsubin(x: number, y: number, z: number, r: number, color = IRON) {
     [r * 0.45, r * 1.2],
   ]
   g.add(latheAt(body, color, {}, 20))
-  g.add(cyl(r * 0.46, r * 0.5, r * 0.12, shade(color, 0.08), { y: r * 1.18 }, 16))
+  g.add(cyl(r * 0.46, r * 0.5, r * 0.12, shade(color, 0.08), { y: r * 1.18 }, 20))
   g.add(ball(r * 0.14, shade(color, 0.12), { y: r * 1.4 }))
   g.add(rod3([r * 0.85, r * 0.6, 0], [r * 1.35, r * 1.0, 0], r * 0.11, color, 8))
   g.add(
@@ -63,12 +66,12 @@ function tetsubin(x: number, y: number, z: number, r: number, color = IRON) {
   return g
 }
 
-/** 五德（铁三脚圈）：一只圆环 + 三条插进灰里的爪，圈顶在 y + h */
-function gotoku(x: number, y: number, z: number, r: number, h: number) {
+/** 五德（铁三脚圈）：一只圆环 + 三条插进灰里的爪，圈顶在 y + h；a0 是第一条爪的方位角 */
+function gotoku(x: number, y: number, z: number, r: number, h: number, a0 = 0.4) {
   const g = new THREE.Group()
-  g.add(P(torus(r, 0.5, IRON, {}, PI * 2), 0, h, 0, PI / 2))
+  g.add(P(torus(r, 0.5, IRON, {}, PI * 2, [6, 20]), 0, h, 0, PI / 2))
   for (let k = 0; k < 3; k++) {
-    const a = (k / 3) * PI * 2 + 0.4
+    const a = (k / 3) * PI * 2 + a0
     g.add(rod3([Math.cos(a) * r, h, Math.sin(a) * r], [Math.cos(a) * r * 1.1, -1, Math.sin(a) * r * 1.1], 0.45, IRON, 6))
   }
   g.position.set(x, y, z)
@@ -90,15 +93,20 @@ function irori(p: string[]) {
   }
   g.add(P(shell(IR.w - 8, IR.h - 9, IR.w - 8, 3, shade(wood, -0.1), { top: false }), 0, 4, 0))
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rbox(9, 4, 9, shade(wood, -0.2), { x: sx * (IR.w / 2 - 12), z: sz * (IR.w / 2 - 12) }, 1))
-  // 灰坑：铜板内衬 + 灰面
-  g.add(P(shell(pit + 1, 14, pit + 1, 1, metal, { top: false }), 0, IR.h - 15, 0))
+  // 灰坑：铜板内衬 + 灰面。内衬只做四面壁板（底板压在灰下面，从哪儿都看不见；整只空心壳要七百多个面）
+  const lw = pit + 1
+  for (const s of [-1, 1]) {
+    g.add(box(lw, 14, 1, metal, { y: IR.h - 15, z: s * (lw / 2 - 0.5) }))
+    g.add(box(1, 14, lw - 2, metal, { x: s * (lw / 2 - 0.5), y: IR.h - 15 }))
+  }
   // 灰从铜盘底一直填到灰面 ay（只铺薄薄一层的话会悬在盘子半空）
   const ay = IR.h - 5
   g.add(rbox(pit - 0.6, ay - (IR.h - 14), pit - 0.6, ASH, { y: IR.h - 14 }, 0.4))
   g.add(embers(0, ay, 2, 1.5))
-  // 五德圈比壶身最粗处小：壶坐在圈上（圈顶 = ay + 9.5，壶身半径 7 的地方离壶底约 1）
-  g.add(gotoku(0, ay, 2, 7, 9))
-  g.add(tetsubin(0, ay + 8.5, 2, 9))
+  // 五德圈比壶身最粗处小：壶坐在圈上（圈顶 = ay + 9.5，壶身半径 7 的地方离壶底约 1；壶再压低 0.1，真的压在圈上）。
+  // 三条爪转到炭块之间的空当里（原先的方位有两条爪正好从炭块里穿过去）
+  g.add(gotoku(0, ay, 2, 7, 9, -PI / 4))
+  g.add(tetsubin(0, ay + 8.4, 2, 9))
   // 火箸和灰铲
   g.add(rod3([-22, ay - 1, 18], [-19, ay + 20, 21], 0.4, IRON, 6))
   g.add(rod3([-20.5, ay - 1, 18.6], [-16.5, ay + 20, 20], 0.4, IRON, 6))
@@ -114,24 +122,25 @@ const SHICHIRIN_FX: Fx[] = [{ kind: 'smoke', x: 0, y: SH.h + 4, z: 0, scale: 0.9
 function shichirin(p: string[]) {
   const [body, band, fish] = p
   const g = new THREE.Group()
-  g.add(cup(SH.r, SH.r * 0.82, SH.h, 2.2, body))
+  // 炉身一圈 24 段，贴着它的箍、烤网外圈、炭饼用同样的段数
+  g.add(cup(SH.r, SH.r * 0.82, SH.h, 2.2, body, {}, 24))
   // 腰箍和口箍
-  g.add(P(noOutline(torus(SH.r * 0.92, 0.6, band, {}, PI * 2)), 0, SH.h * 0.45, 0, PI / 2))
-  g.add(P(noOutline(torus(SH.r + 0.1, 0.6, band, {}, PI * 2)), 0, SH.h - 1.2, 0, PI / 2))
+  g.add(P(noOutline(torus(SH.r * 0.92, 0.6, band, {}, PI * 2, [6, 24])), 0, SH.h * 0.45, 0, PI / 2))
+  g.add(P(noOutline(torus(SH.r + 0.1, 0.6, band, {}, PI * 2, [6, 24])), 0, SH.h - 1.2, 0, PI / 2))
   // 进风口：正面一块深色小门 + 拉钮
   g.add(noOutline(rbox(6.5, 4.6, 0.8, CHARCOAL, { y: 3, z: SH.r * 0.86 }, 0.4)))
   g.add(rbox(1.6, 1.6, 1, band, { y: 4.5, z: SH.r * 0.86 + 0.7 }, 0.4))
   // 炭和火
-  g.add(cyl(SH.r - 2.6, SH.r - 3.4, 1, CHARCOAL, { y: SH.h - 6 }, 16))
+  g.add(cyl(SH.r - 2.6, SH.r - 3.4, 1, CHARCOAL, { y: SH.h - 6 }, 24))
   for (const [x, z] of [
     [-3, 1],
     [3, -2],
     [0.5, 4],
   ])
-    g.add(lit(ball(2.2, EMBER, { x, y: SH.h - 5, z }, [1, 0.5, 1]), EMBER, 0.9))
-  // 烤网：外圈 + 几根横丝
-  const ny = SH.h + 0.5
-  g.add(P(torus(SH.r - 0.6, 0.35, IRON, {}, PI * 2), 0, ny, 0, PI / 2))
+    g.add(lit(ball(2.2, EMBER, { x, y: SH.h - 5, z }, [1, 0.5, 1], [10, 6]), EMBER, 0.9))
+  // 烤网：外圈 + 几根横丝。外圈压在口沿的圆棱上（原先 ny = h + 0.5，整张网连鱼悬在口沿上方 0.2）
+  const ny = SH.h + 0.2
+  g.add(P(torus(SH.r - 0.6, 0.35, IRON, {}, PI * 2, [6, 24]), 0, ny, 0, PI / 2))
   for (let k = -3; k <= 3; k++) {
     const x = k * 3.2
     const half = Math.sqrt(Math.max(1, (SH.r - 0.8) ** 2 - x * x))
@@ -143,10 +152,12 @@ function shichirin(p: string[]) {
     [3.4, -0.08],
   ]) {
     const f = new THREE.Group()
-    f.add(ball(9, fish, {}, [1, 0.11, 0.16]))
-    f.add(P(rbox(2.6, 0.5, 3.2, shade(fish, -0.2), {}, 0.2), -9.6, 0, 0, 0, 0.78))
+    // 鱼身：压扁的球，两极在上下（最薄的方向），一圈 16 段是鱼的轮廓、上下 6 段就够
+    f.add(ball(9, fish, {}, [1, 0.11, 0.16], [16, 6]))
+    f.add(P(box(2.6, 0.5, 3.2, shade(fish, -0.2)), -9.6, 0, 0, 0, 0.78))
     f.add(noOutline(ball(0.35, '#1f1f1f', { x: 7.2, y: 0.6, z: 0.9 })))
-    g.add(P(f, 0, ny + 1.2, z, 0, ry))
+    // 鱼肚子压进网丝一点（鱼身半厚 0.99、网丝半径 0.2）
+    g.add(P(f, 0, ny + 1.1, z, 0, ry))
   }
   return g
 }
@@ -174,15 +185,17 @@ function usuKine(p: string[]) {
     [0, USU.h - 19],
   ]
   g.add(latheAt(prof, wood, {}, 28))
-  g.add(P(noOutline(torus(r * 0.82, 0.7, shade(wood, -0.2), {}, PI * 2)), 0, 16, 0, PI / 2))
-  // 年糕：一团压扁的白球
-  g.add(ball(13, mochi, { y: USU.h - 14 }, [1, 0.45, 1]))
+  // 腰上的凹槽：和臼身一样一圈 28 段（默认 32 段的话折线对不上，槽线一截截陷进臼身）
+  g.add(P(noOutline(torus(r * 0.82, 0.7, shade(wood, -0.2), {}, PI * 2, [6, 28])), 0, 16, 0, PI / 2))
+  // 年糕：一团压扁的白球（大半埋在臼里，只看得见顶上）
+  g.add(ball(13, mochi, { y: USU.h - 14 }, [1, 0.45, 1], [20, 10]))
   // 杵：横木槌头横躺在臼里、压在年糕上，长柄从槌头中间伸出来、架在臼口前沿上往前探。
   // 原先槌头架在口上、柄往下斜，直柄会从臼的侧壁穿出去，柄尾还离地好几厘米
-  const head: [number, number, number] = [0, USU.h - 2.5, -3]
+  // （槌头再压低 0.7 才真的陷进年糕里：原先槌头底离年糕顶还差 0.1）
+  const head: [number, number, number] = [0, USU.h - 3.2, -3]
   g.add(P(cyl(5.2, 5.6, 26, shade(wood, 0.08), {}, 16), head[0], head[1], head[2], 0, 0, PI / 2))
-  // 柄的下沿正好搭在口沿平面（y = USU.h，半径 19.5～22.5 一圈）上
-  const lean = Math.atan2(USU.h + 1.7 - head[1], 21 - head[2])
+  // 柄的下沿搭在口沿平面（y = USU.h，半径 19.5～22.5 一圈）上，压进去 0.2
+  const lean = Math.atan2(USU.h + 1.5 - head[1], 21 - head[2])
   const len = 52
   g.add(rod3(head, [0, head[1] + Math.sin(lean) * len, head[2] + Math.cos(lean) * len], 1.7, shade(wood, 0.14), 10))
   return fitGroup(g)
@@ -200,9 +213,9 @@ function chadogu(p: string[]) {
   }
   // 抹茶碗：筒形碗 + 高台 + 茶汤和一点泡沫
   g.add(cyl(3, 3.3, 1, shade(bowl, -0.12), { x: -8, y: 1.4, z: 1 }, 16))
-  g.add(cup(6.3, 4.6, 7.2, 0.8, bowl, { x: -8, y: 2.2, z: 1 }))
-  g.add(noOutline(cyl(5.3, 5.3, 0.4, '#7fa24a', { x: -8, y: 7.2, z: 1 }, 20)))
-  g.add(noOutline(ball(1.6, '#a9c26a', { x: -9, y: 7.5, z: 0.4 }, [1, 0.2, 1])))
+  g.add(cup(6.3, 4.6, 7.2, 0.8, bowl, { x: -8, y: 2.2, z: 1 }, 24))
+  g.add(noOutline(cyl(5.3, 5.3, 0.4, '#7fa24a', { x: -8, y: 7.2, z: 1 }, 24)))
+  g.add(noOutline(ball(1.6, '#a9c26a', { x: -9, y: 7.5, z: 0.4 }, [1, 0.2, 1], [8, 4])))
   // 茶筅：竹节柄 + 往外张开的穗（两圈细丝收成一束）
   const cx = 6
   const cz = -5
@@ -226,13 +239,19 @@ function chadogu(p: string[]) {
       ],
       lacquer,
       { x: 9, y: 1.4, z: 5 },
-      18,
+      16,
     ),
   )
-  g.add(P(noOutline(torus(3.62, 0.12, shade(lacquer, 0.3), {}, PI * 2)), 9, 5.2, 5, PI / 2))
-  // 茶杓：细竹片，一头搭在枣盖上，一头落在盆面
-  g.add(rod3([10.5, 8.5, 5.6], [-1, 1.9, 9.6], 0.32, BAMBOO, 6))
-  g.add(P(rbox(1.3, 0.3, 2, BAMBOO, {}, 0.12), 11.3, 8.9, 5.3, 0, -0.34, 0.5))
+  // 盖缝的细线和枣身同样一圈 16 段
+  g.add(P(noOutline(torus(3.62, 0.12, shade(lacquer, 0.3), {}, PI * 2, [5, 16])), 9, 5.2, 5, PI / 2))
+  // 茶杓：细竹片，一头落在盆面，斜搭在枣盖的肩上，勺头探到盖顶上方。
+  // （原先是一根从盖顶扎进枣里、再从枣的侧面穿出来的直杆，落在盆面的那头也悬着 0.2）
+  // 先沿局部 +z 做出来，抬起 pitch，再绕竖轴转到「从盆面的落点指向枣的轴心」
+  const sa: V3 = [-1, 1.6, 9.6]
+  const pitch = 0.649
+  const sl = 13.3
+  const scoop = G(rod3([0, 0, 0], [0, 0, sl], 0.32, BAMBOO, 6), box(1.3, 0.3, 2, BAMBOO, { y: -0.15, z: sl + 0.6 }))
+  g.add(P(G(P(scoop, 0, 0, 0, -pitch)), sa[0], sa[1], sa[2], 0, Math.atan2(9 - sa[0], 5 - sa[2])))
   return g
 }
 
@@ -246,7 +265,7 @@ function furoKama(p: string[]) {
   // 风炉：鼓形炉身 + 三只小足 + 正面火窗（深色口里一点炭火）
   for (let k = 0; k < 3; k++) {
     const a = (k / 3) * PI * 2 + PI / 2
-    g.add(cyl(2.2, 1.8, 3, furo, { x: Math.cos(a) * 11, y: 1.6, z: Math.sin(a) * 11 }, 10))
+    g.add(cyl(2.2, 1.8, 3, furo, { x: Math.cos(a) * 11, y: 1.6, z: Math.sin(a) * 11 }, 8))
   }
   g.add(
     latheAt(
@@ -285,13 +304,13 @@ function furoKama(p: string[]) {
     ),
   )
   for (const s of [-1, 1]) g.add(P(rbox(2, 2.4, 2.6, shade(kama, 0.08), {}, 0.7), s * 12, 26.4, 0))
-  g.add(cyl(5.8, 6, 1, shade(kama, 0.12), { y: 31.8 }, 18))
-  g.add(ball(1, '#b9905a', { y: 33.6 }))
+  g.add(cyl(5.8, 6, 1, shade(kama, 0.12), { y: 31.8 }, 24))
+  g.add(ball(1, '#b9905a', { y: 33.6 }, undefined, [8, 6]))
   // 柄杓：竹筒勺头扣在釜口边、长柄斜伸出去
   g.add(P(cyl(2.4, 2.4, 3.4, BAMBOO, {}, 12), 7.4, 33.4, 3, 0, 0, 0.25))
   g.add(rod3([8.6, 34.4, 3.4], [21, 30, 15], 0.5, BAMBOO, 6))
   // 盖置：一小截青竹
-  g.add(cup(2.6, 2.6, 5, 0.6, BAMBOO_G, { x: -13.5, y: 1.6, z: 13 }))
+  g.add(cup(2.6, 2.6, 5, 0.6, BAMBOO_G, { x: -13.5, y: 1.6, z: 13 }, 12))
   return fitGroup(g)
 }
 
@@ -313,7 +332,8 @@ function fuzukue(p: string[]) {
     g.add(rbox(3, FZ.h - 5, FZ.d - 10, wood, { x: s * (FZ.w / 2 - 8), y: 2.6 }, 0.8))
     g.add(rbox(5, 3, FZ.d - 2, shade(wood, -0.1), { x: s * (FZ.w / 2 - 8) }, 1))
   }
-  g.add(rbox(FZ.w - 19, 3, 2.4, shade(wood, -0.1), { y: 9, z: -6 }, 0.6))
+  // 贯的两头各伸进板腿 0.5（原先正好停在板腿的内侧面上）
+  g.add(rbox(FZ.w - 18, 3, 2.4, shade(wood, -0.1), { y: 9, z: -6 }, 0.6))
   return g
 }
 
@@ -333,12 +353,22 @@ function nagaHibachi(p: string[]) {
   for (const s of [-1, 1]) g.add(rbox(3.6, 2.4, NH.d - 5, shade(wood, -0.12), { x: s * (NH.w / 2 - 1.3), y: NH.h - 1.8 }, 0.7))
   // 左边：铜内衬 + 灰 + 炭火 + 五德 + 铁壶
   const px = -NH.w / 2 + 4 + NH.pit / 2
-  g.add(P(shell(NH.pit, 12, NH.d - 7, 0.8, metal, { top: false }), px, NH.h - 13.4, 0))
-  g.add(rbox(NH.pit - 1.4, 7, NH.d - 8.4, ASH, { x: px, y: NH.h - 12.6 }, 0.4))
+  // 铜内衬：四面壁板，卡在箱壁和隔板之间（各嵌进去 0.1～0.15）、上沿压在口沿压条下面；底板压在灰下面看不见，不做。
+  // （原先内衬比箱膛小一圈，四周离箱壁、隔板、压条 0.3～1.4cm，连着灰、炭、铁壶一起悬在箱子里）
+  const lx = px - 0.55
+  const lw = NH.pit + 2
+  const ld = NH.d - 5
+  const lt = 1.4
+  for (const s of [-1, 1]) {
+    g.add(box(lw, 12, lt, metal, { x: lx, y: NH.h - 13.4, z: s * (ld / 2 - lt / 2) }))
+    g.add(box(lt, 12, ld - lt * 2, metal, { x: lx + s * (lw / 2 - lt / 2), y: NH.h - 13.4 }))
+  }
+  g.add(rbox(lw - lt * 2 + 0.2, 7, ld - lt * 2 + 0.2, ASH, { x: lx, y: NH.h - 12.6 }, 0.4))
   const ay = NH.h - 5.6
   g.add(embers(px - 8, ay, 1, 1))
   g.add(gotoku(px + 9, ay, 0, 5, 6))
-  g.add(tetsubin(px + 9, ay + 5.7, 0, 6.2))
+  // （壶底比圈顶低一点，真的压在圈上）
+  g.add(tetsubin(px + 9, ay + 5.6, 0, 6.2))
   g.add(rod3([px - 15, ay - 1, -9], [px - 13, ay + 14, -11], 0.35, IRON, 6))
   g.add(rod3([px - 13.6, ay - 1, -8.4], [px - 10.6, ay + 14, -10], 0.35, IRON, 6))
   // 右边：隔板 + 猫板（盖板）+ 正面两只小抽屉
@@ -351,7 +381,7 @@ function nagaHibachi(p: string[]) {
     [19, 8],
   ]) {
     g.add(rbox(rw - 1, h, 0.8, shade(wood, 0.05), { x: rx0 + 1 + rw / 2, y, z: NH.d / 2 - 0.2 }, 0.3))
-    g.add(noOutline(rbox(4, 1, 0.8, metal, { x: rx0 + 1 + rw / 2, y: y + h / 2 - 0.5, z: NH.d / 2 + 0.5 }, 0.3)))
+    g.add(noOutline(box(4, 1, 0.8, metal, { x: rx0 + 1 + rw / 2, y: y + h / 2 - 0.5, z: NH.d / 2 + 0.5 })))
   }
   return g
 }
@@ -369,7 +399,8 @@ function endai(p: string[]) {
   for (const x of [-EN.w / 2 + 12, 0, EN.w / 2 - 12]) g.add(rbox(4.5, 4, EN.d - 4, shade(wood, -0.1), { x, y: EN.h - 6.4 }, 0.8))
   for (const sx of [-1, 1])
     for (const sz of [-1, 1]) g.add(rbox(5.5, EN.h - 6.4, 5.5, shade(wood, -0.06), { x: sx * (EN.w / 2 - 12), z: sz * (EN.d / 2 - 6) }, 0.9))
-  for (const sz of [-1, 1]) g.add(rbox(EN.w - 29.5, 3.6, 2.6, shade(wood, -0.1), { y: 12, z: sz * (EN.d / 2 - 6) }, 0.7))
+  // 横档两头各伸进腿里 0.5（原先正好停在腿的内侧面上）
+  for (const sz of [-1, 1]) g.add(rbox(EN.w - 28.5, 3.6, 2.6, shade(wood, -0.1), { y: 12, z: sz * (EN.d / 2 - 6) }, 0.7))
   return g
 }
 
@@ -404,14 +435,15 @@ function wagasa(p: string[]) {
     const a = (k / ribs) * PI * 2
     const cx = Math.cos(a)
     const cz = Math.sin(a)
-    u.add(noOutline(rod3([cx * 2, depth - 1.2, cz * 2], [cx * (r - 0.6), -0.9, cz * (r - 0.6)], 0.22, frame, 4)))
+    // 伞骨贴着伞面的里侧一路到伞沿（原先外端低了半厘米，越往伞沿离伞面越远）
+    u.add(noOutline(rod3([cx * 2, depth - 1.2, cz * 2], [cx * (r - 0.6), -0.45, cz * (r - 0.6)], 0.22, frame, 4)))
     if (k % 3 === 0) u.add(noOutline(rod3([cx * 1.6, -9, cz * 1.6], [cx * r * 0.52, depth * 0.48 - 1, cz * r * 0.52], 0.2, frame, 4)))
   }
   // 伞柄、滑环、顶上的头轮和伞头
   u.add(cyl(0.9, 0.9, 66, BAMBOO, { y: -50 }, 8))
   u.add(cyl(1.7, 1.7, 2.6, frame, { y: -10.4 }, 10))
   u.add(cyl(2, 1.6, 2.4, frame, { y: depth - 0.6 }, 12))
-  u.add(ball(1.2, CHARCOAL, { y: depth + 2.4 }))
+  u.add(ball(1.2, CHARCOAL, { y: depth + 2.4 }, undefined, [8, 6]))
   u.add(cyl(1.3, 1.1, 5, shade(BAMBOO, -0.25), { y: -50.8 }, 8))
   // 侧放：伞面朝前上方，伞沿和伞柄尾端着地。
   // 倾角按两个着地点算：伞沿最低点 (z = r, y = -0.5) 和柄尾 (z = 1.3, y = -50.8) 转完要一样高（原来 1.02 时柄尾悬空十几厘米）
@@ -445,27 +477,29 @@ function bonChochin(p: string[]) {
         { seg: 20, radial: 6 },
       ),
     )
-    g.add(ball(1.1, frame, { x: cx * 14, y: 1.1, z: cz * 14 }))
+    g.add(ball(1.1, frame, { x: cx * 14, y: 1.1, z: cz * 14 }, undefined, [8, 6]))
   }
   g.add(cyl(2.4, 2.6, 4, frame, { y: top - 5 }, 12))
-  g.add(ball(1.6, frame, { y: top - 0.4 }))
+  g.add(ball(1.6, frame, { y: top - 0.4 }, undefined, [12, 6]))
   // 灯罩：椭球纸罩 + 上下口的木环
   g.add(litOutlined(ball(10, paper, { y: 44 }, [1, 1.25, 1]), paper, 0.55))
   for (const y of [32.2, 55.8]) g.add(cyl(5.2, 5.2, 1.4, frame, { y }, 16))
-  // 罩面的几道横向竹骨和一圈纹样带
+  // 罩面的几道横向竹骨和一圈纹样带：和纸罩同样一圈 24 段，半径按纸罩在那个高度的实际半径取
+  // （原先上下两道竹骨比罩面大一圈，离罩面 0.13 悬着；纹样带也只是擦着罩面）
   for (const [y, rr] of [
-    [38, 9.1],
+    [38, 8.8],
     [44, 10.1],
-    [50, 9.1],
+    [50, 8.8],
   ])
-    g.add(P(noOutline(torus(rr, 0.16, shade(paper, -0.18), {}, PI * 2)), 0, y, 0, PI / 2))
-  g.add(P(noOutline(torus(10.15, 0.5, tassel, {}, PI * 2)), 0, 41, 0, PI / 2))
+    g.add(P(noOutline(torus(rr, 0.16, shade(paper, -0.18), {}, PI * 2, [5, 24])), 0, y, 0, PI / 2))
+  g.add(P(noOutline(torus(9.95, 0.5, tassel, {}, PI * 2, [6, 24])), 0, 41, 0, PI / 2))
   // 吊绳和流苏
   g.add(cyl(0.3, 0.3, 17, frame, { y: 57 }, 6))
   g.add(cyl(0.3, 0.3, 5, tassel, { y: 27 }, 6))
-  g.add(ball(1.3, tassel, { y: 26.4 }))
+  g.add(ball(1.3, tassel, { y: 26.4 }, undefined, [10, 6]))
   g.add(cyl(0.9, 1.6, 8, tassel, { y: 17.6 }, 10))
-  return g
+  // 三条腿的外接盒不以灯的轴心对称（一条腿朝正后）：按包围盒居中，占地才是 27 × 26 而不是 27 × 31
+  return fitGroup(g)
 }
 
 // ---------- 熊手：竹耙上扎满吉祥物——金小判、米俵、红鲷鱼、松枝和一块木牌（酉之市的招福耙，挂在墙上） ----------
@@ -480,6 +514,8 @@ function kumade(p: string[]) {
     const a = k * 0.2
     const x = Math.sin(a) * 30
     const y = 30 + Math.cos(a) * 28
+    // 齿尖朝前：一只小圆头封住管口
+    g.add(ball(0.5, shade(bamboo, k % 2 ? 0.05 : -0.05), { x: x * 1.04, y: y + 1.4, z: 3 }, undefined, [5, 4]))
     g.add(
       tube(
         [
@@ -496,29 +532,31 @@ function kumade(p: string[]) {
   }
   g.add(rbox(20, 1.6, 1.6, shade(bamboo, -0.15), { y: 43, z: 0.6 }, 0.5))
   // 吉祥物：中间一只米俵、两枚小判、一条鲷鱼、一把松枝、一块木牌
-  g.add(P(cyl(4.6, 4.6, 12, '#e6cf8f', {}, 14), 0, 44, 3.6, 0, 0, PI / 2))
-  for (const s of [-1, 1]) g.add(P(noOutline(torus(4.7, 0.35, '#b9933a', {}, PI * 2)), s * 3.2, 44, 3.6, 0, PI / 2))
+  g.add(P(cyl(4.6, 4.6, 12, '#e6cf8f', {}, 14), 0, 44, 3.9, 0, 0, PI / 2))
+  // 草绳和米俵同样一圈 14 段；草绳的后沿和竹柄的后沿齐平（原先草绳比竹柄往后多出半厘米，贴墙时竹柄离墙悬着，总进深也超出声明的 10）
+  for (const s of [-1, 1]) g.add(P(noOutline(torus(4.6, 0.3, '#b9933a', {}, PI * 2, [6, 14])), s * 3.2, 44, 3.9, 0, PI / 2))
+  // 小判贴在耙齿前面（原先离耙齿 0.4～0.6cm 悬着）
   for (const [x, y, rz] of [
     [-10, 49, 0.3],
     [10.5, 47, -0.25],
   ])
-    g.add(P(ball(4.2, gold, {}, [0.72, 1, 0.16]), x, y, 1.9, 0, 0, rz))
-  // 鲷鱼：压扁的红身子 + 尾巴 + 眼睛
-  const fish = G(ball(5.4, red, {}, [1, 0.62, 0.3]), P(rbox(3, 4.6, 0.8, shade(red, -0.12), {}, 0.3), -5.6, 0, 0, 0, 0, 0.78), noOutline(ball(0.55, '#ffffff', { x: 3, y: 0.8, z: 1.5 })))
-  g.add(P(fish, 3, 35.5, 3.8, 0, 0, 0.2))
+    g.add(P(ball(4.2, gold, {}, [0.72, 1, 0.16], [8, 12]), x, y, 0.9, 0, 0, rz))
+  // 鲷鱼：压扁的红身子 + 尾巴 + 眼睛；鱼背顶进米俵底下（原先和米俵、草绳差一条缝，连着木牌一起悬着）
+  const fish = G(ball(5.4, red, {}, [1, 0.62, 0.3], [12, 10]), P(rbox(3, 4.6, 0.8, shade(red, -0.12), {}, 0.3), -5.6, 0, 0, 0, 0, 0.78), noOutline(ball(0.55, '#ffffff', { x: 3, y: 0.8, z: 1.5 })))
+  g.add(P(fish, 3, 36.1, 3.8, 0, 0, 0.2))
   // 松枝插在米俵左端
   for (const [x, y, rz] of [
     [-6.8, 42, 0.5],
     [-7.4, 45.5, 0.9],
     [-6.6, 40, 0.15],
   ])
-    g.add(P(ball(4.4, '#4f8a4a', {}, [0.3, 1, 0.14]), x, y, 3.6, 0, 0, rz))
+    g.add(P(ball(4.4, '#4f8a4a', {}, [0.3, 1, 0.14], [6, 8]), x, y, 3.6, 0, 0, rz))
   g.add(P(rbox(6.5, 9, 0.9, '#f1e3c0', {}, 0.3), 9.5, 37, 3, 0, 0, -0.18))
-  g.add(noOutline(P(rbox(1, 6.5, 0.4, red, {}, 0.15), 9.5, 37, 3.6, 0, 0, -0.18)))
-  // 柄上的红白纸垂和金铃
-  g.add(P(rbox(3.4, 7, 0.5, '#ffffff', {}, 0.2), -1.6, 20, 1.2, 0, 0, 0.2))
-  g.add(P(rbox(3.4, 7, 0.5, red, {}, 0.2), 1.6, 19, 1.3, 0, 0, -0.2))
-  g.add(ball(1.5, gold, { y: 25.6, z: 1.6 }))
+  g.add(noOutline(P(box(1, 6.5, 0.4, red), 9.5, 37, 3.6, 0, 0, -0.18)))
+  // 柄上的红白纸垂和金铃（纸垂是半厘米厚的薄片，直角盒）
+  g.add(P(box(3.4, 7, 0.5, '#ffffff'), -1.6, 20, 1.2, 0, 0, 0.2))
+  g.add(P(box(3.4, 7, 0.5, red), 1.6, 19, 1.3, 0, 0, -0.2))
+  g.add(ball(1.5, gold, { y: 25.6, z: 1.6 }, undefined, [10, 6]))
   return fitWall(g, KM.mount, KM.d)
 }
 
@@ -528,20 +566,21 @@ function yutanpo(p: string[]) {
   const [metal, cap, knit] = p
   const g = new THREE.Group()
   // 壶身：压扁的椭球（半轴 14 × 4.2 × 10.1）+ 顶面几圈同心波纹（椭圆环，贴着壶面的高度摆）
-  g.add(ball(14, metal, { y: 4.6 }, [1, 0.3, 0.72]))
+  // （壶身一圈 24 段；波纹和罗纹贴着壶身 / 套身，也用一圈 24 段，管截面 6 段）
+  g.add(ball(14, metal, { y: 4.6 }, [1, 0.3, 0.72], [24, 12]))
   for (const k of [0.3, 0.52, 0.72]) {
-    const ring = P(noOutline(torus(14 * k, 0.45, shade(metal, -0.1), {}, PI * 2)), 0, 4.6 + 4.2 * Math.sqrt(1 - k * k) - 0.1, 0, PI / 2)
+    const ring = P(noOutline(torus(14 * k, 0.45, shade(metal, -0.1), {}, PI * 2, [6, 24])), 0, 4.6 + 4.2 * Math.sqrt(1 - k * k) - 0.1, 0, PI / 2)
     ring.scale.set(1, 0.72, 1)
     g.add(ring)
   }
   // 铜盖和提环
   g.add(cyl(2, 2.2, 1.6, cap, { x: 9.5, y: 7.2 }, 12))
-  g.add(P(torus(1.4, 0.3, cap, {}, PI), 9.5, 8.8, 0))
+  g.add(P(torus(1.4, 0.3, cap, {}, PI, [6, 8]), 9.5, 8.8, 0))
   // 针织套：包住左边大半截（比壶身略大的椭球，半轴 10.4 × 4.8 × 11）+ 几圈绕着套身的罗纹
-  g.add(ball(14.5, knit, { x: -4.5, y: 4.6 }, [0.72, 0.33, 0.76]))
+  g.add(ball(14.5, knit, { x: -4.5, y: 4.6 }, [0.72, 0.33, 0.76], [24, 12]))
   for (const x of [-10.5, -5.5, -0.5]) {
     const k = Math.sqrt(1 - ((x + 4.5) / 10.4) ** 2)
-    const rib = P(noOutline(torus(11 * k, 0.4, shade(knit, -0.14), {}, PI * 2)), x, 4.6, 0, 0, PI / 2)
+    const rib = P(noOutline(torus(11 * k, 0.4, shade(knit, -0.14), {}, PI * 2, [6, 24])), x, 4.6, 0, 0, PI / 2)
     rib.scale.set(1, 4.8 / 11, 1)
     g.add(rib)
   }
@@ -555,19 +594,23 @@ function somen(p: string[]) {
   const g = new THREE.Group()
   // 盆：底座 + 外圈盆壁 + 中间的岛
   g.add(cyl(15.5, 16.5, 4, shade(body, -0.1), {}, 28))
-  g.add(cup(17, 16, 8, 1.2, body, { y: 4 }))
+  // 盆壁和底座同样一圈 28 段
+  g.add(cup(17, 16, 8, 1.2, body, { y: 4 }, 28))
   g.add(cyl(8, 9, 9.5, island, { y: 4.8 }, 24))
   g.add(cyl(6.4, 7.6, 1.4, shade(island, 0.06), { y: 14.3 }, 20))
   // 岛顶的冰块和一片青枫叶
+  // （半透明件不参与按材质合并：三块冰烘成一个网格，一次绘制）
+  const ice: THREE.Mesh[] = []
   for (const [x, z, s] of [
     [-2, 1, 3],
     [2.2, -1.4, 2.6],
     [0.6, 2.6, 2.2],
   ])
-    g.add(ghost(P(rbox(s, s, s, '#e8f6fb', {}, 0.5), x, 15.7 + s / 2, z, 0.2, 0.6, 0.1), '#e8f6fb', 0.55))
-  g.add(noOutline(P(ball(1.8, '#6fae5a', {}, [1, 0.12, 0.7]), -3.4, 16, -2.6, 0, 0.6, 0.15)))
-  // 水面（环形水道）和漂着的素面
-  const water = markWater(ghost(P(new THREE.Mesh(new THREE.RingGeometry(9.2, 15.7, 36).rotateX(-PI / 2)), 0, 10.4, 0), WATER, 0.55))
+    ice.push(P(rbox(s, s, s, '#e8f6fb', {}, 0.5), x, 15.7 + s / 2, z, 0.2, 0.6, 0.1))
+  g.add(ghost(bakeMeshes(ice, '#e8f6fb'), '#e8f6fb', 0.55))
+  g.add(noOutline(P(ball(1.8, '#6fae5a', {}, [1, 0.12, 0.7], [8, 4]), -3.4, 16, -2.6, 0, 0.6, 0.15)))
+  // 水面（环形水道）和漂着的素面。水面内沿伸进岛身一点（岛在水面高度的半径约 8.4；原先内沿 9.2，岛周围一圈露着盆底）
+  const water = markWater(ghost(P(new THREE.Mesh(new THREE.RingGeometry(8.2, 15.7, 28).rotateX(-PI / 2)), 0, 10.4, 0), WATER, 0.55))
   g.add(water)
   for (const a0 of [0.3, 2.1, 3.9, 5.2]) {
     const pts: [number, number, number][] = []
@@ -576,18 +619,19 @@ function somen(p: string[]) {
       const rr = 12.4 + Math.sin(i * 1.7 + a0) * 1.2
       pts.push([Math.cos(a) * rr, 10.6, Math.sin(a) * rr])
     }
-    g.add(noOutline(tube(pts, 0.28, '#fbf8ef', { seg: 12, radial: 5 })))
+    g.add(noOutline(tube(pts, 0.28, '#fbf8ef', { seg: 8, radial: 4 })))
   }
   // 两只蘸汁杯（里面是酱汁）和一双筷子
   for (const [x, z] of [
     [-24, 8],
     [-25, -6],
   ]) {
-    g.add(cup(4, 3, 5.4, 0.6, cupC, { x, z }))
-    g.add(noOutline(cyl(3.3, 3.3, 0.3, '#5a3a22', { x, y: 4.2, z }, 14)))
+    g.add(cup(4, 3, 5.4, 0.6, cupC, { x, z }, 16))
+    g.add(noOutline(cyl(3.3, 3.3, 0.3, '#5a3a22', { x, y: 4.2, z }, 16)))
   }
-  g.add(rod3([23.2, 1.3, -7], [24.4, 0.4, 13.5], 0.35, shade(island, -0.3), 6))
-  g.add(rod3([25, 1.3, -7], [26.6, 0.4, 13.2], 0.35, shade(island, -0.3), 6))
+  // 筷子：尖头落在桌面，粗头搁在筷架上面（原先两根筷子是从筷架的圆柱里横穿过去的）
+  g.add(rod3([23.2, 2.34, -7], [24.4, 0.4, 13.5], 0.35, shade(island, -0.3), 6))
+  g.add(rod3([25, 2.34, -7], [26.6, 0.4, 13.2], 0.35, shade(island, -0.3), 6))
   g.add(cylZ(0.9, 4, shade(body, -0.2), 24.2, 0.9, -5, 8).rotateZ(PI / 2))
   return fitGroup(g)
 }
@@ -679,7 +723,7 @@ export const JAPANESE_MORE: AssetDef[] = [
       rectPoly(IR.w / 2 - IR.rim + 1, -IR.w / 2 + IR.rim, IR.w / 2 - 1, IR.w / 2 - IR.rim),
     ],
   }),
-  define('jm-shichirin', '七轮炭炉', 'japanese', [SH.r * 2 + 1, SH.r * 2 + 1, SH.h + 3], SHICHIRIN_PALS, shichirin, {
+  define('jm-shichirin', '七轮炭炉', 'japanese', [SH.r * 2 + 1.4, SH.r * 2 + 1.4, SH.h + 3], SHICHIRIN_PALS, shichirin, {
     ...PROP,
     type: 'cookware',
     styles: ['japanese'],
@@ -713,8 +757,8 @@ export const JAPANESE_MORE: AssetDef[] = [
     ...HEARTH,
     mats: ['wood', 'metal'],
     fx: NAGA_FX,
-    // 右边的猫板上能放茶杯
-    surface: NH.h,
+    // 右边的猫板上能放茶杯（猫板顶面比箱口低 0.2）
+    surface: NH.h - 0.2,
     surfaceShape: [rectPoly(-NH.w / 2 + 4 + NH.pit + 1, -NH.d / 2 + 4, NH.w / 2 - 3, NH.d / 2 - 4)],
   }),
   define('jm-endai', '缘台', 'outdoor', [EN.w, EN.d, EN.h], EN_PALS, endai, {

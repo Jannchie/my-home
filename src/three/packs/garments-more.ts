@@ -7,9 +7,9 @@
 
 import * as THREE from 'three'
 import { buildGarment, buildHanger, garment } from '../garments'
-import { ball, capsule, cyl, rbox, shade, torus } from '../toon'
+import { ball, box, cyl, nub, rbox, shade, torus } from '../toon'
 import { C, type AssetDef } from '../kit'
-import { G, P, PI, batten, box3, cylZ, fitGroup, ghost, latheAt, mesh, rod3, tube, type V2, type V3 } from '../geo'
+import { G, P, PI, batten, box3, cappedTube, cylZ, fitGroup, ghost, latheAt, mesh, rod3, tube, type V2, type V3 } from '../geo'
 import { I, J, M, N, R, define, type Pal } from '../packkit'
 
 const METAL = '#c3c7cc'
@@ -86,13 +86,20 @@ const SOCK_PAL: Pal[] = [
  */
 const SOCK_L = 4.6
 const SOCK_R = 2.4
-const sockRad = (y: number, grow = 0) => SOCK_R * Math.sqrt(Math.max(0, 1 - (y / SOCK_L) ** 2)) + grow
-/** 袜身表面从 y0 到尖端、往外长出 grow 的车削轮廓（起点在袜身里面，开口藏在袜身里） */
-function sockCap(y0: number, grow: number, dir: 1 | -1): V2[] {
+/** 袜身往外长出 grow 的那层椭球壳在 y 处的半径（grow = 0 就是袜身） */
+const sockRad = (y: number, grow = 0) => (SOCK_R + grow) * Math.sqrt(Math.max(0, 1 - (y / (SOCK_L + grow)) ** 2))
+/** 一团袜子的截面直径只有五六厘米：一圈 16 段，贴着它的卷边、罗纹用同样的段数 */
+const SOCK_SEG = 16
+/**
+ * 罩在袜身一头的壳：比袜身大 grow 的椭球面，从 y0 到尖端（按角度取点，尖端是圆头；按 y 等距取点的话尖端会成一个锥）。
+ * 起点在袜身里面，开口藏在袜身里
+ */
+function sockCap(y0: number, grow: number, dir: 1 | -1, n: number): V2[] {
   const pts: V2[] = [[sockRad(y0) - 0.3, y0]]
-  for (let i = 0; i < 8; i++) {
-    const y = y0 + ((dir * SOCK_L - y0) * i) / 8
-    pts.push([sockRad(y, grow), y])
+  const t0 = Math.acos((dir * y0) / (SOCK_L + grow))
+  for (let i = 0; i < n; i++) {
+    const t = t0 * (1 - i / n)
+    pts.push([(SOCK_R + grow) * Math.sin(t), dir * (SOCK_L + grow) * Math.cos(t)])
   }
   // 尖端收到轴上（不然顶上留个小洞，看得见里面的袜身）
   pts.push([0.01, dir * (SOCK_L + grow)])
@@ -102,19 +109,19 @@ function sockBall(p: string[]) {
   const [main, cuff, toe] = p
   const s = new THREE.Group()
   const body: V2[] = []
-  for (let i = 0; i <= 12; i++) {
-    const y = -SOCK_L + (2 * SOCK_L * i) / 12
-    body.push([Math.max(0.01, sockRad(y)), y])
+  for (let i = 0; i <= 8; i++) {
+    const t = (i / 8) * PI
+    body.push([Math.max(0.01, SOCK_R * Math.sin(t)), -SOCK_L * Math.cos(t)])
   }
-  s.add(latheAt(body, main, {}, 24))
+  s.add(latheAt(body, main, {}, SOCK_SEG))
   // 翻过来的袜口：从 y = 0.4 罩到这一头
   const y0 = 0.4
-  s.add(latheAt(sockCap(y0, 0.35, 1), cuff, {}, 24))
-  s.add(torus(sockRad(y0, 0.3), 0.32, cuff, { y: y0, rx: PI / 2 }))
-  // 罗纹：几道略深的细环
-  for (const y of [1.5, 2.4, 3.3]) s.add(torus(sockRad(y, 0.38), 0.1, shade(cuff, -0.12), { y, rx: PI / 2 }))
+  s.add(latheAt(sockCap(y0, 0.35, 1, 6), cuff, {}, SOCK_SEG))
+  s.add(torus(sockRad(y0, 0.3), 0.32, cuff, { y: y0, rx: PI / 2 }, PI * 2, [6, SOCK_SEG]))
+  // 罗纹：几道略深的细环（半埋在袜口的壳里）
+  for (const y of [1.5, 2.4, 3.3]) s.add(torus(sockRad(y, 0.35) + 0.03, 0.1, shade(cuff, -0.12), { y, rx: PI / 2 }, PI * 2, [4, SOCK_SEG]))
   // 另一头的袜尖
-  s.add(latheAt(sockCap(-3.3, 0.15, -1), toe, {}, 24))
+  s.add(latheAt(sockCap(-3.3, 0.15, -1, 4), toe, {}, SOCK_SEG))
   s.rotation.z = -PI / 2
   s.scale.z = 1.5
   return fitGroup(G(s))
@@ -151,14 +158,16 @@ const BRA_PAL: Pal[] = [
 ]
 const CUP_R = 5.8
 const CUP_H = 4.6
+/** 罩杯一圈的段数；贴着杯沿的钢圈包边用同样的段数（不然折线对不上，包边一截截陷进杯沿） */
+const CUP_SEG = 20
 /** 罩杯：底面封口的扁圆顶（车削体，轴沿 y，底面在 y = 0） */
 function cupDome(color: string, at: { x?: number; y?: number; z?: number }) {
   const pts: V2[] = [[0.01, 0], [CUP_R, 0]]
-  for (let i = 1; i <= 7; i++) {
-    const a = (i / 7) * (PI / 2)
+  for (let i = 1; i <= 5; i++) {
+    const a = (i / 5) * (PI / 2)
     pts.push([Math.max(0.01, CUP_R * Math.cos(a)), CUP_H * Math.sin(a)])
   }
-  return latheAt(pts, color, at, 20)
+  return latheAt(pts, color, at, CUP_SEG)
 }
 
 function braLying(p: string[]) {
@@ -168,16 +177,16 @@ function braLying(p: string[]) {
   for (const s of [-1, 1]) {
     g.add(cupDome(main, { x: s * cx }))
     // 罩杯底边的钢圈包边
-    g.add(torus(CUP_R, 0.3, trim, { x: s * cx, y: 0.3, rx: PI / 2 }))
-    // 两侧的侧比（下围）+ 背扣
-    g.add(rbox(4, 0.6, 3.2, trim, { x: s * 13.8, z: -1.2 }, 0.25))
-    g.add(rbox(1, 0.8, 2.6, acc, { x: s * 15.4, z: -1.2 }, 0.2))
-    // 肩带：从罩杯上沿往后绕一圈，搭回侧比
-    g.add(tube([[s * 7.6, 3, -3], [s * 9, 3.2, -5.6], [s * 12.5, 1.2, -6.6], [s * 14.6, 0.4, -2.6]], 0.32, trim, { seg: 16, radial: 6 }))
+    g.add(torus(CUP_R, 0.3, trim, { x: s * cx, y: 0.3, rx: PI / 2 }, PI * 2, [6, CUP_SEG]))
+    // 两侧的侧比（下围）+ 背扣（都是几毫米厚的布片，用直角盒）
+    g.add(box(4, 0.6, 3.2, trim, { x: s * 13.8, z: -1.2 }))
+    g.add(nub(1, 0.8, 2.6, acc, { x: s * 15.4, z: -1.2 }))
+    // 肩带：从罩杯上沿往后绕一圈，接到背扣上（末端埋进背扣里）
+    g.add(tube([[s * 7.6, 3, -3], [s * 9, 3.2, -5.5], [s * 12.5, 1.2, -6.3], [s * 15.1, 0.5, -3.3], [s * 15.3, 0.4, -2]], 0.32, trim, { seg: 14, radial: 6 }))
   }
-  // 中间的鸡心 + 小蝴蝶结
-  g.add(rbox(1.6, 2.5, 1.6, trim, { z: 4.6 }, 0.4))
-  g.add(ball(0.75, acc, { y: 2.6, z: 5.3 }, [1.6, 1, 0.8]))
+  // 中间的鸡心：夹在两只罩杯最近的地方、两头埋进罩杯（原先单独立在罩杯前面 2cm 处，哪边都不挨）；上面一只小蝴蝶结
+  g.add(rbox(2.4, 2.2, 2.6, trim, { z: 1 }, 0.4))
+  g.add(ball(0.75, acc, { y: 2.3, z: 1.8 }, [1.6, 1, 0.8], [8, 6]))
   return fitGroup(g)
 }
 
@@ -193,18 +202,18 @@ function braHanging(p: string[]) {
     cup.rotation.x = PI / 2
     body.add(cup)
     // 罩杯下半圈的钢圈包边
-    body.add(torus(CUP_R, 0.3, trim, { x: s * cx, y: yc, z: 0.3, rz: PI }, PI))
+    body.add(torus(CUP_R, 0.3, trim, { x: s * cx, y: yc, z: 0.3, rz: PI }, PI, [6, CUP_SEG / 2]))
     // 肩带：罩杯上沿 → 往上搭过肩条 → 从背后垂下来接到下围的端头
     const ax = s * 9.6
     const top = velvetTop(9.6) + 0.22
-    body.add(tube([[s * 8.9, yc + 4.4, 1.1], [s * 9.4, -13, 0.75], [s * 9.5, top - 0.5, 0.55], [ax, top, 0], [s * 9.7, top - 0.5, -0.55], [s * 12.5, yc, -0.7], [s * 15, yc - 5.6, 0.2]], 0.3, trim, { seg: 28, radial: 6 }))
-    body.add(rbox(1, 2.4, 0.9, acc, { x: s * 15.2, y: yc - 7, z: 0.45 }, 0.2))
+    body.add(tube([[s * 8.9, yc + 4.4, 1.1], [s * 9.4, -13, 0.75], [s * 9.5, top - 0.5, 0.55], [ax, top, 0], [s * 9.7, top - 0.5, -0.55], [s * 12.5, yc, -0.7], [s * 14.9, yc - 5.6, 0.3]], 0.3, trim, { seg: 28, radial: 6 }))
+    body.add(nub(1, 2.4, 0.9, acc, { x: s * 15, y: yc - 7, z: 0.45 }))
   }
   // 下围、鸡心、蝴蝶结
   // （背面比罩杯底面往前 0.1：两个背面在同一平面上会闪）
   body.add(rbox(31, 2.2, 0.7, trim, { y: yc - 7, z: 0.45 }, 0.25))
   body.add(rbox(1.6, 5, 0.9, trim, { y: yc - 5.6, z: 0.55 }, 0.3))
-  body.add(ball(0.75, acc, { y: yc - 1.2, z: 1.1 }, [1.6, 1, 0.8]))
+  body.add(ball(0.75, acc, { y: yc - 1.2, z: 1.1 }, [1.6, 1, 0.8], [8, 6]))
   return h
 }
 
@@ -224,20 +233,22 @@ function pajamasFolded(p: string[]) {
   const fold = shade(main, -0.08)
   // 裤子：叠成一块，前沿露出两只裤脚的滚边，后沿是松紧腰 + 抽绳
   g.add(rbox(30, 3.6, 33, main, {}, 1))
-  g.add(rbox(30.4, 0.8, 0.6, pipe, { y: 1.4, z: 16.5 }, 0.25))
+  g.add(nub(30.4, 0.8, 0.6, pipe, { y: 1.4, z: 16.5 }))
   g.add(rbox(30.4, 2.6, 4, pipe, { y: 0.5, z: -14.8 }, 0.6))
-  g.add(tube([[-2, 3.2, -16.7], [-1.4, 2.4, -17.6], [-1.8, 1.2, -17.4]], 0.22, btn, { seg: 8, radial: 5 }))
+  // 抽绳：从腰头里穿出来、贴着腰头后面垂下（原先离腰头后面半厘米多悬着）
+  g.add(tube([[-2, 2.6, -16.3], [-1.5, 2.3, -16.95], [-1.8, 1.1, -16.95]], 0.22, btn, { seg: 8, radial: 5 }))
   // 上衣：叠好压在上面（往后错一点），领子在后沿，门襟纽扣，前沿是下摆的滚边
   const y1 = 3.5
   const top = y1 + 3.8
   g.add(rbox(28, 3.8, 30, main, { y: y1, z: -1 }, 1))
   const zb = -16
-  g.add(tube([[-5.2, top, zb + 1.4], [-3.4, top, zb + 3.8], [0, top, zb + 5], [3.4, top, zb + 3.8], [5.2, top, zb + 1.4]], 0.5, pipe, { seg: 16, radial: 6 }))
-  for (const s of [-1, 1]) g.add(rbox(3.4, 0.5, 4, pipe, { x: s * 2.6, y: top - 0.2, z: zb + 4.2, ry: s * 0.5 }, 0.2))
-  for (let i = 0; i < 3; i++) g.add(cyl(0.55, 0.55, 0.3, btn, { y: top - 0.1, z: zb + 10 + i * 6 }, 10))
-  g.add(rbox(28.4, 0.8, 0.6, pipe, { y: y1 + 1.4, z: 14.2 }, 0.25))
+  // 领圈两头扎进衣服里（弯管两端不封口：停在面上的话从后面能看进管子里）
+  g.add(tube([[-5.2, top - 0.7, zb + 1.5], [-3.4, top, zb + 3.8], [0, top, zb + 5], [3.4, top, zb + 3.8], [5.2, top - 0.7, zb + 1.5]], 0.5, pipe, { seg: 16, radial: 6 }))
+  for (const s of [-1, 1]) g.add(box(3.4, 0.5, 4, pipe, { x: s * 2.6, y: top - 0.2, z: zb + 4.2, ry: s * 0.5 }))
+  for (let i = 0; i < 3; i++) g.add(cyl(0.55, 0.55, 0.3, btn, { y: top - 0.1, z: zb + 10 + i * 6 }, 8))
+  g.add(nub(28.4, 0.8, 0.6, pipe, { y: y1 + 1.4, z: 14.2 }))
   // 两侧袖子折进去压出的折线
-  for (const s of [-1, 1]) g.add(rbox(0.4, 0.25, 26, fold, { x: s * 8, y: top - 0.1, z: -1 }, 0.1))
+  for (const s of [-1, 1]) g.add(nub(0.4, 0.25, 26, fold, { x: s * 8, y: top - 0.1, z: -1 }))
   return fitGroup(g)
 }
 
@@ -258,7 +269,7 @@ function pajamasHanging(p: string[]) {
   const bw = sw * (1.02 + s.fit * 0.12)
   const yB = yN - s.len
   // 下摆滚边：比衣身宽 0.4、前后各凸出 0.4（压过门襟和纽扣下沿）
-  body.add(rbox(bw + 0.4, 2, T + 0.8, s.sub, { y: yB - 0.2 }, 0.3))
+  body.add(rbox(bw + 0.4, 2, T + 0.8, s.sub, { y: yB - 0.1 }, 0.3))
   // 袖口：沿袖子末端的一圈，比袖子宽出 0.3、长出一点
   const th = 0.1 + s.fit * 0.05
   const d: V2 = [Math.sin(th), -Math.cos(th)]
@@ -291,14 +302,15 @@ const BELT_PAL: Pal[] = [
 const BELT_W = 3.5
 const BELT_T = 0.45
 
-/** 卷起的皮带：带面立着绕成三圈的螺线（xz 平面内挤出，往上高 BELT_W），外圈尾端接皮带扣 */
+/** 卷起的皮带：带面立着绕成三圈的螺线（xz 平面内挤出，往上高 BELT_W），外圈尾端接皮带扣（扣框比带面宽，和带子一起落在桌面上） */
 function beltCoil(p: string[]) {
   const [leather, buckle, holes] = p
   const g = new THREE.Group()
   const r0 = 1.6
   const pitch = 1.05
   const turns = 3
-  const n = 120
+  // 每圈 20 段（最外圈直径不到 10cm）
+  const n = 60
   const rAt = (a: number) => r0 + (pitch * a) / (2 * PI)
   const outer: V2[] = []
   const inner: V2[] = []
@@ -311,29 +323,30 @@ function beltCoil(p: string[]) {
   const shape = new THREE.Shape([...outer, ...inner.reverse()].map(([x, y]) => new THREE.Vector2(x, y)))
   const geo = new THREE.ExtrudeGeometry(shape, { depth: BELT_W, bevelEnabled: false, curveSegments: 2 })
   // 挤出方向（局部 z）转到世界 +y：x 不变，形状的 y 变成世界 -z
-  g.add(P(mesh(geo, leather), 0, 0.3, 0, -PI / 2))
-  // 皮带扣：外圈尾端切线方向上的一只方框 + 扣针，贴在带面外侧
+  g.add(P(mesh(geo, leather), 0, 0, 0, -PI / 2))
+  // 皮带扣：带子的尾端接在扣框的一条竖边上，扣框沿尾端的切线方向伸出去，扣针从这条边搭到对边上。
+  // （原先扣框整个浮在带面外侧 0.4cm 处、哪儿都不挨，而且扣框比带面宽，把整卷带子顶离了桌面 0.6cm）
   const aE = turns * 2 * PI
   const rE = rAt(aE)
   const pE = new THREE.Vector3(Math.cos(aE) * rE, 0, -Math.sin(aE) * rE)
   const tan = new THREE.Vector3(-Math.sin(aE), 0, -Math.cos(aE)).normalize()
-  const out = new THREE.Vector3(Math.cos(aE), 0, -Math.sin(aE))
   const fr = new THREE.Group()
-  const hw = 2.4
+  const hw = 1.8
   const hh = (BELT_W + 0.6) / 2
-  fr.add(tube(loop3(hw, hh, 0.6, 0, 0), 0.3, buckle, { closed: true, seg: 32, radial: 6 }))
-  fr.add(rod3([-hw + 0.2, 0, 0], [hw - 1, 0, 0.1], 0.18, buckle, 6))
-  // 扣框平面 = 切线 × 竖直，扣框中心在尾端往回 1.6、往外 0.9
-  const c = pE.clone().addScaledVector(tan, -1.6).addScaledVector(out, 0.9)
-  fr.position.set(c.x, 0.3 + BELT_W / 2, c.z)
+  fr.add(tube(loop3(hw, hh, 0.6, 0, 0), 0.3, buckle, { closed: true, seg: 24, radial: 6 }))
+  // 扣框局部 +z 朝卷的外侧：扣针压在对边的外面
+  fr.add(rod3([-hw, 0, 0.1], [hw + 0.1, 0, 0.4], 0.18, buckle, 6))
+  // 扣框平面 = 切线 × 竖直；靠带子的竖边压住带子尾端 0.1，扣框底边落在桌面上
+  const c = pE.clone().addScaledVector(tan, hw + 0.2)
+  fr.position.set(c.x, hh + 0.3, c.z)
   fr.rotation.y = Math.atan2(-tan.z, tan.x)
   g.add(fr)
   // 皮带孔：外圈靠尾端的三只（贴着外表面的深色小圆片）
   for (let i = 0; i < 3; i++) {
     const a = aE - 1.1 - i * 0.32
     const r = rAt(a) + BELT_T / 2
-    const hole = cyl(0.22, 0.22, 0.3, holes, {}, 8)
-    hole.position.set(Math.cos(a) * r, 0.3 + BELT_W / 2, -Math.sin(a) * r)
+    const hole = cyl(0.22, 0.22, 0.3, holes, {}, 6)
+    hole.position.set(Math.cos(a) * r, BELT_W / 2, -Math.sin(a) * r)
     hole.rotation.set(0, a, PI / 2)
     g.add(hole)
   }
@@ -349,7 +362,7 @@ function beltHanging(p: string[]) {
   const yTop = -5.85
   const fh = 4.4
   const hw = 2.5
-  h.add(tube(loop3(hw, fh / 2, 0.6, yTop - fh / 2, zc), 0.3, buckle, { closed: true, seg: 32, radial: 6 }))
+  h.add(tube(loop3(hw, fh / 2, 0.6, yTop - fh / 2, zc), 0.3, buckle, { closed: true, seg: 24, radial: 6 }))
   // 扣针：从下边往上搭在顶边前面
   h.add(rod3([0, yTop - fh, zc + 0.15], [0, yTop - 0.6, zc + 0.35], 0.18, buckle, 6))
   // 带身：顶端包住扣框下边，尾端圆头
@@ -359,7 +372,7 @@ function beltHanging(p: string[]) {
   h.add(flat(strap, BELT_T, leather, zc))
   // 皮带圈（护扣）+ 五个孔
   h.add(rbox(BELT_W + 0.4, 1.2, BELT_T + 0.5, leather, { y: y0 - 3.5, z: zc }, 0.3))
-  for (let i = 0; i < 5; i++) h.add(cylZ(0.22, BELT_T + 0.2, holes, 0, y0 - len + 9 + i * 2.5, zc, 8))
+  for (let i = 0; i < 5; i++) h.add(cylZ(0.22, BELT_T + 0.2, holes, 0, y0 - len + 9 + i * 2.5, zc, 6))
   return h
 }
 
@@ -373,29 +386,34 @@ const GLOVE_PAL: Pal[] = [
 ]
 
 /**
+ * 一根手指：直管 + 指尖的半球头，前后压扁成 k。a 端埋在手掌里不封口，b 端是指尖。
+ * （直径 2cm 的小件：一圈 8 段；toon.ts 的 capsule 固定 16 × 6 段，一根 416 个三角面，十根手指就四千多）
+ */
+function finger(a: V3, b: V3, color: string, k: number) {
+  const g = G(tube([a, b], 1, color, { seg: 1, radial: 8 }), ball(1, color, { x: b[0], y: b[1], z: b[2] }, undefined, [8, 4]))
+  g.scale.z = k
+  return g
+}
+
+/**
  * 一只手套：立在 xy 平面里，罗纹袖口顶边在 y = 0、手指朝下，大拇指在 sx 一侧。
  * t = 手掌厚；袖口厚 t + 0.2（挂起时要夹进夹子：袖口薄一点）。
  */
 function glove(p: string[], sx: number, t: number) {
   const [main, cuff, band] = p
   const g = new THREE.Group()
-  const k = t / 1.9
+  // 手指比手掌薄 0.1：埋在手掌里的那一截不会从掌面上冒出来
+  const k = (t - 0.1) / 2
   g.add(rbox(9.4, 6, t + 0.2, cuff, { y: -6 }, 0.3))
   // 手掌：顶边伸进袖口 0.5
   g.add(rbox(8.6, 9.5, t, main, { y: -15 }, Math.min(1, t / 2 - 0.05)))
   // 手背上一道异色针织条（比手掌宽、厚一点）
-  g.add(rbox(8.9, 1.4, t + 0.25, band, { y: -10.2 }, 0.2))
-  // 四根手指：扁胶囊，顶端埋进手掌
+  g.add(nub(8.9, 1.4, t + 0.25, band, { y: -10.2 }))
+  // 四根手指：根部埋进手掌 0.6
   const fingers: [number, number][] = [[-3.15, 5], [-1.05, 6.5], [1.05, 7], [3.15, 6]]
-  for (const [x, len] of fingers) {
-    const f = capsule(0.95, len, main, { x: sx * x, y: -14.5 - len - 1.9 })
-    f.scale.z = k
-    g.add(f)
-  }
-  // 大拇指：斜着从手掌侧边伸出
-  const th = capsule(1, 4.2, main, { x: sx * 4.9, y: -12.6 - 3.1, rz: sx * 0.5 })
-  th.scale.z = k
-  g.add(th)
+  for (const [x, len] of fingers) g.add(finger([sx * x, -14.4, 0], [sx * x, -15.4 - len, 0], main, k))
+  // 大拇指：斜着从手掌侧边伸出（根部一直埋到手掌里面，开口不露在外面）
+  g.add(finger([sx * 3.2, -9.5, 0], [sx * 5.9, -14.45, 0], main, k))
   return g
 }
 
@@ -450,12 +468,14 @@ function robeHanging(p: string[]) {
   const belt = shade(main, -0.09)
   // 青果领的滚边：沿驳领外沿
   for (const sx of [-1, 1]) {
-    const pts: V3[] = [[sx * (nw + 0.5), yN + 0.4, front + 0.7], [sx * (nw + 4.5), yN - 7, front + 0.75], [sx * 3.5, yN - L - 1, front + 0.75]]
-    body.add(tube(pts, 0.4, pipe, { seg: 12, radial: 6 }))
+    // 驳领片（garments.ts）本身离衣身前面还有 0.3 的缝：滚边做粗一点、中心往里收，把领片外沿和衣身连起来
+    const pts: V3[] = [[sx * (nw + 0.5), yN + 0.4, front + 0.4], [sx * (nw + 4.5), yN - 7, front + 0.4], [sx * 3.5, yN - L - 1, front + 0.4]]
+    // 两头带圆帽：上端在肩颈处朝上，不封口的话从上面能看进管子里
+    body.add(cappedTube(pts, 0.48, pipe, { seg: 12, radial: 6, capSeg: [6, 4] }))
   }
-  // 腰带结垂下的两条带尾（顶端埋进腰带结）
-  body.add(batten([-0.6, yW - 1, front + 0.75], [-2.6, yW - 24, front + 0.75], 3, 0.5, belt))
-  body.add(batten([0.8, yW - 1, front + 0.7], [2.2, yW - 19, front + 0.7], 3, 0.5, belt))
+  // 腰带结垂下的两条带尾（顶端埋进腰带结；半厘米厚的布带，直角条）
+  body.add(batten([-0.6, yW - 1, front + 0.75], [-2.6, yW - 24, front + 0.75], 3, 0.5, belt, 0))
+  body.add(batten([0.8, yW - 1, front + 0.7], [2.2, yW - 19, front + 0.7], 3, 0.5, belt, 0))
   return h
 }
 
@@ -467,7 +487,8 @@ function robeFolded(p: string[]) {
   g.add(rbox(35, 4.6, 29, main, { y: 4.9 }, 1.4))
   const top = 9.5
   // 青果领：后沿一道粗滚边围成 U 形
-  g.add(tube([[-9, top - 0.2, -14.2], [-7, top + 0.1, -9.5], [-3, top + 0.15, -6.5], [0, top + 0.15, -6], [3, top + 0.15, -6.5], [7, top + 0.1, -9.5], [9, top - 0.2, -14.2]], 0.9, pipe, { seg: 20, radial: 8 }))
+  // （两头扎进衣服里：弯管两端不封口，停在后沿的话从后面能看进管子里）
+  g.add(tube([[-9, top - 1.2, -13.6], [-7.2, top - 0.1, -9.8], [-3, top + 0.15, -6.5], [0, top + 0.15, -6], [3, top + 0.15, -6.5], [7.2, top - 0.1, -9.8], [9, top - 1.2, -13.6]], 0.9, pipe, { seg: 20, radial: 8 }))
   // 腰带横搭在上面
   g.add(rbox(36.4, 0.6, 3.2, belt, { y: top - 0.1, z: 7 }, 0.25))
   // 前沿下摆滚边 + 口袋
@@ -513,7 +534,7 @@ function garmentBag(p: string[]) {
   h.add(flat(outline(0.4), 0.4, bag, zBack + 0.4))
   // 半透明前片 + 前面正中一条拉链和拉头
   h.add(ghost(flat(outline(0.4), 0.4, bag, zFront - 0.4), '#e9eef2', 0.3))
-  h.add(rbox(0.9, 84, 0.5, trim, { y: yBot + 6, z: zFront - 0.15 }, 0.2))
+  h.add(nub(0.9, 84, 0.5, trim, { y: yBot + 6, z: zFront - 0.15 }))
   h.add(rbox(1.6, 3, 0.8, trim, { y: -24, z: zFront + 0.05 }, 0.3))
   // 底边的一条织带 + 挂钩口的包边
   h.add(rbox(hw * 2 - 4, 2.4, D + 0.4, trim, { y: yBot + 0.6, z: (zBack + zFront) / 2 }, 0.4))
@@ -556,7 +577,8 @@ function briefsHanging(p: string[]) {
   g.add(flat(body, 0.5, main))
   // 腰头（顶边高出布身 0.2）+ 两侧裤脚包边 + 小蝴蝶结
   g.add(flat(rect(-14.3, -2.8, 14.3, 0.2), 0.9, band))
-  for (const s of [-1, 1]) g.add(tube([[s * 14, -7.6, 0], [s * 11, -13, 0], [s * 7.5, -18, 0], [s * 4.7, -22.6, 0], [s * 4.5, -24, 0]], 0.33, band, { seg: 12, radial: 6 }))
+  // （包边比布身厚，两头露在外面：带圆帽）
+  for (const s of [-1, 1]) g.add(cappedTube([[s * 14, -7.6, 0], [s * 11, -13, 0], [s * 7.5, -18, 0], [s * 4.7, -22.6, 0], [s * 4.5, -23.7, 0]], 0.33, band, { seg: 12, radial: 6, capSeg: [6, 4] }))
   g.add(ball(0.6, band, { y: -4.2, z: 0.45 }, [1.6, 1, 0.7]))
   return clipHang(hw, P(g, 0, CLIP_Y, 0))
 }
@@ -577,7 +599,7 @@ function leggingsFolded(p: string[]) {
   g.add(rbox(24.4, 1.9, 19.4, main, { y: 1.95 }, 0.8))
   // 宽腰头横在上面靠后沿，前面露出一道裤脚
   g.add(rbox(24.8, 0.5, 5, band, { y: 3.8, z: -6.8 }, 0.2))
-  g.add(rbox(2.4, 0.3, 1.2, acc, { x: 8, y: 4.25, z: -6.8 }, 0.1))
+  g.add(box(2.4, 0.3, 1.2, acc, { x: 8, y: 4.25, z: -6.8 }))
   g.add(rbox(25.2, 0.6, 0.6, band, { y: 0.8, z: 9.85 }, 0.2))
   return fitGroup(g)
 }
@@ -599,7 +621,7 @@ function leggingsHanging(p: string[]) {
   // 前片：腰那一头，往下变宽，末端是宽腰头
   body.add(flat([[-w / 2, yt], [w / 2, yt], [8, yt - 44], [-8, yt - 44]], T, main, r))
   body.add(flat(rect(-8.3, yt - 44.2, 8.3, yt - 39.5), T + 0.3, band, r))
-  body.add(rbox(2.4, 1.2, 0.3, acc, { x: 5, y: yt - 42.4, z: r + T / 2 + 0.2 }, 0.1))
+  body.add(box(2.4, 1.2, 0.3, acc, { x: 5, y: yt - 42.4, z: r + T / 2 + 0.2 }))
   // 后片：裤脚那一头，往下收窄
   body.add(flat([[-w / 2, yt], [w / 2, yt], [3.6, yt - 40], [-3.6, yt - 40]], T, main, -r))
   return h
@@ -620,10 +642,10 @@ function earmuffs(p: string[]) {
   const yc = 4
   // 头箍：半圆弧，两端埋进耳罩
   const band: V3[] = arcXY(0, yc, R0, 0, PI, 16).map(([x, y]): V3 => [x, y, 0])
-  g.add(tube(band, 0.8, knit, { seg: 32, radial: 8 }))
+  g.add(tube(band, 0.8, knit, { seg: 20, radial: 8 }))
   // 头箍上的几道针织罗纹（圆环垂直于弧线）
   for (const a of [0.55, 1.05, 1.57, 2.09, 2.59]) {
-    const ring = G(torus(0.8, 0.18, shade(knit, -0.1), { rx: PI / 2 }))
+    const ring = G(torus(0.8, 0.18, shade(knit, -0.1), { rx: PI / 2 }, PI * 2, [5, 10]))
     ring.position.set(Math.cos(a) * R0, yc + Math.sin(a) * R0, 0)
     ring.rotation.z = a + PI
     g.add(ring)
@@ -631,12 +653,12 @@ function earmuffs(p: string[]) {
   for (const s of [-1, 1]) {
     g.add(ball(4, knit, { x: s * R0, y: yc }, [0.6, 1, 1]))
     // 绒毛边：绕耳罩最宽处一圈
-    g.add(torus(3.7, 0.75, fur, { x: s * R0, y: yc, ry: PI / 2 }))
+    g.add(torus(3.7, 0.75, fur, { x: s * R0, y: yc, ry: PI / 2 }, PI * 2, [6, 24]))
   }
   // 头箍顶上系一只小蝴蝶结（原先耳罩外侧正中各一颗小绒球，配上粉 / 肤色耳罩一看就像乳头，改放到头顶）
   const top = yc + R0 + 0.8
-  for (const s of [-1, 1]) g.add(P(ball(1.5, acc, {}, [1, 0.6, 0.45], [12, 8]), s * 1.5, top + 0.1, 0, 0, 0, s * -0.35))
-  g.add(ball(0.75, shade(acc, -0.1), { y: top + 0.1 }, [1, 1, 0.8], [10, 8]))
+  for (const s of [-1, 1]) g.add(P(ball(1.5, acc, {}, [1, 0.6, 0.45], [8, 6]), s * 1.5, top + 0.1, 0, 0, 0, s * -0.35))
+  g.add(ball(0.75, shade(acc, -0.1), { y: top + 0.1 }, [1, 1, 0.8], [8, 6]))
   return fitGroup(g)
 }
 
@@ -646,22 +668,22 @@ const CLOTH: Partial<AssetDef> = { type: 'clothing', ...LIMIT, prop: true }
 const DRY: NonNullable<AssetDef['tags']> = ['clothing', 'decor', 'line-dry']
 
 export const GARMENTS_MORE: AssetDef[] = [
-  define('gx-socks-rolled', '袜子', 'deco', [10, 8, 5], SOCK_PAL, sockBall, { ...CLOTH, series: 'gx-socks', form: 'folded', formLabel: '卷好', tags: [...DRY, 'multi-ok'], mats: ['fabric', 'fabric', 'fabric'] }),
+  define('gx-socks-rolled', '袜子', 'deco', [10, 9, 6], SOCK_PAL, sockBall, { ...CLOTH, series: 'gx-socks', form: 'folded', formLabel: '卷好', tags: [...DRY, 'multi-ok'], mats: ['fabric', 'fabric', 'fabric'] }),
   define('gx-socks-hanging', '袜子', 'deco', [38, 3, 28], SOCK_PAL, socksHanging, { ...CLOTH, series: 'gx-socks', form: 'hanging', tags: [...DRY, 'multi-ok'], mats: ['fabric', 'fabric', 'fabric'] }),
   define('gx-bra-lying', '文胸', 'deco', [32, 13, 5], BRA_PAL, braLying, { ...CLOTH, series: 'gx-bra', form: 'lying', tags: DRY, mats: ['fabric', 'fabric', 'fabric'] }),
   define('gx-bra-hanging', '文胸', 'deco', [31, 7, 28], BRA_PAL, braHanging, { ...CLOTH, series: 'gx-bra', form: 'hanging', tags: DRY, mats: ['fabric', 'fabric', 'fabric'] }),
-  define('gx-pajamas-folded', '睡衣套装', 'deco', [30, 34, 8], PJ_PAL, pajamasFolded, { ...CLOTH, series: 'gx-pajamas', form: 'folded', tags: [...DRY, 'bed-ok'], mats: ['fabric', 'fabric', 'plastic'] }),
+  define('gx-pajamas-folded', '睡衣套装', 'deco', [30.4, 34, 8], PJ_PAL, pajamasFolded, { ...CLOTH, series: 'gx-pajamas', form: 'folded', tags: [...DRY, 'bed-ok'], mats: ['fabric', 'fabric', 'plastic'] }),
   define('gx-pajamas-hanging', '睡衣套装', 'deco', [60, 4, 75], PJ_PAL, pajamasHanging, { ...CLOTH, series: 'gx-pajamas', form: 'hanging', formLabel: '挂起的上衣', tags: DRY, mats: ['fabric', 'fabric', 'plastic'] }),
   define('gx-belt-coiled', '皮带', 'deco', [10, 9, 5], BELT_PAL, beltCoil, { ...CLOTH, series: 'gx-belt', form: 'folded', formLabel: '卷起', tags: ['clothing', 'decor'], mats: ['leather', 'metal', 'leather'] }),
-  define('gx-belt-hanging', '皮带', 'deco', [6, 5, 110], BELT_PAL, beltHanging, { ...CLOTH, series: 'gx-belt', form: 'hanging', tags: ['clothing', 'decor'], mats: ['leather', 'metal', 'leather'] }),
-  define('gx-gloves-lying', '毛线手套', 'deco', [24, 13, 3], GLOVE_PAL, glovesLying, { ...CLOTH, series: 'gx-gloves', form: 'lying', tags: DRY, mats: ['fabric', 'fabric', 'fabric'] }),
-  define('gx-gloves-hanging', '毛线手套', 'deco', [26, 3, 32], GLOVE_PAL, glovesHanging, { ...CLOTH, series: 'gx-gloves', form: 'hanging', tags: DRY, mats: ['fabric', 'fabric', 'fabric'] }),
-  define('gx-robe-folded', '浴袍', 'deco', [36, 30, 10.5], ROBE_PAL, robeFolded, { ...CLOTH, series: 'gx-robe', form: 'folded', tags: [...DRY, 'bed-ok', 'wet-supply'], mats: ['fabric', 'fabric', 'fabric'] }),
-  define('gx-robe-hanging', '浴袍', 'deco', [60, 6, 115], ROBE_PAL, robeHanging, { ...CLOTH, series: 'gx-robe', form: 'hanging', tags: [...DRY, 'wet-supply'], mats: ['fabric', 'fabric', 'fabric'] }),
+  define('gx-belt-hanging', '皮带', 'deco', [6, 5.5, 110], BELT_PAL, beltHanging, { ...CLOTH, series: 'gx-belt', form: 'hanging', tags: ['clothing', 'decor'], mats: ['leather', 'metal', 'leather'] }),
+  define('gx-gloves-lying', '毛线手套', 'deco', [24.2, 13, 3], GLOVE_PAL, glovesLying, { ...CLOTH, series: 'gx-gloves', form: 'lying', tags: DRY, mats: ['fabric', 'fabric', 'fabric'] }),
+  define('gx-gloves-hanging', '毛线手套', 'deco', [26, 3, 32.1], GLOVE_PAL, glovesHanging, { ...CLOTH, series: 'gx-gloves', form: 'hanging', tags: DRY, mats: ['fabric', 'fabric', 'fabric'] }),
+  define('gx-robe-folded', '浴袍', 'deco', [36.4, 30.3, 10.6], ROBE_PAL, robeFolded, { ...CLOTH, series: 'gx-robe', form: 'folded', tags: [...DRY, 'bed-ok', 'wet-supply'], mats: ['fabric', 'fabric', 'fabric'] }),
+  define('gx-robe-hanging', '浴袍', 'deco', [60.5, 6, 115], ROBE_PAL, robeHanging, { ...CLOTH, series: 'gx-robe', form: 'hanging', tags: [...DRY, 'wet-supply'], mats: ['fabric', 'fabric', 'fabric'] }),
   define('gx-garment-bag', '防尘衣罩', 'deco', [62, 7, 110], BAG_PAL, garmentBag, { ...CLOTH, form: 'hanging', tags: ['clothing', 'decor'], mats: ['fabric', 'fabric', 'plastic'] }),
-  define('gx-briefs-stack', '内裤', 'deco', [21, 17, 5], BRIEF_PAL, briefsStack, { ...CLOTH, series: 'gx-briefs', form: 'stacked', formLabel: '叠好三条', tags: DRY, mats: ['fabric', 'fabric', 'fabric', 'fabric'] }),
+  define('gx-briefs-stack', '内裤', 'deco', [21.6, 17.4, 5], BRIEF_PAL, briefsStack, { ...CLOTH, series: 'gx-briefs', form: 'stacked', formLabel: '叠好三条', tags: DRY, mats: ['fabric', 'fabric', 'fabric', 'fabric'] }),
   define('gx-briefs-hanging', '内裤', 'deco', [29, 3, 33], BRIEF_PAL, briefsHanging, { ...CLOTH, series: 'gx-briefs', form: 'hanging', tags: DRY, mats: ['fabric', 'fabric', 'fabric', 'fabric'] }),
-  define('gx-leggings-folded', '打底裤', 'deco', [25, 20, 4.5], LEG_PAL, leggingsFolded, { ...CLOTH, series: 'gx-leggings', form: 'folded', tags: DRY, mats: ['fabric', 'fabric', 'plastic'] }),
-  define('gx-leggings-hanging', '打底裤', 'deco', [30, 4, 57], LEG_PAL, leggingsHanging, { ...CLOTH, series: 'gx-leggings', form: 'hanging', formLabel: '搭在衣架横杆上', tags: DRY, mats: ['fabric', 'fabric', 'plastic'] }),
-  define('gx-earmuffs', '针织耳罩', 'deco', [18, 9, 12.5], MUFF_PAL, earmuffs, { ...CLOTH, form: 'lying', tags: ['clothing', 'decor'], mats: ['fabric', 'pile', 'fabric'] }),
+  define('gx-leggings-folded', '打底裤', 'deco', [25.2, 20.2, 4.6], LEG_PAL, leggingsFolded, { ...CLOTH, series: 'gx-leggings', form: 'folded', tags: DRY, mats: ['fabric', 'fabric', 'plastic'] }),
+  define('gx-leggings-hanging', '打底裤', 'deco', [30.5, 4, 57], LEG_PAL, leggingsHanging, { ...CLOTH, series: 'gx-leggings', form: 'hanging', formLabel: '搭在衣架横杆上', tags: DRY, mats: ['fabric', 'fabric', 'plastic'] }),
+  define('gx-earmuffs', '针织耳罩', 'deco', [18, 9, 13], MUFF_PAL, earmuffs, { ...CLOTH, form: 'lying', tags: ['clothing', 'decor'], mats: ['fabric', 'pile', 'fabric'] }),
 ]

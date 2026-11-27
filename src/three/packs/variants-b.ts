@@ -5,6 +5,7 @@
 import * as THREE from 'three'
 import { ball, cached, cup, cyl, puck, rbox, shade, toon, torus, tray, useAnisotropy } from '../toon'
 import { C, G, SWING_OPEN, ellipsePoly, movable, rectPoly, rng, slab, type AssetCategory, type AssetDef, type DoorMotion, type Poly, type SurfaceDef } from '../kit'
+import { trayBox, trayBoxLevel } from '../cabinetKit'
 import { PI, clearDeep, fitChildrenBuild, lathe, lit, mesh, noOutlineDeep, rod3, tube, type TubeOpts, type V3 } from '../geo'
 import { I, J, M, N, R, type Build, type Pal3 } from '../packkit'
 
@@ -54,6 +55,8 @@ function bigPot(rTop: number, rBot: number, h: number, t: number, color: string,
   g.add(cyl(r, r, 0.8, SOIL, { y: y0 + h - 3 }, 32))
   return g
 }
+/** 贴着盆身的细箍：圆周和盆身（cup 32 段）同段数，管截面 6 段（管粗 1cm 出头，一半埋在盆壁里） */
+const HOOP: [number, number] = [6, 32]
 /** 圆台在高度 y 处的半径 */
 const rAt = (rTop: number, rBot: number, h: number, y: number) => rBot + ((rTop - rBot) * y) / h
 /** 二次贝塞尔 */
@@ -125,20 +128,11 @@ function moving(parts: THREE.Object3D[], pivot: V3, m: DoorMotion) {
   return movable(g, m)
 }
 const swing = (left: boolean): DoorMotion => ({ kind: 'swing', angle: (left ? -1 : 1) * SWING_OPEN })
-/** 抽屉盒（面板后面的箱子）：[口 x0, 口 x1, 盒底 y, 盒高, 面板背面 z, 盒深] */
+/** 抽屉盒（cabinetKit trayBox）的参数：[口 x0, 口 x1, 盒底 y, 盒高, 面板背面 z, 盒深] */
 type Tray = readonly [number, number, number, number, number, number]
-function trayParts([x0, x1, y, h, z1, depth]: Tray, color: string): THREE.Object3D[] {
-  const w = x1 - x0
-  const cx = (x0 + x1) / 2
-  const zc = z1 - depth / 2
-  return [rbox(w, 1, depth, color, { x: cx, y, z: zc }, 0.2), rbox(1, h, depth, color, { x: x0 + 0.5, y, z: zc }, 0.2), rbox(1, h, depth, color, { x: x1 - 0.5, y, z: zc }, 0.2), rbox(w - 2, h, 1, color, { x: cx, y, z: z1 - depth + 0.5 }, 0.2)]
-}
-/** 抽屉格，打开时随抽屉拉出 */
-function trayLevel([x0, x1, y, h, z1, depth]: Tray): SurfaceDef {
-  return { y: y + 1, h: Math.round((h - 1.5) * 10) / 10, inside: true, slide: Math.round(depth * 0.6), shape: [rectPoly(x0 + 1.2, z1 - depth + 1.2, x1 - 1.2, z1 - 0.4)] }
-}
+const trayLevel = (t: Tray) => trayBoxLevel(...t)
 function drawer(face: THREE.Object3D[], t: Tray, color: string) {
-  return moving([...face, ...trayParts(t, color)], [0, 0, 0], { kind: 'drawer', dz: Math.round(t[5] * 0.6) })
+  return moving([...face, trayBox(...t, color)], [0, 0, 0], { kind: 'drawer', dz: Math.round(t[5] * 0.6) })
 }
 /** 空心柜体：外框 x ±w/2、y0..y1、z0（背）..z1（前），板厚 t（正面敞开） */
 function hollowBox(w: number, y0: number, y1: number, z0: number, z1: number, color: string, t = 1.6, r = 0.4) {
@@ -193,7 +187,7 @@ function vb(id: string, name: string, sizeLabel: string, category: AssetCategory
 function snakePlant(p: string[]) {
   const [potC, band] = p
   const g = G(bigPot(31, 24, 24, 2, potC))
-  g.add(torus(rAt(31, 24, 24, 7) + 0.15, 0.7, band, { y: 7, rx: PI / 2 }))
+  g.add(torus(rAt(31, 24, 24, 7) + 0.15, 0.7, band, { y: 7, rx: PI / 2 }, PI * 2, HOOP))
   const rand = rng(17)
   const clumps: [number, number, number, number][] = [
     [0, -5, 9, 72],
@@ -205,7 +199,8 @@ function snakePlant(p: string[]) {
       const L = base + rand() * 22
       const a = (i / n) * PI * 2 + rand() * 0.5
       const tilt = 0.04 + rand() * 0.12
-      const inner = G(ball(L / 2, '#c9d36a', { y: L / 2 }, [0.19, 1, 0.05]), ball(L / 2 - 0.7, i % 2 ? C.leafD : '#5f9f5c', { y: L / 2 }, [0.16, 1, 0.075]))
+      // 一圈 12 段：少于 12 段时两层椭球的交线（黄边的宽度）会明显外移；沿叶长 12 段（再少叶尖就看得出折角）
+      const inner = G(ball(L / 2, '#c9d36a', { y: L / 2 }, [0.19, 1, 0.05], [12, 12]), ball(L / 2 - 0.7, i % 2 ? C.leafD : '#5f9f5c', { y: L / 2 }, [0.16, 1, 0.075], [12, 12]))
       inner.rotation.y = rand() * PI
       const lg = G(inner)
       lg.position.set(cx + Math.cos(a) * 2.5, 20.5, cz + Math.sin(a) * 2.5)
@@ -219,7 +214,7 @@ function snakePlant(p: string[]) {
 function areca(p: string[]) {
   const [potC, band] = p
   const g = G(bigPot(17, 14, 34, 1.6, potC))
-  for (const y of [5, 12, 19, 26]) g.add(torus(rAt(17, 14, 34, y) + 0.1, 0.55, band, { y, rx: PI / 2 }))
+  for (const y of [5, 12, 19, 26]) g.add(torus(rAt(17, 14, 34, y) + 0.1, 0.55, band, { y, rx: PI / 2 }, PI * 2, HOOP))
   const rand = rng(23)
   const n = 9
   const up = new THREE.Vector3(0, 1, 0)
@@ -242,7 +237,7 @@ function areca(p: string[]) {
       const len = 16 * (1 - 0.45 * t)
       for (const sd of [-1, 1]) {
         const dir = side.clone().multiplyScalar(sd * 0.85).add(tan.clone().multiplyScalar(0.45)).add(new THREE.Vector3(0, -0.3, 0))
-        g.add(blade(len, 0.17, 0.06, (k + sd) % 3 ? C.leaf : C.leafD, pos, dir, [12, 4]))
+        g.add(blade(len, 0.17, 0.06, (k + sd) % 3 ? C.leaf : C.leafD, pos, dir, [8, 4]))
       }
     }
   }
@@ -262,7 +257,7 @@ function pachira(p: string[]) {
       const r = 2.4 * (1 - j / 26)
       pts.push([Math.cos(ang) * r, y, Math.sin(ang) * r])
     }
-    g.add(tube(pts, 1.5, shade(BARK, k * 0.04), { ...TUBE, seg: 40, radial: 8 }))
+    g.add(tube(pts, 1.5, shade(BARK, k * 0.04), { ...TUBE, seg: 32, radial: 6 }))
   }
   const rand = rng(31)
   const top: V3 = [0, 106, 0]
@@ -272,7 +267,7 @@ function pachira(p: string[]) {
     g.add(noOutlineDeep(rod3(top, tip, 0.4, STEM, 5)))
     for (let k = -2; k <= 2; k++) {
       const ang = a + k * 0.42
-      g.add(blade(18 - Math.abs(k) * 2.2, 0.36, 0.08, k % 2 ? C.leafD : C.leaf, tip, new THREE.Vector3(Math.cos(ang), -0.22 + Math.abs(k) * 0.05, Math.sin(ang))))
+      g.add(blade(18 - Math.abs(k) * 2.2, 0.36, 0.08, k % 2 ? C.leafD : C.leaf, tip, new THREE.Vector3(Math.cos(ang), -0.22 + Math.abs(k) * 0.05, Math.sin(ang)), [16, 4]))
     }
   }
   return g
@@ -304,7 +299,8 @@ function monsteraLeaf(L: number, color: string) {
       h.absellipse(sd * L * 0.09, yy(c), L * 0.022, L * 0.035, 0, PI * 2, true, 0)
       s.holes.push(h)
     }
-  const geo = new THREE.ExtrudeGeometry(s, { depth: 0.35, bevelEnabled: false, curveSegments: 8 })
+  // curveSegments 只管小孔（椭圆孔按它的两倍取点）：孔长 2cm 出头，8 边就够
+  const geo = new THREE.ExtrudeGeometry(s, { depth: 0.35, bevelEnabled: false, curveSegments: 4 })
   geo.translate(0, 0, -0.175)
   geo.rotateX(-PI / 2)
   return mesh(geo, color)
@@ -314,7 +310,7 @@ function monsteraLeaf(L: number, color: string) {
 function monsteraBasket(p: string[]) {
   const [basket, band] = p
   const g = G(bigPot(19, 15, 30, 1.6, basket))
-  for (const y of [6, 12, 18, 24]) g.add(torus(rAt(19, 15, 30, y) + 0.1, 0.6, band, { y, rx: PI / 2 }))
+  for (const y of [6, 12, 18, 24]) g.add(torus(rAt(19, 15, 30, y) + 0.1, 0.6, band, { y, rx: PI / 2 }, PI * 2, HOOP))
   for (const sd of [-1, 1]) g.add(torus(3.5, 0.6, band, { x: sd * 18.6, y: 25, ry: PI / 2 }, PI))
   const rand = rng(5)
   for (let i = 0; i < 8; i++) {
@@ -361,7 +357,7 @@ function cactusGarden(p: string[]) {
   for (let i = 0; i < 16; i++) {
     const a = rand() * PI * 2
     const r = 8 + rand() * 18
-    g.add(ball(1 + rand() * 0.9, i % 3 ? '#e8e4dc' : '#c9c4bb', { x: Math.cos(a) * r, y: soil + 0.5, z: Math.sin(a) * r }, [1, 0.6, 1]))
+    g.add(ball(1 + rand() * 0.9, i % 3 ? '#e8e4dc' : '#c9c4bb', { x: Math.cos(a) * r, y: soil + 0.5, z: Math.sin(a) * r }, [1, 0.6, 1], [8, 6]))
   }
   // 主柱 + 两条臂
   column(g, 2, -5, soil - 1, 92, 6.5, CACTUS)
@@ -380,7 +376,7 @@ function cactusGarden(p: string[]) {
   ] as V3[]) {
     for (let k = 0; k < 5; k++) {
       const a = (k / 5) * PI * 2
-      g.add(ball(1.5, flower, { x: x + Math.cos(a) * 1.4, y, z: z + Math.sin(a) * 1.4 }, [1, 0.6, 1]))
+      g.add(ball(1.5, flower, { x: x + Math.cos(a) * 1.4, y, z: z + Math.sin(a) * 1.4 }, [1, 0.6, 1], [8, 6]))
     }
     g.add(ball(0.9, C.lemon, { x, y: y + 0.4, z }))
   }

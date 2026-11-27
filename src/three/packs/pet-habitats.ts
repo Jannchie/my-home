@@ -52,7 +52,7 @@ function clear<T extends THREE.Object3D>(o: T, color: string, a = 0.25): T {
   return o
 }
 
-/** 丝网的一根细丝：不描边 */
+/** 丝网的一根细丝：不描边。截面 5 段不能再降：3、4 段的杆从斜角看只有 1.4～1.7 倍半径宽，整面网明显变细变淡 */
 const wire = (a: V3, b: V3, r: number, color: string, castShadow = true) => {
   const m = noOutlineDeep(rod3(a, b, r, color, 5))
   if (!castShadow) m.castShadow = false
@@ -183,10 +183,12 @@ function domeCage(rr: number, y0: number, hw: number, color: string, n = 40, r =
     mg.position.y = yTop
     g.add(mg)
   }
-  for (const y of [y0, yTop]) g.add(torus(rr, fr, color, { y, rx: PI / 2 }))
-  g.add(torus(rr, fr * 0.6, color, { y: y0 + hw * 0.55, rx: PI / 2 }))
+  // 箍圈的钢丝直径 4～6mm：管截面 6 段
+  const HOOP: [number, number] = [6, 32]
+  for (const y of [y0, yTop]) g.add(torus(rr, fr, color, { y, rx: PI / 2 }, PI * 2, HOOP))
+  g.add(torus(rr, fr * 0.6, color, { y: y0 + hw * 0.55, rx: PI / 2 }, PI * 2, HOOP))
   const k = Math.cos(PI / 4)
-  g.add(torus(rr * k, fr * 0.6, color, { y: yTop + rr * k, rx: PI / 2 }))
+  g.add(torus(rr * k, fr * 0.6, color, { y: yTop + rr * k, rx: PI / 2 }, PI * 2, HOOP))
   return g
 }
 
@@ -268,7 +270,8 @@ function bottle(rr: number, h: number, cap: string, nozzle = -1) {
 /** 陶瓷食盆（空心）+ 一点饲料 */
 function bowl(rr: number, color: string, food = SEED) {
   const g = new THREE.Group()
-  g.add(cup(rr, rr * 0.8, rr * 0.7, 0.5, color))
+  // 食盆直径 5～9cm：一圈 16 段，和里面的饲料同段数
+  g.add(cup(rr, rr * 0.8, rr * 0.7, 0.5, color, {}, 16))
   g.add(cyl(rr - 0.7, rr - 0.9, 0.4, food, { y: rr * 0.7 - 1.2 }, 16))
   return g
 }
@@ -787,7 +790,7 @@ function domeBirdcage(p: string[], kind: BirdKind = 'budgie') {
   g.add(rod3([-4, sy - 2, 2], [4, sy - 2, 2], 0.45, WOOD, 8))
   g.add(wire([0, sy + 4.5, 2], [0, yTop - 0.4, 0], 0.12, wireC))
   for (const s of [-1, 1]) {
-    g.add(cup(2.4, 1.9, 3, 0.35, acc, { x: s * (rr - 2.4), y: y0 + 4, z: -3 }))
+    g.add(cup(2.4, 1.9, 3, 0.35, acc, { x: s * (rr - 2.4), y: y0 + 4, z: -3 }, 16))
     g.add(cyl(1.9, 1.9, 0.4, s > 0 ? SEED : WATER, { x: s * (rr - 2.4), y: y0 + 6.1, z: -3 }, 16))
   }
   g.add(P(bird(kind), 3, y0 + 9.55, 0, 0, 0.3))
@@ -941,8 +944,9 @@ function bambooCage(p: string[]) {
   g.add(rod3([-W / 4, pa, -D / 2 + 1], [-W / 4, pa, D / 2 - 1], 0.6, WOOD, 8))
   g.add(rod3([W / 4, pa + 6, -D / 2 + 1], [W / 4, pa + 6, D / 2 - 1], 0.6, WOOD, 8))
   for (const s of [-1, 1]) {
-    g.add(cup(2.3, 2, 3, 0.35, CERAMIC, { x: s * 5, y: y0 + 1, z: D / 2 - 3 }))
-    g.add(torus(2.15, 0.2, J.ai, { x: s * 5, y: y0 + 3.85, z: D / 2 - 3, rx: PI / 2 }))
+    // 5cm 的小食罐一圈 16 段，罐口的蓝圈跟着 16 段
+    g.add(cup(2.3, 2, 3, 0.35, CERAMIC, { x: s * 5, y: y0 + 1, z: D / 2 - 3 }, 16))
+    g.add(torus(2.15, 0.2, J.ai, { x: s * 5, y: y0 + 3.85, z: D / 2 - 3, rx: PI / 2 }, PI * 2, [6, 16]))
     g.add(cyl(1.9, 1.9, 0.4, s > 0 ? SEED : WATER, { x: s * 5, y: y0 + 3, z: D / 2 - 3 }, 16))
   }
   g.add(P(bird('buncho-white'), W / 4, pa + 6.6, 0, 0, -0.2))
@@ -977,7 +981,7 @@ function perchStand(p: string[]) {
     [-8, WATER],
   ] as const) {
     // 杯子搁在垫纸上面（垫纸顶面 y = 1.4）
-    g.add(cup(2.5, 2.1, 3.2, 0.4, acc, { x, y: 1.4, z: 8 }))
+    g.add(cup(2.5, 2.1, 3.2, 0.4, acc, { x, y: 1.4, z: 8 }, 16))
     g.add(cyl(2.1, 2.1, 0.4, food, { x, y: 3.8, z: 8 }, 16))
   }
   g.add(wire([-16, 35, 0], [-16, 30, 0], 0.08, '#9a8a7a'))
@@ -1037,7 +1041,7 @@ function terrarium(p: string[]) {
   g.add(cappedTube([[-W / 2 + 6, 9, -10], [-10, 18, -6], [6, 24, -12], [18, 30, -14]], 1.1, '#8a6a4a', { ...TUBE, seg: 30 }))
   g.add(ball(6.5, '#9b8f84', { x: -16, y: 9, z: 2 }, [1.35, 0.8, 1]))
   g.add(noOutlineDeep(rbox(4, 3.6, 0.4, '#3a3230', { x: -16, y: 9, z: 8.6 }, 1.5)))
-  g.add(cup(4.2, 3.6, 1.8, 0.5, '#8d8478', { x: 10, y: 9, z: 9 }))
+  g.add(cup(4.2, 3.6, 1.8, 0.5, '#8d8478', { x: 10, y: 9, z: 9 }, 16))
   g.add(clear(cyl(3.6, 3.6, 0.9, WATER, { x: 10, y: 9.6, z: 9 }, 20), WATER, 0.5))
   for (let i = 0; i < 5; i++) {
     const a = (i / 5) * PI * 2

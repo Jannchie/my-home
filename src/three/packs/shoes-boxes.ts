@@ -217,7 +217,8 @@ function shoeLast(s: LastSpec) {
     const sl = slices(o.from ?? u0, o.to ?? u1, o.n)
     const off = o.off ?? 0
     const th = o.t ?? t
-    const Mh = 8
+    // 半边截面 6 段（整个拱 12 段，鞋宽 6～10cm）
+    const Mh = 6
     const Cn = 2 * Mh + 2
     const pos: number[] = []
     for (const s0 of sl) {
@@ -270,9 +271,11 @@ function shoeLast(s: LastSpec) {
       if (sl[i].open) continue
       const p0 = at(sl[i].u, 0, off)
       const p1 = at(sl[i].u, PI, off)
-      // 端面单独一套顶点（法线不和鞋面混），鞋尖朝 +z、后跟朝 -z
+      // 端面单独一套顶点（法线不和鞋面混），鞋尖朝 +z、后跟朝 -z。
+      // 包片（off > 0）的端面中心往外顶出 off，成一个很浅的锥：at() 的偏移只在截面里，不沿鞋长，
+      // 包片和整只鞋面的端面本来落在同一个平面上（鞋尖正中一小片两种颜色打架）
       const ci = all.length / 3
-      all.push((p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2, (p0[2] + p1[2]) / 2)
+      all.push((p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2, (p0[2] + p1[2]) / 2 + (i > 0 ? off : -off))
       for (let c = 0; c < Cn; c++) all.push(pos[(i * Cn + c) * 3], pos[(i * Cn + c) * 3 + 1], pos[(i * Cn + c) * 3 + 2])
       for (let c = 0; c < Cn - 1; c++) {
         if (i > 0) idx.push(ci, ci + 1 + c, ci + 2 + c)
@@ -1499,13 +1502,21 @@ function underBed(s: UnderSpec): Build {
 function fabricBox(w: number, d: number, h: number): Build {
   return (p) => {
     const g = new THREE.Group()
-    const hole = { kind: 'rect' as const, x: 0, y: h - 6, w: 9, h: 2.6, r: 1.3 }
-    g.add(shell(w, h, d, 0.8, p[0], { top: false, left: [hole], right: [hole] }))
+    // 箱壁同 kit.shell(w, h, d, 0.8, …, { top: false, left / right 各一个把手洞 })，只是把手洞的圆弧降到 seg 3
+    // （洞两头是直径 2.6cm 的半圆，每个半圆 12 段；shell 不透传 seg，默认 16 时一块侧板 1200 面）
+    const t = 0.8
+    const hole = { kind: 'rect' as const, x: 0, y: h - 6 - t, w: 9, h: 2.6, r: 1.3 }
+    const ARC = { seg: 3 }
+    g.add(holePanel(w, h - t, t, p[0], [], { y: t, z: d / 2 - t / 2 }))
+    g.add(holePanel(w, h - t, t, p[0], [], { y: t, z: -d / 2 + t / 2, ry: PI }))
+    g.add(holePanel(d - t * 2, h - t, t, p[0], [hole], { x: w / 2 - t / 2, y: t, ry: PI / 2 }, 1.5, ARC))
+    g.add(holePanel(d - t * 2, h - t, t, p[0], [hole], { x: -w / 2 + t / 2, y: t, ry: -PI / 2 }, 1.5, ARC))
+    g.add(rbox(w, t, d, p[0], {}, t * 0.4))
     g.add(rimRing(w + 0.4, d + 0.4, h - 1, 1.3, p[1])) // 包边比箱壁高出 0.3，避免顶面共面闪烁
     // 把手洞包边
     for (const sx of [-1, 1]) g.add(rbox(0.4, 3.6, 10, p[1], { x: sx * (w / 2 + 0.25), y: h - 6.5 }, 0.2))
-    g.add(holePanel(10, 3.6, 0.4, p[1], [{ kind: 'rect', x: 0, y: 0.5, w: 9, h: 2.6, r: 1.3 }], { x: w / 2 + 0.45, y: h - 6.5, ry: PI / 2 }, 1))
-    g.add(holePanel(10, 3.6, 0.4, p[1], [{ kind: 'rect', x: 0, y: 0.5, w: 9, h: 2.6, r: 1.3 }], { x: -w / 2 - 0.45, y: h - 6.5, ry: -PI / 2 }, 1))
+    g.add(holePanel(10, 3.6, 0.4, p[1], [{ kind: 'rect', x: 0, y: 0.5, w: 9, h: 2.6, r: 1.3 }], { x: w / 2 + 0.45, y: h - 6.5, ry: PI / 2 }, 1, ARC))
+    g.add(holePanel(10, 3.6, 0.4, p[1], [{ kind: 'rect', x: 0, y: 0.5, w: 9, h: 2.6, r: 1.3 }], { x: -w / 2 - 0.45, y: h - 6.5, ry: -PI / 2 }, 1, ARC))
     // 里面：卷起的毛巾
     const r = rng(Math.round(w + h))
     for (let i = 0; i < 4; i++) {
